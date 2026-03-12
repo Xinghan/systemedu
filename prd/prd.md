@@ -493,9 +493,10 @@ class LearningState(TypedDict):
 ### Phase 1: Foundation (当前 → 4周)
 - [x] 项目骨架 (Next.js + Django)
 - [x] 基础 Landing Page + Baby Turtle 角色
-- [ ] 用户注册/登录 (JWT)
-- [ ] 项目数据模型 + CRUD API
-- [ ] 知识节点数据模型 (MySQL + Neo4j)
+- [x] 用户注册/登录 (JWT) — 12 tests
+- [x] 项目数据模型 + CRUD API — 15 tests
+- [x] 进度跟踪 + 成就系统 — 15 tests
+- [ ] 知识节点数据模型 (Neo4j 集成)
 - [ ] 基础知识树可视化 (D3.js)
 
 ### Phase 2: AI Core (4-8周)
