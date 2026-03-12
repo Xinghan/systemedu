@@ -46,6 +46,7 @@ INSTALLED_APPS = [
     "apps.projects",
     "apps.progress",
     "apps.knowledge",
+    "apps.chat",
 ]
 
 MIDDLEWARE = [
