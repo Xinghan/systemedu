@@ -43,7 +43,7 @@ INSTALLED_APPS = [
     "rest_framework_simplejwt",
     # Local apps
     "apps.users",
-    "apps.quests",
+    "apps.projects",
     "apps.progress",
     "apps.knowledge",
 ]
