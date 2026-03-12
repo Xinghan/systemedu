@@ -100,6 +100,21 @@ systemedu/
 - Agents: Each agent is a standalone LangGraph node with clear input/output types
 - No over-engineering: build what's needed now, not what might be needed later
 
+### Development Loop (必须遵循)
+每个功能的开发必须严格按照以下循环执行：
+
+```
+1. 开发新功能 → 2. 编写测试 → 3. 运行测试并修复 bug
+→ 4. 提交代码 → 5. 回顾：审视现有系统，思考是否有新功能/改进可以添加
+→ 6. 向用户提出建议并询问确认 → 7. 用户确认后更新 PRD → 8. 继续下一轮开发
+```
+
+**第 5-6 步（回顾与建议）是强制步骤，不可跳过。** 每完成一个功能提交后，必须：
+- 审视刚完成的功能与现有系统的交互
+- 思考是否有遗漏的边界情况、缺失的配套功能、或新的可能性
+- 将想法整理后**询问用户**是否需要添加
+- 用户确认后更新 `prd/prd.md`，再进入下一轮开发
+
 ### Testing (Mandatory)
 - **每个新 API 端点和新功能都必须附带测试，覆盖新增功能，未写测试不允许提交**
 - Backend: pytest + Django REST Framework test client
