@@ -2,54 +2,76 @@
 
 ## Project Overview
 
-SystemEdu is a gamified educational platform (inspired by Google AI Quests) that teaches AI, medicine, climate science, and more through interactive quests guided by an animated baby turtle teacher character.
+SystemEdu 是一款面向儿童到青少年（6-18岁）的 AI Agent 驱动项目制学习平台。用户可以从零基础开始参与真实工业级项目（如训练ML模型、蛋白质结构发现、火箭研发等），在多 Agent 智能导师系统的引导下，逐步掌握并完成工业级别的项目。
+
+核心技术特色：动态知识树（数千节点DAG）、多 Agent 协作导师、Mem0 持久化记忆、RAG 知识检索。
 
 ## Tech Stack
 
 ### Frontend (`/frontend`)
 - **Framework**: Next.js 16 (App Router) + TypeScript
 - **Styling**: Tailwind CSS 4
-- **State**: React 19 built-in (useState/useContext); Zustand if needed later
-- **API calls**: fetch / SWR
+- **State**: Zustand + React Query (TanStack)
+- **Realtime**: WebSocket (AI对话流式输出)
+- **Graph Viz**: D3.js / React Flow (知识树可视化)
 
 ### Backend (`/backend`)
 - **Framework**: Django 6 + Django REST Framework
 - **Language**: Python 3.12+
-- **Auth**: Django built-in auth + JWT (djangorestframework-simplejwt)
+- **Auth**: django-simplejwt + django-allauth (JWT + 社交登录)
+- **Async**: Django Channels (WebSocket) + Celery (任务队列)
+- **Cache/Broker**: Redis
+
+### AI Agent Layer (`/backend/agents/`)
+- **Orchestration**: LangGraph + LangChain
+- **LLM**: Claude API / OpenAI API
+- **Memory**: Mem0 (self-hosted, vector+graph hybrid)
+- **Agents**: Tutor, Assessor, Planner, Content, Gap Detector, Motivator
 
 ### Database
-- **Primary**: MySQL 8 (relational data: users, quests, progress, content)
-- **Vector DB**: ChromaDB or Pgvector (for AI-powered search, embeddings, knowledge retrieval)
-- **Graph DB**: Neo4j (optional, for knowledge graph relationships between topics)
+- **Primary**: MySQL 8 (用户、项目、进度等关系数据)
+- **Graph DB**: Neo4j (知识树/知识图谱，节点依赖关系)
+- **Vector DB**: Qdrant / Pgvector (RAG检索, 内容embedding)
+- **Memory**: Mem0 (用户记忆、项目记忆、会话记忆)
+- **Object Storage**: S3 / MinIO (文件上传、生成内容)
 
 ### Admin (`/adminsite`)
 - Django Admin (customized) for content management
-- Quest/module/lesson CRUD
-- User management and analytics
+- 项目/知识节点 CRUD
+- 用户管理和数据分析
 
 ## Project Structure
 
 ```
 systemedu/
-├── CLAUDE.md            # This file
-├── prd/                 # Product Requirements Documents
-│   └── prd.md           # Master PRD (links to module PRDs)
-├── frontend/            # Next.js app
+├── CLAUDE.md              # This file
+├── prd/                   # Product Requirements Documents
+│   └── prd.md             # Master PRD
+├── frontend/              # Next.js app
 │   ├── src/
-│   │   ├── app/         # App Router pages
-│   │   ├── components/  # Reusable UI components
-│   │   ├── lib/         # Utilities, API client, hooks
-│   │   └── types/       # TypeScript types
-│   └── public/          # Static assets
-├── backend/             # Django project
-│   ├── config/          # Django settings, urls, wsgi
+│   │   ├── app/           # App Router pages
+│   │   ├── components/    # Reusable UI components
+│   │   ├── lib/           # Utilities, API client, hooks
+│   │   └── types/         # TypeScript types
+│   └── public/            # Static assets
+├── backend/               # Django project
+│   ├── config/            # Django settings, urls, wsgi
 │   ├── apps/
-│   │   ├── users/       # User auth, profiles
-│   │   ├── quests/      # Quest, Module, Lesson models
-│   │   ├── progress/    # User progress tracking
-│   │   └── knowledge/   # Knowledge resources, search
+│   │   ├── users/         # User auth, profiles
+│   │   ├── projects/      # Project, Milestone, KnowledgeNode models
+│   │   ├── progress/      # User progress, XP, achievements
+│   │   ├── knowledge/     # Knowledge tree, graph operations
+│   │   └── chat/          # AI chat sessions, WebSocket consumers
+│   ├── agents/            # LangGraph agent definitions
+│   │   ├── tutor.py
+│   │   ├── assessor.py
+│   │   ├── planner.py
+│   │   ├── content.py
+│   │   ├── gap_detector.py
+│   │   ├── motivator.py
+│   │   └── graph.py       # LangGraph state machine
 │   └── manage.py
-└── adminsite/           # Django admin customizations (within backend)
+└── adminsite/             # Django admin customizations
 ```
 
 ## Development Rules
@@ -62,7 +84,7 @@ systemedu/
 
 ### PRD Workflow
 - `prd/prd.md` is the master PRD — always keep it updated
-- Each major module gets its own PRD file (e.g., `prd/quests.md`, `prd/users.md`)
+- Each major module gets its own PRD file (e.g., `prd/agents.md`, `prd/users.md`)
 - **Ask for user approval before creating any new PRD file**
 - Never create separate change-description files; always update existing PRD files
 - PRD files use markdown with clear sections: Overview, User Stories, Data Model, API Endpoints, UI/UX
@@ -71,11 +93,13 @@ systemedu/
 - Frontend: TypeScript strict mode, functional components, hooks
 - Backend: PEP 8, type hints, Django best practices
 - API: RESTful design, consistent error responses, pagination
+- Agents: Each agent is a standalone LangGraph node with clear input/output types
 - No over-engineering: build what's needed now, not what might be needed later
 
 ### Testing
 - Frontend: Jest + React Testing Library (when added)
 - Backend: pytest + Django test client (when added)
+- Agents: Unit tests with mocked LLM responses
 
 ## Key Decisions Log
 
@@ -85,3 +109,7 @@ systemedu/
 | 2026-03-11 | Django for backend | Mature, admin built-in, Python ML ecosystem |
 | 2026-03-11 | MySQL for primary DB | Widely supported, reliable for relational data |
 | 2026-03-12 | SVG character (baby turtle) | Pure code, no external assets needed for MVP |
+| 2026-03-12 | LangGraph for agent orchestration | Stateful graph, handles branching for adaptive learning |
+| 2026-03-12 | Mem0 for AI memory | Vector+graph hybrid, Django integration, self-hosted |
+| 2026-03-12 | Neo4j for knowledge graph | Native graph DB, Cypher query, handles 1000s of nodes |
+| 2026-03-12 | DAG-based knowledge tree | Prerequisite dependencies, non-linear learning paths |
