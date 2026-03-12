@@ -500,10 +500,11 @@ class LearningState(TypedDict):
 - [ ] 基础知识树可视化 (D3.js)
 
 ### Phase 2: AI Core (4-8周)
-- [ ] LangGraph Agent 编排框架搭建
-- [ ] Tutor Agent 基础版（对话+讲解）
+- [x] LangGraph Agent 编排框架搭建 — 8 tests
+- [x] Tutor Agent 基础版（对话+讲解）— 年龄自适应 prompt
+- [x] Chat API（POST /api/chat/message/ + 会话历史）— 13 tests
 - [ ] Mem0 集成（用户记忆+项目记忆）
-- [ ] WebSocket 实时对话
+- [ ] WebSocket/SSE 实时流式对话
 - [ ] Planner Agent: 项目→知识树自动拆解
 - [ ] 第一个完整项目: "训练无监督模型"
 
