@@ -96,10 +96,18 @@ systemedu/
 - Agents: Each agent is a standalone LangGraph node with clear input/output types
 - No over-engineering: build what's needed now, not what might be needed later
 
-### Testing
-- Frontend: Jest + React Testing Library (when added)
-- Backend: pytest + Django test client (when added)
-- Agents: Unit tests with mocked LLM responses
+### Testing (Mandatory)
+- **每个新 API 端点和新功能都必须附带测试，覆盖新增功能，未写测试不允许提交**
+- Backend: pytest + Django REST Framework test client
+  - 每个新 API view 必须有对应的 `test_<viewname>.py`
+  - 测试覆盖：正常路径、权限校验、参数校验、边界情况
+  - Agent 测试：使用 mock LLM 响应，验证 agent 输入输出和状态流转
+- Frontend: Jest + React Testing Library
+  - 新组件必须有对应测试文件 `__tests__/<Component>.test.tsx`
+  - 测试覆盖：渲染、用户交互、API 调用 mock
+- 运行测试：
+  - Backend: `cd backend && source venv/bin/activate && pytest`
+  - Frontend: `cd frontend && npm test`
 
 ## Key Decisions Log
 
