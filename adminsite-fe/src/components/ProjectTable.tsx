@@ -68,7 +68,7 @@ export default function ProjectTable({ projects, onClone, onDelete }: ProjectTab
                     href={`/projects/${p.id}`}
                     className="text-text-secondary hover:text-accent text-xs font-medium"
                   >
-                    Edit
+                    View
                   </Link>
                   <button
                     onClick={() => onClone(p)}

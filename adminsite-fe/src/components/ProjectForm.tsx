@@ -124,15 +124,6 @@ export default function ProjectForm({ initial, onSubmit, submitLabel }: ProjectF
         <label className="flex items-center gap-2 cursor-pointer">
           <input
             type="checkbox"
-            checked={form.is_published}
-            onChange={(e) => set("is_published", e.target.checked)}
-            className="w-4 h-4 rounded border-border bg-bg-elevated text-accent focus:ring-accent"
-          />
-          <span className="text-sm text-text-secondary">Published</span>
-        </label>
-        <label className="flex items-center gap-2 cursor-pointer">
-          <input
-            type="checkbox"
             checked={form.is_template}
             onChange={(e) => set("is_template", e.target.checked)}
             className="w-4 h-4 rounded border-border bg-bg-elevated text-accent focus:ring-accent"

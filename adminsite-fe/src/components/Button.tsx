@@ -2,7 +2,7 @@
 
 import { ButtonHTMLAttributes } from "react";
 
-type Variant = "primary" | "secondary" | "danger" | "ghost";
+type Variant = "primary" | "secondary" | "danger" | "warning" | "ghost";
 
 interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: Variant;
@@ -16,6 +16,8 @@ const variantStyles: Record<Variant, string> = {
     "bg-bg-elevated text-text-primary border border-border hover:border-border-light",
   danger:
     "bg-danger text-white hover:bg-danger-hover",
+  warning:
+    "bg-warning text-white hover:opacity-90",
   ghost:
     "text-text-secondary hover:text-text-primary hover:bg-bg-elevated",
 };

@@ -7,11 +7,13 @@ import { toast } from "@/components/Toast";
 import type { AdminProjectDetail, ProjectFormData, TreeGraph } from "@/lib/types";
 import TabBar from "@/components/TabBar";
 import ProjectForm from "@/components/ProjectForm";
+import ProjectInfo from "@/components/ProjectInfo";
 import TreePreview from "@/components/TreePreview";
 import TaskBanner from "@/components/TaskBanner";
 import Button from "@/components/Button";
 import Modal from "@/components/Modal";
 import FormInput from "@/components/FormInput";
+import StatusBadge from "@/components/StatusBadge";
 
 const TABS = ["Info", "Knowledge Tree"];
 
@@ -25,6 +27,8 @@ export default function ProjectDetailPage() {
   const [activeTab, setActiveTab] = useState("Info");
   const [treeGraph, setTreeGraph] = useState<TreeGraph | null>(null);
   const [treeLoading, setTreeLoading] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [publishing, setPublishing] = useState(false);
 
   // Clone modal
   const [showClone, setShowClone] = useState(false);
@@ -65,6 +69,7 @@ export default function ProjectDetailPage() {
     try {
       await updateProject(projectId, data);
       toast("Project updated");
+      setEditing(false);
       fetchProject();
     } catch (err) {
       if (err instanceof ApiError && err.data) {
@@ -74,6 +79,25 @@ export default function ProjectDetailPage() {
         toast("Failed to update", "error");
       }
       throw err;
+    }
+  }
+
+  async function handlePublishToggle() {
+    if (!project) return;
+    setPublishing(true);
+    try {
+      await updateProject(projectId, { is_published: !project.is_published });
+      toast(project.is_published ? "Project unpublished" : "Project published");
+      fetchProject();
+    } catch (err) {
+      if (err instanceof ApiError && err.data) {
+        const messages = Object.values(err.data).flat().join(", ");
+        toast(messages || "Failed to update status", "error");
+      } else {
+        toast("Failed to update status", "error");
+      }
+    } finally {
+      setPublishing(false);
     }
   }
 
@@ -127,7 +151,9 @@ export default function ProjectDetailPage() {
         projectId={projectId}
         onTaskComplete={() => { fetchProject(); fetchTree(); }}
       />
-      <div className="flex items-center justify-between mb-6">
+
+      {/* Header */}
+      <div className="flex items-start justify-between mb-6">
         <div>
           <button
             onClick={() => router.push("/dashboard")}
@@ -135,37 +161,67 @@ export default function ProjectDetailPage() {
           >
             &larr; Back to Dashboard
           </button>
-          <h1 className="text-xl font-bold text-text-primary">{project.title}</h1>
+          <div className="flex items-center gap-3">
+            <h1 className="text-xl font-bold text-text-primary">{project.title}</h1>
+            <StatusBadge published={project.is_published} template={project.is_template} />
+          </div>
+          {project.subtitle && (
+            <p className="text-sm text-text-secondary mt-0.5">{project.subtitle}</p>
+          )}
         </div>
         <div className="flex gap-2">
+          {!editing && (
+            <Button variant="secondary" onClick={() => { setEditing(true); setActiveTab("Info"); }}>
+              Edit
+            </Button>
+          )}
+          {project.is_published ? (
+            <Button variant="warning" onClick={handlePublishToggle} loading={publishing}>
+              Unpublish
+            </Button>
+          ) : (
+            <Button onClick={handlePublishToggle} loading={publishing}>
+              Publish
+            </Button>
+          )}
           <Button variant="secondary" onClick={() => { setShowClone(true); setCloneTitle(`${project.title} (Copy)`); }}>
             Clone
           </Button>
         </div>
       </div>
 
-      <TabBar tabs={TABS} active={activeTab} onChange={setActiveTab} />
+      <TabBar tabs={TABS} active={activeTab} onChange={(tab) => { setActiveTab(tab); if (tab !== "Info") setEditing(false); }} />
 
       <div className="mt-6">
         {activeTab === "Info" && (
-          <div className="bg-bg-surface border border-border rounded-xl p-6 max-w-2xl">
-            <ProjectForm
-              initial={{
-                title: project.title,
-                subtitle: project.subtitle,
-                description: project.description,
-                cover_image: project.cover_image,
-                category: project.category,
-                min_age: project.min_age,
-                max_age: project.max_age,
-                estimated_hours: project.estimated_hours,
-                is_published: project.is_published,
-                is_template: project.is_template,
-              }}
-              onSubmit={handleUpdate}
-              submitLabel="Save Changes"
-            />
-          </div>
+          editing ? (
+            <div className="bg-bg-surface border border-border rounded-xl p-6 max-w-2xl">
+              <div className="flex items-center justify-between mb-4">
+                <p className="text-sm font-medium text-accent">Editing project info</p>
+                <Button variant="ghost" onClick={() => setEditing(false)}>
+                  Cancel
+                </Button>
+              </div>
+              <ProjectForm
+                initial={{
+                  title: project.title,
+                  subtitle: project.subtitle,
+                  description: project.description,
+                  cover_image: project.cover_image,
+                  category: project.category,
+                  min_age: project.min_age,
+                  max_age: project.max_age,
+                  estimated_hours: project.estimated_hours,
+                  is_published: project.is_published,
+                  is_template: project.is_template,
+                }}
+                onSubmit={handleUpdate}
+                submitLabel="Save Changes"
+              />
+            </div>
+          ) : (
+            <ProjectInfo project={project} />
+          )
         )}
 
         {activeTab === "Knowledge Tree" && (
