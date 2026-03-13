@@ -486,6 +486,11 @@ class LearningState(TypedDict):
 |--------|----------|-------------|
 | CRUD | `/api/admin/projects/` | 项目管理 |
 | CRUD | `/api/admin/knodes/` | 知识节点管理 |
+| POST | `/api/admin/projects/:id/import-tree` | 导入知识树 JSON |
+| GET | `/api/admin/projects/:id/export-tree` | 导出知识树 JSON |
+| GET | `/api/admin/projects/:id/tree-preview` | 知识树图预览 |
+| POST | `/api/admin/projects/:id/generate-tree` | AI 生成知识树（粗/中/细三档颗粒度） |
+| POST | `/api/admin/projects/:id/clone` | 克隆项目 |
 | GET | `/api/admin/analytics/` | 平台数据分析 |
 
 ## 11. Development Phases

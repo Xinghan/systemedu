@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
+import Navbar from "@/components/Navbar";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -13,8 +14,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "SystemEdu - Learn with Zyx",
-  description: "Gamified learning quests guided by your alien teacher Zyx",
+  title: "SystemEdu - Learn by Doing",
+  description: "AI-powered project-based learning for ages 6-18",
 };
 
 export default function RootLayout({
@@ -25,8 +26,10 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
+        className={`${geistSans.variable} ${geistMono.variable} antialiased pt-14`}
+        suppressHydrationWarning
       >
+        <Navbar />
         {children}
       </body>
     </html>

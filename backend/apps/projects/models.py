@@ -27,6 +27,7 @@ class Project(models.Model):
     max_age = models.PositiveSmallIntegerField(default=18)
     estimated_hours = models.PositiveSmallIntegerField(default=10)
     is_published = models.BooleanField(default=False)
+    is_template = models.BooleanField(default=False)
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.SET_NULL,

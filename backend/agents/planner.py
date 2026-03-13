@@ -76,59 +76,11 @@ def generate_knowledge_tree(
     return json.loads(content.strip())
 
 
-def save_knowledge_tree(project, tree_data: dict) -> dict:
+def save_knowledge_tree(project, tree_data: dict, *, replace: bool = False) -> dict:
     """Save a generated knowledge tree to the database.
 
-    Args:
-        project: Project model instance
-        tree_data: parsed JSON from generate_knowledge_tree()
-
-    Returns:
-        dict with counts of created milestones and knodes
+    Delegates to the shared service in apps.projects.services.
     """
-    from apps.projects.models import KnowledgeNode, Milestone
+    from apps.projects.services import save_knowledge_tree as _save_tree
 
-    created_knodes = []
-    milestone_count = 0
-
-    for ms_data in tree_data["milestones"]:
-        milestone = Milestone.objects.create(
-            project=project,
-            title=ms_data["title"],
-            description=ms_data.get("description", ""),
-            order=ms_data["order"],
-            xp_reward=sum(k.get("xp_reward", 20) for k in ms_data["knodes"]),
-        )
-        milestone_count += 1
-
-        for kn_data in ms_data["knodes"]:
-            knode = KnowledgeNode.objects.create(
-                project=project,
-                milestone=milestone,
-                title=kn_data["title"],
-                summary=kn_data.get("summary", ""),
-                difficulty_level=kn_data.get("difficulty_level", 1),
-                content_type=kn_data.get("content_type", "text"),
-                acceptance_type=kn_data.get("acceptance_type", "quiz"),
-                estimated_minutes=kn_data.get("estimated_minutes", 15),
-                xp_reward=kn_data.get("xp_reward", 20),
-                order=kn_data.get("order", 0),
-            )
-            created_knodes.append(knode)
-
-    # Set prerequisites using global indices
-    global_index = 0
-    for ms_data in tree_data["milestones"]:
-        for kn_data in ms_data["knodes"]:
-            prereq_indices = kn_data.get("prerequisite_indices", [])
-            if prereq_indices:
-                current_knode = created_knodes[global_index]
-                for idx in prereq_indices:
-                    if 0 <= idx < len(created_knodes) and idx != global_index:
-                        current_knode.prerequisites.add(created_knodes[idx])
-            global_index += 1
-
-    return {
-        "milestones_created": milestone_count,
-        "knodes_created": len(created_knodes),
-    }
+    return _save_tree(project, tree_data, replace=replace)
