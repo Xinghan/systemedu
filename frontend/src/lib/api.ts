@@ -12,8 +12,7 @@ import type {
 } from "./types";
 import { getAccessToken, getRefreshToken, setTokens, clearTokens } from "./auth";
 
-const API_BASE =
-  process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8020";
+const API_BASE = "";
 
 class ApiError extends Error {
   status: number;
@@ -40,14 +39,17 @@ async function fetchAPI<T>(
     headers["Authorization"] = `Bearer ${token}`;
   }
 
-  let res = await fetch(`${API_BASE}${path}`, { ...options, headers });
+  // Strip trailing slash to avoid Next.js 308 redirect; the proxy route adds it back for Django
+  const cleanPath = path.replace(/\/+$/, "");
+
+  let res = await fetch(`${API_BASE}${cleanPath}`, { ...options, headers });
 
   // Try refresh if 401
   if (res.status === 401 && token) {
     const refreshed = await tryRefreshToken();
     if (refreshed) {
       headers["Authorization"] = `Bearer ${getAccessToken()}`;
-      res = await fetch(`${API_BASE}${path}`, { ...options, headers });
+      res = await fetch(`${API_BASE}${cleanPath}`, { ...options, headers });
     } else {
       clearTokens();
     }
@@ -72,7 +74,7 @@ async function tryRefreshToken(): Promise<boolean> {
   if (!refresh) return false;
 
   try {
-    const res = await fetch(`${API_BASE}/api/auth/refresh/`, {
+    const res = await fetch(`${API_BASE}/api/auth/refresh`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ refresh }),
@@ -87,8 +89,10 @@ async function tryRefreshToken(): Promise<boolean> {
 }
 
 // Server-side fetch (no auth, no token refresh)
+const SERVER_API_BASE = process.env.BACKEND_URL || "http://127.0.0.1:8020";
+
 export async function fetchServer<T>(path: string): Promise<T> {
-  const res = await fetch(`${API_BASE}${path}`, {
+  const res = await fetch(`${SERVER_API_BASE}${path}`, {
     headers: { "Content-Type": "application/json" },
     next: { revalidate: 60 },
   });
