@@ -59,6 +59,78 @@ export default function TreeImport({ projectId, hasExistingTree, onImported }: T
     }
   }
 
+  function downloadTemplate() {
+    const template = {
+      milestones: [
+        {
+          title: "Getting Started",
+          description: "Foundational concepts and setup",
+          order: 0,
+          knodes: [
+            {
+              title: "Introduction to the Project",
+              summary: "Overview of what we will build and learn",
+              difficulty_level: 1,
+              content_type: "text",
+              acceptance_type: "quiz",
+              estimated_minutes: 15,
+              xp_reward: 20,
+              order: 0,
+              prerequisite_indices: [],
+            },
+            {
+              title: "Setting Up the Environment",
+              summary: "Install required tools and dependencies",
+              difficulty_level: 2,
+              content_type: "interactive",
+              acceptance_type: "auto",
+              estimated_minutes: 30,
+              xp_reward: 30,
+              order: 1,
+              prerequisite_indices: [0],
+            },
+          ],
+        },
+        {
+          title: "Core Concepts",
+          description: "Main learning topics",
+          order: 1,
+          knodes: [
+            {
+              title: "First Core Concept",
+              summary: "Detailed explanation of the first key topic",
+              difficulty_level: 3,
+              content_type: "text",
+              acceptance_type: "quiz",
+              estimated_minutes: 25,
+              xp_reward: 30,
+              order: 0,
+              prerequisite_indices: [0, 1],
+            },
+            {
+              title: "Hands-on Practice",
+              summary: "Apply what you learned with a guided exercise",
+              difficulty_level: 4,
+              content_type: "code",
+              acceptance_type: "code_submit",
+              estimated_minutes: 45,
+              xp_reward: 50,
+              order: 1,
+              prerequisite_indices: [2],
+            },
+          ],
+        },
+      ],
+    };
+    const blob = new Blob([JSON.stringify(template, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "knowledge-tree-template.json";
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
@@ -121,7 +193,19 @@ export default function TreeImport({ projectId, hasExistingTree, onImported }: T
         </Button>
       </div>
 
-      {/* JSON Format Reference */}
+      {/* Download template + JSON Format Reference */}
+      <div className="flex items-center gap-3">
+        <button
+          onClick={downloadTemplate}
+          className="flex items-center gap-1.5 text-xs text-accent hover:text-accent/80 transition-colors cursor-pointer"
+        >
+          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
+          </svg>
+          Download JSON Template
+        </button>
+      </div>
+
       <JsonFormatReference />
     </div>
   );

@@ -7,9 +7,8 @@ import { toast } from "@/components/Toast";
 import type { AdminProjectDetail, ProjectFormData, TreeGraph } from "@/lib/types";
 import TabBar from "@/components/TabBar";
 import ProjectForm from "@/components/ProjectForm";
-import TreeImport from "@/components/TreeImport";
-import TreeGenerator from "@/components/TreeGenerator";
 import TreePreview from "@/components/TreePreview";
+import TaskBanner from "@/components/TaskBanner";
 import Button from "@/components/Button";
 import Modal from "@/components/Modal";
 import FormInput from "@/components/FormInput";
@@ -124,6 +123,10 @@ export default function ProjectDetailPage() {
 
   return (
     <div>
+      <TaskBanner
+        projectId={projectId}
+        onTaskComplete={() => { fetchProject(); fetchTree(); }}
+      />
       <div className="flex items-center justify-between mb-6">
         <div>
           <button
@@ -138,11 +141,6 @@ export default function ProjectDetailPage() {
           <Button variant="secondary" onClick={() => { setShowClone(true); setCloneTitle(`${project.title} (Copy)`); }}>
             Clone
           </Button>
-          {hasTree && (
-            <Button variant="secondary" onClick={handleExport}>
-              Export Tree
-            </Button>
-          )}
         </div>
       </div>
 
@@ -172,30 +170,46 @@ export default function ProjectDetailPage() {
 
         {activeTab === "Knowledge Tree" && (
           <div className="space-y-6">
-            {/* AI Generation */}
-            <div className="bg-bg-surface border border-border rounded-xl p-6">
-              <TreeGenerator
-                projectId={projectId}
-                hasExistingTree={hasTree}
-                onImported={() => { fetchProject(); fetchTree(); }}
-              />
+            {/* Action buttons */}
+            <div className="flex gap-3">
+              <Button onClick={() => router.push(`/projects/${projectId}/generate`)}>
+                AI Generate
+              </Button>
+              <Button variant="secondary" onClick={() => router.push(`/projects/${projectId}/import`)}>
+                Import JSON
+              </Button>
+              {hasTree && (
+                <Button variant="secondary" onClick={handleExport}>
+                  Export
+                </Button>
+              )}
             </div>
 
-            {/* Manual Import */}
-            <div className="bg-bg-surface border border-border rounded-xl p-6">
-              <TreeImport
-                projectId={projectId}
-                hasExistingTree={hasTree}
-                onImported={() => { fetchProject(); fetchTree(); }}
-              />
-            </div>
-
+            {/* Tree visualization */}
             {treeLoading ? (
               <div className="flex justify-center py-12">
                 <div className="animate-spin w-8 h-8 border-2 border-accent border-t-transparent rounded-full" />
               </div>
+            ) : treeGraph && treeGraph.nodes.length > 0 ? (
+              <TreePreview graph={treeGraph} />
             ) : (
-              treeGraph && <TreePreview graph={treeGraph} />
+              <div className="border border-dashed border-border rounded-xl p-12 text-center">
+                <svg className="w-12 h-12 mx-auto text-text-muted mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 17.25v1.007a3 3 0 01-.879 2.122L7.5 21h9l-.621-.621A3 3 0 0115 18.257V17.25m6-12V15a2.25 2.25 0 01-2.25 2.25H5.25A2.25 2.25 0 013 15V5.25m18 0A2.25 2.25 0 0018.75 3H5.25A2.25 2.25 0 003 5.25m18 0V12a2.25 2.25 0 01-2.25 2.25H5.25A2.25 2.25 0 013 12V5.25" />
+                </svg>
+                <p className="text-text-secondary text-sm font-medium mb-1">No knowledge tree yet</p>
+                <p className="text-text-muted text-xs mb-4">
+                  Generate one with AI or import a JSON file to get started.
+                </p>
+                <div className="flex justify-center gap-3">
+                  <Button onClick={() => router.push(`/projects/${projectId}/generate`)}>
+                    AI Generate
+                  </Button>
+                  <Button variant="secondary" onClick={() => router.push(`/projects/${projectId}/import`)}>
+                    Import JSON
+                  </Button>
+                </div>
+              </div>
             )}
           </div>
         )}

@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import TaskIndicator from "./TaskIndicator";
 
 interface SidebarProps {
   onLogout: () => void;
@@ -59,6 +60,9 @@ export default function Sidebar({ onLogout }: SidebarProps) {
           );
         })}
       </nav>
+
+      {/* Active tasks indicator */}
+      <TaskIndicator />
 
       {/* Bottom */}
       <div className="px-3 py-4 border-t border-border">

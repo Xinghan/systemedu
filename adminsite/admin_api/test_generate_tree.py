@@ -1,4 +1,4 @@
-"""Tests for the AI knowledge tree generation endpoint."""
+"""Tests for the AI knowledge tree generation endpoint (async task kickoff)."""
 
 import json
 from unittest.mock import MagicMock, patch
@@ -76,149 +76,67 @@ def project(db):
     )
 
 
-def _mock_openai_response(content: str):
-    """Create a mock OpenAI chat completion response."""
-    mock_message = MagicMock()
-    mock_message.content = content
-
-    mock_choice = MagicMock()
-    mock_choice.message = mock_message
-
-    mock_response = MagicMock()
-    mock_response.choices = [mock_choice]
-    return mock_response
-
-
 # ---------------------------------------------------------------------------
-# Success cases
+# Success cases — endpoint now returns 202 + task_id
 # ---------------------------------------------------------------------------
 
 
-class TestGenerateTreeSuccess:
-    """Tests for successful tree generation."""
+class TestGenerateTreeKickoff:
+    """Tests for async task kickoff via generate-tree endpoint."""
 
-    @patch("admin_api.services.OpenAI")
-    def test_generate_tree_default_granularity(self, mock_openai_cls, admin_client, project):
-        """Default granularity is medium."""
-        mock_client = MagicMock()
-        mock_client.chat.completions.create.return_value = _mock_openai_response(
-            json.dumps(MOCK_TREE_RESPONSE)
-        )
-        mock_openai_cls.return_value = mock_client
-
+    @patch("admin_api.views.run_generate_task")
+    def test_returns_202_with_task_id(self, mock_run, admin_client, project):
+        """POST returns 202 with task_id and pending status."""
         url = GENERATE_URL.format(pk=project.pk)
-        with patch.dict("os.environ", {"DASHSCOPE_API_KEY": "test-key"}):
-            response = admin_client.post(url, {}, format="json")
+        response = admin_client.post(url, {}, format="json")
 
-        assert response.status_code == status.HTTP_200_OK
+        assert response.status_code == status.HTTP_202_ACCEPTED
         data = response.json()
-        assert "tree_data" in data
-        assert "milestones" in data["tree_data"]
-        assert len(data["tree_data"]["milestones"]) == 2
+        assert "task_id" in data
+        assert data["status"] == "pending"
+        mock_run.assert_called_once_with(data["task_id"])
 
-        # Default should use medium prompt
-        call_args = mock_client.chat.completions.create.call_args
-        user_msg = call_args.kwargs["messages"][1]["content"]
-        assert "medium" in user_msg.lower()
-
-    @patch("admin_api.services.OpenAI")
-    def test_generate_tree_coarse(self, mock_openai_cls, admin_client, project):
-        """Coarse granularity includes 20-50 range in prompt."""
-        mock_client = MagicMock()
-        mock_client.chat.completions.create.return_value = _mock_openai_response(
-            json.dumps(MOCK_TREE_RESPONSE)
-        )
-        mock_openai_cls.return_value = mock_client
+    @patch("admin_api.views.run_generate_task")
+    def test_task_created_with_default_granularity(self, mock_run, admin_client, project):
+        """Default granularity is medium."""
+        from admin_api.models import GenerationTask
 
         url = GENERATE_URL.format(pk=project.pk)
-        with patch.dict("os.environ", {"DASHSCOPE_API_KEY": "test-key"}):
-            response = admin_client.post(
-                url, {"granularity": "coarse"}, format="json",
-            )
+        response = admin_client.post(url, {}, format="json")
 
-        assert response.status_code == status.HTTP_200_OK
-        call_args = mock_client.chat.completions.create.call_args
-        user_msg = call_args.kwargs["messages"][1]["content"]
-        assert "coarse" in user_msg.lower()
-        assert "20-50" in user_msg
+        assert response.status_code == status.HTTP_202_ACCEPTED
+        task = GenerationTask.objects.get(pk=response.json()["task_id"])
+        assert task.granularity == "medium"
+        assert task.instructions == ""
+        assert task.project == project
 
-    @patch("admin_api.services.OpenAI")
-    def test_generate_tree_fine(self, mock_openai_cls, admin_client, project):
-        """Fine granularity includes 500-1500 range in prompt."""
-        mock_client = MagicMock()
-        mock_client.chat.completions.create.return_value = _mock_openai_response(
-            json.dumps(MOCK_TREE_RESPONSE)
-        )
-        mock_openai_cls.return_value = mock_client
+    @patch("admin_api.views.run_generate_task")
+    def test_task_created_with_custom_params(self, mock_run, admin_client, project):
+        """Custom granularity and instructions are stored on the task."""
+        from admin_api.models import GenerationTask
 
         url = GENERATE_URL.format(pk=project.pk)
-        with patch.dict("os.environ", {"DASHSCOPE_API_KEY": "test-key"}):
-            response = admin_client.post(
-                url, {"granularity": "fine"}, format="json",
-            )
-
-        assert response.status_code == status.HTTP_200_OK
-        call_args = mock_client.chat.completions.create.call_args
-        user_msg = call_args.kwargs["messages"][1]["content"]
-        assert "fine" in user_msg.lower()
-        assert "500-1500" in user_msg
-
-    @patch("admin_api.services.OpenAI")
-    def test_generate_tree_with_instructions(self, mock_openai_cls, admin_client, project):
-        """Instructions are included in the prompt."""
-        mock_client = MagicMock()
-        mock_client.chat.completions.create.return_value = _mock_openai_response(
-            json.dumps(MOCK_TREE_RESPONSE)
+        response = admin_client.post(
+            url,
+            {"granularity": "fine", "instructions": "Focus on coding"},
+            format="json",
         )
-        mock_openai_cls.return_value = mock_client
+
+        assert response.status_code == status.HTTP_202_ACCEPTED
+        task = GenerationTask.objects.get(pk=response.json()["task_id"])
+        assert task.granularity == "fine"
+        assert task.instructions == "Focus on coding"
+
+    @patch("admin_api.views.run_generate_task")
+    def test_task_created_by_user(self, mock_run, admin_client, admin_user, project):
+        """Task records the requesting user."""
+        from admin_api.models import GenerationTask
 
         url = GENERATE_URL.format(pk=project.pk)
-        with patch.dict("os.environ", {"DASHSCOPE_API_KEY": "test-key"}):
-            response = admin_client.post(
-                url,
-                {"granularity": "medium", "instructions": "Focus on coding exercises"},
-                format="json",
-            )
+        response = admin_client.post(url, {}, format="json")
 
-        assert response.status_code == status.HTTP_200_OK
-        call_args = mock_client.chat.completions.create.call_args
-        user_msg = call_args.kwargs["messages"][1]["content"]
-        assert "Focus on coding exercises" in user_msg
-
-    @patch("admin_api.services.OpenAI")
-    def test_generate_does_not_auto_import(self, mock_openai_cls, admin_client, project):
-        """Generated tree is returned, not automatically imported."""
-        mock_client = MagicMock()
-        mock_client.chat.completions.create.return_value = _mock_openai_response(
-            json.dumps(MOCK_TREE_RESPONSE)
-        )
-        mock_openai_cls.return_value = mock_client
-
-        url = GENERATE_URL.format(pk=project.pk)
-        with patch.dict("os.environ", {"DASHSCOPE_API_KEY": "test-key"}):
-            response = admin_client.post(url, {}, format="json")
-
-        assert response.status_code == status.HTTP_200_OK
-        assert project.milestones.count() == 0
-
-    @patch("admin_api.services.OpenAI")
-    def test_prompt_includes_project_info(self, mock_openai_cls, admin_client, project):
-        """Verify the prompt includes project title, category, age range."""
-        mock_client = MagicMock()
-        mock_client.chat.completions.create.return_value = _mock_openai_response(
-            json.dumps(MOCK_TREE_RESPONSE)
-        )
-        mock_openai_cls.return_value = mock_client
-
-        url = GENERATE_URL.format(pk=project.pk)
-        with patch.dict("os.environ", {"DASHSCOPE_API_KEY": "test-key"}):
-            admin_client.post(url, {}, format="json")
-
-        call_args = mock_client.chat.completions.create.call_args
-        user_msg = call_args.kwargs["messages"][1]["content"]
-        assert "AI for Kids" in user_msg
-        assert "Learn AI step by step" in user_msg
-        assert "10-16" in user_msg
+        task = GenerationTask.objects.get(pk=response.json()["task_id"])
+        assert task.created_by == admin_user
 
 
 # ---------------------------------------------------------------------------
@@ -257,84 +175,6 @@ class TestGenerateTreePermissions:
         url = GENERATE_URL.format(pk=project.pk)
         response = regular_client.post(url, {}, format="json")
         assert response.status_code == status.HTTP_403_FORBIDDEN
-
-
-# ---------------------------------------------------------------------------
-# Error handling
-# ---------------------------------------------------------------------------
-
-
-class TestGenerateTreeErrors:
-    """Tests for API/AI error handling."""
-
-    def test_missing_api_key(self, admin_client, project):
-        url = GENERATE_URL.format(pk=project.pk)
-        with patch.dict("os.environ", {}, clear=True):
-            import os
-            os.environ.pop("DASHSCOPE_API_KEY", None)
-            response = admin_client.post(url, {}, format="json")
-
-        assert response.status_code == status.HTTP_400_BAD_REQUEST
-        assert "DASHSCOPE_API_KEY" in response.json()["detail"]
-
-    @patch("admin_api.services.OpenAI")
-    def test_ai_returns_empty_response(self, mock_openai_cls, admin_client, project):
-        mock_client = MagicMock()
-        mock_client.chat.completions.create.return_value = _mock_openai_response("")
-        mock_openai_cls.return_value = mock_client
-
-        url = GENERATE_URL.format(pk=project.pk)
-        with patch.dict("os.environ", {"DASHSCOPE_API_KEY": "test-key"}):
-            response = admin_client.post(url, {}, format="json")
-
-        assert response.status_code == status.HTTP_400_BAD_REQUEST
-        assert "empty" in response.json()["detail"].lower()
-
-    @patch("admin_api.services.OpenAI")
-    def test_ai_returns_invalid_json(self, mock_openai_cls, admin_client, project):
-        mock_client = MagicMock()
-        mock_client.chat.completions.create.return_value = _mock_openai_response(
-            "not valid json {"
-        )
-        mock_openai_cls.return_value = mock_client
-
-        url = GENERATE_URL.format(pk=project.pk)
-        with patch.dict("os.environ", {"DASHSCOPE_API_KEY": "test-key"}):
-            response = admin_client.post(url, {}, format="json")
-
-        assert response.status_code == status.HTTP_400_BAD_REQUEST
-        assert "invalid json" in response.json()["detail"].lower()
-
-    @patch("admin_api.services.OpenAI")
-    def test_ai_returns_json_without_milestones(self, mock_openai_cls, admin_client, project):
-        mock_client = MagicMock()
-        mock_client.chat.completions.create.return_value = _mock_openai_response(
-            json.dumps({"nodes": []})
-        )
-        mock_openai_cls.return_value = mock_client
-
-        url = GENERATE_URL.format(pk=project.pk)
-        with patch.dict("os.environ", {"DASHSCOPE_API_KEY": "test-key"}):
-            response = admin_client.post(url, {}, format="json")
-
-        assert response.status_code == status.HTTP_400_BAD_REQUEST
-        assert "milestones" in response.json()["detail"].lower()
-
-    @patch("admin_api.services.OpenAI")
-    def test_ai_timeout(self, mock_openai_cls, admin_client, project):
-        """Timeout from the AI provider returns 502."""
-        from openai import APITimeoutError
-
-        mock_client = MagicMock()
-        mock_client.chat.completions.create.side_effect = APITimeoutError(request=MagicMock())
-        mock_openai_cls.return_value = mock_client
-
-        url = GENERATE_URL.format(pk=project.pk)
-        with patch.dict("os.environ", {"DASHSCOPE_API_KEY": "test-key"}):
-            response = admin_client.post(url, {}, format="json")
-
-        assert response.status_code == status.HTTP_502_BAD_GATEWAY
-        assert "generation failed" in response.json()["detail"].lower()
 
 
 # ---------------------------------------------------------------------------
@@ -395,3 +235,162 @@ class TestBuildUserPrompt:
 
         prompt = build_user_prompt(project, granularity="medium")
         assert "foundational" in prompt.lower()
+
+
+# ---------------------------------------------------------------------------
+# Sanitize tree data
+# ---------------------------------------------------------------------------
+
+
+class TestSanitizeTreeData:
+    """Unit tests for _sanitize_tree_data()."""
+
+    def _make_knode(self, **overrides):
+        base = {
+            "title": "Test Node",
+            "summary": "Test",
+            "difficulty_level": 3,
+            "content_type": "text",
+            "acceptance_type": "quiz",
+            "estimated_minutes": 15,
+            "xp_reward": 20,
+            "order": 0,
+            "prerequisite_indices": [],
+        }
+        base.update(overrides)
+        return base
+
+    def _make_tree(self, knodes):
+        return {
+            "milestones": [
+                {"title": "M1", "description": "", "order": 0, "knodes": knodes}
+            ]
+        }
+
+    def test_valid_data_unchanged(self):
+        from admin_api.services import _sanitize_tree_data
+
+        knode = self._make_knode()
+        tree = self._make_tree([knode])
+        _sanitize_tree_data(tree)
+        assert knode["content_type"] == "text"
+        assert knode["acceptance_type"] == "quiz"
+        assert knode["difficulty_level"] == 3
+        assert knode["estimated_minutes"] == 15
+        assert knode["xp_reward"] == 20
+
+    def test_invalid_content_type_falls_back_to_text(self):
+        from admin_api.services import _sanitize_tree_data
+
+        knode = self._make_knode(content_type="essay")
+        tree = self._make_tree([knode])
+        _sanitize_tree_data(tree)
+        assert knode["content_type"] == "text"
+
+    def test_invalid_acceptance_type_falls_back_to_quiz(self):
+        from admin_api.services import _sanitize_tree_data
+
+        knode = self._make_knode(acceptance_type="video")
+        tree = self._make_tree([knode])
+        _sanitize_tree_data(tree)
+        assert knode["acceptance_type"] == "quiz"
+
+    def test_all_valid_content_types_preserved(self):
+        from admin_api.services import _sanitize_tree_data, VALID_CONTENT_TYPES
+
+        for ct in VALID_CONTENT_TYPES:
+            knode = self._make_knode(content_type=ct)
+            tree = self._make_tree([knode])
+            _sanitize_tree_data(tree)
+            assert knode["content_type"] == ct
+
+    def test_all_valid_acceptance_types_preserved(self):
+        from admin_api.services import _sanitize_tree_data, VALID_ACCEPTANCE_TYPES
+
+        for at in VALID_ACCEPTANCE_TYPES:
+            knode = self._make_knode(acceptance_type=at)
+            tree = self._make_tree([knode])
+            _sanitize_tree_data(tree)
+            assert knode["acceptance_type"] == at
+
+    def test_difficulty_level_clamped_to_1(self):
+        from admin_api.services import _sanitize_tree_data
+
+        knode = self._make_knode(difficulty_level=0)
+        tree = self._make_tree([knode])
+        _sanitize_tree_data(tree)
+        assert knode["difficulty_level"] == 1
+
+    def test_difficulty_level_clamped_to_10(self):
+        from admin_api.services import _sanitize_tree_data
+
+        knode = self._make_knode(difficulty_level=15)
+        tree = self._make_tree([knode])
+        _sanitize_tree_data(tree)
+        assert knode["difficulty_level"] == 10
+
+    def test_difficulty_level_float_truncated(self):
+        from admin_api.services import _sanitize_tree_data
+
+        knode = self._make_knode(difficulty_level=3.7)
+        tree = self._make_tree([knode])
+        _sanitize_tree_data(tree)
+        assert knode["difficulty_level"] == 3
+
+    def test_negative_estimated_minutes_defaults(self):
+        from admin_api.services import _sanitize_tree_data
+
+        knode = self._make_knode(estimated_minutes=-5)
+        tree = self._make_tree([knode])
+        _sanitize_tree_data(tree)
+        assert knode["estimated_minutes"] == 15
+
+    def test_zero_estimated_minutes_defaults(self):
+        from admin_api.services import _sanitize_tree_data
+
+        knode = self._make_knode(estimated_minutes=0)
+        tree = self._make_tree([knode])
+        _sanitize_tree_data(tree)
+        assert knode["estimated_minutes"] == 15
+
+    def test_negative_xp_reward_defaults(self):
+        from admin_api.services import _sanitize_tree_data
+
+        knode = self._make_knode(xp_reward=-10)
+        tree = self._make_tree([knode])
+        _sanitize_tree_data(tree)
+        assert knode["xp_reward"] == 20
+
+    def test_zero_xp_reward_defaults(self):
+        from admin_api.services import _sanitize_tree_data
+
+        knode = self._make_knode(xp_reward=0)
+        tree = self._make_tree([knode])
+        _sanitize_tree_data(tree)
+        assert knode["xp_reward"] == 20
+
+    def test_missing_fields_get_defaults(self):
+        from admin_api.services import _sanitize_tree_data
+
+        knode = {"title": "Bare Node", "order": 0}
+        tree = self._make_tree([knode])
+        _sanitize_tree_data(tree)
+        assert knode["content_type"] == "text"
+        assert knode["acceptance_type"] == "quiz"
+        assert knode["difficulty_level"] == 1
+        assert knode["estimated_minutes"] == 15
+        assert knode["xp_reward"] == 20
+
+    def test_multiple_knodes_all_sanitized(self):
+        from admin_api.services import _sanitize_tree_data
+
+        knodes = [
+            self._make_knode(content_type="essay", difficulty_level=0),
+            self._make_knode(acceptance_type="video", xp_reward=-1),
+        ]
+        tree = self._make_tree(knodes)
+        _sanitize_tree_data(tree)
+        assert knodes[0]["content_type"] == "text"
+        assert knodes[0]["difficulty_level"] == 1
+        assert knodes[1]["acceptance_type"] == "quiz"
+        assert knodes[1]["xp_reward"] == 20

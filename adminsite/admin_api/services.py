@@ -170,4 +170,48 @@ def generate_knowledge_tree(
     if "milestones" not in tree_data:
         raise ValueError("AI response missing 'milestones' key")
 
+    _sanitize_tree_data(tree_data)
     return tree_data
+
+
+# Valid enum values for knowledge node fields
+VALID_CONTENT_TYPES = {"text", "interactive", "code", "experiment", "quiz", "video"}
+VALID_ACCEPTANCE_TYPES = {"quiz", "code_submit", "essay", "demo", "peer_review", "auto"}
+
+
+def _sanitize_tree_data(tree_data: dict) -> None:
+    """
+    Sanitize AI-generated tree data in place.
+
+    LLMs sometimes confuse content_type and acceptance_type enum values
+    (e.g. putting "essay" in content_type). This function clamps all fields
+    to valid ranges/values.
+    """
+    for milestone in tree_data.get("milestones", []):
+        for knode in milestone.get("knodes", []):
+            # Fix content_type
+            if knode.get("content_type") not in VALID_CONTENT_TYPES:
+                knode["content_type"] = "text"
+
+            # Fix acceptance_type
+            if knode.get("acceptance_type") not in VALID_ACCEPTANCE_TYPES:
+                knode["acceptance_type"] = "quiz"
+
+            # Clamp difficulty_level to 1-10
+            diff = knode.get("difficulty_level")
+            if not isinstance(diff, (int, float)) or diff < 1:
+                knode["difficulty_level"] = 1
+            elif diff > 10:
+                knode["difficulty_level"] = 10
+            else:
+                knode["difficulty_level"] = int(diff)
+
+            # Ensure estimated_minutes > 0
+            mins = knode.get("estimated_minutes")
+            if not isinstance(mins, (int, float)) or mins <= 0:
+                knode["estimated_minutes"] = 15
+
+            # Ensure xp_reward > 0
+            xp = knode.get("xp_reward")
+            if not isinstance(xp, (int, float)) or xp <= 0:
+                knode["xp_reward"] = 20

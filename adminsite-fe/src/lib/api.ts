@@ -1,4 +1,5 @@
 import type {
+  ActiveTask,
   AdminProject,
   AdminProjectDetail,
   AuthTokens,
@@ -7,7 +8,8 @@ import type {
   TreeGraph,
   ImportResult,
   GenerateTreeInput,
-  GenerateTreeResult,
+  GenerateTreeKickoff,
+  GenerationTaskStatus,
 } from "./types";
 import { getAccessToken, getRefreshToken, setTokens, clearTokens } from "./auth";
 
@@ -176,16 +178,42 @@ export async function getTreePreview(projectId: number): Promise<TreeGraph> {
   return fetchAPI<TreeGraph>(`/projects/${projectId}/tree-preview`);
 }
 
-// ---- AI Generate Tree ----
+// ---- AI Generate Tree (async) ----
 
 export async function generateTree(
   projectId: number,
   input: GenerateTreeInput,
-): Promise<GenerateTreeResult> {
-  return fetchAPI<GenerateTreeResult>(`/projects/${projectId}/generate-tree`, {
+): Promise<GenerateTreeKickoff> {
+  return fetchAPI<GenerateTreeKickoff>(`/projects/${projectId}/generate-tree`, {
     method: "POST",
     body: JSON.stringify(input),
   });
+}
+
+export async function getTaskStatus(taskId: string): Promise<GenerationTaskStatus> {
+  return fetchAPI<GenerationTaskStatus>(`/tasks/${taskId}`);
+}
+
+export async function pollTaskUntilDone(
+  taskId: string,
+  intervalMs: number = 3000,
+  maxAttempts: number = 80,
+): Promise<GenerationTaskStatus> {
+  for (let i = 0; i < maxAttempts; i++) {
+    const status = await getTaskStatus(taskId);
+    if (status.status === "completed" || status.status === "failed") {
+      return status;
+    }
+    await new Promise((resolve) => setTimeout(resolve, intervalMs));
+  }
+  return { task_id: taskId, status: "failed", created_at: null, started_at: null, completed_at: null, error: "Polling timed out" };
+}
+
+// ---- Active Tasks ----
+
+export async function getActiveTasks(projectId?: number): Promise<ActiveTask[]> {
+  const query = projectId ? `?project_id=${projectId}` : "";
+  return fetchAPI<ActiveTask[]>(`/tasks${query}`);
 }
 
 // ---- Clone ----

@@ -19,4 +19,7 @@ urlpatterns = [
     path("projects/<int:pk>/generate-tree/", views.GenerateKnowledgeTreeView.as_view(), name="generate-tree"),
     # Clone project (template system)
     path("projects/<int:pk>/clone/", views.CloneProjectView.as_view(), name="clone-project"),
+    # Async generation tasks
+    path("tasks/", views.ActiveTasksListView.as_view(), name="active-tasks"),
+    path("tasks/<uuid:task_id>/", views.GenerationTaskStatusView.as_view(), name="task-status"),
 ]

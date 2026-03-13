@@ -117,6 +117,33 @@ export interface GenerateTreeResult {
   tree_data: Record<string, unknown>;
 }
 
+export interface GenerateTreeKickoff {
+  task_id: string;
+  status: string;
+}
+
+export interface GenerationTaskStatus {
+  task_id: string;
+  status: "pending" | "running" | "completed" | "failed";
+  created_at: string | null;
+  started_at: string | null;
+  completed_at: string | null;
+  tree_data?: Record<string, unknown>;
+  milestones_created?: number;
+  knodes_created?: number;
+  error?: string;
+}
+
+export interface ActiveTask {
+  task_id: string;
+  status: "pending" | "running";
+  project_id: number;
+  project_title: string;
+  granularity: string;
+  created_at: string | null;
+  started_at: string | null;
+}
+
 export const CATEGORY_OPTIONS = [
   { value: "ai", label: "AI & Machine Learning" },
   { value: "biotech", label: "Biotechnology" },

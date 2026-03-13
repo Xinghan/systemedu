@@ -14,6 +14,7 @@ from apps.projects.services import (
 )
 
 from .permissions import IsAdminUser
+from .models import GenerationTask
 from .serializers import (
     CloneProjectSerializer,
     GenerateTreeSerializer,
@@ -22,7 +23,7 @@ from .serializers import (
     ProjectDetailSerializer,
     ProjectListSerializer,
 )
-from .services import generate_knowledge_tree
+from .tasks import run_generate_task
 
 
 class AdminLoginView(TokenObtainPairView):
@@ -166,7 +167,7 @@ class ExportKnowledgeTreeView(APIView):
 
 
 class GenerateKnowledgeTreeView(APIView):
-    """Use AI (Qwen) to generate a knowledge tree JSON for a project."""
+    """Kick off async AI knowledge tree generation. Returns 202 with task_id."""
 
     permission_classes = [IsAdminUser]
 
@@ -185,25 +186,80 @@ class GenerateKnowledgeTreeView(APIView):
         granularity = serializer.validated_data["granularity"]
         instructions = serializer.validated_data["instructions"]
 
+        task = GenerationTask.objects.create(
+            project=project,
+            created_by=request.user,
+            granularity=granularity,
+            instructions=instructions,
+        )
+
+        run_generate_task(str(task.id))
+
+        return Response(
+            {"task_id": str(task.id), "status": task.status},
+            status=status.HTTP_202_ACCEPTED,
+        )
+
+
+class GenerationTaskStatusView(APIView):
+    """Poll the status of an async generation task."""
+
+    permission_classes = [IsAdminUser]
+
+    def get(self, request, task_id):
         try:
-            tree_data = generate_knowledge_tree(
-                project,
-                granularity=granularity,
-                instructions=instructions,
-            )
-        except ValueError as e:
+            task = GenerationTask.objects.get(pk=task_id)
+        except GenerationTask.DoesNotExist:
             return Response(
-                {"detail": str(e)},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-        except Exception as e:
-            error_type = type(e).__name__
-            return Response(
-                {"detail": f"AI generation failed: {error_type}: {e}"},
-                status=status.HTTP_502_BAD_GATEWAY,
+                {"detail": "Task not found."},
+                status=status.HTTP_404_NOT_FOUND,
             )
 
-        return Response({"tree_data": tree_data})
+        data = {
+            "task_id": str(task.id),
+            "status": task.status,
+            "created_at": task.created_at.isoformat() if task.created_at else None,
+            "started_at": task.started_at.isoformat() if task.started_at else None,
+            "completed_at": task.completed_at.isoformat() if task.completed_at else None,
+        }
+
+        if task.status == GenerationTask.Status.COMPLETED:
+            data["tree_data"] = task.result_json
+            data["milestones_created"] = task.milestones_created
+            data["knodes_created"] = task.knodes_created
+        elif task.status == GenerationTask.Status.FAILED:
+            data["error"] = task.error_message
+
+        return Response(data)
+
+
+class ActiveTasksListView(APIView):
+    """List active (pending/running) generation tasks."""
+
+    permission_classes = [IsAdminUser]
+
+    def get(self, request):
+        qs = GenerationTask.objects.filter(
+            status__in=[GenerationTask.Status.PENDING, GenerationTask.Status.RUNNING],
+        ).select_related("project")
+
+        project_id = request.query_params.get("project_id")
+        if project_id:
+            qs = qs.filter(project_id=project_id)
+
+        tasks = [
+            {
+                "task_id": str(t.id),
+                "status": t.status,
+                "project_id": t.project_id,
+                "project_title": t.project.title,
+                "granularity": t.granularity,
+                "created_at": t.created_at.isoformat() if t.created_at else None,
+                "started_at": t.started_at.isoformat() if t.started_at else None,
+            }
+            for t in qs
+        ]
+        return Response(tasks)
 
 
 class CloneProjectView(APIView):
