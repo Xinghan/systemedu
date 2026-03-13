@@ -20,6 +20,7 @@ def _make_state(**overrides) -> LearningState:
         "knode_summary": "Introduction to the concept of data.",
         "messages": [HumanMessage(content="什么是数据？")],
         "response": "",
+        "memory_context": "",
     }
     defaults.update(overrides)
     return defaults
@@ -98,13 +99,208 @@ class TestTutorAgent:
         assert len(result["messages"]) == 4
         assert result["response"] == "第二轮回答"
 
+    @patch("agents.tutor.get_llm")
+    def test_tutor_includes_memory_in_prompt(self, mock_get_llm):
+        """When memory_context is provided, it appears in the system prompt."""
+        mock_llm = MagicMock()
+        mock_llm.invoke.return_value = AIMessage(content="test")
+        mock_get_llm.return_value = mock_llm
+
+        state = _make_state(memory_context="- 学生喜欢用图表学习\n- 学生对数学有兴趣")
+        tutor_node(state)
+
+        call_args = mock_llm.invoke.call_args[0][0]
+        system_msg = call_args[0].content
+        assert "学生喜欢用图表学习" in system_msg
+        assert "学生对数学有兴趣" in system_msg
+
+    @patch("agents.tutor.get_llm")
+    def test_tutor_works_without_memory(self, mock_get_llm):
+        """When memory_context is empty, prompt still works normally."""
+        mock_llm = MagicMock()
+        mock_llm.invoke.return_value = AIMessage(content="test")
+        mock_get_llm.return_value = mock_llm
+
+        state = _make_state(memory_context="")
+        tutor_node(state)
+
+        call_args = mock_llm.invoke.call_args[0][0]
+        system_msg = call_args[0].content
+        assert "关于这个学生的已知信息" not in system_msg
+
+
+class TestMemoryNodes:
+    @patch("agents.memory.get_memory")
+    def test_retrieve_memory_node(self, mock_get_memory):
+        """retrieve_memory_node populates memory_context from Mem0."""
+        mock_mem = MagicMock()
+        mock_mem.search.return_value = {
+            "results": [
+                {"memory": "学生喜欢编程", "score": 0.9},
+                {"memory": "学生8岁", "score": 0.8},
+            ]
+        }
+        mock_get_memory.return_value = mock_mem
+
+        from agents.graph import retrieve_memory_node
+
+        state = _make_state()
+        result = retrieve_memory_node(state)
+
+        assert "学生喜欢编程" in result["memory_context"]
+        assert "学生8岁" in result["memory_context"]
+        mock_mem.search.assert_called_once()
+
+    @patch("agents.memory.get_memory")
+    def test_retrieve_memory_node_empty(self, mock_get_memory):
+        """When no memories found, memory_context is empty string."""
+        mock_mem = MagicMock()
+        mock_mem.search.return_value = {"results": []}
+        mock_get_memory.return_value = mock_mem
+
+        from agents.graph import retrieve_memory_node
+
+        state = _make_state()
+        result = retrieve_memory_node(state)
+
+        assert result["memory_context"] == ""
+
+    @patch("agents.memory.get_memory")
+    def test_retrieve_memory_node_handles_error(self, mock_get_memory):
+        """Memory retrieval errors don't crash the pipeline."""
+        mock_get_memory.side_effect = Exception("Mem0 unavailable")
+
+        from agents.graph import retrieve_memory_node
+
+        state = _make_state()
+        result = retrieve_memory_node(state)
+
+        assert result["memory_context"] == ""
+
+    @patch("agents.memory.get_memory")
+    def test_store_memory_node(self, mock_get_memory):
+        """store_memory_node sends conversation to Mem0."""
+        mock_mem = MagicMock()
+        mock_mem.add.return_value = {"results": []}
+        mock_get_memory.return_value = mock_mem
+
+        from agents.graph import store_memory_node
+
+        state = _make_state(
+            messages=[
+                HumanMessage(content="什么是数据？"),
+                AIMessage(content="数据就是信息。"),
+            ]
+        )
+        store_memory_node(state)
+
+        mock_mem.add.assert_called_once()
+        call_args = mock_mem.add.call_args
+        msgs = call_args[0][0]
+        assert len(msgs) == 2
+        assert msgs[0]["role"] == "user"
+        assert msgs[1]["role"] == "assistant"
+
+    @patch("agents.memory.get_memory")
+    def test_store_memory_node_handles_error(self, mock_get_memory):
+        """Memory storage errors don't crash the pipeline."""
+        mock_mem = MagicMock()
+        mock_mem.add.side_effect = Exception("Storage failed")
+        mock_get_memory.return_value = mock_mem
+
+        from agents.graph import store_memory_node
+
+        state = _make_state(
+            messages=[
+                HumanMessage(content="test"),
+                AIMessage(content="response"),
+            ]
+        )
+        # Should not raise
+        result = store_memory_node(state)
+        assert result is not None
+
+
+class TestMemoryClient:
+    @patch("agents.memory.get_memory")
+    def test_retrieve_memories(self, mock_get_memory):
+        mock_mem = MagicMock()
+        mock_mem.search.return_value = {
+            "results": [
+                {"memory": "喜欢编程", "score": 0.9},
+                {"memory": "讨厌背诵", "score": 0.7},
+            ]
+        }
+        mock_get_memory.return_value = mock_mem
+
+        from agents.memory import retrieve_memories
+
+        result = retrieve_memories(user_id=1, query="学习偏好")
+
+        assert len(result) == 2
+        assert "喜欢编程" in result
+        mock_mem.search.assert_called_once_with(
+            query="学习偏好", user_id="user_1", limit=5,
+        )
+
+    @patch("agents.memory.get_memory")
+    def test_retrieve_memories_with_project_filter(self, mock_get_memory):
+        mock_mem = MagicMock()
+        mock_mem.search.return_value = {"results": []}
+        mock_get_memory.return_value = mock_mem
+
+        from agents.memory import retrieve_memories
+
+        retrieve_memories(user_id=1, query="test", project_id=42)
+
+        mock_mem.search.assert_called_once_with(
+            query="test",
+            user_id="user_1",
+            limit=5,
+            filters={"project_id": "42"},
+        )
+
+    @patch("agents.memory.get_memory")
+    def test_store_conversation(self, mock_get_memory):
+        mock_mem = MagicMock()
+        mock_mem.add.return_value = {"results": [{"id": "abc", "event": "ADD"}]}
+        mock_get_memory.return_value = mock_mem
+
+        from agents.memory import store_conversation
+
+        msgs = [
+            {"role": "user", "content": "你好"},
+            {"role": "assistant", "content": "你好！"},
+        ]
+        result = store_conversation(user_id=5, messages=msgs, project_id=3, knode_id=10)
+
+        mock_mem.add.assert_called_once_with(
+            msgs,
+            user_id="user_5",
+            metadata={"project_id": "3", "knode_id": "10"},
+        )
+
+    def test_get_memory_without_key_raises(self):
+        with patch("agents.memory.DASHSCOPE_API_KEY", ""):
+            # Reset singleton
+            import agents.memory
+            agents.memory._memory_instance = None
+            with pytest.raises(ValueError, match="DASHSCOPE_API_KEY"):
+                agents.memory.get_memory()
+
 
 class TestLearningGraph:
+    @patch("agents.memory.get_memory")
     @patch("agents.tutor.get_llm")
-    def test_graph_end_to_end(self, mock_get_llm):
+    def test_graph_end_to_end(self, mock_get_llm, mock_get_memory):
         mock_llm = MagicMock()
         mock_llm.invoke.return_value = AIMessage(content="Hello from graph!")
         mock_get_llm.return_value = mock_llm
+
+        mock_mem = MagicMock()
+        mock_mem.search.return_value = {"results": []}
+        mock_mem.add.return_value = {"results": []}
+        mock_get_memory.return_value = mock_mem
 
         from agents.graph import build_learning_graph
 
@@ -114,6 +310,36 @@ class TestLearningGraph:
 
         assert result["response"] == "Hello from graph!"
         assert len(result["messages"]) == 2
+        # Verify memory was searched and stored
+        mock_mem.search.assert_called_once()
+        mock_mem.add.assert_called_once()
+
+    @patch("agents.memory.get_memory")
+    @patch("agents.tutor.get_llm")
+    def test_graph_with_memory_context(self, mock_get_llm, mock_get_memory):
+        """Graph retrieves memories and passes them to tutor."""
+        mock_llm = MagicMock()
+        mock_llm.invoke.return_value = AIMessage(content="个性化回答")
+        mock_get_llm.return_value = mock_llm
+
+        mock_mem = MagicMock()
+        mock_mem.search.return_value = {
+            "results": [{"memory": "学生对数学感兴趣", "score": 0.9}]
+        }
+        mock_mem.add.return_value = {"results": []}
+        mock_get_memory.return_value = mock_mem
+
+        from agents.graph import build_learning_graph
+
+        graph = build_learning_graph()
+        state = _make_state()
+        result = graph.invoke(state)
+
+        assert result["response"] == "个性化回答"
+        # Check that memory context was included in the system prompt
+        call_args = mock_llm.invoke.call_args[0][0]
+        system_msg = call_args[0].content
+        assert "学生对数学感兴趣" in system_msg
 
 
 SAMPLE_TREE_JSON = {

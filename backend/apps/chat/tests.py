@@ -116,6 +116,7 @@ class TestSendMessage:
         assert call_args["knode_id"] == knode.pk
         assert call_args["knode_title"] == "Test Node"
         assert call_args["user_age"] == 14  # from conftest user fixture
+        assert call_args["memory_context"] == ""  # starts empty, populated by graph
 
     def test_send_message_unauthenticated(self, api_client, project):
         resp = api_client.post(SEND_URL, {

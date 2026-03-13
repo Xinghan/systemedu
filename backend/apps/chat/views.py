@@ -91,6 +91,7 @@ class SendMessageView(APIView):
             "knode_summary": knode_summary,
             "messages": messages,
             "response": "",
+            "memory_context": "",
         }
 
         result = learning_graph.invoke(state)

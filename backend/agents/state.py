@@ -16,3 +16,4 @@ class LearningState(TypedDict):
     knode_summary: str
     messages: list[BaseMessage]
     response: str  # final response text
+    memory_context: str  # retrieved memories injected into prompt
