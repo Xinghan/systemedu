@@ -1,6 +1,10 @@
 import type {
   Project,
   ProjectDetail,
+  MyProject,
+  ForkCheck,
+  ProgressSummary,
+  NodeProgress,
   User,
   AuthTokens,
   LoginInput,
@@ -122,6 +126,30 @@ export async function register(input: RegisterInput): Promise<User> {
 
 export async function getProfile(): Promise<User> {
   return fetchAPI<User>("/api/auth/profile/");
+}
+
+// ---- Fork / My Projects ----
+
+export async function forkProject(id: number): Promise<ProjectDetail> {
+  return fetchAPI<ProjectDetail>(`/api/projects/${id}/fork/`, {
+    method: "POST",
+  });
+}
+
+export async function checkFork(id: number): Promise<ForkCheck> {
+  return fetchAPI<ForkCheck>(`/api/projects/${id}/check-fork/`);
+}
+
+export async function getMyProjects(): Promise<MyProject[]> {
+  return fetchAPI<MyProject[]>("/api/projects/my/");
+}
+
+export async function getProgressSummary(id: number): Promise<ProgressSummary> {
+  return fetchAPI<ProgressSummary>(`/api/projects/${id}/progress-summary/`);
+}
+
+export async function getProjectProgress(projectId: number): Promise<NodeProgress[]> {
+  return fetchAPI<NodeProgress[]>(`/api/progress/projects/${projectId}/`);
 }
 
 export { ApiError };

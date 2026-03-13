@@ -1,4 +1,3 @@
-from django.utils import timezone
 from rest_framework import generics, permissions, status
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -11,6 +10,7 @@ from .serializers import (
     NodeProgressSerializer,
     UserAchievementSerializer,
 )
+from .services import enroll_user_in_project
 
 
 class EnrollProjectView(APIView):
@@ -27,34 +27,13 @@ class EnrollProjectView(APIView):
                 status=status.HTTP_404_NOT_FOUND,
             )
 
-        enrollment, created = UserProjectEnrollment.objects.get_or_create(
-            user=request.user,
-            project=project,
-            defaults={"status": "active"},
-        )
-        if not created:
+        try:
+            enrollment = enroll_user_in_project(request.user, project)
+        except ValueError:
             return Response(
                 {"detail": "Already enrolled."},
                 status=status.HTTP_409_CONFLICT,
             )
-
-        # Initialize node progress for all knodes in the project
-        knodes = project.knodes.all()
-        first_milestone = project.milestones.order_by("order").first()
-        progresses = []
-        for knode in knodes:
-            # Unlock first milestone's knodes with no prerequisites
-            node_status = "locked"
-            if knode.milestone == first_milestone and not knode.prerequisites.exists():
-                node_status = "available"
-            progresses.append(
-                UserNodeProgress(
-                    user=request.user,
-                    knode=knode,
-                    status=node_status,
-                )
-            )
-        UserNodeProgress.objects.bulk_create(progresses)
 
         return Response(
             EnrollmentSerializer(enrollment).data,

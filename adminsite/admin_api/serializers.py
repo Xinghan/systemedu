@@ -47,6 +47,23 @@ class ProjectCreateUpdateSerializer(serializers.ModelSerializer):
             "is_published", "is_template",
         ]
 
+    def validate_is_published(self, value):
+        if not value:
+            return value
+        # When publishing, check project has milestones and knodes
+        instance = self.instance
+        if instance:
+            if not instance.milestones.exists():
+                raise serializers.ValidationError(
+                    "Cannot publish: project has no knowledge tree. "
+                    "Import or generate a knowledge tree first."
+                )
+            if not KnowledgeNode.objects.filter(project=instance).exists():
+                raise serializers.ValidationError(
+                    "Cannot publish: project has no knowledge nodes."
+                )
+        return value
+
 
 class ProjectDetailSerializer(serializers.ModelSerializer):
     milestones = MilestoneSerializer(many=True, read_only=True)

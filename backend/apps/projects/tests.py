@@ -1,6 +1,8 @@
 import pytest
+from django.contrib.auth import get_user_model
 from rest_framework import status
 
+from apps.progress.models import UserNodeProgress, UserProjectEnrollment
 from apps.projects.models import KnowledgeNode, Milestone, Project
 from apps.projects.services import (
     KnowledgeTreeValidationError,
@@ -10,6 +12,8 @@ from apps.projects.services import (
     save_knowledge_tree,
     validate_knowledge_tree,
 )
+
+User = get_user_model()
 
 PROJECTS_URL = "/api/projects/"
 
@@ -392,3 +396,271 @@ class TestCloneProject:
             KnowledgeNode.objects.filter(project=cloned).order_by("pk")
         )
         assert cloned_knodes[2].prerequisites.count() == 2
+
+
+# ---------------------------------------------------------------------------
+# Fixtures for fork / my-projects tests
+# ---------------------------------------------------------------------------
+
+@pytest.fixture
+def published_project_with_tree(db):
+    """A published project with a full knowledge tree (2 milestones, 3 knodes)."""
+    proj = Project.objects.create(
+        title="AI Clustering",
+        description="Learn clustering.",
+        category="ai",
+        is_published=True,
+        estimated_hours=10,
+    )
+    tree = _make_tree(2, 3, prereqs={3: [0]})
+    save_knowledge_tree(proj, tree)
+    return proj
+
+
+@pytest.fixture
+def other_user(db):
+    return User.objects.create_user(
+        username="other",
+        email="other@example.com",
+        password="otherpass123",
+        age=16,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Fork API
+# ---------------------------------------------------------------------------
+
+class TestForkProject:
+    def test_fork_success(self, auth_client, user, published_project_with_tree):
+        proj = published_project_with_tree
+        resp = auth_client.post(f"{PROJECTS_URL}{proj.pk}/fork/")
+        assert resp.status_code == status.HTTP_201_CREATED
+        forked_id = resp.data["id"]
+        assert forked_id != proj.pk
+        assert resp.data["title"] == proj.title
+        assert resp.data["forked_from"] == proj.pk
+
+    def test_fork_deep_copies_tree(self, auth_client, user, published_project_with_tree):
+        proj = published_project_with_tree
+        resp = auth_client.post(f"{PROJECTS_URL}{proj.pk}/fork/")
+        forked = Project.objects.get(pk=resp.data["id"])
+        assert forked.milestones.count() == 2
+        assert forked.knodes.count() == 6
+
+    def test_fork_preserves_prerequisites(self, auth_client, user, published_project_with_tree):
+        proj = published_project_with_tree
+        resp = auth_client.post(f"{PROJECTS_URL}{proj.pk}/fork/")
+        forked = Project.objects.get(pk=resp.data["id"])
+        # Node at index 3 should have prereq from node 0 in original tree
+        forked_knodes = list(forked.knodes.order_by("pk"))
+        assert forked_knodes[3].prerequisites.count() == 1
+
+    def test_fork_auto_enrolls(self, auth_client, user, published_project_with_tree):
+        proj = published_project_with_tree
+        resp = auth_client.post(f"{PROJECTS_URL}{proj.pk}/fork/")
+        forked_id = resp.data["id"]
+        assert UserProjectEnrollment.objects.filter(
+            user=user, project_id=forked_id,
+        ).exists()
+
+    def test_fork_creates_node_progress(self, auth_client, user, published_project_with_tree):
+        proj = published_project_with_tree
+        resp = auth_client.post(f"{PROJECTS_URL}{proj.pk}/fork/")
+        forked_id = resp.data["id"]
+        progress_count = UserNodeProgress.objects.filter(
+            user=user, knode__project_id=forked_id,
+        ).count()
+        assert progress_count == 6
+
+    def test_fork_duplicate_rejected(self, auth_client, user, published_project_with_tree):
+        proj = published_project_with_tree
+        auth_client.post(f"{PROJECTS_URL}{proj.pk}/fork/")
+        resp = auth_client.post(f"{PROJECTS_URL}{proj.pk}/fork/")
+        assert resp.status_code == status.HTTP_409_CONFLICT
+        assert "forked_project_id" in resp.data
+
+    def test_fork_unauthenticated(self, api_client, published_project_with_tree):
+        proj = published_project_with_tree
+        resp = api_client.post(f"{PROJECTS_URL}{proj.pk}/fork/")
+        assert resp.status_code == status.HTTP_401_UNAUTHORIZED
+
+    def test_fork_unpublished_404(self, auth_client, unpublished_project):
+        resp = auth_client.post(f"{PROJECTS_URL}{unpublished_project.pk}/fork/")
+        assert resp.status_code == status.HTTP_404_NOT_FOUND
+
+    def test_fork_is_unpublished(self, auth_client, user, published_project_with_tree):
+        proj = published_project_with_tree
+        resp = auth_client.post(f"{PROJECTS_URL}{proj.pk}/fork/")
+        forked = Project.objects.get(pk=resp.data["id"])
+        assert forked.is_published is False
+        assert forked.is_template is False
+
+
+# ---------------------------------------------------------------------------
+# Check Fork
+# ---------------------------------------------------------------------------
+
+class TestCheckFork:
+    def test_not_forked(self, auth_client, published_project_with_tree):
+        resp = auth_client.get(
+            f"{PROJECTS_URL}{published_project_with_tree.pk}/check-fork/"
+        )
+        assert resp.status_code == 200
+        assert resp.data["forked"] is False
+        assert resp.data["forked_project_id"] is None
+
+    def test_already_forked(self, auth_client, user, published_project_with_tree):
+        fork_resp = auth_client.post(
+            f"{PROJECTS_URL}{published_project_with_tree.pk}/fork/"
+        )
+        resp = auth_client.get(
+            f"{PROJECTS_URL}{published_project_with_tree.pk}/check-fork/"
+        )
+        assert resp.data["forked"] is True
+        assert resp.data["forked_project_id"] == fork_resp.data["id"]
+
+    def test_unauthenticated(self, api_client, published_project_with_tree):
+        resp = api_client.get(
+            f"{PROJECTS_URL}{published_project_with_tree.pk}/check-fork/"
+        )
+        assert resp.status_code == status.HTTP_401_UNAUTHORIZED
+
+
+# ---------------------------------------------------------------------------
+# My Projects
+# ---------------------------------------------------------------------------
+
+class TestMyProjects:
+    def test_list_forked_projects(self, auth_client, user, published_project_with_tree):
+        auth_client.post(f"{PROJECTS_URL}{published_project_with_tree.pk}/fork/")
+        resp = auth_client.get(f"{PROJECTS_URL}my/")
+        assert resp.status_code == 200
+        assert len(resp.data) == 1
+        assert resp.data[0]["forked_from"] == published_project_with_tree.pk
+
+    def test_excludes_non_forked(self, auth_client, user):
+        """Non-forked projects created by the user should not appear."""
+        Project.objects.create(
+            title="My Own Project",
+            description="Test",
+            created_by=user,
+            is_published=False,
+        )
+        resp = auth_client.get(f"{PROJECTS_URL}my/")
+        assert resp.status_code == 200
+        assert len(resp.data) == 0
+
+    def test_includes_progress(self, auth_client, user, published_project_with_tree):
+        auth_client.post(f"{PROJECTS_URL}{published_project_with_tree.pk}/fork/")
+        resp = auth_client.get(f"{PROJECTS_URL}my/")
+        proj_data = resp.data[0]
+        assert "total_knodes" in proj_data
+        assert "passed_knodes" in proj_data
+        assert "progress_percent" in proj_data
+        assert proj_data["total_knodes"] == 6
+        assert proj_data["passed_knodes"] == 0
+        assert proj_data["progress_percent"] == 0
+
+    def test_unauthenticated(self, api_client):
+        resp = api_client.get(f"{PROJECTS_URL}my/")
+        assert resp.status_code == status.HTTP_401_UNAUTHORIZED
+
+    def test_other_user_projects_not_visible(
+        self, auth_client, user, other_user, published_project_with_tree
+    ):
+        """Each user should only see their own forked projects."""
+        # other_user forks the project
+        from apps.projects.services import clone_project
+        from apps.progress.services import enroll_user_in_project
+
+        forked = clone_project(
+            published_project_with_tree,
+            new_title=published_project_with_tree.title,
+            created_by=other_user,
+            forked_from=published_project_with_tree,
+        )
+        enroll_user_in_project(other_user, forked)
+
+        # auth_client (user) should see nothing
+        resp = auth_client.get(f"{PROJECTS_URL}my/")
+        assert len(resp.data) == 0
+
+
+# ---------------------------------------------------------------------------
+# Progress Summary
+# ---------------------------------------------------------------------------
+
+class TestProgressSummary:
+    def test_enrolled_returns_progress(self, auth_client, user, published_project_with_tree):
+        fork_resp = auth_client.post(
+            f"{PROJECTS_URL}{published_project_with_tree.pk}/fork/"
+        )
+        forked_id = fork_resp.data["id"]
+        resp = auth_client.get(f"{PROJECTS_URL}{forked_id}/progress-summary/")
+        assert resp.status_code == 200
+        assert resp.data["enrolled"] is True
+        assert resp.data["total_knodes"] == 6
+        assert resp.data["passed_knodes"] == 0
+        assert resp.data["progress_percent"] == 0
+
+    def test_not_enrolled(self, auth_client, published_project_with_tree):
+        resp = auth_client.get(
+            f"{PROJECTS_URL}{published_project_with_tree.pk}/progress-summary/"
+        )
+        assert resp.status_code == 200
+        assert resp.data["enrolled"] is False
+
+    def test_progress_with_passed_nodes(self, auth_client, user, published_project_with_tree):
+        fork_resp = auth_client.post(
+            f"{PROJECTS_URL}{published_project_with_tree.pk}/fork/"
+        )
+        forked_id = fork_resp.data["id"]
+        # Mark 2 nodes as passed
+        progresses = UserNodeProgress.objects.filter(
+            user=user, knode__project_id=forked_id,
+        )[:2]
+        for p in progresses:
+            p.status = "passed"
+            p.save()
+
+        resp = auth_client.get(f"{PROJECTS_URL}{forked_id}/progress-summary/")
+        assert resp.data["passed_knodes"] == 2
+        assert resp.data["progress_percent"] == 33  # 2/6 = 33%
+
+    def test_unauthenticated(self, api_client, published_project_with_tree):
+        resp = api_client.get(
+            f"{PROJECTS_URL}{published_project_with_tree.pk}/progress-summary/"
+        )
+        assert resp.status_code == status.HTTP_401_UNAUTHORIZED
+
+
+# ---------------------------------------------------------------------------
+# Project Detail access for fork owners
+# ---------------------------------------------------------------------------
+
+class TestProjectDetailOwnerAccess:
+    def test_owner_can_view_own_fork(self, auth_client, user, published_project_with_tree):
+        fork_resp = auth_client.post(
+            f"{PROJECTS_URL}{published_project_with_tree.pk}/fork/"
+        )
+        forked_id = fork_resp.data["id"]
+        resp = auth_client.get(f"{PROJECTS_URL}{forked_id}/")
+        assert resp.status_code == 200
+        assert resp.data["id"] == forked_id
+
+    def test_other_user_cannot_view_fork(
+        self, api_client, user, other_user, published_project_with_tree
+    ):
+        from apps.projects.services import clone_project
+
+        forked = clone_project(
+            published_project_with_tree,
+            new_title=published_project_with_tree.title,
+            created_by=user,
+            forked_from=published_project_with_tree,
+        )
+        # other_user tries to view user's fork
+        api_client.force_authenticate(other_user)
+        resp = api_client.get(f"{PROJECTS_URL}{forked.pk}/")
+        assert resp.status_code == status.HTTP_404_NOT_FOUND

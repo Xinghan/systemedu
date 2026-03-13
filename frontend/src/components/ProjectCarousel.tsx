@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import AlienTeacher from "@/components/AlienTeacher";
 import Planet from "@/components/Planet";
 import Stars from "@/components/Stars";
@@ -21,7 +22,7 @@ function getCategoryStyle(category: string) {
 }
 
 export default function ProjectCarousel({ projects }: { projects: Project[] }) {
-  const [entered, setEntered] = useState(false);
+  const router = useRouter();
   const [activeIndex, setActiveIndex] = useState(0);
   const [showAlien, setShowAlien] = useState(false);
 
@@ -51,79 +52,6 @@ export default function ProjectCarousel({ projects }: { projects: Project[] }) {
 
   const project = projects[activeIndex];
   const style = getCategoryStyle(project.category);
-
-  if (entered) {
-    return (
-      <main className="relative min-h-screen overflow-hidden">
-        <Stars />
-        <div className="relative z-10 min-h-screen px-4 py-12 page-enter">
-          <div className="max-w-6xl mx-auto">
-            <div className="flex items-center justify-between mb-8">
-              <div>
-                <h2 className="text-3xl md:text-4xl font-bold title-3d">
-                  Choose Your Quest
-                </h2>
-                <p className="text-[#8a9bb5] mt-1">
-                  Each quest is an adventure in a new field of knowledge
-                </p>
-              </div>
-              <button
-                onClick={() => setEntered(false)}
-                className="text-[#8a9bb5] hover:text-white transition-colors text-sm cursor-pointer"
-              >
-                ← Back
-              </button>
-            </div>
-
-            <div className="flex items-start gap-6 mb-12">
-              <div className="flex-shrink-0">
-                <AlienTeacher size={90} speaking showBubble={false} />
-              </div>
-              <div className="speech-bubble bg-[#2a3548]/80 border border-[#3a4a60] rounded-2xl px-5 py-3 backdrop-blur-sm">
-                <p className="text-[#c0cde0] text-base">
-                  Pick a quest to begin! Each one will teach you how AI is
-                  changing the world. I&apos;ll be with you every step of the way!
-                </p>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {projects.map((p) => {
-                const s = getCategoryStyle(p.category);
-                return (
-                  <Link key={p.id} href={`/project/${p.id}`}>
-                    <div
-                      className={`quest-card rounded-2xl border ${s.borderColor} bg-[#1a2535]/80 backdrop-blur-sm p-6 cursor-pointer`}
-                    >
-                      <div className="flex-1">
-                        <span className="text-xs tracking-widest text-[#8a9bb5] uppercase">
-                          {p.subtitle || s.subtitle}
-                        </span>
-                        <h3 className="text-2xl font-bold text-white mt-1">
-                          {p.title}
-                        </h3>
-                        <p className="text-[#7a8b9f] mt-2 text-sm">
-                          {p.description}
-                        </p>
-                        <div className="flex items-center justify-between mt-4">
-                          <span className="text-xs text-[#6a7b8f]">
-                            {p.milestone_count} milestones · {p.estimated_hours}h
-                          </span>
-                          <span className="text-sm text-[#b8a9d4] font-medium">
-                            Start Quest →
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-                  </Link>
-                );
-              })}
-            </div>
-          </div>
-        </div>
-      </main>
-    );
-  }
 
   return (
     <main className="relative min-h-screen overflow-hidden bg-[#1e2a3a]">
@@ -179,7 +107,7 @@ export default function ProjectCarousel({ projects }: { projects: Project[] }) {
             </button>
 
             <button
-              onClick={() => setEntered(true)}
+              onClick={() => router.push("/challenges")}
               className="px-8 py-3 rounded-full bg-[#b8a0d8] hover:bg-[#c8b0e8] text-[#1a1a2e] font-semibold text-lg transition-colors cursor-pointer shadow-lg shadow-[#b8a0d8]/20"
             >
               Start Quest

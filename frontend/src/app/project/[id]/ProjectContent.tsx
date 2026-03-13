@@ -1,10 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import AlienTeacher from "@/components/AlienTeacher";
 import Stars from "@/components/Stars";
-import type { ProjectDetail, Milestone } from "@/lib/types";
+import { checkFork, forkProject } from "@/lib/api";
+import { isLoggedIn } from "@/lib/auth";
+import type { ProjectDetail, Milestone, ForkCheck } from "@/lib/types";
 
 const difficultyLabels: Record<string, string> = {
   "1": "Beginner",
@@ -140,7 +143,21 @@ export default function ProjectContent({
 }: {
   project: ProjectDetail;
 }) {
+  const router = useRouter();
   const [openMilestone, setOpenMilestone] = useState<number | null>(null);
+  const [forkState, setForkState] = useState<ForkCheck | null>(null);
+  const [forking, setForking] = useState(false);
+  const [loggedIn, setLoggedIn] = useState(false);
+
+  useEffect(() => {
+    const logged = isLoggedIn();
+    setLoggedIn(logged);
+    if (logged) {
+      checkFork(project.id)
+        .then(setForkState)
+        .catch(() => {});
+    }
+  }, [project.id]);
 
   const totalXP = project.milestones.reduce(
     (sum, m) => sum + m.xp_reward + m.knodes.reduce((s, k) => s + k.xp_reward, 0),
@@ -151,17 +168,27 @@ export default function ProjectContent({
     0
   );
 
+  async function handleFork() {
+    setForking(true);
+    try {
+      const forked = await forkProject(project.id);
+      router.push(`/my-projects/${forked.id}`);
+    } catch {
+      setForking(false);
+    }
+  }
+
   return (
     <main className="relative min-h-screen overflow-hidden bg-[#1e2a3a]">
       <Stars />
 
       <div className="relative z-10 px-4 py-8 page-enter">
-        <div className="max-w-4xl mx-auto">
+        <div className="max-w-4xl mx-auto pt-14">
           <Link
-            href="/"
+            href="/challenges"
             className="inline-flex items-center text-[#8a9bb5] hover:text-white transition-colors text-sm mb-8"
           >
-            ← Back to Projects
+            ← Back to Challenge Hall
           </Link>
 
           {/* Project header */}
@@ -184,10 +211,52 @@ export default function ProjectContent({
           </div>
 
           {/* Alien teacher intro */}
-          <div className="flex items-start gap-6 mb-12">
+          <div className="flex items-start gap-6 mb-8">
             <div className="flex-shrink-0">
               <AlienTeacher size={110} message={project.description} />
             </div>
+          </div>
+
+          {/* Fork button area */}
+          <div className="mb-10 bg-[#1a2535]/80 rounded-2xl border border-[#3a4a60]/30 p-6 text-center">
+            {!loggedIn ? (
+              <>
+                <p className="text-[#8a9bb5] mb-3">
+                  Sign in to start this quest
+                </p>
+                <Link
+                  href={`/login?redirect=/project/${project.id}`}
+                  className="inline-block px-8 py-3 rounded-full bg-[#b8a0d8] hover:bg-[#c8b0e8] text-[#1a1a2e] font-semibold transition-colors"
+                >
+                  Sign in to Start
+                </Link>
+              </>
+            ) : forkState?.forked ? (
+              <>
+                <p className="text-[#8a9bb5] mb-3">
+                  You&apos;ve already started this quest!
+                </p>
+                <Link
+                  href={`/my-projects/${forkState.forked_project_id}`}
+                  className="inline-block px-8 py-3 rounded-full bg-[#b8a0d8] hover:bg-[#c8b0e8] text-[#1a1a2e] font-semibold transition-colors"
+                >
+                  Go to My Copy →
+                </Link>
+              </>
+            ) : (
+              <>
+                <p className="text-[#8a9bb5] mb-3">
+                  Ready to begin? Fork this project to start learning!
+                </p>
+                <button
+                  onClick={handleFork}
+                  disabled={forking}
+                  className="px-8 py-3 rounded-full bg-[#b8a0d8] hover:bg-[#c8b0e8] text-[#1a1a2e] font-semibold transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {forking ? "Forking..." : "Fork this Project"}
+                </button>
+              </>
+            )}
           </div>
 
           {/* Milestones */}

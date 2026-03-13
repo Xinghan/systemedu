@@ -12,6 +12,7 @@ export interface Project {
   estimated_hours: number;
   is_published: boolean;
   milestone_count: number;
+  fork_count: number;
   created_at: string;
 }
 
@@ -40,7 +41,49 @@ export interface Milestone {
 
 export interface ProjectDetail extends Project {
   milestones: Milestone[];
+  forked_from: number | null;
   updated_at: string;
+}
+
+export interface MyProject {
+  id: number;
+  title: string;
+  subtitle: string;
+  description: string;
+  cover_image: string | null;
+  category: string;
+  min_age: number;
+  max_age: number;
+  estimated_hours: number;
+  forked_from: number | null;
+  forked_from_title: string;
+  total_knodes: number;
+  passed_knodes: number;
+  progress_percent: number;
+  created_at: string;
+}
+
+export interface ForkCheck {
+  forked: boolean;
+  forked_project_id: number | null;
+}
+
+export interface ProgressSummary {
+  enrolled: boolean;
+  status: string | null;
+  total_knodes: number;
+  passed_knodes: number;
+  progress_percent: number;
+  total_xp_earned: number;
+}
+
+export interface NodeProgress {
+  id: number;
+  knode: number;
+  knode_title: string;
+  status: "locked" | "available" | "in_progress" | "submitted" | "passed" | "failed";
+  attempts: number;
+  best_score: number;
 }
 
 export interface User {

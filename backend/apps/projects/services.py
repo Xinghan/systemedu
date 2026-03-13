@@ -337,6 +337,7 @@ def clone_project(
     *,
     new_title: str | None = None,
     created_by=None,
+    forked_from: Project | None = None,
 ) -> Project:
     """Clone a project and its full knowledge tree.
 
@@ -359,6 +360,7 @@ def clone_project(
         is_published=False,
         is_template=False,
         created_by=created_by,
+        forked_from=forked_from,
     )
 
     if tree_data["milestones"]:

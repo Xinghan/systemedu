@@ -44,7 +44,24 @@ export default function Navbar() {
           </span>
         </Link>
 
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-4">
+          {/* Navigation links */}
+          <Link
+            href="/challenges"
+            className="text-sm text-[#8a9bb5] hover:text-white transition-colors hidden sm:inline"
+          >
+            Challenge Hall
+          </Link>
+          {loggedIn && (
+            <Link
+              href="/my-projects"
+              className="text-sm text-[#8a9bb5] hover:text-white transition-colors hidden sm:inline"
+            >
+              My Projects
+            </Link>
+          )}
+
+          {/* User section */}
           {loggedIn && user ? (
             <>
               <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-[#2a3548]/60 border border-[#3a4a60]/50">
