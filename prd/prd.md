@@ -2,161 +2,180 @@
 
 ## 1. Product Vision
 
-**SystemEdu** 是一款面向儿童到青少年（6-18岁）的、基于最先进 AI Agent 技术的**项目制学习平台**。
+**SystemEdu** 是一款**本地优先的 AI Agent Sandbox 平台**，教育为核心定位，Agent 为底层架构。
 
-与传统教育平台不同，SystemEdu 让零基础用户可以直接参与**真实工业级项目**——例如训练一个无监督学习模型、利用工具发现新蛋白质结构、研发小推进力火箭等。先进的大语言模型、多 Agent 协作系统、持久化记忆和 RAG 知识检索，使得年幼的用户也能在 AI 导师的一步步引导下，从零开始完成工业级项目，最终达到接近专业水平。
+类似 OpenClaw 模式：本地运行 agent daemon，配置 LLM、MCP server、skills，通过 IM 通信，通过 Hub 共享项目。面向儿童到青少年（6-18 岁），让零基础用户直接参与真实工业级项目，在 AI 导师引导下完成学习。
 
 **核心差异化**：
-- 不是"简化版"课程，而是真实工业项目 + AI 自适应拆解
-- 知识树可达数千节点，系统动态生成、持续完善
-- 每个知识节点有验收方案，确保真正掌握
-- AI 不断发现用户知识盲区，自动补全学习路径
+- 本地优先：agent 在本地运行，数据存本地 SQLite
+- 多 LLM：支持 Qwen/Claude/Ollama 等任意 OpenAI-compatible 端点
+- MCP 集成：通过 MCP server 扩展工具能力
+- Skills 系统：SKILL.md 格式，兼容 OpenClaw
+- Hub 共享：项目通过 Hub 发布/下载
+- 教育一等公民：知识树 DAG、进度追踪、AI 导师内置
 
 ## 2. Target Users
 
 | 用户群 | 年龄 | 特征 |
 |--------|------|------|
-| **Primary** | 6-12岁 (儿童) | 零专业基础，需要极强的引导和可视化，注意力短 |
-| **Primary** | 13-18岁 (青少年) | 有一定基础，能处理更抽象的概念，追求成就感 |
-| **Secondary** | 家长 | 关注学习进度、安全性、学习效果报告 |
-| **Secondary** | 教育者/内容创作者 | 创建和管理项目模板 |
+| **Primary** | 6-12岁 (儿童) | 零专业基础，需极强引导和可视化 |
+| **Primary** | 13-18岁 (青少年) | 有一定基础，追求成就感 |
+| **Secondary** | 家长 | 关注学习进度、安全性 |
+| **Secondary** | 内容创作者 | 创建和发布项目到 Hub |
+| **New** | 通用 Agent 用户 | 使用 SystemEdu 作为通用 agent sandbox |
 
 ## 3. System Architecture
 
 ```
-┌─────────────────────────────────────────────────────────┐
-│                      Frontend                            │
-│              Next.js 16 + TypeScript                     │
-│   ┌──────────┐  ┌──────────┐  ┌───────────┐            │
-│   │  Landing  │  │Challenge │  │  Learning  │            │
-│   │   Page    │  │  Hall    │  │  Session   │            │
-│   └──────────┘  └──────────┘  └───────────┘            │
-│   ┌──────────┐  ┌──────────┐  ┌───────────┐            │
-│   │    My    │  │ Profile/ │  │ Knowledge  │            │
-│   │ Projects │  │Dashboard │  │  Tree Viz  │            │
-│   └──────────┘  └──────────┘  └───────────┘            │
-└──────────────────────┬──────────────────────────────────┘
-                       │ REST API + WebSocket
-┌──────────────────────┴──────────────────────────────────┐
-│                   Backend API                            │
-│              Django 6 + DRF                              │
-│   ┌──────────┐  ┌──────────┐  ┌───────────┐            │
-│   │  Users    │  │ Projects │  │  Progress  │            │
-│   │  Auth     │  │ KTree    │  │  Tracking  │            │
-│   └──────────┘  └──────────┘  └───────────┘            │
-└──────────────────────┬──────────────────────────────────┘
-                       │
-┌──────────────────────┴──────────────────────────────────┐
-│                AI Agent Layer                            │
-│          LangGraph + LangChain                           │
-│   ┌──────────┐  ┌──────────┐  ┌───────────┐            │
-│   │  Tutor   │  │ Assessor │  │  Planner   │            │
-│   └──────────┘  └──────────┘  └───────────┘            │
-│   ┌──────────┐  ┌──────────┐  ┌───────────┐            │
-│   │ Content  │  │   Gap    │  │ Motivator  │            │
-│   │  Agent   │  │ Detector │  │  Agent     │            │
-│   └──────────┘  └──────────┘  └───────────┘            │
-└──────────────────────┬──────────────────────────────────┘
-                       │
-┌──────────────────────┴──────────────────────────────────┐
-│                  Data Layer                              │
-│   ┌──────────┐  ┌──────────┐  ┌───────────┐            │
-│   │  MySQL 8 │  │  Neo4j   │  │  Qdrant/  │            │
-│   │ (关系数据)│  │(知识图谱) │  │ Pgvector  │            │
-│   └──────────┘  └──────────┘  └───────────┘            │
-│   ┌──────────┐  ┌──────────┐                            │
-│   │  Mem0    │  │  Redis   │                            │
-│   │(AI记忆层)│  │(Cache)   │                            │
-│   └──────────┘  └──────────┘                            │
-└─────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────┐
+│                     用户交互层                                │
+│  CLI (systemedu)  │  Web UI  │  IM Channels (WeChat/TG/...) │
+└────────┬──────────┴────┬─────┴──────────┬───────────────────┘
+         │               │                │
+┌────────▼───────────────▼────────────────▼───────────────────┐
+│                   Agent Runtime (Python)                      │
+│  LLM 调度 │ Tool 执行 │ MCP 管理 │ Skills 加载器 │ 沙箱隔离   │
+└─────────────────────────┬───────────────────────────────────┘
+                          │
+┌─────────────────────────▼───────────────────────────────────┐
+│                    教育层 (Education Layer)                   │
+│  知识树 DAG │ 学习进度 │ XP/成就 │ AI 导师 │ 学习计划生成      │
+└─────────────────────────┬───────────────────────────────────┘
+                          │
+┌─────────────────────────▼───────────────────────────────────┐
+│                    存储层 (Storage)                           │
+│  SQLite (本地) │ Mem0 (记忆) │ 文件系统 (项目/skills)         │
+└─────────────────────────┬───────────────────────────────────┘
+                          │
+┌─────────────────────────▼───────────────────────────────────┐
+│                    Hub (远程, 可选)                            │
+│  项目发布/下载 │ 用户账号 │ 评分/分类 │ 搜索/发现              │
+└─────────────────────────────────────────────────────────────┘
 ```
 
 ## 4. Tech Stack
 
 | Layer | Technology | Purpose |
 |-------|-----------|---------|
-| **Frontend** | Next.js 16 (App Router) + TypeScript | SSR, 页面路由, UI |
-| **Styling** | Tailwind CSS 4 | 响应式设计 |
-| **State** | Zustand + React Query (TanStack) | 客户端状态 + 服务端缓存 |
-| **Realtime** | WebSocket (Django Channels) | AI 对话流式输出 |
-| **Graph Viz** | D3.js / React Flow | 知识树可视化 |
-| **Backend** | Django 6 + DRF | REST API, 业务逻辑 |
-| **Async** | Django Channels + Celery | WebSocket, 异步任务 |
-| **Auth** | django-simplejwt + django-allauth | JWT + 社交登录 |
-| **Agent** | LangGraph + LangChain | Agent 编排, 状态管理 |
-| **LLM** | Qwen (DashScope) | 核心推理能力 |
-| **Memory** | Mem0 (self-hosted) | 用户/项目/会话记忆 |
-| **Primary DB** | MySQL 8 | 关系数据 |
-| **Graph DB** | Neo4j | 知识图谱 |
-| **Vector DB** | Qdrant / Pgvector | RAG 向量检索 |
-| **Cache** | Redis | Session, Celery broker |
-| **Admin** | 独立 Django 服务 | 项目管理, 知识树管理 |
+| **CLI** | Typer + Rich | 命令行交互 |
+| **Config** | YAML + Pydantic | 配置管理 |
+| **Runtime** | LangGraph + LangChain | Agent 编排 |
+| **LLM** | OpenAI-compatible (Qwen/Claude/Ollama) | 多 provider |
+| **Tools** | MCP SDK + built-in | 工具执行 |
+| **Skills** | SKILL.md format | 提示词管理 |
+| **Memory** | Mem0 (optional) | 持久化记忆 |
+| **Storage** | SQLite + SQLAlchemy | 本地数据 |
+| **Education** | Pydantic models | 知识树/进度 |
+| **Hub** | Django 6 + DRF | 项目共享 |
+| **Web UI** | Next.js 16 (optional) | 可视化界面 |
 
 ## 5. Development Phases
 
-### Phase 1: Foundation ✅
-- [x] 项目骨架 (Next.js + Django)
-- [x] Landing Page + Baby Turtle / Alien Teacher 角色
-- [x] 用户注册/登录 (JWT)
-- [x] 项目数据模型 + CRUD API
-- [x] 进度跟踪 + 成就系统
-- [x] Admin 知识树管理（导入/导出/生成/预览/克隆）
+### Phase 1: Core Runtime (MVP) ✅
+- [x] Python 包骨架 (`pyproject.toml`, `src/systemedu/`)
+- [x] 配置系统 (`config.yaml` 加载, env var 展开)
+- [x] 多 provider LLM client
+- [x] Agent runtime (消息 → LLM → tool calls → 响应)
+- [x] CLI channel (`systemedu chat`)
+- [x] 内置 tools (bash/file read/file write)
+- [x] Session 管理
+- [x] 沙箱 (命令黑名单, 超时)
+- [x] SQLite 本地存储
+- [x] 教育层 Pydantic 模型 (从 Django ORM 迁移)
+- [x] 知识树验证/导入 (DAG 检测, 从 backend 迁移)
+- [x] 进度追踪 (初始化, 节点解锁)
+- [x] Skills 系统 (SKILL.md 解析, 层级加载)
+- [x] 内置 agents (tutor/planner/assessor)
+- [x] CLI 命令: init/chat/config/project/mcp/skill/channel
+- [x] 示例项目 (train-ai-model)
+- [x] 63 个测试全部通过
 
-### Phase 1.5: User Flow (当前)
-- [x] 挑战大厅（浏览已发布项目）
-- [x] Fork 项目（深拷贝到用户空间）
-- [x] 我的项目（查看 fork 项目 + 学习进度）
-- [x] 学习入口（占位页面）
+### Phase 2: MCP + Skills + 沙箱增强
+- [ ] MCP manager (server 启停, tool 注入到 LLM)
+- [ ] MCP client (stdio/SSE transport)
+- [ ] Skills 注入 agent system prompt
+- [ ] 沙箱增强 (文件系统访问控制)
+- [ ] LangGraph 完整状态机 (memory 集成)
 
-### Phase 2: AI Core
-- [x] LangGraph Agent 编排框架
-- [x] Tutor Agent 基础版（对话+讲解）
-- [x] Chat API
-- [ ] Mem0 集成
-- [ ] WebSocket/SSE 实时流式对话
-- [ ] 完整学习工作台
+### Phase 3: 教育层完善
+- [ ] 知识树加载到 agent 上下文
+- [ ] 节点完成自动更新进度
+- [ ] AI 知识树生成 (端到端)
+- [ ] project.yaml 加载
+- [ ] `systemedu chat --agent tutor --project <name>`
 
-### Phase 3: Assessment & Adaptation
-- [ ] Assessor Agent: 验收系统
-- [ ] Gap Detector Agent: 盲区检测
-- [ ] Content Agent: 自动内容生成
-- [ ] RAG 知识检索
-- [ ] 知识树动态更新
+### Phase 4: Hub
+- [ ] 项目打包/解包 (tar.gz)
+- [ ] Hub 客户端 (push/pull/search)
+- [ ] Hub 后端 (Django 改造)
+- [ ] Hub 认证
 
-### Phase 4: Polish & Scale
-- [ ] Motivator Agent
-- [ ] 家长仪表板
-- [ ] 性能优化 + 部署
-- [ ] 安全审计 (COPPA)
+### Phase 5: Channels
+- [ ] Channel 完整实现
+- [ ] Web channel (WebSocket)
+- [ ] IM 渠道 (WeChat/Telegram)
 
-## 6. Module PRDs
+## 6. Configuration
 
-| Domain | Module | PRD File | Status |
-|--------|--------|----------|--------|
-| Frontend | Auth | `prd/frontend/auth.md` | ✅ |
-| Frontend | Challenge Hall | `prd/frontend/challenge-hall.md` | ✅ |
-| Frontend | Project Detail + Fork | `prd/frontend/project-detail.md` | ✅ |
-| Frontend | My Projects | `prd/frontend/my-projects.md` | ✅ |
-| Frontend | Learning Workbench | `prd/frontend/learning.md` | Planned |
-| Frontend | Gamification | `prd/frontend/gamification.md` | Planned |
-| Backend | Auth | `prd/backend/auth.md` | ✅ |
-| Backend | Projects | `prd/backend/projects.md` | ✅ |
-| Backend | Progress | `prd/backend/progress.md` | ✅ |
-| Backend | Agents | `prd/backend/agents.md` | Planned |
-| Backend | Memory | `prd/backend/memory.md` | Planned |
-| Backend | Chat | `prd/backend/chat.md` | Planned |
-| Admin | Auth | `prd/adminsite/auth.md` | ✅ |
-| Admin | Projects | `prd/adminsite/projects.md` | ✅ |
-| Admin | Knowledge Tree | `prd/adminsite/knowledge-tree.md` | ✅ |
-| Admin | Tasks | `prd/adminsite/tasks.md` | ✅ |
+### Global Config: `~/.systemedu/config.yaml`
+```yaml
+llm:
+  default: qwen
+  providers:
+    qwen:
+      base_url: https://dashscope.aliyuncs.com/compatible-mode/v1
+      api_key: ${DASHSCOPE_API_KEY}
+      model: qwen-plus
+sandbox:
+  enabled: true
+  blocked_commands: ["rm -rf /"]
+  max_execution_time: 300
+mcp:
+  servers: {}
+channels:
+  cli: { enabled: true }
+  web: { enabled: false }
+hub:
+  url: https://hub.systemedu.com
+memory:
+  enabled: true
+  backend: mem0
+```
 
-## 7. Non-Functional Requirements
+### Project Config: `<project>/project.yaml`
+```yaml
+name: train-ai-model
+version: "1.0.0"
+title: 训练AI模型
+category: ai
+age_range: [10, 18]
+agents:
+  tutor:
+    type: builtin:tutor
+    llm: qwen
+knowledge_tree: ./knowledge_tree.json
+```
+
+## 7. CLI Commands
+
+```bash
+systemedu init                       # 初始化 ~/.systemedu/
+systemedu chat                       # 交互对话
+systemedu chat --agent tutor         # 指定 agent
+systemedu config show/set/get/edit   # 配置管理
+systemedu project init/list/info     # 项目管理
+systemedu mcp add/list/remove        # MCP 管理
+systemedu skill list/add/remove      # Skills 管理
+systemedu channel list/add/remove    # Channel 管理
+systemedu hub login/search/pull/push # Hub 操作 (Phase 4)
+```
+
+## 8. Non-Functional Requirements
 
 | Category | Requirement |
 |----------|-------------|
-| **安全** | 儿童隐私保护 (COPPA 合规)，数据加密，内容过滤 |
-| **性能** | API 响应 < 200ms，AI 对话首 token < 1s |
-| **可用性** | 界面适配 6-18 岁用户，大字体/高对比度选项 |
-| **可扩展** | 支持动态添加新项目，知识树节点可达数千 |
-| **国际化** | 初期中英文，架构支持多语言 |
-| **监控** | AI token 用量监控，成本控制，用户行为分析 |
+| **安全** | 沙箱隔离, 命令黑名单, 文件访问控制 |
+| **性能** | AI 对话首 token < 1s |
+| **可扩展** | 支持任意 MCP server, 自定义 skills/agents |
+| **本地优先** | 所有数据存本地, Hub 可选 |
+| **国际化** | 初期中文, 架构支持多语言 |
