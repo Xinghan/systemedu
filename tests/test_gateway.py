@@ -93,7 +93,7 @@ class TestGatewayChatUserId:
         mock_llm.ainvoke = AsyncMock(return_value=AIMessage(content="hello user"))
         mock_llm.bind_tools.return_value = mock_llm
 
-        with patch("systemedu.core.runtime.get_llm", return_value=mock_llm):
+        with patch("systemedu.core.agent_backend.get_llm", return_value=mock_llm):
             app = create_app()
             client = TestClient(app)
 
@@ -111,7 +111,7 @@ class TestGatewayChatUserId:
         mock_llm.ainvoke = AsyncMock(return_value=AIMessage(content="ok"))
         mock_llm.bind_tools.return_value = mock_llm
 
-        with patch("systemedu.core.runtime.get_llm", return_value=mock_llm):
+        with patch("systemedu.core.agent_backend.get_llm", return_value=mock_llm):
             app = create_app()
             client = TestClient(app)
 

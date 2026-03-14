@@ -41,11 +41,14 @@ def chat(
     agent: str = typer.Option("default", "--agent", "-a", help="Agent to chat with"),
     project: str = typer.Option(None, "--project", "-p", help="Project context"),
     provider: str = typer.Option(None, "--provider", help="LLM provider to use"),
+    backend: str = typer.Option(
+        None, "--backend", "-b", help="Agent backend: auto, langgraph, deepagents"
+    ),
 ):
     """Start an interactive chat session."""
     import asyncio
 
-    asyncio.run(_run_chat(agent, project, provider))
+    asyncio.run(_run_chat(agent, project, provider, backend))
 
 
 @app.command()
@@ -118,7 +121,7 @@ def doctor():
     run_doctor()
 
 
-async def _run_chat(agent: str, project: str | None, provider: str | None):
+async def _run_chat(agent: str, project: str | None, provider: str | None, backend: str | None = None):
     """Run the interactive chat loop."""
     import asyncio
 
@@ -174,12 +177,20 @@ async def _run_chat(agent: str, project: str | None, provider: str | None):
             except Exception as e:
                 console.print(f"[yellow]MCP: {name} 连接失败: {e}[/yellow]")
 
+    # Determine backend: CLI flag > config > auto
+    effective_backend = backend
+    if effective_backend is None:
+        agent_config = config.agent
+        if agent_config.backend != "auto":
+            effective_backend = agent_config.backend
+
     skill_names = [agent] if agent != "default" else None
     runtime = AgentRuntime(
         provider=provider,
         skill_names=skill_names,
         mcp_manager=mcp_manager,
         project_context=project_context,
+        backend=effective_backend,
     )
     session = runtime.session_manager.create_session(
         agent_name=agent, project_name=project

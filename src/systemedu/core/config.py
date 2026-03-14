@@ -117,6 +117,12 @@ class MemoryConfig(BaseModel):
     backend: str = "mem0"
 
 
+class AgentConfig(BaseModel):
+    """Agent runtime configuration."""
+
+    backend: str = "auto"  # "auto" | "langgraph" | "deepagents"
+
+
 class SystemEduConfig(BaseModel):
     """Root configuration model."""
 
@@ -127,6 +133,7 @@ class SystemEduConfig(BaseModel):
     gateway: GatewayConfig = Field(default_factory=GatewayConfig)
     hub: HubConfig = Field(default_factory=HubConfig)
     memory: MemoryConfig = Field(default_factory=MemoryConfig)
+    agent: AgentConfig = Field(default_factory=AgentConfig)
 
 
 def _default_config_dict() -> dict:
@@ -157,6 +164,7 @@ def _default_config_dict() -> dict:
         "gateway": {"port": 18820, "host": "127.0.0.1"},
         "hub": {"url": "https://hub.systemedu.com"},
         "memory": {"enabled": True, "backend": "mem0"},
+        "agent": {"backend": "auto"},
     }
 
 

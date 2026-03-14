@@ -198,7 +198,7 @@ class TestAgentRuntime:
         mock_llm.ainvoke = AsyncMock(return_value=AIMessage(content="Hello! 我是小龟老师。"))
         mock_llm.bind_tools.return_value = mock_llm
 
-        with patch("systemedu.core.runtime.get_llm", return_value=mock_llm):
+        with patch("systemedu.core.agent_backend.get_llm", return_value=mock_llm):
             runtime = AgentRuntime(provider="test", tools_enabled=False)
             session = runtime.session_manager.create_session()
             response = await runtime.process_message("你好", session)
@@ -223,7 +223,7 @@ class TestAgentRuntime:
         mock_llm.ainvoke = AsyncMock(side_effect=[tool_call_response, final_response])
         mock_llm.bind_tools.return_value = mock_llm
 
-        with patch("systemedu.core.runtime.get_llm", return_value=mock_llm):
+        with patch("systemedu.core.agent_backend.get_llm", return_value=mock_llm):
             runtime = AgentRuntime(provider="test")
             session = runtime.session_manager.create_session()
             response = await runtime.process_message("运行 echo hello", session)
@@ -235,7 +235,7 @@ class TestSkillInjection:
     @pytest.mark.asyncio
     async def test_no_skills_uses_default_prompt(self, mock_config):
         """Without skill_names, default system prompt is used."""
-        with patch("systemedu.core.runtime.get_llm") as mock_get_llm:
+        with patch("systemedu.core.agent_backend.get_llm") as mock_get_llm:
             mock_llm = MagicMock()
             mock_llm.ainvoke = AsyncMock(return_value=AIMessage(content="hi"))
             mock_llm.bind_tools.return_value = mock_llm
@@ -247,7 +247,7 @@ class TestSkillInjection:
     @pytest.mark.asyncio
     async def test_builtin_skill_injected(self, mock_config):
         """Passing skill_names=['tutor'] should inject tutor skill content."""
-        with patch("systemedu.core.runtime.get_llm") as mock_get_llm:
+        with patch("systemedu.core.agent_backend.get_llm") as mock_get_llm:
             mock_llm = MagicMock()
             mock_llm.ainvoke = AsyncMock(return_value=AIMessage(content="hi"))
             mock_get_llm.return_value = mock_llm
@@ -259,7 +259,7 @@ class TestSkillInjection:
     @pytest.mark.asyncio
     async def test_unknown_skill_ignored(self, mock_config):
         """Unknown skill names should be silently ignored."""
-        with patch("systemedu.core.runtime.get_llm") as mock_get_llm:
+        with patch("systemedu.core.agent_backend.get_llm") as mock_get_llm:
             mock_llm = MagicMock()
             mock_get_llm.return_value = mock_llm
 
@@ -270,7 +270,7 @@ class TestSkillInjection:
     @pytest.mark.asyncio
     async def test_multiple_skills_injected(self, mock_config):
         """Multiple skills should all be injected."""
-        with patch("systemedu.core.runtime.get_llm") as mock_get_llm:
+        with patch("systemedu.core.agent_backend.get_llm") as mock_get_llm:
             mock_llm = MagicMock()
             mock_get_llm.return_value = mock_llm
 
@@ -300,7 +300,7 @@ class TestMCPToolsIntegration:
         mock_llm.ainvoke = AsyncMock(return_value=AIMessage(content="done"))
         mock_llm.bind_tools.return_value = mock_llm
 
-        with patch("systemedu.core.runtime.get_llm", return_value=mock_llm):
+        with patch("systemedu.core.agent_backend.get_llm", return_value=mock_llm):
             runtime = AgentRuntime(provider="test", mcp_manager=mock_manager)
             session = runtime.session_manager.create_session()
             await runtime.process_message("test", session)
@@ -340,7 +340,7 @@ class TestMCPToolsIntegration:
         mock_llm.ainvoke = AsyncMock(side_effect=[tool_call_response, final_response])
         mock_llm.bind_tools.return_value = mock_llm
 
-        with patch("systemedu.core.runtime.get_llm", return_value=mock_llm):
+        with patch("systemedu.core.agent_backend.get_llm", return_value=mock_llm):
             runtime = AgentRuntime(provider="test", mcp_manager=mock_manager)
             session = runtime.session_manager.create_session()
             response = await runtime.process_message("echo hello", session)
@@ -363,7 +363,7 @@ class TestMCPAutoConnect:
         mock_llm.ainvoke = AsyncMock(return_value=AIMessage(content="ok"))
         mock_llm.bind_tools.return_value = mock_llm
 
-        with patch("systemedu.core.runtime.get_llm", return_value=mock_llm):
+        with patch("systemedu.core.agent_backend.get_llm", return_value=mock_llm):
             runtime = AgentRuntime(provider="test", mcp_manager=mock_manager)
             session = runtime.session_manager.create_session()
             await runtime.process_message("test", session)
@@ -392,7 +392,7 @@ class TestProjectContextInPrompt:
             project_dir=Path("/tmp/test"),
         )
 
-        with patch("systemedu.core.runtime.get_llm") as mock_get_llm:
+        with patch("systemedu.core.agent_backend.get_llm") as mock_get_llm:
             mock_llm = MagicMock()
             mock_llm.ainvoke = AsyncMock(return_value=AIMessage(content="ok"))
             mock_llm.bind_tools.return_value = mock_llm
@@ -406,7 +406,7 @@ class TestProjectContextInPrompt:
     @pytest.mark.asyncio
     async def test_no_project_context_unchanged(self, mock_config):
         """Without project_context, default prompt should be unchanged."""
-        with patch("systemedu.core.runtime.get_llm") as mock_get_llm:
+        with patch("systemedu.core.agent_backend.get_llm") as mock_get_llm:
             mock_llm = MagicMock()
             mock_get_llm.return_value = mock_llm
 
@@ -424,7 +424,7 @@ class TestMemoryIntegration:
         mock_llm.bind_tools.return_value = mock_llm
 
         with (
-            patch("systemedu.core.runtime.get_llm", return_value=mock_llm),
+            patch("systemedu.core.agent_backend.get_llm", return_value=mock_llm),
             patch(
                 "systemedu.core.runtime.get_config",
                 return_value=MagicMock(
@@ -451,7 +451,7 @@ class TestMemoryIntegration:
         mock_llm.bind_tools.return_value = mock_llm
 
         with (
-            patch("systemedu.core.runtime.get_llm", return_value=mock_llm),
+            patch("systemedu.core.agent_backend.get_llm", return_value=mock_llm),
             patch(
                 "systemedu.core.runtime.get_config",
                 return_value=MagicMock(
@@ -482,7 +482,7 @@ class TestMemoryIntegration:
         mock_llm.bind_tools.return_value = mock_llm
 
         with (
-            patch("systemedu.core.runtime.get_llm", return_value=mock_llm),
+            patch("systemedu.core.agent_backend.get_llm", return_value=mock_llm),
             patch(
                 "systemedu.core.runtime.get_config",
                 return_value=MagicMock(
@@ -513,7 +513,7 @@ class TestLangGraphRuntime:
         mock_llm.ainvoke = AsyncMock(return_value=AIMessage(content="Graph response"))
         mock_llm.bind_tools.return_value = mock_llm
 
-        with patch("systemedu.core.runtime.get_llm", return_value=mock_llm):
+        with patch("systemedu.core.agent_backend.get_llm", return_value=mock_llm):
             runtime = AgentRuntime(provider="test", tools_enabled=False)
             session = runtime.session_manager.create_session()
             response = await runtime.process_message("hi", session)
@@ -537,7 +537,7 @@ class TestLangGraphRuntime:
         mock_llm.ainvoke = AsyncMock(side_effect=[tool_call_msg, final_msg])
         mock_llm.bind_tools.return_value = mock_llm
 
-        with patch("systemedu.core.runtime.get_llm", return_value=mock_llm):
+        with patch("systemedu.core.agent_backend.get_llm", return_value=mock_llm):
             runtime = AgentRuntime(provider="test")
             session = runtime.session_manager.create_session()
             response = await runtime.process_message("do something", session)
@@ -562,7 +562,7 @@ class TestLangGraphRuntime:
         mock_llm.ainvoke = AsyncMock(return_value=tool_call_msg)
         mock_llm.bind_tools.return_value = mock_llm
 
-        with patch("systemedu.core.runtime.get_llm", return_value=mock_llm):
+        with patch("systemedu.core.agent_backend.get_llm", return_value=mock_llm):
             runtime = AgentRuntime(provider="test")
             session = runtime.session_manager.create_session()
             response = await runtime.process_message("infinite loop", session)
@@ -577,7 +577,7 @@ class TestLangGraphRuntime:
         mock_llm.ainvoke = AsyncMock(return_value=AIMessage(content="ok"))
         mock_llm.bind_tools.return_value = mock_llm
 
-        with patch("systemedu.core.runtime.get_llm", return_value=mock_llm):
+        with patch("systemedu.core.agent_backend.get_llm", return_value=mock_llm):
             runtime = AgentRuntime(provider="test", tools_enabled=False)
             session = runtime.session_manager.create_session()
             response = await runtime.process_message("test", session, user_id="user123")

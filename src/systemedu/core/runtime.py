@@ -3,11 +3,9 @@
 import logging
 from pathlib import Path
 
-from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
-from langgraph.graph import END, START, StateGraph
-from langgraph.graph.message import add_messages
-from typing_extensions import Annotated, TypedDict
+from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 
+from .agent_backend import create_backend
 from .config import SYSTEMEDU_HOME, get_config
 from .llm_client import get_llm
 from .session import Session, SessionManager
@@ -19,16 +17,6 @@ DEFAULT_SYSTEM_PROMPT = """你是 SystemEdu 的 AI 助手，一个智能教育�
 你可以帮助用户学习知识、执行任务、编写代码、分析问题。
 你有以下工具可以使用，在需要时调用它们来帮助用户。
 用中文回答用户的问题。"""
-
-
-class AgentState(TypedDict):
-    """State schema for the LangGraph agent."""
-
-    messages: Annotated[list, add_messages]
-    user_id: str
-    session_id: str
-    memory_context: str
-    iteration_count: int
 
 
 def _build_system_prompt(
@@ -92,7 +80,11 @@ def _build_project_prompt_section(project_context) -> str:
 
 
 class AgentRuntime:
-    """Core agent runtime that handles message → LLM → tool calls → response loop."""
+    """Core agent runtime that handles message → LLM → tool calls → response loop.
+
+    Delegates actual LLM interaction to a pluggable AgentBackend (LangGraph or DeepAgents).
+    Memory retrieve/store, session management, and education tools remain in this layer.
+    """
 
     def __init__(
         self,
@@ -102,6 +94,7 @@ class AgentRuntime:
         skill_names: list[str] | None = None,
         mcp_manager=None,
         project_context=None,
+        backend: str | None = None,
     ):
         self.provider = provider
         self._project_context = project_context
@@ -116,7 +109,9 @@ class AgentRuntime:
         self.tools_enabled = tools_enabled
         self._mcp_manager = mcp_manager
         self._mcp_setup_done = False
-        self._graph = None
+
+        # Create pluggable backend
+        self._backend = create_backend(backend, provider)
 
         if project_context is not None:
             self._register_education_tools(project_context)
@@ -158,7 +153,6 @@ class AgentRuntime:
                 DEFAULT_SYSTEM_PROMPT,
                 project_context=ctx,
             )
-            runtime._graph = None  # Force graph rebuild
 
             node = ctx.get_node_by_id(node_id)
             title = node.title if node else f"#{node_id}"
@@ -247,122 +241,36 @@ class AgentRuntime:
             handler = await _make_handler(tool_name)
             self.tool_executor.register_tool(tool_name, handler, tool_schema)
 
-    def _build_graph(self):
-        """Build the LangGraph state machine."""
-        runtime = self  # capture for closures
+    async def _retrieve_memory(self, user_id: str, user_message: str) -> str:
+        """Retrieve relevant memories if mem0 is available."""
+        if not get_config().memory.enabled:
+            return ""
+        try:
+            from systemedu.memory.client import retrieve_memories
 
-        async def retrieve_memory(state: AgentState) -> dict:
-            """Retrieve relevant memories if mem0 is available."""
-            memory_context = ""
-            if get_config().memory.enabled:
-                try:
-                    from systemedu.memory.client import retrieve_memories
+            memories = retrieve_memories(user_id=user_id, query=user_message)
+            if memories:
+                return "\n".join(f"- {m}" for m in memories)
+        except Exception as e:
+            logger.debug(f"Memory retrieval skipped: {e}")
+        return ""
 
-                    user_msg = ""
-                    for msg in reversed(state["messages"]):
-                        if isinstance(msg, HumanMessage):
-                            user_msg = msg.content
-                            break
-                    if user_msg:
-                        memories = retrieve_memories(
-                            user_id=state["user_id"], query=user_msg
-                        )
-                        if memories:
-                            memory_context = "\n".join(
-                                f"- {m}" for m in memories
-                            )
-                except Exception as e:
-                    logger.debug(f"Memory retrieval skipped: {e}")
-            return {"memory_context": memory_context}
+    async def _store_memory(self, user_id: str, user_message: str, assistant_message: str):
+        """Store conversation in memory if mem0 is available."""
+        if not get_config().memory.enabled:
+            return
+        try:
+            from systemedu.memory.client import store_conversation
 
-        async def agent_node(state: AgentState) -> dict:
-            """Call the LLM with current messages."""
-            llm = get_llm(provider=runtime.provider, streaming=False)
-            tools = runtime.tool_executor.get_tool_schemas() if runtime.tools_enabled else []
-            if tools:
-                llm = llm.bind_tools(tools)
-
-            # Build system prompt with memory context
-            sys_prompt = runtime.system_prompt
-            if state.get("memory_context"):
-                sys_prompt += f"\n\n## 相关记忆\n{state['memory_context']}"
-
-            messages = [SystemMessage(content=sys_prompt)] + list(state["messages"])
-            response = await llm.ainvoke(messages)
-            return {
-                "messages": [response],
-                "iteration_count": state.get("iteration_count", 0) + 1,
-            }
-
-        async def execute_tools(state: AgentState) -> dict:
-            """Execute tool calls from the last AI message."""
-            last_msg = state["messages"][-1]
-            tool_messages = []
-            for tool_call in last_msg.tool_calls:
-                tool_name = tool_call["name"]
-                tool_args = tool_call["args"]
-                logger.info(f"Calling tool: {tool_name}({tool_args})")
-
-                result = await runtime.tool_executor.execute(tool_name, tool_args)
-                logger.info(f"Tool result: {result[:200]}...")
-                tool_messages.append(
-                    ToolMessage(content=result, tool_call_id=tool_call["id"])
-                )
-            return {"messages": tool_messages}
-
-        async def store_memory(state: AgentState) -> dict:
-            """Store conversation in memory if mem0 is available."""
-            if get_config().memory.enabled:
-                try:
-                    from systemedu.memory.client import store_conversation
-
-                    # Extract last user-assistant pair
-                    messages = state["messages"]
-                    user_msg = assistant_msg = ""
-                    for msg in reversed(messages):
-                        if isinstance(msg, AIMessage) and not assistant_msg and msg.content:
-                            assistant_msg = msg.content
-                        elif isinstance(msg, HumanMessage) and not user_msg:
-                            user_msg = msg.content
-                        if user_msg and assistant_msg:
-                            break
-                    if user_msg and assistant_msg:
-                        store_conversation(
-                            user_id=state["user_id"],
-                            messages=[
-                                {"role": "user", "content": user_msg},
-                                {"role": "assistant", "content": assistant_msg},
-                            ],
-                        )
-                except Exception as e:
-                    logger.debug(f"Memory storage skipped: {e}")
-            return {}
-
-        def should_continue(state: AgentState) -> str:
-            """Decide whether to continue tool loop or finish."""
-            last_msg = state["messages"][-1]
-            if (
-                isinstance(last_msg, AIMessage)
-                and last_msg.tool_calls
-                and state.get("iteration_count", 0) < 10
-            ):
-                return "execute_tools"
-            return "store_memory"
-
-        # Build graph
-        graph = StateGraph(AgentState)
-        graph.add_node("retrieve_memory", retrieve_memory)
-        graph.add_node("agent", agent_node)
-        graph.add_node("execute_tools", execute_tools)
-        graph.add_node("store_memory", store_memory)
-
-        graph.add_edge(START, "retrieve_memory")
-        graph.add_edge("retrieve_memory", "agent")
-        graph.add_conditional_edges("agent", should_continue)
-        graph.add_edge("execute_tools", "agent")
-        graph.add_edge("store_memory", END)
-
-        return graph.compile()
+            store_conversation(
+                user_id=user_id,
+                messages=[
+                    {"role": "user", "content": user_message},
+                    {"role": "assistant", "content": assistant_message},
+                ],
+            )
+        except Exception as e:
+            logger.debug(f"Memory storage skipped: {e}")
 
     async def process_message(
         self,
@@ -370,7 +278,7 @@ class AgentRuntime:
         session: Session | None = None,
         user_id: str = "default",
     ) -> str:
-        """Process a user message through the LangGraph state machine."""
+        """Process a user message through the agent backend."""
         if session is None:
             session = self.session_manager.create_session()
 
@@ -379,9 +287,8 @@ class AgentRuntime:
 
         session.add_message("user", user_message)
 
-        # Build LangGraph
-        if self._graph is None:
-            self._graph = self._build_graph()
+        # Retrieve memory
+        memory_context = await self._retrieve_memory(user_id, user_message)
 
         # Convert session history to LangChain messages
         lc_messages = []
@@ -391,27 +298,24 @@ class AgentRuntime:
             elif msg.role == "assistant":
                 lc_messages.append(AIMessage(content=msg.content))
 
-        initial_state: AgentState = {
-            "messages": lc_messages,
-            "user_id": user_id,
-            "session_id": session.id,
-            "memory_context": "",
-            "iteration_count": 0,
-        }
+        # Get tool schemas
+        tools = self.tool_executor.get_tool_schemas() if self.tools_enabled else []
 
-        result = await self._graph.ainvoke(initial_state)
+        # Delegate to backend
+        response = await self._backend.process(
+            messages=lc_messages,
+            system_prompt=self.system_prompt,
+            tools=tools,
+            tool_executor=self.tool_executor,
+            user_id=user_id,
+            memory_context=memory_context,
+        )
 
-        # Extract final response
-        final_messages = result["messages"]
-        for msg in reversed(final_messages):
-            if isinstance(msg, AIMessage) and msg.content and not msg.tool_calls:
-                session.add_message("assistant", msg.content)
-                return msg.content
+        # Store memory
+        await self._store_memory(user_id, user_message, response)
 
-        # Fallback: max iterations hit
-        final = "抱歉，我执行了太多步骤。请尝试简化你的请求。"
-        session.add_message("assistant", final)
-        return final
+        session.add_message("assistant", response)
+        return response
 
     async def stream_message(
         self,
@@ -421,27 +325,24 @@ class AgentRuntime:
         """Process a message with streaming output.
 
         Yields chunks of the response as they arrive.
-        Note: streaming does not use the LangGraph state machine.
         """
         if session is None:
             session = self.session_manager.create_session()
 
         session.add_message("user", user_message)
 
-        llm = get_llm(provider=self.provider, streaming=True)
-
-        messages = [SystemMessage(content=self.system_prompt)]
+        # Convert session to LangChain messages
+        lc_messages = []
         for msg in session.messages[:-1]:  # Exclude the message we just added
             if msg.role == "user":
-                messages.append(HumanMessage(content=msg.content))
+                lc_messages.append(HumanMessage(content=msg.content))
             elif msg.role == "assistant":
-                messages.append(AIMessage(content=msg.content))
-        messages.append(HumanMessage(content=user_message))
+                lc_messages.append(AIMessage(content=msg.content))
+        lc_messages.append(HumanMessage(content=user_message))
 
         full_response = ""
-        async for chunk in llm.astream(messages):
-            if chunk.content:
-                full_response += chunk.content
-                yield chunk.content
+        async for chunk in self._backend.stream(lc_messages, self.system_prompt):
+            full_response += chunk
+            yield chunk
 
         session.add_message("assistant", full_response)
