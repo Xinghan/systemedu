@@ -105,6 +105,8 @@ class ProjectMCPConfig(BaseModel):
 class Project(BaseModel):
     """A learning project."""
 
+    model_config = {"populate_by_name": True}
+
     name: str
     version: str = "0.1.0"
     title: str
@@ -116,7 +118,9 @@ class Project(BaseModel):
     tags: list[str] = Field(default_factory=list)
     agents: dict[str, ProjectAgentConfig] = Field(default_factory=dict)
     mcp: dict[str, ProjectMCPConfig] = Field(default_factory=dict)
-    knowledge_tree_path: str = "./knowledge_tree.json"
+    knowledge_tree_path: str = Field(
+        default="./knowledge_tree.json", alias="knowledge_tree"
+    )
 
 
 class UserNodeProgress(BaseModel):
