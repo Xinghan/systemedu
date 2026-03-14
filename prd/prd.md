@@ -29,10 +29,16 @@
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │                     用户交互层                                │
-│  CLI (systemedu)  │  Web UI  │  IM Channels (WeChat/TG/...) │
-└────────┬──────────┴────┬─────┴──────────┬───────────────────┘
-         │               │                │
-┌────────▼───────────────▼────────────────▼───────────────────┐
+│  CLI (systemedu)  │  Dashboard (浏览器) │  IM Channels       │
+└────────┬──────────┴────┬────────────────┴───────────────────┘
+         │               │
+┌────────▼───────────────▼────────────────────────────────────┐
+│              Gateway (Starlette + Uvicorn)                    │
+│  REST API │ WebSocket (流式对话) │ 静态文件 (Dashboard)        │
+│  localhost:18820 │ Daemon 后台进程管理                         │
+└─────────────────────────┬───────────────────────────────────┘
+                          │
+┌─────────────────────────▼───────────────────────────────────┐
 │                   Agent Runtime (Python)                      │
 │  LLM 调度 │ Tool 执行 │ MCP 管理 │ Skills 加载器 │ 沙箱隔离   │
 └─────────────────────────┬───────────────────────────────────┘
@@ -58,6 +64,9 @@
 | Layer | Technology | Purpose |
 |-------|-----------|---------|
 | **CLI** | Typer + Rich | 命令行交互 |
+| **Gateway** | Starlette + Uvicorn | 本地 HTTP + WebSocket 服务 |
+| **Dashboard** | Vue 3 + Tailwind (单文件 HTML) | 浏览器管理界面 |
+| **Daemon** | Python 后台进程 (PID 管理) | 长驻服务 |
 | **Config** | YAML + Pydantic | 配置管理 |
 | **Runtime** | LangGraph + LangChain | Agent 编排 |
 | **LLM** | OpenAI-compatible (Qwen/Claude/Ollama) | 多 provider |
@@ -89,6 +98,23 @@
 - [x] CLI 命令: init/chat/config/project/mcp/skill/channel
 - [x] 示例项目 (train-ai-model)
 - [x] 63 个测试全部通过
+
+### Phase 1.5: UX 重构 (Install → Onboard → Daemon → Dashboard) ✅
+- [x] `systemedu onboard` 交互式引导 (LLM provider 选择, API key, 连接测试)
+- [x] Daemon 后台进程管理 (`core/daemon.py`, PID 文件, SIGTERM 优雅停止)
+- [x] Gateway HTTP + WebSocket 服务 (`gateway/server.py`, starlette + uvicorn)
+  - REST: `/api/status`, `/api/config`, `/api/sessions`, `/api/sessions/:id`, `/api/chat`
+  - WebSocket: `/api/chat/stream` (流式对话)
+  - 静态文件: Dashboard 单页应用
+- [x] Dashboard 浏览器界面 (`gateway/static/index.html`, Vue 3 + Tailwind CDN)
+  - Chat (WebSocket 流式), Status, Sessions, Config 四个页面
+- [x] `systemedu doctor` 诊断检查 (Python/Config/LLM/Daemon/Gateway/DB 共 8 项)
+- [x] `systemedu status` 系统状态面板 (Rich Panel)
+- [x] `systemedu dashboard` 自动启动 daemon + 打开浏览器
+- [x] `install.sh` 一键安装脚本 (pipx/uv/pip + onboard)
+- [x] `GatewayConfig` (port/host) 加入配置系统
+- [x] `save_config()` 辅助函数
+- [x] 84 个测试全部通过 (+21 新增)
 
 ### Phase 2: MCP + Skills + 沙箱增强
 - [ ] MCP manager (server 启停, tool 注入到 LLM)
@@ -130,6 +156,9 @@ sandbox:
   enabled: true
   blocked_commands: ["rm -rf /"]
   max_execution_time: 300
+gateway:
+  port: 18820
+  host: 127.0.0.1
 mcp:
   servers: {}
 channels:
@@ -141,6 +170,17 @@ memory:
   enabled: true
   backend: mem0
 ```
+
+### Gateway API Endpoints
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/api/status` | 系统状态 (版本, uptime, LLM, 会话数) |
+| GET | `/api/config` | 当前配置 (API key 脱敏) |
+| GET | `/api/sessions` | 活跃会话列表 |
+| GET | `/api/sessions/:id` | 会话详情 + 消息历史 |
+| POST | `/api/chat` | 发送消息 (同步响应) |
+| WS | `/api/chat/stream` | 流式对话 WebSocket |
+| GET | `/` | Dashboard 页面 |
 
 ### Project Config: `<project>/project.yaml`
 ```yaml
@@ -159,9 +199,24 @@ knowledge_tree: ./knowledge_tree.json
 ## 7. CLI Commands
 
 ```bash
+# 安装与初始化
+curl -fsSL https://systemedu.com/install.sh | bash  # 一键安装
 systemedu init                       # 初始化 ~/.systemedu/
+systemedu onboard                    # 交互式引导 (LLM 选择 + API key + 测试)
+
+# 日常使用
 systemedu chat                       # 交互对话
 systemedu chat --agent tutor         # 指定 agent
+systemedu dashboard                  # 打开浏览器 Dashboard
+systemedu status                     # 系统状态
+systemedu doctor                     # 诊断检查
+
+# Daemon 管理
+systemedu agent start                # 启动后台 daemon (Gateway)
+systemedu agent stop                 # 停止 daemon
+systemedu agent status               # daemon 状态
+
+# 配置与管理
 systemedu config show/set/get/edit   # 配置管理
 systemedu project init/list/info     # 项目管理
 systemedu mcp add/list/remove        # MCP 管理

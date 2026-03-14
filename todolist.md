@@ -21,6 +21,27 @@
 - [x] 示例项目 (train-ai-model)
 - [x] 测试 (63 pass)
 
+## Phase 1.5: UX 重构 (Install → Onboard → Daemon → Dashboard) ✅
+
+- [x] `systemedu onboard` 交互式引导 (LLM 选择 + API key + 连接测试)
+- [x] Daemon 进程管理 (PID 文件, start/stop/status)
+- [x] Gateway HTTP + WebSocket 服务 (starlette + uvicorn, localhost:18820)
+- [x] Dashboard 单页应用 (Vue 3 + Tailwind, Chat/Status/Sessions/Config)
+- [x] `systemedu doctor` 诊断检查 (8 项)
+- [x] `systemedu status` 系统状态面板
+- [x] `systemedu dashboard` 自动启动 daemon + 打开浏览器
+- [x] `install.sh` 一键安装脚本
+- [x] GatewayConfig 配置 + save_config 助手函数
+- [x] 测试 (84 pass, +21 new)
+
+## UX 增强 (待开发)
+
+- [ ] `systemedu chat` 通过 Gateway WebSocket 路由 — 所有对话在 dashboard 可见
+- [ ] 系统服务安装 — `systemedu agent install` 支持 systemd/launchd 开机自启
+- [ ] Dashboard 多 Session 切换 — 选择/恢复历史会话
+- [ ] Gateway `/health` 端点 — 轻量健康检查供监控使用
+- [ ] `systemedu logs` 命令 — 实时查看 daemon 日志 (类似 `tail -f`)
+
 ## Phase 2: MCP + Skills 增强
 
 - [ ] MCP server 生命周期管理 (start/stop/connect)
