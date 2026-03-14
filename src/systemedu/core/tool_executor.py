@@ -8,6 +8,8 @@ import asyncio
 import subprocess
 from pathlib import Path
 
+from .sandbox import Sandbox, SandboxViolation
+
 BUILTIN_TOOLS = [
     {
         "type": "function",
@@ -72,15 +74,19 @@ class ToolExecutor:
 
     def __init__(self, sandbox_config=None):
         self.sandbox_config = sandbox_config
+        self._sandbox = Sandbox(sandbox_config) if sandbox_config else None
         self._handlers = {
             "run_bash": self._run_bash,
             "read_file": self._read_file,
             "write_file": self._write_file,
         }
+        self._extra_schemas: list[dict] = []
 
     def register_tool(self, name: str, handler, schema: dict | None = None):
         """Register a custom tool handler."""
         self._handlers[name] = handler
+        if schema is not None:
+            self._extra_schemas.append(schema)
 
     async def execute(self, tool_name: str, arguments: dict) -> str:
         """Execute a tool call and return the result as a string."""
@@ -99,16 +105,17 @@ class ToolExecutor:
 
     def get_tool_schemas(self) -> list[dict]:
         """Return OpenAI function-calling schemas for all registered tools."""
-        return list(BUILTIN_TOOLS)
+        return list(BUILTIN_TOOLS) + list(self._extra_schemas)
 
     def _run_bash(self, command: str) -> str:
         """Execute a bash command with optional sandbox restrictions."""
         timeout = 300
-        if self.sandbox_config:
-            timeout = self.sandbox_config.max_execution_time
-            for blocked in self.sandbox_config.blocked_commands:
-                if blocked in command:
-                    return f"Error: Command blocked by sandbox policy: '{blocked}'"
+        if self._sandbox:
+            timeout = self._sandbox.config.max_execution_time
+            try:
+                self._sandbox.check_command(command)
+            except SandboxViolation as e:
+                return f"Error: {e}"
 
         try:
             result = subprocess.run(
@@ -128,6 +135,12 @@ class ToolExecutor:
 
     def _read_file(self, path: str) -> str:
         """Read a file's contents."""
+        if self._sandbox:
+            try:
+                self._sandbox.check_file_access(path, write=False)
+            except SandboxViolation as e:
+                return f"Error: {e}"
+
         p = Path(path).expanduser()
         if not p.exists():
             return f"Error: File not found: {path}"
@@ -138,6 +151,12 @@ class ToolExecutor:
 
     def _write_file(self, path: str, content: str) -> str:
         """Write content to a file."""
+        if self._sandbox:
+            try:
+                self._sandbox.check_file_access(path, write=True)
+            except SandboxViolation as e:
+                return f"Error: {e}"
+
         p = Path(path).expanduser()
         try:
             p.parent.mkdir(parents=True, exist_ok=True)

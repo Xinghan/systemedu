@@ -5,10 +5,12 @@ from datetime import datetime
 from sqlalchemy import (
     Column,
     DateTime,
+    Float,
     ForeignKey,
     Integer,
     String,
     Text,
+    UniqueConstraint,
     create_engine,
 )
 from sqlalchemy.orm import DeclarativeBase, Session, relationship, sessionmaker
@@ -60,6 +62,24 @@ class LocalProject(Base):
     path = Column(String(500), nullable=False)  # Path to project directory
     category = Column(String(50), default="other")
     loaded_at = Column(DateTime, default=datetime.now)
+
+
+class ProgressRecord(Base):
+    """Persisted progress for a knowledge node."""
+
+    __tablename__ = "progress"
+    __table_args__ = (
+        UniqueConstraint("user_id", "project_name", "knode_id", name="uq_progress"),
+    )
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(String(100), nullable=False, default="default")
+    project_name = Column(String(200), nullable=False)
+    knode_id = Column(Integer, nullable=False)
+    status = Column(String(20), nullable=False, default="locked")
+    attempts = Column(Integer, default=0)
+    best_score = Column(Float, default=0.0)
+    passed_at = Column(DateTime, nullable=True)
 
 
 _engine = None

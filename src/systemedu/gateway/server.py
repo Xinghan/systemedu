@@ -149,6 +149,7 @@ async def api_chat(request: Request) -> JSONResponse:
     body = await request.json()
     message = body.get("message", "").strip()
     session_id = body.get("session_id")
+    user_id = body.get("user_id", "default")
 
     if not message:
         return JSONResponse({"error": "message is required"}, status_code=400)
@@ -162,7 +163,7 @@ async def api_chat(request: Request) -> JSONResponse:
     if session is None:
         session = _get_session_manager().create_session()
 
-    response = await runtime.process_message(message, session)
+    response = await runtime.process_message(message, session, user_id=user_id)
 
     return JSONResponse(
         {
@@ -229,6 +230,32 @@ async def dashboard(request: Request) -> HTMLResponse:
 # --- App Factory ---
 
 
+async def _on_startup():
+    """Initialize runtime and auto-connect configured MCP servers on startup."""
+    global _runtime
+    from systemedu.core.config import get_config
+    from systemedu.core.runtime import AgentRuntime
+
+    config = get_config()
+    mcp_manager = None
+
+    if config.mcp.servers:
+        try:
+            from systemedu.mcp.manager import MCPManager
+
+            mcp_manager = MCPManager()
+            for name, srv_config in config.mcp.servers.items():
+                try:
+                    await mcp_manager.start_server(name, srv_config)
+                    logger.info(f"MCP server '{name}' auto-connected")
+                except Exception as e:
+                    logger.warning(f"MCP server '{name}' auto-connect failed: {e}")
+        except Exception as e:
+            logger.warning(f"MCP manager init failed: {e}")
+
+    _runtime = AgentRuntime(mcp_manager=mcp_manager)
+
+
 def create_app() -> Starlette:
     """Create the Starlette ASGI application."""
     global _start_time
@@ -253,7 +280,11 @@ def create_app() -> Starlette:
         ),
     ]
 
-    app = Starlette(routes=routes, middleware=middleware)
+    app = Starlette(
+        routes=routes,
+        middleware=middleware,
+        on_startup=[_on_startup],
+    )
     return app
 
 

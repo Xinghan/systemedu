@@ -116,12 +116,16 @@
 - [x] `save_config()` 辅助函数
 - [x] 84 个测试全部通过 (+21 新增)
 
-### Phase 2: MCP + Skills + 沙箱增强
-- [ ] MCP manager (server 启停, tool 注入到 LLM)
-- [ ] MCP client (stdio/SSE transport)
-- [ ] Skills 注入 agent system prompt
-- [ ] 沙箱增强 (文件系统访问控制)
-- [ ] LangGraph 完整状态机 (memory 集成)
+### Phase 2: MCP + Skills + 沙箱增强 ✅
+- [x] MCP client (stdio transport, 官方 MCP SDK)
+- [x] MCP manager (server 启停, qualified tool naming `server__tool`, tool 注入到 LLM)
+- [x] Skills 内容注入 agent system prompt (`--agent tutor` 自动加载 tutor SKILL.md)
+- [x] 沙箱增强 (文件访问控制 `check_file_access` 真正接入 ToolExecutor)
+- [x] LangGraph 状态机 (retrieve_memory → agent → execute_tools → store_memory)
+- [x] MCP tools 自动注册到 ToolExecutor (lazy setup)
+- [x] `_extra_schemas` 支持动态 tool 注册
+- [x] `process_message` 支持 `user_id` 参数
+- [x] 114 个测试全部通过 (+30 新增)
 
 ### Phase 3: 教育层完善
 - [ ] 知识树加载到 agent 上下文

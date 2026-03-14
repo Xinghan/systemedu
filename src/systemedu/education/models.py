@@ -85,6 +85,23 @@ class KnowledgeTree(BaseModel):
     milestones: list[Milestone] = Field(default_factory=list)
 
 
+class ProjectAgentConfig(BaseModel):
+    """Agent configuration within a project."""
+
+    type: str = "builtin:tutor"
+    llm: str | None = None
+    skills: list[str] = Field(default_factory=list)
+    mcp_servers: list[str] = Field(default_factory=list)
+
+
+class ProjectMCPConfig(BaseModel):
+    """MCP server configuration within a project."""
+
+    command: str
+    args: list[str] = Field(default_factory=list)
+    env: dict[str, str] = Field(default_factory=dict)
+
+
 class Project(BaseModel):
     """A learning project."""
 
@@ -97,6 +114,9 @@ class Project(BaseModel):
     estimated_hours: int = 10
     author: str = ""
     tags: list[str] = Field(default_factory=list)
+    agents: dict[str, ProjectAgentConfig] = Field(default_factory=dict)
+    mcp: dict[str, ProjectMCPConfig] = Field(default_factory=dict)
+    knowledge_tree_path: str = "./knowledge_tree.json"
 
 
 class UserNodeProgress(BaseModel):

@@ -1,4 +1,7 @@
-"""Tests for education layer (knowledge tree validation, progress tracking)."""
+"""Tests for education layer (knowledge tree validation, progress tracking, tree generation)."""
+
+import json
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -9,6 +12,7 @@ from systemedu.education.services import (
     parse_knowledge_tree,
     validate_knowledge_tree,
 )
+from systemedu.education.tree_generator import _extract_json, generate_knowledge_tree
 
 
 @pytest.fixture
@@ -188,3 +192,68 @@ class TestProgress:
         unlocked = unlock_next_nodes(tree, progresses, completed_node_id=1)
         assert 2 in unlocked
         assert progresses[2].status == NodeStatus.AVAILABLE
+
+
+class TestExtractJson:
+    def test_extract_json_from_code_block(self):
+        content = 'Here is the tree:\n```json\n{"milestones": []}\n```\nDone.'
+        result = _extract_json(content)
+        assert result == {"milestones": []}
+
+    def test_extract_json_from_generic_block(self):
+        content = 'Result:\n```\n{"key": "value"}\n```'
+        result = _extract_json(content)
+        assert result == {"key": "value"}
+
+    def test_extract_json_from_raw(self):
+        content = 'Some text before {"name": "test"} and after'
+        result = _extract_json(content)
+        assert result == {"name": "test"}
+
+    def test_extract_json_no_json_raises(self):
+        content = "No JSON here at all"
+        with pytest.raises(ValueError, match="No valid JSON"):
+            _extract_json(content)
+
+    def test_extract_json_nested_braces(self):
+        content = '{"outer": {"inner": 1}}'
+        result = _extract_json(content)
+        assert result == {"outer": {"inner": 1}}
+
+
+class TestGenerateKnowledgeTree:
+    @pytest.fixture
+    def valid_tree_json(self, valid_tree_data):
+        return json.dumps(valid_tree_data)
+
+    @pytest.mark.asyncio
+    async def test_generate_retries_on_failure(self, valid_tree_json):
+        """Should retry and succeed on second attempt."""
+        mock_planner = AsyncMock()
+        mock_planner.process = AsyncMock(
+            side_effect=[
+                "not valid json at all",
+                f"```json\n{valid_tree_json}\n```",
+            ]
+        )
+
+        with (
+            patch("systemedu.agents.builtin.planner.PlannerAgent", return_value=mock_planner),
+            patch("systemedu.agents.base.AgentConfig"),
+        ):
+            tree = await generate_knowledge_tree("Test", "Test project", max_retries=3)
+            assert isinstance(tree, KnowledgeTree)
+            assert mock_planner.process.call_count == 2
+
+    @pytest.mark.asyncio
+    async def test_generate_max_retries_exceeded(self):
+        """Should raise RuntimeError after max retries."""
+        mock_planner = AsyncMock()
+        mock_planner.process = AsyncMock(return_value="garbage response")
+
+        with (
+            patch("systemedu.agents.builtin.planner.PlannerAgent", return_value=mock_planner),
+            patch("systemedu.agents.base.AgentConfig"),
+        ):
+            with pytest.raises(RuntimeError, match="Failed to generate"):
+                await generate_knowledge_tree("Test", "Test", max_retries=2)

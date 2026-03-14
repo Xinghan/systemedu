@@ -42,13 +42,23 @@
 - [ ] Gateway `/health` 端点 — 轻量健康检查供监控使用
 - [ ] `systemedu logs` 命令 — 实时查看 daemon 日志 (类似 `tail -f`)
 
-## Phase 2: MCP + Skills 增强
+## Phase 2: MCP + Skills 增强 ✅
 
-- [ ] MCP server 生命周期管理 (start/stop/connect)
-- [ ] MCP tool → OpenAI function calling 注入
-- [ ] Skills 内容注入 agent system prompt
-- [ ] 沙箱文件系统访问控制 (allowed_dirs)
-- [ ] LangGraph 完整状态机 (retrieve_memory → agent → store_memory)
+- [x] MCP client (stdio transport, 官方 MCP SDK, `mcp/client.py`)
+- [x] MCP manager (server 启停, qualified tool naming `server__tool`)
+- [x] MCP tool → OpenAI function calling 注入 (lazy setup, `_extra_schemas`)
+- [x] Skills 内容注入 agent system prompt (`--agent tutor` 自动加载)
+- [x] 沙箱文件系统访问控制 (`check_file_access` 接入 ToolExecutor)
+- [x] LangGraph 完整状态机 (retrieve_memory → agent → execute_tools → store_memory)
+- [x] 测试 (114 pass, +30 new)
+
+## Runtime 增强 (待开发)
+
+- [ ] Daemon/chat 启动时自动连接 config.yaml 中已配置的 MCP servers — 当前 `mcp add` 写入配置后 runtime 不会读取并 connect
+- [ ] `stream_message` 使用 LangGraph streaming — 当前 streaming 模式不走 graph，无法使用 tools
+- [ ] Memory 系统实现 — `systemedu.memory.client.get_memory_client()` 连接 Mem0，LangGraph 节点已就绪
+- [ ] Gateway `/api/chat` 适配 LangGraph — 传 `user_id` 参数
+- [ ] `systemedu mcp test <name>` — MCP server 连接测试命令
 
 ## Phase 3: 教育层完善
 

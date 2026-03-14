@@ -125,13 +125,62 @@ async def _run_chat(agent: str, project: str | None, provider: str | None):
     from prompt_toolkit import PromptSession
     from rich.console import Console
 
-    from systemedu.core.config import init_config_dir
+    from systemedu.core.config import get_config, init_config_dir
     from systemedu.core.runtime import AgentRuntime
 
     init_config_dir()
     console = Console()
+    config = get_config()
 
-    runtime = AgentRuntime(provider=provider)
+    # Load project context if specified
+    project_context = None
+    mcp_manager = None
+    if project:
+        try:
+            from systemedu.education.project_loader import load_project_context
+
+            project_context = load_project_context(project)
+            console.print(f"[green]已加载项目: {project_context.project.title}[/green]")
+
+            current = project_context.current_node()
+            if current:
+                idx, node = current
+                console.print(f"[dim]当前节点: [{idx}] {node.title}[/dim]")
+        except FileNotFoundError as e:
+            console.print(f"[red]项目加载失败: {e}[/red]")
+            return
+
+    # Setup MCP manager and auto-connect servers
+    mcp_servers = dict(config.mcp.servers)  # Global servers
+    if project_context and project_context.project.mcp:
+        # Add project-level MCP servers
+        from systemedu.core.config import MCPServerConfig
+
+        for name, mcp_conf in project_context.project.mcp.items():
+            mcp_servers[name] = MCPServerConfig(
+                command=mcp_conf.command,
+                args=mcp_conf.args,
+                env=mcp_conf.env,
+            )
+
+    if mcp_servers:
+        from systemedu.mcp.manager import MCPManager
+
+        mcp_manager = MCPManager()
+        for name, srv_config in mcp_servers.items():
+            try:
+                await mcp_manager.start_server(name, srv_config)
+                console.print(f"[dim]MCP: {name} 已连接[/dim]")
+            except Exception as e:
+                console.print(f"[yellow]MCP: {name} 连接失败: {e}[/yellow]")
+
+    skill_names = [agent] if agent != "default" else None
+    runtime = AgentRuntime(
+        provider=provider,
+        skill_names=skill_names,
+        mcp_manager=mcp_manager,
+        project_context=project_context,
+    )
     session = runtime.session_manager.create_session(
         agent_name=agent, project_name=project
     )
@@ -140,30 +189,37 @@ async def _run_chat(agent: str, project: str | None, provider: str | None):
 
     console.print("[bold green]SystemEdu Agent[/bold green] - 输入消息开始对话，输入 /quit 退出\n")
 
-    while True:
-        try:
-            user_input = await asyncio.get_event_loop().run_in_executor(
-                None,
-                lambda: prompt_session.prompt("You> "),
-            )
-            user_input = user_input.strip()
-            if not user_input:
-                continue
-            if user_input in ("/quit", "/exit", "/q"):
+    try:
+        while True:
+            try:
+                user_input = await asyncio.get_event_loop().run_in_executor(
+                    None,
+                    lambda: prompt_session.prompt("You> "),
+                )
+                user_input = user_input.strip()
+                if not user_input:
+                    continue
+                if user_input in ("/quit", "/exit", "/q"):
+                    console.print("\n[dim]再见！[/dim]")
+                    break
+
+                if project_context:
+                    # Project mode: use process_message (non-streaming, supports tools)
+                    response = await runtime.process_message(user_input, session)
+                    console.print(f"\n{response}\n")
+                else:
+                    # Normal mode: streaming
+                    console.print()
+                    async for chunk in runtime.stream_message(user_input, session):
+                        console.print(chunk, end="", highlight=False)
+                    console.print("\n")
+
+            except (KeyboardInterrupt, EOFError):
                 console.print("\n[dim]再见！[/dim]")
                 break
-
-            # Stream response
-            console.print()
-            full_response = ""
-            async for chunk in runtime.stream_message(user_input, session):
-                console.print(chunk, end="", highlight=False)
-                full_response += chunk
-            console.print("\n")
-
-        except (KeyboardInterrupt, EOFError):
-            console.print("\n[dim]再见！[/dim]")
-            break
+    finally:
+        if mcp_manager:
+            await mcp_manager.stop_all()
 
 
 # Import subcommands

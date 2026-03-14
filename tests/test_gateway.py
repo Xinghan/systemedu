@@ -1,7 +1,10 @@
 """Tests for gateway HTTP server."""
 
+from unittest.mock import AsyncMock, MagicMock, patch
+
 import pytest
 import yaml
+from langchain_core.messages import AIMessage
 from starlette.testclient import TestClient
 
 from systemedu.core.config import reset_config
@@ -81,3 +84,40 @@ class TestGatewayAPI:
         resp = client.get("/")
         assert resp.status_code == 200
         assert "SystemEdu" in resp.text
+
+
+class TestGatewayChatUserId:
+    def test_chat_with_user_id(self, config_env):
+        """POST /api/chat with user_id should pass it to process_message."""
+        mock_llm = MagicMock()
+        mock_llm.ainvoke = AsyncMock(return_value=AIMessage(content="hello user"))
+        mock_llm.bind_tools.return_value = mock_llm
+
+        with patch("systemedu.core.runtime.get_llm", return_value=mock_llm):
+            app = create_app()
+            client = TestClient(app)
+
+            resp = client.post(
+                "/api/chat",
+                json={"message": "hi", "user_id": "user42"},
+            )
+            assert resp.status_code == 200
+            data = resp.json()
+            assert data["response"] == "hello user"
+
+    def test_chat_default_user_id(self, config_env):
+        """POST /api/chat without user_id should default to 'default'."""
+        mock_llm = MagicMock()
+        mock_llm.ainvoke = AsyncMock(return_value=AIMessage(content="ok"))
+        mock_llm.bind_tools.return_value = mock_llm
+
+        with patch("systemedu.core.runtime.get_llm", return_value=mock_llm):
+            app = create_app()
+            client = TestClient(app)
+
+            resp = client.post(
+                "/api/chat",
+                json={"message": "test"},
+            )
+            assert resp.status_code == 200
+            assert resp.json()["response"] == "ok"
