@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SystemEdu Dashboard</title>
+<script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+<link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+<style>
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
+.chat-messages { height: calc(100vh - 280px); overflow-y: auto; }
+.msg-user { background: #e8f4fd; }
+.msg-assistant { background: #f0f0f0; }
+pre code { background: #1e1e1e; color: #d4d4d4; padding: 12px; border-radius: 6px; display: block; overflow-x: auto; }
+.status-dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+.status-dot.running { background: #22c55e; }
+.status-dot.stopped { background: #9ca3af; }
+.fade-enter-active, .fade-leave-active { transition: opacity 0.2s; }
+.fade-enter-from, .fade-leave-to { opacity: 0; }
+.typing-indicator span { animation: blink 1.4s infinite both; }
+.typing-indicator span:nth-child(2) { animation-delay: 0.2s; }
+.typing-indicator span:nth-child(3) { animation-delay: 0.4s; }
+@keyframes blink { 0%,80%,100% { opacity: 0; } 40% { opacity: 1; } }
+</style>
+</head>
+<body class="bg-gray-50 text-gray-900">
+<div id="app">
+  <!-- Header -->
+  <header class="bg-white border-b px-6 py-3 flex items-center justify-between shadow-sm">
+    <div class="flex items-center gap-3">
+      <h1 class="text-xl font-bold text-green-700">SystemEdu</h1>
+      <span class="text-sm text-gray-500">Dashboard</span>
+    </div>
+    <div class="flex items-center gap-2 text-sm">
+      <span class="status-dot" :class="systemStatus.running ? 'running' : 'stopped'"></span>
+      <span>{{ systemStatus.running ? 'Running' : 'Stopped' }}</span>
+      <span class="text-gray-400 ml-2" v-if="systemStatus.uptime">{{ systemStatus.uptime }}</span>
+    </div>
+  </header>
+
+  <div class="flex" style="height: calc(100vh - 57px);">
+    <!-- Sidebar -->
+    <nav class="w-48 bg-white border-r p-4 flex flex-col gap-1">
+      <button v-for="tab in tabs" :key="tab.id"
+        @click="currentTab = tab.id"
+        class="text-left px-3 py-2 rounded-lg text-sm font-medium transition-colors"
+        :class="currentTab === tab.id ? 'bg-green-100 text-green-800' : 'text-gray-600 hover:bg-gray-100'">
+        {{ tab.label }}
+      </button>
+    </nav>
+
+    <!-- Main content -->
+    <main class="flex-1 p-6 overflow-y-auto">
+
+      <!-- Chat Tab -->
+      <div v-if="currentTab === 'chat'">
+        <div class="max-w-3xl mx-auto">
+          <div class="chat-messages space-y-3 mb-4" ref="chatMessages">
+            <div v-for="(msg, i) in messages" :key="i"
+              class="p-3 rounded-lg text-sm whitespace-pre-wrap"
+              :class="msg.role === 'user' ? 'msg-user ml-12' : 'msg-assistant mr-12'">
+              <div class="text-xs text-gray-500 mb-1 font-medium">{{ msg.role === 'user' ? 'You' : 'Assistant' }}</div>
+              <div v-html="renderContent(msg.content)"></div>
+            </div>
+            <div v-if="streaming" class="p-3 rounded-lg msg-assistant mr-12 text-sm">
+              <div class="text-xs text-gray-500 mb-1 font-medium">Assistant</div>
+              <div v-html="renderContent(streamBuffer)"></div>
+              <span v-if="!streamBuffer" class="typing-indicator"><span>.</span><span>.</span><span>.</span></span>
+            </div>
+          </div>
+          <div class="flex gap-2">
+            <input v-model="chatInput" @keydown.enter="sendMessage"
+              :disabled="streaming"
+              class="flex-1 border rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-400"
+              placeholder="输入消息..." />
+            <button @click="sendMessage" :disabled="streaming || !chatInput.trim()"
+              class="bg-green-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-green-700 disabled:opacity-50">
+              Send
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Status Tab -->
+      <div v-if="currentTab === 'status'">
+        <h2 class="text-lg font-semibold mb-4">System Status</h2>
+        <div class="bg-white rounded-lg border p-6 max-w-lg">
+          <table class="w-full text-sm">
+            <tr v-for="(value, key) in statusDisplay" :key="key" class="border-b last:border-0">
+              <td class="py-2 font-medium text-gray-600 pr-4">{{ key }}</td>
+              <td class="py-2">{{ value }}</td>
+            </tr>
+          </table>
+        </div>
+      </div>
+
+      <!-- Sessions Tab -->
+      <div v-if="currentTab === 'sessions'">
+        <h2 class="text-lg font-semibold mb-4">Active Sessions</h2>
+        <div v-if="sessions.length === 0" class="text-gray-500 text-sm">No active sessions.</div>
+        <div v-else class="space-y-2">
+          <div v-for="s in sessions" :key="s.id" class="bg-white rounded-lg border p-4 text-sm">
+            <div class="flex justify-between">
+              <span class="font-mono text-xs text-gray-500">{{ s.id.slice(0, 8) }}...</span>
+              <span class="text-gray-500">{{ s.messages }} messages</span>
+            </div>
+            <div class="mt-1">Agent: {{ s.agent }} | Project: {{ s.project || '-' }}</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Config Tab -->
+      <div v-if="currentTab === 'config'">
+        <h2 class="text-lg font-semibold mb-4">Configuration</h2>
+        <div class="bg-white rounded-lg border p-6 max-w-lg">
+          <pre class="text-sm bg-gray-50 p-4 rounded overflow-x-auto"><code>{{ JSON.stringify(configData, null, 2) }}</code></pre>
+        </div>
+      </div>
+
+    </main>
+  </div>
+</div>
+
+<script>
+const { createApp, ref, computed, onMounted, nextTick, watch } = Vue;
+
+createApp({
+  setup() {
+    const currentTab = ref('chat');
+    const tabs = [
+      { id: 'chat', label: 'Chat' },
+      { id: 'status', label: 'Status' },
+      { id: 'sessions', label: 'Sessions' },
+      { id: 'config', label: 'Config' },
+    ];
+
+    const systemStatus = ref({ running: false });
+    const sessions = ref([]);
+    const configData = ref({});
+    const messages = ref([]);
+    const chatInput = ref('');
+    const streaming = ref(false);
+    const streamBuffer = ref('');
+    const sessionId = ref(null);
+    const chatMessages = ref(null);
+    let ws = null;
+
+    const statusDisplay = computed(() => {
+      const s = systemStatus.value;
+      return {
+        'Version': s.version || '-',
+        'Status': s.running ? 'Running' : 'Stopped',
+        'Uptime': s.uptime || '-',
+        'LLM Provider': s.llm?.default || '-',
+        'LLM Providers': (s.llm?.providers || []).join(', ') || '-',
+        'Active Sessions': s.sessions ?? '-',
+        'Port': s.port || '-',
+      };
+    });
+
+    function renderContent(text) {
+      if (!text) return '';
+      return text
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+        .replace(/```(\w*)\n([\s\S]*?)```/g, '<pre><code>$2</code></pre>')
+        .replace(/`([^`]+)`/g, '<code class="bg-gray-200 px-1 rounded text-sm">$1</code>')
+        .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+        .replace(/\n/g, '<br>');
+    }
+
+    async function fetchStatus() {
+      try {
+        const r = await fetch('/api/status');
+        systemStatus.value = await r.json();
+      } catch { systemStatus.value = { running: false }; }
+    }
+
+    async function fetchSessions() {
+      try {
+        const r = await fetch('/api/sessions');
+        sessions.value = await r.json();
+      } catch { sessions.value = []; }
+    }
+
+    async function fetchConfig() {
+      try {
+        const r = await fetch('/api/config');
+        configData.value = await r.json();
+      } catch { configData.value = {}; }
+    }
+
+    function connectWS() {
+      const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+      ws = new WebSocket(`${proto}//${location.host}/api/chat/stream`);
+      ws.onmessage = (event) => {
+        const data = JSON.parse(event.data);
+        if (data.type === 'chunk') {
+          streamBuffer.value += data.content;
+          scrollToBottom();
+        } else if (data.type === 'done') {
+          messages.value.push({ role: 'assistant', content: streamBuffer.value });
+          streamBuffer.value = '';
+          streaming.value = false;
+          sessionId.value = data.session_id;
+          scrollToBottom();
+          fetchSessions();
+        } else if (data.type === 'error') {
+          messages.value.push({ role: 'assistant', content: `Error: ${data.message}` });
+          streaming.value = false;
+          streamBuffer.value = '';
+        }
+      };
+      ws.onclose = () => { setTimeout(connectWS, 3000); };
+      ws.onerror = () => { ws.close(); };
+    }
+
+    function sendMessage() {
+      if (!chatInput.value.trim() || streaming.value) return;
+      const text = chatInput.value.trim();
+      messages.value.push({ role: 'user', content: text });
+      chatInput.value = '';
+      streaming.value = true;
+      streamBuffer.value = '';
+
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({ message: text, session_id: sessionId.value }));
+      }
+      scrollToBottom();
+    }
+
+    function scrollToBottom() {
+      nextTick(() => {
+        if (chatMessages.value) {
+          chatMessages.value.scrollTop = chatMessages.value.scrollHeight;
+        }
+      });
+    }
+
+    watch(currentTab, (tab) => {
+      if (tab === 'status') fetchStatus();
+      if (tab === 'sessions') fetchSessions();
+      if (tab === 'config') fetchConfig();
+    });
+
+    onMounted(() => {
+      fetchStatus();
+      connectWS();
+      setInterval(fetchStatus, 30000);
+    });
+
+    return {
+      currentTab, tabs, systemStatus, sessions, configData,
+      messages, chatInput, streaming, streamBuffer, sessionId,
+      chatMessages, statusDisplay, sendMessage, renderContent,
+    };
+  }
+}).mount('#app');
+</script>
+</body>
+</html>

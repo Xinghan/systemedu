@@ -96,6 +96,13 @@ class ChannelsConfig(BaseModel):
     web: ChannelConfig = Field(default_factory=lambda: ChannelConfig(enabled=False))
 
 
+class GatewayConfig(BaseModel):
+    """Gateway (local HTTP server) configuration."""
+
+    port: int = 18820
+    host: str = "127.0.0.1"
+
+
 class HubConfig(BaseModel):
     """Hub server configuration."""
 
@@ -117,6 +124,7 @@ class SystemEduConfig(BaseModel):
     sandbox: SandboxConfig = Field(default_factory=SandboxConfig)
     mcp: MCPConfig = Field(default_factory=MCPConfig)
     channels: ChannelsConfig = Field(default_factory=ChannelsConfig)
+    gateway: GatewayConfig = Field(default_factory=GatewayConfig)
     hub: HubConfig = Field(default_factory=HubConfig)
     memory: MemoryConfig = Field(default_factory=MemoryConfig)
 
@@ -146,6 +154,7 @@ def _default_config_dict() -> dict:
             "cli": {"enabled": True},
             "web": {"enabled": False},
         },
+        "gateway": {"port": 18820, "host": "127.0.0.1"},
         "hub": {"url": "https://hub.systemedu.com"},
         "memory": {"enabled": True, "backend": "mem0"},
     }
@@ -163,6 +172,17 @@ def init_config_dir() -> Path:
         )
 
     return SYSTEMEDU_HOME
+
+
+def save_config(config_dict: dict, path: Path | None = None) -> None:
+    """Save a config dict to the config file."""
+    config_path = path or CONFIG_FILE
+    config_path.parent.mkdir(parents=True, exist_ok=True)
+    config_path.write_text(
+        yaml.dump(config_dict, default_flow_style=False, allow_unicode=True),
+        encoding="utf-8",
+    )
+    reset_config()
 
 
 def load_config(path: Path | None = None) -> SystemEduConfig:
