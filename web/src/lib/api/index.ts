@@ -5,15 +5,29 @@ import type {
   ChatRequest,
   ChatResponse,
   ConfigResponse,
+  CreateProjectResponse,
+  EnrollmentInfo,
+  LessonContent,
   MCPServer,
+  NodeContext,
+  NodeProgress,
   ProjectDetail,
   ProjectSummary,
   SessionDetail,
   SessionSummary,
   SkillInfo,
   StatusResponse,
+  TreePreviewResponse,
 } from "@/lib/types/api"
 import { api } from "./client"
+
+export interface FullSession {
+  id: string
+  agent: string
+  project: string | null
+  created_at: string
+  messages: { role: string; content: string; timestamp: string }[]
+}
 
 export const gateway = {
   status: () => api.get<StatusResponse>("/api/status"),
@@ -21,6 +35,7 @@ export const gateway = {
   updateConfig: (body: Record<string, unknown>) =>
     api.put<{ status: string }>("/api/config", body),
   sessions: () => api.get<SessionSummary[]>("/api/sessions"),
+  sessionsFull: () => api.get<FullSession[]>("/api/sessions/full"),
   session: (id: string) => api.get<SessionDetail>(`/api/sessions/${id}`),
   chat: (req: ChatRequest) => api.post<ChatResponse>("/api/chat", req),
   projects: () => api.get<ProjectSummary[]>("/api/projects"),
@@ -32,4 +47,22 @@ export const gateway = {
     api.post<{ status: string; name: string }>("/api/mcp/servers", body),
   removeMCPServer: (name: string) =>
     api.delete<{ status: string; name: string }>(`/api/mcp/servers/${name}`),
+  nodeContext: (projectName: string, nodeId: number) =>
+    api.get<NodeContext>(`/api/projects/${projectName}/nodes/${nodeId}/context`),
+  lesson: (projectName: string, nodeId: number) =>
+    api.get<LessonContent>(`/api/projects/${projectName}/nodes/${nodeId}/lesson`),
+  generateLesson: (projectName: string, nodeId: number, regenerate = false) =>
+    api.post<LessonContent>(`/api/projects/${projectName}/nodes/${nodeId}/lesson/generate`, { regenerate }),
+  updateNodeProgress: (projectName: string, nodeId: number, status: string, userId = "default") =>
+    api.patch<NodeProgress>(`/api/projects/${projectName}/nodes/${nodeId}/progress`, { status, user_id: userId }),
+  previewTree: (treeData: Record<string, unknown>) =>
+    api.post<TreePreviewResponse>("/api/projects/preview-tree", { tree_data: treeData }),
+  createProject: (name: string, title: string, treeData: Record<string, unknown>) =>
+    api.post<CreateProjectResponse>("/api/projects", { name, title, tree_data: treeData }),
+  enroll: (projectName: string, userId = "default") =>
+    api.post<EnrollmentInfo>(`/api/projects/${projectName}/enroll`, { user_id: userId }),
+  enrollment: (projectName: string, userId = "default") =>
+    api.get<EnrollmentInfo | null>(`/api/projects/${projectName}/enrollment?user_id=${userId}`),
+  updateEnrollment: (projectName: string, body: { add_time_seconds?: number; status?: string; user_id?: string }) =>
+    api.patch<EnrollmentInfo>(`/api/projects/${projectName}/enrollment`, body),
 }

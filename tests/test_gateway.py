@@ -40,11 +40,18 @@ def config_env(tmp_path, monkeypatch):
     config_file.write_text(yaml.dump(config_data))
     monkeypatch.setattr("systemedu.core.config.CONFIG_FILE", config_file)
     monkeypatch.setattr("systemedu.core.config.SYSTEMEDU_HOME", home)
+    # Point DB to temp dir so sessions load from a clean database
+    db_file = home / "systemedu.db"
+    monkeypatch.setattr("systemedu.storage.db.DB_FILE", db_file)
+    from systemedu.storage.db import reset_db
+    reset_db()
     return home
 
 
 @pytest.fixture
 def client(config_env):
+    from systemedu.gateway import server
+    server._runtime = None  # Reset cached runtime
     app = create_app()
     return TestClient(app)
 
@@ -224,6 +231,634 @@ class TestGatewayNewEndpoints:
         client2 = TestClient(app2)
         resp = client2.get("/api/config")
         assert resp.json()["llm"]["default"] == "claude"
+
+
+class TestGatewayNodeContext:
+    """Tests for GET /api/projects/{name}/nodes/{node_id}/context."""
+
+    def test_node_context_project_not_found(self, client):
+        """Returns 404 when project doesn't exist."""
+        resp = client.get("/api/projects/nonexistent/nodes/0/context")
+        assert resp.status_code == 404
+
+    def test_node_context_returns_cached(self, config_env, tmp_path, monkeypatch):
+        """Returns cached context if available."""
+        from systemedu.storage.db import NodeContextCache, get_session as get_db_session, reset_db
+
+        # Set up DB in tmp
+        db_file = tmp_path / "test_ctx.db"
+        monkeypatch.setattr("systemedu.storage.db.DB_FILE", db_file)
+        reset_db()
+
+        db = get_db_session()
+        cache = NodeContextCache(
+            project_name="test-proj",
+            knode_id=0,
+            prerequisites_trace="prereq text",
+            learning_suggestions="suggestions text",
+            related_extensions="extensions text",
+        )
+        db.add(cache)
+        db.commit()
+        db.close()
+
+        app = create_app()
+        client = TestClient(app)
+        resp = client.get("/api/projects/test-proj/nodes/0/context")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["knode_id"] == 0
+        assert data["prerequisites_trace"] == "prereq text"
+        assert data["learning_suggestions"] == "suggestions text"
+        assert data["related_extensions"] == "extensions text"
+
+        reset_db()
+
+
+class TestGatewayLessonAPI:
+    """Tests for lesson content API endpoints."""
+
+    def test_lesson_get_pending(self, config_env, tmp_path, monkeypatch):
+        """GET /api/projects/{name}/nodes/{id}/lesson returns pending when no content exists."""
+        db_file = tmp_path / "test_lesson.db"
+        monkeypatch.setattr("systemedu.storage.db.DB_FILE", db_file)
+        from systemedu.storage.db import reset_db
+        reset_db()
+
+        app = create_app()
+        client = TestClient(app)
+        resp = client.get("/api/projects/test-proj/nodes/0/lesson")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["status"] == "pending"
+        assert data["knode_id"] == 0
+        assert data["concept"] == ""
+
+        reset_db()
+
+    def test_lesson_get_existing(self, config_env, tmp_path, monkeypatch):
+        """GET /api/projects/{name}/nodes/{id}/lesson returns content when it exists."""
+        db_file = tmp_path / "test_lesson2.db"
+        monkeypatch.setattr("systemedu.storage.db.DB_FILE", db_file)
+        from systemedu.storage.db import LessonContent, get_session as get_db_session, reset_db
+        reset_db()
+
+        db = get_db_session()
+        lesson = LessonContent(
+            project_name="test-proj",
+            knode_id=0,
+            status="ready",
+            concept="Test concept",
+            examples="Test examples",
+        )
+        db.add(lesson)
+        db.commit()
+        db.close()
+
+        app = create_app()
+        client = TestClient(app)
+        resp = client.get("/api/projects/test-proj/nodes/0/lesson")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["status"] == "ready"
+        assert data["concept"] == "Test concept"
+        assert data["examples"] == "Test examples"
+
+        reset_db()
+
+    def test_update_progress(self, config_env, tmp_path, monkeypatch):
+        """PATCH /api/projects/{name}/nodes/{id}/progress updates status."""
+        db_file = tmp_path / "test_progress.db"
+        monkeypatch.setattr("systemedu.storage.db.DB_FILE", db_file)
+        from systemedu.storage.db import reset_db
+        reset_db()
+
+        app = create_app()
+        client = TestClient(app)
+        resp = client.patch(
+            "/api/projects/test-proj/nodes/0/progress",
+            json={"status": "passed"},
+        )
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["status"] == "passed"
+        assert data["knode_id"] == 0
+
+        reset_db()
+
+    def test_update_progress_invalid_status(self, config_env, tmp_path, monkeypatch):
+        """PATCH /api/projects/{name}/nodes/{id}/progress rejects invalid status."""
+        db_file = tmp_path / "test_progress2.db"
+        monkeypatch.setattr("systemedu.storage.db.DB_FILE", db_file)
+        from systemedu.storage.db import reset_db
+        reset_db()
+
+        app = create_app()
+        client = TestClient(app)
+        resp = client.patch(
+            "/api/projects/test-proj/nodes/0/progress",
+            json={"status": "invalid"},
+        )
+        assert resp.status_code == 400
+
+        reset_db()
+
+    def test_update_progress_missing_status(self, config_env, tmp_path, monkeypatch):
+        """PATCH /api/projects/{name}/nodes/{id}/progress requires status field."""
+        db_file = tmp_path / "test_progress3.db"
+        monkeypatch.setattr("systemedu.storage.db.DB_FILE", db_file)
+        from systemedu.storage.db import reset_db
+        reset_db()
+
+        app = create_app()
+        client = TestClient(app)
+        resp = client.patch(
+            "/api/projects/test-proj/nodes/0/progress",
+            json={},
+        )
+        assert resp.status_code == 400
+
+        reset_db()
+
+
+class TestGatewayCreateProject:
+    """Tests for POST /api/projects and POST /api/projects/preview-tree."""
+
+    TREE_LEAF_DATA = {
+        "项目名称": "测试项目",
+        "模块依赖图": [
+            {"模块id": "M01", "模块标题": "基础", "前置模块": []},
+        ],
+        "知识树节点": [
+            {
+                "id": "M01N01",
+                "模块id": "M01",
+                "标题": "节点1",
+                "详细描述": "描述1",
+                "知识等级": "L0-启蒙",
+                "预估学习时长_分钟": 10,
+                "先修节点": [],
+                "学习目标": ["目标1"],
+                "完成标记": "quiz",
+                "是否核心": True,
+            },
+        ],
+    }
+
+    MILESTONES_DATA = {
+        "milestones": [
+            {
+                "title": "基础",
+                "knodes": [
+                    {
+                        "title": "节点1",
+                        "summary": "描述1",
+                        "difficulty_level": 1,
+                        "estimated_minutes": 10,
+                        "prerequisite_indices": [],
+                    }
+                ],
+            }
+        ]
+    }
+
+    def test_preview_tree_leaf_format(self, config_env):
+        """POST /api/projects/preview-tree converts and validates tree_leaf format."""
+        app = create_app()
+        client = TestClient(app)
+        resp = client.post(
+            "/api/projects/preview-tree",
+            json={"tree_data": self.TREE_LEAF_DATA},
+        )
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["valid"] is True
+        assert data["stats"]["node_count"] == 1
+        assert data["stats"]["milestone_count"] == 1
+        assert len(data["milestones"]) == 1
+        assert data["errors"] == []
+
+    def test_preview_milestones_format(self, config_env):
+        """POST /api/projects/preview-tree passes through milestones format."""
+        app = create_app()
+        client = TestClient(app)
+        resp = client.post(
+            "/api/projects/preview-tree",
+            json={"tree_data": self.MILESTONES_DATA},
+        )
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["valid"] is True
+
+    def test_preview_invalid_format(self, config_env):
+        """POST /api/projects/preview-tree rejects unrecognized format."""
+        app = create_app()
+        client = TestClient(app)
+        resp = client.post(
+            "/api/projects/preview-tree",
+            json={"tree_data": {"random": "data"}},
+        )
+        assert resp.status_code == 400
+
+    def test_preview_missing_tree_data(self, config_env):
+        """POST /api/projects/preview-tree requires tree_data."""
+        app = create_app()
+        client = TestClient(app)
+        resp = client.post("/api/projects/preview-tree", json={})
+        assert resp.status_code == 400
+
+    def test_create_project(self, config_env, tmp_path, monkeypatch):
+        """POST /api/projects creates a project on disk."""
+        monkeypatch.chdir(tmp_path)
+        (tmp_path / "projects").mkdir()
+
+        app = create_app()
+        client = TestClient(app)
+        resp = client.post(
+            "/api/projects",
+            json={
+                "name": "test-proj-new",
+                "tree_data": self.TREE_LEAF_DATA,
+            },
+        )
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["created"] is True
+        assert data["name"] == "test-proj-new"
+
+        # Verify files on disk
+        proj_dir = tmp_path / "projects" / "test-proj-new"
+        assert (proj_dir / "project.yaml").exists()
+        assert (proj_dir / "knowledge_tree.json").exists()
+
+    def test_create_project_missing_name(self, config_env):
+        """POST /api/projects requires name."""
+        app = create_app()
+        client = TestClient(app)
+        resp = client.post(
+            "/api/projects",
+            json={"tree_data": self.MILESTONES_DATA},
+        )
+        assert resp.status_code == 400
+
+    def test_create_project_duplicate(self, config_env, tmp_path, monkeypatch):
+        """POST /api/projects returns 409 for existing project."""
+        monkeypatch.chdir(tmp_path)
+        proj_dir = tmp_path / "projects" / "existing-proj"
+        proj_dir.mkdir(parents=True)
+
+        app = create_app()
+        client = TestClient(app)
+        resp = client.post(
+            "/api/projects",
+            json={
+                "name": "existing-proj",
+                "tree_data": self.MILESTONES_DATA,
+            },
+        )
+        assert resp.status_code == 409
+
+    def test_create_project_with_milestones_format(self, config_env, tmp_path, monkeypatch):
+        """POST /api/projects works with milestones format directly."""
+        monkeypatch.chdir(tmp_path)
+        (tmp_path / "projects").mkdir()
+
+        app = create_app()
+        client = TestClient(app)
+        resp = client.post(
+            "/api/projects",
+            json={
+                "name": "ms-proj",
+                "title": "Milestones Project",
+                "tree_data": self.MILESTONES_DATA,
+            },
+        )
+        assert resp.status_code == 200
+        assert resp.json()["created"] is True
+
+
+class TestGatewayEnrollment:
+    """Tests for enrollment API endpoints."""
+
+    def test_enroll_project_not_found(self, config_env, tmp_path, monkeypatch):
+        """POST /api/projects/{name}/enroll returns 404 for missing project."""
+        monkeypatch.chdir(tmp_path)
+        db_file = tmp_path / "test_enroll.db"
+        monkeypatch.setattr("systemedu.storage.db.DB_FILE", db_file)
+        from systemedu.storage.db import reset_db
+        reset_db()
+
+        app = create_app()
+        client = TestClient(app)
+        resp = client.post("/api/projects/nonexistent/enroll", json={})
+        assert resp.status_code == 404
+
+        reset_db()
+
+    def test_enroll_creates_enrollment(self, config_env, tmp_path, monkeypatch):
+        """POST /api/projects/{name}/enroll creates an enrollment record."""
+        # Create a minimal project on disk
+        monkeypatch.chdir(tmp_path)
+        projects_dir = tmp_path / "projects"
+        projects_dir.mkdir()
+        proj = projects_dir / "enroll-test"
+        proj.mkdir()
+        (proj / "project.yaml").write_text(
+            yaml.dump({
+                "name": "enroll-test",
+                "title": "Enroll Test",
+                "description": "Test project",
+                "category": "ai",
+            })
+        )
+        import json
+        (proj / "knowledge_tree.json").write_text(json.dumps({
+            "milestones": [{
+                "title": "M1",
+                "description": "",
+                "order": 0,
+                "xp_reward": 100,
+                "knodes": [{
+                    "title": "N1",
+                    "summary": "node",
+                    "difficulty_level": 1,
+                    "content_type": "text",
+                    "acceptance_type": "quiz",
+                    "estimated_minutes": 10,
+                    "xp_reward": 10,
+                    "prerequisite_indices": [],
+                }],
+            }],
+        }))
+
+        db_file = tmp_path / "test_enroll2.db"
+        monkeypatch.setattr("systemedu.storage.db.DB_FILE", db_file)
+        from systemedu.storage.db import reset_db
+        reset_db()
+
+        app = create_app()
+        client = TestClient(app)
+        resp = client.post("/api/projects/enroll-test/enroll", json={})
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["status"] == "active"
+        assert data["started_at"] is not None
+        assert data["total_nodes"] == 1
+        assert data["nodes_passed"] == 0
+
+        reset_db()
+
+    def test_get_enrollment_not_enrolled(self, config_env, tmp_path, monkeypatch):
+        """GET /api/projects/{name}/enrollment returns null when not enrolled."""
+        db_file = tmp_path / "test_enroll3.db"
+        monkeypatch.setattr("systemedu.storage.db.DB_FILE", db_file)
+        from systemedu.storage.db import reset_db
+        reset_db()
+
+        app = create_app()
+        client = TestClient(app)
+        resp = client.get("/api/projects/some-proj/enrollment")
+        assert resp.status_code == 200
+        assert resp.json() is None
+
+        reset_db()
+
+    def test_get_enrollment_exists(self, config_env, tmp_path, monkeypatch):
+        """GET /api/projects/{name}/enrollment returns enrollment data."""
+        db_file = tmp_path / "test_enroll4.db"
+        monkeypatch.setattr("systemedu.storage.db.DB_FILE", db_file)
+        from systemedu.storage.db import Enrollment, get_session as get_db_session, reset_db
+        from datetime import datetime
+        reset_db()
+
+        db = get_db_session()
+        enrollment = Enrollment(
+            user_id="default",
+            project_name="test-proj",
+            status="active",
+            started_at=datetime(2026, 1, 1, 10, 0, 0),
+            total_nodes=5,
+            nodes_passed=2,
+            total_time_seconds=3600,
+        )
+        db.add(enrollment)
+        db.commit()
+        db.close()
+
+        app = create_app()
+        client = TestClient(app)
+        resp = client.get("/api/projects/test-proj/enrollment")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["status"] == "active"
+        assert data["total_nodes"] == 5
+        assert data["nodes_passed"] == 2
+        assert data["total_time_seconds"] == 3600
+
+        reset_db()
+
+    def test_update_enrollment_not_enrolled(self, config_env, tmp_path, monkeypatch):
+        """PATCH /api/projects/{name}/enrollment returns 404 when not enrolled."""
+        db_file = tmp_path / "test_enroll5.db"
+        monkeypatch.setattr("systemedu.storage.db.DB_FILE", db_file)
+        from systemedu.storage.db import reset_db
+        reset_db()
+
+        app = create_app()
+        client = TestClient(app)
+        resp = client.patch(
+            "/api/projects/some-proj/enrollment",
+            json={"add_time_seconds": 60},
+        )
+        assert resp.status_code == 404
+
+        reset_db()
+
+    def test_update_enrollment_add_time(self, config_env, tmp_path, monkeypatch):
+        """PATCH /api/projects/{name}/enrollment adds learning time."""
+        db_file = tmp_path / "test_enroll6.db"
+        monkeypatch.setattr("systemedu.storage.db.DB_FILE", db_file)
+        from systemedu.storage.db import Enrollment, get_session as get_db_session, reset_db
+        from datetime import datetime
+        reset_db()
+
+        db = get_db_session()
+        enrollment = Enrollment(
+            user_id="default",
+            project_name="time-proj",
+            status="active",
+            started_at=datetime.now(),
+            total_time_seconds=100,
+        )
+        db.add(enrollment)
+        db.commit()
+        db.close()
+
+        app = create_app()
+        client = TestClient(app)
+        resp = client.patch(
+            "/api/projects/time-proj/enrollment",
+            json={"add_time_seconds": 60},
+        )
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["total_time_seconds"] == 160
+
+        reset_db()
+
+    def test_update_enrollment_pause(self, config_env, tmp_path, monkeypatch):
+        """PATCH /api/projects/{name}/enrollment can pause enrollment."""
+        db_file = tmp_path / "test_enroll7.db"
+        monkeypatch.setattr("systemedu.storage.db.DB_FILE", db_file)
+        from systemedu.storage.db import Enrollment, get_session as get_db_session, reset_db
+        from datetime import datetime
+        reset_db()
+
+        db = get_db_session()
+        enrollment = Enrollment(
+            user_id="default",
+            project_name="pause-proj",
+            status="active",
+            started_at=datetime.now(),
+        )
+        db.add(enrollment)
+        db.commit()
+        db.close()
+
+        app = create_app()
+        client = TestClient(app)
+        resp = client.patch(
+            "/api/projects/pause-proj/enrollment",
+            json={"status": "paused"},
+        )
+        assert resp.status_code == 200
+        assert resp.json()["status"] == "paused"
+
+        reset_db()
+
+    def test_project_detail_includes_enrollment(self, config_env, tmp_path, monkeypatch):
+        """GET /api/projects/{name} includes enrollment field."""
+        monkeypatch.chdir(tmp_path)
+        projects_dir = tmp_path / "projects"
+        projects_dir.mkdir()
+        proj = projects_dir / "detail-test"
+        proj.mkdir()
+        (proj / "project.yaml").write_text(
+            yaml.dump({
+                "name": "detail-test",
+                "title": "Detail Test",
+                "description": "Test",
+                "category": "ai",
+            })
+        )
+        import json
+        (proj / "knowledge_tree.json").write_text(json.dumps({
+            "milestones": [{
+                "title": "M1",
+                "description": "",
+                "order": 0,
+                "xp_reward": 100,
+                "knodes": [{
+                    "title": "N1",
+                    "summary": "node",
+                    "difficulty_level": 1,
+                    "content_type": "text",
+                    "acceptance_type": "quiz",
+                    "estimated_minutes": 10,
+                    "xp_reward": 10,
+                    "prerequisite_indices": [],
+                }],
+            }],
+        }))
+
+        db_file = tmp_path / "test_detail.db"
+        monkeypatch.setattr("systemedu.storage.db.DB_FILE", db_file)
+        from systemedu.storage.db import reset_db
+        reset_db()
+
+        app = create_app()
+        client = TestClient(app)
+        resp = client.get("/api/projects/detail-test")
+        assert resp.status_code == 200
+        data = resp.json()
+        # No enrollment yet
+        assert data["enrollment"] is None
+
+        # Now enroll
+        resp = client.post("/api/projects/detail-test/enroll", json={})
+        assert resp.status_code == 200
+
+        # Check detail again
+        resp = client.get("/api/projects/detail-test")
+        data = resp.json()
+        assert data["enrollment"] is not None
+        assert data["enrollment"]["status"] == "active"
+
+        reset_db()
+
+    def test_auto_complete_on_all_nodes_passed(self, config_env, tmp_path, monkeypatch):
+        """When all nodes pass, enrollment status changes to completed."""
+        monkeypatch.chdir(tmp_path)
+        projects_dir = tmp_path / "projects"
+        projects_dir.mkdir()
+        proj = projects_dir / "complete-test"
+        proj.mkdir()
+        (proj / "project.yaml").write_text(
+            yaml.dump({
+                "name": "complete-test",
+                "title": "Complete Test",
+                "description": "Test",
+                "category": "ai",
+            })
+        )
+        import json
+        (proj / "knowledge_tree.json").write_text(json.dumps({
+            "milestones": [{
+                "title": "M1",
+                "description": "",
+                "order": 0,
+                "xp_reward": 100,
+                "knodes": [{
+                    "title": "N1",
+                    "summary": "node",
+                    "difficulty_level": 1,
+                    "content_type": "text",
+                    "acceptance_type": "quiz",
+                    "estimated_minutes": 10,
+                    "xp_reward": 10,
+                    "prerequisite_indices": [],
+                }],
+            }],
+        }))
+
+        db_file = tmp_path / "test_complete.db"
+        monkeypatch.setattr("systemedu.storage.db.DB_FILE", db_file)
+        from systemedu.storage.db import reset_db
+        reset_db()
+
+        app = create_app()
+        client = TestClient(app)
+
+        # Enroll first (total_nodes=1)
+        resp = client.post("/api/projects/complete-test/enroll", json={})
+        assert resp.status_code == 200
+        assert resp.json()["total_nodes"] == 1
+
+        # Pass the only node
+        resp = client.patch(
+            "/api/projects/complete-test/nodes/0/progress",
+            json={"status": "passed"},
+        )
+        assert resp.status_code == 200
+
+        # Check enrollment is now completed
+        resp = client.get("/api/projects/complete-test/enrollment")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["status"] == "completed"
+        assert data["nodes_passed"] == 1
+
+        reset_db()
 
 
 class TestGatewayChatUserId:

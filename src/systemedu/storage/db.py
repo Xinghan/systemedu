@@ -82,6 +82,65 @@ class ProgressRecord(Base):
     passed_at = Column(DateTime, nullable=True)
 
 
+class NodeContextCache(Base):
+    """Cached AI-generated knowledge context for a node."""
+
+    __tablename__ = "node_context_cache"
+    __table_args__ = (
+        UniqueConstraint("project_name", "knode_id", name="uq_node_context"),
+    )
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    project_name = Column(String(200), nullable=False)
+    knode_id = Column(Integer, nullable=False)
+    prerequisites_trace = Column(Text, default="")
+    learning_suggestions = Column(Text, default="")
+    related_extensions = Column(Text, default="")
+    created_at = Column(DateTime, default=datetime.now)
+
+
+class Enrollment(Base):
+    """Tracks user enrollment and learning progress for a project."""
+
+    __tablename__ = "enrollments"
+    __table_args__ = (
+        UniqueConstraint("user_id", "project_name", name="uq_enrollment"),
+    )
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(String(100), nullable=False, default="default")
+    project_name = Column(String(200), nullable=False)
+    status = Column(String(20), nullable=False, default="active")  # active, paused, completed
+    started_at = Column(DateTime, nullable=True)
+    last_activity_at = Column(DateTime, nullable=True)
+    total_time_seconds = Column(Integer, default=0)
+    nodes_passed = Column(Integer, default=0)
+    total_nodes = Column(Integer, default=0)
+    created_at = Column(DateTime, default=datetime.now)
+
+
+class LessonContent(Base):
+    """AI-generated lesson content for a knowledge node."""
+
+    __tablename__ = "lesson_content"
+    __table_args__ = (
+        UniqueConstraint("project_name", "knode_id", name="uq_lesson_content"),
+    )
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    project_name = Column(String(200), nullable=False)
+    knode_id = Column(Integer, nullable=False)
+    status = Column(String(20), nullable=False, default="pending")
+    concept = Column(Text, default="")
+    examples = Column(Text, default="")
+    code_samples = Column(Text, default="")
+    practice = Column(Text, default="")
+    key_takeaways = Column(Text, default="")
+    quiz_data = Column(Text, default="")
+    content_type = Column(String(20), default="text")
+    generated_at = Column(DateTime, nullable=True)
+
+
 _engine = None
 _session_factory = None
 

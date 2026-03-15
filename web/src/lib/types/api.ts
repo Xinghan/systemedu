@@ -91,10 +91,20 @@ export interface NodeProgress {
   passed_at: string | null
 }
 
+export interface EnrollmentInfo {
+  status: "active" | "paused" | "completed"
+  started_at: string | null
+  last_activity_at: string | null
+  total_time_seconds: number
+  nodes_passed: number
+  total_nodes: number
+}
+
 export interface ProjectDetail {
   project: Omit<ProjectSummary, "path">
   milestones: MilestoneInfo[]
   progress: NodeProgress[]
+  enrollment: EnrollmentInfo | null
 }
 
 export interface AgentInfo {
@@ -131,9 +141,54 @@ export interface ChatResponse {
   response: string
 }
 
+export interface NodeContext {
+  knode_id: number
+  prerequisites_trace: string
+  learning_suggestions: string
+  related_extensions: string
+}
+
+export type LessonStatus = "pending" | "generating" | "ready" | "failed"
+
+export interface LessonContent {
+  project_name: string
+  knode_id: number
+  status: LessonStatus
+  concept: string
+  examples: string
+  code_samples: string
+  practice: string
+  key_takeaways: string
+  quiz_data: string
+  content_type: string
+  generated_at: string | null
+}
+
+export interface TreePreviewResponse {
+  valid: boolean
+  milestones: MilestoneInfo[]
+  stats: {
+    milestone_count: number
+    node_count: number
+    total_minutes: number
+    estimated_hours: number
+  }
+  meta: Record<string, unknown>
+  errors: string[]
+}
+
+export interface CreateProjectResponse {
+  name: string
+  created: boolean
+  path: string
+}
+
 export interface WSMessage {
-  type: "chunk" | "done" | "error"
+  type: "chunk" | "done" | "error" | "tool_call" | "tool_result"
   content?: string
   session_id?: string
   message?: string
+  name?: string
+  args?: Record<string, unknown>
+  result?: string
 }
