@@ -145,23 +145,46 @@ async def api_session_detail(request: Request) -> JSONResponse:
 
 
 async def api_chat(request: Request) -> JSONResponse:
-    """POST /api/chat - Send a message (synchronous response)."""
+    """POST /api/chat - Send a message (synchronous response).
+
+    Supports optional project/agent context:
+      {"message": "...", "session_id": "...", "project": "train-ai-model", "agent": "tutor"}
+    """
     body = await request.json()
     message = body.get("message", "").strip()
     session_id = body.get("session_id")
     user_id = body.get("user_id", "default")
+    project_name = body.get("project")
+    agent_name = body.get("agent")
 
     if not message:
         return JSONResponse({"error": "message is required"}, status_code=400)
 
+    # If project/agent specified and no existing session, create a contextual runtime
     runtime = _get_runtime()
+    if project_name and not session_id:
+        try:
+            from systemedu.core.runtime import AgentRuntime
+            from systemedu.education.project_loader import load_project_context
+
+            ctx = load_project_context(project_name, user_id=user_id)
+            skill_names = [agent_name] if agent_name else None
+            runtime = AgentRuntime(
+                project_context=ctx,
+                skill_names=skill_names,
+            )
+        except Exception as e:
+            logger.warning(f"Failed to load project context: {e}")
 
     session = None
     if session_id:
         session = _get_session_manager().get_session(session_id)
 
     if session is None:
-        session = _get_session_manager().create_session()
+        session = _get_session_manager().create_session(
+            agent_name=agent_name,
+            project_name=project_name,
+        )
 
     response = await runtime.process_message(message, session, user_id=user_id)
 
@@ -211,6 +234,253 @@ async def ws_chat_stream(websocket: WebSocket) -> None:
 
     except Exception:
         pass  # Client disconnected
+
+
+async def api_projects(request: Request) -> JSONResponse:
+    """GET /api/projects - List local projects."""
+    from systemedu.core.config import SYSTEMEDU_HOME
+
+    projects = []
+    search_dirs = [
+        Path.cwd() / "projects",
+        Path.home() / "projects",
+        SYSTEMEDU_HOME / "projects",
+    ]
+
+    seen = set()
+    for d in search_dirs:
+        if not d.is_dir():
+            continue
+        for sub in sorted(d.iterdir()):
+            yaml_file = sub / "project.yaml"
+            if sub.is_dir() and yaml_file.exists() and sub.name not in seen:
+                seen.add(sub.name)
+                try:
+                    import yaml as _yaml
+
+                    data = _yaml.safe_load(yaml_file.read_text(encoding="utf-8"))
+                    projects.append(
+                        {
+                            "name": data.get("name", sub.name),
+                            "title": data.get("title", sub.name),
+                            "description": data.get("description", ""),
+                            "category": data.get("category", "other"),
+                            "age_range": data.get("age_range", [6, 18]),
+                            "estimated_hours": data.get("estimated_hours", 10),
+                            "tags": data.get("tags", []),
+                            "path": str(sub),
+                        }
+                    )
+                except Exception as e:
+                    logger.warning(f"Failed to load project {sub.name}: {e}")
+
+    return JSONResponse(projects)
+
+
+async def api_project_detail(request: Request) -> JSONResponse:
+    """GET /api/projects/{name} - Project detail with tree and progress."""
+    name = request.path_params["name"]
+    try:
+        from systemedu.education.project_loader import load_project_context
+
+        ctx = load_project_context(name)
+
+        # Serialize tree
+        milestones = []
+        for ms in ctx.tree.milestones:
+            milestones.append(
+                {
+                    "title": ms.title,
+                    "description": ms.description,
+                    "order": ms.order,
+                    "xp_reward": ms.xp_reward,
+                    "knodes": [
+                        {
+                            "id": i,
+                            "title": node.title,
+                            "summary": node.summary,
+                            "difficulty_level": node.difficulty_level,
+                            "content_type": node.content_type.value,
+                            "acceptance_type": node.acceptance_type.value,
+                            "estimated_minutes": node.estimated_minutes,
+                            "xp_reward": node.xp_reward,
+                            "prerequisite_indices": node.prerequisite_indices,
+                        }
+                        for i, node in enumerate(ms.knodes)
+                    ],
+                }
+            )
+
+        # Serialize progress
+        progress = [
+            {
+                "knode_id": p.knode_id,
+                "status": p.status.value,
+                "attempts": p.attempts,
+                "best_score": p.best_score,
+                "passed_at": p.passed_at.isoformat() if p.passed_at else None,
+            }
+            for p in ctx.progress
+        ]
+
+        return JSONResponse(
+            {
+                "project": {
+                    "name": ctx.project.name,
+                    "title": ctx.project.title,
+                    "description": ctx.project.description,
+                    "category": ctx.project.category.value,
+                    "age_range": ctx.project.age_range,
+                    "estimated_hours": ctx.project.estimated_hours,
+                    "tags": ctx.project.tags,
+                },
+                "milestones": milestones,
+                "progress": progress,
+            }
+        )
+    except FileNotFoundError:
+        return JSONResponse({"error": f"Project '{name}' not found"}, status_code=404)
+    except Exception as e:
+        logger.exception(f"Failed to load project {name}")
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+
+async def api_agents(request: Request) -> JSONResponse:
+    """GET /api/agents - List available agent types."""
+    agents = [
+        {
+            "name": "tutor",
+            "type": "builtin:tutor",
+            "description": "AI 导师 — 引导式教学，辅助项目学习",
+        },
+        {
+            "name": "planner",
+            "type": "builtin:planner",
+            "description": "知识树规划器 — 生成项目知识树",
+        },
+        {
+            "name": "assessor",
+            "type": "builtin:assessor",
+            "description": "知识评估器 — 评估学习成果",
+        },
+    ]
+    return JSONResponse(agents)
+
+
+async def api_skills(request: Request) -> JSONResponse:
+    """GET /api/skills - List all loaded skills."""
+    from systemedu.core.config import SYSTEMEDU_HOME
+    from systemedu.skills.loader import SkillLoader
+
+    loader = SkillLoader()
+    loader.load_builtin()
+
+    user_skills_dir = SYSTEMEDU_HOME / "skills"
+    if user_skills_dir.exists():
+        loader.load_directory(user_skills_dir, priority=1)
+
+    skills = [
+        {
+            "name": s.name,
+            "description": s.description,
+            "user_invocable": s.user_invocable,
+            "source": s.source_path,
+        }
+        for s in loader.list_skills()
+    ]
+    return JSONResponse(skills)
+
+
+async def api_mcp_servers(request: Request) -> JSONResponse:
+    """GET /api/mcp/servers - List MCP server configs and status."""
+    from systemedu.core.config import get_config
+
+    config = get_config()
+    servers = []
+    for name, srv in config.mcp.servers.items():
+        servers.append(
+            {
+                "name": name,
+                "command": srv.command,
+                "args": srv.args,
+                "env": {k: "***" for k in srv.env},
+                "status": "configured",
+            }
+        )
+    return JSONResponse(servers)
+
+
+async def api_mcp_add(request: Request) -> JSONResponse:
+    """POST /api/mcp/servers - Add an MCP server to config."""
+    import yaml as _yaml
+
+    from systemedu.core.config import CONFIG_FILE, get_config, reset_config, save_config
+
+    body = await request.json()
+    name = body.get("name", "").strip()
+    command = body.get("command", "").strip()
+    args = body.get("args", [])
+
+    if not name or not command:
+        return JSONResponse({"error": "name and command are required"}, status_code=400)
+
+    config_path = CONFIG_FILE
+    raw = {}
+    if config_path.exists():
+        raw = _yaml.safe_load(config_path.read_text(encoding="utf-8")) or {}
+
+    raw.setdefault("mcp", {}).setdefault("servers", {})
+    raw["mcp"]["servers"][name] = {"command": command, "args": args}
+    save_config(raw)
+
+    return JSONResponse({"status": "added", "name": name})
+
+
+async def api_mcp_remove(request: Request) -> JSONResponse:
+    """DELETE /api/mcp/servers/{name} - Remove an MCP server from config."""
+    import yaml as _yaml
+
+    from systemedu.core.config import CONFIG_FILE, reset_config, save_config
+
+    name = request.path_params["name"]
+    config_path = CONFIG_FILE
+    if not config_path.exists():
+        return JSONResponse({"error": "Config not found"}, status_code=404)
+
+    raw = _yaml.safe_load(config_path.read_text(encoding="utf-8")) or {}
+    servers = raw.get("mcp", {}).get("servers", {})
+    if name not in servers:
+        return JSONResponse({"error": f"MCP server '{name}' not found"}, status_code=404)
+
+    del servers[name]
+    save_config(raw)
+
+    return JSONResponse({"status": "removed", "name": name})
+
+
+async def api_config_update(request: Request) -> JSONResponse:
+    """PUT /api/config - Update config values."""
+    import yaml as _yaml
+
+    from systemedu.core.config import CONFIG_FILE, reset_config, save_config
+
+    body = await request.json()
+
+    config_path = CONFIG_FILE
+    raw = {}
+    if config_path.exists():
+        raw = _yaml.safe_load(config_path.read_text(encoding="utf-8")) or {}
+
+    # Merge top-level keys
+    for key, value in body.items():
+        if isinstance(value, dict) and isinstance(raw.get(key), dict):
+            raw[key].update(value)
+        else:
+            raw[key] = value
+
+    save_config(raw)
+
+    return JSONResponse({"status": "updated"})
 
 
 async def dashboard(request: Request) -> HTMLResponse:
@@ -264,10 +534,18 @@ def create_app() -> Starlette:
     routes = [
         Route("/", dashboard),
         Route("/api/status", api_status),
-        Route("/api/config", api_config),
+        Route("/api/config", api_config, methods=["GET"]),
+        Route("/api/config", api_config_update, methods=["PUT"]),
         Route("/api/sessions", api_sessions),
         Route("/api/sessions/{id}", api_session_detail),
         Route("/api/chat", api_chat, methods=["POST"]),
+        Route("/api/projects", api_projects),
+        Route("/api/projects/{name}", api_project_detail),
+        Route("/api/agents", api_agents),
+        Route("/api/skills", api_skills),
+        Route("/api/mcp/servers", api_mcp_servers, methods=["GET"]),
+        Route("/api/mcp/servers", api_mcp_add, methods=["POST"]),
+        Route("/api/mcp/servers/{name}", api_mcp_remove, methods=["DELETE"]),
         WebSocketRoute("/api/chat/stream", ws_chat_stream),
     ]
 
