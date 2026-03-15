@@ -70,12 +70,14 @@ export default function MCPPage() {
             管理 MCP（Model Context Protocol）服务器
           </p>
           <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-            <DialogTrigger>
-              <Button size="sm" className="flex items-center gap-1">
-                <Plus className="h-4 w-4" />
-                添加服务器
-              </Button>
-            </DialogTrigger>
+            <DialogTrigger
+              render={
+                <button className="inline-flex items-center justify-center gap-1 rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors">
+                  <Plus className="h-4 w-4" />
+                  添加服务器
+                </button>
+              }
+            />
             <DialogContent>
               <DialogHeader>
                 <DialogTitle>添加 MCP 服务器</DialogTitle>
