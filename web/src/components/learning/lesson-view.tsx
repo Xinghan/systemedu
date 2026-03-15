@@ -174,9 +174,14 @@ export function LessonView({
     )
   }
 
-  // Loading / generating state
-  if (loading || !lesson || lesson.status !== "ready") {
-    return <LessonGenerating nodeTitle={knode?.title ?? "加载中..."} />
+  // Loading / generating / regenerating state
+  if (loading || regenerating || !lesson || lesson.status !== "ready") {
+    return (
+      <LessonGenerating
+        nodeTitle={knode?.title ?? "加载中..."}
+        isRegenerate={regenerating}
+      />
+    )
   }
 
   // Ready state
