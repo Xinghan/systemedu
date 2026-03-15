@@ -113,6 +113,9 @@ export function LessonView({
 
   const handleRegenerate = useCallback(async () => {
     if (nodeId === null) return
+    // Clear old content and show loading
+    lessonCacheRef.current.delete(nodeId)
+    setLesson(null)
     setRegenerating(true)
     setError(null)
     try {

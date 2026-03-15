@@ -16,7 +16,6 @@ import {
 import { Button } from "@/components/ui/button"
 import { Progress } from "@/components/ui/progress"
 import { ScrollArea } from "@/components/ui/scroll-area"
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import { KnowledgeTreeView } from "@/components/knowledge-tree/knowledge-tree-view"
 import { LessonView } from "@/components/learning/lesson-view"
 import { FloatingChat } from "@/components/learning/floating-chat"
@@ -123,34 +122,40 @@ export default function LearnPage() {
     )
   }
 
+  const CONTENT_TABS = [
+    { id: 0, label: "课程", Icon: BookOpen },
+    { id: 1, label: "学习资料", Icon: FileText },
+    { id: 2, label: "作业", Icon: FileText },
+    { id: 3, label: "AI建议", Icon: Lightbulb },
+    { id: 4, label: "笔记", Icon: StickyNote },
+  ]
+
   /** Right-side content area with tab bar */
   const contentArea = (
-    <Tabs value={contentTab} onValueChange={setContentTab} className="h-full">
-      <div className="px-4 pt-2 border-b shrink-0">
-        <TabsList variant="line" className="gap-2">
-          <TabsTrigger value={0} className="gap-2 px-3 py-2 text-sm">
-            <BookOpen className="h-4 w-4" />
-            课程
-          </TabsTrigger>
-          <TabsTrigger value={1} className="gap-2 px-3 py-2 text-sm">
-            <FileText className="h-4 w-4" />
-            学习资料
-          </TabsTrigger>
-          <TabsTrigger value={2} className="gap-2 px-3 py-2 text-sm">
-            <FileText className="h-4 w-4" />
-            作业
-          </TabsTrigger>
-          <TabsTrigger value={3} className="gap-2 px-3 py-2 text-sm">
-            <Lightbulb className="h-4 w-4" />
-            AI建议
-          </TabsTrigger>
-          <TabsTrigger value={4} className="gap-2 px-3 py-2 text-sm">
-            <StickyNote className="h-4 w-4" />
-            笔记
-          </TabsTrigger>
-        </TabsList>
+    <div className="flex flex-col h-full">
+      {/* Tab bar */}
+      <div className="flex border-b shrink-0 px-4 pt-1 gap-1 overflow-x-auto">
+        {CONTENT_TABS.map((tab) => {
+          const isActive = contentTab === tab.id
+          return (
+            <button
+              key={tab.id}
+              onClick={() => setContentTab(tab.id)}
+              className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium whitespace-nowrap transition-colors border-b-2 ${
+                isActive
+                  ? "border-primary text-foreground"
+                  : "border-transparent text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              <tab.Icon className="h-4 w-4" />
+              {tab.label}
+            </button>
+          )
+        })}
       </div>
-      <TabsContent value={0} className="flex-1 min-h-0 h-[calc(100%-48px)]">
+
+      {/* Content — LessonView stays mounted to preserve state */}
+      <div className={`flex-1 min-h-0 ${contentTab === 0 ? "" : "hidden"}`}>
         <LessonView
           projectName={params.projectName}
           nodeId={activeNodeId}
@@ -159,28 +164,13 @@ export default function LearnPage() {
           onNodeChange={handleNodeChange}
           onProgressUpdate={handleProgressUpdate}
         />
-      </TabsContent>
-      <TabsContent value={1} className="flex-1 min-h-0 h-[calc(100%-48px)]">
-        <div className="flex items-center justify-center h-full text-sm text-muted-foreground">
+      </div>
+      {contentTab !== 0 && (
+        <div className="flex-1 min-h-0 flex items-center justify-center text-sm text-muted-foreground">
           即将推出
         </div>
-      </TabsContent>
-      <TabsContent value={2} className="flex-1 min-h-0 h-[calc(100%-48px)]">
-        <div className="flex items-center justify-center h-full text-sm text-muted-foreground">
-          即将推出
-        </div>
-      </TabsContent>
-      <TabsContent value={3} className="flex-1 min-h-0 h-[calc(100%-48px)]">
-        <div className="flex items-center justify-center h-full text-sm text-muted-foreground">
-          即将推出
-        </div>
-      </TabsContent>
-      <TabsContent value={4} className="flex-1 min-h-0 h-[calc(100%-48px)]">
-        <div className="flex items-center justify-center h-full text-sm text-muted-foreground">
-          即将推出
-        </div>
-      </TabsContent>
-    </Tabs>
+      )}
+    </div>
   )
 
   return (
