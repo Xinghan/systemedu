@@ -10,15 +10,6 @@ export interface KnodeNodeData {
   [key: string]: unknown
 }
 
-const STATUS_COLORS: Record<string, string> = {
-  locked: "#6b7280",     // gray
-  available: "#3b82f6",  // blue
-  in_progress: "#f59e0b", // amber
-  passed: "#22c55e",     // green
-  submitted: "#a855f7",  // purple
-  failed: "#ef4444",     // red
-}
-
 export function buildFlowGraph(
   milestones: MilestoneInfo[],
   progress: NodeProgress[]
@@ -69,9 +60,6 @@ export function buildFlowGraph(
           knode: { ...knode, id },
           progress: p,
           milestone: ms.title,
-        },
-        style: {
-          borderColor: STATUS_COLORS[status] ?? STATUS_COLORS.locked,
         },
       })
 

@@ -7,14 +7,14 @@ import type { KnodeNodeData } from "@/lib/utils/tree-layout"
 
 const STATUS_CONFIG: Record<
   string,
-  { label: string; bg: string; border: string }
+  { label: string; dot: string; border: string }
 > = {
-  locked: { label: "锁定", bg: "bg-gray-500/10", border: "border-gray-500/30" },
-  available: { label: "可学", bg: "bg-blue-500/10", border: "border-blue-500/50" },
-  in_progress: { label: "进行中", bg: "bg-amber-500/10", border: "border-amber-500/50" },
-  passed: { label: "完成", bg: "bg-green-500/10", border: "border-green-500/50" },
-  submitted: { label: "已提交", bg: "bg-purple-500/10", border: "border-purple-500/50" },
-  failed: { label: "未通过", bg: "bg-red-500/10", border: "border-red-500/50" },
+  locked: { label: "锁定", dot: "bg-muted-foreground/50", border: "border-muted-foreground/30" },
+  available: { label: "可学", dot: "bg-blue-500", border: "border-blue-500/50" },
+  in_progress: { label: "进行中", dot: "bg-amber-500", border: "border-amber-500/50" },
+  passed: { label: "完成", dot: "bg-green-500", border: "border-green-500/50" },
+  submitted: { label: "已提交", dot: "bg-purple-500", border: "border-purple-500/50" },
+  failed: { label: "未通过", dot: "bg-destructive", border: "border-destructive/50" },
 }
 
 function KnodeNodeComponent({ data }: NodeProps<Node<KnodeNodeData>>) {
@@ -24,11 +24,14 @@ function KnodeNodeComponent({ data }: NodeProps<Node<KnodeNodeData>>) {
 
   return (
     <div
-      className={`px-4 py-3 rounded-lg border-2 ${cfg.bg} ${cfg.border} min-w-[200px] max-w-[240px]`}
+      className={`px-4 py-3 rounded-lg border-2 bg-card text-card-foreground ${cfg.border} min-w-[200px] max-w-[240px] shadow-sm`}
     >
       <Handle type="target" position={Position.Left} className="!bg-muted-foreground" />
       <div className="flex items-start justify-between gap-2 mb-1">
-        <span className="text-sm font-medium leading-tight">{knode.title}</span>
+        <div className="flex items-center gap-1.5">
+          <span className={`h-2 w-2 rounded-full shrink-0 ${cfg.dot}`} />
+          <span className="text-sm font-medium leading-tight">{knode.title}</span>
+        </div>
         <Badge variant="outline" className="text-[10px] shrink-0">
           {cfg.label}
         </Badge>

@@ -4,6 +4,7 @@ import { useCallback, useMemo } from "react"
 import {
   ReactFlow,
   Background,
+  BackgroundVariant,
   Controls,
   MiniMap,
   useNodesState,
@@ -55,12 +56,14 @@ export function TreeFlow({ milestones, progress, onNodeClick }: TreeFlowProps) {
         minZoom={0.3}
         maxZoom={2}
         proOptions={{ hideAttribution: true }}
+        className="bg-background"
       >
-        <Background />
+        <Background variant={BackgroundVariant.Dots} gap={20} size={1} />
         <Controls />
         <MiniMap
           nodeStrokeWidth={3}
-          className="!bg-background"
+          className="!bg-card !border-border"
+          maskColor="var(--muted)"
         />
       </ReactFlow>
     </div>
