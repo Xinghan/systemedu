@@ -16,21 +16,12 @@ import {
 import { Button } from "@/components/ui/button"
 import { Progress } from "@/components/ui/progress"
 import { ScrollArea } from "@/components/ui/scroll-area"
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import { KnowledgeTreeView } from "@/components/knowledge-tree/knowledge-tree-view"
 import { LessonView } from "@/components/learning/lesson-view"
 import { FloatingChat } from "@/components/learning/floating-chat"
 import { gateway } from "@/lib/api"
 import type { KnodeInfo, NodeProgress, ProjectDetail } from "@/lib/types/api"
-
-const CONTENT_TABS = [
-  { id: "lesson", label: "课程", icon: BookOpen },
-  { id: "materials", label: "学习资料", icon: FileText },
-  { id: "assignments", label: "作业", icon: FileText },
-  { id: "suggestions", label: "AI建议", icon: Lightbulb },
-  { id: "notes", label: "笔记", icon: StickyNote },
-] as const
-
-type ContentTabId = (typeof CONTENT_TABS)[number]["id"]
 
 export default function LearnPage() {
   const params = useParams<{ projectName: string }>()
@@ -40,7 +31,7 @@ export default function LearnPage() {
   const [activeNodeId, setActiveNodeId] = useState<number | null>(null)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [mobileTab, setMobileTab] = useState<"tree" | "content">("tree")
-  const [contentTab, setContentTab] = useState<ContentTabId>("lesson")
+  const [contentTab, setContentTab] = useState<number>(0)
   const sessionStartRef = useRef<number>(Date.now())
 
   useEffect(() => {
@@ -95,7 +86,7 @@ export default function LearnPage() {
 
   const handleNodeClick = useCallback((nodeId: number) => {
     setActiveNodeId(nodeId)
-    setContentTab("lesson")
+    setContentTab(0) // Switch to 课程 tab
     setMobileTab("content")
   }, [])
 
@@ -134,47 +125,62 @@ export default function LearnPage() {
 
   /** Right-side content area with tab bar */
   const contentArea = (
-    <div className="flex flex-col h-full">
-      {/* Content tab bar */}
-      <div className="flex border-b shrink-0 overflow-x-auto px-2">
-        {CONTENT_TABS.map((tab) => {
-          const Icon = tab.icon
-          const isActive = contentTab === tab.id
-          return (
-            <button
-              key={tab.id}
-              onClick={() => setContentTab(tab.id)}
-              className={`flex items-center gap-1.5 px-3 py-2.5 text-xs font-medium whitespace-nowrap transition-colors ${
-                isActive
-                  ? "border-b-2 border-primary text-foreground"
-                  : "text-muted-foreground hover:text-foreground"
-              }`}
-            >
-              <Icon className="h-3.5 w-3.5" />
-              {tab.label}
-            </button>
-          )
-        })}
+    <Tabs value={contentTab} onValueChange={setContentTab} className="h-full">
+      <div className="px-4 pt-2 border-b shrink-0">
+        <TabsList variant="line" className="gap-2">
+          <TabsTrigger value={0} className="gap-2 px-3 py-2 text-sm">
+            <BookOpen className="h-4 w-4" />
+            课程
+          </TabsTrigger>
+          <TabsTrigger value={1} className="gap-2 px-3 py-2 text-sm">
+            <FileText className="h-4 w-4" />
+            学习资料
+          </TabsTrigger>
+          <TabsTrigger value={2} className="gap-2 px-3 py-2 text-sm">
+            <FileText className="h-4 w-4" />
+            作业
+          </TabsTrigger>
+          <TabsTrigger value={3} className="gap-2 px-3 py-2 text-sm">
+            <Lightbulb className="h-4 w-4" />
+            AI建议
+          </TabsTrigger>
+          <TabsTrigger value={4} className="gap-2 px-3 py-2 text-sm">
+            <StickyNote className="h-4 w-4" />
+            笔记
+          </TabsTrigger>
+        </TabsList>
       </div>
-
-      {/* Tab content */}
-      <div className="flex-1 min-h-0">
-        {contentTab === "lesson" ? (
-          <LessonView
-            projectName={params.projectName}
-            nodeId={activeNodeId}
-            allKnodes={allKnodes}
-            progress={progressList}
-            onNodeChange={handleNodeChange}
-            onProgressUpdate={handleProgressUpdate}
-          />
-        ) : (
-          <div className="flex items-center justify-center h-full text-sm text-muted-foreground">
-            即将推出
-          </div>
-        )}
-      </div>
-    </div>
+      <TabsContent value={0} className="flex-1 min-h-0 h-[calc(100%-48px)]">
+        <LessonView
+          projectName={params.projectName}
+          nodeId={activeNodeId}
+          allKnodes={allKnodes}
+          progress={progressList}
+          onNodeChange={handleNodeChange}
+          onProgressUpdate={handleProgressUpdate}
+        />
+      </TabsContent>
+      <TabsContent value={1} className="flex-1 min-h-0 h-[calc(100%-48px)]">
+        <div className="flex items-center justify-center h-full text-sm text-muted-foreground">
+          即将推出
+        </div>
+      </TabsContent>
+      <TabsContent value={2} className="flex-1 min-h-0 h-[calc(100%-48px)]">
+        <div className="flex items-center justify-center h-full text-sm text-muted-foreground">
+          即将推出
+        </div>
+      </TabsContent>
+      <TabsContent value={3} className="flex-1 min-h-0 h-[calc(100%-48px)]">
+        <div className="flex items-center justify-center h-full text-sm text-muted-foreground">
+          即将推出
+        </div>
+      </TabsContent>
+      <TabsContent value={4} className="flex-1 min-h-0 h-[calc(100%-48px)]">
+        <div className="flex items-center justify-center h-full text-sm text-muted-foreground">
+          即将推出
+        </div>
+      </TabsContent>
+    </Tabs>
   )
 
   return (
