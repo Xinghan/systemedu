@@ -1,12 +1,15 @@
 "use client"
 
 import { useCallback, useEffect, useRef, useState } from "react"
-import { Highlighter, Trash2 } from "lucide-react"
+import { Highlighter, MessageSquare, X } from "lucide-react"
+import { Button } from "@/components/ui/button"
 
+/**
+ * Floating toolbar that appears when user selects text.
+ * Supports highlight creation with optional comment.
+ */
 interface HighlightToolbarProps {
-  /** Called when user clicks the highlight button with selected text info */
-  onHighlight: (text: string, startOffset: number, endOffset: number) => void
-  /** Container element to scope selection detection */
+  onHighlight: (text: string, comment: string) => void
   containerRef: React.RefObject<HTMLElement | null>
 }
 
@@ -14,10 +17,15 @@ export function HighlightToolbar({ onHighlight, containerRef }: HighlightToolbar
   const [visible, setVisible] = useState(false)
   const [position, setPosition] = useState({ x: 0, y: 0 })
   const [selectedText, setSelectedText] = useState("")
-  const [offsets, setOffsets] = useState({ start: 0, end: 0 })
+  const [showComment, setShowComment] = useState(false)
+  const [comment, setComment] = useState("")
   const toolbarRef = useRef<HTMLDivElement>(null)
+  const inputRef = useRef<HTMLTextAreaElement>(null)
 
   const handleMouseUp = useCallback(() => {
+    // Don't interfere if comment input is open
+    if (showComment) return
+
     const selection = window.getSelection()
     if (!selection || selection.isCollapsed || !selection.rangeCount) {
       setVisible(false)
@@ -31,180 +39,194 @@ export function HighlightToolbar({ onHighlight, containerRef }: HighlightToolbar
       return
     }
 
-    // Check if selection is within our container
     if (!containerRef.current.contains(range.commonAncestorContainer)) {
       setVisible(false)
       return
     }
 
-    // Calculate text offset within the container's text content
-    const containerText = containerRef.current.textContent ?? ""
-    const preRange = document.createRange()
-    preRange.setStart(containerRef.current, 0)
-    preRange.setEnd(range.startContainer, range.startOffset)
-    const startOffset = preRange.toString().length
-    const endOffset = startOffset + text.length
-
-    // Position toolbar above selection
     const rect = range.getBoundingClientRect()
     const containerRect = containerRef.current.getBoundingClientRect()
 
     setPosition({
-      x: rect.left + rect.width / 2 - containerRect.left,
+      x: Math.min(
+        Math.max(rect.left + rect.width / 2 - containerRect.left, 60),
+        containerRect.width - 60,
+      ),
       y: rect.top - containerRect.top - 8,
     })
     setSelectedText(text)
-    setOffsets({ start: startOffset, end: endOffset })
     setVisible(true)
-  }, [containerRef])
+    setShowComment(false)
+    setComment("")
+  }, [containerRef, showComment])
 
   useEffect(() => {
     document.addEventListener("mouseup", handleMouseUp)
     return () => document.removeEventListener("mouseup", handleMouseUp)
   }, [handleMouseUp])
 
-  // Hide toolbar when clicking outside
+  // Hide when clicking outside
   useEffect(() => {
     const handleMouseDown = (e: MouseEvent) => {
       if (toolbarRef.current && !toolbarRef.current.contains(e.target as Node)) {
         setVisible(false)
+        setShowComment(false)
       }
     }
     document.addEventListener("mousedown", handleMouseDown)
     return () => document.removeEventListener("mousedown", handleMouseDown)
   }, [])
 
-  const handleHighlightClick = useCallback(() => {
-    onHighlight(selectedText, offsets.start, offsets.end)
-    setVisible(false)
-    window.getSelection()?.removeAllRanges()
-  }, [onHighlight, selectedText, offsets])
+  // Focus comment input when opened
+  useEffect(() => {
+    if (showComment) {
+      setTimeout(() => inputRef.current?.focus(), 50)
+    }
+  }, [showComment])
+
+  const doHighlight = useCallback(
+    (withComment: string) => {
+      onHighlight(selectedText, withComment)
+      setVisible(false)
+      setShowComment(false)
+      setComment("")
+      window.getSelection()?.removeAllRanges()
+    },
+    [onHighlight, selectedText],
+  )
 
   if (!visible) return null
 
   return (
     <div
       ref={toolbarRef}
-      className="absolute z-50 flex items-center gap-1 px-2 py-1 bg-popover border rounded-lg shadow-lg -translate-x-1/2 -translate-y-full"
+      className="absolute z-50 -translate-x-1/2 -translate-y-full"
       style={{ left: position.x, top: position.y }}
     >
-      <button
-        onClick={handleHighlightClick}
-        className="flex items-center gap-1.5 px-2 py-1 text-xs font-medium rounded hover:bg-muted transition-colors"
-        title="高亮标注"
-      >
-        <Highlighter className="h-3.5 w-3.5 text-yellow-500" />
-        高亮
-      </button>
+      <div className="bg-popover border rounded-lg shadow-lg overflow-hidden">
+        {/* Main actions */}
+        <div className="flex items-center gap-0.5 px-1 py-1">
+          <button
+            onClick={() => doHighlight("")}
+            className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium rounded hover:bg-yellow-100 dark:hover:bg-yellow-900/30 transition-colors"
+            title="高亮"
+          >
+            <Highlighter className="h-3.5 w-3.5 text-yellow-500" />
+            高亮
+          </button>
+          <div className="w-px h-4 bg-border" />
+          <button
+            onClick={() => setShowComment(!showComment)}
+            className={`flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium rounded transition-colors ${
+              showComment ? "bg-muted" : "hover:bg-muted"
+            }`}
+            title="高亮并批注"
+          >
+            <MessageSquare className="h-3.5 w-3.5 text-blue-500" />
+            批注
+          </button>
+        </div>
+
+        {/* Comment input */}
+        {showComment && (
+          <div className="border-t px-2 py-2 space-y-2">
+            <textarea
+              ref={inputRef}
+              value={comment}
+              onChange={(e) => setComment(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && !e.shiftKey) {
+                  e.preventDefault()
+                  doHighlight(comment)
+                }
+                if (e.key === "Escape") {
+                  setShowComment(false)
+                }
+              }}
+              placeholder="写下你的笔记..."
+              className="w-56 h-16 text-xs resize-none rounded border bg-background px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-ring"
+            />
+            <div className="flex justify-end gap-1">
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-6 text-xs px-2"
+                onClick={() => setShowComment(false)}
+              >
+                取消
+              </Button>
+              <Button
+                size="sm"
+                className="h-6 text-xs px-2"
+                onClick={() => doHighlight(comment)}
+              >
+                保存
+              </Button>
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   )
 }
 
+/**
+ * Renders highlighted text with visual marks.
+ * Shows note icon for highlights with comments.
+ */
 interface HighlightMark {
   id: number
   text: string
-  startOffset: number
-  endOffset: number
+  note: string
   color: string
 }
 
-interface HighlightOverlayProps {
-  highlights: HighlightMark[]
-  containerRef: React.RefObject<HTMLElement | null>
+interface HighlightPopoverProps {
+  highlight: HighlightMark
   onDelete: (id: number) => void
 }
 
-/**
- * Renders highlight overlays on top of text content.
- * Uses DOM text node walking to find and wrap highlighted ranges.
- */
-export function useHighlightRenderer(
-  containerRef: React.RefObject<HTMLElement | null>,
-  highlights: HighlightMark[],
-  onDelete: (id: number) => void,
-) {
-  useEffect(() => {
-    const container = containerRef.current
-    if (!container || highlights.length === 0) return
+export function HighlightPopover({ highlight, onDelete }: HighlightPopoverProps) {
+  const [open, setOpen] = useState(false)
 
-    // Clean up previous highlights
-    container.querySelectorAll("mark[data-highlight-id]").forEach((el) => {
-      const parent = el.parentNode
-      if (parent) {
-        parent.replaceChild(document.createTextNode(el.textContent ?? ""), el)
-        parent.normalize()
-      }
-    })
-
-    // Walk text nodes and apply highlights
-    const textNodes: { node: Text; offset: number }[] = []
-    let totalOffset = 0
-
-    function walkTextNodes(node: Node) {
-      if (node.nodeType === Node.TEXT_NODE) {
-        textNodes.push({ node: node as Text, offset: totalOffset })
-        totalOffset += (node.textContent ?? "").length
-      } else {
-        for (const child of Array.from(node.childNodes)) {
-          walkTextNodes(child)
-        }
-      }
-    }
-    walkTextNodes(container)
-
-    // Apply each highlight (sorted by start offset, reversed to avoid position shifts)
-    const sorted = [...highlights].sort((a, b) => b.startOffset - a.startOffset)
-    for (const hl of sorted) {
-      try {
-        // Find start and end text nodes
-        let startNode: Text | null = null
-        let startLocal = 0
-        let endNode: Text | null = null
-        let endLocal = 0
-
-        for (const { node, offset } of textNodes) {
-          const len = (node.textContent ?? "").length
-          if (!startNode && offset + len > hl.startOffset) {
-            startNode = node
-            startLocal = hl.startOffset - offset
-          }
-          if (offset + len >= hl.endOffset) {
-            endNode = node
-            endLocal = hl.endOffset - offset
-            break
-          }
-        }
-
-        if (!startNode || !endNode) continue
-
-        // Only handle single-node highlights for simplicity
-        if (startNode === endNode) {
-          const range = document.createRange()
-          range.setStart(startNode, startLocal)
-          range.setEnd(endNode, endLocal)
-
-          const mark = document.createElement("mark")
-          mark.setAttribute("data-highlight-id", String(hl.id))
-          mark.className = `bg-yellow-200/70 dark:bg-yellow-500/30 cursor-pointer rounded-sm px-0.5`
-          mark.title = "点击删除高亮"
-          mark.addEventListener("click", () => onDelete(hl.id))
-
-          range.surroundContents(mark)
-        }
-      } catch {
-        // Ignore DOM errors from complex node structures
-      }
-    }
-
-    // Cleanup function
-    return () => {
-      container.querySelectorAll("mark[data-highlight-id]").forEach((el) => {
-        const parent = el.parentNode
-        if (parent) {
-          parent.replaceChild(document.createTextNode(el.textContent ?? ""), el)
-          parent.normalize()
-        }
-      })
-    }
-  }, [containerRef, highlights, onDelete])
+  return (
+    <span className="relative inline group/hl">
+      <mark
+        className="bg-yellow-200/80 dark:bg-yellow-500/40 rounded-sm px-0.5 cursor-pointer border-b border-yellow-400/50"
+        onClick={() => setOpen(!open)}
+        title={highlight.note || "点击查看"}
+      >
+        {highlight.text}
+        {highlight.note && (
+          <MessageSquare className="inline h-3 w-3 ml-0.5 text-yellow-600 dark:text-yellow-400" />
+        )}
+      </mark>
+      {open && (
+        <span
+          className="absolute left-0 top-full mt-1 z-50 bg-popover border rounded-lg shadow-lg p-2 min-w-[160px] max-w-[280px]"
+          onClick={(e) => e.stopPropagation()}
+        >
+          {highlight.note && (
+            <span className="block text-xs text-muted-foreground mb-2 whitespace-pre-wrap">
+              {highlight.note}
+            </span>
+          )}
+          <span className="flex items-center justify-between">
+            <button
+              onClick={() => { onDelete(highlight.id); setOpen(false) }}
+              className="text-xs text-destructive hover:underline"
+            >
+              删除高亮
+            </button>
+            <button
+              onClick={() => setOpen(false)}
+              className="h-5 w-5 rounded flex items-center justify-center hover:bg-muted"
+            >
+              <X className="h-3 w-3" />
+            </button>
+          </span>
+        </span>
+      )}
+    </span>
+  )
 }

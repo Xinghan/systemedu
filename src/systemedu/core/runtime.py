@@ -88,19 +88,35 @@ def _build_project_prompt_section(project_context) -> str:
     return section
 
 
-def _split_by_headings(markdown: str) -> list[str]:
-    """Split markdown by ## or ### headings into pages.
+_PAGE_TARGET_CHARS = 800
 
-    Logic mirrors the frontend splitByHeadings() utility.
+
+def _split_by_headings(markdown: str) -> list[str]:
+    """Split markdown into pages. Mirrors frontend splitByHeadings().
+
+    Strategy:
+    1. If content has multiple ## or ### headings, split by headings.
+    2. Otherwise, split by paragraph breaks, grouping to ~800 chars/page.
+    3. Short content stays as one page.
     """
     if not markdown or not markdown.strip():
         return [markdown or ""]
 
+    # Try heading-based split first
+    heading_pages = _split_by_heading_markers(markdown)
+    if len(heading_pages) > 1:
+        return heading_pages
+
+    # Fallback: paragraph-based split
+    return _split_by_paragraphs(markdown)
+
+
+def _split_by_heading_markers(markdown: str) -> list[str]:
+    import re
+
     lines = markdown.split("\n")
     pages: list[str] = []
     current_page: list[str] = []
-
-    import re
 
     for line in lines:
         if re.match(r"^#{2,3}\s", line):
@@ -122,6 +138,34 @@ def _split_by_headings(markdown: str) -> list[str]:
         pages.pop(0)
 
     return pages if pages else [markdown.strip()]
+
+
+def _split_by_paragraphs(markdown: str) -> list[str]:
+    import re
+
+    trimmed = markdown.strip()
+    if len(trimmed) <= _PAGE_TARGET_CHARS:
+        return [trimmed]
+
+    blocks = re.split(r"\n{2,}", trimmed)
+    pages: list[str] = []
+    current_page: list[str] = []
+    current_len = 0
+
+    for block in blocks:
+        block_len = len(block)
+        if current_len > 0 and current_len + block_len > _PAGE_TARGET_CHARS:
+            pages.append("\n\n".join(current_page).strip())
+            current_page = [block]
+            current_len = block_len
+        else:
+            current_page.append(block)
+            current_len += block_len
+
+    if current_page:
+        pages.append("\n\n".join(current_page).strip())
+
+    return pages if len(pages) > 1 else [trimmed]
 
 
 def _build_node_context(project_context, node_id: int, active_tab: str | None = None, page_index: int | None = None) -> str:

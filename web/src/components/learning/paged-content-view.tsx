@@ -4,15 +4,15 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { ChevronLeft, ChevronRight } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { MarkdownRenderer } from "@/components/chat/markdown-renderer"
+import { HighlightedMarkdown } from "./highlighted-markdown"
 import { splitByHeadings } from "@/lib/utils/split-pages"
-import { HighlightToolbar, useHighlightRenderer } from "./highlight-toolbar"
+import { HighlightToolbar } from "./highlight-toolbar"
 import { gateway } from "@/lib/api"
 import type { HighlightInfo } from "@/lib/types/api"
 
 interface PagedContentViewProps {
   content: string
   onPageChange?: (pageIndex: number, pageContent: string) => void
-  /** Required for highlight persistence */
   projectName?: string
   nodeId?: number | null
   tab?: string
@@ -23,6 +23,7 @@ export function PagedContentView({ content, onPageChange, projectName, nodeId, t
   const [currentPage, setCurrentPage] = useState(0)
   const [highlights, setHighlights] = useState<HighlightInfo[]>([])
   const contentRef = useRef<HTMLDivElement>(null)
+  const highlightsEnabled = !!projectName && nodeId != null && !!tab
 
   // Reset to page 0 when content changes
   useEffect(() => {
@@ -36,9 +37,9 @@ export function PagedContentView({ content, onPageChange, projectName, nodeId, t
 
   // Fetch highlights from server
   useEffect(() => {
-    if (!projectName || nodeId == null) return
-    gateway.getHighlights(projectName, nodeId).then(setHighlights).catch(() => {})
-  }, [projectName, nodeId])
+    if (!highlightsEnabled) return
+    gateway.getHighlights(projectName!, nodeId!).then(setHighlights).catch(() => {})
+  }, [projectName, nodeId, highlightsEnabled])
 
   // Filter highlights for current page and tab
   const pageHighlights = useMemo(
@@ -48,43 +49,40 @@ export function PagedContentView({ content, onPageChange, projectName, nodeId, t
         .map((h) => ({
           id: h.id,
           text: h.text,
-          startOffset: h.start_offset,
-          endOffset: h.end_offset,
+          note: h.note || "",
           color: h.color,
         })),
-    [highlights, tab, currentPage]
+    [highlights, tab, currentPage],
   )
 
   const handleDeleteHighlight = useCallback(
     (id: number) => {
-      if (!projectName || nodeId == null) return
-      gateway.deleteHighlight(projectName, nodeId, id).then(() => {
+      if (!highlightsEnabled) return
+      gateway.deleteHighlight(projectName!, nodeId!, id).then(() => {
         setHighlights((prev) => prev.filter((h) => h.id !== id))
       }).catch(() => {})
     },
-    [projectName, nodeId]
+    [projectName, nodeId, highlightsEnabled],
   )
 
-  // Apply highlight rendering after markdown renders
-  useHighlightRenderer(contentRef, pageHighlights, handleDeleteHighlight)
-
   const handleHighlight = useCallback(
-    (text: string, startOffset: number, endOffset: number) => {
-      if (!projectName || nodeId == null || !tab) return
+    (text: string, comment: string) => {
+      if (!highlightsEnabled) return
       gateway
-        .createHighlight(projectName, nodeId, {
-          tab,
+        .createHighlight(projectName!, nodeId!, {
+          tab: tab!,
           page_index: currentPage,
           text,
-          start_offset: startOffset,
-          end_offset: endOffset,
+          start_offset: 0,
+          end_offset: text.length,
+          note: comment || undefined,
         })
         .then((h) => {
           setHighlights((prev) => [...prev, h])
         })
         .catch(() => {})
     },
-    [projectName, nodeId, tab, currentPage]
+    [projectName, nodeId, tab, currentPage, highlightsEnabled],
   )
 
   const goTo = useCallback(
@@ -93,35 +91,39 @@ export function PagedContentView({ content, onPageChange, projectName, nodeId, t
         setCurrentPage(page)
       }
     },
-    [pages.length]
+    [pages.length],
   )
 
   // Keyboard navigation
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (
-        e.target instanceof HTMLInputElement ||
-        e.target instanceof HTMLTextAreaElement
-      ) {
-        return
-      }
-      if (e.key === "ArrowLeft") {
-        goTo(currentPage - 1)
-      } else if (e.key === "ArrowRight") {
-        goTo(currentPage + 1)
-      }
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return
+      if (e.key === "ArrowLeft") goTo(currentPage - 1)
+      else if (e.key === "ArrowRight") goTo(currentPage + 1)
     }
-
     window.addEventListener("keydown", handleKeyDown)
     return () => window.removeEventListener("keydown", handleKeyDown)
   }, [currentPage, goTo])
+
+  const renderContent = (md: string) => {
+    if (highlightsEnabled && pageHighlights.length > 0) {
+      return (
+        <HighlightedMarkdown
+          content={md}
+          highlights={pageHighlights}
+          onDeleteHighlight={handleDeleteHighlight}
+        />
+      )
+    }
+    return <MarkdownRenderer content={md} />
+  }
 
   // Single page — no pagination controls
   if (pages.length <= 1) {
     return (
       <div className="relative" ref={contentRef}>
-        <MarkdownRenderer content={content} />
-        {projectName && nodeId != null && tab && (
+        {renderContent(content)}
+        {highlightsEnabled && (
           <HighlightToolbar onHighlight={handleHighlight} containerRef={contentRef} />
         )}
       </div>
@@ -132,8 +134,8 @@ export function PagedContentView({ content, onPageChange, projectName, nodeId, t
     <div className="flex flex-col h-full">
       {/* Page content */}
       <div className="flex-1 min-h-0 overflow-y-auto relative" ref={contentRef}>
-        <MarkdownRenderer content={pages[currentPage] ?? ""} />
-        {projectName && nodeId != null && tab && (
+        {renderContent(pages[currentPage] ?? "")}
+        {highlightsEnabled && (
           <HighlightToolbar onHighlight={handleHighlight} containerRef={contentRef} />
         )}
       </div>
@@ -151,7 +153,6 @@ export function PagedContentView({ content, onPageChange, projectName, nodeId, t
           上一页
         </Button>
 
-        {/* Dot indicators */}
         <div className="flex items-center gap-1.5">
           {pages.map((_, i) => (
             <button

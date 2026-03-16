@@ -1067,6 +1067,20 @@ class TestSplitByHeadings:
         result = _split_by_headings(md)
         assert len(result) == 1  # Only one ## heading, no split
 
+    def test_long_content_without_headings_splits_by_paragraphs(self):
+        """Long content without headings should auto-split by paragraphs."""
+        # Create content with multiple paragraphs, each ~300 chars
+        paragraphs = [f"段落{i}。" + "这是一段较长的描述文字。" * 15 for i in range(5)]
+        md = "\n\n".join(paragraphs)
+        result = _split_by_headings(md)
+        assert len(result) > 1, f"Expected multiple pages for {len(md)} chars, got {len(result)}"
+
+    def test_short_content_without_headings_stays_single(self):
+        """Short content without headings stays as one page."""
+        md = "这是短内容。\n\n第二段也很短。"
+        result = _split_by_headings(md)
+        assert len(result) == 1
+
 
 class TestBuildNodeContextWithPageInfo:
     """Test _build_node_context with active_tab and page_index."""
