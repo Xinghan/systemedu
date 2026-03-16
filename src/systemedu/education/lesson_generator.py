@@ -259,10 +259,10 @@ def _generate_interactive_lab(node_title: str, node_summary: str, difficulty: in
         f"- 使用 React.useState 管理游戏状态\n"
         f"- 页面背景白色，字体 system-ui，圆角卡片风格\n"
         f"- 所有内容在一个不超过 800px 宽的居中容器内\n"
+        f"- 【重要】页面会在 600px 高的 iframe 中显示，所以整体布局必须紧凑，适配 600px 高度，不要纵向堆叠太多内容\n"
+        f"- html 和 body 设置 margin:0; padding:0; overflow:hidden; height:100vh; 确保不出现滚动条\n"
         f"- 整个页面在 <!DOCTYPE html><html>...</html> 中，完整可运行\n"
-        f"- script type 为 text/babel，使用 ReactDOM.createRoot\n"
-        f"- 页面加载后通过 window.parent.postMessage({{type:'lab-height',height:document.body.scrollHeight}},'*') 通知父页面高度\n"
-        f"  并在内容变化时也发送（用 ResizeObserver 监听 body）\n\n"
+        f"- script type 为 text/babel，使用 ReactDOM.createRoot\n\n"
         f"直接输出完整 HTML 代码，不要包含 markdown 代码块标记，不要输出其他任何文字。"
     )
 

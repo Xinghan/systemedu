@@ -67,10 +67,10 @@ class TestGenerateInteractiveLab:
         assert "不要使用滑块" in prompt_text
         assert "拖拽分类" in prompt_text
 
-    def test_prompt_requests_postmessage_height(self):
-        """Prompt requests iframe height reporting via postMessage."""
+    def test_prompt_constrains_height(self):
+        """Prompt tells LLM to fit within 600px iframe height."""
         llm = _make_llm_mock(self.VALID_HTML)
         _generate_interactive_lab("Node", "Summary", 3, llm)
         prompt_text = llm.invoke.call_args[0][0][0].content
-        assert "postMessage" in prompt_text
-        assert "lab-height" in prompt_text
+        assert "600px" in prompt_text
+        assert "overflow:hidden" in prompt_text
