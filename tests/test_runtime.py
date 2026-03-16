@@ -1069,7 +1069,6 @@ class TestSplitByHeadings:
 
     def test_long_content_without_headings_splits_by_paragraphs(self):
         """Long content without headings should auto-split by paragraphs."""
-        # Create content with multiple paragraphs, each ~300 chars
         paragraphs = [f"段落{i}。" + "这是一段较长的描述文字。" * 15 for i in range(5)]
         md = "\n\n".join(paragraphs)
         result = _split_by_headings(md)
@@ -1080,6 +1079,21 @@ class TestSplitByHeadings:
         md = "这是短内容。\n\n第二段也很短。"
         result = _split_by_headings(md)
         assert len(result) == 1
+
+    def test_h1_heading_also_splits(self):
+        """# headings should also trigger page splits."""
+        md = "# Title\nContent here\n# Another\nMore content"
+        result = _split_by_headings(md)
+        assert len(result) == 2
+
+    def test_realistic_content_splits(self):
+        """Realistic 600+ char content with paragraphs should split."""
+        para1 = "变量是编程中用来存储数据的容器。" + "这是一段较长的描述文字，用来测试段落分页功能是否正常工作。" * 5
+        para2 = "变量可以存储各种类型的数据。" + "这是另一段较长的描述文字，用于验证自动分页的阈值设置。" * 5
+        para3 = "使用变量让代码更灵活。" + "更多关于变量的详细说明内容，帮助学习者理解变量的用途。" * 5
+        md = f"# 什么是变量\n\n{para1}\n\n{para2}\n\n{para3}"
+        result = _split_by_headings(md)
+        assert len(result) >= 2, f"Expected 2+ pages for {len(md)} chars, got {len(result)}"
 
 
 class TestBuildNodeContextWithPageInfo:

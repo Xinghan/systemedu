@@ -62,6 +62,15 @@ export function HighlightedMarkdown({ content, highlights, onDeleteHighlight }: 
           }
           return <CodeBlock className={className}>{String(children).replace(/\n$/, "")}</CodeBlock>
         },
+        h1({ children }) {
+          return <h1 className="text-2xl font-bold mb-3"><HighlightTextChildren highlights={highlights} onDelete={onDeleteHighlight}>{children}</HighlightTextChildren></h1>
+        },
+        h2({ children }) {
+          return <h2 className="text-xl font-bold mb-2"><HighlightTextChildren highlights={highlights} onDelete={onDeleteHighlight}>{children}</HighlightTextChildren></h2>
+        },
+        h3({ children }) {
+          return <h3 className="text-lg font-semibold mb-2"><HighlightTextChildren highlights={highlights} onDelete={onDeleteHighlight}>{children}</HighlightTextChildren></h3>
+        },
         p({ children }) {
           return <p className="mb-2 last:mb-0"><HighlightTextChildren highlights={highlights} onDelete={onDeleteHighlight}>{children}</HighlightTextChildren></p>
         },

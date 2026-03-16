@@ -88,27 +88,27 @@ def _build_project_prompt_section(project_context) -> str:
     return section
 
 
-_PAGE_TARGET_CHARS = 800
+_PAGE_TARGET_CHARS = 400
 
 
 def _split_by_headings(markdown: str) -> list[str]:
     """Split markdown into pages. Mirrors frontend splitByHeadings().
 
     Strategy:
-    1. If content has multiple ## or ### headings, split by headings.
-    2. Otherwise, split by paragraph breaks, grouping to ~800 chars/page.
-    3. Short content stays as one page.
+    1. If content has multiple headings (#, ##, ###), split by headings.
+    2. Otherwise, split by paragraph breaks, grouping to ~400 chars/page.
+    3. Short single-paragraph content stays as one page.
     """
     if not markdown or not markdown.strip():
         return [markdown or ""]
 
-    # Try heading-based split first
-    heading_pages = _split_by_heading_markers(markdown)
+    trimmed = markdown.strip()
+
+    heading_pages = _split_by_heading_markers(trimmed)
     if len(heading_pages) > 1:
         return heading_pages
 
-    # Fallback: paragraph-based split
-    return _split_by_paragraphs(markdown)
+    return _split_by_paragraphs(trimmed)
 
 
 def _split_by_heading_markers(markdown: str) -> list[str]:
@@ -119,7 +119,8 @@ def _split_by_heading_markers(markdown: str) -> list[str]:
     current_page: list[str] = []
 
     for line in lines:
-        if re.match(r"^#{2,3}\s", line):
+        # Match #, ##, or ### at line start (not #### or deeper)
+        if re.match(r"^#{1,3}\s", line):
             if current_page:
                 content = "\n".join(current_page).strip()
                 if content or pages:
@@ -144,10 +145,11 @@ def _split_by_paragraphs(markdown: str) -> list[str]:
     import re
 
     trimmed = markdown.strip()
-    if len(trimmed) <= _PAGE_TARGET_CHARS:
+    blocks = [b for b in re.split(r"\n{2,}", trimmed) if b.strip()]
+
+    if len(blocks) <= 1:
         return [trimmed]
 
-    blocks = re.split(r"\n{2,}", trimmed)
     pages: list[str] = []
     current_page: list[str] = []
     current_len = 0

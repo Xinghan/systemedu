@@ -1,34 +1,37 @@
 /**
- * Split a markdown string into pages.
+ * Split a markdown string into pages for slide-like reading.
  *
  * Strategy:
- * 1. If the content has multiple ## or ### headings, split by headings.
- * 2. Otherwise, split by double-newline paragraph breaks,
- *    grouping paragraphs to fill ~800 chars per page.
- * 3. Single short content (< 800 chars, no headings) stays as one page.
+ * 1. If content has multiple markdown headings (#, ##, ###), split by headings.
+ * 2. Otherwise, split by paragraph breaks (double newlines), grouping into
+ *    pages of roughly PAGE_TARGET_CHARS each.
+ * 3. Very short content (single paragraph, < target) stays as one page.
  */
 
-const PAGE_TARGET_CHARS = 800
+const PAGE_TARGET_CHARS = 400
 
 export function splitByHeadings(markdown: string): string[] {
   if (!markdown || !markdown.trim()) return [""]
 
-  // First try heading-based split
-  const headingPages = splitByHeadingMarkers(markdown)
+  const trimmed = markdown.trim()
+
+  // Try heading-based split first (supports #, ##, ###)
+  const headingPages = splitByHeadingMarkers(trimmed)
   if (headingPages.length > 1) return headingPages
 
-  // Fallback: split by paragraphs if content is long
-  return splitByParagraphs(markdown)
+  // Fallback: split by paragraphs
+  return splitByParagraphs(trimmed)
 }
 
-/** Split markdown by ## or ### headings into pages. */
+/** Split markdown by #, ## or ### headings into pages. */
 function splitByHeadingMarkers(markdown: string): string[] {
   const lines = markdown.split("\n")
   const pages: string[] = []
   let currentPage: string[] = []
 
   for (const line of lines) {
-    if (/^#{2,3}\s/.test(line)) {
+    // Match #, ##, or ### at line start (but not #### or deeper)
+    if (/^#{1,3}\s/.test(line)) {
       if (currentPage.length > 0) {
         const content = currentPage.join("\n").trim()
         if (content || pages.length > 0) {
@@ -47,6 +50,7 @@ function splitByHeadingMarkers(markdown: string): string[] {
 
   if (pages.length === 0) return [markdown.trim()]
 
+  // Remove empty first page (content before first heading that is empty)
   if (pages[0] === "" && pages.length > 1) {
     pages.shift()
   }
@@ -57,21 +61,22 @@ function splitByHeadingMarkers(markdown: string): string[] {
 /**
  * Split long markdown into pages by grouping paragraphs.
  * Each page targets ~PAGE_TARGET_CHARS characters.
- * Never breaks in the middle of a paragraph or code block.
  */
 function splitByParagraphs(markdown: string): string[] {
   const trimmed = markdown.trim()
-  if (trimmed.length <= PAGE_TARGET_CHARS) return [trimmed]
 
   // Split by double newlines (paragraph boundaries)
-  const blocks = trimmed.split(/\n{2,}/)
+  const blocks = trimmed.split(/\n{2,}/).filter((b) => b.trim())
+
+  // If only 1 block, can't split
+  if (blocks.length <= 1) return [trimmed]
+
   const pages: string[] = []
   let currentPage: string[] = []
   let currentLen = 0
 
   for (const block of blocks) {
     const blockLen = block.length
-    // If adding this block exceeds target and page is non-empty, start new page
     if (currentLen > 0 && currentLen + blockLen > PAGE_TARGET_CHARS) {
       pages.push(currentPage.join("\n\n").trim())
       currentPage = [block]
@@ -86,6 +91,5 @@ function splitByParagraphs(markdown: string): string[] {
     pages.push(currentPage.join("\n\n").trim())
   }
 
-  // If we only got 1 page from paragraph splitting, return as-is (no pagination)
   return pages.length > 1 ? pages : [trimmed]
 }

@@ -21,6 +21,7 @@ import { ScrollArea } from "@/components/ui/scroll-area"
 import { KnowledgeTreeView } from "@/components/knowledge-tree/knowledge-tree-view"
 import { LessonView } from "@/components/learning/lesson-view"
 import { FloatingChat } from "@/components/learning/floating-chat"
+import { NotesPanel } from "@/components/learning/notes-panel"
 import { gateway } from "@/lib/api"
 import type { KnodeInfo, NodeProgress, ProjectDetail } from "@/lib/types/api"
 
@@ -183,6 +184,8 @@ export default function LearnPage() {
         </div>
       </div>
     </>
+  ) : sidebarNav === "notes" ? (
+    <NotesPanel projectName={params.projectName} nodeId={activeNodeId} />
   ) : (
     <div className="flex-1 flex flex-col items-center justify-center text-muted-foreground gap-3 p-6">
       {(() => {

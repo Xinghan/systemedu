@@ -2,8 +2,8 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { ChevronLeft, ChevronRight } from "lucide-react"
+import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
-import { MarkdownRenderer } from "@/components/chat/markdown-renderer"
 import { HighlightedMarkdown } from "./highlighted-markdown"
 import { splitByHeadings } from "@/lib/utils/split-pages"
 import { HighlightToolbar } from "./highlight-toolbar"
@@ -79,8 +79,11 @@ export function PagedContentView({ content, onPageChange, projectName, nodeId, t
         })
         .then((h) => {
           setHighlights((prev) => [...prev, h])
+          toast.success("已添加高亮")
         })
-        .catch(() => {})
+        .catch((e) => {
+          toast.error(`高亮失败: ${e instanceof Error ? e.message : "未知错误"}`)
+        })
     },
     [projectName, nodeId, tab, currentPage, highlightsEnabled],
   )
@@ -105,18 +108,13 @@ export function PagedContentView({ content, onPageChange, projectName, nodeId, t
     return () => window.removeEventListener("keydown", handleKeyDown)
   }, [currentPage, goTo])
 
-  const renderContent = (md: string) => {
-    if (highlightsEnabled && pageHighlights.length > 0) {
-      return (
-        <HighlightedMarkdown
-          content={md}
-          highlights={pageHighlights}
-          onDeleteHighlight={handleDeleteHighlight}
-        />
-      )
-    }
-    return <MarkdownRenderer content={md} />
-  }
+  const renderContent = (md: string) => (
+    <HighlightedMarkdown
+      content={md}
+      highlights={pageHighlights}
+      onDeleteHighlight={handleDeleteHighlight}
+    />
+  )
 
   // Single page — no pagination controls
   if (pages.length <= 1) {
