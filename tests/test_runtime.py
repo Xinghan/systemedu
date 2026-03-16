@@ -13,7 +13,7 @@ from systemedu.core.config import (
     SystemEduConfig,
     reset_config,
 )
-from systemedu.core.runtime import AgentRuntime
+from systemedu.core.runtime import AgentRuntime, _build_node_context, _split_by_headings
 from systemedu.core.session import Session, SessionManager
 from systemedu.core.tool_executor import ToolExecutor
 
@@ -46,28 +46,113 @@ def mock_config():
 
 class TestSessionManager:
     def test_create_session(self):
-        sm = SessionManager()
+        sm = SessionManager(persist=False)
         session = sm.create_session()
         assert session.id
         assert session.agent_name == "default"
 
     def test_create_session_with_agent(self):
-        sm = SessionManager()
+        sm = SessionManager(persist=False)
         session = sm.create_session(agent_name="tutor", project_name="test-project")
         assert session.agent_name == "tutor"
         assert session.project_name == "test-project"
 
     def test_get_session(self):
-        sm = SessionManager()
+        sm = SessionManager(persist=False)
         session = sm.create_session()
         found = sm.get_session(session.id)
         assert found is session
 
     def test_close_session(self):
-        sm = SessionManager()
+        sm = SessionManager(persist=False)
         session = sm.create_session()
         sm.close_session(session.id)
         assert sm.get_session(session.id) is None
+
+
+class TestSessionPersistence:
+    """Test session persistence to SQLite."""
+
+    @pytest.fixture(autouse=True)
+    def setup_db(self, tmp_path, monkeypatch):
+        """Use a temp database for persistence tests."""
+        db_file = tmp_path / "test.db"
+        monkeypatch.setattr("systemedu.storage.db.DB_FILE", db_file)
+        from systemedu.storage.db import reset_db
+        reset_db()
+        yield
+        reset_db()
+
+    def test_session_persisted_to_db(self):
+        sm = SessionManager(persist=True)
+        session = sm.create_session(agent_name="tutor", project_name="test-proj")
+
+        from systemedu.storage.db import ChatSession as DBSession
+        from systemedu.storage.db import get_session as get_db_session
+
+        db = get_db_session()
+        try:
+            db_sess = db.query(DBSession).filter_by(id=session.id).first()
+            assert db_sess is not None
+            assert db_sess.agent_name == "tutor"
+            assert db_sess.project_name == "test-proj"
+        finally:
+            db.close()
+
+    def test_messages_persisted_to_db(self):
+        sm = SessionManager(persist=True)
+        session = sm.create_session()
+        session.add_message("user", "hello")
+        session.add_message("assistant", "hi there")
+
+        from systemedu.storage.db import ChatMessage as DBMessage
+        from systemedu.storage.db import get_session as get_db_session
+
+        db = get_db_session()
+        try:
+            messages = db.query(DBMessage).filter_by(session_id=session.id).all()
+            assert len(messages) == 2
+            assert messages[0].role == "user"
+            assert messages[0].content == "hello"
+            assert messages[1].role == "assistant"
+            assert messages[1].content == "hi there"
+        finally:
+            db.close()
+
+    def test_sessions_loaded_on_init(self):
+        # Create a session with the first manager
+        sm1 = SessionManager(persist=True)
+        session = sm1.create_session(agent_name="tutor")
+        session.add_message("user", "test msg")
+        session.add_message("assistant", "response")
+
+        # Create a new manager — should load from DB
+        sm2 = SessionManager(persist=True)
+        loaded = sm2.get_session(session.id)
+        assert loaded is not None
+        assert loaded.agent_name == "tutor"
+        assert len(loaded.messages) == 2
+        assert loaded.messages[0].content == "test msg"
+
+    def test_tool_messages_not_persisted(self):
+        sm = SessionManager(persist=True)
+        session = sm.create_session()
+        session.add_message("user", "test")
+        session.add_message("tool", "tool result", name="run_bash")
+        session.add_message("assistant", "done")
+
+        from systemedu.storage.db import ChatMessage as DBMessage
+        from systemedu.storage.db import get_session as get_db_session
+
+        db = get_db_session()
+        try:
+            messages = db.query(DBMessage).filter_by(session_id=session.id).all()
+            # Only user and assistant, not tool
+            assert len(messages) == 2
+            roles = [m.role for m in messages]
+            assert "tool" not in roles
+        finally:
+            db.close()
 
 
 class TestSession:
@@ -404,6 +489,45 @@ class TestProjectContextInPrompt:
             assert "当前学习节点" in runtime.system_prompt
 
     @pytest.mark.asyncio
+    async def test_progress_summary_in_prompt(self, mock_config):
+        """Full progress summary with all node statuses should appear in system prompt."""
+        from systemedu.education.project_loader import ProjectContext
+        from systemedu.education.models import (
+            KnowledgeNode, KnowledgeTree, Milestone, NodeStatus, Project, UserNodeProgress,
+        )
+
+        ctx = ProjectContext(
+            project=Project(name="test", title="测试项目", description="测试描述"),
+            tree=KnowledgeTree(milestones=[
+                Milestone(title="M1", knodes=[
+                    KnowledgeNode(title="节点A", summary="第一个节点"),
+                    KnowledgeNode(title="节点B", summary="第二个节点"),
+                    KnowledgeNode(title="节点C", summary="第三个节点"),
+                ]),
+            ]),
+            progress=[
+                UserNodeProgress(knode_id=0, status=NodeStatus.PASSED),
+                UserNodeProgress(knode_id=1, status=NodeStatus.AVAILABLE),
+                UserNodeProgress(knode_id=2, status=NodeStatus.LOCKED),
+            ],
+            project_dir=Path("/tmp/test"),
+        )
+
+        with patch("systemedu.core.agent_backend.get_llm") as mock_get_llm:
+            mock_llm = MagicMock()
+            mock_llm.bind_tools.return_value = mock_llm
+            mock_get_llm.return_value = mock_llm
+
+            runtime = AgentRuntime(provider="test", project_context=ctx)
+            # Should include progress percentage
+            assert "1/3" in runtime.system_prompt
+            assert "33%" in runtime.system_prompt
+            # Should include all nodes with their status
+            assert "节点A — passed" in runtime.system_prompt
+            assert "节点B — available" in runtime.system_prompt
+            assert "节点C — locked" in runtime.system_prompt
+
+    @pytest.mark.asyncio
     async def test_no_project_context_unchanged(self, mock_config):
         """Without project_context, default prompt should be unchanged."""
         with patch("systemedu.core.agent_backend.get_llm") as mock_get_llm:
@@ -441,7 +565,7 @@ class TestMemoryIntegration:
             session = runtime.session_manager.create_session()
             await runtime.process_message("hello", session, user_id="user1")
 
-            mock_retrieve.assert_called_once_with(user_id="user1", query="hello")
+            mock_retrieve.assert_called_once_with(user_id="user1", query="hello", project_id=None)
 
     @pytest.mark.asyncio
     async def test_memory_store_called(self, mock_config):
@@ -583,3 +707,444 @@ class TestLangGraphRuntime:
             response = await runtime.process_message("test", session, user_id="user123")
 
             assert response == "ok"
+
+
+class TestStreamMessage:
+    @pytest.mark.asyncio
+    async def test_stream_basic(self, mock_config):
+        """stream_message should yield structured events and save to session."""
+        chunk1 = MagicMock()
+        chunk1.content = "Hello"
+        chunk2 = MagicMock()
+        chunk2.content = " World"
+
+        mock_llm = MagicMock()
+
+        async def fake_stream(*args, **kwargs):
+            yield chunk1
+            yield chunk2
+
+        mock_llm.astream = fake_stream
+
+        with patch("systemedu.core.agent_backend.get_llm", return_value=mock_llm):
+            runtime = AgentRuntime(provider="test", tools_enabled=False)
+            session = runtime.session_manager.create_session()
+            events = []
+            async for event in runtime.stream_message("hello", session):
+                events.append(event)
+
+            assert len(events) == 2
+            assert events[0] == {"type": "chunk", "content": "Hello"}
+            assert events[1] == {"type": "chunk", "content": " World"}
+            assert len(session.messages) == 2  # user + assistant
+            assert session.messages[1].content == "Hello World"
+
+    @pytest.mark.asyncio
+    async def test_stream_with_user_id(self, mock_config):
+        """stream_message should pass user_id for memory retrieval."""
+        chunk = MagicMock()
+        chunk.content = "response"
+
+        mock_llm = MagicMock()
+
+        async def fake_stream(*args, **kwargs):
+            yield chunk
+
+        mock_llm.astream = fake_stream
+
+        with (
+            patch("systemedu.core.agent_backend.get_llm", return_value=mock_llm),
+            patch(
+                "systemedu.core.runtime.get_config",
+                return_value=MagicMock(
+                    memory=MagicMock(enabled=True),
+                    sandbox=MagicMock(enabled=False),
+                ),
+            ),
+            patch(
+                "systemedu.memory.client.retrieve_memories",
+                return_value=["past memory"],
+            ) as mock_retrieve,
+            patch("systemedu.memory.client.store_conversation") as mock_store,
+        ):
+            runtime = AgentRuntime(provider="test", tools_enabled=False)
+            session = runtime.session_manager.create_session()
+            events = []
+            async for event in runtime.stream_message("test", session, user_id="user1"):
+                events.append(event)
+
+            mock_retrieve.assert_called_once_with(user_id="user1", query="test", project_id=None)
+            mock_store.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_stream_with_mcp_tools(self, mock_config):
+        """stream_message should set up MCP tools before streaming."""
+        mock_llm = MagicMock()
+        # When tools are present, stream uses the graph path which calls ainvoke
+        mock_llm.ainvoke = AsyncMock(return_value=AIMessage(content="result"))
+        mock_llm.bind_tools.return_value = mock_llm
+
+        mock_manager = MagicMock()
+        mock_manager.list_tools.return_value = [
+            {
+                "type": "function",
+                "function": {
+                    "name": "test_tool",
+                    "description": "A test tool",
+                    "parameters": {"type": "object"},
+                },
+            }
+        ]
+
+        with patch("systemedu.core.agent_backend.get_llm", return_value=mock_llm):
+            runtime = AgentRuntime(provider="test", mcp_manager=mock_manager)
+            session = runtime.session_manager.create_session()
+            events = []
+            async for event in runtime.stream_message("test", session):
+                events.append(event)
+
+            # MCP tools should have been set up
+            assert runtime._mcp_setup_done
+            # Tool should be registered
+            schemas = runtime.tool_executor.get_tool_schemas()
+            tool_names = [s["function"]["name"] for s in schemas]
+            assert "test_tool" in tool_names
+
+
+class TestBuildNodeContext:
+    """Test _build_node_context function."""
+
+    def _make_project_context(self):
+        from systemedu.education.models import (
+            KnowledgeNode, KnowledgeTree, Milestone, NodeStatus, Project, UserNodeProgress,
+        )
+        from systemedu.education.project_loader import ProjectContext
+
+        return ProjectContext(
+            project=Project(name="test-proj", title="测试项目", description="测试描述"),
+            tree=KnowledgeTree(milestones=[
+                Milestone(title="M1", knodes=[
+                    KnowledgeNode(title="Python基础", summary="学习Python基础语法"),
+                    KnowledgeNode(title="变量与类型", summary="了解变量和数据类型"),
+                ]),
+            ]),
+            progress=[
+                UserNodeProgress(knode_id=0, status=NodeStatus.AVAILABLE),
+                UserNodeProgress(knode_id=1, status=NodeStatus.LOCKED),
+            ],
+            project_dir=Path("/tmp/test"),
+        )
+
+    def test_returns_empty_for_invalid_node_id(self):
+        ctx = self._make_project_context()
+        result = _build_node_context(ctx, 999)
+        assert result == ""
+
+    def test_includes_node_title_and_summary(self):
+        ctx = self._make_project_context()
+        result = _build_node_context(ctx, 0)
+        assert "Python基础" in result
+        assert "学习Python基础语法" in result
+        assert "学生当前正在学习的知识点" in result
+
+    def test_includes_lesson_content_from_db(self, tmp_path, monkeypatch):
+        """When LessonContent exists in DB, concept and key_takeaways are included."""
+        db_file = tmp_path / "test.db"
+        monkeypatch.setattr("systemedu.storage.db.DB_FILE", db_file)
+        from systemedu.storage.db import LessonContent, get_session as get_db_session, reset_db
+        reset_db()
+
+        # Insert lesson content
+        db = get_db_session()
+        try:
+            lesson = LessonContent(
+                project_name="test-proj",
+                knode_id=0,
+                status="ready",
+                concept="Python是一种解释型编程语言",
+                key_takeaways="- 易学易用\n- 动态类型",
+            )
+            db.add(lesson)
+            db.commit()
+        finally:
+            db.close()
+
+        ctx = self._make_project_context()
+        result = _build_node_context(ctx, 0)
+        assert "Python是一种解释型编程语言" in result
+        assert "易学易用" in result
+        assert "核心概念" in result
+        assert "要点总结" in result
+
+        reset_db()
+
+    def test_concept_truncated_when_long(self, tmp_path, monkeypatch):
+        """Long concept text should be truncated to ~500 chars."""
+        db_file = tmp_path / "test.db"
+        monkeypatch.setattr("systemedu.storage.db.DB_FILE", db_file)
+        from systemedu.storage.db import LessonContent, get_session as get_db_session, reset_db
+        reset_db()
+
+        long_concept = "x" * 1000
+        db = get_db_session()
+        try:
+            lesson = LessonContent(
+                project_name="test-proj", knode_id=0, status="ready",
+                concept=long_concept, key_takeaways="takeaway",
+            )
+            db.add(lesson)
+            db.commit()
+        finally:
+            db.close()
+
+        ctx = self._make_project_context()
+        result = _build_node_context(ctx, 0)
+        # Full 1000-char concept should not appear
+        assert long_concept not in result
+        # But truncated version + "..." should appear
+        assert "x" * 500 + "..." in result
+
+        reset_db()
+
+    def test_no_lesson_still_returns_basic_info(self):
+        """Without DB data, still returns node title and summary."""
+        ctx = self._make_project_context()
+        result = _build_node_context(ctx, 1)
+        assert "变量与类型" in result
+        assert "了解变量和数据类型" in result
+
+
+class TestStreamMessageWithNodeId:
+    """Test stream_message node_id injection."""
+
+    @pytest.mark.asyncio
+    async def test_stream_with_node_id_injects_context(self, mock_config, tmp_path, monkeypatch):
+        """stream_message with node_id should inject node context into system prompt."""
+        from systemedu.education.models import (
+            KnowledgeNode, KnowledgeTree, Milestone, NodeStatus, Project, UserNodeProgress,
+        )
+        from systemedu.education.project_loader import ProjectContext
+
+        db_file = tmp_path / "test.db"
+        monkeypatch.setattr("systemedu.storage.db.DB_FILE", db_file)
+        from systemedu.storage.db import LessonContent, get_session as get_db_session, reset_db
+        reset_db()
+
+        # Insert lesson content
+        db = get_db_session()
+        try:
+            lesson = LessonContent(
+                project_name="test-proj", knode_id=0, status="ready",
+                concept="函数是代码复用的基础", key_takeaways="- def 关键字",
+            )
+            db.add(lesson)
+            db.commit()
+        finally:
+            db.close()
+
+        ctx = ProjectContext(
+            project=Project(name="test-proj", title="测试项目", description="描述"),
+            tree=KnowledgeTree(milestones=[
+                Milestone(title="M1", knodes=[
+                    KnowledgeNode(title="函数基础", summary="学习函数"),
+                ]),
+            ]),
+            progress=[UserNodeProgress(knode_id=0, status=NodeStatus.AVAILABLE)],
+            project_dir=Path("/tmp/test"),
+        )
+
+        chunk = MagicMock()
+        chunk.content = "ok"
+
+        mock_llm = MagicMock()
+
+        # Capture the system_prompt passed to the backend
+        captured_prompts = []
+
+        async def fake_stream(messages, system_prompt, **kwargs):
+            captured_prompts.append(system_prompt)
+            yield {"type": "chunk", "content": "ok"}
+
+        with patch("systemedu.core.agent_backend.get_llm", return_value=mock_llm):
+            runtime = AgentRuntime(provider="test", project_context=ctx, tools_enabled=False)
+            runtime._backend.stream = fake_stream
+            session = runtime.session_manager.create_session()
+
+            events = []
+            async for event in runtime.stream_message("test", session, node_id=0):
+                events.append(event)
+
+            assert len(captured_prompts) == 1
+            prompt = captured_prompts[0]
+            assert "函数基础" in prompt
+            assert "函数是代码复用的基础" in prompt
+            assert "学生当前正在学习的知识点" in prompt
+
+        reset_db()
+
+    @pytest.mark.asyncio
+    async def test_stream_without_node_id_no_injection(self, mock_config):
+        """stream_message without node_id should not inject node context."""
+        from systemedu.education.models import (
+            KnowledgeNode, KnowledgeTree, Milestone, NodeStatus, Project, UserNodeProgress,
+        )
+        from systemedu.education.project_loader import ProjectContext
+
+        ctx = ProjectContext(
+            project=Project(name="test-proj", title="测试项目", description="描述"),
+            tree=KnowledgeTree(milestones=[
+                Milestone(title="M1", knodes=[
+                    KnowledgeNode(title="函数基础", summary="学习函数"),
+                ]),
+            ]),
+            progress=[UserNodeProgress(knode_id=0, status=NodeStatus.AVAILABLE)],
+            project_dir=Path("/tmp/test"),
+        )
+
+        captured_prompts = []
+
+        async def fake_stream(messages, system_prompt, **kwargs):
+            captured_prompts.append(system_prompt)
+            yield {"type": "chunk", "content": "ok"}
+
+        mock_llm = MagicMock()
+
+        with patch("systemedu.core.agent_backend.get_llm", return_value=mock_llm):
+            runtime = AgentRuntime(provider="test", project_context=ctx, tools_enabled=False)
+            runtime._backend.stream = fake_stream
+            session = runtime.session_manager.create_session()
+
+            async for _ in runtime.stream_message("test", session):
+                pass
+
+            prompt = captured_prompts[0]
+            # Should have project context from init, but NOT the per-message node context
+            assert "测试项目" in prompt
+            assert "学生当前正在学习的知识点" not in prompt
+
+
+class TestSplitByHeadings:
+    """Test _split_by_headings utility function."""
+
+    def test_no_headings_returns_single_page(self):
+        result = _split_by_headings("Hello world\nThis is content.")
+        assert len(result) == 1
+        assert "Hello world" in result[0]
+
+    def test_split_by_h2(self):
+        md = "## Page 1\nContent 1\n## Page 2\nContent 2"
+        result = _split_by_headings(md)
+        assert len(result) == 2
+        assert "Page 1" in result[0]
+        assert "Page 2" in result[1]
+
+    def test_split_by_h3(self):
+        md = "### A\nFoo\n### B\nBar"
+        result = _split_by_headings(md)
+        assert len(result) == 2
+        assert "Foo" in result[0]
+        assert "Bar" in result[1]
+
+    def test_mixed_h2_and_h3(self):
+        md = "## Intro\nText\n### Detail\nMore text\n## Conclusion\nEnd"
+        result = _split_by_headings(md)
+        assert len(result) == 3
+
+    def test_content_before_first_heading(self):
+        md = "Some preamble\n## Title\nBody"
+        result = _split_by_headings(md)
+        assert len(result) == 2
+        assert "preamble" in result[0]
+        assert "Title" in result[1]
+
+    def test_empty_string(self):
+        result = _split_by_headings("")
+        assert len(result) == 1
+
+    def test_h4_not_split(self):
+        """#### headings should NOT cause page splits."""
+        md = "## Top\nContent\n#### Sub\nMore"
+        result = _split_by_headings(md)
+        assert len(result) == 1  # Only one ## heading, no split
+
+
+class TestBuildNodeContextWithPageInfo:
+    """Test _build_node_context with active_tab and page_index."""
+
+    def _make_project_context(self):
+        from systemedu.education.models import (
+            KnowledgeNode, KnowledgeTree, Milestone, NodeStatus, Project, UserNodeProgress,
+        )
+        from systemedu.education.project_loader import ProjectContext
+
+        return ProjectContext(
+            project=Project(name="test-proj", title="测试项目", description="测试描述"),
+            tree=KnowledgeTree(milestones=[
+                Milestone(title="M1", knodes=[
+                    KnowledgeNode(title="Python基础", summary="学习Python基础语法"),
+                ]),
+            ]),
+            progress=[
+                UserNodeProgress(knode_id=0, status=NodeStatus.AVAILABLE),
+            ],
+            project_dir=Path("/tmp/test"),
+        )
+
+    def test_page_context_injected(self, tmp_path, monkeypatch):
+        """When active_tab and page_index are given, specific page content is injected."""
+        db_file = tmp_path / "test.db"
+        monkeypatch.setattr("systemedu.storage.db.DB_FILE", db_file)
+        from systemedu.storage.db import LessonContent, get_session as get_db_session, reset_db
+        reset_db()
+
+        db = get_db_session()
+        try:
+            lesson = LessonContent(
+                project_name="test-proj",
+                knode_id=0,
+                status="ready",
+                concept="## 第一页\n变量是存储数据的容器。\n## 第二页\n类型决定了数据的行为。",
+                key_takeaways="- 变量\n- 类型",
+            )
+            db.add(lesson)
+            db.commit()
+        finally:
+            db.close()
+
+        ctx = self._make_project_context()
+        result = _build_node_context(ctx, 0, active_tab="concept", page_index=1)
+        assert "第二页" in result
+        assert "类型决定了数据的行为" in result
+        assert "学生当前正在阅读的内容" in result
+        # Concept summary should NOT appear (page-level takes over)
+        assert "核心概念" not in result
+
+        reset_db()
+
+    def test_without_page_info_fallback(self, tmp_path, monkeypatch):
+        """Without active_tab, falls back to concept summary."""
+        db_file = tmp_path / "test.db"
+        monkeypatch.setattr("systemedu.storage.db.DB_FILE", db_file)
+        from systemedu.storage.db import LessonContent, get_session as get_db_session, reset_db
+        reset_db()
+
+        db = get_db_session()
+        try:
+            lesson = LessonContent(
+                project_name="test-proj",
+                knode_id=0,
+                status="ready",
+                concept="Python是一门很好的编程语言。",
+                key_takeaways="- 很好",
+            )
+            db.add(lesson)
+            db.commit()
+        finally:
+            db.close()
+
+        ctx = self._make_project_context()
+        result = _build_node_context(ctx, 0)
+        assert "核心概念" in result
+        assert "Python是一门很好的编程语言" in result
+
+        reset_db()

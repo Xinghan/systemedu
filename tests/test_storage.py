@@ -7,6 +7,7 @@ from systemedu.storage.db import (
     ChatMessage,
     ChatSession,
     Enrollment,
+    Highlight,
     LessonContent,
     LocalProject,
     NodeContextCache,
@@ -287,4 +288,85 @@ class TestEnrollment:
         assert found.started_at is None
         assert found.last_activity_at is None
         assert found.created_at is not None
+        db.close()
+
+
+class TestHighlight:
+    def test_create_highlight(self):
+        db = get_session()
+        h = Highlight(
+            user_id="default",
+            project_name="test-proj",
+            knode_id=0,
+            tab="concept",
+            page_index=1,
+            text="Hello world",
+            start_offset=10,
+            end_offset=21,
+            color="yellow",
+        )
+        db.add(h)
+        db.commit()
+
+        found = db.query(Highlight).filter_by(project_name="test-proj", knode_id=0).first()
+        assert found is not None
+        assert found.text == "Hello world"
+        assert found.tab == "concept"
+        assert found.page_index == 1
+        assert found.start_offset == 10
+        assert found.end_offset == 21
+        assert found.color == "yellow"
+        assert found.created_at is not None
+        db.close()
+
+    def test_highlight_unique_constraint(self):
+        from sqlalchemy.exc import IntegrityError
+
+        db = get_session()
+        h1 = Highlight(
+            user_id="default", project_name="proj", knode_id=0,
+            tab="concept", text="a", start_offset=5, end_offset=6,
+        )
+        h2 = Highlight(
+            user_id="default", project_name="proj", knode_id=0,
+            tab="concept", text="b", start_offset=5, end_offset=10,
+        )
+        db.add(h1)
+        db.commit()
+        db.add(h2)
+        with pytest.raises(IntegrityError):
+            db.commit()
+        db.close()
+
+    def test_highlight_delete(self):
+        db = get_session()
+        h = Highlight(
+            user_id="default", project_name="proj", knode_id=1,
+            tab="code_samples", text="x = 1", start_offset=0, end_offset=5,
+        )
+        db.add(h)
+        db.commit()
+        hid = h.id
+
+        db.delete(h)
+        db.commit()
+
+        found = db.query(Highlight).filter_by(id=hid).first()
+        assert found is None
+        db.close()
+
+    def test_highlight_default_values(self):
+        db = get_session()
+        h = Highlight(
+            project_name="proj", knode_id=0,
+            tab="practice", text="test", start_offset=0, end_offset=4,
+        )
+        db.add(h)
+        db.commit()
+
+        found = db.query(Highlight).filter_by(project_name="proj", tab="practice").first()
+        assert found.user_id == "default"
+        assert found.page_index == 0
+        assert found.note == ""
+        assert found.color == "yellow"
         db.close()

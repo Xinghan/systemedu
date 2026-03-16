@@ -183,6 +183,18 @@ export interface CreateProjectResponse {
   path: string
 }
 
+export interface HighlightInfo {
+  id: number
+  tab: string
+  page_index: number
+  text: string
+  start_offset: number
+  end_offset: number
+  note: string
+  color: string
+  created_at: string | null
+}
+
 export interface WSMessage {
   type: "chunk" | "done" | "error" | "tool_call" | "tool_result"
   content?: string

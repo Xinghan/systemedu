@@ -259,6 +259,9 @@ async def ws_chat_stream(websocket: WebSocket) -> None:
             project_name = data.get("project")
             agent_name = data.get("agent")
             user_id = data.get("user_id", "default")
+            node_id = data.get("node_id")  # Active learning node (optional)
+            active_tab = data.get("active_tab")  # Current lesson tab (concept/examples/etc.)
+            page_index = data.get("page_index")  # Current page index within tab
 
             if not message:
                 await websocket.send_json({"type": "error", "message": "message is required"})
@@ -288,7 +291,7 @@ async def ws_chat_stream(websocket: WebSocket) -> None:
                 )
 
             try:
-                async for event in runtime.stream_message(message, session, user_id=user_id):
+                async for event in runtime.stream_message(message, session, user_id=user_id, node_id=node_id, active_tab=active_tab, page_index=page_index):
                     await websocket.send_json(event)
                 await websocket.send_json({"type": "done", "session_id": session.id})
             except Exception as e:
@@ -1161,6 +1164,107 @@ async def _on_startup():
     _runtime = AgentRuntime(mcp_manager=mcp_manager)
 
 
+async def api_get_highlights(request: Request) -> JSONResponse:
+    """GET /api/projects/{name}/nodes/{node_id}/highlights - List highlights for a node."""
+    from systemedu.storage.db import Highlight, get_session as get_db_session
+
+    project_name = request.path_params["name"]
+    node_id = request.path_params["node_id"]
+    user_id = request.query_params.get("user_id", "default")
+
+    db = get_db_session()
+    try:
+        highlights = (
+            db.query(Highlight)
+            .filter_by(user_id=user_id, project_name=project_name, knode_id=node_id)
+            .order_by(Highlight.tab, Highlight.page_index, Highlight.start_offset)
+            .all()
+        )
+        return JSONResponse([
+            {
+                "id": h.id,
+                "tab": h.tab,
+                "page_index": h.page_index,
+                "text": h.text,
+                "start_offset": h.start_offset,
+                "end_offset": h.end_offset,
+                "note": h.note,
+                "color": h.color,
+                "created_at": h.created_at.isoformat() if h.created_at else None,
+            }
+            for h in highlights
+        ])
+    finally:
+        db.close()
+
+
+async def api_create_highlight(request: Request) -> JSONResponse:
+    """POST /api/projects/{name}/nodes/{node_id}/highlights - Create a highlight."""
+    from systemedu.storage.db import Highlight, get_session as get_db_session
+
+    project_name = request.path_params["name"]
+    node_id = request.path_params["node_id"]
+    body = await request.json()
+
+    db = get_db_session()
+    try:
+        h = Highlight(
+            user_id=body.get("user_id", "default"),
+            project_name=project_name,
+            knode_id=node_id,
+            tab=body["tab"],
+            page_index=body.get("page_index", 0),
+            text=body["text"],
+            start_offset=body["start_offset"],
+            end_offset=body["end_offset"],
+            note=body.get("note", ""),
+            color=body.get("color", "yellow"),
+        )
+        db.add(h)
+        db.commit()
+        db.refresh(h)
+        return JSONResponse(
+            {
+                "id": h.id,
+                "tab": h.tab,
+                "page_index": h.page_index,
+                "text": h.text,
+                "start_offset": h.start_offset,
+                "end_offset": h.end_offset,
+                "note": h.note,
+                "color": h.color,
+                "created_at": h.created_at.isoformat() if h.created_at else None,
+            },
+            status_code=201,
+        )
+    except Exception as e:
+        db.rollback()
+        return JSONResponse({"error": str(e)}, status_code=400)
+    finally:
+        db.close()
+
+
+async def api_delete_highlight(request: Request) -> JSONResponse:
+    """DELETE /api/projects/{name}/nodes/{node_id}/highlights/{highlight_id} - Delete a highlight."""
+    from systemedu.storage.db import Highlight, get_session as get_db_session
+
+    highlight_id = request.path_params["highlight_id"]
+
+    db = get_db_session()
+    try:
+        h = db.query(Highlight).filter_by(id=highlight_id).first()
+        if not h:
+            return JSONResponse({"error": "Not found"}, status_code=404)
+        db.delete(h)
+        db.commit()
+        return JSONResponse({"status": "deleted", "id": highlight_id})
+    except Exception as e:
+        db.rollback()
+        return JSONResponse({"error": str(e)}, status_code=400)
+    finally:
+        db.close()
+
+
 def create_app() -> Starlette:
     """Create the Starlette ASGI application."""
     global _start_time
@@ -1186,6 +1290,9 @@ def create_app() -> Starlette:
         Route("/api/projects/{name}/nodes/{node_id:int}/lesson", api_node_lesson, methods=["GET"]),
         Route("/api/projects/{name}/nodes/{node_id:int}/lesson/generate", api_generate_lesson, methods=["POST"]),
         Route("/api/projects/{name}/nodes/{node_id:int}/progress", api_update_progress, methods=["PATCH"]),
+        Route("/api/projects/{name}/nodes/{node_id:int}/highlights", api_get_highlights, methods=["GET"]),
+        Route("/api/projects/{name}/nodes/{node_id:int}/highlights", api_create_highlight, methods=["POST"]),
+        Route("/api/projects/{name}/nodes/{node_id:int}/highlights/{highlight_id:int}", api_delete_highlight, methods=["DELETE"]),
         Route("/api/agents", api_agents),
         Route("/api/skills", api_skills),
         Route("/api/mcp/servers", api_mcp_servers, methods=["GET"]),

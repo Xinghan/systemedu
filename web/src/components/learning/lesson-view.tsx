@@ -1,7 +1,7 @@
 "use client"
 
 import { useCallback, useEffect, useRef, useState } from "react"
-import { BookOpen } from "lucide-react"
+import { IconBook } from "./cartoon-icons"
 import { gateway } from "@/lib/api"
 import type { KnodeInfo, LessonContent, NodeProgress } from "@/lib/types/api"
 import { LessonGenerating } from "./lesson-generating"
@@ -14,6 +14,7 @@ interface LessonViewProps {
   progress: NodeProgress[]
   onNodeChange: (nodeId: number) => void
   onProgressUpdate: (nodeId: number, status: string) => void
+  onPageChange?: (tab: string, pageIndex: number, pageContent: string) => void
 }
 
 export function LessonView({
@@ -23,6 +24,7 @@ export function LessonView({
   progress,
   onNodeChange,
   onProgressUpdate,
+  onPageChange,
 }: LessonViewProps) {
   const [lesson, setLesson] = useState<LessonContent | null>(null)
   const [loading, setLoading] = useState(false)
@@ -144,7 +146,7 @@ export function LessonView({
   if (nodeId === null) {
     return (
       <div className="flex flex-col items-center justify-center h-full text-muted-foreground gap-3">
-        <BookOpen className="h-12 w-12 opacity-30" />
+        <IconBook className="h-12 w-12 opacity-30" />
         <div className="text-center">
           <p className="text-lg font-medium">选择知识节点开始学习</p>
           <p className="text-sm">点击左侧知识树中的节点</p>
@@ -192,9 +194,12 @@ export function LessonView({
     <LessonContentView
       knode={knode!}
       lesson={lesson}
+      projectName={projectName}
+      nodeId={nodeId!}
       onMarkComplete={handleMarkComplete}
       onRegenerate={handleRegenerate}
       onNavigate={handleNavigate}
+      onPageChange={onPageChange}
       hasPrev={nodeId > 0}
       hasNext={nodeId < allKnodes.length - 1}
       isCompleted={isCompleted}

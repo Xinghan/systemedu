@@ -7,6 +7,7 @@ import type {
   ConfigResponse,
   CreateProjectResponse,
   EnrollmentInfo,
+  HighlightInfo,
   LessonContent,
   MCPServer,
   NodeContext,
@@ -65,4 +66,13 @@ export const gateway = {
     api.get<EnrollmentInfo | null>(`/api/projects/${projectName}/enrollment?user_id=${userId}`),
   updateEnrollment: (projectName: string, body: { add_time_seconds?: number; status?: string; user_id?: string }) =>
     api.patch<EnrollmentInfo>(`/api/projects/${projectName}/enrollment`, body),
+  getHighlights: (projectName: string, nodeId: number, userId = "default") =>
+    api.get<HighlightInfo[]>(`/api/projects/${projectName}/nodes/${nodeId}/highlights?user_id=${userId}`),
+  createHighlight: (projectName: string, nodeId: number, data: {
+    tab: string; page_index: number; text: string; start_offset: number; end_offset: number;
+    note?: string; color?: string; user_id?: string;
+  }) =>
+    api.post<HighlightInfo>(`/api/projects/${projectName}/nodes/${nodeId}/highlights`, data),
+  deleteHighlight: (projectName: string, nodeId: number, highlightId: number) =>
+    api.delete<{ status: string; id: number }>(`/api/projects/${projectName}/nodes/${nodeId}/highlights/${highlightId}`),
 }

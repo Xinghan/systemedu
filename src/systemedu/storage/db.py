@@ -119,6 +119,31 @@ class Enrollment(Base):
     created_at = Column(DateTime, default=datetime.now)
 
 
+class Highlight(Base):
+    """User text highlight / annotation on lesson content."""
+
+    __tablename__ = "highlights"
+    __table_args__ = (
+        UniqueConstraint(
+            "user_id", "project_name", "knode_id", "tab", "start_offset",
+            name="uq_highlight",
+        ),
+    )
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(String(100), nullable=False, default="default")
+    project_name = Column(String(200), nullable=False)
+    knode_id = Column(Integer, nullable=False)
+    tab = Column(String(20), nullable=False)  # concept/examples/code_samples/...
+    page_index = Column(Integer, default=0)
+    text = Column(Text, nullable=False)
+    start_offset = Column(Integer, nullable=False)
+    end_offset = Column(Integer, nullable=False)
+    note = Column(Text, default="")
+    color = Column(String(20), default="yellow")
+    created_at = Column(DateTime, default=datetime.now)
+
+
 class LessonContent(Base):
     """AI-generated lesson content for a knowledge node."""
 

@@ -55,6 +55,22 @@ def _build_project_prompt_section(project_context) -> str:
     section = f"\n\n## 当前项目: {ctx.project.title}\n"
     section += f"项目描述: {ctx.project.description}\n"
 
+    # Full progress summary so AI can answer "我的进度如何" without tool calls
+    nodes = ctx.all_nodes_flat()
+    if ctx.progress:
+        status_icons = {
+            "locked": "🔒", "available": "📖", "in_progress": "⏳",
+            "passed": "✅", "submitted": "📤", "failed": "❌",
+        }
+        passed = sum(1 for p in ctx.progress if p.status.value == "passed")
+        total = len(ctx.progress)
+        section += f"\n## 学习进度: {passed}/{total} ({100 * passed // total if total else 0}%)\n"
+        for p in ctx.progress:
+            node = ctx.get_node_by_id(p.knode_id)
+            title = node.title if node else f"#{p.knode_id}"
+            icon = status_icons.get(p.status.value, "?")
+            section += f"{icon} [{p.knode_id}] {title} — {p.status.value}\n"
+
     current = ctx.current_node()
     if current:
         idx, node = current
@@ -65,18 +81,124 @@ def _build_project_prompt_section(project_context) -> str:
         section += f"内容类型: {node.content_type.value}\n"
         section += f"验收方式: {node.acceptance_type.value}\n"
 
-    available = ctx.available_nodes()
-    if available:
-        section += "\n## 可用节点列表\n"
-        for i, node in available:
-            status_icon = "→" if current and i == current[0] else " "
-            section += f"{status_icon} [{i}] {node.title} (难度 {node.difficulty_level})\n"
-
     section += (
         "\n你可以使用 complete_node 工具标记节点完成，"
         "使用 get_progress 工具查看学习进度。\n"
     )
     return section
+
+
+def _split_by_headings(markdown: str) -> list[str]:
+    """Split markdown by ## or ### headings into pages.
+
+    Logic mirrors the frontend splitByHeadings() utility.
+    """
+    if not markdown or not markdown.strip():
+        return [markdown or ""]
+
+    lines = markdown.split("\n")
+    pages: list[str] = []
+    current_page: list[str] = []
+
+    import re
+
+    for line in lines:
+        if re.match(r"^#{2,3}\s", line):
+            if current_page:
+                content = "\n".join(current_page).strip()
+                if content or pages:
+                    pages.append(content)
+            current_page = [line]
+        else:
+            current_page.append(line)
+
+    if current_page:
+        pages.append("\n".join(current_page).strip())
+
+    if not pages:
+        return [markdown.strip()]
+
+    if pages[0] == "" and len(pages) > 1:
+        pages.pop(0)
+
+    return pages if pages else [markdown.strip()]
+
+
+def _build_node_context(project_context, node_id: int, active_tab: str | None = None, page_index: int | None = None) -> str:
+    """Build per-message context for the active learning node.
+
+    Queries LessonContent and NodeContextCache from the DB,
+    returns a markdown section to append to the system prompt.
+    Content is kept concise (~2000 chars) to avoid token waste.
+    """
+    ctx = project_context
+    node = ctx.get_node_by_id(node_id)
+    if node is None:
+        return ""
+
+    parts = [f"\n\n## 学生当前正在学习的知识点 (ID: {node_id})"]
+    parts.append(f"标题: {node.title}")
+    parts.append(f"简介: {node.summary}")
+    parts.append(f"难度: {node.difficulty_level}/10")
+
+    # Query lesson content from DB
+    try:
+        from systemedu.storage.db import LessonContent, NodeContextCache, get_session as get_db_session
+
+        db = get_db_session()
+        try:
+            lesson = db.query(LessonContent).filter_by(
+                project_name=ctx.project.name, knode_id=node_id
+            ).first()
+
+            if lesson and lesson.status == "ready":
+                # If active_tab and page_index are given, inject specific page content
+                if active_tab and page_index is not None:
+                    tab_content = getattr(lesson, active_tab, "")
+                    if tab_content:
+                        pages = _split_by_headings(tab_content)
+                        if page_index < len(pages):
+                            page_text = pages[page_index]
+                            if len(page_text) > 1000:
+                                page_text = page_text[:1000] + "..."
+                            tab_labels = {
+                                "concept": "概念",
+                                "examples": "示例",
+                                "code_samples": "代码",
+                                "practice": "练习",
+                                "key_takeaways": "总结",
+                            }
+                            tab_label = tab_labels.get(active_tab, active_tab)
+                            parts.append(
+                                f"\n### 学生当前正在阅读的内容 (tab: {tab_label}, 第{page_index + 1}页/{len(pages)}页)\n{page_text}"
+                            )
+                else:
+                    # Fallback: inject concept summary if no specific page
+                    if lesson.concept:
+                        concept = lesson.concept[:500]
+                        if len(lesson.concept) > 500:
+                            concept += "..."
+                        parts.append(f"\n### 核心概念\n{concept}")
+                if lesson.key_takeaways:
+                    parts.append(f"\n### 要点总结\n{lesson.key_takeaways}")
+
+            # Query context cache
+            cache = db.query(NodeContextCache).filter_by(
+                project_name=ctx.project.name, knode_id=node_id
+            ).first()
+
+            if cache:
+                if cache.prerequisites_trace:
+                    parts.append(f"\n### 前置知识链\n{cache.prerequisites_trace}")
+                if cache.learning_suggestions:
+                    parts.append(f"\n### 学习建议\n{cache.learning_suggestions}")
+        finally:
+            db.close()
+    except Exception as e:
+        logger.debug(f"Failed to load node context from DB: {e}")
+
+    parts.append("\n请基于以上学习内容来回答学生的问题。不要注入 examples/code_samples/practice 的内容，学生已在页面上看到。")
+    return "\n".join(parts)
 
 
 class AgentRuntime:
@@ -241,14 +363,26 @@ class AgentRuntime:
             handler = await _make_handler(tool_name)
             self.tool_executor.register_tool(tool_name, handler, tool_schema)
 
+    @property
+    def _project_name(self) -> str | None:
+        """Return the project name if project context is available."""
+        if self._project_context is not None:
+            return self._project_context.project.name
+        return None
+
     async def _retrieve_memory(self, user_id: str, user_message: str) -> str:
-        """Retrieve relevant memories if mem0 is available."""
+        """Retrieve relevant memories if mem0 is available.
+
+        When a project context exists, memories are scoped to that project.
+        """
         if not get_config().memory.enabled:
             return ""
         try:
             from systemedu.memory.client import retrieve_memories
 
-            memories = retrieve_memories(user_id=user_id, query=user_message)
+            memories = retrieve_memories(
+                user_id=user_id, query=user_message, project_id=self._project_name
+            )
             if memories:
                 return "\n".join(f"- {m}" for m in memories)
         except Exception as e:
@@ -256,7 +390,10 @@ class AgentRuntime:
         return ""
 
     async def _store_memory(self, user_id: str, user_message: str, assistant_message: str):
-        """Store conversation in memory if mem0 is available."""
+        """Store conversation in memory if mem0 is available.
+
+        When a project context exists, memories are tagged with that project.
+        """
         if not get_config().memory.enabled:
             return
         try:
@@ -268,6 +405,7 @@ class AgentRuntime:
                     {"role": "user", "content": user_message},
                     {"role": "assistant", "content": assistant_message},
                 ],
+                project_id=self._project_name,
             )
         except Exception as e:
             logger.debug(f"Memory storage skipped: {e}")
@@ -321,15 +459,36 @@ class AgentRuntime:
         self,
         user_message: str,
         session: Session | None = None,
+        user_id: str = "default",
+        node_id: int | None = None,
+        active_tab: str | None = None,
+        page_index: int | None = None,
     ):
         """Process a message with streaming output.
 
         Yields chunks of the response as they arrive.
+        Supports tools (MCP + education) just like process_message.
+        If node_id is provided and project_context exists, the active node's
+        lesson content is injected into the system prompt for this message.
+        active_tab and page_index allow injecting specific page content.
         """
         if session is None:
             session = self.session_manager.create_session()
 
+        # Lazy MCP setup
+        await self._setup_mcp_tools()
+
         session.add_message("user", user_message)
+
+        # Retrieve memory
+        memory_context = await self._retrieve_memory(user_id, user_message)
+
+        # Build per-message system prompt with optional node context
+        system_prompt = self.system_prompt
+        if node_id is not None and self._project_context is not None:
+            node_context = _build_node_context(self._project_context, node_id, active_tab=active_tab, page_index=page_index)
+            if node_context:
+                system_prompt = system_prompt + node_context
 
         # Convert session to LangChain messages
         lc_messages = []
@@ -340,9 +499,23 @@ class AgentRuntime:
                 lc_messages.append(AIMessage(content=msg.content))
         lc_messages.append(HumanMessage(content=user_message))
 
+        # Get tool schemas
+        tools = self.tool_executor.get_tool_schemas() if self.tools_enabled else []
+
         full_response = ""
-        async for chunk in self._backend.stream(lc_messages, self.system_prompt):
-            full_response += chunk
-            yield chunk
+        async for event in self._backend.stream(
+            lc_messages,
+            system_prompt,
+            tools=tools,
+            tool_executor=self.tool_executor,
+            user_id=user_id,
+            memory_context=memory_context,
+        ):
+            if event["type"] == "chunk":
+                full_response += event["content"]
+            yield event
+
+        # Store memory
+        await self._store_memory(user_id, user_message, full_response)
 
         session.add_message("assistant", full_response)

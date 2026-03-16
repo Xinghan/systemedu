@@ -7,12 +7,14 @@ import {
   ArrowLeft,
   PanelLeftClose,
   PanelLeftOpen,
-  TreePine,
-  BookOpen,
-  FileText,
-  Lightbulb,
-  StickyNote,
 } from "lucide-react"
+import {
+  IconBook,
+  IconScroll,
+  IconBlueprint,
+  IconNote,
+  IconTree,
+} from "@/components/learning/cartoon-icons"
 import { Button } from "@/components/ui/button"
 import { Progress } from "@/components/ui/progress"
 import { ScrollArea } from "@/components/ui/scroll-area"
@@ -22,6 +24,15 @@ import { FloatingChat } from "@/components/learning/floating-chat"
 import { gateway } from "@/lib/api"
 import type { KnodeInfo, NodeProgress, ProjectDetail } from "@/lib/types/api"
 
+type SidebarNav = "tree" | "notes" | "materials" | "assignments"
+
+const SIDEBAR_NAVS: { id: SidebarNav; label: string; Icon: React.FC<{ className?: string }> }[] = [
+  { id: "tree", label: "知识树", Icon: IconTree },
+  { id: "notes", label: "笔记", Icon: IconNote },
+  { id: "materials", label: "资料", Icon: IconScroll },
+  { id: "assignments", label: "作业", Icon: IconBlueprint },
+]
+
 export default function LearnPage() {
   const params = useParams<{ projectName: string }>()
   const [detail, setDetail] = useState<ProjectDetail | null>(null)
@@ -30,8 +41,15 @@ export default function LearnPage() {
   const [activeNodeId, setActiveNodeId] = useState<number | null>(null)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [mobileTab, setMobileTab] = useState<"tree" | "content">("tree")
-  const [contentTab, setContentTab] = useState<number>(0)
+  const [sidebarNav, setSidebarNav] = useState<SidebarNav>("tree")
+  const [activeLessonTab, setActiveLessonTab] = useState<string>("concept")
+  const [activePage, setActivePage] = useState<number>(0)
   const sessionStartRef = useRef<number>(Date.now())
+
+  const handleLessonPageChange = useCallback((tab: string, pageIndex: number, _pageContent: string) => {
+    setActiveLessonTab(tab)
+    setActivePage(pageIndex)
+  }, [])
 
   useEffect(() => {
     if (!params.projectName) return
@@ -85,7 +103,6 @@ export default function LearnPage() {
 
   const handleNodeClick = useCallback((nodeId: number) => {
     setActiveNodeId(nodeId)
-    setContentTab(0) // Switch to 课程 tab
     setMobileTab("content")
   }, [])
 
@@ -122,54 +139,61 @@ export default function LearnPage() {
     )
   }
 
-  const CONTENT_TABS = [
-    { id: 0, label: "课程", Icon: BookOpen },
-    { id: 1, label: "学习资料", Icon: FileText },
-    { id: 2, label: "作业", Icon: FileText },
-    { id: 3, label: "AI建议", Icon: Lightbulb },
-    { id: 4, label: "笔记", Icon: StickyNote },
-  ]
+  /** Sidebar navigation buttons */
+  const sidebarNavBar = (
+    <div className="flex border-b shrink-0 px-2 gap-0.5">
+      {SIDEBAR_NAVS.map((nav) => {
+        const isActive = sidebarNav === nav.id
+        return (
+          <button
+            key={nav.id}
+            onClick={() => setSidebarNav(nav.id)}
+            className={`flex-1 flex flex-col items-center gap-0.5 py-2 text-xs font-medium transition-colors rounded-md ${
+              isActive
+                ? "text-primary bg-primary/10"
+                : "text-muted-foreground hover:text-foreground hover:bg-muted"
+            }`}
+          >
+            <nav.Icon className="h-4 w-4" />
+            {nav.label}
+          </button>
+        )
+      })}
+    </div>
+  )
 
-  /** Right-side content area with tab bar */
-  const contentArea = (
-    <div className="flex flex-col h-full">
-      {/* Tab bar */}
-      <div className="flex border-b shrink-0 px-4 pt-1 gap-1 overflow-x-auto">
-        {CONTENT_TABS.map((tab) => {
-          const isActive = contentTab === tab.id
-          return (
-            <button
-              key={tab.id}
-              onClick={() => setContentTab(tab.id)}
-              className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium whitespace-nowrap transition-colors border-b-2 ${
-                isActive
-                  ? "border-primary text-foreground"
-                  : "border-transparent text-muted-foreground hover:text-foreground"
-              }`}
-            >
-              <tab.Icon className="h-4 w-4" />
-              {tab.label}
-            </button>
-          )
-        })}
-      </div>
-
-      {/* Content — LessonView stays mounted to preserve state */}
-      <div className={`flex-1 min-h-0 ${contentTab === 0 ? "" : "hidden"}`}>
-        <LessonView
-          projectName={params.projectName}
-          nodeId={activeNodeId}
-          allKnodes={allKnodes}
-          progress={progressList}
-          onNodeChange={handleNodeChange}
-          onProgressUpdate={handleProgressUpdate}
-        />
-      </div>
-      {contentTab !== 0 && (
-        <div className="flex-1 min-h-0 flex items-center justify-center text-sm text-muted-foreground">
-          即将推出
+  /** Sidebar content based on active nav */
+  const sidebarContent = sidebarNav === "tree" ? (
+    <>
+      <ScrollArea className="flex-1 min-h-0">
+        <div className="p-3">
+          <KnowledgeTreeView
+            milestones={detail.milestones}
+            progress={detail.progress}
+            onNodeClick={handleNodeClick}
+          />
         </div>
-      )}
+      </ScrollArea>
+      <div className="p-3 border-t">
+        <div className="flex items-center gap-3">
+          <Progress value={pct} className="flex-1" />
+          <span className="text-xs text-muted-foreground shrink-0">
+            {totalPassed}/{totalNodes} ({pct}%)
+          </span>
+        </div>
+      </div>
+    </>
+  ) : (
+    <div className="flex-1 flex flex-col items-center justify-center text-muted-foreground gap-3 p-6">
+      {(() => {
+        const nav = SIDEBAR_NAVS.find((n) => n.id === sidebarNav)!
+        return (
+          <>
+            <nav.Icon className="h-12 w-12 opacity-40" />
+            <p className="text-sm">{nav.label} · 即将推出</p>
+          </>
+        )
+      })()}
     </div>
   )
 
@@ -177,7 +201,7 @@ export default function LearnPage() {
     <div className="flex flex-col w-full h-full overflow-hidden relative">
       {/* Desktop layout */}
       <div className="hidden md:flex flex-1 min-h-0">
-        {/* Left sidebar: knowledge tree */}
+        {/* Left sidebar */}
         {!sidebarCollapsed && (
           <div className="w-[320px] shrink-0 border-r flex flex-col">
             <div className="flex items-center gap-2 p-3 border-b">
@@ -195,23 +219,8 @@ export default function LearnPage() {
                 <PanelLeftClose className="h-4 w-4" />
               </Button>
             </div>
-            <ScrollArea className="flex-1 min-h-0">
-              <div className="p-3">
-                <KnowledgeTreeView
-                  milestones={detail.milestones}
-                  progress={detail.progress}
-                  onNodeClick={handleNodeClick}
-                />
-              </div>
-            </ScrollArea>
-            <div className="p-3 border-t">
-              <div className="flex items-center gap-3">
-                <Progress value={pct} className="flex-1" />
-                <span className="text-xs text-muted-foreground shrink-0">
-                  {totalPassed}/{totalNodes} ({pct}%)
-                </span>
-              </div>
-            </div>
+            {sidebarNavBar}
+            {sidebarContent}
           </div>
         )}
 
@@ -228,9 +237,8 @@ export default function LearnPage() {
           </div>
         )}
 
-        {/* Right: tabbed content area */}
+        {/* Right: lesson content */}
         <div className="flex-1 min-w-0 flex flex-col">
-          {/* Compact top bar (visible when sidebar collapsed) */}
           {sidebarCollapsed && (
             <div className="flex items-center gap-3 px-4 py-2 border-b shrink-0">
               <Link href={`/projects/${params.projectName}`}>
@@ -246,14 +254,22 @@ export default function LearnPage() {
             </div>
           )}
           <div className="flex-1 min-h-0 h-full">
-            {contentArea}
+            <LessonView
+              projectName={params.projectName}
+              nodeId={activeNodeId}
+              allKnodes={allKnodes}
+              progress={progressList}
+              onNodeChange={handleNodeChange}
+              onProgressUpdate={handleProgressUpdate}
+              onPageChange={handleLessonPageChange}
+            />
           </div>
         </div>
       </div>
 
       {/* Mobile layout */}
       <div className="md:hidden flex flex-col flex-1 min-h-0">
-        {/* Tab switcher: tree vs content */}
+        {/* Tab switcher: sidebar vs content */}
         <div className="flex border-b shrink-0">
           <button
             onClick={() => setMobileTab("tree")}
@@ -263,8 +279,8 @@ export default function LearnPage() {
                 : "text-muted-foreground"
             }`}
           >
-            <TreePine className="h-4 w-4" />
-            知识树
+            <IconTree className="h-4 w-4" />
+            导航
           </button>
           <button
             onClick={() => setMobileTab("content")}
@@ -274,7 +290,7 @@ export default function LearnPage() {
                 : "text-muted-foreground"
             }`}
           >
-            <BookOpen className="h-4 w-4" />
+            <IconBook className="h-4 w-4" />
             学习
           </button>
         </div>
@@ -289,33 +305,26 @@ export default function LearnPage() {
               </Link>
               <h2 className="font-semibold text-sm truncate">{detail.project.title}</h2>
             </div>
-            <ScrollArea className="flex-1 min-h-0">
-              <div className="p-3">
-                <KnowledgeTreeView
-                  milestones={detail.milestones}
-                  progress={detail.progress}
-                  onNodeClick={handleNodeClick}
-                />
-              </div>
-            </ScrollArea>
-            <div className="p-3 border-t shrink-0">
-              <div className="flex items-center gap-3">
-                <Progress value={pct} className="flex-1" />
-                <span className="text-xs text-muted-foreground shrink-0">
-                  {totalPassed}/{totalNodes} ({pct}%)
-                </span>
-              </div>
-            </div>
+            {sidebarNavBar}
+            {sidebarContent}
           </div>
         ) : (
           <div className="flex-1 min-h-0">
-            {contentArea}
+            <LessonView
+              projectName={params.projectName}
+              nodeId={activeNodeId}
+              allKnodes={allKnodes}
+              progress={progressList}
+              onNodeChange={handleNodeChange}
+              onProgressUpdate={handleProgressUpdate}
+              onPageChange={handleLessonPageChange}
+            />
           </div>
         )}
       </div>
 
       {/* Floating chat */}
-      <FloatingChat project={params.projectName} />
+      <FloatingChat project={params.projectName} nodeId={activeNodeId} activeTab={activeLessonTab} pageIndex={activePage} />
     </div>
   )
 }
