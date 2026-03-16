@@ -125,7 +125,7 @@ class Highlight(Base):
     __tablename__ = "highlights"
     __table_args__ = (
         UniqueConstraint(
-            "user_id", "project_name", "knode_id", "tab", "start_offset",
+            "user_id", "project_name", "knode_id", "tab", "page_index", "text",
             name="uq_highlight",
         ),
     )
@@ -162,6 +162,7 @@ class LessonContent(Base):
     practice = Column(Text, default="")
     key_takeaways = Column(Text, default="")
     quiz_data = Column(Text, default="")
+    interactive_lab = Column(Text, default="")
     content_type = Column(String(20), default="text")
     generated_at = Column(DateTime, nullable=True)
 

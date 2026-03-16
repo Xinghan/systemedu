@@ -6,6 +6,7 @@ import { IconStar, IconCheck, IconLightning, IconClock } from "./cartoon-icons"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { AnimatedExamplesView } from "./animated-examples"
+import { InteractiveLabView } from "./interactive-lab-view"
 import { PagedContentView } from "./paged-content-view"
 import type { KnodeInfo, LessonContent } from "@/lib/types/api"
 
@@ -28,6 +29,7 @@ interface LessonContentViewProps {
 const TAB_CONFIG = [
   { key: "concept", label: "概念", field: "concept" as const },
   { key: "examples", label: "示例", field: "examples" as const },
+  { key: "interactive_lab", label: "实验", field: "interactive_lab" as const },
   { key: "code_samples", label: "代码", field: "code_samples" as const },
   { key: "practice", label: "练习", field: "practice" as const },
   { key: "key_takeaways", label: "总结", field: "key_takeaways" as const },
@@ -135,6 +137,8 @@ export function LessonContentView({
             <div className="max-w-5xl mx-auto px-6 py-4">
               {(availableTabs[activeTab]?.key ?? availableTabs[0]?.key) === "examples" ? (
                 <AnimatedExamplesView content={lesson[availableTabs[activeTab]?.field ?? availableTabs[0].field]} />
+              ) : (availableTabs[activeTab]?.key ?? availableTabs[0]?.key) === "interactive_lab" ? (
+                <InteractiveLabView html={lesson[availableTabs[activeTab]?.field ?? availableTabs[0].field]} />
               ) : (
                 <PagedContentView
                   content={lesson[availableTabs[activeTab]?.field ?? availableTabs[0].field]}

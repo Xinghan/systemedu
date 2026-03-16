@@ -690,6 +690,7 @@ async def api_node_lesson(request: Request) -> JSONResponse:
                     "practice": "",
                     "key_takeaways": "",
                     "quiz_data": "[]",
+                    "interactive_lab": "",
                     "content_type": "text",
                     "generated_at": None,
                 }
@@ -784,9 +785,20 @@ async def api_update_progress(request: Request) -> JSONResponse:
                 record.passed_at = datetime.now()
         db.commit()
 
-        # Sync enrollment nodes_passed when a node is passed
+        # When a node is passed, unlock dependent nodes and sync enrollment
+        unlocked_ids: list[int] = []
         if new_status == "passed":
+            from systemedu.education.project_loader import load_project_context, save_progress
+            from systemedu.education.progress import unlock_next_nodes
             from systemedu.storage.db import Enrollment
+
+            try:
+                ctx = load_project_context(name, user_id=user_id)
+                unlocked_ids = unlock_next_nodes(ctx.tree, ctx.progress, node_id)
+                if unlocked_ids:
+                    save_progress(user_id, name, ctx.progress)
+            except Exception:
+                logger.exception("Failed to unlock next nodes")
 
             enrollment = (
                 db.query(Enrollment)
@@ -807,12 +819,32 @@ async def api_update_progress(request: Request) -> JSONResponse:
                     enrollment.status = "completed"
                 db.commit()
 
+        # Return full progress list so frontend can update all nodes
+        all_records = (
+            db.query(ProgressRecord)
+            .filter_by(user_id=user_id, project_name=name)
+            .order_by(ProgressRecord.knode_id)
+            .all()
+        )
+        progress_list = [
+            {
+                "knode_id": r.knode_id,
+                "status": r.status,
+                "attempts": r.attempts,
+                "best_score": r.best_score,
+                "passed_at": r.passed_at.isoformat() if r.passed_at else None,
+            }
+            for r in all_records
+        ]
+
         return JSONResponse(
             {
                 "knode_id": node_id,
                 "status": record.status,
                 "attempts": record.attempts,
                 "best_score": record.best_score,
+                "unlocked": unlocked_ids,
+                "progress": progress_list,
             }
         )
     finally:

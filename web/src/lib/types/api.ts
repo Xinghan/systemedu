@@ -91,6 +91,15 @@ export interface NodeProgress {
   passed_at: string | null
 }
 
+export interface UpdateProgressResponse {
+  knode_id: number
+  status: string
+  attempts: number
+  best_score: number
+  unlocked: number[]
+  progress: NodeProgress[]
+}
+
 export interface EnrollmentInfo {
   status: "active" | "paused" | "completed"
   started_at: string | null
@@ -160,6 +169,7 @@ export interface LessonContent {
   practice: string
   key_takeaways: string
   quiz_data: string
+  interactive_lab: string
   content_type: string
   generated_at: string | null
 }
