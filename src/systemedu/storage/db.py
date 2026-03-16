@@ -171,12 +171,33 @@ _engine = None
 _session_factory = None
 
 
+def _migrate_schema(engine):
+    """Add missing columns to existing tables (lightweight auto-migration)."""
+    import sqlalchemy as sa
+
+    inspector = sa.inspect(engine)
+
+    # Map: (table_name, column_name, column_DDL)
+    expected_columns = [
+        ("lesson_content", "interactive_lab", "TEXT DEFAULT ''"),
+    ]
+
+    with engine.connect() as conn:
+        for table, col, ddl in expected_columns:
+            if inspector.has_table(table):
+                existing = {c["name"] for c in inspector.get_columns(table)}
+                if col not in existing:
+                    conn.execute(sa.text(f"ALTER TABLE {table} ADD COLUMN {col} {ddl}"))
+                    conn.commit()
+
+
 def get_engine():
     global _engine
     if _engine is None:
         DB_FILE.parent.mkdir(parents=True, exist_ok=True)
         _engine = create_engine(f"sqlite:///{DB_FILE}", echo=False)
         Base.metadata.create_all(_engine)
+        _migrate_schema(_engine)
     return _engine
 
 
