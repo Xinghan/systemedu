@@ -223,10 +223,10 @@ def _ensure_game_templates(
 
 
 def _generate_interactive_lab(node_title: str, node_summary: str, difficulty: int, llm) -> str:
-    """Two-stage LLM pipeline: design experiment, then generate runnable React HTML.
+    """Generate a runnable React HTML page as an interactive lab for a knowledge node.
 
-    Stage 1: LLM designs the interactive experiment (parameters, visuals, logic).
-    Stage 2: LLM generates a complete standalone HTML page with React 18 + SVG.
+    Single-stage LLM: directly generates a complete standalone HTML page with
+    drag-and-drop, click, or other hands-on interactions appropriate for the topic.
 
     Returns the full HTML string, or empty string on failure.
     """
@@ -234,68 +234,40 @@ def _generate_interactive_lab(node_title: str, node_summary: str, difficulty: in
 
     difficulty_desc = "入门级" if difficulty <= 3 else "中级" if difficulty <= 6 else "高级"
 
-    # --- Stage 1: Experiment Design ---
-    design_prompt = (
-        f"你是一个教育互动实验设计师。请为以下知识点设计一个交互式实验模拟器。\n\n"
+    prompt = (
+        f"你是一个儿童教育互动游戏开发专家。请为以下知识点生成一个完整的、可在浏览器中独立运行的交互式小游戏 HTML 页面。\n\n"
         f"知识点：{node_title}\n"
         f"简介：{node_summary}\n"
         f"难度：{difficulty_desc}\n\n"
-        f"请输出实验设计 JSON（不要包含 markdown 代码块标记）：\n"
-        f'{{\n'
-        f'  "experiment_title": "实验名称",\n'
-        f'  "description": "一句话描述",\n'
-        f'  "parameters": [\n'
-        f'    {{"name": "param1", "label": "显示名", "min": 0, "max": 100, "default": 50, "unit": "单位"}}\n'
-        f'  ],\n'
-        f'  "visualization": "描述可视化效果（如：左侧滑块控制面板，右侧 SVG 画布显示…）",\n'
-        f'  "formula_logic": "描述计算逻辑",\n'
-        f'  "interaction": "描述用户操作（如：拖动滑块调节参数，点击按钮，观察动画）"\n'
-        f'}}\n\n'
-        f"设计要求：\n"
-        f"- 实验必须有 2-4 个可调参数（滑块或按钮）\n"
-        f"- 必须有直观的可视化反馈（SVG 图形随参数实时变化）\n"
-        f"- 适合{difficulty_desc}学习者，操作简单直观\n"
-        f"- 直接输出 JSON，不要其他文字"
-    )
-
-    try:
-        response = llm.invoke([HumanMessage(content=design_prompt)])
-        design_text = response.content.strip()
-        # Strip markdown code fences
-        if design_text.startswith("```"):
-            lines = design_text.split("\n")
-            design_text = "\n".join(lines[1:-1] if lines[-1].strip() == "```" else lines[1:])
-            design_text = design_text.strip()
-
-        # Validate it's valid JSON
-        design_json = json.loads(design_text)
-        logger.info(f"Stage 1 done: experiment design for '{node_title}': {design_json.get('experiment_title', '?')}")
-    except Exception:
-        logger.exception(f"Interactive lab stage 1 failed for '{node_title}'")
-        return ""
-
-    # --- Stage 2: React Code Generation ---
-    code_prompt = (
-        f"你是一个前端开发专家。请根据以下实验设计，生成一个完整的、可在浏览器中独立运行的 HTML 页面。\n\n"
-        f"实验设计：\n{json.dumps(design_json, ensure_ascii=False, indent=2)}\n\n"
-        f"技术要求：\n"
-        f"- 使用 React 18（通过 CDN: https://unpkg.com/react@18/umd/react.production.min.js 和 https://unpkg.com/react-dom@18/umd/react-dom.production.min.js）\n"
+        f"【游戏设计原则】\n"
+        f"- 游戏必须是**直接动手操作**的，而不是调参数/滑块的模拟器\n"
+        f"- 优先使用以下交互模式（根据知识点选最合适的）：\n"
+        f"  1. **拖拽分类**：屏幕上有若干物品（如树叶、动物、食物），下方有分类框，用户把物品拖到正确的框里\n"
+        f"  2. **点击选择**：展示场景，用户点击正确的选项，有即时反馈（对/错动画）\n"
+        f"  3. **拖拽排序**：把打乱的步骤/元素拖拽成正确顺序\n"
+        f"  4. **连线配对**：左右两列，用户点击/拖拽连线\n"
+        f"  5. **操作模拟**：简单的操作+观察因果关系（如：点击浇水→植物长大）\n"
+        f"- 不要使用滑块调参数的模式！不要做仪表盘！\n"
+        f"- 游戏要有明确的目标、即时反馈（正确/错误提示）、完成后的得分或鼓励\n"
+        f"- 适合{difficulty_desc}儿童，操作简单直观，视觉丰富有趣\n\n"
+        f"【技术要求】\n"
+        f"- 使用 React 18（CDN: https://unpkg.com/react@18/umd/react.production.min.js, https://unpkg.com/react-dom@18/umd/react-dom.production.min.js）\n"
         f"- 使用 Babel standalone（https://unpkg.com/@babel/standalone/babel.min.js）编译 JSX\n"
-        f"- 所有 CSS 内联在 <style> 标签中，使用现代简洁风格\n"
-        f"- 使用 SVG 做可视化，不依赖外部图片或库\n"
-        f"- 必须使用 React.useState 管理参数状态\n"
-        f"- 必须有滑块（input range）或按钮等交互控件\n"
-        f"- 参数变化时可视化必须实时更新\n"
-        f"- 页面背景色为白色，字体使用 system-ui\n"
-        f"- 布局：上方标题和描述，中间左侧控制面板（滑块+数值显示），右侧 SVG 可视化区域\n"
-        f"- 整个页面代码在一个完整的 <!DOCTYPE html><html>...</html> 中\n"
-        f"- script type 必须是 text/babel\n"
-        f"- 使用 ReactDOM.createRoot 渲染\n\n"
-        f"直接输出完整 HTML 代码，不要包含 markdown 代码块标记，不要输出任何其他文字。"
+        f"- 所有 CSS 内联在 <style> 标签中\n"
+        f"- 用 SVG 或 CSS 画物品图形（如用不同颜色/形状的 SVG 代表不同树叶），不依赖外部图片\n"
+        f"- 拖拽使用 HTML5 drag & drop API（onDragStart, onDragOver, onDrop）\n"
+        f"- 使用 React.useState 管理游戏状态\n"
+        f"- 页面背景白色，字体 system-ui，圆角卡片风格\n"
+        f"- 所有内容在一个不超过 800px 宽的居中容器内\n"
+        f"- 整个页面在 <!DOCTYPE html><html>...</html> 中，完整可运行\n"
+        f"- script type 为 text/babel，使用 ReactDOM.createRoot\n"
+        f"- 页面加载后通过 window.parent.postMessage({{type:'lab-height',height:document.body.scrollHeight}},'*') 通知父页面高度\n"
+        f"  并在内容变化时也发送（用 ResizeObserver 监听 body）\n\n"
+        f"直接输出完整 HTML 代码，不要包含 markdown 代码块标记，不要输出其他任何文字。"
     )
 
     try:
-        response = llm.invoke([HumanMessage(content=code_prompt)])
+        response = llm.invoke([HumanMessage(content=prompt)])
         html_code = response.content.strip()
         # Strip markdown code fences
         if html_code.startswith("```"):
@@ -303,15 +275,15 @@ def _generate_interactive_lab(node_title: str, node_summary: str, difficulty: in
             html_code = "\n".join(lines[1:-1] if lines[-1].strip() == "```" else lines[1:])
             html_code = html_code.strip()
 
-        # Basic validation: must contain key markers
+        # Basic validation
         if "<html" not in html_code.lower() or "react" not in html_code.lower():
-            logger.warning(f"Interactive lab stage 2 output doesn't look like valid HTML+React for '{node_title}'")
+            logger.warning(f"Interactive lab output doesn't look like valid HTML+React for '{node_title}'")
             return ""
 
-        logger.info(f"Stage 2 done: generated {len(html_code)} chars of HTML for '{node_title}'")
+        logger.info(f"Generated interactive lab: {len(html_code)} chars for '{node_title}'")
         return html_code
     except Exception:
-        logger.exception(f"Interactive lab stage 2 failed for '{node_title}'")
+        logger.exception(f"Interactive lab generation failed for '{node_title}'")
         return ""
 
 
