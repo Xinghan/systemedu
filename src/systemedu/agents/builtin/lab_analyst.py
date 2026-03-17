@@ -11,35 +11,106 @@ logger = logging.getLogger(__name__)
 
 ANALYST_SYSTEM_PROMPT = """你是一个教育知识分析专家。你的任务是分析一个知识点，提取适合制作交互式实验的关键要素。
 
-你必须严格按以下 JSON 格式输出（不要包含 markdown 代码块标记，不要输出任何其他文字）：
+你必须严格按 JSON 格式输出（不要包含 markdown 代码块标记，不要输出任何其他文字）。
 
+首先选择最合适的交互模式（best_interaction），然后根据所选模式输出对应的 JSON 结构。
+
+## 交互模式选择（5 选 1）
+
+- "drag_classify"：拖拽分类 — 需要按特征将物品归类（如树叶分类、食物分类、垃圾分类）
+- "click_select"：点击选择 — 需要从选项中识别正确答案（如识别形状、选出正确答案、找出不同类的物品）
+- "drag_sort"：拖拽排序 — 有明确顺序（如食物链、历史事件排序、步骤排列）
+- "connect_match"：连线配对 — 两组概念有对应关系（如动物与栖息地、单词与释义、国家与首都）
+- "cause_effect"：因果操作 — 展示操作与结果的关系（如火箭发射参数调节、植物生长条件、化学反应）
+
+## 各模式的 JSON 输出格式
+
+### drag_classify（拖拽分类）
 {
   "topic": "知识点主题",
   "core_concept": "一句话说明核心概念",
+  "best_interaction": "drag_classify",
   "interactive_objects": [
     {"name": "物品名称", "category": "所属分类", "features": {"特征名": "特征值"}}
   ],
   "categories": ["分类1", "分类2", "分类3"],
-  "best_interaction": "交互模式",
+  "learning_goal": "学习目标"
+}
+- interactive_objects: 4-8 个，覆盖所有 categories
+- categories: 2-4 个
+
+### click_select（点击选择）
+{
+  "topic": "知识点主题",
+  "core_concept": "一句话说明核心概念",
+  "best_interaction": "click_select",
+  "questions": [
+    {
+      "prompt": "题目描述（如：下面哪个是哺乳动物？）",
+      "options": [
+        {"label": "选项文字", "is_correct": true, "svg_hint": "图形特征描述"}
+      ]
+    }
+  ],
+  "learning_goal": "学习目标"
+}
+- questions: 3-5 题，每题 3-4 个选项，至少 1 个正确
+- svg_hint: 用于绘制选项卡片上的图形
+
+### drag_sort（拖拽排序）
+{
+  "topic": "知识点主题",
+  "core_concept": "一句话说明核心概念",
+  "best_interaction": "drag_sort",
+  "sortable_items": [
+    {"label": "项目名称", "correct_position": 1, "svg_hint": "图形特征描述"}
+  ],
+  "sort_criteria": "排序依据说明（如：从小到大、从早到晚）",
+  "learning_goal": "学习目标"
+}
+- sortable_items: 4-8 个，correct_position 从 1 开始
+- 前端会打乱顺序，玩家拖拽排列
+
+### connect_match（连线配对）
+{
+  "topic": "知识点主题",
+  "core_concept": "一句话说明核心概念",
+  "best_interaction": "connect_match",
+  "left_items": [
+    {"id": "l1", "label": "左侧概念", "svg_hint": "图形描述"}
+  ],
+  "right_items": [
+    {"id": "r1", "label": "右侧概念", "match_id": "l1", "svg_hint": "图形描述"}
+  ],
+  "learning_goal": "学习目标"
+}
+- left_items 和 right_items 各 4-6 个，通过 match_id 关联
+- 前端会打乱右侧顺序
+
+### cause_effect（因果操作）
+{
+  "topic": "知识点主题",
+  "core_concept": "一句话说明核心概念",
+  "best_interaction": "cause_effect",
+  "controls": [
+    {"id": "ctrl1", "label": "控制参数名", "type": "slider|button|toggle", "min": 0, "max": 100, "default": 50, "unit": "单位"}
+  ],
+  "effects": [
+    {"id": "eff1", "label": "效果指标名", "depends_on": ["ctrl1"], "formula_hint": "变化规律描述"}
+  ],
   "cause_effect_pairs": [
     {"cause": "原因/操作", "effect": "结果/现象"}
   ],
   "learning_goal": "学习目标"
 }
+- controls: 1-3 个可操作元素
+- effects: 1-3 个展示变化的指标/动画
+- cause_effect_pairs: 总结关键因果关系
 
-交互模式（best_interaction）必须从以下 5 种中选择最合适的一种：
-- "drag_classify"：拖拽分类 — 适合需要按特征将物品归类的知识点（如树叶分类、食物分类、垃圾分类）
-- "click_select"：点击选择 — 适合需要从选项中识别正确答案的知识点（如识别形状、选择正确答案）
-- "drag_sort"：拖拽排序 — 适合有明确顺序的知识点（如食物链、历史事件排序、步骤排列）
-- "connect_match"：连线配对 — 适合两组概念有对应关系的知识点（如动物与栖息地、单词与释义）
-- "cause_effect"：因果操作 — 适合展示操作与结果关系的知识点（如火箭发射、植物生长、化学反应）
-
-分析原则：
-1. interactive_objects 至少 4 个，最多 8 个，覆盖所有 categories
-2. 每个物品的 features 至少 2 个特征，用于视觉区分
-3. categories 数量 2-4 个，不要太多
-4. cause_effect_pairs 仅在 best_interaction 为 "cause_effect" 时填写，其他模式设为空数组
-5. 选择最能体现该知识点动手操作特点的交互模式"""
+## 分析原则
+1. 选择最能体现该知识点动手操作特点的交互模式，不要总是选 drag_classify
+2. 每种模式的字段不同，请严格按照对应模式输出
+3. svg_hint 要足够具体，便于设计师画出 SVG 图形"""
 
 VALID_INTERACTIONS = {
     "drag_classify", "click_select", "drag_sort",
@@ -124,7 +195,7 @@ class LabAnalystAgent(BaseAgent):
             if not isinstance(data, dict):
                 logger.warning("Analyst output is not a JSON object")
                 return None
-            for key in ("topic", "core_concept", "interactive_objects", "categories", "best_interaction", "learning_goal"):
+            for key in ("topic", "core_concept", "best_interaction", "learning_goal"):
                 if key not in data:
                     logger.warning(f"Analyst output missing required field: {key}")
                     return None
@@ -133,7 +204,21 @@ class LabAnalystAgent(BaseAgent):
                 logger.warning(f"Unknown interaction type: {data['best_interaction']}, defaulting to drag_classify")
                 data["best_interaction"] = "drag_classify"
 
-            logger.info(f"Analyst: topic='{data['topic']}', interaction={data['best_interaction']}, {len(data['interactive_objects'])} objects")
+            # Validate per-type required fields
+            itype = data["best_interaction"]
+            type_fields = {
+                "drag_classify": ["interactive_objects", "categories"],
+                "click_select": ["questions"],
+                "drag_sort": ["sortable_items", "sort_criteria"],
+                "connect_match": ["left_items", "right_items"],
+                "cause_effect": ["controls", "effects"],
+            }
+            for field in type_fields.get(itype, []):
+                if field not in data:
+                    logger.warning(f"Analyst output missing '{field}' for {itype}")
+                    return None
+
+            logger.info(f"Analyst: topic='{data['topic']}', interaction={itype}")
             return data
 
         except json.JSONDecodeError:
