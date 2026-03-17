@@ -744,6 +744,37 @@ async def api_generate_lesson(request: Request) -> JSONResponse:
         return JSONResponse({"error": str(e)}, status_code=500)
 
 
+async def api_lesson_progress(request: Request) -> JSONResponse:
+    """GET /api/projects/{name}/nodes/{node_id}/lesson/progress - Get lesson generation pipeline progress."""
+    name = request.path_params["name"]
+    node_id = int(request.path_params["node_id"])
+
+    from systemedu.storage.db import LessonGenerationProgress, get_session as get_db_session
+
+    db = get_db_session()
+    try:
+        records = (
+            db.query(LessonGenerationProgress)
+            .filter_by(project_name=name, knode_id=node_id)
+            .order_by(LessonGenerationProgress.id)
+            .all()
+        )
+        return JSONResponse([
+            {
+                "step_name": r.step_name,
+                "step_label": r.step_label,
+                "status": r.status,
+                "agent_name": r.agent_name or "",
+                "started_at": r.started_at.isoformat() if r.started_at else None,
+                "completed_at": r.completed_at.isoformat() if r.completed_at else None,
+                "output_preview": r.output_preview or "",
+            }
+            for r in records
+        ])
+    finally:
+        db.close()
+
+
 async def api_update_progress(request: Request) -> JSONResponse:
     """PATCH /api/projects/{name}/nodes/{node_id}/progress - Update node progress status."""
     name = request.path_params["name"]
@@ -1320,6 +1351,7 @@ def create_app() -> Starlette:
         Route("/api/projects/{name}/nodes/{node_id:int}/context", api_node_context),
         Route("/api/projects/{name}/nodes/{node_id:int}/lesson", api_node_lesson, methods=["GET"]),
         Route("/api/projects/{name}/nodes/{node_id:int}/lesson/generate", api_generate_lesson, methods=["POST"]),
+        Route("/api/projects/{name}/nodes/{node_id:int}/lesson/progress", api_lesson_progress, methods=["GET"]),
         Route("/api/projects/{name}/nodes/{node_id:int}/progress", api_update_progress, methods=["PATCH"]),
         Route("/api/projects/{name}/nodes/{node_id:int}/highlights", api_get_highlights, methods=["GET"]),
         Route("/api/projects/{name}/nodes/{node_id:int}/highlights", api_create_highlight, methods=["POST"]),

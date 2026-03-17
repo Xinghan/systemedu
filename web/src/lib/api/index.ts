@@ -9,9 +9,11 @@ import type {
   EnrollmentInfo,
   HighlightInfo,
   LessonContent,
+  LessonGenerationStep,
   MCPServer,
   NodeContext,
   NodeProgress,
+  UpdateProgressResponse,
   ProjectDetail,
   ProjectSummary,
   SessionDetail,
@@ -54,8 +56,10 @@ export const gateway = {
     api.get<LessonContent>(`/api/projects/${projectName}/nodes/${nodeId}/lesson`),
   generateLesson: (projectName: string, nodeId: number, regenerate = false) =>
     api.post<LessonContent>(`/api/projects/${projectName}/nodes/${nodeId}/lesson/generate`, { regenerate }),
+  lessonProgress: (projectName: string, nodeId: number) =>
+    api.get<LessonGenerationStep[]>(`/api/projects/${projectName}/nodes/${nodeId}/lesson/progress`),
   updateNodeProgress: (projectName: string, nodeId: number, status: string, userId = "default") =>
-    api.patch<NodeProgress>(`/api/projects/${projectName}/nodes/${nodeId}/progress`, { status, user_id: userId }),
+    api.patch<UpdateProgressResponse>(`/api/projects/${projectName}/nodes/${nodeId}/progress`, { status, user_id: userId }),
   previewTree: (treeData: Record<string, unknown>) =>
     api.post<TreePreviewResponse>("/api/projects/preview-tree", { tree_data: treeData }),
   createProject: (name: string, title: string, treeData: Record<string, unknown>) =>

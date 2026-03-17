@@ -205,6 +205,16 @@ export interface HighlightInfo {
   created_at: string | null
 }
 
+export interface LessonGenerationStep {
+  step_name: string
+  step_label: string
+  status: "pending" | "in_progress" | "completed" | "failed"
+  agent_name: string
+  started_at: string | null
+  completed_at: string | null
+  output_preview: string
+}
+
 export interface WSMessage {
   type: "chunk" | "done" | "error" | "tool_call" | "tool_result"
   content?: string

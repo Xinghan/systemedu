@@ -144,6 +144,23 @@ class Highlight(Base):
     created_at = Column(DateTime, default=datetime.now)
 
 
+class LessonGenerationProgress(Base):
+    """Tracks step-by-step progress of lesson generation pipeline."""
+
+    __tablename__ = "lesson_generation_progress"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    project_name = Column(String(200), nullable=False)
+    knode_id = Column(Integer, nullable=False)
+    step_name = Column(String(50), nullable=False)
+    step_label = Column(String(100), nullable=False)
+    status = Column(String(20), default="pending")
+    agent_name = Column(String(50), default="")
+    started_at = Column(DateTime, nullable=True)
+    completed_at = Column(DateTime, nullable=True)
+    output_preview = Column(Text, default="")
+
+
 class LessonContent(Base):
     """AI-generated lesson content for a knowledge node."""
 

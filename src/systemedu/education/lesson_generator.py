@@ -222,69 +222,135 @@ def _ensure_game_templates(
     return examples_content
 
 
-def _generate_interactive_lab(node_title: str, node_summary: str, difficulty: int, llm) -> str:
-    """Generate a runnable React HTML page as an interactive lab for a knowledge node.
+def _generate_interactive_lab(
+    node_title: str,
+    node_summary: str,
+    difficulty: int,
+    llm,
+    lesson_plan: dict | None = None,
+    progress_callback=None,
+) -> str:
+    """Generate a runnable React HTML page using the 3-Agent pipeline.
 
-    Single-stage LLM: directly generates a complete standalone HTML page with
-    drag-and-drop, click, or other hands-on interactions appropriate for the topic.
+    Pipeline: LabAnalystAgent → LabDesignerAgent → LabCoderAgent
+
+    Falls back gracefully if any agent fails.
+
+    Args:
+        node_title: Title of the knowledge node.
+        node_summary: Brief summary.
+        difficulty: Difficulty level (1-10).
+        llm: LLM instance.
+        lesson_plan: Optional teaching strategy from LessonPlannerAgent.
+        progress_callback: Optional callback(step_name, status, preview).
 
     Returns the full HTML string, or empty string on failure.
     """
-    from langchain_core.messages import HumanMessage
+    from systemedu.agents.builtin.lab_analyst import LabAnalystAgent
+    from systemedu.agents.builtin.lab_designer import LabDesignerAgent
+    from systemedu.agents.builtin.lab_coder import LabCoderAgent
 
-    difficulty_desc = "入门级" if difficulty <= 3 else "中级" if difficulty <= 6 else "高级"
-
-    prompt = (
-        f"你是一个儿童教育互动游戏开发专家。请为以下知识点生成一个完整的、可在浏览器中独立运行的交互式小游戏 HTML 页面。\n\n"
-        f"知识点：{node_title}\n"
-        f"简介：{node_summary}\n"
-        f"难度：{difficulty_desc}\n\n"
-        f"【游戏设计原则】\n"
-        f"- 游戏必须是**直接动手操作**的，而不是调参数/滑块的模拟器\n"
-        f"- 优先使用以下交互模式（根据知识点选最合适的）：\n"
-        f"  1. **拖拽分类**：屏幕上有若干物品（如树叶、动物、食物），下方有分类框，用户把物品拖到正确的框里\n"
-        f"  2. **点击选择**：展示场景，用户点击正确的选项，有即时反馈（对/错动画）\n"
-        f"  3. **拖拽排序**：把打乱的步骤/元素拖拽成正确顺序\n"
-        f"  4. **连线配对**：左右两列，用户点击/拖拽连线\n"
-        f"  5. **操作模拟**：简单的操作+观察因果关系（如：点击浇水→植物长大）\n"
-        f"- 不要使用滑块调参数的模式！不要做仪表盘！\n"
-        f"- 游戏要有明确的目标、即时反馈（正确/错误提示）、完成后的得分或鼓励\n"
-        f"- 适合{difficulty_desc}儿童，操作简单直观，视觉丰富有趣\n\n"
-        f"【技术要求】\n"
-        f"- 使用 React 18（CDN: https://unpkg.com/react@18/umd/react.production.min.js, https://unpkg.com/react-dom@18/umd/react-dom.production.min.js）\n"
-        f"- 使用 Babel standalone（https://unpkg.com/@babel/standalone/babel.min.js）编译 JSX\n"
-        f"- 所有 CSS 内联在 <style> 标签中\n"
-        f"- 用 SVG 或 CSS 画物品图形（如用不同颜色/形状的 SVG 代表不同树叶），不依赖外部图片\n"
-        f"- 拖拽使用 HTML5 drag & drop API（onDragStart, onDragOver, onDrop）\n"
-        f"- 使用 React.useState 管理游戏状态\n"
-        f"- 页面背景白色，字体 system-ui，圆角卡片风格\n"
-        f"- 所有内容在一个不超过 800px 宽的居中容器内\n"
-        f"- 【重要】页面会在 600px 高的 iframe 中显示，所以整体布局必须紧凑，适配 600px 高度，不要纵向堆叠太多内容\n"
-        f"- html 和 body 设置 margin:0; padding:0; overflow:hidden; height:100vh; 确保不出现滚动条\n"
-        f"- 整个页面在 <!DOCTYPE html><html>...</html> 中，完整可运行\n"
-        f"- script type 为 text/babel，使用 ReactDOM.createRoot\n\n"
-        f"直接输出完整 HTML 代码，不要包含 markdown 代码块标记，不要输出其他任何文字。"
-    )
-
-    try:
-        response = llm.invoke([HumanMessage(content=prompt)])
-        html_code = response.content.strip()
-        # Strip markdown code fences
-        if html_code.startswith("```"):
-            lines = html_code.split("\n")
-            html_code = "\n".join(lines[1:-1] if lines[-1].strip() == "```" else lines[1:])
-            html_code = html_code.strip()
-
-        # Basic validation
-        if "<html" not in html_code.lower() or "react" not in html_code.lower():
-            logger.warning(f"Interactive lab output doesn't look like valid HTML+React for '{node_title}'")
-            return ""
-
-        logger.info(f"Generated interactive lab: {len(html_code)} chars for '{node_title}'")
-        return html_code
-    except Exception:
-        logger.exception(f"Interactive lab generation failed for '{node_title}'")
+    # Stage 1: Analyst
+    if progress_callback:
+        progress_callback("lab_analyst", "in_progress", "")
+    analyst = LabAnalystAgent(llm=llm)
+    analysis = analyst.analyze(node_title, node_summary, difficulty, lesson_plan=lesson_plan)
+    if not analysis:
+        logger.warning(f"Lab analyst returned None for '{node_title}'")
+        if progress_callback:
+            progress_callback("lab_analyst", "failed", "")
         return ""
+    preview = f"交互模式: {analysis.get('best_interaction', '?')}, {len(analysis.get('interactive_objects', []))} 个物品"
+    if progress_callback:
+        progress_callback("lab_analyst", "completed", preview)
+
+    # Stage 2: Designer
+    if progress_callback:
+        progress_callback("lab_designer", "in_progress", "")
+    designer = LabDesignerAgent(llm=llm)
+    design = designer.design(analysis, difficulty)
+    if not design:
+        logger.warning(f"Lab designer returned None for '{node_title}'")
+        if progress_callback:
+            progress_callback("lab_designer", "failed", "")
+        return ""
+    preview = f"游戏: {design.get('game_title', '?')}, {len(design.get('items', []))} 物品"
+    if progress_callback:
+        progress_callback("lab_designer", "completed", preview)
+
+    # Stage 3: Coder
+    if progress_callback:
+        progress_callback("lab_coder", "in_progress", "")
+    coder = LabCoderAgent(llm=llm)
+    html = coder.generate(design, difficulty)
+    if progress_callback:
+        status = "completed" if html else "failed"
+        progress_callback("lab_coder", status, f"{len(html)} chars" if html else "")
+
+    return html
+
+
+def _extract_plan_context_for_section(section_key: str, lesson_plan: dict) -> str:
+    """Extract relevant strategy guidance from the lesson plan for a specific section."""
+    parts = []
+    if section_key == "concept":
+        emphasis = lesson_plan.get("concept_emphasis", "")
+        approach = lesson_plan.get("concept_approach", "")
+        depth = lesson_plan.get("concept_depth", "")
+        if emphasis:
+            parts.append(f"- 核心要点：{emphasis}")
+        if approach:
+            approach_map = {
+                "analogy": "使用类比帮助理解",
+                "visual": "使用可视化方式展示",
+                "story": "用故事串联知识",
+                "definition_first": "先给出精确定义再展开",
+            }
+            parts.append(f"- 讲解方式：{approach_map.get(approach, approach)}")
+        if depth:
+            depth_map = {"shallow": "浅层理解即可", "medium": "适度深入", "deep": "深入讲解"}
+            parts.append(f"- 深度要求：{depth_map.get(depth, depth)}")
+        vocab = lesson_plan.get("key_vocabulary", [])
+        if vocab:
+            parts.append(f"- 必须涵盖的关键术语：{', '.join(vocab)}")
+
+    elif section_key == "examples":
+        ex_strategy = lesson_plan.get("example_strategy", {})
+        if isinstance(ex_strategy, dict):
+            focus = ex_strategy.get("example_focus", "")
+            if focus:
+                parts.append(f"- 示例角度：{focus}")
+            vis_templates = ex_strategy.get("recommended_visual_templates", [])
+            if vis_templates:
+                parts.append(f"- 推荐可视化模板：{', '.join(vis_templates)}")
+            game_templates = ex_strategy.get("recommended_game_templates", [])
+            if game_templates:
+                parts.append(f"- 推荐游戏模板：{', '.join(game_templates)}")
+
+    elif section_key == "practice":
+        pr_strategy = lesson_plan.get("practice_strategy", {})
+        if isinstance(pr_strategy, dict):
+            progression = pr_strategy.get("progression", "")
+            connection = pr_strategy.get("connection_to_lab", "")
+            if progression:
+                parts.append(f"- 练习递进逻辑：{progression}")
+            if connection:
+                parts.append(f"- 与实验的关联：{connection}")
+
+    # Add overall tone guidance for all sections
+    tone = lesson_plan.get("overall_tone", "")
+    if tone:
+        tone_map = {
+            "playful": "活泼有趣",
+            "encouraging": "鼓励引导",
+            "rigorous": "严谨细致",
+            "hands_on": "注重动手实践",
+        }
+        parts.append(f"- 整体语气：{tone_map.get(tone, tone)}")
+
+    if not parts:
+        return ""
+    return "\n\n【教学策划指引】\n" + "\n".join(parts)
 
 
 def _build_section_prompt(
@@ -294,15 +360,32 @@ def _build_section_prompt(
     difficulty: int,
     section_label: str,
     section_instruction: str,
+    lesson_plan: dict | None = None,
 ) -> str:
     """Build a prompt for generating one section of lesson content."""
     difficulty_desc = "入门级" if difficulty <= 3 else "中级" if difficulty <= 6 else "高级"
+
+    plan_context = ""
+    if lesson_plan:
+        # Determine section_key from section_label
+        section_key_map = {
+            "核心概念讲解": "concept",
+            "示例与图解": "examples",
+            "代码示例": "code_samples",
+            "练习题": "practice",
+            "要点总结": "key_takeaways",
+        }
+        section_key = section_key_map.get(section_label, "")
+        if section_key:
+            plan_context = _extract_plan_context_for_section(section_key, lesson_plan)
+
     return (
         f"你是一个专业的教育内容创作者。请为以下知识节点生成「{section_label}」部分的教学内容。\n\n"
         f"知识节点：{node_title}\n"
         f"简介：{node_summary}\n"
         f"所属里程碑：{milestone_title}\n"
-        f"难度等级：{difficulty}/10（{difficulty_desc}）\n\n"
+        f"难度等级：{difficulty}/10（{difficulty_desc}）\n"
+        f"{plan_context}\n\n"
         f"要求：\n"
         f"- {section_instruction}\n"
         f"- 全部使用中文\n"
@@ -311,11 +394,83 @@ def _build_section_prompt(
     )
 
 
+def _update_progress(db, project_name: str, knode_id: int, step_name: str,
+                     step_label: str, agent_name: str, status: str, preview: str = ""):
+    """Upsert a LessonGenerationProgress record."""
+    from systemedu.storage.db import LessonGenerationProgress
+
+    record = (
+        db.query(LessonGenerationProgress)
+        .filter_by(project_name=project_name, knode_id=knode_id, step_name=step_name)
+        .first()
+    )
+    if record is None:
+        record = LessonGenerationProgress(
+            project_name=project_name,
+            knode_id=knode_id,
+            step_name=step_name,
+            step_label=step_label,
+            agent_name=agent_name,
+            status=status,
+            output_preview=preview,
+        )
+        db.add(record)
+    else:
+        record.status = status
+        record.step_label = step_label
+        record.agent_name = agent_name
+        record.output_preview = preview
+
+    if status == "in_progress" and record.started_at is None:
+        record.started_at = datetime.now()
+    if status in ("completed", "failed"):
+        record.completed_at = datetime.now()
+
+    db.commit()
+
+
+def _init_progress_steps(db, project_name: str, knode_id: int):
+    """Initialize all progress steps as pending at the start of generation."""
+    from systemedu.storage.db import LessonGenerationProgress
+
+    # Clear old progress records for this node
+    db.query(LessonGenerationProgress).filter_by(
+        project_name=project_name, knode_id=knode_id
+    ).delete()
+    db.commit()
+
+    steps = [
+        ("planner", "课程策划", "策划小助手"),
+        ("concept", "核心概念讲解", "概念老师"),
+        ("examples", "示例与图解", "示例设计师"),
+        ("code_samples", "代码示例", "代码老师"),
+        ("practice", "练习题", "练习设计师"),
+        ("key_takeaways", "要点总结", "总结老师"),
+        ("quiz", "测验题", "出题老师"),
+        ("lab_analyst", "实验-知识分析", "分析小助手"),
+        ("lab_designer", "实验-游戏设计", "设计小助手"),
+        ("lab_coder", "实验-代码生成", "开发小助手"),
+    ]
+    for step_name, step_label, agent_name in steps:
+        record = LessonGenerationProgress(
+            project_name=project_name,
+            knode_id=knode_id,
+            step_name=step_name,
+            step_label=step_label,
+            agent_name=agent_name,
+            status="pending",
+        )
+        db.add(record)
+    db.commit()
+
+
 def generate_lesson(project_name: str, knode_id: int, user_id: str = "default") -> dict:
     """Generate lesson content for a knowledge node.
 
-    Loads project context, finds the target node, generates each section
-    via LLM, saves to DB, and returns the complete lesson data.
+    Loads project context, finds the target node, runs the LessonPlannerAgent
+    for strategy, generates each section via LLM with strategy guidance,
+    uses 3-Agent pipeline for interactive lab, tracks progress in DB,
+    and returns the complete lesson data.
 
     Returns dict with status and all content fields.
     """
@@ -361,11 +516,40 @@ def generate_lesson(project_name: str, knode_id: int, user_id: str = "default") 
             lesson.status = "generating"
         db.commit()
 
+        # Initialize progress tracking
+        _init_progress_steps(db, project_name, knode_id)
+
         # Generate each section
         llm = get_llm(streaming=False)
         from langchain_core.messages import HumanMessage
 
+        # Step 1: LessonPlannerAgent — create teaching strategy
+        lesson_plan = None
+        _update_progress(db, project_name, knode_id, "planner", "课程策划", "策划小助手", "in_progress")
+        try:
+            from systemedu.agents.builtin.lesson_planner import LessonPlannerAgent
+            planner = LessonPlannerAgent(llm=llm)
+            lesson_plan = planner.plan(
+                node_title=target_node.title,
+                node_summary=target_node.summary,
+                difficulty=target_node.difficulty_level,
+                content_type=target_node.content_type.value,
+                milestone_title=target_milestone.title,
+            )
+            if lesson_plan:
+                preview = f"方式: {lesson_plan.get('concept_approach', '?')}, 实验: {lesson_plan.get('lab_strategy', {}).get('interaction_type', '?')}"
+                _update_progress(db, project_name, knode_id, "planner", "课程策划", "策划小助手", "completed", preview)
+                logger.info(f"Lesson plan created for node {knode_id}")
+            else:
+                _update_progress(db, project_name, knode_id, "planner", "课程策划", "策划小助手", "completed", "降级：无策划")
+                logger.info(f"Planner returned None for node {knode_id}, proceeding without plan")
+        except Exception:
+            logger.exception(f"Planner failed for node {knode_id}, proceeding without plan")
+            _update_progress(db, project_name, knode_id, "planner", "课程策划", "策划小助手", "failed")
+
+        # Step 2: Generate content sections with plan guidance
         for section_key, section_label, section_instruction in SECTIONS:
+            _update_progress(db, project_name, knode_id, section_key, section_label, "内容老师", "in_progress")
             try:
                 prompt = _build_section_prompt(
                     node_title=target_node.title,
@@ -374,6 +558,7 @@ def generate_lesson(project_name: str, knode_id: int, user_id: str = "default") 
                     difficulty=target_node.difficulty_level,
                     section_label=section_label,
                     section_instruction=section_instruction,
+                    lesson_plan=lesson_plan,
                 )
                 response = llm.invoke([HumanMessage(content=prompt)])
                 content = response.content
@@ -391,12 +576,16 @@ def generate_lesson(project_name: str, knode_id: int, user_id: str = "default") 
 
                 setattr(lesson, section_key, content)
                 db.commit()
+                preview = f"{len(content)} 字" if content else ""
+                _update_progress(db, project_name, knode_id, section_key, section_label, "内容老师", "completed", preview)
                 logger.info(f"Generated section '{section_key}' for node {knode_id}")
             except Exception:
                 logger.exception(f"Failed to generate section '{section_key}' for node {knode_id}")
                 setattr(lesson, section_key, "")
+                _update_progress(db, project_name, knode_id, section_key, section_label, "内容老师", "failed")
 
-        # Generate quiz data
+        # Step 3: Generate quiz data
+        _update_progress(db, project_name, knode_id, "quiz", "测验题", "出题老师", "in_progress")
         try:
             quiz_prompt = (
                 f"你是一个教育测验设计师。请为以下知识点设计 3 道选择题。\n\n"
@@ -414,17 +603,41 @@ def generate_lesson(project_name: str, knode_id: int, user_id: str = "default") 
                 quiz_text = "\n".join(lines[1:-1])
             json.loads(quiz_text)  # validate
             lesson.quiz_data = quiz_text
+            _update_progress(db, project_name, knode_id, "quiz", "测验题", "出题老师", "completed", "3 道题")
         except Exception:
             logger.exception(f"Failed to generate quiz for node {knode_id}")
             lesson.quiz_data = "[]"
+            _update_progress(db, project_name, knode_id, "quiz", "测验题", "出题老师", "failed")
 
-        # Generate interactive lab (two-stage pipeline)
+        # Step 4: Generate interactive lab (3-Agent pipeline)
+        def lab_progress_callback(step_name, status, preview):
+            step_labels = {
+                "lab_analyst": "实验-知识分析",
+                "lab_designer": "实验-游戏设计",
+                "lab_coder": "实验-代码生成",
+            }
+            agent_names = {
+                "lab_analyst": "分析小助手",
+                "lab_designer": "设计小助手",
+                "lab_coder": "开发小助手",
+            }
+            _update_progress(
+                db, project_name, knode_id,
+                step_name,
+                step_labels.get(step_name, step_name),
+                agent_names.get(step_name, ""),
+                status,
+                preview or "",
+            )
+
         try:
             lab_html = _generate_interactive_lab(
                 node_title=target_node.title,
                 node_summary=target_node.summary,
                 difficulty=target_node.difficulty_level,
                 llm=llm,
+                lesson_plan=lesson_plan,
+                progress_callback=lab_progress_callback,
             )
             lesson.interactive_lab = lab_html
             db.commit()

@@ -1,0 +1,132 @@
+"""Lab Coder Agent - generates complete runnable HTML from a game design spec."""
+
+import json
+import logging
+
+from langchain_core.messages import HumanMessage, SystemMessage
+
+from systemedu.agents.base import BaseAgent
+
+logger = logging.getLogger(__name__)
+
+CODER_SYSTEM_PROMPT = """你是一个专业的前端开发者，擅长 React + SVG + CSS 动画。你的任务是根据游戏设计稿，生成一个完整的、可在浏览器中独立运行的交互式小游戏 HTML 页面。
+
+【技术栈】
+- React 18 CDN:
+  - https://unpkg.com/react@18/umd/react.production.min.js
+  - https://unpkg.com/react-dom@18/umd/react-dom.production.min.js
+- Babel standalone: https://unpkg.com/@babel/standalone/babel.min.js
+- script type="text/babel"
+- ReactDOM.createRoot(document.getElementById('root')).render(<App />)
+
+【SVG 矢量图形要求】
+- 所有游戏物品必须用 SVG 绘制，不依赖外部图片
+- 根据设计稿中的 svg_description 绘制具体图形
+- SVG 使用 viewBox 确保缩放正确
+- 物品 SVG 大小统一，便于拖拽操作
+
+【CSS 动画要求（重要！）】
+- 使用 @keyframes 定义以下动画：
+  - fadeIn: 入场渐显
+  - shake: 错误时水平抖动
+  - bounceIn: 正确时弹入效果
+  - float: 物品待机轻微浮动
+  - confetti: 完成时纸屑飘落
+  - scorePopup: 得分飘起消失
+- 使用 CSS transition 做 hover 和状态变化的平滑过渡
+- 动画时间和缓动函数要符合设计稿描述
+- 拖拽时物品要有视觉反馈（阴影、缩放、透明度）
+
+【拖拽实现要求】
+- 使用 HTML5 Drag & Drop API: onDragStart, onDragOver, onDrop, onDragEnd
+- 拖拽时设置 dataTransfer.setData 传递物品 ID
+- 目标区域 onDragOver 要 preventDefault 允许放置
+- 放置后判断正确性并触发对应动画
+- 已正确放置的物品不可再次拖拽
+
+【布局要求（严格！）】
+- html, body: margin:0; padding:0; height:100vh; overflow:hidden;
+- 整体在 800px 宽居中容器内
+- 必须适配 600px 高度的 iframe，不出现滚动条
+- 使用 flexbox 布局，紧凑排列
+- 标题区域高度不超过 50px
+- 游戏区域自适应填充剩余空间
+- 底部状态栏（分数等）高度不超过 40px
+
+【代码质量】
+- 使用 React.useState 管理游戏状态
+- 组件结构清晰：App > Header + GameArea + StatusBar
+- 所有 CSS 放在 <style> 标签中
+- 颜色使用设计稿指定的 hex 值
+- 全部文字使用中文
+
+直接输出完整的 HTML 代码（从 <!DOCTYPE html> 开始），不要包含 markdown 代码块标记，不要输出任何其他文字。"""
+
+
+class LabCoderAgent(BaseAgent):
+    """Generates complete runnable HTML+React+SVG code from a game design spec."""
+
+    name = "lab_coder"
+    description = "根据游戏设计稿生成完整可运行的 HTML+React+SVG 代码"
+
+    def __init__(self, llm=None, **kwargs):
+        super().__init__(**kwargs)
+        self._llm = llm
+
+    async def process(self, message: str, context: dict | None = None) -> str:
+        design = json.loads(message) if isinstance(message, str) else message
+        difficulty = context.get("difficulty", 5) if context else 5
+        return self.generate(design, difficulty)
+
+    def generate(self, design: dict, difficulty: int) -> str:
+        """Generate complete HTML code from a game design spec.
+
+        Args:
+            design: The JSON dict from LabDesignerAgent.
+            difficulty: Difficulty level (1-10).
+
+        Returns:
+            Complete HTML string, or empty string on failure.
+        """
+        difficulty_desc = "入门级" if difficulty <= 3 else "中级" if difficulty <= 6 else "高级"
+        design_text = json.dumps(design, ensure_ascii=False, indent=2)
+
+        user_prompt = (
+            f"请根据以下游戏设计稿，生成完整的 HTML 页面代码。\n\n"
+            f"游戏设计：\n{design_text}\n\n"
+            f"难度：{difficulty_desc}\n\n"
+            f"注意事项：\n"
+            f"- 严格按照设计稿中的 SVG 描述绘制每个物品\n"
+            f"- 严格实现设计稿中描述的所有动画效果\n"
+            f"- 正确放置和错误放置必须有明显不同的动画反馈\n"
+            f"- 全部完成后必须有庆祝动画\n"
+            f"- 分数显示和鼓励语要符合设计稿\n"
+            f"- 布局紧凑，适配 600px 高度 iframe\n"
+            f"- 直接输出完整 HTML 代码"
+        )
+
+        try:
+            response = self._llm.invoke([
+                SystemMessage(content=CODER_SYSTEM_PROMPT),
+                HumanMessage(content=user_prompt),
+            ])
+            html_code = response.content.strip()
+            # Strip markdown code fences
+            if html_code.startswith("```"):
+                lines = html_code.split("\n")
+                html_code = "\n".join(
+                    lines[1:-1] if lines[-1].strip() == "```" else lines[1:]
+                )
+                html_code = html_code.strip()
+
+            # Basic validation
+            if "<html" not in html_code.lower() or "react" not in html_code.lower():
+                logger.warning("Coder output doesn't look like valid HTML+React")
+                return ""
+
+            logger.info(f"Coder: generated {len(html_code)} chars of HTML")
+            return html_code
+
+        except Exception:
+            logger.exception("Lab coder failed")
+            return ""

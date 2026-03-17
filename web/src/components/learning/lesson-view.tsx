@@ -6,6 +6,7 @@ import { gateway } from "@/lib/api"
 import type { KnodeInfo, LessonContent, NodeProgress } from "@/lib/types/api"
 import { LessonGenerating } from "./lesson-generating"
 import { LessonContentView } from "./lesson-content-view"
+import { GenerationPipelineView } from "./generation-pipeline-view"
 
 interface LessonViewProps {
   projectName: string
@@ -13,7 +14,7 @@ interface LessonViewProps {
   allKnodes: KnodeInfo[]
   progress: NodeProgress[]
   onNodeChange: (nodeId: number) => void
-  onProgressUpdate: (nodeId: number, status: string) => void
+  onProgressUpdate: (updatedProgress: NodeProgress[]) => void
   onPageChange?: (tab: string, pageIndex: number, pageContent: string) => void
 }
 
@@ -31,6 +32,7 @@ export function LessonView({
   const [error, setError] = useState<string | null>(null)
   const [completing, setCompleting] = useState(false)
   const [regenerating, setRegenerating] = useState(false)
+  const [isGenerating, setIsGenerating] = useState(false)
   // Cache lessons that have been fetched/generated to avoid redundant requests
   const lessonCacheRef = useRef<Map<number, LessonContent>>(new Map())
   const fetchControllerRef = useRef<AbortController | null>(null)
@@ -40,6 +42,12 @@ export function LessonView({
     ? progress.find((p) => p.knode_id === nodeId)
     : null
   const isCompleted = nodeProgress?.status === "passed"
+
+  // Refs to avoid re-triggering effect when progress/callback changes
+  const progressRef = useRef(progress)
+  progressRef.current = progress
+  const onProgressUpdateRef = useRef(onProgressUpdate)
+  onProgressUpdateRef.current = onProgressUpdate
 
   // Fetch lesson when nodeId changes
   useEffect(() => {
@@ -69,6 +77,14 @@ export function LessonView({
       setError(null)
       setLesson(null)
 
+      // Mark node as in_progress if it's locked or available
+      const currentProgress = progressRef.current.find((p) => p.knode_id === currentNodeId)
+      if (currentProgress && (currentProgress.status === "locked" || currentProgress.status === "available")) {
+        gateway.updateNodeProgress(projectName, currentNodeId, "in_progress")
+          .then((result) => { if (!controller.signal.aborted) onProgressUpdateRef.current(result.progress) })
+          .catch(() => {})
+      }
+
       try {
         // First check if lesson exists on server
         const existing = await gateway.lesson(projectName, currentNodeId)
@@ -82,11 +98,13 @@ export function LessonView({
           return
         }
 
-        // Not ready, trigger generation
+        // Not ready, trigger generation — show pipeline view
+        setIsGenerating(true)
         const generated = await gateway.generateLesson(projectName, currentNodeId)
         if (controller.signal.aborted) return
         lessonCacheRef.current.set(currentNodeId, generated)
         setLesson(generated)
+        setIsGenerating(false)
       } catch (e) {
         if (!controller.signal.aborted) {
           setError(e instanceof Error ? e.message : "加载失败")
@@ -104,8 +122,8 @@ export function LessonView({
     if (nodeId === null) return
     setCompleting(true)
     try {
-      await gateway.updateNodeProgress(projectName, nodeId, "passed")
-      onProgressUpdate(nodeId, "passed")
+      const result = await gateway.updateNodeProgress(projectName, nodeId, "passed")
+      onProgressUpdate(result.progress)
     } catch {
       // silently fail
     } finally {
@@ -119,6 +137,7 @@ export function LessonView({
     lessonCacheRef.current.delete(nodeId)
     setLesson(null)
     setRegenerating(true)
+    setIsGenerating(true)
     setError(null)
     try {
       const generated = await gateway.generateLesson(projectName, nodeId, true)
@@ -128,6 +147,7 @@ export function LessonView({
       setError(e instanceof Error ? e.message : "重新生成失败")
     } finally {
       setRegenerating(false)
+      setIsGenerating(false)
     }
   }, [nodeId, projectName])
 
@@ -181,6 +201,16 @@ export function LessonView({
 
   // Loading / generating / regenerating state
   if (loading || regenerating || !lesson || lesson.status !== "ready") {
+    // Show pipeline view during actual generation, fallback to old animation for initial load
+    if (isGenerating && nodeId !== null) {
+      return (
+        <GenerationPipelineView
+          projectName={projectName}
+          nodeId={nodeId}
+          nodeTitle={knode?.title ?? "生成中..."}
+        />
+      )
+    }
     return (
       <LessonGenerating
         nodeTitle={knode?.title ?? "加载中..."}
