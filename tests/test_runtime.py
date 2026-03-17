@@ -13,7 +13,7 @@ from systemedu.core.config import (
     SystemEduConfig,
     reset_config,
 )
-from systemedu.core.runtime import AgentRuntime, _build_node_context, _split_by_headings
+from systemedu.core.runtime import AgentRuntime, _build_node_context, _build_practice_context, _split_by_headings
 from systemedu.core.session import Session, SessionManager
 from systemedu.core.tool_executor import ToolExecutor
 
@@ -1174,5 +1174,186 @@ class TestBuildNodeContextWithPageInfo:
         result = _build_node_context(ctx, 0)
         assert "核心概念" in result
         assert "Python是一门很好的编程语言" in result
+
+        reset_db()
+
+
+class TestBuildPracticeContext:
+    """Test _build_practice_context and practice tab in _build_node_context."""
+
+    PRACTICE_JSON = '{"exercises": [{"type": "choice", "question": "Python用什么定义函数？", "options": ["def", "func", "function", "define"], "answer": "def", "points": 10}, {"type": "fill_blank", "question": "Python用___关键字定义函数", "answer": "def", "points": 5}], "total_points": 15, "pass_score": 10}'
+
+    def test_parse_exercises_readable(self):
+        """Exercises JSON is parsed into human-readable text."""
+        result = _build_practice_context("proj", 0, self.PRACTICE_JSON)
+        assert "练习共 2 题" in result
+        assert "满分 15 分" in result
+        assert "及格分 10 分" in result
+        assert "[选择题]" in result
+        assert "Python用什么定义函数" in result
+        assert "A.def" in result
+        assert "B.func" in result
+        assert "[填空题]" in result
+        assert "正确答案: def" in result
+
+    def test_invalid_json_returns_empty(self):
+        result = _build_practice_context("proj", 0, "not json")
+        assert result == ""
+
+    def test_empty_exercises_returns_empty(self):
+        result = _build_practice_context("proj", 0, '{"exercises": []}')
+        assert result == ""
+
+    def test_with_submission(self, tmp_path, monkeypatch):
+        """When a submission exists, student answers and feedback are included."""
+        import json
+
+        db_file = tmp_path / "test.db"
+        monkeypatch.setattr("systemedu.storage.db.DB_FILE", db_file)
+        from systemedu.storage.db import PracticeSubmission, get_session as get_db_session, reset_db
+        reset_db()
+
+        db = get_db_session()
+        try:
+            submission = PracticeSubmission(
+                user_id="default",
+                project_name="test-proj",
+                knode_id=0,
+                attempt=2,
+                answers_json=json.dumps([
+                    {"exercise_idx": 0, "user_answer": "func"},
+                    {"exercise_idx": 1, "user_answer": "def"},
+                ]),
+                score=5,
+                total_points=15,
+                feedback_json=json.dumps([
+                    {"exercise_idx": 0, "correct": False, "correct_answer": "def", "feedback": "def是定义函数的关键字", "points_earned": 0},
+                    {"exercise_idx": 1, "correct": True, "correct_answer": "def", "feedback": "正确！", "points_earned": 5},
+                ]),
+                status="graded",
+            )
+            db.add(submission)
+            db.commit()
+        finally:
+            db.close()
+
+        result = _build_practice_context("test-proj", 0, self.PRACTICE_JSON)
+        assert "第2次尝试" in result
+        assert "得分: 5/15" in result
+        assert "学生答了「func」" in result
+        assert "错误" in result
+        assert "正确答案: def" in result
+        assert "def是定义函数的关键字" in result
+        assert "学生答了「def」" in result
+        assert "正确" in result
+
+        reset_db()
+
+    def test_without_submission(self, tmp_path, monkeypatch):
+        """Without submission, only exercises are shown."""
+        db_file = tmp_path / "test.db"
+        monkeypatch.setattr("systemedu.storage.db.DB_FILE", db_file)
+        from systemedu.storage.db import reset_db
+        reset_db()
+
+        result = _build_practice_context("test-proj", 0, self.PRACTICE_JSON)
+        assert "题目列表" in result
+        assert "学生最近一次提交" not in result
+
+        reset_db()
+
+    def test_node_context_practice_tab(self, tmp_path, monkeypatch):
+        """_build_node_context with active_tab='practice' uses _build_practice_context."""
+        from systemedu.education.models import (
+            KnowledgeNode, KnowledgeTree, Milestone, NodeStatus, Project, UserNodeProgress,
+        )
+        from systemedu.education.project_loader import ProjectContext
+
+        db_file = tmp_path / "test.db"
+        monkeypatch.setattr("systemedu.storage.db.DB_FILE", db_file)
+        from systemedu.storage.db import LessonContent, get_session as get_db_session, reset_db
+        reset_db()
+
+        db = get_db_session()
+        try:
+            lesson = LessonContent(
+                project_name="test-proj",
+                knode_id=0,
+                status="ready",
+                concept="概念内容",
+                practice=self.PRACTICE_JSON,
+                key_takeaways="- 要点",
+            )
+            db.add(lesson)
+            db.commit()
+        finally:
+            db.close()
+
+        ctx = ProjectContext(
+            project=Project(name="test-proj", title="测试项目", description="测试描述"),
+            tree=KnowledgeTree(milestones=[
+                Milestone(title="M1", knodes=[
+                    KnowledgeNode(title="Python基础", summary="学习Python基础语法"),
+                ]),
+            ]),
+            progress=[
+                UserNodeProgress(knode_id=0, status=NodeStatus.AVAILABLE),
+            ],
+            project_dir=Path("/tmp/test"),
+        )
+
+        # With practice tab - should get readable exercises, not raw JSON
+        result = _build_node_context(ctx, 0, active_tab="practice", page_index=0)
+        assert "学生当前正在做的练习题" in result
+        assert "[选择题]" in result
+        assert "Python用什么定义函数" in result
+        # Should NOT have the raw JSON
+        assert '"exercises"' not in result
+
+        reset_db()
+
+    def test_node_context_practice_tab_no_page_index(self, tmp_path, monkeypatch):
+        """Practice tab works even without page_index (exercises are one unit)."""
+        from systemedu.education.models import (
+            KnowledgeNode, KnowledgeTree, Milestone, NodeStatus, Project, UserNodeProgress,
+        )
+        from systemedu.education.project_loader import ProjectContext
+
+        db_file = tmp_path / "test.db"
+        monkeypatch.setattr("systemedu.storage.db.DB_FILE", db_file)
+        from systemedu.storage.db import LessonContent, get_session as get_db_session, reset_db
+        reset_db()
+
+        db = get_db_session()
+        try:
+            lesson = LessonContent(
+                project_name="test-proj",
+                knode_id=0,
+                status="ready",
+                practice=self.PRACTICE_JSON,
+                key_takeaways="- 要点",
+            )
+            db.add(lesson)
+            db.commit()
+        finally:
+            db.close()
+
+        ctx = ProjectContext(
+            project=Project(name="test-proj", title="测试项目", description="测试描述"),
+            tree=KnowledgeTree(milestones=[
+                Milestone(title="M1", knodes=[
+                    KnowledgeNode(title="Python基础", summary="学习Python基础语法"),
+                ]),
+            ]),
+            progress=[
+                UserNodeProgress(knode_id=0, status=NodeStatus.AVAILABLE),
+            ],
+            project_dir=Path("/tmp/test"),
+        )
+
+        # Practice tab without page_index should still work
+        result = _build_node_context(ctx, 0, active_tab="practice")
+        assert "学生当前正在做的练习题" in result
+        assert "[选择题]" in result
 
         reset_db()

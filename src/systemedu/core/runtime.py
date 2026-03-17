@@ -170,7 +170,115 @@ def _split_by_paragraphs(markdown: str) -> list[str]:
     return pages if len(pages) > 1 else [trimmed]
 
 
-def _build_node_context(project_context, node_id: int, active_tab: str | None = None, page_index: int | None = None) -> str:
+def _build_practice_context(
+    project_name: str, knode_id: int, practice_json: str, user_id: str = "default"
+) -> str:
+    """Parse practice exercises JSON and latest submission into readable context.
+
+    Returns a markdown section the tutor agent can use to understand what
+    exercises the student is working on and how they performed.
+    """
+    import json
+
+    try:
+        practice_data = json.loads(practice_json)
+    except (json.JSONDecodeError, TypeError):
+        return ""
+
+    exercises = practice_data.get("exercises", [])
+    if not exercises:
+        return ""
+
+    total_points = practice_data.get("total_points", 0)
+    pass_score = practice_data.get("pass_score", 0)
+
+    parts = []
+    parts.append(f"练习共 {len(exercises)} 题，满分 {total_points} 分" +
+                 (f"，及格分 {pass_score} 分" if pass_score else "") + "。")
+    parts.append("")
+    parts.append("题目列表：")
+    for i, ex in enumerate(exercises):
+        ex_type = ex.get("type", "unknown")
+        type_labels = {"choice": "选择题", "fill_blank": "填空题", "short_answer": "简答题"}
+        type_label = type_labels.get(ex_type, ex_type)
+        question = ex.get("question", "")
+        line = f"{i + 1}. [{type_label}] {question}"
+        # Add choices for choice questions
+        options = ex.get("options", [])
+        if options:
+            labels = "ABCDEFGH"
+            opts_str = " ".join(f"{labels[j]}.{opt}" for j, opt in enumerate(options) if j < len(labels))
+            line += f"  选项: {opts_str}"
+        # Add correct answer
+        answer = ex.get("answer", "")
+        if answer:
+            line += f"  正确答案: {answer}"
+        parts.append(line)
+
+    # Query latest submission
+    try:
+        from systemedu.storage.db import PracticeSubmission, get_session as get_db_session
+
+        db = get_db_session()
+        try:
+            submission = (
+                db.query(PracticeSubmission)
+                .filter_by(user_id=user_id, project_name=project_name, knode_id=knode_id)
+                .order_by(PracticeSubmission.attempt.desc())
+                .first()
+            )
+            if submission:
+                parts.append("")
+                parts.append(
+                    f"### 学生最近一次提交（第{submission.attempt}次尝试，"
+                    f"得分: {int(submission.score) if submission.score == int(submission.score) else submission.score}"
+                    f"/{int(submission.total_points) if submission.total_points == int(submission.total_points) else submission.total_points}）"
+                )
+                try:
+                    answers = json.loads(submission.answers_json) if submission.answers_json else []
+                except (json.JSONDecodeError, TypeError):
+                    answers = []
+                try:
+                    feedback_list = json.loads(submission.feedback_json) if submission.feedback_json else []
+                except (json.JSONDecodeError, TypeError):
+                    feedback_list = []
+
+                # Merge answers and feedback by exercise index
+                for i, ex in enumerate(exercises):
+                    # Find user's answer for this exercise
+                    user_answer = ""
+                    for a in answers:
+                        if a.get("exercise_idx") == i:
+                            user_answer = a.get("user_answer", "")
+                            break
+
+                    # Find feedback for this exercise
+                    fb = {}
+                    for f in feedback_list:
+                        if f.get("exercise_idx") == i:
+                            fb = f
+                            break
+
+                    is_correct = fb.get("correct", False)
+                    correct_answer = fb.get("correct_answer", ex.get("answer", ""))
+                    feedback_text = fb.get("feedback", "")
+                    status = "正确" if is_correct else "错误"
+
+                    line = f"- 第{i + 1}题: 学生答了「{user_answer}」，{status}。"
+                    if not is_correct and correct_answer:
+                        line += f" 正确答案: {correct_answer}。"
+                    if feedback_text:
+                        line += f" 反馈: {feedback_text}"
+                    parts.append(line)
+        finally:
+            db.close()
+    except Exception as e:
+        logger.debug(f"Failed to load practice submission: {e}")
+
+    return "\n".join(parts)
+
+
+def _build_node_context(project_context, node_id: int, active_tab: str | None = None, page_index: int | None = None, user_id: str = "default") -> str:
     """Build per-message context for the active learning node.
 
     Queries LessonContent and NodeContextCache from the DB,
@@ -199,7 +307,14 @@ def _build_node_context(project_context, node_id: int, active_tab: str | None = 
 
             if lesson and lesson.status == "ready":
                 # If active_tab and page_index are given, inject specific page content
-                if active_tab and page_index is not None:
+                if active_tab == "practice" and lesson.practice:
+                    # Practice tab: parse exercises JSON + latest submission
+                    practice_ctx = _build_practice_context(
+                        ctx.project.name, node_id, lesson.practice, user_id=user_id
+                    )
+                    if practice_ctx:
+                        parts.append(f"\n### 学生当前正在做的练习题\n{practice_ctx}")
+                elif active_tab and page_index is not None:
                     tab_content = getattr(lesson, active_tab, "")
                     if tab_content:
                         pages = _split_by_headings(tab_content)
@@ -532,7 +647,7 @@ class AgentRuntime:
         # Build per-message system prompt with optional node context
         system_prompt = self.system_prompt
         if node_id is not None and self._project_context is not None:
-            node_context = _build_node_context(self._project_context, node_id, active_tab=active_tab, page_index=page_index)
+            node_context = _build_node_context(self._project_context, node_id, active_tab=active_tab, page_index=page_index, user_id=user_id)
             if node_context:
                 system_prompt = system_prompt + node_context
 
