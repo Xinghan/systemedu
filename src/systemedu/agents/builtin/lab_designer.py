@@ -207,9 +207,13 @@ class LabDesignerAgent(BaseAgent):
                     logger.warning(f"Designer output missing required field: {key}")
                     return None
 
+            output_type = data.get("interaction_type", "(missing)")
+            input_type = interaction_type
+            match = "MATCH" if output_type == input_type else f"MISMATCH(input={input_type})"
             logger.info(
-                f"Designer: '{data['game_title']}', "
-                f"type={data.get('interaction_type', '?')}"
+                f"Designer decision: "
+                f"input_type={input_type} -> output_type={output_type} ({match}) | "
+                f"title='{data['game_title']}'"
             )
             return data
 

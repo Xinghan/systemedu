@@ -261,7 +261,29 @@ class LabCoderAgent(BaseAgent):
                 for w in issues["warnings"]:
                     logger.warning(f"Lab HTML warning: {w}")
 
-            logger.info(f"Coder: generated {len(html_code)} chars of HTML")
+            # Detect what the generated HTML actually implements
+            import re
+            title_match = re.search(r'<title>(.*?)</title>', html_code)
+            html_title = title_match.group(1) if title_match else "?"
+            has_drag = "draggable" in html_code or "onDragStart" in html_code
+            has_click = "onClick" in html_code or "handleSelect" in html_code
+            has_line = "<line" in html_code or "<path" in html_code
+            has_range = 'type="range"' in html_code or "type='range'" in html_code
+            actual_hints = []
+            if has_drag:
+                actual_hints.append("drag")
+            if has_click:
+                actual_hints.append("click")
+            if has_line:
+                actual_hints.append("svg-line")
+            if has_range:
+                actual_hints.append("range-slider")
+            logger.info(
+                f"Coder decision: requested_type={interaction_type} | "
+                f"html_title='{html_title}' | "
+                f"detected_patterns={actual_hints} | "
+                f"{len(html_code)} chars"
+            )
             return html_code
 
         except Exception:

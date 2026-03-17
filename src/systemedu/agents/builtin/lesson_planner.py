@@ -150,15 +150,26 @@ class LessonPlannerAgent(BaseAgent):
             # Validate lab_strategy
             lab = data.get("lab_strategy", {})
             if isinstance(lab, dict):
-                if lab.get("interaction_type") not in VALID_INTERACTIONS:
+                raw_type = lab.get("interaction_type", "(missing)")
+                if raw_type not in VALID_INTERACTIONS:
+                    logger.warning(
+                        f"Planner decision for '{node_title}': "
+                        f"LLM chose invalid interaction_type='{raw_type}', "
+                        f"FALLBACK to drag_classify"
+                    )
                     lab["interaction_type"] = "drag_classify"
             else:
+                logger.warning(
+                    f"Planner decision for '{node_title}': "
+                    f"lab_strategy is not a dict, FALLBACK to drag_classify"
+                )
                 data["lab_strategy"] = {"interaction_type": "drag_classify"}
 
+            lab = data["lab_strategy"]
             logger.info(
-                f"Planner: approach={data['concept_approach']}, "
-                f"lab={data['lab_strategy'].get('interaction_type')}, "
-                f"tone={data['overall_tone']}"
+                f"Planner decision for '{node_title}': "
+                f"interaction_type={lab.get('interaction_type')} | "
+                f"rationale={lab.get('interaction_rationale', '(none)')}"
             )
             return data
 

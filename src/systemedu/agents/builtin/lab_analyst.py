@@ -199,13 +199,39 @@ class LabAnalystAgent(BaseAgent):
                 if key not in data:
                     logger.warning(f"Analyst output missing required field: {key}")
                     return None
+            # Log what the planner recommended vs what analyst chose
+            planner_rec = ""
+            if lesson_plan:
+                planner_rec = lesson_plan.get("lab_strategy", {}).get("interaction_type", "?")
+
+            raw_interaction = data.get("best_interaction", "(missing)")
+
             # Validate interaction type
-            if data["best_interaction"] not in VALID_INTERACTIONS:
-                logger.warning(f"Unknown interaction type: {data['best_interaction']}, defaulting to drag_classify")
+            if raw_interaction not in VALID_INTERACTIONS:
+                logger.warning(
+                    f"Analyst decision for '{node_title}': "
+                    f"LLM chose invalid '{raw_interaction}', FALLBACK to drag_classify"
+                )
                 data["best_interaction"] = "drag_classify"
 
-            # Validate per-type required fields
             itype = data["best_interaction"]
+
+            # Log the decision chain
+            if planner_rec:
+                followed = "FOLLOWED" if itype == planner_rec else "OVERRODE"
+                logger.info(
+                    f"Analyst decision for '{node_title}': "
+                    f"planner_recommended={planner_rec} -> analyst_chose={itype} ({followed}) | "
+                    f"topic={data.get('topic')}"
+                )
+            else:
+                logger.info(
+                    f"Analyst decision for '{node_title}': "
+                    f"chose={itype} (no planner guidance) | "
+                    f"topic={data.get('topic')}"
+                )
+
+            # Validate per-type required fields
             type_fields = {
                 "drag_classify": ["interactive_objects", "categories"],
                 "click_select": ["questions"],
@@ -215,10 +241,11 @@ class LabAnalystAgent(BaseAgent):
             }
             for field in type_fields.get(itype, []):
                 if field not in data:
-                    logger.warning(f"Analyst output missing '{field}' for {itype}")
+                    logger.warning(
+                        f"Analyst decision for '{node_title}': "
+                        f"chose {itype} but missing required field '{field}', returning None"
+                    )
                     return None
-
-            logger.info(f"Analyst: topic='{data['topic']}', interaction={itype}")
             return data
 
         except json.JSONDecodeError:
