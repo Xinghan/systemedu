@@ -9,10 +9,12 @@ import type {
   EnrollmentInfo,
   HighlightInfo,
   LessonContent,
-  LessonGenerationStep,
+  LessonProgressResponse,
   MCPServer,
   NodeContext,
   NodeProgress,
+  PracticeSubmissionResult,
+  PracticeSubmissionSummary,
   UpdateProgressResponse,
   ProjectDetail,
   ProjectSummary,
@@ -55,9 +57,9 @@ export const gateway = {
   lesson: (projectName: string, nodeId: number) =>
     api.get<LessonContent>(`/api/projects/${projectName}/nodes/${nodeId}/lesson`),
   generateLesson: (projectName: string, nodeId: number, regenerate = false) =>
-    api.post<LessonContent>(`/api/projects/${projectName}/nodes/${nodeId}/lesson/generate`, { regenerate }),
+    api.post<{ status: string; project_name: string; knode_id: number }>(`/api/projects/${projectName}/nodes/${nodeId}/lesson/generate`, { regenerate }),
   lessonProgress: (projectName: string, nodeId: number) =>
-    api.get<LessonGenerationStep[]>(`/api/projects/${projectName}/nodes/${nodeId}/lesson/progress`),
+    api.get<LessonProgressResponse>(`/api/projects/${projectName}/nodes/${nodeId}/lesson/progress`),
   updateNodeProgress: (projectName: string, nodeId: number, status: string, userId = "default") =>
     api.patch<UpdateProgressResponse>(`/api/projects/${projectName}/nodes/${nodeId}/progress`, { status, user_id: userId }),
   previewTree: (treeData: Record<string, unknown>) =>
@@ -79,4 +81,8 @@ export const gateway = {
     api.post<HighlightInfo>(`/api/projects/${projectName}/nodes/${nodeId}/highlights`, data),
   deleteHighlight: (projectName: string, nodeId: number, highlightId: number) =>
     api.delete<{ status: string; id: number }>(`/api/projects/${projectName}/nodes/${nodeId}/highlights/${highlightId}`),
+  submitPractice: (projectName: string, nodeId: number, answers: { exercise_idx: number; user_answer: string }[], userId = "default") =>
+    api.post<PracticeSubmissionResult>(`/api/projects/${projectName}/nodes/${nodeId}/practice/submit`, { answers, user_id: userId }),
+  practiceSubmissions: (projectName: string, nodeId: number, userId = "default") =>
+    api.get<PracticeSubmissionSummary[]>(`/api/projects/${projectName}/nodes/${nodeId}/practice/submissions?user_id=${userId}`),
 }

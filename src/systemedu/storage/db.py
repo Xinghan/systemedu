@@ -144,6 +144,28 @@ class Highlight(Base):
     created_at = Column(DateTime, default=datetime.now)
 
 
+class PracticeSubmission(Base):
+    """Tracks user practice exercise submissions and AI grading results."""
+
+    __tablename__ = "practice_submissions"
+    __table_args__ = (
+        UniqueConstraint("user_id", "project_name", "knode_id", "attempt", name="uq_submission"),
+    )
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(String(100), nullable=False, default="default")
+    project_name = Column(String(200), nullable=False)
+    knode_id = Column(Integer, nullable=False)
+    attempt = Column(Integer, nullable=False, default=1)
+    answers_json = Column(Text, nullable=False)       # [{exercise_idx, user_answer}]
+    score = Column(Float, default=0)
+    total_points = Column(Float, default=0)
+    feedback_json = Column(Text, default="")           # AI grading result
+    status = Column(String(20), default="submitted")   # submitted | graded
+    submitted_at = Column(DateTime, default=datetime.now)
+    graded_at = Column(DateTime, nullable=True)
+
+
 class LessonGenerationProgress(Base):
     """Tracks step-by-step progress of lesson generation pipeline."""
 

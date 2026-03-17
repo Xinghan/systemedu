@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button"
 import { AnimatedExamplesView } from "./animated-examples"
 import { InteractiveLabView } from "./interactive-lab-view"
 import { PagedContentView } from "./paged-content-view"
+import { PracticeView } from "./practice-view"
 import type { KnodeInfo, LessonContent } from "@/lib/types/api"
 
 interface LessonContentViewProps {
@@ -139,6 +140,12 @@ export function LessonContentView({
                 <AnimatedExamplesView content={lesson[availableTabs[activeTab]?.field ?? availableTabs[0].field]} />
               ) : (availableTabs[activeTab]?.key ?? availableTabs[0]?.key) === "interactive_lab" ? (
                 <InteractiveLabView html={lesson[availableTabs[activeTab]?.field ?? availableTabs[0].field]} />
+              ) : (availableTabs[activeTab]?.key ?? availableTabs[0]?.key) === "practice" ? (
+                <PracticeView
+                  content={lesson[availableTabs[activeTab]?.field ?? availableTabs[0].field]}
+                  projectName={projectName}
+                  nodeId={nodeId}
+                />
               ) : (
                 <PagedContentView
                   content={lesson[availableTabs[activeTab]?.field ?? availableTabs[0].field]}

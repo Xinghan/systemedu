@@ -84,7 +84,7 @@ export function InteractiveLabView({ html }: InteractiveLabViewProps) {
             ref={iframeRef}
             key={key}
             src={blobUrl}
-            sandbox="allow-scripts"
+            sandbox="allow-scripts allow-same-origin"
             className="w-full border-0"
             style={{ height: `${IFRAME_HEIGHT}px` }}
             title="互动游戏"

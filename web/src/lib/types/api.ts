@@ -217,6 +217,57 @@ export interface LessonGenerationStep {
   output_preview: string
 }
 
+export interface LessonProgressResponse {
+  lesson_status: LessonStatus
+  steps: LessonGenerationStep[]
+}
+
+export interface PracticeExercise {
+  type: "choice" | "fill_blank" | "short_answer"
+  question: string
+  options?: string[]
+  correct?: number
+  answer?: string
+  hint?: string
+  explanation?: string
+  difficulty: "easy" | "medium" | "hard"
+  points: number
+}
+
+export interface PracticeData {
+  exercises: PracticeExercise[]
+  total_points: number
+  pass_score: number
+}
+
+export interface PracticeFeedbackItem {
+  exercise_idx: number
+  correct: boolean
+  points_earned: number
+  feedback: string
+  correct_answer?: string
+}
+
+export interface PracticeSubmissionResult {
+  submission_id: number
+  attempt: number
+  score: number
+  total_points: number
+  passed: boolean
+  feedback: PracticeFeedbackItem[]
+}
+
+export interface PracticeSubmissionSummary {
+  submission_id: number
+  attempt: number
+  score: number
+  total_points: number
+  status: string
+  submitted_at: string | null
+  graded_at: string | null
+  feedback: PracticeFeedbackItem[]
+}
+
 export interface WSMessage {
   type: "chunk" | "done" | "error" | "tool_call" | "tool_result"
   content?: string

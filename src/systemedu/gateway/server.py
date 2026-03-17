@@ -5,6 +5,7 @@ import asyncio
 import json
 import logging
 import time
+from datetime import datetime
 from pathlib import Path
 
 from starlette.applications import Starlette
@@ -699,8 +700,35 @@ async def api_node_lesson(request: Request) -> JSONResponse:
         db.close()
 
 
+def _run_lesson_generation(name: str, node_id: int):
+    """Run lesson generation in a background thread. Errors are caught and logged."""
+    try:
+        from systemedu.education.lesson_generator import generate_lesson
+        generate_lesson(name, node_id)
+        logger.info(f"Background lesson generation completed: {name}/{node_id}")
+    except Exception:
+        logger.exception(f"Background lesson generation failed: {name}/{node_id}")
+        # Mark lesson as failed in DB so frontend can detect it
+        from systemedu.storage.db import LessonContent, get_session as get_db_session
+        db = get_db_session()
+        try:
+            lesson = db.query(LessonContent).filter_by(project_name=name, knode_id=node_id).first()
+            if lesson:
+                lesson.status = "failed"
+                db.commit()
+        finally:
+            db.close()
+
+
+# Track in-flight generation tasks to prevent duplicates
+_generation_tasks: dict[str, bool] = {}
+
+
 async def api_generate_lesson(request: Request) -> JSONResponse:
-    """POST /api/projects/{name}/nodes/{node_id}/lesson/generate - Generate lesson content."""
+    """POST /api/projects/{name}/nodes/{node_id}/lesson/generate - Trigger async lesson generation.
+
+    Returns immediately with status "generating". Frontend should poll progress endpoint.
+    """
     name = request.path_params["name"]
     node_id = int(request.path_params["node_id"])
 
@@ -730,26 +758,36 @@ async def api_generate_lesson(request: Request) -> JSONResponse:
         finally:
             db.close()
 
-    try:
-        from systemedu.education.lesson_generator import generate_lesson
+    # Prevent duplicate generation
+    task_key = f"{name}/{node_id}"
+    if _generation_tasks.get(task_key):
+        return JSONResponse({"status": "generating", "project_name": name, "knode_id": node_id})
 
-        result = generate_lesson(name, node_id)
-        return JSONResponse(result)
-    except FileNotFoundError:
-        return JSONResponse({"error": f"Project '{name}' not found"}, status_code=404)
-    except ValueError as e:
-        return JSONResponse({"error": str(e)}, status_code=404)
-    except Exception as e:
-        logger.exception(f"Failed to generate lesson for {name}/{node_id}")
-        return JSONResponse({"error": str(e)}, status_code=500)
+    # Launch generation in background thread
+    import threading
+    _generation_tasks[task_key] = True
+
+    def _run_and_cleanup():
+        try:
+            _run_lesson_generation(name, node_id)
+        finally:
+            _generation_tasks.pop(task_key, None)
+
+    thread = threading.Thread(target=_run_and_cleanup, daemon=True)
+    thread.start()
+
+    return JSONResponse({"status": "generating", "project_name": name, "knode_id": node_id})
 
 
 async def api_lesson_progress(request: Request) -> JSONResponse:
-    """GET /api/projects/{name}/nodes/{node_id}/lesson/progress - Get lesson generation pipeline progress."""
+    """GET /api/projects/{name}/nodes/{node_id}/lesson/progress - Get lesson generation pipeline progress.
+
+    Returns steps array plus lesson_status to indicate overall completion.
+    """
     name = request.path_params["name"]
     node_id = int(request.path_params["node_id"])
 
-    from systemedu.storage.db import LessonGenerationProgress, get_session as get_db_session
+    from systemedu.storage.db import LessonContent, LessonGenerationProgress, get_session as get_db_session
 
     db = get_db_session()
     try:
@@ -759,18 +797,29 @@ async def api_lesson_progress(request: Request) -> JSONResponse:
             .order_by(LessonGenerationProgress.id)
             .all()
         )
-        return JSONResponse([
-            {
-                "step_name": r.step_name,
-                "step_label": r.step_label,
-                "status": r.status,
-                "agent_name": r.agent_name or "",
-                "started_at": r.started_at.isoformat() if r.started_at else None,
-                "completed_at": r.completed_at.isoformat() if r.completed_at else None,
-                "output_preview": r.output_preview or "",
-            }
-            for r in records
-        ])
+        # Also check lesson status for completion detection
+        lesson = (
+            db.query(LessonContent)
+            .filter_by(project_name=name, knode_id=node_id)
+            .first()
+        )
+        lesson_status = lesson.status if lesson else "pending"
+
+        return JSONResponse({
+            "lesson_status": lesson_status,
+            "steps": [
+                {
+                    "step_name": r.step_name,
+                    "step_label": r.step_label,
+                    "status": r.status,
+                    "agent_name": r.agent_name or "",
+                    "started_at": r.started_at.isoformat() if r.started_at else None,
+                    "completed_at": r.completed_at.isoformat() if r.completed_at else None,
+                    "output_preview": r.output_preview or "",
+                }
+                for r in records
+            ],
+        })
     finally:
         db.close()
 
@@ -1348,6 +1397,207 @@ async def api_delete_highlight(request: Request) -> JSONResponse:
         db.close()
 
 
+async def api_submit_practice(request: Request) -> JSONResponse:
+    """POST /api/projects/{name}/nodes/{node_id}/practice/submit - Submit and grade practice."""
+    from systemedu.storage.db import LessonContent, PracticeSubmission, get_session as get_db_session
+
+    name = request.path_params["name"]
+    node_id = request.path_params["node_id"]
+
+    try:
+        body = await request.json()
+    except Exception:
+        return JSONResponse({"error": "Invalid JSON"}, status_code=400)
+
+    user_answers = body.get("answers", [])
+    user_id = body.get("user_id", "default")
+    if not user_answers:
+        return JSONResponse({"error": "No answers provided"}, status_code=400)
+
+    db = get_db_session()
+    try:
+        # Load the lesson to get practice exercises
+        lesson = (
+            db.query(LessonContent)
+            .filter_by(project_name=name, knode_id=node_id)
+            .first()
+        )
+        if not lesson or not lesson.practice:
+            return JSONResponse({"error": "Lesson or practice not found"}, status_code=404)
+
+        # Parse practice JSON
+        practice_text = lesson.practice.strip()
+        if practice_text.startswith("```"):
+            lines = practice_text.split("\n")
+            practice_text = "\n".join(lines[1:-1] if lines[-1].strip() == "```" else lines[1:])
+            practice_text = practice_text.strip()
+        try:
+            practice_data = json.loads(practice_text)
+        except (json.JSONDecodeError, TypeError):
+            return JSONResponse({"error": "Practice data is not structured JSON"}, status_code=400)
+
+        exercises = practice_data.get("exercises", [])
+        total_points = practice_data.get("total_points", 0)
+
+        # Determine attempt number
+        prev_count = (
+            db.query(PracticeSubmission)
+            .filter_by(user_id=user_id, project_name=name, knode_id=node_id)
+            .count()
+        )
+        attempt = prev_count + 1
+
+        # Grade each answer
+        feedback = []
+        total_score = 0.0
+        for ans in user_answers:
+            idx = ans.get("exercise_idx", -1)
+            user_answer = str(ans.get("user_answer", "")).strip()
+            if idx < 0 or idx >= len(exercises):
+                feedback.append({
+                    "exercise_idx": idx,
+                    "correct": False,
+                    "points_earned": 0,
+                    "feedback": "题目索引无效",
+                })
+                continue
+
+            ex = exercises[idx]
+            ex_type = ex.get("type", "")
+            points = ex.get("points", 10)
+            fb_item = {"exercise_idx": idx, "correct": False, "points_earned": 0, "feedback": ""}
+
+            if ex_type == "choice":
+                correct_idx = ex.get("correct", -1)
+                if user_answer == str(correct_idx):
+                    fb_item["correct"] = True
+                    fb_item["points_earned"] = points
+                    fb_item["feedback"] = "回答正确！"
+                else:
+                    options = ex.get("options", [])
+                    correct_text = options[correct_idx] if 0 <= correct_idx < len(options) else "?"
+                    fb_item["feedback"] = f"回答错误。正确答案是：{correct_text}"
+                    fb_item["correct_answer"] = str(correct_idx)
+
+            elif ex_type == "fill_blank":
+                expected = str(ex.get("answer", "")).strip()
+                if user_answer.lower() == expected.lower():
+                    fb_item["correct"] = True
+                    fb_item["points_earned"] = points
+                    fb_item["feedback"] = "回答正确！"
+                else:
+                    fb_item["feedback"] = f"回答错误。正确答案是：{expected}"
+                    fb_item["correct_answer"] = expected
+
+            elif ex_type == "short_answer":
+                # Use LLM to grade short answers
+                try:
+                    from systemedu.core.llm_client import get_llm
+                    from langchain_core.messages import HumanMessage
+
+                    grading_llm = get_llm(streaming=False)
+                    grading_prompt = (
+                        f"你是一位严格但公正的阅卷老师。请根据参考答案批改学生的简答题回答。\n\n"
+                        f"题目：{ex.get('question', '')}\n"
+                        f"参考答案要点：{ex.get('answer', '')}\n"
+                        f"学生回答：{user_answer}\n"
+                        f"满分：{points}分\n\n"
+                        f"请严格按以下 JSON 格式输出（不要包含 markdown 代码块标记）：\n"
+                        f'{{"score": <0到{points}的整数>, "feedback": "评语"}}\n'
+                        f"评分标准：答案要点覆盖完整度、表述准确度。"
+                    )
+                    resp = grading_llm.invoke([HumanMessage(content=grading_prompt)])
+                    grade_text = resp.content.strip()
+                    if grade_text.startswith("```"):
+                        lines = grade_text.split("\n")
+                        grade_text = "\n".join(lines[1:-1] if lines[-1].strip() == "```" else lines[1:])
+                        grade_text = grade_text.strip()
+                    grade_result = json.loads(grade_text)
+                    earned = min(max(int(grade_result.get("score", 0)), 0), points)
+                    fb_item["points_earned"] = earned
+                    fb_item["correct"] = earned >= points * 0.6
+                    fb_item["feedback"] = grade_result.get("feedback", "")
+                    fb_item["correct_answer"] = ex.get("answer", "")
+                except Exception as e:
+                    logger.exception("LLM grading failed, falling back to partial credit")
+                    fb_item["points_earned"] = 0
+                    fb_item["feedback"] = f"批改出错，请稍后重试。({str(e)[:50]})"
+                    fb_item["correct_answer"] = ex.get("answer", "")
+
+            total_score += fb_item["points_earned"]
+            feedback.append(fb_item)
+
+        # Save submission to DB
+        submission = PracticeSubmission(
+            user_id=user_id,
+            project_name=name,
+            knode_id=node_id,
+            attempt=attempt,
+            answers_json=json.dumps(user_answers, ensure_ascii=False),
+            score=total_score,
+            total_points=total_points,
+            feedback_json=json.dumps(feedback, ensure_ascii=False),
+            status="graded",
+            graded_at=datetime.now(),
+        )
+        db.add(submission)
+        db.commit()
+        db.refresh(submission)
+
+        passed = total_score >= practice_data.get("pass_score", total_points * 0.6)
+
+        return JSONResponse({
+            "submission_id": submission.id,
+            "attempt": attempt,
+            "score": total_score,
+            "total_points": total_points,
+            "passed": passed,
+            "feedback": feedback,
+        })
+
+    except Exception as e:
+        db.rollback()
+        logger.exception("Practice submission failed")
+        return JSONResponse({"error": str(e)}, status_code=500)
+    finally:
+        db.close()
+
+
+async def api_practice_submissions(request: Request) -> JSONResponse:
+    """GET /api/projects/{name}/nodes/{node_id}/practice/submissions - List submissions."""
+    from systemedu.storage.db import PracticeSubmission, get_session as get_db_session
+
+    name = request.path_params["name"]
+    node_id = request.path_params["node_id"]
+    user_id = request.query_params.get("user_id", "default")
+
+    db = get_db_session()
+    try:
+        submissions = (
+            db.query(PracticeSubmission)
+            .filter_by(user_id=user_id, project_name=name, knode_id=node_id)
+            .order_by(PracticeSubmission.attempt.desc())
+            .all()
+        )
+        result = []
+        for s in submissions:
+            result.append({
+                "submission_id": s.id,
+                "attempt": s.attempt,
+                "score": s.score,
+                "total_points": s.total_points,
+                "status": s.status,
+                "submitted_at": s.submitted_at.isoformat() if s.submitted_at else None,
+                "graded_at": s.graded_at.isoformat() if s.graded_at else None,
+                "feedback": json.loads(s.feedback_json) if s.feedback_json else [],
+            })
+        return JSONResponse(result)
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
+    finally:
+        db.close()
+
+
 def create_app() -> Starlette:
     """Create the Starlette ASGI application."""
     global _start_time
@@ -1375,6 +1625,8 @@ def create_app() -> Starlette:
         Route("/api/projects/{name}/nodes/{node_id:int}/progress", api_update_progress, methods=["PATCH"]),
         Route("/api/projects/{name}/nodes/{node_id:int}/highlights", api_get_highlights, methods=["GET"]),
         Route("/api/projects/{name}/nodes/{node_id:int}/highlights", api_create_highlight, methods=["POST"]),
+        Route("/api/projects/{name}/nodes/{node_id:int}/practice/submit", api_submit_practice, methods=["POST"]),
+        Route("/api/projects/{name}/nodes/{node_id:int}/practice/submissions", api_practice_submissions, methods=["GET"]),
         Route("/api/projects/{name}/nodes/{node_id:int}/highlights/{highlight_id:int}", api_delete_highlight, methods=["DELETE"]),
         Route("/api/projects/{name}", api_project_detail),
         Route("/api/agents", api_agents),

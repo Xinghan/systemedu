@@ -44,6 +44,23 @@ CODER_SYSTEM_PROMPT = """你是一个专业的前端开发者，擅长 React + S
 - 放置后判断正确性并触发对应动画
 - 已正确放置的物品不可再次拖拽
 
+【拖拽代码模板（必须参考！）】
+```
+const [items, setItems] = React.useState([...]);
+const handleDragStart = (e, id) => { e.dataTransfer.setData("text/plain", id); };
+const handleDragOver = (e) => { e.preventDefault(); };
+const handleDrop = (e, targetId) => {
+  e.preventDefault();
+  const itemId = e.dataTransfer.getData("text/plain");
+  // 判断正确性，更新状态...
+};
+// JSX 中使用:
+<div draggable onDragStart={(e) => handleDragStart(e, item.id)} style={{cursor: 'grab'}}>...</div>
+<div onDragOver={handleDragOver} onDrop={(e) => handleDrop(e, target.id)}>...</div>
+```
+- 注意：在 iframe sandbox 中使用 blob URL 时，必须用 e.dataTransfer.setData/getData 方式传递数据
+- 不要使用 React DnD 等库，只用原生 HTML5 Drag & Drop
+
 【布局要求（严格！）】
 - html, body: margin:0; padding:0; height:100vh; overflow:hidden;
 - 整体在 800px 宽居中容器内
@@ -100,6 +117,20 @@ def validate_lab_html(html_code: str) -> dict:
         warnings.append("No SVG elements found — may lack visual items")
     if len(html_code) < 1000:
         warnings.append(f"HTML very short ({len(html_code)} chars) — may be incomplete")
+
+    # Drag & drop checks
+    if "draggable" not in html_lower and "ondragstart" not in html_lower and "onDragStart" not in html_code:
+        warnings.append("No draggable/onDragStart found — drag game may not work")
+
+    # Animation checks
+    keyframe_count = html_lower.count("@keyframes")
+    if keyframe_count < 2:
+        warnings.append(f"Only {keyframe_count} @keyframes found — should have at least 2 animations")
+
+    # Event handler checks
+    has_events = any(kw in html_code for kw in ["onclick", "onClick", "onDrag", "ondrag", "onDrop", "ondrop"])
+    if not has_events:
+        warnings.append("No event handlers (onClick/onDrag) found — may lack interactivity")
 
     return {"fatal": None, "warnings": warnings}
 

@@ -57,9 +57,25 @@ SECTIONS = [
     (
         "practice",
         "练习题",
-        "请设计 2-3 道练习题，由易到难。"
-        "每道题用 ## 标题开头（如 ## 练习一：基础题、## 练习二：应用题）。"
-        "每道题包含题目描述和提示（不要直接给答案）。使用 markdown 格式。",
+        "请设计 3-5 道练习题，由易到难，以结构化 JSON 格式输出。\n"
+        "你必须严格按照以下 JSON 格式输出（不要包含 markdown 代码块标记）：\n"
+        '{"exercises": [\n'
+        '  {"type": "choice", "question": "题目描述", "options": ["A选项","B选项","C选项","D选项"], '
+        '"correct": 0, "answer": "", "hint": "提示", "explanation": "解析", "difficulty": "easy", "points": 10},\n'
+        '  {"type": "fill_blank", "question": "Python 中用 ___ 关键字定义函数", "options": [], '
+        '"correct": -1, "answer": "def", "hint": "提示", "explanation": "解析", "difficulty": "medium", "points": 10},\n'
+        '  {"type": "short_answer", "question": "请解释...", "options": [], '
+        '"correct": -1, "answer": "参考答案要点", "hint": "提示", "explanation": "解析", "difficulty": "hard", "points": 15}\n'
+        '], "total_points": 35, "pass_score": 20}\n\n'
+        "【重要要求】\n"
+        "- 必须至少包含 choice（选择题）、fill_blank（填空题）、short_answer（简答题）各一道\n"
+        "- choice: correct 是正确选项的索引（0-3），answer 留空\n"
+        "- fill_blank: correct 设为 -1，answer 是正确答案文本\n"
+        "- short_answer: correct 设为 -1，answer 是参考答案要点\n"
+        "- difficulty 从 easy/medium/hard 中选择\n"
+        "- total_points 是所有题目 points 之和\n"
+        "- pass_score 约为 total_points 的 60%\n"
+        "- 全部使用中文，直接输出 JSON，不要其他文字",
     ),
     (
         "key_takeaways",
@@ -113,6 +129,46 @@ def _validate_examples_json(content: str) -> str:
         return text  # Valid JSON, return cleaned version
     except (json.JSONDecodeError, TypeError):
         logger.info("Examples content is not JSON, will use markdown fallback on frontend")
+        return content
+
+
+def _validate_practice_json(content: str) -> str:
+    """Validate and clean practice JSON content.
+
+    If the content is valid JSON with an 'exercises' array, return cleaned JSON.
+    Otherwise return the original content (frontend will fall back to markdown).
+    """
+    text = content.strip()
+    # Strip markdown code fences if present
+    if text.startswith("```"):
+        lines = text.split("\n")
+        text = "\n".join(lines[1:-1] if lines[-1].strip() == "```" else lines[1:])
+        text = text.strip()
+
+    try:
+        data = json.loads(text)
+        if not isinstance(data, dict) or "exercises" not in data:
+            logger.warning("Practice JSON missing 'exercises' key, keeping as markdown")
+            return content
+        exercises = data["exercises"]
+        if not isinstance(exercises, list) or len(exercises) == 0:
+            logger.warning("Practice exercises array empty, keeping as markdown")
+            return content
+        valid_types = {"choice", "fill_blank", "short_answer"}
+        for ex in exercises:
+            if not isinstance(ex, dict):
+                return content
+            if ex.get("type") not in valid_types:
+                logger.warning(f"Unknown exercise type '{ex.get('type')}', keeping as markdown")
+                return content
+        # Ensure total_points and pass_score exist
+        if "total_points" not in data:
+            data["total_points"] = sum(ex.get("points", 10) for ex in exercises)
+        if "pass_score" not in data:
+            data["pass_score"] = int(data["total_points"] * 0.6)
+        return json.dumps(data, ensure_ascii=False)
+    except (json.JSONDecodeError, TypeError):
+        logger.info("Practice content is not JSON, will use markdown fallback on frontend")
         return content
 
 
@@ -607,6 +663,10 @@ def generate_lesson(project_name: str, knode_id: int, user_id: str = "default") 
                         difficulty=target_node.difficulty_level,
                         llm=llm,
                     )
+
+                # Validate practice section as structured JSON
+                if section_key == "practice":
+                    content = _validate_practice_json(content)
 
                 setattr(lesson, section_key, content)
                 db.commit()
