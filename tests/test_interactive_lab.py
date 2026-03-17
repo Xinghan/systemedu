@@ -1,7 +1,7 @@
-"""Tests for interactive lab generation pipeline (3-Agent version).
+"""Tests for interactive lab generation pipeline (4-Agent version).
 
-These tests validate the _generate_interactive_lab function which now
-uses the 3-Agent pipeline (LabAnalyst → LabDesigner → LabCoder).
+These tests validate the _generate_interactive_lab function which uses
+the 4-Agent pipeline (LabAnalyst → LabDesigner → LabCoder → LabReviewer).
 """
 
 import json
@@ -69,12 +69,13 @@ class TestGenerateInteractiveLab:
     )
 
     def test_successful_generation(self):
-        """Full 3-agent pipeline returns valid HTML."""
-        llm = _make_multi_llm_mock([VALID_ANALYSIS, VALID_DESIGN, self.VALID_HTML])
+        """Full 4-agent pipeline returns valid HTML."""
+        llm = _make_multi_llm_mock([VALID_ANALYSIS, VALID_DESIGN, self.VALID_HTML, self.VALID_HTML])
         result = _generate_interactive_lab("Test Node", "A test summary", 3, llm)
         assert "<html" in result
         assert "react" in result.lower()
-        assert llm.invoke.call_count == 3
+        # analyst + designer + coder + reviewer = 4
+        assert llm.invoke.call_count == 4
 
     def test_analyst_failure_returns_empty(self):
         """If analyst returns invalid JSON, pipeline returns empty."""
@@ -96,7 +97,7 @@ class TestGenerateInteractiveLab:
 
     def test_lesson_plan_passed_to_analyst(self):
         """When lesson_plan is provided, it's passed to the analyst."""
-        llm = _make_multi_llm_mock([VALID_ANALYSIS, VALID_DESIGN, self.VALID_HTML])
+        llm = _make_multi_llm_mock([VALID_ANALYSIS, VALID_DESIGN, self.VALID_HTML, self.VALID_HTML])
         plan = {"lab_strategy": {"interaction_type": "cause_effect", "interaction_rationale": "test", "game_theme": "test", "item_count": 4}}
         result = _generate_interactive_lab("Node", "Summary", 3, llm, lesson_plan=plan)
         assert "<html" in result
@@ -105,14 +106,16 @@ class TestGenerateInteractiveLab:
         assert "策划师指引" in analyst_prompt
 
     def test_progress_callback_called(self):
-        """Progress callback is called for each pipeline stage."""
-        llm = _make_multi_llm_mock([VALID_ANALYSIS, VALID_DESIGN, self.VALID_HTML])
+        """Progress callback is called for each pipeline stage including reviewer."""
+        llm = _make_multi_llm_mock([VALID_ANALYSIS, VALID_DESIGN, self.VALID_HTML, self.VALID_HTML])
         calls = []
         def cb(step, status, preview):
             calls.append((step, status))
 
         _generate_interactive_lab("Node", "Summary", 3, llm, progress_callback=cb)
-        assert len(calls) == 6  # 3 stages x 2 (in_progress + completed)
+        assert len(calls) == 8  # 4 stages x 2 (in_progress + completed)
         assert ("lab_analyst", "in_progress") in calls
         assert ("lab_analyst", "completed") in calls
         assert ("lab_coder", "completed") in calls
+        assert ("lab_reviewer", "in_progress") in calls
+        assert ("lab_reviewer", "completed") in calls

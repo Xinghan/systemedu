@@ -1,4 +1,4 @@
-"""Tests for the 3-Agent lab pipeline: LabAnalyst, LabDesigner, LabCoder."""
+"""Tests for the 4-Agent lab pipeline: LabAnalyst, LabDesigner, LabCoder, LabReviewer."""
 
 import json
 from unittest.mock import MagicMock, call
@@ -8,6 +8,7 @@ import pytest
 from systemedu.agents.builtin.lab_analyst import LabAnalystAgent
 from systemedu.agents.builtin.lab_designer import LabDesignerAgent
 from systemedu.agents.builtin.lab_coder import LabCoderAgent, validate_lab_html
+from systemedu.agents.builtin.lab_reviewer import LabReviewerAgent
 from systemedu.education.lesson_generator import _generate_interactive_lab
 
 
@@ -160,15 +161,16 @@ class TestLabCoderAgent:
 
 class TestLabPipeline:
     def test_full_pipeline_success(self):
-        """Full 3-agent pipeline produces HTML."""
-        llm = _make_multi_llm_mock([VALID_ANALYSIS, VALID_DESIGN, VALID_HTML])
+        """Full 4-agent pipeline produces HTML."""
+        llm = _make_multi_llm_mock([VALID_ANALYSIS, VALID_DESIGN, VALID_HTML, VALID_HTML])
         result = _generate_interactive_lab("树叶分类", "学习分类", 3, llm)
         assert "<html" in result
-        assert llm.invoke.call_count == 3
+        # analyst + designer + coder + reviewer = 4
+        assert llm.invoke.call_count == 4
 
     def test_pipeline_with_lesson_plan(self):
         """Pipeline passes lesson plan to analyst."""
-        llm = _make_multi_llm_mock([VALID_ANALYSIS, VALID_DESIGN, VALID_HTML])
+        llm = _make_multi_llm_mock([VALID_ANALYSIS, VALID_DESIGN, VALID_HTML, VALID_HTML])
         plan = {"lab_strategy": {"interaction_type": "drag_classify"}}
         result = _generate_interactive_lab("Test", "Summary", 3, llm, lesson_plan=plan)
         assert "<html" in result
@@ -189,22 +191,24 @@ class TestLabPipeline:
         assert result == ""
 
     def test_pipeline_progress_callback(self):
-        """Progress callback is invoked for each stage."""
-        llm = _make_multi_llm_mock([VALID_ANALYSIS, VALID_DESIGN, VALID_HTML])
+        """Progress callback is invoked for each stage including reviewer."""
+        llm = _make_multi_llm_mock([VALID_ANALYSIS, VALID_DESIGN, VALID_HTML, VALID_HTML])
         callbacks = []
         def callback(step, status, preview):
             callbacks.append((step, status))
 
         _generate_interactive_lab("Test", "Summary", 3, llm, progress_callback=callback)
 
-        # Expect: analyst in_progress, analyst completed, designer in_progress, designer completed, coder in_progress, coder completed
         step_names = [c[0] for c in callbacks]
         assert "lab_analyst" in step_names
         assert "lab_designer" in step_names
         assert "lab_coder" in step_names
+        assert "lab_reviewer" in step_names
         # Check status progression
         assert ("lab_analyst", "in_progress") in callbacks
         assert ("lab_analyst", "completed") in callbacks
+        assert ("lab_reviewer", "in_progress") in callbacks
+        assert ("lab_reviewer", "completed") in callbacks
 
     def test_pipeline_progress_callback_on_failure(self):
         """Progress callback reports failure when analyst fails."""
@@ -219,25 +223,25 @@ class TestLabPipeline:
     def test_pipeline_retry_on_analyst_failure(self):
         """Pipeline retries analyst once before failing."""
         # First call returns invalid, second returns valid
-        llm = _make_multi_llm_mock(["not json", VALID_ANALYSIS, VALID_DESIGN, VALID_HTML])
+        llm = _make_multi_llm_mock(["not json", VALID_ANALYSIS, VALID_DESIGN, VALID_HTML, VALID_HTML])
         result = _generate_interactive_lab("Test", "Summary", 3, llm)
         assert "<html" in result
-        # 2 analyst calls + 1 designer + 1 coder = 4
-        assert llm.invoke.call_count == 4
+        # 2 analyst calls + 1 designer + 1 coder + 1 reviewer = 5
+        assert llm.invoke.call_count == 5
 
     def test_pipeline_retry_on_designer_failure(self):
         """Pipeline retries designer once before failing."""
-        llm = _make_multi_llm_mock([VALID_ANALYSIS, "not json", VALID_DESIGN, VALID_HTML])
+        llm = _make_multi_llm_mock([VALID_ANALYSIS, "not json", VALID_DESIGN, VALID_HTML, VALID_HTML])
         result = _generate_interactive_lab("Test", "Summary", 3, llm)
         assert "<html" in result
-        assert llm.invoke.call_count == 4
+        assert llm.invoke.call_count == 5
 
     def test_pipeline_retry_on_coder_failure(self):
         """Pipeline retries coder once before failing."""
-        llm = _make_multi_llm_mock([VALID_ANALYSIS, VALID_DESIGN, "not html", VALID_HTML])
+        llm = _make_multi_llm_mock([VALID_ANALYSIS, VALID_DESIGN, "not html", VALID_HTML, VALID_HTML])
         result = _generate_interactive_lab("Test", "Summary", 3, llm)
         assert "<html" in result
-        assert llm.invoke.call_count == 4
+        assert llm.invoke.call_count == 5
 
 
 class TestValidateLabHtml:
@@ -291,3 +295,74 @@ class TestValidateLabHtml:
         result = validate_lab_html(html)
         assert result["fatal"] is None
         assert any("short" in w for w in result["warnings"])
+
+
+class TestLabReviewerAgent:
+    def test_review_returns_fixed_html(self):
+        """Reviewer returns fixed HTML from LLM."""
+        fixed_html = (
+            "<!DOCTYPE html><html><head></head><body>"
+            "<div id='root'>fixed content</div></body></html>"
+        )
+        llm = _make_llm_mock(fixed_html)
+        reviewer = LabReviewerAgent(llm=llm)
+        result = reviewer.review(VALID_HTML, design=json.loads(VALID_DESIGN))
+        assert "<html" in result
+        assert "fixed content" in result
+
+    def test_review_strips_markdown_fences(self):
+        """Reviewer strips markdown code fences from LLM output."""
+        fenced = "```html\n" + VALID_HTML + "\n```"
+        llm = _make_llm_mock(fenced)
+        reviewer = LabReviewerAgent(llm=llm)
+        result = reviewer.review(VALID_HTML)
+        assert not result.startswith("```")
+        assert "<html" in result
+
+    def test_review_keeps_original_on_invalid_output(self):
+        """If reviewer returns non-HTML, keep original."""
+        llm = _make_llm_mock("Here are the bugs I found...")
+        reviewer = LabReviewerAgent(llm=llm)
+        result = reviewer.review(VALID_HTML)
+        assert result == VALID_HTML
+
+    def test_review_keeps_original_on_short_output(self):
+        """If reviewer output is suspiciously short, keep original."""
+        short_html = "<html><div>x</div></html>"
+        llm = _make_llm_mock(short_html)
+        reviewer = LabReviewerAgent(llm=llm)
+        result = reviewer.review(VALID_HTML)
+        assert result == VALID_HTML
+
+    def test_review_keeps_original_on_exception(self):
+        """If LLM raises, return original HTML."""
+        llm = MagicMock()
+        llm.invoke = MagicMock(side_effect=RuntimeError("LLM error"))
+        reviewer = LabReviewerAgent(llm=llm)
+        result = reviewer.review(VALID_HTML)
+        assert result == VALID_HTML
+
+    def test_review_empty_html_passthrough(self):
+        """Empty HTML is returned as-is without calling LLM."""
+        llm = _make_llm_mock("should not be called")
+        reviewer = LabReviewerAgent(llm=llm)
+        result = reviewer.review("")
+        assert result == ""
+        llm.invoke.assert_not_called()
+
+    def test_review_without_design_context(self):
+        """Review works without design context."""
+        llm = _make_llm_mock(VALID_HTML)
+        reviewer = LabReviewerAgent(llm=llm)
+        result = reviewer.review(VALID_HTML, design=None)
+        assert "<html" in result
+
+    def test_review_prompt_includes_design_context(self):
+        """Design context is included in the review prompt."""
+        llm = _make_llm_mock(VALID_HTML)
+        reviewer = LabReviewerAgent(llm=llm)
+        design = json.loads(VALID_DESIGN)
+        reviewer.review(VALID_HTML, design=design)
+        prompt_text = llm.invoke.call_args[0][0][1].content
+        assert "树叶分类小能手" in prompt_text
+        assert "drag_classify" in prompt_text

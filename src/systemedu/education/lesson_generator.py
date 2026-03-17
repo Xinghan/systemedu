@@ -305,6 +305,7 @@ def _generate_interactive_lab(
     from systemedu.agents.builtin.lab_analyst import LabAnalystAgent
     from systemedu.agents.builtin.lab_designer import LabDesignerAgent
     from systemedu.agents.builtin.lab_coder import LabCoderAgent
+    from systemedu.agents.builtin.lab_reviewer import LabReviewerAgent
 
     max_retries = 1  # retry once on failure
 
@@ -362,6 +363,26 @@ def _generate_interactive_lab(
     if progress_callback:
         status = "completed" if html else "failed"
         progress_callback("lab_coder", status, f"{len(html)} chars" if html else "")
+
+    # Stage 4: Reviewer — review and fix known interaction bugs
+    if html:
+        if progress_callback:
+            progress_callback("lab_reviewer", "in_progress", "")
+        try:
+            reviewer = LabReviewerAgent(llm=llm)
+            reviewed_html = reviewer.review(html, design)
+            if reviewed_html:
+                html = reviewed_html
+            if progress_callback:
+                progress_callback("lab_reviewer", "completed", f"{len(html)} chars")
+        except Exception:
+            logger.exception("Lab reviewer failed, using unreviewed HTML")
+            if progress_callback:
+                progress_callback("lab_reviewer", "failed", "降级：跳过审查")
+    else:
+        # No HTML to review — mark reviewer as skipped
+        if progress_callback:
+            progress_callback("lab_reviewer", "completed", "跳过：无代码")
 
     return html
 
@@ -526,6 +547,7 @@ def _init_progress_steps(db, project_name: str, knode_id: int):
         ("lab_analyst", "实验-知识分析", "分析小助手"),
         ("lab_designer", "实验-游戏设计", "设计小助手"),
         ("lab_coder", "实验-代码生成", "开发小助手"),
+        ("lab_reviewer", "实验-代码审查", "审查小助手"),
     ]
     for step_name, step_label, agent_name in steps:
         record = LessonGenerationProgress(
@@ -709,11 +731,13 @@ def generate_lesson(project_name: str, knode_id: int, user_id: str = "default") 
                 "lab_analyst": "实验-知识分析",
                 "lab_designer": "实验-游戏设计",
                 "lab_coder": "实验-代码生成",
+                "lab_reviewer": "实验-代码审查",
             }
             agent_names = {
                 "lab_analyst": "分析小助手",
                 "lab_designer": "设计小助手",
                 "lab_coder": "开发小助手",
+                "lab_reviewer": "审查小助手",
             }
             _update_progress(
                 db, project_name, knode_id,
