@@ -180,6 +180,7 @@ class LessonContent(Base):
     key_takeaways = Column(Text, default="")
     quiz_data = Column(Text, default="")
     interactive_lab = Column(Text, default="")
+    lesson_plan_json = Column(Text, default="")
     content_type = Column(String(20), default="text")
     generated_at = Column(DateTime, nullable=True)
 
@@ -197,6 +198,7 @@ def _migrate_schema(engine):
     # Map: (table_name, column_name, column_DDL)
     expected_columns = [
         ("lesson_content", "interactive_lab", "TEXT DEFAULT ''"),
+        ("lesson_content", "lesson_plan_json", "TEXT DEFAULT ''"),
     ]
 
     with engine.connect() as conn:

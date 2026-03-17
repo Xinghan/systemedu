@@ -7,7 +7,7 @@ import pytest
 
 from systemedu.agents.builtin.lab_analyst import LabAnalystAgent
 from systemedu.agents.builtin.lab_designer import LabDesignerAgent
-from systemedu.agents.builtin.lab_coder import LabCoderAgent
+from systemedu.agents.builtin.lab_coder import LabCoderAgent, validate_lab_html
 from systemedu.education.lesson_generator import _generate_interactive_lab
 
 
@@ -215,3 +215,77 @@ class TestLabPipeline:
 
         _generate_interactive_lab("Test", "Summary", 3, llm, progress_callback=callback)
         assert ("lab_analyst", "failed") in callbacks
+
+    def test_pipeline_retry_on_analyst_failure(self):
+        """Pipeline retries analyst once before failing."""
+        # First call returns invalid, second returns valid
+        llm = _make_multi_llm_mock(["not json", VALID_ANALYSIS, VALID_DESIGN, VALID_HTML])
+        result = _generate_interactive_lab("Test", "Summary", 3, llm)
+        assert "<html" in result
+        # 2 analyst calls + 1 designer + 1 coder = 4
+        assert llm.invoke.call_count == 4
+
+    def test_pipeline_retry_on_designer_failure(self):
+        """Pipeline retries designer once before failing."""
+        llm = _make_multi_llm_mock([VALID_ANALYSIS, "not json", VALID_DESIGN, VALID_HTML])
+        result = _generate_interactive_lab("Test", "Summary", 3, llm)
+        assert "<html" in result
+        assert llm.invoke.call_count == 4
+
+    def test_pipeline_retry_on_coder_failure(self):
+        """Pipeline retries coder once before failing."""
+        llm = _make_multi_llm_mock([VALID_ANALYSIS, VALID_DESIGN, "not html", VALID_HTML])
+        result = _generate_interactive_lab("Test", "Summary", 3, llm)
+        assert "<html" in result
+        assert llm.invoke.call_count == 4
+
+
+class TestValidateLabHtml:
+    def test_valid_html(self):
+        """Complete HTML passes validation."""
+        # Build HTML > 1000 chars to avoid short-content warning
+        padding = "/* " + "x" * 500 + " */"
+        html = (
+            '<!DOCTYPE html><html><head>'
+            '<script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>'
+            '<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>'
+            '<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>'
+            f'<style>.game {{ color: red; }} {padding}</style>'
+            '</head><body><div id="root"></div>'
+            '<script type="text/babel">'
+            'const App = () => { const [s, setS] = React.useState(0); return <svg><circle/></svg>; };'
+            'ReactDOM.createRoot(document.getElementById("root")).render(<App/>);'
+            '</script></body></html>'
+        )
+        result = validate_lab_html(html)
+        assert result["fatal"] is None
+        assert len(result["warnings"]) == 0
+
+    def test_no_html_tag(self):
+        """Missing html tag is fatal."""
+        result = validate_lab_html("<div>hello</div>")
+        assert result["fatal"] is not None
+
+    def test_no_react(self):
+        """Missing react reference is fatal."""
+        result = validate_lab_html("<html><div>hello</div></html>")
+        assert result["fatal"] is not None
+
+    def test_no_div(self):
+        """Missing div is fatal."""
+        result = validate_lab_html("<html>react only text</html>")
+        assert result["fatal"] is not None
+
+    def test_missing_babel_warning(self):
+        """Missing Babel is a warning, not fatal."""
+        html = '<html><div id="root"></div><script src="react@18">React useState createRoot</script></html>'
+        result = validate_lab_html(html)
+        assert result["fatal"] is None
+        assert any("Babel" in w for w in result["warnings"])
+
+    def test_short_html_warning(self):
+        """Very short HTML generates a warning."""
+        html = '<html><div>react</div></html>'
+        result = validate_lab_html(html)
+        assert result["fatal"] is None
+        assert any("short" in w for w in result["warnings"])

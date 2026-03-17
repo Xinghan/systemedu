@@ -120,6 +120,8 @@ export interface AgentInfo {
   name: string
   type: string
   description: string
+  display_name?: string
+  role?: "tutor" | "teacher" | "student" | "system"
 }
 
 export interface SkillInfo {

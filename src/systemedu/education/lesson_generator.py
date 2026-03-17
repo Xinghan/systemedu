@@ -250,13 +250,21 @@ def _generate_interactive_lab(
     from systemedu.agents.builtin.lab_designer import LabDesignerAgent
     from systemedu.agents.builtin.lab_coder import LabCoderAgent
 
+    max_retries = 1  # retry once on failure
+
     # Stage 1: Analyst
     if progress_callback:
         progress_callback("lab_analyst", "in_progress", "")
     analyst = LabAnalystAgent(llm=llm)
-    analysis = analyst.analyze(node_title, node_summary, difficulty, lesson_plan=lesson_plan)
+    analysis = None
+    for attempt in range(1 + max_retries):
+        analysis = analyst.analyze(node_title, node_summary, difficulty, lesson_plan=lesson_plan)
+        if analysis:
+            break
+        if attempt < max_retries:
+            logger.info(f"Lab analyst attempt {attempt + 1} failed for '{node_title}', retrying...")
     if not analysis:
-        logger.warning(f"Lab analyst returned None for '{node_title}'")
+        logger.warning(f"Lab analyst returned None for '{node_title}' after retries")
         if progress_callback:
             progress_callback("lab_analyst", "failed", "")
         return ""
@@ -268,9 +276,15 @@ def _generate_interactive_lab(
     if progress_callback:
         progress_callback("lab_designer", "in_progress", "")
     designer = LabDesignerAgent(llm=llm)
-    design = designer.design(analysis, difficulty)
+    design = None
+    for attempt in range(1 + max_retries):
+        design = designer.design(analysis, difficulty)
+        if design:
+            break
+        if attempt < max_retries:
+            logger.info(f"Lab designer attempt {attempt + 1} failed for '{node_title}', retrying...")
     if not design:
-        logger.warning(f"Lab designer returned None for '{node_title}'")
+        logger.warning(f"Lab designer returned None for '{node_title}' after retries")
         if progress_callback:
             progress_callback("lab_designer", "failed", "")
         return ""
@@ -282,7 +296,13 @@ def _generate_interactive_lab(
     if progress_callback:
         progress_callback("lab_coder", "in_progress", "")
     coder = LabCoderAgent(llm=llm)
-    html = coder.generate(design, difficulty)
+    html = ""
+    for attempt in range(1 + max_retries):
+        html = coder.generate(design, difficulty)
+        if html:
+            break
+        if attempt < max_retries:
+            logger.info(f"Lab coder attempt {attempt + 1} failed for '{node_title}', retrying...")
     if progress_callback:
         status = "completed" if html else "failed"
         progress_callback("lab_coder", status, f"{len(html)} chars" if html else "")
@@ -523,29 +543,43 @@ def generate_lesson(project_name: str, knode_id: int, user_id: str = "default") 
         llm = get_llm(streaming=False)
         from langchain_core.messages import HumanMessage
 
-        # Step 1: LessonPlannerAgent — create teaching strategy
+        # Step 1: LessonPlannerAgent — create teaching strategy (or reuse cached)
         lesson_plan = None
-        _update_progress(db, project_name, knode_id, "planner", "课程策划", "策划小助手", "in_progress")
-        try:
-            from systemedu.agents.builtin.lesson_planner import LessonPlannerAgent
-            planner = LessonPlannerAgent(llm=llm)
-            lesson_plan = planner.plan(
-                node_title=target_node.title,
-                node_summary=target_node.summary,
-                difficulty=target_node.difficulty_level,
-                content_type=target_node.content_type.value,
-                milestone_title=target_milestone.title,
-            )
-            if lesson_plan:
-                preview = f"方式: {lesson_plan.get('concept_approach', '?')}, 实验: {lesson_plan.get('lab_strategy', {}).get('interaction_type', '?')}"
-                _update_progress(db, project_name, knode_id, "planner", "课程策划", "策划小助手", "completed", preview)
-                logger.info(f"Lesson plan created for node {knode_id}")
-            else:
-                _update_progress(db, project_name, knode_id, "planner", "课程策划", "策划小助手", "completed", "降级：无策划")
-                logger.info(f"Planner returned None for node {knode_id}, proceeding without plan")
-        except Exception:
-            logger.exception(f"Planner failed for node {knode_id}, proceeding without plan")
-            _update_progress(db, project_name, knode_id, "planner", "课程策划", "策划小助手", "failed")
+
+        # Try to load cached plan from DB
+        if lesson and lesson.lesson_plan_json:
+            try:
+                lesson_plan = json.loads(lesson.lesson_plan_json)
+                logger.info(f"Reusing cached lesson plan for node {knode_id}")
+                _update_progress(db, project_name, knode_id, "planner", "课程策划", "策划小助手", "completed", "复用缓存策划")
+            except (json.JSONDecodeError, TypeError):
+                lesson_plan = None
+
+        if lesson_plan is None:
+            _update_progress(db, project_name, knode_id, "planner", "课程策划", "策划小助手", "in_progress")
+            try:
+                from systemedu.agents.builtin.lesson_planner import LessonPlannerAgent
+                planner = LessonPlannerAgent(llm=llm)
+                lesson_plan = planner.plan(
+                    node_title=target_node.title,
+                    node_summary=target_node.summary,
+                    difficulty=target_node.difficulty_level,
+                    content_type=target_node.content_type.value,
+                    milestone_title=target_milestone.title,
+                )
+                if lesson_plan:
+                    # Cache the plan
+                    lesson.lesson_plan_json = json.dumps(lesson_plan, ensure_ascii=False)
+                    db.commit()
+                    preview = f"方式: {lesson_plan.get('concept_approach', '?')}, 实验: {lesson_plan.get('lab_strategy', {}).get('interaction_type', '?')}"
+                    _update_progress(db, project_name, knode_id, "planner", "课程策划", "策划小助手", "completed", preview)
+                    logger.info(f"Lesson plan created and cached for node {knode_id}")
+                else:
+                    _update_progress(db, project_name, knode_id, "planner", "课程策划", "策划小助手", "completed", "降级：无策划")
+                    logger.info(f"Planner returned None for node {knode_id}, proceeding without plan")
+            except Exception:
+                logger.exception(f"Planner failed for node {knode_id}, proceeding without plan")
+                _update_progress(db, project_name, knode_id, "planner", "课程策划", "策划小助手", "failed")
 
         # Step 2: Generate content sections with plan guidance
         for section_key, section_label, section_instruction in SECTIONS:

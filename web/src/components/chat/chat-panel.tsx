@@ -18,7 +18,7 @@ interface ChatPanelProps {
 }
 
 export function ChatPanel({ project, agent, nodeId, activeTab, pageIndex }: ChatPanelProps) {
-  const { sessions, activeSessionId, streaming, streamContent, streamToolCalls, hydrated, hydrateSessions } = useChatStore()
+  const { sessions, activeSessionId, streaming, streamContent, streamToolCalls, hydrated, hydrateSessions, setActiveSession, addSession } = useChatStore()
   const { connect, sendMessage, disconnect } = useWebSocketChat()
   const bottomRef = useRef<HTMLDivElement>(null)
   const connectRef = useRef(connect)
@@ -27,6 +27,32 @@ export function ChatPanel({ project, agent, nodeId, activeTab, pageIndex }: Chat
   disconnectRef.current = disconnect
 
   const activeSession = sessions.find((s) => s.id === activeSessionId)
+
+  // Switch to the session for the current agent (or create one if needed)
+  const prevAgentRef = useRef(agent)
+  useEffect(() => {
+    if (agent && agent !== prevAgentRef.current) {
+      prevAgentRef.current = agent
+      // Look for existing session with this agent+project combo
+      const existing = sessions.find(
+        (s) => s.agent === agent && s.project === project
+      )
+      if (existing) {
+        setActiveSession(existing.id)
+      } else {
+        // Create a new local session for this agent
+        const newId = crypto.randomUUID()
+        addSession({
+          id: newId,
+          agent,
+          project,
+          messages: [],
+          createdAt: new Date(),
+        })
+        setActiveSession(newId)
+      }
+    }
+  }, [agent, project, sessions, setActiveSession, addSession])
 
   // Hydrate sessions from backend on first mount
   useEffect(() => {
@@ -86,7 +112,13 @@ export function ChatPanel({ project, agent, nodeId, activeTab, pageIndex }: Chat
               <Bot className="h-6 w-6" />
             </div>
             <p className="text-lg font-medium">开始对话</p>
-            <p className="text-sm mt-1">输入你的问题，AI 助手会为你解答</p>
+            <p className="text-sm mt-1">
+              {agent === "student"
+                ? "和小豆同学一起讨论学习吧"
+                : agent === "teacher"
+                  ? "让星星老师为你讲解知识点"
+                  : "输入你的问题，AI 助手会为你解答"}
+            </p>
           </div>
         ) : (
           /* Messages — centered with max-width */

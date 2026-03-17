@@ -1052,17 +1052,37 @@ async def api_agents(request: Request) -> JSONResponse:
         {
             "name": "tutor",
             "type": "builtin:tutor",
-            "description": "AI 导师 — 引导式教学，辅助项目学习",
+            "description": "AI 导师「小龟老师」— 引导式教学，辅助项目学习",
+            "display_name": "小龟老师",
+            "role": "tutor",
+        },
+        {
+            "name": "teacher",
+            "type": "builtin:teacher",
+            "description": "AI 课堂老师「星星老师」— 系统讲解知识点",
+            "display_name": "星星老师",
+            "role": "teacher",
+        },
+        {
+            "name": "student",
+            "type": "builtin:student",
+            "description": "AI 同学「小豆同学」— 一起讨论学习",
+            "display_name": "小豆同学",
+            "role": "student",
         },
         {
             "name": "planner",
             "type": "builtin:planner",
             "description": "知识树规划器 — 生成项目知识树",
+            "display_name": "规划器",
+            "role": "system",
         },
         {
             "name": "assessor",
             "type": "builtin:assessor",
             "description": "知识评估器 — 评估学习成果",
+            "display_name": "评估器",
+            "role": "system",
         },
     ]
     return JSONResponse(agents)

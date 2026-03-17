@@ -63,6 +63,47 @@ CODER_SYSTEM_PROMPT = """你是一个专业的前端开发者，擅长 React + S
 直接输出完整的 HTML 代码（从 <!DOCTYPE html> 开始），不要包含 markdown 代码块标记，不要输出任何其他文字。"""
 
 
+def validate_lab_html(html_code: str) -> dict:
+    """Validate generated lab HTML for required structure.
+
+    Returns dict with:
+        - "fatal": str or None — if set, HTML is unusable
+        - "warnings": list[str] — non-fatal issues
+    """
+    html_lower = html_code.lower()
+    warnings = []
+
+    # Fatal checks — must have these or HTML won't work
+    if "<html" not in html_lower:
+        return {"fatal": "Missing <html> tag", "warnings": []}
+    if "react" not in html_lower:
+        return {"fatal": "No React reference found", "warnings": []}
+    if "<div" not in html_lower:
+        return {"fatal": "No <div> element found", "warnings": []}
+
+    # Non-fatal structural checks
+    if "react.production.min.js" not in html_lower and "react@18" not in html_lower:
+        warnings.append("React CDN URL may be non-standard")
+    if "react-dom" not in html_lower:
+        warnings.append("Missing ReactDOM reference")
+    if "babel" not in html_lower:
+        warnings.append("Missing Babel standalone (JSX won't compile)")
+    if 'text/babel' not in html_lower:
+        warnings.append("Missing script type='text/babel'")
+    if "createroot" not in html_lower and "createRoot" not in html_code:
+        warnings.append("Missing ReactDOM.createRoot call")
+    if "usestate" not in html_lower and "useState" not in html_code:
+        warnings.append("No useState found — may lack interactivity")
+    if "<style" not in html_lower:
+        warnings.append("No <style> tag — missing CSS styles")
+    if "<svg" not in html_lower:
+        warnings.append("No SVG elements found — may lack visual items")
+    if len(html_code) < 1000:
+        warnings.append(f"HTML very short ({len(html_code)} chars) — may be incomplete")
+
+    return {"fatal": None, "warnings": warnings}
+
+
 class LabCoderAgent(BaseAgent):
     """Generates complete runnable HTML+React+SVG code from a game design spec."""
 
@@ -119,10 +160,16 @@ class LabCoderAgent(BaseAgent):
                 )
                 html_code = html_code.strip()
 
-            # Basic validation
-            if "<html" not in html_code.lower() or "react" not in html_code.lower():
-                logger.warning("Coder output doesn't look like valid HTML+React")
+            # Validate HTML structure
+            html_lower = html_code.lower()
+            issues = validate_lab_html(html_code)
+            if issues.get("fatal"):
+                logger.warning(f"Coder output failed validation: {issues['fatal']}")
                 return ""
+
+            if issues.get("warnings"):
+                for w in issues["warnings"]:
+                    logger.warning(f"Lab HTML warning: {w}")
 
             logger.info(f"Coder: generated {len(html_code)} chars of HTML")
             return html_code
