@@ -118,11 +118,11 @@ class MemoryConfig(BaseModel):
 
 
 class TTSConfig(BaseModel):
-    """Text-to-speech configuration (DashScope CosyVoice)."""
+    """Text-to-speech configuration (DashScope qwen3-tts)."""
 
     enabled: bool = True
-    model: str = "cosyvoice-v2"
-    voice: str = "longanyang"
+    model: str = "qwen3-tts-flash"
+    voice: str = "Cherry"
 
 
 class AgentConfig(BaseModel):

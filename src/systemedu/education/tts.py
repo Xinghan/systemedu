@@ -1,8 +1,8 @@
-"""CosyVoice / Sambert TTS synthesis via DashScope SDK."""
+"""TTS synthesis via DashScope qwen3-tts-flash API."""
 
-import json
 import logging
 import os
+import urllib.request
 from pathlib import Path
 
 from systemedu.core.config import SYSTEMEDU_HOME, get_config
@@ -15,17 +15,13 @@ def synthesize_speech(
     project_name: str,
     knode_id: int,
 ) -> tuple[str, list[dict]]:
-    """Synthesize speech from text using DashScope TTS.
+    """Synthesize speech using DashScope qwen3-tts-flash.
 
     Returns (audio_relative_path, timestamps_list).
     audio_relative_path is relative to SYSTEMEDU_HOME/media/, e.g.
-    "{project_name}/{knode_id}/teacher.mp3".
-
-    Timestamps list: [{"text": "...", "begin_time": 0, "end_time": 200}, ...]
-    Times are in milliseconds.
+    "{project_name}/{knode_id}/teacher.wav".
     """
     import dashscope
-    from dashscope.audio.tts import SpeechSynthesizer
 
     config = get_config()
 
@@ -41,54 +37,38 @@ def synthesize_speech(
             "or configure llm.providers.qwen.api_key"
         )
 
-    dashscope.api_key = api_key
+    voice = config.tts.voice  # e.g. "Cherry"
+    model = config.tts.model  # e.g. "qwen3-tts-flash"
 
-    # Prepare output directory
-    media_dir = SYSTEMEDU_HOME / "media" / project_name / str(knode_id)
-    media_dir.mkdir(parents=True, exist_ok=True)
-    audio_path = media_dir / "teacher.mp3"
-
-    # Resolve model/voice: sambert uses HTTP API; cosyvoice uses WebSocket.
-    # Always use sambert HTTP API for reliability (no proxy/WebSocket issues).
-    model = config.tts.model
-    voice = config.tts.voice
-    if not model.startswith("sambert"):
-        model = "sambert-zhichu-v1"
-        voice = "zhichu"
-
-    # Use HTTP-based TTS API
-    result = SpeechSynthesizer.call(
+    response = dashscope.MultiModalConversation.call(
         model=model,
-        voice=voice,
+        api_key=api_key,
         text=text,
-        sample_rate=48000,
-        format="mp3",
+        voice=voice,
     )
 
-    audio_data = result.get_audio_data()
-    if not audio_data:
-        resp = result.get_response()
-        raise RuntimeError(f"TTS synthesis returned no audio. Response: {resp}")
+    if response.status_code != 200:
+        raise RuntimeError(
+            f"TTS API error {response.status_code}: {response.message}"
+        )
 
+    audio_url = response.output.audio.get("url", "")
+    if not audio_url:
+        raise RuntimeError("TTS API returned no audio URL")
+
+    # Download audio from temporary OSS URL (bypass proxy)
+    audio_data = urllib.request.urlopen(audio_url).read()
+    if not audio_data:
+        raise RuntimeError("Downloaded audio is empty")
+
+    # Save to media directory
+    media_dir = SYSTEMEDU_HOME / "media" / project_name / str(knode_id)
+    media_dir.mkdir(parents=True, exist_ok=True)
+    audio_path = media_dir / "teacher.wav"
     audio_path.write_bytes(audio_data)
     logger.info(f"TTS audio saved: {audio_path} ({len(audio_data)} bytes)")
 
-    # Parse word-level timestamps if available
-    timestamps: list[dict] = []
-    try:
-        raw_ts = result.get_timestamps()
-        if raw_ts:
-            ts_data = json.loads(raw_ts) if isinstance(raw_ts, str) else raw_ts
-            if isinstance(ts_data, list):
-                for item in ts_data:
-                    timestamps.append({
-                        "text": item.get("text", ""),
-                        "begin_time": item.get("begin_time", 0),
-                        "end_time": item.get("end_time", 0),
-                    })
-    except Exception:
-        logger.debug("Could not parse TTS timestamps", exc_info=True)
-
-    relative_path = f"{project_name}/{knode_id}/teacher.mp3"
-    logger.info(f"TTS synthesis complete: {len(timestamps)} word timestamps")
-    return relative_path, timestamps
+    # qwen3-tts-flash does not return word-level timestamps
+    relative_path = f"{project_name}/{knode_id}/teacher.wav"
+    logger.info("TTS synthesis complete (no word timestamps from this model)")
+    return relative_path, []
