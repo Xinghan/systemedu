@@ -172,6 +172,9 @@ export interface LessonContent {
   key_takeaways: string
   quiz_data: string
   interactive_lab: string
+  teacher_script: string
+  teacher_audio_url: string
+  teacher_timestamps: string
   content_type: string
   generated_at: string | null
 }

@@ -117,6 +117,14 @@ class MemoryConfig(BaseModel):
     backend: str = "mem0"
 
 
+class TTSConfig(BaseModel):
+    """Text-to-speech configuration (DashScope CosyVoice)."""
+
+    enabled: bool = True
+    model: str = "cosyvoice-v2"
+    voice: str = "longanyang"
+
+
 class AgentConfig(BaseModel):
     """Agent runtime configuration."""
 
@@ -134,6 +142,7 @@ class SystemEduConfig(BaseModel):
     hub: HubConfig = Field(default_factory=HubConfig)
     memory: MemoryConfig = Field(default_factory=MemoryConfig)
     agent: AgentConfig = Field(default_factory=AgentConfig)
+    tts: TTSConfig = Field(default_factory=TTSConfig)
 
 
 def _default_config_dict() -> dict:

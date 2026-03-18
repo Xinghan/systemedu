@@ -83,6 +83,18 @@ SECTIONS = [
         "请用 5-8 个要点总结这个知识点的核心内容。"
         "每个要点一句话，简洁有力。使用 markdown 列表格式。",
     ),
+    (
+        "teacher_script",
+        "老师讲义",
+        "你是一位亲切的 AI 老师，正在为学生录制这节课的语音讲解。"
+        "请根据本节知识点的核心概念，写一段口语化的讲义文本。"
+        "要求：\n"
+        "- 语气亲切自然，像跟学生面对面聊天\n"
+        "- 300-500 字，不超过 2 分钟朗读时长\n"
+        "- 先问候引入，再逐步讲解核心概念，最后总结鼓励\n"
+        "- 不要使用 markdown 格式，输出纯文本\n"
+        "- 全部使用中文",
+    ),
 ]
 
 
@@ -471,6 +483,7 @@ def _build_section_prompt(
             "代码示例": "code_samples",
             "练习题": "practice",
             "要点总结": "key_takeaways",
+            "老师讲义": "teacher_script",
         }
         section_key = section_key_map.get(section_label, "")
         if section_key:
@@ -544,10 +557,12 @@ def _init_progress_steps(db, project_name: str, knode_id: int):
         ("practice", "练习题", "练习设计师"),
         ("key_takeaways", "要点总结", "总结老师"),
         ("quiz", "测验题", "出题老师"),
+        ("teacher_script", "老师讲义", "讲稿老师"),
         ("lab_analyst", "实验-知识分析", "分析小助手"),
         ("lab_designer", "实验-游戏设计", "设计小助手"),
         ("lab_coder", "实验-代码生成", "开发小助手"),
         ("lab_reviewer", "实验-代码审查", "审查小助手"),
+        ("tts", "语音合成", "朗读老师"),
     ]
     for step_name, step_label, agent_name in steps:
         record = LessonGenerationProgress(
@@ -767,6 +782,39 @@ def generate_lesson(project_name: str, knode_id: int, user_id: str = "default") 
             logger.exception(f"Failed to generate interactive lab for node {knode_id}")
             lesson.interactive_lab = ""
 
+        # Step 5: TTS audio synthesis
+        from systemedu.core.config import get_config
+        tts_config = get_config().tts
+        if tts_config.enabled:
+            _update_progress(db, project_name, knode_id, "tts", "语音合成", "朗读老师", "in_progress")
+            try:
+                script = lesson.teacher_script
+                if script and script.strip():
+                    from systemedu.education.tts import synthesize_speech
+                    audio_path, timestamps = synthesize_speech(script, project_name, knode_id)
+                    lesson.teacher_audio_url = audio_path
+                    lesson.teacher_timestamps = json.dumps(timestamps, ensure_ascii=False)
+                    db.commit()
+                    _update_progress(
+                        db, project_name, knode_id, "tts", "语音合成", "朗读老师",
+                        "completed", f"音频 {len(timestamps)} 词",
+                    )
+                else:
+                    _update_progress(
+                        db, project_name, knode_id, "tts", "语音合成", "朗读老师",
+                        "completed", "无讲义，跳过",
+                    )
+            except Exception:
+                logger.exception(f"TTS synthesis failed for node {knode_id}")
+                _update_progress(
+                    db, project_name, knode_id, "tts", "语音合成", "朗读老师", "failed",
+                )
+        else:
+            _update_progress(
+                db, project_name, knode_id, "tts", "语音合成", "朗读老师",
+                "completed", "TTS 已禁用",
+            )
+
         lesson.status = "ready"
         lesson.generated_at = datetime.now()
         db.commit()
@@ -799,6 +847,9 @@ def _lesson_to_dict(lesson) -> dict:
         "key_takeaways": lesson.key_takeaways or "",
         "quiz_data": lesson.quiz_data or "[]",
         "interactive_lab": lesson.interactive_lab or "",
+        "teacher_script": lesson.teacher_script or "",
+        "teacher_audio_url": lesson.teacher_audio_url or "",
+        "teacher_timestamps": lesson.teacher_timestamps or "[]",
         "content_type": lesson.content_type or "text",
         "generated_at": lesson.generated_at.isoformat() if lesson.generated_at else None,
     }

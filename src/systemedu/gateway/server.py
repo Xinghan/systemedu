@@ -737,6 +737,9 @@ async def api_node_lesson(request: Request) -> JSONResponse:
                     "key_takeaways": "",
                     "quiz_data": "[]",
                     "interactive_lab": "",
+                    "teacher_script": "",
+                    "teacher_audio_url": "",
+                    "teacher_timestamps": "[]",
                     "content_type": "text",
                     "generated_at": None,
                 }
@@ -1682,6 +1685,12 @@ def create_app() -> Starlette:
         Route("/api/mcp/servers/{name}", api_mcp_remove, methods=["DELETE"]),
         WebSocketRoute("/api/chat/stream", ws_chat_stream),
     ]
+
+    # Mount media files directory for TTS audio serving
+    from systemedu.core.config import SYSTEMEDU_HOME
+    media_dir = SYSTEMEDU_HOME / "media"
+    media_dir.mkdir(parents=True, exist_ok=True)
+    routes.append(Mount("/api/media", StaticFiles(directory=str(media_dir)), name="media"))
 
     middleware = [
         Middleware(

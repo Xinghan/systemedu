@@ -9,6 +9,7 @@ import { AnimatedExamplesView } from "./animated-examples"
 import { InteractiveLabView } from "./interactive-lab-view"
 import { PagedContentView } from "./paged-content-view"
 import { PracticeView } from "./practice-view"
+import { AudioPlayerBar } from "./audio-player-bar"
 import type { KnodeInfo, LessonContent } from "@/lib/types/api"
 
 interface LessonContentViewProps {
@@ -165,6 +166,15 @@ export function LessonContentView({
         <div className="flex-1 flex items-center justify-center text-muted-foreground">
           <p>暂无内容</p>
         </div>
+      )}
+
+      {/* Audio player bar */}
+      {lesson.teacher_audio_url && (
+        <AudioPlayerBar
+          audioUrl={lesson.teacher_audio_url}
+          script={lesson.teacher_script}
+          timestamps={lesson.teacher_timestamps}
+        />
       )}
 
       {/* Bottom navigation */}
