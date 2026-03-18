@@ -131,6 +131,14 @@ class AgentConfig(BaseModel):
     backend: str = "auto"  # "auto" | "langgraph" | "deepagents"
 
 
+class SearchConfig(BaseModel):
+    """Search configuration (Tavily)."""
+
+    enabled: bool = True
+    tavily_api_key: str = "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"
+    max_results_per_source: int = 10
+
+
 class SystemEduConfig(BaseModel):
     """Root configuration model."""
 
@@ -143,6 +151,7 @@ class SystemEduConfig(BaseModel):
     memory: MemoryConfig = Field(default_factory=MemoryConfig)
     agent: AgentConfig = Field(default_factory=AgentConfig)
     tts: TTSConfig = Field(default_factory=TTSConfig)
+    search: SearchConfig = Field(default_factory=SearchConfig)
 
 
 def _default_config_dict() -> dict:

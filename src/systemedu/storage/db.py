@@ -206,8 +206,47 @@ class LessonContent(Base):
     teacher_script = Column(Text, default="")
     teacher_audio_url = Column(Text, default="")
     teacher_timestamps = Column(Text, default="")
+    # Per-tab audio URLs (section narration)
+    concept_audio_url = Column(Text, default="")
+    practice_audio_url = Column(Text, default="")
+    lab_audio_url = Column(Text, default="")
+    key_takeaways_audio_url = Column(Text, default="")
     content_type = Column(String(20), default="text")
     generated_at = Column(DateTime, nullable=True)
+
+
+class NodeResource(Base):
+    """Search result resource for a knowledge node."""
+
+    __tablename__ = "node_resources"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    project_name = Column(String(200), nullable=False)
+    knode_id = Column(Integer, nullable=False)
+    source_type = Column(String(20), nullable=False)   # "web" | "youtube"
+    title = Column(String(500), nullable=False)
+    url = Column(String(1000), nullable=False)
+    snippet = Column(Text, default="")
+    score = Column(Float, default=0.0)
+    saved = Column(Integer, default=0)                 # 0=unsaved, 1=saved
+    searched_at = Column(DateTime, default=datetime.now)
+    saved_at = Column(DateTime, nullable=True)
+
+
+class NodeSearchStatus(Base):
+    """Tracks search state for a knowledge node."""
+
+    __tablename__ = "node_search_status"
+    __table_args__ = (
+        UniqueConstraint("project_name", "knode_id", name="uq_search_status"),
+    )
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    project_name = Column(String(200), nullable=False)
+    knode_id = Column(Integer, nullable=False)
+    status = Column(String(20), nullable=False, default="idle")  # idle|searching|done|failed
+    searched_at = Column(DateTime, nullable=True)
+    error = Column(Text, default="")
 
 
 _engine = None
@@ -227,6 +266,10 @@ def _migrate_schema(engine):
         ("lesson_content", "teacher_script", "TEXT DEFAULT ''"),
         ("lesson_content", "teacher_audio_url", "TEXT DEFAULT ''"),
         ("lesson_content", "teacher_timestamps", "TEXT DEFAULT ''"),
+        ("lesson_content", "concept_audio_url", "TEXT DEFAULT ''"),
+        ("lesson_content", "practice_audio_url", "TEXT DEFAULT ''"),
+        ("lesson_content", "lab_audio_url", "TEXT DEFAULT ''"),
+        ("lesson_content", "key_takeaways_audio_url", "TEXT DEFAULT ''"),
     ]
 
     with engine.connect() as conn:

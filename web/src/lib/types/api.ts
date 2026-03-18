@@ -175,6 +175,10 @@ export interface LessonContent {
   teacher_script: string
   teacher_audio_url: string
   teacher_timestamps: string
+  concept_audio_url: string
+  practice_audio_url: string
+  lab_audio_url: string
+  key_takeaways_audio_url: string
   content_type: string
   generated_at: string | null
 }
@@ -269,6 +273,26 @@ export interface PracticeSubmissionSummary {
   submitted_at: string | null
   graded_at: string | null
   feedback: PracticeFeedbackItem[]
+}
+
+export type ResourceSearchStatus = "idle" | "searching" | "done" | "failed"
+
+export interface ResourceItem {
+  id: number
+  source_type: "web" | "youtube"
+  title: string
+  url: string
+  snippet: string
+  score: number
+  saved: boolean
+  saved_at: string | null
+}
+
+export interface ResourceSearchResponse {
+  status: ResourceSearchStatus
+  searched_at: string | null
+  error: string
+  resources: ResourceItem[]
 }
 
 export interface WSMessage {

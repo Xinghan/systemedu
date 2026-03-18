@@ -9,6 +9,7 @@ import { AnimatedExamplesView } from "./animated-examples"
 import { InteractiveLabView } from "./interactive-lab-view"
 import { PagedContentView } from "./paged-content-view"
 import { PracticeView } from "./practice-view"
+import { ResourceSearchView } from "./resource-search-view"
 import { AudioPlayerBar } from "./audio-player-bar"
 import type { KnodeInfo, LessonContent } from "@/lib/types/api"
 
@@ -29,12 +30,12 @@ interface LessonContentViewProps {
 }
 
 const TAB_CONFIG = [
-  { key: "concept", label: "概念", field: "concept" as const },
-  { key: "examples", label: "示例", field: "examples" as const },
-  { key: "interactive_lab", label: "实验", field: "interactive_lab" as const },
-  { key: "code_samples", label: "代码", field: "code_samples" as const },
-  { key: "practice", label: "练习", field: "practice" as const },
-  { key: "key_takeaways", label: "总结", field: "key_takeaways" as const },
+  { key: "concept", label: "概念", field: "concept" as const, audioField: "concept_audio_url" as const },
+  { key: "examples", label: "示例", field: "examples" as const, audioField: null },
+  { key: "interactive_lab", label: "实验", field: "interactive_lab" as const, audioField: "lab_audio_url" as const },
+  { key: "code_samples", label: "代码", field: "code_samples" as const, audioField: null },
+  { key: "practice", label: "练习", field: "practice" as const, audioField: "practice_audio_url" as const },
+  { key: "key_takeaways", label: "总结", field: "key_takeaways" as const, audioField: "key_takeaways_audio_url" as const },
 ]
 
 export function LessonContentView({
@@ -59,6 +60,9 @@ export function LessonContentView({
     const content = lesson[tab.field]
     return content && content.trim().length > 0
   })
+
+  const RESOURCE_TAB = { key: "resources", label: "资料" }
+  const allTabs = [...availableTabs, RESOURCE_TAB]
 
   const difficultyLabel = knode.difficulty_level <= 3 ? "入门" : knode.difficulty_level <= 6 ? "中级" : "高级"
 
@@ -121,7 +125,7 @@ export function LessonContentView({
       {availableTabs.length > 0 ? (
         <div className="flex-1 flex flex-col min-h-0">
           <div className="max-w-5xl mx-auto w-full px-6 pt-3 flex gap-1">
-            {availableTabs.map((tab, index) => (
+            {allTabs.map((tab, index) => (
               <button
                 key={tab.key}
                 onClick={() => setActiveTab(index)}
@@ -137,7 +141,9 @@ export function LessonContentView({
           </div>
           <div className="flex-1 min-h-0 overflow-y-auto">
             <div className="max-w-5xl mx-auto px-6 py-4">
-              {(availableTabs[activeTab]?.key ?? availableTabs[0]?.key) === "examples" ? (
+              {(allTabs[activeTab]?.key ?? allTabs[0]?.key) === "resources" ? (
+                <ResourceSearchView projectName={projectName} nodeId={nodeId} nodeTitle={knode.title} />
+              ) : (availableTabs[activeTab]?.key ?? availableTabs[0]?.key) === "examples" ? (
                 <AnimatedExamplesView content={lesson[availableTabs[activeTab]?.field ?? availableTabs[0].field]} />
               ) : (availableTabs[activeTab]?.key ?? availableTabs[0]?.key) === "interactive_lab" ? (
                 <InteractiveLabView html={lesson[availableTabs[activeTab]?.field ?? availableTabs[0].field]} />
@@ -168,14 +174,20 @@ export function LessonContentView({
         </div>
       )}
 
-      {/* Audio player bar */}
-      {lesson.teacher_audio_url && (
-        <AudioPlayerBar
-          audioUrl={lesson.teacher_audio_url}
-          script={lesson.teacher_script}
-          timestamps={lesson.teacher_timestamps}
-        />
-      )}
+      {/* Audio player bar — per-tab audio, fallback to teacher audio */}
+      {(() => {
+        const currentTab = availableTabs[activeTab] ?? availableTabs[0]
+        const tabAudioUrl = currentTab?.audioField ? lesson[currentTab.audioField] : null
+        const audioUrl = tabAudioUrl || lesson.teacher_audio_url
+        return audioUrl ? (
+          <AudioPlayerBar
+            key={audioUrl}
+            audioUrl={audioUrl}
+            script={lesson.teacher_script}
+            timestamps={lesson.teacher_timestamps}
+          />
+        ) : null
+      })()}
 
       {/* Bottom navigation */}
       <div className="border-t">

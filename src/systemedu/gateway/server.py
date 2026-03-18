@@ -803,6 +803,9 @@ def _run_lesson_generation(name: str, node_id: int):
 # Track in-flight generation tasks to prevent duplicates
 _generation_tasks: dict[str, bool] = {}
 
+# Track in-flight resource search tasks
+_search_tasks: dict[str, bool] = {}
+
 
 async def api_generate_lesson(request: Request) -> JSONResponse:
     """POST /api/projects/{name}/nodes/{node_id}/lesson/generate - Trigger async lesson generation.
@@ -1678,6 +1681,77 @@ async def api_practice_submissions(request: Request) -> JSONResponse:
         db.close()
 
 
+async def api_search_resources(request: Request) -> JSONResponse:
+    """POST /api/projects/{name}/nodes/{node_id}/resources/search - Trigger resource search."""
+    import threading
+
+    from systemedu.education.search_service import search_resources
+
+    name = request.path_params["name"]
+    node_id = int(request.path_params["node_id"])
+
+    body = {}
+    try:
+        body = await request.json()
+    except Exception:
+        pass
+
+    query = body.get("query", "").strip()
+    if not query:
+        return JSONResponse({"error": "query is required"}, status_code=400)
+
+    task_key = f"{name}/{node_id}"
+    if _search_tasks.get(task_key):
+        return JSONResponse({"status": "searching"})
+
+    _search_tasks[task_key] = True
+
+    def _run_and_cleanup():
+        try:
+            search_resources(name, node_id, query)
+        finally:
+            _search_tasks.pop(task_key, None)
+
+    thread = threading.Thread(target=_run_and_cleanup, daemon=True)
+    thread.start()
+
+    return JSONResponse({"status": "searching"})
+
+
+async def api_get_resources(request: Request) -> JSONResponse:
+    """GET /api/projects/{name}/nodes/{node_id}/resources - Get resources and search status."""
+    from systemedu.education.search_service import get_resources
+
+    name = request.path_params["name"]
+    node_id = int(request.path_params["node_id"])
+
+    try:
+        result = get_resources(name, node_id)
+        return JSONResponse(result)
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+
+async def api_toggle_resource_saved(request: Request) -> JSONResponse:
+    """PATCH /api/projects/{name}/nodes/{node_id}/resources/{resource_id} - Toggle saved flag."""
+    from systemedu.education.search_service import toggle_resource_saved
+
+    resource_id = int(request.path_params["resource_id"])
+
+    body = {}
+    try:
+        body = await request.json()
+    except Exception:
+        pass
+
+    saved = bool(body.get("saved", False))
+
+    result = toggle_resource_saved(resource_id, saved)
+    if result is None:
+        return JSONResponse({"error": "resource not found"}, status_code=404)
+    return JSONResponse(result)
+
+
 def create_app() -> Starlette:
     """Create the Starlette ASGI application."""
     global _start_time
@@ -1709,6 +1783,9 @@ def create_app() -> Starlette:
         Route("/api/projects/{name}/nodes/{node_id:int}/practice/submit", api_submit_practice, methods=["POST"]),
         Route("/api/projects/{name}/nodes/{node_id:int}/practice/submissions", api_practice_submissions, methods=["GET"]),
         Route("/api/projects/{name}/nodes/{node_id:int}/highlights/{highlight_id:int}", api_delete_highlight, methods=["DELETE"]),
+        Route("/api/projects/{name}/nodes/{node_id:int}/resources/search", api_search_resources, methods=["POST"]),
+        Route("/api/projects/{name}/nodes/{node_id:int}/resources", api_get_resources, methods=["GET"]),
+        Route("/api/projects/{name}/nodes/{node_id:int}/resources/{resource_id:int}", api_toggle_resource_saved, methods=["PATCH"]),
         Route("/api/projects/{name}", api_project_detail, methods=["GET"]),
         Route("/api/projects/{name}", api_update_project, methods=["PATCH"]),
         Route("/api/agents", api_agents),
