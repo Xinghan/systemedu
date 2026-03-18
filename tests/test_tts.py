@@ -122,106 +122,193 @@ class TestTTSConfig:
     def test_tts_config_custom(self):
         from systemedu.core.config import SystemEduConfig
 
-        config = SystemEduConfig(tts={"enabled": False, "model": "cosyvoice-v3-flash", "voice": "longxiaochun_v2"})
+        config = SystemEduConfig(tts={"enabled": False, "model": "sambert-zhichu-v1", "voice": "zhichu"})
         assert config.tts.enabled is False
-        assert config.tts.model == "cosyvoice-v3-flash"
-        assert config.tts.voice == "longxiaochun_v2"
+        assert config.tts.model == "sambert-zhichu-v1"
+        assert config.tts.voice == "zhichu"
 
 
 class TestSynthesizeSpeech:
     """Test the synthesize_speech function with mocked DashScope SDK."""
 
     def test_synthesize_speech_success(self, tmp_path, monkeypatch):
-        """Test TTS synthesis with mocked SDK."""
+        """Test TTS synthesis with mocked HTTP SDK (dashscope.audio.tts)."""
+        import importlib
         from systemedu.core.config import reset_config
 
-        # Set up environment
         monkeypatch.setenv("DASHSCOPE_API_KEY", "test-key")
         monkeypatch.setattr("systemedu.core.config.SYSTEMEDU_HOME", tmp_path)
         reset_config()
 
-        # Mock the DashScope SDK
-        mock_callback_instance = None
+        fake_audio = b"\xff\xfb\x90\x00" * 100
 
-        class MockAudioFormat:
-            MP3_22050HZ_MONO_256KBPS = "mp3_22050"
+        mock_result = MagicMock()
+        mock_result.get_audio_data.return_value = fake_audio
+        mock_result.get_timestamps.return_value = json.dumps([
+            {"text": "你好", "begin_time": 0, "end_time": 300},
+            {"text": "世界", "begin_time": 300, "end_time": 600},
+        ])
 
-        class MockResultCallback:
-            def on_data(self, data): pass
-            def on_event(self, message): pass
-            def on_complete(self): pass
-            def on_error(self, message): pass
-            def on_open(self): pass
-            def on_close(self): pass
+        mock_synthesizer = MagicMock()
+        mock_synthesizer.call.return_value = mock_result
 
-        class MockSynthesizer:
-            def __init__(self, **kwargs):
-                nonlocal mock_callback_instance
-                mock_callback_instance = kwargs.get("callback")
+        mock_tts_module = MagicMock()
+        mock_tts_module.SpeechSynthesizer = mock_synthesizer
 
-            def call(self, text):
-                # Simulate sending audio data and events
-                if mock_callback_instance:
-                    mock_callback_instance.on_data(b"\xff\xfb\x90\x00" * 10)
-                    # Simulate word timestamp event
-                    event = json.dumps({
-                        "payload": {
-                            "output": {
-                                "sentence": {
-                                    "words": [
-                                        {"text": "hello", "begin_index": 0, "end_index": 5, "begin_time": 0, "end_time": 300},
-                                        {"text": "world", "begin_index": 6, "end_index": 11, "begin_time": 300, "end_time": 600},
-                                    ]
-                                }
-                            }
-                        }
-                    })
-                    mock_callback_instance.on_event(event)
-                    mock_callback_instance.on_complete()
+        mock_dashscope = MagicMock()
 
         with patch.dict("sys.modules", {
-            "dashscope": MagicMock(),
+            "dashscope": mock_dashscope,
             "dashscope.audio": MagicMock(),
-            "dashscope.audio.tts_v2": MagicMock(
-                AudioFormat=MockAudioFormat,
-                ResultCallback=MockResultCallback,
-                SpeechSynthesizer=MockSynthesizer,
-            ),
+            "dashscope.audio.tts": mock_tts_module,
         }):
-            # Re-import to pick up mocked modules
-            import importlib
             import systemedu.education.tts as tts_module
             importlib.reload(tts_module)
 
             audio_path, timestamps = tts_module.synthesize_speech(
-                "hello world", "test-proj", 0
+                "你好世界", "test-proj", 0
             )
 
             assert audio_path == "test-proj/0/teacher.mp3"
             assert len(timestamps) == 2
-            assert timestamps[0]["text"] == "hello"
+            assert timestamps[0]["text"] == "你好"
             assert timestamps[0]["begin_time"] == 0
-            assert timestamps[0]["end_time"] == 300
-            assert timestamps[1]["text"] == "world"
+            assert timestamps[1]["text"] == "世界"
+            assert timestamps[1]["end_time"] == 600
 
-            # Verify the audio file was created
             audio_file = tmp_path / "media" / "test-proj" / "0" / "teacher.mp3"
             assert audio_file.exists()
-            assert audio_file.stat().st_size > 0
+            assert audio_file.read_bytes() == fake_audio
 
         reset_config()
 
-    def test_synthesize_speech_no_api_key(self, tmp_path, monkeypatch):
-        """Test that missing API key raises RuntimeError."""
-        from systemedu.core.config import reset_config
+    def test_synthesize_speech_no_api_key_no_config(self, tmp_path, monkeypatch):
+        """Test that missing API key from both env and config raises RuntimeError."""
+        import importlib
+        from systemedu.core.config import reset_config, SystemEduConfig
 
         monkeypatch.delenv("DASHSCOPE_API_KEY", raising=False)
         monkeypatch.setattr("systemedu.core.config.SYSTEMEDU_HOME", tmp_path)
         reset_config()
 
-        from systemedu.education.tts import synthesize_speech
+        import systemedu.education.tts as tts_module
+        importlib.reload(tts_module)
 
-        with pytest.raises(RuntimeError, match="DASHSCOPE_API_KEY"):
-            synthesize_speech("test", "proj", 0)
+        # Patch get_config to return a config with no providers
+        empty_cfg = SystemEduConfig()
+        with patch("systemedu.education.tts.get_config", return_value=empty_cfg):
+            with pytest.raises(RuntimeError, match="No DashScope API key"):
+                tts_module.synthesize_speech("test", "proj", 0)
+
+        reset_config()
+
+    def test_synthesize_speech_uses_config_api_key(self, tmp_path, monkeypatch):
+        """Test that the qwen provider api_key is used as fallback."""
+        import importlib
+        from systemedu.core.config import reset_config, SystemEduConfig, LLMProviderConfig
+
+        monkeypatch.delenv("DASHSCOPE_API_KEY", raising=False)
+        monkeypatch.setattr("systemedu.core.config.SYSTEMEDU_HOME", tmp_path)
+
+        cfg = SystemEduConfig()
+        cfg.llm.providers["qwen"] = LLMProviderConfig(
+            base_url="https://dashscope.aliyuncs.com/compatible-mode/v1",
+            api_key="config-key-123",
+            model="qwen-plus",
+        )
+        monkeypatch.setattr("systemedu.core.config._config", cfg)
+
+        fake_audio = b"\xff\xfb" * 50
+        mock_result = MagicMock()
+        mock_result.get_audio_data.return_value = fake_audio
+        mock_result.get_timestamps.return_value = "[]"
+
+        mock_synthesizer = MagicMock()
+        mock_synthesizer.call.return_value = mock_result
+        mock_tts_module = MagicMock()
+        mock_tts_module.SpeechSynthesizer = mock_synthesizer
+        mock_dashscope = MagicMock()
+
+        with patch.dict("sys.modules", {
+            "dashscope": mock_dashscope,
+            "dashscope.audio": MagicMock(),
+            "dashscope.audio.tts": mock_tts_module,
+        }):
+            import systemedu.education.tts as tts_module
+            importlib.reload(tts_module)
+
+            audio_path, timestamps = tts_module.synthesize_speech("test", "proj", 1)
+
+            assert audio_path == "proj/1/teacher.mp3"
+            # Verify dashscope.api_key was set to config key
+            assert mock_dashscope.api_key == "config-key-123"
+            assert timestamps == []
+
+        reset_config()
+
+    def test_synthesize_speech_no_audio_data(self, tmp_path, monkeypatch):
+        """Test that empty audio data from SDK raises RuntimeError."""
+        import importlib
+        from systemedu.core.config import reset_config
+
+        monkeypatch.setenv("DASHSCOPE_API_KEY", "test-key")
+        monkeypatch.setattr("systemedu.core.config.SYSTEMEDU_HOME", tmp_path)
+        reset_config()
+
+        mock_result = MagicMock()
+        mock_result.get_audio_data.return_value = None
+        mock_result.get_response.return_value = {"status_code": 400, "message": "error"}
+
+        mock_synthesizer = MagicMock()
+        mock_synthesizer.call.return_value = mock_result
+        mock_tts_module = MagicMock()
+        mock_tts_module.SpeechSynthesizer = mock_synthesizer
+
+        with patch.dict("sys.modules", {
+            "dashscope": MagicMock(),
+            "dashscope.audio": MagicMock(),
+            "dashscope.audio.tts": mock_tts_module,
+        }):
+            import systemedu.education.tts as tts_module
+            importlib.reload(tts_module)
+
+            with pytest.raises(RuntimeError, match="no audio"):
+                tts_module.synthesize_speech("test", "proj", 2)
+
+        reset_config()
+
+    def test_synthesize_speech_sambert_model_used_for_non_sambert_config(self, tmp_path, monkeypatch):
+        """Test that non-sambert models in config fall back to sambert-zhichu-v1."""
+        import importlib
+        from systemedu.core.config import reset_config
+
+        monkeypatch.setenv("DASHSCOPE_API_KEY", "test-key")
+        monkeypatch.setattr("systemedu.core.config.SYSTEMEDU_HOME", tmp_path)
+        reset_config()
+
+        fake_audio = b"\xff\xfb" * 50
+        mock_result = MagicMock()
+        mock_result.get_audio_data.return_value = fake_audio
+        mock_result.get_timestamps.return_value = "[]"
+
+        mock_synthesizer = MagicMock()
+        mock_synthesizer.call.return_value = mock_result
+        mock_tts_module = MagicMock()
+        mock_tts_module.SpeechSynthesizer = mock_synthesizer
+
+        with patch.dict("sys.modules", {
+            "dashscope": MagicMock(),
+            "dashscope.audio": MagicMock(),
+            "dashscope.audio.tts": mock_tts_module,
+        }):
+            import systemedu.education.tts as tts_module
+            importlib.reload(tts_module)
+
+            tts_module.synthesize_speech("test", "proj", 3)
+
+            # Verify SpeechSynthesizer was called with sambert model
+            call_kwargs = mock_synthesizer.call.call_args
+            assert call_kwargs.kwargs["model"] == "sambert-zhichu-v1"
+            assert call_kwargs.kwargs["voice"] == "zhichu"
 
         reset_config()
