@@ -45,6 +45,8 @@ export const gateway = {
   chat: (req: ChatRequest) => api.post<ChatResponse>("/api/chat", req),
   projects: () => api.get<ProjectSummary[]>("/api/projects"),
   project: (name: string) => api.get<ProjectDetail>(`/api/projects/${name}`),
+  updateProject: (name: string, body: { title?: string; description?: string; category?: string; age_range?: number[]; estimated_hours?: number; tags?: string[] }) =>
+    api.patch<{ name: string; updated: boolean }>(`/api/projects/${name}`, body),
   agents: () => api.get<AgentInfo[]>("/api/agents"),
   skills: () => api.get<SkillInfo[]>("/api/skills"),
   mcpServers: () => api.get<MCPServer[]>("/api/mcp/servers"),

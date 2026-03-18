@@ -567,6 +567,38 @@ async def api_project_detail(request: Request) -> JSONResponse:
         return JSONResponse({"error": str(e)}, status_code=500)
 
 
+async def api_update_project(request: Request) -> JSONResponse:
+    """PATCH /api/projects/{name} - Update project metadata (title, description, etc.)."""
+    from systemedu.education.project_loader import find_project_dir
+
+    name = request.path_params["name"]
+    try:
+        project_dir = find_project_dir(name)
+    except FileNotFoundError:
+        return JSONResponse({"error": f"Project '{name}' not found"}, status_code=404)
+
+    try:
+        body = await request.json()
+    except Exception:
+        return JSONResponse({"error": "Invalid JSON body"}, status_code=400)
+
+    # Load current project.yaml
+    import yaml as _yaml
+    yaml_path = project_dir / "project.yaml"
+    data = _yaml.safe_load(yaml_path.read_text(encoding="utf-8")) or {}
+
+    # Apply only allowed fields
+    allowed = {"title", "description", "category", "age_range", "estimated_hours", "tags", "author"}
+    for key in allowed:
+        if key in body:
+            data[key] = body[key]
+
+    # Write back
+    yaml_path.write_text(_yaml.dump(data, allow_unicode=True, default_flow_style=False), encoding="utf-8")
+
+    return JSONResponse({"name": name, "updated": True})
+
+
 async def api_node_context(request: Request) -> JSONResponse:
     """GET /api/projects/{name}/nodes/{node_id}/context - AI-generated node knowledge context."""
     name = request.path_params["name"]
@@ -1677,7 +1709,8 @@ def create_app() -> Starlette:
         Route("/api/projects/{name}/nodes/{node_id:int}/practice/submit", api_submit_practice, methods=["POST"]),
         Route("/api/projects/{name}/nodes/{node_id:int}/practice/submissions", api_practice_submissions, methods=["GET"]),
         Route("/api/projects/{name}/nodes/{node_id:int}/highlights/{highlight_id:int}", api_delete_highlight, methods=["DELETE"]),
-        Route("/api/projects/{name}", api_project_detail),
+        Route("/api/projects/{name}", api_project_detail, methods=["GET"]),
+        Route("/api/projects/{name}", api_update_project, methods=["PATCH"]),
         Route("/api/agents", api_agents),
         Route("/api/skills", api_skills),
         Route("/api/mcp/servers", api_mcp_servers, methods=["GET"]),

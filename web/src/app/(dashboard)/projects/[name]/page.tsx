@@ -4,16 +4,39 @@ import { useEffect, useState } from "react"
 import { useParams, useRouter } from "next/navigation"
 import Link from "next/link"
 import dynamic from "next/dynamic"
-import { ArrowLeft, Clock, Play, CheckCircle, GraduationCap, Highlighter, FolderOpen, Palette } from "lucide-react"
+import { toast } from "sonner"
+import { ArrowLeft, Clock, Play, CheckCircle, GraduationCap, Highlighter, FolderOpen, Palette, Pencil, Save, X } from "lucide-react"
 import { PageLoading } from "@/components/ui/page-loading"
 import { LoadingSpinner } from "@/components/ui/loading-spinner"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
 import { Progress } from "@/components/ui/progress"
 import { AppHeader } from "@/components/layout/app-header"
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog"
 import { IconTree, IconNote, IconScroll, IconBlueprint } from "@/components/learning/cartoon-icons"
 import { gateway } from "@/lib/api"
 import type { ProjectDetail } from "@/lib/types/api"
+
+const CATEGORY_OPTIONS = [
+  { value: "ai", label: "人工智能" },
+  { value: "biotech", label: "生物技术" },
+  { value: "aerospace", label: "航天航空" },
+  { value: "music", label: "音乐" },
+  { value: "climate", label: "气候" },
+  { value: "robotics", label: "机器人" },
+  { value: "chemistry", label: "化学" },
+  { value: "math", label: "数学" },
+  { value: "cs", label: "计算机" },
+  { value: "other", label: "其他" },
+]
 
 const D3KnowledgeTree = dynamic(
   () => import("@/components/knowledge-tree/d3-knowledge-tree").then((m) => m.D3KnowledgeTree),
@@ -84,15 +107,70 @@ export default function ProjectDetailPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [enrolling, setEnrolling] = useState(false)
+  const [editOpen, setEditOpen] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [editTitle, setEditTitle] = useState("")
+  const [editDescription, setEditDescription] = useState("")
+  const [editCategory, setEditCategory] = useState("")
+  const [editHours, setEditHours] = useState(0)
+  const [editAgeMin, setEditAgeMin] = useState(6)
+  const [editAgeMax, setEditAgeMax] = useState(18)
+  const [editTags, setEditTags] = useState("")
 
   useEffect(() => {
     if (!params.name) return
     gateway
       .project(params.name)
-      .then(setDetail)
+      .then((d) => {
+        setDetail(d)
+        setEditTitle(d.project.title)
+        setEditDescription(d.project.description)
+        setEditCategory(d.project.category)
+        setEditHours(d.project.estimated_hours)
+        setEditAgeMin(d.project.age_range[0] ?? 6)
+        setEditAgeMax(d.project.age_range[1] ?? 18)
+        setEditTags(d.project.tags.join(", "))
+      })
       .catch((e) => setError(e.message))
       .finally(() => setLoading(false))
   }, [params.name])
+
+  const handleSaveEdit = async () => {
+    if (!params.name || !detail) return
+    setSaving(true)
+    try {
+      await gateway.updateProject(params.name, {
+        title: editTitle.trim(),
+        description: editDescription.trim(),
+        category: editCategory,
+        estimated_hours: editHours,
+        age_range: [editAgeMin, editAgeMax],
+        tags: editTags.split(",").map((t) => t.trim()).filter(Boolean),
+      })
+      setDetail((prev) =>
+        prev
+          ? {
+              ...prev,
+              project: {
+                ...prev.project,
+                title: editTitle.trim(),
+                description: editDescription.trim(),
+                category: editCategory,
+                estimated_hours: editHours,
+                age_range: [editAgeMin, editAgeMax],
+                tags: editTags.split(",").map((t) => t.trim()).filter(Boolean),
+              },
+            }
+          : prev
+      )
+      setEditOpen(false)
+      toast.success("项目信息已保存")
+    } catch (e: unknown) {
+      toast.error(`保存失败: ${e instanceof Error ? e.message : "未知错误"}`)
+    } finally {
+      setSaving(false)
+    }
+  }
 
   const handleStartLearning = async () => {
     if (!params.name) return
@@ -156,7 +234,113 @@ export default function ProjectDetailPage() {
               </Button>
             </Link>
             <div className="flex-1 min-w-0">
-              <h1 className="text-2xl font-bold">{detail.project.title}</h1>
+              <div className="flex items-center gap-3">
+                <h1 className="text-2xl font-bold">{detail.project.title}</h1>
+                <Dialog open={editOpen} onOpenChange={setEditOpen}>
+                  <DialogTrigger render={
+                    <Button variant="ghost" size="icon-sm" className="text-muted-foreground hover:text-foreground shrink-0">
+                      <Pencil className="h-4 w-4" />
+                    </Button>
+                  } />
+                  <DialogContent className="max-w-lg">
+                    <DialogHeader>
+                      <DialogTitle>编辑项目信息</DialogTitle>
+                    </DialogHeader>
+                    <div className="space-y-4 pt-2">
+                      <div>
+                        <Label htmlFor="edit-title">项目标题</Label>
+                        <Input
+                          id="edit-title"
+                          value={editTitle}
+                          onChange={(e) => setEditTitle(e.target.value)}
+                          className="mt-2"
+                        />
+                      </div>
+                      <div>
+                        <Label htmlFor="edit-desc">项目描述</Label>
+                        <textarea
+                          id="edit-desc"
+                          value={editDescription}
+                          onChange={(e) => setEditDescription(e.target.value)}
+                          className="w-full h-24 px-4 py-3 rounded-xl border bg-muted/50 text-base resize-y focus:outline-none focus:ring-2 focus:ring-ring mt-2"
+                        />
+                      </div>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <Label htmlFor="edit-category">分类</Label>
+                          <select
+                            id="edit-category"
+                            value={editCategory}
+                            onChange={(e) => setEditCategory(e.target.value)}
+                            className="w-full mt-2 h-12 px-4 rounded-xl border bg-background text-base focus:outline-none focus:ring-2 focus:ring-ring"
+                          >
+                            {CATEGORY_OPTIONS.map((opt) => (
+                              <option key={opt.value} value={opt.value}>{opt.label}</option>
+                            ))}
+                          </select>
+                        </div>
+                        <div>
+                          <Label htmlFor="edit-hours">预计学时 (h)</Label>
+                          <Input
+                            id="edit-hours"
+                            type="number"
+                            min={1}
+                            value={editHours}
+                            onChange={(e) => setEditHours(Number(e.target.value) || 1)}
+                            className="mt-2"
+                          />
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <Label htmlFor="edit-age-min">最小年龄</Label>
+                          <Input
+                            id="edit-age-min"
+                            type="number"
+                            min={6}
+                            max={18}
+                            value={editAgeMin}
+                            onChange={(e) => setEditAgeMin(Number(e.target.value) || 6)}
+                            className="mt-2"
+                          />
+                        </div>
+                        <div>
+                          <Label htmlFor="edit-age-max">最大年龄</Label>
+                          <Input
+                            id="edit-age-max"
+                            type="number"
+                            min={6}
+                            max={18}
+                            value={editAgeMax}
+                            onChange={(e) => setEditAgeMax(Number(e.target.value) || 18)}
+                            className="mt-2"
+                          />
+                        </div>
+                      </div>
+                      <div>
+                        <Label htmlFor="edit-tags">标签 (逗号分隔)</Label>
+                        <Input
+                          id="edit-tags"
+                          value={editTags}
+                          onChange={(e) => setEditTags(e.target.value)}
+                          placeholder="例: Python, 机器学习, 入门"
+                          className="mt-2"
+                        />
+                      </div>
+                      <div className="flex justify-end gap-3 pt-2">
+                        <Button variant="outline" onClick={() => setEditOpen(false)}>
+                          <X className="h-4 w-4 mr-2" />
+                          取消
+                        </Button>
+                        <Button onClick={handleSaveEdit} disabled={saving}>
+                          <Save className="h-4 w-4 mr-2" />
+                          {saving ? "保存中..." : "保存"}
+                        </Button>
+                      </div>
+                    </div>
+                  </DialogContent>
+                </Dialog>
+              </div>
               <p className="text-muted-foreground mt-1 text-sm">{detail.project.description}</p>
               <div className="flex flex-wrap gap-2 mt-3">
                 <Badge>{detail.project.category}</Badge>
