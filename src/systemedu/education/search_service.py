@@ -1,8 +1,10 @@
-"""Resource search service using Tavily API."""
+"""Resource search service - delegates to SearchAgent."""
 
 from datetime import datetime
 
+from systemedu.agents.builtin.search_agent import SearchAgent
 from systemedu.core.config import get_config
+from systemedu.core.llm_client import get_llm
 from systemedu.storage.db import NodeResource, NodeSearchStatus, get_session
 
 
@@ -21,8 +23,14 @@ def _upsert_search_status(session, project_name: str, knode_id: int, status: str
     return row
 
 
-def search_resources(project_name: str, knode_id: int, query: str) -> None:
-    """Run Tavily search and persist results. Designed to run in a background thread."""
+def search_resources(
+    project_name: str,
+    knode_id: int,
+    node_title: str,
+    node_summary: str = "",
+    difficulty: int = 5,
+) -> None:
+    """Run SearchAgent and persist results. Designed to run in a background thread."""
     config = get_config()
     api_key = config.search.tavily_api_key
     max_results = config.search.max_results_per_source
@@ -32,9 +40,17 @@ def search_resources(project_name: str, knode_id: int, query: str) -> None:
         _upsert_search_status(session, project_name, knode_id, "searching")
 
         try:
-            from tavily import TavilyClient  # type: ignore
+            llm = get_llm()
+            agent = SearchAgent(llm=llm, tavily_api_key=api_key, max_results=max_results)
 
-            client = TavilyClient(api_key=api_key)
+            result = agent.search(
+                node_title=node_title,
+                node_summary=node_summary,
+                difficulty=difficulty,
+            )
+
+            if result is None:
+                raise RuntimeError("SearchAgent returned no results")
 
             # Delete old unsaved resources for this node
             session.query(NodeResource).filter_by(
@@ -43,50 +59,42 @@ def search_resources(project_name: str, knode_id: int, query: str) -> None:
             session.commit()
 
             now = datetime.now()
+            resources = []
 
-            # Web search
-            web_result = client.search(query, max_results=max_results)
-            web_resources = []
-            for item in web_result.get("results", []):
-                web_resources.append(NodeResource(
+            for item in result.get("web_results", []):
+                resources.append(NodeResource(
                     project_name=project_name,
                     knode_id=knode_id,
                     source_type="web",
-                    title=item.get("title", ""),
-                    url=item.get("url", ""),
-                    snippet=item.get("content", ""),
-                    score=float(item.get("score", 0.0)),
+                    title=item["title"],
+                    url=item["url"],
+                    snippet=item["snippet"],
+                    score=item["score"],
                     saved=0,
                     searched_at=now,
                 ))
 
-            # YouTube search
-            yt_result = client.search(
-                query,
-                max_results=max_results,
-                include_domains=["youtube.com"],
-            )
-            yt_resources = []
-            for item in yt_result.get("results", []):
-                yt_resources.append(NodeResource(
+            for item in result.get("youtube_results", []):
+                resources.append(NodeResource(
                     project_name=project_name,
                     knode_id=knode_id,
                     source_type="youtube",
-                    title=item.get("title", ""),
-                    url=item.get("url", ""),
-                    snippet=item.get("content", ""),
-                    score=float(item.get("score", 0.0)),
+                    title=item["title"],
+                    url=item["url"],
+                    snippet=item["snippet"],
+                    score=item["score"],
                     saved=0,
                     searched_at=now,
                 ))
 
-            session.add_all(web_resources + yt_resources)
+            session.add_all(resources)
             session.commit()
 
             _upsert_search_status(session, project_name, knode_id, "done")
 
         except Exception as exc:
             _upsert_search_status(session, project_name, knode_id, "failed", error=str(exc))
+
     finally:
         session.close()
 

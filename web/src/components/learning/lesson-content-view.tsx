@@ -142,7 +142,7 @@ export function LessonContentView({
           <div className="flex-1 min-h-0 overflow-y-auto">
             <div className="max-w-5xl mx-auto px-6 py-4">
               {(allTabs[activeTab]?.key ?? allTabs[0]?.key) === "resources" ? (
-                <ResourceSearchView projectName={projectName} nodeId={nodeId} nodeTitle={knode.title} />
+                <ResourceSearchView projectName={projectName} nodeId={nodeId} />
               ) : (availableTabs[activeTab]?.key ?? availableTabs[0]?.key) === "examples" ? (
                 <AnimatedExamplesView content={lesson[availableTabs[activeTab]?.field ?? availableTabs[0].field]} />
               ) : (availableTabs[activeTab]?.key ?? availableTabs[0]?.key) === "interactive_lab" ? (

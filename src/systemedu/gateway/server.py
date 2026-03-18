@@ -1682,23 +1682,26 @@ async def api_practice_submissions(request: Request) -> JSONResponse:
 
 
 async def api_search_resources(request: Request) -> JSONResponse:
-    """POST /api/projects/{name}/nodes/{node_id}/resources/search - Trigger resource search."""
+    """POST /api/projects/{name}/nodes/{node_id}/resources/search - Trigger resource search via SearchAgent."""
     import threading
 
+    from systemedu.education.project_loader import load_project_context
     from systemedu.education.search_service import search_resources
 
     name = request.path_params["name"]
     node_id = int(request.path_params["node_id"])
 
-    body = {}
+    # Load node info from knowledge tree
     try:
-        body = await request.json()
-    except Exception:
-        pass
-
-    query = body.get("query", "").strip()
-    if not query:
-        return JSONResponse({"error": "query is required"}, status_code=400)
+        ctx = load_project_context(name)
+        knode = ctx.get_node_by_id(node_id)
+        if knode is None:
+            return JSONResponse({"error": f"node {node_id} not found"}, status_code=404)
+        node_title = knode.title
+        node_summary = knode.summary
+        difficulty = knode.difficulty_level
+    except Exception as e:
+        return JSONResponse({"error": f"failed to load project: {e}"}, status_code=500)
 
     task_key = f"{name}/{node_id}"
     if _search_tasks.get(task_key):
@@ -1708,7 +1711,7 @@ async def api_search_resources(request: Request) -> JSONResponse:
 
     def _run_and_cleanup():
         try:
-            search_resources(name, node_id, query)
+            search_resources(name, node_id, node_title, node_summary, difficulty)
         finally:
             _search_tasks.pop(task_key, None)
 

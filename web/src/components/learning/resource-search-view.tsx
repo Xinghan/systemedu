@@ -10,12 +10,11 @@ import type { ResourceItem, ResourceSearchStatus } from "@/lib/types/api"
 interface ResourceSearchViewProps {
   projectName: string
   nodeId: number
-  nodeTitle: string
 }
 
 type FilterKey = "all" | "web" | "youtube" | "saved"
 
-export function ResourceSearchView({ projectName, nodeId, nodeTitle }: ResourceSearchViewProps) {
+export function ResourceSearchView({ projectName, nodeId }: ResourceSearchViewProps) {
   const [status, setStatus] = useState<ResourceSearchStatus>("idle")
   const [resources, setResources] = useState<ResourceItem[]>([])
   const [error, setError] = useState("")
@@ -56,7 +55,7 @@ export function ResourceSearchView({ projectName, nodeId, nodeTitle }: ResourceS
   const handleSearch = async () => {
     try {
       setStatus("searching")
-      await gateway.triggerResourceSearch(projectName, nodeId, nodeTitle)
+      await gateway.triggerResourceSearch(projectName, nodeId)
       startPolling()
     } catch {
       setStatus("failed")

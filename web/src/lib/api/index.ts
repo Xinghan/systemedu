@@ -92,8 +92,8 @@ export const gateway = {
     api.get<PracticeSubmissionSummary[]>(`/api/projects/${projectName}/nodes/${nodeId}/practice/submissions?user_id=${userId}`),
   getResources: (projectName: string, nodeId: number) =>
     api.get<ResourceSearchResponse>(`/api/projects/${projectName}/nodes/${nodeId}/resources`),
-  triggerResourceSearch: (projectName: string, nodeId: number, query: string) =>
-    api.post<{ status: string }>(`/api/projects/${projectName}/nodes/${nodeId}/resources/search`, { query }),
+  triggerResourceSearch: (projectName: string, nodeId: number) =>
+    api.post<{ status: string }>(`/api/projects/${projectName}/nodes/${nodeId}/resources/search`, {}),
   toggleResourceSaved: (projectName: string, nodeId: number, resourceId: number, saved: boolean) =>
     api.patch<{ id: number; saved: boolean }>(`/api/projects/${projectName}/nodes/${nodeId}/resources/${resourceId}`, { saved }),
 }
