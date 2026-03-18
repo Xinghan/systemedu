@@ -264,35 +264,40 @@ export default function ProjectResourcesPage() {
             </div>
           )}
 
-          {/* Milestones */}
-          {milestones.map((ms) => {
-            // Only show milestones that have at least one node with resources
-            const nodesWithResources = ms.knodes.filter(
-              (kn) => resourceMap[String(kn.id)]?.resources.length > 0
-            )
-            if (nodesWithResources.length === 0) return null
-
-            return (
-              <div key={ms.order} className="space-y-3">
-                <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
-                  {ms.title}
-                </h2>
-                {nodesWithResources.map((kn) => {
-                  const group = resourceMap[String(kn.id)]
-                  return (
-                    <NodeSection
-                      key={kn.id}
-                      nodeId={kn.id}
-                      nodeTitle={kn.title}
-                      resources={group.resources}
-                      projectName={params.name}
-                      onToggle={handleToggle}
-                    />
-                  )
-                })}
-              </div>
-            )
-          })}
+          {/* Milestones — use global node index to match knode_id in resourceMap */}
+          {(() => {
+            let globalIdx = 0
+            return milestones.map((ms) => {
+              const nodesWithResources: { globalIdx: number; title: string }[] = []
+              ms.knodes.forEach((kn) => {
+                const idx = globalIdx++
+                if (resourceMap[String(idx)]?.resources.length > 0) {
+                  nodesWithResources.push({ globalIdx: idx, title: kn.title })
+                }
+              })
+              if (nodesWithResources.length === 0) return null
+              return (
+                <div key={ms.order} className="space-y-3">
+                  <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
+                    {ms.title}
+                  </h2>
+                  {nodesWithResources.map(({ globalIdx: idx, title }) => {
+                    const group = resourceMap[String(idx)]
+                    return (
+                      <NodeSection
+                        key={idx}
+                        nodeId={idx}
+                        nodeTitle={title}
+                        resources={group.resources}
+                        projectName={params.name}
+                        onToggle={handleToggle}
+                      />
+                    )
+                  })}
+                </div>
+              )
+            })
+          })()}
         </div>
       </div>
     </>
