@@ -295,6 +295,15 @@ export interface ResourceSearchResponse {
   resources: ResourceItem[]
 }
 
+export interface NodeResourceGroup {
+  status: ResourceSearchStatus
+  searched_at: string | null
+  resources: ResourceItem[]
+}
+
+// knode_id (as string) -> NodeResourceGroup
+export type ProjectResourcesResponse = Record<string, NodeResourceGroup>
+
 export interface WSMessage {
   type: "chunk" | "done" | "error" | "tool_call" | "tool_result"
   content?: string

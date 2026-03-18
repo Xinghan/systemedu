@@ -15,6 +15,7 @@ import type {
   NodeProgress,
   PracticeSubmissionResult,
   PracticeSubmissionSummary,
+  ProjectResourcesResponse,
   ResourceSearchResponse,
   UpdateProgressResponse,
   ProjectDetail,
@@ -92,6 +93,8 @@ export const gateway = {
     api.get<PracticeSubmissionSummary[]>(`/api/projects/${projectName}/nodes/${nodeId}/practice/submissions?user_id=${userId}`),
   getResources: (projectName: string, nodeId: number) =>
     api.get<ResourceSearchResponse>(`/api/projects/${projectName}/nodes/${nodeId}/resources`),
+  getAllResources: (projectName: string) =>
+    api.get<ProjectResourcesResponse>(`/api/projects/${projectName}/resources`),
   triggerResourceSearch: (projectName: string, nodeId: number) =>
     api.post<{ status: string }>(`/api/projects/${projectName}/nodes/${nodeId}/resources/search`, {}),
   toggleResourceSaved: (projectName: string, nodeId: number, resourceId: number, saved: boolean) =>

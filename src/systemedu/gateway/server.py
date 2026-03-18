@@ -1735,6 +1735,19 @@ async def api_get_resources(request: Request) -> JSONResponse:
         return JSONResponse({"error": str(e)}, status_code=500)
 
 
+async def api_get_all_resources(request: Request) -> JSONResponse:
+    """GET /api/projects/{name}/resources - Get all resources for a project, keyed by knode_id."""
+    from systemedu.education.search_service import get_all_resources
+
+    name = request.path_params["name"]
+    try:
+        result = get_all_resources(name)
+        # JSON keys must be strings
+        return JSONResponse({str(k): v for k, v in result.items()})
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+
 async def api_toggle_resource_saved(request: Request) -> JSONResponse:
     """PATCH /api/projects/{name}/nodes/{node_id}/resources/{resource_id} - Toggle saved flag."""
     from systemedu.education.search_service import toggle_resource_saved
@@ -1789,6 +1802,7 @@ def create_app() -> Starlette:
         Route("/api/projects/{name}/nodes/{node_id:int}/resources/search", api_search_resources, methods=["POST"]),
         Route("/api/projects/{name}/nodes/{node_id:int}/resources", api_get_resources, methods=["GET"]),
         Route("/api/projects/{name}/nodes/{node_id:int}/resources/{resource_id:int}", api_toggle_resource_saved, methods=["PATCH"]),
+        Route("/api/projects/{name}/resources", api_get_all_resources, methods=["GET"]),
         Route("/api/projects/{name}", api_project_detail, methods=["GET"]),
         Route("/api/projects/{name}", api_update_project, methods=["PATCH"]),
         Route("/api/agents", api_agents),

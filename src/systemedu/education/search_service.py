@@ -136,6 +136,47 @@ def get_resources(project_name: str, knode_id: int) -> dict:
         session.close()
 
 
+def get_all_resources(project_name: str) -> dict[int, dict]:
+    """Return all resources for a project, keyed by knode_id."""
+    session = get_session()
+    try:
+        resources = (
+            session.query(NodeResource)
+            .filter_by(project_name=project_name)
+            .order_by(NodeResource.knode_id, NodeResource.score.desc())
+            .all()
+        )
+        statuses = (
+            session.query(NodeSearchStatus)
+            .filter_by(project_name=project_name)
+            .all()
+        )
+        status_map = {s.knode_id: s for s in statuses}
+
+        result: dict[int, dict] = {}
+        for r in resources:
+            if r.knode_id not in result:
+                s = status_map.get(r.knode_id)
+                result[r.knode_id] = {
+                    "status": s.status if s else "idle",
+                    "searched_at": s.searched_at.isoformat() if s and s.searched_at else None,
+                    "resources": [],
+                }
+            result[r.knode_id]["resources"].append({
+                "id": r.id,
+                "source_type": r.source_type,
+                "title": r.title,
+                "url": r.url,
+                "snippet": r.snippet,
+                "score": r.score,
+                "saved": bool(r.saved),
+                "saved_at": r.saved_at.isoformat() if r.saved_at else None,
+            })
+        return result
+    finally:
+        session.close()
+
+
 def toggle_resource_saved(resource_id: int, saved: bool) -> dict | None:
     """Toggle the saved flag on a resource. Returns updated dict or None if not found."""
     session = get_session()

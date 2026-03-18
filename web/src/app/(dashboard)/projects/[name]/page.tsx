@@ -413,9 +413,8 @@ export default function ProjectDetailPage() {
                 icon={<FolderOpen className="h-5 w-5 text-blue-600" />}
                 iconBg="bg-blue-100 dark:bg-blue-500/20"
                 title="资料"
-                description="项目相关学习资料和参考文档"
-                disabled
-                badge="即将推出"
+                description="按知识点浏览收集的网页和视频资源"
+                onClick={() => router.push(`/projects/${params.name}/resources`)}
               />
               <ModuleCard
                 icon={<Palette className="h-5 w-5 text-purple-600" />}
