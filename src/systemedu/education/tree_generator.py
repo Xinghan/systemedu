@@ -59,6 +59,7 @@ async def generate_knowledge_tree(
     project_title: str,
     project_description: str,
     user_age: int = 12,
+    target_nodes: int = 20,
     llm_provider: str | None = None,
     max_retries: int = 3,
 ) -> KnowledgeTree:
@@ -78,7 +79,7 @@ async def generate_knowledge_tree(
         try:
             content = await planner.process(
                 f"项目标题：{project_title}\n项目描述：{project_description}",
-                context={"user_age": user_age},
+                context={"user_age": user_age, "target_nodes": target_nodes},
             )
 
             tree_data = _extract_json(content)

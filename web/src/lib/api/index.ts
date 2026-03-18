@@ -64,6 +64,8 @@ export const gateway = {
     api.patch<UpdateProgressResponse>(`/api/projects/${projectName}/nodes/${nodeId}/progress`, { status, user_id: userId }),
   previewTree: (treeData: Record<string, unknown>) =>
     api.post<TreePreviewResponse>("/api/projects/preview-tree", { tree_data: treeData }),
+  generateTree: (body: { title: string; description: string; age?: number; node_count?: number }) =>
+    api.post<TreePreviewResponse>("/api/projects/generate-tree", body),
   createProject: (name: string, title: string, treeData: Record<string, unknown>) =>
     api.post<CreateProjectResponse>("/api/projects", { name, title, tree_data: treeData }),
   enroll: (projectName: string, userId = "default") =>

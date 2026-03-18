@@ -326,8 +326,69 @@ class TestGatewayLessonAPI:
 
         reset_db()
 
+    def test_lesson_get_json_examples(self, config_env, tmp_path, monkeypatch):
+        """GET lesson with JSON examples returns valid structured content."""
+        import json as json_mod
+        db_file = tmp_path / "test_lesson_json.db"
+        monkeypatch.setattr("systemedu.storage.db.DB_FILE", db_file)
+        from systemedu.storage.db import LessonContent, get_session as get_db_session, reset_db
+        reset_db()
+
+        examples_json = json_mod.dumps({
+            "examples": [
+                {
+                    "template": "step-by-step",
+                    "title": "测试步骤",
+                    "data": {
+                        "steps": [
+                            {"title": "步骤1", "content": "内容1", "highlight": "关键"},
+                            {"title": "步骤2", "content": "内容2"},
+                        ]
+                    },
+                    "fallback_markdown": "## 步骤\n1. 步骤1\n2. 步骤2",
+                },
+                {
+                    "template": "comparison",
+                    "title": "对比示例",
+                    "data": {
+                        "left": {"label": "A", "points": ["点1"]},
+                        "right": {"label": "B", "points": ["点2"]},
+                        "conclusion": "总结",
+                    },
+                    "fallback_markdown": "A vs B",
+                },
+            ]
+        })
+
+        db = get_db_session()
+        lesson = LessonContent(
+            project_name="test-proj",
+            knode_id=1,
+            status="ready",
+            concept="Test concept",
+            examples=examples_json,
+        )
+        db.add(lesson)
+        db.commit()
+        db.close()
+
+        app = create_app()
+        client = TestClient(app)
+        resp = client.get("/api/projects/test-proj/nodes/1/lesson")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["status"] == "ready"
+        # Verify examples is valid JSON with expected structure
+        parsed = json_mod.loads(data["examples"])
+        assert "examples" in parsed
+        assert len(parsed["examples"]) == 2
+        assert parsed["examples"][0]["template"] == "step-by-step"
+        assert parsed["examples"][1]["template"] == "comparison"
+
+        reset_db()
+
     def test_update_progress(self, config_env, tmp_path, monkeypatch):
-        """PATCH /api/projects/{name}/nodes/{id}/progress updates status."""
+        """PATCH /api/projects/{name}/nodes/{id}/progress updates status and returns full progress."""
         db_file = tmp_path / "test_progress.db"
         monkeypatch.setattr("systemedu.storage.db.DB_FILE", db_file)
         from systemedu.storage.db import reset_db
@@ -343,6 +404,9 @@ class TestGatewayLessonAPI:
         data = resp.json()
         assert data["status"] == "passed"
         assert data["knode_id"] == 0
+        assert "progress" in data
+        assert isinstance(data["progress"], list)
+        assert "unlocked" in data
 
         reset_db()
 
@@ -377,6 +441,89 @@ class TestGatewayLessonAPI:
             json={},
         )
         assert resp.status_code == 400
+
+        reset_db()
+
+
+class TestGatewayUnlockNodes:
+    """Tests for node unlock on progress update."""
+
+    def test_passing_node_unlocks_dependents(self, config_env, tmp_path, monkeypatch):
+        """When a node is marked 'passed', dependent nodes should be unlocked."""
+        import json
+        db_file = tmp_path / "test_unlock.db"
+        monkeypatch.setattr("systemedu.storage.db.DB_FILE", db_file)
+        from systemedu.storage.db import reset_db
+        reset_db()
+
+        # Create a project with prerequisite chain: node0 → node1
+        project_dir = tmp_path / "projects" / "unlock-test"
+        project_dir.mkdir(parents=True)
+        (project_dir / "project.yaml").write_text(
+            yaml.dump({
+                "name": "unlock-test",
+                "title": "Unlock Test",
+                "knowledge_tree": "./knowledge_tree.json",
+            })
+        )
+        tree_data = {
+            "milestones": [
+                {
+                    "title": "基础",
+                    "knodes": [
+                        {
+                            "title": "Node 0",
+                            "summary": "First node",
+                            "difficulty_level": 1,
+                            "estimated_minutes": 10,
+                            "xp_reward": 100,
+                            "prerequisite_indices": [],
+                        },
+                        {
+                            "title": "Node 1",
+                            "summary": "Second node, depends on Node 0",
+                            "difficulty_level": 2,
+                            "estimated_minutes": 15,
+                            "xp_reward": 150,
+                            "prerequisite_indices": [0],
+                        },
+                    ],
+                }
+            ],
+        }
+        (project_dir / "knowledge_tree.json").write_text(
+            json.dumps(tree_data, ensure_ascii=False)
+        )
+
+        monkeypatch.setattr(
+            "systemedu.education.project_loader.find_project_dir",
+            lambda name: project_dir,
+        )
+
+        # Initialize progress via loading context (creates initial records)
+        from systemedu.education.project_loader import load_project_context
+        ctx = load_project_context("unlock-test", user_id="default", project_dir=project_dir)
+        # Node 0 should be available, node 1 should be locked
+        assert ctx.progress[0].status.value == "available"
+        assert ctx.progress[1].status.value == "locked"
+
+        app = create_app()
+        client = TestClient(app)
+
+        # Mark node 0 as passed
+        resp = client.patch(
+            "/api/projects/unlock-test/nodes/0/progress",
+            json={"status": "passed"},
+        )
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["status"] == "passed"
+        assert 1 in data["unlocked"]
+
+        # Check the full progress list: node 1 should now be available
+        progress_map = {p["knode_id"]: p["status"] for p in data["progress"]}
+        assert progress_map[0] == "passed"
+        assert progress_map[1] == "available"
 
         reset_db()
 
@@ -896,3 +1043,190 @@ class TestGatewayChatUserId:
             )
             assert resp.status_code == 200
             assert resp.json()["response"] == "ok"
+
+
+class TestGatewayGenerateTree:
+    """Tests for POST /api/projects/generate-tree."""
+
+    def test_generate_tree_missing_fields(self, config_env):
+        """POST /api/projects/generate-tree requires title and description."""
+        app = create_app()
+        client = TestClient(app)
+        resp = client.post("/api/projects/generate-tree", json={"title": "test"})
+        assert resp.status_code == 400
+        assert "description" in resp.json()["error"]
+
+    def test_generate_tree_empty_title(self, config_env):
+        """POST /api/projects/generate-tree rejects empty title."""
+        app = create_app()
+        client = TestClient(app)
+        resp = client.post(
+            "/api/projects/generate-tree",
+            json={"title": "", "description": "some desc"},
+        )
+        assert resp.status_code == 400
+
+    def test_generate_tree_success(self, config_env):
+        """POST /api/projects/generate-tree returns TreePreviewResponse on success."""
+        from systemedu.education.models import KnowledgeTree, Milestone, KnowledgeNode
+
+        mock_tree = KnowledgeTree(
+            milestones=[
+                Milestone(
+                    title="基础模块",
+                    knodes=[
+                        KnowledgeNode(
+                            title="节点1",
+                            summary="描述",
+                            difficulty_level=1,
+                            estimated_minutes=20,
+                            prerequisite_indices=[],
+                        ),
+                        KnowledgeNode(
+                            title="节点2",
+                            summary="描述2",
+                            difficulty_level=2,
+                            estimated_minutes=30,
+                            prerequisite_indices=[0],
+                        ),
+                    ],
+                )
+            ]
+        )
+
+        with patch(
+            "systemedu.education.tree_generator.generate_knowledge_tree",
+            new_callable=AsyncMock,
+            return_value=mock_tree,
+        ):
+            app = create_app()
+            client = TestClient(app)
+            resp = client.post(
+                "/api/projects/generate-tree",
+                json={"title": "AI 树叶识别", "description": "学习用AI识别树叶种类", "age": 10},
+            )
+            assert resp.status_code == 200
+            data = resp.json()
+            assert data["valid"] is True
+            assert data["stats"]["milestone_count"] == 1
+            assert data["stats"]["node_count"] == 2
+            assert data["stats"]["total_minutes"] == 50
+            assert data["stats"]["estimated_hours"] == 1
+            assert len(data["milestones"]) == 1
+            assert data["meta"]["title"] == "AI 树叶识别"
+            assert data["errors"] == []
+
+    def test_generate_tree_llm_failure(self, config_env):
+        """POST /api/projects/generate-tree returns 500 when LLM fails."""
+        with patch(
+            "systemedu.education.tree_generator.generate_knowledge_tree",
+            new_callable=AsyncMock,
+            side_effect=RuntimeError("LLM timeout"),
+        ):
+            app = create_app()
+            client = TestClient(app)
+            resp = client.post(
+                "/api/projects/generate-tree",
+                json={"title": "Test", "description": "Test project"},
+            )
+            assert resp.status_code == 500
+            assert "AI 生成失败" in resp.json()["error"]
+
+    def test_generate_tree_with_node_count(self, config_env):
+        """POST /api/projects/generate-tree passes node_count to generate_knowledge_tree."""
+        from systemedu.education.models import KnowledgeTree, Milestone, KnowledgeNode
+
+        mock_tree = KnowledgeTree(
+            milestones=[
+                Milestone(
+                    title="M1",
+                    knodes=[
+                        KnowledgeNode(
+                            title="N1", summary="d", difficulty_level=1,
+                            estimated_minutes=10, prerequisite_indices=[],
+                        ),
+                    ],
+                )
+            ]
+        )
+
+        with patch(
+            "systemedu.education.tree_generator.generate_knowledge_tree",
+            new_callable=AsyncMock,
+            return_value=mock_tree,
+        ) as mock_gen:
+            app = create_app()
+            client = TestClient(app)
+            resp = client.post(
+                "/api/projects/generate-tree",
+                json={"title": "Test", "description": "Desc", "node_count": 100},
+            )
+            assert resp.status_code == 200
+            mock_gen.assert_called_once()
+            call_kwargs = mock_gen.call_args[1]
+            assert call_kwargs["target_nodes"] == 100
+
+    def test_generate_tree_node_count_clamped(self, config_env):
+        """node_count should be clamped to [5, 500]."""
+        from systemedu.education.models import KnowledgeTree, Milestone, KnowledgeNode
+
+        mock_tree = KnowledgeTree(
+            milestones=[
+                Milestone(
+                    title="M1",
+                    knodes=[
+                        KnowledgeNode(
+                            title="N1", summary="d", difficulty_level=1,
+                            estimated_minutes=10, prerequisite_indices=[],
+                        ),
+                    ],
+                )
+            ]
+        )
+
+        with patch(
+            "systemedu.education.tree_generator.generate_knowledge_tree",
+            new_callable=AsyncMock,
+            return_value=mock_tree,
+        ) as mock_gen:
+            app = create_app()
+            client = TestClient(app)
+            # Test clamping below minimum
+            resp = client.post(
+                "/api/projects/generate-tree",
+                json={"title": "T", "description": "D", "node_count": 1},
+            )
+            assert resp.status_code == 200
+            assert mock_gen.call_args[1]["target_nodes"] == 5
+
+    def test_generate_tree_node_count_default(self, config_env):
+        """node_count defaults to 20 when not provided."""
+        from systemedu.education.models import KnowledgeTree, Milestone, KnowledgeNode
+
+        mock_tree = KnowledgeTree(
+            milestones=[
+                Milestone(
+                    title="M1",
+                    knodes=[
+                        KnowledgeNode(
+                            title="N1", summary="d", difficulty_level=1,
+                            estimated_minutes=10, prerequisite_indices=[],
+                        ),
+                    ],
+                )
+            ]
+        )
+
+        with patch(
+            "systemedu.education.tree_generator.generate_knowledge_tree",
+            new_callable=AsyncMock,
+            return_value=mock_tree,
+        ) as mock_gen:
+            app = create_app()
+            client = TestClient(app)
+            resp = client.post(
+                "/api/projects/generate-tree",
+                json={"title": "T", "description": "D"},
+            )
+            assert resp.status_code == 200
+            assert mock_gen.call_args[1]["target_nodes"] == 20

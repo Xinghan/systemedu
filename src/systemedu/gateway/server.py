@@ -430,6 +430,51 @@ async def api_preview_tree(request: Request) -> JSONResponse:
     })
 
 
+async def api_generate_tree(request: Request) -> JSONResponse:
+    """POST /api/projects/generate-tree - AI-generate a knowledge tree from title + description."""
+    from systemedu.education.tree_generator import generate_knowledge_tree
+
+    body = await request.json()
+    title = body.get("title", "").strip()
+    description = body.get("description", "").strip()
+    age = body.get("age", 12)
+    node_count = max(5, min(500, int(body.get("node_count", 20))))
+
+    if not title or not description:
+        return JSONResponse(
+            {"error": "title and description are required"}, status_code=400
+        )
+
+    try:
+        tree = await generate_knowledge_tree(title, description, user_age=age, target_nodes=node_count)
+    except Exception as e:
+        logger.error(f"AI tree generation failed: {e}")
+        return JSONResponse(
+            {"error": f"AI 生成失败: {e}"}, status_code=500
+        )
+
+    milestones = [ms.model_dump() for ms in tree.milestones]
+    total_nodes = sum(len(ms.get("knodes", [])) for ms in milestones)
+    total_minutes = sum(
+        kn.get("estimated_minutes", 15)
+        for ms in milestones
+        for kn in ms.get("knodes", [])
+    )
+
+    return JSONResponse({
+        "valid": True,
+        "milestones": milestones,
+        "stats": {
+            "milestone_count": len(milestones),
+            "node_count": total_nodes,
+            "total_minutes": total_minutes,
+            "estimated_hours": max(1, round(total_minutes / 60)),
+        },
+        "meta": {"title": title, "description": description},
+        "errors": [],
+    })
+
+
 async def api_project_detail(request: Request) -> JSONResponse:
     """GET /api/projects/{name} - Project detail with tree and progress."""
     name = request.path_params["name"]
@@ -1615,6 +1660,7 @@ def create_app() -> Starlette:
         Route("/api/projects", api_projects, methods=["GET"]),
         Route("/api/projects", api_create_project, methods=["POST"]),
         Route("/api/projects/preview-tree", api_preview_tree, methods=["POST"]),
+        Route("/api/projects/generate-tree", api_generate_tree, methods=["POST"]),
         Route("/api/projects/{name}/enroll", api_enroll, methods=["POST"]),
         Route("/api/projects/{name}/enrollment", api_get_enrollment, methods=["GET"]),
         Route("/api/projects/{name}/enrollment", api_update_enrollment, methods=["PATCH"]),
@@ -1660,6 +1706,13 @@ def create_app() -> Starlette:
 def main():
     """Run the gateway server (used by daemon subprocess)."""
     import uvicorn
+
+    # Configure logging so systemedu agent logs are visible in stdout
+    import logging
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(levelname)s:%(name)s:%(message)s",
+    )
 
     parser = argparse.ArgumentParser(description="SystemEdu Gateway")
     parser.add_argument("--host", default="127.0.0.1")

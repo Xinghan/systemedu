@@ -12,6 +12,8 @@ from systemedu.education.services import (
     parse_knowledge_tree,
     validate_knowledge_tree,
 )
+from systemedu.education.lesson_generator import _validate_examples_json
+from systemedu.agents.builtin.planner import _compute_tree_scale
 from systemedu.education.tree_generator import _extract_json, generate_knowledge_tree
 
 
@@ -257,3 +259,181 @@ class TestGenerateKnowledgeTree:
         ):
             with pytest.raises(RuntimeError, match="Failed to generate"):
                 await generate_knowledge_tree("Test", "Test", max_retries=2)
+
+
+class TestComputeTreeScale:
+    """Tests for _compute_tree_scale helper."""
+
+    def test_small_scale(self):
+        result = _compute_tree_scale(10)
+        assert result["milestones"] == "2-3"
+        assert result["nodes_per"] == "2-5"
+        assert result["target"] == 10
+
+    def test_medium_scale(self):
+        result = _compute_tree_scale(30)
+        assert result["milestones"] == "3-6"
+        assert result["nodes_per"] == "3-10"
+        assert result["target"] == 30
+
+    def test_large_scale(self):
+        result = _compute_tree_scale(100)
+        assert result["milestones"] == "5-10"
+        assert result["nodes_per"] == "8-15"
+        assert result["target"] == 100
+
+    def test_xlarge_scale(self):
+        result = _compute_tree_scale(300)
+        assert result["milestones"] == "8-15"
+        assert result["nodes_per"] == "15-35"
+        assert result["target"] == 300
+
+    def test_boundary_15(self):
+        assert _compute_tree_scale(15)["milestones"] == "2-3"
+
+    def test_boundary_16(self):
+        assert _compute_tree_scale(16)["milestones"] == "3-6"
+
+    def test_boundary_50(self):
+        assert _compute_tree_scale(50)["milestones"] == "3-6"
+
+    def test_boundary_51(self):
+        assert _compute_tree_scale(51)["milestones"] == "5-10"
+
+    def test_boundary_150(self):
+        assert _compute_tree_scale(150)["milestones"] == "5-10"
+
+    def test_boundary_151(self):
+        assert _compute_tree_scale(151)["milestones"] == "8-15"
+
+
+class TestGenerateTreeTargetNodes:
+    """Tests for target_nodes propagation through generate_knowledge_tree."""
+
+    @pytest.fixture
+    def valid_tree_json(self, valid_tree_data):
+        return json.dumps(valid_tree_data)
+
+    @pytest.mark.asyncio
+    async def test_target_nodes_passed_to_planner(self, valid_tree_json):
+        """target_nodes should be passed in the context to planner.process()."""
+        mock_planner = AsyncMock()
+        mock_planner.process = AsyncMock(
+            return_value=f"```json\n{valid_tree_json}\n```"
+        )
+
+        with (
+            patch("systemedu.agents.builtin.planner.PlannerAgent", return_value=mock_planner),
+            patch("systemedu.agents.base.AgentConfig"),
+        ):
+            await generate_knowledge_tree("Test", "Test project", target_nodes=100)
+            call_args = mock_planner.process.call_args
+            context = call_args[1].get("context") or call_args[0][1]
+            assert context["target_nodes"] == 100
+
+    @pytest.mark.asyncio
+    async def test_target_nodes_default(self, valid_tree_json):
+        """Default target_nodes should be 20."""
+        mock_planner = AsyncMock()
+        mock_planner.process = AsyncMock(
+            return_value=f"```json\n{valid_tree_json}\n```"
+        )
+
+        with (
+            patch("systemedu.agents.builtin.planner.PlannerAgent", return_value=mock_planner),
+            patch("systemedu.agents.base.AgentConfig"),
+        ):
+            await generate_knowledge_tree("Test", "Test project")
+            call_args = mock_planner.process.call_args
+            context = call_args[1].get("context") or call_args[0][1]
+            assert context["target_nodes"] == 20
+
+
+class TestValidateExamplesJson:
+    """Tests for _validate_examples_json validation function."""
+
+    def test_valid_json_returns_cleaned(self):
+        """Valid JSON with known templates returns cleaned JSON string."""
+        payload = json.dumps({
+            "examples": [{
+                "template": "step-by-step",
+                "title": "Test",
+                "data": {"steps": [{"title": "S1", "content": "C1"}]},
+                "fallback_markdown": "fallback",
+            }]
+        })
+        result = _validate_examples_json(payload)
+        parsed = json.loads(result)
+        assert parsed["examples"][0]["template"] == "step-by-step"
+
+    def test_valid_json_with_code_fences(self):
+        """JSON wrapped in markdown code fences is still parsed."""
+        inner = json.dumps({
+            "examples": [{
+                "template": "comparison",
+                "title": "Test",
+                "data": {"left": {"label": "A", "points": []}, "right": {"label": "B", "points": []}},
+                "fallback_markdown": "fb",
+            }]
+        })
+        wrapped = f"```json\n{inner}\n```"
+        result = _validate_examples_json(wrapped)
+        parsed = json.loads(result)
+        assert parsed["examples"][0]["template"] == "comparison"
+
+    def test_plain_markdown_returned_as_is(self):
+        """Non-JSON content is returned unchanged."""
+        md = "## 示例\n\n这是一个示例说明。"
+        result = _validate_examples_json(md)
+        assert result == md
+
+    def test_unknown_template_returns_original(self):
+        """JSON with unknown template type returns original content."""
+        payload = json.dumps({
+            "examples": [{
+                "template": "unknown-type",
+                "title": "Test",
+                "data": {},
+                "fallback_markdown": "fb",
+            }]
+        })
+        result = _validate_examples_json(payload)
+        # Should return original since template is invalid
+        assert result == payload
+
+    def test_missing_examples_key_returns_original(self):
+        """JSON without 'examples' key returns original content."""
+        payload = json.dumps({"data": "something"})
+        result = _validate_examples_json(payload)
+        assert result == payload
+
+    def test_missing_required_fields_returns_original(self):
+        """JSON examples missing 'data' or 'fallback_markdown' returns original."""
+        payload = json.dumps({
+            "examples": [{
+                "template": "timeline",
+                "title": "Test",
+                # missing 'data' and 'fallback_markdown'
+            }]
+        })
+        result = _validate_examples_json(payload)
+        assert result == payload
+
+    def test_all_template_types_accepted(self):
+        """All 7 valid template types are accepted."""
+        templates = [
+            "step-by-step", "comparison", "flowchart", "timeline",
+            "formula", "cause-effect", "anatomy",
+        ]
+        for tmpl in templates:
+            payload = json.dumps({
+                "examples": [{
+                    "template": tmpl,
+                    "title": f"Test {tmpl}",
+                    "data": {},
+                    "fallback_markdown": "fb",
+                }]
+            })
+            result = _validate_examples_json(payload)
+            parsed = json.loads(result)
+            assert parsed["examples"][0]["template"] == tmpl
