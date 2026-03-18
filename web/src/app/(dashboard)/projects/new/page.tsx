@@ -2,8 +2,8 @@
 
 import { useCallback, useState } from "react"
 import { useRouter } from "next/navigation"
-import { FileJson, Eye, Check, AlertCircle, ArrowLeft, ArrowRight, Loader2, Sparkles, Upload } from "lucide-react"
-import { LoadingSpinner } from "@/components/ui/loading-spinner"
+import { FileJson, Eye, Check, AlertCircle, ArrowLeft, ArrowRight, Sparkles, Upload } from "lucide-react"
+import { PageLoading } from "@/components/ui/page-loading"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -27,6 +27,7 @@ export default function NewProjectPage() {
   const [projectTitle, setProjectTitle] = useState("")
   const [error, setError] = useState("")
   const [loading, setLoading] = useState(false)
+  const [loadingLabel, setLoadingLabel] = useState("")
   const [dragOver, setDragOver] = useState(false)
 
   // AI generate form state
@@ -74,6 +75,7 @@ export default function NewProjectPage() {
   const handlePreview = useCallback(async () => {
     if (!treeData) return
     setLoading(true)
+    setLoadingLabel("正在验证知识树...")
     setError("")
     try {
       const result = await gateway.previewTree(treeData)
@@ -95,6 +97,7 @@ export default function NewProjectPage() {
   const handleAiGenerate = useCallback(async () => {
     if (!aiTitle.trim() || !aiDescription.trim()) return
     setLoading(true)
+    setLoadingLabel("AI 正在生成知识树，请稍候...")
     setError("")
     try {
       const result = await gateway.generateTree({
@@ -117,6 +120,7 @@ export default function NewProjectPage() {
   const handleCreate = useCallback(async () => {
     if (!treeData || !projectName.trim()) return
     setLoading(true)
+    setLoadingLabel("正在创建项目...")
     setError("")
     try {
       await gateway.createProject(projectName.trim(), projectTitle.trim(), treeData)
@@ -132,6 +136,15 @@ export default function NewProjectPage() {
     input: "选择方式",
     preview: "预览",
     confirm: "确认创建",
+  }
+
+  if (loading) {
+    return (
+      <>
+        <AppHeader title="新建项目" />
+        <PageLoading label={loadingLabel} />
+      </>
+    )
   }
 
   return (
@@ -242,19 +255,10 @@ export default function NewProjectPage() {
                     <div className="pt-2">
                       <Button
                         onClick={handleAiGenerate}
-                        disabled={loading || !aiTitle.trim() || !aiDescription.trim()}
+                        disabled={!aiTitle.trim() || !aiDescription.trim()}
                       >
-                        {loading ? (
-                          <span className="flex items-center gap-2">
-                            <LoadingSpinner size="sm" />
-                            AI 正在生成知识树，请稍候...
-                          </span>
-                        ) : (
-                          <>
-                            <Sparkles className="h-4 w-4 mr-2" />
-                            生成知识树
-                          </>
-                        )}
+                        <Sparkles className="h-4 w-4 mr-2" />
+                        生成知识树
                       </Button>
                     </div>
                   </CardContent>
@@ -324,8 +328,7 @@ export default function NewProjectPage() {
                         <Check className="h-3 w-3" />
                         JSON 已解析
                       </Badge>
-                      <Button onClick={handlePreview} disabled={loading}>
-                        {loading && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+                      <Button onClick={handlePreview}>
                         <Eye className="h-4 w-4 mr-2" />
                         预览知识树
                         <ArrowRight className="h-4 w-4 ml-2" />
@@ -434,8 +437,7 @@ export default function NewProjectPage() {
                   <ArrowLeft className="h-4 w-4 mr-2" />
                   返回预览
                 </Button>
-                <Button onClick={handleCreate} disabled={loading || !projectName.trim()}>
-                  {loading && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+                <Button onClick={handleCreate} disabled={!projectName.trim()}>
                   <Check className="h-4 w-4 mr-2" />
                   创建项目
                 </Button>
