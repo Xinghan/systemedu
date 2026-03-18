@@ -1748,6 +1748,33 @@ async def api_get_all_resources(request: Request) -> JSONResponse:
         return JSONResponse({"error": str(e)}, status_code=500)
 
 
+async def api_add_resource(request: Request) -> JSONResponse:
+    """POST /api/projects/{name}/nodes/{node_id}/resources - Manually add a resource."""
+    from systemedu.education.search_service import add_resource
+
+    name = request.path_params["name"]
+    node_id = int(request.path_params["node_id"])
+
+    body = {}
+    try:
+        body = await request.json()
+    except Exception:
+        pass
+
+    url = body.get("url", "").strip()
+    if not url:
+        return JSONResponse({"error": "url is required"}, status_code=400)
+
+    title = body.get("title", "").strip()
+    snippet = body.get("snippet", "").strip()
+
+    try:
+        result = add_resource(name, node_id, url, title, snippet)
+        return JSONResponse(result, status_code=201)
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+
 async def api_toggle_resource_saved(request: Request) -> JSONResponse:
     """PATCH /api/projects/{name}/nodes/{node_id}/resources/{resource_id} - Toggle saved flag."""
     from systemedu.education.search_service import toggle_resource_saved
@@ -1801,6 +1828,7 @@ def create_app() -> Starlette:
         Route("/api/projects/{name}/nodes/{node_id:int}/highlights/{highlight_id:int}", api_delete_highlight, methods=["DELETE"]),
         Route("/api/projects/{name}/nodes/{node_id:int}/resources/search", api_search_resources, methods=["POST"]),
         Route("/api/projects/{name}/nodes/{node_id:int}/resources", api_get_resources, methods=["GET"]),
+        Route("/api/projects/{name}/nodes/{node_id:int}/resources", api_add_resource, methods=["POST"]),
         Route("/api/projects/{name}/nodes/{node_id:int}/resources/{resource_id:int}", api_toggle_resource_saved, methods=["PATCH"]),
         Route("/api/projects/{name}/resources", api_get_all_resources, methods=["GET"]),
         Route("/api/projects/{name}", api_project_detail, methods=["GET"]),

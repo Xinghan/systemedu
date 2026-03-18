@@ -93,6 +93,8 @@ export const gateway = {
     api.get<PracticeSubmissionSummary[]>(`/api/projects/${projectName}/nodes/${nodeId}/practice/submissions?user_id=${userId}`),
   getResources: (projectName: string, nodeId: number) =>
     api.get<ResourceSearchResponse>(`/api/projects/${projectName}/nodes/${nodeId}/resources`),
+  addResource: (projectName: string, nodeId: number, url: string, title: string, snippet?: string) =>
+    api.post<ResourceItem>(`/api/projects/${projectName}/nodes/${nodeId}/resources`, { url, title, snippet: snippet ?? "" }),
   getAllResources: (projectName: string) =>
     api.get<ProjectResourcesResponse>(`/api/projects/${projectName}/resources`),
   triggerResourceSearch: (projectName: string, nodeId: number) =>

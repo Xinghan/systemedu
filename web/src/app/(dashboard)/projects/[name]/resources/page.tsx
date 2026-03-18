@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react"
 import { useParams, useRouter } from "next/navigation"
 import Link from "next/link"
-import { ArrowLeft, Bookmark, BookmarkCheck, ChevronDown, ChevronRight, ExternalLink, Loader2 } from "lucide-react"
+import { ArrowLeft, Bookmark, BookmarkCheck, ChevronDown, ChevronRight, ExternalLink, Loader2, Plus, X } from "lucide-react"
 import { AppHeader } from "@/components/layout/app-header"
 import { PageLoading } from "@/components/ui/page-loading"
 import { Badge } from "@/components/ui/badge"
@@ -99,35 +99,93 @@ function NodeSection({
   resources,
   projectName,
   onToggle,
+  onAdd,
 }: {
   nodeId: number
   nodeTitle: string
   resources: ResourceItem[]
   projectName: string
   onToggle: (nodeId: number, r: ResourceItem) => void
+  onAdd: (nodeId: number, url: string, title: string) => Promise<void>
 }) {
   const [open, setOpen] = useState(true)
+  const [showForm, setShowForm] = useState(false)
+  const [url, setUrl] = useState("")
+  const [title, setTitle] = useState("")
+  const [adding, setAdding] = useState(false)
   const savedCount = resources.filter((r) => r.saved).length
+
+  const handleAdd = async (e: React.FormEvent) => {
+    e.preventDefault()
+    const trimmed = url.trim()
+    if (!trimmed) return
+    setAdding(true)
+    try {
+      await onAdd(nodeId, trimmed, title.trim())
+      setUrl(""); setTitle(""); setShowForm(false)
+    } finally {
+      setAdding(false)
+    }
+  }
 
   return (
     <div className="border rounded-xl overflow-hidden">
-      <button
-        onClick={() => setOpen((v) => !v)}
-        className="w-full flex items-center gap-3 px-4 py-3 bg-muted/40 hover:bg-muted/60 transition-colors text-left"
-      >
-        {open ? (
-          <ChevronDown className="h-4 w-4 text-muted-foreground shrink-0" />
-        ) : (
-          <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
-        )}
-        <span className="font-medium text-sm flex-1">{nodeTitle}</span>
-        <span className="text-xs text-muted-foreground">
-          {resources.length} 条资料
-          {savedCount > 0 && ` · ${savedCount} 已收藏`}
-        </span>
-      </button>
+      <div className="flex items-center gap-2 px-4 py-3 bg-muted/40">
+        <button
+          onClick={() => setOpen((v) => !v)}
+          className="flex items-center gap-2 flex-1 text-left hover:text-foreground transition-colors"
+        >
+          {open ? (
+            <ChevronDown className="h-4 w-4 text-muted-foreground shrink-0" />
+          ) : (
+            <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
+          )}
+          <span className="font-medium text-sm flex-1">{nodeTitle}</span>
+          <span className="text-xs text-muted-foreground">
+            {resources.length} 条资料
+            {savedCount > 0 && ` · ${savedCount} 已收藏`}
+          </span>
+        </button>
+        <button
+          onClick={() => setShowForm((v) => !v)}
+          className="shrink-0 p-1 rounded text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+          title="添加链接"
+        >
+          {showForm ? <X className="h-3.5 w-3.5" /> : <Plus className="h-3.5 w-3.5" />}
+        </button>
+      </div>
       {open && (
         <div className="p-3 space-y-2">
+          {showForm && (
+            <form onSubmit={handleAdd} className="rounded-lg border bg-muted/40 p-3 space-y-2">
+              <input
+                type="text"
+                value={url}
+                onChange={(e) => setUrl(e.target.value)}
+                placeholder="粘贴链接（网页或 YouTube）"
+                className="w-full text-sm px-3 py-1.5 rounded-md border bg-background focus:outline-none focus:ring-1 focus:ring-ring"
+                autoFocus
+              />
+              <input
+                type="text"
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                placeholder="标题（可选）"
+                className="w-full text-sm px-3 py-1.5 rounded-md border bg-background focus:outline-none focus:ring-1 focus:ring-ring"
+              />
+              <div className="flex gap-2 justify-end">
+                <button type="button" onClick={() => setShowForm(false)}
+                  className="px-3 py-1 text-xs rounded-md border hover:bg-muted transition-colors">
+                  取消
+                </button>
+                <button type="submit" disabled={adding || !url.trim()}
+                  className="px-3 py-1 text-xs rounded-md bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50 transition-colors flex items-center gap-1">
+                  {adding && <Loader2 className="h-3 w-3 animate-spin" />}
+                  添加
+                </button>
+              </div>
+            </form>
+          )}
           {resources.map((r) => (
             <ResourceRow
               key={r.id}
@@ -199,6 +257,19 @@ export default function ProjectResourcesPage() {
         }
       })
     }
+  }
+
+  const handleAdd = async (nodeId: number, url: string, title: string) => {
+    const newItem = await gateway.addResource(params.name, nodeId, url, title)
+    const key = String(nodeId)
+    setResourceMap((prev) => ({
+      ...prev,
+      [key]: {
+        status: prev[key]?.status ?? "idle",
+        searched_at: prev[key]?.searched_at ?? null,
+        resources: [newItem, ...(prev[key]?.resources ?? [])],
+      },
+    }))
   }
 
   if (loading) return (
@@ -291,6 +362,7 @@ export default function ProjectResourcesPage() {
                         resources={group.resources}
                         projectName={params.name}
                         onToggle={handleToggle}
+                        onAdd={handleAdd}
                       />
                     )
                   })}

@@ -177,6 +177,44 @@ def get_all_resources(project_name: str) -> dict[int, dict]:
         session.close()
 
 
+def add_resource(project_name: str, knode_id: int, url: str, title: str, snippet: str = "") -> dict:
+    """Manually add a resource for a node. Auto-detects source_type from URL."""
+    try:
+        u = __import__("urllib.parse", fromlist=["urlparse"]).urlparse(url)
+        source_type = "youtube" if "youtube.com" in u.netloc or "youtu.be" in u.netloc else "web"
+    except Exception:
+        source_type = "web"
+
+    session = get_session()
+    try:
+        row = NodeResource(
+            project_name=project_name,
+            knode_id=knode_id,
+            source_type=source_type,
+            title=title or url,
+            url=url,
+            snippet=snippet,
+            score=0.0,
+            saved=1,  # manually added resources are saved by default
+            searched_at=datetime.now(),
+            saved_at=datetime.now(),
+        )
+        session.add(row)
+        session.commit()
+        return {
+            "id": row.id,
+            "source_type": row.source_type,
+            "title": row.title,
+            "url": row.url,
+            "snippet": row.snippet,
+            "score": row.score,
+            "saved": True,
+            "saved_at": row.saved_at.isoformat() if row.saved_at else None,
+        }
+    finally:
+        session.close()
+
+
 def toggle_resource_saved(resource_id: int, saved: bool) -> dict | None:
     """Toggle the saved flag on a resource. Returns updated dict or None if not found."""
     session = get_session()

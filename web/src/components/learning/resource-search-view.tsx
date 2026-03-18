@@ -1,7 +1,7 @@
 "use client"
 
 import { useCallback, useEffect, useRef, useState } from "react"
-import { Bookmark, BookmarkCheck, ExternalLink, Loader2, Search } from "lucide-react"
+import { Bookmark, BookmarkCheck, ExternalLink, Loader2, Plus, Search, X } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { gateway } from "@/lib/api"
@@ -14,35 +14,13 @@ interface ResourceSearchViewProps {
 
 type FilterKey = "all" | "web" | "youtube" | "saved"
 
-function extractYouTubeId(url: string): string | null {
+export function extractYouTubeId(url: string): string | null {
   try {
     const u = new URL(url)
-    if (u.hostname.includes("youtube.com")) {
-      return u.searchParams.get("v")
-    }
-    if (u.hostname === "youtu.be") {
-      return u.pathname.slice(1)
-    }
-  } catch {
-    // ignore
-  }
+    if (u.hostname.includes("youtube.com")) return u.searchParams.get("v")
+    if (u.hostname === "youtu.be") return u.pathname.slice(1)
+  } catch { /* ignore */ }
   return null
-}
-
-function YouTubeEmbed({ url, title }: { url: string; title: string }) {
-  const videoId = extractYouTubeId(url)
-  if (!videoId) return null
-  return (
-    <div className="mt-2 rounded-md overflow-hidden aspect-video w-full">
-      <iframe
-        src={`https://www.youtube.com/embed/${videoId}`}
-        title={title}
-        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-        allowFullScreen
-        className="w-full h-full"
-      />
-    </div>
-  )
 }
 
 function ResourceCard({
@@ -77,7 +55,6 @@ function ResourceCard({
           {resource.snippet && (
             <p className="text-xs text-muted-foreground line-clamp-2">{resource.snippet}</p>
           )}
-          {/* Expand/collapse button for YouTube */}
           {videoId && (
             <button
               onClick={() => setExpanded((v) => !v)}
@@ -101,10 +78,87 @@ function ResourceCard({
       </div>
       {expanded && videoId && (
         <div className="px-3 pb-3">
-          <YouTubeEmbed url={resource.url} title={resource.title} />
+          <div className="rounded-md overflow-hidden aspect-video w-full">
+            <iframe
+              src={`https://www.youtube.com/embed/${videoId}`}
+              title={resource.title}
+              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+              allowFullScreen
+              className="w-full h-full"
+            />
+          </div>
         </div>
       )}
     </div>
+  )
+}
+
+function AddResourceForm({
+  onAdd,
+  onCancel,
+}: {
+  onAdd: (url: string, title: string) => Promise<void>
+  onCancel: () => void
+}) {
+  const [url, setUrl] = useState("")
+  const [title, setTitle] = useState("")
+  const [adding, setAdding] = useState(false)
+  const [urlError, setUrlError] = useState("")
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    const trimmed = url.trim()
+    if (!trimmed) { setUrlError("请输入链接"); return }
+    try { new URL(trimmed) } catch { setUrlError("请输入有效的 URL"); return }
+    setUrlError("")
+    setAdding(true)
+    try {
+      await onAdd(trimmed, title.trim())
+      setUrl("")
+      setTitle("")
+    } finally {
+      setAdding(false)
+    }
+  }
+
+  return (
+    <form onSubmit={handleSubmit} className="rounded-lg border bg-muted/40 p-3 space-y-2">
+      <div className="space-y-1">
+        <input
+          type="text"
+          value={url}
+          onChange={(e) => { setUrl(e.target.value); setUrlError("") }}
+          placeholder="粘贴链接（网页或 YouTube）"
+          className="w-full text-sm px-3 py-1.5 rounded-md border bg-background focus:outline-none focus:ring-1 focus:ring-ring"
+          autoFocus
+        />
+        {urlError && <p className="text-xs text-destructive">{urlError}</p>}
+      </div>
+      <input
+        type="text"
+        value={title}
+        onChange={(e) => setTitle(e.target.value)}
+        placeholder="标题（可选，留空自动填充链接）"
+        className="w-full text-sm px-3 py-1.5 rounded-md border bg-background focus:outline-none focus:ring-1 focus:ring-ring"
+      />
+      <div className="flex gap-2 justify-end">
+        <button
+          type="button"
+          onClick={onCancel}
+          className="px-3 py-1 text-xs rounded-md border hover:bg-muted transition-colors"
+        >
+          取消
+        </button>
+        <button
+          type="submit"
+          disabled={adding}
+          className="px-3 py-1 text-xs rounded-md bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50 transition-colors flex items-center gap-1"
+        >
+          {adding && <Loader2 className="h-3 w-3 animate-spin" />}
+          添加
+        </button>
+      </div>
+    </form>
   )
 }
 
@@ -113,6 +167,7 @@ export function ResourceSearchView({ projectName, nodeId }: ResourceSearchViewPr
   const [resources, setResources] = useState<ResourceItem[]>([])
   const [error, setError] = useState("")
   const [filter, setFilter] = useState<FilterKey>("all")
+  const [showAddForm, setShowAddForm] = useState(false)
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
   const stopPolling = useCallback(() => {
@@ -128,9 +183,7 @@ export function ResourceSearchView({ projectName, nodeId }: ResourceSearchViewPr
       setStatus(data.status)
       setResources(data.resources)
       setError(data.error ?? "")
-      if (data.status !== "searching") {
-        stopPolling()
-      }
+      if (data.status !== "searching") stopPolling()
     } catch {
       stopPolling()
     }
@@ -158,16 +211,18 @@ export function ResourceSearchView({ projectName, nodeId }: ResourceSearchViewPr
 
   const handleToggleSaved = async (resource: ResourceItem) => {
     const newSaved = !resource.saved
-    setResources((prev) =>
-      prev.map((r) => (r.id === resource.id ? { ...r, saved: newSaved } : r))
-    )
+    setResources((prev) => prev.map((r) => r.id === resource.id ? { ...r, saved: newSaved } : r))
     try {
       await gateway.toggleResourceSaved(projectName, nodeId, resource.id, newSaved)
     } catch {
-      setResources((prev) =>
-        prev.map((r) => (r.id === resource.id ? { ...r, saved: resource.saved } : r))
-      )
+      setResources((prev) => prev.map((r) => r.id === resource.id ? { ...r, saved: resource.saved } : r))
     }
+  }
+
+  const handleAddResource = async (url: string, title: string) => {
+    const newItem = await gateway.addResource(projectName, nodeId, url, title)
+    setResources((prev) => [newItem, ...prev])
+    setShowAddForm(false)
   }
 
   const webCount = resources.filter((r) => r.source_type === "web").length
@@ -185,19 +240,30 @@ export function ResourceSearchView({ projectName, nodeId }: ResourceSearchViewPr
     <div className="space-y-4">
       {/* Toolbar */}
       <div className="flex items-center justify-between gap-3 flex-wrap">
-        <Button
-          onClick={handleSearch}
-          disabled={status === "searching"}
-          size="sm"
-          className="gap-1.5"
-        >
-          {status === "searching" ? (
-            <Loader2 className="h-3.5 w-3.5 animate-spin" />
-          ) : (
-            <Search className="h-3.5 w-3.5" />
-          )}
-          {status === "searching" ? "搜索中..." : "收集资料"}
-        </Button>
+        <div className="flex gap-2">
+          <Button
+            onClick={handleSearch}
+            disabled={status === "searching"}
+            size="sm"
+            className="gap-1.5"
+          >
+            {status === "searching" ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <Search className="h-3.5 w-3.5" />
+            )}
+            {status === "searching" ? "搜索中..." : "收集资料"}
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setShowAddForm((v) => !v)}
+            className="gap-1.5"
+          >
+            {showAddForm ? <X className="h-3.5 w-3.5" /> : <Plus className="h-3.5 w-3.5" />}
+            {showAddForm ? "取消" : "添加链接"}
+          </Button>
+        </div>
 
         {resources.length > 0 && (
           <div className="flex gap-1">
@@ -225,15 +291,23 @@ export function ResourceSearchView({ projectName, nodeId }: ResourceSearchViewPr
         )}
       </div>
 
+      {/* Add form */}
+      {showAddForm && (
+        <AddResourceForm
+          onAdd={handleAddResource}
+          onCancel={() => setShowAddForm(false)}
+        />
+      )}
+
       {/* Error */}
       {status === "failed" && error && (
         <p className="text-sm text-destructive">{error}</p>
       )}
 
       {/* Empty state */}
-      {status !== "searching" && resources.length === 0 && (
+      {status !== "searching" && resources.length === 0 && !showAddForm && (
         <p className="text-sm text-muted-foreground">
-          点击"收集资料"搜索与本知识点相关的网页和视频资源。
+          点击"收集资料"自动搜索，或点击"添加链接"手动添加。
         </p>
       )}
 
