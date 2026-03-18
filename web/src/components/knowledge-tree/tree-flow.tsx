@@ -61,7 +61,8 @@ export function TreeFlow({ milestones, progress, onNodeClick }: TreeFlowProps) {
         onNodeClick={handleNodeClick}
         nodeTypes={nodeTypes}
         fitView
-        minZoom={0.1}
+        fitViewOptions={{ padding: 0.15, duration: 0 }}
+        minZoom={0.05}
         maxZoom={2}
         proOptions={{ hideAttribution: true }}
         className="bg-background"
@@ -95,7 +96,7 @@ function CustomControls() {
         <ZoomOut className="h-4 w-4" />
       </button>
       <button
-        onClick={() => fitView({ duration: 300, padding: 0.1 })}
+        onClick={() => fitView({ duration: 300, padding: 0.15 })}
         className="flex h-8 w-8 items-center justify-center rounded-lg border bg-background shadow-sm hover:bg-muted transition-colors text-foreground"
         title="适应窗口"
       >
