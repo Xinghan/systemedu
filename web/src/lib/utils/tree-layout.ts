@@ -187,18 +187,18 @@ export function buildSemanticFlowGraph(
     const size = milestoneSizes[msIdx]
     const childIds: string[] = []
 
-    let totalXp = ms.xp_reward
+    let totalXp = ms.xp_reward ?? 0
     let earnedXp = 0
     let passedNodes = 0
     const msKnodes = knodeMetas.filter((m) => m.msIdx === msIdx)
 
     for (const meta of msKnodes) {
       childIds.push(String(meta.globalId))
-      totalXp += meta.knode.xp_reward
+      totalXp += meta.knode.xp_reward ?? 0
       const p = progressMap.get(meta.globalId)
       if (p?.status === "passed") {
         passedNodes++
-        earnedXp += meta.knode.xp_reward
+        earnedXp += meta.knode.xp_reward ?? 0
       }
     }
 
