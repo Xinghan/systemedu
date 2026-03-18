@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react"
 import { Sparkles, Terminal } from "lucide-react"
+import { PageLoading } from "@/components/ui/page-loading"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { AppHeader } from "@/components/layout/app-header"
@@ -11,12 +12,13 @@ import type { SkillInfo } from "@/lib/types/api"
 export default function SkillsPage() {
   const [skills, setSkills] = useState<SkillInfo[]>([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     gateway
       .skills()
       .then(setSkills)
-      .catch(() => {})
+      .catch((e) => setError(e.message ?? "无法加载 Skills"))
       .finally(() => setLoading(false))
   }, [])
 
@@ -24,10 +26,13 @@ export default function SkillsPage() {
     <>
       <AppHeader title="Skills" />
       <div className="p-6">
-        {loading ? (
-          <div className="flex items-center justify-center h-64 text-muted-foreground">
-            加载中...
+        {error && (
+          <div className="mb-4 p-3 rounded-md bg-destructive/10 text-destructive text-sm">
+            {error}
           </div>
+        )}
+        {loading ? (
+          <PageLoading />
         ) : skills.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-64 text-muted-foreground">
             <Sparkles className="h-12 w-12 mb-4" />

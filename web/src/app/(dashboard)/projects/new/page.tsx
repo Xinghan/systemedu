@@ -3,6 +3,7 @@
 import { useCallback, useState } from "react"
 import { useRouter } from "next/navigation"
 import { FileJson, Eye, Check, AlertCircle, ArrowLeft, ArrowRight, Loader2, Sparkles, Upload } from "lucide-react"
+import { LoadingSpinner } from "@/components/ui/loading-spinner"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -244,10 +245,10 @@ export default function NewProjectPage() {
                         disabled={loading || !aiTitle.trim() || !aiDescription.trim()}
                       >
                         {loading ? (
-                          <>
-                            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                          <span className="flex items-center gap-2">
+                            <LoadingSpinner size="sm" />
                             AI 正在生成知识树，请稍候...
-                          </>
+                          </span>
                         ) : (
                           <>
                             <Sparkles className="h-4 w-4 mr-2" />

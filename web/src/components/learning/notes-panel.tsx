@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react"
 import { Highlighter, MessageSquare, Trash2 } from "lucide-react"
+import { LoadingSpinner } from "@/components/ui/loading-spinner"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { gateway } from "@/lib/api"
 import type { HighlightInfo } from "@/lib/types/api"
@@ -57,8 +58,8 @@ export function NotesPanel({ projectName, nodeId }: NotesPanelProps) {
 
   if (loading) {
     return (
-      <div className="flex-1 flex items-center justify-center text-muted-foreground p-6">
-        <p className="text-sm">加载中...</p>
+      <div className="flex-1 flex items-center justify-center p-6">
+        <LoadingSpinner size="sm" label="加载中" />
       </div>
     )
   }

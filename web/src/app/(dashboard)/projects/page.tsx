@@ -2,7 +2,9 @@
 
 import { useEffect, useState } from "react"
 import Link from "next/link"
-import { FolderKanban, Clock, Users } from "lucide-react"
+import { FolderKanban, Clock, Users, Plus } from "lucide-react"
+import { PageLoading } from "@/components/ui/page-loading"
+import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { AppHeader } from "@/components/layout/app-header"
@@ -38,10 +40,16 @@ export default function ProjectsPage() {
     <>
       <AppHeader title="项目" />
       <div className="p-6">
+        <div className="flex justify-end mb-4">
+          <Link href="/projects/new">
+            <Button size="sm">
+              <Plus className="h-4 w-4 mr-2" />
+              新建项目
+            </Button>
+          </Link>
+        </div>
         {loading ? (
-          <div className="flex items-center justify-center h-64 text-muted-foreground">
-            加载中...
-          </div>
+          <PageLoading />
         ) : projects.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-64 text-muted-foreground">
             <FolderKanban className="h-12 w-12 mb-4" />

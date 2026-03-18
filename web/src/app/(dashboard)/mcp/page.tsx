@@ -1,7 +1,9 @@
 "use client"
 
 import { useEffect, useState, useCallback } from "react"
+import { toast } from "sonner"
 import { Plug, Plus, Trash2 } from "lucide-react"
+import { PageLoading } from "@/components/ui/page-loading"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -25,12 +27,13 @@ export default function MCPPage() {
   const [newName, setNewName] = useState("")
   const [newCommand, setNewCommand] = useState("")
   const [newArgs, setNewArgs] = useState("")
+  const [error, setError] = useState<string | null>(null)
 
   const refresh = useCallback(() => {
     gateway
       .mcpServers()
       .then(setServers)
-      .catch(() => {})
+      .catch((e) => setError(e.message ?? "无法加载 MCP 服务器"))
       .finally(() => setLoading(false))
   }, [])
 
@@ -50,21 +53,32 @@ export default function MCPPage() {
       setNewCommand("")
       setNewArgs("")
       setDialogOpen(false)
+      toast.success(`已添加 MCP 服务器: ${newName.trim()}`)
       refresh()
-    } catch {}
+    } catch (e: unknown) {
+      toast.error(`添加失败: ${e instanceof Error ? e.message : "未知错误"}`)
+    }
   }
 
   const handleRemove = async (name: string) => {
     try {
       await gateway.removeMCPServer(name)
+      toast.success(`已移除 MCP 服务器: ${name}`)
       refresh()
-    } catch {}
+    } catch (e: unknown) {
+      toast.error(`移除失败: ${e instanceof Error ? e.message : "未知错误"}`)
+    }
   }
 
   return (
     <>
       <AppHeader title="MCP 服务" />
       <div className="p-6">
+        {error && (
+          <div className="mb-4 p-3 rounded-md bg-destructive/10 text-destructive text-sm">
+            {error}
+          </div>
+        )}
         <div className="flex justify-between items-center mb-6">
           <p className="text-sm text-muted-foreground">
             管理 MCP（Model Context Protocol）服务器
@@ -116,9 +130,7 @@ export default function MCPPage() {
         </div>
 
         {loading ? (
-          <div className="flex items-center justify-center h-64 text-muted-foreground">
-            加载中...
-          </div>
+          <PageLoading />
         ) : servers.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-64 text-muted-foreground">
             <Plug className="h-12 w-12 mb-4" />

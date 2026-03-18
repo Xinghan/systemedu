@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react"
 import { Bot } from "lucide-react"
+import { PageLoading } from "@/components/ui/page-loading"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { AppHeader } from "@/components/layout/app-header"
@@ -11,12 +12,13 @@ import type { AgentInfo } from "@/lib/types/api"
 export default function AgentsPage() {
   const [agents, setAgents] = useState<AgentInfo[]>([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     gateway
       .agents()
       .then(setAgents)
-      .catch(() => {})
+      .catch((e) => setError(e.message ?? "无法加载 Agents"))
       .finally(() => setLoading(false))
   }, [])
 
@@ -24,10 +26,13 @@ export default function AgentsPage() {
     <>
       <AppHeader title="Agents" />
       <div className="p-6">
-        {loading ? (
-          <div className="flex items-center justify-center h-64 text-muted-foreground">
-            加载中...
+        {error && (
+          <div className="mb-4 p-3 rounded-md bg-destructive/10 text-destructive text-sm">
+            {error}
           </div>
+        )}
+        {loading ? (
+          <PageLoading />
         ) : (
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
             {agents.map((agent) => (

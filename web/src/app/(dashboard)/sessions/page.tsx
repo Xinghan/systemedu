@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react"
 import Link from "next/link"
 import { History, MessageSquare } from "lucide-react"
+import { PageLoading } from "@/components/ui/page-loading"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { AppHeader } from "@/components/layout/app-header"
@@ -12,12 +13,13 @@ import type { SessionSummary } from "@/lib/types/api"
 export default function SessionsPage() {
   const [sessions, setSessions] = useState<SessionSummary[]>([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     gateway
       .sessions()
       .then(setSessions)
-      .catch(() => {})
+      .catch((e) => setError(e.message ?? "无法加载会话"))
       .finally(() => setLoading(false))
   }, [])
 
@@ -25,10 +27,13 @@ export default function SessionsPage() {
     <>
       <AppHeader title="会话历史" />
       <div className="p-6">
-        {loading ? (
-          <div className="flex items-center justify-center h-64 text-muted-foreground">
-            加载中...
+        {error && (
+          <div className="mb-4 p-3 rounded-md bg-destructive/10 text-destructive text-sm">
+            {error}
           </div>
+        )}
+        {loading ? (
+          <PageLoading />
         ) : sessions.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-64 text-muted-foreground">
             <History className="h-12 w-12 mb-4" />
