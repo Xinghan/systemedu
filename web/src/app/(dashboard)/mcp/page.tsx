@@ -85,10 +85,10 @@ export default function MCPPage() {
           <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
             <DialogTrigger
               render={
-                <button className="inline-flex items-center justify-center gap-2 rounded-xl bg-primary px-5 py-3 text-base font-semibold text-primary-foreground hover:bg-primary/90 transition-colors shadow-sm">
-                  <Plus className="h-5 w-5" />
+                <Button>
+                  <Plus className="h-5 w-5 mr-2" />
                   添加服务器
-                </button>
+                </Button>
               }
             />
             <DialogContent>
@@ -142,7 +142,7 @@ export default function MCPPage() {
             <p className="text-base mt-1">添加 MCP 服务器以扩展 AI 能力</p>
           </div>
         ) : (
-          <div className="grid gap-6 sm:grid-cols-2">
+          <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
             {servers.map((srv) => (
               <div key={srv.name} className="rounded-2xl border bg-white dark:bg-card p-6 shadow-sm hover:shadow-md transition-shadow">
                 <div className="flex items-start justify-between mb-4">

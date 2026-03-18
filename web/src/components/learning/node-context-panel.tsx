@@ -29,7 +29,7 @@ export function NodeContextPanel({
   const pct = totalNodes > 0 ? Math.round((totalPassed / totalNodes) * 100) : 0
 
   return (
-    <div className="p-4 space-y-4 border-t">
+    <div className="p-4 space-y-4 border-t max-h-[40vh] overflow-y-auto">
       {/* Overall progress */}
       <div>
         <div className="flex justify-between text-sm mb-1">
@@ -43,31 +43,23 @@ export function NodeContextPanel({
 
       {/* Selected node info */}
       {knode ? (
-        <div className="space-y-2">
-          <h3 className="font-semibold text-sm">{knode.title}</h3>
-          <p className="text-xs text-muted-foreground">{knode.summary}</p>
-          <div className="flex flex-wrap gap-1">
-            <Badge variant="outline" className="text-xs">
-              难度 {knode.difficulty_level}/10
-            </Badge>
-            <Badge variant="outline" className="text-xs">
-              {knode.estimated_minutes} 分钟
-            </Badge>
-            <Badge variant="outline" className="text-xs">
-              {knode.xp_reward} XP
-            </Badge>
-            <Badge variant="secondary" className="text-xs">
-              {STATUS_LABELS[progress?.status ?? "locked"]}
-            </Badge>
+        <div className="space-y-3">
+          <h3 className="font-semibold text-base">{knode.title}</h3>
+          <p className="text-sm text-muted-foreground">{knode.summary}</p>
+          <div className="flex flex-wrap gap-2">
+            <Badge variant="outline">难度 {knode.difficulty_level}/10</Badge>
+            <Badge variant="outline">{knode.estimated_minutes} 分钟</Badge>
+            <Badge variant="outline">{knode.xp_reward} XP</Badge>
+            <Badge variant="secondary">{STATUS_LABELS[progress?.status ?? "locked"]}</Badge>
           </div>
           {progress?.attempts ? (
-            <p className="text-xs text-muted-foreground">
+            <p className="text-sm text-muted-foreground">
               尝试次数: {progress.attempts}
             </p>
           ) : null}
         </div>
       ) : (
-        <p className="text-sm text-muted-foreground">点击知识树节点查看详情</p>
+        <p className="text-base text-muted-foreground">点击知识树节点查看详情</p>
       )}
     </div>
   )

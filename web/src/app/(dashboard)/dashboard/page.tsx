@@ -130,14 +130,14 @@ export default function DashboardPage() {
                       href={`/projects/${p.name}`}
                       className="flex items-center gap-4 px-6 py-4 hover:bg-muted/50 transition-colors group"
                     >
-                      <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-violet-50 dark:bg-violet-950/40">
-                        <FolderKanban className="h-5 w-5 text-violet-600 dark:text-violet-400" />
+                      <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-violet-50 dark:bg-violet-950/40">
+                        <FolderKanban className="h-6 w-6 text-violet-600 dark:text-violet-400" />
                       </div>
                       <div className="min-w-0 flex-1">
                         <p className="text-base font-medium text-foreground truncate">{p.title}</p>
                         <div className="flex items-center gap-2 mt-1">
-                          <Badge variant="secondary" className="text-xs px-2 py-0 h-5">{p.category}</Badge>
-                          <span className="text-xs text-muted-foreground">{p.estimated_hours}h</span>
+                          <Badge variant="secondary">{p.category}</Badge>
+                          <span className="text-sm text-muted-foreground">{p.estimated_hours}h</span>
                         </div>
                       </div>
                       <ArrowRight className="h-5 w-5 text-muted-foreground/30 shrink-0 opacity-0 -translate-x-1 group-hover:opacity-100 group-hover:translate-x-0 transition-all" />

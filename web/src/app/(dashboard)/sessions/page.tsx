@@ -47,8 +47,8 @@ export default function SessionsPage() {
               <Link key={s.id} href={`/chat/${s.id}`}>
                 <div className="rounded-2xl border bg-white dark:bg-card p-6 shadow-sm hover:shadow-md transition-shadow cursor-pointer">
                   <div className="flex items-start gap-4 mb-4">
-                    <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-emerald-50 dark:bg-emerald-950/40">
-                      <MessageSquare className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />
+                    <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-emerald-50 dark:bg-emerald-950/40">
+                      <MessageSquare className="h-6 w-6 text-emerald-600 dark:text-emerald-400" />
                     </div>
                     <div className="min-w-0">
                       <p className="font-medium text-base text-foreground font-mono">{s.id.slice(0, 8)}...</p>

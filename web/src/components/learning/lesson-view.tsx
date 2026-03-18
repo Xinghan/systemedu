@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react"
 import { IconBook } from "./cartoon-icons"
+import { Button } from "@/components/ui/button"
 import { gateway } from "@/lib/api"
 import type { KnodeInfo, LessonContent, NodeProgress } from "@/lib/types/api"
 import { LessonGenerating } from "./lesson-generating"
@@ -98,19 +99,16 @@ export function LessonView({
           return
         }
 
-        // Not ready, trigger generation — show pipeline view
+        // Not ready — trigger async generation (returns immediately)
         setIsGenerating(true)
-        const generated = await gateway.generateLesson(projectName, currentNodeId)
-        if (controller.signal.aborted) return
-        lessonCacheRef.current.set(currentNodeId, generated)
-        setLesson(generated)
-        setIsGenerating(false)
+        setLoading(false)
+        await gateway.generateLesson(projectName, currentNodeId)
+        // Pipeline view will handle polling and call onComplete when done
       } catch (e) {
         if (!controller.signal.aborted) {
           setError(e instanceof Error ? e.message : "加载失败")
+          setLoading(false)
         }
-      } finally {
-        if (!controller.signal.aborted) setLoading(false)
       }
     }
 
@@ -133,21 +131,39 @@ export function LessonView({
 
   const handleRegenerate = useCallback(async () => {
     if (nodeId === null) return
-    // Clear old content and show loading
+    // Clear old content and show pipeline view
     lessonCacheRef.current.delete(nodeId)
     setLesson(null)
     setRegenerating(true)
     setIsGenerating(true)
     setError(null)
     try {
-      const generated = await gateway.generateLesson(projectName, nodeId, true)
-      lessonCacheRef.current.set(nodeId, generated)
-      setLesson(generated)
+      // Trigger async generation (returns immediately)
+      await gateway.generateLesson(projectName, nodeId, true)
+      // Pipeline view will handle polling and call handleGenerationComplete when done
     } catch (e) {
       setError(e instanceof Error ? e.message : "重新生成失败")
-    } finally {
       setRegenerating(false)
       setIsGenerating(false)
+    }
+  }, [nodeId, projectName])
+
+  // Called by GenerationPipelineView when generation completes
+  const handleGenerationComplete = useCallback(async () => {
+    if (nodeId === null) return
+    try {
+      const lesson = await gateway.lesson(projectName, nodeId)
+      if (lesson.status === "ready") {
+        lessonCacheRef.current.set(nodeId, lesson)
+        setLesson(lesson)
+      } else {
+        setError("课程生成失败，请重试")
+      }
+    } catch {
+      setError("加载生成的课程失败")
+    } finally {
+      setIsGenerating(false)
+      setRegenerating(false)
     }
   }, [nodeId, projectName])
 
@@ -178,23 +194,21 @@ export function LessonView({
   // Error state
   if (error) {
     return (
-      <div className="flex flex-col items-center justify-center h-full text-muted-foreground gap-3">
-        <p className="text-destructive">{error}</p>
-        <button
+      <div className="flex flex-col items-center justify-center h-full text-muted-foreground gap-4">
+        <p className="text-destructive text-base">{error}</p>
+        <Button
+          variant="outline"
           onClick={() => {
-            // Clear cache for this node and re-trigger fetch
             if (nodeId !== null) {
               lessonCacheRef.current.delete(nodeId)
             }
             setError(null)
             setLesson(null)
-            // Force re-fetch by toggling nodeId through parent
             if (nodeId !== null) onNodeChange(nodeId)
           }}
-          className="text-sm underline"
         >
           重试
-        </button>
+        </Button>
       </div>
     )
   }
@@ -208,6 +222,7 @@ export function LessonView({
           projectName={projectName}
           nodeId={nodeId}
           nodeTitle={knode?.title ?? "生成中..."}
+          onComplete={handleGenerationComplete}
         />
       )
     }

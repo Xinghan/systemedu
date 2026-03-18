@@ -42,8 +42,8 @@ export default function ProjectsPage() {
         <div className="flex items-center justify-between mb-6">
           <p className="text-base text-muted-foreground">管理你的学习项目</p>
           <Link href="/projects/new">
-            <Button size="sm">
-              <Plus className="h-4 w-4 mr-1.5" />
+            <Button>
+              <Plus className="h-5 w-5 mr-2" />
               新建项目
             </Button>
           </Link>

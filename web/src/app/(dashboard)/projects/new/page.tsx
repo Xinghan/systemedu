@@ -164,8 +164,8 @@ export default function NewProjectPage() {
         </div>
 
         {error && (
-          <div className="flex items-start gap-2 p-3 mb-4 rounded-md bg-destructive/10 text-destructive text-sm max-w-2xl">
-            <AlertCircle className="h-4 w-4 mt-0.5 shrink-0" />
+          <div className="flex items-start gap-3 p-4 mb-6 rounded-2xl bg-red-50 dark:bg-red-950/30 text-red-600 dark:text-red-400 text-base border border-red-200 dark:border-red-800 max-w-2xl">
+            <AlertCircle className="h-5 w-5 mt-0.5 shrink-0" />
             <span>{error}</span>
           </div>
         )}
@@ -202,14 +202,14 @@ export default function NewProjectPage() {
                         placeholder="例如：树叶识别AI模型"
                         value={aiTitle}
                         onChange={(e) => setAiTitle(e.target.value)}
-                        className="mt-1 max-w-md"
+                        className="mt-2 max-w-md"
                       />
                     </div>
                     <div>
                       <Label htmlFor="ai-desc">项目描述</Label>
                       <textarea
                         id="ai-desc"
-                        className="w-full max-w-lg h-28 p-4 rounded-xl border bg-muted/50 text-base resize-y focus:outline-none focus:ring-2 focus:ring-ring mt-2"
+                        className="w-full max-w-lg h-28 px-4 py-3 rounded-xl border bg-muted/50 text-base resize-y focus:outline-none focus:ring-2 focus:ring-ring mt-2"
                         placeholder="描述项目的目标、学习内容、预期成果等..."
                         value={aiDescription}
                         onChange={(e) => setAiDescription(e.target.value)}
@@ -224,7 +224,7 @@ export default function NewProjectPage() {
                         max={18}
                         value={aiAge}
                         onChange={(e) => setAiAge(Number(e.target.value) || 12)}
-                        className="mt-1 w-20"
+                        className="mt-2 w-28"
                       />
                     </div>
                     <div>
@@ -240,9 +240,9 @@ export default function NewProjectPage() {
                         step={1}
                         value={aiNodeCount}
                         onChange={(e) => setAiNodeCount(Number(e.target.value))}
-                        className="mt-1 w-full max-w-md"
+                        className="mt-2 w-full max-w-md"
                       />
-                      <p className="text-xs text-muted-foreground mt-1">
+                      <p className="text-sm text-muted-foreground mt-1">
                         {aiNodeCount <= 15
                           ? "入门概览 -- 快速了解项目全貌"
                           : aiNodeCount <= 50
@@ -298,7 +298,7 @@ export default function NewProjectPage() {
                             if (file) handleFile(file)
                           }}
                         />
-                        <label htmlFor="file-input" className="cursor-pointer inline-flex items-center justify-center rounded-md text-sm font-medium border border-input bg-background hover:bg-accent hover:text-accent-foreground h-8 px-3">
+                        <label htmlFor="file-input" className="cursor-pointer inline-flex items-center justify-center rounded-xl text-base font-semibold border border-input bg-background hover:bg-accent hover:text-accent-foreground h-12 px-6 shadow-sm transition-colors">
                           选择文件
                         </label>
                       </div>
@@ -311,12 +311,12 @@ export default function NewProjectPage() {
                     </CardHeader>
                     <CardContent>
                       <textarea
-                        className="w-full h-44 p-4 rounded-xl border bg-muted/50 font-mono text-sm resize-y focus:outline-none focus:ring-2 focus:ring-ring"
+                        className="w-full h-44 px-4 py-3 rounded-xl border bg-muted/50 font-mono text-base resize-y focus:outline-none focus:ring-2 focus:ring-ring"
                         placeholder='{"知识树节点": [...], "模块依赖图": [...]} 或 {"milestones": [...]}'
                         value={rawJson}
                         onChange={(e) => setRawJson(e.target.value)}
                       />
-                      <Button variant="outline" size="sm" className="mt-2" onClick={handlePaste}>
+                      <Button variant="outline" className="mt-3" onClick={handlePaste}>
                         解析 JSON
                       </Button>
                     </CardContent>
@@ -344,29 +344,29 @@ export default function NewProjectPage() {
         {/* Step 2: Preview (full width for tree visualization) */}
         {step === "preview" && preview && (
           <div className="space-y-4">
-            <div className="grid grid-cols-4 gap-3 max-w-2xl">
+            <div className="grid grid-cols-4 gap-4 max-w-2xl">
               <Card>
-                <CardContent className="pt-4 text-center">
-                  <div className="text-2xl font-bold">{preview.stats.milestone_count}</div>
-                  <div className="text-xs text-muted-foreground">模块</div>
+                <CardContent className="py-5 text-center">
+                  <div className="text-3xl font-bold">{preview.stats.milestone_count}</div>
+                  <div className="text-sm text-muted-foreground mt-1">模块</div>
                 </CardContent>
               </Card>
               <Card>
-                <CardContent className="pt-4 text-center">
-                  <div className="text-2xl font-bold">{preview.stats.node_count}</div>
-                  <div className="text-xs text-muted-foreground">知识节点</div>
+                <CardContent className="py-5 text-center">
+                  <div className="text-3xl font-bold">{preview.stats.node_count}</div>
+                  <div className="text-sm text-muted-foreground mt-1">知识节点</div>
                 </CardContent>
               </Card>
               <Card>
-                <CardContent className="pt-4 text-center">
-                  <div className="text-2xl font-bold">{preview.stats.total_minutes}</div>
-                  <div className="text-xs text-muted-foreground">总分钟</div>
+                <CardContent className="py-5 text-center">
+                  <div className="text-3xl font-bold">{preview.stats.total_minutes}</div>
+                  <div className="text-sm text-muted-foreground mt-1">总分钟</div>
                 </CardContent>
               </Card>
               <Card>
-                <CardContent className="pt-4 text-center">
-                  <div className="text-2xl font-bold">~{preview.stats.estimated_hours}h</div>
-                  <div className="text-xs text-muted-foreground">预计学时</div>
+                <CardContent className="py-5 text-center">
+                  <div className="text-3xl font-bold">~{preview.stats.estimated_hours}h</div>
+                  <div className="text-sm text-muted-foreground mt-1">预计学时</div>
                 </CardContent>
               </Card>
             </div>
@@ -409,9 +409,9 @@ export default function NewProjectPage() {
                   placeholder="e.g. tree-leaf-ai"
                   value={projectName}
                   onChange={(e) => setProjectName(e.target.value.replace(/[^a-z0-9-]/g, ""))}
-                  className="mt-1 max-w-sm"
+                  className="mt-2 max-w-sm"
                 />
-                <p className="text-xs text-muted-foreground mt-1">
+                <p className="text-sm text-muted-foreground mt-1.5">
                   仅允许小写字母、数字和连字符
                 </p>
               </div>
@@ -422,7 +422,7 @@ export default function NewProjectPage() {
                   placeholder="e.g. 树叶识别AI模型"
                   value={projectTitle}
                   onChange={(e) => setProjectTitle(e.target.value)}
-                  className="mt-1 max-w-md"
+                  className="mt-2 max-w-md"
                 />
               </div>
 
