@@ -196,7 +196,7 @@ export default function NewProjectPage() {
                       <Label htmlFor="ai-desc">项目描述</Label>
                       <textarea
                         id="ai-desc"
-                        className="w-full max-w-lg h-24 p-3 rounded-md border bg-muted/50 text-sm resize-y focus:outline-none focus:ring-2 focus:ring-ring mt-1"
+                        className="w-full max-w-lg h-28 p-4 rounded-xl border bg-muted/50 text-base resize-y focus:outline-none focus:ring-2 focus:ring-ring mt-2"
                         placeholder="描述项目的目标、学习内容、预期成果等..."
                         value={aiDescription}
                         onChange={(e) => setAiDescription(e.target.value)}
@@ -307,7 +307,7 @@ export default function NewProjectPage() {
                     </CardHeader>
                     <CardContent>
                       <textarea
-                        className="w-full h-40 p-3 rounded-md border bg-muted/50 font-mono text-xs resize-y focus:outline-none focus:ring-2 focus:ring-ring"
+                        className="w-full h-44 p-4 rounded-xl border bg-muted/50 font-mono text-sm resize-y focus:outline-none focus:ring-2 focus:ring-ring"
                         placeholder='{"知识树节点": [...], "模块依赖图": [...]} 或 {"milestones": [...]}'
                         value={rawJson}
                         onChange={(e) => setRawJson(e.target.value)}

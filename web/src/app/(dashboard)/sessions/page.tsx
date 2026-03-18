@@ -4,7 +4,6 @@ import { useEffect, useState } from "react"
 import Link from "next/link"
 import { History, MessageSquare } from "lucide-react"
 import { PageLoading } from "@/components/ui/page-loading"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { AppHeader } from "@/components/layout/app-header"
 import { gateway } from "@/lib/api"
@@ -26,43 +25,44 @@ export default function SessionsPage() {
   return (
     <>
       <AppHeader title="会话历史" />
-      <div className="p-6">
+      <div className="p-8">
         {error && (
-          <div className="mb-4 p-3 rounded-md bg-destructive/10 text-destructive text-sm">
+          <div className="mb-6 p-4 rounded-2xl bg-red-50 dark:bg-red-950/30 text-red-600 dark:text-red-400 text-base border border-red-200 dark:border-red-800">
             {error}
           </div>
         )}
         {loading ? (
           <PageLoading />
         ) : sessions.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-64 text-muted-foreground">
-            <History className="h-12 w-12 mb-4" />
-            <p>暂无会话</p>
-            <p className="text-sm">开始聊天后会话会显示在这里</p>
+          <div className="flex flex-col items-center justify-center py-24 text-muted-foreground">
+            <div className="flex h-20 w-20 items-center justify-center rounded-3xl bg-muted mb-5">
+              <History className="h-10 w-10 opacity-40" />
+            </div>
+            <p className="text-lg font-medium">暂无会话</p>
+            <p className="text-base mt-1">开始聊天后会话会显示在这里</p>
           </div>
         ) : (
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+          <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
             {sessions.map((s) => (
               <Link key={s.id} href={`/chat/${s.id}`}>
-                <Card className="hover:border-primary/50 transition-colors cursor-pointer">
-                  <CardHeader className="pb-2">
-                    <CardTitle className="flex items-center gap-2 text-sm">
-                      <MessageSquare className="h-4 w-4" />
-                      {s.id.slice(0, 8)}...
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="flex flex-wrap gap-2 mb-2">
-                      <Badge variant="secondary">{s.agent}</Badge>
-                      {s.project && <Badge variant="outline">{s.project}</Badge>}
+                <div className="rounded-2xl border bg-white dark:bg-card p-6 shadow-sm hover:shadow-md transition-shadow cursor-pointer">
+                  <div className="flex items-start gap-4 mb-4">
+                    <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-emerald-50 dark:bg-emerald-950/40">
+                      <MessageSquare className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />
                     </div>
-                    <div className="text-xs text-muted-foreground">
-                      <span>{s.messages} 条消息</span>
-                      <span className="mx-1">·</span>
-                      <span>{new Date(s.created_at).toLocaleString("zh-CN")}</span>
+                    <div className="min-w-0">
+                      <p className="font-medium text-base text-foreground font-mono">{s.id.slice(0, 8)}...</p>
+                      <p className="text-sm text-muted-foreground mt-1">
+                        {new Date(s.created_at).toLocaleString("zh-CN")}
+                      </p>
                     </div>
-                  </CardContent>
-                </Card>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Badge variant="secondary">{s.agent}</Badge>
+                    {s.project && <Badge variant="outline">{s.project}</Badge>}
+                    <span className="text-sm text-muted-foreground ml-auto">{s.messages} 条消息</span>
+                  </div>
+                </div>
               </Link>
             ))}
           </div>
