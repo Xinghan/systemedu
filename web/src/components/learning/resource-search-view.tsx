@@ -14,6 +14,100 @@ interface ResourceSearchViewProps {
 
 type FilterKey = "all" | "web" | "youtube" | "saved"
 
+function extractYouTubeId(url: string): string | null {
+  try {
+    const u = new URL(url)
+    if (u.hostname.includes("youtube.com")) {
+      return u.searchParams.get("v")
+    }
+    if (u.hostname === "youtu.be") {
+      return u.pathname.slice(1)
+    }
+  } catch {
+    // ignore
+  }
+  return null
+}
+
+function YouTubeEmbed({ url, title }: { url: string; title: string }) {
+  const videoId = extractYouTubeId(url)
+  if (!videoId) return null
+  return (
+    <div className="mt-2 rounded-md overflow-hidden aspect-video w-full">
+      <iframe
+        src={`https://www.youtube.com/embed/${videoId}`}
+        title={title}
+        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+        allowFullScreen
+        className="w-full h-full"
+      />
+    </div>
+  )
+}
+
+function ResourceCard({
+  resource,
+  onToggleSaved,
+}: {
+  resource: ResourceItem
+  onToggleSaved: (r: ResourceItem) => void
+}) {
+  const [expanded, setExpanded] = useState(false)
+  const isYouTube = resource.source_type === "youtube"
+  const videoId = isYouTube ? extractYouTubeId(resource.url) : null
+
+  return (
+    <div className="rounded-lg border bg-card transition-colors">
+      <div className="flex items-start gap-3 p-3">
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 mb-1">
+            <Badge variant="secondary" className="text-xs shrink-0">
+              {isYouTube ? "视频" : "网页"}
+            </Badge>
+            <a
+              href={resource.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-sm font-medium leading-snug hover:underline truncate flex items-center gap-1"
+            >
+              {resource.title}
+              <ExternalLink className="h-3 w-3 shrink-0 text-muted-foreground" />
+            </a>
+          </div>
+          {resource.snippet && (
+            <p className="text-xs text-muted-foreground line-clamp-2">{resource.snippet}</p>
+          )}
+          {/* Expand/collapse button for YouTube */}
+          {videoId && (
+            <button
+              onClick={() => setExpanded((v) => !v)}
+              className="mt-1.5 text-xs text-primary hover:underline"
+            >
+              {expanded ? "收起播放器" : "在此播放"}
+            </button>
+          )}
+        </div>
+        <button
+          onClick={() => onToggleSaved(resource)}
+          className="shrink-0 mt-0.5 text-muted-foreground hover:text-foreground transition-colors"
+          title={resource.saved ? "取消收藏" : "收藏"}
+        >
+          {resource.saved ? (
+            <BookmarkCheck className="h-4 w-4 text-primary" />
+          ) : (
+            <Bookmark className="h-4 w-4" />
+          )}
+        </button>
+      </div>
+      {expanded && videoId && (
+        <div className="px-3 pb-3">
+          <YouTubeEmbed url={resource.url} title={resource.title} />
+        </div>
+      )}
+    </div>
+  )
+}
+
 export function ResourceSearchView({ projectName, nodeId }: ResourceSearchViewProps) {
   const [status, setStatus] = useState<ResourceSearchStatus>("idle")
   const [resources, setResources] = useState<ResourceItem[]>([])
@@ -64,14 +158,12 @@ export function ResourceSearchView({ projectName, nodeId }: ResourceSearchViewPr
 
   const handleToggleSaved = async (resource: ResourceItem) => {
     const newSaved = !resource.saved
-    // Optimistic update
     setResources((prev) =>
       prev.map((r) => (r.id === resource.id ? { ...r, saved: newSaved } : r))
     )
     try {
       await gateway.toggleResourceSaved(projectName, nodeId, resource.id, newSaved)
     } catch {
-      // Revert on failure
       setResources((prev) =>
         prev.map((r) => (r.id === resource.id ? { ...r, saved: resource.saved } : r))
       )
@@ -157,44 +249,11 @@ export function ResourceSearchView({ projectName, nodeId }: ResourceSearchViewPr
       {filtered.length > 0 && (
         <div className="space-y-2">
           {filtered.map((resource) => (
-            <div
+            <ResourceCard
               key={resource.id}
-              className="flex items-start gap-3 p-3 rounded-lg border bg-card hover:bg-accent/30 transition-colors"
-            >
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2 mb-1">
-                  <Badge
-                    variant="secondary"
-                    className="text-xs shrink-0"
-                  >
-                    {resource.source_type === "youtube" ? "视频" : "网页"}
-                  </Badge>
-                  <a
-                    href={resource.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-sm font-medium leading-snug hover:underline truncate flex items-center gap-1"
-                  >
-                    {resource.title}
-                    <ExternalLink className="h-3 w-3 shrink-0 text-muted-foreground" />
-                  </a>
-                </div>
-                {resource.snippet && (
-                  <p className="text-xs text-muted-foreground line-clamp-2">{resource.snippet}</p>
-                )}
-              </div>
-              <button
-                onClick={() => handleToggleSaved(resource)}
-                className="shrink-0 mt-0.5 text-muted-foreground hover:text-foreground transition-colors"
-                title={resource.saved ? "取消收藏" : "收藏"}
-              >
-                {resource.saved ? (
-                  <BookmarkCheck className="h-4 w-4 text-primary" />
-                ) : (
-                  <Bookmark className="h-4 w-4" />
-                )}
-              </button>
-            </div>
+              resource={resource}
+              onToggleSaved={handleToggleSaved}
+            />
           ))}
         </div>
       )}
