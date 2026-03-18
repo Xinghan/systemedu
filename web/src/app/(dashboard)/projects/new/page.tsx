@@ -147,6 +147,60 @@ export default function NewProjectPage() {
     )
   }
 
+  // Preview step: full-screen tree layout (no padding wrapper)
+  if (step === "preview" && preview) {
+    return (
+      <>
+        <AppHeader title="新建项目" />
+        {/* Full-height flex container */}
+        <div className="flex flex-col" style={{ height: "calc(100vh - 64px)" }}>
+          {/* Top stats bar */}
+          <div className="flex items-center gap-6 px-6 py-3 border-b bg-white dark:bg-card shrink-0">
+            <div className="flex items-center gap-2">
+              {(["input", "preview", "confirm"] as Step[]).map((s, i) => (
+                <div key={s} className="flex items-center gap-2">
+                  {i > 0 && <div className="w-6 h-px bg-border" />}
+                  <Badge variant={step === s ? "default" : "outline"} className="text-sm">
+                    {i + 1}. {stepLabels[s]}
+                  </Badge>
+                </div>
+              ))}
+            </div>
+            <div className="h-5 w-px bg-border" />
+            <div className="flex items-center gap-6 text-sm">
+              <span className="text-muted-foreground">
+                <span className="font-bold text-foreground text-base">{preview.stats.milestone_count}</span> 模块
+              </span>
+              <span className="text-muted-foreground">
+                <span className="font-bold text-foreground text-base">{preview.stats.node_count}</span> 知识节点
+              </span>
+              <span className="text-muted-foreground">
+                <span className="font-bold text-foreground text-base">{preview.stats.total_minutes}</span> 分钟
+              </span>
+              <span className="text-muted-foreground">
+                约 <span className="font-bold text-foreground text-base">~{preview.stats.estimated_hours}h</span> 学时
+              </span>
+            </div>
+            <div className="ml-auto flex items-center gap-3">
+              <Button variant="outline" onClick={() => setStep("input")}>
+                <ArrowLeft className="h-4 w-4 mr-2" />
+                返回
+              </Button>
+              <Button onClick={() => setStep("confirm")}>
+                确认并创建项目
+                <ArrowRight className="h-4 w-4 ml-2" />
+              </Button>
+            </div>
+          </div>
+          {/* Tree fills remaining height */}
+          <div className="flex-1 min-h-0">
+            <TreeFlow milestones={preview.milestones} progress={[]} />
+          </div>
+        </div>
+      </>
+    )
+  }
+
   return (
     <>
       <AppHeader title="新建项目" />
@@ -338,60 +392,6 @@ export default function NewProjectPage() {
                 </div>
               </TabsContent>
             </Tabs>
-          </div>
-        )}
-
-        {/* Step 2: Preview (full width for tree visualization) */}
-        {step === "preview" && preview && (
-          <div className="space-y-4">
-            <div className="grid grid-cols-4 gap-4 max-w-2xl">
-              <Card>
-                <CardContent className="py-5 text-center">
-                  <div className="text-3xl font-bold">{preview.stats.milestone_count}</div>
-                  <div className="text-sm text-muted-foreground mt-1">模块</div>
-                </CardContent>
-              </Card>
-              <Card>
-                <CardContent className="py-5 text-center">
-                  <div className="text-3xl font-bold">{preview.stats.node_count}</div>
-                  <div className="text-sm text-muted-foreground mt-1">知识节点</div>
-                </CardContent>
-              </Card>
-              <Card>
-                <CardContent className="py-5 text-center">
-                  <div className="text-3xl font-bold">{preview.stats.total_minutes}</div>
-                  <div className="text-sm text-muted-foreground mt-1">总分钟</div>
-                </CardContent>
-              </Card>
-              <Card>
-                <CardContent className="py-5 text-center">
-                  <div className="text-3xl font-bold">~{preview.stats.estimated_hours}h</div>
-                  <div className="text-sm text-muted-foreground mt-1">预计学时</div>
-                </CardContent>
-              </Card>
-            </div>
-
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-base">知识树预览</CardTitle>
-              </CardHeader>
-              <CardContent className="p-0">
-                <div className="h-[500px] w-full">
-                  <TreeFlow milestones={preview.milestones} progress={[]} />
-                </div>
-              </CardContent>
-            </Card>
-
-            <div className="flex justify-between max-w-2xl">
-              <Button variant="outline" onClick={() => setStep("input")}>
-                <ArrowLeft className="h-4 w-4 mr-2" />
-                返回
-              </Button>
-              <Button onClick={() => setStep("confirm")}>
-                确认并创建项目
-                <ArrowRight className="h-4 w-4 ml-2" />
-              </Button>
-            </div>
           </div>
         )}
 
