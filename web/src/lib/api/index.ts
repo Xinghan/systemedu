@@ -11,6 +11,7 @@ import type {
   LessonContent,
   LessonProgressResponse,
   MCPServer,
+  MilestoneInfo,
   NodeContext,
   NodeProgress,
   NoteInfo,
@@ -109,4 +110,8 @@ export const gateway = {
     api.put<NoteInfo>(`/api/projects/${projectName}/nodes/${nodeId}/note`, { content, user_id: userId }),
   getAllNotes: (projectName: string) =>
     api.get<ProjectNotesResponse>(`/api/projects/${projectName}/notes`),
+  updateTree: (projectName: string, milestones: MilestoneInfo[]) =>
+    api.put<{ ok: boolean; milestones: MilestoneInfo[] }>(
+      `/api/projects/${projectName}/tree`, { milestones }
+    ),
 }

@@ -2,12 +2,26 @@
 
 import { useEffect, useRef, useMemo, useCallback, useState } from "react"
 import * as d3 from "d3"
-import type { MilestoneInfo, NodeProgress } from "@/lib/types/api"
+import type { MilestoneInfo, KnodeInfo } from "@/lib/types/api"
+import type { NodeProgress } from "@/lib/types/api"
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { gateway } from "@/lib/api"
 
 interface D3KnowledgeTreeProps {
   milestones: MilestoneInfo[]
   progress: NodeProgress[]
   onNodeClick?: (nodeId: number) => void
+  projectName?: string
+  onTreeChange?: (milestones: MilestoneInfo[]) => void
   className?: string
 }
 
@@ -21,6 +35,7 @@ interface GraphNode extends d3.SimulationNodeDatum {
   minutes: number
   milestone: string
   milestoneIdx: number
+  nodeIdx: number  // index within the milestone
   depth: number
   passed: boolean
 }
@@ -35,11 +50,16 @@ interface HoverInfo {
   y: number
 }
 
-interface MagnifierState {
-  x: number  // SVG-space mouse x
-  y: number  // SVG-space mouse y
-  cx: number // screen x relative to container
-  cy: number // screen y relative to container
+interface ContextMenuState {
+  node: GraphNode
+  x: number
+  y: number
+}
+
+interface EditState {
+  node: GraphNode | null  // null = new node mode
+  isNew: boolean
+  parentNode?: GraphNode  // set when isNew, used to determine placement
 }
 
 const MILESTONE_PALETTE = [
@@ -60,17 +80,33 @@ const CARD_H = 44
 const X_SPACING = 160
 const Y_SPACING = 62
 
-// Magnifier parameters
-const MAG_R = 90        // radius of the magnifier lens (px)
-const MAG_ZOOM = 2.8   // zoom factor inside the lens
+function deepClone<T>(obj: T): T {
+  return JSON.parse(JSON.stringify(obj))
+}
 
-export function D3KnowledgeTree({ milestones, progress, onNodeClick, className }: D3KnowledgeTreeProps) {
+export function D3KnowledgeTree({
+  milestones,
+  progress,
+  onNodeClick,
+  projectName,
+  onTreeChange,
+  className,
+}: D3KnowledgeTreeProps) {
   const svgRef = useRef<SVGSVGElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
   const [hover, setHover] = useState<HoverInfo | null>(null)
-  const [magnifier, setMagnifier] = useState<MagnifierState | null>(null)
-  // Store current d3 zoom transform so magnifier knows the correct coordinate mapping
+  const [minimapTransform, setMinimapTransform] = useState<d3.ZoomTransform>(d3.zoomIdentity)
+  const containerSizeRef = useRef({ w: 0, h: 0 })
   const currentTransformRef = useRef<d3.ZoomTransform>(d3.zoomIdentity)
+
+  const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null)
+  const [editState, setEditState] = useState<EditState | null>(null)
+  const [saving, setSaving] = useState(false)
+
+  // localMilestones is the source of truth for rendering once user edits
+  const [localMilestones, setLocalMilestones] = useState<MilestoneInfo[]>(milestones)
+  // Sync if parent milestones prop changes (e.g. initial load)
+  useEffect(() => { setLocalMilestones(milestones) }, [milestones])
 
   const progressMap = useMemo(() => new Map(progress.map((p) => [p.knode_id, p])), [progress])
 
@@ -80,7 +116,7 @@ export function D3KnowledgeTree({ milestones, progress, onNodeClick, className }
     const depthMap = new Map<number, number>()
 
     let globalIdx = 0
-    for (const ms of milestones) {
+    for (const ms of localMilestones) {
       for (const knode of ms.knodes) {
         const id = globalIdx++
         let depth = 0
@@ -92,9 +128,10 @@ export function D3KnowledgeTree({ milestones, progress, onNodeClick, className }
     }
 
     globalIdx = 0
-    for (let msIdx = 0; msIdx < milestones.length; msIdx++) {
-      const ms = milestones[msIdx]
-      for (const knode of ms.knodes) {
+    for (let msIdx = 0; msIdx < localMilestones.length; msIdx++) {
+      const ms = localMilestones[msIdx]
+      for (let nodeIdx = 0; nodeIdx < ms.knodes.length; nodeIdx++) {
+        const knode = ms.knodes[nodeIdx]
         const id = globalIdx++
         const p = progressMap.get(id)
         nodes.push({
@@ -107,6 +144,7 @@ export function D3KnowledgeTree({ milestones, progress, onNodeClick, className }
           minutes: knode.estimated_minutes,
           milestone: ms.title,
           milestoneIdx: msIdx,
+          nodeIdx,
           depth: depthMap.get(id) ?? 0,
           passed: p?.status === "passed",
         })
@@ -122,12 +160,25 @@ export function D3KnowledgeTree({ milestones, progress, onNodeClick, className }
     }
 
     return { graphNodes: nodes, graphLinks: links }
-  }, [milestones, progressMap])
+  }, [localMilestones, progressMap])
 
   const handleNodeClick = useCallback(
     (globalId: number) => { onNodeClick?.(globalId) },
     [onNodeClick],
   )
+
+  // Close context menu on outside click or Escape
+  useEffect(() => {
+    if (!contextMenu) return
+    const handleClick = () => setContextMenu(null)
+    const handleKey = (e: KeyboardEvent) => { if (e.key === "Escape") setContextMenu(null) }
+    window.addEventListener("click", handleClick)
+    window.addEventListener("keydown", handleKey)
+    return () => {
+      window.removeEventListener("click", handleClick)
+      window.removeEventListener("keydown", handleKey)
+    }
+  }, [contextMenu])
 
   useEffect(() => {
     if (!svgRef.current || !containerRef.current || graphNodes.length === 0) return
@@ -135,6 +186,7 @@ export function D3KnowledgeTree({ milestones, progress, onNodeClick, className }
     const container = containerRef.current
     const width = container.clientWidth
     const height = container.clientHeight
+    containerSizeRef.current = { w: width, h: height }
 
     const svg = d3.select(svgRef.current)
     svg.selectAll("*").remove()
@@ -147,6 +199,7 @@ export function D3KnowledgeTree({ milestones, progress, onNodeClick, className }
       .on("zoom", (event) => {
         g.attr("transform", event.transform)
         currentTransformRef.current = event.transform
+        setMinimapTransform(event.transform)
       })
     svg.call(zoom)
 
@@ -180,6 +233,7 @@ export function D3KnowledgeTree({ milestones, progress, onNodeClick, className }
     const ty = (height - gH * scale) / 2 - gMinY * scale
     const initTransform = d3.zoomIdentity.translate(tx, ty).scale(scale)
     currentTransformRef.current = initTransform
+    setMinimapTransform(initTransform)
     svg.call(zoom.transform, initTransform)
 
     // Defs
@@ -201,14 +255,6 @@ export function D3KnowledgeTree({ milestones, progress, onNodeClick, className }
     // Drop shadow filter
     const filter = defs.append("filter").attr("id", "card-shadow").attr("x", "-10%").attr("y", "-10%").attr("width", "130%").attr("height", "140%")
     filter.append("feDropShadow").attr("dx", 0).attr("dy", 1).attr("stdDeviation", 2).attr("flood-color", "#000").attr("flood-opacity", 0.08)
-
-    // Magnifier lens clip path (static circle, translated by CSS/transform)
-    defs.append("clipPath").attr("id", "mag-clip")
-      .append("circle").attr("r", MAG_R)
-
-    // Magnifier lens border filter
-    const magFilter = defs.append("filter").attr("id", "mag-shadow").attr("x", "-20%").attr("y", "-20%").attr("width", "140%").attr("height", "140%")
-    magFilter.append("feDropShadow").attr("dx", 0).attr("dy", 2).attr("stdDeviation", 6).attr("flood-color", "#000").attr("flood-opacity", 0.18)
 
     const nodeMap = new Map(graphNodes.map((n) => [n.id, n]))
 
@@ -285,7 +331,7 @@ export function D3KnowledgeTree({ milestones, progress, onNodeClick, className }
 
     renderGraph(g)
 
-    // Clip-path ids for left strips (main graph only)
+    // Clip-path ids for left strips
     g.selectAll<SVGGElement, GraphNode>(".nodes > g").each(function (_, i) {
       const el = d3.select(this)
       defs.append("clipPath").attr("id", `clip-${i}`)
@@ -293,22 +339,7 @@ export function D3KnowledgeTree({ milestones, progress, onNodeClick, className }
       el.select("rect:nth-child(2)").attr("clip-path", `url(#clip-${i})`)
     })
 
-    // Invisible overlay for magnifier mouse tracking
-    svg.append("rect")
-      .attr("width", width).attr("height", height)
-      .attr("fill", "transparent")
-      .attr("class", "mag-overlay")
-      .on("mousemove", function (event) {
-        const [cx, cy] = d3.pointer(event, container)
-        const t = currentTransformRef.current
-        // Convert screen coords to graph (SVG) coords
-        const svgX = (cx - t.x) / t.k
-        const svgY = (cy - t.y) / t.k
-        setMagnifier({ x: svgX, y: svgY, cx, cy })
-      })
-      .on("mouseleave", () => setMagnifier(null))
-
-    // Clickable overlay for node clicks
+    // Clickable overlay for node clicks and context menu
     svg.append("g").attr("class", "click-overlay")
       .selectAll("rect")
       .data(graphNodes)
@@ -318,14 +349,19 @@ export function D3KnowledgeTree({ milestones, progress, onNodeClick, className }
       .attr("cursor", "pointer")
       .attr("width", CARD_W + 8)
       .attr("height", CARD_H + 8)
-      // position updated by zoom transform via the transform attribute on the group
       .each(function (d) {
-        // We can't put these inside zoom-transformed g because overlay is outside,
-        // so we update positions via event and store in data
-        d3.select(this)
-          .attr("data-gid", d.globalId)
+        d3.select(this).attr("data-gid", d.globalId)
       })
       .on("click", (_, d) => handleNodeClick(d.globalId))
+      .on("contextmenu", function (event, d) {
+        event.preventDefault()
+        const containerRect = container.getBoundingClientRect()
+        setContextMenu({
+          node: d,
+          x: event.clientX - containerRect.left,
+          y: event.clientY - containerRect.top,
+        })
+      })
       .on("mouseenter", function (event, d) {
         d3.select(svgRef.current)
           .select(`.nodes > g:nth-child(${graphNodes.indexOf(d) + 1}) rect.card-bg`)
@@ -360,7 +396,7 @@ export function D3KnowledgeTree({ milestones, progress, onNodeClick, className }
       .attr("height", (CARD_H + 8) * t.k)
 
     // Milestone legend
-    const legendData = milestones.map((ms, i) => ({
+    const legendData = localMilestones.map((ms, i) => ({
       label: ms.title,
       color: MILESTONE_PALETTE[i % MILESTONE_PALETTE.length].stroke,
     }))
@@ -375,159 +411,427 @@ export function D3KnowledgeTree({ milestones, progress, onNodeClick, className }
       lx += (text.node()?.getBBox().width ?? 40) + 24
     }
 
-  }, [graphNodes, graphLinks, handleNodeClick, milestones])
+  }, [graphNodes, graphLinks, handleNodeClick, localMilestones])
+
+  // Save handler: edit or add node
+  const handleSave = useCallback(async (fields: {
+    title: string
+    summary: string
+    difficulty_level: number
+    estimated_minutes: number
+    xp_reward: number
+    milestoneIdx: number
+  }) => {
+    if (!projectName || !editState) return
+    setSaving(true)
+    try {
+      const updated = deepClone(localMilestones)
+      if (editState.isNew) {
+        const newKnode: KnodeInfo = {
+          id: 0,
+          title: fields.title,
+          summary: fields.summary,
+          difficulty_level: fields.difficulty_level,
+          content_type: "text",
+          acceptance_type: "auto",
+          estimated_minutes: fields.estimated_minutes,
+          xp_reward: fields.xp_reward,
+          prerequisite_indices: editState.parentNode
+            ? [editState.parentNode.globalId]
+            : [],
+        }
+        updated[fields.milestoneIdx].knodes.push(newKnode)
+      } else if (editState.node) {
+        const node = editState.node
+        const knode = updated[node.milestoneIdx].knodes[node.nodeIdx]
+        knode.title = fields.title
+        knode.summary = fields.summary
+        knode.difficulty_level = fields.difficulty_level
+        knode.estimated_minutes = fields.estimated_minutes
+        knode.xp_reward = fields.xp_reward
+      }
+      await gateway.updateTree(projectName, updated)
+      setLocalMilestones(updated)
+      onTreeChange?.(updated)
+      setEditState(null)
+    } catch (e) {
+      console.error("Failed to save tree:", e)
+    } finally {
+      setSaving(false)
+    }
+  }, [projectName, editState, localMilestones, onTreeChange])
+
+  // Delete handler
+  const handleDelete = useCallback(async (node: GraphNode) => {
+    if (!projectName) return
+    setSaving(true)
+    try {
+      const updated = deepClone(localMilestones)
+      const gid = node.globalId
+
+      // Remove node from its milestone
+      updated[node.milestoneIdx].knodes.splice(node.nodeIdx, 1)
+
+      // Rebuild prerequisite_indices for all remaining nodes:
+      // 1. Remove any reference to gid
+      // 2. Decrement indices > gid (since the global numbering shifts)
+      let idx = 0
+      for (const ms of updated) {
+        for (const kn of ms.knodes) {
+          // Remove reference to deleted gid
+          kn.prerequisite_indices = kn.prerequisite_indices.filter((p) => p !== gid)
+          // Decrement indices that came after the removed node
+          kn.prerequisite_indices = kn.prerequisite_indices.map((p) => p > gid ? p - 1 : p)
+          idx++
+        }
+      }
+
+      await gateway.updateTree(projectName, updated)
+      setLocalMilestones(updated)
+      onTreeChange?.(updated)
+    } catch (e) {
+      console.error("Failed to delete node:", e)
+    } finally {
+      setSaving(false)
+      setContextMenu(null)
+    }
+  }, [projectName, localMilestones, onTreeChange])
 
   return (
     <div ref={containerRef} className={`relative w-full h-full min-h-[300px] ${className ?? ""}`}>
       <svg ref={svgRef} className="w-full h-full" />
 
-      {/* Magnifier lens — rendered as SVG overlay */}
-      {magnifier && (
-        <MagnifierLens
-          cx={magnifier.cx}
-          cy={magnifier.cy}
-          svgX={magnifier.x}
-          svgY={magnifier.y}
-          transform={currentTransformRef.current}
-          graphNodes={graphNodes}
-          graphLinks={graphLinks}
-          milestones={milestones}
-          radius={MAG_R}
-          zoom={MAG_ZOOM}
+      {/* Minimap - top right */}
+      <MinimapOverlay
+        graphNodes={graphNodes}
+        graphLinks={graphLinks}
+        transform={minimapTransform}
+        viewportW={containerSizeRef.current.w}
+        viewportH={containerSizeRef.current.h}
+      />
+
+      {hover && !contextMenu && <HoverTooltip info={hover} />}
+
+      {/* Context menu */}
+      {contextMenu && (
+        <NodeContextMenu
+          node={contextMenu.node}
+          x={contextMenu.x}
+          y={contextMenu.y}
+          canEdit={!!projectName}
+          onEdit={() => {
+            setEditState({ node: contextMenu.node, isNew: false })
+            setContextMenu(null)
+          }}
+          onAddChild={() => {
+            setEditState({ node: null, isNew: true, parentNode: contextMenu.node })
+            setContextMenu(null)
+          }}
+          onDelete={() => handleDelete(contextMenu.node)}
         />
       )}
 
-      {hover && !magnifier && <HoverTooltip info={hover} />}
+      {/* Edit dialog */}
+      {editState && (
+        <NodeEditDialog
+          node={editState.node}
+          isNew={editState.isNew}
+          milestones={localMilestones}
+          saving={saving}
+          onSave={handleSave}
+          onClose={() => setEditState(null)}
+        />
+      )}
     </div>
   )
 }
 
-// ─── Magnifier Lens ────────────────────────────────────────────────────────────
+// ─── Minimap ──────────────────────────────────────────────────────────────────
 
-interface MagnifierLensProps {
-  cx: number
-  cy: number
-  svgX: number
-  svgY: number
-  transform: d3.ZoomTransform
+interface MinimapProps {
   graphNodes: GraphNode[]
   graphLinks: GraphLink[]
-  milestones: MilestoneInfo[]
-  radius: number
-  zoom: number
+  transform: d3.ZoomTransform
+  viewportW: number
+  viewportH: number
 }
 
-function MagnifierLens({ cx, cy, svgX, svgY, radius, zoom, graphNodes, graphLinks, milestones }: MagnifierLensProps) {
-  const lensRef = useRef<SVGSVGElement>(null)
+const MINIMAP_W = 160
+const MINIMAP_H = 100
+const MINIMAP_PAD = 4
 
-  // The lens shows the graph centered on (svgX, svgY) with MAG_ZOOM scale
-  // Transform: scale by zoom, then translate so (svgX, svgY) maps to lens center (radius, radius)
-  const lensTransform = `translate(${radius - svgX * zoom}, ${radius - svgY * zoom}) scale(${zoom})`
+function MinimapOverlay({ graphNodes, graphLinks, transform, viewportW, viewportH }: MinimapProps) {
+  if (graphNodes.length === 0) return null
 
-  const nodeMap = useMemo(() => new Map(graphNodes.map((n) => [n.id, n])), [graphNodes])
+  const allX = graphNodes.map((n) => n.x ?? 0)
+  const allY = graphNodes.map((n) => n.y ?? 0)
+  const gMinX = Math.min(...allX) - CARD_W / 2 - 20
+  const gMaxX = Math.max(...allX) + CARD_W / 2 + 20
+  const gMinY = Math.min(...allY) - CARD_H / 2 - 20
+  const gMaxY = Math.max(...allY) + CARD_H / 2 + 20
+  const gW = gMaxX - gMinX || 1
+  const gH = gMaxY - gMinY || 1
+
+  const innerW = MINIMAP_W - MINIMAP_PAD * 2
+  const innerH = MINIMAP_H - MINIMAP_PAD * 2
+  const ms = Math.min(innerW / gW, innerH / gH)
+
+  // Viewport rect in graph space
+  const vpLeft = -transform.x / transform.k
+  const vpTop = -transform.y / transform.k
+  const vpW = viewportW / transform.k
+  const vpH = viewportH / transform.k
+
+  // Viewport rect in minimap space
+  const mvpX = (vpLeft - gMinX) * ms + MINIMAP_PAD
+  const mvpY = (vpTop - gMinY) * ms + MINIMAP_PAD
+  const mvpW = vpW * ms
+  const mvpH = vpH * ms
+
+  const nodeMap = new Map(graphNodes.map((n) => [n.id, n]))
 
   return (
-    <svg
-      ref={lensRef}
-      style={{
-        position: "absolute",
-        left: cx - radius,
-        top: cy - radius,
-        width: radius * 2,
-        height: radius * 2,
-        pointerEvents: "none",
-        zIndex: 40,
-        overflow: "visible",
-      }}
+    <div
+      className="absolute top-3 right-3 bg-card/80 backdrop-blur border rounded-lg overflow-hidden shadow-sm"
+      style={{ width: MINIMAP_W, height: MINIMAP_H, pointerEvents: "none" }}
     >
-      <defs>
-        <clipPath id="lens-clip">
-          <circle cx={radius} cy={radius} r={radius - 2} />
-        </clipPath>
-        <filter id="lens-shadow">
-          <feDropShadow dx="0" dy="2" stdDeviation="6" floodColor="#000" floodOpacity="0.22" />
-        </filter>
-      </defs>
-
-      {/* White background inside lens */}
-      <circle cx={radius} cy={radius} r={radius - 2} fill="white" clipPath="url(#lens-clip)" />
-
-      {/* Magnified graph content */}
-      <g clipPath="url(#lens-clip)">
-        <g transform={lensTransform}>
-          {/* Links */}
-          <g>
-            {graphLinks.map((d) => {
-              const src = nodeMap.get(typeof d.source === "string" ? d.source : (d.source as GraphNode).id)
-              const tgt = nodeMap.get(typeof d.target === "string" ? d.target : (d.target as GraphNode).id)
-              if (!src || !tgt) return null
-              const sx = (src.x ?? 0) + CARD_W / 2
-              const sy = src.y ?? 0
-              const tx = (tgt.x ?? 0) - CARD_W / 2
-              const ty = tgt.y ?? 0
-              const mx = (sx + tx) / 2
-              return (
-                <path
-                  key={d.id}
-                  d={`M${sx},${sy} C${mx},${sy} ${mx},${ty} ${tx},${ty}`}
-                  fill="none" stroke="#cbd5e1" strokeWidth={1.5}
-                />
-              )
-            })}
-          </g>
-          {/* Nodes */}
-          <g>
-            {graphNodes.map((d) => {
-              const palette = MILESTONE_PALETTE[d.milestoneIdx % MILESTONE_PALETTE.length]
-              const nx = (d.x ?? 0) - CARD_W / 2
-              const ny = (d.y ?? 0) - CARD_H / 2
-              const maxChars = 7
-              const title = d.label.length > maxChars ? d.label.slice(0, maxChars) + "…" : d.label
-              const msName = d.milestone.length > 10 ? d.milestone.slice(0, 10) + "…" : d.milestone
-              return (
-                <g key={d.id} transform={`translate(${nx},${ny})`}>
-                  <rect
-                    width={CARD_W} height={CARD_H} rx={8}
-                    fill={d.passed ? "#d1fae5" : palette.fill}
-                    stroke={d.passed ? "#10b981" : palette.stroke}
-                    strokeWidth={1.5}
-                  />
-                  <rect x={0} y={0} width={4} height={CARD_H} rx={2}
-                    fill={d.passed ? "#10b981" : palette.stroke}
-                  />
-                  <text x={12} y={18} fontSize="11px" fontWeight="600"
-                    fill={d.passed ? "#047857" : palette.text}>{title}</text>
-                  <text x={12} y={33} fontSize="8px" fill="#94a3b8">{msName}</text>
-                  {d.passed && (
-                    <>
-                      <circle cx={CARD_W - 12} cy={14} r={7} fill="#10b981" />
-                      <path d={`M${CARD_W - 15},14 L${CARD_W - 13},16 L${CARD_W - 9},12`}
-                        stroke="white" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" fill="none" />
-                    </>
-                  )}
-                </g>
-              )
-            })}
-          </g>
+      <svg width={MINIMAP_W} height={MINIMAP_H}>
+        {/* Links */}
+        <g>
+          {graphLinks.map((d) => {
+            const src = nodeMap.get(typeof d.source === "string" ? d.source : (d.source as GraphNode).id)
+            const tgt = nodeMap.get(typeof d.target === "string" ? d.target : (d.target as GraphNode).id)
+            if (!src || !tgt) return null
+            const sx = ((src.x ?? 0) + CARD_W / 2 - gMinX) * ms + MINIMAP_PAD
+            const sy = ((src.y ?? 0) - gMinY) * ms + MINIMAP_PAD
+            const ex = ((tgt.x ?? 0) - CARD_W / 2 - gMinX) * ms + MINIMAP_PAD
+            const ey = ((tgt.y ?? 0) - gMinY) * ms + MINIMAP_PAD
+            const mx2 = (sx + ex) / 2
+            return (
+              <path
+                key={d.id}
+                d={`M${sx},${sy} C${mx2},${sy} ${mx2},${ey} ${ex},${ey}`}
+                fill="none"
+                stroke="#cbd5e1"
+                strokeWidth={0.8}
+              />
+            )
+          })}
         </g>
-      </g>
+        {/* Nodes */}
+        <g>
+          {graphNodes.map((n) => {
+            const palette = MILESTONE_PALETTE[n.milestoneIdx % MILESTONE_PALETTE.length]
+            const nx = ((n.x ?? 0) - CARD_W / 2 - gMinX) * ms + MINIMAP_PAD
+            const ny = ((n.y ?? 0) - CARD_H / 2 - gMinY) * ms + MINIMAP_PAD
+            const nw = Math.max(CARD_W * ms, 4)
+            const nh = Math.max(CARD_H * ms, 3)
+            return (
+              <rect
+                key={n.id}
+                x={nx} y={ny}
+                width={nw} height={nh}
+                rx={2}
+                fill={n.passed ? "#d1fae5" : palette.fill}
+                stroke={n.passed ? "#10b981" : palette.stroke}
+                strokeWidth={0.5}
+              />
+            )
+          })}
+        </g>
+        {/* Viewport indicator */}
+        <rect
+          x={mvpX} y={mvpY}
+          width={Math.max(mvpW, 4)} height={Math.max(mvpH, 4)}
+          fill="rgba(59,130,246,0.12)"
+          stroke="#3b82f6"
+          strokeWidth={1.2}
+          rx={2}
+        />
+      </svg>
+    </div>
+  )
+}
 
-      {/* Lens border ring */}
-      <circle
-        cx={radius} cy={radius} r={radius - 2}
-        fill="none"
-        stroke="rgba(0,0,0,0.15)"
-        strokeWidth={2}
-        filter="url(#lens-shadow)"
-      />
-      {/* Inner highlight ring */}
-      <circle
-        cx={radius} cy={radius} r={radius - 2}
-        fill="none"
-        stroke="rgba(255,255,255,0.6)"
-        strokeWidth={1}
-      />
-    </svg>
+// ─── Context Menu ─────────────────────────────────────────────────────────────
+
+interface NodeContextMenuProps {
+  node: GraphNode
+  x: number
+  y: number
+  canEdit: boolean
+  onEdit: () => void
+  onAddChild: () => void
+  onDelete: () => void
+}
+
+function NodeContextMenu({ node, x, y, canEdit, onEdit, onAddChild, onDelete }: NodeContextMenuProps) {
+  return (
+    <div
+      style={{ position: "absolute", left: x, top: y, zIndex: 60 }}
+      className="rounded-lg border bg-popover shadow-lg py-1 min-w-[140px] text-sm"
+      onClick={(e) => e.stopPropagation()}
+    >
+      <div className="px-3 py-1.5 text-xs text-muted-foreground border-b mb-1 font-medium truncate max-w-[160px]">
+        {node.label}
+      </div>
+      {canEdit ? (
+        <>
+          <button
+            className="w-full text-left px-3 py-1.5 hover:bg-accent rounded transition-colors"
+            onClick={onEdit}
+          >
+            编辑节点
+          </button>
+          <button
+            className="w-full text-left px-3 py-1.5 hover:bg-accent rounded transition-colors"
+            onClick={onAddChild}
+          >
+            添加后继节点
+          </button>
+          <div className="border-t my-1" />
+          <button
+            className="w-full text-left px-3 py-1.5 hover:bg-destructive/10 text-destructive rounded transition-colors"
+            onClick={onDelete}
+          >
+            删除节点
+          </button>
+        </>
+      ) : (
+        <div className="px-3 py-1.5 text-xs text-muted-foreground">
+          传入 projectName 以启用编辑
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ─── Edit Dialog ──────────────────────────────────────────────────────────────
+
+interface NodeEditDialogProps {
+  node: GraphNode | null
+  isNew: boolean
+  milestones: MilestoneInfo[]
+  saving: boolean
+  onSave: (fields: {
+    title: string
+    summary: string
+    difficulty_level: number
+    estimated_minutes: number
+    xp_reward: number
+    milestoneIdx: number
+  }) => void
+  onClose: () => void
+}
+
+function NodeEditDialog({ node, isNew, milestones, saving, onSave, onClose }: NodeEditDialogProps) {
+  const [title, setTitle] = useState(node?.label ?? "")
+  const [summary, setSummary] = useState(node?.summary ?? "")
+  const [difficulty, setDifficulty] = useState(String(node?.difficulty ?? 3))
+  const [minutes, setMinutes] = useState(String(node?.minutes ?? 15))
+  const [xp, setXp] = useState(String(node?.xp ?? 100))
+  const [milestoneIdx, setMilestoneIdx] = useState(node?.milestoneIdx ?? 0)
+
+  const handleSubmit = () => {
+    if (!title.trim()) return
+    onSave({
+      title: title.trim(),
+      summary: summary.trim(),
+      difficulty_level: Math.min(10, Math.max(1, parseInt(difficulty) || 3)),
+      estimated_minutes: Math.max(1, parseInt(minutes) || 15),
+      xp_reward: Math.max(0, parseInt(xp) || 100),
+      milestoneIdx,
+    })
+  }
+
+  return (
+    <Dialog open onOpenChange={(open) => { if (!open) onClose() }}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle>{isNew ? "添加新节点" : "编辑节点"}</DialogTitle>
+        </DialogHeader>
+
+        <div className="grid gap-4">
+          <div className="grid gap-1.5">
+            <Label htmlFor="node-title">标题</Label>
+            <Input
+              id="node-title"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              placeholder="节点标题"
+            />
+          </div>
+
+          <div className="grid gap-1.5">
+            <Label htmlFor="node-summary">简介</Label>
+            <textarea
+              id="node-summary"
+              value={summary}
+              onChange={(e) => setSummary(e.target.value)}
+              placeholder="节点内容简介"
+              rows={3}
+              className="flex w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-xs placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring resize-none"
+            />
+          </div>
+
+          <div className="grid grid-cols-3 gap-3">
+            <div className="grid gap-1.5">
+              <Label htmlFor="node-diff">难度 (1-10)</Label>
+              <Input
+                id="node-diff"
+                type="number"
+                min={1} max={10}
+                value={difficulty}
+                onChange={(e) => setDifficulty(e.target.value)}
+              />
+            </div>
+            <div className="grid gap-1.5">
+              <Label htmlFor="node-min">时长 (分钟)</Label>
+              <Input
+                id="node-min"
+                type="number"
+                min={1}
+                value={minutes}
+                onChange={(e) => setMinutes(e.target.value)}
+              />
+            </div>
+            <div className="grid gap-1.5">
+              <Label htmlFor="node-xp">XP</Label>
+              <Input
+                id="node-xp"
+                type="number"
+                min={0}
+                value={xp}
+                onChange={(e) => setXp(e.target.value)}
+              />
+            </div>
+          </div>
+
+          {isNew && (
+            <div className="grid gap-1.5">
+              <Label htmlFor="node-ms">所属里程碑</Label>
+              <select
+                id="node-ms"
+                value={milestoneIdx}
+                onChange={(e) => setMilestoneIdx(parseInt(e.target.value))}
+                className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+              >
+                {milestones.map((ms, i) => (
+                  <option key={i} value={i}>{ms.title}</option>
+                ))}
+              </select>
+            </div>
+          )}
+        </div>
+
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose} disabled={saving}>取消</Button>
+          <Button onClick={handleSubmit} disabled={saving || !title.trim()}>
+            {saving ? "保存中..." : "保存"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   )
 }
 

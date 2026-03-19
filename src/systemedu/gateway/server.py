@@ -599,6 +599,39 @@ async def api_update_project(request: Request) -> JSONResponse:
     return JSONResponse({"name": name, "updated": True})
 
 
+async def api_update_tree(request: Request) -> JSONResponse:
+    """PUT /api/projects/{name}/tree - Full-replace the knowledge_tree.json for a project."""
+    from systemedu.education.project_loader import find_project_dir
+    from systemedu.education.services import validate_knowledge_tree
+
+    name = request.path_params["name"]
+    try:
+        project_dir = find_project_dir(name)
+    except FileNotFoundError:
+        return JSONResponse({"error": f"Project '{name}' not found"}, status_code=404)
+
+    try:
+        body = await request.json()
+    except Exception:
+        return JSONResponse({"error": "Invalid JSON body"}, status_code=400)
+
+    milestones_data = body.get("milestones")
+    if not isinstance(milestones_data, list):
+        return JSONResponse({"error": "milestones must be a list"}, status_code=400)
+
+    tree_dict = {"milestones": milestones_data}
+    errors = validate_knowledge_tree(tree_dict)
+    if errors:
+        return JSONResponse({"error": errors[0]}, status_code=422)
+
+    tree_path = project_dir / "knowledge_tree.json"
+    tree_path.write_text(
+        json.dumps(tree_dict, ensure_ascii=False, indent=2), encoding="utf-8"
+    )
+
+    return JSONResponse({"ok": True, "milestones": milestones_data})
+
+
 async def api_node_context(request: Request) -> JSONResponse:
     """GET /api/projects/{name}/nodes/{node_id}/context - AI-generated node knowledge context."""
     name = request.path_params["name"]
@@ -1925,6 +1958,7 @@ def create_app() -> Starlette:
         Route("/api/projects/{name}/nodes/{node_id:int}/note", api_get_note, methods=["GET"]),
         Route("/api/projects/{name}/nodes/{node_id:int}/note", api_upsert_note, methods=["PUT"]),
         Route("/api/projects/{name}/notes", api_get_all_notes, methods=["GET"]),
+        Route("/api/projects/{name}/tree", api_update_tree, methods=["PUT"]),
         Route("/api/projects/{name}", api_project_detail, methods=["GET"]),
         Route("/api/projects/{name}", api_update_project, methods=["PATCH"]),
         Route("/api/agents", api_agents),
