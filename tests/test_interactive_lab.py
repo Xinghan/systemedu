@@ -150,9 +150,11 @@ class TestGenerateInteractiveLab:
         ):
             await _generate_interactive_lab("Node", "Summary", 3, MagicMock(), progress_callback=cb)
 
-        assert len(calls) == 8  # 4 stages x 2 (in_progress + completed)
+        assert len(calls) == 10  # 5 stages x 2 (in_progress + completed)
         assert ("lab_analyst", "in_progress") in calls
         assert ("lab_analyst", "completed") in calls
+        assert ("lab_image_search", "in_progress") in calls
+        assert ("lab_image_search", "completed") in calls
         assert ("lab_coder", "completed") in calls
         assert ("lab_reviewer", "in_progress") in calls
         assert ("lab_reviewer", "completed") in calls

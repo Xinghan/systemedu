@@ -50,6 +50,26 @@ CODER_SYSTEM_PROMPT = """你是一个专业的前端开发者，擅长 React + S
    - 形状圆润，strokeWidth 2，stroke 颜色比填充色深一档
    - 不使用任何第三方图形库
 
+【图片渲染规则】
+当物品数据含 image_url 字段（非 null 非空字符串）时，用 <img> 展示真实图片，失败时降级为 emoji：
+```jsx
+{item.image_url ? (
+  <span style={{display:'inline-flex',alignItems:'center',justifyContent:'center',width:'64px',height:'64px'}}>
+    <img src={item.image_url}
+         style={{width:'64px',height:'64px',objectFit:'contain',borderRadius:'8px'}}
+         onError={(e)=>{e.currentTarget.style.display='none'; e.currentTarget.nextSibling.style.display='flex';}} />
+    <span style={{display:'none',width:'64px',height:'64px',alignItems:'center',justifyContent:'center',fontSize:'32px'}}>
+      {/* emoji fallback，根据标签推断，如 🍃🐱📦🌊 */}
+    </span>
+  </span>
+) : (
+  <svg>/* 原有 SVG 图形 */</svg>
+)}
+```
+- image_url 为 null 或缺失时：使用原有 SVG 几何图形，不使用 <img>
+- onError 回调：隐藏失败的 img，显示 emoji fallback span
+- 图片尺寸统一 64x64px，objectFit: contain，borderRadius: 8px
+
 【CSS 动画要求】
 - 正确答案：绿色边框 + scale(1.08) bounce + 对勾淡入
 - 错误答案：红色边框 + shake 抖动（translateX）
