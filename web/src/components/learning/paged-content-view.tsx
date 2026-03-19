@@ -1,9 +1,7 @@
 "use client"
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
-import { ChevronLeft, ChevronRight } from "lucide-react"
 import { toast } from "sonner"
-import { Button } from "@/components/ui/button"
 import { HighlightedMarkdown } from "./highlighted-markdown"
 import { splitByHeadings } from "@/lib/utils/split-pages"
 import { HighlightToolbar } from "./highlight-toolbar"
@@ -13,12 +11,13 @@ import type { HighlightInfo } from "@/lib/types/api"
 interface PagedContentViewProps {
   content: string
   onPageChange?: (pageIndex: number, pageContent: string) => void
+  onPaginationState?: (state: { currentPage: number; totalPages: number; goTo: (i: number) => void }) => void
   projectName?: string
   nodeId?: number | null
   tab?: string
 }
 
-export function PagedContentView({ content, onPageChange, projectName, nodeId, tab }: PagedContentViewProps) {
+export function PagedContentView({ content, onPageChange, onPaginationState, projectName, nodeId, tab }: PagedContentViewProps) {
   const pages = useMemo(() => splitByHeadings(content), [content])
   const [currentPage, setCurrentPage] = useState(0)
   const [highlights, setHighlights] = useState<HighlightInfo[]>([])
@@ -97,6 +96,11 @@ export function PagedContentView({ content, onPageChange, projectName, nodeId, t
     [pages.length],
   )
 
+  // Expose pagination state to parent (for external pagination bar)
+  useEffect(() => {
+    onPaginationState?.({ currentPage, totalPages: pages.length, goTo })
+  }, [currentPage, pages.length, goTo, onPaginationState])
+
   // Keyboard navigation
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -130,57 +134,10 @@ export function PagedContentView({ content, onPageChange, projectName, nodeId, t
 
   return (
     <div className="relative" ref={contentRef}>
-      {/* Page content */}
-      <div className="pb-2">
-        {renderContent(pages[currentPage] ?? "")}
-        {highlightsEnabled && (
-          <HighlightToolbar onHighlight={handleHighlight} containerRef={contentRef} />
-        )}
-      </div>
-
-      {/* Pagination controls — sits directly below content */}
-      <div className="flex items-center justify-between gap-3 pt-4 mt-4 border-t">
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => goTo(currentPage - 1)}
-          disabled={currentPage === 0}
-          className="gap-1"
-        >
-          <ChevronLeft className="h-4 w-4" />
-          上一页
-        </Button>
-
-        <div className="flex items-center gap-2">
-          <div className="flex items-center gap-1.5">
-            {pages.map((_, i) => (
-              <button
-                key={i}
-                onClick={() => goTo(i)}
-                className={`rounded-full transition-all ${
-                  i === currentPage
-                    ? "h-2 w-5 bg-primary"
-                    : "h-2 w-2 bg-muted-foreground/30 hover:bg-muted-foreground/50"
-                }`}
-              />
-            ))}
-          </div>
-          <span className="text-xs text-muted-foreground tabular-nums">
-            {currentPage + 1} / {pages.length}
-          </span>
-        </div>
-
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => goTo(currentPage + 1)}
-          disabled={currentPage === pages.length - 1}
-          className="gap-1"
-        >
-          下一页
-          <ChevronRight className="h-4 w-4" />
-        </Button>
-      </div>
+      {renderContent(pages[currentPage] ?? "")}
+      {highlightsEnabled && (
+        <HighlightToolbar onHighlight={handleHighlight} containerRef={contentRef} />
+      )}
     </div>
   )
 }

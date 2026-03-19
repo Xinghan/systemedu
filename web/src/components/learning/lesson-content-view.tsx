@@ -63,6 +63,7 @@ export function LessonContentView({
   nextNodes,
 }: LessonContentViewProps) {
   const [activeTab, setActiveTab] = useState(0)
+  const [pagination, setPagination] = useState<{ currentPage: number; totalPages: number; goTo: (i: number) => void } | null>(null)
   const [noteState, setNoteState] = useState<"closed" | "open" | "minimized">("closed")
   const [noteStatus, setNoteStatus] = useState<"idle" | "saving" | "saved">("idle")
   const [notePreviewMode, setNotePreviewMode] = useState<NotePreviewMode>("edit")
@@ -83,6 +84,7 @@ export function LessonContentView({
 
   // Wide-layout tabs: full-width content (no sidebar)
   const isWideTab = ["interactive_lab", "examples", "practice", "resources"].includes(activeKey)
+  const showPagination = !isWideTab && pagination && pagination.totalPages > 1
 
   const handleDragMouseDown = useCallback((e: React.MouseEvent) => {
     e.preventDefault()
@@ -213,6 +215,7 @@ export function LessonContentView({
                           const tabKey = availableTabs[activeTab]?.key ?? availableTabs[0]?.key
                           onPageChange?.(tabKey, pageIndex, pageContent)
                         }}
+                        onPaginationState={setPagination}
                       />
                     </div>
 
@@ -265,6 +268,50 @@ export function LessonContentView({
             ) : (
               <div className="flex items-center justify-center h-full text-muted-foreground text-sm">
                 暂无内容
+              </div>
+            )}
+
+            {/* Sticky pagination bar — fixed to bottom of scroll area */}
+            {showPagination && pagination && (
+              <div className="sticky bottom-0 flex items-center justify-between px-5 py-2 border-t bg-background/95 backdrop-blur-sm">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => pagination.goTo(pagination.currentPage - 1)}
+                  disabled={pagination.currentPage === 0}
+                  className="gap-1"
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                  上一页
+                </Button>
+                <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-1.5">
+                    {Array.from({ length: pagination.totalPages }).map((_, i) => (
+                      <button
+                        key={i}
+                        onClick={() => pagination.goTo(i)}
+                        className={`rounded-full transition-all ${
+                          i === pagination.currentPage
+                            ? "h-2 w-5 bg-primary"
+                            : "h-2 w-2 bg-muted-foreground/30 hover:bg-muted-foreground/50"
+                        }`}
+                      />
+                    ))}
+                  </div>
+                  <span className="text-xs text-muted-foreground tabular-nums">
+                    {pagination.currentPage + 1} / {pagination.totalPages}
+                  </span>
+                </div>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => pagination.goTo(pagination.currentPage + 1)}
+                  disabled={pagination.currentPage === pagination.totalPages - 1}
+                  className="gap-1"
+                >
+                  下一页
+                  <ChevronRight className="h-4 w-4" />
+                </Button>
               </div>
             )}
           </div>
