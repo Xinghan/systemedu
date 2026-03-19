@@ -5,7 +5,6 @@ import { IconBook } from "./cartoon-icons"
 import { Button } from "@/components/ui/button"
 import { gateway } from "@/lib/api"
 import type { KnodeInfo, LessonContent, NodeProgress } from "@/lib/types/api"
-import { LessonGenerating } from "./lesson-generating"
 import { LessonContentView } from "./lesson-content-view"
 import { GenerationPipelineView } from "./generation-pipeline-view"
 
@@ -17,6 +16,23 @@ interface LessonViewProps {
   onNodeChange: (nodeId: number) => void
   onProgressUpdate: (updatedProgress: NodeProgress[]) => void
   onPageChange?: (tab: string, pageIndex: number, pageContent: string) => void
+}
+
+/** Compute nodes that become learnable after the given progress list is applied */
+function computeNextNodes(
+  currentNodeId: number,
+  allKnodes: KnodeInfo[],
+  progress: NodeProgress[]
+): KnodeInfo[] {
+  const passedIds = new Set(
+    progress.filter((p) => p.status === "passed").map((p) => p.knode_id)
+  )
+  return allKnodes.filter((knode) => {
+    if (knode.id === currentNodeId) return false
+    if (passedIds.has(knode.id)) return false
+    // all prerequisites must be passed
+    return knode.prerequisite_indices.every((idx) => passedIds.has(idx))
+  })
 }
 
 export function LessonView({
@@ -213,28 +229,37 @@ export function LessonView({
     )
   }
 
-  // Loading / generating / regenerating state
-  if (loading || regenerating || !lesson || lesson.status !== "ready") {
-    // Show pipeline view during actual generation, fallback to old animation for initial load
-    if (isGenerating && nodeId !== null) {
-      return (
-        <GenerationPipelineView
-          projectName={projectName}
-          nodeId={nodeId}
-          nodeTitle={knode?.title ?? "生成中..."}
-          onComplete={handleGenerationComplete}
-        />
-      )
-    }
+  // Generating state — pipeline view
+  if (isGenerating && nodeId !== null) {
     return (
-      <LessonGenerating
-        nodeTitle={knode?.title ?? "加载中..."}
-        isRegenerate={regenerating}
+      <GenerationPipelineView
+        projectName={projectName}
+        nodeId={nodeId}
+        nodeTitle={knode?.title ?? "生成中..."}
+        onComplete={handleGenerationComplete}
       />
     )
   }
 
+  // Initial loading spinner (before we know if generation is needed)
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-full text-muted-foreground">
+        <div className="w-6 h-6 rounded-full border-2 border-current border-t-transparent animate-spin" />
+      </div>
+    )
+  }
+
+  // Lesson not ready but not generating — shouldn't happen normally, show nothing
+  if (!lesson || lesson.status !== "ready") {
+    return null
+  }
+
   // Ready state
+  const nextNodes = isCompleted && nodeId !== null
+    ? computeNextNodes(nodeId, allKnodes, progress)
+    : []
+
   return (
     <LessonContentView
       knode={knode!}
@@ -244,12 +269,14 @@ export function LessonView({
       onMarkComplete={handleMarkComplete}
       onRegenerate={handleRegenerate}
       onNavigate={handleNavigate}
+      onNavigateToNode={onNodeChange}
       onPageChange={onPageChange}
       hasPrev={nodeId > 0}
       hasNext={nodeId < allKnodes.length - 1}
       isCompleted={isCompleted}
       completing={completing}
       regenerating={regenerating}
+      nextNodes={nextNodes}
     />
   )
 }

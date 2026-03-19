@@ -12,6 +12,7 @@ import { PracticeView } from "./practice-view"
 import { ResourceSearchView } from "./resource-search-view"
 import { NotePanel, type NotePreviewMode } from "./note-panel"
 import { AudioPlayerBar } from "./audio-player-bar"
+import { ArrowRight } from "lucide-react"
 import type { KnodeInfo, LessonContent } from "@/lib/types/api"
 
 const MIN_NOTE_WIDTH = 280
@@ -26,12 +27,14 @@ interface LessonContentViewProps {
   onMarkComplete: () => void
   onRegenerate: () => void
   onNavigate: (direction: "prev" | "next") => void
+  onNavigateToNode: (nodeId: number) => void
   onPageChange?: (tab: string, pageIndex: number, pageContent: string) => void
   hasPrev: boolean
   hasNext: boolean
   isCompleted: boolean
   completing: boolean
   regenerating: boolean
+  nextNodes: KnodeInfo[]
 }
 
 const TAB_CONFIG = [
@@ -51,12 +54,14 @@ export function LessonContentView({
   onMarkComplete,
   onRegenerate,
   onNavigate,
+  onNavigateToNode,
   onPageChange,
   hasPrev,
   hasNext,
   isCompleted,
   completing,
   regenerating,
+  nextNodes,
 }: LessonContentViewProps) {
   const [activeTab, setActiveTab] = useState(0)
   const [noteState, setNoteState] = useState<"closed" | "open" | "minimized">("closed")
@@ -298,6 +303,27 @@ export function LessonContentView({
           />
         ) : null
       })()}
+
+      {/* Next nodes panel — shown after marking complete */}
+      {isCompleted && nextNodes.length > 0 && (
+        <div className="border-t bg-muted/30">
+          <div className="max-w-5xl mx-auto px-6 py-4">
+            <p className="text-sm font-medium text-muted-foreground mb-3">下一步可以学习</p>
+            <div className="flex flex-wrap gap-2">
+              {nextNodes.map((node) => (
+                <button
+                  key={node.id}
+                  onClick={() => onNavigateToNode(node.id)}
+                  className="flex items-center gap-2 rounded-lg border bg-card px-3 py-2 text-sm hover:bg-accent hover:border-primary/40 transition-colors text-left"
+                >
+                  <span className="font-medium truncate max-w-[200px]">{node.title}</span>
+                  <ArrowRight className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Bottom navigation */}
       <div className="border-t">
