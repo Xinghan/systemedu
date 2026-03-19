@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import { ChevronLeft, ChevronRight, RefreshCw, NotebookPen, X } from "lucide-react"
+import { ChevronLeft, ChevronRight, RefreshCw, NotebookPen, X, Minus } from "lucide-react"
 import { IconStar, IconCheck, IconLightning, IconClock } from "./cartoon-icons"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -55,9 +55,10 @@ export function LessonContentView({
   regenerating,
 }: LessonContentViewProps) {
   const [activeTab, setActiveTab] = useState(0)
-  const [noteOpen, setNoteOpen] = useState(false)
+  // note panel: false = closed, true = open (full panel), "minimized" = icon-only FAB
+  const [noteState, setNoteState] = useState<"closed" | "open" | "minimized">("closed")
+  const [noteStatus, setNoteStatus] = useState<"idle" | "saving" | "saved">("idle")
 
-  // Filter out tabs with empty content
   const availableTabs = TAB_CONFIG.filter((tab) => {
     const content = lesson[tab.field]
     return content && content.trim().length > 0
@@ -67,7 +68,6 @@ export function LessonContentView({
   const allTabs = [...availableTabs, RESOURCE_TAB]
 
   const difficultyLabel = knode.difficulty_level <= 3 ? "入门" : knode.difficulty_level <= 6 ? "中级" : "高级"
-
   const activeKey = allTabs[activeTab]?.key ?? allTabs[0]?.key
 
   return (
@@ -125,7 +125,7 @@ export function LessonContentView({
         </div>
       </div>
 
-      {/* Main area: content + optional note panel side-by-side */}
+      {/* Main area: content + optional note panel */}
       <div className="flex flex-1 min-h-0">
         {/* Tabbed content */}
         {availableTabs.length > 0 ? (
@@ -180,20 +180,46 @@ export function LessonContentView({
           </div>
         )}
 
-        {/* Right note panel */}
-        {noteOpen && (
-          <div className="w-80 shrink-0 border-l flex flex-col min-h-0 bg-background">
-            <div className="flex items-center justify-between px-4 py-2 border-b shrink-0">
-              <span className="text-sm font-medium">笔记</span>
-              <button
-                onClick={() => setNoteOpen(false)}
-                className="text-muted-foreground hover:text-foreground transition-colors"
-              >
-                <X className="h-4 w-4" />
-              </button>
+        {/* Note panel — mirrors floating-chat window style */}
+        {noteState === "open" && (
+          <div className="w-[360px] shrink-0 border-l flex flex-col min-h-0 bg-background shadow-2xl">
+            {/* Header — same pattern as floating-chat header */}
+            <div className="border-b bg-muted/30 shrink-0">
+              <div className="flex items-center justify-between px-3 py-2">
+                <div className="flex items-center gap-2">
+                  <div className="w-2.5 h-2.5 rounded-full bg-amber-500" />
+                  <span className="text-sm font-medium">笔记</span>
+                  {noteStatus === "saving" && (
+                    <span className="text-xs text-muted-foreground">保存中...</span>
+                  )}
+                  {noteStatus === "saved" && (
+                    <span className="text-xs text-green-600 dark:text-green-400">已保存</span>
+                  )}
+                </div>
+                <div className="flex items-center">
+                  <button
+                    onClick={() => setNoteState("minimized")}
+                    className="h-8 w-8 rounded-md flex items-center justify-center hover:bg-muted transition-colors"
+                    title="最小化"
+                  >
+                    <Minus className="h-4 w-4" />
+                  </button>
+                  <button
+                    onClick={() => setNoteState("closed")}
+                    className="h-8 w-8 rounded-md flex items-center justify-center hover:bg-muted transition-colors"
+                    title="关闭"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
+              </div>
             </div>
-            <div className="flex-1 overflow-y-auto p-3">
-              <NotePanel projectName={projectName} nodeId={nodeId} />
+            <div className="flex-1 min-h-0 overflow-hidden">
+              <NotePanel
+                projectName={projectName}
+                nodeId={nodeId}
+                onStatusChange={setNoteStatus}
+              />
             </div>
           </div>
         )}
@@ -217,42 +243,46 @@ export function LessonContentView({
       {/* Bottom navigation */}
       <div className="border-t">
         <div className="max-w-5xl mx-auto px-6 py-3 flex items-center justify-between">
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => onNavigate("prev")}
-            disabled={!hasPrev}
-            className="gap-1"
-          >
+          <Button variant="ghost" size="sm" onClick={() => onNavigate("prev")} disabled={!hasPrev} className="gap-1">
             <ChevronLeft className="h-4 w-4" />
             上一节
           </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => onNavigate("next")}
-            disabled={!hasNext}
-            className="gap-1"
-          >
+          <Button variant="ghost" size="sm" onClick={() => onNavigate("next")} disabled={!hasNext} className="gap-1">
             下一节
             <ChevronRight className="h-4 w-4" />
           </Button>
         </div>
       </div>
 
-      {/* Floating note button — bottom-right corner */}
-      <button
-        onClick={() => setNoteOpen((v) => !v)}
-        className={`fixed bottom-20 right-6 z-50 flex items-center gap-1.5 px-3 py-2 rounded-full shadow-lg text-sm font-medium transition-all ${
-          noteOpen
-            ? "bg-primary text-primary-foreground"
-            : "bg-card border text-foreground hover:bg-muted"
-        }`}
-        title="笔记"
-      >
-        <NotebookPen className="h-4 w-4" />
-        笔记
-      </button>
+      {/* Note FAB — same style as Chat FAB (h-14 w-14 rounded-full), stacked above it */}
+      {noteState === "closed" && (
+        <button
+          onClick={() => setNoteState("open")}
+          className="fixed bottom-[88px] right-6 z-50 h-14 w-14 rounded-full bg-amber-500 text-white shadow-lg hover:bg-amber-500/90 transition-colors flex items-center justify-center"
+          title="笔记"
+        >
+          <NotebookPen className="h-6 w-6" />
+        </button>
+      )}
+
+      {/* Minimized note pill — same style as chat minimized state, stacked above Chat FAB */}
+      {noteState === "minimized" && (
+        <div className="fixed bottom-[88px] right-6 z-50 flex items-center gap-2">
+          <button
+            onClick={() => setNoteState("open")}
+            className="flex items-center gap-2 rounded-full bg-secondary text-secondary-foreground px-4 py-2 shadow-lg hover:bg-secondary/80 text-sm font-medium transition-colors"
+          >
+            <NotebookPen className="h-4 w-4" />
+            笔记
+          </button>
+          <button
+            onClick={() => setNoteState("closed")}
+            className="h-8 w-8 rounded-full flex items-center justify-center hover:bg-muted transition-colors"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+      )}
     </div>
   )
 }

@@ -9,11 +9,12 @@ const MDEditor = dynamic(() => import("@uiw/react-md-editor"), { ssr: false })
 interface NotePanelProps {
   projectName: string
   nodeId: number
+  /** Controlled from outside so the panel header can show save status */
+  onStatusChange?: (status: "idle" | "saving" | "saved") => void
 }
 
-export function NotePanel({ projectName, nodeId }: NotePanelProps) {
+export function NotePanel({ projectName, nodeId, onStatusChange }: NotePanelProps) {
   const [content, setContent] = useState<string>("")
-  const [status, setStatus] = useState<"idle" | "saving" | "saved">("idle")
   const [loading, setLoading] = useState(true)
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const initialLoad = useRef(true)
@@ -21,18 +22,13 @@ export function NotePanel({ projectName, nodeId }: NotePanelProps) {
   useEffect(() => {
     initialLoad.current = true
     setLoading(true)
+    onStatusChange?.("idle")
     gateway
       .getNote(projectName, nodeId)
-      .then((note) => {
-        setContent(note.content)
-      })
-      .catch(() => {
-        setContent("")
-      })
-      .finally(() => {
-        setLoading(false)
-      })
-  }, [projectName, nodeId])
+      .then((note) => setContent(note.content))
+      .catch(() => setContent(""))
+      .finally(() => setLoading(false))
+  }, [projectName, nodeId]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleChange = (val: string | undefined) => {
     const newContent = val ?? ""
@@ -43,13 +39,13 @@ export function NotePanel({ projectName, nodeId }: NotePanelProps) {
       return
     }
 
-    setStatus("saving")
+    onStatusChange?.("saving")
     if (debounceRef.current) clearTimeout(debounceRef.current)
     debounceRef.current = setTimeout(() => {
       gateway
         .upsertNote(projectName, nodeId, newContent)
-        .then(() => setStatus("saved"))
-        .catch(() => setStatus("idle"))
+        .then(() => onStatusChange?.("saved"))
+        .catch(() => onStatusChange?.("idle"))
     }, 1500)
   }
 
@@ -60,30 +56,20 @@ export function NotePanel({ projectName, nodeId }: NotePanelProps) {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-32 text-sm text-muted-foreground">
+      <div className="flex items-center justify-center h-full text-xs text-muted-foreground">
         加载中...
       </div>
     )
   }
 
   return (
-    <div className="flex flex-col gap-2 h-full" data-color-mode={colorMode}>
-      <div className="flex items-center justify-between px-1">
-        <span className="text-xs text-muted-foreground">
-          支持 Markdown 格式，自动保存
-        </span>
-        {status === "saving" && (
-          <span className="text-xs text-muted-foreground">保存中...</span>
-        )}
-        {status === "saved" && (
-          <span className="text-xs text-green-600 dark:text-green-400">已保存</span>
-        )}
-      </div>
+    <div className="h-full" data-color-mode={colorMode}>
       <MDEditor
         value={content}
         onChange={handleChange}
-        height={360}
+        height="100%"
         preview="edit"
+        style={{ fontSize: "13px" }}
       />
     </div>
   )
