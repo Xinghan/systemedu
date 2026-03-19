@@ -98,11 +98,16 @@ export function D3KnowledgeTree({
   const [minimapTransform, setMinimapTransform] = useState<d3.ZoomTransform>(d3.zoomIdentity)
   const containerSizeRef = useRef({ w: 0, h: 0 })
   const currentTransformRef = useRef<d3.ZoomTransform>(d3.zoomIdentity)
+  const applyHighlightRef = useRef<(ids: Set<string>) => void>(() => {})
+  const clearHighlightRef = useRef<() => void>(() => {})
 
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null)
   const [editState, setEditState] = useState<EditState | null>(null)
   const [detailNode, setDetailNode] = useState<GraphNode | null>(null)
   const [saving, setSaving] = useState(false)
+  // Pinned highlight: set of node ids that stay highlighted until manually cleared
+  const pinnedPathIdsRef = useRef<Set<string>>(new Set())
+  const [hasPinnedPath, setHasPinnedPath] = useState(false)
 
   // localMilestones is the source of truth for rendering once user edits
   const [localMilestones, setLocalMilestones] = useState<MilestoneInfo[]>(milestones)
@@ -388,10 +393,8 @@ export function D3KnowledgeTree({
       }
 
       function applyPathHighlight(pathIds: Set<string>) {
-        // Dim non-path nodes
         g.select(".nodes").selectAll<SVGGElement, GraphNode>("g.node-group")
           .attr("opacity", (d) => pathIds.has(d.id) ? 1 : 0.15)
-        // Highlight path links, dim others
         g.select(".links").selectAll<SVGPathElement, GraphLink>("path")
           .each(function (lk) {
             const srcId = typeof lk.source === "string" ? lk.source : (lk.source as GraphNode).id
@@ -415,18 +418,34 @@ export function D3KnowledgeTree({
           .attr("marker-end", "url(#arrow)")
       }
 
+      // Expose to React callbacks
+      applyHighlightRef.current = applyPathHighlight
+      clearHighlightRef.current = clearPathHighlight
+
+      // Restore pinned highlight if any (after re-render)
+      if (pinnedPathIdsRef.current.size > 0) {
+        applyPathHighlight(pinnedPathIdsRef.current)
+      }
+
       // Hover + context menu on node groups
       nodeGroups
         .on("mouseenter", function (event, d) {
           d3.select(this).select(".card-bg").attr("stroke-width", 2.5)
-          const pathIds = getPathNodeIds(d.id)
-          applyPathHighlight(pathIds)
+          // If pinned, don't override with hover
+          if (pinnedPathIdsRef.current.size === 0) {
+            applyPathHighlight(getPathNodeIds(d.id))
+          }
           const containerRect = container.getBoundingClientRect()
           setHover({ node: d, x: event.clientX - containerRect.left, y: event.clientY - containerRect.top })
         })
         .on("mouseleave", function () {
           d3.select(this).select(".card-bg").attr("stroke-width", 1.5)
-          clearPathHighlight()
+          // Only clear if nothing is pinned; otherwise restore pinned
+          if (pinnedPathIdsRef.current.size === 0) {
+            clearPathHighlight()
+          } else {
+            applyPathHighlight(pinnedPathIdsRef.current)
+          }
           setHover(null)
         })
         .on("contextmenu", function (event, d) {
@@ -595,6 +614,26 @@ export function D3KnowledgeTree({
 
       {hover && !contextMenu && <HoverTooltip info={hover} />}
 
+      {/* Clear pinned highlight button — shown top-right below minimap when path is pinned */}
+      {hasPinnedPath && (
+        <div
+          className="absolute top-[116px] right-3 z-30"
+          style={{ pointerEvents: "auto" }}
+        >
+          <button
+            className="flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs bg-card/90 backdrop-blur border shadow-sm text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
+            onClick={() => {
+              pinnedPathIdsRef.current = new Set()
+              setHasPinnedPath(false)
+              clearHighlightRef.current()
+            }}
+          >
+            <span className="inline-block w-2 h-2 rounded-sm bg-slate-400/60" />
+            取消固定高亮
+          </button>
+        </div>
+      )}
+
       {/* Context menu */}
       {contextMenu && (
         <NodeContextMenu
@@ -602,6 +641,23 @@ export function D3KnowledgeTree({
           x={contextMenu.x}
           y={contextMenu.y}
           canEdit={!!projectName}
+          isPinned={hasPinnedPath && pinnedPathIdsRef.current.has(contextMenu.node.id)}
+          onPinPath={() => {
+            const ids = (() => {
+              const result = new Set<string>([contextMenu.node.id])
+              for (const lk of graphLinks) {
+                const srcId = typeof lk.source === "string" ? lk.source : (lk.source as GraphNode).id
+                const tgtId = typeof lk.target === "string" ? lk.target : (lk.target as GraphNode).id
+                if (tgtId === contextMenu.node.id) result.add(srcId)
+                if (srcId === contextMenu.node.id) result.add(tgtId)
+              }
+              return result
+            })()
+            pinnedPathIdsRef.current = ids
+            setHasPinnedPath(true)
+            applyHighlightRef.current(ids)
+            setContextMenu(null)
+          }}
           onEdit={() => {
             setEditState({ node: contextMenu.node, isNew: false })
             setContextMenu(null)
@@ -753,23 +809,32 @@ interface NodeContextMenuProps {
   x: number
   y: number
   canEdit: boolean
+  isPinned: boolean
+  onPinPath: () => void
   onEdit: () => void
   onAddChild: () => void
   onDelete: () => void
 }
 
-function NodeContextMenu({ node, x, y, canEdit, onEdit, onAddChild, onDelete }: NodeContextMenuProps) {
+function NodeContextMenu({ node, x, y, canEdit, isPinned, onPinPath, onEdit, onAddChild, onDelete }: NodeContextMenuProps) {
   return (
     <div
       style={{ position: "absolute", left: x, top: y, zIndex: 60 }}
-      className="rounded-lg border bg-popover shadow-lg py-1 min-w-[140px] text-sm"
+      className="rounded-lg border bg-popover shadow-lg py-1 min-w-[150px] text-sm"
       onClick={(e) => e.stopPropagation()}
     >
-      <div className="px-3 py-1.5 text-xs text-muted-foreground border-b mb-1 font-medium truncate max-w-[160px]">
+      <div className="px-3 py-1.5 text-xs text-muted-foreground border-b mb-1 font-medium truncate max-w-[170px]">
         {node.label}
       </div>
-      {canEdit ? (
+      <button
+        className="w-full text-left px-3 py-1.5 hover:bg-accent rounded transition-colors"
+        onClick={onPinPath}
+      >
+        {isPinned ? "更新固定高亮" : "固定高亮路径"}
+      </button>
+      {canEdit && (
         <>
+          <div className="border-t my-1" />
           <button
             className="w-full text-left px-3 py-1.5 hover:bg-accent rounded transition-colors"
             onClick={onEdit}
@@ -790,10 +855,6 @@ function NodeContextMenu({ node, x, y, canEdit, onEdit, onAddChild, onDelete }: 
             删除节点
           </button>
         </>
-      ) : (
-        <div className="px-3 py-1.5 text-xs text-muted-foreground">
-          传入 projectName 以启用编辑
-        </div>
       )}
     </div>
   )
