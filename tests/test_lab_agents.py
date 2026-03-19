@@ -571,3 +571,147 @@ class TestLabReviewerAgent:
         reviewer.review(VALID_HTML, design=design)
         prompt_text = llm.invoke.call_args[0][0][1].content
         assert "click_select" in prompt_text
+
+
+ANIMATED_STORY_ANALYSIS = json.dumps({
+    "topic": "认识地址栏与搜索框",
+    "core_concept": "地址栏用来输入网址，搜索框用来搜索内容",
+    "best_interaction": "animated_story",
+    "scene_description": "一个浏览器窗口，顶部有地址栏和搜索框，底部有一个卡通小人",
+    "characters": [
+        {"id": "char1", "name": "小明", "description": "圆头卡通小人，蓝色身体"}
+    ],
+    "animation_steps": [
+        {
+            "step": 1,
+            "narration": "这是浏览器的地址栏，输入网址可以直接跳转",
+            "action": "小明走到地址栏下方，地址栏发蓝色光晕",
+            "highlight": "地址栏",
+            "duration_ms": 2000,
+        },
+        {
+            "step": 2,
+            "narration": "这是搜索框，输入关键词可以搜索信息",
+            "action": "小明走向搜索框，搜索框发橙色光晕",
+            "highlight": "搜索框",
+            "duration_ms": 2000,
+        },
+    ],
+    "interactive_prompt": "点击「继续」跟着小明一起认识浏览器",
+    "learning_goal": "区分地址栏和搜索框的用途",
+}, ensure_ascii=False)
+
+ANIMATED_STORY_DESIGN = json.dumps({
+    "game_title": "跟小明认识浏览器",
+    "interaction_type": "animated_story",
+    "layout": "上方SVG场景区，下方旁白区+继续按钮",
+    "background_color": "linear-gradient(135deg, #EEF2FF, #F0FDF4)",
+    "scene": {
+        "width": 760,
+        "height": 320,
+        "description": "浏览器窗口场景",
+        "elements": [
+            {"id": "addr-bar", "name": "地址栏", "type": "rect", "x": 80, "y": 40,
+             "width": 400, "height": 36, "fill": "#FFFFFF", "stroke": "#CBD5E1", "rx": 8, "label": "地址栏"},
+        ],
+    },
+    "characters": [
+        {"id": "char1", "name": "小明", "start_x": 30, "start_y": 240,
+         "svg_description": "圆形头部填充#FCD34D，矩形身体填充#4F8EF7，宽30px高50px"},
+    ],
+    "animation_steps": [
+        {
+            "step": 1,
+            "narration": "这是浏览器的地址栏，输入网址可以直接跳转",
+            "actions": [
+                {"target": "char1", "type": "move", "to_x": 120, "to_y": 240, "duration_ms": 1000},
+                {"target": "addr-bar", "type": "highlight", "color": "#4F8EF7", "glow": True, "duration_ms": 800},
+            ],
+            "label_popup": {"text": "地址栏", "point_to": "addr-bar", "color": "#4F8EF7"},
+        },
+    ],
+    "narration_style": {"font_size": 16, "color": "#1E293B", "background": "#FFFFFF"},
+    "continue_button": {"label": "继续", "color": "#4F8EF7"},
+    "animations": {
+        "character_walk": "小人水平移动",
+        "highlight_glow": "box-shadow脉冲动画",
+        "scene_complete": "彩色圆点飘落",
+    },
+    "scoring": {"type": "progress", "total_steps": 2, "encouragement": "太棒了！"},
+    "instructions": "点击继续跟着小明认识浏览器",
+}, ensure_ascii=False)
+
+ANIMATED_STORY_HTML = (
+    '<!DOCTYPE html><html><head>'
+    '<script src="https://cdnjs.cloudflare.com/ajax/libs/animejs/3.2.1/anime.min.js"></script>'
+    '<style>body{margin:0;} @keyframes float{0%{opacity:1}100%{opacity:0}} @keyframes walk{} </style>'
+    '</head><body>'
+    '<svg id="scene-area" viewBox="0 0 760 320"><rect id="addr-bar" x="80" y="40" width="400" height="36"/>'
+    '<g id="char1"><circle cx="45" cy="15" r="15" fill="#FCD34D"/></g></svg>'
+    '<div id="progress">第 1 / 2 步</div>'
+    '<div id="narration">点击继续开始</div>'
+    '<button id="continue-btn" onClick="nextStep()">继续</button>'
+    '<script>const steps=[{narration:"地址栏",run:()=>{anime({targets:"#char1",translateX:90,duration:1000});}},{narration:"完成",run:()=>{}}];'
+    'let cur=0; function nextStep(){if(cur<steps.length){document.getElementById("narration").textContent=steps[cur].narration;steps[cur].run();cur++;}}</script>'
+    '</body></html>'
+)
+
+
+class TestAnimatedStoryMode:
+    def test_analyst_accepts_animated_story(self):
+        """LabAnalystAgent accepts animated_story as a valid interaction type."""
+        llm = _make_llm_mock(ANIMATED_STORY_ANALYSIS)
+        analyst = LabAnalystAgent(llm=llm)
+        result = analyst.analyze("认识地址栏与搜索框", "区分地址栏和搜索框", 2)
+        assert result is not None
+        assert result["best_interaction"] == "animated_story"
+        assert "scene_description" in result
+        assert "animation_steps" in result
+
+    def test_analyst_animated_story_missing_steps_returns_none(self):
+        """Analyst returns None if animated_story is missing animation_steps."""
+        bad = json.dumps({
+            "topic": "认识地址栏",
+            "core_concept": "地址栏用途",
+            "best_interaction": "animated_story",
+            "scene_description": "浏览器窗口",
+            "learning_goal": "认识地址栏",
+            # missing animation_steps
+        }, ensure_ascii=False)
+        llm = _make_llm_mock(bad)
+        analyst = LabAnalystAgent(llm=llm)
+        result = analyst.analyze("认识地址栏", "了解地址栏", 2)
+        assert result is None
+
+    def test_pipeline_animated_story_end_to_end(self):
+        """Full pipeline works with animated_story interaction type."""
+        llm = _make_multi_llm_mock([
+            ANIMATED_STORY_ANALYSIS,
+            ANIMATED_STORY_DESIGN,
+            ANIMATED_STORY_HTML,
+            ANIMATED_STORY_HTML,
+        ])
+        result = _generate_interactive_lab("认识地址栏与搜索框", "区分地址栏和搜索框", 2, llm)
+        assert "<html" in result
+        assert "anime" in result
+        assert llm.invoke.call_count == 4
+
+    def test_validate_animated_story_warns_no_anime(self):
+        """Validator warns if animated_story HTML lacks anime.js."""
+        html = '<html><div>react onClick step</div></html>'
+        result = validate_lab_html(html, interaction_type="animated_story")
+        assert any("anime" in w.lower() for w in result["warnings"])
+
+    def test_validate_animated_story_no_drag_warning(self):
+        """animated_story HTML should NOT warn about missing draggable."""
+        html = (
+            '<!DOCTYPE html><html><head>'
+            '<script src="https://cdnjs.cloudflare.com/ajax/libs/animejs/3.2.1/anime.min.js"></script>'
+            '<style>@keyframes float{} @keyframes walk{}</style>'
+            '</head><body><div id="root"></div>'
+            '<svg><rect/></svg>'
+            '<script>const steps=[]; let cur=0; document.querySelector("button").onclick=()=>{};</script>'
+            '</body></html>'
+        )
+        result = validate_lab_html(html, interaction_type="animated_story")
+        assert not any("draggable" in w.lower() or "onDragStart" in w for w in result["warnings"])

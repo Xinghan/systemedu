@@ -16,18 +16,45 @@ CODER_SYSTEM_PROMPT = """你是一个专业的前端开发者，擅长 React + S
   - https://unpkg.com/react@18/umd/react.production.min.js
   - https://unpkg.com/react-dom@18/umd/react-dom.production.min.js
 - Babel standalone: https://unpkg.com/@babel/standalone/babel.min.js
+- 不引入任何第三方图形库（不用 rough.js）
 - script type="text/babel"
 - ReactDOM.createRoot(document.getElementById('root')).render(<App />)
 
-【SVG 矢量图形要求】
-- 所有游戏物品必须用 SVG 绘制，不依赖外部图片
-- 根据设计稿中的 svg_description 绘制具体图形
-- SVG 使用 viewBox 确保缩放正确
+【视觉风格（卡通教育风）】
+整体风格：活泼卡通，类似 Duolingo 的儿童教育游戏风格。圆润、色彩鲜明、有趣。
+
+1. 字体与背景：
+   - Google Fonts: <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet">
+   - body font-family: 'Nunito', 'PingFang SC', 'Hiragino Sans GB', sans-serif
+   - body 背景色：明亮渐变，如 linear-gradient(135deg, #EEF2FF 0%, #F0FDF4 100%)
+
+2. 色板（高饱和度卡通色）：
+   - 主蓝 #4F8EF7、主绿 #4ADE80、主红 #F87171、主橙 #FB923C、主紫 #A78BFA、主黄 #FCD34D
+   - 卡片白色 #FFFFFF，border-radius: 16px，box-shadow: 0 4px 0 rgba(0,0,0,0.10)（底部阴影营造立体感）
+   - 选中状态：border 3px solid 主色 + box-shadow: 0 0 0 4px 主色20%
+
+3. 按钮（卡通立体感）：
+   - 背景为主色，border-radius: 12px
+   - box-shadow: 0 4px 0 darken主色（如 #3B7AF0 配 #2563EB 底部阴影）
+   - 按下时：translateY(2px) + box-shadow 减少，模拟按压效果
+   - 文字 font-weight: 800，白色
+
+4. 卡片元素：
+   - 统一白色背景 + 16px 圆角 + 底部 4px 彩色阴影
+   - 每种类别用不同主色区分
+   - 图标/符号用大字号 emoji 或简洁 SVG（不用手绘库）
+
+5. SVG 图形：
+   - 用纯 SVG path/circle/rect，颜色饱和鲜明
+   - 形状圆润，strokeWidth 2，stroke 颜色比填充色深一档
+   - 不使用任何第三方图形库
 
 【CSS 动画要求】
-- 使用 @keyframes 定义动画：fadeIn, shake, bounceIn, float, confetti 等
-- 使用 CSS transition 做 hover 和状态变化的平滑过渡
-- 动画时间和缓动函数要符合设计稿描述
+- 正确答案：绿色边框 + scale(1.08) bounce + 对勾淡入
+- 错误答案：红色边框 + shake 抖动（translateX）
+- 卡片出现：bounceIn（scale 0.8 -> 1.05 -> 1.0）
+- 完成庆祝：5-8 个彩色圆点从顶部飘落（@keyframes 控制 translateY + opacity）
+- 使用 CSS transition + @keyframes，不用第三方动画库
 
 【布局要求（严格！）】
 - html, body: margin:0; padding:0; height:100vh; overflow:hidden;
@@ -68,7 +95,7 @@ const handleDrop = (e, targetId) => {
 
 ## click_select（点击选择）
 - 每题显示题目文字 + 多个可点击选项卡片（每个卡片含 SVG 图形和文字）
-- 点击选项后高亮并判断正确性，正确绿色边框+✓，错误红色+shake
+- 点击选项后高亮并判断正确性，正确绿色边框+手绘对勾，错误红色+shake
 - 答对后自动跳转下一题，全部完成后显示总分
 代码模板：
 ```
@@ -123,6 +150,91 @@ const handleChange = (id, value) => { setParams(p => ({...p, [id]: value})); };
 </div>
 ```
 
+## animated_story（动画演示）
+- 用 SVG + anime.js 实现逐帧矢量动画（从 CDN 加载 anime.js：https://cdnjs.cloudflare.com/ajax/libs/animejs/3.2.1/anime.min.js）
+- 不用 React，用原生 HTML + JS + SVG，更适合时间轴动画控制
+- 布局：上方大 SVG 场景区（~320px 高），下方旁白文字区（~120px），底部继续按钮（~60px）
+- 角色用 SVG group（<g>）包裹，通过 anime.js translate 实现移动
+- 高亮效果：目标元素 filter glow + stroke 颜色变化 + 脉冲动画
+- 旁白文字淡入淡出配合步骤切换
+- 进度条显示当前步骤（第 X / 共 Y 步）
+- 最后一步完成后：彩色圆点飘落 + 完成文字
+代码模板：
+```html
+<!DOCTYPE html>
+<html>
+<head>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/animejs/3.2.1/anime.min.js"></script>
+  <style>
+    body { margin:0; font-family:'PingFang SC',sans-serif; background:linear-gradient(135deg,#EEF2FF,#F0FDF4); height:100vh; overflow:hidden; display:flex; flex-direction:column; }
+    #scene-area { flex:1; min-height:0; }
+    #narration { padding:12px 20px; background:#fff; border-radius:12px; margin:8px 16px; font-size:15px; min-height:48px; box-shadow:0 2px 8px rgba(0,0,0,0.08); }
+    #continue-btn { margin:8px 16px 12px; padding:10px; background:#4F8EF7; color:#fff; border:none; border-radius:12px; font-size:15px; font-weight:700; cursor:pointer; box-shadow:0 4px 0 #2563EB; }
+    #continue-btn:active { transform:translateY(2px); box-shadow:0 2px 0 #2563EB; }
+    #progress { font-size:12px; color:#94a3b8; text-align:center; margin-bottom:4px; }
+    .highlight-glow { filter: drop-shadow(0 0 6px currentColor); }
+    @keyframes float-confetti { 0%{transform:translateY(-20px);opacity:1} 100%{transform:translateY(580px);opacity:0} }
+  </style>
+</head>
+<body>
+  <svg id="scene-area" viewBox="0 0 760 320" preserveAspectRatio="xMidYMid meet">
+    <!-- 场景元素：界面/物体/背景 -->
+    <!-- 角色 <g id="char1"> ... </g> -->
+  </svg>
+  <div id="progress">第 1 / 4 步</div>
+  <div id="narration">点击「继续」开始学习</div>
+  <button id="continue-btn">继续 ▶</button>
+  <script>
+    const steps = [
+      {
+        narration: "这是浏览器的地址栏，用来输入网址",
+        run: () => {
+          anime({ targets: '#char1', translateX: 150, duration: 1000, easing: 'easeInOutQuad' });
+          anime({ targets: '#addr-bar', stroke: '#4F8EF7', strokeWidth: 3, duration: 600, delay: 800 });
+          // 显示标签
+          document.getElementById('label-addr').style.opacity = 1;
+          anime({ targets: '#label-addr', opacity: [0,1], scale: [0.8,1], duration: 400, delay: 1200 });
+        }
+      },
+      // ... 更多步骤
+    ];
+    let currentStep = 0;
+    function runStep(i) {
+      document.getElementById('narration').textContent = steps[i].narration;
+      document.getElementById('progress').textContent = `第 ${i+1} / ${steps.length} 步`;
+      steps[i].run();
+      if (i === steps.length - 1) {
+        document.getElementById('continue-btn').textContent = '完成！';
+      }
+    }
+    document.getElementById('continue-btn').addEventListener('click', () => {
+      if (currentStep < steps.length) {
+        runStep(currentStep);
+        currentStep++;
+      } else {
+        showConfetti();
+      }
+    });
+    function showConfetti() {
+      for (let i = 0; i < 8; i++) {
+        const dot = document.createElement('div');
+        dot.style.cssText = `position:fixed;top:0;left:${10+i*12}%;width:12px;height:12px;border-radius:50%;background:${['#4F8EF7','#4ADE80','#FB923C','#A78BFA'][i%4]};animation:float-confetti ${1+Math.random()}s ease forwards;animation-delay:${i*0.1}s;`;
+        document.body.appendChild(dot);
+      }
+    }
+  </script>
+</body>
+</html>
+```
+
+关键要求：
+- SVG 场景元素必须与设计稿中 scene.elements 完全对应
+- 每个 animation_steps 的 actions 都用 anime.js 实现
+- 角色走路：translateX 移动 + 小幅 translateY 正弦模拟步伐
+- 高亮效果：stroke 颜色变化 + drop-shadow filter glow
+- label_popup：SVG text + 小箭头，淡入显示
+- 旁白文字要与步骤同步切换
+
 ---
 
 直接输出完整的 HTML 代码（从 <!DOCTYPE html> 开始），不要包含 markdown 代码块标记，不要输出任何其他文字。"""
@@ -146,24 +258,26 @@ def validate_lab_html(html_code: str, interaction_type: str = "") -> dict:
     # Fatal checks — must have these or HTML won't work
     if "<html" not in html_lower:
         return {"fatal": "Missing <html> tag", "warnings": []}
-    if "react" not in html_lower:
+    # animated_story uses anime.js without React, so skip the React requirement
+    if interaction_type != "animated_story" and "react" not in html_lower:
         return {"fatal": "No React reference found", "warnings": []}
-    if "<div" not in html_lower:
-        return {"fatal": "No <div> element found", "warnings": []}
+    if "<div" not in html_lower and "<svg" not in html_lower:
+        return {"fatal": "No <div> or <svg> element found", "warnings": []}
 
-    # Non-fatal structural checks
-    if "react.production.min.js" not in html_lower and "react@18" not in html_lower:
-        warnings.append("React CDN URL may be non-standard")
-    if "react-dom" not in html_lower:
-        warnings.append("Missing ReactDOM reference")
-    if "babel" not in html_lower:
-        warnings.append("Missing Babel standalone (JSX won't compile)")
-    if 'text/babel' not in html_lower:
-        warnings.append("Missing script type='text/babel'")
-    if "createroot" not in html_lower and "createRoot" not in html_code:
-        warnings.append("Missing ReactDOM.createRoot call")
-    if "usestate" not in html_lower and "useState" not in html_code:
-        warnings.append("No useState found — may lack interactivity")
+    # Non-fatal structural checks (skip React-specific checks for animated_story)
+    if interaction_type != "animated_story":
+        if "react.production.min.js" not in html_lower and "react@18" not in html_lower:
+            warnings.append("React CDN URL may be non-standard")
+        if "react-dom" not in html_lower:
+            warnings.append("Missing ReactDOM reference")
+        if "babel" not in html_lower:
+            warnings.append("Missing Babel standalone (JSX won't compile)")
+        if 'text/babel' not in html_lower:
+            warnings.append("Missing script type='text/babel'")
+        if "createroot" not in html_lower and "createRoot" not in html_code:
+            warnings.append("Missing ReactDOM.createRoot call")
+        if "usestate" not in html_lower and "useState" not in html_code:
+            warnings.append("No useState found — may lack interactivity")
     if "<style" not in html_lower:
         warnings.append("No <style> tag — missing CSS styles")
     if "<svg" not in html_lower:
@@ -177,6 +291,12 @@ def validate_lab_html(html_code: str, interaction_type: str = "") -> dict:
         # Drag & drop checks — only for drag types (or when type unknown for backward compat)
         if "draggable" not in html_lower and "ondragstart" not in html_lower and "onDragStart" not in html_code:
             warnings.append("No draggable/onDragStart found — drag game may not work")
+
+    if interaction_type == "animated_story":
+        if "anime" not in html_lower and "animejs" not in html_lower:
+            warnings.append("animated_story should use anime.js for timeline animations")
+        if "steps" not in html_lower and "step" not in html_lower:
+            warnings.append("animated_story should have animation steps logic")
 
     # Animation checks
     keyframe_count = html_lower.count("@keyframes")
