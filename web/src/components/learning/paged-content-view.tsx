@@ -129,17 +129,17 @@ export function PagedContentView({ content, onPageChange, projectName, nodeId, t
   }
 
   return (
-    <div className="relative flex flex-col min-h-full" ref={contentRef}>
-      {/* Page content — grows to fill */}
-      <div className="flex-1 pb-4">
+    <div className="relative" ref={contentRef}>
+      {/* Page content */}
+      <div className="pb-2">
         {renderContent(pages[currentPage] ?? "")}
         {highlightsEnabled && (
           <HighlightToolbar onHighlight={handleHighlight} containerRef={contentRef} />
         )}
       </div>
 
-      {/* Pagination controls */}
-      <div className="sticky bottom-0 flex items-center justify-between gap-3 py-2 mt-6 border-t bg-background/95 backdrop-blur-sm">
+      {/* Pagination controls — sits directly below content */}
+      <div className="flex items-center justify-between gap-3 pt-4 mt-4 border-t">
         <Button
           variant="ghost"
           size="sm"
