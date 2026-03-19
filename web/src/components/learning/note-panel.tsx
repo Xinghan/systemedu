@@ -85,6 +85,7 @@ export function NotePanel({ projectName, nodeId, previewMode = "edit", onStatusC
         height="100%"
         preview="edit"
         hideToolbar={false}
+        data-color-mode={colorMode}
       />
     </div>
   )
