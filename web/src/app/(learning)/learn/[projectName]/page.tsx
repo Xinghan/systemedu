@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useState, useCallback, useMemo, useRef } from "react"
-import { useParams } from "next/navigation"
+import { useParams, useSearchParams } from "next/navigation"
 import Link from "next/link"
 import {
   ArrowLeft,
@@ -24,10 +24,12 @@ import type { KnodeInfo, NodeProgress, ProjectDetail } from "@/lib/types/api"
 
 export default function LearnPage() {
   const params = useParams<{ projectName: string }>()
+  const searchParams = useSearchParams()
   const [detail, setDetail] = useState<ProjectDetail | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [activeNodeId, setActiveNodeId] = useState<number | null>(null)
+  const initialNodeId = searchParams.get("node") !== null ? Number(searchParams.get("node")) : null
+  const [activeNodeId, setActiveNodeId] = useState<number | null>(initialNodeId)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [mobileTab, setMobileTab] = useState<"tree" | "content">("tree")
   const [activeLessonTab, setActiveLessonTab] = useState<string>("concept")
@@ -151,6 +153,7 @@ export default function LearnPage() {
                 <KnowledgeTreeView
                   milestones={detail.milestones}
                   progress={detail.progress}
+                  activeNodeId={activeNodeId}
                   onNodeClick={handleNodeClick}
                 />
               </div>
@@ -252,6 +255,7 @@ export default function LearnPage() {
                 <KnowledgeTreeView
                   milestones={detail.milestones}
                   progress={detail.progress}
+                  activeNodeId={activeNodeId}
                   onNodeClick={handleNodeClick}
                 />
               </div>
