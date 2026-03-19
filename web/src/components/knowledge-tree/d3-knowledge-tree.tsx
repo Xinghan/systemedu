@@ -78,7 +78,7 @@ const MILESTONE_PALETTE = [
 const CARD_W = 120
 const CARD_H = 44
 const X_SPACING = 220
-const Y_SPACING = 110
+const Y_SPACING = 180
 
 function deepClone<T>(obj: T): T {
   return JSON.parse(JSON.stringify(obj))
