@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import { ChevronLeft, ChevronRight, RefreshCw } from "lucide-react"
+import { ChevronLeft, ChevronRight, RefreshCw, NotebookPen, X } from "lucide-react"
 import { IconStar, IconCheck, IconLightning, IconClock } from "./cartoon-icons"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -55,6 +55,7 @@ export function LessonContentView({
   regenerating,
 }: LessonContentViewProps) {
   const [activeTab, setActiveTab] = useState(0)
+  const [noteOpen, setNoteOpen] = useState(false)
 
   // Filter out tabs with empty content
   const availableTabs = TAB_CONFIG.filter((tab) => {
@@ -63,13 +64,14 @@ export function LessonContentView({
   })
 
   const RESOURCE_TAB = { key: "resources", label: "资料" }
-  const NOTE_TAB = { key: "note", label: "笔记" }
-  const allTabs = [...availableTabs, RESOURCE_TAB, NOTE_TAB]
+  const allTabs = [...availableTabs, RESOURCE_TAB]
 
   const difficultyLabel = knode.difficulty_level <= 3 ? "入门" : knode.difficulty_level <= 6 ? "中级" : "高级"
 
+  const activeKey = allTabs[activeTab]?.key ?? allTabs[0]?.key
+
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col h-full relative">
       {/* Header */}
       <div className="border-b">
         <div className="max-w-5xl mx-auto px-6 py-4">
@@ -123,62 +125,81 @@ export function LessonContentView({
         </div>
       </div>
 
-      {/* Tabbed content */}
-      {availableTabs.length > 0 ? (
-        <div className="flex-1 flex flex-col min-h-0">
-          <div className="max-w-5xl mx-auto w-full px-6 pt-3 flex gap-1">
-            {allTabs.map((tab, index) => (
-              <button
-                key={tab.key}
-                onClick={() => setActiveTab(index)}
-                className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
-                  activeTab === index
-                    ? "bg-muted text-foreground shadow-sm"
-                    : "text-muted-foreground hover:text-foreground"
-                }`}
-              >
-                {tab.label}
-              </button>
-            ))}
-          </div>
-          <div className="flex-1 min-h-0 overflow-y-auto">
-            <div className="max-w-5xl mx-auto px-6 py-4">
-              {(allTabs[activeTab]?.key ?? allTabs[0]?.key) === "note" ? (
-                <NotePanel projectName={projectName} nodeId={nodeId} />
-              ) : (allTabs[activeTab]?.key ?? allTabs[0]?.key) === "resources" ? (
-                <ResourceSearchView projectName={projectName} nodeId={nodeId} />
-              ) : (availableTabs[activeTab]?.key ?? availableTabs[0]?.key) === "examples" ? (
-                <AnimatedExamplesView content={lesson[availableTabs[activeTab]?.field ?? availableTabs[0].field]} />
-              ) : (availableTabs[activeTab]?.key ?? availableTabs[0]?.key) === "interactive_lab" ? (
-                <InteractiveLabView html={lesson[availableTabs[activeTab]?.field ?? availableTabs[0].field]} />
-              ) : (availableTabs[activeTab]?.key ?? availableTabs[0]?.key) === "practice" ? (
-                <PracticeView
-                  content={lesson[availableTabs[activeTab]?.field ?? availableTabs[0].field]}
-                  projectName={projectName}
-                  nodeId={nodeId}
-                />
-              ) : (
-                <PagedContentView
-                  content={lesson[availableTabs[activeTab]?.field ?? availableTabs[0].field]}
-                  projectName={projectName}
-                  nodeId={nodeId}
-                  tab={availableTabs[activeTab]?.key ?? availableTabs[0]?.key}
-                  onPageChange={(pageIndex, pageContent) => {
-                    const tabKey = availableTabs[activeTab]?.key ?? availableTabs[0]?.key
-                    onPageChange?.(tabKey, pageIndex, pageContent)
-                  }}
-                />
-              )}
+      {/* Main area: content + optional note panel side-by-side */}
+      <div className="flex flex-1 min-h-0">
+        {/* Tabbed content */}
+        {availableTabs.length > 0 ? (
+          <div className="flex-1 flex flex-col min-h-0 min-w-0">
+            <div className="max-w-5xl mx-auto w-full px-6 pt-3 flex gap-1">
+              {allTabs.map((tab, index) => (
+                <button
+                  key={tab.key}
+                  onClick={() => setActiveTab(index)}
+                  className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
+                    activeTab === index
+                      ? "bg-muted text-foreground shadow-sm"
+                      : "text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  {tab.label}
+                </button>
+              ))}
+            </div>
+            <div className="flex-1 min-h-0 overflow-y-auto">
+              <div className="max-w-5xl mx-auto px-6 py-4">
+                {activeKey === "resources" ? (
+                  <ResourceSearchView projectName={projectName} nodeId={nodeId} />
+                ) : (availableTabs[activeTab]?.key ?? availableTabs[0]?.key) === "examples" ? (
+                  <AnimatedExamplesView content={lesson[availableTabs[activeTab]?.field ?? availableTabs[0].field]} />
+                ) : (availableTabs[activeTab]?.key ?? availableTabs[0]?.key) === "interactive_lab" ? (
+                  <InteractiveLabView html={lesson[availableTabs[activeTab]?.field ?? availableTabs[0].field]} />
+                ) : (availableTabs[activeTab]?.key ?? availableTabs[0]?.key) === "practice" ? (
+                  <PracticeView
+                    content={lesson[availableTabs[activeTab]?.field ?? availableTabs[0].field]}
+                    projectName={projectName}
+                    nodeId={nodeId}
+                  />
+                ) : (
+                  <PagedContentView
+                    content={lesson[availableTabs[activeTab]?.field ?? availableTabs[0].field]}
+                    projectName={projectName}
+                    nodeId={nodeId}
+                    tab={availableTabs[activeTab]?.key ?? availableTabs[0]?.key}
+                    onPageChange={(pageIndex, pageContent) => {
+                      const tabKey = availableTabs[activeTab]?.key ?? availableTabs[0]?.key
+                      onPageChange?.(tabKey, pageIndex, pageContent)
+                    }}
+                  />
+                )}
+              </div>
             </div>
           </div>
-        </div>
-      ) : (
-        <div className="flex-1 flex items-center justify-center text-muted-foreground">
-          <p>暂无内容</p>
-        </div>
-      )}
+        ) : (
+          <div className="flex-1 flex items-center justify-center text-muted-foreground">
+            <p>暂无内容</p>
+          </div>
+        )}
 
-      {/* Audio player bar — per-tab audio, fallback to teacher audio */}
+        {/* Right note panel */}
+        {noteOpen && (
+          <div className="w-80 shrink-0 border-l flex flex-col min-h-0 bg-background">
+            <div className="flex items-center justify-between px-4 py-2 border-b shrink-0">
+              <span className="text-sm font-medium">笔记</span>
+              <button
+                onClick={() => setNoteOpen(false)}
+                className="text-muted-foreground hover:text-foreground transition-colors"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-3">
+              <NotePanel projectName={projectName} nodeId={nodeId} />
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Audio player bar */}
       {(() => {
         const currentTab = availableTabs[activeTab] ?? availableTabs[0]
         const tabAudioUrl = currentTab?.audioField ? lesson[currentTab.audioField] : null
@@ -218,6 +239,20 @@ export function LessonContentView({
           </Button>
         </div>
       </div>
+
+      {/* Floating note button — bottom-right corner */}
+      <button
+        onClick={() => setNoteOpen((v) => !v)}
+        className={`fixed bottom-20 right-6 z-50 flex items-center gap-1.5 px-3 py-2 rounded-full shadow-lg text-sm font-medium transition-all ${
+          noteOpen
+            ? "bg-primary text-primary-foreground"
+            : "bg-card border text-foreground hover:bg-muted"
+        }`}
+        title="笔记"
+      >
+        <NotebookPen className="h-4 w-4" />
+        笔记
+      </button>
     </div>
   )
 }
