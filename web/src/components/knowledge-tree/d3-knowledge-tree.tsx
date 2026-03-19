@@ -72,7 +72,7 @@ const MILESTONE_PALETTE = [
   { fill: "#ffedd5", stroke: "#f97316", text: "#c2410c", bg: "#fff7ed" },
   { fill: "#ccfbf1", stroke: "#14b8a6", text: "#0f766e", bg: "#f0fdfa" },
   { fill: "#ffe4e6", stroke: "#e11d48", text: "#be123c", bg: "#fff1f2" },
-  { fill: "#e0e7ff", stroke: "#6366f1", text: "#4338ca", bg: "#eef2ff" },
+  { fill: "#e0e7ff", stroke: "#94a3b8", text: "#4338ca", bg: "#eef2ff" },
 ]
 
 const CARD_W = 120
@@ -265,7 +265,7 @@ export function D3KnowledgeTree({
       .attr("refX", 8).attr("refY", 0)
       .attr("markerWidth", 6).attr("markerHeight", 6)
       .attr("orient", "auto")
-      .append("path").attr("d", "M0,-4L8,0L0,4").attr("fill", "#6366f1")
+      .append("path").attr("d", "M0,-4L8,0L0,4").attr("fill", "#94a3b8")
 
     // Drop shadow filter
     const filter = defs.append("filter").attr("id", "card-shadow").attr("x", "-10%").attr("y", "-10%").attr("width", "130%").attr("height", "140%")
@@ -375,33 +375,14 @@ export function D3KnowledgeTree({
       // Build adjacency for path highlighting
       // ancestors: set of node ids reachable by following sources backwards
       // descendants: set of node ids reachable by following targets forward
+      // Returns self + direct parents + direct children (no recursive traversal)
       function getPathNodeIds(rootId: string): Set<string> {
         const result = new Set<string>([rootId])
-        // ancestors
-        const qAncestor = [rootId]
-        while (qAncestor.length) {
-          const cur = qAncestor.shift()!
-          for (const lk of graphLinks) {
-            const tgtId = typeof lk.target === "string" ? lk.target : (lk.target as GraphNode).id
-            const srcId = typeof lk.source === "string" ? lk.source : (lk.source as GraphNode).id
-            if (tgtId === cur && !result.has(srcId)) {
-              result.add(srcId)
-              qAncestor.push(srcId)
-            }
-          }
-        }
-        // descendants
-        const qDesc = [rootId]
-        while (qDesc.length) {
-          const cur = qDesc.shift()!
-          for (const lk of graphLinks) {
-            const srcId = typeof lk.source === "string" ? lk.source : (lk.source as GraphNode).id
-            const tgtId = typeof lk.target === "string" ? lk.target : (lk.target as GraphNode).id
-            if (srcId === cur && !result.has(tgtId)) {
-              result.add(tgtId)
-              qDesc.push(tgtId)
-            }
-          }
+        for (const lk of graphLinks) {
+          const srcId = typeof lk.source === "string" ? lk.source : (lk.source as GraphNode).id
+          const tgtId = typeof lk.target === "string" ? lk.target : (lk.target as GraphNode).id
+          if (tgtId === rootId) result.add(srcId)  // direct parent
+          if (srcId === rootId) result.add(tgtId)  // direct child
         }
         return result
       }
@@ -417,7 +398,7 @@ export function D3KnowledgeTree({
             const tgtId = typeof lk.target === "string" ? lk.target : (lk.target as GraphNode).id
             const onPath = pathIds.has(srcId) && pathIds.has(tgtId)
             d3.select(this)
-              .attr("stroke", onPath ? "#6366f1" : "#cbd5e1")
+              .attr("stroke", onPath ? "#94a3b8" : "#cbd5e1")
               .attr("stroke-width", onPath ? 2.5 : 1.5)
               .attr("opacity", onPath ? 1 : 0.15)
               .attr("marker-end", onPath ? "url(#arrow-hl)" : "url(#arrow)")
