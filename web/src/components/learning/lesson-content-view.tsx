@@ -1,7 +1,7 @@
 "use client"
 
-import { useState } from "react"
-import { ChevronLeft, ChevronRight, RefreshCw, NotebookPen, X, Minus } from "lucide-react"
+import { useCallback, useRef, useState } from "react"
+import { ChevronLeft, ChevronRight, RefreshCw, NotebookPen, X, Minus, Eye, Pencil } from "lucide-react"
 import { IconStar, IconCheck, IconLightning, IconClock } from "./cartoon-icons"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -10,9 +10,13 @@ import { InteractiveLabView } from "./interactive-lab-view"
 import { PagedContentView } from "./paged-content-view"
 import { PracticeView } from "./practice-view"
 import { ResourceSearchView } from "./resource-search-view"
-import { NotePanel } from "./note-panel"
+import { NotePanel, type NotePreviewMode } from "./note-panel"
 import { AudioPlayerBar } from "./audio-player-bar"
 import type { KnodeInfo, LessonContent } from "@/lib/types/api"
+
+const MIN_NOTE_WIDTH = 280
+const MAX_NOTE_WIDTH = 640
+const DEFAULT_NOTE_WIDTH = 360
 
 interface LessonContentViewProps {
   knode: KnodeInfo
@@ -55,9 +59,12 @@ export function LessonContentView({
   regenerating,
 }: LessonContentViewProps) {
   const [activeTab, setActiveTab] = useState(0)
-  // note panel: false = closed, true = open (full panel), "minimized" = icon-only FAB
   const [noteState, setNoteState] = useState<"closed" | "open" | "minimized">("closed")
   const [noteStatus, setNoteStatus] = useState<"idle" | "saving" | "saved">("idle")
+  const [notePreviewMode, setNotePreviewMode] = useState<NotePreviewMode>("edit")
+  const [noteWidth, setNoteWidth] = useState(DEFAULT_NOTE_WIDTH)
+  const dragStartX = useRef<number | null>(null)
+  const dragStartWidth = useRef<number>(DEFAULT_NOTE_WIDTH)
 
   const availableTabs = TAB_CONFIG.filter((tab) => {
     const content = lesson[tab.field]
@@ -69,6 +76,27 @@ export function LessonContentView({
 
   const difficultyLabel = knode.difficulty_level <= 3 ? "入门" : knode.difficulty_level <= 6 ? "中级" : "高级"
   const activeKey = allTabs[activeTab]?.key ?? allTabs[0]?.key
+
+  // Drag-to-resize handler on the left border of the note panel
+  const handleDragMouseDown = useCallback((e: React.MouseEvent) => {
+    e.preventDefault()
+    dragStartX.current = e.clientX
+    dragStartWidth.current = noteWidth
+
+    const onMouseMove = (ev: MouseEvent) => {
+      if (dragStartX.current === null) return
+      const delta = dragStartX.current - ev.clientX  // drag left = wider
+      const newWidth = Math.min(MAX_NOTE_WIDTH, Math.max(MIN_NOTE_WIDTH, dragStartWidth.current + delta))
+      setNoteWidth(newWidth)
+    }
+    const onMouseUp = () => {
+      dragStartX.current = null
+      window.removeEventListener("mousemove", onMouseMove)
+      window.removeEventListener("mouseup", onMouseUp)
+    }
+    window.addEventListener("mousemove", onMouseMove)
+    window.addEventListener("mouseup", onMouseUp)
+  }, [noteWidth])
 
   return (
     <div className="flex flex-col h-full relative">
@@ -110,12 +138,7 @@ export function LessonContentView({
                   已完成
                 </Badge>
               ) : (
-                <Button
-                  size="sm"
-                  onClick={onMarkComplete}
-                  disabled={completing}
-                  className="gap-1"
-                >
+                <Button size="sm" onClick={onMarkComplete} disabled={completing} className="gap-1">
                   <IconCheck className="h-4 w-4" />
                   标记完成
                 </Button>
@@ -180,10 +203,20 @@ export function LessonContentView({
           </div>
         )}
 
-        {/* Note panel — mirrors floating-chat window style */}
+        {/* Note panel */}
         {noteState === "open" && (
-          <div className="w-[360px] shrink-0 border-l flex flex-col min-h-0 bg-background shadow-2xl">
-            {/* Header — same pattern as floating-chat header */}
+          <div
+            className="shrink-0 border-l flex flex-col min-h-0 bg-background relative"
+            style={{ width: noteWidth }}
+          >
+            {/* Drag handle on left edge */}
+            <div
+              onMouseDown={handleDragMouseDown}
+              className="absolute left-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-primary/30 transition-colors z-10"
+              title="拖拽调整宽度"
+            />
+
+            {/* Header — matches floating-chat window header */}
             <div className="border-b bg-muted/30 shrink-0">
               <div className="flex items-center justify-between px-3 py-2">
                 <div className="flex items-center gap-2">
@@ -196,17 +229,41 @@ export function LessonContentView({
                     <span className="text-xs text-green-600 dark:text-green-400">已保存</span>
                   )}
                 </div>
-                <div className="flex items-center">
+                <div className="flex items-center gap-0.5">
+                  {/* Preview / Edit toggle */}
+                  <button
+                    onClick={() => setNotePreviewMode("edit")}
+                    className={`h-8 w-8 rounded-md flex items-center justify-center transition-colors ${
+                      notePreviewMode === "edit"
+                        ? "bg-muted text-foreground"
+                        : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                    }`}
+                    title="编辑模式"
+                  >
+                    <Pencil className="h-3.5 w-3.5" />
+                  </button>
+                  <button
+                    onClick={() => setNotePreviewMode("preview")}
+                    className={`h-8 w-8 rounded-md flex items-center justify-center transition-colors ${
+                      notePreviewMode === "preview"
+                        ? "bg-muted text-foreground"
+                        : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                    }`}
+                    title="预览模式"
+                  >
+                    <Eye className="h-3.5 w-3.5" />
+                  </button>
+                  <div className="w-px h-4 bg-border mx-1" />
                   <button
                     onClick={() => setNoteState("minimized")}
-                    className="h-8 w-8 rounded-md flex items-center justify-center hover:bg-muted transition-colors"
+                    className="h-8 w-8 rounded-md flex items-center justify-center text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
                     title="最小化"
                   >
                     <Minus className="h-4 w-4" />
                   </button>
                   <button
                     onClick={() => setNoteState("closed")}
-                    className="h-8 w-8 rounded-md flex items-center justify-center hover:bg-muted transition-colors"
+                    className="h-8 w-8 rounded-md flex items-center justify-center text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
                     title="关闭"
                   >
                     <X className="h-4 w-4" />
@@ -214,10 +271,12 @@ export function LessonContentView({
                 </div>
               </div>
             </div>
+
             <div className="flex-1 min-h-0 overflow-hidden">
               <NotePanel
                 projectName={projectName}
                 nodeId={nodeId}
+                previewMode={notePreviewMode}
                 onStatusChange={setNoteStatus}
               />
             </div>
@@ -254,7 +313,7 @@ export function LessonContentView({
         </div>
       </div>
 
-      {/* Note FAB — same style as Chat FAB (h-14 w-14 rounded-full), stacked above it */}
+      {/* Note FAB — same style as Chat FAB, stacked above it */}
       {noteState === "closed" && (
         <button
           onClick={() => setNoteState("open")}
@@ -265,7 +324,7 @@ export function LessonContentView({
         </button>
       )}
 
-      {/* Minimized note pill — same style as chat minimized state, stacked above Chat FAB */}
+      {/* Minimized note pill */}
       {noteState === "minimized" && (
         <div className="fixed bottom-[88px] right-6 z-50 flex items-center gap-2">
           <button

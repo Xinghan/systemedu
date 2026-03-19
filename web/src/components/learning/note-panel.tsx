@@ -5,15 +5,18 @@ import dynamic from "next/dynamic"
 import { gateway } from "@/lib/api"
 
 const MDEditor = dynamic(() => import("@uiw/react-md-editor"), { ssr: false })
+const MDPreview = dynamic(() => import("@uiw/react-md-editor").then((m) => m.default.Markdown), { ssr: false })
+
+export type NotePreviewMode = "edit" | "preview"
 
 interface NotePanelProps {
   projectName: string
   nodeId: number
-  /** Controlled from outside so the panel header can show save status */
+  previewMode?: NotePreviewMode
   onStatusChange?: (status: "idle" | "saving" | "saved") => void
 }
 
-export function NotePanel({ projectName, nodeId, onStatusChange }: NotePanelProps) {
+export function NotePanel({ projectName, nodeId, previewMode = "edit", onStatusChange }: NotePanelProps) {
   const [content, setContent] = useState<string>("")
   const [loading, setLoading] = useState(true)
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -62,6 +65,18 @@ export function NotePanel({ projectName, nodeId, onStatusChange }: NotePanelProp
     )
   }
 
+  if (previewMode === "preview") {
+    return (
+      <div className="h-full overflow-y-auto px-4 py-3" data-color-mode={colorMode}>
+        {content.trim() ? (
+          <MDPreview source={content} />
+        ) : (
+          <p className="text-xs text-muted-foreground">暂无笔记内容</p>
+        )}
+      </div>
+    )
+  }
+
   return (
     <div className="h-full" data-color-mode={colorMode}>
       <MDEditor
@@ -69,7 +84,7 @@ export function NotePanel({ projectName, nodeId, onStatusChange }: NotePanelProp
         onChange={handleChange}
         height="100%"
         preview="edit"
-        style={{ fontSize: "13px" }}
+        hideToolbar={false}
       />
     </div>
   )
