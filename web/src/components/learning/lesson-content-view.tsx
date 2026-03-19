@@ -174,32 +174,42 @@ export function LessonContentView({
               ))}
             </div>
             <div className="flex-1 min-h-0 overflow-y-auto">
-              <div className="max-w-5xl mx-auto px-6 py-4">
-                {activeKey === "resources" ? (
+              {activeKey === "resources" ? (
+                <div className="max-w-5xl mx-auto px-6 py-4 h-full">
                   <ResourceSearchView projectName={projectName} nodeId={nodeId} />
-                ) : (availableTabs[activeTab]?.key ?? availableTabs[0]?.key) === "examples" ? (
+                </div>
+              ) : (availableTabs[activeTab]?.key ?? availableTabs[0]?.key) === "examples" ? (
+                <div className="max-w-5xl mx-auto px-6 py-4">
                   <AnimatedExamplesView content={lesson[availableTabs[activeTab]?.field ?? availableTabs[0].field]} />
-                ) : (availableTabs[activeTab]?.key ?? availableTabs[0]?.key) === "interactive_lab" ? (
+                </div>
+              ) : (availableTabs[activeTab]?.key ?? availableTabs[0]?.key) === "interactive_lab" ? (
+                <div className="max-w-5xl mx-auto px-6 py-4">
                   <InteractiveLabView html={lesson[availableTabs[activeTab]?.field ?? availableTabs[0].field]} />
-                ) : (availableTabs[activeTab]?.key ?? availableTabs[0]?.key) === "practice" ? (
+                </div>
+              ) : (availableTabs[activeTab]?.key ?? availableTabs[0]?.key) === "practice" ? (
+                <div className="max-w-5xl mx-auto px-6 py-4">
                   <PracticeView
                     content={lesson[availableTabs[activeTab]?.field ?? availableTabs[0].field]}
                     projectName={projectName}
                     nodeId={nodeId}
                   />
-                ) : (
-                  <PagedContentView
-                    content={lesson[availableTabs[activeTab]?.field ?? availableTabs[0].field]}
-                    projectName={projectName}
-                    nodeId={nodeId}
-                    tab={availableTabs[activeTab]?.key ?? availableTabs[0]?.key}
-                    onPageChange={(pageIndex, pageContent) => {
-                      const tabKey = availableTabs[activeTab]?.key ?? availableTabs[0]?.key
-                      onPageChange?.(tabKey, pageIndex, pageContent)
-                    }}
-                  />
-                )}
-              </div>
+                </div>
+              ) : (
+                <div className="flex flex-col min-h-full">
+                  <div className="max-w-3xl mx-auto w-full px-6 py-8 flex-1">
+                    <PagedContentView
+                      content={lesson[availableTabs[activeTab]?.field ?? availableTabs[0].field]}
+                      projectName={projectName}
+                      nodeId={nodeId}
+                      tab={availableTabs[activeTab]?.key ?? availableTabs[0]?.key}
+                      onPageChange={(pageIndex, pageContent) => {
+                        const tabKey = availableTabs[activeTab]?.key ?? availableTabs[0]?.key
+                        onPageChange?.(tabKey, pageIndex, pageContent)
+                      }}
+                    />
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         ) : (

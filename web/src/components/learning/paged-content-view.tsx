@@ -129,9 +129,9 @@ export function PagedContentView({ content, onPageChange, projectName, nodeId, t
   }
 
   return (
-    <div className="flex flex-col h-full">
-      {/* Page content */}
-      <div className="flex-1 min-h-0 overflow-y-auto relative" ref={contentRef}>
+    <div className="relative flex flex-col min-h-full" ref={contentRef}>
+      {/* Page content — grows to fill */}
+      <div className="flex-1 pb-4">
         {renderContent(pages[currentPage] ?? "")}
         {highlightsEnabled && (
           <HighlightToolbar onHighlight={handleHighlight} containerRef={contentRef} />
@@ -139,7 +139,7 @@ export function PagedContentView({ content, onPageChange, projectName, nodeId, t
       </div>
 
       {/* Pagination controls */}
-      <div className="flex items-center justify-center gap-3 py-3 border-t mt-4">
+      <div className="sticky bottom-0 flex items-center justify-between gap-3 py-2 mt-6 border-t bg-background/95 backdrop-blur-sm">
         <Button
           variant="ghost"
           size="sm"
@@ -151,23 +151,24 @@ export function PagedContentView({ content, onPageChange, projectName, nodeId, t
           上一页
         </Button>
 
-        <div className="flex items-center gap-1.5">
-          {pages.map((_, i) => (
-            <button
-              key={i}
-              onClick={() => goTo(i)}
-              className={`h-2 w-2 rounded-full transition-colors ${
-                i === currentPage
-                  ? "bg-primary"
-                  : "bg-muted-foreground/30 hover:bg-muted-foreground/50"
-              }`}
-            />
-          ))}
+        <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5">
+            {pages.map((_, i) => (
+              <button
+                key={i}
+                onClick={() => goTo(i)}
+                className={`rounded-full transition-all ${
+                  i === currentPage
+                    ? "h-2 w-5 bg-primary"
+                    : "h-2 w-2 bg-muted-foreground/30 hover:bg-muted-foreground/50"
+                }`}
+              />
+            ))}
+          </div>
+          <span className="text-xs text-muted-foreground tabular-nums">
+            {currentPage + 1} / {pages.length}
+          </span>
         </div>
-
-        <span className="text-xs text-muted-foreground tabular-nums">
-          {currentPage + 1}/{pages.length}
-        </span>
 
         <Button
           variant="ghost"
