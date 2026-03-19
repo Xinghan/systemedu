@@ -13,8 +13,10 @@ import type {
   MCPServer,
   NodeContext,
   NodeProgress,
+  NoteInfo,
   PracticeSubmissionResult,
   PracticeSubmissionSummary,
+  ProjectNotesResponse,
   ProjectResourcesResponse,
   ResourceSearchResponse,
   UpdateProgressResponse,
@@ -101,4 +103,10 @@ export const gateway = {
     api.post<{ status: string }>(`/api/projects/${projectName}/nodes/${nodeId}/resources/search`, {}),
   toggleResourceSaved: (projectName: string, nodeId: number, resourceId: number, saved: boolean) =>
     api.patch<{ id: number; saved: boolean }>(`/api/projects/${projectName}/nodes/${nodeId}/resources/${resourceId}`, { saved }),
+  getNote: (projectName: string, nodeId: number, userId = "default") =>
+    api.get<NoteInfo>(`/api/projects/${projectName}/nodes/${nodeId}/note?user_id=${userId}`),
+  upsertNote: (projectName: string, nodeId: number, content: string, userId = "default") =>
+    api.put<NoteInfo>(`/api/projects/${projectName}/nodes/${nodeId}/note`, { content, user_id: userId }),
+  getAllNotes: (projectName: string) =>
+    api.get<ProjectNotesResponse>(`/api/projects/${projectName}/notes`),
 }

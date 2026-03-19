@@ -249,6 +249,23 @@ class NodeSearchStatus(Base):
     error = Column(Text, default="")
 
 
+class UserNote(Base):
+    """User Markdown note for a knowledge node."""
+
+    __tablename__ = "user_notes"
+    __table_args__ = (
+        UniqueConstraint("user_id", "project_name", "knode_id", name="uq_user_note"),
+    )
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(String(100), nullable=False, default="default")
+    project_name = Column(String(200), nullable=False)
+    knode_id = Column(Integer, nullable=False)
+    content = Column(Text, default="")
+    created_at = Column(DateTime, default=datetime.now)
+    updated_at = Column(DateTime, default=datetime.now)
+
+
 _engine = None
 _session_factory = None
 

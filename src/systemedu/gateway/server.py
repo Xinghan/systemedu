@@ -1795,6 +1795,97 @@ async def api_toggle_resource_saved(request: Request) -> JSONResponse:
     return JSONResponse(result)
 
 
+async def api_get_note(request: Request) -> JSONResponse:
+    """GET /api/projects/{name}/nodes/{node_id}/note - Get user note for a knowledge node."""
+    from systemedu.storage.db import UserNote, get_session as get_db_session
+
+    project_name = request.path_params["name"]
+    node_id = request.path_params["node_id"]
+    user_id = request.query_params.get("user_id", "default")
+
+    db = get_db_session()
+    try:
+        note = db.query(UserNote).filter_by(
+            user_id=user_id, project_name=project_name, knode_id=node_id
+        ).first()
+        if note is None:
+            return JSONResponse({"id": None, "content": "", "updated_at": None})
+        return JSONResponse({
+            "id": note.id,
+            "content": note.content,
+            "updated_at": note.updated_at.isoformat() if note.updated_at else None,
+        })
+    finally:
+        db.close()
+
+
+async def api_upsert_note(request: Request) -> JSONResponse:
+    """PUT /api/projects/{name}/nodes/{node_id}/note - Upsert user note."""
+    from systemedu.storage.db import UserNote, get_session as get_db_session
+
+    project_name = request.path_params["name"]
+    node_id = request.path_params["node_id"]
+    body = await request.json()
+    content = body.get("content", "")
+    user_id = body.get("user_id", "default")
+    now = datetime.now()
+
+    db = get_db_session()
+    try:
+        note = db.query(UserNote).filter_by(
+            user_id=user_id, project_name=project_name, knode_id=node_id
+        ).first()
+        if note is None:
+            note = UserNote(
+                user_id=user_id,
+                project_name=project_name,
+                knode_id=node_id,
+                content=content,
+                created_at=now,
+                updated_at=now,
+            )
+            db.add(note)
+        else:
+            note.content = content
+            note.updated_at = now
+        db.commit()
+        db.refresh(note)
+        return JSONResponse({
+            "id": note.id,
+            "content": note.content,
+            "updated_at": note.updated_at.isoformat() if note.updated_at else None,
+        })
+    finally:
+        db.close()
+
+
+async def api_get_all_notes(request: Request) -> JSONResponse:
+    """GET /api/projects/{name}/notes - Get all non-empty notes for a project."""
+    from systemedu.storage.db import UserNote, get_session as get_db_session
+
+    project_name = request.path_params["name"]
+    user_id = request.query_params.get("user_id", "default")
+
+    db = get_db_session()
+    try:
+        notes = db.query(UserNote).filter(
+            UserNote.project_name == project_name,
+            UserNote.user_id == user_id,
+            UserNote.content != "",
+        ).all()
+        result = {
+            str(n.knode_id): {
+                "id": n.id,
+                "content": n.content,
+                "updated_at": n.updated_at.isoformat() if n.updated_at else None,
+            }
+            for n in notes
+        }
+        return JSONResponse(result)
+    finally:
+        db.close()
+
+
 def create_app() -> Starlette:
     """Create the Starlette ASGI application."""
     global _start_time
@@ -1831,6 +1922,9 @@ def create_app() -> Starlette:
         Route("/api/projects/{name}/nodes/{node_id:int}/resources", api_add_resource, methods=["POST"]),
         Route("/api/projects/{name}/nodes/{node_id:int}/resources/{resource_id:int}", api_toggle_resource_saved, methods=["PATCH"]),
         Route("/api/projects/{name}/resources", api_get_all_resources, methods=["GET"]),
+        Route("/api/projects/{name}/nodes/{node_id:int}/note", api_get_note, methods=["GET"]),
+        Route("/api/projects/{name}/nodes/{node_id:int}/note", api_upsert_note, methods=["PUT"]),
+        Route("/api/projects/{name}/notes", api_get_all_notes, methods=["GET"]),
         Route("/api/projects/{name}", api_project_detail, methods=["GET"]),
         Route("/api/projects/{name}", api_update_project, methods=["PATCH"]),
         Route("/api/agents", api_agents),

@@ -10,6 +10,7 @@ import { InteractiveLabView } from "./interactive-lab-view"
 import { PagedContentView } from "./paged-content-view"
 import { PracticeView } from "./practice-view"
 import { ResourceSearchView } from "./resource-search-view"
+import { NotePanel } from "./note-panel"
 import { AudioPlayerBar } from "./audio-player-bar"
 import type { KnodeInfo, LessonContent } from "@/lib/types/api"
 
@@ -62,7 +63,8 @@ export function LessonContentView({
   })
 
   const RESOURCE_TAB = { key: "resources", label: "资料" }
-  const allTabs = [...availableTabs, RESOURCE_TAB]
+  const NOTE_TAB = { key: "note", label: "笔记" }
+  const allTabs = [...availableTabs, RESOURCE_TAB, NOTE_TAB]
 
   const difficultyLabel = knode.difficulty_level <= 3 ? "入门" : knode.difficulty_level <= 6 ? "中级" : "高级"
 
@@ -141,7 +143,9 @@ export function LessonContentView({
           </div>
           <div className="flex-1 min-h-0 overflow-y-auto">
             <div className="max-w-5xl mx-auto px-6 py-4">
-              {(allTabs[activeTab]?.key ?? allTabs[0]?.key) === "resources" ? (
+              {(allTabs[activeTab]?.key ?? allTabs[0]?.key) === "note" ? (
+                <NotePanel projectName={projectName} nodeId={nodeId} />
+              ) : (allTabs[activeTab]?.key ?? allTabs[0]?.key) === "resources" ? (
                 <ResourceSearchView projectName={projectName} nodeId={nodeId} />
               ) : (availableTabs[activeTab]?.key ?? availableTabs[0]?.key) === "examples" ? (
                 <AnimatedExamplesView content={lesson[availableTabs[activeTab]?.field ?? availableTabs[0].field]} />

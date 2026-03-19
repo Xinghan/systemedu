@@ -400,14 +400,14 @@ export default function ProjectDetailPage() {
                 iconBg="bg-emerald-100 dark:bg-emerald-500/20"
                 title="知识树"
                 description="查看完整知识结构和学习路径"
-                onClick={handleStartLearning}
+                onClick={() => router.push(`/projects/${params.name}/tree`)}
               />
               <ModuleCard
                 icon={<Highlighter className="h-5 w-5 text-amber-600" />}
                 iconBg="bg-amber-100 dark:bg-amber-500/20"
                 title="笔记"
-                description="查看高亮标注和学习批注"
-                onClick={handleStartLearning}
+                description="查看按知识点整理的 Markdown 学习笔记"
+                onClick={() => router.push(`/projects/${params.name}/notes`)}
               />
               <ModuleCard
                 icon={<FolderOpen className="h-5 w-5 text-blue-600" />}

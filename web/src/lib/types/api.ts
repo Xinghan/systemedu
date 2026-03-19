@@ -304,6 +304,15 @@ export interface NodeResourceGroup {
 // knode_id (as string) -> NodeResourceGroup
 export type ProjectResourcesResponse = Record<string, NodeResourceGroup>
 
+export interface NoteInfo {
+  id: number | null
+  content: string
+  updated_at: string | null
+}
+
+// knode_id (as string) -> NoteInfo
+export type ProjectNotesResponse = Record<string, NoteInfo>
+
 export interface WSMessage {
   type: "chunk" | "done" | "error" | "tool_call" | "tool_result"
   content?: string
