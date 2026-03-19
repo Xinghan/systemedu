@@ -65,7 +65,7 @@
 |-------|-----------|---------|
 | **CLI** | Typer + Rich | 命令行交互 |
 | **Gateway** | Starlette + Uvicorn | 本地 HTTP + WebSocket 服务 |
-| **Dashboard** | Vue 3 + Tailwind (单文件 HTML) | 浏览器管理界面 |
+| **Dashboard** | Next.js 16 + shadcn/ui + Tailwind | 浏览器管理界面 (替换原 Vue 单文件) |
 | **Daemon** | Python 后台进程 (PID 管理) | 长驻服务 |
 | **Config** | YAML + Pydantic | 配置管理 |
 | **Runtime** | LangGraph + LangChain | Agent 编排 |
@@ -106,7 +106,7 @@
   - REST: `/api/status`, `/api/config`, `/api/sessions`, `/api/sessions/:id`, `/api/chat`
   - WebSocket: `/api/chat/stream` (流式对话)
   - 静态文件: Dashboard 单页应用
-- [x] Dashboard 浏览器界面 (`gateway/static/index.html`, Vue 3 + Tailwind CDN)
+- [x] Dashboard 浏览器界面 (初始: `gateway/static/index.html` Vue 3, 后迁移到 `web/` Next.js 16)
   - Chat (WebSocket 流式), Status, Sessions, Config 四个页面
 - [x] `systemedu doctor` 诊断检查 (Python/Config/LLM/Daemon/Gateway/DB 共 8 项)
 - [x] `systemedu status` 系统状态面板 (Rich Panel)
@@ -127,12 +127,75 @@
 - [x] `process_message` 支持 `user_id` 参数
 - [x] 114 个测试全部通过 (+30 新增)
 
-### Phase 3: 教育层完善
-- [ ] 知识树加载到 agent 上下文
-- [ ] 节点完成自动更新进度
-- [ ] AI 知识树生成 (端到端)
-- [ ] project.yaml 加载
-- [ ] `systemedu chat --agent tutor --project <name>`
+### Phase 3: 教育层 + Web UI (进行中)
+
+#### 3a: Web UI 基础 ✅
+- [x] Next.js 16 + TypeScript + shadcn/ui + Tailwind 前端 (`web/`)
+- [x] Gateway API 扩展：项目列表、项目详情、Agent 列表、Skills 列表、MCP 管理
+- [x] `systemedu agent start` 自动启动 web frontend
+- [x] 可插拔 Agent Backend (LangGraph / DeepAgents ABC 抽象)
+- [x] 知识树可视化 (React Flow + 自定义节点, 暗色主题适配)
+
+#### 3b: 项目 + 知识树管理 ✅
+- [x] project.yaml 加载 (`ProjectLoader`, `find_project_dir`)
+- [x] 知识树加载到 agent 上下文
+- [x] `POST /api/projects` 创建项目 (上传 JSON → 磁盘写入 project.yaml + knowledge_tree.json)
+- [x] `POST /api/projects/preview-tree` 预览/验证知识树 (支持 tree_leaf + milestones 双格式)
+- [x] `POST /api/projects/generate-tree` AI 生成知识树 (PlannerAgent → milestones JSON)
+- [x] Web 新建项目页：上传 JSON / AI 生成二选一 → 预览 → 确认创建
+
+#### 3c: 学习进度 + 注册 ✅
+- [x] 节点完成自动更新进度 (`PATCH /api/projects/{name}/nodes/{id}/progress`)
+- [x] 前置节点解锁逻辑 (prerequisite_indices DAG)
+- [x] 项目注册 (enroll / enrollment CRUD)
+- [x] 全部节点通过 → enrollment 自动标记 completed
+- [x] 学习侧边栏 (知识树 + 进度 + 节点状态)
+
+#### 3d: 课程内容生成 ✅
+- [x] 3-Agent 课程流水线：LessonPlannerAgent → TeacherAgent → StudentAgent
+- [x] 课程缓存 (DB 持久化, 避免重复生成)
+- [x] 课程内容分页 (自动拆分长内容, 每页 ≤ 3000 字符)
+- [x] 结构化课程模板 (step-by-step, comparison, 表格等)
+- [x] Minecraft 风格加载画面
+- [x] 内容 Tab：概念 / 举例 / 应用
+
+#### 3e: 交互实验模块 ✅
+- [x] 交互实验流水线：LessonPlanner → LabAnalyst → LabDesigner → LabCoder → LabReviewer
+- [x] 6 种交互类型：drag_classify, click_select, drag_sort, connect_match, cause_effect, animated_story
+- [x] animated_story：anime.js + SVG 时间轴动画，概念性节点兜底模式
+- [x] Lab HTML 在 iframe 沙箱中运行
+- [x] LabReviewer 自动审查/修复生成的 HTML
+- [x] Agent 决策追踪日志 (decision tracing)
+- [x] LessonPlannerAgent：在课程生成前制定整体教学策略 (interaction_type 选择依据)
+
+#### 3f: 练习 + AI 批改 ✅
+- [x] 结构化练习题生成 (exercises JSON)
+- [x] `POST /api/projects/{name}/nodes/{id}/practice/submit` AI 批改
+- [x] 练习提交历史 (`GET .../practice/submissions`)
+- [x] Tutor Agent 注入练习上下文用于答疑
+
+#### 3g: 文本划线 + 高亮 ✅
+- [x] 文本选中 → 高亮 + 备注
+- [x] 高亮颜色选择, 高亮 CRUD API
+- [x] 按页分组存储高亮
+
+#### 3i: 知识树编辑 + 导航 ✅
+- [x] D3.js 知识树可视化 (替换 React Flow)，支持 pan/zoom
+- [x] 知识树 minimap（右上角缩略图导航器，实时显示视口位置）
+- [x] 右键菜单节点编辑：编辑标题/描述/难度/时间/XP、添加新节点、删除节点
+- [x] `PUT /api/projects/{name}/tree` — 全量更新知识树 JSON
+- [x] 节点编辑后自动持久化到磁盘
+
+#### 3j: 学习页 UX 优化 ✅
+- [x] 课程内容两栏布局：左侧 prose + 右侧 sidebar（节点概览 + 下一步）
+- [x] 完成节点后展示"下一步可学节点"列表（基于 DAG prerequisite 计算）
+- [x] 笔记 FAB（amber 圆形按钮，右下角固定）+ AI chatbot FAB（右下角）
+- [x] 底部导航：上一节 / 下一节（独立 bar，不与 FAB 重叠）
+- [x] 移除内容分页，全文连续滚动展示
+
+#### 3h: 待完成
+- [ ] XP / 成就 / 等级系统
+- [ ] `systemedu chat --agent tutor --project <name>` (CLI 端项目模式)
 
 ### Phase 4: Hub
 - [ ] 项目打包/解包 (tar.gz)
@@ -176,15 +239,50 @@ memory:
 ```
 
 ### Gateway API Endpoints
+
+**系统**
 | Method | Path | Description |
 |--------|------|-------------|
 | GET | `/api/status` | 系统状态 (版本, uptime, LLM, 会话数) |
 | GET | `/api/config` | 当前配置 (API key 脱敏) |
-| GET | `/api/sessions` | 活跃会话列表 |
-| GET | `/api/sessions/:id` | 会话详情 + 消息历史 |
-| POST | `/api/chat` | 发送消息 (同步响应) |
+| PUT | `/api/config` | 更新配置 |
+| GET | `/api/sessions` | 会话列表 |
+| GET | `/api/sessions/full` | 会话列表 (含完整消息) |
+| GET | `/api/sessions/:id` | 会话详情 |
+| POST | `/api/chat` | 发送消息 (同步) |
 | WS | `/api/chat/stream` | 流式对话 WebSocket |
-| GET | `/` | Dashboard 页面 |
+| GET | `/api/agents` | Agent 列表 |
+| GET | `/api/skills` | Skills 列表 |
+| GET | `/api/mcp/servers` | MCP server 列表 |
+| POST | `/api/mcp/servers` | 添加 MCP server |
+| DELETE | `/api/mcp/servers/:name` | 删除 MCP server |
+
+**项目**
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/api/projects` | 项目列表 |
+| POST | `/api/projects` | 创建项目 |
+| POST | `/api/projects/preview-tree` | 预览/验证知识树 |
+| POST | `/api/projects/generate-tree` | AI 生成知识树 |
+| GET | `/api/projects/:name` | 项目详情 (含知识树 + 进度 + 注册) |
+| PUT | `/api/projects/:name/tree` | 全量更新知识树 JSON |
+| POST | `/api/projects/:name/enroll` | 注册学习 |
+| GET | `/api/projects/:name/enrollment` | 获取注册信息 |
+| PATCH | `/api/projects/:name/enrollment` | 更新注册 (暂停/恢复/加时) |
+
+**节点学习**
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/api/projects/:name/nodes/:id/context` | 节点上下文 (前置链 + 建议) |
+| GET | `/api/projects/:name/nodes/:id/lesson` | 获取课程内容 |
+| POST | `/api/projects/:name/nodes/:id/lesson/generate` | 生成/重新生成课程 |
+| GET | `/api/projects/:name/nodes/:id/lesson/progress` | 课程进度 |
+| PATCH | `/api/projects/:name/nodes/:id/progress` | 更新节点状态 |
+| GET | `/api/projects/:name/nodes/:id/highlights` | 获取高亮 |
+| POST | `/api/projects/:name/nodes/:id/highlights` | 创建高亮 |
+| DELETE | `/api/projects/:name/nodes/:id/highlights/:hid` | 删除高亮 |
+| POST | `/api/projects/:name/nodes/:id/practice/submit` | 提交练习 (AI 批改) |
+| GET | `/api/projects/:name/nodes/:id/practice/submissions` | 练习提交历史 |
 
 ### Project Config: `<project>/project.yaml`
 ```yaml

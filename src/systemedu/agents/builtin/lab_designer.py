@@ -3,7 +3,8 @@
 import json
 import logging
 
-from langchain_core.messages import HumanMessage, SystemMessage
+from deepagents import create_deep_agent
+from langchain_core.messages import AIMessage, HumanMessage
 
 from systemedu.agents.base import BaseAgent
 
@@ -227,10 +228,10 @@ class LabDesignerAgent(BaseAgent):
     async def process(self, message: str, context: dict | None = None) -> str:
         analysis = json.loads(message) if isinstance(message, str) else message
         difficulty = context.get("difficulty", 5) if context else 5
-        result = self.design(analysis, difficulty)
+        result = await self.design(analysis, difficulty)
         return json.dumps(result, ensure_ascii=False) if result else ""
 
-    def design(self, analysis: dict, difficulty: int) -> dict | None:
+    async def design(self, analysis: dict, difficulty: int) -> dict | None:
         """Design a game based on the analyst's output.
 
         Args:
@@ -270,11 +271,20 @@ class LabDesignerAgent(BaseAgent):
         )
 
         try:
-            response = self._llm.invoke([
-                SystemMessage(content=DESIGNER_SYSTEM_PROMPT),
-                HumanMessage(content=user_prompt),
-            ])
-            text = response.content.strip()
+            agent = create_deep_agent(
+                model=self._llm,
+                tools=[],
+                system_prompt=DESIGNER_SYSTEM_PROMPT,
+            )
+            result = await agent.ainvoke({"messages": [HumanMessage(content=user_prompt)]})
+            # Extract last AIMessage content
+            text = ""
+            for msg in reversed(result["messages"]):
+                if isinstance(msg, AIMessage) and msg.content:
+                    text = msg.content
+                    break
+
+            text = text.strip()
             if text.startswith("```"):
                 lines = text.split("\n")
                 text = "\n".join(lines[1:-1] if lines[-1].strip() == "```" else lines[1:])

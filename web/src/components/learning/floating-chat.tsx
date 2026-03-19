@@ -45,7 +45,7 @@ export function FloatingChat({ project, agent: defaultAgent = "tutor", nodeId, a
     return (
       <button
         onClick={() => setOpen(true)}
-        className="fixed bottom-6 right-6 z-50 h-14 w-14 rounded-full bg-primary text-primary-foreground shadow-lg hover:bg-primary/90 transition-colors flex items-center justify-center"
+        className="fixed bottom-[52px] right-6 z-50 h-14 w-14 rounded-full bg-primary text-primary-foreground shadow-lg hover:bg-primary/90 transition-colors flex items-center justify-center"
       >
         <MessageSquare className="h-6 w-6" />
       </button>
@@ -54,7 +54,7 @@ export function FloatingChat({ project, agent: defaultAgent = "tutor", nodeId, a
 
   if (minimized) {
     return (
-      <div className="fixed bottom-6 right-6 z-50 flex items-center gap-2">
+      <div className="fixed bottom-[52px] right-6 z-50 flex items-center gap-2">
         <button
           onClick={handleRestore}
           className="flex items-center gap-2 rounded-full bg-secondary text-secondary-foreground px-4 py-2 shadow-lg hover:bg-secondary/80 text-sm font-medium transition-colors"
@@ -73,7 +73,7 @@ export function FloatingChat({ project, agent: defaultAgent = "tutor", nodeId, a
   }
 
   return (
-    <div className="fixed bottom-6 right-6 z-50 w-[400px] h-[500px] max-w-[calc(100vw-3rem)] max-h-[calc(100vh-6rem)] rounded-xl border bg-background shadow-2xl flex flex-col overflow-hidden">
+    <div className="fixed bottom-[52px] right-6 z-50 w-[400px] h-[500px] max-w-[calc(100vw-3rem)] max-h-[calc(100vh-6rem)] rounded-xl border bg-background shadow-2xl flex flex-col overflow-hidden">
       {/* Header with agent selector */}
       <div className="relative z-10 border-b bg-muted/30 shrink-0">
         <div className="flex items-center justify-between px-3 py-2">

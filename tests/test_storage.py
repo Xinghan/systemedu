@@ -325,17 +325,36 @@ class TestHighlight:
         db = get_session()
         h1 = Highlight(
             user_id="default", project_name="proj", knode_id=0,
-            tab="concept", text="a", start_offset=5, end_offset=6,
+            tab="concept", page_index=0, text="same text", start_offset=0, end_offset=9,
         )
         h2 = Highlight(
             user_id="default", project_name="proj", knode_id=0,
-            tab="concept", text="b", start_offset=5, end_offset=10,
+            tab="concept", page_index=0, text="same text", start_offset=0, end_offset=9,
         )
         db.add(h1)
         db.commit()
         db.add(h2)
         with pytest.raises(IntegrityError):
             db.commit()
+        db.close()
+
+    def test_highlight_different_text_same_tab(self):
+        """Different text on same tab/page should be allowed."""
+        db = get_session()
+        h1 = Highlight(
+            user_id="default", project_name="proj", knode_id=0,
+            tab="concept", page_index=0, text="text one", start_offset=0, end_offset=8,
+        )
+        h2 = Highlight(
+            user_id="default", project_name="proj", knode_id=0,
+            tab="concept", page_index=0, text="text two", start_offset=0, end_offset=8,
+        )
+        db.add(h1)
+        db.add(h2)
+        db.commit()
+
+        count = db.query(Highlight).filter_by(project_name="proj", knode_id=0).count()
+        assert count == 2
         db.close()
 
     def test_highlight_delete(self):

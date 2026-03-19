@@ -1,36 +1,25 @@
 """Tests for interactive lab generation pipeline (4-Agent version).
 
 These tests validate the _generate_interactive_lab function which uses
-the 4-Agent pipeline (LabAnalyst → LabDesigner → LabCoder → LabReviewer).
+the 4-Agent pipeline (LabAnalyst -> LabDesigner -> LabCoder -> LabReviewer).
 """
 
 import json
-from unittest.mock import MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from langchain_core.messages import AIMessage
 
 from systemedu.education.lesson_generator import _generate_interactive_lab
 
 
-def _make_llm_mock(response: str) -> MagicMock:
-    """Create a mock LLM that returns the given response."""
-    mock = MagicMock()
-    resp = MagicMock()
-    resp.content = response
-    mock.invoke = MagicMock(return_value=resp)
-    return mock
-
-
-def _make_multi_llm_mock(responses: list[str]) -> MagicMock:
-    """Create a mock LLM that returns different responses for sequential calls."""
-    mock = MagicMock()
-    resps = []
-    for r in responses:
-        resp = MagicMock()
-        resp.content = r
-        resps.append(resp)
-    mock.invoke = MagicMock(side_effect=resps)
-    return mock
+def _make_agent_mock(response: str) -> MagicMock:
+    """Create a mock deep agent returning the given response."""
+    mock_agent = MagicMock()
+    mock_agent.ainvoke = AsyncMock(return_value={
+        "messages": [AIMessage(content=response)]
+    })
+    return mock_agent
 
 
 VALID_ANALYSIS = json.dumps({
@@ -60,59 +49,107 @@ VALID_DESIGN = json.dumps({
     "instructions": "instructions",
 }, ensure_ascii=False)
 
+VALID_HTML = (
+    "<!DOCTYPE html><html><head>"
+    '<script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>'
+    "</head><body><div id='root'></div></body></html>"
+)
+
 
 class TestGenerateInteractiveLab:
-    VALID_HTML = (
-        "<!DOCTYPE html><html><head>"
-        '<script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>'
-        "</head><body><div id='root'></div></body></html>"
-    )
-
-    def test_successful_generation(self):
+    @pytest.mark.asyncio
+    async def test_successful_generation(self):
         """Full 4-agent pipeline returns valid HTML."""
-        llm = _make_multi_llm_mock([VALID_ANALYSIS, VALID_DESIGN, self.VALID_HTML, self.VALID_HTML])
-        result = _generate_interactive_lab("Test Node", "A test summary", 3, llm)
+        mock_analyst = _make_agent_mock(VALID_ANALYSIS)
+        mock_designer = _make_agent_mock(VALID_DESIGN)
+        mock_coder = _make_agent_mock(VALID_HTML)
+        mock_reviewer = _make_agent_mock(VALID_HTML)
+        with (
+            patch("systemedu.agents.builtin.lab_analyst.create_deep_agent", return_value=mock_analyst),
+            patch("systemedu.agents.builtin.lab_designer.create_deep_agent", return_value=mock_designer),
+            patch("systemedu.agents.builtin.lab_coder.create_deep_agent", return_value=mock_coder),
+            patch("systemedu.agents.builtin.lab_reviewer.create_deep_agent", return_value=mock_reviewer),
+        ):
+            result = await _generate_interactive_lab("Test Node", "A test summary", 3, MagicMock())
         assert "<html" in result
         assert "react" in result.lower()
-        # analyst + designer + coder + reviewer = 4
-        assert llm.invoke.call_count == 4
 
-    def test_analyst_failure_returns_empty(self):
+    @pytest.mark.asyncio
+    async def test_analyst_failure_returns_empty(self):
         """If analyst returns invalid JSON, pipeline returns empty."""
-        llm = _make_llm_mock("This is just plain text, no JSON here")
-        result = _generate_interactive_lab("Node", "Summary", 3, llm)
+        mock_analyst = _make_agent_mock("This is just plain text, no JSON here")
+        with patch("systemedu.agents.builtin.lab_analyst.create_deep_agent", return_value=mock_analyst):
+            result = await _generate_interactive_lab("Node", "Summary", 3, MagicMock())
         assert result == ""
 
-    def test_designer_failure_returns_empty(self):
+    @pytest.mark.asyncio
+    async def test_designer_failure_returns_empty(self):
         """If designer fails, pipeline returns empty."""
-        llm = _make_multi_llm_mock([VALID_ANALYSIS, "not json at all"])
-        result = _generate_interactive_lab("Node", "Summary", 3, llm)
+        mock_analyst = _make_agent_mock(VALID_ANALYSIS)
+        mock_designer = _make_agent_mock("not json at all")
+        with (
+            patch("systemedu.agents.builtin.lab_analyst.create_deep_agent", return_value=mock_analyst),
+            patch("systemedu.agents.builtin.lab_designer.create_deep_agent", return_value=mock_designer),
+        ):
+            result = await _generate_interactive_lab("Node", "Summary", 3, MagicMock())
         assert result == ""
 
-    def test_coder_failure_returns_empty(self):
+    @pytest.mark.asyncio
+    async def test_coder_failure_returns_empty(self):
         """If coder returns non-HTML, pipeline returns empty."""
-        llm = _make_multi_llm_mock([VALID_ANALYSIS, VALID_DESIGN, "just text, no html"])
-        result = _generate_interactive_lab("Node", "Summary", 3, llm)
+        mock_analyst = _make_agent_mock(VALID_ANALYSIS)
+        mock_designer = _make_agent_mock(VALID_DESIGN)
+        mock_coder = _make_agent_mock("just text, no html")
+        with (
+            patch("systemedu.agents.builtin.lab_analyst.create_deep_agent", return_value=mock_analyst),
+            patch("systemedu.agents.builtin.lab_designer.create_deep_agent", return_value=mock_designer),
+            patch("systemedu.agents.builtin.lab_coder.create_deep_agent", return_value=mock_coder),
+        ):
+            result = await _generate_interactive_lab("Node", "Summary", 3, MagicMock())
         assert result == ""
 
-    def test_lesson_plan_passed_to_analyst(self):
+    @pytest.mark.asyncio
+    async def test_lesson_plan_passed_to_analyst(self):
         """When lesson_plan is provided, it's passed to the analyst."""
-        llm = _make_multi_llm_mock([VALID_ANALYSIS, VALID_DESIGN, self.VALID_HTML, self.VALID_HTML])
+        mock_analyst = _make_agent_mock(VALID_ANALYSIS)
+        mock_designer = _make_agent_mock(VALID_DESIGN)
+        mock_coder = _make_agent_mock(VALID_HTML)
+        mock_reviewer = _make_agent_mock(VALID_HTML)
         plan = {"lab_strategy": {"interaction_type": "cause_effect", "interaction_rationale": "test", "game_theme": "test", "item_count": 4}}
-        result = _generate_interactive_lab("Node", "Summary", 3, llm, lesson_plan=plan)
+        with (
+            patch("systemedu.agents.builtin.lab_analyst.create_deep_agent", return_value=mock_analyst),
+            patch("systemedu.agents.builtin.lab_designer.create_deep_agent", return_value=mock_designer),
+            patch("systemedu.agents.builtin.lab_coder.create_deep_agent", return_value=mock_coder),
+            patch("systemedu.agents.builtin.lab_reviewer.create_deep_agent", return_value=mock_reviewer),
+        ):
+            result = await _generate_interactive_lab("Node", "Summary", 3, MagicMock(), lesson_plan=plan)
         assert "<html" in result
-        # First call is analyst — check that plan guidance is in prompt
-        analyst_prompt = llm.invoke.call_args_list[0][0][0][1].content
-        assert "策划师指引" in analyst_prompt
+        # Analyst ainvoke called with plan guidance in prompt
+        call_args = mock_analyst.ainvoke.call_args
+        messages = call_args[0][0]["messages"]
+        prompt_text = messages[0].content
+        assert "策划师指引" in prompt_text
 
-    def test_progress_callback_called(self):
+    @pytest.mark.asyncio
+    async def test_progress_callback_called(self):
         """Progress callback is called for each pipeline stage including reviewer."""
-        llm = _make_multi_llm_mock([VALID_ANALYSIS, VALID_DESIGN, self.VALID_HTML, self.VALID_HTML])
+        mock_analyst = _make_agent_mock(VALID_ANALYSIS)
+        mock_designer = _make_agent_mock(VALID_DESIGN)
+        mock_coder = _make_agent_mock(VALID_HTML)
+        mock_reviewer = _make_agent_mock(VALID_HTML)
         calls = []
+
         def cb(step, status, preview):
             calls.append((step, status))
 
-        _generate_interactive_lab("Node", "Summary", 3, llm, progress_callback=cb)
+        with (
+            patch("systemedu.agents.builtin.lab_analyst.create_deep_agent", return_value=mock_analyst),
+            patch("systemedu.agents.builtin.lab_designer.create_deep_agent", return_value=mock_designer),
+            patch("systemedu.agents.builtin.lab_coder.create_deep_agent", return_value=mock_coder),
+            patch("systemedu.agents.builtin.lab_reviewer.create_deep_agent", return_value=mock_reviewer),
+        ):
+            await _generate_interactive_lab("Node", "Summary", 3, MagicMock(), progress_callback=cb)
+
         assert len(calls) == 8  # 4 stages x 2 (in_progress + completed)
         assert ("lab_analyst", "in_progress") in calls
         assert ("lab_analyst", "completed") in calls

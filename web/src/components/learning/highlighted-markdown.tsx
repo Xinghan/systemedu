@@ -4,7 +4,7 @@ import { useMemo } from "react"
 import ReactMarkdown from "react-markdown"
 import remarkGfm from "remark-gfm"
 import { Copy, Check } from "lucide-react"
-import { useState, useCallback } from "react"
+import { useState, useCallback, useRef } from "react"
 import type { HighlightInfo } from "@/lib/types/api"
 
 function CodeBlock({ children, className }: { children: string; className?: string }) {
@@ -219,12 +219,25 @@ function HighlightSpan({
   onDelete: (id: number) => void
 }) {
   const [open, setOpen] = useState(false)
+  const markRef = useRef<HTMLElement>(null)
+  const [openUp, setOpenUp] = useState(false)
+
+  const handleClick = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation()
+    if (!open && markRef.current) {
+      const rect = markRef.current.getBoundingClientRect()
+      // Open upward if less than 200px from viewport bottom
+      setOpenUp(window.innerHeight - rect.bottom < 200)
+    }
+    setOpen(!open)
+  }, [open])
 
   return (
     <span className="relative inline">
       <mark
+        ref={markRef}
         className="bg-yellow-200/80 dark:bg-yellow-500/40 rounded-sm cursor-pointer border-b border-yellow-400/50 transition-colors hover:bg-yellow-300/80 dark:hover:bg-yellow-500/60"
-        onClick={(e) => { e.stopPropagation(); setOpen(!open) }}
+        onClick={handleClick}
         title={highlight.note || "点击管理高亮"}
       >
         {highlight.text}
@@ -234,7 +247,9 @@ function HighlightSpan({
       )}
       {open && (
         <span
-          className="absolute left-0 top-full mt-1 z-50 bg-popover border rounded-lg shadow-lg p-2.5 min-w-[180px] max-w-[300px]"
+          className={`absolute left-0 z-[100] bg-popover border rounded-lg shadow-lg p-2.5 min-w-[180px] max-w-[300px] ${
+            openUp ? "bottom-full mb-1" : "top-full mt-1"
+          }`}
           onClick={(e) => e.stopPropagation()}
         >
           {highlight.note && (

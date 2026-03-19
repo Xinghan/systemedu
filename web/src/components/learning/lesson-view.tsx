@@ -1,6 +1,7 @@
 "use client"
 
 import { useCallback, useEffect, useRef, useState } from "react"
+import { NotebookPen, X } from "lucide-react"
 import { IconBook } from "./cartoon-icons"
 import { Button } from "@/components/ui/button"
 import { gateway } from "@/lib/api"
@@ -27,11 +28,15 @@ function computeNextNodes(
   const passedIds = new Set(
     progress.filter((p) => p.status === "passed").map((p) => p.knode_id)
   )
+  const seen = new Set<number>()
   return allKnodes.filter((knode) => {
     if (knode.id === currentNodeId) return false
     if (passedIds.has(knode.id)) return false
+    if (seen.has(knode.id)) return false
     // all prerequisites must be passed
-    return knode.prerequisite_indices.every((idx) => passedIds.has(idx))
+    if (!knode.prerequisite_indices.every((idx) => passedIds.has(idx))) return false
+    seen.add(knode.id)
+    return true
   })
 }
 
@@ -50,6 +55,7 @@ export function LessonView({
   const [completing, setCompleting] = useState(false)
   const [regenerating, setRegenerating] = useState(false)
   const [isGenerating, setIsGenerating] = useState(false)
+  const [noteState, setNoteState] = useState<"closed" | "open" | "minimized">("closed")
   // Cache lessons that have been fetched/generated to avoid redundant requests
   const lessonCacheRef = useRef<Map<number, LessonContent>>(new Map())
   const fetchControllerRef = useRef<AbortController | null>(null)
@@ -261,22 +267,66 @@ export function LessonView({
     : []
 
   return (
-    <LessonContentView
-      knode={knode!}
-      lesson={lesson}
-      projectName={projectName}
-      nodeId={nodeId!}
-      onMarkComplete={handleMarkComplete}
-      onRegenerate={handleRegenerate}
-      onNavigate={handleNavigate}
-      onNavigateToNode={onNodeChange}
-      onPageChange={onPageChange}
-      hasPrev={nodeId > 0}
-      hasNext={nodeId < allKnodes.length - 1}
-      isCompleted={isCompleted}
-      completing={completing}
-      regenerating={regenerating}
-      nextNodes={nextNodes}
-    />
+    <>
+      <LessonContentView
+        knode={knode!}
+        lesson={lesson}
+        projectName={projectName}
+        nodeId={nodeId!}
+        onMarkComplete={handleMarkComplete}
+        onRegenerate={handleRegenerate}
+        onNavigate={handleNavigate}
+        onNavigateToNode={onNodeChange}
+        onPageChange={onPageChange}
+        hasPrev={nodeId > 0}
+        hasNext={nodeId < allKnodes.length - 1}
+        isCompleted={isCompleted}
+        completing={completing}
+        regenerating={regenerating}
+        nextNodes={nextNodes}
+        noteState={noteState}
+        onNoteStateChange={setNoteState}
+      />
+
+      {/* FABs — rendered here to escape overflow-hidden ancestors */}
+      <div className="fixed bottom-[116px] right-6 z-50 flex flex-col items-center gap-3">
+        {/* Note FAB */}
+        {noteState === "closed" && (
+          <button
+            onClick={() => setNoteState("open")}
+            className="h-14 w-14 rounded-full bg-amber-500 text-white shadow-lg hover:bg-amber-500/90 transition-colors flex items-center justify-center"
+            title="笔记"
+          >
+            <NotebookPen className="h-6 w-6" />
+          </button>
+        )}
+        {noteState === "minimized" && (
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setNoteState("open")}
+              className="flex items-center gap-2 rounded-full bg-secondary text-secondary-foreground px-4 py-2 shadow-lg hover:bg-secondary/80 text-sm font-medium transition-colors"
+            >
+              <NotebookPen className="h-4 w-4" />
+              笔记
+            </button>
+            <button
+              onClick={() => setNoteState("closed")}
+              className="h-8 w-8 rounded-full flex items-center justify-center hover:bg-muted transition-colors"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+        )}
+        {noteState === "open" && (
+          <button
+            onClick={() => setNoteState("minimized")}
+            className="h-14 w-14 rounded-full bg-amber-500 text-white shadow-lg hover:bg-amber-500/90 transition-colors flex items-center justify-center"
+            title="笔记"
+          >
+            <NotebookPen className="h-6 w-6" />
+          </button>
+        )}
+      </div>
+    </>
   )
 }

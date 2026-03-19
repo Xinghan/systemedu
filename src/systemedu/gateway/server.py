@@ -815,9 +815,10 @@ async def api_node_lesson(request: Request) -> JSONResponse:
 
 def _run_lesson_generation(name: str, node_id: int):
     """Run lesson generation in a background thread. Errors are caught and logged."""
+    import asyncio
     try:
         from systemedu.education.lesson_generator import generate_lesson
-        generate_lesson(name, node_id)
+        asyncio.run(generate_lesson(name, node_id))
         logger.info(f"Background lesson generation completed: {name}/{node_id}")
     except Exception:
         logger.exception(f"Background lesson generation failed: {name}/{node_id}")

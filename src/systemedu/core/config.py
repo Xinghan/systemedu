@@ -135,7 +135,7 @@ class SearchConfig(BaseModel):
     """Search configuration (Tavily)."""
 
     enabled: bool = True
-    tavily_api_key: str = "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"
+    tavily_api_key: str = ""
     max_results_per_source: int = 10
 
 

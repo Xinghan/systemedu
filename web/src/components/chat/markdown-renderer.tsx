@@ -40,9 +40,11 @@ function CodeBlock({
 }
 
 export function MarkdownRenderer({ content }: { content: string }) {
+  if (!content) return null
   return (
     <ReactMarkdown
       remarkPlugins={[remarkGfm]}
+      children={content}
       components={{
         code({ children, className, ...props }) {
           const isInline = !className

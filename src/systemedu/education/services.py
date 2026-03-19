@@ -137,6 +137,141 @@ def validate_knowledge_tree(tree_data: dict) -> list[str]:
     return errors
 
 
+_LEVEL_MAP = {
+    "L0-启蒙": 1,
+    "L0": 1,
+    "L1-入门": 2,
+    "L1": 2,
+    "L2-基础": 3,
+    "L2": 3,
+    "L3-进阶": 5,
+    "L3": 5,
+    "L4-高级": 7,
+    "L4": 7,
+    "L5-专家": 9,
+    "L5": 9,
+}
+
+
+def convert_uploaded_tree(raw_data: dict) -> dict:
+    """Convert uploaded knowledge tree to internal milestones format.
+
+    Auto-detects format:
+    - If `raw_data` has "milestones" key → already internal format, return as-is.
+    - If `raw_data` has "知识树节点" key → tree_leaf format, convert.
+
+    Raises ValueError if format is unrecognized.
+    """
+    if "milestones" in raw_data:
+        return raw_data
+
+    if "知识树节点" not in raw_data:
+        raise ValueError(
+            "Unrecognized format: must contain 'milestones' or '知识树节点' key"
+        )
+
+    nodes = raw_data["知识树节点"]
+    module_graph = raw_data.get("模块依赖图", [])
+
+    # Build module order from dependency graph
+    module_order = [m["模块id"] for m in module_graph] if module_graph else []
+
+    # Group nodes by module id
+    modules: dict[str, list[dict]] = {}
+    for node in nodes:
+        mid = node.get("模块id", "M00")
+        modules.setdefault(mid, []).append(node)
+
+    # Sort modules: use dependency graph order, then fallback to key sort
+    if module_order:
+        sorted_module_ids = [mid for mid in module_order if mid in modules]
+        # Add any modules not in graph
+        for mid in sorted(modules.keys()):
+            if mid not in sorted_module_ids:
+                sorted_module_ids.append(mid)
+    else:
+        sorted_module_ids = sorted(modules.keys())
+
+    # Build module title lookup from dependency graph
+    module_titles = {}
+    for m in module_graph:
+        module_titles[m["模块id"]] = m.get("模块标题", m["模块id"])
+
+    # Build global node id → index mapping
+    node_id_to_index: dict[str, int] = {}
+    global_idx = 0
+    for mid in sorted_module_ids:
+        for node in modules[mid]:
+            node_id_to_index[node["id"]] = global_idx
+            global_idx += 1
+
+    # Convert to milestones format
+    milestones = []
+    for mid in sorted_module_ids:
+        module_nodes = modules[mid]
+        knodes = []
+        for node in module_nodes:
+            # Convert level
+            level_str = node.get("知识等级", "L0")
+            difficulty = _LEVEL_MAP.get(level_str, 1)
+
+            # Convert prerequisites
+            prereq_ids = node.get("先修节点", [])
+            prereq_indices = []
+            for pid in prereq_ids:
+                if pid in node_id_to_index:
+                    prereq_indices.append(node_id_to_index[pid])
+
+            knodes.append(
+                {
+                    "title": node.get("标题", ""),
+                    "summary": node.get("详细描述", ""),
+                    "difficulty_level": difficulty,
+                    "estimated_minutes": node.get("预估学习时长_分钟", 15),
+                    "prerequisite_indices": prereq_indices,
+                }
+            )
+
+        milestones.append(
+            {
+                "title": module_titles.get(mid, mid),
+                "knodes": knodes,
+            }
+        )
+
+    return {"milestones": milestones}
+
+
+def extract_project_meta(raw_data: dict) -> dict:
+    """Extract project metadata from uploaded tree_leaf format.
+
+    Returns a dict suitable for project.yaml fields.
+    """
+    meta: dict = {}
+
+    if "项目名称" in raw_data:
+        meta["title"] = raw_data["项目名称"]
+    if "项目简介" in raw_data:
+        meta["description"] = raw_data["项目简介"]
+
+    target = raw_data.get("适用对象", {})
+    if isinstance(target, dict):
+        age = target.get("年龄", "")
+        if isinstance(age, str) and "-" in age:
+            parts = age.replace("岁", "").split("-")
+            try:
+                meta["age_range"] = [int(parts[0]), int(parts[1])]
+            except (ValueError, IndexError):
+                pass
+
+    # Estimate total hours from node minutes
+    nodes = raw_data.get("知识树节点", [])
+    total_minutes = sum(n.get("预估学习时长_分钟", 15) for n in nodes)
+    meta["estimated_hours"] = max(1, round(total_minutes / 60))
+
+    return meta
+
+
 def parse_knowledge_tree(tree_data: dict, *, validate: bool = True) -> KnowledgeTree:
     """Parse and validate a knowledge tree dict into a KnowledgeTree model.
 

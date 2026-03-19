@@ -1,6 +1,10 @@
 # Adminsite — Projects
 
-## API Endpoints
+> **状态**: 暂冻结 (Phase 4: Hub 管理后台)
+> 项目 CRUD 已在本地 Gateway 中实现 (见 `prd/backend/projects.md`)。
+> 此文件描述未来 Hub admin 管理界面的项目管理功能。
+
+## API Endpoints (Hub Admin)
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | GET | `/api/admin/projects/` | List all projects |

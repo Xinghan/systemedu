@@ -1,9 +1,10 @@
 """Tests for LessonPlannerAgent."""
 
 import json
-from unittest.mock import MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from langchain_core.messages import AIMessage
 
 from systemedu.agents.builtin.lesson_planner import (
     LessonPlannerAgent,
@@ -14,13 +15,13 @@ from systemedu.agents.builtin.lesson_planner import (
 )
 
 
-def _make_llm_mock(response: str) -> MagicMock:
-    """Create a mock LLM that returns the given response."""
-    mock = MagicMock()
-    resp = MagicMock()
-    resp.content = response
-    mock.invoke = MagicMock(return_value=resp)
-    return mock
+def _make_agent_mock(response: str) -> MagicMock:
+    """Create a mock deep agent that returns the given response."""
+    mock_agent = MagicMock()
+    mock_agent.ainvoke = AsyncMock(return_value={
+        "messages": [AIMessage(content=response)]
+    })
+    return mock_agent
 
 
 VALID_PLAN = json.dumps({
@@ -53,81 +54,98 @@ VALID_PLAN = json.dumps({
 
 
 class TestLessonPlannerAgent:
-    def test_successful_plan(self):
+    @pytest.mark.asyncio
+    async def test_successful_plan(self):
         """Planner returns valid JSON plan."""
-        llm = _make_llm_mock(VALID_PLAN)
-        planner = LessonPlannerAgent(llm=llm)
-        result = planner.plan("树叶分类", "学习如何分类", 3, "text", "自然科学基础")
+        mock_agent = _make_agent_mock(VALID_PLAN)
+        with patch("systemedu.agents.builtin.lesson_planner.create_deep_agent", return_value=mock_agent):
+            planner = LessonPlannerAgent(llm=MagicMock())
+            result = await planner.plan("树叶分类", "学习如何分类", 3, "text", "自然科学基础")
         assert result is not None
         assert result["concept_approach"] == "analogy"
         assert result["lab_strategy"]["interaction_type"] == "drag_classify"
         assert result["overall_tone"] == "playful"
-        assert llm.invoke.call_count == 1
+        mock_agent.ainvoke.assert_called_once()
 
-    def test_code_fences_stripped(self):
+    @pytest.mark.asyncio
+    async def test_code_fences_stripped(self):
         """Output wrapped in code fences is handled."""
-        llm = _make_llm_mock(f"```json\n{VALID_PLAN}\n```")
-        planner = LessonPlannerAgent(llm=llm)
-        result = planner.plan("Test", "Summary", 5)
+        mock_agent = _make_agent_mock(f"```json\n{VALID_PLAN}\n```")
+        with patch("systemedu.agents.builtin.lesson_planner.create_deep_agent", return_value=mock_agent):
+            planner = LessonPlannerAgent(llm=MagicMock())
+            result = await planner.plan("Test", "Summary", 5)
         assert result is not None
         assert result["concept_emphasis"] == "理解分类的本质是按特征分组"
 
-    def test_invalid_json_returns_none(self):
+    @pytest.mark.asyncio
+    async def test_invalid_json_returns_none(self):
         """Non-JSON output returns None."""
-        llm = _make_llm_mock("This is not JSON")
-        planner = LessonPlannerAgent(llm=llm)
-        result = planner.plan("Test", "Summary", 5)
+        mock_agent = _make_agent_mock("This is not JSON")
+        with patch("systemedu.agents.builtin.lesson_planner.create_deep_agent", return_value=mock_agent):
+            planner = LessonPlannerAgent(llm=MagicMock())
+            result = await planner.plan("Test", "Summary", 5)
         assert result is None
 
-    def test_missing_required_field_returns_none(self):
+    @pytest.mark.asyncio
+    async def test_missing_required_field_returns_none(self):
         """JSON missing required fields returns None."""
         partial = json.dumps({"concept_emphasis": "test"})
-        llm = _make_llm_mock(partial)
-        planner = LessonPlannerAgent(llm=llm)
-        result = planner.plan("Test", "Summary", 5)
+        mock_agent = _make_agent_mock(partial)
+        with patch("systemedu.agents.builtin.lesson_planner.create_deep_agent", return_value=mock_agent):
+            planner = LessonPlannerAgent(llm=MagicMock())
+            result = await planner.plan("Test", "Summary", 5)
         assert result is None
 
-    def test_invalid_enum_values_normalized(self):
+    @pytest.mark.asyncio
+    async def test_invalid_enum_values_normalized(self):
         """Invalid enum values are replaced with defaults."""
         plan = json.loads(VALID_PLAN)
         plan["concept_approach"] = "invalid"
         plan["concept_depth"] = "invalid"
         plan["overall_tone"] = "invalid"
         plan["lab_strategy"]["interaction_type"] = "invalid"
-        llm = _make_llm_mock(json.dumps(plan, ensure_ascii=False))
-        planner = LessonPlannerAgent(llm=llm)
-        result = planner.plan("Test", "Summary", 5)
+        mock_agent = _make_agent_mock(json.dumps(plan, ensure_ascii=False))
+        with patch("systemedu.agents.builtin.lesson_planner.create_deep_agent", return_value=mock_agent):
+            planner = LessonPlannerAgent(llm=MagicMock())
+            result = await planner.plan("Test", "Summary", 5)
         assert result is not None
         assert result["concept_approach"] == "analogy"
         assert result["concept_depth"] == "medium"
         assert result["overall_tone"] == "encouraging"
         assert result["lab_strategy"]["interaction_type"] == "drag_classify"
 
-    def test_exception_returns_none(self):
+    @pytest.mark.asyncio
+    async def test_exception_returns_none(self):
         """LLM exception returns None."""
-        llm = MagicMock()
-        llm.invoke = MagicMock(side_effect=RuntimeError("LLM error"))
-        planner = LessonPlannerAgent(llm=llm)
-        result = planner.plan("Test", "Summary", 5)
+        mock_agent = MagicMock()
+        mock_agent.ainvoke = AsyncMock(side_effect=RuntimeError("LLM error"))
+        with patch("systemedu.agents.builtin.lesson_planner.create_deep_agent", return_value=mock_agent):
+            planner = LessonPlannerAgent(llm=MagicMock())
+            result = await planner.plan("Test", "Summary", 5)
         assert result is None
 
-    def test_difficulty_in_prompt(self):
-        """Difficulty level appears in prompt."""
+    @pytest.mark.asyncio
+    async def test_difficulty_in_prompt(self):
+        """Difficulty level appears in user prompt sent to agent."""
+        mock_agent = _make_agent_mock(VALID_PLAN)
         for difficulty, expected in [(1, "入门级"), (5, "中级"), (9, "高级")]:
-            llm = _make_llm_mock(VALID_PLAN)
-            planner = LessonPlannerAgent(llm=llm)
-            planner.plan("Test", "Summary", difficulty)
-            prompt_text = llm.invoke.call_args[0][0][1].content
-            assert expected in prompt_text
+            mock_agent.ainvoke.reset_mock()
+            with patch("systemedu.agents.builtin.lesson_planner.create_deep_agent", return_value=mock_agent):
+                planner = LessonPlannerAgent(llm=MagicMock())
+                await planner.plan("Test", "Summary", difficulty)
+            # Check that ainvoke was called with HumanMessage containing the difficulty desc
+            call_args = mock_agent.ainvoke.call_args
+            messages = call_args[0][0]["messages"]
+            prompt_text = messages[0].content
+            assert expected in prompt_text, f"Expected '{expected}' for difficulty={difficulty}"
 
-    def test_process_method(self):
+    @pytest.mark.asyncio
+    async def test_process_method(self):
         """Async process method delegates to plan()."""
-        import asyncio
-        llm = _make_llm_mock(VALID_PLAN)
-        planner = LessonPlannerAgent(llm=llm)
-        result = asyncio.get_event_loop().run_until_complete(
-            planner.process("树叶分类", context={"summary": "分类学习", "difficulty": 3})
-        )
+        mock_agent = _make_agent_mock(VALID_PLAN)
+        with patch("systemedu.agents.builtin.lesson_planner.create_deep_agent", return_value=mock_agent):
+            planner = LessonPlannerAgent(llm=MagicMock())
+            result = await planner.process("树叶分类", context={"summary": "分类学习", "difficulty": 3})
         assert result  # non-empty string
         parsed = json.loads(result)
         assert parsed["concept_approach"] == "analogy"

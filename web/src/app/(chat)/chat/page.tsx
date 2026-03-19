@@ -15,17 +15,17 @@ export default function ChatPage() {
   }
 
   return (
-    <div className="flex h-full">
+    <div className="flex w-full h-full">
       {/* Session sidebar */}
-      <div className="w-64 border-r flex flex-col">
-        <div className="flex items-center justify-between p-4 border-b">
+      <div className="w-60 shrink-0 border-r flex flex-col bg-muted/30">
+        <div className="flex items-center justify-between p-3 border-b">
           <Link href="/dashboard">
-            <Button variant="ghost" size="icon">
+            <Button variant="ghost" size="icon" className="h-8 w-8">
               <ArrowLeft className="h-4 w-4" />
             </Button>
           </Link>
-          <h2 className="font-semibold">聊天</h2>
-          <Button variant="ghost" size="icon" onClick={newSession}>
+          <h2 className="font-semibold text-sm">聊天</h2>
+          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={newSession}>
             <Plus className="h-4 w-4" />
           </Button>
         </div>
@@ -58,8 +58,8 @@ export default function ChatPage() {
         </ScrollArea>
       </div>
 
-      {/* Chat area */}
-      <div className="flex-1">
+      {/* Chat area — fills remaining space */}
+      <div className="flex-1 min-w-0">
         <ChatPanel />
       </div>
     </div>

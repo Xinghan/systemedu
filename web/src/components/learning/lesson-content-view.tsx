@@ -34,6 +34,8 @@ interface LessonContentViewProps {
   completing: boolean
   regenerating: boolean
   nextNodes: KnodeInfo[]
+  noteState: "closed" | "open" | "minimized"
+  onNoteStateChange: (state: "closed" | "open" | "minimized") => void
 }
 
 const TAB_CONFIG = [
@@ -61,10 +63,10 @@ export function LessonContentView({
   completing,
   regenerating,
   nextNodes,
+  noteState,
+  onNoteStateChange: setNoteState,
 }: LessonContentViewProps) {
   const [activeTab, setActiveTab] = useState(0)
-  const [pagination, setPagination] = useState<{ currentPage: number; totalPages: number; goTo: (i: number) => void } | null>(null)
-  const [noteState, setNoteState] = useState<"closed" | "open" | "minimized">("closed")
   const [noteStatus, setNoteStatus] = useState<"idle" | "saving" | "saved">("idle")
   const [notePreviewMode, setNotePreviewMode] = useState<NotePreviewMode>("edit")
   const [noteWidth, setNoteWidth] = useState(DEFAULT_NOTE_WIDTH)
@@ -84,7 +86,6 @@ export function LessonContentView({
 
   // Wide-layout tabs: full-width content (no sidebar)
   const isWideTab = ["interactive_lab", "examples", "practice", "resources"].includes(activeKey)
-  const showPagination = !isWideTab && pagination && pagination.totalPages > 1
 
   const handleDragMouseDown = useCallback((e: React.MouseEvent) => {
     e.preventDefault()
@@ -183,6 +184,7 @@ export function LessonContentView({
 
         {/* Content column */}
         <div className="flex-1 min-w-0 flex flex-col min-h-0">
+          {/* Scrollable content */}
           <div className="flex-1 min-h-0 overflow-y-auto">
             {availableTabs.length > 0 ? (
               <div className={isWideTab ? "p-5 h-full" : "flex min-h-full"}>
@@ -215,7 +217,6 @@ export function LessonContentView({
                           const tabKey = availableTabs[activeTab]?.key ?? availableTabs[0]?.key
                           onPageChange?.(tabKey, pageIndex, pageContent)
                         }}
-                        onPaginationState={setPagination}
                       />
                     </div>
 
@@ -247,9 +248,9 @@ export function LessonContentView({
                         <div>
                           <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-2">下一步</p>
                           <div className="flex flex-col gap-1.5">
-                            {nextNodes.map((node) => (
+                            {nextNodes.map((node, idx) => (
                               <button
-                                key={node.id}
+                                key={`${node.id}-${idx}`}
                                 onClick={() => onNavigateToNode(node.id)}
                                 className="flex items-center gap-2 rounded-md border bg-background px-3 py-2 text-sm hover:bg-accent hover:border-primary/40 transition-colors text-left w-full"
                               >
@@ -270,51 +271,8 @@ export function LessonContentView({
                 暂无内容
               </div>
             )}
-
-            {/* Sticky pagination bar — fixed to bottom of scroll area */}
-            {showPagination && pagination && (
-              <div className="sticky bottom-0 flex items-center justify-between px-5 py-2 border-t bg-background/95 backdrop-blur-sm">
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => pagination.goTo(pagination.currentPage - 1)}
-                  disabled={pagination.currentPage === 0}
-                  className="gap-1"
-                >
-                  <ChevronLeft className="h-4 w-4" />
-                  上一页
-                </Button>
-                <div className="flex items-center gap-2">
-                  <div className="flex items-center gap-1.5">
-                    {Array.from({ length: pagination.totalPages }).map((_, i) => (
-                      <button
-                        key={i}
-                        onClick={() => pagination.goTo(i)}
-                        className={`rounded-full transition-all ${
-                          i === pagination.currentPage
-                            ? "h-2 w-5 bg-primary"
-                            : "h-2 w-2 bg-muted-foreground/30 hover:bg-muted-foreground/50"
-                        }`}
-                      />
-                    ))}
-                  </div>
-                  <span className="text-xs text-muted-foreground tabular-nums">
-                    {pagination.currentPage + 1} / {pagination.totalPages}
-                  </span>
-                </div>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => pagination.goTo(pagination.currentPage + 1)}
-                  disabled={pagination.currentPage === pagination.totalPages - 1}
-                  className="gap-1"
-                >
-                  下一页
-                  <ChevronRight className="h-4 w-4" />
-                </Button>
-              </div>
-            )}
           </div>
+
         </div>
 
         {/* Note panel (side drawer) */}
@@ -402,35 +360,6 @@ export function LessonContentView({
         </Button>
       </div>
 
-      {/* Note FAB */}
-      {noteState === "closed" && (
-        <button
-          onClick={() => setNoteState("open")}
-          className="fixed bottom-[88px] right-6 z-50 h-14 w-14 rounded-full bg-amber-500 text-white shadow-lg hover:bg-amber-500/90 transition-colors flex items-center justify-center"
-          title="笔记"
-        >
-          <NotebookPen className="h-6 w-6" />
-        </button>
-      )}
-
-      {/* Minimized note pill */}
-      {noteState === "minimized" && (
-        <div className="fixed bottom-[88px] right-6 z-50 flex items-center gap-2">
-          <button
-            onClick={() => setNoteState("open")}
-            className="flex items-center gap-2 rounded-full bg-secondary text-secondary-foreground px-4 py-2 shadow-lg hover:bg-secondary/80 text-sm font-medium transition-colors"
-          >
-            <NotebookPen className="h-4 w-4" />
-            笔记
-          </button>
-          <button
-            onClick={() => setNoteState("closed")}
-            className="h-8 w-8 rounded-full flex items-center justify-center hover:bg-muted transition-colors"
-          >
-            <X className="h-4 w-4" />
-          </button>
-        </div>
-      )}
     </div>
   )
 }

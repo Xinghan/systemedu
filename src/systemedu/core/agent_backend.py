@@ -1,11 +1,10 @@
 """Pluggable agent execution backends.
 
-Provides an abstract base class and two implementations:
-- LangGraphBackend: the original hand-built LangGraph state machine (default)
-- DeepAgentBackend: uses deepagents framework for planning/subagent capabilities
+Provides an abstract base class and a DeepAgentBackend implementation
+that uses the deepagents framework for all agent execution.
 
 Usage:
-    backend = create_backend()  # auto-detect
+    backend = create_backend()
     response = await backend.process(messages, system_prompt, tools, tool_executor)
 """
 
@@ -13,28 +12,13 @@ import logging
 from abc import ABC, abstractmethod
 from collections.abc import AsyncGenerator
 
-from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
-from langgraph.graph import END, START, StateGraph
-from langgraph.graph.message import add_messages
-from typing_extensions import Annotated, TypedDict
+from deepagents import create_deep_agent
+from langchain_core.messages import AIMessage, SystemMessage, ToolMessage
 
 from .config import get_config
 from .llm_client import get_llm
 
 logger = logging.getLogger(__name__)
-
-# Max tool-call iterations before stopping
-MAX_ITERATIONS = 10
-
-
-class AgentState(TypedDict):
-    """State schema for the LangGraph agent."""
-
-    messages: Annotated[list, add_messages]
-    user_id: str
-    session_id: str
-    memory_context: str
-    iteration_count: int
 
 
 class AgentBackend(ABC):
@@ -58,125 +42,25 @@ class AgentBackend(ABC):
         self,
         messages: list,
         system_prompt: str,
-    ) -> AsyncGenerator[str, None]:
-        """Stream response chunks."""
-        ...
-        # Make this a proper async generator
-        yield ""  # pragma: no cover
-
-
-class LangGraphBackend(AgentBackend):
-    """Backend using a hand-built LangGraph state machine.
-
-    Implements: retrieve_memory → agent → (execute_tools → agent)* → store_memory → END.
-    Memory retrieve/store is handled externally by AgentRuntime, so this backend
-    only deals with the agent ↔ tool loop.
-    """
-
-    def __init__(self, provider: str | None = None):
-        self.provider = provider
-
-    async def process(
-        self,
-        messages: list,
-        system_prompt: str,
-        tools: list[dict],
-        tool_executor,
+        tools: list[dict] | None = None,
+        tool_executor=None,
         user_id: str = "default",
         memory_context: str = "",
-    ) -> str:
-        graph = self._build_graph(system_prompt, tools, tool_executor, memory_context)
+    ) -> AsyncGenerator[dict, None]:
+        """Stream structured events with optional tool support.
 
-        initial_state: AgentState = {
-            "messages": messages,
-            "user_id": user_id,
-            "session_id": "",
-            "memory_context": memory_context,
-            "iteration_count": 0,
-        }
-
-        result = await graph.ainvoke(initial_state)
-
-        # Extract final AI response
-        for msg in reversed(result["messages"]):
-            if isinstance(msg, AIMessage) and msg.content and not msg.tool_calls:
-                return msg.content
-
-        return "抱歉，我执行了太多步骤。请尝试简化你的请求。"
-
-    async def stream(
-        self,
-        messages: list,
-        system_prompt: str,
-    ) -> AsyncGenerator[str, None]:
-        llm = get_llm(provider=self.provider, streaming=True)
-        lc_messages = [SystemMessage(content=system_prompt)] + list(messages)
-
-        async for chunk in llm.astream(lc_messages):
-            if chunk.content:
-                yield chunk.content
-
-    def _build_graph(self, system_prompt, tools, tool_executor, memory_context):
-        """Build the LangGraph state machine for agent ↔ tool loop."""
-        provider = self.provider
-
-        async def agent_node(state: AgentState) -> dict:
-            llm = get_llm(provider=provider, streaming=False)
-            if tools:
-                llm = llm.bind_tools(tools)
-
-            sys_prompt = system_prompt
-            mem_ctx = state.get("memory_context") or memory_context
-            if mem_ctx:
-                sys_prompt += f"\n\n## 相关记忆\n{mem_ctx}"
-
-            msgs = [SystemMessage(content=sys_prompt)] + list(state["messages"])
-            response = await llm.ainvoke(msgs)
-            return {
-                "messages": [response],
-                "iteration_count": state.get("iteration_count", 0) + 1,
-            }
-
-        async def execute_tools(state: AgentState) -> dict:
-            last_msg = state["messages"][-1]
-            tool_messages = []
-            for tool_call in last_msg.tool_calls:
-                tool_name = tool_call["name"]
-                tool_args = tool_call["args"]
-                logger.info(f"Calling tool: {tool_name}({tool_args})")
-                result = await tool_executor.execute(tool_name, tool_args)
-                logger.info(f"Tool result: {result[:200]}...")
-                tool_messages.append(
-                    ToolMessage(content=result, tool_call_id=tool_call["id"])
-                )
-            return {"messages": tool_messages}
-
-        def should_continue(state: AgentState) -> str:
-            last_msg = state["messages"][-1]
-            if (
-                isinstance(last_msg, AIMessage)
-                and last_msg.tool_calls
-                and state.get("iteration_count", 0) < MAX_ITERATIONS
-            ):
-                return "execute_tools"
-            return END
-
-        graph = StateGraph(AgentState)
-        graph.add_node("agent", agent_node)
-        graph.add_node("execute_tools", execute_tools)
-
-        graph.add_edge(START, "agent")
-        graph.add_conditional_edges("agent", should_continue)
-        graph.add_edge("execute_tools", "agent")
-
-        return graph.compile()
+        Yields dicts with a "type" key:
+          {"type": "chunk", "content": "..."}       — text content
+          {"type": "tool_call", "name": "...", "args": {...}}  — tool invocation
+          {"type": "tool_result", "name": "...", "result": "..."}  — tool result
+        """
+        ...
+        # Make this a proper async generator
+        yield {"type": "chunk", "content": ""}  # pragma: no cover
 
 
 class DeepAgentBackend(AgentBackend):
-    """Backend using deepagents framework for advanced agent capabilities.
-
-    Requires: pip install deepagents>=0.4.11
-    """
+    """Backend using deepagents framework for agent capabilities."""
 
     def __init__(self, provider: str | None = None):
         self.provider = provider
@@ -190,8 +74,6 @@ class DeepAgentBackend(AgentBackend):
         user_id: str = "default",
         memory_context: str = "",
     ) -> str:
-        from deepagents import create_deep_agent
-
         llm = get_llm(provider=self.provider, streaming=False)
 
         # Convert ToolExecutor custom tools to @tool functions for deepagents
@@ -221,17 +103,58 @@ class DeepAgentBackend(AgentBackend):
         self,
         messages: list,
         system_prompt: str,
-    ) -> AsyncGenerator[str, None]:
-        from deepagents import create_deep_agent
-
+        tools: list[dict] | None = None,
+        tool_executor=None,
+        user_id: str = "default",
+        memory_context: str = "",
+    ) -> AsyncGenerator[dict, None]:
         llm = get_llm(provider=self.provider, streaming=True)
-        agent = create_deep_agent(model=llm, system_prompt=system_prompt)
 
+        full_prompt = system_prompt
+        if memory_context:
+            full_prompt += f"\n\n## 相关记忆\n{memory_context}"
+
+        # Convert tools if provided
+        custom_tools = []
+        if tools and tool_executor:
+            custom_tools = _convert_tools(tools, tool_executor)
+
+        agent = create_deep_agent(
+            model=llm,
+            tools=custom_tools or None,
+            system_prompt=full_prompt,
+        )
+
+        pending_tool_calls: dict[str, str] = {}
         async for event in agent.astream_events({"messages": messages}, version="v2"):
-            if event["event"] == "on_chat_model_stream":
+            if event["event"] == "on_chat_model_end":
+                output = event["data"].get("output")
+                if isinstance(output, AIMessage) and getattr(output, "tool_calls", None):
+                    for tc in output.tool_calls:
+                        pending_tool_calls[tc["id"]] = tc["name"]
+                        yield {
+                            "type": "tool_call",
+                            "name": tc["name"],
+                            "args": tc["args"],
+                        }
+            elif event["event"] == "on_tool_end":
+                output = event["data"].get("output")
+                tool_name = event.get("name", "")
+                result_content = str(output) if output else ""
+                if isinstance(output, ToolMessage):
+                    result_content = output.content
+                    tc_id = output.tool_call_id
+                    if tc_id in pending_tool_calls:
+                        tool_name = pending_tool_calls.pop(tc_id)
+                yield {
+                    "type": "tool_result",
+                    "name": tool_name,
+                    "result": result_content[:500],
+                }
+            elif event["event"] == "on_chat_model_stream":
                 chunk = event["data"]["chunk"]
-                if chunk.content:
-                    yield chunk.content
+                if chunk.content and not getattr(chunk, "tool_calls", None):
+                    yield {"type": "chunk", "content": chunk.content}
 
 
 # --- Tool conversion helpers ---
@@ -257,7 +180,6 @@ def _convert_tools(tool_schemas: list[dict], tool_executor) -> list:
         if name in _BUILTIN_TOOL_NAMES:
             continue
 
-        params = func_info.get("parameters", {})
         description = func_info.get("description", name)
 
         # Create a wrapper that calls tool_executor.execute
@@ -270,7 +192,6 @@ def _convert_tools(tool_schemas: list[dict], tool_executor) -> list:
 
         handler = _make_handler(name)
 
-        # Build args_schema from parameters if possible
         tool = StructuredTool.from_function(
             coroutine=handler,
             name=name,
@@ -284,31 +205,14 @@ def _convert_tools(tool_schemas: list[dict], tool_executor) -> list:
 # --- Factory ---
 
 
-def get_default_backend() -> str:
-    """Auto-detect: return 'deepagents' if installed, else 'langgraph'."""
-    try:
-        import deepagents  # noqa: F401
-
-        return "deepagents"
-    except ImportError:
-        return "langgraph"
-
-
 def create_backend(
     backend_type: str | None = None,
     provider: str | None = None,
 ) -> AgentBackend:
-    """Factory: create the appropriate backend instance.
+    """Factory: create a DeepAgentBackend instance.
 
     Args:
-        backend_type: "deepagents", "langgraph", or None (auto-detect).
+        backend_type: Ignored (kept for backward compatibility).
         provider: LLM provider name.
     """
-    bt = backend_type or get_default_backend()
-    if bt == "auto":
-        bt = get_default_backend()
-
-    if bt == "deepagents":
-        return DeepAgentBackend(provider=provider)
-    else:
-        return LangGraphBackend(provider=provider)
+    return DeepAgentBackend(provider=provider)

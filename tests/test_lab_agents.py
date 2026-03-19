@@ -1,9 +1,10 @@
 """Tests for the 4-Agent lab pipeline: LabAnalyst, LabDesigner, LabCoder, LabReviewer."""
 
 import json
-from unittest.mock import MagicMock, call
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from langchain_core.messages import AIMessage
 
 from systemedu.agents.builtin.lab_analyst import LabAnalystAgent
 from systemedu.agents.builtin.lab_designer import LabDesignerAgent
@@ -12,25 +13,13 @@ from systemedu.agents.builtin.lab_reviewer import LabReviewerAgent
 from systemedu.education.lesson_generator import _generate_interactive_lab
 
 
-def _make_llm_mock(response: str) -> MagicMock:
-    """Create a mock LLM that returns the given response."""
-    mock = MagicMock()
-    resp = MagicMock()
-    resp.content = response
-    mock.invoke = MagicMock(return_value=resp)
-    return mock
-
-
-def _make_multi_llm_mock(responses: list[str]) -> MagicMock:
-    """Create a mock LLM that returns different responses for sequential calls."""
-    mock = MagicMock()
-    resps = []
-    for r in responses:
-        resp = MagicMock()
-        resp.content = r
-        resps.append(resp)
-    mock.invoke = MagicMock(side_effect=resps)
-    return mock
+def _make_agent_mock(response: str) -> MagicMock:
+    """Create a mock deep agent returning the given response."""
+    mock_agent = MagicMock()
+    mock_agent.ainvoke = AsyncMock(return_value={
+        "messages": [AIMessage(content=response)]
+    })
+    return mock_agent
 
 
 VALID_ANALYSIS = json.dumps({
@@ -161,18 +150,20 @@ VALID_HTML = (
 
 
 class TestLabAnalystAgent:
-    def test_analyze_success(self):
-        llm = _make_llm_mock(VALID_ANALYSIS)
-        analyst = LabAnalystAgent(llm=llm)
-        result = analyst.analyze("树叶分类", "学习分类", 3)
+    @pytest.mark.asyncio
+    async def test_analyze_success(self):
+        mock_agent = _make_agent_mock(VALID_ANALYSIS)
+        with patch("systemedu.agents.builtin.lab_analyst.create_deep_agent", return_value=mock_agent):
+            analyst = LabAnalystAgent(llm=MagicMock())
+            result = await analyst.analyze("树叶分类", "学习分类", 3)
         assert result is not None
         assert result["best_interaction"] == "drag_classify"
         assert len(result["interactive_objects"]) == 4
 
-    def test_analyze_with_lesson_plan(self):
+    @pytest.mark.asyncio
+    async def test_analyze_with_lesson_plan(self):
         """Lesson plan guidance is injected into the prompt."""
-        llm = _make_llm_mock(VALID_ANALYSIS)
-        analyst = LabAnalystAgent(llm=llm)
+        mock_agent = _make_agent_mock(VALID_ANALYSIS)
         plan = {
             "lab_strategy": {
                 "interaction_type": "cause_effect",
@@ -181,215 +172,353 @@ class TestLabAnalystAgent:
                 "item_count": 4,
             }
         }
-        result = analyst.analyze("火箭发射", "学习火箭", 5, lesson_plan=plan)
+        with patch("systemedu.agents.builtin.lab_analyst.create_deep_agent", return_value=mock_agent):
+            analyst = LabAnalystAgent(llm=MagicMock())
+            result = await analyst.analyze("火箭发射", "学习火箭", 5, lesson_plan=plan)
         assert result is not None
-        # Check prompt contains plan guidance
-        prompt_text = llm.invoke.call_args[0][0][1].content
+        # Check ainvoke was called with a prompt containing plan guidance
+        call_args = mock_agent.ainvoke.call_args
+        messages = call_args[0][0]["messages"]
+        prompt_text = messages[0].content
         assert "策划师指引" in prompt_text
         assert "cause_effect" in prompt_text
 
-    def test_analyze_without_lesson_plan(self):
+    @pytest.mark.asyncio
+    async def test_analyze_without_lesson_plan(self):
         """Works fine without lesson plan."""
-        llm = _make_llm_mock(VALID_ANALYSIS)
-        analyst = LabAnalystAgent(llm=llm)
-        result = analyst.analyze("Test", "Summary", 3, lesson_plan=None)
+        mock_agent = _make_agent_mock(VALID_ANALYSIS)
+        with patch("systemedu.agents.builtin.lab_analyst.create_deep_agent", return_value=mock_agent):
+            analyst = LabAnalystAgent(llm=MagicMock())
+            result = await analyst.analyze("Test", "Summary", 3, lesson_plan=None)
         assert result is not None
-        prompt_text = llm.invoke.call_args[0][0][1].content
+        call_args = mock_agent.ainvoke.call_args
+        messages = call_args[0][0]["messages"]
+        prompt_text = messages[0].content
         assert "策划师指引" not in prompt_text
 
-    def test_invalid_interaction_defaults(self):
+    @pytest.mark.asyncio
+    async def test_invalid_interaction_defaults(self):
         """Invalid interaction type defaults to drag_classify."""
         analysis = json.loads(VALID_ANALYSIS)
         analysis["best_interaction"] = "unknown_type"
-        llm = _make_llm_mock(json.dumps(analysis, ensure_ascii=False))
-        analyst = LabAnalystAgent(llm=llm)
-        result = analyst.analyze("Test", "Summary", 3)
+        mock_agent = _make_agent_mock(json.dumps(analysis, ensure_ascii=False))
+        with patch("systemedu.agents.builtin.lab_analyst.create_deep_agent", return_value=mock_agent):
+            analyst = LabAnalystAgent(llm=MagicMock())
+            result = await analyst.analyze("Test", "Summary", 3)
         assert result["best_interaction"] == "drag_classify"
 
-    def test_analyze_click_select(self):
+    @pytest.mark.asyncio
+    async def test_analyze_click_select(self):
         """Analyst returns valid click_select analysis."""
-        llm = _make_llm_mock(CLICK_SELECT_ANALYSIS)
-        analyst = LabAnalystAgent(llm=llm)
-        result = analyst.analyze("识别哺乳动物", "根据特征识别", 3)
+        mock_agent = _make_agent_mock(CLICK_SELECT_ANALYSIS)
+        with patch("systemedu.agents.builtin.lab_analyst.create_deep_agent", return_value=mock_agent):
+            analyst = LabAnalystAgent(llm=MagicMock())
+            result = await analyst.analyze("识别哺乳动物", "根据特征识别", 3)
         assert result is not None
         assert result["best_interaction"] == "click_select"
         assert "questions" in result
 
-    def test_analyze_drag_sort(self):
+    @pytest.mark.asyncio
+    async def test_analyze_drag_sort(self):
         """Analyst returns valid drag_sort analysis."""
-        llm = _make_llm_mock(DRAG_SORT_ANALYSIS)
-        analyst = LabAnalystAgent(llm=llm)
-        result = analyst.analyze("食物链", "排序食物链", 5)
+        mock_agent = _make_agent_mock(DRAG_SORT_ANALYSIS)
+        with patch("systemedu.agents.builtin.lab_analyst.create_deep_agent", return_value=mock_agent):
+            analyst = LabAnalystAgent(llm=MagicMock())
+            result = await analyst.analyze("食物链", "排序食物链", 5)
         assert result is not None
         assert result["best_interaction"] == "drag_sort"
         assert "sortable_items" in result
         assert "sort_criteria" in result
 
-    def test_analyze_connect_match(self):
+    @pytest.mark.asyncio
+    async def test_analyze_connect_match(self):
         """Analyst returns valid connect_match analysis."""
-        llm = _make_llm_mock(CONNECT_MATCH_ANALYSIS)
-        analyst = LabAnalystAgent(llm=llm)
-        result = analyst.analyze("动物栖息地", "配对动物和栖息地", 4)
+        mock_agent = _make_agent_mock(CONNECT_MATCH_ANALYSIS)
+        with patch("systemedu.agents.builtin.lab_analyst.create_deep_agent", return_value=mock_agent):
+            analyst = LabAnalystAgent(llm=MagicMock())
+            result = await analyst.analyze("动物栖息地", "配对动物和栖息地", 4)
         assert result is not None
         assert result["best_interaction"] == "connect_match"
         assert "left_items" in result
         assert "right_items" in result
 
-    def test_analyze_cause_effect(self):
+    @pytest.mark.asyncio
+    async def test_analyze_cause_effect(self):
         """Analyst returns valid cause_effect analysis."""
-        llm = _make_llm_mock(CAUSE_EFFECT_ANALYSIS)
-        analyst = LabAnalystAgent(llm=llm)
-        result = analyst.analyze("火箭发射", "燃料与高度", 7)
+        mock_agent = _make_agent_mock(CAUSE_EFFECT_ANALYSIS)
+        with patch("systemedu.agents.builtin.lab_analyst.create_deep_agent", return_value=mock_agent):
+            analyst = LabAnalystAgent(llm=MagicMock())
+            result = await analyst.analyze("火箭发射", "燃料与高度", 7)
         assert result is not None
         assert result["best_interaction"] == "cause_effect"
         assert "controls" in result
         assert "effects" in result
 
-    def test_analyze_missing_type_fields_returns_none(self):
+    @pytest.mark.asyncio
+    async def test_analyze_missing_type_fields_returns_none(self):
         """Analyst returns None if type-specific fields are missing."""
-        # click_select without 'questions'
         bad = {"topic": "T", "core_concept": "C", "best_interaction": "click_select", "learning_goal": "G"}
-        llm = _make_llm_mock(json.dumps(bad))
-        analyst = LabAnalystAgent(llm=llm)
-        result = analyst.analyze("T", "S", 3)
+        mock_agent = _make_agent_mock(json.dumps(bad))
+        with patch("systemedu.agents.builtin.lab_analyst.create_deep_agent", return_value=mock_agent):
+            analyst = LabAnalystAgent(llm=MagicMock())
+            result = await analyst.analyze("T", "S", 3)
         assert result is None
 
 
 class TestLabDesignerAgent:
-    def test_design_success(self):
+    @pytest.mark.asyncio
+    async def test_design_success(self):
         analysis = json.loads(VALID_ANALYSIS)
-        llm = _make_llm_mock(VALID_DESIGN)
-        designer = LabDesignerAgent(llm=llm)
-        result = designer.design(analysis, 3)
+        mock_agent = _make_agent_mock(VALID_DESIGN)
+        with patch("systemedu.agents.builtin.lab_designer.create_deep_agent", return_value=mock_agent):
+            designer = LabDesignerAgent(llm=MagicMock())
+            result = await designer.design(analysis, 3)
         assert result is not None
         assert result["game_title"] == "树叶分类小能手"
         assert len(result["items"]) >= 1
 
-    def test_design_click_select(self):
+    @pytest.mark.asyncio
+    async def test_design_click_select(self):
         """Designer handles click_select analysis."""
         analysis = json.loads(CLICK_SELECT_ANALYSIS)
-        llm = _make_llm_mock(CLICK_SELECT_DESIGN)
-        designer = LabDesignerAgent(llm=llm)
-        result = designer.design(analysis, 3)
+        mock_agent = _make_agent_mock(CLICK_SELECT_DESIGN)
+        with patch("systemedu.agents.builtin.lab_designer.create_deep_agent", return_value=mock_agent):
+            designer = LabDesignerAgent(llm=MagicMock())
+            result = await designer.design(analysis, 3)
         assert result is not None
         assert result["interaction_type"] == "click_select"
         assert "questions" in result
 
-    def test_design_invalid_json(self):
-        analysis = json.loads(VALID_ANALYSIS)
-        llm = _make_llm_mock("not json")
-        designer = LabDesignerAgent(llm=llm)
-        result = designer.design(analysis, 3)
+    @pytest.mark.asyncio
+    async def test_design_invalid_json(self):
+        mock_agent = _make_agent_mock("not json")
+        with patch("systemedu.agents.builtin.lab_designer.create_deep_agent", return_value=mock_agent):
+            designer = LabDesignerAgent(llm=MagicMock())
+            result = await designer.design(json.loads(VALID_ANALYSIS), 3)
         assert result is None
 
 
 class TestLabCoderAgent:
-    def test_generate_success(self):
+    @pytest.mark.asyncio
+    async def test_generate_success(self):
         design = json.loads(VALID_DESIGN)
-        llm = _make_llm_mock(VALID_HTML)
-        coder = LabCoderAgent(llm=llm)
-        result = coder.generate(design, 3)
+        mock_agent = _make_agent_mock(VALID_HTML)
+        with patch("systemedu.agents.builtin.lab_coder.create_deep_agent", return_value=mock_agent):
+            coder = LabCoderAgent(llm=MagicMock())
+            result = await coder.generate(design, 3)
         assert "<html" in result
         assert "react" in result.lower()
 
-    def test_generate_invalid_html(self):
-        design = json.loads(VALID_DESIGN)
-        llm = _make_llm_mock("just plain text")
-        coder = LabCoderAgent(llm=llm)
-        result = coder.generate(design, 3)
+    @pytest.mark.asyncio
+    async def test_generate_invalid_html(self):
+        mock_agent = _make_agent_mock("just plain text")
+        with patch("systemedu.agents.builtin.lab_coder.create_deep_agent", return_value=mock_agent):
+            coder = LabCoderAgent(llm=MagicMock())
+            result = await coder.generate(json.loads(VALID_DESIGN), 3)
         assert result == ""
 
 
 class TestLabPipeline:
-    def test_full_pipeline_success(self):
+    @pytest.mark.asyncio
+    async def test_full_pipeline_success(self):
         """Full 4-agent pipeline produces HTML."""
-        llm = _make_multi_llm_mock([VALID_ANALYSIS, VALID_DESIGN, VALID_HTML, VALID_HTML])
-        result = _generate_interactive_lab("树叶分类", "学习分类", 3, llm)
+        mock_analyst = _make_agent_mock(VALID_ANALYSIS)
+        mock_designer = _make_agent_mock(VALID_DESIGN)
+        mock_coder = _make_agent_mock(VALID_HTML)
+        mock_reviewer = _make_agent_mock(VALID_HTML)
+        with (
+            patch("systemedu.agents.builtin.lab_analyst.create_deep_agent", return_value=mock_analyst),
+            patch("systemedu.agents.builtin.lab_designer.create_deep_agent", return_value=mock_designer),
+            patch("systemedu.agents.builtin.lab_coder.create_deep_agent", return_value=mock_coder),
+            patch("systemedu.agents.builtin.lab_reviewer.create_deep_agent", return_value=mock_reviewer),
+        ):
+            result = await _generate_interactive_lab("树叶分类", "学习分类", 3, MagicMock())
         assert "<html" in result
-        # analyst + designer + coder + reviewer = 4
-        assert llm.invoke.call_count == 4
 
-    def test_pipeline_with_lesson_plan(self):
+    @pytest.mark.asyncio
+    async def test_pipeline_with_lesson_plan(self):
         """Pipeline passes lesson plan to analyst."""
-        llm = _make_multi_llm_mock([VALID_ANALYSIS, VALID_DESIGN, VALID_HTML, VALID_HTML])
+        mock_analyst = _make_agent_mock(VALID_ANALYSIS)
+        mock_designer = _make_agent_mock(VALID_DESIGN)
+        mock_coder = _make_agent_mock(VALID_HTML)
+        mock_reviewer = _make_agent_mock(VALID_HTML)
         plan = {"lab_strategy": {"interaction_type": "drag_classify"}}
-        result = _generate_interactive_lab("Test", "Summary", 3, llm, lesson_plan=plan)
+        with (
+            patch("systemedu.agents.builtin.lab_analyst.create_deep_agent", return_value=mock_analyst),
+            patch("systemedu.agents.builtin.lab_designer.create_deep_agent", return_value=mock_designer),
+            patch("systemedu.agents.builtin.lab_coder.create_deep_agent", return_value=mock_coder),
+            patch("systemedu.agents.builtin.lab_reviewer.create_deep_agent", return_value=mock_reviewer),
+        ):
+            result = await _generate_interactive_lab("Test", "Summary", 3, MagicMock(), lesson_plan=plan)
         assert "<html" in result
-        # First call is analyst — check plan guidance in prompt
-        analyst_prompt = llm.invoke.call_args_list[0][0][0][1].content
-        assert "策划师指引" in analyst_prompt
+        # Analyst ainvoke was called with plan guidance in prompt
+        call_args = mock_analyst.ainvoke.call_args
+        messages = call_args[0][0]["messages"]
+        prompt_text = messages[0].content
+        assert "策划师指引" in prompt_text
 
-    def test_pipeline_analyst_failure(self):
+    @pytest.mark.asyncio
+    async def test_pipeline_analyst_failure(self):
         """If analyst fails, pipeline returns empty."""
-        llm = _make_llm_mock("not valid json")
-        result = _generate_interactive_lab("Test", "Summary", 3, llm)
+        mock_analyst = _make_agent_mock("not valid json")
+        with patch("systemedu.agents.builtin.lab_analyst.create_deep_agent", return_value=mock_analyst):
+            result = await _generate_interactive_lab("Test", "Summary", 3, MagicMock())
         assert result == ""
 
-    def test_pipeline_designer_failure(self):
+    @pytest.mark.asyncio
+    async def test_pipeline_designer_failure(self):
         """If designer fails, pipeline returns empty."""
-        llm = _make_multi_llm_mock([VALID_ANALYSIS, "not json"])
-        result = _generate_interactive_lab("Test", "Summary", 3, llm)
+        mock_analyst = _make_agent_mock(VALID_ANALYSIS)
+        mock_designer = _make_agent_mock("not json")
+        with (
+            patch("systemedu.agents.builtin.lab_analyst.create_deep_agent", return_value=mock_analyst),
+            patch("systemedu.agents.builtin.lab_designer.create_deep_agent", return_value=mock_designer),
+        ):
+            result = await _generate_interactive_lab("Test", "Summary", 3, MagicMock())
         assert result == ""
 
-    def test_pipeline_progress_callback(self):
+    @pytest.mark.asyncio
+    async def test_pipeline_progress_callback(self):
         """Progress callback is invoked for each stage including reviewer."""
-        llm = _make_multi_llm_mock([VALID_ANALYSIS, VALID_DESIGN, VALID_HTML, VALID_HTML])
+        mock_analyst = _make_agent_mock(VALID_ANALYSIS)
+        mock_designer = _make_agent_mock(VALID_DESIGN)
+        mock_coder = _make_agent_mock(VALID_HTML)
+        mock_reviewer = _make_agent_mock(VALID_HTML)
         callbacks = []
+
         def callback(step, status, preview):
             callbacks.append((step, status))
 
-        _generate_interactive_lab("Test", "Summary", 3, llm, progress_callback=callback)
+        with (
+            patch("systemedu.agents.builtin.lab_analyst.create_deep_agent", return_value=mock_analyst),
+            patch("systemedu.agents.builtin.lab_designer.create_deep_agent", return_value=mock_designer),
+            patch("systemedu.agents.builtin.lab_coder.create_deep_agent", return_value=mock_coder),
+            patch("systemedu.agents.builtin.lab_reviewer.create_deep_agent", return_value=mock_reviewer),
+        ):
+            await _generate_interactive_lab("Test", "Summary", 3, MagicMock(), progress_callback=callback)
 
         step_names = [c[0] for c in callbacks]
         assert "lab_analyst" in step_names
         assert "lab_designer" in step_names
         assert "lab_coder" in step_names
         assert "lab_reviewer" in step_names
-        # Check status progression
         assert ("lab_analyst", "in_progress") in callbacks
         assert ("lab_analyst", "completed") in callbacks
         assert ("lab_reviewer", "in_progress") in callbacks
         assert ("lab_reviewer", "completed") in callbacks
 
-    def test_pipeline_progress_callback_on_failure(self):
+    @pytest.mark.asyncio
+    async def test_pipeline_progress_callback_on_failure(self):
         """Progress callback reports failure when analyst fails."""
-        llm = _make_llm_mock("not json")
+        mock_analyst = _make_agent_mock("not json")
         callbacks = []
+
         def callback(step, status, preview):
             callbacks.append((step, status))
 
-        _generate_interactive_lab("Test", "Summary", 3, llm, progress_callback=callback)
+        with patch("systemedu.agents.builtin.lab_analyst.create_deep_agent", return_value=mock_analyst):
+            await _generate_interactive_lab("Test", "Summary", 3, MagicMock(), progress_callback=callback)
+
         assert ("lab_analyst", "failed") in callbacks
 
-    def test_pipeline_retry_on_analyst_failure(self):
+    @pytest.mark.asyncio
+    async def test_pipeline_retry_on_analyst_failure(self):
         """Pipeline retries analyst once before failing."""
         # First call returns invalid, second returns valid
-        llm = _make_multi_llm_mock(["not json", VALID_ANALYSIS, VALID_DESIGN, VALID_HTML, VALID_HTML])
-        result = _generate_interactive_lab("Test", "Summary", 3, llm)
-        assert "<html" in result
-        # 2 analyst calls + 1 designer + 1 coder + 1 reviewer = 5
-        assert llm.invoke.call_count == 5
+        mock_analyst_bad = _make_agent_mock("not json")
+        mock_analyst_good = _make_agent_mock(VALID_ANALYSIS)
+        mock_designer = _make_agent_mock(VALID_DESIGN)
+        mock_coder = _make_agent_mock(VALID_HTML)
+        mock_reviewer = _make_agent_mock(VALID_HTML)
 
-    def test_pipeline_retry_on_designer_failure(self):
+        call_count = {"n": 0}
+        original_create = None
+
+        def analyst_side_effect(*args, **kwargs):
+            call_count["n"] += 1
+            if call_count["n"] == 1:
+                return mock_analyst_bad
+            return mock_analyst_good
+
+        with (
+            patch("systemedu.agents.builtin.lab_analyst.create_deep_agent", side_effect=analyst_side_effect),
+            patch("systemedu.agents.builtin.lab_designer.create_deep_agent", return_value=mock_designer),
+            patch("systemedu.agents.builtin.lab_coder.create_deep_agent", return_value=mock_coder),
+            patch("systemedu.agents.builtin.lab_reviewer.create_deep_agent", return_value=mock_reviewer),
+        ):
+            result = await _generate_interactive_lab("Test", "Summary", 3, MagicMock())
+        assert "<html" in result
+        assert call_count["n"] == 2  # analyst called twice
+
+    @pytest.mark.asyncio
+    async def test_pipeline_retry_on_designer_failure(self):
         """Pipeline retries designer once before failing."""
-        llm = _make_multi_llm_mock([VALID_ANALYSIS, "not json", VALID_DESIGN, VALID_HTML, VALID_HTML])
-        result = _generate_interactive_lab("Test", "Summary", 3, llm)
-        assert "<html" in result
-        assert llm.invoke.call_count == 5
+        mock_analyst = _make_agent_mock(VALID_ANALYSIS)
+        mock_designer_bad = _make_agent_mock("not json")
+        mock_designer_good = _make_agent_mock(VALID_DESIGN)
+        mock_coder = _make_agent_mock(VALID_HTML)
+        mock_reviewer = _make_agent_mock(VALID_HTML)
 
-    def test_pipeline_retry_on_coder_failure(self):
+        call_count = {"n": 0}
+
+        def designer_side_effect(*args, **kwargs):
+            call_count["n"] += 1
+            if call_count["n"] == 1:
+                return mock_designer_bad
+            return mock_designer_good
+
+        with (
+            patch("systemedu.agents.builtin.lab_analyst.create_deep_agent", return_value=mock_analyst),
+            patch("systemedu.agents.builtin.lab_designer.create_deep_agent", side_effect=designer_side_effect),
+            patch("systemedu.agents.builtin.lab_coder.create_deep_agent", return_value=mock_coder),
+            patch("systemedu.agents.builtin.lab_reviewer.create_deep_agent", return_value=mock_reviewer),
+        ):
+            result = await _generate_interactive_lab("Test", "Summary", 3, MagicMock())
+        assert "<html" in result
+        assert call_count["n"] == 2
+
+    @pytest.mark.asyncio
+    async def test_pipeline_retry_on_coder_failure(self):
         """Pipeline retries coder once before failing."""
-        llm = _make_multi_llm_mock([VALID_ANALYSIS, VALID_DESIGN, "not html", VALID_HTML, VALID_HTML])
-        result = _generate_interactive_lab("Test", "Summary", 3, llm)
-        assert "<html" in result
-        assert llm.invoke.call_count == 5
+        mock_analyst = _make_agent_mock(VALID_ANALYSIS)
+        mock_designer = _make_agent_mock(VALID_DESIGN)
+        mock_coder_bad = _make_agent_mock("not html")
+        mock_coder_good = _make_agent_mock(VALID_HTML)
+        mock_reviewer = _make_agent_mock(VALID_HTML)
 
-    def test_pipeline_click_select(self):
-        """Pipeline works with click_select interaction type."""
-        llm = _make_multi_llm_mock([CLICK_SELECT_ANALYSIS, CLICK_SELECT_DESIGN, VALID_HTML, VALID_HTML])
-        result = _generate_interactive_lab("识别哺乳动物", "识别特征", 3, llm)
+        call_count = {"n": 0}
+
+        def coder_side_effect(*args, **kwargs):
+            call_count["n"] += 1
+            if call_count["n"] == 1:
+                return mock_coder_bad
+            return mock_coder_good
+
+        with (
+            patch("systemedu.agents.builtin.lab_analyst.create_deep_agent", return_value=mock_analyst),
+            patch("systemedu.agents.builtin.lab_designer.create_deep_agent", return_value=mock_designer),
+            patch("systemedu.agents.builtin.lab_coder.create_deep_agent", side_effect=coder_side_effect),
+            patch("systemedu.agents.builtin.lab_reviewer.create_deep_agent", return_value=mock_reviewer),
+        ):
+            result = await _generate_interactive_lab("Test", "Summary", 3, MagicMock())
         assert "<html" in result
-        assert llm.invoke.call_count == 4
+        assert call_count["n"] == 2
+
+    @pytest.mark.asyncio
+    async def test_pipeline_click_select(self):
+        """Pipeline works with click_select interaction type."""
+        mock_analyst = _make_agent_mock(CLICK_SELECT_ANALYSIS)
+        mock_designer = _make_agent_mock(CLICK_SELECT_DESIGN)
+        mock_coder = _make_agent_mock(VALID_HTML)
+        mock_reviewer = _make_agent_mock(VALID_HTML)
+        with (
+            patch("systemedu.agents.builtin.lab_analyst.create_deep_agent", return_value=mock_analyst),
+            patch("systemedu.agents.builtin.lab_designer.create_deep_agent", return_value=mock_designer),
+            patch("systemedu.agents.builtin.lab_coder.create_deep_agent", return_value=mock_coder),
+            patch("systemedu.agents.builtin.lab_reviewer.create_deep_agent", return_value=mock_reviewer),
+        ):
+            result = await _generate_interactive_lab("识别哺乳动物", "识别特征", 3, MagicMock())
+        assert "<html" in result
 
 
 class TestValidateLabHtml:
@@ -494,82 +623,103 @@ class TestValidateLabHtml:
 
 
 class TestLabReviewerAgent:
-    def test_review_returns_fixed_html(self):
+    @pytest.mark.asyncio
+    async def test_review_returns_fixed_html(self):
         """Reviewer returns fixed HTML from LLM."""
         fixed_html = (
             "<!DOCTYPE html><html><head></head><body>"
             "<div id='root'>fixed content</div></body></html>"
         )
-        llm = _make_llm_mock(fixed_html)
-        reviewer = LabReviewerAgent(llm=llm)
-        result = reviewer.review(VALID_HTML, design=json.loads(VALID_DESIGN))
+        mock_agent = _make_agent_mock(fixed_html)
+        with patch("systemedu.agents.builtin.lab_reviewer.create_deep_agent", return_value=mock_agent):
+            reviewer = LabReviewerAgent(llm=MagicMock())
+            result = await reviewer.review(VALID_HTML, design=json.loads(VALID_DESIGN))
         assert "<html" in result
         assert "fixed content" in result
 
-    def test_review_strips_markdown_fences(self):
+    @pytest.mark.asyncio
+    async def test_review_strips_markdown_fences(self):
         """Reviewer strips markdown code fences from LLM output."""
         fenced = "```html\n" + VALID_HTML + "\n```"
-        llm = _make_llm_mock(fenced)
-        reviewer = LabReviewerAgent(llm=llm)
-        result = reviewer.review(VALID_HTML)
+        mock_agent = _make_agent_mock(fenced)
+        with patch("systemedu.agents.builtin.lab_reviewer.create_deep_agent", return_value=mock_agent):
+            reviewer = LabReviewerAgent(llm=MagicMock())
+            result = await reviewer.review(VALID_HTML)
         assert not result.startswith("```")
         assert "<html" in result
 
-    def test_review_keeps_original_on_invalid_output(self):
+    @pytest.mark.asyncio
+    async def test_review_keeps_original_on_invalid_output(self):
         """If reviewer returns non-HTML, keep original."""
-        llm = _make_llm_mock("Here are the bugs I found...")
-        reviewer = LabReviewerAgent(llm=llm)
-        result = reviewer.review(VALID_HTML)
+        mock_agent = _make_agent_mock("Here are the bugs I found...")
+        with patch("systemedu.agents.builtin.lab_reviewer.create_deep_agent", return_value=mock_agent):
+            reviewer = LabReviewerAgent(llm=MagicMock())
+            result = await reviewer.review(VALID_HTML)
         assert result == VALID_HTML
 
-    def test_review_keeps_original_on_short_output(self):
+    @pytest.mark.asyncio
+    async def test_review_keeps_original_on_short_output(self):
         """If reviewer output is suspiciously short, keep original."""
         short_html = "<html><div>x</div></html>"
-        llm = _make_llm_mock(short_html)
-        reviewer = LabReviewerAgent(llm=llm)
-        result = reviewer.review(VALID_HTML)
+        mock_agent = _make_agent_mock(short_html)
+        with patch("systemedu.agents.builtin.lab_reviewer.create_deep_agent", return_value=mock_agent):
+            reviewer = LabReviewerAgent(llm=MagicMock())
+            result = await reviewer.review(VALID_HTML)
         assert result == VALID_HTML
 
-    def test_review_keeps_original_on_exception(self):
+    @pytest.mark.asyncio
+    async def test_review_keeps_original_on_exception(self):
         """If LLM raises, return original HTML."""
-        llm = MagicMock()
-        llm.invoke = MagicMock(side_effect=RuntimeError("LLM error"))
-        reviewer = LabReviewerAgent(llm=llm)
-        result = reviewer.review(VALID_HTML)
+        mock_agent = MagicMock()
+        mock_agent.ainvoke = AsyncMock(side_effect=RuntimeError("LLM error"))
+        with patch("systemedu.agents.builtin.lab_reviewer.create_deep_agent", return_value=mock_agent):
+            reviewer = LabReviewerAgent(llm=MagicMock())
+            result = await reviewer.review(VALID_HTML)
         assert result == VALID_HTML
 
-    def test_review_empty_html_passthrough(self):
+    @pytest.mark.asyncio
+    async def test_review_empty_html_passthrough(self):
         """Empty HTML is returned as-is without calling LLM."""
-        llm = _make_llm_mock("should not be called")
-        reviewer = LabReviewerAgent(llm=llm)
-        result = reviewer.review("")
+        with patch("systemedu.agents.builtin.lab_reviewer.create_deep_agent") as mock_create:
+            reviewer = LabReviewerAgent(llm=MagicMock())
+            result = await reviewer.review("")
         assert result == ""
-        llm.invoke.assert_not_called()
+        mock_create.assert_not_called()
 
-    def test_review_without_design_context(self):
+    @pytest.mark.asyncio
+    async def test_review_without_design_context(self):
         """Review works without design context."""
-        llm = _make_llm_mock(VALID_HTML)
-        reviewer = LabReviewerAgent(llm=llm)
-        result = reviewer.review(VALID_HTML, design=None)
+        mock_agent = _make_agent_mock(VALID_HTML)
+        with patch("systemedu.agents.builtin.lab_reviewer.create_deep_agent", return_value=mock_agent):
+            reviewer = LabReviewerAgent(llm=MagicMock())
+            result = await reviewer.review(VALID_HTML, design=None)
         assert "<html" in result
 
-    def test_review_prompt_includes_design_context(self):
+    @pytest.mark.asyncio
+    async def test_review_prompt_includes_design_context(self):
         """Design context is included in the review prompt."""
-        llm = _make_llm_mock(VALID_HTML)
-        reviewer = LabReviewerAgent(llm=llm)
+        mock_agent = _make_agent_mock(VALID_HTML)
         design = json.loads(VALID_DESIGN)
-        reviewer.review(VALID_HTML, design=design)
-        prompt_text = llm.invoke.call_args[0][0][1].content
+        with patch("systemedu.agents.builtin.lab_reviewer.create_deep_agent", return_value=mock_agent):
+            reviewer = LabReviewerAgent(llm=MagicMock())
+            await reviewer.review(VALID_HTML, design=design)
+        call_args = mock_agent.ainvoke.call_args
+        messages = call_args[0][0]["messages"]
+        prompt_text = messages[0].content
         assert "树叶分类小能手" in prompt_text
         assert "drag_classify" in prompt_text
 
-    def test_review_prompt_includes_interaction_type(self):
+    @pytest.mark.asyncio
+    async def test_review_prompt_includes_interaction_type(self):
         """Review prompt mentions interaction type for type-specific checks."""
-        llm = _make_llm_mock(VALID_HTML)
-        reviewer = LabReviewerAgent(llm=llm)
+        mock_agent = _make_agent_mock(VALID_HTML)
         design = json.loads(CLICK_SELECT_DESIGN)
-        reviewer.review(VALID_HTML, design=design)
-        prompt_text = llm.invoke.call_args[0][0][1].content
+        with patch("systemedu.agents.builtin.lab_reviewer.create_deep_agent", return_value=mock_agent):
+            reviewer = LabReviewerAgent(llm=MagicMock())
+            await reviewer.review(VALID_HTML, design=design)
+        call_args = mock_agent.ainvoke.call_args
+        messages = call_args[0][0]["messages"]
+        prompt_text = messages[0].content
         assert "click_select" in prompt_text
 
 
@@ -658,17 +808,20 @@ ANIMATED_STORY_HTML = (
 
 
 class TestAnimatedStoryMode:
-    def test_analyst_accepts_animated_story(self):
+    @pytest.mark.asyncio
+    async def test_analyst_accepts_animated_story(self):
         """LabAnalystAgent accepts animated_story as a valid interaction type."""
-        llm = _make_llm_mock(ANIMATED_STORY_ANALYSIS)
-        analyst = LabAnalystAgent(llm=llm)
-        result = analyst.analyze("认识地址栏与搜索框", "区分地址栏和搜索框", 2)
+        mock_agent = _make_agent_mock(ANIMATED_STORY_ANALYSIS)
+        with patch("systemedu.agents.builtin.lab_analyst.create_deep_agent", return_value=mock_agent):
+            analyst = LabAnalystAgent(llm=MagicMock())
+            result = await analyst.analyze("认识地址栏与搜索框", "区分地址栏和搜索框", 2)
         assert result is not None
         assert result["best_interaction"] == "animated_story"
         assert "scene_description" in result
         assert "animation_steps" in result
 
-    def test_analyst_animated_story_missing_steps_returns_none(self):
+    @pytest.mark.asyncio
+    async def test_analyst_animated_story_missing_steps_returns_none(self):
         """Analyst returns None if animated_story is missing animation_steps."""
         bad = json.dumps({
             "topic": "认识地址栏",
@@ -678,23 +831,28 @@ class TestAnimatedStoryMode:
             "learning_goal": "认识地址栏",
             # missing animation_steps
         }, ensure_ascii=False)
-        llm = _make_llm_mock(bad)
-        analyst = LabAnalystAgent(llm=llm)
-        result = analyst.analyze("认识地址栏", "了解地址栏", 2)
+        mock_agent = _make_agent_mock(bad)
+        with patch("systemedu.agents.builtin.lab_analyst.create_deep_agent", return_value=mock_agent):
+            analyst = LabAnalystAgent(llm=MagicMock())
+            result = await analyst.analyze("认识地址栏", "了解地址栏", 2)
         assert result is None
 
-    def test_pipeline_animated_story_end_to_end(self):
+    @pytest.mark.asyncio
+    async def test_pipeline_animated_story_end_to_end(self):
         """Full pipeline works with animated_story interaction type."""
-        llm = _make_multi_llm_mock([
-            ANIMATED_STORY_ANALYSIS,
-            ANIMATED_STORY_DESIGN,
-            ANIMATED_STORY_HTML,
-            ANIMATED_STORY_HTML,
-        ])
-        result = _generate_interactive_lab("认识地址栏与搜索框", "区分地址栏和搜索框", 2, llm)
+        mock_analyst = _make_agent_mock(ANIMATED_STORY_ANALYSIS)
+        mock_designer = _make_agent_mock(ANIMATED_STORY_DESIGN)
+        mock_coder = _make_agent_mock(ANIMATED_STORY_HTML)
+        mock_reviewer = _make_agent_mock(ANIMATED_STORY_HTML)
+        with (
+            patch("systemedu.agents.builtin.lab_analyst.create_deep_agent", return_value=mock_analyst),
+            patch("systemedu.agents.builtin.lab_designer.create_deep_agent", return_value=mock_designer),
+            patch("systemedu.agents.builtin.lab_coder.create_deep_agent", return_value=mock_coder),
+            patch("systemedu.agents.builtin.lab_reviewer.create_deep_agent", return_value=mock_reviewer),
+        ):
+            result = await _generate_interactive_lab("认识地址栏与搜索框", "区分地址栏和搜索框", 2, MagicMock())
         assert "<html" in result
         assert "anime" in result
-        assert llm.invoke.call_count == 4
 
     def test_validate_animated_story_warns_no_anime(self):
         """Validator warns if animated_story HTML lacks anime.js."""

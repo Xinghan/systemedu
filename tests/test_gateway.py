@@ -1011,11 +1011,15 @@ class TestGatewayEnrollment:
 class TestGatewayChatUserId:
     def test_chat_with_user_id(self, config_env):
         """POST /api/chat with user_id should pass it to process_message."""
-        mock_llm = MagicMock()
-        mock_llm.ainvoke = AsyncMock(return_value=AIMessage(content="hello user"))
-        mock_llm.bind_tools.return_value = mock_llm
+        mock_agent = MagicMock()
+        mock_agent.ainvoke = AsyncMock(return_value={
+            "messages": [AIMessage(content="hello user")]
+        })
 
-        with patch("systemedu.core.agent_backend.get_llm", return_value=mock_llm):
+        with (
+            patch("systemedu.core.agent_backend.get_llm", return_value=MagicMock()),
+            patch("systemedu.core.agent_backend.create_deep_agent", return_value=mock_agent),
+        ):
             app = create_app()
             client = TestClient(app)
 
@@ -1029,11 +1033,15 @@ class TestGatewayChatUserId:
 
     def test_chat_default_user_id(self, config_env):
         """POST /api/chat without user_id should default to 'default'."""
-        mock_llm = MagicMock()
-        mock_llm.ainvoke = AsyncMock(return_value=AIMessage(content="ok"))
-        mock_llm.bind_tools.return_value = mock_llm
+        mock_agent = MagicMock()
+        mock_agent.ainvoke = AsyncMock(return_value={
+            "messages": [AIMessage(content="ok")]
+        })
 
-        with patch("systemedu.core.agent_backend.get_llm", return_value=mock_llm):
+        with (
+            patch("systemedu.core.agent_backend.get_llm", return_value=MagicMock()),
+            patch("systemedu.core.agent_backend.create_deep_agent", return_value=mock_agent),
+        ):
             app = create_app()
             client = TestClient(app)
 

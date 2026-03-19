@@ -134,7 +134,7 @@ export function PagedContentView({ content, onPageChange, onPaginationState, pro
 
   return (
     <div className="relative" ref={contentRef}>
-      {renderContent(pages[currentPage] ?? "")}
+      {renderContent(content)}
       {highlightsEnabled && (
         <HighlightToolbar onHighlight={handleHighlight} containerRef={contentRef} />
       )}

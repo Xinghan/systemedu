@@ -1,25 +1,29 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { Pickaxe, Flame, FlaskConical, Hammer, Sparkles, Package, Building, Bomb, Ruler, BrickWall, PaintBucket, Search, Lightbulb } from "lucide-react"
+import {
+  IconPickaxe, IconFlame, IconFlask, IconHammer, IconSparkles,
+  IconChest, IconCastle, IconBoom, IconBlueprint, IconBricks,
+  IconPaint, IconMagnify, IconBulb,
+} from "./cartoon-icons"
 
 const CRAFT_MESSAGES = [
-  { text: "正在采集知识原矿...", Icon: Pickaxe },
-  { text: "正在熔炼核心概念...", Icon: Flame },
-  { text: "正在合成示例材料...", Icon: FlaskConical },
-  { text: "正在锻造代码工具...", Icon: Hammer },
-  { text: "正在附魔练习卷轴...", Icon: Sparkles },
-  { text: "正在打包知识箱子...", Icon: Package },
-  { text: "即将完成建造...", Icon: Building },
+  { text: "正在采集知识原矿...", Icon: IconPickaxe },
+  { text: "正在熔炼核心概念...", Icon: IconFlame },
+  { text: "正在合成示例材料...", Icon: IconFlask },
+  { text: "正在锻造代码工具...", Icon: IconHammer },
+  { text: "正在附魔练习卷轴...", Icon: IconSparkles },
+  { text: "正在打包知识箱子...", Icon: IconChest },
+  { text: "即将完成建造...", Icon: IconCastle },
 ]
 
 const REGEN_MESSAGES = [
-  { text: "正在拆除旧建筑...", Icon: Bomb },
-  { text: "正在重新设计蓝图...", Icon: Ruler },
-  { text: "正在搬运新材料...", Icon: BrickWall },
-  { text: "正在重新建造中...", Icon: Building },
-  { text: "正在精装修...", Icon: PaintBucket },
-  { text: "最终检查中...", Icon: Search },
+  { text: "正在拆除旧建筑...", Icon: IconBoom },
+  { text: "正在重新设计蓝图...", Icon: IconBlueprint },
+  { text: "正在搬运新材料...", Icon: IconBricks },
+  { text: "正在重新建造中...", Icon: IconCastle },
+  { text: "正在精装修...", Icon: IconPaint },
+  { text: "最终检查中...", Icon: IconMagnify },
 ]
 
 interface LessonGeneratingProps {
@@ -118,10 +122,9 @@ export function LessonGenerating({ nodeTitle, isRegenerate = false }: LessonGene
               boxShadow: "inset -3px -3px 0 rgba(0,0,0,0.1), inset 3px 3px 0 rgba(255,255,255,0.1)",
             }}
           >
-            <Pickaxe
-              className="h-10 w-10 sm:h-12 sm:w-12 text-amber-600 dark:text-amber-400 animate-bounce"
+            <IconPickaxe
+              className="h-10 w-10 sm:h-12 sm:w-12 animate-bounce"
               style={{ animationDuration: "0.8s" }}
-              strokeWidth={2.5}
             />
           </div>
         </div>
@@ -169,7 +172,7 @@ export function LessonGenerating({ nodeTitle, isRegenerate = false }: LessonGene
         {/* Tip */}
         <div className="text-center">
           <div className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-muted/30 text-xs text-muted-foreground">
-            <Lightbulb className="h-3.5 w-3.5 shrink-0" />
+            <IconBulb className="h-3.5 w-3.5 shrink-0" />
             <span>AI 工匠正在为你精心打造课程内容，请稍候...</span>
           </div>
         </div>

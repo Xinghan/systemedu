@@ -92,10 +92,28 @@ systemedu/
 │       ├── project.yaml
 │       └── knowledge_tree.json
 ├── tests/                      # pytest test suite
+├── scripts/                    # Utility scripts (restart.sh, etc.)
 ├── backend/                    # Legacy Django backend
 ├── frontend/                   # Legacy Next.js frontend
 ├── adminsite/                  # Legacy admin service
 └── prd/                        # Product Requirements Documents
+```
+
+## Common Commands
+
+### Restart (Backend + Frontend)
+```bash
+./scripts/restart.sh
+```
+Kills existing processes on ports 18820 (backend) and 3000 (frontend), then starts both.
+
+- Backend: `source .venv/bin/activate && python -m systemedu.gateway.server` (port 18820)
+- Frontend: `cd web && npm run dev` (port 3000)
+- Note: 本机有 HTTP proxy (`http_proxy=http://127.0.0.1:7890`)，curl 测试时需加 `--noproxy '*'`
+
+### Run Tests
+```bash
+source .venv/bin/activate && python -m pytest tests/ -v
 ```
 
 ## Development Rules
@@ -108,9 +126,18 @@ systemedu/
 
 ### PRD Workflow
 - `prd/prd.md` is the master PRD — always keep it updated
-- Each major module gets its own PRD file (e.g., `prd/agents.md`, `prd/users.md`)
+- **每次完成新功能后，必须同步更新对应的 PRD 文件**（与代码提交同等重要）
+- PRD 目录结构：
+  - `prd/prd.md` — 总纲，Phase 进度、架构、API 总览
+  - `prd/frontend/` — Next.js Web UI 页面级 PRD
+  - `prd/backend/` — Gateway API + 核心服务（已从 Django 迁移到 Starlette + Pydantic）
+  - `prd/adminsite/` — Hub 管理后台（Phase 4，暂冻结）
 - **Ask for user approval before creating any new PRD file**
 - Never create separate change-description files; always update existing PRD files
+- PRD 更新检查清单：
+  1. `prd/prd.md` Phase checklist 打勾
+  2. Gateway API Endpoints 表格补全
+  3. 对应模块 PRD 文件更新功能描述
 
 ### Code Standards
 - Python: PEP 8, type hints, async where appropriate
@@ -118,6 +145,7 @@ systemedu/
 - Agents: BaseAgent subclass with `process()` method
 - Education: Pydantic models (no Django ORM in core package)
 - No over-engineering: build what's needed now, not what might be needed later
+- **禁止使用 emoji**：所有代码、prompt、UI 文案、PRD 中不使用任何 emoji 符号（包括 ✓✗★♥ 等 Unicode 符号）。反馈用纯文字或 SVG 图形表达。
 
 ### Development Loop (必须遵循)
 每个功能的开发必须严格按照以下循环执行：

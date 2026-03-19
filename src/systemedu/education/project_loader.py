@@ -193,6 +193,57 @@ def save_progress(
         logger.exception("Failed to save progress to DB")
 
 
+def create_project(
+    name: str,
+    title: str,
+    tree_data: dict,
+    meta: dict | None = None,
+) -> Path:
+    """Create a new project on disk with project.yaml and knowledge_tree.json.
+
+    Args:
+        name: Project slug (e.g. "tree-leaf-ai").
+        title: Human-readable project title.
+        tree_data: Knowledge tree in milestones format (already converted).
+        meta: Optional metadata dict (age_range, estimated_hours, etc.).
+
+    Returns:
+        Path to the created project directory.
+
+    Raises:
+        FileExistsError: If the project directory already exists.
+    """
+    project_dir = Path.cwd() / "projects" / name
+    if project_dir.exists():
+        raise FileExistsError(f"Project '{name}' already exists at {project_dir}")
+
+    project_dir.mkdir(parents=True)
+
+    # Build project.yaml data
+    project_data = {
+        "name": name,
+        "title": title,
+        "knowledge_tree": "./knowledge_tree.json",
+    }
+    if meta:
+        for key in ("description", "category", "age_range", "estimated_hours", "tags"):
+            if key in meta:
+                project_data[key] = meta[key]
+
+    (project_dir / "project.yaml").write_text(
+        yaml.dump(project_data, allow_unicode=True, default_flow_style=False),
+        encoding="utf-8",
+    )
+
+    # Write knowledge tree
+    (project_dir / "knowledge_tree.json").write_text(
+        json.dumps(tree_data, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+
+    return project_dir
+
+
 def load_project_context(
     name: str,
     user_id: str = "default",

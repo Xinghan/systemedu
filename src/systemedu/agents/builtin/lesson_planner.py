@@ -3,7 +3,8 @@
 import json
 import logging
 
-from langchain_core.messages import HumanMessage, SystemMessage
+from deepagents import create_deep_agent
+from langchain_core.messages import AIMessage, HumanMessage
 
 from systemedu.agents.base import BaseAgent
 
@@ -76,7 +77,7 @@ class LessonPlannerAgent(BaseAgent):
 
     async def process(self, message: str, context: dict | None = None) -> str:
         ctx = context or {}
-        result = self.plan(
+        result = await self.plan(
             node_title=message,
             node_summary=ctx.get("summary", ""),
             difficulty=ctx.get("difficulty", 5),
@@ -85,7 +86,7 @@ class LessonPlannerAgent(BaseAgent):
         )
         return json.dumps(result, ensure_ascii=False) if result else ""
 
-    def plan(
+    async def plan(
         self,
         node_title: str,
         node_summary: str,
@@ -118,11 +119,20 @@ class LessonPlannerAgent(BaseAgent):
         )
 
         try:
-            response = self._llm.invoke([
-                SystemMessage(content=PLANNER_SYSTEM_PROMPT),
-                HumanMessage(content=user_prompt),
-            ])
-            text = response.content.strip()
+            agent = create_deep_agent(
+                model=self._llm,
+                tools=[],
+                system_prompt=PLANNER_SYSTEM_PROMPT,
+            )
+            result = await agent.ainvoke({"messages": [HumanMessage(content=user_prompt)]})
+            # Extract last AIMessage content
+            text = ""
+            for msg in reversed(result["messages"]):
+                if isinstance(msg, AIMessage) and msg.content:
+                    text = msg.content
+                    break
+
+            text = text.strip()
             # Strip markdown code fences
             if text.startswith("```"):
                 lines = text.split("\n")

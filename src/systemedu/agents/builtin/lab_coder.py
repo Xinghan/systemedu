@@ -3,7 +3,8 @@
 import json
 import logging
 
-from langchain_core.messages import HumanMessage, SystemMessage
+from deepagents import create_deep_agent
+from langchain_core.messages import AIMessage, HumanMessage
 
 from systemedu.agents.base import BaseAgent
 
@@ -183,7 +184,7 @@ const handleChange = (id, value) => { setParams(p => ({...p, [id]: value})); };
   </svg>
   <div id="progress">第 1 / 4 步</div>
   <div id="narration">点击「继续」开始学习</div>
-  <button id="continue-btn">继续 ▶</button>
+  <button id="continue-btn">继续</button>
   <script>
     const steps = [
       {
@@ -324,9 +325,9 @@ class LabCoderAgent(BaseAgent):
     async def process(self, message: str, context: dict | None = None) -> str:
         design = json.loads(message) if isinstance(message, str) else message
         difficulty = context.get("difficulty", 5) if context else 5
-        return self.generate(design, difficulty)
+        return await self.generate(design, difficulty)
 
-    def generate(self, design: dict, difficulty: int) -> str:
+    async def generate(self, design: dict, difficulty: int) -> str:
         """Generate complete HTML code from a game design spec.
 
         Args:
@@ -357,11 +358,20 @@ class LabCoderAgent(BaseAgent):
         )
 
         try:
-            response = self._llm.invoke([
-                SystemMessage(content=CODER_SYSTEM_PROMPT),
-                HumanMessage(content=user_prompt),
-            ])
-            html_code = response.content.strip()
+            agent = create_deep_agent(
+                model=self._llm,
+                tools=[],
+                system_prompt=CODER_SYSTEM_PROMPT,
+            )
+            result = await agent.ainvoke({"messages": [HumanMessage(content=user_prompt)]})
+            # Extract last AIMessage content
+            html_code = ""
+            for msg in reversed(result["messages"]):
+                if isinstance(msg, AIMessage) and msg.content:
+                    html_code = msg.content
+                    break
+
+            html_code = html_code.strip()
             # Strip markdown code fences
             if html_code.startswith("```"):
                 lines = html_code.split("\n")
@@ -371,7 +381,6 @@ class LabCoderAgent(BaseAgent):
                 html_code = html_code.strip()
 
             # Validate HTML structure
-            html_lower = html_code.lower()
             issues = validate_lab_html(html_code, interaction_type=interaction_type)
             if issues.get("fatal"):
                 logger.warning(f"Coder output failed validation: {issues['fatal']}")

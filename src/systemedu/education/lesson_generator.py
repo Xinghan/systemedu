@@ -290,7 +290,7 @@ def _ensure_game_templates(
     return examples_content
 
 
-def _generate_interactive_lab(
+async def _generate_interactive_lab(
     node_title: str,
     node_summary: str,
     difficulty: int,
@@ -327,7 +327,7 @@ def _generate_interactive_lab(
     analyst = LabAnalystAgent(llm=llm)
     analysis = None
     for attempt in range(1 + max_retries):
-        analysis = analyst.analyze(node_title, node_summary, difficulty, lesson_plan=lesson_plan)
+        analysis = await analyst.analyze(node_title, node_summary, difficulty, lesson_plan=lesson_plan)
         if analysis:
             break
         if attempt < max_retries:
@@ -347,7 +347,7 @@ def _generate_interactive_lab(
     designer = LabDesignerAgent(llm=llm)
     design = None
     for attempt in range(1 + max_retries):
-        design = designer.design(analysis, difficulty)
+        design = await designer.design(analysis, difficulty)
         if design:
             break
         if attempt < max_retries:
@@ -367,7 +367,7 @@ def _generate_interactive_lab(
     coder = LabCoderAgent(llm=llm)
     html = ""
     for attempt in range(1 + max_retries):
-        html = coder.generate(design, difficulty)
+        html = await coder.generate(design, difficulty)
         if html:
             break
         if attempt < max_retries:
@@ -382,7 +382,7 @@ def _generate_interactive_lab(
             progress_callback("lab_reviewer", "in_progress", "")
         try:
             reviewer = LabReviewerAgent(llm=llm)
-            reviewed_html = reviewer.review(html, design)
+            reviewed_html = await reviewer.review(html, design)
             if reviewed_html:
                 html = reviewed_html
             if progress_callback:
@@ -577,7 +577,7 @@ def _init_progress_steps(db, project_name: str, knode_id: int):
     db.commit()
 
 
-def generate_lesson(project_name: str, knode_id: int, user_id: str = "default") -> dict:
+async def generate_lesson(project_name: str, knode_id: int, user_id: str = "default") -> dict:
     """Generate lesson content for a knowledge node.
 
     Loads project context, finds the target node, runs the LessonPlannerAgent
@@ -653,7 +653,7 @@ def generate_lesson(project_name: str, knode_id: int, user_id: str = "default") 
             try:
                 from systemedu.agents.builtin.lesson_planner import LessonPlannerAgent
                 planner = LessonPlannerAgent(llm=llm)
-                lesson_plan = planner.plan(
+                lesson_plan = await planner.plan(
                     node_title=target_node.title,
                     node_summary=target_node.summary,
                     difficulty=target_node.difficulty_level,
@@ -764,7 +764,7 @@ def generate_lesson(project_name: str, knode_id: int, user_id: str = "default") 
             )
 
         try:
-            lab_html = _generate_interactive_lab(
+            lab_html = await _generate_interactive_lab(
                 node_title=target_node.title,
                 node_summary=target_node.summary,
                 difficulty=target_node.difficulty_level,
@@ -782,28 +782,92 @@ def generate_lesson(project_name: str, knode_id: int, user_id: str = "default") 
             logger.exception(f"Failed to generate interactive lab for node {knode_id}")
             lesson.interactive_lab = ""
 
-        # Step 5: TTS audio synthesis
+        # Step 5: TTS audio synthesis — generate per-tab narration scripts + audio
         from systemedu.core.config import get_config
         tts_config = get_config().tts
         if tts_config.enabled:
             _update_progress(db, project_name, knode_id, "tts", "语音合成", "朗读老师", "in_progress")
             try:
-                script = lesson.teacher_script
-                if script and script.strip():
-                    from systemedu.education.tts import synthesize_speech
-                    audio_path, timestamps = synthesize_speech(script, project_name, knode_id)
-                    lesson.teacher_audio_url = audio_path
-                    lesson.teacher_timestamps = json.dumps(timestamps, ensure_ascii=False)
-                    db.commit()
-                    _update_progress(
-                        db, project_name, knode_id, "tts", "语音合成", "朗读老师",
-                        "completed", f"音频 {len(timestamps)} 词",
-                    )
-                else:
-                    _update_progress(
-                        db, project_name, knode_id, "tts", "语音合成", "朗读老师",
-                        "completed", "无讲义，跳过",
-                    )
+                from systemedu.education.tts import synthesize_speech
+
+                node_title = target_node.title if target_node else str(knode_id)
+
+                # Per-tab narration: generate a short oral script for each section
+                # then synthesize audio.  Each section gets its own file.
+                tab_narrations: list[tuple[str, str, str]] = [
+                    # (section_key, content_field_value, filename)
+                    ("concept", lesson.concept or "", "concept.wav"),
+                    ("practice", lesson.practice or "", "practice.wav"),
+                    ("lab", lesson.interactive_lab or "", "lab.wav"),
+                    ("key_takeaways", lesson.key_takeaways or "", "key_takeaways.wav"),
+                ]
+
+                tab_audio_attrs = {
+                    "concept": "concept_audio_url",
+                    "practice": "practice_audio_url",
+                    "lab": "lab_audio_url",
+                    "key_takeaways": "key_takeaways_audio_url",
+                }
+
+                tab_script_prompts = {
+                    "concept": (
+                        f"你是一位亲切的 AI 老师，正在为「{node_title}」这节课录制概念讲解的语音旁白。"
+                        "请根据以下概念内容，写一段 150-250 字的口语化讲解，语气亲切自然，像跟学生直接说话，不要使用 markdown，输出纯文本。\n\n内容：\n"
+                    ),
+                    "practice": (
+                        f"你是一位亲切的 AI 老师，正在为「{node_title}」这节课的练习部分录制语音旁白。"
+                        "请写一段 100-180 字的口语化引导语，解释练习的目的和做题思路，鼓励学生动手尝试，语气亲切，输出纯文本，不要使用 markdown。\n\n练习内容：\n"
+                    ),
+                    "lab": (
+                        f"你是一位亲切的 AI 老师，正在为「{node_title}」这节课的互动实验录制语音旁白。"
+                        "请写一段 100-180 字的口语化引导语，解释实验的学习目标和操作方式，激发学生的动手兴趣，语气活泼，输出纯文本，不要使用 markdown。\n\n实验简介：这是一个互动游戏，帮助学生通过动手操作理解知识点。"
+                    ),
+                    "key_takeaways": (
+                        f"你是一位亲切的 AI 老师，正在为「{node_title}」这节课的要点总结录制语音旁白。"
+                        "请根据以下要点，写一段 100-180 字的口语化总结，帮助学生回顾和记忆核心内容，语气温暖鼓励，输出纯文本，不要使用 markdown。\n\n要点：\n"
+                    ),
+                }
+
+                audio_count = 0
+                for section_key, section_content, filename in tab_narrations:
+                    if not section_content.strip():
+                        continue
+                    try:
+                        # Generate oral script for this section
+                        prompt = tab_script_prompts[section_key] + section_content[:1500]
+                        script_resp = llm.invoke([HumanMessage(content=prompt)])
+                        oral_script = script_resp.content.strip()
+                        if not oral_script:
+                            continue
+
+                        audio_path, _ = synthesize_speech(
+                            oral_script, project_name, knode_id, filename=filename
+                        )
+                        attr = tab_audio_attrs[section_key]
+                        setattr(lesson, attr, audio_path)
+                        db.commit()
+                        audio_count += 1
+                        logger.info(f"TTS audio generated for {section_key}: {audio_path}")
+                    except Exception:
+                        logger.exception(f"TTS failed for section {section_key} of node {knode_id}")
+
+                # Also keep teacher_script audio (full lesson narration)
+                if lesson.teacher_script and lesson.teacher_script.strip():
+                    try:
+                        audio_path, timestamps = synthesize_speech(
+                            lesson.teacher_script, project_name, knode_id, filename="teacher.wav"
+                        )
+                        lesson.teacher_audio_url = audio_path
+                        lesson.teacher_timestamps = json.dumps(timestamps, ensure_ascii=False)
+                        db.commit()
+                        audio_count += 1
+                    except Exception:
+                        logger.exception(f"TTS failed for teacher_script of node {knode_id}")
+
+                _update_progress(
+                    db, project_name, knode_id, "tts", "语音合成", "朗读老师",
+                    "completed", f"{audio_count} 段音频",
+                )
             except Exception:
                 logger.exception(f"TTS synthesis failed for node {knode_id}")
                 _update_progress(
@@ -850,6 +914,10 @@ def _lesson_to_dict(lesson) -> dict:
         "teacher_script": lesson.teacher_script or "",
         "teacher_audio_url": lesson.teacher_audio_url or "",
         "teacher_timestamps": lesson.teacher_timestamps or "[]",
+        "concept_audio_url": lesson.concept_audio_url or "",
+        "practice_audio_url": lesson.practice_audio_url or "",
+        "lab_audio_url": lesson.lab_audio_url or "",
+        "key_takeaways_audio_url": lesson.key_takeaways_audio_url or "",
         "content_type": lesson.content_type or "text",
         "generated_at": lesson.generated_at.isoformat() if lesson.generated_at else None,
     }

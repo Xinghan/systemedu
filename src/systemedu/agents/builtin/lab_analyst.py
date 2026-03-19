@@ -3,7 +3,8 @@
 import json
 import logging
 
-from langchain_core.messages import HumanMessage, SystemMessage
+from deepagents import create_deep_agent
+from langchain_core.messages import AIMessage, HumanMessage
 
 from systemedu.agents.base import BaseAgent
 
@@ -159,7 +160,7 @@ class LabAnalystAgent(BaseAgent):
         self._llm = llm
 
     async def process(self, message: str, context: dict | None = None) -> str:
-        result = self.analyze(
+        result = await self.analyze(
             node_title=message,
             node_summary=context.get("summary", "") if context else "",
             difficulty=context.get("difficulty", 5) if context else 5,
@@ -167,7 +168,7 @@ class LabAnalystAgent(BaseAgent):
         )
         return json.dumps(result, ensure_ascii=False) if result else ""
 
-    def analyze(self, node_title: str, node_summary: str, difficulty: int, lesson_plan: dict | None = None) -> dict | None:
+    async def analyze(self, node_title: str, node_summary: str, difficulty: int, lesson_plan: dict | None = None) -> dict | None:
         """Analyze a knowledge node and return structured JSON.
 
         Args:
@@ -209,11 +210,20 @@ class LabAnalystAgent(BaseAgent):
         )
 
         try:
-            response = self._llm.invoke([
-                SystemMessage(content=ANALYST_SYSTEM_PROMPT),
-                HumanMessage(content=user_prompt),
-            ])
-            text = response.content.strip()
+            agent = create_deep_agent(
+                model=self._llm,
+                tools=[],
+                system_prompt=ANALYST_SYSTEM_PROMPT,
+            )
+            result = await agent.ainvoke({"messages": [HumanMessage(content=user_prompt)]})
+            # Extract last AIMessage content
+            text = ""
+            for msg in reversed(result["messages"]):
+                if isinstance(msg, AIMessage) and msg.content:
+                    text = msg.content
+                    break
+
+            text = text.strip()
             # Strip markdown code fences
             if text.startswith("```"):
                 lines = text.split("\n")
