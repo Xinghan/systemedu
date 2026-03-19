@@ -1,8 +1,8 @@
 "use client"
 
 import { useCallback, useRef, useState } from "react"
-import { ChevronLeft, ChevronRight, RefreshCw, NotebookPen, X, Minus, Eye, Pencil } from "lucide-react"
-import { IconStar, IconCheck, IconLightning, IconClock } from "./cartoon-icons"
+import { ChevronLeft, ChevronRight, RefreshCw, NotebookPen, X, Minus, Eye, Pencil, ArrowRight, BookOpen, Clock, Zap, Star } from "lucide-react"
+import { IconCheck } from "./cartoon-icons"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { AnimatedExamplesView } from "./animated-examples"
@@ -12,7 +12,6 @@ import { PracticeView } from "./practice-view"
 import { ResourceSearchView } from "./resource-search-view"
 import { NotePanel, type NotePreviewMode } from "./note-panel"
 import { AudioPlayerBar } from "./audio-player-bar"
-import { ArrowRight } from "lucide-react"
 import type { KnodeInfo, LessonContent } from "@/lib/types/api"
 
 const MIN_NOTE_WIDTH = 280
@@ -82,7 +81,9 @@ export function LessonContentView({
   const difficultyLabel = knode.difficulty_level <= 3 ? "入门" : knode.difficulty_level <= 6 ? "中级" : "高级"
   const activeKey = allTabs[activeTab]?.key ?? allTabs[0]?.key
 
-  // Drag-to-resize handler on the left border of the note panel
+  // Wide-layout tabs: full-width content (no sidebar)
+  const isWideTab = ["interactive_lab", "examples", "practice", "resources"].includes(activeKey)
+
   const handleDragMouseDown = useCallback((e: React.MouseEvent) => {
     e.preventDefault()
     dragStartX.current = e.clientX
@@ -90,7 +91,7 @@ export function LessonContentView({
 
     const onMouseMove = (ev: MouseEvent) => {
       if (dragStartX.current === null) return
-      const delta = dragStartX.current - ev.clientX  // drag left = wider
+      const delta = dragStartX.current - ev.clientX
       const newWidth = Math.min(MAX_NOTE_WIDTH, Math.max(MIN_NOTE_WIDTH, dragStartWidth.current + delta))
       setNoteWidth(newWidth)
     }
@@ -103,180 +104,216 @@ export function LessonContentView({
     window.addEventListener("mouseup", onMouseUp)
   }, [noteWidth])
 
+  // Audio bar
+  const currentTab = availableTabs[activeTab] ?? availableTabs[0]
+  const tabAudioUrl = currentTab?.audioField ? lesson[currentTab.audioField] : null
+  const audioUrl = tabAudioUrl || lesson.teacher_audio_url
+
   return (
     <div className="flex flex-col h-full relative">
-      {/* Header */}
-      <div className="border-b">
-        <div className="px-6 py-3">
-          <div className="flex items-center justify-between gap-3">
-            <div className="min-w-0 flex-1">
-              <h2 className="text-lg font-semibold truncate">{knode.title}</h2>
-              <div className="flex flex-wrap gap-1.5 mt-1">
-                <Badge variant="outline" className="gap-1 text-xs">
-                  <IconLightning className="h-3 w-3" />
-                  {difficultyLabel} {knode.difficulty_level}/10
-                </Badge>
-                <Badge variant="outline" className="gap-1 text-xs">
-                  <IconClock className="h-3 w-3" />
-                  {knode.estimated_minutes}分钟
-                </Badge>
-                <Badge variant="outline" className="gap-1 text-xs">
-                  <IconStar className="h-3 w-3" />
-                  {knode.xp_reward} XP
-                </Badge>
-              </div>
-            </div>
-            <div className="flex items-center gap-2 shrink-0">
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={onRegenerate}
-                disabled={regenerating}
-                className="gap-1 text-xs"
-              >
-                <RefreshCw className={`h-3 w-3 ${regenerating ? "animate-spin" : ""}`} />
-                重新生成
-              </Button>
-              {isCompleted ? (
-                <Badge className="bg-green-500/10 text-green-700 dark:text-green-400 gap-1">
-                  <IconCheck className="h-3 w-3" />
-                  已完成
-                </Badge>
-              ) : (
-                <Button size="sm" onClick={onMarkComplete} disabled={completing} className="gap-1">
-                  <IconCheck className="h-4 w-4" />
-                  标记完成
-                </Button>
-              )}
-            </div>
+
+      {/* ── Top bar: title + actions ── */}
+      <div className="flex items-center justify-between gap-4 px-5 py-2.5 border-b shrink-0">
+        <div className="min-w-0 flex-1">
+          <h2 className="text-base font-semibold leading-snug truncate">{knode.title}</h2>
+          <div className="flex items-center gap-3 mt-0.5 text-xs text-muted-foreground">
+            <span className="flex items-center gap-1">
+              <Zap className="h-3 w-3" />
+              {difficultyLabel} {knode.difficulty_level}/10
+            </span>
+            <span className="flex items-center gap-1">
+              <Clock className="h-3 w-3" />
+              {knode.estimated_minutes} 分钟
+            </span>
+            <span className="flex items-center gap-1">
+              <Star className="h-3 w-3" />
+              {knode.xp_reward} XP
+            </span>
           </div>
+        </div>
+        <div className="flex items-center gap-2 shrink-0">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={onRegenerate}
+            disabled={regenerating}
+            className="gap-1 text-xs text-muted-foreground"
+          >
+            <RefreshCw className={`h-3 w-3 ${regenerating ? "animate-spin" : ""}`} />
+            重新生成
+          </Button>
+          {isCompleted ? (
+            <Badge className="bg-green-500/10 text-green-700 dark:text-green-400 border-green-500/20 gap-1">
+              <IconCheck className="h-3 w-3" />
+              已完成
+            </Badge>
+          ) : (
+            <Button size="sm" onClick={onMarkComplete} disabled={completing} className="gap-1">
+              <IconCheck className="h-3.5 w-3.5" />
+              标记完成
+            </Button>
+          )}
         </div>
       </div>
 
-      {/* Main area: content + optional note panel */}
-      <div className="flex flex-1 min-h-0">
-        {/* Tabbed content */}
-        {availableTabs.length > 0 ? (
-          <div className="flex-1 flex flex-col min-h-0 min-w-0">
-            <div className="px-6 pt-3 flex gap-1 border-b pb-2">
-              {allTabs.map((tab, index) => (
-                <button
-                  key={tab.key}
-                  onClick={() => setActiveTab(index)}
-                  className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
-                    activeTab === index
-                      ? "bg-muted text-foreground shadow-sm"
-                      : "text-muted-foreground hover:text-foreground"
-                  }`}
-                >
-                  {tab.label}
-                </button>
-              ))}
-            </div>
-            <div className="flex-1 min-h-0 overflow-y-auto">
-              {activeKey === "resources" ? (
-                <div className="px-6 py-4 h-full">
-                  <ResourceSearchView projectName={projectName} nodeId={nodeId} />
-                </div>
-              ) : (availableTabs[activeTab]?.key ?? availableTabs[0]?.key) === "examples" ? (
-                <div className="px-6 py-4">
-                  <AnimatedExamplesView content={lesson[availableTabs[activeTab]?.field ?? availableTabs[0].field]} />
-                </div>
-              ) : (availableTabs[activeTab]?.key ?? availableTabs[0]?.key) === "interactive_lab" ? (
-                <div className="px-6 py-4">
-                  <InteractiveLabView html={lesson[availableTabs[activeTab]?.field ?? availableTabs[0].field]} />
-                </div>
-              ) : (availableTabs[activeTab]?.key ?? availableTabs[0]?.key) === "practice" ? (
-                <div className="px-6 py-4">
-                  <PracticeView
-                    content={lesson[availableTabs[activeTab]?.field ?? availableTabs[0].field]}
-                    projectName={projectName}
-                    nodeId={nodeId}
-                  />
-                </div>
-              ) : (
-                <div className="px-6 py-5 max-w-[720px]">
-                  <PagedContentView
-                    content={lesson[availableTabs[activeTab]?.field ?? availableTabs[0].field]}
-                    projectName={projectName}
-                    nodeId={nodeId}
-                    tab={availableTabs[activeTab]?.key ?? availableTabs[0]?.key}
-                    onPageChange={(pageIndex, pageContent) => {
-                      const tabKey = availableTabs[activeTab]?.key ?? availableTabs[0]?.key
-                      onPageChange?.(tabKey, pageIndex, pageContent)
-                    }}
-                  />
-                </div>
-              )}
-            </div>
-          </div>
-        ) : (
-          <div className="flex-1 flex items-center justify-center text-muted-foreground">
-            <p>暂无内容</p>
-          </div>
-        )}
+      {/* ── Tab bar ── */}
+      <div className="flex items-center gap-0.5 px-5 border-b shrink-0">
+        {allTabs.map((tab, index) => (
+          <button
+            key={tab.key}
+            onClick={() => setActiveTab(index)}
+            className={`px-3 py-2 text-sm font-medium transition-colors relative ${
+              activeTab === index
+                ? "text-foreground"
+                : "text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            {tab.label}
+            {activeTab === index && (
+              <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary rounded-t-full" />
+            )}
+          </button>
+        ))}
+      </div>
 
-        {/* Note panel */}
+      {/* ── Main content area ── */}
+      <div className="flex flex-1 min-h-0">
+
+        {/* Content column */}
+        <div className="flex-1 min-w-0 flex flex-col min-h-0">
+          <div className="flex-1 min-h-0 overflow-y-auto">
+            {availableTabs.length > 0 ? (
+              <div className={isWideTab ? "p-5 h-full" : "flex min-h-full"}>
+                {isWideTab ? (
+                  // Wide: full-width content
+                  activeKey === "resources" ? (
+                    <ResourceSearchView projectName={projectName} nodeId={nodeId} />
+                  ) : activeKey === "examples" ? (
+                    <AnimatedExamplesView content={lesson[availableTabs[activeTab]?.field ?? availableTabs[0].field]} />
+                  ) : activeKey === "interactive_lab" ? (
+                    <InteractiveLabView html={lesson[availableTabs[activeTab]?.field ?? availableTabs[0].field]} />
+                  ) : (
+                    <PracticeView
+                      content={lesson[availableTabs[activeTab]?.field ?? availableTabs[0].field]}
+                      projectName={projectName}
+                      nodeId={nodeId}
+                    />
+                  )
+                ) : (
+                  // Two-column: prose left, sidebar right
+                  <>
+                    {/* Prose content */}
+                    <div className="flex-1 min-w-0 px-5 py-5">
+                      <PagedContentView
+                        content={lesson[availableTabs[activeTab]?.field ?? availableTabs[0].field]}
+                        projectName={projectName}
+                        nodeId={nodeId}
+                        tab={availableTabs[activeTab]?.key ?? availableTabs[0]?.key}
+                        onPageChange={(pageIndex, pageContent) => {
+                          const tabKey = availableTabs[activeTab]?.key ?? availableTabs[0]?.key
+                          onPageChange?.(tabKey, pageIndex, pageContent)
+                        }}
+                      />
+                    </div>
+
+                    {/* Right sidebar — node info + next steps */}
+                    <div className="w-64 shrink-0 border-l px-4 py-5 flex flex-col gap-5 bg-muted/20">
+                      {/* Node summary card */}
+                      <div>
+                        <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-2">本节概览</p>
+                        <p className="text-sm text-muted-foreground leading-relaxed">{knode.summary}</p>
+                      </div>
+
+                      {/* Completion action */}
+                      {!isCompleted && (
+                        <div>
+                          <Button
+                            size="sm"
+                            className="w-full gap-1"
+                            onClick={onMarkComplete}
+                            disabled={completing}
+                          >
+                            <IconCheck className="h-3.5 w-3.5" />
+                            标记完成
+                          </Button>
+                        </div>
+                      )}
+
+                      {/* Next learnable nodes */}
+                      {isCompleted && nextNodes.length > 0 && (
+                        <div>
+                          <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-2">下一步</p>
+                          <div className="flex flex-col gap-1.5">
+                            {nextNodes.map((node) => (
+                              <button
+                                key={node.id}
+                                onClick={() => onNavigateToNode(node.id)}
+                                className="flex items-center gap-2 rounded-md border bg-background px-3 py-2 text-sm hover:bg-accent hover:border-primary/40 transition-colors text-left w-full"
+                              >
+                                <BookOpen className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                                <span className="truncate flex-1">{node.title}</span>
+                                <ArrowRight className="h-3 w-3 text-muted-foreground shrink-0" />
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </>
+                )}
+              </div>
+            ) : (
+              <div className="flex items-center justify-center h-full text-muted-foreground text-sm">
+                暂无内容
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Note panel (side drawer) */}
         {noteState === "open" && (
           <div
             className="shrink-0 border-l flex flex-col min-h-0 bg-background relative"
             style={{ width: noteWidth }}
           >
-            {/* Drag handle on left edge */}
             <div
               onMouseDown={handleDragMouseDown}
               className="absolute left-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-primary/30 transition-colors z-10"
-              title="拖拽调整宽度"
             />
-
-            {/* Header — matches floating-chat window header */}
             <div className="border-b bg-muted/30 shrink-0">
               <div className="flex items-center justify-between px-3 py-2">
                 <div className="flex items-center gap-2">
                   <div className="w-2.5 h-2.5 rounded-full bg-amber-500" />
                   <span className="text-sm font-medium">笔记</span>
-                  {noteStatus === "saving" && (
-                    <span className="text-xs text-muted-foreground">保存中...</span>
-                  )}
-                  {noteStatus === "saved" && (
-                    <span className="text-xs text-green-600 dark:text-green-400">已保存</span>
-                  )}
+                  {noteStatus === "saving" && <span className="text-xs text-muted-foreground">保存中...</span>}
+                  {noteStatus === "saved" && <span className="text-xs text-green-600 dark:text-green-400">已保存</span>}
                 </div>
                 <div className="flex items-center gap-0.5">
-                  {/* Preview / Edit toggle */}
                   <button
                     onClick={() => setNotePreviewMode("edit")}
-                    className={`h-8 w-8 rounded-md flex items-center justify-center transition-colors ${
-                      notePreviewMode === "edit"
-                        ? "bg-muted text-foreground"
-                        : "text-muted-foreground hover:bg-muted hover:text-foreground"
-                    }`}
-                    title="编辑模式"
+                    className={`h-8 w-8 rounded-md flex items-center justify-center transition-colors ${notePreviewMode === "edit" ? "bg-muted text-foreground" : "text-muted-foreground hover:bg-muted"}`}
+                    title="编辑"
                   >
                     <Pencil className="h-3.5 w-3.5" />
                   </button>
                   <button
                     onClick={() => setNotePreviewMode("preview")}
-                    className={`h-8 w-8 rounded-md flex items-center justify-center transition-colors ${
-                      notePreviewMode === "preview"
-                        ? "bg-muted text-foreground"
-                        : "text-muted-foreground hover:bg-muted hover:text-foreground"
-                    }`}
-                    title="预览模式"
+                    className={`h-8 w-8 rounded-md flex items-center justify-center transition-colors ${notePreviewMode === "preview" ? "bg-muted text-foreground" : "text-muted-foreground hover:bg-muted"}`}
+                    title="预览"
                   >
                     <Eye className="h-3.5 w-3.5" />
                   </button>
                   <div className="w-px h-4 bg-border mx-1" />
                   <button
                     onClick={() => setNoteState("minimized")}
-                    className="h-8 w-8 rounded-md flex items-center justify-center text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+                    className="h-8 w-8 rounded-md flex items-center justify-center text-muted-foreground hover:bg-muted transition-colors"
                     title="最小化"
                   >
                     <Minus className="h-4 w-4" />
                   </button>
                   <button
                     onClick={() => setNoteState("closed")}
-                    className="h-8 w-8 rounded-md flex items-center justify-center text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+                    className="h-8 w-8 rounded-md flex items-center justify-center text-muted-foreground hover:bg-muted transition-colors"
                     title="关闭"
                   >
                     <X className="h-4 w-4" />
@@ -284,7 +321,6 @@ export function LessonContentView({
                 </div>
               </div>
             </div>
-
             <div className="flex-1 min-h-0 overflow-hidden">
               <NotePanel
                 projectName={projectName}
@@ -298,56 +334,28 @@ export function LessonContentView({
       </div>
 
       {/* Audio player bar */}
-      {(() => {
-        const currentTab = availableTabs[activeTab] ?? availableTabs[0]
-        const tabAudioUrl = currentTab?.audioField ? lesson[currentTab.audioField] : null
-        const audioUrl = tabAudioUrl || lesson.teacher_audio_url
-        return audioUrl ? (
-          <AudioPlayerBar
-            key={audioUrl}
-            audioUrl={audioUrl}
-            script={lesson.teacher_script}
-            timestamps={lesson.teacher_timestamps}
-          />
-        ) : null
-      })()}
-
-      {/* Next nodes panel — shown after marking complete */}
-      {isCompleted && nextNodes.length > 0 && (
-        <div className="border-t bg-muted/30">
-          <div className="max-w-5xl mx-auto px-6 py-4">
-            <p className="text-sm font-medium text-muted-foreground mb-3">下一步可以学习</p>
-            <div className="flex flex-wrap gap-2">
-              {nextNodes.map((node) => (
-                <button
-                  key={node.id}
-                  onClick={() => onNavigateToNode(node.id)}
-                  className="flex items-center gap-2 rounded-lg border bg-card px-3 py-2 text-sm hover:bg-accent hover:border-primary/40 transition-colors text-left"
-                >
-                  <span className="font-medium truncate max-w-[200px]">{node.title}</span>
-                  <ArrowRight className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
+      {audioUrl && (
+        <AudioPlayerBar
+          key={audioUrl}
+          audioUrl={audioUrl}
+          script={lesson.teacher_script}
+          timestamps={lesson.teacher_timestamps}
+        />
       )}
 
-      {/* Bottom navigation */}
-      <div className="border-t">
-        <div className="max-w-5xl mx-auto px-6 py-3 flex items-center justify-between">
-          <Button variant="ghost" size="sm" onClick={() => onNavigate("prev")} disabled={!hasPrev} className="gap-1">
-            <ChevronLeft className="h-4 w-4" />
-            上一节
-          </Button>
-          <Button variant="ghost" size="sm" onClick={() => onNavigate("next")} disabled={!hasNext} className="gap-1">
-            下一节
-            <ChevronRight className="h-4 w-4" />
-          </Button>
-        </div>
+      {/* ── Bottom nav: prev/next lesson ── */}
+      <div className="flex items-center justify-between px-5 py-2 border-t shrink-0">
+        <Button variant="ghost" size="sm" onClick={() => onNavigate("prev")} disabled={!hasPrev} className="gap-1 text-muted-foreground">
+          <ChevronLeft className="h-4 w-4" />
+          上一节
+        </Button>
+        <Button variant="ghost" size="sm" onClick={() => onNavigate("next")} disabled={!hasNext} className="gap-1 text-muted-foreground">
+          下一节
+          <ChevronRight className="h-4 w-4" />
+        </Button>
       </div>
 
-      {/* Note FAB — same style as Chat FAB, stacked above it */}
+      {/* Note FAB */}
       {noteState === "closed" && (
         <button
           onClick={() => setNoteState("open")}
