@@ -47,6 +47,8 @@ def get_llm(
 
     # Bypass system HTTP proxy to avoid SSL errors with LLM API endpoints
     # proxy=None does NOT disable env vars; trust_env=False is required
+    # Use http_client / http_async_client (httpx transports passed to OpenAI SDK),
+    # NOT async_client (which must be an openai.AsyncOpenAI.chat.completions object).
     no_proxy_client = httpx.Client(trust_env=False)
     no_proxy_async_client = httpx.AsyncClient(trust_env=False)
 
@@ -57,7 +59,7 @@ def get_llm(
         "temperature": temperature if temperature is not None else prov.temperature,
         "streaming": streaming,
         "http_client": no_proxy_client,
-        "async_client": no_proxy_async_client,
+        "http_async_client": no_proxy_async_client,
     }
     if prov.max_tokens:
         llm_kwargs["max_tokens"] = prov.max_tokens
