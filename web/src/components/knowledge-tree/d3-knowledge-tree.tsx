@@ -249,18 +249,23 @@ export function D3KnowledgeTree({
     // Defs
     const defs = svg.append("defs")
 
-    // Arrow marker
+    // Arrow marker (default)
     defs.append("marker")
       .attr("id", "arrow")
       .attr("viewBox", "0 -4 8 8")
-      .attr("refX", 8)
-      .attr("refY", 0)
-      .attr("markerWidth", 6)
-      .attr("markerHeight", 6)
+      .attr("refX", 8).attr("refY", 0)
+      .attr("markerWidth", 6).attr("markerHeight", 6)
       .attr("orient", "auto")
-      .append("path")
-      .attr("d", "M0,-4L8,0L0,4")
-      .attr("fill", "#cbd5e1")
+      .append("path").attr("d", "M0,-4L8,0L0,4").attr("fill", "#cbd5e1")
+
+    // Arrow marker (highlighted path)
+    defs.append("marker")
+      .attr("id", "arrow-hl")
+      .attr("viewBox", "0 -4 8 8")
+      .attr("refX", 8).attr("refY", 0)
+      .attr("markerWidth", 6).attr("markerHeight", 6)
+      .attr("orient", "auto")
+      .append("path").attr("d", "M0,-4L8,0L0,4").attr("fill", "#6366f1")
 
     // Drop shadow filter
     const filter = defs.append("filter").attr("id", "card-shadow").attr("x", "-10%").attr("y", "-10%").attr("width", "130%").attr("height", "140%")
@@ -367,15 +372,80 @@ export function D3KnowledgeTree({
         }
       })
 
+      // Build adjacency for path highlighting
+      // ancestors: set of node ids reachable by following sources backwards
+      // descendants: set of node ids reachable by following targets forward
+      function getPathNodeIds(rootId: string): Set<string> {
+        const result = new Set<string>([rootId])
+        // ancestors
+        const qAncestor = [rootId]
+        while (qAncestor.length) {
+          const cur = qAncestor.shift()!
+          for (const lk of graphLinks) {
+            const tgtId = typeof lk.target === "string" ? lk.target : (lk.target as GraphNode).id
+            const srcId = typeof lk.source === "string" ? lk.source : (lk.source as GraphNode).id
+            if (tgtId === cur && !result.has(srcId)) {
+              result.add(srcId)
+              qAncestor.push(srcId)
+            }
+          }
+        }
+        // descendants
+        const qDesc = [rootId]
+        while (qDesc.length) {
+          const cur = qDesc.shift()!
+          for (const lk of graphLinks) {
+            const srcId = typeof lk.source === "string" ? lk.source : (lk.source as GraphNode).id
+            const tgtId = typeof lk.target === "string" ? lk.target : (lk.target as GraphNode).id
+            if (srcId === cur && !result.has(tgtId)) {
+              result.add(tgtId)
+              qDesc.push(tgtId)
+            }
+          }
+        }
+        return result
+      }
+
+      function applyPathHighlight(pathIds: Set<string>) {
+        // Dim non-path nodes
+        g.select(".nodes").selectAll<SVGGElement, GraphNode>("g.node-group")
+          .attr("opacity", (d) => pathIds.has(d.id) ? 1 : 0.15)
+        // Highlight path links, dim others
+        g.select(".links").selectAll<SVGPathElement, GraphLink>("path")
+          .each(function (lk) {
+            const srcId = typeof lk.source === "string" ? lk.source : (lk.source as GraphNode).id
+            const tgtId = typeof lk.target === "string" ? lk.target : (lk.target as GraphNode).id
+            const onPath = pathIds.has(srcId) && pathIds.has(tgtId)
+            d3.select(this)
+              .attr("stroke", onPath ? "#6366f1" : "#cbd5e1")
+              .attr("stroke-width", onPath ? 2.5 : 1.5)
+              .attr("opacity", onPath ? 1 : 0.15)
+              .attr("marker-end", onPath ? "url(#arrow-hl)" : "url(#arrow)")
+          })
+      }
+
+      function clearPathHighlight() {
+        g.select(".nodes").selectAll<SVGGElement, GraphNode>("g.node-group")
+          .attr("opacity", 1)
+        g.select(".links").selectAll<SVGPathElement, GraphLink>("path")
+          .attr("stroke", "#cbd5e1")
+          .attr("stroke-width", 1.5)
+          .attr("opacity", 1)
+          .attr("marker-end", "url(#arrow)")
+      }
+
       // Hover + context menu on node groups
       nodeGroups
         .on("mouseenter", function (event, d) {
           d3.select(this).select(".card-bg").attr("stroke-width", 2.5)
+          const pathIds = getPathNodeIds(d.id)
+          applyPathHighlight(pathIds)
           const containerRect = container.getBoundingClientRect()
           setHover({ node: d, x: event.clientX - containerRect.left, y: event.clientY - containerRect.top })
         })
         .on("mouseleave", function () {
           d3.select(this).select(".card-bg").attr("stroke-width", 1.5)
+          clearPathHighlight()
           setHover(null)
         })
         .on("contextmenu", function (event, d) {
