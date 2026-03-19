@@ -796,7 +796,7 @@ function NodeEditDialog({ node, isNew, milestones, saving, onSave, onClose }: No
               />
             </div>
             <div className="grid gap-1.5">
-              <Label htmlFor="node-xp">XP</Label>
+              <Label htmlFor="node-xp">经验值</Label>
               <Input
                 id="node-xp"
                 type="number"
@@ -873,7 +873,7 @@ function HoverTooltip({ info }: { info: HoverInfo }) {
         </span>
         <span>难度 {node.difficulty}/10</span>
         <span>{node.minutes}分钟</span>
-        <span>{node.xp} XP</span>
+        <span>{node.xp} 经验值</span>
       </div>
     </div>
   )
