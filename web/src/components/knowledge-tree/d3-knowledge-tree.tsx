@@ -101,6 +101,7 @@ export function D3KnowledgeTree({
 
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null)
   const [editState, setEditState] = useState<EditState | null>(null)
+  const [detailNode, setDetailNode] = useState<GraphNode | null>(null)
   const [saving, setSaving] = useState(false)
 
   // localMilestones is the source of truth for rendering once user edits
@@ -163,8 +164,11 @@ export function D3KnowledgeTree({
   }, [localMilestones, progressMap])
 
   const handleNodeClick = useCallback(
-    (globalId: number) => { onNodeClick?.(globalId) },
-    [onNodeClick],
+    (globalId: number) => {
+      const node = graphNodes.find((n) => n.globalId === globalId) ?? null
+      setDetailNode(node)
+    },
+    [graphNodes],
   )
 
   // Close context menu on outside click or Escape
@@ -194,8 +198,14 @@ export function D3KnowledgeTree({
 
     const g = svg.append("g").attr("class", "main-g")
 
+    // zoom only triggers on non-node areas (filter out events on .node-drag-handle)
     const zoom = d3.zoom<SVGSVGElement, unknown>()
       .scaleExtent([0.2, 3])
+      .filter((event) => {
+        // Allow wheel zoom everywhere; block pan (mousedown/touchstart) on node drag handles
+        if (event.type === "wheel") return true
+        return !(event.target as Element).closest?.(".node-drag-handle")
+      })
       .on("zoom", (event) => {
         g.attr("transform", event.transform)
         currentTransformRef.current = event.transform
@@ -258,8 +268,35 @@ export function D3KnowledgeTree({
 
     const nodeMap = new Map(graphNodes.map((n) => [n.id, n]))
 
+    // Helper: recompute all link paths based on current node x/y
+    function updateLinks() {
+      g.select(".links").selectAll<SVGPathElement, GraphLink>("path")
+        .attr("d", (d) => {
+          const src = nodeMap.get(typeof d.source === "string" ? d.source : (d.source as GraphNode).id)
+          const tgt = nodeMap.get(typeof d.target === "string" ? d.target : (d.target as GraphNode).id)
+          if (!src || !tgt) return ""
+          const sx = (src.x ?? 0) + CARD_W / 2
+          const sy = src.y ?? 0
+          const tx2 = (tgt.x ?? 0) - CARD_W / 2
+          const ty2 = tgt.y ?? 0
+          const mx = (sx + tx2) / 2
+          return `M${sx},${sy} C${mx},${sy} ${mx},${ty2} ${tx2},${ty2}`
+        })
+    }
+
+    // Helper: sync click-overlay positions to current node x/y + zoom transform
+    function updateOverlay() {
+      const t = currentTransformRef.current
+      d3.select(svgRef.current).select(".click-overlay")
+        .selectAll<SVGRectElement, GraphNode>("rect")
+        .attr("x", (d) => t.applyX((d.x ?? 0) - CARD_W / 2 - 4))
+        .attr("y", (d) => t.applyY((d.y ?? 0) - CARD_H / 2 - 4))
+        .attr("width", (CARD_W + 8) * t.k)
+        .attr("height", (CARD_H + 8) * t.k)
+    }
+
     function renderGraph(target: d3.Selection<SVGGElement, unknown, null, undefined>) {
-      // Links
+      // Links (rendered first so nodes appear on top)
       target.append("g").attr("class", "links")
         .selectAll("path")
         .data(graphLinks)
@@ -287,12 +324,13 @@ export function D3KnowledgeTree({
         .data(graphNodes)
         .enter()
         .append("g")
+        .attr("class", "node-group")
         .attr("transform", (d) => `translate(${(d.x ?? 0) - CARD_W / 2},${(d.y ?? 0) - CARD_H / 2})`)
 
-      // Card background
+      // Card background (also acts as drag handle — full card area)
       nodeGroups
         .append("rect")
-        .attr("class", "card-bg")
+        .attr("class", "card-bg node-drag-handle")
         .attr("width", CARD_W)
         .attr("height", CARD_H)
         .attr("rx", 8)
@@ -300,6 +338,7 @@ export function D3KnowledgeTree({
         .attr("stroke", (d) => d.passed ? "#10b981" : MILESTONE_PALETTE[d.milestoneIdx % MILESTONE_PALETTE.length].stroke)
         .attr("stroke-width", 1.5)
         .attr("filter", "url(#card-shadow)")
+        .attr("cursor", "grab")
 
       // Left color strip
       nodeGroups
@@ -327,6 +366,55 @@ export function D3KnowledgeTree({
             .attr("stroke-linecap", "round").attr("stroke-linejoin", "round").attr("fill", "none")
         }
       })
+
+      // Hover + context menu on node groups
+      nodeGroups
+        .on("mouseenter", function (event, d) {
+          d3.select(this).select(".card-bg").attr("stroke-width", 2.5)
+          const containerRect = container.getBoundingClientRect()
+          setHover({ node: d, x: event.clientX - containerRect.left, y: event.clientY - containerRect.top })
+        })
+        .on("mouseleave", function () {
+          d3.select(this).select(".card-bg").attr("stroke-width", 1.5)
+          setHover(null)
+        })
+        .on("contextmenu", function (event, d) {
+          event.preventDefault()
+          event.stopPropagation()
+          const containerRect = container.getBoundingClientRect()
+          setContextMenu({
+            node: d,
+            x: event.clientX - containerRect.left,
+            y: event.clientY - containerRect.top,
+          })
+        })
+
+      // Drag behavior: drag individual nodes
+      let dragMoved = false
+      const drag = d3.drag<SVGGElement, GraphNode>()
+        .on("start", function () {
+          dragMoved = false
+          d3.select(this).select(".card-bg").attr("cursor", "grabbing")
+          setHover(null)
+        })
+        .on("drag", function (event, d) {
+          dragMoved = true
+          const t = currentTransformRef.current
+          // Convert screen delta to graph space
+          d.x = (d.x ?? 0) + event.dx / t.k
+          d.y = (d.y ?? 0) + event.dy / t.k
+          d3.select(this).attr("transform", `translate(${(d.x ?? 0) - CARD_W / 2},${(d.y ?? 0) - CARD_H / 2})`)
+          updateLinks()
+        })
+        .on("end", function (event, d) {
+          d3.select(this).select(".card-bg").attr("cursor", "grab")
+          if (!dragMoved) {
+            // treat short press as click
+            handleNodeClick(d.globalId)
+          }
+        })
+
+      nodeGroups.call(drag)
     }
 
     renderGraph(g)
@@ -338,62 +426,6 @@ export function D3KnowledgeTree({
         .append("rect").attr("width", CARD_W).attr("height", CARD_H).attr("rx", 8)
       el.select("rect:nth-child(2)").attr("clip-path", `url(#clip-${i})`)
     })
-
-    // Clickable overlay for node clicks and context menu
-    svg.append("g").attr("class", "click-overlay")
-      .selectAll("rect")
-      .data(graphNodes)
-      .enter()
-      .append("rect")
-      .attr("fill", "transparent")
-      .attr("cursor", "pointer")
-      .attr("width", CARD_W + 8)
-      .attr("height", CARD_H + 8)
-      .each(function (d) {
-        d3.select(this).attr("data-gid", d.globalId)
-      })
-      .on("click", (_, d) => handleNodeClick(d.globalId))
-      .on("contextmenu", function (event, d) {
-        event.preventDefault()
-        const containerRect = container.getBoundingClientRect()
-        setContextMenu({
-          node: d,
-          x: event.clientX - containerRect.left,
-          y: event.clientY - containerRect.top,
-        })
-      })
-      .on("mouseenter", function (event, d) {
-        d3.select(svgRef.current)
-          .select(`.nodes > g:nth-child(${graphNodes.indexOf(d) + 1}) rect.card-bg`)
-          .attr("stroke-width", 2.5)
-        const containerRect = container.getBoundingClientRect()
-        setHover({ node: d, x: event.clientX - containerRect.left, y: event.clientY - containerRect.top })
-      })
-      .on("mouseleave", function (_, d) {
-        d3.select(svgRef.current)
-          .select(`.nodes > g:nth-child(${graphNodes.indexOf(d) + 1}) rect.card-bg`)
-          .attr("stroke-width", 1.5)
-        setHover(null)
-      })
-
-    // Update click overlay positions on zoom
-    zoom.on("zoom.overlay", (event) => {
-      const t: d3.ZoomTransform = event.transform
-      d3.select(svgRef.current).select(".click-overlay")
-        .selectAll<SVGRectElement, GraphNode>("rect")
-        .attr("x", (d) => t.applyX((d.x ?? 0) - CARD_W / 2 - 4))
-        .attr("y", (d) => t.applyY((d.y ?? 0) - CARD_H / 2 - 4))
-        .attr("width", (CARD_W + 8) * t.k)
-        .attr("height", (CARD_H + 8) * t.k)
-    })
-    // Init positions
-    const t = currentTransformRef.current
-    d3.select(svgRef.current).select(".click-overlay")
-      .selectAll<SVGRectElement, GraphNode>("rect")
-      .attr("x", (d) => t.applyX((d.x ?? 0) - CARD_W / 2 - 4))
-      .attr("y", (d) => t.applyY((d.y ?? 0) - CARD_H / 2 - 4))
-      .attr("width", (CARD_W + 8) * t.k)
-      .attr("height", (CARD_H + 8) * t.k)
 
     // Milestone legend
     const legendData = localMilestones.map((ms, i) => ({
@@ -528,6 +560,16 @@ export function D3KnowledgeTree({
             setContextMenu(null)
           }}
           onDelete={() => handleDelete(contextMenu.node)}
+        />
+      )}
+
+      {/* Node detail popup */}
+      {detailNode && (
+        <NodeDetailDialog
+          node={detailNode}
+          onClose={() => setDetailNode(null)}
+          onLearn={onNodeClick ? () => { onNodeClick(detailNode.globalId); setDetailNode(null) } : undefined}
+          onEdit={projectName ? () => { setEditState({ node: detailNode, isNew: false }); setDetailNode(null) } : undefined}
         />
       )}
 
@@ -829,6 +871,72 @@ function NodeEditDialog({ node, isNew, milestones, saving, onSave, onClose }: No
           <Button onClick={handleSubmit} disabled={saving || !title.trim()}>
             {saving ? "保存中..." : "保存"}
           </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+// ─── Node Detail Dialog ───────────────────────────────────────────────────────
+
+interface NodeDetailDialogProps {
+  node: GraphNode
+  onClose: () => void
+  onLearn?: () => void
+  onEdit?: () => void
+}
+
+function NodeDetailDialog({ node, onClose, onLearn, onEdit }: NodeDetailDialogProps) {
+  const palette = MILESTONE_PALETTE[node.milestoneIdx % MILESTONE_PALETTE.length]
+
+  return (
+    <Dialog open onOpenChange={(open) => { if (!open) onClose() }}>
+      <DialogContent className="max-w-sm">
+        <DialogHeader>
+          <div className="flex items-center gap-2">
+            <span className="w-1 h-5 rounded-sm shrink-0" style={{ backgroundColor: palette.stroke }} />
+            <DialogTitle className="text-base leading-snug">{node.label}</DialogTitle>
+            {node.passed && (
+              <span className="ml-auto text-[10px] px-1.5 py-0.5 rounded-full bg-green-100 text-green-700 shrink-0 font-normal">
+                已完成
+              </span>
+            )}
+          </div>
+        </DialogHeader>
+
+        <div className="grid gap-3">
+          {node.summary && (
+            <p className="text-sm text-muted-foreground leading-relaxed">{node.summary}</p>
+          )}
+
+          <div className="rounded-lg border bg-muted/30 p-3 grid grid-cols-3 gap-2 text-center text-xs">
+            <div>
+              <div className="text-muted-foreground mb-0.5">难度</div>
+              <div className="font-semibold text-foreground">{node.difficulty} / 10</div>
+            </div>
+            <div>
+              <div className="text-muted-foreground mb-0.5">时长</div>
+              <div className="font-semibold text-foreground">{node.minutes} 分钟</div>
+            </div>
+            <div>
+              <div className="text-muted-foreground mb-0.5">经验值</div>
+              <div className="font-semibold text-foreground">{node.xp}</div>
+            </div>
+          </div>
+
+          <div className="text-xs text-muted-foreground flex items-center gap-1.5">
+            <span className="inline-block w-2 h-2 rounded-sm shrink-0" style={{ backgroundColor: palette.stroke }} />
+            {node.milestone}
+          </div>
+        </div>
+
+        <DialogFooter>
+          {onEdit && (
+            <Button variant="outline" size="sm" onClick={onEdit}>编辑</Button>
+          )}
+          {onLearn && (
+            <Button size="sm" onClick={onLearn}>进入学习</Button>
+          )}
         </DialogFooter>
       </DialogContent>
     </Dialog>
