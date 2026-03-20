@@ -1,18 +1,12 @@
 """Scan project nodes and auto-enqueue + trigger ObjectFactory creation.
 
-Uses deterministic keyword matching (no LLM) to decide which standard object
-keys a topic needs, then enqueues missing ones into FactoryQueue and fires off
-ObjectFactory pipeline as background asyncio tasks.
-
-Design principle:
-  object_key = family.variant (e.g. rocket.engine, cell.nucleus)
-  The variant is a FIXED standard part name for that family — NOT derived from
-  the node title. A topic keyword identifies the family; the family definition
-  lists the standard parts that should exist.
+Uses ObjectNeedAnalyzer (LLM-based Planner) to determine what 3D objects
+a knowledge node requires, enqueues missing ones into FactoryQueue, and
+fires off ObjectFactory pipeline as background asyncio tasks.
 
 Two entry points:
   scan_and_enqueue_project_nodes(): called on project creation, scans first-layer nodes
-  scan_and_enqueue_unlocked_nodes(): called when nodes are unlocked after a node is passed
+  scan_and_enqueue_unlocked_nodes(): called when nodes are unlocked after passing
 """
 
 from __future__ import annotations
@@ -22,174 +16,9 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-# ---------------------------------------------------------------------------
-# Topic keyword -> family mapping
-# ---------------------------------------------------------------------------
-
-_KEYWORD_TO_FAMILY: dict[str, str] = {
-    # Rocket / aerospace
-    "火箭": "rocket",
-    "导弹": "rocket",
-    "飞船": "rocket",
-    "航天": "rocket",
-    "飞机": "aircraft",
-    "太空": "rocket",
-    "宇宙飞船": "rocket",
-    "推进": "rocket",
-    "发射": "rocket",
-    # Cell / biology
-    "细胞": "cell",
-    "细菌": "cell",
-    "微生物": "cell",
-    "病毒": "cell",
-    "生物": "cell",
-    # Atom / chemistry / physics
-    "原子": "atom",
-    "分子": "atom",
-    "电子": "atom",
-    "质子": "atom",
-    "中子": "atom",
-    "化学键": "atom",
-    # Plant
-    "植物": "plant",
-    "光合": "plant",
-    "叶绿": "plant",
-    "树木": "plant",
-    "花朵": "plant",
-    "种子": "plant",
-    # Human body
-    "人体": "human_body",
-    "器官": "human_body",
-    "骨骼": "human_body",
-    "肌肉": "human_body",
-    "心脏": "human_body",
-    "大脑": "human_body",
-    "血液": "human_body",
-    # Earth / geology
-    "地球": "earth",
-    "地壳": "earth",
-    "大气": "earth",
-    "板块": "earth",
-    "火山": "earth",
-    "地震": "earth",
-    # Others
-    "潜水艇": "submarine",
-    "潜艇": "submarine",
-    "机器人": "robot",
-    "机械臂": "robot",
-    "汽车": "car",
-    "赛车": "car",
-    "轮船": "ship",
-    "舰艇": "ship",
-}
 
 # ---------------------------------------------------------------------------
-# Family -> standard object variants (fixed canonical parts, not node titles)
-# Each variant represents a meaningful educational 3D object for that domain.
-# ---------------------------------------------------------------------------
-
-_FAMILY_STANDARD_OBJECTS: dict[str, list[str]] = {
-    "rocket": [
-        "rocket.basic",        # full rocket side view (already in registry)
-        "rocket.engine",       # rocket engine cross-section
-        "rocket.nozzle",       # nozzle detail
-        "rocket.fuel_tank",    # fuel tank structure
-        "rocket.fairing",      # payload fairing
-        "rocket.stage",        # multi-stage separation
-    ],
-    "aircraft": [
-        "aircraft.basic",      # airplane side view
-        "aircraft.engine",     # jet engine cross-section
-        "aircraft.wing",       # wing airfoil cross-section
-        "aircraft.fuselage",   # fuselage structure
-    ],
-    "cell": [
-        "cell.animal",         # animal cell (already in registry)
-        "cell.plant",          # plant cell with chloroplast
-        "cell.bacteria",       # prokaryotic cell
-        "cell.nucleus",        # nucleus detail
-        "cell.mitochondria",   # mitochondrion
-    ],
-    "atom": [
-        "atom.bohr",           # Bohr model (already in registry)
-        "atom.hydrogen",       # hydrogen atom
-        "atom.carbon",         # carbon atom
-        "atom.molecule_water", # H2O molecule
-        "atom.molecule_co2",   # CO2 molecule
-    ],
-    "plant": [
-        "plant.basic",         # whole plant (already in registry)
-        "plant.leaf",          # leaf cross-section (photosynthesis)
-        "plant.root",          # root structure
-        "plant.flower",        # flower anatomy
-        "plant.seed",          # seed germination
-    ],
-    "human_body": [
-        "human_body.external", # external body (already in registry)
-        "human_body.skeleton", # skeletal system
-        "human_body.heart",    # heart cross-section
-        "human_body.brain",    # brain lobes
-        "human_body.lung",     # lung structure
-        "human_body.muscle",   # muscle fiber
-    ],
-    "earth": [
-        "earth.basic",         # earth layers (already in registry)
-        "earth.crust",         # tectonic plates
-        "earth.atmosphere",    # atmospheric layers
-        "earth.volcano",       # volcano cross-section
-        "earth.core",          # earth core detail
-    ],
-    "submarine": [
-        "submarine.basic",     # submarine side view
-        "submarine.hull",      # pressure hull cross-section
-        "submarine.propeller", # propeller detail
-    ],
-    "robot": [
-        "robot.basic",         # humanoid robot
-        "robot.arm",           # robotic arm
-        "robot.sensor",        # sensor array
-    ],
-    "car": [
-        "car.basic",           # car side view
-        "car.engine",          # engine cross-section
-        "car.drivetrain",      # drivetrain
-    ],
-    "ship": [
-        "ship.basic",          # ship side view
-        "ship.hull",           # hull cross-section
-        "ship.propeller",      # propeller
-    ],
-}
-
-
-def infer_needed_object_keys(title: str, summary: str) -> list[str]:
-    """Return list of standard object_keys needed for a topic.
-
-    Matches topic keywords to a family, then returns that family's standard
-    objects that are NOT already in ObjectRegistry.
-
-    Returns [] if no keyword matches or all standard objects already exist.
-    """
-    from systemedu.agents.builtin.gameagent.objects import ObjectRegistry
-
-    existing = set(ObjectRegistry.supported_keys())
-    text = title + " " + summary
-
-    matched_family: str | None = None
-    for keyword, family in _KEYWORD_TO_FAMILY.items():
-        if keyword in text:
-            matched_family = family
-            break
-
-    if matched_family is None:
-        return []
-
-    standard_keys = _FAMILY_STANDARD_OBJECTS.get(matched_family, [])
-    return [k for k in standard_keys if k not in existing]
-
-
-# ---------------------------------------------------------------------------
-# ObjectFactory trigger
+# ObjectFactory pipeline runner
 # ---------------------------------------------------------------------------
 
 async def _run_factory_pipeline(object_key: str, description: str) -> None:
@@ -247,44 +76,52 @@ def trigger_factory_for_keys(enqueued_items: list[tuple[str, str]]) -> None:
 
 
 # ---------------------------------------------------------------------------
-# Internal: enqueue helpers
+# Core: analyze a batch of nodes, enqueue and trigger
 # ---------------------------------------------------------------------------
 
-def _enqueue_keys_for_nodes(
+async def _analyze_and_enqueue_nodes(
     nodes: list,
     project_name: str,
-) -> tuple[list[str], list[tuple[str, str]]]:
-    """For a list of KnowledgeNode objects, infer and enqueue missing objects.
+) -> list[str]:
+    """Use ObjectNeedAnalyzer to determine required objects for each node.
 
-    Returns (enqueued_keys, to_trigger_pairs).
+    Enqueues missing objects into FactoryQueue and triggers factory pipeline.
+    Returns list of newly enqueued object_keys.
+    Deduplicates by family: once a family is handled, skip further nodes for same family.
     """
     from systemedu.agents.builtin.gameagent.object_factory import (
         FactoryQueue,
         FactoryQueueItem,
+        ObjectNeedAnalyzer,
     )
+    from systemedu.core.llm_client import get_llm
 
+    llm = get_llm()
+    analyzer = ObjectNeedAnalyzer(llm=llm)
     queue = FactoryQueue()
+
     enqueued: list[str] = []
     to_trigger: list[tuple[str, str]] = []
-    seen_families: set[str] = set()
+    handled_families: set[str] = set()
 
     for node in nodes:
-        text = node.title + " " + node.summary
-        matched_family: str | None = None
-        for keyword, family in _KEYWORD_TO_FAMILY.items():
-            if keyword in text:
-                matched_family = family
-                break
+        # Skip if family already handled in this batch (avoid duplicate LLM calls)
+        # We'll still analyze if no family detected yet
+        needed_keys = await analyzer.analyze(node.title, node.summary)
 
-        if matched_family is None or matched_family in seen_families:
-            continue
-        seen_families.add(matched_family)
-
-        needed_keys = infer_needed_object_keys(node.title, node.summary)
         for key in needed_keys:
-            # Build a meaningful description based on the family variant
+            family = key.split(".")[0]
+            if family in handled_families:
+                continue
+            handled_families.add(family)
+
+            # Build meaningful description from the key itself
             variant = key.split(".", 1)[1] if "." in key else key
-            description = f"{matched_family} / {variant} — from project: {project_name}"
+            description = (
+                f"{family} / {variant} — 来自项目: {project_name}, "
+                f"节点: {node.title}"
+            )
+
             item = FactoryQueueItem(
                 object_key=key,
                 description=description,
@@ -295,21 +132,23 @@ def _enqueue_keys_for_nodes(
                 enqueued.append(key)
                 to_trigger.append((key, description))
                 logger.info(
-                    f"object_scan: enqueued {key!r} for project {project_name!r}"
+                    f"object_scan: enqueued {key!r} for node {node.title!r} "
+                    f"in project {project_name!r}"
                 )
 
-    return enqueued, to_trigger
+    trigger_factory_for_keys(to_trigger)
+    return enqueued
 
 
 # ---------------------------------------------------------------------------
-# Scan entry points
+# Scan entry points (sync wrappers that schedule async work)
 # ---------------------------------------------------------------------------
 
 def scan_and_enqueue_project_nodes(project_name: str) -> list[str]:
-    """Called on project creation. Scan first-layer nodes, enqueue and trigger.
+    """Called on project creation. Analyze first-layer nodes and enqueue missing objects.
 
-    First-layer nodes: in first milestone, no prerequisite_indices.
-    Returns list of newly enqueued object_keys.
+    Schedules an async task to do the analysis (LLM call) — returns [] immediately
+    since the actual analysis is async. The factory pipeline runs in background.
     """
     from systemedu.education.project_loader import load_project_context
 
@@ -328,19 +167,20 @@ def scan_and_enqueue_project_nodes(project_name: str) -> list[str]:
         if not node.prerequisite_indices
     ]
 
-    enqueued, to_trigger = _enqueue_keys_for_nodes(first_layer_nodes, project_name)
-    trigger_factory_for_keys(to_trigger)
-    return enqueued
+    if not first_layer_nodes:
+        return []
+
+    _schedule_analysis(first_layer_nodes, project_name)
+    return []  # async — actual keys logged when tasks complete
 
 
 def scan_and_enqueue_unlocked_nodes(
     project_name: str,
     unlocked_node_ids: list[int],
 ) -> list[str]:
-    """Called when nodes are unlocked after a node is passed.
+    """Called when nodes are unlocked. Analyze unlocked nodes for missing objects.
 
-    Scans the newly unlocked nodes, enqueues missing objects, triggers factory.
-    Returns list of newly enqueued object_keys.
+    Schedules async analysis — returns [] immediately.
     """
     if not unlocked_node_ids:
         return []
@@ -365,6 +205,34 @@ def scan_and_enqueue_unlocked_nodes(
         if nid < len(all_nodes)
     ]
 
-    enqueued, to_trigger = _enqueue_keys_for_nodes(unlocked_nodes, project_name)
-    trigger_factory_for_keys(to_trigger)
-    return enqueued
+    if not unlocked_nodes:
+        return []
+
+    _schedule_analysis(unlocked_nodes, project_name)
+    return []
+
+
+def _schedule_analysis(nodes: list, project_name: str) -> None:
+    """Schedule _analyze_and_enqueue_nodes as an asyncio task if loop is running."""
+    try:
+        loop = asyncio.get_running_loop()
+    except RuntimeError:
+        logger.warning(
+            f"object_scan: no running event loop for project {project_name!r}, "
+            "cannot schedule analysis"
+        )
+        return
+
+    async def _run():
+        try:
+            keys = await _analyze_and_enqueue_nodes(nodes, project_name)
+            if keys:
+                logger.info(f"object_scan: analysis complete, enqueued: {keys}")
+        except Exception:
+            logger.exception(f"object_scan: analysis task failed for {project_name!r}")
+
+    loop.create_task(_run(), name=f"object_scan:{project_name}")
+    logger.info(
+        f"object_scan: scheduled analysis for {len(nodes)} nodes "
+        f"in project {project_name!r}"
+    )

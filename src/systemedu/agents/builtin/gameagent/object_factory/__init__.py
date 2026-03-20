@@ -29,6 +29,7 @@ from pathlib import Path
 from .candidate_generator import CandidateGenerator, CandidateResult
 from .candidate_validator import CandidateValidator, ValidationReport
 from .factory_queue import FactoryQueue, FactoryQueueItem
+from .object_need_analyzer import ObjectNeedAnalyzer
 from .registry_promoter import RegistryPromoter
 from .snapshot_renderer import SnapshotRenderer
 
@@ -44,6 +45,7 @@ __all__ = [
     "RegistryPromoter",
     "FactoryQueue",
     "FactoryQueueItem",
+    "ObjectNeedAnalyzer",
 ]
 
 

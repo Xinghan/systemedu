@@ -134,50 +134,108 @@ def test_multiple_items_different_keys(tmp_path):
 
 
 # ---------------------------------------------------------------------------
-# infer_object_key tests
+# ObjectNeedAnalyzer tests (mocked LLM)
 # ---------------------------------------------------------------------------
 
 
-def test_infer_needed_object_keys_rocket():
-    from systemedu.education.object_scan import infer_needed_object_keys
+@pytest.mark.asyncio
+async def test_object_need_analyzer_valid_response(monkeypatch):
+    """Analyzer should return valid keys from LLM response."""
+    from systemedu.agents.builtin.gameagent.object_factory import ObjectNeedAnalyzer
+    from unittest.mock import AsyncMock, MagicMock
 
-    results = infer_needed_object_keys("火箭发动机原理", "探索火箭如何升空")
-    # Should return standard rocket part keys not already in registry
-    assert len(results) > 0
-    assert all(k.startswith("rocket.") for k in results)
-    # rocket.basic is already in registry, should NOT appear
-    assert "rocket.basic" not in results
-    # standard parts should appear
-    assert "rocket.engine" in results
+    async def mock_ainvoke(payload):
+        from langchain_core.messages import AIMessage
+        return {"messages": [AIMessage(content='{"needed": ["rocket.engine", "rocket.nozzle"]}')]}
 
+    mock_agent = MagicMock()
+    mock_agent.ainvoke = mock_ainvoke
 
-def test_infer_needed_object_keys_cell():
-    from systemedu.education.object_scan import infer_needed_object_keys
+    monkeypatch.setattr(
+        "systemedu.agents.builtin.gameagent.object_factory.object_need_analyzer.create_deep_agent",
+        lambda **kwargs: mock_agent,
+    )
 
-    results = infer_needed_object_keys("细胞结构", "了解细胞的基本组成部分")
-    assert len(results) > 0
-    assert all(k.startswith("cell.") for k in results)
-    # cell.animal is already in registry
-    assert "cell.animal" not in results
-    assert "cell.plant" in results
-
-
-def test_infer_needed_object_keys_no_match():
-    from systemedu.education.object_scan import infer_needed_object_keys
-
-    results = infer_needed_object_keys("数学公式推导", "解方程的方法")
-    assert results == []
+    analyzer = ObjectNeedAnalyzer()
+    result = await analyzer.analyze("火箭发动机原理", "探索燃烧室和推进系统")
+    assert "rocket.engine" in result
+    assert "rocket.nozzle" in result
+    # Must not include already-registered keys
+    assert "rocket.basic" not in result
 
 
-def test_infer_needed_object_keys_excludes_registered():
-    """All returned keys should not be in ObjectRegistry."""
-    from systemedu.agents.builtin.gameagent.objects import ObjectRegistry
-    from systemedu.education.object_scan import infer_needed_object_keys
+@pytest.mark.asyncio
+async def test_object_need_analyzer_filters_registered(monkeypatch):
+    """Analyzer should filter out keys already in ObjectRegistry."""
+    from systemedu.agents.builtin.gameagent.object_factory import ObjectNeedAnalyzer
+    from unittest.mock import MagicMock
 
-    existing = set(ObjectRegistry.supported_keys())
-    results = infer_needed_object_keys("火箭推进系统", "了解火箭各零部件的作用")
-    for key in results:
-        assert key not in existing, f"{key} should not be in registry already"
+    async def mock_ainvoke(payload):
+        from langchain_core.messages import AIMessage
+        # LLM returns a key that's already in registry
+        return {"messages": [AIMessage(content='{"needed": ["rocket.basic", "rocket.engine"]}')]}
+
+    mock_agent = MagicMock()
+    mock_agent.ainvoke = mock_ainvoke
+
+    monkeypatch.setattr(
+        "systemedu.agents.builtin.gameagent.object_factory.object_need_analyzer.create_deep_agent",
+        lambda **kwargs: mock_agent,
+    )
+
+    analyzer = ObjectNeedAnalyzer()
+    result = await analyzer.analyze("火箭结构", "了解火箭部件")
+    # rocket.basic is already registered — should be filtered out
+    assert "rocket.basic" not in result
+    assert "rocket.engine" in result
+
+
+@pytest.mark.asyncio
+async def test_object_need_analyzer_no_object_needed(monkeypatch):
+    """Analyzer returns [] when LLM says no object needed."""
+    from systemedu.agents.builtin.gameagent.object_factory import ObjectNeedAnalyzer
+    from unittest.mock import MagicMock
+
+    async def mock_ainvoke(payload):
+        from langchain_core.messages import AIMessage
+        return {"messages": [AIMessage(content='{"needed": []}')]}
+
+    mock_agent = MagicMock()
+    mock_agent.ainvoke = mock_ainvoke
+
+    monkeypatch.setattr(
+        "systemedu.agents.builtin.gameagent.object_factory.object_need_analyzer.create_deep_agent",
+        lambda **kwargs: mock_agent,
+    )
+
+    analyzer = ObjectNeedAnalyzer()
+    result = await analyzer.analyze("数学公式推导", "解方程的方法")
+    assert result == []
+
+
+@pytest.mark.asyncio
+async def test_object_need_analyzer_rejects_title_slug(monkeypatch):
+    """Analyzer should reject variant names not in candidate list (e.g. title slugs)."""
+    from systemedu.agents.builtin.gameagent.object_factory import ObjectNeedAnalyzer
+    from unittest.mock import MagicMock
+
+    async def mock_ainvoke(payload):
+        from langchain_core.messages import AIMessage
+        # LLM returns an invalid variant (title slug)
+        return {"messages": [AIMessage(content='{"needed": ["rocket.为什么先讲安全再讲火箭"]}')]}
+
+    mock_agent = MagicMock()
+    mock_agent.ainvoke = mock_ainvoke
+
+    monkeypatch.setattr(
+        "systemedu.agents.builtin.gameagent.object_factory.object_need_analyzer.create_deep_agent",
+        lambda **kwargs: mock_agent,
+    )
+
+    analyzer = ObjectNeedAnalyzer()
+    result = await analyzer.analyze("为什么先讲安全再讲火箭", "安全教育")
+    # Should be filtered out since variant is not in candidate list
+    assert result == []
 
 
 # ---------------------------------------------------------------------------
@@ -229,11 +287,9 @@ def _make_fake_project(tmp_path, project_name: str, nodes_data: list[dict]) -> N
     return proj_dir
 
 
-def test_scan_enqueues_first_layer_only(tmp_path, monkeypatch):
-    """Only nodes without prerequisite_indices should be enqueued."""
-    import json
+def test_scan_project_nodes_schedules_task(tmp_path, monkeypatch):
+    """scan_and_enqueue_project_nodes schedules an async task and returns [] immediately."""
     from systemedu.education.object_scan import scan_and_enqueue_project_nodes
-    from systemedu.agents.builtin.gameagent.object_factory import FactoryQueue
 
     nodes = [
         {
@@ -247,75 +303,8 @@ def test_scan_enqueues_first_layer_only(tmp_path, monkeypatch):
             "xp_reward": 50,
             "prerequisite_indices": [],
         },
-        {
-            "id": 1,
-            "title": "高级推进",
-            "summary": "火箭高级推进技术",
-            "difficulty_level": 3,
-            "content_type": "text",
-            "acceptance_type": "quiz",
-            "estimated_minutes": 60,
-            "xp_reward": 100,
-            "prerequisite_indices": [0],  # NOT first layer
-        },
     ]
-
-    proj_dir = _make_fake_project(tmp_path, "rocket-proj", nodes)
-
-    # Monkeypatch load_project_context to look in tmp_path
-    import systemedu.education.project_loader as pl_mod
-    orig_find = pl_mod.find_project_dir
-
-    def mock_find(name, *args, **kwargs):
-        d = tmp_path / name
-        if d.exists():
-            return d
-        return orig_find(name, *args, **kwargs)
-
-    monkeypatch.setattr(pl_mod, "find_project_dir", mock_find)
-
-    queue_path = tmp_path / "fq.jsonl"
-
-    # Patch the module-level default path used by FactoryQueue
-    import systemedu.agents.builtin.gameagent.object_factory.factory_queue as fq_mod
-    monkeypatch.setattr(fq_mod, "_DEFAULT_PATH", queue_path)
-
-    enqueued = scan_and_enqueue_project_nodes("rocket-proj")
-
-    # Should enqueue rocket standard parts (no node title slugs)
-    assert len(enqueued) > 0
-    assert all(k.startswith("rocket.") for k in enqueued)
-    # rocket.basic is already in registry, should not appear
-    assert "rocket.basic" not in enqueued
-    # standard parts should appear
-    assert "rocket.engine" in enqueued
-
-    q = FactoryQueue(queue_path=queue_path)
-    items = q.pending_items()
-    assert len(items) > 0
-    assert all(i.source == "auto_project" for i in items)
-    assert all(i.project_name == "rocket-proj" for i in items)
-
-
-def test_scan_skips_unknown_topics(tmp_path, monkeypatch):
-    """Nodes with no matching keyword should not be enqueued."""
-    from systemedu.education.object_scan import scan_and_enqueue_project_nodes
-
-    nodes = [
-        {
-            "id": 0,
-            "title": "数学基础",
-            "summary": "学习加减乘除",
-            "difficulty_level": 1,
-            "content_type": "text",
-            "acceptance_type": "quiz",
-            "estimated_minutes": 20,
-            "xp_reward": 30,
-            "prerequisite_indices": [],
-        },
-    ]
-
-    _make_fake_project(tmp_path, "math-proj", nodes)
+    _make_fake_project(tmp_path, "rocket-proj", nodes)
 
     import systemedu.education.project_loader as pl_mod
     orig_find = pl_mod.find_project_dir
@@ -328,8 +317,9 @@ def test_scan_skips_unknown_topics(tmp_path, monkeypatch):
 
     monkeypatch.setattr(pl_mod, "find_project_dir", mock_find)
 
-    enqueued = scan_and_enqueue_project_nodes("math-proj")
-    assert enqueued == []
+    # Returns [] immediately (analysis is async)
+    result = scan_and_enqueue_project_nodes("rocket-proj")
+    assert result == []
 
 
 def test_scan_invalid_project_returns_empty(tmp_path):
@@ -337,6 +327,99 @@ def test_scan_invalid_project_returns_empty(tmp_path):
 
     enqueued = scan_and_enqueue_project_nodes("nonexistent-project-xyz")
     assert enqueued == []
+
+
+@pytest.mark.asyncio
+async def test_analyze_and_enqueue_nodes_uses_analyzer(tmp_path, monkeypatch):
+    """_analyze_and_enqueue_nodes calls ObjectNeedAnalyzer and enqueues returned keys."""
+    from systemedu.education.object_scan import _analyze_and_enqueue_nodes
+    from systemedu.agents.builtin.gameagent.object_factory import FactoryQueue
+    from unittest.mock import MagicMock
+
+    # Mock ObjectNeedAnalyzer.analyze to return controlled keys
+    async def mock_analyze(self, title, summary):
+        if "火箭" in title or "火箭" in summary:
+            return ["rocket.engine", "rocket.nozzle"]
+        return []
+
+    import systemedu.agents.builtin.gameagent.object_factory.object_need_analyzer as ana_mod
+    monkeypatch.setattr(ana_mod.ObjectNeedAnalyzer, "analyze", mock_analyze)
+
+    # Patch get_llm to return None (analyzer mock ignores it)
+    import systemedu.core.llm_client as llm_mod
+    monkeypatch.setattr(llm_mod, "get_llm", lambda: None)
+
+    queue_path = tmp_path / "fq.jsonl"
+    import systemedu.agents.builtin.gameagent.object_factory.factory_queue as fq_mod
+    monkeypatch.setattr(fq_mod, "_DEFAULT_PATH", queue_path)
+
+    # Patch trigger_factory_for_keys to no-op
+    import systemedu.education.object_scan as scan_mod
+    monkeypatch.setattr(scan_mod, "trigger_factory_for_keys", lambda items: None)
+
+    # Create fake node objects
+    class FakeNode:
+        def __init__(self, title, summary):
+            self.title = title
+            self.summary = summary
+
+    nodes = [FakeNode("火箭发动机", "燃烧室和推进系统原理")]
+
+    enqueued = await _analyze_and_enqueue_nodes(nodes, "rocket-proj")
+
+    # Both keys are in the "rocket" family — dedup-by-family keeps only the first
+    assert len(enqueued) == 1
+    assert enqueued[0] == "rocket.engine"
+
+    q = FactoryQueue(queue_path=queue_path)
+    items = q.pending_items()
+    assert len(items) == 1
+    assert items[0].source == "auto_project"
+    assert items[0].project_name == "rocket-proj"
+
+
+@pytest.mark.asyncio
+async def test_analyze_and_enqueue_dedup_by_family(tmp_path, monkeypatch):
+    """Same family handled only once per batch (dedup by family)."""
+    from systemedu.education.object_scan import _analyze_and_enqueue_nodes
+    from systemedu.agents.builtin.gameagent.object_factory import FactoryQueue
+    from unittest.mock import MagicMock
+
+    call_count = 0
+
+    async def mock_analyze(self, title, summary):
+        nonlocal call_count
+        call_count += 1
+        return ["rocket.engine"]  # always returns rocket.engine
+
+    import systemedu.agents.builtin.gameagent.object_factory.object_need_analyzer as ana_mod
+    monkeypatch.setattr(ana_mod.ObjectNeedAnalyzer, "analyze", mock_analyze)
+
+    import systemedu.core.llm_client as llm_mod
+    monkeypatch.setattr(llm_mod, "get_llm", lambda: None)
+
+    queue_path = tmp_path / "fq_dedup.jsonl"
+    import systemedu.agents.builtin.gameagent.object_factory.factory_queue as fq_mod
+    monkeypatch.setattr(fq_mod, "_DEFAULT_PATH", queue_path)
+
+    import systemedu.education.object_scan as scan_mod
+    monkeypatch.setattr(scan_mod, "trigger_factory_for_keys", lambda items: None)
+
+    class FakeNode:
+        def __init__(self, title, summary):
+            self.title = title
+            self.summary = summary
+
+    # Two nodes both return rocket.engine — second should be deduped by family
+    nodes = [FakeNode("火箭推进", "推进系统"), FakeNode("火箭结构", "箭体结构")]
+
+    enqueued = await _analyze_and_enqueue_nodes(nodes, "rocket-proj")
+
+    # Only one enqueue because family "rocket" is handled after first node
+    assert enqueued == ["rocket.engine"]
+
+    q = FactoryQueue(queue_path=queue_path)
+    assert len(q.all_items()) == 1
 
 
 # ---------------------------------------------------------------------------
@@ -380,10 +463,9 @@ def _make_fake_project_with_chain(tmp_path, project_name: str) -> None:
     )
 
 
-def test_scan_unlocked_nodes_enqueues_topic_nodes(tmp_path, monkeypatch):
-    """Unlocked nodes with matching topics should be enqueued."""
+def test_scan_unlocked_nodes_schedules_task(tmp_path, monkeypatch):
+    """scan_and_enqueue_unlocked_nodes schedules an async task and returns [] immediately."""
     from systemedu.education.object_scan import scan_and_enqueue_unlocked_nodes
-    from systemedu.agents.builtin.gameagent.object_factory import FactoryQueue
 
     _make_fake_project_with_chain(tmp_path, "chain-proj")
 
@@ -398,81 +480,64 @@ def test_scan_unlocked_nodes_enqueues_topic_nodes(tmp_path, monkeypatch):
 
     monkeypatch.setattr(pl_mod, "find_project_dir", mock_find)
 
-    queue_path = tmp_path / "fq.jsonl"
-    import systemedu.agents.builtin.gameagent.object_factory.factory_queue as fq_mod
-    monkeypatch.setattr(fq_mod, "_DEFAULT_PATH", queue_path)
-
-    # Node 1 (细胞结构) just got unlocked
-    enqueued = scan_and_enqueue_unlocked_nodes("chain-proj", [1])
-    assert len(enqueued) > 0
-    assert all(k.startswith("cell.") for k in enqueued)
-    # cell.animal is already in registry
-    assert "cell.animal" not in enqueued
-
-    q = FactoryQueue(queue_path=queue_path)
-    items = q.pending_items()
-    assert len(items) > 0
-    assert all(i.project_name == "chain-proj" for i in items)
-    assert all(i.source == "auto_project" for i in items)
-
-
-def test_scan_unlocked_nodes_skips_no_topic_match(tmp_path, monkeypatch):
-    """Unlocked nodes with no topic keyword should not be enqueued."""
-    from systemedu.education.object_scan import scan_and_enqueue_unlocked_nodes
-
-    _make_fake_project_with_chain(tmp_path, "chain-proj2")
-
-    import systemedu.education.project_loader as pl_mod
-    orig_find = pl_mod.find_project_dir
-
-    def mock_find(name, *args, **kwargs):
-        d = tmp_path / name
-        if d.exists():
-            return d
-        return orig_find(name, *args, **kwargs)
-
-    monkeypatch.setattr(pl_mod, "find_project_dir", mock_find)
-
-    # Node 2 (数学公式) — no keyword match
-    enqueued = scan_and_enqueue_unlocked_nodes("chain-proj2", [2])
-    assert enqueued == []
+    # Returns [] immediately (analysis is async)
+    result = scan_and_enqueue_unlocked_nodes("chain-proj", [1])
+    assert result == []
 
 
 def test_scan_unlocked_nodes_empty_list(tmp_path):
     from systemedu.education.object_scan import scan_and_enqueue_unlocked_nodes
 
-    enqueued = scan_and_enqueue_unlocked_nodes("any-proj", [])
-    assert enqueued == []
+    result = scan_and_enqueue_unlocked_nodes("any-proj", [])
+    assert result == []
 
 
-def test_scan_unlocked_dedup(tmp_path, monkeypatch):
-    """Same node unlocked twice should only enqueue once."""
+def test_scan_unlocked_nodes_invalid_project(tmp_path):
     from systemedu.education.object_scan import scan_and_enqueue_unlocked_nodes
+
+    result = scan_and_enqueue_unlocked_nodes("nonexistent-project-xyz", [1])
+    assert result == []
+
+
+@pytest.mark.asyncio
+async def test_analyze_and_enqueue_unlocked_nodes(tmp_path, monkeypatch):
+    """_analyze_and_enqueue_nodes works for unlocked nodes (same logic as project scan)."""
+    from systemedu.education.object_scan import _analyze_and_enqueue_nodes
     from systemedu.agents.builtin.gameagent.object_factory import FactoryQueue
 
-    _make_fake_project_with_chain(tmp_path, "chain-proj3")
+    async def mock_analyze(self, title, summary):
+        if "细胞" in title or "细胞" in summary:
+            return ["cell.nucleus", "cell.membrane"]
+        return []
 
-    import systemedu.education.project_loader as pl_mod
-    orig_find = pl_mod.find_project_dir
+    import systemedu.agents.builtin.gameagent.object_factory.object_need_analyzer as ana_mod
+    monkeypatch.setattr(ana_mod.ObjectNeedAnalyzer, "analyze", mock_analyze)
 
-    def mock_find(name, *args, **kwargs):
-        d = tmp_path / name
-        if d.exists():
-            return d
-        return orig_find(name, *args, **kwargs)
+    import systemedu.core.llm_client as llm_mod
+    monkeypatch.setattr(llm_mod, "get_llm", lambda: None)
 
-    monkeypatch.setattr(pl_mod, "find_project_dir", mock_find)
-
-    queue_path = tmp_path / "fq2.jsonl"
+    queue_path = tmp_path / "fq_unlocked.jsonl"
     import systemedu.agents.builtin.gameagent.object_factory.factory_queue as fq_mod
     monkeypatch.setattr(fq_mod, "_DEFAULT_PATH", queue_path)
 
-    first = scan_and_enqueue_unlocked_nodes("chain-proj3", [1])
-    first_count = len(first)
-    assert first_count > 0
-    # Second call — all should be deduped (already pending)
-    second = scan_and_enqueue_unlocked_nodes("chain-proj3", [1])
-    assert second == []
+    import systemedu.education.object_scan as scan_mod
+    monkeypatch.setattr(scan_mod, "trigger_factory_for_keys", lambda items: None)
+
+    class FakeNode:
+        def __init__(self, title, summary):
+            self.title = title
+            self.summary = summary
+
+    nodes = [FakeNode("细胞结构", "细菌和微生物的细胞组织")]
+
+    enqueued = await _analyze_and_enqueue_nodes(nodes, "chain-proj")
+
+    # Both keys are in the "cell" family — dedup-by-family keeps only the first
+    assert len(enqueued) == 1
+    assert enqueued[0] == "cell.nucleus"
 
     q = FactoryQueue(queue_path=queue_path)
-    assert len(q.all_items()) == first_count
+    items = q.pending_items()
+    assert len(items) == 1
+    assert items[0].project_name == "chain-proj"
+    assert items[0].source == "auto_project"
