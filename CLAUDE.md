@@ -166,6 +166,10 @@ source .venv/bin/activate && python -m pytest tests/ -v
 - **每个新功能都必须附带测试，未写测试不允许提交**
 - 运行测试：`source .venv/bin/activate && python -m pytest tests/ -v`
 - Agent 测试：使用 mock LLM 响应，验证 agent 输入输出
+- **LLM/Prompt 行为必须用真实 LLM 验证，不允许仅凭预期推断**
+  - 修改 prompt 后，必须用真实 LLM 跑代表性测试用例，观察实际输出
+  - 例如：`python3 << 'EOF' ... asyncio.run(test()) EOF`
+  - 不允许说"LLM 会判断..."、"LLM 应该会..."，必须跑出实际结果再下结论
 - 配置测试：使用 tmp_path fixture，不污染真实 ~/.systemedu/
 
 ## Key Decisions Log
