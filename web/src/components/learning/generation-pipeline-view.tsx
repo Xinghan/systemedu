@@ -298,13 +298,15 @@ export function GenerationPipelineView({
                       </div>
                     </div>
                     {/* Duration or status indicator */}
-                    {step.started_at && step.completed_at && (
-                      <span className="text-xs text-muted-foreground tabular-nums">
-                        {Math.round(
-                          (new Date(step.completed_at).getTime() - new Date(step.started_at).getTime()) / 1000
-                        )}s
-                      </span>
-                    )}
+                    {step.started_at && step.completed_at && (() => {
+                      const ms = new Date(step.completed_at).getTime() - new Date(step.started_at).getTime()
+                      const secs = Math.round(ms / 1000)
+                      return (
+                        <span className="text-xs text-muted-foreground tabular-nums">
+                          {secs < 1 ? '<1s' : `${secs}s`}
+                        </span>
+                      )
+                    })()}
                     {step.status === "in_progress" && (
                       <span className="text-xs text-blue-500 tabular-nums animate-pulse">
                         ...
