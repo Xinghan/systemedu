@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>分类游戏</title>
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet"/>
+<script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100vh;overflow:hidden;font-family:'Nunito','PingFang SC',sans-serif;background:linear-gradient(135deg,#EEF2FF 0%,#F0FDF4 100%)}
+@keyframes bounce{0%,100%{transform:scale(1)}50%{transform:scale(1.12)}}
+@keyframes shake{0%,100%{transform:translateX(0)}25%{transform:translateX(-8px)}75%{transform:translateX(8px)}}
+@keyframes fall{0%{transform:translateY(-20px);opacity:1}100%{transform:translateY(120vh);opacity:0}}
+@keyframes pop{0%{transform:scale(0.8);opacity:0}100%{transform:scale(1);opacity:1}}
+.bounce{animation:bounce 0.4s ease}
+.shake{animation:shake 0.4s ease}
+.confetti-dot{position:fixed;width:10px;height:10px;border-radius:50%;pointer-events:none;animation:fall 1.8s ease-in forwards}
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const GAME_SPEC = "__GAME_SPEC__";
+
+const { useState, useEffect, useCallback, useRef } = React;
+
+const COLORS = ["#4F8EF7","#4ADE80","#FB923C","#A78BFA","#FCD34D","#F87171","#06B6D4","#EC4899"];
+
+function Confetti() {
+  const dots = Array.from({length:16},(_,i)=>i);
+  return (
+    <div aria-hidden="true">
+      {dots.map(i=>(
+        <div key={i} className="confetti-dot" style={{
+          left:`${Math.random()*100}%`,
+          top:0,
+          background:COLORS[i%COLORS.length],
+          animationDelay:`${Math.random()*0.6}s`,
+          animationDuration:`${1.2+Math.random()*0.8}s`,
+        }}/>
+      ))}
+    </div>
+  );
+}
+
+function App() {
+  const spec = GAME_SPEC;
+  const { entities, categories, rules, levels, feedback, topic, theme } = spec;
+  const [placed, setPlaced] = useState({});
+  const [animState, setAnimState] = useState({});
+  const [showConfetti, setShowConfetti] = useState(false);
+  const [mistakes, setMistakes] = useState(0);
+  const [score, setScore] = useState(0);
+  const [done, setDone] = useState(false);
+  const animRef = useRef({});
+
+  const remaining = entities.filter(e => !placed[e.id]);
+  const levelIdx = Math.min(Math.floor(placed ? Object.keys(placed).length / Math.max(entities.length / Math.max(levels.length,1), 1) : 0), levels.length-1);
+  const currentPrompt = levels[levelIdx]?.prompt || "";
+
+  const triggerAnim = (id, type) => {
+    setAnimState(s => ({...s, [id]: type}));
+    clearTimeout(animRef.current[id]);
+    animRef.current[id] = setTimeout(() => setAnimState(s => ({...s, [id]: null})), 500);
+  };
+
+  const handleDrop = (e, catId) => {
+    e.preventDefault();
+    const entityId = e.dataTransfer.getData("text/plain");
+    const entity = entities.find(en => en.id === entityId);
+    if (!entity || placed[entityId]) return;
+    if (entity.category === catId) {
+      setPlaced(p => ({...p, [entityId]: catId}));
+      setScore(s => s + (rules.correct_points || 10));
+      triggerAnim(entityId, "bounce");
+      const newPlaced = {...placed, [entityId]: catId};
+      if (Object.keys(newPlaced).length === entities.length) {
+        setDone(true);
+        setShowConfetti(true);
+      }
+    } else {
+      setMistakes(m => m+1);
+      triggerAnim(entityId, "shake");
+    }
+  };
+
+  return (
+    <div style={{height:"100vh",display:"flex",flexDirection:"column",padding:"8px 12px",gap:8}}>
+      {showConfetti && <Confetti/>}
+      {/* Header */}
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",height:44,flexShrink:0}}>
+        <div style={{fontWeight:800,fontSize:16,color:"#3730A3"}}>{topic}</div>
+        <div style={{display:"flex",gap:12,fontSize:13,fontWeight:700}}>
+          <span style={{color:"#4F8EF7"}}>得分: {score}</span>
+          <span style={{color:"#F87171"}}>错误: {mistakes}</span>
+        </div>
+      </div>
+
+      {/* Prompt */}
+      <div style={{background:"#fff",borderRadius:12,padding:"6px 12px",fontSize:13,color:"#6B7280",fontWeight:600,flexShrink:0,boxShadow:"0 2px 0 rgba(0,0,0,0.06)"}}>{currentPrompt || `将卡片拖入正确的类别`}</div>
+
+      {done ? (
+        <div style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:16}}>
+          <div style={{fontSize:48}}>🎉</div>
+          <div style={{fontSize:22,fontWeight:800,color:"#3730A3"}}>{feedback.complete_text}</div>
+          <div style={{fontSize:15,color:"#6B7280"}}>得分: {score} | 错误: {mistakes}</div>
+          <button onClick={()=>{setPlaced({});setScore(0);setMistakes(0);setDone(false);setShowConfetti(false);}} style={{background:"#4F8EF7",color:"#fff",border:"none",borderRadius:12,padding:"10px 28px",fontWeight:800,fontSize:15,cursor:"pointer",boxShadow:"0 4px 0 #2563EB"}}>再玩一次</button>
+        </div>
+      ) : (
+        <div style={{flex:1,display:"flex",gap:10,minHeight:0}}>
+          {/* Items to drag */}
+          <div style={{flex:"0 0 160px",display:"flex",flexDirection:"column",gap:6,overflowY:"auto"}}>
+            <div style={{fontSize:11,fontWeight:700,color:"#9CA3AF",paddingBottom:2}}>待分类</div>
+            {remaining.map((entity,i) => (
+              <div
+                key={entity.id}
+                draggable
+                onDragStart={e=>{e.dataTransfer.setData("text/plain",entity.id);}}
+                className={animState[entity.id] || ""}
+                style={{
+                  background:"#fff",borderRadius:12,padding:"8px 10px",
+                  boxShadow:"0 3px 0 rgba(0,0,0,0.10)",cursor:"grab",
+                  fontWeight:700,fontSize:13,color:"#1F2937",
+                  borderLeft:`4px solid ${COLORS[i%COLORS.length]}`,
+                  userSelect:"none",
+                }}
+              >
+                {entity.label}
+              </div>
+            ))}
+            {remaining.length === 0 && <div style={{fontSize:12,color:"#9CA3AF",fontStyle:"italic"}}>全部已分类！</div>}
+          </div>
+
+          {/* Category drop zones */}
+          <div style={{flex:1,display:"flex",flexDirection:"column",gap:8,overflowY:"auto"}}>
+            {(categories || []).map((cat,ci) => {
+              const placedItems = entities.filter(e=>placed[e.id]===cat.id);
+              return (
+                <div
+                  key={cat.id}
+                  onDragOver={e=>e.preventDefault()}
+                  onDrop={e=>handleDrop(e,cat.id)}
+                  style={{
+                    flex:1,minHeight:60,background:"rgba(255,255,255,0.7)",borderRadius:14,
+                    border:`2px dashed ${COLORS[ci%COLORS.length]}`,padding:"8px 10px",
+                    display:"flex",flexDirection:"column",gap:6,
+                  }}
+                >
+                  <div style={{fontSize:12,fontWeight:800,color:COLORS[ci%COLORS.length]}}>{cat.label}</div>
+                  <div style={{display:"flex",flexWrap:"wrap",gap:4}}>
+                    {placedItems.map(e=>(
+                      <div key={e.id} style={{background:COLORS[ci%COLORS.length],color:"#fff",borderRadius:8,padding:"3px 8px",fontSize:12,fontWeight:700,animation:"pop 0.3s ease"}}>
+                        {e.label}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<App/>);
+</script>
+</body>
+</html>

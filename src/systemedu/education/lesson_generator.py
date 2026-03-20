@@ -298,11 +298,11 @@ async def _generate_interactive_lab(
     lesson_plan: dict | None = None,
     progress_callback=None,
 ) -> str:
-    """Generate a runnable React HTML page using the 2-Agent pipeline.
+    """Generate a runnable HTML game using the GameAgent pipeline.
 
-    Pipeline: LabCoderAgent → LabReviewerAgent
+    Pipeline: GameSpecPlannerAgent (LLM) → GameCompiler (Python)
 
-    Falls back gracefully if any agent fails.
+    Falls back gracefully if any stage fails.
 
     Args:
         node_title: Title of the knowledge node.
@@ -314,50 +314,41 @@ async def _generate_interactive_lab(
 
     Returns the full HTML string, or empty string on failure.
     """
-    from systemedu.agents.builtin.lab_coder import LabCoderAgent
-    from systemedu.agents.builtin.lab_reviewer import LabReviewerAgent
-
-    max_retries = 1  # retry once on failure
+    from systemedu.agents.builtin.gameagent.compiler import GameCompiler
+    from systemedu.agents.builtin.gameagent.planner import GameSpecPlannerAgent
 
     # Extract lab_strategy from lesson_plan
     lab_strategy = {}
     if lesson_plan:
         lab_strategy = lesson_plan.get("lab_strategy", {})
 
-    # Stage 1: Coder — generate HTML directly from game concept
+    # Stage 1: Planner (LLM) — generate GameSpec JSON
     if progress_callback:
-        progress_callback("lab_coder", "in_progress", "")
-    coder = LabCoderAgent(llm=llm)
-    html = ""
-    for attempt in range(1 + max_retries):
-        html = await coder.generate(node_title, node_summary, difficulty, lab_strategy)
-        if html:
-            break
-        if attempt < max_retries:
-            logger.info(f"Lab coder attempt {attempt + 1} failed for '{node_title}', retrying...")
+        progress_callback("game_spec_planner", "in_progress", "")
+    planner = GameSpecPlannerAgent(llm=llm)
+    spec = await planner.plan(node_title, node_summary, difficulty, lab_strategy)
     if progress_callback:
-        status = "completed" if html else "failed"
-        progress_callback("lab_coder", status, f"{len(html)} chars" if html else "")
+        if spec:
+            progress_callback("game_spec_planner", "completed", f"mechanic={spec.mechanic}")
+        else:
+            progress_callback("game_spec_planner", "failed", "")
 
-    # Stage 2: Reviewer — review and fix known interaction bugs
-    if html:
+    # Stage 2: Compiler (Python, no LLM) — inject spec into HTML template
+    html = ""
+    if spec:
         if progress_callback:
-            progress_callback("lab_reviewer", "in_progress", "")
+            progress_callback("game_compiler", "in_progress", "")
         try:
-            reviewer = LabReviewerAgent(llm=llm)
-            reviewed_html = await reviewer.review(html, lab_strategy)
-            if reviewed_html:
-                html = reviewed_html
+            html = GameCompiler().compile(spec)
             if progress_callback:
-                progress_callback("lab_reviewer", "completed", f"{len(html)} chars")
+                progress_callback("game_compiler", "completed", f"{len(html)} chars")
         except Exception:
-            logger.exception("Lab reviewer failed, using unreviewed HTML")
+            logger.exception(f"GameCompiler failed for '{node_title}'")
             if progress_callback:
-                progress_callback("lab_reviewer", "failed", "降级：跳过审查")
+                progress_callback("game_compiler", "failed", "")
     else:
-        # No HTML to review — mark reviewer as skipped
         if progress_callback:
-            progress_callback("lab_reviewer", "completed", "跳过：无代码")
+            progress_callback("game_compiler", "completed", "跳过：无 spec")
 
     return html
 
@@ -521,8 +512,8 @@ def _init_progress_steps(db, project_name: str, knode_id: int):
         ("key_takeaways", "要点总结", "总结老师"),
         ("quiz", "测验题", "出题老师"),
         ("teacher_script", "老师讲义", "讲稿老师"),
-        ("lab_coder", "实验-代码生成", "开发小助手"),
-        ("lab_reviewer", "实验-代码审查", "审查小助手"),
+        ("game_spec_planner", "实验-游戏策划", "游戏策划师"),
+        ("game_compiler", "实验-游戏编译", "编译小助手"),
         ("tts", "语音合成", "朗读老师"),
     ]
     for step_name, step_label, agent_name in steps:
@@ -704,12 +695,12 @@ async def generate_lesson(project_name: str, knode_id: int, user_id: str = "defa
         # Step 4: Generate interactive lab (3-Agent pipeline)
         def lab_progress_callback(step_name, status, preview):
             step_labels = {
-                "lab_coder": "实验-代码生成",
-                "lab_reviewer": "实验-代码审查",
+                "game_spec_planner": "实验-游戏策划",
+                "game_compiler": "实验-游戏编译",
             }
             agent_names = {
-                "lab_coder": "开发小助手",
-                "lab_reviewer": "审查小助手",
+                "game_spec_planner": "游戏策划师",
+                "game_compiler": "编译小助手",
             }
             _update_progress(
                 db, project_name, knode_id,

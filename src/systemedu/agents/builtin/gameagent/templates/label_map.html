@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>标注地图</title>
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet"/>
+<script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100vh;overflow:hidden;font-family:'Nunito','PingFang SC',sans-serif;background:linear-gradient(135deg,#EEF2FF 0%,#F0FDF4 100%)}
+@keyframes bounce{0%,100%{transform:scale(1)}40%{transform:scale(1.3)}70%{transform:scale(0.9)}}
+@keyframes fall{0%{transform:translateY(-20px);opacity:1}100%{transform:translateY(120vh);opacity:0}}
+@keyframes blink{0%,100%{opacity:1;transform:scale(1)}50%{opacity:0.6;transform:scale(1.2)}}
+@keyframes popIn{0%{transform:scale(0.5);opacity:0}100%{transform:scale(1);opacity:1}}
+.confetti-dot{position:fixed;width:10px;height:10px;border-radius:50%;pointer-events:none;animation:fall 1.8s ease-in forwards}
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const GAME_SPEC = "__GAME_SPEC__";
+
+const { useState, useRef } = React;
+const COLORS = ["#4F8EF7","#4ADE80","#FB923C","#A78BFA","#FCD34D","#06B6D4","#EC4899","#F87171"];
+
+function Confetti() {
+  return (
+    <div aria-hidden="true">
+      {Array.from({length:18},(_,i)=>(
+        <div key={i} className="confetti-dot" style={{
+          left:`${Math.random()*100}%`,top:0,
+          background:COLORS[i%COLORS.length],
+          animationDelay:`${Math.random()*0.7}s`,
+          animationDuration:`${1.2+Math.random()*0.9}s`,
+        }}/>
+      ))}
+    </div>
+  );
+}
+
+function App() {
+  const { entities, rules, levels, feedback, topic, scene_description } = GAME_SPEC;
+  const [explored, setExplored] = useState({});
+  const [activeBubble, setActiveBubble] = useState(null);
+  const [done, setDone] = useState(false);
+  const [showConfetti, setShowConfetti] = useState(false);
+  const [score, setScore] = useState(0);
+
+  const handleDotClick = (entity) => {
+    const alreadyExplored = explored[entity.id];
+    if (activeBubble === entity.id) {
+      setActiveBubble(null);
+    } else {
+      setActiveBubble(entity.id);
+      if (!alreadyExplored) {
+        const newExplored = {...explored, [entity.id]: true};
+        setExplored(newExplored);
+        setScore(s => s + (rules.correct_points || 10));
+        if (Object.keys(newExplored).length === entities.length) {
+          setDone(true);
+          setShowConfetti(true);
+        }
+      }
+    }
+  };
+
+  const reset = () => {
+    setExplored({});setActiveBubble(null);setDone(false);setShowConfetti(false);setScore(0);
+  };
+
+  const exploredCount = Object.keys(explored).length;
+  const levelIdx = Math.min(Math.floor(exploredCount / Math.max(entities.length/Math.max(levels.length,1),1)), levels.length-1);
+  const currentPrompt = levels[levelIdx]?.prompt || "点击闪烁的圆点，探索各个部分";
+
+  return (
+    <div style={{height:"100vh",display:"flex",flexDirection:"column",padding:"8px 12px",gap:8}}>
+      {showConfetti && <Confetti/>}
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",height:44,flexShrink:0}}>
+        <div style={{fontWeight:800,fontSize:16,color:"#3730A3"}}>{topic}</div>
+        <div style={{display:"flex",gap:12,fontSize:13,fontWeight:700}}>
+          <span style={{color:"#4F8EF7"}}>得分: {score}</span>
+          <span style={{color:"#6B7280"}}>{exploredCount}/{entities.length} 已探索</span>
+        </div>
+      </div>
+
+      <div style={{background:"#fff",borderRadius:12,padding:"6px 12px",fontSize:13,color:"#6B7280",fontWeight:600,flexShrink:0,boxShadow:"0 2px 0 rgba(0,0,0,0.06)"}}>{currentPrompt}</div>
+
+      {done ? (
+        <div style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:16}}>
+          <div style={{fontSize:48}}>🎉</div>
+          <div style={{fontSize:22,fontWeight:800,color:"#3730A3"}}>{feedback.complete_text}</div>
+          <div style={{fontSize:14,color:"#6B7280"}}>全部 {entities.length} 个部分已探索！</div>
+          <button onClick={reset} style={{background:"#4F8EF7",color:"#fff",border:"none",borderRadius:12,padding:"10px 28px",fontWeight:800,fontSize:15,cursor:"pointer",boxShadow:"0 4px 0 #2563EB"}}>再探索一次</button>
+        </div>
+      ) : (
+        <div style={{flex:1,display:"flex",gap:10,minHeight:0}}>
+          {/* Scene area with dots */}
+          <div style={{flex:1,position:"relative",background:"#fff",borderRadius:14,boxShadow:"0 3px 0 rgba(0,0,0,0.08)",overflow:"hidden"}}>
+            {/* Scene background description */}
+            <div style={{position:"absolute",top:8,left:0,right:0,textAlign:"center",fontSize:11,color:"#D1D5DB",fontWeight:600,pointerEvents:"none"}}>
+              {scene_description}
+            </div>
+
+            {/* Simple SVG background pattern */}
+            <svg style={{position:"absolute",inset:0,width:"100%",height:"100%",opacity:0.06}} viewBox="0 0 400 300">
+              <defs>
+                <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
+                  <path d="M 40 0 L 0 0 0 40" fill="none" stroke="#6366F1" strokeWidth="1"/>
+                </pattern>
+              </defs>
+              <rect width="400" height="300" fill="url(#grid)"/>
+            </svg>
+
+            {entities.map((entity, i) => {
+              const isExplored = explored[entity.id];
+              const isActive = activeBubble === entity.id;
+              const color = COLORS[i % COLORS.length];
+              return (
+                <div key={entity.id} style={{position:"absolute",left:`${entity.x}%`,top:`${entity.y}%`,transform:"translate(-50%,-50%)",zIndex:isActive?20:10}}>
+                  {/* Blinking dot */}
+                  <div
+                    onClick={()=>handleDotClick(entity)}
+                    style={{
+                      width:isActive?22:18,height:isActive?22:18,
+                      borderRadius:"50%",
+                      background:isExplored?"#4ADE80":color,
+                      cursor:"pointer",
+                      boxShadow:`0 0 0 4px ${isExplored?"rgba(74,222,128,0.3)":"rgba(79,142,247,0.25)"}`,
+                      animation:isExplored?"bounce 0.4s ease":"blink 1.5s ease-in-out infinite",
+                      transition:"all 0.2s",
+                    }}
+                  />
+                  {/* Bubble */}
+                  {isActive && (
+                    <div style={{
+                      position:"absolute",
+                      bottom:"calc(100% + 8px)",
+                      left:"50%",
+                      transform:"translateX(-50%)",
+                      background:"#fff",
+                      borderRadius:12,
+                      padding:"8px 12px",
+                      minWidth:100,maxWidth:160,
+                      boxShadow:"0 4px 12px rgba(0,0,0,0.15)",
+                      animation:"popIn 0.2s ease",
+                      zIndex:30,
+                    }}>
+                      <div style={{fontWeight:800,fontSize:13,color:color,marginBottom:3}}>{entity.name}</div>
+                      <div style={{fontSize:11,color:"#6B7280",lineHeight:1.4}}>{entity.description}</div>
+                      {/* Arrow */}
+                      <div style={{position:"absolute",bottom:-6,left:"50%",transform:"translateX(-50%)",width:12,height:12,background:"#fff",borderRadius:2,transform:"translateX(-50%) rotate(45deg)",boxShadow:"2px 2px 4px rgba(0,0,0,0.06)"}}/>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Right: explored list */}
+          <div style={{flex:"0 0 130px",display:"flex",flexDirection:"column",gap:6,overflowY:"auto"}}>
+            <div style={{fontSize:11,fontWeight:700,color:"#9CA3AF",paddingBottom:2}}>已探索</div>
+            {entities.map((e,i)=>(
+              <div key={e.id} style={{
+                background: explored[e.id]?"#F0FDF4":"#F9FAFB",
+                borderRadius:10,padding:"5px 8px",
+                fontSize:11,fontWeight:700,
+                color:explored[e.id]?"#16A34A":"#9CA3AF",
+                borderLeft:`3px solid ${explored[e.id]?COLORS[i%COLORS.length]:"#E5E7EB"}`,
+              }}>
+                {explored[e.id]?"+ ":""}{e.name}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<App/>);
+</script>
+</body>
+</html>

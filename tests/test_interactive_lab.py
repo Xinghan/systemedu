@@ -1,14 +1,16 @@
-"""Tests for interactive lab generation pipeline (2-Agent version).
+"""Tests for interactive lab generation pipeline (GameAgent version).
 
 These tests validate the _generate_interactive_lab function which uses
-the 2-Agent pipeline (LabCoder -> LabReviewer).
+the GameAgent pipeline (GameSpecPlannerAgent -> GameCompiler).
 """
 
+import json
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from langchain_core.messages import AIMessage
 
+from systemedu.agents.builtin.gameagent.spec import GameFeedback, GameLevel, GameRules, GameSpec
 from systemedu.education.lesson_generator import _generate_interactive_lab
 
 
@@ -21,11 +23,28 @@ def _make_agent_mock(response: str) -> MagicMock:
     return mock_agent
 
 
-VALID_HTML = (
-    "<!DOCTYPE html><html><head>"
-    '<script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>'
-    "</head><body><div id='root'></div></body></html>"
-)
+def _make_drag_sort_spec_json() -> str:
+    spec = GameSpec(
+        mechanic="drag_sort",
+        topic="火箭发射",
+        theme="火箭探险",
+        difficulty=5,
+        entities=[
+            {"id": "e1", "label": "燃料箱", "category": "cat1", "color": "#F87171"},
+            {"id": "e2", "label": "发动机", "category": "cat1", "color": "#4F8EF7"},
+            {"id": "e3", "label": "驾驶舱", "category": "cat2", "color": "#4ADE80"},
+            {"id": "e4", "label": "太阳能板", "category": "cat2", "color": "#FB923C"},
+        ],
+        categories=[
+            {"id": "cat1", "label": "动力系统"},
+            {"id": "cat2", "label": "载荷系统"},
+        ],
+        rules=GameRules(),
+        levels=[GameLevel(prompt="将组件拖入对应系统")],
+        feedback=GameFeedback(),
+    )
+    return spec.model_dump_json()
+
 
 VALID_LAB_STRATEGY = {
     "game_concept": "用户调节燃料和推力两个滑块，点击发射，右侧实时显示火箭飞行高度曲线和最终高度",
@@ -37,63 +56,51 @@ VALID_LAB_STRATEGY = {
 class TestGenerateInteractiveLab:
     @pytest.mark.asyncio
     async def test_successful_generation(self):
-        """Full 2-agent pipeline returns valid HTML."""
-        mock_coder = _make_agent_mock(VALID_HTML)
-        mock_reviewer = _make_agent_mock(VALID_HTML)
-        with (
-            patch("systemedu.agents.builtin.lab_coder.create_deep_agent", return_value=mock_coder),
-            patch("systemedu.agents.builtin.lab_reviewer.create_deep_agent", return_value=mock_reviewer),
-        ):
+        """GameAgent pipeline returns valid HTML with GAME_SPEC."""
+        spec_json = _make_drag_sort_spec_json()
+        mock_agent = _make_agent_mock(spec_json)
+        with patch("systemedu.agents.builtin.gameagent.planner.create_deep_agent", return_value=mock_agent):
             result = await _generate_interactive_lab("Test Node", "A test summary", 3, MagicMock())
-        assert "<html" in result
-        assert "react" in result.lower()
+        assert "const GAME_SPEC =" in result
+        assert "__GAME_SPEC__" not in result
 
     @pytest.mark.asyncio
-    async def test_coder_failure_returns_empty(self):
-        """If coder returns non-HTML, pipeline returns empty."""
-        mock_coder = _make_agent_mock("just text, no html")
-        with patch("systemedu.agents.builtin.lab_coder.create_deep_agent", return_value=mock_coder):
+    async def test_planner_failure_returns_empty(self):
+        """If planner returns invalid JSON, pipeline returns empty."""
+        mock_agent = _make_agent_mock("just text, no json")
+        with patch("systemedu.agents.builtin.gameagent.planner.create_deep_agent", return_value=mock_agent):
             result = await _generate_interactive_lab("Node", "Summary", 3, MagicMock())
         assert result == ""
 
     @pytest.mark.asyncio
-    async def test_lesson_plan_passed_to_coder(self):
-        """When lesson_plan is provided, game_concept is passed to the coder."""
-        mock_coder = _make_agent_mock(VALID_HTML)
-        mock_reviewer = _make_agent_mock(VALID_HTML)
+    async def test_lesson_plan_passed_to_planner(self):
+        """When lesson_plan is provided, lab_strategy is passed to the planner."""
+        spec_json = _make_drag_sort_spec_json()
+        mock_agent = _make_agent_mock(spec_json)
         plan = {"lab_strategy": VALID_LAB_STRATEGY}
-        with (
-            patch("systemedu.agents.builtin.lab_coder.create_deep_agent", return_value=mock_coder),
-            patch("systemedu.agents.builtin.lab_reviewer.create_deep_agent", return_value=mock_reviewer),
-        ):
+        with patch("systemedu.agents.builtin.gameagent.planner.create_deep_agent", return_value=mock_agent):
             result = await _generate_interactive_lab("Node", "Summary", 3, MagicMock(), lesson_plan=plan)
-        assert "<html" in result
-        # Coder ainvoke called with game_concept in prompt
-        call_args = mock_coder.ainvoke.call_args
-        messages = call_args[0][0]["messages"]
-        prompt_text = messages[0].content
-        assert "用户调节燃料" in prompt_text
+        assert "const GAME_SPEC =" in result
 
     @pytest.mark.asyncio
     async def test_progress_callback_called(self):
-        """Progress callback is called for each pipeline stage including reviewer."""
-        mock_coder = _make_agent_mock(VALID_HTML)
-        mock_reviewer = _make_agent_mock(VALID_HTML)
+        """Progress callback is called for game_spec_planner and game_compiler."""
+        spec_json = _make_drag_sort_spec_json()
+        mock_agent = _make_agent_mock(spec_json)
         calls = []
 
         def cb(step, status, preview):
             calls.append((step, status))
 
-        with (
-            patch("systemedu.agents.builtin.lab_coder.create_deep_agent", return_value=mock_coder),
-            patch("systemedu.agents.builtin.lab_reviewer.create_deep_agent", return_value=mock_reviewer),
-        ):
+        with patch("systemedu.agents.builtin.gameagent.planner.create_deep_agent", return_value=mock_agent):
             await _generate_interactive_lab("Node", "Summary", 3, MagicMock(), progress_callback=cb)
 
-        assert len(calls) == 4  # 2 stages x 2 (in_progress + completed)
-        assert ("lab_coder", "in_progress") in calls
-        assert ("lab_coder", "completed") in calls
-        assert ("lab_reviewer", "in_progress") in calls
-        assert ("lab_reviewer", "completed") in calls
+        step_names = [c[0] for c in calls]
+        assert "game_spec_planner" in step_names
+        assert "game_compiler" in step_names
+        assert ("game_spec_planner", "in_progress") in calls
+        assert ("game_spec_planner", "completed") in calls
+        assert ("game_compiler", "in_progress") in calls
+        assert ("game_compiler", "completed") in calls
         # Old agent steps should NOT appear
-        assert not any(s in [c[0] for c in calls] for s in ("lab_analyst", "lab_designer", "lab_image_search"))
+        assert not any(s in step_names for s in ("lab_coder", "lab_reviewer"))

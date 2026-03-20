@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>配对游戏</title>
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet"/>
+<script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100vh;overflow:hidden;font-family:'Nunito','PingFang SC',sans-serif;background:linear-gradient(135deg,#EEF2FF 0%,#F0FDF4 100%)}
+@keyframes bounce{0%,100%{transform:scale(1)}50%{transform:scale(1.1)}}
+@keyframes shake{0%,100%{transform:translateX(0)}25%{transform:translateX(-8px)}75%{transform:translateX(8px)}}
+@keyframes fall{0%{transform:translateY(-20px);opacity:1}100%{transform:translateY(120vh);opacity:0}}
+@keyframes matched{0%{opacity:0;transform:scale(0.85)}100%{opacity:1;transform:scale(1)}}
+.confetti-dot{position:fixed;width:10px;height:10px;border-radius:50%;pointer-events:none;animation:fall 1.8s ease-in forwards}
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const GAME_SPEC = "__GAME_SPEC__";
+
+const { useState, useRef } = React;
+const COLORS = ["#4F8EF7","#4ADE80","#FB923C","#A78BFA","#FCD34D","#06B6D4","#EC4899","#F87171"];
+
+function Confetti() {
+  return (
+    <div aria-hidden="true">
+      {Array.from({length:18},(_,i)=>(
+        <div key={i} className="confetti-dot" style={{
+          left:`${Math.random()*100}%`,top:0,
+          background:COLORS[i%COLORS.length],
+          animationDelay:`${Math.random()*0.7}s`,
+          animationDuration:`${1.2+Math.random()*0.9}s`,
+        }}/>
+      ))}
+    </div>
+  );
+}
+
+function App() {
+  const { entities, rules, levels, feedback, topic } = GAME_SPEC;
+  const [selectedLeft, setSelectedLeft] = useState(null);
+  const [matched, setMatched] = useState({});
+  const [animState, setAnimState] = useState({});
+  const [mistakes, setMistakes] = useState(0);
+  const [score, setScore] = useState(0);
+  const [done, setDone] = useState(false);
+  const [showConfetti, setShowConfetti] = useState(false);
+  const animRef = useRef({});
+
+  const triggerAnim = (id, type) => {
+    setAnimState(s=>({...s,[id]:type}));
+    clearTimeout(animRef.current[id]);
+    animRef.current[id] = setTimeout(()=>setAnimState(s=>({...s,[id]:null})),500);
+  };
+
+  const handleLeftClick = (entity) => {
+    if (matched[entity.id]) return;
+    setSelectedLeft(entity.id === selectedLeft ? null : entity.id);
+  };
+
+  const handleRightClick = (entity) => {
+    if (matched[entity.id]) return;
+    if (!selectedLeft) return;
+    if (selectedLeft === entity.id) {
+      setScore(s=>s+(rules.correct_points||10));
+      const newMatched = {...matched, [entity.id]: true};
+      setMatched(newMatched);
+      triggerAnim(entity.id, "bounce");
+      setSelectedLeft(null);
+      if (Object.keys(newMatched).length === entities.length) {
+        setDone(true);
+        setShowConfetti(true);
+      }
+    } else {
+      setMistakes(m=>m+1);
+      triggerAnim(selectedLeft, "shake");
+      triggerAnim(entity.id, "shake");
+      setSelectedLeft(null);
+    }
+  };
+
+  const reset = () => {
+    setSelectedLeft(null);setMatched({});setAnimState({});
+    setMistakes(0);setScore(0);setDone(false);setShowConfetti(false);
+  };
+
+  const levelIdx = Math.min(Math.floor(Object.keys(matched).length / Math.max(entities.length/Math.max(levels.length,1),1)), levels.length-1);
+  const currentPrompt = levels[levelIdx]?.prompt || "点击左侧卡片，再点击右侧对应的答案配对";
+
+  return (
+    <div style={{height:"100vh",display:"flex",flexDirection:"column",padding:"8px 12px",gap:8}}>
+      {showConfetti && <Confetti/>}
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",height:44,flexShrink:0}}>
+        <div style={{fontWeight:800,fontSize:16,color:"#3730A3"}}>{topic}</div>
+        <div style={{display:"flex",gap:12,fontSize:13,fontWeight:700}}>
+          <span style={{color:"#4F8EF7"}}>得分: {score}</span>
+          <span style={{color:"#F87171"}}>错误: {mistakes}</span>
+        </div>
+      </div>
+
+      <div style={{background:"#fff",borderRadius:12,padding:"6px 12px",fontSize:13,color:"#6B7280",fontWeight:600,flexShrink:0,boxShadow:"0 2px 0 rgba(0,0,0,0.06)"}}>{currentPrompt}</div>
+
+      {done ? (
+        <div style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:16}}>
+          <div style={{fontSize:48}}>🎉</div>
+          <div style={{fontSize:22,fontWeight:800,color:"#3730A3"}}>{feedback.complete_text}</div>
+          <div style={{fontSize:15,color:"#6B7280"}}>得分: {score} | 错误: {mistakes}</div>
+          <button onClick={reset} style={{background:"#4F8EF7",color:"#fff",border:"none",borderRadius:12,padding:"10px 28px",fontWeight:800,fontSize:15,cursor:"pointer",boxShadow:"0 4px 0 #2563EB"}}>再玩一次</button>
+        </div>
+      ) : (
+        <div style={{flex:1,display:"flex",gap:8,minHeight:0,overflowY:"auto"}}>
+          {/* Left column: terms */}
+          <div style={{flex:1,display:"flex",flexDirection:"column",gap:6}}>
+            <div style={{fontSize:11,fontWeight:700,color:"#9CA3AF",paddingBottom:2}}>概念</div>
+            {entities.map((e,i) => {
+              const isMatched = matched[e.id];
+              const isSelected = selectedLeft === e.id;
+              return (
+                <div
+                  key={`left-${e.id}`}
+                  onClick={()=>handleLeftClick(e)}
+                  className={animState[e.id]||""}
+                  style={{
+                    background: isMatched ? "#F0FDF4" : isSelected ? "#EEF2FF" : "#fff",
+                    borderRadius:12,padding:"8px 10px",
+                    boxShadow: isSelected ? `0 0 0 2px #4F8EF7` : "0 3px 0 rgba(0,0,0,0.08)",
+                    fontWeight:700,fontSize:13,color: isMatched ? "#16A34A" : "#1F2937",
+                    cursor: isMatched ? "default" : "pointer",
+                    borderLeft:`4px solid ${isMatched?"#4ADE80":COLORS[i%COLORS.length]}`,
+                    opacity: isMatched ? 0.7 : 1,
+                    transition:"all 0.15s",
+                    textDecoration: isMatched ? "line-through" : "none",
+                  }}
+                >
+                  {e.term}
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Right column: definitions (shuffled display) */}
+          <div style={{flex:1,display:"flex",flexDirection:"column",gap:6}}>
+            <div style={{fontSize:11,fontWeight:700,color:"#9CA3AF",paddingBottom:2}}>定义</div>
+            {[...entities].sort(()=>0.5-Math.random()*0).map((e,i) => {
+              const isMatched = matched[e.id];
+              return (
+                <div
+                  key={`right-${e.id}`}
+                  onClick={()=>handleRightClick(e)}
+                  className={animState[e.id]||""}
+                  style={{
+                    background: isMatched ? "#F0FDF4" : "#fff",
+                    borderRadius:12,padding:"8px 10px",
+                    boxShadow:"0 3px 0 rgba(0,0,0,0.08)",
+                    fontWeight:600,fontSize:12,color: isMatched ? "#16A34A" : "#374151",
+                    cursor: isMatched ? "default" : "pointer",
+                    borderRight:`4px solid ${isMatched?"#4ADE80":COLORS[i%COLORS.length]}`,
+                    opacity: isMatched ? 0.7 : 1,
+                    transition:"all 0.15s",
+                  }}
+                >
+                  {e.definition}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<App/>);
+</script>
+</body>
+</html>

@@ -97,93 +97,102 @@ class TestLabCoderAgent:
         assert "<html" in result
 
 
+def _make_simulation_spec_json() -> str:
+    from systemedu.agents.builtin.gameagent.spec import GameFeedback, GameLevel, GameRules, GameSpec
+    spec = GameSpec(
+        mechanic="simulation",
+        topic="火箭发射",
+        theme="参数模拟",
+        difficulty=5,
+        entities=[
+            {"id": "p1", "param_name": "fuel", "label": "燃料", "min": 0, "max": 100, "default": 30, "unit": "%", "effect_key": "height"},
+            {"id": "p2", "param_name": "thrust", "label": "推力", "min": 0, "max": 100, "default": 20, "unit": "kN", "effect_key": "height"},
+            {"id": "p3", "param_name": "angle", "label": "角度", "min": 0, "max": 90, "default": 45, "unit": "°", "effect_key": "height"},
+        ],
+        target_condition="调高参数使火箭飞行高度超过 70%",
+        visual_description="火箭高度实时曲线",
+        rules=GameRules(),
+        levels=[GameLevel(prompt="调节参数，观察飞行高度变化")],
+        feedback=GameFeedback(),
+    )
+    return spec.model_dump_json()
+
+
 class TestLabPipeline:
     @pytest.mark.asyncio
     async def test_full_pipeline_success(self):
-        """Full 2-agent pipeline produces HTML."""
-        mock_coder = _make_agent_mock(VALID_HTML)
-        mock_reviewer = _make_agent_mock(VALID_HTML)
-        with (
-            patch("systemedu.agents.builtin.lab_coder.create_deep_agent", return_value=mock_coder),
-            patch("systemedu.agents.builtin.lab_reviewer.create_deep_agent", return_value=mock_reviewer),
-        ):
+        """GameAgent pipeline produces HTML with GAME_SPEC."""
+        spec_json = _make_simulation_spec_json()
+        mock_agent = _make_agent_mock(spec_json)
+        with patch("systemedu.agents.builtin.gameagent.planner.create_deep_agent", return_value=mock_agent):
             result = await _generate_interactive_lab("火箭发射", "学习火箭原理", 5, MagicMock())
-        assert "<html" in result
+        assert "const GAME_SPEC =" in result
+        assert "__GAME_SPEC__" not in result
 
     @pytest.mark.asyncio
     async def test_pipeline_with_lesson_plan(self):
-        """Pipeline passes game_concept from lesson plan to coder."""
-        mock_coder = _make_agent_mock(VALID_HTML)
-        mock_reviewer = _make_agent_mock(VALID_HTML)
+        """Pipeline accepts lab_strategy from lesson plan."""
+        spec_json = _make_simulation_spec_json()
+        mock_agent = _make_agent_mock(spec_json)
         plan = {"lab_strategy": VALID_LAB_STRATEGY}
-        with (
-            patch("systemedu.agents.builtin.lab_coder.create_deep_agent", return_value=mock_coder),
-            patch("systemedu.agents.builtin.lab_reviewer.create_deep_agent", return_value=mock_reviewer),
-        ):
+        with patch("systemedu.agents.builtin.gameagent.planner.create_deep_agent", return_value=mock_agent):
             result = await _generate_interactive_lab("火箭发射", "学习火箭", 5, MagicMock(), lesson_plan=plan)
-        assert "<html" in result
-        # Coder ainvoke called with game_concept in prompt
-        call_args = mock_coder.ainvoke.call_args
-        messages = call_args[0][0]["messages"]
-        prompt_text = messages[0].content
-        assert "用户调节燃料滑块" in prompt_text
+        assert "const GAME_SPEC =" in result
 
     @pytest.mark.asyncio
-    async def test_pipeline_coder_failure_returns_empty(self):
-        """If coder fails, pipeline returns empty."""
-        mock_coder = _make_agent_mock("not html")
-        with patch("systemedu.agents.builtin.lab_coder.create_deep_agent", return_value=mock_coder):
+    async def test_pipeline_planner_failure_returns_empty(self):
+        """If planner returns invalid output, pipeline returns empty."""
+        mock_agent = _make_agent_mock("not json")
+        with patch("systemedu.agents.builtin.gameagent.planner.create_deep_agent", return_value=mock_agent):
             result = await _generate_interactive_lab("Test", "Summary", 3, MagicMock())
         assert result == ""
 
     @pytest.mark.asyncio
     async def test_pipeline_progress_callback(self):
-        """Progress callback is invoked for coder and reviewer."""
-        mock_coder = _make_agent_mock(VALID_HTML)
-        mock_reviewer = _make_agent_mock(VALID_HTML)
+        """Progress callback is invoked for game_spec_planner and game_compiler."""
+        spec_json = _make_simulation_spec_json()
+        mock_agent = _make_agent_mock(spec_json)
         callbacks = []
 
         def callback(step, status, preview):
             callbacks.append((step, status))
 
-        with (
-            patch("systemedu.agents.builtin.lab_coder.create_deep_agent", return_value=mock_coder),
-            patch("systemedu.agents.builtin.lab_reviewer.create_deep_agent", return_value=mock_reviewer),
-        ):
+        with patch("systemedu.agents.builtin.gameagent.planner.create_deep_agent", return_value=mock_agent):
             await _generate_interactive_lab("Test", "Summary", 3, MagicMock(), progress_callback=callback)
 
         step_names = [c[0] for c in callbacks]
-        assert "lab_coder" in step_names
-        assert "lab_reviewer" in step_names
-        assert ("lab_coder", "in_progress") in callbacks
-        assert ("lab_coder", "completed") in callbacks
-        assert ("lab_reviewer", "in_progress") in callbacks
-        assert ("lab_reviewer", "completed") in callbacks
-        # Should NOT include old agent names
-        assert not any(s in step_names for s in ("lab_analyst", "lab_designer", "lab_image_search"))
+        assert "game_spec_planner" in step_names
+        assert "game_compiler" in step_names
+        assert ("game_spec_planner", "in_progress") in callbacks
+        assert ("game_spec_planner", "completed") in callbacks
+        assert ("game_compiler", "completed") in callbacks
+        # Old lab agent steps should NOT appear
+        assert not any(s in step_names for s in ("lab_coder", "lab_reviewer"))
 
     @pytest.mark.asyncio
     async def test_pipeline_retry_on_coder_failure(self):
-        """Pipeline retries coder once before failing."""
-        mock_coder_bad = _make_agent_mock("not html")
-        mock_coder_good = _make_agent_mock(VALID_HTML)
-        mock_reviewer = _make_agent_mock(VALID_HTML)
+        """When planner fails first time, second call succeeds."""
+        spec_json = _make_simulation_spec_json()
+        mock_agent_bad = _make_agent_mock("not json")
+        mock_agent_good = _make_agent_mock(spec_json)
 
         call_count = {"n": 0}
 
-        def coder_side_effect(*args, **kwargs):
+        def planner_side_effect(*args, **kwargs):
             call_count["n"] += 1
             if call_count["n"] == 1:
-                return mock_coder_bad
-            return mock_coder_good
+                return mock_agent_bad
+            return mock_agent_good
 
-        with (
-            patch("systemedu.agents.builtin.lab_coder.create_deep_agent", side_effect=coder_side_effect),
-            patch("systemedu.agents.builtin.lab_reviewer.create_deep_agent", return_value=mock_reviewer),
-        ):
-            result = await _generate_interactive_lab("Test", "Summary", 3, MagicMock())
-        assert "<html" in result
-        assert call_count["n"] == 2
+        with patch("systemedu.agents.builtin.gameagent.planner.create_deep_agent", side_effect=planner_side_effect):
+            # First call fails (planner returns bad), so result is empty
+            result1 = await _generate_interactive_lab("Test", "Summary", 3, MagicMock())
+        assert result1 == ""
+
+        with patch("systemedu.agents.builtin.gameagent.planner.create_deep_agent", return_value=mock_agent_good):
+            # Second call succeeds
+            result2 = await _generate_interactive_lab("Test", "Summary", 3, MagicMock())
+        assert "const GAME_SPEC =" in result2
 
 
 class TestValidateLabHtml:
