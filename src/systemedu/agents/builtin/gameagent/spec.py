@@ -38,6 +38,7 @@ class GameSpec(BaseModel):
     target_condition: str | None = None        # simulation
     visual_description: str | None = None      # simulation
     scene_description: str | None = None       # label_map
+    scene_type: str | None = None              # label_map: rocket/human_body/cell/earth/brain/plant/atom/ship/dna/custom
     # timeline_order
     ordered_items: list[dict] | None = None    # [{id, label, emoji, year, description}]
     # boss_quiz

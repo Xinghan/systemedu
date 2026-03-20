@@ -181,27 +181,59 @@ export function GenerationPipelineView({
 
         {/* Overall progress bar */}
         <div className="space-y-1.5">
+          {/* Progress bar + running robot */}
+          <div className="relative pt-9">
+            {/* Robot sitting above the bar tip */}
+            <div
+              className="absolute top-0 transition-all duration-700 ease-out"
+              style={{ left: `calc(${Math.max(progressPercent, 2)}% - 14px)` }}
+            >
+              <svg
+                width="28" height="28" viewBox="0 0 28 28" fill="none"
+                xmlns="http://www.w3.org/2000/svg"
+                className="robot-svg drop-shadow-md"
+              >
+                <line x1="14" y1="2" x2="14" y2="5" stroke="rgb(59,130,246)" strokeWidth="1.5" strokeLinecap="round"/>
+                <circle cx="14" cy="1.5" r="1.2" fill="rgb(59,130,246)" className="robot-antenna-dot"/>
+                <rect x="8" y="5" width="12" height="9" rx="2.5" fill="rgb(59,130,246)"/>
+                <circle cx="11" cy="9" r="1.5" fill="white"/>
+                <circle cx="17" cy="9" r="1.5" fill="white"/>
+                <circle cx="11.5" cy="9.2" r="0.7" fill="rgb(30,64,175)"/>
+                <circle cx="17.5" cy="9.2" r="0.7" fill="rgb(30,64,175)"/>
+                <rect x="9" y="15" width="10" height="7" rx="2" fill="rgb(96,165,250)"/>
+                <circle cx="14" cy="18.5" r="1.2" fill="white" className="robot-chest-light"/>
+                <rect x="5" y="15.5" width="4" height="2.5" rx="1.2" fill="rgb(59,130,246)" className="robot-arm-l"/>
+                <rect x="19" y="15.5" width="4" height="2.5" rx="1.2" fill="rgb(59,130,246)" className="robot-arm-r"/>
+                <rect x="10" y="22" width="3.5" height="5" rx="1.5" fill="rgb(59,130,246)" className="robot-leg-l"/>
+                <rect x="14.5" y="22" width="3.5" height="5" rx="1.5" fill="rgb(59,130,246)" className="robot-leg-r"/>
+              </svg>
+            </div>
+
+            {/* The bar */}
+            <div className="h-2 bg-muted rounded-full overflow-hidden">
+              {steps.length > 0 ? (
+                <div
+                  className="h-full rounded-full transition-all duration-700 ease-out relative overflow-hidden"
+                  style={{ width: `${Math.max(progressPercent, 2)}%`, backgroundColor: "rgb(59,130,246)" }}
+                >
+                  <div
+                    className="absolute inset-y-0 w-8 bg-white/30 skew-x-[-20deg]"
+                    style={{ animation: "progress-scan 1.8s ease-in-out infinite" }}
+                  />
+                </div>
+              ) : (
+                <div
+                  className="h-full w-full rounded-full"
+                  style={{ backgroundColor: "rgb(59,130,246)", animation: "progress-pulse 1.4s ease-in-out infinite" }}
+                />
+              )}
+            </div>
+          </div>
+
+          {/* Status text below the bar */}
           <div className="flex justify-between text-xs text-muted-foreground">
             <span className="truncate max-w-[200px]">{statusMessage}</span>
             <span className="tabular-nums">{progressPercent}%</span>
-          </div>
-          <div className="h-2.5 bg-muted rounded-full overflow-hidden">
-            {steps.length > 0 ? (
-              <div
-                className="h-full bg-gradient-to-r from-blue-500 via-indigo-500 to-emerald-500 rounded-full transition-all duration-700 ease-out"
-                style={{ width: `${Math.max(progressPercent, 2)}%` }}
-              />
-            ) : (
-              /* Indeterminate shimmer when no steps loaded yet */
-              <div className="h-full w-full relative overflow-hidden">
-                <div
-                  className="absolute inset-0 bg-gradient-to-r from-transparent via-blue-500/40 to-transparent"
-                  style={{
-                    animation: "shimmer 1.5s ease-in-out infinite",
-                  }}
-                />
-              </div>
-            )}
           </div>
         </div>
 
@@ -314,11 +346,83 @@ export function GenerationPipelineView({
         </div>
       </div>
 
-      {/* CSS for shimmer animation */}
+      {/* CSS for progress + robot animations */}
       <style jsx>{`
-        @keyframes shimmer {
-          0% { transform: translateX(-100%); }
-          100% { transform: translateX(100%); }
+        @keyframes progress-scan {
+          0%   { left: -2rem; opacity: 0; }
+          20%  { opacity: 1; }
+          80%  { opacity: 1; }
+          100% { left: 110%; opacity: 0; }
+        }
+        @keyframes progress-pulse {
+          0%, 100% { opacity: 1; }
+          50%       { opacity: 0.35; }
+        }
+
+        /* Robot body bounce */
+        .robot-svg {
+          animation: robot-bounce 0.35s ease-in-out infinite alternate;
+          transform-origin: bottom center;
+        }
+        @keyframes robot-bounce {
+          0%   { transform: translateY(0px); }
+          100% { transform: translateY(-2px); }
+        }
+
+        /* Left leg: kick forward / back */
+        .robot-leg-l {
+          transform-origin: 11.75px 22px;
+          animation: leg-l 0.35s ease-in-out infinite alternate;
+        }
+        @keyframes leg-l {
+          0%   { transform: rotate(-22deg) translateY(0px); }
+          100% { transform: rotate(22deg)  translateY(0px); }
+        }
+
+        /* Right leg: opposite phase */
+        .robot-leg-r {
+          transform-origin: 16.25px 22px;
+          animation: leg-r 0.35s ease-in-out infinite alternate;
+        }
+        @keyframes leg-r {
+          0%   { transform: rotate(22deg)  translateY(0px); }
+          100% { transform: rotate(-22deg) translateY(0px); }
+        }
+
+        /* Arms swing opposite to legs */
+        .robot-arm-l {
+          transform-origin: 9px 16.75px;
+          animation: arm-l 0.35s ease-in-out infinite alternate;
+        }
+        @keyframes arm-l {
+          0%   { transform: rotate(20deg); }
+          100% { transform: rotate(-20deg); }
+        }
+        .robot-arm-r {
+          transform-origin: 23px 16.75px;
+          animation: arm-r 0.35s ease-in-out infinite alternate;
+        }
+        @keyframes arm-r {
+          0%   { transform: rotate(-20deg); }
+          100% { transform: rotate(20deg); }
+        }
+
+        /* Antenna dot blink */
+        .robot-antenna-dot {
+          animation: antenna-blink 1s ease-in-out infinite;
+        }
+        @keyframes antenna-blink {
+          0%, 100% { opacity: 1; }
+          50%       { opacity: 0.2; }
+        }
+
+        /* Chest light pulse */
+        .robot-chest-light {
+          animation: chest-glow 0.7s ease-in-out infinite alternate;
+        }
+        @keyframes chest-glow {
+          0%   { opacity: 0.4; }
+          100% { opacity: 1; }
         }
       `}</style>
     </div>
