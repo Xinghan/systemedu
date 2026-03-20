@@ -79,32 +79,49 @@ class GameCompiler:
         return html
 
     def _resolve_render_spec(self, spec: GameSpec):
-        """Build a RenderSpec from spec.object_spec via ObjectRegistry.
+        """Resolve spec.object_spec to a RenderSpec via ObjectResolver.
 
-        Also runs the ObjectValidator and logs warnings on failure.
-        Returns the RenderSpec, or None on error.
+        Uses fallback strategy if exact key is missing.
+        Emits MissingObjectRequest to MissQueue on any miss.
+        Returns the RenderSpec, or None if no fallback available.
         """
+        from systemedu.agents.builtin.gameagent.miss_queue import MissQueue
+        from systemedu.agents.builtin.gameagent.object_resolver import ObjectResolver
         from systemedu.agents.builtin.gameagent.object_validator import ObjectValidator
         from systemedu.agents.builtin.gameagent.objects import ObjectRegistry
 
         obj_spec = spec.object_spec
-        try:
-            render_spec = ObjectRegistry.build(
-                obj_spec.object_key,
-                view=obj_spec.view,
-                variant=obj_spec.variant,
-            )
-        except KeyError as e:
-            logger.warning(f"ObjectRegistry.build failed: {e}")
+        resolver = ObjectResolver()
+        result = resolver.resolve(
+            obj_spec,
+            game_spec_context={"topic": spec.topic, "mechanic": spec.mechanic},
+        )
+
+        if result.miss_request is not None:
+            MissQueue().enqueue(result.miss_request)
+            if result.resolution_type == "fallback":
+                logger.info(
+                    f"ObjectResolver fallback: {obj_spec.object_key!r} -> {result.resolved_key!r}"
+                )
+            elif result.resolution_type == "none":
+                logger.warning(
+                    f"ObjectResolver: no fallback for {obj_spec.object_key!r}, rendering blank"
+                )
+
+        if result.render_spec is None:
             return None
 
-        meta = ObjectRegistry.get_meta(obj_spec.object_key)
-        validator = ObjectValidator(meta)
-        valid, errors = validator.validate(obj_spec, render_spec)
-        if not valid:
-            logger.warning(
-                f"ObjectValidator errors for '{obj_spec.object_key}': {errors}"
-            )
-            # Still return the render_spec — partial render is better than nothing
+        # Run ObjectValidator on whatever key was actually resolved
+        resolved_key = result.resolved_key or obj_spec.object_key
+        try:
+            meta = ObjectRegistry.get_meta(resolved_key)
+            validator = ObjectValidator(meta)
+            valid, errors = validator.validate(obj_spec, result.render_spec)
+            if not valid:
+                logger.warning(
+                    f"ObjectValidator errors for {resolved_key!r}: {errors}"
+                )
+        except KeyError:
+            pass  # resolved_key not in registry (shouldn't happen)
 
-        return render_spec
+        return result.render_spec

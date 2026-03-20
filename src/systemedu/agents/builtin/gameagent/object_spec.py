@@ -126,3 +126,19 @@ class ObjectSpec(BaseModel):
     locale: str = "zh-CN"
     # LLM may NOT set descriptions - those come from Registry/KB
     custom_labels: dict[str, str] = Field(default_factory=dict)  # override display name only
+
+
+# ---------------------------------------------------------------------------
+# MissingObjectRequest: emitted by ObjectResolver when a key is not in Registry
+# Consumed by C pipeline (ObjectFactory) for async backfill
+# ---------------------------------------------------------------------------
+
+class MissingObjectRequest(BaseModel):
+    object_key: str                     # key that was requested but not in Registry
+    family: str                         # e.g. "rocket" (object_key.split(".")[0])
+    view: str = "side"
+    topic: str = ""                     # from GameSpec.topic, helps C pipeline understand purpose
+    required_parts: list[str] = Field(default_factory=list)  # from ObjectSpec.label_part_ids
+    preferred_mechanic: str = ""        # from GameSpec.mechanic
+    fallback_used: str | None = None    # key B actually used for this request
+    request_count: int = 1
