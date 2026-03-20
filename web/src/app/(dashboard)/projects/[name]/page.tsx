@@ -118,6 +118,7 @@ export default function ProjectDetailPage() {
   const [editTags, setEditTags] = useState("")
   const [queueItems, setQueueItems] = useState<FactoryQueueItem[]>([])
   const [queueOpen, setQueueOpen] = useState(false)
+  const [triggering, setTriggering] = useState(false)
 
   useEffect(() => {
     if (!params.name) return
@@ -450,13 +451,37 @@ export default function ProjectDetailPage() {
             <div>
               <div className="flex items-center justify-between mb-3">
                 <h2 className="text-base font-semibold">对象队列</h2>
-                <button
-                  onClick={() => setQueueOpen(false)}
-                  className="text-xs text-muted-foreground flex items-center gap-1 hover:text-foreground"
-                >
-                  <ChevronUp className="h-3.5 w-3.5" />
-                  收起
-                </button>
+                <div className="flex items-center gap-3">
+                  {queueItems.length > 0 && (
+                    <button
+                      onClick={async () => {
+                        setTriggering(true)
+                        try {
+                          const r = await gateway.objectQueueTrigger(params.name)
+                          toast.success(`已触发 ${r.triggered} 个创建任务`)
+                          // Refresh queue
+                          const fresh = await gateway.objectQueue(params.name)
+                          setQueueItems(fresh.items.filter((i) => i.status === "pending" || i.status === "in_progress"))
+                        } catch (e: unknown) {
+                          toast.error(`触发失败: ${e instanceof Error ? e.message : "未知错误"}`)
+                        } finally {
+                          setTriggering(false)
+                        }
+                      }}
+                      disabled={triggering}
+                      className="text-xs text-primary flex items-center gap-1 hover:opacity-80 disabled:opacity-50"
+                    >
+                      {triggering ? "触发中..." : "触发创建"}
+                    </button>
+                  )}
+                  <button
+                    onClick={() => setQueueOpen(false)}
+                    className="text-xs text-muted-foreground flex items-center gap-1 hover:text-foreground"
+                  >
+                    <ChevronUp className="h-3.5 w-3.5" />
+                    收起
+                  </button>
+                </div>
               </div>
               {queueItems.length === 0 ? (
                 <div className="rounded-xl border bg-card px-5 py-8 text-center text-sm text-muted-foreground">

@@ -656,6 +656,29 @@ async def api_objects_queue_add(request: Request) -> JSONResponse:
     return JSONResponse({"object_key": object_key, "added": added})
 
 
+async def api_objects_queue_trigger(request: Request) -> JSONResponse:
+    """POST /api/objects/queue/trigger - Trigger factory pipeline for all pending items.
+
+    Optionally filter by project via ?project=name query param.
+    """
+    from systemedu.agents.builtin.gameagent.object_factory import FactoryQueue
+    from systemedu.education.object_scan import trigger_factory_for_keys
+
+    project_filter = request.query_params.get("project", "").strip()
+    queue = FactoryQueue()
+
+    if project_filter:
+        pending = [i for i in queue.pending_items() if i.project_name == project_filter]
+    else:
+        pending = queue.pending_items()
+
+    if not pending:
+        return JSONResponse({"triggered": 0, "message": "no pending items"})
+
+    trigger_factory_for_keys([(i.object_key, i.description) for i in pending])
+    return JSONResponse({"triggered": len(pending), "object_keys": [i.object_key for i in pending]})
+
+
 async def api_update_tree(request: Request) -> JSONResponse:
     """PUT /api/projects/{name}/tree - Full-replace the knowledge_tree.json for a project."""
     from systemedu.education.project_loader import find_project_dir
@@ -1477,6 +1500,24 @@ async def _on_startup():
 
     _runtime = AgentRuntime(mcp_manager=mcp_manager)
 
+    # Resume any pending FactoryQueue items from previous sessions (non-fatal)
+    try:
+        from systemedu.agents.builtin.gameagent.object_factory import FactoryQueue
+        from systemedu.education.object_scan import trigger_factory_for_keys
+
+        queue = FactoryQueue()
+        # Reset stale in_progress items (crashed mid-run) back to pending
+        for item in queue.all_items():
+            if item.status == "in_progress":
+                queue.mark_failed(item.object_key, error="reset: server restarted mid-run")
+
+        pending = queue.pending_items()
+        if pending:
+            logger.info(f"Startup: resuming {len(pending)} pending factory queue items")
+            trigger_factory_for_keys([(i.object_key, i.description) for i in pending])
+    except Exception:
+        logger.exception("Startup factory queue resume failed (non-fatal)")
+
 
 async def api_get_highlights(request: Request) -> JSONResponse:
     """GET /api/projects/{name}/nodes/{node_id}/highlights - List highlights for a node."""
@@ -2029,6 +2070,7 @@ def create_app() -> Starlette:
         Route("/api/projects/{name}", api_update_project, methods=["PATCH"]),
         Route("/api/objects/queue", api_objects_queue, methods=["GET"]),
         Route("/api/objects/queue/add", api_objects_queue_add, methods=["POST"]),
+        Route("/api/objects/queue/trigger", api_objects_queue_trigger, methods=["POST"]),
         Route("/api/agents", api_agents),
         Route("/api/skills", api_skills),
         Route("/api/mcp/servers", api_mcp_servers, methods=["GET"]),

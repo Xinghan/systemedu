@@ -127,4 +127,10 @@ export const gateway = {
       description: description ?? "",
       project_name: projectName ?? "",
     }),
+  objectQueueTrigger: (projectName?: string) => {
+    const url = projectName
+      ? `/api/objects/queue/trigger?project=${encodeURIComponent(projectName)}`
+      : "/api/objects/queue/trigger"
+    return api.post<{ triggered: number; object_keys?: string[] }>(url, {})
+  },
 }
