@@ -7,6 +7,7 @@ import type {
   ConfigResponse,
   CreateProjectResponse,
   EnrollmentInfo,
+  FactoryQueueResponse,
   HighlightInfo,
   LessonContent,
   LessonProgressResponse,
@@ -114,4 +115,16 @@ export const gateway = {
     api.put<{ ok: boolean; milestones: MilestoneInfo[] }>(
       `/api/projects/${projectName}/tree`, { milestones }
     ),
+  objectQueue: (projectName?: string) => {
+    const url = projectName
+      ? `/api/objects/queue?project=${encodeURIComponent(projectName)}`
+      : "/api/objects/queue"
+    return api.get<FactoryQueueResponse>(url)
+  },
+  objectQueueAdd: (objectKey: string, description?: string, projectName?: string) =>
+    api.post<{ object_key: string; added: boolean }>("/api/objects/queue/add", {
+      object_key: objectKey,
+      description: description ?? "",
+      project_name: projectName ?? "",
+    }),
 }

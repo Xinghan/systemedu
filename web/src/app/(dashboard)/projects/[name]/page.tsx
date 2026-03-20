@@ -23,7 +23,7 @@ import {
 } from "@/components/ui/dialog"
 import { IconTree, IconNote, IconScroll, IconBlueprint } from "@/components/learning/cartoon-icons"
 import { gateway } from "@/lib/api"
-import type { ProjectDetail } from "@/lib/types/api"
+import type { FactoryQueueItem, ProjectDetail } from "@/lib/types/api"
 
 const CATEGORY_OPTIONS = [
   { value: "ai", label: "人工智能" },
@@ -116,6 +116,7 @@ export default function ProjectDetailPage() {
   const [editAgeMin, setEditAgeMin] = useState(6)
   const [editAgeMax, setEditAgeMax] = useState(18)
   const [editTags, setEditTags] = useState("")
+  const [queueItems, setQueueItems] = useState<FactoryQueueItem[]>([])
 
   useEffect(() => {
     if (!params.name) return
@@ -133,6 +134,14 @@ export default function ProjectDetailPage() {
       })
       .catch((e) => setError(e.message))
       .finally(() => setLoading(false))
+
+    gateway
+      .objectQueue(params.name)
+      .then((r) => {
+        const active = r.items.filter((i) => i.status === "pending" || i.status === "in_progress")
+        setQueueItems(active)
+      })
+      .catch(() => {/* non-fatal */})
   }, [params.name])
 
   const handleSaveEdit = async () => {
@@ -426,6 +435,37 @@ export default function ProjectDetailPage() {
               />
             </div>
           </div>
+
+          {/* Object Queue Section — shown only when pending/in_progress items exist */}
+          {queueItems.length > 0 && (
+            <div>
+              <h2 className="text-base font-semibold mb-4">对象队列</h2>
+              <div className="rounded-xl border bg-card divide-y">
+                {queueItems.map((item) => (
+                  <div key={item.object_key} className="flex items-center gap-4 px-5 py-3">
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-mono font-medium truncate">{item.object_key}</p>
+                      {item.description && (
+                        <p className="text-xs text-muted-foreground mt-0.5 truncate">{item.description}</p>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${
+                        item.status === "pending"
+                          ? "bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-400"
+                          : "bg-blue-100 text-blue-700 dark:bg-blue-500/20 dark:text-blue-400"
+                      }`}>
+                        {item.status === "pending" ? "等待创建" : "创建中"}
+                      </span>
+                      <span className="text-[10px] text-muted-foreground">
+                        {new Date(item.created_at).toLocaleDateString("zh-CN")}
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* D3 Knowledge Tree Visualization */}
           <div className="rounded-xl border bg-card overflow-hidden">

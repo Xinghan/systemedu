@@ -322,3 +322,23 @@ export interface WSMessage {
   args?: Record<string, unknown>
   result?: string
 }
+
+export interface FactoryQueueItem {
+  object_key: string
+  description: string
+  source: "auto_project" | "miss_queue" | "manual"
+  project_name: string
+  status: "pending" | "in_progress" | "done" | "failed"
+  created_at: string
+  error: string
+}
+
+export interface FactoryQueueResponse {
+  items: FactoryQueueItem[]
+  stats: {
+    pending: number
+    in_progress: number
+    done: number
+    failed: number
+  }
+}

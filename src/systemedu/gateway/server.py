@@ -381,6 +381,15 @@ async def api_create_project(request: Request) -> JSONResponse:
     except FileExistsError as e:
         return JSONResponse({"error": str(e)}, status_code=409)
 
+    # Auto-scan first-layer nodes and enqueue missing objects (non-fatal)
+    try:
+        from systemedu.education.object_scan import scan_and_enqueue_project_nodes
+        enqueued = scan_and_enqueue_project_nodes(name)
+        if enqueued:
+            logger.info(f"Auto-enqueued {len(enqueued)} objects for {name!r}: {enqueued}")
+    except Exception:
+        logger.exception("Auto-enqueue scan failed (non-fatal)")
+
     return JSONResponse({"name": name, "created": True, "path": str(project_dir)})
 
 
@@ -597,6 +606,54 @@ async def api_update_project(request: Request) -> JSONResponse:
     yaml_path.write_text(_yaml.dump(data, allow_unicode=True, default_flow_style=False), encoding="utf-8")
 
     return JSONResponse({"name": name, "updated": True})
+
+
+async def api_objects_queue(request: Request) -> JSONResponse:
+    """GET /api/objects/queue - Return FactoryQueue items, optionally filtered by project."""
+    from systemedu.agents.builtin.gameagent.object_factory import FactoryQueue
+
+    queue = FactoryQueue()
+    project_filter = request.query_params.get("project", "").strip()
+
+    if project_filter:
+        items = queue.items_for_project(project_filter)
+    else:
+        items = queue.all_items()
+
+    return JSONResponse(
+        {
+            "items": [i.model_dump() for i in items],
+            "stats": queue.stats(),
+        }
+    )
+
+
+async def api_objects_queue_add(request: Request) -> JSONResponse:
+    """POST /api/objects/queue/add - Manually add an item to FactoryQueue."""
+    from systemedu.agents.builtin.gameagent.object_factory import (
+        FactoryQueue,
+        FactoryQueueItem,
+    )
+
+    try:
+        body = await request.json()
+    except Exception:
+        return JSONResponse({"error": "Invalid JSON body"}, status_code=400)
+
+    object_key = body.get("object_key", "").strip()
+    if not object_key:
+        return JSONResponse({"error": "object_key is required"}, status_code=400)
+
+    item = FactoryQueueItem(
+        object_key=object_key,
+        description=body.get("description", ""),
+        source="manual",
+        project_name=body.get("project_name", ""),
+    )
+
+    queue = FactoryQueue()
+    added = queue.enqueue(item)
+    return JSONResponse({"object_key": object_key, "added": added})
 
 
 async def api_update_tree(request: Request) -> JSONResponse:
@@ -1962,6 +2019,8 @@ def create_app() -> Starlette:
         Route("/api/projects/{name}/tree", api_update_tree, methods=["PUT"]),
         Route("/api/projects/{name}", api_project_detail, methods=["GET"]),
         Route("/api/projects/{name}", api_update_project, methods=["PATCH"]),
+        Route("/api/objects/queue", api_objects_queue, methods=["GET"]),
+        Route("/api/objects/queue/add", api_objects_queue_add, methods=["POST"]),
         Route("/api/agents", api_agents),
         Route("/api/skills", api_skills),
         Route("/api/mcp/servers", api_mcp_servers, methods=["GET"]),
