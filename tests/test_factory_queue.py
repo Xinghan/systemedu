@@ -138,43 +138,46 @@ def test_multiple_items_different_keys(tmp_path):
 # ---------------------------------------------------------------------------
 
 
-def test_infer_object_key_rocket_keyword():
-    from systemedu.education.object_scan import infer_object_key
+def test_infer_needed_object_keys_rocket():
+    from systemedu.education.object_scan import infer_needed_object_keys
 
-    result = infer_object_key("火箭发动机原理", "探索火箭如何升空")
-    # Should return a rocket.* key (not in registry)
-    assert result is not None
-    assert result.startswith("rocket.")
-
-
-def test_infer_object_key_cell_keyword():
-    from systemedu.education.object_scan import infer_object_key
-
-    result = infer_object_key("细胞结构", "了解细胞的基本组成部分")
-    assert result is not None
-    assert result.startswith("cell.")
+    results = infer_needed_object_keys("火箭发动机原理", "探索火箭如何升空")
+    # Should return standard rocket part keys not already in registry
+    assert len(results) > 0
+    assert all(k.startswith("rocket.") for k in results)
+    # rocket.basic is already in registry, should NOT appear
+    assert "rocket.basic" not in results
+    # standard parts should appear
+    assert "rocket.engine" in results
 
 
-def test_infer_object_key_no_match():
-    from systemedu.education.object_scan import infer_object_key
+def test_infer_needed_object_keys_cell():
+    from systemedu.education.object_scan import infer_needed_object_keys
 
-    result = infer_object_key("数学公式推导", "解方程的方法")
-    assert result is None
+    results = infer_needed_object_keys("细胞结构", "了解细胞的基本组成部分")
+    assert len(results) > 0
+    assert all(k.startswith("cell.") for k in results)
+    # cell.animal is already in registry
+    assert "cell.animal" not in results
+    assert "cell.plant" in results
 
 
-def test_infer_object_key_already_in_registry():
-    """If the inferred key happens to already be in ObjectRegistry, return None."""
+def test_infer_needed_object_keys_no_match():
+    from systemedu.education.object_scan import infer_needed_object_keys
+
+    results = infer_needed_object_keys("数学公式推导", "解方程的方法")
+    assert results == []
+
+
+def test_infer_needed_object_keys_excludes_registered():
+    """All returned keys should not be in ObjectRegistry."""
     from systemedu.agents.builtin.gameagent.objects import ObjectRegistry
-    from systemedu.education.object_scan import infer_object_key, _make_variant_slug
+    from systemedu.education.object_scan import infer_needed_object_keys
 
-    # Find a key that IS in the registry and check it's excluded
-    supported = ObjectRegistry.supported_keys()
-    if supported:
-        # This test only runs meaningfully if registry is non-empty
-        # (it's a best-effort check)
-        pass
-    # At minimum, ensure no crash
-    infer_object_key("火箭发射台", "发射火箭的基础设施")
+    existing = set(ObjectRegistry.supported_keys())
+    results = infer_needed_object_keys("火箭推进系统", "了解火箭各零部件的作用")
+    for key in results:
+        assert key not in existing, f"{key} should not be in registry already"
 
 
 # ---------------------------------------------------------------------------
@@ -279,15 +282,19 @@ def test_scan_enqueues_first_layer_only(tmp_path, monkeypatch):
 
     enqueued = scan_and_enqueue_project_nodes("rocket-proj")
 
-    # Should enqueue rocket node (no prereqs), NOT the second node
-    assert len(enqueued) == 1
-    assert enqueued[0].startswith("rocket.")
+    # Should enqueue rocket standard parts (no node title slugs)
+    assert len(enqueued) > 0
+    assert all(k.startswith("rocket.") for k in enqueued)
+    # rocket.basic is already in registry, should not appear
+    assert "rocket.basic" not in enqueued
+    # standard parts should appear
+    assert "rocket.engine" in enqueued
 
     q = FactoryQueue(queue_path=queue_path)
     items = q.pending_items()
-    assert len(items) == 1
-    assert items[0].source == "auto_project"
-    assert items[0].project_name == "rocket-proj"
+    assert len(items) > 0
+    assert all(i.source == "auto_project" for i in items)
+    assert all(i.project_name == "rocket-proj" for i in items)
 
 
 def test_scan_skips_unknown_topics(tmp_path, monkeypatch):
@@ -397,14 +404,16 @@ def test_scan_unlocked_nodes_enqueues_topic_nodes(tmp_path, monkeypatch):
 
     # Node 1 (细胞结构) just got unlocked
     enqueued = scan_and_enqueue_unlocked_nodes("chain-proj", [1])
-    assert len(enqueued) == 1
-    assert enqueued[0].startswith("cell.")
+    assert len(enqueued) > 0
+    assert all(k.startswith("cell.") for k in enqueued)
+    # cell.animal is already in registry
+    assert "cell.animal" not in enqueued
 
     q = FactoryQueue(queue_path=queue_path)
     items = q.pending_items()
-    assert len(items) == 1
-    assert items[0].project_name == "chain-proj"
-    assert items[0].source == "auto_project"
+    assert len(items) > 0
+    assert all(i.project_name == "chain-proj" for i in items)
+    assert all(i.source == "auto_project" for i in items)
 
 
 def test_scan_unlocked_nodes_skips_no_topic_match(tmp_path, monkeypatch):
@@ -458,10 +467,12 @@ def test_scan_unlocked_dedup(tmp_path, monkeypatch):
     import systemedu.agents.builtin.gameagent.object_factory.factory_queue as fq_mod
     monkeypatch.setattr(fq_mod, "_DEFAULT_PATH", queue_path)
 
-    scan_and_enqueue_unlocked_nodes("chain-proj3", [1])
-    # Second call — should be deduped
+    first = scan_and_enqueue_unlocked_nodes("chain-proj3", [1])
+    first_count = len(first)
+    assert first_count > 0
+    # Second call — all should be deduped (already pending)
     second = scan_and_enqueue_unlocked_nodes("chain-proj3", [1])
     assert second == []
 
     q = FactoryQueue(queue_path=queue_path)
-    assert len(q.all_items()) == 1
+    assert len(q.all_items()) == first_count
