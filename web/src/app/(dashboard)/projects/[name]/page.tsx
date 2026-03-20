@@ -5,7 +5,7 @@ import { useParams, useRouter } from "next/navigation"
 import Link from "next/link"
 import dynamic from "next/dynamic"
 import { toast } from "sonner"
-import { ArrowLeft, Clock, Play, CheckCircle, GraduationCap, Highlighter, FolderOpen, Palette, Pencil, Save, X } from "lucide-react"
+import { ArrowLeft, Clock, Play, CheckCircle, GraduationCap, Highlighter, FolderOpen, Palette, Pencil, Save, X, Package, ChevronDown, ChevronUp } from "lucide-react"
 import { PageLoading } from "@/components/ui/page-loading"
 import { LoadingSpinner } from "@/components/ui/loading-spinner"
 import { Badge } from "@/components/ui/badge"
@@ -117,6 +117,7 @@ export default function ProjectDetailPage() {
   const [editAgeMax, setEditAgeMax] = useState(18)
   const [editTags, setEditTags] = useState("")
   const [queueItems, setQueueItems] = useState<FactoryQueueItem[]>([])
+  const [queueOpen, setQueueOpen] = useState(false)
 
   useEffect(() => {
     if (!params.name) return
@@ -433,37 +434,60 @@ export default function ProjectDetailPage() {
                 disabled
                 badge="即将推出"
               />
+              <ModuleCard
+                icon={<Package className="h-5 w-5 text-slate-600 dark:text-slate-400" />}
+                iconBg="bg-slate-100 dark:bg-slate-500/20"
+                title="对象队列"
+                description="查看等待创建的 3D 对象任务"
+                onClick={() => setQueueOpen((v) => !v)}
+                badge={queueItems.length > 0 ? `${queueItems.length} 待处理` : undefined}
+              />
             </div>
           </div>
 
-          {/* Object Queue Section — shown only when pending/in_progress items exist */}
-          {queueItems.length > 0 && (
+          {/* Object Queue expandable list */}
+          {queueOpen && (
             <div>
-              <h2 className="text-base font-semibold mb-4">对象队列</h2>
-              <div className="rounded-xl border bg-card divide-y">
-                {queueItems.map((item) => (
-                  <div key={item.object_key} className="flex items-center gap-4 px-5 py-3">
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-mono font-medium truncate">{item.object_key}</p>
-                      {item.description && (
-                        <p className="text-xs text-muted-foreground mt-0.5 truncate">{item.description}</p>
-                      )}
-                    </div>
-                    <div className="flex items-center gap-2 shrink-0">
-                      <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${
-                        item.status === "pending"
-                          ? "bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-400"
-                          : "bg-blue-100 text-blue-700 dark:bg-blue-500/20 dark:text-blue-400"
-                      }`}>
-                        {item.status === "pending" ? "等待创建" : "创建中"}
-                      </span>
-                      <span className="text-[10px] text-muted-foreground">
-                        {new Date(item.created_at).toLocaleDateString("zh-CN")}
-                      </span>
-                    </div>
-                  </div>
-                ))}
+              <div className="flex items-center justify-between mb-3">
+                <h2 className="text-base font-semibold">对象队列</h2>
+                <button
+                  onClick={() => setQueueOpen(false)}
+                  className="text-xs text-muted-foreground flex items-center gap-1 hover:text-foreground"
+                >
+                  <ChevronUp className="h-3.5 w-3.5" />
+                  收起
+                </button>
               </div>
+              {queueItems.length === 0 ? (
+                <div className="rounded-xl border bg-card px-5 py-8 text-center text-sm text-muted-foreground">
+                  暂无待处理的对象创建任务
+                </div>
+              ) : (
+                <div className="rounded-xl border bg-card divide-y">
+                  {queueItems.map((item) => (
+                    <div key={item.object_key} className="flex items-center gap-4 px-5 py-3">
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-mono font-medium truncate">{item.object_key}</p>
+                        {item.description && (
+                          <p className="text-xs text-muted-foreground mt-0.5 truncate">{item.description}</p>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${
+                          item.status === "pending"
+                            ? "bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-400"
+                            : "bg-blue-100 text-blue-700 dark:bg-blue-500/20 dark:text-blue-400"
+                        }`}>
+                          {item.status === "pending" ? "等待创建" : "创建中"}
+                        </span>
+                        <span className="text-[10px] text-muted-foreground">
+                          {new Date(item.created_at).toLocaleDateString("zh-CN")}
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           )}
 
