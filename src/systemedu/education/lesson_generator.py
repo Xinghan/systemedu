@@ -1,6 +1,5 @@
 """AI-powered lesson content generation for knowledge nodes."""
 
-import asyncio
 import json
 import logging
 from datetime import datetime
@@ -291,129 +290,6 @@ def _ensure_game_templates(
     return examples_content
 
 
-_IMAGE_SEARCH_SEMAPHORE = asyncio.Semaphore(5)
-
-
-async def _fetch_wikimedia_image(keyword: str) -> str | None:
-    """Fetch a thumbnail URL from the Wikipedia pageimages API.
-
-    Args:
-        keyword: English search keyword (1-3 words).
-
-    Returns:
-        Thumbnail URL string, or None if not found or on error.
-    """
-    import urllib.parse
-
-    try:
-        import httpx
-    except ImportError:
-        logger.warning("httpx not available, skipping image search")
-        return None
-
-    url = "https://en.wikipedia.org/w/api.php"
-    params = {
-        "action": "query",
-        "titles": keyword,
-        "prop": "pageimages",
-        "piprop": "thumbnail",
-        "pithumbsize": 200,
-        "format": "json",
-        "redirects": "1",
-    }
-    try:
-        async with _IMAGE_SEARCH_SEMAPHORE:
-            async with httpx.AsyncClient(trust_env=False, timeout=5.0) as client:
-                resp = await client.get(url, params=params)
-                resp.raise_for_status()
-                data = resp.json()
-        pages = data.get("query", {}).get("pages", {})
-        if not pages:
-            return None
-        first_key = next(iter(pages))
-        page = pages[first_key]
-        # page_id < 0 means the article doesn't exist
-        if page.get("pageid", -1) < 0:
-            return None
-        thumbnail = page.get("thumbnail", {})
-        return thumbnail.get("source") or None
-    except Exception:
-        logger.debug(f"Image search failed for '{keyword}'", exc_info=True)
-        return None
-
-
-def _extract_items_for_image_search(analysis: dict) -> list[tuple[dict, str]]:
-    """Extract (item_dict, search_keyword) pairs from an analysis dict.
-
-    Returns an empty list for cause_effect and animated_story modes.
-    """
-    mode = analysis.get("best_interaction", "")
-    if mode in ("cause_effect", "animated_story"):
-        return []
-
-    results: list[tuple[dict, str]] = []
-
-    def _keyword(item: dict, name_key: str) -> str:
-        kw = item.get("search_keyword", "")
-        if kw and isinstance(kw, str):
-            return kw.strip()
-        return str(item.get(name_key, "")).strip()
-
-    if mode == "drag_classify":
-        for item in analysis.get("interactive_objects", []):
-            kw = _keyword(item, "name")
-            if kw:
-                results.append((item, kw))
-
-    elif mode == "drag_sort":
-        for item in analysis.get("sortable_items", []):
-            kw = _keyword(item, "label")
-            if kw:
-                results.append((item, kw))
-
-    elif mode == "click_select":
-        for question in analysis.get("questions", []):
-            for opt in question.get("options", []):
-                kw = _keyword(opt, "label")
-                if kw:
-                    results.append((opt, kw))
-
-    elif mode == "connect_match":
-        for item in analysis.get("left_items", []):
-            kw = _keyword(item, "label")
-            if kw:
-                results.append((item, kw))
-        for item in analysis.get("right_items", []):
-            kw = _keyword(item, "label")
-            if kw:
-                results.append((item, kw))
-
-    return results
-
-
-async def _enrich_analysis_with_images(analysis: dict) -> dict:
-    """Concurrently fetch Wikimedia images for all interactive items.
-
-    Writes image_url (str or None) into each item dict in-place.
-    Never raises — pipeline continues even if all searches fail.
-    """
-    try:
-        pairs = _extract_items_for_image_search(analysis)
-        if not pairs:
-            return analysis
-
-        async def _fetch_and_set(item: dict, keyword: str) -> None:
-            url = await _fetch_wikimedia_image(keyword)
-            item["image_url"] = url
-
-        await asyncio.gather(*[_fetch_and_set(item, kw) for item, kw in pairs])
-        found = sum(1 for item, _ in pairs if item.get("image_url"))
-        logger.info(f"Image search: {found}/{len(pairs)} items got images")
-    except Exception:
-        logger.exception("_enrich_analysis_with_images failed, continuing without images")
-    return analysis
-
-
 async def _generate_interactive_lab(
     node_title: str,
     node_summary: str,
@@ -422,9 +298,9 @@ async def _generate_interactive_lab(
     lesson_plan: dict | None = None,
     progress_callback=None,
 ) -> str:
-    """Generate a runnable React HTML page using the 3-Agent pipeline.
+    """Generate a runnable React HTML page using the 2-Agent pipeline.
 
-    Pipeline: LabAnalystAgent → LabDesignerAgent → LabCoderAgent
+    Pipeline: LabCoderAgent → LabReviewerAgent
 
     Falls back gracefully if any agent fails.
 
@@ -438,79 +314,23 @@ async def _generate_interactive_lab(
 
     Returns the full HTML string, or empty string on failure.
     """
-    from systemedu.agents.builtin.lab_analyst import LabAnalystAgent
-    from systemedu.agents.builtin.lab_designer import LabDesignerAgent
     from systemedu.agents.builtin.lab_coder import LabCoderAgent
     from systemedu.agents.builtin.lab_reviewer import LabReviewerAgent
 
     max_retries = 1  # retry once on failure
 
-    # Stage 1: Analyst
-    if progress_callback:
-        progress_callback("lab_analyst", "in_progress", "")
-    analyst = LabAnalystAgent(llm=llm)
-    analysis = None
-    for attempt in range(1 + max_retries):
-        analysis = await analyst.analyze(node_title, node_summary, difficulty, lesson_plan=lesson_plan)
-        if analysis:
-            break
-        if attempt < max_retries:
-            logger.info(f"Lab analyst attempt {attempt + 1} failed for '{node_title}', retrying...")
-    if not analysis:
-        logger.warning(f"Lab analyst returned None for '{node_title}' after retries")
-        if progress_callback:
-            progress_callback("lab_analyst", "failed", "")
-        return ""
-    preview = f"交互模式: {analysis.get('best_interaction', '?')}, {len(analysis.get('interactive_objects', []))} 个物品"
-    if progress_callback:
-        progress_callback("lab_analyst", "completed", preview)
+    # Extract lab_strategy from lesson_plan
+    lab_strategy = {}
+    if lesson_plan:
+        lab_strategy = lesson_plan.get("lab_strategy", {})
 
-    # Stage 1.5: Enrich analysis with Wikimedia images
-    if progress_callback:
-        progress_callback("lab_image_search", "in_progress", "")
-    analysis = await _enrich_analysis_with_images(analysis)
-    mode = analysis.get("best_interaction", "")
-    if mode not in ("cause_effect", "animated_story"):
-        items = (
-            analysis.get("interactive_objects", [])
-            or analysis.get("sortable_items", [])
-            or [o for q in analysis.get("questions", []) for o in q.get("options", [])]
-            or analysis.get("left_items", []) + analysis.get("right_items", [])
-        )
-        found_images = sum(1 for i in items if i.get("image_url"))
-        img_preview = f"{found_images}/{len(items)} 张图片"
-    else:
-        img_preview = "跳过（不适用）"
-    if progress_callback:
-        progress_callback("lab_image_search", "completed", img_preview)
-
-    # Stage 2: Designer
-    if progress_callback:
-        progress_callback("lab_designer", "in_progress", "")
-    designer = LabDesignerAgent(llm=llm)
-    design = None
-    for attempt in range(1 + max_retries):
-        design = await designer.design(analysis, difficulty)
-        if design:
-            break
-        if attempt < max_retries:
-            logger.info(f"Lab designer attempt {attempt + 1} failed for '{node_title}', retrying...")
-    if not design:
-        logger.warning(f"Lab designer returned None for '{node_title}' after retries")
-        if progress_callback:
-            progress_callback("lab_designer", "failed", "")
-        return ""
-    preview = f"游戏: {design.get('game_title', '?')}, {len(design.get('items', []))} 物品"
-    if progress_callback:
-        progress_callback("lab_designer", "completed", preview)
-
-    # Stage 3: Coder
+    # Stage 1: Coder — generate HTML directly from game concept
     if progress_callback:
         progress_callback("lab_coder", "in_progress", "")
     coder = LabCoderAgent(llm=llm)
     html = ""
     for attempt in range(1 + max_retries):
-        html = await coder.generate(design, difficulty)
+        html = await coder.generate(node_title, node_summary, difficulty, lab_strategy)
         if html:
             break
         if attempt < max_retries:
@@ -519,13 +339,13 @@ async def _generate_interactive_lab(
         status = "completed" if html else "failed"
         progress_callback("lab_coder", status, f"{len(html)} chars" if html else "")
 
-    # Stage 4: Reviewer — review and fix known interaction bugs
+    # Stage 2: Reviewer — review and fix known interaction bugs
     if html:
         if progress_callback:
             progress_callback("lab_reviewer", "in_progress", "")
         try:
             reviewer = LabReviewerAgent(llm=llm)
-            reviewed_html = await reviewer.review(html, design)
+            reviewed_html = await reviewer.review(html, lab_strategy)
             if reviewed_html:
                 html = reviewed_html
             if progress_callback:
@@ -701,9 +521,6 @@ def _init_progress_steps(db, project_name: str, knode_id: int):
         ("key_takeaways", "要点总结", "总结老师"),
         ("quiz", "测验题", "出题老师"),
         ("teacher_script", "老师讲义", "讲稿老师"),
-        ("lab_analyst", "实验-知识分析", "分析小助手"),
-        ("lab_image_search", "实验-图片搜索", "图片助手"),
-        ("lab_designer", "实验-游戏设计", "设计小助手"),
         ("lab_coder", "实验-代码生成", "开发小助手"),
         ("lab_reviewer", "实验-代码审查", "审查小助手"),
         ("tts", "语音合成", "朗读老师"),
@@ -808,7 +625,7 @@ async def generate_lesson(project_name: str, knode_id: int, user_id: str = "defa
                     # Cache the plan
                     lesson.lesson_plan_json = json.dumps(lesson_plan, ensure_ascii=False)
                     db.commit()
-                    preview = f"方式: {lesson_plan.get('concept_approach', '?')}, 实验: {lesson_plan.get('lab_strategy', {}).get('interaction_type', '?')}"
+                    preview = f"方式: {lesson_plan.get('concept_approach', '?')}, 实验: {lesson_plan.get('lab_strategy', {}).get('game_mechanic', '?')}"
                     _update_progress(db, project_name, knode_id, "planner", "课程策划", "策划小助手", "completed", preview)
                     logger.info(f"Lesson plan created and cached for node {knode_id}")
                 else:
@@ -887,16 +704,10 @@ async def generate_lesson(project_name: str, knode_id: int, user_id: str = "defa
         # Step 4: Generate interactive lab (3-Agent pipeline)
         def lab_progress_callback(step_name, status, preview):
             step_labels = {
-                "lab_analyst": "实验-知识分析",
-                "lab_image_search": "实验-图片搜索",
-                "lab_designer": "实验-游戏设计",
                 "lab_coder": "实验-代码生成",
                 "lab_reviewer": "实验-代码审查",
             }
             agent_names = {
-                "lab_analyst": "分析小助手",
-                "lab_image_search": "图片助手",
-                "lab_designer": "设计小助手",
                 "lab_coder": "开发小助手",
                 "lab_reviewer": "审查小助手",
             }

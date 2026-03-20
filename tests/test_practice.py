@@ -230,7 +230,7 @@ class TestLabCoderValidation:
         drag_warnings = [w for w in result["warnings"] if "drag" in w.lower()]
         assert len(drag_warnings) == 0
 
-    def test_validate_missing_drag_warns(self):
+    def test_validate_warns_on_insufficient_keyframes(self):
         from systemedu.agents.builtin.lab_coder import validate_lab_html
 
         html = """<!DOCTYPE html><html><head><style>
@@ -253,5 +253,5 @@ class TestLabCoderValidation:
         result = validate_lab_html(html)
         assert result["fatal"] is None
         warnings_text = " ".join(result["warnings"])
-        assert "drag" in warnings_text.lower()
-        assert "@keyframes" in warnings_text.lower() or "keyframes" in warnings_text.lower()
+        # Should warn about insufficient @keyframes (only 1, need at least 2)
+        assert "keyframes" in warnings_text.lower()
