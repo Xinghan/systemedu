@@ -2,170 +2,345 @@
 <html lang="zh">
 <head>
 <meta charset="UTF-8"/>
-<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-<title>参数模拟</title>
-<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet"/>
-<script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
-<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>参数实验室</title>
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800;900&display=swap" rel="stylesheet"/>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
 <style>
+:root{--bg1:#0c1425;--bg2:#0f2040;--accent:#38bdf8;--green:#4ADE80;--red:#F87171;--yellow:#FCD34D;--border:#ffffff18;--text:#f1f5f9;--dim:#64748b}
 *{box-sizing:border-box;margin:0;padding:0}
-html,body{height:100vh;overflow:hidden;font-family:'Nunito','PingFang SC',sans-serif;background:linear-gradient(135deg,#EEF2FF 0%,#F0FDF4 100%)}
-@keyframes bounce{0%,100%{transform:scale(1)}50%{transform:scale(1.08)}}
-@keyframes fall{0%{transform:translateY(-20px);opacity:1}100%{transform:translateY(120vh);opacity:0}}
-@keyframes pulse{0%,100%{opacity:1}50%{opacity:0.5}}
-.confetti-dot{position:fixed;width:10px;height:10px;border-radius:50%;pointer-events:none;animation:fall 1.8s ease-in forwards}
-input[type=range]{width:100%;height:6px;border-radius:3px;appearance:none;background:#E5E7EB;outline:none;cursor:pointer}
-input[type=range]::-webkit-slider-thumb{appearance:none;width:18px;height:18px;border-radius:50%;background:#4F8EF7;cursor:pointer;box-shadow:0 2px 4px rgba(0,0,0,0.2)}
+html,body{height:100vh;overflow:hidden;font-family:'Nunito','PingFang SC',sans-serif;background:linear-gradient(160deg,var(--bg1) 0%,var(--bg2) 100%);color:var(--text);user-select:none}
+
+#header{display:flex;align-items:center;justify-content:space-between;padding:10px 16px;height:52px;background:rgba(0,0,0,.3);border-bottom:1px solid var(--border);flex-shrink:0}
+#topic{font-size:15px;font-weight:800;color:#bae6fd}
+.badge{padding:3px 10px;border-radius:20px;background:rgba(255,255,255,.08);font-size:12px;font-weight:700}
+
+#prompt-bar{padding:7px 16px;background:rgba(56,189,248,.15);border-bottom:1px solid rgba(56,189,248,.2);font-size:13px;font-weight:600;color:#bae6fd;flex-shrink:0;min-height:34px;display:flex;align-items:center}
+
+#game{flex:1;display:flex;gap:10px;padding:10px 12px;min-height:0;overflow:hidden}
+
+/* left: sliders */
+#controls{flex:0 0 168px;display:flex;flex-direction:column;gap:8px;overflow-y:auto;padding-right:2px}
+.ctrl-card{background:rgba(255,255,255,.06);border:1px solid var(--border);border-radius:14px;padding:10px 12px}
+.ctrl-header{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px}
+.ctrl-label{font-size:12px;font-weight:700;color:#e0f2fe}
+.ctrl-value{font-size:14px;font-weight:900}
+.ctrl-range{width:100%;appearance:none;height:5px;border-radius:3px;outline:none;cursor:pointer}
+.ctrl-range::-webkit-slider-thumb{appearance:none;width:20px;height:20px;border-radius:50%;cursor:pointer;border:3px solid #0c1425;transition:transform .1s}
+.ctrl-range::-webkit-slider-thumb:hover{transform:scale(1.2)}
+.ctrl-bar{height:4px;border-radius:2px;margin-top:6px;transition:width .15s}
+
+/* right: canvas scene */
+#scene-wrap{flex:1;background:rgba(0,0,0,.3);border:1px solid var(--border);border-radius:16px;overflow:hidden;position:relative;min-width:0}
+#scene-canvas{width:100%;height:100%;display:block}
+#scene-label{position:absolute;bottom:8px;left:50%;transform:translateX(-50%);font-size:11px;font-weight:600;color:var(--dim);white-space:nowrap;pointer-events:none}
+#goal-badge{position:absolute;top:8px;right:10px;background:rgba(74,222,128,.15);border:1px solid rgba(74,222,128,.3);border-radius:20px;padding:3px 10px;font-size:11px;font-weight:700;color:var(--green);opacity:0}
+
+/* win */
+#win{position:absolute;inset:0;display:none;flex-direction:column;align-items:center;justify-content:center;gap:14px;z-index:50;background:rgba(12,20,37,.92);backdrop-filter:blur(6px)}
+#win-title{font-size:26px;font-weight:900;color:#bae6fd;text-align:center}
+#win-sub{font-size:14px;color:var(--dim)}
+#win-btn{padding:11px 32px;border-radius:14px;border:none;background:var(--accent);color:#0c1425;font-size:15px;font-weight:900;cursor:pointer;font-family:inherit;box-shadow:0 5px 0 #0284c7}
+#win-btn:active{transform:translateY(3px);box-shadow:0 2px 0 #0284c7}
+#particle-canvas{position:fixed;inset:0;pointer-events:none;z-index:60}
 </style>
 </head>
 <body>
-<div id="root"></div>
-<script type="text/babel">
-const GAME_SPEC = "__GAME_SPEC__";
-
-const { useState, useEffect, useMemo } = React;
-const COLORS = ["#4F8EF7","#4ADE80","#FB923C","#A78BFA","#FCD34D","#06B6D4"];
-
-function Confetti() {
-  return (
-    <div aria-hidden="true">
-      {Array.from({length:16},(_,i)=>(
-        <div key={i} className="confetti-dot" style={{
-          left:`${Math.random()*100}%`,top:0,
-          background:COLORS[i%COLORS.length],
-          animationDelay:`${Math.random()*0.7}s`,
-          animationDuration:`${1.2+Math.random()*0.9}s`,
-        }}/>
-      ))}
+<canvas id="particle-canvas"></canvas>
+<div style="display:flex;flex-direction:column;height:100vh">
+  <div id="header">
+    <span id="topic"></span>
+    <span class="badge" id="prog-badge" style="color:#fbbf24">0%</span>
+  </div>
+  <div id="prompt-bar"></div>
+  <div id="game">
+    <div id="controls"></div>
+    <div id="scene-wrap">
+      <canvas id="scene-canvas"></canvas>
+      <div id="scene-label"></div>
+      <div id="goal-badge">目标达成!</div>
     </div>
-  );
+  </div>
+</div>
+<div id="win">
+  <div id="win-title"></div>
+  <div id="win-sub"></div>
+  <button id="win-btn">再次实验</button>
+</div>
+
+<script>
+const SPEC = "__GAME_SPEC__";
+
+const PALETTE = ["#38bdf8","#4ADE80","#FB923C","#A78BFA","#FCD34D","#F87171","#06B6D4","#EC4899"];
+const entities = SPEC.entities;
+let params = {};
+entities.forEach(e => { params[e.param_name] = e.default !== undefined ? e.default : Math.floor((e.min + e.max) / 2); });
+
+let won = false;
+document.getElementById("topic").textContent = SPEC.topic;
+document.getElementById("prompt-bar").textContent = SPEC.levels[0]?.prompt || SPEC.target_condition || "调节参数，观察效果变化";
+document.getElementById("scene-label").textContent = SPEC.visual_description || "";
+
+// ── build sliders ────────────────────────────────────────
+const ctrlContainer = document.getElementById("controls");
+entities.forEach((e, i) => {
+  const color = PALETTE[i % PALETTE.length];
+  const card = document.createElement("div");
+  card.className = "ctrl-card";
+  card.innerHTML = `
+    <div class="ctrl-header">
+      <span class="ctrl-label">${e.label}</span>
+      <span class="ctrl-value" id="val-${e.param_name}" style="color:${color}">${params[e.param_name]}${e.unit || ""}</span>
+    </div>
+    <input class="ctrl-range" type="range" id="range-${e.param_name}"
+      min="${e.min}" max="${e.max}" value="${params[e.param_name]}"
+      style="background:linear-gradient(to right, ${color} 0%, ${color} ${pct(e)}%, #1e293b ${pct(e)}%, #1e293b 100%)">
+    <input type="range" style="display:none">
+    <div class="ctrl-bar" id="bar-${e.param_name}" style="background:${color};width:${pct(e)}%"></div>
+  `;
+  card.style.borderColor = color + "44";
+  ctrlContainer.appendChild(card);
+
+  // thumb color via inline style workaround
+  const range = card.querySelector(`#range-${e.param_name}`);
+  range.style.setProperty("--thumb", color);
+  range.style.cssText += `;--thumb:${color}`;
+  // add dynamic thumb color
+  const style = document.createElement("style");
+  style.textContent = `#range-${e.param_name}::-webkit-slider-thumb{background:${color}}`;
+  document.head.appendChild(style);
+
+  range.addEventListener("input", () => {
+    params[e.param_name] = Number(range.value);
+    document.getElementById(`val-${e.param_name}`).textContent = `${params[e.param_name]}${e.unit || ""}`;
+    const p = pct(e);
+    range.style.background = `linear-gradient(to right, ${color} 0%, ${color} ${p}%, #1e293b ${p}%, #1e293b 100%)`;
+    document.getElementById(`bar-${e.param_name}`).style.width = p + "%";
+    onParamChange();
+  });
+
+  gsap.from(card, { opacity: 0, x: -20, duration: .3, delay: i * .07, ease: "back.out(1.5)" });
+});
+
+function pct(e) { return Math.round((params[e.param_name] - e.min) / Math.max(e.max - e.min, 1) * 100); }
+
+// ── canvas scene ─────────────────────────────────────────
+const canvas = document.getElementById("scene-canvas");
+const ctx = canvas.getContext("2d");
+
+function resizeCanvas() {
+  const wrap = document.getElementById("scene-wrap");
+  canvas.width = wrap.clientWidth;
+  canvas.height = wrap.clientHeight;
+  drawScene();
+}
+window.addEventListener("resize", resizeCanvas);
+setTimeout(resizeCanvas, 50);
+
+function overallProgress() {
+  const vals = entities.map(e => (params[e.param_name] - e.min) / Math.max(e.max - e.min, 1));
+  return vals.reduce((a, b) => a + b, 0) / Math.max(vals.length, 1);
 }
 
-function App() {
-  const { entities, rules, levels, feedback, topic, target_condition, visual_description } = GAME_SPEC;
-  const initParams = useMemo(() => {
-    const p = {};
-    entities.forEach(e => { p[e.param_name] = e.default !== undefined ? e.default : Math.floor((e.min+e.max)/2); });
-    return p;
-  }, []);
-  const [params, setParams] = useState(initParams);
-  const [done, setDone] = useState(false);
-  const [showConfetti, setShowConfetti] = useState(false);
-  const [score, setScore] = useState(0);
+function drawScene() {
+  const W = canvas.width, H = canvas.height;
+  if (!W || !H) return;
+  ctx.clearRect(0, 0, W, H);
 
-  const levelIdx = Math.min(Math.floor(score/Math.max(rules.correct_points||10,1)), levels.length-1);
-  const currentPrompt = levels[levelIdx]?.prompt || target_condition || "调节参数，观察效果变化";
+  const progress = overallProgress();
 
-  const updateParam = (paramName, val) => {
-    const newP = {...params, [paramName]: Number(val)};
-    setParams(newP);
-    // Simple win: all params at their "effect" end (>75% of range)
-    if (!done) {
-      const allHigh = entities.every(e => {
-        const pct = (newP[e.param_name] - e.min) / Math.max(e.max - e.min, 1);
-        return pct >= 0.7;
-      });
-      if (allHigh) {
-        setDone(true);
-        setShowConfetti(true);
-        setScore(s=>s+(rules.correct_points||10)*entities.length);
-      }
+  // ── background glow ──────────────────────────────────
+  const grad = ctx.createRadialGradient(W/2, H/2, 10, W/2, H/2, W*.7);
+  const hue = Math.round(progress * 120); // 0=red→120=green
+  grad.addColorStop(0, `hsla(${hue},80%,40%,${.08 + progress*.15})`);
+  grad.addColorStop(1, "transparent");
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, W, H);
+
+  // ── grid lines ───────────────────────────────────────
+  ctx.strokeStyle = "rgba(255,255,255,.04)";
+  ctx.lineWidth = 1;
+  for (let x = 0; x < W; x += 32) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke(); }
+  for (let y = 0; y < H; y += 32) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke(); }
+
+  // ── per-param bars (vertical) ────────────────────────
+  const barCount = entities.length;
+  const barW = Math.min(32, (W * .5) / barCount);
+  const barAreaLeft = W * .18;
+  entities.forEach((e, i) => {
+    const color = PALETTE[i % PALETTE.length];
+    const p = (params[e.param_name] - e.min) / Math.max(e.max - e.min, 1);
+    const maxH = H * .55;
+    const bH = p * maxH + 4;
+    const bX = barAreaLeft + i * (barW + 8);
+    const bY = H * .72 - bH;
+
+    // shadow glow
+    ctx.shadowColor = color;
+    ctx.shadowBlur = 12 * p + 2;
+
+    // bar body
+    const g = ctx.createLinearGradient(0, bY, 0, bY + bH);
+    g.addColorStop(0, color);
+    g.addColorStop(1, color + "44");
+    ctx.fillStyle = g;
+    roundRect(ctx, bX, bY, barW, bH, 6);
+    ctx.fill();
+
+    ctx.shadowBlur = 0;
+
+    // label
+    ctx.fillStyle = color;
+    ctx.font = `bold 9px Nunito,sans-serif`;
+    ctx.textAlign = "center";
+    ctx.fillText(e.label.slice(0, 4), bX + barW / 2, H * .72 + 14);
+  });
+
+  // ── central effect orb ───────────────────────────────
+  const orbR = 28 + progress * 38;
+  const orbX = W * .72, orbY = H * .38;
+  const hue2 = Math.round(progress * 120);
+
+  ctx.shadowColor = `hsl(${hue2},90%,60%)`;
+  ctx.shadowBlur = 24 + progress * 30;
+
+  const og = ctx.createRadialGradient(orbX, orbY, 0, orbX, orbY, orbR);
+  og.addColorStop(0, `hsl(${hue2},90%,75%)`);
+  og.addColorStop(.6, `hsl(${hue2},80%,50%)`);
+  og.addColorStop(1, `hsl(${hue2},70%,30%)00`);
+  ctx.fillStyle = og;
+  ctx.beginPath();
+  ctx.arc(orbX, orbY, orbR, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.shadowBlur = 0;
+
+  // orbR pulse rings when progress > .5
+  if (progress > .5) {
+    const alpha = (progress - .5) * 2 * .25;
+    for (let r = 1; r <= 3; r++) {
+      ctx.strokeStyle = `hsla(${hue2},80%,60%,${alpha / r})`;
+      ctx.lineWidth = 2 / r;
+      ctx.beginPath();
+      ctx.arc(orbX, orbY, orbR + r * 14, 0, Math.PI * 2);
+      ctx.stroke();
     }
-  };
+  }
 
-  const reset = () => { setParams(initParams); setDone(false); setShowConfetti(false); setScore(0); };
+  // ── progress arc ─────────────────────────────────────
+  const arcR = 22, arcX = W * .72, arcY = H * .72;
+  ctx.strokeStyle = "rgba(255,255,255,.1)";
+  ctx.lineWidth = 5;
+  ctx.beginPath();
+  ctx.arc(arcX, arcY, arcR, -Math.PI / 2, Math.PI * 2 * 1.5, false);
+  ctx.stroke();
 
-  // Compute a "progress" value 0-1 based on average param position
-  const overallProgress = useMemo(() => {
-    if (!entities.length) return 0;
-    const avg = entities.reduce((sum,e) => sum + (params[e.param_name]-e.min)/Math.max(e.max-e.min,1), 0) / entities.length;
-    return Math.min(1, Math.max(0, avg));
-  }, [params]);
+  const col = progress >= .8 ? "#4ADE80" : progress >= .5 ? "#FCD34D" : "#38bdf8";
+  ctx.strokeStyle = col;
+  ctx.shadowColor = col;
+  ctx.shadowBlur = 8;
+  ctx.lineWidth = 5;
+  ctx.lineCap = "round";
+  ctx.beginPath();
+  ctx.arc(arcX, arcY, arcR, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * progress, false);
+  ctx.stroke();
+  ctx.shadowBlur = 0;
 
-  return (
-    <div style={{height:"100vh",display:"flex",flexDirection:"column",padding:"8px 12px",gap:8}}>
-      {showConfetti && <Confetti/>}
-      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",height:44,flexShrink:0}}>
-        <div style={{fontWeight:800,fontSize:16,color:"#3730A3"}}>{topic}</div>
-        <div style={{fontSize:13,fontWeight:700,color:"#4F8EF7"}}>得分: {score}</div>
-      </div>
-
-      <div style={{background:"#fff",borderRadius:12,padding:"6px 12px",fontSize:13,color:"#6B7280",fontWeight:600,flexShrink:0,boxShadow:"0 2px 0 rgba(0,0,0,0.06)"}}>{currentPrompt}</div>
-
-      {done ? (
-        <div style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:16}}>
-          <div style={{fontSize:48}}>🎉</div>
-          <div style={{fontSize:22,fontWeight:800,color:"#3730A3"}}>{feedback.complete_text}</div>
-          <button onClick={reset} style={{background:"#4F8EF7",color:"#fff",border:"none",borderRadius:12,padding:"10px 28px",fontWeight:800,fontSize:15,cursor:"pointer",boxShadow:"0 4px 0 #2563EB"}}>再试一次</button>
-        </div>
-      ) : (
-        <div style={{flex:1,display:"flex",gap:10,minHeight:0}}>
-          {/* Left: sliders */}
-          <div style={{flex:"0 0 180px",display:"flex",flexDirection:"column",gap:10,overflowY:"auto",paddingRight:4}}>
-            {entities.map((e,i) => {
-              const val = params[e.param_name];
-              const pct = (val-e.min)/Math.max(e.max-e.min,1);
-              return (
-                <div key={e.id} style={{background:"#fff",borderRadius:12,padding:"8px 10px",boxShadow:"0 3px 0 rgba(0,0,0,0.08)"}}>
-                  <div style={{display:"flex",justifyContent:"space-between",marginBottom:6}}>
-                    <span style={{fontWeight:700,fontSize:12,color:"#374151"}}>{e.label}</span>
-                    <span style={{fontWeight:800,fontSize:12,color:COLORS[i%COLORS.length]}}>{val}{e.unit||""}</span>
-                  </div>
-                  <input
-                    type="range" min={e.min} max={e.max} value={val}
-                    onChange={ev=>updateParam(e.param_name,ev.target.value)}
-                    style={{"--thumb-color":COLORS[i%COLORS.length]}}
-                  />
-                </div>
-              );
-            })}
-          </div>
-
-          {/* Right: visual effect area */}
-          <div style={{flex:1,background:"#fff",borderRadius:14,boxShadow:"0 3px 0 rgba(0,0,0,0.08)",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:12,gap:12}}>
-            <div style={{fontSize:12,color:"#9CA3AF",fontWeight:600}}>{visual_description || "效果预览"}</div>
-            {/* Progress ring */}
-            <svg width="100" height="100" viewBox="0 0 100 100">
-              <circle cx="50" cy="50" r="40" fill="none" stroke="#E5E7EB" strokeWidth="10"/>
-              <circle cx="50" cy="50" r="40" fill="none"
-                stroke={overallProgress>=0.7?"#4ADE80":"#4F8EF7"} strokeWidth="10"
-                strokeDasharray={`${overallProgress*2*Math.PI*40} ${2*Math.PI*40}`}
-                strokeLinecap="round"
-                transform="rotate(-90 50 50)"
-                style={{transition:"stroke-dasharray 0.3s ease, stroke 0.3s ease"}}
-              />
-              <text x="50" y="55" textAnchor="middle" fontSize="18" fontWeight="800" fill={overallProgress>=0.7?"#16A34A":"#3730A3"}>
-                {Math.round(overallProgress*100)}%
-              </text>
-            </svg>
-
-            {/* Bar chart of params */}
-            <div style={{width:"100%",display:"flex",gap:6,alignItems:"flex-end",height:60}}>
-              {entities.map((e,i)=>{
-                const pct=(params[e.param_name]-e.min)/Math.max(e.max-e.min,1);
-                return (
-                  <div key={e.id} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:2}}>
-                    <div style={{width:"100%",background:COLORS[i%COLORS.length],borderRadius:"4px 4px 0 0",height:`${pct*52+4}px`,transition:"height 0.2s ease"}}/>
-                    <div style={{fontSize:9,color:"#9CA3AF",fontWeight:600,textAlign:"center"}}>{e.label.slice(0,4)}</div>
-                  </div>
-                );
-              })}
-            </div>
-
-            {overallProgress >= 0.7 && (
-              <div style={{background:"#F0FDF4",borderRadius:10,padding:"4px 12px",fontSize:12,fontWeight:700,color:"#16A34A"}}>
-                目标达成！继续保持
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-    </div>
-  );
+  ctx.fillStyle = col;
+  ctx.font = `bold 11px Nunito,sans-serif`;
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillText(Math.round(progress * 100) + "%", arcX, arcY);
+  ctx.textBaseline = "alphabetic";
 }
 
-ReactDOM.createRoot(document.getElementById("root")).render(<App/>);
+function roundRect(ctx, x, y, w, h, r) {
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.lineTo(x + w - r, y);
+  ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+  ctx.lineTo(x + w, y + h - r);
+  ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+  ctx.lineTo(x + r, y + h);
+  ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+  ctx.lineTo(x, y + r);
+  ctx.quadraticCurveTo(x, y, x + r, y);
+  ctx.closePath();
+}
+
+// animate loop
+let animFrame;
+function animateScene() {
+  drawScene();
+  animFrame = requestAnimationFrame(animateScene);
+}
+animateScene();
+
+function onParamChange() {
+  const p = overallProgress();
+  document.getElementById("prog-badge").textContent = Math.round(p * 100) + "%";
+  gsap.to(document.getElementById("prog-badge"), { color: p >= .8 ? "#4ADE80" : p >= .5 ? "#FCD34D" : "#fbbf24", duration: .3 });
+
+  if (p >= .75 && !won) {
+    won = true;
+    const badge = document.getElementById("goal-badge");
+    gsap.to(badge, { opacity: 1, scale: 1.1, duration: .4, yoyo: true, repeat: 1, onComplete: () => gsap.set(badge, { opacity: 1, scale: 1 }) });
+    setTimeout(showWin, 600);
+  }
+}
+
+function showWin() {
+  cancelAnimationFrame(animFrame);
+  const p = Math.round(overallProgress() * 100);
+  document.getElementById("win-title").textContent = SPEC.feedback.complete_text;
+  document.getElementById("win-sub").textContent = `实验成功 · 效率达到 ${p}%`;
+  const win = document.getElementById("win");
+  win.style.display = "flex";
+  gsap.from(win.children, { opacity: 0, y: 28, stagger: .1, duration: .5, ease: "back.out(1.4)" });
+  launchParticles();
+}
+
+document.getElementById("win-btn").addEventListener("click", () => {
+  won = false;
+  entities.forEach(e => { params[e.param_name] = e.default !== undefined ? e.default : Math.floor((e.min + e.max) / 2); });
+  entities.forEach(e => {
+    const r = document.getElementById(`range-${e.param_name}`);
+    if (r) r.value = params[e.param_name];
+    const v = document.getElementById(`val-${e.param_name}`);
+    if (v) v.textContent = `${params[e.param_name]}${e.unit || ""}`;
+  });
+  document.getElementById("prog-badge").textContent = "0%";
+  document.getElementById("goal-badge").style.opacity = "0";
+  document.getElementById("win").style.display = "none";
+  animateScene();
+});
+
+function launchParticles() {
+  const c = document.getElementById("particle-canvas");
+  const x = c.getContext("2d");
+  c.width = innerWidth; c.height = innerHeight;
+  const parts = Array.from({length:100}, () => ({
+    px: Math.random()*c.width, py:-10,
+    vx:(Math.random()-.5)*5, vy:Math.random()*4+2,
+    sz:Math.random()*8+4, col:PALETTE[Math.floor(Math.random()*PALETTE.length)],
+    rot:Math.random()*360, rv:(Math.random()-.5)*7, life:1
+  }));
+  function draw2() {
+    x.clearRect(0,0,c.width,c.height);
+    let alive=false;
+    for(const p of parts){
+      p.px+=p.vx; p.py+=p.vy; p.vy+=.1; p.rot+=p.rv; p.life-=.009;
+      if(p.py<c.height&&p.life>0) alive=true;
+      x.save(); x.globalAlpha=Math.max(0,p.life);
+      x.translate(p.px,p.py); x.rotate(p.rot*Math.PI/180);
+      x.fillStyle=p.col; x.fillRect(-p.sz/2,-p.sz/3,p.sz,p.sz*.6);
+      x.restore();
+    }
+    if(alive) requestAnimationFrame(draw2);
+    else x.clearRect(0,0,c.width,c.height);
+  }
+  requestAnimationFrame(draw2);
+}
 </script>
 </body>
 </html>

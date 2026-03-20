@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>时间线排序</title>
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800;900&display=swap" rel="stylesheet"/>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
+<style>
+:root{--bg1:#0d1117;--bg2:#161b22;--accent:#58a6ff;--green:#3fb950;--red:#f85149;--gold:#e3b341;--card:#161b22;--border:#30363d;--text:#e6edf3;--dim:#8b949e}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100vh;overflow:hidden;font-family:'Nunito','PingFang SC',sans-serif;background:linear-gradient(160deg,var(--bg1) 0%,var(--bg2) 100%);color:var(--text);user-select:none}
+
+#header{display:flex;align-items:center;justify-content:space-between;padding:10px 16px;height:52px;background:rgba(0,0,0,.4);border-bottom:1px solid var(--border);flex-shrink:0}
+#topic{font-size:15px;font-weight:800;color:#cae8ff}
+.badge{padding:3px 10px;border-radius:20px;background:rgba(255,255,255,.08);font-size:12px;font-weight:700}
+.badge.pts{color:#e3b341}
+.badge.prog{color:#79c0ff}
+
+#prompt-bar{padding:7px 16px;background:rgba(88,166,255,.12);border-bottom:1px solid rgba(88,166,255,.2);font-size:13px;font-weight:600;color:#79c0ff;flex-shrink:0;min-height:34px;display:flex;align-items:center;gap:8px}
+
+#timeline-rail{display:flex;align-items:center;padding:0 16px;height:36px;flex-shrink:0;background:rgba(0,0,0,.2);border-bottom:1px solid var(--border);position:relative;overflow:hidden}
+#rail-line{position:absolute;left:16px;right:16px;top:50%;height:2px;background:linear-gradient(90deg,var(--accent)40%,var(--border)100%);border-radius:2px}
+.tick{position:absolute;top:50%;transform:translateY(-50%);width:8px;height:8px;border-radius:50%;background:var(--accent);border:2px solid var(--bg2);z-index:2;transition:background .3s}
+.tick.filled{background:var(--green)}
+
+#items-area{flex:1;display:flex;flex-direction:column;gap:0;overflow-y:auto;padding:8px 12px;gap:4px}
+
+.item-card{border-radius:12px;padding:10px 14px;background:var(--card);border:2px solid var(--border);cursor:grab;display:flex;align-items:center;gap:10px;transition:border-color .2s,background .2s;position:relative;will-change:transform}
+.item-card:active{cursor:grabbing}
+.item-card .drag-handle{color:var(--dim);font-size:16px;flex-shrink:0;line-height:1}
+.item-card .item-num{width:26px;height:26px;border-radius:8px;background:rgba(88,166,255,.15);border:1px solid rgba(88,166,255,.3);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;color:var(--accent);flex-shrink:0}
+.item-card .item-label{flex:1;font-size:13px;font-weight:700;line-height:1.3}
+.item-card .item-hint{font-size:11px;color:var(--dim);flex-shrink:0}
+.item-card.correct{border-color:var(--green);background:rgba(63,185,80,.08)}
+.item-card.wrong-flash{border-color:var(--red)}
+.item-card.dragging{opacity:.4;border-style:dashed}
+.item-card.drag-over{border-color:var(--accent);background:rgba(88,166,255,.12)}
+
+#check-btn-bar{padding:8px 12px;flex-shrink:0}
+#check-btn{width:100%;padding:11px;border-radius:12px;border:none;background:var(--accent);color:#000;font-size:14px;font-weight:800;cursor:pointer;font-family:inherit;box-shadow:0 4px 0 #1f6feb;transition:transform .1s,box-shadow .1s}
+#check-btn:active{transform:translateY(3px);box-shadow:0 1px 0 #1f6feb}
+#check-btn:disabled{background:var(--border);color:var(--dim);cursor:default;box-shadow:none}
+
+#win{position:absolute;inset:0;display:none;flex-direction:column;align-items:center;justify-content:center;gap:14px;z-index:50;background:linear-gradient(160deg,var(--bg1) 0%,var(--bg2) 100%)}
+#win-title{font-size:26px;font-weight:900;color:#cae8ff;text-align:center}
+#win-sub{font-size:14px;color:var(--dim)}
+#win-btn{padding:11px 32px;border-radius:14px;border:none;background:var(--accent);color:#000;font-size:15px;font-weight:800;cursor:pointer;font-family:inherit;box-shadow:0 5px 0 #1f6feb}
+#win-btn:active{transform:translateY(3px);box-shadow:0 2px 0 #1f6feb}
+
+#particle-canvas{position:fixed;inset:0;pointer-events:none;z-index:60}
+</style>
+</head>
+<body>
+<canvas id="particle-canvas"></canvas>
+<div style="display:flex;flex-direction:column;height:100vh">
+  <div id="header">
+    <span id="topic"></span>
+    <div style="display:flex;gap:8px">
+      <span class="badge pts" id="score-el">0 分</span>
+      <span class="badge prog" id="prog-el">0/0</span>
+    </div>
+  </div>
+  <div id="prompt-bar">
+    <span>按正确顺序排列以下事件</span>
+  </div>
+  <div id="timeline-rail">
+    <div id="rail-line"></div>
+  </div>
+  <div id="items-area"></div>
+  <div id="check-btn-bar">
+    <button id="check-btn">检查顺序</button>
+  </div>
+</div>
+<div id="win">
+  <div id="win-title"></div>
+  <div id="win-sub"></div>
+  <button id="win-btn">再来一次</button>
+</div>
+
+<script>
+const SPEC = "__GAME_SPEC__";
+
+document.getElementById("topic").textContent = SPEC.topic;
+document.getElementById("prompt-bar").querySelector("span").textContent =
+  SPEC.levels[0]?.prompt || "按正确顺序排列以下事件";
+
+const items = SPEC.ordered_items || SPEC.entities;
+const total = items.length;
+document.getElementById("prog-el").textContent = `0/${total}`;
+
+let score = 0, correctCount = 0, attempts = 0;
+
+// Build ticks on rail
+const rail = document.getElementById("timeline-rail");
+const railLine = document.getElementById("rail-line");
+items.forEach((_, i) => {
+  const tick = document.createElement("div");
+  tick.className = "tick";
+  tick.id = `tick-${i}`;
+  const pct = total > 1 ? (i / (total - 1)) * 100 : 50;
+  tick.style.left = `calc(16px + (100% - 32px) * ${pct / 100})`;
+  rail.appendChild(tick);
+});
+
+// Shuffle items
+function shuffle(arr) { return [...arr].sort(() => Math.random() - .5); }
+let currentOrder = shuffle(items.map((_, i) => i)); // indices into items[]
+
+const area = document.getElementById("items-area");
+
+function buildCards() {
+  area.innerHTML = "";
+  currentOrder.forEach((origIdx, pos) => {
+    const item = items[origIdx];
+    const card = document.createElement("div");
+    card.className = "item-card";
+    card.dataset.origIdx = origIdx;
+    card.draggable = true;
+    card.innerHTML = `
+      <span class="drag-handle">&#8597;</span>
+      <div class="item-num">${pos + 1}</div>
+      <div class="item-label">${item.emoji ? item.emoji + " " : ""}${item.label}</div>
+      ${item.date || item.year ? `<div class="item-hint">${item.date || item.year}</div>` : ""}
+    `;
+    setupDrag(card, origIdx);
+    gsap.from(card, { opacity: 0, x: -20, duration: .3, delay: pos * .04, ease: "back.out(1.4)" });
+    area.appendChild(card);
+  });
+}
+buildCards();
+
+// --- Drag & Drop ---
+let dragSrcOrigIdx = null;
+
+function setupDrag(card, origIdx) {
+  card.addEventListener("dragstart", e => {
+    dragSrcOrigIdx = origIdx;
+    card.classList.add("dragging");
+    e.dataTransfer.effectAllowed = "move";
+    gsap.to(card, { scale: 1.03, duration: .1 });
+  });
+  card.addEventListener("dragend", () => {
+    card.classList.remove("dragging");
+    gsap.to(card, { scale: 1, duration: .15 });
+    document.querySelectorAll(".item-card").forEach(c => c.classList.remove("drag-over"));
+  });
+  card.addEventListener("dragover", e => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+    document.querySelectorAll(".item-card").forEach(c => c.classList.remove("drag-over"));
+    card.classList.add("drag-over");
+  });
+  card.addEventListener("drop", e => {
+    e.preventDefault();
+    if (dragSrcOrigIdx === origIdx) return;
+    const srcPos = currentOrder.indexOf(dragSrcOrigIdx);
+    const dstPos = currentOrder.indexOf(origIdx);
+    currentOrder.splice(srcPos, 1);
+    currentOrder.splice(dstPos, 0, dragSrcOrigIdx);
+    buildCards();
+  });
+
+  // Touch drag (swap on tap-hold)
+  let touchStartY, touchCard;
+  card.addEventListener("touchstart", e => {
+    touchStartY = e.touches[0].clientY;
+    touchCard = card;
+    gsap.to(card, { scale: 1.03, duration: .1 });
+  }, { passive: true });
+  card.addEventListener("touchmove", e => {
+    const dy = e.touches[0].clientY - touchStartY;
+    gsap.set(card, { y: dy });
+  }, { passive: true });
+  card.addEventListener("touchend", e => {
+    gsap.to(card, { scale: 1, y: 0, duration: .2 });
+    const endY = e.changedTouches[0].clientY;
+    const target = document.elementFromPoint(e.changedTouches[0].clientX, endY)?.closest(".item-card");
+    if (target && target !== card) {
+      const srcPos = currentOrder.indexOf(parseInt(card.dataset.origIdx));
+      const dstPos = currentOrder.indexOf(parseInt(target.dataset.origIdx));
+      currentOrder.splice(srcPos, 1);
+      currentOrder.splice(dstPos, 0, parseInt(card.dataset.origIdx));
+      buildCards();
+    }
+  });
+}
+
+// --- Check Order ---
+document.getElementById("check-btn").addEventListener("click", () => {
+  attempts++;
+  const cards = [...area.querySelectorAll(".item-card")];
+  let allCorrect = true;
+  cards.forEach((card, pos) => {
+    const origIdx = parseInt(card.dataset.origIdx);
+    const correct = origIdx === pos; // items[pos] should be at position pos
+    if (correct) {
+      card.classList.add("correct");
+      card.classList.remove("wrong-flash");
+      document.getElementById(`tick-${pos}`).classList.add("filled");
+    } else {
+      allCorrect = false;
+      card.classList.remove("correct");
+      card.classList.add("wrong-flash");
+      gsap.timeline()
+        .to(card, { x: -8, duration: .06 })
+        .to(card, { x: 8, duration: .06 })
+        .to(card, { x: -5, duration: .06 })
+        .to(card, { x: 0, duration: .06, onComplete: () => card.classList.remove("wrong-flash") });
+    }
+  });
+
+  const correctNow = cards.filter((c, i) => parseInt(c.dataset.origIdx) === i).length;
+  correctCount = correctNow;
+  const pts = SPEC.rules?.correct_points || 10;
+  const gained = Math.max(0, correctNow * pts - (attempts - 1) * 5);
+  score = gained;
+  document.getElementById("score-el").textContent = `${score} 分`;
+  document.getElementById("prog-el").textContent = `${correctNow}/${total}`;
+
+  if (allCorrect) {
+    setTimeout(showWin, 400);
+  } else {
+    // hint: shake the button
+    const btn = document.getElementById("check-btn");
+    gsap.timeline()
+      .to(btn, { x: -6, duration: .07 })
+      .to(btn, { x: 6, duration: .07 })
+      .to(btn, { x: 0, duration: .07 });
+  }
+});
+
+function showWin() {
+  document.getElementById("win-title").textContent = SPEC.feedback?.complete_text || "排列完成！";
+  document.getElementById("win-sub").textContent = `得分 ${score} · ${attempts} 次检查完成全部排序`;
+  const win = document.getElementById("win");
+  win.style.display = "flex";
+  gsap.from(win.children, { opacity: 0, y: 28, stagger: .1, duration: .5, ease: "back.out(1.4)" });
+  launchParticles();
+}
+
+document.getElementById("win-btn").addEventListener("click", () => {
+  score = 0; correctCount = 0; attempts = 0;
+  document.getElementById("score-el").textContent = "0 分";
+  document.getElementById("prog-el").textContent = `0/${total}`;
+  document.querySelectorAll(".tick").forEach(t => t.classList.remove("filled"));
+  document.getElementById("win").style.display = "none";
+  currentOrder = shuffle(items.map((_, i) => i));
+  buildCards();
+});
+
+function launchParticles() {
+  const canvas = document.getElementById("particle-canvas");
+  const ctx = canvas.getContext("2d");
+  canvas.width = innerWidth; canvas.height = innerHeight;
+  const colors = ["#58a6ff","#3fb950","#e3b341","#f85149","#79c0ff","#56d364"];
+  const parts = Array.from({length:100}, () => ({
+    x: Math.random()*canvas.width, y:-10,
+    vx:(Math.random()-.5)*5, vy:Math.random()*4+2,
+    size:Math.random()*8+4, color:colors[Math.floor(Math.random()*colors.length)],
+    rot:Math.random()*360, rotV:(Math.random()-.5)*8, life:1
+  }));
+  function draw() {
+    ctx.clearRect(0,0,canvas.width,canvas.height);
+    let alive=false;
+    for(const p of parts){
+      p.x+=p.vx; p.y+=p.vy; p.vy+=.1; p.rot+=p.rotV; p.life-=.009;
+      if(p.y<canvas.height&&p.life>0) alive=true;
+      ctx.save(); ctx.globalAlpha=Math.max(0,p.life);
+      ctx.translate(p.x,p.y); ctx.rotate(p.rot*Math.PI/180);
+      ctx.fillStyle=p.color;
+      ctx.fillRect(-p.size/2,-p.size/3,p.size,p.size*.6);
+      ctx.restore();
+    }
+    if(alive) requestAnimationFrame(draw);
+    else ctx.clearRect(0,0,canvas.width,canvas.height);
+  }
+  requestAnimationFrame(draw);
+}
+</script>
+</body>
+</html>

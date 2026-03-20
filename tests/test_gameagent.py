@@ -101,6 +101,50 @@ def make_label_map_spec(**overrides) -> GameSpec:
     return GameSpec(**data)
 
 
+def make_timeline_order_spec(**overrides) -> GameSpec:
+    data = dict(
+        mechanic="timeline_order",
+        topic="法国大革命",
+        theme="历史时间线",
+        difficulty=5,
+        ordered_items=[
+            {"id": "t1", "label": "三级会议召开", "date": "1789年5月"},
+            {"id": "t2", "label": "巴士底狱被攻占", "date": "1789年7月"},
+            {"id": "t3", "label": "《人权宣言》发布", "date": "1789年8月"},
+            {"id": "t4", "label": "路易十六被处决", "date": "1793年1月"},
+        ],
+        entities=[],
+        rules=GameRules(),
+        levels=[GameLevel(prompt="拖动卡片，按正确的时间顺序排列")],
+        feedback=GameFeedback(),
+    )
+    data.update(overrides)
+    return GameSpec(**data)
+
+
+def make_boss_quiz_spec(**overrides) -> GameSpec:
+    data = dict(
+        mechanic="boss_quiz",
+        topic="Python 基础语法",
+        theme="知识挑战",
+        difficulty=6,
+        boss_name="语法守卫者",
+        boss_emoji="🤖",
+        questions=[
+            {"id": "q1", "question": "Python 中定义函数使用哪个关键字？", "options": ["def", "function", "fn", "func"], "correct": "def"},
+            {"id": "q2", "question": "Python 列表使用什么符号定义？", "options": ["[]", "{}", "()", "<>"], "correct": "[]"},
+            {"id": "q3", "question": "Python 中注释使用什么符号开头？", "options": ["#", "//", "--", "/*"], "correct": "#"},
+            {"id": "q4", "question": "哪个语句用于退出循环？", "options": ["break", "exit", "stop", "end"], "correct": "break"},
+        ],
+        entities=[],
+        rules=GameRules(),
+        levels=[GameLevel(prompt="回答问题击败 Boss！")],
+        feedback=GameFeedback(),
+    )
+    data.update(overrides)
+    return GameSpec(**data)
+
+
 # ---------------------------------------------------------------------------
 # GameSpec model tests
 # ---------------------------------------------------------------------------
@@ -125,6 +169,20 @@ class TestGameSpec:
         spec = make_label_map_spec()
         assert spec.mechanic == "label_map"
         assert spec.scene_description is not None
+
+    def test_timeline_order_spec_valid(self):
+        spec = make_timeline_order_spec()
+        assert spec.mechanic == "timeline_order"
+        assert spec.ordered_items is not None
+        assert len(spec.ordered_items) == 4
+
+    def test_boss_quiz_spec_valid(self):
+        spec = make_boss_quiz_spec()
+        assert spec.mechanic == "boss_quiz"
+        assert spec.questions is not None
+        assert len(spec.questions) == 4
+        assert spec.boss_name == "语法守卫者"
+        assert spec.boss_emoji == "🤖"
 
     def test_difficulty_bounds(self):
         from pydantic import ValidationError
@@ -219,6 +277,42 @@ class TestGameSpecValidator:
         assert not valid
         assert any("x" in e for e in errors)
 
+    def test_timeline_order_valid(self):
+        spec = make_timeline_order_spec()
+        valid, errors = self.v.validate(spec)
+        assert valid, errors
+
+    def test_timeline_order_too_few_items(self):
+        spec = make_timeline_order_spec()
+        spec.ordered_items = spec.ordered_items[:2]
+        valid, errors = self.v.validate(spec)
+        assert not valid
+
+    def test_timeline_order_missing_label(self):
+        spec = make_timeline_order_spec()
+        spec.ordered_items[0] = {"id": "t1"}  # missing 'label'
+        valid, errors = self.v.validate(spec)
+        assert not valid
+        assert any("label" in e for e in errors)
+
+    def test_boss_quiz_valid(self):
+        spec = make_boss_quiz_spec()
+        valid, errors = self.v.validate(spec)
+        assert valid, errors
+
+    def test_boss_quiz_too_few_questions(self):
+        spec = make_boss_quiz_spec()
+        spec.questions = spec.questions[:2]
+        valid, errors = self.v.validate(spec)
+        assert not valid
+
+    def test_boss_quiz_missing_correct(self):
+        spec = make_boss_quiz_spec()
+        spec.questions[0] = {"id": "q1", "question": "?", "options": ["A", "B"]}  # missing 'correct'
+        valid, errors = self.v.validate(spec)
+        assert not valid
+        assert any("correct" in e for e in errors)
+
 
 # ---------------------------------------------------------------------------
 # GameCompiler tests
@@ -232,49 +326,61 @@ class TestGameCompiler:
         spec = make_drag_sort_spec()
         html = self.compiler.compile(spec)
         assert "<!DOCTYPE html>" in html
-        assert "const GAME_SPEC =" in html
+        assert "const SPEC =" in html
         assert '"mechanic": "drag_sort"' in html
-        assert "drag_sort" not in html.split("const GAME_SPEC =")[0].split("__GAME_SPEC__")[-1:]  # placeholder replaced
+        assert "drag_sort" not in html.split("const SPEC =")[0].split("__GAME_SPEC__")[-1:]  # placeholder replaced
         assert "__GAME_SPEC__" not in html
 
     def test_match_pairs_compiles(self):
         spec = make_match_pairs_spec()
         html = self.compiler.compile(spec)
-        assert "const GAME_SPEC =" in html
+        assert "const SPEC =" in html
         assert '"mechanic": "match_pairs"' in html
         assert "__GAME_SPEC__" not in html
 
     def test_simulation_compiles(self):
         spec = make_simulation_spec()
         html = self.compiler.compile(spec)
-        assert "const GAME_SPEC =" in html
+        assert "const SPEC =" in html
         assert '"mechanic": "simulation"' in html
         assert "__GAME_SPEC__" not in html
 
     def test_label_map_compiles(self):
         spec = make_label_map_spec()
         html = self.compiler.compile(spec)
-        assert "const GAME_SPEC =" in html
+        assert "const SPEC =" in html
         assert '"mechanic": "label_map"' in html
         assert "__GAME_SPEC__" not in html
 
-    def test_compiled_html_has_react(self):
+    def test_compiled_html_has_gsap(self):
         spec = make_drag_sort_spec()
         html = self.compiler.compile(spec)
-        assert "react" in html.lower()
-        assert "babel" in html.lower()
+        assert "gsap" in html.lower()
 
-    def test_compiled_html_has_animations(self):
+    def test_compiled_html_has_particle_canvas(self):
         spec = make_drag_sort_spec()
         html = self.compiler.compile(spec)
-        assert "@keyframes bounce" in html
-        assert "@keyframes fall" in html
+        assert "particle-canvas" in html
+
+    def test_timeline_order_compiles(self):
+        spec = make_timeline_order_spec()
+        html = self.compiler.compile(spec)
+        assert "const SPEC =" in html
+        assert '"mechanic": "timeline_order"' in html
+        assert "__GAME_SPEC__" not in html
+
+    def test_boss_quiz_compiles(self):
+        spec = make_boss_quiz_spec()
+        html = self.compiler.compile(spec)
+        assert "const SPEC =" in html
+        assert '"mechanic": "boss_quiz"' in html
+        assert "__GAME_SPEC__" not in html
 
     def test_spec_json_injected_correctly(self):
         spec = make_drag_sort_spec()
         html = self.compiler.compile(spec)
         # Extract the JSON from the compiled HTML
-        marker = "const GAME_SPEC = "
+        marker = "const SPEC = "
         idx = html.index(marker)
         json_start = idx + len(marker)
         # Find the end of the JSON (next semicolon on same logical line)
@@ -446,21 +552,23 @@ class TestGamePipeline:
 
         assert spec is not None
         html = GameCompiler().compile(spec)
-        assert "const GAME_SPEC =" in html
+        assert "const SPEC =" in html
         assert "__GAME_SPEC__" not in html
         assert '"mechanic": "drag_sort"' in html
 
     @pytest.mark.asyncio
     async def test_full_pipeline_all_mechanics(self):
-        """Compiler works for all 4 mechanics without error."""
+        """Compiler works for all 6 mechanics without error."""
         specs = [
             make_drag_sort_spec(),
             make_match_pairs_spec(),
             make_simulation_spec(),
             make_label_map_spec(),
+            make_timeline_order_spec(),
+            make_boss_quiz_spec(),
         ]
         compiler = GameCompiler()
         for spec in specs:
             html = compiler.compile(spec)
-            assert "const GAME_SPEC =" in html, f"Missing GAME_SPEC for mechanic={spec.mechanic}"
+            assert "const SPEC =" in html, f"Missing GAME_SPEC for mechanic={spec.mechanic}"
             assert "__GAME_SPEC__" not in html, f"Placeholder not replaced for mechanic={spec.mechanic}"

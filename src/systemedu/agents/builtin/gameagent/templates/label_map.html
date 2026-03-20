@@ -2,185 +2,327 @@
 <html lang="zh">
 <head>
 <meta charset="UTF-8"/>
-<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-<title>标注地图</title>
-<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet"/>
-<script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
-<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>探索地图</title>
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800;900&display=swap" rel="stylesheet"/>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
 <style>
+:root{--bg1:#0a1628;--bg2:#0d2137;--accent:#34d399;--border:#ffffff18;--text:#f1f5f9;--dim:#64748b}
 *{box-sizing:border-box;margin:0;padding:0}
-html,body{height:100vh;overflow:hidden;font-family:'Nunito','PingFang SC',sans-serif;background:linear-gradient(135deg,#EEF2FF 0%,#F0FDF4 100%)}
-@keyframes bounce{0%,100%{transform:scale(1)}40%{transform:scale(1.3)}70%{transform:scale(0.9)}}
-@keyframes fall{0%{transform:translateY(-20px);opacity:1}100%{transform:translateY(120vh);opacity:0}}
-@keyframes blink{0%,100%{opacity:1;transform:scale(1)}50%{opacity:0.6;transform:scale(1.2)}}
-@keyframes popIn{0%{transform:scale(0.5);opacity:0}100%{transform:scale(1);opacity:1}}
-.confetti-dot{position:fixed;width:10px;height:10px;border-radius:50%;pointer-events:none;animation:fall 1.8s ease-in forwards}
+html,body{height:100vh;overflow:hidden;font-family:'Nunito','PingFang SC',sans-serif;background:linear-gradient(160deg,var(--bg1) 0%,var(--bg2) 100%);color:var(--text);user-select:none}
+
+#header{display:flex;align-items:center;justify-content:space-between;padding:10px 16px;height:52px;background:rgba(0,0,0,.3);border-bottom:1px solid var(--border);flex-shrink:0}
+#topic{font-size:15px;font-weight:800;color:#a7f3d0}
+.badge{padding:3px 10px;border-radius:20px;background:rgba(255,255,255,.08);font-size:12px;font-weight:700}
+
+#prompt-bar{padding:7px 16px;background:rgba(52,211,153,.12);border-bottom:1px solid rgba(52,211,153,.2);font-size:13px;font-weight:600;color:#a7f3d0;flex-shrink:0;min-height:34px;display:flex;align-items:center}
+
+#game{flex:1;display:flex;gap:10px;padding:10px 12px;min-height:0;overflow:hidden}
+
+/* scene */
+#scene{flex:1;position:relative;border-radius:16px;border:1px solid var(--border);background:rgba(0,0,0,.4);overflow:hidden;cursor:crosshair}
+#scene-canvas{position:absolute;inset:0;width:100%;height:100%}
+#scene-label{position:absolute;bottom:8px;left:50%;transform:translateX(-50%);font-size:10px;color:var(--dim);pointer-events:none;white-space:nowrap}
+
+/* dot markers */
+.dot-marker{position:absolute;transform:translate(-50%,-50%);z-index:10;cursor:pointer}
+.dot-ring{width:22px;height:22px;border-radius:50%;border:2.5px solid;display:flex;align-items:center;justify-content:center;transition:transform .2s;background:rgba(0,0,0,.5)}
+.dot-ring:hover{transform:scale(1.3)}
+.dot-pulse{position:absolute;inset:-6px;border-radius:50%;border:2px solid;opacity:0}
+.dot-marker.explored .dot-ring{background:rgba(52,211,153,.25);border-color:var(--accent) !important}
+
+/* bubble tooltip */
+.bubble{position:absolute;z-index:30;background:rgba(10,22,40,.95);border:1px solid rgba(255,255,255,.2);border-radius:14px;padding:10px 14px;min-width:120px;max-width:200px;pointer-events:none;backdrop-filter:blur(8px);box-shadow:0 8px 24px rgba(0,0,0,.5)}
+.bubble-name{font-size:13px;font-weight:800;margin-bottom:4px}
+.bubble-desc{font-size:11px;color:var(--dim);line-height:1.45}
+.bubble-arrow{position:absolute;bottom:-6px;left:50%;transform:translateX(-50%);width:12px;height:12px;background:rgba(10,22,40,.95);border-right:1px solid rgba(255,255,255,.2);border-bottom:1px solid rgba(255,255,255,.2);transform:translateX(-50%) rotate(45deg)}
+
+/* right: explored list */
+#explored-list{flex:0 0 130px;display:flex;flex-direction:column;gap:5px;overflow-y:auto}
+#explored-label{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--dim);padding-bottom:4px;flex-shrink:0}
+.exp-item{border-radius:10px;padding:6px 9px;font-size:11px;font-weight:700;background:rgba(255,255,255,.05);border:1px solid var(--border);color:var(--dim);display:flex;align-items:center;gap:5px;transition:background .2s,color .2s}
+.exp-item.found{background:rgba(52,211,153,.12);border-color:rgba(52,211,153,.3);color:#a7f3d0}
+.exp-dot{width:7px;height:7px;border-radius:50%;background:var(--dim);flex-shrink:0;transition:background .2s}
+.exp-item.found .exp-dot{background:var(--accent)}
+
+#win{position:absolute;inset:0;display:none;flex-direction:column;align-items:center;justify-content:center;gap:14px;z-index:50;background:rgba(10,22,40,.92);backdrop-filter:blur(6px)}
+#win-title{font-size:26px;font-weight:900;color:#a7f3d0;text-align:center}
+#win-sub{font-size:14px;color:var(--dim)}
+#win-btn{padding:11px 32px;border-radius:14px;border:none;background:var(--accent);color:#0a1628;font-size:15px;font-weight:900;cursor:pointer;font-family:inherit;box-shadow:0 5px 0 #059669}
+#win-btn:active{transform:translateY(3px);box-shadow:0 2px 0 #059669}
+#particle-canvas{position:fixed;inset:0;pointer-events:none;z-index:60}
 </style>
 </head>
 <body>
-<div id="root"></div>
-<script type="text/babel">
-const GAME_SPEC = "__GAME_SPEC__";
-
-const { useState, useRef } = React;
-const COLORS = ["#4F8EF7","#4ADE80","#FB923C","#A78BFA","#FCD34D","#06B6D4","#EC4899","#F87171"];
-
-function Confetti() {
-  return (
-    <div aria-hidden="true">
-      {Array.from({length:18},(_,i)=>(
-        <div key={i} className="confetti-dot" style={{
-          left:`${Math.random()*100}%`,top:0,
-          background:COLORS[i%COLORS.length],
-          animationDelay:`${Math.random()*0.7}s`,
-          animationDuration:`${1.2+Math.random()*0.9}s`,
-        }}/>
-      ))}
+<canvas id="particle-canvas"></canvas>
+<div style="display:flex;flex-direction:column;height:100vh">
+  <div id="header">
+    <span id="topic"></span>
+    <span class="badge" id="prog-badge" style="color:#a7f3d0">0/0</span>
+  </div>
+  <div id="prompt-bar"></div>
+  <div id="game">
+    <div id="scene">
+      <canvas id="scene-canvas"></canvas>
+      <div id="scene-label"></div>
     </div>
-  );
+    <div id="explored-list">
+      <div id="explored-label">已探索</div>
+    </div>
+  </div>
+</div>
+<div id="win">
+  <div id="win-title"></div>
+  <div id="win-sub"></div>
+  <button id="win-btn">再次探索</button>
+</div>
+
+<script>
+const SPEC = "__GAME_SPEC__";
+
+const PALETTE = ["#34d399","#38bdf8","#FB923C","#A78BFA","#FCD34D","#F87171","#06B6D4","#EC4899"];
+const entities = SPEC.entities;
+const total = entities.length;
+let explored = new Set();
+let activeBubble = null;
+
+document.getElementById("topic").textContent = SPEC.topic;
+document.getElementById("prompt-bar").textContent = SPEC.levels[0]?.prompt || "点击闪光圆点，探索各个部分";
+document.getElementById("scene-label").textContent = SPEC.scene_description || "";
+document.getElementById("prog-badge").textContent = `0/${total}`;
+
+// ── scene canvas background ───────────────────────────────
+const sceneEl = document.getElementById("scene");
+const sceneCanvas = document.getElementById("scene-canvas");
+const sCtx = sceneCanvas.getContext("2d");
+
+function resizeScene() {
+  sceneCanvas.width = sceneEl.clientWidth;
+  sceneCanvas.height = sceneEl.clientHeight;
+  drawSceneBackground();
+  repositionDots();
+}
+window.addEventListener("resize", resizeScene);
+setTimeout(resizeScene, 50);
+
+function drawSceneBackground() {
+  const W = sceneCanvas.width, H = sceneCanvas.height;
+  if (!W || !H) return;
+  const ctx = sCtx;
+  ctx.clearRect(0, 0, W, H);
+
+  // deep space gradient
+  const bg = ctx.createRadialGradient(W * .4, H * .35, 20, W * .5, H * .5, W * .9);
+  bg.addColorStop(0, "rgba(20,40,80,.6)");
+  bg.addColorStop(1, "rgba(5,10,20,.9)");
+  ctx.fillStyle = bg;
+  ctx.fillRect(0, 0, W, H);
+
+  // subtle grid
+  ctx.strokeStyle = "rgba(255,255,255,.025)";
+  ctx.lineWidth = 1;
+  for (let x = 0; x < W; x += 40) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke(); }
+  for (let y = 0; y < H; y += 40) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke(); }
+
+  // concentric rings (spatial hint)
+  ctx.strokeStyle = "rgba(52,211,153,.06)";
+  ctx.lineWidth = 1;
+  for (let r = 60; r < W; r += 70) {
+    ctx.beginPath();
+    ctx.arc(W * .5, H * .45, r, 0, Math.PI * 2);
+    ctx.stroke();
+  }
+
+  // draw entity region hints as faint circles
+  entities.forEach((e, i) => {
+    const color = PALETTE[i % PALETTE.length];
+    const x = e.x / 100 * W, y = e.y / 100 * H;
+    const g = ctx.createRadialGradient(x, y, 0, x, y, 40);
+    g.addColorStop(0, color + "18");
+    g.addColorStop(1, "transparent");
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    ctx.arc(x, y, 40, 0, Math.PI * 2);
+    ctx.fill();
+  });
 }
 
-function App() {
-  const { entities, rules, levels, feedback, topic, scene_description } = GAME_SPEC;
-  const [explored, setExplored] = useState({});
-  const [activeBubble, setActiveBubble] = useState(null);
-  const [done, setDone] = useState(false);
-  const [showConfetti, setShowConfetti] = useState(false);
-  const [score, setScore] = useState(0);
+// ── dot markers ───────────────────────────────────────────
+let dotEls = [];
 
-  const handleDotClick = (entity) => {
-    const alreadyExplored = explored[entity.id];
-    if (activeBubble === entity.id) {
-      setActiveBubble(null);
-    } else {
-      setActiveBubble(entity.id);
-      if (!alreadyExplored) {
-        const newExplored = {...explored, [entity.id]: true};
-        setExplored(newExplored);
-        setScore(s => s + (rules.correct_points || 10));
-        if (Object.keys(newExplored).length === entities.length) {
-          setDone(true);
-          setShowConfetti(true);
-        }
-      }
-    }
-  };
+function buildDots() {
+  dotEls.forEach(d => d.remove());
+  dotEls = [];
 
-  const reset = () => {
-    setExplored({});setActiveBubble(null);setDone(false);setShowConfetti(false);setScore(0);
-  };
+  entities.forEach((entity, i) => {
+    const color = PALETTE[i % PALETTE.length];
+    const marker = document.createElement("div");
+    marker.className = "dot-marker";
+    marker.id = `dot-${entity.id}`;
+    marker.style.left = entity.x + "%";
+    marker.style.top = entity.y + "%";
 
-  const exploredCount = Object.keys(explored).length;
-  const levelIdx = Math.min(Math.floor(exploredCount / Math.max(entities.length/Math.max(levels.length,1),1)), levels.length-1);
-  const currentPrompt = levels[levelIdx]?.prompt || "点击闪烁的圆点，探索各个部分";
-
-  return (
-    <div style={{height:"100vh",display:"flex",flexDirection:"column",padding:"8px 12px",gap:8}}>
-      {showConfetti && <Confetti/>}
-      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",height:44,flexShrink:0}}>
-        <div style={{fontWeight:800,fontSize:16,color:"#3730A3"}}>{topic}</div>
-        <div style={{display:"flex",gap:12,fontSize:13,fontWeight:700}}>
-          <span style={{color:"#4F8EF7"}}>得分: {score}</span>
-          <span style={{color:"#6B7280"}}>{exploredCount}/{entities.length} 已探索</span>
-        </div>
+    marker.innerHTML = `
+      <div class="dot-pulse" style="border-color:${color}"></div>
+      <div class="dot-ring" style="border-color:${color}">
+        <span style="font-size:14px">${entity.emoji || "•"}</span>
       </div>
+    `;
 
-      <div style={{background:"#fff",borderRadius:12,padding:"6px 12px",fontSize:13,color:"#6B7280",fontWeight:600,flexShrink:0,boxShadow:"0 2px 0 rgba(0,0,0,0.06)"}}>{currentPrompt}</div>
+    marker.addEventListener("click", (ev) => {
+      ev.stopPropagation();
+      onDotClick(entity, marker, color);
+    });
 
-      {done ? (
-        <div style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:16}}>
-          <div style={{fontSize:48}}>🎉</div>
-          <div style={{fontSize:22,fontWeight:800,color:"#3730A3"}}>{feedback.complete_text}</div>
-          <div style={{fontSize:14,color:"#6B7280"}}>全部 {entities.length} 个部分已探索！</div>
-          <button onClick={reset} style={{background:"#4F8EF7",color:"#fff",border:"none",borderRadius:12,padding:"10px 28px",fontWeight:800,fontSize:15,cursor:"pointer",boxShadow:"0 4px 0 #2563EB"}}>再探索一次</button>
-        </div>
-      ) : (
-        <div style={{flex:1,display:"flex",gap:10,minHeight:0}}>
-          {/* Scene area with dots */}
-          <div style={{flex:1,position:"relative",background:"#fff",borderRadius:14,boxShadow:"0 3px 0 rgba(0,0,0,0.08)",overflow:"hidden"}}>
-            {/* Scene background description */}
-            <div style={{position:"absolute",top:8,left:0,right:0,textAlign:"center",fontSize:11,color:"#D1D5DB",fontWeight:600,pointerEvents:"none"}}>
-              {scene_description}
-            </div>
+    sceneEl.appendChild(marker);
+    dotEls.push(marker);
 
-            {/* Simple SVG background pattern */}
-            <svg style={{position:"absolute",inset:0,width:"100%",height:"100%",opacity:0.06}} viewBox="0 0 400 300">
-              <defs>
-                <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
-                  <path d="M 40 0 L 0 0 0 40" fill="none" stroke="#6366F1" strokeWidth="1"/>
-                </pattern>
-              </defs>
-              <rect width="400" height="300" fill="url(#grid)"/>
-            </svg>
+    // entrance stagger
+    gsap.from(marker, { opacity: 0, scale: .3, duration: .4, delay: i * .1, ease: "back.out(2)" });
 
-            {entities.map((entity, i) => {
-              const isExplored = explored[entity.id];
-              const isActive = activeBubble === entity.id;
-              const color = COLORS[i % COLORS.length];
-              return (
-                <div key={entity.id} style={{position:"absolute",left:`${entity.x}%`,top:`${entity.y}%`,transform:"translate(-50%,-50%)",zIndex:isActive?20:10}}>
-                  {/* Blinking dot */}
-                  <div
-                    onClick={()=>handleDotClick(entity)}
-                    style={{
-                      width:isActive?22:18,height:isActive?22:18,
-                      borderRadius:"50%",
-                      background:isExplored?"#4ADE80":color,
-                      cursor:"pointer",
-                      boxShadow:`0 0 0 4px ${isExplored?"rgba(74,222,128,0.3)":"rgba(79,142,247,0.25)"}`,
-                      animation:isExplored?"bounce 0.4s ease":"blink 1.5s ease-in-out infinite",
-                      transition:"all 0.2s",
-                    }}
-                  />
-                  {/* Bubble */}
-                  {isActive && (
-                    <div style={{
-                      position:"absolute",
-                      bottom:"calc(100% + 8px)",
-                      left:"50%",
-                      transform:"translateX(-50%)",
-                      background:"#fff",
-                      borderRadius:12,
-                      padding:"8px 12px",
-                      minWidth:100,maxWidth:160,
-                      boxShadow:"0 4px 12px rgba(0,0,0,0.15)",
-                      animation:"popIn 0.2s ease",
-                      zIndex:30,
-                    }}>
-                      <div style={{fontWeight:800,fontSize:13,color:color,marginBottom:3}}>{entity.name}</div>
-                      <div style={{fontSize:11,color:"#6B7280",lineHeight:1.4}}>{entity.description}</div>
-                      {/* Arrow */}
-                      <div style={{position:"absolute",bottom:-6,left:"50%",transform:"translateX(-50%)",width:12,height:12,background:"#fff",borderRadius:2,transform:"translateX(-50%) rotate(45deg)",boxShadow:"2px 2px 4px rgba(0,0,0,0.06)"}}/>
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
+    // pulse animation (unexplored only)
+    animatePulse(marker, color, i);
+  });
 
-          {/* Right: explored list */}
-          <div style={{flex:"0 0 130px",display:"flex",flexDirection:"column",gap:6,overflowY:"auto"}}>
-            <div style={{fontSize:11,fontWeight:700,color:"#9CA3AF",paddingBottom:2}}>已探索</div>
-            {entities.map((e,i)=>(
-              <div key={e.id} style={{
-                background: explored[e.id]?"#F0FDF4":"#F9FAFB",
-                borderRadius:10,padding:"5px 8px",
-                fontSize:11,fontWeight:700,
-                color:explored[e.id]?"#16A34A":"#9CA3AF",
-                borderLeft:`3px solid ${explored[e.id]?COLORS[i%COLORS.length]:"#E5E7EB"}`,
-              }}>
-                {explored[e.id]?"+ ":""}{e.name}
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-    </div>
-  );
+  // right list
+  const listEl = document.getElementById("explored-list");
+  listEl.querySelectorAll(".exp-item").forEach(e => e.remove());
+  entities.forEach((entity, i) => {
+    const color = PALETTE[i % PALETTE.length];
+    const item = document.createElement("div");
+    item.className = "exp-item";
+    item.id = `exp-${entity.id}`;
+    item.innerHTML = `<span class="exp-dot" style="background:${color}66"></span><span>${entity.name}</span>`;
+    listEl.appendChild(item);
+    gsap.from(item, { opacity: 0, x: 12, duration: .3, delay: i * .06 });
+  });
 }
 
-ReactDOM.createRoot(document.getElementById("root")).render(<App/>);
+function animatePulse(marker, color, i) {
+  const pulse = marker.querySelector(".dot-pulse");
+  if (!pulse) return;
+  gsap.to(pulse, {
+    opacity: .6, scale: 1.8, duration: .8,
+    repeat: -1, yoyo: true, delay: i * .3,
+    ease: "sine.inOut",
+    onUpdate() { pulse.style.borderColor = color; }
+  });
+}
+
+function repositionDots() {
+  // dots use % so they auto-reposition; just redraw background
+  drawSceneBackground();
+}
+
+buildDots();
+
+// dismiss bubble on scene click
+sceneEl.addEventListener("click", () => dismissBubble());
+
+function onDotClick(entity, markerEl, color) {
+  // dismiss existing
+  dismissBubble();
+
+  // explore
+  const alreadyExplored = explored.has(entity.id);
+  if (!alreadyExplored) {
+    explored.add(entity.id);
+    markerEl.classList.add("explored");
+    gsap.timeline()
+      .to(markerEl, { scale: 1.4, duration: .15, ease: "back.out(2)" })
+      .to(markerEl, { scale: 1, duration: .2, ease: "elastic.out(1,.5)" });
+
+    // update list
+    const item = document.getElementById(`exp-${entity.id}`);
+    if (item) {
+      item.classList.add("found");
+      gsap.from(item, { x: 8, duration: .3, ease: "back.out(1.4)" });
+    }
+
+    document.getElementById("prog-badge").textContent = `${explored.size}/${total}`;
+
+    // score pop
+    const pop = document.createElement("div");
+    pop.textContent = `+${SPEC.rules.correct_points || 10}`;
+    pop.style.cssText = `position:absolute;font-size:16px;font-weight:900;color:${color};pointer-events:none;z-index:100;left:${entity.x}%;top:${entity.y}%;transform:translate(-50%,-100%)`;
+    sceneEl.appendChild(pop);
+    gsap.to(pop, { y: -40, opacity: 0, duration: .8, ease: "power2.out", onComplete: () => pop.remove() });
+
+    if (explored.size === total) { setTimeout(showWin, 400); return; }
+  } else {
+    gsap.to(markerEl, { scale: 1.2, duration: .1, yoyo: true, repeat: 1 });
+  }
+
+  // show bubble
+  const bubble = document.createElement("div");
+  bubble.className = "bubble";
+  bubble.id = "active-bubble";
+  bubble.innerHTML = `<div class="bubble-name" style="color:${color}">${entity.emoji || ""} ${entity.name}</div><div class="bubble-desc">${entity.description || ""}</div><div class="bubble-arrow"></div>`;
+  sceneEl.appendChild(bubble);
+  activeBubble = bubble;
+
+  // position above dot, centered
+  const markerRect = markerEl.getBoundingClientRect();
+  const sceneRect = sceneEl.getBoundingClientRect();
+  let left = markerRect.left - sceneRect.left + markerRect.width / 2;
+  let top  = markerRect.top  - sceneRect.top  - 10;
+
+  bubble.style.left = left + "px";
+  bubble.style.top  = top + "px";
+  bubble.style.transform = "translate(-50%, -100%)";
+
+  gsap.from(bubble, { opacity: 0, y: 8, scale: .9, duration: .25, ease: "back.out(2)" });
+}
+
+function dismissBubble() {
+  if (activeBubble) {
+    gsap.to(activeBubble, { opacity: 0, y: 5, scale: .9, duration: .15, onComplete: () => { activeBubble?.remove(); activeBubble = null; } });
+  }
+}
+
+function showWin() {
+  document.getElementById("win-title").textContent = SPEC.feedback.complete_text;
+  document.getElementById("win-sub").textContent = `全部 ${total} 个部分探索完毕！`;
+  const win = document.getElementById("win");
+  win.style.display = "flex";
+  gsap.from(win.children, { opacity: 0, y: 26, stagger: .1, duration: .5, ease: "back.out(1.4)" });
+  launchParticles();
+}
+
+document.getElementById("win-btn").addEventListener("click", () => {
+  explored = new Set();
+  activeBubble = null;
+  document.getElementById("prog-badge").textContent = `0/${total}`;
+  document.getElementById("win").style.display = "none";
+  buildDots();
+});
+
+function launchParticles() {
+  const c = document.getElementById("particle-canvas");
+  const x = c.getContext("2d");
+  c.width = innerWidth; c.height = innerHeight;
+  const parts = Array.from({length:100}, () => ({
+    px: Math.random()*c.width, py:-10,
+    vx:(Math.random()-.5)*5, vy:Math.random()*4+2,
+    sz:Math.random()*8+4, col:PALETTE[Math.floor(Math.random()*PALETTE.length)],
+    rot:Math.random()*360, rv:(Math.random()-.5)*7, life:1
+  }));
+  function draw() {
+    x.clearRect(0,0,c.width,c.height);
+    let alive=false;
+    for(const p of parts){
+      p.px+=p.vx; p.py+=p.vy; p.vy+=.1; p.rot+=p.rv; p.life-=.009;
+      if(p.py<c.height&&p.life>0) alive=true;
+      x.save(); x.globalAlpha=Math.max(0,p.life);
+      x.translate(p.px,p.py); x.rotate(p.rot*Math.PI/180);
+      x.fillStyle=p.col; x.fillRect(-p.sz/2,-p.sz/3,p.sz,p.sz*.6);
+      x.restore();
+    }
+    if(alive) requestAnimationFrame(draw);
+    else x.clearRect(0,0,c.width,c.height);
+  }
+  requestAnimationFrame(draw);
+}
 </script>
 </body>
 </html>

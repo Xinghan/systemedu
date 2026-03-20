@@ -61,7 +61,7 @@ class TestGenerateInteractiveLab:
         mock_agent = _make_agent_mock(spec_json)
         with patch("systemedu.agents.builtin.gameagent.planner.create_deep_agent", return_value=mock_agent):
             result = await _generate_interactive_lab("Test Node", "A test summary", 3, MagicMock())
-        assert "const GAME_SPEC =" in result
+        assert "const SPEC =" in result
         assert "__GAME_SPEC__" not in result
 
     @pytest.mark.asyncio
@@ -80,7 +80,7 @@ class TestGenerateInteractiveLab:
         plan = {"lab_strategy": VALID_LAB_STRATEGY}
         with patch("systemedu.agents.builtin.gameagent.planner.create_deep_agent", return_value=mock_agent):
             result = await _generate_interactive_lab("Node", "Summary", 3, MagicMock(), lesson_plan=plan)
-        assert "const GAME_SPEC =" in result
+        assert "const SPEC =" in result
 
     @pytest.mark.asyncio
     async def test_progress_callback_called(self):

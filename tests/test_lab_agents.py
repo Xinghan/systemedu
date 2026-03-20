@@ -126,7 +126,7 @@ class TestLabPipeline:
         mock_agent = _make_agent_mock(spec_json)
         with patch("systemedu.agents.builtin.gameagent.planner.create_deep_agent", return_value=mock_agent):
             result = await _generate_interactive_lab("火箭发射", "学习火箭原理", 5, MagicMock())
-        assert "const GAME_SPEC =" in result
+        assert "const SPEC =" in result
         assert "__GAME_SPEC__" not in result
 
     @pytest.mark.asyncio
@@ -137,7 +137,7 @@ class TestLabPipeline:
         plan = {"lab_strategy": VALID_LAB_STRATEGY}
         with patch("systemedu.agents.builtin.gameagent.planner.create_deep_agent", return_value=mock_agent):
             result = await _generate_interactive_lab("火箭发射", "学习火箭", 5, MagicMock(), lesson_plan=plan)
-        assert "const GAME_SPEC =" in result
+        assert "const SPEC =" in result
 
     @pytest.mark.asyncio
     async def test_pipeline_planner_failure_returns_empty(self):
@@ -192,7 +192,7 @@ class TestLabPipeline:
         with patch("systemedu.agents.builtin.gameagent.planner.create_deep_agent", return_value=mock_agent_good):
             # Second call succeeds
             result2 = await _generate_interactive_lab("Test", "Summary", 3, MagicMock())
-        assert "const GAME_SPEC =" in result2
+        assert "const SPEC =" in result2
 
 
 class TestValidateLabHtml:
