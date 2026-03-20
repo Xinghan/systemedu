@@ -180,7 +180,7 @@ class TestLabAnalystAgent:
         call_args = mock_agent.ainvoke.call_args
         messages = call_args[0][0]["messages"]
         prompt_text = messages[0].content
-        assert "策划师指引" in prompt_text
+        assert "策划师参考" in prompt_text
         assert "cause_effect" in prompt_text
 
     @pytest.mark.asyncio
@@ -194,7 +194,7 @@ class TestLabAnalystAgent:
         call_args = mock_agent.ainvoke.call_args
         messages = call_args[0][0]["messages"]
         prompt_text = messages[0].content
-        assert "策划师指引" not in prompt_text
+        assert "策划师参考" not in prompt_text
 
     @pytest.mark.asyncio
     async def test_invalid_interaction_defaults(self):
@@ -355,7 +355,7 @@ class TestLabPipeline:
         call_args = mock_analyst.ainvoke.call_args
         messages = call_args[0][0]["messages"]
         prompt_text = messages[0].content
-        assert "策划师指引" in prompt_text
+        assert "策划师参考" in prompt_text
 
     @pytest.mark.asyncio
     async def test_pipeline_analyst_failure(self):

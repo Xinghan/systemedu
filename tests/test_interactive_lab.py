@@ -128,7 +128,7 @@ class TestGenerateInteractiveLab:
         call_args = mock_analyst.ainvoke.call_args
         messages = call_args[0][0]["messages"]
         prompt_text = messages[0].content
-        assert "策划师指引" in prompt_text
+        assert "策划师参考" in prompt_text
 
     @pytest.mark.asyncio
     async def test_progress_callback_called(self):
