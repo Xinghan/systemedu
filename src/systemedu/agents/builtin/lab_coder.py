@@ -400,6 +400,13 @@ class LabCoderAgent(BaseAgent):
                 )
                 html_code = html_code.strip()
 
+            # Strip any preamble text before <!DOCTYPE html> or <html
+            import re as _re
+            html_start = _re.search(r'(<!DOCTYPE\s+html|<html)', html_code, _re.IGNORECASE)
+            if html_start and html_start.start() > 0:
+                logger.info(f"Coder: stripping {html_start.start()} chars of preamble before HTML")
+                html_code = html_code[html_start.start():]
+
             # Validate HTML structure
             issues = validate_lab_html(html_code, interaction_type=interaction_type)
             if issues.get("fatal"):

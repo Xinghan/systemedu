@@ -60,6 +60,7 @@ def get_llm(
         "streaming": streaming,
         "http_client": no_proxy_client,
         "http_async_client": no_proxy_async_client,
+        "request_timeout": 300,  # 5 min — coder generates large HTML
     }
     if prov.max_tokens:
         llm_kwargs["max_tokens"] = prov.max_tokens

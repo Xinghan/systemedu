@@ -193,6 +193,16 @@ class LabReviewerAgent(BaseAgent):
                 )
                 reviewed_html = reviewed_html.strip()
 
+            # Strip any preamble text before <!DOCTYPE html> or <html
+            # (LLM may output thinking/analysis text before the actual HTML)
+            import re
+            html_start = re.search(r'(<!DOCTYPE\s+html|<html)', reviewed_html, re.IGNORECASE)
+            if html_start and html_start.start() > 0:
+                logger.info(
+                    f"Reviewer: stripping {html_start.start()} chars of preamble before HTML"
+                )
+                reviewed_html = reviewed_html[html_start.start():]
+
             # Sanity check: reviewed output must still be valid HTML
             if "<html" not in reviewed_html.lower():
                 logger.warning("Reviewer output missing <html> tag, keeping original")
