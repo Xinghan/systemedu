@@ -1,4 +1,4 @@
-"""Tests for GameAgent V1 pipeline: spec, validator, compiler, planner."""
+"""Tests for GameAgent pipeline: spec, validator, compiler, planner, object_registry."""
 
 import json
 from pathlib import Path
@@ -572,3 +572,194 @@ class TestGamePipeline:
             html = compiler.compile(spec)
             assert "const SPEC =" in html, f"Missing GAME_SPEC for mechanic={spec.mechanic}"
             assert "__GAME_SPEC__" not in html, f"Placeholder not replaced for mechanic={spec.mechanic}"
+
+
+# ---------------------------------------------------------------------------
+# ObjectRegistry tests (B+ architecture)
+# ---------------------------------------------------------------------------
+
+class TestObjectRegistry:
+    def test_supported_keys(self):
+        from systemedu.agents.builtin.gameagent.objects import ObjectRegistry
+        keys = ObjectRegistry.supported_keys()
+        assert "rocket.basic" in keys
+        assert "human_body.external" in keys
+        assert "cell.animal" in keys
+        assert "atom.bohr" in keys
+        assert "plant.basic" in keys
+        assert "earth.basic" in keys
+
+    def test_rocket_build_returns_render_spec(self):
+        from systemedu.agents.builtin.gameagent.objects import ObjectRegistry
+        rs = ObjectRegistry.build("rocket.basic", view="side")
+        assert rs.object_key == "rocket.basic"
+        assert len(rs.shapes) > 0
+        assert len(rs.anchors) > 0
+        assert len(rs.rendered_parts) > 0
+
+    def test_rocket_must_have_all_rendered(self):
+        from systemedu.agents.builtin.gameagent.objects import ObjectRegistry
+        rs = ObjectRegistry.build("rocket.basic", view="side")
+        meta = ObjectRegistry.get_meta("rocket.basic")
+        for part in meta["must_have"]:
+            assert part in rs.rendered_parts, f"must_have part '{part}' not rendered"
+
+    def test_cell_build(self):
+        from systemedu.agents.builtin.gameagent.objects import ObjectRegistry
+        rs = ObjectRegistry.build("cell.animal")
+        assert "nucleus" in rs.rendered_parts
+        assert "cell_membrane" in rs.rendered_parts
+
+    def test_atom_build(self):
+        from systemedu.agents.builtin.gameagent.objects import ObjectRegistry
+        rs = ObjectRegistry.build("atom.bohr")
+        assert "nucleus" in rs.rendered_parts
+        assert "electron_shell_1" in rs.rendered_parts
+
+    def test_plant_build(self):
+        from systemedu.agents.builtin.gameagent.objects import ObjectRegistry
+        rs = ObjectRegistry.build("plant.basic")
+        assert "stem" in rs.rendered_parts
+        assert "root" in rs.rendered_parts
+
+    def test_earth_build(self):
+        from systemedu.agents.builtin.gameagent.objects import ObjectRegistry
+        rs = ObjectRegistry.build("earth.basic")
+        assert "inner_core" in rs.rendered_parts
+        assert "mantle" in rs.rendered_parts
+
+    def test_unknown_key_raises(self):
+        from systemedu.agents.builtin.gameagent.objects import ObjectRegistry
+        with pytest.raises(KeyError):
+            ObjectRegistry.build("alien_spaceship")
+
+    def test_render_spec_viewbox(self):
+        from systemedu.agents.builtin.gameagent.objects import ObjectRegistry
+        rs = ObjectRegistry.build("rocket.basic")
+        assert rs.viewbox == "0 0 560 420"
+
+    def test_shapes_have_valid_types(self):
+        from systemedu.agents.builtin.gameagent.objects import ObjectRegistry
+        rs = ObjectRegistry.build("rocket.basic")
+        valid_types = {"rect", "ellipse", "polygon", "path", "line"}
+        for s in rs.shapes:
+            assert s.type in valid_types
+
+
+# ---------------------------------------------------------------------------
+# ObjectValidator tests (B+ architecture - two-phase)
+# ---------------------------------------------------------------------------
+
+class TestObjectValidator:
+    def test_render_completeness_valid(self):
+        from systemedu.agents.builtin.gameagent.object_spec import ObjectSpec
+        from systemedu.agents.builtin.gameagent.object_validator import ObjectValidator
+        from systemedu.agents.builtin.gameagent.objects import ObjectRegistry
+        rs = ObjectRegistry.build("rocket.basic")
+        meta = ObjectRegistry.get_meta("rocket.basic")
+        obj_spec = ObjectSpec(
+            object_key="rocket.basic", view="side",
+            label_part_ids=["nose_cone", "body", "engine_nozzle"],
+        )
+        v = ObjectValidator(meta)
+        ok, errs = v.validate_render(rs)
+        assert ok, errs
+
+    def test_label_legality_valid(self):
+        from systemedu.agents.builtin.gameagent.object_spec import ObjectSpec
+        from systemedu.agents.builtin.gameagent.object_validator import ObjectValidator
+        from systemedu.agents.builtin.gameagent.objects import ObjectRegistry
+        rs = ObjectRegistry.build("rocket.basic")
+        meta = ObjectRegistry.get_meta("rocket.basic")
+        obj_spec = ObjectSpec(
+            object_key="rocket.basic", view="side",
+            label_part_ids=["nose_cone", "body", "engine_nozzle"],
+        )
+        v = ObjectValidator(meta)
+        ok, errs = v.validate_labels(obj_spec, rs)
+        assert ok, errs
+
+    def test_label_legality_unknown_part(self):
+        """Requesting a label for a non-existent part fails legality check."""
+        from systemedu.agents.builtin.gameagent.object_spec import ObjectSpec
+        from systemedu.agents.builtin.gameagent.object_validator import ObjectValidator
+        from systemedu.agents.builtin.gameagent.objects import ObjectRegistry
+        rs = ObjectRegistry.build("rocket.basic")
+        meta = ObjectRegistry.get_meta("rocket.basic")
+        obj_spec = ObjectSpec(
+            object_key="rocket.basic", view="side",
+            label_part_ids=["nose_cone", "nonexistent_part"],
+        )
+        v = ObjectValidator(meta)
+        ok, errs = v.validate_labels(obj_spec, rs)
+        assert not ok
+        assert any("nonexistent_part" in e for e in errs)
+
+    def test_must_have_vs_label_separation(self):
+        """must_have parts (left_fin/right_fin) need not be in label_part_ids."""
+        from systemedu.agents.builtin.gameagent.object_spec import ObjectSpec
+        from systemedu.agents.builtin.gameagent.object_validator import ObjectValidator
+        from systemedu.agents.builtin.gameagent.objects import ObjectRegistry
+        rs = ObjectRegistry.build("rocket.basic")
+        meta = ObjectRegistry.get_meta("rocket.basic")
+        # Only label nose_cone - fins are must_have but not labeled
+        obj_spec = ObjectSpec(
+            object_key="rocket.basic", view="side",
+            label_part_ids=["nose_cone"],
+        )
+        v = ObjectValidator(meta)
+        ok, errs = v.validate(obj_spec, rs)
+        # Render check should pass (fins ARE rendered), label check should pass too
+        assert ok, errs
+
+
+# ---------------------------------------------------------------------------
+# Compiler with object_spec (B+ architecture)
+# ---------------------------------------------------------------------------
+
+class TestCompilerWithObjectSpec:
+    def _make_label_map_with_object_spec(self) -> GameSpec:
+        from systemedu.agents.builtin.gameagent.object_spec import ObjectSpec
+        return GameSpec(
+            mechanic="label_map",
+            topic="认识火箭系统",
+            theme="探索火箭结构",
+            difficulty=4,
+            entities=[],
+            levels=[GameLevel(prompt="点击闪烁的圆点，探索各个部分")],
+            object_spec=ObjectSpec(
+                object_key="rocket.basic",
+                view="side",
+                label_part_ids=["nose_cone", "body", "engine_nozzle", "left_fin"],
+                highlight_part_ids=["engine_nozzle"],
+            ),
+        )
+
+    def test_label_map_with_object_spec_compiles(self):
+        spec = self._make_label_map_with_object_spec()
+        html = GameCompiler().compile(spec)
+        assert "const SPEC =" in html
+        assert "const RENDER_SPEC =" in html
+        assert "__GAME_SPEC__" not in html
+        assert "__RENDER_SPEC__" not in html
+
+    def test_label_map_render_spec_has_shapes(self):
+        spec = self._make_label_map_with_object_spec()
+        html = GameCompiler().compile(spec)
+        assert '"rendered_parts"' in html
+        assert '"shapes"' in html
+
+    def test_label_map_labels_from_registry_not_llm(self):
+        """Labels come from Registry (in Chinese from META), not from LLM free text."""
+        spec = self._make_label_map_with_object_spec()
+        html = GameCompiler().compile(spec)
+        # Registry labels for rocket parts
+        assert "鼻锥" in html           # nose_cone label from META
+        assert "发动机喷口" in html      # engine_nozzle label from META
+
+    def test_label_map_descriptions_from_registry(self):
+        spec = self._make_label_map_with_object_spec()
+        html = GameCompiler().compile(spec)
+        # desc_brief from META
+        assert "空气阻力" in html        # nose_cone desc mentions aerodynamics
+        assert "推力" in html            # engine_nozzle desc mentions thrust

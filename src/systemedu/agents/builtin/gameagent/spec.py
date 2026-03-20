@@ -4,6 +4,8 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
+from systemedu.agents.builtin.gameagent.object_spec import ObjectSpec
+
 
 class GameRules(BaseModel):
     correct_points: int = 10
@@ -30,15 +32,17 @@ class GameSpec(BaseModel):
     rules: GameRules = Field(default_factory=GameRules)
     levels: list[GameLevel] = Field(default_factory=list)
     feedback: GameFeedback = Field(default_factory=GameFeedback)
-    # visual skin fields (V2)
-    color_theme: str | None = None          # hex accent color, e.g. "#6366F1"
-    bg_gradient: list[str] | None = None    # [from_color, to_color]
+    # visual skin fields
+    color_theme: str | None = None
+    bg_gradient: list[str] | None = None
     # mechanic-specific extra fields
     categories: list[dict] | None = None      # drag_sort
     target_condition: str | None = None        # simulation
     visual_description: str | None = None      # simulation
-    scene_description: str | None = None       # label_map
-    scene_type: str | None = None              # label_map: rocket/human_body/cell/earth/brain/plant/atom/ship/dna/custom
+    scene_description: str | None = None       # label_map (legacy, kept for compat)
+    scene_type: str | None = None              # label_map (legacy, kept for compat)
+    # V2: structured object spec (label_map + simulation)
+    object_spec: ObjectSpec | None = None      # LLM picks object_key + label_part_ids
     # timeline_order
     ordered_items: list[dict] | None = None    # [{id, label, emoji, year, description}]
     # boss_quiz
