@@ -608,6 +608,58 @@ async def api_update_project(request: Request) -> JSONResponse:
     return JSONResponse({"name": name, "updated": True})
 
 
+async def api_objects_registry(request: Request) -> JSONResponse:
+    """GET /api/objects/registry - Return all objects in ObjectRegistry with metadata."""
+    from systemedu.agents.builtin.gameagent.objects import ObjectRegistry
+
+    keys = ObjectRegistry.supported_keys()
+    items = []
+    for key in keys:
+        meta = ObjectRegistry.get_meta(key)
+        family = key.split(".")[0]
+        variant = key.split(".", 1)[1] if "." in key else key
+        items.append({
+            "object_key": key,
+            "family": family,
+            "variant": variant,
+            "views": meta.get("views", []),
+            "must_have": meta.get("must_have", []),
+            "optional": meta.get("optional", []),
+            "labelable": meta.get("labelable", []),
+            "source": "registry",
+        })
+
+    # Also include done items from FactoryQueue (promoted to registry)
+    from systemedu.agents.builtin.gameagent.object_factory import FactoryQueue
+    queue = FactoryQueue()
+    staging_items = []
+    for item in queue.all_items():
+        if item.status in ("pending", "in_progress", "done", "failed"):
+            family = item.object_key.split(".")[0]
+            variant = item.object_key.split(".", 1)[1] if "." in item.object_key else item.object_key
+            staging_items.append({
+                "object_key": item.object_key,
+                "family": family,
+                "variant": variant,
+                "status": item.status,
+                "source": "factory_queue",
+                "project_name": item.project_name,
+                "created_at": item.created_at,
+                "error": item.error,
+            })
+
+    # Deduplicate: remove staging items already in registry
+    registry_keys = {i["object_key"] for i in items}
+    staging_items = [i for i in staging_items if i["object_key"] not in registry_keys]
+
+    return JSONResponse({
+        "registry": items,
+        "staging": staging_items,
+        "total_registry": len(items),
+        "total_staging": len(staging_items),
+    })
+
+
 async def api_objects_queue(request: Request) -> JSONResponse:
     """GET /api/objects/queue - Return FactoryQueue items, optionally filtered by project."""
     from systemedu.agents.builtin.gameagent.object_factory import FactoryQueue
@@ -2085,6 +2137,7 @@ def create_app() -> Starlette:
         Route("/api/projects/{name}/tree", api_update_tree, methods=["PUT"]),
         Route("/api/projects/{name}", api_project_detail, methods=["GET"]),
         Route("/api/projects/{name}", api_update_project, methods=["PATCH"]),
+        Route("/api/objects/registry", api_objects_registry, methods=["GET"]),
         Route("/api/objects/queue", api_objects_queue, methods=["GET"]),
         Route("/api/objects/queue/add", api_objects_queue_add, methods=["POST"]),
         Route("/api/objects/queue/trigger", api_objects_queue_trigger, methods=["POST"]),

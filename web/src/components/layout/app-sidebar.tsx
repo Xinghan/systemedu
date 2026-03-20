@@ -4,6 +4,7 @@ import Link from "next/link"
 import { usePathname } from "next/navigation"
 import {
   Bot,
+  Box,
   Brain,
   FolderKanban,
   LayoutDashboard,
@@ -32,6 +33,7 @@ const navItems = [
   { href: "/dashboard", label: "仪表盘", icon: LayoutDashboard },
   { href: "/chat", label: "聊天", icon: MessageSquare },
   { href: "/projects", label: "项目", icon: FolderKanban },
+  { href: "/objects", label: "Object 库", icon: Box },
 ]
 
 const manageItems = [

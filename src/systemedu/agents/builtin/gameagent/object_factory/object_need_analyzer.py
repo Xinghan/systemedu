@@ -116,19 +116,24 @@ def _build_analyzer_prompt(
         "",
         "判断规则：",
         "1. 只有当知识点直接涉及某个具体物体的结构/原理时，才需要创建 object",
-        "   适合创建：火箭发动机原理 → rocket.engine；细胞核结构 → cell.nucleus",
-        "   不适合创建：比较概念 / 历史事件 / 抽象公式 / 社会现象 → 不需要 object",
-        "2. object_key 格式必须是 family.variant，variant 必须从候选列表中选择",
-        "   不允许使用知识点标题作为 variant（如 rocket.为什么先讲安全 是错误的）",
-        "3. 最多返回 2 个 object_key",
-        "4. 如果不需要任何新 object，返回空列表 []",
+        "   例如需要创建：火箭发动机原理 → rocket.engine；细胞核结构 → cell.nucleus",
+        "   例如不需要创建：比较概念 / 历史事件 / 抽象公式 / 社会现象 / 安全规则 → []",
+        "2. object_key 格式必须是 family.variant",
+        "   variant 必须是真实物理部件名称（英文小写下划线），不允许使用知识点标题作为 variant",
+        "   例如错误：rocket.为什么先讲安全、rocket.safety_rules",
+        "   例如正确：rocket.engine、cell.nucleus",
+        "3. 优先从下方已知 family 的候选 variant 中选择",
+        "   如果知识点涉及的物体不在已知 family 中，可以自由创建新的 family.variant",
+        "   例如：circuit.breadboard、sensor.gyroscope、motor.brushless",
+        "4. 最多返回 2 个 object_key",
+        "5. 如果不需要任何新 object，返回空列表 []",
         "",
         "已存在于系统中的 object（不需要重复创建）：",
     ]
     for k in sorted(existing_keys):
         lines.append(f"  - {k}")
     lines.append("")
-    lines.append("可选的 family 和候选 variant（只能从以下选择）：")
+    lines.append("已知 family 和候选 variant（优先从此选择，不够用时可创建新 family）：")
     for family, variants in families_with_candidates.items():
         if variants:
             lines.append(f"  {family}: {', '.join(variants)}")
@@ -174,6 +179,12 @@ class ObjectNeedAnalyzer:
             f"内容简介：{node_summary}\n\n"
             f"请判断是否需要创建新的 object，输出 JSON。"
         )
+        logger.info(
+            f"ObjectNeedAnalyzer prompt for {node_title!r}:\n"
+            f"=== SYSTEM ===\n{system_prompt}\n"
+            f"=== USER ===\n{user_prompt}\n"
+            f"=============="
+        )
 
         try:
             agent = create_deep_agent(
@@ -199,25 +210,27 @@ class ObjectNeedAnalyzer:
             needed: list[str] = data.get("needed", [])
 
             # Validate: must be family.variant format, must not already exist
-            valid_families = set(_FAMILY_VARIANTS.keys())
+            # Allow new families/variants freely — only reject title slugs (non-ASCII or spaces)
             filtered: list[str] = []
             for key in needed:
                 if "." not in key:
                     logger.warning(f"ObjectNeedAnalyzer: invalid key format {key!r}, skipping")
                     continue
                 family, variant = key.split(".", 1)
-                if family not in valid_families:
-                    logger.warning(f"ObjectNeedAnalyzer: unknown family {family!r} in {key!r}, skipping")
+                # Reject if variant looks like a title slug (contains CJK or spaces)
+                if any(ord(c) > 127 or c == " " for c in variant):
+                    logger.warning(f"ObjectNeedAnalyzer: variant {variant!r} looks like a title slug, skipping")
                     continue
                 if key in existing_keys:
                     logger.debug(f"ObjectNeedAnalyzer: {key!r} already in registry, skipping")
                     continue
-                if variant not in _FAMILY_VARIANTS.get(family, []):
-                    logger.warning(
-                        f"ObjectNeedAnalyzer: variant {variant!r} not in candidate list "
-                        f"for family {family!r}, skipping"
+                if family in _FAMILY_VARIANTS and variant not in _FAMILY_VARIANTS[family]:
+                    logger.info(
+                        f"ObjectNeedAnalyzer: {key!r} uses new variant outside candidate list "
+                        f"(allowed for known family {family!r})"
                     )
-                    continue
+                if family not in _FAMILY_VARIANTS:
+                    logger.info(f"ObjectNeedAnalyzer: {key!r} uses new family {family!r} (allowed)")
                 filtered.append(key)
 
             logger.info(

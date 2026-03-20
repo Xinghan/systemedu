@@ -323,6 +323,35 @@ export interface WSMessage {
   result?: string
 }
 
+export interface ObjectRegistryItem {
+  object_key: string
+  family: string
+  variant: string
+  views: string[]
+  must_have: string[]
+  optional: string[]
+  labelable: string[]
+  source: "registry"
+}
+
+export interface ObjectStagingItem {
+  object_key: string
+  family: string
+  variant: string
+  status: "pending" | "in_progress" | "done" | "failed"
+  source: "factory_queue"
+  project_name: string
+  created_at: string
+  error: string
+}
+
+export interface ObjectRegistryResponse {
+  registry: ObjectRegistryItem[]
+  staging: ObjectStagingItem[]
+  total_registry: number
+  total_staging: number
+}
+
 export interface FactoryQueueItem {
   object_key: string
   description: string

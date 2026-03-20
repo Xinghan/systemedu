@@ -8,6 +8,7 @@ import type {
   CreateProjectResponse,
   EnrollmentInfo,
   FactoryQueueResponse,
+  ObjectRegistryResponse,
   HighlightInfo,
   LessonContent,
   LessonProgressResponse,
@@ -115,6 +116,7 @@ export const gateway = {
     api.put<{ ok: boolean; milestones: MilestoneInfo[] }>(
       `/api/projects/${projectName}/tree`, { milestones }
     ),
+  objectRegistry: () => api.get<ObjectRegistryResponse>("/api/objects/registry"),
   objectQueue: (projectName?: string) => {
     const url = projectName
       ? `/api/objects/queue?project=${encodeURIComponent(projectName)}`
