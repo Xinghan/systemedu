@@ -330,3 +330,138 @@ def test_scan_invalid_project_returns_empty(tmp_path):
 
     enqueued = scan_and_enqueue_project_nodes("nonexistent-project-xyz")
     assert enqueued == []
+
+
+# ---------------------------------------------------------------------------
+# scan_and_enqueue_unlocked_nodes tests
+# ---------------------------------------------------------------------------
+
+
+def _make_fake_project_with_chain(tmp_path, project_name: str) -> None:
+    """Project with 3 nodes: node0 (first-layer), node1 (prereq=0), node2 (prereq=1)."""
+    import json
+    import yaml
+
+    proj_dir = tmp_path / project_name
+    proj_dir.mkdir()
+    (proj_dir / "project.yaml").write_text(
+        yaml.dump({
+            "name": project_name, "title": "Chain", "description": "",
+            "category": "other", "age_range": [6, 18], "estimated_hours": 5, "tags": [],
+            "knowledge_tree_path": "knowledge_tree.json",
+        }, allow_unicode=True),
+        encoding="utf-8",
+    )
+    tree = {
+        "milestones": [{
+            "title": "M1", "description": "", "order": 0, "xp_reward": 100,
+            "knodes": [
+                {"id": 0, "title": "火箭基础", "summary": "了解火箭推进", "difficulty_level": 1,
+                 "content_type": "text", "acceptance_type": "quiz",
+                 "estimated_minutes": 20, "xp_reward": 30, "prerequisite_indices": []},
+                {"id": 1, "title": "细胞结构", "summary": "细菌和微生物", "difficulty_level": 2,
+                 "content_type": "text", "acceptance_type": "quiz",
+                 "estimated_minutes": 30, "xp_reward": 50, "prerequisite_indices": [0]},
+                {"id": 2, "title": "数学公式", "summary": "加减乘除", "difficulty_level": 1,
+                 "content_type": "text", "acceptance_type": "quiz",
+                 "estimated_minutes": 20, "xp_reward": 30, "prerequisite_indices": [1]},
+            ],
+        }]
+    }
+    (proj_dir / "knowledge_tree.json").write_text(
+        json.dumps(tree, ensure_ascii=False), encoding="utf-8"
+    )
+
+
+def test_scan_unlocked_nodes_enqueues_topic_nodes(tmp_path, monkeypatch):
+    """Unlocked nodes with matching topics should be enqueued."""
+    from systemedu.education.object_scan import scan_and_enqueue_unlocked_nodes
+    from systemedu.agents.builtin.gameagent.object_factory import FactoryQueue
+
+    _make_fake_project_with_chain(tmp_path, "chain-proj")
+
+    import systemedu.education.project_loader as pl_mod
+    orig_find = pl_mod.find_project_dir
+
+    def mock_find(name, *args, **kwargs):
+        d = tmp_path / name
+        if d.exists():
+            return d
+        return orig_find(name, *args, **kwargs)
+
+    monkeypatch.setattr(pl_mod, "find_project_dir", mock_find)
+
+    queue_path = tmp_path / "fq.jsonl"
+    import systemedu.agents.builtin.gameagent.object_factory.factory_queue as fq_mod
+    monkeypatch.setattr(fq_mod, "_DEFAULT_PATH", queue_path)
+
+    # Node 1 (细胞结构) just got unlocked
+    enqueued = scan_and_enqueue_unlocked_nodes("chain-proj", [1])
+    assert len(enqueued) == 1
+    assert enqueued[0].startswith("cell.")
+
+    q = FactoryQueue(queue_path=queue_path)
+    items = q.pending_items()
+    assert len(items) == 1
+    assert items[0].project_name == "chain-proj"
+    assert items[0].source == "auto_project"
+
+
+def test_scan_unlocked_nodes_skips_no_topic_match(tmp_path, monkeypatch):
+    """Unlocked nodes with no topic keyword should not be enqueued."""
+    from systemedu.education.object_scan import scan_and_enqueue_unlocked_nodes
+
+    _make_fake_project_with_chain(tmp_path, "chain-proj2")
+
+    import systemedu.education.project_loader as pl_mod
+    orig_find = pl_mod.find_project_dir
+
+    def mock_find(name, *args, **kwargs):
+        d = tmp_path / name
+        if d.exists():
+            return d
+        return orig_find(name, *args, **kwargs)
+
+    monkeypatch.setattr(pl_mod, "find_project_dir", mock_find)
+
+    # Node 2 (数学公式) — no keyword match
+    enqueued = scan_and_enqueue_unlocked_nodes("chain-proj2", [2])
+    assert enqueued == []
+
+
+def test_scan_unlocked_nodes_empty_list(tmp_path):
+    from systemedu.education.object_scan import scan_and_enqueue_unlocked_nodes
+
+    enqueued = scan_and_enqueue_unlocked_nodes("any-proj", [])
+    assert enqueued == []
+
+
+def test_scan_unlocked_dedup(tmp_path, monkeypatch):
+    """Same node unlocked twice should only enqueue once."""
+    from systemedu.education.object_scan import scan_and_enqueue_unlocked_nodes
+    from systemedu.agents.builtin.gameagent.object_factory import FactoryQueue
+
+    _make_fake_project_with_chain(tmp_path, "chain-proj3")
+
+    import systemedu.education.project_loader as pl_mod
+    orig_find = pl_mod.find_project_dir
+
+    def mock_find(name, *args, **kwargs):
+        d = tmp_path / name
+        if d.exists():
+            return d
+        return orig_find(name, *args, **kwargs)
+
+    monkeypatch.setattr(pl_mod, "find_project_dir", mock_find)
+
+    queue_path = tmp_path / "fq2.jsonl"
+    import systemedu.agents.builtin.gameagent.object_factory.factory_queue as fq_mod
+    monkeypatch.setattr(fq_mod, "_DEFAULT_PATH", queue_path)
+
+    scan_and_enqueue_unlocked_nodes("chain-proj3", [1])
+    # Second call — should be deduped
+    second = scan_and_enqueue_unlocked_nodes("chain-proj3", [1])
+    assert second == []
+
+    q = FactoryQueue(queue_path=queue_path)
+    assert len(q.all_items()) == 1

@@ -1054,6 +1054,14 @@ async def api_update_progress(request: Request) -> JSONResponse:
             except Exception:
                 logger.exception("Failed to unlock next nodes")
 
+            # Scan newly unlocked nodes for missing objects and trigger factory
+            if unlocked_ids:
+                try:
+                    from systemedu.education.object_scan import scan_and_enqueue_unlocked_nodes
+                    scan_and_enqueue_unlocked_nodes(name, unlocked_ids)
+                except Exception:
+                    logger.exception("Failed to scan unlocked nodes for object factory (non-fatal)")
+
             enrollment = (
                 db.query(Enrollment)
                 .filter_by(user_id=user_id, project_name=name)

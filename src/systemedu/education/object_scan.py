@@ -1,11 +1,17 @@
-"""Scan first-layer project nodes and auto-enqueue missing objects.
+"""Scan project nodes and auto-enqueue + trigger ObjectFactory creation.
 
 Uses deterministic keyword matching (no LLM) to infer object_key from
-node title + summary, then enqueues into FactoryQueue if not in ObjectRegistry.
+node title + summary, then enqueues into FactoryQueue and fires off
+ObjectFactory pipeline as a background asyncio task.
+
+Two entry points:
+- scan_and_enqueue_project_nodes(): called on project creation, scans first-layer nodes
+- scan_and_enqueue_unlocked_nodes(): called when nodes are unlocked after a node is passed
 """
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import re
 
@@ -64,9 +70,7 @@ _TOPIC_FAMILY_MAP: dict[str, str] = {
 
 def _make_variant_slug(title: str) -> str:
     """Create a simple slug from a node title for use as object_key variant."""
-    # Remove non-alphanumeric (keep CJK, ASCII alnum)
     cleaned = re.sub(r"[^\w\u4e00-\u9fff]", "_", title.strip())
-    # Truncate to keep it sane
     cleaned = cleaned[:32].strip("_")
     return cleaned or "basic"
 
@@ -89,12 +93,70 @@ def infer_object_key(title: str, summary: str) -> str | None:
     return None
 
 
+# ---------------------------------------------------------------------------
+# ObjectFactory trigger
+# ---------------------------------------------------------------------------
+
+async def _run_factory_pipeline(object_key: str, description: str) -> None:
+    """Run ObjectFactory pipeline for a single key. Fire-and-forget background task."""
+    from systemedu.agents.builtin.gameagent.object_factory import FactoryQueue, ObjectFactory
+
+    queue = FactoryQueue()
+    queue.mark_in_progress(object_key)
+    logger.info(f"object_scan: starting factory pipeline for {object_key!r}")
+    try:
+        factory = ObjectFactory()
+        _staging_path, report = await factory.run_pipeline(
+            object_key=object_key,
+            description=description,
+            base_family=object_key.split(".")[0],
+        )
+        if report.passed:
+            queue.mark_done(object_key)
+            logger.info(f"object_scan: factory done for {object_key!r} score={report.score}")
+        else:
+            queue.mark_failed(object_key, error="; ".join(report.errors[:3]))
+            logger.warning(
+                f"object_scan: factory failed for {object_key!r}: {report.errors[:3]}"
+            )
+    except Exception as exc:
+        queue.mark_failed(object_key, error=str(exc))
+        logger.exception(f"object_scan: factory pipeline error for {object_key!r}")
+
+
+def trigger_factory_for_keys(enqueued_items: list[tuple[str, str]]) -> None:
+    """Schedule ObjectFactory pipeline tasks for a list of (object_key, description) pairs.
+
+    Uses asyncio.create_task() if a loop is running, otherwise logs a warning.
+    This is non-blocking — callers do not await this.
+    """
+    if not enqueued_items:
+        return
+    try:
+        loop = asyncio.get_running_loop()
+    except RuntimeError:
+        logger.warning("object_scan: no running event loop, skipping factory trigger")
+        return
+
+    for object_key, description in enqueued_items:
+        task = loop.create_task(
+            _run_factory_pipeline(object_key, description),
+            name=f"factory:{object_key}",
+        )
+        task.add_done_callback(
+            lambda t: logger.debug(f"factory task finished: {t.get_name()}")
+        )
+        logger.info(f"object_scan: scheduled factory task for {object_key!r}")
+
+
+# ---------------------------------------------------------------------------
+# Scan entry points
+# ---------------------------------------------------------------------------
+
 def scan_and_enqueue_project_nodes(project_name: str) -> list[str]:
-    """Load project, scan first-layer nodes, enqueue missing objects.
+    """Called on project creation. Scan first-layer nodes, enqueue and trigger.
 
-    First-layer nodes are those with no prerequisite_indices (unlocked at start).
-    Only the first milestone is scanned.
-
+    First-layer nodes: in first milestone, no prerequisite_indices.
     Returns list of newly enqueued object_keys.
     """
     from systemedu.agents.builtin.gameagent.object_factory import (
@@ -115,6 +177,7 @@ def scan_and_enqueue_project_nodes(project_name: str) -> list[str]:
     first_ms = ctx.tree.milestones[0]
     queue = FactoryQueue()
     enqueued: list[str] = []
+    to_trigger: list[tuple[str, str]] = []
 
     for node in first_ms.knodes:
         if node.prerequisite_indices:
@@ -124,14 +187,79 @@ def scan_and_enqueue_project_nodes(project_name: str) -> list[str]:
         if key is None:
             continue
 
+        description = f"{node.title}: {node.summary[:100]}"
         item = FactoryQueueItem(
             object_key=key,
-            description=f"{node.title}: {node.summary[:100]}",
+            description=description,
             source="auto_project",
             project_name=project_name,
         )
         if queue.enqueue(item):
             enqueued.append(key)
+            to_trigger.append((key, description))
             logger.info(f"object_scan: enqueued {key!r} for project {project_name!r}")
 
+    trigger_factory_for_keys(to_trigger)
+    return enqueued
+
+
+def scan_and_enqueue_unlocked_nodes(
+    project_name: str,
+    unlocked_node_ids: list[int],
+) -> list[str]:
+    """Called when nodes are unlocked after a node is passed.
+
+    Scans the newly unlocked nodes, enqueues missing objects, triggers factory.
+    Returns list of newly enqueued object_keys.
+    """
+    if not unlocked_node_ids:
+        return []
+
+    from systemedu.agents.builtin.gameagent.object_factory import (
+        FactoryQueue,
+        FactoryQueueItem,
+    )
+    from systemedu.education.project_loader import load_project_context
+
+    try:
+        ctx = load_project_context(project_name)
+    except Exception as exc:
+        logger.warning(
+            f"object_scan: failed to load project {project_name!r} for unlock scan: {exc}"
+        )
+        return []
+
+    # Build flat node list
+    all_nodes = []
+    for ms in ctx.tree.milestones:
+        all_nodes.extend(ms.knodes)
+
+    queue = FactoryQueue()
+    enqueued: list[str] = []
+    to_trigger: list[tuple[str, str]] = []
+
+    for node_id in unlocked_node_ids:
+        if node_id >= len(all_nodes):
+            continue
+        node = all_nodes[node_id]
+        key = infer_object_key(node.title, node.summary)
+        if key is None:
+            continue
+
+        description = f"{node.title}: {node.summary[:100]}"
+        item = FactoryQueueItem(
+            object_key=key,
+            description=description,
+            source="auto_project",
+            project_name=project_name,
+        )
+        if queue.enqueue(item):
+            enqueued.append(key)
+            to_trigger.append((key, description))
+            logger.info(
+                f"object_scan: enqueued {key!r} for unlocked node {node_id} "
+                f"in project {project_name!r}"
+            )
+
+    trigger_factory_for_keys(to_trigger)
     return enqueued
