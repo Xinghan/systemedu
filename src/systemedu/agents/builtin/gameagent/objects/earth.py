@@ -11,6 +11,7 @@ from systemedu.agents.builtin.gameagent.object_spec import (
 
 META = {
     "object_key": "earth.basic",
+    "description": "地球圈层剖面图，包含地壳、地幔、外核、内核及大气层、海洋、陆地。适合讲解地球内部圈层结构。不包含板块构造细节、火山截面、大气各层详细划分、水循环等专题内容。",
     "views": ["front"],
     "must_have": ["crust", "mantle", "outer_core", "inner_core"],
     "optional": ["atmosphere", "ocean", "land_mass", "satellite"],

@@ -12,6 +12,7 @@ from systemedu.agents.builtin.gameagent.object_spec import (
 
 META = {
     "object_key": "plant.basic",
+    "description": "植物整体侧视图，包含根、茎、叶、花。适合讲解植物整体结构和各部分功能。不包含叶片横截面（叶肉细胞/气孔）、根毛放大图、维管束细节等微观结构。",
     "views": ["side"],
     "must_have": ["stem", "root", "leaf_left", "leaf_right"],
     "optional": ["flower", "soil_line", "sun", "leaf_top"],

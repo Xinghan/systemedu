@@ -22,6 +22,7 @@ from systemedu.agents.builtin.gameagent.object_spec import (
 
 META = {
     "object_key": "rocket.basic",
+    "description": "火箭整体侧视外观图，包含鼻锥、箭体、尾翼、发动机喷嘴。适合讲解火箭整体结构和各部件名称。不包含发动机内部燃烧室、燃料箱内部、制导系统、级间分离机构等内部细节。",
     "views": ["side"],
     "must_have": ["nose_cone", "body", "left_fin", "right_fin", "engine_nozzle"],
     "optional": ["window", "interstage", "grid_fin_left", "grid_fin_right", "flame"],

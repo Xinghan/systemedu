@@ -108,6 +108,7 @@ _FAMILY_VARIANTS: dict[str, list[str]] = {
 def _build_analyzer_prompt(
     existing_keys: set[str],
     families_with_candidates: dict[str, list[str]],
+    existing_descriptions: dict[str, str] | None = None,
 ) -> str:
     lines = [
         "你是一位教育游戏物体需求分析师。",
@@ -128,10 +129,15 @@ def _build_analyzer_prompt(
         "4. 最多返回 2 个 object_key",
         "5. 如果不需要任何新 object，返回空列表 []",
         "",
-        "已存在于系统中的 object（不需要重复创建）：",
+        "已存在于系统中的 object（查看描述判断是否已覆盖，不需要重复创建）：",
     ]
+    descs = existing_descriptions or {}
     for k in sorted(existing_keys):
-        lines.append(f"  - {k}")
+        desc = descs.get(k, "")
+        if desc:
+            lines.append(f"  - {k}：{desc}")
+        else:
+            lines.append(f"  - {k}")
     lines.append("")
     lines.append("已知 family 和候选 variant（优先从此选择，不够用时可创建新 family）：")
     for family, variants in families_with_candidates.items():
@@ -159,6 +165,17 @@ class ObjectNeedAnalyzer:
 
         existing_keys = set(ObjectRegistry.supported_keys())
 
+        # Collect descriptions from META for existing objects
+        existing_descriptions: dict[str, str] = {}
+        for key in existing_keys:
+            try:
+                meta = ObjectRegistry.get_meta(key)
+                desc = meta.get("description", "")
+                if desc:
+                    existing_descriptions[key] = desc
+            except Exception:
+                pass
+
         # Build candidate lists (only variants not already in registry)
         families_with_candidates: dict[str, list[str]] = {}
         for family, variants in _FAMILY_VARIANTS.items():
@@ -173,7 +190,7 @@ class ObjectNeedAnalyzer:
             logger.info("ObjectNeedAnalyzer: all standard variants already in registry")
             return []
 
-        system_prompt = _build_analyzer_prompt(existing_keys, families_with_candidates)
+        system_prompt = _build_analyzer_prompt(existing_keys, families_with_candidates, existing_descriptions)
         user_prompt = (
             f"知识节点标题：{node_title}\n"
             f"内容简介：{node_summary}\n\n"

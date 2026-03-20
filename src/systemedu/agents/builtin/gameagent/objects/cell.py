@@ -12,6 +12,7 @@ from systemedu.agents.builtin.gameagent.object_spec import (
 
 META = {
     "object_key": "cell.animal",
+    "description": "动物细胞横截面图，包含细胞膜、细胞核、细胞质及主要细胞器（线粒体、核糖体、内质网、高尔基体）。适合讲解动物细胞结构和细胞器功能。不包含细胞壁、叶绿体（植物细胞专有），不包含细菌（原核细胞）结构。",
     "views": ["cross_section"],
     "must_have": ["cell_membrane", "nucleus", "cytoplasm"],
     "optional": ["nucleolus", "mitochondria_1", "mitochondria_2", "ribosome", "er_rough", "golgi", "vacuole"],

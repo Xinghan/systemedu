@@ -13,6 +13,7 @@ from systemedu.agents.builtin.gameagent.object_spec import (
 
 META = {
     "object_key": "atom.bohr",
+    "description": "玻尔原子模型图，包含原子核（质子+中子）和电子轨道。适合讲解原子结构和电子层概念。不包含具体元素分子结构、化学键、离子键等，也不涉及量子力学轨道模型。",
     "views": ["front"],
     "must_have": ["nucleus", "electron_shell_1", "electron_1"],
     "optional": ["electron_shell_2", "electron_shell_3", "electron_2", "electron_3", "proton", "neutron"],

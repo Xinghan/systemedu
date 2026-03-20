@@ -12,6 +12,7 @@ from systemedu.agents.builtin.gameagent.object_spec import (
 
 META = {
     "object_key": "human_body.external",
+    "description": "人体正面外观图，包含头、躯干、四肢轮廓及主要内脏位置标注（心、肺、胃）。适合讲解人体各部位名称和器官大致位置。不包含骨骼系统、肌肉系统、神经系统、单个器官的详细内部结构。",
     "views": ["front"],
     "must_have": ["head", "torso", "left_arm", "right_arm", "left_leg", "right_leg"],
     "optional": ["heart", "left_lung", "right_lung", "stomach", "brain_outline"],
