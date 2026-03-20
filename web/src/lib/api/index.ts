@@ -127,10 +127,13 @@ export const gateway = {
       description: description ?? "",
       project_name: projectName ?? "",
     }),
-  objectQueueTrigger: (projectName?: string) => {
-    const url = projectName
-      ? `/api/objects/queue/trigger?project=${encodeURIComponent(projectName)}`
-      : "/api/objects/queue/trigger"
-    return api.post<{ triggered: number; object_keys?: string[] }>(url, {})
+  objectQueueTrigger: (projectName?: string, retryFailed = true) => {
+    const params = new URLSearchParams()
+    if (projectName) params.set("project", projectName)
+    if (retryFailed) params.set("retry_failed", "1")
+    const qs = params.toString()
+    return api.post<{ triggered: number; object_keys?: string[] }>(
+      `/api/objects/queue/trigger${qs ? `?${qs}` : ""}`, {}
+    )
   },
 }

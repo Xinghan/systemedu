@@ -100,12 +100,14 @@ def infer_object_key(title: str, summary: str) -> str | None:
 async def _run_factory_pipeline(object_key: str, description: str) -> None:
     """Run ObjectFactory pipeline for a single key. Fire-and-forget background task."""
     from systemedu.agents.builtin.gameagent.object_factory import FactoryQueue, ObjectFactory
+    from systemedu.core.llm_client import get_llm
 
     queue = FactoryQueue()
     queue.mark_in_progress(object_key)
     logger.info(f"object_scan: starting factory pipeline for {object_key!r}")
     try:
-        factory = ObjectFactory()
+        llm = get_llm()
+        factory = ObjectFactory(llm=llm)
         _staging_path, report = await factory.run_pipeline(
             object_key=object_key,
             description=description,

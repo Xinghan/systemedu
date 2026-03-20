@@ -657,26 +657,43 @@ async def api_objects_queue_add(request: Request) -> JSONResponse:
 
 
 async def api_objects_queue_trigger(request: Request) -> JSONResponse:
-    """POST /api/objects/queue/trigger - Trigger factory pipeline for all pending items.
+    """POST /api/objects/queue/trigger - Trigger factory pipeline for pending/failed items.
 
-    Optionally filter by project via ?project=name query param.
+    Query params:
+      project=name   filter by project
+      retry_failed=1 also retry failed items (reset to pending first)
     """
     from systemedu.agents.builtin.gameagent.object_factory import FactoryQueue
     from systemedu.education.object_scan import trigger_factory_for_keys
 
     project_filter = request.query_params.get("project", "").strip()
+    retry_failed = request.query_params.get("retry_failed", "0") == "1"
     queue = FactoryQueue()
 
-    if project_filter:
-        pending = [i for i in queue.pending_items() if i.project_name == project_filter]
-    else:
-        pending = queue.pending_items()
+    items = queue.items_for_project(project_filter) if project_filter else queue.all_items()
 
-    if not pending:
+    # Optionally reset failed items so they can be re-triggered
+    if retry_failed:
+        for item in items:
+            if item.status == "failed":
+                # Reset by re-writing with pending status
+                from systemedu.agents.builtin.gameagent.object_factory import FactoryQueueItem
+                all_items = queue.all_items()
+                for qi in all_items:
+                    if qi.object_key == item.object_key and qi.status == "failed":
+                        qi.status = "pending"
+                        qi.error = ""
+                queue._write_all(all_items)
+
+    to_trigger = [(i.object_key, i.description) for i in queue.all_items()
+                  if i.status == "pending"
+                  and (not project_filter or i.project_name == project_filter)]
+
+    if not to_trigger:
         return JSONResponse({"triggered": 0, "message": "no pending items"})
 
-    trigger_factory_for_keys([(i.object_key, i.description) for i in pending])
-    return JSONResponse({"triggered": len(pending), "object_keys": [i.object_key for i in pending]})
+    trigger_factory_for_keys(to_trigger)
+    return JSONResponse({"triggered": len(to_trigger), "object_keys": [k for k, _ in to_trigger]})
 
 
 async def api_update_tree(request: Request) -> JSONResponse:
