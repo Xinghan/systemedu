@@ -46,12 +46,18 @@ class GameSpecValidator:
                         errors.append(f"simulation entity[{i}] missing field '{field}'")
 
         elif spec.mechanic == "label_map":
-            if len(spec.entities) < 3:
-                errors.append(f"label_map entities must have at least 3 items, got {len(spec.entities)}")
-            for i, e in enumerate(spec.entities):
-                for field in ("id", "name", "x", "y"):
-                    if field not in e:
-                        errors.append(f"label_map entity[{i}] missing field '{field}'")
+            if spec.object_spec is not None:
+                # object_spec mode: Registry provides the visual; entities must be empty
+                if spec.entities:
+                    errors.append("label_map with object_spec must have empty entities list")
+            else:
+                # Legacy manual-coordinate mode
+                if len(spec.entities) < 3:
+                    errors.append(f"label_map entities must have at least 3 items, got {len(spec.entities)}")
+                for i, e in enumerate(spec.entities):
+                    for field in ("id", "name", "x", "y"):
+                        if field not in e:
+                            errors.append(f"label_map entity[{i}] missing field '{field}'")
 
         elif spec.mechanic == "timeline_order":
             items = spec.ordered_items or spec.entities

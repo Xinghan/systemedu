@@ -313,6 +313,48 @@ class TestGameSpecValidator:
         assert not valid
         assert any("correct" in e for e in errors)
 
+    def test_label_map_with_object_spec_empty_entities_valid(self):
+        """label_map + object_spec mode: entities=[] is valid (Registry provides visuals)."""
+        from systemedu.agents.builtin.gameagent.object_spec import ObjectSpec
+        spec = GameSpec(
+            mechanic="label_map",
+            topic="火箭结构",
+            theme="探索火箭",
+            difficulty=4,
+            entities=[],
+            levels=[GameLevel(prompt="点击探索")],
+            object_spec=ObjectSpec(
+                object_key="rocket.basic",
+                label_part_ids=["nose_cone", "body", "engine_nozzle"],
+            ),
+        )
+        valid, errors = self.v.validate(spec)
+        assert valid, errors
+
+    def test_label_map_with_object_spec_non_empty_entities_invalid(self):
+        """label_map + object_spec mode: entities must be empty."""
+        from systemedu.agents.builtin.gameagent.object_spec import ObjectSpec
+        spec = GameSpec(
+            mechanic="label_map",
+            topic="火箭结构",
+            theme="探索火箭",
+            difficulty=4,
+            entities=[{"id": "l1", "name": "x", "x": 10, "y": 20}],
+            levels=[GameLevel(prompt="点击探索")],
+            object_spec=ObjectSpec(object_key="rocket.basic"),
+        )
+        valid, errors = self.v.validate(spec)
+        assert not valid
+        assert any("entities" in e for e in errors)
+
+    def test_label_map_no_object_spec_requires_entities(self):
+        """label_map without object_spec: must have >= 3 entities."""
+        spec = make_label_map_spec()
+        spec.entities = spec.entities[:2]
+        valid, errors = self.v.validate(spec)
+        assert not valid
+        assert any("entities" in e for e in errors)
+
 
 # ---------------------------------------------------------------------------
 # GameCompiler tests
@@ -763,3 +805,85 @@ class TestCompilerWithObjectSpec:
         # desc_brief from META
         assert "空气阻力" in html        # nose_cone desc mentions aerodynamics
         assert "推力" in html            # engine_nozzle desc mentions thrust
+
+    def test_label_map_fallback_object_key_still_compiles(self):
+        """Fallback: unknown variant → family fallback → HTML still generated."""
+        from systemedu.agents.builtin.gameagent.object_spec import ObjectSpec
+        spec = GameSpec(
+            mechanic="label_map",
+            topic="认识火箭",
+            theme="探索火箭结构",
+            difficulty=3,
+            entities=[],
+            levels=[GameLevel(prompt="点击探索")],
+            object_spec=ObjectSpec(
+                object_key="rocket.cutaway",   # not in registry
+                label_part_ids=["nose_cone", "body"],
+            ),
+        )
+        html = GameCompiler().compile(spec)
+        # Fallback to rocket.basic → RENDER_SPEC injected
+        assert "const RENDER_SPEC =" in html
+        assert "__RENDER_SPEC__" not in html
+
+    def test_label_map_unknown_family_renders_null_spec(self):
+        """No fallback: unknown family → RENDER_SPEC = null, HTML still valid."""
+        from systemedu.agents.builtin.gameagent.object_spec import ObjectSpec
+        spec = GameSpec(
+            mechanic="label_map",
+            topic="外星飞船",
+            theme="探索飞船",
+            difficulty=3,
+            entities=[],
+            levels=[GameLevel(prompt="点击探索")],
+            object_spec=ObjectSpec(object_key="alien.spaceship"),
+        )
+        html = GameCompiler().compile(spec)
+        assert "const RENDER_SPEC = null" in html
+
+    def test_fallback_enqueues_miss_request(self, tmp_path):
+        """When a fallback is used, a MissingObjectRequest is written to MissQueue."""
+        import json
+        from unittest.mock import patch
+        from systemedu.agents.builtin.gameagent.object_spec import ObjectSpec
+        from systemedu.agents.builtin.gameagent.miss_queue import MissQueue
+
+        queue_path = tmp_path / "test_miss.jsonl"
+        spec = GameSpec(
+            mechanic="label_map",
+            topic="火箭解剖",
+            theme="探索火箭剖面",
+            difficulty=3,
+            entities=[],
+            levels=[GameLevel(prompt="点击探索")],
+            object_spec=ObjectSpec(object_key="rocket.cutaway"),
+        )
+        with patch(
+            "systemedu.agents.builtin.gameagent.miss_queue.MissQueue",
+            return_value=MissQueue(queue_path),
+        ):
+            GameCompiler().compile(spec)
+
+        assert queue_path.exists()
+        data = json.loads(queue_path.read_text().strip())
+        assert data["object_key"] == "rocket.cutaway"
+        assert data["fallback_used"] == "rocket.basic"
+
+    def test_exact_hit_does_not_enqueue(self, tmp_path):
+        """Exact hit produces no MissingObjectRequest."""
+        from systemedu.agents.builtin.gameagent.object_spec import ObjectSpec
+        from systemedu.agents.builtin.gameagent.miss_queue import MissQueue
+
+        queue_path = tmp_path / "test_miss.jsonl"
+        # Use a real queue at tmp_path to verify nothing is written
+        spec = self._make_label_map_with_object_spec()  # rocket.basic (exact)
+        # Temporarily redirect default queue to tmp_path
+        import systemedu.agents.builtin.gameagent.miss_queue as mq_module
+        original = mq_module._DEFAULT_QUEUE_PATH
+        mq_module._DEFAULT_QUEUE_PATH = queue_path
+        try:
+            GameCompiler().compile(spec)
+        finally:
+            mq_module._DEFAULT_QUEUE_PATH = original
+
+        assert not queue_path.exists() or queue_path.read_text().strip() == ""
