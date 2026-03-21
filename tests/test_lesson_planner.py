@@ -38,7 +38,7 @@ VALID_PLAN = json.dumps({
     },
     "lab_strategy": {
         "game_concept": "屏幕左侧有四片不同形状的树叶，用户拖拽树叶放到右侧对应形状的分类框，正确放置时叶片弹跳动画反馈，全部完成后播放庆祝彩带",
-        "game_mechanic": "exploration",
+        "game_mechanic": "drag_sort",
         "learning_connection": "通过动手操作直接体验叶形分类的标准",
     },
     "practice_strategy": {
@@ -61,7 +61,7 @@ class TestLessonPlannerAgent:
             result = await planner.plan("树叶分类", "学习如何分类", 3, "text", "自然科学基础")
         assert result is not None
         assert result["concept_approach"] == "analogy"
-        assert result["lab_strategy"]["game_mechanic"] == "exploration"
+        assert result["lab_strategy"]["game_mechanic"] == "drag_sort"
         assert result["lab_strategy"]["game_concept"] != ""
         assert result["overall_tone"] == "playful"
         mock_agent.ainvoke.assert_called_once()
@@ -111,7 +111,7 @@ class TestLessonPlannerAgent:
         assert result["concept_approach"] == "analogy"
         assert result["concept_depth"] == "medium"
         assert result["overall_tone"] == "encouraging"
-        assert result["lab_strategy"]["game_mechanic"] == "exploration"
+        assert result["lab_strategy"]["game_mechanic"] == "drag_sort"
 
     @pytest.mark.asyncio
     async def test_missing_game_concept_gets_fallback(self):
@@ -162,12 +162,14 @@ class TestLessonPlannerAgent:
         assert parsed["concept_approach"] == "analogy"
 
     def test_valid_game_mechanics_constant(self):
-        """VALID_GAME_MECHANICS contains the expected values."""
+        """VALID_GAME_MECHANICS contains the expected GameSpec-aligned values."""
         assert "simulation" in VALID_GAME_MECHANICS
-        assert "exploration" in VALID_GAME_MECHANICS
-        assert "construction" in VALID_GAME_MECHANICS
-        assert "puzzle" in VALID_GAME_MECHANICS
-        assert "narrative" in VALID_GAME_MECHANICS
-        # Old interaction types should NOT be in VALID_GAME_MECHANICS
-        assert "drag_classify" not in VALID_GAME_MECHANICS
-        assert "connect_match" not in VALID_GAME_MECHANICS
+        assert "drag_sort" in VALID_GAME_MECHANICS
+        assert "match_pairs" in VALID_GAME_MECHANICS
+        assert "label_map" in VALID_GAME_MECHANICS
+        assert "timeline_order" in VALID_GAME_MECHANICS
+        assert "boss_quiz" in VALID_GAME_MECHANICS
+        # Old lesson-planner-only mechanics should NOT be in VALID_GAME_MECHANICS
+        assert "exploration" not in VALID_GAME_MECHANICS
+        assert "construction" not in VALID_GAME_MECHANICS
+        assert "narrative" not in VALID_GAME_MECHANICS

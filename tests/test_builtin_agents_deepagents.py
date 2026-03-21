@@ -30,7 +30,7 @@ class TestLessonPlannerAgent:
             "example_strategy": {"total_count": 5},
             "lab_strategy": {
                 "game_concept": "用户拖拽树叶到对应分类框，正确时弹跳反馈",
-                "game_mechanic": "exploration",
+                "game_mechanic": "drag_sort",
                 "learning_connection": "通过分类操作理解特征",
             },
             "practice_strategy": {},
@@ -47,7 +47,7 @@ class TestLessonPlannerAgent:
 
         assert result is not None
         assert result["concept_approach"] == "analogy"
-        assert result["lab_strategy"]["game_mechanic"] == "exploration"
+        assert result["lab_strategy"]["game_mechanic"] == "drag_sort"
         assert result["lab_strategy"]["game_concept"] != ""
 
     @pytest.mark.asyncio
@@ -65,7 +65,7 @@ class TestLessonPlannerAgent:
 
     @pytest.mark.asyncio
     async def test_plan_normalizes_invalid_game_mechanic(self):
-        """Invalid game_mechanic in lab_strategy should fall back to exploration."""
+        """Invalid game_mechanic in lab_strategy should fall back to drag_sort."""
         plan_json = json.dumps({
             "concept_emphasis": "key point",
             "concept_approach": "visual",
@@ -85,7 +85,7 @@ class TestLessonPlannerAgent:
             agent = LessonPlannerAgent(llm=mock_llm)
             result = await agent.plan("Test", "desc", 5)
 
-        assert result["lab_strategy"]["game_mechanic"] == "exploration"
+        assert result["lab_strategy"]["game_mechanic"] == "drag_sort"
 
     @pytest.mark.asyncio
     async def test_process_returns_json_string(self):

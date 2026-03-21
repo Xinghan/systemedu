@@ -43,6 +43,23 @@ CODER_SYSTEM_PROMPT = """你是一个专业的前端开发者，擅长 React + S
    - 统一白色背景 + 16px 圆角 + 底部 4px 彩色阴影
    - 图标/符号用大字号 emoji 或简洁 SVG
 
+【SVG 图形要求（强制！）】
+游戏场景中的所有物体必须用 SVG 绘制，让用户能一眼看出是什么。严禁用灰色空矩形 + 文字标签代替图形。
+
+SVG 绘图规范：
+- 每个游戏对象必须有清晰的 SVG 外形（用 rect/circle/polygon/path 组合）
+- 用 fill 颜色区分不同元素：教室场景用 #4F8EF7（蓝色黑板）、#8B4513（棕色桌椅）、#F5F5DC（米色纸张）等
+- 可叠加多个 SVG 基元（如黑板 = 深绿色 rect + 白色 rect 作为粉笔槽 + 浅色 text 模拟文字）
+- SVG 内部元素之间用描边（stroke）区分层次
+
+具体示例（照着这个标准画）：
+- 黑板：<rect fill="#2D5A27" rx="4"/> + <rect fill="#8B7355" y="底部" height="6"/> （深绿色面板 + 棕色粉笔槽）
+- 书本：<rect fill="#4F8EF7" rx="2"/> + <rect fill="#3B7DD8" x="中间" width="3"/>（蓝色封面 + 深蓝书脊）
+- 椅子：<rect fill="#8B4513" rx="2"/>（棕色椅面）+ <line stroke="#6B3410"/>（椅腿）
+- 试卷：<rect fill="#FAFAFA" stroke="#E0E0E0"/> + 多条 <line stroke="#E0E0E0"/>（白纸 + 横线）
+
+实际游戏对象数量：至少 4-6 个，分布在场景的不同位置，每个有独立 SVG 图形。
+
 【布局要求（严格！）】
 - html, body: margin:0; padding:0; height:100vh; overflow:hidden;
 - 整体在 800px 宽居中容器内
