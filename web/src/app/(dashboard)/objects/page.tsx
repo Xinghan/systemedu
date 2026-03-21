@@ -133,22 +133,20 @@ export default function ObjectsPage() {
   }
 
   return (
-    <div className="p-6 max-w-4xl mx-auto space-y-8">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold">Object 库</h1>
-          <p className="text-sm text-muted-foreground mt-1">
-            已注册 {registry.length} 个 object，队列中 {staging.length} 个
-          </p>
-        </div>
-        <input
-          type="text"
-          placeholder="搜索..."
-          value={filter}
-          onChange={(e) => setFilter(e.target.value)}
-          className="border rounded-md px-3 py-1.5 text-sm bg-background w-48 focus:outline-none focus:ring-1 focus:ring-emerald-500"
-        />
+    <div className="p-6 max-w-4xl mx-auto space-y-6">
+      <div>
+        <h1 className="text-2xl font-bold">Object 库</h1>
+        <p className="text-sm text-muted-foreground mt-1">
+          已注册 {registry.length} 个 object，队列中 {staging.length} 个
+        </p>
       </div>
+      <input
+        type="text"
+        placeholder="搜索 object..."
+        value={filter}
+        onChange={(e) => setFilter(e.target.value)}
+        className="w-full border rounded-md px-3 py-2 text-sm bg-background focus:outline-none focus:ring-1 focus:ring-emerald-500"
+      />
 
       {loading && (
         <p className="text-muted-foreground text-sm">加载中...</p>

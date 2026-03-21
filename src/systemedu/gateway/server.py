@@ -1042,6 +1042,13 @@ async def api_generate_lesson(request: Request) -> JSONResponse:
     thread = threading.Thread(target=_run_and_cleanup, daemon=True)
     thread.start()
 
+    # Trigger object scan for this node (fire-and-forget, non-blocking)
+    try:
+        from systemedu.education.object_scan import scan_and_enqueue_unlocked_nodes
+        scan_and_enqueue_unlocked_nodes(name, [node_id])
+    except Exception:
+        logger.exception("api_generate_lesson: object scan failed (non-fatal)")
+
     return JSONResponse({"status": "generating", "project_name": name, "knode_id": node_id})
 
 

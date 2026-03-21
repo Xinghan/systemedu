@@ -1,19 +1,30 @@
-"""atom.bohr - Bohr model atom diagram (side/front view)."""
+"""atom.bohr - Bohr model atom diagram.
+
+High-fidelity rendering:
+- Dark background glow effect for space feel
+- Radial gradient nucleus (red-orange plasma look)
+- Tilted elliptical orbits for 3D perspective
+- Electron glow halos with radial gradient
+- Subtle orbit glow / trail effect
+- Output via RenderSpec.defs_svg + body_svg (raw SVG)
+"""
 
 from __future__ import annotations
 
 import math
 
 from systemedu.agents.builtin.gameagent.object_spec import (
-    EllipseShape,
     LabelAnchor,
-    PathShape,
     RenderSpec,
 )
 
 META = {
     "object_key": "atom.bohr",
-    "description": "玻尔原子模型图，包含原子核（质子+中子）和电子轨道。适合讲解原子结构和电子层概念。不包含具体元素分子结构、化学键、离子键等，也不涉及量子力学轨道模型。",
+    "description": (
+        "玻尔原子模型图，包含原子核（质子+中子）和电子轨道。"
+        "适合讲解原子结构和电子层概念。"
+        "不包含具体元素分子结构、化学键、离子键等，也不涉及量子力学轨道模型。"
+    ),
     "views": ["front"],
     "must_have": ["nucleus", "electron_shell_1", "electron_1"],
     "optional": ["electron_shell_2", "electron_shell_3", "electron_2", "electron_3", "proton", "neutron"],
@@ -77,107 +88,181 @@ META = {
 }
 
 
+def _e(cx, cy, rx, ry, fill, stroke="none", sw=1, opacity=1, **kw) -> str:
+    attrs = f'cx="{cx:.2f}" cy="{cy:.2f}" rx="{rx:.2f}" ry="{ry:.2f}" fill="{fill}" stroke="{stroke}" stroke-width="{sw}"'
+    if opacity != 1:
+        attrs += f' opacity="{opacity}"'
+    for k, v in kw.items():
+        attrs += f' {k.replace("_", "-")}="{v}"'
+    return f'<ellipse {attrs}/>'
+
+
+def _p(d, fill="none", stroke="none", sw=1, **kw) -> str:
+    attrs = f'fill="{fill}" stroke="{stroke}" stroke-width="{sw}"'
+    for k, v in kw.items():
+        attrs += f' {k.replace("_", "-")}="{v}"'
+    return f'<path d="{d}" {attrs}/>'
+
+
+def _g(part_id, content) -> str:
+    return f'<g data-part="{part_id}">{content}</g>'
+
+
 def build(view: str = "front", variant: str | None = None) -> RenderSpec:
-    """Build a Bohr model atom RenderSpec. Viewbox: 0 0 560 420."""
-    cx, cy = 280.0, 210.0
-    shells = [80.0, 140.0, 195.0]   # radii for 3 shells
-    nucleus_r = 28.0
+    """Build a high-fidelity Bohr atom. ViewBox: 0 0 560 420"""
+    W, H = 560, 420
+    cx, cy = W / 2, H / 2  # 280, 210
 
-    shapes: list = []
+    shells = [72.0, 128.0, 178.0]
+    tilt_factors = [0.36, 0.40, 0.44]    # ry = rx * factor for 3D tilt
+    nucleus_r = 26.0
+    e_r = 7.0
 
-    # shells (elliptical orbits, slightly tilted for 3D feel)
-    tilt_ry_factors = [0.38, 0.42, 0.45]
-    for i, (r, ry_f) in enumerate(zip(shells, tilt_ry_factors)):
-        part = f"electron_shell_{i+1}"
-        shapes.append(EllipseShape(
-            id=f"shell_{i+1}_ellipse", part_id=part,
-            cx=cx, cy=cy, rx=r, ry=r * ry_f,
-            fill="none", stroke="#90CAF9", stroke_width=1.5, opacity=0.7,
+    defs = f"""
+<radialGradient id="at_nucleus" cx="35%" cy="30%" r="65%">
+  <stop offset="0%" stop-color="#FFEE58"/>
+  <stop offset="35%" stop-color="#FF7043"/>
+  <stop offset="100%" stop-color="#B71C1C"/>
+</radialGradient>
+<radialGradient id="at_electron" cx="35%" cy="30%" r="65%">
+  <stop offset="0%" stop-color="#B3E5FC"/>
+  <stop offset="50%" stop-color="#29B6F6"/>
+  <stop offset="100%" stop-color="#0277BD"/>
+</radialGradient>
+<radialGradient id="at_proton" cx="35%" cy="30%" r="65%">
+  <stop offset="0%" stop-color="#FFCDD2"/>
+  <stop offset="60%" stop-color="#EF5350"/>
+  <stop offset="100%" stop-color="#B71C1C"/>
+</radialGradient>
+<radialGradient id="at_neutron" cx="35%" cy="30%" r="65%">
+  <stop offset="0%" stop-color="#E0E0E0"/>
+  <stop offset="60%" stop-color="#90A4AE"/>
+  <stop offset="100%" stop-color="#37474F"/>
+</radialGradient>
+<filter id="at_glow" x="-50%" y="-50%" width="200%" height="200%">
+  <feGaussianBlur stdDeviation="6" result="blur"/>
+  <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+</filter>
+<filter id="at_softglow" x="-30%" y="-30%" width="160%" height="160%">
+  <feGaussianBlur stdDeviation="3" result="blur"/>
+  <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+</filter>
+"""
+
+    parts = []
+
+    # ── Background space feel ──────────────────────────────────────────────
+    # subtle background circle for context
+    parts.append(_e(cx, cy, W * 0.46, H * 0.46, fill="#0D1B2A", opacity=0.15))
+
+    # ── Orbits (tilted ellipses) ────────────────────────────────────────────
+    shell_colors = ["#64B5F6", "#4FC3F7", "#81D4FA"]
+    for i, (r, tf, col) in enumerate(zip(shells, tilt_factors, shell_colors)):
+        pid = f"electron_shell_{i+1}"
+        ry = r * tf
+        # outer glow
+        parts.append(_g(pid,
+            _e(cx, cy, r + 3, ry + 3, fill="none", stroke=col, sw=6, opacity=0.1) +
+            _e(cx, cy, r, ry, fill="none", stroke=col, sw=1.5, opacity=0.65)
         ))
 
-    # nucleus glow
-    shapes.append(EllipseShape(
-        id="nucleus_glow", part_id=None,
-        cx=cx, cy=cy, rx=nucleus_r + 12, ry=nucleus_r + 12,
-        fill="#FF8F00", opacity=0.2,
+    # ── Nucleus glow aura ────────────────────────────────────────────────────
+    parts.append(_e(cx, cy, nucleus_r + 22, nucleus_r + 22,
+                    fill="#FF7043", opacity=0.12, filter="url(#at_glow)"))
+    parts.append(_e(cx, cy, nucleus_r + 12, nucleus_r + 12,
+                    fill="#FF7043", opacity=0.2))
+
+    # ── Nucleus ──────────────────────────────────────────────────────────────
+    parts.append(_g("nucleus",
+        _e(cx, cy, nucleus_r, nucleus_r, fill="url(#at_nucleus)",
+           stroke="#E65100", sw=1.5)
     ))
 
-    # nucleus
-    shapes.append(EllipseShape(
-        id="nucleus_circle", part_id="nucleus",
-        cx=cx, cy=cy, rx=nucleus_r, ry=nucleus_r,
-        fill="#FF6F00", stroke="#E65100", stroke_width=2.0,
-    ))
-
-    # proton / neutron inside nucleus (small dots)
-    for i, (px, py, pcolor, pid) in enumerate([
-        (cx - 8, cy - 6, "#EF5350", "proton"),
-        (cx + 7, cy + 5, "#EF5350", None),
-        (cx - 5, cy + 8, "#78909C", "neutron"),
-        (cx + 6, cy - 7, "#78909C", None),
-    ]):
-        shapes.append(EllipseShape(
-            id=f"nucleus_particle_{i}", part_id=pid,
-            cx=px, cy=py, rx=7, ry=7,
-            fill=pcolor, stroke=None, opacity=0.9,
-        ))
-
-    # electrons on each shell
-    electron_positions = [
-        # shell 1: 2 electrons at 0 and 180 deg
-        [(0, 0), (180, 0)],
-        # shell 2: 4 electrons at 45/135/225/315
-        [(45, 1), (135, 1), (225, 1), (315, 1)],
-        # shell 3: 3 electrons at 60/180/300
-        [(60, 2), (180, 2), (300, 2)],
+    # proton / neutron clusters inside nucleus
+    pn_positions = [
+        (cx - 8, cy - 7, "proton", "at_proton"),
+        (cx + 7, cy + 6, "proton", "at_proton"),
+        (cx - 5, cy + 8, "neutron", "at_neutron"),
+        (cx + 6, cy - 7, "neutron", "at_neutron"),
     ]
-    e_count = 0
-    for shell_electrons in electron_positions:
-        for angle_deg, shell_idx in shell_electrons:
-            a = math.radians(angle_deg)
-            r = shells[shell_idx]
-            ry_f = tilt_ry_factors[shell_idx]
-            ex = cx + r * math.cos(a)
-            ey = cy + r * ry_f * math.sin(a)
-            e_count += 1
-            pid = f"electron_{min(e_count, 3)}" if e_count <= 3 else None
-            shapes.append(EllipseShape(
-                id=f"electron_{e_count}", part_id=pid,
-                cx=ex, cy=ey, rx=7, ry=7,
-                fill="#42A5F5", stroke="#0D47A1", stroke_width=1.2,
-            ))
-            # glow
-            shapes.append(EllipseShape(
-                id=f"electron_{e_count}_glow", part_id=None,
-                cx=ex, cy=ey, rx=12, ry=12,
-                fill="#42A5F5", opacity=0.25,
-            ))
+    for i, (px, py, pid, grad) in enumerate(pn_positions):
+        actual_pid = pid if i in (0, 2) else None
+        parts.append(_g(actual_pid or "nucleus",
+            _e(px, py, 7.5, 7.5, fill=f"url(#{grad})", stroke="#00000033", sw=0.5)
+        ) if actual_pid else
+            _e(px, py, 7.5, 7.5, fill=f"url(#{grad})", stroke="#00000033", sw=0.5)
+        )
 
-    # nucleus label line
-    shapes.append(PathShape(
-        id="nucleus_label_line", part_id=None,
-        d=f"M {cx + nucleus_r} {cy} L {cx + nucleus_r + 30} {cy - 20}",
-        fill="none", stroke="#FF8F00", stroke_width=1.0, opacity=0.5,
-    ))
+    # ── Electrons ────────────────────────────────────────────────────────────
+    electron_positions = [
+        (0,   0),   # shell 1
+        (180, 0),
+        (45,  1),   # shell 2
+        (135, 1),
+        (225, 1),
+        (315, 1),
+        (60,  2),   # shell 3
+        (180, 2),
+        (300, 2),
+    ]
+    labeled = ["electron_1", "electron_2", "electron_3"]
+    for i, (angle_deg, sh_idx) in enumerate(electron_positions):
+        a = math.radians(angle_deg)
+        r = shells[sh_idx]
+        ry = r * tilt_factors[sh_idx]
+        ex = cx + r * math.cos(a)
+        ey = cy + ry * math.sin(a)
+        pid = labeled[i] if i < 3 else None
+        # glow halo
+        parts.append(_e(ex, ey, e_r + 8, e_r + 8, fill="#29B6F6", opacity=0.18))
+        # electron
+        e_content = _e(ex, ey, e_r, e_r, fill="url(#at_electron)",
+                       stroke="#0277BD", sw=1.0)
+        # catchlight
+        e_content += _e(ex - 2.5, ey - 2.5, 2, 2, fill="white", opacity=0.7)
+        if pid:
+            parts.append(_g(pid, e_content))
+        else:
+            parts.append(e_content)
+
+    body_svg = "\n".join(str(p) for p in parts)
+
+    # ── Anchors (% of 560x420) ────────────────────────────────────────────────
+    def px(x): return round(x / W * 100, 1)
+    def py(y): return round(y / H * 100, 1)
+
+    # compute representative electron positions for anchors
+    s0x = cx + shells[0] * math.cos(0)
+    s0y = cy + shells[0] * tilt_factors[0] * math.sin(0)
+    s1x = cx + shells[1] * math.cos(math.radians(45))
+    s1y = cy + shells[1] * tilt_factors[1] * math.sin(math.radians(45))
+    s2x = cx + shells[2] * math.cos(math.radians(60))
+    s2y = cy + shells[2] * tilt_factors[2] * math.sin(math.radians(60))
 
     anchors = [
-        LabelAnchor(part_id="nucleus",          x=50.0, y=50.0),
-        LabelAnchor(part_id="proton",           x=44.0, y=43.0),
-        LabelAnchor(part_id="neutron",          x=56.0, y=57.0),
-        LabelAnchor(part_id="electron_shell_1", x=72.0, y=40.0),
-        LabelAnchor(part_id="electron_shell_2", x=80.0, y=35.0),
-        LabelAnchor(part_id="electron_shell_3", x=88.0, y=30.0),
-        LabelAnchor(part_id="electron_1",       x=64.0, y=24.0),
-        LabelAnchor(part_id="electron_2",       x=74.0, y=54.0),
-        LabelAnchor(part_id="electron_3",       x=24.0, y=56.0),
+        LabelAnchor(part_id="nucleus",          x=px(cx + nucleus_r + 12), y=py(cy - 10)),
+        LabelAnchor(part_id="proton",           x=px(cx - 8 + 12),          y=py(cy - 7 - 12)),
+        LabelAnchor(part_id="neutron",          x=px(cx - 5 - 14),          y=py(cy + 8 + 10)),
+        LabelAnchor(part_id="electron_shell_1", x=px(cx + shells[0] + 12),  y=py(cy - shells[0] * tilt_factors[0] - 10)),
+        LabelAnchor(part_id="electron_shell_2", x=px(cx + shells[1] + 14),  y=py(cy - shells[1] * tilt_factors[1] - 10)),
+        LabelAnchor(part_id="electron_shell_3", x=px(cx + shells[2] + 16),  y=py(cy - shells[2] * tilt_factors[2] - 10)),
+        LabelAnchor(part_id="electron_1",       x=px(s0x + 12),             y=py(s0y - 12)),
+        LabelAnchor(part_id="electron_2",       x=px(s1x + 12),             y=py(s1y - 12)),
+        LabelAnchor(part_id="electron_3",       x=px(s2x + 12),             y=py(s2y - 12)),
     ]
 
-    rendered_parts = list({s.part_id for s in shapes if s.part_id})
+    rendered_parts = [
+        "nucleus", "proton", "neutron",
+        "electron_shell_1", "electron_shell_2", "electron_shell_3",
+        "electron_1", "electron_2", "electron_3",
+    ]
 
     return RenderSpec(
         object_key="atom.bohr",
-        viewbox="0 0 560 420",
-        shapes=shapes,
+        viewbox=f"0 0 {W} {H}",
+        shapes=[],
         anchors=anchors,
         rendered_parts=rendered_parts,
+        defs_svg=defs.strip(),
+        body_svg=body_svg,
     )

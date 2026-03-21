@@ -1,28 +1,28 @@
 """rocket.basic - side-view educational 2D rocket.
 
-Semantic layer: parts definition, must-have list, labels/descriptions
-Geometry layer: parameterized shape builder
+High-fidelity rendering:
+- Smooth bezier nose cone (ogive profile)
+- Metallic body with radial highlight gradient
+- Swept delta fins with perspective shading
+- Multi-bell nozzle with rim glow
+- Layered flame with opacity gradient
+- Output via RenderSpec.defs_svg + body_svg (raw SVG)
 """
 
 from __future__ import annotations
 
 from systemedu.agents.builtin.gameagent.object_spec import (
-    EllipseShape,
     LabelAnchor,
-    LineShape,
-    PathShape,
-    PolygonShape,
-    RectShape,
     RenderSpec,
 )
 
-# ---------------------------------------------------------------------------
-# Semantic layer
-# ---------------------------------------------------------------------------
-
 META = {
     "object_key": "rocket.basic",
-    "description": "火箭整体侧视外观图，包含鼻锥、箭体、尾翼、发动机喷嘴。适合讲解火箭整体结构和各部件名称。不包含发动机内部燃烧室、燃料箱内部、制导系统、级间分离机构等内部细节。",
+    "description": (
+        "火箭整体侧视外观图，包含鼻锥、箭体、尾翼、发动机喷嘴。"
+        "适合讲解火箭整体结构和各部件名称。"
+        "不包含发动机内部燃烧室、燃料箱内部、制导系统、级间分离机构等内部细节。"
+    ),
     "views": ["side"],
     "must_have": ["nose_cone", "body", "left_fin", "right_fin", "engine_nozzle"],
     "optional": ["window", "interstage", "grid_fin_left", "grid_fin_right", "flame"],
@@ -95,272 +95,219 @@ META = {
 }
 
 
-# ---------------------------------------------------------------------------
-# Geometry layer
-# ---------------------------------------------------------------------------
+def _p(d, fill="none", stroke="none", sw=1, **kw) -> str:
+    attrs = f'fill="{fill}" stroke="{stroke}" stroke-width="{sw}"'
+    for k, v in kw.items():
+        attrs += f' {k.replace("_", "-")}="{v}"'
+    return f'<path d="{d}" {attrs}/>'
+
+
+def _g(part_id, content) -> str:
+    return f'<g data-part="{part_id}">{content}</g>'
+
 
 def build(view: str = "side", variant: str | None = None) -> RenderSpec:
-    """Build a side-view rocket RenderSpec.
+    """Build a high-fidelity side-view rocket. ViewBox: 0 0 420 580"""
+    W, H = 420, 580
+    cx = W / 2  # 210
 
-    Viewbox: 0 0 560 420
-    Rocket centered at x=280, occupying roughly y=20..390
-    """
-    if view != "side":
-        raise ValueError(f"rocket.basic only supports view='side', got {view!r}")
+    # proportions
+    bw = 60.0           # body half-width * 2
+    bx = cx - bw / 2   # 180
+    body_top = 100.0
+    body_bot = 370.0
+    body_h = body_bot - body_top
+    nose_tip_y = 18.0
+    interstage_y = body_top + body_h * 0.62  # ~275
+    fin_start_y = body_top + body_h * 0.68   # ~290
+    nozzle_top = body_bot
+    nozzle_bot = body_bot + 38.0
+    flame_top = nozzle_bot
+    flame_bot = flame_top + 80.0
 
-    # Geometry constants (all in viewbox units, 560x420)
-    cx = 280.0          # horizontal center
-    body_x = cx - 30   # body left edge
-    body_y = 90.0       # body top
-    body_w = 60.0
-    body_h = 200.0
-    nose_tip_y = 20.0
-    interstage_y = body_y + body_h * 0.62   # ~214
-    fin_y_start = body_y + body_h * 0.72    # ~234
-    fin_y_end = body_y + body_h             # 290
-    nozzle_top_y = body_y + body_h          # 290
-    nozzle_h = 32.0
+    # defs
+    defs = f"""
+<linearGradient id="rk_body" x1="0" y1="0" x2="1" y2="0">
+  <stop offset="0%" stop-color="#8EAFC0"/>
+  <stop offset="18%" stop-color="#D6E8F0"/>
+  <stop offset="35%" stop-color="#F0F8FF"/>
+  <stop offset="60%" stop-color="#C8DCE8"/>
+  <stop offset="100%" stop-color="#7090A8"/>
+</linearGradient>
+<linearGradient id="rk_nose" x1="0" y1="0" x2="1" y2="0">
+  <stop offset="0%" stop-color="#7090A0"/>
+  <stop offset="30%" stop-color="#E0EEF4"/>
+  <stop offset="100%" stop-color="#506878"/>
+</linearGradient>
+<linearGradient id="rk_fin_l" x1="1" y1="0" x2="0" y2="0">
+  <stop offset="0%" stop-color="#506880"/>
+  <stop offset="100%" stop-color="#283848"/>
+</linearGradient>
+<linearGradient id="rk_fin_r" x1="0" y1="0" x2="1" y2="0">
+  <stop offset="0%" stop-color="#506880"/>
+  <stop offset="100%" stop-color="#283848"/>
+</linearGradient>
+<linearGradient id="rk_nozzle" x1="0" y1="0" x2="1" y2="0">
+  <stop offset="0%" stop-color="#1A2830"/>
+  <stop offset="40%" stop-color="#486070"/>
+  <stop offset="100%" stop-color="#1A2830"/>
+</linearGradient>
+<radialGradient id="rk_flame_outer" cx="50%" cy="0%" r="70%">
+  <stop offset="0%" stop-color="#FFEE58"/>
+  <stop offset="40%" stop-color="#FF6F00"/>
+  <stop offset="100%" stop-color="#FF3300" stop-opacity="0"/>
+</radialGradient>
+<radialGradient id="rk_flame_core" cx="50%" cy="5%" r="60%">
+  <stop offset="0%" stop-color="#FFFFFF"/>
+  <stop offset="30%" stop-color="#FFFDE7"/>
+  <stop offset="100%" stop-color="#FF8F00" stop-opacity="0"/>
+</radialGradient>
+<filter id="rk_glow">
+  <feGaussianBlur stdDeviation="4" result="blur"/>
+  <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+</filter>
+"""
 
-    shapes: list = []
+    parts = []
 
-    # --- body ---
-    shapes.append(RectShape(
-        id="body_rect",
-        part_id="body",
-        x=body_x, y=body_y, w=body_w, h=body_h,
-        rx=4,
-        fill="#B0BEC5",
-        stroke="#78909C",
-        stroke_width=1.5,
+    # ── Flame ────────────────────────────────────────────────────────────────
+    # outer flame lobe
+    fd = (f"M {cx-22:.1f},{flame_top:.1f} "
+          f"C {cx-28:.1f},{flame_top+30:.1f} {cx-10:.1f},{flame_bot-5:.1f} {cx:.1f},{flame_bot:.1f} "
+          f"C {cx+10:.1f},{flame_bot-5:.1f} {cx+28:.1f},{flame_top+30:.1f} {cx+22:.1f},{flame_top:.1f} Z")
+    parts.append(_g("flame",
+        _p(fd, fill="url(#rk_flame_outer)", stroke="none") +
+        # inner bright core
+        _p(f"M {cx-12:.1f},{flame_top:.1f} "
+           f"C {cx-14:.1f},{flame_top+20:.1f} {cx-5:.1f},{flame_top+55:.1f} {cx:.1f},{flame_top+70:.1f} "
+           f"C {cx+5:.1f},{flame_top+55:.1f} {cx+14:.1f},{flame_top+20:.1f} {cx+12:.1f},{flame_top:.1f} Z",
+           fill="url(#rk_flame_core)", stroke="none")
     ))
 
-    # body highlight stripe (shading, no part_id)
-    shapes.append(RectShape(
-        id="body_highlight",
-        part_id=None,
-        x=body_x + 8, y=body_y + 10, w=10, h=body_h - 20,
-        rx=5,
-        fill="#ECEFF1",
-        opacity=0.5,
+    # ── Left fin ─────────────────────────────────────────────────────────────
+    lf_d = (f"M {bx:.1f},{fin_start_y:.1f} "
+            f"L {bx:.1f},{body_bot:.1f} "
+            f"L {bx-52:.1f},{body_bot+8:.1f} "
+            f"C {bx-58:.1f},{body_bot-20:.1f} {bx-20:.1f},{fin_start_y+30:.1f} {bx:.1f},{fin_start_y:.1f} Z")
+    parts.append(_g("left_fin",
+        _p(lf_d, fill="url(#rk_fin_l)", stroke="#283848", sw=1.2) +
+        # rim highlight
+        _p(f"M {bx:.1f},{fin_start_y:.1f} C {bx-4:.1f},{fin_start_y+40:.1f} {bx-8:.1f},{body_bot-20:.1f} {bx:.1f},{body_bot:.1f}",
+           stroke="#7090A8", sw=1.5, stroke_linecap="round")
     ))
 
-    # --- nose cone (triangle) ---
-    shapes.append(PolygonShape(
-        id="nose_cone_poly",
-        part_id="nose_cone",
-        points=[
-            (body_x, body_y),
-            (body_x + body_w, body_y),
-            (cx, nose_tip_y),
-        ],
-        fill="#78909C",
-        stroke="#546E7A",
-        stroke_width=1.5,
+    # ── Right fin ────────────────────────────────────────────────────────────
+    rx2 = bx + bw
+    rf_d = (f"M {rx2:.1f},{fin_start_y:.1f} "
+            f"L {rx2:.1f},{body_bot:.1f} "
+            f"L {rx2+52:.1f},{body_bot+8:.1f} "
+            f"C {rx2+58:.1f},{body_bot-20:.1f} {rx2+20:.1f},{fin_start_y+30:.1f} {rx2:.1f},{fin_start_y:.1f} Z")
+    parts.append(_g("right_fin",
+        _p(rf_d, fill="url(#rk_fin_r)", stroke="#283848", sw=1.2) +
+        _p(f"M {rx2:.1f},{fin_start_y:.1f} C {rx2+4:.1f},{fin_start_y+40:.1f} {rx2+8:.1f},{body_bot-20:.1f} {rx2:.1f},{body_bot:.1f}",
+           stroke="#7090A8", sw=1.5, stroke_linecap="round")
     ))
 
-    # nose cone inner shading
-    shapes.append(PolygonShape(
-        id="nose_cone_shade",
-        part_id=None,
-        points=[
-            (body_x + 10, body_y),
-            (body_x + 18, body_y),
-            (cx - 2, nose_tip_y + 18),
-        ],
-        fill="#ECEFF1",
-        opacity=0.3,
+    # ── Nozzle ───────────────────────────────────────────────────────────────
+    noz_tw, noz_bw = 44.0, 54.0
+    noz_d = (f"M {cx-noz_tw/2:.1f},{nozzle_top:.1f} "
+             f"C {cx-noz_tw/2:.1f},{nozzle_top+18:.1f} {cx-noz_bw/2:.1f},{nozzle_bot-8:.1f} {cx-noz_bw/2:.1f},{nozzle_bot:.1f} "
+             f"L {cx+noz_bw/2:.1f},{nozzle_bot:.1f} "
+             f"C {cx+noz_bw/2:.1f},{nozzle_bot-8:.1f} {cx+noz_tw/2:.1f},{nozzle_top+18:.1f} {cx+noz_tw/2:.1f},{nozzle_top:.1f} Z")
+    parts.append(_g("engine_nozzle",
+        _p(noz_d, fill="url(#rk_nozzle)", stroke="#0A1820", sw=1.5) +
+        # inner rim glow
+        _p(f"M {cx-noz_bw/2+4:.1f},{nozzle_bot:.1f} L {cx+noz_bw/2-4:.1f},{nozzle_bot:.1f}",
+           stroke="#FF8F00", sw=3, stroke_linecap="round", opacity="0.7", filter="url(#rk_glow)")
     ))
 
-    # --- window ---
-    shapes.append(EllipseShape(
-        id="window_ellipse",
-        part_id="window",
-        cx=cx, cy=body_y + 46,
-        rx=12, ry=12,
-        fill="#80DEEA",
-        stroke="#4DD0E1",
-        stroke_width=2.0,
-    ))
-    # window glare
-    shapes.append(EllipseShape(
-        id="window_glare",
-        part_id=None,
-        cx=cx - 4, cy=body_y + 41,
-        rx=4, ry=3,
-        fill="#FFFFFF",
-        opacity=0.5,
+    # ── Body ─────────────────────────────────────────────────────────────────
+    body_d = (f"M {bx:.1f},{body_top:.1f} L {bx+bw:.1f},{body_top:.1f} "
+              f"L {bx+bw:.1f},{body_bot:.1f} L {bx:.1f},{body_bot:.1f} Z")
+    parts.append(_g("body",
+        _p(body_d, fill="url(#rk_body)", stroke="#5A7888", sw=1.5) +
+        # panel line 1
+        _p(f"M {bx:.1f},{body_top+90:.1f} L {bx+bw:.1f},{body_top+90:.1f}",
+           stroke="#90B0C0", sw=0.8, opacity="0.5") +
+        # panel line 2
+        _p(f"M {bx:.1f},{body_top+160:.1f} L {bx+bw:.1f},{body_top+160:.1f}",
+           stroke="#90B0C0", sw=0.8, opacity="0.5")
     ))
 
-    # --- interstage stripe ---
-    shapes.append(RectShape(
-        id="interstage_rect",
-        part_id="interstage",
-        x=body_x, y=interstage_y, w=body_w, h=10,
-        fill="#546E7A",
-        stroke="#37474F",
-        stroke_width=1.0,
+    # ── Interstage band ───────────────────────────────────────────────────────
+    parts.append(_g("interstage",
+        f'<rect x="{bx:.1f}" y="{interstage_y:.1f}" width="{bw:.1f}" height="10" '
+        f'fill="#2C4A60" stroke="#1A2E3C" stroke-width="1"/>' +
+        f'<rect x="{bx:.1f}" y="{interstage_y:.1f}" width="{bw:.1f}" height="3" '
+        f'fill="#4A6C80" opacity="0.6"/>'
     ))
 
-    # --- grid fins (small, above main fins) ---
-    gf_w = 14.0
-    gf_h = 18.0
-    gf_y = interstage_y - gf_h - 4
+    # ── Grid fins ─────────────────────────────────────────────────────────────
+    gf_w, gf_h = 16.0, 20.0
+    gf_y = interstage_y - gf_h - 2
+    for pid, gx in [("grid_fin_left", bx - gf_w), ("grid_fin_right", bx + bw)]:
+        cells = ""
+        for col in range(3):
+            for row in range(3):
+                cells += (f'<rect x="{gx + col*(gf_w/3):.1f}" y="{gf_y + row*(gf_h/3):.1f}" '
+                          f'width="{gf_w/3:.1f}" height="{gf_h/3:.1f}" '
+                          f'fill="#3A5868" stroke="#283848" stroke-width="0.6"/>')
+        parts.append(_g(pid, cells))
 
-    shapes.append(RectShape(
-        id="grid_fin_left_rect",
-        part_id="grid_fin_left",
-        x=body_x - gf_w, y=gf_y, w=gf_w, h=gf_h,
-        rx=2,
-        fill="#546E7A",
-        stroke="#37474F",
-        stroke_width=1.0,
-    ))
-    # grid pattern lines inside left grid fin
-    for i in range(1, 3):
-        shapes.append(LineShape(
-            id=f"grid_fin_left_v{i}",
-            part_id=None,
-            x1=body_x - gf_w + gf_w * i / 3,
-            y1=gf_y,
-            x2=body_x - gf_w + gf_w * i / 3,
-            y2=gf_y + gf_h,
-            stroke="#78909C",
-            stroke_width=0.8,
-        ))
-
-    shapes.append(RectShape(
-        id="grid_fin_right_rect",
-        part_id="grid_fin_right",
-        x=body_x + body_w, y=gf_y, w=gf_w, h=gf_h,
-        rx=2,
-        fill="#546E7A",
-        stroke="#37474F",
-        stroke_width=1.0,
-    ))
-    for i in range(1, 3):
-        shapes.append(LineShape(
-            id=f"grid_fin_right_v{i}",
-            part_id=None,
-            x1=body_x + body_w + gf_w * i / 3,
-            y1=gf_y,
-            x2=body_x + body_w + gf_w * i / 3,
-            y2=gf_y + gf_h,
-            stroke="#78909C",
-            stroke_width=0.8,
-        ))
-
-    # --- left fin (swept triangle) ---
-    shapes.append(PolygonShape(
-        id="left_fin_poly",
-        part_id="left_fin",
-        points=[
-            (body_x, fin_y_start),
-            (body_x, fin_y_end),
-            (body_x - 38, fin_y_end),
-        ],
-        fill="#546E7A",
-        stroke="#37474F",
-        stroke_width=1.5,
+    # ── Window ───────────────────────────────────────────────────────────────
+    win_cy = body_top + 54
+    parts.append(_g("window",
+        f'<ellipse cx="{cx}" cy="{win_cy}" rx="14" ry="14" '
+        f'fill="#1A3A50" stroke="#4A90B8" stroke-width="2.5"/>' +
+        f'<ellipse cx="{cx}" cy="{win_cy}" rx="12" ry="12" fill="#2A6090" opacity="0.85"/>' +
+        # window glare
+        f'<ellipse cx="{cx-4}" cy="{win_cy-5}" rx="5" ry="4" fill="white" opacity="0.45"/>' +
+        f'<ellipse cx="{cx+4}" cy="{win_cy+4}" rx="2" ry="1.5" fill="white" opacity="0.2"/>'
     ))
 
-    # --- right fin ---
-    shapes.append(PolygonShape(
-        id="right_fin_poly",
-        part_id="right_fin",
-        points=[
-            (body_x + body_w, fin_y_start),
-            (body_x + body_w, fin_y_end),
-            (body_x + body_w + 38, fin_y_end),
-        ],
-        fill="#546E7A",
-        stroke="#37474F",
-        stroke_width=1.5,
+    # ── Nose cone (ogive bezier) ──────────────────────────────────────────────
+    nc_d = (f"M {bx:.1f},{body_top:.1f} "
+            f"C {bx:.1f},{body_top-20:.1f} {cx-8:.1f},{nose_tip_y+30:.1f} {cx:.1f},{nose_tip_y:.1f} "
+            f"C {cx+8:.1f},{nose_tip_y+30:.1f} {bx+bw:.1f},{body_top-20:.1f} {bx+bw:.1f},{body_top:.1f} Z")
+    parts.append(_g("nose_cone",
+        _p(nc_d, fill="url(#rk_nose)", stroke="#405868", sw=1.5) +
+        # highlight band
+        _p(f"M {bx+8:.1f},{body_top:.1f} "
+           f"C {bx+8:.1f},{body_top-14:.1f} {cx-4:.1f},{nose_tip_y+22:.1f} {cx-2:.1f},{nose_tip_y+8:.1f}",
+           stroke="white", sw=2.5, stroke_linecap="round", opacity="0.3")
     ))
 
-    # --- engine nozzle (trapezoid via polygon) ---
-    nozzle_top_w = body_w - 10
-    nozzle_bot_w = body_w - 20
-    nozzle_top_x = cx - nozzle_top_w / 2
-    nozzle_bot_x = cx - nozzle_bot_w / 2
+    body_svg = "\n".join(parts)
 
-    shapes.append(PolygonShape(
-        id="engine_nozzle_poly",
-        part_id="engine_nozzle",
-        points=[
-            (nozzle_top_x, nozzle_top_y),
-            (nozzle_top_x + nozzle_top_w, nozzle_top_y),
-            (nozzle_bot_x + nozzle_bot_w, nozzle_top_y + nozzle_h),
-            (nozzle_bot_x, nozzle_top_y + nozzle_h),
-        ],
-        fill="#37474F",
-        stroke="#263238",
-        stroke_width=1.5,
-    ))
+    # ── Anchors (% of 420x580) ────────────────────────────────────────────────
+    def px(x): return round(x / W * 100, 1)
+    def py(y): return round(y / H * 100, 1)
 
-    # nozzle inner bell curve (path)
-    noz_cx = cx
-    noz_top = nozzle_top_y + 4
-    noz_bot = nozzle_top_y + nozzle_h - 2
-    shapes.append(PathShape(
-        id="engine_nozzle_inner",
-        part_id=None,
-        d=f"M {noz_cx - 10} {noz_top} Q {noz_cx - 14} {(noz_top+noz_bot)/2} {noz_cx - 8} {noz_bot}",
-        fill="none",
-        stroke="#546E7A",
-        stroke_width=1.0,
-    ))
-
-    # --- flame (optional, always included as decorative) ---
-    flame_y = nozzle_top_y + nozzle_h
-    shapes.append(PolygonShape(
-        id="flame_outer",
-        part_id="flame",
-        points=[
-            (cx - 14, flame_y),
-            (cx + 14, flame_y),
-            (cx + 6, flame_y + 45),
-            (cx, flame_y + 60),
-            (cx - 6, flame_y + 45),
-        ],
-        fill="#FF6F00",
-        opacity=0.85,
-    ))
-    shapes.append(PolygonShape(
-        id="flame_inner",
-        part_id=None,
-        points=[
-            (cx - 7, flame_y),
-            (cx + 7, flame_y),
-            (cx + 3, flame_y + 28),
-            (cx, flame_y + 38),
-            (cx - 3, flame_y + 28),
-        ],
-        fill="#FFF176",
-        opacity=0.9,
-    ))
-
-    # ---------------------------------------------------------------------------
-    # Label anchors (% of 560x420 viewbox)
-    # ---------------------------------------------------------------------------
     anchors = [
-        LabelAnchor(part_id="nose_cone",       x=50.0, y=10.0),
-        LabelAnchor(part_id="body",            x=64.0, y=38.0),
-        LabelAnchor(part_id="window",          x=64.0, y=26.0),
-        LabelAnchor(part_id="interstage",      x=64.0, y=53.0),
-        LabelAnchor(part_id="left_fin",        x=28.0, y=70.0),
-        LabelAnchor(part_id="right_fin",       x=72.0, y=70.0),
-        LabelAnchor(part_id="grid_fin_left",   x=36.0, y=47.0),
-        LabelAnchor(part_id="grid_fin_right",  x=64.0, y=47.0),
-        LabelAnchor(part_id="engine_nozzle",   x=50.0, y=74.0),
-        LabelAnchor(part_id="flame",           x=50.0, y=88.0),
+        LabelAnchor(part_id="nose_cone",      x=px(cx + 28), y=py(nose_tip_y + 28)),
+        LabelAnchor(part_id="body",           x=px(bx + bw + 20), y=py(body_top + 90)),
+        LabelAnchor(part_id="window",         x=px(bx + bw + 20), y=py(win_cy)),
+        LabelAnchor(part_id="interstage",     x=px(bx + bw + 20), y=py(interstage_y + 5)),
+        LabelAnchor(part_id="left_fin",       x=px(bx - 36), y=py(fin_start_y + 60)),
+        LabelAnchor(part_id="right_fin",      x=px(rx2 + 36), y=py(fin_start_y + 60)),
+        LabelAnchor(part_id="grid_fin_left",  x=px(bx - gf_w - 16), y=py(gf_y + 10)),
+        LabelAnchor(part_id="grid_fin_right", x=px(bx + bw + gf_w + 16), y=py(gf_y + 10)),
+        LabelAnchor(part_id="engine_nozzle",  x=px(cx + 36), y=py(nozzle_bot - 10)),
+        LabelAnchor(part_id="flame",          x=px(cx + 24), y=py(flame_top + 50)),
     ]
 
-    rendered_parts = list({s.part_id for s in shapes if s.part_id})
+    rendered_parts = [
+        "nose_cone", "body", "window", "interstage",
+        "left_fin", "right_fin", "grid_fin_left", "grid_fin_right",
+        "engine_nozzle", "flame",
+    ]
 
     return RenderSpec(
         object_key="rocket.basic",
-        viewbox="0 0 560 420",
-        shapes=shapes,
+        viewbox=f"0 0 {W} {H}",
+        shapes=[],
         anchors=anchors,
         rendered_parts=rendered_parts,
+        defs_svg=defs.strip(),
+        body_svg=body_svg,
     )

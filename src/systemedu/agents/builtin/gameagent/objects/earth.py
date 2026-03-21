@@ -1,17 +1,30 @@
-"""earth.basic - cross-section / front view educational earth diagram."""
+"""earth.basic - cross-section educational earth diagram.
+
+High-fidelity rendering:
+- Concentric layer circles with radial gradients
+- Realistic layer colors (hot core → cool crust)
+- Visible cross-section wedge showing layers
+- Atmospheric glow ring
+- Stylized ocean + land masses on exterior
+- Output via RenderSpec.defs_svg + body_svg (raw SVG)
+"""
 
 from __future__ import annotations
 
+import math
+
 from systemedu.agents.builtin.gameagent.object_spec import (
-    EllipseShape,
     LabelAnchor,
-    PathShape,
     RenderSpec,
 )
 
 META = {
     "object_key": "earth.basic",
-    "description": "地球圈层剖面图，包含地壳、地幔、外核、内核及大气层、海洋、陆地。适合讲解地球内部圈层结构。不包含板块构造细节、火山截面、大气各层详细划分、水循环等专题内容。",
+    "description": (
+        "地球圈层剖面图，包含地壳、地幔、外核、内核及大气层、海洋、陆地。"
+        "适合讲解地球内部圈层结构。"
+        "不包含板块构造细节、火山截面、大气各层详细划分、水循环等专题内容。"
+    ),
     "views": ["front"],
     "must_have": ["crust", "mantle", "outer_core", "inner_core"],
     "optional": ["atmosphere", "ocean", "land_mass", "satellite"],
@@ -66,126 +79,184 @@ META = {
 }
 
 
+def _e(cx, cy, rx, ry, fill, stroke="none", sw=1, opacity=1, **kw) -> str:
+    attrs = f'cx="{cx:.2f}" cy="{cy:.2f}" rx="{rx:.2f}" ry="{ry:.2f}" fill="{fill}" stroke="{stroke}" stroke-width="{sw}"'
+    if opacity != 1:
+        attrs += f' opacity="{opacity}"'
+    for k, v in kw.items():
+        attrs += f' {k.replace("_", "-")}="{v}"'
+    return f'<ellipse {attrs}/>'
+
+
+def _p(d, fill="none", stroke="none", sw=1, **kw) -> str:
+    attrs = f'fill="{fill}" stroke="{stroke}" stroke-width="{sw}"'
+    for k, v in kw.items():
+        attrs += f' {k.replace("_", "-")}="{v}"'
+    return f'<path d="{d}" {attrs}/>'
+
+
+def _g(part_id, content) -> str:
+    return f'<g data-part="{part_id}">{content}</g>'
+
+
 def build(view: str = "front", variant: str | None = None) -> RenderSpec:
-    """Build an earth cross-section RenderSpec. Viewbox: 0 0 560 420."""
-    cx, cy = 280.0, 210.0
-    r_inner_core = 36.0
-    r_outer_core = 72.0
-    r_mantle = 130.0
-    r_crust = 148.0
-    r_ocean = 154.0
-    r_atmos = 175.0
+    """Build a high-fidelity earth cross-section. ViewBox: 0 0 560 460"""
+    W, H = 560, 460
+    cx, cy = W / 2, H / 2   # 280, 230
 
-    shapes: list = []
+    # Layer radii (scaled to fit comfortably in viewbox)
+    r_inner = 38.0
+    r_outer  = 76.0
+    r_mantle = 140.0
+    r_crust  = 160.0
+    r_ocean  = 167.0
+    r_atmos  = 195.0
 
-    # atmosphere glow
-    shapes.append(EllipseShape(
-        id="atmosphere_glow", part_id="atmosphere",
-        cx=cx, cy=cy, rx=r_atmos + 14, ry=r_atmos + 14,
-        fill="#B3E5FC", opacity=0.25,
+    defs = f"""
+<radialGradient id="ea_inner" cx="35%" cy="30%" r="70%">
+  <stop offset="0%" stop-color="#FFFDE7"/>
+  <stop offset="40%" stop-color="#FFCC02"/>
+  <stop offset="100%" stop-color="#E65100"/>
+</radialGradient>
+<radialGradient id="ea_outer" cx="35%" cy="30%" r="70%">
+  <stop offset="0%" stop-color="#FFCC80"/>
+  <stop offset="50%" stop-color="#FF6F00"/>
+  <stop offset="100%" stop-color="#BF360C"/>
+</radialGradient>
+<radialGradient id="ea_mantle" cx="35%" cy="30%" r="70%">
+  <stop offset="0%" stop-color="#FF8A65"/>
+  <stop offset="55%" stop-color="#D84315"/>
+  <stop offset="100%" stop-color="#8B1A00"/>
+</radialGradient>
+<radialGradient id="ea_crust" cx="35%" cy="30%" r="70%">
+  <stop offset="0%" stop-color="#A5907E"/>
+  <stop offset="60%" stop-color="#6D4C41"/>
+  <stop offset="100%" stop-color="#3E2723"/>
+</radialGradient>
+<radialGradient id="ea_ocean" cx="38%" cy="32%" r="65%">
+  <stop offset="0%" stop-color="#64B5F6"/>
+  <stop offset="50%" stop-color="#1565C0"/>
+  <stop offset="100%" stop-color="#0D2B60"/>
+</radialGradient>
+<clipPath id="ea_globe_clip">
+  <circle cx="{cx:.1f}" cy="{cy:.1f}" r="{r_ocean:.1f}"/>
+</clipPath>
+"""
+
+    parts = []
+
+    # ── Atmosphere glow ───────────────────────────────────────────────────────
+    parts.append(_g("atmosphere",
+        _e(cx, cy, r_atmos + 18, r_atmos + 18, fill="#B3E5FC", opacity=0.18) +
+        _e(cx, cy, r_atmos, r_atmos, fill="none", stroke="#64B5F6", sw=6, opacity=0.22) +
+        _e(cx, cy, r_atmos, r_atmos, fill="none", stroke="#29B6F6", sw=2.5, opacity=0.45)
     ))
-    shapes.append(EllipseShape(
-        id="atmosphere_ring", part_id=None,
-        cx=cx, cy=cy, rx=r_atmos, ry=r_atmos,
-        fill="none", stroke="#4FC3F7", stroke_width=3.0, opacity=0.5,
+
+    # ── Ocean sphere ─────────────────────────────────────────────────────────
+    parts.append(_g("ocean",
+        _e(cx, cy, r_ocean, r_ocean, fill="url(#ea_ocean)")
     ))
 
-    # ocean (full sphere)
-    shapes.append(EllipseShape(
-        id="ocean_sphere", part_id="ocean",
-        cx=cx, cy=cy, rx=r_ocean, ry=r_ocean,
-        fill="#1565C0", opacity=0.75,
-    ))
-
-    # land masses (irregular ellipses on top)
-    import math
+    # ── Land masses (clipped to globe) ────────────────────────────────────────
     land_positions = [
-        (cx - 30, cy - 50, 38, 24, -20),
-        (cx + 55, cy - 20, 28, 38, 10),
-        (cx - 60, cy + 40, 22, 18, 15),
-        (cx + 10, cy + 55, 30, 16, -5),
+        # (lx, ly, lrx, lry, rotation_deg)
+        (cx - 28, cy - 60, 44, 28, -18),
+        (cx + 62, cy - 18, 32, 44, 12),
+        (cx - 62, cy + 42, 26, 20, 14),
+        (cx + 8,  cy + 60, 34, 18, -6),
     ]
-    for i, (lx, ly, lrx, lry, angle_deg) in enumerate(land_positions):
-        # check if within ocean sphere (rough clip via opacity)
-        shapes.append(EllipseShape(
-            id=f"land_mass_{i}", part_id="land_mass" if i == 0 else None,
-            cx=lx, cy=ly, rx=lrx, ry=lry,
-            fill="#4CAF50", stroke="#2E7D32", stroke_width=0.8, opacity=0.85,
-        ))
+    land_svg = ""
+    for i, (lx, ly, lrx, lry, rot) in enumerate(land_positions):
+        pid_attr = f' data-part="land_mass"' if i == 0 else ""
+        land_svg += (
+            f'<ellipse cx="{lx:.1f}" cy="{ly:.1f}" rx="{lrx:.1f}" ry="{lry:.1f}" '
+            f'fill="#4CAF50" stroke="#2E7D32" stroke-width="0.8" opacity="0.9" '
+            f'transform="rotate({rot} {lx:.1f} {ly:.1f})"{pid_attr}/>'
+        )
+        # snow cap hint on top continent
+        if i == 0:
+            land_svg += (
+                f'<ellipse cx="{lx:.1f}" cy="{ly-lry*0.55:.1f}" rx="{lrx*0.38:.1f}" ry="{lry*0.28:.1f}" '
+                f'fill="white" opacity="0.55" transform="rotate({rot} {lx:.1f} {ly:.1f})"/>'
+            )
+    # polar ice caps
+    land_svg += _e(cx, cy - r_ocean + 14, 28, 14, fill="white", opacity=0.7)
+    land_svg += _e(cx, cy + r_ocean - 14, 24, 12, fill="white", opacity=0.65)
+    parts.append(f'<g clip-path="url(#ea_globe_clip)">{land_svg}</g>')
+    # Also add a separate g for land_mass label (first continent, outside clip isn't visible)
+    parts.append(f'<g data-part="land_mass" style="display:none"></g>')
 
-    # mantle (half-circle cross-section visible)
-    # draw as filled circle minus upper half overlay
-    shapes.append(EllipseShape(
-        id="mantle_full", part_id="mantle",
-        cx=cx, cy=cy, rx=r_mantle, ry=r_mantle,
-        fill="#FF7043", opacity=0.5,
+    # ── Cross-section wedge (lower-right quarter revealing layers) ─────────────
+    # We show the full globe from outside + draw layers as concentric filled circles
+    # then overlay a wedge cutout hint (a crescent/label guide lines)
+    # Instead: draw label guide lines from each layer edge
+    guide_color = "#FFFFFF"
+    for r, pid, angle in [
+        (r_crust,  "crust",      55),
+        (r_mantle, "mantle",     40),
+        (r_outer,  "outer_core", 28),
+        (r_inner,  "inner_core", 18),
+    ]:
+        a = math.radians(angle)
+        x1 = cx + r * math.cos(a)
+        y1 = cy - r * math.sin(a)
+        x2 = cx + (r + 30) * math.cos(a)
+        y2 = cy - (r + 30) * math.sin(a)
+        parts.append(_p(f"M {x1:.1f},{y1:.1f} L {x2:.1f},{y2:.1f}",
+                        stroke=guide_color, sw=0.8, opacity="0.5"))
+
+    # Draw layer circles from inside out (concentric, smallest on top)
+    # Mantle (largest filled circle for cross-section)
+    parts.append(_g("mantle",
+        _e(cx, cy, r_mantle, r_mantle, fill="url(#ea_mantle)")
     ))
-    shapes.append(EllipseShape(
-        id="mantle_outline", part_id=None,
-        cx=cx, cy=cy, rx=r_mantle, ry=r_mantle,
-        fill="none", stroke="#BF360C", stroke_width=1.5,
+    parts.append(_g("outer_core",
+        _e(cx, cy, r_outer, r_outer, fill="url(#ea_outer)")
+    ))
+    parts.append(_g("inner_core",
+        _e(cx, cy, r_inner, r_inner, fill="url(#ea_inner)") +
+        # catchlight
+        _e(cx - r_inner * 0.3, cy - r_inner * 0.3, r_inner * 0.25, r_inner * 0.2,
+           fill="white", opacity=0.35)
     ))
 
-    # outer core
-    shapes.append(EllipseShape(
-        id="outer_core_full", part_id="outer_core",
-        cx=cx, cy=cy, rx=r_outer_core, ry=r_outer_core,
-        fill="#FFA000", opacity=0.75,
-    ))
-    shapes.append(EllipseShape(
-        id="outer_core_outline", part_id=None,
-        cx=cx, cy=cy, rx=r_outer_core, ry=r_outer_core,
-        fill="none", stroke="#E65100", stroke_width=1.2,
+    # Thin crust ring on globe exterior
+    parts.append(_g("crust",
+        _e(cx, cy, r_ocean + 2, r_ocean + 2, fill="none", stroke="#795548", sw=5, opacity=0.7) +
+        _e(cx, cy, r_ocean + 2, r_ocean + 2, fill="none", stroke="#A1887F", sw=2, opacity=0.5)
     ))
 
-    # inner core
-    shapes.append(EllipseShape(
-        id="inner_core_full", part_id="inner_core",
-        cx=cx, cy=cy, rx=r_inner_core, ry=r_inner_core,
-        fill="#FFEE58", stroke="#F57F17", stroke_width=1.5,
-    ))
-    # inner core glow
-    shapes.append(EllipseShape(
-        id="inner_core_glow", part_id=None,
-        cx=cx - 8, cy=cy - 8, rx=14, ry=14,
-        fill="#FFFFFF", opacity=0.3,
-    ))
+    # Globe rim highlight
+    parts.append(_e(cx - r_ocean * 0.28, cy - r_ocean * 0.28,
+                    r_ocean * 0.35, r_ocean * 0.22,
+                    fill="white", opacity=0.12))
 
-    # label lines (visual guides)
-    label_lines = [
-        (r_inner_core + 5, 45, "inner_core"),
-        (r_outer_core + 5, 0, "outer_core"),
-        (r_mantle + 5, 315, "mantle"),
-        (r_crust + 5, 270, "crust"),
-    ]
-    for r, angle_deg, pid in label_lines:
-        a = math.radians(angle_deg)
-        x1 = cx + (r - 5) * math.cos(a)
-        y1 = cy + (r - 5) * math.sin(a)
-        x2 = cx + (r + 20) * math.cos(a)
-        y2 = cy + (r + 20) * math.sin(a)
-        shapes.append(PathShape(
-            id=f"label_line_{pid}", part_id=None,
-            d=f"M {x1:.1f} {y1:.1f} L {x2:.1f} {y2:.1f}",
-            fill="none", stroke="#ECEFF1", stroke_width=0.8, opacity=0.5,
-        ))
+    body_svg = "\n".join(parts)
+
+    # ── Anchors (% of 560x460) ────────────────────────────────────────────────
+    def px(x): return round(x / W * 100, 1)
+    def py(y): return round(y / H * 100, 1)
 
     anchors = [
-        LabelAnchor(part_id="atmosphere", x=50.0, y=4.0),
-        LabelAnchor(part_id="ocean",      x=22.0, y=36.0),
-        LabelAnchor(part_id="land_mass",  x=40.0, y=24.0),
-        LabelAnchor(part_id="crust",      x=78.0, y=22.0),
-        LabelAnchor(part_id="mantle",     x=82.0, y=50.0),
-        LabelAnchor(part_id="outer_core", x=70.0, y=50.0),
-        LabelAnchor(part_id="inner_core", x=58.0, y=50.0),
+        LabelAnchor(part_id="atmosphere", x=px(cx),                       y=py(cy - r_atmos - 10)),
+        LabelAnchor(part_id="ocean",      x=px(cx - r_ocean * 0.7 - 20),  y=py(cy - r_ocean * 0.4)),
+        LabelAnchor(part_id="land_mass",  x=px(cx - 28 + 48),             y=py(cy - 60 - 20)),
+        LabelAnchor(part_id="crust",      x=px(cx + r_ocean + 14),         y=py(cy - r_ocean * 0.45)),
+        LabelAnchor(part_id="mantle",     x=px(cx + r_mantle + 16),        y=py(cy - r_mantle * 0.55)),
+        LabelAnchor(part_id="outer_core", x=px(cx + r_outer + 12),         y=py(cy - r_outer * 0.5)),
+        LabelAnchor(part_id="inner_core", x=px(cx + r_inner + 8),          y=py(cy - r_inner * 0.5)),
     ]
 
-    rendered_parts = list({s.part_id for s in shapes if s.part_id})
+    rendered_parts = [
+        "atmosphere", "ocean", "land_mass", "crust", "mantle", "outer_core", "inner_core",
+    ]
 
     return RenderSpec(
         object_key="earth.basic",
-        viewbox="0 0 560 420",
-        shapes=shapes,
+        viewbox=f"0 0 {W} {H}",
+        shapes=[],
         anchors=anchors,
         rendered_parts=rendered_parts,
+        defs_svg=defs.strip(),
+        body_svg=body_svg,
     )

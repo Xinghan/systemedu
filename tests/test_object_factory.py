@@ -106,13 +106,16 @@ class TestSnapshotRenderer:
         svg = self.renderer.render_normal(rs)
         assert svg.startswith("<svg")
         assert svg.endswith("</svg>")
-        assert 'viewBox="0 0 560 420"' in svg
+        # viewBox should match the RenderSpec's viewbox field
+        assert f'viewBox="{rs.viewbox}"' in svg
 
     def test_render_normal_contains_shapes(self):
         rs = self._get_rocket_rs()
         svg = self.renderer.render_normal(rs)
-        # rocket has rect, polygon, ellipse, path shapes
-        assert "<rect" in svg or "<polygon" in svg
+        # High-fidelity objects use body_svg (path/ellipse etc.); legacy use shapes
+        has_content = ("<rect" in svg or "<polygon" in svg or "<path" in svg
+                       or "<ellipse" in svg or "<line" in svg)
+        assert has_content
 
     def test_render_normal_svg_length_reasonable(self):
         rs = self._get_rocket_rs()
@@ -783,7 +786,7 @@ def test_snapshot_renderer_smoke_rocket():
     renderer = SnapshotRenderer()
     svg = renderer.render_normal(rs)
     assert len(svg) > 200
-    assert "0 0 560 420" in svg
+    assert rs.viewbox in svg
 
 
 def test_snapshot_renderer_smoke_with_anchors():

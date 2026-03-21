@@ -106,9 +106,14 @@ class LabelAnchor(BaseModel):
 class RenderSpec(BaseModel):
     object_key: str             # e.g. "rocket.basic"
     viewbox: str = "0 0 560 420"
-    shapes: list[AnyShape]
+    shapes: list[AnyShape] = Field(default_factory=list)
     anchors: list[LabelAnchor]
     rendered_parts: list[str]   # part_ids actually drawn (for validator)
+    # Optional high-fidelity raw SVG path (bypasses JS shapeToSVG renderer).
+    # defs_svg: content for <defs> (gradients, filters, clipPaths)
+    # body_svg: the full scene markup, rendered directly into #scene-group
+    defs_svg: str = ""
+    body_svg: str = ""
 
 
 # ---------------------------------------------------------------------------

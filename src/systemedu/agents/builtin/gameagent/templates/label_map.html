@@ -159,7 +159,18 @@ if (RENDER_SPEC && RENDER_SPEC.viewbox) {
   const parts = RENDER_SPEC.viewbox.split(" ");
   bgEl.setAttribute("width", parts[2]);
   bgEl.setAttribute("height", parts[3]);
-  sceneGroup.innerHTML = renderShapes(RENDER_SPEC.shapes);
+
+  // High-fidelity path: inject raw SVG directly (gradients + pre-rendered body)
+  if (RENDER_SPEC.defs_svg) {
+    const defsEl = svgEl.querySelector("defs");
+    if (defsEl) defsEl.innerHTML += RENDER_SPEC.defs_svg;
+    else svgEl.insertAdjacentHTML("afterbegin", `<defs>${RENDER_SPEC.defs_svg}</defs>`);
+  }
+  if (RENDER_SPEC.body_svg) {
+    sceneGroup.innerHTML = RENDER_SPEC.body_svg;
+  } else {
+    sceneGroup.innerHTML = renderShapes(RENDER_SPEC.shapes);
+  }
 } else {
   // Legacy: viewBox fallback
   svgEl.setAttribute("viewBox", "0 0 560 420");
@@ -195,6 +206,25 @@ document.getElementById("prog-badge").textContent = `0/${total}`;
 // ── Dot markers ────────────────────────────────────────────────────────────────
 const sceneEl = document.getElementById("scene");
 
+// Convert anchor % coords (relative to viewBox) → pixel position within #scene,
+// accounting for xMidYMid meet letterboxing.
+function anchorToPixel(pctX, pctY) {
+  const sr = sceneEl.getBoundingClientRect();
+  const vb = (RENDER_SPEC && RENDER_SPEC.viewbox) ? RENDER_SPEC.viewbox.split(" ").map(Number) : [0,0,560,420];
+  const vbW = vb[2], vbH = vb[3];
+  const scaleX = sr.width  / vbW;
+  const scaleY = sr.height / vbH;
+  const scale  = Math.min(scaleX, scaleY); // meet = fit inside
+  const rendW  = vbW * scale;
+  const rendH  = vbH * scale;
+  const offX   = (sr.width  - rendW) / 2;  // letterbox padding left
+  const offY   = (sr.height - rendH) / 2;  // letterbox padding top
+  return {
+    left: offX + (pctX / 100) * rendW,
+    top:  offY + (pctY / 100) * rendH,
+  };
+}
+
 function buildDots() {
   sceneEl.querySelectorAll(".dot-marker").forEach(d => d.remove());
   const listEl = document.getElementById("explored-list");
@@ -205,8 +235,9 @@ function buildDots() {
     const marker = document.createElement("div");
     marker.className = "dot-marker";
     marker.id = `dot-${entity.id}`;
-    marker.style.left = entity.x + "%";
-    marker.style.top  = entity.y + "%";
+    const pos = anchorToPixel(entity.x, entity.y);
+    marker.style.left = pos.left + "px";
+    marker.style.top  = pos.top  + "px";
     marker.innerHTML = `
       <div class="dot-pulse" style="border-color:${color}"></div>
       <div class="dot-ring" style="border-color:${color}">
@@ -305,6 +336,9 @@ document.getElementById("win-btn").addEventListener("click", () => {
 });
 
 buildDots();
+
+// Rebuild dots on resize so pixel positions stay aligned with the SVG
+window.addEventListener("resize", buildDots);
 
 function launchParticles() {
   const c = document.getElementById("particle-canvas");

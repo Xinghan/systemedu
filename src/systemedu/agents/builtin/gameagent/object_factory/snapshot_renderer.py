@@ -105,15 +105,25 @@ def _anchor_to_svg(anchor: LabelAnchor, vw: float, vh: float) -> str:
 class SnapshotRenderer:
     """Pure Python SVG renderer for RenderSpec objects."""
 
+    def _build_content(self, render_spec: RenderSpec) -> str:
+        """Return inner SVG content (defs + body), supporting both shapes and body_svg."""
+        if render_spec.body_svg:
+            # High-fidelity path: inject raw SVG directly
+            defs_part = f"<defs>{render_spec.defs_svg}</defs>" if render_spec.defs_svg else ""
+            return defs_part + "\n" + render_spec.body_svg
+        else:
+            # Legacy path: render from shapes list
+            return "\n  ".join(_shape_to_svg(s) for s in render_spec.shapes)
+
     def render_normal(self, render_spec: RenderSpec) -> str:
         """Render object as plain SVG."""
         _, _, vw, vh = _parse_viewbox(render_spec.viewbox)
-        shapes_svg = "\n  ".join(_shape_to_svg(s) for s in render_spec.shapes)
+        content = self._build_content(render_spec)
         return (
             f'<svg xmlns="http://www.w3.org/2000/svg" '
             f'viewBox="{render_spec.viewbox}" '
             f'width="{vw:.0f}" height="{vh:.0f}">\n'
-            f'  {shapes_svg}\n'
+            f'  {content}\n'
             f'</svg>'
         )
 
@@ -122,32 +132,36 @@ class SnapshotRenderer:
         parts_set = set(parts)
         _, _, vw, vh = _parse_viewbox(render_spec.viewbox)
 
-        defs = (
-            '<defs>'
+        highlight_filter = (
             '<filter id="highlight" x="-10%" y="-10%" width="120%" height="120%">'
             '<feFlood flood-color="#FFD54F" flood-opacity="0.5" result="color"/>'
             '<feComposite in="color" in2="SourceGraphic" operator="atop"/>'
             '</filter>'
-            '</defs>'
         )
 
-        shapes_svg = "\n  ".join(
-            _shape_to_svg(s, highlight=(s.part_id in parts_set))
-            for s in render_spec.shapes
-        )
+        if render_spec.body_svg:
+            defs_inner = (render_spec.defs_svg or "") + highlight_filter
+            content = f"<defs>{defs_inner}</defs>\n{render_spec.body_svg}"
+        else:
+            defs_inner = highlight_filter
+            shapes_svg = "\n  ".join(
+                _shape_to_svg(s, highlight=(s.part_id in parts_set))
+                for s in render_spec.shapes
+            )
+            content = f"<defs>{defs_inner}</defs>\n  {shapes_svg}"
+
         return (
             f'<svg xmlns="http://www.w3.org/2000/svg" '
             f'viewBox="{render_spec.viewbox}" '
             f'width="{vw:.0f}" height="{vh:.0f}">\n'
-            f'  {defs}\n'
-            f'  {shapes_svg}\n'
+            f'  {content}\n'
             f'</svg>'
         )
 
     def render_with_anchors(self, render_spec: RenderSpec) -> str:
         """Render object with anchor dot markers overlaid."""
         _, _, vw, vh = _parse_viewbox(render_spec.viewbox)
-        shapes_svg = "\n  ".join(_shape_to_svg(s) for s in render_spec.shapes)
+        content = self._build_content(render_spec)
         anchors_svg = "\n  ".join(
             _anchor_to_svg(a, vw, vh) for a in render_spec.anchors
         )
@@ -155,7 +169,7 @@ class SnapshotRenderer:
             f'<svg xmlns="http://www.w3.org/2000/svg" '
             f'viewBox="{render_spec.viewbox}" '
             f'width="{vw:.0f}" height="{vh:.0f}">\n'
-            f'  {shapes_svg}\n'
+            f'  {content}\n'
             f'  {anchors_svg}\n'
             f'</svg>'
         )

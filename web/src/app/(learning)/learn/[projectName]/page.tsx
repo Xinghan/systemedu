@@ -7,6 +7,8 @@ import {
   ArrowLeft,
   PanelLeftClose,
   PanelLeftOpen,
+  Search,
+  X,
 } from "lucide-react"
 import {
   IconBook,
@@ -32,6 +34,7 @@ export default function LearnPage() {
   const [activeNodeId, setActiveNodeId] = useState<number | null>(initialNodeId)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [mobileTab, setMobileTab] = useState<"tree" | "content">("tree")
+  const [searchQuery, setSearchQuery] = useState("")
   const [activeLessonTab, setActiveLessonTab] = useState<string>("concept")
   const [activePage, setActivePage] = useState<number>(0)
   const sessionStartRef = useRef<number>(Date.now())
@@ -148,6 +151,26 @@ export default function LearnPage() {
                 <PanelLeftClose className="h-4 w-4" />
               </Button>
             </div>
+            <div className="px-3 py-2 border-b">
+              <div className="relative">
+                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
+                <input
+                  type="text"
+                  placeholder="搜索节点..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="w-full pl-8 pr-7 py-1.5 text-xs rounded-md border bg-background focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                />
+                {searchQuery && (
+                  <button
+                    onClick={() => setSearchQuery("")}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                )}
+              </div>
+            </div>
             <ScrollArea className="flex-1 min-h-0">
               <div className="p-3">
                 <KnowledgeTreeView
@@ -155,6 +178,7 @@ export default function LearnPage() {
                   progress={detail.progress}
                   activeNodeId={activeNodeId}
                   onNodeClick={handleNodeClick}
+                  searchQuery={searchQuery}
                 />
               </div>
             </ScrollArea>
@@ -250,6 +274,26 @@ export default function LearnPage() {
               </Link>
               <h2 className="font-semibold text-sm truncate">{detail.project.title}</h2>
             </div>
+            <div className="px-3 py-2 border-b shrink-0">
+              <div className="relative">
+                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
+                <input
+                  type="text"
+                  placeholder="搜索节点..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="w-full pl-8 pr-7 py-1.5 text-xs rounded-md border bg-background focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                />
+                {searchQuery && (
+                  <button
+                    onClick={() => setSearchQuery("")}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                )}
+              </div>
+            </div>
             <ScrollArea className="flex-1 min-h-0">
               <div className="p-3">
                 <KnowledgeTreeView
@@ -257,6 +301,7 @@ export default function LearnPage() {
                   progress={detail.progress}
                   activeNodeId={activeNodeId}
                   onNodeClick={handleNodeClick}
+                  searchQuery={searchQuery}
                 />
               </div>
             </ScrollArea>

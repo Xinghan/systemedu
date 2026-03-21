@@ -1,18 +1,31 @@
-"""plant.basic - side-view educational plant diagram."""
+"""plant.basic - side-view educational plant diagram.
+
+High-fidelity rendering:
+- Sky gradient background
+- Layered soil with texture
+- Bezier-shaped leaves with realistic veins and gradient
+- Organic stem with gradient shading
+- Detailed flower with gradient petals + stamen
+- Radial sun with soft glow rays
+- Output via RenderSpec.defs_svg + body_svg (raw SVG)
+"""
 
 from __future__ import annotations
 
+import math
+
 from systemedu.agents.builtin.gameagent.object_spec import (
-    EllipseShape,
     LabelAnchor,
-    PathShape,
-    RectShape,
     RenderSpec,
 )
 
 META = {
     "object_key": "plant.basic",
-    "description": "植物整体侧视图，包含根、茎、叶、花。适合讲解植物整体结构和各部分功能。不包含叶片横截面（叶肉细胞/气孔）、根毛放大图、维管束细节等微观结构。",
+    "description": (
+        "植物整体侧视图，包含根、茎、叶、花。"
+        "适合讲解植物整体结构和各部分功能。"
+        "不包含叶片横截面（叶肉细胞/气孔）、根毛放大图、维管束细节等微观结构。"
+    ),
     "views": ["side"],
     "must_have": ["stem", "root", "leaf_left", "leaf_right"],
     "optional": ["flower", "soil_line", "sun", "leaf_top"],
@@ -70,167 +83,241 @@ META = {
 }
 
 
+def _p(d, fill="none", stroke="none", sw=1, **kw) -> str:
+    attrs = f'fill="{fill}" stroke="{stroke}" stroke-width="{sw}"'
+    for k, v in kw.items():
+        attrs += f' {k.replace("_", "-")}="{v}"'
+    return f'<path d="{d}" {attrs}/>'
+
+
+def _e(cx, cy, rx, ry, fill, stroke="none", sw=1, opacity=1, **kw) -> str:
+    attrs = f'cx="{cx:.2f}" cy="{cy:.2f}" rx="{rx:.2f}" ry="{ry:.2f}" fill="{fill}" stroke="{stroke}" stroke-width="{sw}"'
+    if opacity != 1:
+        attrs += f' opacity="{opacity}"'
+    for k, v in kw.items():
+        attrs += f' {k.replace("_", "-")}="{v}"'
+    return f'<ellipse {attrs}/>'
+
+
+def _g(part_id, content) -> str:
+    return f'<g data-part="{part_id}">{content}</g>'
+
+
 def build(view: str = "side", variant: str | None = None) -> RenderSpec:
-    """Build a side-view plant RenderSpec. Viewbox: 0 0 560 420."""
-    cx = 280.0
-    soil_y = 310.0
-    stem_bottom = soil_y
-    stem_top = 160.0
-    stem_x = cx - 6
+    """Build a high-fidelity plant diagram. ViewBox: 0 0 560 460"""
+    W, H = 560, 460
+    cx = W / 2   # 280
+    soil_y = 320.0
+    stem_bot = soil_y - 2
+    stem_top = 150.0
+    stem_cx = cx
 
-    shapes: list = []
+    defs = """
+<linearGradient id="pl_sky" x1="0" y1="0" x2="0" y2="1">
+  <stop offset="0%" stop-color="#87CEEB"/>
+  <stop offset="100%" stop-color="#E0F4FF"/>
+</linearGradient>
+<linearGradient id="pl_soil" x1="0" y1="0" x2="0" y2="1">
+  <stop offset="0%" stop-color="#5D4037"/>
+  <stop offset="30%" stop-color="#6D4C41"/>
+  <stop offset="100%" stop-color="#4E342E"/>
+</linearGradient>
+<linearGradient id="pl_stem" x1="0" y1="0" x2="1" y2="0">
+  <stop offset="0%" stop-color="#2E7D32"/>
+  <stop offset="40%" stop-color="#66BB6A"/>
+  <stop offset="100%" stop-color="#1B5E20"/>
+</linearGradient>
+<linearGradient id="pl_leaf_r" x1="0" y1="0" x2="1" y2="1">
+  <stop offset="0%" stop-color="#A5D6A7"/>
+  <stop offset="40%" stop-color="#4CAF50"/>
+  <stop offset="100%" stop-color="#2E7D32"/>
+</linearGradient>
+<linearGradient id="pl_leaf_l" x1="1" y1="0" x2="0" y2="1">
+  <stop offset="0%" stop-color="#A5D6A7"/>
+  <stop offset="40%" stop-color="#43A047"/>
+  <stop offset="100%" stop-color="#1B5E20"/>
+</linearGradient>
+<linearGradient id="pl_petal" x1="0" y1="0" x2="0.5" y2="1">
+  <stop offset="0%" stop-color="#FCE4EC"/>
+  <stop offset="60%" stop-color="#F48FB1"/>
+  <stop offset="100%" stop-color="#E91E63"/>
+</linearGradient>
+<radialGradient id="pl_sun" cx="40%" cy="38%" r="60%">
+  <stop offset="0%" stop-color="#FFFDE7"/>
+  <stop offset="50%" stop-color="#FDD835"/>
+  <stop offset="100%" stop-color="#F57F17"/>
+</radialGradient>
+"""
 
-    # sky background
-    shapes.append(RectShape(
-        id="sky_bg", part_id=None,
-        x=0, y=0, w=560, h=soil_y,
-        fill="#E3F2FD", opacity=0.4,
-    ))
+    parts = []
 
-    # soil
-    shapes.append(RectShape(
-        id="soil_rect", part_id="soil_line",
-        x=0, y=soil_y, w=560, h=420 - soil_y,
-        fill="#795548", opacity=0.6,
-    ))
-    shapes.append(RectShape(
-        id="soil_top", part_id=None,
-        x=0, y=soil_y, w=560, h=12,
-        fill="#5D4037",
-    ))
+    # ── Sky background ────────────────────────────────────────────────────────
+    parts.append(f'<rect x="0" y="0" width="{W}" height="{soil_y:.1f}" fill="url(#pl_sky)"/>')
 
-    # sun
-    sun_cx, sun_cy = 470.0, 70.0
-    shapes.append(EllipseShape(
-        id="sun_glow", part_id=None,
-        cx=sun_cx, cy=sun_cy, rx=42, ry=42,
-        fill="#FFE082", opacity=0.4,
-    ))
-    shapes.append(EllipseShape(
-        id="sun_circle", part_id="sun",
-        cx=sun_cx, cy=sun_cy, rx=28, ry=28,
-        fill="#FDD835", stroke="#F9A825", stroke_width=2.0,
-    ))
-    # sun rays
-    import math
-    for i in range(8):
-        a = math.radians(i * 45)
-        x1 = sun_cx + 34 * math.cos(a)
-        y1 = sun_cy + 34 * math.sin(a)
-        x2 = sun_cx + 50 * math.cos(a)
-        y2 = sun_cy + 50 * math.sin(a)
-        shapes.append(PathShape(
-            id=f"sun_ray_{i}", part_id=None,
-            d=f"M {x1:.1f} {y1:.1f} L {x2:.1f} {y2:.1f}",
-            fill="none", stroke="#FDD835", stroke_width=2.0,
-        ))
-
-    # stem
-    shapes.append(RectShape(
-        id="stem_rect", part_id="stem",
-        x=stem_x, y=stem_top, w=12, h=stem_bottom - stem_top,
-        rx=6,
-        fill="#388E3C", stroke="#1B5E20", stroke_width=1.0,
-    ))
-
-    # roots (branching paths)
-    shapes.append(PathShape(
-        id="root_main", part_id="root",
-        d=f"M {cx} {soil_y} C {cx-5} {soil_y+40} {cx-5} {soil_y+50} {cx} {soil_y+80}",
-        fill="none", stroke="#A1887F", stroke_width=3.0,
-    ))
-    shapes.append(PathShape(
-        id="root_left_1", part_id=None,
-        d=f"M {cx} {soil_y+30} C {cx-30} {soil_y+30} {cx-50} {soil_y+20} {cx-60} {soil_y+35}",
-        fill="none", stroke="#A1887F", stroke_width=2.0,
-    ))
-    shapes.append(PathShape(
-        id="root_right_1", part_id=None,
-        d=f"M {cx} {soil_y+30} C {cx+30} {soil_y+30} {cx+50} {soil_y+20} {cx+60} {soil_y+35}",
-        fill="none", stroke="#A1887F", stroke_width=2.0,
-    ))
-    shapes.append(PathShape(
-        id="root_left_2", part_id=None,
-        d=f"M {cx-30} {soil_y+32} C {cx-55} {soil_y+45} {cx-70} {soil_y+55} {cx-55} {soil_y+65}",
-        fill="none", stroke="#A1887F", stroke_width=1.2,
-    ))
-    shapes.append(PathShape(
-        id="root_right_2", part_id=None,
-        d=f"M {cx+30} {soil_y+32} C {cx+55} {soil_y+45} {cx+70} {soil_y+55} {cx+55} {soil_y+65}",
-        fill="none", stroke="#A1887F", stroke_width=1.2,
+    # ── Soil ─────────────────────────────────────────────────────────────────
+    parts.append(_g("soil_line",
+        f'<rect x="0" y="{soil_y:.1f}" width="{W}" height="{H - soil_y:.1f}" fill="url(#pl_soil)"/>' +
+        # darker top soil band
+        f'<rect x="0" y="{soil_y:.1f}" width="{W}" height="14" fill="#3E2723" opacity="0.55"/>' +
+        # pebble texture hints
+        _e(cx - 80, soil_y + 30, 10, 6, fill="#4E342E", opacity=0.5) +
+        _e(cx + 60, soil_y + 22, 8, 5, fill="#4E342E", opacity=0.45) +
+        _e(cx - 20, soil_y + 55, 6, 4, fill="#3E2723", opacity=0.4)
     ))
 
-    # leaf right (higher)
-    leaf_mid_y = (stem_top + stem_bottom) / 2 - 10
-    shapes.append(PathShape(
-        id="leaf_right_path", part_id="leaf_right",
-        d=(f"M {cx + 6} {leaf_mid_y} "
-           f"C {cx + 50} {leaf_mid_y - 30} {cx + 80} {leaf_mid_y - 20} {cx + 70} {leaf_mid_y + 10} "
-           f"C {cx + 50} {leaf_mid_y + 30} {cx + 20} {leaf_mid_y + 20} {cx + 6} {leaf_mid_y} Z"),
-        fill="#66BB6A", stroke="#388E3C", stroke_width=1.2,
-    ))
-    # leaf right vein
-    shapes.append(PathShape(
-        id="leaf_right_vein", part_id=None,
-        d=f"M {cx + 6} {leaf_mid_y + 5} Q {cx + 45} {leaf_mid_y} {cx + 68} {leaf_mid_y + 8}",
-        fill="none", stroke="#2E7D32", stroke_width=0.8,
+    # ── Roots ────────────────────────────────────────────────────────────────
+    root_color = "#8D6E63"
+    root_content = (
+        # main taproot
+        _p(f"M {cx:.1f},{soil_y:.1f} C {cx-4:.1f},{soil_y+50:.1f} {cx+4:.1f},{soil_y+80:.1f} {cx:.1f},{soil_y+110:.1f}",
+           stroke=root_color, sw=4, stroke_linecap="round") +
+        # lateral roots
+        _p(f"M {cx:.1f},{soil_y+28:.1f} C {cx-40:.1f},{soil_y+24:.1f} {cx-70:.1f},{soil_y+14:.1f} {cx-85:.1f},{soil_y+30:.1f}",
+           stroke=root_color, sw=2.5, stroke_linecap="round") +
+        _p(f"M {cx:.1f},{soil_y+28:.1f} C {cx+40:.1f},{soil_y+24:.1f} {cx+70:.1f},{soil_y+14:.1f} {cx+85:.1f},{soil_y+30:.1f}",
+           stroke=root_color, sw=2.5, stroke_linecap="round") +
+        _p(f"M {cx-50:.1f},{soil_y+28:.1f} C {cx-70:.1f},{soil_y+42:.1f} {cx-90:.1f},{soil_y+52:.1f} {cx-75:.1f},{soil_y+68:.1f}",
+           stroke=root_color, sw=1.5, stroke_linecap="round") +
+        _p(f"M {cx+50:.1f},{soil_y+28:.1f} C {cx+70:.1f},{soil_y+42:.1f} {cx+90:.1f},{soil_y+52:.1f} {cx+75:.1f},{soil_y+68:.1f}",
+           stroke=root_color, sw=1.5, stroke_linecap="round") +
+        # fine root tips
+        _p(f"M {cx-75:.1f},{soil_y+68:.1f} C {cx-88:.1f},{soil_y+78:.1f} {cx-82:.1f},{soil_y+85:.1f} {cx-72:.1f},{soil_y+82:.1f}",
+           stroke=root_color, sw=0.9, stroke_linecap="round", opacity="0.7") +
+        _p(f"M {cx+75:.1f},{soil_y+68:.1f} C {cx+88:.1f},{soil_y+78:.1f} {cx+82:.1f},{soil_y+85:.1f} {cx+72:.1f},{soil_y+82:.1f}",
+           stroke=root_color, sw=0.9, stroke_linecap="round", opacity="0.7")
+    )
+    parts.append(_g("root", root_content))
+
+    # ── Stem ─────────────────────────────────────────────────────────────────
+    # slightly curved stem
+    stem_content = (
+        # outline (enlarged)
+        _p(f"M {stem_cx-9:.1f},{stem_bot:.1f} C {stem_cx-10:.1f},{(stem_top+stem_bot)/2:.1f} "
+           f"{stem_cx-8:.1f},{stem_top+20:.1f} {stem_cx:.1f},{stem_top:.1f} "
+           f"C {stem_cx+8:.1f},{stem_top+20:.1f} {stem_cx+10:.1f},{(stem_top+stem_bot)/2:.1f} "
+           f"{stem_cx+9:.1f},{stem_bot:.1f} Z",
+           fill="#1B5E20") +
+        # gradient fill
+        _p(f"M {stem_cx-7:.1f},{stem_bot:.1f} C {stem_cx-8:.1f},{(stem_top+stem_bot)/2:.1f} "
+           f"{stem_cx-6:.1f},{stem_top+18:.1f} {stem_cx:.1f},{stem_top:.1f} "
+           f"C {stem_cx+6:.1f},{stem_top+18:.1f} {stem_cx+8:.1f},{(stem_top+stem_bot)/2:.1f} "
+           f"{stem_cx+7:.1f},{stem_bot:.1f} Z",
+           fill="url(#pl_stem)")
+    )
+    parts.append(_g("stem", stem_content))
+
+    # ── Leaf right (upper-right) ──────────────────────────────────────────────
+    lr_y = stem_top + (stem_bot - stem_top) * 0.30   # attach point ~215
+    lr_d = (f"M {stem_cx+6:.1f},{lr_y:.1f} "
+            f"C {stem_cx+55:.1f},{lr_y-35:.1f} {stem_cx+95:.1f},{lr_y-15:.1f} {stem_cx+82:.1f},{lr_y+18:.1f} "
+            f"C {stem_cx+60:.1f},{lr_y+38:.1f} {stem_cx+22:.1f},{lr_y+25:.1f} {stem_cx+6:.1f},{lr_y:.1f} Z")
+    parts.append(_g("leaf_right",
+        _p(lr_d, fill="url(#pl_leaf_r)", stroke="#2E7D32", sw=1.2) +
+        # midrib
+        _p(f"M {stem_cx+6:.1f},{lr_y+4:.1f} Q {stem_cx+50:.1f},{lr_y+2:.1f} {stem_cx+80:.1f},{lr_y+16:.1f}",
+           stroke="#1B5E20", sw=1.2, stroke_linecap="round") +
+        # side veins
+        _p(f"M {stem_cx+22:.1f},{lr_y+2:.1f} L {stem_cx+36:.1f},{lr_y-14:.1f}",
+           stroke="#2E7D32", sw=0.7, opacity="0.7") +
+        _p(f"M {stem_cx+42:.1f},{lr_y+2:.1f} L {stem_cx+60:.1f},{lr_y-10:.1f}",
+           stroke="#2E7D32", sw=0.7, opacity="0.7") +
+        _p(f"M {stem_cx+58:.1f},{lr_y+6:.1f} L {stem_cx+78:.1f},{lr_y+4:.1f}",
+           stroke="#2E7D32", sw=0.7, opacity="0.7")
     ))
 
-    # leaf left (lower)
-    leaf_low_y = leaf_mid_y + 50
-    shapes.append(PathShape(
-        id="leaf_left_path", part_id="leaf_left",
-        d=(f"M {cx - 6} {leaf_low_y} "
-           f"C {cx - 50} {leaf_low_y - 28} {cx - 78} {leaf_low_y - 15} {cx - 68} {leaf_low_y + 14} "
-           f"C {cx - 50} {leaf_low_y + 32} {cx - 20} {leaf_low_y + 22} {cx - 6} {leaf_low_y} Z"),
-        fill="#4CAF50", stroke="#388E3C", stroke_width=1.2,
+    # ── Leaf left (lower-left) ────────────────────────────────────────────────
+    ll_y = stem_top + (stem_bot - stem_top) * 0.55   # attach point ~265
+    ll_d = (f"M {stem_cx-6:.1f},{ll_y:.1f} "
+            f"C {stem_cx-55:.1f},{ll_y-32:.1f} {stem_cx-92:.1f},{ll_y-12:.1f} {stem_cx-78:.1f},{ll_y+20:.1f} "
+            f"C {stem_cx-58:.1f},{ll_y+40:.1f} {stem_cx-20:.1f},{ll_y+28:.1f} {stem_cx-6:.1f},{ll_y:.1f} Z")
+    parts.append(_g("leaf_left",
+        _p(ll_d, fill="url(#pl_leaf_l)", stroke="#2E7D32", sw=1.2) +
+        _p(f"M {stem_cx-6:.1f},{ll_y+4:.1f} Q {stem_cx-50:.1f},{ll_y+4:.1f} {stem_cx-76:.1f},{ll_y+18:.1f}",
+           stroke="#1B5E20", sw=1.2, stroke_linecap="round") +
+        _p(f"M {stem_cx-22:.1f},{ll_y+3:.1f} L {stem_cx-38:.1f},{ll_y-12:.1f}",
+           stroke="#2E7D32", sw=0.7, opacity="0.7") +
+        _p(f"M {stem_cx-44:.1f},{ll_y+3:.1f} L {stem_cx-62:.1f},{ll_y-8:.1f}",
+           stroke="#2E7D32", sw=0.7, opacity="0.7")
     ))
 
-    # top leaf
-    shapes.append(PathShape(
-        id="leaf_top_path", part_id="leaf_top",
-        d=(f"M {cx} {stem_top} "
-           f"C {cx + 35} {stem_top - 40} {cx + 40} {stem_top - 10} {cx + 10} {stem_top + 20} "
-           f"C {cx - 10} {stem_top + 20} {cx - 10} {stem_top + 10} {cx} {stem_top} Z"),
-        fill="#81C784", stroke="#388E3C", stroke_width=1.2,
+    # ── Top leaf ─────────────────────────────────────────────────────────────
+    lt_d = (f"M {stem_cx:.1f},{stem_top:.1f} "
+            f"C {stem_cx+42:.1f},{stem_top-50:.1f} {stem_cx+48:.1f},{stem_top-10:.1f} {stem_cx+12:.1f},{stem_top+22:.1f} "
+            f"C {stem_cx+4:.1f},{stem_top+22:.1f} {stem_cx-2:.1f},{stem_top+8:.1f} {stem_cx:.1f},{stem_top:.1f} Z")
+    parts.append(_g("leaf_top",
+        _p(lt_d, fill="url(#pl_leaf_r)", stroke="#2E7D32", sw=1.2) +
+        _p(f"M {stem_cx:.1f},{stem_top:.1f} Q {stem_cx+28:.1f},{stem_top-14:.1f} {stem_cx+44:.1f},{stem_top-4:.1f}",
+           stroke="#1B5E20", sw=1.0, stroke_linecap="round")
     ))
 
-    # flower (5 petals + center)
-    flower_cx, flower_cy = cx, stem_top - 20
-    petal_r = 16.0
+    # ── Flower ───────────────────────────────────────────────────────────────
+    flower_cx, flower_cy = stem_cx, stem_top - 28
+    petal_r = 18.0
+    petal_svgs = ""
     for i in range(5):
         a = math.radians(i * 72 - 90)
-        px = flower_cx + 20 * math.cos(a)
-        py = flower_cy + 20 * math.sin(a)
-        shapes.append(EllipseShape(
-            id=f"petal_{i}", part_id="flower" if i == 0 else None,
-            cx=px, cy=py, rx=petal_r, ry=petal_r,
-            fill="#F48FB1", stroke="#E91E63", stroke_width=1.0, opacity=0.9,
-        ))
-    # flower center
-    shapes.append(EllipseShape(
-        id="flower_center", part_id=None,
-        cx=flower_cx, cy=flower_cy, rx=10, ry=10,
-        fill="#FDD835", stroke="#F9A825", stroke_width=1.5,
+        px = flower_cx + 22 * math.cos(a)
+        py = flower_cy + 22 * math.sin(a)
+        # each petal is an ellipse rotated around bloom center
+        rot = i * 72 - 90
+        petal_svgs += (
+            f'<ellipse cx="{px:.1f}" cy="{py:.1f}" rx="{petal_r:.1f}" ry="{petal_r*0.65:.1f}" '
+            f'fill="url(#pl_petal)" stroke="#E91E63" stroke-width="0.8" '
+            f'transform="rotate({rot} {px:.1f} {py:.1f})"/>'
+        )
+    parts.append(_g("flower",
+        petal_svgs +
+        # stamen center (yellow)
+        _e(flower_cx, flower_cy, 11, 11, fill="#FDD835", stroke="#F9A825", sw=1.5) +
+        _e(flower_cx, flower_cy, 7, 7, fill="#FFEE58") +
+        _e(flower_cx - 3, flower_cy - 3, 3, 2.5, fill="white", opacity=0.45)
     ))
 
+    # ── Sun ──────────────────────────────────────────────────────────────────
+    sun_cx, sun_cy = 456.0, 64.0
+    sun_r = 30.0
+    ray_lines = ""
+    for i in range(8):
+        a = math.radians(i * 45)
+        x1 = sun_cx + (sun_r + 8) * math.cos(a)
+        y1 = sun_cy + (sun_r + 8) * math.sin(a)
+        x2 = sun_cx + (sun_r + 22) * math.cos(a)
+        y2 = sun_cy + (sun_r + 22) * math.sin(a)
+        ray_lines += f'<line x1="{x1:.1f}" y1="{y1:.1f}" x2="{x2:.1f}" y2="{y2:.1f}" stroke="#FDD835" stroke-width="2.5" stroke-linecap="round" opacity="0.9"/>'
+    parts.append(_g("sun",
+        _e(sun_cx, sun_cy, sun_r + 18, sun_r + 18, fill="#FFF9C4", opacity=0.25) +
+        ray_lines +
+        _e(sun_cx, sun_cy, sun_r, sun_r, fill="url(#pl_sun)", stroke="#F9A825", sw=1.5) +
+        _e(sun_cx - 9, sun_cy - 9, 10, 8, fill="white", opacity=0.3)
+    ))
+
+    body_svg = "\n".join(parts)
+
+    # ── Anchors (% of 560x460) ─────────────────────────────────────────────────
+    def px(x): return round(x / W * 100, 1)
+    def py(y): return round(y / H * 100, 1)
+
     anchors = [
-        LabelAnchor(part_id="sun",        x=85.0, y=12.0),
-        LabelAnchor(part_id="flower",     x=62.0, y=22.0),
-        LabelAnchor(part_id="leaf_top",   x=66.0, y=30.0),
-        LabelAnchor(part_id="leaf_right", x=72.0, y=45.0),
-        LabelAnchor(part_id="stem",       x=60.0, y=58.0),
-        LabelAnchor(part_id="leaf_left",  x=25.0, y=58.0),
-        LabelAnchor(part_id="soil_line",  x=18.0, y=76.0),
-        LabelAnchor(part_id="root",       x=50.0, y=88.0),
+        LabelAnchor(part_id="sun",        x=px(sun_cx + sun_r + 26), y=py(sun_cy)),
+        LabelAnchor(part_id="flower",     x=px(flower_cx + 36),       y=py(flower_cy - 10)),
+        LabelAnchor(part_id="leaf_top",   x=px(stem_cx + 58),         y=py(stem_top - 28)),
+        LabelAnchor(part_id="leaf_right", x=px(stem_cx + 90),         y=py(lr_y)),
+        LabelAnchor(part_id="stem",       x=px(stem_cx + 22),         y=py((stem_top + stem_bot) / 2 + 10)),
+        LabelAnchor(part_id="leaf_left",  x=px(stem_cx - 88),         y=py(ll_y + 5)),
+        LabelAnchor(part_id="soil_line",  x=px(60),                   y=py(soil_y + 18)),
+        LabelAnchor(part_id="root",       x=px(stem_cx + 90),         y=py(soil_y + 50)),
     ]
 
-    rendered_parts = list({s.part_id for s in shapes if s.part_id})
+    rendered_parts = [
+        "sun", "flower", "leaf_top", "leaf_right", "leaf_left", "stem", "soil_line", "root",
+    ]
 
     return RenderSpec(
         object_key="plant.basic",
-        viewbox="0 0 560 420",
-        shapes=shapes,
+        viewbox=f"0 0 {W} {H}",
+        shapes=[],
         anchors=anchors,
         rendered_parts=rendered_parts,
+        defs_svg=defs.strip(),
+        body_svg=body_svg,
     )

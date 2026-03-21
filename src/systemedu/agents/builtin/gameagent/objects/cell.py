@@ -1,18 +1,32 @@
-"""cell.animal - animal cell cross-section educational diagram."""
+"""cell.animal - animal cell cross-section educational diagram.
+
+High-fidelity rendering:
+- Translucent cytoplasm with radial gradient (warm yellow-green)
+- Double-layered cell membrane with phospholipid dots
+- Nucleus with gradient + nuclear pore detail
+- Mitochondria as proper bean shapes with cristae
+- Rough ER as parallel wavy membrane pairs
+- Golgi as stacked curved ribbon stacks
+- Ribosomes as paired ellipses
+- Output via RenderSpec.defs_svg + body_svg (raw SVG)
+"""
 
 from __future__ import annotations
 
+import math
+
 from systemedu.agents.builtin.gameagent.object_spec import (
-    EllipseShape,
     LabelAnchor,
-    PathShape,
-    RectShape,
     RenderSpec,
 )
 
 META = {
     "object_key": "cell.animal",
-    "description": "动物细胞横截面图，包含细胞膜、细胞核、细胞质及主要细胞器（线粒体、核糖体、内质网、高尔基体）。适合讲解动物细胞结构和细胞器功能。不包含细胞壁、叶绿体（植物细胞专有），不包含细菌（原核细胞）结构。",
+    "description": (
+        "动物细胞横截面图，包含细胞膜、细胞核、细胞质及主要细胞器（线粒体、核糖体、内质网、高尔基体）。"
+        "适合讲解动物细胞结构和细胞器功能。"
+        "不包含细胞壁、叶绿体（植物细胞专有），不包含细菌（原核细胞）结构。"
+    ),
     "views": ["cross_section"],
     "must_have": ["cell_membrane", "nucleus", "cytoplasm"],
     "optional": ["nucleolus", "mitochondria_1", "mitochondria_2", "ribosome", "er_rough", "golgi", "vacuole"],
@@ -85,144 +99,238 @@ META = {
 }
 
 
+def _e(cx, cy, rx, ry, fill, stroke="none", sw=1, opacity=1, **kw) -> str:
+    attrs = f'cx="{cx:.2f}" cy="{cy:.2f}" rx="{rx:.2f}" ry="{ry:.2f}" fill="{fill}" stroke="{stroke}" stroke-width="{sw}"'
+    if opacity != 1:
+        attrs += f' opacity="{opacity}"'
+    for k, v in kw.items():
+        attrs += f' {k.replace("_", "-")}="{v}"'
+    return f'<ellipse {attrs}/>'
+
+
+def _p(d, fill="none", stroke="none", sw=1, **kw) -> str:
+    attrs = f'fill="{fill}" stroke="{stroke}" stroke-width="{sw}"'
+    for k, v in kw.items():
+        attrs += f' {k.replace("_", "-")}="{v}"'
+    return f'<path d="{d}" {attrs}/>'
+
+
+def _g(part_id, content) -> str:
+    return f'<g data-part="{part_id}">{content}</g>'
+
+
+def _mito(mx, my, rx, ry, rot=0) -> str:
+    """Bean-shaped mitochondrion with outer membrane, inner membrane, cristae."""
+    # outer envelope
+    outer = (f'<ellipse cx="{mx:.1f}" cy="{my:.1f}" rx="{rx:.1f}" ry="{ry:.1f}" '
+             f'fill="#FFF3E0" stroke="#E65100" stroke-width="1.8" '
+             f'transform="rotate({rot} {mx:.1f} {my:.1f})"/>')
+    # inner fill gradient
+    inner = (f'<ellipse cx="{mx:.1f}" cy="{my:.1f}" rx="{rx*0.82:.1f}" ry="{ry*0.78:.1f}" '
+             f'fill="url(#cl_mito)" stroke="#FF6D00" stroke-width="0.8" '
+             f'transform="rotate({rot} {mx:.1f} {my:.1f})"/>')
+    # cristae (folded inner membrane)
+    c = math.cos(math.radians(rot))
+    s = math.sin(math.radians(rot))
+    def rot_pt(px, py):
+        return mx + (px - mx) * c - (py - my) * s, my + (px - mx) * s + (py - my) * c
+    cristae = ""
+    for i in range(3):
+        cy_offset = -ry * 0.35 + i * ry * 0.35
+        x0, y0 = mx - rx * 0.6, my + cy_offset
+        x1, y1 = mx + rx * 0.6, my + cy_offset
+        xm, ym = mx, my + cy_offset - ry * 0.18
+        r0 = rot_pt(x0, y0)
+        r1 = rot_pt(x1, y1)
+        rm = rot_pt(xm, ym)
+        cristae += (f'<path d="M {r0[0]:.1f},{r0[1]:.1f} Q {rm[0]:.1f},{rm[1]:.1f} {r1[0]:.1f},{r1[1]:.1f}" '
+                    f'fill="none" stroke="#FF8F00" stroke-width="1.0" opacity="0.7"/>')
+    # highlight
+    hx, hy = rot_pt(mx - rx * 0.28, my - ry * 0.28)
+    hl = f'<ellipse cx="{hx:.1f}" cy="{hy:.1f}" rx="{rx*0.18:.1f}" ry="{ry*0.16:.1f}" fill="white" opacity="0.35"/>'
+    return outer + inner + cristae + hl
+
+
 def build(view: str = "cross_section", variant: str | None = None) -> RenderSpec:
-    """Build an animal cell cross-section RenderSpec. Viewbox: 0 0 560 420."""
-    cx, cy = 280.0, 210.0
-    cell_rx, cell_ry = 220.0, 170.0
+    """Build a high-fidelity animal cell. ViewBox: 0 0 560 420"""
+    W, H = 560, 420
+    cx, cy = W / 2, H / 2   # 280, 210
+    cell_rx, cell_ry = 225.0, 175.0
 
-    shapes: list = []
+    # nucleus position
+    nuc_cx, nuc_cy = cx - 22, cy - 8
+    nuc_rx, nuc_ry = 64.0, 55.0
 
-    # cytoplasm background
-    shapes.append(EllipseShape(
-        id="cytoplasm_bg", part_id="cytoplasm",
-        cx=cx, cy=cy, rx=cell_rx, ry=cell_ry,
-        fill="#FFF9C4", stroke=None,
+    defs = f"""
+<radialGradient id="cl_cyto" cx="40%" cy="35%" r="65%">
+  <stop offset="0%" stop-color="#FFFFF0"/>
+  <stop offset="60%" stop-color="#FFFDE7"/>
+  <stop offset="100%" stop-color="#F0E68C" stop-opacity="0.7"/>
+</radialGradient>
+<radialGradient id="cl_nucleus" cx="35%" cy="30%" r="65%">
+  <stop offset="0%" stop-color="#E3F2FD"/>
+  <stop offset="55%" stop-color="#90CAF9"/>
+  <stop offset="100%" stop-color="#1565C0"/>
+</radialGradient>
+<radialGradient id="cl_nucleolus" cx="40%" cy="35%" r="65%">
+  <stop offset="0%" stop-color="#D1C4E9"/>
+  <stop offset="60%" stop-color="#7B1FA2"/>
+  <stop offset="100%" stop-color="#4A148C"/>
+</radialGradient>
+<radialGradient id="cl_mito" cx="35%" cy="30%" r="65%">
+  <stop offset="0%" stop-color="#FFF8E1"/>
+  <stop offset="55%" stop-color="#FFB300"/>
+  <stop offset="100%" stop-color="#E65100"/>
+</radialGradient>
+<radialGradient id="cl_vacuole" cx="35%" cy="30%" r="65%">
+  <stop offset="0%" stop-color="#E1F5FE"/>
+  <stop offset="70%" stop-color="#0288D1" stop-opacity="0.5"/>
+  <stop offset="100%" stop-color="#01579B" stop-opacity="0.3"/>
+</radialGradient>
+<clipPath id="cl_cell_clip">
+  <ellipse cx="{cx:.1f}" cy="{cy:.1f}" rx="{cell_rx:.1f}" ry="{cell_ry:.1f}"/>
+</clipPath>
+"""
+
+    parts = []
+
+    # ── Cytoplasm ─────────────────────────────────────────────────────────────
+    parts.append(_g("cytoplasm",
+        _e(cx, cy, cell_rx, cell_ry, fill="url(#cl_cyto)")
     ))
 
-    # cell membrane (dashed effect via two ellipses)
-    shapes.append(EllipseShape(
-        id="cell_membrane_outer", part_id="cell_membrane",
-        cx=cx, cy=cy, rx=cell_rx, ry=cell_ry,
-        fill="none", stroke="#F57F17", stroke_width=4.0,
-    ))
-    shapes.append(EllipseShape(
-        id="cell_membrane_inner", part_id=None,
-        cx=cx, cy=cy, rx=cell_rx - 6, ry=cell_ry - 5,
-        fill="none", stroke="#FFE082", stroke_width=2.0, opacity=0.6,
+    # ── Rough ER (inside clip) ────────────────────────────────────────────────
+    er_svg = ""
+    er_x0, er_y = cx - 128, cy + 58
+    er_amp, er_lambda = 12, 48
+    n_waves = 3
+    for line in range(3):
+        dy = line * 14
+        pts = []
+        for i in range(n_waves * 4 + 1):
+            x = er_x0 + i * er_lambda / 4
+            y = er_y + dy + er_amp * math.sin(i * math.pi / 2)
+            pts.append((x, y))
+        d = f"M {pts[0][0]:.1f},{pts[0][1]:.1f}"
+        for i in range(1, len(pts)):
+            d += f" L {pts[i][0]:.1f},{pts[i][1]:.1f}"
+        sw = 2.2 if line == 0 else 1.0
+        op = "1.0" if line < 2 else "0.45"
+        er_svg += f'<path d="{d}" fill="none" stroke="#00BCD4" stroke-width="{sw}" opacity="{op}"/>'
+    # ribosome dots on ER
+    for i, (rx2, ry2) in enumerate([(er_x0 + 20, er_y - 5), (er_x0 + 68, er_y - 5),
+                                     (er_x0 + 116, er_y - 5), (er_x0 + 44, er_y + 10)]):
+        er_svg += (f'<ellipse cx="{rx2:.1f}" cy="{ry2:.1f}" rx="4" ry="3" '
+                   f'fill="#CE93D8" stroke="#8E24AA" stroke-width="0.6"/>')
+    parts.append(_g("er_rough", f'<g clip-path="url(#cl_cell_clip)">{er_svg}</g>'))
+
+    # ── Golgi apparatus ───────────────────────────────────────────────────────
+    golgi_cx, golgi_cy = cx - 120, cy - 45
+    golgi_svg = ""
+    for i in range(5):
+        spread = i * 7
+        w = 50 - i * 5
+        golgi_svg += (f'<path d="M {golgi_cx-w:.1f},{golgi_cy+i*9:.1f} '
+                      f'Q {golgi_cx:.1f},{golgi_cy+i*9-18+spread:.1f} '
+                      f'{golgi_cx+w:.1f},{golgi_cy+i*9:.1f}" '
+                      f'fill="none" stroke="#43A047" stroke-width="{3.0-i*0.4:.1f}" '
+                      f'stroke-linecap="round"/>')
+    # vesicle buds
+    golgi_svg += _e(golgi_cx - 48, golgi_cy + 8, 7, 6, fill="#A5D6A7", stroke="#2E7D32", sw=0.8)
+    golgi_svg += _e(golgi_cx + 48, golgi_cy + 30, 7, 6, fill="#A5D6A7", stroke="#2E7D32", sw=0.8)
+    parts.append(_g("golgi", golgi_svg))
+
+    # ── Mitochondria ─────────────────────────────────────────────────────────
+    parts.append(_g("mitochondria_1", _mito(cx + 106, cy - 48, 38, 19, rot=-15)))
+    parts.append(_g("mitochondria_2", _mito(cx + 92,  cy + 65,  32, 17, rot=10)))
+
+    # ── Ribosomes ────────────────────────────────────────────────────────────
+    ribo_pos = [(cx + 28, cy + 92), (cx + 52, cy + 105), (cx + 18, cy + 114), (cx - 18, cy + 108)]
+    ribo_svg = ""
+    for px2, py2 in ribo_pos:
+        ribo_svg += (f'<ellipse cx="{px2:.1f}" cy="{py2:.1f}" rx="5" ry="4" '
+                     f'fill="#CE93D8" stroke="#8E24AA" stroke-width="0.8"/>')
+        ribo_svg += (f'<ellipse cx="{px2+3:.1f}" cy="{py2+3:.1f}" rx="3.5" ry="3" '
+                     f'fill="#BA68C8" stroke="#8E24AA" stroke-width="0.6"/>')
+    parts.append(_g("ribosome", ribo_svg))
+
+    # ── Vacuole ───────────────────────────────────────────────────────────────
+    parts.append(_g("vacuole",
+        _e(cx + 54, cy - 80, 30, 24, fill="url(#cl_vacuole)", stroke="#0288D1", sw=1.5) +
+        _e(cx + 44, cy - 90, 10, 7, fill="white", opacity=0.4)
     ))
 
-    # nucleus
-    nuc_cx, nuc_cy = cx - 20, cy - 10
-    nuc_rx, nuc_ry = 60.0, 52.0
-    shapes.append(EllipseShape(
-        id="nucleus_bg", part_id="nucleus",
-        cx=nuc_cx, cy=nuc_cy, rx=nuc_rx, ry=nuc_ry,
-        fill="#BBDEFB", stroke="#1565C0", stroke_width=2.5,
-    ))
-    # nuclear pore dots
-    for angle_deg in [30, 90, 150, 210, 270, 330]:
-        import math
+    # ── Nucleus ──────────────────────────────────────────────────────────────
+    # nuclear envelope (outer ring)
+    nuc_svg = (
+        _e(nuc_cx, nuc_cy, nuc_rx + 4, nuc_ry + 3, fill="none", stroke="#1565C0", sw=4, opacity=0.4) +
+        _e(nuc_cx, nuc_cy, nuc_rx, nuc_ry, fill="url(#cl_nucleus)", stroke="#1565C0", sw=2.0)
+    )
+    # nuclear pores
+    for angle_deg in range(0, 360, 45):
         a = math.radians(angle_deg)
-        px = nuc_cx + nuc_rx * math.cos(a)
-        py = nuc_cy + nuc_ry * math.sin(a)
-        shapes.append(EllipseShape(
-            id=f"nuclear_pore_{angle_deg}", part_id=None,
-            cx=px, cy=py, rx=3.5, ry=3.5,
-            fill="#1565C0", opacity=0.7,
-        ))
+        px3 = nuc_cx + nuc_rx * math.cos(a)
+        py3 = nuc_cy + nuc_ry * math.sin(a)
+        nuc_svg += _e(px3, py3, 4.5, 4.5, fill="#1565C0", opacity=0.7)
+        nuc_svg += _e(px3, py3, 2.5, 2.5, fill="#E3F2FD", opacity=0.6)
+    # chromatin texture
+    nuc_svg += _e(nuc_cx + 15, nuc_cy + 12, 20, 14, fill="#90CAF9", opacity=0.35)
+    nuc_svg += _e(nuc_cx - 18, nuc_cy - 8, 14, 10, fill="#64B5F6", opacity=0.3)
+    # catchlight
+    nuc_svg += _e(nuc_cx - nuc_rx * 0.3, nuc_cy - nuc_ry * 0.32, 18, 12, fill="white", opacity=0.18)
+    parts.append(_g("nucleus", nuc_svg))
 
-    # nucleolus
-    shapes.append(EllipseShape(
-        id="nucleolus_ellipse", part_id="nucleolus",
-        cx=nuc_cx + 10, cy=nuc_cy + 5, rx=18, ry=15,
-        fill="#7986CB", stroke="#3949AB", stroke_width=1.5,
-    ))
-
-    # mitochondria (two bean shapes via ellipses)
-    shapes.append(EllipseShape(
-        id="mitochondria_1_ellipse", part_id="mitochondria_1",
-        cx=cx + 100, cy=cy - 50, rx=36, ry=18,
-        fill="#FFCC80", stroke="#E65100", stroke_width=1.5,
-    ))
-    # inner membrane lines
-    shapes.append(PathShape(
-        id="mito_1_crista", part_id=None,
-        d=f"M {cx+82} {cy-50} Q {cx+100} {cy-60} {cx+118} {cy-50}",
-        fill="none", stroke="#FF6D00", stroke_width=1.2,
+    # ── Nucleolus ────────────────────────────────────────────────────────────
+    parts.append(_g("nucleolus",
+        _e(nuc_cx + 12, nuc_cy + 6, 20, 17, fill="url(#cl_nucleolus)", stroke="#6A1B9A", sw=1.5) +
+        _e(nuc_cx + 6, nuc_cy + 0, 7, 6, fill="#CE93D8", opacity=0.5)
     ))
 
-    shapes.append(EllipseShape(
-        id="mitochondria_2_ellipse", part_id="mitochondria_2",
-        cx=cx + 90, cy=cy + 60, rx=30, ry=16,
-        fill="#FFCC80", stroke="#E65100", stroke_width=1.5,
-    ))
-    shapes.append(PathShape(
-        id="mito_2_crista", part_id=None,
-        d=f"M {cx+74} {cy+60} Q {cx+90} {cy+50} {cx+106} {cy+60}",
-        fill="none", stroke="#FF6D00", stroke_width=1.2,
-    ))
+    # ── Cell membrane ─────────────────────────────────────────────────────────
+    # outer phospholipid layer
+    mem_svg = (
+        _e(cx, cy, cell_rx + 4, cell_ry + 4, fill="none", stroke="#F9A825", sw=7, opacity=0.25) +
+        _e(cx, cy, cell_rx, cell_ry, fill="none", stroke="#FFA000", sw=4.0, opacity=0.75) +
+        _e(cx, cy, cell_rx - 7, cell_ry - 5, fill="none", stroke="#FFD54F", sw=2.0, opacity=0.45)
+    )
+    # phospholipid heads (dots along membrane)
+    for angle_deg in range(0, 360, 18):
+        a = math.radians(angle_deg)
+        px4 = cx + cell_rx * math.cos(a)
+        py4 = cy + cell_ry * math.sin(a)
+        mem_svg += _e(px4, py4, 3, 3, fill="#FFA000", opacity=0.55)
+    parts.append(_g("cell_membrane", mem_svg))
 
-    # ribosomes (small dots near ER)
-    for i, (rx2, ry2) in enumerate([(cx + 30, cy + 90), (cx + 50, cy + 100), (cx + 20, cy + 110), (cx - 20, cy + 105)]):
-        shapes.append(EllipseShape(
-            id=f"ribosome_{i}", part_id="ribosome" if i == 0 else None,
-            cx=rx2, cy=ry2, rx=5, ry=5,
-            fill="#E040FB", stroke=None,
-        ))
+    body_svg = "\n".join(parts)
 
-    # rough ER (wavy path)
-    shapes.append(PathShape(
-        id="er_rough_path", part_id="er_rough",
-        d=(f"M {cx - 120} {cy + 60} "
-           f"C {cx - 100} {cy + 40} {cx - 80} {cy + 80} {cx - 60} {cy + 60} "
-           f"C {cx - 40} {cy + 40} {cx - 20} {cy + 80} {cx} {cy + 70}"),
-        fill="none", stroke="#26C6DA", stroke_width=2.5,
-    ))
-    shapes.append(PathShape(
-        id="er_rough_path2", part_id=None,
-        d=(f"M {cx - 115} {cy + 70} "
-           f"C {cx - 95} {cy + 50} {cx - 75} {cy + 90} {cx - 55} {cy + 70} "
-           f"C {cx - 35} {cy + 50} {cx - 15} {cy + 90} {cx + 5} {cy + 80}"),
-        fill="none", stroke="#26C6DA", stroke_width=1.2, opacity=0.5,
-    ))
-
-    # Golgi (stacked arcs)
-    golgi_cx, golgi_cy = cx - 110, cy - 40
-    for i in range(4):
-        offset = i * 8
-        shapes.append(PathShape(
-            id=f"golgi_arc_{i}", part_id="golgi" if i == 0 else None,
-            d=(f"M {golgi_cx - 30 + offset} {golgi_cy} "
-               f"Q {golgi_cx} {golgi_cy - 20 + offset * 2} {golgi_cx + 30 - offset} {golgi_cy}"),
-            fill="none", stroke="#66BB6A", stroke_width=3.0 - i * 0.5,
-        ))
-
-    # vacuole
-    shapes.append(EllipseShape(
-        id="vacuole_ellipse", part_id="vacuole",
-        cx=cx + 50, cy=cy - 80, rx=28, ry=22,
-        fill="#B3E5FC", stroke="#0288D1", stroke_width=1.5, opacity=0.8,
-    ))
+    # ── Anchors ───────────────────────────────────────────────────────────────
+    def px(x): return round(x / W * 100, 1)
+    def py(y): return round(y / H * 100, 1)
 
     anchors = [
-        LabelAnchor(part_id="cell_membrane",  x=88.0, y=50.0),
-        LabelAnchor(part_id="cytoplasm",       x=16.0, y=74.0),
-        LabelAnchor(part_id="nucleus",         x=28.0, y=30.0),
-        LabelAnchor(part_id="nucleolus",       x=38.0, y=42.0),
-        LabelAnchor(part_id="mitochondria_1",  x=72.0, y=22.0),
-        LabelAnchor(part_id="mitochondria_2",  x=72.0, y=72.0),
-        LabelAnchor(part_id="ribosome",        x=56.0, y=82.0),
-        LabelAnchor(part_id="er_rough",        x=22.0, y=70.0),
-        LabelAnchor(part_id="golgi",           x=14.0, y=42.0),
-        LabelAnchor(part_id="vacuole",         x=62.0, y=14.0),
+        LabelAnchor(part_id="cell_membrane",  x=px(cx + cell_rx + 12), y=py(cy)),
+        LabelAnchor(part_id="cytoplasm",       x=px(18),                y=py(cy + 80)),
+        LabelAnchor(part_id="nucleus",         x=px(nuc_cx - nuc_rx - 16), y=py(nuc_cy - 10)),
+        LabelAnchor(part_id="nucleolus",       x=px(nuc_cx - 10),       y=py(nuc_cy + 28)),
+        LabelAnchor(part_id="mitochondria_1",  x=px(cx + 106 + 42),     y=py(cy - 48)),
+        LabelAnchor(part_id="mitochondria_2",  x=px(cx + 92 + 36),      y=py(cy + 65)),
+        LabelAnchor(part_id="ribosome",        x=px(cx + 60),           y=py(cy + 108)),
+        LabelAnchor(part_id="er_rough",        x=px(er_x0 - 18),        y=py(er_y + 10)),
+        LabelAnchor(part_id="golgi",           x=px(golgi_cx - 58),     y=py(golgi_cy + 20)),
+        LabelAnchor(part_id="vacuole",         x=px(cx + 54 + 34),      y=py(cy - 80)),
     ]
 
-    rendered_parts = list({s.part_id for s in shapes if s.part_id})
+    rendered_parts = [
+        "cell_membrane", "cytoplasm", "nucleus", "nucleolus",
+        "mitochondria_1", "mitochondria_2", "ribosome", "er_rough", "golgi", "vacuole",
+    ]
 
     return RenderSpec(
         object_key="cell.animal",
-        viewbox="0 0 560 420",
-        shapes=shapes,
+        viewbox=f"0 0 {W} {H}",
+        shapes=[],
         anchors=anchors,
         rendered_parts=rendered_parts,
+        defs_svg=defs.strip(),
+        body_svg=body_svg,
     )

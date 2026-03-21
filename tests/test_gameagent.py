@@ -635,7 +635,8 @@ class TestObjectRegistry:
         from systemedu.agents.builtin.gameagent.objects import ObjectRegistry
         rs = ObjectRegistry.build("rocket.basic", view="side")
         assert rs.object_key == "rocket.basic"
-        assert len(rs.shapes) > 0
+        # High-fidelity objects use body_svg; legacy objects use shapes
+        assert len(rs.shapes) > 0 or bool(rs.body_svg)
         assert len(rs.anchors) > 0
         assert len(rs.rendered_parts) > 0
 
@@ -678,7 +679,11 @@ class TestObjectRegistry:
     def test_render_spec_viewbox(self):
         from systemedu.agents.builtin.gameagent.objects import ObjectRegistry
         rs = ObjectRegistry.build("rocket.basic")
-        assert rs.viewbox == "0 0 560 420"
+        # viewbox starts with "0 0 " and has positive dimensions
+        parts = rs.viewbox.split()
+        assert len(parts) == 4
+        assert parts[0] == "0" and parts[1] == "0"
+        assert int(parts[2]) > 0 and int(parts[3]) > 0
 
     def test_shapes_have_valid_types(self):
         from systemedu.agents.builtin.gameagent.objects import ObjectRegistry

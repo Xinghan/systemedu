@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useCallback, useEffect, useRef } from "react"
+import { createPortal } from "react-dom"
 import {
   ChevronRight,
   ChevronDown,
@@ -21,6 +22,7 @@ interface KnowledgeTreeViewProps {
   progress: NodeProgress[]
   activeNodeId?: number | null
   onNodeClick?: (nodeId: number) => void
+  searchQuery?: string
 }
 
 const STATUS_CONFIG: Record<string, {
@@ -67,13 +69,84 @@ const STATUS_CONFIG: Record<string, {
   },
 }
 
+// Portal tooltip that escapes overflow containers
+interface TooltipData {
+  knode: MilestoneInfo["knodes"][number]
+  status: string
+  cfg: typeof STATUS_CONFIG[string]
+  rect: DOMRect
+}
+
+function NodeTooltip({ data }: { data: TooltipData }) {
+  const { knode, cfg } = data
+  const StatusIcon = cfg.icon
+
+  // Position: try right of element first, fallback to left if too close to edge
+  const TOOLTIP_W = 280
+  const TOOLTIP_OFFSET = 8
+  const viewportW = window.innerWidth
+
+  let left = data.rect.right + TOOLTIP_OFFSET
+  if (left + TOOLTIP_W > viewportW - 8) {
+    left = data.rect.left - TOOLTIP_W - TOOLTIP_OFFSET
+  }
+
+  // Vertical: align with top of element, clamp to viewport
+  const TOOLTIP_APPROX_H = 160
+  let top = data.rect.top
+  if (top + TOOLTIP_APPROX_H > window.innerHeight - 8) {
+    top = window.innerHeight - TOOLTIP_APPROX_H - 8
+  }
+
+  return createPortal(
+    <div
+      className="fixed z-[9999] pointer-events-none"
+      style={{ left, top, width: TOOLTIP_W }}
+    >
+      <div className="rounded-lg border bg-popover text-popover-foreground shadow-lg p-3 space-y-2">
+        <div className="flex items-start gap-2">
+          <StatusIcon className={`h-4 w-4 shrink-0 mt-0.5 ${cfg.color}`} />
+          <p className="text-sm font-semibold leading-tight">{knode.title}</p>
+        </div>
+        {knode.summary && (
+          <p className="text-xs text-muted-foreground leading-relaxed">
+            {knode.summary}
+          </p>
+        )}
+        <div className="flex items-center gap-3 pt-1 border-t text-xs text-muted-foreground">
+          <span className="flex items-center gap-1">
+            <Zap className="h-3 w-3" />
+            难度 {knode.difficulty_level}
+          </span>
+          <span className="flex items-center gap-1">
+            <Clock className="h-3 w-3" />
+            {knode.estimated_minutes} 分钟
+          </span>
+          <span className="flex items-center gap-1">
+            <BookOpen className="h-3 w-3" />
+            {knode.xp_reward} XP
+          </span>
+        </div>
+        <div>
+          <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium ${cfg.badgeClass}`}>
+            {cfg.label}
+          </span>
+        </div>
+      </div>
+    </div>,
+    document.body,
+  )
+}
+
 export function KnowledgeTreeView({
   milestones,
   progress,
   activeNodeId,
   onNodeClick,
+  searchQuery = "",
 }: KnowledgeTreeViewProps) {
   const progressMap = new Map(progress.map((p) => [p.knode_id, p]))
+  const [hoveredTooltip, setHoveredTooltip] = useState<TooltipData | null>(null)
 
   // Compute which milestone index each globalId belongs to
   const nodeToMsIdx = new Map<number, number>()
@@ -119,14 +192,31 @@ export function KnowledgeTreeView({
     })
   }, [])
 
+  const lq = searchQuery.trim().toLowerCase()
+
   let globalIdx = 0
 
   return (
     <div className="space-y-2">
+      {hoveredTooltip && <NodeTooltip data={hoveredTooltip} />}
       {milestones.map((ms, msIdx) => {
         const startIdx = globalIdx
         const knodeIds = ms.knodes.map((_, i) => startIdx + i)
         globalIdx += ms.knodes.length
+
+        // Filter nodes by search query
+        const visibleKnodes = lq
+          ? ms.knodes.map((knode, li) => ({ knode, li })).filter(
+              ({ knode }) =>
+                knode.title.toLowerCase().includes(lq) ||
+                (knode.summary ?? "").toLowerCase().includes(lq)
+            )
+          : ms.knodes.map((knode, li) => ({ knode, li }))
+
+        // Hide milestone entirely if no nodes match
+        if (lq && visibleKnodes.length === 0) {
+          return null
+        }
 
         const passedCount = knodeIds.filter(
           (id) => progressMap.get(id)?.status === "passed"
@@ -188,10 +278,10 @@ export function KnowledgeTreeView({
             </button>
 
             {/* Expanded knode list */}
-            {isExpanded && (
+            {(isExpanded || lq) && (
               <div className="border-t px-4 pb-3 pt-1">
                 <div className="space-y-1">
-                  {ms.knodes.map((knode, li) => {
+                  {visibleKnodes.map(({ knode, li }) => {
                     const nodeId = startIdx + li
                     const p = progressMap.get(nodeId)
                     const status = p?.status ?? "locked"
@@ -208,6 +298,11 @@ export function KnowledgeTreeView({
                           else nodeRefs.current.delete(nodeId)
                         }}
                         onClick={isClickable ? () => onNodeClick!(nodeId) : undefined}
+                        onMouseEnter={(e) => {
+                          const rect = (e.currentTarget as HTMLDivElement).getBoundingClientRect()
+                          setHoveredTooltip({ knode, status, cfg, rect })
+                        }}
+                        onMouseLeave={() => setHoveredTooltip(null)}
                         className={`flex items-center gap-3 rounded-md px-3 py-2.5 transition-colors ${
                           isActive
                             ? "bg-primary/10 ring-1 ring-primary/30"
