@@ -125,7 +125,10 @@ def client(tmp_path, monkeypatch, project_dir):
     server._runtime = None
     from systemedu.gateway.server import create_app
     app = create_app()
-    return TestClient(app)
+    c = TestClient(app)
+    token = c.post("/api/auth/login", json={"username": "root", "password": "123systemedu"}).json()["token"]
+    c.headers.update({"Authorization": f"Bearer {token}"})
+    return c
 
 
 class TestUpdateTreeAPI:

@@ -31,7 +31,36 @@ import type {
   StatusResponse,
   TreePreviewResponse,
 } from "@/lib/types/api"
-import { api } from "./client"
+import { api, GATEWAY_URL } from "./client"
+import { setToken, clearToken, getToken } from "@/lib/auth"
+
+export const auth = {
+  login: async (username: string, password: string): Promise<{ token: string; username: string }> => {
+    const res = await fetch(`${GATEWAY_URL}/api/auth/login`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ username, password }),
+    })
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}))
+      throw new Error(body.error || "Login failed")
+    }
+    const data = await res.json()
+    setToken(data.token)
+    return data
+  },
+  logout: async (): Promise<void> => {
+    const token = getToken()
+    if (token) {
+      await fetch(`${GATEWAY_URL}/api/auth/logout`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
+      }).catch(() => {})
+    }
+    clearToken()
+  },
+  me: () => api.get<{ username: string; valid: boolean }>("/api/auth/me"),
+}
 
 export interface FullSession {
   id: string

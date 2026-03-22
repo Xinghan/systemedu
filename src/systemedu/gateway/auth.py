@@ -1,0 +1,42 @@
+"""Simple token-based authentication for the gateway."""
+
+import secrets
+import time
+
+from starlette.requests import Request
+from starlette.responses import JSONResponse
+
+CREDENTIALS: dict[str, str] = {"root": "123systemedu"}
+TOKEN_TTL = 86400 * 7  # 7 days
+
+_VALID_TOKENS: dict[str, float] = {}  # token -> expire_ts
+
+
+def create_token(username: str) -> str:
+    token = secrets.token_hex(32)
+    _VALID_TOKENS[token] = time.time() + TOKEN_TTL
+    return token
+
+
+def verify_token(token: str) -> bool:
+    exp = _VALID_TOKENS.get(token)
+    return exp is not None and time.time() < exp
+
+
+def revoke_token(token: str) -> None:
+    _VALID_TOKENS.pop(token, None)
+
+
+def _extract_token(request: Request) -> str | None:
+    auth = request.headers.get("Authorization", "")
+    if auth.startswith("Bearer "):
+        return auth[7:]
+    return None
+
+
+async def require_auth(request: Request) -> JSONResponse | None:
+    """Return 401 JSONResponse if token is missing/invalid, else None."""
+    token = _extract_token(request)
+    if not token or not verify_token(token):
+        return JSONResponse({"error": "Unauthorized"}, status_code=401)
+    return None

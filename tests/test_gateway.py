@@ -11,6 +11,14 @@ from systemedu.core.config import reset_config
 from systemedu.gateway.server import create_app
 
 
+def _auth_client(app) -> TestClient:
+    """Create an authenticated TestClient."""
+    c = TestClient(app)
+    token = c.post("/api/auth/login", json={"username": "root", "password": "123systemedu"}).json()["token"]
+    c.headers.update({"Authorization": f"Bearer {token}"})
+    return c
+
+
 @pytest.fixture(autouse=True)
 def clean_config():
     reset_config()
@@ -53,7 +61,10 @@ def client(config_env):
     from systemedu.gateway import server
     server._runtime = None  # Reset cached runtime
     app = create_app()
-    return TestClient(app)
+    c = TestClient(app)
+    token = c.post("/api/auth/login", json={"username": "root", "password": "123systemedu"}).json()["token"]
+    c.headers.update({"Authorization": f"Bearer {token}"})
+    return c
 
 
 class TestGatewayAPI:
@@ -116,7 +127,7 @@ class TestGatewayNewEndpoints:
         monkeypatch.chdir(tmp_path)
 
         app = create_app()
-        client = TestClient(app)
+        client = _auth_client(app)
         resp = client.get("/api/projects")
         assert resp.status_code == 200
         data = resp.json()
@@ -134,7 +145,7 @@ class TestGatewayNewEndpoints:
         # Override home to avoid scanning real ~/projects
         monkeypatch.setattr("pathlib.Path.home", lambda: tmp_path / "fakehome")
         app = create_app()
-        client = TestClient(app)
+        client = _auth_client(app)
         resp = client.get("/api/projects")
         assert resp.status_code == 200
         assert resp.json() == []
@@ -176,7 +187,7 @@ class TestGatewayNewEndpoints:
     def test_mcp_add_and_remove(self, config_env):
         """POST/DELETE /api/mcp/servers lifecycle."""
         app = create_app()
-        client = TestClient(app)
+        client = _auth_client(app)
 
         # Add
         resp = client.post(
@@ -189,7 +200,7 @@ class TestGatewayNewEndpoints:
         # Verify it's listed
         reset_config()
         app2 = create_app()
-        client2 = TestClient(app2)
+        client2 = _auth_client(app2)
         resp = client2.get("/api/mcp/servers")
         assert resp.status_code == 200
         names = [s["name"] for s in resp.json()]
@@ -198,7 +209,7 @@ class TestGatewayNewEndpoints:
         # Remove
         reset_config()
         app3 = create_app()
-        client3 = TestClient(app3)
+        client3 = _auth_client(app3)
         resp = client3.delete("/api/mcp/servers/test-mcp")
         assert resp.status_code == 200
         assert resp.json()["status"] == "removed"
@@ -216,7 +227,7 @@ class TestGatewayNewEndpoints:
     def test_config_update(self, config_env):
         """PUT /api/config updates config values."""
         app = create_app()
-        client = TestClient(app)
+        client = _auth_client(app)
 
         resp = client.put(
             "/api/config",
@@ -228,7 +239,7 @@ class TestGatewayNewEndpoints:
         # Verify the change persists
         reset_config()
         app2 = create_app()
-        client2 = TestClient(app2)
+        client2 = _auth_client(app2)
         resp = client2.get("/api/config")
         assert resp.json()["llm"]["default"] == "claude"
 
@@ -263,7 +274,7 @@ class TestGatewayNodeContext:
         db.close()
 
         app = create_app()
-        client = TestClient(app)
+        client = _auth_client(app)
         resp = client.get("/api/projects/test-proj/nodes/0/context")
         assert resp.status_code == 200
         data = resp.json()
@@ -286,7 +297,7 @@ class TestGatewayLessonAPI:
         reset_db()
 
         app = create_app()
-        client = TestClient(app)
+        client = _auth_client(app)
         resp = client.get("/api/projects/test-proj/nodes/0/lesson")
         assert resp.status_code == 200
         data = resp.json()
@@ -316,7 +327,7 @@ class TestGatewayLessonAPI:
         db.close()
 
         app = create_app()
-        client = TestClient(app)
+        client = _auth_client(app)
         resp = client.get("/api/projects/test-proj/nodes/0/lesson")
         assert resp.status_code == 200
         data = resp.json()
@@ -373,7 +384,7 @@ class TestGatewayLessonAPI:
         db.close()
 
         app = create_app()
-        client = TestClient(app)
+        client = _auth_client(app)
         resp = client.get("/api/projects/test-proj/nodes/1/lesson")
         assert resp.status_code == 200
         data = resp.json()
@@ -395,7 +406,7 @@ class TestGatewayLessonAPI:
         reset_db()
 
         app = create_app()
-        client = TestClient(app)
+        client = _auth_client(app)
         resp = client.patch(
             "/api/projects/test-proj/nodes/0/progress",
             json={"status": "passed"},
@@ -418,7 +429,7 @@ class TestGatewayLessonAPI:
         reset_db()
 
         app = create_app()
-        client = TestClient(app)
+        client = _auth_client(app)
         resp = client.patch(
             "/api/projects/test-proj/nodes/0/progress",
             json={"status": "invalid"},
@@ -435,7 +446,7 @@ class TestGatewayLessonAPI:
         reset_db()
 
         app = create_app()
-        client = TestClient(app)
+        client = _auth_client(app)
         resp = client.patch(
             "/api/projects/test-proj/nodes/0/progress",
             json={},
@@ -508,7 +519,7 @@ class TestGatewayUnlockNodes:
         assert ctx.progress[1].status.value == "locked"
 
         app = create_app()
-        client = TestClient(app)
+        client = _auth_client(app)
 
         # Mark node 0 as passed
         resp = client.patch(
@@ -572,7 +583,7 @@ class TestGatewayCreateProject:
     def test_preview_tree_leaf_format(self, config_env):
         """POST /api/projects/preview-tree converts and validates tree_leaf format."""
         app = create_app()
-        client = TestClient(app)
+        client = _auth_client(app)
         resp = client.post(
             "/api/projects/preview-tree",
             json={"tree_data": self.TREE_LEAF_DATA},
@@ -588,7 +599,7 @@ class TestGatewayCreateProject:
     def test_preview_milestones_format(self, config_env):
         """POST /api/projects/preview-tree passes through milestones format."""
         app = create_app()
-        client = TestClient(app)
+        client = _auth_client(app)
         resp = client.post(
             "/api/projects/preview-tree",
             json={"tree_data": self.MILESTONES_DATA},
@@ -600,7 +611,7 @@ class TestGatewayCreateProject:
     def test_preview_invalid_format(self, config_env):
         """POST /api/projects/preview-tree rejects unrecognized format."""
         app = create_app()
-        client = TestClient(app)
+        client = _auth_client(app)
         resp = client.post(
             "/api/projects/preview-tree",
             json={"tree_data": {"random": "data"}},
@@ -610,7 +621,7 @@ class TestGatewayCreateProject:
     def test_preview_missing_tree_data(self, config_env):
         """POST /api/projects/preview-tree requires tree_data."""
         app = create_app()
-        client = TestClient(app)
+        client = _auth_client(app)
         resp = client.post("/api/projects/preview-tree", json={})
         assert resp.status_code == 400
 
@@ -620,7 +631,7 @@ class TestGatewayCreateProject:
         (tmp_path / "projects").mkdir()
 
         app = create_app()
-        client = TestClient(app)
+        client = _auth_client(app)
         resp = client.post(
             "/api/projects",
             json={
@@ -641,7 +652,7 @@ class TestGatewayCreateProject:
     def test_create_project_missing_name(self, config_env):
         """POST /api/projects requires name."""
         app = create_app()
-        client = TestClient(app)
+        client = _auth_client(app)
         resp = client.post(
             "/api/projects",
             json={"tree_data": self.MILESTONES_DATA},
@@ -655,7 +666,7 @@ class TestGatewayCreateProject:
         proj_dir.mkdir(parents=True)
 
         app = create_app()
-        client = TestClient(app)
+        client = _auth_client(app)
         resp = client.post(
             "/api/projects",
             json={
@@ -671,7 +682,7 @@ class TestGatewayCreateProject:
         (tmp_path / "projects").mkdir()
 
         app = create_app()
-        client = TestClient(app)
+        client = _auth_client(app)
         resp = client.post(
             "/api/projects",
             json={
@@ -696,7 +707,7 @@ class TestGatewayEnrollment:
         reset_db()
 
         app = create_app()
-        client = TestClient(app)
+        client = _auth_client(app)
         resp = client.post("/api/projects/nonexistent/enroll", json={})
         assert resp.status_code == 404
 
@@ -744,7 +755,7 @@ class TestGatewayEnrollment:
         reset_db()
 
         app = create_app()
-        client = TestClient(app)
+        client = _auth_client(app)
         resp = client.post("/api/projects/enroll-test/enroll", json={})
         assert resp.status_code == 200
         data = resp.json()
@@ -763,7 +774,7 @@ class TestGatewayEnrollment:
         reset_db()
 
         app = create_app()
-        client = TestClient(app)
+        client = _auth_client(app)
         resp = client.get("/api/projects/some-proj/enrollment")
         assert resp.status_code == 200
         assert resp.json() is None
@@ -793,7 +804,7 @@ class TestGatewayEnrollment:
         db.close()
 
         app = create_app()
-        client = TestClient(app)
+        client = _auth_client(app)
         resp = client.get("/api/projects/test-proj/enrollment")
         assert resp.status_code == 200
         data = resp.json()
@@ -812,7 +823,7 @@ class TestGatewayEnrollment:
         reset_db()
 
         app = create_app()
-        client = TestClient(app)
+        client = _auth_client(app)
         resp = client.patch(
             "/api/projects/some-proj/enrollment",
             json={"add_time_seconds": 60},
@@ -842,7 +853,7 @@ class TestGatewayEnrollment:
         db.close()
 
         app = create_app()
-        client = TestClient(app)
+        client = _auth_client(app)
         resp = client.patch(
             "/api/projects/time-proj/enrollment",
             json={"add_time_seconds": 60},
@@ -873,7 +884,7 @@ class TestGatewayEnrollment:
         db.close()
 
         app = create_app()
-        client = TestClient(app)
+        client = _auth_client(app)
         resp = client.patch(
             "/api/projects/pause-proj/enrollment",
             json={"status": "paused"},
@@ -924,7 +935,7 @@ class TestGatewayEnrollment:
         reset_db()
 
         app = create_app()
-        client = TestClient(app)
+        client = _auth_client(app)
         resp = client.get("/api/projects/detail-test")
         assert resp.status_code == 200
         data = resp.json()
@@ -984,7 +995,7 @@ class TestGatewayEnrollment:
         reset_db()
 
         app = create_app()
-        client = TestClient(app)
+        client = _auth_client(app)
 
         # Enroll first (total_nodes=1)
         resp = client.post("/api/projects/complete-test/enroll", json={})
@@ -1021,7 +1032,7 @@ class TestGatewayChatUserId:
             patch("systemedu.core.agent_backend.create_deep_agent", return_value=mock_agent),
         ):
             app = create_app()
-            client = TestClient(app)
+            client = _auth_client(app)
 
             resp = client.post(
                 "/api/chat",
@@ -1043,7 +1054,7 @@ class TestGatewayChatUserId:
             patch("systemedu.core.agent_backend.create_deep_agent", return_value=mock_agent),
         ):
             app = create_app()
-            client = TestClient(app)
+            client = _auth_client(app)
 
             resp = client.post(
                 "/api/chat",
@@ -1059,7 +1070,7 @@ class TestGatewayGenerateTree:
     def test_generate_tree_missing_fields(self, config_env):
         """POST /api/projects/generate-tree requires title and description."""
         app = create_app()
-        client = TestClient(app)
+        client = _auth_client(app)
         resp = client.post("/api/projects/generate-tree", json={"title": "test"})
         assert resp.status_code == 400
         assert "description" in resp.json()["error"]
@@ -1067,7 +1078,7 @@ class TestGatewayGenerateTree:
     def test_generate_tree_empty_title(self, config_env):
         """POST /api/projects/generate-tree rejects empty title."""
         app = create_app()
-        client = TestClient(app)
+        client = _auth_client(app)
         resp = client.post(
             "/api/projects/generate-tree",
             json={"title": "", "description": "some desc"},
@@ -1108,7 +1119,7 @@ class TestGatewayGenerateTree:
             return_value=mock_tree,
         ):
             app = create_app()
-            client = TestClient(app)
+            client = _auth_client(app)
             resp = client.post(
                 "/api/projects/generate-tree",
                 json={"title": "AI 树叶识别", "description": "学习用AI识别树叶种类", "age": 10},
@@ -1132,7 +1143,7 @@ class TestGatewayGenerateTree:
             side_effect=RuntimeError("LLM timeout"),
         ):
             app = create_app()
-            client = TestClient(app)
+            client = _auth_client(app)
             resp = client.post(
                 "/api/projects/generate-tree",
                 json={"title": "Test", "description": "Test project"},
@@ -1164,7 +1175,7 @@ class TestGatewayGenerateTree:
             return_value=mock_tree,
         ) as mock_gen:
             app = create_app()
-            client = TestClient(app)
+            client = _auth_client(app)
             resp = client.post(
                 "/api/projects/generate-tree",
                 json={"title": "Test", "description": "Desc", "node_count": 100},
@@ -1198,7 +1209,7 @@ class TestGatewayGenerateTree:
             return_value=mock_tree,
         ) as mock_gen:
             app = create_app()
-            client = TestClient(app)
+            client = _auth_client(app)
             # Test clamping below minimum
             resp = client.post(
                 "/api/projects/generate-tree",
@@ -1231,7 +1242,7 @@ class TestGatewayGenerateTree:
             return_value=mock_tree,
         ) as mock_gen:
             app = create_app()
-            client = TestClient(app)
+            client = _auth_client(app)
             resp = client.post(
                 "/api/projects/generate-tree",
                 json={"title": "T", "description": "D"},

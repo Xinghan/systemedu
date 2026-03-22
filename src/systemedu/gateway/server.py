@@ -19,6 +19,15 @@ from starlette.websockets import WebSocket
 
 logger = logging.getLogger(__name__)
 
+from systemedu.gateway.auth import (  # noqa: E402
+    CREDENTIALS,
+    create_token,
+    require_auth,
+    revoke_token,
+    verify_token,
+    _extract_token,
+)
+
 # Track server start time for uptime calculation
 _start_time: float = 0.0
 
@@ -98,6 +107,39 @@ def _format_uptime(seconds: float) -> str:
     if minutes > 0:
         return f"{minutes}m {secs}s"
     return f"{secs}s"
+
+
+# --- Auth Endpoints ---
+
+
+async def api_auth_login(request: Request) -> JSONResponse:
+    """POST /api/auth/login - Authenticate and get token."""
+    try:
+        body = await request.json()
+    except Exception:
+        return JSONResponse({"error": "Invalid JSON"}, status_code=400)
+    username = body.get("username", "")
+    password = body.get("password", "")
+    if CREDENTIALS.get(username) != password:
+        return JSONResponse({"error": "Invalid credentials"}, status_code=401)
+    token = create_token(username)
+    return JSONResponse({"token": token, "username": username})
+
+
+async def api_auth_logout(request: Request) -> JSONResponse:
+    """POST /api/auth/logout - Revoke current token."""
+    token = _extract_token(request)
+    if token:
+        revoke_token(token)
+    return JSONResponse({"status": "ok"})
+
+
+async def api_auth_me(request: Request) -> JSONResponse:
+    """GET /api/auth/me - Check token validity."""
+    token = _extract_token(request)
+    if not token or not verify_token(token):
+        return JSONResponse({"error": "Unauthorized"}, status_code=401)
+    return JSONResponse({"username": "root", "valid": True})
 
 
 # --- API Endpoints ---
@@ -2102,6 +2144,44 @@ async def api_get_all_notes(request: Request) -> JSONResponse:
         db.close()
 
 
+_AUTH_PUBLIC_PATHS = {"/api/auth/login", "/api/auth/logout", "/api/auth/me", "/api/status", "/"}
+
+
+class _AuthMiddleware:
+    """ASGI middleware that enforces Bearer token auth on all /api/* paths except public ones."""
+
+    def __init__(self, app):
+        self.app = app
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] not in ("http", "websocket"):
+            await self.app(scope, receive, send)
+            return
+
+        path = scope.get("path", "")
+        # Only protect /api/* routes
+        if not path.startswith("/api/"):
+            await self.app(scope, receive, send)
+            return
+
+        # Public paths skip auth
+        if path in _AUTH_PUBLIC_PATHS:
+            await self.app(scope, receive, send)
+            return
+
+        # Extract token from Authorization header
+        headers = dict(scope.get("headers", []))
+        auth = headers.get(b"authorization", b"").decode("utf-8", errors="replace")
+        token = auth[7:] if auth.startswith("Bearer ") else ""
+
+        if not token or not verify_token(token):
+            response = JSONResponse({"error": "Unauthorized"}, status_code=401)
+            await response(scope, receive, send)
+            return
+
+        await self.app(scope, receive, send)
+
+
 def create_app() -> Starlette:
     """Create the Starlette ASGI application."""
     global _start_time
@@ -2162,6 +2242,11 @@ def create_app() -> Starlette:
     media_dir.mkdir(parents=True, exist_ok=True)
     routes.append(Mount("/api/media", StaticFiles(directory=str(media_dir)), name="media"))
 
+    # Auth routes (public)
+    routes.insert(0, Route("/api/auth/login", api_auth_login, methods=["POST"]))
+    routes.insert(1, Route("/api/auth/logout", api_auth_logout, methods=["POST"]))
+    routes.insert(2, Route("/api/auth/me", api_auth_me, methods=["GET"]))
+
     middleware = [
         Middleware(
             CORSMiddleware,
@@ -2169,6 +2254,7 @@ def create_app() -> Starlette:
             allow_methods=["*"],
             allow_headers=["*"],
         ),
+        Middleware(_AuthMiddleware),
     ]
 
     app = Starlette(
