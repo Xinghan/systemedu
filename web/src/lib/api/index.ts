@@ -21,6 +21,7 @@ import type {
   PracticeSubmissionSummary,
   ProjectNotesResponse,
   ProjectResourcesResponse,
+  ResourceItem,
   ResourceSearchResponse,
   UpdateProgressResponse,
   ProjectDetail,
