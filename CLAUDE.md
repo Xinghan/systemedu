@@ -101,7 +101,7 @@ systemedu/
 
 ## Common Commands
 
-### Restart (Backend + Frontend)
+### Restart (Backend + Frontend) - 本地开发
 ```bash
 ./scripts/restart.sh
 ```
@@ -114,6 +114,59 @@ Kills existing processes on ports 18820 (backend) and 3000 (frontend), then star
 ### Run Tests
 ```bash
 source .venv/bin/activate && python -m pytest tests/ -v
+```
+
+---
+
+## 生产服务器
+
+- **地址**: 47.92.200.21
+- **系统**: Ubuntu 24.04，阿里云 ECS
+- **访问**: http://47.92.200.21
+- **账号**: root / 123systemedu（应用登录）
+
+### SSH 登录服务器
+```bash
+./scripts/server-ssh.sh
+# 或直接:
+ssh root@47.92.200.21
+# 密码: c1x2h3419850208!  (! 需注意 shell 历史扩展，建议用 ssh-copy-id 后免密登录)
+```
+
+### 部署最新代码到生产
+```bash
+./scripts/deploy.sh
+```
+打包本地代码 -> scp 上传 -> 服务器解压 + pip install + npm build -> 重启服务 -> 验证。
+
+### 服务器目录结构
+```
+/opt/systemedu/          # 项目代码
+/root/.systemedu/        # 用户数据（config.yaml、systemedu.db、media/）
+/etc/systemd/system/systemedu-backend.service
+/etc/systemd/system/systemedu-frontend.service
+/etc/nginx/sites-available/systemedu
+```
+
+### 服务管理
+```bash
+# 查看服务状态
+./scripts/server-ssh.sh "systemctl status systemedu-backend systemedu-frontend nginx"
+
+# 查看后端日志
+./scripts/server-ssh.sh "journalctl -u systemedu-backend -n 100 -f"
+
+# 查看前端日志
+./scripts/server-ssh.sh "journalctl -u systemedu-frontend -n 50"
+
+# 重启服务
+./scripts/server-ssh.sh "systemctl restart systemedu-backend systemedu-frontend"
+```
+
+### 架构
+```
+Internet -> nginx:80 -> /api/*  -> uvicorn:18820 (Python gateway)
+                     -> /*      -> Next.js:3000  (npm start)
 ```
 
 ## Development Rules
