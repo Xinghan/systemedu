@@ -904,3 +904,191 @@ class TestCompilerWithObjectSpec:
             mq_module._DEFAULT_QUEUE_PATH = original
 
         assert not queue_path.exists() or queue_path.read_text().strip() == ""
+
+
+# ---------------------------------------------------------------------------
+# SimulationSceneJS model tests
+# ---------------------------------------------------------------------------
+
+class TestSimulationSceneJS:
+    def test_model_fields_exist(self):
+        from systemedu.agents.builtin.gameagent.spec import SimulationSceneJS
+        s = SimulationSceneJS(
+            static_svg="<rect x='0' y='0' width='100' height='100'/>",
+            dynamic_fn="return '<circle cx=\"50\" cy=\"50\" r=\"10\"/>';",
+        )
+        assert s.static_svg != ""
+        assert s.dynamic_fn != ""
+
+    def test_model_defaults_empty(self):
+        from systemedu.agents.builtin.gameagent.spec import SimulationSceneJS
+        s = SimulationSceneJS()
+        assert s.static_svg == ""
+        assert s.dynamic_fn == ""
+
+    def test_scene_js_round_trip(self):
+        from systemedu.agents.builtin.gameagent.spec import SimulationSceneJS
+        s = SimulationSceneJS(
+            static_svg="<line x1='0' y1='0' x2='100' y2='100'/>",
+            dynamic_fn="const r = progress * 50; return `<circle r='${r}'/>`;",
+        )
+        data = s.model_dump()
+        s2 = SimulationSceneJS(**data)
+        assert s2.static_svg == s.static_svg
+        assert s2.dynamic_fn == s.dynamic_fn
+
+    def test_game_spec_accepts_scene_js(self):
+        from systemedu.agents.builtin.gameagent.spec import SimulationSceneJS
+        spec = make_simulation_spec(
+            scene_js=SimulationSceneJS(
+                static_svg="<rect x='0' y='0' width='560' height='420'/>",
+                dynamic_fn="return '<circle cx=\"280\" cy=\"210\" r=\"50\"/>';",
+            )
+        )
+        assert spec.scene_js is not None
+        assert spec.scene_js.static_svg != ""
+
+    def test_game_spec_scene_js_none_by_default(self):
+        spec = make_simulation_spec()
+        assert spec.scene_js is None
+
+    def test_scene_js_serialized_in_model_dump(self):
+        from systemedu.agents.builtin.gameagent.spec import SimulationSceneJS
+        spec = make_simulation_spec(
+            scene_js=SimulationSceneJS(static_svg="<g/>", dynamic_fn="return '';")
+        )
+        data = spec.model_dump()
+        assert "scene_js" in data
+        assert data["scene_js"]["static_svg"] == "<g/>"
+
+
+# ---------------------------------------------------------------------------
+# Compiler: simulation with scene_js
+# ---------------------------------------------------------------------------
+
+class TestCompilerWithSceneJS:
+    def _make_simulation_with_scene_js(self) -> GameSpec:
+        from systemedu.agents.builtin.gameagent.spec import SimulationSceneJS
+        return make_simulation_spec(
+            scene_js=SimulationSceneJS(
+                static_svg="<rect x='60' y='20' width='460' height='360' fill='none' stroke='#ccc'/>",
+                dynamic_fn=(
+                    "const a = p.light || 20;"
+                    " const b = p.co2 || 30;"
+                    " const h = (a + b) * progress * 2;"
+                    " return `<rect x='200' y='${420 - h}' width='80' height='${h}' fill='green'/>`;"
+                ),
+            )
+        )
+
+    def test_simulation_with_scene_js_compiles(self):
+        spec = self._make_simulation_with_scene_js()
+        html = GameCompiler().compile(spec)
+        assert "const SPEC =" in html
+        assert '"mechanic": "simulation"' in html
+        assert "__GAME_SPEC__" not in html
+
+    def test_scene_js_content_in_compiled_html(self):
+        """scene_js fields should appear inside SPEC JSON in the compiled HTML."""
+        spec = self._make_simulation_with_scene_js()
+        html = GameCompiler().compile(spec)
+        assert "scene_js" in html
+        assert "static_svg" in html
+        assert "dynamic_fn" in html
+
+    def test_script_tag_escaping(self):
+        """</script> inside dynamic_fn must be escaped to prevent HTML breakage."""
+        from systemedu.agents.builtin.gameagent.spec import SimulationSceneJS
+        spec = make_simulation_spec(
+            scene_js=SimulationSceneJS(
+                static_svg="<g/>",
+                dynamic_fn="return '</script><script>alert(1)</script>';",
+            )
+        )
+        html = GameCompiler().compile(spec)
+        # The raw </script> must NOT appear verbatim (would close the <script> block early)
+        # The compiler should have escaped it
+        import re
+        # Find SPEC JSON block
+        m = re.search(r"const SPEC = (.+?);", html, re.DOTALL)
+        assert m is not None
+        spec_text = m.group(1)
+        assert "</script>" not in spec_text
+
+    def test_simulation_without_scene_js_still_compiles(self):
+        """scene_js=None: falls back to detectScene() in template, HTML still valid."""
+        spec = make_simulation_spec()  # no scene_js
+        html = GameCompiler().compile(spec)
+        assert "const SPEC =" in html
+        assert '"mechanic": "simulation"' in html
+        assert '"scene_js": null' in html
+
+    def test_static_svg_appears_in_spec_json(self):
+        from systemedu.agents.builtin.gameagent.spec import SimulationSceneJS
+        unique_marker = "UNIQUE_STATIC_SVG_MARKER_12345"
+        spec = make_simulation_spec(
+            scene_js=SimulationSceneJS(
+                static_svg=f"<rect id='{unique_marker}'/>",
+                dynamic_fn="return '';",
+            )
+        )
+        html = GameCompiler().compile(spec)
+        assert unique_marker in html
+
+
+# ---------------------------------------------------------------------------
+# Planner: simulation spec with scene_js (mocked LLM)
+# ---------------------------------------------------------------------------
+
+class TestPlannerSimulationSceneJS:
+    @pytest.mark.asyncio
+    async def test_plan_simulation_with_scene_js(self):
+        """Planner correctly parses LLM output that includes scene_js."""
+        from systemedu.agents.builtin.gameagent.planner import GameSpecPlannerAgent
+        from systemedu.agents.builtin.gameagent.spec import SimulationSceneJS
+
+        spec_data = make_simulation_spec(
+            scene_js=SimulationSceneJS(
+                static_svg="<line x1='60' y1='380' x2='520' y2='380'/>",
+                dynamic_fn=(
+                    "const rate = (p.light + p.co2 + p.water) / 3 * progress;"
+                    " return `<circle cx='${60 + rate * 4}' cy='210' r='20' fill='lime'/>`;"
+                ),
+            )
+        ).model_dump()
+        spec_json = json.dumps(spec_data, ensure_ascii=False)
+
+        from langchain_core.messages import AIMessage
+        mock_agent = MagicMock()
+        mock_agent.ainvoke = AsyncMock(return_value={"messages": [AIMessage(content=spec_json)]})
+
+        with patch("systemedu.agents.builtin.gameagent.planner.create_deep_agent", return_value=mock_agent):
+            planner = GameSpecPlannerAgent(llm=MagicMock())
+            result = await planner.plan("光合作用", "了解光合作用过程", 6,
+                                        lab_strategy={"game_mechanic": "simulation"})
+
+        assert result is not None
+        assert result.mechanic == "simulation"
+        assert result.scene_js is not None
+        assert result.scene_js.static_svg != ""
+        assert result.scene_js.dynamic_fn != ""
+
+    @pytest.mark.asyncio
+    async def test_plan_simulation_without_scene_js_still_valid(self):
+        """Planner accepts simulation spec without scene_js (field is optional)."""
+        from systemedu.agents.builtin.gameagent.planner import GameSpecPlannerAgent
+
+        spec_data = make_simulation_spec().model_dump()
+        spec_json = json.dumps(spec_data, ensure_ascii=False)
+
+        from langchain_core.messages import AIMessage
+        mock_agent = MagicMock()
+        mock_agent.ainvoke = AsyncMock(return_value={"messages": [AIMessage(content=spec_json)]})
+
+        with patch("systemedu.agents.builtin.gameagent.planner.create_deep_agent", return_value=mock_agent):
+            planner = GameSpecPlannerAgent(llm=MagicMock())
+            result = await planner.plan("光合作用", "了解光合作用过程", 6)
+
+        assert result is not None
+        assert result.mechanic == "simulation"
+        assert result.scene_js is None

@@ -182,28 +182,25 @@ match_pairs 示例：
   "feedback": {{"correct_text": "配对成功！", "wrong_text": "再试一次！", "complete_text": "全部配对完成，太厉害了！"}}
 }}
 
-simulation 示例（含 object_spec）：
+simulation 示例（勾股定理，含 scene_js）：
 {{
   "mechanic": "simulation",
-  "topic": "知识点标题",
-  "theme": "火箭推进实验",
-  "difficulty": 6,
+  "topic": "用方格纸画直角三角形",
+  "theme": "方格纸直角三角形实验室",
+  "difficulty": 4,
   "entities": [
-    {{"id": "p1", "param_name": "thrust", "label": "推力", "min": 0, "max": 100, "default": 30, "unit": "kN", "effect_key": "altitude"}},
-    {{"id": "p2", "param_name": "fuel", "label": "燃料量", "min": 0, "max": 100, "default": 50, "unit": "%", "effect_key": "duration"}},
-    {{"id": "p3", "param_name": "angle", "label": "发射角度", "min": 60, "max": 90, "default": 80, "unit": "°", "effect_key": "trajectory"}}
+    {{"id": "p1", "param_name": "side_a", "label": "直角边a（格）", "min": 1, "max": 9, "default": 3, "unit": "格", "effect_key": "triangle"}},
+    {{"id": "p2", "param_name": "side_b", "label": "直角边b（格）", "min": 1, "max": 9, "default": 4, "unit": "格", "effect_key": "triangle"}}
   ],
-  "object_spec": {{
-    "object_key": "rocket.basic",
-    "view": "side",
-    "label_part_ids": [],
-    "highlight_part_ids": ["engine_nozzle", "flame"]
-  }},
-  "target_condition": "推力超过 70 且燃料量超过 60",
-  "visual_description": "火箭随推力增加上升，燃料影响飞行时长",
+  "target_condition": "side_a 和 side_b 之和超过 10",
+  "visual_description": "方格纸上实时绘制直角三角形，显示三边长度和勾股定理验证",
   "rules": {{"correct_points": 15, "max_mistakes": 0, "hint_after_sec": 12}},
-  "levels": [{{"prompt": "拖动滑块调节参数，让火箭成功升空"}}],
-  "feedback": {{"correct_text": "参数设置正确！", "wrong_text": "", "complete_text": "实验成功！你掌握了规律！"}}
+  "levels": [{{"prompt": "拖动滑块设置两条直角边长度（整数格），观察方格纸上实时生成的直角三角形"}}],
+  "feedback": {{"correct_text": "参数设置正确！", "wrong_text": "", "complete_text": "实验成功！你掌握了规律！"}},
+  "scene_js": {{
+    "static_svg": "<rect x='60' y='20' width='460' height='360' fill='none'/><line x1='60' y1='380' x2='520' y2='380' stroke='rgba(255,255,255,.25)' stroke-width='1.5'/><line x1='60' y1='20' x2='60' y2='380' stroke='rgba(255,255,255,.25)' stroke-width='1.5'/>",
+    "dynamic_fn": "const aEnt = entities.find(e => e.param_name === 'side_a'); const bEnt = entities.find(e => e.param_name === 'side_b'); const a = p.side_a || 3; const b = p.side_b || 4; const c = Math.sqrt(a*a + b*b); const unit = 32; const ox = 100, oy = 340; const px2 = ox + a*unit, py2 = oy; const px3 = ox, py3 = oy - b*unit; let grid = ''; for(let i=0;i<=10;i++){grid+=`<line x1='${ox}' y1='${oy-i*unit}' x2='${ox+10*unit}' y2='${oy-i*unit}' stroke='rgba(255,255,255,.06)' stroke-width='1'/><line x1='${ox+i*unit}' y1='${oy}' x2='${ox+i*unit}' y2='${oy-10*unit}' stroke='rgba(255,255,255,.06)' stroke-width='1'/>`}; return grid + `<polygon points='${ox},${oy} ${px2},${py2} ${px3},${py3}' fill='rgba(56,189,248,.15)' stroke='#38bdf8' stroke-width='2.5'/><line x1='${ox}' y1='${oy}' x2='${px2}' y2='${py2}' stroke='#4ADE80' stroke-width='3'/><line x1='${ox}' y1='${oy}' x2='${px3}' y2='${py3}' stroke='#FB923C' stroke-width='3'/><line x1='${px2}' y1='${py2}' x2='${px3}' y2='${py3}' stroke='#c084fc' stroke-width='3' stroke-dasharray='6,3'/><text x='${ox+a*unit/2}' y='${oy+22}' text-anchor='middle' font-size='14' font-weight='700' fill='#4ADE80' font-family='system-ui'>a=${a}</text><text x='${ox-22}' y='${oy-b*unit/2}' text-anchor='middle' font-size='14' font-weight='700' fill='#FB923C' font-family='system-ui'>b=${b}</text><text x='${(px2+px3)/2+18}' y='${(py2+py3)/2-10}' text-anchor='start' font-size='13' font-weight='700' fill='#c084fc' font-family='system-ui'>c=${c.toFixed(2)}</text><text x='280' y='55' text-anchor='middle' font-size='13' font-weight='700' fill='rgba(255,255,255,.7)' font-family='system-ui'>a²+b²=${a*a}+${b*b}=${a*a+b*b}</text><text x='280' y='75' text-anchor='middle' font-size='13' font-weight='700' fill='#38bdf8' font-family='system-ui'>c²=${(c*c).toFixed(1)}</text><rect x='${ox}' y='${oy}' width='20' height='-20' fill='none' stroke='rgba(255,255,255,.5)' stroke-width='1.5'/>`;"
+  }}
 }}
 
 label_map 示例（含 object_spec）：
@@ -271,10 +268,44 @@ boss_quiz 示例：
   "feedback": {{"correct_text": "答对了！造成伤害！", "wrong_text": "答错了！小心！", "complete_text": "Boss 已击败！知识就是力量！"}}
 }}
 
+【simulation scene_js 生成规则（必读）】
+
+当 mechanic = "simulation" 时，必须在 JSON 中包含 "scene_js" 字段，包含两个子字段：
+
+1. static_svg（字符串）：SVG 片段，作为场景背景（坐标轴、网格线、固定标签、背景元素）。
+   - viewBox 尺寸为 560×420，注意不要超出范围
+   - 不包含 <svg> 标签包装，直接是 SVG 子元素
+   - 示例：坐标轴、方格纸网格、固定说明文字、背景图形
+
+2. dynamic_fn（字符串）：JavaScript 函数体（不含 function 关键字声明）。
+   - 可用的变量：p（参数对象，如 p.side_a）、progress（0-1 浮点，当前整体进度）、entities（entities数组）
+   - 必须 return 一个 SVG 字符串，作为动态层的 innerHTML
+   - 可以使用模板字符串、Math.*、条件表达式
+   - 禁止使用 document、window、fetch 等 DOM/网络 API
+   - 归一化参数值的标准写法（避免越界）：
+     const aEnt = entities.find(e => e.param_name === 'side_a');
+     const a = p.side_a || aEnt?.default || 1;
+   - 主要动画元素应占据视图 40% 以上面积，不允许只有小图形
+
+设计原则：
+- 场景必须与主题语义直接对应：勾股定理→三角形，化学反应→分子碰撞或试管，电路→灯泡亮灭，力学→弹簧或摆
+- 参数变化应在视觉上清晰可见，直觉式反馈
+- 不要使用折线图/柱状图作为通用 fallback，必须设计与主题匹配的具体场景
+- 中文标签用 font-family='system-ui' 确保字体可用
+
+常用 SVG 元素：
+- 直线：<line x1='...' y1='...' x2='...' y2='...' stroke='#color' stroke-width='2'/>
+- 矩形：<rect x='...' y='...' width='...' height='...' fill='...' rx='4'/>
+- 圆形：<circle cx='...' cy='...' r='...' fill='...'/>
+- 多边形：<polygon points='x1,y1 x2,y2 x3,y3' fill='...' stroke='...'/>
+- 路径：<path d='M x y L x y Z' fill='...'/>
+- 文字：<text x='...' y='...' text-anchor='middle' font-size='14' fill='...' font-family='system-ui'>文字</text>
+
 【强制要求】
 - drag_sort / match_pairs 至少 4 个 entities（推荐 5-7 个），不超过 8 个
 - label_map 使用 object_spec，entities 留空列表
-- simulation 使用 object_spec，entities 填参数滑块
+- simulation 的 entities 填参数滑块（2-4个），必须包含 scene_js 字段，static_svg 和 dynamic_fn 都不能为空字符串
+- simulation 不需要 object_spec（场景由 scene_js 直接描绘）
 - mechanic 选择：优先 lab_strategy 中的 game_mechanic 建议；否则根据知识点类型选最合适的
 - topic 使用知识点标题；theme 用 1-2 句话描述游戏场景（要有画面感，体现主题）
 - 全部文字使用中文
@@ -282,7 +313,7 @@ boss_quiz 示例：
 
 【simulation 参数设计要求】
 - 每个参数必须与主题场景强关联，有物理或逻辑意义
-  正确：param_name="thrust" label="推力", param_name="fuel" label="燃料量"
+  正确：param_name="side_a" label="直角边a（格）", param_name="temperature" label="温度"
   错误：param_name="param1" label="参数1"（无意义）
 - effect_key 用于标识该参数影响的效果，如 "altitude"/"rate"/"temperature"
 """
@@ -301,8 +332,8 @@ class GameSpecPlannerAgent(BaseAgent):
 
     def _build_system_prompt(self) -> str:
         """Inject the supported objects whitelist into the system prompt at runtime."""
-        return PLANNER_SYSTEM_PROMPT.format(
-            object_spec_section=_build_object_spec_section()
+        return PLANNER_SYSTEM_PROMPT.replace(
+            "{object_spec_section}", _build_object_spec_section()
         )
 
     async def process(self, message: str, context: dict | None = None) -> str:

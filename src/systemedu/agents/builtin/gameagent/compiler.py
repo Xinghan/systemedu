@@ -84,6 +84,8 @@ class GameCompiler:
                 pass  # fall through with original entities
 
         spec_json = json.dumps(spec_dict, ensure_ascii=False, indent=None)
+        # Prevent </script> in dynamic_fn from breaking the HTML page
+        spec_json = spec_json.replace("</script>", r"<\/script>")
 
         html = template.replace(f'"{PLACEHOLDER}"', spec_json, 1)
 

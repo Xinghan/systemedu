@@ -371,8 +371,36 @@ function detectScene(spec) {
   return "default";
 }
 
-const sceneKey = detectScene(SPEC);
-const scene = SCENES[sceneKey] || SCENES.default;
+// ── Scene selection: LLM-generated scene_js takes priority ───────────────────
+let scene;
+if (SPEC.scene_js && SPEC.scene_js.static_svg && SPEC.scene_js.dynamic_fn) {
+  let _dynFn = null;
+  try {
+    // new Function creates a function with (p, progress, entities) as named params
+    _dynFn = new Function('p', 'progress', 'entities', SPEC.scene_js.dynamic_fn);
+  } catch (e) {
+    console.warn('[simulation] scene_js.dynamic_fn parse error, falling back to detectScene:', e);
+  }
+  if (_dynFn) {
+    scene = {
+      static: SPEC.scene_js.static_svg,
+      dynamic: (p, progress) => {
+        try {
+          return _dynFn(p, progress, entities) || '';
+        } catch (e) {
+          console.warn('[simulation] scene_js.dynamic_fn runtime error:', e);
+          return '';
+        }
+      }
+    };
+  } else {
+    const sceneKey = detectScene(SPEC);
+    scene = SCENES[sceneKey] || SCENES.default;
+  }
+} else {
+  const sceneKey = detectScene(SPEC);
+  scene = SCENES[sceneKey] || SCENES.default;
+}
 
 // inject static SVG
 document.getElementById("scene-static").innerHTML = scene.static;

@@ -23,6 +23,18 @@ class GameFeedback(BaseModel):
     complete_text: str = "恭喜你完成了！"
 
 
+class SimulationSceneJS(BaseModel):
+    """LLM-generated JS code fragments for a simulation scene.
+
+    static_svg: SVG markup injected as innerHTML of #scene-static (axes, labels, background).
+    dynamic_fn: JavaScript function body (no `function` keyword).
+                Receives three named params: p (params object), progress (0-1), entities (array).
+                Must return an SVG string for #scene-dynamic innerHTML.
+    """
+    static_svg: str = ""
+    dynamic_fn: str = ""
+
+
 class GameSpec(BaseModel):
     mechanic: Literal["drag_sort", "match_pairs", "simulation", "label_map", "timeline_order", "boss_quiz"]
     topic: str
@@ -49,3 +61,5 @@ class GameSpec(BaseModel):
     boss_name: str | None = None
     boss_emoji: str | None = None
     questions: list[dict] | None = None        # [{id, question, options:[str], correct:int, explanation}]
+    # simulation: LLM-generated JS scene code (overrides hardcoded SCENES in template)
+    scene_js: SimulationSceneJS | None = None
