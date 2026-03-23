@@ -2,20 +2,25 @@
 
 import { useCallback, useState } from "react"
 import { useRouter } from "next/navigation"
-import { FileJson, Eye, Check, AlertCircle, ArrowLeft, ArrowRight, Sparkles, Upload } from "lucide-react"
-import { PageLoading } from "@/components/ui/page-loading"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import {
+  FileJson, Eye, Check, AlertCircle, ArrowLeft, ArrowRight,
+  Sparkles, Upload, Brain,
+} from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
-import { AppHeader } from "@/components/layout/app-header"
 import { TreeFlow } from "@/components/knowledge-tree/tree-flow"
 import { gateway } from "@/lib/api"
 import type { TreePreviewResponse } from "@/lib/types/api"
 
 type Step = "input" | "preview" | "confirm"
+
+const STEPS: { key: Step; label: string }[] = [
+  { key: "input", label: "Setup" },
+  { key: "preview", label: "Preview" },
+  { key: "confirm", label: "Confirm" },
+]
 
 export default function NewProjectPage() {
   const router = useRouter()
@@ -28,9 +33,10 @@ export default function NewProjectPage() {
   const [error, setError] = useState("")
   const [loading, setLoading] = useState(false)
   const [loadingLabel, setLoadingLabel] = useState("")
+  const [loadingStep, setLoadingStep] = useState(0)
   const [dragOver, setDragOver] = useState(false)
 
-  // AI generate form state
+  // AI form state
   const [aiTitle, setAiTitle] = useState("")
   const [aiDescription, setAiDescription] = useState("")
   const [aiAge, setAiAge] = useState(12)
@@ -43,40 +49,33 @@ export default function NewProjectPage() {
       const text = e.target?.result as string
       setRawJson(text)
       try {
-        const parsed = JSON.parse(text)
-        setTreeData(parsed)
+        setTreeData(JSON.parse(text))
       } catch {
-        setError("JSON 解析失败，请检查文件格式")
+        setError("JSON parse failed, please check file format")
       }
     }
     reader.readAsText(file)
   }, [])
 
-  const handleDrop = useCallback(
-    (e: React.DragEvent) => {
-      e.preventDefault()
-      setDragOver(false)
-      const file = e.dataTransfer.files[0]
-      if (file) handleFile(file)
-    },
-    [handleFile]
-  )
+  const handleDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault()
+    setDragOver(false)
+    const file = e.dataTransfer.files[0]
+    if (file) handleFile(file)
+  }, [handleFile])
 
   const handlePaste = useCallback(() => {
     setError("")
     try {
-      const parsed = JSON.parse(rawJson)
-      setTreeData(parsed)
+      setTreeData(JSON.parse(rawJson))
     } catch {
-      setError("JSON 解析失败，请检查格式")
+      setError("JSON parse failed, please check format")
     }
   }, [rawJson])
 
   const handlePreview = useCallback(async () => {
     if (!treeData) return
-    setLoading(true)
-    setLoadingLabel("正在验证知识树...")
-    setError("")
+    setLoading(true); setLoadingLabel("Validating knowledge tree..."); setLoadingStep(0); setError("")
     try {
       const result = await gateway.previewTree(treeData)
       setPreview(result)
@@ -85,10 +84,10 @@ export default function NewProjectPage() {
         if (metaTitle) setProjectTitle(metaTitle)
         setStep("preview")
       } else {
-        setError(`验证失败: ${result.errors.join("; ")}`)
+        setError(`Validation failed: ${result.errors.join("; ")}`)
       }
     } catch (e) {
-      setError(e instanceof Error ? e.message : "预览请求失败")
+      setError(e instanceof Error ? e.message : "Preview request failed")
     } finally {
       setLoading(false)
     }
@@ -96,9 +95,12 @@ export default function NewProjectPage() {
 
   const handleAiGenerate = useCallback(async () => {
     if (!aiTitle.trim() || !aiDescription.trim()) return
-    setLoading(true)
-    setLoadingLabel("AI 正在生成知识树，请稍候...")
-    setError("")
+    setLoading(true); setError("")
+    setLoadingLabel("AI is generating your knowledge tree...")
+    // Simulate step progression
+    setLoadingStep(0)
+    const stepTimer1 = setTimeout(() => setLoadingStep(1), 1500)
+    const stepTimer2 = setTimeout(() => setLoadingStep(2), 3500)
     try {
       const result = await gateway.generateTree({
         title: aiTitle.trim(),
@@ -111,341 +113,444 @@ export default function NewProjectPage() {
       setProjectTitle(aiTitle.trim())
       setStep("preview")
     } catch (e) {
-      setError(e instanceof Error ? e.message : "AI 生成失败，请重试")
+      setError(e instanceof Error ? e.message : "AI generation failed, please retry")
     } finally {
+      clearTimeout(stepTimer1); clearTimeout(stepTimer2)
       setLoading(false)
     }
-  }, [aiTitle, aiDescription, aiAge])
+  }, [aiTitle, aiDescription, aiAge, aiNodeCount])
 
   const handleCreate = useCallback(async () => {
     if (!treeData || !projectName.trim()) return
-    setLoading(true)
-    setLoadingLabel("正在创建项目...")
-    setError("")
+    setLoading(true); setLoadingLabel("Creating project..."); setLoadingStep(2); setError("")
     try {
       await gateway.createProject(projectName.trim(), projectTitle.trim(), treeData)
       router.push(`/projects/${projectName.trim()}`)
     } catch (e) {
-      setError(e instanceof Error ? e.message : "创建失败")
+      setError(e instanceof Error ? e.message : "Create failed")
     } finally {
       setLoading(false)
     }
   }, [treeData, projectName, projectTitle, router])
 
-  const stepLabels: Record<Step, string> = {
-    input: "选择方式",
-    preview: "预览",
-    confirm: "确认创建",
-  }
-
+  // ── Loading screen ──────────────────────────────────────────────────────────
   if (loading) {
+    const LOAD_STEPS = ["SYNTHESIZE", "CURATE", "ARCHITECT"]
     return (
-      <>
-        <AppHeader title="新建项目" />
-        <PageLoading label={loadingLabel} />
-      </>
-    )
-  }
+      <div className="min-h-screen bg-background flex flex-col items-center justify-center gap-10 px-4">
+        {/* Header label */}
+        <div className="text-center">
+          <p className="text-[10px] font-[var(--font-manrope)] uppercase tracking-widest text-muted-foreground mb-2">
+            SystemEdu Engine
+          </p>
+          <h1 className="text-3xl font-extrabold text-foreground">Generating...</h1>
+        </div>
 
-  // Preview step: full-screen tree layout (no padding wrapper)
-  if (step === "preview" && preview) {
-    return (
-      <>
-        <AppHeader title="新建项目" />
-        {/* Full-height flex container */}
-        <div className="flex flex-col" style={{ height: "calc(100vh - 64px)" }}>
-          {/* Top stats bar */}
-          <div className="flex items-center gap-6 px-6 py-3 border-b bg-white dark:bg-card shrink-0">
-            <div className="flex items-center gap-2">
-              {(["input", "preview", "confirm"] as Step[]).map((s, i) => (
-                <div key={s} className="flex items-center gap-2">
-                  {i > 0 && <div className="w-6 h-px bg-border" />}
-                  <Badge variant={step === s ? "default" : "outline"} className="text-sm">
-                    {i + 1}. {stepLabels[s]}
-                  </Badge>
-                </div>
-              ))}
-            </div>
-            <div className="h-5 w-px bg-border" />
-            <div className="flex items-center gap-6 text-sm">
-              <span className="text-muted-foreground">
-                <span className="font-bold text-foreground text-base">{preview.stats.milestone_count}</span> 模块
-              </span>
-              <span className="text-muted-foreground">
-                <span className="font-bold text-foreground text-base">{preview.stats.node_count}</span> 知识节点
-              </span>
-              <span className="text-muted-foreground">
-                <span className="font-bold text-foreground text-base">{preview.stats.total_minutes}</span> 分钟
-              </span>
-              <span className="text-muted-foreground">
-                约 <span className="font-bold text-foreground text-base">~{preview.stats.estimated_hours}h</span> 学时
-              </span>
-            </div>
-            <div className="ml-auto flex items-center gap-3">
-              <Button variant="outline" onClick={() => setStep("input")}>
-                <ArrowLeft className="h-4 w-4 mr-2" />
-                返回
-              </Button>
-              <Button onClick={() => setStep("confirm")}>
-                确认并创建项目
-                <ArrowRight className="h-4 w-4 ml-2" />
-              </Button>
-            </div>
-          </div>
-          {/* Tree fills remaining height */}
-          <div className="flex-1 min-h-0">
-            <TreeFlow milestones={preview.milestones} progress={[]} />
+        {/* Animated circle */}
+        <div className="relative w-44 h-44">
+          {/* Outer ring */}
+          <svg className="absolute inset-0 w-full h-full -rotate-90" viewBox="0 0 176 176">
+            <circle cx="88" cy="88" r="80" fill="none" stroke="currentColor" strokeWidth="2" className="text-border" />
+            <circle
+              cx="88" cy="88" r="80"
+              fill="none"
+              stroke="url(#ring-gradient)"
+              strokeWidth="3"
+              strokeLinecap="round"
+              strokeDasharray={`${2 * Math.PI * 80}`}
+              strokeDashoffset={`${2 * Math.PI * 80 * (1 - (loadingStep + 1) / 3)}`}
+              className="transition-all duration-1000"
+            />
+            <defs>
+              <linearGradient id="ring-gradient" x1="0%" y1="0%" x2="100%" y2="0%">
+                <stop offset="0%" stopColor="oklch(0.488 0.258 302)" />
+                <stop offset="100%" stopColor="oklch(0.660 0.220 302)" />
+              </linearGradient>
+            </defs>
+          </svg>
+          {/* Inner gradient circle */}
+          <div className="absolute inset-4 rounded-full bg-gradient-to-br from-violet-600 via-purple-600 to-purple-700 flex items-center justify-center shadow-[0_8px_40px_0_oklch(0.488_0.258_302_/_0.40)]">
+            <Brain className="h-14 w-14 text-white/90 animate-pulse" />
           </div>
         </div>
-      </>
-    )
-  }
 
-  return (
-    <>
-      <AppHeader title="新建项目" />
-      <div className="p-6">
-        {/* Step indicator */}
-        <div className="flex items-center gap-2 mb-6">
-          {(["input", "preview", "confirm"] as Step[]).map((s, i) => (
-            <div key={s} className="flex items-center gap-2">
-              {i > 0 && <div className="w-8 h-px bg-border" />}
-              <Badge variant={step === s ? "default" : "outline"}>
-                {i + 1}. {stepLabels[s]}
-              </Badge>
+        {/* Progress bar */}
+        <div className="w-72 space-y-2">
+          <div className="h-1 rounded-full bg-border overflow-hidden">
+            <div
+              className="h-full rounded-full bg-gradient-to-r from-violet-600 to-purple-400 transition-all duration-700"
+              style={{ width: `${((loadingStep + 1) / 3) * 100}%` }}
+            />
+          </div>
+          <div className="flex justify-between text-[10px] font-[var(--font-manrope)] uppercase tracking-widest text-muted-foreground">
+            <span>Synchronizing</span>
+            <span>{loadingLabel}</span>
+          </div>
+        </div>
+
+        {/* Step indicators */}
+        <div className="flex items-center gap-3">
+          {LOAD_STEPS.map((s, i) => (
+            <div
+              key={s}
+              className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-[var(--font-manrope)] uppercase tracking-wider transition-all duration-500 ${
+                i < loadingStep
+                  ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-400"
+                  : i === loadingStep
+                    ? "bg-primary/15 text-primary font-semibold"
+                    : "bg-secondary text-muted-foreground"
+              }`}
+            >
+              {i < loadingStep && <Check className="h-3 w-3" />}
+              {i === loadingStep && <div className="w-3 h-3 rounded-full border-2 border-primary border-t-transparent animate-spin" />}
+              {s}
             </div>
           ))}
         </div>
+      </div>
+    )
+  }
 
-        {error && (
-          <div className="flex items-start gap-3 p-4 mb-6 rounded-2xl bg-red-50 dark:bg-red-950/30 text-red-600 dark:text-red-400 text-base border border-red-200 dark:border-red-800 max-w-2xl">
-            <AlertCircle className="h-5 w-5 mt-0.5 shrink-0" />
-            <span>{error}</span>
+  // ── Preview step ─────────────────────────────────────────────────────────────
+  if (step === "preview" && preview) {
+    return (
+      <div className="flex flex-col h-screen bg-background">
+        {/* Stats bar */}
+        <div className="flex items-center gap-6 px-6 py-4 glass-surface shadow-[0_1px_0_0_var(--border)] shrink-0">
+          <div className="flex items-center gap-2">
+            {STEPS.map((s, i) => (
+              <div key={s.key} className="flex items-center gap-2">
+                {i > 0 && <div className="w-5 h-px bg-border" />}
+                <span className={`text-xs font-[var(--font-manrope)] px-3 py-1 rounded-full ${
+                  step === s.key
+                    ? "bg-primary text-primary-foreground"
+                    : i < STEPS.findIndex((x) => x.key === step)
+                      ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-400"
+                      : "bg-secondary text-secondary-foreground"
+                }`}>
+                  {i + 1}. {s.label}
+                </span>
+              </div>
+            ))}
           </div>
-        )}
+          <div className="h-4 w-px bg-border" />
+          <div className="flex items-center gap-5 text-xs">
+            {[
+              { v: preview.stats.milestone_count, l: "Modules" },
+              { v: preview.stats.node_count, l: "Nodes" },
+              { v: preview.stats.total_minutes, l: "Minutes" },
+              { v: `~${preview.stats.estimated_hours}h`, l: "Study Time" },
+            ].map(({ v, l }) => (
+              <span key={l} className="text-muted-foreground">
+                <span className="font-bold text-foreground text-sm mr-1">{v}</span>{l}
+              </span>
+            ))}
+          </div>
+          <div className="ml-auto flex items-center gap-3">
+            <Button variant="outline" size="sm" onClick={() => setStep("input")}>
+              <ArrowLeft className="h-4 w-4 mr-1.5" />Back
+            </Button>
+            <button
+              onClick={() => setStep("confirm")}
+              className="h-9 px-5 rounded-xl bg-gradient-to-r from-violet-600 to-purple-600 text-white text-sm font-semibold flex items-center gap-2 shadow-[0_2px_12px_0_oklch(0.488_0.258_302_/_0.25)] hover:shadow-[0_4px_20px_0_oklch(0.488_0.258_302_/_0.35)] transition-all duration-[350ms]"
+            >
+              Confirm & Create
+              <ArrowRight className="h-4 w-4" />
+            </button>
+          </div>
+        </div>
+        <div className="flex-1 min-h-0">
+          <TreeFlow milestones={preview.milestones} progress={[]} />
+        </div>
+      </div>
+    )
+  }
 
-        {/* Step 1: Choose method — Tab switch (mutually exclusive) */}
-        {step === "input" && (
-          <div className="max-w-2xl">
-            <Tabs defaultValue={0}>
-              <TabsList className="mb-6">
-                <TabsTrigger value={0}>
-                  <Sparkles className="h-4 w-4" />
-                  AI 生成
-                </TabsTrigger>
-                <TabsTrigger value={1}>
-                  <Upload className="h-4 w-4" />
-                  上传 JSON
-                </TabsTrigger>
-              </TabsList>
+  // ── Main layout: left panel + right form ────────────────────────────────────
+  return (
+    <div className="flex min-h-screen bg-background">
+      {/* Left decorative panel */}
+      <div className="hidden lg:flex w-80 shrink-0 bg-gradient-to-b from-violet-700 via-purple-700 to-purple-800 flex-col justify-between p-10 relative overflow-hidden">
+        {/* Background circles */}
+        <div className="absolute -top-16 -left-16 w-64 h-64 rounded-full bg-white/5" />
+        <div className="absolute bottom-20 -right-12 w-48 h-48 rounded-full bg-white/5" />
 
-              {/* AI Generate */}
-              <TabsContent value={0}>
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="flex items-center gap-2 text-base">
-                      <Sparkles className="h-4 w-4" />
-                      AI 生成知识树
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-4">
+        <div className="relative">
+          <div className="flex items-center gap-3 mb-12">
+            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-white/20">
+              <Brain className="h-5 w-5 text-white" />
+            </div>
+            <span className="text-white font-bold text-base">SystemEdu</span>
+          </div>
+          <h2 className="text-3xl font-extrabold text-white mb-4 leading-tight">
+            Forge New Ideas.
+          </h2>
+          <p className="text-sm text-white/70 leading-relaxed">
+            Let AI transform your abstract concepts into a structured knowledge tree of discovery.
+          </p>
+        </div>
+
+        {/* Step list */}
+        <div className="relative space-y-4">
+          {[
+            { n: "01", t: "Describe your topic", d: "Tell us what you want to learn" },
+            { n: "02", t: "AI generates tree", d: "Smart curriculum in seconds" },
+            { n: "03", t: "Start learning", d: "Dive into your personalized path" },
+          ].map((s) => (
+            <div key={s.n} className="flex items-start gap-3">
+              <span className="text-xs font-[var(--font-manrope)] text-white/40 mt-0.5 w-5 shrink-0">{s.n}</span>
+              <div>
+                <p className="text-sm font-semibold text-white/90">{s.t}</p>
+                <p className="text-xs text-white/50">{s.d}</p>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Right form area */}
+      <div className="flex-1 flex flex-col">
+        {/* Header */}
+        <div className="flex items-center gap-3 px-8 py-5 shadow-[0_1px_0_0_var(--border)] glass-surface">
+          <button onClick={() => router.push("/projects")} className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors">
+            <ArrowLeft className="h-3.5 w-3.5" />
+            Back to Library
+          </button>
+          <div className="h-4 w-px bg-border" />
+          {/* Step indicator */}
+          <div className="flex items-center gap-2">
+            {STEPS.map((s, i) => (
+              <div key={s.key} className="flex items-center gap-2">
+                {i > 0 && <div className="w-5 h-px bg-border" />}
+                <span className={`text-[11px] font-[var(--font-manrope)] px-2.5 py-1 rounded-full ${
+                  step === s.key ? "bg-primary text-primary-foreground" : "bg-secondary text-muted-foreground"
+                }`}>
+                  {i + 1}. {s.label}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Form content */}
+        <div className="flex-1 overflow-y-auto px-8 py-10">
+          {/* CONFIGURATION header */}
+          <div className="max-w-xl">
+            <p className="text-[10px] font-[var(--font-manrope)] uppercase tracking-widest text-primary mb-1">Configuration</p>
+            <h1 className="text-2xl font-extrabold text-foreground mb-8">Project Details</h1>
+
+            {error && (
+              <div className="flex items-start gap-3 p-4 mb-6 rounded-xl bg-destructive/8 text-destructive text-sm">
+                <AlertCircle className="h-4 w-4 mt-0.5 shrink-0" />
+                <span>{error}</span>
+              </div>
+            )}
+
+            {/* Step 1: Input */}
+            {step === "input" && (
+              <Tabs defaultValue={0}>
+                <TabsList className="mb-6 bg-secondary rounded-xl p-1">
+                  <TabsTrigger value={0} className="rounded-lg data-[state=active]:bg-card data-[state=active]:shadow-sm">
+                    <Sparkles className="h-3.5 w-3.5 mr-1.5" />AI Generate
+                  </TabsTrigger>
+                  <TabsTrigger value={1} className="rounded-lg data-[state=active]:bg-card data-[state=active]:shadow-sm">
+                    <Upload className="h-3.5 w-3.5 mr-1.5" />Upload JSON
+                  </TabsTrigger>
+                </TabsList>
+
+                {/* AI Generate */}
+                <TabsContent value={0}>
+                  <div className="space-y-5">
                     <div>
-                      <Label htmlFor="ai-title">项目标题</Label>
+                      <Label htmlFor="ai-title" className="text-[11px] font-[var(--font-manrope)] uppercase tracking-wider text-muted-foreground">
+                        Project Title
+                      </Label>
                       <Input
                         id="ai-title"
-                        placeholder="例如：树叶识别AI模型"
+                        placeholder="e.g. Quantum Mechanics for Beginners"
                         value={aiTitle}
                         onChange={(e) => setAiTitle(e.target.value)}
-                        className="mt-2 max-w-md"
+                        className="mt-2 border-0 bg-secondary/60 focus:bg-card h-12"
                       />
                     </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <Label htmlFor="ai-age" className="text-[11px] font-[var(--font-manrope)] uppercase tracking-wider text-muted-foreground">
+                          Student Age
+                        </Label>
+                        <select
+                          id="ai-age"
+                          value={aiAge}
+                          onChange={(e) => setAiAge(Number(e.target.value))}
+                          className="w-full mt-2 h-12 px-4 rounded-xl bg-secondary/60 text-sm focus:outline-none focus:ring-2 focus:ring-ring border-0 appearance-none"
+                        >
+                          {[6,7,8,9,10,11,12,13,14,15,16,17,18].map((a) => (
+                            <option key={a} value={a}>{a} years</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div>
+                        <Label className="text-[11px] font-[var(--font-manrope)] uppercase tracking-wider text-muted-foreground">
+                          Complexity
+                        </Label>
+                        <div className="flex items-center gap-2 mt-2">
+                          {[
+                            { v: 15, l: "Core" },
+                            { v: 50, l: "Deep" },
+                            { v: 200, l: "Expert" },
+                          ].map((opt) => (
+                            <button
+                              key={opt.l}
+                              onClick={() => setAiNodeCount(opt.v)}
+                              className={`flex-1 h-12 rounded-xl text-xs font-[var(--font-manrope)] font-semibold uppercase tracking-wider transition-all duration-[350ms] ${
+                                (opt.l === "Core" && aiNodeCount <= 25)
+                                  ? "bg-secondary text-secondary-foreground"
+                                  : (opt.l === "Deep" && aiNodeCount > 25 && aiNodeCount <= 100)
+                                    ? "bg-primary text-primary-foreground shadow-[0_2px_12px_0_oklch(0.488_0.258_302_/_0.25)]"
+                                    : (opt.l === "Expert" && aiNodeCount > 100)
+                                      ? "bg-primary text-primary-foreground shadow-[0_2px_12px_0_oklch(0.488_0.258_302_/_0.25)]"
+                                      : "bg-secondary text-muted-foreground"
+                              }`}
+                            >
+                              {opt.l}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+
                     <div>
-                      <Label htmlFor="ai-desc">项目描述</Label>
+                      <Label htmlFor="ai-desc" className="text-[11px] font-[var(--font-manrope)] uppercase tracking-wider text-muted-foreground">
+                        Description & Objectives
+                      </Label>
                       <textarea
                         id="ai-desc"
-                        className="w-full max-w-lg h-28 px-4 py-3 rounded-xl border bg-muted/50 text-base resize-y focus:outline-none focus:ring-2 focus:ring-ring mt-2"
-                        placeholder="描述项目的目标、学习内容、预期成果等..."
+                        className="w-full h-28 px-4 py-3 rounded-xl bg-secondary/60 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-ring mt-2 border-0"
+                        placeholder="What specific goals should the Knowledge Tree focus on?"
                         value={aiDescription}
                         onChange={(e) => setAiDescription(e.target.value)}
                       />
                     </div>
-                    <div>
-                      <Label htmlFor="ai-age">学生年龄</Label>
-                      <Input
-                        id="ai-age"
-                        type="number"
-                        min={6}
-                        max={18}
-                        value={aiAge}
-                        onChange={(e) => setAiAge(Number(e.target.value) || 12)}
-                        className="mt-2 w-28"
-                      />
-                    </div>
-                    <div>
-                      <div className="flex items-center justify-between">
-                        <Label htmlFor="ai-node-count">知识树精细度</Label>
-                        <span className="text-sm font-medium tabular-nums">{aiNodeCount} 节点</span>
-                      </div>
-                      <input
-                        id="ai-node-count"
-                        type="range"
-                        min={5}
-                        max={500}
-                        step={1}
-                        value={aiNodeCount}
-                        onChange={(e) => setAiNodeCount(Number(e.target.value))}
-                        className="mt-2 w-full max-w-md"
-                      />
-                      <p className="text-sm text-muted-foreground mt-1">
-                        {aiNodeCount <= 15
-                          ? "入门概览 -- 快速了解项目全貌"
-                          : aiNodeCount <= 50
-                            ? "标准课程 -- 适合大多数学习场景"
-                            : aiNodeCount <= 150
-                              ? "深入学习 -- 包含更多细节和练习"
-                              : "完整体系 -- 全面覆盖，适合系统学习"}
+
+                    <button
+                      onClick={handleAiGenerate}
+                      disabled={!aiTitle.trim() || !aiDescription.trim()}
+                      className="w-full h-14 rounded-xl bg-gradient-to-r from-violet-600 to-purple-600 text-white font-semibold text-sm flex items-center justify-center gap-2 shadow-[0_2px_20px_0_oklch(0.488_0.258_302_/_0.30)] hover:shadow-[0_4px_28px_0_oklch(0.488_0.258_302_/_0.40)] transition-all duration-[350ms] [transition-timing-function:cubic-bezier(0.2,0.8,0.2,1)] disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      <Sparkles className="h-4 w-4" />
+                      Generate Knowledge Tree
+                    </button>
+                    <p className="text-xs text-center text-muted-foreground">
+                      AI will synthesize a multi-layered curriculum based on your inputs.
+                    </p>
+                  </div>
+                </TabsContent>
+
+                {/* Upload JSON */}
+                <TabsContent value={1}>
+                  <div className="space-y-4">
+                    <div
+                      className={`rounded-xl p-8 text-center transition-all duration-[350ms] cursor-pointer ${
+                        dragOver ? "bg-primary/8 ring-2 ring-primary" : "bg-secondary/60 hover:bg-secondary"
+                      }`}
+                      onDragOver={(e) => { e.preventDefault(); setDragOver(true) }}
+                      onDragLeave={() => setDragOver(false)}
+                      onDrop={handleDrop}
+                    >
+                      <FileJson className="h-10 w-10 mx-auto mb-3 text-muted-foreground" />
+                      <p className="text-sm text-muted-foreground mb-3">
+                        Drag & drop JSON file here, or click to select
                       </p>
+                      <input
+                        type="file" accept=".json" className="hidden" id="file-input"
+                        onChange={(e) => { const file = e.target.files?.[0]; if (file) handleFile(file) }}
+                      />
+                      <label htmlFor="file-input" className="cursor-pointer inline-flex h-10 px-5 items-center justify-center rounded-xl bg-card text-sm font-medium shadow-card hover:shadow-card-hover transition-all duration-[350ms]">
+                        Select File
+                      </label>
                     </div>
-                    <div className="pt-2">
-                      <Button
-                        onClick={handleAiGenerate}
-                        disabled={!aiTitle.trim() || !aiDescription.trim()}
-                      >
-                        <Sparkles className="h-4 w-4 mr-2" />
-                        生成知识树
-                      </Button>
-                    </div>
-                  </CardContent>
-                </Card>
-              </TabsContent>
 
-              {/* Upload JSON */}
-              <TabsContent value={1}>
-                <div className="space-y-4">
-                  <Card>
-                    <CardHeader>
-                      <CardTitle className="flex items-center gap-2 text-base">
-                        <FileJson className="h-4 w-4" />
-                        上传 JSON 文件
-                      </CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                      <div
-                        className={`border-2 border-dashed rounded-lg p-8 text-center transition-colors ${
-                          dragOver ? "border-primary bg-primary/5" : "border-muted-foreground/25"
-                        }`}
-                        onDragOver={(e) => { e.preventDefault(); setDragOver(true) }}
-                        onDragLeave={() => setDragOver(false)}
-                        onDrop={handleDrop}
-                      >
-                        <FileJson className="h-10 w-10 mx-auto mb-3 text-muted-foreground" />
-                        <p className="text-sm text-muted-foreground mb-3">
-                          拖拽 JSON 文件到此处，或点击选择文件
-                        </p>
-                        <input
-                          type="file"
-                          accept=".json"
-                          className="hidden"
-                          id="file-input"
-                          onChange={(e) => {
-                            const file = e.target.files?.[0]
-                            if (file) handleFile(file)
-                          }}
-                        />
-                        <label htmlFor="file-input" className="cursor-pointer inline-flex items-center justify-center rounded-xl text-base font-semibold border border-input bg-background hover:bg-accent hover:text-accent-foreground h-12 px-6 shadow-sm transition-colors">
-                          选择文件
-                        </label>
-                      </div>
-                    </CardContent>
-                  </Card>
-
-                  <Card>
-                    <CardHeader>
-                      <CardTitle className="text-base">或粘贴 JSON</CardTitle>
-                    </CardHeader>
-                    <CardContent>
+                    <div>
+                      <p className="text-xs text-muted-foreground mb-2">Or paste JSON</p>
                       <textarea
-                        className="w-full h-44 px-4 py-3 rounded-xl border bg-muted/50 font-mono text-base resize-y focus:outline-none focus:ring-2 focus:ring-ring"
-                        placeholder='{"知识树节点": [...], "模块依赖图": [...]} 或 {"milestones": [...]}'
+                        className="w-full h-36 px-4 py-3 rounded-xl bg-secondary/60 font-mono text-xs resize-none focus:outline-none focus:ring-2 focus:ring-ring border-0"
+                        placeholder='{"milestones": [...]}'
                         value={rawJson}
                         onChange={(e) => setRawJson(e.target.value)}
                       />
-                      <Button variant="outline" className="mt-3" onClick={handlePaste}>
-                        解析 JSON
-                      </Button>
-                    </CardContent>
-                  </Card>
-
-                  {treeData && (
-                    <div className="flex items-center justify-between">
-                      <Badge variant="secondary" className="flex items-center gap-1">
-                        <Check className="h-3 w-3" />
-                        JSON 已解析
-                      </Badge>
-                      <Button onClick={handlePreview}>
-                        <Eye className="h-4 w-4 mr-2" />
-                        预览知识树
-                        <ArrowRight className="h-4 w-4 ml-2" />
+                      <Button variant="outline" size="sm" className="mt-2" onClick={handlePaste}>
+                        Parse JSON
                       </Button>
                     </div>
-                  )}
+
+                    {treeData && (
+                      <div className="flex items-center justify-between pt-2">
+                        <span className="flex items-center gap-1.5 text-xs text-emerald-600 dark:text-emerald-400">
+                          <Check className="h-3.5 w-3.5" />JSON parsed
+                        </span>
+                        <button
+                          onClick={handlePreview}
+                          className="h-9 px-5 rounded-xl bg-gradient-to-r from-violet-600 to-purple-600 text-white text-xs font-semibold flex items-center gap-2 shadow-[0_2px_12px_0_oklch(0.488_0.258_302_/_0.25)] hover:shadow-[0_4px_20px_0_oklch(0.488_0.258_302_/_0.35)] transition-all duration-[350ms]"
+                        >
+                          <Eye className="h-3.5 w-3.5" />Preview Tree
+                          <ArrowRight className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </TabsContent>
+              </Tabs>
+            )}
+
+            {/* Step 3: Confirm */}
+            {step === "confirm" && (
+              <div className="space-y-5">
+                <div>
+                  <Label htmlFor="proj-name" className="text-[11px] font-[var(--font-manrope)] uppercase tracking-wider text-muted-foreground">
+                    Project Slug (lowercase, hyphens)
+                  </Label>
+                  <Input
+                    id="proj-name"
+                    placeholder="e.g. rocket-scientist"
+                    value={projectName}
+                    onChange={(e) => setProjectName(e.target.value.replace(/[^a-z0-9-]/g, ""))}
+                    className="mt-2 border-0 bg-secondary/60 focus:bg-card h-12"
+                  />
                 </div>
-              </TabsContent>
-            </Tabs>
+                <div>
+                  <Label htmlFor="proj-title" className="text-[11px] font-[var(--font-manrope)] uppercase tracking-wider text-muted-foreground">
+                    Project Title
+                  </Label>
+                  <Input
+                    id="proj-title"
+                    value={projectTitle}
+                    onChange={(e) => setProjectTitle(e.target.value)}
+                    className="mt-2 border-0 bg-secondary/60 focus:bg-card h-12"
+                  />
+                </div>
+                {preview && (
+                  <p className="text-xs text-muted-foreground">
+                    This will create a project with {preview.stats.milestone_count} modules and {preview.stats.node_count} knowledge nodes.
+                  </p>
+                )}
+                <div className="flex justify-between pt-2">
+                  <Button variant="outline" onClick={() => setStep("preview")}>
+                    <ArrowLeft className="h-4 w-4 mr-1.5" />Back to Preview
+                  </Button>
+                  <button
+                    onClick={handleCreate}
+                    disabled={!projectName.trim()}
+                    className="h-11 px-6 rounded-xl bg-gradient-to-r from-violet-600 to-purple-600 text-white text-sm font-semibold flex items-center gap-2 shadow-[0_2px_16px_0_oklch(0.488_0.258_302_/_0.30)] hover:shadow-[0_4px_24px_0_oklch(0.488_0.258_302_/_0.40)] transition-all duration-[350ms] disabled:opacity-50"
+                  >
+                    <Check className="h-4 w-4" />Create Project
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
-        )}
-
-        {/* Step 3: Confirm */}
-        {step === "confirm" && (
-          <Card className="max-w-2xl">
-            <CardHeader>
-              <CardTitle className="text-base">创建项目</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div>
-                <Label htmlFor="proj-name">项目标识 (英文 slug)</Label>
-                <Input
-                  id="proj-name"
-                  placeholder="e.g. tree-leaf-ai"
-                  value={projectName}
-                  onChange={(e) => setProjectName(e.target.value.replace(/[^a-z0-9-]/g, ""))}
-                  className="mt-2 max-w-sm"
-                />
-                <p className="text-sm text-muted-foreground mt-1.5">
-                  仅允许小写字母、数字和连字符
-                </p>
-              </div>
-              <div>
-                <Label htmlFor="proj-title">项目标题</Label>
-                <Input
-                  id="proj-title"
-                  placeholder="e.g. 树叶识别AI模型"
-                  value={projectTitle}
-                  onChange={(e) => setProjectTitle(e.target.value)}
-                  className="mt-2 max-w-md"
-                />
-              </div>
-
-              {preview && (
-                <div className="text-sm text-muted-foreground">
-                  将创建包含 {preview.stats.milestone_count} 个模块、{preview.stats.node_count} 个节点的项目
-                </div>
-              )}
-
-              <div className="flex justify-between pt-2">
-                <Button variant="outline" onClick={() => setStep("preview")}>
-                  <ArrowLeft className="h-4 w-4 mr-2" />
-                  返回预览
-                </Button>
-                <Button onClick={handleCreate} disabled={!projectName.trim()}>
-                  <Check className="h-4 w-4 mr-2" />
-                  创建项目
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        )}
+        </div>
       </div>
-    </>
+    </div>
   )
 }

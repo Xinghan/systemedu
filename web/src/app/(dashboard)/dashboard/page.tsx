@@ -9,8 +9,8 @@ import {
   FolderKanban,
   MessageSquare,
   Settings,
+  TrendingUp,
 } from "lucide-react"
-import { Badge } from "@/components/ui/badge"
 import { AppHeader } from "@/components/layout/app-header"
 import { useAppStore } from "@/lib/stores/app-store"
 import { gateway } from "@/lib/api"
@@ -29,122 +29,148 @@ export default function DashboardPage() {
 
   return (
     <>
-      <AppHeader title="仪表盘" />
-      <div className="p-8 space-y-8 animate-[loading-fade-in_0.35s_ease-out]">
+      <AppHeader />
+      <div className="p-8 space-y-8 animate-[loading-fade-in_0.4s_cubic-bezier(0.2,0.8,0.2,1)]">
         {error && (
-          <div className="p-4 rounded-2xl bg-red-50 dark:bg-red-950/30 text-red-600 dark:text-red-400 text-base border border-red-200 dark:border-red-800">
+          <div className="p-4 rounded-xl bg-destructive/8 text-destructive text-sm">
             {error}
           </div>
         )}
 
-        {/* Welcome */}
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight text-foreground">欢迎回来!</h1>
-          <p className="text-base text-muted-foreground mt-2">这是你的 SystemEdu 控制面板概览</p>
+        {/* Welcome section */}
+        <div className="flex items-start justify-between">
+          <div>
+            <h1 className="text-3xl font-extrabold tracking-tight text-foreground">
+              Welcome back!
+            </h1>
+            <p className="text-sm text-muted-foreground mt-1.5">
+              {gatewayConnected
+                ? "Your AI ecosystem is optimized and ready for deep learning."
+                : "Connect to your local gateway to get started."}
+            </p>
+          </div>
+          {/* System online badge */}
+          <div className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-[var(--font-manrope)] font-semibold uppercase tracking-wider ${
+            gatewayConnected
+              ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-400"
+              : "bg-muted text-muted-foreground"
+          }`}>
+            <span className={`w-1.5 h-1.5 rounded-full ${gatewayConnected ? "bg-emerald-500 animate-pulse" : "bg-muted-foreground"}`} />
+            {gatewayConnected ? "System Online" : "Offline"}
+          </div>
         </div>
 
         {/* Stat Cards */}
-        <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
           <StatCard
-            label="系统状态"
-            value={gatewayConnected ? "运行中" : "离线"}
-            valueColor={gatewayConnected ? "text-emerald-600" : "text-red-500"}
-            sub={status ? `v${status.version} · ${status.uptime}` : "无法连接"}
-            icon={<Activity className="h-6 w-6 text-emerald-600 dark:text-emerald-400" />}
-            iconBg="bg-emerald-50 dark:bg-emerald-950/40"
+            label="System Status"
+            value={gatewayConnected ? "Running" : "Offline"}
+            badge={gatewayConnected ? "Healthy" : undefined}
+            badgeColor="bg-emerald-50 text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-400"
+            sub={status ? `v${status.version}` : "Unable to connect"}
+            icon={<Activity className="h-5 w-5 text-primary" />}
+            iconBg="bg-primary/10"
           />
           <StatCard
-            label="LLM 提供商"
+            label="LLM Provider"
             value={config?.llm.default ?? "--"}
-            sub={`${status?.llm.providers.length ?? 0} 个已配置`}
-            icon={<Bot className="h-6 w-6 text-blue-600 dark:text-blue-400" />}
-            iconBg="bg-blue-50 dark:bg-blue-950/40"
+            badge="Default"
+            badgeColor="bg-secondary text-secondary-foreground"
+            sub={`${status?.llm.providers.length ?? 0} configured`}
+            icon={<Bot className="h-5 w-5 text-primary" />}
+            iconBg="bg-primary/10"
           />
           <StatCard
-            label="活跃会话"
+            label="Active Sessions"
             value={String(status?.sessions ?? 0)}
-            sub={`端口 ${status?.port ?? 18820}`}
-            icon={<MessageSquare className="h-6 w-6 text-amber-600 dark:text-amber-400" />}
-            iconBg="bg-amber-50 dark:bg-amber-950/40"
+            sub={`Port ${status?.port ?? 18820}`}
+            icon={<MessageSquare className="h-5 w-5 text-primary" />}
+            iconBg="bg-primary/10"
           />
           <StatCard
-            label="项目"
+            label="Total Projects"
             value={String(projects.length)}
-            sub="本地项目"
-            icon={<FolderKanban className="h-6 w-6 text-violet-600 dark:text-violet-400" />}
-            iconBg="bg-violet-50 dark:bg-violet-950/40"
+            sub="Local projects"
+            icon={<FolderKanban className="h-5 w-5 text-primary" />}
+            iconBg="bg-primary/10"
           />
         </div>
 
-        {/* Two columns */}
+        {/* Two columns: Recent Projects + Quick Actions */}
         <div className="grid gap-8 lg:grid-cols-5">
-          {/* Quick actions */}
+          {/* Recent Projects — wider column */}
           <div className="lg:col-span-3">
-            <h2 className="text-lg font-bold text-foreground mb-5">快速操作</h2>
-            <div className="grid gap-5 sm:grid-cols-2">
-              <QuickAction
-                href="/chat"
-                icon={<MessageSquare className="h-6 w-6" />}
-                iconBg="bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400"
-                title="开始聊天"
-                desc="与 AI 助手进行对话，获取学习帮助"
-              />
-              <QuickAction
-                href="/projects"
-                icon={<FolderKanban className="h-6 w-6" />}
-                iconBg="bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400"
-                title="浏览项目"
-                desc="查看和管理学习项目"
-              />
-              <QuickAction
-                href="/agents"
-                icon={<Bot className="h-6 w-6" />}
-                iconBg="bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400"
-                title="管理 Agents"
-                desc="查看 AI 代理状态"
-              />
-              <QuickAction
-                href="/config"
-                icon={<Settings className="h-6 w-6" />}
-                iconBg="bg-violet-50 dark:bg-violet-950/40 text-violet-600 dark:text-violet-400"
-                title="系统配置"
-                desc="LLM 与服务设置"
-              />
+            <div className="flex items-center justify-between mb-5">
+              <h2 className="text-base font-semibold text-foreground">Recent Projects</h2>
+              <Link href="/projects" className="text-xs font-medium text-primary hover:text-primary/80 transition-colors flex items-center gap-1">
+                View All <ArrowRight className="h-3.5 w-3.5" />
+              </Link>
             </div>
-          </div>
-
-          {/* Recent projects */}
-          <div className="lg:col-span-2">
-            <h2 className="text-lg font-bold text-foreground mb-5">最近项目</h2>
-            <div className="rounded-2xl border bg-white dark:bg-card shadow-sm overflow-hidden">
+            <div className="card-elevated overflow-hidden">
               {projects.length === 0 ? (
-                <div className="px-6 py-16 text-center text-muted-foreground">
-                  <FolderKanban className="h-12 w-12 mx-auto mb-4 opacity-30" />
-                  <p className="text-base">暂无项目</p>
+                <div className="px-6 py-14 text-center text-muted-foreground">
+                  <FolderKanban className="h-10 w-10 mx-auto mb-3 opacity-20" />
+                  <p className="text-sm">No projects yet</p>
                 </div>
               ) : (
-                <div className="divide-y divide-border">
+                <div className="divide-y divide-border/60">
                   {projects.slice(0, 5).map((p) => (
                     <Link
                       key={p.name}
                       href={`/projects/${p.name}`}
-                      className="flex items-center gap-4 px-6 py-4 hover:bg-muted/50 transition-colors group"
+                      className="flex items-center gap-4 px-5 py-4 hover:bg-secondary/60 transition-all duration-[350ms] [transition-timing-function:cubic-bezier(0.2,0.8,0.2,1)] group"
                     >
-                      <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-violet-50 dark:bg-violet-950/40">
-                        <FolderKanban className="h-6 w-6 text-violet-600 dark:text-violet-400" />
+                      <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-primary/10">
+                        <FolderKanban className="h-5 w-5 text-primary" />
                       </div>
                       <div className="min-w-0 flex-1">
-                        <p className="text-base font-medium text-foreground truncate">{p.title}</p>
+                        <p className="text-sm font-semibold text-foreground truncate">{p.title}</p>
                         <div className="flex items-center gap-2 mt-1">
-                          <Badge variant="secondary">{p.category}</Badge>
-                          <span className="text-sm text-muted-foreground">{p.estimated_hours}h</span>
+                          <span className="text-[10px] font-[var(--font-manrope)] uppercase tracking-wider px-2 py-0.5 rounded-full bg-secondary text-secondary-foreground">
+                            {p.category}
+                          </span>
+                          <span className="text-xs text-muted-foreground">{p.estimated_hours}h</span>
                         </div>
                       </div>
-                      <ArrowRight className="h-5 w-5 text-muted-foreground/30 shrink-0 opacity-0 -translate-x-1 group-hover:opacity-100 group-hover:translate-x-0 transition-all" />
+                      <ArrowRight className="h-4 w-4 text-muted-foreground/30 shrink-0 opacity-0 -translate-x-1 group-hover:opacity-100 group-hover:translate-x-0 transition-all duration-[350ms]" />
                     </Link>
                   ))}
                 </div>
               )}
+            </div>
+          </div>
+
+          {/* Quick Actions + Insight card */}
+          <div className="lg:col-span-2 space-y-5">
+            <div>
+              <h2 className="text-base font-semibold text-foreground mb-5">Quick Actions</h2>
+              <div className="space-y-3">
+                <QuickAction href="/chat" icon={<MessageSquare className="h-5 w-5 text-primary" />} title="Start Chat" />
+                <QuickAction href="/projects" icon={<FolderKanban className="h-5 w-5 text-primary" />} title="Browse Projects" />
+                <QuickAction href="/agents" icon={<Bot className="h-5 w-5 text-primary" />} title="Manage Agents" />
+                <QuickAction href="/config" icon={<Settings className="h-5 w-5 text-primary" />} title="System Settings" />
+              </div>
+            </div>
+
+            {/* Neural Efficiency card — teal/purple gradient */}
+            <div className="rounded-xl bg-gradient-to-br from-violet-600 via-purple-600 to-purple-700 p-5 text-white shadow-[0_4px_32px_0_oklch(0.488_0.258_302_/_0.25)]">
+              <p className="text-[10px] font-[var(--font-manrope)] uppercase tracking-widest opacity-70 mb-2">
+                Neural Efficiency
+              </p>
+              <h3 className="text-base font-bold mb-1">
+                {projects.length > 0
+                  ? `${projects.length} project${projects.length > 1 ? "s" : ""} active`
+                  : "Start your first project"}
+              </h3>
+              <p className="text-xs opacity-75 mb-4">
+                {gatewayConnected
+                  ? "Your AI ecosystem is running at full capacity."
+                  : "Connect your gateway to unlock AI-powered learning."}
+              </p>
+              <div className="flex items-center gap-2">
+                <TrendingUp className="h-4 w-4 opacity-80" />
+                <span className="text-xs opacity-80">Gateway {gatewayConnected ? "Connected" : "Offline"}</span>
+              </div>
             </div>
           </div>
         </div>
@@ -156,30 +182,37 @@ export default function DashboardPage() {
 function StatCard({
   label,
   value,
-  valueColor,
+  badge,
+  badgeColor,
   sub,
   icon,
   iconBg,
 }: {
   label: string
   value: string
-  valueColor?: string
+  badge?: string
+  badgeColor?: string
   sub: string
   icon: React.ReactNode
   iconBg: string
 }) {
   return (
-    <div className="rounded-2xl border bg-white dark:bg-card p-6 shadow-sm hover:shadow-md transition-shadow">
-      <div className="flex items-start justify-between">
-        <div>
-          <p className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">{label}</p>
-          <p className={`mt-3 text-3xl font-bold ${valueColor ?? "text-foreground"}`}>{value}</p>
-          <p className="mt-1.5 text-sm text-muted-foreground">{sub}</p>
-        </div>
-        <div className={`flex h-13 w-13 items-center justify-center rounded-2xl ${iconBg}`}>
+    <div className="card-elevated p-6 transition-all duration-[350ms] [transition-timing-function:cubic-bezier(0.2,0.8,0.2,1)] hover:shadow-card-hover">
+      <div className="flex items-start justify-between mb-4">
+        <div className={`flex h-11 w-11 items-center justify-center rounded-xl ${iconBg}`}>
           {icon}
         </div>
+        {badge && (
+          <span className={`text-[10px] font-[var(--font-manrope)] uppercase tracking-wider px-2 py-1 rounded-full ${badgeColor}`}>
+            {badge}
+          </span>
+        )}
       </div>
+      <p className="text-[11px] font-[var(--font-manrope)] uppercase tracking-wider text-muted-foreground mb-1">
+        {label}
+      </p>
+      <p className="text-2xl font-bold text-foreground">{value}</p>
+      <p className="text-xs text-muted-foreground mt-1">{sub}</p>
     </div>
   )
 }
@@ -187,29 +220,20 @@ function StatCard({
 function QuickAction({
   href,
   icon,
-  iconBg,
   title,
-  desc,
 }: {
   href: string
   icon: React.ReactNode
-  iconBg: string
   title: string
-  desc: string
 }) {
   return (
     <Link href={href}>
-      <div className="group rounded-2xl border bg-white dark:bg-card p-6 shadow-sm hover:shadow-md transition-all cursor-pointer">
-        <div className={`inline-flex h-12 w-12 items-center justify-center rounded-xl ${iconBg} mb-4`}>
+      <div className="card-elevated flex items-center gap-4 px-4 py-3.5 cursor-pointer hover:shadow-card-hover transition-all duration-[350ms] [transition-timing-function:cubic-bezier(0.2,0.8,0.2,1)] group">
+        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10">
           {icon}
         </div>
-        <div className="flex items-center justify-between">
-          <div>
-            <p className="text-base font-semibold text-foreground">{title}</p>
-            <p className="text-sm text-muted-foreground mt-1">{desc}</p>
-          </div>
-          <ArrowRight className="h-5 w-5 text-muted-foreground/30 opacity-0 -translate-x-1 group-hover:opacity-100 group-hover:translate-x-0 transition-all" />
-        </div>
+        <span className="text-sm font-medium text-foreground flex-1">{title}</span>
+        <ArrowRight className="h-4 w-4 text-muted-foreground/30 opacity-0 -translate-x-1 group-hover:opacity-100 group-hover:translate-x-0 transition-all duration-[350ms]" />
       </div>
     </Link>
   )
