@@ -5,7 +5,7 @@ import { useParams, useRouter } from "next/navigation"
 import Link from "next/link"
 import dynamic from "next/dynamic"
 import { toast } from "sonner"
-import { ArrowLeft, Clock, Play, CheckCircle, GraduationCap, Highlighter, FolderOpen, Palette, Pencil, Save, X, Package, ChevronUp, BookOpen } from "lucide-react"
+import { ArrowLeft, Clock, Play, GraduationCap, Highlighter, FolderOpen, Palette, Pencil, Save, X, Package, ChevronUp, BookOpen } from "lucide-react"
 import { PageLoading } from "@/components/ui/page-loading"
 import { LoadingSpinner } from "@/components/ui/loading-spinner"
 import { Badge } from "@/components/ui/badge"
@@ -236,8 +236,8 @@ export default function ProjectDetailPage() {
   const isCompleted = enrollment?.status === "completed"
   const isActive = enrollment?.status === "active"
 
-  const buttonLabel = isCompleted ? "已完成" : isActive ? "继续学习" : "开始学习"
-  const ButtonIcon = isCompleted ? CheckCircle : isActive ? Play : GraduationCap
+  const buttonLabel = isCompleted ? "再次学习" : isActive ? "继续学习" : "开始学习"
+  const ButtonIcon = isCompleted ? Play : isActive ? Play : GraduationCap
 
   return (
     <>
@@ -373,7 +373,7 @@ export default function ProjectDetailPage() {
             </div>
             <Button
               onClick={handleStartLearning}
-              disabled={enrolling || isCompleted}
+              disabled={enrolling}
               size="lg"
               className="flex items-center gap-2 shrink-0"
             >
