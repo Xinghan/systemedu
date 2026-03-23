@@ -179,6 +179,7 @@ export interface LessonContent {
   practice_audio_url: string
   lab_audio_url: string
   key_takeaways_audio_url: string
+  project_assignment: string
   content_type: string
   generated_at: string | null
 }

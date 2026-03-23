@@ -97,6 +97,22 @@ SECTIONS = [
     ),
 ]
 
+# Assignment section is handled separately (not in SECTIONS loop) because it uses lesson_plan data
+ASSIGNMENT_PROMPT_TEMPLATE = (
+    "你是一位项目制教育课程设计师。请为知识节点《{title}》生成一个项目制大作业。\n\n"
+    "大作业策略：\n"
+    "- 类型：{assignment_type}\n"
+    "- 标题：{assignment_title}\n"
+    "- 描述：{assignment_description}\n"
+    "{hands_on_section}"
+    "\n要求：\n"
+    "- 大作业是综合性任务，而非简单选择题\n"
+    "- 描述清晰的任务目标、详细步骤、预期成果\n"
+    "- 若有手工操作内容，在该部分段落前加上标记 [HANDS_ON]\n"
+    "- 输出 Markdown 格式，使用 ## 标题分节（如 ## 任务目标、## 操作步骤、## 提交要求）\n"
+    "- 全部使用中文，不加 JSON 包装，直接输出 Markdown"
+)
+
 
 VALID_TEMPLATES = {
     "step-by-step", "comparison", "flowchart", "timeline",
@@ -105,6 +121,18 @@ VALID_TEMPLATES = {
 }
 
 GAME_TEMPLATES = {"quiz-choice", "match-pairs", "sort-order", "fill-blanks", "true-false"}
+
+PLACEHOLDER_PATTERNS = ["不涉及编程", "无代码", "no code", "n/a", "暂无代码", "本节点无代码示例"]
+
+
+def _clean_empty_field(text: str) -> str:
+    """Return empty string if text is a placeholder with no real content."""
+    if not text or len(text.strip()) < 50:
+        return ""
+    lower = text.lower()
+    if any(p in lower for p in PLACEHOLDER_PATTERNS):
+        return ""
+    return text
 
 
 def _validate_examples_json(content: str) -> str:
@@ -657,6 +685,10 @@ async def generate_lesson(project_name: str, knode_id: int, user_id: str = "defa
                 if section_key == "practice":
                     content = _validate_practice_json(content)
 
+                # Clean code_samples placeholder text
+                if section_key == "code_samples":
+                    content = _clean_empty_field(content)
+
                 setattr(lesson, section_key, content)
                 db.commit()
                 preview = f"{len(content)} 字" if content else ""
@@ -666,6 +698,44 @@ async def generate_lesson(project_name: str, knode_id: int, user_id: str = "defa
                 logger.exception(f"Failed to generate section '{section_key}' for node {knode_id}")
                 setattr(lesson, section_key, "")
                 _update_progress(db, project_name, knode_id, section_key, section_label, "内容老师", "failed")
+
+        # Step 2b: Generate project_assignment (if assignment_strategy.type != "none")
+        assignment_strategy = {}
+        if lesson_plan:
+            assignment_strategy = lesson_plan.get("assignment_strategy", {})
+        assignment_type = assignment_strategy.get("type", "none") if assignment_strategy else "none"
+
+        if assignment_type and assignment_type != "none":
+            _update_progress(db, project_name, knode_id, "project_assignment", "大作业", "内容老师", "in_progress")
+            try:
+                has_hands_on = lesson_plan.get("has_hands_on", False) if lesson_plan else False
+                hands_on_note = assignment_strategy.get("hands_on_note", "")
+                hands_on_section = (
+                    f"- 手工操作说明：{hands_on_note}\n"
+                    if has_hands_on and hands_on_note
+                    else ""
+                )
+                assignment_prompt = ASSIGNMENT_PROMPT_TEMPLATE.format(
+                    title=target_node.title,
+                    assignment_type=assignment_type,
+                    assignment_title=assignment_strategy.get("title", target_node.title + "大作业"),
+                    assignment_description=assignment_strategy.get("description", ""),
+                    hands_on_section=hands_on_section,
+                )
+                response = llm.invoke([HumanMessage(content=assignment_prompt)])
+                assignment_content = response.content
+                lesson.project_assignment = assignment_content
+                db.commit()
+                _update_progress(db, project_name, knode_id, "project_assignment", "大作业", "内容老师", "completed", f"{len(assignment_content)} 字")
+                logger.info(f"Generated project_assignment for node {knode_id}")
+            except Exception:
+                logger.exception(f"Failed to generate project_assignment for node {knode_id}")
+                lesson.project_assignment = ""
+                _update_progress(db, project_name, knode_id, "project_assignment", "大作业", "内容老师", "failed")
+        else:
+            lesson.project_assignment = ""
+            db.commit()
+            logger.info(f"Skipping project_assignment for node {knode_id} (type=none)")
 
         # Step 3: Generate quiz data
         _update_progress(db, project_name, knode_id, "quiz", "测验题", "出题老师", "in_progress")
@@ -866,6 +936,7 @@ def _lesson_to_dict(lesson) -> dict:
         "practice_audio_url": lesson.practice_audio_url or "",
         "lab_audio_url": lesson.lab_audio_url or "",
         "key_takeaways_audio_url": lesson.key_takeaways_audio_url or "",
+        "project_assignment": lesson.project_assignment or "",
         "content_type": lesson.content_type or "text",
         "generated_at": lesson.generated_at.isoformat() if lesson.generated_at else None,
     }

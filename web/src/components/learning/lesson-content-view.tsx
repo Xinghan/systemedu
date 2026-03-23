@@ -9,6 +9,7 @@ import { AnimatedExamplesView } from "./animated-examples"
 import { InteractiveLabView } from "./interactive-lab-view"
 import { PagedContentView } from "./paged-content-view"
 import { PracticeView } from "./practice-view"
+import { AssignmentView } from "./assignment-view"
 import { ResourceSearchView } from "./resource-search-view"
 import { NotePanel, type NotePreviewMode } from "./note-panel"
 import { AudioPlayerBar } from "./audio-player-bar"
@@ -45,6 +46,7 @@ const TAB_CONFIG = [
   { key: "code_samples", label: "代码", field: "code_samples" as const, audioField: null },
   { key: "practice", label: "练习", field: "practice" as const, audioField: "practice_audio_url" as const },
   { key: "key_takeaways", label: "总结", field: "key_takeaways" as const, audioField: "key_takeaways_audio_url" as const },
+  { key: "project_assignment", label: "大作业", field: "project_assignment" as const, audioField: null },
 ]
 
 export function LessonContentView({
@@ -85,7 +87,7 @@ export function LessonContentView({
   const activeKey = allTabs[activeTab]?.key ?? allTabs[0]?.key
 
   // Wide-layout tabs: full-width content (no sidebar)
-  const isWideTab = ["interactive_lab", "examples", "practice", "resources"].includes(activeKey)
+  const isWideTab = ["interactive_lab", "examples", "practice", "resources", "project_assignment"].includes(activeKey)
 
   const handleDragMouseDown = useCallback((e: React.MouseEvent) => {
     e.preventDefault()
@@ -196,6 +198,8 @@ export function LessonContentView({
                     <AnimatedExamplesView content={lesson[availableTabs[activeTab]?.field ?? availableTabs[0].field]} />
                   ) : activeKey === "interactive_lab" ? (
                     <InteractiveLabView html={lesson[availableTabs[activeTab]?.field ?? availableTabs[0].field]} />
+                  ) : activeKey === "project_assignment" ? (
+                    <AssignmentView content={lesson.project_assignment} />
                   ) : (
                     <PracticeView
                       content={lesson[availableTabs[activeTab]?.field ?? availableTabs[0].field]}

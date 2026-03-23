@@ -996,6 +996,7 @@ async def api_node_lesson(request: Request) -> JSONResponse:
                     "teacher_script": "",
                     "teacher_audio_url": "",
                     "teacher_timestamps": "[]",
+                    "project_assignment": "",
                     "content_type": "text",
                     "generated_at": None,
                 }

@@ -211,6 +211,7 @@ class LessonContent(Base):
     practice_audio_url = Column(Text, default="")
     lab_audio_url = Column(Text, default="")
     key_takeaways_audio_url = Column(Text, default="")
+    project_assignment = Column(Text, default="")
     content_type = Column(String(20), default="text")
     generated_at = Column(DateTime, nullable=True)
 
@@ -304,6 +305,7 @@ def _migrate_schema(engine):
         ("lesson_content", "practice_audio_url", "TEXT DEFAULT ''"),
         ("lesson_content", "lab_audio_url", "TEXT DEFAULT ''"),
         ("lesson_content", "key_takeaways_audio_url", "TEXT DEFAULT ''"),
+        ("lesson_content", "project_assignment", "TEXT DEFAULT ''"),
     ]
 
     with engine.connect() as conn:
