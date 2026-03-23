@@ -35,8 +35,14 @@ class SimulationSceneJS(BaseModel):
     dynamic_fn: str = ""
 
 
+class FreeSimulationHTML(BaseModel):
+    """LLM-generated standalone HTML for free_simulation mechanic."""
+    html: str = ""
+    design_idea: str = ""
+
+
 class GameSpec(BaseModel):
-    mechanic: Literal["drag_sort", "match_pairs", "simulation", "label_map", "timeline_order", "boss_quiz"]
+    mechanic: Literal["drag_sort", "match_pairs", "simulation", "label_map", "timeline_order", "boss_quiz", "free_simulation"]
     topic: str
     theme: str
     difficulty: int = Field(ge=1, le=10)
@@ -63,3 +69,7 @@ class GameSpec(BaseModel):
     questions: list[dict] | None = None        # [{id, question, options:[str], correct:int, explanation}]
     # simulation: LLM-generated JS scene code (overrides hardcoded SCENES in template)
     scene_js: SimulationSceneJS | None = None
+    # free_simulation: LLM-generated standalone HTML (Canvas/SVG, self-contained)
+    free_html: FreeSimulationHTML | None = None
+    # scientific model constraints injected at planning time (stored for reference)
+    scientific_model: dict | None = None

@@ -18,6 +18,32 @@ _GSAP_SRC = '<script src="gsap.min.js"></script>'
 
 logger = logging.getLogger(__name__)
 
+_KATEX_INJECT = (
+    '<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">\n'
+    '<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>\n'
+    '<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js"'
+    ' onload="renderMathInElement(document.body,{delimiters:['
+    '{left:\'$$\',right:\'$$\',display:true},'
+    '{left:\'$\',right:\'$\',display:false},'
+    '{left:\'\\\\(\',right:\'\\\\)\',display:false},'
+    '{left:\'\\\\[\',right:\'\\\\]\',display:true}'
+    ']})"></script>'
+)
+
+
+def _inject_katex_if_needed(html: str) -> str:
+    """Inject KaTeX CDN into <head> if the HTML contains LaTeX delimiters."""
+    has_latex = any(marker in html for marker in (r"\(", r"\[", "$$", r"\begin{"))
+    if not has_latex:
+        return html
+    # Avoid double-injection
+    if "katex" in html:
+        return html
+    # Insert before </head>; if no </head>, prepend
+    if "</head>" in html:
+        return html.replace("</head>", f"{_KATEX_INJECT}\n</head>", 1)
+    return _KATEX_INJECT + "\n" + html
+
 
 def _load_gsap_inline() -> str:
     """Return an inline <script> tag containing the bundled GSAP source."""
@@ -38,6 +64,9 @@ class GameCompiler:
         Returns the full HTML string.
         Raises FileNotFoundError if the template does not exist.
         """
+        if spec.mechanic == "free_simulation":
+            return self._compile_free_simulation(spec)
+
         template_path = TEMPLATES_DIR / f"{spec.mechanic}.html"
         if not template_path.exists():
             raise FileNotFoundError(f"Template not found: {template_path}")
@@ -93,6 +122,14 @@ class GameCompiler:
         if f'"{RENDER_SPEC_PLACEHOLDER}"' in html:
             html = html.replace(f'"{RENDER_SPEC_PLACEHOLDER}"', render_spec_json, 1)
 
+        return html
+
+    def _compile_free_simulation(self, spec: GameSpec) -> str:
+        """Return the free_simulation HTML, optionally injecting KaTeX for LaTeX rendering."""
+        if not spec.free_html or not spec.free_html.html:
+            raise ValueError("free_simulation spec has no html content")
+        html = spec.free_html.html
+        html = _inject_katex_if_needed(html)
         return html
 
     def _resolve_render_spec(self, spec: GameSpec):

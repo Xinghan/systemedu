@@ -2,7 +2,7 @@
 
 from systemedu.agents.builtin.gameagent.spec import GameSpec
 
-ALLOWED_MECHANICS = {"drag_sort", "match_pairs", "simulation", "label_map", "timeline_order", "boss_quiz"}
+ALLOWED_MECHANICS = {"drag_sort", "match_pairs", "simulation", "label_map", "timeline_order", "boss_quiz", "free_simulation"}
 
 
 class GameSpecValidator:
@@ -88,5 +88,13 @@ class GameSpecValidator:
                 for field in ("id", "question", "options", "correct"):
                     if field not in q:
                         errors.append(f"boss_quiz question[{i}] missing field '{field}'")
+
+        elif spec.mechanic == "free_simulation":
+            if not spec.free_html or not spec.free_html.html:
+                errors.append("free_simulation requires non-empty free_html.html")
+            elif len(spec.free_html.html) < 500:
+                errors.append(
+                    f"free_simulation html too short ({len(spec.free_html.html)} chars, min 500)"
+                )
 
         return len(errors) == 0, errors

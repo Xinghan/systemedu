@@ -1111,3 +1111,374 @@ class TestPlannerSimulationSceneJS:
         assert result is not None
         assert result.mechanic == "simulation"
         assert result.scene_js is None
+
+
+# ---------------------------------------------------------------------------
+# P0: ScientificModeler tests
+# ---------------------------------------------------------------------------
+
+class TestScientificModeler:
+    def test_scientific_model_fields(self):
+        from systemedu.agents.builtin.gameagent.scientific_modeler import ScientificModel
+        m = ScientificModel(
+            core_formulas=["F=ma"],
+            mechanism=["力使物体产生加速度"],
+            constraints=["质量m>0"],
+            forbidden_errors=["负质量"],
+        )
+        assert m.core_formulas == ["F=ma"]
+        assert m.mechanism == ["力使物体产生加速度"]
+        assert m.constraints == ["质量m>0"]
+        assert m.forbidden_errors == ["负质量"]
+
+    def test_scientific_model_defaults(self):
+        from systemedu.agents.builtin.gameagent.scientific_modeler import ScientificModel
+        m = ScientificModel()
+        assert m.core_formulas == []
+        assert m.mechanism == []
+        assert m.constraints == []
+        assert m.forbidden_errors == []
+
+    def test_to_prompt_section_with_content(self):
+        from systemedu.agents.builtin.gameagent.scientific_modeler import ScientificModel
+        m = ScientificModel(
+            core_formulas=["F=ma"],
+            mechanism=["力使物体加速"],
+            constraints=["质量m>0"],
+            forbidden_errors=["负质量"],
+        )
+        section = m.to_prompt_section()
+        assert "科学建模约束" in section
+        assert "F=ma" in section
+        assert "力使物体加速" in section
+        assert "质量m>0" in section
+        assert "负质量" in section
+
+    def test_to_prompt_section_empty(self):
+        from systemedu.agents.builtin.gameagent.scientific_modeler import ScientificModel
+        m = ScientificModel()
+        section = m.to_prompt_section()
+        assert "科学建模约束" in section  # header always present
+
+    @pytest.mark.asyncio
+    async def test_modeler_returns_model_on_valid_response(self):
+        from langchain_core.messages import AIMessage
+        from systemedu.agents.builtin.gameagent.scientific_modeler import ScientificModeler, ScientificModel
+
+        model_data = {
+            "core_formulas": ["F=ma", "a=F/m"],
+            "mechanism": ["施加力使物体加速"],
+            "constraints": ["质量m必须大于0"],
+            "forbidden_errors": ["负质量"],
+        }
+        mock_agent = MagicMock()
+        mock_agent.ainvoke = AsyncMock(return_value={
+            "messages": [AIMessage(content=json.dumps(model_data))]
+        })
+
+        with patch("deepagents.create_deep_agent", return_value=mock_agent):
+            modeler = ScientificModeler(llm=MagicMock())
+            result = await modeler.model("牛顿第二定律", "F=ma，力与加速度的关系")
+
+        assert result is not None
+        assert isinstance(result, ScientificModel)
+        assert "F=ma" in result.core_formulas
+
+    @pytest.mark.asyncio
+    async def test_modeler_returns_none_on_invalid_response(self):
+        from langchain_core.messages import AIMessage
+        from systemedu.agents.builtin.gameagent.scientific_modeler import ScientificModeler
+
+        mock_agent = MagicMock()
+        mock_agent.ainvoke = AsyncMock(return_value={
+            "messages": [AIMessage(content="not valid json")]
+        })
+
+        with patch("deepagents.create_deep_agent", return_value=mock_agent):
+            modeler = ScientificModeler(llm=MagicMock())
+            result = await modeler.model("测试", "测试内容")
+
+        assert result is None  # graceful failure
+
+    @pytest.mark.asyncio
+    async def test_modeler_strips_markdown_fences(self):
+        from langchain_core.messages import AIMessage
+        from systemedu.agents.builtin.gameagent.scientific_modeler import ScientificModeler
+
+        model_data = {"core_formulas": ["E=mc²"], "mechanism": [], "constraints": [], "forbidden_errors": []}
+        fenced = f"```json\n{json.dumps(model_data)}\n```"
+
+        mock_agent = MagicMock()
+        mock_agent.ainvoke = AsyncMock(return_value={"messages": [AIMessage(content=fenced)]})
+
+        with patch("deepagents.create_deep_agent", return_value=mock_agent):
+            modeler = ScientificModeler(llm=MagicMock())
+            result = await modeler.model("质能方程", "E=mc²")
+
+        assert result is not None
+        assert "E=mc²" in result.core_formulas
+
+
+# ---------------------------------------------------------------------------
+# P0: ScientificModeler integration with planner
+# ---------------------------------------------------------------------------
+
+class TestPlannerWithScientificModel:
+    @pytest.mark.asyncio
+    async def test_planner_stores_scientific_model_in_spec(self):
+        """When ScientificModeler succeeds, spec.scientific_model is populated."""
+        from langchain_core.messages import AIMessage
+        from systemedu.agents.builtin.gameagent.planner import GameSpecPlannerAgent
+        from systemedu.agents.builtin.gameagent.scientific_modeler import ScientificModel
+
+        spec_data = make_simulation_spec().model_dump()
+        spec_json = json.dumps(spec_data, ensure_ascii=False)
+
+        mock_agent = MagicMock()
+        mock_agent.ainvoke = AsyncMock(return_value={"messages": [AIMessage(content=spec_json)]})
+
+        mock_model = ScientificModel(
+            core_formulas=["F=ma"],
+            mechanism=["力使物体加速"],
+            constraints=["m>0"],
+            forbidden_errors=["负质量"],
+        )
+
+        with patch("systemedu.agents.builtin.gameagent.planner.create_deep_agent", return_value=mock_agent):
+            with patch("systemedu.agents.builtin.gameagent.scientific_modeler.ScientificModeler") as MockModeler:
+                MockModeler.return_value.model = AsyncMock(return_value=mock_model)
+                planner = GameSpecPlannerAgent(llm=MagicMock())
+                result = await planner.plan("牛顿第二定律", "F=ma", 5)
+
+        assert result is not None
+        assert result.scientific_model is not None
+        assert result.scientific_model["core_formulas"] == ["F=ma"]
+
+    @pytest.mark.asyncio
+    async def test_planner_continues_without_scientific_model(self):
+        """ScientificModeler failure does not block planner (graceful skip)."""
+        from langchain_core.messages import AIMessage
+        from systemedu.agents.builtin.gameagent.planner import GameSpecPlannerAgent
+
+        spec_data = make_drag_sort_spec().model_dump()
+        spec_json = json.dumps(spec_data, ensure_ascii=False)
+
+        mock_agent = MagicMock()
+        mock_agent.ainvoke = AsyncMock(return_value={"messages": [AIMessage(content=spec_json)]})
+
+        with patch("systemedu.agents.builtin.gameagent.planner.create_deep_agent", return_value=mock_agent):
+            with patch("systemedu.agents.builtin.gameagent.scientific_modeler.ScientificModeler") as MockModeler:
+                MockModeler.return_value.model = AsyncMock(return_value=None)  # failure
+                planner = GameSpecPlannerAgent(llm=MagicMock())
+                result = await planner.plan("动物分类", "测试", 4)
+
+        assert result is not None  # planner not blocked
+        assert result.mechanic == "drag_sort"
+
+
+# ---------------------------------------------------------------------------
+# P1: FreeSimulationHTML model tests
+# ---------------------------------------------------------------------------
+
+class TestFreeSimulationHTML:
+    def test_model_fields(self):
+        from systemedu.agents.builtin.gameagent.spec import FreeSimulationHTML
+        f = FreeSimulationHTML(html="<html></html>", design_idea="测试设计")
+        assert f.html == "<html></html>"
+        assert f.design_idea == "测试设计"
+
+    def test_model_defaults(self):
+        from systemedu.agents.builtin.gameagent.spec import FreeSimulationHTML
+        f = FreeSimulationHTML()
+        assert f.html == ""
+        assert f.design_idea == ""
+
+    def test_game_spec_free_simulation(self):
+        from systemedu.agents.builtin.gameagent.spec import FreeSimulationHTML
+        spec = GameSpec(
+            mechanic="free_simulation",
+            topic="欧姆定律",
+            theme="电路实验室",
+            difficulty=5,
+            entities=[],
+            levels=[GameLevel(prompt="调节电压和电阻")],
+            free_html=FreeSimulationHTML(html="<!DOCTYPE html><html><body>test</body></html>" + "x" * 460),
+        )
+        assert spec.mechanic == "free_simulation"
+        assert spec.free_html is not None
+        assert len(spec.free_html.html) > 500
+
+
+# ---------------------------------------------------------------------------
+# P1: Validator for free_simulation
+# ---------------------------------------------------------------------------
+
+class TestValidatorFreeSimulation:
+    def _make_free_sim_spec(self, html: str = "") -> GameSpec:
+        from systemedu.agents.builtin.gameagent.spec import FreeSimulationHTML
+        return GameSpec(
+            mechanic="free_simulation",
+            topic="欧姆定律",
+            theme="电路实验室",
+            difficulty=5,
+            entities=[],
+            levels=[GameLevel(prompt="调节参数")],
+            free_html=FreeSimulationHTML(html=html),
+        )
+
+    def test_valid_free_simulation(self):
+        long_html = "<!DOCTYPE html><html><body>" + "x" * 500 + "</body></html>"
+        spec = self._make_free_sim_spec(long_html)
+        validator = GameSpecValidator()
+        ok, errors = validator.validate(spec)
+        assert ok, errors
+
+    def test_missing_free_html_fails(self):
+        spec = GameSpec(
+            mechanic="free_simulation",
+            topic="测试",
+            theme="测试",
+            difficulty=5,
+            entities=[],
+            levels=[GameLevel(prompt="测试")],
+            free_html=None,
+        )
+        validator = GameSpecValidator()
+        ok, errors = validator.validate(spec)
+        assert not ok
+        assert any("free_html" in e for e in errors)
+
+    def test_empty_html_fails(self):
+        spec = self._make_free_sim_spec(html="")
+        validator = GameSpecValidator()
+        ok, errors = validator.validate(spec)
+        assert not ok
+        assert any("free_html" in e for e in errors)
+
+    def test_too_short_html_fails(self):
+        spec = self._make_free_sim_spec(html="<html></html>")
+        validator = GameSpecValidator()
+        ok, errors = validator.validate(spec)
+        assert not ok
+        assert any("too short" in e for e in errors)
+
+
+# ---------------------------------------------------------------------------
+# P1: Compiler for free_simulation
+# ---------------------------------------------------------------------------
+
+class TestCompilerFreeSimulation:
+    def _make_free_sim_spec(self, html: str | None = None) -> GameSpec:
+        from systemedu.agents.builtin.gameagent.spec import FreeSimulationHTML
+        if html is None:
+            html = "<!DOCTYPE html>\n<html>\n<head><title>Test</title></head>\n<body>" + "x" * 500 + "</body>\n</html>"
+        return GameSpec(
+            mechanic="free_simulation",
+            topic="欧姆定律",
+            theme="电路实验室",
+            difficulty=5,
+            entities=[],
+            levels=[GameLevel(prompt="调节参数")],
+            free_html=FreeSimulationHTML(html=html),
+        )
+
+    def test_free_simulation_compiles_directly(self):
+        spec = self._make_free_sim_spec()
+        html = GameCompiler().compile(spec)
+        assert "<!DOCTYPE html>" in html or "<html>" in html.lower()
+
+    def test_free_simulation_returns_exact_html(self):
+        """Compiler returns free_html.html verbatim (no template wrapping)."""
+        unique = "UNIQUE_MARKER_FREE_SIM_42"
+        html_content = f"<!DOCTYPE html><html><head></head><body>{unique}{'x' * 490}</body></html>"
+        spec = self._make_free_sim_spec(html=html_content)
+        result = GameCompiler().compile(spec)
+        assert unique in result
+
+    def test_free_simulation_no_template_placeholders(self):
+        """free_simulation output must not contain template placeholders."""
+        spec = self._make_free_sim_spec()
+        html = GameCompiler().compile(spec)
+        assert "__GAME_SPEC__" not in html
+        assert "__RENDER_SPEC__" not in html
+
+    def test_katex_not_injected_without_latex(self):
+        """KaTeX is not injected when no LaTeX delimiters present."""
+        spec = self._make_free_sim_spec()
+        html = GameCompiler().compile(spec)
+        assert "katex" not in html.lower()
+
+    def test_katex_injected_with_latex_delimiters(self):
+        r"""KaTeX is injected when \( ... \) is detected."""
+        latex_html = (
+            "<!DOCTYPE html><html><head></head><body>"
+            r"\(F = ma\)"
+            + "x" * 490 + "</body></html>"
+        )
+        spec = self._make_free_sim_spec(html=latex_html)
+        result = GameCompiler().compile(spec)
+        assert "katex" in result.lower()
+
+    def test_katex_injected_with_dollar_delimiters(self):
+        """KaTeX is injected when $$ ... $$ is detected."""
+        latex_html = (
+            "<!DOCTYPE html><html><head></head><body>"
+            "$$E = mc^2$$"
+            + "x" * 490 + "</body></html>"
+        )
+        spec = self._make_free_sim_spec(html=latex_html)
+        result = GameCompiler().compile(spec)
+        assert "katex" in result.lower()
+
+    def test_free_simulation_raises_on_empty_html(self):
+        from systemedu.agents.builtin.gameagent.spec import FreeSimulationHTML
+        spec = GameSpec(
+            mechanic="free_simulation",
+            topic="测试",
+            theme="测试",
+            difficulty=5,
+            entities=[],
+            levels=[GameLevel(prompt="测试")],
+            free_html=FreeSimulationHTML(html=""),
+        )
+        with pytest.raises(ValueError, match="no html content"):
+            GameCompiler().compile(spec)
+
+
+# ---------------------------------------------------------------------------
+# P1: KaTeX injection helper tests
+# ---------------------------------------------------------------------------
+
+class TestKatexInjection:
+    def test_no_latex_no_inject(self):
+        from systemedu.agents.builtin.gameagent.compiler import _inject_katex_if_needed
+        html = "<html><head></head><body>hello world</body></html>"
+        result = _inject_katex_if_needed(html)
+        assert result == html  # unchanged
+
+    def test_backslash_paren_triggers_inject(self):
+        from systemedu.agents.builtin.gameagent.compiler import _inject_katex_if_needed
+        html = r"<html><head></head><body>\(F=ma\)</body></html>"
+        result = _inject_katex_if_needed(html)
+        assert "katex" in result.lower()
+
+    def test_double_dollar_triggers_inject(self):
+        from systemedu.agents.builtin.gameagent.compiler import _inject_katex_if_needed
+        html = "<html><head></head><body>$$E=mc^2$$</body></html>"
+        result = _inject_katex_if_needed(html)
+        assert "katex" in result.lower()
+
+    def test_inject_before_head_close(self):
+        from systemedu.agents.builtin.gameagent.compiler import _inject_katex_if_needed
+        html = r"<html><head><title>t</title></head><body>\(x\)</body></html>"
+        result = _inject_katex_if_needed(html)
+        head_close = result.index("</head>")
+        katex_pos = result.lower().index("katex")
+        assert katex_pos < head_close  # KaTeX injected before </head>
+
+    def test_no_double_inject(self):
+        from systemedu.agents.builtin.gameagent.compiler import _inject_katex_if_needed
+        html = r'<html><head><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css"></head><body>\(x\)</body></html>'
+        result = _inject_katex_if_needed(html)
+        # katex should appear only once in the head area (not duplicated)
+        assert result.count("katex.min.css") == 1
