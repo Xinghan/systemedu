@@ -117,24 +117,21 @@ export function LessonContentView({
   return (
     <div className="flex flex-col h-full relative">
 
-      {/* ── Top bar: title + actions ── */}
-      <div className="flex items-center justify-between gap-4 px-5 py-2.5 border-b shrink-0">
-        <div className="min-w-0 flex-1">
-          <h2 className="text-base font-semibold leading-snug truncate">{knode.title}</h2>
-          <div className="flex items-center gap-3 mt-0.5 text-xs text-muted-foreground">
-            <span className="flex items-center gap-1">
-              <Zap className="h-3 w-3" />
-              {difficultyLabel} {knode.difficulty_level}/10
-            </span>
-            <span className="flex items-center gap-1">
-              <Clock className="h-3 w-3" />
-              {knode.estimated_minutes} 分钟
-            </span>
-            <span className="flex items-center gap-1">
-              <Star className="h-3 w-3" />
-              {knode.xp_reward} XP
-            </span>
-          </div>
+      {/* ── Top bar: meta + actions ── */}
+      <div className="flex items-center justify-between gap-4 px-5 py-2.5 border-b border-border/50 shrink-0">
+        <div className="flex items-center gap-3 text-xs text-muted-foreground font-[var(--font-manrope)]">
+          <span className="flex items-center gap-1">
+            <Zap className="h-3 w-3 text-amber-500" />
+            {difficultyLabel} {knode.difficulty_level}/10
+          </span>
+          <span className="flex items-center gap-1">
+            <Clock className="h-3 w-3" />
+            {knode.estimated_minutes} min
+          </span>
+          <span className="flex items-center gap-1">
+            <Star className="h-3 w-3 text-primary" />
+            {knode.xp_reward} XP
+          </span>
         </div>
         <div className="flex items-center gap-2 shrink-0">
           <Button
@@ -142,32 +139,32 @@ export function LessonContentView({
             size="sm"
             onClick={onRegenerate}
             disabled={regenerating}
-            className="gap-1 text-xs text-muted-foreground"
+            className="gap-1 text-xs text-muted-foreground h-7"
           >
             <RefreshCw className={`h-3 w-3 ${regenerating ? "animate-spin" : ""}`} />
-            重新生成
+            Regenerate
           </Button>
           {isCompleted ? (
-            <Badge className="bg-green-500/10 text-green-700 dark:text-green-400 border-green-500/20 gap-1">
+            <Badge className="bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/20 gap-1 h-7">
               <IconCheck className="h-3 w-3" />
-              已完成
+              Mastered
             </Badge>
           ) : (
-            <Button size="sm" onClick={onMarkComplete} disabled={completing} className="gap-1">
+            <Button size="sm" onClick={onMarkComplete} disabled={completing} className="gap-1 h-7 text-xs">
               <IconCheck className="h-3.5 w-3.5" />
-              标记完成
+              Mark Complete
             </Button>
           )}
         </div>
       </div>
 
       {/* ── Tab bar ── */}
-      <div className="flex items-center gap-0.5 px-5 border-b shrink-0">
+      <div className="flex items-center gap-0.5 px-5 border-b border-border/50 shrink-0">
         {allTabs.map((tab, index) => (
           <button
             key={tab.key}
             onClick={() => setActiveTab(index)}
-            className={`px-3 py-2 text-sm font-medium transition-colors relative ${
+            className={`px-3 py-2.5 text-xs font-medium transition-colors relative font-[var(--font-manrope)] ${
               activeTab === index
                 ? "text-foreground"
                 : "text-muted-foreground hover:text-foreground"
@@ -175,7 +172,7 @@ export function LessonContentView({
           >
             {tab.label}
             {activeTab === index && (
-              <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary rounded-t-full" />
+              <span className="absolute bottom-0 left-1 right-1 h-0.5 bg-primary rounded-t-full" />
             )}
           </button>
         ))}

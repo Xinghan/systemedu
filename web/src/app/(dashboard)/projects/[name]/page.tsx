@@ -6,9 +6,8 @@ import Link from "next/link"
 import dynamic from "next/dynamic"
 import { toast } from "sonner"
 import {
-  ArrowLeft, Clock, Play, GraduationCap, Highlighter, FolderOpen,
-  Palette, Pencil, Save, X, Package, ChevronUp, BookOpen, ArrowRight,
-  Zap,
+  ArrowLeft, Clock, Play, GraduationCap, Highlighter,
+  Pencil, Save, X, ChevronUp, ArrowRight, Zap,
 } from "lucide-react"
 import { PageLoading } from "@/components/ui/page-loading"
 import { LoadingSpinner } from "@/components/ui/loading-spinner"
@@ -23,7 +22,6 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog"
-import { IconTree, IconNote, IconScroll } from "@/components/learning/cartoon-icons"
 import { gateway } from "@/lib/api"
 import type { FactoryQueueItem, ProjectDetail } from "@/lib/types/api"
 
@@ -78,7 +76,6 @@ function formatDate(isoString: string | null): string {
 
 interface ResourceCardProps {
   icon: React.ReactNode
-  iconBg: string
   title: string
   description: string
   onClick?: () => void
@@ -86,7 +83,7 @@ interface ResourceCardProps {
   badge?: string
 }
 
-function ResourceCard({ icon, iconBg, title, description, onClick, disabled, badge }: ResourceCardProps) {
+function ResourceCard({ icon, title, description, onClick, disabled, badge }: ResourceCardProps) {
   return (
     <button
       onClick={onClick}
@@ -97,7 +94,7 @@ function ResourceCard({ icon, iconBg, title, description, onClick, disabled, bad
           : "hover:shadow-card-hover cursor-pointer"
       } card-elevated`}
     >
-      <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${iconBg}`}>
+      <div className="w-14 h-14 rounded-2xl flex items-center justify-center">
         {icon}
       </div>
       <div>
@@ -112,6 +109,128 @@ function ResourceCard({ icon, iconBg, title, description, onClick, disabled, bad
         <p className="text-xs text-muted-foreground leading-relaxed">{description}</p>
       </div>
     </button>
+  )
+}
+
+// Gradient icon components matching the project_resources_icons design
+function IconKnowledgeTree() {
+  return (
+    <svg viewBox="0 0 56 56" fill="none" xmlns="http://www.w3.org/2000/svg" className="w-14 h-14">
+      <rect width="56" height="56" rx="16" fill="url(#grad-tree)" />
+      <defs>
+        <linearGradient id="grad-tree" x1="0" y1="0" x2="56" y2="56" gradientUnits="userSpaceOnUse">
+          <stop stopColor="#7c3aed" />
+          <stop offset="1" stopColor="#4f46e5" />
+        </linearGradient>
+      </defs>
+      <circle cx="28" cy="16" r="4" fill="white" fillOpacity="0.9" />
+      <circle cx="18" cy="30" r="3.5" fill="white" fillOpacity="0.75" />
+      <circle cx="38" cy="30" r="3.5" fill="white" fillOpacity="0.75" />
+      <circle cx="13" cy="42" r="3" fill="white" fillOpacity="0.6" />
+      <circle cx="23" cy="42" r="3" fill="white" fillOpacity="0.6" />
+      <circle cx="33" cy="42" r="3" fill="white" fillOpacity="0.6" />
+      <circle cx="43" cy="42" r="3" fill="white" fillOpacity="0.6" />
+      <line x1="28" y1="20" x2="18" y2="26.5" stroke="white" strokeOpacity="0.7" strokeWidth="1.5" />
+      <line x1="28" y1="20" x2="38" y2="26.5" stroke="white" strokeOpacity="0.7" strokeWidth="1.5" />
+      <line x1="18" y1="33.5" x2="13" y2="39" stroke="white" strokeOpacity="0.6" strokeWidth="1.5" />
+      <line x1="18" y1="33.5" x2="23" y2="39" stroke="white" strokeOpacity="0.6" strokeWidth="1.5" />
+      <line x1="38" y1="33.5" x2="33" y2="39" stroke="white" strokeOpacity="0.6" strokeWidth="1.5" />
+      <line x1="38" y1="33.5" x2="43" y2="39" stroke="white" strokeOpacity="0.6" strokeWidth="1.5" />
+    </svg>
+  )
+}
+
+function IconNotesGradient() {
+  return (
+    <svg viewBox="0 0 56 56" fill="none" xmlns="http://www.w3.org/2000/svg" className="w-14 h-14">
+      <rect width="56" height="56" rx="16" fill="url(#grad-notes)" />
+      <defs>
+        <linearGradient id="grad-notes" x1="0" y1="0" x2="56" y2="56" gradientUnits="userSpaceOnUse">
+          <stop stopColor="#0d9488" />
+          <stop offset="1" stopColor="#0891b2" />
+        </linearGradient>
+      </defs>
+      <rect x="16" y="13" width="24" height="30" rx="3" fill="white" fillOpacity="0.2" stroke="white" strokeOpacity="0.6" strokeWidth="1.5" />
+      <line x1="21" y1="21" x2="35" y2="21" stroke="white" strokeOpacity="0.85" strokeWidth="1.8" strokeLinecap="round" />
+      <line x1="21" y1="27" x2="35" y2="27" stroke="white" strokeOpacity="0.85" strokeWidth="1.8" strokeLinecap="round" />
+      <line x1="21" y1="33" x2="29" y2="33" stroke="white" strokeOpacity="0.85" strokeWidth="1.8" strokeLinecap="round" />
+      <circle cx="38" cy="39" r="6" fill="white" fillOpacity="0.25" />
+      <path d="M35.5 39.5l2 2 4-4" stroke="white" strokeOpacity="0.95" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  )
+}
+
+function IconResourcesGradient() {
+  return (
+    <svg viewBox="0 0 56 56" fill="none" xmlns="http://www.w3.org/2000/svg" className="w-14 h-14">
+      <rect width="56" height="56" rx="16" fill="url(#grad-res)" />
+      <defs>
+        <linearGradient id="grad-res" x1="0" y1="0" x2="56" y2="56" gradientUnits="userSpaceOnUse">
+          <stop stopColor="#2563eb" />
+          <stop offset="1" stopColor="#7c3aed" />
+        </linearGradient>
+      </defs>
+      <path d="M16 36V22a3 3 0 013-3h5l2 3h11a3 3 0 013 3v11a3 3 0 01-3 3H19a3 3 0 01-3-3z" fill="white" fillOpacity="0.2" stroke="white" strokeOpacity="0.7" strokeWidth="1.5" />
+      <line x1="22" y1="29" x2="34" y2="29" stroke="white" strokeOpacity="0.9" strokeWidth="1.8" strokeLinecap="round" />
+      <line x1="22" y1="33" x2="30" y2="33" stroke="white" strokeOpacity="0.7" strokeWidth="1.8" strokeLinecap="round" />
+    </svg>
+  )
+}
+
+function IconStudentWorks() {
+  return (
+    <svg viewBox="0 0 56 56" fill="none" xmlns="http://www.w3.org/2000/svg" className="w-14 h-14">
+      <rect width="56" height="56" rx="16" fill="url(#grad-sw)" />
+      <defs>
+        <linearGradient id="grad-sw" x1="0" y1="0" x2="56" y2="56" gradientUnits="userSpaceOnUse">
+          <stop stopColor="#db2777" />
+          <stop offset="1" stopColor="#e11d48" />
+        </linearGradient>
+      </defs>
+      <circle cx="28" cy="22" r="6" fill="white" fillOpacity="0.25" stroke="white" strokeOpacity="0.7" strokeWidth="1.5" />
+      <circle cx="19" cy="23" r="4" fill="white" fillOpacity="0.18" stroke="white" strokeOpacity="0.55" strokeWidth="1.2" />
+      <circle cx="37" cy="23" r="4" fill="white" fillOpacity="0.18" stroke="white" strokeOpacity="0.55" strokeWidth="1.2" />
+      <path d="M14 40c0-5.5 6.3-9 14-9s14 3.5 14 9" stroke="white" strokeOpacity="0.75" strokeWidth="1.5" strokeLinecap="round" />
+    </svg>
+  )
+}
+
+function IconAICourse() {
+  return (
+    <svg viewBox="0 0 56 56" fill="none" xmlns="http://www.w3.org/2000/svg" className="w-14 h-14">
+      <rect width="56" height="56" rx="16" fill="url(#grad-ai)" />
+      <defs>
+        <radialGradient id="grad-ai" cx="30%" cy="30%" r="80%" fx="30%" fy="30%">
+          <stop stopColor="#7c3aed" />
+          <stop offset="1" stopColor="#4c1d95" />
+        </radialGradient>
+      </defs>
+      <circle cx="28" cy="24" r="8" fill="white" fillOpacity="0.15" stroke="white" strokeOpacity="0.6" strokeWidth="1.5" />
+      <circle cx="28" cy="24" r="3" fill="white" fillOpacity="0.9" />
+      <line x1="28" y1="16" x2="28" y2="14" stroke="white" strokeOpacity="0.7" strokeWidth="1.5" strokeLinecap="round" />
+      <line x1="28" y1="32" x2="28" y2="34" stroke="white" strokeOpacity="0.7" strokeWidth="1.5" strokeLinecap="round" />
+      <line x1="20" y1="24" x2="18" y2="24" stroke="white" strokeOpacity="0.7" strokeWidth="1.5" strokeLinecap="round" />
+      <line x1="36" y1="24" x2="38" y2="24" stroke="white" strokeOpacity="0.7" strokeWidth="1.5" strokeLinecap="round" />
+      <path d="M23 38h10M25 41h6" stroke="white" strokeOpacity="0.75" strokeWidth="1.5" strokeLinecap="round" />
+      <line x1="28" y1="34" x2="28" y2="38" stroke="white" strokeOpacity="0.65" strokeWidth="1.5" />
+    </svg>
+  )
+}
+
+function IconObjectQueue() {
+  return (
+    <svg viewBox="0 0 56 56" fill="none" xmlns="http://www.w3.org/2000/svg" className="w-14 h-14">
+      <rect width="56" height="56" rx="16" fill="url(#grad-obj)" />
+      <defs>
+        <linearGradient id="grad-obj" x1="0" y1="0" x2="56" y2="56" gradientUnits="userSpaceOnUse">
+          <stop stopColor="#64748b" />
+          <stop offset="1" stopColor="#475569" />
+        </linearGradient>
+      </defs>
+      <path d="M28 14l12 7v14l-12 7-12-7V21z" fill="white" fillOpacity="0.15" stroke="white" strokeOpacity="0.65" strokeWidth="1.5" strokeLinejoin="round" />
+      <path d="M28 28l12-7M28 28V42M28 28l-12-7" stroke="white" strokeOpacity="0.6" strokeWidth="1.5" strokeLinejoin="round" />
+      <path d="M34 17.5l12 7v14l-12 7-12-7V24.5z" fill="none" stroke="white" strokeOpacity="0.3" strokeWidth="1" strokeLinejoin="round" transform="translate(5 -3) scale(0.6) translate(-15 8)" />
+    </svg>
   )
 }
 
@@ -411,45 +530,39 @@ export default function ProjectDetailPage() {
             </div>
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-3">
               <ResourceCard
-                icon={<IconTree className="h-6 w-6 text-primary" />}
-                iconBg="bg-primary/10"
+                icon={<IconKnowledgeTree />}
                 title="Knowledge Tree"
                 description="Visualize your learning nodes."
                 onClick={() => router.push(`/projects/${params.name}/tree`)}
               />
               <ResourceCard
-                icon={<IconNote className="h-5 w-5 text-amber-600" />}
-                iconBg="bg-amber-100 dark:bg-amber-500/15"
+                icon={<IconNotesGradient />}
                 title="Notes"
                 description="Project journals & research."
                 onClick={() => router.push(`/projects/${params.name}/notes`)}
               />
               <ResourceCard
-                icon={<FolderOpen className="h-5 w-5 text-blue-600" />}
-                iconBg="bg-blue-100 dark:bg-blue-500/15"
+                icon={<IconResourcesGradient />}
                 title="Resources"
                 description="External libraries & papers."
                 onClick={() => router.push(`/projects/${params.name}/resources`)}
               />
               <ResourceCard
-                icon={<Palette className="h-5 w-5 text-pink-500" />}
-                iconBg="bg-pink-100 dark:bg-pink-500/15"
+                icon={<IconStudentWorks />}
                 title="Student Works"
                 description="Peer reviews & submissions."
                 disabled
                 badge="Soon"
               />
               <ResourceCard
-                icon={<BookOpen className="h-5 w-5 text-cyan-600" />}
-                iconBg="bg-cyan-100 dark:bg-cyan-500/15"
+                icon={<IconAICourse />}
                 title="AI Course"
                 description="Adaptive curriculum builder."
                 onClick={() => router.push(`/projects/${params.name}/batch-lessons`)}
                 badge={lessonQueueRunning ? "Active" : undefined}
               />
               <ResourceCard
-                icon={<Package className="h-5 w-5 text-violet-600" />}
-                iconBg="bg-violet-100 dark:bg-violet-500/15"
+                icon={<IconObjectQueue />}
                 title="Object Queue"
                 description="Next topics in line."
                 onClick={() => setQueueOpen((v) => !v)}

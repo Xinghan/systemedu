@@ -45,7 +45,7 @@ export function FloatingChat({ project, agent: defaultAgent = "tutor", nodeId, a
     return (
       <button
         onClick={() => setOpen(true)}
-        className="fixed bottom-[52px] right-6 z-50 h-14 w-14 rounded-full bg-primary text-primary-foreground shadow-lg hover:bg-primary/90 transition-colors flex items-center justify-center"
+        className="fixed bottom-[52px] right-6 z-50 h-14 w-14 rounded-full bg-gradient-to-br from-violet-600 to-purple-700 text-white shadow-[0_4px_20px_0_oklch(0.488_0.258_302_/_0.35)] hover:shadow-[0_6px_28px_0_oklch(0.488_0.258_302_/_0.45)] transition-all duration-[350ms] flex items-center justify-center"
       >
         <MessageSquare className="h-6 w-6" />
       </button>
@@ -73,9 +73,9 @@ export function FloatingChat({ project, agent: defaultAgent = "tutor", nodeId, a
   }
 
   return (
-    <div className="fixed bottom-[52px] right-6 z-50 w-[400px] h-[500px] max-w-[calc(100vw-3rem)] max-h-[calc(100vh-6rem)] rounded-xl border bg-background shadow-2xl flex flex-col overflow-hidden">
+    <div className="fixed bottom-[52px] right-6 z-50 w-[400px] h-[500px] max-w-[calc(100vw-3rem)] max-h-[calc(100vh-6rem)] rounded-2xl shadow-[0_8px_40px_0_oklch(0.488_0.258_302_/_0.20)] flex flex-col overflow-hidden border border-border/50 bg-background">
       {/* Header with agent selector */}
-      <div className="relative z-10 border-b bg-muted/30 shrink-0">
+      <div className="relative z-10 border-b border-border/50 bg-gradient-to-r from-violet-600/5 to-purple-600/5 shrink-0">
         <div className="flex items-center justify-between px-3 py-2">
           <div className="flex items-center gap-2">
             <div className={`w-2.5 h-2.5 rounded-full ${currentAgent.color}`} />

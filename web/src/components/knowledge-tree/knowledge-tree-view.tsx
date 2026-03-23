@@ -236,52 +236,47 @@ export function KnowledgeTreeView({
 
         const msColor =
           msStatus === "completed"
-            ? "border-green-500/40 bg-green-500/5"
+            ? "border-emerald-500/30 bg-emerald-500/4"
             : msStatus === "in_progress"
-            ? "border-amber-500/40 bg-amber-500/5"
-            : "border-border bg-card"
+            ? "border-primary/30 bg-primary/4"
+            : "border-border/50 bg-card"
 
         return (
-          <div key={msIdx} className={`rounded-lg border ${msColor} overflow-hidden`}>
+          <div key={msIdx} className={`rounded-xl border ${msColor} overflow-hidden`}>
             {/* Milestone header */}
             <button
               onClick={() => toggleMilestone(msIdx)}
-              className="w-full flex items-center gap-3 p-4 text-left hover:bg-muted/30 transition-colors"
+              className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-secondary/40 transition-colors"
             >
               <div className="shrink-0 text-muted-foreground">
                 {isExpanded ? (
-                  <ChevronDown className="h-5 w-5" />
+                  <ChevronDown className="h-4 w-4" />
                 ) : (
-                  <ChevronRight className="h-5 w-5" />
+                  <ChevronRight className="h-4 w-4" />
                 )}
               </div>
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2">
-                  <span className="text-xs text-muted-foreground font-medium">
-                    里程碑 {msIdx + 1}
+                  <span className="text-[10px] font-[var(--font-manrope)] uppercase tracking-widest text-muted-foreground/70 font-semibold">
+                    Module {msIdx + 1}
                   </span>
-                  <span className="text-xs text-muted-foreground">
-                    {passedCount}/{totalCount} 节点
+                  <span className="text-[10px] text-muted-foreground font-[var(--font-manrope)]">
+                    {passedCount}/{totalCount}
                   </span>
                 </div>
-                <h3 className="font-semibold text-sm mt-0.5">{ms.title}</h3>
-                {ms.description && (
-                  <p className="text-xs text-muted-foreground mt-1 line-clamp-1">
-                    {ms.description}
-                  </p>
-                )}
+                <h3 className="font-semibold text-sm mt-0.5 truncate">{ms.title}</h3>
               </div>
-              <div className="shrink-0 flex items-center gap-3">
-                <div className="w-20">
-                  <Progress value={pct} className="h-1.5" />
+              <div className="shrink-0 flex items-center gap-2">
+                <div className="w-16">
+                  <Progress value={pct} className="h-1" />
                 </div>
-                <span className="text-xs text-muted-foreground w-10 text-right">{pct}%</span>
+                <span className="text-[10px] text-muted-foreground w-8 text-right font-[var(--font-manrope)] font-semibold">{pct}%</span>
               </div>
             </button>
 
             {/* Expanded knode list */}
             {(isExpanded || lq) && (
-              <div className="border-t px-4 pb-3 pt-1">
+              <div className="border-t border-border/40 px-3 pb-3 pt-1">
                 <div className="space-y-1">
                   {visibleKnodes.map(({ knode, li }) => {
                     const nodeId = startIdx + li
@@ -306,13 +301,13 @@ export function KnowledgeTreeView({
                           setHoveredTooltip({ knode, status, cfg, rect })
                         }}
                         onMouseLeave={() => setHoveredTooltip(null)}
-                        className={`flex items-center gap-3 rounded-md px-3 py-2.5 transition-colors ${
+                        className={`flex items-center gap-3 rounded-xl px-3 py-2.5 transition-all duration-[250ms] ${
                           isActive
-                            ? "bg-primary/10 ring-1 ring-primary/30"
+                            ? "bg-primary/10"
                             : isClickable
-                            ? "cursor-pointer hover:bg-muted/50"
+                            ? "cursor-pointer hover:bg-secondary/60"
                             : status === "locked"
-                            ? "opacity-50"
+                            ? "opacity-40"
                             : ""
                         } ${isClickable && !isActive ? "cursor-pointer" : ""}`}
                       >
