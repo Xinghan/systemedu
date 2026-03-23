@@ -14,8 +14,19 @@ from systemedu.agents.builtin.gameagent.spec import GameSpec
 TEMPLATES_DIR = Path(__file__).parent / "templates"
 PLACEHOLDER = "__GAME_SPEC__"
 RENDER_SPEC_PLACEHOLDER = "__RENDER_SPEC__"
+_GSAP_SRC = '<script src="gsap.min.js"></script>'
 
 logger = logging.getLogger(__name__)
+
+
+def _load_gsap_inline() -> str:
+    """Return an inline <script> tag containing the bundled GSAP source."""
+    gsap_path = TEMPLATES_DIR / "gsap.min.js"
+    if not gsap_path.exists():
+        logger.warning("gsap.min.js not found in templates dir; GSAP animations will be broken")
+        return ""
+    js = gsap_path.read_text(encoding="utf-8")
+    return f"<script>{js}</script>"
 
 
 class GameCompiler:
@@ -32,6 +43,10 @@ class GameCompiler:
             raise FileNotFoundError(f"Template not found: {template_path}")
 
         template = template_path.read_text(encoding="utf-8")
+
+        # Inline GSAP so blob: URL iframes can load it without network access
+        if _GSAP_SRC in template:
+            template = template.replace(_GSAP_SRC, _load_gsap_inline(), 1)
 
         # Resolve ObjectSpec -> RenderSpec if present (label_map / simulation)
         render_spec_json = "null"

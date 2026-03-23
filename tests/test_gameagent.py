@@ -399,6 +399,18 @@ class TestGameCompiler:
         html = self.compiler.compile(spec)
         assert "gsap" in html.lower()
 
+    def test_compiled_html_has_no_cdn_links(self):
+        """GSAP and Google Fonts must be inlined/removed, not loaded from CDN."""
+        for mechanic, make_fn in [
+            ("drag_sort", make_drag_sort_spec),
+            ("boss_quiz", make_boss_quiz_spec),
+        ]:
+            spec = make_fn()
+            html = self.compiler.compile(spec)
+            assert "cdnjs.cloudflare.com" not in html, f"{mechanic}: cdnjs link still present"
+            assert "fonts.googleapis.com" not in html, f"{mechanic}: Google Fonts link still present"
+            assert "gsap.min.js" not in html, f"{mechanic}: external gsap.min.js ref still present"
+
     def test_compiled_html_has_particle_canvas(self):
         spec = make_drag_sort_spec()
         html = self.compiler.compile(spec)
