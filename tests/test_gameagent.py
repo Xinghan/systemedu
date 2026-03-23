@@ -355,6 +355,25 @@ class TestGameSpecValidator:
         assert not valid
         assert any("entities" in e for e in errors)
 
+    def test_label_map_unknown_object_key_invalid(self):
+        """label_map with object_key not in Registry must be rejected."""
+        from systemedu.agents.builtin.gameagent.object_spec import ObjectSpec
+        spec = GameSpec(
+            mechanic="label_map",
+            topic="认识三角形",
+            theme="三角形探索",
+            difficulty=3,
+            entities=[],
+            levels=[GameLevel(prompt="点击探索")],
+            object_spec=ObjectSpec(
+                object_key="triangle.basic",  # not in Registry
+                label_part_ids=["vertex_a", "side_ab"],
+            ),
+        )
+        valid, errors = self.v.validate(spec)
+        assert not valid
+        assert any("triangle.basic" in e for e in errors)
+
 
 # ---------------------------------------------------------------------------
 # GameCompiler tests

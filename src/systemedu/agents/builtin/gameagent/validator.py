@@ -50,6 +50,14 @@ class GameSpecValidator:
                 # object_spec mode: Registry provides the visual; entities must be empty
                 if spec.entities:
                     errors.append("label_map with object_spec must have empty entities list")
+                # Reject object_keys not in Registry - prevents silent blank-scene games
+                from systemedu.agents.builtin.gameagent.objects import ObjectRegistry
+                if spec.object_spec.object_key not in ObjectRegistry.supported_keys():
+                    errors.append(
+                        f"label_map object_key '{spec.object_spec.object_key}' is not in ObjectRegistry; "
+                        f"use drag_sort or match_pairs instead, or pick from: "
+                        f"{', '.join(sorted(ObjectRegistry.supported_keys()))}"
+                    )
             else:
                 # Legacy manual-coordinate mode
                 if len(spec.entities) < 3:
