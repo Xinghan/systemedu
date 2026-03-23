@@ -50,13 +50,17 @@ class GameSpecValidator:
                 # object_spec mode: Registry provides the visual; entities must be empty
                 if spec.entities:
                     errors.append("label_map with object_spec must have empty entities list")
-                # Reject object_keys not in Registry - prevents silent blank-scene games
+                # Reject object_keys whose family has no fallback in Registry
+                # (known families like rocket.cutaway can fall back to rocket.basic,
+                #  but entirely unknown families like triangle → no visual at all)
                 from systemedu.agents.builtin.gameagent.objects import ObjectRegistry
-                if spec.object_spec.object_key not in ObjectRegistry.supported_keys():
+                key = spec.object_spec.object_key
+                family = key.split(".")[0]
+                supported = ObjectRegistry.supported_keys()
+                if key not in supported and not any(k.startswith(f"{family}.") for k in supported):
                     errors.append(
-                        f"label_map object_key '{spec.object_spec.object_key}' is not in ObjectRegistry; "
-                        f"use drag_sort or match_pairs instead, or pick from: "
-                        f"{', '.join(sorted(ObjectRegistry.supported_keys()))}"
+                        f"label_map object_key '{key}' has no matching family in ObjectRegistry "
+                        f"(family='{family}' unknown); use drag_sort or match_pairs instead"
                     )
             else:
                 # Legacy manual-coordinate mode

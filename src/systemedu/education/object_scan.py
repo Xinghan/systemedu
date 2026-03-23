@@ -40,6 +40,8 @@ async def _run_factory_pipeline(object_key: str, description: str) -> None:
         if report.passed:
             queue.mark_done(object_key)
             logger.info(f"object_scan: factory done for {object_key!r} score={report.score}")
+            # Trigger lab regeneration for nodes that were waiting on this object
+            await _retry_pending_labs(object_key)
         else:
             queue.mark_failed(object_key, error="; ".join(report.errors[:3]))
             logger.warning(
@@ -48,6 +50,73 @@ async def _run_factory_pipeline(object_key: str, description: str) -> None:
     except Exception as exc:
         queue.mark_failed(object_key, error=str(exc))
         logger.exception(f"object_scan: factory pipeline error for {object_key!r}")
+
+
+async def _retry_pending_labs(object_key: str) -> None:
+    """Regenerate interactive labs for all nodes pending on object_key."""
+    from systemedu.storage.db import SessionLocal, LessonContent
+    from systemedu.education.lesson_generator import _generate_interactive_lab
+    from systemedu.core.llm_client import get_llm
+
+    db = SessionLocal()
+    try:
+        pending = db.query(LessonContent).filter(
+            LessonContent.interactive_lab_pending_object == object_key
+        ).all()
+    except Exception:
+        logger.exception(f"object_scan: DB query failed in _retry_pending_labs for '{object_key}'")
+        return
+    finally:
+        db.close()
+
+        if not pending:
+            return
+
+        logger.info(
+            f"object_scan: retrying interactive lab for {len(pending)} node(s) "
+            f"pending on '{object_key}'"
+        )
+        llm = get_llm()
+        for item in pending:
+            try:
+                # Load node title/summary from the project's knowledge tree
+                from systemedu.education.project_loader import load_project_context
+                ctx = load_project_context(item.project_name)
+                node = next(
+                    (n for n in ctx.knowledge_tree.nodes if n.node_id == item.knode_id),
+                    None,
+                )
+                if node is None:
+                    logger.warning(
+                        f"object_scan: node {item.knode_id} not found in "
+                        f"project '{item.project_name}', skipping retry"
+                    )
+                    continue
+
+                html = await _generate_interactive_lab(
+                    node_title=node.title,
+                    node_summary=node.summary,
+                    difficulty=node.difficulty_level,
+                    llm=llm,
+                )
+                db2 = SessionLocal()
+                try:
+                    lesson = db2.query(LessonContent).filter_by(id=item.id).first()
+                    if lesson:
+                        lesson.interactive_lab = html or ""
+                        lesson.interactive_lab_pending_object = ""
+                        db2.commit()
+                        logger.info(
+                            f"object_scan: regenerated lab for "
+                            f"'{item.project_name}' node {item.knode_id}"
+                        )
+                finally:
+                    db2.close()
+            except Exception:
+                logger.exception(
+                    f"object_scan: failed to retry lab for "
+                    f"'{item.project_name}' node {item.knode_id}"
+                )
 
 
 def trigger_factory_for_keys(enqueued_items: list[tuple[str, str]]) -> None:

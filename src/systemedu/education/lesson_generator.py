@@ -8,6 +8,18 @@ from systemedu.education.project_loader import ProjectContext, load_project_cont
 
 logger = logging.getLogger(__name__)
 
+
+class _PendingObjectLabError(Exception):
+    """Raised when the interactive lab requires an object not yet in ObjectRegistry.
+
+    The object has been enqueued in MissQueue for ObjectFactory generation.
+    The lesson's interactive_lab_pending_object field will be set, and the lab
+    will be regenerated once ObjectFactory completes.
+    """
+    def __init__(self, object_key: str):
+        super().__init__(object_key)
+        self.object_key = object_key
+
 # Section definitions: (key, prompt_label, instruction)
 SECTIONS = [
     (
@@ -354,7 +366,16 @@ async def _generate_interactive_lab(
     if progress_callback:
         progress_callback("game_spec_planner", "in_progress", "")
     planner = GameSpecPlannerAgent(llm=llm)
-    spec = await planner.plan(node_title, node_summary, difficulty, lab_strategy)
+    try:
+        spec = await planner.plan(node_title, node_summary, difficulty, lab_strategy)
+    except Exception as exc:
+        # Re-import here to avoid circular import at module level
+        from systemedu.agents.builtin.gameagent.planner import _PendingObjectError
+        if isinstance(exc, _PendingObjectError):
+            if progress_callback:
+                progress_callback("game_spec_planner", "pending_object", exc.object_key)
+            raise _PendingObjectLabError(exc.object_key) from exc
+        raise
     if progress_callback:
         if spec:
             progress_callback("game_spec_planner", "completed", f"mechanic={spec.mechanic}")
@@ -791,11 +812,24 @@ async def generate_lesson(project_name: str, knode_id: int, user_id: str = "defa
                 progress_callback=lab_progress_callback,
             )
             lesson.interactive_lab = lab_html
+            lesson.interactive_lab_pending_object = ""
             db.commit()
             if lab_html:
                 logger.info(f"Generated interactive lab for node {knode_id}")
             else:
                 logger.info(f"No interactive lab generated for node {knode_id}")
+        except _PendingObjectLabError as e:
+            # Object not in Registry yet — ObjectFactory has been notified.
+            # Mark lab as pending so it will be retried once the object is ready.
+            lesson.interactive_lab = ""
+            lesson.interactive_lab_pending_object = e.object_key
+            db.commit()
+            logger.info(
+                f"Interactive lab for node {knode_id} pending object '{e.object_key}'; "
+                f"will regenerate once ObjectFactory completes"
+            )
+            if lab_progress_callback:
+                lab_progress_callback("game_spec_planner", "pending_object", e.object_key)
         except Exception:
             logger.exception(f"Failed to generate interactive lab for node {knode_id}")
             lesson.interactive_lab = ""
@@ -929,6 +963,7 @@ def _lesson_to_dict(lesson) -> dict:
         "key_takeaways": lesson.key_takeaways or "",
         "quiz_data": lesson.quiz_data or "[]",
         "interactive_lab": lesson.interactive_lab or "",
+        "interactive_lab_pending_object": lesson.interactive_lab_pending_object or "",
         "teacher_script": lesson.teacher_script or "",
         "teacher_audio_url": lesson.teacher_audio_url or "",
         "teacher_timestamps": lesson.teacher_timestamps or "[]",

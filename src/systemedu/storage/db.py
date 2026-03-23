@@ -212,6 +212,10 @@ class LessonContent(Base):
     lab_audio_url = Column(Text, default="")
     key_takeaways_audio_url = Column(Text, default="")
     project_assignment = Column(Text, default="")
+    # When interactive_lab cannot be generated because the object isn't in the
+    # Registry yet, this field stores the pending object_key (e.g. "triangle.basic").
+    # ObjectFactory sets it to "" once the object is ready and the lab is regenerated.
+    interactive_lab_pending_object = Column(String(200), default="")
     content_type = Column(String(20), default="text")
     generated_at = Column(DateTime, nullable=True)
 
@@ -306,6 +310,7 @@ def _migrate_schema(engine):
         ("lesson_content", "lab_audio_url", "TEXT DEFAULT ''"),
         ("lesson_content", "key_takeaways_audio_url", "TEXT DEFAULT ''"),
         ("lesson_content", "project_assignment", "TEXT DEFAULT ''"),
+        ("lesson_content", "interactive_lab_pending_object", "VARCHAR(200) DEFAULT ''"),
     ]
 
     with engine.connect() as conn:

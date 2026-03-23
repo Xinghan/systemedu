@@ -401,12 +401,49 @@ class GameSpecPlannerAgent(BaseAgent):
             spec = GameSpec(**data)
             valid, errors = self._validator.validate(spec)
             if not valid:
+                # Check if the only failure is an unknown object family (label_map miss)
+                unknown_family_errors = [e for e in errors if "has no matching family" in e]
+                if unknown_family_errors and len(errors) == len(unknown_family_errors):
+                    # Enqueue for ObjectFactory generation; caller should mark lab as pending
+                    from systemedu.agents.builtin.gameagent.miss_queue import MissQueue
+                    from systemedu.agents.builtin.gameagent.object_spec import MissingObjectRequest
+                    obj_key = spec.object_spec.object_key
+                    family = obj_key.split(".")[0]
+                    MissQueue().enqueue(MissingObjectRequest(
+                        object_key=obj_key,
+                        family=family,
+                        view=spec.object_spec.view or "front",
+                        topic=spec.topic,
+                        required_parts=list(spec.object_spec.label_part_ids or []),
+                        preferred_mechanic="label_map",
+                        fallback_used=None,
+                    ))
+                    logger.info(
+                        f"Enqueued missing object '{obj_key}' (family unknown) for "
+                        f"ObjectFactory; marking lab as pending for '{node_title}'"
+                    )
+                    # Signal to caller: pending_object = the key that needs generation
+                    raise _PendingObjectError(obj_key)
+
                 logger.warning(f"GameSpec validation failed for '{node_title}': {errors}")
                 return None
 
             logger.info(f"GameSpec planned: mechanic={spec.mechanic}, entities={len(spec.entities)} for '{node_title}'")
             return spec
 
+        except _PendingObjectError:
+            raise  # re-raise so lesson_generator can handle it
         except Exception:
             logger.exception(f"GameSpecPlannerAgent failed for '{node_title}'")
             return None
+
+
+class _PendingObjectError(Exception):
+    """Raised when a label_map spec requires an object not yet in the Registry.
+
+    The object_key is enqueued into MissQueue for ObjectFactory generation.
+    The caller (lesson_generator) should mark interactive_lab as pending.
+    """
+    def __init__(self, object_key: str):
+        super().__init__(object_key)
+        self.object_key = object_key
