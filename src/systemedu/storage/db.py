@@ -249,6 +249,23 @@ class NodeSearchStatus(Base):
     error = Column(Text, default="")
 
 
+class LessonQueueItem(Base):
+    """Tracks batch lesson pre-generation queue items."""
+
+    __tablename__ = "lesson_queue"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    project_name = Column(String(200), nullable=False)
+    knode_id = Column(Integer, nullable=False)
+    knode_title = Column(String(500), default="")
+    batch_id = Column(Integer, nullable=False)
+    status = Column(String(20), default="pending")  # pending|generating|done|failed|skipped
+    created_at = Column(DateTime, default=datetime.now)
+    started_at = Column(DateTime, nullable=True)
+    completed_at = Column(DateTime, nullable=True)
+    error = Column(Text, default="")
+
+
 class UserNote(Base):
     """User Markdown note for a knowledge node."""
 
@@ -296,6 +313,24 @@ def _migrate_schema(engine):
                 if col not in existing:
                     conn.execute(sa.text(f"ALTER TABLE {table} ADD COLUMN {col} {ddl}"))
                     conn.commit()
+
+        # Create lesson_queue table if it doesn't exist (handled by create_all, but ensure schema)
+        if not inspector.has_table("lesson_queue"):
+            conn.execute(sa.text("""
+                CREATE TABLE lesson_queue (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    project_name VARCHAR(200) NOT NULL,
+                    knode_id INTEGER NOT NULL,
+                    knode_title VARCHAR(500) DEFAULT '',
+                    batch_id INTEGER NOT NULL,
+                    status VARCHAR(20) DEFAULT 'pending',
+                    created_at DATETIME,
+                    started_at DATETIME,
+                    completed_at DATETIME,
+                    error TEXT DEFAULT ''
+                )
+            """))
+            conn.commit()
 
 
 def get_engine():

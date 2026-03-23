@@ -352,6 +352,31 @@ export interface ObjectRegistryResponse {
   total_staging: number
 }
 
+export interface LessonQueueItem {
+  id: number
+  project_name: string
+  knode_id: number
+  knode_title: string
+  batch_id: number
+  status: "pending" | "generating" | "done" | "failed" | "skipped"
+  created_at: string
+  started_at: string | null
+  completed_at: string | null
+  error: string
+}
+
+export interface LessonQueueResponse {
+  items: LessonQueueItem[]
+  running: boolean
+  batch_id: number
+}
+
+export interface BatchGenerateResponse {
+  queued_knode_ids: number[]
+  total: number
+  batch_id: number
+}
+
 export interface FactoryQueueItem {
   object_key: string
   description: string

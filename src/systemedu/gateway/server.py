@@ -1031,6 +1031,9 @@ _generation_tasks: dict[str, bool] = {}
 # Track in-flight resource search tasks
 _search_tasks: dict[str, bool] = {}
 
+# Track in-flight batch lesson generation tasks (project_name -> True)
+_lesson_queue_tasks: dict[str, bool] = {}
+
 
 async def api_generate_lesson(request: Request) -> JSONResponse:
     """POST /api/projects/{name}/nodes/{node_id}/lesson/generate - Trigger async lesson generation.
@@ -2144,6 +2147,225 @@ async def api_get_all_notes(request: Request) -> JSONResponse:
         db.close()
 
 
+async def api_batch_generate_lessons(request: Request) -> JSONResponse:
+    """POST /api/projects/{name}/lessons/batch-generate - Batch pre-generate lessons for up to 10 nodes."""
+    import threading
+
+    name = request.path_params["name"]
+
+    # Prevent duplicate batch runs for the same project
+    if _lesson_queue_tasks.get(name):
+        return JSONResponse({"error": f"Batch generation already running for project '{name}'"}, status_code=409)
+
+    # Load project tree to get all knode_ids + titles
+    try:
+        from systemedu.education.project_loader import load_project_context
+        ctx = load_project_context(name)
+    except FileNotFoundError:
+        return JSONResponse({"error": f"Project '{name}' not found"}, status_code=404)
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+    # Collect all (knode_id, title) in global order
+    all_knodes: list[tuple[int, str]] = []
+    for ms in ctx.tree.milestones:
+        for knode in ms.knodes:
+            all_knodes.append((len(all_knodes), knode.title))
+
+    if not all_knodes:
+        return JSONResponse({"queued_knode_ids": [], "total": 0, "batch_id": 0})
+
+    # Find which nodes already have status=ready in DB
+    from systemedu.storage.db import LessonContent, LessonQueueItem, get_session as get_db_session
+
+    db = get_db_session()
+    try:
+        ready_ids = {
+            r.knode_id
+            for r in db.query(LessonContent.knode_id)
+            .filter_by(project_name=name)
+            .filter(LessonContent.status == "ready")
+            .all()
+        }
+
+        # Take first 10 nodes that are not ready
+        queued_knodes = [(kid, title) for kid, title in all_knodes if kid not in ready_ids][:10]
+
+        if not queued_knodes:
+            return JSONResponse({"queued_knode_ids": [], "total": 0, "batch_id": 0})
+
+        # Compute next batch_id
+        last_batch = (
+            db.query(LessonQueueItem.batch_id)
+            .filter_by(project_name=name)
+            .order_by(LessonQueueItem.batch_id.desc())
+            .first()
+        )
+        batch_id = (last_batch[0] + 1) if last_batch else 1
+
+        now = datetime.now()
+        queue_items = []
+        for kid, title in queued_knodes:
+            item = LessonQueueItem(
+                project_name=name,
+                knode_id=kid,
+                knode_title=title,
+                batch_id=batch_id,
+                status="pending",
+                created_at=now,
+            )
+            db.add(item)
+            queue_items.append(item)
+        db.commit()
+        # Refresh to get IDs
+        for item in queue_items:
+            db.refresh(item)
+        item_ids = [item.id for item in queue_items]
+    finally:
+        db.close()
+
+    queued_knode_ids = [kid for kid, _ in queued_knodes]
+
+    def _run_batch():
+        _lesson_queue_tasks[name] = True
+        try:
+            import asyncio as _asyncio
+            from systemedu.education.lesson_generator import generate_lesson
+            from systemedu.storage.db import LessonQueueItem as _LQI, get_session as _get_db
+
+            for item_id, (knode_id, _title) in zip(item_ids, queued_knodes):
+                db2 = _get_db()
+                try:
+                    item = db2.query(_LQI).filter_by(id=item_id).first()
+                    if item is None:
+                        continue
+                    item.status = "generating"
+                    item.started_at = datetime.now()
+                    db2.commit()
+                finally:
+                    db2.close()
+
+                try:
+                    _asyncio.run(generate_lesson(name, knode_id))
+                    db3 = _get_db()
+                    try:
+                        item = db3.query(_LQI).filter_by(id=item_id).first()
+                        if item:
+                            item.status = "done"
+                            item.completed_at = datetime.now()
+                            db3.commit()
+                    finally:
+                        db3.close()
+                except Exception as e:
+                    logger.exception(f"Batch lesson generation failed for {name}/{knode_id}")
+                    db3 = _get_db()
+                    try:
+                        item = db3.query(_LQI).filter_by(id=item_id).first()
+                        if item:
+                            item.status = "failed"
+                            item.error = str(e)[:500]
+                            item.completed_at = datetime.now()
+                            db3.commit()
+                    finally:
+                        db3.close()
+        finally:
+            _lesson_queue_tasks.pop(name, None)
+
+    thread = threading.Thread(target=_run_batch, daemon=True)
+    thread.start()
+
+    return JSONResponse({
+        "queued_knode_ids": queued_knode_ids,
+        "total": len(queued_knode_ids),
+        "batch_id": batch_id,
+    })
+
+
+async def api_get_lesson_queue(request: Request) -> JSONResponse:
+    """GET /api/projects/{name}/lessons/queue - Get latest batch queue status."""
+    name = request.path_params["name"]
+
+    from systemedu.storage.db import LessonQueueItem, get_session as get_db_session
+
+    db = get_db_session()
+    try:
+        # Find the latest batch_id for this project
+        last_batch = (
+            db.query(LessonQueueItem.batch_id)
+            .filter_by(project_name=name)
+            .order_by(LessonQueueItem.batch_id.desc())
+            .first()
+        )
+
+        if not last_batch:
+            return JSONResponse({
+                "items": [],
+                "running": _lesson_queue_tasks.get(name, False),
+                "batch_id": 0,
+            })
+
+        batch_id = last_batch[0]
+        items = (
+            db.query(LessonQueueItem)
+            .filter_by(project_name=name, batch_id=batch_id)
+            .order_by(LessonQueueItem.id)
+            .all()
+        )
+
+        return JSONResponse({
+            "items": [
+                {
+                    "id": item.id,
+                    "project_name": item.project_name,
+                    "knode_id": item.knode_id,
+                    "knode_title": item.knode_title,
+                    "batch_id": item.batch_id,
+                    "status": item.status,
+                    "created_at": item.created_at.isoformat() if item.created_at else None,
+                    "started_at": item.started_at.isoformat() if item.started_at else None,
+                    "completed_at": item.completed_at.isoformat() if item.completed_at else None,
+                    "error": item.error or "",
+                }
+                for item in items
+            ],
+            "running": _lesson_queue_tasks.get(name, False),
+            "batch_id": batch_id,
+        })
+    finally:
+        db.close()
+
+
+async def api_cancel_lesson_queue(request: Request) -> JSONResponse:
+    """DELETE /api/projects/{name}/lessons/queue - Skip pending items in current batch."""
+    name = request.path_params["name"]
+
+    from systemedu.storage.db import LessonQueueItem, get_session as get_db_session
+
+    db = get_db_session()
+    try:
+        last_batch = (
+            db.query(LessonQueueItem.batch_id)
+            .filter_by(project_name=name)
+            .order_by(LessonQueueItem.batch_id.desc())
+            .first()
+        )
+        if not last_batch:
+            return JSONResponse({"skipped": 0})
+
+        batch_id = last_batch[0]
+        pending_items = (
+            db.query(LessonQueueItem)
+            .filter_by(project_name=name, batch_id=batch_id, status="pending")
+            .all()
+        )
+        for item in pending_items:
+            item.status = "skipped"
+        db.commit()
+        return JSONResponse({"skipped": len(pending_items)})
+    finally:
+        db.close()
+
+
 _AUTH_PUBLIC_PATHS = {"/api/auth/login", "/api/auth/logout", "/api/auth/me", "/api/status", "/"}
 
 
@@ -2207,6 +2429,9 @@ def create_app() -> Starlette:
         Route("/api/projects/{name}/nodes/{node_id:int}/lesson", api_node_lesson, methods=["GET"]),
         Route("/api/projects/{name}/nodes/{node_id:int}/lesson/generate", api_generate_lesson, methods=["POST"]),
         Route("/api/projects/{name}/nodes/{node_id:int}/lesson/progress", api_lesson_progress, methods=["GET"]),
+        Route("/api/projects/{name}/lessons/batch-generate", api_batch_generate_lessons, methods=["POST"]),
+        Route("/api/projects/{name}/lessons/queue", api_get_lesson_queue, methods=["GET"]),
+        Route("/api/projects/{name}/lessons/queue", api_cancel_lesson_queue, methods=["DELETE"]),
         Route("/api/projects/{name}/nodes/{node_id:int}/progress", api_update_progress, methods=["PATCH"]),
         Route("/api/projects/{name}/nodes/{node_id:int}/highlights", api_get_highlights, methods=["GET"]),
         Route("/api/projects/{name}/nodes/{node_id:int}/highlights", api_create_highlight, methods=["POST"]),

@@ -2,6 +2,7 @@
 
 import type {
   AgentInfo,
+  BatchGenerateResponse,
   ChatRequest,
   ChatResponse,
   ConfigResponse,
@@ -12,6 +13,7 @@ import type {
   HighlightInfo,
   LessonContent,
   LessonProgressResponse,
+  LessonQueueResponse,
   MCPServer,
   MilestoneInfo,
   NodeContext,
@@ -146,6 +148,10 @@ export const gateway = {
     api.put<{ ok: boolean; milestones: MilestoneInfo[] }>(
       `/api/projects/${projectName}/tree`, { milestones }
     ),
+  batchGenerateLessons: (projectName: string) =>
+    api.post<BatchGenerateResponse>(`/api/projects/${projectName}/lessons/batch-generate`, {}),
+  getLessonQueue: (projectName: string) =>
+    api.get<LessonQueueResponse>(`/api/projects/${projectName}/lessons/queue`),
   objectRegistry: () => api.get<ObjectRegistryResponse>("/api/objects/registry"),
   objectQueue: (projectName?: string) => {
     const url = projectName
