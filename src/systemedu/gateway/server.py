@@ -2336,6 +2336,26 @@ async def api_get_lesson_queue(request: Request) -> JSONResponse:
         db.close()
 
 
+async def api_get_lesson_statuses(request: Request) -> JSONResponse:
+    """GET /api/projects/{name}/lessons/statuses - Get lesson generation status for all nodes."""
+    name = request.path_params["name"]
+
+    from systemedu.storage.db import LessonContent, get_session as get_db_session
+
+    db = get_db_session()
+    try:
+        rows = (
+            db.query(LessonContent.knode_id, LessonContent.status)
+            .filter_by(project_name=name)
+            .all()
+        )
+        return JSONResponse({
+            "statuses": {str(knode_id): status for knode_id, status in rows}
+        })
+    finally:
+        db.close()
+
+
 async def api_cancel_lesson_queue(request: Request) -> JSONResponse:
     """DELETE /api/projects/{name}/lessons/queue - Skip pending items in current batch."""
     name = request.path_params["name"]
@@ -2431,6 +2451,7 @@ def create_app() -> Starlette:
         Route("/api/projects/{name}/nodes/{node_id:int}/lesson/generate", api_generate_lesson, methods=["POST"]),
         Route("/api/projects/{name}/nodes/{node_id:int}/lesson/progress", api_lesson_progress, methods=["GET"]),
         Route("/api/projects/{name}/lessons/batch-generate", api_batch_generate_lessons, methods=["POST"]),
+        Route("/api/projects/{name}/lessons/statuses", api_get_lesson_statuses, methods=["GET"]),
         Route("/api/projects/{name}/lessons/queue", api_get_lesson_queue, methods=["GET"]),
         Route("/api/projects/{name}/lessons/queue", api_cancel_lesson_queue, methods=["DELETE"]),
         Route("/api/projects/{name}/nodes/{node_id:int}/progress", api_update_progress, methods=["PATCH"]),

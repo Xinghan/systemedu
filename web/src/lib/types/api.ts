@@ -378,6 +378,10 @@ export interface BatchGenerateResponse {
   batch_id: number
 }
 
+export interface LessonStatusesResponse {
+  statuses: Record<string, LessonStatus>
+}
+
 export interface FactoryQueueItem {
   object_key: string
   description: string

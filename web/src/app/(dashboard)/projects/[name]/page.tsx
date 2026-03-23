@@ -5,7 +5,7 @@ import { useParams, useRouter } from "next/navigation"
 import Link from "next/link"
 import dynamic from "next/dynamic"
 import { toast } from "sonner"
-import { ArrowLeft, Clock, Play, CheckCircle, GraduationCap, Highlighter, FolderOpen, Palette, Pencil, Save, X, Package, ChevronDown, ChevronUp, BookOpen } from "lucide-react"
+import { ArrowLeft, Clock, Play, CheckCircle, GraduationCap, Highlighter, FolderOpen, Palette, Pencil, Save, X, Package, ChevronUp, BookOpen } from "lucide-react"
 import { PageLoading } from "@/components/ui/page-loading"
 import { LoadingSpinner } from "@/components/ui/loading-spinner"
 import { Badge } from "@/components/ui/badge"
@@ -23,7 +23,7 @@ import {
 } from "@/components/ui/dialog"
 import { IconTree, IconNote, IconScroll, IconBlueprint } from "@/components/learning/cartoon-icons"
 import { gateway } from "@/lib/api"
-import type { FactoryQueueItem, LessonQueueItem, ProjectDetail } from "@/lib/types/api"
+import type { FactoryQueueItem, ProjectDetail } from "@/lib/types/api"
 
 const CATEGORY_OPTIONS = [
   { value: "ai", label: "人工智能" },
@@ -119,12 +119,8 @@ export default function ProjectDetailPage() {
   const [queueItems, setQueueItems] = useState<FactoryQueueItem[]>([])
   const [queueOpen, setQueueOpen] = useState(false)
   const [triggering, setTriggering] = useState(false)
-  // Lesson batch generation state
-  const [lessonQueueItems, setLessonQueueItems] = useState<LessonQueueItem[]>([])
+  // Lesson batch generation state (running badge only)
   const [lessonQueueRunning, setLessonQueueRunning] = useState(false)
-  const [lessonQueueOpen, setLessonQueueOpen] = useState(false)
-  const [batchConfirmOpen, setBatchConfirmOpen] = useState(false)
-  const [batchStarting, setBatchStarting] = useState(false)
 
   useEffect(() => {
     if (!params.name) return
@@ -153,46 +149,9 @@ export default function ProjectDetailPage() {
 
     gateway
       .getLessonQueue(params.name)
-      .then((r) => {
-        setLessonQueueItems(r.items)
-        setLessonQueueRunning(r.running)
-      })
+      .then((r) => setLessonQueueRunning(r.running))
       .catch(() => {/* non-fatal */})
   }, [params.name])
-
-  // Poll lesson queue while running
-  useEffect(() => {
-    if (!lessonQueueRunning || !params.name) return
-    const interval = setInterval(async () => {
-      try {
-        const r = await gateway.getLessonQueue(params.name)
-        setLessonQueueItems(r.items)
-        setLessonQueueRunning(r.running)
-        if (!r.running) clearInterval(interval)
-      } catch {
-        // non-fatal
-      }
-    }, 3000)
-    return () => clearInterval(interval)
-  }, [lessonQueueRunning, params.name])
-
-  const handleStartBatchGenerate = async () => {
-    if (!params.name) return
-    setBatchStarting(true)
-    try {
-      await gateway.batchGenerateLessons(params.name)
-      setBatchConfirmOpen(false)
-      setLessonQueueOpen(true)
-      setLessonQueueRunning(true)
-      // Immediately fetch queue to show items
-      const r = await gateway.getLessonQueue(params.name)
-      setLessonQueueItems(r.items)
-    } catch (e: unknown) {
-      toast.error(`启动失败: ${e instanceof Error ? e.message : "未知错误"}`)
-    } finally {
-      setBatchStarting(false)
-    }
-  }
 
   const handleSaveEdit = async () => {
     if (!params.name || !detail) return
@@ -488,20 +447,8 @@ export default function ProjectDetailPage() {
                 iconBg="bg-cyan-100 dark:bg-cyan-500/20"
                 title="预生成课程"
                 description="按知识树顺序自动生成课程内容，最多 10 个节点"
-                onClick={() => {
-                  if (lessonQueueRunning) {
-                    setLessonQueueOpen((v) => !v)
-                  } else {
-                    setBatchConfirmOpen(true)
-                  }
-                }}
-                badge={
-                  lessonQueueRunning
-                    ? "生成中"
-                    : lessonQueueItems.length > 0
-                    ? "查看进度"
-                    : undefined
-                }
+                onClick={() => router.push(`/projects/${params.name}/batch-lessons`)}
+                badge={lessonQueueRunning ? "生成中" : undefined}
               />
               <ModuleCard
                 icon={<Package className="h-5 w-5 text-slate-600 dark:text-slate-400" />}
@@ -576,91 +523,6 @@ export default function ProjectDetailPage() {
                         <span className="text-[10px] text-muted-foreground">
                           {new Date(item.created_at).toLocaleDateString("zh-CN")}
                         </span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* Batch confirm dialog */}
-          <Dialog open={batchConfirmOpen} onOpenChange={setBatchConfirmOpen}>
-            <DialogContent className="max-w-sm">
-              <DialogHeader>
-                <DialogTitle>确认批量生成课程</DialogTitle>
-              </DialogHeader>
-              <p className="text-sm text-muted-foreground pt-1">
-                将按知识树顺序，为最多 10 个尚未生成课程的节点自动生成内容。每节点约需 2-3 分钟，全程后台运行。
-              </p>
-              <div className="flex justify-end gap-3 pt-2">
-                <Button variant="outline" onClick={() => setBatchConfirmOpen(false)}>
-                  取消
-                </Button>
-                <Button onClick={handleStartBatchGenerate} disabled={batchStarting}>
-                  {batchStarting ? "启动中..." : "开始生成"}
-                </Button>
-              </div>
-            </DialogContent>
-          </Dialog>
-
-          {/* Lesson queue panel */}
-          {lessonQueueOpen && (
-            <div>
-              <div className="flex items-center justify-between mb-3">
-                <h2 className="text-base font-semibold">
-                  课程生成队列
-                  {lessonQueueRunning && (
-                    <span className="ml-2 inline-flex items-center gap-1 text-xs text-blue-500">
-                      <span className="h-1.5 w-1.5 rounded-full bg-blue-500 animate-pulse" />
-                      生成中
-                    </span>
-                  )}
-                </h2>
-                <button
-                  onClick={() => setLessonQueueOpen(false)}
-                  className="text-xs text-muted-foreground flex items-center gap-1 hover:text-foreground"
-                >
-                  <ChevronUp className="h-3.5 w-3.5" />
-                  收起
-                </button>
-              </div>
-              {lessonQueueItems.length === 0 ? (
-                <div className="rounded-xl border bg-card px-5 py-8 text-center text-sm text-muted-foreground">
-                  暂无生成任务
-                </div>
-              ) : (
-                <div className="rounded-xl border bg-card divide-y">
-                  {lessonQueueItems.map((item, idx) => (
-                    <div key={item.id} className="flex items-center gap-4 px-5 py-3">
-                      <span className="text-xs text-muted-foreground w-5 shrink-0">{idx + 1}</span>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium truncate">{item.knode_title || `节点 ${item.knode_id}`}</p>
-                      </div>
-                      <div className="shrink-0">
-                        {item.status === "pending" && (
-                          <span className="text-[10px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground">等待中</span>
-                        )}
-                        {item.status === "generating" && (
-                          <span className="text-[10px] px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 dark:bg-blue-500/20 dark:text-blue-400 inline-flex items-center gap-1">
-                            <span className="h-1.5 w-1.5 rounded-full bg-blue-500 animate-pulse" />
-                            生成中
-                          </span>
-                        )}
-                        {item.status === "done" && (
-                          <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-400">已完成</span>
-                        )}
-                        {item.status === "failed" && (
-                          <span
-                            className="text-[10px] px-2 py-0.5 rounded-full bg-red-100 text-red-700 dark:bg-red-500/20 dark:text-red-400 cursor-help"
-                            title={item.error || "未知错误"}
-                          >
-                            失败
-                          </span>
-                        )}
-                        {item.status === "skipped" && (
-                          <span className="text-[10px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground">已跳过</span>
-                        )}
                       </div>
                     </div>
                   ))}

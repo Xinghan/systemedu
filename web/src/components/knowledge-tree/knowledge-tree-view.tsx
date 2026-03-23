@@ -15,11 +15,12 @@ import {
 } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Progress } from "@/components/ui/progress"
-import type { MilestoneInfo, NodeProgress } from "@/lib/types/api"
+import type { LessonStatus, MilestoneInfo, NodeProgress } from "@/lib/types/api"
 
 interface KnowledgeTreeViewProps {
   milestones: MilestoneInfo[]
   progress: NodeProgress[]
+  lessonStatuses?: Record<string, LessonStatus>
   activeNodeId?: number | null
   onNodeClick?: (nodeId: number) => void
   searchQuery?: string
@@ -141,6 +142,7 @@ function NodeTooltip({ data }: { data: TooltipData }) {
 export function KnowledgeTreeView({
   milestones,
   progress,
+  lessonStatuses = {},
   activeNodeId,
   onNodeClick,
   searchQuery = "",
@@ -289,6 +291,7 @@ export function KnowledgeTreeView({
                     const StatusIcon = cfg.icon
                     const isClickable = status !== "locked" && !!onNodeClick
                     const isActive = activeNodeId === nodeId
+                    const lessonStatus = lessonStatuses[String(nodeId)]
 
                     return (
                       <div
@@ -323,6 +326,22 @@ export function KnowledgeTreeView({
                               <Badge className={`${cfg.badgeClass} text-[10px]`}>
                                 已完成
                               </Badge>
+                            )}
+                            {lessonStatus === "generating" && (
+                              <span className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-full bg-blue-100 text-blue-700 dark:bg-blue-500/20 dark:text-blue-400 shrink-0">
+                                <span className="h-1.5 w-1.5 rounded-full bg-blue-500 animate-pulse" />
+                                生成中
+                              </span>
+                            )}
+                            {lessonStatus === "ready" && status !== "passed" && (
+                              <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-400 shrink-0">
+                                已就绪
+                              </span>
+                            )}
+                            {lessonStatus === "failed" && (
+                              <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-red-100 text-red-700 dark:bg-red-500/20 dark:text-red-400 shrink-0">
+                                生成失败
+                              </span>
                             )}
                           </div>
                           {knode.summary && (

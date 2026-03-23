@@ -14,6 +14,7 @@ import type {
   LessonContent,
   LessonProgressResponse,
   LessonQueueResponse,
+  LessonStatusesResponse,
   MCPServer,
   MilestoneInfo,
   NodeContext,
@@ -152,6 +153,8 @@ export const gateway = {
     api.post<BatchGenerateResponse>(`/api/projects/${projectName}/lessons/batch-generate`, {}),
   getLessonQueue: (projectName: string) =>
     api.get<LessonQueueResponse>(`/api/projects/${projectName}/lessons/queue`),
+  getLessonStatuses: (projectName: string) =>
+    api.get<LessonStatusesResponse>(`/api/projects/${projectName}/lessons/statuses`),
   objectRegistry: () => api.get<ObjectRegistryResponse>("/api/objects/registry"),
   objectQueue: (projectName?: string) => {
     const url = projectName

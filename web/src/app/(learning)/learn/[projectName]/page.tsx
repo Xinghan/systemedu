@@ -22,7 +22,7 @@ import { KnowledgeTreeView } from "@/components/knowledge-tree/knowledge-tree-vi
 import { LessonView } from "@/components/learning/lesson-view"
 import { FloatingChat } from "@/components/learning/floating-chat"
 import { gateway } from "@/lib/api"
-import type { KnodeInfo, NodeProgress, ProjectDetail } from "@/lib/types/api"
+import type { KnodeInfo, LessonStatus, NodeProgress, ProjectDetail } from "@/lib/types/api"
 
 export default function LearnPage() {
   const params = useParams<{ projectName: string }>()
@@ -37,6 +37,7 @@ export default function LearnPage() {
   const [searchQuery, setSearchQuery] = useState("")
   const [activeLessonTab, setActiveLessonTab] = useState<string>("concept")
   const [activePage, setActivePage] = useState<number>(0)
+  const [lessonStatuses, setLessonStatuses] = useState<Record<string, LessonStatus>>({})
   const sessionStartRef = useRef<number>(Date.now())
 
   const handleLessonPageChange = useCallback((tab: string, pageIndex: number, _pageContent: string) => {
@@ -51,7 +52,27 @@ export default function LearnPage() {
       .then(setDetail)
       .catch((e) => setError(e.message ?? "无法加载项目"))
       .finally(() => setLoading(false))
+
+    gateway
+      .getLessonStatuses(params.projectName)
+      .then((r) => setLessonStatuses(r.statuses))
+      .catch(() => {/* non-fatal */})
   }, [params.projectName])
+
+  // Poll lesson statuses while any node is still generating
+  const hasGenerating = Object.values(lessonStatuses).some((s) => s === "generating")
+  useEffect(() => {
+    if (!hasGenerating || !params.projectName) return
+    const interval = setInterval(async () => {
+      try {
+        const r = await gateway.getLessonStatuses(params.projectName)
+        setLessonStatuses(r.statuses)
+      } catch {
+        // non-fatal
+      }
+    }, 3000)
+    return () => clearInterval(interval)
+  }, [hasGenerating, params.projectName])
 
   // Track learning time: flush on unmount and visibilitychange
   useEffect(() => {
@@ -176,6 +197,7 @@ export default function LearnPage() {
                 <KnowledgeTreeView
                   milestones={detail.milestones}
                   progress={detail.progress}
+                  lessonStatuses={lessonStatuses}
                   activeNodeId={activeNodeId}
                   onNodeClick={handleNodeClick}
                   searchQuery={searchQuery}
@@ -299,6 +321,7 @@ export default function LearnPage() {
                 <KnowledgeTreeView
                   milestones={detail.milestones}
                   progress={detail.progress}
+                  lessonStatuses={lessonStatuses}
                   activeNodeId={activeNodeId}
                   onNodeClick={handleNodeClick}
                   searchQuery={searchQuery}

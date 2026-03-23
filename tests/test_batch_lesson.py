@@ -432,3 +432,59 @@ class TestAuthRequired:
         c = TestClient(app)
         resp = c.delete("/api/projects/testproject/lessons/queue")
         assert resp.status_code == 401
+
+
+class TestLessonStatusesAPI:
+    def test_empty_returns_empty_dict(self, client):
+        resp = client.get("/api/projects/testproject/lessons/statuses")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["statuses"] == {}
+
+    def test_returns_knode_status_map(self, client, db_session):
+        from systemedu.storage.db import LessonContent
+        from datetime import datetime
+
+        db_session.add(LessonContent(
+            project_name="testproject", knode_id=0, status="ready",
+            generated_at=datetime.now(),
+        ))
+        db_session.add(LessonContent(
+            project_name="testproject", knode_id=1, status="generating",
+        ))
+        db_session.add(LessonContent(
+            project_name="testproject", knode_id=2, status="failed",
+        ))
+        db_session.commit()
+
+        resp = client.get("/api/projects/testproject/lessons/statuses")
+        assert resp.status_code == 200
+        statuses = resp.json()["statuses"]
+        assert statuses["0"] == "ready"
+        assert statuses["1"] == "generating"
+        assert statuses["2"] == "failed"
+
+    def test_only_returns_this_project(self, client, db_session):
+        from systemedu.storage.db import LessonContent
+
+        db_session.add(LessonContent(
+            project_name="testproject", knode_id=0, status="ready",
+        ))
+        db_session.add(LessonContent(
+            project_name="otherproject", knode_id=0, status="generating",
+        ))
+        db_session.commit()
+
+        resp = client.get("/api/projects/testproject/lessons/statuses")
+        statuses = resp.json()["statuses"]
+        assert "0" in statuses
+        assert statuses["0"] == "ready"
+        assert len(statuses) == 1
+
+    def test_requires_auth(self, config_env):
+        from systemedu.gateway import server
+        server._runtime = None
+        app = create_app()
+        c = TestClient(app)
+        resp = c.get("/api/projects/testproject/lessons/statuses")
+        assert resp.status_code == 401
