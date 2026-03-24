@@ -406,6 +406,44 @@ export default function NewProjectPage() {
                       />
                     </div>
 
+                    {/* Cover image upload */}
+                    <div>
+                      <Label className="text-[11px] font-[var(--font-manrope)] uppercase tracking-wider text-muted-foreground">
+                        Cover Image <span className="normal-case tracking-normal opacity-60">(optional — AI will generate if left blank)</span>
+                      </Label>
+                      <div className="mt-2 flex items-center gap-4">
+                        <div className="w-24 h-16 rounded-xl overflow-hidden bg-secondary/60 shrink-0 flex items-center justify-center border border-border/40">
+                          {coverPreview ? (
+                            <img src={coverPreview} alt="cover" className="w-full h-full object-cover" />
+                          ) : (
+                            <div className="flex flex-col items-center gap-1 text-muted-foreground">
+                              <ImageIcon className="h-4 w-4" />
+                              <span className="text-[9px] font-[var(--font-manrope)] uppercase tracking-wider">Auto AI</span>
+                            </div>
+                          )}
+                        </div>
+                        <div className="flex flex-col gap-2">
+                          <input type="file" accept="image/*" className="hidden" id="new-cover-input"
+                            onChange={(e) => {
+                              const file = e.target.files?.[0]
+                              if (!file) return
+                              setCoverFile(file)
+                              setCoverPreview(URL.createObjectURL(file))
+                            }}
+                          />
+                          <label htmlFor="new-cover-input" className="cursor-pointer inline-flex h-9 px-4 items-center gap-2 rounded-xl bg-secondary hover:bg-secondary/80 text-xs font-medium transition-colors w-fit">
+                            <Upload className="h-3.5 w-3.5" />
+                            {coverFile ? "Change Image" : "Upload Cover"}
+                          </label>
+                          {coverFile && (
+                            <button onClick={() => { setCoverFile(null); setCoverPreview(null) }} className="text-xs text-muted-foreground hover:text-foreground transition-colors text-left">
+                              Remove
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
                     <button
                       onClick={handleAiGenerate}
                       disabled={!aiTitle.trim() || !aiDescription.trim()}
@@ -479,57 +517,18 @@ export default function NewProjectPage() {
             {/* Step 3: Confirm */}
             {step === "confirm" && (
               <div className="space-y-5">
-                {/* Cover image upload */}
-                <div>
-                  <Label className="text-[11px] font-[var(--font-manrope)] uppercase tracking-wider text-muted-foreground">
-                    Cover Image (Optional)
-                  </Label>
-                  <div className="mt-2 flex items-start gap-4">
-                    {/* Preview */}
-                    <div className="shrink-0 w-28 h-20 rounded-xl overflow-hidden bg-secondary/60 flex items-center justify-center">
-                      {coverPreview ? (
-                        <img src={coverPreview} alt="cover" className="w-full h-full object-cover" />
-                      ) : (
-                        <div className="flex flex-col items-center gap-1 text-muted-foreground">
-                          <ImageIcon className="h-5 w-5" />
-                          <span className="text-[9px] font-[var(--font-manrope)] uppercase tracking-wider">Auto AI</span>
-                        </div>
-                      )}
-                    </div>
-                    {/* Upload controls */}
-                    <div className="flex-1 flex flex-col gap-2">
-                      <input
-                        type="file"
-                        accept="image/*"
-                        className="hidden"
-                        id="cover-input"
-                        onChange={(e) => {
-                          const file = e.target.files?.[0]
-                          if (!file) return
-                          setCoverFile(file)
-                          const url = URL.createObjectURL(file)
-                          setCoverPreview(url)
-                        }}
-                      />
-                      <label htmlFor="cover-input" className="cursor-pointer inline-flex h-10 px-4 items-center gap-2 rounded-xl bg-secondary hover:bg-secondary/80 text-sm font-medium transition-colors w-fit">
-                        <Upload className="h-3.5 w-3.5" />
-                        {coverFile ? "Change Image" : "Upload Cover"}
-                      </label>
-                      {coverFile ? (
-                        <button
-                          onClick={() => { setCoverFile(null); setCoverPreview(null) }}
-                          className="text-xs text-muted-foreground hover:text-foreground transition-colors text-left"
-                        >
-                          Remove
-                        </button>
-                      ) : (
-                        <p className="text-xs text-muted-foreground">
-                          No image? AI will auto-generate one after creation.
-                        </p>
-                      )}
+                {/* Cover preview (set in Step 1) */}
+                {(coverPreview || coverFile) && (
+                  <div className="flex items-center gap-3 p-3 rounded-xl bg-secondary/50">
+                    <img src={coverPreview!} alt="cover" className="w-16 h-12 rounded-lg object-cover shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-medium text-foreground truncate">{coverFile?.name}</p>
+                      <button onClick={() => { setCoverFile(null); setCoverPreview(null) }} className="text-xs text-muted-foreground hover:text-foreground transition-colors">
+                        Remove
+                      </button>
                     </div>
                   </div>
-                </div>
+                )}
 
                 <div>
                   <Label htmlFor="proj-name" className="text-[11px] font-[var(--font-manrope)] uppercase tracking-wider text-muted-foreground">
