@@ -2,6 +2,7 @@
 
 import { useState, useRef, useCallback } from "react"
 import { Mic, Send } from "lucide-react"
+import { useT } from "@/lib/hooks/use-t"
 
 interface ChatInputProps {
   onSend: (message: string) => void
@@ -12,8 +13,9 @@ interface ChatInputProps {
 export function ChatInput({
   onSend,
   disabled,
-  placeholder = "输入消息...",
+  placeholder,
 }: ChatInputProps) {
+  const t = useT()
   const [value, setValue] = useState("")
   const inputRef = useRef<HTMLInputElement>(null)
 
@@ -44,7 +46,7 @@ export function ChatInput({
           value={value}
           onChange={(e) => setValue(e.target.value)}
           onKeyDown={handleKeyDown}
-          placeholder={placeholder}
+          placeholder={placeholder ?? "输入消息..."}
           disabled={disabled}
           className="w-full bg-white dark:bg-card border border-primary/20 rounded-2xl px-5 py-4 pr-24 text-foreground text-sm placeholder:text-muted-foreground/60 focus:outline-none focus:ring-2 focus:ring-primary/30 transition-all"
         />
@@ -67,7 +69,7 @@ export function ChatInput({
         </div>
       </div>
       <p className="text-center text-[9px] text-muted-foreground/60 mt-3 uppercase tracking-[0.2em] font-[var(--font-manrope)]">
-        Cognitive Sanctuary Neural Engine v4.2
+        {t("chat.neural_engine")}
       </p>
     </div>
   )

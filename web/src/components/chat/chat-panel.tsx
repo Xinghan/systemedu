@@ -6,6 +6,7 @@ import { ScrollArea } from "@/components/ui/scroll-area"
 import { useChatStore } from "@/lib/stores/chat-store"
 import { useWebSocketChat } from "@/lib/hooks/use-websocket-chat"
 import { gateway } from "@/lib/api"
+import { useT } from "@/lib/hooks/use-t"
 import { ChatInput } from "./chat-input"
 import { MessageBubble, StreamingBubble, ToolCallIndicator, TypingIndicator } from "./message-bubble"
 
@@ -18,6 +19,7 @@ interface ChatPanelProps {
 }
 
 export function ChatPanel({ project, agent, nodeId, activeTab, pageIndex }: ChatPanelProps) {
+  const t = useT()
   const { sessions, activeSessionId, streaming, streamContent, streamToolCalls, hydrated, hydrateSessions, setActiveSession, addSession } = useChatStore()
   const { connect, sendMessage, disconnect } = useWebSocketChat()
   const bottomRef = useRef<HTMLDivElement>(null)
@@ -111,13 +113,13 @@ export function ChatPanel({ project, agent, nodeId, activeTab, pageIndex }: Chat
             <div className="w-14 h-14 rounded-full bg-gradient-to-br from-primary to-emerald-500 flex items-center justify-center mb-4 shadow-[0_0_20px_rgba(106,28,246,0.3)]">
               <Bot className="h-7 w-7 text-white" />
             </div>
-            <p className="text-base font-bold text-foreground mb-1">Start a conversation</p>
+            <p className="text-base font-bold text-foreground mb-1">{t("chat.start_conversation")}</p>
             <p className="text-sm text-muted-foreground leading-relaxed">
               {agent === "student"
-                ? "Discuss and learn together"
+                ? t("chat.student_hint")
                 : agent === "teacher"
-                  ? "Ask your teacher to explain any concept"
-                  : "Ask me anything about this lesson. I'm here to help you understand every concept deeply."}
+                  ? t("chat.teacher_hint")
+                  : t("chat.tutor_hint")}
             </p>
           </div>
         ) : (

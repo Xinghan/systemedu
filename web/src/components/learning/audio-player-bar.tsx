@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react"
 import { Pause, Play, RotateCcw, RotateCw } from "lucide-react"
 import { GATEWAY_URL } from "@/lib/api/client"
+import { useT } from "@/lib/hooks/use-t"
 
 interface WordTimestamp {
   text: string
@@ -19,6 +20,7 @@ interface AudioPlayerBarProps {
 const SPEEDS = [0.75, 1.0, 1.25, 1.5, 2.0]
 
 export function AudioPlayerBar({ audioUrl, script, timestamps }: AudioPlayerBarProps) {
+  const t = useT()
   const audioRef = useRef<HTMLAudioElement>(null)
   const [isPlaying, setIsPlaying] = useState(false)
   const [currentTime, setCurrentTime] = useState(0)
@@ -117,8 +119,8 @@ export function AudioPlayerBar({ audioUrl, script, timestamps }: AudioPlayerBarP
               }
             </button>
             <div>
-              <p className="text-sm font-bold text-foreground font-[var(--font-manrope)]">AI Narration</p>
-              <p className="text-[11px] text-muted-foreground italic font-[var(--font-manrope)]">Powered by Neural-Voice</p>
+              <p className="text-sm font-bold text-foreground font-[var(--font-manrope)]">{t("audio.ai_narration")}</p>
+              <p className="text-[11px] text-muted-foreground italic font-[var(--font-manrope)]">{t("audio.neural_voice")}</p>
             </div>
           </div>
 

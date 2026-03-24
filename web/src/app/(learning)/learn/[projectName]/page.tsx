@@ -365,7 +365,7 @@ export default function LearnPage() {
         <div className="flex-1 min-w-0 min-h-0 flex flex-col">
           {/* Node title header */}
           {activeKnode && (
-            <div className="px-8 pt-6 pb-0 shrink-0">
+            <div className="px-16 pt-8 pb-0 shrink-0">
               <div className="flex items-start justify-between">
                 <div className="min-w-0 flex-1 pr-6">
                   <h1 className="text-2xl font-extrabold text-foreground tracking-tight leading-tight mb-1">
@@ -458,7 +458,7 @@ export default function LearnPage() {
                       <div className="flex-1 min-w-0">
                         <p className="text-xs font-medium text-foreground truncate">{t("learn.course_notes")}</p>
                         <p className="text-[10px] text-muted-foreground font-[var(--font-manrope)]">
-                          {noteStatus === "saving" ? "保存中..." : noteStatus === "saved" ? "已保存" : "Markdown"}
+                          {noteStatus === "saving" ? t("new_project.saving") : noteStatus === "saved" ? t("project.saved") : t("learn.markdown")}
                         </p>
                       </div>
                       <ArrowRight className="h-3 w-3 text-muted-foreground/30 group-hover:text-primary shrink-0 transition-colors" />
@@ -573,12 +573,12 @@ export default function LearnPage() {
             <div className="flex items-center justify-between">
               <div>
                 <h2 className="text-2xl font-extrabold tracking-tight text-foreground leading-tight">
-                  AI Tutor <span className="text-primary italic">Thread</span>
+                  {t("learn.ai_tutor_thread")} <span className="text-primary italic">{t("learn.ai_tutor_italic")}</span>
                 </h2>
                 <div className="flex items-center gap-2 mt-1">
                   <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
                   <span className="text-[10px] font-[var(--font-manrope)] font-bold text-muted-foreground uppercase tracking-widest">
-                    Neural Engine Active
+                    {t("learn.neural_active")}
                   </span>
                 </div>
               </div>
@@ -628,7 +628,7 @@ export default function LearnPage() {
           <div className="px-6 py-4 flex items-center justify-between border-b border-primary/10 bg-white/40 shrink-0">
             <h2 className="font-extrabold text-foreground flex items-center gap-2">
               <FileText className="h-5 w-5 text-primary" />
-              My Study Notes
+              {t("learn.notes_title")}
             </h2>
             <div className="flex items-center gap-1">
               <button
@@ -676,7 +676,7 @@ export default function LearnPage() {
             <div className="ml-auto">
               <button className="flex items-center gap-1 px-2.5 py-1 bg-primary/10 text-primary rounded-full text-[11px] font-[var(--font-manrope)] font-bold hover:bg-primary/20 transition-colors">
                 <Sparkles className="h-3 w-3" />
-                Smart Note
+                {t("learn.smart_note")}
               </button>
             </div>
           </div>
@@ -691,7 +691,7 @@ export default function LearnPage() {
               />
             ) : (
               <div className="flex items-center justify-center h-full text-sm text-muted-foreground">
-                选择一个知识节点以开始记笔记
+                {t("learn.select_node_note")}
               </div>
             )}
           </div>
@@ -700,11 +700,11 @@ export default function LearnPage() {
           <div className="p-4 border-t border-primary/10 bg-white/40 flex gap-3 shrink-0">
             <button className="flex-1 flex items-center justify-center gap-2 py-2.5 border border-border rounded-xl text-muted-foreground text-xs font-[var(--font-manrope)] font-bold hover:bg-primary/5 transition-colors">
               <History className="h-3.5 w-3.5" />
-              History
+              {t("learn.history")}
             </button>
             <button className="flex-1 flex items-center justify-center gap-2 py-2.5 bg-foreground text-background rounded-xl text-xs font-[var(--font-manrope)] font-bold hover:opacity-90 transition-colors shadow-sm">
               <FileDown className="h-3.5 w-3.5" />
-              Export PDF
+              {t("learn.export_pdf")}
             </button>
           </div>
 
