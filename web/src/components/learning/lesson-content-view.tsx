@@ -123,72 +123,92 @@ export function LessonContentView({
   return (
     <div className="flex flex-col h-full relative">
 
-      {/* ── Top bar: meta + regenerate ── */}
-      <div className="flex items-center justify-between gap-4 px-16 py-2 border-b border-border/40 shrink-0">
-        <div className="flex items-center gap-3 text-xs text-muted-foreground font-[var(--font-manrope)]">
-          <span className="flex items-center gap-1">
-            <Zap className="h-3 w-3 text-amber-500" />
-            {difficultyLabel} {knode.difficulty_level}/10
-          </span>
-          <span className="flex items-center gap-1">
-            <Clock className="h-3 w-3" />
-            {knode.estimated_minutes} min
-          </span>
-          <span className="flex items-center gap-1">
-            <Star className="h-3 w-3 text-primary" />
-            {knode.xp_reward} XP
-          </span>
-        </div>
-        <div className="flex items-center gap-2 shrink-0">
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={onRegenerate}
-            disabled={regenerating}
-            className="gap-1 text-xs text-muted-foreground h-7"
-          >
-            <RefreshCw className={`h-3 w-3 ${regenerating ? "animate-spin" : ""}`} />
-            {t("lesson.regenerate")}
-          </Button>
-          {isCompleted && (
-            <Badge className="bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/20 gap-1 h-7">
-              <IconCheck className="h-3 w-3" />
-              {t("lesson.mastered")}
-            </Badge>
-          )}
-        </div>
-      </div>
-
-      {/* ── Tab bar ── */}
-      <div className="flex items-center gap-0.5 px-16 border-b border-border/40 shrink-0">
-        {allTabs.map((tab, index) => (
-          <button
-            key={tab.key}
-            onClick={() => setActiveTab(index)}
-            className={`px-3 py-2.5 text-xs font-medium transition-colors relative font-[var(--font-manrope)] ${
-              activeTab === index
-                ? "text-foreground"
-                : "text-muted-foreground hover:text-foreground"
-            }`}
-          >
-            {tab.label}
-            {activeTab === index && (
-              <span className="absolute bottom-0 left-1 right-1 h-0.5 bg-primary rounded-t-full" />
-            )}
-          </button>
-        ))}
-      </div>
-
-      {/* ── Main content area ── */}
+      {/* ── Scrollable main area: topbar + tabbar + content + bottom nav ── */}
       <div className="flex flex-1 min-h-0">
 
-        {/* Content column */}
-        <div className="flex-1 min-w-0 flex flex-col min-h-0">
-          <div className="flex-1 min-h-0 overflow-y-auto">
-            {availableTabs.length > 0 ? (
-              <div className={isWideTab ? "h-full" : "flex min-h-full"}>
-                {isWideTab ? (
-                  <div className="px-16 py-8 h-full flex flex-col">
+        {/* Scrollable content column */}
+        <div className="flex-1 min-w-0 flex flex-col min-h-0 overflow-y-auto">
+
+          {/* Node title */}
+          <div className="px-16 pt-8 pb-2">
+            <h1 className="text-2xl font-extrabold text-foreground tracking-tight leading-tight mb-1">
+              {knode.title.split(" ").map((word, i, arr) => (
+                <span key={i}>
+                  {i > 0 && " "}
+                  <span className={i === Math.floor(arr.length / 2) ? "text-primary" : ""}>
+                    {word}
+                  </span>
+                </span>
+              ))}
+            </h1>
+            {knode.summary && (
+              <p className="text-sm text-muted-foreground leading-relaxed max-w-2xl">
+                {knode.summary}
+              </p>
+            )}
+          </div>
+
+          {/* Top bar: meta + regenerate */}
+          <div className="flex items-center justify-between gap-4 px-16 py-2 border-b border-border/40 shrink-0">
+            <div className="flex items-center gap-3 text-xs text-muted-foreground font-[var(--font-manrope)]">
+              <span className="flex items-center gap-1">
+                <Zap className="h-3 w-3 text-amber-500" />
+                {difficultyLabel} {knode.difficulty_level}/10
+              </span>
+              <span className="flex items-center gap-1">
+                <Clock className="h-3 w-3" />
+                {knode.estimated_minutes} min
+              </span>
+              <span className="flex items-center gap-1">
+                <Star className="h-3 w-3 text-primary" />
+                {knode.xp_reward} XP
+              </span>
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={onRegenerate}
+                disabled={regenerating}
+                className="gap-1 text-xs text-muted-foreground h-7"
+              >
+                <RefreshCw className={`h-3 w-3 ${regenerating ? "animate-spin" : ""}`} />
+                {t("lesson.regenerate")}
+              </Button>
+              {isCompleted && (
+                <Badge className="bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/20 gap-1 h-7">
+                  <IconCheck className="h-3 w-3" />
+                  {t("lesson.mastered")}
+                </Badge>
+              )}
+            </div>
+          </div>
+
+          {/* Tab bar */}
+          <div className="flex items-center gap-0.5 px-16 border-b border-border/40 shrink-0 sticky top-0 bg-background/95 backdrop-blur-sm z-10">
+            {allTabs.map((tab, index) => (
+              <button
+                key={tab.key}
+                onClick={() => setActiveTab(index)}
+                className={`px-3 py-2.5 text-xs font-medium transition-colors relative font-[var(--font-manrope)] ${
+                  activeTab === index
+                    ? "text-foreground"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                {tab.label}
+                {activeTab === index && (
+                  <span className="absolute bottom-0 left-1 right-1 h-0.5 bg-primary rounded-t-full" />
+                )}
+              </button>
+            ))}
+          </div>
+
+          {/* Tab content */}
+          {availableTabs.length > 0 ? (
+            <div className="flex-1">
+              {isWideTab ? (
+                <div className="px-16 py-8">
                   {activeKey === "resources" ? (
                     <ResourceSearchView projectName={projectName} nodeId={nodeId} />
                   ) : activeKey === "examples" ? (
@@ -204,28 +224,99 @@ export function LessonContentView({
                       nodeId={nodeId}
                     />
                   )}
-                  </div>
-                ) : (
-                  <div className="flex-1 min-w-0 px-16 py-8">
-                    <PagedContentView
-                      content={lesson[availableTabs[activeTab]?.field ?? availableTabs[0].field]}
-                      projectName={projectName}
-                      nodeId={nodeId}
-                      tab={availableTabs[activeTab]?.key ?? availableTabs[0]?.key}
-                      onPageChange={(pageIndex, pageContent) => {
-                        const tabKey = availableTabs[activeTab]?.key ?? availableTabs[0]?.key
-                        onPageChange?.(tabKey, pageIndex, pageContent)
-                      }}
-                    />
-                  </div>
-                )}
+                </div>
+              ) : (
+                <div className="px-16 py-8">
+                  <PagedContentView
+                    content={lesson[availableTabs[activeTab]?.field ?? availableTabs[0].field]}
+                    projectName={projectName}
+                    nodeId={nodeId}
+                    tab={availableTabs[activeTab]?.key ?? availableTabs[0]?.key}
+                    onPageChange={(pageIndex, pageContent) => {
+                      const tabKey = availableTabs[activeTab]?.key ?? availableTabs[0]?.key
+                      onPageChange?.(tabKey, pageIndex, pageContent)
+                    }}
+                  />
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className="flex items-center justify-center py-20 text-muted-foreground text-sm">
+              暂无内容
+            </div>
+          )}
+
+          {/* Bottom nav: prev / step indicator / next */}
+          <div className="px-16 pb-5 pt-1 mt-auto">
+            <div className="flex items-center justify-between gap-4">
+
+              {/* Previous */}
+              <button
+                onClick={() => onNavigate("prev")}
+                disabled={!hasPrev}
+                className={`flex items-center gap-3 px-5 py-3 rounded-2xl border transition-all duration-300 group min-w-0 ${
+                  hasPrev
+                    ? "bg-white dark:bg-card border-border/30 hover:border-border hover:shadow-sm cursor-pointer"
+                    : "opacity-0 pointer-events-none"
+                }`}
+              >
+                <ArrowLeft className="h-4 w-4 text-muted-foreground group-hover:-translate-x-0.5 transition-transform shrink-0" />
+                <div className="text-left min-w-0">
+                  <span className="block text-[10px] uppercase font-[var(--font-manrope)] tracking-widest text-muted-foreground">
+                    {t("lesson.prev_lesson") || "Previous Lesson"}
+                  </span>
+                  <span className="block text-xs font-bold text-foreground truncate max-w-[140px]">
+                    {prevNodeTitle ?? ""}
+                  </span>
+                </div>
+              </button>
+
+              {/* Step indicator */}
+              <div className="flex flex-col items-center gap-1 shrink-0">
+                <div className="flex gap-1">
+                  {(() => {
+                    const dots = Math.min(totalNodes, 5)
+                    return Array.from({ length: dots }).map((_, i) => (
+                      <div
+                        key={i}
+                        className={`rounded-full transition-all ${
+                          i === 0
+                            ? "h-1.5 w-5 bg-primary"
+                            : "h-1.5 w-1.5 bg-border"
+                        }`}
+                      />
+                    ))
+                  })()}
+                </div>
+                <span className="text-[10px] font-[var(--font-manrope)] uppercase tracking-tight text-muted-foreground">
+                  {t("learn.step_of", { n: nodeId + 1, total: totalNodes }) || `Step ${nodeId + 1} of ${totalNodes}`}
+                </span>
               </div>
-            ) : (
-              <div className="flex items-center justify-center h-full text-muted-foreground text-sm">
-                暂无内容
-              </div>
-            )}
+
+              {/* Next */}
+              <button
+                onClick={() => onNavigate("next")}
+                disabled={!hasNext}
+                className={`flex items-center gap-3 px-5 py-3 rounded-2xl transition-all duration-300 group min-w-0 ${
+                  hasNext
+                    ? "bg-gradient-to-r from-primary to-violet-500 text-white shadow-lg shadow-primary/20 hover:shadow-primary/40 hover:scale-[1.02] cursor-pointer"
+                    : "opacity-0 pointer-events-none"
+                }`}
+              >
+                <div className="text-right min-w-0">
+                  <span className="block text-[10px] uppercase font-[var(--font-manrope)] tracking-widest opacity-80">
+                    {t("lesson.next_lesson") || "Next Lesson"}
+                  </span>
+                  <span className="block text-xs font-bold truncate max-w-[140px]">
+                    {nextNodeTitle ?? ""}
+                  </span>
+                </div>
+                <ArrowRight className="h-4 w-4 group-hover:translate-x-0.5 transition-transform shrink-0" />
+              </button>
+
+            </div>
           </div>
+
         </div>
 
         {/* Note panel (side drawer) */}
@@ -291,7 +382,7 @@ export function LessonContentView({
         )}
       </div>
 
-      {/* ── Audio player ── */}
+      {/* ── Audio player — fixed to bottom, outside scroll ── */}
       {audioUrl && (
         <AudioPlayerBar
           key={audioUrl}
@@ -300,78 +391,6 @@ export function LessonContentView({
           timestamps={lesson.teacher_timestamps}
         />
       )}
-
-      {/* ── Bottom nav: prev / step indicator / next ── */}
-      <div className="shrink-0 px-16 pb-5 pt-1">
-        <div className="flex items-center justify-between gap-4">
-
-          {/* Previous */}
-          <button
-            onClick={() => onNavigate("prev")}
-            disabled={!hasPrev}
-            className={`flex items-center gap-3 px-5 py-3 rounded-2xl border transition-all duration-300 group min-w-0 ${
-              hasPrev
-                ? "bg-white dark:bg-card border-border/30 hover:border-border hover:shadow-sm cursor-pointer"
-                : "opacity-0 pointer-events-none"
-            }`}
-          >
-            <ArrowLeft className="h-4 w-4 text-muted-foreground group-hover:-translate-x-0.5 transition-transform shrink-0" />
-            <div className="text-left min-w-0">
-              <span className="block text-[10px] uppercase font-[var(--font-manrope)] tracking-widest text-muted-foreground">
-                {t("lesson.prev_lesson") || "Previous Lesson"}
-              </span>
-              <span className="block text-xs font-bold text-foreground truncate max-w-[140px]">
-                {prevNodeTitle ?? ""}
-              </span>
-            </div>
-          </button>
-
-          {/* Step indicator */}
-          <div className="flex flex-col items-center gap-1 shrink-0">
-            <div className="flex gap-1">
-              {/* show up to 5 dots around active */}
-              {(() => {
-                const dots = Math.min(totalNodes, 5)
-                return Array.from({ length: dots }).map((_, i) => (
-                  <div
-                    key={i}
-                    className={`rounded-full transition-all ${
-                      i === 0
-                        ? "h-1.5 w-5 bg-primary"
-                        : "h-1.5 w-1.5 bg-border"
-                    }`}
-                  />
-                ))
-              })()}
-            </div>
-            <span className="text-[10px] font-[var(--font-manrope)] uppercase tracking-tight text-muted-foreground">
-              {t("learn.step_of", { n: nodeId + 1, total: totalNodes }) || `Step ${nodeId + 1} of ${totalNodes}`}
-            </span>
-          </div>
-
-          {/* Next */}
-          <button
-            onClick={() => onNavigate("next")}
-            disabled={!hasNext}
-            className={`flex items-center gap-3 px-5 py-3 rounded-2xl transition-all duration-300 group min-w-0 ${
-              hasNext
-                ? "bg-gradient-to-r from-primary to-violet-500 text-white shadow-lg shadow-primary/20 hover:shadow-primary/40 hover:scale-[1.02] cursor-pointer"
-                : "opacity-0 pointer-events-none"
-            }`}
-          >
-            <div className="text-right min-w-0">
-              <span className="block text-[10px] uppercase font-[var(--font-manrope)] tracking-widest opacity-80">
-                {t("lesson.next_lesson") || "Next Lesson"}
-              </span>
-              <span className="block text-xs font-bold truncate max-w-[140px]">
-                {nextNodeTitle ?? ""}
-              </span>
-            </div>
-            <ArrowRight className="h-4 w-4 group-hover:translate-x-0.5 transition-transform shrink-0" />
-          </button>
-
-        </div>
-      </div>
 
     </div>
   )

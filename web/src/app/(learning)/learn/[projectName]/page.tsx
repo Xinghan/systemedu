@@ -363,32 +363,7 @@ export default function LearnPage() {
 
         {/* Center: lesson content */}
         <div className="flex-1 min-w-0 min-h-0 flex flex-col">
-          {/* Node title header */}
-          {activeKnode && (
-            <div className="px-16 pt-8 pb-0 shrink-0">
-              <div className="flex items-start justify-between">
-                <div className="min-w-0 flex-1 pr-6">
-                  <h1 className="text-2xl font-extrabold text-foreground tracking-tight leading-tight mb-1">
-                    {activeKnode.title.split(" ").map((word, i) => (
-                      <span key={i}>
-                        {i > 0 && " "}
-                        <span className={i === Math.floor(activeKnode.title.split(" ").length / 2) ? "text-primary" : ""}>
-                          {word}
-                        </span>
-                      </span>
-                    ))}
-                  </h1>
-                  {activeKnode.summary && (
-                    <p className="text-sm text-muted-foreground leading-relaxed max-w-2xl">
-                      {activeKnode.summary}
-                    </p>
-                  )}
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Lesson content */}
+          {/* Lesson content (title is rendered inside LessonContentView for scrolling) */}
           <div className="flex-1 min-h-0">
             <LessonView
               projectName={params.projectName}
