@@ -1,5 +1,9 @@
 # SystemEdu - Project Guidelines
 
+## 语言要求
+
+**所有回复必须使用中文**，包括代码注释说明、错误分析、建议等。禁止在回复中混入其他语言（韩文、日文等）。
+
 ## Project Overview
 
 SystemEdu 是一款**本地优先的 AI Agent Sandbox 平台**，教育为核心定位，Agent 为底层架构。类似 OpenClaw 模式：本地运行 agent daemon，配置 LLM、MCP server、skills，通过 IM 通信，通过 Hub 共享项目。
