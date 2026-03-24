@@ -186,9 +186,10 @@ export function LessonContentView({
         <div className="flex-1 min-w-0 flex flex-col min-h-0">
           <div className="flex-1 min-h-0 overflow-y-auto">
             {availableTabs.length > 0 ? (
-              <div className={isWideTab ? "p-5 h-full" : "flex min-h-full"}>
+              <div className={isWideTab ? "h-full" : "flex min-h-full"}>
                 {isWideTab ? (
-                  activeKey === "resources" ? (
+                  <div className="px-16 py-8 h-full flex flex-col">
+                  {activeKey === "resources" ? (
                     <ResourceSearchView projectName={projectName} nodeId={nodeId} />
                   ) : activeKey === "examples" ? (
                     <AnimatedExamplesView content={lesson[availableTabs[activeTab]?.field ?? availableTabs[0].field]} />
@@ -202,7 +203,8 @@ export function LessonContentView({
                       projectName={projectName}
                       nodeId={nodeId}
                     />
-                  )
+                  )}
+                  </div>
                 ) : (
                   <div className="flex-1 min-w-0 px-16 py-8">
                     <PagedContentView

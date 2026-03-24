@@ -572,29 +572,33 @@ async def api_project_detail(request: Request) -> JSONResponse:
 
         ctx = load_project_context(name)
 
-        # Serialize tree
+        # Serialize tree — use global sequential id so knode.id is unique across all milestones
         milestones = []
+        global_idx = 0
         for ms in ctx.tree.milestones:
+            knodes_serialized = []
+            for node in ms.knodes:
+                knodes_serialized.append(
+                    {
+                        "id": global_idx,
+                        "title": node.title,
+                        "summary": node.summary,
+                        "difficulty_level": node.difficulty_level,
+                        "content_type": node.content_type.value,
+                        "acceptance_type": node.acceptance_type.value,
+                        "estimated_minutes": node.estimated_minutes,
+                        "xp_reward": node.xp_reward,
+                        "prerequisite_indices": node.prerequisite_indices,
+                    }
+                )
+                global_idx += 1
             milestones.append(
                 {
                     "title": ms.title,
                     "description": ms.description,
                     "order": ms.order,
                     "xp_reward": ms.xp_reward,
-                    "knodes": [
-                        {
-                            "id": i,
-                            "title": node.title,
-                            "summary": node.summary,
-                            "difficulty_level": node.difficulty_level,
-                            "content_type": node.content_type.value,
-                            "acceptance_type": node.acceptance_type.value,
-                            "estimated_minutes": node.estimated_minutes,
-                            "xp_reward": node.xp_reward,
-                            "prerequisite_indices": node.prerequisite_indices,
-                        }
-                        for i, node in enumerate(ms.knodes)
-                    ],
+                    "knodes": knodes_serialized,
                 }
             )
 
