@@ -369,9 +369,9 @@ export default function ProjectDetailPage() {
     <>
       <AppHeader />
       <div className="flex-1 overflow-y-auto animate-[loading-fade-in_0.4s_cubic-bezier(0.2,0.8,0.2,1)]">
+        <div className="max-w-5xl mx-auto px-8 pt-6 pb-8 space-y-8">
         {/* Hero section */}
-        <div className="px-8 pt-6 pb-2">
-          <div className="max-w-5xl mx-auto">
+        <div>
             {/* Back link */}
             <Link href="/projects">
               <button className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground mb-4 transition-colors">
@@ -496,10 +496,7 @@ export default function ProjectDetailPage() {
                 )}
               </div>
             </div>
-          </div>
         </div>
-
-        <div className="max-w-5xl mx-auto px-8 py-8 space-y-8">
           {/* Overall Mastery */}
           {enrollment && (
             <div className="grid gap-5 lg:grid-cols-3">
