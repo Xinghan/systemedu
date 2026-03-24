@@ -370,45 +370,37 @@ export default function ProjectDetailPage() {
       <AppHeader />
       <div className="flex-1 overflow-y-auto animate-[loading-fade-in_0.4s_cubic-bezier(0.2,0.8,0.2,1)]">
         {/* Hero section */}
-        <div className="bg-background px-8 pt-8 pb-10">
+        <div className="px-8 pt-6 pb-2">
           <div className="max-w-5xl mx-auto">
-            {/* Top row: back button + Continue Learning button */}
-            <div className="flex items-center justify-between mb-5">
-              <Link href="/projects">
-                <button className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors">
-                  <ArrowLeft className="h-3.5 w-3.5" />
-                  {t("project.back_library")}
-                </button>
-              </Link>
-              <button
-                onClick={handleStartLearning}
-                disabled={enrolling}
-                className="h-11 px-6 rounded-xl bg-gradient-to-r from-violet-600 to-purple-600 text-white text-sm font-semibold flex items-center gap-2 shadow-[0_2px_16px_0_oklch(0.488_0.258_302_/_0.30)] hover:shadow-[0_4px_24px_0_oklch(0.488_0.258_302_/_0.40)] transition-all duration-[350ms] disabled:opacity-60"
-              >
-                <ButtonIcon className="h-4 w-4" />
-                {enrolling ? t("project.loading") : buttonLabel}
+            {/* Back link */}
+            <Link href="/projects">
+              <button className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground mb-4 transition-colors">
+                <ArrowLeft className="h-3.5 w-3.5" />
+                {t("project.back_library")}
               </button>
-            </div>
+            </Link>
 
-            {/* Hero content: left text + right cover image */}
-            <div className="flex items-start gap-8">
-              {/* Left: tags + title + description + meta */}
+            {/* Hero card — lavender gradient background */}
+            <div className="rounded-3xl bg-gradient-to-br from-[#e8e6f5] via-[#eceaf8] to-[#f2f0fb] dark:from-[#1e1a2e] dark:via-[#1a1728] dark:to-[#1e1b30] px-10 py-10 flex items-center gap-10 overflow-hidden">
+              {/* Left: tags + title + description + button */}
               <div className="flex-1 min-w-0">
-                {/* Tags */}
-                <div className="flex flex-wrap gap-2 mb-3">
+                {/* Tags — teal/emerald pill style */}
+                <div className="flex flex-wrap gap-2 mb-5">
                   {allTags.map((tag) => (
-                    <span key={tag} className="text-[10px] font-[var(--font-manrope)] uppercase tracking-wider px-3 py-1 rounded-full bg-primary/10 text-primary font-semibold">
+                    <span key={tag} className="text-[11px] font-[var(--font-manrope)] font-bold uppercase tracking-wider px-4 py-1.5 rounded-full bg-emerald-200/80 text-emerald-800 dark:bg-emerald-800/40 dark:text-emerald-300">
                       {tag}
                     </span>
                   ))}
                 </div>
 
-                {/* Title + edit button */}
-                <div className="flex items-center gap-2 mb-2">
-                  <h1 className="text-3xl font-extrabold text-foreground tracking-tight">{detail.project.title}</h1>
+                {/* Title */}
+                <div className="flex items-center gap-2 mb-4">
+                  <h1 className="text-[2.75rem] font-extrabold text-[#1e2d6b] dark:text-white leading-tight tracking-tight">
+                    {detail.project.title}
+                  </h1>
                   <Dialog open={editOpen} onOpenChange={setEditOpen}>
                     <DialogTrigger render={
-                      <button className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors">
+                      <button className="p-1.5 rounded-lg text-[#1e2d6b]/40 hover:text-[#1e2d6b] hover:bg-white/30 dark:text-white/40 dark:hover:text-white transition-colors">
                         <Pencil className="h-4 w-4" />
                       </button>
                     } />
@@ -468,32 +460,38 @@ export default function ProjectDetailPage() {
                 </div>
 
                 {/* Description */}
-                <p className="text-sm text-muted-foreground max-w-xl leading-relaxed">{detail.project.description}</p>
+                <p className="text-base text-[#3d4f7c]/80 dark:text-white/60 max-w-lg leading-relaxed mb-8">
+                  {detail.project.description}
+                </p>
 
-                {/* Meta info */}
-                <div className="flex items-center gap-4 mt-4 text-xs text-muted-foreground">
-                  <span className="flex items-center gap-1.5">
-                    <Clock className="h-3.5 w-3.5" />
-                    <span className="font-[var(--font-manrope)] font-semibold text-foreground">{detail.project.estimated_hours}h</span>
-                  </span>
-                  <span className="h-3 w-px bg-border" />
-                  <span className="font-[var(--font-manrope)]">Ages {detail.project.age_range[0]}-{detail.project.age_range[1]}</span>
-                </div>
+                {/* CTA button — wide purple pill */}
+                <button
+                  onClick={handleStartLearning}
+                  disabled={enrolling}
+                  className="h-14 px-10 rounded-2xl bg-violet-600 hover:bg-violet-700 text-white text-base font-bold flex items-center gap-3 shadow-[0_4px_20px_0_rgba(109,40,217,0.35)] hover:shadow-[0_6px_28px_0_rgba(109,40,217,0.45)] transition-all duration-[350ms] disabled:opacity-60"
+                >
+                  {enrolling ? t("project.loading") : buttonLabel}
+                  <ArrowRight className="h-5 w-5" />
+                </button>
               </div>
 
-              {/* Right: cover image */}
-              <div className="shrink-0 w-56">
+              {/* Right: cover image card — white border, large rounded */}
+              <div className="shrink-0">
                 {coverUrl ? (
-                  <img
-                    src={coverUrl}
-                    alt={detail.project.title}
-                    className="w-56 h-44 rounded-2xl object-cover shadow-lg ring-2 ring-white/10"
-                  />
+                  <div className="bg-white rounded-[20px] p-3 shadow-[0_8px_40px_0_rgba(109,40,217,0.18)]">
+                    <img
+                      src={coverUrl}
+                      alt={detail.project.title}
+                      className="w-[260px] h-[220px] rounded-[14px] object-cover"
+                    />
+                  </div>
                 ) : (
-                  <div className="w-56 h-44 rounded-2xl bg-gradient-to-br from-violet-600 via-purple-600 to-purple-800 flex items-center justify-center shadow-lg ring-2 ring-white/10">
-                    <span className="text-5xl font-extrabold text-white/80 tracking-tight">
-                      {detail.project.title.charAt(0).toUpperCase()}
-                    </span>
+                  <div className="bg-white rounded-[20px] p-3 shadow-[0_8px_40px_0_rgba(109,40,217,0.18)]">
+                    <div className="w-[260px] h-[220px] rounded-[14px] bg-gradient-to-br from-violet-600 via-purple-600 to-purple-800 flex items-center justify-center">
+                      <span className="text-6xl font-extrabold text-white/80 tracking-tight">
+                        {detail.project.title.charAt(0).toUpperCase()}
+                      </span>
+                    </div>
                   </div>
                 )}
               </div>
