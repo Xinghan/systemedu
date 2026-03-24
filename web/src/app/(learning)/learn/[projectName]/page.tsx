@@ -524,36 +524,50 @@ export default function LearnPage() {
         )}
       </div>
 
-      {/* AI Tutor chat drawer (bottom) */}
+      {/* AI Tutor side panel (right slide-in) */}
+      {/* Backdrop */}
       {tutorOpen && (
-        <div className="absolute bottom-0 left-0 right-0 z-50 flex flex-col bg-background rounded-t-2xl shadow-[0_-8px_40px_rgba(0,0,0,0.15)] border-t border-border/50"
-          style={{ height: "420px" }}>
+        <div
+          className="fixed inset-0 z-40 bg-black/10 backdrop-blur-[2px]"
+          onClick={() => setTutorOpen(false)}
+        />
+      )}
+      <div
+        className={`fixed top-0 right-0 h-full z-50 flex flex-col transition-transform duration-500 ease-[cubic-bezier(0.2,0.8,0.2,1)] ${
+          tutorOpen ? "translate-x-0" : "translate-x-full"
+        }`}
+        style={{ width: "min(450px, 100vw)" }}
+      >
+        {/* Glass background */}
+        <div className="absolute inset-0 bg-white/80 dark:bg-slate-900/80 backdrop-blur-2xl border-l border-primary/10 shadow-[−8px_0_40px_rgba(106,28,246,0.08)]" />
+
+        {/* Content */}
+        <div className="relative z-10 flex flex-col h-full">
+
           {/* Header */}
-          <div className="flex items-center justify-between px-5 py-3 border-b border-border/50 shrink-0 bg-gradient-to-r from-violet-600/5 to-purple-600/5">
-            <div className="flex items-center gap-3">
-              <div className="w-7 h-7 rounded-full bg-gradient-to-br from-violet-600 to-purple-700 flex items-center justify-center">
-                <Bot className="h-3.5 w-3.5 text-white" />
-              </div>
+          <div className="px-6 py-5 border-b border-primary/10 shrink-0">
+            <div className="flex items-center justify-between">
               <div>
-                <h2 className="text-sm font-bold leading-tight text-foreground">
-                  AI Tutor
-                  {activeKnode && <span className="text-muted-foreground font-normal"> · {activeKnode.title}</span>}
+                <h2 className="text-2xl font-extrabold tracking-tight text-foreground leading-tight">
+                  AI Tutor <span className="text-primary italic">Thread</span>
                 </h2>
+                <div className="flex items-center gap-2 mt-1">
+                  <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                  <span className="text-[10px] font-[var(--font-manrope)] font-bold text-muted-foreground uppercase tracking-widest">
+                    Neural Engine Active
+                  </span>
+                </div>
               </div>
-              <div className="flex items-center gap-1.5 ml-1">
-                <div className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-                <span className="text-[10px] font-[var(--font-manrope)] text-emerald-600 dark:text-emerald-400 uppercase tracking-widest font-semibold">Online</span>
-              </div>
+              <button
+                onClick={() => setTutorOpen(false)}
+                className="w-10 h-10 rounded-full hover:bg-primary/10 flex items-center justify-center text-foreground transition-colors"
+              >
+                <X className="h-5 w-5" />
+              </button>
             </div>
-            <button
-              onClick={() => setTutorOpen(false)}
-              className="h-7 w-7 rounded-full bg-secondary hover:bg-secondary/80 flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors"
-            >
-              <X className="h-3.5 w-3.5" />
-            </button>
           </div>
 
-          {/* Chat content via real ChatPanel */}
+          {/* Chat via ChatPanel — fills remaining space */}
           <div className="flex-1 min-h-0">
             <ChatPanel
               project={params.projectName}
@@ -563,8 +577,9 @@ export default function LearnPage() {
               pageIndex={activePage}
             />
           </div>
+
         </div>
-      )}
+      </div>
     </div>
   )
 }

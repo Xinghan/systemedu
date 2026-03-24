@@ -106,23 +106,23 @@ export function ChatPanel({ project, agent, nodeId, activeTab, pageIndex }: Chat
     <div className="flex flex-col h-full min-h-0">
       <ScrollArea className="flex-1 min-h-0">
         {!hasMessages ? (
-          /* Empty state — centered like ChatGPT */
-          <div className="flex flex-col items-center justify-center h-full min-h-[200px] text-muted-foreground">
-            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-muted mb-4">
-              <Bot className="h-6 w-6" />
+          /* Empty state */
+          <div className="flex flex-col items-center justify-center h-full min-h-[200px] text-center px-8">
+            <div className="w-14 h-14 rounded-full bg-gradient-to-br from-primary to-emerald-500 flex items-center justify-center mb-4 shadow-[0_0_20px_rgba(106,28,246,0.3)]">
+              <Bot className="h-7 w-7 text-white" />
             </div>
-            <p className="text-lg font-medium">开始对话</p>
-            <p className="text-sm mt-1">
+            <p className="text-base font-bold text-foreground mb-1">Start a conversation</p>
+            <p className="text-sm text-muted-foreground leading-relaxed">
               {agent === "student"
-                ? "和小豆同学一起讨论学习吧"
+                ? "Discuss and learn together"
                 : agent === "teacher"
-                  ? "让星星老师为你讲解知识点"
-                  : "输入你的问题，AI 助手会为你解答"}
+                  ? "Ask your teacher to explain any concept"
+                  : "Ask me anything about this lesson. I'm here to help you understand every concept deeply."}
             </p>
           </div>
         ) : (
-          /* Messages — centered with max-width */
-          <div className="max-w-3xl mx-auto px-4 py-4 space-y-4">
+          /* Messages */
+          <div className="px-6 py-6 space-y-6">
             {activeSession?.messages.map((msg) => (
               <MessageBubble key={msg.id} message={msg} />
             ))}
