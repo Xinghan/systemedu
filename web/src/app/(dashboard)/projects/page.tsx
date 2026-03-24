@@ -2,24 +2,104 @@
 
 import { useEffect, useState } from "react"
 import Link from "next/link"
-import { Clock, Users, Plus, Sparkles, ArrowRight, TrendingUp, Brain } from "lucide-react"
+import { Plus, Sparkles, ArrowRight, TrendingUp, Brain } from "lucide-react"
 import { PageLoading } from "@/components/ui/page-loading"
 import { AppHeader } from "@/components/layout/app-header"
 import { gateway } from "@/lib/api"
 import type { ProjectSummary } from "@/lib/types/api"
 import { useT } from "@/lib/hooks/use-t"
 
-const CATEGORY_ICONS: Record<string, string> = {
-  ai: "AI",
-  math: "MATH",
-  aerospace: "AERO",
-  biotech: "BIO",
-  cs: "CS",
-  chemistry: "CHEM",
-  music: "MUS",
-  climate: "ENV",
-  robotics: "ROBO",
-  other: "...",
+// Category icon SVGs — matching UI mockup style (symbol on light purple bg)
+function CategoryIcon({ category }: { category: string }) {
+  const icons: Record<string, React.ReactNode> = {
+    math: (
+      <svg viewBox="0 0 24 24" fill="none" className="w-6 h-6" stroke="#7c3aed" strokeWidth="2" strokeLinecap="round">
+        <path d="M4 7h16M4 12h10M4 17h7" />
+        <path d="M18 10l3 3-3 3" />
+      </svg>
+    ),
+    aerospace: (
+      <svg viewBox="0 0 24 24" fill="none" className="w-6 h-6">
+        <path d="M12 2C8 2 5 8 5 12c0 2 .5 3.5 1.5 5L12 22l5.5-5c1-1.5 1.5-3 1.5-5 0-4-3-10-7-10z" fill="#7c3aed" fillOpacity="0.15" stroke="#7c3aed" strokeWidth="1.5"/>
+        <circle cx="12" cy="12" r="2" fill="#7c3aed"/>
+      </svg>
+    ),
+    ai: (
+      <svg viewBox="0 0 24 24" fill="none" className="w-6 h-6">
+        <circle cx="12" cy="12" r="3" fill="#7c3aed" fillOpacity="0.2" stroke="#7c3aed" strokeWidth="1.5"/>
+        <path d="M12 5v2M12 17v2M5 12h2M17 12h2M7.05 7.05l1.41 1.41M15.54 15.54l1.41 1.41M7.05 16.95l1.41-1.41M15.54 8.46l1.41-1.41" stroke="#7c3aed" strokeWidth="1.5" strokeLinecap="round"/>
+      </svg>
+    ),
+    biotech: (
+      <svg viewBox="0 0 24 24" fill="none" className="w-6 h-6">
+        <circle cx="12" cy="8" r="3" stroke="#7c3aed" strokeWidth="1.5" fill="#7c3aed" fillOpacity="0.15"/>
+        <path d="M12 11v6M9 14h6M7 19h10" stroke="#7c3aed" strokeWidth="1.5" strokeLinecap="round"/>
+      </svg>
+    ),
+    cs: (
+      <svg viewBox="0 0 24 24" fill="none" className="w-6 h-6">
+        <rect x="3" y="5" width="18" height="14" rx="2" stroke="#7c3aed" strokeWidth="1.5" fill="#7c3aed" fillOpacity="0.1"/>
+        <path d="M8 10l-2 2 2 2M16 10l2 2-2 2M13 9l-2 6" stroke="#7c3aed" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+      </svg>
+    ),
+    chemistry: (
+      <svg viewBox="0 0 24 24" fill="none" className="w-6 h-6">
+        <path d="M9 3h6M10 3v5l-4 8a2 2 0 001.8 3h8.4a2 2 0 001.8-3l-4-8V3" stroke="#7c3aed" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" fill="#7c3aed" fillOpacity="0.1"/>
+      </svg>
+    ),
+    music: (
+      <svg viewBox="0 0 24 24" fill="none" className="w-6 h-6">
+        <path d="M9 18V5l12-2v13" stroke="#7c3aed" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+        <circle cx="6" cy="18" r="3" stroke="#7c3aed" strokeWidth="1.5" fill="#7c3aed" fillOpacity="0.15"/>
+        <circle cx="18" cy="16" r="3" stroke="#7c3aed" strokeWidth="1.5" fill="#7c3aed" fillOpacity="0.15"/>
+      </svg>
+    ),
+    climate: (
+      <svg viewBox="0 0 24 24" fill="none" className="w-6 h-6">
+        <circle cx="12" cy="12" r="4" stroke="#7c3aed" strokeWidth="1.5" fill="#7c3aed" fillOpacity="0.15"/>
+        <path d="M12 2v2M12 20v2M2 12h2M20 12h2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41" stroke="#7c3aed" strokeWidth="1.5" strokeLinecap="round"/>
+      </svg>
+    ),
+    robotics: (
+      <svg viewBox="0 0 24 24" fill="none" className="w-6 h-6">
+        <rect x="7" y="9" width="10" height="8" rx="2" stroke="#7c3aed" strokeWidth="1.5" fill="#7c3aed" fillOpacity="0.1"/>
+        <path d="M12 5v4M9.5 13h.01M14.5 13h.01M10 17v2M14 17v2M3 13h4M17 13h4" stroke="#7c3aed" strokeWidth="1.5" strokeLinecap="round"/>
+        <circle cx="12" cy="4" r="1.5" fill="#7c3aed"/>
+      </svg>
+    ),
+    other: (
+      <svg viewBox="0 0 24 24" fill="none" className="w-6 h-6">
+        <circle cx="12" cy="12" r="1.5" fill="#7c3aed"/>
+        <circle cx="6" cy="12" r="1.5" fill="#7c3aed"/>
+        <circle cx="18" cy="12" r="1.5" fill="#7c3aed"/>
+      </svg>
+    ),
+  }
+  return (
+    <div className="w-10 h-10 rounded-xl bg-primary/8 flex items-center justify-center">
+      {icons[category] ?? icons.other}
+    </div>
+  )
+}
+
+// Category tag color mapping
+const CATEGORY_TAG_COLOR: Record<string, string> = {
+  math:      "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400",
+  aerospace: "bg-sky-100 text-sky-700 dark:bg-sky-900/40 dark:text-sky-400",
+  ai:        "bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-400",
+  biotech:   "bg-teal-100 text-teal-700 dark:bg-teal-900/40 dark:text-teal-400",
+  cs:        "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-400",
+  chemistry: "bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-400",
+  music:     "bg-pink-100 text-pink-700 dark:bg-pink-900/40 dark:text-pink-400",
+  climate:   "bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-400",
+  robotics:  "bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-400",
+  other:     "bg-secondary text-secondary-foreground",
+}
+
+const CATEGORY_TAG_LABELS: Record<string, string> = {
+  math: "MATH", aerospace: "AEROSPACE", ai: "AI", biotech: "BIOLOGY",
+  cs: "CS", chemistry: "CHEMISTRY", music: "MUSIC", climate: "CLIMATE",
+  robotics: "ROBOTICS", other: "",
 }
 
 export default function ProjectsPage() {
@@ -155,13 +235,13 @@ export default function ProjectsPage() {
             ))}
             {/* "Start Custom Project" card */}
             <Link href="/projects/new">
-              <div className="rounded-xl border-2 border-dashed border-primary/25 p-6 h-full min-h-[220px] flex flex-col items-center justify-center gap-3 cursor-pointer hover:border-primary/50 hover:bg-primary/4 transition-all duration-[350ms] group">
-                <div className="h-12 w-12 rounded-xl bg-primary/10 flex items-center justify-center group-hover:bg-primary/15 transition-colors">
+              <div className="rounded-2xl border-2 border-dashed border-primary/30 p-6 h-full min-h-[240px] flex flex-col items-center justify-center gap-4 cursor-pointer hover:border-primary/60 hover:bg-primary/4 transition-all duration-[350ms] group bg-white/50 dark:bg-card/50">
+                <div className="h-12 w-12 rounded-full border-2 border-primary/30 group-hover:border-primary/60 flex items-center justify-center transition-colors">
                   <Plus className="h-6 w-6 text-primary" />
                 </div>
                 <div className="text-center">
-                  <p className="text-sm font-semibold text-foreground">{t("projects.start_custom")}</p>
-                  <p className="text-xs text-muted-foreground mt-1">
+                  <p className="text-base font-bold text-foreground mb-1.5">{t("projects.start_custom")}</p>
+                  <p className="text-sm text-muted-foreground leading-relaxed max-w-[180px]">
                     {t("projects.custom_desc")}
                   </p>
                 </div>
@@ -174,64 +254,67 @@ export default function ProjectsPage() {
   )
 }
 
-const GATEWAY_URL = process.env.NEXT_PUBLIC_GATEWAY_URL ?? "http://localhost:18820"
-
 function ProjectCard({ project: p }: { project: ProjectSummary }) {
   const t = useT()
-  const coverUrl = p.cover_image_url ? `${GATEWAY_URL}${p.cover_image_url}` : null
-  const iconLabel = CATEGORY_ICONS[p.category] ?? "..."
+  const tagColor = CATEGORY_TAG_COLOR[p.category] ?? CATEGORY_TAG_COLOR.other
+  const categoryLabel = CATEGORY_TAG_LABELS[p.category] ?? p.category.toUpperCase()
+  // Additional tags from project.tags (show up to 1 extra)
+  const extraTag = p.tags[0]?.toUpperCase()
+
+  // Age range as "level" label
+  const levelLabel = p.age_range[1] >= 16
+    ? `Ages ${p.age_range[0]}+`
+    : `Ages ${p.age_range[0]}-${p.age_range[1]}`
 
   return (
     <Link href={`/projects/${p.name}`}>
-      <div className="card-elevated h-full flex flex-col cursor-pointer hover:shadow-card-hover transition-all duration-[350ms] [transition-timing-function:cubic-bezier(0.2,0.8,0.2,1)] group overflow-hidden">
-        {/* Cover image area */}
-        <div className="h-36 w-full overflow-hidden">
-          {coverUrl ? (
-            <img
-              src={coverUrl}
-              alt={p.title}
-              className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-            />
-          ) : (
-            <div className="w-full h-full bg-gradient-to-br from-violet-600 via-purple-600 to-purple-800 flex items-center justify-center">
-              <span className="text-3xl font-extrabold text-white/70 tracking-tight">
-                {iconLabel}
-              </span>
-            </div>
+      <div className="bg-white dark:bg-card rounded-2xl p-6 h-full flex flex-col cursor-pointer shadow-[0_2px_12px_0_rgba(0,0,0,0.06)] hover:shadow-[0_6px_24px_0_rgba(109,40,217,0.12)] transition-all duration-[350ms] [transition-timing-function:cubic-bezier(0.2,0.8,0.2,1)] group border border-border/30">
+        {/* Category icon */}
+        <div className="mb-4">
+          <CategoryIcon category={p.category} />
+        </div>
+
+        {/* Tags row */}
+        <div className="flex flex-wrap gap-1.5 mb-3">
+          {categoryLabel && (
+            <span className={`text-[10px] font-[var(--font-manrope)] font-bold uppercase tracking-wider px-2.5 py-1 rounded-md ${tagColor}`}>
+              {categoryLabel}
+            </span>
+          )}
+          {extraTag && (
+            <span className={`text-[10px] font-[var(--font-manrope)] font-bold uppercase tracking-wider px-2.5 py-1 rounded-md ${tagColor}`}>
+              {extraTag}
+            </span>
           )}
         </div>
 
-        <div className="p-5 flex flex-col flex-1">
-          {/* Category chip */}
-          <div className="flex flex-wrap gap-2 mb-3">
-            <span className="text-[10px] font-[var(--font-manrope)] uppercase tracking-wider px-2.5 py-1 rounded-full bg-primary/10 text-primary font-semibold">
-              {(t as (key: string) => string)(`cat.${p.category}`) || p.category}
-            </span>
-            {p.tags.slice(0, 1).map((tag) => (
-              <span key={tag} className="text-[10px] font-[var(--font-manrope)] uppercase tracking-wider px-2.5 py-1 rounded-full bg-secondary text-secondary-foreground">
-                {tag}
-              </span>
-            ))}
+        {/* Title */}
+        <h3 className="text-[1.1rem] font-extrabold text-[#1e2d6b] dark:text-foreground leading-snug mb-2 group-hover:text-primary transition-colors duration-[350ms]">
+          {p.title}
+        </h3>
+
+        {/* Description */}
+        <p className="text-sm text-muted-foreground leading-relaxed line-clamp-3 flex-1 mb-4">
+          {p.description}
+        </p>
+
+        {/* Footer: DURATION + LEVEL */}
+        <div className="border-t border-border/40 pt-4 grid grid-cols-2 gap-4">
+          <div>
+            <p className="text-[9px] font-[var(--font-manrope)] font-bold uppercase tracking-[0.12em] text-muted-foreground mb-1">
+              {t("projects.duration")}
+            </p>
+            <p className="text-sm font-bold text-[#1e2d6b] dark:text-foreground">
+              {p.estimated_hours} {t("projects.hours")}
+            </p>
           </div>
-
-          {/* Title + description */}
-          <h3 className="text-base font-bold text-foreground mb-2 group-hover:text-primary transition-colors duration-[350ms]">
-            {p.title}
-          </h3>
-          <p className="text-sm text-muted-foreground line-clamp-3 flex-1">{p.description}</p>
-
-          {/* Footer meta */}
-          <div className="flex items-center justify-between mt-5 pt-4 border-t border-border/50">
-            <div className="flex items-center gap-3 text-xs text-muted-foreground">
-              <span className="flex items-center gap-1">
-                <Clock className="h-3.5 w-3.5" />
-                <span className="font-[var(--font-manrope)] font-semibold text-foreground">{p.estimated_hours} {t("projects.hours")}</span>
-              </span>
-            </div>
-            <div className="flex items-center gap-1 text-xs text-muted-foreground">
-              <Users className="h-3.5 w-3.5" />
-              <span className="font-[var(--font-manrope)]">{t("projects.ages")} {p.age_range[0]}-{p.age_range[1]}</span>
-            </div>
+          <div>
+            <p className="text-[9px] font-[var(--font-manrope)] font-bold uppercase tracking-[0.12em] text-muted-foreground mb-1">
+              {t("projects.level")}
+            </p>
+            <p className="text-sm font-bold text-[#1e2d6b] dark:text-foreground">
+              {levelLabel}
+            </p>
           </div>
         </div>
       </div>
