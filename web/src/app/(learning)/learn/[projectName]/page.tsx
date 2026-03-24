@@ -14,12 +14,12 @@ import {
   BookOpen,
   ExternalLink,
   Search,
-  Send,
   CheckCircle,
 } from "lucide-react"
 import { PageLoading } from "@/components/ui/page-loading"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { LessonView } from "@/components/learning/lesson-view"
+import { ChatPanel } from "@/components/chat/chat-panel"
 import { gateway } from "@/lib/api"
 import type { KnodeInfo, LessonStatus, NodeProgress, ProjectDetail } from "@/lib/types/api"
 import { useT } from "@/lib/hooks/use-t"
@@ -58,11 +58,6 @@ export default function LearnPage() {
   const [lessonStatuses, setLessonStatuses] = useState<Record<string, LessonStatus>>({})
   const [completing, setCompleting] = useState(false)
   const [tutorOpen, setTutorOpen] = useState(false)
-  const [tutorInput, setTutorInput] = useState("")
-  const [tutorMessages, setTutorMessages] = useState<{ role: "user" | "ai"; text: string }[]>([])
-  const [tutorSending, setTutorSending] = useState(false)
-  const tutorInputRef = useRef<HTMLInputElement>(null)
-  const tutorMessagesRef = useRef<HTMLDivElement>(null)
   const sessionStartRef = useRef<number>(Date.now())
 
   const handleLessonPageChange = useCallback((tab: string, pageIndex: number, _pageContent: string) => {
@@ -153,36 +148,6 @@ export default function LearnPage() {
   const isNodeCompleted = activeNodeId !== null
     ? progressList.find((p) => p.knode_id === activeNodeId)?.status === "passed"
     : false
-
-  // Auto-scroll tutor messages to bottom
-  useEffect(() => {
-    if (tutorMessagesRef.current) {
-      tutorMessagesRef.current.scrollTop = tutorMessagesRef.current.scrollHeight
-    }
-  }, [tutorMessages, tutorSending])
-
-  const handleTutorSend = useCallback(async () => {
-    const text = tutorInput.trim()
-    if (!text || tutorSending) return
-    setTutorMessages((prev) => [...prev, { role: "user", text }])
-    setTutorInput("")
-    setTutorSending(true)
-    // Placeholder: echo response (will be replaced with real AI call)
-    setTimeout(() => {
-      setTutorMessages((prev) => [
-        ...prev,
-        { role: "ai", text: `Great question about "${text}"! Let me help you understand this concept...` },
-      ])
-      setTutorSending(false)
-    }, 800)
-  }, [tutorInput, tutorSending])
-
-  const handleTutorKeyDown = useCallback((e: React.KeyboardEvent) => {
-    if (e.key === "Enter" && !e.shiftKey) {
-      e.preventDefault()
-      handleTutorSend()
-    }
-  }, [handleTutorSend])
 
   // Search filtering for sidebar
   const filteredMilestones = useMemo(() => {
@@ -507,7 +472,7 @@ export default function LearnPage() {
                     {t("learn.ai_tutor_ask", { topic: activeKnode?.title ?? "this topic" })}
                   </p>
                   <button
-                    onClick={() => { setTutorOpen(true); setTimeout(() => tutorInputRef.current?.focus(), 100) }}
+                    onClick={() => setTutorOpen(true)}
                     className="w-full h-8 rounded-lg bg-white text-violet-700 text-xs font-bold transition-all hover:bg-white/90 flex items-center justify-center gap-1.5"
                   >
                     <Bot className="h-3.5 w-3.5" />
@@ -561,107 +526,42 @@ export default function LearnPage() {
 
       {/* AI Tutor chat drawer (bottom) */}
       {tutorOpen && (
-        <div className="absolute bottom-0 left-0 right-0 z-50 flex flex-col bg-[#1a1a2e] rounded-t-2xl shadow-[0_-8px_40px_rgba(0,0,0,0.4)] border-t border-white/10"
+        <div className="absolute bottom-0 left-0 right-0 z-50 flex flex-col bg-background rounded-t-2xl shadow-[0_-8px_40px_rgba(0,0,0,0.15)] border-t border-border/50"
           style={{ height: "420px" }}>
           {/* Header */}
-          <div className="flex items-center justify-between px-6 py-4 border-b border-white/10 shrink-0">
-            <div>
-              <h2 className="text-white font-extrabold text-lg leading-tight">
-                AI Tutor <span className="italic text-primary">Interactive Thread</span>
-              </h2>
-              <p className="text-white/50 text-xs mt-0.5">
-                {activeKnode
-                  ? `Deep-dive into ${activeKnode.title} with your personalized neural guide.`
-                  : "Ask your AI tutor anything about this lesson."}
-              </p>
-            </div>
+          <div className="flex items-center justify-between px-5 py-3 border-b border-border/50 shrink-0 bg-gradient-to-r from-violet-600/5 to-purple-600/5">
             <div className="flex items-center gap-3">
-              <div className="flex items-center gap-1.5">
-                <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-                <span className="text-[10px] font-[var(--font-manrope)] text-emerald-400 uppercase tracking-widest font-semibold">AI Online</span>
+              <div className="w-7 h-7 rounded-full bg-gradient-to-br from-violet-600 to-purple-700 flex items-center justify-center">
+                <Bot className="h-3.5 w-3.5 text-white" />
               </div>
-              <button
-                onClick={() => setTutorOpen(false)}
-                className="w-7 h-7 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white/70 hover:text-white transition-colors"
-              >
-                <X className="h-3.5 w-3.5" />
-              </button>
+              <div>
+                <h2 className="text-sm font-bold leading-tight text-foreground">
+                  AI Tutor
+                  {activeKnode && <span className="text-muted-foreground font-normal"> · {activeKnode.title}</span>}
+                </h2>
+              </div>
+              <div className="flex items-center gap-1.5 ml-1">
+                <div className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                <span className="text-[10px] font-[var(--font-manrope)] text-emerald-600 dark:text-emerald-400 uppercase tracking-widest font-semibold">Online</span>
+              </div>
             </div>
+            <button
+              onClick={() => setTutorOpen(false)}
+              className="h-7 w-7 rounded-full bg-secondary hover:bg-secondary/80 flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors"
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
           </div>
 
-          {/* Messages */}
-          <div ref={tutorMessagesRef} className="flex-1 min-h-0 overflow-y-auto px-6 py-4 space-y-4">
-            {tutorMessages.length === 0 && (
-              <div className="flex flex-col items-center justify-center h-full gap-3 text-center">
-                <div className="w-12 h-12 rounded-full bg-primary/20 flex items-center justify-center">
-                  <Bot className="h-6 w-6 text-primary" />
-                </div>
-                <p className="text-white/50 text-sm max-w-xs leading-relaxed">
-                  Ask me anything about{" "}
-                  <span className="text-white/80 font-medium">{activeKnode?.title ?? "this lesson"}</span>.
-                  I&apos;m here to help you understand every concept deeply.
-                </p>
-              </div>
-            )}
-            {tutorMessages.map((msg, i) => (
-              <div key={i} className={`flex gap-3 ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
-                {msg.role === "ai" && (
-                  <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center shrink-0 mt-0.5">
-                    <Bot className="h-4 w-4 text-white" />
-                  </div>
-                )}
-                <div className={`max-w-[80%] rounded-2xl px-4 py-2.5 text-sm leading-relaxed ${
-                  msg.role === "user"
-                    ? "bg-primary text-white rounded-br-sm"
-                    : "bg-white/10 text-white/90 rounded-bl-sm"
-                }`}>
-                  {msg.text}
-                  {msg.role === "user" && (
-                    <p className="text-[10px] text-white/50 mt-1 text-right">Sent</p>
-                  )}
-                  {msg.role === "ai" && (
-                    <p className="text-[10px] text-white/40 mt-1">Sanctuary AI · Just now</p>
-                  )}
-                </div>
-              </div>
-            ))}
-            {tutorSending && (
-              <div className="flex gap-3">
-                <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center shrink-0">
-                  <Bot className="h-4 w-4 text-white" />
-                </div>
-                <div className="bg-white/10 rounded-2xl rounded-bl-sm px-4 py-3 flex items-center gap-1.5">
-                  <div className="w-1.5 h-1.5 rounded-full bg-white/60 animate-bounce" style={{ animationDelay: "0ms" }} />
-                  <div className="w-1.5 h-1.5 rounded-full bg-white/60 animate-bounce" style={{ animationDelay: "150ms" }} />
-                  <div className="w-1.5 h-1.5 rounded-full bg-white/60 animate-bounce" style={{ animationDelay: "300ms" }} />
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* Input */}
-          <div className="px-6 py-4 border-t border-white/10 shrink-0">
-            <div className="flex items-center gap-3 bg-white/10 rounded-xl px-4 py-2.5">
-              <input
-                ref={tutorInputRef}
-                type="text"
-                value={tutorInput}
-                onChange={(e) => setTutorInput(e.target.value)}
-                onKeyDown={handleTutorKeyDown}
-                placeholder={`Ask a follow-up question about ${activeKnode?.title ?? "this lesson"}...`}
-                className="flex-1 bg-transparent text-white placeholder:text-white/30 text-sm outline-none"
-              />
-              <button
-                onClick={handleTutorSend}
-                disabled={!tutorInput.trim() || tutorSending}
-                className="w-8 h-8 rounded-lg bg-primary hover:bg-primary/90 disabled:opacity-40 flex items-center justify-center transition-colors shrink-0"
-              >
-                <Send className="h-3.5 w-3.5 text-white" />
-              </button>
-            </div>
-            <p className="text-center text-[10px] text-white/20 mt-2 font-[var(--font-manrope)] uppercase tracking-widest">
-              Powered by Cognitive Sanctuary Neural Engine v4.2
-            </p>
+          {/* Chat content via real ChatPanel */}
+          <div className="flex-1 min-h-0">
+            <ChatPanel
+              project={params.projectName}
+              agent="tutor"
+              nodeId={activeNodeId}
+              activeTab={activeLessonTab}
+              pageIndex={activePage}
+            />
           </div>
         </div>
       )}
