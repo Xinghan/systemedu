@@ -18,6 +18,9 @@ interface LessonViewProps {
   onPageChange?: (tab: string, pageIndex: number, pageContent: string) => void
   /** Called whenever completing state changes so parent can update its own UI */
   onCompletingChange?: (completing: boolean) => void
+  /** Note panel state controlled externally (if provided) */
+  noteState?: "closed" | "open" | "minimized"
+  onNoteStateChange?: (state: "closed" | "open" | "minimized") => void
 }
 
 /** Compute nodes that become learnable after the given progress list is applied */
@@ -50,6 +53,8 @@ export function LessonView({
   onProgressUpdate,
   onPageChange,
   onCompletingChange,
+  noteState: externalNoteState,
+  onNoteStateChange: externalSetNoteState,
 }: LessonViewProps) {
   const [lesson, setLesson] = useState<LessonContent | null>(null)
   const [loading, setLoading] = useState(false)
@@ -57,7 +62,9 @@ export function LessonView({
   const [completing, setCompleting] = useState(false)
   const [regenerating, setRegenerating] = useState(false)
   const [isGenerating, setIsGenerating] = useState(false)
-  const [noteState, setNoteState] = useState<"closed" | "open" | "minimized">("closed")
+  const [internalNoteState, setInternalNoteState] = useState<"closed" | "open" | "minimized">("closed")
+  const noteState = externalNoteState ?? internalNoteState
+  const setNoteState = externalSetNoteState ?? setInternalNoteState
   // Cache lessons that have been fetched/generated to avoid redundant requests
   const lessonCacheRef = useRef<Map<number, LessonContent>>(new Map())
   const fetchControllerRef = useRef<AbortController | null>(null)

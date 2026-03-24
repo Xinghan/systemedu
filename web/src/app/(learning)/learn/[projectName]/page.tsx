@@ -15,11 +15,24 @@ import {
   ExternalLink,
   Search,
   CheckCircle,
+  FileText,
+  Bold,
+  Italic,
+  List,
+  Quote,
+  Link2,
+  Image,
+  Sparkles,
+  History,
+  FileDown,
+  Save,
+  MoreVertical,
 } from "lucide-react"
 import { PageLoading } from "@/components/ui/page-loading"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { LessonView } from "@/components/learning/lesson-view"
 import { ChatPanel } from "@/components/chat/chat-panel"
+import { NotePanel } from "@/components/learning/note-panel"
 import { gateway } from "@/lib/api"
 import type { KnodeInfo, LessonStatus, NodeProgress, ProjectDetail } from "@/lib/types/api"
 import { useT } from "@/lib/hooks/use-t"
@@ -58,6 +71,9 @@ export default function LearnPage() {
   const [lessonStatuses, setLessonStatuses] = useState<Record<string, LessonStatus>>({})
   const [completing, setCompleting] = useState(false)
   const [tutorOpen, setTutorOpen] = useState(false)
+  const [noteOpen, setNoteOpen] = useState(false)
+  const [noteState, setNoteState] = useState<"closed" | "open" | "minimized">("closed")
+  const [noteStatus, setNoteStatus] = useState<"idle" | "saving" | "saved">("idle")
   const sessionStartRef = useRef<number>(Date.now())
 
   const handleLessonPageChange = useCallback((tab: string, pageIndex: number, _pageContent: string) => {
@@ -383,6 +399,8 @@ export default function LearnPage() {
               onProgressUpdate={handleProgressUpdate}
               onPageChange={handleLessonPageChange}
               onCompletingChange={setCompleting}
+              noteState={noteState}
+              onNoteStateChange={setNoteState}
             />
           </div>
         </div>
@@ -429,29 +447,35 @@ export default function LearnPage() {
                     {t("learn.materials")}
                   </p>
                   <div className="space-y-1">
-                    {[
-                      {
-                        icon: <div className="w-8 h-8 rounded-lg bg-red-100 dark:bg-red-500/15 flex items-center justify-center"><BookOpen className="h-4 w-4 text-red-600" /></div>,
-                        label: t("learn.course_notes"),
-                        sub: "PDF",
-                        href: `/projects/${params.projectName}/notes`,
-                      },
-                      {
-                        icon: <div className="w-8 h-8 rounded-lg bg-emerald-100 dark:bg-emerald-500/15 flex items-center justify-center"><ExternalLink className="h-4 w-4 text-emerald-600" /></div>,
-                        label: t("learn.external_resources"),
-                        sub: "Library",
-                        href: `/projects/${params.projectName}/resources`,
-                      },
-                    ].map((item) => (
-                      <Link key={item.label} href={item.href} className="flex items-center gap-3 px-3 py-2 rounded-xl hover:bg-secondary/60 transition-colors group">
-                        {item.icon}
-                        <div className="flex-1 min-w-0">
-                          <p className="text-xs font-medium text-foreground truncate">{item.label}</p>
-                          <p className="text-[10px] text-muted-foreground font-[var(--font-manrope)]">{item.sub}</p>
-                        </div>
-                        <ArrowRight className="h-3 w-3 text-muted-foreground/30 group-hover:text-primary shrink-0 transition-colors" />
-                      </Link>
-                    ))}
+                    {/* Course Notes — opens in-page note panel */}
+                    <button
+                      onClick={() => setNoteOpen(true)}
+                      className="w-full flex items-center gap-3 px-3 py-2 rounded-xl hover:bg-secondary/60 transition-colors group text-left"
+                    >
+                      <div className="w-8 h-8 rounded-lg bg-amber-100 dark:bg-amber-500/15 flex items-center justify-center shrink-0">
+                        <FileText className="h-4 w-4 text-amber-600" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs font-medium text-foreground truncate">{t("learn.course_notes")}</p>
+                        <p className="text-[10px] text-muted-foreground font-[var(--font-manrope)]">
+                          {noteStatus === "saving" ? "保存中..." : noteStatus === "saved" ? "已保存" : "Markdown"}
+                        </p>
+                      </div>
+                      <ArrowRight className="h-3 w-3 text-muted-foreground/30 group-hover:text-primary shrink-0 transition-colors" />
+                    </button>
+                    <Link
+                      href={`/projects/${params.projectName}/resources`}
+                      className="flex items-center gap-3 px-3 py-2 rounded-xl hover:bg-secondary/60 transition-colors group"
+                    >
+                      <div className="w-8 h-8 rounded-lg bg-emerald-100 dark:bg-emerald-500/15 flex items-center justify-center">
+                        <ExternalLink className="h-4 w-4 text-emerald-600" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs font-medium text-foreground truncate">{t("learn.external_resources")}</p>
+                        <p className="text-[10px] text-muted-foreground font-[var(--font-manrope)]">Library</p>
+                      </div>
+                      <ArrowRight className="h-3 w-3 text-muted-foreground/30 group-hover:text-primary shrink-0 transition-colors" />
+                    </Link>
                   </div>
                 </div>
 
@@ -576,6 +600,112 @@ export default function LearnPage() {
               activeTab={activeLessonTab}
               pageIndex={activePage}
             />
+          </div>
+
+        </div>
+      </div>
+
+      {/* Note panel (right slide-in) */}
+      {noteOpen && (
+        <div
+          className="fixed inset-0 z-40 bg-black/10 backdrop-blur-[2px]"
+          onClick={() => setNoteOpen(false)}
+        />
+      )}
+      <div
+        className={`fixed top-0 right-0 h-full z-50 flex flex-col transition-transform duration-500 ease-[cubic-bezier(0.2,0.8,0.2,1)] ${
+          noteOpen ? "translate-x-0" : "translate-x-full"
+        }`}
+        style={{ width: "min(450px, 100vw)" }}
+      >
+        {/* Glass background */}
+        <div className="absolute inset-0 bg-[#f1efff]/90 dark:bg-slate-900/90 backdrop-blur-2xl border-l border-primary/10 shadow-[-8px_0_40px_rgba(106,28,246,0.08)]" />
+
+        {/* Content */}
+        <div className="relative z-10 flex flex-col h-full">
+
+          {/* Header */}
+          <div className="px-6 py-4 flex items-center justify-between border-b border-primary/10 bg-white/40 shrink-0">
+            <h2 className="font-extrabold text-foreground flex items-center gap-2">
+              <FileText className="h-5 w-5 text-primary" />
+              My Study Notes
+            </h2>
+            <div className="flex items-center gap-1">
+              <button
+                className="p-1.5 rounded-lg hover:bg-primary/10 text-muted-foreground transition-colors"
+                title="保存"
+              >
+                <Save className="h-4 w-4" />
+              </button>
+              <button
+                className="p-1.5 rounded-lg hover:bg-primary/10 text-muted-foreground transition-colors"
+                title="更多"
+              >
+                <MoreVertical className="h-4 w-4" />
+              </button>
+              <button
+                onClick={() => setNoteOpen(false)}
+                className="w-9 h-9 rounded-full hover:bg-primary/10 flex items-center justify-center text-foreground transition-colors ml-1"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+          </div>
+
+          {/* Editor Toolbar */}
+          <div className="px-4 py-2.5 flex flex-wrap items-center gap-1 border-b border-primary/10 bg-white/20 shrink-0">
+            <button className="p-1.5 rounded bg-primary/10 text-primary transition-colors" title="加粗">
+              <Bold className="h-4 w-4" />
+            </button>
+            <button className="p-1.5 rounded hover:bg-primary/10 text-muted-foreground transition-colors" title="斜体">
+              <Italic className="h-4 w-4" />
+            </button>
+            <button className="p-1.5 rounded hover:bg-primary/10 text-muted-foreground transition-colors" title="列表">
+              <List className="h-4 w-4" />
+            </button>
+            <button className="p-1.5 rounded hover:bg-primary/10 text-muted-foreground transition-colors" title="引用">
+              <Quote className="h-4 w-4" />
+            </button>
+            <div className="w-px h-5 bg-primary/15 mx-0.5" />
+            <button className="p-1.5 rounded hover:bg-primary/10 text-muted-foreground transition-colors" title="链接">
+              <Link2 className="h-4 w-4" />
+            </button>
+            <button className="p-1.5 rounded hover:bg-primary/10 text-muted-foreground transition-colors" title="图片">
+              <Image className="h-4 w-4" />
+            </button>
+            <div className="ml-auto">
+              <button className="flex items-center gap-1 px-2.5 py-1 bg-primary/10 text-primary rounded-full text-[11px] font-[var(--font-manrope)] font-bold hover:bg-primary/20 transition-colors">
+                <Sparkles className="h-3 w-3" />
+                Smart Note
+              </button>
+            </div>
+          </div>
+
+          {/* Note editor */}
+          <div className="flex-1 min-h-0 overflow-hidden bg-white/10">
+            {activeNodeId !== null ? (
+              <NotePanel
+                projectName={params.projectName}
+                nodeId={activeNodeId}
+                onStatusChange={setNoteStatus}
+              />
+            ) : (
+              <div className="flex items-center justify-center h-full text-sm text-muted-foreground">
+                选择一个知识节点以开始记笔记
+              </div>
+            )}
+          </div>
+
+          {/* Footer */}
+          <div className="p-4 border-t border-primary/10 bg-white/40 flex gap-3 shrink-0">
+            <button className="flex-1 flex items-center justify-center gap-2 py-2.5 border border-border rounded-xl text-muted-foreground text-xs font-[var(--font-manrope)] font-bold hover:bg-primary/5 transition-colors">
+              <History className="h-3.5 w-3.5" />
+              History
+            </button>
+            <button className="flex-1 flex items-center justify-center gap-2 py-2.5 bg-foreground text-background rounded-xl text-xs font-[var(--font-manrope)] font-bold hover:opacity-90 transition-colors shadow-sm">
+              <FileDown className="h-3.5 w-3.5" />
+              Export PDF
+            </button>
           </div>
 
         </div>
