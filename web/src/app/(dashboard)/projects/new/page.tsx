@@ -4,7 +4,7 @@ import { useCallback, useState } from "react"
 import { useRouter } from "next/navigation"
 import {
   FileJson, Eye, Check, AlertCircle, ArrowLeft, ArrowRight,
-  Sparkles, Upload, Brain, ImageIcon,
+  Sparkles, Upload, Brain, ImageIcon, Wand2,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -47,6 +47,7 @@ export default function NewProjectPage() {
   // Cover image state
   const [coverFile, setCoverFile] = useState<File | null>(null)
   const [coverPreview, setCoverPreview] = useState<string | null>(null)
+  const [generatingCover, setGeneratingCover] = useState(false)
 
   const handleFile = useCallback((file: File) => {
     setError("")
@@ -131,14 +132,14 @@ export default function NewProjectPage() {
     setLoading(true); setLoadingLabel("Creating project..."); setLoadingStep(2); setError("")
     try {
       await gateway.createProject(projectName.trim(), projectTitle.trim(), treeData)
-      // Upload cover if provided, otherwise AI generation will be triggered server-side
       if (coverFile) {
-        try {
-          await gateway.uploadProjectCover(projectName.trim(), coverFile)
-        } catch {
-          // Non-fatal: proceed without cover
-        }
+        // User uploaded a custom image
+        try { await gateway.uploadProjectCover(projectName.trim(), coverFile) } catch { /* non-fatal */ }
+      } else if (coverPreview === "__generate__") {
+        // User clicked "AI Generate Cover" — trigger generation
+        try { await gateway.generateProjectCover(projectName.trim()) } catch { /* non-fatal */ }
       }
+      // else: leave blank (default cover shown on detail page)
       router.push(`/projects/${projectName.trim()}`)
     } catch (e) {
       setError(e instanceof Error ? e.message : "Create failed")
@@ -406,40 +407,73 @@ export default function NewProjectPage() {
                       />
                     </div>
 
-                    {/* Cover image upload */}
+                    {/* Cover image */}
                     <div>
                       <Label className="text-[11px] font-[var(--font-manrope)] uppercase tracking-wider text-muted-foreground">
-                        Cover Image <span className="normal-case tracking-normal opacity-60">(optional — AI will generate if left blank)</span>
+                        Cover Image
                       </Label>
                       <div className="mt-2 flex items-center gap-4">
-                        <div className="w-24 h-16 rounded-xl overflow-hidden bg-secondary/60 shrink-0 flex items-center justify-center border border-border/40">
+                        {/* Preview */}
+                        <div className="w-28 h-20 rounded-xl overflow-hidden bg-secondary/60 shrink-0 flex items-center justify-center border border-border/40">
                           {coverPreview ? (
                             <img src={coverPreview} alt="cover" className="w-full h-full object-cover" />
                           ) : (
-                            <div className="flex flex-col items-center gap-1 text-muted-foreground">
-                              <ImageIcon className="h-4 w-4" />
-                              <span className="text-[9px] font-[var(--font-manrope)] uppercase tracking-wider">Auto AI</span>
+                            <div className="flex flex-col items-center gap-1.5 text-muted-foreground">
+                              <ImageIcon className="h-5 w-5" />
+                              <span className="text-[9px] font-[var(--font-manrope)] uppercase tracking-wider">Default</span>
                             </div>
                           )}
                         </div>
+                        {/* Buttons */}
                         <div className="flex flex-col gap-2">
-                          <input type="file" accept="image/*" className="hidden" id="new-cover-input"
-                            onChange={(e) => {
-                              const file = e.target.files?.[0]
-                              if (!file) return
-                              setCoverFile(file)
-                              setCoverPreview(URL.createObjectURL(file))
+                          {/* AI Generate */}
+                          <button
+                            type="button"
+                            disabled={generatingCover || !aiTitle.trim()}
+                            onClick={async () => {
+                              if (!aiTitle.trim()) return
+                              setGeneratingCover(true)
+                              try {
+                                // We don't have a project name yet — preview via a temp URL from a future endpoint.
+                                // For now trigger after creation; show a spinner to indicate intent.
+                                // Mark as "will generate" by setting a sentinel preview.
+                                setCoverPreview("__generate__")
+                              } finally {
+                                setGeneratingCover(false)
+                              }
                             }}
-                          />
-                          <label htmlFor="new-cover-input" className="cursor-pointer inline-flex h-9 px-4 items-center gap-2 rounded-xl bg-secondary hover:bg-secondary/80 text-xs font-medium transition-colors w-fit">
-                            <Upload className="h-3.5 w-3.5" />
-                            {coverFile ? "Change Image" : "Upload Cover"}
-                          </label>
-                          {coverFile && (
-                            <button onClick={() => { setCoverFile(null); setCoverPreview(null) }} className="text-xs text-muted-foreground hover:text-foreground transition-colors text-left">
-                              Remove
-                            </button>
-                          )}
+                            className="inline-flex h-9 px-4 items-center gap-2 rounded-xl bg-primary/10 hover:bg-primary/15 text-primary text-xs font-medium transition-colors w-fit disabled:opacity-50"
+                          >
+                            <Wand2 className="h-3.5 w-3.5" />
+                            {coverPreview === "__generate__" ? "Will AI Generate" : "AI Generate Cover"}
+                          </button>
+                          {/* Upload */}
+                          <div className="flex items-center gap-2">
+                            <input type="file" accept="image/*" className="hidden" id="new-cover-input"
+                              onChange={(e) => {
+                                const file = e.target.files?.[0]
+                                if (!file) return
+                                setCoverFile(file)
+                                setCoverPreview(URL.createObjectURL(file))
+                              }}
+                            />
+                            <label htmlFor="new-cover-input" className="cursor-pointer inline-flex h-9 px-4 items-center gap-2 rounded-xl bg-secondary hover:bg-secondary/80 text-xs font-medium transition-colors w-fit">
+                              <Upload className="h-3.5 w-3.5" />
+                              {coverFile ? "Change Image" : "Upload Image"}
+                            </label>
+                            {(coverFile || coverPreview) && (
+                              <button type="button" onClick={() => { setCoverFile(null); setCoverPreview(null) }} className="text-xs text-muted-foreground hover:text-foreground transition-colors">
+                                Reset
+                              </button>
+                            )}
+                          </div>
+                          <p className="text-[11px] text-muted-foreground">
+                            {coverPreview === "__generate__"
+                              ? "Cover will be AI-generated after creation."
+                              : coverFile
+                                ? "Your image will be uploaded."
+                                : "Leave blank to use default cover."}
+                          </p>
                         </div>
                       </div>
                     </div>

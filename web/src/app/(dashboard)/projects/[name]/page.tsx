@@ -7,7 +7,7 @@ import dynamic from "next/dynamic"
 import { toast } from "sonner"
 import {
   ArrowLeft, Clock, Play, GraduationCap, Highlighter,
-  Pencil, Save, X, ChevronUp, ArrowRight, Zap, ImageIcon, Upload,
+  Pencil, Save, X, ChevronUp, ArrowRight, Zap, ImageIcon, Upload, Wand2,
 } from "lucide-react"
 import { PageLoading } from "@/components/ui/page-loading"
 import { LoadingSpinner } from "@/components/ui/loading-spinner"
@@ -258,6 +258,7 @@ export default function ProjectDetailPage() {
   const [lessonQueueRunning, setLessonQueueRunning] = useState(false)
   const [editCoverFile, setEditCoverFile] = useState<File | null>(null)
   const [editCoverPreview, setEditCoverPreview] = useState<string | null>(null)
+  const [generatingEditCover, setGeneratingEditCover] = useState(false)
 
   useEffect(() => {
     if (!params.name) return
@@ -302,9 +303,10 @@ export default function ProjectDetailPage() {
         try {
           const r = await gateway.uploadProjectCover(params.name, editCoverFile)
           newCoverUrl = r.url
-        } catch {
-          // non-fatal
-        }
+        } catch { /* non-fatal */ }
+      } else if (editCoverPreview === "__generate__") {
+        try { await gateway.generateProjectCover(params.name) } catch { /* non-fatal */ }
+        // Cover URL will update after generation completes in background
       }
       setDetail((prev) =>
         prev ? {
@@ -463,16 +465,44 @@ export default function ProjectDetailPage() {
                         <div>
                           <Label>{t("project.cover_image")}</Label>
                           <div className="mt-2 flex items-center gap-3">
-                            <div className="w-20 h-14 rounded-lg overflow-hidden bg-secondary/60 shrink-0 flex items-center justify-center">
-                              {editCoverPreview ? (
+                            {/* Preview */}
+                            <div className="w-24 h-16 rounded-xl overflow-hidden bg-secondary/60 shrink-0 flex items-center justify-center border border-border/40">
+                              {editCoverPreview && editCoverPreview !== "__generate__" ? (
                                 <img src={editCoverPreview} alt="cover" className="w-full h-full object-cover" />
+                              ) : editCoverPreview === "__generate__" ? (
+                                <div className="flex flex-col items-center gap-1 text-primary">
+                                  <Wand2 className="h-4 w-4 animate-pulse" />
+                                  <span className="text-[9px] font-[var(--font-manrope)] uppercase tracking-wider">AI Gen</span>
+                                </div>
                               ) : detail?.project.cover_image_url ? (
                                 <img src={`${process.env.NEXT_PUBLIC_GATEWAY_URL ?? "http://localhost:18820"}${detail.project.cover_image_url}`} alt="cover" className="w-full h-full object-cover" />
                               ) : (
-                                <ImageIcon className="h-5 w-5 text-muted-foreground" />
+                                <div className="flex flex-col items-center gap-1 text-muted-foreground">
+                                  <ImageIcon className="h-4 w-4" />
+                                  <span className="text-[9px] font-[var(--font-manrope)] uppercase tracking-wider">Default</span>
+                                </div>
                               )}
                             </div>
+                            {/* Actions */}
                             <div className="flex flex-col gap-1.5">
+                              {/* AI Generate */}
+                              <button
+                                type="button"
+                                disabled={generatingEditCover}
+                                onClick={() => {
+                                  setEditCoverFile(null)
+                                  setEditCoverPreview("__generate__")
+                                }}
+                                className={`inline-flex h-8 px-3 items-center gap-1.5 rounded-lg text-xs font-medium transition-colors w-fit ${
+                                  editCoverPreview === "__generate__"
+                                    ? "bg-primary/15 text-primary"
+                                    : "bg-primary/10 hover:bg-primary/15 text-primary"
+                                }`}
+                              >
+                                <Wand2 className="h-3 w-3" />
+                                {editCoverPreview === "__generate__" ? "Will Generate" : t("project.ai_generate_cover")}
+                              </button>
+                              {/* Upload */}
                               <input type="file" accept="image/*" className="hidden" id="edit-cover-input"
                                 onChange={(e) => {
                                   const file = e.target.files?.[0]
@@ -484,8 +514,8 @@ export default function ProjectDetailPage() {
                               <label htmlFor="edit-cover-input" className="cursor-pointer inline-flex h-8 px-3 items-center gap-1.5 rounded-lg bg-secondary hover:bg-secondary/80 text-xs font-medium transition-colors w-fit">
                                 <Upload className="h-3 w-3" />{t("project.upload_cover")}
                               </label>
-                              {editCoverFile && (
-                                <button onClick={() => { setEditCoverFile(null); setEditCoverPreview(null) }} className="text-xs text-muted-foreground hover:text-foreground transition-colors text-left">
+                              {(editCoverFile || editCoverPreview) && (
+                                <button type="button" onClick={() => { setEditCoverFile(null); setEditCoverPreview(null) }} className="text-xs text-muted-foreground hover:text-foreground transition-colors text-left">
                                   {t("project.remove_cover")}
                                 </button>
                               )}
