@@ -124,7 +124,7 @@ export function LessonContentView({
     <div className="flex flex-col h-full relative">
 
       {/* ── Top bar: meta + regenerate ── */}
-      <div className="flex items-center justify-between gap-4 px-6 py-2 border-b border-border/40 shrink-0">
+      <div className="flex items-center justify-between gap-4 px-16 py-2 border-b border-border/40 shrink-0">
         <div className="flex items-center gap-3 text-xs text-muted-foreground font-[var(--font-manrope)]">
           <span className="flex items-center gap-1">
             <Zap className="h-3 w-3 text-amber-500" />
@@ -160,7 +160,7 @@ export function LessonContentView({
       </div>
 
       {/* ── Tab bar ── */}
-      <div className="flex items-center gap-0.5 px-6 border-b border-border/40 shrink-0">
+      <div className="flex items-center gap-0.5 px-16 border-b border-border/40 shrink-0">
         {allTabs.map((tab, index) => (
           <button
             key={tab.key}
@@ -204,7 +204,7 @@ export function LessonContentView({
                     />
                   )
                 ) : (
-                  <div className="flex-1 min-w-0 px-8 py-6">
+                  <div className="flex-1 min-w-0 px-16 py-8">
                     <PagedContentView
                       content={lesson[availableTabs[activeTab]?.field ?? availableTabs[0].field]}
                       projectName={projectName}
@@ -300,7 +300,7 @@ export function LessonContentView({
       )}
 
       {/* ── Bottom nav: prev / step indicator / next ── */}
-      <div className="shrink-0 px-4 pb-4 pt-1">
+      <div className="shrink-0 px-16 pb-5 pt-1">
         <div className="flex items-center justify-between gap-4">
 
           {/* Previous */}

@@ -652,37 +652,8 @@ export default function LearnPage() {
             </div>
           </div>
 
-          {/* Editor Toolbar */}
-          <div className="px-4 py-2.5 flex flex-wrap items-center gap-1 border-b border-primary/10 bg-white/20 shrink-0">
-            <button className="p-1.5 rounded bg-primary/10 text-primary transition-colors" title="加粗">
-              <Bold className="h-4 w-4" />
-            </button>
-            <button className="p-1.5 rounded hover:bg-primary/10 text-muted-foreground transition-colors" title="斜体">
-              <Italic className="h-4 w-4" />
-            </button>
-            <button className="p-1.5 rounded hover:bg-primary/10 text-muted-foreground transition-colors" title="列表">
-              <List className="h-4 w-4" />
-            </button>
-            <button className="p-1.5 rounded hover:bg-primary/10 text-muted-foreground transition-colors" title="引用">
-              <Quote className="h-4 w-4" />
-            </button>
-            <div className="w-px h-5 bg-primary/15 mx-0.5" />
-            <button className="p-1.5 rounded hover:bg-primary/10 text-muted-foreground transition-colors" title="链接">
-              <Link2 className="h-4 w-4" />
-            </button>
-            <button className="p-1.5 rounded hover:bg-primary/10 text-muted-foreground transition-colors" title="图片">
-              <Image className="h-4 w-4" />
-            </button>
-            <div className="ml-auto">
-              <button className="flex items-center gap-1 px-2.5 py-1 bg-primary/10 text-primary rounded-full text-[11px] font-[var(--font-manrope)] font-bold hover:bg-primary/20 transition-colors">
-                <Sparkles className="h-3 w-3" />
-                {t("learn.smart_note")}
-              </button>
-            </div>
-          </div>
-
-          {/* Note editor */}
-          <div className="flex-1 min-h-0 overflow-hidden bg-white/10">
+          {/* Note editor — toolbar is built into NotePanel */}
+          <div className="flex-1 min-h-0 overflow-hidden bg-white/5">
             {activeNodeId !== null ? (
               <NotePanel
                 projectName={params.projectName}
