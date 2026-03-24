@@ -16,6 +16,7 @@ import {
 import { Badge } from "@/components/ui/badge"
 import { Progress } from "@/components/ui/progress"
 import type { LessonStatus, MilestoneInfo, NodeProgress } from "@/lib/types/api"
+import { useT } from "@/lib/hooks/use-t"
 
 interface KnowledgeTreeViewProps {
   milestones: MilestoneInfo[]
@@ -81,6 +82,7 @@ interface TooltipData {
 function NodeTooltip({ data }: { data: TooltipData }) {
   const { knode, cfg } = data
   const StatusIcon = cfg.icon
+  const t = useT()
 
   // Position: try right of element first, fallback to left if too close to edge
   const TOOLTIP_W = 280
@@ -117,11 +119,11 @@ function NodeTooltip({ data }: { data: TooltipData }) {
         <div className="flex items-center gap-3 pt-1 border-t text-xs text-muted-foreground">
           <span className="flex items-center gap-1">
             <Zap className="h-3 w-3" />
-            难度 {knode.difficulty_level}
+            {t("ktree.difficulty")} {knode.difficulty_level}
           </span>
           <span className="flex items-center gap-1">
             <Clock className="h-3 w-3" />
-            {knode.estimated_minutes} 分钟
+            {knode.estimated_minutes} {t("ktree.minutes")}
           </span>
           <span className="flex items-center gap-1">
             <BookOpen className="h-3 w-3" />
@@ -147,6 +149,7 @@ export function KnowledgeTreeView({
   onNodeClick,
   searchQuery = "",
 }: KnowledgeTreeViewProps) {
+  const t = useT()
   const progressMap = new Map(progress.map((p) => [p.knode_id, p]))
   const [hoveredTooltip, setHoveredTooltip] = useState<TooltipData | null>(null)
 
@@ -258,7 +261,7 @@ export function KnowledgeTreeView({
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2">
                   <span className="text-[10px] font-[var(--font-manrope)] uppercase tracking-widest text-muted-foreground/70 font-semibold">
-                    Module {msIdx + 1}
+                    {t("ktree.module")} {msIdx + 1}
                   </span>
                   <span className="text-[10px] text-muted-foreground font-[var(--font-manrope)]">
                     {passedCount}/{totalCount}
@@ -319,23 +322,23 @@ export function KnowledgeTreeView({
                             </span>
                             {status === "passed" && (
                               <Badge className={`${cfg.badgeClass} text-[10px]`}>
-                                已完成
+                                {t("ktree.completed_label")}
                               </Badge>
                             )}
                             {lessonStatus === "generating" && (
                               <span className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-full bg-blue-100 text-blue-700 dark:bg-blue-500/20 dark:text-blue-400 shrink-0">
                                 <span className="h-1.5 w-1.5 rounded-full bg-blue-500 animate-pulse" />
-                                生成中
+                                {t("ktree.generating")}
                               </span>
                             )}
                             {lessonStatus === "ready" && status !== "passed" && (
                               <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-400 shrink-0">
-                                已就绪
+                                {t("ktree.ready")}
                               </span>
                             )}
                             {lessonStatus === "failed" && (
                               <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-red-100 text-red-700 dark:bg-red-500/20 dark:text-red-400 shrink-0">
-                                生成失败
+                                {t("ktree.failed")}
                               </span>
                             )}
                           </div>

@@ -7,23 +7,25 @@ import { Badge } from "@/components/ui/badge"
 import { AppHeader } from "@/components/layout/app-header"
 import { gateway } from "@/lib/api"
 import type { SkillInfo } from "@/lib/types/api"
+import { useT } from "@/lib/hooks/use-t"
 
 export default function SkillsPage() {
   const [skills, setSkills] = useState<SkillInfo[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const t = useT()
 
   useEffect(() => {
     gateway
       .skills()
       .then(setSkills)
-      .catch((e) => setError(e.message ?? "无法加载 Skills"))
+      .catch((e) => setError(e.message ?? t("skills.load_error")))
       .finally(() => setLoading(false))
   }, [])
 
   return (
     <>
-      <AppHeader title="Skills" />
+      <AppHeader title={t("skills.title")} />
       <div className="p-8">
         {error && (
           <div className="mb-6 p-4 rounded-2xl bg-red-50 dark:bg-red-950/30 text-red-600 dark:text-red-400 text-base border border-red-200 dark:border-red-800">
@@ -37,8 +39,8 @@ export default function SkillsPage() {
             <div className="flex h-20 w-20 items-center justify-center rounded-3xl bg-muted mb-5">
               <Sparkles className="h-10 w-10 opacity-40" />
             </div>
-            <p className="text-lg font-medium">暂无 Skills</p>
-            <p className="text-base mt-1">在 ~/.systemedu/skills/ 下创建 SKILL.md</p>
+            <p className="text-lg font-medium">{t("skills.empty")}</p>
+            <p className="text-base mt-1">{t("skills.empty_desc")}</p>
           </div>
         ) : (
           <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
@@ -50,14 +52,14 @@ export default function SkillsPage() {
                   </div>
                   <div className="min-w-0">
                     <p className="font-semibold text-base text-foreground">{skill.name}</p>
-                    <p className="text-sm text-muted-foreground mt-1">{skill.description || "无描述"}</p>
+                    <p className="text-sm text-muted-foreground mt-1">{skill.description || t("skills.no_desc")}</p>
                   </div>
                 </div>
                 <div className="flex flex-wrap gap-2">
                   {skill.user_invocable && (
                     <Badge className="flex items-center gap-1.5">
                       <Terminal className="h-3.5 w-3.5" />
-                      可调用
+                      {t("skills.invocable")}
                     </Badge>
                   )}
                   <Badge variant="outline" className="truncate max-w-[200px]">

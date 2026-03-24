@@ -14,6 +14,7 @@ import { ResourceSearchView } from "./resource-search-view"
 import { NotePanel, type NotePreviewMode } from "./note-panel"
 import { AudioPlayerBar } from "./audio-player-bar"
 import type { KnodeInfo, LessonContent } from "@/lib/types/api"
+import { useT } from "@/lib/hooks/use-t"
 
 const MIN_NOTE_WIDTH = 280
 const MAX_NOTE_WIDTH = 640
@@ -39,16 +40,6 @@ interface LessonContentViewProps {
   onNoteStateChange: (state: "closed" | "open" | "minimized") => void
 }
 
-const TAB_CONFIG = [
-  { key: "concept", label: "概念", field: "concept" as const, audioField: "concept_audio_url" as const },
-  { key: "examples", label: "示例", field: "examples" as const, audioField: null },
-  { key: "interactive_lab", label: "实验", field: "interactive_lab" as const, audioField: "lab_audio_url" as const },
-  { key: "code_samples", label: "代码", field: "code_samples" as const, audioField: null },
-  { key: "practice", label: "练习", field: "practice" as const, audioField: "practice_audio_url" as const },
-  { key: "key_takeaways", label: "总结", field: "key_takeaways" as const, audioField: "key_takeaways_audio_url" as const },
-  { key: "project_assignment", label: "大作业", field: "project_assignment" as const, audioField: null },
-]
-
 export function LessonContentView({
   knode,
   lesson,
@@ -68,6 +59,7 @@ export function LessonContentView({
   noteState,
   onNoteStateChange: setNoteState,
 }: LessonContentViewProps) {
+  const t = useT()
   const [activeTab, setActiveTab] = useState(0)
   const [noteStatus, setNoteStatus] = useState<"idle" | "saving" | "saved">("idle")
   const [notePreviewMode, setNotePreviewMode] = useState<NotePreviewMode>("edit")
@@ -75,12 +67,22 @@ export function LessonContentView({
   const dragStartX = useRef<number | null>(null)
   const dragStartWidth = useRef<number>(DEFAULT_NOTE_WIDTH)
 
+  const TAB_CONFIG = [
+    { key: "concept", label: t("lesson.concept"), field: "concept" as const, audioField: "concept_audio_url" as const },
+    { key: "examples", label: t("lesson.examples"), field: "examples" as const, audioField: null },
+    { key: "interactive_lab", label: t("lesson.lab"), field: "interactive_lab" as const, audioField: "lab_audio_url" as const },
+    { key: "code_samples", label: t("lesson.code"), field: "code_samples" as const, audioField: null },
+    { key: "practice", label: t("lesson.practice"), field: "practice" as const, audioField: "practice_audio_url" as const },
+    { key: "key_takeaways", label: t("lesson.summary"), field: "key_takeaways" as const, audioField: "key_takeaways_audio_url" as const },
+    { key: "project_assignment", label: t("lesson.assignment"), field: "project_assignment" as const, audioField: null },
+  ]
+
   const availableTabs = TAB_CONFIG.filter((tab) => {
     const content = lesson[tab.field]
     return content && content.trim().length > 0
   })
 
-  const RESOURCE_TAB = { key: "resources", label: "资料" }
+  const RESOURCE_TAB = { key: "resources", label: t("lesson.resources") }
   const allTabs = [...availableTabs, RESOURCE_TAB]
 
   const difficultyLabel = knode.difficulty_level <= 3 ? "入门" : knode.difficulty_level <= 6 ? "中级" : "高级"
@@ -142,17 +144,17 @@ export function LessonContentView({
             className="gap-1 text-xs text-muted-foreground h-7"
           >
             <RefreshCw className={`h-3 w-3 ${regenerating ? "animate-spin" : ""}`} />
-            Regenerate
+            {t("lesson.regenerate")}
           </Button>
           {isCompleted ? (
             <Badge className="bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/20 gap-1 h-7">
               <IconCheck className="h-3 w-3" />
-              Mastered
+              {t("lesson.mastered")}
             </Badge>
           ) : (
             <Button size="sm" onClick={onMarkComplete} disabled={completing} className="gap-1 h-7 text-xs">
               <IconCheck className="h-3.5 w-3.5" />
-              Mark Complete
+              {t("lesson.mark_complete")}
             </Button>
           )}
         </div>

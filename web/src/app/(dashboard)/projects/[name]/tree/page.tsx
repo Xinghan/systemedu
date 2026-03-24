@@ -11,6 +11,7 @@ import { LoadingSpinner } from "@/components/ui/loading-spinner"
 import { Button } from "@/components/ui/button"
 import { gateway } from "@/lib/api"
 import type { MilestoneInfo, ProjectDetail } from "@/lib/types/api"
+import { useT } from "@/lib/hooks/use-t"
 
 const D3KnowledgeTree = dynamic(
   () => import("@/components/knowledge-tree/d3-knowledge-tree").then((m) => m.D3KnowledgeTree),
@@ -27,6 +28,7 @@ const D3KnowledgeTree = dynamic(
 export default function ProjectTreePage() {
   const params = useParams<{ name: string }>()
   const router = useRouter()
+  const t = useT()
   const [detail, setDetail] = useState<ProjectDetail | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -55,8 +57,8 @@ export default function ProjectTreePage() {
     <>
       <AppHeader title="Knowledge Map" />
       <div className="flex flex-col items-center justify-center h-64 text-muted-foreground gap-2">
-        <p>{error ?? "Project not found"}</p>
-        <Button variant="link" onClick={() => router.back()}>Go back</Button>
+        <p>{error ?? t("tree.not_found")}</p>
+        <Button variant="link" onClick={() => router.back()}>{t("tree.go_back")}</Button>
       </div>
     </>
   )
@@ -75,7 +77,7 @@ export default function ProjectTreePage() {
         <Link href={`/projects/${params.name}`}>
           <button className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors">
             <ArrowLeft className="h-3.5 w-3.5" />
-            Back to project
+            {t("tree.back")}
           </button>
         </Link>
       </AppHeader>
@@ -93,7 +95,7 @@ export default function ProjectTreePage() {
                   {detail.project.title}
                 </h1>
                 <p className="text-[11px] text-muted-foreground font-[var(--font-manrope)]">
-                  {total} knowledge nodes &middot; {passed} mastered
+                  {total} {t("tree.knowledge_nodes")} &middot; {passed} {t("tree.mastered")}
                 </p>
               </div>
             </div>
@@ -134,19 +136,19 @@ export default function ProjectTreePage() {
           {/* Legend card — bottom right */}
           <div className="absolute bottom-5 right-5 card-elevated px-4 py-3 text-[11px] font-[var(--font-manrope)] space-y-2 pointer-events-none">
             <p className="uppercase tracking-widest text-muted-foreground font-semibold text-[10px] mb-2">
-              Legend
+              {t("tree.legend")}
             </p>
             <div className="flex items-center gap-2.5">
               <span className="h-3 w-3 rounded-full bg-emerald-500 shrink-0" />
-              <span className="text-foreground">Mastered</span>
+              <span className="text-foreground">{t("tree.legend_mastered")}</span>
             </div>
             <div className="flex items-center gap-2.5">
               <span className="h-3 w-3 rounded-full bg-primary shrink-0" />
-              <span className="text-foreground">In Progress</span>
+              <span className="text-foreground">{t("tree.legend_in_progress")}</span>
             </div>
             <div className="flex items-center gap-2.5">
               <span className="h-3 w-3 rounded-full bg-secondary border border-border shrink-0" />
-              <span className="text-foreground">Not Started</span>
+              <span className="text-foreground">{t("tree.legend_not_started")}</span>
             </div>
           </div>
         </div>

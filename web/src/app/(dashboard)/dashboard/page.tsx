@@ -15,11 +15,13 @@ import { AppHeader } from "@/components/layout/app-header"
 import { useAppStore } from "@/lib/stores/app-store"
 import { gateway } from "@/lib/api"
 import type { ProjectSummary } from "@/lib/types/api"
+import { useT } from "@/lib/hooks/use-t"
 
 export default function DashboardPage() {
   const { status, config, gatewayConnected } = useAppStore()
   const [projects, setProjects] = useState<ProjectSummary[]>([])
   const [error, setError] = useState<string | null>(null)
+  const t = useT()
 
   useEffect(() => {
     if (gatewayConnected) {
@@ -41,12 +43,12 @@ export default function DashboardPage() {
         <div className="flex items-start justify-between">
           <div>
             <h1 className="text-3xl font-extrabold tracking-tight text-foreground">
-              Welcome back!
+              {t("dashboard.welcome")}
             </h1>
             <p className="text-sm text-muted-foreground mt-1.5">
               {gatewayConnected
-                ? "Your AI ecosystem is optimized and ready for deep learning."
-                : "Connect to your local gateway to get started."}
+                ? t("dashboard.ready")
+                : t("dashboard.connect")}
             </p>
           </div>
           {/* System online badge */}
@@ -56,41 +58,41 @@ export default function DashboardPage() {
               : "bg-muted text-muted-foreground"
           }`}>
             <span className={`w-1.5 h-1.5 rounded-full ${gatewayConnected ? "bg-emerald-500 animate-pulse" : "bg-muted-foreground"}`} />
-            {gatewayConnected ? "System Online" : "Offline"}
+            {gatewayConnected ? t("dashboard.system_online") : t("dashboard.offline")}
           </div>
         </div>
 
         {/* Stat Cards */}
         <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
           <StatCard
-            label="System Status"
-            value={gatewayConnected ? "Running" : "Offline"}
-            badge={gatewayConnected ? "Healthy" : undefined}
+            label={t("dashboard.system_status")}
+            value={gatewayConnected ? t("dashboard.running") : t("dashboard.offline")}
+            badge={gatewayConnected ? t("dashboard.healthy") : undefined}
             badgeColor="bg-emerald-50 text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-400"
             sub={status ? `v${status.version}` : "Unable to connect"}
             icon={<Activity className="h-5 w-5 text-primary" />}
             iconBg="bg-primary/10"
           />
           <StatCard
-            label="LLM Provider"
+            label={t("dashboard.llm_provider")}
             value={config?.llm.default ?? "--"}
-            badge="Default"
+            badge={t("dashboard.default")}
             badgeColor="bg-secondary text-secondary-foreground"
-            sub={`${status?.llm.providers.length ?? 0} configured`}
+            sub={`${status?.llm.providers.length ?? 0} ${t("dashboard.configured")}`}
             icon={<Bot className="h-5 w-5 text-primary" />}
             iconBg="bg-primary/10"
           />
           <StatCard
-            label="Active Sessions"
+            label={t("dashboard.active_sessions")}
             value={String(status?.sessions ?? 0)}
             sub={`Port ${status?.port ?? 18820}`}
             icon={<MessageSquare className="h-5 w-5 text-primary" />}
             iconBg="bg-primary/10"
           />
           <StatCard
-            label="Total Projects"
+            label={t("dashboard.total_projects")}
             value={String(projects.length)}
-            sub="Local projects"
+            sub={t("dashboard.local_projects")}
             icon={<FolderKanban className="h-5 w-5 text-primary" />}
             iconBg="bg-primary/10"
           />
@@ -101,16 +103,16 @@ export default function DashboardPage() {
           {/* Recent Projects — wider column */}
           <div className="lg:col-span-3">
             <div className="flex items-center justify-between mb-5">
-              <h2 className="text-base font-semibold text-foreground">Recent Projects</h2>
+              <h2 className="text-base font-semibold text-foreground">{t("dashboard.recent_projects")}</h2>
               <Link href="/projects" className="text-xs font-medium text-primary hover:text-primary/80 transition-colors flex items-center gap-1">
-                View All <ArrowRight className="h-3.5 w-3.5" />
+                {t("dashboard.view_all")} <ArrowRight className="h-3.5 w-3.5" />
               </Link>
             </div>
             <div className="card-elevated overflow-hidden">
               {projects.length === 0 ? (
                 <div className="px-6 py-14 text-center text-muted-foreground">
                   <FolderKanban className="h-10 w-10 mx-auto mb-3 opacity-20" />
-                  <p className="text-sm">No projects yet</p>
+                  <p className="text-sm">{t("dashboard.no_projects")}</p>
                 </div>
               ) : (
                 <div className="divide-y divide-border/60">
@@ -143,33 +145,35 @@ export default function DashboardPage() {
           {/* Quick Actions + Insight card */}
           <div className="lg:col-span-2 space-y-5">
             <div>
-              <h2 className="text-base font-semibold text-foreground mb-5">Quick Actions</h2>
+              <h2 className="text-base font-semibold text-foreground mb-5">{t("dashboard.quick_actions")}</h2>
               <div className="space-y-3">
-                <QuickAction href="/chat" icon={<MessageSquare className="h-5 w-5 text-primary" />} title="Start Chat" />
-                <QuickAction href="/projects" icon={<FolderKanban className="h-5 w-5 text-primary" />} title="Browse Projects" />
-                <QuickAction href="/agents" icon={<Bot className="h-5 w-5 text-primary" />} title="Manage Agents" />
-                <QuickAction href="/config" icon={<Settings className="h-5 w-5 text-primary" />} title="System Settings" />
+                <QuickAction href="/chat" icon={<MessageSquare className="h-5 w-5 text-primary" />} title={t("dashboard.start_chat")} />
+                <QuickAction href="/projects" icon={<FolderKanban className="h-5 w-5 text-primary" />} title={t("dashboard.browse_projects")} />
+                <QuickAction href="/agents" icon={<Bot className="h-5 w-5 text-primary" />} title={t("dashboard.manage_agents")} />
+                <QuickAction href="/config" icon={<Settings className="h-5 w-5 text-primary" />} title={t("dashboard.system_settings")} />
               </div>
             </div>
 
             {/* Neural Efficiency card — teal/purple gradient */}
             <div className="rounded-xl bg-gradient-to-br from-violet-600 via-purple-600 to-purple-700 p-5 text-white shadow-[0_4px_32px_0_oklch(0.488_0.258_302_/_0.25)]">
               <p className="text-[10px] font-[var(--font-manrope)] uppercase tracking-widest opacity-70 mb-2">
-                Neural Efficiency
+                {t("dashboard.neural_efficiency")}
               </p>
               <h3 className="text-base font-bold mb-1">
                 {projects.length > 0
-                  ? `${projects.length} project${projects.length > 1 ? "s" : ""} active`
-                  : "Start your first project"}
+                  ? t("dashboard.projects_active", { n: projects.length, s: projects.length > 1 ? "s" : "" })
+                  : t("dashboard.start_first")}
               </h3>
               <p className="text-xs opacity-75 mb-4">
                 {gatewayConnected
-                  ? "Your AI ecosystem is running at full capacity."
-                  : "Connect your gateway to unlock AI-powered learning."}
+                  ? t("dashboard.full_capacity")
+                  : t("dashboard.connect_unlock")}
               </p>
               <div className="flex items-center gap-2">
                 <TrendingUp className="h-4 w-4 opacity-80" />
-                <span className="text-xs opacity-80">Gateway {gatewayConnected ? "Connected" : "Offline"}</span>
+                <span className="text-xs opacity-80">
+                  {gatewayConnected ? t("dashboard.gateway_connected") : t("dashboard.gateway_offline")}
+                </span>
               </div>
             </div>
           </div>

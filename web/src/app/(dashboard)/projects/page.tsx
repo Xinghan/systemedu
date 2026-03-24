@@ -7,29 +7,7 @@ import { PageLoading } from "@/components/ui/page-loading"
 import { AppHeader } from "@/components/layout/app-header"
 import { gateway } from "@/lib/api"
 import type { ProjectSummary } from "@/lib/types/api"
-
-const CATEGORY_LABELS: Record<string, string> = {
-  ai: "AI",
-  biotech: "Biology",
-  aerospace: "Aerospace",
-  music: "Music",
-  climate: "Climate",
-  robotics: "Robotics",
-  chemistry: "Chemistry",
-  math: "Mathematics",
-  cs: "Computer Science",
-  other: "Other",
-}
-
-const CATEGORY_FILTER_OPTIONS = [
-  { value: "all", label: "All Categories" },
-  { value: "math", label: "Mathematics" },
-  { value: "aerospace", label: "Aerospace" },
-  { value: "ai", label: "Artificial Intelligence" },
-  { value: "cs", label: "Computer Science" },
-  { value: "biotech", label: "Biology" },
-  { value: "chemistry", label: "Chemistry" },
-]
+import { useT } from "@/lib/hooks/use-t"
 
 const CATEGORY_ICONS: Record<string, string> = {
   ai: "AI",
@@ -49,6 +27,17 @@ export default function ProjectsPage() {
   const [loading, setLoading] = useState(true)
   const [selectedCategory, setSelectedCategory] = useState("all")
   const [searchQuery, setSearchQuery] = useState("")
+  const t = useT()
+
+  const CATEGORY_FILTER_OPTIONS = [
+    { value: "all", label: t("projects.all_categories") },
+    { value: "math", label: t("projects.mathematics") },
+    { value: "aerospace", label: t("projects.aerospace") },
+    { value: "ai", label: t("projects.ai") },
+    { value: "cs", label: t("projects.cs") },
+    { value: "biotech", label: t("projects.biology") },
+    { value: "chemistry", label: t("projects.chemistry") },
+  ]
 
   useEffect(() => {
     gateway
@@ -75,23 +64,23 @@ export default function ProjectsPage() {
         <div className="absolute -bottom-12 right-24 w-32 h-32 rounded-full bg-white/5" />
         <div className="relative max-w-2xl">
           <h1 className="text-3xl font-extrabold text-white tracking-tight mb-2">
-            Explore Learning Projects
+            {t("projects.explore")}
           </h1>
           <p className="text-sm text-white/75 mb-6">
-            Dive into immersive, AI-guided educational journeys designed to bridge the gap between theory and real-world application.
+            {t("projects.subtitle")}
           </p>
           <div className="flex items-center gap-3">
             <Link href="/projects/new">
               <button className="h-10 px-5 rounded-xl bg-white text-violet-700 text-sm font-semibold flex items-center gap-2 hover:bg-white/90 transition-all duration-[350ms] shadow-sm">
                 <Plus className="h-4 w-4" />
-                Create New Project
+                {t("projects.create_new")}
               </button>
             </Link>
             <div className="flex items-center gap-2 h-10 px-4 rounded-xl bg-white/15 backdrop-blur-sm text-white/80 text-sm">
               <Search className="h-3.5 w-3.5" />
               <input
                 className="bg-transparent outline-none placeholder:text-white/50 text-white text-sm w-44"
-                placeholder="Search projects..."
+                placeholder={t("projects.search")}
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
               />
@@ -104,7 +93,7 @@ export default function ProjectsPage() {
         {/* Category filter chips */}
         <div className="flex items-center gap-3 flex-wrap mb-8">
           <span className="text-[11px] font-[var(--font-manrope)] uppercase tracking-widest text-muted-foreground">
-            Filter by:
+            {t("projects.filter_by")}
           </span>
           {CATEGORY_FILTER_OPTIONS.map((opt) => (
             <button
@@ -137,9 +126,9 @@ export default function ProjectsPage() {
                   <Plus className="h-6 w-6 text-primary" />
                 </div>
                 <div className="text-center">
-                  <p className="text-sm font-semibold text-foreground">Start Custom Project</p>
+                  <p className="text-sm font-semibold text-foreground">{t("projects.start_custom")}</p>
                   <p className="text-xs text-muted-foreground mt-1">
-                    Can&apos;t find what you&apos;re looking for? Build a project with AI assistance.
+                    {t("projects.custom_desc")}
                   </p>
                 </div>
               </div>
@@ -153,6 +142,7 @@ export default function ProjectsPage() {
 
 function ProjectCard({ project: p }: { project: ProjectSummary }) {
   const iconLabel = CATEGORY_ICONS[p.category] ?? "..."
+  const t = useT()
 
   return (
     <Link href={`/projects/${p.name}`}>
@@ -167,7 +157,7 @@ function ProjectCard({ project: p }: { project: ProjectSummary }) {
         {/* Category chip */}
         <div className="flex flex-wrap gap-2 mb-3">
           <span className="text-[10px] font-[var(--font-manrope)] uppercase tracking-wider px-2.5 py-1 rounded-full bg-primary/10 text-primary font-semibold">
-            {CATEGORY_LABELS[p.category] ?? p.category}
+            {(t as (key: string) => string)(`cat.${p.category}`) || p.category}
           </span>
           {p.tags.slice(0, 1).map((tag) => (
             <span key={tag} className="text-[10px] font-[var(--font-manrope)] uppercase tracking-wider px-2.5 py-1 rounded-full bg-secondary text-secondary-foreground">
@@ -187,12 +177,12 @@ function ProjectCard({ project: p }: { project: ProjectSummary }) {
           <div className="flex items-center gap-3 text-xs text-muted-foreground">
             <span className="flex items-center gap-1">
               <Clock className="h-3.5 w-3.5" />
-              <span className="font-[var(--font-manrope)] font-semibold text-foreground">{p.estimated_hours} Hours</span>
+              <span className="font-[var(--font-manrope)] font-semibold text-foreground">{p.estimated_hours} {t("projects.hours")}</span>
             </span>
           </div>
           <div className="flex items-center gap-1 text-xs text-muted-foreground">
             <Users className="h-3.5 w-3.5" />
-            <span className="font-[var(--font-manrope)]">Ages {p.age_range[0]}-{p.age_range[1]}</span>
+            <span className="font-[var(--font-manrope)]">{t("projects.ages")} {p.age_range[0]}-{p.age_range[1]}</span>
           </div>
         </div>
       </div>
@@ -201,19 +191,20 @@ function ProjectCard({ project: p }: { project: ProjectSummary }) {
 }
 
 function EmptyState() {
+  const t = useT()
   return (
     <div className="flex flex-col items-center justify-center py-24 text-center">
       <div className="flex h-20 w-20 items-center justify-center rounded-2xl bg-primary/10 mb-5">
         <Sparkles className="h-9 w-9 text-primary" />
       </div>
-      <h3 className="text-lg font-bold text-foreground mb-2">No projects yet</h3>
+      <h3 className="text-lg font-bold text-foreground mb-2">{t("projects.no_projects")}</h3>
       <p className="text-sm text-muted-foreground mb-6 max-w-xs">
-        Create your first AI-guided learning project and start your journey.
+        {t("projects.no_projects_desc")}
       </p>
       <Link href="/projects/new">
         <button className="h-11 px-6 rounded-xl bg-gradient-to-r from-violet-600 to-purple-600 text-white text-sm font-semibold flex items-center gap-2 shadow-[0_2px_16px_0_oklch(0.488_0.258_302_/_0.30)] hover:shadow-[0_4px_24px_0_oklch(0.488_0.258_302_/_0.40)] transition-all duration-[350ms]">
           <Plus className="h-4 w-4" />
-          Create New Project
+          {t("projects.create_new")}
           <ArrowRight className="h-4 w-4" />
         </button>
       </Link>

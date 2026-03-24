@@ -13,6 +13,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import { TreeFlow } from "@/components/knowledge-tree/tree-flow"
 import { gateway } from "@/lib/api"
 import type { TreePreviewResponse } from "@/lib/types/api"
+import { useT } from "@/lib/hooks/use-t"
 
 type Step = "input" | "preview" | "confirm"
 
@@ -24,6 +25,7 @@ const STEPS: { key: Step; label: string }[] = [
 
 export default function NewProjectPage() {
   const router = useRouter()
+  const t = useT()
   const [step, setStep] = useState<Step>("input")
   const [rawJson, setRawJson] = useState("")
   const [treeData, setTreeData] = useState<Record<string, unknown> | null>(null)
@@ -135,7 +137,7 @@ export default function NewProjectPage() {
 
   // ── Loading screen ──────────────────────────────────────────────────────────
   if (loading) {
-    const LOAD_STEPS = ["SYNTHESIZE", "CURATE", "ARCHITECT"]
+    const LOAD_STEPS = [t("new_project.synthesize"), t("new_project.curate"), t("new_project.architect")]
     return (
       <div className="min-h-screen bg-background flex flex-col items-center justify-center gap-10 px-4">
         {/* Header label */}
@@ -248,7 +250,7 @@ export default function NewProjectPage() {
           </div>
           <div className="ml-auto flex items-center gap-3">
             <Button variant="outline" size="sm" onClick={() => setStep("input")}>
-              <ArrowLeft className="h-4 w-4 mr-1.5" />Back
+              <ArrowLeft className="h-4 w-4 mr-1.5" />{t("new_project.back")}
             </Button>
             <button
               onClick={() => setStep("confirm")}
@@ -314,7 +316,7 @@ export default function NewProjectPage() {
         <div className="flex items-center gap-3 px-8 py-5 shadow-[0_1px_0_0_var(--border)] glass-surface">
           <button onClick={() => router.push("/projects")} className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors">
             <ArrowLeft className="h-3.5 w-3.5" />
-            Back to Library
+            {t("project.back_library")}
           </button>
           <div className="h-4 w-px bg-border" />
           {/* Step indicator */}
@@ -439,7 +441,7 @@ export default function NewProjectPage() {
                       className="w-full h-14 rounded-xl bg-gradient-to-r from-violet-600 to-purple-600 text-white font-semibold text-sm flex items-center justify-center gap-2 shadow-[0_2px_20px_0_oklch(0.488_0.258_302_/_0.30)] hover:shadow-[0_4px_28px_0_oklch(0.488_0.258_302_/_0.40)] transition-all duration-[350ms] [transition-timing-function:cubic-bezier(0.2,0.8,0.2,1)] disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       <Sparkles className="h-4 w-4" />
-                      Generate Knowledge Tree
+                      {t("new_project.generate")}
                     </button>
                     <p className="text-xs text-center text-muted-foreground">
                       AI will synthesize a multi-layered curriculum based on your inputs.
@@ -536,7 +538,7 @@ export default function NewProjectPage() {
                 )}
                 <div className="flex justify-between pt-2">
                   <Button variant="outline" onClick={() => setStep("preview")}>
-                    <ArrowLeft className="h-4 w-4 mr-1.5" />Back to Preview
+                    <ArrowLeft className="h-4 w-4 mr-1.5" />{t("new_project.back")}
                   </Button>
                   <button
                     onClick={handleCreate}

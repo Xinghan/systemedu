@@ -16,6 +16,7 @@ import {
   Plus,
   HelpCircle,
   LogOut,
+  Languages,
 } from "lucide-react"
 import {
   Sidebar,
@@ -29,24 +30,28 @@ import {
   SidebarFooter,
 } from "@/components/ui/sidebar"
 import { GatewayIndicator } from "./gateway-indicator"
-
-const navItems = [
-  { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/projects", label: "Library", icon: FolderKanban },
-  { href: "/chat", label: "Chat", icon: MessageSquare },
-  { href: "/objects", label: "Objects", icon: Box },
-]
-
-const manageItems = [
-  { href: "/agents", label: "Agents", icon: Bot },
-  { href: "/skills", label: "Skills", icon: Sparkles },
-  { href: "/mcp", label: "MCP", icon: Plug },
-  { href: "/config", label: "Settings", icon: Settings },
-  { href: "/sessions", label: "History", icon: History },
-]
+import { useAppStore } from "@/lib/stores/app-store"
+import { useT } from "@/lib/hooks/use-t"
 
 export function AppSidebar() {
   const pathname = usePathname()
+  const { locale, setLocale } = useAppStore()
+  const t = useT()
+
+  const navItems = [
+    { href: "/dashboard", label: t("nav.dashboard"), icon: LayoutDashboard },
+    { href: "/projects", label: t("nav.library"), icon: FolderKanban },
+    { href: "/chat", label: t("nav.chat"), icon: MessageSquare },
+    { href: "/objects", label: t("nav.objects"), icon: Box },
+  ]
+
+  const manageItems = [
+    { href: "/agents", label: t("nav.agents"), icon: Bot },
+    { href: "/skills", label: t("nav.skills"), icon: Sparkles },
+    { href: "/mcp", label: t("nav.mcp"), icon: Plug },
+    { href: "/config", label: t("nav.settings"), icon: Settings },
+    { href: "/sessions", label: t("nav.history"), icon: History },
+  ]
 
   return (
     <Sidebar className="border-r-0 shadow-[1px_0_0_0_var(--sidebar-border)]">
@@ -59,7 +64,7 @@ export function AppSidebar() {
           <div>
             <span className="text-base font-bold tracking-tight text-foreground">SystemEdu</span>
             <p className="text-[10px] font-[var(--font-manrope)] uppercase tracking-widest text-muted-foreground leading-none mt-0.5">
-              AI Learning Hub
+              {t("nav.ai_hub")}
             </p>
           </div>
         </Link>
@@ -103,7 +108,7 @@ export function AppSidebar() {
         {/* Separator label */}
         <div className="px-3 pt-4 pb-1">
           <span className="text-[10px] font-[var(--font-manrope)] uppercase tracking-widest text-muted-foreground/60">
-            Manage
+            {t("nav.manage")}
           </span>
         </div>
 
@@ -146,13 +151,22 @@ export function AppSidebar() {
         <Link href="/projects/new" className="block">
           <button className="w-full h-11 rounded-xl bg-gradient-to-r from-violet-600 to-purple-600 hover:from-violet-500 hover:to-purple-500 text-white text-sm font-semibold flex items-center justify-center gap-2 shadow-[0_2px_16px_0_oklch(0.488_0.258_302_/_0.30)] transition-all duration-[350ms] [transition-timing-function:cubic-bezier(0.2,0.8,0.2,1)] hover:shadow-[0_4px_24px_0_oklch(0.488_0.258_302_/_0.40)]">
             <Plus className="h-4 w-4" />
-            New Project
+            {t("nav.new_project")}
           </button>
         </Link>
 
         <div className="flex items-center justify-between px-1">
           <GatewayIndicator />
-          <div className="flex items-center gap-2 text-muted-foreground">
+          <div className="flex items-center gap-1 text-muted-foreground">
+            {/* Language toggle */}
+            <button
+              onClick={() => setLocale(locale === "en" ? "zh" : "en")}
+              className="flex items-center gap-1 h-7 px-2 rounded-lg hover:bg-sidebar-accent transition-colors text-xs font-[var(--font-manrope)] font-semibold"
+              title="Toggle language"
+            >
+              <Languages className="h-3.5 w-3.5" />
+              {locale === "en" ? "中" : "EN"}
+            </button>
             <button className="h-7 w-7 rounded-lg hover:bg-sidebar-accent flex items-center justify-center transition-colors">
               <HelpCircle className="h-4 w-4" />
             </button>

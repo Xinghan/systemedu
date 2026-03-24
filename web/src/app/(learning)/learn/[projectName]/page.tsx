@@ -21,19 +21,7 @@ import { LessonView } from "@/components/learning/lesson-view"
 import { FloatingChat } from "@/components/learning/floating-chat"
 import { gateway } from "@/lib/api"
 import type { KnodeInfo, LessonStatus, NodeProgress, ProjectDetail } from "@/lib/types/api"
-
-const CATEGORY_LABELS: Record<string, string> = {
-  ai: "AI",
-  biotech: "Biology",
-  aerospace: "Aeronautics",
-  music: "Music",
-  climate: "Climate",
-  robotics: "Robotics",
-  chemistry: "Chemistry",
-  math: "Mathematics",
-  cs: "Computer Science",
-  other: "General",
-}
+import { useT } from "@/lib/hooks/use-t"
 
 function getNodeStatus(nodeId: number, progress: NodeProgress[]): NodeProgress["status"] {
   return progress.find((p) => p.knode_id === nodeId)?.status ?? "locked"
@@ -42,6 +30,20 @@ function getNodeStatus(nodeId: number, progress: NodeProgress[]): NodeProgress["
 export default function LearnPage() {
   const params = useParams<{ projectName: string }>()
   const searchParams = useSearchParams()
+  const t = useT()
+
+  const CATEGORY_LABELS: Record<string, string> = {
+    ai: t("cat.ai"),
+    biotech: t("cat.biotech"),
+    aerospace: t("cat.aerospace"),
+    music: t("cat.music"),
+    climate: t("cat.climate"),
+    robotics: t("cat.robotics"),
+    chemistry: t("cat.chemistry"),
+    math: t("cat.math"),
+    cs: t("cat.cs"),
+    other: t("cat.other"),
+  }
   const [detail, setDetail] = useState<ProjectDetail | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -65,7 +67,7 @@ export default function LearnPage() {
     gateway
       .project(params.projectName)
       .then(setDetail)
-      .catch((e) => setError(e.message ?? "Failed to load project"))
+      .catch((e) => setError(e.message ?? t("learn.failed_load")))
       .finally(() => setLoading(false))
 
     gateway
@@ -161,8 +163,8 @@ export default function LearnPage() {
 
   if (error || !detail) return (
     <div className="flex flex-col items-center justify-center w-full h-full text-muted-foreground gap-2">
-      <p>{error ?? "Project not found"}</p>
-      <Link href="/projects" className="text-primary text-sm hover:underline">Back to Projects</Link>
+      <p>{error ?? t("learn.failed_load")}</p>
+      <Link href="/projects" className="text-primary text-sm hover:underline">{t("learn.back")}</Link>
     </div>
   )
 
@@ -176,7 +178,7 @@ export default function LearnPage() {
         <ChevronRight className="h-3 w-3 text-muted-foreground/50" />
         {activeMs && (
           <span className="text-xs font-[var(--font-manrope)] uppercase tracking-widest text-primary font-semibold">
-            Module {(detail.milestones.indexOf(activeMs) + 1).toString().padStart(2, "0")}
+            {t("learn.module")} {(detail.milestones.indexOf(activeMs) + 1).toString().padStart(2, "0")}
           </span>
         )}
         <div className="flex-1" />
@@ -194,7 +196,7 @@ export default function LearnPage() {
           onClick={() => setRightPanelOpen((v) => !v)}
           className="text-xs text-muted-foreground hover:text-foreground transition-colors px-2 py-1 rounded-md hover:bg-secondary"
         >
-          {rightPanelOpen ? "Hide Panel" : "Show Panel"}
+          {rightPanelOpen ? t("learn.hide_panel") : t("learn.show_panel")}
         </button>
       </div>
 
@@ -207,7 +209,7 @@ export default function LearnPage() {
             <div className="px-4 pt-4 pb-3 shrink-0">
               <div className="flex items-center justify-between mb-3">
                 <h2 className="text-xs font-[var(--font-manrope)] uppercase tracking-widest text-muted-foreground font-semibold">
-                  Module Curriculum
+                  {t("learn.module_curriculum")}
                 </h2>
                 <button
                   onClick={() => setSidebarOpen(false)}
@@ -221,7 +223,7 @@ export default function LearnPage() {
                 <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3 w-3 text-muted-foreground pointer-events-none" />
                 <input
                   type="text"
-                  placeholder="Search nodes..."
+                  placeholder={t("learn.search_nodes")}
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   className="w-full pl-7 pr-3 py-1.5 text-xs rounded-lg bg-secondary/60 focus:outline-none focus:ring-1 focus:ring-ring"
@@ -282,12 +284,12 @@ export default function LearnPage() {
                                 </span>
                                 {isActive && (
                                   <span className="text-[9px] font-[var(--font-manrope)] uppercase tracking-wider px-1.5 py-0.5 rounded-full bg-primary/15 text-primary font-semibold">
-                                    Current
+                                    {t("learn.current")}
                                   </span>
                                 )}
                                 {lessonStatus === "generating" && (
                                   <span className="text-[9px] font-[var(--font-manrope)] uppercase tracking-wider px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700">
-                                    Generating
+                                    {t("learn.generating")}
                                   </span>
                                 )}
                               </div>
@@ -312,7 +314,7 @@ export default function LearnPage() {
             {/* Bottom progress bar */}
             <div className="px-4 py-3 border-t border-border/50 shrink-0">
               <div className="flex items-center justify-between text-xs text-muted-foreground mb-2">
-                <span className="font-[var(--font-manrope)]">{totalPassed}/{totalNodes} mastered</span>
+                <span className="font-[var(--font-manrope)]">{t("learn.mastered_count", { n: totalPassed, total: totalNodes })}</span>
                 <span className="font-[var(--font-manrope)] font-semibold text-foreground">{pct}%</span>
               </div>
               <div className="h-1.5 rounded-full bg-secondary overflow-hidden">
@@ -387,13 +389,13 @@ export default function LearnPage() {
                 {/* Mastery Progress card */}
                 <div className="card-elevated p-4">
                   <p className="text-[10px] font-[var(--font-manrope)] uppercase tracking-widest text-muted-foreground font-semibold mb-2">
-                    Mastery Progress
+                    {t("learn.mastery_progress")}
                   </p>
                   <div className="flex items-end justify-between mb-2">
                     <span className="text-3xl font-extrabold text-foreground tracking-tight">{pct}%</span>
                     {pct > 0 && (
                       <span className="text-[10px] font-[var(--font-manrope)] text-emerald-600 font-semibold mb-1">
-                        +{Math.max(1, Math.round(pct * 0.12))}% Today
+                        {t("learn.today", { n: Math.max(1, Math.round(pct * 0.12)) })}
                       </span>
                     )}
                   </div>
@@ -404,32 +406,32 @@ export default function LearnPage() {
                     />
                   </div>
                   <p className="text-[11px] text-muted-foreground font-[var(--font-manrope)]">
-                    {totalPassed} of {totalNodes} nodes completed
+                    {t("learn.nodes_completed", { n: totalPassed, total: totalNodes })}
                   </p>
                 </div>
 
                 {/* View Full Syllabus */}
                 <Link href={`/projects/${params.projectName}/tree`} className="flex items-center justify-between px-3 py-2.5 rounded-xl bg-secondary/50 hover:bg-secondary transition-colors group">
-                  <span className="text-xs font-medium text-foreground">View Full Syllabus</span>
+                  <span className="text-xs font-medium text-foreground">{t("learn.view_syllabus")}</span>
                   <ArrowRight className="h-3.5 w-3.5 text-muted-foreground/50 group-hover:text-primary transition-colors" />
                 </Link>
 
                 {/* Materials & Resources */}
                 <div>
                   <p className="text-[10px] font-[var(--font-manrope)] uppercase tracking-widest text-muted-foreground font-semibold mb-2 px-1">
-                    Materials & Resources
+                    {t("learn.materials")}
                   </p>
                   <div className="space-y-1">
                     {[
                       {
                         icon: <div className="w-8 h-8 rounded-lg bg-red-100 dark:bg-red-500/15 flex items-center justify-center"><BookOpen className="h-4 w-4 text-red-600" /></div>,
-                        label: "Course Notes",
+                        label: t("learn.course_notes"),
                         sub: "PDF",
                         href: `/projects/${params.projectName}/notes`,
                       },
                       {
                         icon: <div className="w-8 h-8 rounded-lg bg-emerald-100 dark:bg-emerald-500/15 flex items-center justify-center"><ExternalLink className="h-4 w-4 text-emerald-600" /></div>,
-                        label: "External Resources",
+                        label: t("learn.external_resources"),
                         sub: "Library",
                         href: `/projects/${params.projectName}/resources`,
                       },
@@ -453,22 +455,21 @@ export default function LearnPage() {
                       <Bot className="h-3.5 w-3.5" />
                     </div>
                     <span className="text-[10px] font-[var(--font-manrope)] uppercase tracking-widest opacity-80 font-semibold">
-                      AI Tutor Active
+                      {t("learn.ai_tutor_active")}
                     </span>
                   </div>
                   <h3 className="text-sm font-bold mb-1 leading-snug">
-                    Need a hint with this lesson?
+                    {t("learn.ai_tutor_hint")}
                   </h3>
                   <p className="text-[11px] opacity-75 mb-3 leading-relaxed">
-                    Ask me anything about{" "}
-                    {activeKnode?.title ?? "this topic"}.
+                    {t("learn.ai_tutor_ask", { topic: activeKnode?.title ?? "this topic" })}
                   </p>
                   <button
                     onClick={() => {}}
                     className="w-full h-8 rounded-lg bg-white/20 hover:bg-white/30 text-white text-xs font-semibold transition-colors flex items-center justify-center gap-1.5"
                   >
                     <Bot className="h-3.5 w-3.5" />
-                    Ask AI Tutor
+                    {t("learn.ask_ai")}
                   </button>
                 </div>
 

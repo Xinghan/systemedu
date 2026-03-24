@@ -3,13 +3,7 @@
 import { useEffect, useState } from "react"
 import { gateway } from "@/lib/api"
 import type { ObjectRegistryItem, ObjectStagingItem } from "@/lib/types/api"
-
-const STATUS_LABEL: Record<string, string> = {
-  pending: "等待中",
-  in_progress: "创建中",
-  done: "已完成",
-  failed: "失败",
-}
+import { useT } from "@/lib/hooks/use-t"
 
 const STATUS_COLOR: Record<string, string> = {
   pending: "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400",
@@ -18,20 +12,9 @@ const STATUS_COLOR: Record<string, string> = {
   failed: "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400",
 }
 
-const FAMILY_LABELS: Record<string, string> = {
-  rocket: "火箭",
-  cell: "细胞",
-  atom: "原子",
-  plant: "植物",
-  human_body: "人体",
-  earth: "地球",
-  aircraft: "飞机",
-  submarine: "潜水艇",
-  robot: "机器人",
-}
-
 function RegistryCard({ item }: { item: ObjectRegistryItem }) {
   const [open, setOpen] = useState(false)
+  const t = useT()
   return (
     <div className="border rounded-lg bg-card overflow-hidden">
       <button
@@ -43,32 +26,32 @@ function RegistryCard({ item }: { item: ObjectRegistryItem }) {
             {item.object_key}
           </span>
           <span className="text-sm text-muted-foreground">
-            {FAMILY_LABELS[item.family] ?? item.family} / {item.variant}
+            {(t as (key: string) => string)(`objects.family.${item.family}`) || item.family} / {item.variant}
           </span>
         </div>
         <span className="text-xs px-2 py-0.5 rounded bg-emerald-50 text-emerald-600 dark:bg-emerald-900/20 dark:text-emerald-400 font-medium">
-          已注册
+          {t("objects.registered_badge")}
         </span>
       </button>
       {open && (
         <div className="px-4 pb-4 pt-1 border-t bg-muted/20 text-sm space-y-2">
           <div>
-            <span className="text-xs text-muted-foreground font-medium">视图：</span>
+            <span className="text-xs text-muted-foreground font-medium">{t("objects.views")}</span>
             <span className="ml-1">{item.views.join(", ") || "-"}</span>
           </div>
           <div>
-            <span className="text-xs text-muted-foreground font-medium">必要部件：</span>
+            <span className="text-xs text-muted-foreground font-medium">{t("objects.must_have")}</span>
             <span className="ml-1 font-mono text-xs">{item.must_have.join(", ") || "-"}</span>
           </div>
           {item.optional.length > 0 && (
             <div>
-              <span className="text-xs text-muted-foreground font-medium">可选部件：</span>
+              <span className="text-xs text-muted-foreground font-medium">{t("objects.optional")}</span>
               <span className="ml-1 font-mono text-xs">{item.optional.join(", ")}</span>
             </div>
           )}
           {item.labelable.length > 0 && (
             <div>
-              <span className="text-xs text-muted-foreground font-medium">可标注：</span>
+              <span className="text-xs text-muted-foreground font-medium">{t("objects.labelable")}</span>
               <span className="ml-1 font-mono text-xs">{item.labelable.join(", ")}</span>
             </div>
           )}
@@ -79,6 +62,13 @@ function RegistryCard({ item }: { item: ObjectRegistryItem }) {
 }
 
 function StagingCard({ item }: { item: ObjectStagingItem }) {
+  const t = useT()
+  const statusKeyMap: Record<string, string> = {
+    pending: t("objects.pending"),
+    in_progress: t("objects.in_progress"),
+    done: t("objects.done"),
+    failed: t("objects.failed"),
+  }
   return (
     <div className="border rounded-lg bg-card px-4 py-3 flex items-center justify-between gap-3">
       <div className="flex items-center gap-3 min-w-0">
@@ -97,7 +87,7 @@ function StagingCard({ item }: { item: ObjectStagingItem }) {
         )}
       </div>
       <span className={`text-xs px-2 py-0.5 rounded font-medium shrink-0 ${STATUS_COLOR[item.status] ?? ""}`}>
-        {STATUS_LABEL[item.status] ?? item.status}
+        {statusKeyMap[item.status] ?? item.status}
       </span>
     </div>
   )
@@ -108,6 +98,7 @@ export default function ObjectsPage() {
   const [staging, setStaging] = useState<ObjectStagingItem[]>([])
   const [loading, setLoading] = useState(true)
   const [filter, setFilter] = useState("")
+  const t = useT()
 
   useEffect(() => {
     gateway.objectRegistry().then((data) => {
@@ -119,7 +110,7 @@ export default function ObjectsPage() {
 
   const lc = filter.toLowerCase()
   const filteredRegistry = registry.filter(
-    (i) => !lc || i.object_key.includes(lc) || (FAMILY_LABELS[i.family] ?? "").includes(lc)
+    (i) => !lc || i.object_key.includes(lc) || ((t as (key: string) => string)(`objects.family.${i.family}`) ?? "").includes(lc)
   )
   const filteredStaging = staging.filter(
     (i) => !lc || i.object_key.includes(lc)
@@ -135,36 +126,36 @@ export default function ObjectsPage() {
   return (
     <div className="p-6 max-w-4xl mx-auto space-y-6">
       <div>
-        <h1 className="text-2xl font-bold">Object 库</h1>
+        <h1 className="text-2xl font-bold">{t("objects.title")}</h1>
         <p className="text-sm text-muted-foreground mt-1">
-          已注册 {registry.length} 个 object，队列中 {staging.length} 个
+          {t("objects.registered_count", { n: registry.length, q: staging.length })}
         </p>
       </div>
       <input
         type="text"
-        placeholder="搜索 object..."
+        placeholder={t("objects.search")}
         value={filter}
         onChange={(e) => setFilter(e.target.value)}
         className="w-full border rounded-md px-3 py-2 text-sm bg-background focus:outline-none focus:ring-1 focus:ring-emerald-500"
       />
 
       {loading && (
-        <p className="text-muted-foreground text-sm">加载中...</p>
+        <p className="text-muted-foreground text-sm">{t("objects.loading")}</p>
       )}
 
       {/* Registry section */}
       {!loading && (
         <section className="space-y-4">
           <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">
-            已注册 ({filteredRegistry.length})
+            {t("objects.registered")} ({filteredRegistry.length})
           </h2>
           {Object.keys(families).length === 0 && (
-            <p className="text-sm text-muted-foreground">无匹配结果</p>
+            <p className="text-sm text-muted-foreground">{t("objects.no_results")}</p>
           )}
           {Object.entries(families).map(([family, items]) => (
             <div key={family} className="space-y-2">
               <h3 className="text-xs font-medium text-muted-foreground px-1">
-                {FAMILY_LABELS[family] ?? family}（{items.length}）
+                {(t as (key: string) => string)(`objects.family.${family}`) || family}({items.length})
               </h3>
               {items.map((item) => (
                 <RegistryCard key={item.object_key} item={item} />
@@ -178,7 +169,7 @@ export default function ObjectsPage() {
       {!loading && filteredStaging.length > 0 && (
         <section className="space-y-3">
           <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">
-            创建队列 ({filteredStaging.length})
+            {t("objects.queue")} ({filteredStaging.length})
           </h2>
           {filteredStaging.map((item) => (
             <StagingCard key={`${item.object_key}-${item.created_at}`} item={item} />
