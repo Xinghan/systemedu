@@ -25,7 +25,7 @@ interface LessonContentViewProps {
   lesson: LessonContent
   projectName: string
   nodeId: number
-  onMarkComplete: () => void
+  onMarkComplete?: () => void
   onRegenerate: () => void
   onNavigate: (direction: "prev" | "next") => void
   onNavigateToNode: (nodeId: number) => void
@@ -33,7 +33,7 @@ interface LessonContentViewProps {
   hasPrev: boolean
   hasNext: boolean
   isCompleted: boolean
-  completing: boolean
+  completing?: boolean
   regenerating: boolean
   nextNodes: KnodeInfo[]
   noteState: "closed" | "open" | "minimized"
@@ -299,35 +299,6 @@ export function LessonContentView({
           timestamps={lesson.teacher_timestamps}
         />
       )}
-
-      {/* ── CTA: Mark as Finished banner ── */}
-      <div className="shrink-0 mx-4 mb-3 rounded-2xl bg-gradient-to-br from-violet-600 to-purple-700 px-6 py-4 flex items-center justify-between gap-4 relative overflow-hidden shadow-[0_4px_20px_rgba(109,40,217,0.3)]">
-        <div className="absolute -right-8 -top-8 w-32 h-32 bg-white/10 rounded-full blur-3xl pointer-events-none" />
-        <div className="absolute -left-8 -bottom-8 w-32 h-32 bg-purple-400/20 rounded-full blur-3xl pointer-events-none" />
-        <div className="relative z-10 text-white">
-          <p className="font-bold text-sm italic mb-0.5">
-            {isCompleted ? t("lesson.mastered_title") : t("lesson.ready_title")}
-          </p>
-          <p className="text-white/70 text-xs leading-relaxed">
-            {isCompleted ? t("lesson.mastered_desc") : t("lesson.ready_desc")}
-          </p>
-        </div>
-        {isCompleted ? (
-          <div className="relative z-10 shrink-0 flex items-center gap-2 px-5 py-2.5 bg-white/20 text-white rounded-full font-bold text-xs">
-            <IconCheck className="h-3.5 w-3.5" />
-            {t("lesson.mastered")}
-          </div>
-        ) : (
-          <button
-            onClick={onMarkComplete}
-            disabled={completing}
-            className="relative z-10 shrink-0 flex items-center gap-2 px-5 py-2.5 bg-white text-violet-700 rounded-full font-extrabold text-xs uppercase tracking-wide shadow-lg hover:scale-105 hover:shadow-xl transition-all duration-300 active:scale-95 disabled:opacity-60"
-          >
-            <IconCheck className="h-3.5 w-3.5" />
-            {completing ? t("lesson.completing") : t("lesson.mark_complete")}
-          </button>
-        )}
-      </div>
 
       {/* ── Bottom nav: prev/next lesson ── */}
       <div className="flex items-center justify-between px-5 py-2 border-t shrink-0">

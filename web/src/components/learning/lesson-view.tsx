@@ -16,6 +16,8 @@ interface LessonViewProps {
   onNodeChange: (nodeId: number) => void
   onProgressUpdate: (updatedProgress: NodeProgress[]) => void
   onPageChange?: (tab: string, pageIndex: number, pageContent: string) => void
+  /** Called whenever completing state changes so parent can update its own UI */
+  onCompletingChange?: (completing: boolean) => void
 }
 
 /** Compute nodes that become learnable after the given progress list is applied */
@@ -47,6 +49,7 @@ export function LessonView({
   onNodeChange,
   onProgressUpdate,
   onPageChange,
+  onCompletingChange,
 }: LessonViewProps) {
   const [lesson, setLesson] = useState<LessonContent | null>(null)
   const [loading, setLoading] = useState(false)
@@ -70,6 +73,7 @@ export function LessonView({
   progressRef.current = progress
   const onProgressUpdateRef = useRef(onProgressUpdate)
   onProgressUpdateRef.current = onProgressUpdate
+  const handleMarkCompleteRef = useRef<() => void>(() => {})
 
   // Fetch lesson when nodeId changes
   useEffect(() => {
@@ -140,6 +144,7 @@ export function LessonView({
   const handleMarkComplete = useCallback(async () => {
     if (nodeId === null) return
     setCompleting(true)
+    onCompletingChange?.(true)
     try {
       const result = await gateway.updateNodeProgress(projectName, nodeId, "passed")
       onProgressUpdate(result.progress)
@@ -147,8 +152,19 @@ export function LessonView({
       // silently fail
     } finally {
       setCompleting(false)
+      onCompletingChange?.(false)
     }
-  }, [nodeId, projectName, onProgressUpdate])
+  }, [nodeId, projectName, onProgressUpdate, onCompletingChange])
+
+  // Keep ref up to date so CustomEvent listener can call it
+  handleMarkCompleteRef.current = handleMarkComplete
+
+  // Listen for cross-component mark-complete trigger from right sidebar
+  useEffect(() => {
+    const handler = () => handleMarkCompleteRef.current()
+    window.addEventListener("lesson:markComplete", handler)
+    return () => window.removeEventListener("lesson:markComplete", handler)
+  }, [])
 
   const handleRegenerate = useCallback(async () => {
     if (nodeId === null) return

@@ -14,6 +14,8 @@ import {
   BookOpen,
   ExternalLink,
   Search,
+  Send,
+  CheckCircle,
 } from "lucide-react"
 import { PageLoading } from "@/components/ui/page-loading"
 import { ScrollArea } from "@/components/ui/scroll-area"
@@ -54,6 +56,13 @@ export default function LearnPage() {
   const [activeLessonTab, setActiveLessonTab] = useState<string>("concept")
   const [activePage, setActivePage] = useState<number>(0)
   const [lessonStatuses, setLessonStatuses] = useState<Record<string, LessonStatus>>({})
+  const [completing, setCompleting] = useState(false)
+  const [tutorOpen, setTutorOpen] = useState(false)
+  const [tutorInput, setTutorInput] = useState("")
+  const [tutorMessages, setTutorMessages] = useState<{ role: "user" | "ai"; text: string }[]>([])
+  const [tutorSending, setTutorSending] = useState(false)
+  const tutorInputRef = useRef<HTMLInputElement>(null)
+  const tutorMessagesRef = useRef<HTMLDivElement>(null)
   const sessionStartRef = useRef<number>(Date.now())
 
   const handleLessonPageChange = useCallback((tab: string, pageIndex: number, _pageContent: string) => {
@@ -141,6 +150,39 @@ export default function LearnPage() {
   const activeKnode = activeNodeId !== null ? allKnodes[activeNodeId] ?? null : null
   const activeMs = detail?.milestones.find((ms) => ms.knodes.some((k) => k.id === activeNodeId)) ?? detail?.milestones[0]
   const categoryLabel = CATEGORY_LABELS[detail?.project.category ?? ""] ?? "General"
+  const isNodeCompleted = activeNodeId !== null
+    ? progressList.find((p) => p.knode_id === activeNodeId)?.status === "passed"
+    : false
+
+  // Auto-scroll tutor messages to bottom
+  useEffect(() => {
+    if (tutorMessagesRef.current) {
+      tutorMessagesRef.current.scrollTop = tutorMessagesRef.current.scrollHeight
+    }
+  }, [tutorMessages, tutorSending])
+
+  const handleTutorSend = useCallback(async () => {
+    const text = tutorInput.trim()
+    if (!text || tutorSending) return
+    setTutorMessages((prev) => [...prev, { role: "user", text }])
+    setTutorInput("")
+    setTutorSending(true)
+    // Placeholder: echo response (will be replaced with real AI call)
+    setTimeout(() => {
+      setTutorMessages((prev) => [
+        ...prev,
+        { role: "ai", text: `Great question about "${text}"! Let me help you understand this concept...` },
+      ])
+      setTutorSending(false)
+    }, 800)
+  }, [tutorInput, tutorSending])
+
+  const handleTutorKeyDown = useCallback((e: React.KeyboardEvent) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault()
+      handleTutorSend()
+    }
+  }, [handleTutorSend])
 
   // Search filtering for sidebar
   const filteredMilestones = useMemo(() => {
@@ -168,7 +210,7 @@ export default function LearnPage() {
   )
 
   return (
-    <div className="flex flex-col w-full h-full overflow-hidden bg-background">
+    <div className="flex flex-col w-full h-full overflow-hidden bg-background relative">
       {/* Top header bar */}
       <div className="flex items-center gap-3 px-5 py-3 border-b border-border/50 bg-background/80 backdrop-blur-sm shrink-0">
         <Link href={`/projects/${params.projectName}`} className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors">
@@ -375,6 +417,7 @@ export default function LearnPage() {
               onNodeChange={handleNodeChange}
               onProgressUpdate={handleProgressUpdate}
               onPageChange={handleLessonPageChange}
+              onCompletingChange={setCompleting}
             />
           </div>
         </div>
@@ -464,13 +507,51 @@ export default function LearnPage() {
                     {t("learn.ai_tutor_ask", { topic: activeKnode?.title ?? "this topic" })}
                   </p>
                   <button
-                    onClick={() => {}}
-                    className="w-full h-8 rounded-lg bg-white/20 hover:bg-white/30 text-white text-xs font-semibold transition-colors flex items-center justify-center gap-1.5"
+                    onClick={() => { setTutorOpen(true); setTimeout(() => tutorInputRef.current?.focus(), 100) }}
+                    className="w-full h-8 rounded-lg bg-white text-violet-700 text-xs font-bold transition-all hover:bg-white/90 flex items-center justify-center gap-1.5"
                   >
                     <Bot className="h-3.5 w-3.5" />
                     {t("learn.ask_ai")}
                   </button>
                 </div>
+
+                {/* Mark as Finished card */}
+                {activeNodeId !== null && (
+                  <div className={`rounded-xl p-4 border transition-all duration-300 ${
+                    isNodeCompleted
+                      ? "bg-emerald-50 dark:bg-emerald-950/30 border-emerald-200 dark:border-emerald-800"
+                      : "bg-card border-border/60"
+                  }`}>
+                    <div className="flex items-center gap-2 mb-2">
+                      <CheckCircle className={`h-4 w-4 ${isNodeCompleted ? "text-emerald-500" : "text-muted-foreground/40"}`} />
+                      <span className={`text-xs font-semibold font-[var(--font-manrope)] ${isNodeCompleted ? "text-emerald-700 dark:text-emerald-400" : "text-foreground"}`}>
+                        {isNodeCompleted ? t("lesson.mastered_title") : t("lesson.ready_title")}
+                      </span>
+                    </div>
+                    <p className={`text-[11px] mb-3 leading-relaxed ${isNodeCompleted ? "text-emerald-600/80 dark:text-emerald-400/70" : "text-muted-foreground"}`}>
+                      {isNodeCompleted ? t("lesson.mastered_desc") : t("lesson.ready_desc")}
+                    </p>
+                    {isNodeCompleted ? (
+                      <div className="w-full h-8 rounded-lg bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 text-xs font-semibold flex items-center justify-center gap-1.5">
+                        <CheckCircle className="h-3.5 w-3.5" />
+                        {t("lesson.mastered")}
+                      </div>
+                    ) : (
+                      <button
+                        disabled={completing}
+                        className="w-full h-8 rounded-lg bg-primary text-primary-foreground text-xs font-bold transition-all hover:bg-primary/90 active:scale-95 disabled:opacity-60 flex items-center justify-center gap-1.5 shadow-sm"
+                        onClick={() => {
+                          // Trigger via LessonView's internal handleMarkComplete
+                          // We use a custom event to communicate cross-component
+                          window.dispatchEvent(new CustomEvent("lesson:markComplete"))
+                        }}
+                      >
+                        <CheckCircle className="h-3.5 w-3.5" />
+                        {completing ? t("lesson.completing") : t("lesson.mark_complete")}
+                      </button>
+                    )}
+                  </div>
+                )}
 
               </div>
             </ScrollArea>
@@ -478,7 +559,112 @@ export default function LearnPage() {
         )}
       </div>
 
-      {/* Floating chat */}
+      {/* AI Tutor chat drawer (bottom) */}
+      {tutorOpen && (
+        <div className="absolute bottom-0 left-0 right-0 z-50 flex flex-col bg-[#1a1a2e] rounded-t-2xl shadow-[0_-8px_40px_rgba(0,0,0,0.4)] border-t border-white/10"
+          style={{ height: "420px" }}>
+          {/* Header */}
+          <div className="flex items-center justify-between px-6 py-4 border-b border-white/10 shrink-0">
+            <div>
+              <h2 className="text-white font-extrabold text-lg leading-tight">
+                AI Tutor <span className="italic text-primary">Interactive Thread</span>
+              </h2>
+              <p className="text-white/50 text-xs mt-0.5">
+                {activeKnode
+                  ? `Deep-dive into ${activeKnode.title} with your personalized neural guide.`
+                  : "Ask your AI tutor anything about this lesson."}
+              </p>
+            </div>
+            <div className="flex items-center gap-3">
+              <div className="flex items-center gap-1.5">
+                <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                <span className="text-[10px] font-[var(--font-manrope)] text-emerald-400 uppercase tracking-widest font-semibold">AI Online</span>
+              </div>
+              <button
+                onClick={() => setTutorOpen(false)}
+                className="w-7 h-7 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white/70 hover:text-white transition-colors"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            </div>
+          </div>
+
+          {/* Messages */}
+          <div ref={tutorMessagesRef} className="flex-1 min-h-0 overflow-y-auto px-6 py-4 space-y-4">
+            {tutorMessages.length === 0 && (
+              <div className="flex flex-col items-center justify-center h-full gap-3 text-center">
+                <div className="w-12 h-12 rounded-full bg-primary/20 flex items-center justify-center">
+                  <Bot className="h-6 w-6 text-primary" />
+                </div>
+                <p className="text-white/50 text-sm max-w-xs leading-relaxed">
+                  Ask me anything about{" "}
+                  <span className="text-white/80 font-medium">{activeKnode?.title ?? "this lesson"}</span>.
+                  I&apos;m here to help you understand every concept deeply.
+                </p>
+              </div>
+            )}
+            {tutorMessages.map((msg, i) => (
+              <div key={i} className={`flex gap-3 ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
+                {msg.role === "ai" && (
+                  <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center shrink-0 mt-0.5">
+                    <Bot className="h-4 w-4 text-white" />
+                  </div>
+                )}
+                <div className={`max-w-[80%] rounded-2xl px-4 py-2.5 text-sm leading-relaxed ${
+                  msg.role === "user"
+                    ? "bg-primary text-white rounded-br-sm"
+                    : "bg-white/10 text-white/90 rounded-bl-sm"
+                }`}>
+                  {msg.text}
+                  {msg.role === "user" && (
+                    <p className="text-[10px] text-white/50 mt-1 text-right">Sent</p>
+                  )}
+                  {msg.role === "ai" && (
+                    <p className="text-[10px] text-white/40 mt-1">Sanctuary AI · Just now</p>
+                  )}
+                </div>
+              </div>
+            ))}
+            {tutorSending && (
+              <div className="flex gap-3">
+                <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center shrink-0">
+                  <Bot className="h-4 w-4 text-white" />
+                </div>
+                <div className="bg-white/10 rounded-2xl rounded-bl-sm px-4 py-3 flex items-center gap-1.5">
+                  <div className="w-1.5 h-1.5 rounded-full bg-white/60 animate-bounce" style={{ animationDelay: "0ms" }} />
+                  <div className="w-1.5 h-1.5 rounded-full bg-white/60 animate-bounce" style={{ animationDelay: "150ms" }} />
+                  <div className="w-1.5 h-1.5 rounded-full bg-white/60 animate-bounce" style={{ animationDelay: "300ms" }} />
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Input */}
+          <div className="px-6 py-4 border-t border-white/10 shrink-0">
+            <div className="flex items-center gap-3 bg-white/10 rounded-xl px-4 py-2.5">
+              <input
+                ref={tutorInputRef}
+                type="text"
+                value={tutorInput}
+                onChange={(e) => setTutorInput(e.target.value)}
+                onKeyDown={handleTutorKeyDown}
+                placeholder={`Ask a follow-up question about ${activeKnode?.title ?? "this lesson"}...`}
+                className="flex-1 bg-transparent text-white placeholder:text-white/30 text-sm outline-none"
+              />
+              <button
+                onClick={handleTutorSend}
+                disabled={!tutorInput.trim() || tutorSending}
+                className="w-8 h-8 rounded-lg bg-primary hover:bg-primary/90 disabled:opacity-40 flex items-center justify-center transition-colors shrink-0"
+              >
+                <Send className="h-3.5 w-3.5 text-white" />
+              </button>
+            </div>
+            <p className="text-center text-[10px] text-white/20 mt-2 font-[var(--font-manrope)] uppercase tracking-widest">
+              Powered by Cognitive Sanctuary Neural Engine v4.2
+            </p>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
