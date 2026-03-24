@@ -7,7 +7,7 @@ import dynamic from "next/dynamic"
 import { toast } from "sonner"
 import {
   ArrowLeft, Clock, Play, GraduationCap, Highlighter,
-  Pencil, Save, X, ChevronUp, ArrowRight, Zap,
+  Pencil, Save, X, ChevronUp, ArrowRight, Zap, ImageIcon, Upload,
 } from "lucide-react"
 import { PageLoading } from "@/components/ui/page-loading"
 import { LoadingSpinner } from "@/components/ui/loading-spinner"
@@ -256,6 +256,8 @@ export default function ProjectDetailPage() {
   const [queueOpen, setQueueOpen] = useState(false)
   const [triggering, setTriggering] = useState(false)
   const [lessonQueueRunning, setLessonQueueRunning] = useState(false)
+  const [editCoverFile, setEditCoverFile] = useState<File | null>(null)
+  const [editCoverPreview, setEditCoverPreview] = useState<string | null>(null)
 
   useEffect(() => {
     if (!params.name) return
@@ -295,6 +297,15 @@ export default function ProjectDetailPage() {
         age_range: [editAgeMin, editAgeMax],
         tags: editTags.split(",").map((t) => t.trim()).filter(Boolean),
       })
+      let newCoverUrl = detail.project.cover_image_url
+      if (editCoverFile) {
+        try {
+          const r = await gateway.uploadProjectCover(params.name, editCoverFile)
+          newCoverUrl = r.url
+        } catch {
+          // non-fatal
+        }
+      }
       setDetail((prev) =>
         prev ? {
           ...prev,
@@ -306,10 +317,13 @@ export default function ProjectDetailPage() {
             estimated_hours: editHours,
             age_range: [editAgeMin, editAgeMax],
             tags: editTags.split(",").map((t) => t.trim()).filter(Boolean),
+            cover_image_url: newCoverUrl,
           },
         } : prev
       )
       setEditOpen(false)
+      setEditCoverFile(null)
+      setEditCoverPreview(null)
       toast.success(t("project.saved"))
     } catch (e: unknown) {
       toast.error(`Save failed: ${e instanceof Error ? e.message : "Unknown error"}`)
@@ -444,6 +458,39 @@ export default function ProjectDetailPage() {
                         <div>
                           <Label htmlFor="edit-tags">{t("project.tags")}</Label>
                           <Input id="edit-tags" value={editTags} onChange={(e) => setEditTags(e.target.value)} placeholder={t("project.tags_placeholder")} className="mt-2" />
+                        </div>
+                        {/* Cover image */}
+                        <div>
+                          <Label>{t("project.cover_image")}</Label>
+                          <div className="mt-2 flex items-center gap-3">
+                            <div className="w-20 h-14 rounded-lg overflow-hidden bg-secondary/60 shrink-0 flex items-center justify-center">
+                              {editCoverPreview ? (
+                                <img src={editCoverPreview} alt="cover" className="w-full h-full object-cover" />
+                              ) : detail?.project.cover_image_url ? (
+                                <img src={`${process.env.NEXT_PUBLIC_GATEWAY_URL ?? "http://localhost:18820"}${detail.project.cover_image_url}`} alt="cover" className="w-full h-full object-cover" />
+                              ) : (
+                                <ImageIcon className="h-5 w-5 text-muted-foreground" />
+                              )}
+                            </div>
+                            <div className="flex flex-col gap-1.5">
+                              <input type="file" accept="image/*" className="hidden" id="edit-cover-input"
+                                onChange={(e) => {
+                                  const file = e.target.files?.[0]
+                                  if (!file) return
+                                  setEditCoverFile(file)
+                                  setEditCoverPreview(URL.createObjectURL(file))
+                                }}
+                              />
+                              <label htmlFor="edit-cover-input" className="cursor-pointer inline-flex h-8 px-3 items-center gap-1.5 rounded-lg bg-secondary hover:bg-secondary/80 text-xs font-medium transition-colors w-fit">
+                                <Upload className="h-3 w-3" />{t("project.upload_cover")}
+                              </label>
+                              {editCoverFile && (
+                                <button onClick={() => { setEditCoverFile(null); setEditCoverPreview(null) }} className="text-xs text-muted-foreground hover:text-foreground transition-colors text-left">
+                                  {t("project.remove_cover")}
+                                </button>
+                              )}
+                            </div>
+                          </div>
                         </div>
                         <div className="flex justify-end gap-3 pt-2">
                           <Button variant="outline" onClick={() => setEditOpen(false)}>
