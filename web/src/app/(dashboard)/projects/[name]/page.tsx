@@ -113,125 +113,113 @@ function ResourceCard({ icon, title, description, onClick, disabled, badge }: Re
   )
 }
 
-// Gradient icon components matching the project_resources_icons design
+// Icon components — ethereal glass style matching project_new_icon design
 function IconKnowledgeTree() {
   return (
-    <svg viewBox="0 0 56 56" fill="none" xmlns="http://www.w3.org/2000/svg" className="w-14 h-14">
-      <rect width="56" height="56" rx="16" fill="url(#grad-tree)" />
-      <defs>
-        <linearGradient id="grad-tree" x1="0" y1="0" x2="56" y2="56" gradientUnits="userSpaceOnUse">
-          <stop stopColor="#7c3aed" />
-          <stop offset="1" stopColor="#4f46e5" />
-        </linearGradient>
-      </defs>
-      <circle cx="28" cy="16" r="4" fill="white" fillOpacity="0.9" />
-      <circle cx="18" cy="30" r="3.5" fill="white" fillOpacity="0.75" />
-      <circle cx="38" cy="30" r="3.5" fill="white" fillOpacity="0.75" />
-      <circle cx="13" cy="42" r="3" fill="white" fillOpacity="0.6" />
-      <circle cx="23" cy="42" r="3" fill="white" fillOpacity="0.6" />
-      <circle cx="33" cy="42" r="3" fill="white" fillOpacity="0.6" />
-      <circle cx="43" cy="42" r="3" fill="white" fillOpacity="0.6" />
-      <line x1="28" y1="20" x2="18" y2="26.5" stroke="white" strokeOpacity="0.7" strokeWidth="1.5" />
-      <line x1="28" y1="20" x2="38" y2="26.5" stroke="white" strokeOpacity="0.7" strokeWidth="1.5" />
-      <line x1="18" y1="33.5" x2="13" y2="39" stroke="white" strokeOpacity="0.6" strokeWidth="1.5" />
-      <line x1="18" y1="33.5" x2="23" y2="39" stroke="white" strokeOpacity="0.6" strokeWidth="1.5" />
-      <line x1="38" y1="33.5" x2="33" y2="39" stroke="white" strokeOpacity="0.6" strokeWidth="1.5" />
-      <line x1="38" y1="33.5" x2="43" y2="39" stroke="white" strokeOpacity="0.6" strokeWidth="1.5" />
-    </svg>
+    <div className="relative w-14 h-14 rounded-2xl bg-gradient-to-br from-primary/10 to-indigo-500/10 flex items-center justify-center">
+      <div className="absolute inset-0 bg-primary/8 rounded-2xl blur-xl" />
+      <div className="relative w-12 h-12 rounded-xl bg-white/60 backdrop-blur-sm border border-white/50 shadow-[0_8px_32px_rgba(98,0,238,0.1)] flex items-center justify-center">
+        <svg viewBox="0 0 24 24" fill="none" stroke="#6a1cf6" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="w-6 h-6">
+          <circle cx="12" cy="4" r="2" />
+          <circle cx="6" cy="13" r="2" />
+          <circle cx="18" cy="13" r="2" />
+          <circle cx="4" cy="21" r="1.5" />
+          <circle cx="9" cy="21" r="1.5" />
+          <circle cx="15" cy="21" r="1.5" />
+          <circle cx="20" cy="21" r="1.5" />
+          <line x1="12" y1="6" x2="6" y2="11" />
+          <line x1="12" y1="6" x2="18" y2="11" />
+          <line x1="6" y1="15" x2="4" y2="19.5" />
+          <line x1="6" y1="15" x2="9" y2="19.5" />
+          <line x1="18" y1="15" x2="15" y2="19.5" />
+          <line x1="18" y1="15" x2="20" y2="19.5" />
+        </svg>
+      </div>
+    </div>
   )
 }
 
 function IconNotesGradient() {
   return (
-    <svg viewBox="0 0 56 56" fill="none" xmlns="http://www.w3.org/2000/svg" className="w-14 h-14">
-      <rect width="56" height="56" rx="16" fill="url(#grad-notes)" />
-      <defs>
-        <linearGradient id="grad-notes" x1="0" y1="0" x2="56" y2="56" gradientUnits="userSpaceOnUse">
-          <stop stopColor="#0d9488" />
-          <stop offset="1" stopColor="#0891b2" />
-        </linearGradient>
-      </defs>
-      <rect x="16" y="13" width="24" height="30" rx="3" fill="white" fillOpacity="0.2" stroke="white" strokeOpacity="0.6" strokeWidth="1.5" />
-      <line x1="21" y1="21" x2="35" y2="21" stroke="white" strokeOpacity="0.85" strokeWidth="1.8" strokeLinecap="round" />
-      <line x1="21" y1="27" x2="35" y2="27" stroke="white" strokeOpacity="0.85" strokeWidth="1.8" strokeLinecap="round" />
-      <line x1="21" y1="33" x2="29" y2="33" stroke="white" strokeOpacity="0.85" strokeWidth="1.8" strokeLinecap="round" />
-      <circle cx="38" cy="39" r="6" fill="white" fillOpacity="0.25" />
-      <path d="M35.5 39.5l2 2 4-4" stroke="white" strokeOpacity="0.95" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
+    <div className="relative w-14 h-14 rounded-2xl bg-gradient-to-br from-emerald-500/10 to-teal-400/10 flex items-center justify-center">
+      <div className="absolute inset-0 bg-emerald-400/8 rounded-2xl blur-xl" />
+      <div className="relative w-12 h-12 rounded-xl bg-white/60 backdrop-blur-sm border border-white/50 shadow-[0_8px_32px_rgba(16,185,129,0.1)] flex items-center justify-center">
+        <svg viewBox="0 0 24 24" fill="none" stroke="#059669" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="w-6 h-6">
+          <path d="M15.5 3H5a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2V8.5L15.5 3z" />
+          <polyline points="15 3 15 9 21 9" />
+          <line x1="9" y1="13" x2="15" y2="13" />
+          <line x1="9" y1="17" x2="12" y2="17" />
+          <polyline points="12.5 19.5 14 18 16.5 20.5 21 15" strokeWidth="1.8" stroke="#059669" />
+        </svg>
+      </div>
+    </div>
   )
 }
 
 function IconResourcesGradient() {
   return (
-    <svg viewBox="0 0 56 56" fill="none" xmlns="http://www.w3.org/2000/svg" className="w-14 h-14">
-      <rect width="56" height="56" rx="16" fill="url(#grad-res)" />
-      <defs>
-        <linearGradient id="grad-res" x1="0" y1="0" x2="56" y2="56" gradientUnits="userSpaceOnUse">
-          <stop stopColor="#2563eb" />
-          <stop offset="1" stopColor="#7c3aed" />
-        </linearGradient>
-      </defs>
-      <path d="M16 36V22a3 3 0 013-3h5l2 3h11a3 3 0 013 3v11a3 3 0 01-3 3H19a3 3 0 01-3-3z" fill="white" fillOpacity="0.2" stroke="white" strokeOpacity="0.7" strokeWidth="1.5" />
-      <line x1="22" y1="29" x2="34" y2="29" stroke="white" strokeOpacity="0.9" strokeWidth="1.8" strokeLinecap="round" />
-      <line x1="22" y1="33" x2="30" y2="33" stroke="white" strokeOpacity="0.7" strokeWidth="1.8" strokeLinecap="round" />
-    </svg>
+    <div className="relative w-14 h-14 rounded-2xl bg-gradient-to-br from-blue-500/10 to-cyan-400/10 flex items-center justify-center">
+      <div className="absolute inset-0 bg-blue-400/8 rounded-2xl blur-xl" />
+      <div className="relative w-12 h-12 rounded-xl bg-white/60 backdrop-blur-sm border border-white/50 shadow-[0_8px_32px_rgba(59,130,246,0.1)] flex items-center justify-center">
+        <svg viewBox="0 0 24 24" fill="none" stroke="#3b82f6" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="w-6 h-6">
+          <path d="M2 8a2 2 0 012-2h4l2 2h8a2 2 0 012 2v8a2 2 0 01-2 2H4a2 2 0 01-2-2V8z" />
+          <line x1="8" y1="13" x2="16" y2="13" />
+          <line x1="8" y1="16.5" x2="13" y2="16.5" />
+        </svg>
+      </div>
+    </div>
   )
 }
 
 function IconStudentWorks() {
   return (
-    <svg viewBox="0 0 56 56" fill="none" xmlns="http://www.w3.org/2000/svg" className="w-14 h-14">
-      <rect width="56" height="56" rx="16" fill="url(#grad-sw)" />
-      <defs>
-        <linearGradient id="grad-sw" x1="0" y1="0" x2="56" y2="56" gradientUnits="userSpaceOnUse">
-          <stop stopColor="#db2777" />
-          <stop offset="1" stopColor="#e11d48" />
-        </linearGradient>
-      </defs>
-      <circle cx="28" cy="22" r="6" fill="white" fillOpacity="0.25" stroke="white" strokeOpacity="0.7" strokeWidth="1.5" />
-      <circle cx="19" cy="23" r="4" fill="white" fillOpacity="0.18" stroke="white" strokeOpacity="0.55" strokeWidth="1.2" />
-      <circle cx="37" cy="23" r="4" fill="white" fillOpacity="0.18" stroke="white" strokeOpacity="0.55" strokeWidth="1.2" />
-      <path d="M14 40c0-5.5 6.3-9 14-9s14 3.5 14 9" stroke="white" strokeOpacity="0.75" strokeWidth="1.5" strokeLinecap="round" />
-    </svg>
+    <div className="relative w-14 h-14 rounded-2xl bg-gradient-to-br from-rose-400/10 to-pink-400/10 flex items-center justify-center">
+      <div className="absolute inset-0 bg-rose-400/8 rounded-2xl blur-xl" />
+      <div className="relative w-12 h-12 rounded-xl bg-white/60 backdrop-blur-sm border border-white/50 shadow-[0_8px_32px_rgba(251,113,133,0.1)] flex items-center justify-center">
+        <svg viewBox="0 0 24 24" fill="none" stroke="#f43f5e" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="w-6 h-6">
+          <circle cx="12" cy="7" r="3" />
+          <circle cx="5.5" cy="8.5" r="2" />
+          <circle cx="18.5" cy="8.5" r="2" />
+          <path d="M6 20c0-3.3 2.7-5.5 6-5.5s6 2.2 6 5.5" />
+          <path d="M1 20c0-2.2 1.8-3.5 4.5-3.5" strokeOpacity="0.5" />
+          <path d="M23 20c0-2.2-1.8-3.5-4.5-3.5" strokeOpacity="0.5" />
+        </svg>
+      </div>
+    </div>
   )
 }
 
 function IconAICourse() {
   return (
-    <svg viewBox="0 0 56 56" fill="none" xmlns="http://www.w3.org/2000/svg" className="w-14 h-14">
-      <rect width="56" height="56" rx="16" fill="url(#grad-ai)" />
-      <defs>
-        <radialGradient id="grad-ai" cx="30%" cy="30%" r="80%" fx="30%" fy="30%">
-          <stop stopColor="#7c3aed" />
-          <stop offset="1" stopColor="#4c1d95" />
-        </radialGradient>
-      </defs>
-      <circle cx="28" cy="24" r="8" fill="white" fillOpacity="0.15" stroke="white" strokeOpacity="0.6" strokeWidth="1.5" />
-      <circle cx="28" cy="24" r="3" fill="white" fillOpacity="0.9" />
-      <line x1="28" y1="16" x2="28" y2="14" stroke="white" strokeOpacity="0.7" strokeWidth="1.5" strokeLinecap="round" />
-      <line x1="28" y1="32" x2="28" y2="34" stroke="white" strokeOpacity="0.7" strokeWidth="1.5" strokeLinecap="round" />
-      <line x1="20" y1="24" x2="18" y2="24" stroke="white" strokeOpacity="0.7" strokeWidth="1.5" strokeLinecap="round" />
-      <line x1="36" y1="24" x2="38" y2="24" stroke="white" strokeOpacity="0.7" strokeWidth="1.5" strokeLinecap="round" />
-      <path d="M23 38h10M25 41h6" stroke="white" strokeOpacity="0.75" strokeWidth="1.5" strokeLinecap="round" />
-      <line x1="28" y1="34" x2="28" y2="38" stroke="white" strokeOpacity="0.65" strokeWidth="1.5" />
-    </svg>
+    <div className="relative w-14 h-14 rounded-2xl bg-gradient-to-br from-amber-400/10 to-orange-400/10 flex items-center justify-center">
+      <div className="absolute inset-0 bg-amber-400/8 rounded-2xl blur-xl" />
+      <div className="relative w-12 h-12 rounded-xl bg-white/60 backdrop-blur-sm border border-white/50 shadow-[0_8px_32px_rgba(251,191,36,0.1)] flex items-center justify-center">
+        <svg viewBox="0 0 24 24" fill="none" stroke="#d97706" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="w-6 h-6">
+          <circle cx="12" cy="9" r="3.5" />
+          <path d="M12 2a7 7 0 100 14" strokeOpacity="0.4" />
+          <path d="M12 2a7 7 0 110 14" />
+          <line x1="12" y1="16" x2="12" y2="20" />
+          <line x1="9" y1="20" x2="15" y2="20" />
+          <path d="M9 9l1.5 1.5L14 7" strokeWidth="1.8" stroke="#d97706" />
+        </svg>
+      </div>
+    </div>
   )
 }
 
 function IconObjectQueue() {
   return (
-    <svg viewBox="0 0 56 56" fill="none" xmlns="http://www.w3.org/2000/svg" className="w-14 h-14">
-      <rect width="56" height="56" rx="16" fill="url(#grad-obj)" />
-      <defs>
-        <linearGradient id="grad-obj" x1="0" y1="0" x2="56" y2="56" gradientUnits="userSpaceOnUse">
-          <stop stopColor="#64748b" />
-          <stop offset="1" stopColor="#475569" />
-        </linearGradient>
-      </defs>
-      <path d="M28 14l12 7v14l-12 7-12-7V21z" fill="white" fillOpacity="0.15" stroke="white" strokeOpacity="0.65" strokeWidth="1.5" strokeLinejoin="round" />
-      <path d="M28 28l12-7M28 28V42M28 28l-12-7" stroke="white" strokeOpacity="0.6" strokeWidth="1.5" strokeLinejoin="round" />
-      <path d="M34 17.5l12 7v14l-12 7-12-7V24.5z" fill="none" stroke="white" strokeOpacity="0.3" strokeWidth="1" strokeLinejoin="round" transform="translate(5 -3) scale(0.6) translate(-15 8)" />
-    </svg>
+    <div className="relative w-14 h-14 rounded-2xl bg-gradient-to-br from-violet-400/10 to-purple-300/10 flex items-center justify-center">
+      <div className="absolute inset-0 bg-violet-400/8 rounded-2xl blur-xl" />
+      <div className="relative w-12 h-12 rounded-xl bg-white/60 backdrop-blur-sm border border-white/50 shadow-[0_8px_32px_rgba(167,139,250,0.1)] flex items-center justify-center">
+        <svg viewBox="0 0 24 24" fill="none" stroke="#7c3aed" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="w-6 h-6">
+          <path d="M12 3l9 5v8l-9 5-9-5V8l9-5z" />
+          <line x1="12" y1="13" x2="12" y2="21" />
+          <line x1="12" y1="13" x2="3" y2="8" />
+          <line x1="12" y1="13" x2="21" y2="8" />
+        </svg>
+      </div>
+    </div>
   )
 }
 
@@ -259,6 +247,7 @@ export default function ProjectDetailPage() {
   const [editCoverFile, setEditCoverFile] = useState<File | null>(null)
   const [editCoverPreview, setEditCoverPreview] = useState<string | null>(null)
   const [generatingEditCover, setGeneratingEditCover] = useState(false)
+  const [coverCacheBust, setCoverCacheBust] = useState(Date.now())
 
   useEffect(() => {
     if (!params.name) return
@@ -378,7 +367,7 @@ export default function ProjectDetailPage() {
   const allTags = [...new Set([...categoryTags, ...detail.project.tags.map((t) => t.toUpperCase())])].slice(0, 4)
 
   const coverUrl = detail.project.cover_image_url
-    ? `${process.env.NEXT_PUBLIC_GATEWAY_URL ?? "http://localhost:18820"}${detail.project.cover_image_url}`
+    ? `${process.env.NEXT_PUBLIC_GATEWAY_URL ?? "http://localhost:18820"}${detail.project.cover_image_url}?t=${coverCacheBust}`
     : null
 
   return (
@@ -489,18 +478,45 @@ export default function ProjectDetailPage() {
                               <button
                                 type="button"
                                 disabled={generatingEditCover}
-                                onClick={() => {
+                                onClick={async () => {
+                                  if (!params.name) return
                                   setEditCoverFile(null)
                                   setEditCoverPreview("__generate__")
+                                  setGeneratingEditCover(true)
+                                  // Record current cover URL to detect change
+                                  const prevCoverUrl = detail?.project.cover_image_url ?? null
+                                  const generationStartTime = Date.now()
+                                  try {
+                                    await gateway.generateProjectCover(params.name)
+                                    // Poll for result every 6s, up to 24 attempts (2min)
+                                    const GATEWAY = process.env.NEXT_PUBLIC_GATEWAY_URL ?? "http://localhost:18820"
+                                    for (let i = 0; i < 24; i++) {
+                                      await new Promise((r) => setTimeout(r, 6000))
+                                      const d = await gateway.project(params.name)
+                                      const newCoverUrl = d.project.cover_image_url
+                                      // Accept if: URL is set AND (URL changed OR enough time has passed that it's a fresh generation)
+                                      if (newCoverUrl && (newCoverUrl !== prevCoverUrl || Date.now() - generationStartTime > 20000)) {
+                                        const ts = Date.now()
+                                        const url = `${GATEWAY}${newCoverUrl}?t=${ts}`
+                                        setEditCoverPreview(url)
+                                        setCoverCacheBust(ts)
+                                        setDetail((prev) => prev ? { ...prev, project: { ...prev.project, cover_image_url: newCoverUrl } } : prev)
+                                        break
+                                      }
+                                    }
+                                  } catch {
+                                    // non-fatal
+                                  } finally {
+                                    setGeneratingEditCover(false)
+                                  }
                                 }}
-                                className={`inline-flex h-8 px-3 items-center gap-1.5 rounded-lg text-xs font-medium transition-colors w-fit ${
-                                  editCoverPreview === "__generate__"
-                                    ? "bg-primary/15 text-primary"
-                                    : "bg-primary/10 hover:bg-primary/15 text-primary"
-                                }`}
+                                className="inline-flex h-8 px-3 items-center gap-1.5 rounded-lg bg-primary/10 hover:bg-primary/15 text-primary text-xs font-medium transition-colors w-fit disabled:opacity-60"
                               >
-                                <Wand2 className="h-3 w-3" />
-                                {editCoverPreview === "__generate__" ? "Will Generate" : t("project.ai_generate_cover")}
+                                {generatingEditCover ? (
+                                  <><div className="h-3 w-3 rounded-full border-2 border-primary border-t-transparent animate-spin" />{t("project.generating_cover")}</>
+                                ) : (
+                                  <><Wand2 className="h-3 w-3" />{t("project.ai_generate_cover")}</>
+                                )}
                               </button>
                               {/* Upload */}
                               <input type="file" accept="image/*" className="hidden" id="edit-cover-input"
@@ -552,10 +568,10 @@ export default function ProjectDetailPage() {
                 </button>
               </div>
 
-              {/* Right: cover image card — white border, large rounded */}
-              <div className="shrink-0">
+              {/* Right: cover image card — tilted like design mockup */}
+              <div className="shrink-0 rotate-3 translate-y-2">
                 {coverUrl ? (
-                  <div className="bg-white rounded-[20px] p-3 shadow-[0_8px_40px_0_rgba(109,40,217,0.18)]">
+                  <div className="bg-white rounded-[20px] p-3 shadow-[0_8px_40px_0_rgba(109,40,217,0.22)]">
                     <img
                       src={coverUrl}
                       alt={detail.project.title}
@@ -563,7 +579,7 @@ export default function ProjectDetailPage() {
                     />
                   </div>
                 ) : (
-                  <div className="bg-white rounded-[20px] p-3 shadow-[0_8px_40px_0_rgba(109,40,217,0.18)]">
+                  <div className="bg-white rounded-[20px] p-3 shadow-[0_8px_40px_0_rgba(109,40,217,0.22)]">
                     <div className="w-[260px] h-[220px] rounded-[14px] bg-gradient-to-br from-violet-600 via-purple-600 to-purple-800 flex items-center justify-center">
                       <span className="text-6xl font-extrabold text-white/80 tracking-tight">
                         {detail.project.title.charAt(0).toUpperCase()}

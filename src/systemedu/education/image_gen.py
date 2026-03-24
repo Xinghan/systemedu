@@ -55,7 +55,9 @@ async def generate_project_cover(title: str, description: str, save_path: Path) 
     }
 
     try:
-        async with httpx.AsyncClient(timeout=30) as client:
+        # Use explicit transport to bypass system proxy settings (DashScope is a CN service, no proxy needed)
+        transport = httpx.AsyncHTTPTransport()
+        async with httpx.AsyncClient(transport=transport, timeout=30) as client:
             # Submit task
             res = await client.post(WANX_SUBMIT_URL, headers=headers, json=payload)
             if res.status_code != 200:

@@ -1,7 +1,6 @@
 "use client"
 
 import { useCallback, useEffect, useRef, useState } from "react"
-import { NotebookPen, X } from "lucide-react"
 import { IconBook } from "./cartoon-icons"
 import { Button } from "@/components/ui/button"
 import { gateway } from "@/lib/api"
@@ -288,45 +287,6 @@ export function LessonView({
         onNoteStateChange={setNoteState}
       />
 
-      {/* FABs — rendered here to escape overflow-hidden ancestors */}
-      <div className="fixed bottom-[116px] right-6 z-50 flex flex-col items-center gap-3">
-        {/* Note FAB */}
-        {noteState === "closed" && (
-          <button
-            onClick={() => setNoteState("open")}
-            className="h-14 w-14 rounded-full bg-amber-500 text-white shadow-lg hover:bg-amber-500/90 transition-colors flex items-center justify-center"
-            title="笔记"
-          >
-            <NotebookPen className="h-6 w-6" />
-          </button>
-        )}
-        {noteState === "minimized" && (
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => setNoteState("open")}
-              className="flex items-center gap-2 rounded-full bg-secondary text-secondary-foreground px-4 py-2 shadow-lg hover:bg-secondary/80 text-sm font-medium transition-colors"
-            >
-              <NotebookPen className="h-4 w-4" />
-              笔记
-            </button>
-            <button
-              onClick={() => setNoteState("closed")}
-              className="h-8 w-8 rounded-full flex items-center justify-center hover:bg-muted transition-colors"
-            >
-              <X className="h-4 w-4" />
-            </button>
-          </div>
-        )}
-        {noteState === "open" && (
-          <button
-            onClick={() => setNoteState("minimized")}
-            className="h-14 w-14 rounded-full bg-amber-500 text-white shadow-lg hover:bg-amber-500/90 transition-colors flex items-center justify-center"
-            title="笔记"
-          >
-            <NotebookPen className="h-6 w-6" />
-          </button>
-        )}
-      </div>
     </>
   )
 }

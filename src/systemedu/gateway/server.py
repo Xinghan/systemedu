@@ -2550,7 +2550,7 @@ class _AuthMiddleware:
             return
 
         # Public paths skip auth
-        if path in _AUTH_PUBLIC_PATHS:
+        if path in _AUTH_PUBLIC_PATHS or path.startswith("/api/media/"):
             await self.app(scope, receive, send)
             return
 

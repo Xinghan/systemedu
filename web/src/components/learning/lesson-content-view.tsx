@@ -119,7 +119,7 @@ export function LessonContentView({
   return (
     <div className="flex flex-col h-full relative">
 
-      {/* ── Top bar: meta + actions ── */}
+      {/* ── Top bar: meta + regenerate only ── */}
       <div className="flex items-center justify-between gap-4 px-5 py-2.5 border-b border-border/50 shrink-0">
         <div className="flex items-center gap-3 text-xs text-muted-foreground font-[var(--font-manrope)]">
           <span className="flex items-center gap-1">
@@ -146,16 +146,11 @@ export function LessonContentView({
             <RefreshCw className={`h-3 w-3 ${regenerating ? "animate-spin" : ""}`} />
             {t("lesson.regenerate")}
           </Button>
-          {isCompleted ? (
+          {isCompleted && (
             <Badge className="bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/20 gap-1 h-7">
               <IconCheck className="h-3 w-3" />
               {t("lesson.mastered")}
             </Badge>
-          ) : (
-            <Button size="sm" onClick={onMarkComplete} disabled={completing} className="gap-1 h-7 text-xs">
-              <IconCheck className="h-3.5 w-3.5" />
-              {t("lesson.mark_complete")}
-            </Button>
           )}
         </div>
       </div>
@@ -207,66 +202,20 @@ export function LessonContentView({
                     />
                   )
                 ) : (
-                  // Two-column: prose left, sidebar right
-                  <>
-                    {/* Prose content */}
-                    <div className="flex-1 min-w-0 px-5 py-5">
-                      <PagedContentView
-                        content={lesson[availableTabs[activeTab]?.field ?? availableTabs[0].field]}
-                        projectName={projectName}
-                        nodeId={nodeId}
-                        tab={availableTabs[activeTab]?.key ?? availableTabs[0]?.key}
-                        onPageChange={(pageIndex, pageContent) => {
-                          const tabKey = availableTabs[activeTab]?.key ?? availableTabs[0]?.key
-                          onPageChange?.(tabKey, pageIndex, pageContent)
-                        }}
-                      />
-                    </div>
+                  // Full-width prose content (no sidebar)
+                  <div className="flex-1 min-w-0 px-6 py-6">
+                    <PagedContentView
+                      content={lesson[availableTabs[activeTab]?.field ?? availableTabs[0].field]}
+                      projectName={projectName}
+                      nodeId={nodeId}
+                      tab={availableTabs[activeTab]?.key ?? availableTabs[0]?.key}
+                      onPageChange={(pageIndex, pageContent) => {
+                        const tabKey = availableTabs[activeTab]?.key ?? availableTabs[0]?.key
+                        onPageChange?.(tabKey, pageIndex, pageContent)
+                      }}
+                    />
 
-                    {/* Right sidebar — node info + next steps */}
-                    <div className="w-64 shrink-0 border-l px-4 py-5 flex flex-col gap-5 bg-muted/20">
-                      {/* Node summary card */}
-                      <div>
-                        <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-2">本节概览</p>
-                        <p className="text-sm text-muted-foreground leading-relaxed">{knode.summary}</p>
-                      </div>
-
-                      {/* Completion action */}
-                      {!isCompleted && (
-                        <div>
-                          <Button
-                            size="sm"
-                            className="w-full gap-1"
-                            onClick={onMarkComplete}
-                            disabled={completing}
-                          >
-                            <IconCheck className="h-3.5 w-3.5" />
-                            标记完成
-                          </Button>
-                        </div>
-                      )}
-
-                      {/* Next learnable nodes */}
-                      {isCompleted && nextNodes.length > 0 && (
-                        <div>
-                          <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-2">下一步</p>
-                          <div className="flex flex-col gap-1.5">
-                            {nextNodes.map((node, idx) => (
-                              <button
-                                key={`${node.id}-${idx}`}
-                                onClick={() => onNavigateToNode(node.id)}
-                                className="flex items-center gap-2 rounded-md border bg-background px-3 py-2 text-sm hover:bg-accent hover:border-primary/40 transition-colors text-left w-full"
-                              >
-                                <BookOpen className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                                <span className="truncate flex-1">{node.title}</span>
-                                <ArrowRight className="h-3 w-3 text-muted-foreground shrink-0" />
-                              </button>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  </>
+                  </div>
                 )}
               </div>
             ) : (
@@ -350,6 +299,35 @@ export function LessonContentView({
           timestamps={lesson.teacher_timestamps}
         />
       )}
+
+      {/* ── CTA: Mark as Finished banner ── */}
+      <div className="shrink-0 mx-4 mb-3 rounded-2xl bg-gradient-to-br from-violet-600 to-purple-700 px-6 py-4 flex items-center justify-between gap-4 relative overflow-hidden shadow-[0_4px_20px_rgba(109,40,217,0.3)]">
+        <div className="absolute -right-8 -top-8 w-32 h-32 bg-white/10 rounded-full blur-3xl pointer-events-none" />
+        <div className="absolute -left-8 -bottom-8 w-32 h-32 bg-purple-400/20 rounded-full blur-3xl pointer-events-none" />
+        <div className="relative z-10 text-white">
+          <p className="font-bold text-sm italic mb-0.5">
+            {isCompleted ? t("lesson.mastered_title") : t("lesson.ready_title")}
+          </p>
+          <p className="text-white/70 text-xs leading-relaxed">
+            {isCompleted ? t("lesson.mastered_desc") : t("lesson.ready_desc")}
+          </p>
+        </div>
+        {isCompleted ? (
+          <div className="relative z-10 shrink-0 flex items-center gap-2 px-5 py-2.5 bg-white/20 text-white rounded-full font-bold text-xs">
+            <IconCheck className="h-3.5 w-3.5" />
+            {t("lesson.mastered")}
+          </div>
+        ) : (
+          <button
+            onClick={onMarkComplete}
+            disabled={completing}
+            className="relative z-10 shrink-0 flex items-center gap-2 px-5 py-2.5 bg-white text-violet-700 rounded-full font-extrabold text-xs uppercase tracking-wide shadow-lg hover:scale-105 hover:shadow-xl transition-all duration-300 active:scale-95 disabled:opacity-60"
+          >
+            <IconCheck className="h-3.5 w-3.5" />
+            {completing ? t("lesson.completing") : t("lesson.mark_complete")}
+          </button>
+        )}
+      </div>
 
       {/* ── Bottom nav: prev/next lesson ── */}
       <div className="flex items-center justify-between px-5 py-2 border-t shrink-0">

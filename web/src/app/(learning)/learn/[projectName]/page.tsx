@@ -18,7 +18,6 @@ import {
 import { PageLoading } from "@/components/ui/page-loading"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { LessonView } from "@/components/learning/lesson-view"
-import { FloatingChat } from "@/components/learning/floating-chat"
 import { gateway } from "@/lib/api"
 import type { KnodeInfo, LessonStatus, NodeProgress, ProjectDetail } from "@/lib/types/api"
 import { useT } from "@/lib/hooks/use-t"
@@ -480,7 +479,6 @@ export default function LearnPage() {
       </div>
 
       {/* Floating chat */}
-      <FloatingChat project={params.projectName} nodeId={activeNodeId} activeTab={activeLessonTab} pageIndex={activePage} />
     </div>
   )
 }
