@@ -2554,10 +2554,18 @@ class _AuthMiddleware:
             await self.app(scope, receive, send)
             return
 
-        # Extract token from Authorization header
+        # Extract token: Authorization header (HTTP) or ?token= query param (WebSocket)
         headers = dict(scope.get("headers", []))
         auth = headers.get(b"authorization", b"").decode("utf-8", errors="replace")
         token = auth[7:] if auth.startswith("Bearer ") else ""
+
+        # For WebSocket connections, browsers can't set custom headers — fall back to query param
+        if not token and scope["type"] == "websocket":
+            qs = scope.get("query_string", b"").decode("utf-8", errors="replace")
+            for part in qs.split("&"):
+                if part.startswith("token="):
+                    token = part[6:]
+                    break
 
         if not token or not verify_token(token):
             response = JSONResponse({"error": "Unauthorized"}, status_code=401)

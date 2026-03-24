@@ -3,6 +3,7 @@
 import { useCallback, useRef } from "react"
 import { toast } from "sonner"
 import { GATEWAY_URL } from "@/lib/api/client"
+import { getToken } from "@/lib/auth"
 import { useChatStore } from "@/lib/stores/chat-store"
 import type { WSMessage } from "@/lib/types/api"
 
@@ -50,7 +51,9 @@ export function useWebSocketChat() {
         wsRef.current?.readyState === WebSocket.CONNECTING) return
 
     intentionalCloseRef.current = false
-    const wsUrl = GATEWAY_URL.replace(/^http/, "ws") + "/api/chat/stream"
+    const token = getToken()
+    const wsBase = GATEWAY_URL.replace(/^http/, "ws") + "/api/chat/stream"
+    const wsUrl = token ? `${wsBase}?token=${encodeURIComponent(token)}` : wsBase
     const ws = new WebSocket(wsUrl)
     wsRef.current = ws
 
