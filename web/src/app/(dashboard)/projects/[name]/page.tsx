@@ -373,7 +373,7 @@ export default function ProjectDetailPage() {
   const ButtonIcon = isActive ? Play : GraduationCap
 
   const categoryTags = CATEGORY_TAGS[detail.project.category] ?? []
-  const allTags = [...categoryTags, ...detail.project.tags.map((t) => t.toUpperCase())].slice(0, 4)
+  const allTags = [...new Set([...categoryTags, ...detail.project.tags.map((t) => t.toUpperCase())])].slice(0, 4)
 
   const coverUrl = detail.project.cover_image_url
     ? `${process.env.NEXT_PUBLIC_GATEWAY_URL ?? "http://localhost:18820"}${detail.project.cover_image_url}`
@@ -400,8 +400,8 @@ export default function ProjectDetailPage() {
               <div className="flex-1 min-w-0">
                 {/* Tags — teal/emerald pill style */}
                 <div className="flex flex-wrap gap-2 mb-5">
-                  {allTags.map((tag) => (
-                    <span key={tag} className="text-[11px] font-[var(--font-manrope)] font-bold uppercase tracking-wider px-4 py-1.5 rounded-full bg-emerald-200/80 text-emerald-800 dark:bg-emerald-800/40 dark:text-emerald-300">
+                  {allTags.map((tag, i) => (
+                    <span key={`${tag}-${i}`} className="text-[11px] font-[var(--font-manrope)] font-bold uppercase tracking-wider px-4 py-1.5 rounded-full bg-emerald-200/80 text-emerald-800 dark:bg-emerald-800/40 dark:text-emerald-300">
                       {tag}
                     </span>
                   ))}
