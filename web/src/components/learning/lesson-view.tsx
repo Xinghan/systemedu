@@ -295,6 +295,9 @@ export function LessonView({
         onPageChange={onPageChange}
         hasPrev={nodeId > 0}
         hasNext={nodeId < allKnodes.length - 1}
+        prevNodeTitle={nodeId > 0 ? (allKnodes[nodeId - 1]?.title ?? null) : null}
+        nextNodeTitle={nodeId < allKnodes.length - 1 ? (allKnodes[nodeId + 1]?.title ?? null) : null}
+        totalNodes={allKnodes.length}
         isCompleted={isCompleted}
         completing={completing}
         regenerating={regenerating}

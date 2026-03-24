@@ -227,8 +227,11 @@ const translations = {
     "learn.generating": "Generating",
     "learn.failed_load": "Failed to load project",
     "learn.back": "Back to Projects",
+    "learn.step_of": "Step {n} of {total}",
 
     // Lesson content view
+    "lesson.prev_lesson": "Previous Lesson",
+    "lesson.next_lesson": "Next Lesson",
     "lesson.regenerate": "Regenerate",
     "lesson.mark_complete": "Mark as Finished",
     "lesson.completing": "Saving...",
@@ -568,8 +571,11 @@ const translations = {
     "learn.generating": "生成中",
     "learn.failed_load": "加载项目失败",
     "learn.back": "返回项目列表",
+    "learn.step_of": "第 {n} / {total} 节",
 
     // Lesson content view
+    "lesson.prev_lesson": "上一节",
+    "lesson.next_lesson": "下一节",
     "lesson.regenerate": "重新生成",
     "lesson.mark_complete": "标记完成",
     "lesson.completing": "保存中...",
