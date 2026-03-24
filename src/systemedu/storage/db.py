@@ -61,6 +61,7 @@ class LocalProject(Base):
     description = Column(Text, default="")
     path = Column(String(500), nullable=False)  # Path to project directory
     category = Column(String(50), default="other")
+    cover_image_url = Column(Text, default="")
     loaded_at = Column(DateTime, default=datetime.now)
 
 
@@ -311,6 +312,7 @@ def _migrate_schema(engine):
         ("lesson_content", "key_takeaways_audio_url", "TEXT DEFAULT ''"),
         ("lesson_content", "project_assignment", "TEXT DEFAULT ''"),
         ("lesson_content", "interactive_lab_pending_object", "VARCHAR(200) DEFAULT ''"),
+        ("projects", "cover_image_url", "TEXT DEFAULT ''"),
     ]
 
     with engine.connect() as conn:

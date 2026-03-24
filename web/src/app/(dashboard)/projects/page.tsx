@@ -174,49 +174,64 @@ export default function ProjectsPage() {
   )
 }
 
+const GATEWAY_URL = process.env.NEXT_PUBLIC_GATEWAY_URL ?? "http://localhost:18820"
+
 function ProjectCard({ project: p }: { project: ProjectSummary }) {
-  const iconLabel = CATEGORY_ICONS[p.category] ?? "..."
   const t = useT()
+  const coverUrl = p.cover_image_url ? `${GATEWAY_URL}${p.cover_image_url}` : null
+  const iconLabel = CATEGORY_ICONS[p.category] ?? "..."
 
   return (
     <Link href={`/projects/${p.name}`}>
-      <div className="card-elevated p-6 h-full flex flex-col cursor-pointer hover:shadow-card-hover transition-all duration-[350ms] [transition-timing-function:cubic-bezier(0.2,0.8,0.2,1)] group">
-        {/* Icon */}
-        <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary/10 mb-4">
-          <span className="text-[10px] font-[var(--font-manrope)] font-bold text-primary tracking-wider">
-            {iconLabel}
-          </span>
+      <div className="card-elevated h-full flex flex-col cursor-pointer hover:shadow-card-hover transition-all duration-[350ms] [transition-timing-function:cubic-bezier(0.2,0.8,0.2,1)] group overflow-hidden">
+        {/* Cover image area */}
+        <div className="h-36 w-full overflow-hidden">
+          {coverUrl ? (
+            <img
+              src={coverUrl}
+              alt={p.title}
+              className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+            />
+          ) : (
+            <div className="w-full h-full bg-gradient-to-br from-violet-600 via-purple-600 to-purple-800 flex items-center justify-center">
+              <span className="text-3xl font-extrabold text-white/70 tracking-tight">
+                {iconLabel}
+              </span>
+            </div>
+          )}
         </div>
 
-        {/* Category chip */}
-        <div className="flex flex-wrap gap-2 mb-3">
-          <span className="text-[10px] font-[var(--font-manrope)] uppercase tracking-wider px-2.5 py-1 rounded-full bg-primary/10 text-primary font-semibold">
-            {(t as (key: string) => string)(`cat.${p.category}`) || p.category}
-          </span>
-          {p.tags.slice(0, 1).map((tag) => (
-            <span key={tag} className="text-[10px] font-[var(--font-manrope)] uppercase tracking-wider px-2.5 py-1 rounded-full bg-secondary text-secondary-foreground">
-              {tag}
+        <div className="p-5 flex flex-col flex-1">
+          {/* Category chip */}
+          <div className="flex flex-wrap gap-2 mb-3">
+            <span className="text-[10px] font-[var(--font-manrope)] uppercase tracking-wider px-2.5 py-1 rounded-full bg-primary/10 text-primary font-semibold">
+              {(t as (key: string) => string)(`cat.${p.category}`) || p.category}
             </span>
-          ))}
-        </div>
-
-        {/* Title + description */}
-        <h3 className="text-base font-bold text-foreground mb-2 group-hover:text-primary transition-colors duration-[350ms]">
-          {p.title}
-        </h3>
-        <p className="text-sm text-muted-foreground line-clamp-3 flex-1">{p.description}</p>
-
-        {/* Footer meta */}
-        <div className="flex items-center justify-between mt-5 pt-4 border-t border-border/50">
-          <div className="flex items-center gap-3 text-xs text-muted-foreground">
-            <span className="flex items-center gap-1">
-              <Clock className="h-3.5 w-3.5" />
-              <span className="font-[var(--font-manrope)] font-semibold text-foreground">{p.estimated_hours} {t("projects.hours")}</span>
-            </span>
+            {p.tags.slice(0, 1).map((tag) => (
+              <span key={tag} className="text-[10px] font-[var(--font-manrope)] uppercase tracking-wider px-2.5 py-1 rounded-full bg-secondary text-secondary-foreground">
+                {tag}
+              </span>
+            ))}
           </div>
-          <div className="flex items-center gap-1 text-xs text-muted-foreground">
-            <Users className="h-3.5 w-3.5" />
-            <span className="font-[var(--font-manrope)]">{t("projects.ages")} {p.age_range[0]}-{p.age_range[1]}</span>
+
+          {/* Title + description */}
+          <h3 className="text-base font-bold text-foreground mb-2 group-hover:text-primary transition-colors duration-[350ms]">
+            {p.title}
+          </h3>
+          <p className="text-sm text-muted-foreground line-clamp-3 flex-1">{p.description}</p>
+
+          {/* Footer meta */}
+          <div className="flex items-center justify-between mt-5 pt-4 border-t border-border/50">
+            <div className="flex items-center gap-3 text-xs text-muted-foreground">
+              <span className="flex items-center gap-1">
+                <Clock className="h-3.5 w-3.5" />
+                <span className="font-[var(--font-manrope)] font-semibold text-foreground">{p.estimated_hours} {t("projects.hours")}</span>
+              </span>
+            </div>
+            <div className="flex items-center gap-1 text-xs text-muted-foreground">
+              <Users className="h-3.5 w-3.5" />
+              <span className="font-[var(--font-manrope)]">{t("projects.ages")} {p.age_range[0]}-{p.age_range[1]}</span>
+            </div>
           </div>
         </div>
       </div>

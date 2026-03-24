@@ -110,6 +110,23 @@ export const gateway = {
     api.post<TreePreviewResponse>("/api/projects/generate-tree", body),
   createProject: (name: string, title: string, treeData: Record<string, unknown>) =>
     api.post<CreateProjectResponse>("/api/projects", { name, title, tree_data: treeData }),
+  uploadProjectCover: async (name: string, file: File): Promise<{ url: string }> => {
+    const formData = new FormData()
+    formData.append("file", file)
+    const token = getToken()
+    const res = await fetch(`${GATEWAY_URL}/api/projects/${encodeURIComponent(name)}/cover`, {
+      method: "POST",
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      body: formData,
+    })
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}))
+      throw new Error(body.error || "Upload failed")
+    }
+    return res.json()
+  },
+  generateProjectCover: (name: string) =>
+    api.post<{ status: string; name: string }>(`/api/projects/${name}/cover/generate`, {}),
   enroll: (projectName: string, userId = "default") =>
     api.post<EnrollmentInfo>(`/api/projects/${projectName}/enroll`, { user_id: userId }),
   enrollment: (projectName: string, userId = "default") =>

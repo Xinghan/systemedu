@@ -61,6 +61,7 @@ export interface ProjectSummary {
   estimated_hours: number
   tags: string[]
   path: string
+  cover_image_url?: string | null
 }
 
 export interface KnodeInfo {
@@ -114,6 +115,7 @@ export interface ProjectDetail {
   milestones: MilestoneInfo[]
   progress: NodeProgress[]
   enrollment: EnrollmentInfo | null
+  // cover_image_url is included in project object from backend
 }
 
 export interface AgentInfo {

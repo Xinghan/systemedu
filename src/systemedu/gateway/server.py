@@ -356,6 +356,15 @@ async def api_projects(request: Request) -> JSONResponse:
         SYSTEMEDU_HOME / "projects",
     ]
 
+    from systemedu.storage.db import LocalProject, get_session as get_db_session
+
+    # Build cover_image_url lookup from DB
+    db = get_db_session()
+    try:
+        db_projects = {p.name: p for p in db.query(LocalProject).all()}
+    finally:
+        db.close()
+
     seen = set()
     for d in search_dirs:
         if not d.is_dir():
@@ -368,9 +377,11 @@ async def api_projects(request: Request) -> JSONResponse:
                     import yaml as _yaml
 
                     data = _yaml.safe_load(yaml_file.read_text(encoding="utf-8"))
+                    proj_name = data.get("name", sub.name)
+                    db_proj = db_projects.get(proj_name)
                     projects.append(
                         {
-                            "name": data.get("name", sub.name),
+                            "name": proj_name,
                             "title": data.get("title", sub.name),
                             "description": data.get("description", ""),
                             "category": data.get("category", "other"),
@@ -378,6 +389,7 @@ async def api_projects(request: Request) -> JSONResponse:
                             "estimated_hours": data.get("estimated_hours", 10),
                             "tags": data.get("tags", []),
                             "path": str(sub),
+                            "cover_image_url": (db_proj.cover_image_url or "") if db_proj else "",
                         }
                     )
                 except Exception as e:
@@ -431,6 +443,32 @@ async def api_create_project(request: Request) -> JSONResponse:
             logger.info(f"Auto-enqueued {len(enqueued)} objects for {name!r}: {enqueued}")
     except Exception:
         logger.exception("Auto-enqueue scan failed (non-fatal)")
+
+    # Trigger async cover image generation
+    try:
+        from systemedu.core.config import SYSTEMEDU_HOME
+        from systemedu.education.image_gen import generate_project_cover
+        from systemedu.storage.db import LocalProject, get_session as get_db_session
+
+        save_path = SYSTEMEDU_HOME / "media" / "projects" / name / "cover.jpg"
+
+        async def _gen_cover():
+            ok = await generate_project_cover(title, meta.get("description", ""), save_path)
+            if ok:
+                cover_url = f"/api/media/projects/{name}/cover.jpg"
+                db = get_db_session()
+                try:
+                    proj = db.query(LocalProject).filter_by(name=name).first()
+                    if proj:
+                        proj.cover_image_url = cover_url
+                        db.commit()
+                finally:
+                    db.close()
+                logger.info(f"Auto-generated cover for {name!r}: {cover_url}")
+
+        asyncio.create_task(_gen_cover())
+    except Exception:
+        logger.exception("Auto cover generation failed (non-fatal)")
 
     return JSONResponse({"name": name, "created": True, "path": str(project_dir)})
 
@@ -595,6 +633,18 @@ async def api_project_detail(request: Request) -> JSONResponse:
         finally:
             db.close()
 
+        # Fetch cover_image_url from DB
+        from systemedu.storage.db import LocalProject, get_session as get_db_session
+
+        cover_url = ""
+        _db = get_db_session()
+        try:
+            _db_proj = _db.query(LocalProject).filter_by(name=name).first()
+            if _db_proj:
+                cover_url = _db_proj.cover_image_url or ""
+        finally:
+            _db.close()
+
         return JSONResponse(
             {
                 "project": {
@@ -605,6 +655,7 @@ async def api_project_detail(request: Request) -> JSONResponse:
                     "age_range": ctx.project.age_range,
                     "estimated_hours": ctx.project.estimated_hours,
                     "tags": ctx.project.tags,
+                    "cover_image_url": cover_url,
                 },
                 "milestones": milestones,
                 "progress": progress,
@@ -648,6 +699,97 @@ async def api_update_project(request: Request) -> JSONResponse:
     yaml_path.write_text(_yaml.dump(data, allow_unicode=True, default_flow_style=False), encoding="utf-8")
 
     return JSONResponse({"name": name, "updated": True})
+
+
+async def api_upload_project_cover(request: Request) -> JSONResponse:
+    """POST /api/projects/{name}/cover - Upload a cover image for a project."""
+    from systemedu.core.config import SYSTEMEDU_HOME
+    from systemedu.storage.db import LocalProject, get_session as get_db_session
+
+    name = request.path_params["name"]
+
+    try:
+        form = await request.form()
+        file_field = form.get("file")
+        if file_field is None or not hasattr(file_field, "read"):
+            return JSONResponse({"error": "No file provided"}, status_code=400)
+
+        content = await file_field.read()
+        filename = getattr(file_field, "filename", "cover.jpg") or "cover.jpg"
+        ext = Path(filename).suffix.lower() or ".jpg"
+        if ext not in (".jpg", ".jpeg", ".png", ".webp"):
+            ext = ".jpg"
+
+        save_path = SYSTEMEDU_HOME / "media" / "projects" / name / f"cover{ext}"
+        save_path.parent.mkdir(parents=True, exist_ok=True)
+        save_path.write_bytes(content)
+
+        cover_url = f"/api/media/projects/{name}/cover{ext}"
+
+        db = get_db_session()
+        try:
+            proj = db.query(LocalProject).filter_by(name=name).first()
+            if proj:
+                proj.cover_image_url = cover_url
+                db.commit()
+        finally:
+            db.close()
+
+        return JSONResponse({"url": cover_url})
+    except Exception as e:
+        logger.exception(f"Cover upload failed for {name}")
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+
+async def api_generate_project_cover(request: Request) -> JSONResponse:
+    """POST /api/projects/{name}/cover/generate - Trigger async AI cover image generation."""
+    from systemedu.core.config import SYSTEMEDU_HOME
+    from systemedu.education.image_gen import generate_project_cover
+    from systemedu.storage.db import LocalProject, get_session as get_db_session
+
+    name = request.path_params["name"]
+
+    # Load project info for prompt
+    try:
+        from systemedu.education.project_loader import find_project_dir
+        import yaml as _yaml
+        project_dir = find_project_dir(name)
+        yaml_data = _yaml.safe_load((project_dir / "project.yaml").read_text(encoding="utf-8")) or {}
+        title = yaml_data.get("title", name)
+        description = yaml_data.get("description", "")
+    except Exception:
+        title = name
+        description = ""
+
+    save_path = SYSTEMEDU_HOME / "media" / "projects" / name / "cover.jpg"
+
+    async def _bg_generate():
+        ok = await generate_project_cover(title, description, save_path)
+        if ok:
+            cover_url = f"/api/media/projects/{name}/cover.jpg"
+            db = get_db_session()
+            try:
+                proj = db.query(LocalProject).filter_by(name=name).first()
+                if proj:
+                    proj.cover_image_url = cover_url
+                    db.commit()
+                else:
+                    new_proj = LocalProject(
+                        name=name,
+                        title=title,
+                        description=description,
+                        path=str(save_path.parent.parent),
+                        category="other",
+                        cover_image_url=cover_url,
+                    )
+                    db.add(new_proj)
+                    db.commit()
+            finally:
+                db.close()
+            logger.info(f"Cover generated and saved for {name!r}: {cover_url}")
+
+    asyncio.create_task(_bg_generate())
+    return JSONResponse({"status": "generating", "name": name})
 
 
 async def api_objects_registry(request: Request) -> JSONResponse:
@@ -2468,6 +2610,8 @@ def create_app() -> Starlette:
         Route("/api/projects/{name}/nodes/{node_id:int}/note", api_get_note, methods=["GET"]),
         Route("/api/projects/{name}/nodes/{node_id:int}/note", api_upsert_note, methods=["PUT"]),
         Route("/api/projects/{name}/notes", api_get_all_notes, methods=["GET"]),
+        Route("/api/projects/{name}/cover", api_upload_project_cover, methods=["POST"]),
+        Route("/api/projects/{name}/cover/generate", api_generate_project_cover, methods=["POST"]),
         Route("/api/projects/{name}/tree", api_update_tree, methods=["PUT"]),
         Route("/api/projects/{name}", api_project_detail, methods=["GET"]),
         Route("/api/projects/{name}", api_update_project, methods=["PATCH"]),
