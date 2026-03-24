@@ -268,50 +268,9 @@ export default function NewProjectPage() {
     )
   }
 
-  // ── Main layout: left panel + right form ────────────────────────────────────
+  // ── Main layout ────────────────────────────────────────────────────────────
   return (
-    <div className="flex min-h-screen bg-background">
-      {/* Left decorative panel */}
-      <div className="hidden lg:flex w-80 shrink-0 bg-gradient-to-b from-violet-700 via-purple-700 to-purple-800 flex-col justify-between p-10 relative overflow-hidden">
-        {/* Background circles */}
-        <div className="absolute -top-16 -left-16 w-64 h-64 rounded-full bg-white/5" />
-        <div className="absolute bottom-20 -right-12 w-48 h-48 rounded-full bg-white/5" />
-
-        <div className="relative">
-          <div className="flex items-center gap-3 mb-12">
-            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-white/20">
-              <Brain className="h-5 w-5 text-white" />
-            </div>
-            <span className="text-white font-bold text-base">SystemEdu</span>
-          </div>
-          <h2 className="text-3xl font-extrabold text-white mb-4 leading-tight">
-            Forge New Ideas.
-          </h2>
-          <p className="text-sm text-white/70 leading-relaxed">
-            Let AI transform your abstract concepts into a structured knowledge tree of discovery.
-          </p>
-        </div>
-
-        {/* Step list */}
-        <div className="relative space-y-4">
-          {[
-            { n: "01", t: "Describe your topic", d: "Tell us what you want to learn" },
-            { n: "02", t: "AI generates tree", d: "Smart curriculum in seconds" },
-            { n: "03", t: "Start learning", d: "Dive into your personalized path" },
-          ].map((s) => (
-            <div key={s.n} className="flex items-start gap-3">
-              <span className="text-xs font-[var(--font-manrope)] text-white/40 mt-0.5 w-5 shrink-0">{s.n}</span>
-              <div>
-                <p className="text-sm font-semibold text-white/90">{s.t}</p>
-                <p className="text-xs text-white/50">{s.d}</p>
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* Right form area */}
-      <div className="flex-1 flex flex-col">
+    <div className="flex flex-col flex-1 min-h-0">
         {/* Header */}
         <div className="flex items-center gap-3 px-8 py-5 shadow-[0_1px_0_0_var(--border)] glass-surface">
           <button onClick={() => router.push("/projects")} className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors">
@@ -552,7 +511,6 @@ export default function NewProjectPage() {
             )}
           </div>
         </div>
-      </div>
     </div>
   )
 }
