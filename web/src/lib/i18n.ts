@@ -70,6 +70,10 @@ const translations = {
     "projects.custom_desc": "Can't find what you're looking for? Build a project with AI assistance.",
     "projects.no_projects": "No projects yet",
     "projects.no_projects_desc": "Create your first AI-guided learning project and start your journey.",
+    "projects.popular": "Popular",
+    "projects.popular_desc": "Rocket Scientist is the most launched project this week.",
+    "projects.ai_mentor": "AI Mentor",
+    "projects.ai_mentor_desc": "Ready to help you customize your next project module.",
 
     // Category labels
     "cat.ai": "AI",
@@ -394,6 +398,10 @@ const translations = {
     "projects.custom_desc": "找不到合适的项目？用 AI 助手定制专属项目。",
     "projects.no_projects": "暂无项目",
     "projects.no_projects_desc": "创建您的第一个 AI 引导学习项目，开始您的学习之旅。",
+    "projects.popular": "热门项目",
+    "projects.popular_desc": "火箭专家是本周启动最多的项目。",
+    "projects.ai_mentor": "AI 导师",
+    "projects.ai_mentor_desc": "随时协助你定制下一个项目模块。",
 
     // Category labels
     "cat.ai": "人工智能",
