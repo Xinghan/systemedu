@@ -1249,3 +1249,186 @@ class TestGatewayGenerateTree:
             )
             assert resp.status_code == 200
             assert mock_gen.call_args[1]["target_nodes"] == 20
+
+
+class TestGatewayGenerateDescription:
+    """Tests for POST /api/projects/generate-description."""
+
+    def test_generate_description_missing_title(self, config_env):
+        """Returns 400 when title is missing."""
+        app = create_app()
+        client = _auth_client(app)
+        resp = client.post("/api/projects/generate-description", json={"age": 9})
+        assert resp.status_code == 400
+        assert "title" in resp.json()["error"]
+
+    def test_generate_description_empty_title(self, config_env):
+        """Returns 400 when title is empty string."""
+        app = create_app()
+        client = _auth_client(app)
+        resp = client.post("/api/projects/generate-description", json={"title": "  "})
+        assert resp.status_code == 400
+
+    def test_generate_description_success(self, config_env):
+        """Returns description and tags when LLM succeeds."""
+        import json as json_lib
+        mock_response = MagicMock()
+        mock_response.content = json_lib.dumps({
+            "description": "这是一个关于火箭科学的精彩学习项目。",
+            "tags": ["航空航天", "物理学", "STEM"],
+        })
+
+        with patch("systemedu.core.llm_client.get_llm") as mock_get_llm:
+            mock_llm = MagicMock()
+            mock_llm.ainvoke = AsyncMock(return_value=mock_response)
+            mock_get_llm.return_value = mock_llm
+
+            app = create_app()
+            client = _auth_client(app)
+            resp = client.post(
+                "/api/projects/generate-description",
+                json={"title": "火箭科学家", "age": 13, "node_count": 25},
+            )
+
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["description"] == "这是一个关于火箭科学的精彩学习项目。"
+        assert data["tags"] == ["航空航天", "物理学", "STEM"]
+
+    def test_generate_description_llm_fallback_on_invalid_json(self, config_env):
+        """Falls back to raw content as description when LLM returns non-JSON."""
+        mock_response = MagicMock()
+        mock_response.content = "这是纯文本描述，没有JSON格式。"
+
+        with patch("systemedu.core.llm_client.get_llm") as mock_get_llm:
+            mock_llm = MagicMock()
+            mock_llm.ainvoke = AsyncMock(return_value=mock_response)
+            mock_get_llm.return_value = mock_llm
+
+            app = create_app()
+            client = _auth_client(app)
+            resp = client.post(
+                "/api/projects/generate-description",
+                json={"title": "测试项目"},
+            )
+
+        assert resp.status_code == 200
+        data = resp.json()
+        assert "纯文本描述" in data["description"]
+        assert data["tags"] == []
+
+    def test_generate_description_default_params(self, config_env):
+        """Uses default age=9 and node_count=25 when not provided."""
+        import json as json_lib
+        mock_response = MagicMock()
+        mock_response.content = json_lib.dumps({"description": "desc", "tags": []})
+
+        with patch("systemedu.core.llm_client.get_llm") as mock_get_llm:
+            mock_llm = MagicMock()
+            mock_llm.ainvoke = AsyncMock(return_value=mock_response)
+            mock_get_llm.return_value = mock_llm
+
+            app = create_app()
+            client = _auth_client(app)
+            resp = client.post(
+                "/api/projects/generate-description",
+                json={"title": "数学探索"},
+            )
+
+        assert resp.status_code == 200
+        assert resp.json()["description"] == "desc"
+
+
+class TestGatewayDeleteProject:
+    """Tests for DELETE /api/projects/{name}."""
+
+    MILESTONES_DATA = {
+        "milestones": [
+            {
+                "title": "基础",
+                "knodes": [
+                    {
+                        "title": "节点1",
+                        "summary": "描述1",
+                        "difficulty_level": 1,
+                        "estimated_minutes": 10,
+                        "prerequisite_indices": [],
+                    }
+                ],
+            }
+        ]
+    }
+
+    def _create_project(self, client, tmp_path, name="del-test-proj"):
+        """Helper: create a project and return its name."""
+        (tmp_path / "projects").mkdir(exist_ok=True)
+        resp = client.post(
+            "/api/projects",
+            json={"name": name, "title": "Delete Test", "tree_data": self.MILESTONES_DATA},
+        )
+        assert resp.status_code == 200
+        return name
+
+    def test_delete_project_success(self, config_env, tmp_path, monkeypatch):
+        """DELETE /api/projects/{name} removes project from disk and DB."""
+        monkeypatch.chdir(tmp_path)
+        app = create_app()
+        client = _auth_client(app)
+        name = self._create_project(client, tmp_path)
+
+        # Confirm project exists
+        assert client.get(f"/api/projects/{name}").status_code == 200
+
+        # Delete it
+        resp = client.delete(f"/api/projects/{name}")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["status"] == "deleted"
+        assert data["name"] == name
+
+        # Project directory should be gone
+        proj_dir = tmp_path / "projects" / name
+        assert not proj_dir.exists()
+
+    def test_delete_project_not_found(self, config_env):
+        """DELETE /api/projects/{name} returns 404 for unknown project."""
+        app = create_app()
+        client = _auth_client(app)
+        resp = client.delete("/api/projects/nonexistent-xyz")
+        assert resp.status_code == 404
+
+    def test_delete_project_removes_from_list(self, config_env, tmp_path, monkeypatch):
+        """After deletion, project no longer appears in GET /api/projects."""
+        monkeypatch.chdir(tmp_path)
+        app = create_app()
+        client = _auth_client(app)
+        name = self._create_project(client, tmp_path, name="list-del-proj")
+
+        # Delete
+        assert client.delete(f"/api/projects/{name}").status_code == 200
+
+        # Project list should not contain it
+        projects = client.get("/api/projects").json()
+        assert not any(p["name"] == name for p in projects)
+
+    def test_delete_project_cleans_db_records(self, config_env, tmp_path, monkeypatch):
+        """Deletion removes associated DB records (progress, enrollment, etc.)."""
+        monkeypatch.chdir(tmp_path)
+        app = create_app()
+        client = _auth_client(app)
+        name = self._create_project(client, tmp_path, name="db-clean-proj")
+
+        # Create an enrollment
+        client.post(f"/api/projects/{name}/enroll", json={"user_id": "test-user"})
+
+        # Delete project
+        assert client.delete(f"/api/projects/{name}").status_code == 200
+
+        # DB records should be cleaned up
+        from systemedu.storage.db import Enrollment, get_session as get_db_session
+        db = get_db_session()
+        try:
+            count = db.query(Enrollment).filter_by(project_name=name).count()
+            assert count == 0
+        finally:
+            db.close()

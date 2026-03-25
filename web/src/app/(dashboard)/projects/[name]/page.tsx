@@ -7,7 +7,7 @@ import dynamic from "next/dynamic"
 import { toast } from "sonner"
 import {
   ArrowLeft, Clock, Play, GraduationCap, Highlighter,
-  Pencil, Save, X, ChevronUp, ArrowRight, Zap, ImageIcon, Upload, Wand2,
+  Pencil, Save, X, ChevronUp, ArrowRight, Zap, ImageIcon, Upload, Wand2, Trash2,
 } from "lucide-react"
 import { PageLoading } from "@/components/ui/page-loading"
 import { LoadingSpinner } from "@/components/ui/loading-spinner"
@@ -248,6 +248,8 @@ export default function ProjectDetailPage() {
   const [editCoverPreview, setEditCoverPreview] = useState<string | null>(null)
   const [generatingEditCover, setGeneratingEditCover] = useState(false)
   const [coverCacheBust, setCoverCacheBust] = useState(Date.now())
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false)
+  const [deleting, setDeleting] = useState(false)
 
   useEffect(() => {
     if (!params.name) return
@@ -320,6 +322,19 @@ export default function ProjectDetailPage() {
       toast.error(`Save failed: ${e instanceof Error ? e.message : "Unknown error"}`)
     } finally {
       setSaving(false)
+    }
+  }
+
+  const handleDelete = async () => {
+    if (!params.name) return
+    setDeleting(true)
+    try {
+      await gateway.deleteProject(params.name)
+      toast.success(t("project.deleted"))
+      router.push("/projects")
+    } catch (e: unknown) {
+      toast.error(`Delete failed: ${e instanceof Error ? e.message : "Unknown error"}`)
+      setDeleting(false)
     }
   }
 
@@ -403,7 +418,7 @@ export default function ProjectDetailPage() {
                   <h1 className="text-[2.75rem] font-extrabold text-[#1e2d6b] dark:text-white leading-tight tracking-tight">
                     {detail.project.title}
                   </h1>
-                  <Dialog open={editOpen} onOpenChange={setEditOpen}>
+                  <Dialog open={editOpen} onOpenChange={(v) => { setEditOpen(v); if (!v) setDeleteConfirmOpen(false) }}>
                     <DialogTrigger render={
                       <button className="p-1.5 rounded-lg text-[#1e2d6b]/40 hover:text-[#1e2d6b] hover:bg-white/30 dark:text-white/40 dark:hover:text-white transition-colors">
                         <Pencil className="h-4 w-4" />
@@ -546,6 +561,42 @@ export default function ProjectDetailPage() {
                             <Save className="h-4 w-4 mr-2" />
                             {saving ? t("project.saving") : t("project.save")}
                           </Button>
+                        </div>
+                        {/* Danger zone */}
+                        <div className="pt-3 border-t border-destructive/20">
+                          {!deleteConfirmOpen ? (
+                            <button
+                              type="button"
+                              onClick={() => setDeleteConfirmOpen(true)}
+                              className="flex items-center gap-1.5 text-xs text-destructive/70 hover:text-destructive transition-colors"
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                              {t("project.delete")}
+                            </button>
+                          ) : (
+                            <div className="rounded-xl bg-destructive/8 border border-destructive/20 p-3 space-y-2">
+                              <p className="text-xs text-destructive font-medium">{t("project.delete_confirm_title")}</p>
+                              <p className="text-xs text-muted-foreground">{t("project.delete_confirm_desc")}</p>
+                              <div className="flex gap-2 pt-1">
+                                <button
+                                  type="button"
+                                  onClick={() => setDeleteConfirmOpen(false)}
+                                  className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+                                >
+                                  {t("project.cancel")}
+                                </button>
+                                <Button
+                                  variant="destructive"
+                                  size="sm"
+                                  onClick={handleDelete}
+                                  disabled={deleting}
+                                  className="h-7 text-xs"
+                                >
+                                  {deleting ? t("project.deleting") : t("project.delete_confirm_btn")}
+                                </Button>
+                              </div>
+                            </div>
+                          )}
                         </div>
                       </div>
                     </DialogContent>

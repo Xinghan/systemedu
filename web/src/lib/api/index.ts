@@ -106,10 +106,16 @@ export const gateway = {
     api.patch<UpdateProgressResponse>(`/api/projects/${projectName}/nodes/${nodeId}/progress`, { status, user_id: userId }),
   previewTree: (treeData: Record<string, unknown>) =>
     api.post<TreePreviewResponse>("/api/projects/preview-tree", { tree_data: treeData }),
+  generateDescription: (body: { title: string; age?: number; node_count?: number }) =>
+    api.post<{ description: string; tags?: string[] }>("/api/projects/generate-description", body),
+  generateCoverPreview: (body: { title: string; description?: string }) =>
+    api.post<{ url: string }>("/api/projects/generate-cover-preview", body),
   generateTree: (body: { title: string; description: string; age?: number; node_count?: number }) =>
     api.post<TreePreviewResponse>("/api/projects/generate-tree", body),
   createProject: (name: string, title: string, treeData: Record<string, unknown>) =>
     api.post<CreateProjectResponse>("/api/projects", { name, title, tree_data: treeData }),
+  deleteProject: (name: string) =>
+    api.delete<{ status: string; name: string }>(`/api/projects/${name}`),
   uploadProjectCover: async (name: string, file: File): Promise<{ url: string }> => {
     const formData = new FormData()
     formData.append("file", file)

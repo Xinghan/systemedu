@@ -519,6 +519,60 @@ async def api_preview_tree(request: Request) -> JSONResponse:
     })
 
 
+async def api_generate_description(request: Request) -> JSONResponse:
+    """POST /api/projects/generate-description - AI-generate a project description from title + age + complexity."""
+    from langchain_core.messages import HumanMessage, SystemMessage
+    from systemedu.core.llm_client import get_llm
+
+    body = await request.json()
+    title = body.get("title", "").strip()
+    age = int(body.get("age", 9))
+    node_count = int(body.get("node_count", 25))
+
+    if not title:
+        return JSONResponse({"error": "title is required"}, status_code=400)
+
+    complexity = "入门级（核心概念，约5-50个知识节点）" if node_count <= 50 else "中等深度（系统学习，约50-200个知识节点）" if node_count <= 200 else "专家级（工业深度，200+个知识节点）"
+    age_desc = "6岁以下儿童" if age < 6 else f"{age}岁左右的学生"
+
+    prompt = (
+        f"请为一个名为《{title}》的学习项目生成内容，目标学生是{age_desc}，课程深度为{complexity}。\n\n"
+        f"请严格按照以下JSON格式输出，不要输出任何其他内容：\n"
+        f'{{"description": "100-150字的项目描述，说明学什么、能学到什么、为什么有趣，语言生动自然", '
+        f'"tags": ["标签1", "标签2", "标签3", "标签4"]}}\n\n'
+        f"标签要求：3-5个简短标签（2-6字），反映学科领域、技能或特色，例如：编程思维、数学建模、实验探究等。"
+    )
+
+    try:
+        import json as json_lib
+        llm = get_llm(streaming=False)
+        response = await llm.ainvoke([
+            SystemMessage(content="你是一名教育内容策划专家。严格按照要求的JSON格式输出，不添加任何额外文字。"),
+            HumanMessage(content=prompt),
+        ])
+        content = response.content.strip()
+        # 尝试解析JSON，提取 description 和 tags
+        try:
+            # 去掉可能的 markdown 代码块
+            if content.startswith("```"):
+                content = content.split("```")[1]
+                if content.startswith("json"):
+                    content = content[4:]
+            parsed = json_lib.loads(content)
+            description = parsed.get("description", "").strip()
+            tags = parsed.get("tags", [])
+            if not isinstance(tags, list):
+                tags = []
+        except Exception:
+            # 解析失败时把整个内容当描述
+            description = content
+            tags = []
+        return JSONResponse({"description": description, "tags": tags})
+    except Exception as e:
+        logger.error(f"Description generation failed: {e}")
+        return JSONResponse({"error": f"生成失败: {e}"}, status_code=500)
+
+
 async def api_generate_tree(request: Request) -> JSONResponse:
     """POST /api/projects/generate-tree - AI-generate a knowledge tree from title + description."""
     from systemedu.education.tree_generator import generate_knowledge_tree
@@ -705,6 +759,62 @@ async def api_update_project(request: Request) -> JSONResponse:
     return JSONResponse({"name": name, "updated": True})
 
 
+async def api_delete_project(request: Request) -> JSONResponse:
+    """DELETE /api/projects/{name} - Delete a project and all associated data."""
+    import shutil
+    from systemedu.education.project_loader import find_project_dir
+    from systemedu.storage.db import (
+        LocalProject, ProgressRecord, NodeContextCache, Enrollment,
+        Highlight, PracticeSubmission, LessonGenerationProgress, LessonContent,
+        NodeResource, NodeSearchStatus, LessonQueueItem, UserNote,
+        get_session as get_db_session,
+    )
+
+    name = request.path_params["name"]
+
+    # Locate project directory (may not exist if only in DB)
+    project_dir: Path | None = None
+    try:
+        project_dir = find_project_dir(name)
+    except FileNotFoundError:
+        pass
+
+    db = get_db_session()
+    try:
+        # Check project exists in DB
+        proj = db.query(LocalProject).filter_by(name=name).first()
+        if proj is None and project_dir is None:
+            return JSONResponse({"error": f"Project '{name}' not found"}, status_code=404)
+
+        # Cascade-delete all related records
+        for model in (
+            ProgressRecord, NodeContextCache, Enrollment, Highlight,
+            PracticeSubmission, LessonGenerationProgress, LessonContent,
+            NodeResource, NodeSearchStatus, LessonQueueItem, UserNote,
+        ):
+            db.query(model).filter_by(project_name=name).delete(synchronize_session=False)
+
+        if proj:
+            db.delete(proj)
+        db.commit()
+    except Exception as e:
+        db.rollback()
+        logger.error(f"[api_delete_project] DB error: {e}")
+        return JSONResponse({"error": str(e)}, status_code=500)
+    finally:
+        db.close()
+
+    # Delete project directory from disk
+    if project_dir and project_dir.exists():
+        try:
+            shutil.rmtree(project_dir)
+        except Exception as e:
+            logger.warning(f"[api_delete_project] Failed to delete directory {project_dir}: {e}")
+
+    logger.info(f"[api_delete_project] Deleted project '{name}'")
+    return JSONResponse({"status": "deleted", "name": name})
+
+
 async def api_upload_project_cover(request: Request) -> JSONResponse:
     """POST /api/projects/{name}/cover - Upload a cover image for a project."""
     from systemedu.core.config import SYSTEMEDU_HOME
@@ -743,6 +853,35 @@ async def api_upload_project_cover(request: Request) -> JSONResponse:
     except Exception as e:
         logger.exception(f"Cover upload failed for {name}")
         return JSONResponse({"error": str(e)}, status_code=500)
+
+
+async def api_generate_cover_preview(request: Request) -> JSONResponse:
+    """POST /api/projects/generate-cover-preview - Generate a cover image immediately and return the URL.
+
+    Used in the new-project form before the project is created.
+    Saves to a temp path and returns a media URL for preview.
+    """
+    from systemedu.core.config import SYSTEMEDU_HOME
+    from systemedu.education.image_gen import generate_project_cover
+
+    body = await request.json()
+    title = body.get("title", "").strip()
+    description = body.get("description", "").strip()
+
+    if not title:
+        return JSONResponse({"error": "title is required"}, status_code=400)
+
+    # Save to a predictable temp path based on title slug
+    import re
+    slug = re.sub(r"[^a-z0-9]+", "-", title.lower()).strip("-") or "preview"
+    save_path = SYSTEMEDU_HOME / "media" / "_preview" / f"{slug}.jpg"
+
+    ok = await generate_project_cover(title, description, save_path)
+    if not ok:
+        return JSONResponse({"error": "Cover generation failed. Check your DashScope API key and try again."}, status_code=500)
+
+    cover_url = f"/api/media/_preview/{slug}.jpg"
+    return JSONResponse({"url": cover_url})
 
 
 async def api_generate_project_cover(request: Request) -> JSONResponse:
@@ -2596,7 +2735,9 @@ def create_app() -> Starlette:
         Route("/api/projects", api_projects, methods=["GET"]),
         Route("/api/projects", api_create_project, methods=["POST"]),
         Route("/api/projects/preview-tree", api_preview_tree, methods=["POST"]),
+        Route("/api/projects/generate-description", api_generate_description, methods=["POST"]),
         Route("/api/projects/generate-tree", api_generate_tree, methods=["POST"]),
+        Route("/api/projects/generate-cover-preview", api_generate_cover_preview, methods=["POST"]),
         Route("/api/projects/{name}/enroll", api_enroll, methods=["POST"]),
         Route("/api/projects/{name}/enrollment", api_get_enrollment, methods=["GET"]),
         Route("/api/projects/{name}/enrollment", api_update_enrollment, methods=["PATCH"]),
@@ -2627,6 +2768,7 @@ def create_app() -> Starlette:
         Route("/api/projects/{name}/tree", api_update_tree, methods=["PUT"]),
         Route("/api/projects/{name}", api_project_detail, methods=["GET"]),
         Route("/api/projects/{name}", api_update_project, methods=["PATCH"]),
+        Route("/api/projects/{name}", api_delete_project, methods=["DELETE"]),
         Route("/api/objects/registry", api_objects_registry, methods=["GET"]),
         Route("/api/objects/queue", api_objects_queue, methods=["GET"]),
         Route("/api/objects/queue/add", api_objects_queue_add, methods=["POST"]),

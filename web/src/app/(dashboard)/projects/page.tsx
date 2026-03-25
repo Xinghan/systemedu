@@ -2,9 +2,10 @@
 
 import { useEffect, useState } from "react"
 import Link from "next/link"
-import { Plus, Sparkles, ArrowRight, TrendingUp, Brain } from "lucide-react"
+import { Plus, Sparkles, ArrowRight, TrendingUp, Brain, Trash2 } from "lucide-react"
 import { PageLoading } from "@/components/ui/page-loading"
 import { AppHeader } from "@/components/layout/app-header"
+import { toast } from "sonner"
 import { gateway } from "@/lib/api"
 import type { ProjectSummary } from "@/lib/types/api"
 import { useT } from "@/lib/hooks/use-t"
@@ -231,7 +232,7 @@ export default function ProjectsPage() {
         ) : (
           <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
             {filtered.map((p) => (
-              <ProjectCard key={p.name} project={p} />
+              <ProjectCard key={p.name} project={p} onDelete={(name) => setProjects((prev) => prev.filter((x) => x.name !== name))} />
             ))}
             {/* "Start Custom Project" card */}
             <Link href="/projects/new">
@@ -254,25 +255,45 @@ export default function ProjectsPage() {
   )
 }
 
-function ProjectCard({ project: p }: { project: ProjectSummary }) {
+function ProjectCard({ project: p, onDelete }: { project: ProjectSummary; onDelete: (name: string) => void }) {
   const t = useT()
   const tagColor = CATEGORY_TAG_COLOR[p.category] ?? CATEGORY_TAG_COLOR.other
   const categoryLabel = CATEGORY_TAG_LABELS[p.category] ?? p.category.toUpperCase()
-  // Additional tags from project.tags (show up to 1 extra)
   const extraTag = p.tags[0]?.toUpperCase()
+  const [confirmDelete, setConfirmDelete] = useState(false)
+  const [deleting, setDeleting] = useState(false)
 
-  // Age range as "level" label
   const levelLabel = p.age_range[1] >= 16
     ? `Ages ${p.age_range[0]}+`
     : `Ages ${p.age_range[0]}-${p.age_range[1]}`
 
+  const handleDelete = async (e: React.MouseEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    if (!confirmDelete) {
+      setConfirmDelete(true)
+      return
+    }
+    setDeleting(true)
+    try {
+      await gateway.deleteProject(p.name)
+      toast.success(t("project.deleted"))
+      onDelete(p.name)
+    } catch (err: unknown) {
+      toast.error(`Delete failed: ${err instanceof Error ? err.message : "Unknown error"}`)
+      setDeleting(false)
+      setConfirmDelete(false)
+    }
+  }
+
   return (
-    <Link href={`/projects/${p.name}`}>
-      <div className="bg-white dark:bg-card rounded-2xl p-6 h-full flex flex-col cursor-pointer shadow-[0_2px_12px_0_rgba(0,0,0,0.06)] hover:shadow-[0_6px_24px_0_rgba(109,40,217,0.12)] transition-all duration-[350ms] [transition-timing-function:cubic-bezier(0.2,0.8,0.2,1)] group border border-border/30">
-        {/* Category icon */}
-        <div className="mb-4">
-          <CategoryIcon category={p.category} />
-        </div>
+    <div className="relative group">
+      <Link href={`/projects/${p.name}`}>
+        <div className="bg-white dark:bg-card rounded-2xl p-6 h-full flex flex-col cursor-pointer shadow-[0_2px_12px_0_rgba(0,0,0,0.06)] hover:shadow-[0_6px_24px_0_rgba(109,40,217,0.12)] transition-all duration-[350ms] [transition-timing-function:cubic-bezier(0.2,0.8,0.2,1)] border border-border/30">
+          {/* Category icon */}
+          <div className="mb-4">
+            <CategoryIcon category={p.category} />
+          </div>
 
         {/* Tags row */}
         <div className="flex flex-wrap gap-1.5 mb-3">
@@ -298,27 +319,42 @@ function ProjectCard({ project: p }: { project: ProjectSummary }) {
           {p.description}
         </p>
 
-        {/* Footer: DURATION + LEVEL */}
-        <div className="border-t border-border/40 pt-4 grid grid-cols-2 gap-4">
-          <div>
-            <p className="text-[9px] font-[var(--font-manrope)] font-bold uppercase tracking-[0.12em] text-muted-foreground mb-1">
-              {t("projects.duration")}
-            </p>
-            <p className="text-sm font-bold text-[#1e2d6b] dark:text-foreground">
-              {p.estimated_hours} {t("projects.hours")}
-            </p>
-          </div>
-          <div>
-            <p className="text-[9px] font-[var(--font-manrope)] font-bold uppercase tracking-[0.12em] text-muted-foreground mb-1">
-              {t("projects.level")}
-            </p>
-            <p className="text-sm font-bold text-[#1e2d6b] dark:text-foreground">
-              {levelLabel}
-            </p>
+          {/* Footer: DURATION + LEVEL */}
+          <div className="border-t border-border/40 pt-4 grid grid-cols-2 gap-4">
+            <div>
+              <p className="text-[9px] font-[var(--font-manrope)] font-bold uppercase tracking-[0.12em] text-muted-foreground mb-1">
+                {t("projects.duration")}
+              </p>
+              <p className="text-sm font-bold text-[#1e2d6b] dark:text-foreground">
+                {p.estimated_hours} {t("projects.hours")}
+              </p>
+            </div>
+            <div>
+              <p className="text-[9px] font-[var(--font-manrope)] font-bold uppercase tracking-[0.12em] text-muted-foreground mb-1">
+                {t("projects.level")}
+              </p>
+              <p className="text-sm font-bold text-[#1e2d6b] dark:text-foreground">
+                {levelLabel}
+              </p>
+            </div>
           </div>
         </div>
-      </div>
-    </Link>
+      </Link>
+      {/* Delete button — top-right corner, appears on hover */}
+      <button
+        onClick={handleDelete}
+        onBlur={() => setConfirmDelete(false)}
+        disabled={deleting}
+        className={`absolute top-3 right-3 z-10 flex items-center gap-1 rounded-lg px-2 py-1.5 text-xs font-medium transition-all duration-200 ${
+          confirmDelete
+            ? "opacity-100 bg-destructive text-white shadow-md"
+            : "opacity-0 group-hover:opacity-100 bg-white/90 dark:bg-card/90 text-muted-foreground hover:text-destructive hover:bg-destructive/10 shadow-sm border border-border/40"
+        }`}
+      >
+        <Trash2 className="h-3 w-3" />
+        {confirmDelete ? (deleting ? t("project.deleting") : t("project.delete_confirm_btn")) : ""}
+      </button>
+    </div>
   )
 }
 
