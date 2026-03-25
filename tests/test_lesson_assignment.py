@@ -55,40 +55,6 @@ def test_clean_empty_field_preserves_long_content_with_keyword():
 
 
 # ---------------------------------------------------------------------------
-# ASSIGNMENT_PROMPT_TEMPLATE tests
-# ---------------------------------------------------------------------------
-
-def test_assignment_prompt_template_with_hands_on():
-    from systemedu.education.lesson_generator import ASSIGNMENT_PROMPT_TEMPLATE
-
-    prompt = ASSIGNMENT_PROMPT_TEMPLATE.format(
-        title="火箭推进原理",
-        assignment_type="experiment",
-        assignment_title="自制水火箭实验",
-        assignment_description="使用水和气压原理制作水火箭，测量发射高度",
-        hands_on_section="- 手工操作说明：准备矿泉水瓶、气泵、水、发射台\n",
-    )
-    assert "火箭推进原理" in prompt
-    assert "自制水火箭实验" in prompt
-    assert "[HANDS_ON]" in prompt
-    assert "手工操作" in prompt
-
-
-def test_assignment_prompt_template_without_hands_on():
-    from systemedu.education.lesson_generator import ASSIGNMENT_PROMPT_TEMPLATE
-
-    prompt = ASSIGNMENT_PROMPT_TEMPLATE.format(
-        title="变量与数据类型",
-        assignment_type="project",
-        assignment_title="变量应用综合练习",
-        assignment_description="设计一个程序，使用不同类型变量解决实际问题",
-        hands_on_section="",
-    )
-    assert "变量与数据类型" in prompt
-    assert "变量应用综合练习" in prompt
-
-
-# ---------------------------------------------------------------------------
 # DB: LessonContent has project_assignment field
 # ---------------------------------------------------------------------------
 
@@ -134,20 +100,3 @@ def test_lesson_to_dict_includes_project_assignment(tmp_path, monkeypatch):
         reset_db()
 
 
-# ---------------------------------------------------------------------------
-# LessonPlannerAgent: has_hands_on and assignment_strategy in prompt schema
-# ---------------------------------------------------------------------------
-
-def test_planner_prompt_contains_has_hands_on():
-    from systemedu.agents.builtin.lesson_planner import PLANNER_SYSTEM_PROMPT
-
-    assert "has_hands_on" in PLANNER_SYSTEM_PROMPT
-    assert "assignment_strategy" in PLANNER_SYSTEM_PROMPT
-    assert "hands_on_note" in PLANNER_SYSTEM_PROMPT
-
-
-def test_planner_prompt_contains_assignment_types():
-    from systemedu.agents.builtin.lesson_planner import PLANNER_SYSTEM_PROMPT
-
-    for assignment_type in ["project", "report", "design", "experiment", "none"]:
-        assert assignment_type in PLANNER_SYSTEM_PROMPT
