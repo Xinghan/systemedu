@@ -49,7 +49,7 @@ async def generate_project_cover(title: str, description: str, save_path: Path) 
         "model": "wanx2.1-t2i-plus",
         "input": {"prompt": prompt},
         "parameters": {
-            "size": "768*512",
+            "size": "512*512",
             "n": 1,
         },
     }
