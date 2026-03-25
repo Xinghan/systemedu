@@ -222,6 +222,8 @@ class LessonContent(Base):
     # Course (step-based learning) fields
     course_manifest = Column(Text, default="")   # CourseManifest JSON
     course_steps = Column(Text, default="")      # Generated steps JSON array
+    # Course v2 (multi-agent pipeline) field
+    course_content = Column(Text, default="")    # CourseContent JSON (new pipeline)
 
 
 class NodeResource(Base):
@@ -317,6 +319,7 @@ def _migrate_schema(engine):
         ("lesson_content", "interactive_lab_pending_object", "VARCHAR(200) DEFAULT ''"),
         ("lesson_content", "course_manifest", "TEXT DEFAULT ''"),
         ("lesson_content", "course_steps", "TEXT DEFAULT ''"),
+        ("lesson_content", "course_content", "TEXT DEFAULT ''"),
         ("projects", "cover_image_url", "TEXT DEFAULT ''"),
     ]
 

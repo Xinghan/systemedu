@@ -764,3 +764,296 @@ def _lesson_to_dict(lesson) -> dict:
         "content_type": lesson.content_type or "text",
         "generated_at": lesson.generated_at.isoformat() if lesson.generated_at else None,
     }
+
+
+async def generate_course_v2(
+    project_name: str,
+    knode_id: int,
+    user_id: str = "default",
+    progress_cb=None,
+) -> dict:
+    """Generate rich-media course content via 6-agent pipeline.
+
+    Pipeline:
+    1. CoursePlannerAgent.plan_detailed() -> plan_markdown
+    2. CourseIdeaAgent.identify() -> (plan_with_placeholders, ideas)
+    3. CourseIdeaDetailAgent x N (parallel) -> ideas with detail_plan
+    4. AnimationGenAgent / GameGenAgent / StoryGenAgent (parallel per idea)
+    5. IntegrationAgent.integrate() -> CourseContent
+    6. Save to DB course_content field
+
+    progress_cb(event, data): optional callback for SSE progress events.
+    Returns dict with status and course_content.
+    """
+    import asyncio
+    from systemedu.core.llm_client import get_llm
+    from systemedu.storage.db import LessonContent, get_session as get_db_session
+    from systemedu.agents.builtin.course_planner import CoursePlannerAgent
+    from systemedu.agents.builtin.course_idea_agent import CourseIdeaAgent
+    from systemedu.agents.builtin.course_idea_detail_agent import CourseIdeaDetailAgent
+    from systemedu.agents.builtin.animation_gen_agent import AnimationGenAgent
+    from systemedu.agents.builtin.game_gen_agent import GameGenAgent
+    from systemedu.agents.builtin.story_gen_agent import StoryGenAgent
+    from systemedu.agents.builtin.integration_agent import IntegrationAgent
+
+    ctx = load_project_context(project_name, user_id=user_id)
+
+    target_node = None
+    target_milestone = None
+    global_idx = 0
+    for ms in ctx.tree.milestones:
+        for knode in ms.knodes:
+            if global_idx == knode_id:
+                target_node = knode
+                target_milestone = ms
+                break
+            global_idx += 1
+        if target_node:
+            break
+
+    if not target_node:
+        raise ValueError(f"Node {knode_id} not found in project '{project_name}'")
+
+    db = get_db_session()
+    try:
+        lesson = (
+            db.query(LessonContent)
+            .filter_by(project_name=project_name, knode_id=knode_id)
+            .first()
+        )
+        if lesson is None:
+            lesson = LessonContent(
+                project_name=project_name,
+                knode_id=knode_id,
+                status="generating",
+                content_type=target_node.content_type.value,
+                course_content="",
+            )
+            db.add(lesson)
+        else:
+            lesson.status = "generating"
+            lesson.course_content = ""
+        db.commit()
+
+        llm = get_llm(streaming=False)
+        node_title = target_node.title
+        node_summary = target_node.summary
+        difficulty = target_node.difficulty_level
+        milestone_title = target_milestone.title
+
+        def _emit_log(agent: str, phase: str, input_summary: str, output_summary: str):
+            """Emit an agent_log debug event via progress_cb."""
+            if progress_cb:
+                progress_cb("agent_log", {
+                    "agent": agent,
+                    "phase": phase,
+                    "input": input_summary[:600],
+                    "output": output_summary[:1200],
+                })
+
+        # Step 1: Detailed learning plan
+        logger.info(f"[v2] Step 1: CoursePlannerAgent.plan_detailed for node {knode_id}")
+        _emit_log(
+            "CoursePlannerAgent",
+            "input",
+            f"node_title={node_title!r}, difficulty={difficulty}, milestone={milestone_title!r}",
+            "(pending...)",
+        )
+        plan_markdown = await CoursePlannerAgent(llm).plan_detailed(
+            node_title=node_title,
+            node_summary=node_summary,
+            difficulty=difficulty,
+            milestone_title=milestone_title,
+        )
+        if not plan_markdown:
+            raise ValueError("CoursePlannerAgent.plan_detailed returned empty")
+
+        _emit_log(
+            "CoursePlannerAgent",
+            "output",
+            f"node_title={node_title!r}",
+            plan_markdown[:1200],
+        )
+        if progress_cb:
+            progress_cb("plan_ready", {})
+
+        # Step 2: Identify rich-media ideas
+        logger.info(f"[v2] Step 2: CourseIdeaAgent.identify for node {knode_id}")
+        _emit_log(
+            "CourseIdeaAgent",
+            "input",
+            f"node_title={node_title!r}, plan_length={len(plan_markdown)} chars",
+            "(pending...)",
+        )
+        plan_with_placeholders, ideas = await CourseIdeaAgent(llm).identify(
+            plan_markdown=plan_markdown,
+            node_title=node_title,
+        )
+        if not ideas:
+            # Fallback: use plain plan without ideas
+            logger.warning(f"[v2] No ideas identified for node {knode_id}, using plain plan")
+            plan_with_placeholders = plan_markdown
+
+        _emit_log(
+            "CourseIdeaAgent",
+            "output",
+            f"plan_length={len(plan_markdown)} chars",
+            f"ideas={[{k: v for k, v in i.items() if k in ('idea_id','mode','topic')} for i in ideas]}\nplan_with_placeholders[:600]={plan_with_placeholders[:600]}",
+        )
+        if progress_cb:
+            progress_cb("ideas_identified", {"count": len(ideas)})
+
+        # Step 3: Elaborate each idea in parallel
+        if ideas:
+            logger.info(f"[v2] Step 3: CourseIdeaDetailAgent x {len(ideas)} (parallel)")
+            for idea in ideas:
+                _emit_log(
+                    "CourseIdeaDetailAgent",
+                    "input",
+                    f"idea_id={idea['idea_id']!r}, mode={idea['mode']!r}, topic={idea['topic']!r}",
+                    "(pending...)",
+                )
+            detail_agent = CourseIdeaDetailAgent(llm)
+            ideas = list(await asyncio.gather(*[detail_agent.elaborate(i) for i in ideas]))
+            for idea in ideas:
+                dp = idea.get("detail_plan")
+                _emit_log(
+                    "CourseIdeaDetailAgent",
+                    "output",
+                    f"idea_id={idea['idea_id']!r}, mode={idea['mode']!r}",
+                    json.dumps(dp, ensure_ascii=False)[:1200] if dp else "null",
+                )
+
+        # Step 4: Generate content for each idea in parallel
+        async def _generate_idea(idea: dict) -> dict:
+            mode = idea.get("mode", "")
+            detail_plan = idea.get("detail_plan")
+            result_idea = dict(idea)
+
+            if not detail_plan:
+                result_idea["result"] = None
+                if progress_cb:
+                    progress_cb("idea_complete", {
+                        "idea_id": idea.get("idea_id", ""),
+                        "mode": mode,
+                        "status": "failed",
+                    })
+                return result_idea
+
+            agent_name = {
+                "animation": "AnimationGenAgent",
+                "game": "GameGenAgent",
+                "story": "StoryGenAgent",
+            }.get(mode, f"{mode}Agent")
+
+            _emit_log(
+                agent_name,
+                "input",
+                f"mode={mode!r}, topic={idea.get('topic')!r}, node_title={node_title!r}",
+                json.dumps(detail_plan, ensure_ascii=False)[:600],
+            )
+
+            try:
+                if mode == "animation":
+                    result = await AnimationGenAgent(llm).generate(
+                        detail_plan=detail_plan,
+                        node_title=node_title,
+                    )
+                elif mode == "game":
+                    result = await GameGenAgent(llm).generate(
+                        detail_plan=detail_plan,
+                        node_title=node_title,
+                        node_summary=node_summary,
+                        difficulty=difficulty,
+                    )
+                elif mode == "story":
+                    result = await StoryGenAgent().generate(detail_plan=detail_plan)
+                else:
+                    result = None
+
+                result_idea["result"] = result
+                status = "ready" if result else "failed"
+
+                # Output summary
+                if mode in ("animation", "game"):
+                    output_summary = f"HTML length={len(result or '')} chars, status={status}"
+                elif mode == "story":
+                    output_summary = f"paragraphs={len(result or [])} items, status={status}"
+                    if result:
+                        output_summary += "\n" + json.dumps(result, ensure_ascii=False)[:800]
+                else:
+                    output_summary = f"status={status}"
+                _emit_log(agent_name, "output", f"topic={idea.get('topic')!r}", output_summary)
+
+            except Exception:
+                logger.exception(
+                    f"[v2] Failed to generate idea '{idea.get('idea_id')}' (mode={mode})"
+                )
+                result_idea["result"] = None
+                status = "failed"
+                _emit_log(agent_name, "output", f"topic={idea.get('topic')!r}", f"ERROR: status=failed")
+
+            if progress_cb:
+                progress_cb("idea_complete", {
+                    "idea_id": idea.get("idea_id", ""),
+                    "mode": mode,
+                    "status": status,
+                })
+            return result_idea
+
+        if ideas:
+            logger.info(f"[v2] Step 4: generating content for {len(ideas)} ideas (parallel)")
+            ideas = list(await asyncio.gather(*[_generate_idea(i) for i in ideas]))
+
+        # Step 5: Integration
+        logger.info(f"[v2] Step 5: IntegrationAgent.integrate for node {knode_id}")
+        course_content = IntegrationAgent().integrate(
+            plan_with_placeholders=plan_with_placeholders,
+            ideas=ideas,
+        )
+
+        # Step 6: Save to DB
+        lesson.course_content = json.dumps(course_content, ensure_ascii=False)
+        lesson.status = "ready"
+        lesson.generated_at = datetime.now()
+        db.commit()
+
+        if progress_cb:
+            progress_cb("done", {"status": "ready"})
+
+        logger.info(f"[v2] Course v2 generation complete for node {knode_id}")
+        return {
+            "project_name": project_name,
+            "knode_id": knode_id,
+            "status": "ready",
+            "course_content": course_content,
+        }
+
+    except Exception as exc:
+        try:
+            if lesson:
+                lesson.status = "failed"
+                db.commit()
+        except Exception:
+            pass
+        if progress_cb:
+            progress_cb("error", {"message": str(exc)})
+        raise
+    finally:
+        db.close()
+
+
+def _course_content_to_dict(lesson) -> dict:
+    """Convert a LessonContent ORM object to a course_content-focused dict."""
+    course_content = {}
+    try:
+        if lesson.course_content:
+            course_content = json.loads(lesson.course_content)
+    except (json.JSONDecodeError, TypeError, AttributeError):
+        pass
+    return {
+        "project_name": lesson.project_name,
+        "knode_id": lesson.knode_id,
+        "status": lesson.status,
+        "course_content": course_content,
+    }

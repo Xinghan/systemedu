@@ -7,6 +7,7 @@ import type {
   ChatResponse,
   ConfigResponse,
   CourseData,
+  CourseContentData,
   CreateProjectResponse,
   EnrollmentInfo,
   FactoryQueueResponse,
@@ -107,6 +108,18 @@ export const gateway = {
     api.post<CourseData>(`/api/projects/${projectName}/nodes/${nodeId}/course/generate`, { regenerate }),
   getCourse: (projectName: string, nodeId: number) =>
     api.get<CourseData>(`/api/projects/${projectName}/nodes/${nodeId}/course`),
+  generateCourseV2: (projectName: string, nodeId: number, regenerate = false) =>
+    api.post<{ status: string; project_name: string; knode_id: number }>(
+      `/api/projects/${projectName}/nodes/${nodeId}/course/v2/generate`,
+      { regenerate }
+    ),
+  getCourseV2: (projectName: string, nodeId: number) =>
+    api.get<CourseContentData>(`/api/projects/${projectName}/nodes/${nodeId}/course/v2`),
+  streamCourse: (projectName: string, nodeId: number): EventSource => {
+    return new EventSource(
+      `${GATEWAY_URL}/api/projects/${encodeURIComponent(projectName)}/nodes/${nodeId}/course/v2/stream`
+    )
+  },
   updateNodeProgress: (projectName: string, nodeId: number, status: string, userId = "default") =>
     api.patch<UpdateProgressResponse>(`/api/projects/${projectName}/nodes/${nodeId}/progress`, { status, user_id: userId }),
   previewTree: (treeData: Record<string, unknown>) =>

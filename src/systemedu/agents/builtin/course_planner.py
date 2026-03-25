@@ -5,6 +5,47 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+PLAN_DETAILED_PROMPT = """你是一位经验丰富的教育专家，专门为 6-18 岁学生设计深度学习内容。
+
+请为以下知识节点撰写一份详细的学习计划文档（800-1500字，Markdown格式）。
+
+知识节点：{node_title}
+简介：{node_summary}
+所属里程碑：{milestone_title}
+难度等级：{difficulty}/10
+
+学习计划必须包含以下三个部分：
+
+## 学习目标
+
+列出 3-5 条可验证的学习目标，每条目标用动词开头（如"理解"、"能够描述"、"能够计算"、"掌握"），并说明如何验证是否达成。
+
+## 正文
+
+分 3-5 节，每节包含：
+- 二级标题（## 小节名称）
+- 每节 200-400 字
+- 核心定义或概念的清晰解释
+- 至少一个贴近生活的类比或例子
+- 该概念的实际应用场景
+
+各节之间应有逻辑递进关系（从基础到深入）。
+
+## 学习路径建议
+
+描述最佳学习顺序：
+- 需要先掌握哪些基础知识
+- 本节点的学习步骤建议
+- 学完后可以进一步探索的方向
+
+要求：
+- 全部使用中文
+- 语言亲切、适合学生年龄段
+- 不使用任何 emoji 符号
+- 内容丰富，不少于 800 字
+- 直接输出 Markdown 内容，不要添加额外说明
+"""
+
 COURSE_PLANNER_PROMPT = """你是一位经验丰富的教育课程设计师，专门为 6-18 岁学生设计步骤式学习体验（类似 Duolingo）。
 
 请为以下知识节点规划一套有序的学习步骤序列。
@@ -148,3 +189,37 @@ class CoursePlannerAgent:
         except Exception:
             logger.exception("CoursePlannerAgent: unexpected error during planning")
             return None
+
+    async def plan_detailed(
+        self,
+        node_title: str,
+        node_summary: str,
+        difficulty: int,
+        milestone_title: str = "",
+    ) -> str:
+        """Generate a detailed learning plan in Markdown format (800-1500 words).
+
+        Returns a Markdown string, or empty string on failure.
+        """
+        from langchain_core.messages import HumanMessage
+
+        prompt = PLAN_DETAILED_PROMPT.format(
+            node_title=node_title,
+            node_summary=node_summary,
+            difficulty=difficulty,
+            milestone_title=milestone_title or "未知里程碑",
+        )
+
+        try:
+            response = self.llm.invoke([HumanMessage(content=prompt)])
+            text = response.content.strip()
+            if not text:
+                logger.warning("CoursePlannerAgent.plan_detailed: empty response")
+                return ""
+            logger.info(
+                f"CoursePlannerAgent.plan_detailed: generated {len(text)} chars for '{node_title}'"
+            )
+            return text
+        except Exception:
+            logger.exception("CoursePlannerAgent.plan_detailed: unexpected error")
+            return ""

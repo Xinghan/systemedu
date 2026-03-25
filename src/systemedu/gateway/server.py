@@ -1642,6 +1642,187 @@ async def api_get_course(request: Request) -> JSONResponse:
         db.close()
 
 
+# --- Course v2 SSE: per-connection event queues ---
+_course_v2_sse_queues: dict[str, list] = {}  # key -> list of asyncio.Queue
+
+
+async def api_generate_course_v2(request: Request) -> JSONResponse:
+    """POST /api/projects/{name}/nodes/{node_id}/course/v2/generate - Trigger async v2 course generation.
+
+    Returns immediately with status "generating".
+    Frontend should connect to the SSE endpoint to receive progress events.
+    """
+    name = request.path_params["name"]
+    node_id = int(request.path_params["node_id"])
+
+    body = {}
+    try:
+        body = await request.json()
+    except Exception:
+        pass
+
+    regenerate = body.get("regenerate", False)
+
+    from systemedu.storage.db import LessonContent, get_session as get_db_session
+
+    if not regenerate:
+        db = get_db_session()
+        try:
+            existing = (
+                db.query(LessonContent)
+                .filter_by(project_name=name, knode_id=node_id)
+                .first()
+            )
+            if existing and existing.status == "ready" and existing.course_content:
+                from systemedu.education.lesson_generator import _course_content_to_dict
+                return JSONResponse(_course_content_to_dict(existing))
+        finally:
+            db.close()
+
+    # Prevent duplicate generation
+    task_key = f"course_v2/{name}/{node_id}"
+    if _generation_tasks.get(task_key):
+        return JSONResponse({"status": "generating", "project_name": name, "knode_id": node_id})
+
+    import asyncio as _asyncio
+    import threading
+
+    _generation_tasks[task_key] = True
+
+    # Collect all SSE queues for this key
+    def _get_sse_queues():
+        return _course_v2_sse_queues.get(task_key, [])
+
+    def _progress_cb(event: str, data: dict):
+        payload = json.dumps({"event": event, "data": data}, ensure_ascii=False)
+        for q in _get_sse_queues():
+            try:
+                q.put_nowait(payload)
+            except Exception:
+                pass
+
+    def _run_v2_and_cleanup():
+        loop = _asyncio.new_event_loop()
+        try:
+            from systemedu.education.lesson_generator import generate_course_v2
+            loop.run_until_complete(generate_course_v2(name, node_id, progress_cb=_progress_cb))
+        except Exception as exc:
+            logger.exception(f"generate_course_v2 failed for {name}/{node_id}")
+            _progress_cb("error", {"message": str(exc)})
+        finally:
+            _generation_tasks.pop(task_key, None)
+            loop.close()
+
+    thread = threading.Thread(target=_run_v2_and_cleanup, daemon=True)
+    thread.start()
+
+    return JSONResponse({"status": "generating", "project_name": name, "knode_id": node_id})
+
+
+async def api_course_v2_stream(request: Request):
+    """GET /api/projects/{name}/nodes/{node_id}/course/v2/stream - SSE stream for v2 generation progress.
+
+    Events:
+      event: plan_ready      data: {}
+      event: ideas_identified data: {"count": N}
+      event: idea_complete   data: {"idea_id": "...", "mode": "...", "status": "ready|failed"}
+      event: done            data: {"status": "ready"}
+      event: error           data: {"message": "..."}
+    """
+    from starlette.responses import StreamingResponse
+    import asyncio as _asyncio
+
+    name = request.path_params["name"]
+    node_id = int(request.path_params["node_id"])
+    task_key = f"course_v2/{name}/{node_id}"
+
+    queue: _asyncio.Queue = _asyncio.Queue()
+
+    # Register this queue
+    if task_key not in _course_v2_sse_queues:
+        _course_v2_sse_queues[task_key] = []
+    _course_v2_sse_queues[task_key].append(queue)
+
+    # Check if already ready in DB
+    from systemedu.storage.db import LessonContent, get_session as get_db_session
+    db = get_db_session()
+    try:
+        existing = (
+            db.query(LessonContent)
+            .filter_by(project_name=name, knode_id=node_id)
+            .first()
+        )
+        if existing and existing.status == "ready" and existing.course_content:
+            # Already done, emit done immediately
+            async def _quick_done():
+                yield f"event: done\ndata: {{\"status\": \"ready\"}}\n\n"
+            return StreamingResponse(
+                _quick_done(),
+                media_type="text/event-stream",
+                headers={
+                    "Cache-Control": "no-cache",
+                    "X-Accel-Buffering": "no",
+                },
+            )
+    finally:
+        db.close()
+
+    async def _stream():
+        done_events = {"done", "error"}
+        try:
+            while True:
+                try:
+                    payload = await _asyncio.wait_for(queue.get(), timeout=60.0)
+                    parsed = json.loads(payload)
+                    event = parsed.get("event", "message")
+                    data = json.dumps(parsed.get("data", {}), ensure_ascii=False)
+                    yield f"event: {event}\ndata: {data}\n\n"
+                    if event in done_events:
+                        break
+                except _asyncio.TimeoutError:
+                    # Send keep-alive comment
+                    yield ": keep-alive\n\n"
+        finally:
+            # Cleanup queue registration
+            qs = _course_v2_sse_queues.get(task_key, [])
+            if queue in qs:
+                qs.remove(queue)
+            if not qs:
+                _course_v2_sse_queues.pop(task_key, None)
+
+    return StreamingResponse(
+        _stream(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+        },
+    )
+
+
+async def api_get_course_v2(request: Request) -> JSONResponse:
+    """GET /api/projects/{name}/nodes/{node_id}/course/v2 - Get current v2 course content."""
+    name = request.path_params["name"]
+    node_id = int(request.path_params["node_id"])
+
+    from systemedu.storage.db import LessonContent, get_session as get_db_session
+
+    db = get_db_session()
+    try:
+        lesson = (
+            db.query(LessonContent)
+            .filter_by(project_name=name, knode_id=node_id)
+            .first()
+        )
+        if lesson is None:
+            return JSONResponse({"status": "pending", "course_content": {}})
+
+        from systemedu.education.lesson_generator import _course_content_to_dict
+        return JSONResponse(_course_content_to_dict(lesson))
+    finally:
+        db.close()
+
+
 async def api_update_progress(request: Request) -> JSONResponse:
     """PATCH /api/projects/{name}/nodes/{node_id}/progress - Update node progress status."""
     name = request.path_params["name"]
@@ -2959,6 +3140,9 @@ def create_app() -> Starlette:
         Route("/api/projects/{name}/nodes/{node_id:int}/lesson/progress", api_lesson_progress, methods=["GET"]),
         Route("/api/projects/{name}/nodes/{node_id:int}/course/generate", api_generate_course, methods=["POST"]),
         Route("/api/projects/{name}/nodes/{node_id:int}/course", api_get_course, methods=["GET"]),
+        Route("/api/projects/{name}/nodes/{node_id:int}/course/v2/generate", api_generate_course_v2, methods=["POST"]),
+        Route("/api/projects/{name}/nodes/{node_id:int}/course/v2/stream", api_course_v2_stream, methods=["GET"]),
+        Route("/api/projects/{name}/nodes/{node_id:int}/course/v2", api_get_course_v2, methods=["GET"]),
         Route("/api/projects/{name}/lessons/batch-generate", api_batch_generate_lessons, methods=["POST"]),
         Route("/api/projects/{name}/lessons/statuses", api_get_lesson_statuses, methods=["GET"]),
         Route("/api/projects/{name}/lessons/queue", api_lessons_queue_dispatch, methods=["GET", "DELETE"]),

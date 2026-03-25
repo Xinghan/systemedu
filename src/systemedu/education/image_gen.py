@@ -119,3 +119,96 @@ async def generate_project_cover(title: str, description: str, save_path: Path) 
     except Exception as e:
         logger.error(f"Cover generation error: {e}")
         return False
+
+
+async def generate_image_url(prompt: str) -> str:
+    """Generate an image via DashScope Wanx and return a publicly accessible URL.
+
+    Used by StoryGenAgent to generate paragraph illustrations.
+    Returns empty string on failure.
+    """
+    import uuid
+    from systemedu.core.config import get_config
+
+    api_key = _get_api_key()
+    if not api_key:
+        logger.warning("No DashScope API key found, skipping image generation")
+        return ""
+
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json",
+        "X-DashScope-Async": "enable",
+    }
+    payload = {
+        "model": "wanx2.1-t2i-plus",
+        "input": {"prompt": prompt[:500]},
+        "parameters": {
+            "size": "512*512",
+            "n": 1,
+        },
+    }
+
+    try:
+        transport = httpx.AsyncHTTPTransport()
+        async with httpx.AsyncClient(transport=transport, timeout=30) as client:
+            res = await client.post(WANX_SUBMIT_URL, headers=headers, json=payload)
+            if res.status_code != 200:
+                logger.error(f"Wanx submit failed: {res.status_code} {res.text[:200]}")
+                return ""
+
+            data = res.json()
+            task_id = data.get("output", {}).get("task_id")
+            if not task_id:
+                logger.error(f"No task_id in response: {data}")
+                return ""
+
+            # Poll for result (max 120s)
+            for attempt in range(24):
+                await asyncio.sleep(5)
+                poll_res = await client.get(
+                    WANX_TASK_URL.format(task_id=task_id),
+                    headers={"Authorization": f"Bearer {api_key}"},
+                )
+                if poll_res.status_code != 200:
+                    continue
+
+                poll_data = poll_res.json()
+                task_status = poll_data.get("output", {}).get("task_status")
+
+                if task_status == "SUCCEEDED":
+                    results = poll_data.get("output", {}).get("results", [])
+                    if not results:
+                        return ""
+                    image_url = results[0].get("url", "")
+                    if not image_url:
+                        return ""
+
+                    # Download and save locally, return local URL path
+                    config = get_config()
+                    media_dir = Path(str(config.storage.data_dir)) / "media" / "story_images"
+                    media_dir.mkdir(parents=True, exist_ok=True)
+                    filename = f"{uuid.uuid4().hex}.png"
+                    save_path = media_dir / filename
+
+                    img_res = await client.get(image_url, follow_redirects=True)
+                    if img_res.status_code != 200:
+                        logger.error(f"Failed to download image: {img_res.status_code}")
+                        return ""
+
+                    save_path.write_bytes(img_res.content)
+                    logger.info(f"Story image saved to {save_path}")
+                    return f"/api/media/story_images/{filename}"
+
+                elif task_status in ("FAILED", "CANCELED"):
+                    logger.error(f"Image generation {task_status}: {poll_data}")
+                    return ""
+
+                logger.debug(f"Image generation pending (attempt {attempt+1}/24): {task_status}")
+
+            logger.error("Image generation timed out after 120s")
+            return ""
+
+    except Exception as e:
+        logger.error(f"Image generation error: {e}")
+        return ""

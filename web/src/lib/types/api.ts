@@ -404,6 +404,42 @@ export interface FactoryQueueResponse {
   }
 }
 
+// --- Course v2 types (multi-agent pipeline) ---
+
+export type CourseIdeaMode = "animation" | "game" | "story"
+
+export interface CourseIdeaSummary {
+  idea_id: string
+  mode: CourseIdeaMode
+  topic: string
+  context_summary: string
+}
+
+export interface StoryParagraph {
+  text: string
+  image_url: string
+}
+
+export interface RenderedSection {
+  mode: CourseIdeaMode
+  status: "ready" | "failed"
+  html: string | null
+  story_paragraphs: StoryParagraph[] | null
+}
+
+export interface CourseContent {
+  plan_markdown: string
+  ideas: CourseIdeaSummary[]
+  rendered_sections: Record<string, RenderedSection>
+}
+
+export interface CourseContentData {
+  project_name?: string
+  knode_id?: number
+  status: "pending" | "generating" | "ready" | "failed"
+  course_content: CourseContent | Record<string, never>
+}
+
 export type CourseStepType =
   | "concept"
   | "story"
