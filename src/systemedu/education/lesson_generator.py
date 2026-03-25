@@ -950,6 +950,176 @@ async def generate_lesson(project_name: str, knode_id: int, user_id: str = "defa
         db.close()
 
 
+async def generate_course(project_name: str, knode_id: int, user_id: str = "default") -> dict:
+    """Generate step-by-step course content for a knowledge node.
+
+    1. Run CoursePlannerAgent to create CourseManifest -> saved to course_manifest
+    2. Generate each step in order -> append to course_steps after each step
+    3. Track progress via LessonGenerationProgress (step_name: course_step_{i}_{type})
+
+    Returns dict with status, manifest, and steps list.
+    """
+    from systemedu.core.llm_client import get_llm
+    from systemedu.storage.db import LessonContent, LessonGenerationProgress, get_session as get_db_session
+
+    ctx = load_project_context(project_name, user_id=user_id)
+
+    # Find target node and milestone
+    target_node = None
+    target_milestone = None
+    global_idx = 0
+    for ms in ctx.tree.milestones:
+        for knode in ms.knodes:
+            if global_idx == knode_id:
+                target_node = knode
+                target_milestone = ms
+                break
+            global_idx += 1
+        if target_node:
+            break
+
+    if not target_node:
+        raise ValueError(f"Node {knode_id} not found in project '{project_name}'")
+
+    db = get_db_session()
+    try:
+        lesson = (
+            db.query(LessonContent)
+            .filter_by(project_name=project_name, knode_id=knode_id)
+            .first()
+        )
+        if lesson is None:
+            lesson = LessonContent(
+                project_name=project_name,
+                knode_id=knode_id,
+                status="generating",
+                content_type=target_node.content_type.value,
+                course_manifest="",
+                course_steps="",
+            )
+            db.add(lesson)
+        else:
+            lesson.status = "generating"
+            lesson.course_manifest = ""
+            lesson.course_steps = ""
+        db.commit()
+
+        llm = get_llm(streaming=False)
+
+        # Step 1: Plan the course
+        _update_progress(db, project_name, knode_id, "course_planner", "课程规划", "课程规划师", "in_progress")
+        try:
+            from systemedu.agents.builtin.course_planner import CoursePlannerAgent
+            planner = CoursePlannerAgent(llm=llm)
+            manifest = await planner.plan(
+                node_title=target_node.title,
+                node_summary=target_node.summary,
+                difficulty=target_node.difficulty_level,
+                milestone_title=target_milestone.title,
+            )
+            if manifest is None:
+                raise ValueError("CoursePlannerAgent returned None")
+
+            lesson.course_manifest = json.dumps(manifest, ensure_ascii=False)
+            db.commit()
+            _update_progress(
+                db, project_name, knode_id, "course_planner", "课程规划", "课程规划师",
+                "completed", f"{manifest['total_steps']} 步骤"
+            )
+            logger.info(f"Course manifest planned for node {knode_id}: {manifest['total_steps']} steps")
+        except Exception:
+            logger.exception(f"CoursePlannerAgent failed for node {knode_id}")
+            _update_progress(db, project_name, knode_id, "course_planner", "课程规划", "课程规划师", "failed")
+            lesson.status = "failed"
+            db.commit()
+            return _course_to_dict(lesson)
+
+        # Step 2: Generate each step sequentially
+        steps: list[dict] = []
+        from systemedu.education.step_generator import generate_step
+
+        for step_spec in manifest["steps"]:
+            step_index = step_spec["step_index"]
+            step_type = step_spec["type"]
+            step_name = f"course_step_{step_index}_{step_type}"
+            step_label = f"步骤{step_index + 1}: {step_spec.get('title', step_type)}"
+
+            _update_progress(db, project_name, knode_id, step_name, step_label, "内容生成器", "in_progress")
+            try:
+                step_data = await generate_step(
+                    step_spec=step_spec,
+                    node_title=target_node.title,
+                    node_summary=target_node.summary,
+                    difficulty=target_node.difficulty_level,
+                    milestone_title=target_milestone.title,
+                    llm=llm,
+                )
+                steps.append(step_data)
+                lesson.course_steps = json.dumps(steps, ensure_ascii=False)
+                db.commit()
+
+                status = step_data.get("status", "ready")
+                preview = f"{len(step_data.get('content') or step_data.get('html') or '')} 字"
+                _update_progress(db, project_name, knode_id, step_name, step_label, "内容生成器", status, preview)
+                logger.info(f"Course step {step_index} ({step_type}) generated for node {knode_id}")
+            except Exception:
+                logger.exception(f"Course step {step_index} failed for node {knode_id}")
+                failed_step = {
+                    "step_index": step_index,
+                    "type": step_type,
+                    "title": step_spec.get("title", ""),
+                    "status": "failed",
+                    "content": "",
+                    "html": "",
+                    "practice_data": "",
+                    "audio_url": "",
+                }
+                steps.append(failed_step)
+                lesson.course_steps = json.dumps(steps, ensure_ascii=False)
+                db.commit()
+                _update_progress(db, project_name, knode_id, step_name, step_label, "内容生成器", "failed")
+
+        lesson.status = "ready"
+        lesson.generated_at = datetime.now()
+        db.commit()
+
+        return _course_to_dict(lesson)
+
+    except Exception:
+        try:
+            if lesson:
+                lesson.status = "failed"
+                db.commit()
+        except Exception:
+            pass
+        raise
+    finally:
+        db.close()
+
+
+def _course_to_dict(lesson) -> dict:
+    """Convert a LessonContent ORM object to a course-focused dict."""
+    manifest = {}
+    steps = []
+    try:
+        if lesson.course_manifest:
+            manifest = json.loads(lesson.course_manifest)
+    except (json.JSONDecodeError, TypeError, AttributeError):
+        pass
+    try:
+        if lesson.course_steps:
+            steps = json.loads(lesson.course_steps)
+    except (json.JSONDecodeError, TypeError, AttributeError):
+        pass
+    return {
+        "project_name": lesson.project_name,
+        "knode_id": lesson.knode_id,
+        "status": lesson.status,
+        "manifest": manifest,
+        "steps": steps,
+    }
+
+
 def _lesson_to_dict(lesson) -> dict:
     """Convert a LessonContent ORM object to a plain dict."""
     return {

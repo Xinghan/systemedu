@@ -6,6 +6,7 @@ import type {
   ChatRequest,
   ChatResponse,
   ConfigResponse,
+  CourseData,
   CreateProjectResponse,
   EnrollmentInfo,
   FactoryQueueResponse,
@@ -102,6 +103,10 @@ export const gateway = {
     api.post<{ status: string; project_name: string; knode_id: number }>(`/api/projects/${projectName}/nodes/${nodeId}/lesson/generate`, { regenerate }),
   lessonProgress: (projectName: string, nodeId: number) =>
     api.get<LessonProgressResponse>(`/api/projects/${projectName}/nodes/${nodeId}/lesson/progress`),
+  generateCourse: (projectName: string, nodeId: number, regenerate = false) =>
+    api.post<CourseData>(`/api/projects/${projectName}/nodes/${nodeId}/course/generate`, { regenerate }),
+  getCourse: (projectName: string, nodeId: number) =>
+    api.get<CourseData>(`/api/projects/${projectName}/nodes/${nodeId}/course`),
   updateNodeProgress: (projectName: string, nodeId: number, status: string, userId = "default") =>
     api.patch<UpdateProgressResponse>(`/api/projects/${projectName}/nodes/${nodeId}/progress`, { status, user_id: userId }),
   previewTree: (treeData: Record<string, unknown>) =>

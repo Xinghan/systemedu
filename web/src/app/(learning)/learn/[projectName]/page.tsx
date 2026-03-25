@@ -36,6 +36,7 @@ import { ScrollArea } from "@/components/ui/scroll-area"
 import { LessonView } from "@/components/learning/lesson-view"
 import { ChatPanel } from "@/components/chat/chat-panel"
 import { NotePanel } from "@/components/learning/note-panel"
+import { CourseView } from "@/components/learning/course-view"
 import { gateway } from "@/lib/api"
 import type { KnodeInfo, LessonStatus, NodeProgress, ProjectDetail } from "@/lib/types/api"
 import { useT } from "@/lib/hooks/use-t"
@@ -138,6 +139,7 @@ export default function LearnPage() {
   const [activePage, setActivePage] = useState<number>(0)
   const [lessonStatuses, setLessonStatuses] = useState<Record<string, LessonStatus>>({})
   const [completing, setCompleting] = useState(false)
+  const [courseNodeId, setCourseNodeId] = useState<number | null>(null)
   const [tutorOpen, setTutorOpen] = useState(false)
   const [noteOpen, setNoteOpen] = useState(false)
   const [noteState, setNoteState] = useState<"closed" | "open" | "minimized">("closed")
@@ -214,6 +216,7 @@ export default function LearnPage() {
 
   const handleNodeClick = useCallback((nodeId: number) => {
     setActiveNodeId(nodeId)
+    setCourseNodeId(nodeId)
   }, [])
 
   const handleNodeChange = useCallback((nodeId: number) => {
@@ -439,7 +442,7 @@ export default function LearnPage() {
         )}
 
         {/* Center: lesson content */}
-        <div className="flex-1 min-w-0 min-h-0 flex flex-col">
+        <div className="flex-1 min-w-0 min-h-0 flex flex-col relative">
           {/* Lesson content (title is rendered inside LessonContentView for scrolling) */}
           <div className="flex-1 min-h-0">
             <LessonView
@@ -455,6 +458,21 @@ export default function LearnPage() {
               onNoteStateChange={setNoteState}
             />
           </div>
+
+          {/* CourseView overlay — slides in when a node is clicked */}
+          {courseNodeId !== null && (
+            <div className="absolute inset-0 z-20 bg-background flex flex-col">
+              <CourseView
+                projectName={params.projectName}
+                nodeId={courseNodeId}
+                knode={allKnodes[courseNodeId] ?? null}
+                onClose={() => setCourseNodeId(null)}
+                onMarkComplete={() => {
+                  window.dispatchEvent(new CustomEvent("lesson:markComplete"))
+                }}
+              />
+            </div>
+          )}
         </div>
 
         {/* Right panel: Mastery + Resources + AI Tutor */}

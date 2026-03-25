@@ -403,3 +403,53 @@ export interface FactoryQueueResponse {
     failed: number
   }
 }
+
+export type CourseStepType =
+  | "concept"
+  | "story"
+  | "animation"
+  | "game"
+  | "code"
+  | "practice"
+  | "summary"
+
+export interface CourseStepSpec {
+  prompt_hint?: string
+  game_mechanic?: string
+  game_concept?: string
+  exercise_count?: number
+}
+
+export interface CourseManifestStep {
+  step_index: number
+  type: CourseStepType
+  title: string
+  duration_minutes: number
+  spec: CourseStepSpec
+}
+
+export interface CourseManifest {
+  node_title: string
+  total_steps: number
+  learning_goal: string
+  steps: CourseManifestStep[]
+}
+
+export interface CourseStep {
+  step_index: number
+  type: CourseStepType
+  title: string
+  status: "ready" | "pending" | "failed"
+  content: string
+  html: string
+  practice_data: string
+  audio_url: string
+}
+
+export interface CourseData {
+  project_name?: string
+  knode_id?: number
+  status: LessonStatus
+  manifest: CourseManifest | Record<string, never>
+  steps: CourseStep[]
+}
