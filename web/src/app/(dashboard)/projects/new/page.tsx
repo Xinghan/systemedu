@@ -15,6 +15,22 @@ import { useT } from "@/lib/hooks/use-t"
 
 type Step = "input" | "preview" | "confirm"
 
+/** Generate a URL-safe slug from a title + short random suffix to ensure uniqueness. */
+function generateSlug(title: string): string {
+  const base = title
+    .toLowerCase()
+    // Keep ASCII letters, digits, spaces; strip everything else
+    .replace(/[^\w\s-]/g, "")
+    .trim()
+    .replace(/[\s_]+/g, "-")
+    .replace(/-{2,}/g, "-")
+    .slice(0, 32)
+    .replace(/^-|-$/g, "") || "project"
+  // 4-char base36 suffix: ~1.7M combinations, collision-free in practice
+  const suffix = Math.random().toString(36).slice(2, 6)
+  return `${base}-${suffix}`
+}
+
 export default function NewProjectPage() {
   const router = useRouter()
   const t = useT()
@@ -89,7 +105,12 @@ export default function NewProjectPage() {
       setPreview(result)
       if (result.valid) {
         const metaTitle = result.meta?.title as string
-        if (metaTitle) setProjectTitle(metaTitle)
+        if (metaTitle) {
+          setProjectTitle(metaTitle)
+          setProjectName(generateSlug(metaTitle))
+        } else {
+          setProjectName(generateSlug("project"))
+        }
         setStep("preview")
       } else {
         setError(`Validation failed: ${result.errors.join("; ")}`)
@@ -118,6 +139,7 @@ export default function NewProjectPage() {
       setPreview(result)
       setTreeData({ milestones: result.milestones })
       setProjectTitle(aiTitle.trim())
+      setProjectName(generateSlug(aiTitle.trim()))
       setStep("preview")
     } catch (e) {
       setError(e instanceof Error ? e.message : "AI generation failed, please retry")
@@ -128,16 +150,17 @@ export default function NewProjectPage() {
   }, [aiTitle, aiDescription, aiAge, aiNodeCount, t])
 
   const handleCreate = useCallback(async () => {
-    if (!treeData || !projectName.trim()) return
+    if (!treeData) return
+    const slug = projectName.trim() || generateSlug(projectTitle.trim() || "project")
     setLoading(true); setLoadingLabel(t("new_project.saving")); setLoadingStep(2); setError("")
     try {
-      await gateway.createProject(projectName.trim(), projectTitle.trim(), treeData, {
+      await gateway.createProject(slug, projectTitle.trim(), treeData, {
         description: aiDescription.trim() || undefined,
         tags: tags.length > 0 ? tags : undefined,
         age_range: [aiAge, aiAge + 6],
       })
       if (coverFile) {
-        try { await gateway.uploadProjectCover(projectName.trim(), coverFile) } catch { /* non-fatal */ }
+        try { await gateway.uploadProjectCover(slug, coverFile) } catch { /* non-fatal */ }
       } else if (coverPreview && coverPreview.includes("/_preview/")) {
         // Preview was generated — fetch the image and re-upload under the project name
         try {
@@ -145,17 +168,18 @@ export default function NewProjectPage() {
           if (imgRes.ok) {
             const blob = await imgRes.blob()
             const file = new File([blob], "cover.jpg", { type: "image/jpeg" })
-            await gateway.uploadProjectCover(projectName.trim(), file)
+            await gateway.uploadProjectCover(slug, file)
           }
         } catch { /* non-fatal */ }
       }
-      router.push(`/projects/${projectName.trim()}`)
+      router.push(`/projects/${slug}`)
     } catch (e) {
       setError(e instanceof Error ? e.message : "Create failed")
     } finally {
       setLoading(false)
     }
   }, [treeData, projectName, projectTitle, coverFile, coverPreview, aiDescription, tags, aiAge, router, t])
+  // Note: projectName is auto-generated (generateSlug) and stored in state; slug variable is derived inside handleCreate
 
   // ── Loading screen ─────────────────────────────────────────────────────────
   if (loading) {
@@ -261,30 +285,19 @@ export default function NewProjectPage() {
           )}
 
           <div className="space-y-6">
+            {/* Cover preview — square */}
             {(coverPreview || coverFile) && coverPreview !== "__generate__" && (
-              <div className="flex items-center gap-4 p-4 rounded-2xl bg-white shadow-sm">
-                <img src={coverPreview!} alt="cover" className="w-20 h-14 rounded-xl object-cover shrink-0" />
+              <div className="flex items-center gap-5 p-4 rounded-2xl bg-white shadow-sm">
+                <img src={coverPreview!} alt="cover" className="w-20 h-20 rounded-2xl object-cover shrink-0" />
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-foreground truncate">{coverFile?.name}</p>
+                  <p className="text-sm font-semibold text-foreground">{projectTitle}</p>
                   <button onClick={() => { setCoverFile(null); setCoverPreview(null) }}
-                    className="text-xs text-muted-foreground hover:text-foreground transition-colors mt-1">
+                    className="text-xs text-muted-foreground hover:text-foreground transition-colors mt-1.5">
                     {t("new_project.remove")}
                   </button>
                 </div>
               </div>
             )}
-
-            <div className="space-y-2">
-              <label className="text-sm font-bold text-foreground font-[var(--font-manrope)] block">
-                {t("new_project.slug_label")}
-              </label>
-              <Input
-                placeholder={t("new_project.slug_placeholder")}
-                value={projectName}
-                onChange={(e) => setProjectName(e.target.value.replace(/[^a-z0-9-]/g, ""))}
-                className="h-14 text-lg bg-[#f1efff] border-0 border-b-2 border-primary/20 focus:border-primary rounded-none rounded-t-xl px-4 focus:ring-0"
-              />
-            </div>
 
             <div className="space-y-2">
               <label className="text-sm font-bold text-foreground font-[var(--font-manrope)] block">
@@ -307,7 +320,7 @@ export default function NewProjectPage() {
               <Button variant="outline" onClick={() => setStep("preview")}>
                 <ArrowLeft className="h-4 w-4 mr-1.5" />{t("new_project.back")}
               </Button>
-              <button onClick={handleCreate} disabled={!projectName.trim()}
+              <button onClick={handleCreate} disabled={!projectTitle.trim()}
                 className="group relative px-10 py-4 bg-primary text-white font-extrabold text-base rounded-2xl overflow-hidden transition-all hover:scale-105 active:scale-95 shadow-[0_8px_32px_0_rgba(106,28,246,0.30)] disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-3">
                 <div className="absolute inset-0 bg-gradient-to-r from-primary via-[#ac8eff] to-primary opacity-0 group-hover:opacity-100 transition-opacity" />
                 <span className="relative flex items-center gap-3">
@@ -598,9 +611,13 @@ export default function NewProjectPage() {
                     </div>
                   )}
                   {!coverPreview && !generatingCover && (
-                    <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 text-muted-foreground/40">
-                      <ImageIcon className="h-10 w-10" />
-                      <span className="text-xs" style={{ fontFamily: "var(--font-manrope, sans-serif)" }}>{t("new_project.cover_hint")}</span>
+                    <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 px-8 text-center">
+                      <div className="rounded-2xl bg-muted-foreground/10 p-4">
+                        <ImageIcon className="h-8 w-8 text-muted-foreground/30" />
+                      </div>
+                      <span className="text-xs text-muted-foreground/50 leading-relaxed" style={{ fontFamily: "var(--font-manrope, sans-serif)" }}>
+                        {t("new_project.cover_hint_short")}
+                      </span>
                     </div>
                   )}
                 </div>
