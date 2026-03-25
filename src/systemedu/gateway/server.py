@@ -1555,93 +1555,6 @@ async def api_lesson_progress(request: Request) -> JSONResponse:
         db.close()
 
 
-def _run_course_generation(project_name: str, node_id: int):
-    """Run generate_course in a new event loop (for background thread)."""
-    import asyncio as _asyncio
-
-    from systemedu.education.lesson_generator import generate_course
-    _asyncio.run(generate_course(project_name, node_id))
-
-
-async def api_generate_course(request: Request) -> JSONResponse:
-    """POST /api/projects/{name}/nodes/{node_id}/course/generate - Trigger async course generation.
-
-    Returns immediately with status "generating". Frontend should poll GET /course.
-    If course is already ready, returns existing data immediately.
-    """
-    name = request.path_params["name"]
-    node_id = int(request.path_params["node_id"])
-
-    body = {}
-    try:
-        body = await request.json()
-    except Exception:
-        pass
-
-    regenerate = body.get("regenerate", False)
-
-    from systemedu.storage.db import LessonContent, get_session as get_db_session
-
-    if not regenerate:
-        db = get_db_session()
-        try:
-            existing = (
-                db.query(LessonContent)
-                .filter_by(project_name=name, knode_id=node_id)
-                .first()
-            )
-            if existing and existing.status == "ready" and existing.course_manifest:
-                from systemedu.education.lesson_generator import _course_to_dict
-                return JSONResponse(_course_to_dict(existing))
-        finally:
-            db.close()
-
-    # Prevent duplicate generation
-    task_key = f"course/{name}/{node_id}"
-    if _generation_tasks.get(task_key):
-        return JSONResponse({"status": "generating", "project_name": name, "knode_id": node_id})
-
-    import threading
-    _generation_tasks[task_key] = True
-
-    def _run_and_cleanup():
-        try:
-            _run_course_generation(name, node_id)
-        finally:
-            _generation_tasks.pop(task_key, None)
-
-    thread = threading.Thread(target=_run_and_cleanup, daemon=True)
-    thread.start()
-
-    return JSONResponse({"status": "generating", "project_name": name, "knode_id": node_id})
-
-
-async def api_get_course(request: Request) -> JSONResponse:
-    """GET /api/projects/{name}/nodes/{node_id}/course - Get current course data.
-
-    Returns: { status, manifest, steps: CourseStep[] }
-    """
-    name = request.path_params["name"]
-    node_id = int(request.path_params["node_id"])
-
-    from systemedu.storage.db import LessonContent, get_session as get_db_session
-
-    db = get_db_session()
-    try:
-        lesson = (
-            db.query(LessonContent)
-            .filter_by(project_name=name, knode_id=node_id)
-            .first()
-        )
-        if lesson is None:
-            return JSONResponse({"status": "pending", "manifest": {}, "steps": []})
-
-        from systemedu.education.lesson_generator import _course_to_dict
-        return JSONResponse(_course_to_dict(lesson))
-    finally:
-        db.close()
-
-
 # --- Course v2 SSE: per-connection event queues ---
 _course_v2_sse_queues: dict[str, list] = {}  # key -> list of asyncio.Queue
 
@@ -3138,8 +3051,6 @@ def create_app() -> Starlette:
         Route("/api/projects/{name}/nodes/{node_id:int}/lesson", api_node_lesson, methods=["GET"]),
         Route("/api/projects/{name}/nodes/{node_id:int}/lesson/generate", api_generate_lesson, methods=["POST"]),
         Route("/api/projects/{name}/nodes/{node_id:int}/lesson/progress", api_lesson_progress, methods=["GET"]),
-        Route("/api/projects/{name}/nodes/{node_id:int}/course/generate", api_generate_course, methods=["POST"]),
-        Route("/api/projects/{name}/nodes/{node_id:int}/course", api_get_course, methods=["GET"]),
         Route("/api/projects/{name}/nodes/{node_id:int}/course/v2/generate", api_generate_course_v2, methods=["POST"]),
         Route("/api/projects/{name}/nodes/{node_id:int}/course/v2/stream", api_course_v2_stream, methods=["GET"]),
         Route("/api/projects/{name}/nodes/{node_id:int}/course/v2", api_get_course_v2, methods=["GET"]),

@@ -36,7 +36,7 @@ import { ScrollArea } from "@/components/ui/scroll-area"
 import { LessonView } from "@/components/learning/lesson-view"
 import { ChatPanel } from "@/components/chat/chat-panel"
 import { NotePanel } from "@/components/learning/note-panel"
-import { CourseView } from "@/components/learning/course-view"
+import { CourseContentView } from "@/components/learning/course-content-view"
 import { gateway } from "@/lib/api"
 import type { KnodeInfo, LessonStatus, NodeProgress, ProjectDetail } from "@/lib/types/api"
 import { useT } from "@/lib/hooks/use-t"
@@ -459,10 +459,10 @@ export default function LearnPage() {
             />
           </div>
 
-          {/* CourseView overlay — slides in when a node is clicked */}
+          {/* CourseContentView overlay — slides in when a node is clicked (v2 pipeline) */}
           {courseNodeId !== null && (
             <div className="absolute inset-0 z-20 bg-background flex flex-col">
-              <CourseView
+              <CourseContentView
                 projectName={params.projectName}
                 nodeId={courseNodeId}
                 knode={allKnodes[courseNodeId] ?? null}
