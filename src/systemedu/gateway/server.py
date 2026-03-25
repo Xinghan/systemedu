@@ -441,6 +441,27 @@ async def api_create_project(request: Request) -> JSONResponse:
     except FileExistsError as e:
         return JSONResponse({"error": str(e)}, status_code=409)
 
+    # Insert DB record immediately so cover_image_url can be updated later
+    from systemedu.storage.db import LocalProject, get_session as get_db_session
+    db = get_db_session()
+    try:
+        existing = db.query(LocalProject).filter_by(name=name).first()
+        if not existing:
+            db.add(LocalProject(
+                name=name,
+                title=title,
+                description=meta.get("description", "") if meta else "",
+                path=str(project_dir),
+                category=meta.get("category", "other") if meta else "other",
+                cover_image_url="",
+            ))
+            db.commit()
+    except Exception:
+        db.rollback()
+        logger.exception("Failed to insert project DB record (non-fatal)")
+    finally:
+        db.close()
+
     # Auto-scan first-layer nodes and enqueue missing objects (non-fatal)
     try:
         from systemedu.education.object_scan import scan_and_enqueue_project_nodes
@@ -454,7 +475,6 @@ async def api_create_project(request: Request) -> JSONResponse:
     try:
         from systemedu.core.config import SYSTEMEDU_HOME
         from systemedu.education.image_gen import generate_project_cover
-        from systemedu.storage.db import LocalProject, get_session as get_db_session
 
         save_path = SYSTEMEDU_HOME / "media" / "projects" / name / "cover.jpg"
 
@@ -462,14 +482,14 @@ async def api_create_project(request: Request) -> JSONResponse:
             ok = await generate_project_cover(title, meta.get("description", ""), save_path)
             if ok:
                 cover_url = f"/api/media/projects/{name}/cover.jpg"
-                db = get_db_session()
+                _db = get_db_session()
                 try:
-                    proj = db.query(LocalProject).filter_by(name=name).first()
+                    proj = _db.query(LocalProject).filter_by(name=name).first()
                     if proj:
                         proj.cover_image_url = cover_url
-                        db.commit()
+                        _db.commit()
                 finally:
-                    db.close()
+                    _db.close()
                 logger.info(f"Auto-generated cover for {name!r}: {cover_url}")
 
         asyncio.create_task(_gen_cover())
@@ -697,7 +717,8 @@ async def api_project_detail(request: Request) -> JSONResponse:
         finally:
             db.close()
 
-        # Fetch cover_image_url from DB
+        # Fetch cover_image_url from DB, fallback to filesystem
+        from systemedu.core.config import SYSTEMEDU_HOME
         from systemedu.storage.db import LocalProject, get_session as get_db_session
 
         cover_url = ""
@@ -706,6 +727,32 @@ async def api_project_detail(request: Request) -> JSONResponse:
             _db_proj = _db.query(LocalProject).filter_by(name=name).first()
             if _db_proj:
                 cover_url = _db_proj.cover_image_url or ""
+                # If DB record exists but has no cover, check filesystem
+                if not cover_url:
+                    fs_cover = SYSTEMEDU_HOME / "media" / "projects" / name / "cover.jpg"
+                    if fs_cover.exists():
+                        cover_url = f"/api/media/projects/{name}/cover.jpg"
+                        _db_proj.cover_image_url = cover_url
+                        _db.commit()
+            else:
+                # No DB record — check filesystem and auto-register
+                fs_cover = SYSTEMEDU_HOME / "media" / "projects" / name / "cover.jpg"
+                if fs_cover.exists():
+                    cover_url = f"/api/media/projects/{name}/cover.jpg"
+                # Create DB record so future updates work
+                try:
+                    project_path = find_project_dir(name)
+                    _db.add(LocalProject(
+                        name=name,
+                        title=ctx.project.title,
+                        description=ctx.project.description,
+                        path=str(project_path),
+                        category=ctx.project.category.value if hasattr(ctx.project.category, "value") else str(ctx.project.category),
+                        cover_image_url=cover_url,
+                    ))
+                    _db.commit()
+                except Exception:
+                    _db.rollback()
         finally:
             _db.close()
 
