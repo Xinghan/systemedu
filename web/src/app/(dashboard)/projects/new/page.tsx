@@ -497,7 +497,7 @@ export default function NewProjectPage() {
                   }}
                   className="inline-flex items-center gap-1.5 text-xs text-primary hover:text-primary/80 font-[var(--font-manrope)] font-semibold transition-colors disabled:opacity-40">
                   <Wand2 className={`h-3.5 w-3.5 ${generatingDesc ? "animate-spin" : ""}`} />
-                  {generatingDesc ? t("new_project.generating") : t("new_project.ai_fill_desc")}
+                  {generatingDesc ? t("new_project.generating_desc") : t("new_project.ai_fill_desc")}
                 </button>
               </div>
               <div className="relative">
@@ -514,7 +514,7 @@ export default function NewProjectPage() {
                     <div className="flex items-center gap-2 text-primary">
                       <Wand2 className="h-5 w-5 animate-spin" />
                       <span className="text-sm font-semibold" style={{ fontFamily: "var(--font-manrope, sans-serif)" }}>
-                        {t("new_project.generating")}
+                        {t("new_project.generating_desc")}
                       </span>
                     </div>
                     <div className="flex gap-1 mt-1">

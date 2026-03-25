@@ -264,6 +264,24 @@ export default function ProjectDetailPage() {
         setEditAgeMin(d.project.age_range[0] ?? 6)
         setEditAgeMax(d.project.age_range[1] ?? 18)
         setEditTags(d.project.tags.join(", "))
+
+        // If no cover yet, poll until backend finishes generating it
+        if (!d.project.cover_image_url) {
+          let attempts = 0
+          const timer = setInterval(async () => {
+            attempts++
+            if (attempts > 20) { clearInterval(timer); return }
+            try {
+              const latest = await gateway.project(params.name)
+              if (latest.project.cover_image_url) {
+                clearInterval(timer)
+                setCoverCacheBust(Date.now())
+                setDetail((prev) => prev ? { ...prev, project: { ...prev.project, cover_image_url: latest.project.cover_image_url } } : prev)
+              }
+            } catch { clearInterval(timer) }
+          }, 5000)
+          return () => clearInterval(timer)
+        }
       })
       .catch((e) => setError(e.message))
       .finally(() => setLoading(false))
@@ -631,10 +649,14 @@ export default function ProjectDetailPage() {
                   </div>
                 ) : (
                   <div className="bg-white rounded-[20px] p-3 shadow-[0_8px_40px_0_rgba(109,40,217,0.22)]">
-                    <div className="w-[260px] h-[220px] rounded-[14px] bg-gradient-to-br from-violet-600 via-purple-600 to-purple-800 flex items-center justify-center">
-                      <span className="text-6xl font-extrabold text-white/80 tracking-tight">
+                    <div className="w-[260px] h-[220px] rounded-[14px] bg-gradient-to-br from-violet-600 via-purple-600 to-purple-800 flex flex-col items-center justify-center gap-3">
+                      <span className="text-7xl font-extrabold text-white/80 tracking-tight leading-none">
                         {detail.project.title.charAt(0).toUpperCase()}
                       </span>
+                      <div className="flex items-center gap-1.5 text-white/50 text-[11px]">
+                        <div className="h-3 w-3 rounded-full border-2 border-white/40 border-t-transparent animate-spin" />
+                        <span style={{ fontFamily: "var(--font-manrope, sans-serif)" }}>生成封面中...</span>
+                      </div>
                     </div>
                   </div>
                 )}
