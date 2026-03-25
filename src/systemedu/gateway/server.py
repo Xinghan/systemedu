@@ -821,6 +821,80 @@ async def api_delete_project(request: Request) -> JSONResponse:
     return JSONResponse({"status": "deleted", "name": name})
 
 
+async def api_project_dispatch(request: Request) -> JSONResponse:
+    """Dispatch GET/PATCH/DELETE /api/projects/{name}."""
+    if request.method == "GET":
+        return await api_project_detail(request)
+    if request.method == "PATCH":
+        return await api_update_project(request)
+    if request.method == "DELETE":
+        return await api_delete_project(request)
+    return JSONResponse({"error": "Method not allowed"}, status_code=405)
+
+
+async def api_projects_dispatch(request: Request) -> JSONResponse:
+    """Dispatch GET/POST /api/projects."""
+    if request.method == "GET":
+        return await api_projects(request)
+    if request.method == "POST":
+        return await api_create_project(request)
+    return JSONResponse({"error": "Method not allowed"}, status_code=405)
+
+
+async def api_enrollment_dispatch(request: Request) -> JSONResponse:
+    """Dispatch GET/PATCH /api/projects/{name}/enrollment."""
+    if request.method == "GET":
+        return await api_get_enrollment(request)
+    if request.method == "PATCH":
+        return await api_update_enrollment(request)
+    return JSONResponse({"error": "Method not allowed"}, status_code=405)
+
+
+async def api_lessons_queue_dispatch(request: Request) -> JSONResponse:
+    """Dispatch GET/DELETE /api/projects/{name}/lessons/queue."""
+    if request.method == "GET":
+        return await api_get_lesson_queue(request)
+    if request.method == "DELETE":
+        return await api_cancel_lesson_queue(request)
+    return JSONResponse({"error": "Method not allowed"}, status_code=405)
+
+
+async def api_highlights_dispatch(request: Request) -> JSONResponse:
+    """Dispatch GET/POST /api/projects/{name}/nodes/{node_id}/highlights."""
+    if request.method == "GET":
+        return await api_get_highlights(request)
+    if request.method == "POST":
+        return await api_create_highlight(request)
+    return JSONResponse({"error": "Method not allowed"}, status_code=405)
+
+
+async def api_resources_dispatch(request: Request) -> JSONResponse:
+    """Dispatch GET/POST /api/projects/{name}/nodes/{node_id}/resources."""
+    if request.method == "GET":
+        return await api_get_resources(request)
+    if request.method == "POST":
+        return await api_add_resource(request)
+    return JSONResponse({"error": "Method not allowed"}, status_code=405)
+
+
+async def api_note_dispatch(request: Request) -> JSONResponse:
+    """Dispatch GET/PUT /api/projects/{name}/nodes/{node_id}/note."""
+    if request.method == "GET":
+        return await api_get_note(request)
+    if request.method == "PUT":
+        return await api_upsert_note(request)
+    return JSONResponse({"error": "Method not allowed"}, status_code=405)
+
+
+async def api_mcp_dispatch(request: Request) -> JSONResponse:
+    """Dispatch GET/POST /api/mcp/servers."""
+    if request.method == "GET":
+        return await api_mcp_servers(request)
+    if request.method == "POST":
+        return await api_mcp_add(request)
+    return JSONResponse({"error": "Method not allowed"}, status_code=405)
+
+
 async def api_upload_project_cover(request: Request) -> JSONResponse:
     """POST /api/projects/{name}/cover - Upload a cover image for a project."""
     from systemedu.core.config import SYSTEMEDU_HOME
@@ -2738,51 +2812,42 @@ def create_app() -> Starlette:
         Route("/api/sessions/full", api_sessions_full),
         Route("/api/sessions/{id}", api_session_detail),
         Route("/api/chat", api_chat, methods=["POST"]),
-        Route("/api/projects", api_projects, methods=["GET"]),
-        Route("/api/projects", api_create_project, methods=["POST"]),
+        Route("/api/projects", api_projects_dispatch, methods=["GET", "POST"]),
         Route("/api/projects/preview-tree", api_preview_tree, methods=["POST"]),
         Route("/api/projects/generate-description", api_generate_description, methods=["POST"]),
         Route("/api/projects/generate-tree", api_generate_tree, methods=["POST"]),
         Route("/api/projects/generate-cover-preview", api_generate_cover_preview, methods=["POST"]),
         Route("/api/projects/{name}/enroll", api_enroll, methods=["POST"]),
-        Route("/api/projects/{name}/enrollment", api_get_enrollment, methods=["GET"]),
-        Route("/api/projects/{name}/enrollment", api_update_enrollment, methods=["PATCH"]),
+        Route("/api/projects/{name}/enrollment", api_enrollment_dispatch, methods=["GET", "PATCH"]),
         Route("/api/projects/{name}/nodes/{node_id:int}/context", api_node_context),
         Route("/api/projects/{name}/nodes/{node_id:int}/lesson", api_node_lesson, methods=["GET"]),
         Route("/api/projects/{name}/nodes/{node_id:int}/lesson/generate", api_generate_lesson, methods=["POST"]),
         Route("/api/projects/{name}/nodes/{node_id:int}/lesson/progress", api_lesson_progress, methods=["GET"]),
         Route("/api/projects/{name}/lessons/batch-generate", api_batch_generate_lessons, methods=["POST"]),
         Route("/api/projects/{name}/lessons/statuses", api_get_lesson_statuses, methods=["GET"]),
-        Route("/api/projects/{name}/lessons/queue", api_get_lesson_queue, methods=["GET"]),
-        Route("/api/projects/{name}/lessons/queue", api_cancel_lesson_queue, methods=["DELETE"]),
+        Route("/api/projects/{name}/lessons/queue", api_lessons_queue_dispatch, methods=["GET", "DELETE"]),
         Route("/api/projects/{name}/nodes/{node_id:int}/progress", api_update_progress, methods=["PATCH"]),
-        Route("/api/projects/{name}/nodes/{node_id:int}/highlights", api_get_highlights, methods=["GET"]),
-        Route("/api/projects/{name}/nodes/{node_id:int}/highlights", api_create_highlight, methods=["POST"]),
+        Route("/api/projects/{name}/nodes/{node_id:int}/highlights", api_highlights_dispatch, methods=["GET", "POST"]),
         Route("/api/projects/{name}/nodes/{node_id:int}/practice/submit", api_submit_practice, methods=["POST"]),
         Route("/api/projects/{name}/nodes/{node_id:int}/practice/submissions", api_practice_submissions, methods=["GET"]),
         Route("/api/projects/{name}/nodes/{node_id:int}/highlights/{highlight_id:int}", api_delete_highlight, methods=["DELETE"]),
         Route("/api/projects/{name}/nodes/{node_id:int}/resources/search", api_search_resources, methods=["POST"]),
-        Route("/api/projects/{name}/nodes/{node_id:int}/resources", api_get_resources, methods=["GET"]),
-        Route("/api/projects/{name}/nodes/{node_id:int}/resources", api_add_resource, methods=["POST"]),
+        Route("/api/projects/{name}/nodes/{node_id:int}/resources", api_resources_dispatch, methods=["GET", "POST"]),
         Route("/api/projects/{name}/nodes/{node_id:int}/resources/{resource_id:int}", api_toggle_resource_saved, methods=["PATCH"]),
         Route("/api/projects/{name}/resources", api_get_all_resources, methods=["GET"]),
-        Route("/api/projects/{name}/nodes/{node_id:int}/note", api_get_note, methods=["GET"]),
-        Route("/api/projects/{name}/nodes/{node_id:int}/note", api_upsert_note, methods=["PUT"]),
+        Route("/api/projects/{name}/nodes/{node_id:int}/note", api_note_dispatch, methods=["GET", "PUT"]),
         Route("/api/projects/{name}/notes", api_get_all_notes, methods=["GET"]),
         Route("/api/projects/{name}/cover", api_upload_project_cover, methods=["POST"]),
         Route("/api/projects/{name}/cover/generate", api_generate_project_cover, methods=["POST"]),
         Route("/api/projects/{name}/tree", api_update_tree, methods=["PUT"]),
-        Route("/api/projects/{name}", api_project_detail, methods=["GET"]),
-        Route("/api/projects/{name}", api_update_project, methods=["PATCH"]),
-        Route("/api/projects/{name}", api_delete_project, methods=["DELETE"]),
+        Route("/api/projects/{name}", api_project_dispatch, methods=["GET", "PATCH", "DELETE"]),
         Route("/api/objects/registry", api_objects_registry, methods=["GET"]),
         Route("/api/objects/queue", api_objects_queue, methods=["GET"]),
         Route("/api/objects/queue/add", api_objects_queue_add, methods=["POST"]),
         Route("/api/objects/queue/trigger", api_objects_queue_trigger, methods=["POST"]),
         Route("/api/agents", api_agents),
         Route("/api/skills", api_skills),
-        Route("/api/mcp/servers", api_mcp_servers, methods=["GET"]),
-        Route("/api/mcp/servers", api_mcp_add, methods=["POST"]),
+        Route("/api/mcp/servers", api_mcp_dispatch, methods=["GET", "POST"]),
         Route("/api/mcp/servers/{name}", api_mcp_remove, methods=["DELETE"]),
         WebSocketRoute("/api/chat/stream", ws_chat_stream),
     ]
