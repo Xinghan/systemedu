@@ -56,6 +56,7 @@ export function buildFlowGraph(
 
   // Second pass: create nodes + edges
   globalIdx = 0
+  const seenSimpleEdges = new Set<string>()
   for (const ms of milestones) {
     for (const knode of ms.knodes) {
       const id = globalIdx++
@@ -78,12 +79,16 @@ export function buildFlowGraph(
       })
 
       for (const preIdx of knode.prerequisite_indices) {
-        edges.push({
-          id: `e${preIdx}-${id}`,
-          source: String(preIdx),
-          target: String(id),
-          animated: status === "available",
-        })
+        const edgeId = `e${preIdx}-${id}`
+        if (!seenSimpleEdges.has(edgeId)) {
+          seenSimpleEdges.add(edgeId)
+          edges.push({
+            id: edgeId,
+            source: String(preIdx),
+            target: String(id),
+            animated: status === "available",
+          })
+        }
       }
     }
   }
@@ -246,12 +251,16 @@ export function buildSemanticFlowGraph(
   }
 
   // Create knode-level edges (prerequisite dependencies)
+  const seenKnodeEdges = new Set<string>()
   for (const meta of knodeMetas) {
     const p = progressMap.get(meta.globalId)
     const status = p?.status ?? "locked"
     for (const preIdx of meta.knode.prerequisite_indices) {
+      const edgeId = `e${preIdx}-${meta.globalId}`
+      if (seenKnodeEdges.has(edgeId)) continue
+      seenKnodeEdges.add(edgeId)
       edges.push({
-        id: `e${preIdx}-${meta.globalId}`,
+        id: edgeId,
         source: String(preIdx),
         target: String(meta.globalId),
         animated: status === "available",
