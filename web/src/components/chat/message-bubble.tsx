@@ -4,14 +4,19 @@ import { Wrench, Check, Loader2 } from "lucide-react"
 import { MarkdownRenderer } from "./markdown-renderer"
 import type { ChatMessage, ToolCallInfo } from "@/lib/stores/chat-store"
 
+// AI avatar: gradient square with robot icon (matches UI mockup)
 function AIAvatar() {
   return (
-    <div className="w-8 h-8 rounded-full bg-gradient-to-br from-primary to-emerald-500 flex items-center justify-center shadow-[0_0_12px_rgba(106,28,246,0.35)] shrink-0">
-      <svg viewBox="0 0 24 24" className="h-4 w-4 text-white" fill="currentColor">
-        <path d="M12 2L9.09 8.26L2 9.27L7 14.14L5.82 21.02L12 17.77L18.18 21.02L17 14.14L22 9.27L14.91 8.26L12 2Z" />
+    <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-violet-600 to-indigo-600 flex items-center justify-center text-white shadow-lg shrink-0">
+      <svg viewBox="0 0 24 24" className="h-4 w-4" fill="currentColor">
+        <path d="M17.5 3C16.12 3 15 4.12 15 5.5v1H9v-1C9 4.12 7.88 3 6.5 3S4 4.12 4 5.5 5.12 8 6.5 8H7v1c0 1.66 1.34 3 3 3h1v2.09c-2.83.48-5 2.94-5 5.91h2c0-2.21 1.79-4 4-4s4 1.79 4 4h2c0-2.97-2.17-5.43-5-5.91V12h1c1.66 0 3-1.34 3-3V8h.5c1.38 0 2.5-1.12 2.5-2.5S18.88 3 17.5 3zM6.5 6C5.67 6 5 5.33 5 4.5S5.67 3 6.5 3 8 3.67 8 4.5 7.33 6 6.5 6zm11 0c-.83 0-1.5-.67-1.5-1.5S16.67 3 17.5 3 19 3.67 19 4.5 18.33 6 17.5 6z" />
       </svg>
     </div>
   )
+}
+
+function formatTime(date: Date): string {
+  return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
 }
 
 export function MessageBubble({ message }: { message: ChatMessage }) {
@@ -19,33 +24,48 @@ export function MessageBubble({ message }: { message: ChatMessage }) {
 
   if (isUser) {
     return (
-      <div className="flex flex-col items-end gap-1.5">
-        <div className="max-w-[85%] bg-primary text-white px-4 py-3 rounded-2xl rounded-tr-sm shadow-md">
-          <p className="text-sm leading-relaxed whitespace-pre-wrap">{message.content}</p>
+      <div className="flex flex-col items-end gap-2">
+        {/* Purple bubble, right-aligned, no top-right radius */}
+        <div className="bg-primary text-white px-6 py-4 rounded-2xl rounded-tr-none max-w-[85%] shadow-lg shadow-primary/10">
+          <p className="text-[15px] leading-relaxed whitespace-pre-wrap">{message.content}</p>
         </div>
-        <span className="text-[10px] font-[var(--font-manrope)] text-muted-foreground mr-1">
-          Sent {message.timestamp.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+        <span className="text-[10px] font-bold text-muted-foreground/50 uppercase tracking-widest px-2 font-[var(--font-manrope)]">
+          你 · {formatTime(message.timestamp)}
         </span>
       </div>
     )
   }
 
   return (
-    <div className="flex gap-3">
-      <AIAvatar />
-      <div className="flex flex-col gap-1.5 flex-1 min-w-0">
-        {message.toolCalls && message.toolCalls.length > 0 && (
-          <ToolCallBadges toolCalls={message.toolCalls} />
-        )}
-        <div className="max-w-[95%] bg-primary/5 border border-primary/10 px-4 py-3 rounded-2xl rounded-tl-sm">
-          <div className="text-sm text-foreground leading-relaxed prose prose-sm dark:prose-invert max-w-none
-            prose-p:my-1 prose-headings:text-foreground prose-code:bg-primary/10 prose-code:text-primary prose-code:px-1 prose-code:rounded">
-            <MarkdownRenderer content={message.content} />
-          </div>
-        </div>
-        <span className="text-[10px] font-[var(--font-manrope)] text-muted-foreground ml-1">
-          Sanctuary AI · Just now
+    <div className="flex flex-col items-start gap-3">
+      {/* AI label row */}
+      <div className="flex items-center gap-3">
+        <AIAvatar />
+        <span className="text-[10px] font-extrabold text-primary uppercase tracking-widest font-[var(--font-manrope)]">
+          AI 导师
         </span>
+      </div>
+
+      {/* Tool calls badges */}
+      {message.toolCalls && message.toolCalls.length > 0 && (
+        <div className="ml-11">
+          <ToolCallBadges toolCalls={message.toolCalls} />
+        </div>
+      )}
+
+      {/* AI response bubble: light purple, no top-left radius */}
+      <div className="ml-11 bg-[#f1efff] dark:bg-primary/10 px-8 py-6 rounded-3xl rounded-tl-none max-w-[95%] shadow-sm">
+        <div className="text-[15px] text-foreground leading-relaxed prose prose-sm dark:prose-invert max-w-none
+          prose-p:my-2 prose-p:leading-relaxed
+          prose-headings:text-primary prose-headings:font-bold prose-headings:font-[var(--font-manrope)]
+          prose-strong:text-foreground prose-strong:font-bold
+          prose-code:bg-primary/10 prose-code:text-primary prose-code:px-1.5 prose-code:py-0.5 prose-code:rounded-md prose-code:text-[0.85em] prose-code:before:content-none prose-code:after:content-none
+          prose-pre:bg-[#0a051a] prose-pre:rounded-xl prose-pre:p-4 prose-pre:overflow-x-auto
+          prose-blockquote:border-l-4 prose-blockquote:border-primary/30 prose-blockquote:pl-4 prose-blockquote:italic prose-blockquote:text-muted-foreground prose-blockquote:not-italic
+          prose-li:my-1
+          prose-a:text-primary prose-a:no-underline hover:prose-a:underline">
+          <MarkdownRenderer content={message.content} />
+        </div>
       </div>
     </div>
   )
@@ -70,9 +90,14 @@ function ToolCallBadges({ toolCalls }: { toolCalls: ToolCallInfo[] }) {
 
 export function TypingIndicator() {
   return (
-    <div className="flex gap-3">
-      <AIAvatar />
-      <div className="bg-primary/5 border border-primary/10 px-4 py-3 rounded-2xl rounded-tl-sm">
+    <div className="flex flex-col items-start gap-3">
+      <div className="flex items-center gap-3">
+        <AIAvatar />
+        <span className="text-[10px] font-extrabold text-primary uppercase tracking-widest font-[var(--font-manrope)]">
+          AI 导师
+        </span>
+      </div>
+      <div className="ml-11 bg-[#f1efff] dark:bg-primary/10 px-6 py-4 rounded-3xl rounded-tl-none shadow-sm">
         <div className="flex gap-1.5 items-center">
           <span className="h-2 w-2 rounded-full bg-primary/50 animate-bounce [animation-delay:-0.3s]" />
           <span className="h-2 w-2 rounded-full bg-primary/50 animate-bounce [animation-delay:-0.15s]" />
@@ -85,25 +110,28 @@ export function TypingIndicator() {
 
 export function ToolCallIndicator({ toolCalls }: { toolCalls: ToolCallInfo[] }) {
   return (
-    <div className="flex gap-3">
-      <AIAvatar />
-      <div className="flex-1 min-w-0">
-        <div className="space-y-1">
-          {toolCalls.map((tc, i) => (
-            <div
-              key={i}
-              className="inline-flex items-center gap-1.5 rounded-full bg-primary/10 text-primary px-3 py-1 text-xs font-[var(--font-manrope)] mr-2"
-            >
-              <Wrench className="h-3 w-3" />
-              <span>{tc.name}</span>
-              {tc.status === "calling" ? (
-                <Loader2 className="h-3 w-3 animate-spin" />
-              ) : (
-                <Check className="h-3 w-3 text-emerald-500" />
-              )}
-            </div>
-          ))}
-        </div>
+    <div className="flex flex-col items-start gap-3">
+      <div className="flex items-center gap-3">
+        <AIAvatar />
+        <span className="text-[10px] font-extrabold text-primary uppercase tracking-widest font-[var(--font-manrope)]">
+          AI 导师
+        </span>
+      </div>
+      <div className="ml-11 flex flex-wrap gap-2">
+        {toolCalls.map((tc, i) => (
+          <div
+            key={i}
+            className="inline-flex items-center gap-1.5 rounded-full bg-primary/10 text-primary px-3 py-1.5 text-xs font-[var(--font-manrope)] font-semibold"
+          >
+            <Wrench className="h-3 w-3" />
+            <span>{tc.name}</span>
+            {tc.status === "calling" ? (
+              <Loader2 className="h-3 w-3 animate-spin" />
+            ) : (
+              <Check className="h-3 w-3 text-emerald-500" />
+            )}
+          </div>
+        ))}
       </div>
     </div>
   )
@@ -111,18 +139,20 @@ export function ToolCallIndicator({ toolCalls }: { toolCalls: ToolCallInfo[] }) 
 
 export function StreamingBubble({ content }: { content: string }) {
   return (
-    <div className="flex gap-3">
-      <AIAvatar />
-      <div className="flex flex-col gap-1.5 flex-1 min-w-0">
-        <div className="max-w-[95%] bg-primary/5 border border-primary/10 px-4 py-3 rounded-2xl rounded-tl-sm">
-          <div className="text-sm text-foreground leading-relaxed prose prose-sm dark:prose-invert max-w-none
-            prose-p:my-1 prose-headings:text-foreground prose-code:bg-primary/10 prose-code:text-primary prose-code:px-1 prose-code:rounded">
-            <MarkdownRenderer content={content} />
-          </div>
-        </div>
-        <span className="text-[10px] font-[var(--font-manrope)] text-muted-foreground ml-1">
-          Sanctuary AI · Just now
+    <div className="flex flex-col items-start gap-3">
+      <div className="flex items-center gap-3">
+        <AIAvatar />
+        <span className="text-[10px] font-extrabold text-primary uppercase tracking-widest font-[var(--font-manrope)]">
+          AI 导师
         </span>
+      </div>
+      <div className="ml-11 bg-[#f1efff] dark:bg-primary/10 px-8 py-6 rounded-3xl rounded-tl-none max-w-[95%] shadow-sm">
+        <div className="text-[15px] text-foreground leading-relaxed prose prose-sm dark:prose-invert max-w-none
+          prose-p:my-2 prose-headings:text-primary prose-headings:font-bold
+          prose-code:bg-primary/10 prose-code:text-primary prose-code:px-1.5 prose-code:py-0.5 prose-code:rounded-md prose-code:before:content-none prose-code:after:content-none
+          prose-pre:bg-[#0a051a] prose-pre:rounded-xl prose-pre:p-4">
+          <MarkdownRenderer content={content} />
+        </div>
       </div>
     </div>
   )
