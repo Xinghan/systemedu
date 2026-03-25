@@ -112,8 +112,8 @@ export const gateway = {
     api.post<{ url: string }>("/api/projects/generate-cover-preview", body),
   generateTree: (body: { title: string; description: string; age?: number; node_count?: number }) =>
     api.post<TreePreviewResponse>("/api/projects/generate-tree", body),
-  createProject: (name: string, title: string, treeData: Record<string, unknown>) =>
-    api.post<CreateProjectResponse>("/api/projects", { name, title, tree_data: treeData }),
+  createProject: (name: string, title: string, treeData: Record<string, unknown>, meta?: { description?: string; tags?: string[]; category?: string; age_range?: number[] }) =>
+    api.post<CreateProjectResponse>("/api/projects", { name, title, tree_data: treeData, ...meta }),
   deleteProject: (name: string) =>
     api.delete<{ status: string; name: string }>(`/api/projects/${name}`),
   uploadProjectCover: async (name: string, file: File): Promise<{ url: string }> => {

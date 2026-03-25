@@ -694,6 +694,35 @@ class TestGatewayCreateProject:
         assert resp.status_code == 200
         assert resp.json()["created"] is True
 
+    def test_create_project_saves_tags_and_description(self, config_env, tmp_path, monkeypatch):
+        """POST /api/projects persists tags and description to project.yaml."""
+        import yaml as _yaml
+        monkeypatch.chdir(tmp_path)
+        (tmp_path / "projects").mkdir()
+
+        app = create_app()
+        client = _auth_client(app)
+        resp = client.post(
+            "/api/projects",
+            json={
+                "name": "tagged-proj",
+                "title": "Tagged Project",
+                "tree_data": self.MILESTONES_DATA,
+                "description": "A project about rockets.",
+                "tags": ["aerospace", "physics"],
+                "age_range": [10, 14],
+            },
+        )
+        assert resp.status_code == 200
+
+        # Verify project.yaml on disk contains the tags and description
+        yaml_path = tmp_path / "projects" / "tagged-proj" / "project.yaml"
+        assert yaml_path.exists()
+        data = _yaml.safe_load(yaml_path.read_text(encoding="utf-8"))
+        assert data["tags"] == ["aerospace", "physics"]
+        assert data["description"] == "A project about rockets."
+        assert data["age_range"] == [10, 14]
+
 
 class TestGatewayEnrollment:
     """Tests for enrollment API endpoints."""

@@ -430,6 +430,12 @@ async def api_create_project(request: Request) -> JSONResponse:
     if not title:
         title = meta.get("title", name)
 
+    # Merge explicit meta fields from request body (override tree-extracted values)
+    for key in ("description", "tags", "category", "age_range"):
+        val = body.get(key)
+        if val is not None:
+            meta[key] = val
+
     try:
         project_dir = create_project(name, title, converted, meta)
     except FileExistsError as e:
