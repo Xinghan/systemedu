@@ -487,8 +487,8 @@ export default function ProjectDetailPage() {
                         <div>
                           <Label>{t("project.cover_image")}</Label>
                           <div className="mt-2 flex items-center gap-3">
-                            {/* Preview */}
-                            <div className="w-24 h-16 rounded-xl overflow-hidden bg-secondary/60 shrink-0 flex items-center justify-center border border-border/40">
+                            {/* Preview — square, no white bg */}
+                            <div className="w-20 h-20 rounded-2xl overflow-hidden shrink-0 flex items-center justify-center bg-gradient-to-br from-violet-500/20 to-purple-600/20">
                               {editCoverPreview && editCoverPreview !== "__generate__" ? (
                                 <img src={editCoverPreview} alt="cover" className="w-full h-full object-cover" />
                               ) : editCoverPreview === "__generate__" ? (
@@ -499,9 +499,8 @@ export default function ProjectDetailPage() {
                               ) : detail?.project.cover_image_url ? (
                                 <img src={`${process.env.NEXT_PUBLIC_GATEWAY_URL ?? "http://localhost:18820"}${detail.project.cover_image_url}`} alt="cover" className="w-full h-full object-cover" />
                               ) : (
-                                <div className="flex flex-col items-center gap-1 text-muted-foreground">
-                                  <ImageIcon className="h-4 w-4" />
-                                  <span className="text-[9px] font-[var(--font-manrope)] uppercase tracking-wider">Default</span>
+                                <div className="flex flex-col items-center gap-1 text-muted-foreground/60">
+                                  <ImageIcon className="h-5 w-5" />
                                 </div>
                               )}
                             </div>

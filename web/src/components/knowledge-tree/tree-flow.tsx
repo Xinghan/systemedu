@@ -7,7 +7,6 @@ import {
   BackgroundVariant,
   useNodesState,
   useEdgesState,
-  useOnViewportChange,
   useReactFlow,
   type NodeTypes,
 } from "@xyflow/react"
@@ -16,7 +15,6 @@ import { ZoomIn, ZoomOut, Maximize2 } from "lucide-react"
 
 import type { MilestoneInfo, NodeProgress } from "@/lib/types/api"
 import { buildSemanticFlowGraph } from "@/lib/utils/tree-layout"
-import { useViewportStore } from "@/lib/stores/viewport-store"
 import { KnodeNode } from "./knode-node"
 import { MilestoneNode } from "./milestone-node"
 
@@ -49,10 +47,8 @@ export function TreeFlow({ milestones, progress, onNodeClick }: TreeFlowProps) {
     [onNodeClick]
   )
 
-  const layer = useViewportStore((s) => s.layer)
-
   return (
-    <div className={`w-full h-full semantic-layer-${layer} relative`}>
+    <div className="w-full h-full relative">
       <ReactFlow
         nodes={nodes}
         edges={edges}
@@ -67,11 +63,14 @@ export function TreeFlow({ milestones, progress, onNodeClick }: TreeFlowProps) {
         proOptions={{ hideAttribution: true }}
         className="bg-background"
       >
-        <ViewportSync />
         <Background variant={BackgroundVariant.Dots} gap={20} size={1} className="opacity-40" />
         <CustomControls />
       </ReactFlow>
-      <style>{semanticLayerCSS}</style>
+      {/* Always show knode edges, hide milestone-level cross-edges */}
+      <style>{`
+        .edge-milestone { opacity: 0; pointer-events: none; }
+        .edge-knode { opacity: 1; }
+      `}</style>
     </div>
   )
 }
@@ -105,42 +104,3 @@ function CustomControls() {
     </div>
   )
 }
-
-/** Syncs ReactFlow viewport zoom → viewport store */
-function ViewportSync() {
-  const setZoom = useViewportStore((s) => s.setZoom)
-
-  useOnViewportChange({
-    onChange: useCallback(
-      (viewport: { zoom: number }) => {
-        setZoom(viewport.zoom)
-      },
-      [setZoom]
-    ),
-  })
-
-  return null
-}
-
-const semanticLayerCSS = `
-  .semantic-layer-overview .edge-knode {
-    opacity: 0;
-    pointer-events: none;
-    transition: opacity 200ms ease;
-  }
-  .semantic-layer-overview .edge-milestone {
-    opacity: 1;
-    transition: opacity 200ms ease;
-  }
-  .semantic-layer-milestone .edge-milestone,
-  .semantic-layer-detail .edge-milestone {
-    opacity: 0;
-    pointer-events: none;
-    transition: opacity 200ms ease;
-  }
-  .semantic-layer-milestone .edge-knode,
-  .semantic-layer-detail .edge-knode {
-    opacity: 1;
-    transition: opacity 200ms ease;
-  }
-`

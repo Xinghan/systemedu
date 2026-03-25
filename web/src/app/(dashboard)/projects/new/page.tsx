@@ -287,12 +287,12 @@ export default function NewProjectPage() {
           <div className="space-y-6">
             {/* Cover preview — square */}
             {(coverPreview || coverFile) && coverPreview !== "__generate__" && (
-              <div className="flex items-center gap-5 p-4 rounded-2xl bg-white shadow-sm">
+              <div className="flex items-center gap-5 p-4 rounded-2xl bg-secondary/60 border border-border/40">
                 <img src={coverPreview!} alt="cover" className="w-20 h-20 rounded-2xl object-cover shrink-0" />
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-semibold text-foreground">{projectTitle}</p>
                   <button onClick={() => { setCoverFile(null); setCoverPreview(null) }}
-                    className="text-xs text-muted-foreground hover:text-foreground transition-colors mt-1.5">
+                    className="text-xs text-muted-foreground hover:text-destructive transition-colors mt-1.5">
                     {t("new_project.remove")}
                   </button>
                 </div>
@@ -306,7 +306,7 @@ export default function NewProjectPage() {
               <Input
                 value={projectTitle}
                 onChange={(e) => setProjectTitle(e.target.value)}
-                className="h-14 text-lg bg-[#f1efff] border-0 border-b-2 border-primary/20 focus:border-primary rounded-none rounded-t-xl px-4 focus:ring-0"
+                className="text-base"
               />
             </div>
 
@@ -594,7 +594,7 @@ export default function NewProjectPage() {
               </label>
               <div className="flex flex-col items-center gap-3">
                 {/* Square cover preview */}
-                <div className="relative w-48 h-48 rounded-2xl overflow-hidden bg-[#f1efff]">
+                <div className="relative w-48 h-48 rounded-2xl overflow-hidden bg-gradient-to-br from-violet-500/20 via-purple-500/15 to-indigo-500/20">
                   {coverPreview && coverPreview !== "__generate__" && (
                     <img src={coverPreview} alt="cover" className="absolute inset-0 w-full h-full object-cover" />
                   )}

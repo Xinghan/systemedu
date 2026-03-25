@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useState, useCallback, useMemo, useRef } from "react"
+import { createPortal } from "react-dom"
 import { useParams, useSearchParams } from "next/navigation"
 import Link from "next/link"
 import {
@@ -27,6 +28,8 @@ import {
   FileDown,
   Save,
   MoreVertical,
+  Zap,
+  Clock,
 } from "lucide-react"
 import { PageLoading } from "@/components/ui/page-loading"
 import { ScrollArea } from "@/components/ui/scroll-area"
@@ -39,6 +42,71 @@ import { useT } from "@/lib/hooks/use-t"
 
 function getNodeStatus(nodeId: number, progress: NodeProgress[]): NodeProgress["status"] {
   return progress.find((p) => p.knode_id === nodeId)?.status ?? "locked"
+}
+
+interface NodeTooltipData {
+  knode: KnodeInfo
+  status: NodeProgress["status"]
+  rect: DOMRect
+}
+
+function NodeTooltip({ data }: { data: NodeTooltipData }) {
+  const { knode, status } = data
+  const TOOLTIP_W = 260
+  const TOOLTIP_OFFSET = 8
+  const viewportW = typeof window !== "undefined" ? window.innerWidth : 1200
+
+  let left = data.rect.right + TOOLTIP_OFFSET
+  if (left + TOOLTIP_W > viewportW - 8) {
+    left = data.rect.left - TOOLTIP_W - TOOLTIP_OFFSET
+  }
+  const TOOLTIP_APPROX_H = 140
+  let top = data.rect.top
+  if (top + TOOLTIP_APPROX_H > (typeof window !== "undefined" ? window.innerHeight : 800) - 8) {
+    top = (typeof window !== "undefined" ? window.innerHeight : 800) - TOOLTIP_APPROX_H - 8
+  }
+
+  const statusColor =
+    status === "passed" ? "text-emerald-600" :
+    status === "in_progress" ? "text-primary" :
+    "text-muted-foreground"
+  const statusLabel =
+    status === "passed" ? "已完成" :
+    status === "in_progress" ? "进行中" :
+    status === "available" ? "可学习" :
+    "未解锁"
+
+  return createPortal(
+    <div
+      className="fixed z-[9999] pointer-events-none"
+      style={{ left, top, width: TOOLTIP_W }}
+    >
+      <div className="rounded-xl border border-border bg-popover text-popover-foreground shadow-xl p-3.5 space-y-2">
+        <div className="flex items-start justify-between gap-2">
+          <p className="text-sm font-semibold leading-tight text-foreground">{knode.title}</p>
+          <span className={`text-[10px] font-semibold shrink-0 mt-0.5 ${statusColor}`}>{statusLabel}</span>
+        </div>
+        {knode.summary && (
+          <p className="text-xs text-muted-foreground leading-relaxed line-clamp-3">{knode.summary}</p>
+        )}
+        <div className="flex items-center gap-3 pt-1.5 border-t border-border/60 text-[11px] text-muted-foreground">
+          <span className="flex items-center gap-1">
+            <Zap className="h-3 w-3" />
+            难度 {knode.difficulty_level}/10
+          </span>
+          <span className="flex items-center gap-1">
+            <Clock className="h-3 w-3" />
+            {knode.estimated_minutes} min
+          </span>
+          <span className="flex items-center gap-1">
+            <BookOpen className="h-3 w-3" />
+            {knode.xp_reward} XP
+          </span>
+        </div>
+      </div>
+    </div>,
+    document.body,
+  )
 }
 
 export default function LearnPage() {
@@ -74,6 +142,7 @@ export default function LearnPage() {
   const [noteOpen, setNoteOpen] = useState(false)
   const [noteState, setNoteState] = useState<"closed" | "open" | "minimized">("closed")
   const [noteStatus, setNoteStatus] = useState<"idle" | "saving" | "saved">("idle")
+  const [hoveredNode, setHoveredNode] = useState<NodeTooltipData | null>(null)
   const sessionStartRef = useRef<number>(Date.now())
 
   const handleLessonPageChange = useCallback((tab: string, pageIndex: number, _pageContent: string) => {
@@ -192,6 +261,9 @@ export default function LearnPage() {
 
   return (
     <div className="flex flex-col w-full h-full overflow-hidden bg-background relative">
+      {/* Node hover tooltip */}
+      {hoveredNode && <NodeTooltip data={hoveredNode} />}
+
       {/* Top header bar */}
       <div className="flex items-center gap-3 px-5 py-3 border-b border-border/50 bg-background/80 backdrop-blur-sm shrink-0">
         <Link href={`/projects/${params.projectName}`} className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors">
@@ -276,6 +348,11 @@ export default function LearnPage() {
                             key={knode.id}
                             onClick={() => !isLocked && handleNodeClick(knode.id)}
                             disabled={isLocked}
+                            onMouseEnter={(e) => {
+                              const rect = (e.currentTarget as HTMLButtonElement).getBoundingClientRect()
+                              setHoveredNode({ knode, status, rect })
+                            }}
+                            onMouseLeave={() => setHoveredNode(null)}
                             className={`w-full flex items-start gap-3 px-3 py-2.5 rounded-xl text-left transition-all duration-[250ms] group ${
                               isActive
                                 ? "bg-primary/10 text-foreground"
