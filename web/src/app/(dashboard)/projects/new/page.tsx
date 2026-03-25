@@ -159,26 +159,14 @@ export default function NewProjectPage() {
         tags: tags.length > 0 ? tags : undefined,
         age_range: [aiAge, aiAge + 6],
       })
-      if (coverFile) {
-        try { await gateway.uploadProjectCover(slug, coverFile) } catch { /* non-fatal */ }
-      } else if (coverPreview && coverPreview.includes("/_preview/")) {
-        // Preview was generated — fetch the image and re-upload under the project name
-        try {
-          const imgRes = await fetch(coverPreview)
-          if (imgRes.ok) {
-            const blob = await imgRes.blob()
-            const file = new File([blob], "cover.jpg", { type: "image/jpeg" })
-            await gateway.uploadProjectCover(slug, file)
-          }
-        } catch { /* non-fatal */ }
-      }
+      // Cover is auto-generated server-side after project creation; no upload needed here
       router.push(`/projects/${slug}`)
     } catch (e) {
       setError(e instanceof Error ? e.message : "Create failed")
     } finally {
       setLoading(false)
     }
-  }, [treeData, projectName, projectTitle, coverFile, coverPreview, aiDescription, tags, aiAge, router, t])
+  }, [treeData, projectName, projectTitle, aiDescription, tags, aiAge, router, t])
   // Note: projectName is auto-generated (generateSlug) and stored in state; slug variable is derived inside handleCreate
 
   // ── Loading screen ─────────────────────────────────────────────────────────
