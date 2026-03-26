@@ -56,9 +56,10 @@ function AudioProvider({ children }: { children: React.ReactNode }) {
 
   const play = (sectionId: string, url: string) => {
     stop()
-    const audio = new Audio(`/api/media/${url}`)
+    const gatewayBase = process.env.NEXT_PUBLIC_GATEWAY_URL || "http://localhost:18820"
+    const audio = new Audio(`${gatewayBase}/api/media/${url}`)
     audioRef.current = audio
-    audio.play().catch(() => {})
+    audio.play().catch((e) => console.error("[audio] play failed:", e))
     audio.onended = () => setPlaying(null)
     setPlaying(sectionId)
   }
