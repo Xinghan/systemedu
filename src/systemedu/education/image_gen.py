@@ -128,7 +128,6 @@ async def generate_image_url(prompt: str) -> str:
     Returns empty string on failure.
     """
     import uuid
-    from systemedu.core.config import get_config
 
     api_key = _get_api_key()
     if not api_key:
@@ -185,8 +184,8 @@ async def generate_image_url(prompt: str) -> str:
                         return ""
 
                     # Download and save locally, return local URL path
-                    config = get_config()
-                    media_dir = Path(str(config.storage.data_dir)) / "media" / "story_images"
+                    from systemedu.core.config import SYSTEMEDU_HOME
+                    media_dir = SYSTEMEDU_HOME / "media" / "story_images"
                     media_dir.mkdir(parents=True, exist_ok=True)
                     filename = f"{uuid.uuid4().hex}.png"
                     save_path = media_dir / filename

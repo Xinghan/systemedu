@@ -326,7 +326,7 @@ function StoryBlock({
             <div key={idx} className="flex gap-4 p-5">
               {para.image_url ? (
                 <img
-                  src={para.image_url}
+                  src={`${process.env.NEXT_PUBLIC_GATEWAY_URL || "http://localhost:18820"}${para.image_url}`}
                   alt={`故事插图 ${idx + 1}`}
                   className="w-32 h-24 rounded-xl object-cover shrink-0 bg-secondary"
                 />
