@@ -440,6 +440,11 @@ export interface CourseContentData {
   course_content: CourseContent | Record<string, never>
 }
 
+export interface CourseAssignmentData {
+  status: "pending" | "generating" | "ready" | "failed"
+  assignment: string
+}
+
 export type CourseStepType =
   | "concept"
   | "story"

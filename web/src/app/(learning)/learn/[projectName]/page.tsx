@@ -30,15 +30,16 @@ import {
   MoreVertical,
   Zap,
   Clock,
+  ClipboardList,
 } from "lucide-react"
 import { PageLoading } from "@/components/ui/page-loading"
 import { ScrollArea } from "@/components/ui/scroll-area"
-import { LessonView } from "@/components/learning/lesson-view"
 import { ChatPanel } from "@/components/chat/chat-panel"
 import { NotePanel } from "@/components/learning/note-panel"
 import { CourseContentView } from "@/components/learning/course-content-view"
+import { AssignmentView } from "@/components/learning/assignment-view"
 import { gateway } from "@/lib/api"
-import type { KnodeInfo, LessonStatus, NodeProgress, ProjectDetail } from "@/lib/types/api"
+import type { KnodeInfo, NodeProgress, ProjectDetail } from "@/lib/types/api"
 import { useT } from "@/lib/hooks/use-t"
 
 function getNodeStatus(nodeId: number, progress: NodeProgress[]): NodeProgress["status"] {
@@ -137,20 +138,15 @@ export default function LearnPage() {
   const [searchQuery, setSearchQuery] = useState("")
   const [activeLessonTab, setActiveLessonTab] = useState<string>("concept")
   const [activePage, setActivePage] = useState<number>(0)
-  const [lessonStatuses, setLessonStatuses] = useState<Record<string, LessonStatus>>({})
-  const [completing, setCompleting] = useState(false)
-  const [courseNodeId, setCourseNodeId] = useState<number | null>(null)
   const [tutorOpen, setTutorOpen] = useState(false)
   const [noteOpen, setNoteOpen] = useState(false)
   const [noteState, setNoteState] = useState<"closed" | "open" | "minimized">("closed")
+  const [assignmentOpen, setAssignmentOpen] = useState(false)
+  const [assignmentText, setAssignmentText] = useState<string | null>(null)
+  const [assignmentLoading, setAssignmentLoading] = useState(false)
   const [noteStatus, setNoteStatus] = useState<"idle" | "saving" | "saved">("idle")
   const [hoveredNode, setHoveredNode] = useState<NodeTooltipData | null>(null)
   const sessionStartRef = useRef<number>(Date.now())
-
-  const handleLessonPageChange = useCallback((tab: string, pageIndex: number, _pageContent: string) => {
-    setActiveLessonTab(tab)
-    setActivePage(pageIndex)
-  }, [])
 
   useEffect(() => {
     if (!params.projectName) return
@@ -160,24 +156,7 @@ export default function LearnPage() {
       .catch((e) => setError(e.message ?? t("learn.failed_load")))
       .finally(() => setLoading(false))
 
-    gateway
-      .getLessonStatuses(params.projectName)
-      .then((r) => setLessonStatuses(r.statuses))
-      .catch(() => {})
   }, [params.projectName])
-
-  // Poll lesson statuses while any node is still generating
-  const hasGenerating = Object.values(lessonStatuses).some((s) => s === "generating")
-  useEffect(() => {
-    if (!hasGenerating || !params.projectName) return
-    const interval = setInterval(async () => {
-      try {
-        const r = await gateway.getLessonStatuses(params.projectName)
-        setLessonStatuses(r.statuses)
-      } catch { /* non-fatal */ }
-    }, 3000)
-    return () => clearInterval(interval)
-  }, [hasGenerating, params.projectName])
 
   // Track learning time
   useEffect(() => {
@@ -216,19 +195,17 @@ export default function LearnPage() {
 
   const handleNodeClick = useCallback((nodeId: number) => {
     setActiveNodeId(nodeId)
-    setCourseNodeId(nodeId)
+    setAssignmentText(null)
+    setAssignmentOpen(false)
   }, [])
 
-  const handleNodeChange = useCallback((nodeId: number) => {
-    setActiveNodeId(nodeId)
-  }, [])
-
-  const handleProgressUpdate = useCallback((updatedProgress: NodeProgress[]) => {
-    setDetail((prev) => {
-      if (!prev) return prev
-      return { ...prev, progress: updatedProgress }
-    })
-  }, [])
+  const handleMarkComplete = useCallback(async () => {
+    if (activeNodeId === null) return
+    try {
+      const result = await gateway.updateNodeProgress(params.projectName, activeNodeId, "passed")
+      setDetail((prev) => prev ? { ...prev, progress: result.progress } : prev)
+    } catch { /* non-fatal */ }
+  }, [activeNodeId, params.projectName])
 
   const activeKnode = activeNodeId !== null ? allKnodes[activeNodeId] ?? null : null
   const activeMs = detail?.milestones.find((ms) => ms.knodes.some((k) => k.id === activeNodeId)) ?? detail?.milestones[0]
@@ -342,7 +319,6 @@ export default function LearnPage() {
                         const isPassed = status === "passed"
                         const isLocked = status === "locked"
                         const isInProgress = status === "in_progress"
-                        const lessonStatus = lessonStatuses[String(knode.id)]
                         const globalIdx = allKnodes.findIndex((k) => k.id === knode.id)
                         const displayIdx = msIdx * 100 + knodeIdx + 1
 
@@ -387,11 +363,6 @@ export default function LearnPage() {
                                 {isActive && (
                                   <span className="text-[9px] font-[var(--font-manrope)] uppercase tracking-wider px-1.5 py-0.5 rounded-full bg-primary/15 text-primary font-semibold">
                                     {t("learn.current")}
-                                  </span>
-                                )}
-                                {lessonStatus === "generating" && (
-                                  <span className="text-[9px] font-[var(--font-manrope)] uppercase tracking-wider px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700">
-                                    {t("learn.generating")}
                                   </span>
                                 )}
                               </div>
@@ -441,36 +412,20 @@ export default function LearnPage() {
           </div>
         )}
 
-        {/* Center: lesson content */}
-        <div className="flex-1 min-w-0 min-h-0 flex flex-col relative">
-          {/* Lesson content (title is rendered inside LessonContentView for scrolling) */}
-          <div className="flex-1 min-h-0">
-            <LessonView
+        {/* Center: course content (v2 pipeline) */}
+        <div className="flex-1 min-w-0 min-h-0 flex flex-col">
+          {activeNodeId !== null ? (
+            <CourseContentView
               projectName={params.projectName}
               nodeId={activeNodeId}
-              allKnodes={allKnodes}
-              progress={progressList}
-              onNodeChange={handleNodeChange}
-              onProgressUpdate={handleProgressUpdate}
-              onPageChange={handleLessonPageChange}
-              onCompletingChange={setCompleting}
-              noteState={noteState}
-              onNoteStateChange={setNoteState}
+              knode={allKnodes[activeNodeId] ?? null}
+              onClose={() => setActiveNodeId(null)}
+              onMarkComplete={handleMarkComplete}
             />
-          </div>
-
-          {/* CourseContentView overlay — slides in when a node is clicked (v2 pipeline) */}
-          {courseNodeId !== null && (
-            <div className="absolute inset-0 z-20 bg-background flex flex-col">
-              <CourseContentView
-                projectName={params.projectName}
-                nodeId={courseNodeId}
-                knode={allKnodes[courseNodeId] ?? null}
-                onClose={() => setCourseNodeId(null)}
-                onMarkComplete={() => {
-                  window.dispatchEvent(new CustomEvent("lesson:markComplete"))
-                }}
-              />
+          ) : (
+            <div className="flex-1 flex flex-col items-center justify-center gap-3 text-muted-foreground">
+              <BookOpen className="h-8 w-8 opacity-20" />
+              <p className="text-sm">从左侧选择一个知识节点开始学习</p>
             </div>
           )}
         </div>
@@ -546,6 +501,29 @@ export default function LearnPage() {
                       </div>
                       <ArrowRight className="h-3 w-3 text-muted-foreground/30 group-hover:text-primary shrink-0 transition-colors" />
                     </Link>
+                    {/* Assignment */}
+                    <button
+                      onClick={() => {
+                        setAssignmentOpen(true)
+                        if (assignmentText === null && activeNodeId !== null && !assignmentLoading) {
+                          setAssignmentLoading(true)
+                          gateway.getCourseV2Assignment(params.projectName, activeNodeId)
+                            .then((data) => setAssignmentText(data.assignment || ""))
+                            .catch(() => setAssignmentText(""))
+                            .finally(() => setAssignmentLoading(false))
+                        }
+                      }}
+                      className="w-full flex items-center gap-3 px-3 py-2 rounded-xl hover:bg-secondary/60 transition-colors group text-left"
+                    >
+                      <div className="w-8 h-8 rounded-lg bg-indigo-100 dark:bg-indigo-500/15 flex items-center justify-center shrink-0">
+                        <ClipboardList className="h-4 w-4 text-indigo-600" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs font-medium text-foreground truncate">作业练习</p>
+                        <p className="text-[10px] text-muted-foreground font-[var(--font-manrope)]">选择题 · 问答 · 动手项目</p>
+                      </div>
+                      <ArrowRight className="h-3 w-3 text-muted-foreground/30 group-hover:text-primary shrink-0 transition-colors" />
+                    </button>
                   </div>
                 </div>
 
@@ -597,16 +575,11 @@ export default function LearnPage() {
                       </div>
                     ) : (
                       <button
-                        disabled={completing}
-                        className="w-full h-8 rounded-lg bg-primary text-primary-foreground text-xs font-bold transition-all hover:bg-primary/90 active:scale-95 disabled:opacity-60 flex items-center justify-center gap-1.5 shadow-sm"
-                        onClick={() => {
-                          // Trigger via LessonView's internal handleMarkComplete
-                          // We use a custom event to communicate cross-component
-                          window.dispatchEvent(new CustomEvent("lesson:markComplete"))
-                        }}
+                        className="w-full h-8 rounded-lg bg-primary text-primary-foreground text-xs font-bold transition-all hover:bg-primary/90 active:scale-95 flex items-center justify-center gap-1.5 shadow-sm"
+                        onClick={handleMarkComplete}
                       >
                         <CheckCircle className="h-3.5 w-3.5" />
-                        {completing ? t("lesson.completing") : t("lesson.mark_complete")}
+                        {t("lesson.mark_complete")}
                       </button>
                     )}
                   </div>
@@ -751,6 +724,49 @@ export default function LearnPage() {
 
         </div>
       </div>
+
+      {/* Assignment slide-in panel */}
+      {assignmentOpen && (
+        <div className="absolute inset-0 z-40 flex items-stretch pointer-events-none">
+          {/* Backdrop */}
+          <div
+            className="absolute inset-0 bg-black/20 backdrop-blur-[1px] pointer-events-auto"
+            onClick={() => setAssignmentOpen(false)}
+          />
+          {/* Panel */}
+          <div className="absolute right-0 top-0 bottom-0 w-[480px] bg-background border-l border-border/60 shadow-2xl flex flex-col pointer-events-auto">
+            {/* Header */}
+            <div className="flex items-center gap-3 px-5 py-4 border-b border-border/50 shrink-0">
+              <div className="w-7 h-7 rounded-lg bg-indigo-100 dark:bg-indigo-500/15 flex items-center justify-center">
+                <ClipboardList className="h-4 w-4 text-indigo-600" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-semibold text-foreground">作业练习</p>
+                <p className="text-[10px] text-muted-foreground font-[var(--font-manrope)]">
+                  {activeKnode?.title ?? ""}
+                </p>
+              </div>
+              <button
+                onClick={() => setAssignmentOpen(false)}
+                className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            {/* Content */}
+            <div className="flex-1 overflow-y-auto px-5 py-4">
+              {assignmentLoading ? (
+                <div className="flex flex-col items-center justify-center h-40 gap-3 text-muted-foreground">
+                  <div className="w-5 h-5 border-2 border-indigo-500/30 border-t-indigo-500 rounded-full animate-spin" />
+                  <p className="text-xs">加载作业中...</p>
+                </div>
+              ) : (
+                <AssignmentView content={assignmentText ?? ""} />
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

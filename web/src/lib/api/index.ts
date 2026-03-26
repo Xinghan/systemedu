@@ -2,20 +2,16 @@
 
 import type {
   AgentInfo,
-  BatchGenerateResponse,
   ChatRequest,
   ChatResponse,
   ConfigResponse,
+  CourseAssignmentData,
   CourseContentData,
   CreateProjectResponse,
   EnrollmentInfo,
   FactoryQueueResponse,
   ObjectRegistryResponse,
   HighlightInfo,
-  LessonContent,
-  LessonProgressResponse,
-  LessonQueueResponse,
-  LessonStatusesResponse,
   MCPServer,
   MilestoneInfo,
   NodeContext,
@@ -97,12 +93,6 @@ export const gateway = {
     api.delete<{ status: string; name: string }>(`/api/mcp/servers/${name}`),
   nodeContext: (projectName: string, nodeId: number) =>
     api.get<NodeContext>(`/api/projects/${projectName}/nodes/${nodeId}/context`),
-  lesson: (projectName: string, nodeId: number) =>
-    api.get<LessonContent>(`/api/projects/${projectName}/nodes/${nodeId}/lesson`),
-  generateLesson: (projectName: string, nodeId: number, regenerate = false) =>
-    api.post<{ status: string; project_name: string; knode_id: number }>(`/api/projects/${projectName}/nodes/${nodeId}/lesson/generate`, { regenerate }),
-  lessonProgress: (projectName: string, nodeId: number) =>
-    api.get<LessonProgressResponse>(`/api/projects/${projectName}/nodes/${nodeId}/lesson/progress`),
   generateCourseV2: (projectName: string, nodeId: number, regenerate = false) =>
     api.post<{ status: string; project_name: string; knode_id: number }>(
       `/api/projects/${projectName}/nodes/${nodeId}/course/v2/generate`,
@@ -110,10 +100,17 @@ export const gateway = {
     ),
   getCourseV2: (projectName: string, nodeId: number) =>
     api.get<CourseContentData>(`/api/projects/${projectName}/nodes/${nodeId}/course/v2`),
-  streamCourse: (projectName: string, nodeId: number): EventSource => {
-    return new EventSource(
-      `${GATEWAY_URL}/api/projects/${encodeURIComponent(projectName)}/nodes/${nodeId}/course/v2/stream`
-    )
+  getCourseV2Assignment: (projectName: string, nodeId: number) =>
+    api.get<CourseAssignmentData>(`/api/projects/${projectName}/nodes/${nodeId}/course/v2/assignment`),
+  streamCourseV2: async (projectName: string, nodeId: number, regenerate = false): Promise<Response> => {
+    // Returns a fetch Response with SSE stream. Use body.getReader() to consume.
+    // Auth is passed via ?token= query param so no CORS preflight issues.
+    const token = getToken()
+    const qs = new URLSearchParams()
+    if (token) qs.set("token", token)
+    if (regenerate) qs.set("regenerate", "1")
+    const url = `${GATEWAY_URL}/api/projects/${encodeURIComponent(projectName)}/nodes/${nodeId}/course/v2/stream?${qs.toString()}`
+    return fetch(url)
   },
   updateNodeProgress: (projectName: string, nodeId: number, status: string, userId = "default") =>
     api.patch<UpdateProgressResponse>(`/api/projects/${projectName}/nodes/${nodeId}/progress`, { status, user_id: userId }),
@@ -185,12 +182,6 @@ export const gateway = {
     api.put<{ ok: boolean; milestones: MilestoneInfo[] }>(
       `/api/projects/${projectName}/tree`, { milestones }
     ),
-  batchGenerateLessons: (projectName: string) =>
-    api.post<BatchGenerateResponse>(`/api/projects/${projectName}/lessons/batch-generate`, {}),
-  getLessonQueue: (projectName: string) =>
-    api.get<LessonQueueResponse>(`/api/projects/${projectName}/lessons/queue`),
-  getLessonStatuses: (projectName: string) =>
-    api.get<LessonStatusesResponse>(`/api/projects/${projectName}/lessons/statuses`),
   objectRegistry: () => api.get<ObjectRegistryResponse>("/api/objects/registry"),
   objectQueue: (projectName?: string) => {
     const url = projectName
