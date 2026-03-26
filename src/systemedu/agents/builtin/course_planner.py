@@ -143,7 +143,9 @@ class CoursePlannerAgent:
         )
 
         try:
-            response = self.llm.invoke([HumanMessage(content=prompt)])
+            import asyncio
+
+            response = await asyncio.to_thread(self.llm.invoke, [HumanMessage(content=prompt)])
             text = response.content.strip()
 
             # Strip markdown code fences if present
@@ -211,7 +213,9 @@ class CoursePlannerAgent:
         )
 
         try:
-            response = self.llm.invoke([HumanMessage(content=prompt)])
+            import asyncio
+
+            response = await asyncio.to_thread(self.llm.invoke, [HumanMessage(content=prompt)])
             text = response.content.strip()
             if not text:
                 logger.warning("CoursePlannerAgent.plan_detailed: empty response")

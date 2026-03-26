@@ -31,6 +31,10 @@ def _extract_token(request: Request) -> str | None:
     auth = request.headers.get("Authorization", "")
     if auth.startswith("Bearer "):
         return auth[7:]
+    # Allow token via query param for streaming endpoints (SSE/EventSource)
+    token_qs = request.query_params.get("token")
+    if token_qs:
+        return token_qs
     return None
 
 

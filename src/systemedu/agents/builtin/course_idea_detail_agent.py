@@ -34,39 +34,43 @@ ANIMATION_DETAIL_PROMPT = """你是一位动画脚本设计师，请为以下知
 - 直接输出 JSON，不要其他文字
 """
 
-GAME_DETAIL_PROMPT = """你是一位教育游戏设计师，请为以下知识点设计一个互动游戏方案。
+GAME_DETAIL_PROMPT = """你是一位教育游戏设计师，请为以下知识点设计一个模拟实验互动游戏方案。
 
 知识点：{topic}
 上下文：{context_summary}
 
+游戏类型固定为 simulation（模拟实验）：学生通过调节参数、观察实验结果来理解知识点，适合有因果关系的概念。
+
 请输出一个详细的游戏设计方案，严格按以下 JSON 格式（不要包含 markdown 代码块标记）：
 {{
-  "game_mechanic": "drag_sort|simulation|match_game|build_sort|quiz_game",
-  "game_concept": "学生通过这个游戏将理解什么核心概念（20-40字）",
+  "game_mechanic": "simulation",
+  "game_concept": "学生通过这个模拟实验将理解什么核心概念（20-40字）",
   "game_title": "游戏标题（10字以内）",
   "interaction_flow": [
-    "步骤1描述",
-    "步骤2描述",
-    "步骤3描述"
+    "步骤1：调节哪个参数",
+    "步骤2：观察什么现象",
+    "步骤3：得出什么结论"
   ],
   "win_condition": "正确完成条件描述（20字以内）",
   "difficulty_hint": "easy|medium|hard",
-  "example_data": {{
-    "description": "示例数据说明",
-    "items": ["示例项目1", "示例项目2", "示例项目3"]
-  }}
+  "simulation_params": [
+    {{
+      "param_name": "参数英文名（如 temperature、voltage）",
+      "label": "参数中文名（如 温度、电压）",
+      "min": 0,
+      "max": 100,
+      "default": 50,
+      "unit": "单位（如 °C、V）"
+    }}
+  ],
+  "scene_description": "模拟场景的视觉描述（40-60字），描述画面中有什么元素、参数变化时会看到什么效果"
 }}
 
-game_mechanic 说明：
-- drag_sort：拖拽排序，适合有顺序的概念
-- simulation：模拟实验，适合有因果关系的概念
-- match_game：连线匹配，适合配对关系
-- build_sort：分类整理，适合分类概念
-- quiz_game：问答闯关，适合知识点测验
-
 要求：
+- game_mechanic 必须是 "simulation"，不能是其他值
+- simulation_params 包含 2-4 个有意义的参数，每个参数必须与知识点强相关
 - interaction_flow 包含 3-5 个步骤
-- 全部使用中文（game_mechanic 和 difficulty_hint 除外）
+- 全部使用中文（game_mechanic、param_name、difficulty_hint 除外）
 - 直接输出 JSON，不要其他文字
 """
 
@@ -131,7 +135,9 @@ class CourseIdeaDetailAgent:
         )
 
         try:
-            response = self.llm.invoke([HumanMessage(content=prompt)])
+            import asyncio
+
+            response = await asyncio.to_thread(self.llm.invoke, [HumanMessage(content=prompt)])
             text = response.content.strip()
 
             # Strip markdown code fences if present

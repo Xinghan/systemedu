@@ -243,8 +243,7 @@ export default function ProjectDetailPage() {
   const [queueItems, setQueueItems] = useState<FactoryQueueItem[]>([])
   const [queueOpen, setQueueOpen] = useState(false)
   const [triggering, setTriggering] = useState(false)
-  const [lessonQueueRunning, setLessonQueueRunning] = useState(false)
-  const [editCoverFile, setEditCoverFile] = useState<File | null>(null)
+const [editCoverFile, setEditCoverFile] = useState<File | null>(null)
   const [editCoverPreview, setEditCoverPreview] = useState<string | null>(null)
   const [generatingEditCover, setGeneratingEditCover] = useState(false)
   const [coverCacheBust, setCoverCacheBust] = useState(Date.now())
@@ -290,9 +289,6 @@ export default function ProjectDetailPage() {
       .then((r) => setQueueItems(r.items.filter((i) => i.status === "pending" || i.status === "in_progress")))
       .catch(() => {})
 
-    gateway.getLessonQueue(params.name)
-      .then((r) => setLessonQueueRunning(r.running))
-      .catch(() => {})
   }, [params.name])
 
   const handleSaveEdit = async () => {
@@ -744,13 +740,6 @@ export default function ProjectDetailPage() {
                 description={t("project.student_works_desc")}
                 disabled
                 badge={t("project.soon")}
-              />
-              <ResourceCard
-                icon={<IconAICourse />}
-                title={t("project.ai_course")}
-                description={t("project.ai_course_desc")}
-                onClick={() => router.push(`/projects/${params.name}/batch-lessons`)}
-                badge={lessonQueueRunning ? "Active" : undefined}
               />
               <ResourceCard
                 icon={<IconObjectQueue />}

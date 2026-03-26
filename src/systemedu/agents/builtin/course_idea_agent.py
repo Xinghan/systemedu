@@ -70,7 +70,9 @@ class CourseIdeaAgent:
         )
 
         try:
-            response = self.llm.invoke([HumanMessage(content=prompt)])
+            import asyncio
+
+            response = await asyncio.to_thread(self.llm.invoke, [HumanMessage(content=prompt)])
             text = response.content.strip()
 
             if "---SEPARATOR---" not in text:
@@ -86,6 +88,12 @@ class CourseIdeaAgent:
                 lines = ideas_raw.split("\n")
                 ideas_raw = "\n".join(lines[1:-1] if lines[-1].strip() == "```" else lines[1:])
                 ideas_raw = ideas_raw.strip()
+
+            # LLM sometimes prefixes with description text before the JSON array
+            # Find the first '[' to locate the actual JSON array
+            bracket_idx = ideas_raw.find("[")
+            if bracket_idx > 0:
+                ideas_raw = ideas_raw[bracket_idx:]
 
             ideas = json.loads(ideas_raw)
             if not isinstance(ideas, list):

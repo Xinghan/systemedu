@@ -148,8 +148,9 @@ def generate_knowledge_tree(
 
     user_prompt = build_user_prompt(project, granularity, instructions)
 
+    model_name = os.environ.get("DASHSCOPE_MODEL", "qwen3-max")
     response = client.chat.completions.create(
-        model="qwen-plus",
+        model=model_name,
         messages=[
             {"role": "system", "content": SYSTEM_PROMPT},
             {"role": "user", "content": user_prompt},

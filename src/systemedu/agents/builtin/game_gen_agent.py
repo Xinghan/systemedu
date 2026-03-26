@@ -40,10 +40,8 @@ class GameGenAgent:
             flow_text = "；".join(interaction_flow[:3])
             enhanced_summary = f"{game_concept}。互动流程：{flow_text}"
 
-        # Build override hints dict for the planner
-        extra_hints: dict = {}
-        if game_mechanic:
-            extra_hints["preferred_mechanic"] = game_mechanic
+        # 强制使用 simulation 模式
+        lab_strategy: dict = {"game_mechanic": "simulation"}
 
         try:
             planner = GameSpecPlannerAgent(llm=self.llm)
@@ -51,7 +49,7 @@ class GameGenAgent:
                 node_title=game_title or node_title,
                 node_summary=enhanced_summary,
                 difficulty=difficulty,
-                extra_hints=extra_hints,
+                lab_strategy=lab_strategy,
             )
             if spec is None:
                 logger.warning(
