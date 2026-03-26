@@ -1,25 +1,23 @@
 "use client"
 
-import { useCallback, useEffect, useRef, useState } from "react"
-import { X, CheckCircle2, Loader2, BookOpen, Zap, Gamepad2, BookMarked, Terminal, ChevronDown, ChevronRight } from "lucide-react"
+import { createContext, useContext, useEffect, useRef, useState } from "react"
+import {
+  X, CheckCircle2, Loader2, BookOpen, Zap, Gamepad2, BookMarked,
+  Terminal, ChevronDown, ChevronRight, Circle, Play, Square,
+} from "lucide-react"
 import { gateway } from "@/lib/api"
 import type {
   CourseContent,
   CourseContentData,
   CourseIdeaSummary,
+  CourseSection,
   KnodeInfo,
   RenderedSection,
 } from "@/lib/types/api"
-import { IframeStepView } from "./iframe-step-view"
 
-interface AgentLogEntry {
-  agent: string
-  phase: "input" | "output"
-  input: string
-  output: string
-  timestamp: string
-}
-
+// ---------------------------------------------------------------------------
+// Props
+// ---------------------------------------------------------------------------
 interface CourseContentViewProps {
   projectName: string
   nodeId: number
@@ -28,116 +26,417 @@ interface CourseContentViewProps {
   onMarkComplete?: () => void
 }
 
-const MODE_ICONS = {
-  animation: Zap,
-  game: Gamepad2,
-  story: BookMarked,
+// ---------------------------------------------------------------------------
+// Audio Context — ensures only one section plays at a time
+// ---------------------------------------------------------------------------
+interface AudioCtxValue {
+  playing: string | null
+  play: (sectionId: string, url: string) => void
+  stop: () => void
 }
 
-const MODE_LABELS = {
-  animation: "动画演示",
-  game: "互动游戏",
-  story: "故事引入",
+const AudioPlayContext = createContext<AudioCtxValue>({
+  playing: null,
+  play: () => {},
+  stop: () => {},
+})
+
+function AudioProvider({ children }: { children: React.ReactNode }) {
+  const [playing, setPlaying] = useState<string | null>(null)
+  const audioRef = useRef<HTMLAudioElement | null>(null)
+
+  const stop = () => {
+    if (audioRef.current) {
+      audioRef.current.pause()
+      audioRef.current.src = ""
+      audioRef.current = null
+    }
+    setPlaying(null)
+  }
+
+  const play = (sectionId: string, url: string) => {
+    stop()
+    const audio = new Audio(`/api/media/${url}`)
+    audioRef.current = audio
+    audio.play().catch(() => {})
+    audio.onended = () => setPlaying(null)
+    setPlaying(sectionId)
+  }
+
+  return (
+    <AudioPlayContext.Provider value={{ playing, play, stop }}>
+      {children}
+    </AudioPlayContext.Provider>
+  )
 }
 
+// ---------------------------------------------------------------------------
+// SSE / pipeline types
+// ---------------------------------------------------------------------------
+interface AgentLogEntry {
+  agent: string
+  phase: "input" | "output"
+  input: string
+  output: string
+  timestamp: string
+}
+
+type PipelineStage =
+  | "connecting"
+  | "planning"
+  | "ideating"
+  | "detailing"
+  | "generating"
+  | "audio"
+  | "done"
+
+const PIPELINE_STAGES: { key: PipelineStage; label: string }[] = [
+  { key: "planning", label: "CoursePlannerAgent" },
+  { key: "ideating", label: "CourseIdeaAgent" },
+  { key: "detailing", label: "CourseIdeaDetailAgent" },
+  { key: "generating", label: "AnimationGen / GameGen / StoryGen" },
+  { key: "audio", label: "TTS 音频生成" },
+]
+
+const STAGE_ORDER: PipelineStage[] = [
+  "connecting", "planning", "ideating", "detailing", "generating", "audio", "done",
+]
+
+// ---------------------------------------------------------------------------
+// Markdown renderer
+// ---------------------------------------------------------------------------
+function renderSimpleMarkdown(text: string): string {
+  return text
+    .replace(/^## (.+)$/gm, '<h2 class="text-2xl font-bold mt-8 mb-3 text-on-surface">$1</h2>')
+    .replace(/^### (.+)$/gm, '<h3 class="text-lg font-semibold mt-6 mb-2 text-on-surface">$1</h3>')
+    .replace(/^\- (.+)$/gm, '<li class="ml-5 list-disc text-base text-on-surface leading-relaxed">$1</li>')
+    .replace(/^\d+\. (.+)$/gm, '<li class="ml-5 list-decimal text-base text-on-surface leading-relaxed">$1</li>')
+    .replace(/\*\*(.+?)\*\*/g, '<strong class="font-semibold">$1</strong>')
+    .replace(/\n\n/g, '</p><p class="text-base text-on-surface leading-loose my-3">')
+    .replace(/^([^<\n].+)$/gm, (match) => {
+      if (match.startsWith("<") || match.startsWith("-") || /^\d+\./.test(match)) return match
+      return `<p class="text-base text-on-surface leading-loose my-3">${match}</p>`
+    })
+}
+
+// ---------------------------------------------------------------------------
+// SectionAudioButton
+// ---------------------------------------------------------------------------
+function SectionAudioButton({ sectionId, audioUrl }: { sectionId: string; audioUrl: string }) {
+  const { playing, play, stop } = useContext(AudioPlayContext)
+  const isPlaying = playing === sectionId
+
+  if (!audioUrl) return null
+
+  return (
+    <button
+      onClick={() => isPlaying ? stop() : play(sectionId, audioUrl)}
+      title={isPlaying ? "暂停" : "播放讲解"}
+      className={[
+        "w-12 h-12 rounded-full flex items-center justify-center transition-all duration-200 shadow-sm border",
+        isPlaying
+          ? "bg-primary border-primary/30 text-primary-foreground animate-pulse"
+          : "bg-card border-border/40 text-primary hover:bg-primary/10",
+      ].join(" ")}
+    >
+      {isPlaying
+        ? <Square className="h-4 w-4 fill-current" />
+        : <Play className="h-4 w-4 fill-current" />
+      }
+    </button>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// IdeaIframeBlock (animation / game)
+// ---------------------------------------------------------------------------
+function IdeaIframeBlock({
+  idea, html, darkMode,
+}: {
+  idea: CourseIdeaSummary
+  html: string
+  darkMode: boolean
+}) {
+  const [blobUrl, setBlobUrl] = useState<string | null>(null)
+  const [resetKey, setResetKey] = useState(0)
+  const [expanded, setExpanded] = useState(false)
+
+  useEffect(() => {
+    if (!expanded) return
+    const blob = new Blob([html], { type: "text/html;charset=utf-8" })
+    const url = URL.createObjectURL(blob)
+    setBlobUrl(url)
+    return () => URL.revokeObjectURL(url)
+  }, [html, resetKey, expanded])
+
+  if (darkMode) {
+    // Animation block — deep dark style matching code.html inverse-surface
+    return (
+      <section className="rounded-2xl overflow-hidden shadow-2xl bg-slate-950 border border-white/10">
+        <button
+          onClick={() => setExpanded((e) => !e)}
+          className="w-full flex items-center justify-between p-6 bg-white/5 hover:bg-white/10 transition-colors"
+        >
+          <div className="flex items-center gap-5">
+            <div className="w-12 h-12 rounded-xl bg-primary/20 flex items-center justify-center border border-primary/30 shrink-0">
+              <Zap className="h-6 w-6 text-primary" />
+            </div>
+            <div className="text-left">
+              <h3 className="font-bold text-white text-lg leading-tight">动画演示</h3>
+              <p className="text-white/60 text-sm mt-0.5">{idea.topic}</p>
+            </div>
+          </div>
+          <ChevronDown
+            className={`h-5 w-5 text-white/40 transition-transform duration-200 ${expanded ? "rotate-180" : ""}`}
+          />
+        </button>
+        {expanded && blobUrl && (
+          <div className="p-6 pt-2">
+            <iframe
+              key={resetKey}
+              src={blobUrl}
+              sandbox="allow-scripts allow-same-origin"
+              className="w-full rounded-xl block"
+              style={{ height: 460, border: "none" }}
+              title={`动画演示 - ${idea.topic}`}
+            />
+          </div>
+        )}
+        {!expanded && (
+          <div className="px-6 py-3 text-white/40 text-sm">点击展开查看动画演示</div>
+        )}
+      </section>
+    )
+  }
+
+  // Game block — light surface style
+  return (
+    <section className="rounded-2xl overflow-hidden shadow-lg bg-secondary/20 border border-border/20">
+      <button
+        onClick={() => setExpanded((e) => !e)}
+        className="w-full flex items-center justify-between p-6 bg-card hover:bg-card/80 transition-colors"
+      >
+        <div className="flex items-center gap-5">
+          <div className="w-12 h-12 rounded-xl bg-emerald-500/10 flex items-center justify-center border border-emerald-500/20 shrink-0">
+            <Gamepad2 className="h-6 w-6 text-emerald-600 dark:text-emerald-400" />
+          </div>
+          <div className="text-left">
+            <h3 className="font-bold text-foreground text-lg leading-tight">互动游戏</h3>
+            <p className="text-muted-foreground text-sm mt-0.5">{idea.topic}</p>
+          </div>
+        </div>
+        <div className="flex items-center gap-3">
+          {expanded && (
+            <span
+              role="button"
+              onClick={(e) => { e.stopPropagation(); setResetKey((k) => k + 1) }}
+              className="text-xs text-muted-foreground hover:text-foreground transition-colors px-2 py-1 rounded border border-border/40"
+            >
+              重置游戏
+            </span>
+          )}
+          <ChevronDown
+            className={`h-5 w-5 text-muted-foreground/40 transition-transform duration-200 ${expanded ? "rotate-180" : ""}`}
+          />
+        </div>
+      </button>
+      {expanded && blobUrl && (
+        <iframe
+          key={resetKey}
+          src={blobUrl}
+          sandbox="allow-scripts allow-same-origin"
+          className="w-full block"
+          style={{ height: 560, border: "none" }}
+          title={`互动游戏 - ${idea.topic}`}
+        />
+      )}
+      {!expanded && (
+        <div className="px-6 py-3 text-muted-foreground text-sm opacity-60">点击展开开始游戏</div>
+      )}
+    </section>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// StoryBlock
+// ---------------------------------------------------------------------------
+function StoryBlock({
+  idea, section,
+}: {
+  idea: CourseIdeaSummary
+  section: RenderedSection
+}) {
+  const [expanded, setExpanded] = useState(false)
+
+  return (
+    <section className="rounded-2xl overflow-hidden shadow-lg bg-secondary/20 border border-border/20">
+      <button
+        onClick={() => setExpanded((e) => !e)}
+        className="w-full flex items-center justify-between p-6 bg-card hover:bg-card/80 transition-colors"
+      >
+        <div className="flex items-center gap-5">
+          <div className="w-12 h-12 rounded-xl bg-amber-500/10 flex items-center justify-center border border-amber-500/20 shrink-0">
+            <BookMarked className="h-6 w-6 text-amber-600 dark:text-amber-400" />
+          </div>
+          <div className="text-left">
+            <h3 className="font-bold text-foreground text-lg leading-tight">故事引入</h3>
+            <p className="text-muted-foreground text-sm mt-0.5">{idea.topic}</p>
+          </div>
+        </div>
+        <ChevronDown
+          className={`h-5 w-5 text-muted-foreground/40 transition-transform duration-200 ${expanded ? "rotate-180" : ""}`}
+        />
+      </button>
+      {expanded && section.story_paragraphs && (
+        <div className="divide-y divide-border/30">
+          {section.story_paragraphs.map((para, idx) => (
+            <div key={idx} className="flex gap-4 p-5">
+              {para.image_url ? (
+                <img
+                  src={para.image_url}
+                  alt={`故事插图 ${idx + 1}`}
+                  className="w-32 h-24 rounded-xl object-cover shrink-0 bg-secondary"
+                />
+              ) : (
+                <div className="w-32 h-24 rounded-xl bg-secondary/30 shrink-0 flex items-center justify-center">
+                  <BookMarked className="h-6 w-6 text-muted-foreground/30" />
+                </div>
+              )}
+              <p className="text-base text-foreground leading-relaxed">{para.text}</p>
+            </div>
+          ))}
+        </div>
+      )}
+      {!expanded && (
+        <div className="px-6 py-3 text-muted-foreground text-sm opacity-60">点击展开阅读故事</div>
+      )}
+    </section>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// IdeaBlock (dispatcher)
+// ---------------------------------------------------------------------------
 function IdeaBlock({
-  idea,
-  section,
+  idea, section,
 }: {
   idea: CourseIdeaSummary
   section: RenderedSection | null
 }) {
-  const Icon = MODE_ICONS[idea.mode]
-  const label = MODE_LABELS[idea.mode]
-
   if (!section) {
-    // Loading skeleton
     return (
-      <div className="my-6 rounded-2xl border border-border/50 overflow-hidden">
-        <div className="flex items-center gap-2 px-4 py-3 bg-secondary/40 border-b border-border/30">
-          <div className="h-3.5 w-3.5 rounded-full bg-muted-foreground/20 animate-pulse" />
-          <div className="h-3 w-24 rounded bg-muted-foreground/20 animate-pulse" />
+      <div className="rounded-2xl border border-border/50 overflow-hidden animate-pulse">
+        <div className="flex items-center gap-3 px-5 py-4 bg-secondary/30">
+          <div className="h-5 w-5 rounded-full bg-muted-foreground/20" />
+          <div className="h-3 w-32 rounded bg-muted-foreground/20" />
         </div>
-        <div className="h-48 bg-secondary/20 animate-pulse" />
+        <div className="h-20 bg-secondary/20" />
       </div>
     )
   }
 
   if (section.status === "failed") {
     return (
-      <div className="my-6 rounded-2xl border border-border/50 overflow-hidden">
-        <div className="flex items-center gap-2 px-4 py-3 bg-secondary/40 border-b border-border/30">
-          <Icon className="h-3.5 w-3.5 text-muted-foreground" />
-          <span className="text-xs font-semibold text-muted-foreground">{label} - {idea.topic}</span>
+      <div className="rounded-2xl border border-border/50 overflow-hidden">
+        <div className="flex items-center gap-3 px-5 py-4 bg-secondary/30">
+          <span className="text-sm text-muted-foreground">{idea.topic}</span>
         </div>
-        <div className="h-20 flex items-center justify-center text-xs text-muted-foreground">
+        <div className="h-14 flex items-center justify-center text-sm text-muted-foreground">
           内容生成失败
         </div>
       </div>
     )
   }
 
-  if (idea.mode === "story" && section.story_paragraphs) {
-    return (
-      <div className="my-6 rounded-2xl border border-border/50 overflow-hidden">
-        <div className="flex items-center gap-2 px-4 py-3 bg-amber-50 dark:bg-amber-500/10 border-b border-amber-200/50 dark:border-amber-500/20">
-          <BookMarked className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400" />
-          <span className="text-xs font-semibold text-amber-700 dark:text-amber-300">{label} - {idea.topic}</span>
-        </div>
-        <div className="divide-y divide-border/30">
-          {section.story_paragraphs.map((para, idx) => (
-            <div key={idx} className="flex gap-4 p-4">
-              {para.image_url ? (
-                <img
-                  src={para.image_url}
-                  alt={`故事插图 ${idx + 1}`}
-                  className="w-28 h-20 rounded-lg object-cover shrink-0 bg-secondary"
-                />
-              ) : (
-                <div className="w-28 h-20 rounded-lg bg-secondary shrink-0 flex items-center justify-center">
-                  <BookMarked className="h-6 w-6 text-muted-foreground/30" />
-                </div>
-              )}
-              <p className="text-sm text-foreground leading-relaxed">{para.text}</p>
-            </div>
-          ))}
-        </div>
-      </div>
-    )
+  if (idea.mode === "animation" && section.html) {
+    return <IdeaIframeBlock idea={idea} html={section.html} darkMode={true} />
   }
 
-  if ((idea.mode === "animation" || idea.mode === "game") && section.html) {
-    const bgColor = idea.mode === "animation" ? "bg-blue-50 dark:bg-blue-500/10" : "bg-purple-50 dark:bg-purple-500/10"
-    const borderColor = idea.mode === "animation" ? "border-blue-200/50 dark:border-blue-500/20" : "border-purple-200/50 dark:border-purple-500/20"
-    const textColor = idea.mode === "animation" ? "text-blue-700 dark:text-blue-300" : "text-purple-700 dark:text-purple-300"
-    const iconColor = idea.mode === "animation" ? "text-blue-600 dark:text-blue-400" : "text-purple-600 dark:text-purple-400"
+  if (idea.mode === "game" && section.html) {
+    return <IdeaIframeBlock idea={idea} html={section.html} darkMode={false} />
+  }
 
-    return (
-      <div className="my-6 rounded-2xl border border-border/50 overflow-hidden">
-        <div className={`flex items-center gap-2 px-4 py-3 ${bgColor} border-b ${borderColor}`}>
-          <Icon className={`h-3.5 w-3.5 ${iconColor}`} />
-          <span className={`text-xs font-semibold ${textColor}`}>{label} - {idea.topic}</span>
-        </div>
-        <div className="h-[380px]">
-          <IframeStepView html={section.html} onComplete={() => {}} />
-        </div>
-      </div>
-    )
+  if (idea.mode === "story" && section.story_paragraphs) {
+    return <StoryBlock idea={idea} section={section} />
   }
 
   return null
 }
 
-function PlanWithIdeas({
-  content,
-  loadedSections,
+// ---------------------------------------------------------------------------
+// SectionBlock: one section of plan_markdown + optional audio button
+// ---------------------------------------------------------------------------
+function SectionBlock({
+  section, ideaMap, renderedSections,
 }: {
-  content: CourseContent
-  loadedSections: Record<string, RenderedSection | null>
+  section: CourseSection
+  ideaMap: Map<string, CourseIdeaSummary>
+  renderedSections: Record<string, RenderedSection>
 }) {
-  // Split plan by placeholders and render ideas inline
-  const parts = content.plan_markdown.split(/(\[\[IDEA:[^\]]+\]\])/g)
+  // Split body_markdown by [[IDEA:xxx]] placeholders
+  const parts = section.body_markdown.split(/(\[\[IDEA:[^\]]+\]\])/g)
 
+  return (
+    <div className="group relative flex gap-8 items-start">
+      {/* Main content */}
+      <div className="flex-1 space-y-4 min-w-0">
+        {parts.map((part, idx) => {
+          const match = part.match(/^\[\[IDEA:([^\]]+)\]\]$/)
+          if (match) {
+            const ideaId = match[1]
+            const idea = ideaMap.get(ideaId)
+            if (!idea) return null
+            const rendered = renderedSections[ideaId] ?? null
+            return <IdeaBlock key={idx} idea={idea} section={rendered} />
+          }
+          if (!part.trim()) return null
+          return (
+            <div
+              key={idx}
+              dangerouslySetInnerHTML={{ __html: renderSimpleMarkdown(part) }}
+            />
+          )
+        })}
+      </div>
+
+      {/* Right sidebar: audio button, hover-revealed */}
+      <div className="w-16 flex flex-col gap-3 opacity-40 group-hover:opacity-100 transition-opacity duration-300 sticky top-24 shrink-0">
+        {section.audio_url && (
+          <SectionAudioButton
+            sectionId={section.section_id}
+            audioUrl={section.audio_url}
+          />
+        )}
+      </div>
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// PlanWithSections: new layout using CourseSection[]
+// ---------------------------------------------------------------------------
+function PlanWithSections({ content }: { content: CourseContent }) {
+  const ideaMap = new Map(content.ideas.map((i) => [i.idea_id, i]))
+
+  return (
+    <div className="space-y-16">
+      {content.sections!.map((section) => (
+        <SectionBlock
+          key={section.section_id}
+          section={section}
+          ideaMap={ideaMap}
+          renderedSections={content.rendered_sections}
+        />
+      ))}
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// PlanWithIdeas: fallback for old data (no sections)
+// ---------------------------------------------------------------------------
+function PlanWithIdeas({ content }: { content: CourseContent }) {
+  const parts = content.plan_markdown.split(/(\[\[IDEA:[^\]]+\]\])/g)
   const ideaMap = new Map(content.ideas.map((i) => [i.idea_id, i]))
 
   return (
@@ -148,18 +447,15 @@ function PlanWithIdeas({
           const ideaId = match[1]
           const idea = ideaMap.get(ideaId)
           if (!idea) return null
-          const section = loadedSections[ideaId] ?? null
+          const section = content.rendered_sections[ideaId] ?? null
           return <IdeaBlock key={idx} idea={idea} section={section} />
         }
-        // Render markdown text
         if (!part.trim()) return null
         return (
           <div
             key={idx}
             className="prose prose-sm dark:prose-invert max-w-none"
-            dangerouslySetInnerHTML={{
-              __html: renderSimpleMarkdown(part),
-            }}
+            dangerouslySetInnerHTML={{ __html: renderSimpleMarkdown(part) }}
           />
         )
       })}
@@ -167,330 +463,112 @@ function PlanWithIdeas({
   )
 }
 
-/** Very simple Markdown-to-HTML converter for plan text. */
-function renderSimpleMarkdown(text: string): string {
-  return text
-    .replace(/^## (.+)$/gm, '<h2 class="text-base font-bold mt-5 mb-2">$1</h2>')
-    .replace(/^### (.+)$/gm, '<h3 class="text-sm font-semibold mt-4 mb-1">$1</h3>')
-    .replace(/^\- (.+)$/gm, '<li class="ml-4 list-disc text-sm">$1</li>')
-    .replace(/^\d+\. (.+)$/gm, '<li class="ml-4 list-decimal text-sm">$1</li>')
-    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-    .replace(/\n\n/g, '</p><p class="text-sm text-foreground leading-relaxed my-2">')
-    .replace(/^(.+)$/gm, (match) => {
-      if (match.startsWith('<')) return match
-      return `<p class="text-sm text-foreground leading-relaxed my-2">${match}</p>`
-    })
+// ---------------------------------------------------------------------------
+// EditorialHeader
+// ---------------------------------------------------------------------------
+function EditorialHeader({ knode }: { knode: KnodeInfo | null }) {
+  if (!knode) return null
+  return (
+    <header className="space-y-4 pb-8 border-b border-border/30">
+      <div className="inline-flex items-center gap-2 px-3 py-1 bg-accent rounded-full text-accent-foreground text-xs font-bold tracking-wide uppercase">
+        难度 {knode.difficulty_level} / 5 · {knode.estimated_minutes} 分钟
+      </div>
+      <h1 className="text-4xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-primary to-violet-400 leading-tight">
+        {knode.title}
+      </h1>
+      {knode.summary && (
+        <p className="text-lg text-muted-foreground leading-relaxed max-w-2xl">
+          {knode.summary}
+        </p>
+      )}
+    </header>
+  )
 }
 
-export function CourseContentView({
-  projectName,
-  nodeId,
-  knode,
-  onClose,
-  onMarkComplete,
-}: CourseContentViewProps) {
-  const [courseData, setCourseData] = useState<CourseContentData | null>(null)
-  const [loadedSections, setLoadedSections] = useState<Record<string, RenderedSection | null>>({})
-  const [generationStatus, setGenerationStatus] = useState<
-    "idle" | "generating" | "ready" | "failed"
-  >("idle")
-  const [generationProgress, setGenerationProgress] = useState<string>("")
-  const [agentLogs, setAgentLogs] = useState<AgentLogEntry[]>([])
-  const [isCompleted, setIsCompleted] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const esRef = useRef<EventSource | null>(null)
-
-  const content = courseData?.course_content as CourseContent | undefined
-
-  const startGeneration = useCallback(
-    async (regenerate = false) => {
-      setError(null)
-      setGenerationStatus("generating")
-      setGenerationProgress("正在规划学习内容...")
-      setCourseData(null)
-      setLoadedSections({})
-      setAgentLogs([])
-
-      try {
-        await gateway.generateCourseV2(projectName, nodeId, regenerate)
-      } catch (e) {
-        setError(e instanceof Error ? e.message : "生成失败")
-        setGenerationStatus("failed")
-        return
-      }
-
-      // Connect SSE
-      if (esRef.current) {
-        esRef.current.close()
-      }
-      const es = gateway.streamCourse(projectName, nodeId)
-      esRef.current = es
-
-      es.addEventListener("plan_ready", () => {
-        setGenerationProgress("学习计划已生成，正在识别富媒体知识点...")
-      })
-
-      es.addEventListener("ideas_identified", (e: MessageEvent) => {
-        const data = JSON.parse(e.data) as { count: number }
-        setGenerationProgress(`已识别 ${data.count} 个知识点，正在并行生成内容...`)
-        // Pre-fill loadedSections with null (loading state)
-        if (courseData?.course_content) {
-          const c = courseData.course_content as CourseContent
-          const initial: Record<string, RenderedSection | null> = {}
-          c.ideas.forEach((i) => { initial[i.idea_id] = null })
-          setLoadedSections(initial)
-        }
-      })
-
-      es.addEventListener("agent_log", (e: MessageEvent) => {
-        const data = JSON.parse(e.data) as { agent: string; phase: string; input: string; output: string }
-        setAgentLogs((prev) => [
-          ...prev,
-          {
-            agent: data.agent,
-            phase: data.phase as "input" | "output",
-            input: data.input,
-            output: data.output,
-            timestamp: new Date().toLocaleTimeString("zh-CN", { hour12: false }),
-          },
-        ])
-      })
-
-      es.addEventListener("idea_complete", (e: MessageEvent) => {
-        const data = JSON.parse(e.data) as { idea_id: string; mode: string; status: string }
-        // Reload course v2 to get latest section data
-        gateway.getCourseV2(projectName, nodeId).then((latest) => {
-          const c = latest.course_content as CourseContent
-          if (c?.rendered_sections) {
-            setLoadedSections((prev) => ({
-              ...prev,
-              [data.idea_id]: c.rendered_sections[data.idea_id] ?? null,
-            }))
-          }
-          setCourseData(latest)
-        }).catch(() => {})
-        setGenerationProgress(`已完成: ${data.mode} (${data.status})`)
-      })
-
-      es.addEventListener("done", () => {
-        setGenerationStatus("ready")
-        setGenerationProgress("")
-        gateway.getCourseV2(projectName, nodeId).then((latest) => {
-          setCourseData(latest)
-          const c = latest.course_content as CourseContent
-          if (c?.rendered_sections) {
-            setLoadedSections(c.rendered_sections)
-          }
-        }).catch(() => {})
-        es.close()
-      })
-
-      es.addEventListener("error", (e: MessageEvent) => {
-        const data = e.data ? JSON.parse(e.data) as { message?: string } : {}
-        setError(data.message || "生成过程出错")
-        setGenerationStatus("failed")
-        es.close()
-      })
-
-      es.onerror = () => {
-        // Connection lost - check DB state
-        gateway.getCourseV2(projectName, nodeId).then((latest) => {
-          if (latest.status === "ready") {
-            setCourseData(latest)
-            const c = latest.course_content as CourseContent
-            if (c?.rendered_sections) {
-              setLoadedSections(c.rendered_sections)
-            }
-            setGenerationStatus("ready")
-          } else {
-            setError("连接中断，请刷新重试")
-            setGenerationStatus("failed")
-          }
-        }).catch(() => {
-          setError("连接中断，请刷新重试")
-          setGenerationStatus("failed")
-        })
-        es.close()
-      }
-    },
-    [projectName, nodeId, courseData]
-  )
-
-  // On mount: check if already generated, otherwise trigger generation
-  useEffect(() => {
-    setCurrentScrollTop(0)
-    setIsCompleted(false)
-    setError(null)
-    setCourseData(null)
-    setLoadedSections({})
-    setGenerationStatus("idle")
-
-    gateway.getCourseV2(projectName, nodeId).then((data) => {
-      if (data.status === "ready" && Object.keys(data.course_content).length > 0) {
-        setCourseData(data)
-        const c = data.course_content as CourseContent
-        if (c?.rendered_sections) {
-          setLoadedSections(c.rendered_sections)
-        }
-        setGenerationStatus("ready")
-      } else {
-        startGeneration(false)
-      }
-    }).catch(() => {
-      startGeneration(false)
-    })
-
-    return () => {
-      esRef.current?.close()
-    }
-  }, [projectName, nodeId]) // eslint-disable-line react-hooks/exhaustive-deps
-
-  const [currentScrollTop, setCurrentScrollTop] = useState(0)
-
-  if (error) {
-    return (
-      <div className="flex flex-col h-full">
-        <Header knode={knode} onClose={onClose} />
-        <div className="flex-1 flex flex-col items-center justify-center gap-3 text-muted-foreground">
-          <p className="text-sm">{error}</p>
-          <button
-            onClick={() => startGeneration(true)}
-            className="text-xs text-primary hover:underline"
-          >
-            重试
-          </button>
-        </div>
-      </div>
-    )
-  }
-
-  if (isCompleted) {
-    return (
-      <div className="flex flex-col h-full">
-        <Header knode={knode} onClose={onClose} />
-        <div className="flex-1 flex flex-col items-center justify-center gap-5 px-8">
-          <div className="w-16 h-16 rounded-full bg-emerald-100 dark:bg-emerald-500/15 flex items-center justify-center">
-            <CheckCircle2 className="h-9 w-9 text-emerald-500" />
-          </div>
-          <div className="text-center space-y-1">
-            <h3 className="text-xl font-extrabold text-foreground">恭喜完成！</h3>
-            <p className="text-sm text-muted-foreground">你已完成《{knode?.title}》的全部学习内容</p>
-          </div>
-          <div className="flex gap-3 w-full max-w-xs">
-            <button
-              onClick={onClose}
-              className="flex-1 h-10 rounded-xl border border-border text-sm text-muted-foreground hover:bg-secondary transition-colors"
-            >
-              返回
-            </button>
-            <button
-              onClick={() => { onMarkComplete?.(); onClose() }}
-              className="flex-1 h-10 rounded-xl bg-emerald-500 text-white text-sm font-bold hover:bg-emerald-600 transition-colors"
-            >
-              标记完成
-            </button>
-          </div>
-        </div>
-      </div>
-    )
-  }
+// ---------------------------------------------------------------------------
+// GeneratingProgress
+// ---------------------------------------------------------------------------
+function GeneratingProgress({
+  stage, ideaProgress, agentLogs,
+}: {
+  stage: PipelineStage
+  ideaProgress: { done: number; total: number }
+  agentLogs: AgentLogEntry[]
+}) {
+  const currentIdx = STAGE_ORDER.indexOf(stage)
 
   return (
-    <div className="flex flex-col h-full">
-      <Header knode={knode} onClose={onClose} />
-
-      {/* Generation progress indicator */}
-      {generationStatus === "generating" && (
-        <div className="px-6 py-2.5 border-b border-border/30 flex items-center gap-2 bg-primary/5 shrink-0">
+    <div className="space-y-6">
+      <div className="rounded-xl border border-border/40 overflow-hidden">
+        <div className="px-4 py-3 bg-secondary/30 border-b border-border/30 flex items-center gap-2">
           <Loader2 className="h-3.5 w-3.5 animate-spin text-primary" />
-          <span className="text-xs text-muted-foreground">
-            {generationProgress || "内容生成中..."}
-          </span>
+          <span className="text-xs font-semibold text-foreground">AI 生成进度</span>
         </div>
-      )}
+        <div className="divide-y divide-border/20">
+          {PIPELINE_STAGES.map((s) => {
+            const stageIdx = STAGE_ORDER.indexOf(s.key)
+            const isDone = currentIdx > stageIdx
+            const isActive = currentIdx === stageIdx
+            const isPending = currentIdx < stageIdx
 
-      {/* Content area */}
-      <div className="flex-1 min-h-0 overflow-y-auto px-6 py-5">
-        {generationStatus === "generating" && !content && (
-          <>
-            <GeneratingSkeleton />
-            {agentLogs.length > 0 && (
-              <AgentDebugPanel logs={agentLogs} />
-            )}
-          </>
-        )}
-
-        {content && (
-          <>
-            <PlanWithIdeas
-              content={content}
-              loadedSections={loadedSections}
-            />
-            {agentLogs.length > 0 && (
-              <AgentDebugPanel logs={agentLogs} />
-            )}
-          </>
-        )}
+            return (
+              <div key={s.key} className={`flex items-center gap-3 px-4 py-3 ${isActive ? "bg-primary/5" : ""}`}>
+                <div className="shrink-0 w-4 h-4 flex items-center justify-center">
+                  {isDone && <CheckCircle2 className="h-4 w-4 text-emerald-500" />}
+                  {isActive && <Loader2 className="h-4 w-4 animate-spin text-primary" />}
+                  {isPending && <Circle className="h-3.5 w-3.5 text-muted-foreground/30" />}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <span className={`text-xs font-mono ${isDone ? "text-muted-foreground" : isActive ? "text-foreground font-semibold" : "text-muted-foreground/50"}`}>
+                    {s.label}
+                  </span>
+                  {isActive && (s.key === "generating" || s.key === "detailing") && ideaProgress.total > 0 && (
+                    <span className="ml-2 text-[10px] text-muted-foreground">
+                      {s.key === "generating" ? `${ideaProgress.done} / ${ideaProgress.total}` : `${ideaProgress.total} 个`}
+                    </span>
+                  )}
+                </div>
+                {isDone && <span className="text-[10px] text-emerald-500 shrink-0">完成</span>}
+                {isActive && <span className="text-[10px] text-primary shrink-0 animate-pulse">运行中</span>}
+              </div>
+            )
+          })}
+        </div>
       </div>
 
-      {/* Footer */}
-      {generationStatus === "ready" && (
-        <div className="px-6 py-4 border-t border-border/50 shrink-0">
-          <div className="flex items-center justify-end">
-            <button
-              onClick={() => setIsCompleted(true)}
-              className="flex items-center gap-1.5 px-6 h-10 rounded-xl bg-emerald-500 text-white text-sm font-bold hover:bg-emerald-600 transition-colors"
-            >
-              <CheckCircle2 className="h-4 w-4" />
-              完成学习
-            </button>
+      {agentLogs.length > 0 && (
+        <div className="rounded-xl border border-border/40 overflow-hidden">
+          <div className="px-4 py-3 bg-secondary/30 border-b border-border/30 flex items-center gap-2">
+            <Terminal className="h-3.5 w-3.5 text-muted-foreground" />
+            <span className="text-xs font-semibold text-muted-foreground">Agent 实时日志</span>
+            <span className="text-[10px] text-muted-foreground/60 ml-1">({agentLogs.length} 条)</span>
+          </div>
+          <div className="max-h-[340px] overflow-y-auto divide-y divide-border/20">
+            {agentLogs.map((log, idx) => (
+              <AgentLogRow key={idx} log={log} defaultExpanded={idx === agentLogs.length - 1} />
+            ))}
           </div>
         </div>
       )}
+
+      <div className="space-y-3 animate-pulse mt-2">
+        <div className="h-4 w-2/3 bg-secondary rounded" />
+        <div className="space-y-1.5">
+          <div className="h-2.5 w-full bg-secondary/70 rounded" />
+          <div className="h-2.5 w-5/6 bg-secondary/70 rounded" />
+          <div className="h-2.5 w-4/5 bg-secondary/70 rounded" />
+        </div>
+        <div className="h-32 rounded-xl bg-secondary/40 mt-4" />
+      </div>
     </div>
   )
 }
 
-function Header({ knode, onClose }: { knode: KnodeInfo | null; onClose: () => void }) {
-  return (
-    <div className="flex items-center justify-between px-6 py-4 border-b border-border/50 shrink-0">
-      <div className="flex items-center gap-2 min-w-0">
-        <BookOpen className="h-4 w-4 text-primary shrink-0" />
-        <h2 className="text-sm font-semibold text-foreground truncate">{knode?.title}</h2>
-      </div>
-      <button onClick={onClose} className="ml-3 p-1 rounded-lg hover:bg-secondary transition-colors shrink-0">
-        <X className="h-4 w-4 text-muted-foreground" />
-      </button>
-    </div>
-  )
-}
-
-function GeneratingSkeleton() {
-  return (
-    <div className="space-y-4 animate-pulse">
-      <div className="h-5 w-2/3 bg-secondary rounded" />
-      <div className="space-y-2">
-        <div className="h-3 w-full bg-secondary/70 rounded" />
-        <div className="h-3 w-5/6 bg-secondary/70 rounded" />
-        <div className="h-3 w-4/5 bg-secondary/70 rounded" />
-      </div>
-      <div className="h-5 w-1/2 bg-secondary rounded mt-4" />
-      <div className="space-y-2">
-        <div className="h-3 w-full bg-secondary/70 rounded" />
-        <div className="h-3 w-3/4 bg-secondary/70 rounded" />
-      </div>
-      <div className="h-48 rounded-2xl bg-secondary/40 mt-6" />
-      <div className="space-y-2">
-        <div className="h-3 w-full bg-secondary/70 rounded" />
-        <div className="h-3 w-2/3 bg-secondary/70 rounded" />
-      </div>
-      <div className="h-48 rounded-2xl bg-secondary/40 mt-6" />
-    </div>
-  )
-}
-
-function AgentLogRow({ log }: { log: AgentLogEntry }) {
-  const [expanded, setExpanded] = useState(false)
+// ---------------------------------------------------------------------------
+// AgentLogRow
+// ---------------------------------------------------------------------------
+function AgentLogRow({ log, defaultExpanded = false }: { log: AgentLogEntry; defaultExpanded?: boolean }) {
+  const [expanded, setExpanded] = useState(defaultExpanded)
   const isOutput = log.phase === "output"
 
   return (
@@ -500,11 +578,7 @@ function AgentLogRow({ log }: { log: AgentLogEntry }) {
         className="w-full flex items-start gap-2 px-3 py-2 text-left hover:bg-secondary/20 transition-colors"
       >
         <div className="shrink-0 mt-0.5">
-          {expanded ? (
-            <ChevronDown className="h-3 w-3 text-muted-foreground" />
-          ) : (
-            <ChevronRight className="h-3 w-3 text-muted-foreground" />
-          )}
+          {expanded ? <ChevronDown className="h-3 w-3 text-muted-foreground" /> : <ChevronRight className="h-3 w-3 text-muted-foreground" />}
         </div>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
@@ -543,11 +617,12 @@ function AgentLogRow({ log }: { log: AgentLogEntry }) {
   )
 }
 
+// ---------------------------------------------------------------------------
+// AgentDebugPanel
+// ---------------------------------------------------------------------------
 function AgentDebugPanel({ logs }: { logs: AgentLogEntry[] }) {
   const [collapsed, setCollapsed] = useState(false)
 
-  // Group logs: pair input+output for same agent call
-  // Show logs in order received
   return (
     <div className="mt-8 rounded-xl border border-border/40 overflow-hidden">
       <button
@@ -558,19 +633,224 @@ function AgentDebugPanel({ logs }: { logs: AgentLogEntry[] }) {
         <span className="text-xs font-semibold text-muted-foreground">Agent Debug Log</span>
         <span className="text-[10px] text-muted-foreground/60 ml-1">({logs.length} 条)</span>
         <div className="flex-1" />
-        {collapsed ? (
-          <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
-        ) : (
-          <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
-        )}
+        {collapsed ? <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" /> : <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />}
       </button>
       {!collapsed && (
         <div className="divide-y divide-border/20 max-h-[500px] overflow-y-auto">
-          {logs.map((log, idx) => (
-            <AgentLogRow key={idx} log={log} />
-          ))}
+          {logs.map((log, idx) => <AgentLogRow key={idx} log={log} />)}
         </div>
       )}
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Main: CourseContentView
+// ---------------------------------------------------------------------------
+export function CourseContentView({
+  projectName,
+  nodeId,
+  knode,
+  onClose,
+  onMarkComplete,
+}: CourseContentViewProps) {
+  const [courseData, setCourseData] = useState<CourseContentData | null>(null)
+  const [generating, setGenerating] = useState(false)
+  const [stage, setStage] = useState<PipelineStage>("connecting")
+  const [ideaProgress, setIdeaProgress] = useState<{ done: number; total: number }>({ done: 0, total: 0 })
+  const [agentLogs, setAgentLogs] = useState<AgentLogEntry[]>([])
+  const [error, setError] = useState<string | null>(null)
+  const abortRef = useRef(false)
+
+  const content = courseData?.course_content as CourseContent | undefined
+
+  const load = async (regenerate = false) => {
+    abortRef.current = false
+    setError(null)
+    setGenerating(true)
+    setStage("connecting")
+    setIdeaProgress({ done: 0, total: 0 })
+    setCourseData(null)
+    setAgentLogs([])
+
+    try {
+      const res = await gateway.streamCourseV2(projectName, nodeId, regenerate)
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}))
+        throw new Error((body as { error?: string }).error || `HTTP ${res.status}`)
+      }
+      if (!res.body) throw new Error("no response body")
+
+      const reader = res.body.getReader()
+      const decoder = new TextDecoder()
+      let buffer = ""
+      let buffer_event = ""
+
+      const handleLine = (line: string) => {
+        if (!line.startsWith("data: ")) return
+        const dataStr = line.slice(6)
+        let data: Record<string, unknown> = {}
+        try { data = JSON.parse(dataStr) } catch { return }
+
+        const evt = buffer_event || "message"
+        buffer_event = ""
+
+        if (evt === "plan_ready") {
+          setStage("ideating")
+        } else if (evt === "ideas_identified") {
+          setStage("detailing")
+          setIdeaProgress({ done: 0, total: (data.count as number) || 0 })
+        } else if (evt === "details_ready") {
+          setStage("generating")
+          setIdeaProgress({ done: 0, total: (data.count as number) || 0 })
+        } else if (evt === "idea_complete") {
+          setStage("generating")
+          setIdeaProgress((prev) => ({ ...prev, done: prev.done + 1 }))
+        } else if (evt === "audio_ready") {
+          setStage("audio")
+        } else if (evt === "agent_log") {
+          const now = new Date().toLocaleTimeString("zh-CN", { hour12: false })
+          setAgentLogs((prev) => [
+            ...prev,
+            {
+              agent: data.agent as string,
+              phase: data.phase as "input" | "output",
+              input: data.input as string,
+              output: data.output as string,
+              timestamp: now,
+            },
+          ])
+        } else if (evt === "done") {
+          setStage("done")
+        } else if (evt === "error") {
+          throw new Error((data.message as string) || "生成失败")
+        }
+      }
+
+      const processChunk = (text: string) => {
+        buffer += text
+        const lines = buffer.split("\n")
+        buffer = lines.pop() ?? ""
+        for (const line of lines) {
+          const trimmed = line.trim()
+          if (trimmed.startsWith("event: ")) {
+            buffer_event = trimmed.slice(7).trim()
+          } else if (trimmed.startsWith("data: ")) {
+            handleLine(trimmed)
+          }
+        }
+      }
+
+      setStage("planning")
+
+      while (true) {
+        const { done, value } = await reader.read()
+        if (abortRef.current) { reader.cancel(); return }
+        if (done) break
+        processChunk(decoder.decode(value, { stream: true }))
+      }
+
+      if (!abortRef.current) {
+        const data = await gateway.getCourseV2(projectName, nodeId)
+        setCourseData(data)
+      }
+    } catch (e) {
+      if (!abortRef.current) {
+        setError(e instanceof Error ? e.message : "生成失败")
+      }
+    } finally {
+      if (!abortRef.current) setGenerating(false)
+    }
+  }
+
+  useEffect(() => {
+    setError(null)
+    gateway.getCourseV2(projectName, nodeId).then((data) => {
+      if (data.status === "ready" && data.course_content && Object.keys(data.course_content).length > 0) {
+        setCourseData(data)
+        setGenerating(false)
+      } else {
+        load(false)
+      }
+    }).catch(() => {
+      load(false)
+    })
+
+    return () => { abortRef.current = true }
+  }, [projectName, nodeId]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  if (error) {
+    return (
+      <div className="flex flex-col h-full">
+        <Header knode={knode} onClose={onClose} />
+        <div className="flex-1 flex flex-col items-center justify-center gap-3 text-muted-foreground">
+          <p className="text-sm">{error}</p>
+          <button onClick={() => load(true)} className="text-xs text-primary hover:underline">重试</button>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <AudioProvider>
+      <div className="flex flex-col h-full">
+        <Header knode={knode} onClose={onClose} />
+
+        <div className="flex-1 min-h-0 overflow-y-auto">
+          {generating && (
+            <div className="px-6 py-5">
+              <GeneratingProgress
+                stage={stage}
+                ideaProgress={ideaProgress}
+                agentLogs={agentLogs}
+              />
+            </div>
+          )}
+
+          {!generating && content && (
+            <div className="max-w-3xl mx-auto px-8 py-10 space-y-16">
+              <EditorialHeader knode={knode} />
+
+              {/* Content sections */}
+              {content.sections && content.sections.length > 0 ? (
+                <PlanWithSections content={content} />
+              ) : (
+                <PlanWithIdeas content={content} />
+              )}
+
+              {agentLogs.length > 0 && <AgentDebugPanel logs={agentLogs} />}
+            </div>
+          )}
+        </div>
+
+        {!generating && content && (
+          <div className="px-6 py-4 border-t border-border/50 shrink-0 flex items-center justify-end gap-3">
+            <p className="text-xs text-muted-foreground mr-auto">
+              学完后，点击右侧面板的「标记完成」继续下一节
+            </p>
+            <button
+              onClick={() => load(true)}
+              className="flex items-center gap-1.5 px-4 h-9 rounded-xl border border-border text-xs text-muted-foreground hover:text-foreground hover:border-foreground/40 transition-colors"
+            >
+              重新生成
+            </button>
+          </div>
+        )}
+      </div>
+    </AudioProvider>
+  )
+}
+
+function Header({ knode, onClose }: { knode: KnodeInfo | null; onClose: () => void }) {
+  return (
+    <div className="flex items-center justify-between px-6 py-4 border-b border-border/50 shrink-0">
+      <div className="flex items-center gap-2 min-w-0">
+        <BookOpen className="h-4 w-4 text-primary shrink-0" />
+        <h2 className="text-sm font-semibold text-foreground truncate">{knode?.title}</h2>
+      </div>
+      <button onClick={onClose} className="ml-3 p-1 rounded-lg hover:bg-secondary transition-colors shrink-0">
+        <X className="h-4 w-4 text-muted-foreground" />
+      </button>
     </div>
   )
 }

@@ -427,8 +427,17 @@ export interface RenderedSection {
   story_paragraphs: StoryParagraph[] | null
 }
 
+export interface CourseSection {
+  section_id: string
+  heading: string
+  body_markdown: string
+  audio_script: string
+  audio_url: string
+}
+
 export interface CourseContent {
   plan_markdown: string
+  sections?: CourseSection[]
   ideas: CourseIdeaSummary[]
   rendered_sections: Record<string, RenderedSection>
 }

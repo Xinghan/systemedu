@@ -118,6 +118,21 @@ class TestCourseIdeaAgent:
         plan_text, ideas = await agent.identify("内容", "力")
         assert ideas == []
 
+    @pytest.mark.asyncio
+    async def test_identify_handles_prefix_text_before_json(self):
+        """Regression: LLM sometimes outputs description text before the JSON array after SEPARATOR."""
+        from systemedu.agents.builtin.course_idea_agent import CourseIdeaAgent
+
+        plan = "内容[[IDEA:idea-x]]"
+        ideas = [{"idea_id": "idea-x", "mode": "animation", "topic": "测试", "context_summary": "上下文"}]
+        # Simulate LLM adding "第二部分：JSON 数组..." prefix before the actual JSON
+        sep_part = f"\n第二部分：JSON 数组，每个元素格式：\n\n{json.dumps(ideas, ensure_ascii=False)}"
+        llm = _make_llm(f"{plan}\n---SEPARATOR---\n{sep_part}")
+        agent = CourseIdeaAgent(llm)
+        plan_text, result = await agent.identify("原始内容", "力")
+        assert len(result) == 1
+        assert result[0]["mode"] == "animation"
+
 
 # ===== CourseIdeaDetailAgent =====
 
@@ -359,3 +374,77 @@ class TestDbCourseContent:
         finally:
             session.close()
             _db.reset_db()
+
+
+# ===== CourseSegmentAgent =====
+
+class TestCourseSegmentAgent:
+
+    @pytest.mark.asyncio
+    async def test_segment_returns_sections(self):
+        from systemedu.agents.builtin.course_segment_agent import CourseSegmentAgent
+
+        response_json = json.dumps([
+            {
+                "section_id": "",
+                "heading": "什么是力",
+                "body_markdown": "## 什么是力\n\n力是物体间的相互作用。",
+                "audio_script": "同学们好，今天我们聊聊力的概念。",
+            },
+            {
+                "section_id": "",
+                "heading": "力的类型",
+                "body_markdown": "## 力的类型\n\n[[IDEA:idea-1]]\n\n重力和摩擦力是常见的力。",
+                "audio_script": "力有很多种类，我们来认识几种常见的。",
+            },
+        ])
+        llm = _make_llm(response_json)
+        agent = CourseSegmentAgent(llm)
+        sections = await agent.segment(
+            plan_markdown="## 什么是力\n\n力是物体间的相互作用。\n\n## 力的类型\n\n重力和摩擦力是常见的力。",
+            node_title="力",
+        )
+
+        assert len(sections) == 2
+        for s in sections:
+            assert "section_id" in s
+            assert len(s["section_id"]) > 0  # UUID assigned
+            assert "heading" in s
+            assert "body_markdown" in s
+            assert "audio_script" in s
+            assert "audio_url" in s
+
+        assert sections[0]["heading"] == "什么是力"
+        assert "[[IDEA:idea-1]]" in sections[1]["body_markdown"]
+
+    @pytest.mark.asyncio
+    async def test_segment_fallback_on_invalid_json(self):
+        from systemedu.agents.builtin.course_segment_agent import CourseSegmentAgent
+
+        llm = _make_llm("这不是 JSON")
+        agent = CourseSegmentAgent(llm)
+        plan = "## 学习目标\n\n理解基本概念。"
+        sections = await agent.segment(plan_markdown=plan, node_title="测试节点")
+
+        assert len(sections) == 1
+        assert sections[0]["body_markdown"] == plan
+        assert sections[0]["audio_url"] == ""
+
+    @pytest.mark.asyncio
+    async def test_segment_preserves_idea_placeholders(self):
+        from systemedu.agents.builtin.course_segment_agent import CourseSegmentAgent
+
+        plan_with_idea = "## 第一段\n\n内容[[IDEA:abc123]]\n\n继续内容。"
+        response_json = json.dumps([
+            {
+                "section_id": "",
+                "heading": "第一段",
+                "body_markdown": plan_with_idea,
+                "audio_script": "讲解第一段内容。",
+            },
+        ])
+        llm = _make_llm(response_json)
+        agent = CourseSegmentAgent(llm)
+        sections = await agent.segment(plan_markdown=plan_with_idea, node_title="测试")
+
+        assert "[[IDEA:abc123]]" in sections[0]["body_markdown"]

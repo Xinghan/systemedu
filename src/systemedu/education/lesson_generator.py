@@ -270,6 +270,49 @@ async def generate_course_v2(
             assignment_text[:400] if assignment_text else "(empty)",
         )
 
+        # Step 6a: Segment plan + generate audio scripts
+        logger.info(f"[v2] Step 6a: CourseSegmentAgent for node {knode_id}")
+        from systemedu.agents.builtin.course_segment_agent import CourseSegmentAgent
+        segments = await CourseSegmentAgent(llm).segment(
+            plan_markdown=plan_with_placeholders,
+            node_title=node_title,
+        )
+        logger.info(f"[v2] Step 6a: {len(segments)} sections generated")
+
+        # Step 6b: Parallel TTS for each section
+        logger.info(f"[v2] Step 6b: TTS x {len(segments)} sections (parallel)")
+        from systemedu.education.tts import synthesize_speech
+
+        async def _tts_one(seg: dict) -> dict:
+            script = seg.get("audio_script", "")
+            if not script:
+                seg["audio_url"] = ""
+                return seg
+            try:
+                path, _ = await asyncio.to_thread(
+                    synthesize_speech,
+                    script,
+                    project_name,
+                    knode_id,
+                    f"section_{seg['section_id'][:8]}.wav",
+                )
+                seg["audio_url"] = path
+            except Exception:
+                logger.exception(
+                    f"[v2] TTS failed for section {seg.get('section_id', '')[:8]}"
+                )
+                seg["audio_url"] = ""
+            return seg
+
+        segments = list(await asyncio.gather(*[_tts_one(s) for s in segments]))
+        course_content["sections"] = segments
+        logger.info(
+            f"[v2] Step 6b: TTS complete, "
+            f"{sum(1 for s in segments if s.get('audio_url'))} / {len(segments)} succeeded"
+        )
+        if progress_cb:
+            progress_cb("audio_ready", {"count": len(segments)})
+
         # Step 7: Save to DB
         lesson.course_content = json.dumps(course_content, ensure_ascii=False)
         lesson.project_assignment = assignment_text
