@@ -120,30 +120,62 @@ function renderSimpleMarkdown(text: string): string {
 }
 
 // ---------------------------------------------------------------------------
-// SectionAudioButton
+// SectionAudioBar — inline audio player shown at top of each section
 // ---------------------------------------------------------------------------
-function SectionAudioButton({ sectionId, audioUrl }: { sectionId: string; audioUrl: string }) {
+function SectionAudioBar({ sectionId, audioUrl }: { sectionId: string; audioUrl: string }) {
   const { playing, play, stop } = useContext(AudioPlayContext)
   const isPlaying = playing === sectionId
 
-  if (!audioUrl) return null
+  // No audio generated — show disabled placeholder
+  if (!audioUrl) {
+    return (
+      <div className="flex items-center gap-3 px-4 py-2.5 rounded-xl border border-border/20 bg-secondary/20 opacity-40 cursor-not-allowed select-none">
+        <div className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 bg-card border border-border/30 text-muted-foreground">
+          <Play className="h-3.5 w-3.5 ml-0.5" />
+        </div>
+        <span className="text-xs text-muted-foreground">讲解音频未生成</span>
+      </div>
+    )
+  }
 
   return (
-    <button
-      onClick={() => isPlaying ? stop() : play(sectionId, audioUrl)}
-      title={isPlaying ? "暂停" : "播放讲解"}
+    <div
       className={[
-        "w-12 h-12 rounded-full flex items-center justify-center transition-all duration-200 shadow-sm border",
+        "flex items-center gap-3 px-4 py-2.5 rounded-xl border transition-all duration-200 cursor-pointer select-none",
         isPlaying
-          ? "bg-primary border-primary/30 text-primary-foreground animate-pulse"
-          : "bg-card border-border/40 text-primary hover:bg-primary/10",
+          ? "bg-primary/10 border-primary/30"
+          : "bg-secondary/40 border-border/30 hover:bg-secondary/70 hover:border-border/50",
       ].join(" ")}
+      onClick={() => isPlaying ? stop() : play(sectionId, audioUrl)}
     >
-      {isPlaying
-        ? <Square className="h-4 w-4 fill-current" />
-        : <Play className="h-4 w-4 fill-current" />
-      }
-    </button>
+      <div className={[
+        "w-8 h-8 rounded-full flex items-center justify-center shrink-0 transition-colors",
+        isPlaying ? "bg-primary text-primary-foreground" : "bg-card border border-border/40 text-primary",
+      ].join(" ")}>
+        {isPlaying
+          ? <Square className="h-3.5 w-3.5 fill-current" />
+          : <Play className="h-3.5 w-3.5 fill-current ml-0.5" />
+        }
+      </div>
+      <div className="flex-1 min-w-0">
+        {isPlaying ? (
+          <div className="flex items-center gap-1.5">
+            <span className="text-xs font-medium text-primary">正在播放讲解</span>
+            <div className="flex gap-0.5 items-end h-3">
+              {[0, 1, 2, 3].map((i) => (
+                <div
+                  key={i}
+                  className="w-0.5 bg-primary rounded-full animate-pulse"
+                  style={{ height: `${[8, 12, 6, 10][i]}px`, animationDelay: `${i * 0.15}s` }}
+                />
+              ))}
+            </div>
+          </div>
+        ) : (
+          <span className="text-xs text-muted-foreground">点击播放本节讲解音频</span>
+        )}
+      </div>
+    </div>
   )
 }
 
@@ -364,7 +396,7 @@ function IdeaBlock({
 }
 
 // ---------------------------------------------------------------------------
-// SectionBlock: one section of plan_markdown + optional audio button
+// SectionBlock: one section of plan_markdown + inline audio bar
 // ---------------------------------------------------------------------------
 function SectionBlock({
   section, ideaMap, renderedSections,
@@ -377,9 +409,20 @@ function SectionBlock({
   const parts = section.body_markdown.split(/(\[\[IDEA:[^\]]+\]\])/g)
 
   return (
-    <div className="group relative flex gap-8 items-start">
-      {/* Main content */}
-      <div className="flex-1 space-y-4 min-w-0">
+    <div className="space-y-4">
+      {/* Section heading (if any) extracted from body_markdown heading */}
+      {section.heading && (
+        <h2 className="text-2xl font-bold text-foreground">{section.heading}</h2>
+      )}
+
+      {/* Inline audio bar — always visible when audio_url present */}
+      <SectionAudioBar
+        sectionId={section.section_id}
+        audioUrl={section.audio_url}
+      />
+
+      {/* Content: text + idea blocks */}
+      <div className="space-y-4">
         {parts.map((part, idx) => {
           const match = part.match(/^\[\[IDEA:([^\]]+)\]\]$/)
           if (match) {
@@ -390,23 +433,16 @@ function SectionBlock({
             return <IdeaBlock key={idx} idea={idea} section={rendered} />
           }
           if (!part.trim()) return null
+          // Strip leading ## heading from body_markdown since we render it above
+          const stripped = part.replace(/^##\s+.+\n?/, "")
+          if (!stripped.trim()) return null
           return (
             <div
               key={idx}
-              dangerouslySetInnerHTML={{ __html: renderSimpleMarkdown(part) }}
+              dangerouslySetInnerHTML={{ __html: renderSimpleMarkdown(stripped) }}
             />
           )
         })}
-      </div>
-
-      {/* Right sidebar: audio button, hover-revealed */}
-      <div className="w-16 flex flex-col gap-3 opacity-40 group-hover:opacity-100 transition-opacity duration-300 sticky top-24 shrink-0">
-        {section.audio_url && (
-          <SectionAudioButton
-            sectionId={section.section_id}
-            audioUrl={section.audio_url}
-          />
-        )}
       </div>
     </div>
   )
@@ -441,6 +477,13 @@ function PlanWithIdeas({ content }: { content: CourseContent }) {
 
   return (
     <div>
+      {/* Upgrade notice for old content without audio sections */}
+      <div className="flex items-center gap-3 px-4 py-2.5 rounded-xl border border-border/20 bg-secondary/20 mb-8">
+        <div className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 bg-card border border-border/30 text-muted-foreground">
+          <Play className="h-3.5 w-3.5 ml-0.5" />
+        </div>
+        <span className="text-xs text-muted-foreground">点击「重新生成」以获得分段音频讲解</span>
+      </div>
       {parts.map((part, idx) => {
         const match = part.match(/^\[\[IDEA:([^\]]+)\]\]$/)
         if (match) {
