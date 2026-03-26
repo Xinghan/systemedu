@@ -705,10 +705,14 @@ export function CourseContentView({
   const [agentLogs, setAgentLogs] = useState<AgentLogEntry[]>([])
   const [error, setError] = useState<string | null>(null)
   const abortRef = useRef(false)
+  const loadIdRef = useRef(0)
 
   const content = courseData?.course_content as CourseContent | undefined
 
   const load = async (regenerate = false) => {
+    // Abort any in-flight load before starting a new one
+    abortRef.current = true
+    const myLoadId = ++loadIdRef.current
     abortRef.current = false
     setError(null)
     setGenerating(true)
@@ -749,7 +753,7 @@ export function CourseContentView({
           setIdeaProgress({ done: 0, total: (data.count as number) || 0 })
         } else if (evt === "idea_complete") {
           setStage("generating")
-          setIdeaProgress((prev) => ({ ...prev, done: prev.done + 1 }))
+          setIdeaProgress((prev) => ({ ...prev, done: Math.min(prev.done + 1, prev.total) }))
         } else if (evt === "audio_ready") {
           setStage("audio")
         } else if (evt === "agent_log") {
@@ -789,21 +793,21 @@ export function CourseContentView({
 
       while (true) {
         const { done, value } = await reader.read()
-        if (abortRef.current) { reader.cancel(); return }
+        if (abortRef.current || loadIdRef.current !== myLoadId) { reader.cancel(); return }
         if (done) break
         processChunk(decoder.decode(value, { stream: true }))
       }
 
-      if (!abortRef.current) {
+      if (!abortRef.current && loadIdRef.current === myLoadId) {
         const data = await gateway.getCourseV2(projectName, nodeId)
         setCourseData(data)
       }
     } catch (e) {
-      if (!abortRef.current) {
+      if (!abortRef.current && loadIdRef.current === myLoadId) {
         setError(e instanceof Error ? e.message : "生成失败")
       }
     } finally {
-      if (!abortRef.current) setGenerating(false)
+      if (!abortRef.current && loadIdRef.current === myLoadId) setGenerating(false)
     }
   }
 
