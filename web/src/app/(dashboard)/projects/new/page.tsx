@@ -4,7 +4,7 @@ import { useCallback, useState } from "react"
 import { useRouter } from "next/navigation"
 import {
   FileJson, Eye, Check, AlertCircle, ArrowLeft, ArrowRight,
-  Sparkles, Upload, Brain, ImageIcon, Wand2, ChevronDown, X, Plus,
+  Sparkles, Brain, ChevronDown, X, Plus,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -53,11 +53,7 @@ export default function NewProjectPage() {
   const [aiAge, setAiAge] = useState(9)
   const [aiNodeCount, setAiNodeCount] = useState(25)
 
-  // Cover image state
-  const [coverFile, setCoverFile] = useState<File | null>(null)
-  const [coverPreview, setCoverPreview] = useState<string | null>(null)
   const [generatingDesc, setGeneratingDesc] = useState(false)
-  const [generatingCover, setGeneratingCover] = useState(false)
 
   // Tags state
   const [tags, setTags] = useState<string[]>([])
@@ -393,19 +389,6 @@ export default function NewProjectPage() {
           )}
 
           <div className="space-y-6">
-            {/* Cover preview — square */}
-            {(coverPreview || coverFile) && coverPreview !== "__generate__" && (
-              <div className="flex items-center gap-5 p-4 rounded-2xl bg-secondary/60 border border-border/40">
-                <img src={coverPreview!} alt="cover" className="w-20 h-20 rounded-2xl object-cover shrink-0" />
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-semibold text-foreground">{projectTitle}</p>
-                  <button onClick={() => { setCoverFile(null); setCoverPreview(null) }}
-                    className="text-xs text-muted-foreground hover:text-destructive transition-colors mt-1.5">
-                    {t("new_project.remove")}
-                  </button>
-                </div>
-              </div>
-            )}
 
             <div className="space-y-2">
               <label className="text-sm font-bold text-foreground font-[var(--font-manrope)] block">
@@ -692,79 +675,6 @@ export default function NewProjectPage() {
                     <Plus className="h-3 w-3" />{t("new_project.add_tag")}
                   </button>
                 )}
-              </div>
-            </section>
-
-            {/* Cover image */}
-            <section className="space-y-3">
-              <label className="font-bold text-foreground text-base block" style={{ fontFamily: "var(--font-manrope, sans-serif)" }}>
-                {t("new_project.cover_label")}
-              </label>
-              <div className="flex flex-col items-center gap-3">
-                {/* Square cover preview */}
-                <div className="relative w-48 h-48 rounded-2xl overflow-hidden bg-gradient-to-br from-violet-500/20 via-purple-500/15 to-indigo-500/20">
-                  {coverPreview && coverPreview !== "__generate__" && (
-                    <img src={coverPreview} alt="cover" className="absolute inset-0 w-full h-full object-cover" />
-                  )}
-                  {generatingCover && (
-                    <div className="absolute inset-0 bg-gradient-to-br from-violet-600/20 to-purple-400/10 flex flex-col items-center justify-center gap-3">
-                      <Wand2 className="h-8 w-8 text-primary animate-pulse" />
-                      <span className="text-xs font-semibold text-primary" style={{ fontFamily: "var(--font-manrope, sans-serif)" }}>{t("new_project.generating_cover")}</span>
-                      <div className="flex gap-1">
-                        {[0, 1, 2].map((i) => (
-                          <div key={i} className="w-1.5 h-1.5 rounded-full bg-primary/60 animate-bounce"
-                            style={{ animationDelay: `${i * 150}ms` }} />
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                  {!coverPreview && !generatingCover && (
-                    <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 px-8 text-center">
-                      <div className="rounded-2xl bg-muted-foreground/10 p-4">
-                        <ImageIcon className="h-8 w-8 text-muted-foreground/30" />
-                      </div>
-                      <span className="text-xs text-muted-foreground/50 leading-relaxed" style={{ fontFamily: "var(--font-manrope, sans-serif)" }}>
-                        {t("new_project.cover_hint_short")}
-                      </span>
-                    </div>
-                  )}
-                </div>
-
-                {/* Buttons below the square */}
-                <div className="flex items-center gap-2">
-                  <button type="button"
-                    disabled={!aiTitle.trim() || generatingCover}
-                    onClick={async () => {
-                      setCoverFile(null); setCoverPreview(null)
-                      setGeneratingCover(true)
-                      try {
-                        const res = await gateway.generateCoverPreview({ title: aiTitle, description: aiDescription })
-                        const fullUrl = `${process.env.NEXT_PUBLIC_GATEWAY_URL ?? "http://localhost:18820"}${res.url}`
-                        setCoverPreview(fullUrl)
-                      } catch { /* ignore */ }
-                      finally { setGeneratingCover(false) }
-                    }}
-                    className="flex items-center gap-1.5 text-xs bg-white border border-border/60 px-4 py-2 rounded-xl text-primary hover:bg-primary/5 transition-colors font-semibold disabled:opacity-40 disabled:cursor-not-allowed" style={{ fontFamily: "var(--font-manrope, sans-serif)" }}>
-                    <Wand2 className="h-3.5 w-3.5" />{coverPreview ? t("new_project.regenerate") : t("new_project.ai_generate_cover")}
-                  </button>
-                  <label htmlFor="new-cover-input"
-                    className="flex items-center gap-1.5 text-xs bg-white border border-border/60 px-4 py-2 rounded-xl text-foreground hover:bg-secondary/60 transition-colors font-semibold cursor-pointer" style={{ fontFamily: "var(--font-manrope, sans-serif)" }}>
-                    <Upload className="h-3.5 w-3.5" />{t("new_project.upload_image")}
-                  </label>
-                  <input type="file" accept="image/*" className="hidden" id="new-cover-input"
-                    onChange={(e) => {
-                      const file = e.target.files?.[0]
-                      if (!file) return
-                      setCoverFile(file)
-                      setCoverPreview(URL.createObjectURL(file))
-                    }} />
-                  {coverPreview && (
-                    <button type="button" onClick={() => { setCoverFile(null); setCoverPreview(null) }}
-                      className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors px-2 py-2" style={{ fontFamily: "var(--font-manrope, sans-serif)" }}>
-                      <X className="h-3.5 w-3.5" />
-                    </button>
-                  )}
-                </div>
               </div>
             </section>
 

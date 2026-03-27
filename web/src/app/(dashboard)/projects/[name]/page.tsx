@@ -7,7 +7,7 @@ import dynamic from "next/dynamic"
 import { toast } from "sonner"
 import {
   ArrowLeft, Clock, Play, GraduationCap, Highlighter,
-  Pencil, Save, X, ChevronUp, ArrowRight, Zap, ImageIcon, Upload, Wand2, Trash2,
+  Pencil, Save, X, ChevronUp, ArrowRight, Zap, ImageIcon, Upload, Trash2,
 } from "lucide-react"
 import { PageLoading } from "@/components/ui/page-loading"
 import { LoadingSpinner } from "@/components/ui/loading-spinner"
@@ -245,7 +245,7 @@ export default function ProjectDetailPage() {
   const [triggering, setTriggering] = useState(false)
 const [editCoverFile, setEditCoverFile] = useState<File | null>(null)
   const [editCoverPreview, setEditCoverPreview] = useState<string | null>(null)
-  const [generatingEditCover, setGeneratingEditCover] = useState(false)
+
   const [coverCacheBust, setCoverCacheBust] = useState(Date.now())
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false)
   const [deleting, setDeleting] = useState(false)
@@ -309,9 +309,6 @@ const [editCoverFile, setEditCoverFile] = useState<File | null>(null)
           const r = await gateway.uploadProjectCover(params.name, editCoverFile)
           newCoverUrl = r.url
         } catch { /* non-fatal */ }
-      } else if (editCoverPreview === "__generate__") {
-        try { await gateway.generateProjectCover(params.name) } catch { /* non-fatal */ }
-        // Cover URL will update after generation completes in background
       }
       setDetail((prev) =>
         prev ? {
@@ -485,13 +482,8 @@ const [editCoverFile, setEditCoverFile] = useState<File | null>(null)
                           <div className="mt-2 flex items-center gap-3">
                             {/* Preview — square, no white bg */}
                             <div className="w-20 h-20 rounded-2xl overflow-hidden shrink-0 flex items-center justify-center bg-gradient-to-br from-violet-500/20 to-purple-600/20">
-                              {editCoverPreview && editCoverPreview !== "__generate__" ? (
+                              {editCoverPreview ? (
                                 <img src={editCoverPreview} alt="cover" className="w-full h-full object-cover" />
-                              ) : editCoverPreview === "__generate__" ? (
-                                <div className="flex flex-col items-center gap-1 text-primary">
-                                  <Wand2 className="h-4 w-4 animate-pulse" />
-                                  <span className="text-[9px] font-[var(--font-manrope)] uppercase tracking-wider">AI Gen</span>
-                                </div>
                               ) : detail?.project.cover_image_url ? (
                                 <img src={`${process.env.NEXT_PUBLIC_GATEWAY_URL ?? "http://localhost:18820"}${detail.project.cover_image_url}`} alt="cover" className="w-full h-full object-cover" />
                               ) : (
@@ -502,50 +494,6 @@ const [editCoverFile, setEditCoverFile] = useState<File | null>(null)
                             </div>
                             {/* Actions */}
                             <div className="flex flex-col gap-1.5">
-                              {/* AI Generate */}
-                              <button
-                                type="button"
-                                disabled={generatingEditCover}
-                                onClick={async () => {
-                                  if (!params.name) return
-                                  setEditCoverFile(null)
-                                  setEditCoverPreview("__generate__")
-                                  setGeneratingEditCover(true)
-                                  // Record current cover URL to detect change
-                                  const prevCoverUrl = detail?.project.cover_image_url ?? null
-                                  const generationStartTime = Date.now()
-                                  try {
-                                    await gateway.generateProjectCover(params.name)
-                                    // Poll for result every 6s, up to 24 attempts (2min)
-                                    const GATEWAY = process.env.NEXT_PUBLIC_GATEWAY_URL ?? "http://localhost:18820"
-                                    for (let i = 0; i < 24; i++) {
-                                      await new Promise((r) => setTimeout(r, 6000))
-                                      const d = await gateway.project(params.name)
-                                      const newCoverUrl = d.project.cover_image_url
-                                      // Accept if: URL is set AND (URL changed OR enough time has passed that it's a fresh generation)
-                                      if (newCoverUrl && (newCoverUrl !== prevCoverUrl || Date.now() - generationStartTime > 20000)) {
-                                        const ts = Date.now()
-                                        const url = `${GATEWAY}${newCoverUrl}?t=${ts}`
-                                        setEditCoverPreview(url)
-                                        setCoverCacheBust(ts)
-                                        setDetail((prev) => prev ? { ...prev, project: { ...prev.project, cover_image_url: newCoverUrl } } : prev)
-                                        break
-                                      }
-                                    }
-                                  } catch {
-                                    // non-fatal
-                                  } finally {
-                                    setGeneratingEditCover(false)
-                                  }
-                                }}
-                                className="inline-flex h-8 px-3 items-center gap-1.5 rounded-lg bg-primary/10 hover:bg-primary/15 text-primary text-xs font-medium transition-colors w-fit disabled:opacity-60"
-                              >
-                                {generatingEditCover ? (
-                                  <><div className="h-3 w-3 rounded-full border-2 border-primary border-t-transparent animate-spin" />{t("project.generating_cover")}</>
-                                ) : (
-                                  <><Wand2 className="h-3 w-3" />{t("project.ai_generate_cover")}</>
-                                )}
-                              </button>
                               {/* Upload */}
                               <input type="file" accept="image/*" className="hidden" id="edit-cover-input"
                                 onChange={(e) => {

@@ -471,31 +471,6 @@ async def api_create_project(request: Request) -> JSONResponse:
     except Exception:
         logger.exception("Auto-enqueue scan failed (non-fatal)")
 
-    # Trigger async cover image generation
-    try:
-        from systemedu.core.config import SYSTEMEDU_HOME
-        from systemedu.education.image_gen import generate_project_cover
-
-        save_path = SYSTEMEDU_HOME / "media" / "projects" / name / "cover.jpg"
-
-        async def _gen_cover():
-            ok = await generate_project_cover(title, meta.get("description", ""), save_path)
-            if ok:
-                cover_url = f"/api/media/projects/{name}/cover.jpg"
-                _db = get_db_session()
-                try:
-                    proj = _db.query(LocalProject).filter_by(name=name).first()
-                    if proj:
-                        proj.cover_image_url = cover_url
-                        _db.commit()
-                finally:
-                    _db.close()
-                logger.info(f"Auto-generated cover for {name!r}: {cover_url}")
-
-        asyncio.create_task(_gen_cover())
-    except Exception:
-        logger.exception("Auto cover generation failed (non-fatal)")
-
     return JSONResponse({"name": name, "created": True, "path": str(project_dir)})
 
 
@@ -972,86 +947,6 @@ async def api_upload_project_cover(request: Request) -> JSONResponse:
     except Exception as e:
         logger.exception(f"Cover upload failed for {name}")
         return JSONResponse({"error": str(e)}, status_code=500)
-
-
-async def api_generate_cover_preview(request: Request) -> JSONResponse:
-    """POST /api/projects/generate-cover-preview - Generate a cover image immediately and return the URL.
-
-    Used in the new-project form before the project is created.
-    Saves to a temp path and returns a media URL for preview.
-    """
-    from systemedu.core.config import SYSTEMEDU_HOME
-    from systemedu.education.image_gen import generate_project_cover
-
-    body = await request.json()
-    title = body.get("title", "").strip()
-    description = body.get("description", "").strip()
-
-    if not title:
-        return JSONResponse({"error": "title is required"}, status_code=400)
-
-    # Save to a predictable temp path based on title slug
-    import re
-    slug = re.sub(r"[^a-z0-9]+", "-", title.lower()).strip("-") or "preview"
-    save_path = SYSTEMEDU_HOME / "media" / "_preview" / f"{slug}.jpg"
-
-    ok = await generate_project_cover(title, description, save_path)
-    if not ok:
-        return JSONResponse({"error": "Cover generation failed. Check your DashScope API key and try again."}, status_code=500)
-
-    cover_url = f"/api/media/_preview/{slug}.jpg"
-    return JSONResponse({"url": cover_url})
-
-
-async def api_generate_project_cover(request: Request) -> JSONResponse:
-    """POST /api/projects/{name}/cover/generate - Trigger async AI cover image generation."""
-    from systemedu.core.config import SYSTEMEDU_HOME
-    from systemedu.education.image_gen import generate_project_cover
-    from systemedu.storage.db import LocalProject, get_session as get_db_session
-
-    name = request.path_params["name"]
-
-    # Load project info for prompt
-    try:
-        from systemedu.education.project_loader import find_project_dir
-        import yaml as _yaml
-        project_dir = find_project_dir(name)
-        yaml_data = _yaml.safe_load((project_dir / "project.yaml").read_text(encoding="utf-8")) or {}
-        title = yaml_data.get("title", name)
-        description = yaml_data.get("description", "")
-    except Exception:
-        title = name
-        description = ""
-
-    save_path = SYSTEMEDU_HOME / "media" / "projects" / name / "cover.jpg"
-
-    async def _bg_generate():
-        ok = await generate_project_cover(title, description, save_path)
-        if ok:
-            cover_url = f"/api/media/projects/{name}/cover.jpg"
-            db = get_db_session()
-            try:
-                proj = db.query(LocalProject).filter_by(name=name).first()
-                if proj:
-                    proj.cover_image_url = cover_url
-                    db.commit()
-                else:
-                    new_proj = LocalProject(
-                        name=name,
-                        title=title,
-                        description=description,
-                        path=str(save_path.parent.parent),
-                        category="other",
-                        cover_image_url=cover_url,
-                    )
-                    db.add(new_proj)
-                    db.commit()
-            finally:
-                db.close()
-            logger.info(f"Cover generated and saved for {name!r}: {cover_url}")
-
-    asyncio.create_task(_bg_generate())
-    return JSONResponse({"status": "generating", "name": name})
 
 
 async def api_objects_registry(request: Request) -> JSONResponse:
@@ -2591,7 +2486,7 @@ def create_app() -> Starlette:
         Route("/api/projects/preview-tree", api_preview_tree, methods=["POST"]),
         Route("/api/projects/generate-description", api_generate_description, methods=["POST"]),
         Route("/api/projects/generate-tree", api_generate_tree, methods=["POST"]),
-        Route("/api/projects/generate-cover-preview", api_generate_cover_preview, methods=["POST"]),
+
         Route("/api/projects/{name}/enroll", api_enroll, methods=["POST"]),
         Route("/api/projects/{name}/enrollment", api_enrollment_dispatch, methods=["GET", "PATCH"]),
         Route("/api/projects/{name}/nodes/{node_id:int}/context", api_node_context),
@@ -2611,7 +2506,7 @@ def create_app() -> Starlette:
         Route("/api/projects/{name}/nodes/{node_id:int}/note", api_note_dispatch, methods=["GET", "PUT"]),
         Route("/api/projects/{name}/notes", api_get_all_notes, methods=["GET"]),
         Route("/api/projects/{name}/cover", api_upload_project_cover, methods=["POST"]),
-        Route("/api/projects/{name}/cover/generate", api_generate_project_cover, methods=["POST"]),
+
         Route("/api/projects/{name}/tree", api_update_tree, methods=["PUT"]),
         Route("/api/projects/{name}", api_project_dispatch, methods=["GET", "PATCH", "DELETE"]),
         Route("/api/objects/registry", api_objects_registry, methods=["GET"]),

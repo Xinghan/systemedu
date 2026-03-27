@@ -118,8 +118,6 @@ export const gateway = {
     api.post<TreePreviewResponse>("/api/projects/preview-tree", { tree_data: treeData }),
   generateDescription: (body: { title: string; age?: number; node_count?: number }) =>
     api.post<{ description: string; tags?: string[] }>("/api/projects/generate-description", body),
-  generateCoverPreview: (body: { title: string; description?: string }) =>
-    api.post<{ url: string }>("/api/projects/generate-cover-preview", body),
   generateTree: (body: { title: string; description: string; age?: number; node_count?: number }) =>
     api.post<TreePreviewResponse>("/api/projects/generate-tree", body),
   createProject: (name: string, title: string, treeData: Record<string, unknown>, meta?: { description?: string; tags?: string[]; category?: string; age_range?: number[] }) =>
@@ -141,8 +139,7 @@ export const gateway = {
     }
     return res.json()
   },
-  generateProjectCover: (name: string) =>
-    api.post<{ status: string; name: string }>(`/api/projects/${name}/cover/generate`, {}),
+
   enroll: (projectName: string, userId = "default") =>
     api.post<EnrollmentInfo>(`/api/projects/${projectName}/enroll`, { user_id: userId }),
   enrollment: (projectName: string, userId = "default") =>
