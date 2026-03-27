@@ -550,15 +550,23 @@ function EditorialHeader({ knode }: { knode: KnodeInfo | null }) {
 }
 
 // ---------------------------------------------------------------------------
-// GeneratingProgress — redesigned to match Lumina Nexus reference
+// GeneratingProgress — Lumina Nexus design
 // ---------------------------------------------------------------------------
 
 const STAGE_SUBTITLES: Partial<Record<PipelineStage, string>> = {
-  planning: "分析知识节点，生成详细学习计划",
-  ideating: "识别适合做成动画、游戏、故事的知识点",
-  detailing: "为每个知识点细化媒体方案",
-  generating: "并行生成动画 / 游戏 / 故事内容",
-  audio: "为每段文字生成讲解音频",
+  planning:   "Strategic curriculum mapping in progress.",
+  ideating:   "Creative thematic concepts generated.",
+  detailing:  "Module granularity and objectives defined.",
+  generating: "Generating Assets:",
+  audio:      "Pending visual sequence completion...",
+}
+
+const STAGE_COMPLETED_LABELS: Partial<Record<PipelineStage, string>> = {
+  planning:   "Strategic curriculum mapping complete.",
+  ideating:   "Creative thematic concepts generated.",
+  detailing:  "Module granularity and objectives defined.",
+  generating: "All assets generated.",
+  audio:      "Audio synthesis complete.",
 }
 
 function GeneratingProgress({
@@ -569,79 +577,169 @@ function GeneratingProgress({
   agentLogs: AgentLogEntry[]
 }) {
   const currentIdx = STAGE_ORDER.indexOf(stage)
+  const doneCount = PIPELINE_STAGES.filter((s) => STAGE_ORDER.indexOf(s.key) < currentIdx).length
   const progressPct = PIPELINE_STAGES.length > 0
-    ? Math.round((PIPELINE_STAGES.filter((s) => STAGE_ORDER.indexOf(s.key) < currentIdx).length / PIPELINE_STAGES.length) * 100)
+    ? Math.round((doneCount / PIPELINE_STAGES.length) * 100)
     : 0
 
+  const M = {
+    bg: "#f8f7ff",
+    surface: "#ffffff",
+    primary: "#6a1cf6",
+    teal: "#00c9a7",
+    onBg: "#19227d",
+    muted: "#9ea6ff",
+    mutedFg: "#4953ac",
+    border: "rgba(158,166,255,0.18)",
+  }
+
   return (
-    <div className="space-y-4">
-      {/* Header */}
-      <div className="flex items-center justify-between mb-2">
-        <div className="flex items-center gap-2">
-          <div className="w-2 h-2 rounded-full bg-primary animate-pulse" />
-          <span className="text-sm font-semibold text-foreground">AI 生成进度</span>
-        </div>
-        <span className="text-xs font-bold text-muted-foreground">{progressPct}%</span>
+    <div style={{ fontFamily: "var(--font-manrope, 'Inter', sans-serif)" }}>
+
+      {/* ── Version badge ── */}
+      <div className="flex items-center gap-2 mb-5">
+        <span
+          className="text-[10px] font-bold uppercase tracking-[0.25em] px-2.5 py-1 rounded-full"
+          style={{ background: "rgba(106,28,246,0.08)", color: M.mutedFg }}
+        >
+          SYSTEMEDU AI
+        </span>
+        <span className="w-1.5 h-1.5 rounded-full bg-[#00c9a7] animate-pulse" />
       </div>
 
-      {/* Agent steps */}
-      <div className="space-y-2">
+      {/* ── Hero header: title + progress number ── */}
+      <div className="flex items-start justify-between mb-8">
+        <div>
+          <h2
+            className="font-extrabold leading-tight tracking-tight"
+            style={{ fontSize: "clamp(1.6rem, 4vw, 2.4rem)", color: M.onBg }}
+          >
+            Architecting Your
+          </h2>
+          <h2
+            className="font-extrabold leading-tight tracking-tight italic"
+            style={{
+              fontSize: "clamp(1.6rem, 4vw, 2.4rem)",
+              background: "linear-gradient(90deg, #6a1cf6 0%, #4f8ef7 60%, #00c9a7 100%)",
+              WebkitBackgroundClip: "text",
+              WebkitTextFillColor: "transparent",
+            }}
+          >
+            Learning Experience
+          </h2>
+        </div>
+        <div className="text-right shrink-0 pl-6">
+          <p
+            className="text-[10px] font-bold uppercase tracking-[0.2em] mb-1"
+            style={{ color: M.muted }}
+          >
+            SYSTEM PROGRESS
+          </p>
+          <p
+            className="font-extrabold leading-none"
+            style={{ fontSize: "clamp(2rem, 5vw, 3rem)", color: M.onBg }}
+          >
+            {progressPct}
+            <span className="text-xl font-bold" style={{ color: M.mutedFg }}>%</span>
+          </p>
+        </div>
+      </div>
+
+      {/* ── Agent steps ── */}
+      <div className="space-y-3">
         {PIPELINE_STAGES.map((s) => {
           const stageIdx = STAGE_ORDER.indexOf(s.key)
           const isDone = currentIdx > stageIdx
           const isActive = currentIdx === stageIdx
-          const isPending = currentIdx < stageIdx
+          const showProgress = isActive && s.key === "generating" && ideaProgress.total > 0
+          const pct = showProgress ? Math.round((ideaProgress.done / ideaProgress.total) * 100) : 0
 
           if (isActive) {
-            // Active step — elevated card with left gradient bar + large spinner
-            const showProgress = (s.key === "generating") && ideaProgress.total > 0
-            const pct = showProgress ? Math.round((ideaProgress.done / ideaProgress.total) * 100) : 0
-
             return (
               <div
                 key={s.key}
-                className="relative flex items-center justify-between px-6 py-5 rounded-xl bg-card border border-primary/15 shadow-[0_8px_30px_-8px_rgba(124,58,237,0.12)] overflow-hidden"
+                className="relative overflow-hidden rounded-2xl"
+                style={{
+                  background: M.surface,
+                  border: `1px solid ${M.border}`,
+                  boxShadow: "0 8px 32px -8px rgba(106,28,246,0.10)",
+                }}
               >
                 {/* Left accent bar */}
-                <div className="absolute left-0 top-0 w-1 h-full bg-gradient-to-b from-primary to-violet-400 rounded-l-xl" />
-
-                <div className="flex items-center gap-5 ml-2">
-                  {/* Spinner */}
-                  <div className="relative shrink-0">
-                    <div className="w-10 h-10 rounded-full border-2 border-primary/10 flex items-center justify-center">
-                      <div className="w-7 h-7 rounded-full border-2 border-t-primary border-r-primary border-b-transparent border-l-transparent animate-spin" />
-                    </div>
-                    <div className="absolute inset-0 rounded-full bg-primary/10 animate-pulse" />
+                <div
+                  className="absolute left-0 top-0 w-1 h-full rounded-l-2xl"
+                  style={{ background: "linear-gradient(to bottom, #6a1cf6, #4f8ef7)" }}
+                />
+                <div className="flex items-center gap-4 px-6 py-5 ml-1">
+                  {/* Dual-ring spinner */}
+                  <div className="relative shrink-0 w-11 h-11">
+                    <div
+                      className="absolute inset-0 rounded-full"
+                      style={{ border: "2px solid rgba(106,28,246,0.10)" }}
+                    />
+                    <div
+                      className="absolute inset-[3px] rounded-full animate-spin"
+                      style={{
+                        border: "2px solid transparent",
+                        borderTopColor: M.primary,
+                        borderRightColor: M.primary,
+                      }}
+                    />
+                    <div
+                      className="absolute inset-0 rounded-full animate-pulse"
+                      style={{ background: "rgba(106,28,246,0.06)" }}
+                    />
                   </div>
 
-                  <div>
-                    <div className="flex items-center gap-2 mb-0.5">
-                      <span className="text-sm font-bold text-foreground">{s.label}</span>
-                      {showProgress && (
-                        <span className="text-[10px] bg-primary/8 text-primary font-bold px-2 py-0.5 rounded-full">
-                          {ideaProgress.done} / {ideaProgress.total}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap mb-1">
+                      <span className="text-sm font-bold" style={{ color: M.onBg }}>{s.label}</span>
+                      {s.key === "generating" && (
+                        <span
+                          className="text-[9px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-full"
+                          style={{ background: "rgba(106,28,246,0.08)", color: M.primary }}
+                        >
+                          HIGH COMPUTE
                         </span>
                       )}
                     </div>
                     {showProgress ? (
-                      <div className="flex items-center gap-2 mt-1">
-                        <div className="h-1 w-36 bg-primary/8 rounded-full overflow-hidden">
+                      <div>
+                        <p className="text-xs mb-1.5" style={{ color: M.mutedFg }}>
+                          {STAGE_SUBTITLES[s.key]} {ideaProgress.done} of {ideaProgress.total}
+                        </p>
+                        <div
+                          className="h-1 rounded-full overflow-hidden"
+                          style={{ background: "rgba(106,28,246,0.10)", width: 160 }}
+                        >
                           <div
-                            className="h-full bg-gradient-to-r from-primary to-violet-400 rounded-full transition-all duration-500"
-                            style={{ width: `${pct}%` }}
+                            className="h-full rounded-full transition-all duration-500"
+                            style={{
+                              width: `${pct}%`,
+                              background: "linear-gradient(90deg, #6a1cf6, #4f8ef7)",
+                            }}
                           />
                         </div>
-                        <span className="text-[10px] text-muted-foreground">{pct}%</span>
                       </div>
                     ) : (
-                      <p className="text-xs text-muted-foreground">{STAGE_SUBTITLES[s.key]}</p>
+                      <p className="text-xs" style={{ color: M.mutedFg }}>{STAGE_SUBTITLES[s.key]}</p>
+                    )}
+                  </div>
+
+                  <div className="text-right shrink-0">
+                    <p
+                      className="text-[10px] font-bold uppercase tracking-widest animate-pulse"
+                      style={{ color: M.primary }}
+                    >
+                      PROCESSING
+                    </p>
+                    {showProgress && (
+                      <p className="text-[10px] mt-0.5" style={{ color: M.muted }}>
+                        ~ {Math.max(0, ideaProgress.total - ideaProgress.done) * 25}s remaining
+                      </p>
                     )}
                   </div>
                 </div>
-
-                <span className="text-[11px] font-bold text-primary uppercase tracking-widest animate-pulse shrink-0">
-                  运行中
-                </span>
               </div>
             )
           }
@@ -650,16 +748,26 @@ function GeneratingProgress({
             return (
               <div
                 key={s.key}
-                className="flex items-center justify-between px-6 py-4 rounded-xl bg-secondary/20 border border-transparent hover:bg-secondary/30 transition-colors duration-300"
+                className="flex items-center justify-between px-5 py-4 rounded-2xl"
+                style={{ background: "rgba(0,201,167,0.04)", border: `1px solid transparent` }}
               >
                 <div className="flex items-center gap-4">
-                  <div className="w-8 h-8 rounded-full bg-cyan-500/10 flex items-center justify-center shrink-0">
-                    <CheckCircle2 className="h-4 w-4 text-cyan-500" />
+                  <div
+                    className="w-8 h-8 rounded-full flex items-center justify-center shrink-0"
+                    style={{ background: "rgba(0,201,167,0.12)" }}
+                  >
+                    <CheckCircle2 className="h-4 w-4" style={{ color: M.teal }} />
                   </div>
-                  <span className="text-sm font-medium text-foreground/70">{s.label}</span>
+                  <div>
+                    <p className="text-sm font-semibold" style={{ color: M.onBg }}>{s.label}</p>
+                    <p className="text-xs" style={{ color: M.mutedFg }}>{STAGE_COMPLETED_LABELS[s.key]}</p>
+                  </div>
                 </div>
-                <span className="text-[10px] font-bold text-cyan-500 uppercase tracking-widest bg-cyan-500/8 px-2.5 py-1 rounded-full">
-                  完成
+                <span
+                  className="text-[9px] font-bold uppercase tracking-widest px-2.5 py-1 rounded-full shrink-0"
+                  style={{ color: M.teal, background: "rgba(0,201,167,0.10)" }}
+                >
+                  COMPLETED
                 </span>
               </div>
             )
@@ -669,47 +777,122 @@ function GeneratingProgress({
           return (
             <div
               key={s.key}
-              className="flex items-center justify-between px-6 py-4 rounded-xl bg-secondary/10 border border-transparent opacity-50"
+              className="flex items-center justify-between px-5 py-4 rounded-2xl opacity-50"
             >
               <div className="flex items-center gap-4">
-                <div className="w-8 h-8 rounded-full bg-muted-foreground/8 flex items-center justify-center shrink-0">
-                  <Circle className="h-3.5 w-3.5 text-muted-foreground/40" />
+                <div
+                  className="w-8 h-8 rounded-full flex items-center justify-center shrink-0"
+                  style={{ background: "rgba(158,166,255,0.10)" }}
+                >
+                  <Circle className="h-3 w-3" style={{ color: M.muted }} />
                 </div>
-                <span className="text-sm font-medium text-muted-foreground">{s.label}</span>
+                <div>
+                  <p className="text-sm font-medium" style={{ color: M.mutedFg }}>{s.label}</p>
+                  <p className="text-xs" style={{ color: M.muted }}>{STAGE_SUBTITLES[s.key]}</p>
+                </div>
               </div>
-              <span className="text-[10px] font-bold text-muted-foreground/40 uppercase tracking-widest">
-                等待中
+              <span
+                className="text-[9px] font-bold uppercase tracking-widest shrink-0"
+                style={{ color: M.muted }}
+              >
+                QUEUED
               </span>
             </div>
           )
         })}
       </div>
 
-      {/* Agent logs (collapsible) */}
-      {agentLogs.length > 0 && (
-        <div className="rounded-xl border border-border/40 overflow-hidden mt-4">
-          <div className="px-4 py-3 bg-secondary/30 border-b border-border/30 flex items-center gap-2">
-            <Terminal className="h-3.5 w-3.5 text-muted-foreground" />
-            <span className="text-xs font-semibold text-muted-foreground">Agent 实时日志</span>
-            <span className="text-[10px] text-muted-foreground/60 ml-1">({agentLogs.length} 条)</span>
+      {/* ── System core footer bar ── */}
+      <div
+        className="flex items-center justify-between mt-6 px-5 py-4 rounded-2xl"
+        style={{ background: M.surface, border: `1px solid ${M.border}` }}
+      >
+        <div className="flex items-center gap-3">
+          <div
+            className="relative w-10 h-10 rounded-full flex items-center justify-center shrink-0"
+            style={{ background: "linear-gradient(135deg, #6a1cf6 0%, #4f8ef7 100%)" }}
+          >
+            <span className="text-white text-xs font-bold">AI</span>
+            <span
+              className="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-white bg-[#00c9a7]"
+            />
           </div>
-          <div className="max-h-[260px] overflow-y-auto divide-y divide-border/20">
+          <div>
+            <p className="text-[10px] font-bold uppercase tracking-widest" style={{ color: M.muted }}>SYSTEM CORE</p>
+            <p className="text-sm font-semibold" style={{ color: M.onBg }}>Synchronizing with Knowledge Graph</p>
+          </div>
+        </div>
+        <div className="flex items-center gap-2">
+          {agentLogs.length > 0 && (
+            <span className="text-xs font-semibold" style={{ color: M.mutedFg }}>
+              {agentLogs.length} logs
+            </span>
+          )}
+        </div>
+      </div>
+
+      {/* ── Feature cards row ── */}
+      <div className="grid grid-cols-3 gap-4 mt-6">
+        {[
+          {
+            icon: (
+              <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5}>
+                <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
+              </svg>
+            ),
+            label: "Adaptive Logic",
+            desc: "Dynamic difficulty adjustment based on student cognitive profiling.",
+          },
+          {
+            icon: (
+              <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5}>
+                <rect x="2" y="3" width="20" height="14" rx="2" /><path d="M8 21h8M12 17v4" />
+              </svg>
+            ),
+            label: "HD Rendering",
+            desc: "StudioGen agents constructing cinematic educational sequences.",
+          },
+          {
+            icon: (
+              <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5}>
+                <path d="M3 15a4 4 0 0 0 4 4h9a5 5 0 1 0-.1-9.999 5.002 5.002 0 0 0-9.78 2.096A4.001 4.001 0 0 0 3 15z" />
+              </svg>
+            ),
+            label: "Nexus Sync",
+            desc: "Global asset distribution across low-latency edge networks.",
+          },
+        ].map((item) => (
+          <div key={item.label} className="flex flex-col items-start gap-2 pt-2">
+            <div
+              className="w-10 h-10 rounded-xl flex items-center justify-center"
+              style={{ background: "rgba(158,166,255,0.12)", color: M.mutedFg }}
+            >
+              {item.icon}
+            </div>
+            <p className="text-sm font-bold" style={{ color: M.onBg }}>{item.label}</p>
+            <p className="text-xs leading-relaxed" style={{ color: M.mutedFg }}>{item.desc}</p>
+          </div>
+        ))}
+      </div>
+
+      {/* Agent logs — collapsed by default */}
+      {agentLogs.length > 0 && (
+        <div className="rounded-xl border overflow-hidden mt-5" style={{ borderColor: M.border }}>
+          <div
+            className="px-4 py-3 flex items-center gap-2 border-b"
+            style={{ background: "rgba(158,166,255,0.06)", borderColor: M.border }}
+          >
+            <Terminal className="h-3.5 w-3.5" style={{ color: M.mutedFg }} />
+            <span className="text-xs font-semibold" style={{ color: M.mutedFg }}>Agent Logs</span>
+            <span className="text-[10px] ml-1" style={{ color: M.muted }}>({agentLogs.length})</span>
+          </div>
+          <div className="max-h-[200px] overflow-y-auto divide-y" style={{ borderColor: M.border }}>
             {agentLogs.map((log, idx) => (
               <AgentLogRow key={idx} log={log} defaultExpanded={idx === agentLogs.length - 1} />
             ))}
           </div>
         </div>
       )}
-
-      <div className="space-y-3 animate-pulse mt-2">
-        <div className="h-4 w-2/3 bg-secondary rounded" />
-        <div className="space-y-1.5">
-          <div className="h-2.5 w-full bg-secondary/70 rounded" />
-          <div className="h-2.5 w-5/6 bg-secondary/70 rounded" />
-          <div className="h-2.5 w-4/5 bg-secondary/70 rounded" />
-        </div>
-        <div className="h-32 rounded-xl bg-secondary/40 mt-4" />
-      </div>
     </div>
   )
 }
