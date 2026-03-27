@@ -31,6 +31,7 @@ import {
   Zap,
   Clock,
   ClipboardList,
+  Languages,
 } from "lucide-react"
 import { PageLoading } from "@/components/ui/page-loading"
 import { ScrollArea } from "@/components/ui/scroll-area"
@@ -41,6 +42,7 @@ import { AssignmentView } from "@/components/learning/assignment-view"
 import { gateway } from "@/lib/api"
 import type { KnodeInfo, NodeProgress, ProjectDetail } from "@/lib/types/api"
 import { useT } from "@/lib/hooks/use-t"
+import { useAppStore } from "@/lib/stores/app-store"
 
 function getNodeStatus(nodeId: number, progress: NodeProgress[]): NodeProgress["status"] {
   return progress.find((p) => p.knode_id === nodeId)?.status ?? "locked"
@@ -115,6 +117,7 @@ export default function LearnPage() {
   const params = useParams<{ projectName: string }>()
   const searchParams = useSearchParams()
   const t = useT()
+  const { locale, setLocale } = useAppStore()
 
   const CATEGORY_LABELS: Record<string, string> = {
     ai: t("cat.ai"),
@@ -266,6 +269,14 @@ export default function LearnPage() {
           </div>
           <span className="font-[var(--font-manrope)] font-semibold text-foreground">{pct}%</span>
         </div>
+        <button
+          onClick={() => setLocale(locale === "en" ? "zh" : "en")}
+          className="flex items-center gap-1 h-7 px-2 rounded-lg hover:bg-secondary transition-colors text-xs font-[var(--font-manrope)] font-semibold text-muted-foreground hover:text-foreground"
+          title="Toggle language"
+        >
+          <Languages className="h-3.5 w-3.5" />
+          {locale === "en" ? "中" : "EN"}
+        </button>
         <button
           onClick={() => setRightPanelOpen((v) => !v)}
           className="text-xs text-muted-foreground hover:text-foreground transition-colors px-2 py-1 rounded-md hover:bg-secondary"
