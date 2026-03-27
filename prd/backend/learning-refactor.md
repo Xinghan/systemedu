@@ -133,7 +133,8 @@ Step 7  DB 保存
 | `src/systemedu/agents/builtin/story_gen_agent.py` | Step 4 图文故事生成 |
 | `src/systemedu/agents/builtin/integration_agent.py` | Step 5 内容整合 |
 | `src/systemedu/agents/builtin/course_segment_agent.py` | Step 6a 分段 + TTS稿 |
-| `src/systemedu/agents/builtin/media_art_direction.py` | 风格系统、质量评估、简化工具 |
+| `src/systemedu/agents/builtin/scientific_model_agent.py` | 理科节点科学约束预提取（P2） |
+| `src/systemedu/agents/builtin/media_art_direction.py` | 风格系统、质量评估、简化工具、KaTeX 注入 |
 | `src/systemedu/education/tts.py` | Step 6b TTS 合成 (DashScope) |
 | `src/systemedu/education/image_gen.py` | 故事图片生成 (DashScope Wanx) |
 | `src/systemedu/education/lesson_generator.py` | 主协调入口 |
@@ -180,6 +181,34 @@ Step 7  DB 保存
 | GET | `/api/projects/:name/nodes/:id/course/v2` | 获取 v2 课程内容 |
 | POST | `/api/projects/:name/nodes/:id/course/v2/generate` | 触发生成（SSE 流式进度） |
 | GET | `/api/media/:path` | 获取媒体文件（TTS 音频、生成图片） |
+
+---
+
+## OpenMAIC 借鉴改进（已完成）
+
+### KaTeX 数学公式渲染（2026-03-27）
+- `media_art_direction.py` 新增 `inject_katex_if_needed(html)` 后处理函数
+- 检测 LaTeX 标记（`\(`, `\[`, `$`, `\frac`, `\int` 等），自动注入 KaTeX CDN
+- `KATEX_PROMPT_HINT` 常量注入到动画/游戏生成 prompt，引导 LLM 使用 KaTeX 语法写公式
+- 零成本设计：无 LaTeX 标记时不注入任何代码
+
+### P1 游戏机制选择去硬编码（2026-03-27）
+- 重写 `GAME_DETAIL_PROMPT`，加入 5 种机制的选择规则和示例
+- `GameGenAgent` 从 `detail_plan["game_mechanic"]` 读取 LLM 决策，不再硬编码 `simulation`
+- 支持：`simulation`、`drag_sort`、`match_pairs`、`timeline_order`、`boss_quiz`
+- 未知机制 fallback 到 `simulation` 并输出 warning 日志
+
+### P2 ScientificModelAgent 科学约束预提取（2026-03-27）
+- 新建 `scientific_model_agent.py`
+- 理科节点（physics/chemistry/math/biology 等 9 类 + 关键词检测）在生成前先提取：
+  - `core_formulas`：关键公式（LaTeX 格式）
+  - `key_mechanisms`：核心工作原理（2-3 条）
+  - `visual_constraints`：视觉呈现约束
+  - `common_misconceptions`：常见错误认知（不得强化）
+  - `forbidden_errors`：绝对禁止的科学错误
+  - `suggested_variables`：适合做滑块的参数（game 模式）
+- 集成到 `AnimationGenAgent` 和 `GameGenAgent` 的 prompt 构建流程
+- 非致命设计：`extract()` 失败返回 `None`，生成流程正常继续
 
 ---
 
