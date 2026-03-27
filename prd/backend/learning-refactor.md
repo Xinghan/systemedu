@@ -160,7 +160,17 @@ Step 7  DB 保存
 
 ### 动画 HTML 质量评分（AnimationGenAgent）
 
-检查项：SVG 存在、@keyframes、transform、opacity、gradient、defs、postMessage 完备性，焦点元素 ≥ 220×120px。综合评分 ≥ 72 通过，否则触发 ANIMATION_REPAIR_PROMPT 修复，修复后仍不通过使用确定性 fallback 模板。
+双维度评分，总分 100，通过线 72：
+
+**技术维度（60分）**：SVG 存在(15)、@keyframes(12)、transform(8)、opacity(5)、gradient(8)、defs(5)、postMessage 完成信号(7)、焦点元素 ≥ 220×120px(8，上限 60)
+
+**教学维度（40分）**：
+- 教学节奏(12)：有 anticipation + settle 阶段（ease-in/ease-out）
+- 视觉证据(10)：`<text>` 标注 ≥ 2 处
+- 知识焦点(10)：含 caption/label/narration 标注
+- 多帧递进(8)：JS frames 数组 + `@keyframes` 多次出现
+
+不通过 → ANIMATION_REPAIR_PROMPT 修复（`format_animation_quality_feedback` 输出"技术分=X/60，教学分=Y/40"定向提示）；修复后仍不通过 → 确定性 fallback 模板。
 
 ---
 
@@ -214,7 +224,8 @@ Step 7  DB 保存
 
 ## 已知问题 / 待优化
 
-- [ ] AnimationGenAgent 当前强制走 Manim（临时测试模式），正式版应恢复路由逻辑
+- [x] AnimationGenAgent 当前强制走 Manim（临时测试模式）→ 已移除，恢复正常路由
+- [ ] AnimationGenAgent 教学维度评分依赖代码结构启发式（caption/label 关键词），未来可考虑 LLM 辅助评审
 - [ ] StoryGenAgent 图片生成串行（避免速率限制 2req/s），可考虑动态并发
 - [ ] CourseSegmentAgent 分段依赖 `##` 标题，对无标题的 plan_markdown 效果较差
 - [ ] TTS 音频路径目前为相对路径，前端通过 `/api/media/` 代理访问
