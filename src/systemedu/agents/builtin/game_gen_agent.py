@@ -80,9 +80,11 @@ class GameGenAgent:
         # Use mechanic from detail_plan (chosen by CourseIdeaDetailPlannerAgent)
         # Fall back to simulation only if not specified
         mechanic = detail_plan.get("game_mechanic", "simulation")
-        valid_mechanics = {"simulation", "drag_sort", "match_pairs", "timeline_order", "boss_quiz", "free_simulation", "label_map"}
-        if mechanic not in valid_mechanics:
-            logger.warning("GameGenAgent: unknown mechanic '%s', falling back to simulation", mechanic)
+        # free_simulation requires hand-written free_html — LLM cannot generate it reliably,
+        # so we degrade it to simulation automatically.
+        supported_mechanics = {"simulation", "drag_sort", "match_pairs", "timeline_order", "boss_quiz", "label_map"}
+        if mechanic not in supported_mechanics:
+            logger.warning("GameGenAgent: mechanic '%s' not supported (falling back to simulation)", mechanic)
             mechanic = "simulation"
         lab_strategy: dict = {"game_mechanic": mechanic}
         logger.info("GameGenAgent: using mechanic '%s' for '%s'", mechanic, node_title)
