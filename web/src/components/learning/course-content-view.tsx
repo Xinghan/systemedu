@@ -110,75 +110,52 @@ const STAGE_ORDER: PipelineStage[] = [
 // ---------------------------------------------------------------------------
 function renderSimpleMarkdown(text: string): string {
   return text
-    .replace(/^## (.+)$/gm, '<h2 class="text-2xl font-bold mt-8 mb-3 text-on-surface">$1</h2>')
+    .replace(/^## (.+)$/gm, '<h2 class="text-2xl font-bold mt-8 mb-3 text-on-surface tracking-tight">$1</h2>')
     .replace(/^### (.+)$/gm, '<h3 class="text-lg font-semibold mt-6 mb-2 text-on-surface">$1</h3>')
-    .replace(/^\- (.+)$/gm, '<li class="ml-5 list-disc text-base text-on-surface leading-relaxed">$1</li>')
-    .replace(/^\d+\. (.+)$/gm, '<li class="ml-5 list-decimal text-base text-on-surface leading-relaxed">$1</li>')
+    .replace(/^\- (.+)$/gm, '<li class="ml-5 list-disc text-lg text-on-surface leading-loose">$1</li>')
+    .replace(/^\d+\. (.+)$/gm, '<li class="ml-5 list-decimal text-lg text-on-surface leading-loose">$1</li>')
     .replace(/\*\*(.+?)\*\*/g, '<strong class="font-semibold">$1</strong>')
-    .replace(/\n\n/g, '</p><p class="text-base text-on-surface leading-loose my-3">')
+    .replace(/\n\n/g, '</p><p class="text-lg text-on-surface leading-loose my-4">')
     .replace(/^([^<\n].+)$/gm, (match) => {
       if (match.startsWith("<") || match.startsWith("-") || /^\d+\./.test(match)) return match
-      return `<p class="text-base text-on-surface leading-loose my-3">${match}</p>`
+      return `<p class="text-lg text-on-surface leading-loose my-4">${match}</p>`
     })
 }
 
 // ---------------------------------------------------------------------------
-// SectionAudioBar — inline audio player shown at top of each section
+// SectionAudioButton — circular hover button in right gutter
 // ---------------------------------------------------------------------------
-function SectionAudioBar({ sectionId, audioUrl }: { sectionId: string; audioUrl: string }) {
+function SectionAudioButton({ sectionId, audioUrl }: { sectionId: string; audioUrl: string }) {
   const { playing, play, stop } = useContext(AudioPlayContext)
   const isPlaying = playing === sectionId
 
-  // No audio generated — show disabled placeholder
-  if (!audioUrl) {
-    return (
-      <div className="flex items-center gap-3 px-4 py-2.5 rounded-xl border border-border/20 bg-secondary/20 opacity-40 cursor-not-allowed select-none">
-        <div className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 bg-card border border-border/30 text-muted-foreground">
-          <Play className="h-3.5 w-3.5 ml-0.5" />
-        </div>
-        <span className="text-xs text-muted-foreground">讲解音频未生成</span>
-      </div>
-    )
-  }
+  if (!audioUrl) return null
 
   return (
-    <div
-      className={[
-        "flex items-center gap-3 px-4 py-2.5 rounded-xl border transition-all duration-200 cursor-pointer select-none",
-        isPlaying
-          ? "bg-primary/10 border-primary/30"
-          : "bg-secondary/40 border-border/30 hover:bg-secondary/70 hover:border-border/50",
-      ].join(" ")}
+    <button
       onClick={() => isPlaying ? stop() : play(sectionId, audioUrl)}
+      title={isPlaying ? "停止播放" : "播放讲解音频"}
+      className={[
+        "w-12 h-12 rounded-full flex items-center justify-center transition-all duration-200 shadow-sm border",
+        isPlaying
+          ? "bg-primary text-white border-primary/40 scale-110"
+          : "bg-white border-outline-variant/20 text-primary hover:bg-primary-container/20",
+      ].join(" ")}
     >
-      <div className={[
-        "w-8 h-8 rounded-full flex items-center justify-center shrink-0 transition-colors",
-        isPlaying ? "bg-primary text-primary-foreground" : "bg-card border border-border/40 text-primary",
-      ].join(" ")}>
-        {isPlaying
-          ? <Square className="h-3.5 w-3.5 fill-current" />
-          : <Play className="h-3.5 w-3.5 fill-current ml-0.5" />
-        }
-      </div>
-      <div className="flex-1 min-w-0">
-        {isPlaying ? (
-          <div className="flex items-center gap-1.5">
-            <span className="text-xs font-medium text-primary">正在播放讲解</span>
-            <div className="flex gap-0.5 items-end h-3">
-              {[0, 1, 2, 3].map((i) => (
-                <div
-                  key={i}
-                  className="w-0.5 bg-primary rounded-full animate-pulse"
-                  style={{ height: `${[8, 12, 6, 10][i]}px`, animationDelay: `${i * 0.15}s` }}
-                />
-              ))}
-            </div>
-          </div>
-        ) : (
-          <span className="text-xs text-muted-foreground">点击播放本节讲解音频</span>
-        )}
-      </div>
-    </div>
+      {isPlaying ? (
+        <div className="flex gap-0.5 items-end h-4">
+          {[0, 1, 2, 3].map((i) => (
+            <div
+              key={i}
+              className="w-0.5 bg-white rounded-full animate-pulse"
+              style={{ height: `${[10, 14, 8, 12][i]}px`, animationDelay: `${i * 0.12}s` }}
+            />
+          ))}
+        </div>
+      ) : (
+        <Play className="h-4 w-4 fill-current ml-0.5" />
+      )}
+    </button>
   )
 }
 
@@ -204,27 +181,31 @@ function IdeaIframeBlock({
   const backendLabel = backendBadgeLabel(backend)
 
   if (darkMode) {
-    // Animation block — deep dark style matching code.html inverse-surface
+    // Animation block — inverse-surface deep dark style (#000341)
     return (
-      <section className="rounded-2xl overflow-hidden shadow-2xl bg-slate-950 border border-white/10">
+      <section
+        className="rounded-2xl overflow-hidden shadow-2xl border border-white/10"
+        style={{ background: "#000341" }}
+      >
         <button
           onClick={() => setExpanded((e) => !e)}
-          className="w-full flex items-center justify-between p-6 bg-white/5 hover:bg-white/10 transition-colors"
+          className="w-full flex items-center justify-between p-8 hover:bg-white/10 transition-colors"
+          style={{ backdropFilter: "blur(20px)", background: "rgba(255,255,255,0.05)" }}
         >
-          <div className="flex items-center gap-5">
-            <div className="w-12 h-12 rounded-xl bg-primary/20 flex items-center justify-center border border-primary/30 shrink-0">
-              <Zap className="h-6 w-6 text-primary" />
+          <div className="flex items-center gap-6">
+            <div className="w-14 h-14 rounded-xl bg-primary/20 flex items-center justify-center border border-primary/30 shrink-0">
+              <Zap className="h-7 w-7 text-primary" />
             </div>
             <div className="text-left">
-              <div className="flex items-center gap-2">
-                <h3 className="font-bold text-white text-lg leading-tight">动画演示</h3>
+              <div className="flex items-center gap-2 mb-0.5">
+                <h3 className="font-bold text-white text-xl leading-tight">动画演示</h3>
                 {backendLabel && (
                   <span className="inline-flex items-center rounded-full border border-primary/30 bg-primary/15 px-2 py-0.5 text-[11px] font-semibold text-primary">
                     {backendLabel}
                   </span>
                 )}
               </div>
-              <p className="text-white/60 text-sm mt-0.5">{idea.topic}</p>
+              <p className="text-white/60 text-sm">{idea.topic}</p>
             </div>
           </div>
           <ChevronDown
@@ -232,7 +213,7 @@ function IdeaIframeBlock({
           />
         </button>
         {expanded && (
-          <div className="p-6 pt-2">
+          <div className="p-8 pt-4">
             <iframe
               key={resetKey}
               srcDoc={html}
@@ -244,26 +225,26 @@ function IdeaIframeBlock({
           </div>
         )}
         {!expanded && (
-          <div className="px-6 py-3 text-white/40 text-sm">点击展开查看动画演示</div>
+          <div className="px-8 py-4 text-white/30 text-sm">点击展开查看动画演示</div>
         )}
       </section>
     )
   }
 
-  // Game block — light surface style
+  // Game block — surface-container-low light style
   return (
-    <section className="rounded-2xl overflow-hidden shadow-lg bg-secondary/20 border border-border/20">
+    <section className="rounded-2xl overflow-hidden shadow-lg bg-surface-container-low border border-outline-variant/10">
       <button
         onClick={() => setExpanded((e) => !e)}
-        className="w-full flex items-center justify-between p-6 bg-card hover:bg-card/80 transition-colors"
+        className="w-full flex items-center justify-between p-8 bg-white/50 hover:bg-white transition-colors"
       >
-        <div className="flex items-center gap-5">
-          <div className="w-12 h-12 rounded-xl bg-cyan-500/10 flex items-center justify-center border border-cyan-500/20 shrink-0">
-            <Gamepad2 className="h-6 w-6 text-cyan-600 dark:text-cyan-400" />
+        <div className="flex items-center gap-6">
+          <div className="w-14 h-14 rounded-xl bg-secondary/10 flex items-center justify-center border border-secondary/20 shrink-0">
+            <Gamepad2 className="h-7 w-7 text-secondary" />
           </div>
-            <div className="text-left">
-              <h3 className="font-bold text-foreground text-lg leading-tight">互动游戏</h3>
-              <p className="text-muted-foreground text-sm mt-0.5">{idea.topic}</p>
+          <div className="text-left">
+            <h3 className="font-bold text-on-surface text-xl leading-tight mb-0.5">互动游戏</h3>
+            <p className="text-on-surface-variant text-sm">{idea.topic}</p>
           </div>
         </div>
         <div className="flex items-center gap-3">
@@ -271,13 +252,13 @@ function IdeaIframeBlock({
             <span
               role="button"
               onClick={(e) => { e.stopPropagation(); setResetKey((k) => k + 1) }}
-              className="text-xs text-muted-foreground hover:text-foreground transition-colors px-2 py-1 rounded border border-border/40"
+              className="text-xs text-on-surface-variant hover:text-on-surface transition-colors px-3 py-1.5 rounded-lg border border-outline-variant/30"
             >
               重置游戏
             </span>
           )}
           <ChevronDown
-            className={`h-5 w-5 text-muted-foreground/40 transition-transform duration-200 ${expanded ? "rotate-180" : ""}`}
+            className={`h-5 w-5 text-on-surface-variant/40 transition-transform duration-200 ${expanded ? "rotate-180" : ""}`}
           />
         </div>
       </button>
@@ -292,7 +273,7 @@ function IdeaIframeBlock({
         />
       )}
       {!expanded && (
-        <div className="px-6 py-3 text-muted-foreground text-sm opacity-60">点击展开开始游戏</div>
+        <div className="px-8 py-4 text-on-surface-variant text-sm opacity-60">点击展开开始游戏</div>
       )}
     </section>
   )
@@ -310,46 +291,46 @@ function StoryBlock({
   const [expanded, setExpanded] = useState(false)
 
   return (
-    <section className="rounded-2xl overflow-hidden shadow-lg bg-secondary/20 border border-border/20">
+    <section className="rounded-2xl overflow-hidden shadow-lg bg-surface-container-low border border-outline-variant/10">
       <button
         onClick={() => setExpanded((e) => !e)}
-        className="w-full flex items-center justify-between p-6 bg-card hover:bg-card/80 transition-colors"
+        className="w-full flex items-center justify-between p-8 bg-white/50 hover:bg-white transition-colors"
       >
-        <div className="flex items-center gap-5">
-          <div className="w-12 h-12 rounded-xl bg-amber-500/10 flex items-center justify-center border border-amber-500/20 shrink-0">
-            <BookMarked className="h-6 w-6 text-amber-600 dark:text-amber-400" />
+        <div className="flex items-center gap-6">
+          <div className="w-14 h-14 rounded-xl bg-tertiary/10 flex items-center justify-center border border-tertiary/20 shrink-0">
+            <BookMarked className="h-7 w-7 text-tertiary" />
           </div>
           <div className="text-left">
-            <h3 className="font-bold text-foreground text-lg leading-tight">故事引入</h3>
-            <p className="text-muted-foreground text-sm mt-0.5">{idea.topic}</p>
+            <h3 className="font-bold text-on-surface text-xl leading-tight mb-0.5">故事引入</h3>
+            <p className="text-on-surface-variant text-sm">{idea.topic}</p>
           </div>
         </div>
         <ChevronDown
-          className={`h-5 w-5 text-muted-foreground/40 transition-transform duration-200 ${expanded ? "rotate-180" : ""}`}
+          className={`h-5 w-5 text-on-surface-variant/40 transition-transform duration-200 ${expanded ? "rotate-180" : ""}`}
         />
       </button>
       {expanded && section.story_paragraphs && (
-        <div className="divide-y divide-border/30">
+        <div className="divide-y divide-outline-variant/20">
           {section.story_paragraphs.map((para, idx) => (
-            <div key={idx} className="flex gap-4 p-5">
+            <div key={idx} className="flex gap-6 p-6">
               {para.image_url ? (
                 <img
                   src={`${process.env.NEXT_PUBLIC_GATEWAY_URL || "http://localhost:18820"}${para.image_url}`}
                   alt={`故事插图 ${idx + 1}`}
-                  className="w-32 h-24 rounded-xl object-cover shrink-0 bg-secondary"
+                  className="w-36 h-28 rounded-xl object-cover shrink-0"
                 />
               ) : (
-                <div className="w-32 h-24 rounded-xl bg-secondary/30 shrink-0 flex items-center justify-center">
-                  <BookMarked className="h-6 w-6 text-muted-foreground/30" />
+                <div className="w-36 h-28 rounded-xl bg-surface-container shrink-0 flex items-center justify-center">
+                  <BookMarked className="h-7 w-7 text-on-surface-variant/20" />
                 </div>
               )}
-              <p className="text-base text-foreground leading-relaxed">{para.text}</p>
+              <p className="text-lg text-on-surface leading-loose">{para.text}</p>
             </div>
           ))}
         </div>
       )}
       {!expanded && (
-        <div className="px-6 py-3 text-muted-foreground text-sm opacity-60">点击展开阅读故事</div>
+        <div className="px-8 py-4 text-on-surface-variant text-sm opacity-60">点击展开阅读故事</div>
       )}
     </section>
   )
@@ -419,7 +400,7 @@ function IdeaBlock({
 }
 
 // ---------------------------------------------------------------------------
-// SectionBlock: one section of plan_markdown + inline audio bar
+// SectionBlock: one section of plan_markdown + right-gutter audio button
 // ---------------------------------------------------------------------------
 function SectionBlock({
   section, ideaMap, renderedSections,
@@ -428,45 +409,53 @@ function SectionBlock({
   ideaMap: Map<string, CourseIdeaSummary>
   renderedSections: Record<string, RenderedSection>
 }) {
-  // Split body_markdown by [[IDEA:xxx]] placeholders
   const parts = section.body_markdown.split(/(\[\[IDEA:[^\]]+\]\])/g)
 
+  // Separate text parts from idea placeholders
+  const textParts = parts.filter((p) => !p.match(/^\[\[IDEA:[^\]]+\]\]$/))
+  const hasText = textParts.some((p) => p.replace(/^##\s+.+\n?/, "").trim())
+
   return (
-    <div className="space-y-4">
-      {/* Section heading (if any) extracted from body_markdown heading */}
-      {section.heading && (
-        <h2 className="text-2xl font-bold text-foreground">{section.heading}</h2>
+    <div className="space-y-6">
+      {/* Text content with right-gutter audio button */}
+      {hasText && (
+        <div className="group relative flex gap-8 items-start">
+          <div className="flex-1 space-y-4 min-w-0">
+            {section.heading && (
+              <h2 className="text-2xl font-bold text-on-surface tracking-tight">{section.heading}</h2>
+            )}
+            {parts.map((part, idx) => {
+              if (part.match(/^\[\[IDEA:[^\]]+\]\]$/)) return null
+              const stripped = part.replace(/^##\s+.+\n?/, "")
+              if (!stripped.trim()) return null
+              return (
+                <div
+                  key={idx}
+                  dangerouslySetInnerHTML={{ __html: renderSimpleMarkdown(stripped) }}
+                />
+              )
+            })}
+          </div>
+          {/* Right gutter — visible on hover */}
+          <div className="w-16 flex flex-col gap-3 opacity-40 group-hover:opacity-100 transition-opacity duration-300 sticky top-24 shrink-0 pt-1">
+            <SectionAudioButton
+              sectionId={section.section_id}
+              audioUrl={section.audio_url}
+            />
+          </div>
+        </div>
       )}
 
-      {/* Inline audio bar — always visible when audio_url present */}
-      <SectionAudioBar
-        sectionId={section.section_id}
-        audioUrl={section.audio_url}
-      />
-
-      {/* Content: text + idea blocks */}
-      <div className="space-y-4">
-        {parts.map((part, idx) => {
-          const match = part.match(/^\[\[IDEA:([^\]]+)\]\]$/)
-          if (match) {
-            const ideaId = match[1]
-            const idea = ideaMap.get(ideaId)
-            if (!idea) return null
-            const rendered = renderedSections[ideaId] ?? null
-            return <IdeaBlock key={idx} idea={idea} section={rendered} />
-          }
-          if (!part.trim()) return null
-          // Strip leading ## heading from body_markdown since we render it above
-          const stripped = part.replace(/^##\s+.+\n?/, "")
-          if (!stripped.trim()) return null
-          return (
-            <div
-              key={idx}
-              dangerouslySetInnerHTML={{ __html: renderSimpleMarkdown(stripped) }}
-            />
-          )
-        })}
-      </div>
+      {/* Idea blocks (animation / game / story) */}
+      {parts.map((part, idx) => {
+        const match = part.match(/^\[\[IDEA:([^\]]+)\]\]$/)
+        if (!match) return null
+        const ideaId = match[1]
+        const idea = ideaMap.get(ideaId)
+        if (!idea) return null
+        const rendered = renderedSections[ideaId] ?? null
+        return <IdeaBlock key={idx} idea={idea} section={rendered} />
+      })}
     </div>
   )
 }
@@ -499,13 +488,11 @@ function PlanWithIdeas({ content }: { content: CourseContent }) {
   const ideaMap = new Map(content.ideas.map((i) => [i.idea_id, i]))
 
   return (
-    <div>
-      {/* Upgrade notice for old content without audio sections */}
-      <div className="flex items-center gap-3 px-4 py-2.5 rounded-xl border border-border/20 bg-secondary/20 mb-8">
-        <div className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 bg-card border border-border/30 text-muted-foreground">
-          <Play className="h-3.5 w-3.5 ml-0.5" />
-        </div>
-        <span className="text-xs text-muted-foreground">点击「重新生成」以获得分段音频讲解</span>
+    <div className="space-y-10">
+      {/* Upgrade notice */}
+      <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full border border-outline-variant/20 bg-surface-container-low text-on-surface-variant text-xs">
+        <Play className="h-3 w-3" />
+        点击「重新生成」以获得分段音频讲解
       </div>
       {parts.map((part, idx) => {
         const match = part.match(/^\[\[IDEA:([^\]]+)\]\]$/)
@@ -520,7 +507,6 @@ function PlanWithIdeas({ content }: { content: CourseContent }) {
         return (
           <div
             key={idx}
-            className="prose prose-sm dark:prose-invert max-w-none"
             dangerouslySetInnerHTML={{ __html: renderSimpleMarkdown(part) }}
           />
         )
@@ -535,15 +521,17 @@ function PlanWithIdeas({ content }: { content: CourseContent }) {
 function EditorialHeader({ knode }: { knode: KnodeInfo | null }) {
   if (!knode) return null
   return (
-    <header className="space-y-4 pb-8 border-b border-border/30">
-      <div className="inline-flex items-center gap-2 px-3 py-1 bg-accent rounded-full text-accent-foreground text-xs font-bold tracking-wide uppercase">
+    <header className="space-y-6">
+      <div className="inline-flex items-center gap-2 px-3 py-1 bg-secondary-container rounded-full text-on-secondary-container text-xs font-bold tracking-widest uppercase">
         难度 {knode.difficulty_level} / 5 · {knode.estimated_minutes} 分钟
       </div>
-      <h1 className="text-4xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-primary to-violet-400 leading-tight">
-        {knode.title}
+      <h1 className="font-extrabold text-5xl text-on-surface tracking-tight leading-[1.1]">
+        <span className="text-transparent bg-clip-text bg-gradient-to-r from-primary to-tertiary">
+          {knode.title}
+        </span>
       </h1>
       {knode.summary && (
-        <p className="text-lg text-muted-foreground leading-relaxed max-w-2xl">
+        <p className="text-xl text-on-surface-variant leading-relaxed max-w-2xl">
           {knode.summary}
         </p>
       )}
@@ -1159,7 +1147,7 @@ export function CourseContentView({
           )}
 
           {!generating && content && (
-            <div className="max-w-3xl mx-auto px-8 py-10 space-y-16">
+            <div className="max-w-4xl mx-auto px-8 py-12 space-y-16">
               <EditorialHeader knode={knode} />
 
               {/* Content sections */}
