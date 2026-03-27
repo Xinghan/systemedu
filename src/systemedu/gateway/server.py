@@ -935,6 +935,45 @@ async def api_mcp_dispatch(request: Request) -> JSONResponse:
     return JSONResponse({"error": "Method not allowed"}, status_code=405)
 
 
+async def api_generate_project_icon(request: Request) -> JSONResponse:
+    """POST /api/projects/{name}/icon/generate - Generate and save SVG icon for an existing project."""
+    from systemedu.education.project_loader import find_project_dir
+    import yaml as _yaml
+
+    name = request.path_params["name"]
+    try:
+        project_dir = find_project_dir(name)
+    except Exception:
+        return JSONResponse({"error": f"Project '{name}' not found"}, status_code=404)
+
+    yaml_path = project_dir / "project.yaml"
+    try:
+        data = _yaml.safe_load(yaml_path.read_text(encoding="utf-8")) or {}
+    except Exception:
+        return JSONResponse({"error": "Failed to read project.yaml"}, status_code=500)
+
+    # Skip if already has icon
+    if data.get("icon_svg"):
+        return JSONResponse({"status": "exists", "icon_svg": data["icon_svg"]})
+
+    from systemedu.agents.builtin.icon_gen_agent import generate_project_icon
+    svg = await generate_project_icon(
+        title=data.get("title", name),
+        category=data.get("category", "other"),
+        description=data.get("description", ""),
+    )
+    if not svg:
+        return JSONResponse({"error": "Icon generation failed"}, status_code=500)
+
+    data["icon_svg"] = svg
+    yaml_path.write_text(
+        _yaml.dump(data, allow_unicode=True, default_flow_style=False),
+        encoding="utf-8",
+    )
+    logger.info(f"Icon generated for existing project '{name}'")
+    return JSONResponse({"status": "generated", "icon_svg": svg})
+
+
 async def api_upload_project_cover(request: Request) -> JSONResponse:
     """POST /api/projects/{name}/cover - Upload a cover image for a project."""
     from systemedu.core.config import SYSTEMEDU_HOME
@@ -2532,6 +2571,7 @@ def create_app() -> Starlette:
         Route("/api/projects/{name}/nodes/{node_id:int}/note", api_note_dispatch, methods=["GET", "PUT"]),
         Route("/api/projects/{name}/notes", api_get_all_notes, methods=["GET"]),
         Route("/api/projects/{name}/cover", api_upload_project_cover, methods=["POST"]),
+        Route("/api/projects/{name}/icon/generate", api_generate_project_icon, methods=["POST"]),
 
         Route("/api/projects/{name}/tree", api_update_tree, methods=["PUT"]),
         Route("/api/projects/{name}", api_project_dispatch, methods=["GET", "PATCH", "DELETE"]),

@@ -140,6 +140,9 @@ export const gateway = {
     return res.json()
   },
 
+  generateProjectIcon: (name: string) =>
+    api.post<{ status: string; icon_svg: string }>(`/api/projects/${name}/icon/generate`, {}),
+
   enroll: (projectName: string, userId = "default") =>
     api.post<EnrollmentInfo>(`/api/projects/${projectName}/enroll`, { user_id: userId }),
   enrollment: (projectName: string, userId = "default") =>

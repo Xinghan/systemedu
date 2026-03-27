@@ -123,7 +123,22 @@ export default function ProjectsPage() {
   useEffect(() => {
     gateway
       .projects()
-      .then(setProjects)
+      .then((list) => {
+        setProjects(list)
+        // Silently generate icons for projects that don't have one yet
+        const missing = list.filter((p) => !p.icon_svg)
+        missing.forEach((p) => {
+          gateway.generateProjectIcon(p.name)
+            .then((res) => {
+              if (res.icon_svg) {
+                setProjects((prev) =>
+                  prev.map((x) => x.name === p.name ? { ...x, icon_svg: res.icon_svg } : x)
+                )
+              }
+            })
+            .catch(() => {})
+        })
+      })
       .catch(() => {})
       .finally(() => setLoading(false))
   }, [])
