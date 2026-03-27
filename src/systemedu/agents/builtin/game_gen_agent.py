@@ -2,6 +2,11 @@
 
 import logging
 
+from systemedu.agents.builtin.media_art_direction import (
+    inject_game_style_overrides,
+    style_kit_prompt_block,
+)
+
 logger = logging.getLogger(__name__)
 
 
@@ -33,12 +38,24 @@ class GameGenAgent:
         game_concept = detail_plan.get("game_concept", node_summary)
         game_title = detail_plan.get("game_title", node_title)
         interaction_flow = detail_plan.get("interaction_flow", [])
+        visual_storyboard = detail_plan.get("visual_storyboard", [])
+        visual_focus = detail_plan.get("visual_focus", "")
+        style_key = detail_plan.get("style_key")
 
         # Build enhanced context for the planner
         enhanced_summary = game_concept
         if interaction_flow:
             flow_text = "；".join(interaction_flow[:3])
             enhanced_summary = f"{game_concept}。互动流程：{flow_text}"
+        if visual_storyboard:
+            storyboard_text = "；".join(str(step) for step in visual_storyboard[:3])
+            enhanced_summary = f"{enhanced_summary}。画面分镜：{storyboard_text}"
+        if visual_focus:
+            enhanced_summary = f"{enhanced_summary}。视觉焦点：{visual_focus}"
+        enhanced_summary = (
+            f"{enhanced_summary}\n\n"
+            f"以下为必须遵守的视觉风格：\n{style_kit_prompt_block(mode='game', preferred_key=style_key)}"
+        )
 
         # 强制使用 simulation 模式
         lab_strategy: dict = {"game_mechanic": "simulation"}
@@ -57,7 +74,14 @@ class GameGenAgent:
                 )
                 return ""
 
+            # Fill optional visual skin fields for downstream templates/runtime.
+            if hasattr(spec, "color_theme"):
+                spec.color_theme = style_key or "concept_lab_clean"
+            if hasattr(spec, "bg_gradient"):
+                spec.bg_gradient = ["#eef2ff", "#ffffff"]
+
             html = GameCompiler().compile(spec)
+            html = inject_game_style_overrides(html, style_key=style_key)
             logger.info(
                 f"GameGenAgent: generated {len(html)} chars for '{node_title}'"
             )

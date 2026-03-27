@@ -46,6 +46,19 @@ PLAN_DETAILED_PROMPT = """你是一位经验丰富的教育专家，专门为 6-
 - 直接输出 Markdown 内容，不要添加额外说明
 """
 
+PLAN_EXPAND_PROMPT = """你需要在不改变原有结构和事实的前提下，扩写并细化这份学习计划。
+
+要求：
+1. 保留原有三级结构（学习目标 / 正文 / 学习路径建议）
+2. 每个正文小节补充具体例子、常见误区、应用情境
+3. 全文目标长度 1000-1800 字
+4. 语言仍然面向 6-18 岁学生，亲切但严谨
+5. 直接输出 Markdown，不要解释
+
+原始学习计划：
+{plan_markdown}
+"""
+
 COURSE_PLANNER_PROMPT = """你是一位经验丰富的教育课程设计师，专门为 6-18 岁学生设计步骤式学习体验（类似 Duolingo）。
 
 请为以下知识节点规划一套有序的学习步骤序列。
@@ -220,6 +233,16 @@ class CoursePlannerAgent:
             if not text:
                 logger.warning("CoursePlannerAgent.plan_detailed: empty response")
                 return ""
+            # If first draft is too short, request one rewrite pass with richer detail.
+            if len(text) < 1600:
+                expand_prompt = PLAN_EXPAND_PROMPT.format(plan_markdown=text)
+                expanded_resp = await asyncio.to_thread(
+                    self.llm.invoke,
+                    [HumanMessage(content=expand_prompt)],
+                )
+                expanded_text = expanded_resp.content.strip()
+                if len(expanded_text) > len(text):
+                    text = expanded_text
             logger.info(
                 f"CoursePlannerAgent.plan_detailed: generated {len(text)} chars for '{node_title}'"
             )

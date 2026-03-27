@@ -25,11 +25,17 @@ class IntegrationAgent:
             idea_id = idea.get("idea_id", "")
             mode = idea.get("mode", "")
             result = idea.get("result")
+            generation_backend = self._resolve_generation_backend(idea)
 
             if not idea_id or not mode:
                 continue
 
-            section: dict = {"mode": mode, "html": None, "story_paragraphs": None}
+            section: dict = {
+                "mode": mode,
+                "html": None,
+                "story_paragraphs": None,
+                "generation_backend": generation_backend,
+            }
 
             if mode in ("animation", "game"):
                 html = result if isinstance(result, str) else ""
@@ -61,8 +67,11 @@ class IntegrationAgent:
                 {
                     "idea_id": idea.get("idea_id", ""),
                     "mode": idea.get("mode", ""),
+                    "style_key": idea.get("style_key", ""),
                     "topic": idea.get("topic", ""),
                     "context_summary": idea.get("context_summary", ""),
+                    "mode_reason": idea.get("mode_reason", ""),
+                    "generation_backend": self._resolve_generation_backend(idea),
                 }
                 for idea in ideas
             ],
@@ -73,3 +82,14 @@ class IntegrationAgent:
             f"IntegrationAgent: integrated {len(rendered_sections)} sections"
         )
         return course_content
+
+    def _resolve_generation_backend(self, idea: dict) -> str:
+        """Resolve the media generation backend for an idea, if any."""
+        if idea.get("generation_backend"):
+            return str(idea["generation_backend"])
+        detail_plan = idea.get("detail_plan") or {}
+        if isinstance(detail_plan, dict) and detail_plan.get("generation_backend"):
+            return str(detail_plan["generation_backend"])
+        if idea.get("mode") == "animation":
+            return "html_svg"
+        return ""

@@ -206,6 +206,41 @@ class TestCourseIdeaDetailAgent:
         # Unknown mode: detail_plan not set (key absent or None)
         assert result.get("detail_plan") is None
 
+    @pytest.mark.asyncio
+    async def test_elaborate_applies_simplification_for_overly_complex_animation(self):
+        from systemedu.agents.builtin.course_idea_detail_agent import CourseIdeaDetailAgent
+
+        complex_detail = {
+            "title": "复杂动画",
+            "frame_count": 8,
+            "frames": [
+                {
+                    "frame_index": i,
+                    "description": f"步骤{i}",
+                    "visual_elements": ["A", "B", "C", "D", "E"],
+                    "narration": "说明",
+                }
+                for i in range(8)
+            ],
+            "beats": [
+                {"t": 0.1 * i, "action": "main_action", "focus": f"f{i}"}
+                for i in range(8)
+            ],
+            "layout": {"focal_object": "核心", "secondary_object": "辅助", "safe_area_fill": 0.3},
+            "style_hint": "科技感",
+            "animation_type": "流程演示",
+        }
+
+        llm = _make_llm(json.dumps(complex_detail, ensure_ascii=False))
+        agent = CourseIdeaDetailAgent(llm)
+        idea = {"idea_id": "ix", "mode": "animation", "topic": "复杂知识点", "context_summary": "上下文"}
+        result = await agent.elaborate(idea)
+        dp = result["detail_plan"]
+        assert dp["frame_count"] <= 6
+        assert len(dp["frames"]) <= 5
+        assert all(len(f.get("visual_elements", [])) <= 3 for f in dp["frames"])
+        assert isinstance(dp.get("persuasion"), dict)
+
 
 # ===== AnimationGenAgent =====
 
@@ -236,7 +271,7 @@ class TestAnimationGenAgent:
         assert "animation" in result.lower()
 
     @pytest.mark.asyncio
-    async def test_generate_empty_on_missing_svg(self):
+    async def test_generate_fallback_on_missing_svg(self):
         from systemedu.agents.builtin.animation_gen_agent import AnimationGenAgent
 
         llm = _make_llm("<html><body>no svg here</body></html>")
@@ -249,7 +284,8 @@ class TestAnimationGenAgent:
             "animation_type": "物理过程",
         }
         result = await agent.generate(detail, "力")
-        assert result == ""
+        assert "<svg" in result.lower()
+        assert "step_complete" in result.lower()
 
     @pytest.mark.asyncio
     async def test_generate_empty_frames(self):
@@ -275,7 +311,7 @@ class TestIntegrationAgent:
                 "mode": "animation",
                 "topic": "力传递",
                 "context_summary": "力",
-                "detail_plan": {"title": "动画"},
+                "detail_plan": {"title": "动画", "generation_backend": "manim"},
                 "result": "<html><body><svg>...</svg><style>@keyframes x{}</style></body></html>",
             },
             {
@@ -295,7 +331,9 @@ class TestIntegrationAgent:
         assert "[[IDEA:id-2]]" in result["plan_markdown"]
         assert len(result["ideas"]) == 2
         assert "rendered_sections" in result
+        assert result["ideas"][0]["generation_backend"] == "manim"
         assert result["rendered_sections"]["id-1"]["mode"] == "animation"
+        assert result["rendered_sections"]["id-1"]["generation_backend"] == "manim"
         assert result["rendered_sections"]["id-2"]["mode"] == "story"
         assert result["rendered_sections"]["id-2"]["story_paragraphs"] is not None
 
@@ -333,7 +371,10 @@ class TestIntegrationAgent:
 class TestDbCourseContent:
 
     def test_lesson_content_has_course_content_column(self, tmp_path, monkeypatch):
+        db_file = tmp_path / "systemedu.db"
         monkeypatch.setenv("SYSTEMEDU_HOME", str(tmp_path))
+        monkeypatch.setattr("systemedu.core.config.DB_FILE", db_file)
+        monkeypatch.setattr("systemedu.storage.db.DB_FILE", db_file)
         from systemedu.storage import db as _db
         _db.reset_db()
         try:
@@ -347,7 +388,10 @@ class TestDbCourseContent:
 
     def test_course_content_to_dict(self, tmp_path, monkeypatch):
         import uuid as _uuid
+        db_file = tmp_path / "systemedu.db"
         monkeypatch.setenv("SYSTEMEDU_HOME", str(tmp_path))
+        monkeypatch.setattr("systemedu.core.config.DB_FILE", db_file)
+        monkeypatch.setattr("systemedu.storage.db.DB_FILE", db_file)
         from systemedu.storage import db as _db
         _db.reset_db()
 

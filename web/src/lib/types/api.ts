@@ -407,12 +407,16 @@ export interface FactoryQueueResponse {
 // --- Course v2 types (multi-agent pipeline) ---
 
 export type CourseIdeaMode = "animation" | "game" | "story"
+export type CourseGenerationBackend = "manim" | "html_svg" | ""
 
 export interface CourseIdeaSummary {
   idea_id: string
   mode: CourseIdeaMode
   topic: string
   context_summary: string
+  generation_backend?: CourseGenerationBackend
+  style_key?: string
+  mode_reason?: string
 }
 
 export interface StoryParagraph {
@@ -425,6 +429,7 @@ export interface RenderedSection {
   status: "ready" | "failed"
   html: string | null
   story_paragraphs: StoryParagraph[] | null
+  generation_backend?: CourseGenerationBackend
 }
 
 export interface CourseSection {

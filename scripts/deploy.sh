@@ -29,7 +29,7 @@ scp -o StrictHostKeyChecking=no /tmp/systemedu_code.tar.gz ${SERVER}:/tmp/
 
 echo "[3/5] 服务器端解压并安装依赖..."
 ssh -o StrictHostKeyChecking=no ${SERVER} "bash -s" << 'ENDSSH'
-set -e
+set -euo pipefail
 # 停止服务
 systemctl stop systemedu-backend systemedu-frontend 2>/dev/null || true
 
@@ -37,10 +37,38 @@ systemctl stop systemedu-backend systemedu-frontend 2>/dev/null || true
 cd /opt/systemedu
 tar -xzf /tmp/systemedu_code.tar.gz 2>/dev/null || true
 
-# 重新安装 Python 依赖（如有变更）
+# 安装 Linux 系统依赖（Python/Node/Manim/TeX/ffmpeg 等）
+source scripts/linux_system_deps.sh
+systemedu_install_linux_system_deps
+systemedu_verify_linux_runtime
+
+# 准备 Python 虚拟环境
+if [ ! -x .venv/bin/python ]; then
+    python3 -m venv .venv
+fi
 source .venv/bin/activate
-pip install -e . --quiet 2>&1 | tail -3
-pip install dashscope --quiet 2>&1 | tail -1
+python -m pip install --upgrade pip setuptools wheel >/tmp/systemedu_pip_bootstrap.log 2>&1
+
+# 重新安装 Python 依赖（如有变更）
+python -m pip install -e . >/tmp/systemedu_pip_install.log 2>&1
+python -m pip install dashscope manim >/tmp/systemedu_pip_media.log 2>&1
+tail -n 3 /tmp/systemedu_pip_install.log || true
+tail -n 3 /tmp/systemedu_pip_media.log || true
+
+# 验证媒体运行时
+python - <<'PY'
+from systemedu.agents.builtin.manim_gen_agent import ManimGenAgent
+profile = ManimGenAgent().runtime_profile()
+required = {
+    "manim_available": profile.get("manim_available"),
+    "ffmpeg_available": profile.get("ffmpeg_available"),
+    "latex_available": profile.get("latex_available"),
+}
+missing = [key for key, value in required.items() if not value]
+if missing:
+    raise SystemExit(f"Manim runtime incomplete: {missing} profile={profile}")
+print("Manim runtime OK:", required)
+PY
 
 # 重新构建前端
 cd web
