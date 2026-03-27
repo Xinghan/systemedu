@@ -108,10 +108,32 @@ export function CourseStepRenderer({
   }
 
   const { type } = step
+  const isManimAnimation =
+    type === "animation" &&
+    (step.html.includes("/api/media/animations/manim/") || step.html.includes(">Manim<"))
 
   // game/animation with HTML: iframe
   if ((type === "game" || type === "animation") && step.html) {
-    return <IframeStepView html={step.html} onComplete={onStepComplete} />
+    return (
+      <IframeStepView
+        html={step.html}
+        onComplete={onStepComplete}
+        title={
+          type === "game"
+            ? "互动游戏"
+            : isManimAnimation
+              ? "Manim 动画"
+              : "动画演示"
+        }
+        subtitle={
+          type === "game"
+            ? "动手操作，边玩边学"
+            : isManimAnimation
+              ? "公式或图形推导动画"
+              : "动态可视化讲解"
+        }
+      />
+    )
   }
 
   // practice: dedicated view

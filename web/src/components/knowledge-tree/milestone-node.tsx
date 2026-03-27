@@ -18,7 +18,7 @@ function MilestoneNodeComponent({ data }: NodeProps<Node<MilestoneNodeData>>) {
 
   const headerColor =
     status === "completed"
-      ? "text-emerald-600 dark:text-emerald-400"
+      ? "text-cyan-600 dark:text-cyan-400"
       : status === "in_progress"
       ? "text-amber-600 dark:text-amber-400"
       : "text-muted-foreground"

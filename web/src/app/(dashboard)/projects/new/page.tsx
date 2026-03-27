@@ -195,7 +195,7 @@ export default function NewProjectPage() {
         <div className="flex items-center gap-3">
           {LOAD_STEPS.map((s, i) => (
             <div key={s} className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs uppercase tracking-wider transition-all duration-500 ${
-              i < loadingStep ? "bg-emerald-50 text-emerald-700" : i === loadingStep ? "bg-primary/15 text-primary font-semibold" : "bg-secondary text-muted-foreground"
+              i < loadingStep ? "bg-cyan-50 text-cyan-700" : i === loadingStep ? "bg-primary/15 text-primary font-semibold" : "bg-secondary text-muted-foreground"
             }`} style={{ fontFamily: "var(--font-manrope, sans-serif)" }}>
               {i < loadingStep && <Check className="h-3 w-3" />}
               {i === loadingStep && <div className="w-3 h-3 rounded-full border-2 border-primary border-t-transparent animate-spin" />}
@@ -218,7 +218,7 @@ export default function NewProjectPage() {
                 {i > 0 && <div className="w-5 h-px bg-border" />}
                 <span className={`text-xs font-[var(--font-manrope)] px-3 py-1 rounded-full ${
                   step === s.key ? "bg-primary text-primary-foreground"
-                    : i < STEPS.findIndex((x) => x.key === step) ? "bg-emerald-100 text-emerald-700"
+                    : i < STEPS.findIndex((x) => x.key === step) ? "bg-cyan-100 text-cyan-700"
                     : "bg-secondary text-secondary-foreground"
                 }`}>{i + 1}. {s.label}</span>
               </div>
@@ -698,7 +698,7 @@ export default function NewProjectPage() {
 
             {treeData && (
               <div className="flex items-center justify-between pt-2">
-                <span className="flex items-center gap-1.5 text-sm text-emerald-600 font-[var(--font-manrope)] font-semibold">
+                <span className="flex items-center gap-1.5 text-sm text-cyan-600 font-[var(--font-manrope)] font-semibold">
                   <Check className="h-4 w-4" />{t("new_project.json_parsed")}
                 </span>
                 <button onClick={handlePreview}
@@ -841,7 +841,7 @@ function StepIndicator({ steps, currentIndex }: { steps: { key: string; label: s
         return (
           <div key={s.key} className="relative z-10 flex flex-col items-center gap-2">
             <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm ring-8 ring-[#f8f5ff] transition-all duration-300 ${
-              isActive ? "bg-primary text-white" : isDone ? "bg-emerald-500 text-white" : "bg-[#e0e0ff] text-[#4953ac]"
+              isActive ? "bg-primary text-white" : isDone ? "bg-cyan-500 text-white" : "bg-[#e0e0ff] text-[#4953ac]"
             }`}>
               {isDone ? <Check className="h-4 w-4" /> : i + 1}
             </div>

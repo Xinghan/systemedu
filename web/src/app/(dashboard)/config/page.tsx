@@ -45,8 +45,8 @@ export default function ConfigPage() {
         <div className="rounded-2xl border bg-white dark:bg-card shadow-sm overflow-hidden">
           <div className="px-6 py-5 border-b bg-muted/30">
             <div className="flex items-center gap-4">
-              <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-emerald-50 dark:bg-emerald-950/40">
-                <Settings className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />
+              <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-cyan-50 dark:bg-cyan-950/40">
+                <Settings className="h-5 w-5 text-cyan-600 dark:text-cyan-400" />
               </div>
               <h2 className="text-lg font-bold text-foreground">{t("config.llm")}</h2>
             </div>

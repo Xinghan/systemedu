@@ -81,7 +81,7 @@ function ToolCallBadges({ toolCalls }: { toolCalls: ToolCallInfo[] }) {
         >
           <Wrench className="h-3 w-3" />
           {tc.name}
-          <Check className="h-3 w-3 text-emerald-500" />
+          <Check className="h-3 w-3 text-cyan-500" />
         </span>
       ))}
     </div>
@@ -128,7 +128,7 @@ export function ToolCallIndicator({ toolCalls }: { toolCalls: ToolCallInfo[] }) 
             {tc.status === "calling" ? (
               <Loader2 className="h-3 w-3 animate-spin" />
             ) : (
-              <Check className="h-3 w-3 text-emerald-500" />
+              <Check className="h-3 w-3 text-cyan-500" />
             )}
           </div>
         ))}

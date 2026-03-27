@@ -103,7 +103,7 @@ export default function ProjectTreePage() {
             {/* Completion badge */}
             <div className="flex items-center gap-2">
               {pct === 100 && (
-                <span className="flex items-center gap-1 text-[10px] font-[var(--font-manrope)] font-semibold uppercase tracking-wider px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-400">
+                <span className="flex items-center gap-1 text-[10px] font-[var(--font-manrope)] font-semibold uppercase tracking-wider px-2.5 py-1 rounded-full bg-cyan-50 text-cyan-700 dark:bg-cyan-950/30 dark:text-cyan-400">
                   <CheckCircle2 className="h-3 w-3" />
                   Complete
                 </span>
@@ -117,7 +117,7 @@ export default function ProjectTreePage() {
           {/* Full-width progress bar */}
           <div className="h-2 rounded-full bg-secondary overflow-hidden">
             <div
-              className="h-full rounded-full bg-gradient-to-r from-teal-500 to-emerald-500 transition-all duration-700"
+              className="h-full rounded-full bg-gradient-to-r from-teal-500 to-cyan-500 transition-all duration-700"
               style={{ width: `${pct}%` }}
             />
           </div>
@@ -139,7 +139,7 @@ export default function ProjectTreePage() {
               {t("tree.legend")}
             </p>
             <div className="flex items-center gap-2.5">
-              <span className="h-3 w-3 rounded-full bg-emerald-500 shrink-0" />
+              <span className="h-3 w-3 rounded-full bg-cyan-500 shrink-0" />
               <span className="text-foreground">{t("tree.legend_mastered")}</span>
             </div>
             <div className="flex items-center gap-2.5">

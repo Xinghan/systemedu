@@ -176,7 +176,7 @@ export function LessonContentView({
                 {t("lesson.regenerate")}
               </Button>
               {isCompleted && (
-                <Badge className="bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/20 gap-1 h-7">
+                <Badge className="bg-cyan-500/10 text-cyan-700 dark:text-cyan-400 border-cyan-500/20 gap-1 h-7">
                   <IconCheck className="h-3 w-3" />
                   {t("lesson.mastered")}
                 </Badge>

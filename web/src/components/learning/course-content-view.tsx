@@ -256,8 +256,8 @@ function IdeaIframeBlock({
         className="w-full flex items-center justify-between p-6 bg-card hover:bg-card/80 transition-colors"
       >
         <div className="flex items-center gap-5">
-          <div className="w-12 h-12 rounded-xl bg-emerald-500/10 flex items-center justify-center border border-emerald-500/20 shrink-0">
-            <Gamepad2 className="h-6 w-6 text-emerald-600 dark:text-emerald-400" />
+          <div className="w-12 h-12 rounded-xl bg-cyan-500/10 flex items-center justify-center border border-cyan-500/20 shrink-0">
+            <Gamepad2 className="h-6 w-6 text-cyan-600 dark:text-cyan-400" />
           </div>
             <div className="text-left">
               <h3 className="font-bold text-foreground text-lg leading-tight">互动游戏</h3>
@@ -732,7 +732,7 @@ function AgentLogRow({ log, defaultExpanded = false }: { log: AgentLogEntry; def
         </div>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
-            <span className={`text-[10px] font-bold font-mono ${isOutput ? "text-emerald-500" : "text-blue-500"}`}>
+            <span className={`text-[10px] font-bold font-mono ${isOutput ? "text-cyan-500" : "text-blue-500"}`}>
               {isOutput ? "OUT" : "IN"}
             </span>
             <span className="text-xs font-semibold text-foreground">{log.agent}</span>
@@ -755,7 +755,7 @@ function AgentLogRow({ log, defaultExpanded = false }: { log: AgentLogEntry; def
           </div>
           {log.output !== "(pending...)" && (
             <div>
-              <div className="text-[10px] font-bold text-emerald-500 mb-1">OUTPUT</div>
+              <div className="text-[10px] font-bold text-cyan-500 mb-1">OUTPUT</div>
               <pre className="text-[10px] text-foreground bg-secondary/30 rounded p-2 overflow-x-auto whitespace-pre-wrap break-all font-mono leading-relaxed">
                 {log.output}
               </pre>

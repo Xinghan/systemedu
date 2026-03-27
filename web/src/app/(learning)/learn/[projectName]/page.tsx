@@ -69,7 +69,7 @@ function NodeTooltip({ data }: { data: NodeTooltipData }) {
   }
 
   const statusColor =
-    status === "passed" ? "text-emerald-600" :
+    status === "passed" ? "text-cyan-600" :
     status === "in_progress" ? "text-primary" :
     "text-muted-foreground"
   const statusLabel =
@@ -260,7 +260,7 @@ export default function LearnPage() {
         <div className="flex items-center gap-3 text-xs text-muted-foreground">
           <div className="w-24 h-1.5 rounded-full bg-secondary overflow-hidden">
             <div
-              className="h-full rounded-full bg-gradient-to-r from-teal-500 to-emerald-500 transition-all duration-700"
+              className="h-full rounded-full bg-gradient-to-r from-teal-500 to-cyan-500 transition-all duration-700"
               style={{ width: `${pct}%` }}
             />
           </div>
@@ -343,7 +343,7 @@ export default function LearnPage() {
                             {/* Status icon */}
                             <div className="shrink-0 mt-0.5">
                               {isPassed ? (
-                                <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+                                <CheckCircle2 className="h-4 w-4 text-cyan-500" />
                               ) : isActive || isInProgress ? (
                                 <div className="h-4 w-4 rounded-full border-2 border-primary bg-primary/20 flex items-center justify-center">
                                   <div className="h-1.5 w-1.5 rounded-full bg-primary" />
@@ -392,7 +392,7 @@ export default function LearnPage() {
               </div>
               <div className="h-1.5 rounded-full bg-secondary overflow-hidden">
                 <div
-                  className="h-full rounded-full bg-gradient-to-r from-teal-500 to-emerald-500 transition-all duration-700"
+                  className="h-full rounded-full bg-gradient-to-r from-teal-500 to-cyan-500 transition-all duration-700"
                   style={{ width: `${pct}%` }}
                 />
               </div>
@@ -444,7 +444,7 @@ export default function LearnPage() {
                   <div className="flex items-end justify-between mb-2">
                     <span className="text-3xl font-extrabold text-foreground tracking-tight">{pct}%</span>
                     {pct > 0 && (
-                      <span className="text-[10px] font-[var(--font-manrope)] text-emerald-600 font-semibold mb-1">
+                      <span className="text-[10px] font-[var(--font-manrope)] text-cyan-600 font-semibold mb-1">
                         {t("learn.today", { n: Math.max(1, Math.round(pct * 0.12)) })}
                       </span>
                     )}
@@ -492,8 +492,8 @@ export default function LearnPage() {
                       href={`/projects/${params.projectName}/resources`}
                       className="flex items-center gap-3 px-3 py-2 rounded-xl hover:bg-secondary/60 transition-colors group"
                     >
-                      <div className="w-8 h-8 rounded-lg bg-emerald-100 dark:bg-emerald-500/15 flex items-center justify-center">
-                        <ExternalLink className="h-4 w-4 text-emerald-600" />
+                      <div className="w-8 h-8 rounded-lg bg-cyan-100 dark:bg-cyan-500/15 flex items-center justify-center">
+                        <ExternalLink className="h-4 w-4 text-cyan-600" />
                       </div>
                       <div className="flex-1 min-w-0">
                         <p className="text-xs font-medium text-foreground truncate">{t("learn.external_resources")}</p>
@@ -556,20 +556,20 @@ export default function LearnPage() {
                 {activeNodeId !== null && (
                   <div className={`rounded-xl p-4 border transition-all duration-300 ${
                     isNodeCompleted
-                      ? "bg-emerald-50 dark:bg-emerald-950/30 border-emerald-200 dark:border-emerald-800"
+                      ? "bg-cyan-50 dark:bg-cyan-950/30 border-cyan-200 dark:border-cyan-800"
                       : "bg-card border-border/60"
                   }`}>
                     <div className="flex items-center gap-2 mb-2">
-                      <CheckCircle className={`h-4 w-4 ${isNodeCompleted ? "text-emerald-500" : "text-muted-foreground/40"}`} />
-                      <span className={`text-xs font-semibold font-[var(--font-manrope)] ${isNodeCompleted ? "text-emerald-700 dark:text-emerald-400" : "text-foreground"}`}>
+                      <CheckCircle className={`h-4 w-4 ${isNodeCompleted ? "text-cyan-500" : "text-muted-foreground/40"}`} />
+                      <span className={`text-xs font-semibold font-[var(--font-manrope)] ${isNodeCompleted ? "text-cyan-700 dark:text-cyan-400" : "text-foreground"}`}>
                         {isNodeCompleted ? t("lesson.mastered_title") : t("lesson.ready_title")}
                       </span>
                     </div>
-                    <p className={`text-[11px] mb-3 leading-relaxed ${isNodeCompleted ? "text-emerald-600/80 dark:text-emerald-400/70" : "text-muted-foreground"}`}>
+                    <p className={`text-[11px] mb-3 leading-relaxed ${isNodeCompleted ? "text-cyan-600/80 dark:text-cyan-400/70" : "text-muted-foreground"}`}>
                       {isNodeCompleted ? t("lesson.mastered_desc") : t("lesson.ready_desc")}
                     </p>
                     {isNodeCompleted ? (
-                      <div className="w-full h-8 rounded-lg bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 text-xs font-semibold flex items-center justify-center gap-1.5">
+                      <div className="w-full h-8 rounded-lg bg-cyan-500/15 text-cyan-700 dark:text-cyan-400 text-xs font-semibold flex items-center justify-center gap-1.5">
                         <CheckCircle className="h-3.5 w-3.5" />
                         {t("lesson.mastered")}
                       </div>
@@ -619,7 +619,7 @@ export default function LearnPage() {
                   {t("learn.ai_tutor_thread")} <span className="text-primary italic">{t("learn.ai_tutor_italic")}</span>
                 </h2>
                 <div className="flex items-center gap-2 mt-1">
-                  <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                  <div className="w-2 h-2 rounded-full bg-cyan-500 animate-pulse" />
                   <span className="text-[10px] font-[var(--font-manrope)] font-bold text-muted-foreground uppercase tracking-widest">
                     {t("learn.neural_active")}
                   </span>

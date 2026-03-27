@@ -7,27 +7,19 @@ import { Button } from "@/components/ui/button"
 interface IframeStepViewProps {
   html: string
   onComplete?: () => void
+  title?: string
+  subtitle?: string
 }
 
-export function IframeStepView({ html, onComplete }: IframeStepViewProps) {
+export function IframeStepView({
+  html,
+  onComplete,
+  title = "互动内容",
+  subtitle = "在当前视图中播放或交互",
+}: IframeStepViewProps) {
   const iframeRef = useRef<HTMLIFrameElement>(null)
-  const [blobUrl, setBlobUrl] = useState<string | null>(null)
   const [loadError, setLoadError] = useState(false)
   const [key, setKey] = useState(0)
-
-  useEffect(() => {
-    if (!html || html.trim().length === 0) {
-      setBlobUrl(null)
-      return
-    }
-    const blob = new Blob([html], { type: "text/html;charset=utf-8" })
-    const url = URL.createObjectURL(blob)
-    setBlobUrl(url)
-    setLoadError(false)
-    return () => {
-      URL.revokeObjectURL(url)
-    }
-  }, [html, key])
 
   // Listen for STEP_COMPLETE message from iframe
   useEffect(() => {
@@ -53,8 +45,8 @@ export function IframeStepView({ html, onComplete }: IframeStepViewProps) {
     <div className="space-y-3">
       <div className="flex items-center justify-between">
         <div>
-          <h3 className="text-sm font-medium">互动游戏</h3>
-          <p className="text-xs text-muted-foreground mt-0.5">动手操作，边玩边学</p>
+          <h3 className="text-sm font-medium">{title}</h3>
+          <p className="text-xs text-muted-foreground mt-0.5">{subtitle}</p>
         </div>
         <Button
           variant="ghost"
@@ -80,16 +72,16 @@ export function IframeStepView({ html, onComplete }: IframeStepViewProps) {
             重试
           </Button>
         </div>
-      ) : blobUrl ? (
+      ) : html.trim().length > 0 ? (
         <iframe
           key={key}
           ref={iframeRef}
-          src={blobUrl}
+          srcDoc={html}
           sandbox="allow-scripts allow-same-origin"
           className="w-full rounded-lg border border-border bg-white"
           style={{ height: 520 }}
           onError={() => setLoadError(true)}
-          title="互动游戏"
+          title={title}
         />
       ) : null}
     </div>

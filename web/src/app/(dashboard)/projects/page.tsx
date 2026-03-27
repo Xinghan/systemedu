@@ -85,7 +85,7 @@ function CategoryIcon({ category }: { category: string }) {
 
 // Category tag color mapping
 const CATEGORY_TAG_COLOR: Record<string, string> = {
-  math:      "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400",
+  math:      "bg-cyan-100 text-cyan-700 dark:bg-cyan-900/40 dark:text-cyan-400",
   aerospace: "bg-sky-100 text-sky-700 dark:bg-sky-900/40 dark:text-sky-400",
   ai:        "bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-400",
   biotech:   "bg-teal-100 text-teal-700 dark:bg-teal-900/40 dark:text-teal-400",
@@ -169,9 +169,9 @@ export default function ProjectsPage() {
           {/* Right: two small cards stacked */}
           <div className="w-64 shrink-0 flex flex-col gap-4">
             {/* Popular card */}
-            <div className="flex-1 rounded-2xl bg-emerald-100 dark:bg-emerald-950/40 p-5 flex flex-col justify-between">
+            <div className="flex-1 rounded-2xl bg-cyan-100 dark:bg-cyan-950/40 p-5 flex flex-col justify-between">
               <div className="flex items-center gap-2 mb-2">
-                <TrendingUp className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />
+                <TrendingUp className="h-5 w-5 text-cyan-600 dark:text-cyan-400" />
                 <span className="text-base font-bold text-foreground">{t("projects.popular")}</span>
               </div>
               <p className="text-sm text-muted-foreground leading-relaxed">
