@@ -72,6 +72,11 @@ function AudioProvider({ children }: { children: React.ReactNode }) {
 }
 
 // ---------------------------------------------------------------------------
+// i18n hook (re-exported for use within this file)
+// ---------------------------------------------------------------------------
+import { useT } from "@/lib/hooks/use-t"
+
+// ---------------------------------------------------------------------------
 // SSE / pipeline types
 // ---------------------------------------------------------------------------
 interface AgentLogEntry {
@@ -555,24 +560,6 @@ function EditorialHeader({ knode }: { knode: KnodeInfo | null }) {
 // GeneratingProgress — Lumina Nexus design
 // ---------------------------------------------------------------------------
 
-const STAGE_SUBTITLES: Partial<Record<PipelineStage, string>> = {
-  planning:   "Strategic curriculum mapping in progress.",
-  ideating:   "Creative thematic concepts generated.",
-  detailing:  "Module granularity and objectives defined.",
-  generating: "Generating Assets:",
-  assignment: "Building exercises, Q&A and hands-on tasks.",
-  audio:      "Pending visual sequence completion...",
-}
-
-const STAGE_COMPLETED_LABELS: Partial<Record<PipelineStage, string>> = {
-  planning:   "Strategic curriculum mapping complete.",
-  ideating:   "Creative thematic concepts generated.",
-  detailing:  "Module granularity and objectives defined.",
-  generating: "All assets generated.",
-  assignment: "Exercises and assignments ready.",
-  audio:      "Audio synthesis complete.",
-}
-
 function GeneratingProgress({
   stage, ideaProgress, agentLogs,
 }: {
@@ -580,7 +567,25 @@ function GeneratingProgress({
   ideaProgress: { done: number; total: number }
   agentLogs: AgentLogEntry[]
 }) {
+  const t = useT()
   const currentIdx = STAGE_ORDER.indexOf(stage)
+
+  const STAGE_SUBTITLES: Partial<Record<PipelineStage, string>> = {
+    planning:   t("gen.stage_planning_active"),
+    ideating:   t("gen.stage_ideating_active"),
+    detailing:  t("gen.stage_detailing_active"),
+    generating: t("gen.stage_generating_active"),
+    assignment: t("gen.stage_assignment_active"),
+    audio:      t("gen.stage_audio_active"),
+  }
+  const STAGE_COMPLETED_LABELS: Partial<Record<PipelineStage, string>> = {
+    planning:   t("gen.stage_planning_done"),
+    ideating:   t("gen.stage_ideating_done"),
+    detailing:  t("gen.stage_detailing_done"),
+    generating: t("gen.stage_generating_done"),
+    assignment: t("gen.stage_assignment_done"),
+    audio:      t("gen.stage_audio_done"),
+  }
   const doneCount = PIPELINE_STAGES.filter((s) => STAGE_ORDER.indexOf(s.key) < currentIdx).length
   const progressPct = PIPELINE_STAGES.length > 0
     ? Math.round((doneCount / PIPELINE_STAGES.length) * 100)
@@ -606,7 +611,7 @@ function GeneratingProgress({
           className="text-[10px] font-bold uppercase tracking-[0.25em] px-2.5 py-1 rounded-full"
           style={{ background: "rgba(106,28,246,0.08)", color: M.mutedFg }}
         >
-          SYSTEMEDU AI
+          SYSTEMEDU AI {/* brand name — intentionally not translated */}
         </span>
         <span className="w-1.5 h-1.5 rounded-full bg-[#00c9a7] animate-pulse" />
       </div>
@@ -618,7 +623,7 @@ function GeneratingProgress({
             className="font-extrabold leading-tight tracking-tight"
             style={{ fontSize: "clamp(1.6rem, 4vw, 2.4rem)", color: M.onBg }}
           >
-            Architecting Your
+            {t("gen.title_line1")}
           </h2>
           <h2
             className="font-extrabold leading-tight tracking-tight italic"
@@ -629,7 +634,7 @@ function GeneratingProgress({
               WebkitTextFillColor: "transparent",
             }}
           >
-            Learning Experience
+            {t("gen.title_line2")}
           </h2>
         </div>
         <div className="text-right shrink-0 pl-6">
@@ -637,7 +642,7 @@ function GeneratingProgress({
             className="text-[10px] font-bold uppercase tracking-[0.2em] mb-1"
             style={{ color: M.muted }}
           >
-            SYSTEM PROGRESS
+            {t("gen.system_progress")}
           </p>
           <p
             className="font-extrabold leading-none"
@@ -703,14 +708,14 @@ function GeneratingProgress({
                           className="text-[9px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-full"
                           style={{ background: "rgba(106,28,246,0.08)", color: M.primary }}
                         >
-                          HIGH COMPUTE
+                          {t("gen.high_compute")}
                         </span>
                       )}
                     </div>
                     {showProgress ? (
                       <div>
                         <p className="text-xs mb-1.5" style={{ color: M.mutedFg }}>
-                          {STAGE_SUBTITLES[s.key]} {ideaProgress.done} of {ideaProgress.total}
+                          {STAGE_SUBTITLES[s.key]} {ideaProgress.done} {t("gen.of")} {ideaProgress.total}
                         </p>
                         <div
                           className="h-1 rounded-full overflow-hidden"
@@ -735,11 +740,11 @@ function GeneratingProgress({
                       className="text-[10px] font-bold uppercase tracking-widest animate-pulse"
                       style={{ color: M.primary }}
                     >
-                      PROCESSING
+                      {t("gen.processing")}
                     </p>
                     {showProgress && (
                       <p className="text-[10px] mt-0.5" style={{ color: M.muted }}>
-                        ~ {Math.max(0, ideaProgress.total - ideaProgress.done) * 25}s remaining
+                        ~ {Math.max(0, ideaProgress.total - ideaProgress.done) * 25}s {t("gen.remaining")}
                       </p>
                     )}
                   </div>
@@ -771,7 +776,7 @@ function GeneratingProgress({
                   className="text-[9px] font-bold uppercase tracking-widest px-2.5 py-1 rounded-full shrink-0"
                   style={{ color: M.teal, background: "rgba(0,201,167,0.10)" }}
                 >
-                  COMPLETED
+                  {t("gen.completed")}
                 </span>
               </div>
             )
@@ -799,7 +804,7 @@ function GeneratingProgress({
                 className="text-[9px] font-bold uppercase tracking-widest shrink-0"
                 style={{ color: M.muted }}
               >
-                QUEUED
+                {t("gen.queued")}
               </span>
             </div>
           )
@@ -822,14 +827,14 @@ function GeneratingProgress({
             />
           </div>
           <div>
-            <p className="text-[10px] font-bold uppercase tracking-widest" style={{ color: M.muted }}>SYSTEM CORE</p>
-            <p className="text-sm font-semibold" style={{ color: M.onBg }}>Synchronizing with Knowledge Graph</p>
+            <p className="text-[10px] font-bold uppercase tracking-widest" style={{ color: M.muted }}>{t("gen.system_core")}</p>
+            <p className="text-sm font-semibold" style={{ color: M.onBg }}>{t("gen.syncing")}</p>
           </div>
         </div>
         <div className="flex items-center gap-2">
           {agentLogs.length > 0 && (
             <span className="text-xs font-semibold" style={{ color: M.mutedFg }}>
-              {agentLogs.length} logs
+              {agentLogs.length} {t("gen.logs")}
             </span>
           )}
         </div>
@@ -844,8 +849,8 @@ function GeneratingProgress({
                 <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
               </svg>
             ),
-            label: "Adaptive Logic",
-            desc: "Dynamic difficulty adjustment based on student cognitive profiling.",
+            label: t("gen.feat_adaptive_label"),
+            desc: t("gen.feat_adaptive_desc"),
           },
           {
             icon: (
@@ -853,8 +858,8 @@ function GeneratingProgress({
                 <rect x="2" y="3" width="20" height="14" rx="2" /><path d="M8 21h8M12 17v4" />
               </svg>
             ),
-            label: "HD Rendering",
-            desc: "StudioGen agents constructing cinematic educational sequences.",
+            label: t("gen.feat_render_label"),
+            desc: t("gen.feat_render_desc"),
           },
           {
             icon: (
@@ -862,8 +867,8 @@ function GeneratingProgress({
                 <path d="M3 15a4 4 0 0 0 4 4h9a5 5 0 1 0-.1-9.999 5.002 5.002 0 0 0-9.78 2.096A4.001 4.001 0 0 0 3 15z" />
               </svg>
             ),
-            label: "Nexus Sync",
-            desc: "Global asset distribution across low-latency edge networks.",
+            label: t("gen.feat_sync_label"),
+            desc: t("gen.feat_sync_desc"),
           },
         ].map((item) => (
           <div key={item.label} className="flex flex-col items-start gap-2 pt-2">
@@ -887,7 +892,7 @@ function GeneratingProgress({
             style={{ background: "rgba(158,166,255,0.06)", borderColor: M.border }}
           >
             <Terminal className="h-3.5 w-3.5" style={{ color: M.mutedFg }} />
-            <span className="text-xs font-semibold" style={{ color: M.mutedFg }}>Agent Logs</span>
+            <span className="text-xs font-semibold" style={{ color: M.mutedFg }}>{t("gen.agent_logs")}</span>
             <span className="text-[10px] ml-1" style={{ color: M.muted }}>({agentLogs.length})</span>
           </div>
           <div className="max-h-[200px] overflow-y-auto divide-y" style={{ borderColor: M.border }}>
