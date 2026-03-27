@@ -617,27 +617,30 @@ function GeneratingProgress({
       </div>
 
       {/* ── Hero header: title + progress number ── */}
-      <div className="flex items-start justify-between mb-8">
-        <div>
+      <div className="flex items-start justify-between mb-8 gap-4">
+        <div className="flex-1 min-w-0">
           <h2
             className="font-extrabold leading-tight tracking-tight"
-            style={{ fontSize: "clamp(1.6rem, 4vw, 2.4rem)", color: M.onBg }}
+            style={{ fontSize: "clamp(1.4rem, 3.5vw, 2.2rem)", color: M.onBg }}
           >
             {t("gen.title_line1")}
           </h2>
           <h2
             className="font-extrabold leading-tight tracking-tight italic"
             style={{
-              fontSize: "clamp(1.6rem, 4vw, 2.4rem)",
+              fontSize: "clamp(1.4rem, 3.5vw, 2.2rem)",
               background: "linear-gradient(90deg, #6a1cf6 0%, #4f8ef7 60%, #00c9a7 100%)",
               WebkitBackgroundClip: "text",
               WebkitTextFillColor: "transparent",
+              paddingBottom: "0.1em",
+              display: "block",
+              overflow: "visible",
             }}
           >
             {t("gen.title_line2")}
           </h2>
         </div>
-        <div className="text-right shrink-0 pl-6">
+        <div className="text-right shrink-0">
           <p
             className="text-[10px] font-bold uppercase tracking-[0.2em] mb-1"
             style={{ color: M.muted }}

@@ -9,6 +9,7 @@ import { toast } from "sonner"
 import { gateway } from "@/lib/api"
 import type { ProjectSummary } from "@/lib/types/api"
 import { useT } from "@/lib/hooks/use-t"
+import { findProjectIcon } from "@/lib/project-icon"
 
 // Category icon SVGs — matching UI mockup style (symbol on light purple bg)
 function CategoryIcon({ category }: { category: string }) {
@@ -125,19 +126,6 @@ export default function ProjectsPage() {
       .projects()
       .then((list) => {
         setProjects(list)
-        // Silently generate icons for projects that don't have one yet
-        const missing = list.filter((p) => !p.icon_svg)
-        missing.forEach((p) => {
-          gateway.generateProjectIcon(p.name)
-            .then((res) => {
-              if (res.icon_svg) {
-                setProjects((prev) =>
-                  prev.map((x) => x.name === p.name ? { ...x, icon_svg: res.icon_svg } : x)
-                )
-              }
-            })
-            .catch(() => {})
-        })
       })
       .catch(() => {})
       .finally(() => setLoading(false))
@@ -305,16 +293,19 @@ function ProjectCard({ project: p, onDelete }: { project: ProjectSummary; onDele
     <div className="relative group">
       <Link href={`/projects/${p.name}`}>
         <div className="bg-white dark:bg-card rounded-2xl p-6 h-full flex flex-col cursor-pointer shadow-[0_2px_12px_0_rgba(0,0,0,0.06)] hover:shadow-[0_6px_24px_0_rgba(109,40,217,0.12)] transition-all duration-[350ms] [transition-timing-function:cubic-bezier(0.2,0.8,0.2,1)] border border-border/30">
-          {/* Project icon — LLM-generated SVG or category fallback */}
+          {/* Project icon — from pre-built icon library, or category fallback */}
           <div className="mb-4">
-            {p.icon_svg ? (
-              <div
-                className="w-10 h-10 rounded-xl bg-primary/8 flex items-center justify-center"
-                dangerouslySetInnerHTML={{ __html: p.icon_svg }}
-              />
-            ) : (
-              <CategoryIcon category={p.category} />
-            )}
+            {(() => {
+              const svg = findProjectIcon(p.title, p.category, p.description)
+              return svg ? (
+                <div
+                  className="w-10 h-10 rounded-xl bg-primary/8 flex items-center justify-center"
+                  dangerouslySetInnerHTML={{ __html: svg }}
+                />
+              ) : (
+                <CategoryIcon category={p.category} />
+              )
+            })()}
           </div>
 
         {/* Tags row */}
