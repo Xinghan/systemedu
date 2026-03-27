@@ -653,12 +653,12 @@ function GeneratingProgress({
                 className="flex items-center justify-between px-6 py-4 rounded-xl bg-secondary/20 border border-transparent hover:bg-secondary/30 transition-colors duration-300"
               >
                 <div className="flex items-center gap-4">
-                  <div className="w-8 h-8 rounded-full bg-emerald-500/10 flex items-center justify-center shrink-0">
-                    <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+                  <div className="w-8 h-8 rounded-full bg-cyan-500/10 flex items-center justify-center shrink-0">
+                    <CheckCircle2 className="h-4 w-4 text-cyan-500" />
                   </div>
                   <span className="text-sm font-medium text-foreground/70">{s.label}</span>
                 </div>
-                <span className="text-[10px] font-bold text-emerald-500 uppercase tracking-widest bg-emerald-500/8 px-2.5 py-1 rounded-full">
+                <span className="text-[10px] font-bold text-cyan-500 uppercase tracking-widest bg-cyan-500/8 px-2.5 py-1 rounded-full">
                   完成
                 </span>
               </div>
