@@ -8,6 +8,7 @@ from systemedu.agents.builtin.media_art_direction import (
     inject_katex_if_needed,
     style_kit_prompt_block,
 )
+from systemedu.agents.builtin.scientific_model_agent import ScientificModelAgent
 
 logger = logging.getLogger(__name__)
 
@@ -21,6 +22,7 @@ class GameGenAgent:
 
     def __init__(self, llm):
         self.llm = llm
+        self.science_model = ScientificModelAgent(llm)
 
     async def generate(
         self,
@@ -44,6 +46,19 @@ class GameGenAgent:
         visual_focus = detail_plan.get("visual_focus", "")
         style_key = detail_plan.get("style_key")
 
+        # Pre-step: extract scientific model for science-domain nodes
+        science_block = ""
+        project_category = detail_plan.get("project_category", "")
+        if ScientificModelAgent.should_run(project_category, node_title, node_summary):
+            science_model = await self.science_model.extract(
+                node_title=node_title,
+                node_summary=node_summary,
+                mode="game",
+            )
+            if science_model:
+                science_block = ScientificModelAgent.build_prompt_block(science_model)
+                logger.info("GameGenAgent: scientific model injected for '%s'", node_title)
+
         # Build enhanced context for the planner
         enhanced_summary = game_concept
         if interaction_flow:
@@ -59,9 +74,18 @@ class GameGenAgent:
             f"以下为必须遵守的视觉风格：\n{style_kit_prompt_block(mode='game', preferred_key=style_key)}\n\n"
             f"{KATEX_PROMPT_HINT}"
         )
+        if science_block:
+            enhanced_summary = f"{science_block}\n\n{enhanced_summary}"
 
-        # 强制使用 simulation 模式
-        lab_strategy: dict = {"game_mechanic": "simulation"}
+        # Use mechanic from detail_plan (chosen by CourseIdeaDetailPlannerAgent)
+        # Fall back to simulation only if not specified
+        mechanic = detail_plan.get("game_mechanic", "simulation")
+        valid_mechanics = {"simulation", "drag_sort", "match_pairs", "timeline_order", "boss_quiz", "free_simulation", "label_map"}
+        if mechanic not in valid_mechanics:
+            logger.warning("GameGenAgent: unknown mechanic '%s', falling back to simulation", mechanic)
+            mechanic = "simulation"
+        lab_strategy: dict = {"game_mechanic": mechanic}
+        logger.info("GameGenAgent: using mechanic '%s' for '%s'", mechanic, node_title)
 
         try:
             planner = GameSpecPlannerAgent(llm=self.llm)

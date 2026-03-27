@@ -568,3 +568,162 @@ class TestKaTeXInjection:
         assert r"\frac" in KATEX_PROMPT_HINT
         assert r"\int" in KATEX_PROMPT_HINT
         assert "KaTeX" in KATEX_PROMPT_HINT
+
+
+# ===== P1: Game mechanic selection =====
+
+class TestGameMechanicSelection:
+
+    def test_game_detail_prompt_no_longer_forces_simulation(self):
+        from systemedu.agents.builtin.course_idea_detail_planner_agent import GAME_DETAIL_PROMPT
+        # Prompt must NOT hard-code simulation as the only option
+        assert 'game_mechanic 必须是 "simulation"' not in GAME_DETAIL_PROMPT
+        assert '"simulation"' not in GAME_DETAIL_PROMPT or "drag_sort" in GAME_DETAIL_PROMPT
+
+    def test_game_detail_prompt_lists_all_mechanics(self):
+        from systemedu.agents.builtin.course_idea_detail_planner_agent import GAME_DETAIL_PROMPT
+        for mechanic in ["simulation", "drag_sort", "match_pairs", "timeline_order", "boss_quiz"]:
+            assert mechanic in GAME_DETAIL_PROMPT
+
+    def test_game_detail_prompt_has_mechanic_reason(self):
+        from systemedu.agents.builtin.course_idea_detail_planner_agent import GAME_DETAIL_PROMPT
+        assert "mechanic_reason" in GAME_DETAIL_PROMPT
+
+    @pytest.mark.asyncio
+    async def test_game_gen_agent_uses_mechanic_from_detail_plan(self):
+        from systemedu.agents.builtin.game_gen_agent import GameGenAgent
+        from unittest.mock import AsyncMock, patch
+
+        llm = _make_llm("")
+        agent = GameGenAgent(llm)
+
+        # Patch science model to return None (skip)
+        agent.science_model.extract = AsyncMock(return_value=None)
+
+        detail_plan = {
+            "game_mechanic": "match_pairs",
+            "game_concept": "配对细胞器与功能",
+            "game_title": "细胞器配对",
+            "style_key": "concept_lab_clean",
+        }
+
+        captured_strategy = {}
+        original_plan = None
+
+        async def mock_planner_plan(**kwargs):
+            captured_strategy.update(kwargs.get("lab_strategy", {}))
+            return None  # return None to exit early
+
+        with patch(
+            "systemedu.agents.builtin.gameagent.planner.GameSpecPlannerAgent.plan",
+            side_effect=mock_planner_plan,
+        ):
+            await agent.generate(detail_plan, "细胞器", "了解细胞器功能", difficulty=3)
+
+        assert captured_strategy.get("game_mechanic") == "match_pairs"
+
+    @pytest.mark.asyncio
+    async def test_game_gen_agent_fallback_unknown_mechanic(self):
+        from systemedu.agents.builtin.game_gen_agent import GameGenAgent
+        from unittest.mock import AsyncMock, patch
+
+        llm = _make_llm("")
+        agent = GameGenAgent(llm)
+        agent.science_model.extract = AsyncMock(return_value=None)
+
+        detail_plan = {"game_mechanic": "unknown_mechanic", "game_concept": "test", "game_title": "test"}
+
+        captured = {}
+
+        async def mock_plan(**kwargs):
+            captured.update(kwargs.get("lab_strategy", {}))
+            return None
+
+        with patch(
+            "systemedu.agents.builtin.gameagent.planner.GameSpecPlannerAgent.plan",
+            side_effect=mock_plan,
+        ):
+            await agent.generate(detail_plan, "test", "test", difficulty=3)
+
+        assert captured.get("game_mechanic") == "simulation"
+
+
+# ===== P2: ScientificModelAgent =====
+
+class TestScientificModelAgent:
+
+    def test_should_run_science_categories(self):
+        from systemedu.agents.builtin.scientific_model_agent import ScientificModelAgent
+
+        assert ScientificModelAgent.should_run("physics", "牛顿第二定律", "") is True
+        assert ScientificModelAgent.should_run("chemistry", "化学反应", "") is True
+        assert ScientificModelAgent.should_run("math", "积分", "") is True
+        assert ScientificModelAgent.should_run("biology", "细胞", "") is True
+
+    def test_should_run_keyword_detection(self):
+        from systemedu.agents.builtin.scientific_model_agent import ScientificModelAgent
+
+        assert ScientificModelAgent.should_run("other", "力与运动", "牛顿定律描述了力") is True
+        assert ScientificModelAgent.should_run("other", "化学反应速率", "") is True
+        assert ScientificModelAgent.should_run("other", "积分与面积", "") is True
+
+    def test_should_not_run_unrelated(self):
+        from systemedu.agents.builtin.scientific_model_agent import ScientificModelAgent
+
+        assert ScientificModelAgent.should_run("music", "音乐节拍", "学习音乐节奏") is False
+        assert ScientificModelAgent.should_run("other", "项目管理", "学习如何管理项目时间") is False
+
+    @pytest.mark.asyncio
+    async def test_extract_returns_model(self):
+        from systemedu.agents.builtin.scientific_model_agent import ScientificModelAgent
+        import json
+
+        model_data = {
+            "core_formulas": ["\\(F = ma\\)", "\\(W = Fd\\)"],
+            "key_mechanisms": ["力使物体产生加速度"],
+            "visual_constraints": ["力的方向必须与加速度方向一致"],
+            "common_misconceptions": ["不要暗示速度大则质量大"],
+            "forbidden_errors": ["质量随速度变化（经典力学范畴禁止）"],
+            "suggested_variables": [{"name": "力", "symbol": "F", "unit": "N", "range_hint": "0-100 N"}],
+        }
+        llm = _make_llm(json.dumps(model_data))
+        agent = ScientificModelAgent(llm)
+        result = await agent.extract("牛顿第二定律", "F=ma 的关系", mode="animation")
+
+        assert result is not None
+        assert "core_formulas" in result
+        assert len(result["core_formulas"]) == 2
+
+    @pytest.mark.asyncio
+    async def test_extract_returns_none_on_failure(self):
+        from systemedu.agents.builtin.scientific_model_agent import ScientificModelAgent
+        from unittest.mock import MagicMock
+        from langchain_core.messages import AIMessage
+
+        llm = MagicMock()
+        llm.invoke = MagicMock(return_value=AIMessage(content="not valid json {{{"))
+        agent = ScientificModelAgent(llm)
+        result = await agent.extract("test", "test")
+        assert result is None
+
+    def test_build_prompt_block_contains_key_fields(self):
+        from systemedu.agents.builtin.scientific_model_agent import ScientificModelAgent
+
+        model = {
+            "core_formulas": ["\\(F = ma\\)"],
+            "key_mechanisms": ["力使物体加速"],
+            "visual_constraints": ["方向一致"],
+            "common_misconceptions": ["速度大质量大"],
+            "forbidden_errors": ["因果颠倒"],
+        }
+        block = ScientificModelAgent.build_prompt_block(model)
+        assert "F = ma" in block
+        assert "力使物体加速" in block
+        assert "速度大质量大" in block
+        assert "科学准确性约束" in block
+
+    def test_build_prompt_block_empty_returns_empty(self):
+        from systemedu.agents.builtin.scientific_model_agent import ScientificModelAgent
+
+        assert ScientificModelAgent.build_prompt_block({}) == ""
+        assert ScientificModelAgent.build_prompt_block(None) == ""

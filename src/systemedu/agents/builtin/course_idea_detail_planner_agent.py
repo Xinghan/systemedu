@@ -71,57 +71,65 @@ ANIMATION_DETAIL_PROMPT = """你是一位动画脚本设计师，请为以下知
 - 直接输出 JSON，不要其他文字
 """
 
-GAME_DETAIL_PROMPT = """你是一位教育游戏设计师，请为以下知识点设计一个模拟实验互动游戏方案。
+GAME_DETAIL_PROMPT = """你是一位教育游戏设计师，请为以下知识点设计最合适的互动游戏方案。
 
 知识点：{topic}
 上下文：{context_summary}
 {style_kit_block}
 
-游戏类型固定为 simulation（模拟实验）：学生通过调节参数、观察实验结果来理解知识点，适合有因果关系的概念。
-设计目标：一个核心实验场景，少量参数，但要非常有说服力。
+【mechanic 选择规则（必须严格遵守）】
+根据知识点类型选择一种 mechanic：
+- simulation   → 知识点有明确的"参数→结果"因果规律，可用 2-4 个滑块直观展示
+  例：调推力观察火箭升空高度、调温度观察化学反应速率、调电压观察电流
+- drag_sort    → 需要将多个概念/事物归类到不同类别
+  例：火箭零件按系统分类、食物按营养素分类、动物按栖息地分类
+- match_pairs  → 需要配对记忆：概念↔定义、术语↔解释、符号↔含义
+  例：细胞器与功能配对、元素符号与名称配对、公式符号与物理量配对
+- timeline_order → 知识点有明确的先后顺序或步骤流程
+  例：火箭发射流程、化学反应步骤、生物进化阶段
+- boss_quiz    → 综合测验型，知识点适合用选择题检验
+  例：章节末综合测试、多知识点交叉考察
 
-请输出一个详细的游戏设计方案，严格按以下 JSON 格式（不要包含 markdown 代码块标记）：
+simulation 与 free_simulation 区别：
+- 参数少（2-4个）、映射清晰（调A看B变化）→ 选 simulation
+- 需要自由拖拽/点击/绘图/组装/多对象交互 → 选 free_simulation（高级，慎选）
+
+设计目标：机制与知识点高度匹配，学生在"玩"的过程中自然理解概念。
+
+请输出游戏设计方案，严格按以下 JSON 格式（不要包含 markdown 代码块标记）：
 {{
   "style_key": "edu_soft_tech|concept_lab_clean|storybook_vivid",
-  "game_mechanic": "simulation",
-  "game_concept": "学生通过这个模拟实验将理解什么核心概念（20-40字）",
+  "game_mechanic": "simulation|drag_sort|match_pairs|timeline_order|boss_quiz",
+  "mechanic_reason": "一句话解释为什么选这个 mechanic（15-25字）",
+  "game_concept": "学生通过这个游戏将理解什么核心概念（20-40字）",
   "game_title": "游戏标题（10字以内）",
-  "visual_focus": "画面主焦点（如 小车、电路、光束）",
+  "visual_focus": "画面主焦点（如 小车、电路、光束、卡片组）",
   "visual_storyboard": [
-    "初始状态画面",
-    "用户调节参数时变化",
-    "结果反馈画面"
+    "初始/开始状态画面描述",
+    "核心交互过程画面描述",
+    "完成/反馈状态画面描述"
   ],
   "persuasion": {{
-    "learning_claim": "本实验要证明的结论（20-40字）",
-    "evidence": "学生会观察到的关键证据（20-40字）",
-    "takeaway": "学生操作后应得出的结论（15-30字）"
+    "learning_claim": "这个游戏要证明的核心结论（20-40字）",
+    "evidence": "学生会看到/体验到的关键证据（20-40字）",
+    "takeaway": "学生完成后应能复述的结论（15-30字）"
   }},
   "interaction_flow": [
-    "步骤1：调节哪个参数",
-    "步骤2：观察什么现象",
+    "步骤1：学生做什么操作",
+    "步骤2：看到什么变化/反馈",
     "步骤3：得出什么结论"
   ],
-  "win_condition": "正确完成条件描述（20字以内）",
+  "win_condition": "正确完成的判定条件（20字以内）",
   "difficulty_hint": "easy|medium|hard",
-  "simulation_params": [
-    {{
-      "param_name": "参数英文名（如 temperature、voltage）",
-      "label": "参数中文名（如 温度、电压）",
-      "min": 0,
-      "max": 100,
-      "default": 50,
-      "unit": "单位（如 °C、V）"
-    }}
-  ],
-  "scene_description": "模拟场景的视觉描述（40-60字），描述画面中有什么元素、参数变化时会看到什么效果"
+  "simulation_params": [],
+  "scene_description": "游戏场景的视觉描述（60-100字），描述画面布局、主要元素、交互时的视觉变化"
 }}
 
-要求：
-- game_mechanic 必须是 "simulation"，不能是其他值
-- simulation_params 包含 2-3 个有意义的参数，每个参数必须与知识点强相关
-- interaction_flow 包含 3-5 个步骤
-- visual_storyboard 必须包含 3 个阶段并且与 interaction_flow 对应
+重要说明：
+- simulation_params 仅在 game_mechanic="simulation" 时填写（2-3个参数对象），其他 mechanic 留空列表 []
+- simulation_params 每项格式：{{"param_name":"英文名","label":"中文名","min":0,"max":100,"default":50,"unit":"单位"}}
+- interaction_flow 包含 3-5 个步骤，必须与 game_mechanic 的交互方式一致
+- visual_storyboard 必须 3 项，对应 开始/过程/结束
 - 全部使用中文（game_mechanic、param_name、difficulty_hint 除外）
 - 直接输出 JSON，不要其他文字
 """

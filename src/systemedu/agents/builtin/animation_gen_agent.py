@@ -16,6 +16,7 @@ from systemedu.agents.builtin.media_art_direction import (
     motion_preset_block,
     style_kit_prompt_block,
 )
+from systemedu.agents.builtin.scientific_model_agent import ScientificModelAgent
 
 logger = logging.getLogger(__name__)
 
@@ -28,7 +29,7 @@ ANIMATION_GEN_PROMPT = """你是一位专业的 SVG 动画工程师，请根据�
 布局信息：{layout_summary}
 节奏信息：{beats_summary}
 推荐资产：{asset_summary}
-
+{scientific_model_block}
 帧序列：
 {frames_description}
 {style_kit_block}
@@ -87,6 +88,7 @@ class AnimationGenAgent:
         self.llm = llm
         self.router = AnimationBackendRouterAgent(llm)
         self.manim = ManimGenAgent(llm)
+        self.science_model = ScientificModelAgent(llm)
 
     async def generate(
         self,
@@ -135,6 +137,18 @@ class AnimationGenAgent:
         ) or "无"
         asset_summary = "、".join(str(i) for i in asset_plan[:8]) if isinstance(asset_plan, list) else "无"
 
+        # Pre-step: extract scientific model for science-domain nodes
+        scientific_model_block = ""
+        if ScientificModelAgent.should_run(project_category, node_title, node_summary):
+            science_model = await self.science_model.extract(
+                node_title=node_title,
+                node_summary=node_summary,
+                mode="animation",
+            )
+            if science_model:
+                scientific_model_block = ScientificModelAgent.build_prompt_block(science_model)
+                logger.info("AnimationGenAgent: scientific model injected for '%s'", node_title)
+
         prompt = ANIMATION_GEN_PROMPT.format(
             node_title=node_title,
             title=detail_plan.get("title", node_title),
@@ -145,6 +159,7 @@ class AnimationGenAgent:
             layout_summary=layout_summary,
             beats_summary=beats_summary,
             asset_summary=asset_summary or "无",
+            scientific_model_block=scientific_model_block,
             style_kit_block=style_kit_prompt_block(
                 mode="animation",
                 preferred_key=detail_plan.get("style_key"),
