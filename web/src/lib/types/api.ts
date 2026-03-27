@@ -62,6 +62,7 @@ export interface ProjectSummary {
   tags: string[]
   path: string
   cover_image_url?: string | null
+  icon_svg?: string | null
 }
 
 export interface KnodeInfo {

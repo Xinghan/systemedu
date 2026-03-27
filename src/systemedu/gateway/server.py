@@ -390,6 +390,7 @@ async def api_projects(request: Request) -> JSONResponse:
                             "tags": data.get("tags", []),
                             "path": str(sub),
                             "cover_image_url": (db_proj.cover_image_url or "") if db_proj else "",
+                            "icon_svg": data.get("icon_svg", ""),
                         }
                     )
                 except Exception as e:
@@ -470,6 +471,31 @@ async def api_create_project(request: Request) -> JSONResponse:
             logger.info(f"Auto-enqueued {len(enqueued)} objects for {name!r}: {enqueued}")
     except Exception:
         logger.exception("Auto-enqueue scan failed (non-fatal)")
+
+    # Async: generate SVG icon and write to project.yaml (non-blocking)
+    async def _gen_icon():
+        try:
+            from systemedu.agents.builtin.icon_gen_agent import generate_project_icon
+            import yaml as _yaml
+
+            svg = await generate_project_icon(
+                title=title,
+                category=meta.get("category", "other") if meta else "other",
+                description=meta.get("description", "") if meta else "",
+            )
+            if svg:
+                yaml_path = project_dir / "project.yaml"
+                data = _yaml.safe_load(yaml_path.read_text(encoding="utf-8")) or {}
+                data["icon_svg"] = svg
+                yaml_path.write_text(
+                    _yaml.dump(data, allow_unicode=True, default_flow_style=False),
+                    encoding="utf-8",
+                )
+                logger.info(f"Icon written to project.yaml for '{name}'")
+        except Exception:
+            logger.exception(f"Icon generation failed for '{name}' (non-fatal)")
+
+    asyncio.create_task(_gen_icon())
 
     return JSONResponse({"name": name, "created": True, "path": str(project_dir)})
 

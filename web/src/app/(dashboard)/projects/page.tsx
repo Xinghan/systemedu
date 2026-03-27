@@ -290,9 +290,16 @@ function ProjectCard({ project: p, onDelete }: { project: ProjectSummary; onDele
     <div className="relative group">
       <Link href={`/projects/${p.name}`}>
         <div className="bg-white dark:bg-card rounded-2xl p-6 h-full flex flex-col cursor-pointer shadow-[0_2px_12px_0_rgba(0,0,0,0.06)] hover:shadow-[0_6px_24px_0_rgba(109,40,217,0.12)] transition-all duration-[350ms] [transition-timing-function:cubic-bezier(0.2,0.8,0.2,1)] border border-border/30">
-          {/* Category icon */}
+          {/* Project icon — LLM-generated SVG or category fallback */}
           <div className="mb-4">
-            <CategoryIcon category={p.category} />
+            {p.icon_svg ? (
+              <div
+                className="w-10 h-10 rounded-xl bg-primary/8 flex items-center justify-center"
+                dangerouslySetInnerHTML={{ __html: p.icon_svg }}
+              />
+            ) : (
+              <CategoryIcon category={p.category} />
+            )}
           </div>
 
         {/* Tags row */}
