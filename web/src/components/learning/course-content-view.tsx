@@ -180,27 +180,26 @@ function SectionAudioBar({ sectionId, audioUrl }: { sectionId: string; audioUrl:
   )
 }
 
+function backendBadgeLabel(backend?: string): string {
+  if (backend === "manim") return "Manim"
+  if (backend === "html_svg") return "SVG/HTML"
+  return ""
+}
+
 // ---------------------------------------------------------------------------
 // IdeaIframeBlock (animation / game)
 // ---------------------------------------------------------------------------
 function IdeaIframeBlock({
-  idea, html, darkMode,
+  idea, html, darkMode, backend,
 }: {
   idea: CourseIdeaSummary
   html: string
   darkMode: boolean
+  backend?: string
 }) {
-  const [blobUrl, setBlobUrl] = useState<string | null>(null)
   const [resetKey, setResetKey] = useState(0)
   const [expanded, setExpanded] = useState(false)
-
-  useEffect(() => {
-    if (!expanded) return
-    const blob = new Blob([html], { type: "text/html;charset=utf-8" })
-    const url = URL.createObjectURL(blob)
-    setBlobUrl(url)
-    return () => URL.revokeObjectURL(url)
-  }, [html, resetKey, expanded])
+  const backendLabel = backendBadgeLabel(backend)
 
   if (darkMode) {
     // Animation block — deep dark style matching code.html inverse-surface
@@ -215,7 +214,14 @@ function IdeaIframeBlock({
               <Zap className="h-6 w-6 text-primary" />
             </div>
             <div className="text-left">
-              <h3 className="font-bold text-white text-lg leading-tight">动画演示</h3>
+              <div className="flex items-center gap-2">
+                <h3 className="font-bold text-white text-lg leading-tight">动画演示</h3>
+                {backendLabel && (
+                  <span className="inline-flex items-center rounded-full border border-primary/30 bg-primary/15 px-2 py-0.5 text-[11px] font-semibold text-primary">
+                    {backendLabel}
+                  </span>
+                )}
+              </div>
               <p className="text-white/60 text-sm mt-0.5">{idea.topic}</p>
             </div>
           </div>
@@ -223,11 +229,11 @@ function IdeaIframeBlock({
             className={`h-5 w-5 text-white/40 transition-transform duration-200 ${expanded ? "rotate-180" : ""}`}
           />
         </button>
-        {expanded && blobUrl && (
+        {expanded && (
           <div className="p-6 pt-2">
             <iframe
               key={resetKey}
-              src={blobUrl}
+              srcDoc={html}
               sandbox="allow-scripts allow-same-origin"
               className="w-full rounded-xl block"
               style={{ height: 460, border: "none" }}
@@ -253,9 +259,9 @@ function IdeaIframeBlock({
           <div className="w-12 h-12 rounded-xl bg-emerald-500/10 flex items-center justify-center border border-emerald-500/20 shrink-0">
             <Gamepad2 className="h-6 w-6 text-emerald-600 dark:text-emerald-400" />
           </div>
-          <div className="text-left">
-            <h3 className="font-bold text-foreground text-lg leading-tight">互动游戏</h3>
-            <p className="text-muted-foreground text-sm mt-0.5">{idea.topic}</p>
+            <div className="text-left">
+              <h3 className="font-bold text-foreground text-lg leading-tight">互动游戏</h3>
+              <p className="text-muted-foreground text-sm mt-0.5">{idea.topic}</p>
           </div>
         </div>
         <div className="flex items-center gap-3">
@@ -273,10 +279,10 @@ function IdeaIframeBlock({
           />
         </div>
       </button>
-      {expanded && blobUrl && (
+      {expanded && (
         <iframe
           key={resetKey}
-          src={blobUrl}
+          srcDoc={html}
           sandbox="allow-scripts allow-same-origin"
           className="w-full block"
           style={{ height: 560, border: "none" }}
@@ -382,11 +388,25 @@ function IdeaBlock({
   }
 
   if (idea.mode === "animation" && section.html) {
-    return <IdeaIframeBlock idea={idea} html={section.html} darkMode={true} />
+    return (
+      <IdeaIframeBlock
+        idea={idea}
+        html={section.html}
+        darkMode={true}
+        backend={section.generation_backend || idea.generation_backend}
+      />
+    )
   }
 
   if (idea.mode === "game" && section.html) {
-    return <IdeaIframeBlock idea={idea} html={section.html} darkMode={false} />
+    return (
+      <IdeaIframeBlock
+        idea={idea}
+        html={section.html}
+        darkMode={false}
+        backend={section.generation_backend || idea.generation_backend}
+      />
+    )
   }
 
   if (idea.mode === "story" && section.story_paragraphs) {
@@ -530,8 +550,17 @@ function EditorialHeader({ knode }: { knode: KnodeInfo | null }) {
 }
 
 // ---------------------------------------------------------------------------
-// GeneratingProgress
+// GeneratingProgress — redesigned to match Lumina Nexus reference
 // ---------------------------------------------------------------------------
+
+const STAGE_SUBTITLES: Partial<Record<PipelineStage, string>> = {
+  planning: "分析知识节点，生成详细学习计划",
+  ideating: "识别适合做成动画、游戏、故事的知识点",
+  detailing: "为每个知识点细化媒体方案",
+  generating: "并行生成动画 / 游戏 / 故事内容",
+  audio: "为每段文字生成讲解音频",
+}
+
 function GeneratingProgress({
   stage, ideaProgress, agentLogs,
 }: {
@@ -540,54 +569,131 @@ function GeneratingProgress({
   agentLogs: AgentLogEntry[]
 }) {
   const currentIdx = STAGE_ORDER.indexOf(stage)
+  const progressPct = PIPELINE_STAGES.length > 0
+    ? Math.round((PIPELINE_STAGES.filter((s) => STAGE_ORDER.indexOf(s.key) < currentIdx).length / PIPELINE_STAGES.length) * 100)
+    : 0
 
   return (
-    <div className="space-y-6">
-      <div className="rounded-xl border border-border/40 overflow-hidden">
-        <div className="px-4 py-3 bg-secondary/30 border-b border-border/30 flex items-center gap-2">
-          <Loader2 className="h-3.5 w-3.5 animate-spin text-primary" />
-          <span className="text-xs font-semibold text-foreground">AI 生成进度</span>
+    <div className="space-y-4">
+      {/* Header */}
+      <div className="flex items-center justify-between mb-2">
+        <div className="flex items-center gap-2">
+          <div className="w-2 h-2 rounded-full bg-primary animate-pulse" />
+          <span className="text-sm font-semibold text-foreground">AI 生成进度</span>
         </div>
-        <div className="divide-y divide-border/20">
-          {PIPELINE_STAGES.map((s) => {
-            const stageIdx = STAGE_ORDER.indexOf(s.key)
-            const isDone = currentIdx > stageIdx
-            const isActive = currentIdx === stageIdx
-            const isPending = currentIdx < stageIdx
-
-            return (
-              <div key={s.key} className={`flex items-center gap-3 px-4 py-3 ${isActive ? "bg-primary/5" : ""}`}>
-                <div className="shrink-0 w-4 h-4 flex items-center justify-center">
-                  {isDone && <CheckCircle2 className="h-4 w-4 text-emerald-500" />}
-                  {isActive && <Loader2 className="h-4 w-4 animate-spin text-primary" />}
-                  {isPending && <Circle className="h-3.5 w-3.5 text-muted-foreground/30" />}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <span className={`text-xs font-mono ${isDone ? "text-muted-foreground" : isActive ? "text-foreground font-semibold" : "text-muted-foreground/50"}`}>
-                    {s.label}
-                  </span>
-                  {isActive && (s.key === "generating" || s.key === "detailing") && ideaProgress.total > 0 && (
-                    <span className="ml-2 text-[10px] text-muted-foreground">
-                      {s.key === "generating" ? `${ideaProgress.done} / ${ideaProgress.total}` : `${ideaProgress.total} 个`}
-                    </span>
-                  )}
-                </div>
-                {isDone && <span className="text-[10px] text-emerald-500 shrink-0">完成</span>}
-                {isActive && <span className="text-[10px] text-primary shrink-0 animate-pulse">运行中</span>}
-              </div>
-            )
-          })}
-        </div>
+        <span className="text-xs font-bold text-muted-foreground">{progressPct}%</span>
       </div>
 
+      {/* Agent steps */}
+      <div className="space-y-2">
+        {PIPELINE_STAGES.map((s) => {
+          const stageIdx = STAGE_ORDER.indexOf(s.key)
+          const isDone = currentIdx > stageIdx
+          const isActive = currentIdx === stageIdx
+          const isPending = currentIdx < stageIdx
+
+          if (isActive) {
+            // Active step — elevated card with left gradient bar + large spinner
+            const showProgress = (s.key === "generating") && ideaProgress.total > 0
+            const pct = showProgress ? Math.round((ideaProgress.done / ideaProgress.total) * 100) : 0
+
+            return (
+              <div
+                key={s.key}
+                className="relative flex items-center justify-between px-6 py-5 rounded-xl bg-card border border-primary/15 shadow-[0_8px_30px_-8px_rgba(124,58,237,0.12)] overflow-hidden"
+              >
+                {/* Left accent bar */}
+                <div className="absolute left-0 top-0 w-1 h-full bg-gradient-to-b from-primary to-violet-400 rounded-l-xl" />
+
+                <div className="flex items-center gap-5 ml-2">
+                  {/* Spinner */}
+                  <div className="relative shrink-0">
+                    <div className="w-10 h-10 rounded-full border-2 border-primary/10 flex items-center justify-center">
+                      <div className="w-7 h-7 rounded-full border-2 border-t-primary border-r-primary border-b-transparent border-l-transparent animate-spin" />
+                    </div>
+                    <div className="absolute inset-0 rounded-full bg-primary/10 animate-pulse" />
+                  </div>
+
+                  <div>
+                    <div className="flex items-center gap-2 mb-0.5">
+                      <span className="text-sm font-bold text-foreground">{s.label}</span>
+                      {showProgress && (
+                        <span className="text-[10px] bg-primary/8 text-primary font-bold px-2 py-0.5 rounded-full">
+                          {ideaProgress.done} / {ideaProgress.total}
+                        </span>
+                      )}
+                    </div>
+                    {showProgress ? (
+                      <div className="flex items-center gap-2 mt-1">
+                        <div className="h-1 w-36 bg-primary/8 rounded-full overflow-hidden">
+                          <div
+                            className="h-full bg-gradient-to-r from-primary to-violet-400 rounded-full transition-all duration-500"
+                            style={{ width: `${pct}%` }}
+                          />
+                        </div>
+                        <span className="text-[10px] text-muted-foreground">{pct}%</span>
+                      </div>
+                    ) : (
+                      <p className="text-xs text-muted-foreground">{STAGE_SUBTITLES[s.key]}</p>
+                    )}
+                  </div>
+                </div>
+
+                <span className="text-[11px] font-bold text-primary uppercase tracking-widest animate-pulse shrink-0">
+                  运行中
+                </span>
+              </div>
+            )
+          }
+
+          if (isDone) {
+            return (
+              <div
+                key={s.key}
+                className="flex items-center justify-between px-6 py-4 rounded-xl bg-secondary/20 border border-transparent hover:bg-secondary/30 transition-colors duration-300"
+              >
+                <div className="flex items-center gap-4">
+                  <div className="w-8 h-8 rounded-full bg-emerald-500/10 flex items-center justify-center shrink-0">
+                    <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+                  </div>
+                  <span className="text-sm font-medium text-foreground/70">{s.label}</span>
+                </div>
+                <span className="text-[10px] font-bold text-emerald-500 uppercase tracking-widest bg-emerald-500/8 px-2.5 py-1 rounded-full">
+                  完成
+                </span>
+              </div>
+            )
+          }
+
+          // Pending
+          return (
+            <div
+              key={s.key}
+              className="flex items-center justify-between px-6 py-4 rounded-xl bg-secondary/10 border border-transparent opacity-50"
+            >
+              <div className="flex items-center gap-4">
+                <div className="w-8 h-8 rounded-full bg-muted-foreground/8 flex items-center justify-center shrink-0">
+                  <Circle className="h-3.5 w-3.5 text-muted-foreground/40" />
+                </div>
+                <span className="text-sm font-medium text-muted-foreground">{s.label}</span>
+              </div>
+              <span className="text-[10px] font-bold text-muted-foreground/40 uppercase tracking-widest">
+                等待中
+              </span>
+            </div>
+          )
+        })}
+      </div>
+
+      {/* Agent logs (collapsible) */}
       {agentLogs.length > 0 && (
-        <div className="rounded-xl border border-border/40 overflow-hidden">
+        <div className="rounded-xl border border-border/40 overflow-hidden mt-4">
           <div className="px-4 py-3 bg-secondary/30 border-b border-border/30 flex items-center gap-2">
             <Terminal className="h-3.5 w-3.5 text-muted-foreground" />
             <span className="text-xs font-semibold text-muted-foreground">Agent 实时日志</span>
             <span className="text-[10px] text-muted-foreground/60 ml-1">({agentLogs.length} 条)</span>
           </div>
-          <div className="max-h-[340px] overflow-y-auto divide-y divide-border/20">
+          <div className="max-h-[260px] overflow-y-auto divide-y divide-border/20">
             {agentLogs.map((log, idx) => (
               <AgentLogRow key={idx} log={log} defaultExpanded={idx === agentLogs.length - 1} />
             ))}
