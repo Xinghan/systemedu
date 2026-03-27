@@ -182,28 +182,33 @@ def motion_preset_block() -> str:
 
 
 def evaluate_animation_html_quality(html: str) -> dict:
-    """Heuristic quality scoring for generated animation HTML."""
+    """Heuristic quality scoring for generated animation HTML.
+
+    Two dimensions:
+    - Technical (60 pts): SVG structure, animation primitives, completion signal
+    - Pedagogical (40 pts): teaching rhythm, visual evidence, knowledge focus
+    """
     lower = html.lower()
-    checks: list[tuple[str, bool, int, str]] = [
-        ("contains_svg", "<svg" in lower, 20, "缺少 SVG 场景"),
-        ("has_motion", ("@keyframes" in lower) or ("animation" in lower), 15, "缺少明确动画定义"),
-        ("has_transform", ("transform" in lower) or ("translate(" in lower), 10, "缺少 transform 动画"),
-        ("has_opacity", "opacity" in lower, 8, "缺少透明度层次与过渡"),
-        ("has_gradient", ("lineargradient" in lower) or ("radialgradient" in lower), 12, "缺少渐变层次"),
-        ("has_defs", "<defs" in lower, 8, "缺少可复用 SVG 定义"),
-        ("has_progress", ("step_complete" in lower) and ("postmessage" in lower), 12, "缺少完成信号上报"),
-        ("has_style_vars", ":root" in lower and "--" in lower, 8, "缺少统一样式变量"),
-        ("has_text", "<text" in lower, 7, "缺少必要标注文字"),
+
+    # --- Technical dimension (60 pts) ---
+    tech_checks: list[tuple[bool, int, str]] = [
+        ("<svg" in lower, 15, "缺少 SVG 场景"),
+        (("@keyframes" in lower) or ("animation" in lower), 12, "缺少明确动画定义"),
+        (("transform" in lower) or ("translate(" in lower), 8, "缺少 transform 动画"),
+        ("opacity" in lower, 5, "缺少透明度层次与过渡"),
+        (("lineargradient" in lower) or ("radialgradient" in lower), 8, "缺少渐变层次"),
+        ("<defs" in lower, 5, "缺少可复用 SVG 定义"),
+        (("step_complete" in lower) and ("postmessage" in lower), 7, "缺少完成信号上报"),
     ]
-    score = 0
+    tech_score = 0
     issues: list[str] = []
-    for _, ok, weight, issue in checks:
+    for ok, weight, issue in tech_checks:
         if ok:
-            score += weight
+            tech_score += weight
         else:
             issues.append(issue)
 
-    # Composition proxy: if no large geometry, penalize.
+    # Composition proxy: large focal element
     has_large_shape = False
     for w, h in re.findall(r'width=["\']?(\d{2,4})["\']?[^>]*height=["\']?(\d{2,4})["\']?', html):
         try:
@@ -213,24 +218,67 @@ def evaluate_animation_html_quality(html: str) -> dict:
         except ValueError:
             continue
     if has_large_shape:
-        score += 10
+        tech_score += 8  # max tech = 68, capped to 60
     else:
         issues.append("主体构图可能偏小，缺少足够大的焦点元素")
 
+    tech_score = min(tech_score, 60)
+
+    # --- Pedagogical dimension (40 pts) ---
+    # Teaching rhythm: anticipation + settle pattern signals staged learning
+    has_teaching_rhythm = (
+        ("anticipation" in lower or "ease-in" in lower or "ease-out" in lower)
+        and ("settl" in lower or "ease-in-out" in lower or "step" in lower)
+    )
+    # Visual evidence: frame captions / text labels / narration present
+    text_count = lower.count("<text")
+    has_visual_evidence = text_count >= 2
+    # Knowledge focus: label or caption content present (not just decorative)
+    has_knowledge_focus = (
+        "caption" in lower or "narration" in lower
+        or "frame-caption" in lower or "label" in lower
+    )
+    # Multi-frame progression: JS array or multiple keyframe stops
+    has_progression = (
+        "frames" in lower and ("[" in html and "]" in html)
+        or lower.count("keyframe") >= 2
+        or lower.count("@keyframes") >= 2
+    )
+
+    ped_checks: list[tuple[bool, int, str]] = [
+        (has_teaching_rhythm, 12, "缺少教学节奏（anticipation/settle 阶段）"),
+        (has_visual_evidence, 10, "视觉证据不足（标注文字少于 2 处）"),
+        (has_knowledge_focus, 10, "缺少知识焦点标注（caption/label）"),
+        (has_progression, 8, "缺少多帧递进（学习进程不清晰）"),
+    ]
+    ped_score = 0
+    for ok, weight, issue in ped_checks:
+        if ok:
+            ped_score += weight
+        else:
+            issues.append(issue)
+
+    total = tech_score + ped_score
+
     return {
-        "score": min(score, 100),
+        "score": min(total, 100),
+        "tech_score": tech_score,
+        "ped_score": ped_score,
         "issues": issues,
-        "pass": score >= 72,
+        "pass": total >= 72,
     }
 
 
 def format_animation_quality_feedback(report: dict) -> str:
     """Convert quality report to terse, prompt-friendly feedback."""
     issues = report.get("issues") or []
+    tech = report.get("tech_score", 0)
+    ped = report.get("ped_score", 0)
     if not issues:
         return "当前质量检查通过。请保持构图焦点、风格一致性与动效层次。"
-    top = issues[:5]
-    return "需要修复的问题：\n" + "\n".join(f"- {item}" for item in top)
+    top = issues[:6]
+    header = f"技术分={tech}/60，教学分={ped}/40，需要修复：\n"
+    return header + "\n".join(f"- {item}" for item in top)
 
 
 def normalize_story_image_prompt(

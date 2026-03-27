@@ -172,8 +172,12 @@ class AnimationGenAgent:
         try:
             import asyncio
 
-            # TEMP: force Manim for testing — remove after verification
-            route = {"backend": "manim", "reason": "forced for testing", "subject_hint": "math_formula"}
+            route = await self.router.route(
+                node_title=node_title,
+                node_summary=node_summary,
+                detail_plan=detail_plan,
+                project_category=project_category,
+            )
             detail_plan.setdefault("generation_backend", route["backend"])
 
             if route["backend"] == "manim":

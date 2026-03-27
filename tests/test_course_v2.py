@@ -727,3 +727,98 @@ class TestScientificModelAgent:
 
         assert ScientificModelAgent.build_prompt_block({}) == ""
         assert ScientificModelAgent.build_prompt_block(None) == ""
+
+
+# ===== P3: Animation quality scoring — pedagogical dimension =====
+
+class TestAnimationQualityScoring:
+
+    def _make_full_html(self) -> str:
+        """Full-featured animation HTML that should pass both dimensions."""
+        return """<!DOCTYPE html><html><head>
+        <style>
+          :root { --bg: #fff; --primary: #1d4ed8; }
+          @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+          #frame-caption { font-size: 11px; }
+          .settle { ease-in-out; }
+          .anticipation { ease-in; }
+        </style>
+        </head><body>
+        <svg width="600" height="420" viewBox="0 0 600 420">
+          <defs>
+            <linearGradient id="g1"><stop offset="0%" stop-color="#fff"/></linearGradient>
+            <radialGradient id="g2"><stop offset="0%" stop-color="#00f"/></radialGradient>
+          </defs>
+          <rect x="0" y="0" width="600" height="420" fill="#eee"/>
+          <rect x="50" y="50" width="300" height="200" fill="url(#g1)" opacity="0.8"/>
+          <text id="frame-caption" x="24" y="388">第1帧：知识点说明</text>
+          <text x="300" y="100">力的作用</text>
+          <text class="label" x="200" y="200">知识焦点</text>
+        </svg>
+        <script>
+          const FRAMES = [{"idx":1,"description":"牛顿定律","elements":["力","加速度"],"narration":"力使物体产生加速度"}];
+          window.parent.postMessage({type: 'STEP_COMPLETE'}, '*');
+        </script>
+        </body></html>"""
+
+    def test_score_has_tech_and_ped_keys(self):
+        from systemedu.agents.builtin.media_art_direction import evaluate_animation_html_quality
+
+        report = evaluate_animation_html_quality(self._make_full_html())
+        assert "tech_score" in report
+        assert "ped_score" in report
+        assert "score" in report
+        assert "pass" in report
+        assert "issues" in report
+
+    def test_full_html_passes(self):
+        from systemedu.agents.builtin.media_art_direction import evaluate_animation_html_quality
+
+        report = evaluate_animation_html_quality(self._make_full_html())
+        assert report["pass"] is True, f"Expected pass but score={report['score']}, issues={report['issues']}"
+
+    def test_minimal_html_fails(self):
+        from systemedu.agents.builtin.media_art_direction import evaluate_animation_html_quality
+
+        html = "<html><body><p>hello</p></body></html>"
+        report = evaluate_animation_html_quality(html)
+        assert report["pass"] is False
+        assert report["score"] < 72
+
+    def test_pedagogical_issues_reported(self):
+        from systemedu.agents.builtin.media_art_direction import evaluate_animation_html_quality
+
+        # Good technical structure but no teaching rhythm or captions
+        html = """<html><head><style>
+          @keyframes x { from{opacity:0} to{opacity:1} }
+          :root { --c: #fff; }
+        </style></head><body>
+        <svg width="600" height="420">
+          <defs><linearGradient id="g"></linearGradient></defs>
+          <rect x="0" y="0" width="500" height="300"/>
+        </svg>
+        <script>window.parent.postMessage({type:'STEP_COMPLETE'},'*')</script>
+        </body></html>"""
+        report = evaluate_animation_html_quality(html)
+        pedagogical_issues = [i for i in report["issues"] if any(
+            kw in i for kw in ("节奏", "证据", "焦点", "递进", "标注")
+        )]
+        assert len(pedagogical_issues) >= 1, f"No pedagogical issues found: {report['issues']}"
+
+    def test_tech_score_capped_at_60(self):
+        from systemedu.agents.builtin.media_art_direction import evaluate_animation_html_quality
+
+        report = evaluate_animation_html_quality(self._make_full_html())
+        assert report["tech_score"] <= 60
+
+    def test_format_feedback_shows_both_scores(self):
+        from systemedu.agents.builtin.media_art_direction import (
+            evaluate_animation_html_quality,
+            format_animation_quality_feedback,
+        )
+
+        html = "<html><body><svg><rect width='100' height='100'/></svg></body></html>"
+        report = evaluate_animation_html_quality(html)
+        feedback = format_animation_quality_feedback(report)
+        assert "技术分" in feedback
+        assert "教学分" in feedback
