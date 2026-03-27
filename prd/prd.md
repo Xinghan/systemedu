@@ -151,7 +151,7 @@
 - [x] 全部节点通过 → enrollment 自动标记 completed
 - [x] 学习侧边栏 (知识树 + 进度 + 节点状态)
 
-#### 3d: 课程内容生成 ✅
+#### 3d: 课程内容生成 v1 ✅ (已被 v2 取代)
 - [x] 3-Agent 课程流水线：LessonPlannerAgent → TeacherAgent → StudentAgent
 - [x] 课程缓存 (DB 持久化, 避免重复生成)
 - [x] 课程内容分页 (自动拆分长内容, 每页 ≤ 3000 字符)
@@ -159,7 +159,7 @@
 - [x] Minecraft 风格加载画面
 - [x] 内容 Tab：概念 / 举例 / 应用
 
-#### 3e: 交互实验模块 ✅
+#### 3e: 交互实验模块 v1 ✅ (已被 v2 取代)
 - [x] 交互实验流水线：LessonPlanner → LabAnalyst → LabDesigner → LabCoder → LabReviewer
 - [x] 6 种交互类型：drag_classify, click_select, drag_sort, connect_match, cause_effect, animated_story
 - [x] animated_story：anime.js + SVG 时间轴动画，概念性节点兜底模式
@@ -193,9 +193,70 @@
 - [x] 底部导航：上一节 / 下一节（独立 bar，不与 FAB 重叠）
 - [x] 移除内容分页，全文连续滚动展示
 
+#### 3k: 课程生成 v2 Pipeline ✅
+完全重写课程生成系统，从单一文本输出升级为多媒体富文本学习体验。
+
+**核心架构**: `lesson_generator.py` 的 `generate_course_v2()` 7步流水线
+
+- [x] **Step 1 - CoursePlannerAgent**: 生成 800-1500 字详细学习计划 (Markdown)，<1600字时自动触发扩写
+- [x] **Step 2 - CourseIdeaAgent**: 识别 3-6 个富媒体知识点，分配媒体模式 (animation/game/story)，在 plan_markdown 中插入 `[[IDEA:uuid]]` 占位符
+- [x] **Step 3 - CourseIdeaDetailAgent** (并行): 3节点质量管道
+  - CourseIdeaDetailPlannerAgent → detail_plan JSON（帧序列/游戏规格/故事段落）
+  - CourseIdeaDetailCriticAgent → 评分 (complexity_score + persuasion_score)
+  - CourseIdeaDetailSimplifierAgent → 简化/fallback
+- [x] **Step 4 - 媒体生成** (并行):
+  - AnimationGenAgent → SVG+CSS HTML 动画，支持 Manim 数学动画后端路由
+  - GameGenAgent → 模拟实验交互 HTML（固定 simulation 机制）
+  - StoryGenAgent → 图文故事（DashScope Wanx 图片生成，串行避免速率限制）
+- [x] **Step 5 - IntegrationAgent**: 整合为 CourseContent JSON（plan_markdown + ideas + rendered_sections）
+- [x] **Step 6 - AssignmentAgent**: 生成结构化作业（选择题 x3 / 问答 x2 / 动手项目 x1）
+- [x] **Step 6a - CourseSegmentAgent**: 将 plan_markdown 按 `##` 标题拆分为 3-6 个 section，为每段生成口语化 TTS 讲解稿
+- [x] **Step 6b - TTS 合成** (并行): DashScope qwen3-tts-flash 生成每段音频
+- [x] **Step 7 - DB 保存**: LessonContent 表持久化 CourseContent JSON + 作业内容
+
+**质量保障机制**:
+- Critic 双维度评分：complexity_score ≥ 72 且 persuasion_score ≥ 65 方可通过
+- 动画 HTML 质量评估：SVG/keyframes/transform/opacity/gradient/postMessage 完备性
+- 三级降级策略：LLM生成 → Repair提示修复 → 确定性fallback模板
+
+**媒体风格系统** (3套预定义风格，media_art_direction.py):
+- `edu_soft_tech`：蓝色科技感，Noto Sans SC + Nunito
+- `concept_lab_clean`：青绿实验室感，Rubik
+- `storybook_vivid`：暖色故事书感，Noto Serif SC
+
+#### 3l: 课程 v2 Web UI ✅
+- [x] **CourseContentView 完整重写**：编辑级排版，大标题 + 副标题 + 大段落间距
+- [x] **GeneratingProgress 生成进度界面**：科技感 SSE 实时进度，含 Agent 日志面板
+- [x] **分段音频播放按钮**：每段文字右侧 hover 显示圆形播放按钮，共享 AudioContext 防止并发
+- [x] **动画区块**：深色背景 (#000341)，可展开/折叠 iframe
+- [x] **游戏区块**：浅色背景，可展开/折叠 iframe
+- [x] **故事区块**：图文混排（图片 + 段落），可展开/折叠
+- [x] **作业区块**：选择题/问答/动手项目，i18n 支持
+- [x] **旧数据兼容 fallback**：无 sections 字段时降级展示原 plan_markdown
+- [x] **语言切换**：学习页右上角 EN/中 切换按钮（useAppStore locale）
+
+#### 3m: 全站 i18n ✅
+- [x] `web/src/lib/i18n.ts` 统一翻译表（EN + ZH）
+- [x] `useT()` hook 绑定 useAppStore locale
+- [x] GeneratingProgress 所有文案 i18n（生成中/等待中/已完成/高算力 等 35+ 键）
+- [x] 流水线阶段名称 i18n：课程规划师 / 创意发散 / 内容设计师 / 媒体工坊 / 练习构建 / 语音合成
+- [x] 学习页作业区块 i18n
+- [x] 项目列表页、项目详情页、新建项目页全面 i18n
+
+#### 3n: 项目图标库 ✅
+- [x] 移除封面图片生成功能（`api_generate_cover_preview`、`api_generate_project_cover` 已删除）
+- [x] 移除 LLM 生成项目 SVG 图标（质量不稳定）
+- [x] `web/src/lib/icon-library.json`：71 个 Tabler Icons（MIT）理工科图标，含数学/物理/化学/生物/CS/航天/机器人/能源
+- [x] `web/src/lib/project-icon.ts`：`findProjectIcon()` 本地查询（类别优先列表 + 文本评分 + 品牌色 #7c3aed）
+- [x] ProjectCard 使用前端图标库，无需后端生成
+
 #### 3h: 待完成
 - [ ] XP / 成就 / 等级系统
 - [ ] `systemedu chat --agent tutor --project <name>` (CLI 端项目模式)
+- [ ] Quiz 结构化交互（选项点击 + 即时反馈 + AI 批改简答题）
+- [ ] 课程 Outline 预览 + 用户确认后再生成（借鉴 OpenMAIC 两阶段）
+- [ ] 课中提问 Agent（学习页内嵌聊天面板）
+- [ ] ECharts 数据图表支持（数学/物理课程可视化）
 
 ### Phase 4: Hub
 - [ ] 项目打包/解包 (tar.gz)
@@ -274,8 +335,8 @@ memory:
 | Method | Path | Description |
 |--------|------|-------------|
 | GET | `/api/projects/:name/nodes/:id/context` | 节点上下文 (前置链 + 建议) |
-| GET | `/api/projects/:name/nodes/:id/lesson` | 获取课程内容 |
-| POST | `/api/projects/:name/nodes/:id/lesson/generate` | 生成/重新生成课程 |
+| GET | `/api/projects/:name/nodes/:id/lesson` | 获取课程内容 (v1) |
+| POST | `/api/projects/:name/nodes/:id/lesson/generate` | 生成/重新生成课程 (v1) |
 | GET | `/api/projects/:name/nodes/:id/lesson/progress` | 课程进度 |
 | PATCH | `/api/projects/:name/nodes/:id/progress` | 更新节点状态 |
 | GET | `/api/projects/:name/nodes/:id/highlights` | 获取高亮 |
@@ -283,6 +344,9 @@ memory:
 | DELETE | `/api/projects/:name/nodes/:id/highlights/:hid` | 删除高亮 |
 | POST | `/api/projects/:name/nodes/:id/practice/submit` | 提交练习 (AI 批改) |
 | GET | `/api/projects/:name/nodes/:id/practice/submissions` | 练习提交历史 |
+| GET | `/api/projects/:name/nodes/:id/course/v2` | 获取 v2 课程内容 (CourseContent JSON) |
+| POST | `/api/projects/:name/nodes/:id/course/v2/generate` | 生成 v2 课程（SSE 流式进度） |
+| GET | `/api/media/:path` | 获取生成的媒体文件（TTS 音频等） |
 
 ### Project Config: `<project>/project.yaml`
 ```yaml

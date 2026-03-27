@@ -1,137 +1,192 @@
-What I would build for your product
+# 课程生成 v2 - 后端 PRD
 
-I would not make it SVG-only.
+## 概述
 
-I would build a hybrid stack:
+课程生成 v2 是对原有 LessonPlanner/TeacherAgent/StudentAgent 三段式流水线的完全重写。核心目标是生成多媒体富文本学习内容，而非纯文本课程。
 
-SVG + HTML for diagrams, anatomy, architecture plans, network flows, labeled explainers, drag/drop exercises, charts, and step-by-step process animations.
-Canvas or Phaser for motion-heavy simulations and simple games: rocket launch, collision, gravity, traffic flow, surgical tool timing, packet movement, factory systems.
-Optional SVG/Lottie generation for decorative or reusable vector assets.
+**状态**: 已上线 (2026-03-27)
 
-The architecture I recommend is:
+---
 
-User prompt
--> pedagogy planner
--> domain grounder
--> engine router
--> JSON lesson/game manifest
--> deterministic compiler
--> sandbox preview
--> smoke tests
--> repair loop
--> publish/share
+## 架构
 
-The key is the JSON lesson/game manifest. Do not ask the model to emit a whole free-form web app first. Ask it to emit a typed spec like:
+### 入口函数
 
+```
+src/systemedu/education/lesson_generator.py
+generate_course_v2(project_name, knode_id, progress_cb=None)
+```
+
+`progress_cb(event, data)` 用于 SSE 向前端推送进度，事件类型：
+- `planning_start` / `ideating_start` / `detailing_start` / `generating_start`
+- `assignment_start` / `audio_ready` / `done` / `error`
+
+### 7步流水线
+
+```
+Step 1  CoursePlannerAgent.plan_detailed()
+        → plan_markdown (800-1500字 Markdown，<1600字自动扩写)
+
+Step 2  CourseIdeaAgent.identify()
+        → 修改后的 plan_markdown（含 [[IDEA:uuid]] 占位符）
+        → ideas 列表 (3-6个，包含 idea_id/mode/style_key/topic/context_summary)
+
+Step 3  CourseIdeaDetailAgent.elaborate() [N ideas 并行]
+        → 每个 idea 得到 detail_plan (JSON)
+        内部 3 节点管道:
+          PlannerAgent → detail_plan 初稿
+          CriticAgent  → 评分 (complexity_score + persuasion_score)
+          SimplifierAgent → 简化/fallback
+
+Step 4  媒体生成 [N ideas 并行]
+        → animation → AnimationGenAgent → SVG+CSS HTML
+        → game      → GameGenAgent     → 模拟实验 HTML
+        → story     → StoryGenAgent    → [{text, image_url}]
+
+Step 5  IntegrationAgent.integrate()
+        → CourseContent {plan_markdown, ideas, rendered_sections}
+
+Step 6  AssignmentAgent
+        → project_assignment (Markdown 文本)
+        事件: assignment_start 在生成前发送
+
+Step 6a CourseSegmentAgent.segment()
+        → sections 列表 [{section_id, heading, body_markdown, audio_script, audio_url}]
+
+Step 6b TTS 合成 [M sections 并行]
+        → 每段调用 DashScope qwen3-tts-flash
+        → 音频存 SYSTEMEDU_HOME/media/{project}/{knode_id}/section_{id[:8]}.wav
+        事件: audio_ready 在全部完成后发送
+
+Step 7  DB 保存
+        → LessonContent(course_content=..., project_assignment=...)
+```
+
+---
+
+## 数据结构
+
+### CourseContent（存储于 LessonContent.course_content，JSON 字符串）
+
+```json
 {
-  "audience": { "age": 10, "readingLevel": "simple" },
-  "learningGoal": "Understand the basics of rocket launch",
-  "interactionType": "parameter_game",
-  "engine": "phaser_with_svg_hud",
-  "worldModel": {
-    "variables": ["thrust", "fuel", "mass", "drag"],
-    "constraints": ["fuel decreases over time", "higher mass needs more thrust"],
-    "misconceptions": ["more fuel is always better"]
-  },
-  "ui": {
-    "controls": ["thrust slider", "fuel slider", "mass slider", "launch", "reset"],
-    "outputs": ["altitude", "speed", "result message"]
-  },
-  "pedagogy": {
-    "hook": "Predict before launching",
-    "feedbackStyle": "kid-friendly",
-    "successCondition": "reach target altitude"
+  "plan_markdown": "## 学习目标\n...",
+  "sections": [
+    {
+      "section_id": "uuid",
+      "heading": "学习目标",
+      "body_markdown": "...",
+      "audio_script": "今天我们来学习...",
+      "audio_url": "project-name/0/section_abc12345.wav"
+    }
+  ],
+  "ideas": [
+    {
+      "idea_id": "uuid",
+      "mode": "animation",
+      "style_key": "edu_soft_tech",
+      "topic": "知识点名称",
+      "context_summary": "该知识点的上下文(30-50字)",
+      "mode_reason": "为什么选这个mode",
+      "generation_backend": "manim"
+    }
+  ],
+  "rendered_sections": {
+    "uuid": {
+      "mode": "animation",
+      "status": "ready",
+      "html": "<!DOCTYPE html>...",
+      "story_paragraphs": null,
+      "generation_backend": "manim"
+    }
   }
 }
+```
 
-Then compile that manifest into one of a small number of engines.
+### API 响应 (GET /course/v2)
 
-The engine set I would start with
+```json
+{
+  "project_name": "project-name",
+  "knode_id": 0,
+  "status": "ready",
+  "course_content": { ...CourseContent... }
+}
+```
 
-You do not need a universal engine on day one. You need a small reusable engine family.
+---
 
-A good first set is:
+## Agent 文件清单
 
-Diagram explorer for labeled SVG explainers.
-Parameter simulator for “change sliders and observe outcome.”
-Process stepper for sequences like blood circulation, compiler stages, building construction phases.
-Drag/drop labeling for anatomy, system components, architecture parts.
-Chart/data explorer for statistics, medical vitals, performance graphs.
-Mini-game engine for simple 2D educational games with a loop and win/lose states.
-State-machine / network-flow visualizer for CS and systems topics.
+| 文件 | 职责 |
+|------|------|
+| `src/systemedu/agents/builtin/course_planner.py` | Step 1：详细学习计划 |
+| `src/systemedu/agents/builtin/course_idea_agent.py` | Step 2：富媒体知识点识别 |
+| `src/systemedu/agents/builtin/course_idea_detail_agent.py` | Step 3 协调器 |
+| `src/systemedu/agents/builtin/course_idea_detail_planner_agent.py` | Step 3 规划子节点 |
+| `src/systemedu/agents/builtin/course_idea_detail_critic_agent.py` | Step 3 评审子节点 |
+| `src/systemedu/agents/builtin/course_idea_detail_simplifier_agent.py` | Step 3 简化子节点 |
+| `src/systemedu/agents/builtin/animation_gen_agent.py` | Step 4 动画生成 |
+| `src/systemedu/agents/builtin/manim_gen_agent.py` | Step 4 Manim 数学动画 |
+| `src/systemedu/agents/builtin/animation_backend_router_agent.py` | Step 4 动画后端路由 |
+| `src/systemedu/agents/builtin/game_gen_agent.py` | Step 4 模拟游戏生成 |
+| `src/systemedu/agents/builtin/story_gen_agent.py` | Step 4 图文故事生成 |
+| `src/systemedu/agents/builtin/integration_agent.py` | Step 5 内容整合 |
+| `src/systemedu/agents/builtin/course_segment_agent.py` | Step 6a 分段 + TTS稿 |
+| `src/systemedu/agents/builtin/media_art_direction.py` | 风格系统、质量评估、简化工具 |
+| `src/systemedu/education/tts.py` | Step 6b TTS 合成 (DashScope) |
+| `src/systemedu/education/image_gen.py` | 故事图片生成 (DashScope Wanx) |
+| `src/systemedu/education/lesson_generator.py` | 主协调入口 |
 
-That engine set can cover a surprising amount of medicine, computer science, architecture, physics, chemistry, business, and civics. The trick is that the runtime stays small while the domain pack changes.
+---
 
-How to cover “all topics”
+## 质量保障
 
-You will not get good quality across medicine, computer science, and architecture by using one giant unstructured prompt.
+### Critic 评分维度（CourseIdeaDetailCriticAgent）
 
-You will get much better results by combining three layers:
+**complexity_score**（复杂度，越高越简洁，通过线 72）：
+- 动画：帧数>6 (-20)、视觉元素>20 (-20)、beats>6 (-15)、safe_area_fill<0.55 (-8)
+- 游戏：params>3 (-25)、flow步骤>4 (-15)、storyboard>3 (-10)
+- 故事：段落>4 (-15)、单段>180字 (-6)
 
-1. Generic interaction engines.
-These are the reusable runtimes above.
+**persuasion_score**（说服力，越高越有教学主张，通过线 65）：
+- 缺少 persuasion 字段 (-35)
+- persuasion 信息不足 (-20)
 
-2. Domain packs.
-Each domain pack provides variables, formulas, process stages, safe constraints, common misconceptions, glossary, and age-adapted wording. For medicine, keep the scope educational and explanatory unless a validated knowledge base and human review are in the loop.
+**降级策略**：
+1. 不通过 → Planner.revise() 修改
+2. 修改后仍不通过 → Simplifier.fallback() 确定性备选方案
 
-3. Codegen fallback.
-When a request does not fit your standard engines, generate a one-off HTML/JS app in a stronger sandbox. That is how you preserve breadth without making every request expensive.
+### 动画 HTML 质量评分（AnimationGenAgent）
 
-This is the real answer to “cover all topics in real time”: most requests should hit a fast manifest-to-template compiler, and only unusual requests should go to full code generation.
+检查项：SVG 存在、@keyframes、transform、opacity、gradient、defs、postMessage 完备性，焦点元素 ≥ 220×120px。综合评分 ≥ 72 通过，否则触发 ANIMATION_REPAIR_PROMPT 修复，修复后仍不通过使用确定性 fallback 模板。
 
-Your rocket example
+---
 
-For the prompt, “I’m 10 years old kid, and I want to learn how the rocket launched,” I would route it to a parameter mini-game.
+## 媒体风格系统（media_art_direction.py）
 
-The generated experience should look like this:
+| style_key | 风格名 | 主色 | 字体 |
+|-----------|--------|------|------|
+| `edu_soft_tech` | 教育科技感 | #1d4ed8 蓝 | Noto Sans SC + Nunito |
+| `concept_lab_clean` | 实验室洁净感 | #0891b2 深青 | Noto Sans SC + Rubik |
+| `storybook_vivid` | 故事书生动感 | #d97706 琥珀 | Noto Serif SC + Nunito |
 
-A simple 2D rocket scene.
-Sliders for thrust, fuel, and mass.
-A big Launch button and Reset button.
-A short “predict first” prompt before launch.
-During flight: altitude, speed, and fuel indicators.
-After flight: a friendly explanation such as “Too heavy,” “Not enough thrust,” or “Great balance.”
-A one-question follow-up like “Which variable helped the rocket most this time?”
+---
 
-For the renderer, I would use Canvas/Phaser for flight motion and an SVG/HTML overlay for labels and controls. That gives you smooth animation without losing the clarity and editability of SVG-based UI.
+## API 端点
 
-A practical product plan
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/api/projects/:name/nodes/:id/course/v2` | 获取 v2 课程内容 |
+| POST | `/api/projects/:name/nodes/:id/course/v2/generate` | 触发生成（SSE 流式进度） |
+| GET | `/api/media/:path` | 获取媒体文件（TTS 音频、生成图片） |
 
-Phase 1: ship the core generator.
-Build the prompt intake, planner, router, manifest schema, 5–7 engines, sandboxed preview, and a teacher-facing edit screen. Keep generation mostly deterministic.
+---
 
-Phase 2: make it educationally strong.
-Add age adaptation, domain packs, misconception handling, explanation quality rules, quick assessments, and analytics on whether users actually manipulate the controls and learn the target concept.
+## 已知问题 / 待优化
 
-Phase 3: expand breadth.
-Add one-off code generation for novel requests, remote sandboxes for heavier builds, asset generation for better visuals, and remix/share features.
-
-The tech stack I would choose
-
-For the web product itself:
-
-Next.js/React for the main app and editor.
-SVG + HTML as the default renderer.
-Phaser for game-like scenes.
-Sandboxed iframe for any generated client-only experience.
-Remote sandbox infrastructure for codegen fallback or heavier builds. The infrastructure category to study includes CodeSandbox SDK, Cloudflare Dynamic Workers, E2B, and Daytona.
-
-A useful warning: if you study bolt.diy as a reference, check the production implications of the WebContainers path carefully, because StackBlitz documents commercial licensing requirements for production use of that API.
-
-The most important skills to copy from these systems
-
-The best “tech and skill” pattern is not flashy animation. It is disciplined generation:
-
-classify the prompt first,
-extract pedagogy and domain constraints,
-choose the right engine,
-generate a typed manifest,
-compile deterministically when possible,
-sandbox everything,
-test and repair before showing the result.
-
-That is the shared idea behind the strongest public research, the stronger open-source repos, and the commercial prompt-to-app tools.
-
-The six references I would study first are OpenGenerativeUI for routing and iframe rendering, OpenMAIC for education-oriented planning, <generate-html> for security, Renderify for runtime contracts, Text2GameAI for prompt-to-preview plumbing, and Cloudflare/CodeSandbox for sandbox execution.
-
-A strong next step is to draft the JSON manifest schema and the engine router for your SVG/Phaser hybrid.
+- [ ] AnimationGenAgent 当前强制走 Manim（临时测试模式），正式版应恢复路由逻辑
+- [ ] StoryGenAgent 图片生成串行（避免速率限制 2req/s），可考虑动态并发
+- [ ] CourseSegmentAgent 分段依赖 `##` 标题，对无标题的 plan_markdown 效果较差
+- [ ] TTS 音频路径目前为相对路径，前端通过 `/api/media/` 代理访问
+- [ ] 作业（Assignment）目前为纯 Markdown 文本，待重构为结构化 JSON 支持前端交互答题
