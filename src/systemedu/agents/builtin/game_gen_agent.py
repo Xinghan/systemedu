@@ -3,7 +3,9 @@
 import logging
 
 from systemedu.agents.builtin.media_art_direction import (
+    KATEX_PROMPT_HINT,
     inject_game_style_overrides,
+    inject_katex_if_needed,
     style_kit_prompt_block,
 )
 
@@ -54,7 +56,8 @@ class GameGenAgent:
             enhanced_summary = f"{enhanced_summary}。视觉焦点：{visual_focus}"
         enhanced_summary = (
             f"{enhanced_summary}\n\n"
-            f"以下为必须遵守的视觉风格：\n{style_kit_prompt_block(mode='game', preferred_key=style_key)}"
+            f"以下为必须遵守的视觉风格：\n{style_kit_prompt_block(mode='game', preferred_key=style_key)}\n\n"
+            f"{KATEX_PROMPT_HINT}"
         )
 
         # 强制使用 simulation 模式
@@ -82,6 +85,7 @@ class GameGenAgent:
 
             html = GameCompiler().compile(spec)
             html = inject_game_style_overrides(html, style_key=style_key)
+            html = inject_katex_if_needed(html)
             logger.info(
                 f"GameGenAgent: generated {len(html)} chars for '{node_title}'"
             )

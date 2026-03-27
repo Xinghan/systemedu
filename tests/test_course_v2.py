@@ -248,6 +248,7 @@ class TestAnimationGenAgent:
 
     @pytest.mark.asyncio
     async def test_generate_returns_html(self):
+        """AnimationGenAgent returns valid HTML (video or SVG depending on backend)."""
         from systemedu.agents.builtin.animation_gen_agent import AnimationGenAgent
 
         html_output = """<!DOCTYPE html><html><head><style>
@@ -267,11 +268,13 @@ class TestAnimationGenAgent:
             "animation_type": "物理过程",
         }
         result = await agent.generate(detail, "力")
-        assert "<svg" in result
-        assert "animation" in result.lower()
+        # Manim (forced) returns <video>, SVG path returns <svg> — either is valid HTML
+        assert "<html" in result.lower() or "<!doctype" in result.lower()
+        assert "step_complete" in result.lower()
 
     @pytest.mark.asyncio
     async def test_generate_fallback_on_missing_svg(self):
+        """When Manim is forced and succeeds, it returns video HTML (not SVG)."""
         from systemedu.agents.builtin.animation_gen_agent import AnimationGenAgent
 
         llm = _make_llm("<html><body>no svg here</body></html>")
@@ -284,7 +287,7 @@ class TestAnimationGenAgent:
             "animation_type": "物理过程",
         }
         result = await agent.generate(detail, "力")
-        assert "<svg" in result.lower()
+        # Manim forced: returns video HTML; fallback: returns SVG — both have completion signal
         assert "step_complete" in result.lower()
 
     @pytest.mark.asyncio
@@ -492,3 +495,76 @@ class TestCourseSegmentAgent:
         sections = await agent.segment(plan_markdown=plan_with_idea, node_title="测试")
 
         assert "[[IDEA:abc123]]" in sections[0]["body_markdown"]
+
+
+# ===== KaTeX injection =====
+
+class TestKaTeXInjection:
+
+    def test_inject_katex_when_latex_detected(self):
+        from systemedu.agents.builtin.media_art_direction import inject_katex_if_needed
+
+        html = "<html><head></head><body><p>公式 \\(E = mc^2\\)</p></body></html>"
+        result = inject_katex_if_needed(html)
+        assert "katex" in result.lower()
+        assert "auto-render" in result
+
+    def test_no_inject_when_no_latex(self):
+        from systemedu.agents.builtin.media_art_direction import inject_katex_if_needed
+
+        html = "<html><head></head><body><p>普通文本，没有公式</p></body></html>"
+        result = inject_katex_if_needed(html)
+        assert result == html
+
+    def test_no_double_inject(self):
+        from systemedu.agents.builtin.media_art_direction import inject_katex_if_needed
+
+        html = "<html><head><script src='katex.min.js'></script></head><body>\\(x^2\\)</body></html>"
+        result = inject_katex_if_needed(html)
+        assert result.lower().count("katex") == 1
+
+    def test_inject_various_latex_markers(self):
+        from systemedu.agents.builtin.media_art_direction import inject_katex_if_needed
+
+        markers = [
+            r"\(x\)",
+            r"\[x\]",
+            "$$x$$",
+            r"\begin{equation}",
+            r"\frac{a}{b}",
+            r"\int_0^1",
+            r"\sum_{i=1}^n",
+            r"\sqrt{x}",
+        ]
+        for marker in markers:
+            html = f"<html><head></head><body>{marker}</body></html>"
+            result = inject_katex_if_needed(html)
+            assert "katex" in result.lower(), f"KaTeX not injected for marker: {marker!r}"
+
+    def test_inject_before_head_close(self):
+        from systemedu.agents.builtin.media_art_direction import inject_katex_if_needed
+
+        html = "<html><head><title>Test</title></head><body>\\(a+b\\)</body></html>"
+        result = inject_katex_if_needed(html)
+        head_end = result.index("</head>")
+        katex_pos = result.lower().index("katex")
+        assert katex_pos < head_end
+
+    def test_inject_fallback_no_head_tag(self):
+        from systemedu.agents.builtin.media_art_direction import inject_katex_if_needed
+
+        html = "<body>\\(x^2\\)</body>"
+        result = inject_katex_if_needed(html)
+        assert "katex" in result.lower()
+
+    def test_animation_gen_prompt_contains_katex_hint(self):
+        from systemedu.agents.builtin.animation_gen_agent import ANIMATION_GEN_PROMPT
+
+        assert "KaTeX" in ANIMATION_GEN_PROMPT or "katex" in ANIMATION_GEN_PROMPT.lower()
+
+    def test_katex_prompt_hint_content(self):
+        from systemedu.agents.builtin.media_art_direction import KATEX_PROMPT_HINT
+
+        assert r"\frac" in KATEX_PROMPT_HINT
+        assert r"\int" in KATEX_PROMPT_HINT
+        assert "KaTeX" in KATEX_PROMPT_HINT

@@ -4,6 +4,40 @@ from __future__ import annotations
 
 import re
 
+# KaTeX auto-render injection snippet (CDN, MIT licensed)
+_KATEX_INJECT = """<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css" crossorigin="anonymous">
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js" crossorigin="anonymous"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js" crossorigin="anonymous"
+  onload="renderMathInElement(document.body,{delimiters:[{left:'$$',right:'$$',display:true},{left:'\\\\(',right:'\\\\)',display:false},{left:'\\\\[',right:'\\\\]',display:true}]})"></script>"""
+
+# Markers that indicate LaTeX content in generated HTML
+_LATEX_MARKERS = (r"\(", r"\[", "$$", r"\begin{", r"\frac", r"\int", r"\sum", r"\sqrt")
+
+
+def inject_katex_if_needed(html: str) -> str:
+    """Inject KaTeX CDN into HTML if LaTeX syntax is detected.
+
+    Checks for common LaTeX markers. If found and KaTeX is not already
+    present, inserts the CDN scripts before </head>.
+    """
+    if "katex" in html.lower():
+        return html  # already has KaTeX
+    if not any(m in html for m in _LATEX_MARKERS):
+        return html  # no LaTeX detected
+    if "</head>" in html:
+        return html.replace("</head>", f"{_KATEX_INJECT}\n</head>", 1)
+    # No </head> tag — prepend to document
+    return f"<head>{_KATEX_INJECT}\n</head>\n" + html
+
+
+# Prompt hint telling LLM it can use KaTeX syntax
+KATEX_PROMPT_HINT = """数学公式渲染：页面已自动加载 KaTeX，可直接在 HTML 文本节点中使用 LaTeX 语法：
+- 行内公式：\\(E = mc^2\\)
+- 块级公式：$$\\int_0^\\infty e^{-x}\\,dx = 1$$
+- 支持：分数 \\frac{{a}}{{b}}、根号 \\sqrt{{x}}、求和 \\sum_{{i=1}}^n、积分 \\int、希腊字母 \\alpha \\beta \\theta 等
+- 公式写在普通 <div> 或 <p> 标签内即可，KaTeX 会自动渲染
+- 禁止用 SVG <text> 元素手写公式，应全部改用 KaTeX 语法"""
+
 
 STYLE_KITS: dict[str, dict] = {
     "edu_soft_tech": {
