@@ -30,15 +30,19 @@ import {
   MoreVertical,
   Zap,
   Clock,
+  ClipboardList,
+  Languages,
 } from "lucide-react"
 import { PageLoading } from "@/components/ui/page-loading"
 import { ScrollArea } from "@/components/ui/scroll-area"
-import { LessonView } from "@/components/learning/lesson-view"
 import { ChatPanel } from "@/components/chat/chat-panel"
 import { NotePanel } from "@/components/learning/note-panel"
+import { CourseContentView } from "@/components/learning/course-content-view"
+import { AssignmentView } from "@/components/learning/assignment-view"
 import { gateway } from "@/lib/api"
-import type { KnodeInfo, LessonStatus, NodeProgress, ProjectDetail } from "@/lib/types/api"
+import type { KnodeInfo, NodeProgress, ProjectDetail } from "@/lib/types/api"
 import { useT } from "@/lib/hooks/use-t"
+import { useAppStore } from "@/lib/stores/app-store"
 
 function getNodeStatus(nodeId: number, progress: NodeProgress[]): NodeProgress["status"] {
   return progress.find((p) => p.knode_id === nodeId)?.status ?? "locked"
@@ -67,7 +71,7 @@ function NodeTooltip({ data }: { data: NodeTooltipData }) {
   }
 
   const statusColor =
-    status === "passed" ? "text-emerald-600" :
+    status === "passed" ? "text-cyan-600" :
     status === "in_progress" ? "text-primary" :
     "text-muted-foreground"
   const statusLabel =
@@ -113,6 +117,7 @@ export default function LearnPage() {
   const params = useParams<{ projectName: string }>()
   const searchParams = useSearchParams()
   const t = useT()
+  const { locale, setLocale } = useAppStore()
 
   const CATEGORY_LABELS: Record<string, string> = {
     ai: t("cat.ai"),
@@ -136,19 +141,15 @@ export default function LearnPage() {
   const [searchQuery, setSearchQuery] = useState("")
   const [activeLessonTab, setActiveLessonTab] = useState<string>("concept")
   const [activePage, setActivePage] = useState<number>(0)
-  const [lessonStatuses, setLessonStatuses] = useState<Record<string, LessonStatus>>({})
-  const [completing, setCompleting] = useState(false)
   const [tutorOpen, setTutorOpen] = useState(false)
   const [noteOpen, setNoteOpen] = useState(false)
   const [noteState, setNoteState] = useState<"closed" | "open" | "minimized">("closed")
+  const [assignmentOpen, setAssignmentOpen] = useState(false)
+  const [assignmentText, setAssignmentText] = useState<string | null>(null)
+  const [assignmentLoading, setAssignmentLoading] = useState(false)
   const [noteStatus, setNoteStatus] = useState<"idle" | "saving" | "saved">("idle")
   const [hoveredNode, setHoveredNode] = useState<NodeTooltipData | null>(null)
   const sessionStartRef = useRef<number>(Date.now())
-
-  const handleLessonPageChange = useCallback((tab: string, pageIndex: number, _pageContent: string) => {
-    setActiveLessonTab(tab)
-    setActivePage(pageIndex)
-  }, [])
 
   useEffect(() => {
     if (!params.projectName) return
@@ -158,24 +159,7 @@ export default function LearnPage() {
       .catch((e) => setError(e.message ?? t("learn.failed_load")))
       .finally(() => setLoading(false))
 
-    gateway
-      .getLessonStatuses(params.projectName)
-      .then((r) => setLessonStatuses(r.statuses))
-      .catch(() => {})
   }, [params.projectName])
-
-  // Poll lesson statuses while any node is still generating
-  const hasGenerating = Object.values(lessonStatuses).some((s) => s === "generating")
-  useEffect(() => {
-    if (!hasGenerating || !params.projectName) return
-    const interval = setInterval(async () => {
-      try {
-        const r = await gateway.getLessonStatuses(params.projectName)
-        setLessonStatuses(r.statuses)
-      } catch { /* non-fatal */ }
-    }, 3000)
-    return () => clearInterval(interval)
-  }, [hasGenerating, params.projectName])
 
   // Track learning time
   useEffect(() => {
@@ -214,18 +198,17 @@ export default function LearnPage() {
 
   const handleNodeClick = useCallback((nodeId: number) => {
     setActiveNodeId(nodeId)
+    setAssignmentText(null)
+    setAssignmentOpen(false)
   }, [])
 
-  const handleNodeChange = useCallback((nodeId: number) => {
-    setActiveNodeId(nodeId)
-  }, [])
-
-  const handleProgressUpdate = useCallback((updatedProgress: NodeProgress[]) => {
-    setDetail((prev) => {
-      if (!prev) return prev
-      return { ...prev, progress: updatedProgress }
-    })
-  }, [])
+  const handleMarkComplete = useCallback(async () => {
+    if (activeNodeId === null) return
+    try {
+      const result = await gateway.updateNodeProgress(params.projectName, activeNodeId, "passed")
+      setDetail((prev) => prev ? { ...prev, progress: result.progress } : prev)
+    } catch { /* non-fatal */ }
+  }, [activeNodeId, params.projectName])
 
   const activeKnode = activeNodeId !== null ? allKnodes[activeNodeId] ?? null : null
   const activeMs = detail?.milestones.find((ms) => ms.knodes.some((k) => k.id === activeNodeId)) ?? detail?.milestones[0]
@@ -280,12 +263,20 @@ export default function LearnPage() {
         <div className="flex items-center gap-3 text-xs text-muted-foreground">
           <div className="w-24 h-1.5 rounded-full bg-secondary overflow-hidden">
             <div
-              className="h-full rounded-full bg-gradient-to-r from-teal-500 to-emerald-500 transition-all duration-700"
+              className="h-full rounded-full bg-gradient-to-r from-teal-500 to-cyan-500 transition-all duration-700"
               style={{ width: `${pct}%` }}
             />
           </div>
           <span className="font-[var(--font-manrope)] font-semibold text-foreground">{pct}%</span>
         </div>
+        <button
+          onClick={() => setLocale(locale === "en" ? "zh" : "en")}
+          className="flex items-center gap-1 h-7 px-2 rounded-lg hover:bg-secondary transition-colors text-xs font-[var(--font-manrope)] font-semibold text-muted-foreground hover:text-foreground"
+          title="Toggle language"
+        >
+          <Languages className="h-3.5 w-3.5" />
+          {locale === "en" ? "中" : "EN"}
+        </button>
         <button
           onClick={() => setRightPanelOpen((v) => !v)}
           className="text-xs text-muted-foreground hover:text-foreground transition-colors px-2 py-1 rounded-md hover:bg-secondary"
@@ -339,7 +330,6 @@ export default function LearnPage() {
                         const isPassed = status === "passed"
                         const isLocked = status === "locked"
                         const isInProgress = status === "in_progress"
-                        const lessonStatus = lessonStatuses[String(knode.id)]
                         const globalIdx = allKnodes.findIndex((k) => k.id === knode.id)
                         const displayIdx = msIdx * 100 + knodeIdx + 1
 
@@ -364,7 +354,7 @@ export default function LearnPage() {
                             {/* Status icon */}
                             <div className="shrink-0 mt-0.5">
                               {isPassed ? (
-                                <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+                                <CheckCircle2 className="h-4 w-4 text-cyan-500" />
                               ) : isActive || isInProgress ? (
                                 <div className="h-4 w-4 rounded-full border-2 border-primary bg-primary/20 flex items-center justify-center">
                                   <div className="h-1.5 w-1.5 rounded-full bg-primary" />
@@ -384,11 +374,6 @@ export default function LearnPage() {
                                 {isActive && (
                                   <span className="text-[9px] font-[var(--font-manrope)] uppercase tracking-wider px-1.5 py-0.5 rounded-full bg-primary/15 text-primary font-semibold">
                                     {t("learn.current")}
-                                  </span>
-                                )}
-                                {lessonStatus === "generating" && (
-                                  <span className="text-[9px] font-[var(--font-manrope)] uppercase tracking-wider px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700">
-                                    {t("learn.generating")}
                                   </span>
                                 )}
                               </div>
@@ -418,7 +403,7 @@ export default function LearnPage() {
               </div>
               <div className="h-1.5 rounded-full bg-secondary overflow-hidden">
                 <div
-                  className="h-full rounded-full bg-gradient-to-r from-teal-500 to-emerald-500 transition-all duration-700"
+                  className="h-full rounded-full bg-gradient-to-r from-teal-500 to-cyan-500 transition-all duration-700"
                   style={{ width: `${pct}%` }}
                 />
               </div>
@@ -438,23 +423,22 @@ export default function LearnPage() {
           </div>
         )}
 
-        {/* Center: lesson content */}
+        {/* Center: course content (v2 pipeline) */}
         <div className="flex-1 min-w-0 min-h-0 flex flex-col">
-          {/* Lesson content (title is rendered inside LessonContentView for scrolling) */}
-          <div className="flex-1 min-h-0">
-            <LessonView
+          {activeNodeId !== null ? (
+            <CourseContentView
               projectName={params.projectName}
               nodeId={activeNodeId}
-              allKnodes={allKnodes}
-              progress={progressList}
-              onNodeChange={handleNodeChange}
-              onProgressUpdate={handleProgressUpdate}
-              onPageChange={handleLessonPageChange}
-              onCompletingChange={setCompleting}
-              noteState={noteState}
-              onNoteStateChange={setNoteState}
+              knode={allKnodes[activeNodeId] ?? null}
+              onClose={() => setActiveNodeId(null)}
+              onMarkComplete={handleMarkComplete}
             />
-          </div>
+          ) : (
+            <div className="flex-1 flex flex-col items-center justify-center gap-3 text-muted-foreground">
+              <BookOpen className="h-8 w-8 opacity-20" />
+              <p className="text-sm">从左侧选择一个知识节点开始学习</p>
+            </div>
+          )}
         </div>
 
         {/* Right panel: Mastery + Resources + AI Tutor */}
@@ -471,7 +455,7 @@ export default function LearnPage() {
                   <div className="flex items-end justify-between mb-2">
                     <span className="text-3xl font-extrabold text-foreground tracking-tight">{pct}%</span>
                     {pct > 0 && (
-                      <span className="text-[10px] font-[var(--font-manrope)] text-emerald-600 font-semibold mb-1">
+                      <span className="text-[10px] font-[var(--font-manrope)] text-cyan-600 font-semibold mb-1">
                         {t("learn.today", { n: Math.max(1, Math.round(pct * 0.12)) })}
                       </span>
                     )}
@@ -519,8 +503,8 @@ export default function LearnPage() {
                       href={`/projects/${params.projectName}/resources`}
                       className="flex items-center gap-3 px-3 py-2 rounded-xl hover:bg-secondary/60 transition-colors group"
                     >
-                      <div className="w-8 h-8 rounded-lg bg-emerald-100 dark:bg-emerald-500/15 flex items-center justify-center">
-                        <ExternalLink className="h-4 w-4 text-emerald-600" />
+                      <div className="w-8 h-8 rounded-lg bg-cyan-100 dark:bg-cyan-500/15 flex items-center justify-center">
+                        <ExternalLink className="h-4 w-4 text-cyan-600" />
                       </div>
                       <div className="flex-1 min-w-0">
                         <p className="text-xs font-medium text-foreground truncate">{t("learn.external_resources")}</p>
@@ -528,6 +512,29 @@ export default function LearnPage() {
                       </div>
                       <ArrowRight className="h-3 w-3 text-muted-foreground/30 group-hover:text-primary shrink-0 transition-colors" />
                     </Link>
+                    {/* Assignment */}
+                    <button
+                      onClick={() => {
+                        setAssignmentOpen(true)
+                        if (assignmentText === null && activeNodeId !== null && !assignmentLoading) {
+                          setAssignmentLoading(true)
+                          gateway.getCourseV2Assignment(params.projectName, activeNodeId)
+                            .then((data) => setAssignmentText(data.assignment || ""))
+                            .catch(() => setAssignmentText(""))
+                            .finally(() => setAssignmentLoading(false))
+                        }
+                      }}
+                      className="w-full flex items-center gap-3 px-3 py-2 rounded-xl hover:bg-secondary/60 transition-colors group text-left"
+                    >
+                      <div className="w-8 h-8 rounded-lg bg-indigo-100 dark:bg-indigo-500/15 flex items-center justify-center shrink-0">
+                        <ClipboardList className="h-4 w-4 text-indigo-600" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs font-medium text-foreground truncate">{t("learn.assignment")}</p>
+                        <p className="text-[10px] text-muted-foreground font-[var(--font-manrope)]">{t("learn.assignment_subtitle")}</p>
+                      </div>
+                      <ArrowRight className="h-3 w-3 text-muted-foreground/30 group-hover:text-primary shrink-0 transition-colors" />
+                    </button>
                   </div>
                 </div>
 
@@ -560,35 +567,30 @@ export default function LearnPage() {
                 {activeNodeId !== null && (
                   <div className={`rounded-xl p-4 border transition-all duration-300 ${
                     isNodeCompleted
-                      ? "bg-emerald-50 dark:bg-emerald-950/30 border-emerald-200 dark:border-emerald-800"
+                      ? "bg-cyan-50 dark:bg-cyan-950/30 border-cyan-200 dark:border-cyan-800"
                       : "bg-card border-border/60"
                   }`}>
                     <div className="flex items-center gap-2 mb-2">
-                      <CheckCircle className={`h-4 w-4 ${isNodeCompleted ? "text-emerald-500" : "text-muted-foreground/40"}`} />
-                      <span className={`text-xs font-semibold font-[var(--font-manrope)] ${isNodeCompleted ? "text-emerald-700 dark:text-emerald-400" : "text-foreground"}`}>
+                      <CheckCircle className={`h-4 w-4 ${isNodeCompleted ? "text-cyan-500" : "text-muted-foreground/40"}`} />
+                      <span className={`text-xs font-semibold font-[var(--font-manrope)] ${isNodeCompleted ? "text-cyan-700 dark:text-cyan-400" : "text-foreground"}`}>
                         {isNodeCompleted ? t("lesson.mastered_title") : t("lesson.ready_title")}
                       </span>
                     </div>
-                    <p className={`text-[11px] mb-3 leading-relaxed ${isNodeCompleted ? "text-emerald-600/80 dark:text-emerald-400/70" : "text-muted-foreground"}`}>
+                    <p className={`text-[11px] mb-3 leading-relaxed ${isNodeCompleted ? "text-cyan-600/80 dark:text-cyan-400/70" : "text-muted-foreground"}`}>
                       {isNodeCompleted ? t("lesson.mastered_desc") : t("lesson.ready_desc")}
                     </p>
                     {isNodeCompleted ? (
-                      <div className="w-full h-8 rounded-lg bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 text-xs font-semibold flex items-center justify-center gap-1.5">
+                      <div className="w-full h-8 rounded-lg bg-cyan-500/15 text-cyan-700 dark:text-cyan-400 text-xs font-semibold flex items-center justify-center gap-1.5">
                         <CheckCircle className="h-3.5 w-3.5" />
                         {t("lesson.mastered")}
                       </div>
                     ) : (
                       <button
-                        disabled={completing}
-                        className="w-full h-8 rounded-lg bg-primary text-primary-foreground text-xs font-bold transition-all hover:bg-primary/90 active:scale-95 disabled:opacity-60 flex items-center justify-center gap-1.5 shadow-sm"
-                        onClick={() => {
-                          // Trigger via LessonView's internal handleMarkComplete
-                          // We use a custom event to communicate cross-component
-                          window.dispatchEvent(new CustomEvent("lesson:markComplete"))
-                        }}
+                        className="w-full h-8 rounded-lg bg-primary text-primary-foreground text-xs font-bold transition-all hover:bg-primary/90 active:scale-95 flex items-center justify-center gap-1.5 shadow-sm"
+                        onClick={handleMarkComplete}
                       >
                         <CheckCircle className="h-3.5 w-3.5" />
-                        {completing ? t("lesson.completing") : t("lesson.mark_complete")}
+                        {t("lesson.mark_complete")}
                       </button>
                     )}
                   </div>
@@ -628,7 +630,7 @@ export default function LearnPage() {
                   {t("learn.ai_tutor_thread")} <span className="text-primary italic">{t("learn.ai_tutor_italic")}</span>
                 </h2>
                 <div className="flex items-center gap-2 mt-1">
-                  <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                  <div className="w-2 h-2 rounded-full bg-cyan-500 animate-pulse" />
                   <span className="text-[10px] font-[var(--font-manrope)] font-bold text-muted-foreground uppercase tracking-widest">
                     {t("learn.neural_active")}
                   </span>
@@ -733,6 +735,49 @@ export default function LearnPage() {
 
         </div>
       </div>
+
+      {/* Assignment slide-in panel */}
+      {assignmentOpen && (
+        <div className="absolute inset-0 z-40 flex items-stretch pointer-events-none">
+          {/* Backdrop */}
+          <div
+            className="absolute inset-0 bg-black/20 backdrop-blur-[1px] pointer-events-auto"
+            onClick={() => setAssignmentOpen(false)}
+          />
+          {/* Panel */}
+          <div className="absolute right-0 top-0 bottom-0 w-[480px] bg-background border-l border-border/60 shadow-2xl flex flex-col pointer-events-auto">
+            {/* Header */}
+            <div className="flex items-center gap-3 px-5 py-4 border-b border-border/50 shrink-0">
+              <div className="w-7 h-7 rounded-lg bg-indigo-100 dark:bg-indigo-500/15 flex items-center justify-center">
+                <ClipboardList className="h-4 w-4 text-indigo-600" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-semibold text-foreground">{t("learn.assignment")}</p>
+                <p className="text-[10px] text-muted-foreground font-[var(--font-manrope)]">
+                  {activeKnode?.title ?? ""}
+                </p>
+              </div>
+              <button
+                onClick={() => setAssignmentOpen(false)}
+                className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            {/* Content */}
+            <div className="flex-1 overflow-y-auto px-5 py-4">
+              {assignmentLoading ? (
+                <div className="flex flex-col items-center justify-center h-40 gap-3 text-muted-foreground">
+                  <div className="w-5 h-5 border-2 border-indigo-500/30 border-t-indigo-500 rounded-full animate-spin" />
+                  <p className="text-xs">{t("learn.assignment_loading")}</p>
+                </div>
+              ) : (
+                <AssignmentView content={assignmentText ?? ""} />
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

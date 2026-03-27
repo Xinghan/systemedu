@@ -403,3 +403,108 @@ export interface FactoryQueueResponse {
     failed: number
   }
 }
+
+// --- Course v2 types (multi-agent pipeline) ---
+
+export type CourseIdeaMode = "animation" | "game" | "story"
+export type CourseGenerationBackend = "manim" | "html_svg" | ""
+
+export interface CourseIdeaSummary {
+  idea_id: string
+  mode: CourseIdeaMode
+  topic: string
+  context_summary: string
+  generation_backend?: CourseGenerationBackend
+  style_key?: string
+  mode_reason?: string
+}
+
+export interface StoryParagraph {
+  text: string
+  image_url: string
+}
+
+export interface RenderedSection {
+  mode: CourseIdeaMode
+  status: "ready" | "failed"
+  html: string | null
+  story_paragraphs: StoryParagraph[] | null
+  generation_backend?: CourseGenerationBackend
+}
+
+export interface CourseSection {
+  section_id: string
+  heading: string
+  body_markdown: string
+  audio_script: string
+  audio_url: string
+}
+
+export interface CourseContent {
+  plan_markdown: string
+  sections?: CourseSection[]
+  ideas: CourseIdeaSummary[]
+  rendered_sections: Record<string, RenderedSection>
+}
+
+export interface CourseContentData {
+  project_name?: string
+  knode_id?: number
+  status: "pending" | "generating" | "ready" | "failed"
+  course_content: CourseContent | Record<string, never>
+}
+
+export interface CourseAssignmentData {
+  status: "pending" | "generating" | "ready" | "failed"
+  assignment: string
+}
+
+export type CourseStepType =
+  | "concept"
+  | "story"
+  | "animation"
+  | "game"
+  | "code"
+  | "practice"
+  | "summary"
+
+export interface CourseStepSpec {
+  prompt_hint?: string
+  game_mechanic?: string
+  game_concept?: string
+  exercise_count?: number
+}
+
+export interface CourseManifestStep {
+  step_index: number
+  type: CourseStepType
+  title: string
+  duration_minutes: number
+  spec: CourseStepSpec
+}
+
+export interface CourseManifest {
+  node_title: string
+  total_steps: number
+  learning_goal: string
+  steps: CourseManifestStep[]
+}
+
+export interface CourseStep {
+  step_index: number
+  type: CourseStepType
+  title: string
+  status: "ready" | "pending" | "failed"
+  content: string
+  html: string
+  practice_data: string
+  audio_url: string
+}
+
+export interface CourseData {
+  project_name?: string
+  knode_id?: number
+  status: LessonStatus
+  manifest: CourseManifest | Record<string, never>
+  steps: CourseStep[]
+}

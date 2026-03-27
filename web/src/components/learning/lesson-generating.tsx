@@ -52,7 +52,7 @@ function PixelBlock({ filled, color, delay }: { filled: boolean; color: string; 
 function Particles() {
   const colors = [
     "#6B8E23", "#8B6914", "#808080", "#4682B4",
-    "#DAA520", "#228B22", "#6B8E23", "#4682B4",
+    "#DAA520", "#06B6D4", "#6B8E23", "#4682B4",
   ]
   return (
     <div className="absolute inset-0 overflow-hidden pointer-events-none">
@@ -79,7 +79,7 @@ const BLOCK_COLORS = [
   "#808080", // stone gray
   "#4682B4", // diamond blue
   "#DAA520", // gold
-  "#228B22", // emerald green
+  "#06B6D4", // emerald green
 ]
 
 const TOTAL_BLOCKS = 20

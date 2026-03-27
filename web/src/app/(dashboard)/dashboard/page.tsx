@@ -54,10 +54,10 @@ export default function DashboardPage() {
           {/* System online badge */}
           <div className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-[var(--font-manrope)] font-semibold uppercase tracking-wider ${
             gatewayConnected
-              ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-400"
+              ? "bg-cyan-50 text-cyan-700 dark:bg-cyan-950/30 dark:text-cyan-400"
               : "bg-muted text-muted-foreground"
           }`}>
-            <span className={`w-1.5 h-1.5 rounded-full ${gatewayConnected ? "bg-emerald-500 animate-pulse" : "bg-muted-foreground"}`} />
+            <span className={`w-1.5 h-1.5 rounded-full ${gatewayConnected ? "bg-cyan-500 animate-pulse" : "bg-muted-foreground"}`} />
             {gatewayConnected ? t("dashboard.system_online") : t("dashboard.offline")}
           </div>
         </div>
@@ -68,7 +68,7 @@ export default function DashboardPage() {
             label={t("dashboard.system_status")}
             value={gatewayConnected ? t("dashboard.running") : t("dashboard.offline")}
             badge={gatewayConnected ? t("dashboard.healthy") : undefined}
-            badgeColor="bg-emerald-50 text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-400"
+            badgeColor="bg-cyan-50 text-cyan-700 dark:bg-cyan-950/30 dark:text-cyan-400"
             sub={status ? `v${status.version}` : "Unable to connect"}
             icon={<Activity className="h-5 w-5 text-primary" />}
             iconBg="bg-primary/10"

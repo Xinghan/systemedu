@@ -13,7 +13,7 @@ interface FloatingChatProps {
 }
 
 const AGENTS = [
-  { name: "tutor", label: "小龟老师", desc: "AI 导师", color: "bg-emerald-500" },
+  { name: "tutor", label: "小龟老师", desc: "AI 导师", color: "bg-cyan-500" },
   { name: "teacher", label: "星星老师", desc: "课堂老师", color: "bg-blue-500" },
   { name: "student", label: "小豆同学", desc: "学习伙伴", color: "bg-amber-500" },
 ] as const

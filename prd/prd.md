@@ -218,7 +218,7 @@ llm:
     qwen:
       base_url: https://dashscope.aliyuncs.com/compatible-mode/v1
       api_key: ${DASHSCOPE_API_KEY}
-      model: qwen-plus
+      model: qwen3-max
 sandbox:
   enabled: true
   blocked_commands: ["rm -rf /"]

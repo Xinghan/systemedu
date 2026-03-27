@@ -163,7 +163,7 @@ def _default_config_dict() -> dict:
                 "qwen": {
                     "base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1",
                     "api_key": "${DASHSCOPE_API_KEY}",
-                    "model": "qwen-plus",
+                    "model": "qwen3-max",
                 },
             },
         },

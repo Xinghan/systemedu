@@ -147,7 +147,7 @@ export default function ChatPage() {
       <div className="flex-1 min-w-0 flex flex-col relative overflow-hidden">
         {/* Decorative background gradients */}
         <div className="absolute -top-64 -right-64 w-[600px] h-[600px] bg-primary/5 rounded-full blur-[120px] pointer-events-none z-0" />
-        <div className="absolute -bottom-64 -left-32 w-[500px] h-[500px] bg-emerald-500/4 rounded-full blur-[120px] pointer-events-none z-0" />
+        <div className="absolute -bottom-64 -left-32 w-[500px] h-[500px] bg-cyan-500/4 rounded-full blur-[120px] pointer-events-none z-0" />
 
         <div className="relative z-10 flex-1 min-h-0">
           <ChatPanel />

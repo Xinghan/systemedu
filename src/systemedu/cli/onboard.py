@@ -27,7 +27,7 @@ PROVIDERS = {
         "name": "qwen",
         "label": "Qwen (阿里通义千问)",
         "base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1",
-        "model": "qwen-plus",
+        "model": "qwen3-max",
         "env_key": "DASHSCOPE_API_KEY",
         "needs_key": True,
     },

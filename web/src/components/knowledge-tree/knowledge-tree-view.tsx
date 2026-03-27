@@ -239,7 +239,7 @@ export function KnowledgeTreeView({
 
         const msColor =
           msStatus === "completed"
-            ? "border-emerald-500/30 bg-emerald-500/4"
+            ? "border-emerald-500/30 bg-cyan-500/4"
             : msStatus === "in_progress"
             ? "border-primary/30 bg-primary/4"
             : "border-border/50 bg-card"
@@ -332,7 +332,7 @@ export function KnowledgeTreeView({
                               </span>
                             )}
                             {lessonStatus === "ready" && status !== "passed" && (
-                              <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-400 shrink-0">
+                              <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-cyan-100 text-cyan-700 dark:bg-cyan-500/20 dark:text-cyan-400 shrink-0">
                                 {t("ktree.ready")}
                               </span>
                             )}

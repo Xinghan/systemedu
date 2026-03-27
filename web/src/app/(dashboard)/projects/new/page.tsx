@@ -172,37 +172,157 @@ export default function NewProjectPage() {
   // ── Loading screen ─────────────────────────────────────────────────────────
   if (loading) {
     const LOAD_STEPS = [t("new_project.synthesize"), t("new_project.curate"), t("new_project.architect")]
+    const COGNITIVE_TIPS = [
+      t("new_project.tip_interleave"),
+      t("new_project.tip_spaced"),
+      t("new_project.tip_retrieval"),
+    ]
+    const tip = COGNITIVE_TIPS[loadingStep % COGNITIVE_TIPS.length]
     return (
-      <div className="min-h-screen bg-[#f8f5ff] flex flex-col items-center justify-center gap-10 px-4">
-        <div className="text-center">
-          <p className="text-[10px] uppercase tracking-widest text-muted-foreground mb-2" style={{ fontFamily: "var(--font-manrope, sans-serif)" }}>SystemEdu Engine</p>
-          <h1 className="text-3xl font-extrabold text-foreground" style={{ fontFamily: "var(--font-manrope, sans-serif)" }}>{t("new_project.generating_label")}</h1>
-        </div>
+      <div
+        className="fixed inset-0 overflow-hidden"
+        style={{ background: "#f8f5ff", fontFamily: "var(--font-manrope, sans-serif)" }}
+      >
+        {/* Dot-grid mesh background */}
+        <div
+          className="absolute inset-0 pointer-events-none"
+          style={{
+            backgroundImage: "radial-gradient(circle at 2px 2px, rgba(106,28,246,0.04) 1px, transparent 0)",
+            backgroundSize: "40px 40px",
+          }}
+        />
+        {/* Ambient glow blobs */}
+        <div className="absolute -top-[10%] -right-[5%] w-[500px] h-[500px] rounded-full pointer-events-none"
+          style={{ background: "#6a1cf6", filter: "blur(80px)", opacity: 0.12 }} />
+        <div className="absolute -bottom-[10%] -left-[5%] w-[400px] h-[400px] rounded-full pointer-events-none"
+          style={{ background: "#006859", filter: "blur(80px)", opacity: 0.12 }} />
 
-        {/* Growing knowledge tree SVG animation */}
-        <GrowingTreeAnimation step={loadingStep} />
+        <main className="relative z-10 min-h-screen flex flex-col items-center justify-between py-16 px-6">
 
-        <div className="w-72 space-y-2">
-          <div className="h-1 rounded-full bg-border overflow-hidden">
-            <div className="h-full rounded-full bg-gradient-to-r from-violet-600 to-purple-400 transition-all duration-700"
-              style={{ width: `${((loadingStep + 1) / 3) * 100}%` }} />
-          </div>
-          <div className="flex justify-between text-[10px] uppercase tracking-widest text-muted-foreground" style={{ fontFamily: "var(--font-manrope, sans-serif)" }}>
-            <span>{t("new_project.synchronizing")}</span>
-            <span>{loadingLabel}</span>
-          </div>
-        </div>
-        <div className="flex items-center gap-3">
-          {LOAD_STEPS.map((s, i) => (
-            <div key={s} className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs uppercase tracking-wider transition-all duration-500 ${
-              i < loadingStep ? "bg-emerald-50 text-emerald-700" : i === loadingStep ? "bg-primary/15 text-primary font-semibold" : "bg-secondary text-muted-foreground"
-            }`} style={{ fontFamily: "var(--font-manrope, sans-serif)" }}>
-              {i < loadingStep && <Check className="h-3 w-3" />}
-              {i === loadingStep && <div className="w-3 h-3 rounded-full border-2 border-primary border-t-transparent animate-spin" />}
-              {s}
+          {/* Top brand anchor */}
+          <header className="flex flex-col items-center">
+            <span className="text-[10px] uppercase tracking-[0.3em] mb-3"
+              style={{ color: "#4953ac", fontFamily: "var(--font-manrope, sans-serif)", fontWeight: 500 }}>
+              {t("new_project.initializing")}
+            </span>
+            <h2 className="font-extrabold text-xl tracking-tight"
+              style={{ color: "#19227d", fontFamily: "var(--font-headline, 'Plus Jakarta Sans', sans-serif)" }}>
+              SystemEdu
+            </h2>
+          </header>
+
+          {/* Centerpiece */}
+          <div className="relative w-full max-w-2xl flex flex-col items-center justify-center">
+            {/* Tree container with circular grid backdrop */}
+            <div className="relative w-full aspect-square flex items-center justify-center">
+              {/* Architectural concentric rings */}
+              <div className="absolute inset-0 rounded-full flex items-center justify-center"
+                style={{ border: "1px solid rgba(158,166,255,0.12)" }}>
+                <div className="w-3/4 h-3/4 rounded-full"
+                  style={{ border: "1px solid rgba(158,166,255,0.10)" }} />
+                {/* Cross hairs */}
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <div className="h-full w-px"
+                    style={{ background: "linear-gradient(to bottom, transparent, rgba(158,166,255,0.18), transparent)" }} />
+                  <div className="w-full h-px"
+                    style={{ background: "linear-gradient(to right, transparent, rgba(158,166,255,0.18), transparent)" }} />
+                </div>
+              </div>
+
+              {/* Circular progress ring */}
+              <svg className="absolute pointer-events-none" style={{ width: 450, height: 450, opacity: 0.22, transform: "rotate(-90deg)" }}>
+                <defs>
+                  <linearGradient id="ring-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+                    <stop offset="0%" stopColor="#6a1cf6" />
+                    <stop offset="100%" stopColor="#006859" />
+                  </linearGradient>
+                </defs>
+                <circle cx="225" cy="225" r="210" fill="none" stroke="rgba(158,166,255,0.3)" strokeWidth="1" />
+                <circle cx="225" cy="225" r="210" fill="none" stroke="url(#ring-grad)" strokeWidth="4"
+                  strokeLinecap="round"
+                  strokeDasharray="1319"
+                  strokeDashoffset={1319 - (((loadingStep + 1) / 3) * 1319 * 0.85)}
+                  style={{ transition: "stroke-dashoffset 1.2s cubic-bezier(0.2,0.8,0.2,1)" }} />
+              </svg>
+
+              {/* The Knowledge Tree */}
+              <div className="relative z-20" style={{ width: 320, height: 380 }}>
+                <GrowingTreeAnimation step={loadingStep} />
+              </div>
             </div>
-          ))}
-        </div>
+
+            {/* Typography & status */}
+            <div className="mt-6 text-center w-full">
+              <h1 className="font-extrabold tracking-tight leading-tight"
+                style={{
+                  fontSize: "clamp(2rem, 5vw, 3.25rem)",
+                  color: "#19227d",
+                  fontFamily: "var(--font-headline, 'Plus Jakarta Sans', sans-serif)",
+                }}>
+                {t("new_project.loading_title_1")}<br />
+                <span style={{ color: "#6a1cf6", fontStyle: "italic" }}>
+                  {t("new_project.loading_title_2")}
+                </span>
+              </h1>
+
+              <div className="mt-8 flex flex-col items-center gap-6">
+                {/* Spinning status label */}
+                <div className="flex items-center gap-3"
+                  style={{ color: "#4953ac", fontFamily: "var(--font-manrope, sans-serif)", fontSize: 14 }}>
+                  <div className="w-4 h-4 rounded-full border-2 border-[#6a1cf6] border-t-transparent animate-spin" />
+                  <span>{loadingLabel || t("new_project.synthesizing")}</span>
+                </div>
+
+                {/* Status chips */}
+                <div className="flex flex-wrap justify-center gap-3">
+                  {LOAD_STEPS.map((s, i) => {
+                    const isDone = i < loadingStep
+                    const isActive = i === loadingStep
+                    return (
+                      <span key={s}
+                        className="px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest backdrop-blur transition-all duration-500"
+                        style={{
+                          background: isActive ? "rgba(106,28,246,0.08)" : isDone ? "rgba(0,184,153,0.08)" : "rgba(255,255,255,0.6)",
+                          color: isActive ? "#6a1cf6" : isDone ? "#006859" : "#4953ac",
+                          border: "1px solid rgba(158,166,255,0.25)",
+                        }}>
+                        {isDone ? "✓ " : ""}{s}
+                      </span>
+                    )
+                  })}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Cognitive tip card */}
+          <div className="w-full max-w-md rounded-xl p-6 backdrop-blur-xl"
+            style={{
+              background: "rgba(255,255,255,0.45)",
+              border: "1px solid rgba(255,255,255,0.55)",
+              boxShadow: "0 4px 24px 0 rgba(106,28,246,0.06)",
+            }}>
+            <div className="flex items-start gap-4">
+              <div className="p-2 rounded-lg shrink-0"
+                style={{ background: "rgba(106,28,246,0.08)" }}>
+                <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="#6a1cf6" strokeWidth={1.5}>
+                  <path d="M12 2a7 7 0 0 1 7 7c0 2.38-1.19 4.47-3 5.74V17a1 1 0 0 1-1 1H9a1 1 0 0 1-1-1v-2.26C6.19 13.47 5 11.38 5 9a7 7 0 0 1 7-7z" />
+                  <line x1="9" y1="21" x2="15" y2="21" /><line x1="9" y1="18" x2="15" y2="18" />
+                </svg>
+              </div>
+              <div>
+                <p className="text-[10px] uppercase tracking-[0.2em] mb-1"
+                  style={{ color: "#4953ac", fontFamily: "var(--font-manrope, sans-serif)", fontWeight: 500 }}>
+                  {t("new_project.cognitive_tip")}
+                </p>
+                <p className="text-sm leading-relaxed" style={{ color: "#19227d" }}>
+                  {tip}
+                </p>
+              </div>
+            </div>
+          </div>
+
+        </main>
       </div>
     )
   }
@@ -218,7 +338,7 @@ export default function NewProjectPage() {
                 {i > 0 && <div className="w-5 h-px bg-border" />}
                 <span className={`text-xs font-[var(--font-manrope)] px-3 py-1 rounded-full ${
                   step === s.key ? "bg-primary text-primary-foreground"
-                    : i < STEPS.findIndex((x) => x.key === step) ? "bg-emerald-100 text-emerald-700"
+                    : i < STEPS.findIndex((x) => x.key === step) ? "bg-cyan-100 text-cyan-700"
                     : "bg-secondary text-secondary-foreground"
                 }`}>{i + 1}. {s.label}</span>
               </div>
@@ -698,7 +818,7 @@ export default function NewProjectPage() {
 
             {treeData && (
               <div className="flex items-center justify-between pt-2">
-                <span className="flex items-center gap-1.5 text-sm text-emerald-600 font-[var(--font-manrope)] font-semibold">
+                <span className="flex items-center gap-1.5 text-sm text-cyan-600 font-[var(--font-manrope)] font-semibold">
                   <Check className="h-4 w-4" />{t("new_project.json_parsed")}
                 </span>
                 <button onClick={handlePreview}
@@ -718,113 +838,191 @@ export default function NewProjectPage() {
 
 // ── Step Indicator Component ────────────────────────────────────────────────
 // ── Growing Knowledge Tree Animation ────────────────────────────────────────
-function GrowingTreeAnimation({ step }: { step: number }) {
-  // Tree branches defined as SVG paths with staggered animation delays
-  // Root trunk + 3 levels of branches that grow one by one
-  const branches = [
-    // trunk
-    { d: "M120,220 L120,160", delay: 0, width: 4 },
-    // level 1
-    { d: "M120,160 L80,120", delay: 0.3, width: 3 },
-    { d: "M120,160 L160,120", delay: 0.5, width: 3 },
-    // level 2 left
-    { d: "M80,120 L55,90", delay: 0.8, width: 2.5 },
-    { d: "M80,120 L95,85", delay: 1.0, width: 2.5 },
-    // level 2 right
-    { d: "M160,120 L145,85", delay: 1.2, width: 2.5 },
-    { d: "M160,120 L185,90", delay: 1.4, width: 2.5 },
-    // level 3
-    { d: "M55,90 L40,65", delay: 1.7, width: 2 },
-    { d: "M55,90 L65,62", delay: 1.9, width: 2 },
-    { d: "M95,85 L85,60", delay: 2.1, width: 2 },
-    { d: "M95,85 L108,58", delay: 2.3, width: 2 },
-    { d: "M145,85 L132,58", delay: 2.5, width: 2 },
-    { d: "M145,85 L155,60", delay: 2.7, width: 2 },
-    { d: "M185,90 L175,62", delay: 2.9, width: 2 },
-    { d: "M185,90 L200,65", delay: 3.1, width: 2 },
+function GrowingTreeAnimation({ step: _step }: { step: number }) {
+  // Organic knowledge tree with bezier curves, 4 levels, root-to-crown growth
+  // All paths use cubic bezier for natural branching feel
+  const branches: { d: string; delay: number; w: number; opacity?: number }[] = [
+    // Root / trunk (thick, grows first)
+    { d: "M160,340 C160,310 160,290 160,250", delay: 0.0, w: 6 },
+    { d: "M160,250 C160,225 160,210 160,185", delay: 0.35, w: 5 },
+
+    // Level 1 branches
+    { d: "M160,220 C140,205 115,195 85,188", delay: 0.7, w: 3.5, opacity: 0.85 },
+    { d: "M160,220 C180,205 205,195 235,188", delay: 0.9, w: 3.5, opacity: 0.85 },
+
+    // Level 2 — left subtree
+    { d: "M85,188 C72,178 60,165 48,148", delay: 1.2, w: 2.5, opacity: 0.75 },
+    { d: "M85,188 C85,172 88,158 92,140", delay: 1.4, w: 2.5, opacity: 0.75 },
+
+    // Level 2 — right subtree
+    { d: "M235,188 C235,172 232,158 228,140", delay: 1.5, w: 2.5, opacity: 0.75 },
+    { d: "M235,188 C248,178 260,165 272,148", delay: 1.7, w: 2.5, opacity: 0.75 },
+
+    // Level 2 — center (from upper trunk)
+    { d: "M160,185 C148,165 138,150 125,130", delay: 1.6, w: 2.5, opacity: 0.75 },
+    { d: "M160,185 C172,165 182,150 195,130", delay: 1.8, w: 2.5, opacity: 0.75 },
+
+    // Level 3 — fine tips (left)
+    { d: "M48,148 C40,135 35,120 32,104", delay: 2.0, w: 1.8, opacity: 0.6 },
+    { d: "M48,148 C52,133 58,120 65,106", delay: 2.15, w: 1.8, opacity: 0.6 },
+    { d: "M92,140 C85,125 82,112 82,96", delay: 2.25, w: 1.8, opacity: 0.6 },
+    { d: "M92,140 C98,124 105,110 112,96", delay: 2.4, w: 1.8, opacity: 0.6 },
+
+    // Level 3 — center
+    { d: "M125,130 C116,114 112,98 110,82", delay: 2.35, w: 1.8, opacity: 0.6 },
+    { d: "M125,130 C130,113 138,100 148,86", delay: 2.5, w: 1.8, opacity: 0.6 },
+    { d: "M195,130 C192,113 182,100 172,86", delay: 2.55, w: 1.8, opacity: 0.6 },
+    { d: "M195,130 C204,113 208,98 210,82", delay: 2.7, w: 1.8, opacity: 0.6 },
+
+    // Level 3 — right
+    { d: "M228,140 C218,124 215,110 215,95", delay: 2.45, w: 1.8, opacity: 0.6 },
+    { d: "M228,140 C236,124 242,110 248,96", delay: 2.6, w: 1.8, opacity: 0.6 },
+    { d: "M272,148 C268,133 265,120 265,105", delay: 2.75, w: 1.8, opacity: 0.6 },
+    { d: "M272,148 C278,134 282,120 285,106", delay: 2.9, w: 1.8, opacity: 0.6 },
   ]
 
-  // Leaf nodes (circles) at branch tips
-  const leaves = [
-    { cx: 40, cy: 65, r: 7, delay: 2.0 },
-    { cx: 65, cy: 62, r: 6, delay: 2.2 },
-    { cx: 85, cy: 60, r: 7, delay: 2.4 },
-    { cx: 108, cy: 58, r: 6, delay: 2.6 },
-    { cx: 132, cy: 58, r: 7, delay: 2.8 },
-    { cx: 155, cy: 60, r: 6, delay: 3.0 },
-    { cx: 175, cy: 62, r: 7, delay: 3.2 },
-    { cx: 200, cy: 65, r: 6, delay: 3.4 },
+  // Knowledge nodes at branch tips — varying size to show hierarchy
+  const nodes: { cx: number; cy: number; r: number; delay: number; color: string; pulse: number }[] = [
+    // L3 tips — small leaf nodes
+    { cx: 32, cy: 104, r: 5, delay: 2.2, color: "#68fadd", pulse: 3.0 },
+    { cx: 65, cy: 106, r: 4, delay: 2.35, color: "#ac8eff", pulse: 3.5 },
+    { cx: 82, cy: 96, r: 5, delay: 2.45, color: "#68fadd", pulse: 4.0 },
+    { cx: 112, cy: 96, r: 4, delay: 2.6, color: "#b8a3ff", pulse: 3.2 },
+    { cx: 110, cy: 82, r: 5, delay: 2.55, color: "#ac8eff", pulse: 3.8 },
+    { cx: 148, cy: 86, r: 4, delay: 2.7, color: "#68fadd", pulse: 4.2 },
+    { cx: 172, cy: 86, r: 4, delay: 2.75, color: "#b8a3ff", pulse: 3.4 },
+    { cx: 210, cy: 82, r: 5, delay: 2.9, color: "#ac8eff", pulse: 3.6 },
+    { cx: 215, cy: 95, r: 4, delay: 2.65, color: "#68fadd", pulse: 4.4 },
+    { cx: 248, cy: 96, r: 5, delay: 2.8, color: "#b8a3ff", pulse: 3.0 },
+    { cx: 265, cy: 105, r: 4, delay: 2.95, color: "#ac8eff", pulse: 3.5 },
+    { cx: 285, cy: 106, r: 5, delay: 3.1, color: "#68fadd", pulse: 4.0 },
+    // Crown apex — main top node
+    { cx: 160, cy: 58, r: 8, delay: 3.3, color: "#6a1cf6", pulse: 2.5 },
+  ]
+
+  // Extra crown branches reaching to apex
+  const crownBranches = [
+    { d: "M160,185 C160,150 160,110 160,70", delay: 2.2, w: 3 },
   ]
 
   return (
-    <div className="relative w-64 h-56">
+    <div className="relative w-full h-full flex items-end justify-center">
       <style>{`
-        @keyframes grow-branch {
-          from { stroke-dashoffset: 200; opacity: 0; }
+        @keyframes tree-grow {
+          from { stroke-dashoffset: 600; opacity: 0; }
           to   { stroke-dashoffset: 0;   opacity: 1; }
         }
-        @keyframes pop-leaf {
+        @keyframes node-pop {
           0%   { transform: scale(0); opacity: 0; }
-          60%  { transform: scale(1.3); opacity: 1; }
-          100% { transform: scale(1); opacity: 1; }
+          65%  { transform: scale(1.4); opacity: 1; }
+          100% { transform: scale(1);   opacity: 1; }
         }
-        @keyframes pulse-leaf {
-          0%, 100% { opacity: 0.85; }
+        @keyframes node-pulse {
+          0%, 100% { opacity: 0.7; r: attr(r); }
           50%       { opacity: 1; }
         }
-        .tree-branch {
-          stroke-dasharray: 200;
-          stroke-dashoffset: 200;
-          animation: grow-branch 0.6s ease-out forwards;
+        @keyframes float-particle {
+          0%   { transform: translateY(0) scale(1); opacity: 0.6; }
+          50%  { transform: translateY(-18px) scale(1.1); opacity: 1; }
+          100% { transform: translateY(0) scale(1); opacity: 0.6; }
         }
-        .tree-leaf {
+        .tb {
+          stroke-dasharray: 600;
+          stroke-dashoffset: 600;
+          animation: tree-grow 0.7s cubic-bezier(0.4,0,0.2,1) forwards;
+        }
+        .tn {
           transform-origin: center;
           transform: scale(0);
           opacity: 0;
-          animation: pop-leaf 0.4s cubic-bezier(0.34,1.56,0.64,1) forwards,
-                     pulse-leaf 2s ease-in-out 0.4s infinite;
+          animation: node-pop 0.45s cubic-bezier(0.34,1.56,0.64,1) forwards;
+        }
+        .tp {
+          animation: float-particle 3s ease-in-out infinite;
         }
       `}</style>
-      <svg viewBox="0 0 240 230" className="w-full h-full" fill="none">
+
+      <svg
+        viewBox="0 0 320 360"
+        className="w-full h-full"
+        fill="none"
+        style={{ filter: "drop-shadow(0 0 22px rgba(106,28,246,0.22))" }}
+      >
         <defs>
-          <linearGradient id="branch-grad" x1="0%" y1="100%" x2="0%" y2="0%">
-            <stop offset="0%" stopColor="#6a1cf6" />
-            <stop offset="100%" stopColor="#ac8eff" />
+          <linearGradient id="tb-grad" x1="0%" y1="100%" x2="30%" y2="0%">
+            <stop offset="0%" stopColor="#6a1cf6" stopOpacity="0.9" />
+            <stop offset="60%" stopColor="#8b4ff8" />
+            <stop offset="100%" stopColor="#ac8eff" stopOpacity="0.7" />
           </linearGradient>
-          <radialGradient id="leaf-grad">
-            <stop offset="0%" stopColor="#c4b5fd" />
+          <radialGradient id="apex-grad" cx="50%" cy="40%">
+            <stop offset="0%" stopColor="#b8a3ff" />
             <stop offset="100%" stopColor="#6a1cf6" />
           </radialGradient>
+          <radialGradient id="teal-grad" cx="50%" cy="40%">
+            <stop offset="0%" stopColor="#a8fff2" />
+            <stop offset="100%" stopColor="#006859" />
+          </radialGradient>
+          <filter id="glow">
+            <feGaussianBlur stdDeviation="2.5" result="blur" />
+            <feMerge><feMergeNode in="blur" /><feMergeNode in="SourceGraphic" /></feMerge>
+          </filter>
         </defs>
-        {/* Ground line */}
-        <ellipse cx="120" cy="222" rx="40" ry="4" fill="#6a1cf6" opacity="0.12" />
-        {/* Branches */}
-        {branches.map((b, i) => (
-          <path
-            key={i}
-            d={b.d}
-            className="tree-branch"
-            stroke="url(#branch-grad)"
-            strokeWidth={b.width}
-            strokeLinecap="round"
-            style={{ animationDelay: `${b.delay}s`, animationIterationCount: step >= 2 ? "infinite" : "1" }}
-          />
+
+        {/* Ground shadow */}
+        <ellipse cx="160" cy="348" rx="52" ry="7" fill="#6a1cf6" opacity="0.10" />
+
+        {/* Root anchor dots */}
+        <circle cx="148" cy="342" r="2.5" fill="#6a1cf6" opacity="0.25" />
+        <circle cx="160" cy="344" r="3" fill="#6a1cf6" opacity="0.30" />
+        <circle cx="172" cy="342" r="2.5" fill="#6a1cf6" opacity="0.25" />
+
+        {/* Crown branches (central spine to apex) */}
+        {crownBranches.map((b, i) => (
+          <path key={`c${i}`} d={b.d} className="tb" stroke="url(#tb-grad)"
+            strokeWidth={b.w} strokeLinecap="round"
+            style={{ animationDelay: `${b.delay}s` }} />
         ))}
-        {/* Leaves */}
-        {leaves.map((l, i) => (
-          <circle
-            key={i}
-            cx={l.cx}
-            cy={l.cy}
-            r={l.r}
-            fill="url(#leaf-grad)"
-            className="tree-leaf"
-            style={{ animationDelay: `${l.delay}s`, transformOrigin: `${l.cx}px ${l.cy}px` }}
-          />
+
+        {/* All branches */}
+        {branches.map((b, i) => (
+          <path key={i} d={b.d} className="tb" stroke="url(#tb-grad)"
+            strokeWidth={b.w} strokeLinecap="round"
+            style={{ animationDelay: `${b.delay}s`, opacity: b.opacity ?? 1 }} />
+        ))}
+
+        {/* Leaf nodes */}
+        {nodes.map((n, i) => (
+          <circle key={i} cx={n.cx} cy={n.cy} r={n.r}
+            fill={n.color === "#6a1cf6" ? "url(#apex-grad)" : n.color.startsWith("#68") ? "url(#teal-grad)" : "url(#apex-grad)"}
+            className="tn"
+            filter={n.r >= 7 ? "url(#glow)" : undefined}
+            style={{
+              animationDelay: `${n.delay}s`,
+              transformOrigin: `${n.cx}px ${n.cy}px`,
+            }} />
+        ))}
+
+        {/* Floating micro-particles around crown */}
+        {[
+          { cx: 128, cy: 68, r: 2, delay: 3.4, d: 3.2 },
+          { cx: 192, cy: 62, r: 1.5, delay: 3.6, d: 4.0 },
+          { cx: 145, cy: 44, r: 2.5, delay: 3.8, d: 2.8 },
+          { cx: 176, cy: 46, r: 1.8, delay: 4.0, d: 3.6 },
+        ].map((p, i) => (
+          <circle key={`p${i}`} cx={p.cx} cy={p.cy} r={p.r}
+            fill="#ac8eff" opacity="0"
+            className="tn tp"
+            style={{
+              animationDelay: `${p.delay}s`,
+              transformOrigin: `${p.cx}px ${p.cy}px`,
+              ["--tp-d" as string]: `${p.d}s`,
+            }} />
         ))}
       </svg>
-      {/* Glow under tree */}
-      <div className="absolute bottom-2 left-1/2 -translate-x-1/2 w-24 h-6 rounded-full bg-primary/10 blur-xl" />
+
+      {/* Radial glow beneath tree */}
+      <div className="absolute bottom-8 left-1/2 -translate-x-1/2 w-40 h-10 rounded-full pointer-events-none"
+        style={{ background: "rgba(106,28,246,0.12)", filter: "blur(20px)" }} />
     </div>
   )
 }
@@ -841,7 +1039,7 @@ function StepIndicator({ steps, currentIndex }: { steps: { key: string; label: s
         return (
           <div key={s.key} className="relative z-10 flex flex-col items-center gap-2">
             <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm ring-8 ring-[#f8f5ff] transition-all duration-300 ${
-              isActive ? "bg-primary text-white" : isDone ? "bg-emerald-500 text-white" : "bg-[#e0e0ff] text-[#4953ac]"
+              isActive ? "bg-primary text-white" : isDone ? "bg-cyan-500 text-white" : "bg-[#e0e0ff] text-[#4953ac]"
             }`}>
               {isDone ? <Check className="h-4 w-4" /> : i + 1}
             </div>

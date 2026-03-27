@@ -141,8 +141,8 @@ function IconKnowledgeTree() {
 
 function IconNotesGradient() {
   return (
-    <div className="relative w-14 h-14 rounded-2xl bg-gradient-to-br from-emerald-500/10 to-teal-400/10 flex items-center justify-center">
-      <div className="absolute inset-0 bg-emerald-400/8 rounded-2xl blur-xl" />
+    <div className="relative w-14 h-14 rounded-2xl bg-gradient-to-br from-cyan-500/10 to-teal-400/10 flex items-center justify-center">
+      <div className="absolute inset-0 bg-cyan-400/8 rounded-2xl blur-xl" />
       <div className="relative w-12 h-12 rounded-xl bg-white/60 backdrop-blur-sm border border-white/50 shadow-[0_8px_32px_rgba(16,185,129,0.1)] flex items-center justify-center">
         <svg viewBox="0 0 24 24" fill="none" stroke="#059669" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="w-6 h-6">
           <path d="M15.5 3H5a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2V8.5L15.5 3z" />
@@ -243,8 +243,7 @@ export default function ProjectDetailPage() {
   const [queueItems, setQueueItems] = useState<FactoryQueueItem[]>([])
   const [queueOpen, setQueueOpen] = useState(false)
   const [triggering, setTriggering] = useState(false)
-  const [lessonQueueRunning, setLessonQueueRunning] = useState(false)
-  const [editCoverFile, setEditCoverFile] = useState<File | null>(null)
+const [editCoverFile, setEditCoverFile] = useState<File | null>(null)
   const [editCoverPreview, setEditCoverPreview] = useState<string | null>(null)
   const [generatingEditCover, setGeneratingEditCover] = useState(false)
   const [coverCacheBust, setCoverCacheBust] = useState(Date.now())
@@ -290,9 +289,6 @@ export default function ProjectDetailPage() {
       .then((r) => setQueueItems(r.items.filter((i) => i.status === "pending" || i.status === "in_progress")))
       .catch(() => {})
 
-    gateway.getLessonQueue(params.name)
-      .then((r) => setLessonQueueRunning(r.running))
-      .catch(() => {})
   }, [params.name])
 
   const handleSaveEdit = async () => {
@@ -425,7 +421,7 @@ export default function ProjectDetailPage() {
                 {/* Tags — teal/emerald pill style */}
                 <div className="flex flex-wrap gap-2 mb-5">
                   {allTags.map((tag, i) => (
-                    <span key={`${tag}-${i}`} className="text-[11px] font-[var(--font-manrope)] font-bold uppercase tracking-wider px-4 py-1.5 rounded-full bg-emerald-200/80 text-emerald-800 dark:bg-emerald-800/40 dark:text-emerald-300">
+                    <span key={`${tag}-${i}`} className="text-[11px] font-[var(--font-manrope)] font-bold uppercase tracking-wider px-4 py-1.5 rounded-full bg-cyan-200/80 text-cyan-800 dark:bg-cyan-800/40 dark:text-cyan-300">
                       {tag}
                     </span>
                   ))}
@@ -676,7 +672,7 @@ export default function ProjectDetailPage() {
                 {/* Progress bar */}
                 <div className="h-2 rounded-full bg-secondary overflow-hidden mb-5">
                   <div
-                    className="h-full rounded-full bg-gradient-to-r from-teal-500 to-emerald-500 transition-all duration-700"
+                    className="h-full rounded-full bg-gradient-to-r from-teal-500 to-cyan-500 transition-all duration-700"
                     style={{ width: `${pct}%` }}
                   />
                 </div>
@@ -744,13 +740,6 @@ export default function ProjectDetailPage() {
                 description={t("project.student_works_desc")}
                 disabled
                 badge={t("project.soon")}
-              />
-              <ResourceCard
-                icon={<IconAICourse />}
-                title={t("project.ai_course")}
-                description={t("project.ai_course_desc")}
-                onClick={() => router.push(`/projects/${params.name}/batch-lessons`)}
-                badge={lessonQueueRunning ? "Active" : undefined}
               />
               <ResourceCard
                 icon={<IconObjectQueue />}

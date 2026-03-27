@@ -13,7 +13,7 @@ const STATUS_CONFIG: Record<
   locked:      { label: "锁定",   dot: "bg-muted-foreground/40", border: "border-muted-foreground/20", bg: "bg-card" },
   available:   { label: "可学",   dot: "bg-blue-500",            border: "border-blue-400/50",         bg: "bg-card" },
   in_progress: { label: "进行中", dot: "bg-amber-500",           border: "border-amber-400/50",        bg: "bg-card" },
-  passed:      { label: "完成",   dot: "bg-emerald-500",         border: "border-emerald-400/50",      bg: "bg-card" },
+  passed:      { label: "完成",   dot: "bg-cyan-500",         border: "border-cyan-400/50",      bg: "bg-card" },
   submitted:   { label: "已提交", dot: "bg-purple-500",          border: "border-purple-400/50",       bg: "bg-card" },
   failed:      { label: "未通过", dot: "bg-destructive",         border: "border-destructive/50",      bg: "bg-card" },
 }

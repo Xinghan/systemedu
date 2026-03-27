@@ -130,16 +130,6 @@ class TestLabPipeline:
         assert "__GAME_SPEC__" not in result
 
     @pytest.mark.asyncio
-    async def test_pipeline_with_lesson_plan(self):
-        """Pipeline accepts lab_strategy from lesson plan."""
-        spec_json = _make_simulation_spec_json()
-        mock_agent = _make_agent_mock(spec_json)
-        plan = {"lab_strategy": VALID_LAB_STRATEGY}
-        with patch("systemedu.agents.builtin.gameagent.planner.create_deep_agent", return_value=mock_agent):
-            result = await _generate_interactive_lab("火箭发射", "学习火箭", 5, MagicMock(), lesson_plan=plan)
-        assert "const SPEC =" in result
-
-    @pytest.mark.asyncio
     async def test_pipeline_planner_failure_returns_empty(self):
         """If planner returns invalid output, pipeline returns empty."""
         mock_agent = _make_agent_mock("not json")

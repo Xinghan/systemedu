@@ -8,7 +8,7 @@ import { useT } from "@/lib/hooks/use-t"
 const STATUS_COLOR: Record<string, string> = {
   pending: "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400",
   in_progress: "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400",
-  done: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400",
+  done: "bg-cyan-100 text-cyan-700 dark:bg-cyan-900/30 dark:text-cyan-400",
   failed: "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400",
 }
 
@@ -22,14 +22,14 @@ function RegistryCard({ item }: { item: ObjectRegistryItem }) {
         onClick={() => setOpen(!open)}
       >
         <div className="flex items-center gap-3">
-          <span className="text-xs font-mono bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 px-2 py-0.5 rounded">
+          <span className="text-xs font-mono bg-cyan-100 text-cyan-700 dark:bg-cyan-900/30 dark:text-cyan-400 px-2 py-0.5 rounded">
             {item.object_key}
           </span>
           <span className="text-sm text-muted-foreground">
             {(t as (key: string) => string)(`objects.family.${item.family}`) || item.family} / {item.variant}
           </span>
         </div>
-        <span className="text-xs px-2 py-0.5 rounded bg-emerald-50 text-emerald-600 dark:bg-emerald-900/20 dark:text-emerald-400 font-medium">
+        <span className="text-xs px-2 py-0.5 rounded bg-cyan-50 text-cyan-600 dark:bg-cyan-900/20 dark:text-cyan-400 font-medium">
           {t("objects.registered_badge")}
         </span>
       </button>
@@ -136,7 +136,7 @@ export default function ObjectsPage() {
         placeholder={t("objects.search")}
         value={filter}
         onChange={(e) => setFilter(e.target.value)}
-        className="w-full border rounded-md px-3 py-2 text-sm bg-background focus:outline-none focus:ring-1 focus:ring-emerald-500"
+        className="w-full border rounded-md px-3 py-2 text-sm bg-background focus:outline-none focus:ring-1 focus:ring-cyan-500"
       />
 
       {loading && (
