@@ -344,6 +344,9 @@ const translations = {
     "learn.failed_load": "Failed to load project",
     "learn.back": "Back to Projects",
     "learn.step_of": "Step {n} of {total}",
+    "learn.assignment": "Assignment",
+    "learn.assignment_subtitle": "MCQ \u00b7 Q&A \u00b7 Hands-on",
+    "learn.assignment_loading": "Loading assignment...",
 
     // Lesson content view
     "lesson.prev_lesson": "Previous Lesson",
@@ -804,6 +807,9 @@ const translations = {
     "learn.failed_load": "加载项目失败",
     "learn.back": "返回项目列表",
     "learn.step_of": "第 {n} / {total} 节",
+    "learn.assignment": "作业练习",
+    "learn.assignment_subtitle": "选择题 \u00b7 问答 \u00b7 动手项目",
+    "learn.assignment_loading": "加载作业中...",
 
     // Lesson content view
     "lesson.prev_lesson": "上一节",

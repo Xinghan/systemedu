@@ -519,8 +519,8 @@ export default function LearnPage() {
                         <ClipboardList className="h-4 w-4 text-indigo-600" />
                       </div>
                       <div className="flex-1 min-w-0">
-                        <p className="text-xs font-medium text-foreground truncate">作业练习</p>
-                        <p className="text-[10px] text-muted-foreground font-[var(--font-manrope)]">选择题 · 问答 · 动手项目</p>
+                        <p className="text-xs font-medium text-foreground truncate">{t("learn.assignment")}</p>
+                        <p className="text-[10px] text-muted-foreground font-[var(--font-manrope)]">{t("learn.assignment_subtitle")}</p>
                       </div>
                       <ArrowRight className="h-3 w-3 text-muted-foreground/30 group-hover:text-primary shrink-0 transition-colors" />
                     </button>
@@ -741,7 +741,7 @@ export default function LearnPage() {
                 <ClipboardList className="h-4 w-4 text-indigo-600" />
               </div>
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-semibold text-foreground">作业练习</p>
+                <p className="text-sm font-semibold text-foreground">{t("learn.assignment")}</p>
                 <p className="text-[10px] text-muted-foreground font-[var(--font-manrope)]">
                   {activeKnode?.title ?? ""}
                 </p>
@@ -758,7 +758,7 @@ export default function LearnPage() {
               {assignmentLoading ? (
                 <div className="flex flex-col items-center justify-center h-40 gap-3 text-muted-foreground">
                   <div className="w-5 h-5 border-2 border-indigo-500/30 border-t-indigo-500 rounded-full animate-spin" />
-                  <p className="text-xs">加载作业中...</p>
+                  <p className="text-xs">{t("learn.assignment_loading")}</p>
                 </div>
               ) : (
                 <AssignmentView content={assignmentText ?? ""} />

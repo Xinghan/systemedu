@@ -88,6 +88,7 @@ type PipelineStage =
   | "ideating"
   | "detailing"
   | "generating"
+  | "assignment"
   | "audio"
   | "done"
 
@@ -96,11 +97,12 @@ const PIPELINE_STAGES: { key: PipelineStage; label: string }[] = [
   { key: "ideating", label: "CourseIdeaAgent" },
   { key: "detailing", label: "CourseIdeaDetailAgent" },
   { key: "generating", label: "AnimationGen / GameGen / StoryGen" },
-  { key: "audio", label: "TTS 音频生成" },
+  { key: "assignment", label: "AssignmentAgent" },
+  { key: "audio", label: "TTS Audio Generation" },
 ]
 
 const STAGE_ORDER: PipelineStage[] = [
-  "connecting", "planning", "ideating", "detailing", "generating", "audio", "done",
+  "connecting", "planning", "ideating", "detailing", "generating", "assignment", "audio", "done",
 ]
 
 // ---------------------------------------------------------------------------
@@ -558,6 +560,7 @@ const STAGE_SUBTITLES: Partial<Record<PipelineStage, string>> = {
   ideating:   "Creative thematic concepts generated.",
   detailing:  "Module granularity and objectives defined.",
   generating: "Generating Assets:",
+  assignment: "Building exercises, Q&A and hands-on tasks.",
   audio:      "Pending visual sequence completion...",
 }
 
@@ -566,6 +569,7 @@ const STAGE_COMPLETED_LABELS: Partial<Record<PipelineStage, string>> = {
   ideating:   "Creative thematic concepts generated.",
   detailing:  "Module granularity and objectives defined.",
   generating: "All assets generated.",
+  assignment: "Exercises and assignments ready.",
   audio:      "Audio synthesis complete.",
 }
 
@@ -594,7 +598,7 @@ function GeneratingProgress({
   }
 
   return (
-    <div style={{ fontFamily: "var(--font-manrope, 'Inter', sans-serif)" }}>
+    <div style={{ fontFamily: "var(--font-manrope, 'Inter', sans-serif)" }} className="px-8 py-6">
 
       {/* ── Version badge ── */}
       <div className="flex items-center gap-2 mb-5">
@@ -1043,6 +1047,8 @@ export function CourseContentView({
         } else if (evt === "idea_complete") {
           setStage("generating")
           setIdeaProgress((prev) => ({ ...prev, done: Math.min(prev.done + 1, prev.total) }))
+        } else if (evt === "assignment_start") {
+          setStage("assignment")
         } else if (evt === "audio_ready") {
           setStage("audio")
         } else if (evt === "agent_log") {

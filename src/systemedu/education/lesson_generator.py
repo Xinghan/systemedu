@@ -201,6 +201,8 @@ async def generate_course_v2(
                     result = await AnimationGenAgent(llm).generate(
                         detail_plan=detail_plan,
                         node_title=node_title,
+                        node_summary=node_summary,
+                        project_category=getattr(ctx.project.category, "value", str(ctx.project.category)),
                     )
                 elif mode == "game":
                     result = await GameGenAgent(llm).generate(
@@ -256,6 +258,8 @@ async def generate_course_v2(
 
         # Step 6: Generate assignment (parallel-friendly, non-blocking)
         logger.info(f"[v2] Step 6: generate assignment for node {knode_id}")
+        if progress_cb:
+            progress_cb("assignment_start", {})
         assignment_text = await _generate_assignment(
             llm=llm,
             node_title=node_title,
