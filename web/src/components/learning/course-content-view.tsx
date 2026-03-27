@@ -97,13 +97,8 @@ type PipelineStage =
   | "audio"
   | "done"
 
-const PIPELINE_STAGES: { key: PipelineStage; label: string }[] = [
-  { key: "planning", label: "CoursePlannerAgent" },
-  { key: "ideating", label: "CourseIdeaAgent" },
-  { key: "detailing", label: "CourseIdeaDetailAgent" },
-  { key: "generating", label: "AnimationGen / GameGen / StoryGen" },
-  { key: "assignment", label: "AssignmentAgent" },
-  { key: "audio", label: "TTS Audio Generation" },
+const PIPELINE_STAGE_KEYS: PipelineStage[] = [
+  "planning", "ideating", "detailing", "generating", "assignment", "audio",
 ]
 
 const STAGE_ORDER: PipelineStage[] = [
@@ -569,6 +564,11 @@ function GeneratingProgress({
 }) {
   const t = useT()
   const currentIdx = STAGE_ORDER.indexOf(stage)
+
+  const PIPELINE_STAGES = PIPELINE_STAGE_KEYS.map((key) => ({
+    key,
+    label: t(`gen.stage_${key}_name`),
+  }))
 
   const STAGE_SUBTITLES: Partial<Record<PipelineStage, string>> = {
     planning:   t("gen.stage_planning_active"),

@@ -349,6 +349,12 @@ const translations = {
     "learn.assignment_loading": "Loading assignment...",
 
     // GeneratingProgress UI
+    "gen.stage_planning_name": "Curriculum Planner",
+    "gen.stage_ideating_name": "Idea Generator",
+    "gen.stage_detailing_name": "Content Designer",
+    "gen.stage_generating_name": "Media Studio",
+    "gen.stage_assignment_name": "Exercise Builder",
+    "gen.stage_audio_name": "Voice Synthesizer",
     "gen.title_line1": "Architecting Your",
     "gen.title_line2": "Learning Experience",
     "gen.system_progress": "SYSTEM PROGRESS",
@@ -845,6 +851,12 @@ const translations = {
     "learn.assignment_loading": "加载作业中...",
 
     // GeneratingProgress UI
+    "gen.stage_planning_name": "课程规划师",
+    "gen.stage_ideating_name": "创意发散",
+    "gen.stage_detailing_name": "内容设计师",
+    "gen.stage_generating_name": "媒体工坊",
+    "gen.stage_assignment_name": "练习构建",
+    "gen.stage_audio_name": "语音合成",
     "gen.title_line1": "正在构建你的",
     "gen.title_line2": "个性化学习体验",
     "gen.system_progress": "生成进度",
