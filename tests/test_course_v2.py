@@ -845,3 +845,118 @@ class TestAnimationQualityScoring:
         feedback = format_animation_quality_feedback(report)
         assert "技术分" in feedback
         assert "教学分" in feedback
+
+
+# ===== ExerciseGenAgent =====
+
+class TestExerciseGenAgent:
+
+    def _make_exercise_response(self):
+        exercises = [
+            {
+                "type": "choice",
+                "question": "牛顿第一定律描述的是什么？",
+                "options": ["A. 惯性定律", "B. 加速度定律", "C. 作用反作用定律", "D. 万有引力定律"],
+                "correct": 0,
+                "explanation": "牛顿第一定律描述了物体的惯性：没有外力时，物体保持静止或匀速直线运动。",
+            },
+            {
+                "type": "choice",
+                "question": "以下哪个情况符合牛顿第一定律？",
+                "options": ["A. 踢球后球继续滚动", "B. 汽车刹车后停止", "C. 真空中运动的飞船匀速直线行驶", "D. 苹果落地"],
+                "correct": 2,
+                "explanation": "真空中没有阻力，飞船会按惯性保持匀速直线运动。",
+            },
+        ]
+        return json.dumps(exercises, ensure_ascii=False)
+
+    @pytest.mark.asyncio
+    async def test_generate_returns_choice_exercises(self):
+        from systemedu.agents.builtin.exercise_gen_agent import ExerciseGenAgent
+
+        llm = _make_llm(self._make_exercise_response())
+        agent = ExerciseGenAgent(llm)
+        exercises = await agent.generate(
+            node_title="牛顿第一定律",
+            node_summary="物体在没有外力时保持静止或匀速直线运动",
+            topic="惯性定律理解",
+            context_summary="我们刚刚学习了牛顿第一定律",
+        )
+        assert isinstance(exercises, list)
+        assert len(exercises) == 2
+        for ex in exercises:
+            assert ex["type"] == "choice"
+            assert "question" in ex
+            assert len(ex["options"]) == 4
+            assert isinstance(ex["correct"], int)
+            assert "explanation" in ex
+
+    @pytest.mark.asyncio
+    async def test_generate_fallback_on_invalid_json(self):
+        from systemedu.agents.builtin.exercise_gen_agent import ExerciseGenAgent
+
+        llm = _make_llm("这不是有效的JSON")
+        agent = ExerciseGenAgent(llm)
+        exercises = await agent.generate(
+            node_title="测试节点",
+            node_summary="",
+            topic="测试主题",
+            context_summary="",
+        )
+        assert isinstance(exercises, list)
+        assert len(exercises) == 1
+        assert exercises[0]["type"] == "short_answer"  # fallback
+
+    @pytest.mark.asyncio
+    async def test_generate_filters_invalid_types(self):
+        from systemedu.agents.builtin.exercise_gen_agent import ExerciseGenAgent
+
+        bad = json.dumps([
+            {"type": "unknown", "question": "坏题目"},
+            {"type": "choice", "question": "好题目", "options": ["A. 一", "B. 二", "C. 三", "D. 四"], "correct": 0, "explanation": "解析"},
+        ])
+        llm = _make_llm(bad)
+        agent = ExerciseGenAgent(llm)
+        exercises = await agent.generate("title", "", "topic", "ctx")
+        assert len(exercises) == 1
+        assert exercises[0]["type"] == "choice"
+
+    @pytest.mark.asyncio
+    async def test_elaborate_exercise_mode_passthrough(self):
+        """CourseIdeaDetailAgent should passthrough exercise mode without calling LLM planner."""
+        from systemedu.agents.builtin.course_idea_detail_agent import CourseIdeaDetailAgent
+
+        llm = _make_llm("{}")
+        agent = CourseIdeaDetailAgent(llm)
+        idea = {"idea_id": "ex-1", "mode": "exercise", "topic": "重力的理解", "context_summary": "重力是万有引力在地球上的表现"}
+        result = await agent.elaborate(idea)
+        dp = result.get("detail_plan")
+        assert dp is not None
+        assert dp["mode"] == "exercise"
+        assert dp["exercise_count"] == 2
+        assert "context_summary" in dp
+
+    def test_integration_agent_handles_exercise_mode(self):
+        from systemedu.agents.builtin.integration_agent import IntegrationAgent
+
+        exercises = [
+            {"type": "choice", "question": "问题", "options": ["A. 一", "B. 二", "C. 三", "D. 四"], "correct": 0, "explanation": "解析"},
+        ]
+        ideas = [
+            {
+                "idea_id": "ex-abc",
+                "mode": "exercise",
+                "topic": "练习",
+                "context_summary": "上下文",
+                "detail_plan": {"mode": "exercise", "topic": "练习", "context_summary": "上下文", "exercise_count": 2},
+                "result": exercises,
+            }
+        ]
+        plan = "## 内容\n\n学习内容[[IDEA:ex-abc]]"
+        agent = IntegrationAgent()
+        result = agent.integrate(plan, ideas)
+        section = result["rendered_sections"]["ex-abc"]
+        assert section["mode"] == "exercise"
+        assert section["status"] == "ready"
+        assert section["exercises"] == exercises
+        assert section["html"] is None

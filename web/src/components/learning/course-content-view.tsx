@@ -4,6 +4,7 @@ import { createContext, useContext, useEffect, useRef, useState } from "react"
 import {
   X, CheckCircle2, Loader2, BookOpen, Zap, Gamepad2, BookMarked,
   Terminal, ChevronDown, ChevronRight, Circle, Play, Square,
+  ClipboardList, CheckCircle, XCircle, Lightbulb,
 } from "lucide-react"
 import { gateway } from "@/lib/api"
 import type {
@@ -11,6 +12,7 @@ import type {
   CourseContentData,
   CourseIdeaSummary,
   CourseSection,
+  InlineExercise,
   KnodeInfo,
   RenderedSection,
 } from "@/lib/types/api"
@@ -337,6 +339,181 @@ function StoryBlock({
 }
 
 // ---------------------------------------------------------------------------
+// ExerciseBlock — lightweight inline quiz (choice questions only, pop-up)
+// ---------------------------------------------------------------------------
+function ExerciseBlock({
+  idea, exercises,
+}: {
+  idea: CourseIdeaSummary
+  exercises: InlineExercise[]
+}) {
+  // Filter to choice questions only — inline exercises are lightweight
+  const choiceExercises = exercises.filter((e) => e.type === "choice")
+  const [open, setOpen] = useState(false)
+  const [current, setCurrent] = useState(0)
+  const [selected, setSelected] = useState<number | null>(null)
+  const [answered, setAnswered] = useState(false)
+  const [score, setScore] = useState(0)
+  const [finished, setFinished] = useState(false)
+
+  const total = choiceExercises.length
+  const ex = choiceExercises[current]
+
+  const handleOpen = () => {
+    setOpen(true)
+    setCurrent(0)
+    setSelected(null)
+    setAnswered(false)
+    setScore(0)
+    setFinished(false)
+  }
+
+  const handleChoice = (idx: number) => {
+    if (answered) return
+    setSelected(idx)
+    setAnswered(true)
+    if (idx === ex.correct) setScore((s) => s + 1)
+  }
+
+  const handleNext = () => {
+    if (current + 1 >= total) {
+      setFinished(true)
+    } else {
+      setCurrent((c) => c + 1)
+      setSelected(null)
+      setAnswered(false)
+    }
+  }
+
+  if (total === 0) return null
+
+  return (
+    <>
+      {/* Inline trigger — compact strip */}
+      <div className="flex items-center gap-4 px-6 py-4 rounded-2xl border border-secondary/20 bg-secondary/5 hover:bg-secondary/10 transition-colors cursor-pointer" onClick={handleOpen}>
+        <div className="w-9 h-9 rounded-xl bg-secondary/15 flex items-center justify-center shrink-0">
+          <ClipboardList className="h-4.5 w-4.5 text-secondary" style={{ width: 18, height: 18 }} />
+        </div>
+        <div className="flex-1 min-w-0">
+          <span className="text-sm font-semibold text-on-surface">即时检测</span>
+          <span className="ml-2 text-xs text-on-surface-variant">{idea.topic}</span>
+        </div>
+        <span className="text-xs font-medium text-secondary shrink-0">{total} 道选择题 &rarr;</span>
+      </div>
+
+      {/* Pop-up modal */}
+      {open && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          style={{ background: "rgba(0,0,0,0.35)", backdropFilter: "blur(6px)" }}
+          onClick={(e) => { if (e.target === e.currentTarget) setOpen(false) }}
+        >
+          <div className="w-full max-w-md rounded-3xl shadow-2xl overflow-hidden bg-white">
+            {/* Header */}
+            <div className="flex items-center justify-between px-6 py-4 border-b border-outline-variant/20">
+              <div className="flex items-center gap-2">
+                <ClipboardList className="h-4 w-4 text-secondary" />
+                <span className="font-semibold text-sm text-on-surface">{idea.topic}</span>
+              </div>
+              {!finished && (
+                <div className="flex items-center gap-3">
+                  <span className="text-xs text-on-surface-variant">{current + 1} / {total}</span>
+                  <button onClick={() => setOpen(false)} className="p-1 rounded-lg hover:bg-surface-container transition-colors">
+                    <X className="h-4 w-4 text-on-surface-variant" />
+                  </button>
+                </div>
+              )}
+              {finished && (
+                <button onClick={() => setOpen(false)} className="p-1 rounded-lg hover:bg-surface-container transition-colors">
+                  <X className="h-4 w-4 text-on-surface-variant" />
+                </button>
+              )}
+            </div>
+
+            {/* Progress bar */}
+            {!finished && (
+              <div className="h-0.5 bg-outline-variant/20">
+                <div
+                  className="h-full bg-secondary transition-all duration-300"
+                  style={{ width: `${(current / total) * 100}%` }}
+                />
+              </div>
+            )}
+
+            {/* Body */}
+            <div className="px-6 py-5">
+              {finished ? (
+                <div className="text-center py-3 space-y-3">
+                  <div className="w-14 h-14 rounded-full bg-secondary/10 border border-secondary/20 flex items-center justify-center mx-auto">
+                    <CheckCircle className="h-7 w-7 text-secondary" />
+                  </div>
+                  <p className="text-lg font-bold text-on-surface">
+                    {score} / {total} 答对
+                  </p>
+                  <p className="text-sm text-on-surface-variant">
+                    {score === total ? "全部答对，掌握得很好！" : score >= total / 2 ? "做得不错，继续加油！" : "可以再回顾一下上方的内容哦"}
+                  </p>
+                  <button
+                    onClick={() => setOpen(false)}
+                    className="mt-1 px-7 h-10 rounded-xl bg-secondary text-on-secondary font-semibold text-sm hover:bg-secondary/90 transition-colors"
+                  >
+                    继续学习
+                  </button>
+                </div>
+              ) : ex ? (
+                <div className="space-y-4">
+                  <p className="text-base font-semibold text-on-surface leading-relaxed">{ex.question}</p>
+                  <div className="space-y-2">
+                    {(ex.options ?? []).map((opt, i) => {
+                      const isCorrect = i === ex.correct
+                      const isSelected = selected === i
+                      let cls = "bg-surface-container-low border-outline-variant/30 text-on-surface hover:border-secondary/40 hover:bg-secondary/5"
+                      if (answered && isCorrect) cls = "bg-secondary/10 border-secondary text-secondary"
+                      else if (answered && isSelected && !isCorrect) cls = "bg-error/10 border-error/60 text-error"
+                      return (
+                        <button
+                          key={i}
+                          onClick={() => handleChoice(i)}
+                          disabled={answered}
+                          className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl border text-sm text-left transition-all ${cls}`}
+                        >
+                          <span className={`w-5 h-5 rounded-full border flex items-center justify-center text-xs font-bold shrink-0 ${answered && isCorrect ? "border-secondary bg-secondary text-on-secondary" : answered && isSelected ? "border-error bg-error/10 text-error" : "border-outline-variant/40"}`}>
+                            {String.fromCharCode(65 + i)}
+                          </span>
+                          <span className="flex-1">{opt.replace(/^[A-D]\.\s*/, "")}</span>
+                          {answered && isCorrect && <CheckCircle className="h-4 w-4 shrink-0 text-secondary" />}
+                          {answered && isSelected && !isCorrect && <XCircle className="h-4 w-4 shrink-0 text-error" />}
+                        </button>
+                      )
+                    })}
+                  </div>
+                  {answered && ex.explanation && (
+                    <div className="flex gap-2 px-4 py-3 rounded-xl bg-secondary/5 border border-secondary/20 text-sm text-on-surface-variant">
+                      <Lightbulb className="h-4 w-4 text-secondary shrink-0 mt-0.5" />
+                      <span>{ex.explanation}</span>
+                    </div>
+                  )}
+                  {answered && (
+                    <div className="flex justify-end">
+                      <button
+                        onClick={handleNext}
+                        className="px-5 h-9 rounded-xl bg-secondary text-on-secondary text-sm font-semibold hover:bg-secondary/90 transition-colors"
+                      >
+                        {current + 1 < total ? "下一题" : "查看结果"}
+                      </button>
+                    </div>
+                  )}
+                </div>
+              ) : null}
+            </div>
+          </div>
+        </div>
+      )}
+    </>
+  )
+}
+
+// ---------------------------------------------------------------------------
 // IdeaBlock (dispatcher)
 // ---------------------------------------------------------------------------
 function IdeaBlock({
@@ -394,6 +571,10 @@ function IdeaBlock({
 
   if (idea.mode === "story" && section.story_paragraphs) {
     return <StoryBlock idea={idea} section={section} />
+  }
+
+  if (idea.mode === "exercise" && section.exercises && section.exercises.length > 0) {
+    return <ExerciseBlock idea={idea} exercises={section.exercises} />
   }
 
   return null

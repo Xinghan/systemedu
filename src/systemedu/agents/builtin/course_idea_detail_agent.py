@@ -44,6 +44,20 @@ class CourseIdeaDetailAgent:
         mode = idea.get("mode", "")
         topic = idea.get("topic", "")
         style_key = idea.get("style_key", "")
+
+        # exercise mode: skip complex planner/critic pipeline
+        # ExerciseGenAgent uses the idea directly, no elaboration needed
+        if mode == "exercise":
+            result = dict(idea)
+            result["detail_plan"] = {
+                "mode": "exercise",
+                "topic": topic,
+                "context_summary": idea.get("context_summary", ""),
+                "exercise_count": 2,
+            }
+            logger.info("CourseIdeaDetailAgent: exercise mode passthrough for '%s'", topic)
+            return result
+
         if mode not in {"animation", "game", "story"}:
             logger.warning("CourseIdeaDetailAgent: unknown mode '%s'", mode)
             return idea

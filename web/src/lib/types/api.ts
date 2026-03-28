@@ -407,7 +407,7 @@ export interface FactoryQueueResponse {
 
 // --- Course v2 types (multi-agent pipeline) ---
 
-export type CourseIdeaMode = "animation" | "game" | "story"
+export type CourseIdeaMode = "animation" | "game" | "story" | "exercise"
 export type CourseGenerationBackend = "manim" | "html_svg" | ""
 
 export interface CourseIdeaSummary {
@@ -425,11 +425,24 @@ export interface StoryParagraph {
   image_url: string
 }
 
+export interface InlineExercise {
+  type: "choice" | "short_answer"
+  question: string
+  // choice fields
+  options?: string[]
+  correct?: number
+  explanation?: string
+  // short_answer fields
+  hint?: string
+  sample_answer?: string
+}
+
 export interface RenderedSection {
   mode: CourseIdeaMode
   status: "ready" | "failed"
   html: string | null
   story_paragraphs: StoryParagraph[] | null
+  exercises: InlineExercise[] | null
   generation_backend?: CourseGenerationBackend
 }
 

@@ -37,6 +37,7 @@ async def generate_course_v2(
     from systemedu.agents.builtin.animation_gen_agent import AnimationGenAgent
     from systemedu.agents.builtin.game_gen_agent import GameGenAgent
     from systemedu.agents.builtin.story_gen_agent import StoryGenAgent
+    from systemedu.agents.builtin.exercise_gen_agent import ExerciseGenAgent
     from systemedu.agents.builtin.integration_agent import IntegrationAgent
 
     ctx = load_project_context(project_name, user_id=user_id)
@@ -168,10 +169,25 @@ async def generate_course_v2(
                 progress_cb("details_ready", {"count": len(ideas)})
 
         # Step 4: Generate content for each idea in parallel
+        # Note: game mode is temporarily disabled; use exercise mode instead.
+        _GAME_DISABLED = True
+
         async def _generate_idea(idea: dict) -> dict:
             mode = idea.get("mode", "")
             detail_plan = idea.get("detail_plan")
             result_idea = dict(idea)
+
+            # game temporarily disabled — skip silently
+            if mode == "game" and _GAME_DISABLED:
+                logger.info("[v2] game mode disabled, skipping idea '%s'", idea.get("idea_id"))
+                result_idea["result"] = None
+                if progress_cb:
+                    progress_cb("idea_complete", {
+                        "idea_id": idea.get("idea_id", ""),
+                        "mode": mode,
+                        "status": "skipped",
+                    })
+                return result_idea
 
             if not detail_plan:
                 result_idea["result"] = None
@@ -187,6 +203,7 @@ async def generate_course_v2(
                 "animation": "AnimationGenAgent",
                 "game": "GameGenAgent",
                 "story": "StoryGenAgent",
+                "exercise": "ExerciseGenAgent",
             }.get(mode, f"{mode}Agent")
 
             _emit_log(
@@ -213,6 +230,14 @@ async def generate_course_v2(
                     )
                 elif mode == "story":
                     result = await StoryGenAgent().generate(detail_plan=detail_plan)
+                elif mode == "exercise":
+                    result = await ExerciseGenAgent(llm).generate(
+                        node_title=node_title,
+                        node_summary=node_summary,
+                        topic=idea.get("topic", ""),
+                        context_summary=detail_plan.get("context_summary", ""),
+                        count=detail_plan.get("exercise_count", 3),
+                    )
                 else:
                     result = None
 
@@ -225,6 +250,10 @@ async def generate_course_v2(
                     output_summary = f"paragraphs={len(result or [])} items, status={status}"
                     if result:
                         output_summary += "\n" + json.dumps(result, ensure_ascii=False)[:800]
+                elif mode == "exercise":
+                    output_summary = f"exercises={len(result or [])} items, status={status}"
+                    if result:
+                        output_summary += "\n" + json.dumps(result, ensure_ascii=False)[:600]
                 else:
                     output_summary = f"status={status}"
                 _emit_log(agent_name, "output", f"topic={idea.get('topic')!r}", output_summary)

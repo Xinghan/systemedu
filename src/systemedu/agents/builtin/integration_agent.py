@@ -34,6 +34,7 @@ class IntegrationAgent:
                 "mode": mode,
                 "html": None,
                 "story_paragraphs": None,
+                "exercises": None,
                 "generation_backend": generation_backend,
             }
 
@@ -45,6 +46,10 @@ class IntegrationAgent:
                 story_paragraphs = result if isinstance(result, list) else []
                 section["story_paragraphs"] = story_paragraphs
                 section["status"] = "ready" if story_paragraphs else "failed"
+            elif mode == "exercise":
+                exercises = result if isinstance(result, list) else []
+                section["exercises"] = exercises
+                section["status"] = "ready" if exercises else "failed"
             else:
                 section["status"] = "failed"
 
