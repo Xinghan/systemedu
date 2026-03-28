@@ -51,6 +51,9 @@ class AnimationBackendRouterAgent:
     def __init__(self, llm=None):
         self.llm = llm
 
+    # TEMP: Manim disabled — always route to html_svg until Manim quality is fixed
+    _MANIM_DISABLED = True
+
     async def route(
         self,
         *,
@@ -60,6 +63,18 @@ class AnimationBackendRouterAgent:
         detail_plan: dict | None = None,
     ) -> dict:
         """Return backend routing decision."""
+        if self._MANIM_DISABLED:
+            logger.info(
+                "AnimationBackendRouterAgent: Manim disabled, forcing html_svg for '%s'",
+                node_title,
+            )
+            return {
+                "backend": "html_svg",
+                "subject_hint": "general_visual",
+                "reason": "Manim暂时禁用，走HTML/SVG",
+                "confidence": 1.0,
+            }
+
         heuristic = self._heuristic_route(
             node_title=node_title,
             node_summary=node_summary,

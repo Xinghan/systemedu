@@ -112,13 +112,13 @@ function renderSimpleMarkdown(text: string): string {
   return text
     .replace(/^## (.+)$/gm, '<h2 class="text-2xl font-bold mt-8 mb-3 text-on-surface tracking-tight">$1</h2>')
     .replace(/^### (.+)$/gm, '<h3 class="text-lg font-semibold mt-6 mb-2 text-on-surface">$1</h3>')
-    .replace(/^\- (.+)$/gm, '<li class="ml-5 list-disc text-lg text-on-surface leading-loose">$1</li>')
-    .replace(/^\d+\. (.+)$/gm, '<li class="ml-5 list-decimal text-lg text-on-surface leading-loose">$1</li>')
+    .replace(/^\- (.+)$/gm, '<li class="ml-5 list-disc text-base text-on-surface leading-relaxed">$1</li>')
+    .replace(/^\d+\. (.+)$/gm, '<li class="ml-5 list-decimal text-base text-on-surface leading-relaxed">$1</li>')
     .replace(/\*\*(.+?)\*\*/g, '<strong class="font-semibold">$1</strong>')
-    .replace(/\n\n/g, '</p><p class="text-lg text-on-surface leading-loose my-4">')
+    .replace(/\n\n/g, '</p><p class="text-base text-on-surface leading-relaxed my-3">')
     .replace(/^([^<\n].+)$/gm, (match) => {
       if (match.startsWith("<") || match.startsWith("-") || /^\d+\./.test(match)) return match
-      return `<p class="text-lg text-on-surface leading-loose my-4">${match}</p>`
+      return `<p class="text-base text-on-surface leading-relaxed my-3">${match}</p>`
     })
 }
 
@@ -324,7 +324,7 @@ function StoryBlock({
                   <BookMarked className="h-7 w-7 text-on-surface-variant/20" />
                 </div>
               )}
-              <p className="text-lg text-on-surface leading-loose">{para.text}</p>
+              <p className="text-base text-on-surface leading-relaxed">{para.text}</p>
             </div>
           ))}
         </div>
@@ -525,13 +525,13 @@ function EditorialHeader({ knode }: { knode: KnodeInfo | null }) {
       <div className="inline-flex items-center gap-2 px-3 py-1 bg-secondary-container rounded-full text-on-secondary-container text-xs font-bold tracking-widest uppercase">
         难度 {knode.difficulty_level} / 5 · {knode.estimated_minutes} 分钟
       </div>
-      <h1 className="font-extrabold text-5xl text-on-surface tracking-tight leading-[1.1]">
+      <h1 className="font-extrabold text-3xl text-on-surface tracking-tight leading-[1.2]">
         <span className="text-transparent bg-clip-text bg-gradient-to-r from-primary to-tertiary">
           {knode.title}
         </span>
       </h1>
       {knode.summary && (
-        <p className="text-xl text-on-surface-variant leading-relaxed max-w-2xl">
+        <p className="text-base text-on-surface-variant leading-relaxed max-w-2xl">
           {knode.summary}
         </p>
       )}

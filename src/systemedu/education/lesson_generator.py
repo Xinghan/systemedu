@@ -283,39 +283,14 @@ async def generate_course_v2(
         )
         logger.info(f"[v2] Step 6a: {len(segments)} sections generated")
 
-        # Step 6b: Parallel TTS for each section
-        logger.info(f"[v2] Step 6b: TTS x {len(segments)} sections (parallel)")
-        from systemedu.education.tts import synthesize_speech
-
-        async def _tts_one(seg: dict) -> dict:
-            script = seg.get("audio_script", "")
-            if not script:
-                seg["audio_url"] = ""
-                return seg
-            try:
-                path, _ = await asyncio.to_thread(
-                    synthesize_speech,
-                    script,
-                    project_name,
-                    knode_id,
-                    f"section_{seg['section_id'][:8]}.wav",
-                )
-                seg["audio_url"] = path
-            except Exception:
-                logger.exception(
-                    f"[v2] TTS failed for section {seg.get('section_id', '')[:8]}"
-                )
-                seg["audio_url"] = ""
-            return seg
-
-        segments = list(await asyncio.gather(*[_tts_one(s) for s in segments]))
+        # Step 6b: TTS (TEMP: disabled to save tokens, focus on animation/game quality)
+        # To re-enable: remove the early return and un-comment the TTS code below
+        logger.info("[v2] Step 6b: TTS disabled (temp), skipping audio generation")
+        for seg in segments:
+            seg["audio_url"] = ""
         course_content["sections"] = segments
-        logger.info(
-            f"[v2] Step 6b: TTS complete, "
-            f"{sum(1 for s in segments if s.get('audio_url'))} / {len(segments)} succeeded"
-        )
         if progress_cb:
-            progress_cb("audio_ready", {"count": len(segments)})
+            progress_cb("audio_ready", {"count": 0})
 
         # Step 7: Save to DB
         lesson.course_content = json.dumps(course_content, ensure_ascii=False)
