@@ -960,3 +960,154 @@ class TestExerciseGenAgent:
         assert section["status"] == "ready"
         assert section["exercises"] == exercises
         assert section["html"] is None
+
+
+# ===== PatternRouterAgent =====
+
+class TestPatternRouterAgent:
+
+    def _make_async_llm(self, response_text: str):
+        llm = MagicMock()
+        llm.ainvoke = AsyncMock(return_value=AIMessage(content=response_text))
+        return llm
+
+    @pytest.mark.asyncio
+    async def test_matched_relative_motion(self):
+        from systemedu.agents.builtin.pattern_router_agent import PatternRouterAgent
+
+        match_resp = json.dumps({
+            "matched": True,
+            "pattern_id": "relative_motion",
+            "reason": "典型相遇问题",
+            "params": {
+                "title": "甲乙相向而行",
+                "total_distance": 300,
+                "speed_a": 60,
+                "speed_b": 40,
+                "label_a": "甲",
+                "label_b": "乙",
+                "unit": "km/h",
+                "distance_unit": "km",
+                "mode": "toward",
+                "color_a": "#3b82f6",
+                "color_b": "#ef4444",
+            },
+        })
+        llm = self._make_async_llm(match_resp)
+        agent = PatternRouterAgent(llm)
+        result = await agent.route(
+            node_title="相遇问题",
+            node_summary="甲乙两人相向行走",
+            topic="速度与时间的关系",
+        )
+        assert result["matched"] is True
+        assert result["pattern_id"] == "relative_motion"
+        assert result["html"] != ""
+        # HTML should be rendered with title substituted
+        assert "甲乙相向而行" in result["html"]
+
+    @pytest.mark.asyncio
+    async def test_no_match_returns_empty_html(self):
+        from systemedu.agents.builtin.pattern_router_agent import PatternRouterAgent
+
+        no_match_resp = json.dumps({
+            "matched": False,
+            "pattern_id": None,
+            "reason": "知识点不适合任何预制模板",
+            "params": {},
+        })
+        llm = self._make_async_llm(no_match_resp)
+        agent = PatternRouterAgent(llm)
+        result = await agent.route(
+            node_title="微积分概念",
+            node_summary="极限与导数",
+            topic="导数的几何意义",
+        )
+        assert result["matched"] is False
+        assert result["html"] == ""
+
+    @pytest.mark.asyncio
+    async def test_wave_oscillation_spring_mode(self):
+        from systemedu.agents.builtin.pattern_router_agent import PatternRouterAgent
+
+        match_resp = json.dumps({
+            "matched": True,
+            "pattern_id": "wave_oscillation",
+            "reason": "弹簧振动场景",
+            "params": {
+                "title": "弹簧简谐运动",
+                "mode": "spring",
+                "amplitude": 80,
+                "period": 2.0,
+                "label_mass": "m",
+                "label_k": "k=5N/m",
+                "show_energy": True,
+                "color_main": "#6366f1",
+            },
+        })
+        llm = self._make_async_llm(match_resp)
+        agent = PatternRouterAgent(llm)
+        result = await agent.route(
+            node_title="弹簧振动",
+            node_summary="弹簧做简谐运动",
+            topic="弹性势能与动能转换",
+        )
+        assert result["matched"] is True
+        assert result["pattern_id"] == "wave_oscillation"
+        assert result["html"] != ""
+        assert "弹簧简谐运动" in result["html"]
+
+    @pytest.mark.asyncio
+    async def test_render_pattern_direct(self):
+        """Test render_pattern function directly without LLM."""
+        from systemedu.agents.builtin.animation_patterns.registry import render_pattern
+
+        html = render_pattern("relative_motion", {
+            "title": "测试标题",
+            "total_distance": 200,
+            "speed_a": 50,
+            "speed_b": 30,
+            "label_a": "甲",
+            "label_b": "乙",
+            "unit": "m/s",
+            "distance_unit": "m",
+            "mode": "toward",
+            "color_a": "#3b82f6",
+            "color_b": "#ef4444",
+        })
+        assert html != ""
+        assert "测试标题" in html
+        assert "<!DOCTYPE html>" in html
+
+    def test_render_pattern_unknown_id(self):
+        from systemedu.agents.builtin.animation_patterns.registry import render_pattern
+
+        html = render_pattern("nonexistent_pattern", {})
+        assert html == ""
+
+    @pytest.mark.asyncio
+    async def test_json_parse_from_markdown_fence(self):
+        """PatternRouterAgent should handle LLM wrapping JSON in code fence."""
+        from systemedu.agents.builtin.pattern_router_agent import PatternRouterAgent
+
+        fenced_resp = '```json\n' + json.dumps({
+            "matched": True,
+            "pattern_id": "projectile",
+            "reason": "抛体运动",
+            "params": {
+                "title": "斜抛运动",
+                "mode": "angle",
+                "launch_angle": 45,
+                "v0": 20,
+                "gravity": 10,
+                "label_object": "炮弹",
+                "show_components": True,
+                "color_trail": "#f59e0b",
+                "color_object": "#ef4444",
+            },
+        }) + '\n```'
+        llm = self._make_async_llm(fenced_resp)
+        agent = PatternRouterAgent(llm)
+        result = await agent.route("抛体运动", "斜抛运动", "抛体")
+        assert result["matched"] is True
+        assert result["html"] != ""

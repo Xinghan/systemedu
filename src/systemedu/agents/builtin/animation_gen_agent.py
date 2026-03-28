@@ -24,6 +24,7 @@ from systemedu.agents.builtin.manim_gen_agent import ManimGenAgent
 from systemedu.agents.builtin.media_art_direction import (
     inject_katex_if_needed,
 )
+from systemedu.agents.builtin.pattern_router_agent import PatternRouterAgent
 from systemedu.agents.builtin.scientific_model_agent import ScientificModelAgent
 
 logger = logging.getLogger(__name__)
@@ -45,6 +46,7 @@ class AnimationGenAgent:
         self.router = AnimationBackendRouterAgent(llm)
         self.manim = ManimGenAgent(llm)
         self.science_model = ScientificModelAgent(llm)
+        self.pattern_router = PatternRouterAgent(llm)
 
     async def generate(
         self,
@@ -56,8 +58,32 @@ class AnimationGenAgent:
         """Generate animation HTML from detail_plan.
 
         Returns HTML string, or empty string on failure.
+
+        Layer 1: Parametric template library (highest quality, physics equations)
+        Layer 2: AnimationSpec DSL (current system, frame-snapshot based)
+        Layer 3: Fallback HTML
         """
         frames = detail_plan.get("frames", [])
+        topic = detail_plan.get("topic", node_title)
+        context = detail_plan.get("context_summary", "")
+
+        # Layer 1: Try parametric template library first
+        pattern_result = await self.pattern_router.route(
+            node_title=node_title,
+            node_summary=node_summary,
+            topic=topic,
+            context=context,
+        )
+        if pattern_result.get("matched") and pattern_result.get("html"):
+            logger.info(
+                "AnimationGenAgent: Layer 1 pattern match for '%s' -> %s",
+                node_title,
+                pattern_result.get("pattern_id"),
+            )
+            detail_plan["generation_backend"] = "pattern_template"
+            detail_plan["pattern_id"] = pattern_result["pattern_id"]
+            return pattern_result["html"]
+
         if not frames:
             logger.warning("AnimationGenAgent: no frames in detail_plan for '%s'", node_title)
             return ""

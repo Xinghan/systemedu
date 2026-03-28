@@ -1,0 +1,379 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8"/>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{width:100%;height:100%;overflow:hidden;background:#0f172a;
+  font-family:"Noto Sans SC","PingFang SC","Microsoft YaHei",system-ui,sans-serif}
+svg{display:block;width:100%;height:100%}
+</style>
+</head>
+<body>
+<svg id="sv" viewBox="0 0 600 420" preserveAspectRatio="xMidYMid meet">
+  <defs>
+    <linearGradient id="skyGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#0f172a"/>
+      <stop offset="70%" stop-color="#1e3a5f"/>
+      <stop offset="100%" stop-color="#1e293b"/>
+    </linearGradient>
+    <linearGradient id="groundGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#166534"/>
+      <stop offset="100%" stop-color="#14532d"/>
+    </linearGradient>
+    <linearGradient id="objGrad" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#fbbf24"/>
+      <stop offset="100%" stop-color="#dc2626"/>
+    </linearGradient>
+    <linearGradient id="rocketGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#f1f5f9"/>
+      <stop offset="100%" stop-color="#94a3b8"/>
+    </linearGradient>
+    <filter id="glow">
+      <feGaussianBlur stdDeviation="5" result="b"/>
+      <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <filter id="trailGlow">
+      <feGaussianBlur stdDeviation="3" result="b"/>
+      <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <marker id="arrowV" markerWidth="8" markerHeight="8" refX="4" refY="4" orient="auto">
+      <path d="M0,8 L4,0 L8,8 Z" fill="#22d3ee"/>
+    </marker>
+    <marker id="arrowH" markerWidth="8" markerHeight="8" refX="4" refY="4" orient="auto">
+      <path d="M0,0 L8,4 L0,8 Z" fill="#fb923c"/>
+    </marker>
+  </defs>
+
+  <!-- Sky background -->
+  <rect width="600" height="420" fill="url(#skyGrad)"/>
+
+  <!-- Stars (static) -->
+  <g opacity="0.4">
+    <circle cx="50"  cy="30"  r="1" fill="white"/>
+    <circle cx="120" cy="60"  r="1" fill="white"/>
+    <circle cx="200" cy="20"  r="1.5" fill="white"/>
+    <circle cx="350" cy="45"  r="1" fill="white"/>
+    <circle cx="450" cy="25"  r="1" fill="white"/>
+    <circle cx="530" cy="55"  r="1.5" fill="white"/>
+    <circle cx="80"  cy="80"  r="1" fill="white"/>
+    <circle cx="480" cy="80"  r="1" fill="white"/>
+  </g>
+
+  <!-- Ground -->
+  <rect x="0" y="330" width="600" height="90" fill="url(#groundGrad)"/>
+  <line x1="0" y1="330" x2="600" y2="330" stroke="#16a34a" stroke-width="2"/>
+
+  <!-- Title -->
+  <text x="300" y="34" text-anchor="middle" font-size="17" font-weight="700"
+        fill="#f1f5f9" letter-spacing="1">{{title}}</text>
+
+  <!-- Trajectory trail (polyline updated by JS) -->
+  <polyline id="trail" fill="none" stroke={{color_trail}} stroke-width="2.5"
+            stroke-linecap="round" stroke-linejoin="round"
+            filter="url(#trailGlow)" opacity="0.8"/>
+
+  <!-- Velocity component arrows (optional) -->
+  <g id="compArrows" opacity="{{show_components}}">
+    <!-- Horizontal component -->
+    <line id="vxArrow" x1="0" y1="0" x2="0" y2="0"
+          stroke="#fb923c" stroke-width="2.5" marker-end="url(#arrowH)"/>
+    <text id="vxLabel" x="0" y="0" font-size="10" fill="#fb923c" font-weight="600"/>
+    <!-- Vertical component -->
+    <line id="vyArrow" x1="0" y1="0" x2="0" y2="0"
+          stroke="#22d3ee" stroke-width="2.5" marker-end="url(#arrowV)"/>
+    <text id="vyLabel" x="0" y="0" font-size="10" fill="#22d3ee" font-weight="600"/>
+  </g>
+
+  <!-- Launch angle indicator (shown at start) -->
+  <g id="launchAngle" opacity="0.7">
+    <line id="angleLineH" x1="60" y1="310" x2="120" y2="310" stroke="#94a3b8" stroke-width="1.5"/>
+    <path id="angleArcPath" fill="none" stroke="#fbbf24" stroke-width="1.5"/>
+    <text id="angleLbl" x="90" y="305" text-anchor="middle" font-size="11" fill="#fbbf24" font-weight="600"/>
+  </g>
+
+  <!-- Object (circle or rocket) -->
+  <g id="objGroup" filter="url(#glow)">
+    <!-- Simple projectile (circle) -->
+    <g id="projShape">
+      <circle id="projCircle" cx="60" cy="310" r="12" fill="url(#objGrad)"/>
+      <text id="projLabel" x="60" y="314" text-anchor="middle" font-size="10"
+            font-weight="700" fill="white">{{label_object}}</text>
+    </g>
+    <!-- Rocket shape (hidden for non-rocket mode) -->
+    <g id="rocketShape" visibility="hidden">
+      <!-- Body -->
+      <ellipse id="rocketBody" cx="60" cy="310" rx="8" ry="18" fill="url(#rocketGrad)"/>
+      <!-- Nose cone -->
+      <path id="rocketNose" d="M60,292 L68,310 L52,310 Z" fill="#94a3b8"/>
+      <!-- Fins -->
+      <path id="finL" d="M52,324 L46,334 L52,334 Z" fill="#64748b"/>
+      <path id="finR" d="M68,324 L74,334 L68,334 Z" fill="#64748b"/>
+      <!-- Exhaust -->
+      <ellipse id="exhaust" cx="60" cy="328" rx="5" ry="8" fill="#fb923c" opacity="0.8"
+               filter="url(#glow)"/>
+    </g>
+  </g>
+
+  <!-- Max height indicator -->
+  <line id="maxHLine" x1="40" y1="100" x2="560" y2="100" stroke="#a78bfa"
+        stroke-width="1" stroke-dasharray="5,4" opacity="0" id="maxHorizLine"/>
+  <text id="maxHLabel" x="45" y="97" font-size="10" fill="#a78bfa" font-weight="600" opacity="0"/>
+
+  <!-- Range marker -->
+  <line id="rangeLine" x1="60" y1="335" x2="60" y2="335" stroke="#fbbf24"
+        stroke-width="1.5" stroke-dasharray="3,3" opacity="0.5"/>
+  <text id="rangeLbl" x="300" y="350" text-anchor="middle" font-size="11" fill="#fbbf24" font-weight="600" opacity="0"/>
+
+  <!-- Formula panel -->
+  <rect x="10" y="60" width="190" height="72" rx="10"
+        fill="black" opacity="0.5" stroke="#334155" stroke-width="1"/>
+  <text id="formulaTitle" x="105" y="80" text-anchor="middle" font-size="10" fill="#94a3b8" font-weight="600"/>
+  <text id="f1" x="105" y="97" text-anchor="middle" font-size="11" fill="#f1f5f9" font-weight="600"/>
+  <text id="f2" x="105" y="113" text-anchor="middle" font-size="11" fill="#f1f5f9" font-weight="600"/>
+  <text id="f3" x="105" y="128" text-anchor="middle" font-size="11" fill="#94a3b8"/>
+
+  <!-- HUD bar -->
+  <rect x="0" y="360" width="600" height="60" fill="#000" opacity="0.6"/>
+  <text x="40"  y="382" font-size="10" fill="#94a3b8" font-weight="600">水平速度</text>
+  <text x="160" y="382" font-size="10" fill="#94a3b8" font-weight="600">竖直速度</text>
+  <text x="290" y="382" font-size="10" fill="#94a3b8" font-weight="600">高度</text>
+  <text x="410" y="382" font-size="10" fill="#94a3b8" font-weight="600">水平位移</text>
+  <text id="hud_vx" x="40"  y="402" font-size="13" fill="#fb923c" font-weight="700"/>
+  <text id="hud_vy" x="160" y="402" font-size="13" fill="#22d3ee" font-weight="700"/>
+  <text id="hud_h"  x="290" y="402" font-size="13" fill="#f1f5f9" font-weight="700"/>
+  <text id="hud_x"  x="410" y="402" font-size="13" fill="#f1f5f9" font-weight="700"/>
+</svg>
+
+<script>
+(function(){
+  var TITLE          = {{title}};
+  var MODE           = {{mode}};         // "horizontal" | "angle" | "rocket"
+  var LAUNCH_ANGLE   = {{launch_angle}}; // degrees
+  var V0             = {{v0}};           // m/s (logical units)
+  var GRAVITY        = {{gravity}};      // m/s^2
+  var LABEL_OBJ      = {{label_object}};
+  var SHOW_COMP      = {{show_components}};
+  var COLOR_TRAIL    = {{color_trail}};
+  var COLOR_OBJ      = {{color_object}};
+
+  // Scale: 1 logical unit = SCALE px
+  var SCALE = 8;  // adjustable
+  var GROUND_Y = 330;
+  var LAUNCH_X = 60;
+  var LAUNCH_Y = GROUND_Y;
+
+  var angleRad = LAUNCH_ANGLE * Math.PI / 180;
+  var vx0, vy0;
+  if (MODE === "horizontal") {
+    vx0 = V0; vy0 = 0;
+    LAUNCH_Y = 200;  // horizontal throw from elevated position
+  } else if (MODE === "rocket") {
+    vx0 = 0; vy0 = -V0;  // straight up
+    LAUNCH_X = 300;
+  } else {
+    // angle throw
+    vx0 = V0 * Math.cos(angleRad);
+    vy0 = -V0 * Math.sin(angleRad);  // negative = upward in SVG
+  }
+
+  // Time of flight (when y returns to ground)
+  var totalT;
+  if (MODE === "rocket") {
+    totalT = 2 * V0 / GRAVITY;  // up and down
+  } else if (MODE === "horizontal") {
+    // falls from launch height to ground
+    var fallH = (GROUND_Y - LAUNCH_Y) / SCALE;
+    totalT = Math.sqrt(2 * fallH / GRAVITY);
+  } else {
+    totalT = 2 * V0 * Math.sin(angleRad) / GRAVITY;
+  }
+
+  var maxH = V0 * V0 * Math.sin(angleRad) * Math.sin(angleRad) / (2 * GRAVITY);
+
+  // DOM refs
+  var trail      = document.getElementById("trail");
+  var projCircle = document.getElementById("projCircle");
+  var projLabel  = document.getElementById("projLabel");
+  var rocketShape = document.getElementById("rocketShape");
+  var projShape  = document.getElementById("projShape");
+  var vxArrow    = document.getElementById("vxArrow");
+  var vyArrow    = document.getElementById("vyArrow");
+  var vxLabel    = document.getElementById("vxLabel");
+  var vyLabel    = document.getElementById("vyLabel");
+  var maxHorizLine = document.getElementById("maxHorizLine");
+  var maxHLabel  = document.getElementById("maxHLabel");
+  var rangeLbl   = document.getElementById("rangeLbl");
+  var rangeLine  = document.getElementById("rangeLine");
+  var launchAngle = document.getElementById("launchAngle");
+  var angleArcPath = document.getElementById("angleArcPath");
+  var angleLbl   = document.getElementById("angleLbl");
+  var f1 = document.getElementById("f1");
+  var f2 = document.getElementById("f2");
+  var f3 = document.getElementById("f3");
+  var formulaTitle = document.getElementById("formulaTitle");
+  var hudVx = document.getElementById("hud_vx");
+  var hudVy = document.getElementById("hud_vy");
+  var hudH  = document.getElementById("hud_h");
+  var hudX  = document.getElementById("hud_x");
+  var rocketBody = document.getElementById("rocketBody");
+  var rocketNose = document.getElementById("rocketNose");
+  var finL = document.getElementById("finL");
+  var finR = document.getElementById("finR");
+  var exhaust = document.getElementById("exhaust");
+
+  // Show rocket or projectile shape
+  if (MODE === "rocket") {
+    projShape.style.visibility = "hidden";
+    rocketShape.setAttribute("visibility", "visible");
+  }
+
+  // Formula panel
+  if (MODE === "horizontal") {
+    formulaTitle.textContent = "平抛运动";
+    f1.textContent = "x = v\u2080t";
+    f2.textContent = "y = \u00begt\u00b2";
+    f3.textContent = "水平匀速, 竖直加速";
+  } else if (MODE === "rocket") {
+    formulaTitle.textContent = "竖直上抛";
+    f1.textContent = "h = v\u2080t - \u00begt\u00b2";
+    f2.textContent = "v = v\u2080 - gt";
+    f3.textContent = "最高点: v=0";
+  } else {
+    formulaTitle.textContent = "斜抛运动";
+    f1.textContent = "x = v\u2080cos\u03b8 \u00b7 t";
+    f2.textContent = "y = v\u2080sin\u03b8\u00b7t - \u00begt\u00b2";
+    f3.textContent = "\u03b8 = " + LAUNCH_ANGLE + "\u00b0  v\u2080=" + V0 + " m/s";
+  }
+
+  // Launch angle visual
+  if (MODE !== "rocket") {
+    var arcR2 = 40;
+    var aAng = -angleRad;
+    var ax2 = LAUNCH_X + arcR2 * Math.cos(aAng);
+    var ay2 = LAUNCH_Y + arcR2 * Math.sin(aAng);
+    angleArcPath.setAttribute("d",
+      "M " + (LAUNCH_X + arcR2) + " " + LAUNCH_Y +
+      " A " + arcR2 + " " + arcR2 + " 0 0 0 " + ax2.toFixed(1) + " " + ay2.toFixed(1));
+    angleLbl.setAttribute("x", (LAUNCH_X + arcR2 * 1.3 * Math.cos(aAng/2)).toFixed(1));
+    angleLbl.setAttribute("y", (LAUNCH_Y + arcR2 * 1.3 * Math.sin(aAng/2) - 2).toFixed(1));
+    angleLbl.textContent = LAUNCH_ANGLE + "\u00b0";
+  }
+
+  var trailPts = [];
+  var startTime = null;
+  var cycleMs = (totalT * 1000 + 1500);  // total + pause
+
+  function posAt(t) {
+    var px = LAUNCH_X + vx0 * t * SCALE;
+    var py = LAUNCH_Y + vy0 * t * SCALE + 0.5 * GRAVITY * t * t * SCALE;
+    return {x: px, y: py};
+  }
+
+  function frame(ts) {
+    if (!startTime) startTime = ts;
+    var elapsed = (ts - startTime);
+    var cycleT = elapsed % cycleMs;
+    var t = Math.min(cycleT / 1000, totalT);
+
+    // Reset trail on new cycle
+    if (cycleT < 16) trailPts = [];
+
+    var pos = posAt(t);
+    var cx = pos.x, cy = pos.y;
+
+    // Clamp to visible area
+    cx = Math.max(20, Math.min(580, cx));
+    cy = Math.max(20, Math.min(GROUND_Y, cy));
+
+    // Build trail
+    trailPts.push(cx.toFixed(1) + "," + cy.toFixed(1));
+    // Limit trail length for performance
+    if (trailPts.length > 120) trailPts.shift();
+    trail.setAttribute("points", trailPts.join(" "));
+
+    // Update object position
+    if (MODE === "rocket") {
+      // Rocket shape: translate group
+      var dx = cx - 300, dy = cy - GROUND_Y;
+      rocketBody.setAttribute("cx", cx.toFixed(1));
+      rocketBody.setAttribute("cy", cy.toFixed(1));
+      var noseH = 18;
+      rocketNose.setAttribute("d",
+        "M" + cx + "," + (cy-noseH) +
+        " L" + (cx+8) + "," + cy +
+        " L" + (cx-8) + "," + cy + " Z");
+      finL.setAttribute("d",
+        "M" + (cx-8) + "," + (cy+10) +
+        " L" + (cx-14) + "," + (cy+20) +
+        " L" + (cx-8) + "," + (cy+20) + " Z");
+      finR.setAttribute("d",
+        "M" + (cx+8) + "," + (cy+10) +
+        " L" + (cx+14) + "," + (cy+20) +
+        " L" + (cx+8) + "," + (cy+20) + " Z");
+      exhaust.setAttribute("cx", cx.toFixed(1));
+      exhaust.setAttribute("cy", (cy + 28).toFixed(1));
+    } else {
+      projCircle.setAttribute("cx", cx.toFixed(1));
+      projCircle.setAttribute("cy", cy.toFixed(1));
+      projLabel.setAttribute("x", cx.toFixed(1));
+      projLabel.setAttribute("y", (cy + 4).toFixed(1));
+    }
+
+    // Velocity at time t
+    var vxT = vx0;
+    var vyT = vy0 + GRAVITY * t;
+
+    // Velocity component arrows
+    if (SHOW_COMP && t > 0.05) {
+      var arrowScale = SCALE * 0.6;
+      var vxEnd = cx + vxT * arrowScale;
+      var vyEnd = cy + vyT * arrowScale;
+      vxArrow.setAttribute("x1", cx.toFixed(1)); vxArrow.setAttribute("y1", cy.toFixed(1));
+      vxArrow.setAttribute("x2", Math.min(580, vxEnd).toFixed(1)); vxArrow.setAttribute("y2", cy.toFixed(1));
+      vyArrow.setAttribute("x1", cx.toFixed(1)); vyArrow.setAttribute("y1", cy.toFixed(1));
+      vyArrow.setAttribute("x2", cx.toFixed(1));
+      vyArrow.setAttribute("y2", Math.max(20, Math.min(GROUND_Y, vyEnd)).toFixed(1));
+      vxLabel.setAttribute("x", (cx + vxT * arrowScale * 0.5).toFixed(1));
+      vxLabel.setAttribute("y", (cy - 8).toFixed(1));
+      vxLabel.textContent = "Vx";
+      vyLabel.setAttribute("x", (cx + 14).toFixed(1));
+      vyLabel.setAttribute("y", (cy + vyT * arrowScale * 0.5).toFixed(1));
+      vyLabel.textContent = "Vy";
+    }
+
+    // Max height indicator
+    if (trailPts.length > 5) {
+      var maxY_px = Math.min.apply(null, trailPts.map(function(p){ return parseFloat(p.split(",")[1]); }));
+      maxHorizLine.setAttribute("y1", maxY_px); maxHorizLine.setAttribute("y2", maxY_px);
+      maxHorizLine.setAttribute("opacity", "0.5");
+      maxHLabel.setAttribute("y", maxY_px - 4);
+      maxHLabel.setAttribute("opacity", "0.8");
+      var hMeters = ((GROUND_Y - maxY_px) / SCALE).toFixed(1);
+      maxHLabel.textContent = "H = " + hMeters + "m";
+    }
+
+    // Range label when landing
+    if (t >= totalT - 0.1) {
+      rangeLbl.setAttribute("opacity", "0.9");
+      var rangeM = (vx0 * totalT).toFixed(0);
+      rangeLbl.textContent = "水平位移: " + rangeM + " m";
+      rangeLbl.setAttribute("x", ((LAUNCH_X + cx) / 2).toFixed(1));
+    }
+
+    // HUD
+    var heightM = Math.max(0, (GROUND_Y - cy) / SCALE).toFixed(1);
+    var xM = ((cx - LAUNCH_X) / SCALE).toFixed(1);
+    hudVx.textContent = vxT.toFixed(1) + " m/s";
+    hudVy.textContent = (-vyT).toFixed(1) + " m/s";
+    hudH.textContent  = heightM + " m";
+    hudX.textContent  = xM + " m";
+
+    requestAnimationFrame(frame);
+  }
+
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
