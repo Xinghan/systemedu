@@ -244,21 +244,42 @@ class TestCourseIdeaDetailAgent:
 
 # ===== AnimationGenAgent =====
 
+_MOCK_ANIM_SPEC = json.dumps({
+    "style_key": "edu_soft_tech",
+    "frame_duration": 3.0,
+    "frames": [
+        {
+            "caption": "力的传递",
+            "narration": "展示力",
+            "elements": [
+                {"type": "rect", "x": 40, "y": 30, "w": 520, "h": 290, "fill": "#eff6ff", "rx": 16},
+                {"type": "circle", "cx": 300, "cy": 170, "r": 80, "fill": "#1d4ed8", "opacity": 0.3,
+                 "enter": {"duration": 0.5, "easing": "spring", "from_scale": 0.3}},
+                {"type": "text", "x": 300, "y": 175, "text": "力的传递", "font_size": 20, "bold": True, "color": "#1e3a8a",
+                 "enter": {"duration": 0.4, "delay": 0.2, "easing": "easeOut", "from_y": 15}},
+            ],
+        },
+        {
+            "caption": "结论",
+            "narration": "作用与反作用",
+            "elements": [
+                {"type": "rect", "x": 40, "y": 30, "w": 520, "h": 290, "fill": "#f0fdfa", "rx": 16},
+                {"type": "label_bubble", "x": 300, "y": 200, "text": "作用力=反作用力", "font_size": 14, "bg": "#0891b2",
+                 "enter": {"duration": 0.4, "easing": "spring", "from_scale": 0.2}},
+            ],
+        },
+    ],
+})
+
+
 class TestAnimationGenAgent:
 
     @pytest.mark.asyncio
     async def test_generate_returns_html(self):
-        """AnimationGenAgent returns valid HTML (video or SVG depending on backend)."""
+        """AnimationGenAgent 通过 AnimationSpec DSL 生成合法 HTML。"""
         from systemedu.agents.builtin.animation_gen_agent import AnimationGenAgent
 
-        html_output = """<!DOCTYPE html><html><head><style>
-        @keyframes move { from { opacity: 0; } to { opacity: 1; } }
-        .box { animation: move 2s; }
-        </style></head><body>
-        <svg viewBox="0 0 600 400"><rect class="box" x="10" y="10" width="100" height="50"/></svg>
-        </body></html>"""
-
-        llm = _make_llm(html_output)
+        llm = _make_llm(_MOCK_ANIM_SPEC)
         agent = AnimationGenAgent(llm)
         detail = {
             "title": "力传递动画",
@@ -268,27 +289,28 @@ class TestAnimationGenAgent:
             "animation_type": "物理过程",
         }
         result = await agent.generate(detail, "力")
-        # Manim (forced) returns <video>, SVG path returns <svg> — either is valid HTML
-        assert "<html" in result.lower() or "<!doctype" in result.lower()
+        assert "<!doctype html" in result.lower()
         assert "step_complete" in result.lower()
+        assert "AnimationRuntime" in result
 
     @pytest.mark.asyncio
-    async def test_generate_fallback_on_missing_svg(self):
-        """When Manim is forced and succeeds, it returns video HTML (not SVG)."""
+    async def test_generate_fallback_on_invalid_json(self):
+        """LLM 返回非法 JSON 时，AnimationGenAgent 走 deterministic fallback。"""
         from systemedu.agents.builtin.animation_gen_agent import AnimationGenAgent
 
-        llm = _make_llm("<html><body>no svg here</body></html>")
+        llm = _make_llm("这不是JSON内容，只是普通文字")
         agent = AnimationGenAgent(llm)
         detail = {
             "title": "t",
             "frame_count": 1,
-            "frames": [{"frame_index": 0, "description": "d", "visual_elements": []}],
+            "frames": [{"frame_index": 0, "description": "d", "visual_elements": ["A", "B"]}],
             "style_hint": "科技感",
             "animation_type": "物理过程",
         }
         result = await agent.generate(detail, "力")
-        # Manim forced: returns video HTML; fallback: returns SVG — both have completion signal
+        # Fallback 仍然返回合法 HTML 含完成信号
         assert "step_complete" in result.lower()
+        assert "AnimationRuntime" in result
 
     @pytest.mark.asyncio
     async def test_generate_empty_frames(self):
@@ -557,10 +579,11 @@ class TestKaTeXInjection:
         result = inject_katex_if_needed(html)
         assert "katex" in result.lower()
 
-    def test_animation_gen_prompt_contains_katex_hint(self):
-        from systemedu.agents.builtin.animation_gen_agent import ANIMATION_GEN_PROMPT
-
-        assert "KaTeX" in ANIMATION_GEN_PROMPT or "katex" in ANIMATION_GEN_PROMPT.lower()
+    def test_animation_spec_prompt_contains_formula_type(self):
+        # AnimationGenAgent 现在使用 AnimationSpec DSL，LLM 输出 JSON spec
+        # formula 类型元素支持 LaTeX（由 compile_animation_spec 自动注入 KaTeX）
+        from systemedu.agents.builtin.animation_spec import ANIMATION_SPEC_PROMPT
+        assert "formula" in ANIMATION_SPEC_PROMPT
 
     def test_katex_prompt_hint_content(self):
         from systemedu.agents.builtin.media_art_direction import KATEX_PROMPT_HINT
