@@ -318,7 +318,7 @@ export default function LearnPage() {
 
             <ScrollArea className="flex-1 min-h-0">
               <div className="px-3 pb-4 space-y-4">
-                {filteredMilestones.map((ms, msIdx) => (
+                {filteredMilestones.map((ms) => (
                   <div key={ms.title}>
                     <p className="text-[10px] font-[var(--font-manrope)] uppercase tracking-widest text-muted-foreground/70 font-semibold px-2 mb-2">
                       {ms.title}
@@ -331,7 +331,7 @@ export default function LearnPage() {
                         const isLocked = status === "locked"
                         const isInProgress = status === "in_progress"
                         const globalIdx = allKnodes.findIndex((k) => k.id === knode.id)
-                        const displayIdx = msIdx * 100 + knodeIdx + 1
+                        const displayIdx = globalIdx + 1
 
                         return (
                           <button

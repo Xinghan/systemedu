@@ -102,6 +102,8 @@ export const gateway = {
     api.get<CourseContentData>(`/api/projects/${projectName}/nodes/${nodeId}/course/v2`),
   getCourseV2Assignment: (projectName: string, nodeId: number) =>
     api.get<CourseAssignmentData>(`/api/projects/${projectName}/nodes/${nodeId}/course/v2/assignment`),
+  cancelCourseV2: (projectName: string, nodeId: number) =>
+    api.post<{ status: string }>(`/api/projects/${projectName}/nodes/${nodeId}/course/v2/cancel`, {}),
   streamCourseV2: async (projectName: string, nodeId: number, regenerate = false): Promise<Response> => {
     // Returns a fetch Response with SSE stream. Use body.getReader() to consume.
     // Auth is passed via ?token= query param so no CORS preflight issues.

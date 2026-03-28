@@ -544,11 +544,12 @@ function EditorialHeader({ knode }: { knode: KnodeInfo | null }) {
 // ---------------------------------------------------------------------------
 
 function GeneratingProgress({
-  stage, ideaProgress, agentLogs,
+  stage, ideaProgress, agentLogs, onStop,
 }: {
   stage: PipelineStage
   ideaProgress: { done: number; total: number }
   agentLogs: AgentLogEntry[]
+  onStop?: () => void
 }) {
   const t = useT()
   const currentIdx = STAGE_ORDER.indexOf(stage)
@@ -628,9 +629,9 @@ function GeneratingProgress({
             {t("gen.title_line2")}
           </h2>
         </div>
-        <div className="text-right shrink-0">
+        <div className="text-right shrink-0 flex flex-col items-end gap-2">
           <p
-            className="text-[10px] font-bold uppercase tracking-[0.2em] mb-1"
+            className="text-[10px] font-bold uppercase tracking-[0.2em]"
             style={{ color: M.muted }}
           >
             {t("gen.system_progress")}
@@ -642,6 +643,20 @@ function GeneratingProgress({
             {progressPct}
             <span className="text-xl font-bold" style={{ color: M.mutedFg }}>%</span>
           </p>
+          {onStop && (
+            <button
+              onClick={onStop}
+              className="flex items-center gap-1.5 px-3 h-8 rounded-lg border text-xs font-semibold transition-colors"
+              style={{
+                borderColor: "rgba(239,68,68,0.3)",
+                color: "#ef4444",
+                background: "rgba(239,68,68,0.06)",
+              }}
+            >
+              <Square className="h-3 w-3 fill-current" />
+              停止
+            </button>
+          )}
         </div>
       </div>
 
@@ -989,6 +1004,7 @@ export function CourseContentView({
 }: CourseContentViewProps) {
   const [courseData, setCourseData] = useState<CourseContentData | null>(null)
   const [generating, setGenerating] = useState(false)
+  const [stopped, setStopped] = useState(false)   // user explicitly stopped, backend task cancelled
   const [stage, setStage] = useState<PipelineStage>("connecting")
   const [ideaProgress, setIdeaProgress] = useState<{ done: number; total: number }>({ done: 0, total: 0 })
   const [agentLogs, setAgentLogs] = useState<AgentLogEntry[]>([])
@@ -998,11 +1014,26 @@ export function CourseContentView({
 
   const content = courseData?.course_content as CourseContent | undefined
 
+  const handleStop = async () => {
+    abortRef.current = true          // stop SSE reader loop
+    setStopped(true)
+    setGenerating(false)
+    try {
+      await gateway.cancelCourseV2(projectName, nodeId)
+    } catch { /* ignore */ }
+  }
+
+  const handleResume = () => {
+    setStopped(false)
+    load(false)   // reconnect SSE — backend will restart generation
+  }
+
   const load = async (regenerate = false) => {
     // Abort any in-flight load before starting a new one
     abortRef.current = true
     const myLoadId = ++loadIdRef.current
     abortRef.current = false
+    setStopped(false)
     setError(null)
     setGenerating(true)
     setStage("connecting")
@@ -1142,7 +1173,35 @@ export function CourseContentView({
                 stage={stage}
                 ideaProgress={ideaProgress}
                 agentLogs={agentLogs}
+                onStop={handleStop}
               />
+            </div>
+          )}
+
+          {stopped && !generating && (
+            <div className="flex flex-col items-center justify-center gap-4 px-6 py-16 text-center">
+              <div className="w-14 h-14 rounded-full bg-amber-50 border border-amber-200 flex items-center justify-center">
+                <Square className="h-6 w-6 text-amber-500" />
+              </div>
+              <div>
+                <p className="text-sm font-semibold text-on-surface">生成已停止</p>
+                <p className="text-xs text-muted-foreground mt-1">后台任务已取消，点击恢复重新生成</p>
+              </div>
+              <div className="flex gap-3">
+                <button
+                  onClick={handleResume}
+                  className="flex items-center gap-2 px-5 h-10 rounded-xl bg-primary text-white text-sm font-semibold hover:bg-primary/90 transition-colors"
+                >
+                  <Play className="h-4 w-4 fill-current" />
+                  恢复生成
+                </button>
+                <button
+                  onClick={onClose}
+                  className="flex items-center gap-2 px-5 h-10 rounded-xl border border-border text-sm text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  关闭
+                </button>
+              </div>
             </div>
           )}
 

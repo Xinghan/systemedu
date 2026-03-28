@@ -1348,6 +1348,10 @@ async def api_generate_course_v2(request: Request) -> JSONResponse:
         return JSONResponse({"error": str(exc)}, status_code=500)
 
 
+# Registry of active generation tasks: key = (project_name, node_id)
+_generation_tasks: dict[tuple[str, int], "asyncio.Task[None]"] = {}
+
+
 async def api_course_v2_stream(request: Request) -> StreamingResponse:
     """GET /api/projects/{name}/nodes/{node_id}/course/v2/stream - SSE stream for course generation.
 
@@ -1364,22 +1368,34 @@ async def api_course_v2_stream(request: Request) -> StreamingResponse:
     node_id = int(request.path_params["node_id"])
     regenerate = request.query_params.get("regenerate", "0") == "1"
 
+    task_key = (name, node_id)
+
+    # Cancel any existing task for this node before starting a new one
+    existing = _generation_tasks.get(task_key)
+    if existing and not existing.done():
+        existing.cancel()
+        _generation_tasks.pop(task_key, None)
+
     queue: asyncio.Queue = asyncio.Queue()
 
     def progress_cb(event: str, data: dict):
         queue.put_nowait((event, data))
 
     async def generate():
-        # Kick off pipeline in background task
         async def run():
             try:
                 from systemedu.education.lesson_generator import generate_course_v2
                 await generate_course_v2(name, node_id, progress_cb=progress_cb)
+            except asyncio.CancelledError:
+                queue.put_nowait(("cancelled", {}))
             except Exception as exc:
                 logger.exception(f"course_v2_stream failed for {name}/{node_id}")
                 queue.put_nowait(("error", {"message": str(exc)}))
+            finally:
+                _generation_tasks.pop(task_key, None)
 
         task = asyncio.ensure_future(run())
+        _generation_tasks[task_key] = task
 
         try:
             while True:
@@ -1392,10 +1408,11 @@ async def api_course_v2_stream(request: Request) -> StreamingResponse:
                 payload = json.dumps(data, ensure_ascii=False)
                 yield f"event: {event}\ndata: {payload}\n\n"
 
-                if event in ("done", "error"):
+                if event in ("done", "error", "cancelled"):
                     break
         finally:
-            task.cancel()
+            # SSE client disconnected — task keeps running unless explicitly cancelled
+            pass
 
     return StreamingResponse(
         generate(),
@@ -1405,6 +1422,36 @@ async def api_course_v2_stream(request: Request) -> StreamingResponse:
             "X-Accel-Buffering": "no",
         },
     )
+
+
+async def api_course_v2_cancel(request: Request) -> JSONResponse:
+    """POST /api/projects/{name}/nodes/{node_id}/course/v2/cancel - Cancel a running generation."""
+    err = await require_auth(request)
+    if err:
+        return err
+
+    name = request.path_params["name"]
+    node_id = int(request.path_params["node_id"])
+    task_key = (name, node_id)
+
+    task = _generation_tasks.get(task_key)
+    if task and not task.done():
+        task.cancel()
+        _generation_tasks.pop(task_key, None)
+        # Mark DB status back to pending so user can regenerate cleanly
+        from systemedu.storage.db import LessonContent, get_session as get_db_session
+        db = get_db_session()
+        try:
+            lesson = db.query(LessonContent).filter_by(project_name=name, knode_id=node_id).first()
+            if lesson and lesson.status == "generating":
+                lesson.status = "pending"
+                db.commit()
+        finally:
+            db.close()
+        logger.info(f"Generation cancelled for {name}/{node_id}")
+        return JSONResponse({"status": "cancelled"})
+
+    return JSONResponse({"status": "not_running"})
 
 
 async def api_get_course_v2(request: Request) -> JSONResponse:
@@ -2532,6 +2579,7 @@ def create_app() -> Starlette:
         Route("/api/projects/{name}/nodes/{node_id:int}/context", api_node_context),
         Route("/api/projects/{name}/nodes/{node_id:int}/course/v2/generate", api_generate_course_v2, methods=["POST"]),
         Route("/api/projects/{name}/nodes/{node_id:int}/course/v2/stream", api_course_v2_stream, methods=["GET"]),
+        Route("/api/projects/{name}/nodes/{node_id:int}/course/v2/cancel", api_course_v2_cancel, methods=["POST"]),
         Route("/api/projects/{name}/nodes/{node_id:int}/course/v2/assignment", api_get_course_v2_assignment, methods=["GET"]),
         Route("/api/projects/{name}/nodes/{node_id:int}/course/v2", api_get_course_v2, methods=["GET"]),
         Route("/api/projects/{name}/nodes/{node_id:int}/progress", api_update_progress, methods=["PATCH"]),
