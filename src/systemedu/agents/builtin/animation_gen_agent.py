@@ -29,6 +29,31 @@ from systemedu.agents.builtin.scientific_model_agent import ScientificModelAgent
 
 logger = logging.getLogger(__name__)
 
+# ─────────────────────────────────────────────────────────────
+# Repair Agent prompt（A4）
+# ─────────────────────────────────────────────────────────────
+
+REPAIR_PROMPT = """\
+以下 AnimationSpec 存在几何/质量问题，请修复并返回完整的修复后 JSON：
+
+问题列表：
+{issues}
+
+原始 AnimationSpec：
+{spec_json}
+
+修复规则：
+1. 只修改有问题的帧/元素，保持其他内容不变
+2. 超出边界的元素：调整 x/y/w/h 使其在 0-600(x) 和 0-360(y) 范围内
+3. 字体过小：将 font_size 调整至至少 12
+4. 缺少 objective：为每帧补充一句教学目标说明（不是视觉描述，是教学意图）
+5. enter.duration <= 0：修正为 0.4
+6. enter.delay < 0：修正为 0
+7. enter 动画超出 frame_duration：缩短 duration 或减小 delay
+8. 直接输出修复后的完整 JSON，不要任何说明
+
+修复后的 AnimationSpec JSON："""
+
 
 def _strip_code_fence(text: str) -> str:
     """Strip markdown code fences."""
@@ -124,6 +149,25 @@ class AnimationGenAgent:
             project_category=project_category,
         )
 
+    async def _repair_spec(self, spec: dict, issues: list[str]) -> dict:
+        """A4: 单次 LLM 修复调用，修正几何/质量问题后返回修复后的 spec。"""
+        import asyncio
+        from langchain_core.messages import HumanMessage
+
+        prompt = REPAIR_PROMPT.format(
+            issues="\n".join(f"- {issue}" for issue in issues),
+            spec_json=json.dumps(spec, ensure_ascii=False, indent=2),
+        )
+        try:
+            response = await asyncio.to_thread(self.llm.invoke, [HumanMessage(content=prompt)])
+            raw = _strip_code_fence(response.content.strip())
+            repaired = json.loads(raw)
+            logger.info("AnimationGenAgent: repair successful, issues fixed: %d", len(issues))
+            return repaired
+        except Exception as exc:
+            logger.warning("AnimationGenAgent: repair failed (%s), using original spec", exc)
+            return spec
+
     async def _generate_via_spec(
         self,
         detail_plan: dict,
@@ -199,15 +243,19 @@ class AnimationGenAgent:
                 )
                 return _build_fallback_html(detail_plan, node_title)
 
-            # Validate spec
+            # Validate spec（A3/A6 几何+时间线校验）
             valid, issues = validate_animation_spec(spec)
-            if not valid:
-                logger.warning(
-                    "AnimationGenAgent: spec invalid for '%s': %s", node_title, issues
+            if issues:
+                logger.info(
+                    "AnimationGenAgent: spec has %d issues for '%s', calling repair",
+                    len(issues),
+                    node_title,
                 )
-                # Attempt to use as-is if frames exist, otherwise fallback
-                if not spec.get("frames"):
-                    return _build_fallback_html(detail_plan, node_title)
+                spec = await self._repair_spec(spec, issues)
+                # 修复后不再重复校验，避免无限循环
+
+            if not valid and not spec.get("frames"):
+                return _build_fallback_html(detail_plan, node_title)
 
             # Ensure style_key
             if not spec.get("style_key"):
@@ -300,15 +348,17 @@ def _build_fallback_html(detail_plan: dict, node_title: str) -> str:
 
         spec_frames.append({
             "caption": desc[:12],
+            "objective": f"展示{desc[:10]}的核心概念",
             "narration": narration[:10],
             "elements": frame_elements,
         })
 
     if not spec_frames:
-        # 最小化 fallback
+        # 最소化 fallback
         title = detail_plan.get("title") or node_title
         spec_frames = [{
             "caption": title[:12],
+            "objective": f"介绍{title[:10]}",
             "narration": "",
             "elements": [
                 {"type": "rect", "x": 32, "y": 20, "w": 536, "h": 300, "fill": "#eff6ff", "rx": 18},

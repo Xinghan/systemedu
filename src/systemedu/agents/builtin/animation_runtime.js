@@ -168,11 +168,116 @@
         div.style.cssText = "text-align:center;font-size:" + (spec.font_size || 20) + "px;color:" + (spec.color || "#1d4ed8") + ";line-height:" + (spec.h || 60) + "px;";
         div.textContent = spec.text || "";
         el.appendChild(div);
+      } else if (type === "axis") {
+        // 坐标轴（A5：自动计算刻度）
+        el = _svgEl("g", {});
+        var ax = spec.x || 60, ay = spec.y || 280;
+        var xLen = spec.x_len || 300, yLen = spec.y_len || -200;
+        var stroke = spec.stroke || "#64748b";
+        var fs = spec.font_size || 11;
+        var xTicks = spec.x_ticks || 5, yTicks = spec.y_ticks || 4;
+        // 水平轴
+        var hAxis = _svgEl("line", { x1: ax, y1: ay, x2: ax + xLen, y2: ay, stroke: stroke, "stroke-width": 1.5 });
+        el.appendChild(hAxis);
+        // 水平轴箭头
+        var hArrow = _svgEl("path", { d: "M" + (ax+xLen-6) + "," + (ay-4) + " L" + (ax+xLen) + "," + ay + " L" + (ax+xLen-6) + "," + (ay+4), fill: "none", stroke: stroke, "stroke-width": 1.5 });
+        el.appendChild(hArrow);
+        // 竖直轴
+        var vAxis = _svgEl("line", { x1: ax, y1: ay, x2: ax, y2: ay + yLen, stroke: stroke, "stroke-width": 1.5 });
+        el.appendChild(vAxis);
+        // 竖直轴箭头
+        var vArrow = _svgEl("path", { d: "M" + (ax-4) + "," + (ay+yLen+6) + " L" + ax + "," + (ay+yLen) + " L" + (ax+4) + "," + (ay+yLen+6), fill: "none", stroke: stroke, "stroke-width": 1.5 });
+        el.appendChild(vArrow);
+        // X 轴刻度
+        var xTickStep = xLen / xTicks;
+        for (var ti = 1; ti <= xTicks; ti++) {
+          var tx = ax + ti * xTickStep;
+          el.appendChild(_svgEl("line", { x1: tx, y1: ay - 4, x2: tx, y2: ay + 4, stroke: stroke, "stroke-width": 1 }));
+          var tLabel = _svgEl("text", { x: tx, y: ay + fs + 4, "text-anchor": "middle", "font-size": fs, fill: stroke });
+          tLabel.textContent = ti;
+          el.appendChild(tLabel);
+        }
+        // Y 轴刻度
+        var yTickStep = yLen / yTicks;
+        for (var ti2 = 1; ti2 <= yTicks; ti2++) {
+          var ty = ay + ti2 * yTickStep;
+          el.appendChild(_svgEl("line", { x1: ax - 4, y1: ty, x2: ax + 4, y2: ty, stroke: stroke, "stroke-width": 1 }));
+          var tLabel2 = _svgEl("text", { x: ax - fs - 2, y: ty + fs * 0.35, "text-anchor": "end", "font-size": fs, fill: stroke });
+          tLabel2.textContent = ti2;
+          el.appendChild(tLabel2);
+        }
+        // 轴标签
+        if (spec.x_label) {
+          var xl = _svgEl("text", { x: ax + xLen + 8, y: ay + 4, "text-anchor": "start", "font-size": fs, fill: stroke });
+          xl.textContent = spec.x_label;
+          el.appendChild(xl);
+        }
+        if (spec.y_label) {
+          var yl = _svgEl("text", { x: ax + 6, y: ay + yLen - 4, "text-anchor": "start", "font-size": fs, fill: stroke });
+          yl.textContent = spec.y_label;
+          el.appendChild(yl);
+        }
+      } else if (type === "grid") {
+        // 网格（A5）
+        el = _svgEl("g", {});
+        var gx = spec.x || 60, gy = spec.y || 60;
+        var gw = spec.w || 300, gh = spec.h || 200;
+        var cols = spec.cols || 5, rows = spec.rows || 4;
+        var gStroke = spec.stroke || "#e2e8f0";
+        var gOp = spec.opacity != null ? spec.opacity : 0.4;
+        var colStep = gw / cols, rowStep = gh / rows;
+        for (var ci = 0; ci <= cols; ci++) {
+          var gLineX = _svgEl("line", { x1: gx + ci * colStep, y1: gy, x2: gx + ci * colStep, y2: gy + gh, stroke: gStroke, "stroke-width": 0.8, opacity: gOp });
+          el.appendChild(gLineX);
+        }
+        for (var ri = 0; ri <= rows; ri++) {
+          var gLineY = _svgEl("line", { x1: gx, y1: gy + ri * rowStep, x2: gx + gw, y2: gy + ri * rowStep, stroke: gStroke, "stroke-width": 0.8, opacity: gOp });
+          el.appendChild(gLineY);
+        }
+      } else if (type === "plot") {
+        // 函数曲线（A5：编译器计算采样点）
+        el = _svgEl("g", {});
+        var fn = spec.fn || "linear";
+        var params = spec.params || {};
+        var xRange = spec.x_range || [0, 5];
+        var pStroke = spec.stroke || "#3b82f6";
+        var pSW = spec.stroke_width || 2.5;
+        // 查找关联 axis 元素来确定坐标系映射
+        var axisEl = spec.axis_ref ? document.getElementById(spec.axis_ref) : null;
+        // 简单采样：使用逻辑坐标（不做轴关联，直接用 SVG 坐标）
+        var samples = 60;
+        var x0 = xRange[0], x1 = xRange[1];
+        var points = [];
+        for (var si = 0; si <= samples; si++) {
+          var sx = x0 + (x1 - x0) * si / samples;
+          var sy;
+          if (fn === "linear") {
+            sy = (params.m || 1) * sx + (params.b || 0);
+          } else if (fn === "quadratic") {
+            sy = (params.a || 1) * sx * sx + (params.b || 0) * sx + (params.c || 0);
+          } else if (fn === "sine") {
+            sy = (params.amplitude || 50) * Math.sin(2 * Math.PI * (params.frequency || 1) * sx + (params.phase || 0));
+          } else if (fn === "points" && params.points) {
+            // 线性插值
+            var pts = params.points;
+            if (pts.length > 1) {
+              var pIdx = Math.min(Math.floor(si / samples * (pts.length - 1)), pts.length - 2);
+              var pT = (si / samples * (pts.length - 1)) - pIdx;
+              sy = pts[pIdx][1] + (pts[pIdx + 1][1] - pts[pIdx][1]) * pT;
+              sx = pts[pIdx][0] + (pts[pIdx + 1][0] - pts[pIdx][0]) * pT;
+            } else { sy = 0; }
+          } else {
+            sy = sx;
+          }
+          points.push(sx + "," + sy);
+        }
+        var plotPath = _svgEl("polyline", { points: points.join(" "), fill: "none", stroke: pStroke, "stroke-width": pSW, "stroke-linecap": "round", "stroke-linejoin": "round" });
+        el.appendChild(plotPath);
       } else {
         // 未知类型 fallback 为矩形占位
         el = _svgEl("rect", { x: spec.x || 0, y: spec.y || 0, width: spec.w || 60, height: spec.h || 40, fill: "#e2e8f0" });
       }
-      if (type !== "group" && type !== "text" && type !== "formula" && type !== "label_bubble" && type !== "arrow" && type !== "line") {
+      if (type !== "group" && type !== "text" && type !== "formula" && type !== "label_bubble" && type !== "arrow" && type !== "line" && type !== "axis" && type !== "grid" && type !== "plot") {
         this._applyBase(el, spec, defs);
       }
       if (spec.id) el.setAttribute("id", spec.id);
