@@ -35,89 +35,93 @@ console = Console()
 # 使用原则：项目主题 → 色彩氛围，如火星探索=土黄橙，生命科学=荧光绿，宇宙=深蓝紫
 
 VISUAL_THEMES = {
-    # 生命科学/蛋白质 — 实验室白+生命绿
-    # 联想：显微镜下的细胞切片、医学插图、Nature杂志配图
+    # 生命科学/蛋白质 — 荧光显微镜暗色
+    # 联想：共聚焦荧光显微镜下的GFP/DAPI染色、PDB结构可视化、Nature封面
+    # 深蓝黑背景 + 荧光绿主色 + 青蓝辅色 + 琥珀高亮
     # 适用：biotech, chemistry
     "biotech_life": {
-        "bg": "#f8fafc",            # 实验室白
-        "bg2": "#f0f7f4",           # 略带绿调的次级背景
-        "card": "rgba(255,255,255,0.92)",
-        "primary": "#059669",       # 生命绿（叶绿素/DNA可视化标准色）
-        "secondary": "#0891b2",     # 海洋蓝（细胞膜/水环境）
-        "accent": "#d97706",        # 琥珀橙（活性位点/能量）
-        "text": "#1e293b",          # 深灰蓝（清晰可读）
+        "bg": "#060d12",            # 显微镜暗场（深蓝黑）
+        "bg2": "#0a1a1f",           # 略带青调的次级背景
+        "card": "rgba(10,26,31,0.88)",
+        "primary": "#34d399",       # GFP荧光绿（蛋白质标记常用色）
+        "secondary": "#22d3ee",     # DAPI青蓝（核酸/水环境）
+        "accent": "#fbbf24",        # 琥珀金（活性位点/能量/ATP）
+        "text": "#e2e8f0",          # 浅灰白（暗场高对比度）
         "text_dim": "#64748b",      # 中灰（次要信息）
-        "border": "rgba(5,150,105,0.15)",
-        "grid": "rgba(5,150,105,0.06)",
+        "border": "rgba(52,211,153,0.12)",
+        "grid": "rgba(52,211,153,0.04)",
         "font_display": "'Noto Sans SC', 'PingFang SC', sans-serif",
         "font_mono": "'JetBrains Mono', 'Menlo', monospace",
-        "hud_label": "rgba(5,150,105,0.8)",
-        "hud_value": "#1e293b",
-        "hud_bg": "rgba(240,247,244,0.95)",
-        "beam_color": "#059669",
+        "hud_label": "rgba(52,211,153,0.75)",
+        "hud_value": "#e2e8f0",
+        "hud_bg": "rgba(10,26,31,0.92)",
+        "beam_color": "#34d399",
     },
-    # 物理/数学 — 方格纸白+墨水蓝
-    # 联想：物理教科书、费曼讲义手绘、黑板
+    # 物理/力学 — 黑板暗色+粉笔蓝白
+    # 联想：费曼讲义黑板、牛顿手稿、物理实验室仪表盘
+    # 深灰黑背景 + 粉笔蓝 + 电场紫 + 红色标注
     # 适用：physics, math, cs
     "physics_chalk": {
-        "bg": "#fafafa",
-        "bg2": "#f1f5f9",
-        "card": "rgba(255,255,255,0.95)",
-        "primary": "#2563eb",       # 墨水蓝
-        "secondary": "#7c3aed",     # 紫（场线/向量）
-        "accent": "#dc2626",        # 红（重点标注）
-        "text": "#0f172a",
-        "text_dim": "#475569",
-        "border": "rgba(37,99,235,0.12)",
-        "grid": "rgba(37,99,235,0.06)",
+        "bg": "#0c0e14",            # 黑板深色
+        "bg2": "#121620",           # 略带蓝调
+        "card": "rgba(18,22,32,0.90)",
+        "primary": "#60a5fa",       # 粉笔蓝（力/速度向量）
+        "secondary": "#a78bfa",     # 电场紫（场线/波动）
+        "accent": "#f87171",        # 红粉笔（重点标注/F=ma）
+        "text": "#e2e8f0",
+        "text_dim": "#6b7280",
+        "border": "rgba(96,165,250,0.10)",
+        "grid": "rgba(96,165,250,0.04)",
         "font_display": "'Noto Sans SC', 'PingFang SC', sans-serif",
         "font_mono": "'JetBrains Mono', 'Menlo', monospace",
-        "hud_label": "rgba(37,99,235,0.75)",
-        "hud_value": "#0f172a",
-        "hud_bg": "rgba(241,245,249,0.95)",
-        "beam_color": "#2563eb",
+        "hud_label": "rgba(96,165,250,0.75)",
+        "hud_value": "#e2e8f0",
+        "hud_bg": "rgba(18,22,32,0.92)",
+        "beam_color": "#60a5fa",
     },
-    # 航空/探索 — 沙漠卡其+探索橙
-    # 联想：NASA任务贴纸、地质图、探险地图
+    # 航空/探索 — 火星暗色+探索橙金
+    # 联想：NASA控制台、火星地表红外图、星图
+    # 深棕黑背景 + 火星橙 + 沙金 + 天际蓝
     # 适用：aerospace, robotics, climate
     "explorer_sand": {
-        "bg": "#fefce8",            # 沙色白
-        "bg2": "#fef9c3",
-        "card": "rgba(255,255,255,0.90)",
-        "primary": "#d97706",       # 探索橙
-        "secondary": "#65a30d",     # 苔绿（地形）
-        "accent": "#0369a1",        # 天空蓝
-        "text": "#44403c",
-        "text_dim": "#78716c",
-        "border": "rgba(217,119,6,0.15)",
-        "grid": "rgba(217,119,6,0.06)",
+        "bg": "#0a0806",            # 火星暗夜
+        "bg2": "#12100c",           # 深棕
+        "card": "rgba(18,16,12,0.90)",
+        "primary": "#e8723a",       # 火星橙
+        "secondary": "#f0c040",     # 沙金（地形高亮）
+        "accent": "#4dd0e1",        # 天际青（大气散射）
+        "text": "#d4c8b8",          # 沙白
+        "text_dim": "#6b5e50",
+        "border": "rgba(232,114,58,0.10)",
+        "grid": "rgba(232,114,58,0.04)",
         "font_display": "'Noto Sans SC', 'PingFang SC', sans-serif",
         "font_mono": "'JetBrains Mono', 'Menlo', monospace",
-        "hud_label": "rgba(217,119,6,0.8)",
-        "hud_value": "#44403c",
-        "hud_bg": "rgba(254,249,195,0.95)",
-        "beam_color": "#d97706",
+        "hud_label": "rgba(232,114,58,0.75)",
+        "hud_value": "#d4c8b8",
+        "hud_bg": "rgba(18,16,12,0.92)",
+        "beam_color": "#e8723a",
     },
-    # 音乐/AI — 暖白+活力紫
-    # 联想：乐谱、声波、创意工作室
+    # 音乐/AI/创意 — 赛博暗色+活力紫粉
+    # 联想：音频波形可视化、AI神经网络、合成器界面
+    # 深紫黑背景 + 霓虹紫 + 玫瑰粉 + 青光
     # 适用：music, ai
     "creative_studio": {
-        "bg": "#fdf4ff",            # 薰衣草白
-        "bg2": "#fae8ff",
-        "card": "rgba(255,255,255,0.92)",
-        "primary": "#9333ea",       # 活力紫
-        "secondary": "#db2777",     # 玫瑰粉（旋律）
-        "accent": "#0891b2",        # 青蓝（节奏）
-        "text": "#1e1b4b",
+        "bg": "#0c0816",            # 深紫黑
+        "bg2": "#14102a",
+        "card": "rgba(20,16,42,0.90)",
+        "primary": "#a78bfa",       # 霓虹紫
+        "secondary": "#f472b6",     # 玫瑰粉（旋律/激活函数）
+        "accent": "#22d3ee",        # 青光（节拍/数据流）
+        "text": "#e2e8f0",
         "text_dim": "#6b7280",
-        "border": "rgba(147,51,234,0.12)",
-        "grid": "rgba(147,51,234,0.05)",
+        "border": "rgba(167,139,250,0.10)",
+        "grid": "rgba(167,139,250,0.04)",
         "font_display": "'Noto Sans SC', 'PingFang SC', sans-serif",
         "font_mono": "'JetBrains Mono', 'Menlo', monospace",
-        "hud_label": "rgba(147,51,234,0.75)",
-        "hud_value": "#1e1b4b",
-        "hud_bg": "rgba(250,232,255,0.95)",
-        "beam_color": "#9333ea",
+        "hud_label": "rgba(167,139,250,0.75)",
+        "hud_value": "#e2e8f0",
+        "hud_bg": "rgba(20,16,42,0.92)",
+        "beam_color": "#a78bfa",
     },
 }
 
@@ -428,6 +432,44 @@ svg { display: block; width: 100%; height: 100%; }
   fill: __THEME_TEXT_DIM__;
   font-size: 11px;
 }
+
+/* 探索模式 */
+.explore-hint {
+  fill: __THEME_TEXT_DIM__;
+  font-size: 10px;
+  opacity: 0;
+  transition: opacity 0.5s;
+  pointer-events: none;
+}
+.explore-hint.show { opacity: 0.7; }
+.replay-btn { cursor: pointer; }
+.replay-btn rect {
+  fill: __THEME_PRIMARY__;
+  opacity: 0.85;
+  transition: opacity 0.15s;
+}
+.replay-btn:hover rect { opacity: 1; }
+.replay-btn text {
+  fill: #fff;
+  font-size: 11px;
+  font-weight: bold;
+  pointer-events: none;
+}
+.tooltip-bg {
+  fill: rgba(0,0,0,0.78);
+  rx: 4;
+}
+.tooltip-text {
+  fill: #fff;
+  font-size: 10px;
+}
+.hbond-label-text {
+  fill: __THEME_ACCENT__;
+  font-size: 10px;
+  font-weight: bold;
+}
+.bead-core.draggable { cursor: grab; }
+.bead-core.dragging { cursor: grabbing; }
 </style>
 </head>
 <body>
@@ -511,39 +553,29 @@ svg { display: block; width: 100%; height: 100%; }
 "use strict";
 
 var svgNS = "http://www.w3.org/2000/svg";
+var svgEl = document.getElementById("svg");
 var scene = document.getElementById("scene");
 
 // ── 动画参数 ──────────────────────────────────────────────────
-var BEADS = 13;       // 展示的氨基酸数量
-var BEAD_R = 10;      // 骨架Cα珠子半径
-var SIDE_R = 6;       // 侧链珠子半径
+var BEADS = 13;
+var BEAD_R = 10;
+var SIDE_R = 6;
 
-// 三个阶段的珠子坐标
-// 阶段0：直链（水平展开）
-// 阶段1：部分卷曲（S形曲线）
-// 阶段2：完整α螺旋（螺旋投影）
-
-// α螺旋参数：右视投影到2D
-// 螺旋轴竖直，旋转投影
 var HELIX_CX = 300;
 var HELIX_TOP = 55;
-var HELIX_PITCH_PX = 40;   // 每圈高度（像素，代表0.54nm）
-var HELIX_RX = 55;          // 水平半径（椭圆透视效果）
-var HELIX_RY = 18;          // 垂直半径（透视压缩）
-
-// 角度步进：3.6残基/圈 → 每残基 360°/3.6 ≈ 100°
+var HELIX_PITCH_PX = 40;
+var HELIX_RX = 55;
+var HELIX_RY = 18;
 var ANGLE_STEP = 100;
 
 function helixPos(i) {
-  var angle = (i * ANGLE_STEP - 90) * Math.PI / 180;  // -90使第0个在顶部
+  var angle = (i * ANGLE_STEP - 90) * Math.PI / 180;
   var y = HELIX_TOP + i * (HELIX_PITCH_PX / 3.6);
   var x = HELIX_CX + HELIX_RX * Math.cos(angle);
-  // 透视：前面的珠子y偏移HELIX_RY
   var yOffset = HELIX_RY * Math.sin(angle);
   return { x: x, y: y + yOffset, angle: angle, depth: Math.sin(angle) };
 }
 
-// 侧链方向：从中心向外，稍微朝上
 function sidePos(hx, hy, angle) {
   var dist = BEAD_R + SIDE_R + 6;
   return {
@@ -552,18 +584,15 @@ function sidePos(hx, hy, angle) {
   };
 }
 
-// 直链坐标
 function linearPos(i) {
   var startX = 80;
   var spacing = (440) / (BEADS - 1);
   return { x: startX + i * spacing, y: 195 };
 }
 
-// 中间过渡：正弦波弯曲
 function wavePos(i, t) {
   var lp = linearPos(i);
   var hp = helixPos(i);
-  // t: 0=直线, 1=螺旋
   return {
     x: lp.x + (hp.x - lp.x) * t,
     y: lp.y + (hp.y - lp.y) * t,
@@ -580,7 +609,6 @@ function makeSVG(tag, attrs) {
   return el;
 }
 
-// 珠子组
 var beadGroups = [];
 var hbondLines = [];
 var backbonePath = makeSVG("path", {
@@ -588,32 +616,27 @@ var backbonePath = makeSVG("path", {
 });
 scene.appendChild(backbonePath);
 
-// 氢键（共 BEADS-4 条）
 for (var hi = 0; hi < BEADS - 4; hi++) {
   var hb = makeSVG("path", { class: "hbond", id: "hb-" + hi });
   scene.appendChild(hb);
   hbondLines.push(hb);
 }
 
-// 珠子（从后到前排序，先画深度大的）
 for (var bi = 0; bi < BEADS; bi++) {
   var g = document.createElementNS(svgNS, "g");
   g.setAttribute("class", "bead");
   g.setAttribute("id", "bead-" + bi);
 
-  // 侧链
   var sideCirc = makeSVG("circle", {
     class: "bead-side", r: SIDE_R,
   });
   g.appendChild(sideCirc);
 
-  // 主链Cα
   var coreCirc = makeSVG("circle", {
     class: "bead-core", r: BEAD_R,
   });
   g.appendChild(coreCirc);
 
-  // 序号标签
   var label = makeSVG("text", {
     "text-anchor": "middle",
     "dominant-baseline": "central",
@@ -625,7 +648,7 @@ for (var bi = 0; bi < BEADS; bi++) {
   g.appendChild(label);
 
   scene.appendChild(g);
-  beadGroups.push({ g: g, core: coreCirc, side: sideCirc, label: label });
+  beadGroups.push({ g: g, core: coreCirc, side: sideCirc, label: label, idx: bi });
 }
 
 // ── 阶段标注 ───────────────────────────────────────────────────
@@ -641,7 +664,6 @@ var phaseSub = makeSVG("text", {
 phaseSub.textContent = "氨基酸刚从核糖体合成，还没有折叠";
 scene.appendChild(phaseSub);
 
-// 氢键标注
 var hbLabel = makeSVG("text", {
   class: "annotation", x: "520", y: "120", "text-anchor": "middle",
   fill: "rgba(251,191,36,0.9)", "font-size": "11"
@@ -656,7 +678,6 @@ var hbArrow = makeSVG("line", {
 });
 scene.appendChild(hbArrow);
 
-// 螺旋参数标注（最终阶段）
 var paramLabel = makeSVG("text", {
   class: "annotation", x: "90", y: "100", "text-anchor": "middle",
   fill: "rgba(167,243,208,0.9)", "font-size": "10"
@@ -664,26 +685,95 @@ var paramLabel = makeSVG("text", {
 paramLabel.id = "param-label";
 scene.appendChild(paramLabel);
 
+// ── 探索模式 UI 元素（初始隐藏）──────────────────────────────
+var exploreHint = makeSVG("text", {
+  class: "explore-hint", x: "590", y: "48", "text-anchor": "end"
+});
+exploreHint.textContent = "探索模式：拖动珠子 | 悬停查看详情";
+scene.appendChild(exploreHint);
+
+// 重播按钮
+var replayGroup = makeSVG("g", { class: "replay-btn", opacity: "0" });
+replayGroup.style.pointerEvents = "none";
+var replayRect = makeSVG("rect", {
+  x: "10", y: "340", width: "58", height: "24", rx: "5"
+});
+replayGroup.appendChild(replayRect);
+var replayText = makeSVG("text", {
+  x: "39", y: "356", "text-anchor": "middle"
+});
+replayText.textContent = "重播";
+replayGroup.appendChild(replayText);
+scene.appendChild(replayGroup);
+
+// Tooltip 组
+var tooltipG = makeSVG("g", { opacity: "0", "pointer-events": "none" });
+var tooltipBg = makeSVG("rect", { class: "tooltip-bg", width: "70", height: "22", x: "0", y: "0" });
+tooltipG.appendChild(tooltipBg);
+var tooltipTxt = makeSVG("text", { class: "tooltip-text", x: "6", y: "15" });
+tooltipG.appendChild(tooltipTxt);
+svgEl.appendChild(tooltipG);
+
+// 氢键点击标注
+var hbClickLabel = makeSVG("g", { opacity: "0", "pointer-events": "none" });
+var hbClickBg = makeSVG("rect", { class: "tooltip-bg", width: "90", height: "22", x: "0", y: "0" });
+hbClickLabel.appendChild(hbClickBg);
+var hbClickTxt = makeSVG("text", { class: "hbond-label-text", x: "6", y: "15" });
+hbClickLabel.appendChild(hbClickTxt);
+svgEl.appendChild(hbClickLabel);
+
+// ── 探索模式状态 ────────────────────────────────────────────
+var exploreMode = false;
+// 珠子当前位置（探索模式下可被拖拽修改）
+var beadPositions = [];  // [{x, y, angle, depth}]
+// 珠子的原始螺旋位置（拖拽松开后弹回的目标）
+var beadHomePositions = [];
+for (var ii = 0; ii < BEADS; ii++) {
+  var hp = helixPos(ii);
+  beadHomePositions.push({ x: hp.x, y: hp.y, angle: hp.angle, depth: hp.depth });
+  beadPositions.push({ x: hp.x, y: hp.y, angle: hp.angle, depth: hp.depth });
+}
+
+// 拖拽状态
+var dragIdx = -1;
+var dragOffsetX = 0, dragOffsetY = 0;
+var snapAnims = [];  // [{idx, startX, startY, startTime}]
+
+// ── 坐标转换辅助 ──────────────────────────────────────────────
+function svgPoint(evt) {
+  var pt = svgEl.createSVGPoint();
+  var src = evt.touches ? evt.touches[0] : evt;
+  pt.x = src.clientX;
+  pt.y = src.clientY;
+  var ctm = svgEl.getScreenCTM().inverse();
+  return pt.matrixTransform(ctm);
+}
+
 // ── 渲染函数 ───────────────────────────────────────────────────
 
 function updatePositions(t, showHbonds) {
-  // 排序珠子（按深度从后到前）
   var sorted = [];
   for (var i = 0; i < BEADS; i++) {
-    var pos = wavePos(i, t);
+    var pos;
+    if (exploreMode) {
+      pos = beadPositions[i];
+    } else {
+      pos = wavePos(i, t);
+      // 同步到 beadPositions
+      beadPositions[i] = { x: pos.x, y: pos.y, angle: pos.angle, depth: pos.depth };
+    }
     sorted.push({ i: i, pos: pos });
   }
   sorted.sort(function(a, b) { return a.pos.depth - b.pos.depth; });
 
-  // 重新排序DOM（深度较小=在后面，先渲染）
   for (var si = 0; si < sorted.length; si++) {
     scene.appendChild(beadGroups[sorted[si].i].g);
   }
 
-  // 更新骨架路径
+  // 骨架路径 — 使用 beadPositions
   var pathD = "";
   for (var pi = 0; pi < BEADS; pi++) {
-    var p = wavePos(pi, t);
+    var p = beadPositions[pi];
     if (pi === 0) {
       pathD = "M" + p.x.toFixed(1) + "," + p.y.toFixed(1);
     } else {
@@ -692,9 +782,9 @@ function updatePositions(t, showHbonds) {
   }
   backbonePath.setAttribute("d", pathD);
 
-  // 更新珠子位置
+  // 珠子位置
   for (var bi2 = 0; bi2 < BEADS; bi2++) {
-    var pos2 = wavePos(bi2, t);
+    var pos2 = beadPositions[bi2];
     var sp = sidePos(pos2.x, pos2.y, pos2.angle);
     var bg = beadGroups[bi2];
 
@@ -705,33 +795,34 @@ function updatePositions(t, showHbonds) {
     bg.label.setAttribute("x", pos2.x.toFixed(1));
     bg.label.setAttribute("y", pos2.y.toFixed(1));
 
-    // 深度影响透明度（后面的珠子稍暗）
     var alpha = 0.6 + 0.4 * (pos2.depth + 1) / 2;
     bg.core.style.opacity = alpha.toFixed(2);
     bg.side.style.opacity = (alpha * 0.9).toFixed(2);
   }
 
-  // 更新氢键
+  // 氢键
   for (var hbi = 0; hbi < hbondLines.length; hbi++) {
-    var p1 = wavePos(hbi, t);
-    var p2 = wavePos(hbi + 4, t);
-    var hb = hbondLines[hbi];
+    var p1 = beadPositions[hbi];
+    var p2 = beadPositions[hbi + 4];
+    var hbl = hbondLines[hbi];
 
-    // 曲线路径（弧形）
     var mx = (p1.x + p2.x) / 2;
     var my = (p1.y + p2.y) / 2 - 15 * Math.abs(Math.cos(p1.angle));
-    hb.setAttribute("d",
+    hbl.setAttribute("d",
       "M" + p1.x.toFixed(1) + "," + p1.y.toFixed(1) +
       " Q" + mx.toFixed(1) + "," + my.toFixed(1) +
       " " + p2.x.toFixed(1) + "," + p2.y.toFixed(1)
     );
 
-    if (showHbonds && t > 0.7) {
-      hb.classList.add("visible");
-      hb.style.opacity = ((t - 0.7) / 0.3).toFixed(2);
+    if (exploreMode) {
+      hbl.classList.add("visible");
+      hbl.style.opacity = "1";
+    } else if (showHbonds && t > 0.7) {
+      hbl.classList.add("visible");
+      hbl.style.opacity = ((t - 0.7) / 0.3).toFixed(2);
     } else {
-      hb.classList.remove("visible");
-      hb.style.opacity = "0";
+      hbl.classList.remove("visible");
+      hbl.style.opacity = "0";
     }
   }
 }
@@ -760,88 +851,311 @@ var PHASES = [
 var currentPhase = 0;
 var phaseStart = performance.now();
 var animT = 0;
-var lastPhaseTime = 0;
-
-var ANIM_DURATION = 1500;  // 过渡动画时长(ms)
+var ANIM_DURATION = 1500;
 
 function easeInOut(t) {
   return t < 0.5 ? 2 * t * t : -1 + (4 - 2 * t) * t;
 }
 
-function loop(now) {
-  var elapsed = now - phaseStart;
-  var ph = PHASES[currentPhase];
+// ── 进入探索模式 ──────────────────────────────────────────────
+function enterExploreMode() {
+  if (exploreMode) return;
+  exploreMode = true;
+  // 记录当前位置为 home
+  for (var i = 0; i < BEADS; i++) {
+    var hp = helixPos(i);
+    beadHomePositions[i] = { x: hp.x, y: hp.y, angle: hp.angle, depth: hp.depth };
+    beadPositions[i] = { x: hp.x, y: hp.y, angle: hp.angle, depth: hp.depth };
+  }
+  // 显示探索模式 UI
+  exploreHint.classList.add("show");
+  replayGroup.setAttribute("opacity", "1");
+  replayGroup.style.pointerEvents = "auto";
+  // 珠子可拖拽
+  for (var j = 0; j < BEADS; j++) {
+    beadGroups[j].core.classList.add("draggable");
+  }
+  // 更新 HUD
+  hudPhase.textContent = "探索模式";
+  phaseTitle.textContent = "探索模式";
+  phaseSub.textContent = "拖动珠子探索结构，悬停查看详情，点击氢键查看标注";
+}
 
-  if (ph.tStart === ph.tEnd) {
-    // 静止阶段
-    animT = ph.tEnd;
-    if (elapsed > ph.holdMs && currentPhase < PHASES.length - 1) {
-      currentPhase++;
-      phaseStart = now;
+// ── 重播动画 ──────────────────────────────────────────────────
+function replay() {
+  exploreMode = false;
+  dragIdx = -1;
+  snapAnims = [];
+  currentPhase = 0;
+  phaseStart = performance.now();
+  animT = 0;
+  // 隐藏探索模式 UI
+  exploreHint.classList.remove("show");
+  replayGroup.setAttribute("opacity", "0");
+  replayGroup.style.pointerEvents = "none";
+  tooltipG.setAttribute("opacity", "0");
+  hbClickLabel.setAttribute("opacity", "0");
+  // 移除可拖拽标记
+  for (var j = 0; j < BEADS; j++) {
+    beadGroups[j].core.classList.remove("draggable");
+    beadGroups[j].core.classList.remove("dragging");
+  }
+}
+
+replayGroup.addEventListener("click", function(e) {
+  e.stopPropagation();
+  replay();
+});
+
+// ── 弹回动画处理 ─────────────────────────────────────────────
+var SNAP_DURATION = 300;
+function processSnapAnims(now) {
+  var remaining = [];
+  for (var s = 0; s < snapAnims.length; s++) {
+    var sa = snapAnims[s];
+    var elapsed = now - sa.startTime;
+    var progress = Math.min(elapsed / SNAP_DURATION, 1);
+    // 弹性缓动
+    var t = 1 - Math.pow(1 - progress, 3);
+    var home = beadHomePositions[sa.idx];
+    beadPositions[sa.idx].x = sa.startX + (home.x - sa.startX) * t;
+    beadPositions[sa.idx].y = sa.startY + (home.y - sa.startY) * t;
+    if (progress < 1) {
+      remaining.push(sa);
+    } else {
+      beadPositions[sa.idx].x = home.x;
+      beadPositions[sa.idx].y = home.y;
     }
-  } else {
-    // 动画阶段
-    var progress = Math.min(elapsed / ANIM_DURATION, 1);
-    animT = ph.tStart + (ph.tEnd - ph.tStart) * easeInOut(progress);
-    if (progress >= 1) {
-      if (elapsed > ANIM_DURATION + ph.holdMs && currentPhase < PHASES.length - 1) {
+  }
+  snapAnims = remaining;
+}
+
+// ── 主循环 ───────────────────────────────────────────────────
+function loop(now) {
+  if (!exploreMode) {
+    var elapsed = now - phaseStart;
+    var ph = PHASES[currentPhase];
+
+    if (ph.tStart === ph.tEnd) {
+      animT = ph.tEnd;
+      if (elapsed > ph.holdMs && currentPhase < PHASES.length - 1) {
         currentPhase++;
         phaseStart = now;
       }
+    } else {
+      var progress = Math.min(elapsed / ANIM_DURATION, 1);
+      animT = ph.tStart + (ph.tEnd - ph.tStart) * easeInOut(progress);
+      if (progress >= 1) {
+        if (elapsed > ANIM_DURATION + ph.holdMs && currentPhase < PHASES.length - 1) {
+          currentPhase++;
+          phaseStart = now;
+        }
+      }
     }
-  }
 
-  // 最后一阶段循环
-  if (currentPhase === PHASES.length - 1) {
-    var loopTime = now - phaseStart;
-    if (loopTime > 4000) {
-      // 重置回第0阶段
-      currentPhase = 0;
-      phaseStart = now;
+    // 最后一阶段：进入探索模式（不再循环）
+    if (currentPhase === PHASES.length - 1) {
+      var loopTime = now - phaseStart;
+      if (loopTime > 4000) {
+        enterExploreMode();
+      }
     }
-  }
 
-  updatePositions(animT, animT > 0.6);
+    // 更新 HUD（仅在动画模式）
+    hudPhase.textContent = PHASES[currentPhase].name;
+    var hbCount = Math.round(animT * 9);
+    hudHbonds.textContent = hbCount.toString();
+    hudRpm.textContent = animT < 0.3 ? "—" : "3.6";
+    hudType.textContent = animT < 0.9 ? (animT < 0.3 ? "无规则卷曲" : "过渡态") : "α螺旋";
+    phaseTitle.textContent = PHASES[currentPhase].name;
+    phaseSub.textContent = PHASES[currentPhase].sub;
 
-  // 更新 HUD
-  var pName = PHASES[currentPhase].name;
-  hudPhase.textContent = pName;
+    var hbLabelEl = document.getElementById("hb-label");
+    var hbArrowEl = document.getElementById("hb-arrow");
+    if (animT > 0.75) {
+      hbLabelEl.classList.add("show");
+      hbArrowEl.classList.add("show");
+    } else {
+      hbLabelEl.classList.remove("show");
+      hbArrowEl.classList.remove("show");
+    }
 
-  var hbCount = Math.round(animT * 9);
-  hudHbonds.textContent = hbCount.toString();
-  hudRpm.textContent = animT < 0.3 ? "—" : "3.6";
-  hudType.textContent = animT < 0.9 ? (animT < 0.3 ? "无规则卷曲" : "过渡态") : "α螺旋";
-
-  // 更新阶段标题
-  phaseTitle.textContent = PHASES[currentPhase].name;
-  phaseSub.textContent = PHASES[currentPhase].sub;
-
-  // 氢键标注
-  var hbLabelEl = document.getElementById("hb-label");
-  var hbArrowEl = document.getElementById("hb-arrow");
-  if (animT > 0.75) {
-    hbLabelEl.classList.add("show");
-    hbArrowEl.classList.add("show");
+    var paramLabelEl = document.getElementById("param-label");
+    if (animT > 0.9) {
+      paramLabelEl.classList.add("show");
+      paramLabelEl.textContent = "每圈3.6个残基 · 螺距0.54nm";
+      paramLabelEl.setAttribute("y", "340");
+      paramLabelEl.setAttribute("x", "300");
+      paramLabelEl.setAttribute("fill", "rgba(167,243,208,0.85)");
+      paramLabelEl.setAttribute("font-size", "11");
+    } else {
+      paramLabelEl.classList.remove("show");
+    }
   } else {
-    hbLabelEl.classList.remove("show");
-    hbArrowEl.classList.remove("show");
+    // 探索模式：处理弹回动画
+    processSnapAnims(now);
   }
 
-  // 螺旋参数标注
-  var paramLabelEl = document.getElementById("param-label");
-  if (animT > 0.9) {
-    paramLabelEl.classList.add("show");
-    paramLabelEl.textContent = "每圈3.6个残基 · 螺距0.54nm";
-    paramLabelEl.setAttribute("y", "340");
-    paramLabelEl.setAttribute("x", "300");
-    paramLabelEl.setAttribute("fill", "rgba(167,243,208,0.85)");
-    paramLabelEl.setAttribute("font-size", "11");
-  } else {
-    paramLabelEl.classList.remove("show");
-  }
-
+  updatePositions(animT, exploreMode || animT > 0.6);
   requestAnimationFrame(loop);
 }
+
+// ── Hover 交互（探索模式）───────────────────────────────────
+function showTooltip(idx, pt) {
+  var text = "残基 #" + (idx + 1);
+  tooltipTxt.textContent = text;
+  var tw = text.length * 7 + 12;
+  tooltipBg.setAttribute("width", tw);
+  var tx = pt.x - tw / 2;
+  var ty = pt.y - 32;
+  if (tx < 2) tx = 2;
+  if (tx + tw > 598) tx = 598 - tw;
+  if (ty < 2) ty = pt.y + 16;
+  tooltipG.setAttribute("transform", "translate(" + tx.toFixed(1) + "," + ty.toFixed(1) + ")");
+  tooltipG.setAttribute("opacity", "1");
+}
+
+function hideTooltip() {
+  tooltipG.setAttribute("opacity", "0");
+}
+
+function findBeadAt(pt) {
+  for (var i = 0; i < BEADS; i++) {
+    var bp = beadPositions[i];
+    var dx = pt.x - bp.x, dy = pt.y - bp.y;
+    if (dx * dx + dy * dy <= (BEAD_R + 4) * (BEAD_R + 4)) return i;
+  }
+  return -1;
+}
+
+function findHbondAt(pt) {
+  for (var i = 0; i < hbondLines.length; i++) {
+    var p1 = beadPositions[i];
+    var p2 = beadPositions[i + 4];
+    // 简单距离检查：到线段中点距离
+    var mx = (p1.x + p2.x) / 2;
+    var my = (p1.y + p2.y) / 2;
+    var dx = pt.x - mx, dy = pt.y - my;
+    // 线段长度的一半
+    var halfLen = Math.sqrt((p2.x - p1.x) * (p2.x - p1.x) + (p2.y - p1.y) * (p2.y - p1.y)) / 2;
+    // 到线段的距离
+    var dToMid = Math.sqrt(dx * dx + dy * dy);
+    if (dToMid < halfLen + 8) {
+      // 更精确检查：到线段的距离
+      var len2 = (p2.x - p1.x) * (p2.x - p1.x) + (p2.y - p1.y) * (p2.y - p1.y);
+      if (len2 === 0) continue;
+      var t = ((pt.x - p1.x) * (p2.x - p1.x) + (pt.y - p1.y) * (p2.y - p1.y)) / len2;
+      t = Math.max(0, Math.min(1, t));
+      var projX = p1.x + t * (p2.x - p1.x);
+      var projY = p1.y + t * (p2.y - p1.y);
+      var dist = Math.sqrt((pt.x - projX) * (pt.x - projX) + (pt.y - projY) * (pt.y - projY));
+      if (dist < 10) return i;
+    }
+  }
+  return -1;
+}
+
+// 氢键点击高亮
+var highlightedHb = -1;
+function showHbondLabel(hbIdx) {
+  var i1 = hbIdx + 1, i2 = hbIdx + 5;
+  var text = "第" + i1 + " ↔ 第" + i2;
+  hbClickTxt.textContent = text;
+  var tw = text.length * 11 + 14;
+  hbClickBg.setAttribute("width", tw);
+  var p1 = beadPositions[hbIdx];
+  var p2 = beadPositions[hbIdx + 4];
+  var mx = (p1.x + p2.x) / 2;
+  var my = (p1.y + p2.y) / 2 - 20;
+  hbClickLabel.setAttribute("transform", "translate(" + (mx - tw / 2).toFixed(1) + "," + (my - 24).toFixed(1) + ")");
+  hbClickLabel.setAttribute("opacity", "1");
+  // 高亮该氢键
+  highlightedHb = hbIdx;
+  hbondLines[hbIdx].setAttribute("stroke-width", "3.5");
+  hbondLines[hbIdx].setAttribute("stroke-opacity", "1");
+}
+
+function clearHbondHighlight() {
+  if (highlightedHb >= 0) {
+    hbondLines[highlightedHb].setAttribute("stroke-width", "1.5");
+    highlightedHb = -1;
+  }
+  hbClickLabel.setAttribute("opacity", "0");
+}
+
+// ── 事件处理（鼠标 + 触摸）──────────────────────────────────
+
+function onPointerDown(e) {
+  if (!exploreMode) return;
+  var pt = svgPoint(e);
+  var idx = findBeadAt(pt);
+  if (idx >= 0) {
+    dragIdx = idx;
+    dragOffsetX = beadPositions[idx].x - pt.x;
+    dragOffsetY = beadPositions[idx].y - pt.y;
+    beadGroups[idx].core.classList.add("dragging");
+    // 移除该珠子的弹回动画
+    snapAnims = snapAnims.filter(function(sa) { return sa.idx !== idx; });
+    e.preventDefault();
+    return;
+  }
+  // 检查氢键点击
+  var hbIdx = findHbondAt(pt);
+  if (hbIdx >= 0) {
+    if (highlightedHb === hbIdx) {
+      clearHbondHighlight();
+    } else {
+      clearHbondHighlight();
+      showHbondLabel(hbIdx);
+    }
+    return;
+  }
+  // 点击空白处清除高亮
+  clearHbondHighlight();
+}
+
+function onPointerMove(e) {
+  if (!exploreMode) return;
+  var pt = svgPoint(e);
+  if (dragIdx >= 0) {
+    beadPositions[dragIdx].x = pt.x + dragOffsetX;
+    beadPositions[dragIdx].y = pt.y + dragOffsetY;
+    e.preventDefault();
+    return;
+  }
+  // Hover 检测
+  var idx = findBeadAt(pt);
+  if (idx >= 0) {
+    showTooltip(idx, pt);
+  } else {
+    hideTooltip();
+  }
+}
+
+function onPointerUp(e) {
+  if (dragIdx < 0) return;
+  var idx = dragIdx;
+  beadGroups[idx].core.classList.remove("dragging");
+  // 启动弹回动画
+  snapAnims.push({
+    idx: idx,
+    startX: beadPositions[idx].x,
+    startY: beadPositions[idx].y,
+    startTime: performance.now()
+  });
+  dragIdx = -1;
+}
+
+// 鼠标事件
+svgEl.addEventListener("mousedown", onPointerDown);
+svgEl.addEventListener("mousemove", onPointerMove);
+svgEl.addEventListener("mouseup", onPointerUp);
+svgEl.addEventListener("mouseleave", function() { hideTooltip(); onPointerUp(null); });
+
+// 触摸事件
+svgEl.addEventListener("touchstart", function(e) { onPointerDown(e); }, { passive: false });
+svgEl.addEventListener("touchmove", function(e) { onPointerMove(e); }, { passive: false });
+svgEl.addEventListener("touchend", function(e) { onPointerUp(e); });
 
 // ── 初始化 ────────────────────────────────────────────────────
 updatePositions(0, false);
@@ -874,10 +1188,43 @@ svg { display: block; width: 100%; height: 100%; }
 .hud-label { fill: __THEME_HUD_LABEL__; font-size: 10px; }
 .hud-value { fill: __THEME_HUD_VALUE__; font-size: 13px; font-weight: bold; }
 .hud-line { stroke: rgba(255,255,255,0.08); stroke-width: 1; }
+
+/* 探索模式 */
+.explore-hint2 {
+  fill: __THEME_TEXT_DIM__;
+  font-size: 10px;
+  opacity: 0;
+  transition: opacity 0.5s;
+  pointer-events: none;
+}
+.explore-hint2.show { opacity: 0.7; }
+.replay-btn2 { cursor: pointer; }
+.replay-btn2 rect {
+  fill: __THEME_PRIMARY__;
+  opacity: 0.85;
+  transition: opacity 0.15s;
+}
+.replay-btn2:hover rect { opacity: 1; }
+.replay-btn2 text {
+  fill: #fff;
+  font-size: 11px;
+  font-weight: bold;
+  pointer-events: none;
+}
+.tooltip2-bg {
+  fill: rgba(0,0,0,0.78);
+  rx: 4;
+}
+.tooltip2-text {
+  fill: #fff;
+  font-size: 10px;
+}
+.bead2-core-draggable { cursor: grab; }
+.bead2-core-dragging { cursor: grabbing; }
 </style>
 </head>
 <body>
-<svg id="svg" viewBox="0 0 600 420" xmlns="http://www.w3.org/2000/svg">
+<svg id="svg2" viewBox="0 0 600 420" xmlns="http://www.w3.org/2000/svg">
   <defs>
     <linearGradient id="bg2" x1="0" y1="0" x2="0" y2="1">
       <stop offset="0%" stop-color="__THEME_BG__"/>
@@ -964,31 +1311,28 @@ svg { display: block; width: 100%; height: 100%; }
 (function() {
 "use strict";
 var svgNS = "http://www.w3.org/2000/svg";
+var svgEl2 = document.getElementById("svg2");
 var scene2 = document.getElementById("scene2");
 
 var BEADS = 13;
-// α螺旋侧视：螺旋轴水平（左→右），珠子沿螺旋排列
-// 使用侧面投影：x=沿轴方向，y=螺旋在侧面的投影（正弦波）
-var AXIS_Y = 200;    // 螺旋轴高度
-var AXIS_X0 = 60;    // 起始x
-var X_STEP = 37;     // 每个残基的轴向步进（代表0.15nm）
-var AMP = 55;        // 侧面投影振幅
+var AXIS_Y = 200;
+var AXIS_X0 = 60;
+var X_STEP = 37;
+var AMP = 55;
 var BEAD_R = 10;
 var SIDE_R = 5.5;
 
-// 每圈100°
 function getPos(i) {
   var angle = (i * 100) * Math.PI / 180;
   return {
     x: AXIS_X0 + i * X_STEP,
-    y: AXIS_Y - AMP * Math.sin(angle),  // 侧面投影
+    y: AXIS_Y - AMP * Math.sin(angle),
     angle: angle,
-    depth: Math.cos(angle),  // 深度（正=前面）
+    depth: Math.cos(angle),
   };
 }
 
 function getSidePos(bx, by, angle) {
-  // 侧链朝"外"：在侧视图中朝上或朝下（取决于当前螺旋面的法向量）
   var perpAngle = angle + Math.PI / 2;
   return {
     x: bx + (BEAD_R + SIDE_R + 4) * Math.cos(perpAngle) * 0.3,
@@ -1002,6 +1346,15 @@ function makeSVG(tag, attrs) {
   return el;
 }
 
+// ── 珠子位置状态（探索模式可修改）─────────────────────────
+var beadPositions2 = [];
+var beadHomePositions2 = [];
+for (var ii = 0; ii < BEADS; ii++) {
+  var hp = getPos(ii);
+  beadPositions2.push({ x: hp.x, y: hp.y, angle: hp.angle, depth: hp.depth });
+  beadHomePositions2.push({ x: hp.x, y: hp.y, angle: hp.angle, depth: hp.depth });
+}
+
 // 骨架线
 var backbone = makeSVG("path", {
   "stroke": "__THEME_SECONDARY__", "stroke-opacity": "0.5", "stroke-width": "2.5",
@@ -1009,25 +1362,20 @@ var backbone = makeSVG("path", {
 });
 scene2.appendChild(backbone);
 
-// 计算骨架路径
-var pathD = "";
-for (var pi = 0; pi < BEADS; pi++) {
-  var pp = getPos(pi);
-  pathD += (pi === 0 ? "M" : "L") + pp.x.toFixed(1) + "," + pp.y.toFixed(1) + " ";
+function updateBackbone() {
+  var pathD = "";
+  for (var pi = 0; pi < BEADS; pi++) {
+    var pp = beadPositions2[pi];
+    pathD += (pi === 0 ? "M" : "L") + pp.x.toFixed(1) + "," + pp.y.toFixed(1) + " ";
+  }
+  backbone.setAttribute("d", pathD);
 }
-backbone.setAttribute("d", pathD);
+updateBackbone();
 
 // 氢键线（9条，初始隐藏）
 var hbLines = [];
 for (var hi = 0; hi < BEADS - 4; hi++) {
-  var p1 = getPos(hi);
-  var p2 = getPos(hi + 4);
-  var mx = (p1.x + p2.x) / 2;
-  var my = Math.min(p1.y, p2.y) - 22;
   var hb = makeSVG("path", {
-    "d": "M" + p1.x.toFixed(1) + "," + p1.y.toFixed(1) +
-         " Q" + mx.toFixed(1) + "," + my.toFixed(1) +
-         " " + p2.x.toFixed(1) + "," + p2.y.toFixed(1),
     "stroke": "__THEME_ACCENT__",
     "stroke-width": "2",
     "stroke-dasharray": "4 3",
@@ -1039,14 +1387,27 @@ for (var hi = 0; hi < BEADS - 4; hi++) {
   hbLines.push(hb);
 }
 
+function updateHbondPaths() {
+  for (var i = 0; i < hbLines.length; i++) {
+    var p1 = beadPositions2[i];
+    var p2 = beadPositions2[i + 4];
+    var mx = (p1.x + p2.x) / 2;
+    var my = Math.min(p1.y, p2.y) - 22;
+    hbLines[i].setAttribute("d",
+      "M" + p1.x.toFixed(1) + "," + p1.y.toFixed(1) +
+      " Q" + mx.toFixed(1) + "," + my.toFixed(1) +
+      " " + p2.x.toFixed(1) + "," + p2.y.toFixed(1)
+    );
+  }
+}
+updateHbondPaths();
+
 // 珠子和侧链（排序后创建）
 var beadData = [];
 for (var bi = 0; bi < BEADS; bi++) {
   var pos = getPos(bi);
   beadData.push({ i: bi, pos: pos });
 }
-
-// 按深度排序，后面的先画
 beadData.sort(function(a, b) { return a.pos.depth - b.pos.depth; });
 
 var beadEls = new Array(BEADS);
@@ -1057,7 +1418,6 @@ for (var si = 0; si < beadData.length; si++) {
 
   var g = document.createElementNS(svgNS, "g");
 
-  // 侧链
   var sideCirc = makeSVG("circle", {
     cx: sp.x.toFixed(1), cy: sp.y.toFixed(1), r: SIDE_R,
     fill: "url(#sideGrad2)",
@@ -1065,7 +1425,6 @@ for (var si = 0; si < beadData.length; si++) {
   });
   g.appendChild(sideCirc);
 
-  // 主链珠子
   var core = makeSVG("circle", {
     cx: bp.x.toFixed(1), cy: bp.y.toFixed(1), r: BEAD_R,
     fill: "url(#normalBeadGrad)",
@@ -1074,7 +1433,6 @@ for (var si = 0; si < beadData.length; si++) {
   });
   g.appendChild(core);
 
-  // 序号
   var lbl = makeSVG("text", {
     x: bp.x.toFixed(1), y: bp.y.toFixed(1),
     "text-anchor": "middle", "dominant-baseline": "central",
@@ -1084,7 +1442,7 @@ for (var si = 0; si < beadData.length; si++) {
   g.appendChild(lbl);
 
   scene2.appendChild(g);
-  beadEls[d.i] = { g: g, core: core };
+  beadEls[d.i] = { g: g, core: core, side: sideCirc, label: lbl };
 }
 
 // 螺旋轴线
@@ -1096,7 +1454,6 @@ var axisLine = makeSVG("line", {
 });
 scene2.appendChild(axisLine);
 
-// 轴标注
 var axisLabel = makeSVG("text", {
   x: (AXIS_X0 + (BEADS - 1) * X_STEP / 2).toFixed(0),
   y: (AXIS_Y + 16).toFixed(0),
@@ -1106,61 +1463,419 @@ var axisLabel = makeSVG("text", {
 axisLabel.textContent = "螺旋轴（C 端 →）";
 scene2.appendChild(axisLabel);
 
+// ── 探索模式 UI 元素 ──────────────────────────────────────
+var exploreHint2 = makeSVG("text", {
+  class: "explore-hint2", x: "590", y: "48", "text-anchor": "end"
+});
+exploreHint2.textContent = "探索模式：点击珠子高亮关联氢键 | 拖动珠子";
+scene2.appendChild(exploreHint2);
+
+var replayGroup2 = makeSVG("g", { class: "replay-btn2", opacity: "0" });
+replayGroup2.style.pointerEvents = "none";
+var replayRect2 = makeSVG("rect", {
+  x: "10", y: "340", width: "58", height: "24", rx: "5"
+});
+replayGroup2.appendChild(replayRect2);
+var replayText2 = makeSVG("text", {
+  x: "39", y: "356", "text-anchor": "middle"
+});
+replayText2.textContent = "重播";
+replayGroup2.appendChild(replayText2);
+scene2.appendChild(replayGroup2);
+
+// Tooltip
+var tooltipG2 = makeSVG("g", { opacity: "0", "pointer-events": "none" });
+var tooltipBg2 = makeSVG("rect", { class: "tooltip2-bg", width: "120", height: "22", x: "0", y: "0" });
+tooltipG2.appendChild(tooltipBg2);
+var tooltipTxt2 = makeSVG("text", { class: "tooltip2-text", x: "6", y: "15" });
+tooltipG2.appendChild(tooltipTxt2);
+svgEl2.appendChild(tooltipG2);
+
+// ── 氢键关联映射 ──────────────────────────────────────────
+// 对每个珠子，找到它作为给体（C=O端，i↔i+4中的i）和受体（N-H端，i↔i+4中的i+4）的氢键
+function getRelatedHbonds(beadIdx) {
+  var result = [];
+  // 作为给体 (C=O): beadIdx 是氢键 beadIdx 的起点
+  if (beadIdx < BEADS - 4) {
+    result.push(beadIdx);
+  }
+  // 作为受体 (N-H): beadIdx 是氢键 (beadIdx-4) 的终点
+  if (beadIdx >= 4) {
+    result.push(beadIdx - 4);
+  }
+  return result;
+}
+
+// 判断珠子是给体还是受体的描述
+function beadRole(beadIdx) {
+  var roles = [];
+  if (beadIdx < BEADS - 4) {
+    roles.push("C=O端");
+  }
+  if (beadIdx >= 4) {
+    roles.push("N-H端");
+  }
+  if (roles.length === 0) {
+    // 珠子9-12（0-based）如果不满足两端
+    return "";
+  }
+  return " (" + roles.join(", ") + ")";
+}
+
+// ── 探索模式状态 ──────────────────────────────────────────
+var exploreMode2 = false;
+var selectedBead2 = -1;
+var dragIdx2 = -1;
+var dragOffsetX2 = 0, dragOffsetY2 = 0;
+var snapAnims2 = [];
+var SNAP_DURATION2 = 300;
+
+// ── 坐标转换 ────────────────────────────────────────────────
+function svgPoint2(evt) {
+  var pt = svgEl2.createSVGPoint();
+  var src = evt.touches ? evt.touches[0] : evt;
+  pt.x = src.clientX;
+  pt.y = src.clientY;
+  var ctm = svgEl2.getScreenCTM().inverse();
+  return pt.matrixTransform(ctm);
+}
+
+// ── 更新珠子视觉位置 ───────────────────────────────────────
+function updateBeadVisuals() {
+  updateBackbone();
+  updateHbondPaths();
+  for (var i = 0; i < BEADS; i++) {
+    var bp = beadPositions2[i];
+    var sp = getSidePos(bp.x, bp.y, bp.angle);
+    beadEls[i].core.setAttribute("cx", bp.x.toFixed(1));
+    beadEls[i].core.setAttribute("cy", bp.y.toFixed(1));
+    beadEls[i].side.setAttribute("cx", sp.x.toFixed(1));
+    beadEls[i].side.setAttribute("cy", sp.y.toFixed(1));
+    beadEls[i].label.setAttribute("x", bp.x.toFixed(1));
+    beadEls[i].label.setAttribute("y", bp.y.toFixed(1));
+  }
+}
+
 // ── 动画逻辑：逐一点亮氢键 ────────────────────────────────────
 var TOTAL_HBONDS = 9;
-var curHbond = 0;  // 当前高亮的氢键（0-based）
+var curHbond = 0;
 var lastSwitch = performance.now();
 var HOLD_MS = 1400;
+var allRevealed = false;  // 全部展示完毕标志
 
 var hud2Cur   = document.getElementById("hud2-cur");
 var hud2Total = document.getElementById("hud2-total");
 var ruleCur   = document.getElementById("rule-cur");
 var ruleCount = document.getElementById("rule-count");
 
+// ── 进入探索模式 ──────────────────────────────────────────
+function enterExploreMode2() {
+  if (exploreMode2) return;
+  exploreMode2 = true;
+  exploreHint2.classList.add("show");
+  replayGroup2.setAttribute("opacity", "1");
+  replayGroup2.style.pointerEvents = "auto";
+  // 所有氢键都显示为淡色
+  for (var i = 0; i < TOTAL_HBONDS; i++) {
+    hbLines[i].setAttribute("stroke", "__THEME_ACCENT__");
+    hbLines[i].setAttribute("stroke-width", "1.5");
+    hbLines[i].setAttribute("stroke-opacity", "0.4");
+    hbLines[i].setAttribute("opacity", "1");
+  }
+  // 所有珠子恢复正常大小
+  for (var j = 0; j < BEADS; j++) {
+    beadEls[j].core.setAttribute("fill", "url(#normalBeadGrad)");
+    beadEls[j].core.setAttribute("r", "10");
+    beadEls[j].core.removeAttribute("filter");
+    var baseAlpha = 0.6 + 0.4 * (getPos(j).depth + 1) / 2;
+    beadEls[j].core.setAttribute("opacity", baseAlpha.toFixed(2));
+    beadEls[j].core.classList.add("bead2-core-draggable");
+  }
+  // 更新 HUD
+  hud2Cur.textContent = "—";
+  hud2Total.textContent = "9 / 9";
+  ruleCur.textContent = "点击珠子查看";
+  ruleCount.textContent = "全部 9 条已展示";
+}
+
+// ── 重播动画 ──────────────────────────────────────────────
+function replay2() {
+  exploreMode2 = false;
+  allRevealed = false;
+  curHbond = 0;
+  lastSwitch = performance.now();
+  selectedBead2 = -1;
+  dragIdx2 = -1;
+  snapAnims2 = [];
+  exploreHint2.classList.remove("show");
+  replayGroup2.setAttribute("opacity", "0");
+  replayGroup2.style.pointerEvents = "none";
+  tooltipG2.setAttribute("opacity", "0");
+  // 重置珠子位置到原始位置
+  for (var i = 0; i < BEADS; i++) {
+    beadPositions2[i].x = beadHomePositions2[i].x;
+    beadPositions2[i].y = beadHomePositions2[i].y;
+    beadEls[i].core.classList.remove("bead2-core-draggable");
+    beadEls[i].core.classList.remove("bead2-core-dragging");
+  }
+  updateBeadVisuals();
+}
+
+replayGroup2.addEventListener("click", function(e) {
+  e.stopPropagation();
+  replay2();
+});
+
+// ── 珠子点击高亮关联氢键 ──────────────────────────────────
+function highlightBeadHbonds(beadIdx) {
+  if (selectedBead2 === beadIdx) {
+    // 取消高亮
+    selectedBead2 = -1;
+    for (var i = 0; i < TOTAL_HBONDS; i++) {
+      hbLines[i].setAttribute("stroke-width", "1.5");
+      hbLines[i].setAttribute("stroke-opacity", "0.4");
+    }
+    for (var j = 0; j < BEADS; j++) {
+      beadEls[j].core.setAttribute("fill", "url(#normalBeadGrad)");
+      beadEls[j].core.setAttribute("r", "10");
+      beadEls[j].core.removeAttribute("filter");
+    }
+    ruleCur.textContent = "点击珠子查看";
+    ruleCount.textContent = "全部 9 条已展示";
+    hud2Cur.textContent = "—";
+    return;
+  }
+  // 设置新的高亮
+  selectedBead2 = beadIdx;
+  var related = getRelatedHbonds(beadIdx);
+  // 重置所有
+  for (var i2 = 0; i2 < TOTAL_HBONDS; i2++) {
+    hbLines[i2].setAttribute("stroke-width", "1.5");
+    hbLines[i2].setAttribute("stroke-opacity", "0.15");
+  }
+  for (var j2 = 0; j2 < BEADS; j2++) {
+    beadEls[j2].core.setAttribute("fill", "url(#normalBeadGrad)");
+    beadEls[j2].core.setAttribute("r", "10");
+    beadEls[j2].core.removeAttribute("filter");
+    var baseAlpha = 0.6 + 0.4 * (getPos(j2).depth + 1) / 2;
+    beadEls[j2].core.setAttribute("opacity", baseAlpha.toFixed(2));
+  }
+  // 高亮选中的珠子
+  beadEls[beadIdx].core.setAttribute("fill", "url(#hlBeadGrad)");
+  beadEls[beadIdx].core.setAttribute("r", "12");
+  beadEls[beadIdx].core.setAttribute("opacity", "1");
+  beadEls[beadIdx].core.setAttribute("filter", "url(#softGlow)");
+  // 高亮关联氢键和配对珠子
+  var labels = [];
+  for (var r = 0; r < related.length; r++) {
+    var hbIdx = related[r];
+    hbLines[hbIdx].setAttribute("stroke-width", "3");
+    hbLines[hbIdx].setAttribute("stroke-opacity", "1");
+    // 高亮配对珠子
+    var pairIdx = (hbIdx === beadIdx) ? hbIdx + 4 : hbIdx;
+    if (pairIdx !== beadIdx) {
+      beadEls[pairIdx].core.setAttribute("fill", "url(#hlBeadGrad)");
+      beadEls[pairIdx].core.setAttribute("r", "12");
+      beadEls[pairIdx].core.setAttribute("opacity", "1");
+      beadEls[pairIdx].core.setAttribute("filter", "url(#softGlow)");
+    }
+    labels.push((hbIdx + 1) + "↔" + (hbIdx + 5));
+  }
+  ruleCur.textContent = "残基 " + (beadIdx + 1) + " 关联";
+  ruleCount.textContent = labels.join(", ");
+  hud2Cur.textContent = labels.join(", ");
+}
+
+// ── Hover tooltip ──────────────────────────────────────────
+function showTooltip2(beadIdx, pt) {
+  var role = beadRole(beadIdx);
+  var text = "残基 #" + (beadIdx + 1) + role;
+  tooltipTxt2.textContent = text;
+  var tw = text.length * 7 + 12;
+  tooltipBg2.setAttribute("width", tw);
+  var tx = pt.x - tw / 2;
+  var ty = pt.y - 32;
+  if (tx < 2) tx = 2;
+  if (tx + tw > 598) tx = 598 - tw;
+  if (ty < 2) ty = pt.y + 16;
+  tooltipG2.setAttribute("transform", "translate(" + tx.toFixed(1) + "," + ty.toFixed(1) + ")");
+  tooltipG2.setAttribute("opacity", "1");
+}
+
+function hideTooltip2() {
+  tooltipG2.setAttribute("opacity", "0");
+}
+
+function findBeadAt2(pt) {
+  for (var i = 0; i < BEADS; i++) {
+    var bp = beadPositions2[i];
+    var dx = pt.x - bp.x, dy = pt.y - bp.y;
+    if (dx * dx + dy * dy <= (BEAD_R + 4) * (BEAD_R + 4)) return i;
+  }
+  return -1;
+}
+
+// ── 弹回动画 ──────────────────────────────────────────────
+function processSnapAnims2(now) {
+  var remaining = [];
+  for (var s = 0; s < snapAnims2.length; s++) {
+    var sa = snapAnims2[s];
+    var elapsed = now - sa.startTime;
+    var progress = Math.min(elapsed / SNAP_DURATION2, 1);
+    var t = 1 - Math.pow(1 - progress, 3);
+    var home = beadHomePositions2[sa.idx];
+    beadPositions2[sa.idx].x = sa.startX + (home.x - sa.startX) * t;
+    beadPositions2[sa.idx].y = sa.startY + (home.y - sa.startY) * t;
+    if (progress < 1) {
+      remaining.push(sa);
+    } else {
+      beadPositions2[sa.idx].x = home.x;
+      beadPositions2[sa.idx].y = home.y;
+    }
+  }
+  snapAnims2 = remaining;
+}
+
+// ── 事件处理 ──────────────────────────────────────────────
+function onPointerDown2(e) {
+  if (!exploreMode2) return;
+  var pt = svgPoint2(e);
+  var idx = findBeadAt2(pt);
+  if (idx >= 0) {
+    // 短按 vs 拖拽：先记录为潜在拖拽
+    dragIdx2 = idx;
+    dragOffsetX2 = beadPositions2[idx].x - pt.x;
+    dragOffsetY2 = beadPositions2[idx].y - pt.y;
+    beadEls[idx].core.classList.add("bead2-core-dragging");
+    snapAnims2 = snapAnims2.filter(function(sa) { return sa.idx !== idx; });
+    e.preventDefault();
+    return;
+  }
+  // 点击空白处取消选择
+  if (selectedBead2 >= 0) {
+    highlightBeadHbonds(selectedBead2);  // 取消
+  }
+}
+
+var dragMoved2 = false;
+
+function onPointerDown2Full(e) {
+  dragMoved2 = false;
+  onPointerDown2(e);
+}
+
+function onPointerMove2(e) {
+  if (!exploreMode2) return;
+  var pt = svgPoint2(e);
+  if (dragIdx2 >= 0) {
+    dragMoved2 = true;
+    beadPositions2[dragIdx2].x = pt.x + dragOffsetX2;
+    beadPositions2[dragIdx2].y = pt.y + dragOffsetY2;
+    updateBeadVisuals();
+    e.preventDefault();
+    return;
+  }
+  var idx = findBeadAt2(pt);
+  if (idx >= 0) {
+    showTooltip2(idx, pt);
+  } else {
+    hideTooltip2();
+  }
+}
+
+function onPointerUp2(e) {
+  if (dragIdx2 < 0) return;
+  var idx = dragIdx2;
+  beadEls[idx].core.classList.remove("bead2-core-dragging");
+  if (!dragMoved2) {
+    // 没有实际拖动 → 当作点击
+    highlightBeadHbonds(idx);
+  }
+  // 启动弹回动画
+  snapAnims2.push({
+    idx: idx,
+    startX: beadPositions2[idx].x,
+    startY: beadPositions2[idx].y,
+    startTime: performance.now()
+  });
+  dragIdx2 = -1;
+}
+
+// 鼠标事件
+svgEl2.addEventListener("mousedown", onPointerDown2Full);
+svgEl2.addEventListener("mousemove", onPointerMove2);
+svgEl2.addEventListener("mouseup", onPointerUp2);
+svgEl2.addEventListener("mouseleave", function() { hideTooltip2(); if (dragIdx2 >= 0) onPointerUp2(null); });
+
+// 触摸事件
+svgEl2.addEventListener("touchstart", function(e) { onPointerDown2Full(e); }, { passive: false });
+svgEl2.addEventListener("touchmove", function(e) { onPointerMove2(e); }, { passive: false });
+svgEl2.addEventListener("touchend", function(e) { onPointerUp2(e); });
+
+// ── 主循环 ───────────────────────────────────────────────
 function loop2(now) {
+  if (exploreMode2) {
+    // 处理弹回动画
+    processSnapAnims2(now);
+    if (snapAnims2.length > 0) {
+      updateBeadVisuals();
+    }
+    requestAnimationFrame(loop2);
+    return;
+  }
+
   if (now - lastSwitch > HOLD_MS) {
-    curHbond = (curHbond + 1) % TOTAL_HBONDS;
-    lastSwitch = now;
+    if (curHbond < TOTAL_HBONDS - 1) {
+      curHbond++;
+      lastSwitch = now;
+    } else if (!allRevealed) {
+      allRevealed = true;
+      lastSwitch = now;  // 开始计时进入探索模式的延迟
+    }
+  }
+
+  // 全部展示完毕后等待2秒进入探索模式
+  if (allRevealed && now - lastSwitch > 2000) {
+    enterExploreMode2();
+    requestAnimationFrame(loop2);
+    return;
   }
 
   // 全部氢键显示（淡色），当前高亮
-  for (var hi = 0; hi < TOTAL_HBONDS; hi++) {
-    if (hi <= curHbond) {
-      if (hi === curHbond) {
-        // 当前高亮：亮色，宽
-        hbLines[hi].setAttribute("stroke", "__THEME_ACCENT__");
-        hbLines[hi].setAttribute("stroke-width", "2.5");
-        hbLines[hi].setAttribute("opacity", "1");
+  for (var hi2 = 0; hi2 < TOTAL_HBONDS; hi2++) {
+    if (hi2 <= curHbond) {
+      if (hi2 === curHbond) {
+        hbLines[hi2].setAttribute("stroke", "__THEME_ACCENT__");
+        hbLines[hi2].setAttribute("stroke-width", "2.5");
+        hbLines[hi2].setAttribute("opacity", "1");
+        hbLines[hi2].removeAttribute("stroke-opacity");
       } else {
-        // 已显示：暗色
-        hbLines[hi].setAttribute("stroke", "__THEME_ACCENT__");
-        hbLines[hi].setAttribute("stroke-opacity", "0.35");
-        hbLines[hi].setAttribute("stroke-width", "1.5");
-        hbLines[hi].setAttribute("opacity", "1");
+        hbLines[hi2].setAttribute("stroke", "__THEME_ACCENT__");
+        hbLines[hi2].setAttribute("stroke-opacity", "0.35");
+        hbLines[hi2].setAttribute("stroke-width", "1.5");
+        hbLines[hi2].setAttribute("opacity", "1");
       }
     } else {
-      hbLines[hi].setAttribute("opacity", "0");
+      hbLines[hi2].setAttribute("opacity", "0");
     }
   }
 
-  // 高亮当前氢键的两个珠子
-  for (var bi = 0; bi < BEADS; bi++) {
-    var isHL = (bi === curHbond || bi === curHbond + 4);
-    var baseAlpha = 0.6 + 0.4 * (getPos(bi).depth + 1) / 2;
+  for (var bi2 = 0; bi2 < BEADS; bi2++) {
+    var isHL = (bi2 === curHbond || bi2 === curHbond + 4);
+    var baseAlpha = 0.6 + 0.4 * (getPos(bi2).depth + 1) / 2;
     if (isHL) {
-      beadEls[bi].core.setAttribute("fill", "url(#hlBeadGrad)");
-      beadEls[bi].core.setAttribute("r", "12");
-      beadEls[bi].core.setAttribute("opacity", "1");
-      beadEls[bi].core.setAttribute("filter", "url(#softGlow)");
+      beadEls[bi2].core.setAttribute("fill", "url(#hlBeadGrad)");
+      beadEls[bi2].core.setAttribute("r", "12");
+      beadEls[bi2].core.setAttribute("opacity", "1");
+      beadEls[bi2].core.setAttribute("filter", "url(#softGlow)");
     } else {
-      beadEls[bi].core.setAttribute("fill", "url(#normalBeadGrad)");
-      beadEls[bi].core.setAttribute("r", "10");
-      beadEls[bi].core.setAttribute("opacity", baseAlpha.toFixed(2));
-      beadEls[bi].core.removeAttribute("filter");
+      beadEls[bi2].core.setAttribute("fill", "url(#normalBeadGrad)");
+      beadEls[bi2].core.setAttribute("r", "10");
+      beadEls[bi2].core.setAttribute("opacity", baseAlpha.toFixed(2));
+      beadEls[bi2].core.removeAttribute("filter");
     }
   }
 
-  // 更新HUD和标注
   var i1 = curHbond + 1, i2 = curHbond + 5;
   hud2Cur.textContent = i1 + "↔" + i2;
   hud2Total.textContent = (curHbond + 1) + " / " + TOTAL_HBONDS;
