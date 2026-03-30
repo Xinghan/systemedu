@@ -27,6 +27,126 @@ from rich.panel import Panel
 
 console = Console()
 
+# ── 视觉主题系统 ──────────────────────────────────────────────────
+# 参考来源：/Users/xinghan/Dev/oknowledgetree/mars_terrain_animations.html
+#           /Users/xinghan/Dev/oknowledgetree/protein_secondary_structure_animations.html
+#
+# 每个主题包含：背景色、主色/辅色、粒子风格、大气光晕、字体
+# 使用原则：项目主题 → 色彩氛围，如火星探索=土黄橙，生命科学=荧光绿，宇宙=深蓝紫
+
+VISUAL_THEMES = {
+    # 火星探索风格（参考 mars_terrain_animations.html）
+    # 适用：aerospace, robotics, climate（荒野探索类）
+    "mars_terrain": {
+        "bg": "#0a0806",
+        "card": "rgba(18,14,10,0.92)",
+        "primary": "#e8723a",       # 火星橙
+        "secondary": "#f0c040",     # 金沙黄
+        "accent": "#c0392b",        # 火星红
+        "sand": "#d4a056",          # 沙棕
+        "text": "#d4c8b8",
+        "text_dim": "#6b5e50",
+        "border": "rgba(255,160,60,0.08)",
+        "glow_1": "rgba(232,114,58,0.10)",
+        "glow_2": "rgba(192,57,43,0.06)",
+        "glow_3": "rgba(240,192,64,0.05)",
+        "particle_color": "rgba(232,114,58,",  # 尘埃粒子 orange-tinted
+        "particle_count": 160,
+        "particle_type": "dust",    # 飘散尘埃
+        "font_display": "'Oxanium', 'Noto Sans SC', sans-serif",
+        "font_mono": "'Space Mono', monospace",
+        "hud_label": "rgba(240,192,64,0.7)",
+        "hud_value": "rgba(255,255,255,0.9)",
+        "beam_color": "#e8723a",
+    },
+    # 生命科学/蛋白质风格（参考 protein_secondary_structure_animations.html）
+    # 适用：biotech, chemistry（生命科学类）
+    "biotech_life": {
+        "bg": "#080c14",
+        "card": "rgba(14,19,28,0.88)",
+        "primary": "#58d68d",       # 荧光绿（生命色）
+        "secondary": "#bb86fc",     # 紫罗兰（结构色）
+        "accent": "#4dd0e1",        # 青色（活性位点）
+        "warm": "#ff8a65",          # 暖橙（能量/热力）
+        "text": "#c9d1d9",
+        "text_dim": "#484f58",
+        "border": "rgba(255,255,255,0.05)",
+        "glow_1": "rgba(88,214,141,0.06)",
+        "glow_2": "rgba(187,134,252,0.04)",
+        "glow_3": "rgba(100,181,246,0.05)",
+        "particle_color": "rgba(200,230,210,",  # 星点/荧光粒子
+        "particle_count": 200,
+        "particle_type": "stars",   # 星空
+        "font_display": "'Outfit', 'Noto Sans SC', sans-serif",
+        "font_mono": "'Space Mono', monospace",
+        "hud_label": "rgba(88,214,141,0.7)",
+        "hud_value": "rgba(255,255,255,0.9)",
+        "beam_color": "#58d68d",
+    },
+    # 物理/数学风格
+    # 适用：physics, math, cs
+    "quantum_indigo": {
+        "bg": "#0a0a14",
+        "card": "rgba(15,15,25,0.90)",
+        "primary": "#818cf8",       # 靛紫（量子/数学）
+        "secondary": "#34d399",     # 薄荷绿（辅助）
+        "accent": "#f472b6",        # 粉红（高亮）
+        "text": "#e2e8f0",
+        "text_dim": "#64748b",
+        "border": "rgba(129,140,248,0.08)",
+        "glow_1": "rgba(129,140,248,0.08)",
+        "glow_2": "rgba(52,211,153,0.04)",
+        "glow_3": "rgba(244,114,182,0.04)",
+        "particle_color": "rgba(180,190,255,",
+        "particle_count": 180,
+        "particle_type": "stars",
+        "font_display": "'Oxanium', 'Noto Sans SC', sans-serif",
+        "font_mono": "'Space Mono', monospace",
+        "hud_label": "rgba(129,140,248,0.7)",
+        "hud_value": "rgba(255,255,255,0.9)",
+        "beam_color": "#818cf8",
+    },
+    # 音乐/艺术风格
+    # 适用：music, ai
+    "sonic_amber": {
+        "bg": "#0c0a08",
+        "card": "rgba(20,16,12,0.90)",
+        "primary": "#fbbf24",       # 琥珀金（音波/旋律）
+        "secondary": "#a78bfa",     # 淡紫（和声）
+        "accent": "#34d399",        # 绿（节拍/节奏）
+        "text": "#e8dcc8",
+        "text_dim": "#6b5e40",
+        "border": "rgba(251,191,36,0.08)",
+        "glow_1": "rgba(251,191,36,0.08)",
+        "glow_2": "rgba(167,139,250,0.04)",
+        "glow_3": "rgba(52,211,153,0.04)",
+        "particle_color": "rgba(251,191,36,",
+        "particle_count": 150,
+        "particle_type": "sparks",  # 音符粒子
+        "font_display": "'Outfit', 'Noto Sans SC', sans-serif",
+        "font_mono": "'Space Mono', monospace",
+        "hud_label": "rgba(251,191,36,0.7)",
+        "hud_value": "rgba(255,255,255,0.9)",
+        "beam_color": "#fbbf24",
+    },
+}
+
+# 项目类别 -> 视觉主题 映射
+CATEGORY_THEME_MAP = {
+    "biotech": "biotech_life",
+    "chemistry": "biotech_life",
+    "physics": "quantum_indigo",
+    "math": "quantum_indigo",
+    "cs": "quantum_indigo",
+    "ai": "quantum_indigo",
+    "aerospace": "mars_terrain",
+    "robotics": "mars_terrain",
+    "climate": "mars_terrain",
+    "music": "sonic_amber",
+    "other": "biotech_life",
+}
+
+
 # ── 工具 ────────────────────────────────────────────────────────
 
 def _id(prefix: str) -> str:
@@ -45,10 +165,13 @@ PROJECT_DESCRIPTION = (
 )
 PROJECT_CATEGORY = "biotech"
 PROJECT_AGE_RANGE = [10, 16]
-PROJECT_ESTIMATED_HOURS = 16.5
+PROJECT_ESTIMATED_HOURS = 17
 PROJECT_TAGS = ["biology", "protein", "structure", "biochemistry", "AlphaFold"]
 
 TREE_PATH = _ROOT / "projects" / "protein-structure" / "knowledge_tree.json"
+
+# 根据项目类别自动选取视觉主题
+T = VISUAL_THEMES[CATEGORY_THEME_MAP.get(PROJECT_CATEGORY, "biotech_life")]
 
 # ── 课程节点：M05N01 α螺旋 ──────────────────────────────────────
 # 在知识树中的全局 knode_id（按模块顺序计算）：
@@ -229,6 +352,7 @@ PLAN_MARKDOWN = """# M05N01：α螺旋——大自然的弹簧
 
 ANIM1_ID = _id("anim")
 ANIM2_ID = _id("anim")
+GAME_ID  = _id("game")
 STORY_ID = _id("story")
 EXER_ID  = _id("ex")
 
@@ -246,8 +370,8 @@ ANIM1_HTML = """<!DOCTYPE html>
 * { box-sizing: border-box; margin: 0; padding: 0; }
 html, body {
   width: 100%; height: 100%; overflow: hidden;
-  background: #0a0f1e;
-  font-family: "Noto Sans SC", "PingFang SC", system-ui, sans-serif;
+  background: __THEME_BG__;
+  font-family: __THEME_FONT__;
 }
 svg { display: block; width: 100%; height: 100%; }
 
@@ -272,7 +396,7 @@ svg { display: block; width: 100%; height: 100%; }
 
 /* 氢键 */
 .hbond {
-  stroke: #fbbf24;
+  stroke: __THEME_ACCENT__;
   stroke-width: 1.5;
   stroke-dasharray: 4 3;
   fill: none;
@@ -283,8 +407,8 @@ svg { display: block; width: 100%; height: 100%; }
 
 /* HUD */
 .hud-bg { fill: rgba(0,0,0,0.6); }
-.hud-label { fill: rgba(160,180,255,0.6); font-size: 10px; }
-.hud-value { fill: rgba(255,255,255,0.9); font-size: 13px; font-weight: bold; }
+.hud-label { fill: __THEME_HUD_LABEL__; font-size: 10px; }
+.hud-value { fill: __THEME_HUD_VALUE__; font-size: 13px; font-weight: bold; }
 .hud-line { stroke: rgba(255,255,255,0.08); stroke-width: 1; }
 
 /* 标注文字 */
@@ -296,7 +420,7 @@ svg { display: block; width: 100%; height: 100%; }
 }
 .annotation.show { opacity: 1; }
 .ann-line {
-  stroke: rgba(200,220,255,0.4);
+  stroke: __THEME_PRIMARY__;
   stroke-width: 1;
   stroke-dasharray: 3 3;
   opacity: 0;
@@ -306,12 +430,12 @@ svg { display: block; width: 100%; height: 100%; }
 
 /* 阶段标题 */
 .phase-title {
-  fill: rgba(129,140,248,0.9);
+  fill: __THEME_PRIMARY__;
   font-size: 14px;
   font-weight: bold;
 }
 .phase-sub {
-  fill: rgba(200,210,255,0.6);
+  fill: __THEME_TEXT_DIM__;
   font-size: 11px;
 }
 </style>
@@ -321,29 +445,29 @@ svg { display: block; width: 100%; height: 100%; }
   <defs>
     <!-- 背景渐变 -->
     <linearGradient id="bgGrad" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%" stop-color="#0a0f1e"/>
-      <stop offset="100%" stop-color="#0f1628"/>
+      <stop offset="0%" stop-color="__THEME_BG__"/>
+      <stop offset="100%" stop-color="__THEME_BG2__"/>
     </linearGradient>
     <!-- 网格图案 -->
     <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
-      <path d="M40 0L0 0L0 40" fill="none" stroke="rgba(255,255,255,0.025)" stroke-width="1"/>
+      <path d="M40 0L0 0L0 40" fill="none" stroke="__THEME_GRID__" stroke-width="1"/>
     </pattern>
-    <!-- 珠子渐变 -->
+    <!-- 珠子渐变：主色调 -->
     <radialGradient id="beadGrad" cx="35%" cy="30%" r="65%">
-      <stop offset="0%" stop-color="#a5b4fc"/>
-      <stop offset="50%" stop-color="#6366f1"/>
-      <stop offset="100%" stop-color="#3730a3"/>
+      <stop offset="0%" stop-color="__THEME_PRIMARY__" stop-opacity="0.9"/>
+      <stop offset="50%" stop-color="__THEME_PRIMARY__" stop-opacity="0.7"/>
+      <stop offset="100%" stop-color="__THEME_PRIMARY__" stop-opacity="0.4"/>
     </radialGradient>
-    <!-- 侧链渐变 -->
+    <!-- 侧链渐变：辅色调 -->
     <radialGradient id="sideGrad" cx="35%" cy="30%" r="65%">
-      <stop offset="0%" stop-color="#86efac"/>
-      <stop offset="60%" stop-color="#22c55e"/>
-      <stop offset="100%" stop-color="#15803d"/>
+      <stop offset="0%" stop-color="__THEME_SECONDARY__" stop-opacity="0.9"/>
+      <stop offset="60%" stop-color="__THEME_SECONDARY__" stop-opacity="0.6"/>
+      <stop offset="100%" stop-color="__THEME_SECONDARY__" stop-opacity="0.3"/>
     </radialGradient>
     <!-- 骨架渐变 -->
     <linearGradient id="backboneGrad" x1="0" y1="0" x2="1" y2="0">
-      <stop offset="0%" stop-color="#818cf8"/>
-      <stop offset="100%" stop-color="#6366f1"/>
+      <stop offset="0%" stop-color="__THEME_PRIMARY__"/>
+      <stop offset="100%" stop-color="__THEME_SECONDARY__"/>
     </linearGradient>
     <!-- 珠子发光滤镜 -->
     <filter id="beadGlow" x="-50%" y="-50%" width="200%" height="200%">
@@ -751,14 +875,14 @@ ANIM2_HTML = """<!DOCTYPE html>
 * { box-sizing: border-box; margin: 0; padding: 0; }
 html, body {
   width: 100%; height: 100%; overflow: hidden;
-  background: #0a0f1e;
-  font-family: "Noto Sans SC", "PingFang SC", system-ui, sans-serif;
+  background: __THEME_BG__;
+  font-family: __THEME_FONT__;
 }
 svg { display: block; width: 100%; height: 100%; }
 
 .hud-bg { fill: rgba(0,0,0,0.6); }
-.hud-label { fill: rgba(160,180,255,0.6); font-size: 10px; }
-.hud-value { fill: rgba(255,255,255,0.9); font-size: 13px; font-weight: bold; }
+.hud-label { fill: __THEME_HUD_LABEL__; font-size: 10px; }
+.hud-value { fill: __THEME_HUD_VALUE__; font-size: 13px; font-weight: bold; }
 .hud-line { stroke: rgba(255,255,255,0.08); stroke-width: 1; }
 </style>
 </head>
@@ -766,11 +890,11 @@ svg { display: block; width: 100%; height: 100%; }
 <svg id="svg" viewBox="0 0 600 420" xmlns="http://www.w3.org/2000/svg">
   <defs>
     <linearGradient id="bg2" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%" stop-color="#0a0f1e"/>
-      <stop offset="100%" stop-color="#0d1530"/>
+      <stop offset="0%" stop-color="__THEME_BG__"/>
+      <stop offset="100%" stop-color="__THEME_BG2__"/>
     </linearGradient>
     <pattern id="grid2" width="40" height="40" patternUnits="userSpaceOnUse">
-      <path d="M40 0L0 0L0 40" fill="none" stroke="rgba(255,255,255,0.025)" stroke-width="1"/>
+      <path d="M40 0L0 0L0 40" fill="none" stroke="__THEME_GRID__" stroke-width="1"/>
     </pattern>
     <filter id="glow2">
       <feGaussianBlur in="SourceGraphic" stdDeviation="3" result="blur"/>
@@ -780,23 +904,23 @@ svg { display: block; width: 100%; height: 100%; }
       <feGaussianBlur in="SourceGraphic" stdDeviation="1.5" result="blur"/>
       <feComposite in="SourceGraphic" in2="blur" operator="over"/>
     </filter>
-    <!-- 当前高亮氢键颜色 -->
+    <!-- 当前高亮氢键颜色：主色调 -->
     <radialGradient id="hlBeadGrad" cx="35%" cy="30%" r="65%">
-      <stop offset="0%" stop-color="#fde68a"/>
-      <stop offset="50%" stop-color="#f59e0b"/>
-      <stop offset="100%" stop-color="#b45309"/>
+      <stop offset="0%" stop-color="__THEME_PRIMARY__" stop-opacity="1.0"/>
+      <stop offset="50%" stop-color="__THEME_PRIMARY__" stop-opacity="0.75"/>
+      <stop offset="100%" stop-color="__THEME_PRIMARY__" stop-opacity="0.4"/>
     </radialGradient>
-    <!-- 普通珠子 -->
+    <!-- 普通珠子：辅色 -->
     <radialGradient id="normalBeadGrad" cx="35%" cy="30%" r="65%">
-      <stop offset="0%" stop-color="#a5b4fc"/>
-      <stop offset="50%" stop-color="#6366f1"/>
-      <stop offset="100%" stop-color="#3730a3"/>
+      <stop offset="0%" stop-color="__THEME_SECONDARY__" stop-opacity="0.7"/>
+      <stop offset="50%" stop-color="__THEME_SECONDARY__" stop-opacity="0.4"/>
+      <stop offset="100%" stop-color="__THEME_SECONDARY__" stop-opacity="0.2"/>
     </radialGradient>
-    <!-- 侧链 -->
+    <!-- 侧链：强调色 -->
     <radialGradient id="sideGrad2" cx="35%" cy="30%" r="65%">
-      <stop offset="0%" stop-color="#86efac"/>
-      <stop offset="50%" stop-color="#22c55e"/>
-      <stop offset="100%" stop-color="#15803d"/>
+      <stop offset="0%" stop-color="__THEME_ACCENT__" stop-opacity="0.8"/>
+      <stop offset="50%" stop-color="__THEME_ACCENT__" stop-opacity="0.5"/>
+      <stop offset="100%" stop-color="__THEME_ACCENT__" stop-opacity="0.2"/>
     </radialGradient>
   </defs>
 
@@ -813,19 +937,19 @@ svg { display: block; width: 100%; height: 100%; }
   <!-- 规则说明框 -->
   <g id="rule-box">
     <rect x="390" y="42" width="195" height="110" rx="8"
-          fill="rgba(15,20,50,0.85)" stroke="rgba(99,102,241,0.4)" stroke-width="1.5"/>
+          fill="rgba(0,0,0,0.5)" stroke="__THEME_PRIMARY__" stroke-opacity="0.3" stroke-width="1.5"/>
     <text x="487" y="62" text-anchor="middle"
-          fill="rgba(167,243,208,0.9)" font-size="11" font-weight="bold">氢键形成规律</text>
+          fill="__THEME_PRIMARY__" font-size="11" font-weight="bold">氢键形成规律</text>
     <text id="rule-cur" x="487" y="82" text-anchor="middle"
-          fill="rgba(251,191,36,0.95)" font-size="13" font-weight="bold">第1↔第5</text>
+          fill="__THEME_ACCENT__" font-size="13" font-weight="bold">第1↔第5</text>
     <text x="487" y="100" text-anchor="middle"
-          fill="rgba(200,210,255,0.65)" font-size="10">C=O（第i个）</text>
+          fill="__THEME_TEXT_DIM__" font-size="10">C=O（第i个）</text>
     <text x="487" y="115" text-anchor="middle"
-          fill="rgba(200,210,255,0.65)" font-size="10">与 N-H（第i+4个）</text>
+          fill="__THEME_TEXT_DIM__" font-size="10">与 N-H（第i+4个）</text>
     <text x="487" y="130" text-anchor="middle"
-          fill="rgba(200,210,255,0.65)" font-size="10">之间形成氢键</text>
+          fill="__THEME_TEXT_DIM__" font-size="10">之间形成氢键</text>
     <text id="rule-count" x="487" y="146" text-anchor="middle"
-          fill="rgba(129,140,248,0.8)" font-size="10">当前高亮第 1 条</text>
+          fill="__THEME_SECONDARY__" font-size="10">当前高亮第 1 条</text>
   </g>
 
   <!-- HUD -->
@@ -890,7 +1014,7 @@ function makeSVG(tag, attrs) {
 
 // 骨架线
 var backbone = makeSVG("path", {
-  "stroke": "rgba(99,102,241,0.5)", "stroke-width": "2.5",
+  "stroke": "__THEME_SECONDARY__", "stroke-opacity": "0.5", "stroke-width": "2.5",
   "fill": "none", "stroke-linecap": "round"
 });
 scene2.appendChild(backbone);
@@ -914,7 +1038,7 @@ for (var hi = 0; hi < BEADS - 4; hi++) {
     "d": "M" + p1.x.toFixed(1) + "," + p1.y.toFixed(1) +
          " Q" + mx.toFixed(1) + "," + my.toFixed(1) +
          " " + p2.x.toFixed(1) + "," + p2.y.toFixed(1),
-    "stroke": "#fbbf24",
+    "stroke": "__THEME_ACCENT__",
     "stroke-width": "2",
     "stroke-dasharray": "4 3",
     "fill": "none",
@@ -977,7 +1101,7 @@ for (var si = 0; si < beadData.length; si++) {
 var axisLine = makeSVG("line", {
   x1: AXIS_X0, y1: AXIS_Y,
   x2: AXIS_X0 + (BEADS - 1) * X_STEP, y2: AXIS_Y,
-  stroke: "rgba(99,102,241,0.2)", "stroke-width": "1",
+  stroke: "__THEME_SECONDARY__", "stroke-opacity": "0.2", "stroke-width": "1",
   "stroke-dasharray": "6 4",
 });
 scene2.appendChild(axisLine);
@@ -987,7 +1111,7 @@ var axisLabel = makeSVG("text", {
   x: (AXIS_X0 + (BEADS - 1) * X_STEP / 2).toFixed(0),
   y: (AXIS_Y + 16).toFixed(0),
   "text-anchor": "middle",
-  fill: "rgba(99,102,241,0.5)", "font-size": "9",
+  fill: "__THEME_SECONDARY__", "fill-opacity": "0.5", "font-size": "9",
 });
 axisLabel.textContent = "螺旋轴（C 端 →）";
 scene2.appendChild(axisLabel);
@@ -1014,12 +1138,13 @@ function loop2(now) {
     if (hi <= curHbond) {
       if (hi === curHbond) {
         // 当前高亮：亮色，宽
-        hbLines[hi].setAttribute("stroke", "#fbbf24");
+        hbLines[hi].setAttribute("stroke", "__THEME_ACCENT__");
         hbLines[hi].setAttribute("stroke-width", "2.5");
         hbLines[hi].setAttribute("opacity", "1");
       } else {
         // 已显示：暗色
-        hbLines[hi].setAttribute("stroke", "rgba(251,191,36,0.35)");
+        hbLines[hi].setAttribute("stroke", "__THEME_ACCENT__");
+        hbLines[hi].setAttribute("stroke-opacity", "0.35");
         hbLines[hi].setAttribute("stroke-width", "1.5");
         hbLines[hi].setAttribute("opacity", "1");
       }
@@ -1056,6 +1181,331 @@ function loop2(now) {
 }
 
 requestAnimationFrame(loop2);
+})();
+</script>
+</body>
+</html>"""
+
+# ── 交互游戏：氢键连连看 ────────────────────────────────────────
+# 玩法：屏幕左侧显示编号1-9的氨基酸（C=O端），右侧显示编号5-13（N-H端）
+# 玩家点击左侧一个珠子，再点击右侧一个珠子，如果配对正确（差值=4）得分
+# 全部9对连完获胜，每轮随机打乱顺序
+
+GAME_HTML = """<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>氢键连连看</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body {
+  width: 100%; height: 100%; overflow: hidden;
+  background: __THEME_BG__;
+  font-family: __THEME_FONT__;
+  color: __THEME_TEXT__;
+  user-select: none;
+}
+#wrap {
+  display: flex; flex-direction: column;
+  width: 100%; height: 100%; padding: 10px;
+}
+#header {
+  text-align: center; padding-bottom: 8px;
+  font-size: 14px; font-weight: bold;
+  color: __THEME_PRIMARY__;
+  letter-spacing: 0.5px;
+}
+#subtitle {
+  text-align: center;
+  font-size: 11px; color: __THEME_TEXT_DIM__;
+  margin-bottom: 6px;
+}
+#game-area {
+  display: flex; flex: 1; align-items: stretch;
+  gap: 8px; min-height: 0;
+}
+#left-col, #right-col {
+  display: flex; flex-direction: column;
+  justify-content: space-around; align-items: center;
+  width: 110px; padding: 4px 0; gap: 4px;
+}
+#center-area {
+  flex: 1; position: relative; overflow: hidden;
+}
+#connect-svg {
+  position: absolute; inset: 0;
+  width: 100%; height: 100%;
+}
+.bead-btn {
+  width: 80px; height: 34px;
+  border-radius: 8px;
+  border: 1.5px solid rgba(255,255,255,0.1);
+  background: rgba(255,255,255,0.04);
+  color: __THEME_TEXT__;
+  font-size: 11px; font-weight: bold;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  display: flex; align-items: center; justify-content: center;
+  gap: 4px;
+  position: relative;
+}
+.bead-btn:hover:not(.done):not(.selected) {
+  border-color: __THEME_PRIMARY__;
+  background: rgba(255,255,255,0.08);
+}
+.bead-btn.selected {
+  border-color: __THEME_PRIMARY__;
+  background: __THEME_PRIMARY__;
+  color: __THEME_BG__;
+  box-shadow: 0 0 12px __THEME_PRIMARY__;
+}
+.bead-btn.done {
+  border-color: rgba(255,255,255,0.06);
+  background: rgba(255,255,255,0.02);
+  color: __THEME_TEXT_DIM__;
+  cursor: default;
+}
+.bead-btn.wrong {
+  border-color: #f87171;
+  background: rgba(248,113,113,0.15);
+  animation: shake 0.3s ease;
+}
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  25% { transform: translateX(-4px); }
+  75% { transform: translateX(4px); }
+}
+.bead-dot {
+  width: 8px; height: 8px; border-radius: 50%;
+  background: __THEME_SECONDARY__; flex-shrink: 0;
+}
+.bead-btn.done .bead-dot { background: __THEME_TEXT_DIM__; }
+#hud {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 6px 12px; margin-top: 6px;
+  background: rgba(0,0,0,0.3);
+  border-radius: 8px; border: 1px solid rgba(255,255,255,0.06);
+  font-size: 11px;
+}
+#hud-score { color: __THEME_PRIMARY__; font-weight: bold; font-size: 13px; }
+#hud-rule  { color: __THEME_TEXT_DIM__; }
+#hud-msg   { color: __THEME_ACCENT__; font-weight: bold; min-width: 60px; text-align: right; }
+#win-overlay {
+  position: absolute; inset: 0;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  background: rgba(0,0,0,0.7);
+  backdrop-filter: blur(4px);
+  gap: 14px;
+  opacity: 0; pointer-events: none;
+  transition: opacity 0.4s ease;
+  z-index: 10;
+}
+#win-overlay.show { opacity: 1; pointer-events: all; }
+#win-title { font-size: 22px; font-weight: bold; color: __THEME_PRIMARY__; }
+#win-sub   { font-size: 13px; color: __THEME_TEXT__; }
+#replay-btn {
+  padding: 10px 28px; border-radius: 10px;
+  background: __THEME_PRIMARY__; color: __THEME_BG__;
+  border: none; font-size: 14px; font-weight: bold;
+  cursor: pointer;
+  transition: box-shadow 0.2s;
+}
+#replay-btn:hover { box-shadow: 0 0 20px __THEME_PRIMARY__; }
+</style>
+</head>
+<body>
+<div id="wrap">
+  <div id="header">氢键连连看：找到 i ↔ (i+4) 的配对</div>
+  <div id="subtitle">点击左侧一个氨基酸（C=O），再点击右侧相隔4位的氨基酸（N-H）完成配对</div>
+
+  <div id="game-area">
+    <div id="left-col"></div>
+    <div id="center-area">
+      <svg id="connect-svg" xmlns="http://www.w3.org/2000/svg"></svg>
+      <div id="win-overlay">
+        <div id="win-title">全部配对成功！</div>
+        <div id="win-sub">你已掌握 α螺旋 i↔(i+4) 氢键规律</div>
+        <button id="replay-btn" onclick="initGame()">再玩一次</button>
+      </div>
+    </div>
+    <div id="right-col"></div>
+  </div>
+
+  <div id="hud">
+    <span id="hud-score">得分：0 / 9</span>
+    <span id="hud-rule">规律：第 i ↔ 第 (i+4) 形成氢键</span>
+    <span id="hud-msg"></span>
+  </div>
+</div>
+
+<script>
+(function() {
+"use strict";
+
+var leftCol   = document.getElementById("left-col");
+var rightCol  = document.getElementById("right-col");
+var svg       = document.getElementById("connect-svg");
+var hudScore  = document.getElementById("hud-score");
+var hudMsg    = document.getElementById("hud-msg");
+var winOverlay= document.getElementById("win-overlay");
+var TOTAL     = 9;
+
+// 游戏状态
+var leftItems, rightItems;
+var selectedLeft = null;
+var score = 0;
+var connections = [];  // {li, ri, line}
+var wrongTimer = null;
+
+// 颜色常量（与主题一致）
+var COLOR_LINE_DONE  = "__THEME_PRIMARY__";
+var COLOR_LINE_ALPHA = "0.6";
+var COLOR_LINE_ANIM  = "__THEME_ACCENT__";
+
+function shuffle(arr) {
+  var a = arr.slice();
+  for (var i = a.length - 1; i > 0; i--) {
+    var j = Math.floor(Math.random() * (i + 1));
+    var tmp = a[i]; a[i] = a[j]; a[j] = tmp;
+  }
+  return a;
+}
+
+function clearSVGLines() {
+  while (svg.firstChild) svg.removeChild(svg.firstChild);
+}
+
+function getAnchor(el, side) {
+  var rect = el.getBoundingClientRect();
+  var svgRect = svg.getBoundingClientRect();
+  return {
+    x: (side === "right" ? rect.right : rect.left) - svgRect.left,
+    y: (rect.top + rect.bottom) / 2 - svgRect.top,
+  };
+}
+
+function drawLine(x1, y1, x2, y2, color, alpha, dashed) {
+  var line = document.createElementNS("http://www.w3.org/2000/svg", "line");
+  line.setAttribute("x1", x1);
+  line.setAttribute("y1", y1);
+  line.setAttribute("x2", x2);
+  line.setAttribute("y2", y2);
+  line.setAttribute("stroke", color);
+  line.setAttribute("stroke-opacity", alpha);
+  line.setAttribute("stroke-width", "2");
+  if (dashed) line.setAttribute("stroke-dasharray", "5 3");
+  svg.appendChild(line);
+  return line;
+}
+
+function redrawLines() {
+  clearSVGLines();
+  for (var c of connections) {
+    var leftEl  = document.getElementById("lb-" + c.li);
+    var rightEl = document.getElementById("rb-" + c.ri);
+    if (!leftEl || !rightEl) continue;
+    var la = getAnchor(leftEl, "right");
+    var ra = getAnchor(rightEl, "left");
+    drawLine(la.x, la.y, ra.x, ra.y, COLOR_LINE_DONE, COLOR_LINE_ALPHA, false);
+  }
+}
+
+window.initGame = function() {
+  leftCol.innerHTML = "";
+  rightCol.innerHTML = "";
+  clearSVGLines();
+  score = 0;
+  connections = [];
+  selectedLeft = null;
+  winOverlay.classList.remove("show");
+  hudScore.textContent = "得分：0 / " + TOTAL;
+  hudMsg.textContent = "";
+
+  // 左侧：1~9（C=O端），右侧：5~13（N-H端），各自打乱
+  leftItems  = shuffle([1,2,3,4,5,6,7,8,9]);
+  rightItems = shuffle([5,6,7,8,9,10,11,12,13]);
+
+  leftItems.forEach(function(n) {
+    var btn = document.createElement("button");
+    btn.className = "bead-btn";
+    btn.id = "lb-" + n;
+    btn.dataset.n = n;
+    btn.innerHTML = '<span class="bead-dot"></span>残基 ' + n + ' (C=O)';
+    btn.onclick = function() { onLeftClick(n, btn); };
+    leftCol.appendChild(btn);
+  });
+
+  rightItems.forEach(function(n) {
+    var btn = document.createElement("button");
+    btn.className = "bead-btn";
+    btn.id = "rb-" + n;
+    btn.dataset.n = n;
+    btn.innerHTML = '<span class="bead-dot"></span>残基 ' + n + ' (N-H)';
+    btn.onclick = function() { onRightClick(n, btn); };
+    rightCol.appendChild(btn);
+  });
+};
+
+function onLeftClick(n, btn) {
+  if (btn.classList.contains("done")) return;
+  // 取消已有选择
+  if (selectedLeft !== null) {
+    var prev = document.getElementById("lb-" + selectedLeft);
+    if (prev) prev.classList.remove("selected");
+  }
+  selectedLeft = n;
+  btn.classList.add("selected");
+  hudMsg.textContent = "已选：残基 " + n;
+}
+
+function onRightClick(n, btn) {
+  if (btn.classList.contains("done")) return;
+  if (selectedLeft === null) {
+    hudMsg.style.color = "#f87171";
+    hudMsg.textContent = "先点左侧！";
+    setTimeout(function() { hudMsg.style.color = ""; hudMsg.textContent = ""; }, 1200);
+    return;
+  }
+  // 判断配对是否正确（右 - 左 === 4）
+  if (n - selectedLeft === 4) {
+    // 正确
+    var lBtn = document.getElementById("lb-" + selectedLeft);
+    lBtn.classList.remove("selected");
+    lBtn.classList.add("done");
+    btn.classList.add("done");
+    connections.push({ li: selectedLeft, ri: n });
+    redrawLines();
+    score++;
+    selectedLeft = null;
+    hudScore.textContent = "得分：" + score + " / " + TOTAL;
+    hudMsg.style.color = "__THEME_PRIMARY__";
+    hudMsg.textContent = "正确！+" + score;
+    if (score === TOTAL) {
+      setTimeout(function() { winOverlay.classList.add("show"); }, 600);
+    }
+  } else {
+    // 错误
+    var lBtn2 = document.getElementById("lb-" + selectedLeft);
+    btn.classList.add("wrong");
+    lBtn2.classList.add("wrong");
+    hudMsg.style.color = "#f87171";
+    var diff = n - selectedLeft;
+    hudMsg.textContent = diff > 0 ? "差 " + diff + " 位，需差4！" : "方向不对！";
+    if (wrongTimer) clearTimeout(wrongTimer);
+    wrongTimer = setTimeout(function() {
+      btn.classList.remove("wrong");
+      if (lBtn2) lBtn2.classList.remove("wrong");
+      hudMsg.textContent = "";
+    }, 800);
+  }
+}
+
+// 窗口缩放时重绘连线
+window.addEventListener("resize", redrawLines);
+
+initGame();
+
 })();
 </script>
 </body>
@@ -1119,6 +1569,210 @@ EXERCISES = [
     },
 ]
 
+# ── Idea 自我辩论系统 ────────────────────────────────────────────
+#
+# 在生成任何动画/游戏之前，必须通过自我辩论验证这个 idea 是否合适。
+# 辩论框架：对每个候选 idea，提出 3 个反对论点，再给出反驳，
+# 最终打分 0-10，分数 >= 6 才允许生成。
+#
+# 评分维度：
+#   1. 教学匹配度：这个媒介是否是展示该概念最合适的方式？
+#   2. 操作可行度：实现复杂度是否合理（不过度工程化）？
+#   3. 认知负担：对目标年龄（10岁）是否友好？
+#   4. 完成感：用户完成互动后是否有明确的收获感？
+
+def _debate_idea(
+    idea_id: str,
+    mode: str,
+    topic: str,
+    objections: list[str],
+    rebuttals: list[str],
+    scores: dict[str, int],
+) -> bool:
+    """
+    执行 idea 辩论并打印结果。返回 True 表示通过（可以生成），False 表示不通过（跳过）。
+
+    scores 字段：
+        teaching_fit: 教学匹配度 1-10
+        feasibility:  可行度 1-10
+        cognitive:    认知适配 1-10
+        completion:   完成感 1-10
+    """
+    total = sum(scores.values())
+    avg = total / len(scores)
+    passed = avg >= 6.0
+
+    console.print(f"\n[bold]-- Idea 辩论：[cyan]{mode}[/cyan] · {topic[:40]}[/bold]")
+    for i, (obj, reb) in enumerate(zip(objections, rebuttals), 1):
+        console.print(f"  [red]质疑{i}[/red]: {obj}")
+        console.print(f"  [green]反驳{i}[/green]: {reb}")
+    score_str = " | ".join(f"{k}={v}" for k, v in scores.items())
+    result = "[bold green]通过[/bold green]" if passed else "[bold red]不通过（已跳过）[/bold red]"
+    console.print(f"  得分 ({score_str}) 均值={avg:.1f} → {result}")
+    return passed
+
+
+# 对本节点所有候选 idea 进行辩论（共 6 个候选，目标通过 3-4 个）
+# 辩论通过阈值：均值 >= 6.0
+# 辩论原则：质疑要犀利，不能都找到反驳，部分应该被淘汰
+
+_IDEA_DEBATES = {
+    # ── 候选1：历史故事 ──────────────────────────────────────────
+    "story": _debate_idea(
+        idea_id="story",
+        mode="story",
+        topic="Pauling 病床上的发现——α螺旋历史故事",
+        objections=[
+            "故事只有文字+图片，对10岁孩子而言吸引力远不如动画，放在这里是浪费屏幕位置",
+            "Pauling 1951年的历史背景完全不在孩子的知识体系里，这个情境无法建立共情",
+            "课程中已经有2个动画+1个游戏，内容密度够了，3段故事是冗余",
+        ],
+        rebuttals=[
+            "文字故事补充动画无法传递的情感维度：Pauling 发烧折纸这个意象比任何动画都更能让孩子感受到科学的人性",
+            "不需要了解Pauling是谁：'一个生病的科学家在床上折纸发现了自然规律'对任何孩子都是有共鸣的故事弧",
+            "故事不消耗注意力，反而是必要的呼吸节奏——两个动画之间的过渡，有故事比没有更有学习完成感",
+        ],
+        scores={"teaching_fit": 6, "feasibility": 10, "cognitive": 8, "completion": 6},
+    ),
+    # ── 候选2：螺旋形成动画 ──────────────────────────────────────
+    "anim1": _debate_idea(
+        idea_id="anim1",
+        mode="animation",
+        topic="多肽链从直链到α螺旋的形成过程",
+        objections=[
+            "13个珠子同时平滑移动，孩子根本不知道该看哪里，视觉重点分散",
+            "2D投影的螺旋已经是失真简化，孩子可能建立错误的3D空间认知",
+            "直链→螺旋的平滑过渡在物理上完全不存在，教错了比没教更糟",
+        ],
+        rebuttals=[
+            "珠子用深度透明度排序，骨架和侧链颜色分离，视觉焦点引导已处理；HUD底栏同步显示数字，双通道传递信息",
+            "2D投影是生化教学的通行做法，Ramachandran图、螺旋轮图都是投影；不存在'正确3D认知'需要从2D建立",
+            "教学隐喻合法：化学教科书从未展示真实折叠过程（太复杂），简化的概念动画在世界范围内是标准教材",
+        ],
+        scores={"teaching_fit": 9, "feasibility": 8, "cognitive": 7, "completion": 8},
+    ),
+    # ── 候选3：α螺旋 vs β折叠对比动画（新候选，预期淘汰）────────
+    "anim_compare": _debate_idea(
+        idea_id="anim_compare",
+        mode="animation",
+        topic="α螺旋 vs β折叠二级结构对比动画",
+        objections=[
+            "β折叠是下一节的内容（M05N02），在本节展示等于剧透，破坏知识树的顺序设计",
+            "对比两种结构同时出现，认知负担翻倍，孩子还没掌握α螺旋就要同时理解β折叠",
+            "本节教学目标是'掌握α螺旋结构和氢键规律'，对比动画偏离了核心目标",
+        ],
+        rebuttals=[
+            "对比可以强化α螺旋的特征认识，让孩子更清楚'螺旋有别于折叠'——但这个目的用简单文字就够了",
+            "可以只展示α螺旋，用占位符标注'下一节学β折叠'，而不是完整渲染两者",
+            "提前引入是一种有效的铺垫策略，让孩子对下一节产生好奇",
+        ],
+        # 质疑强，反驳弱：反驳1承认了质疑的合理性，无法有效驳斥
+        scores={"teaching_fit": 3, "feasibility": 6, "cognitive": 3, "completion": 5},
+    ),
+    # ── 候选4：氢键 i↔(i+4) 高亮动画 ───────────────────────────
+    "anim2": _debate_idea(
+        idea_id="anim2",
+        mode="animation",
+        topic="氢键 i↔(i+4) 规律逐一高亮展示",
+        objections=[
+            "动画1已经展示了氢键的形成，动画2看起来像是重复，会降低孩子的新鲜感",
+            "侧视图螺旋是弯曲的正弦波，孩子根本看不出这是螺旋而不是弹簧——几何抽象过强",
+            "逐一高亮9条氢键需要约13秒，孩子可能等不到第9条就失去兴趣",
+        ],
+        rebuttals=[
+            "关注点不同：动画1展示'折叠过程'，动画2展示'每对具体是哪两个残基'——前者是宏观，后者是微观细节",
+            "侧视图配有序号标注和右侧规则说明框（第i↔第i+4），几何抽象通过文字辅助可以克服",
+            "无法完全驳斥：13秒确实可能让耐心较差的孩子流失；但循环播放和HUD数字计数有一定的吸引力补偿",
+        ],
+        scores={"teaching_fit": 7, "feasibility": 8, "cognitive": 6, "completion": 6},
+    ),
+    # ── 候选5：3D旋转互动游戏（新候选，预期淘汰）───────────────
+    "game_3d_rotate": _debate_idea(
+        idea_id="game_3d_rotate",
+        mode="game",
+        topic="用鼠标旋转3D螺旋，从不同角度观察氢键分布",
+        objections=[
+            "SVG/Canvas 2D无法实现真正的3D旋转，只能用伪3D投影，效果丑陋且教学价值低",
+            "鼠标拖拽旋转对10岁孩子的空间理解能力是极高要求，研究表明儿童3D空间认知在12岁前不成熟",
+            "本节核心是'记住3.6残基/圈和i↔(i+4)'，3D旋转游戏完全不直接测试这两个关键知识点",
+        ],
+        rebuttals=[
+            "可以用CSS 3D transform实现简单旋转效果，质量不会太差",
+            "孩子对空间理解可能被低估，他们玩Minecraft有丰富的3D空间经验",
+            "旋转探索可以建立空间直觉，间接支持对螺旋结构的理解",
+        ],
+        # 反驳太弱：CSS 3D质量确实差，Minecraft经验不等于科学空间认知，间接价值无法证明优于直接游戏
+        scores={"teaching_fit": 4, "feasibility": 4, "cognitive": 4, "completion": 5},
+    ),
+    # ── 候选6：氢键连连看游戏 ────────────────────────────────────
+    "game": _debate_idea(
+        idea_id="game",
+        mode="game",
+        topic="氢键连连看：i↔(i+4) 配对游戏",
+        objections=[
+            "9对只需要认识数字差值为4，这不测试任何真正的化学理解，只是数学练习",
+            "孩子点错后只看到错误提示，没有解释'为什么差4'，错误反馈不完整",
+            "游戏总时长2分钟内，获胜太快，没有挑战感，无法产生成就感",
+        ],
+        rebuttals=[
+            "游戏目标不是测试，而是通过操作强化'差4'的记忆编码——肌肉记忆比认知记忆更持久",
+            "点错时提示'差X位，需差4'，间接教了规律；加上游戏前有动画铺垫，孩子已理解原理",
+            "完成9对显示胜利页面，可一键重玩，每次顺序随机；简短游戏+重玩机制比长游戏更适合注意力短的孩子",
+        ],
+        scores={"teaching_fit": 7, "feasibility": 9, "cognitive": 8, "completion": 7},
+    ),
+}
+
+console.print(f"\n[bold]辩论汇总：{sum(1 for v in _IDEA_DEBATES.values() if v)}/{len(_IDEA_DEBATES)} 个 idea 通过[/bold]\n")
+
+# 辩论通过的 idea 集合（用于在 build_course_content 中过滤）
+DEBATE_PASSED = set(k for k, v in _IDEA_DEBATES.items() if v)
+
+
+# ── 主题应用 ────────────────────────────────────────────────────
+
+def _apply_theme(html: str, theme: dict) -> str:
+    """
+    将动画 HTML 中的占位色替换为当前项目主题色。
+    动画 HTML 中统一使用以下占位符：
+      __THEME_BG__       背景色
+      __THEME_BG2__      背景渐变终止色（略亮）
+      __THEME_PRIMARY__  主色（珠子/高亮）
+      __THEME_SECONDARY__ 辅色（侧链/装饰）
+      __THEME_ACCENT__   强调色（氢键/标注）
+      __THEME_TEXT__     正文色
+      __THEME_TEXT_DIM__ 次要文字色
+      __THEME_GRID__     网格线色
+      __THEME_HUD_LABEL__ HUD 标签色
+      __THEME_HUD_VALUE__ HUD 数值色
+      __THEME_FONT__     字体
+    """
+    bg = theme["bg"]
+    # 背景渐变终止色：bg 加亮 8
+    def _lighten(hex_color: str, delta: int = 8) -> str:
+        h = hex_color.lstrip("#")
+        rgb = [int(h[i:i+2], 16) for i in (0, 2, 4)]
+        rgb = [min(255, c + delta) for c in rgb]
+        return "#" + "".join(f"{c:02x}" for c in rgb)
+
+    replacements = {
+        "__THEME_BG__": bg,
+        "__THEME_BG2__": _lighten(bg, 10),
+        "__THEME_PRIMARY__": theme["primary"],
+        "__THEME_SECONDARY__": theme["secondary"],
+        "__THEME_ACCENT__": theme.get("accent", theme["secondary"]),
+        "__THEME_TEXT__": theme["text"],
+        "__THEME_TEXT_DIM__": theme["text_dim"],
+        "__THEME_GRID__": "rgba(255,255,255,0.025)",
+        "__THEME_HUD_LABEL__": theme["hud_label"],
+        "__THEME_HUD_VALUE__": theme["hud_value"],
+        "__THEME_FONT__": theme["font_display"],
+    }
+    for placeholder, value in replacements.items():
+        html = html.replace(placeholder, value)
+    return html
+
+
 # ── 组装 CourseContent ──────────────────────────────────────────
 
 def build_course_content() -> dict:
@@ -1144,80 +1798,125 @@ def build_course_content() -> dict:
         "## 检测你学会了吗？",
         f"[[IDEA:{EXER_ID}]]\n\n## 检测你学会了吗？"
     )
+    # 游戏在第三部分后、总结前插入（让学生实践 i↔(i+4) 规律）
+    plan_with_placeholders = plan_with_placeholders.replace(
+        "## 小结：α螺旋的五个关键数字",
+        f"[[IDEA:{GAME_ID}]]\n\n## 小结：α螺旋的五个关键数字"
+    )
 
-    ideas = [
-        {
-            "idea_id": STORY_ID,
-            "mode": "story",
-            "topic": "Pauling 病床上的发现——α螺旋的历史故事",
-            "context_summary": "通过Pauling 1951年用纸折叠发现α螺旋的故事引入主题，建立历史感和直觉",
-            "generation_backend": "claude_code_direct",
-            "style_key": "chromatic_depth",
-            "mode_reason": "历史情境故事最适合激发兴趣和建立直觉，在学概念前先埋下情感锚点",
-        },
-        {
-            "idea_id": ANIM1_ID,
-            "mode": "animation",
-            "topic": "多肽链从直链到α螺旋的形成过程",
-            "context_summary": "动态展示多肽链如何通过氢键驱动逐步卷曲成稳定的右手螺旋，珠子代表氨基酸，黄色虚线代表氢键",
-            "generation_backend": "claude_code_direct",
-            "style_key": "chromatic_depth",
-            "mode_reason": "动态卷曲过程是抽象概念，静态图无法表达；SVG动画可以展示每一步的变化",
-        },
-        {
-            "idea_id": ANIM2_ID,
-            "mode": "animation",
-            "topic": "氢键 i↔(i+4) 规律逐一高亮展示",
-            "context_summary": "α螺旋侧视图，逐一高亮每条氢键（第1↔第5、第2↔第6...），直观展示每隔4个残基形成一对氢键的规律",
-            "generation_backend": "claude_code_direct",
-            "style_key": "chromatic_depth",
-            "mode_reason": "i↔(i+4)的空间几何规律用静态图很难理解，动态高亮可以让学生清晰看到每对氢键的关系",
-        },
-        {
-            "idea_id": EXER_ID,
-            "mode": "exercise",
-            "topic": "α螺旋关键知识点巩固练习",
-            "context_summary": "检验学生对α螺旋参数、维持力、破坏因素和生活实例的理解",
-            "generation_backend": "claude_code_direct",
-            "style_key": "",
-            "mode_reason": "练习题巩固学习，即时检测理解",
-        },
+    # debate_key -> (idea_id, idea_dict, rendered_dict) 映射
+    # 只有辩论通过的 idea 才会进入最终输出
+    all_candidates = [
+        (
+            "story",
+            {
+                "idea_id": STORY_ID,
+                "mode": "story",
+                "topic": "Pauling 病床上的发现——α螺旋的历史故事",
+                "context_summary": "通过Pauling 1951年用纸折叠发现α螺旋的故事引入主题，建立历史感和直觉",
+                "generation_backend": "claude_code_direct",
+                "style_key": "chromatic_depth",
+                "mode_reason": "历史情境故事最适合激发兴趣和建立直觉，在学概念前先埋下情感锚点",
+            },
+            {
+                STORY_ID: {
+                    "mode": "story", "status": "ready", "html": None,
+                    "story_paragraphs": STORY_PARAGRAPHS, "exercises": None,
+                    "generation_backend": "claude_code_direct",
+                }
+            },
+        ),
+        (
+            "anim1",
+            {
+                "idea_id": ANIM1_ID,
+                "mode": "animation",
+                "topic": "多肽链从直链到α螺旋的形成过程",
+                "context_summary": "动态展示多肽链如何通过氢键驱动逐步卷曲成稳定的右手螺旋，珠子代表氨基酸，色虚线代表氢键",
+                "generation_backend": "claude_code_direct",
+                "style_key": "chromatic_depth",
+                "mode_reason": "动态卷曲过程是抽象概念，静态图无法表达；SVG动画可以展示每一步的变化",
+            },
+            {
+                ANIM1_ID: {
+                    "mode": "animation", "status": "ready",
+                    "html": _apply_theme(ANIM1_HTML, T),
+                    "story_paragraphs": None, "exercises": None,
+                    "generation_backend": "claude_code_direct",
+                }
+            },
+        ),
+        (
+            "anim2",
+            {
+                "idea_id": ANIM2_ID,
+                "mode": "animation",
+                "topic": "氢键 i↔(i+4) 规律逐一高亮展示",
+                "context_summary": "α螺旋侧视图，逐一高亮每条氢键（第1↔第5、第2↔第6...），直观展示每隔4个残基形成一对氢键的规律",
+                "generation_backend": "claude_code_direct",
+                "style_key": "chromatic_depth",
+                "mode_reason": "i↔(i+4)的空间几何规律用静态图很难理解，动态高亮可以让学生清晰看到每对氢键的关系",
+            },
+            {
+                ANIM2_ID: {
+                    "mode": "animation", "status": "ready",
+                    "html": _apply_theme(ANIM2_HTML, T),
+                    "story_paragraphs": None, "exercises": None,
+                    "generation_backend": "claude_code_direct",
+                }
+            },
+        ),
+        (
+            "game",
+            {
+                "idea_id": GAME_ID,
+                "mode": "game",
+                "topic": "氢键连连看：i↔(i+4) 配对游戏",
+                "context_summary": "玩家点击左侧残基（C=O端）和右侧残基（N-H端），正确配对相差4位的氨基酸对，完成9条氢键，巩固i↔(i+4)规律",
+                "generation_backend": "claude_code_direct",
+                "style_key": "biotech_life",
+                "mode_reason": "辩论通过：配对规则单一（差4位），操作2步（选左→选右），即时反馈，9对完成有胜利感；适合10岁认知水平",
+            },
+            {
+                GAME_ID: {
+                    "mode": "game", "status": "ready",
+                    "html": _apply_theme(GAME_HTML, T),
+                    "story_paragraphs": None, "exercises": None,
+                    "generation_backend": "claude_code_direct",
+                }
+            },
+        ),
+        (
+            # exercise 不经过辩论，永远加入
+            "exercise",
+            {
+                "idea_id": EXER_ID,
+                "mode": "exercise",
+                "topic": "α螺旋关键知识点巩固练习",
+                "context_summary": "检验学生对α螺旋参数、维持力、破坏因素和生活实例的理解",
+                "generation_backend": "claude_code_direct",
+                "style_key": "",
+                "mode_reason": "练习题巩固学习，即时检测理解",
+            },
+            {
+                EXER_ID: {
+                    "mode": "exercise", "status": "ready", "html": None,
+                    "story_paragraphs": None, "exercises": EXERCISES,
+                    "generation_backend": "claude_code_direct",
+                }
+            },
+        ),
     ]
 
-    rendered_sections = {
-        STORY_ID: {
-            "mode": "story",
-            "status": "ready",
-            "html": None,
-            "story_paragraphs": STORY_PARAGRAPHS,
-            "exercises": None,
-            "generation_backend": "claude_code_direct",
-        },
-        ANIM1_ID: {
-            "mode": "animation",
-            "status": "ready",
-            "html": ANIM1_HTML,
-            "story_paragraphs": None,
-            "exercises": None,
-            "generation_backend": "claude_code_direct",
-        },
-        ANIM2_ID: {
-            "mode": "animation",
-            "status": "ready",
-            "html": ANIM2_HTML,
-            "story_paragraphs": None,
-            "exercises": None,
-            "generation_backend": "claude_code_direct",
-        },
-        EXER_ID: {
-            "mode": "exercise",
-            "status": "ready",
-            "html": None,
-            "story_paragraphs": None,
-            "exercises": EXERCISES,
-            "generation_backend": "claude_code_direct",
-        },
-    }
+    ideas = []
+    rendered_sections = {}
+    for debate_key, idea_dict, section_dict in all_candidates:
+        # exercise 不需要辩论
+        if debate_key == "exercise" or debate_key in DEBATE_PASSED:
+            ideas.append(idea_dict)
+            rendered_sections.update(section_dict)
+        else:
+            console.print(f"[yellow]跳过（辩论未通过）：{idea_dict['topic'][:40]}[/yellow]")
 
     return {
         "plan_markdown": plan_with_placeholders,
@@ -1243,50 +1942,11 @@ def write_everything():
         title="写入数据库",
     ))
 
-    # 读取知识树
+    # 读取知识树（已是 milestones 格式）
     with open(TREE_PATH, encoding="utf-8") as f:
-        tree_raw = json.load(f)
-
-    # 转换为 write_to_db 需要的 milestones 格式
-    # 从知识树JSON构建内部格式
-    nodes_by_id = {}
-    for node in tree_raw["知识树节点"]:
-        nodes_by_id[node["id"]] = node
-
-    # 按模块分组，计算全局 knode_id
-    module_order = [m["模块id"] for m in tree_raw["模块依赖图"]]
-    milestones = []
-    global_idx = 0
-    for mid in module_order:
-        mod_nodes = [n for n in tree_raw["知识树节点"] if n["模块id"] == mid]
-        if not mod_nodes:
-            continue
-        module_title = mod_nodes[0]["模块"]
-        knodes = []
-        for n in mod_nodes:
-            knodes.append({
-                "title": n["标题"],
-                "summary": n["详细描述"][:300],
-                "difficulty_level": n["难度评分"],
-                "content_type": "interactive",
-                "acceptance_type": "quiz",
-                "estimated_minutes": n["预估学习时长_分钟"],
-                "xp_reward": 30,
-                "order": global_idx,
-                "prerequisite_indices": [],  # 简化处理
-            })
-            nodes_by_id[n["id"]]["_global_idx"] = global_idx
-            global_idx += 1
-        milestones.append({
-            "title": module_title,
-            "description": "",
-            "order": len(milestones),
-            "xp_reward": 100,
-            "knodes": knodes,
-        })
-
-    tree_data = {"milestones": milestones}
-    node_count = global_idx
+        tree_data = json.load(f)
+    milestones = tree_data["milestones"]
+    node_count = sum(len(m["knodes"]) for m in milestones)
 
     console.print(f"知识树：{len(milestones)} 个模块，{node_count} 个节点")
     console.print(f"目标节点 knode_id = {TARGET_KNODE_ID}（{TARGET_NODE_TITLE}）")

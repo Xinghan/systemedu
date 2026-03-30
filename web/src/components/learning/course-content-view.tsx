@@ -6,6 +6,8 @@ import {
   Terminal, ChevronDown, ChevronRight, Circle, Play, Square,
   ClipboardList, CheckCircle, XCircle, Lightbulb,
 } from "lucide-react"
+import ReactMarkdown from "react-markdown"
+import remarkGfm from "remark-gfm"
 import { gateway } from "@/lib/api"
 import type {
   CourseContent,
@@ -108,20 +110,72 @@ const STAGE_ORDER: PipelineStage[] = [
 ]
 
 // ---------------------------------------------------------------------------
-// Markdown renderer
+// Markdown renderer — ReactMarkdown + GFM (tables, strikethrough, etc.)
 // ---------------------------------------------------------------------------
-function renderSimpleMarkdown(text: string): string {
-  return text
-    .replace(/^## (.+)$/gm, '<h2 class="text-2xl font-bold mt-8 mb-3 text-on-surface tracking-tight">$1</h2>')
-    .replace(/^### (.+)$/gm, '<h3 class="text-lg font-semibold mt-6 mb-2 text-on-surface">$1</h3>')
-    .replace(/^\- (.+)$/gm, '<li class="ml-5 list-disc text-base text-on-surface leading-relaxed">$1</li>')
-    .replace(/^\d+\. (.+)$/gm, '<li class="ml-5 list-decimal text-base text-on-surface leading-relaxed">$1</li>')
-    .replace(/\*\*(.+?)\*\*/g, '<strong class="font-semibold">$1</strong>')
-    .replace(/\n\n/g, '</p><p class="text-base text-on-surface leading-relaxed my-3">')
-    .replace(/^([^<\n].+)$/gm, (match) => {
-      if (match.startsWith("<") || match.startsWith("-") || /^\d+\./.test(match)) return match
-      return `<p class="text-base text-on-surface leading-relaxed my-3">${match}</p>`
-    })
+function MarkdownBlock({ content }: { content: string }) {
+  if (!content?.trim()) return null
+  return (
+    <ReactMarkdown
+      remarkPlugins={[remarkGfm]}
+      components={{
+        h2: ({ children }) => (
+          <h2 className="text-2xl font-bold mt-8 mb-3 text-on-surface tracking-tight">{children}</h2>
+        ),
+        h3: ({ children }) => (
+          <h3 className="text-lg font-semibold mt-6 mb-2 text-on-surface">{children}</h3>
+        ),
+        h4: ({ children }) => (
+          <h4 className="text-base font-semibold mt-4 mb-1 text-on-surface">{children}</h4>
+        ),
+        p: ({ children }) => (
+          <p className="text-base text-on-surface leading-relaxed my-3">{children}</p>
+        ),
+        ul: ({ children }) => (
+          <ul className="list-disc pl-5 my-2 space-y-1">{children}</ul>
+        ),
+        ol: ({ children }) => (
+          <ol className="list-decimal pl-5 my-2 space-y-1">{children}</ol>
+        ),
+        li: ({ children }) => (
+          <li className="text-base text-on-surface leading-relaxed">{children}</li>
+        ),
+        strong: ({ children }) => (
+          <strong className="font-semibold text-on-surface">{children}</strong>
+        ),
+        em: ({ children }) => (
+          <em className="italic text-on-surface-variant">{children}</em>
+        ),
+        blockquote: ({ children }) => (
+          <blockquote className="border-l-2 border-primary/40 pl-4 italic text-on-surface-variant my-4">{children}</blockquote>
+        ),
+        table: ({ children }) => (
+          <div className="overflow-x-auto my-4">
+            <table className="w-full border-collapse text-sm">{children}</table>
+          </div>
+        ),
+        th: ({ children }) => (
+          <th className="border border-outline-variant/30 px-3 py-2 bg-surface-container-low font-medium text-left text-on-surface">{children}</th>
+        ),
+        td: ({ children }) => (
+          <td className="border border-outline-variant/30 px-3 py-2 text-on-surface">{children}</td>
+        ),
+        code: ({ children, className }) => {
+          const isBlock = !!className
+          if (isBlock) {
+            return (
+              <pre className="bg-surface-container rounded-lg p-3 my-3 overflow-x-auto">
+                <code className="text-sm text-on-surface">{children}</code>
+              </pre>
+            )
+          }
+          return <code className="bg-surface-container px-1.5 py-0.5 rounded text-sm text-on-surface">{children}</code>
+        },
+        hr: () => <hr className="my-6 border-outline-variant/20" />,
+      }}
+    >
+      {content}
+    </ReactMarkdown>
+  )
 }
 
 // ---------------------------------------------------------------------------
@@ -390,15 +444,35 @@ function ExerciseBlock({
   return (
     <>
       {/* Inline trigger — compact strip */}
-      <div className="flex items-center gap-4 px-6 py-4 rounded-2xl border border-secondary/20 bg-secondary/5 hover:bg-secondary/10 transition-colors cursor-pointer" onClick={handleOpen}>
-        <div className="w-9 h-9 rounded-xl bg-secondary/15 flex items-center justify-center shrink-0">
-          <ClipboardList className="h-4.5 w-4.5 text-secondary" style={{ width: 18, height: 18 }} />
+      <div
+        className="group flex items-center gap-4 px-5 py-3.5 rounded-2xl cursor-pointer transition-all duration-200
+          bg-gradient-to-r from-violet-50 to-indigo-50 border border-violet-200/60
+          hover:from-violet-100 hover:to-indigo-100 hover:border-violet-300/80 hover:shadow-sm"
+        onClick={handleOpen}
+      >
+        {/* Icon badge */}
+        <div className="w-10 h-10 rounded-xl bg-violet-600 flex items-center justify-center shrink-0 shadow-sm group-hover:bg-violet-700 transition-colors">
+          <ClipboardList className="text-white" style={{ width: 18, height: 18 }} />
         </div>
+
+        {/* Text */}
         <div className="flex-1 min-w-0">
-          <span className="text-sm font-semibold text-on-surface">即时检测</span>
-          <span className="ml-2 text-xs text-on-surface-variant">{idea.topic}</span>
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-bold uppercase tracking-wider text-violet-600">即时检测</span>
+            <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-violet-100 text-violet-700 font-semibold">
+              {total} 题
+            </span>
+          </div>
+          <p className="text-sm font-medium text-gray-800 mt-0.5 truncate">{idea.topic}</p>
         </div>
-        <span className="text-xs font-medium text-secondary shrink-0">{total} 道选择题 &rarr;</span>
+
+        {/* Arrow */}
+        <div className="flex items-center gap-1.5 text-violet-500 group-hover:text-violet-700 transition-colors shrink-0">
+          <span className="text-xs font-semibold">开始答题</span>
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" className="group-hover:translate-x-0.5 transition-transform">
+            <path d="M6 12L10 8L6 4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+          </svg>
+        </div>
       </div>
 
       {/* Pop-up modal */}
@@ -410,32 +484,29 @@ function ExerciseBlock({
         >
           <div className="w-full max-w-md rounded-3xl shadow-2xl overflow-hidden bg-white">
             {/* Header */}
-            <div className="flex items-center justify-between px-6 py-4 border-b border-outline-variant/20">
-              <div className="flex items-center gap-2">
-                <ClipboardList className="h-4 w-4 text-secondary" />
-                <span className="font-semibold text-sm text-on-surface">{idea.topic}</span>
-              </div>
-              {!finished && (
-                <div className="flex items-center gap-3">
-                  <span className="text-xs text-on-surface-variant">{current + 1} / {total}</span>
-                  <button onClick={() => setOpen(false)} className="p-1 rounded-lg hover:bg-surface-container transition-colors">
-                    <X className="h-4 w-4 text-on-surface-variant" />
-                  </button>
+            <div className="flex items-center justify-between px-6 py-4 bg-violet-600">
+              <div className="flex items-center gap-2.5">
+                <div className="w-7 h-7 rounded-lg bg-white/20 flex items-center justify-center">
+                  <ClipboardList className="h-4 w-4 text-white" />
                 </div>
-              )}
-              {finished && (
-                <button onClick={() => setOpen(false)} className="p-1 rounded-lg hover:bg-surface-container transition-colors">
-                  <X className="h-4 w-4 text-on-surface-variant" />
+                <span className="font-semibold text-sm text-white">{idea.topic}</span>
+              </div>
+              <div className="flex items-center gap-3">
+                {!finished && (
+                  <span className="text-xs text-white/70 font-medium">{current + 1} / {total}</span>
+                )}
+                <button onClick={() => setOpen(false)} className="p-1 rounded-lg hover:bg-white/20 transition-colors">
+                  <X className="h-4 w-4 text-white/80" />
                 </button>
-              )}
+              </div>
             </div>
 
             {/* Progress bar */}
             {!finished && (
-              <div className="h-0.5 bg-outline-variant/20">
+              <div className="h-1 bg-violet-100">
                 <div
-                  className="h-full bg-secondary transition-all duration-300"
-                  style={{ width: `${(current / total) * 100}%` }}
+                  className="h-full bg-violet-500 transition-all duration-300"
+                  style={{ width: `${((current) / total) * 100}%` }}
                 />
               </div>
             )}
@@ -444,52 +515,55 @@ function ExerciseBlock({
             <div className="px-6 py-5">
               {finished ? (
                 <div className="text-center py-3 space-y-3">
-                  <div className="w-14 h-14 rounded-full bg-secondary/10 border border-secondary/20 flex items-center justify-center mx-auto">
-                    <CheckCircle className="h-7 w-7 text-secondary" />
+                  <div className="w-16 h-16 rounded-full bg-violet-100 border-2 border-violet-200 flex items-center justify-center mx-auto">
+                    <CheckCircle className="h-8 w-8 text-violet-600" />
                   </div>
-                  <p className="text-lg font-bold text-on-surface">
+                  <p className="text-xl font-bold text-gray-900">
                     {score} / {total} 答对
                   </p>
-                  <p className="text-sm text-on-surface-variant">
+                  <p className="text-sm text-gray-500">
                     {score === total ? "全部答对，掌握得很好！" : score >= total / 2 ? "做得不错，继续加油！" : "可以再回顾一下上方的内容哦"}
                   </p>
                   <button
                     onClick={() => setOpen(false)}
-                    className="mt-1 px-7 h-10 rounded-xl bg-secondary text-on-secondary font-semibold text-sm hover:bg-secondary/90 transition-colors"
+                    className="mt-1 px-7 h-10 rounded-xl bg-violet-600 text-white font-semibold text-sm hover:bg-violet-700 transition-colors"
                   >
                     继续学习
                   </button>
                 </div>
               ) : ex ? (
                 <div className="space-y-4">
-                  <p className="text-base font-semibold text-on-surface leading-relaxed">{ex.question}</p>
+                  <p className="text-base font-semibold text-gray-900 leading-relaxed">{ex.question}</p>
                   <div className="space-y-2">
                     {(ex.options ?? []).map((opt, i) => {
                       const isCorrect = i === ex.correct
                       const isSelected = selected === i
-                      let cls = "bg-surface-container-low border-outline-variant/30 text-on-surface hover:border-secondary/40 hover:bg-secondary/5"
-                      if (answered && isCorrect) cls = "bg-secondary/10 border-secondary text-secondary"
-                      else if (answered && isSelected && !isCorrect) cls = "bg-error/10 border-error/60 text-error"
+                      let cls = "bg-gray-50 border-gray-200 text-gray-800 hover:border-violet-300 hover:bg-violet-50"
+                      if (answered && isCorrect) cls = "bg-green-50 border-green-400 text-green-800"
+                      else if (answered && isSelected && !isCorrect) cls = "bg-red-50 border-red-400 text-red-800"
                       return (
                         <button
                           key={i}
                           onClick={() => handleChoice(i)}
                           disabled={answered}
-                          className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl border text-sm text-left transition-all ${cls}`}
+                          className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl border-2 text-sm text-left transition-all ${cls}`}
                         >
-                          <span className={`w-5 h-5 rounded-full border flex items-center justify-center text-xs font-bold shrink-0 ${answered && isCorrect ? "border-secondary bg-secondary text-on-secondary" : answered && isSelected ? "border-error bg-error/10 text-error" : "border-outline-variant/40"}`}>
+                          <span className={`w-6 h-6 rounded-full border-2 flex items-center justify-center text-xs font-bold shrink-0
+                            ${answered && isCorrect ? "border-green-500 bg-green-500 text-white"
+                              : answered && isSelected ? "border-red-400 bg-red-100 text-red-700"
+                              : "border-gray-300 text-gray-500"}`}>
                             {String.fromCharCode(65 + i)}
                           </span>
                           <span className="flex-1">{opt.replace(/^[A-D]\.\s*/, "")}</span>
-                          {answered && isCorrect && <CheckCircle className="h-4 w-4 shrink-0 text-secondary" />}
-                          {answered && isSelected && !isCorrect && <XCircle className="h-4 w-4 shrink-0 text-error" />}
+                          {answered && isCorrect && <CheckCircle className="h-4 w-4 shrink-0 text-green-500" />}
+                          {answered && isSelected && !isCorrect && <XCircle className="h-4 w-4 shrink-0 text-red-500" />}
                         </button>
                       )
                     })}
                   </div>
                   {answered && ex.explanation && (
-                    <div className="flex gap-2 px-4 py-3 rounded-xl bg-secondary/5 border border-secondary/20 text-sm text-on-surface-variant">
-                      <Lightbulb className="h-4 w-4 text-secondary shrink-0 mt-0.5" />
+                    <div className="flex gap-2 px-4 py-3 rounded-xl bg-amber-50 border border-amber-200 text-sm text-amber-800">
+                      <Lightbulb className="h-4 w-4 text-amber-500 shrink-0 mt-0.5" />
                       <span>{ex.explanation}</span>
                     </div>
                   )}
@@ -497,7 +571,7 @@ function ExerciseBlock({
                     <div className="flex justify-end">
                       <button
                         onClick={handleNext}
-                        className="px-5 h-9 rounded-xl bg-secondary text-on-secondary text-sm font-semibold hover:bg-secondary/90 transition-colors"
+                        className="px-5 h-9 rounded-xl bg-violet-600 text-white text-sm font-semibold hover:bg-violet-700 transition-colors"
                       >
                         {current + 1 < total ? "下一题" : "查看结果"}
                       </button>
@@ -609,12 +683,7 @@ function SectionBlock({
               if (part.match(/^\[\[IDEA:[^\]]+\]\]$/)) return null
               const stripped = part.replace(/^##\s+.+\n?/, "")
               if (!stripped.trim()) return null
-              return (
-                <div
-                  key={idx}
-                  dangerouslySetInnerHTML={{ __html: renderSimpleMarkdown(stripped) }}
-                />
-              )
+              return <MarkdownBlock key={idx} content={stripped} />
             })}
           </div>
           {/* Right gutter — visible on hover */}
@@ -685,12 +754,7 @@ function PlanWithIdeas({ content }: { content: CourseContent }) {
           return <IdeaBlock key={idx} idea={idea} section={section} />
         }
         if (!part.trim()) return null
-        return (
-          <div
-            key={idx}
-            dangerouslySetInnerHTML={{ __html: renderSimpleMarkdown(part) }}
-          />
-        )
+        return <MarkdownBlock key={idx} content={part} />
       })}
     </div>
   )
