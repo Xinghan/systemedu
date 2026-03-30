@@ -35,99 +35,89 @@ console = Console()
 # 使用原则：项目主题 → 色彩氛围，如火星探索=土黄橙，生命科学=荧光绿，宇宙=深蓝紫
 
 VISUAL_THEMES = {
-    # 火星探索风格（参考 mars_terrain_animations.html）
-    # 适用：aerospace, robotics, climate（荒野探索类）
-    "mars_terrain": {
-        "bg": "#0a0806",
-        "card": "rgba(18,14,10,0.92)",
-        "primary": "#e8723a",       # 火星橙
-        "secondary": "#f0c040",     # 金沙黄
-        "accent": "#c0392b",        # 火星红
-        "sand": "#d4a056",          # 沙棕
-        "text": "#d4c8b8",
-        "text_dim": "#6b5e50",
-        "border": "rgba(255,160,60,0.08)",
-        "glow_1": "rgba(232,114,58,0.10)",
-        "glow_2": "rgba(192,57,43,0.06)",
-        "glow_3": "rgba(240,192,64,0.05)",
-        "particle_color": "rgba(232,114,58,",  # 尘埃粒子 orange-tinted
-        "particle_count": 160,
-        "particle_type": "dust",    # 飘散尘埃
-        "font_display": "'Oxanium', 'Noto Sans SC', sans-serif",
-        "font_mono": "'Space Mono', monospace",
-        "hud_label": "rgba(240,192,64,0.7)",
-        "hud_value": "rgba(255,255,255,0.9)",
-        "beam_color": "#e8723a",
-    },
-    # 生命科学/蛋白质风格（参考 protein_secondary_structure_animations.html）
-    # 适用：biotech, chemistry（生命科学类）
+    # 生命科学/蛋白质 — 实验室白+生命绿
+    # 联想：显微镜下的细胞切片、医学插图、Nature杂志配图
+    # 适用：biotech, chemistry
     "biotech_life": {
-        "bg": "#080c14",
-        "card": "rgba(14,19,28,0.88)",
-        "primary": "#58d68d",       # 荧光绿（生命色）
-        "secondary": "#bb86fc",     # 紫罗兰（结构色）
-        "accent": "#4dd0e1",        # 青色（活性位点）
-        "warm": "#ff8a65",          # 暖橙（能量/热力）
-        "text": "#c9d1d9",
-        "text_dim": "#484f58",
-        "border": "rgba(255,255,255,0.05)",
-        "glow_1": "rgba(88,214,141,0.06)",
-        "glow_2": "rgba(187,134,252,0.04)",
-        "glow_3": "rgba(100,181,246,0.05)",
-        "particle_color": "rgba(200,230,210,",  # 星点/荧光粒子
-        "particle_count": 200,
-        "particle_type": "stars",   # 星空
-        "font_display": "'Outfit', 'Noto Sans SC', sans-serif",
-        "font_mono": "'Space Mono', monospace",
-        "hud_label": "rgba(88,214,141,0.7)",
-        "hud_value": "rgba(255,255,255,0.9)",
-        "beam_color": "#58d68d",
+        "bg": "#f8fafc",            # 实验室白
+        "bg2": "#f0f7f4",           # 略带绿调的次级背景
+        "card": "rgba(255,255,255,0.92)",
+        "primary": "#059669",       # 生命绿（叶绿素/DNA可视化标准色）
+        "secondary": "#0891b2",     # 海洋蓝（细胞膜/水环境）
+        "accent": "#d97706",        # 琥珀橙（活性位点/能量）
+        "text": "#1e293b",          # 深灰蓝（清晰可读）
+        "text_dim": "#64748b",      # 中灰（次要信息）
+        "border": "rgba(5,150,105,0.15)",
+        "grid": "rgba(5,150,105,0.06)",
+        "font_display": "'Noto Sans SC', 'PingFang SC', sans-serif",
+        "font_mono": "'JetBrains Mono', 'Menlo', monospace",
+        "hud_label": "rgba(5,150,105,0.8)",
+        "hud_value": "#1e293b",
+        "hud_bg": "rgba(240,247,244,0.95)",
+        "beam_color": "#059669",
     },
-    # 物理/数学风格
+    # 物理/数学 — 方格纸白+墨水蓝
+    # 联想：物理教科书、费曼讲义手绘、黑板
     # 适用：physics, math, cs
-    "quantum_indigo": {
-        "bg": "#0a0a14",
-        "card": "rgba(15,15,25,0.90)",
-        "primary": "#818cf8",       # 靛紫（量子/数学）
-        "secondary": "#34d399",     # 薄荷绿（辅助）
-        "accent": "#f472b6",        # 粉红（高亮）
-        "text": "#e2e8f0",
-        "text_dim": "#64748b",
-        "border": "rgba(129,140,248,0.08)",
-        "glow_1": "rgba(129,140,248,0.08)",
-        "glow_2": "rgba(52,211,153,0.04)",
-        "glow_3": "rgba(244,114,182,0.04)",
-        "particle_color": "rgba(180,190,255,",
-        "particle_count": 180,
-        "particle_type": "stars",
-        "font_display": "'Oxanium', 'Noto Sans SC', sans-serif",
-        "font_mono": "'Space Mono', monospace",
-        "hud_label": "rgba(129,140,248,0.7)",
-        "hud_value": "rgba(255,255,255,0.9)",
-        "beam_color": "#818cf8",
+    "physics_chalk": {
+        "bg": "#fafafa",
+        "bg2": "#f1f5f9",
+        "card": "rgba(255,255,255,0.95)",
+        "primary": "#2563eb",       # 墨水蓝
+        "secondary": "#7c3aed",     # 紫（场线/向量）
+        "accent": "#dc2626",        # 红（重点标注）
+        "text": "#0f172a",
+        "text_dim": "#475569",
+        "border": "rgba(37,99,235,0.12)",
+        "grid": "rgba(37,99,235,0.06)",
+        "font_display": "'Noto Sans SC', 'PingFang SC', sans-serif",
+        "font_mono": "'JetBrains Mono', 'Menlo', monospace",
+        "hud_label": "rgba(37,99,235,0.75)",
+        "hud_value": "#0f172a",
+        "hud_bg": "rgba(241,245,249,0.95)",
+        "beam_color": "#2563eb",
     },
-    # 音乐/艺术风格
+    # 航空/探索 — 沙漠卡其+探索橙
+    # 联想：NASA任务贴纸、地质图、探险地图
+    # 适用：aerospace, robotics, climate
+    "explorer_sand": {
+        "bg": "#fefce8",            # 沙色白
+        "bg2": "#fef9c3",
+        "card": "rgba(255,255,255,0.90)",
+        "primary": "#d97706",       # 探索橙
+        "secondary": "#65a30d",     # 苔绿（地形）
+        "accent": "#0369a1",        # 天空蓝
+        "text": "#44403c",
+        "text_dim": "#78716c",
+        "border": "rgba(217,119,6,0.15)",
+        "grid": "rgba(217,119,6,0.06)",
+        "font_display": "'Noto Sans SC', 'PingFang SC', sans-serif",
+        "font_mono": "'JetBrains Mono', 'Menlo', monospace",
+        "hud_label": "rgba(217,119,6,0.8)",
+        "hud_value": "#44403c",
+        "hud_bg": "rgba(254,249,195,0.95)",
+        "beam_color": "#d97706",
+    },
+    # 音乐/AI — 暖白+活力紫
+    # 联想：乐谱、声波、创意工作室
     # 适用：music, ai
-    "sonic_amber": {
-        "bg": "#0c0a08",
-        "card": "rgba(20,16,12,0.90)",
-        "primary": "#fbbf24",       # 琥珀金（音波/旋律）
-        "secondary": "#a78bfa",     # 淡紫（和声）
-        "accent": "#34d399",        # 绿（节拍/节奏）
-        "text": "#e8dcc8",
-        "text_dim": "#6b5e40",
-        "border": "rgba(251,191,36,0.08)",
-        "glow_1": "rgba(251,191,36,0.08)",
-        "glow_2": "rgba(167,139,250,0.04)",
-        "glow_3": "rgba(52,211,153,0.04)",
-        "particle_color": "rgba(251,191,36,",
-        "particle_count": 150,
-        "particle_type": "sparks",  # 音符粒子
-        "font_display": "'Outfit', 'Noto Sans SC', sans-serif",
-        "font_mono": "'Space Mono', monospace",
-        "hud_label": "rgba(251,191,36,0.7)",
-        "hud_value": "rgba(255,255,255,0.9)",
-        "beam_color": "#fbbf24",
+    "creative_studio": {
+        "bg": "#fdf4ff",            # 薰衣草白
+        "bg2": "#fae8ff",
+        "card": "rgba(255,255,255,0.92)",
+        "primary": "#9333ea",       # 活力紫
+        "secondary": "#db2777",     # 玫瑰粉（旋律）
+        "accent": "#0891b2",        # 青蓝（节奏）
+        "text": "#1e1b4b",
+        "text_dim": "#6b7280",
+        "border": "rgba(147,51,234,0.12)",
+        "grid": "rgba(147,51,234,0.05)",
+        "font_display": "'Noto Sans SC', 'PingFang SC', sans-serif",
+        "font_mono": "'JetBrains Mono', 'Menlo', monospace",
+        "hud_label": "rgba(147,51,234,0.75)",
+        "hud_value": "#1e1b4b",
+        "hud_bg": "rgba(250,232,255,0.95)",
+        "beam_color": "#9333ea",
     },
 }
 
@@ -135,14 +125,14 @@ VISUAL_THEMES = {
 CATEGORY_THEME_MAP = {
     "biotech": "biotech_life",
     "chemistry": "biotech_life",
-    "physics": "quantum_indigo",
-    "math": "quantum_indigo",
-    "cs": "quantum_indigo",
-    "ai": "quantum_indigo",
-    "aerospace": "mars_terrain",
-    "robotics": "mars_terrain",
-    "climate": "mars_terrain",
-    "music": "sonic_amber",
+    "physics": "physics_chalk",
+    "math": "physics_chalk",
+    "cs": "physics_chalk",
+    "ai": "physics_chalk",
+    "aerospace": "explorer_sand",
+    "robotics": "explorer_sand",
+    "climate": "explorer_sand",
+    "music": "creative_studio",
     "other": "biotech_life",
 }
 
@@ -406,14 +396,14 @@ svg { display: block; width: 100%; height: 100%; }
 .hbond.visible { opacity: 1; }
 
 /* HUD */
-.hud-bg { fill: rgba(0,0,0,0.6); }
+.hud-bg { fill: __THEME_HUD_BG__; }
 .hud-label { fill: __THEME_HUD_LABEL__; font-size: 10px; }
 .hud-value { fill: __THEME_HUD_VALUE__; font-size: 13px; font-weight: bold; }
 .hud-line { stroke: rgba(255,255,255,0.08); stroke-width: 1; }
 
 /* 标注文字 */
 .annotation {
-  fill: rgba(250,250,255,0.85);
+  fill: __THEME_TEXT__;
   font-size: 12px;
   opacity: 0;
   transition: opacity 0.5s;
@@ -880,7 +870,7 @@ html, body {
 }
 svg { display: block; width: 100%; height: 100%; }
 
-.hud-bg { fill: rgba(0,0,0,0.6); }
+.hud-bg { fill: __THEME_HUD_BG__; }
 .hud-label { fill: __THEME_HUD_LABEL__; font-size: 10px; }
 .hud-value { fill: __THEME_HUD_VALUE__; font-size: 13px; font-weight: bold; }
 .hud-line { stroke: rgba(255,255,255,0.08); stroke-width: 1; }
@@ -937,7 +927,7 @@ svg { display: block; width: 100%; height: 100%; }
   <!-- 规则说明框 -->
   <g id="rule-box">
     <rect x="390" y="42" width="195" height="110" rx="8"
-          fill="rgba(0,0,0,0.5)" stroke="__THEME_PRIMARY__" stroke-opacity="0.3" stroke-width="1.5"/>
+          fill="__THEME_CARD__" stroke="__THEME_PRIMARY__" stroke-opacity="0.4" stroke-width="1.5"/>
     <text x="487" y="62" text-anchor="middle"
           fill="__THEME_PRIMARY__" font-size="11" font-weight="bold">氢键形成规律</text>
     <text id="rule-cur" x="487" y="82" text-anchor="middle"
@@ -1240,8 +1230,8 @@ html, body {
 .bead-btn {
   width: 80px; height: 34px;
   border-radius: 8px;
-  border: 1.5px solid rgba(255,255,255,0.1);
-  background: rgba(255,255,255,0.04);
+  border: 1.5px solid __THEME_BORDER__;
+  background: __THEME_CARD__;
   color: __THEME_TEXT__;
   font-size: 11px; font-weight: bold;
   cursor: pointer;
@@ -1252,17 +1242,17 @@ html, body {
 }
 .bead-btn:hover:not(.done):not(.selected) {
   border-color: __THEME_PRIMARY__;
-  background: rgba(255,255,255,0.08);
+  background: __THEME_BG2__;
 }
 .bead-btn.selected {
   border-color: __THEME_PRIMARY__;
   background: __THEME_PRIMARY__;
-  color: __THEME_BG__;
+  color: #fff;
   box-shadow: 0 0 12px __THEME_PRIMARY__;
 }
 .bead-btn.done {
-  border-color: rgba(255,255,255,0.06);
-  background: rgba(255,255,255,0.02);
+  border-color: __THEME_BORDER__;
+  background: __THEME_BG2__;
   color: __THEME_TEXT_DIM__;
   cursor: default;
 }
@@ -1284,8 +1274,8 @@ html, body {
 #hud {
   display: flex; justify-content: space-between; align-items: center;
   padding: 6px 12px; margin-top: 6px;
-  background: rgba(0,0,0,0.3);
-  border-radius: 8px; border: 1px solid rgba(255,255,255,0.06);
+  background: __THEME_HUD_BG__;
+  border-radius: 8px; border: 1px solid __THEME_BORDER__;
   font-size: 11px;
 }
 #hud-score { color: __THEME_PRIMARY__; font-weight: bold; font-size: 13px; }
@@ -1294,7 +1284,7 @@ html, body {
 #win-overlay {
   position: absolute; inset: 0;
   display: flex; flex-direction: column; align-items: center; justify-content: center;
-  background: rgba(0,0,0,0.7);
+  background: __THEME_HUD_BG__;
   backdrop-filter: blur(4px);
   gap: 14px;
   opacity: 0; pointer-events: none;
@@ -1745,6 +1735,7 @@ def _apply_theme(html: str, theme: dict) -> str:
       __THEME_GRID__     网格线色
       __THEME_HUD_LABEL__ HUD 标签色
       __THEME_HUD_VALUE__ HUD 数值色
+      __THEME_HUD_BG__   HUD 背景色
       __THEME_FONT__     字体
     """
     bg = theme["bg"]
@@ -1757,15 +1748,18 @@ def _apply_theme(html: str, theme: dict) -> str:
 
     replacements = {
         "__THEME_BG__": bg,
-        "__THEME_BG2__": _lighten(bg, 10),
+        "__THEME_BG2__": theme.get("bg2", _lighten(bg, 10)),
+        "__THEME_CARD__": theme.get("card", "rgba(255,255,255,0.92)"),
         "__THEME_PRIMARY__": theme["primary"],
         "__THEME_SECONDARY__": theme["secondary"],
         "__THEME_ACCENT__": theme.get("accent", theme["secondary"]),
         "__THEME_TEXT__": theme["text"],
         "__THEME_TEXT_DIM__": theme["text_dim"],
-        "__THEME_GRID__": "rgba(255,255,255,0.025)",
+        "__THEME_BORDER__": theme.get("border", "rgba(0,0,0,0.1)"),
+        "__THEME_GRID__": theme.get("grid", "rgba(0,0,0,0.05)"),
         "__THEME_HUD_LABEL__": theme["hud_label"],
         "__THEME_HUD_VALUE__": theme["hud_value"],
+        "__THEME_HUD_BG__": theme.get("hud_bg", "rgba(255,255,255,0.92)"),
         "__THEME_FONT__": theme["font_display"],
     }
     for placeholder, value in replacements.items():
@@ -1798,10 +1792,10 @@ def build_course_content() -> dict:
         "## 检测你学会了吗？",
         f"[[IDEA:{EXER_ID}]]\n\n## 检测你学会了吗？"
     )
-    # 游戏在第三部分后、总结前插入（让学生实践 i↔(i+4) 规律）
+    # 游戏在本节小结前插入（让学生实践 i↔(i+4) 规律）
     plan_with_placeholders = plan_with_placeholders.replace(
-        "## 小结：α螺旋的五个关键数字",
-        f"[[IDEA:{GAME_ID}]]\n\n## 小结：α螺旋的五个关键数字"
+        "## 本节小结",
+        f"[[IDEA:{GAME_ID}]]\n\n## 本节小结"
     )
 
     # debate_key -> (idea_id, idea_dict, rendered_dict) 映射
