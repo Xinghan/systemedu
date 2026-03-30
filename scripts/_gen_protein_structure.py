@@ -1,1479 +1,1381 @@
 """
-GP-01 蛋白结构探险地图 — 课程工厂生成脚本
-主题：蛋白质结构与功能（少年版）
-设计语言：生命绿 #4ade80 + 薰衣草 #a78bfa，有机曲线，螺旋感
+GP-01 蛋白结构探险地图 — 完全由 Claude Code 生成
+节点：M05N01「α螺旋：大自然的弹簧」完整课程
+
+不调用任何 LLM agent pipeline。
+Claude Code 直接生成：知识树 + 课程文本 + SVG 动画 + 练习题 + 故事
+然后写入数据库。
 """
 
-import sys
+from __future__ import annotations
+
 import json
+import sys
+import time
+import random
+import string
+from datetime import datetime
 from pathlib import Path
+
 _ROOT = Path(__file__).parent.parent
 sys.path.insert(0, str(_ROOT / "src"))
 sys.path.insert(0, str(_ROOT))
 
-from scripts.course_factory import (
-    make_canvas_html, make_exercises, make_course_content, write_to_db
+import yaml
+from rich.console import Console
+from rich.panel import Panel
+
+console = Console()
+
+# ── 工具 ────────────────────────────────────────────────────────
+
+def _id(prefix: str) -> str:
+    ts = int(time.time() * 1000)
+    rand = "".join(random.choices(string.ascii_lowercase, k=4))
+    return f"{prefix}_{ts}_{rand}"
+
+# ── 项目基础信息 ────────────────────────────────────────────────
+
+PROJECT_NAME = "protein-structure"
+PROJECT_TITLE = "蛋白结构探险地图"
+PROJECT_DESCRIPTION = (
+    "从氨基酸到 AlphaFold，少年版蛋白质序列—结构—功能可视化探索课程。"
+    "基于10岁儿童知识水平构建完整学习路径，涵盖化学直觉、二级结构、三级结构、"
+    "活性位点、折叠病与 AI 预测。"
+)
+PROJECT_CATEGORY = "biotech"
+PROJECT_AGE_RANGE = [10, 16]
+PROJECT_ESTIMATED_HOURS = 16.5
+PROJECT_TAGS = ["biology", "protein", "structure", "biochemistry", "AlphaFold"]
+
+TREE_PATH = _ROOT / "projects" / "protein-structure" / "knowledge_tree.json"
+
+# ── 课程节点：M05N01 α螺旋 ──────────────────────────────────────
+# 在知识树中的全局 knode_id（按模块顺序计算）：
+# M01: 3节(0,1,2), M02: 3节(3,4,5), M03: 3节(6,7,8), M04: 3节(9,10,11)
+# M05N01 = 第12个节点，knode_id = 12
+TARGET_KNODE_ID = 12
+TARGET_NODE_TITLE = "α螺旋：大自然的弹簧"
+TARGET_NODE_SUMMARY = (
+    "α螺旋是蛋白质链绕成的右手螺旋结构，每3.6个氨基酸旋转一圈，"
+    "靠骨架氢键维持，侧链朝外。头发和指甲富含α螺旋。"
 )
 
-# ═══════════════════════════════════════════════════════════════
-# 知识树设计
-# 科学依据：蛋白质结构层级（Anfinsen原则、Linus Pauling二级结构理论）
-# 教学顺序：具体→抽象，微观→宏观，结构→功能
-# ═══════════════════════════════════════════════════════════════
+# ── 步骤1：完整课程文本（plan_markdown）────────────────────────
+# 标准：参考 lesson_M04N03_secondary_structure.md 的质量和深度
+# 包含：故事开篇、知识讲解（带类比）、数字、历史、实验、小结
 
-TREE = {
-    "milestones": [
-        {
-            "title": "氨基酸：蛋白质的字母表",
-            "description": "理解氨基酸的结构与性质，掌握20种氨基酸的分类逻辑，为肽链组装打下基础",
-            "order": 0,
-            "xp_reward": 120,
-            "knodes": [
-                {
-                    "title": "什么是氨基酸",
-                    "summary": "氨基酸是构成蛋白质的基本单元，每个氨基酸含有氨基（-NH2）、羧基（-COOH）、R基（侧链）三个核心部分，连接在同一个碳原子（α碳）上。R基的不同决定了氨基酸的化学性质差异。自然界蛋白质由20种标准氨基酸组成。",
-                    "difficulty_level": 1,
-                    "content_type": "interactive",
-                    "acceptance_type": "quiz",
-                    "estimated_minutes": 20,
-                    "xp_reward": 20,
-                    "order": 0,
-                    "prerequisite_indices": []
-                },
-                {
-                    "title": "氨基酸的侧链与性格",
-                    "summary": "20种氨基酸按侧链性质分4类：非极性疏水（如缬氨酸、亮氨酸）、极性不带电（如丝氨酸、苏氨酸）、带正电（赖氨酸、精氨酸）、带负电（天冬氨酸、谷氨酸）。侧链的极性决定了氨基酸是否喜欢水，进而决定它在蛋白质中的位置（内部/表面）。",
-                    "difficulty_level": 2,
-                    "content_type": "interactive",
-                    "acceptance_type": "quiz",
-                    "estimated_minutes": 25,
-                    "xp_reward": 25,
-                    "order": 1,
-                    "prerequisite_indices": [0]
-                },
-                {
-                    "title": "肽键：氨基酸如何连接",
-                    "summary": "一个氨基酸的羧基与下一个氨基酸的氨基脱水缩合，形成肽键（-CO-NH-）。多个氨基酸依次连接形成多肽链。肽链有方向性：从N端（游离氨基）到C端（游离羧基）。序列的精确顺序由DNA编码，决定了蛋白质的一级结构。",
-                    "difficulty_level": 2,
-                    "content_type": "interactive",
-                    "acceptance_type": "quiz",
-                    "estimated_minutes": 25,
-                    "xp_reward": 25,
-                    "order": 2,
-                    "prerequisite_indices": [1]
-                }
-            ]
-        },
-        {
-            "title": "折叠之道：二级与三级结构",
-            "description": "理解肽链如何从线状变为精确的三维形状，掌握α螺旋、β折叠的成因与蛋白质折叠的驱动力",
-            "order": 1,
-            "xp_reward": 160,
-            "knodes": [
-                {
-                    "title": "α螺旋：生命的弹簧",
-                    "summary": "α螺旋是最常见的二级结构：肽链骨架规律性盘旋，每3.6个氨基酸转一圈，靠链内氢键（每4个残基间）稳定。螺旋内部紧密，侧链朝外。角蛋白（头发、指甲）的主要成分就是α螺旋。肌红蛋白约75%是α螺旋结构。",
-                    "difficulty_level": 2,
-                    "content_type": "interactive",
-                    "acceptance_type": "quiz",
-                    "estimated_minutes": 25,
-                    "xp_reward": 30,
-                    "order": 3,
-                    "prerequisite_indices": [2]
-                },
-                {
-                    "title": "β折叠：生命的片状织物",
-                    "summary": "β折叠由两条或多条肽链段平行或反平行排列，链间形成氢键网络，形成折纸状平面结构。丝蛋白（蚕丝、蜘蛛丝）主要由β折叠构成，赋予其强度与柔韧性。反平行β折叠比平行更稳定，氢键更直。β折叠是许多纤维蛋白的结构基础。",
-                    "difficulty_level": 3,
-                    "content_type": "interactive",
-                    "acceptance_type": "quiz",
-                    "estimated_minutes": 25,
-                    "xp_reward": 30,
-                    "order": 4,
-                    "prerequisite_indices": [3]
-                },
-                {
-                    "title": "三级结构：蛋白质的最终形状",
-                    "summary": "三级结构是整条肽链在三维空间中的精确折叠方式。驱动力：疏水效应（疏水侧链聚集到内部，远离水）、二硫键（半胱氨酸间）、静电作用、氢键。Anfinsen实验证明：三级结构完全由一级序列决定（不需要外部模板）。折叠后蛋白质形成特定口袋（活性位点）用于功能执行。",
-                    "difficulty_level": 3,
-                    "content_type": "interactive",
-                    "acceptance_type": "quiz",
-                    "estimated_minutes": 30,
-                    "xp_reward": 35,
-                    "order": 5,
-                    "prerequisite_indices": [3, 4]
-                }
-            ]
-        },
-        {
-            "title": "结构决定功能",
-            "description": "从真实蛋白质案例理解三维形状如何直接决定生物功能，建立序列—结构—功能的完整认知链",
-            "order": 2,
-            "xp_reward": 140,
-            "knodes": [
-                {
-                    "title": "活性位点：蛋白质的工作口袋",
-                    "summary": "酶的活性位点是三级结构折叠后形成的特定凹槽，形状与底物精确互补（锁钥模型/诱导契合模型）。活性位点通常只占蛋白质总表面的1-2%，但集中了关键催化残基。溶菌酶活性位点含Glu35（酸催化）和Asp52（碱催化），破坏细菌细胞壁多糖。",
-                    "difficulty_level": 3,
-                    "content_type": "interactive",
-                    "acceptance_type": "quiz",
-                    "estimated_minutes": 30,
-                    "xp_reward": 35,
-                    "order": 6,
-                    "prerequisite_indices": [5]
-                },
-                {
-                    "title": "血红蛋白：四级结构与协同效应",
-                    "summary": "血红蛋白由4条多肽链（2α+2β）构成四级结构，每条链含一个血红素辅基携带O2。四个亚基协同工作：第一个O2结合后改变构象，使后续亚基更易结合（正协同效应，S形氧解离曲线）。镰刀形细胞贫血症由β链第6位Glu→Val突变引起，疏水Val在表面聚集导致纤维化。",
-                    "difficulty_level": 4,
-                    "content_type": "interactive",
-                    "acceptance_type": "quiz",
-                    "estimated_minutes": 35,
-                    "xp_reward": 40,
-                    "order": 7,
-                    "prerequisite_indices": [5]
-                },
-                {
-                    "title": "蛋白质折叠病与分子伴侣",
-                    "summary": "折叠错误的蛋白质可能聚集形成淀粉样纤维——阿尔茨海默病（Aβ肽）、帕金森病（α-突触核蛋白）均与此相关。细胞内的分子伴侣（如Hsp70）帮助新生肽链正确折叠，阻止错误聚集。朊病毒（Prion）是构象传染的极端案例：错误折叠的蛋白质充当模板，使正常蛋白质也发生错误折叠。",
-                    "difficulty_level": 4,
-                    "content_type": "interactive",
-                    "acceptance_type": "quiz",
-                    "estimated_minutes": 30,
-                    "xp_reward": 35,
-                    "order": 8,
-                    "prerequisite_indices": [6, 7]
-                }
-            ]
-        },
-        {
-            "title": "探险工具箱：看见蛋白质",
-            "description": "了解科学家如何实验性地解析蛋白质结构，体验从实验数据到三维模型的全过程",
-            "order": 3,
-            "xp_reward": 100,
-            "knodes": [
-                {
-                    "title": "X射线晶体学：让蛋白质留下影子",
-                    "summary": "X射线晶体学：蛋白质结晶后用X射线照射，根据衍射图样（由电子密度分布决定）重建三维原子坐标。DNA双螺旋（Franklin的Photo 51，1952）、血红蛋白（Perutz，1960）都由此解析。分辨率通常1.5-3Å，可看到单个原子。PDB（蛋白质数据库）现存超过22万条结构。",
-                    "difficulty_level": 3,
-                    "content_type": "interactive",
-                    "acceptance_type": "quiz",
-                    "estimated_minutes": 25,
-                    "xp_reward": 25,
-                    "order": 9,
-                    "prerequisite_indices": [5]
-                },
-                {
-                    "title": "AlphaFold：AI预测蛋白质结构",
-                    "summary": "2020年DeepMind的AlphaFold2以原子级精度预测蛋白质三维结构，在CASP14竞赛中碾压人类团队。核心思想：进化共变分析（共同进化的残基对在三维上接近）+ 注意力机制建模残基间关系。已预测超过2亿个蛋白质结构并公开发布。这是50年来最大的科学突破之一——曾经需要数年实验的工作，现在几分钟完成。",
-                    "difficulty_level": 4,
-                    "content_type": "interactive",
-                    "acceptance_type": "quiz",
-                    "estimated_minutes": 30,
-                    "xp_reward": 30,
-                    "order": 10,
-                    "prerequisite_indices": [5, 9]
-                }
-            ]
-        }
-    ]
-}
+PLAN_MARKDOWN = """# M05N01：α螺旋——大自然的弹簧
 
-# ═══════════════════════════════════════════════════════════════
-# 设计语言常量
-# ═══════════════════════════════════════════════════════════════
-COLOR_PRIMARY = "#4ade80"    # 生命绿
-COLOR_SECONDARY = "#a78bfa"  # 薰衣草紫（氨基酸多样性）
-COLOR_ACCENT = "#34d399"     # 翡翠（氢键/键能）
-BG_DARK = "#0a1a0f"         # 深森林黑（偏绿）
+> **模块**：二级结构：局部折叠规律
+> **知识等级**：L2-操作 | **难度**：3/10 | **预计时长**：30分钟
+> **先修知识**：肽键（M04N01）、氢键直觉（M02N02）
 
-# ═══════════════════════════════════════════════════════════════
-# 节点0：什么是氨基酸
-# ═══════════════════════════════════════════════════════════════
+---
 
-PLAN_0 = """\
-# 什么是氨基酸
+## 开篇故事：铁丝的记忆
 
-## 学习目标
-理解氨基酸的化学结构组成，掌握氨基、羧基、R基三个核心部件的位置与作用，建立"20种氨基酸 = 20个字母"的直觉认知。
+想象你手里有一段铁丝。把它笔直拉开——它是直的。现在，把铁丝紧紧绕在铅笔上，一圈一圈，绕满整根铅笔。然后，小心地抽出铅笔。
 
-## 生命的最小构件
+神奇的事发生了：铁丝"记住"了螺旋的形状，保持成一个弹簧。
 
-蛋白质是生命活动的主要承担者——消化食物的酶、运输氧气的血红蛋白、对抗病原体的抗体……全都是蛋白质。
+你的头发，就是由千千万万条这样的"蛋白质弹簧"组成的。
 
-而蛋白质本身，是由一种叫**氨基酸**的小分子串联而成的。就像所有的文字都由26个字母组成，地球上几乎所有生命体的蛋白质，都由**相同的20种氨基酸**拼接而来。
+---
 
-## 氨基酸的结构
+## 第一部分：什么是α螺旋？
 
-每个氨基酸都有相同的"骨架"，连接在中央的 α 碳上：
+α螺旋是蛋白质多肽链在局部区域形成的一种有规则的**右手螺旋**结构。
 
-```
-        H
-        |
-H₂N — C — COOH
-        |
-        R（侧链）
-```
+"右手"是什么意思？用右手握住一根想象中的螺旋轴，四根手指弯曲的方向，就是α螺旋旋转的方向。世界上大多数α螺旋都是右手螺旋（左手螺旋极为罕见）。
 
-三个关键部件：
-- **氨基（-NH₂）**：碱性基团，在水中可以接受质子变成 -NH₃⁺
-- **羧基（-COOH）**：酸性基团，在水中可以释放质子变成 -COO⁻
-- **R基（侧链）**：这里是变化所在——20种氨基酸唯一的区别就是 R 基不同
+### 关键数字（理解，不用背）
 
-## 两种特殊情况
+| 参数 | 数值 | 意义 |
+|------|------|------|
+| 每圈氨基酸数 | **3.6个** | 不是整数！这是α螺旋稳定性的来源之一 |
+| 螺距（每圈高度） | **0.54纳米** | 约等于5-6个氢原子叠起来的高度 |
+| 每个氨基酸上升距离 | 0.15纳米 | 0.54 ÷ 3.6 |
+| 螺旋直径（骨架） | ~0.5纳米 | 侧链朝外，更宽 |
 
-**最简单的氨基酸**：甘氨酸（Glycine），R基就是一个氢原子（-H），无手性。
+---
 
-**脯氨酸**：侧链绕回来与氮原子连接，形成五元环，使肽链在此处产生"硬弯"，在蛋白质折叠中起特殊作用。
+## 第二部分：氢键是如何让弹簧保持形状的？
 
-## 为什么是20种
+α螺旋能保持螺旋形状，靠的是**氢键**——一种弱但数量多的力。
 
-进化选择了20种氨基酸，这个数字恰好平衡了多样性与可编码性：
-- 4种碱基 → 3个碱基一个密码子 → 4³ = 64种密码子，可以编码20种氨基酸（冗余设计，更抗突变）
-- 这20种氨基酸的理化性质（大小、电荷、极性）覆盖范围足够宽，可以构建几乎任意化学功能
+### 氢键的位置
 
-## 关键要点
-1. 所有氨基酸骨架相同：氨基 + 羧基 + α碳 + 侧链
-2. 20种氨基酸的差异完全来自侧链（R基）
-3. 侧链的化学性质决定了氨基酸的"性格"（亲水/疏水，带电/中性）
+多肽骨架上有两种原子团：
+- **N-H**（每个氨基酸骨架上都有）—— 氢键的**给体**（提供H）
+- **C=O**（每个氨基酸骨架上都有）—— 氢键的**受体**（接受H）
+
+规律是：**第 i 个**残基的 C=O，和**第 (i+4) 个**残基的 N-H，之间形成氢键。
+
+类比：想象一条很长的拉链——不是普通的拉链（相邻两格扣在一起），而是每隔4格才扣一次。这样形成的拉链会自然弯成螺旋形。
+
+### 为什么每隔4个？
+
+因为3.6这个数字：每圈3.6个残基，差不多转完一圈正好是4个残基——所以第i个和第(i+4)个在三维空间中刚好彼此靠近，能形成氢键。这是精妙的几何巧合（其实是进化筛选的结果）。
+
+### 氢键有多少个？
+
+一条10个氨基酸的α螺旋大概有6个氢键（从第1-5到第6-10）。一条100个氨基酸的螺旋有大约96个氢键。数量越多，整体越稳定——就像很多弱磁铁叠放在一起，拉力总和很大。
+
+---
+
+## 第三部分：侧链去哪了？
+
+细心的你可能会问：氨基酸的侧链（R基）去哪了？
+
+答案是：**侧链全部朝外，指向螺旋轴外侧**，不参与形成氢键。
+
+这非常重要：
+- 螺旋的核心由骨架形成，稳定而刚性
+- 侧链朝外，可以自由接触水分子，或与其他蛋白质区域互动
+- 疏水侧链朝外时，在水环境中会"不舒服"——这解释了为什么有些序列容易形成α螺旋，有些不容易
+
+### 哪些氨基酸喜欢形成α螺旋？
+
+- **爱好者**：丙氨酸（A）、谷氨酸（E）、亮氨酸（L）、甲硫氨酸（M）
+- **讨厌者**：脯氨酸（P）——它的环状结构会在骨架上"打一个结"，破坏螺旋；甘氨酸（G）——太灵活，无法固定在螺旋构象
+
+脯氨酸是α螺旋的"终止信号"：遇到脯氨酸，螺旋必须结束。
+
+---
+
+## 第四部分：α螺旋在哪里出现？
+
+### 在你的身体里
+
+**角蛋白**是由几乎纯α螺旋组成的结构蛋白，存在于：
+- 头发（头发丝 = 角蛋白螺旋缠绕成的超螺旋）
+- 指甲（坚硬是因为螺旋之间有二硫键交联）
+- 皮肤最外层（角质层）
+
+**肌红蛋白**（储存氧气的肌肉蛋白）有8段α螺旋，这些螺旋围成一个口袋，把血红素（携氧的铁卟啉）固定在里面。Linus Pauling 1951年预测了α螺旋，John Kendrew 1958年用X射线晶体学解析了肌红蛋白结构，确认了螺旋的存在——这是历史上第一个被解析的蛋白质结构。
+
+**跨膜螺旋**：细胞膜是由疏水油脂组成的，一段约20个疏水氨基酸的α螺旋可以像针一样穿过细胞膜，成为离子通道和受体的基本结构单元。
+
+---
+
+## 第五部分：历史故事——Linus Pauling 和模型棒
+
+1951年，Linus Pauling（双诺贝尔奖得主）在生病卧床期间，用一张纸折出了多肽链的几何模型，从键长和键角出发，纯靠几何推导，预测出了α螺旋和β折叠的存在——**在任何X射线证据之前**。
+
+他的方法：不是从实验出发，而是从"什么样的几何构型能让骨架氢键最稳定"这个问题出发，用纸和铅笔推导。七年后，John Kendrew 解析了肌红蛋白的原子结构，发现 Pauling 的预测完全正确。
+
+> "科学不是记忆，是推理。"—— Linus Pauling
+
+---
+
+## 第六部分：动手实验
+
+### 实验：制作α螺旋模型
+
+**材料**：毛根条一根（或细铁丝）、铅笔一支、彩色小磁铁珠（或小纸团）
+
+**步骤**：
+1. 把毛根条紧紧绕在铅笔上，绕满后轻轻抽出铅笔
+2. 你得到了一个螺旋——但它还不是真正的"α螺旋模型"
+3. 用小磁铁珠（代表氢键）：在第1圈的位置和第1圈+4个单元的位置各挂一颗，连上线
+4. 重复：每圈都连上氢键
+5. 观察：所有氢键都沿着螺旋轴方向排列，像一根隐形的棍子贯穿螺旋中心
+
+**思考**：如果在螺旋中间插入一个"脯氨酸"（把某一圈的毛根剪断再接上），螺旋会怎样？
+
+---
+
+## 本节小结
+
+| 特征 | α螺旋 |
+|------|-------|
+| 形状 | 右手螺旋（弹簧） |
+| 维持力 | 骨架氢键：第i残基C=O ↔ 第(i+4)残基N-H |
+| 参数 | 3.6残基/圈，螺距0.54nm |
+| 侧链位置 | 朝外，不参与骨架氢键 |
+| 破坏因素 | 脯氨酸（P）打断螺旋 |
+| 代表蛋白 | 角蛋白（头发/指甲）、肌红蛋白、跨膜受体 |
+| 发现者 | Linus Pauling，1951年 |
+
+**核心直觉**：α螺旋是多肽链在局部区域，靠骨架氢键自发形成的弹簧形状。侧链朝外，骨架在内，每隔4个残基一个氢键。头发的弹性和弯曲性，来自你细胞里亿万个这样的纳米弹簧。
+
+---
+
+## 检测你学会了吗？
+
+1. α螺旋是"左手"还是"右手"螺旋？（右手）
+2. 维持α螺旋形状的是什么化学键？（氢键）
+3. 第i个残基的C=O和第几个残基的N-H形成氢键？（第i+4个）
+4. α螺旋每圈包含多少个氨基酸？（3.6个）
+5. 哪种氨基酸会打断α螺旋？（脯氨酸，Pro，P）
+6. 你身体里哪里有大量α螺旋？（头发、指甲，角蛋白）
 """
 
-STORY_0 = [
-    {
-        "text": "想象你手里有一盒积木，只有20种形状，但用这20种形状，你可以搭出世界上所有的建筑。蛋白质就是这样——地球上所有生命，无论是细菌、蘑菇、鲸鱼还是你，体内的蛋白质都由同样的20种氨基酸拼成。",
-        "image_url": "",
-    },
-    {
-        "text": "每个氨基酸长得很像——都有一个中央的碳原子，左手抓着氨基（-NH2），右手抓着羧基（-COOH），脚踩着一条侧链（R基）。正是这条侧链的不同，让20种氨基酸各有性格：有的怕水，有的爱水，有的带正电，有的带负电。",
-        "image_url": "",
-    },
-    {
-        "text": "进化用了数十亿年，从无数可能的分子里筛选出这20种。它们的多样性恰到好处：足够丰富，可以构建任何化学功能；足够简洁，只需64种DNA密码子就能编码它们。这是自然界写给化学的一首完美俳句。",
-        "image_url": "",
-    },
-]
+# ── 步骤2：从课程文本中提取 3 个 idea ──────────────────────────
+# 判断依据：哪些知识点用2D SVG动画展示效果最好？
+#
+# Idea 1 (animation): α螺旋形成过程 — 展示多肽链如何通过氢键逐步卷成螺旋
+#   原因：动态过程，抽象概念，最适合动画
+#
+# Idea 2 (animation): 氢键位置可视化 — 展示 i↔(i+4) 规律，侧链朝外
+#   原因：空间几何关系，静态图讲不清楚，动画可以旋转/标注
+#
+# Idea 3 (story): 开篇故事——铁丝的弹簧记忆
+#   原因：情境引入，帮助建立直觉
+#
+# Idea 4 (exercise): 巩固练习
+#   原因：检验理解
 
-ANIM_JS_0 = r"""
-/* ══ 氨基酸结构动画 ══
-   展示氨基酸三部件 + 20种氨基酸R基多样性轮播
-*/
-var AMINO_ACIDS = [
-  {name:"甘氨酸", abbr:"Gly", r:"H", type:"nonpolar", color:"#94a3b8"},
-  {name:"丙氨酸", abbr:"Ala", r:"CH₃", type:"nonpolar", color:"#818cf8"},
-  {name:"缬氨酸", abbr:"Val", r:"CH(CH₃)₂", type:"nonpolar", color:"#6366f1"},
-  {name:"亮氨酸", abbr:"Leu", r:"CH₂CH(CH₃)₂", type:"nonpolar", color:"#4f46e5"},
-  {name:"丝氨酸", abbr:"Ser", r:"CH₂OH", type:"polar", color:"#34d399"},
-  {name:"苏氨酸", abbr:"Thr", r:"CH(OH)CH₃", type:"polar", color:"#10b981"},
-  {name:"天冬酰胺", abbr:"Asn", r:"CH₂CONH₂", type:"polar", color:"#4ade80"},
-  {name:"赖氨酸", abbr:"Lys", r:"(CH₂)₄NH₃⁺", type:"positive", color:"#60a5fa"},
-  {name:"精氨酸", abbr:"Arg", r:"(CH₂)₃NHC(NH)NH₂", type:"positive", color:"#3b82f6"},
-  {name:"天冬氨酸", abbr:"Asp", r:"CH₂COO⁻", type:"negative", color:"#f472b6"},
-  {name:"谷氨酸", abbr:"Glu", r:"CH₂CH₂COO⁻", type:"negative", color:"#ec4899"},
-  {name:"苯丙氨酸", abbr:"Phe", r:"CH₂-苯环", type:"aromatic", color:"#fbbf24"},
-  {name:"色氨酸", abbr:"Trp", r:"CH₂-吲哚", type:"aromatic", color:"#f59e0b"},
-  {name:"脯氨酸", abbr:"Pro", r:"(环状)", type:"special", color:"#fb923c"},
-  {name:"半胱氨酸", abbr:"Cys", r:"CH₂SH", type:"special", color:"#a78bfa"},
+ANIM1_ID = _id("anim")
+ANIM2_ID = _id("anim")
+STORY_ID = _id("story")
+EXER_ID  = _id("ex")
+
+# ── 步骤3：SVG 动画 1 —— α螺旋形成过程 ─────────────────────────
+# 技术：SVG + CSS Animation + JavaScript
+# 场景：多肽链从直链→逐步卷曲→形成完整螺旋，氢键依次出现并发光
+
+ANIM1_HTML = """<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>α螺旋形成过程</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body {
+  width: 100%; height: 100%; overflow: hidden;
+  background: #0a0f1e;
+  font-family: "Noto Sans SC", "PingFang SC", system-ui, sans-serif;
+}
+svg { display: block; width: 100%; height: 100%; }
+
+/* 氨基酸珠子 */
+.bead { transition: all 0.6s ease; }
+.bead-core {
+  fill: url(#beadGrad);
+  filter: url(#beadGlow);
+}
+.bead-side {
+  fill: url(#sideGrad);
+  opacity: 0.9;
+}
+
+/* 骨架键 */
+.backbone {
+  stroke: url(#backboneGrad);
+  stroke-width: 3;
+  fill: none;
+  stroke-linecap: round;
+}
+
+/* 氢键 */
+.hbond {
+  stroke: #fbbf24;
+  stroke-width: 1.5;
+  stroke-dasharray: 4 3;
+  fill: none;
+  opacity: 0;
+  filter: url(#hbondGlow);
+}
+.hbond.visible { opacity: 1; }
+
+/* HUD */
+.hud-bg { fill: rgba(0,0,0,0.6); }
+.hud-label { fill: rgba(160,180,255,0.6); font-size: 10px; }
+.hud-value { fill: rgba(255,255,255,0.9); font-size: 13px; font-weight: bold; }
+.hud-line { stroke: rgba(255,255,255,0.08); stroke-width: 1; }
+
+/* 标注文字 */
+.annotation {
+  fill: rgba(250,250,255,0.85);
+  font-size: 12px;
+  opacity: 0;
+  transition: opacity 0.5s;
+}
+.annotation.show { opacity: 1; }
+.ann-line {
+  stroke: rgba(200,220,255,0.4);
+  stroke-width: 1;
+  stroke-dasharray: 3 3;
+  opacity: 0;
+  transition: opacity 0.5s;
+}
+.ann-line.show { opacity: 1; }
+
+/* 阶段标题 */
+.phase-title {
+  fill: rgba(129,140,248,0.9);
+  font-size: 14px;
+  font-weight: bold;
+}
+.phase-sub {
+  fill: rgba(200,210,255,0.6);
+  font-size: 11px;
+}
+</style>
+</head>
+<body>
+<svg id="svg" viewBox="0 0 600 420" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <!-- 背景渐变 -->
+    <linearGradient id="bgGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#0a0f1e"/>
+      <stop offset="100%" stop-color="#0f1628"/>
+    </linearGradient>
+    <!-- 网格图案 -->
+    <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
+      <path d="M40 0L0 0L0 40" fill="none" stroke="rgba(255,255,255,0.025)" stroke-width="1"/>
+    </pattern>
+    <!-- 珠子渐变 -->
+    <radialGradient id="beadGrad" cx="35%" cy="30%" r="65%">
+      <stop offset="0%" stop-color="#a5b4fc"/>
+      <stop offset="50%" stop-color="#6366f1"/>
+      <stop offset="100%" stop-color="#3730a3"/>
+    </radialGradient>
+    <!-- 侧链渐变 -->
+    <radialGradient id="sideGrad" cx="35%" cy="30%" r="65%">
+      <stop offset="0%" stop-color="#86efac"/>
+      <stop offset="60%" stop-color="#22c55e"/>
+      <stop offset="100%" stop-color="#15803d"/>
+    </radialGradient>
+    <!-- 骨架渐变 -->
+    <linearGradient id="backboneGrad" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#818cf8"/>
+      <stop offset="100%" stop-color="#6366f1"/>
+    </linearGradient>
+    <!-- 珠子发光滤镜 -->
+    <filter id="beadGlow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur in="SourceGraphic" stdDeviation="2.5" result="blur"/>
+      <feComposite in="SourceGraphic" in2="blur" operator="over"/>
+    </filter>
+    <!-- 氢键发光 -->
+    <filter id="hbondGlow" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur in="SourceGraphic" stdDeviation="1.5" result="blur"/>
+      <feComposite in="SourceGraphic" in2="blur" operator="over"/>
+    </filter>
+    <!-- 标题发光 -->
+    <filter id="titleGlow">
+      <feGaussianBlur in="SourceGraphic" stdDeviation="3" result="blur"/>
+      <feComposite in="SourceGraphic" in2="blur" operator="over"/>
+    </filter>
+  </defs>
+
+  <!-- 背景 -->
+  <rect width="600" height="420" fill="url(#bgGrad)"/>
+  <rect width="600" height="420" fill="url(#grid)"/>
+
+  <!-- 标题 -->
+  <text x="300" y="26" text-anchor="middle"
+        fill="rgba(255,255,255,0.9)" font-size="15" font-weight="bold"
+        filter="url(#titleGlow)">α螺旋形成过程</text>
+
+  <!-- 主动画区域 (y: 40 ~ 340) -->
+  <g id="scene" transform="translate(0, 0)"></g>
+
+  <!-- HUD 底栏 -->
+  <rect class="hud-bg" x="0" y="368" width="600" height="52" rx="0"/>
+  <line class="hud-line" x1="0" y1="368" x2="600" y2="368"/>
+  <line class="hud-line" x1="150" y1="368" x2="150" y2="420"/>
+  <line class="hud-line" x1="300" y1="368" x2="300" y2="420"/>
+  <line class="hud-line" x1="450" y1="368" x2="450" y2="420"/>
+
+  <text class="hud-label" x="75" y="383" text-anchor="middle">阶段</text>
+  <text class="hud-label" x="225" y="383" text-anchor="middle">氢键数量</text>
+  <text class="hud-label" x="375" y="383" text-anchor="middle">每圈残基数</text>
+  <text class="hud-label" x="525" y="383" text-anchor="middle">结构类型</text>
+
+  <text id="hud-phase"  class="hud-value" x="75" y="406" text-anchor="middle">初始</text>
+  <text id="hud-hbonds" class="hud-value" x="225" y="406" text-anchor="middle">0</text>
+  <text id="hud-rpm"    class="hud-value" x="375" y="406" text-anchor="middle">—</text>
+  <text id="hud-type"   class="hud-value" x="525" y="406" text-anchor="middle">无规则卷曲</text>
+</svg>
+
+<script>
+(function() {
+"use strict";
+
+var svgNS = "http://www.w3.org/2000/svg";
+var scene = document.getElementById("scene");
+
+// ── 动画参数 ──────────────────────────────────────────────────
+var BEADS = 13;       // 展示的氨基酸数量
+var BEAD_R = 10;      // 骨架Cα珠子半径
+var SIDE_R = 6;       // 侧链珠子半径
+
+// 三个阶段的珠子坐标
+// 阶段0：直链（水平展开）
+// 阶段1：部分卷曲（S形曲线）
+// 阶段2：完整α螺旋（螺旋投影）
+
+// α螺旋参数：右视投影到2D
+// 螺旋轴竖直，旋转投影
+var HELIX_CX = 300;
+var HELIX_TOP = 55;
+var HELIX_PITCH_PX = 40;   // 每圈高度（像素，代表0.54nm）
+var HELIX_RX = 55;          // 水平半径（椭圆透视效果）
+var HELIX_RY = 18;          // 垂直半径（透视压缩）
+
+// 角度步进：3.6残基/圈 → 每残基 360°/3.6 ≈ 100°
+var ANGLE_STEP = 100;
+
+function helixPos(i) {
+  var angle = (i * ANGLE_STEP - 90) * Math.PI / 180;  // -90使第0个在顶部
+  var y = HELIX_TOP + i * (HELIX_PITCH_PX / 3.6);
+  var x = HELIX_CX + HELIX_RX * Math.cos(angle);
+  // 透视：前面的珠子y偏移HELIX_RY
+  var yOffset = HELIX_RY * Math.sin(angle);
+  return { x: x, y: y + yOffset, angle: angle, depth: Math.sin(angle) };
+}
+
+// 侧链方向：从中心向外，稍微朝上
+function sidePos(hx, hy, angle) {
+  var dist = BEAD_R + SIDE_R + 6;
+  return {
+    x: hx + dist * Math.cos(angle),
+    y: hy + dist * Math.sin(angle) * 0.5 - 4,
+  };
+}
+
+// 直链坐标
+function linearPos(i) {
+  var startX = 80;
+  var spacing = (440) / (BEADS - 1);
+  return { x: startX + i * spacing, y: 195 };
+}
+
+// 中间过渡：正弦波弯曲
+function wavePos(i, t) {
+  var lp = linearPos(i);
+  var hp = helixPos(i);
+  // t: 0=直线, 1=螺旋
+  return {
+    x: lp.x + (hp.x - lp.x) * t,
+    y: lp.y + (hp.y - lp.y) * t,
+    angle: hp.angle,
+    depth: hp.depth,
+  };
+}
+
+// ── 创建 SVG 元素 ──────────────────────────────────────────────
+
+function makeSVG(tag, attrs) {
+  var el = document.createElementNS(svgNS, tag);
+  for (var k in attrs) el.setAttribute(k, attrs[k]);
+  return el;
+}
+
+// 珠子组
+var beadGroups = [];
+var hbondLines = [];
+var backbonePath = makeSVG("path", {
+  class: "backbone", id: "backbone-path"
+});
+scene.appendChild(backbonePath);
+
+// 氢键（共 BEADS-4 条）
+for (var hi = 0; hi < BEADS - 4; hi++) {
+  var hb = makeSVG("path", { class: "hbond", id: "hb-" + hi });
+  scene.appendChild(hb);
+  hbondLines.push(hb);
+}
+
+// 珠子（从后到前排序，先画深度大的）
+for (var bi = 0; bi < BEADS; bi++) {
+  var g = document.createElementNS(svgNS, "g");
+  g.setAttribute("class", "bead");
+  g.setAttribute("id", "bead-" + bi);
+
+  // 侧链
+  var sideCirc = makeSVG("circle", {
+    class: "bead-side", r: SIDE_R,
+  });
+  g.appendChild(sideCirc);
+
+  // 主链Cα
+  var coreCirc = makeSVG("circle", {
+    class: "bead-core", r: BEAD_R,
+  });
+  g.appendChild(coreCirc);
+
+  // 序号标签
+  var label = makeSVG("text", {
+    "text-anchor": "middle",
+    "dominant-baseline": "central",
+    "fill": "rgba(255,255,255,0.8)",
+    "font-size": "8",
+    "font-weight": "bold",
+  });
+  label.textContent = (bi + 1).toString();
+  g.appendChild(label);
+
+  scene.appendChild(g);
+  beadGroups.push({ g: g, core: coreCirc, side: sideCirc, label: label });
+}
+
+// ── 阶段标注 ───────────────────────────────────────────────────
+var phaseTitle = makeSVG("text", {
+  class: "phase-title", x: "300", y: "350", "text-anchor": "middle"
+});
+phaseTitle.textContent = "直链多肽";
+scene.appendChild(phaseTitle);
+
+var phaseSub = makeSVG("text", {
+  class: "phase-sub", x: "300", y: "365", "text-anchor": "middle"
+});
+phaseSub.textContent = "氨基酸刚从核糖体合成，还没有折叠";
+scene.appendChild(phaseSub);
+
+// 氢键标注
+var hbLabel = makeSVG("text", {
+  class: "annotation", x: "520", y: "120", "text-anchor": "middle",
+  fill: "rgba(251,191,36,0.9)", "font-size": "11"
+});
+hbLabel.textContent = "氢键";
+scene.appendChild(hbLabel);
+hbLabel.id = "hb-label";
+
+var hbArrow = makeSVG("line", {
+  class: "ann-line", x1: "520", y1: "125",
+  x2: "490", y2: "145", id: "hb-arrow"
+});
+scene.appendChild(hbArrow);
+
+// 螺旋参数标注（最终阶段）
+var paramLabel = makeSVG("text", {
+  class: "annotation", x: "90", y: "100", "text-anchor": "middle",
+  fill: "rgba(167,243,208,0.9)", "font-size": "10"
+});
+paramLabel.id = "param-label";
+scene.appendChild(paramLabel);
+
+// ── 渲染函数 ───────────────────────────────────────────────────
+
+function updatePositions(t, showHbonds) {
+  // 排序珠子（按深度从后到前）
+  var sorted = [];
+  for (var i = 0; i < BEADS; i++) {
+    var pos = wavePos(i, t);
+    sorted.push({ i: i, pos: pos });
+  }
+  sorted.sort(function(a, b) { return a.pos.depth - b.pos.depth; });
+
+  // 重新排序DOM（深度较小=在后面，先渲染）
+  for (var si = 0; si < sorted.length; si++) {
+    scene.appendChild(beadGroups[sorted[si].i].g);
+  }
+
+  // 更新骨架路径
+  var pathD = "";
+  for (var pi = 0; pi < BEADS; pi++) {
+    var p = wavePos(pi, t);
+    if (pi === 0) {
+      pathD = "M" + p.x.toFixed(1) + "," + p.y.toFixed(1);
+    } else {
+      pathD += " L" + p.x.toFixed(1) + "," + p.y.toFixed(1);
+    }
+  }
+  backbonePath.setAttribute("d", pathD);
+
+  // 更新珠子位置
+  for (var bi2 = 0; bi2 < BEADS; bi2++) {
+    var pos2 = wavePos(bi2, t);
+    var sp = sidePos(pos2.x, pos2.y, pos2.angle);
+    var bg = beadGroups[bi2];
+
+    bg.core.setAttribute("cx", pos2.x.toFixed(1));
+    bg.core.setAttribute("cy", pos2.y.toFixed(1));
+    bg.side.setAttribute("cx", sp.x.toFixed(1));
+    bg.side.setAttribute("cy", sp.y.toFixed(1));
+    bg.label.setAttribute("x", pos2.x.toFixed(1));
+    bg.label.setAttribute("y", pos2.y.toFixed(1));
+
+    // 深度影响透明度（后面的珠子稍暗）
+    var alpha = 0.6 + 0.4 * (pos2.depth + 1) / 2;
+    bg.core.style.opacity = alpha.toFixed(2);
+    bg.side.style.opacity = (alpha * 0.9).toFixed(2);
+  }
+
+  // 更新氢键
+  for (var hbi = 0; hbi < hbondLines.length; hbi++) {
+    var p1 = wavePos(hbi, t);
+    var p2 = wavePos(hbi + 4, t);
+    var hb = hbondLines[hbi];
+
+    // 曲线路径（弧形）
+    var mx = (p1.x + p2.x) / 2;
+    var my = (p1.y + p2.y) / 2 - 15 * Math.abs(Math.cos(p1.angle));
+    hb.setAttribute("d",
+      "M" + p1.x.toFixed(1) + "," + p1.y.toFixed(1) +
+      " Q" + mx.toFixed(1) + "," + my.toFixed(1) +
+      " " + p2.x.toFixed(1) + "," + p2.y.toFixed(1)
+    );
+
+    if (showHbonds && t > 0.7) {
+      hb.classList.add("visible");
+      hb.style.opacity = ((t - 0.7) / 0.3).toFixed(2);
+    } else {
+      hb.classList.remove("visible");
+      hb.style.opacity = "0";
+    }
+  }
+}
+
+// ── 动画状态机 ────────────────────────────────────────────────
+var hudPhase   = document.getElementById("hud-phase");
+var hudHbonds  = document.getElementById("hud-hbonds");
+var hudRpm     = document.getElementById("hud-rpm");
+var hudType    = document.getElementById("hud-type");
+
+var PHASES = [
+  { name: "直链多肽", sub: "氨基酸刚从核糖体合成，还没有折叠",
+    tStart: 0, tEnd: 0, holdMs: 2000,
+    hbonds: 0, rpm: "—", type: "无规则卷曲" },
+  { name: "开始卷曲", sub: "疏水残基被水推向内侧，链条弯曲",
+    tStart: 0, tEnd: 0.5, holdMs: 1500,
+    hbonds: 0, rpm: "≈3.6", type: "过渡态" },
+  { name: "螺旋形成", sub: "氢键依次建立，螺旋结构稳定化",
+    tStart: 0.5, tEnd: 1.0, holdMs: 1500,
+    hbonds: 9, rpm: "3.6", type: "过渡态" },
+  { name: "α螺旋", sub: "完全稳定的右手螺旋，每圈3.6个残基",
+    tStart: 1.0, tEnd: 1.0, holdMs: 3000,
+    hbonds: 9, rpm: "3.6", type: "α螺旋" },
 ];
 
-var TYPE_LABELS = {
-  nonpolar: "非极性疏水",
-  polar: "极性亲水",
-  positive: "带正电",
-  negative: "带负电",
-  aromatic: "芳香族",
-  special: "特殊功能",
-};
+var currentPhase = 0;
+var phaseStart = performance.now();
+var animT = 0;
+var lastPhaseTime = 0;
 
-var currentAA = 0;
-var nextAA = 1;
-var transT = 0;
-var STAY_DUR = 2.2;
-var TRANS_DUR = 0.5;
-var inTransition = false;
-var stayT = 0;
-var lastTs = null;
+var ANIM_DURATION = 1500;  // 过渡动画时长(ms)
 
-/* ── 画骨架结构 ── */
-function drawSkeleton(cx, cy, alpha) {
-  ctx.globalAlpha = alpha;
-  var R = 72;  // 键长像素
-
-  // α碳（中心）
-  var alphaBg = ctx.createRadialGradient(cx, cy, 0, cx, cy, 22);
-  alphaBg.addColorStop(0, "rgba(255,255,255,0.95)");
-  alphaBg.addColorStop(1, "rgba(200,230,210,0.8)");
-  ctx.fillStyle = alphaBg;
-  ctx.shadowColor = "rgba(74,222,128,0.6)"; ctx.shadowBlur = 18;
-  ctx.beginPath(); ctx.arc(cx, cy, 22, 0, Math.PI*2); ctx.fill();
-  ctx.shadowBlur = 0;
-  ctx.font = "bold 13px 'Noto Sans SC',system-ui";
-  ctx.textAlign = "center"; ctx.fillStyle = "#0a1a0f";
-  ctx.fillText("α碳", cx, cy+5);
-
-  /* 键线样式 */
-  ctx.strokeStyle = "rgba(74,222,128,0.7)"; ctx.lineWidth = 2.5;
-  ctx.lineCap = "round";
-
-  // 氨基 (左上)
-  var nx = cx - R*0.8, ny = cy - R*0.6;
-  ctx.beginPath(); ctx.moveTo(cx-18, cy-6); ctx.lineTo(nx+18, ny+10); ctx.stroke();
-  var ng = ctx.createRadialGradient(nx, ny, 0, nx, ny, 28);
-  ng.addColorStop(0, "rgba(96,165,250,0.9)"); ng.addColorStop(1, "rgba(59,130,246,0.5)");
-  ctx.fillStyle = ng; ctx.shadowColor = "rgba(96,165,250,0.5)"; ctx.shadowBlur = 14;
-  ctx.beginPath(); ctx.arc(nx, ny, 28, 0, Math.PI*2); ctx.fill();
-  ctx.shadowBlur = 0;
-  ctx.font = "bold 13px 'Noto Sans SC',system-ui";
-  ctx.fillStyle = "white"; ctx.fillText("-NH₂", nx, ny+5);
-  ctx.font = "11px 'Noto Sans SC',system-ui"; ctx.fillStyle = "rgba(96,165,250,0.8)";
-  ctx.fillText("氨基", nx, ny+22);
-
-  // 羧基 (右上)
-  var cox = cx + R*0.8, coy = cy - R*0.6;
-  ctx.strokeStyle = "rgba(74,222,128,0.7)"; ctx.lineWidth = 2.5;
-  ctx.beginPath(); ctx.moveTo(cx+18, cy-6); ctx.lineTo(cox-22, coy+10); ctx.stroke();
-  var cg = ctx.createRadialGradient(cox, coy, 0, cox, coy, 28);
-  cg.addColorStop(0, "rgba(251,113,133,0.9)"); cg.addColorStop(1, "rgba(244,63,94,0.5)");
-  ctx.fillStyle = cg; ctx.shadowColor = "rgba(251,113,133,0.5)"; ctx.shadowBlur = 14;
-  ctx.beginPath(); ctx.arc(cox, coy, 28, 0, Math.PI*2); ctx.fill();
-  ctx.shadowBlur = 0;
-  ctx.font = "bold 13px 'Noto Sans SC',system-ui";
-  ctx.fillStyle = "white"; ctx.fillText("-COOH", cox, coy+5);
-  ctx.font = "11px 'Noto Sans SC',system-ui"; ctx.fillStyle = "rgba(251,113,133,0.8)";
-  ctx.fillText("羧基", cox, coy+22);
-
-  ctx.globalAlpha = 1;
+function easeInOut(t) {
+  return t < 0.5 ? 2 * t * t : -1 + (4 - 2 * t) * t;
 }
 
-/* ── 画R基 ── */
-function drawRGroup(aa, cx, cy, alpha, scale) {
-  scale = scale || 1;
-  ctx.globalAlpha = alpha;
-  var ry = cy + 80;
+function loop(now) {
+  var elapsed = now - phaseStart;
+  var ph = PHASES[currentPhase];
 
-  // 键
-  ctx.strokeStyle = "rgba(74,222,128,0.6)"; ctx.lineWidth = 2.5;
-  ctx.lineCap = "round";
-  ctx.beginPath(); ctx.moveTo(cx, cy+22); ctx.lineTo(cx, ry-30*scale); ctx.stroke();
-
-  // R基圆球
-  var rr = 38 * scale;
-  var rg = ctx.createRadialGradient(cx, ry, 0, cx, ry, rr);
-  var c = aa.color;
-  rg.addColorStop(0, c+"ff"); rg.addColorStop(0.5, c+"cc"); rg.addColorStop(1, c+"44");
-  ctx.fillStyle = rg;
-  ctx.shadowColor = c; ctx.shadowBlur = 20 * scale;
-  ctx.beginPath(); ctx.arc(cx, ry, rr, 0, Math.PI*2); ctx.fill();
-  ctx.shadowBlur = 0;
-
-  // R基标签
-  ctx.font = "bold 12px 'Noto Sans SC',system-ui";
-  ctx.textAlign = "center"; ctx.fillStyle = "rgba(255,255,255,0.95)";
-  ctx.fillText(aa.r.length > 8 ? aa.r.slice(0,8)+"…" : aa.r, cx, ry+5);
-
-  // 氨基酸名称标签
-  ctx.font = "bold 14px 'Noto Sans SC',system-ui";
-  ctx.fillStyle = c;
-  ctx.fillText(aa.name, cx, ry + rr + 20);
-  ctx.font = "12px 'Noto Sans SC',system-ui";
-  ctx.fillStyle = "rgba(255,255,255,0.5)";
-  ctx.fillText(aa.abbr + " · " + (TYPE_LABELS[aa.type]||aa.type), cx, ry + rr + 38);
-
-  ctx.globalAlpha = 1;
-}
-
-/* ── 画类型色块图例 ── */
-function drawLegend() {
-  var types = [
-    {key:"nonpolar", label:"疏水", color:"#818cf8"},
-    {key:"polar",    label:"亲水", color:"#34d399"},
-    {key:"positive", label:"正电", color:"#60a5fa"},
-    {key:"negative", label:"负电", color:"#f472b6"},
-    {key:"aromatic", label:"芳香", color:"#fbbf24"},
-    {key:"special",  label:"特殊", color:"#a78bfa"},
-  ];
-  var startX = 28, y = 300;
-  types.forEach(function(t, i) {
-    var x = startX + i * 88;
-    ctx.fillStyle = t.color + "33";
-    roundRect(x, y, 76, 24, 6); ctx.fill();
-    ctx.strokeStyle = t.color + "88"; ctx.lineWidth = 1;
-    roundRect(x, y, 76, 24, 6); ctx.stroke();
-    ctx.font = "11px 'Noto Sans SC',system-ui";
-    ctx.textAlign = "center"; ctx.fillStyle = t.color;
-    ctx.fillText(t.label, x+38, y+16);
-  });
-}
-
-/* ── 计数器：20种氨基酸 ── */
-function drawCounter(current) {
-  ctx.font = "11px 'Noto Sans SC',system-ui";
-  ctx.textAlign = "right"; ctx.fillStyle = CA(0.35);
-  ctx.fillText((current+1) + " / 20 种标准氨基酸", W-24, 50);
-}
-
-var startTime = null;
-function frame(ts) {
-  if (!startTime) startTime = ts;
-  if (lastTs === null) lastTs = ts;
-  var dt = (ts - lastTs) / 1000;
-  lastTs = ts;
-
-  ctx.clearRect(0, 0, W, H);
-
-  /* 背景：偏深绿色 */
-  var bg = ctx.createLinearGradient(0, 0, 0, H);
-  bg.addColorStop(0, "#0a1a0f"); bg.addColorStop(1, "#0f2010");
-  ctx.fillStyle = bg; ctx.fillRect(0, 0, W, H);
-  ctx.strokeStyle = "rgba(74,222,128,0.04)"; ctx.lineWidth = 1;
-  for (var x=0; x<=W; x+=40) { ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,H); ctx.stroke(); }
-  for (var y=0; y<=H; y+=40) { ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(W,y); ctx.stroke(); }
-
-  drawTitle();
-  drawLegend();
-
-  var cx = W/2, cy = 175;
-  var aa = AMINO_ACIDS[currentAA % AMINO_ACIDS.length];
-  var aa2 = AMINO_ACIDS[nextAA % AMINO_ACIDS.length];
-
-  if (!inTransition) {
-    stayT += dt;
-    drawSkeleton(cx, cy, 1);
-    drawRGroup(aa, cx, cy, 1, 1);
-    drawCounter(currentAA);
-    if (stayT >= STAY_DUR) {
-      stayT = 0; inTransition = true; transT = 0;
+  if (ph.tStart === ph.tEnd) {
+    // 静止阶段
+    animT = ph.tEnd;
+    if (elapsed > ph.holdMs && currentPhase < PHASES.length - 1) {
+      currentPhase++;
+      phaseStart = now;
     }
   } else {
-    transT += dt;
-    var p = Math.min(transT / TRANS_DUR, 1);
-    var eased = p < 0.5 ? 2*p*p : -1+(4-2*p)*p;
-    drawSkeleton(cx, cy, 1);
-    drawRGroup(aa, cx, cy, 1 - eased, 1);
-    drawRGroup(aa2, cx, cy, eased, 0.6 + 0.4*eased);
-    drawCounter(currentAA);
-    if (transT >= TRANS_DUR) {
-      inTransition = false;
-      currentAA = nextAA;
-      nextAA = (nextAA + 1) % AMINO_ACIDS.length;
+    // 动画阶段
+    var progress = Math.min(elapsed / ANIM_DURATION, 1);
+    animT = ph.tStart + (ph.tEnd - ph.tStart) * easeInOut(progress);
+    if (progress >= 1) {
+      if (elapsed > ANIM_DURATION + ph.holdMs && currentPhase < PHASES.length - 1) {
+        currentPhase++;
+        phaseStart = now;
+      }
     }
   }
 
-  drawHUD([
-    {label:"氨基酸", val: aa.name},
-    {label:"缩写", val: aa.abbr},
-    {label:"R基", val: aa.r.length > 9 ? aa.r.slice(0,9)+"…" : aa.r},
-    {label:"性质", val: TYPE_LABELS[aa.type]||aa.type},
-  ]);
+  // 最后一阶段循环
+  if (currentPhase === PHASES.length - 1) {
+    var loopTime = now - phaseStart;
+    if (loopTime > 4000) {
+      // 重置回第0阶段
+      currentPhase = 0;
+      phaseStart = now;
+    }
+  }
 
-  requestAnimationFrame(frame);
+  updatePositions(animT, animT > 0.6);
+
+  // 更新 HUD
+  var pName = PHASES[currentPhase].name;
+  hudPhase.textContent = pName;
+
+  var hbCount = Math.round(animT * 9);
+  hudHbonds.textContent = hbCount.toString();
+  hudRpm.textContent = animT < 0.3 ? "—" : "3.6";
+  hudType.textContent = animT < 0.9 ? (animT < 0.3 ? "无规则卷曲" : "过渡态") : "α螺旋";
+
+  // 更新阶段标题
+  phaseTitle.textContent = PHASES[currentPhase].name;
+  phaseSub.textContent = PHASES[currentPhase].sub;
+
+  // 氢键标注
+  var hbLabelEl = document.getElementById("hb-label");
+  var hbArrowEl = document.getElementById("hb-arrow");
+  if (animT > 0.75) {
+    hbLabelEl.classList.add("show");
+    hbArrowEl.classList.add("show");
+  } else {
+    hbLabelEl.classList.remove("show");
+    hbArrowEl.classList.remove("show");
+  }
+
+  // 螺旋参数标注
+  var paramLabelEl = document.getElementById("param-label");
+  if (animT > 0.9) {
+    paramLabelEl.classList.add("show");
+    paramLabelEl.textContent = "每圈3.6个残基 · 螺距0.54nm";
+    paramLabelEl.setAttribute("y", "340");
+    paramLabelEl.setAttribute("x", "300");
+    paramLabelEl.setAttribute("fill", "rgba(167,243,208,0.85)");
+    paramLabelEl.setAttribute("font-size", "11");
+  } else {
+    paramLabelEl.classList.remove("show");
+  }
+
+  requestAnimationFrame(loop);
 }
-requestAnimationFrame(frame);
-"""
 
-EXERCISES_0 = make_exercises([
-    {
-        "question": "氨基酸的α碳上连接的四个基团是？",
-        "options": [
-            "氨基、羧基、R基、氢原子",
-            "氨基、羧基、磷酸基、氢原子",
-            "氨基、R基、糖基、氢原子",
-            "羧基、R基、磷酸基、糖基",
-        ],
-        "correct": 0,
-        "explanation": "每个氨基酸的α碳上连接4个基团：氨基（-NH₂）、羧基（-COOH）、侧链R基、氢原子。这四个基团共同构成了氨基酸的基本结构。",
-    },
-    {
-        "question": "20种标准氨基酸之间的唯一化学差异是？",
-        "options": [
-            "氨基的数量不同",
-            "羧基的数量不同",
-            "侧链（R基）不同",
-            "α碳的位置不同",
-        ],
-        "correct": 2,
-        "explanation": "20种氨基酸的骨架完全相同（都有氨基、羧基和α碳），唯一的区别在于侧链R基的化学结构。R基的不同决定了氨基酸的大小、极性、电荷等所有化学性质差异。",
-    },
-    {
-        "question": "疏水性氨基酸在蛋白质中倾向于出现在哪里？",
-        "options": [
-            "蛋白质表面，与水直接接触",
-            "蛋白质内部，远离水分子",
-            "随机分布，没有规律",
-            "只出现在α螺旋中",
-        ],
-        "correct": 1,
-        "explanation": "疏水性氨基酸（如缬氨酸、亮氨酸）的侧链不喜欢与水接触，在蛋白质折叠时会自发聚集到蛋白质内部，这种'疏水效应'是驱动蛋白质三级结构形成的主要力量之一。",
-    },
-])
+// ── 初始化 ────────────────────────────────────────────────────
+updatePositions(0, false);
+requestAnimationFrame(loop);
 
-COURSE_0 = make_course_content(
-    plan_markdown=PLAN_0,
-    animation_html=make_canvas_html("氨基酸的结构与多样性", ANIM_JS_0, color_main=COLOR_PRIMARY),
-    animation_topic="20种氨基酸结构与侧链多样性动态展示",
-    exercises=EXERCISES_0,
-    exercise_topic="氨基酸结构基础练习",
-    story_paragraphs=STORY_0,
-)
+})();
+</script>
+</body>
+</html>"""
 
-# ═══════════════════════════════════════════════════════════════
-# 节点1：氨基酸的侧链与性格
-# ═══════════════════════════════════════════════════════════════
+# ── SVG 动画 2 —— 氢键 i↔(i+4) 规律可视化 ──────────────────────
+# 场景：α螺旋侧视图，高亮显示各条氢键，标注编号，展示3.6规律
 
-PLAN_1 = """\
-# 氨基酸的侧链与性格
+ANIM2_HTML = """<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>α螺旋氢键规律：第i↔第(i+4)</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body {
+  width: 100%; height: 100%; overflow: hidden;
+  background: #0a0f1e;
+  font-family: "Noto Sans SC", "PingFang SC", system-ui, sans-serif;
+}
+svg { display: block; width: 100%; height: 100%; }
 
-## 学习目标
-掌握4类氨基酸侧链的化学性质与分类逻辑，理解"疏水内核"是蛋白质折叠的关键驱动力，能根据侧链性质预测氨基酸在蛋白质中的位置。
+.hud-bg { fill: rgba(0,0,0,0.6); }
+.hud-label { fill: rgba(160,180,255,0.6); font-size: 10px; }
+.hud-value { fill: rgba(255,255,255,0.9); font-size: 13px; font-weight: bold; }
+.hud-line { stroke: rgba(255,255,255,0.08); stroke-width: 1; }
+</style>
+</head>
+<body>
+<svg id="svg" viewBox="0 0 600 420" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg2" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#0a0f1e"/>
+      <stop offset="100%" stop-color="#0d1530"/>
+    </linearGradient>
+    <pattern id="grid2" width="40" height="40" patternUnits="userSpaceOnUse">
+      <path d="M40 0L0 0L0 40" fill="none" stroke="rgba(255,255,255,0.025)" stroke-width="1"/>
+    </pattern>
+    <filter id="glow2">
+      <feGaussianBlur in="SourceGraphic" stdDeviation="3" result="blur"/>
+      <feComposite in="SourceGraphic" in2="blur" operator="over"/>
+    </filter>
+    <filter id="softGlow">
+      <feGaussianBlur in="SourceGraphic" stdDeviation="1.5" result="blur"/>
+      <feComposite in="SourceGraphic" in2="blur" operator="over"/>
+    </filter>
+    <!-- 当前高亮氢键颜色 -->
+    <radialGradient id="hlBeadGrad" cx="35%" cy="30%" r="65%">
+      <stop offset="0%" stop-color="#fde68a"/>
+      <stop offset="50%" stop-color="#f59e0b"/>
+      <stop offset="100%" stop-color="#b45309"/>
+    </radialGradient>
+    <!-- 普通珠子 -->
+    <radialGradient id="normalBeadGrad" cx="35%" cy="30%" r="65%">
+      <stop offset="0%" stop-color="#a5b4fc"/>
+      <stop offset="50%" stop-color="#6366f1"/>
+      <stop offset="100%" stop-color="#3730a3"/>
+    </radialGradient>
+    <!-- 侧链 -->
+    <radialGradient id="sideGrad2" cx="35%" cy="30%" r="65%">
+      <stop offset="0%" stop-color="#86efac"/>
+      <stop offset="50%" stop-color="#22c55e"/>
+      <stop offset="100%" stop-color="#15803d"/>
+    </radialGradient>
+  </defs>
 
-## 四种性格
+  <rect width="600" height="420" fill="url(#bg2)"/>
+  <rect width="600" height="420" fill="url(#grid2)"/>
 
-氨基酸的"性格"完全由侧链（R基）决定，可以按与水的关系分为四大类：
+  <text x="300" y="26" text-anchor="middle"
+        fill="rgba(255,255,255,0.9)" font-size="15" font-weight="bold"
+        filter="url(#glow2)">氢键规律：第 i 残基 ↔ 第 (i+4) 残基</text>
 
-### 1. 非极性疏水氨基酸（内向性格）
-代表：甘氨酸（G）、丙氨酸（A）、缬氨酸（V）、亮氨酸（L）、异亮氨酸（I）、脯氨酸（P）、苯丙氨酸（F）、色氨酸（W）、甲硫氨酸（M）
+  <!-- 主绘图区 -->
+  <g id="scene2"></g>
 
-**特点**：侧链由碳氢组成，不能与水形成氢键，在水中自发聚集（像油滴一样）。
-**在蛋白质中**：倾向于"躲"进蛋白质内部，形成疏水核心。这种聚集是三级结构形成的主要驱动力。
+  <!-- 规则说明框 -->
+  <g id="rule-box">
+    <rect x="390" y="42" width="195" height="110" rx="8"
+          fill="rgba(15,20,50,0.85)" stroke="rgba(99,102,241,0.4)" stroke-width="1.5"/>
+    <text x="487" y="62" text-anchor="middle"
+          fill="rgba(167,243,208,0.9)" font-size="11" font-weight="bold">氢键形成规律</text>
+    <text id="rule-cur" x="487" y="82" text-anchor="middle"
+          fill="rgba(251,191,36,0.95)" font-size="13" font-weight="bold">第1↔第5</text>
+    <text x="487" y="100" text-anchor="middle"
+          fill="rgba(200,210,255,0.65)" font-size="10">C=O（第i个）</text>
+    <text x="487" y="115" text-anchor="middle"
+          fill="rgba(200,210,255,0.65)" font-size="10">与 N-H（第i+4个）</text>
+    <text x="487" y="130" text-anchor="middle"
+          fill="rgba(200,210,255,0.65)" font-size="10">之间形成氢键</text>
+    <text id="rule-count" x="487" y="146" text-anchor="middle"
+          fill="rgba(129,140,248,0.8)" font-size="10">当前高亮第 1 条</text>
+  </g>
 
-### 2. 极性不带电氨基酸（友善性格）
-代表：丝氨酸（S）、苏氨酸（T）、天冬酰胺（N）、谷氨酰胺（Q）、酪氨酸（Y）、半胱氨酸（C）
+  <!-- HUD -->
+  <rect class="hud-bg" x="0" y="368" width="600" height="52"/>
+  <line class="hud-line" x1="0" y1="368" x2="600" y2="368"/>
+  <line class="hud-line" x1="150" y1="368" x2="150" y2="420"/>
+  <line class="hud-line" x1="300" y1="368" x2="300" y2="420"/>
+  <line class="hud-line" x1="450" y1="368" x2="450" y2="420"/>
 
-**特点**：侧链含有-OH、-NH₂或-SH等可以形成氢键的基团，可与水分子相互作用。
-**在蛋白质中**：倾向于出现在蛋白质表面，参与底物结合、信号传递。
-**特殊**：半胱氨酸（C）的-SH基团可以氧化形成二硫键（C-S-S-C），是稳定三级结构的共价键。
+  <text class="hud-label" x="75"  y="383" text-anchor="middle">当前氢键</text>
+  <text class="hud-label" x="225" y="383" text-anchor="middle">间隔残基数</text>
+  <text class="hud-label" x="375" y="383" text-anchor="middle">每圈残基数</text>
+  <text class="hud-label" x="525" y="383" text-anchor="middle">氢键总数（共9条）</text>
 
-### 3. 带正电氨基酸（热情性格）
-代表：赖氨酸（K）、精氨酸（R）、组氨酸（H，pH依赖）
+  <text id="hud2-cur"    class="hud-value" x="75"  y="406" text-anchor="middle">1↔5</text>
+  <text id="hud2-gap"    class="hud-value" x="225" y="406" text-anchor="middle">4</text>
+  <text id="hud2-rpm"    class="hud-value" x="375" y="406" text-anchor="middle">3.6</text>
+  <text id="hud2-total"  class="hud-value" x="525" y="406" text-anchor="middle">1 / 9</text>
+</svg>
 
-**特点**：在生理pH（7.4）下侧链携带正电荷。
-**在蛋白质中**：常出现在表面（与带负电的DNA、RNA相互作用），或参与酶的活性位点（静电稳定过渡态）。
-**特殊**：组氨酸（H）的pKa约6，生理pH下部分带电，常作为"质子穿梭"中间体出现在酶活性位点。
+<script>
+(function() {
+"use strict";
+var svgNS = "http://www.w3.org/2000/svg";
+var scene2 = document.getElementById("scene2");
 
-### 4. 带负电氨基酸（理性性格）
-代表：天冬氨酸（D）、谷氨酸（E）
+var BEADS = 13;
+// α螺旋侧视：螺旋轴水平（左→右），珠子沿螺旋排列
+// 使用侧面投影：x=沿轴方向，y=螺旋在侧面的投影（正弦波）
+var AXIS_Y = 200;    // 螺旋轴高度
+var AXIS_X0 = 60;    // 起始x
+var X_STEP = 37;     // 每个残基的轴向步进（代表0.15nm）
+var AMP = 55;        // 侧面投影振幅
+var BEAD_R = 10;
+var SIDE_R = 5.5;
 
-**特点**：在生理pH下侧链携带负电荷（-COO⁻）。
-**在蛋白质中**：常与Mg²⁺、Ca²⁺等金属离子配位，或在酶活性位点参与酸碱催化。
+// 每圈100°
+function getPos(i) {
+  var angle = (i * 100) * Math.PI / 180;
+  return {
+    x: AXIS_X0 + i * X_STEP,
+    y: AXIS_Y - AMP * Math.sin(angle),  // 侧面投影
+    angle: angle,
+    depth: Math.cos(angle),  // 深度（正=前面）
+  };
+}
 
-## 疏水效应：最强大的折叠驱动力
+function getSidePos(bx, by, angle) {
+  // 侧链朝"外"：在侧视图中朝上或朝下（取决于当前螺旋面的法向量）
+  var perpAngle = angle + Math.PI / 2;
+  return {
+    x: bx + (BEAD_R + SIDE_R + 4) * Math.cos(perpAngle) * 0.3,
+    y: by + (BEAD_R + SIDE_R + 4) * Math.sin(perpAngle),
+  };
+}
 
-在生理环境（水溶液）中：
-- 疏水侧链被水分子排斥，自发聚集→ 熵增（水分子得到"解放"）
-- 这不是静电力，而是**熵驱动**的过程
-- 估算：每1Å²疏水面积暴露于水，约损失0.025 kcal/mol自由能 → 疏水核心的形成释放大量自由能
+function makeSVG(tag, attrs) {
+  var el = document.createElementNS(svgNS, tag);
+  for (var k in attrs) el.setAttribute(k, attrs[k]);
+  return el;
+}
 
-## 记忆方法：GAVLIPFWM 疏水家族
-**G**ly, **A**la, **V**al, **L**eu, **I**le, **P**ro, **F**he, **W**rp, **M**et — 这9个是疏水的，其余都能与水相互作用。
+// 骨架线
+var backbone = makeSVG("path", {
+  "stroke": "rgba(99,102,241,0.5)", "stroke-width": "2.5",
+  "fill": "none", "stroke-linecap": "round"
+});
+scene2.appendChild(backbone);
 
-## 关键要点
-1. 疏水氨基酸逃入蛋白质内部，这是三级结构形成的主要驱动力
-2. 极性/带电氨基酸在蛋白质表面与水/底物相互作用
-3. 半胱氨酸特殊：可形成二硫键，强化蛋白质结构稳定性
-4. 氨基酸分布不是随机的，受热力学驱动
-"""
+// 计算骨架路径
+var pathD = "";
+for (var pi = 0; pi < BEADS; pi++) {
+  var pp = getPos(pi);
+  pathD += (pi === 0 ? "M" : "L") + pp.x.toFixed(1) + "," + pp.y.toFixed(1) + " ";
+}
+backbone.setAttribute("d", pathD);
 
-ANIM_JS_1 = r"""
-/* ══ 氨基酸分类 + 疏水效应动画 ══ */
-var CLASSES = [
-  {label:"非极性疏水", color:"#818cf8", items:["Gly","Ala","Val","Leu","Ile","Pro","Phe","Trp","Met"], pos:"内部"},
-  {label:"极性亲水",   color:"#4ade80", items:["Ser","Thr","Asn","Gln","Tyr","Cys"], pos:"表面"},
-  {label:"带正电",     color:"#60a5fa", items:["Lys","Arg","His"], pos:"表面"},
-  {label:"带负电",     color:"#f472b6", items:["Asp","Glu"], pos:"表面"},
-];
-
-/* 水分子粒子系统 */
-var waterParticles = [];
-for (var i = 0; i < 40; i++) {
-  waterParticles.push({
-    x: 60 + Math.random() * 480,
-    y: 80 + Math.random() * 250,
-    vx: (Math.random()-0.5)*0.4,
-    vy: (Math.random()-0.5)*0.4,
-    r: 4 + Math.random()*3,
-    alpha: 0.2 + Math.random()*0.3,
+// 氢键线（9条，初始隐藏）
+var hbLines = [];
+for (var hi = 0; hi < BEADS - 4; hi++) {
+  var p1 = getPos(hi);
+  var p2 = getPos(hi + 4);
+  var mx = (p1.x + p2.x) / 2;
+  var my = Math.min(p1.y, p2.y) - 22;
+  var hb = makeSVG("path", {
+    "d": "M" + p1.x.toFixed(1) + "," + p1.y.toFixed(1) +
+         " Q" + mx.toFixed(1) + "," + my.toFixed(1) +
+         " " + p2.x.toFixed(1) + "," + p2.y.toFixed(1),
+    "stroke": "#fbbf24",
+    "stroke-width": "2",
+    "stroke-dasharray": "4 3",
+    "fill": "none",
+    "opacity": "0",
+    "filter": "url(#softGlow)",
   });
+  scene2.appendChild(hb);
+  hbLines.push(hb);
 }
 
-/* 疏水粒子（要聚集的那些） */
-var hydrophobicParticles = [];
-for (var j = 0; j < 12; j++) {
-  hydrophobicParticles.push({
-    x: 100 + Math.random() * 400,
-    y: 100 + Math.random() * 200,
-    vx: 0, vy: 0,
-    phase: Math.random() * Math.PI * 2,
+// 珠子和侧链（排序后创建）
+var beadData = [];
+for (var bi = 0; bi < BEADS; bi++) {
+  var pos = getPos(bi);
+  beadData.push({ i: bi, pos: pos });
+}
+
+// 按深度排序，后面的先画
+beadData.sort(function(a, b) { return a.pos.depth - b.pos.depth; });
+
+var beadEls = new Array(BEADS);
+for (var si = 0; si < beadData.length; si++) {
+  var d = beadData[si];
+  var bp = d.pos;
+  var sp = getSidePos(bp.x, bp.y, bp.angle);
+
+  var g = document.createElementNS(svgNS, "g");
+
+  // 侧链
+  var sideCirc = makeSVG("circle", {
+    cx: sp.x.toFixed(1), cy: sp.y.toFixed(1), r: SIDE_R,
+    fill: "url(#sideGrad2)",
+    opacity: (0.55 + 0.4 * (bp.depth + 1) / 2).toFixed(2),
   });
-}
+  g.appendChild(sideCirc);
 
-var t_global = 0;
-var lastTs = null;
-
-function updateHydrophobic(dt) {
-  var CX = W/2, CY = 185;
-  hydrophobicParticles.forEach(function(p) {
-    var dx = CX - p.x, dy = CY - p.y;
-    var dist = Math.sqrt(dx*dx+dy*dy);
-    /* 向中心聚合力，随时间增强 */
-    var pull = Math.min(t_global * 0.008, 0.6);
-    p.vx += dx/dist * pull * dt * 60;
-    p.vy += dy/dist * pull * dt * 60;
-    /* 阻尼 */
-    p.vx *= 0.92; p.vy *= 0.92;
-    /* 碰撞互斥 */
-    hydrophobicParticles.forEach(function(q) {
-      if (q === p) return;
-      var ex = p.x - q.x, ey = p.y - q.y;
-      var ed = Math.sqrt(ex*ex+ey*ey)+0.1;
-      if (ed < 28) {
-        var f = (28-ed)/28 * 0.5;
-        p.vx += ex/ed*f; p.vy += ey/ed*f;
-      }
-    });
-    p.x += p.vx; p.y += p.vy;
-    p.x = Math.max(60, Math.min(W-60, p.x));
-    p.y = Math.max(80, Math.min(280, p.y));
-    p.phase += dt * 2.5;
+  // 主链珠子
+  var core = makeSVG("circle", {
+    cx: bp.x.toFixed(1), cy: bp.y.toFixed(1), r: BEAD_R,
+    fill: "url(#normalBeadGrad)",
+    opacity: (0.6 + 0.4 * (bp.depth + 1) / 2).toFixed(2),
+    id: "bead2-" + d.i,
   });
-}
+  g.appendChild(core);
 
-function drawWater() {
-  waterParticles.forEach(function(p) {
-    p.x += p.vx; p.y += p.vy;
-    if (p.x < 50 || p.x > W-50) p.vx *= -1;
-    if (p.y < 70 || p.y > 290) p.vy *= -1;
-    var wg = ctx.createRadialGradient(p.x-p.r*0.3, p.y-p.r*0.3, 0, p.x, p.y, p.r);
-    wg.addColorStop(0, "rgba(147,210,255,"+p.alpha+")");
-    wg.addColorStop(1, "rgba(59,130,246,"+(p.alpha*0.3)+")");
-    ctx.fillStyle = wg;
-    ctx.beginPath(); ctx.arc(p.x, p.y, p.r, 0, Math.PI*2); ctx.fill();
+  // 序号
+  var lbl = makeSVG("text", {
+    x: bp.x.toFixed(1), y: bp.y.toFixed(1),
+    "text-anchor": "middle", "dominant-baseline": "central",
+    fill: "rgba(255,255,255,0.8)", "font-size": "8", "font-weight": "bold",
   });
+  lbl.textContent = (d.i + 1).toString();
+  g.appendChild(lbl);
+
+  scene2.appendChild(g);
+  beadEls[d.i] = { g: g, core: core };
 }
 
-function drawHydrophobicCluster() {
-  /* 发光核心 */
-  var clumpX = 0, clumpY = 0;
-  hydrophobicParticles.forEach(function(p){clumpX+=p.x;clumpY+=p.y;});
-  clumpX /= hydrophobicParticles.length; clumpY /= hydrophobicParticles.length;
+// 螺旋轴线
+var axisLine = makeSVG("line", {
+  x1: AXIS_X0, y1: AXIS_Y,
+  x2: AXIS_X0 + (BEADS - 1) * X_STEP, y2: AXIS_Y,
+  stroke: "rgba(99,102,241,0.2)", "stroke-width": "1",
+  "stroke-dasharray": "6 4",
+});
+scene2.appendChild(axisLine);
 
-  var concentration = Math.min(t_global/8, 1);
-  var glow = ctx.createRadialGradient(clumpX, clumpY, 0, clumpX, clumpY, 50*concentration+20);
-  glow.addColorStop(0, "rgba(129,140,248,"+(0.3*concentration)+")");
-  glow.addColorStop(1, "transparent");
-  ctx.fillStyle = glow;
-  ctx.fillRect(clumpX-80, clumpY-80, 160, 160);
+// 轴标注
+var axisLabel = makeSVG("text", {
+  x: (AXIS_X0 + (BEADS - 1) * X_STEP / 2).toFixed(0),
+  y: (AXIS_Y + 16).toFixed(0),
+  "text-anchor": "middle",
+  fill: "rgba(99,102,241,0.5)", "font-size": "9",
+});
+axisLabel.textContent = "螺旋轴（C 端 →）";
+scene2.appendChild(axisLabel);
 
-  /* 各粒子 */
-  hydrophobicParticles.forEach(function(p) {
-    var r = 11 + Math.sin(p.phase)*1.5;
-    var pg = ctx.createRadialGradient(p.x-3, p.y-3, 0, p.x, p.y, r);
-    pg.addColorStop(0, "rgba(165,180,252,0.95)");
-    pg.addColorStop(0.5, "rgba(99,102,241,0.9)");
-    pg.addColorStop(1, "rgba(67,56,202,0.6)");
-    ctx.fillStyle = pg;
-    ctx.shadowColor = "#818cf8"; ctx.shadowBlur = 10;
-    ctx.beginPath(); ctx.arc(p.x, p.y, r, 0, Math.PI*2); ctx.fill();
-    ctx.shadowBlur = 0;
-  });
-}
+// ── 动画逻辑：逐一点亮氢键 ────────────────────────────────────
+var TOTAL_HBONDS = 9;
+var curHbond = 0;  // 当前高亮的氢键（0-based）
+var lastSwitch = performance.now();
+var HOLD_MS = 1400;
 
-/* 右侧分类图例 */
-function drawClassLegend() {
-  var startY = 88, rowH = 42;
-  ctx.font = "bold 11px 'Noto Sans SC',system-ui";
-  ctx.textAlign = "left";
-  CLASSES.forEach(function(cls, i) {
-    var y = startY + i * rowH;
-    /* 彩色方块 */
-    ctx.fillStyle = cls.color + "44";
-    roundRect(W-170, y, 148, 32, 6); ctx.fill();
-    ctx.strokeStyle = cls.color + "88"; ctx.lineWidth = 1;
-    roundRect(W-170, y, 148, 32, 6); ctx.stroke();
-    /* 标签 */
-    ctx.fillStyle = cls.color;
-    ctx.fillText(cls.label, W-160, y+13);
-    ctx.font = "10px 'Noto Sans SC',system-ui";
-    ctx.fillStyle = "rgba(255,255,255,0.4)";
-    ctx.fillText(cls.items.slice(0,4).join(" ") + (cls.items.length>4?"…":""), W-160, y+26);
-    ctx.font = "bold 11px 'Noto Sans SC',system-ui";
-  });
-}
+var hud2Cur   = document.getElementById("hud2-cur");
+var hud2Total = document.getElementById("hud2-total");
+var ruleCur   = document.getElementById("rule-cur");
+var ruleCount = document.getElementById("rule-count");
 
-/* 说明文字 */
-function drawAnnotation() {
-  var alpha = Math.min(t_global/3, 1);
-  ctx.globalAlpha = alpha;
-  ctx.font = "12px 'Noto Sans SC',system-ui";
-  ctx.textAlign = "center"; ctx.fillStyle = "rgba(129,140,248,0.9)";
-  ctx.fillText("疏水侧链聚集 → 蛋白质内核", W/2 - 140, 290);
-  ctx.fillStyle = "rgba(74,222,128,0.9)";
-  ctx.fillText("亲水侧链留在表面", W/2 - 140, 310);
-  ctx.globalAlpha = 1;
-}
+function loop2(now) {
+  if (now - lastSwitch > HOLD_MS) {
+    curHbond = (curHbond + 1) % TOTAL_HBONDS;
+    lastSwitch = now;
+  }
 
-var startTime = null;
-function frame(ts) {
-  if (!startTime) startTime = ts;
-  if (!lastTs) lastTs = ts;
-  var dt = Math.min((ts-lastTs)/1000, 0.05);
-  lastTs = ts;
-  t_global += dt;
-
-  ctx.clearRect(0,0,W,H);
-  var bg = ctx.createLinearGradient(0,0,0,H);
-  bg.addColorStop(0,"#0a1a0f"); bg.addColorStop(1,"#0f2010");
-  ctx.fillStyle=bg; ctx.fillRect(0,0,W,H);
-  ctx.strokeStyle="rgba(74,222,128,0.04)"; ctx.lineWidth=1;
-  for(var x=0;x<=W;x+=40){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,H);ctx.stroke();}
-  for(var y=0;y<=H;y+=40){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke();}
-
-  drawTitle();
-  updateHydrophobic(dt);
-  drawWater();
-  drawHydrophobicCluster();
-  drawClassLegend();
-  drawAnnotation();
-
-  var clumpConc = Math.min(t_global/8, 1);
-  drawHUD([
-    {label:"疏水聚集度", val: (clumpConc*100).toFixed(0)+"%"},
-    {label:"非极性AA", val: "9种"},
-    {label:"极性AA",   val: "6种"},
-    {label:"带电AA",   val: "5种"},
-  ]);
-  requestAnimationFrame(frame);
-}
-requestAnimationFrame(frame);
-"""
-
-EXERCISES_1 = make_exercises([
-    {
-        "question": "为什么疏水性氨基酸倾向于聚集在蛋白质内部？",
-        "options": [
-            "它们带有负电荷，被蛋白质表面排斥",
-            "疏水效应——疏水基团聚集可增大水分子的熵（释放自由能）",
-            "它们的体积太大，无法出现在蛋白质表面",
-            "它们与其他氨基酸形成共价键",
-        ],
-        "correct": 1,
-        "explanation": "疏水效应是熵驱动的。疏水基团分散在水中时，水分子必须在其周围形成有序的'笼'，降低系统熵。当疏水基团聚集时，水分子被释放，系统熵增大，自由能降低。这是蛋白质折叠的主要驱动力。",
-    },
-    {
-        "question": "半胱氨酸（Cys）侧链中含有什么特殊基团，使其能形成二硫键？",
-        "options": ["羟基 -OH", "氨基 -NH₂", "巯基 -SH", "磷酸基 -PO₄"],
-        "correct": 2,
-        "explanation": "半胱氨酸含有巯基（-SH），两个半胱氨酸的巯基可以氧化形成二硫键（-S-S-），这是一种共价键，对稳定蛋白质三级结构和四级结构至关重要，在分泌蛋白（如抗体、胰岛素）中尤为常见。",
-    },
-    {
-        "question": "在生理pH（7.4）下，赖氨酸（Lys）和谷氨酸（Glu）的侧链分别带什么电？",
-        "options": [
-            "赖氨酸带负电，谷氨酸带正电",
-            "两者都不带电",
-            "赖氨酸带正电，谷氨酸带负电",
-            "两者都带正电",
-        ],
-        "correct": 2,
-        "explanation": "赖氨酸侧链含-NH₃⁺（pKa≈10.5），在生理pH下带正电；谷氨酸侧链含-COO⁻（pKa≈4.3），在生理pH下带负电。这两种氨基酸可以在蛋白质中形成盐桥（静电相互作用），稳定蛋白质结构。",
-    },
-])
-
-COURSE_1 = make_course_content(
-    plan_markdown=PLAN_1,
-    animation_html=make_canvas_html("氨基酸分类与疏水效应", ANIM_JS_1, color_main=COLOR_PRIMARY),
-    animation_topic="氨基酸四大类型与疏水聚集动态模拟",
-    exercises=EXERCISES_1,
-    exercise_topic="氨基酸侧链性质练习",
-)
-
-# ═══════════════════════════════════════════════════════════════
-# 节点2：肽键（脱水缩合）
-# ═══════════════════════════════════════════════════════════════
-
-PLAN_2 = """\
-# 肽键：氨基酸如何连接
-
-## 学习目标
-理解肽键形成的化学反应（脱水缩合），掌握肽链的方向性（N端→C端），建立"一级结构 = 序列 = 信息"的认知。
-
-## 肽键的形成
-
-一个氨基酸的**羧基**（-COOH）与下一个氨基酸的**氨基**（-NH₂）发生**脱水缩合反应**：
-
-```
-—COOH  +  H₂N—   →   —CO—NH—  +  H₂O
-```
-
-形成的 **-CO-NH-** 键就是**肽键**。
-
-每形成一个肽键，释放一个水分子。一条含100个氨基酸的多肽链，形成过程中产生99个水分子。
-
-## 肽链的方向性
-
-肽链是有方向的：
-- **N端**：链的起点，有一个游离的氨基（-NH₂）
-- **C端**：链的终点，有一个游离的羧基（-COOH）
-
-书写肽链序列时，永远从N端写到C端。
-例如：`Met-Gly-Ala-Val` 表示N端是甲硫氨酸，C端是缬氨酸。
-
-## 肽键的特殊性质
-
-肽键不是普通的单键，而是具有**部分双键性质**：
-
-```
-    O            O⁻
-    ‖            |
-—C—NH—   ↔   —C=NH—
-```
-
-由于共振，肽键呈**平面性**（原子共面），C-N键不能自由旋转。
-这个平面叫**肽键平面（肽平面）**。
-
-肽链骨架的灵活性来自于α碳两侧的两个单键（φ角和ψ角）的旋转，而肽键本身是刚性的。
-
-## 一级结构：蛋白质的信息层
-
-多肽链中氨基酸的精确排列顺序叫**一级结构（primary structure）**，是蛋白质的"信息层"。
-
-**Anfinsen原则**（1973年诺贝尔奖）：蛋白质的一级结构包含了形成最终三维结构所需的全部信息。
-
-一级结构的改变（哪怕单个氨基酸的突变）可能彻底改变蛋白质功能：
-- 镰刀形细胞贫血症：血红蛋白β链第6位 Glu→Val（一个字母的改变→致命疾病）
-
-## 关键要点
-1. 肽键由脱水缩合形成，每个肽键消耗一个水分子
-2. 肽链从N端（氨基）到C端（羧基）有方向性
-3. 肽键具有平面性，是刚性的
-4. 一级结构（氨基酸序列）决定了蛋白质的一切高级结构
-"""
-
-ANIM_JS_2 = r"""
-/* ══ 肽键形成动画 ══ */
-var phase = 0;
-var phaseT = 0;
-var PHASES = ["分离态","靠近","脱水缩合","肽键形成","延伸肽链"];
-var PHASE_DUR = [1.5, 1.2, 1.0, 1.8, 2.0];
-
-/* 氨基酸圆圈位置 */
-var AA1 = {x:160, y:170, label:"Gly", r_label:"H", col:"#4ade80"};
-var AA2 = {x:420, y:170, label:"Ala", r_label:"CH₃", col:"#a78bfa"};
-
-function lerp(a,b,t){return a+(b-a)*t;}
-function ease(t){return t<0.5?2*t*t:-1+(4-2*t)*t;}
-
-function drawAminoAcid(x, y, aa, scale, alpha) {
-  scale = scale||1; alpha = alpha===undefined?1:alpha;
-  ctx.globalAlpha = alpha;
-  var r = 38*scale;
-  /* 主体 */
-  var g = ctx.createRadialGradient(x-r*0.25,y-r*0.25,0,x,y,r);
-  g.addColorStop(0,aa.col+"ff"); g.addColorStop(0.6,aa.col+"cc"); g.addColorStop(1,aa.col+"44");
-  ctx.fillStyle=g; ctx.shadowColor=aa.col; ctx.shadowBlur=16*scale;
-  ctx.beginPath(); ctx.arc(x,y,r,0,Math.PI*2); ctx.fill();
-  ctx.shadowBlur=0;
-  /* 边框 */
-  ctx.strokeStyle="rgba(255,255,255,0.25)"; ctx.lineWidth=1.5;
-  ctx.beginPath(); ctx.arc(x,y,r,0,Math.PI*2); ctx.stroke();
-  /* 标签 */
-  ctx.font="bold 13px 'Noto Sans SC',system-ui"; ctx.textAlign="center";
-  ctx.fillStyle="white"; ctx.fillText(aa.label,x,y+5);
-  ctx.globalAlpha=1;
-}
-
-function drawFunctionalGroup(x,y,label,col,alpha){
-  ctx.globalAlpha=alpha||1;
-  var bw=label.length*8+16, bh=22;
-  ctx.fillStyle=col+"33"; roundRect(x-bw/2,y-bh/2,bw,bh,5); ctx.fill();
-  ctx.strokeStyle=col+"88"; ctx.lineWidth=1;
-  roundRect(x-bw/2,y-bh/2,bw,bh,5); ctx.stroke();
-  ctx.font="bold 11px 'Noto Sans SC',system-ui"; ctx.textAlign="center";
-  ctx.fillStyle=col; ctx.fillText(label,x,y+4);
-  ctx.globalAlpha=1;
-}
-
-function drawWaterMolecule(x,y,alpha){
-  ctx.globalAlpha=alpha||1;
-  ctx.font="bold 14px 'Noto Sans SC',system-ui"; ctx.textAlign="center";
-  ctx.fillStyle="rgba(147,210,255,0.9)"; ctx.fillText("H₂O",x,y);
-  ctx.globalAlpha=1;
-}
-
-function drawPeptideBond(x1,x2,y,alpha){
-  ctx.globalAlpha=alpha||1;
-  var mid=(x1+x2)/2;
-  /* 键线 */
-  ctx.strokeStyle="rgba(251,191,36,0.9)"; ctx.lineWidth=3;
-  ctx.beginPath(); ctx.moveTo(x1+38,y); ctx.lineTo(x2-38,y); ctx.stroke();
-  /* 标注 */
-  ctx.font="bold 13px 'Noto Sans SC',system-ui"; ctx.textAlign="center";
-  ctx.fillStyle="rgba(251,191,36,0.95)"; ctx.fillText("肽键 -CO-NH-",mid,y-16);
-  ctx.globalAlpha=1;
-}
-
-/* 延伸肽链展示 */
-var chainAAs = [
-  {label:"Met",col:"#f472b6"},{label:"Gly",col:"#4ade80"},{label:"Ala",col:"#a78bfa"},
-  {label:"Val",col:"#818cf8"},{label:"Leu",col:"#34d399"},
-];
-
-function drawChain(t) {
-  var startX=60, y=175, spacing=100;
-  var showCount=Math.min(Math.floor(t*2)+2,5);
-  for(var i=0;i<showCount;i++){
-    var x=startX+i*spacing;
-    var sc=i<showCount-1?1:(t*2-Math.floor(t*2));
-    if(i<showCount-1){
-      drawAminoAcid(x,y,chainAAs[i],1,1);
-      if(i<showCount-2){
-        ctx.strokeStyle="rgba(251,191,36,0.7)"; ctx.lineWidth=2.5;
-        ctx.beginPath(); ctx.moveTo(x+36,y); ctx.lineTo(x+spacing-36,y); ctx.stroke();
+  // 全部氢键显示（淡色），当前高亮
+  for (var hi = 0; hi < TOTAL_HBONDS; hi++) {
+    if (hi <= curHbond) {
+      if (hi === curHbond) {
+        // 当前高亮：亮色，宽
+        hbLines[hi].setAttribute("stroke", "#fbbf24");
+        hbLines[hi].setAttribute("stroke-width", "2.5");
+        hbLines[hi].setAttribute("opacity", "1");
+      } else {
+        // 已显示：暗色
+        hbLines[hi].setAttribute("stroke", "rgba(251,191,36,0.35)");
+        hbLines[hi].setAttribute("stroke-width", "1.5");
+        hbLines[hi].setAttribute("opacity", "1");
       }
     } else {
-      drawAminoAcid(x,y,chainAAs[i],sc,sc);
+      hbLines[hi].setAttribute("opacity", "0");
     }
   }
-  /* N端标签 */
-  ctx.font="bold 11px 'Noto Sans SC',system-ui"; ctx.textAlign="center";
-  ctx.fillStyle="rgba(96,165,250,0.9)"; ctx.fillText("N端",startX,y+60);
-  if(showCount>=5){
-    ctx.fillStyle="rgba(251,113,133,0.9)"; ctx.fillText("C端",startX+4*spacing,y+60);
-    ctx.font="12px 'Noto Sans SC',system-ui"; ctx.fillStyle="rgba(255,255,255,0.5)";
-    ctx.fillText("从N端 → C端 读取序列",W/2,y+80);
-  }
-}
 
-var startTime=null, lastTs=null;
-function frame(ts){
-  if(!startTime)startTime=ts;
-  if(!lastTs)lastTs=ts;
-  var dt=Math.min((ts-lastTs)/1000,0.05); lastTs=ts;
-
-  phaseT+=dt;
-  if(phaseT>=PHASE_DUR[phase]){
-    phaseT-=PHASE_DUR[phase];
-    phase=(phase+1)%PHASE_NAMES_LEN;
-  }
-
-  ctx.clearRect(0,0,W,H);
-  var bg=ctx.createLinearGradient(0,0,0,H);
-  bg.addColorStop(0,"#0a1a0f"); bg.addColorStop(1,"#0f2010");
-  ctx.fillStyle=bg; ctx.fillRect(0,0,W,H);
-  ctx.strokeStyle="rgba(74,222,128,0.04)"; ctx.lineWidth=1;
-  for(var x=0;x<=W;x+=40){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,H);ctx.stroke();}
-  for(var y=0;y<=H;y+=40){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke();}
-
-  drawTitle();
-
-  var p = ease(Math.min(phaseT/PHASE_DUR[phase],1));
-  var PHASES_COUNT=5;
-  phase = phase % PHASES_COUNT;
-
-  if(phase===0){
-    /* 分离：两个独立氨基酸 + 标注功能基 */
-    drawAminoAcid(160,170,AA1,1,1);
-    drawAminoAcid(420,170,AA2,1,1);
-    drawFunctionalGroup(240,170,"-COOH","#f472b6",1);
-    drawFunctionalGroup(340,170,"-NH₂","#60a5fa",1);
-  } else if(phase===1){
-    /* 靠近 */
-    var x1=lerp(160,190,p), x2=lerp(420,380,p);
-    drawAminoAcid(x1,170,AA1,1,1);
-    drawAminoAcid(x2,170,AA2,1,1);
-    drawFunctionalGroup(x1+80,170,"-COOH","#f472b6",1);
-    drawFunctionalGroup(x2-80,170,"-NH₂","#60a5fa",1);
-  } else if(phase===2){
-    /* 脱水缩合：水分子飞出 */
-    drawAminoAcid(190,170,AA1,1,1);
-    drawAminoAcid(380,170,AA2,1,1);
-    /* 水飞出 */
-    var waterAlpha=1-p;
-    var wy=lerp(170,100,p);
-    drawWaterMolecule(285+p*40,wy,waterAlpha);
-    /* 功能基消失 */
-    drawFunctionalGroup(270,170,"-COOH","#f472b6",1-p*2>0?1-p*2:0);
-    drawFunctionalGroup(300,170,"-NH₂","#60a5fa",1-p*2>0?1-p*2:0);
-  } else if(phase===3){
-    /* 肽键形成 */
-    drawAminoAcid(190,170,AA1,1,1);
-    drawAminoAcid(380,170,AA2,1,1);
-    drawPeptideBond(190,380,170,p);
-    /* 水出现在上方 */
-    drawWaterMolecule(285+p*10, 90+p*10, Math.min(p*3,1));
-  } else if(phase===4){
-    /* 延伸链 */
-    drawChain(p);
-  }
-
-  /* 当前阶段标注 */
-  ctx.font="14px 'Noto Sans SC',system-ui"; ctx.textAlign="center";
-  ctx.fillStyle="rgba(251,191,36,0.8)";
-  var phaseNames=["两个独立氨基酸","氨基与羧基靠近","脱水缩合反应","肽键形成","多肽链延伸"];
-  ctx.fillText(phaseNames[phase], W/2, 55);
-
-  drawHUD([
-    {label:"阶段", val:phaseNames[phase].slice(0,5)},
-    {label:"反应", val:"脱水缩合"},
-    {label:"产物", val:"肽键"},
-    {label:"副产物", val:"H₂O"},
-  ]);
-  requestAnimationFrame(frame);
-}
-var PHASE_NAMES_LEN=5;
-requestAnimationFrame(frame);
-"""
-
-EXERCISES_2 = make_exercises([
-    {
-        "question": "一条含有200个氨基酸的多肽链，在合成过程中形成了多少个肽键？",
-        "options": ["200个", "199个", "201个", "100个"],
-        "correct": 1,
-        "explanation": "N个氨基酸形成肽链时，产生(N-1)个肽键。200个氨基酸形成199个肽键，同时脱去199个水分子。",
-    },
-    {
-        "question": "肽链的N端是指？",
-        "options": [
-            "含游离羧基（-COOH）的一端",
-            "含游离氨基（-NH₂）的一端",
-            "分子量最大的那端",
-            "靠近细胞核的那端",
-        ],
-        "correct": 1,
-        "explanation": "N端（氨基端）是多肽链中含有游离氨基（-NH₂）的一端，是蛋白质合成（翻译）的起始端。C端（羧基端）含游离羧基，是翻译的终止端。读写氨基酸序列时从N端到C端。",
-    },
-    {
-        "question": "肽键（-CO-NH-）为什么具有平面性，不能自由旋转？",
-        "options": [
-            "因为形成了双硫键",
-            "因为C-N之间的电子共振使肽键具有部分双键性质",
-            "因为温度太低",
-            "因为氨基酸体积太大",
-        ],
-        "correct": 1,
-        "explanation": "肽键中C-N键因为与相邻的C=O形成电子共振，获得部分双键性质（约40%双键特性）。双键不能自由旋转，所以肽键平面是刚性的。肽链骨架的柔性来自于α碳两侧的单键（φ和ψ角）旋转。",
-    },
-])
-
-COURSE_2 = make_course_content(
-    plan_markdown=PLAN_2,
-    animation_html=make_canvas_html("肽键形成的化学反应", ANIM_JS_2, color_main=COLOR_PRIMARY),
-    animation_topic="氨基酸脱水缩合形成肽键的动态过程",
-    exercises=EXERCISES_2,
-    exercise_topic="肽键与一级结构练习",
-)
-
-# ═══════════════════════════════════════════════════════════════
-# 节点3：α螺旋
-# ═══════════════════════════════════════════════════════════════
-
-PLAN_3 = """\
-# α螺旋：生命的弹簧
-
-## 学习目标
-理解α螺旋的几何结构（每圈3.6个残基，氢键规律，侧链朝外），掌握稳定α螺旋的分子间作用力，了解α螺旋在真实蛋白质（角蛋白、肌红蛋白）中的应用。
-
-## 从肽链到螺旋
-
-肽链折叠时，最常见的规律性结构是α螺旋。
-想象把一条直的多肽链卷成弹簧：每转一圈，骨架上升约5.4Å，包含3.6个氨基酸残基。
-
-## α螺旋的精确几何
-
-Linus Pauling（1951年）通过模型研究预测了α螺旋的存在，并被X射线晶体学证实：
-
-| 参数 | 数值 |
-|------|------|
-| 每圈残基数 | 3.6 个 |
-| 螺距（每圈上升高度） | 5.4 Å |
-| 每个残基上升 | 1.5 Å |
-| 螺旋方向 | 右手螺旋（标准α螺旋） |
-
-## 稳定力：链内氢键
-
-α螺旋的稳定性来自**链内氢键**：
-- 每个氨基酸的 N-H 与其**前4位**氨基酸的 C=O 形成氢键
-- 氢键几乎平行于螺旋轴，十分稳定
-- 一段含20个残基的α螺旋大约有16-17个氢键
-
-**侧链朝外**：所有R基都伸向螺旋外侧，不影响螺旋内核，也不受内核约束。
-
-## 破坏α螺旋的因素
-
-不是所有氨基酸都适合在α螺旋中出现：
-
-| 破坏因素 | 原因 |
-|---------|------|
-| 脯氨酸（Pro） | 环状结构使主链N原子无法形成氢键，且使骨架产生硬弯 |
-| 连续带同种电荷的残基 | 电荷排斥（如多个Lys连续出现） |
-| 连续大体积疏水残基 | 空间位阻 |
-| 甘氨酸（Gly） | 过于灵活（R基=H），倾向于打破螺旋的规律性 |
-
-## 真实蛋白质中的α螺旋
-
-**α角蛋白（头发、指甲、皮肤角质层）**：几乎全部由α螺旋构成，两条螺旋相互缠绕形成"超螺旋"（coiled coil），提供机械强度。头发能被拉伸正是因为α螺旋可以被拉开（氢键断裂），再生成。
-
-**肌红蛋白**：约75%的肽链是α螺旋，8段螺旋构成包裹血红素辅基的口袋。
-
-## 关键要点
-1. α螺旋：右手旋，3.6残基/圈，靠链内氢键稳定
-2. 侧链全部朝外，不参与螺旋内核的形成
-3. 脯氨酸（Pro）是α螺旋的"终结者"
-4. 角蛋白（头发）≈ 纯α螺旋；肌红蛋白≈ 75%α螺旋
-"""
-
-ANIM_JS_3 = r"""
-/* ══ α螺旋动画：旋转展示 + 氢键闪烁 ══ */
-var helixResidues = 14;  // 显示残基数
-var PITCH = 5.4;         // 每圈Å
-var RESIDUES_PER_TURN = 3.6;
-var HELIX_R = 42;        // 螺旋半径(px)
-var RES_RISE = 18;       // 每残基上升px
-
-/* 氨基酸颜色 */
-var resColors = ["#4ade80","#a78bfa","#818cf8","#34d399","#60a5fa",
-                 "#f472b6","#fbbf24","#4ade80","#a78bfa","#818cf8",
-                 "#34d399","#60a5fa","#f472b6","#fbbf24"];
-
-var rotY = 0;  // 绕Y轴旋转
-
-function project3D(x3,y3,z3, camZ) {
-  var fov = 400;
-  var scale = fov/(fov+z3+camZ);
-  return {x: W/2 + x3*scale, y: 180 + y3*scale, scale: scale};
-}
-
-function drawHelix(rotY) {
-  var points = [];
-  for(var i=0; i<helixResidues; i++){
-    var angle = (i/RESIDUES_PER_TURN)*Math.PI*2 + rotY;
-    var x3 = HELIX_R * Math.cos(angle);
-    var y3 = (i - helixResidues/2)*RES_RISE;
-    var z3 = HELIX_R * Math.sin(angle);
-    points.push({x3,y3,z3,idx:i,angle,col:resColors[i%resColors.length]});
-  }
-
-  /* 排序按 z3 由远到近 */
-  var sorted = points.slice().sort(function(a,b){return a.z3-b.z3;});
-
-  /* 画氢键（i 与 i+4 之间） */
-  for(var hi=0; hi<helixResidues-4; hi++){
-    var pa = project3D(points[hi].x3, points[hi].y3, points[hi].z3, 0);
-    var pb = project3D(points[hi+4].x3, points[hi+4].y3, points[hi+4].z3, 0);
-    /* 氢键可见性：两端都在前半球时画 */
-    var visible = (points[hi].z3 > -20 && points[hi+4].z3 > -20);
-    var alpha_h = visible ? 0.5 : 0.1;
-    ctx.strokeStyle = "rgba(251,191,36,"+alpha_h+")";
-    ctx.lineWidth = 1;
-    ctx.setLineDash([3,3]);
-    ctx.beginPath(); ctx.moveTo(pa.x,pa.y); ctx.lineTo(pb.x,pb.y); ctx.stroke();
-    ctx.setLineDash([]);
-  }
-
-  /* 画骨架连线 */
-  for(var bi=0; bi<helixResidues-1; bi++){
-    var pA=project3D(points[bi].x3,points[bi].y3,points[bi].z3,0);
-    var pB=project3D(points[bi+1].x3,points[bi+1].y3,points[bi+1].z3,0);
-    var midZ=(points[bi].z3+points[bi+1].z3)/2;
-    var lineAlpha=0.3+0.5*((midZ+HELIX_R)/(HELIX_R*2));
-    ctx.strokeStyle="rgba(255,255,255,"+lineAlpha+")";
-    ctx.lineWidth=2;
-    ctx.beginPath(); ctx.moveTo(pA.x,pA.y); ctx.lineTo(pB.x,pB.y); ctx.stroke();
-  }
-
-  /* 画残基球 */
-  sorted.forEach(function(pt){
-    var pp=project3D(pt.x3,pt.y3,pt.z3,0);
-    var r=12*pp.scale;
-    var depthAlpha=0.4+0.6*((pt.z3+HELIX_R)/(HELIX_R*2));
-    var rg=ctx.createRadialGradient(pp.x-r*0.3,pp.y-r*0.3,0,pp.x,pp.y,r);
-    rg.addColorStop(0,pt.col+"ff"); rg.addColorStop(0.5,pt.col+"cc"); rg.addColorStop(1,pt.col+"33");
-    ctx.fillStyle=rg;
-    ctx.globalAlpha=depthAlpha;
-    ctx.shadowColor=pt.col; ctx.shadowBlur=8;
-    ctx.beginPath(); ctx.arc(pp.x,pp.y,r,0,Math.PI*2); ctx.fill();
-    ctx.shadowBlur=0;
-    ctx.globalAlpha=1;
-
-    /* 侧链小点（只画前半的） */
-    if(pt.z3>0){
-      var sideLen=22*pp.scale;
-      var sideAngle=pt.angle;
-      var sx=pp.x+Math.cos(sideAngle)*sideLen;
-      var sy=pp.y+0.3*pp.scale*RES_RISE*0.2;
-      ctx.strokeStyle=pt.col+"66"; ctx.lineWidth=1.5;
-      ctx.beginPath(); ctx.moveTo(pp.x,pp.y); ctx.lineTo(sx,sy); ctx.stroke();
-      ctx.fillStyle=pt.col+"88";
-      ctx.beginPath(); ctx.arc(sx,sy,5*pp.scale,0,Math.PI*2); ctx.fill();
+  // 高亮当前氢键的两个珠子
+  for (var bi = 0; bi < BEADS; bi++) {
+    var isHL = (bi === curHbond || bi === curHbond + 4);
+    var baseAlpha = 0.6 + 0.4 * (getPos(bi).depth + 1) / 2;
+    if (isHL) {
+      beadEls[bi].core.setAttribute("fill", "url(#hlBeadGrad)");
+      beadEls[bi].core.setAttribute("r", "12");
+      beadEls[bi].core.setAttribute("opacity", "1");
+      beadEls[bi].core.setAttribute("filter", "url(#softGlow)");
+    } else {
+      beadEls[bi].core.setAttribute("fill", "url(#normalBeadGrad)");
+      beadEls[bi].core.setAttribute("r", "10");
+      beadEls[bi].core.setAttribute("opacity", baseAlpha.toFixed(2));
+      beadEls[bi].core.removeAttribute("filter");
     }
-  });
+  }
+
+  // 更新HUD和标注
+  var i1 = curHbond + 1, i2 = curHbond + 5;
+  hud2Cur.textContent = i1 + "↔" + i2;
+  hud2Total.textContent = (curHbond + 1) + " / " + TOTAL_HBONDS;
+  ruleCur.textContent = "第" + i1 + "↔第" + i2;
+  ruleCount.textContent = "当前高亮第 " + (curHbond + 1) + " 条";
+
+  requestAnimationFrame(loop2);
 }
 
-/* 右侧参数标注 */
-function drawParams(){
-  var items=[
-    {label:"每圈残基", val:"3.6"},
-    {label:"螺距",     val:"5.4 Å"},
-    {label:"残基间距", val:"1.5 Å"},
-    {label:"旋向",     val:"右手旋"},
-  ];
-  var sx=W-185, sy=90;
-  ctx.font="bold 11px 'Noto Sans SC',system-ui"; ctx.textAlign="left";
-  items.forEach(function(it,i){
-    var y=sy+i*34;
-    ctx.fillStyle="rgba(74,222,128,0.12)";
-    roundRect(sx,y,168,26,5); ctx.fill();
-    ctx.fillStyle="rgba(74,222,128,0.7)"; ctx.fillText(it.label+":", sx+10, y+17);
-    ctx.fillStyle="rgba(255,255,255,0.9)"; ctx.fillText(it.val, sx+110, y+17);
-  });
+requestAnimationFrame(loop2);
+})();
+</script>
+</body>
+</html>"""
 
-  /* 氢键图例 */
-  var hy=sy+4*34+10;
-  ctx.strokeStyle="rgba(251,191,36,0.7)"; ctx.lineWidth=1.5; ctx.setLineDash([3,3]);
-  ctx.beginPath(); ctx.moveTo(sx,hy+8); ctx.lineTo(sx+30,hy+8); ctx.stroke();
-  ctx.setLineDash([]);
-  ctx.font="11px 'Noto Sans SC',system-ui"; ctx.fillStyle="rgba(251,191,36,0.8)";
-  ctx.fillText("链内氢键(i→i+4)", sx+36, hy+12);
-}
-
-var startTime=null;
-function frame(ts){
-  if(!startTime)startTime=ts;
-  var t=(ts-startTime)/1000;
-  rotY = t * 0.8;  // 慢速旋转
-
-  ctx.clearRect(0,0,W,H);
-  var bg=ctx.createLinearGradient(0,0,0,H);
-  bg.addColorStop(0,"#0a1a0f"); bg.addColorStop(1,"#0f2010");
-  ctx.fillStyle=bg; ctx.fillRect(0,0,W,H);
-  ctx.strokeStyle="rgba(74,222,128,0.04)"; ctx.lineWidth=1;
-  for(var x=0;x<=W;x+=40){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,H);ctx.stroke();}
-  for(var y=0;y<=H;y+=40){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke();}
-
-  drawTitle();
-  drawHelix(rotY);
-  drawParams();
-
-  drawHUD([
-    {label:"结构类型", val:"α螺旋"},
-    {label:"稳定键", val:"链内氢键"},
-    {label:"侧链方向", val:"朝外"},
-    {label:"典型蛋白", val:"角蛋白"},
-  ]);
-  requestAnimationFrame(frame);
-}
-requestAnimationFrame(frame);
-"""
-
-EXERCISES_3 = make_exercises([
+# ── 故事段落（情境引入）────────────────────────────────────────
+STORY_PARAGRAPHS = [
     {
-        "question": "α螺旋中，氢键形成于哪两个残基之间？",
-        "options": [
-            "相邻两个残基（i 和 i+1）",
-            "间隔3个残基（i 和 i+3）",
-            "间隔4个残基（i 和 i+4）",
-            "间隔7个残基（i 和 i+7）",
-        ],
-        "correct": 2,
-        "explanation": "α螺旋的氢键在残基i的N-H与残基i+4的C=O之间形成。由于每圈有3.6个残基，这正好是将近1圈处，氢键方向几乎平行于螺旋轴，使螺旋非常稳定。",
+        "text": "1951年的某个深夜，加州理工学院的实验室里，Linus Pauling 正在病床上。他感冒发烧，但手里拿着一张纸，正在折叠——不是折纸，而是在折叠多肽链的几何模型。",
+        "image_url": "",
     },
     {
-        "question": "脯氨酸（Pro）为什么会破坏α螺旋？",
-        "options": [
-            "脯氨酸带电荷，产生静电排斥",
-            "脯氨酸的N原子没有氢，无法形成氢键，且环状结构使主链产生弯折",
-            "脯氨酸侧链太大，产生位阻",
-            "脯氨酸是疏水氨基酸，不适合螺旋",
-        ],
-        "correct": 1,
-        "explanation": "脯氨酸的侧链形成五元环，将N原子纳入环中，导致：1）N原子没有氢原子，无法作为氢键供体；2）主链φ角被锁死，使骨架在此处强制弯折。因此脯氨酸通常是α螺旋的终止信号，常出现在转角（loop）区域。",
+        "text": "他发现：如果每个氨基酸的键角都保持理想值，链条会自然而然地卷成弹簧形状。第1个残基的C=O，与第5个残基的N-H，恰好靠近到可以形成氢键的距离。",
+        "image_url": "",
     },
-])
-
-COURSE_3 = make_course_content(
-    plan_markdown=PLAN_3,
-    animation_html=make_canvas_html("α螺旋三维结构", ANIM_JS_3, color_main=COLOR_PRIMARY),
-    animation_topic="α螺旋三维旋转展示与氢键分布",
-    exercises=EXERCISES_3,
-    exercise_topic="α螺旋结构特征练习",
-)
-
-# ═══════════════════════════════════════════════════════════════
-# 节点4-10：精简版（完整结构，内容聚焦）
-# ═══════════════════════════════════════════════════════════════
-
-def make_node_course(title, summary, color, anim_title, hud_items):
-    """生成标准节点课程，包含完整动画。"""
-    plan = f"""\
-# {title}
-
-## 学习目标
-深入理解{title}的核心机制，能运用相关概念分析实际生物学问题。
-
-## 核心内容
-
-{summary}
-
-## 深入理解
-
-蛋白质的每一层结构都有其物理化学基础：氢键、疏水效应、静电相互作用共同决定了分子的最终形态。理解这些力，就理解了生命的精确性从何而来。
-
-## 关键要点
-1. {title}的结构特征由特定的分子间作用力维持
-2. 结构改变直接影响蛋白质功能
-3. 突变的后果可以通过结构逻辑来预测
-"""
-
-    # 标准化动画
-    anim_js = f"""
-var t0=null, lastT=null;
-var angle=0;
-var particles=[];
-for(var i=0;i<20;i++){{
-  particles.push({{
-    x:80+Math.random()*440, y:80+Math.random()*240,
-    vx:(Math.random()-0.5)*0.3, vy:(Math.random()-0.5)*0.3,
-    r:6+Math.random()*8, phase:Math.random()*Math.PI*2,
-    col:{json.dumps(color)},
-  }});
-}}
-function frame(ts){{
-  if(!t0)t0=ts;
-  if(!lastT)lastT=ts;
-  var dt=Math.min((ts-lastT)/1000,0.05); lastT=ts;
-  angle+=dt*0.5;
-
-  ctx.clearRect(0,0,W,H);
-  var bg=ctx.createLinearGradient(0,0,0,H);
-  bg.addColorStop(0,"#0a1a0f"); bg.addColorStop(1,"#0f2010");
-  ctx.fillStyle=bg; ctx.fillRect(0,0,W,H);
-  ctx.strokeStyle="rgba(74,222,128,0.04)"; ctx.lineWidth=1;
-  for(var x=0;x<=W;x+=40){{ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,H);ctx.stroke();}}
-  for(var y=0;y<=H;y+=40){{ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke();}}
-
-  drawTitle();
-
-  /* 粒子 */
-  particles.forEach(function(p){{
-    p.x+=p.vx; p.y+=p.vy; p.phase+=dt*1.5;
-    if(p.x<50||p.x>W-50)p.vx*=-1;
-    if(p.y<60||p.y>H-70)p.vy*=-1;
-    var r=p.r+Math.sin(p.phase)*2;
-    var pg=ctx.createRadialGradient(p.x-r*0.3,p.y-r*0.3,0,p.x,p.y,r);
-    pg.addColorStop(0,p.col+"ff"); pg.addColorStop(1,p.col+"22");
-    ctx.fillStyle=pg; ctx.shadowColor=p.col; ctx.shadowBlur=12;
-    ctx.beginPath(); ctx.arc(p.x,p.y,r,0,Math.PI*2); ctx.fill();
-    ctx.shadowBlur=0;
-  }});
-
-  /* 中央文字 */
-  ctx.font="bold 18px 'Noto Sans SC',system-ui"; ctx.textAlign="center";
-  ctx.fillStyle={json.dumps(color)};
-  ctx.shadowColor={json.dumps(color)}; ctx.shadowBlur=20;
-  ctx.fillText({json.dumps(anim_title)},W/2,H/2-20);
-  ctx.shadowBlur=0;
-  ctx.font="12px 'Noto Sans SC',system-ui"; ctx.fillStyle="rgba(255,255,255,0.4)";
-  ctx.fillText("交互动画版本即将上线",W/2,H/2+10);
-
-  drawHUD({json.dumps(hud_items)});
-  requestAnimationFrame(frame);
-}}
-requestAnimationFrame(frame);
-"""
-
-    exercises = make_exercises([
-        {
-            "question": f"关于{title[:10]}，以下说法最准确的是？",
-            "options": [
-                "与蛋白质功能无关",
-                f"{title[:10]}是蛋白质结构层级的重要组成部分",
-                "只存在于人体中",
-                "不受温度影响",
-            ],
-            "correct": 1,
-            "explanation": f"{title}是蛋白质结构体系中不可或缺的部分，直接影响蛋白质的生物功能。",
-        },
-    ])
-
-    return make_course_content(
-        plan_markdown=plan,
-        animation_html=make_canvas_html(anim_title, anim_js, color_main=color),
-        animation_topic=anim_title,
-        exercises=exercises,
-        exercise_topic=f"{title}练习",
-    )
-
-
-# 节点4-10
-NODES_FLAT = []
-for ms in TREE["milestones"]:
-    for kn in ms["knodes"]:
-        NODES_FLAT.append(kn)
-
-COURSE_4 = make_node_course(
-    "β折叠：生命的片状织物",
-    NODES_FLAT[4]["summary"], COLOR_SECONDARY,
-    "β折叠结构展示",
-    [{"label":"结构类型","val":"β折叠"},{"label":"氢键","val":"链间"},{"label":"稳定键","val":"氢键网络"},{"label":"典型","val":"蚕丝蛋白"}],
-)
-
-COURSE_5 = make_node_course(
-    "三级结构：蛋白质的最终形状",
-    NODES_FLAT[5]["summary"], COLOR_ACCENT,
-    "疏水核心与三级结构",
-    [{"label":"主驱动力","val":"疏水效应"},{"label":"稳定键","val":"多种"},{"label":"Anfinsen","val":"序列决定结构"},{"label":"关键键","val":"二硫键"}],
-)
-
-COURSE_6 = make_node_course(
-    "活性位点：蛋白质的工作口袋",
-    NODES_FLAT[6]["summary"], COLOR_PRIMARY,
-    "酶活性位点动态演示",
-    [{"label":"占比","val":"1-2%表面"},{"label":"模型","val":"诱导契合"},{"label":"典型酶","val":"溶菌酶"},{"label":"催化","val":"酸碱催化"}],
-)
-
-COURSE_7 = make_node_course(
-    "血红蛋白：四级结构与协同效应",
-    NODES_FLAT[7]["summary"], "#fb923c",
-    "血红蛋白氧结合曲线",
-    [{"label":"亚基","val":"2α+2β"},{"label":"辅基","val":"血红素"},{"label":"效应","val":"正协同"},{"label":"曲线","val":"S形"}],
-)
-
-COURSE_8 = make_node_course(
-    "蛋白质折叠病与分子伴侣",
-    NODES_FLAT[8]["summary"], "#f472b6",
-    "淀粉样纤维聚集模拟",
-    [{"label":"典型病","val":"阿尔茨海默"},{"label":"机制","val":"错误聚集"},{"label":"伴侣","val":"Hsp70"},{"label":"朊病毒","val":"构象传染"}],
-)
-
-COURSE_9 = make_node_course(
-    "X射线晶体学：让蛋白质留下影子",
-    NODES_FLAT[9]["summary"], "#38bdf8",
-    "X射线衍射原理演示",
-    [{"label":"分辨率","val":"1.5-3 Å"},{"label":"PDB","val":"22万+结构"},{"label":"里程碑","val":"血红蛋白1960"},{"label":"方法","val":"X射线衍射"}],
-)
-
-COURSE_10 = make_node_course(
-    "AlphaFold：AI预测蛋白质结构",
-    NODES_FLAT[10]["summary"], "#818cf8",
-    "AlphaFold预测流程",
-    [{"label":"精度","val":"原子级"},{"label":"CASP14","val":"碾压人类"},{"label":"数据库","val":"2亿+结构"},{"label":"方法","val":"注意力机制"}],
-)
-
-# ═══════════════════════════════════════════════════════════════
-# 组装并写入
-# ═══════════════════════════════════════════════════════════════
-
-ALL_COURSES = [
-    COURSE_0, COURSE_1, COURSE_2, COURSE_3, COURSE_4,
-    COURSE_5, COURSE_6, COURSE_7, COURSE_8, COURSE_9, COURSE_10,
+    {
+        "text": "七年后，John Kendrew 用X射线晶体学解析了肌红蛋白的原子结构——世界上第一个被看清楚的蛋白质。镜子里映出的，正是Pauling在病床上折出的弹簧。他当年的推理，分毫不差。",
+        "image_url": "",
+    },
 ]
 
-write_to_db(
-    name="protein-structure",
-    title="蛋白结构探险地图",
-    description="从氨基酸到AlphaFold，少年版蛋白质序列—结构—功能可视化探索课程。涵盖二级结构、三级结构、活性位点、折叠病与AI预测，适合12-16岁对生命科学有好奇心的学生。",
-    category="biology",
-    age_range=[12, 16],
-    estimated_hours=8.0,
-    tags=["biology", "protein", "structure", "biochemistry", "AlphaFold"],
-    tree_data=TREE,
-    course_contents=ALL_COURSES,
-    dry_run=False,
-)
+# ── 练习题 ──────────────────────────────────────────────────────
+EXERCISES = [
+    {
+        "type": "choice",
+        "question": "α螺旋每圈包含多少个氨基酸？",
+        "options": ["A. 3.0个", "B. 3.6个", "C. 4.0个", "D. 4.5个"],
+        "correct": 1,
+        "explanation": "每圈3.6个残基，这不是整数，正是因为100°的旋转角（360°÷3.6≈100°），使得每隔约一圈（4个残基）的氨基酸在三维空间中刚好靠近，能形成氢键。",
+    },
+    {
+        "type": "choice",
+        "question": "α螺旋靠什么力量保持螺旋形状？",
+        "options": [
+            "A. 肽键（骨架共价键）",
+            "B. 骨架氢键（C=O 与 N-H 之间）",
+            "C. 侧链之间的共价键",
+            "D. 离子键",
+        ],
+        "correct": 1,
+        "explanation": "α螺旋靠骨架氢键维持——每个残基的C=O与第(i+4)个残基的N-H之间形成氢键，沿螺旋轴方向排列。侧链不参与这些氢键，而是朝外排列。",
+    },
+    {
+        "type": "choice",
+        "question": "哪种氨基酸会打断α螺旋？",
+        "options": ["A. 丙氨酸（A）", "B. 亮氨酸（L）", "C. 脯氨酸（P）", "D. 甘氨酸（G）"],
+        "correct": 2,
+        "explanation": "脯氨酸的侧链与骨架氮原子形成环状结构，使骨架氮上没有可以提供氢键的H原子，同时环结构限制了骨架的旋转自由度。因此脯氨酸是α螺旋的天然终止符。",
+    },
+    {
+        "type": "choice",
+        "question": "你的头发主要由哪种蛋白质组成？这种蛋白质富含什么结构？",
+        "options": [
+            "A. 胶原蛋白，富含β折叠",
+            "B. 角蛋白，富含α螺旋",
+            "C. 血红蛋白，富含β折叠",
+            "D. 丝蛋白，富含α螺旋",
+        ],
+        "correct": 1,
+        "explanation": "头发和指甲主要由角蛋白组成，角蛋白几乎全部由α螺旋构成。多条α螺旋缠绕形成超螺旋，再组装成头发纤维。这正是头发有弹性的原因——α螺旋就像弹簧。",
+    },
+]
+
+# ── 组装 CourseContent ──────────────────────────────────────────
+
+def build_course_content() -> dict:
+    plan_with_placeholders = PLAN_MARKDOWN
+
+    # 在故事段落前插入 story 占位符（在"开篇故事"后）
+    # 在动画1前插入（在"第一部分"前）
+    # 在动画2前插入（在"第二部分"前）
+    # 在练习前插入（在"检测你学会了吗"前）
+    plan_with_placeholders = plan_with_placeholders.replace(
+        "## 开篇故事：铁丝的记忆",
+        f"[[IDEA:{STORY_ID}]]\n\n## 开篇故事：铁丝的记忆"
+    )
+    plan_with_placeholders = plan_with_placeholders.replace(
+        "## 第一部分：什么是α螺旋？",
+        f"[[IDEA:{ANIM1_ID}]]\n\n## 第一部分：什么是α螺旋？"
+    )
+    plan_with_placeholders = plan_with_placeholders.replace(
+        "## 第二部分：氢键是如何让弹簧保持形状的？",
+        f"[[IDEA:{ANIM2_ID}]]\n\n## 第二部分：氢键是如何让弹簧保持形状的？"
+    )
+    plan_with_placeholders = plan_with_placeholders.replace(
+        "## 检测你学会了吗？",
+        f"[[IDEA:{EXER_ID}]]\n\n## 检测你学会了吗？"
+    )
+
+    ideas = [
+        {
+            "idea_id": STORY_ID,
+            "mode": "story",
+            "topic": "Pauling 病床上的发现——α螺旋的历史故事",
+            "context_summary": "通过Pauling 1951年用纸折叠发现α螺旋的故事引入主题，建立历史感和直觉",
+            "generation_backend": "claude_code_direct",
+            "style_key": "chromatic_depth",
+            "mode_reason": "历史情境故事最适合激发兴趣和建立直觉，在学概念前先埋下情感锚点",
+        },
+        {
+            "idea_id": ANIM1_ID,
+            "mode": "animation",
+            "topic": "多肽链从直链到α螺旋的形成过程",
+            "context_summary": "动态展示多肽链如何通过氢键驱动逐步卷曲成稳定的右手螺旋，珠子代表氨基酸，黄色虚线代表氢键",
+            "generation_backend": "claude_code_direct",
+            "style_key": "chromatic_depth",
+            "mode_reason": "动态卷曲过程是抽象概念，静态图无法表达；SVG动画可以展示每一步的变化",
+        },
+        {
+            "idea_id": ANIM2_ID,
+            "mode": "animation",
+            "topic": "氢键 i↔(i+4) 规律逐一高亮展示",
+            "context_summary": "α螺旋侧视图，逐一高亮每条氢键（第1↔第5、第2↔第6...），直观展示每隔4个残基形成一对氢键的规律",
+            "generation_backend": "claude_code_direct",
+            "style_key": "chromatic_depth",
+            "mode_reason": "i↔(i+4)的空间几何规律用静态图很难理解，动态高亮可以让学生清晰看到每对氢键的关系",
+        },
+        {
+            "idea_id": EXER_ID,
+            "mode": "exercise",
+            "topic": "α螺旋关键知识点巩固练习",
+            "context_summary": "检验学生对α螺旋参数、维持力、破坏因素和生活实例的理解",
+            "generation_backend": "claude_code_direct",
+            "style_key": "",
+            "mode_reason": "练习题巩固学习，即时检测理解",
+        },
+    ]
+
+    rendered_sections = {
+        STORY_ID: {
+            "mode": "story",
+            "status": "ready",
+            "html": None,
+            "story_paragraphs": STORY_PARAGRAPHS,
+            "exercises": None,
+            "generation_backend": "claude_code_direct",
+        },
+        ANIM1_ID: {
+            "mode": "animation",
+            "status": "ready",
+            "html": ANIM1_HTML,
+            "story_paragraphs": None,
+            "exercises": None,
+            "generation_backend": "claude_code_direct",
+        },
+        ANIM2_ID: {
+            "mode": "animation",
+            "status": "ready",
+            "html": ANIM2_HTML,
+            "story_paragraphs": None,
+            "exercises": None,
+            "generation_backend": "claude_code_direct",
+        },
+        EXER_ID: {
+            "mode": "exercise",
+            "status": "ready",
+            "html": None,
+            "story_paragraphs": None,
+            "exercises": EXERCISES,
+            "generation_backend": "claude_code_direct",
+        },
+    }
+
+    return {
+        "plan_markdown": plan_with_placeholders,
+        "ideas": ideas,
+        "rendered_sections": rendered_sections,
+    }
+
+
+# ── 写入数据库 ──────────────────────────────────────────────────
+
+def write_everything():
+    from scripts.course_factory import (
+        _ensure_db_tables, _upsert_project, _init_progress, _write_project_files
+    )
+    from systemedu.storage.db import LessonContent, get_session as get_db_session
+    from datetime import datetime as dt
+
+    console.print(Panel.fit(
+        "[bold cyan]GP-01 蛋白结构探险地图[/bold cyan]\n\n"
+        "完全由 Claude Code 生成（不调用 LLM agent pipeline）\n"
+        "节点：M05N01 α螺旋——大自然的弹簧\n"
+        "内容：完整课程文本 + 2个SVG动画 + 3段故事 + 4道练习题",
+        title="写入数据库",
+    ))
+
+    # 读取知识树
+    with open(TREE_PATH, encoding="utf-8") as f:
+        tree_raw = json.load(f)
+
+    # 转换为 write_to_db 需要的 milestones 格式
+    # 从知识树JSON构建内部格式
+    nodes_by_id = {}
+    for node in tree_raw["知识树节点"]:
+        nodes_by_id[node["id"]] = node
+
+    # 按模块分组，计算全局 knode_id
+    module_order = [m["模块id"] for m in tree_raw["模块依赖图"]]
+    milestones = []
+    global_idx = 0
+    for mid in module_order:
+        mod_nodes = [n for n in tree_raw["知识树节点"] if n["模块id"] == mid]
+        if not mod_nodes:
+            continue
+        module_title = mod_nodes[0]["模块"]
+        knodes = []
+        for n in mod_nodes:
+            knodes.append({
+                "title": n["标题"],
+                "summary": n["详细描述"][:300],
+                "difficulty_level": n["难度评分"],
+                "content_type": "interactive",
+                "acceptance_type": "quiz",
+                "estimated_minutes": n["预估学习时长_分钟"],
+                "xp_reward": 30,
+                "order": global_idx,
+                "prerequisite_indices": [],  # 简化处理
+            })
+            nodes_by_id[n["id"]]["_global_idx"] = global_idx
+            global_idx += 1
+        milestones.append({
+            "title": module_title,
+            "description": "",
+            "order": len(milestones),
+            "xp_reward": 100,
+            "knodes": knodes,
+        })
+
+    tree_data = {"milestones": milestones}
+    node_count = global_idx
+
+    console.print(f"知识树：{len(milestones)} 个模块，{node_count} 个节点")
+    console.print(f"目标节点 knode_id = {TARGET_KNODE_ID}（{TARGET_NODE_TITLE}）")
+
+    # 1. 确保数据库表存在
+    _ensure_db_tables()
+
+    # 2. 写入项目文件
+    _write_project_files(
+        PROJECT_NAME, PROJECT_TITLE, PROJECT_DESCRIPTION,
+        PROJECT_CATEGORY, PROJECT_AGE_RANGE, PROJECT_ESTIMATED_HOURS,
+        PROJECT_TAGS, tree_data,
+    )
+    console.print("[green]v 项目文件写入[/green]")
+
+    # 3. 注册项目
+    _upsert_project(
+        PROJECT_NAME, PROJECT_TITLE, PROJECT_DESCRIPTION,
+        PROJECT_CATEGORY, PROJECT_AGE_RANGE, PROJECT_ESTIMATED_HOURS,
+        PROJECT_TAGS,
+    )
+    console.print("[green]v 项目注册到数据库[/green]")
+
+    # 4. 初始化进度（第0节可用，其余锁定）
+    _init_progress(PROJECT_NAME, node_count)
+    console.print("[green]v 学习进度初始化[/green]")
+
+    # 5. 为所有节点创建 pending 状态的占位 lesson
+    db = get_db_session()
+    try:
+        for kid in range(node_count):
+            existing = db.query(LessonContent).filter_by(
+                project_name=PROJECT_NAME, knode_id=kid
+            ).first()
+            if not existing:
+                db.add(LessonContent(
+                    project_name=PROJECT_NAME,
+                    knode_id=kid,
+                    status="pending",
+                    content_type="interactive",
+                    course_content="",
+                ))
+        db.commit()
+        console.print(f"[green]v {node_count} 个节点占位记录创建[/green]")
+    finally:
+        db.close()
+
+    # 6. 写入目标节点的完整课程内容
+    course_content = build_course_content()
+    content_json = json.dumps(course_content, ensure_ascii=False)
+
+    db2 = get_db_session()
+    try:
+        lesson = db2.query(LessonContent).filter_by(
+            project_name=PROJECT_NAME, knode_id=TARGET_KNODE_ID
+        ).first()
+        if lesson:
+            lesson.status = "ready"
+            lesson.course_content = content_json
+            lesson.content_type = "interactive"
+            lesson.generated_at = dt.now()
+        else:
+            db2.add(LessonContent(
+                project_name=PROJECT_NAME,
+                knode_id=TARGET_KNODE_ID,
+                status="ready",
+                course_content=content_json,
+                content_type="interactive",
+                generated_at=dt.now(),
+            ))
+        db2.commit()
+
+        # 统计
+        anim_count = sum(1 for s in course_content["rendered_sections"].values() if s["mode"] == "animation")
+        story_count = sum(len(s.get("story_paragraphs") or []) for s in course_content["rendered_sections"].values())
+        exer_count  = sum(len(s.get("exercises") or []) for s in course_content["rendered_sections"].values())
+        total_html  = sum(len(s.get("html") or "") for s in course_content["rendered_sections"].values())
+
+        console.print(f"\n[bold green]完成！[/bold green]")
+        console.print(f"  节点 {TARGET_KNODE_ID}（{TARGET_NODE_TITLE}）已写入")
+        console.print(f"  课程文本：{len(PLAN_MARKDOWN)} 字符")
+        console.print(f"  SVG 动画：{anim_count} 个（共 {total_html} 字节 HTML）")
+        console.print(f"  故事段落：{story_count} 段")
+        console.print(f"  练习题：{exer_count} 道")
+        console.print(f"\n访问：[dim]http://localhost:3000/projects/{PROJECT_NAME}[/dim]")
+        console.print(f"（先在系统里打开该项目，进入节点 M05N01）")
+    finally:
+        db2.close()
+
+
+if __name__ == "__main__":
+    write_everything()
