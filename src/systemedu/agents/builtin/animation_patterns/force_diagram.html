@@ -1,0 +1,404 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8"/>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{width:100%;height:100%;overflow:hidden;background:#0f0a1e;
+  font-family:"Noto Sans SC","PingFang SC","Microsoft YaHei",system-ui,sans-serif}
+canvas{display:block;width:100%;height:100%;position:absolute;top:0;left:0}
+#ui{position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="ui"></div>
+<script>
+(function(){
+"use strict";
+
+/* ── injected params ─────────────────────────────────── */
+var TITLE        = {{title}};
+var FORCE_MODE   = {{force_mode}};
+var ANGLE        = {{angle}};
+var MAGNITUDE    = {{magnitude}};
+var LABEL_FORCE  = {{label_force}};
+var LABEL_X      = {{label_x}};
+var LABEL_Y      = {{label_y}};
+var SHOW_FORMULA = {{show_formula}};
+
+/* ── canvas setup ────────────────────────────────────── */
+var canvas = document.getElementById("c");
+var ctx = canvas.getContext("2d");
+var W = 600, H = 420;
+var DPR = Math.min(window.devicePixelRatio || 1, 2);
+
+function resize(){
+  var rect = canvas.getBoundingClientRect();
+  canvas.width  = rect.width  * DPR;
+  canvas.height = rect.height * DPR;
+  ctx.setTransform(1,0,0,1,0,0);
+  ctx.scale(DPR * rect.width / W, DPR * rect.height / H);
+}
+resize();
+window.addEventListener("resize", resize);
+
+/* ── utils ───────────────────────────────────────────── */
+function roundRect(x,y,w,h,r){
+  ctx.beginPath();
+  ctx.moveTo(x+r,y);
+  ctx.lineTo(x+w-r,y); ctx.quadraticCurveTo(x+w,y,x+w,y+r);
+  ctx.lineTo(x+w,y+h-r); ctx.quadraticCurveTo(x+w,y+h,x+w-r,y+h);
+  ctx.lineTo(x+r,y+h); ctx.quadraticCurveTo(x,y+h,x,y+h-r);
+  ctx.lineTo(x,y+r); ctx.quadraticCurveTo(x,y,x+r,y);
+  ctx.closePath();
+}
+
+function drawArrow(x1,y1,x2,y2,color,width,headLen){
+  var dx = x2-x1, dy = y2-y1;
+  var len = Math.sqrt(dx*dx+dy*dy);
+  if(len < 1) return;
+  var ux = dx/len, uy = dy/len;
+  var hl = headLen || 14;
+  var hw = hl * 0.45;
+  ctx.strokeStyle = color;
+  ctx.lineWidth = width || 2.5;
+  ctx.lineCap = "round";
+  ctx.beginPath();
+  ctx.moveTo(x1,y1);
+  ctx.lineTo(x2 - ux*hl, y2 - uy*hl);
+  ctx.stroke();
+  ctx.fillStyle = color;
+  ctx.beginPath();
+  ctx.moveTo(x2, y2);
+  ctx.lineTo(x2 - ux*hl - uy*hw, y2 - uy*hl + ux*hw);
+  ctx.lineTo(x2 - ux*hl + uy*hw, y2 - uy*hl - ux*hw);
+  ctx.closePath();
+  ctx.fill();
+}
+
+function drawArrowDashed(x1,y1,x2,y2,color,width){
+  ctx.save();
+  ctx.setLineDash([6,4]);
+  ctx.strokeStyle = color;
+  ctx.lineWidth = width || 1.5;
+  ctx.beginPath(); ctx.moveTo(x1,y1); ctx.lineTo(x2,y2); ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.restore();
+}
+
+/* ── background ──────────────────────────────────────── */
+function drawBg(){
+  var g = ctx.createLinearGradient(0,0,0,H);
+  g.addColorStop(0,"#0f0a1e");
+  g.addColorStop(1,"#1a1035");
+  ctx.fillStyle = g;
+  ctx.fillRect(0,0,W,H);
+  ctx.strokeStyle = "rgba(255,255,255,0.03)";
+  ctx.lineWidth = 1;
+  for(var x=0;x<=W;x+=40){
+    ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,H); ctx.stroke();
+  }
+  for(var y=0;y<=H;y+=40){
+    ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(W,y); ctx.stroke();
+  }
+}
+
+/* ── title ───────────────────────────────────────────── */
+function drawTitle(){
+  ctx.font = "bold 16px 'Noto Sans SC',system-ui,sans-serif";
+  ctx.textAlign = "center";
+  ctx.fillStyle = "rgba(255,255,255,0.9)";
+  ctx.fillText(TITLE, W/2, 28);
+}
+
+/* ── HUD ─────────────────────────────────────────────── */
+function drawHUD(cols){
+  var by = H-52, bw = W, bh = 52;
+  ctx.fillStyle = "rgba(0,0,0,0.55)";
+  roundRect(0,by,bw,bh,0); ctx.fill();
+  ctx.strokeStyle = "rgba(255,255,255,0.06)";
+  ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(0,by); ctx.lineTo(W,by); ctx.stroke();
+  var cw = W / cols.length;
+  cols.forEach(function(c,i){
+    var cx = cw*i + cw/2;
+    ctx.font = "10px 'Noto Sans SC',system-ui";
+    ctx.textAlign = "center";
+    ctx.fillStyle = "rgba(129,140,248,0.6)";
+    ctx.fillText(c.label, cx, by+17);
+    ctx.font = "bold 14px 'Noto Sans SC',system-ui";
+    ctx.fillStyle = "rgba(255,255,255,0.88)";
+    ctx.fillText(c.val, cx, by+38);
+  });
+}
+
+/* ── physics constants ───────────────────────────────── */
+var DEG = Math.PI / 180;
+var RAD = ANGLE * DEG;
+var SCALE = 1.2; // px per N
+var OX = SHOW_FORMULA ? 220 : 280;
+var OY = 210;
+var OBJ_R = 28;
+
+function vecLen(mag){
+  return Math.min(mag * SCALE * 8, 160);
+}
+
+/* ── object (circle) ─────────────────────────────────── */
+function drawObject(){
+  var glow = ctx.createRadialGradient(OX,OY,0,OX,OY,60);
+  glow.addColorStop(0,"rgba(99,102,241,0.25)");
+  glow.addColorStop(1,"transparent");
+  ctx.fillStyle = glow;
+  ctx.fillRect(OX-70,OY-70,140,140);
+
+  ctx.shadowColor = "rgba(99,102,241,0.7)";
+  ctx.shadowBlur = 18;
+  var og = ctx.createRadialGradient(OX-8,OY-8,2,OX,OY,OBJ_R);
+  og.addColorStop(0,"rgba(165,180,252,1)");
+  og.addColorStop(0.5,"rgba(99,102,241,1)");
+  og.addColorStop(1,"rgba(55,48,163,1)");
+  ctx.fillStyle = og;
+  ctx.beginPath(); ctx.arc(OX,OY,OBJ_R,0,Math.PI*2); ctx.fill();
+  ctx.shadowBlur = 0;
+  ctx.strokeStyle = "rgba(255,255,255,0.3)";
+  ctx.lineWidth = 1.5;
+  ctx.beginPath(); ctx.arc(OX,OY,OBJ_R,0,Math.PI*2); ctx.stroke();
+  ctx.fillStyle = "rgba(255,255,255,0.25)";
+  ctx.beginPath(); ctx.arc(OX-8,OY-8,8,0,Math.PI*2); ctx.fill();
+}
+
+/* ── angle arc ───────────────────────────────────────── */
+function drawAngleArc(endX, endY, alpha){
+  var arcR = 40;
+  ctx.strokeStyle = "rgba(251,191,36,0.5)";
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.arc(OX, OY, arcR, -RAD, 0, false);
+  ctx.stroke();
+  var midA = -RAD / 2;
+  ctx.font = "bold 12px 'Noto Sans SC',system-ui";
+  ctx.textAlign = "center";
+  ctx.fillStyle = "rgba(251,191,36,0.9)";
+  var tx = OX + (arcR+14) * Math.cos(midA);
+  var ty = OY + (arcR+14) * Math.sin(midA);
+  ctx.fillText(ANGLE + "\u00b0", tx, ty);
+}
+
+/* ── formula panel ───────────────────────────────────── */
+function drawFormula(mode, alpha){
+  if(!SHOW_FORMULA) return;
+  var fx = 430, fy = 100, fw = 150, fh = mode === "decompose" ? 90 : 70;
+  ctx.fillStyle = "rgba(0,0,0,0.45)";
+  roundRect(fx, fy, fw, fh, 8); ctx.fill();
+  ctx.strokeStyle = "rgba(129,140,248,0.3)";
+  ctx.lineWidth = 1;
+  roundRect(fx, fy, fw, fh, 8); ctx.stroke();
+
+  ctx.font = "12px 'Noto Sans SC',system-ui";
+  ctx.textAlign = "left";
+  ctx.fillStyle = "rgba(255,255,255," + (alpha * 0.9) + ")";
+
+  if(mode === "decompose"){
+    var fl = LABEL_FORCE || "F";
+    var fx2 = LABEL_X || "Fx";
+    var fy2 = LABEL_Y || "Fy";
+    ctx.fillText(fx2 + " = " + fl + " cos\u03b8", fx+12, fy+24);
+    ctx.fillText(fy2 + " = " + fl + " sin\u03b8", fx+12, fy+46);
+    ctx.fillText("\u03b8 = " + ANGLE + "\u00b0", fx+12, fy+68);
+  } else if(mode === "resultant"){
+    var fa = LABEL_X || "Fa";
+    var fb = LABEL_Y || "Fb";
+    var fr = LABEL_FORCE || "F";
+    ctx.fillText(fr + " = \u221a("+fa+"\u00b2+"+fb+"\u00b2)", fx+12, fy+24);
+    ctx.fillText("\u03b8 = arctan("+fb+"/"+fa+")", fx+12, fy+46);
+  } else {
+    var fl2 = LABEL_FORCE || "F";
+    ctx.fillText(fl2 + " = " + MAGNITUDE.toFixed(1) + " N", fx+12, fy+24);
+    ctx.fillText("\u03b8 = " + ANGLE + "\u00b0", fx+12, fy+46);
+  }
+}
+
+/* ── SINGLE mode ─────────────────────────────────────── */
+function drawSingle(t){
+  var pulse = 0.85 + 0.15 * Math.sin(t * 1.8);
+  var fLen = vecLen(MAGNITUDE) * pulse;
+  var ex = OX + fLen * Math.cos(-RAD);
+  var ey = OY + fLen * Math.sin(-RAD);
+
+  drawObject();
+
+  ctx.shadowColor = "rgba(52,211,153,0.7)";
+  ctx.shadowBlur = 12;
+  drawArrow(OX,OY,ex,ey,"rgba(52,211,153,0.95)",3,16);
+  ctx.shadowBlur = 0;
+
+  ctx.font = "bold 13px 'Noto Sans SC',system-ui";
+  ctx.textAlign = "center";
+  ctx.fillStyle = "rgba(52,211,153,0.9)";
+  ctx.fillText(LABEL_FORCE || "F", ex + 18*Math.cos(-RAD+0.5), ey + 18*Math.sin(-RAD+0.5));
+
+  drawAngleArc(ex, ey, 1);
+  drawFormula("single", 1);
+
+  var fx = MAGNITUDE * Math.cos(RAD);
+  var fy = MAGNITUDE * Math.sin(RAD);
+  drawHUD([
+    {label:"合力 F",      val: MAGNITUDE.toFixed(1)+" N"},
+    {label:"x 分量 Fx",   val: fx.toFixed(1)+" N"},
+    {label:"y 分量 Fy",   val: fy.toFixed(1)+" N"},
+    {label:"角度 \u03b8", val: ANGLE + "\u00b0"}
+  ]);
+}
+
+/* ── DECOMPOSE mode ──────────────────────────────────── */
+function drawDecompose(t){
+  var phase = ((t % 3) / 3);
+  var compAlpha = phase < 0.15 ? phase/0.15 : phase > 0.85 ? (1-phase)/0.15 : 1;
+
+  var fLen = vecLen(MAGNITUDE);
+  var fx = MAGNITUDE * Math.cos(RAD);
+  var fy = MAGNITUDE * Math.sin(RAD);
+  var fxLen = vecLen(fx);
+  var fyLen = vecLen(fy);
+
+  var ex = OX + fLen * Math.cos(-RAD);
+  var ey = OY + fLen * Math.sin(-RAD);
+  var excx = OX + fxLen;
+  var eycy = OY - fyLen;
+
+  drawObject();
+
+  // dashed parallelogram construction lines
+  ctx.globalAlpha = compAlpha * 0.55;
+  drawArrowDashed(excx, OY, ex, ey, "rgba(251,191,36,0.7)", 1.5);
+  drawArrowDashed(OX, eycy, ex, ey, "rgba(251,191,36,0.7)", 1.5);
+  ctx.globalAlpha = 1;
+
+  // x component
+  ctx.globalAlpha = compAlpha;
+  ctx.shadowColor = "rgba(251,191,36,0.7)"; ctx.shadowBlur = 10;
+  drawArrow(OX,OY,excx,OY,"rgba(251,191,36,0.95)",2.5,14);
+  ctx.shadowBlur = 0;
+  ctx.font = "bold 12px 'Noto Sans SC',system-ui";
+  ctx.textAlign = "center";
+  ctx.fillStyle = "rgba(251,191,36,0.9)";
+  ctx.fillText(LABEL_X || "Fx", (OX+excx)/2, OY+18);
+  ctx.globalAlpha = 1;
+
+  // y component
+  ctx.globalAlpha = compAlpha;
+  ctx.shadowColor = "rgba(244,114,182,0.7)"; ctx.shadowBlur = 10;
+  drawArrow(OX,OY,OX,eycy,"rgba(244,114,182,0.95)",2.5,14);
+  ctx.shadowBlur = 0;
+  ctx.font = "bold 12px 'Noto Sans SC',system-ui";
+  ctx.textAlign = "left";
+  ctx.fillStyle = "rgba(244,114,182,0.9)";
+  ctx.fillText(LABEL_Y || "Fy", OX+8, (OY+eycy)/2);
+  ctx.globalAlpha = 1;
+
+  // resultant
+  ctx.shadowColor = "rgba(52,211,153,0.7)"; ctx.shadowBlur = 12;
+  drawArrow(OX,OY,ex,ey,"rgba(52,211,153,0.95)",3.5,18);
+  ctx.shadowBlur = 0;
+  ctx.font = "bold 13px 'Noto Sans SC',system-ui";
+  ctx.textAlign = "left";
+  ctx.fillStyle = "rgba(52,211,153,0.9)";
+  ctx.fillText(LABEL_FORCE || "F", ex+10, ey-6);
+
+  drawAngleArc(ex, ey, 1);
+  drawFormula("decompose", compAlpha);
+
+  drawHUD([
+    {label:"合力 F",      val: MAGNITUDE.toFixed(1)+" N"},
+    {label:"x 分量 Fx",   val: fx.toFixed(1)+" N"},
+    {label:"y 分量 Fy",   val: fy.toFixed(1)+" N"},
+    {label:"角度 \u03b8", val: ANGLE + "\u00b0"}
+  ]);
+}
+
+/* ── RESULTANT mode ──────────────────────────────────── */
+function drawResultant(t){
+  var phase = ((t % 3) / 3);
+  var showAlpha = phase < 0.1 ? phase/0.1 : phase > 0.9 ? (1-phase)/0.1 : 1;
+
+  var fa = MAGNITUDE * Math.cos(RAD);
+  var fb = MAGNITUDE * Math.sin(RAD);
+  var fALen = vecLen(fa);
+  var fBLen = vecLen(fb);
+  var fLen  = vecLen(MAGNITUDE);
+
+  // Fa arrow (horizontal from origin)
+  var ex1 = OX + fALen;
+  var ey1 = OY;
+  // Fb arrow (vertical from end of Fa)
+  var ex2 = ex1;
+  var ey2 = ey1 - fBLen;
+  // resultant from origin to final tip
+  var ex3 = OX + fLen * Math.cos(-RAD);
+  var ey3 = OY + fLen * Math.sin(-RAD);
+
+  drawObject();
+
+  // Fa
+  ctx.shadowColor = "rgba(251,191,36,0.7)"; ctx.shadowBlur = 10;
+  drawArrow(OX,OY,ex1,ey1,"rgba(251,191,36,0.95)",2.5,14);
+  ctx.shadowBlur = 0;
+  ctx.font = "bold 12px 'Noto Sans SC',system-ui";
+  ctx.textAlign = "center";
+  ctx.fillStyle = "rgba(251,191,36,0.9)";
+  ctx.fillText(LABEL_X || "Fa", (OX+ex1)/2, OY+16);
+
+  // Fb tail-to-tail from Fa tip
+  ctx.shadowColor = "rgba(244,114,182,0.7)"; ctx.shadowBlur = 10;
+  drawArrow(ex1,ey1,ex2,ey2,"rgba(244,114,182,0.95)",2.5,14);
+  ctx.shadowBlur = 0;
+  ctx.font = "bold 12px 'Noto Sans SC',system-ui";
+  ctx.textAlign = "left";
+  ctx.fillStyle = "rgba(244,114,182,0.9)";
+  ctx.fillText(LABEL_Y || "Fb", ex1+8, (ey1+ey2)/2);
+
+  // resultant
+  ctx.globalAlpha = showAlpha;
+  ctx.shadowColor = "rgba(52,211,153,0.7)"; ctx.shadowBlur = 14;
+  drawArrow(OX,OY,ex3,ey3,"rgba(52,211,153,0.95)",3.5,18);
+  ctx.shadowBlur = 0;
+  ctx.font = "bold 13px 'Noto Sans SC',system-ui";
+  ctx.textAlign = "left";
+  ctx.fillStyle = "rgba(52,211,153,0.9)";
+  ctx.fillText(LABEL_FORCE || "F", ex3+10, ey3-6);
+  ctx.globalAlpha = 1;
+
+  drawFormula("resultant", showAlpha);
+
+  drawHUD([
+    {label:"合力 F",      val: MAGNITUDE.toFixed(1)+" N"},
+    {label:"x 分量 Fx",   val: fa.toFixed(1)+" N"},
+    {label:"y 分量 Fy",   val: fb.toFixed(1)+" N"},
+    {label:"角度 \u03b8", val: ANGLE + "\u00b0"}
+  ]);
+}
+
+/* ── main loop ───────────────────────────────────────── */
+var startTime = null;
+
+function frame(ts){
+  if(!startTime) startTime = ts;
+  var t = (ts - startTime) / 1000;
+  ctx.clearRect(0,0,W,H);
+  drawBg();
+  drawTitle();
+
+  if(FORCE_MODE === "single")       drawSingle(t);
+  else if(FORCE_MODE === "decompose") drawDecompose(t);
+  else if(FORCE_MODE === "resultant") drawResultant(t);
+
+  requestAnimationFrame(frame);
+}
+
+requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>

@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback, useMemo, useRef } from "react"
 import { createPortal } from "react-dom"
-import { useParams, useSearchParams } from "next/navigation"
+import { useParams, useRouter, useSearchParams } from "next/navigation"
 import Link from "next/link"
 import {
   ChevronRight,
@@ -40,7 +40,7 @@ import { NotePanel } from "@/components/learning/note-panel"
 import { CourseContentView } from "@/components/learning/course-content-view"
 import { AssignmentView } from "@/components/learning/assignment-view"
 import { gateway } from "@/lib/api"
-import type { KnodeInfo, NodeProgress, ProjectDetail } from "@/lib/types/api"
+import type { KnodeInfo, MilestoneInfo, NodeProgress, ProjectDetail, SubProjectInfo } from "@/lib/types/api"
 import { useT } from "@/lib/hooks/use-t"
 import { useAppStore } from "@/lib/stores/app-store"
 
@@ -116,8 +116,10 @@ function NodeTooltip({ data }: { data: NodeTooltipData }) {
 export default function LearnPage() {
   const params = useParams<{ projectName: string }>()
   const searchParams = useSearchParams()
+  const router = useRouter()
   const t = useT()
   const { locale, setLocale } = useAppStore()
+  const subProjectId = searchParams.get("sub")
 
   const CATEGORY_LABELS: Record<string, string> = {
     ai: t("cat.ai"),
@@ -191,9 +193,41 @@ export default function LearnPage() {
     return knodes
   }, [detail])
 
+  // Sub-project filtering
+  const activeSubProject: SubProjectInfo | null = useMemo(() => {
+    if (!subProjectId || !detail?.sub_projects) return null
+    return detail.sub_projects.find((sp) => sp.id === subProjectId) ?? null
+  }, [subProjectId, detail])
+
+  const visibleMilestones: MilestoneInfo[] = useMemo(() => {
+    if (!detail) return []
+    if (!activeSubProject) return detail.milestones
+    return activeSubProject.milestone_indices
+      .filter((idx) => idx < detail.milestones.length)
+      .map((idx) => detail.milestones[idx])
+  }, [detail, activeSubProject])
+
+  // Collect node IDs belonging to current sub-project for scoped progress
+  const scopedNodeIds: Set<number> | null = useMemo(() => {
+    if (!activeSubProject || !detail) return null
+    const ids = new Set<number>()
+    for (const msIdx of activeSubProject.milestone_indices) {
+      if (msIdx < detail.milestones.length) {
+        const ms = detail.milestones[msIdx]
+        for (const knode of ms.knodes) {
+          ids.add(knode.id)
+        }
+      }
+    }
+    return ids
+  }, [activeSubProject, detail])
+
   const progressList = detail?.progress ?? []
-  const totalPassed = progressList.filter((p) => p.status === "passed").length
-  const totalNodes = progressList.length
+  const scopedProgress = scopedNodeIds
+    ? progressList.filter((p) => scopedNodeIds.has(p.knode_id))
+    : progressList
+  const totalPassed = scopedProgress.filter((p) => p.status === "passed").length
+  const totalNodes = scopedProgress.length
   const pct = totalNodes > 0 ? Math.round((totalPassed / totalNodes) * 100) : 0
 
   const handleNodeClick = useCallback((nodeId: number) => {
@@ -217,17 +251,19 @@ export default function LearnPage() {
     ? progressList.find((p) => p.knode_id === activeNodeId)?.status === "passed"
     : false
 
-  // Search filtering for sidebar
+  // Search filtering for sidebar — uses visibleMilestones (scoped to sub-project)
   const filteredMilestones = useMemo(() => {
-    if (!detail || !searchQuery.trim()) return detail?.milestones ?? []
+    if (!detail) return []
+    const base = visibleMilestones
+    if (!searchQuery.trim()) return base
     const q = searchQuery.toLowerCase()
-    return detail.milestones
+    return base
       .map((ms) => ({
         ...ms,
         knodes: ms.knodes.filter((k) => k.title.toLowerCase().includes(q) || k.summary?.toLowerCase().includes(q)),
       }))
       .filter((ms) => ms.knodes.length > 0)
-  }, [detail, searchQuery])
+  }, [detail, visibleMilestones, searchQuery])
 
   if (loading) return (
     <div className="flex items-center justify-center w-full h-full">
@@ -253,11 +289,17 @@ export default function LearnPage() {
           <span className="font-[var(--font-manrope)] uppercase tracking-widest">{categoryLabel}</span>
         </Link>
         <ChevronRight className="h-3 w-3 text-muted-foreground/50" />
-        {activeMs && (
+        {activeSubProject ? (
+          <>
+            <span className="text-xs font-[var(--font-manrope)] uppercase tracking-widest text-primary font-semibold">
+              {activeSubProject.id}: {activeSubProject.title}
+            </span>
+          </>
+        ) : activeMs ? (
           <span className="text-xs font-[var(--font-manrope)] uppercase tracking-widest text-primary font-semibold">
             {t("learn.module")} {(detail.milestones.indexOf(activeMs) + 1).toString().padStart(2, "0")}
           </span>
-        )}
+        ) : null}
         <div className="flex-1" />
         {/* Progress */}
         <div className="flex items-center gap-3 text-xs text-muted-foreground">

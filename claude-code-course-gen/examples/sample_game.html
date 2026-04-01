@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{width:100%;height:100%;overflow:hidden;background:#0a0e14;
+  font-family:'Noto Sans SC',system-ui,sans-serif;color:#fff}
+#game{width:600px;max-width:100%;height:560px;margin:0 auto;position:relative;
+  overflow:hidden;display:flex;flex-direction:column}
+.sci-card{background:rgba(255,255,255,0.05);border:1px solid rgba(0,210,255,0.2);
+  border-radius:12px;backdrop-filter:blur(10px);padding:16px;margin:8px}
+.sci-btn{background:linear-gradient(135deg,#00d2ff22,#00ff9d22);border:1px solid #00d2ff44;
+  border-radius:8px;color:#fff;padding:8px 20px;cursor:pointer;transition:all 0.3s;
+  font-family:inherit;font-size:14px}
+.sci-btn:hover{box-shadow:0 0 20px rgba(0,210,255,0.3);border-color:#00d2ff}
+.sci-btn:active{transform:scale(0.96)}
+.neon-text{color:#00d2ff;text-shadow:0 0 10px rgba(0,210,255,0.5)}
+.glow-border{box-shadow:0 0 15px rgba(0,210,255,0.15)}
+.game-title{text-align:center;font-size:18px;font-weight:bold;padding:12px 0;
+  color:rgba(255,255,255,0.9);text-shadow:0 0 15px rgba(0,210,255,0.3)}
+.score-bar{display:flex;justify-content:space-between;padding:0 16px;
+  font-size:13px;color:rgba(255,255,255,0.7)}
+.score-bar span{color:#00d2ff}
+.draggable{cursor:grab;user-select:none;-webkit-user-select:none;
+  transition:box-shadow 0.2s,transform 0.2s}
+.draggable:active{cursor:grabbing;box-shadow:0 0 25px rgba(0,210,255,0.5);transform:scale(1.05)}
+.drop-zone{border:2px dashed rgba(0,210,255,0.3);border-radius:10px;
+  min-height:50px;transition:all 0.3s;padding:8px;text-align:center}
+.drop-zone.hover{border-color:#00ff9d;background:rgba(0,255,157,0.05);
+  box-shadow:0 0 20px rgba(0,255,157,0.1)}
+.drop-zone.correct{border-color:#00ff9d;background:rgba(0,255,157,0.1)}
+.drop-zone.wrong{border-color:#ff4b2b;background:rgba(255,75,43,0.1)}
+@keyframes pulse{0%{transform:scale(1)}50%{transform:scale(1.05)}100%{transform:scale(1)}}
+@keyframes fadeIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+.pulse{animation:pulse 0.4s ease}
+.fade-in{animation:fadeIn 0.5s ease forwards}
+.progress-bar{height:4px;background:rgba(255,255,255,0.1);border-radius:2px;margin:8px 16px;overflow:hidden}
+.progress-fill{height:100%;background:linear-gradient(90deg,#00d2ff,#00ff9d);
+  border-radius:2px;transition:width 0.5s ease}
+</style>
+</head>
+<body>
+<div id="game"></div>
+<script>
+(function(){
+"use strict";
+var container=document.getElementById("game");
+var TITLE="火星地貌类型拖拽匹配";
+
+function el(tag,attrs,children){
+  var e=document.createElement(tag);
+  if(attrs)Object.keys(attrs).forEach(function(k){
+    if(k==="className")e.className=attrs[k];
+    else if(k==="style"&&typeof attrs[k]==="object")Object.assign(e.style,attrs[k]);
+    else if(k.startsWith("on"))e.addEventListener(k.slice(2).toLowerCase(),attrs[k]);
+    else e.setAttribute(k,attrs[k]);
+  });
+  if(typeof children==="string")e.textContent=children;
+  else if(Array.isArray(children))children.forEach(function(c){if(c)e.appendChild(c)});
+  return e;
+}
+
+function shuffle(arr){
+  var a=arr.slice();
+  for(var i=a.length-1;i>0;i--){var j=Math.floor(Math.random()*(i+1));var t=a[i];a[i]=a[j];a[j]=t}
+  return a;
+}
+
+// --- 游戏数据 ---
+var terrainData=[
+  {id:"crater",name:"撞击坑",desc:"陨石撞击火星表面形成的圆形凹陷",
+   feature:"圆形边缘，中央隆起，放射状纹理",color:"#ff6b35"},
+  {id:"volcano",name:"火山地貌",desc:"火山活动留下的盾状高地和熔岩流",
+   feature:"盾形山体，顶部火山口，周围熔岩痕迹",color:"#ff4b2b"},
+  {id:"canyon",name:"峡谷沟壑",desc:"水流或地壳运动切割出的深谷",
+   feature:"线性或分支状深谷，陡峭壁面",color:"#ffd700"},
+  {id:"dune",name:"沙丘风蚀",desc:"风力搬运沙粒堆积或侵蚀岩石形成",
+   feature:"波纹状沙丘，蘑菇岩，风蚀沟槽",color:"#00ff9d"},
+  {id:"ice",name:"极冠冰层",desc:"火星极地的干冰和水冰混合覆盖层",
+   feature:"白色覆盖，季节性消退，层状结构",color:"#00d2ff"}
+];
+
+var score=0;
+var total=terrainData.length;
+var matched=0;
+var currentDrag=null;
+
+function render(){
+  container.innerHTML="";
+
+  // 标题
+  container.appendChild(el("div",{className:"game-title"},TITLE));
+
+  // 分数栏
+  var scoreBar=el("div",{className:"score-bar"},[
+    el("span",null,"得分: "+score+"/"+total),
+    el("span",null,"已匹配: "+matched+"/"+total)
+  ]);
+  container.appendChild(scoreBar);
+
+  // 进度条
+  var progressOuter=el("div",{className:"progress-bar"});
+  var progressInner=el("div",{className:"progress-fill",style:{width:Math.round(matched/total*100)+"%"}});
+  progressOuter.appendChild(progressInner);
+  container.appendChild(progressOuter);
+
+  // 说明文字
+  container.appendChild(el("div",{style:{
+    textAlign:"center",fontSize:"13px",color:"rgba(255,255,255,0.5)",padding:"4px 0"
+  }},"将左侧地貌特征描述拖拽到右侧对应的地貌类型"));
+
+  // 游戏区域: 左侧特征卡片, 右侧分类放置区
+  var gameArea=el("div",{style:{
+    display:"flex",flex:"1",gap:"12px",padding:"8px",overflow:"hidden"
+  }});
+
+  // 左侧: 可拖拽的特征描述卡片
+  var leftCol=el("div",{style:{
+    flex:"1",display:"flex",flexDirection:"column",gap:"8px",overflow:"auto"
+  }});
+
+  var shuffledFeatures=shuffle(terrainData.map(function(d,i){return {index:i,feature:d.feature,id:d.id}}));
+
+  shuffledFeatures.forEach(function(item){
+    if(item.matched)return;
+    var card=el("div",{
+      className:"sci-card draggable fade-in",
+      draggable:"true",
+      style:{fontSize:"12px",lineHeight:"1.5",cursor:"grab",borderColor:item.matched?"#00ff9d":"rgba(0,210,255,0.2)"},
+      onDragstart:function(e){
+        currentDrag=item;
+        e.dataTransfer.setData("text/plain",item.id);
+        e.target.style.opacity="0.5";
+      },
+      onDragend:function(e){
+        e.target.style.opacity="1";
+        currentDrag=null;
+      }
+    },item.feature);
+    // 触摸支持
+    card.addEventListener("touchstart",function(e){
+      currentDrag=item;
+      card.style.opacity="0.5";
+    },{passive:true});
+    card.addEventListener("touchend",function(e){
+      card.style.opacity="1";
+      // 找到触摸点下的 drop zone
+      var touch=e.changedTouches[0];
+      var target=document.elementFromPoint(touch.clientX,touch.clientY);
+      if(target&&target.dataset&&target.dataset.targetId){
+        handleDrop(target,item);
+      }
+      currentDrag=null;
+    });
+    leftCol.appendChild(card);
+  });
+
+  // 右侧: 放置区
+  var rightCol=el("div",{style:{
+    flex:"1",display:"flex",flexDirection:"column",gap:"8px",overflow:"auto"
+  }});
+
+  terrainData.forEach(function(terrain){
+    var zone=el("div",{
+      className:"drop-zone glow-border fade-in",
+      style:{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:"4px"},
+      onDragover:function(e){e.preventDefault();zone.classList.add("hover")},
+      onDragleave:function(e){zone.classList.remove("hover")},
+      onDrop:function(e){
+        e.preventDefault();zone.classList.remove("hover");
+        var draggedId=e.dataTransfer.getData("text/plain");
+        handleDropById(zone,draggedId,terrain);
+      }
+    },[
+      el("div",{style:{fontSize:"14px",fontWeight:"bold",color:terrain.color}},terrain.name),
+      el("div",{style:{fontSize:"11px",color:"rgba(255,255,255,0.5)"}},terrain.desc)
+    ]);
+    zone.dataset.targetId=terrain.id;
+    rightCol.appendChild(zone);
+  });
+
+  gameArea.appendChild(leftCol);
+  gameArea.appendChild(rightCol);
+  container.appendChild(gameArea);
+
+  // 完成状态
+  if(matched>=total){
+    var result=el("div",{className:"sci-card fade-in",style:{
+      textAlign:"center",margin:"8px"
+    }},[
+      el("div",{className:"neon-text",style:{fontSize:"16px",marginBottom:"8px"}},
+        "任务完成! 得分: "+score+"/"+total),
+      el("button",{className:"sci-btn",onClick:function(){
+        score=0;matched=0;render();
+      }},"重新挑战")
+    ]);
+    container.appendChild(result);
+  }
+}
+
+function handleDropById(zone,draggedId,terrain){
+  if(draggedId===terrain.id){
+    zone.classList.add("correct");
+    zone.classList.add("pulse");
+    score++;matched++;
+    setTimeout(render,500);
+  }else{
+    zone.classList.add("wrong");
+    setTimeout(function(){zone.classList.remove("wrong")},800);
+  }
+}
+
+function handleDrop(target,item){
+  var targetId=target.dataset.targetId;
+  if(!targetId)return;
+  var terrain=terrainData.find(function(d){return d.id===targetId});
+  if(!terrain)return;
+  handleDropById(target,item.id,terrain);
+}
+
+render();
+
+})();
+</script>
+</body>
+</html>

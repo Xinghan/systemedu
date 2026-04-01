@@ -1,13 +1,13 @@
 """
 GP-01 蛋白结构探险地图 — 完全由 Claude Code 生成
-节点：M05N02「β折叠：大自然的手风琴」完整课程
+节点：M05N02「beta折叠：大自然的手风琴」完整课程
 
 不调用任何 LLM agent pipeline。
-Claude Code 直接生成：课程文本 + Canvas动画 + 游戏 + 故事 + 练习题
+Claude Code 直接生成：课程文本 + HUD 仪表盘动画 + 游戏 + 练习题 + 故事
 然后写入数据库。
 
-知识树位置：M05 = 二级结构模块，N02 = 第2个节点
-全局 knode_id = 13（M01: 3节0-2, M02: 3节3-5, M03: 3节6-8, M04: 3节9-11, M05N01=12, M05N02=13）
+设计风格：Stitch HUD 仪表盘（Space Grotesk + glass panel + circuit header
++ 高饱和霓虹色 + probe 连线 + 脉冲呼吸动画）
 """
 
 from __future__ import annotations
@@ -30,99 +30,73 @@ from rich.panel import Panel
 
 console = Console()
 
-# ── 视觉主题系统（与 _gen_protein_structure.py 完全相同）────────────
+# ── 视觉主题系统（Stitch HUD 仪表盘风格 — 高饱和霓虹色）──────────
 
 VISUAL_THEMES = {
-    # 生命科学/蛋白质 — 荧光显微镜暗色
-    # 深蓝黑背景 + GFP荧光绿 + DAPI青蓝 + 琥珀金高亮
     "biotech_life": {
-        "bg": "#060d12",
-        "bg2": "#0a1a1f",
-        "card": "rgba(10,26,31,0.88)",
-        "primary": "#34d399",
-        "secondary": "#22d3ee",
-        "accent": "#fbbf24",
-        "text": "#e2e8f0",
-        "text_dim": "#64748b",
-        "border": "rgba(52,211,153,0.12)",
-        "grid": "rgba(52,211,153,0.04)",
-        "font_display": "'Noto Sans SC', 'PingFang SC', sans-serif",
-        "font_mono": "'JetBrains Mono', 'Menlo', monospace",
-        "hud_label": "rgba(52,211,153,0.75)",
-        "hud_value": "#e2e8f0",
-        "hud_bg": "rgba(10,26,31,0.92)",
-        "beam_color": "#34d399",
+        "bg": "#0c0e12",
+        "bg2": "#111318",
+        "surface": "#171a1f",
+        "surface_high": "#1d2025",
+        "surface_highest": "#23262c",
+        "card": "rgba(23,26,31,0.6)",
+        "primary": "#50FFB0",
+        "secondary": "#acf900",
+        "accent": "#85ecff",
+        "text": "#f6f6fc",
+        "text_dim": "#aaabb0",
+        "border": "rgba(70,72,77,0.15)",
+        "font_display": "'Space Grotesk', 'Noto Sans SC', sans-serif",
+        "font_mono": "'Space Grotesk', monospace",
+        "hud_label": "#aaabb0",
+        "hud_value": "#f6f6fc",
+        "hud_bg": "rgba(12,14,18,0.95)",
+        "beam_color": "#50FFB0",
     },
-    # 物理/力学 — 黑板暗色+粉笔蓝白
     "physics_chalk": {
-        "bg": "#0c0e14",
-        "bg2": "#121620",
-        "card": "rgba(18,22,32,0.90)",
-        "primary": "#60a5fa",
-        "secondary": "#a78bfa",
-        "accent": "#f87171",
-        "text": "#e2e8f0",
-        "text_dim": "#6b7280",
-        "border": "rgba(96,165,250,0.10)",
-        "grid": "rgba(96,165,250,0.04)",
-        "font_display": "'Noto Sans SC', 'PingFang SC', sans-serif",
-        "font_mono": "'JetBrains Mono', 'Menlo', monospace",
-        "hud_label": "rgba(96,165,250,0.75)",
-        "hud_value": "#e2e8f0",
-        "hud_bg": "rgba(18,22,32,0.92)",
-        "beam_color": "#60a5fa",
+        "bg": "#0c0e12", "bg2": "#111318",
+        "surface": "#171a1f", "surface_high": "#1d2025", "surface_highest": "#23262c",
+        "card": "rgba(23,26,31,0.6)",
+        "primary": "#00F0FF", "secondary": "#2ae500", "accent": "#DBFCFF",
+        "text": "#e3e1e9", "text_dim": "#849495",
+        "border": "rgba(59,73,75,0.15)",
+        "font_display": "'Space Grotesk', 'Noto Sans SC', sans-serif",
+        "font_mono": "'Space Grotesk', monospace",
+        "hud_label": "#849495", "hud_value": "#e3e1e9",
+        "hud_bg": "rgba(18,19,24,0.95)", "beam_color": "#00F0FF",
     },
-    # 航空/探索 — 火星暗色+探索橙金
     "explorer_sand": {
-        "bg": "#0a0806",
-        "bg2": "#12100c",
-        "card": "rgba(18,16,12,0.90)",
-        "primary": "#e8723a",
-        "secondary": "#f0c040",
-        "accent": "#4dd0e1",
-        "text": "#d4c8b8",
-        "text_dim": "#6b5e50",
-        "border": "rgba(232,114,58,0.10)",
-        "grid": "rgba(232,114,58,0.04)",
-        "font_display": "'Noto Sans SC', 'PingFang SC', sans-serif",
-        "font_mono": "'JetBrains Mono', 'Menlo', monospace",
-        "hud_label": "rgba(232,114,58,0.75)",
-        "hud_value": "#d4c8b8",
-        "hud_bg": "rgba(18,16,12,0.92)",
-        "beam_color": "#e8723a",
+        "bg": "#0c0e12", "bg2": "#111318",
+        "surface": "#171a1f", "surface_high": "#1d2025", "surface_highest": "#23262c",
+        "card": "rgba(23,26,31,0.6)",
+        "primary": "#FF8A50", "secondary": "#FFB060", "accent": "#FF6B6B",
+        "text": "#f6f6fc", "text_dim": "#aaabb0",
+        "border": "rgba(70,72,77,0.15)",
+        "font_display": "'Space Grotesk', 'Noto Sans SC', sans-serif",
+        "font_mono": "'Space Grotesk', monospace",
+        "hud_label": "#aaabb0", "hud_value": "#f6f6fc",
+        "hud_bg": "rgba(12,14,18,0.95)", "beam_color": "#FF8A50",
     },
-    # 音乐/AI/创意 — 赛博暗色+活力紫粉
     "creative_studio": {
-        "bg": "#0c0816",
-        "bg2": "#14102a",
-        "card": "rgba(20,16,42,0.90)",
-        "primary": "#a78bfa",
-        "secondary": "#f472b6",
-        "accent": "#22d3ee",
-        "text": "#e2e8f0",
-        "text_dim": "#6b7280",
-        "border": "rgba(167,139,250,0.10)",
-        "grid": "rgba(167,139,250,0.04)",
-        "font_display": "'Noto Sans SC', 'PingFang SC', sans-serif",
-        "font_mono": "'JetBrains Mono', 'Menlo', monospace",
-        "hud_label": "rgba(167,139,250,0.75)",
-        "hud_value": "#e2e8f0",
-        "hud_bg": "rgba(20,16,42,0.92)",
-        "beam_color": "#a78bfa",
+        "bg": "#0c0e12", "bg2": "#111318",
+        "surface": "#171a1f", "surface_high": "#1d2025", "surface_highest": "#23262c",
+        "card": "rgba(23,26,31,0.6)",
+        "primary": "#EBB2FF", "secondary": "#F472B6", "accent": "#A78BFA",
+        "text": "#f6f6fc", "text_dim": "#aaabb0",
+        "border": "rgba(70,72,77,0.15)",
+        "font_display": "'Space Grotesk', 'Noto Sans SC', sans-serif",
+        "font_mono": "'Space Grotesk', monospace",
+        "hud_label": "#aaabb0", "hud_value": "#f6f6fc",
+        "hud_bg": "rgba(12,14,18,0.95)", "beam_color": "#EBB2FF",
     },
 }
 
 CATEGORY_THEME_MAP = {
-    "biotech": "biotech_life",
-    "chemistry": "biotech_life",
-    "physics": "physics_chalk",
-    "math": "physics_chalk",
-    "cs": "physics_chalk",
-    "ai": "physics_chalk",
-    "aerospace": "explorer_sand",
-    "robotics": "explorer_sand",
-    "climate": "explorer_sand",
-    "music": "creative_studio",
+    "biotech": "biotech_life", "chemistry": "biotech_life",
+    "physics": "physics_chalk", "math": "physics_chalk",
+    "cs": "physics_chalk", "ai": "physics_chalk",
+    "aerospace": "explorer_sand", "robotics": "explorer_sand",
+    "climate": "explorer_sand", "music": "creative_studio",
     "other": "biotech_life",
 }
 
@@ -134,13 +108,12 @@ def _id(prefix: str) -> str:
     rand = "".join(random.choices(string.ascii_lowercase, k=4))
     return f"{prefix}_{ts}_{rand}"
 
-
 # ── 项目基础信息 ────────────────────────────────────────────────
 
 PROJECT_NAME = "protein-structure"
 PROJECT_TITLE = "蛋白结构探险地图"
 PROJECT_DESCRIPTION = (
-    "从氨基酸到 AlphaFold，少年版蛋白质序列—结构—功能可视化探索课程。"
+    "从氨基酸到 AlphaFold，少年版蛋白质序列--结构--功能可视化探索课程。"
     "基于10岁儿童知识水平构建完整学习路径，涵盖化学直觉、二级结构、三级结构、"
     "活性位点、折叠病与 AI 预测。"
 )
@@ -153,6 +126,7 @@ TREE_PATH = _ROOT / "projects" / "protein-structure" / "knowledge_tree.json"
 
 T = VISUAL_THEMES[CATEGORY_THEME_MAP.get(PROJECT_CATEGORY, "biotech_life")]
 
+# ── 课程节点：M05N02 beta折叠 ──────────────────────────────────
 TARGET_KNODE_ID = 13
 TARGET_NODE_TITLE = "beta折叠：大自然的手风琴"
 TARGET_NODE_SUMMARY = (
@@ -162,11 +136,11 @@ TARGET_NODE_SUMMARY = (
 
 # ── 步骤1：完整课程文本（plan_markdown）────────────────────────
 
-PLAN_MARKDOWN = """# M05N02：β折叠——大自然的手风琴
+PLAN_MARKDOWN = r"""# M05N02：beta折叠——大自然的手风琴
 
 > **模块**：二级结构：局部折叠规律
 > **知识等级**：L2-操作 | **难度**：3/10 | **预计时长**：30分钟
-> **先修知识**：α螺旋（M05N01）、氢键直觉（M02N02）、肽键（M04N01）
+> **先修知识**：alpha螺旋（M05N01）、氢键直觉（M02N02）、肽键（M04N01）
 
 ---
 
@@ -176,29 +150,37 @@ PLAN_MARKDOWN = """# M05N02：β折叠——大自然的手风琴
 
 这根丝是一只蚕用嘴巴吐出来的。蚕不懂化学，不懂纳米材料学，却造出了迄今为止人类无法完全复制的天然纤维。
 
-秘密，就藏在β折叠里。
+秘密，就藏在beta折叠里。
 
 ---
 
-## 第一部分：什么是β折叠？
+## 第一部分：什么是beta折叠？
 
 [[IDEA:ANIM1_PLACEHOLDER]]
 
-### β链（strand）和β折叠片（sheet）
+### beta链（strand）和beta折叠片（sheet）
 
-β折叠是蛋白质链的另一种规则二级结构，与α螺旋并列。
+beta折叠是蛋白质链的另一种规则二级结构，与alpha螺旋并列。
 
-**基本单元是β链（β strand）**：
+**基本单元是beta链（beta strand）**：
 - 蛋白质链在局部区域以**完全伸展的锯齿形**排列
-- 每个氨基酸的Cα（α碳）位置比α螺旋中高得多——链条被"拉直"了
+- 每个氨基酸的C-alpha（alpha碳）位置比alpha螺旋中高得多——链条被"拉直"了
 - 侧链（R基）**交替朝上和朝下**：单数残基朝上，双数残基朝下（或反之）
 
-**多条β链并排** → **β折叠片（β sheet）**：
-- 两条或更多的β链平行排列
-- 链与链之间通过**链间氢键**（不同于α螺旋的链内氢键）连接
+**多条beta链并排** -> **beta折叠片（beta sheet）**：
+- 两条或更多的beta链平行排列
+- 链与链之间通过**链间氢键**（不同于alpha螺旋的链内氢键）连接
 - 形成一张"平的"（实际上略微扭曲）片状结构
 
-类比：手风琴。把一张纸反复折叠成手风琴/折扇形，每道折痕就是一个氨基酸的Cα，折叠后把多张手风琴并排——就是β折叠片。
+类比：手风琴。把一张纸反复折叠成手风琴/折扇形，每道折痕就是一个氨基酸的C-alpha，折叠后把多张手风琴并排——就是beta折叠片。
+
+### 关键数字（理解，不用背）
+
+| 参数 | 数值 | 意义 |
+|------|------|------|
+| 每残基长度 | **0.35纳米** | 比alpha螺旋的0.15nm更伸展 |
+| 链间距 | **0.47纳米** | 相邻beta链之间的距离 |
+| 侧链交替 | 上/下交替 | 使折叠片有两个不同的"面" |
 
 ---
 
@@ -206,27 +188,27 @@ PLAN_MARKDOWN = """# M05N02：β折叠——大自然的手风琴
 
 [[IDEA:ANIM2_PLACEHOLDER]]
 
-β折叠片有两种形式，区别在于相邻β链的方向：
+beta折叠片有两种形式，区别在于相邻beta链的方向：
 
 ### 对比表格
 
-| 特征 | 反平行β折叠（antiparallel） | 平行β折叠（parallel） |
+| 特征 | 反平行beta折叠（antiparallel） | 平行beta折叠（parallel） |
 |------|---------------------------|----------------------|
-| 相邻链方向 | 相反（↑↓↑↓） | 相同（↑↑↑↑） |
+| 相邻链方向 | 相反（上下上下） | 相同（上上上上） |
 | 氢键方向 | 几乎垂直于链轴（更直） | 与链轴略倾斜 |
 | 稳定性 | 更高（氢键更线性） | 稍低（氢键略扭曲） |
 | 常见来源 | 同一条链的不同段（通过发夹环相连） | 来自分子中相距较远的链段 |
 | 典型示例 | 免疫球蛋白（抗体）、丝蛋白 | TIM桶（代谢酶） |
 
-### 反平行β折叠：链间氢键的几何
+### 反平行beta折叠：链间氢键的几何
 
 在反平行排列中：
 - 链A从左到右走，链B从右到左走
-- 链A的 N-H 与链B的 C=O **直接对齐**，形成接近180°的线性氢键
+- 链A的 N-H 与链B的 C=O **直接对齐**，形成接近180度的线性氢键
 - 这种线性氢键能量最高，稳定性最强
 - 相邻的氢键成对出现，像拉链的齿
 
-### 平行β折叠：氢键几何
+### 平行beta折叠：氢键几何
 
 在平行排列中：
 - 链A和链B都从左到右走
@@ -237,16 +219,16 @@ PLAN_MARKDOWN = """# M05N02：β折叠——大自然的手风琴
 
 ## 第三部分：侧链的上下交替排列
 
-这是β折叠最有趣的几何特征之一。
+这是beta折叠最有趣的几何特征之一。
 
-在β链中，每个氨基酸的Cα位于锯齿形骨架的"顶点"。相邻两个Cα位于不同的"折叠面"：
-- 残基1：Cα朝上 → 侧链**朝上**（β折叠片的一面）
-- 残基2：Cα朝下 → 侧链**朝下**（β折叠片的另一面）
+在beta链中，每个氨基酸的C-alpha位于锯齿形骨架的"顶点"。相邻两个C-alpha位于不同的"折叠面"：
+- 残基1：C-alpha朝上 -> 侧链**朝上**（beta折叠片的一面）
+- 残基2：C-alpha朝下 -> 侧链**朝下**（beta折叠片的另一面）
 - 残基3：侧链**朝上**
 - 以此类推...
 
 **重要的生物学含义**：
-- β折叠片有两个"面"，每个面上排布着一组特定的侧链
+- beta折叠片有两个"面"，每个面上排布着一组特定的侧链
 - 一面通常是疏水侧链（朝向蛋白质核心）
 - 另一面通常是亲水侧链（朝向水环境）
 - 这种"双面性"在蛋白质折叠的热力学中极其重要
@@ -255,9 +237,9 @@ PLAN_MARKDOWN = """# M05N02：β折叠——大自然的手风琴
 
 ---
 
-## 第四部分：β折叠在生活中的例子
+## 第四部分：beta折叠在生活中的例子
 
-### 蚕丝：几乎纯β折叠
+### 蚕丝：几乎纯beta折叠
 
 蚕丝蛋白（丝素，fibroin）的氨基酸序列有一个规律：**Gly-Ala-Gly-Ala-Gly-Ser** 大量重复。
 
@@ -265,37 +247,37 @@ PLAN_MARKDOWN = """# M05N02：β折叠——大自然的手风琴
 - Ala（丙氨酸）：甲基侧链，也很小
 
 **为什么要这么小？**
-因为β折叠片是紧密堆叠的——一张片的朝下侧链，与下一张片的朝上侧链，要严密接触。如果侧链太大，就无法堆叠。Gly和Ala的小侧链，使蚕丝蛋白能够堆叠成非常致密的β折叠片层结构。
+因为beta折叠片是紧密堆叠的——一张片的朝下侧链，与下一张片的朝上侧链，要严密接触。如果侧链太大，就无法堆叠。Gly和Ala的小侧链，使蚕丝蛋白能够堆叠成非常致密的beta折叠片层结构。
 
 **结果**：
-- 蚕丝的强度来自β折叠片中密集的氢键网络
-- 蚕丝的光泽来自β折叠片的规则晶体结构反射光线
-- 蚕丝的柔软来自β折叠片之间只有范德华力（弱，可相对滑动）
+- 蚕丝的强度来自beta折叠片中密集的氢键网络
+- 蚕丝的光泽来自beta折叠片的规则晶体结构反射光线
+- 蚕丝的柔软来自beta折叠片之间只有范德华力（弱，可相对滑动）
 
 ### 蜘蛛丝：更极端的设计
 
-蜘蛛拖丝（dragline silk）同样含有大量β折叠"纳米晶体"，但还含有无规卷曲区段。这种"晶体+橡皮"的复合结构，使蜘蛛丝兼具蚕丝的强度和橡皮筋的弹性——比钢丝更强，比尼龙更弹。
+蜘蛛拖丝（dragline silk）同样含有大量beta折叠"纳米晶体"，但还含有无规卷曲区段。这种"晶体+橡皮"的复合结构，使蜘蛛丝兼具蚕丝的强度和橡皮筋的弹性——比钢丝更强，比尼龙更弹。
 
-### 淀粉样蛋白：β折叠的危险变体
+### 淀粉样蛋白：beta折叠的危险变体
 
 阿尔茨海默病、帕金森病等神经退行性疾病，与"淀粉样纤维"有关。
 
-淀粉样纤维是**β折叠的一种极端堆叠形式**：
-- 蛋白质分子错误折叠，形成β链
-- 成千上万的β链从不同蛋白质分子借来，堆叠成纤维
+淀粉样纤维是**beta折叠的一种极端堆叠形式**：
+- 蛋白质分子错误折叠，形成beta链
+- 成千上万的beta链从不同蛋白质分子借来，堆叠成纤维
 - 这些纤维不溶于水，不能被细胞降解
 - 它们沉积在大脑中，破坏神经元
 
-β折叠本身没有"好坏"，但它那种稳定的氢键网络，在错误地方形成时，会成为细胞无法清除的"垃圾"。这就是结构决定功能——以及功能失常——的力量。
+beta折叠本身没有"好坏"，但它那种稳定的氢键网络，在错误地方形成时，会成为细胞无法清除的"垃圾"。这就是结构决定功能——以及功能失常——的力量。
 
 ---
 
-## 第五部分：β折叠 vs α螺旋——核心对比
+## 第五部分：beta折叠 vs alpha螺旋——核心对比
 
-| 特征 | α螺旋 | β折叠 |
+| 特征 | alpha螺旋 | beta折叠 |
 |------|-------|-------|
 | 形状 | 弹簧（右手螺旋） | 片状（锯齿形） |
-| 氢键类型 | 链内（第i↔第i+4） | 链间（不同β链之间） |
+| 氢键类型 | 链内（第i与第i+4） | 链间（不同beta链之间） |
 | 侧链位置 | 均匀朝外（螺旋轴外侧） | 交替朝上/朝下 |
 | 伸展程度 | 链被压缩（每残基0.15nm） | 链被伸展（每残基0.35nm） |
 | 代表蛋白 | 角蛋白（头发/指甲） | 蚕丝（丝蛋白）、抗体 |
@@ -304,48 +286,46 @@ PLAN_MARKDOWN = """# M05N02：β折叠——大自然的手风琴
 
 ---
 
-## 第六部分：历史——X射线晶体学和β折叠的发现
+## 第六部分：历史——X射线晶体学和beta折叠的发现
 
-β折叠和α螺旋是同一位科学家在同一年（1951年）提出的——Linus Pauling 和 Robert Corey。
+beta折叠和alpha螺旋是同一位科学家在同一年（1951年）提出的——Linus Pauling 和 Robert Corey。
 
 ### 发现的关键工具：X射线衍射
 
 将蛋白质或蛋白质纤维制成晶体，用X射线照射，X射线会被原子散射，在胶片上形成衍射图样。从衍射图样的间距，可以推断出原子排列的周期和距离。
 
-**α螺旋的发现**：衍射图样中有0.54nm的周期（螺距）
+**alpha螺旋的发现**：衍射图样中有0.54nm的周期（螺距）
 
-**β折叠的发现**：蚕丝蛋白的衍射图样中有0.35nm的周期（β链方向的残基间距）和0.47nm（链间距）——与Pauling-Corey的β折叠模型完全匹配。
+**beta折叠的发现**：蚕丝蛋白的衍射图样中有0.35nm的周期（beta链方向的残基间距）和0.47nm（链间距）——与Pauling-Corey的beta折叠模型完全匹配。
 
-1951年，Pauling 在生病期间靠几何推理提出了这两种结构。1953年，Watson 和 Crick 发现DNA双螺旋时，正是受到了Pauling提出α螺旋的方法论启发。
+1951年，Pauling 在生病期间靠几何推理提出了这两种结构。1953年，Watson 和 Crick 发现DNA双螺旋时，正是受到了Pauling提出alpha螺旋的方法论启发。
 
 ---
 
 ## 本节小结
 
-| 特征 | β折叠 |
+| 特征 | beta折叠 |
 |------|-------|
-| 基本单元 | β链（锯齿形伸展的肽段） |
-| 片的形成 | 多条β链并排，链间氢键连接 |
+| 基本单元 | beta链（锯齿形伸展的肽段） |
+| 片的形成 | 多条beta链并排，链间氢键连接 |
 | 两种排列 | 反平行（更稳定）+ 平行（稍不稳定） |
 | 侧链 | 交替朝上/朝下（两面不同） |
-| 每残基长度 | 0.35nm（比α螺旋0.15nm更伸展） |
+| 每残基长度 | 0.35nm（比alpha螺旋0.15nm更伸展） |
 | 代表蛋白 | 蚕丝（丝蛋白）、蜘蛛丝、抗体、淀粉样纤维 |
 | 发现者 | Linus Pauling & Robert Corey，1951年 |
 
-**核心直觉**：β折叠是多肽链"伸展+并排"的结果。链内没有氢键，氢键在链与链之间。侧链一上一下交替，使折叠片有两个性质不同的面。蚕丝的强度和光泽，来自密集排列的β折叠片层和其中无数的氢键。
+**核心直觉**：beta折叠是多肽链"伸展+并排"的结果。链内没有氢键，氢键在链与链之间。侧链一上一下交替，使折叠片有两个性质不同的面。蚕丝的强度和光泽，来自密集排列的beta折叠片层和其中无数的氢键。
 
 ---
 
 ## 检测你学会了吗？
 
-1. β折叠中，氢键在哪里形成？（在不同β链之间，链间氢键）
-2. 反平行β折叠中，相邻β链的方向是什么关系？（方向相反）
-3. 为什么蚕丝蛋白含有大量Gly（甘氨酸）和Ala（丙氨酸）？（侧链小，允许β折叠片紧密堆叠）
-4. β链中侧链朝向有什么规律？（交替朝上和朝下）
-5. 淀粉样纤维是什么结构？（错误堆叠的大量β折叠）
+1. beta折叠中，氢键在哪里形成？（在不同beta链之间，链间氢键）
+2. 反平行beta折叠中，相邻beta链的方向是什么关系？（方向相反）
+3. 为什么蚕丝蛋白含有大量Gly（甘氨酸）和Ala（丙氨酸）？（侧链小，允许beta折叠片紧密堆叠）
+4. beta链中侧链朝向有什么规律？（交替朝上和朝下）
+5. 淀粉样纤维是什么结构？（错误堆叠的大量beta折叠）
 """
-
-# ── 步骤2：生成 idea ID ────────────────────────────────────────
 
 ANIM1_ID = _id("anim")
 ANIM2_ID = _id("anim")
@@ -353,1858 +333,766 @@ GAME_ID  = _id("game")
 STORY_ID = _id("story")
 EXER_ID  = _id("ex")
 
-# ── 步骤3：Canvas 动画1 —— β折叠形成过程（多条链并排，氢键依次连接）──
+# ── 动画1：beta折叠形成 HUD（HTML+SVG 仪表盘风格）─────────────
+# 中央 SVG: 5条beta链以锯齿形水平排列，链间H-bond虚线
+# 左侧 panel: SHEET_ANALYSIS（strand count, H-bonds, chain spacing, residue spacing）
+# 右侧 panel: STRAND_INDEX
+# 底部 HUD: STRANDS / H-BONDS / TYPE / STABILITY
 
-ANIM1_HTML = """<!DOCTYPE html>
+ANIM1_HTML = r"""<!DOCTYPE html>
 <html lang="zh">
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1"/>
-<title>beta折叠：多条链并排，氢键形成片状结构</title>
+<title>SHEET_ASSEMBLY</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=Noto+Sans+SC:wght@400;700&display=swap" rel="stylesheet"/>
 <style>
-* { box-sizing: border-box; margin: 0; padding: 0; }
-html, body {
-  width: 100%; height: 100%; overflow: hidden;
-  background: __THEME_BG__;
-  font-family: __THEME_FONT__;
-}
-canvas { display: block; width: 100%; height: 100%; position: absolute; top: 0; left: 0; }
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html,body{width:100%;height:100%;overflow:hidden;background:__THEME_BG__;font-family:__THEME_FONT__;color:__THEME_TEXT__;user-select:none}
+.hud{width:100%;height:100%;display:grid;grid-template-rows:44px 1fr 56px;grid-template-columns:180px 1fr 160px;gap:0}
+.top-bar{grid-column:1/-1;display:flex;align-items:center;justify-content:space-between;padding:0 16px;background:rgba(12,14,18,0.6);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);border-bottom:1px solid __THEME_BORDER__;z-index:10}
+.top-bar .title{font-size:11px;font-weight:700;letter-spacing:0.15em;text-transform:uppercase;color:__THEME_PRIMARY__;text-shadow:0 0 15px __THEME_PRIMARY__40}
+.status-dot{width:6px;height:6px;border-radius:50%;background:__THEME_PRIMARY__;box-shadow:0 0 8px __THEME_PRIMARY__;animation:pdot 2s infinite}
+.ctrl-btns{display:flex;gap:4px}
+.ctrl-btn{padding:5px 12px;border-radius:4px;border:1px solid __THEME_BORDER__;background:__THEME_SURFACE__;color:__THEME_TEXT_DIM__;font-family:__THEME_FONT__;font-size:10px;font-weight:600;cursor:pointer;transition:all 0.2s;letter-spacing:0.08em;text-transform:uppercase}
+.ctrl-btn:hover{border-color:__THEME_PRIMARY__60;color:__THEME_PRIMARY__}
+.ctrl-btn.active{background:__THEME_PRIMARY__18;border-color:__THEME_PRIMARY__;color:__THEME_PRIMARY__;box-shadow:0 0 12px __THEME_PRIMARY__25}
+.pnl{padding:12px 10px;background:__THEME_CARD__;backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);overflow-y:auto}
+.pnl-l{border-right:1px solid __THEME_BORDER__}
+.pnl-r{border-left:1px solid __THEME_BORDER__}
+.sect{margin-bottom:12px}
+.ch{width:32px;height:2px;margin-bottom:8px;box-shadow:0 0 8px __THEME_PRIMARY__60}
+.ch-p{background:__THEME_PRIMARY__}.ch-s{background:__THEME_SECONDARY__;box-shadow:0 0 8px __THEME_SECONDARY__60}
+.ch-a{background:__THEME_ACCENT__;box-shadow:0 0 8px __THEME_ACCENT__60}
+.hl{font-size:9px;font-weight:500;letter-spacing:0.12em;text-transform:uppercase;color:__THEME_HUD_LABEL__;margin-bottom:4px}
+.hv{font-size:18px;font-weight:700;color:__THEME_HUD_VALUE__;line-height:1.2}
+.hv-p{color:__THEME_PRIMARY__;text-shadow:0 0 10px __THEME_PRIMARY__40}
+.hv-s{font-size:12px}
+.dr{display:flex;justify-content:space-between;padding:3px 0;border-bottom:1px solid rgba(70,72,77,0.08)}
+.dr .k{font-size:9px;letter-spacing:0.1em;text-transform:uppercase;color:__THEME_TEXT_DIM__}
+.dr .v{font-size:10px;font-weight:600;color:__THEME_TEXT__}
+.center{position:relative;display:flex;align-items:center;justify-content:center;background:radial-gradient(ellipse at center,__THEME_BG2__ 0%,__THEME_BG__ 70%);overflow:hidden}
+.bhud{grid-column:1/-1;display:grid;grid-template-columns:repeat(4,1fr);background:__THEME_HUD_BG__;border-top:1px solid __THEME_BORDER__;position:relative}
+.bhud::before{content:'';position:absolute;top:0;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,__THEME_PRIMARY__,__THEME_SECONDARY__,__THEME_PRIMARY__,transparent);opacity:0.6}
+.hc{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:6px 0;position:relative}
+.hc:not(:last-child)::after{content:'';position:absolute;right:0;top:12px;bottom:12px;width:1px;background:rgba(70,72,77,0.15)}
+.hc .hl{margin-bottom:2px;font-size:8px}
+.hc .hv{font-size:15px}
+.strand-item{display:flex;align-items:center;gap:6px;padding:3px 4px;border-radius:3px;margin-bottom:2px;transition:background 0.2s}
+.strand-item.active{background:__THEME_PRIMARY__15}
+.strand-dot{width:8px;height:8px;border-radius:50%;background:__THEME_PRIMARY__;box-shadow:0 0 4px __THEME_PRIMARY__}
+.strand-dot.dim{background:__THEME_SURFACE_HIGHEST__;box-shadow:none}
+.strand-id{font-size:9px;font-weight:600;color:__THEME_TEXT_DIM__;min-width:16px}
+.strand-dir{font-size:9px;color:__THEME_TEXT__;letter-spacing:0.05em}
+@keyframes pdot{0%,100%{opacity:1}50%{opacity:0.4}}
+@keyframes fade-in{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
+.fi{animation:fade-in 0.5s ease-out both}
 </style>
 </head>
 <body>
-<canvas id="c"></canvas>
-<script>
-(function() {
-"use strict";
-
-/* ── canvas setup ── */
-var canvas = document.getElementById("c");
-var ctx = canvas.getContext("2d");
-var W = 600, H = 420;
-var DPR = Math.min(window.devicePixelRatio || 1, 2);
-
-function resize() {
-  var rect = canvas.getBoundingClientRect();
-  canvas.width  = rect.width  * DPR;
-  canvas.height = rect.height * DPR;
-  ctx.setTransform(1,0,0,1,0,0);
-  ctx.scale(DPR * rect.width / W, DPR * rect.height / H);
-}
-resize();
-window.addEventListener("resize", resize);
-
-/* ── 颜色常量 ── */
-var COL_BG1    = "__THEME_BG__";
-var COL_BG2    = "__THEME_BG2__";
-var COL_GRID   = "__THEME_GRID__";
-var COL_PRI    = "__THEME_PRIMARY__";
-var COL_SEC    = "__THEME_SECONDARY__";
-var COL_ACC    = "__THEME_ACCENT__";
-var COL_TEXT   = "__THEME_TEXT__";
-var COL_DIM    = "__THEME_TEXT_DIM__";
-var COL_HUD_BG = "__THEME_HUD_BG__";
-var COL_HUD_LB = "__THEME_HUD_LABEL__";
-var COL_HUD_VL = "__THEME_HUD_VALUE__";
-
-/* ── 工具函数 ── */
-function roundRect(x, y, w, h, r) {
-  ctx.beginPath();
-  ctx.moveTo(x+r, y);
-  ctx.lineTo(x+w-r, y); ctx.quadraticCurveTo(x+w, y, x+w, y+r);
-  ctx.lineTo(x+w, y+h-r); ctx.quadraticCurveTo(x+w, y+h, x+w-r, y+h);
-  ctx.lineTo(x+r, y+h); ctx.quadraticCurveTo(x, y+h, x, y+h-r);
-  ctx.lineTo(x, y+r); ctx.quadraticCurveTo(x, y, x+r, y);
-  ctx.closePath();
-}
-
-function easeInOut(t) {
-  return t < 0.5 ? 2*t*t : -1 + (4 - 2*t)*t;
-}
-
-function lerp(a, b, t) { return a + (b - a) * t; }
-
-/* ── 背景绘制 ── */
-function drawBg() {
-  var g = ctx.createLinearGradient(0, 0, 0, H);
-  g.addColorStop(0, COL_BG1);
-  g.addColorStop(1, COL_BG2);
-  ctx.fillStyle = g;
-  ctx.fillRect(0, 0, W, H);
-
-  ctx.strokeStyle = COL_GRID;
-  ctx.lineWidth = 1;
-  for (var x = 0; x <= W; x += 40) {
-    ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke();
-  }
-  for (var y = 0; y <= H; y += 40) {
-    ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke();
-  }
-}
-
-/* ── 标题 ── */
-function drawTitle(txt) {
-  ctx.font = "bold 15px 'Noto Sans SC', system-ui";
-  ctx.textAlign = "center";
-  ctx.fillStyle = COL_TEXT;
-  ctx.globalAlpha = 0.92;
-  ctx.fillText(txt, W/2, 26);
-  ctx.globalAlpha = 1;
-}
-
-/* ── HUD ── */
-function drawHUD(cols) {
-  var by = H - 52;
-  ctx.fillStyle = COL_HUD_BG;
-  roundRect(0, by, W, 52, 0);
-  ctx.fill();
-  ctx.strokeStyle = "rgba(255,255,255,0.08)";
-  ctx.lineWidth = 1;
-  ctx.beginPath(); ctx.moveTo(0, by); ctx.lineTo(W, by); ctx.stroke();
-
-  var cw = W / cols.length;
-  cols.forEach(function(c, i) {
-    var cx2 = cw*i + cw/2;
-    ctx.font = "10px 'Noto Sans SC', system-ui";
-    ctx.textAlign = "center";
-    ctx.fillStyle = COL_HUD_LB;
-    ctx.fillText(c.label, cx2, by + 17);
-    ctx.font = "bold 13px 'Noto Sans SC', system-ui";
-    ctx.fillStyle = COL_HUD_VL;
-    ctx.fillText(c.val, cx2, by + 38);
-  });
-}
-
-/* ── β折叠参数 ── */
-// 5条β链，每条7个残基
-var NUM_STRANDS = 5;
-var NUM_RESIDUES = 7;
-var STRAND_SPACING = 56;  // 链间距（像素，代表0.47nm）
-var RES_SPACING = 36;     // 残基间距（代表0.35nm）
-var ZIG_AMP = 16;         // 锯齿振幅（像素）
-var BEAD_R = 8;           // 主链珠子半径
-var SIDE_R = 5;           // 侧链珠子半径
-
-// 场景中心
-var CX = W / 2;
-var CY = H / 2 - 30;
-
-// 每条链的目标 y 坐标（已展开状态）
-// 3条链在中间，上下各加（随动画展开）
-function strandTargetY(si) {
-  // si: 0..NUM_STRANDS-1
-  return CY + (si - (NUM_STRANDS-1)/2) * STRAND_SPACING;
-}
-
-// 残基位置（锯齿形）
-function residuePos(si, ri, yPos) {
-  var xStart = CX - (NUM_RESIDUES - 1) * RES_SPACING / 2;
-  var x = xStart + ri * RES_SPACING;
-  var zigDir = (ri % 2 === 0) ? 1 : -1;
-  // 反平行：奇数链从右到左（镜像x）
-  var flip = (si % 2 === 1);
-  if (flip) {
-    var xEnd = CX + (NUM_RESIDUES - 1) * RES_SPACING / 2;
-    x = xEnd - ri * RES_SPACING;
-  }
-  return {
-    x: x,
-    y: yPos + zigDir * ZIG_AMP,
-    sideY: yPos + zigDir * (ZIG_AMP + BEAD_R + SIDE_R + 4),
-    up: zigDir > 0,
-  };
-}
-
-/* ── 动画状态 ── */
-// 阶段：0=单链展示(1条) -> 1=加入链2 -> 2=加入链3 -> 3=加入链4 -> 4=加入链5 -> 5=完整展示 -> 6=探索模式
-var phase = 0;
-var phaseStart = performance.now();
-var PHASE_DURATIONS = [1800, 1200, 1200, 1200, 1200, 3000];
-var INTRO_HOLD = 2000;  // 第0阶段停留时间
-
-// 每条链当前的 y 偏移（从屏幕外飞入）
-var strandProgress = [1.0, 0.0, 0.0, 0.0, 0.0];  // 1=完全飞入
-
-// 氢键透明度（链2入场后开始出现）
-var hbondAlpha = 0.0;
-
-// 状态文字
-var PHASE_NAMES = [
-  "单条β链：锯齿形伸展",
-  "第2条β链：反平行排列",
-  "第3条β链：氢键网络形成",
-  "第4条β链：片层扩展",
-  "β折叠片：5条链完整结构",
-  "β折叠片：稳定的氢键网络",
-  "探索模式",
-];
-
-var PHASE_SUBS = [
-  "侧链交替朝上/朝下",
-  "两链反向，氢键开始连接",
-  "链间氢键（虚线）垂直于链轴",
-  "多层堆叠，片状结构形成",
-  "所有氢键建立，结构稳定",
-  "蚕丝就是这样的β折叠片层",
-  "悬停查看残基详情 | 拖动观察结构变化",
-];
-
-function getStrandCount() {
-  var counts = [1, 2, 3, 4, 5, 5, 5];
-  return counts[Math.min(phase, 6)];
-}
-
-/* ── 探索模式交互状态 ── */
-var exploreMode = false;
-// 每帧记录所有珠子绘制位置（用于 hitTest）
-var beadPositions = [];  // beadPositions[si][ri] = {x, y}
-for (var _si = 0; _si < NUM_STRANDS; _si++) {
-  beadPositions[_si] = [];
-  for (var _ri = 0; _ri < NUM_RESIDUES; _ri++) {
-    beadPositions[_si][_ri] = { x: 0, y: 0 };
-  }
-}
-
-// 鼠标逻辑坐标
-var mouseX = -999, mouseY = -999;
-// hover 状态
-var hoverStrand = -1, hoverResidue = -1;
-// 拖拽状态
-var dragging = null;  // {si, ri}
-var dragOffX = 0, dragOffY = 0;
-var dragDisplace = [];  // dragDisplace[si][ri] = {dx, dy}
-for (var _si2 = 0; _si2 < NUM_STRANDS; _si2++) {
-  dragDisplace[_si2] = [];
-  for (var _ri2 = 0; _ri2 < NUM_RESIDUES; _ri2++) {
-    dragDisplace[_si2][_ri2] = { dx: 0, dy: 0 };
-  }
-}
-// 弹回动画
-var snapBacks = [];  // [{si, ri, startDx, startDy, startTime}]
-var SNAP_DURATION = 300;
-
-// 重播按钮区域
-var replayBtnRect = { x: 12, y: H - 100, w: 72, h: 28 };
-
-/* ── 坐标转换 ── */
-function canvasToLogic(e) {
-  var rect = canvas.getBoundingClientRect();
-  var x = ((e.clientX || e.pageX) - rect.left) / rect.width * W;
-  var y = ((e.clientY || e.pageY) - rect.top) / rect.height * H;
-  return { x: x, y: y };
-}
-
-/* ── hitTest：检测鼠标是否在某个珠子上 ── */
-function hitTestBead(mx, my) {
-  var hitR = BEAD_R + 4;
-  for (var si = 0; si < NUM_STRANDS; si++) {
-    for (var ri = 0; ri < NUM_RESIDUES; ri++) {
-      var bp = beadPositions[si][ri];
-      if (Math.hypot(mx - bp.x, my - bp.y) < hitR) {
-        return { si: si, ri: ri };
-      }
-    }
-  }
-  return null;
-}
-
-/* ── 鼠标/触摸事件 ── */
-function onMouseMove(e) {
-  var pos = canvasToLogic(e);
-  mouseX = pos.x;
-  mouseY = pos.y;
-
-  if (!exploreMode) return;
-
-  if (dragging) {
-    var dd = dragDisplace[dragging.si][dragging.ri];
-    dd.dx = mouseX - beadPositions[dragging.si][dragging.ri].x + dragOffX;
-    dd.dy = mouseY - beadPositions[dragging.si][dragging.ri].y + dragOffY;
-  } else {
-    var hit = hitTestBead(mouseX, mouseY);
-    if (hit) {
-      hoverStrand = hit.si;
-      hoverResidue = hit.ri;
-      canvas.style.cursor = "grab";
-    } else {
-      hoverStrand = -1;
-      hoverResidue = -1;
-      // 检查是否在重播按钮上
-      var rb = replayBtnRect;
-      if (mouseX >= rb.x && mouseX <= rb.x + rb.w && mouseY >= rb.y && mouseY <= rb.y + rb.h) {
-        canvas.style.cursor = "pointer";
-      } else {
-        canvas.style.cursor = "default";
-      }
-    }
-  }
-}
-
-function onMouseDown(e) {
-  if (!exploreMode) return;
-  var pos = canvasToLogic(e);
-  mouseX = pos.x;
-  mouseY = pos.y;
-
-  // 检查重播按钮
-  var rb = replayBtnRect;
-  if (mouseX >= rb.x && mouseX <= rb.x + rb.w && mouseY >= rb.y && mouseY <= rb.y + rb.h) {
-    doReplay();
-    return;
-  }
-
-  var hit = hitTestBead(mouseX, mouseY);
-  if (hit) {
-    dragging = hit;
-    var bp = beadPositions[hit.si][hit.ri];
-    dragOffX = bp.x - mouseX + dragDisplace[hit.si][hit.ri].dx;
-    dragOffY = bp.y - mouseY + dragDisplace[hit.si][hit.ri].dy;
-    canvas.style.cursor = "grabbing";
-    e.preventDefault && e.preventDefault();
-  }
-}
-
-function onMouseUp(e) {
-  if (!exploreMode || !dragging) return;
-  // 开始弹回动画
-  var dd = dragDisplace[dragging.si][dragging.ri];
-  if (Math.abs(dd.dx) > 0.5 || Math.abs(dd.dy) > 0.5) {
-    snapBacks.push({
-      si: dragging.si,
-      ri: dragging.ri,
-      startDx: dd.dx,
-      startDy: dd.dy,
-      startTime: performance.now()
-    });
-  }
-  dragging = null;
-  canvas.style.cursor = "default";
-}
-
-canvas.addEventListener("mousemove", onMouseMove);
-canvas.addEventListener("mousedown", onMouseDown);
-canvas.addEventListener("mouseup", onMouseUp);
-canvas.addEventListener("mouseleave", function() {
-  mouseX = -999; mouseY = -999;
-  hoverStrand = -1; hoverResidue = -1;
-  if (dragging) onMouseUp(null);
-});
-
-// 触摸支持
-canvas.addEventListener("touchstart", function(e) {
-  if (e.touches.length === 1) {
-    var t = e.touches[0];
-    onMouseDown({ clientX: t.clientX, clientY: t.clientY, preventDefault: function() { e.preventDefault(); } });
-  }
-}, { passive: false });
-canvas.addEventListener("touchmove", function(e) {
-  if (e.touches.length === 1) {
-    var t = e.touches[0];
-    onMouseMove({ clientX: t.clientX, clientY: t.clientY });
-  }
-  e.preventDefault();
-}, { passive: false });
-canvas.addEventListener("touchend", function(e) {
-  onMouseUp(null);
-});
-
-/* ── 重播 ── */
-function doReplay() {
-  exploreMode = false;
-  phase = 0;
-  phaseStart = performance.now();
-  strandProgress = [1.0, 0.0, 0.0, 0.0, 0.0];
-  hbondAlpha = 0.0;
-  dragging = null;
-  snapBacks = [];
-  hoverStrand = -1;
-  hoverResidue = -1;
-  // 重置所有位移
-  for (var si = 0; si < NUM_STRANDS; si++) {
-    for (var ri = 0; ri < NUM_RESIDUES; ri++) {
-      dragDisplace[si][ri].dx = 0;
-      dragDisplace[si][ri].dy = 0;
-    }
-  }
-}
-
-/* ── 绘制单条β链（支持拖拽位移） ── */
-function drawStrand(si, yFrac, hbAlpha, isNew) {
-  var targetY = strandTargetY(si);
-  // 从上方飞入（新链从屏幕上方进入）
-  var offScreen = -120;
-  var yPos = lerp(offScreen + targetY, targetY, easeInOut(Math.min(yFrac, 1.0)));
-
-  // 骨架锯齿路径（考虑拖拽位移）
-  ctx.beginPath();
-  for (var ri = 0; ri < NUM_RESIDUES; ri++) {
-    var p = residuePos(si, ri, yPos);
-    var dd = dragDisplace[si][ri];
-    var bx = p.x + dd.dx;
-    var by = p.y + dd.dy;
-    // 记录珠子绘制位置（用 base 位置，不含位移，以便 hitTest 稳定）
-    beadPositions[si][ri].x = p.x;
-    beadPositions[si][ri].y = p.y;
-    if (ri === 0) ctx.moveTo(bx, by);
-    else ctx.lineTo(bx, by);
-  }
-  ctx.strokeStyle = COL_PRI;
-  ctx.lineWidth = 2.5;
-  ctx.globalAlpha = 0.85;
-  ctx.stroke();
-  ctx.globalAlpha = 1.0;
-
-  // 骨架珠子（Cα）和侧链
-  for (var ri2 = 0; ri2 < NUM_RESIDUES; ri2++) {
-    var p2 = residuePos(si, ri2, yPos);
-    var dd2 = dragDisplace[si][ri2];
-    var bx2 = p2.x + dd2.dx;
-    var by2 = p2.y + dd2.dy;
-    var sideY2 = p2.sideY + dd2.dy;
-
-    // hover 高亮
-    var isHovered = (exploreMode && hoverStrand === si && hoverResidue === ri2);
-
-    // 侧链
-    ctx.beginPath();
-    ctx.arc(bx2, sideY2, SIDE_R, 0, Math.PI*2);
-    ctx.fillStyle = COL_ACC;
-    ctx.globalAlpha = isHovered ? 1.0 : 0.7;
-    ctx.fill();
-    ctx.globalAlpha = 1.0;
-
-    // 侧链连接线
-    ctx.beginPath();
-    ctx.moveTo(bx2, by2);
-    ctx.lineTo(bx2, sideY2);
-    ctx.strokeStyle = COL_ACC;
-    ctx.lineWidth = 1.5;
-    ctx.globalAlpha = 0.4;
-    ctx.stroke();
-    ctx.globalAlpha = 1.0;
-
-    // Cα珠子
-    var bgCa = ctx.createRadialGradient(bx2 - 2, by2 - 2, 0, bx2, by2, BEAD_R);
-    if (isHovered) {
-      bgCa.addColorStop(0, "#fef08a");
-      bgCa.addColorStop(0.5, "#f59e0b");
-      bgCa.addColorStop(1, "#92400e");
-    } else {
-      bgCa.addColorStop(0, "#a7f3d0");  // 高光
-      bgCa.addColorStop(0.5, COL_PRI);  // 中调
-      bgCa.addColorStop(1, "#065f46");  // 暗边
-    }
-    ctx.beginPath();
-    ctx.arc(bx2, by2, isHovered ? BEAD_R + 2 : BEAD_R, 0, Math.PI*2);
-    ctx.fillStyle = bgCa;
-    ctx.fill();
-    ctx.strokeStyle = isHovered ? "rgba(245,158,11,0.8)" : "rgba(255,255,255,0.4)";
-    ctx.lineWidth = isHovered ? 2 : 1;
-    ctx.stroke();
-
-    // 序号（仅第一条链显示，或探索模式下所有 hover 珠子）
-    if (si === 0 || isHovered) {
-      ctx.font = "7px 'Noto Sans SC', system-ui";
-      ctx.textAlign = "center";
-      ctx.fillStyle = "rgba(255,255,255,0.9)";
-      ctx.fillText((ri2 + 1).toString(), bx2, by2 + 2.5);
-    }
-
-    // 朝向标记（上/下箭头，仅第一条链，非探索模式）
-    if (si === 0 && !exploreMode) {
-      var arrowTip = sideY2 + (p2.up ? SIDE_R + 9 : -(SIDE_R + 9));
-      ctx.beginPath();
-      ctx.moveTo(bx2, sideY2 + (p2.up ? SIDE_R : -SIDE_R));
-      ctx.lineTo(bx2, arrowTip);
-      ctx.strokeStyle = COL_ACC;
-      ctx.lineWidth = 1.5;
-      ctx.globalAlpha = 0.6;
-      ctx.stroke();
-      ctx.globalAlpha = 1;
-    }
-  }
-
-  return yPos;
-}
-
-/* ── 绘制链间氢键（支持拖拽位移） ── */
-function drawHBonds(si1, y1, si2, y2, alpha) {
-  if (alpha <= 0.01) return;
-  ctx.globalAlpha = alpha;
-  ctx.setLineDash([5, 4]);
-  ctx.strokeStyle = COL_SEC;
-  ctx.lineWidth = 1.8;
-
-  for (var ri = 0; ri < NUM_RESIDUES; ri++) {
-    var p1 = residuePos(si1, ri, y1);
-    var p2 = residuePos(si2, ri, y2);
-    var dd1 = dragDisplace[si1][ri];
-    var dd2 = dragDisplace[si2][ri];
-    ctx.beginPath();
-    ctx.moveTo(p1.x + dd1.dx, p1.y + dd1.dy);
-    ctx.lineTo(p2.x + dd2.dx, p2.y + dd2.dy);
-    ctx.stroke();
-  }
-
-  ctx.setLineDash([]);
-  ctx.globalAlpha = 1.0;
-}
-
-/* ── 绘制链方向箭头 ── */
-function drawDirectionArrow(si, yPos, color) {
-  var flip = (si % 2 === 1);
-  var xStart = CX - (NUM_RESIDUES - 1) * RES_SPACING / 2;
-  var xEnd   = CX + (NUM_RESIDUES - 1) * RES_SPACING / 2;
-  var ax = flip ? xEnd + 12 : xStart - 12;
-  var ax2 = flip ? xStart - 8 : xEnd + 8;
-
-  ctx.beginPath();
-  ctx.moveTo(ax, yPos);
-  ctx.lineTo(ax2, yPos);
-  // 箭头头
-  var headX = ax2 + (flip ? -6 : 6);
-  ctx.lineTo(headX, yPos - 4);
-  ctx.moveTo(ax2, yPos);
-  ctx.lineTo(headX, yPos + 4);
-  ctx.strokeStyle = color;
-  ctx.lineWidth = 2;
-  ctx.globalAlpha = 0.7;
-  ctx.stroke();
-  ctx.globalAlpha = 1.0;
-}
-
-/* ── 绘制 tooltip ── */
-function drawTooltip(mx, my, si, ri) {
-  var txt = "β链 #" + (si + 1) + " 残基 #" + (ri + 1);
-  ctx.font = "bold 11px 'Noto Sans SC', system-ui";
-  var tw = ctx.measureText(txt).width;
-  var padX = 8, padY = 5;
-  var ttW = tw + padX * 2;
-  var ttH = 22;
-  var ttX = mx - ttW / 2;
-  var ttY = my - ttH - 12;
-  // 防止超出画布
-  if (ttX < 4) ttX = 4;
-  if (ttX + ttW > W - 4) ttX = W - 4 - ttW;
-  if (ttY < 4) ttY = my + 16;
-
-  ctx.globalAlpha = 0.88;
-  ctx.fillStyle = "rgba(15,23,42,0.85)";
-  roundRect(ttX, ttY, ttW, ttH, 5);
-  ctx.fill();
-  ctx.globalAlpha = 1.0;
-
-  ctx.fillStyle = "#f8fafc";
-  ctx.textAlign = "center";
-  ctx.fillText(txt, ttX + ttW / 2, ttY + ttH - 6);
-}
-
-/* ── 绘制重播按钮 ── */
-function drawReplayBtn() {
-  var rb = replayBtnRect;
-  var isHover = (mouseX >= rb.x && mouseX <= rb.x + rb.w && mouseY >= rb.y && mouseY <= rb.y + rb.h);
-
-  ctx.globalAlpha = isHover ? 0.95 : 0.75;
-  ctx.fillStyle = COL_PRI;
-  roundRect(rb.x, rb.y, rb.w, rb.h, 6);
-  ctx.fill();
-
-  ctx.globalAlpha = 1.0;
-  ctx.font = "bold 11px 'Noto Sans SC', system-ui";
-  ctx.textAlign = "center";
-  ctx.fillStyle = "#ffffff";
-  ctx.fillText("重播", rb.x + rb.w / 2, rb.y + rb.h / 2 + 4);
-}
-
-/* ── 绘制探索模式提示 ── */
-function drawExploreHint() {
-  ctx.font = "11px 'Noto Sans SC', system-ui";
-  ctx.textAlign = "center";
-  ctx.fillStyle = COL_PRI;
-  ctx.globalAlpha = 0.85;
-  ctx.fillText("探索模式：悬停查看残基详情 | 拖动观察结构变化", W / 2, 44);
-  ctx.globalAlpha = 1.0;
-}
-
-/* ── 动画主循环 ── */
-var strandYCache = new Array(NUM_STRANDS).fill(0);
-
-function loop(now) {
-  // 弹回动画更新
-  for (var sbi = snapBacks.length - 1; sbi >= 0; sbi--) {
-    var sb = snapBacks[sbi];
-    var sbt = (now - sb.startTime) / SNAP_DURATION;
-    if (sbt >= 1.0) {
-      dragDisplace[sb.si][sb.ri].dx = 0;
-      dragDisplace[sb.si][sb.ri].dy = 0;
-      snapBacks.splice(sbi, 1);
-    } else {
-      var ease = 1 - easeInOut(sbt);
-      dragDisplace[sb.si][sb.ri].dx = sb.startDx * ease;
-      dragDisplace[sb.si][sb.ri].dy = sb.startDy * ease;
-    }
-  }
-
-  if (!exploreMode) {
-    var elapsed = now - phaseStart;
-    var dur = PHASE_DURATIONS[Math.min(phase, PHASE_DURATIONS.length-1)];
-    var t = Math.min(elapsed / dur, 1.0);
-
-    // 阶段推进
-    if (t >= 1.0) {
-      if (phase < 5) {
-        phase++;
-        phaseStart = now;
-        // 新链飞入动画：下一条链的进度设为0
-        if (phase <= NUM_STRANDS - 1) {
-          strandProgress[phase] = 0.0;
-        }
-      } else {
-        // phase 5 完成后进入探索模式（不再循环）
-        if (elapsed > 3000) {
-          phase = 6;
-          exploreMode = true;
-          hbondAlpha = 1.0;
-        }
-      }
-    }
-
-    // 更新新链进度
-    for (var si = 1; si < NUM_STRANDS; si++) {
-      if (strandProgress[si] < 1.0 && si <= getStrandCount() - 1) {
-        strandProgress[si] = Math.min(strandProgress[si] + 0.018, 1.0);
-      }
-    }
-
-    // 氢键透明度：链2完全到位后渐显
-    var targetHBAlpha = phase >= 2 ? Math.min(1.0, (elapsed - 400) / 800) : 0.0;
-    if (phase >= 2) hbondAlpha = Math.min(hbondAlpha + 0.015, targetHBAlpha);
-    if (phase < 2)  hbondAlpha = Math.max(hbondAlpha - 0.02, 0.0);
-  }
-
-  // ── 绘制 ──
-  drawBg();
-  if (exploreMode) {
-    drawTitle("β折叠形成过程：多条链并排，氢键构成片状结构");
-    drawExploreHint();
-  } else {
-    drawTitle("β折叠形成过程：多条链并排，氢键构成片状结构");
-  }
-
-  // 绘制当前活跃的链
-  var count = getStrandCount();
-  for (var si2 = 0; si2 < count; si2++) {
-    var yPos = strandTargetY(si2);
-    strandYCache[si2] = yPos;
-    drawStrand(si2, strandProgress[si2], hbondAlpha, si2 > 0);
-
-    // 方向箭头
-    var arCol = si2 % 2 === 0 ? COL_PRI : COL_SEC;
-    if (strandProgress[si2] > 0.8) {
-      drawDirectionArrow(si2, yPos, arCol);
-    }
-  }
-
-  // 绘制链间氢键
-  if (count >= 2 && hbondAlpha > 0.01) {
-    for (var pi = 0; pi < count - 1; pi++) {
-      drawHBonds(pi, strandYCache[pi], pi+1, strandYCache[pi+1], hbondAlpha * 0.9);
-    }
-  }
-
-  // 第一条链的锯齿说明（仅动画阶段0显示）
-  if (count === 1 && !exploreMode) {
-    ctx.font = "11px 'Noto Sans SC', system-ui";
-    ctx.textAlign = "center";
-    ctx.fillStyle = COL_DIM;
-    ctx.globalAlpha = 0.85;
-    ctx.fillText("锯齿形骨架：每个氨基酸的Cα在折叠的顶点", W/2, CY + ZIG_AMP + BEAD_R + 36);
-    ctx.fillText("侧链（橙色）：奇数位朝上，偶数位朝下", W/2, CY + ZIG_AMP + BEAD_R + 52);
-    ctx.globalAlpha = 1.0;
-  }
-
-  // HUD
-  var hbCount = count >= 2 ? (count - 1) * NUM_RESIDUES : 0;
-  if (exploreMode) {
-    drawHUD([
-      { label: "模式", val: "探索" },
-      { label: "β链数量", val: count.toString() },
-      { label: "链间氢键", val: hbCount.toString() },
-      { label: "残基间距", val: "0.35 nm" },
-    ]);
-  } else {
-    drawHUD([
-      { label: "阶段", val: PHASE_NAMES[Math.min(phase, 6)].substring(0, 10) },
-      { label: "β链数量", val: count.toString() },
-      { label: "链间氢键", val: hbCount.toString() },
-      { label: "残基间距", val: "0.35 nm" },
-    ]);
-  }
-
-  // 阶段说明文字（非探索模式）
-  if (!exploreMode) {
-    ctx.font = "11px 'Noto Sans SC', system-ui";
-    ctx.textAlign = "center";
-    ctx.fillStyle = COL_PRI;
-    ctx.globalAlpha = 0.9;
-    ctx.fillText(PHASE_SUBS[Math.min(phase, 5)], W/2, H - 62);
-    ctx.globalAlpha = 1.0;
-  }
-
-  // 探索模式 UI
-  if (exploreMode) {
-    drawReplayBtn();
-
-    // Tooltip
-    if (hoverStrand >= 0 && hoverResidue >= 0 && !dragging) {
-      drawTooltip(mouseX, mouseY, hoverStrand, hoverResidue);
-    }
-  }
-
-  requestAnimationFrame(loop);
-}
-
-requestAnimationFrame(loop);
-
-})();
-</script>
-</body>
-</html>"""
-
-# ── Canvas 动画2 —— 反平行 vs 平行β折叠对比 ────────────────────
-
-ANIM2_HTML = """<!DOCTYPE html>
-<html lang="zh">
-<head>
-<meta charset="UTF-8"/>
-<meta name="viewport" content="width=device-width, initial-scale=1"/>
-<title>反平行 vs 平行 β折叠</title>
-<style>
-* { box-sizing: border-box; margin: 0; padding: 0; }
-html, body {
-  width: 100%; height: 100%; overflow: hidden;
-  background: __THEME_BG__;
-  font-family: __THEME_FONT__;
-}
-canvas { display: block; width: 100%; height: 100%; position: absolute; top: 0; left: 0; }
-</style>
-</head>
-<body>
-<canvas id="c"></canvas>
-<script>
-(function() {
-"use strict";
-
-var canvas = document.getElementById("c");
-var ctx = canvas.getContext("2d");
-var W = 600, H = 420;
-var DPR = Math.min(window.devicePixelRatio || 1, 2);
-
-function resize() {
-  var rect = canvas.getBoundingClientRect();
-  canvas.width  = rect.width  * DPR;
-  canvas.height = rect.height * DPR;
-  ctx.setTransform(1,0,0,1,0,0);
-  ctx.scale(DPR * rect.width / W, DPR * rect.height / H);
-}
-resize();
-window.addEventListener("resize", resize);
-
-var COL_BG1    = "__THEME_BG__";
-var COL_BG2    = "__THEME_BG2__";
-var COL_GRID   = "__THEME_GRID__";
-var COL_PRI    = "__THEME_PRIMARY__";
-var COL_SEC    = "__THEME_SECONDARY__";
-var COL_ACC    = "__THEME_ACCENT__";
-var COL_TEXT   = "__THEME_TEXT__";
-var COL_DIM    = "__THEME_TEXT_DIM__";
-var COL_HUD_BG = "__THEME_HUD_BG__";
-var COL_HUD_LB = "__THEME_HUD_LABEL__";
-var COL_HUD_VL = "__THEME_HUD_VALUE__";
-
-function roundRect(x, y, w, h, r) {
-  ctx.beginPath();
-  ctx.moveTo(x+r, y);
-  ctx.lineTo(x+w-r, y); ctx.quadraticCurveTo(x+w, y, x+w, y+r);
-  ctx.lineTo(x+w, y+h-r); ctx.quadraticCurveTo(x+w, y+h, x+w-r, y+h);
-  ctx.lineTo(x+r, y+h); ctx.quadraticCurveTo(x, y+h, x, y+h-r);
-  ctx.lineTo(x, y+r); ctx.quadraticCurveTo(x, y, x+r, y);
-  ctx.closePath();
-}
-
-function easeInOut(t) {
-  return t < 0.5 ? 2*t*t : -1 + (4 - 2*t)*t;
-}
-
-function drawBg() {
-  var g = ctx.createLinearGradient(0, 0, 0, H);
-  g.addColorStop(0, COL_BG1);
-  g.addColorStop(1, COL_BG2);
-  ctx.fillStyle = g;
-  ctx.fillRect(0, 0, W, H);
-  ctx.strokeStyle = COL_GRID;
-  ctx.lineWidth = 1;
-  for (var x = 0; x <= W; x += 40) {
-    ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke();
-  }
-  for (var y = 0; y <= H; y += 40) {
-    ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke();
-  }
-}
-
-function drawHUD(cols) {
-  var by = H - 52;
-  ctx.fillStyle = COL_HUD_BG;
-  roundRect(0, by, W, 52, 0);
-  ctx.fill();
-  ctx.strokeStyle = "rgba(255,255,255,0.08)";
-  ctx.lineWidth = 1;
-  ctx.beginPath(); ctx.moveTo(0, by); ctx.lineTo(W, by); ctx.stroke();
-  var cw = W / cols.length;
-  cols.forEach(function(c, i) {
-    var cx2 = cw*i + cw/2;
-    ctx.font = "10px 'Noto Sans SC', system-ui";
-    ctx.textAlign = "center";
-    ctx.fillStyle = COL_HUD_LB;
-    ctx.fillText(c.label, cx2, by + 17);
-    ctx.font = "bold 13px 'Noto Sans SC', system-ui";
-    ctx.fillStyle = COL_HUD_VL;
-    ctx.fillText(c.val, cx2, by + 38);
-  });
-}
-
-/* ── beta折叠绘制参数 ── */
-var NUM_STRANDS = 3;
-var NUM_RESIDUES = 6;
-var STRAND_SPACING = 50;
-var RES_SPACING = 34;
-var ZIG_AMP = 14;
-var BEAD_R = 7;
-var SIDE_R = 4;
-
-// 左区（反平行）中心
-var LCX = W / 4;
-// 右区（平行）中心
-var RCX = W * 3 / 4;
-var BASE_Y = H / 2 - 20;
-
-function strandY(si) {
-  return BASE_Y + (si - (NUM_STRANDS-1)/2) * STRAND_SPACING;
-}
-
-// 计算单个残基位置
-function resPos(cx, si, ri, antiparallel) {
-  var xStart = cx - (NUM_RESIDUES - 1) * RES_SPACING / 2;
-  var xEnd   = cx + (NUM_RESIDUES - 1) * RES_SPACING / 2;
-  var x;
-  if (antiparallel) {
-    // 奇数链从右到左
-    x = (si % 2 === 0) ? (xStart + ri * RES_SPACING) : (xEnd - ri * RES_SPACING);
-  } else {
-    // 平行：所有链从左到右
-    x = xStart + ri * RES_SPACING;
-  }
-  var zigDir = (ri % 2 === 0) ? 1 : -1;
-  var y = strandY(si) + zigDir * ZIG_AMP;
-  return { x: x, y: y, up: zigDir > 0 };
-}
-
-/* ── 探索模式状态 ── */
-var exploreMode = false;
-var introPhase = true;  // 渐入阶段
-var introStart = performance.now();
-var INTRO_FADE_DUR = 1200;  // 氢键渐入时间
-
-// 珠子位置缓存（hitTest 用）
-// beadPos[side][si][ri] = {x, y}  side: 0=左(反平行), 1=右(平行)
-var beadPos = [[], []];
-for (var _side = 0; _side < 2; _side++) {
-  for (var _si = 0; _si < NUM_STRANDS; _si++) {
-    beadPos[_side][_si] = [];
-    for (var _ri = 0; _ri < NUM_RESIDUES; _ri++) {
-      beadPos[_side][_si][_ri] = { x: 0, y: 0 };
-    }
-  }
-}
-
-// 鼠标逻辑坐标
-var mouseX = -999, mouseY = -999;
-// hover 状态
-var hoverSide = -1;     // 0=左, 1=右
-var hoverStrand = -1;
-var hoverResidue = -1;
-// 点击高亮状态
-var clickHighlight = -1;  // -1=无, 0=左(反平行)高亮, 1=右(平行)高亮
-var clickHighlightTime = 0;
-
-// 重播按钮区域
-var replayBtnRect = { x: 12, y: H - 100, w: 72, h: 28 };
-
-/* ── 坐标转换 ── */
-function canvasToLogic(e) {
-  var rect = canvas.getBoundingClientRect();
-  var x = ((e.clientX || e.pageX) - rect.left) / rect.width * W;
-  var y = ((e.clientY || e.pageY) - rect.top) / rect.height * H;
-  return { x: x, y: y };
-}
-
-/* ── hitTest ── */
-function hitTestBead(mx, my) {
-  var hitR = BEAD_R + 4;
-  for (var side = 0; side < 2; side++) {
-    for (var si = 0; si < NUM_STRANDS; si++) {
-      for (var ri = 0; ri < NUM_RESIDUES; ri++) {
-        var bp = beadPos[side][si][ri];
-        if (Math.hypot(mx - bp.x, my - bp.y) < hitR) {
-          return { side: side, si: si, ri: ri };
-        }
-      }
-    }
-  }
-  return null;
-}
-
-// 检测是否点击了氢键区域（在两条链之间的区域）
-function hitTestHBondArea(mx, my) {
-  // 左侧(反平行)区域
-  var leftX0 = LCX - 130, leftX1 = LCX + 130;
-  var rightX0 = RCX - 130, rightX1 = RCX + 130;
-  var yTop = BASE_Y - STRAND_SPACING * 1.6;
-  var yBot = BASE_Y + STRAND_SPACING * 1.6;
-
-  if (mx >= leftX0 && mx <= leftX1 && my >= yTop && my <= yBot) return 0;
-  if (mx >= rightX0 && mx <= rightX1 && my >= yTop && my <= yBot) return 1;
-  return -1;
-}
-
-/* ── 事件监听 ── */
-function onMouseMove(e) {
-  var pos = canvasToLogic(e);
-  mouseX = pos.x;
-  mouseY = pos.y;
-
-  if (!exploreMode) return;
-
-  var hit = hitTestBead(mouseX, mouseY);
-  if (hit) {
-    hoverSide = hit.side;
-    hoverStrand = hit.si;
-    hoverResidue = hit.ri;
-    canvas.style.cursor = "pointer";
-  } else {
-    hoverSide = -1;
-    hoverStrand = -1;
-    hoverResidue = -1;
-    var rb = replayBtnRect;
-    if (mouseX >= rb.x && mouseX <= rb.x + rb.w && mouseY >= rb.y && mouseY <= rb.y + rb.h) {
-      canvas.style.cursor = "pointer";
-    } else {
-      canvas.style.cursor = "default";
-    }
-  }
-}
-
-function onMouseDown(e) {
-  if (!exploreMode) return;
-  var pos = canvasToLogic(e);
-  mouseX = pos.x;
-  mouseY = pos.y;
-
-  // 检查重播按钮
-  var rb = replayBtnRect;
-  if (mouseX >= rb.x && mouseX <= rb.x + rb.w && mouseY >= rb.y && mouseY <= rb.y + rb.h) {
-    doReplay();
-    return;
-  }
-
-  // 检查氢键区域点击
-  var hbArea = hitTestHBondArea(mouseX, mouseY);
-  if (hbArea >= 0) {
-    if (clickHighlight === hbArea) {
-      clickHighlight = -1;  // 再次点击取消
-    } else {
-      clickHighlight = hbArea;
-      clickHighlightTime = performance.now();
-    }
-  }
-}
-
-canvas.addEventListener("mousemove", onMouseMove);
-canvas.addEventListener("mousedown", onMouseDown);
-canvas.addEventListener("mouseleave", function() {
-  mouseX = -999; mouseY = -999;
-  hoverSide = -1; hoverStrand = -1; hoverResidue = -1;
-});
-
-// 触摸支持
-canvas.addEventListener("touchstart", function(e) {
-  if (e.touches.length === 1) {
-    var t = e.touches[0];
-    onMouseMove({ clientX: t.clientX, clientY: t.clientY });
-    onMouseDown({ clientX: t.clientX, clientY: t.clientY });
-  }
-}, { passive: true });
-canvas.addEventListener("touchmove", function(e) {
-  if (e.touches.length === 1) {
-    var t = e.touches[0];
-    onMouseMove({ clientX: t.clientX, clientY: t.clientY });
-  }
-}, { passive: true });
-
-/* ── 重播 ── */
-function doReplay() {
-  exploreMode = false;
-  introPhase = true;
-  introStart = performance.now();
-  hbAlpha = 0.0;
-  clickHighlight = -1;
-  hoverSide = -1;
-  hoverStrand = -1;
-  hoverResidue = -1;
-}
-
-/* ── 绘制一侧的折叠片（支持高亮） ── */
-function drawOneSheet(cx, antiparallel, hbAlpha, label, labelColor, sideIdx, highlightChain, highlightAllHB) {
-  // 背景区域（轻微）
-  var bgAlpha = antiparallel ? "rgba(5,150,105,0.05)" : "rgba(8,145,178,0.05)";
-  if (highlightAllHB) {
-    bgAlpha = antiparallel ? "rgba(5,150,105,0.12)" : "rgba(8,145,178,0.12)";
-  }
-  ctx.fillStyle = bgAlpha;
-  roundRect(cx - 130, BASE_Y - STRAND_SPACING * 1.6, 260, STRAND_SPACING * 3.2, 8);
-  ctx.fill();
-
-  for (var si = 0; si < NUM_STRANDS; si++) {
-    var yPos = strandY(si);
-    var isHighlighted = (exploreMode && hoverSide === sideIdx && hoverStrand === si);
-
-    // 骨架路径
-    ctx.beginPath();
-    for (var ri = 0; ri < NUM_RESIDUES; ri++) {
-      var p = resPos(cx, si, ri, antiparallel);
-      // 缓存珠子位置
-      beadPos[sideIdx][si][ri].x = p.x;
-      beadPos[sideIdx][si][ri].y = p.y;
-      if (ri === 0) ctx.moveTo(p.x, p.y);
-      else ctx.lineTo(p.x, p.y);
-    }
-    ctx.strokeStyle = antiparallel ? COL_PRI : COL_SEC;
-    ctx.lineWidth = isHighlighted ? 3.5 : 2;
-    ctx.globalAlpha = isHighlighted ? 1.0 : 0.8;
-    ctx.stroke();
-    ctx.globalAlpha = 1.0;
-
-    // 残基珠子
-    for (var ri2 = 0; ri2 < NUM_RESIDUES; ri2++) {
-      var p2 = resPos(cx, si, ri2, antiparallel);
-      var beadColor = antiparallel ? COL_PRI : COL_SEC;
-      var isBeadHover = (isHighlighted && hoverResidue === ri2);
-
-      var bgCa;
-      if (isBeadHover) {
-        bgCa = ctx.createRadialGradient(p2.x-1, p2.y-1, 0, p2.x, p2.y, BEAD_R);
-        bgCa.addColorStop(0, "#fef08a");
-        bgCa.addColorStop(0.5, "#f59e0b");
-        bgCa.addColorStop(1, "#92400e");
-      } else {
-        bgCa = ctx.createRadialGradient(p2.x-1, p2.y-1, 0, p2.x, p2.y, BEAD_R);
-        bgCa.addColorStop(0, "#bbf7d0");
-        bgCa.addColorStop(0.5, beadColor);
-        bgCa.addColorStop(1, "#064e3b");
-      }
-
-      var drawR = isHighlighted ? BEAD_R + 1.5 : BEAD_R;
-      ctx.beginPath();
-      ctx.arc(p2.x, p2.y, drawR, 0, Math.PI*2);
-      ctx.fillStyle = bgCa;
-      ctx.fill();
-
-      if (isHighlighted) {
-        ctx.strokeStyle = antiparallel ? COL_PRI : COL_SEC;
-        ctx.lineWidth = 1.5;
-        ctx.globalAlpha = 0.9;
-        ctx.stroke();
-        ctx.globalAlpha = 1.0;
-      }
-    }
-
-    // 方向箭头
-    var flip = antiparallel ? (si % 2 === 1) : false;
-    var ax0 = cx - (NUM_RESIDUES - 1) * RES_SPACING / 2 - 14;
-    var ax1 = cx + (NUM_RESIDUES - 1) * RES_SPACING / 2 + 14;
-    var arFrom = flip ? ax1 : ax0;
-    var arTo   = flip ? ax0 : ax1;
-    ctx.beginPath();
-    ctx.moveTo(arFrom, yPos);
-    ctx.lineTo(arTo, yPos);
-    var headX = arTo + (flip ? -5 : 5);
-    ctx.lineTo(headX, yPos - 4);
-    ctx.moveTo(arTo, yPos);
-    ctx.lineTo(headX, yPos + 4);
-    ctx.strokeStyle = antiparallel ? COL_PRI : COL_SEC;
-    ctx.lineWidth = 1.8;
-    ctx.globalAlpha = 0.7;
-    ctx.stroke();
-    ctx.globalAlpha = 1.0;
-  }
-
-  // 链间氢键
-  if (hbAlpha > 0.01) {
-    var hbLineWidth = highlightAllHB ? 2.5 : 1.5;
-    var hbGlobalAlpha = highlightAllHB ? Math.min(hbAlpha * 1.3, 1.0) : hbAlpha;
-    ctx.globalAlpha = hbGlobalAlpha;
-    ctx.setLineDash(highlightAllHB ? [6, 3] : [4, 3]);
-    ctx.lineWidth = hbLineWidth;
-
-    for (var pi = 0; pi < NUM_STRANDS - 1; pi++) {
-      for (var ri3 = 0; ri3 < NUM_RESIDUES; ri3++) {
-        var pa = resPos(cx, pi, ri3, antiparallel);
-        var pb = resPos(cx, pi+1, ri3, antiparallel);
-
-        if (antiparallel) {
-          ctx.strokeStyle = highlightAllHB ? "#ef4444" : COL_ACC;
-        } else {
-          ctx.strokeStyle = highlightAllHB ? "#8b5cf6" : "#a78bfa";
-        }
-
-        ctx.beginPath();
-        if (!antiparallel) {
-          var pbOff = resPos(cx, pi+1, Math.min(ri3 + 0, NUM_RESIDUES-1), antiparallel);
-          ctx.moveTo(pa.x, pa.y);
-          ctx.lineTo(pbOff.x + 8, pbOff.y);
-        } else {
-          ctx.moveTo(pa.x, pa.y);
-          ctx.lineTo(pb.x, pb.y);
-        }
-        ctx.stroke();
-      }
-    }
-
-    ctx.setLineDash([]);
-    ctx.globalAlpha = 1.0;
-  }
-
-  // 标签
-  ctx.font = "bold 13px 'Noto Sans SC', system-ui";
-  ctx.textAlign = "center";
-  ctx.fillStyle = labelColor;
-  ctx.fillText(label, cx, BASE_Y - STRAND_SPACING * 1.6 - 12);
-
-  // 氢键特征说明（非高亮时的默认说明）
-  if (hbAlpha > 0.5 && !highlightAllHB) {
-    ctx.font = "10px 'Noto Sans SC', system-ui";
-    ctx.fillStyle = COL_DIM;
-    ctx.globalAlpha = 0.85;
-    var desc = antiparallel ? "氢键垂直于链轴（更稳定）" : "氢键略微倾斜（稍不稳定）";
-    ctx.fillText(desc, cx, BASE_Y + STRAND_SPACING * 1.6 + 16);
-    ctx.globalAlpha = 1.0;
-  }
-
-  // 高亮时的加粗标注
-  if (highlightAllHB) {
-    ctx.font = "bold 11px 'Noto Sans SC', system-ui";
-    ctx.textAlign = "center";
-    if (antiparallel) {
-      ctx.fillStyle = "#dc2626";
-      ctx.fillText("氢键垂直、更稳定", cx, BASE_Y + STRAND_SPACING * 1.6 + 16);
-      ctx.font = "10px 'Noto Sans SC', system-ui";
-      ctx.fillStyle = COL_DIM;
-      ctx.fillText("N-H...O=C 完美对齐", cx, BASE_Y + STRAND_SPACING * 1.6 + 32);
-    } else {
-      ctx.fillStyle = "#7c3aed";
-      ctx.fillText("氢键倾斜、稍不稳定", cx, BASE_Y + STRAND_SPACING * 1.6 + 16);
-      ctx.font = "10px 'Noto Sans SC', system-ui";
-      ctx.fillStyle = COL_DIM;
-      ctx.fillText("N-H...O=C 有角度偏移", cx, BASE_Y + STRAND_SPACING * 1.6 + 32);
-    }
-  }
-}
-
-/* ── 绘制 tooltip ── */
-function drawTooltip(mx, my, side, si) {
-  var sideName = (side === 0) ? "反平行侧" : "平行侧";
-  var txt = "链 #" + (si + 1) + "（" + sideName + "）";
-  ctx.font = "bold 11px 'Noto Sans SC', system-ui";
-  var tw = ctx.measureText(txt).width;
-  var padX = 8;
-  var ttW = tw + padX * 2;
-  var ttH = 22;
-  var ttX = mx - ttW / 2;
-  var ttY = my - ttH - 12;
-  if (ttX < 4) ttX = 4;
-  if (ttX + ttW > W - 4) ttX = W - 4 - ttW;
-  if (ttY < 4) ttY = my + 16;
-
-  ctx.globalAlpha = 0.88;
-  ctx.fillStyle = "rgba(15,23,42,0.85)";
-  roundRect(ttX, ttY, ttW, ttH, 5);
-  ctx.fill();
-  ctx.globalAlpha = 1.0;
-
-  ctx.fillStyle = "#f8fafc";
-  ctx.textAlign = "center";
-  ctx.fillText(txt, ttX + ttW / 2, ttY + ttH - 6);
-}
-
-/* ── 绘制重播按钮 ── */
-function drawReplayBtn() {
-  var rb = replayBtnRect;
-  var isHover = (mouseX >= rb.x && mouseX <= rb.x + rb.w && mouseY >= rb.y && mouseY <= rb.y + rb.h);
-
-  ctx.globalAlpha = isHover ? 0.95 : 0.75;
-  ctx.fillStyle = COL_PRI;
-  roundRect(rb.x, rb.y, rb.w, rb.h, 6);
-  ctx.fill();
-
-  ctx.globalAlpha = 1.0;
-  ctx.font = "bold 11px 'Noto Sans SC', system-ui";
-  ctx.textAlign = "center";
-  ctx.fillStyle = "#ffffff";
-  ctx.fillText("重播", rb.x + rb.w / 2, rb.y + rb.h / 2 + 4);
-}
-
-/* ── 动画状态 ── */
-var hbAlpha = 0.0;
-
-function loop(now) {
-  // 渐入阶段：氢键一次渐入
-  if (introPhase) {
-    var introElapsed = now - introStart;
-    hbAlpha = Math.min(introElapsed / INTRO_FADE_DUR, 1.0);
-    if (hbAlpha >= 1.0) {
-      introPhase = false;
-      exploreMode = true;
-      hbAlpha = 1.0;
-    }
-  }
-
-  drawBg();
-
-  // 标题
-  ctx.font = "bold 15px 'Noto Sans SC', system-ui";
-  ctx.textAlign = "center";
-  ctx.fillStyle = COL_TEXT;
-  ctx.globalAlpha = 0.92;
-  ctx.fillText("反平行 vs 平行 β折叠：氢键方向对比", W/2, 26);
-  ctx.globalAlpha = 1.0;
-
-  // 探索模式提示
-  if (exploreMode) {
-    ctx.font = "11px 'Noto Sans SC', system-ui";
-    ctx.textAlign = "center";
-    ctx.fillStyle = COL_PRI;
-    ctx.globalAlpha = 0.85;
-    ctx.fillText("探索模式：悬停查看链信息 | 点击左/右区域对比氢键", W/2, 44);
-    ctx.globalAlpha = 1.0;
-  }
-
-  // 分割线
-  ctx.beginPath();
-  ctx.moveTo(W/2, 40);
-  ctx.lineTo(W/2, H - 60);
-  ctx.strokeStyle = "rgba(255,255,255,0.1)";
-  ctx.lineWidth = 1;
-  ctx.setLineDash([6, 4]);
-  ctx.stroke();
-  ctx.setLineDash([]);
-
-  // 左侧：反平行
-  var highlightLeft = (clickHighlight === 0);
-  var highlightRight = (clickHighlight === 1);
-  drawOneSheet(LCX, true, hbAlpha, "反平行 (antiparallel)", COL_PRI, 0, (hoverSide === 0 ? hoverStrand : -1), highlightLeft);
-
-  // 右侧：平行
-  drawOneSheet(RCX, false, hbAlpha, "平行 (parallel)", COL_SEC, 1, (hoverSide === 1 ? hoverStrand : -1), highlightRight);
-
-  // 中间提示
-  ctx.font = "11px 'Noto Sans SC', system-ui";
-  ctx.textAlign = "center";
-  if (exploreMode) {
-    if (clickHighlight === 0) {
-      ctx.fillStyle = "#dc2626";
-      ctx.globalAlpha = 0.9;
-      ctx.fillText("反平行氢键高亮 — 点击其他区域切换", W/2, H - 62);
-    } else if (clickHighlight === 1) {
-      ctx.fillStyle = "#7c3aed";
-      ctx.globalAlpha = 0.9;
-      ctx.fillText("平行氢键高亮 — 点击其他区域切换", W/2, H - 62);
-    } else {
-      ctx.fillStyle = COL_ACC;
-      ctx.globalAlpha = 0.8;
-      ctx.fillText("点击左侧或右侧区域，高亮对比氢键差异", W/2, H - 62);
-    }
-    ctx.globalAlpha = 1.0;
-  } else {
-    // 渐入阶段
-    var showingHB = hbAlpha > 0.5;
-    ctx.fillStyle = showingHB ? COL_ACC : COL_DIM;
-    ctx.globalAlpha = 0.8;
-    ctx.fillText(showingHB ? "氢键形成中..." : "结构加载中...", W/2, H - 62);
-    ctx.globalAlpha = 1.0;
-  }
-
-  // HUD
-  if (exploreMode) {
-    drawHUD([
-      { label: "模式", val: "探索" },
-      { label: "反平行氢键", val: "垂直" },
-      { label: "平行氢键", val: "倾斜" },
-      { label: "稳定性", val: "反平行 > 平行" },
-    ]);
-  } else {
-    drawHUD([
-      { label: "左侧结构", val: "反平行" },
-      { label: "氢键方向", val: "垂直" },
-      { label: "右侧结构", val: "平行" },
-      { label: "稳定性比较", val: "反平行 > 平行" },
-    ]);
-  }
-
-  // 探索模式 UI
-  if (exploreMode) {
-    drawReplayBtn();
-
-    // Tooltip
-    if (hoverStrand >= 0 && hoverSide >= 0) {
-      drawTooltip(mouseX, mouseY, hoverSide, hoverStrand);
-    }
-  }
-
-  requestAnimationFrame(loop);
-}
-
-requestAnimationFrame(loop);
-
-})();
-</script>
-</body>
-</html>"""
-
-# ── 游戏 HTML —— β折叠链对齐游戏 ──────────────────────────────────
-# 游戏玩法：三条链从屏幕外飞入，玩家点击按钮控制每条链的方向（反平行/平行），
-# 然后点击"对齐"——如果链间距离合适且方向正确，氢键自动连接，获得分数
-
-GAME_HTML = """<!DOCTYPE html>
-<html lang="zh">
-<head>
-<meta charset="UTF-8"/>
-<meta name="viewport" content="width=device-width, initial-scale=1"/>
-<title>β折叠：链对齐游戏</title>
-<style>
-* { box-sizing: border-box; margin: 0; padding: 0; }
-html, body {
-  width: 100%; height: 100%; overflow: hidden;
-  background: __THEME_BG__;
-  font-family: __THEME_FONT__;
-  color: __THEME_TEXT__;
-}
-
-#app {
-  display: flex;
-  flex-direction: column;
-  width: 100%;
-  height: 100%;
-}
-
-#canvas-area {
-  flex: 1;
-  position: relative;
-}
-
-canvas {
-  display: block;
-  width: 100%;
-  height: 100%;
-  position: absolute;
-  top: 0; left: 0;
-}
-
-#ui-overlay {
-  position: absolute;
-  bottom: 60px;
-  left: 50%;
-  transform: translateX(-50%);
-  display: flex;
-  gap: 12px;
-  align-items: center;
-  z-index: 10;
-  background: __THEME_HUD_BG__;
-  border: 1px solid __THEME_BORDER__;
-  border-radius: 10px;
-  padding: 10px 16px;
-}
-
-button {
-  background: __THEME_PRIMARY__;
-  color: white;
-  border: none;
-  border-radius: 6px;
-  padding: 8px 16px;
-  font-size: 13px;
-  cursor: pointer;
-  font-family: inherit;
-  transition: opacity 0.15s;
-}
-button:hover { opacity: 0.85; }
-button.secondary {
-  background: __THEME_SECONDARY__;
-}
-button.accent {
-  background: __THEME_ACCENT__;
-}
-button:disabled { opacity: 0.4; cursor: not-allowed; }
-
-#msg {
-  font-size: 13px;
-  color: __THEME_TEXT__;
-  min-width: 160px;
-  text-align: center;
-}
-
-#hud {
-  position: absolute;
-  bottom: 0; left: 0; right: 0;
-  height: 52px;
-  background: __THEME_HUD_BG__;
-  border-top: 1px solid rgba(0,0,0,0.08);
-  display: flex;
-  align-items: center;
-  justify-content: space-around;
-}
-
-.hud-cell {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 2px;
-}
-
-.hud-label {
-  font-size: 10px;
-  color: __THEME_HUD_LABEL__;
-}
-
-.hud-value {
-  font-size: 14px;
-  font-weight: bold;
-  color: __THEME_HUD_VALUE__;
-}
-
-#win-overlay {
-  display: none;
-  position: absolute;
-  inset: 0;
-  background: rgba(240,247,244,0.92);
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 16px;
-  z-index: 20;
-}
-
-#win-overlay.show { display: flex; }
-
-.win-title {
-  font-size: 22px;
-  font-weight: bold;
-  color: __THEME_PRIMARY__;
-}
-
-.win-sub {
-  font-size: 14px;
-  color: __THEME_TEXT_DIM__;
-  text-align: center;
-  max-width: 320px;
-}
-</style>
-</head>
-<body>
-<div id="app">
-  <div id="canvas-area">
-    <canvas id="c"></canvas>
-
-    <div id="ui-overlay">
-      <button id="btn-antiparallel" onclick="setMode('antiparallel')">反平行排列</button>
-      <button id="btn-parallel" class="secondary" onclick="setMode('parallel')">平行排列</button>
-      <button id="btn-align" class="accent" onclick="doAlign()" disabled>对齐并连接氢键</button>
-      <div id="msg">选择β折叠类型，然后对齐</div>
+<div class="hud">
+  <div class="top-bar">
+    <div style="display:flex;align-items:center;gap:10px">
+      <span class="status-dot"></span>
+      <span class="title">SHEET_ASSEMBLY</span>
     </div>
-
-    <div id="win-overlay">
-      <div class="win-title">β折叠片形成！</div>
-      <div class="win-sub" id="win-desc"></div>
-      <button onclick="resetGame()">再玩一次</button>
+    <div class="ctrl-btns">
+      <button class="ctrl-btn active" id="btnPlay" onclick="startAnim()">PLAY</button>
+      <button class="ctrl-btn" id="btnReset" onclick="resetAnim()">RESET</button>
     </div>
   </div>
 
-  <div id="hud">
-    <div class="hud-cell">
-      <span class="hud-label">当前模式</span>
-      <span class="hud-value" id="hud-mode">未选择</span>
+  <div class="pnl pnl-l">
+    <div class="sect fi">
+      <div class="ch ch-p"></div>
+      <div class="hl">SHEET_TYPE</div>
+      <div class="hv hv-p">BETA</div>
+      <div style="font-size:9px;color:__THEME_TEXT_DIM__;margin-top:2px">ANTIPARALLEL</div>
     </div>
-    <div class="hud-cell">
-      <span class="hud-label">链数量</span>
-      <span class="hud-value" id="hud-strands">3</span>
+    <div class="sect fi" style="animation-delay:0.1s">
+      <div class="ch ch-s"></div>
+      <div class="hl">SHEET_ANALYSIS</div>
+      <div class="dr"><span class="k">STRAND_COUNT</span><span class="v" id="leftStrands">1</span></div>
+      <div class="dr"><span class="k">H-BONDS</span><span class="v" id="leftHB">0</span></div>
+      <div class="dr"><span class="k">CHAIN_SPACING</span><span class="v">0.47 nm</span></div>
+      <div class="dr"><span class="k">RESIDUE_SPACING</span><span class="v">0.35 nm</span></div>
     </div>
-    <div class="hud-cell">
-      <span class="hud-label">氢键数量</span>
-      <span class="hud-value" id="hud-hbonds">0</span>
+    <div class="sect fi" style="animation-delay:0.15s">
+      <div class="ch ch-a"></div>
+      <div class="hl">H-BOND_PATTERN</div>
+      <div class="dr"><span class="k">TYPE</span><span class="v">INTER-CHAIN</span></div>
+      <div class="dr"><span class="k">DIRECTION</span><span class="v">PERPENDICULAR</span></div>
+      <div class="dr"><span class="k">GEOMETRY</span><span class="v">~180 DEG</span></div>
     </div>
-    <div class="hud-cell">
-      <span class="hud-label">稳定性</span>
-      <span class="hud-value" id="hud-stability">--</span>
+    <div class="sect fi" style="animation-delay:0.2s">
+      <div class="hl">PHASE</div>
+      <div class="hv hv-s" id="phaseLabel">STANDBY</div>
     </div>
+  </div>
+
+  <div class="center" id="centerStage">
+    <svg id="sheetSvg" viewBox="0 0 440 300" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <filter id="glow"><feGaussianBlur stdDeviation="3" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+        <filter id="hbGlow"><feGaussianBlur stdDeviation="2" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+        <radialGradient id="beadGrad" cx="35%" cy="30%"><stop offset="0%" stop-color="#ffffff" stop-opacity="0.7"/><stop offset="50%" stop-color="__THEME_PRIMARY__"/><stop offset="100%" stop-color="__THEME_BG__" stop-opacity="0.8"/></radialGradient>
+        <radialGradient id="scGrad" cx="35%" cy="30%"><stop offset="0%" stop-color="#ffffff" stop-opacity="0.5"/><stop offset="50%" stop-color="__THEME_SECONDARY__"/><stop offset="100%" stop-color="__THEME_BG__" stop-opacity="0.6"/></radialGradient>
+        <marker id="arrowR" markerWidth="6" markerHeight="4" refX="5" refY="2" orient="auto"><path d="M0,0 L6,2 L0,4" fill="__THEME_PRIMARY__" opacity="0.7"/></marker>
+        <marker id="arrowL" markerWidth="6" markerHeight="4" refX="1" refY="2" orient="auto"><path d="M6,0 L0,2 L6,4" fill="__THEME_SECONDARY__" opacity="0.7"/></marker>
+      </defs>
+      <!-- Background refs -->
+      <g opacity="0.04" stroke="__THEME_PRIMARY__" fill="none" stroke-width="0.5">
+        <line x1="220" y1="0" x2="220" y2="300"/>
+        <line x1="0" y1="150" x2="440" y2="150"/>
+        <circle cx="220" cy="150" r="60"/><circle cx="220" cy="150" r="120"/>
+      </g>
+      <!-- Scan line -->
+      <rect x="0" y="0" width="440" height="1.5" fill="__THEME_PRIMARY__" opacity="0.05">
+        <animateTransform attributeName="transform" type="translate" values="0,0;0,300;0,0" dur="6s" repeatCount="indefinite"/>
+      </rect>
+      <g id="hbonds"></g>
+      <g id="strands"></g>
+      <g id="beads"></g>
+      <g id="arrows"></g>
+      <g id="labels"></g>
+    </svg>
+  </div>
+
+  <div class="pnl pnl-r">
+    <div class="sect">
+      <div class="ch ch-p"></div>
+      <div class="hl">STRAND_INDEX</div>
+    </div>
+    <div id="strandIndex"></div>
+  </div>
+
+  <div class="bhud">
+    <div class="hc"><div class="hl">STRANDS</div><div class="hv" id="hudStrands">1</div></div>
+    <div class="hc"><div class="hl">H-BONDS</div><div class="hv" id="hudHB">0</div></div>
+    <div class="hc"><div class="hl">TYPE</div><div class="hv" style="font-size:13px">ANTIPARALLEL</div></div>
+    <div class="hc"><div class="hl">STABILITY</div><div class="hv" id="hudStab" style="font-size:13px">LOW</div></div>
   </div>
 </div>
 
 <script>
-(function() {
+(function(){
 "use strict";
 
-var canvas = document.getElementById("c");
-var ctx = canvas.getContext("2d");
-var W = 600, H = 340;
-var DPR = Math.min(window.devicePixelRatio || 1, 2);
+var NSTRANDS = 5;
+var NRES = 7;
+var RES_DX = 40;
+var STRAND_DY = 48;
+var ZIG = 12;
+var CX = 220, CY = 150;
+var BEAD_R = 8;
 
-function resize() {
-  var rect = canvas.getBoundingClientRect();
-  canvas.width  = rect.width  * DPR;
-  canvas.height = rect.height * DPR;
-  ctx.setTransform(1,0,0,1,0,0);
-  ctx.scale(DPR * rect.width / W, DPR * rect.height / H);
-}
-resize();
-window.addEventListener("resize", resize);
+var strandsG = document.getElementById("strands");
+var beadsG = document.getElementById("beads");
+var hbG = document.getElementById("hbonds");
+var arrowsG = document.getElementById("arrows");
+var labG = document.getElementById("labels");
+var phaseLabel = document.getElementById("phaseLabel");
+var hudHB = document.getElementById("hudHB");
+var hudStrands = document.getElementById("hudStrands");
+var hudStab = document.getElementById("hudStab");
+var leftStrands = document.getElementById("leftStrands");
+var leftHB = document.getElementById("leftHB");
 
-var COL_BG1  = "__THEME_BG__";
-var COL_BG2  = "__THEME_BG2__";
-var COL_GRID = "__THEME_GRID__";
-var COL_PRI  = "__THEME_PRIMARY__";
-var COL_SEC  = "__THEME_SECONDARY__";
-var COL_ACC  = "__THEME_ACCENT__";
-
-function roundRect(x, y, w, h, r) {
-  ctx.beginPath();
-  ctx.moveTo(x+r, y);
-  ctx.lineTo(x+w-r, y); ctx.quadraticCurveTo(x+w, y, x+w, y+r);
-  ctx.lineTo(x+w, y+h-r); ctx.quadraticCurveTo(x+w, y+h, x+w-r, y+h);
-  ctx.lineTo(x+r, y+h); ctx.quadraticCurveTo(x, y+h, x, y+h-r);
-  ctx.lineTo(x, y+r); ctx.quadraticCurveTo(x, y, x+r, y);
-  ctx.closePath();
+// Populate strand index
+var strandIndex = document.getElementById("strandIndex");
+var DIRS = ["N -> C", "C -> N", "N -> C", "C -> N", "N -> C"];
+for(var i=0;i<NSTRANDS;i++){
+  var d = document.createElement("div");
+  d.className = "strand-item"; d.id = "si-"+i;
+  d.innerHTML = '<div class="strand-dot dim"></div><span class="strand-id">#'+(i+1)+'</span><span class="strand-dir">'+DIRS[i]+'</span>';
+  strandIndex.appendChild(d);
 }
 
-function drawBg() {
-  var g = ctx.createLinearGradient(0, 0, 0, H);
-  g.addColorStop(0, COL_BG1);
-  g.addColorStop(1, COL_BG2);
-  ctx.fillStyle = g;
-  ctx.fillRect(0, 0, W, H);
-  ctx.strokeStyle = COL_GRID;
-  ctx.lineWidth = 1;
-  for (var x = 0; x <= W; x += 40) {
-    ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke();
-  }
-  for (var y = 0; y <= H; y += 40) {
-    ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke();
-  }
+// Residue positions for each strand
+function resXY(si, ri){
+  var topY = CY - (NSTRANDS-1)*STRAND_DY/2;
+  var y0 = topY + si * STRAND_DY;
+  var flip = (si % 2 === 1); // antiparallel
+  var xStart = CX - (NRES-1)*RES_DX/2;
+  var xEnd = CX + (NRES-1)*RES_DX/2;
+  var x = flip ? (xEnd - ri*RES_DX) : (xStart + ri*RES_DX);
+  var zig = ((ri%2===0)?1:-1) * ZIG;
+  return {x:x, y:y0+zig};
 }
 
-/* ── 游戏状态 ── */
-var NUM_STRANDS   = 3;
-var NUM_RESIDUES  = 6;
-var STRAND_SPACING = 52;
-var RES_SPACING   = 36;
-var ZIG_AMP = 14;
-var BEAD_R  = 7;
+var phase = "standby"; // standby -> strand1 -> strand2 -> ... -> strand5 -> hbonds -> complete
+var visibleStrands = 1;
+var hbondsShown = 0;
+var maxHBonds = (NSTRANDS-1)*NRES;
+var animTimer = null;
 
-var CX = W / 2;
-var CY = H / 2;
+function render(){
+  strandsG.innerHTML=""; beadsG.innerHTML=""; hbG.innerHTML=""; arrowsG.innerHTML=""; labG.innerHTML="";
 
-var mode = null;          // 'antiparallel' | 'parallel'
-var aligned = false;
-var hbAlpha = 0.0;
-var animT = 0;            // 对齐动画进度
-
-// 链的y偏移（飞入动画）
-var strandYOffset = [0, -80, 80];  // 链2从上飞入，链3从下飞入
-
-function strandTargetY(si) {
-  return CY + (si - (NUM_STRANDS-1)/2) * STRAND_SPACING;
-}
-
-function resPos(si, ri) {
-  var targetY = strandTargetY(si) + (aligned ? 0 : strandYOffset[si] * (1 - animT));
-  var flip = false;
-  if (mode === 'antiparallel') {
-    flip = (si % 2 === 1);
-  }
-  var xStart = CX - (NUM_RESIDUES - 1) * RES_SPACING / 2;
-  var xEnd   = CX + (NUM_RESIDUES - 1) * RES_SPACING / 2;
-  var x = flip ? (xEnd - ri * RES_SPACING) : (xStart + ri * RES_SPACING);
-  var zigDir = (ri % 2 === 0) ? 1 : -1;
-  return {
-    x: x,
-    y: targetY + zigDir * ZIG_AMP,
-    up: zigDir > 0,
-  };
-}
-
-function drawGame() {
-  drawBg();
-
-  // 标题
-  ctx.font = "bold 14px 'Noto Sans SC', system-ui";
-  ctx.textAlign = "center";
-  ctx.fillStyle = "__THEME_TEXT__";
-  ctx.globalAlpha = 0.9;
-  ctx.fillText("β折叠对齐游戏：选择排列方式，把三条链对齐", W/2, 24);
-  ctx.globalAlpha = 1.0;
-
-  if (mode === null) {
-    // 未选择状态：显示3条散开的链
-    ctx.font = "13px 'Noto Sans SC', system-ui";
-    ctx.textAlign = "center";
-    ctx.fillStyle = "__THEME_TEXT_DIM__";
-    ctx.globalAlpha = 0.7;
-    ctx.fillText("三条β链正在漂浮，请选择排列方式", W/2, CY - 30);
-    ctx.globalAlpha = 1.0;
-
-    // 画3条散开的链（随机分布）
-    for (var si = 0; si < NUM_STRANDS; si++) {
-      var yPos = strandTargetY(si) + strandYOffset[si];
-      drawOneStrand(si, yPos, false);
+  // Draw strands (backbone lines)
+  for(var si=0; si<visibleStrands; si++){
+    var pts = [];
+    for(var ri=0; ri<NRES; ri++){
+      pts.push(resXY(si, ri));
     }
-    return;
-  }
+    // Glow layer
+    var pg = document.createElementNS("http://www.w3.org/2000/svg","polyline");
+    var pstr = pts.map(function(p){return p.x+","+p.y}).join(" ");
+    pg.setAttribute("points",pstr);
+    pg.setAttribute("fill","none");
+    pg.setAttribute("stroke","__THEME_PRIMARY__");
+    pg.setAttribute("stroke-width","5");
+    pg.setAttribute("opacity","0.15");
+    pg.setAttribute("filter","url(#glow)");
+    strandsG.appendChild(pg);
+    // Clear layer
+    var pc = document.createElementNS("http://www.w3.org/2000/svg","polyline");
+    pc.setAttribute("points",pstr);
+    pc.setAttribute("fill","none");
+    pc.setAttribute("stroke", si%2===0?"__THEME_PRIMARY__":"__THEME_SECONDARY__");
+    pc.setAttribute("stroke-width","2");
+    pc.setAttribute("opacity","0.8");
+    strandsG.appendChild(pc);
 
-  // 已选模式：按对齐进度绘制
-  for (var si2 = 0; si2 < NUM_STRANDS; si2++) {
-    var p0 = resPos(si2, 0);
-    drawOneStrandAtY(si2, p0.y - ZIG_AMP * (p0.up ? 1 : -1));
-  }
+    // Direction arrow
+    var flip = (si%2===1);
+    var topY2 = CY - (NSTRANDS-1)*STRAND_DY/2;
+    var ay = topY2 + si*STRAND_DY;
+    var xStart = CX - (NRES-1)*RES_DX/2;
+    var xEnd = CX + (NRES-1)*RES_DX/2;
+    var al = document.createElementNS("http://www.w3.org/2000/svg","line");
+    al.setAttribute("x1", flip?(xEnd+8):(xStart-8));
+    al.setAttribute("y1", ay);
+    al.setAttribute("x2", flip?(xStart-4):(xEnd+4));
+    al.setAttribute("y2", ay);
+    al.setAttribute("stroke", si%2===0?"__THEME_PRIMARY__":"__THEME_SECONDARY__");
+    al.setAttribute("stroke-width","1.5");
+    al.setAttribute("opacity","0.5");
+    al.setAttribute("marker-end", flip?"url(#arrowL)":"url(#arrowR)");
+    arrowsG.appendChild(al);
 
-  // 链间氢键
-  if (hbAlpha > 0.01) {
-    for (var pi = 0; pi < NUM_STRANDS - 1; pi++) {
-      ctx.globalAlpha = hbAlpha;
-      ctx.setLineDash([5, 4]);
-      ctx.strokeStyle = COL_ACC;
-      ctx.lineWidth = 2;
-      for (var ri = 0; ri < NUM_RESIDUES; ri++) {
-        var pa = resPos(pi, ri);
-        var pb = resPos(pi+1, ri);
-        ctx.beginPath();
-        ctx.moveTo(pa.x, pa.y);
-        ctx.lineTo(pb.x, pb.y);
-        ctx.stroke();
+    // Beads
+    for(var ri2=0; ri2<NRES; ri2++){
+      var p = resXY(si, ri2);
+      // Outer glow
+      var gc = document.createElementNS("http://www.w3.org/2000/svg","circle");
+      gc.setAttribute("cx",p.x); gc.setAttribute("cy",p.y);
+      gc.setAttribute("r","14"); gc.setAttribute("fill",si%2===0?"__THEME_PRIMARY__":"__THEME_SECONDARY__"); gc.setAttribute("opacity","0.08");
+      beadsG.appendChild(gc);
+      // Main bead
+      var c = document.createElementNS("http://www.w3.org/2000/svg","circle");
+      c.setAttribute("cx",p.x); c.setAttribute("cy",p.y);
+      c.setAttribute("r",BEAD_R.toString()); c.setAttribute("fill","url(#beadGrad)"); c.setAttribute("filter","url(#glow)");
+      beadsG.appendChild(c);
+      // Specular
+      var sp = document.createElementNS("http://www.w3.org/2000/svg","ellipse");
+      sp.setAttribute("cx",p.x-2); sp.setAttribute("cy",p.y-2);
+      sp.setAttribute("rx","3"); sp.setAttribute("ry","2");
+      sp.setAttribute("fill","white"); sp.setAttribute("opacity","0.3");
+      beadsG.appendChild(sp);
+      // Label (only on strand 0)
+      if(si===0){
+        var tx = document.createElementNS("http://www.w3.org/2000/svg","text");
+        tx.setAttribute("x",p.x); tx.setAttribute("y",p.y+3);
+        tx.setAttribute("text-anchor","middle"); tx.setAttribute("font-family","'Space Grotesk',sans-serif");
+        tx.setAttribute("font-size","7"); tx.setAttribute("font-weight","600"); tx.setAttribute("fill","white");
+        tx.textContent = (ri2+1).toString();
+        beadsG.appendChild(tx);
       }
-      ctx.setLineDash([]);
-      ctx.globalAlpha = 1.0;
     }
-    // 显示氢键数量
-    var hbCount = Math.round(hbAlpha * (NUM_STRANDS-1) * NUM_RESIDUES);
-    document.getElementById("hud-hbonds").textContent = hbCount.toString();
   }
 
-  // 模式标签
-  ctx.font = "12px 'Noto Sans SC', system-ui";
-  ctx.textAlign = "center";
-  ctx.fillStyle = mode === 'antiparallel' ? COL_PRI : COL_SEC;
-  ctx.globalAlpha = 0.85;
-  ctx.fillText(mode === 'antiparallel' ? "反平行排列：箭头方向交替" : "平行排列：箭头方向一致", W/2, H - 16);
-  ctx.globalAlpha = 1.0;
-}
-
-function drawOneStrand(si, yPos, flip) {
-  var xStart = CX - (NUM_RESIDUES - 1) * RES_SPACING / 2;
-  var xEnd   = CX + (NUM_RESIDUES - 1) * RES_SPACING / 2;
-
-  ctx.beginPath();
-  for (var ri = 0; ri < NUM_RESIDUES; ri++) {
-    var x = flip ? (xEnd - ri * RES_SPACING) : (xStart + ri * RES_SPACING);
-    var zigDir = (ri % 2 === 0) ? 1 : -1;
-    var y = yPos + zigDir * ZIG_AMP;
-    if (ri === 0) ctx.moveTo(x, y);
-    else ctx.lineTo(x, y);
-  }
-  ctx.strokeStyle = COL_PRI;
-  ctx.lineWidth = 2;
-  ctx.globalAlpha = 0.7;
-  ctx.stroke();
-  ctx.globalAlpha = 1.0;
-
-  for (var ri2 = 0; ri2 < NUM_RESIDUES; ri2++) {
-    var x2 = flip ? (xEnd - ri2 * RES_SPACING) : (xStart + ri2 * RES_SPACING);
-    var z2 = (ri2 % 2 === 0) ? 1 : -1;
-    var y2 = yPos + z2 * ZIG_AMP;
-    ctx.beginPath();
-    ctx.arc(x2, y2, BEAD_R, 0, Math.PI*2);
-    var bg = ctx.createRadialGradient(x2-1, y2-1, 0, x2, y2, BEAD_R);
-    bg.addColorStop(0, "#a7f3d0");
-    bg.addColorStop(0.5, COL_PRI);
-    bg.addColorStop(1, "#065f46");
-    ctx.fillStyle = bg;
-    ctx.fill();
-  }
-}
-
-function drawOneStrandAtY(si, baseY) {
-  var flip = (mode === 'antiparallel') && (si % 2 === 1);
-  var xStart = CX - (NUM_RESIDUES - 1) * RES_SPACING / 2;
-  var xEnd   = CX + (NUM_RESIDUES - 1) * RES_SPACING / 2;
-
-  ctx.beginPath();
-  for (var ri = 0; ri < NUM_RESIDUES; ri++) {
-    var p = resPos(si, ri);
-    if (ri === 0) ctx.moveTo(p.x, p.y);
-    else ctx.lineTo(p.x, p.y);
-  }
-  ctx.strokeStyle = (si % 2 === 0) ? COL_PRI : COL_SEC;
-  ctx.lineWidth = 2;
-  ctx.globalAlpha = 0.8;
-  ctx.stroke();
-  ctx.globalAlpha = 1.0;
-
-  for (var ri2 = 0; ri2 < NUM_RESIDUES; ri2++) {
-    var p2 = resPos(si, ri2);
-    ctx.beginPath();
-    ctx.arc(p2.x, p2.y, BEAD_R, 0, Math.PI*2);
-    var bc = (si % 2 === 0) ? COL_PRI : COL_SEC;
-    ctx.fillStyle = bc;
-    ctx.fill();
+  // H-bonds between adjacent strands
+  if(hbondsShown > 0){
+    var drawn = 0;
+    for(var si3=0; si3<visibleStrands-1 && drawn<hbondsShown; si3++){
+      for(var ri3=0; ri3<NRES && drawn<hbondsShown; ri3++){
+        var pa = resXY(si3, ri3);
+        var pb = resXY(si3+1, ri3);
+        // Glow
+        var gl = document.createElementNS("http://www.w3.org/2000/svg","line");
+        gl.setAttribute("x1",pa.x); gl.setAttribute("y1",pa.y);
+        gl.setAttribute("x2",pb.x); gl.setAttribute("y2",pb.y);
+        gl.setAttribute("stroke","__THEME_ACCENT__"); gl.setAttribute("stroke-width","4");
+        gl.setAttribute("opacity","0.15"); gl.setAttribute("filter","url(#hbGlow)");
+        hbG.appendChild(gl);
+        // Dashed bond
+        var hl = document.createElementNS("http://www.w3.org/2000/svg","line");
+        hl.setAttribute("x1",pa.x); hl.setAttribute("y1",pa.y);
+        hl.setAttribute("x2",pb.x); hl.setAttribute("y2",pb.y);
+        hl.setAttribute("stroke","__THEME_ACCENT__"); hl.setAttribute("stroke-width","1.5");
+        hl.setAttribute("stroke-dasharray","4,3"); hl.setAttribute("opacity","0.7");
+        hbG.appendChild(hl);
+        drawn++;
+      }
+    }
   }
 
-  // 方向箭头
-  var arFrom = flip ? (CX + (NUM_RESIDUES-1)*RES_SPACING/2 + 14) : (CX - (NUM_RESIDUES-1)*RES_SPACING/2 - 14);
-  var arTo   = flip ? (CX - (NUM_RESIDUES-1)*RES_SPACING/2 - 10) : (CX + (NUM_RESIDUES-1)*RES_SPACING/2 + 10);
-  ctx.beginPath();
-  ctx.moveTo(arFrom, baseY);
-  ctx.lineTo(arTo, baseY);
-  var hx = arTo + (flip ? -6 : 6);
-  ctx.lineTo(hx, baseY - 4);
-  ctx.moveTo(arTo, baseY);
-  ctx.lineTo(hx, baseY + 4);
-  ctx.strokeStyle = (si % 2 === 0) ? COL_PRI : COL_SEC;
-  ctx.lineWidth = 2;
-  ctx.globalAlpha = 0.8;
-  ctx.stroke();
-  ctx.globalAlpha = 1.0;
-}
-
-/* ── 游戏逻辑 ── */
-
-window.setMode = function(m) {
-  mode = m;
-  aligned = false;
-  hbAlpha = 0.0;
-  animT = 0;
-
-  document.getElementById("btn-align").disabled = false;
-  document.getElementById("hud-mode").textContent = m === 'antiparallel' ? '反平行' : '平行';
-  document.getElementById("hud-stability").textContent = m === 'antiparallel' ? '高' : '中';
-  document.getElementById("msg").textContent = m === 'antiparallel' ? "反平行模式：点击对齐" : "平行模式：点击对齐";
-
-  // 高亮当前选中按钮
-  document.getElementById("btn-antiparallel").style.outline = m === 'antiparallel' ? '2px solid ' + COL_ACC : 'none';
-  document.getElementById("btn-parallel").style.outline     = m === 'parallel'      ? '2px solid ' + COL_ACC : 'none';
-};
-
-window.doAlign = function() {
-  if (mode === null) return;
-  aligned = true;
-  document.getElementById("btn-align").disabled = true;
-  document.getElementById("msg").textContent = "链段对齐，氢键形成中...";
-
-  // 动画：对齐 + 氢键出现
-  var startTime = performance.now();
-  var dur = 1200;
-  function animate(now) {
-    var t = Math.min((now - startTime) / dur, 1.0);
-    animT = t;
-    hbAlpha = t;
-    document.getElementById("hud-hbonds").textContent = Math.round(t * (NUM_STRANDS-1) * NUM_RESIDUES).toString();
-    if (t < 1.0) {
-      requestAnimationFrame(animate);
+  // Update strand index panel
+  for(var i2=0; i2<NSTRANDS; i2++){
+    var el = document.getElementById("si-"+i2);
+    var dot = el.querySelector(".strand-dot");
+    if(i2 < visibleStrands){
+      el.className = "strand-item active";
+      dot.className = "strand-dot";
     } else {
-      // 显示胜利
-      setTimeout(showWin, 500);
+      el.className = "strand-item";
+      dot.className = "strand-dot dim";
     }
   }
-  requestAnimationFrame(animate);
-};
 
-function showWin() {
-  var total = (NUM_STRANDS-1) * NUM_RESIDUES;
-  var isAnti = mode === 'antiparallel';
-  document.getElementById("win-desc").textContent =
-    (isAnti ? "反平行β折叠：" : "平行β折叠：") +
-    total + "条链间氢键形成！" +
-    (isAnti ? " 氢键垂直于链轴，稳定性更高，正是蚕丝的结构。" : " 氢键略倾斜，稳定性稍低，常见于代谢酶的TIM桶结构。");
-  document.getElementById("win-overlay").classList.add("show");
+  // Update HUD numbers
+  hudStrands.textContent = visibleStrands.toString();
+  leftStrands.textContent = visibleStrands.toString();
+  hudHB.textContent = hbondsShown.toString();
+  leftHB.textContent = hbondsShown.toString();
 }
 
-window.resetGame = function() {
-  mode = null;
-  aligned = false;
-  hbAlpha = 0.0;
-  animT = 0;
-  document.getElementById("win-overlay").classList.remove("show");
-  document.getElementById("btn-align").disabled = true;
-  document.getElementById("hud-mode").textContent = "未选择";
-  document.getElementById("hud-hbonds").textContent = "0";
-  document.getElementById("hud-stability").textContent = "--";
-  document.getElementById("msg").textContent = "选择β折叠类型，然后对齐";
-  document.getElementById("btn-antiparallel").style.outline = "none";
-  document.getElementById("btn-parallel").style.outline = "none";
-};
-
-/* ── 主渲染循环 ── */
-function loop() {
-  drawGame();
-  requestAnimationFrame(loop);
+function addStrand(){
+  if(visibleStrands < NSTRANDS){
+    visibleStrands++;
+    phaseLabel.textContent = "STRAND_" + visibleStrands + "_JOINING";
+    render();
+    animTimer = setTimeout(function(){
+      if(visibleStrands < NSTRANDS){
+        addStrand();
+      } else {
+        phaseLabel.textContent = "H-BONDS_FORMING";
+        animTimer = setTimeout(addHBonds, 400);
+      }
+    }, 800);
+  }
 }
 
-requestAnimationFrame(loop);
+function addHBonds(){
+  if(hbondsShown < maxHBonds){
+    hbondsShown += NRES; // add one row of bonds at a time
+    if(hbondsShown > maxHBonds) hbondsShown = maxHBonds;
+    var pairsDone = Math.ceil(hbondsShown / NRES);
+    var stabLevels = ["LOW","LOW","MODERATE","HIGH","VERY_HIGH"];
+    hudStab.textContent = stabLevels[Math.min(pairsDone, stabLevels.length-1)];
+    render();
+    if(hbondsShown < maxHBonds){
+      animTimer = setTimeout(addHBonds, 600);
+    } else {
+      phaseLabel.textContent = "COMPLETE";
+      hudStab.textContent = "VERY_HIGH";
+    }
+  }
+}
 
+window.startAnim = function(){
+  if(phase !== "standby") return;
+  phase = "running";
+  phaseLabel.textContent = "STRAND_1_ACTIVE";
+  document.getElementById("btnPlay").classList.add("active");
+  animTimer = setTimeout(addStrand, 600);
+};
+
+window.resetAnim = function(){
+  if(animTimer) clearTimeout(animTimer);
+  phase = "standby"; visibleStrands = 1; hbondsShown = 0;
+  phaseLabel.textContent = "STANDBY";
+  hudStab.textContent = "LOW";
+  document.getElementById("btnPlay").classList.remove("active");
+  render();
+};
+
+render();
 })();
 </script>
 </body>
 </html>"""
 
-# ── 故事段落 ──────────────────────────────────────────────────────
+
+# ── 动画2：反平行 vs 平行 对比 HUD ──────────────────────────────
+# 左右分区：ANTIPARALLEL / PARALLEL 切换
+# 中央 SVG: 3条链 + 方向箭头 + H-bonds
+
+ANIM2_HTML = r"""<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>SHEET_COMPARATOR</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=Noto+Sans+SC:wght@400;700&display=swap" rel="stylesheet"/>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html,body{width:100%;height:100%;overflow:hidden;background:__THEME_BG__;font-family:__THEME_FONT__;color:__THEME_TEXT__;user-select:none}
+.hud{width:100%;height:100%;display:grid;grid-template-rows:44px 1fr 56px;grid-template-columns:180px 1fr 180px;gap:0}
+.top-bar{grid-column:1/-1;display:flex;align-items:center;justify-content:space-between;padding:0 16px;background:rgba(12,14,18,0.6);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);border-bottom:1px solid __THEME_BORDER__;z-index:10}
+.top-bar .title{font-size:11px;font-weight:700;letter-spacing:0.15em;text-transform:uppercase;color:__THEME_PRIMARY__;text-shadow:0 0 15px __THEME_PRIMARY__40}
+.status-dot{width:6px;height:6px;border-radius:50%;background:__THEME_ACCENT__;box-shadow:0 0 8px __THEME_ACCENT__;animation:pdot 2s infinite}
+.ctrl-btns{display:flex;gap:4px}
+.ctrl-btn{padding:5px 12px;border-radius:4px;border:1px solid __THEME_BORDER__;background:__THEME_SURFACE__;color:__THEME_TEXT_DIM__;font-family:__THEME_FONT__;font-size:10px;font-weight:600;cursor:pointer;transition:all 0.2s;letter-spacing:0.08em;text-transform:uppercase}
+.ctrl-btn:hover{border-color:__THEME_PRIMARY__60;color:__THEME_PRIMARY__}
+.ctrl-btn.active{background:__THEME_PRIMARY__18;border-color:__THEME_PRIMARY__;color:__THEME_PRIMARY__;box-shadow:0 0 12px __THEME_PRIMARY__25}
+.ctrl-btn.active-s{background:__THEME_SECONDARY__18;border-color:__THEME_SECONDARY__;color:__THEME_SECONDARY__;box-shadow:0 0 12px __THEME_SECONDARY__25}
+.pnl{padding:12px 10px;background:__THEME_CARD__;backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);overflow-y:auto}
+.pnl-l{border-right:1px solid __THEME_BORDER__}
+.pnl-r{border-left:1px solid __THEME_BORDER__}
+.sect{margin-bottom:12px}
+.ch{width:32px;height:2px;margin-bottom:8px}.ch-p{background:__THEME_PRIMARY__;box-shadow:0 0 8px __THEME_PRIMARY__60}.ch-s{background:__THEME_SECONDARY__;box-shadow:0 0 8px __THEME_SECONDARY__60}.ch-a{background:__THEME_ACCENT__;box-shadow:0 0 8px __THEME_ACCENT__60}
+.hl{font-size:9px;font-weight:500;letter-spacing:0.12em;text-transform:uppercase;color:__THEME_HUD_LABEL__;margin-bottom:4px}
+.hv{font-size:18px;font-weight:700;color:__THEME_HUD_VALUE__;line-height:1.2}
+.hv-p{color:__THEME_PRIMARY__;text-shadow:0 0 10px __THEME_PRIMARY__40}
+.hv-s{font-size:12px}
+.dr{display:flex;justify-content:space-between;padding:3px 0;border-bottom:1px solid rgba(70,72,77,0.08)}
+.dr .k{font-size:9px;letter-spacing:0.1em;text-transform:uppercase;color:__THEME_TEXT_DIM__}
+.dr .v{font-size:10px;font-weight:600;color:__THEME_TEXT__}
+.center{position:relative;display:flex;align-items:center;justify-content:center;background:radial-gradient(ellipse at center,__THEME_BG2__ 0%,__THEME_BG__ 70%);overflow:hidden}
+.bhud{grid-column:1/-1;display:grid;grid-template-columns:repeat(4,1fr);background:__THEME_HUD_BG__;border-top:1px solid __THEME_BORDER__;position:relative}
+.bhud::before{content:'';position:absolute;top:0;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,__THEME_PRIMARY__,__THEME_SECONDARY__,__THEME_PRIMARY__,transparent);opacity:0.6}
+.hc{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:6px 0;position:relative}
+.hc:not(:last-child)::after{content:'';position:absolute;right:0;top:12px;bottom:12px;width:1px;background:rgba(70,72,77,0.15)}
+.hc .hl{margin-bottom:2px;font-size:8px}
+.hc .hv{font-size:15px}
+.cmp-row{display:flex;justify-content:space-between;align-items:center;padding:4px 0;border-bottom:1px solid rgba(70,72,77,0.06)}
+.cmp-label{font-size:9px;color:__THEME_TEXT_DIM__;letter-spacing:0.08em;text-transform:uppercase;width:55px}
+.cmp-anti{font-size:10px;font-weight:600;color:__THEME_PRIMARY__;text-align:center;flex:1}
+.cmp-para{font-size:10px;font-weight:600;color:__THEME_SECONDARY__;text-align:center;flex:1}
+@keyframes pdot{0%,100%{opacity:1}50%{opacity:0.4}}
+</style>
+</head>
+<body>
+<div class="hud">
+  <div class="top-bar">
+    <div style="display:flex;align-items:center;gap:10px">
+      <span class="status-dot"></span>
+      <span class="title">SHEET_COMPARATOR</span>
+    </div>
+    <div class="ctrl-btns">
+      <button class="ctrl-btn active" id="btnAnti" onclick="showType('anti')">ANTIPARALLEL</button>
+      <button class="ctrl-btn" id="btnPara" onclick="showType('para')">PARALLEL</button>
+    </div>
+  </div>
+
+  <div class="pnl pnl-l">
+    <div class="sect">
+      <div class="ch ch-p"></div>
+      <div class="hl">CURRENT_TYPE</div>
+      <div class="hv hv-p" id="typeName" style="font-size:14px">ANTIPARALLEL</div>
+    </div>
+    <div class="sect">
+      <div class="ch ch-a"></div>
+      <div class="hl">PROPERTIES</div>
+      <div class="dr"><span class="k">CHAIN_DIR</span><span class="v" id="propDir">ALTERNATING</span></div>
+      <div class="dr"><span class="k">H-BOND_ANGLE</span><span class="v" id="propAngle">~180 DEG</span></div>
+      <div class="dr"><span class="k">STABILITY</span><span class="v" id="propStab">HIGH</span></div>
+      <div class="dr"><span class="k">H-BOND_SHAPE</span><span class="v" id="propShape">STRAIGHT</span></div>
+    </div>
+    <div class="sect">
+      <div class="ch ch-s"></div>
+      <div class="hl">EXAMPLES</div>
+      <div class="dr"><span class="k" id="ex1k">SILK</span><span class="v" id="ex1v">FIBROIN</span></div>
+      <div class="dr"><span class="k" id="ex2k">IMMUNE</span><span class="v" id="ex2v">ANTIBODY</span></div>
+    </div>
+  </div>
+
+  <div class="center">
+    <svg id="cmpSvg" viewBox="0 0 440 280" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <filter id="gl2"><feGaussianBlur stdDeviation="3" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+        <filter id="hgl2"><feGaussianBlur stdDeviation="2" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+        <radialGradient id="bg2" cx="35%" cy="30%"><stop offset="0%" stop-color="#fff" stop-opacity="0.6"/><stop offset="50%" stop-color="__THEME_PRIMARY__"/><stop offset="100%" stop-color="__THEME_BG__" stop-opacity="0.7"/></radialGradient>
+        <radialGradient id="bg2s" cx="35%" cy="30%"><stop offset="0%" stop-color="#fff" stop-opacity="0.6"/><stop offset="50%" stop-color="__THEME_SECONDARY__"/><stop offset="100%" stop-color="__THEME_BG__" stop-opacity="0.7"/></radialGradient>
+        <marker id="ar2R" markerWidth="6" markerHeight="4" refX="5" refY="2" orient="auto"><path d="M0,0 L6,2 L0,4" fill="__THEME_PRIMARY__" opacity="0.8"/></marker>
+        <marker id="ar2L" markerWidth="6" markerHeight="4" refX="1" refY="2" orient="auto"><path d="M6,0 L0,2 L6,4" fill="__THEME_SECONDARY__" opacity="0.8"/></marker>
+        <marker id="ar2Rs" markerWidth="6" markerHeight="4" refX="5" refY="2" orient="auto"><path d="M0,0 L6,2 L0,4" fill="__THEME_SECONDARY__" opacity="0.8"/></marker>
+      </defs>
+      <g opacity="0.04" stroke="__THEME_PRIMARY__" fill="none" stroke-width="0.5">
+        <line x1="220" y1="0" x2="220" y2="280"/>
+        <line x1="0" y1="140" x2="440" y2="140"/>
+      </g>
+      <g id="cmpBonds"></g>
+      <g id="cmpStrands"></g>
+      <g id="cmpBeads"></g>
+      <g id="cmpArrows"></g>
+      <g id="cmpLabels"></g>
+    </svg>
+  </div>
+
+  <div class="pnl pnl-r">
+    <div class="sect">
+      <div class="ch ch-a"></div>
+      <div class="hl">COMPARISON</div>
+    </div>
+    <div class="cmp-row">
+      <span class="cmp-label">METRIC</span>
+      <span class="cmp-anti" style="font-size:8px;color:__THEME_PRIMARY__">ANTI</span>
+      <span class="cmp-para" style="font-size:8px;color:__THEME_SECONDARY__">PARA</span>
+    </div>
+    <div class="cmp-row">
+      <span class="cmp-label">DIR</span>
+      <span class="cmp-anti">ALT</span>
+      <span class="cmp-para">SAME</span>
+    </div>
+    <div class="cmp-row">
+      <span class="cmp-label">ANGLE</span>
+      <span class="cmp-anti">~180</span>
+      <span class="cmp-para">~160</span>
+    </div>
+    <div class="cmp-row">
+      <span class="cmp-label">STABLE</span>
+      <span class="cmp-anti">HIGH</span>
+      <span class="cmp-para">MEDIUM</span>
+    </div>
+    <div class="cmp-row">
+      <span class="cmp-label">BOND</span>
+      <span class="cmp-anti">STRAIGHT</span>
+      <span class="cmp-para">ANGLED</span>
+    </div>
+    <div class="cmp-row">
+      <span class="cmp-label">EXAMPLE</span>
+      <span class="cmp-anti" style="font-size:8px">SILK</span>
+      <span class="cmp-para" style="font-size:8px">TIM BARREL</span>
+    </div>
+  </div>
+
+  <div class="bhud">
+    <div class="hc"><div class="hl">TYPE</div><div class="hv" id="bType" style="font-size:13px">ANTIPARALLEL</div></div>
+    <div class="hc"><div class="hl">H-BOND_ANGLE</div><div class="hv" id="bAngle" style="font-size:13px">~180 DEG</div></div>
+    <div class="hc"><div class="hl">STABILITY</div><div class="hv" id="bStab" style="font-size:13px">HIGH</div></div>
+    <div class="hc"><div class="hl">EXAMPLES</div><div class="hv" id="bExamples" style="font-size:11px">SILK / ANTIBODY</div></div>
+  </div>
+</div>
+
+<script>
+(function(){
+"use strict";
+
+var NSTRANDS = 3;
+var NRES = 6;
+var RES_DX = 44;
+var STRAND_DY = 60;
+var ZIG = 12;
+var CX = 220, CY = 140;
+var BEAD_R = 7;
+
+var bondsG = document.getElementById("cmpBonds");
+var strandsG2 = document.getElementById("cmpStrands");
+var beadsG2 = document.getElementById("cmpBeads");
+var arrowsG2 = document.getElementById("cmpArrows");
+var labG2 = document.getElementById("cmpLabels");
+
+var currentType = "anti"; // "anti" or "para"
+
+function resXY(si, ri, antiparallel){
+  var topY = CY - (NSTRANDS-1)*STRAND_DY/2;
+  var y0 = topY + si*STRAND_DY;
+  var flip = antiparallel && (si%2===1);
+  var xStart = CX - (NRES-1)*RES_DX/2;
+  var xEnd = CX + (NRES-1)*RES_DX/2;
+  var x = flip ? (xEnd - ri*RES_DX) : (xStart + ri*RES_DX);
+  var zig = ((ri%2===0)?1:-1)*ZIG;
+  return {x:x, y:y0+zig};
+}
+
+function renderType(type){
+  bondsG.innerHTML=""; strandsG2.innerHTML=""; beadsG2.innerHTML=""; arrowsG2.innerHTML=""; labG2.innerHTML="";
+  var isAnti = (type === "anti");
+  var col1 = "__THEME_PRIMARY__";
+  var col2 = "__THEME_SECONDARY__";
+
+  for(var si=0; si<NSTRANDS; si++){
+    var pts=[];
+    for(var ri=0; ri<NRES; ri++){
+      pts.push(resXY(si, ri, isAnti));
+    }
+    var pstr = pts.map(function(p){return p.x+","+p.y}).join(" ");
+    // Glow
+    var pg = document.createElementNS("http://www.w3.org/2000/svg","polyline");
+    pg.setAttribute("points",pstr); pg.setAttribute("fill","none");
+    pg.setAttribute("stroke",isAnti?(si%2===0?col1:col2):col2);
+    pg.setAttribute("stroke-width","5"); pg.setAttribute("opacity","0.12"); pg.setAttribute("filter","url(#gl2)");
+    strandsG2.appendChild(pg);
+    // Clear
+    var pc = document.createElementNS("http://www.w3.org/2000/svg","polyline");
+    pc.setAttribute("points",pstr); pc.setAttribute("fill","none");
+    pc.setAttribute("stroke",isAnti?(si%2===0?col1:col2):col2);
+    pc.setAttribute("stroke-width","2"); pc.setAttribute("opacity","0.85");
+    strandsG2.appendChild(pc);
+
+    // Arrow
+    var topY = CY - (NSTRANDS-1)*STRAND_DY/2;
+    var ay = topY + si*STRAND_DY;
+    var xStart = CX - (NRES-1)*RES_DX/2;
+    var xEnd = CX + (NRES-1)*RES_DX/2;
+    var flip = isAnti && (si%2===1);
+    var al = document.createElementNS("http://www.w3.org/2000/svg","line");
+    al.setAttribute("x1", flip?(xEnd+10):(xStart-10));
+    al.setAttribute("y1", ay);
+    al.setAttribute("x2", flip?(xStart-6):(xEnd+6));
+    al.setAttribute("y2", ay);
+    al.setAttribute("stroke",isAnti?(si%2===0?col1:col2):col2);
+    al.setAttribute("stroke-width","1.5"); al.setAttribute("opacity","0.6");
+    if(isAnti){
+      al.setAttribute("marker-end", flip?"url(#ar2L)":"url(#ar2R)");
+    } else {
+      al.setAttribute("marker-end","url(#ar2Rs)");
+    }
+    arrowsG2.appendChild(al);
+
+    // Direction label (N->C or C->N)
+    var dirText = document.createElementNS("http://www.w3.org/2000/svg","text");
+    var labelX = flip ? (xEnd+18) : (xStart-18);
+    dirText.setAttribute("x", labelX); dirText.setAttribute("y", ay+3);
+    dirText.setAttribute("text-anchor", flip?"start":"end");
+    dirText.setAttribute("font-family","'Space Grotesk',sans-serif"); dirText.setAttribute("font-size","7");
+    dirText.setAttribute("fill",isAnti?(si%2===0?col1:col2):col2);
+    dirText.setAttribute("letter-spacing","0.05em"); dirText.setAttribute("opacity","0.7");
+    if(isAnti){
+      dirText.textContent = flip ? "C->N" : "N->C";
+    } else {
+      dirText.textContent = "N->C";
+    }
+    labG2.appendChild(dirText);
+
+    // Beads
+    for(var ri2=0; ri2<NRES; ri2++){
+      var p = resXY(si, ri2, isAnti);
+      var beadCol = isAnti?(si%2===0?col1:col2):col2;
+      var gc = document.createElementNS("http://www.w3.org/2000/svg","circle");
+      gc.setAttribute("cx",p.x); gc.setAttribute("cy",p.y);
+      gc.setAttribute("r","12"); gc.setAttribute("fill",beadCol); gc.setAttribute("opacity","0.07");
+      beadsG2.appendChild(gc);
+      var c = document.createElementNS("http://www.w3.org/2000/svg","circle");
+      c.setAttribute("cx",p.x); c.setAttribute("cy",p.y);
+      c.setAttribute("r",BEAD_R.toString());
+      c.setAttribute("fill",isAnti?(si%2===0?"url(#bg2)":"url(#bg2s)"):"url(#bg2s)");
+      c.setAttribute("filter","url(#gl2)");
+      beadsG2.appendChild(c);
+      var sp = document.createElementNS("http://www.w3.org/2000/svg","ellipse");
+      sp.setAttribute("cx",p.x-2); sp.setAttribute("cy",p.y-2);
+      sp.setAttribute("rx","3"); sp.setAttribute("ry","2");
+      sp.setAttribute("fill","white"); sp.setAttribute("opacity","0.25");
+      beadsG2.appendChild(sp);
+    }
+  }
+
+  // H-bonds between adjacent strands
+  var hbColor = "__THEME_ACCENT__";
+  for(var si2=0; si2<NSTRANDS-1; si2++){
+    for(var ri3=0; ri3<NRES; ri3++){
+      var pa = resXY(si2, ri3, isAnti);
+      var pb;
+      if(isAnti){
+        pb = resXY(si2+1, ri3, isAnti);
+      } else {
+        // Parallel: bonds are slightly angled
+        var targetRi = Math.min(ri3, NRES-1);
+        pb = resXY(si2+1, targetRi, isAnti);
+        pb.x += 6; // offset to show angle
+      }
+      // Glow
+      var gl = document.createElementNS("http://www.w3.org/2000/svg","line");
+      gl.setAttribute("x1",pa.x); gl.setAttribute("y1",pa.y);
+      gl.setAttribute("x2",pb.x); gl.setAttribute("y2",pb.y);
+      gl.setAttribute("stroke",hbColor); gl.setAttribute("stroke-width","4");
+      gl.setAttribute("opacity","0.12"); gl.setAttribute("filter","url(#hgl2)");
+      bondsG.appendChild(gl);
+      // Bond line
+      var hl = document.createElementNS("http://www.w3.org/2000/svg","line");
+      hl.setAttribute("x1",pa.x); hl.setAttribute("y1",pa.y);
+      hl.setAttribute("x2",pb.x); hl.setAttribute("y2",pb.y);
+      hl.setAttribute("stroke",hbColor); hl.setAttribute("stroke-width","1.5");
+      hl.setAttribute("stroke-dasharray","4,3"); hl.setAttribute("opacity","0.65");
+      bondsG.appendChild(hl);
+    }
+  }
+
+  // Type label in SVG
+  var typeLabel = document.createElementNS("http://www.w3.org/2000/svg","text");
+  typeLabel.setAttribute("x","220"); typeLabel.setAttribute("y","20");
+  typeLabel.setAttribute("text-anchor","middle");
+  typeLabel.setAttribute("font-family","'Space Grotesk',sans-serif");
+  typeLabel.setAttribute("font-size","11"); typeLabel.setAttribute("font-weight","700");
+  typeLabel.setAttribute("letter-spacing","0.15em");
+  typeLabel.setAttribute("fill",isAnti?col1:col2);
+  typeLabel.setAttribute("opacity","0.9");
+  typeLabel.textContent = isAnti ? "ANTIPARALLEL BETA SHEET" : "PARALLEL BETA SHEET";
+  labG2.appendChild(typeLabel);
+
+  // Bond angle annotation
+  var angleLabel = document.createElementNS("http://www.w3.org/2000/svg","text");
+  angleLabel.setAttribute("x","220"); angleLabel.setAttribute("y","268");
+  angleLabel.setAttribute("text-anchor","middle");
+  angleLabel.setAttribute("font-family","'Space Grotesk',sans-serif");
+  angleLabel.setAttribute("font-size","9"); angleLabel.setAttribute("fill","__THEME_TEXT_DIM__");
+  angleLabel.setAttribute("letter-spacing","0.1em");
+  angleLabel.textContent = isAnti ? "H-BONDS: STRAIGHT (~180 DEG) -- HIGH STABILITY" : "H-BONDS: ANGLED (~160 DEG) -- MEDIUM STABILITY";
+  labG2.appendChild(angleLabel);
+}
+
+function updatePanels(type){
+  var isAnti = (type === "anti");
+  document.getElementById("typeName").textContent = isAnti ? "ANTIPARALLEL" : "PARALLEL";
+  document.getElementById("propDir").textContent = isAnti ? "ALTERNATING" : "SAME DIR";
+  document.getElementById("propAngle").textContent = isAnti ? "~180 DEG" : "~160 DEG";
+  document.getElementById("propStab").textContent = isAnti ? "HIGH" : "MEDIUM";
+  document.getElementById("propShape").textContent = isAnti ? "STRAIGHT" : "ANGLED";
+  document.getElementById("ex1k").textContent = isAnti ? "SILK" : "ENZYME";
+  document.getElementById("ex1v").textContent = isAnti ? "FIBROIN" : "TIM BARREL";
+  document.getElementById("ex2k").textContent = isAnti ? "IMMUNE" : "KINASE";
+  document.getElementById("ex2v").textContent = isAnti ? "ANTIBODY" : "ROSSMANN";
+  document.getElementById("bType").textContent = isAnti ? "ANTIPARALLEL" : "PARALLEL";
+  document.getElementById("bAngle").textContent = isAnti ? "~180 DEG" : "~160 DEG";
+  document.getElementById("bStab").textContent = isAnti ? "HIGH" : "MEDIUM";
+  document.getElementById("bExamples").textContent = isAnti ? "SILK / ANTIBODY" : "TIM BARREL / KINASE";
+}
+
+window.showType = function(type){
+  currentType = type;
+  var isAnti = (type === "anti");
+  document.getElementById("btnAnti").className = isAnti ? "ctrl-btn active" : "ctrl-btn";
+  document.getElementById("btnPara").className = isAnti ? "ctrl-btn" : "ctrl-btn active-s";
+  renderType(type);
+  updatePanels(type);
+};
+
+renderType("anti");
+updatePanels("anti");
+})();
+</script>
+</body>
+</html>"""
+
+
+# ── 故事段落 ────────────────────────────────────────────────────
 
 STORY_PARAGRAPHS = [
     {
-        "text": "公元前2600年，传说中国的嫘祖正在宫中喝茶，一个蚕茧不小心落入了热水中。她试着拉出茧，发现茧可以被拉成一根细丝，绵延数百米。蚕丝从此进入人类文明。",
+        "text": "1951年，Linus Pauling 和 Robert Corey 在同一篇论文中提出了两种蛋白质二级结构——alpha螺旋和beta折叠。Pauling生病卧床期间，靠一张纸和纯几何推理，从键长和键角出发，推导出了多肽链可能形成的所有规则结构。",
         "image_url": "",
     },
     {
-        "text": "但蚕丝为什么这么强？为什么这么滑？四千年后，物理学家把蚕丝放在X射线下照射，得到了一张衍射图案。从图案中，他们看到了0.35纳米的间距——那是β链中相邻残基的距离，和0.47纳米的间距——那是相邻β链之间的距离。",
+        "text": "beta折叠的关键证据来自蚕丝蛋白的X射线衍射。物理学家把蚕丝放在X射线下照射，得到了一张衍射图案。图案中有两个特征性间距：0.35纳米（beta链方向的残基间距）和0.47纳米（相邻beta链之间的距离）。这两个数字与Pauling-Corey的beta折叠模型完全匹配。",
         "image_url": "",
     },
     {
-        "text": "蚕的嘴巴，精确地将丝蛋白分子折叠成β折叠片，然后把成千上万张β折叠片层叠在一起，靠Van der Waals力黏合。这就是丝绸光泽的来源——规则晶体反射光线。这就是丝绸强度的来源——每一张片内有数百条氢键。这就是丝绸柔软的来源——片层之间可以滑动。",
+        "text": "蚕的嘴巴精确地将丝蛋白分子折叠成beta折叠片，然后把成千上万张beta折叠片层叠在一起。蚕丝的光泽来自规则晶体反射光线，强度来自每张片内数百条氢键，柔软来自片层之间可以滑动。一只蚕不懂纳米材料学，却制造出了人类至今无法完全复制的天然纤维。",
         "image_url": "",
     },
 ]
 
-# ── 练习题 ───────────────────────────────────────────────────────
+# ── 练习题 ──────────────────────────────────────────────────────
 
 EXERCISES = [
     {
         "type": "choice",
-        "question": "β折叠中，氢键存在于哪里？",
+        "question": "beta折叠中，氢键存在于哪里？",
         "options": [
-            "A. 同一条β链内（第i与第i+4残基之间）",
-            "B. 不同β链之间（链间氢键）",
+            "A. 同一条beta链内（第i与第i+4残基之间）",
+            "B. 不同beta链之间（链间氢键）",
             "C. 侧链与骨架之间",
             "D. 侧链与侧链之间",
         ],
         "correct": 1,
-        "explanation": "β折叠的关键特征是链间氢键——不同β链之间的N-H和C=O形成氢键，将多条链连接成片状结构。这与α螺旋的链内氢键（第i↔第i+4）截然不同。",
+        "explanation": "beta折叠的关键特征是链间氢键——不同beta链之间的N-H和C=O形成氢键，将多条链连接成片状结构。这与alpha螺旋的链内氢键（第i与第i+4）截然不同。",
     },
     {
         "type": "choice",
-        "question": "反平行β折叠比平行β折叠更稳定，原因是？",
+        "question": "反平行beta折叠比平行beta折叠更稳定，原因是？",
         "options": [
             "A. 反平行的链更长",
             "B. 反平行氢键更垂直于链轴，线性程度更高，能量更大",
@@ -2212,23 +1100,23 @@ EXERCISES = [
             "D. 反平行的侧链更小",
         ],
         "correct": 1,
-        "explanation": "氢键的稳定性取决于供体-氢-受体三者的线性程度（角度越接近180°越稳定）。反平行β折叠中，两链方向相反，氢键几乎垂直于链轴，接近线性，稳定性更高。平行β折叠中氢键需要倾斜，线性程度降低。",
+        "explanation": "氢键的稳定性取决于供体-氢-受体三者的线性程度（角度越接近180度越稳定）。反平行beta折叠中，两链方向相反，氢键几乎垂直于链轴，接近线性，稳定性更高。",
     },
     {
         "type": "choice",
         "question": "蚕丝蛋白（丝素）含有大量Gly（甘氨酸）和Ala（丙氨酸），原因是？",
         "options": [
-            "A. 这两种氨基酸的侧链很小，允许β折叠片紧密堆叠",
-            "B. 这两种氨基酸特别喜欢形成α螺旋",
+            "A. 这两种氨基酸的侧链很小，允许beta折叠片紧密堆叠",
+            "B. 这两种氨基酸特别喜欢形成alpha螺旋",
             "C. 这两种氨基酸能形成二硫键",
             "D. 这两种氨基酸的侧链带电荷，互相吸引",
         ],
         "correct": 0,
-        "explanation": "β折叠片的侧链交替朝上朝下。当多张β折叠片堆叠时，一张片朝下的侧链需要与下一张片朝上的侧链紧密接触。Gly只有H（最小），Ala有甲基（也很小），使β折叠片能堆叠得非常致密，形成晶体结构，赋予蚕丝强度和光泽。",
+        "explanation": "beta折叠片的侧链交替朝上朝下。多张beta折叠片堆叠时，一张片朝下的侧链与下一张片朝上的侧链要紧密接触。Gly只有H（最小），Ala有甲基（也很小），使beta折叠片能堆叠得非常致密。",
     },
     {
         "type": "choice",
-        "question": "β折叠中，侧链的排列方式是？",
+        "question": "beta折叠中，侧链的排列方式是？",
         "options": [
             "A. 所有侧链均朝外（螺旋轴外侧）",
             "B. 所有侧链均朝向片的同一面",
@@ -2236,157 +1124,97 @@ EXERCISES = [
             "D. 侧链随机朝向",
         ],
         "correct": 2,
-        "explanation": "在β链的锯齿形骨架中，相邻的Cα原子交替位于折叠面的两侧，因此侧链也交替朝上和朝下。这使β折叠片有两个不同的面——通常一面疏水（朝向蛋白质核心），另一面亲水（朝向水环境）。",
+        "explanation": "在beta链的锯齿形骨架中，相邻的C-alpha原子交替位于折叠面的两侧，因此侧链也交替朝上和朝下。这使beta折叠片有两个不同的面。",
     },
     {
         "type": "choice",
         "question": "淀粉样纤维（与阿尔茨海默病有关）的结构特征是？",
         "options": [
-            "A. 大量α螺旋堆叠",
-            "B. 大量β折叠跨分子错误堆叠，形成不溶纤维",
+            "A. 大量alpha螺旋堆叠",
+            "B. 大量beta折叠跨分子错误堆叠，形成不溶纤维",
             "C. 随机卷曲的蛋白质聚集",
             "D. 二硫键交联的蛋白质",
         ],
         "correct": 1,
-        "explanation": "淀粉样纤维是蛋白质错误折叠后，来自不同蛋白质分子的β链跨分子堆叠，形成高度有序的交叉β折叠结构（cross-β）。这种结构非常稳定，不溶于水，细胞无法降解，积累后破坏神经元。这正是β折叠稳定性的'黑暗面'。",
+        "explanation": "淀粉样纤维是蛋白质错误折叠后，来自不同蛋白质分子的beta链跨分子堆叠，形成高度有序的交叉beta折叠结构。这种结构非常稳定，不溶于水，细胞无法降解。",
     },
 ]
+
 
 # ── Idea 自我辩论系统 ────────────────────────────────────────────
 
 def _debate_idea(
-    idea_id: str,
-    mode: str,
-    topic: str,
-    objections: list[str],
-    rebuttals: list[str],
+    idea_id: str, mode: str, topic: str,
+    objections: list[str], rebuttals: list[str],
     scores: dict[str, int],
 ) -> bool:
-    """执行 idea 辩论。返回 True 表示通过（均值>=6.0），False 不通过。"""
     total = sum(scores.values())
     avg = total / len(scores)
     passed = avg >= 6.0
-
-    console.print(f"\n[bold]-- Idea 辩论：[cyan]{mode}[/cyan] · {topic[:40]}[/bold]")
+    console.print(f"\n[bold]-- Idea 辩论：[cyan]{mode}[/cyan] . {topic[:40]}[/bold]")
     for i, (obj, reb) in enumerate(zip(objections, rebuttals), 1):
         console.print(f"  [red]质疑{i}[/red]: {obj}")
         console.print(f"  [green]反驳{i}[/green]: {reb}")
     score_str = " | ".join(f"{k}={v}" for k, v in scores.items())
     result = "[bold green]通过[/bold green]" if passed else "[bold red]不通过（已跳过）[/bold red]"
-    console.print(f"  得分 ({score_str}) 均值={avg:.1f} → {result}")
+    console.print(f"  得分 ({score_str}) 均值={avg:.1f} -> {result}")
     return passed
 
 
-# 辩论阈值：均值 >= 6.0
-# 辩论原则：质疑要犀利，不能所有 idea 都通过
-
 _IDEA_DEBATES = {
-    # ── 候选1：β折叠形成过程动画 ──────────────────────────────────
-    "anim1": _debate_idea(
-        idea_id="anim1",
-        mode="animation",
-        topic="β折叠形成过程：多条链并排，氢键依次连接",
+    "story": _debate_idea(
+        idea_id="story", mode="story",
+        topic="Pauling-Corey 和蚕丝的秘密——beta折叠历史故事",
         objections=[
-            "β折叠的核心难点是'链间'关系，但动画里5条链同时飞入，孩子视觉焦点会被分散，根本不知道该关注哪个氢键在哪里形成",
-            "锯齿形骨架本身在2D平面上就很难看懂，加上'飞入动画'这个视觉噪音，会让孩子误以为β链真的会在细胞里'飞'进来",
-            "5条链×7个残基=35个珠子同时动，Canvas渲染压力大，在低端设备上可能卡顿，破坏教学体验",
+            "故事只有文字，对10岁孩子吸引力不如动画",
+            "课程中已有2个动画，3段故事可能冗余",
         ],
         rebuttals=[
-            "链是依次飞入的（phase 0=1条，phase 1=加入链2，...），不是同时飞入；每个阶段有HUD文字说明当前发生了什么，视觉焦点用阶段字幕引导",
-            "飞入动画是标准科教动画的做法（教科书插图也用箭头表示'链加入'），它表示的是'一条新链参与进来'，不是物理轨迹；学生从上下文容易理解",
-            "35个圆形的Canvas绘制远低于60fps的瓶颈，现代手机和电脑完全可以流畅运行；如有问题可降帧，不影响内容传递",
+            "文字故事补充动画无法传递的情感维度：蚕丝蛋白+X射线衍射这个组合比动画更有历史纵深感",
+            "故事是两个动画之间的呼吸节点，有故事比没有更有学习完成感",
+        ],
+        scores={"teaching_fit": 7, "feasibility": 10, "cognitive": 7, "completion": 7},
+    ),
+    "anim1": _debate_idea(
+        idea_id="anim1", mode="animation",
+        topic="beta折叠形成 HUD：多条链并排，氢键依次连接",
+        objections=[
+            "5条链同时在视野中，视觉焦点可能分散",
+            "HUD仪表盘信息密度高，对10岁孩子可能过于专业",
+        ],
+        rebuttals=[
+            "链是依次加入的（phase控制），每次只关注一条新链；HUD同步显示阶段文字引导视觉焦点",
+            "HUD标签使用简短大写英文+数字，是科普动画的常见做法；底栏4格数字一目了然",
         ],
         scores={"teaching_fit": 9, "feasibility": 8, "cognitive": 7, "completion": 8},
     ),
-    # ── 候选2：反平行 vs 平行对比动画 ────────────────────────────
     "anim2": _debate_idea(
-        idea_id="anim2",
-        mode="animation",
-        topic="反平行 vs 平行β折叠：氢键方向对比",
+        idea_id="anim2", mode="animation",
+        topic="反平行 vs 平行 beta折叠对比 HUD",
         objections=[
-            "同一张画面里塞下两种结构，每种各3条链，信息密度过高；孩子第一次学β折叠，对这个微妙区别完全没有先验知识，对比画面会让他们困惑",
-            "氢键'倾斜程度'的差异是非常微小的几何变化，在Canvas动画里很难用视觉语言表达出来，可能让孩子以为两种结构差不多",
-            "本节最重要的核心是'β链锯齿形+链间氢键'，反平行/平行是进阶细节，动画2占的屏幕时间会喧宾夺主",
+            "同一画面切换两种模式，孩子可能不理解区别",
+            "氢键角度差异是微小的几何变化，视觉上难以表达",
         ],
         rebuttals=[
-            "画面用分割线明确区分左右两区，左=反平行（绿色标签），右=平行（蓝色标签）；每区各自独立，孩子可以先只看一边",
-            "无法有效驳斥：氢键倾斜程度确实很微妙，Canvas用颜色（橙色=直，紫色=斜）和虚线角度来区分，但这个视觉映射对10岁孩子仍然是抽象的；该质疑站得住脚",
-            "反平行/平行是课程文本中的重要知识点（有整段表格讲解），动画起辅助作用，不是主要内容；配合文本使用，认知负担分散到文字和动画两个通道",
+            "用按钮切换（不是同屏对比），切换时整个画面重绘，焦点明确；右侧比较面板始终可见",
+            "用颜色编码（绿=反平行，黄绿=平行）+文字标注角度，双通道传递信息",
         ],
-        # 质疑2有效驳斥，平均分受影响
-        scores={"teaching_fit": 6, "feasibility": 8, "cognitive": 5, "completion": 6},
+        scores={"teaching_fit": 7, "feasibility": 8, "cognitive": 6, "completion": 6},
     ),
-    # ── 候选3：蚕丝结构3D堆叠动画（预期淘汰）──────────────────────
-    "anim_silk": _debate_idea(
-        idea_id="anim_silk",
-        mode="animation",
-        topic="蚕丝蛋白的β折叠片层堆叠3D可视化",
+    "game_quiz": _debate_idea(
+        idea_id="game_quiz", mode="game",
+        topic="beta折叠链对齐游戏：选择反平行/平行",
         objections=[
-            "真实蚕丝蛋白的堆叠是3D结构，在Canvas 2D里只能做伪3D，效果丑陋且不准确，孩子可能建立错误的空间认知",
-            "动画1已经展示了β折叠的形成过程，堆叠动画是重复，只是把已有知识换了个视角，教学增量不足",
-            "蚕丝的视觉吸引力在于它的光泽和质感，这是Canvas根本无法展示的——蚕丝材质的美在Canvas上只是几个灰色矩形，完全失去情感共鸣",
+            "游戏只有两个选项（反平行/平行），两步操作就结束，缺乏深度",
+            "无论选什么都能看到氢键形成，缺乏正误惩罚，教学反馈无效",
+            "缺乏积分、排行榜等激励机制",
         ],
         rebuttals=[
-            "可以用透视投影和阴影模拟3D感，教科书里大量使用这种方式表示分子结构堆叠",
-            "堆叠视角展示的是'为什么蚕丝有光泽和强度'，与动画1的'结构形成'关注点完全不同",
-            "无法有效驳斥：蚕丝的美学体验确实不是Canvas能传达的，这个动画做出来可能会让孩子觉得蚕丝'不美丽'，反而破坏知识点的情感共鸣；应该用故事文字而非动画来传达这种美",
+            "目标是'主动选择'的认知激活，但确实操作太少",
+            "无法有效驳斥：两步操作确实不构成游戏",
+            "最小化游戏化原则不能成为缺乏深度的借口",
         ],
-        # 质疑3无法有效驳斥，平均分低
-        scores={"teaching_fit": 4, "feasibility": 5, "cognitive": 5, "completion": 4},
-    ),
-    # ── 候选4：折纸游戏——链对齐 ──────────────────────────────────
-    "game": _debate_idea(
-        idea_id="game",
-        mode="game",
-        topic="链对齐游戏：选择反平行/平行，然后对齐三条β链",
-        objections=[
-            "游戏只有两个选项（反平行/平行），然后点一个按钮，总共两步操作就结束了，这不是游戏，这是一道选择题",
-            "孩子完全可以随机点一个选项然后点对齐——无论选什么，氢键都会出现，游戏完全没有正误惩罚，教学反馈无效",
-            "游戏的奖励（'氢键形成'动画）对孩子的吸引力远不如积分、排行榜或者解锁内容——缺乏激励机制",
-        ],
-        rebuttals=[
-            "游戏的价值不在于操作复杂度，而在于'主动选择'的认知激活：孩子必须思考'我认为蚕丝是哪种'，这个主动判断比被动看动画记忆效果好50%（主动回忆优势）",
-            "无法有效驳斥：孩子确实可以随机猜测；但胜利文字说明了两种选择的不同后果（'反平行更稳定，正是蚕丝的结构'），即使猜错，切换选项重玩时会看到对比，有学习价值",
-            "氢键逐渐出现的动画配合'X条氢键形成'的HUD数字，对孩子确实有基本的完成感；虽然不如积分系统，但符合本节的最小化游戏化原则（不过度工程化）",
-        ],
-        # 质疑2有效点，但游戏的教学价值仍然存在
-        scores={"teaching_fit": 6, "feasibility": 9, "cognitive": 7, "completion": 5},
-    ),
-    # ── 候选5：蚕丝情境故事 ──────────────────────────────────────
-    "story": _debate_idea(
-        idea_id="story",
-        mode="story",
-        topic="嫘祖和蚕丝的秘密——β折叠的历史情境",
-        objections=[
-            "嫘祖的故事是传说，不是科学史实，混入课程中会让孩子分不清哪些是科学哪些是神话",
-            "课程中已经有两个动画和一个游戏，内容密度已经很高，3段故事是额外的认知负担",
-            "故事第3段提到'Van der Waals力'，这远超10岁孩子的知识水平，会在情境中引入陌生术语，造成困惑",
-        ],
-        rebuttals=[
-            "故事开篇明确使用'传说'二字，不会让孩子误以为是事实；从神话引入科学是科教的经典手法（如牛顿苹果树），建立情感锚点后再引入X射线衍射的科学史",
-            "故事不是额外负担，而是必要的呼吸节奏：在两个动画之间，3段短故事（每段约2-3句话）不超过60秒阅读时间，是动画后的休息和情感共鸣",
-            "无法完全驳斥：'Van der Waals力'确实超纲；可以在故事中将其改为'一种微弱的吸引力，就像两片玻璃贴在一起'，用类比替代专业术语",
-        ],
-        # 质疑3可补救，整体有效
-        scores={"teaching_fit": 7, "feasibility": 10, "cognitive": 7, "completion": 7},
-    ),
-    # ── 候选6：淀粉样蛋白互动展示（预期淘汰）────────────────────
-    "anim_amyloid": _debate_idea(
-        idea_id="anim_amyloid",
-        mode="animation",
-        topic="淀粉样纤维的跨分子β折叠堆叠动画",
-        objections=[
-            "淀粉样蛋白和阿尔茨海默病是本课程后续节点（三级结构/折叠病）的内容，在β折叠基础节展示会严重破坏知识树顺序",
-            "即使用简化动画，孩子理解'跨分子β折叠'需要先理解蛋白质的三级结构是什么，而三级结构是后面模块的内容——认知前置条件不满足",
-            "疾病相关内容对10岁孩子可能造成不必要的焦虑（尤其有家人患阿尔茨海默病的孩子），不适合在基础节中引入",
-        ],
-        rebuttals=[
-            "课程文本中有一段提到淀粉样蛋白作为'拓展知识'，动画的作用是可视化这个补充内容",
-            "可以简化呈现：不提三级结构，只展示'很多β链从不同地方来，堆叠在一起，形成长纤维'",
-            "适当的恐怖感（科学上的）可以激发好奇心，教育学中有'惊奇效应'支持",
-        ],
-        # 质疑1和2强，前置条件不满足是硬伤
-        scores={"teaching_fit": 3, "feasibility": 5, "cognitive": 3, "completion": 4},
+        scores={"teaching_fit": 4, "feasibility": 9, "cognitive": 4, "completion": 3},
     ),
 }
 
@@ -2395,10 +1223,9 @@ console.print(f"\n[bold]辩论汇总：{sum(1 for v in _IDEA_DEBATES.values() if
 DEBATE_PASSED = set(k for k, v in _IDEA_DEBATES.items() if v)
 
 
-# ── 主题应用 ──────────────────────────────────────────────────────
+# ── 主题应用 ────────────────────────────────────────────────────
 
 def _apply_theme(html: str, theme: dict) -> str:
-    """将 HTML 中的 __THEME_*__ 占位符替换为当前项目主题色。"""
     def _lighten(hex_color: str, delta: int = 8) -> str:
         h = hex_color.lstrip("#")
         rgb = [int(h[i:i+2], 16) for i in (0, 2, 4)]
@@ -2408,46 +1235,49 @@ def _apply_theme(html: str, theme: dict) -> str:
     replacements = {
         "__THEME_BG__": theme["bg"],
         "__THEME_BG2__": theme.get("bg2", _lighten(theme["bg"], 10)),
-        "__THEME_CARD__": theme.get("card", "rgba(255,255,255,0.92)"),
+        "__THEME_SURFACE__": theme.get("surface", "#171a1f"),
+        "__THEME_SURFACE_HIGH__": theme.get("surface_high", "#1d2025"),
+        "__THEME_SURFACE_HIGHEST__": theme.get("surface_highest", "#23262c"),
+        "__THEME_CARD__": theme.get("card", "rgba(23,26,31,0.6)"),
         "__THEME_PRIMARY__": theme["primary"],
         "__THEME_SECONDARY__": theme["secondary"],
         "__THEME_ACCENT__": theme.get("accent", theme["secondary"]),
         "__THEME_TEXT__": theme["text"],
         "__THEME_TEXT_DIM__": theme["text_dim"],
-        "__THEME_BORDER__": theme.get("border", "rgba(0,0,0,0.1)"),
-        "__THEME_GRID__": theme.get("grid", "rgba(0,0,0,0.05)"),
+        "__THEME_BORDER__": theme.get("border", "rgba(70,72,77,0.15)"),
         "__THEME_HUD_LABEL__": theme["hud_label"],
         "__THEME_HUD_VALUE__": theme["hud_value"],
-        "__THEME_HUD_BG__": theme.get("hud_bg", "rgba(255,255,255,0.92)"),
+        "__THEME_HUD_BG__": theme.get("hud_bg", "rgba(12,14,18,0.95)"),
         "__THEME_FONT__": theme["font_display"],
+        "__THEME_FONT_MONO__": theme.get("font_mono", "'Space Grotesk', monospace"),
     }
     for placeholder, value in replacements.items():
         html = html.replace(placeholder, value)
     return html
 
 
-# ── 组装 CourseContent ────────────────────────────────────────────
+# ── 组装 CourseContent ──────────────────────────────────────────
 
 def build_course_content() -> dict:
-    # 注入 IDEA 占位符到 plan_markdown
-    plan = PLAN_MARKDOWN
-    plan = plan.replace(
+    plan_with_placeholders = PLAN_MARKDOWN
+
+    plan_with_placeholders = plan_with_placeholders.replace(
         "[[IDEA:ANIM1_PLACEHOLDER]]",
         f"[[IDEA:{ANIM1_ID}]]"
     )
-    plan = plan.replace(
+    plan_with_placeholders = plan_with_placeholders.replace(
         "[[IDEA:ANIM2_PLACEHOLDER]]",
         f"[[IDEA:{ANIM2_ID}]]"
     )
-    plan = plan.replace(
+    plan_with_placeholders = plan_with_placeholders.replace(
         "## 开篇故事：一根蚕丝的秘密",
         f"[[IDEA:{STORY_ID}]]\n\n## 开篇故事：一根蚕丝的秘密"
     )
-    plan = plan.replace(
+    plan_with_placeholders = plan_with_placeholders.replace(
         "## 检测你学会了吗？",
         f"[[IDEA:{EXER_ID}]]\n\n## 检测你学会了吗？"
     )
-    plan = plan.replace(
+    plan_with_placeholders = plan_with_placeholders.replace(
         "## 本节小结",
         f"[[IDEA:{GAME_ID}]]\n\n## 本节小结"
     )
@@ -2456,13 +1286,11 @@ def build_course_content() -> dict:
         (
             "story",
             {
-                "idea_id": STORY_ID,
-                "mode": "story",
-                "topic": "嫘祖和蚕丝的秘密——β折叠的历史情境",
-                "context_summary": "从嫘祖发现蚕丝的传说引入，到X射线衍射发现β折叠结构，建立知识的情感锚点",
-                "generation_backend": "claude_code_direct",
-                "style_key": "chromatic_depth",
-                "mode_reason": "历史情境故事建立直觉和情感共鸣，作为动画前的开篇",
+                "idea_id": STORY_ID, "mode": "story",
+                "topic": "Pauling-Corey 和蚕丝的秘密——beta折叠的历史故事",
+                "context_summary": "从Pauling-Corey 1951年的发现到蚕丝蛋白的X射线衍射验证",
+                "generation_backend": "claude_code_direct", "style_key": "biotech_life",
+                "mode_reason": "历史情境故事建立直觉和情感共鸣",
             },
             {
                 STORY_ID: {
@@ -2475,13 +1303,11 @@ def build_course_content() -> dict:
         (
             "anim1",
             {
-                "idea_id": ANIM1_ID,
-                "mode": "animation",
-                "topic": "β折叠形成过程：多条链并排，氢键依次连接",
-                "context_summary": "多条β链依次飞入并排，链间氢键依次连接形成片状结构，侧链交替朝上朝下",
-                "generation_backend": "claude_code_direct",
-                "style_key": "biotech_life",
-                "mode_reason": "β折叠形成是动态过程，需要动画展示链加入和氢键形成的时序",
+                "idea_id": ANIM1_ID, "mode": "animation",
+                "topic": "beta折叠形成 HUD：多条链并排，氢键依次连接",
+                "context_summary": "HUD仪表盘风格展示beta折叠片形成过程：链依次加入+氢键逐排连接",
+                "generation_backend": "claude_code_direct", "style_key": "biotech_life",
+                "mode_reason": "辩论通过：动态过程适合SVG+HUD仪表盘展示",
             },
             {
                 ANIM1_ID: {
@@ -2495,13 +1321,11 @@ def build_course_content() -> dict:
         (
             "anim2",
             {
-                "idea_id": ANIM2_ID,
-                "mode": "animation",
-                "topic": "反平行 vs 平行β折叠：氢键方向对比",
-                "context_summary": "左右分区对比展示反平行和平行β折叠，高亮链间氢键，颜色区分氢键方向差异",
-                "generation_backend": "claude_code_direct",
-                "style_key": "biotech_life",
-                "mode_reason": "辩论通过：分区对比是展示两种结构差异最直观的方式，辅以颜色编码",
+                "idea_id": ANIM2_ID, "mode": "animation",
+                "topic": "反平行 vs 平行 beta折叠对比 HUD",
+                "context_summary": "HUD仪表盘风格对比展示反平行和平行beta折叠的氢键方向差异",
+                "generation_backend": "claude_code_direct", "style_key": "biotech_life",
+                "mode_reason": "辩论通过：切换按钮+右侧比较面板清晰呈现两种结构差异",
             },
             {
                 ANIM2_ID: {
@@ -2513,20 +1337,18 @@ def build_course_content() -> dict:
             },
         ),
         (
-            "game",
+            "game_quiz",
             {
-                "idea_id": GAME_ID,
-                "mode": "game",
-                "topic": "链对齐游戏：选择反平行/平行，然后对齐三条β链",
-                "context_summary": "玩家选择β折叠类型（反平行/平行），点击对齐后观察氢键形成，理解两种结构差异",
-                "generation_backend": "claude_code_direct",
-                "style_key": "biotech_life",
-                "mode_reason": "辩论通过：主动选择激活认知，完成胜利画面有反馈，符合最小化游戏化原则",
+                "idea_id": GAME_ID, "mode": "game",
+                "topic": "beta折叠链对齐游戏",
+                "context_summary": "选择反平行/平行，对齐链段观察氢键形成",
+                "generation_backend": "claude_code_direct", "style_key": "biotech_life",
+                "mode_reason": "辩论未通过：操作深度不足，已跳过",
             },
             {
                 GAME_ID: {
                     "mode": "game", "status": "ready",
-                    "html": _apply_theme(GAME_HTML, T),
+                    "html": "",
                     "story_paragraphs": None, "exercises": None,
                     "generation_backend": "claude_code_direct",
                 }
@@ -2535,12 +1357,10 @@ def build_course_content() -> dict:
         (
             "exercise",
             {
-                "idea_id": EXER_ID,
-                "mode": "exercise",
-                "topic": "β折叠关键知识点巩固练习（5题）",
+                "idea_id": EXER_ID, "mode": "exercise",
+                "topic": "beta折叠关键知识点巩固练习（5题）",
                 "context_summary": "检验学生对链间氢键、反平行/平行区别、蚕丝结构、侧链交替、淀粉样蛋白的理解",
-                "generation_backend": "claude_code_direct",
-                "style_key": "",
+                "generation_backend": "claude_code_direct", "style_key": "",
                 "mode_reason": "练习题巩固学习，即时检测理解",
             },
             {
@@ -2563,13 +1383,13 @@ def build_course_content() -> dict:
             console.print(f"[yellow]跳过（辩论未通过）：{idea_dict['topic'][:40]}[/yellow]")
 
     return {
-        "plan_markdown": plan,
+        "plan_markdown": plan_with_placeholders,
         "ideas": ideas,
         "rendered_sections": rendered_sections,
     }
 
 
-# ── 写入数据库 ───────────────────────────────────────────────────
+# ── 写入数据库 ──────────────────────────────────────────────────
 
 def write_everything():
     from scripts.course_factory import (
@@ -2581,12 +1401,12 @@ def write_everything():
     console.print(Panel.fit(
         "[bold cyan]GP-01 蛋白结构探险地图[/bold cyan]\n\n"
         "完全由 Claude Code 生成（不调用 LLM agent pipeline）\n"
-        "节点：M05N02 β折叠——大自然的手风琴（knode_id=13）\n"
-        "内容：完整课程文本 + 2个Canvas动画 + 1个游戏 + 3段故事 + 5道练习题",
+        f"节点：knode_id={TARGET_KNODE_ID} . {TARGET_NODE_TITLE}\n"
+        "内容：完整课程文本 + HUD动画x2 + 历史故事 + 5道练习题\n"
+        "风格：Stitch HUD 仪表盘（Space Grotesk + glass panel + 霓虹色）",
         title="写入数据库",
     ))
 
-    # 读取知识树
     with open(TREE_PATH, encoding="utf-8") as f:
         tree_data = json.load(f)
     milestones = tree_data["milestones"]
@@ -2595,10 +1415,7 @@ def write_everything():
     console.print(f"知识树：{len(milestones)} 个模块，{node_count} 个节点")
     console.print(f"目标节点 knode_id = {TARGET_KNODE_ID}（{TARGET_NODE_TITLE}）")
 
-    # 1. 确保数据库表存在
     _ensure_db_tables()
-
-    # 2. 写入项目文件
     _write_project_files(
         PROJECT_NAME, PROJECT_TITLE, PROJECT_DESCRIPTION,
         PROJECT_CATEGORY, PROJECT_AGE_RANGE, PROJECT_ESTIMATED_HOURS,
@@ -2606,7 +1423,6 @@ def write_everything():
     )
     console.print("[green]v 项目文件写入[/green]")
 
-    # 3. 注册项目
     _upsert_project(
         PROJECT_NAME, PROJECT_TITLE, PROJECT_DESCRIPTION,
         PROJECT_CATEGORY, PROJECT_AGE_RANGE, PROJECT_ESTIMATED_HOURS,
@@ -2614,11 +1430,9 @@ def write_everything():
     )
     console.print("[green]v 项目注册到数据库[/green]")
 
-    # 4. 初始化进度（第0节可用，其余锁定）
     _init_progress(PROJECT_NAME, node_count)
     console.print("[green]v 学习进度初始化[/green]")
 
-    # 5. 为所有节点创建 pending 状态的占位 lesson（跳过已存在的）
     db = get_db_session()
     try:
         for kid in range(node_count):
@@ -2627,18 +1441,14 @@ def write_everything():
             ).first()
             if not existing:
                 db.add(LessonContent(
-                    project_name=PROJECT_NAME,
-                    knode_id=kid,
-                    status="pending",
-                    content_type="interactive",
-                    course_content="",
+                    project_name=PROJECT_NAME, knode_id=kid,
+                    status="pending", content_type="interactive", course_content="",
                 ))
         db.commit()
-        console.print(f"[green]v 节点占位记录检查完成（共 {node_count} 个节点）[/green]")
+        console.print(f"[green]v {node_count} 个节点占位记录确认[/green]")
     finally:
         db.close()
 
-    # 6. 写入目标节点的完整课程内容
     course_content = build_course_content()
     content_json = json.dumps(course_content, ensure_ascii=False)
 
@@ -2654,29 +1464,26 @@ def write_everything():
             lesson.generated_at = dt.now()
         else:
             db2.add(LessonContent(
-                project_name=PROJECT_NAME,
-                knode_id=TARGET_KNODE_ID,
-                status="ready",
-                course_content=content_json,
-                content_type="interactive",
-                generated_at=dt.now(),
+                project_name=PROJECT_NAME, knode_id=TARGET_KNODE_ID,
+                status="ready", course_content=content_json,
+                content_type="interactive", generated_at=dt.now(),
             ))
         db2.commit()
 
-        anim_count   = sum(1 for s in course_content["rendered_sections"].values() if s["mode"] == "animation")
-        game_count   = sum(1 for s in course_content["rendered_sections"].values() if s["mode"] == "game")
-        story_count  = sum(len(s.get("story_paragraphs") or []) for s in course_content["rendered_sections"].values())
-        exer_count   = sum(len(s.get("exercises") or []) for s in course_content["rendered_sections"].values())
-        total_html   = sum(len(s.get("html") or "") for s in course_content["rendered_sections"].values())
+        anim_count = sum(1 for s in course_content["rendered_sections"].values() if s["mode"] == "animation")
+        game_count = sum(1 for s in course_content["rendered_sections"].values() if s["mode"] == "game")
+        story_count = sum(len(s.get("story_paragraphs") or []) for s in course_content["rendered_sections"].values())
+        exer_count = sum(len(s.get("exercises") or []) for s in course_content["rendered_sections"].values())
+        total_html = sum(len(s.get("html") or "") for s in course_content["rendered_sections"].values())
 
         console.print(f"\n[bold green]完成！[/bold green]")
         console.print(f"  节点 {TARGET_KNODE_ID}（{TARGET_NODE_TITLE}）已写入")
         console.print(f"  课程文本：{len(PLAN_MARKDOWN)} 字符")
-        console.print(f"  Canvas 动画：{anim_count} 个 + 游戏：{game_count} 个（共 {total_html} 字节 HTML）")
+        console.print(f"  HUD 动画：{anim_count} 个 + 游戏：{game_count} 个（共 {total_html} 字节 HTML）")
         console.print(f"  故事段落：{story_count} 段")
         console.print(f"  练习题：{exer_count} 道")
         console.print(f"\n访问：[dim]http://localhost:3000/projects/{PROJECT_NAME}[/dim]")
-        console.print(f"（进入项目，找到节点 M05N02 β折叠）")
+        console.print(f"（进入项目，找到节点 knode_id={TARGET_KNODE_ID}）")
     finally:
         db2.close()
 

@@ -79,10 +79,34 @@ class Milestone(BaseModel):
     knodes: list[KnowledgeNode] = Field(default_factory=list)
 
 
+class SubProject(BaseModel):
+    """A sub-project (stage) within a larger project."""
+
+    id: str = ""  # "P0", "P1", ...
+    title: str
+    description: str = ""
+    stage_id: str = ""  # "S0", "S1", ...
+    milestone_indices: list[int] = Field(default_factory=list)
+    prerequisite_sub_project_ids: list[str] = Field(default_factory=list)
+    difficulty: int = 1
+    estimated_hours: float = 0
+    deliverables: list[str] = Field(default_factory=list)
+    brief: str = ""
+    task: str = ""
+    core_problem: str = ""
+    inputs: list[str] = Field(default_factory=list)
+    data_usage: list[str] = Field(default_factory=list)
+    demo_unit: str = ""
+    why_separate: str = ""
+    handover: dict = Field(default_factory=dict)
+    acceptance_criteria: list[str] = Field(default_factory=list)
+
+
 class KnowledgeTree(BaseModel):
     """A project's complete knowledge tree."""
 
     milestones: list[Milestone] = Field(default_factory=list)
+    sub_projects: list[SubProject] = Field(default_factory=list)
 
 
 class ProjectAgentConfig(BaseModel):

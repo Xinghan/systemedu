@@ -1,0 +1,402 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8"/>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{width:100%;height:100%;overflow:hidden;background:#0f0a1e;
+  font-family:"Noto Sans SC","PingFang SC","Microsoft YaHei",system-ui,sans-serif}
+canvas{display:block;width:100%;height:100%;position:absolute;top:0;left:0}
+#ui{position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="ui"></div>
+<script>
+(function(){
+"use strict";
+
+/* ── injected params ─────────────────────────────────── */
+var TITLE        = {{title}};
+var WAVE_TYPE    = {{wave_type}};
+var FREQUENCY    = {{frequency}};
+var AMPLITUDE    = {{amplitude}};
+var SPEED        = {{speed}};
+var LABEL_WAVE   = {{label_wave}};
+var SHOW_FORMULA = {{show_formula}};
+
+/* ── canvas setup ────────────────────────────────────── */
+var canvas = document.getElementById("c");
+var ctx = canvas.getContext("2d");
+var W = 600, H = 420;
+var DPR = Math.min(window.devicePixelRatio || 1, 2);
+
+function resize(){
+  var rect = canvas.getBoundingClientRect();
+  canvas.width  = rect.width  * DPR;
+  canvas.height = rect.height * DPR;
+  ctx.setTransform(1,0,0,1,0,0);
+  ctx.scale(DPR * rect.width / W, DPR * rect.height / H);
+}
+resize();
+window.addEventListener("resize", resize);
+
+/* ── utils ───────────────────────────────────────────── */
+function roundRect(x,y,w,h,r){
+  ctx.beginPath();
+  ctx.moveTo(x+r,y);
+  ctx.lineTo(x+w-r,y); ctx.quadraticCurveTo(x+w,y,x+w,y+r);
+  ctx.lineTo(x+w,y+h-r); ctx.quadraticCurveTo(x+w,y+h,x+w-r,y+h);
+  ctx.lineTo(x+r,y+h); ctx.quadraticCurveTo(x,y+h,x,y+h-r);
+  ctx.lineTo(x,y+r); ctx.quadraticCurveTo(x,y,x+r,y);
+  ctx.closePath();
+}
+
+/* ── physics ─────────────────────────────────────────── */
+var OMEGA  = 2 * Math.PI * FREQUENCY;
+var LAMBDA_M = SPEED / FREQUENCY;
+var LAMBDA_PX = 180;
+var K_PX = 2 * Math.PI / LAMBDA_PX;
+
+/* ── background ──────────────────────────────────────── */
+function drawBg(){
+  var g = ctx.createLinearGradient(0,0,0,H);
+  g.addColorStop(0,"#0f0a1e");
+  g.addColorStop(1,"#1a1035");
+  ctx.fillStyle = g;
+  ctx.fillRect(0,0,W,H);
+  ctx.strokeStyle = "rgba(255,255,255,0.03)";
+  ctx.lineWidth = 1;
+  for(var x=0;x<=W;x+=40){
+    ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,H); ctx.stroke();
+  }
+  for(var y=0;y<=H;y+=40){
+    ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(W,y); ctx.stroke();
+  }
+}
+
+/* ── title ───────────────────────────────────────────── */
+function drawTitle(){
+  ctx.font = "bold 16px 'Noto Sans SC',system-ui,sans-serif";
+  ctx.textAlign = "center";
+  ctx.fillStyle = "rgba(255,255,255,0.9)";
+  ctx.fillText(TITLE, W/2, 28);
+}
+
+/* ── HUD ─────────────────────────────────────────────── */
+function drawHUD(cols){
+  var by = H-52, bw = W, bh = 52;
+  ctx.fillStyle = "rgba(0,0,0,0.55)";
+  roundRect(0,by,bw,bh,0); ctx.fill();
+  ctx.strokeStyle = "rgba(255,255,255,0.06)";
+  ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(0,by); ctx.lineTo(W,by); ctx.stroke();
+  var cw = W / cols.length;
+  cols.forEach(function(c,i){
+    var cx2 = cw*i + cw/2;
+    ctx.font = "10px 'Noto Sans SC',system-ui";
+    ctx.textAlign = "center";
+    ctx.fillStyle = "rgba(129,140,248,0.6)";
+    ctx.fillText(c.label, cx2, by+17);
+    ctx.font = "bold 14px 'Noto Sans SC',system-ui";
+    ctx.fillStyle = "rgba(255,255,255,0.88)";
+    ctx.fillText(c.val, cx2, by+38);
+  });
+}
+
+/* ── formula panel ───────────────────────────────────── */
+function drawFormula(){
+  if(!SHOW_FORMULA) return;
+  var fx = 30, fy = 50, fw = 160, fh = 60;
+  ctx.fillStyle = "rgba(0,0,0,0.45)";
+  roundRect(fx,fy,fw,fh,8); ctx.fill();
+  ctx.strokeStyle = "rgba(129,140,248,0.3)";
+  ctx.lineWidth = 1;
+  roundRect(fx,fy,fw,fh,8); ctx.stroke();
+  ctx.font = "12px 'Noto Sans SC',system-ui";
+  ctx.textAlign = "left";
+  ctx.fillStyle = "rgba(255,255,255,0.85)";
+  ctx.fillText("v = f \u00d7 \u03bb", fx+12, fy+24);
+  ctx.fillStyle = "rgba(129,140,248,0.8)";
+  ctx.fillText(SPEED.toFixed(0)+" = "+FREQUENCY.toFixed(1)+" \u00d7 "+LAMBDA_M.toFixed(1), fx+12, fy+46);
+}
+
+/* ── double-headed arrow ─────────────────────────────── */
+function drawDoubleArrow(x1,y1,x2,y2,color,label){
+  var dx=x2-x1, dy=y2-y1;
+  var len=Math.sqrt(dx*dx+dy*dy);
+  if(len<1) return;
+  var ux=dx/len, uy=dy/len;
+  var hl=10, hw=4;
+
+  ctx.strokeStyle = color; ctx.lineWidth = 1.5; ctx.lineCap = "butt";
+  ctx.beginPath(); ctx.moveTo(x1+ux*hl,y1+uy*hl); ctx.lineTo(x2-ux*hl,y2-uy*hl); ctx.stroke();
+
+  ctx.fillStyle = color;
+  ctx.beginPath();
+  ctx.moveTo(x1,y1);
+  ctx.lineTo(x1+ux*hl+uy*hw, y1+uy*hl-ux*hw);
+  ctx.lineTo(x1+ux*hl-uy*hw, y1+uy*hl+ux*hw);
+  ctx.closePath(); ctx.fill();
+  ctx.beginPath();
+  ctx.moveTo(x2,y2);
+  ctx.lineTo(x2-ux*hl+uy*hw, y2-uy*hl-ux*hw);
+  ctx.lineTo(x2-ux*hl-uy*hw, y2-uy*hl+ux*hw);
+  ctx.closePath(); ctx.fill();
+
+  if(label){
+    ctx.font = "bold 11px 'Noto Sans SC',system-ui";
+    ctx.textAlign = "center";
+    ctx.fillStyle = color;
+    ctx.fillText(label, (x1+x2)/2 + uy*14, (y1+y2)/2 - ux*14);
+  }
+}
+
+/* ── TRANSVERSE wave ─────────────────────────────────── */
+var AXIS_Y = 200;
+var WAVE_LEFT  = 40;
+var WAVE_RIGHT = 560;
+var NUM_PARTICLES = 11;
+
+function drawTransverse(t){
+  var phase = OMEGA * t;
+
+  /* axis */
+  ctx.strokeStyle = "rgba(255,255,255,0.1)";
+  ctx.lineWidth = 1;
+  ctx.setLineDash([6,5]);
+  ctx.beginPath(); ctx.moveTo(WAVE_LEFT, AXIS_Y); ctx.lineTo(WAVE_RIGHT, AXIS_Y); ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.font = "10px 'Noto Sans SC',system-ui";
+  ctx.textAlign = "right";
+  ctx.fillStyle = "rgba(255,255,255,0.2)";
+  ctx.fillText("x", WAVE_RIGHT, AXIS_Y-6);
+
+  /* wave fill glow */
+  for(var px=WAVE_LEFT; px<=WAVE_RIGHT; px+=2){
+    var wy = AXIS_Y + AMPLITUDE * Math.sin(K_PX*px - phase);
+    var alpha = 0.06 * (1-Math.abs(wy-AXIS_Y)/AMPLITUDE * 0.4);
+    ctx.fillStyle = "rgba(129,140,248,"+alpha+")";
+    ctx.fillRect(px-1, Math.min(wy,AXIS_Y)-1, 2, Math.abs(wy-AXIS_Y)+2);
+  }
+
+  /* main wave curve */
+  ctx.beginPath();
+  var first = true;
+  for(var px=WAVE_LEFT; px<=WAVE_RIGHT; px+=3){
+    var wy = AXIS_Y + AMPLITUDE * Math.sin(K_PX*px - phase);
+    if(first){ ctx.moveTo(px,wy); first=false; }
+    else ctx.lineTo(px,wy);
+  }
+  ctx.strokeStyle = "rgba(129,140,248,0.95)";
+  ctx.lineWidth = 3;
+  ctx.shadowColor = "rgba(129,140,248,0.7)"; ctx.shadowBlur = 10;
+  ctx.stroke();
+  ctx.shadowBlur = 0;
+
+  /* wavelength bracket */
+  var lx1 = WAVE_LEFT + 30;
+  var lx2 = lx1 + LAMBDA_PX;
+  var bracketY = AXIS_Y + AMPLITUDE + 22;
+  ctx.strokeStyle = "rgba(129,140,248,0.5)";
+  ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(lx1,bracketY-6); ctx.lineTo(lx1,bracketY+6); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(lx2,bracketY-6); ctx.lineTo(lx2,bracketY+6); ctx.stroke();
+  drawDoubleArrow(lx1,bracketY,lx2,bracketY,"rgba(129,140,248,0.6)","\u03bb");
+
+  /* amplitude bracket */
+  var amp_x = WAVE_RIGHT - 30;
+  drawDoubleArrow(amp_x, AXIS_Y, amp_x, AXIS_Y-AMPLITUDE, "rgba(251,191,36,0.65)", "A");
+
+  /* wave name label */
+  ctx.font = "bold 12px 'Noto Sans SC',system-ui";
+  ctx.textAlign = "left";
+  ctx.fillStyle = "rgba(129,140,248,0.8)";
+  ctx.fillText(LABEL_WAVE || "横波", WAVE_LEFT, AXIS_Y - AMPLITUDE - 10);
+
+  /* propagation direction arrow */
+  ctx.strokeStyle = "rgba(52,211,153,0.7)";
+  ctx.lineWidth = 2;
+  var arrX = WAVE_RIGHT - 60;
+  ctx.beginPath(); ctx.moveTo(arrX, AXIS_Y-AMPLITUDE-30); ctx.lineTo(arrX+40, AXIS_Y-AMPLITUDE-30); ctx.stroke();
+  ctx.fillStyle = "rgba(52,211,153,0.7)";
+  ctx.beginPath(); ctx.moveTo(arrX+40,AXIS_Y-AMPLITUDE-30);
+  ctx.lineTo(arrX+28,AXIS_Y-AMPLITUDE-35); ctx.lineTo(arrX+28,AXIS_Y-AMPLITUDE-25); ctx.closePath(); ctx.fill();
+  ctx.font = "10px 'Noto Sans SC',system-ui";
+  ctx.textAlign = "right";
+  ctx.fillStyle = "rgba(52,211,153,0.6)";
+  ctx.fillText("\u4f20\u64ad\u65b9\u5411", arrX-4, AXIS_Y-AMPLITUDE-26);
+
+  /* particle markers */
+  for(var i=0;i<NUM_PARTICLES;i++){
+    var px2 = WAVE_LEFT + 20 + i * ((WAVE_RIGHT - WAVE_LEFT - 40) / (NUM_PARTICLES-1));
+    var wy2 = AXIS_Y + AMPLITUDE * Math.sin(K_PX*px2 - phase);
+    var vel_y = -AMPLITUDE * OMEGA * Math.cos(K_PX*px2 - phase);
+
+    // vertical vibration dashed line
+    ctx.strokeStyle = "rgba(255,255,255,0.1)";
+    ctx.lineWidth = 1;
+    ctx.setLineDash([3,3]);
+    ctx.beginPath(); ctx.moveTo(px2, AXIS_Y-AMPLITUDE-5); ctx.lineTo(px2, AXIS_Y+AMPLITUDE+5); ctx.stroke();
+    ctx.setLineDash([]);
+
+    // particle glow
+    var pg = ctx.createRadialGradient(px2,wy2,0,px2,wy2,10);
+    pg.addColorStop(0,"rgba(129,140,248,0.5)"); pg.addColorStop(1,"transparent");
+    ctx.fillStyle = pg; ctx.beginPath(); ctx.arc(px2,wy2,10,0,Math.PI*2); ctx.fill();
+
+    // particle dot
+    ctx.fillStyle = "rgba(165,180,252,0.95)";
+    ctx.strokeStyle = "rgba(255,255,255,0.5)";
+    ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.arc(px2,wy2,5,0,Math.PI*2); ctx.fill(); ctx.stroke();
+
+    // velocity arrow on central particle
+    if(i === Math.floor(NUM_PARTICLES/2)){
+      var vScale = Math.min(Math.abs(vel_y) / OMEGA / AMPLITUDE * 30, 28);
+      if(Math.abs(vel_y) > 0.01){
+        var vyDir = vel_y < 0 ? -1 : 1;
+        ctx.strokeStyle = "rgba(244,114,182,0.8)";
+        ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.moveTo(px2, wy2); ctx.lineTo(px2, wy2 - vScale * vyDir); ctx.stroke();
+        ctx.fillStyle = "rgba(244,114,182,0.8)";
+        ctx.beginPath();
+        ctx.moveTo(px2, wy2 - vScale*vyDir);
+        ctx.lineTo(px2-5, wy2 - vScale*vyDir + vyDir*10);
+        ctx.lineTo(px2+5, wy2 - vScale*vyDir + vyDir*10);
+        ctx.closePath(); ctx.fill();
+        ctx.font = "10px 'Noto Sans SC',system-ui";
+        ctx.textAlign = "left";
+        ctx.fillStyle = "rgba(244,114,182,0.8)";
+        ctx.fillText("v\u8d28", px2+6, wy2 - vScale*vyDir*0.5);
+      }
+    }
+  }
+
+  drawFormula();
+  drawHUD([
+    {label:"频率 f",           val: FREQUENCY.toFixed(1)+" Hz"},
+    {label:"波长 \u03bb",      val: LAMBDA_M.toFixed(2)+" m"},
+    {label:"波速 v",           val: SPEED.toFixed(1)+" m/s"},
+    {label:"振幅 A",           val: AMPLITUDE.toFixed(0)+" px"}
+  ]);
+}
+
+/* ── LONGITUDINAL wave ───────────────────────────────── */
+var LONG_Y = 195;
+var LONG_H = 50;
+var N_LINES = 36;
+var LINE_SPACING = (WAVE_RIGHT - WAVE_LEFT) / N_LINES;
+
+function drawLongitudinal(t){
+  var phase = OMEGA * t;
+
+  /* equilibrium axis */
+  ctx.strokeStyle = "rgba(255,255,255,0.08)";
+  ctx.lineWidth = 1;
+  ctx.setLineDash([4,5]);
+  ctx.beginPath(); ctx.moveTo(WAVE_LEFT, LONG_Y+LONG_H/2); ctx.lineTo(WAVE_RIGHT, LONG_Y+LONG_H/2); ctx.stroke();
+  ctx.setLineDash([]);
+
+  /* tube background */
+  ctx.fillStyle = "rgba(255,255,255,0.04)";
+  roundRect(WAVE_LEFT, LONG_Y, WAVE_RIGHT-WAVE_LEFT, LONG_H, 6); ctx.fill();
+  ctx.strokeStyle = "rgba(255,255,255,0.1)";
+  ctx.lineWidth = 1;
+  roundRect(WAVE_LEFT, LONG_Y, WAVE_RIGHT-WAVE_LEFT, LONG_H, 6); ctx.stroke();
+
+  /* vertical lines (particles) */
+  for(var i=0;i<N_LINES;i++){
+    var x0 = WAVE_LEFT + (i + 0.5) * LINE_SPACING;
+    var disp = AMPLITUDE * 0.6 * Math.sin(K_PX * x0 - phase);
+    var xd = x0 + disp;
+
+    // density-based color: compressed = brighter, rarefied = dimmer
+    var compression = -Math.cos(K_PX * x0 - phase); // +1 = compressed
+    var brightness = 0.3 + 0.55 * (compression * 0.5 + 0.5);
+    var alpha = clamp(brightness, 0.15, 0.85);
+
+    ctx.strokeStyle = "rgba(129,140,248,"+alpha+")";
+    ctx.lineWidth = 1.5;
+    ctx.lineCap = "round";
+    ctx.beginPath();
+    ctx.moveTo(xd, LONG_Y+4); ctx.lineTo(xd, LONG_Y+LONG_H-4);
+    ctx.stroke();
+  }
+
+  /* wavelength bracket above */
+  var bY = LONG_Y - 18;
+  var bx1 = WAVE_LEFT + 30;
+  var bx2 = bx1 + LAMBDA_PX;
+  ctx.strokeStyle = "rgba(129,140,248,0.4)";
+  ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(bx1,bY-5); ctx.lineTo(bx1,bY+5); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(bx2,bY-5); ctx.lineTo(bx2,bY+5); ctx.stroke();
+  drawDoubleArrow(bx1,bY,bx2,bY,"rgba(129,140,248,0.6)","\u03bb");
+
+  /* compression / rarefaction labels */
+  var labelY2 = LONG_Y + LONG_H + 24;
+  var nCycles = 2;
+  for(var c=0;c<nCycles;c++){
+    var cx1 = WAVE_LEFT + 30 + c * LAMBDA_PX;
+    ctx.font = "10px 'Noto Sans SC',system-ui";
+    ctx.textAlign = "center";
+    ctx.fillStyle = "rgba(129,140,248,0.6)";
+    ctx.fillText("\u5bc6\u90e8", cx1 + LAMBDA_PX*0.25, labelY2);
+    ctx.fillStyle = "rgba(255,255,255,0.25)";
+    ctx.fillText("\u758f\u90e8", cx1 + LAMBDA_PX*0.75, labelY2);
+  }
+
+  /* propagation arrow */
+  ctx.strokeStyle = "rgba(52,211,153,0.7)";
+  ctx.lineWidth = 2;
+  var arrX = WAVE_RIGHT - 60;
+  var arrY = LONG_Y - 38;
+  ctx.beginPath(); ctx.moveTo(arrX, arrY); ctx.lineTo(arrX+40, arrY); ctx.stroke();
+  ctx.fillStyle = "rgba(52,211,153,0.7)";
+  ctx.beginPath(); ctx.moveTo(arrX+40,arrY);
+  ctx.lineTo(arrX+28,arrY-5); ctx.lineTo(arrX+28,arrY+5); ctx.closePath(); ctx.fill();
+  ctx.font = "10px 'Noto Sans SC',system-ui";
+  ctx.textAlign = "right";
+  ctx.fillStyle = "rgba(52,211,153,0.6)";
+  ctx.fillText("\u4f20\u64ad\u65b9\u5411", arrX-4, arrY+4);
+
+  /* wave name label */
+  ctx.font = "bold 12px 'Noto Sans SC',system-ui";
+  ctx.textAlign = "left";
+  ctx.fillStyle = "rgba(129,140,248,0.8)";
+  ctx.fillText(LABEL_WAVE || "纵波", WAVE_LEFT, LONG_Y-30);
+
+  drawFormula();
+  drawHUD([
+    {label:"频率 f",           val: FREQUENCY.toFixed(1)+" Hz"},
+    {label:"波长 \u03bb",      val: LAMBDA_M.toFixed(2)+" m"},
+    {label:"波速 v",           val: SPEED.toFixed(1)+" m/s"},
+    {label:"振幅 A",           val: AMPLITUDE.toFixed(0)+" px"}
+  ]);
+}
+
+function clamp(v,lo,hi){ return v<lo?lo:v>hi?hi:v; }
+
+/* ── main loop ───────────────────────────────────────── */
+var startTime = null;
+
+function frame(ts){
+  if(!startTime) startTime = ts;
+  var t = (ts - startTime) / 1000;
+  ctx.clearRect(0,0,W,H);
+  drawBg();
+  drawTitle();
+
+  if(WAVE_TYPE === "transverse") drawTransverse(t);
+  else                           drawLongitudinal(t);
+
+  requestAnimationFrame(frame);
+}
+
+requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>

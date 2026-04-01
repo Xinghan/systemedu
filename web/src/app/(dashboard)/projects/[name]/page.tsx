@@ -1,13 +1,15 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useRef, useMemo, useState, useCallback } from "react"
 import { useParams, useRouter } from "next/navigation"
 import Link from "next/link"
 import dynamic from "next/dynamic"
 import { toast } from "sonner"
 import {
   ArrowLeft, Clock, Play, GraduationCap, Highlighter,
-  Pencil, Save, X, ChevronUp, ArrowRight, Zap, ImageIcon, Upload, Trash2,
+  Pencil, Save, X, ChevronUp, ChevronDown, ArrowRight, Zap, ImageIcon, Upload, Trash2,
+  Lock, CheckCircle2, Target, Compass, BookOpen, Search, Layers, Map, BarChart3,
+  Puzzle, Cpu, Presentation, Info, Database, FileCheck, Eye,
 } from "lucide-react"
 import { PageLoading } from "@/components/ui/page-loading"
 import { LoadingSpinner } from "@/components/ui/loading-spinner"
@@ -23,8 +25,9 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog"
 import { gateway } from "@/lib/api"
-import type { FactoryQueueItem, ProjectDetail } from "@/lib/types/api"
+import type { FactoryQueueItem, LessonStatus, MilestoneInfo, ProjectBrief, ProjectDetail, SubProjectInfo } from "@/lib/types/api"
 import { useT } from "@/lib/hooks/use-t"
+import type { TranslationKey } from "@/lib/i18n"
 
 const CATEGORY_OPTIONS = [
   { value: "ai", label: "AI" },
@@ -223,6 +226,406 @@ function IconObjectQueue() {
   )
 }
 
+type SubProjectStatus = "completed" | "in_progress" | "available" | "locked"
+
+function getSubProjectStatus(
+  sp: SubProjectInfo,
+  allSubProjects: SubProjectInfo[],
+): SubProjectStatus {
+  if (sp.nodes_total > 0 && sp.nodes_passed >= sp.nodes_total) return "completed"
+  if (sp.nodes_passed > 0) return "in_progress"
+  if (sp.prerequisite_sub_project_ids.length === 0) return "available"
+  const allPrereqsDone = sp.prerequisite_sub_project_ids.every((pid) => {
+    const prereq = allSubProjects.find((s) => s.id === pid)
+    return prereq && prereq.nodes_total > 0 && prereq.nodes_passed >= prereq.nodes_total
+  })
+  return allPrereqsDone ? "available" : "locked"
+}
+
+const STATUS_STYLES: Record<SubProjectStatus, { bg: string; text: string; labelKey: TranslationKey }> = {
+  completed: { bg: "bg-cyan-100 dark:bg-cyan-500/20", text: "text-cyan-700 dark:text-cyan-400", labelKey: "project.sp_status_done" },
+  in_progress: { bg: "bg-primary/10", text: "text-primary", labelKey: "project.sp_status_active" },
+  available: { bg: "bg-emerald-100 dark:bg-emerald-500/20", text: "text-emerald-700 dark:text-emerald-400", labelKey: "project.sp_status_ready" },
+  locked: { bg: "bg-secondary", text: "text-muted-foreground", labelKey: "project.sp_status_locked" },
+}
+
+// Icon pool for sub-projects — cycles through for 8+ sub-projects
+const SP_ICONS: { icon: React.ElementType; gradient: string; iconColor: string }[] = [
+  { icon: Compass, gradient: "from-violet-500/15 to-indigo-500/15", iconColor: "text-violet-600" },
+  { icon: BookOpen, gradient: "from-cyan-500/15 to-teal-500/15", iconColor: "text-cyan-600" },
+  { icon: Search, gradient: "from-blue-500/15 to-cyan-400/15", iconColor: "text-blue-600" },
+  { icon: Target, gradient: "from-amber-500/15 to-orange-400/15", iconColor: "text-amber-600" },
+  { icon: Map, gradient: "from-emerald-500/15 to-teal-400/15", iconColor: "text-emerald-600" },
+  { icon: BarChart3, gradient: "from-rose-500/15 to-pink-400/15", iconColor: "text-rose-600" },
+  { icon: Presentation, gradient: "from-indigo-500/15 to-violet-400/15", iconColor: "text-indigo-600" },
+  { icon: Cpu, gradient: "from-purple-500/15 to-fuchsia-400/15", iconColor: "text-purple-600" },
+]
+
+function getSpIcon(index: number) {
+  return SP_ICONS[index % SP_ICONS.length]
+}
+
+
+// Lesson status badge colors
+const LESSON_STATUS_STYLES: Record<string, { bg: string; text: string; label: string }> = {
+  not_started: { bg: "bg-secondary", text: "text-muted-foreground", label: "待生成" },
+  pending: { bg: "bg-secondary", text: "text-muted-foreground", label: "排队中" },
+  generating: { bg: "bg-blue-100 dark:bg-blue-500/20", text: "text-blue-600 dark:text-blue-400", label: "生成中" },
+  ready: { bg: "bg-emerald-100 dark:bg-emerald-500/20", text: "text-emerald-700 dark:text-emerald-400", label: "已完成" },
+  failed: { bg: "bg-red-100 dark:bg-red-500/20", text: "text-red-600 dark:text-red-400", label: "失败" },
+}
+
+// Project Brief Card — shows project overview from v2 knowledge tree
+function ProjectBriefCard({ brief, t }: {
+  brief: ProjectBrief
+  t: (key: TranslationKey, vars?: Record<string, string | number>) => string
+}) {
+  const [expanded, setExpanded] = useState(false)
+
+  const sections = [
+    { key: "real_problem", label: t("project.brief_real_problem"), content: brief.real_problem, icon: Target, always: true },
+    { key: "what_we_do", label: t("project.brief_what_we_do"), content: brief.what_we_do, icon: CheckCircle2, always: true },
+    { key: "what_we_dont", label: t("project.brief_what_we_dont"), content: brief.what_we_dont, icon: X, always: true },
+    { key: "data_sources", label: t("project.brief_data_sources"), content: brief.data_sources, icon: Database, always: false },
+    { key: "min_success", label: t("project.brief_min_success"), content: brief.min_success, icon: Target, always: false },
+    { key: "rec_success", label: t("project.brief_rec_success"), content: brief.recommended_success, icon: Zap, always: false },
+    { key: "deliverables", label: t("project.brief_deliverables"), content: brief.final_deliverables, icon: FileCheck, always: false },
+    { key: "final_demo", label: t("project.brief_final_demo"), content: brief.final_demo, icon: Eye, always: false },
+    { key: "industry", label: t("project.brief_industry"), content: brief.industry_relation, icon: Compass, always: false },
+  ]
+
+  const visibleSections = expanded ? sections : sections.filter((s) => s.always)
+
+  return (
+    <div className="card-elevated overflow-hidden">
+      <div className="px-6 pt-5 pb-2">
+        <div className="flex items-center gap-2 mb-1">
+          <Info className="h-4 w-4 text-primary" />
+          <span className="text-[10px] font-[var(--font-manrope)] uppercase tracking-widest text-primary font-semibold">
+            {t("project.brief_title")}
+          </span>
+        </div>
+        {brief.one_liner && (
+          <p className="text-sm text-foreground font-medium leading-relaxed mb-3">{brief.one_liner}</p>
+        )}
+      </div>
+
+      <div className="px-6 pb-5 space-y-4">
+        {visibleSections.map((section) => {
+          const IconComp = section.icon
+          const content = section.content
+
+          if (!content || (Array.isArray(content) && content.length === 0)) return null
+
+          return (
+            <div key={section.key}>
+              <div className="flex items-center gap-1.5 mb-1.5">
+                <IconComp className="h-3.5 w-3.5 text-muted-foreground" />
+                <h4 className="text-xs font-semibold text-foreground uppercase tracking-wider font-[var(--font-manrope)]">
+                  {section.label}
+                </h4>
+              </div>
+
+              {typeof content === "string" ? (
+                <p className="text-xs text-muted-foreground leading-relaxed pl-5">{content}</p>
+              ) : section.key === "data_sources" && Array.isArray(content) ? (
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 pl-5">
+                  {(content as ProjectBrief["data_sources"]).map((ds, i) => (
+                    <div key={i} className="rounded-lg bg-secondary/50 p-3">
+                      <p className="text-xs font-semibold text-foreground mb-0.5">{ds.name}</p>
+                      <p className="text-[11px] text-muted-foreground leading-relaxed">{ds.role}</p>
+                      {ds.source && (
+                        <p className="text-[10px] text-muted-foreground/70 mt-1">{ds.source}</p>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              ) : Array.isArray(content) ? (
+                section.key === "what_we_do" || section.key === "what_we_dont" ? (
+                  <ul className="space-y-1 pl-5">
+                    {(content as string[]).map((item, i) => (
+                      <li key={i} className="text-xs text-muted-foreground leading-relaxed flex gap-2">
+                        <span className={`shrink-0 mt-0.5 w-1.5 h-1.5 rounded-full ${
+                          section.key === "what_we_do" ? "bg-emerald-500" : "bg-rose-400"
+                        }`} />
+                        {item}
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <ul className="space-y-1 pl-5">
+                    {(content as string[]).map((item, i) => (
+                      <li key={i} className="text-xs text-muted-foreground leading-relaxed flex gap-2">
+                        <span className="shrink-0 mt-0.5 w-1.5 h-1.5 rounded-full bg-primary/40" />
+                        {item}
+                      </li>
+                    ))}
+                  </ul>
+                )
+              ) : null}
+            </div>
+          )
+        })}
+
+        {sections.some((s) => !s.always) && (
+          <button
+            onClick={() => setExpanded((v) => !v)}
+            className="flex items-center gap-1.5 text-xs text-primary hover:text-primary/80 transition-colors pt-1"
+          >
+            {expanded ? (
+              <><ChevronUp className="h-3.5 w-3.5" />{t("project.brief_show_less")}</>
+            ) : (
+              <><ChevronDown className="h-3.5 w-3.5" />{t("project.brief_show_more")}</>
+            )}
+          </button>
+        )}
+      </div>
+    </div>
+  )
+}
+
+// Sub-project roadmap — vertical timeline with icons
+function SubProjectTree({ subProjects, milestones, lessonStatuses, onNodeClick, t }: {
+  subProjects: SubProjectInfo[]
+  milestones: MilestoneInfo[]
+  lessonStatuses: Record<string, string>
+  onNodeClick: (spId: string) => void
+  t: (key: TranslationKey, vars?: Record<string, string | number>) => string
+}) {
+  const [expandedSp, setExpandedSp] = useState<string | null>(null)
+
+  // Build global knode index -> milestone/knode mapping
+  const globalKnodes = useMemo(() => {
+    const result: { globalIdx: number; title: string; msTitle: string }[] = []
+    let idx = 0
+    for (const ms of milestones) {
+      for (const kn of ms.knodes) {
+        result.push({ globalIdx: idx, title: kn.title, msTitle: ms.title })
+        idx++
+      }
+    }
+    return result
+  }, [milestones])
+
+  // For a sub-project, collect all knodes from its milestone_indices
+  const getSpKnodes = useCallback((sp: SubProjectInfo) => {
+    const knodes: { globalIdx: number; title: string; msTitle: string }[] = []
+    for (const msIdx of sp.milestone_indices) {
+      if (msIdx >= milestones.length) continue
+      const ms = milestones[msIdx]
+      // Find the global start index for this milestone
+      let startIdx = 0
+      for (let i = 0; i < msIdx; i++) {
+        startIdx += milestones[i].knodes.length
+      }
+      for (let k = 0; k < ms.knodes.length; k++) {
+        const gi = startIdx + k
+        if (gi < globalKnodes.length) {
+          knodes.push(globalKnodes[gi])
+        }
+      }
+    }
+    return knodes
+  }, [milestones, globalKnodes])
+
+  return (
+    <div className="relative">
+      {subProjects.map((sp, idx) => {
+        const pct = sp.nodes_total > 0 ? Math.round((sp.nodes_passed / sp.nodes_total) * 100) : 0
+        const status = getSubProjectStatus(sp, subProjects)
+        const isCompleted = status === "completed"
+        const isActive = status === "in_progress"
+        const isLocked = status === "locked"
+        const spIcon = getSpIcon(idx)
+        const IconComp = spIcon.icon
+        const isLast = idx === subProjects.length - 1
+        const isExpanded = expandedSp === sp.id
+
+        // Compute lesson stats for this sub-project
+        const spKnodes = getSpKnodes(sp)
+        const readyCount = spKnodes.filter((kn) => lessonStatuses[String(kn.globalIdx)] === "ready").length
+        const totalCount = spKnodes.length
+
+        return (
+          <div key={sp.id} className="relative flex gap-4">
+            {/* Left: icon column + vertical line */}
+            <div className="flex flex-col items-center shrink-0">
+              {/* Icon circle */}
+              <button
+                onClick={() => !isLocked && onNodeClick(sp.id)}
+                disabled={isLocked}
+                className={`relative z-10 w-10 h-10 rounded-full flex items-center justify-center shrink-0 transition-all duration-300 ${
+                  isCompleted
+                    ? "bg-cyan-100 dark:bg-cyan-500/20 ring-2 ring-cyan-400/50"
+                    : isActive
+                    ? "bg-primary/15 ring-2 ring-primary/50"
+                    : isLocked
+                    ? "bg-secondary opacity-50"
+                    : "bg-gradient-to-br " + spIcon.gradient + " ring-1 ring-border"
+                } ${isLocked ? "cursor-not-allowed" : "cursor-pointer hover:scale-110"}`}
+              >
+                {isCompleted ? (
+                  <CheckCircle2 className="h-5 w-5 text-cyan-600" />
+                ) : (
+                  <IconComp className={`h-4.5 w-4.5 ${isLocked ? "text-muted-foreground/40" : spIcon.iconColor}`} />
+                )}
+              </button>
+              {/* Vertical connector line */}
+              {!isLast && (
+                <div className={`w-px flex-1 min-h-[24px] ${
+                  isCompleted ? "bg-cyan-300 dark:bg-cyan-700" : "bg-border"
+                }`} />
+              )}
+            </div>
+
+            {/* Right: content */}
+            <div className={`flex-1 min-w-0 pb-6 text-left ${isLocked ? "opacity-40" : ""}`}>
+              <button
+                onClick={() => !isLocked && onNodeClick(sp.id)}
+                disabled={isLocked}
+                className={`w-full text-left transition-colors ${
+                  isLocked ? "cursor-not-allowed" : "cursor-pointer group"
+                }`}
+              >
+                <div className="flex items-center gap-2 mb-0.5">
+                  <span className="text-[10px] font-[var(--font-manrope)] font-bold uppercase tracking-wider text-muted-foreground">
+                    {sp.id}
+                  </span>
+                  <span className={`text-[9px] font-[var(--font-manrope)] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-full ${STATUS_STYLES[status].bg} ${STATUS_STYLES[status].text}`}>
+                    {t(STATUS_STYLES[status].labelKey)}
+                  </span>
+                  <span className="text-[10px] font-[var(--font-manrope)] text-muted-foreground ml-auto">
+                    {t("project.sp_level", { n: sp.difficulty })} · {sp.estimated_hours}h
+                  </span>
+                </div>
+                <h4 className="text-sm font-semibold text-foreground leading-tight mb-1 group-hover:text-primary transition-colors">
+                  {sp.title}
+                </h4>
+                <p className="text-xs text-muted-foreground leading-relaxed line-clamp-1 mb-2">
+                  {sp.description}
+                </p>
+              </button>
+
+              {/* Lesson progress + expand toggle */}
+              <div className="flex items-center gap-2 mb-1">
+                <div className="flex-1 h-1.5 rounded-full bg-secondary overflow-hidden max-w-[200px]">
+                  <div
+                    className={`h-full rounded-full transition-all duration-700 ${
+                      isCompleted ? "bg-cyan-400" : "bg-gradient-to-r from-teal-500 to-cyan-500"
+                    }`}
+                    style={{ width: `${pct}%` }}
+                  />
+                </div>
+                <span className="text-[10px] font-[var(--font-manrope)] font-semibold text-foreground">
+                  {pct}%
+                </span>
+                <span className="text-[10px] text-muted-foreground">
+                  {sp.nodes_passed}/{sp.nodes_total}
+                </span>
+                {totalCount > 0 && (
+                  <span className="text-[10px] text-muted-foreground ml-2">
+                    {readyCount}/{totalCount} 课程已生成
+                  </span>
+                )}
+                {!isLocked && totalCount > 0 && (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      setExpandedSp(isExpanded ? null : sp.id)
+                    }}
+                    className="ml-auto text-muted-foreground hover:text-foreground transition-colors p-0.5"
+                  >
+                    {isExpanded ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+                  </button>
+                )}
+              </div>
+
+              {/* Expanded: stage details + knode list */}
+              {isExpanded && (
+                <div className="mt-2 ml-1 space-y-3 animate-[loading-fade-in_0.2s_ease-out]">
+                  {/* Stage detail fields */}
+                  {(sp.core_problem || sp.task || sp.acceptance_criteria?.length) && (
+                    <div className="rounded-lg bg-secondary/40 p-3 space-y-2">
+                      {sp.core_problem && (
+                        <div>
+                          <span className="text-[10px] font-semibold uppercase tracking-wider text-primary font-[var(--font-manrope)]">
+                            {t("project.sp_core_problem")}
+                          </span>
+                          <p className="text-xs text-muted-foreground leading-relaxed mt-0.5">{sp.core_problem}</p>
+                        </div>
+                      )}
+                      {sp.task && (
+                        <div>
+                          <span className="text-[10px] font-semibold uppercase tracking-wider text-primary font-[var(--font-manrope)]">
+                            {t("project.sp_task")}
+                          </span>
+                          <p className="text-xs text-muted-foreground leading-relaxed mt-0.5">{sp.task}</p>
+                        </div>
+                      )}
+                      {sp.acceptance_criteria && sp.acceptance_criteria.length > 0 && (
+                        <div>
+                          <span className="text-[10px] font-semibold uppercase tracking-wider text-primary font-[var(--font-manrope)]">
+                            {t("project.sp_acceptance")}
+                          </span>
+                          <ul className="mt-1 space-y-0.5">
+                            {sp.acceptance_criteria.map((c, ci) => (
+                              <li key={ci} className="text-xs text-muted-foreground leading-relaxed flex gap-2">
+                                <span className="shrink-0 mt-1 w-1.5 h-1.5 rounded-full bg-emerald-500/60" />
+                                {c}
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+                      {sp.handover && sp.handover.outputs && sp.handover.outputs.length > 0 && (
+                        <div>
+                          <span className="text-[10px] font-semibold uppercase tracking-wider text-primary font-[var(--font-manrope)]">
+                            {t("project.sp_handover")}
+                          </span>
+                          <div className="flex flex-wrap gap-1.5 mt-1">
+                            {sp.handover.outputs.map((o, oi) => (
+                              <span key={oi} className="text-[10px] px-2 py-0.5 rounded-full bg-primary/10 text-primary">
+                                {o}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                  {/* Knode list */}
+                  <div className="space-y-1">
+                  {spKnodes.map((kn) => {
+                    const lsRaw = lessonStatuses[String(kn.globalIdx)] || "not_started"
+                    const ls = LESSON_STATUS_STYLES[lsRaw] || LESSON_STATUS_STYLES.not_started
+                    return (
+                      <div key={kn.globalIdx} className="flex items-center gap-2 py-0.5">
+                        <span className="text-[10px] text-muted-foreground w-6 text-right shrink-0">
+                          #{kn.globalIdx}
+                        </span>
+                        <span className="text-xs text-foreground truncate flex-1">
+                          {kn.title}
+                        </span>
+                        <span className={`text-[9px] font-medium px-1.5 py-0.5 rounded-full whitespace-nowrap ${ls.bg} ${ls.text}`}>
+                          {lsRaw === "generating" && (
+                            <span className="inline-block w-2 h-2 border border-current border-t-transparent rounded-full animate-spin mr-1 align-middle" />
+                          )}
+                          {ls.label}
+                        </span>
+                      </div>
+                    )
+                  })}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
 export default function ProjectDetailPage() {
   const params = useParams<{ name: string }>()
   const router = useRouter()
@@ -249,6 +652,9 @@ const [editCoverFile, setEditCoverFile] = useState<File | null>(null)
   const [coverCacheBust, setCoverCacheBust] = useState(Date.now())
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false)
   const [deleting, setDeleting] = useState(false)
+  const [progressDetailOpen, setProgressDetailOpen] = useState(false)
+  const [learningPathExpanded, setLearningPathExpanded] = useState(true)
+  const [lessonStatuses, setLessonStatuses] = useState<Record<string, LessonStatus>>({})
 
   useEffect(() => {
     if (!params.name) return
@@ -287,6 +693,10 @@ const [editCoverFile, setEditCoverFile] = useState<File | null>(null)
 
     gateway.objectQueue(params.name)
       .then((r) => setQueueItems(r.items.filter((i) => i.status === "pending" || i.status === "in_progress")))
+      .catch(() => {})
+
+    gateway.lessonStatuses(params.name)
+      .then((r) => setLessonStatuses(r.statuses as Record<string, LessonStatus>))
       .catch(() => {})
 
   }, [params.name])
@@ -354,11 +764,25 @@ const [editCoverFile, setEditCoverFile] = useState<File | null>(null)
     setEnrolling(true)
     try {
       await gateway.enroll(params.name)
+    } catch { /* enroll may already exist */ }
+    setEnrolling(false)
+
+    // When sub-projects exist, navigate to the first active/available one
+    const sps = detail?.sub_projects ?? []
+    if (sps.length > 0) {
+      const active = sps.find((sp) => sp.nodes_passed > 0 && sp.nodes_passed < sp.nodes_total)
+      const available = sps.find((sp) => {
+        if (sp.nodes_passed > 0) return false
+        if (sp.prerequisite_sub_project_ids.length === 0) return true
+        return sp.prerequisite_sub_project_ids.every((pid) => {
+          const prereq = sps.find((s) => s.id === pid)
+          return prereq && prereq.nodes_total > 0 && prereq.nodes_passed >= prereq.nodes_total
+        })
+      })
+      const target = active ?? available ?? sps[0]
+      router.push(`/learn/${params.name}?sub=${target.id}`)
+    } else {
       router.push(`/learn/${params.name}`)
-    } catch {
-      router.push(`/learn/${params.name}`)
-    } finally {
-      setEnrolling(false)
     }
   }
 
@@ -381,6 +805,8 @@ const [editCoverFile, setEditCoverFile] = useState<File | null>(null)
   const passed = detail.progress.filter((p) => p.status === "passed").length
   const total = detail.progress.length
   const pct = total > 0 ? Math.round((passed / total) * 100) : 0
+  const subProjects = detail.sub_projects ?? []
+  const hasSubProjects = subProjects.length > 0
 
   const enrollment = detail.enrollment
   const isCompleted = enrollment?.status === "completed"
@@ -606,8 +1032,131 @@ const [editCoverFile, setEditCoverFile] = useState<File | null>(null)
               </div>
             </div>
         </div>
-          {/* Overall Mastery */}
-          {enrollment && (
+          {/* Project Brief Card */}
+          {detail.project_brief && (
+            <ProjectBriefCard brief={detail.project_brief} t={t} />
+          )}
+
+          {/* Sub-projects mode */}
+          {hasSubProjects && (
+            <>
+              {/* Combined: Overall progress + Learning path timeline */}
+              <div className="card-elevated overflow-hidden">
+                {/* Header — clickable to toggle timeline */}
+                <button
+                  onClick={() => setLearningPathExpanded((v) => !v)}
+                  className="w-full text-left px-6 pt-6 pb-5 group"
+                >
+                  <div className="flex items-start justify-between mb-3">
+                    <div>
+                      <div className="flex items-center gap-2 mb-1">
+                        <Layers className="h-4 w-4 text-primary" />
+                        <span className="text-[10px] font-[var(--font-manrope)] uppercase tracking-widest text-primary font-semibold">
+                          {t("project.learning_path")}
+                        </span>
+                      </div>
+                      <h2 className="text-lg font-extrabold text-foreground">{t("project.overall_mastery")}</h2>
+                      <p className="text-xs text-muted-foreground">
+                        {t("project.nodes_stages", { passed, total, stages: subProjects.length })}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <span className="text-3xl font-extrabold font-[var(--font-manrope)] text-primary">{pct}%</span>
+                      {learningPathExpanded
+                        ? <ChevronUp className="h-4 w-4 text-muted-foreground group-hover:text-foreground transition-colors" />
+                        : <ChevronDown className="h-4 w-4 text-muted-foreground group-hover:text-foreground transition-colors" />
+                      }
+                    </div>
+                  </div>
+                  <div className="h-2 rounded-full bg-secondary overflow-hidden">
+                    <div
+                      className="h-full rounded-full bg-gradient-to-r from-teal-500 to-cyan-500 transition-all duration-700"
+                      style={{ width: `${pct}%` }}
+                    />
+                  </div>
+                </button>
+
+                {/* Collapsed: compact icon row */}
+                {!learningPathExpanded && (
+                  <div className="px-6 pb-5">
+                    <div className="flex items-center gap-2">
+                      {subProjects.map((sp, idx) => {
+                        const status = getSubProjectStatus(sp, subProjects)
+                        const spIcon = getSpIcon(idx)
+                        const IconComp = spIcon.icon
+                        const isCompleted = status === "completed"
+                        const isLocked = status === "locked"
+                        const pctSp = sp.nodes_total > 0 ? Math.round((sp.nodes_passed / sp.nodes_total) * 100) : 0
+                        return (
+                          <button
+                            key={sp.id}
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              if (!isLocked) {
+                                if (!enrollment) gateway.enroll(params.name).catch(() => {})
+                                router.push(`/learn/${params.name}?sub=${sp.id}`)
+                              }
+                            }}
+                            disabled={isLocked}
+                            title={`${sp.id}: ${sp.title} (${pctSp}%)`}
+                            className={`relative flex flex-col items-center gap-1 transition-all ${
+                              isLocked ? "opacity-35 cursor-not-allowed" : "cursor-pointer hover:scale-110"
+                            }`}
+                          >
+                            <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${
+                              isCompleted
+                                ? "bg-cyan-100 dark:bg-cyan-500/20 ring-2 ring-cyan-400/50"
+                                : status === "in_progress"
+                                ? "bg-primary/10 ring-2 ring-primary/40"
+                                : `bg-gradient-to-br ${spIcon.gradient}`
+                            }`}>
+                              {isCompleted ? (
+                                <CheckCircle2 className="h-4.5 w-4.5 text-cyan-600" />
+                              ) : (
+                                <IconComp className={`h-4 w-4 ${isLocked ? "text-muted-foreground/40" : spIcon.iconColor}`} />
+                              )}
+                            </div>
+                            <span className="text-[9px] font-[var(--font-manrope)] font-bold text-muted-foreground">{sp.id}</span>
+                            {pctSp > 0 && !isCompleted && (
+                              <div className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-primary border-2 border-background" />
+                            )}
+                          </button>
+                        )
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                {/* Expanded: full timeline */}
+                {learningPathExpanded && (
+                  <>
+                    <div className="border-t border-border/50" />
+                    <div className="px-6 pt-5 pb-6 animate-[loading-fade-in_0.25s_ease-out]">
+                      <SubProjectTree
+                        subProjects={subProjects}
+                        milestones={detail.milestones}
+                        lessonStatuses={lessonStatuses}
+                        t={t}
+                        onNodeClick={(spId) => {
+                          const sp = subProjects.find((s) => s.id === spId)
+                          if (!sp) return
+                          const status = getSubProjectStatus(sp, subProjects)
+                          if (status !== "locked") {
+                            if (!enrollment) gateway.enroll(params.name).catch(() => {})
+                            router.push(`/learn/${params.name}?sub=${spId}`)
+                          }
+                        }}
+                      />
+                    </div>
+                  </>
+                )}
+              </div>
+
+            </>
+          )}
+
+          {/* Legacy layout: Overall Mastery (when no sub-projects) */}
+          {!hasSubProjects && enrollment && (
             <div className="grid gap-5 lg:grid-cols-3">
               <div className="lg:col-span-2 card-elevated p-6">
                 <div className="flex items-start justify-between mb-4">
@@ -755,37 +1304,39 @@ const [editCoverFile, setEditCoverFile] = useState<File | null>(null)
             </div>
           )}
 
-          {/* Active Roadmap — Knowledge Tree preview */}
-          <div className="card-elevated overflow-hidden">
-            <div className="px-6 pt-5 pb-3">
-              <div className="flex items-center gap-2 mb-1">
-                <Highlighter className="h-4 w-4 text-primary" />
-                <span className="text-[10px] font-[var(--font-manrope)] uppercase tracking-widest text-primary font-semibold">
-                  {t("project.active_roadmap")}
-                </span>
+          {/* Active Roadmap — Knowledge Tree preview (only for legacy projects without sub-projects) */}
+          {!hasSubProjects && (
+            <div className="card-elevated overflow-hidden">
+              <div className="px-6 pt-5 pb-3">
+                <div className="flex items-center gap-2 mb-1">
+                  <Highlighter className="h-4 w-4 text-primary" />
+                  <span className="text-[10px] font-[var(--font-manrope)] uppercase tracking-widest text-primary font-semibold">
+                    {t("project.active_roadmap")}
+                  </span>
+                </div>
+                <h2 className="text-xl font-extrabold text-foreground mb-1">
+                  {t("project.knowledge_tree_title")}
+                </h2>
+                <p className="text-xs text-muted-foreground mb-3">
+                  {t("project.nodes_count", { n: total })} · {t("project.click_node")}
+                </p>
+                <button
+                  onClick={() => router.push(`/projects/${params.name}/tree`)}
+                  className="flex items-center gap-1.5 text-xs text-primary hover:text-primary/80 transition-colors"
+                >
+                  {t("project.open_map")}
+                  <ArrowRight className="h-3.5 w-3.5" />
+                </button>
               </div>
-              <h2 className="text-xl font-extrabold text-foreground mb-1">
-                {t("project.knowledge_tree_title")}
-              </h2>
-              <p className="text-xs text-muted-foreground mb-3">
-                {t("project.nodes_count", { n: total })} · {t("project.click_node")}
-              </p>
-              <button
-                onClick={() => router.push(`/projects/${params.name}/tree`)}
-                className="flex items-center gap-1.5 text-xs text-primary hover:text-primary/80 transition-colors"
-              >
-                {t("project.open_map")}
-                <ArrowRight className="h-3.5 w-3.5" />
-              </button>
+              <div className="h-[360px]">
+                <D3KnowledgeTree
+                  milestones={detail.milestones}
+                  progress={detail.progress}
+                  onNodeClick={() => handleStartLearning()}
+                />
+              </div>
             </div>
-            <div className="h-[360px]">
-              <D3KnowledgeTree
-                milestones={detail.milestones}
-                progress={detail.progress}
-                onNodeClick={() => handleStartLearning()}
-              />
-            </div>
-          </div>
+          )}
         </div>
       </div>
     </>

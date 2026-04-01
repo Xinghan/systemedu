@@ -141,14 +141,19 @@ _LEVEL_MAP = {
     "L0-启蒙": 1,
     "L0": 1,
     "L1-入门": 2,
+    "L1-认识": 2,
     "L1": 2,
     "L2-基础": 3,
+    "L2-操作": 3,
     "L2": 3,
     "L3-进阶": 5,
+    "L3-应用": 5,
     "L3": 5,
     "L4-高级": 7,
+    "L4-解释": 7,
     "L4": 7,
     "L5-专家": 9,
+    "L5-迁移": 9,
     "L5": 9,
 }
 
@@ -239,7 +244,97 @@ def convert_uploaded_tree(raw_data: dict) -> dict:
             }
         )
 
-    return {"milestones": milestones}
+    # Build sub_projects from stage overview if available
+    sub_projects = []
+    stage_overview = raw_data.get("阶段总览", [])
+    if stage_overview:
+        # Map module_id -> milestone index
+        module_id_to_ms_idx = {mid: idx for idx, mid in enumerate(sorted_module_ids)}
+
+        for stage in stage_overview:
+            stage_modules = stage.get("包含模块", [])
+            ms_indices = [
+                module_id_to_ms_idx[mid]
+                for mid in stage_modules
+                if mid in module_id_to_ms_idx
+            ]
+            prereq_stages = stage.get("前置阶段_全部满足", stage.get("前置阶段", []))
+            # Map stage_id -> sub_project_id via lookup
+            stage_to_sp = {s.get("阶段id", ""): s.get("子项目id", "") for s in stage_overview}
+            prereq_sp_ids = [
+                stage_to_sp[sid] for sid in prereq_stages if sid in stage_to_sp
+            ]
+
+            handover_raw = stage.get("完成后输出给下一阶段", {})
+            handover = {}
+            if isinstance(handover_raw, dict):
+                handover = {
+                    "outputs": handover_raw.get("输出物", []),
+                    "method": handover_raw.get("交接方式", ""),
+                }
+
+            sub_projects.append(
+                {
+                    "id": stage.get("子项目id", ""),
+                    "title": stage.get("阶段名称", ""),
+                    "description": stage.get("阶段目标", ""),
+                    "stage_id": stage.get("阶段id", ""),
+                    "milestone_indices": ms_indices,
+                    "prerequisite_sub_project_ids": prereq_sp_ids,
+                    "difficulty": stage.get("阶段难度评分", 1),
+                    "estimated_hours": stage.get("建议学习时长_小时", 0),
+                    "deliverables": stage.get("阶段交付物", []),
+                    "brief": stage.get("子项目一句话说明", ""),
+                    "task": stage.get("本阶段任务是什么", ""),
+                    "core_problem": stage.get("本阶段核心问题", ""),
+                    "inputs": stage.get("本阶段输入", []),
+                    "data_usage": stage.get("本阶段使用数据", []),
+                    "demo_unit": stage.get("本阶段演示_验收单元", ""),
+                    "why_separate": stage.get("为什么独立成验收单元", ""),
+                    "handover": handover,
+                    "acceptance_criteria": stage.get("阶段验收标准", []),
+                }
+            )
+
+    result: dict = {"milestones": milestones}
+    if sub_projects:
+        result["sub_projects"] = sub_projects
+    return result
+
+
+def extract_project_brief(raw_data: dict) -> dict | None:
+    """Extract project brief card from uploaded v2 tree_leaf format.
+
+    Returns a dict suitable for writing as project_brief.json,
+    or None if no brief card is present.
+    """
+    brief_card = raw_data.get("项目总说明卡")
+    if not isinstance(brief_card, dict):
+        return None
+
+    data_sources = []
+    for ds in brief_card.get("使用什么数据", []):
+        if isinstance(ds, dict):
+            data_sources.append({
+                "name": ds.get("数据名称", ""),
+                "role": ds.get("数据角色", ""),
+                "source": ds.get("数据来源", ""),
+                "why": ds.get("为什么用它", ""),
+                "stages": ds.get("在项目中的使用阶段", []),
+            })
+
+    return {
+        "one_liner": brief_card.get("一句话项目定义", ""),
+        "real_problem": brief_card.get("真实问题", ""),
+        "what_we_do": brief_card.get("我们具体做什么", []),
+        "what_we_dont": brief_card.get("我们不做什么", []),
+        "data_sources": data_sources,
+        "min_success": brief_card.get("最低成功目标", ""),
+        "recommended_success": brief_card.get("推荐成功目标", ""),
+        "final_deliverables": brief_card.get("最终交付物", []),
+        "final_demo": brief_card.get("最后展示应该长什么样", ""),
+        "industry_relation": brief_card.get("与工业版的关系", ""),
+    }
 
 
 def extract_project_meta(raw_data: dict) -> dict:

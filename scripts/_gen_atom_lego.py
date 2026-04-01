@@ -3,8 +3,11 @@ GP-01 蛋白结构探险地图 — 节点 knode_id=3
 「原子是什么：乐高积木类比」完整课程内容
 
 不调用任何 LLM agent pipeline。
-Claude Code 直接生成：课程文本 + Canvas 动画 + 练习题 + 故事
+Claude Code 直接生成：课程文本 + HUD 仪表盘动画 + 练习题 + 故事
 然后写入数据库。
+
+设计风格：Stitch HUD 仪表盘（Space Grotesk + glass panel + circuit header
++ 高饱和霓虹色 + probe 连线 + 脉冲呼吸动画）
 """
 
 from __future__ import annotations
@@ -27,84 +30,92 @@ from rich.panel import Panel
 
 console = Console()
 
-# ── 视觉主题系统（与 _gen_protein_structure.py 完全一致）──────────
+# ── 视觉主题系统（Stitch HUD 仪表盘风格 — 高饱和霓虹色）──────────
 
 VISUAL_THEMES = {
-    # 生命科学/蛋白质 — 荧光显微镜暗色
+    # 生命科学/蛋白质 — obsidian + 荧光绿
     "biotech_life": {
-        "bg": "#060d12",
-        "bg2": "#0a1a1f",
-        "card": "rgba(10,26,31,0.88)",
-        "primary": "#34d399",
-        "secondary": "#22d3ee",
-        "accent": "#fbbf24",
-        "text": "#e2e8f0",
-        "text_dim": "#64748b",
-        "border": "rgba(52,211,153,0.12)",
-        "grid": "rgba(52,211,153,0.04)",
-        "font_display": "'Noto Sans SC', 'PingFang SC', sans-serif",
-        "font_mono": "'JetBrains Mono', 'Menlo', monospace",
-        "hud_label": "rgba(52,211,153,0.75)",
-        "hud_value": "#e2e8f0",
-        "hud_bg": "rgba(10,26,31,0.92)",
-        "beam_color": "#34d399",
+        "bg": "#0c0e12",
+        "bg2": "#111318",
+        "surface": "#171a1f",
+        "surface_high": "#1d2025",
+        "surface_highest": "#23262c",
+        "card": "rgba(23,26,31,0.6)",
+        "primary": "#50FFB0",
+        "secondary": "#acf900",
+        "accent": "#85ecff",
+        "text": "#f6f6fc",
+        "text_dim": "#aaabb0",
+        "border": "rgba(70,72,77,0.15)",
+        "font_display": "'Space Grotesk', 'Noto Sans SC', sans-serif",
+        "font_mono": "'Space Grotesk', monospace",
+        "hud_label": "#aaabb0",
+        "hud_value": "#f6f6fc",
+        "hud_bg": "rgba(12,14,18,0.95)",
+        "beam_color": "#50FFB0",
     },
-    # 物理/力学 — 黑板暗色+粉笔蓝白
+    # 物理/力学 — obsidian + 青蓝
     "physics_chalk": {
-        "bg": "#0c0e14",
-        "bg2": "#121620",
-        "card": "rgba(18,22,32,0.90)",
-        "primary": "#60a5fa",
-        "secondary": "#a78bfa",
-        "accent": "#f87171",
-        "text": "#e2e8f0",
-        "text_dim": "#6b7280",
-        "border": "rgba(96,165,250,0.10)",
-        "grid": "rgba(96,165,250,0.04)",
-        "font_display": "'Noto Sans SC', 'PingFang SC', sans-serif",
-        "font_mono": "'JetBrains Mono', 'Menlo', monospace",
-        "hud_label": "rgba(96,165,250,0.75)",
-        "hud_value": "#e2e8f0",
-        "hud_bg": "rgba(18,22,32,0.92)",
-        "beam_color": "#60a5fa",
+        "bg": "#0c0e12",
+        "bg2": "#111318",
+        "surface": "#171a1f",
+        "surface_high": "#1d2025",
+        "surface_highest": "#23262c",
+        "card": "rgba(23,26,31,0.6)",
+        "primary": "#00F0FF",
+        "secondary": "#2ae500",
+        "accent": "#DBFCFF",
+        "text": "#e3e1e9",
+        "text_dim": "#849495",
+        "border": "rgba(59,73,75,0.15)",
+        "font_display": "'Space Grotesk', 'Noto Sans SC', sans-serif",
+        "font_mono": "'Space Grotesk', monospace",
+        "hud_label": "#849495",
+        "hud_value": "#e3e1e9",
+        "hud_bg": "rgba(18,19,24,0.95)",
+        "beam_color": "#00F0FF",
     },
-    # 航空/探索 — 火星暗色+探索橙金
+    # 探索/航天 — obsidian + 橙红
     "explorer_sand": {
-        "bg": "#0a0806",
-        "bg2": "#12100c",
-        "card": "rgba(18,16,12,0.90)",
-        "primary": "#e8723a",
-        "secondary": "#f0c040",
-        "accent": "#4dd0e1",
-        "text": "#d4c8b8",
-        "text_dim": "#6b5e50",
-        "border": "rgba(232,114,58,0.10)",
-        "grid": "rgba(232,114,58,0.04)",
-        "font_display": "'Noto Sans SC', 'PingFang SC', sans-serif",
-        "font_mono": "'JetBrains Mono', 'Menlo', monospace",
-        "hud_label": "rgba(232,114,58,0.75)",
-        "hud_value": "#d4c8b8",
-        "hud_bg": "rgba(18,16,12,0.92)",
-        "beam_color": "#e8723a",
+        "bg": "#0c0e12",
+        "bg2": "#111318",
+        "surface": "#171a1f",
+        "surface_high": "#1d2025",
+        "surface_highest": "#23262c",
+        "card": "rgba(23,26,31,0.6)",
+        "primary": "#FF8A50",
+        "secondary": "#FFB060",
+        "accent": "#FF6B6B",
+        "text": "#f6f6fc",
+        "text_dim": "#aaabb0",
+        "border": "rgba(70,72,77,0.15)",
+        "font_display": "'Space Grotesk', 'Noto Sans SC', sans-serif",
+        "font_mono": "'Space Grotesk', monospace",
+        "hud_label": "#aaabb0",
+        "hud_value": "#f6f6fc",
+        "hud_bg": "rgba(12,14,18,0.95)",
+        "beam_color": "#FF8A50",
     },
-    # 音乐/AI/创意 — 赛博暗色+活力紫粉
+    # 音乐/AI/创意 — obsidian + 霓虹紫
     "creative_studio": {
-        "bg": "#0c0816",
-        "bg2": "#14102a",
-        "card": "rgba(20,16,42,0.90)",
-        "primary": "#a78bfa",
-        "secondary": "#f472b6",
-        "accent": "#22d3ee",
-        "text": "#e2e8f0",
-        "text_dim": "#6b7280",
-        "border": "rgba(167,139,250,0.10)",
-        "grid": "rgba(167,139,250,0.04)",
-        "font_display": "'Noto Sans SC', 'PingFang SC', sans-serif",
-        "font_mono": "'JetBrains Mono', 'Menlo', monospace",
-        "hud_label": "rgba(167,139,250,0.75)",
-        "hud_value": "#e2e8f0",
-        "hud_bg": "rgba(20,16,42,0.92)",
-        "beam_color": "#a78bfa",
+        "bg": "#0c0e12",
+        "bg2": "#111318",
+        "surface": "#171a1f",
+        "surface_high": "#1d2025",
+        "surface_highest": "#23262c",
+        "card": "rgba(23,26,31,0.6)",
+        "primary": "#EBB2FF",
+        "secondary": "#F472B6",
+        "accent": "#A78BFA",
+        "text": "#f6f6fc",
+        "text_dim": "#aaabb0",
+        "border": "rgba(70,72,77,0.15)",
+        "font_display": "'Space Grotesk', 'Noto Sans SC', sans-serif",
+        "font_mono": "'Space Grotesk', monospace",
+        "hud_label": "#aaabb0",
+        "hud_value": "#f6f6fc",
+        "hud_bg": "rgba(12,14,18,0.95)",
+        "beam_color": "#EBB2FF",
     },
 }
 
@@ -136,7 +147,7 @@ def _id(prefix: str) -> str:
 PROJECT_NAME = "protein-structure"
 PROJECT_TITLE = "蛋白结构探险地图"
 PROJECT_DESCRIPTION = (
-    "从氨基酸到 AlphaFold，少年版蛋白质序列—结构—功能可视化探索课程。"
+    "从氨基酸到 AlphaFold，少年版蛋白质序列--结构--功能可视化探索课程。"
     "基于10岁儿童知识水平构建完整学习路径，涵盖化学直觉、二级结构、三级结构、"
     "活性位点、折叠病与 AI 预测。"
 )
@@ -209,7 +220,7 @@ PLAN_MARKDOWN = """# M01N04：原子是什么——乐高积木类比
 |------|------|---------|----------------|
 | 碳 | C | 深灰 / 黑 | 骨架主力，几乎每个氨基酸都有 |
 | 氢 | H | 白 | 数量最多，非常小，填充在各处 |
-| 氮 | N | 蓝 | 氨基（-NH₂）的核心，肽键的一部分 |
+| 氮 | N | 蓝 | 氨基（-NH2）的核心，肽键的一部分 |
 | 氧 | O | 红 | 羧基（-COOH）的核心，肽键的一部分 |
 | 硫 | S | 黄 | 只在半胱氨酸和甲硫氨酸里出现，可形成二硫键 |
 
@@ -245,18 +256,18 @@ PLAN_MARKDOWN = """# M01N04：原子是什么——乐高积木类比
 - 骨架的 C-C、C-N、C=O 都是共价键
 - 乐高类比：用力卡紧的凸起，很难扳开
 
-**氢键**（…或虚线）
+**氢键**（...或虚线）
 - 氢原子被两个电负性原子"抢着"
 - 比共价键弱得多，但数量多时合力很强
-- 蛋白质的二级结构（α螺旋、β折叠）靠氢键维持
+- 蛋白质的二级结构（alpha螺旋、beta折叠）靠氢键维持
 - 乐高类比：两块积木叠放时的弱摩擦力——单个不强，但整块乐高模型靠它维持形状
 
 ### 一个水分子有多少原子？
 
-水 H₂O = 2个氢原子 + 1个氧原子，总共3个原子。
+水 H2O = 2个氢原子 + 1个氧原子，总共3个原子。
 它们靠2条 O-H 共价键连接。
 
-甘氨酸（最简单的氨基酸）= C₂H₅NO₂ = 10个原子。
+甘氨酸（最简单的氨基酸）= C2H5NO2 = 10个原子。
 
 一个蛋白质分子通常有数千到数万个原子。
 
@@ -323,10 +334,10 @@ PLAN_MARKDOWN = """# M01N04：原子是什么——乐高积木类比
 
 # ── ID 生成（在辩论前生成，后面引用）────────────────────────────
 
-ANIM1_ID = _id("anim")   # 原子球棍模型
+ANIM1_ID = _id("anim")   # 原子结构 HUD
 STORY_ID = _id("story")  # 道尔顿历史故事
 EXER_ID  = _id("ex")     # 练习题
-GAME_ID  = _id("game")   # 元素积木组装游戏
+GAME_ID  = _id("game")   # 分子组装台
 
 # ── 故事段落 ────────────────────────────────────────────────────
 
@@ -379,73 +390,66 @@ EXERCISES = [
         ],
         "correct": 1,
         "explanation": (
-            "CPK颜色约定：C=灰/黑，H=白，N=蓝，O=红，S=黄。"
-            "这套颜色是全球生化教材和3D分子软件的统一标准，"
-            "氮（N）是蓝色，氧（O）是红色——这两个最容易混淆，请牢记。"
+            "CPK颜色约定：碳=灰/黑，氢=白，氮=蓝，氧=红，硫=黄。"
+            "氮原子在3D分子模型中用蓝色球表示。"
         ),
     },
     {
         "type": "choice",
         "question": "原子的直径大约是多少？",
         "options": [
-            "A. 1毫米（mm）",
-            "B. 1微米（μm，即0.001mm）",
-            "C. 0.1纳米（nm，即百亿分之一米）",
-            "D. 1纳米（nm）",
+            "A. 0.1毫米",
+            "B. 1微米",
+            "C. 0.1纳米（1埃）",
+            "D. 10纳米",
         ],
         "correct": 2,
         "explanation": (
-            "原子直径约0.1纳米，即1埃（Å）。"
-            "1毫米 > 1微米 > 1纳米 > 0.1纳米。"
-            "你的头发直径约100微米，相当于100万个原子排成一排的宽度。"
-            "蛋白质分子直径约5-10纳米，是原子的50-100倍。"
+            "原子直径约0.1纳米=1埃。"
+            "蛋白质分子5-10纳米，细菌1微米，头发0.1毫米。原子比蛋白质还小50-100倍。"
         ),
     },
     {
         "type": "choice",
-        "question": "下面哪个类比最准确地描述了共价键与氢键的区别？",
+        "question": "共价键和氢键相比，哪种更强？",
         "options": [
-            "A. 共价键像钉子（永久），氢键像双面胶（可反复）",
-            "B. 共价键像乐高的卡扣（牢固，需要力才能拆），氢键像两块积木叠放的摩擦力（弱，但多了合力强）",
-            "C. 两者强度相同，只是位置不同",
-            "D. 氢键比共价键更强，因为氢键更多",
+            "A. 氢键更强",
+            "B. 共价键更强",
+            "C. 两者一样强",
+            "D. 要看元素种类",
         ],
         "correct": 1,
         "explanation": (
-            "共价键是两个原子共享电子形成的强结合（乐高卡扣），断开需要大量能量。"
-            "氢键是氢原子被两个电负性原子之间的弱静电吸引（叠放摩擦力），单个很弱，"
-            "但蛋白质里有数十到数百个氢键共同维持折叠结构——这正是α螺旋和β折叠能保持形状的原因。"
+            "共价键是原子共享电子形成的，非常牢固。氢键弱得多（约为共价键的1/20），"
+            "但数量多时合力也很可观——蛋白质的二级结构就靠大量氢键维持。"
         ),
     },
     {
         "type": "choice",
-        "question": "蛋白质中含有硫（S）原子的氨基酸是哪些？",
+        "question": "蛋白质中只出现在半胱氨酸和甲硫氨酸中的元素是哪个？",
         "options": [
-            "A. 丙氨酸（Ala）和缬氨酸（Val）",
-            "B. 半胱氨酸（Cys）和甲硫氨酸（Met）",
-            "C. 所有氨基酸都含硫",
-            "D. 谷氨酸（Glu）和天冬氨酸（Asp）",
+            "A. 碳（C）",
+            "B. 氮（N）",
+            "C. 硫（S）",
+            "D. 氧（O）",
         ],
-        "correct": 1,
+        "correct": 2,
         "explanation": (
-            "只有半胱氨酸（Cys，C）和甲硫氨酸（Met，M）含有硫原子。"
-            "半胱氨酸的硫可以与另一个半胱氨酸形成二硫键（S-S），"
-            "这种强共价键能把蛋白质的不同部分'锁住'，对结构稳定非常重要——"
-            "比如头发的硬度和卷发的形状就依赖二硫键。"
+            "硫（S）在蛋白质中只存在于两种氨基酸：半胱氨酸（Cys）和甲硫氨酸（Met）。"
+            "半胱氨酸的硫可以形成二硫键（-S-S-），为蛋白质加固。"
         ),
     },
     {
         "type": "choice",
-        "question": "道尔顿提出原子学说的关键实验证据是什么？",
+        "question": "道尔顿用什么证据推断原子的存在？",
         "options": [
-            "A. 用显微镜直接看到了原子",
-            "B. 发现不同气体化合时总是成整数比（倍比定律）",
-            "C. 测量了原子的直径",
-            "D. 发现了原子核",
+            "A. 显微镜直接观察到了原子",
+            "B. 气体混合的质量比总是整数比（倍比定律）",
+            "C. 金箔散射实验",
+            "D. X射线衍射图",
         ],
         "correct": 1,
         "explanation": (
-            "道尔顿时代没有任何仪器能'看到'原子（原子直径0.1纳米，远超光学显微镜极限）。"
             "他的证据是间接的：碳和氧结合时，质量比总是1:1.33（CO）或1:2.66（CO2），"
             "这只能用'原子是离散颗粒，不能切成分数'来解释——这就是倍比定律。"
             "原子核是1909年卢瑟福通过金箔散射实验发现的，比道尔顿晚了100多年。"
@@ -453,542 +457,611 @@ EXERCISES = [
     },
 ]
 
-# ── 动画1：原子球棍模型（Canvas 2D，交互版）──────────────────────
-# 场景：展示 H₂O、NH₃、甘氨酸骨架的原子构成
-# 探索模式：hover显示tooltip，拖拽移动原子（化学键跟着拉伸）
-# 技术：Canvas 2D + radialGradient + requestAnimationFrame
+# ── 动画1：原子结构 HUD（HTML+SVG 仪表盘，Stitch 设计稿风格）─────
+# 场景：HUD 仪表盘展示原子结构
+# 中央：SVG 原子模型（电子云轨道 + 核心呼吸灯）
+# 左侧 glass panel：元素数据读数（ATOMIC_NUMBER, MASS, ELECTRON_CONFIG）
+# 右侧 glass panel：CPK 颜色图例
+# 底部 HUD：当前元素统计
+# 点击切换 C/H/N/O/S 五种元素
+# Probe 连接线 + 脉冲动画
 
 ANIM1_HTML = r"""<!DOCTYPE html>
 <html lang="zh">
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1"/>
-<title>原子球棍模型</title>
+<title>ATOM_EXPLORER</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=Noto+Sans+SC:wght@400;700&display=swap" rel="stylesheet"/>
 <style>
-* { box-sizing: border-box; margin: 0; padding: 0; }
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 html, body {
   width: 100%; height: 100%; overflow: hidden;
   background: __THEME_BG__;
   font-family: __THEME_FONT__;
+  color: __THEME_TEXT__;
   user-select: none;
 }
-canvas { display: block; width: 100%; height: 100%; position: absolute; top: 0; left: 0; }
-#tooltip {
-  position: absolute;
-  pointer-events: none;
-  background: __THEME_CARD__;
-  border: 1.5px solid __THEME_BORDER__;
-  border-radius: 8px;
-  padding: 6px 10px;
-  font-size: 12px;
-  color: __THEME_TEXT__;
-  box-shadow: 0 2px 12px rgba(0,0,0,0.12);
-  opacity: 0;
-  transition: opacity 0.15s;
-  max-width: 160px;
-  line-height: 1.5;
+
+/* -- Layout: Bento Grid -- */
+.hud-container {
+  width: 100%; height: 100%;
+  display: grid;
+  grid-template-rows: 44px 1fr 56px;
+  grid-template-columns: 200px 1fr 180px;
+  gap: 0;
+  padding: 0;
+}
+
+/* -- Top Bar -- */
+.top-bar {
+  grid-column: 1 / -1;
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 0 16px;
+  background: rgba(12,14,18,0.6);
+  backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+  border-bottom: 1px solid __THEME_BORDER__;
   z-index: 10;
 }
-#tooltip.show { opacity: 1; }
-#tooltip .el-sym {
-  font-size: 20px;
-  font-weight: bold;
-  color: __THEME_PRIMARY__;
-  display: block;
-  text-align: center;
+.top-bar .title {
+  font-size: 11px; font-weight: 700; letter-spacing: 0.15em;
+  text-transform: uppercase; color: __THEME_PRIMARY__;
+  text-shadow: 0 0 15px __THEME_PRIMARY__40;
 }
-#tooltip .el-name {
-  font-size: 11px;
-  color: __THEME_TEXT_DIM__;
-  text-align: center;
-  display: block;
-  margin-bottom: 3px;
-}
-#tooltip .el-desc {
-  font-size: 10px;
-  color: __THEME_TEXT__;
-  border-top: 1px solid __THEME_BORDER__;
-  padding-top: 4px;
-  margin-top: 2px;
-}
-#mol-nav {
-  position: absolute;
-  bottom: 60px;
-  left: 50%;
-  transform: translateX(-50%);
-  display: flex;
-  gap: 8px;
-  z-index: 10;
-}
-.mol-btn {
-  padding: 5px 14px;
-  border-radius: 20px;
-  border: 1.5px solid __THEME_BORDER__;
-  background: __THEME_CARD__;
-  color: __THEME_TEXT__;
-  font-size: 11px;
-  cursor: pointer;
-  transition: all 0.15s;
-  font-family: __THEME_FONT__;
-}
-.mol-btn:hover { border-color: __THEME_PRIMARY__; color: __THEME_PRIMARY__; }
-.mol-btn.active {
+.top-bar .status-dot {
+  width: 6px; height: 6px; border-radius: 50%;
   background: __THEME_PRIMARY__;
-  border-color: __THEME_PRIMARY__;
-  color: #fff;
-  font-weight: bold;
+  box-shadow: 0 0 8px __THEME_PRIMARY__;
+  animation: pulse-dot 2s infinite;
 }
-#hint {
-  position: absolute;
-  top: 38px;
-  left: 50%;
-  transform: translateX(-50%);
-  font-size: 10px;
+.element-nav {
+  display: flex; gap: 4px;
+}
+.el-btn {
+  width: 32px; height: 28px; border-radius: 4px;
+  border: 1px solid __THEME_BORDER__;
+  background: __THEME_SURFACE__;
   color: __THEME_TEXT_DIM__;
-  background: __THEME_HUD_BG__;
-  padding: 3px 10px;
-  border-radius: 10px;
-  pointer-events: none;
-  z-index: 10;
-  white-space: nowrap;
+  font-family: __THEME_FONT__;
+  font-size: 11px; font-weight: 600;
+  cursor: pointer; transition: all 0.2s;
+  letter-spacing: 0.05em;
 }
+.el-btn:hover {
+  border-color: __THEME_PRIMARY__60;
+  color: __THEME_PRIMARY__;
+  box-shadow: 0 0 12px __THEME_PRIMARY__20;
+}
+.el-btn.active {
+  background: __THEME_PRIMARY__18;
+  border-color: __THEME_PRIMARY__;
+  color: __THEME_PRIMARY__;
+  box-shadow: 0 0 16px __THEME_PRIMARY__30;
+}
+
+/* -- Glass Panel (Left/Right) -- */
+.panel-left, .panel-right {
+  padding: 12px 10px;
+  overflow-y: auto;
+  background: __THEME_CARD__;
+  backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+  border-right: 1px solid __THEME_BORDER__;
+}
+.panel-right {
+  border-right: none;
+  border-left: 1px solid __THEME_BORDER__;
+}
+
+.panel-section {
+  margin-bottom: 14px;
+}
+.circuit-header {
+  width: 32px; height: 2px;
+  background: __THEME_PRIMARY__;
+  margin-bottom: 8px;
+  box-shadow: 0 0 8px __THEME_PRIMARY__60;
+}
+.circuit-header.secondary { background: __THEME_SECONDARY__; box-shadow: 0 0 8px __THEME_SECONDARY__60; }
+.circuit-header.accent { background: __THEME_ACCENT__; box-shadow: 0 0 8px __THEME_ACCENT__60; }
+
+.hud-label {
+  font-size: 9px; font-weight: 500;
+  letter-spacing: 0.12em; text-transform: uppercase;
+  color: __THEME_HUD_LABEL__;
+  margin-bottom: 4px;
+}
+.hud-value {
+  font-size: 22px; font-weight: 700;
+  color: __THEME_HUD_VALUE__;
+  line-height: 1.1;
+}
+.hud-value.primary { color: __THEME_PRIMARY__; text-shadow: 0 0 12px __THEME_PRIMARY__40; }
+.hud-value.small { font-size: 13px; }
+.hud-unit {
+  font-size: 9px; color: __THEME_TEXT_DIM__;
+  letter-spacing: 0.08em; text-transform: uppercase;
+}
+
+/* -- Data Row -- */
+.data-row {
+  display: flex; justify-content: space-between; align-items: baseline;
+  padding: 3px 0;
+  border-bottom: 1px solid rgba(70,72,77,0.08);
+}
+.data-row .key {
+  font-size: 9px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: __THEME_TEXT_DIM__;
+}
+.data-row .val {
+  font-size: 11px; font-weight: 600;
+  color: __THEME_TEXT__;
+}
+
+/* -- CPK Index (Right panel) -- */
+.cpk-item {
+  display: flex; align-items: center; gap: 8px;
+  padding: 5px 0;
+  cursor: pointer; transition: all 0.15s;
+  border-radius: 4px;
+}
+.cpk-item:hover { background: rgba(70,72,77,0.1); }
+.cpk-item.active { background: __THEME_PRIMARY__12; }
+.cpk-dot {
+  width: 14px; height: 14px; border-radius: 50%;
+  flex-shrink: 0;
+  box-shadow: 0 0 6px var(--dot-color);
+}
+.cpk-sym {
+  font-size: 12px; font-weight: 700; min-width: 14px;
+  color: __THEME_TEXT__;
+}
+.cpk-name {
+  font-size: 9px; letter-spacing: 0.08em;
+  color: __THEME_TEXT_DIM__; text-transform: uppercase;
+}
+
+/* -- Center Stage (SVG Area) -- */
+.center-stage {
+  position: relative;
+  display: flex; align-items: center; justify-content: center;
+  background: radial-gradient(ellipse at center, __THEME_BG2__ 0%, __THEME_BG__ 70%);
+  overflow: hidden;
+}
+.center-stage svg {
+  width: 100%; height: 100%;
+}
+
+/* -- Bottom HUD -- */
+.bottom-hud {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 0;
+  background: __THEME_HUD_BG__;
+  border-top: 1px solid __THEME_BORDER__;
+}
+.bottom-hud::before {
+  content: '';
+  position: absolute; top: 0; left: 0; right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, __THEME_PRIMARY__, __THEME_SECONDARY__, __THEME_PRIMARY__, transparent);
+  opacity: 0.6;
+}
+.hud-cell {
+  position: relative;
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  padding: 6px 0;
+}
+.hud-cell:not(:last-child)::after {
+  content: '';
+  position: absolute; right: 0; top: 12px; bottom: 12px;
+  width: 1px;
+  background: rgba(70,72,77,0.15);
+}
+.hud-cell .hud-label { margin-bottom: 2px; font-size: 8px; }
+.hud-cell .hud-value { font-size: 16px; }
+
+/* -- Probe Lines (SVG overlay) -- */
+.probe-overlay {
+  position: absolute; top: 0; left: 0;
+  width: 100%; height: 100%;
+  pointer-events: none;
+}
+
+/* -- Animations -- */
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+@keyframes orbit-rotate {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+@keyframes core-pulse {
+  0%, 100% { opacity: 0.85; }
+  50% { opacity: 1; }
+}
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes scan-line {
+  from { transform: translateY(-100%); }
+  to { transform: translateY(100%); }
+}
+.fade-in { animation: fade-in 0.5s ease-out both; }
 </style>
 </head>
 <body>
-<canvas id="c"></canvas>
-<div id="tooltip"><span class="el-sym"></span><span class="el-name"></span><div class="el-desc"></div></div>
-<div id="mol-nav">
-  <button class="mol-btn active" data-mol="0">水 H₂O</button>
-  <button class="mol-btn" data-mol="1">氨 NH₃</button>
-  <button class="mol-btn" data-mol="2">甘氨酸</button>
+<div class="hud-container">
+  <!-- Top Bar -->
+  <div class="top-bar">
+    <div style="display:flex;align-items:center;gap:10px;">
+      <span class="status-dot"></span>
+      <span class="title">ATOM_EXPLORER</span>
+    </div>
+    <div class="element-nav" id="elNav">
+      <button class="el-btn active" data-el="C">C</button>
+      <button class="el-btn" data-el="H">H</button>
+      <button class="el-btn" data-el="N">N</button>
+      <button class="el-btn" data-el="O">O</button>
+      <button class="el-btn" data-el="S">S</button>
+    </div>
+  </div>
+
+  <!-- Left Panel: Element Data -->
+  <div class="panel-left" id="panelLeft">
+    <div class="panel-section fade-in">
+      <div class="circuit-header"></div>
+      <div class="hud-label">ELEMENT</div>
+      <div class="hud-value primary" id="elSymbol">C</div>
+      <div class="hud-unit" id="elFullName">CARBON</div>
+    </div>
+    <div class="panel-section fade-in" style="animation-delay:0.1s">
+      <div class="circuit-header secondary"></div>
+      <div class="hud-label">ATOMIC_NUMBER</div>
+      <div class="hud-value small" id="elNumber">6</div>
+    </div>
+    <div class="panel-section fade-in" style="animation-delay:0.15s">
+      <div class="hud-label">MASS</div>
+      <div class="hud-value small" id="elMass">12.011</div>
+      <div class="hud-unit">AMU</div>
+    </div>
+    <div class="panel-section fade-in" style="animation-delay:0.2s">
+      <div class="hud-label">ELECTRON_CONFIG</div>
+      <div class="hud-value small" id="elConfig">1s2 2s2 2p2</div>
+    </div>
+    <div class="panel-section fade-in" style="animation-delay:0.25s">
+      <div class="hud-label">BONDS</div>
+      <div class="hud-value small" id="elBonds">4</div>
+    </div>
+    <div class="panel-section fade-in" style="animation-delay:0.3s">
+      <div class="circuit-header accent"></div>
+      <div class="hud-label">ROLE_IN_PROTEIN</div>
+      <div style="font-size:10px;color:__THEME_TEXT__;line-height:1.5;margin-top:4px" id="elRole">
+        骨架主力，几乎每个氨基酸都有碳原子构成的骨架
+      </div>
+    </div>
+  </div>
+
+  <!-- Center: SVG Atom Model -->
+  <div class="center-stage" id="centerStage">
+    <svg id="atomSvg" viewBox="0 0 400 340" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <!-- Core gradient -->
+        <radialGradient id="coreGrad" cx="40%" cy="35%" r="55%">
+          <stop offset="0%" stop-color="#ffffff" stop-opacity="0.9"/>
+          <stop offset="20%" stop-color="__THEME_PRIMARY__" stop-opacity="0.8"/>
+          <stop offset="60%" stop-color="__THEME_PRIMARY__" stop-opacity="0.5"/>
+          <stop offset="100%" stop-color="__THEME_BG__" stop-opacity="0.9"/>
+        </radialGradient>
+        <!-- Outer glow -->
+        <radialGradient id="coreGlow" cx="50%" cy="50%" r="50%">
+          <stop offset="0%" stop-color="__THEME_PRIMARY__" stop-opacity="0.3"/>
+          <stop offset="100%" stop-color="__THEME_PRIMARY__" stop-opacity="0"/>
+        </radialGradient>
+        <!-- Electron glow -->
+        <radialGradient id="electronGlow" cx="50%" cy="50%" r="50%">
+          <stop offset="0%" stop-color="#ffffff" stop-opacity="0.9"/>
+          <stop offset="100%" stop-color="__THEME_PRIMARY__" stop-opacity="0"/>
+        </radialGradient>
+        <filter id="glow">
+          <feGaussianBlur stdDeviation="3" result="blur"/>
+          <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+        </filter>
+        <filter id="softGlow">
+          <feGaussianBlur stdDeviation="6" result="blur"/>
+          <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+        </filter>
+      </defs>
+
+      <!-- Background scan line -->
+      <rect x="0" y="0" width="400" height="2" fill="__THEME_PRIMARY__" opacity="0.06">
+        <animateTransform attributeName="transform" type="translate" values="0,0;0,340;0,0" dur="8s" repeatCount="indefinite"/>
+      </rect>
+
+      <!-- Concentric reference rings -->
+      <g id="refRings" opacity="0.06" stroke="__THEME_PRIMARY__" fill="none" stroke-width="0.5">
+        <circle cx="200" cy="160" r="40"/>
+        <circle cx="200" cy="160" r="80"/>
+        <circle cx="200" cy="160" r="120"/>
+        <circle cx="200" cy="160" r="160"/>
+      </g>
+
+      <!-- Orbit Ellipses (rotating dashed) -->
+      <g id="orbits">
+        <ellipse cx="200" cy="160" rx="110" ry="45" fill="none" stroke="__THEME_PRIMARY__" stroke-width="0.8" stroke-dasharray="4,6" opacity="0.3" style="transform-origin:200px 160px">
+          <animateTransform attributeName="transform" type="rotate" values="0 200 160;360 200 160" dur="8s" repeatCount="indefinite"/>
+        </ellipse>
+        <ellipse cx="200" cy="160" rx="95" ry="55" fill="none" stroke="__THEME_SECONDARY__" stroke-width="0.6" stroke-dasharray="3,5" opacity="0.2" style="transform-origin:200px 160px">
+          <animateTransform attributeName="transform" type="rotate" values="60 200 160;420 200 160" dur="12s" repeatCount="indefinite"/>
+        </ellipse>
+        <ellipse cx="200" cy="160" rx="80" ry="65" fill="none" stroke="__THEME_ACCENT__" stroke-width="0.5" stroke-dasharray="2,7" opacity="0.15" style="transform-origin:200px 160px">
+          <animateTransform attributeName="transform" type="rotate" values="120 200 160;480 200 160" dur="16s" repeatCount="indefinite"/>
+        </ellipse>
+      </g>
+
+      <!-- Electrons on orbits -->
+      <g id="electrons" filter="url(#glow)">
+        <circle r="3" fill="#ffffff" opacity="0.9">
+          <animateMotion dur="8s" repeatCount="indefinite" rotate="auto">
+            <mpath href="#orbitPath1"/>
+          </animateMotion>
+        </circle>
+        <circle r="2.5" fill="__THEME_SECONDARY__" opacity="0.8">
+          <animateMotion dur="12s" repeatCount="indefinite" rotate="auto">
+            <mpath href="#orbitPath2"/>
+          </animateMotion>
+        </circle>
+        <circle r="2" fill="__THEME_ACCENT__" opacity="0.7">
+          <animateMotion dur="16s" repeatCount="indefinite" rotate="auto">
+            <mpath href="#orbitPath3"/>
+          </animateMotion>
+        </circle>
+      </g>
+      <!-- Hidden orbit paths for animateMotion -->
+      <path id="orbitPath1" d="M310,160 A110,45 0 1,1 90,160 A110,45 0 1,1 310,160" fill="none" stroke="none"/>
+      <path id="orbitPath2" d="M295,160 A95,55 0 1,1 105,160 A95,55 0 1,1 295,160" fill="none" stroke="none"/>
+      <path id="orbitPath3" d="M280,160 A80,65 0 1,1 120,160 A80,65 0 1,1 280,160" fill="none" stroke="none"/>
+
+      <!-- Atom Core -->
+      <g id="atomCore">
+        <circle cx="200" cy="160" r="50" fill="url(#coreGlow)" opacity="0.5">
+          <animate attributeName="r" values="50;55;50" dur="3s" repeatCount="indefinite"/>
+        </circle>
+        <circle cx="200" cy="160" r="32" fill="url(#coreGrad)" filter="url(#softGlow)">
+          <animate attributeName="opacity" values="0.85;1;0.85" dur="2s" repeatCount="indefinite"/>
+        </circle>
+        <!-- Specular highlight -->
+        <ellipse cx="190" cy="150" rx="12" ry="8" fill="white" opacity="0.25"/>
+        <!-- Element symbol on core -->
+        <text id="coreSym" x="200" y="167" text-anchor="middle" font-family="'Space Grotesk', sans-serif" font-size="24" font-weight="700" fill="__THEME_BG__" opacity="0.9">C</text>
+      </g>
+
+      <!-- Probe Lines (from core to data points) -->
+      <g id="probeLines" opacity="0.4">
+        <line x1="168" y1="160" x2="10" y2="60" stroke="__THEME_PRIMARY__" stroke-width="0.5" stroke-dasharray="2,4"/>
+        <circle cx="10" cy="60" r="2" fill="__THEME_PRIMARY__">
+          <animate attributeName="opacity" values="0.4;1;0.4" dur="2s" repeatCount="indefinite"/>
+        </circle>
+        <line x1="168" y1="175" x2="10" y2="200" stroke="__THEME_SECONDARY__" stroke-width="0.5" stroke-dasharray="2,4"/>
+        <circle cx="10" cy="200" r="2" fill="__THEME_SECONDARY__">
+          <animate attributeName="opacity" values="0.4;1;0.4" dur="2.5s" repeatCount="indefinite"/>
+        </circle>
+        <line x1="232" y1="160" x2="390" y2="50" stroke="__THEME_ACCENT__" stroke-width="0.5" stroke-dasharray="2,4"/>
+        <circle cx="390" cy="50" r="2" fill="__THEME_ACCENT__">
+          <animate attributeName="opacity" values="0.4;1;0.4" dur="1.8s" repeatCount="indefinite"/>
+        </circle>
+      </g>
+
+      <!-- Info label near core -->
+      <g id="coreLabel" opacity="0.7">
+        <text x="200" y="215" text-anchor="middle" font-family="'Space Grotesk', sans-serif" font-size="9" fill="__THEME_TEXT_DIM__" letter-spacing="0.12em" text-transform="uppercase">NUCLEUS</text>
+        <text x="200" y="228" text-anchor="middle" font-family="'Space Grotesk', sans-serif" font-size="8" fill="__THEME_TEXT_DIM__" letter-spacing="0.08em" id="coreDesc">6 PROTONS / 6 NEUTRONS</text>
+      </g>
+
+      <!-- Bottom: atom size label -->
+      <g opacity="0.5">
+        <line x1="140" y1="280" x2="260" y2="280" stroke="__THEME_TEXT_DIM__" stroke-width="0.5"/>
+        <line x1="140" y1="276" x2="140" y2="284" stroke="__THEME_TEXT_DIM__" stroke-width="0.5"/>
+        <line x1="260" y1="276" x2="260" y2="284" stroke="__THEME_TEXT_DIM__" stroke-width="0.5"/>
+        <text x="200" y="296" text-anchor="middle" font-family="'Space Grotesk', sans-serif" font-size="8" fill="__THEME_TEXT_DIM__" letter-spacing="0.1em" id="sizeLabel">~0.077 NM (COVALENT RADIUS)</text>
+      </g>
+    </svg>
+  </div>
+
+  <!-- Right Panel: CPK Index -->
+  <div class="panel-right" id="panelRight">
+    <div class="panel-section">
+      <div class="circuit-header"></div>
+      <div class="hud-label">CPK_INDEX</div>
+    </div>
+    <div id="cpkList">
+      <!-- Filled by JS -->
+    </div>
+    <div class="panel-section" style="margin-top:14px;">
+      <div class="circuit-header secondary"></div>
+      <div class="hud-label">SIZE_COMPARISON</div>
+      <div id="sizeBar" style="margin-top:6px;"></div>
+    </div>
+  </div>
+
+  <!-- Bottom HUD -->
+  <div class="bottom-hud" style="position:relative;" id="bottomHud">
+    <div class="hud-cell">
+      <div class="hud-label">ATOMIC_NUM</div>
+      <div class="hud-value" id="hudNum">6</div>
+    </div>
+    <div class="hud-cell">
+      <div class="hud-label">TYPE</div>
+      <div class="hud-value" id="hudType" style="font-size:13px;">NONMETAL</div>
+    </div>
+    <div class="hud-cell">
+      <div class="hud-label">BONDS</div>
+      <div class="hud-value" id="hudBonds">4</div>
+    </div>
+    <div class="hud-cell">
+      <div class="hud-label">ELECTRONEGATIVITY</div>
+      <div class="hud-value" id="hudEN">2.55</div>
+    </div>
+  </div>
 </div>
-<div id="hint">hover原子查看信息 · 拖动改变位置</div>
+
 <script>
 (function(){
 "use strict";
 
-var canvas = document.getElementById("c");
-var ctx = canvas.getContext("2d");
-var tooltip = document.getElementById("tooltip");
-var W = 600, H = 420;
-var DPR = Math.min(window.devicePixelRatio||1, 2);
-
-function resize(){
-  var rect = canvas.getBoundingClientRect();
-  canvas.width = rect.width * DPR;
-  canvas.height = rect.height * DPR;
-  ctx.setTransform(1,0,0,1,0,0);
-  ctx.scale(DPR * rect.width / W, DPR * rect.height / H);
-}
-resize();
-window.addEventListener("resize", resize);
-
-// CPK 颜色 + 元素信息
 var ELEMENTS = {
-  "C": {
-    color1: "#4a5568", color2: "#718096", color3: "#2d3748",
-    r: 18, name: "碳 Carbon", desc: "骨架主力，4个键，可链可环"
+  C: {
+    sym: "C", name: "CARBON", cnName: "碳",
+    number: 6, mass: "12.011", config: "1s2 2s2 2p2",
+    bonds: 4, en: "2.55", type: "NONMETAL",
+    radius: "0.077", sizeLabel: "~0.077 NM (COVALENT RADIUS)",
+    nucleusDesc: "6 PROTONS / 6 NEUTRONS",
+    role: "骨架主力，几乎每个氨基酸都有碳原子构成的骨架",
+    cpkColor: "#4a5568", cpkHex: "#4a5568"
   },
-  "H": {
-    color1: "#e2e8f0", color2: "#f7fafc", color3: "#a0aec0",
-    r: 11, name: "氢 Hydrogen", desc: "数量最多，最轻，填充各处"
+  H: {
+    sym: "H", name: "HYDROGEN", cnName: "氢",
+    number: 1, mass: "1.008", config: "1s1",
+    bonds: 1, en: "2.20", type: "NONMETAL",
+    radius: "0.031", sizeLabel: "~0.031 NM (COVALENT RADIUS)",
+    nucleusDesc: "1 PROTON / 0 NEUTRONS",
+    role: "数量最多，最轻，填充间隙，调节极性",
+    cpkColor: "#e2e8f0", cpkHex: "#e2e8f0"
   },
-  "N": {
-    color1: "#3b82f6", color2: "#60a5fa", color3: "#1d4ed8",
-    r: 16, name: "氮 Nitrogen", desc: "氨基核心，蓝色，参与氢键"
+  N: {
+    sym: "N", name: "NITROGEN", cnName: "氮",
+    number: 7, mass: "14.007", config: "1s2 2s2 2p3",
+    bonds: 3, en: "3.04", type: "NONMETAL",
+    radius: "0.075", sizeLabel: "~0.075 NM (COVALENT RADIUS)",
+    nucleusDesc: "7 PROTONS / 7 NEUTRONS",
+    role: "氨基核心，蓝色标记，参与氢键形成",
+    cpkColor: "#3b82f6", cpkHex: "#3b82f6"
   },
-  "O": {
-    color1: "#ef4444", color2: "#f87171", color3: "#b91c1c",
-    r: 15, name: "氧 Oxygen", desc: "羧基核心，红色，强电负性"
+  O: {
+    sym: "O", name: "OXYGEN", cnName: "氧",
+    number: 8, mass: "15.999", config: "1s2 2s2 2p4",
+    bonds: 2, en: "3.44", type: "NONMETAL",
+    radius: "0.073", sizeLabel: "~0.073 NM (COVALENT RADIUS)",
+    nucleusDesc: "8 PROTONS / 8 NEUTRONS",
+    role: "羧基核心，强电负性，参与氢键",
+    cpkColor: "#ef4444", cpkHex: "#ef4444"
   },
-  "S": {
-    color1: "#eab308", color2: "#fde047", color3: "#a16207",
-    r: 20, name: "硫 Sulfur", desc: "可形成二硫键，赋予结构稳定"
-  },
+  S: {
+    sym: "S", name: "SULFUR", cnName: "硫",
+    number: 16, mass: "32.06", config: "[Ne] 3s2 3p4",
+    bonds: 2, en: "2.58", type: "NONMETAL",
+    radius: "0.102", sizeLabel: "~0.102 NM (COVALENT RADIUS)",
+    nucleusDesc: "16 PROTONS / 16 NEUTRONS",
+    role: "二硫键形成者，只在Cys和Met中出现",
+    cpkColor: "#eab308", cpkHex: "#eab308"
+  }
 };
 
-// 分子定义（原子 + 键）
-// 坐标：以 W/2, (H-60)/2 为中心
-var MOLECULES = [
-  // 水 H2O
-  {
-    title: "水分子 H₂O",
-    formula: "2个氢 + 1个氧 = 3个原子",
-    atoms: [
-      { el: "O", x: 300, y: 185 },
-      { el: "H", x: 255, y: 225 },
-      { el: "H", x: 345, y: 225 },
-    ],
-    bonds: [
-      { a: 0, b: 1, type: "single" },
-      { a: 0, b: 2, type: "single" },
-    ],
-  },
-  // 氨 NH3
-  {
-    title: "氨分子 NH₃",
-    formula: "1个氮 + 3个氢 = 4个原子",
-    atoms: [
-      { el: "N", x: 300, y: 175 },
-      { el: "H", x: 255, y: 225 },
-      { el: "H", x: 300, y: 235 },
-      { el: "H", x: 345, y: 225 },
-    ],
-    bonds: [
-      { a: 0, b: 1, type: "single" },
-      { a: 0, b: 2, type: "single" },
-      { a: 0, b: 3, type: "single" },
-    ],
-  },
-  // 甘氨酸骨架 (简化) H2N-CH2-COOH
-  {
-    title: "甘氨酸骨架（最简单的氨基酸）",
-    formula: "C₂H₅NO₂ = 10个原子（此处展示骨架5个重原子）",
-    atoms: [
-      { el: "N",  x: 185, y: 185 },  // 氨基 N
-      { el: "C",  x: 260, y: 185 },  // Cα
-      { el: "C",  x: 335, y: 185 },  // 羧基 C
-      { el: "O",  x: 375, y: 150 },  // =O
-      { el: "O",  x: 375, y: 220 },  // -OH
-      { el: "H",  x: 185, y: 233 },  // N-H
-      { el: "H",  x: 145, y: 162 },  // N-H
-      { el: "H",  x: 250, y: 233 },  // Cα-H
-      { el: "H",  x: 270, y: 233 },  // Cα-H
-    ],
-    bonds: [
-      { a: 0, b: 1, type: "single" },
-      { a: 1, b: 2, type: "single" },
-      { a: 2, b: 3, type: "double" },
-      { a: 2, b: 4, type: "single" },
-      { a: 0, b: 5, type: "single" },
-      { a: 0, b: 6, type: "single" },
-      { a: 1, b: 7, type: "single" },
-      { a: 1, b: 8, type: "single" },
-    ],
-  },
-];
+var ORDER = ["C","H","N","O","S"];
+var currentEl = "C";
 
-// 当前分子状态（可变坐标）
-var currentMolIdx = 0;
-var atoms = [];  // {el, x, y, vx, vy}
-
-function loadMolecule(idx) {
-  currentMolIdx = idx;
-  var mol = MOLECULES[idx];
-  atoms = mol.atoms.map(function(a){
-    return { el: a.el, x: a.x, y: a.y, vx: 0, vy: 0 };
-  });
-  // 动画：原子从中心飞出
-  var cx = W/2, cy = (H-60)/2;
-  atoms.forEach(function(a){
-    a._targetX = a.x; a._targetY = a.y;
-    a.x = cx; a.y = cy;
-  });
-  phase = "assemble"; assembleT = 0;
-  dragIdx = -1; hoveredIdx = -1;
-}
-
-// 动画阶段
-var phase = "assemble";
-var assembleT = 0;  // 0->1
-var lastTime = 0;
-
-// 交互状态
-var dragIdx = -1;
-var hoveredIdx = -1;
-var dragOffX = 0, dragOffY = 0;
-
-function easeOut(t){ return 1 - Math.pow(1-t, 3); }
-
-// canvas坐标转逻辑坐标
-function canvasToLogic(cx, cy){
-  var rect = canvas.getBoundingClientRect();
-  return {
-    x: (cx / rect.width) * W,
-    y: (cy / rect.height) * H,
-  };
-}
-
-function getAtomAt(lx, ly){
-  for(var i = atoms.length-1; i >= 0; i--){
-    var a = atoms[i];
-    var el = ELEMENTS[a.el];
-    var dx = lx - a.x, dy = ly - a.y;
-    if(dx*dx + dy*dy <= (el.r+4)*(el.r+4)) return i;
-  }
-  return -1;
-}
-
-// 鼠标/触摸事件
-function getEventLogic(e){
-  var rect = canvas.getBoundingClientRect();
-  var cx = e.clientX || (e.touches && e.touches[0].clientX);
-  var cy = e.clientY || (e.touches && e.touches[0].clientY);
-  return canvasToLogic(cx - rect.left, cy - rect.top);
-}
-
-canvas.addEventListener("mousemove", function(e){
-  var p = getEventLogic(e);
-  if(dragIdx >= 0){
-    atoms[dragIdx].x = p.x - dragOffX;
-    atoms[dragIdx].y = p.y - dragOffY;
-    hoveredIdx = dragIdx;
-    showTooltip(dragIdx, e.clientX, e.clientY);
-    return;
-  }
-  var idx = getAtomAt(p.x, p.y);
-  hoveredIdx = idx;
-  if(idx >= 0){
-    canvas.style.cursor = "grab";
-    showTooltip(idx, e.clientX, e.clientY);
-  } else {
-    canvas.style.cursor = "default";
-    hideTooltip();
-  }
+// Build CPK list
+var cpkList = document.getElementById("cpkList");
+ORDER.forEach(function(sym){
+  var el = ELEMENTS[sym];
+  var item = document.createElement("div");
+  item.className = "cpk-item" + (sym === currentEl ? " active" : "");
+  item.dataset.el = sym;
+  item.style.setProperty("--dot-color", el.cpkColor);
+  item.innerHTML =
+    '<div class="cpk-dot" style="background:' + el.cpkColor + ';"></div>' +
+    '<span class="cpk-sym">' + sym + '</span>' +
+    '<span class="cpk-name">' + el.cnName + '</span>';
+  item.addEventListener("click", function(){ selectElement(sym); });
+  cpkList.appendChild(item);
 });
 
-canvas.addEventListener("mousedown", function(e){
-  var p = getEventLogic(e);
-  var idx = getAtomAt(p.x, p.y);
-  if(idx >= 0){
-    dragIdx = idx;
-    dragOffX = p.x - atoms[idx].x;
-    dragOffY = p.y - atoms[idx].y;
-    canvas.style.cursor = "grabbing";
-    e.preventDefault();
-  }
+// Build size bars
+var sizeBar = document.getElementById("sizeBar");
+ORDER.forEach(function(sym){
+  var el = ELEMENTS[sym];
+  var r = parseFloat(el.radius);
+  var pct = Math.round(r / 0.12 * 100);
+  var row = document.createElement("div");
+  row.style.cssText = "display:flex;align-items:center;gap:6px;margin-bottom:4px;";
+  row.innerHTML =
+    '<span style="font-size:9px;width:12px;color:__THEME_TEXT_DIM__;font-weight:600;">' + sym + '</span>' +
+    '<div style="flex:1;height:4px;background:__THEME_SURFACE_HIGHEST__;border-radius:2px;overflow:hidden;">' +
+    '<div style="width:' + pct + '%;height:100%;background:' + el.cpkColor + ';border-radius:2px;box-shadow:0 0 6px ' + el.cpkColor + ';"></div>' +
+    '</div>' +
+    '<span style="font-size:8px;color:__THEME_TEXT_DIM__;">' + el.radius + '</span>';
+  sizeBar.appendChild(row);
 });
 
-canvas.addEventListener("mouseup", function(){
-  dragIdx = -1;
-  canvas.style.cursor = "default";
-});
-
-canvas.addEventListener("mouseleave", function(){
-  dragIdx = -1;
-  hoveredIdx = -1;
-  hideTooltip();
-  canvas.style.cursor = "default";
-});
-
-function showTooltip(idx, cx, cy){
-  var el = ELEMENTS[atoms[idx].el];
-  tooltip.querySelector(".el-sym").textContent = atoms[idx].el;
-  tooltip.querySelector(".el-name").textContent = el.name;
-  tooltip.querySelector(".el-desc").textContent = el.desc;
-  var rect = canvas.getBoundingClientRect();
-  var tx = cx - rect.left + 14;
-  var ty = cy - rect.top - 20;
-  if(tx + 165 > rect.width) tx = cx - rect.left - 175;
-  tooltip.style.left = tx + "px";
-  tooltip.style.top  = ty + "px";
-  tooltip.classList.add("show");
-}
-
-function hideTooltip(){
-  tooltip.classList.remove("show");
-}
-
-// 分子切换按钮
-document.querySelectorAll(".mol-btn").forEach(function(btn){
+// Nav buttons
+document.querySelectorAll(".el-btn").forEach(function(btn){
   btn.addEventListener("click", function(){
-    document.querySelectorAll(".mol-btn").forEach(function(b){ b.classList.remove("active"); });
-    btn.classList.add("active");
-    loadMolecule(parseInt(btn.getAttribute("data-mol")));
+    selectElement(btn.dataset.el);
   });
 });
 
-// ── 绘制函数 ───────────────────────────────────────────────────
+function selectElement(sym){
+  currentEl = sym;
+  var el = ELEMENTS[sym];
 
-function drawBackground(){
-  // 背景渐变
-  var g = ctx.createLinearGradient(0, 0, 0, H);
-  g.addColorStop(0, "__THEME_BG__");
-  g.addColorStop(1, "__THEME_BG2__");
-  ctx.fillStyle = g;
-  ctx.fillRect(0, 0, W, H);
-  // 网格
-  ctx.strokeStyle = "__THEME_GRID__";
-  ctx.lineWidth = 1;
-  for(var x = 0; x <= W; x += 40){
-    ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,H); ctx.stroke();
-  }
-  for(var y = 0; y <= H; y += 40){
-    ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(W,y); ctx.stroke();
-  }
-}
-
-function drawTitle(mol){
-  ctx.font = "bold 15px '__THEME_FONT__'";
-  ctx.textAlign = "center";
-  ctx.fillStyle = "__THEME_TEXT__";
-  ctx.fillText("原子球棍模型：" + mol.title, W/2, 26);
-
-  ctx.font = "11px '__THEME_FONT__'";
-  ctx.fillStyle = "__THEME_TEXT_DIM__";
-  ctx.fillText(mol.formula, W/2, 46);
-}
-
-function drawBond(x1, y1, x2, y2, type, highlight){
-  var dx = x2-x1, dy = y2-y1;
-  var len = Math.sqrt(dx*dx+dy*dy);
-  if(len < 1) return;
-  var nx = -dy/len, ny = dx/len;
-
-  ctx.strokeStyle = highlight ? "__THEME_PRIMARY__" : "__THEME_SECONDARY__";
-  ctx.lineWidth = highlight ? 3 : 2.5;
-  ctx.lineCap = "round";
-  ctx.globalAlpha = 0.75;
-
-  if(type === "single"){
-    ctx.beginPath();
-    ctx.moveTo(x1, y1); ctx.lineTo(x2, y2);
-    ctx.stroke();
-  } else if(type === "double"){
-    var off = 3;
-    ctx.beginPath();
-    ctx.moveTo(x1+nx*off, y1+ny*off); ctx.lineTo(x2+nx*off, y2+ny*off);
-    ctx.stroke();
-    ctx.beginPath();
-    ctx.moveTo(x1-nx*off, y1-ny*off); ctx.lineTo(x2-nx*off, y2-ny*off);
-    ctx.stroke();
-  }
-  ctx.globalAlpha = 1;
-}
-
-function drawAtom(a, hovered){
-  var el = ELEMENTS[a.el];
-  var r = el.r;
-
-  // 外发光（hover或拖拽时）
-  if(hovered){
-    ctx.save();
-    ctx.shadowColor = el.color1;
-    ctx.shadowBlur = 16;
-    ctx.beginPath(); ctx.arc(a.x, a.y, r+4, 0, Math.PI*2);
-    ctx.fillStyle = el.color1;
-    ctx.globalAlpha = 0.18;
-    ctx.fill();
-    ctx.restore();
-  }
-
-  // 球体：径向渐变（立体感）
-  var grad = ctx.createRadialGradient(
-    a.x - r*0.3, a.y - r*0.3, r*0.05,
-    a.x, a.y, r
-  );
-  grad.addColorStop(0, el.color2);
-  grad.addColorStop(0.45, el.color1);
-  grad.addColorStop(1, el.color3);
-
-  ctx.beginPath(); ctx.arc(a.x, a.y, r, 0, Math.PI*2);
-  ctx.fillStyle = grad;
-  ctx.fill();
-
-  // 高光点
-  var hlGrad = ctx.createRadialGradient(
-    a.x - r*0.3, a.y - r*0.35, 0,
-    a.x - r*0.3, a.y - r*0.35, r*0.5
-  );
-  hlGrad.addColorStop(0, "rgba(255,255,255,0.55)");
-  hlGrad.addColorStop(1, "rgba(255,255,255,0)");
-  ctx.beginPath(); ctx.arc(a.x, a.y, r, 0, Math.PI*2);
-  ctx.fillStyle = hlGrad;
-  ctx.fill();
-
-  // 元素符号
-  ctx.font = "bold " + Math.round(r * 1.1) + "px 'Noto Sans SC',sans-serif";
-  ctx.textAlign = "center";
-  ctx.textBaseline = "middle";
-  ctx.fillStyle = "#fff";
-  ctx.globalAlpha = 0.92;
-  ctx.fillText(a.el, a.x, a.y + 0.5);
-  ctx.globalAlpha = 1;
-}
-
-function drawHUD(){
-  var mol = MOLECULES[currentMolIdx];
-  var by = H - 52;
-  // HUD背景
-  ctx.fillStyle = "__THEME_HUD_BG__";
-  ctx.fillRect(0, by, W, 52);
-  ctx.strokeStyle = "rgba(5,150,105,0.15)";
-  ctx.lineWidth = 1;
-  ctx.beginPath(); ctx.moveTo(0, by); ctx.lineTo(W, by); ctx.stroke();
-
-  // 分隔线
-  for(var ci = 1; ci < 4; ci++){
-    var lx = W/4 * ci;
-    ctx.beginPath(); ctx.moveTo(lx, by); ctx.lineTo(lx, H); ctx.stroke();
-  }
-
-  var cols = [
-    { label: "原子总数", val: atoms.length.toString() },
-    { label: "当前分子", val: mol.title.split(" ")[0] },
-    { label: "化学键数", val: mol.bonds.length.toString() },
-    { label: "元素种类", val: (function(){
-        var s = {};
-        atoms.forEach(function(a){ s[a.el]=1; });
-        return Object.keys(s).length.toString();
-      })() },
-  ];
-
-  cols.forEach(function(c, i){
-    var cx2 = W/4 * i + W/8;
-    ctx.font = "10px 'Noto Sans SC',sans-serif";
-    ctx.textAlign = "center";
-    ctx.textBaseline = "alphabetic";
-    ctx.fillStyle = "__THEME_HUD_LABEL__";
-    ctx.fillText(c.label, cx2, by + 17);
-
-    ctx.font = "bold 14px 'Noto Sans SC',sans-serif";
-    ctx.fillStyle = "__THEME_HUD_VALUE__";
-    ctx.fillText(c.val, cx2, by + 38);
-  });
-}
-
-// ── 主循环 ─────────────────────────────────────────────────────
-
-function loop(now){
-  var dt = Math.min((now - lastTime) / 1000, 0.05);
-  lastTime = now;
-
-  // 组装动画
-  if(phase === "assemble"){
-    assembleT = Math.min(assembleT + dt * 1.8, 1);
-    var t = easeOut(assembleT);
-    atoms.forEach(function(a){
-      a.x = W/2 + (a._targetX - W/2) * t;
-      a.y = (H-60)/2 + (a._targetY - (H-60)/2) * t;
-    });
-    if(assembleT >= 1){ phase = "explore"; }
-  }
-
-  var mol = MOLECULES[currentMolIdx];
-
-  drawBackground();
-  drawTitle(mol);
-
-  // 绘制键（先画，在原子下面）
-  mol.bonds.forEach(function(b){
-    var a1 = atoms[b.a], a2 = atoms[b.b];
-    var hl = (hoveredIdx === b.a || hoveredIdx === b.b);
-    drawBond(a1.x, a1.y, a2.x, a2.y, b.type, hl);
+  // Update nav buttons
+  document.querySelectorAll(".el-btn").forEach(function(b){
+    b.classList.toggle("active", b.dataset.el === sym);
   });
 
-  // 绘制原子
-  atoms.forEach(function(a, i){
-    drawAtom(a, i === hoveredIdx);
+  // Update CPK list
+  document.querySelectorAll(".cpk-item").forEach(function(item){
+    item.classList.toggle("active", item.dataset.el === sym);
   });
 
-  drawHUD();
+  // Update left panel data
+  document.getElementById("elSymbol").textContent = sym;
+  document.getElementById("elFullName").textContent = el.name;
+  document.getElementById("elNumber").textContent = el.number;
+  document.getElementById("elMass").textContent = el.mass;
+  document.getElementById("elConfig").textContent = el.config;
+  document.getElementById("elBonds").textContent = el.bonds;
+  document.getElementById("elRole").textContent = el.role;
 
-  requestAnimationFrame(loop);
+  // Update bottom HUD
+  document.getElementById("hudNum").textContent = el.number;
+  document.getElementById("hudType").textContent = el.type;
+  document.getElementById("hudBonds").textContent = el.bonds;
+  document.getElementById("hudEN").textContent = el.en;
+
+  // Update SVG core
+  document.getElementById("coreSym").textContent = sym;
+  document.getElementById("coreDesc").textContent = el.nucleusDesc;
+  document.getElementById("sizeLabel").textContent = el.sizeLabel;
+
+  // Update SVG gradients to CPK color
+  updateCoreColor(el.cpkColor);
+
+  // Animate: scale pulse on core
+  var core = document.getElementById("atomCore");
+  core.style.transition = "transform 0.3s ease";
+  core.style.transform = "scale(0.8)";
+  setTimeout(function(){
+    core.style.transform = "scale(1)";
+  }, 150);
 }
 
-// 初始化
-loadMolecule(0);
-requestAnimationFrame(function(now){ lastTime = now; loop(now); });
+function updateCoreColor(color){
+  // Update gradient stops dynamically
+  var stops = document.querySelectorAll("#coreGrad stop");
+  if(stops.length >= 4){
+    stops[1].setAttribute("stop-color", color);
+    stops[2].setAttribute("stop-color", color);
+  }
+  var glowStops = document.querySelectorAll("#coreGlow stop");
+  if(glowStops.length >= 1){
+    glowStops[0].setAttribute("stop-color", color);
+    glowStops[1].setAttribute("stop-color", color);
+  }
+}
 
 })();
 </script>
@@ -996,11 +1069,383 @@ requestAnimationFrame(function(now){ lastTime = now; loop(now); });
 </html>"""
 
 
+# ── 动画2：分子组装台 HUD（HTML+SVG 仪表盘风格）───────────────────
+# 中央：分子 ball-and-stick 模型（SVG circle + line）
+# 左侧 panel：BOND_ANALYSIS（键长、键角数据）
+# 右侧 panel：COMPOSITION（元素占比条形图）
+# 底部 HUD：ATOMS / BONDS / FORMULA
+# 按钮切换 H2O / NH3 / Glycine
+
+ANIM2_ID = _id("anim")
+
+ANIM2_HTML = r"""<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>MOLECULE_LAB</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=Noto+Sans+SC:wght@400;700&display=swap" rel="stylesheet"/>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html, body {
+  width: 100%; height: 100%; overflow: hidden;
+  background: __THEME_BG__;
+  font-family: __THEME_FONT__;
+  color: __THEME_TEXT__;
+  user-select: none;
+}
+
+.hud-container {
+  width: 100%; height: 100%;
+  display: grid;
+  grid-template-rows: 44px 1fr 56px;
+  grid-template-columns: 180px 1fr 180px;
+  gap: 0;
+}
+
+.top-bar {
+  grid-column: 1 / -1;
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 0 16px;
+  background: rgba(12,14,18,0.6);
+  backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+  border-bottom: 1px solid __THEME_BORDER__;
+  z-index: 10;
+}
+.top-bar .title {
+  font-size: 11px; font-weight: 700; letter-spacing: 0.15em;
+  text-transform: uppercase; color: __THEME_PRIMARY__;
+  text-shadow: 0 0 15px __THEME_PRIMARY__40;
+}
+.top-bar .status-dot {
+  width: 6px; height: 6px; border-radius: 50%;
+  background: __THEME_SECONDARY__;
+  box-shadow: 0 0 8px __THEME_SECONDARY__;
+  animation: pulse-dot 2s infinite;
+}
+.mol-nav { display: flex; gap: 4px; }
+.mol-btn {
+  padding: 5px 14px; border-radius: 4px;
+  border: 1px solid __THEME_BORDER__;
+  background: __THEME_SURFACE__;
+  color: __THEME_TEXT_DIM__;
+  font-family: __THEME_FONT__;
+  font-size: 10px; font-weight: 600; letter-spacing: 0.08em;
+  cursor: pointer; transition: all 0.2s; text-transform: uppercase;
+}
+.mol-btn:hover {
+  border-color: __THEME_PRIMARY__60; color: __THEME_PRIMARY__;
+}
+.mol-btn.active {
+  background: __THEME_PRIMARY__18; border-color: __THEME_PRIMARY__;
+  color: __THEME_PRIMARY__; box-shadow: 0 0 12px __THEME_PRIMARY__25;
+}
+
+.panel-left, .panel-right {
+  padding: 12px 10px;
+  background: __THEME_CARD__;
+  backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+  overflow-y: auto;
+}
+.panel-left { border-right: 1px solid __THEME_BORDER__; }
+.panel-right { border-left: 1px solid __THEME_BORDER__; }
+
+.circuit-header { width: 32px; height: 2px; background: __THEME_PRIMARY__; margin-bottom: 8px; box-shadow: 0 0 8px __THEME_PRIMARY__60; }
+.circuit-header.s { background: __THEME_SECONDARY__; box-shadow: 0 0 8px __THEME_SECONDARY__60; }
+.circuit-header.a { background: __THEME_ACCENT__; box-shadow: 0 0 8px __THEME_ACCENT__60; }
+.hud-label { font-size: 9px; font-weight: 500; letter-spacing: 0.12em; text-transform: uppercase; color: __THEME_HUD_LABEL__; margin-bottom: 4px; }
+.hud-value { font-size: 18px; font-weight: 700; color: __THEME_HUD_VALUE__; line-height: 1.2; }
+.hud-value.p { color: __THEME_PRIMARY__; text-shadow: 0 0 10px __THEME_PRIMARY__40; }
+.hud-value.sm { font-size: 12px; }
+.panel-section { margin-bottom: 12px; }
+
+.data-row { display: flex; justify-content: space-between; padding: 3px 0; border-bottom: 1px solid rgba(70,72,77,0.08); }
+.data-row .k { font-size: 9px; letter-spacing: 0.1em; text-transform: uppercase; color: __THEME_TEXT_DIM__; }
+.data-row .v { font-size: 10px; font-weight: 600; color: __THEME_TEXT__; }
+
+.center-stage {
+  position: relative;
+  display: flex; align-items: center; justify-content: center;
+  background: radial-gradient(ellipse at center, __THEME_BG2__ 0%, __THEME_BG__ 70%);
+  overflow: hidden;
+}
+
+.bottom-hud {
+  grid-column: 1 / -1;
+  display: grid; grid-template-columns: repeat(4, 1fr);
+  background: __THEME_HUD_BG__;
+  border-top: 1px solid __THEME_BORDER__;
+  position: relative;
+}
+.bottom-hud::before {
+  content: ''; position: absolute; top: 0; left: 0; right: 0; height: 1px;
+  background: linear-gradient(90deg, transparent, __THEME_PRIMARY__, __THEME_SECONDARY__, __THEME_PRIMARY__, transparent);
+  opacity: 0.6;
+}
+.hud-cell {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  padding: 6px 0; position: relative;
+}
+.hud-cell:not(:last-child)::after {
+  content: ''; position: absolute; right: 0; top: 12px; bottom: 12px;
+  width: 1px; background: rgba(70,72,77,0.15);
+}
+.hud-cell .hud-label { margin-bottom: 2px; font-size: 8px; }
+.hud-cell .hud-value { font-size: 15px; }
+
+@keyframes pulse-dot { 0%,100%{ opacity:1; } 50%{ opacity:0.4; } }
+@keyframes fade-in { from { opacity:0; transform:translateY(6px); } to { opacity:1; transform:translateY(0); } }
+.fade-in { animation: fade-in 0.5s ease-out both; }
+</style>
+</head>
+<body>
+<div class="hud-container">
+  <div class="top-bar">
+    <div style="display:flex;align-items:center;gap:10px;">
+      <span class="status-dot"></span>
+      <span class="title">MOLECULE_LAB</span>
+    </div>
+    <div class="mol-nav" id="molNav">
+      <button class="mol-btn active" data-mol="0">H2O</button>
+      <button class="mol-btn" data-mol="1">NH3</button>
+      <button class="mol-btn" data-mol="2">GLYCINE</button>
+    </div>
+  </div>
+
+  <div class="panel-left" id="panelLeft">
+    <div class="panel-section fade-in">
+      <div class="circuit-header"></div>
+      <div class="hud-label">MOLECULE</div>
+      <div class="hud-value p" id="molName">H2O</div>
+      <div style="font-size:10px;color:__THEME_TEXT_DIM__;margin-top:2px;" id="molCnName">水分子</div>
+    </div>
+    <div class="panel-section fade-in" style="animation-delay:0.1s">
+      <div class="circuit-header s"></div>
+      <div class="hud-label">BOND_ANALYSIS</div>
+      <div id="bondInfo"></div>
+    </div>
+    <div class="panel-section fade-in" style="animation-delay:0.2s">
+      <div class="circuit-header a"></div>
+      <div class="hud-label">PROPERTIES</div>
+      <div id="propInfo"></div>
+    </div>
+  </div>
+
+  <div class="center-stage" id="centerStage">
+    <svg id="molSvg" viewBox="0 0 400 300" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <filter id="atomGlow">
+          <feGaussianBlur stdDeviation="4" result="blur"/>
+          <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+        </filter>
+        <filter id="bondGlow">
+          <feGaussianBlur stdDeviation="2" result="blur"/>
+          <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+        </filter>
+      </defs>
+      <!-- Background grid -->
+      <g opacity="0.04" stroke="__THEME_PRIMARY__" stroke-width="0.5">
+        <line x1="0" y1="150" x2="400" y2="150"/><line x1="200" y1="0" x2="200" y2="300"/>
+        <circle cx="200" cy="150" r="60" fill="none"/><circle cx="200" cy="150" r="120" fill="none"/>
+      </g>
+      <g id="bonds"></g>
+      <g id="atoms"></g>
+      <g id="labels"></g>
+    </svg>
+  </div>
+
+  <div class="panel-right" id="panelRight">
+    <div class="panel-section fade-in">
+      <div class="circuit-header"></div>
+      <div class="hud-label">COMPOSITION</div>
+      <div id="compBars" style="margin-top:6px;"></div>
+    </div>
+    <div class="panel-section fade-in" style="animation-delay:0.1s;margin-top:14px;">
+      <div class="circuit-header s"></div>
+      <div class="hud-label">ATOM_COUNT</div>
+      <div id="atomCounts"></div>
+    </div>
+  </div>
+
+  <div class="bottom-hud">
+    <div class="hud-cell"><div class="hud-label">ATOMS</div><div class="hud-value" id="hudAtoms">3</div></div>
+    <div class="hud-cell"><div class="hud-label">BONDS</div><div class="hud-value" id="hudBonds">2</div></div>
+    <div class="hud-cell"><div class="hud-label">FORMULA</div><div class="hud-value" id="hudFormula" style="font-size:13px;">H2O</div></div>
+    <div class="hud-cell"><div class="hud-label">ELEMENTS</div><div class="hud-value" id="hudElements">2</div></div>
+  </div>
+</div>
+
+<script>
+(function(){
+"use strict";
+
+var CPK = { C:"#4a5568", H:"#e2e8f0", N:"#3b82f6", O:"#ef4444", S:"#eab308" };
+var RADII = { C:18, H:10, N:16, O:15, S:20 };
+
+var MOLECULES = [
+  {
+    name: "H2O", cnName: "水分子", formula: "H2O",
+    atoms: [{el:"O",x:200,y:140},{el:"H",x:145,y:190},{el:"H",x:255,y:190}],
+    bonds: [{a:0,b:1,type:"single"},{a:0,b:2,type:"single"}],
+    bondInfo: [{k:"O-H_LENGTH",v:"0.096 nm"},{k:"H-O-H_ANGLE",v:"104.5 deg"},{k:"BOND_TYPE",v:"COVALENT"}],
+    props: [{k:"STATE",v:"LIQUID"},{k:"POLARITY",v:"POLAR"},{k:"BOILING",v:"100 C"}]
+  },
+  {
+    name: "NH3", cnName: "氨分子", formula: "NH3",
+    atoms: [{el:"N",x:200,y:120},{el:"H",x:140,y:185},{el:"H",x:200,y:200},{el:"H",x:260,y:185}],
+    bonds: [{a:0,b:1,type:"single"},{a:0,b:2,type:"single"},{a:0,b:3,type:"single"}],
+    bondInfo: [{k:"N-H_LENGTH",v:"0.101 nm"},{k:"H-N-H_ANGLE",v:"107.8 deg"},{k:"BOND_TYPE",v:"COVALENT"}],
+    props: [{k:"STATE",v:"GAS"},{k:"POLARITY",v:"POLAR"},{k:"BOILING",v:"-33 C"}]
+  },
+  {
+    name: "Glycine", cnName: "甘氨酸", formula: "C2H5NO2",
+    atoms: [
+      {el:"N",x:80,y:150},{el:"C",x:155,y:150},{el:"C",x:235,y:150},
+      {el:"O",x:295,y:100},{el:"O",x:295,y:200},
+      {el:"H",x:80,y:205},{el:"H",x:40,y:120},
+      {el:"H",x:140,y:205},{el:"H",x:170,y:205}
+    ],
+    bonds: [
+      {a:0,b:1,type:"single"},{a:1,b:2,type:"single"},
+      {a:2,b:3,type:"double"},{a:2,b:4,type:"single"},
+      {a:0,b:5,type:"single"},{a:0,b:6,type:"single"},
+      {a:1,b:7,type:"single"},{a:1,b:8,type:"single"}
+    ],
+    bondInfo: [{k:"C-N_LENGTH",v:"0.147 nm"},{k:"C-C_LENGTH",v:"0.152 nm"},{k:"C=O_LENGTH",v:"0.123 nm"},{k:"TOTAL_BONDS",v:"8"}],
+    props: [{k:"TYPE",v:"AMINO_ACID"},{k:"MW",v:"75.03 Da"},{k:"ATOMS",v:"10"}]
+  }
+];
+
+var currentMol = 0;
+var svg = document.getElementById("molSvg");
+var bondsG = document.getElementById("bonds");
+var atomsG = document.getElementById("atoms");
+var labelsG = document.getElementById("labels");
+
+function renderMol(idx){
+  currentMol = idx;
+  var mol = MOLECULES[idx];
+  bondsG.innerHTML = ""; atomsG.innerHTML = ""; labelsG.innerHTML = "";
+
+  // Draw bonds
+  mol.bonds.forEach(function(b){
+    var a1 = mol.atoms[b.a], a2 = mol.atoms[b.b];
+    if(b.type === "single"){
+      var line = document.createElementNS("http://www.w3.org/2000/svg","line");
+      line.setAttribute("x1",a1.x); line.setAttribute("y1",a1.y);
+      line.setAttribute("x2",a2.x); line.setAttribute("y2",a2.y);
+      line.setAttribute("stroke","__THEME_PRIMARY__"); line.setAttribute("stroke-width","2");
+      line.setAttribute("opacity","0.6"); line.setAttribute("filter","url(#bondGlow)");
+      bondsG.appendChild(line);
+    } else {
+      var dx=a2.x-a1.x, dy=a2.y-a1.y, len=Math.sqrt(dx*dx+dy*dy);
+      var nx=-dy/len*4, ny=dx/len*4;
+      [-1,1].forEach(function(s){
+        var l = document.createElementNS("http://www.w3.org/2000/svg","line");
+        l.setAttribute("x1",a1.x+nx*s); l.setAttribute("y1",a1.y+ny*s);
+        l.setAttribute("x2",a2.x+nx*s); l.setAttribute("y2",a2.y+ny*s);
+        l.setAttribute("stroke","__THEME_PRIMARY__"); l.setAttribute("stroke-width","2");
+        l.setAttribute("opacity","0.6"); l.setAttribute("filter","url(#bondGlow)");
+        bondsG.appendChild(l);
+      });
+    }
+  });
+
+  // Draw atoms
+  mol.atoms.forEach(function(a,i){
+    var r = RADII[a.el];
+    // Glow
+    var gc = document.createElementNS("http://www.w3.org/2000/svg","circle");
+    gc.setAttribute("cx",a.x); gc.setAttribute("cy",a.y); gc.setAttribute("r",r*2);
+    gc.setAttribute("fill",CPK[a.el]); gc.setAttribute("opacity","0.1");
+    atomsG.appendChild(gc);
+    // Main circle
+    var c = document.createElementNS("http://www.w3.org/2000/svg","circle");
+    c.setAttribute("cx",a.x); c.setAttribute("cy",a.y); c.setAttribute("r",r);
+    c.setAttribute("fill",CPK[a.el]); c.setAttribute("filter","url(#atomGlow)");
+    atomsG.appendChild(c);
+    // Specular
+    var sp = document.createElementNS("http://www.w3.org/2000/svg","ellipse");
+    sp.setAttribute("cx",a.x-r*0.25); sp.setAttribute("cy",a.y-r*0.3);
+    sp.setAttribute("rx",r*0.35); sp.setAttribute("ry",r*0.2);
+    sp.setAttribute("fill","white"); sp.setAttribute("opacity","0.35");
+    atomsG.appendChild(sp);
+    // Label
+    var t = document.createElementNS("http://www.w3.org/2000/svg","text");
+    t.setAttribute("x",a.x); t.setAttribute("y",a.y+4);
+    t.setAttribute("text-anchor","middle");
+    t.setAttribute("font-family","'Space Grotesk', sans-serif");
+    t.setAttribute("font-size", r > 12 ? "12" : "8");
+    t.setAttribute("font-weight","700");
+    t.setAttribute("fill", a.el === "H" ? "#1a1a2e" : "#ffffff");
+    t.textContent = a.el;
+    labelsG.appendChild(t);
+  });
+
+  // Update panels
+  document.getElementById("molName").textContent = mol.name;
+  document.getElementById("molCnName").textContent = mol.cnName;
+
+  var bondInfoEl = document.getElementById("bondInfo");
+  bondInfoEl.innerHTML = "";
+  mol.bondInfo.forEach(function(b){
+    bondInfoEl.innerHTML += '<div class="data-row"><span class="k">'+b.k+'</span><span class="v">'+b.v+'</span></div>';
+  });
+
+  var propInfoEl = document.getElementById("propInfo");
+  propInfoEl.innerHTML = "";
+  mol.props.forEach(function(p){
+    propInfoEl.innerHTML += '<div class="data-row"><span class="k">'+p.k+'</span><span class="v">'+p.v+'</span></div>';
+  });
+
+  // Composition bars
+  var counts = {};
+  mol.atoms.forEach(function(a){ counts[a.el] = (counts[a.el]||0) + 1; });
+  var total = mol.atoms.length;
+  var compEl = document.getElementById("compBars");
+  compEl.innerHTML = "";
+  Object.keys(counts).sort().forEach(function(el){
+    var pct = Math.round(counts[el]/total*100);
+    compEl.innerHTML +=
+      '<div style="display:flex;align-items:center;gap:6px;margin-bottom:5px;">' +
+      '<span style="font-size:10px;width:14px;font-weight:600;color:'+CPK[el]+';">'+el+'</span>' +
+      '<div style="flex:1;height:5px;background:__THEME_SURFACE_HIGHEST__;border-radius:3px;overflow:hidden;">' +
+      '<div style="width:'+pct+'%;height:100%;background:'+CPK[el]+';border-radius:3px;box-shadow:0 0 6px '+CPK[el]+';transition:width 0.5s;"></div>' +
+      '</div>' +
+      '<span style="font-size:8px;color:__THEME_TEXT_DIM__;">'+pct+'%</span>' +
+      '</div>';
+  });
+
+  var acEl = document.getElementById("atomCounts");
+  acEl.innerHTML = "";
+  Object.keys(counts).sort().forEach(function(el){
+    acEl.innerHTML += '<div class="data-row"><span class="k">'+el+'</span><span class="v">'+counts[el]+'</span></div>';
+  });
+
+  // Bottom HUD
+  document.getElementById("hudAtoms").textContent = total;
+  document.getElementById("hudBonds").textContent = mol.bonds.length;
+  document.getElementById("hudFormula").textContent = mol.formula;
+  var elCount = Object.keys(counts).length;
+  document.getElementById("hudElements").textContent = elCount;
+}
+
+document.querySelectorAll(".mol-btn").forEach(function(btn){
+  btn.addEventListener("click", function(){
+    document.querySelectorAll(".mol-btn").forEach(function(b){ b.classList.remove("active"); });
+    btn.classList.add("active");
+    renderMol(parseInt(btn.dataset.mol));
+  });
+});
+
+renderMol(0);
+})();
+</script>
+</body>
+</html>"""
+
+
 # ── Idea 自我辩论系统 ─────────────────────────────────────────────
-#
-# 辩论框架与 _gen_protein_structure.py 完全一致。
-# 辩论阈值：均值 >= 6.0 通过。
-# 原则：质疑要犀利，不轻易通过，部分 idea 应被淘汰。
 
 def _debate_idea(
     idea_id: str,
@@ -1010,10 +1455,6 @@ def _debate_idea(
     rebuttals: list[str],
     scores: dict[str, int],
 ) -> bool:
-    """
-    执行 idea 辩论并打印结果。返回 True 表示通过，False 表示不通过（跳过）。
-    scores: teaching_fit / feasibility / cognitive / completion，各1-10分。
-    """
     total = sum(scores.values())
     avg = total / len(scores)
     passed = avg >= 6.0
@@ -1024,116 +1465,92 @@ def _debate_idea(
         console.print(f"  [green]反驳{i}[/green]: {reb}")
     score_str = " | ".join(f"{k}={v}" for k, v in scores.items())
     result = "[bold green]通过[/bold green]" if passed else "[bold red]不通过（已跳过）[/bold red]"
-    console.print(f"  得分 ({score_str}) 均值={avg:.1f} → {result}")
+    console.print(f"  得分 ({score_str}) 均值={avg:.1f} -> {result}")
     return passed
 
 
-# ── 对所有候选 idea 进行辩论 ──────────────────────────────────────
-# 候选共5个，目标通过3个左右，exercise永远通过
-
 _IDEA_DEBATES = {
 
-    # ── 候选1：原子球棍模型动画（含交互）──────────────────────────
-    "anim_atom_model": _debate_idea(
-        idea_id="anim_atom_model",
+    # 候选1：原子结构 HUD（SVG + HTML 仪表盘）
+    "anim_atom_hud": _debate_idea(
+        idea_id="anim_atom_hud",
         mode="animation",
-        topic="原子球棍模型——展示H₂O/NH₃/甘氨酸，hover+拖拽交互",
+        topic="原子结构 HUD 仪表盘——SVG 原子模型+元素数据面板+CPK图例",
         objections=[
-            "Canvas拖拽原子但化学键还在的设计会产生错误认知：化学键不是橡皮筋，"
-            "拉伸不代表任何化学意义，孩子可能以为键可以任意拉长",
-            "CPK颜色是记忆性知识点，动画展示原子球完全不帮助记忆颜色，"
-            "反而是参考卡片或静态图表更有效",
-            "三个分子切换（水/氨/甘氨酸）增加了认知碎片化——孩子刚看完水分子就要切到甘氨酸，"
-            "连贯性不足，每个分子都浅尝辄止",
+            "HUD 仪表盘展示原子数据（原子序数/质量/电子构型）对10岁孩子来说信息密度过高，"
+            "孩子看不懂'1s2 2s2 2p2'这样的电子构型符号，面板数据可能变成视觉噪音",
+            "五个元素的切换交互只是简单的数据替换，教学深度不足——"
+            "孩子点了5个按钮就结束了，没有渐进式学习体验",
         ],
         rebuttals=[
-            "拖拽的教学价值不在于模拟真实键伸缩，而在于让孩子感受'原子是独立的球，"
-            "键是它们之间的连线'这个核心直觉；hover信息卡的元素名称+描述才是主要信息通道，"
-            "拖拽只是吸引注意力的手段——适当的简化模型是教学常规做法",
-            "颜色记忆需要视觉+语义双编码：动画中球的颜色配合hover显示'O=红色，氧元素'，"
-            "视觉印象+文字标签的绑定比纯文字表格记忆效果强；静态图表放在课文里已有，"
-            "动画提供的是互动式的颜色-元素关联体验",
-            "三分子递进是有设计意图的：水（最熟悉，3个原子）→氨（引入N，4个原子）→甘氨酸（引入C骨架+5种元素）；"
-            "每个分子停留时间由学生控制（点击切换），不是被动浏览；递进结构让学习者自己掌握节奏",
+            "电子构型是'看不懂也没关系'的高阶数据展示，目的不是让孩子理解符号本身，"
+            "而是传达'每个原子有独特身份信息'这个直觉；HUD面板的主要信息通道是"
+            "CPK颜色图例和原子半径大小对比，这些10岁孩子完全能理解",
+            "五元素切换的核心教学目标是建立'C/H/N/O/S各不相同'的直觉，"
+            "配合右侧CPK颜色图例和大小对比条，形成视觉记忆锚点；"
+            "深度学习交给分子组装台（ANIM2）的分子级别交互",
         ],
-        scores={"teaching_fit": 8, "feasibility": 8, "cognitive": 7, "completion": 8},
+        scores={"teaching_fit": 8, "feasibility": 9, "cognitive": 7, "completion": 8},
     ),
 
-    # ── 候选2：尺度对比动画──────────────────────────────────────
-    "anim_scale": _debate_idea(
-        idea_id="anim_scale",
+    # 候选2：分子组装台 HUD
+    "anim_molecule_lab": _debate_idea(
+        idea_id="anim_molecule_lab",
         mode="animation",
-        topic="尺度对比——从地球到蛋白质再到原子，展示纳米尺度有多小",
+        topic="分子组装台——HUD展示H2O/NH3/甘氨酸的ball-and-stick模型",
         objections=[
-            "这类'尺度缩放'动画已经有著名的'Powers of Ten'视频（和多款科普App），"
-            "重复制造一个质量必然更差的版本，反而不如直接引用或链接现有资源",
-            "Canvas动画做尺度缩放需要处理数量级跨度（10^25从地球到原子），"
-            "精确的对数坐标映射和标注文字在600x420画布上会极度拥挤，用户体验差",
-            "尺度对比的核心认知收益是'原子很小'，但这个信息在课文的文字类比（苹果-地球-乒乓球）"
-            "中已经非常清晰地传递了，动画带来的增量认知价值存疑",
+            "Ball-and-stick模型是静态SVG渲染，缺乏动画效果，"
+            "和ANIM1的原子浏览器教学目标高度重叠——都是'看原子/分子的组成'",
+            "甘氨酸有10个原子8条键，SVG静态图上很拥挤，"
+            "在小屏幕上元素标签会互相遮挡",
         ],
         rebuttals=[
-            "自制的动画可以聚焦在蛋白质课程相关的尺度（细胞→蛋白质→原子），"
-            "而不是通用的Powers of Ten范围，更有课程针对性——但这个区别不足以弥补质量差距",
-            "对数映射可以简化为5个离散刻度（地球→细胞→蛋白质→原子），"
-            "不需要连续缩放，每个刻度停留展示——但5个离散刻度和表格没有本质区别",
-            "文字类比已经够清晰了，这一点无法驳斥——动画能增加视觉冲击感，"
-            "但'苹果→地球→乒乓球'这个类比已经是最有效的尺度直觉工具，"
-            "动画只是重复了课文内容的视觉版本",
+            "ANIM1聚焦单个原子的属性探索（微观），ANIM2聚焦分子整体（中观），"
+            "视角不同：ANIM1回答'原子是什么'，ANIM2回答'原子如何组成分子'——"
+            "这是本节课两个核心学习目标的自然分层",
+            "甘氨酸的10个原子在400x300的SVG中分布合理，"
+            "氢原子用小圆（r=10）碳氮氧用大圆（r=15-18），标签在原子内部不会遮挡；"
+            "键角和键长数据放在左侧面板，不占用SVG空间",
         ],
-        # 质疑1和3均有效且反驳不足：自制版质量差 + 课文类比已足够
-        scores={"teaching_fit": 4, "feasibility": 5, "cognitive": 5, "completion": 4},
+        scores={"teaching_fit": 7, "feasibility": 8, "cognitive": 7, "completion": 7},
     ),
 
-    # ── 候选3：道尔顿历史故事 ─────────────────────────────────────
+    # 候选3：道尔顿历史故事
     "story_dalton": _debate_idea(
         idea_id="story_dalton",
         mode="story",
         topic="道尔顿的实验——历史上人类如何发现原子的存在",
         objections=[
             "历史故事对'如何用原子思维看蛋白质'这个本节核心目标贡献为零，"
-            "道尔顿研究的是气体，和蛋白质结构的关联性极弱，学生看完会困惑'为什么在这节课讲道尔顿'",
-            "道尔顿的'倍比定律'概念对10岁孩子过于抽象：理解'气体化合总是整数比'需要一定的化学前置知识，"
-            "如果孩子不理解，故事就变成了不知所云的历史片段",
-            "故事只有4段文字，视觉效果完全依赖读者的想象力，和本节的Canvas动画+游戏相比，"
-            "信息密度和吸引力都低一个量级，会成为课程节奏的低谷",
+            "道尔顿研究的是气体，和蛋白质结构的关联性极弱",
+            "故事只有4段文字，和HUD动画相比信息密度和吸引力都低一个量级",
         ],
         rebuttals=[
-            "故事的价值不在于'解释蛋白质'，而在于回答本节开篇问题'物质是什么做的'——"
-            "道尔顿正是历史上第一个给出有说服力答案的人，这直接对应了本节的知识起点",
-            "倍比定律不需要孩子完全理解，故事里用'碳和氧总是1:1或1:2，从不是1.3:1'作为感性说明，"
-            "10岁孩子能理解'整数'和'分数'的区别；故事的目的是激发好奇心，不是教倍比定律",
-            "故事作为动画和游戏之间的呼吸节点，节奏价值是正的；"
-            "4段文字是轻量化的设计，读完不到2分钟，不会占用大量时间",
+            "故事回答本节开篇问题'物质是什么做的'——道尔顿正是历史上第一个给出有说服力答案的人",
+            "故事作为两个动画之间的呼吸节点，节奏价值是正的；4段文字读完不到2分钟",
         ],
         scores={"teaching_fit": 7, "feasibility": 10, "cognitive": 7, "completion": 6},
     ),
 
-    # ── 候选4：元素积木拼装游戏 ─────────────────────────────────────
-    "game_lego": _debate_idea(
-        idea_id="game_lego",
+    # 候选4：元素识别游戏
+    "game_element_quiz": _debate_idea(
+        idea_id="game_element_quiz",
         mode="game",
-        topic="元素积木——拖拽不同颜色原子组装水分子或甘氨酸",
+        topic="元素识别——给出CPK颜色猜元素名称的快速问答游戏",
         objections=[
-            "拖拽组装游戏需要精确的'吸附'逻辑（原子放到正确位置时snap到位）和错误反馈，"
-            "这在Canvas里实现复杂度极高，容易出现'我明明放对了但游戏说错误'的糟糕体验",
-            "学生已经在动画里看过这三个分子了，再让他们拖拽组装完全相同的分子"
-            "等于重复做同一件事，缺乏新知识增量",
-            "拖拽原子需要精细鼠标操作，对移动设备（触屏）不友好；"
-            "如果学生用平板或手机访问，游戏几乎不可用，会产生挫败感",
+            "CPK颜色只有5种，做成猜测游戏最多5轮就结束了，游戏深度极浅",
+            "ANIM1的CPK图例面板已经提供了颜色-元素的直接对应，"
+            "再做一个'看颜色猜元素'是重复教学",
+            "游戏需要计分/计时/反馈机制，实现复杂度高且容易出bug",
         ],
         rebuttals=[
-            "吸附逻辑可以简化：不检测精确坐标，而是检测每个原子槽位'附近半径内'是否放了正确元素，"
-            "这样的容错实现简单且体验好——但这个简化方案和动画1的交互设计高度重叠，"
-            "两个交互组件合并在动画1里会更紧凑",
-            "动画1是被动展示（按原样呈现分子），游戏是主动组装（学生自己选择原子放到槽位）——"
-            "主动操作和被动观看激活的认知通道不同；但如果两者学习目标太相似，差异化不够，"
-            "这个反驳是不充分的",
-            "Canvas事件在触屏上通过touchstart/touchmove也可以处理，动画1里已经用鼠标事件，"
-            "再做一套触摸适配是可以的——但这增加了实现复杂度，且动画1已经有了hover+拖拽",
+            "5种颜色可以通过随机重复、限时模式增加难度——但这只是延长时间，不增加知识深度",
+            "被动看图例和主动回忆是不同的记忆通道——但差异化不够，"
+            "因为ANIM1的点击切换已经是半主动操作",
+            "计分机制可以极简化：只显示正确/错误，不做排行榜——但即便如此，"
+            "收益和ANIM1+ANIM2已覆盖的教学目标高度重叠",
         ],
-        # 质疑1（实现复杂）+ 质疑2（与动画1高度重叠）均未被有效反驳，游戏整体价值被动画1覆盖
-        scores={"teaching_fit": 5, "feasibility": 4, "cognitive": 6, "completion": 5},
+        scores={"teaching_fit": 5, "feasibility": 5, "cognitive": 5, "completion": 4},
     ),
 }
 
@@ -1157,17 +1574,19 @@ def _apply_theme(html: str, theme: dict) -> str:
     replacements = {
         "__THEME_BG__": theme["bg"],
         "__THEME_BG2__": theme.get("bg2", _lighten(theme["bg"], 10)),
-        "__THEME_CARD__": theme.get("card", "rgba(255,255,255,0.92)"),
+        "__THEME_SURFACE__": theme.get("surface", "#171a1f"),
+        "__THEME_SURFACE_HIGH__": theme.get("surface_high", "#1d2025"),
+        "__THEME_SURFACE_HIGHEST__": theme.get("surface_highest", "#23262c"),
+        "__THEME_CARD__": theme.get("card", "rgba(23,26,31,0.6)"),
         "__THEME_PRIMARY__": theme["primary"],
         "__THEME_SECONDARY__": theme["secondary"],
         "__THEME_ACCENT__": theme.get("accent", theme["secondary"]),
         "__THEME_TEXT__": theme["text"],
         "__THEME_TEXT_DIM__": theme["text_dim"],
-        "__THEME_BORDER__": theme.get("border", "rgba(0,0,0,0.1)"),
-        "__THEME_GRID__": theme.get("grid", "rgba(0,0,0,0.05)"),
+        "__THEME_BORDER__": theme.get("border", "rgba(70,72,77,0.15)"),
         "__THEME_HUD_LABEL__": theme["hud_label"],
         "__THEME_HUD_VALUE__": theme["hud_value"],
-        "__THEME_HUD_BG__": theme.get("hud_bg", "rgba(255,255,255,0.92)"),
+        "__THEME_HUD_BG__": theme.get("hud_bg", "rgba(12,14,18,0.95)"),
         "__THEME_FONT__": theme["font_display"],
     }
     for placeholder, value in replacements.items():
@@ -1190,26 +1609,31 @@ def build_course_content() -> dict:
         f"[[IDEA:{ANIM1_ID}]]\n\n## 第一部分：原子有多小？"
     )
     plan_with_placeholders = plan_with_placeholders.replace(
+        "## 第二部分：蛋白质里有哪些原子？",
+        f"[[IDEA:{ANIM2_ID}]]\n\n## 第二部分：蛋白质里有哪些原子？"
+    )
+    plan_with_placeholders = plan_with_placeholders.replace(
         "## 检测你学会了吗？",
         f"[[IDEA:{EXER_ID}]]\n\n## 检测你学会了吗？"
     )
 
     all_candidates = [
         (
-            "anim_atom_model",
+            "anim_atom_hud",
             {
                 "idea_id": ANIM1_ID,
                 "mode": "animation",
-                "topic": "原子球棍模型：H₂O / NH₃ / 甘氨酸 · hover查看元素 · 拖拽探索",
+                "topic": "原子结构 HUD 仪表盘：SVG 原子模型+元素数据面板+CPK颜色图例+Probe连线",
                 "context_summary": (
-                    "Canvas动画展示三个分子的原子组成，CPK颜色球体。"
-                    "hover显示元素名称/描述，drag可移动原子感受分子结构。"
+                    "HUD 仪表盘风格展示原子结构。中央 SVG 原子模型（电子云轨道+核心呼吸灯），"
+                    "左侧 glass panel 展示元素数据（ATOMIC_NUMBER, MASS, ELECTRON_CONFIG），"
+                    "右侧 glass panel 展示 CPK 颜色图例。点击切换 C/H/N/O/S。"
                 ),
                 "generation_backend": "claude_code_direct",
                 "style_key": "biotech_life",
                 "mode_reason": (
-                    "辩论通过：视觉化CPK颜色+元素信息卡是建立颜色记忆最有效的方式；"
-                    "hover+拖拽让孩子对'原子是独立球形颗粒，键是连线'产生直觉感受"
+                    "辩论通过：HUD仪表盘风格直观展示原子属性，CPK颜色图例建立视觉记忆锚点，"
+                    "五元素切换提供互动式学习体验"
                 ),
             },
             {
@@ -1217,6 +1641,34 @@ def build_course_content() -> dict:
                     "mode": "animation",
                     "status": "ready",
                     "html": _apply_theme(ANIM1_HTML, T),
+                    "story_paragraphs": None,
+                    "exercises": None,
+                    "generation_backend": "claude_code_direct",
+                }
+            },
+        ),
+        (
+            "anim_molecule_lab",
+            {
+                "idea_id": ANIM2_ID,
+                "mode": "animation",
+                "topic": "分子组装台 HUD：ball-and-stick 模型+键分析面板+元素占比",
+                "context_summary": (
+                    "HUD 仪表盘风格展示分子结构。中央 SVG ball-and-stick 模型，"
+                    "左侧 glass panel 展示键分析（键长、键角），"
+                    "右侧展示元素占比条形图。切换 H2O/NH3/Glycine。"
+                ),
+                "generation_backend": "claude_code_direct",
+                "style_key": "biotech_life",
+                "mode_reason": (
+                    "辩论通过：从单原子到分子的视角递进，ball-and-stick模型直观展示原子如何组成分子"
+                ),
+            },
+            {
+                ANIM2_ID: {
+                    "mode": "animation",
+                    "status": "ready",
+                    "html": _apply_theme(ANIM2_HTML, T),
                     "story_paragraphs": None,
                     "exercises": None,
                     "generation_backend": "claude_code_direct",
@@ -1302,7 +1754,8 @@ def write_everything():
         "[bold cyan]GP-01 蛋白结构探险地图[/bold cyan]\n\n"
         "完全由 Claude Code 生成（不调用 LLM agent pipeline）\n"
         f"节点：knode_id={TARGET_KNODE_ID} · {TARGET_NODE_TITLE}\n"
-        "内容：完整课程文本 + Canvas互动动画 + 历史故事 + 5道练习题",
+        "内容：完整课程文本 + HUD仪表盘动画x2 + 历史故事 + 5道练习题\n"
+        "风格：Stitch HUD 仪表盘（Space Grotesk + glass panel + 霓虹色）",
         title="写入数据库",
     ))
 
@@ -1401,7 +1854,7 @@ def write_everything():
         console.print(f"\n[bold green]完成！[/bold green]")
         console.print(f"  节点 {TARGET_KNODE_ID}（{TARGET_NODE_TITLE}）已写入")
         console.print(f"  课程文本：{len(PLAN_MARKDOWN)} 字符")
-        console.print(f"  Canvas 动画：{anim_count} 个（共 {total_html} 字节 HTML）")
+        console.print(f"  HUD 动画：{anim_count} 个（共 {total_html} 字节 HTML）")
         console.print(f"  故事段落：{story_count} 段")
         console.print(f"  练习题：{exer_count} 道")
         console.print(f"\n访问：[dim]http://localhost:3000/projects/{PROJECT_NAME}[/dim]")

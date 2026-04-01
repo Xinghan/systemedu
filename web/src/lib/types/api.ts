@@ -111,12 +111,57 @@ export interface EnrollmentInfo {
   total_nodes: number
 }
 
+export interface SubProjectInfo {
+  id: string              // "P0"
+  title: string
+  description: string
+  stage_id: string        // "S0"
+  milestone_indices: number[]
+  prerequisite_sub_project_ids: string[]
+  difficulty: number
+  estimated_hours: number
+  deliverables: string[]
+  nodes_passed: number
+  nodes_total: number
+  brief?: string
+  task?: string
+  core_problem?: string
+  inputs?: string[]
+  data_usage?: string[]
+  demo_unit?: string
+  why_separate?: string
+  handover?: { outputs: string[]; method: string }
+  acceptance_criteria?: string[]
+}
+
+export interface DataSourceInfo {
+  name: string
+  role: string
+  source: string
+  why: string
+  stages: string[]
+}
+
+export interface ProjectBrief {
+  one_liner: string
+  real_problem: string
+  what_we_do: string[]
+  what_we_dont: string[]
+  data_sources: DataSourceInfo[]
+  min_success: string
+  recommended_success: string
+  final_deliverables: string[]
+  final_demo: string
+  industry_relation: string
+}
+
 export interface ProjectDetail {
   project: Omit<ProjectSummary, "path">
   milestones: MilestoneInfo[]
   progress: NodeProgress[]
   enrollment: EnrollmentInfo | null
-  // cover_image_url is included in project object from backend
+  sub_projects?: SubProjectInfo[]
+  project_brief?: ProjectBrief | null
 }
 
 export interface AgentInfo {

@@ -1,0 +1,394 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8"/>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{width:100%;height:100%;overflow:hidden;background:#0f0a1e;
+  font-family:"Noto Sans SC","PingFang SC","Microsoft YaHei",system-ui,sans-serif}
+canvas{display:block;width:100%;height:100%;position:absolute;top:0;left:0}
+#ui{position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="ui"></div>
+<script>
+(function(){
+"use strict";
+
+/* ── injected params ─────────────────────────────────── */
+var TITLE         = {{title}};
+var MOTION_TYPE   = {{motion_type}};
+var V0            = {{v0}};
+var ACCELERATION  = {{acceleration}};
+var LABEL_OBJECT  = {{label_object}};
+var SHOW_VT_GRAPH = {{show_vt_graph}};
+var SHOW_XT_GRAPH = {{show_xt_graph}};
+
+/* ── canvas setup ────────────────────────────────────── */
+var canvas = document.getElementById("c");
+var ctx = canvas.getContext("2d");
+var W = 600, H = 420;
+var DPR = Math.min(window.devicePixelRatio || 1, 2);
+
+function resize(){
+  var rect = canvas.getBoundingClientRect();
+  canvas.width  = rect.width  * DPR;
+  canvas.height = rect.height * DPR;
+  ctx.setTransform(1,0,0,1,0,0);
+  ctx.scale(DPR * rect.width / W, DPR * rect.height / H);
+}
+resize();
+window.addEventListener("resize", resize);
+
+/* ── utils ───────────────────────────────────────────── */
+function roundRect(x,y,w,h,r){
+  ctx.beginPath();
+  ctx.moveTo(x+r,y);
+  ctx.lineTo(x+w-r,y); ctx.quadraticCurveTo(x+w,y,x+w,y+r);
+  ctx.lineTo(x+w,y+h-r); ctx.quadraticCurveTo(x+w,y+h,x+w-r,y+h);
+  ctx.lineTo(x+r,y+h); ctx.quadraticCurveTo(x,y+h,x,y+h-r);
+  ctx.lineTo(x,y+r); ctx.quadraticCurveTo(x,y,x+r,y);
+  ctx.closePath();
+}
+
+function clamp(v,lo,hi){ return v < lo ? lo : v > hi ? hi : v; }
+
+/* ── background ──────────────────────────────────────── */
+function drawBg(){
+  var g = ctx.createLinearGradient(0,0,0,H);
+  g.addColorStop(0,"#0f0a1e");
+  g.addColorStop(1,"#1a1035");
+  ctx.fillStyle = g;
+  ctx.fillRect(0,0,W,H);
+  ctx.strokeStyle = "rgba(255,255,255,0.03)";
+  ctx.lineWidth = 1;
+  for(var x=0;x<=W;x+=40){
+    ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,H); ctx.stroke();
+  }
+  for(var y=0;y<=H;y+=40){
+    ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(W,y); ctx.stroke();
+  }
+}
+
+/* ── title ───────────────────────────────────────────── */
+function drawTitle(){
+  ctx.font = "bold 16px 'Noto Sans SC',system-ui,sans-serif";
+  ctx.textAlign = "center";
+  ctx.fillStyle = "rgba(255,255,255,0.9)";
+  ctx.fillText(TITLE, W/2, 28);
+}
+
+/* ── HUD ─────────────────────────────────────────────── */
+function drawHUD(cols){
+  var by = H-52, bw = W, bh = 52;
+  ctx.fillStyle = "rgba(0,0,0,0.55)";
+  roundRect(0,by,bw,bh,0); ctx.fill();
+  ctx.strokeStyle = "rgba(255,255,255,0.06)";
+  ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(0,by); ctx.lineTo(W,by); ctx.stroke();
+  var cw = W / cols.length;
+  cols.forEach(function(c,i){
+    var cx = cw*i + cw/2;
+    ctx.font = "10px 'Noto Sans SC',system-ui";
+    ctx.textAlign = "center";
+    ctx.fillStyle = "rgba(129,140,248,0.6)";
+    ctx.fillText(c.label, cx, by+17);
+    ctx.font = "bold 14px 'Noto Sans SC',system-ui";
+    ctx.fillStyle = "rgba(255,255,255,0.88)";
+    ctx.fillText(c.val, cx, by+38);
+  });
+}
+
+/* ── layout constants ────────────────────────────────── */
+var hasGraph = SHOW_VT_GRAPH || SHOW_XT_GRAPH;
+var TRACK_LEFT  = 30;
+var TRACK_RIGHT = hasGraph ? 270 : 570;
+var TRACK_Y     = 220;
+var TRACK_LEN   = TRACK_RIGHT - TRACK_LEFT;
+var OBJ_W = 54, OBJ_H = 36;
+
+/* ── physics state ───────────────────────────────────── */
+var simT  = 0;
+var simDT = 0;
+var lastTs = null;
+var CYCLE_DIST = TRACK_LEN - OBJ_W - 10;
+
+/* graph buffers */
+var vtPoints = [];
+var xtPoints = [];
+var MAX_GRAPH_PTS = 120;
+var graphT = 0;
+
+/* ── graph drawing ───────────────────────────────────── */
+function drawGraph(which, gx, gy, gw, gh, points, labelY, color){
+  // background panel
+  ctx.fillStyle = "rgba(0,0,0,0.4)";
+  roundRect(gx,gy,gw,gh,8); ctx.fill();
+  ctx.strokeStyle = "rgba(255,255,255,0.07)";
+  ctx.lineWidth = 1;
+  roundRect(gx,gy,gw,gh,8); ctx.stroke();
+
+  var pad = 30;
+  var ax = gx+pad, ay = gy+gh-pad;
+  var aw = gw-pad-12, ah = gh-pad-18;
+
+  // axes
+  ctx.strokeStyle = "rgba(255,255,255,0.3)";
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.moveTo(ax, gy+8); ctx.lineTo(ax, ay); ctx.lineTo(ax+aw, ay);
+  ctx.stroke();
+
+  // axis labels
+  ctx.font = "10px 'Noto Sans SC',system-ui";
+  ctx.textAlign = "center";
+  ctx.fillStyle = "rgba(255,255,255,0.4)";
+  ctx.fillText("t(s)", ax+aw+8, ay+4);
+  ctx.save();
+  ctx.translate(ax-18, gy+gh/2);
+  ctx.rotate(-Math.PI/2);
+  ctx.fillText(which === "vt" ? "v(m/s)" : "x(m)", 0, 0);
+  ctx.restore();
+
+  // title
+  ctx.textAlign = "left";
+  ctx.fillStyle = color;
+  ctx.font = "bold 11px 'Noto Sans SC',system-ui";
+  ctx.fillText(which === "vt" ? "v-t \u56fe" : "x-t \u56fe", gx+8, gy+15);
+
+  if(points.length < 2) return;
+
+  // find range
+  var maxV = 0;
+  for(var i=0;i<points.length;i++){
+    if(Math.abs(points[i].y) > maxV) maxV = Math.abs(points[i].y);
+  }
+  if(maxV < 0.1) maxV = 1;
+  var maxT = points[points.length-1].x;
+  if(maxT < 0.1) maxT = 1;
+
+  // midline for signed values
+  var midY = ay - ah/2;
+  var scaleX = aw / maxT;
+  var scaleY = (ah/2) / maxV;
+
+  // zero line if values can be negative
+  if(ACCELERATION !== 0 || V0 < 0){
+    ctx.strokeStyle = "rgba(255,255,255,0.12)";
+    ctx.lineWidth = 1;
+    ctx.setLineDash([4,4]);
+    ctx.beginPath(); ctx.moveTo(ax, midY); ctx.lineTo(ax+aw, midY); ctx.stroke();
+    ctx.setLineDash([]);
+  } else {
+    midY = ay;
+    scaleY = ah / maxV;
+  }
+
+  // plot line
+  ctx.beginPath();
+  for(var j=0;j<points.length;j++){
+    var px = ax + points[j].x * scaleX;
+    var py = midY - points[j].y * scaleY;
+    if(j === 0) ctx.moveTo(px,py);
+    else ctx.lineTo(px,py);
+  }
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 2;
+  ctx.shadowColor = color; ctx.shadowBlur = 6;
+  ctx.stroke();
+  ctx.shadowBlur = 0;
+
+  // current dot
+  var last = points[points.length-1];
+  var dpx = ax + last.x * scaleX;
+  var dpy = midY - last.y * scaleY;
+  ctx.fillStyle = color;
+  ctx.beginPath(); ctx.arc(dpx, dpy, 4, 0, Math.PI*2); ctx.fill();
+}
+
+/* ── main draw ───────────────────────────────────────── */
+function drawScene(t, v, x, cycleX){
+  /* track */
+  var trackGrad = ctx.createLinearGradient(TRACK_LEFT, TRACK_Y+8, TRACK_LEFT, TRACK_Y+18);
+  trackGrad.addColorStop(0,"rgba(99,102,241,0.4)");
+  trackGrad.addColorStop(1,"rgba(55,48,163,0.2)");
+  ctx.fillStyle = trackGrad;
+  roundRect(TRACK_LEFT, TRACK_Y+8, TRACK_RIGHT-TRACK_LEFT, 14, 4); ctx.fill();
+  ctx.strokeStyle = "rgba(129,140,248,0.25)";
+  ctx.lineWidth = 1;
+  roundRect(TRACK_LEFT, TRACK_Y+8, TRACK_RIGHT-TRACK_LEFT, 14, 4); ctx.stroke();
+
+  // tick marks on track
+  ctx.strokeStyle = "rgba(255,255,255,0.1)";
+  ctx.lineWidth = 1;
+  var tickSpacing = TRACK_LEN / 10;
+  for(var i=0;i<=10;i++){
+    var tx = TRACK_LEFT + i*tickSpacing;
+    ctx.beginPath(); ctx.moveTo(tx, TRACK_Y+8); ctx.lineTo(tx, TRACK_Y+22); ctx.stroke();
+  }
+
+  /* object */
+  var objX = TRACK_LEFT + cycleX;
+  var objY = TRACK_Y + 8 - OBJ_H;
+  var objCX = objX + OBJ_W/2;
+  var objCY = objY + OBJ_H/2;
+
+  // glow
+  var gl = ctx.createRadialGradient(objCX,objCY,0,objCX,objCY,60);
+  gl.addColorStop(0,"rgba(52,211,153,0.2)"); gl.addColorStop(1,"transparent");
+  ctx.fillStyle = gl;
+  ctx.fillRect(objCX-70,objCY-50,140,100);
+
+  // body
+  ctx.shadowColor = "rgba(52,211,153,0.6)"; ctx.shadowBlur = 16; ctx.shadowOffsetY = 4;
+  var og = ctx.createLinearGradient(objX,objY,objX,objY+OBJ_H);
+  og.addColorStop(0,"rgba(110,231,183,1)");
+  og.addColorStop(0.5,"rgba(52,211,153,1)");
+  og.addColorStop(1,"rgba(16,185,129,1)");
+  ctx.fillStyle = og;
+  roundRect(objX, objY, OBJ_W, OBJ_H, 8); ctx.fill();
+  ctx.shadowBlur = 0; ctx.shadowOffsetY = 0;
+
+  // shine
+  var shine = ctx.createLinearGradient(objX,objY,objX,objY+OBJ_H*0.45);
+  shine.addColorStop(0,"rgba(255,255,255,0.35)");
+  shine.addColorStop(1,"rgba(255,255,255,0)");
+  ctx.fillStyle = shine;
+  roundRect(objX+4, objY+3, OBJ_W-8, OBJ_H*0.4, 6); ctx.fill();
+
+  ctx.strokeStyle = "rgba(255,255,255,0.3)";
+  ctx.lineWidth = 1.5;
+  roundRect(objX, objY, OBJ_W, OBJ_H, 8); ctx.stroke();
+
+  ctx.font = "bold 13px 'Noto Sans SC',system-ui";
+  ctx.textAlign = "center";
+  ctx.fillStyle = "rgba(0,0,0,0.8)";
+  ctx.fillText(LABEL_OBJECT || "m", objCX, objCY+5);
+
+  /* velocity arrow */
+  if(Math.abs(v) > 0.05){
+    var vDir = v > 0 ? 1 : -1;
+    var vScale = Math.min(Math.abs(v) * 8, 80);
+    var ax = objCX + vDir * (OBJ_W/2 + 4);
+    var bx = ax + vDir * vScale;
+    ctx.shadowColor = "rgba(251,191,36,0.8)"; ctx.shadowBlur = 8;
+    ctx.strokeStyle = "rgba(251,191,36,0.95)";
+    ctx.lineWidth = 2.5;
+    ctx.lineCap = "round";
+    ctx.beginPath(); ctx.moveTo(ax, objCY); ctx.lineTo(bx - vDir*12, objCY); ctx.stroke();
+    ctx.fillStyle = "rgba(251,191,36,0.95)";
+    ctx.beginPath();
+    ctx.moveTo(bx, objCY);
+    ctx.lineTo(bx - vDir*12, objCY-5);
+    ctx.lineTo(bx - vDir*12, objCY+5);
+    ctx.closePath(); ctx.fill();
+    ctx.shadowBlur = 0;
+
+    ctx.font = "bold 11px 'Noto Sans SC',system-ui";
+    ctx.textAlign = "center";
+    ctx.fillStyle = "rgba(251,191,36,0.9)";
+    ctx.fillText("v="+Math.abs(v).toFixed(1)+"m/s", (ax+bx)/2, objCY-14);
+  }
+
+  /* acceleration arrow */
+  if(Math.abs(ACCELERATION) > 0.01){
+    var aDir = ACCELERATION > 0 ? 1 : -1;
+    var aScale = Math.min(Math.abs(ACCELERATION)*12, 60);
+    var asx = objCX + aDir * (OBJ_W/2 + 4);
+    var aex = asx + aDir * aScale;
+    ctx.strokeStyle = "rgba(244,114,182,0.8)";
+    ctx.lineWidth = 2;
+    ctx.lineCap = "round";
+    ctx.setLineDash([5,3]);
+    ctx.beginPath(); ctx.moveTo(asx, objCY+OBJ_H/2+10); ctx.lineTo(aex - aDir*10, objCY+OBJ_H/2+10); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = "rgba(244,114,182,0.8)";
+    ctx.beginPath();
+    ctx.moveTo(aex, objCY+OBJ_H/2+10);
+    ctx.lineTo(aex - aDir*10, objCY+OBJ_H/2+5);
+    ctx.lineTo(aex - aDir*10, objCY+OBJ_H/2+15);
+    ctx.closePath(); ctx.fill();
+    ctx.font = "10px 'Noto Sans SC',system-ui";
+    ctx.textAlign = "center";
+    ctx.fillStyle = "rgba(244,114,182,0.7)";
+    ctx.fillText("a="+ACCELERATION.toFixed(1)+"m/s\u00b2", (asx+aex)/2, objCY+OBJ_H/2+24);
+  }
+
+  /* graphs */
+  if(SHOW_VT_GRAPH && !SHOW_XT_GRAPH){
+    drawGraph("vt", 300, 80, 270, 180, vtPoints, "v", "rgba(129,140,248,0.9)");
+  } else if(!SHOW_VT_GRAPH && SHOW_XT_GRAPH){
+    drawGraph("xt", 300, 80, 270, 180, xtPoints, "x", "rgba(52,211,153,0.9)");
+  } else if(SHOW_VT_GRAPH && SHOW_XT_GRAPH){
+    drawGraph("vt", 300, 75, 270, 110, vtPoints, "v", "rgba(129,140,248,0.9)");
+    drawGraph("xt", 300, 200, 270, 110, xtPoints, "x", "rgba(52,211,153,0.9)");
+  }
+}
+
+/* ── main loop ───────────────────────────────────────── */
+var startTime = null;
+var cycleStart = 0;
+var cycleV0 = V0;
+var cycleDir = 1;
+
+function frame(ts){
+  if(!startTime) startTime = ts;
+  if(!lastTs) lastTs = ts;
+  var dt = (ts - lastTs) / 1000;
+  if(dt > 0.1) dt = 0.1;
+  lastTs = ts;
+  var t = (ts - startTime) / 1000;
+
+  simT += dt;
+  graphT += dt;
+
+  var v = cycleV0 + ACCELERATION * simT;
+  var x = cycleV0 * simT + 0.5 * ACCELERATION * simT * simT;
+
+  // handle deceleration stopping
+  if(ACCELERATION < 0 && v <= 0){
+    v = 0; x = cycleV0 * cycleV0 / (2 * Math.abs(ACCELERATION));
+  }
+  if(ACCELERATION > 0 && v > V0 * 4) v = V0 * 4;
+
+  // scale logical x to screen pixels
+  var xScaleFactor = CYCLE_DIST / Math.max(Math.abs(cycleV0*3 + 0.5*ACCELERATION*9), 1);
+  var cycleX = clamp(x * xScaleFactor, 0, CYCLE_DIST);
+
+  // record graph points
+  if(vtPoints.length === 0 || graphT - vtPoints[vtPoints.length-1].x > 0.08){
+    vtPoints.push({x: graphT, y: v * cycleDir});
+    xtPoints.push({x: graphT, y: x});
+    if(vtPoints.length > MAX_GRAPH_PTS){ vtPoints.shift(); xtPoints.shift();
+      var base = vtPoints[0].x;
+      for(var i=0;i<vtPoints.length;i++){vtPoints[i].x -= base; xtPoints[i].x -= base;}
+      graphT -= base;
+    }
+  }
+
+  // reset when reaching edge
+  if(cycleX >= CYCLE_DIST - 2 || (ACCELERATION < 0 && v <= 0)){
+    simT = 0;
+    cycleV0 = V0;
+  }
+
+  ctx.clearRect(0,0,W,H);
+  drawBg();
+  drawTitle();
+  drawScene(t, v, x, cycleX);
+  drawHUD([
+    {label:"速度 v",       val: v.toFixed(2)+" m/s"},
+    {label:"位移 x",       val: x.toFixed(2)+" m"},
+    {label:"时间 t",       val: simT.toFixed(2)+" s"},
+    {label:"加速度 a",     val: ACCELERATION.toFixed(2)+" m/s\u00b2"}
+  ]);
+  requestAnimationFrame(frame);
+}
+
+requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>

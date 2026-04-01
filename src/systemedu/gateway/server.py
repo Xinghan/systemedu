@@ -472,6 +472,33 @@ async def api_create_project(request: Request) -> JSONResponse:
     except Exception:
         logger.exception("Auto-enqueue scan failed (non-fatal)")
 
+    # Background: generate cover image via DashScope Wanx
+    async def _bg_generate_cover() -> None:
+        try:
+            from systemedu.education.image_gen import generate_project_cover
+            desc = meta.get("description", "") if meta else ""
+            cover_path = SYSTEMEDU_HOME / "media" / "projects" / name / "cover.jpg"
+            ok = await generate_project_cover(title, desc, cover_path)
+            if ok:
+                cover_url = f"/api/media/projects/{name}/cover.jpg"
+                from systemedu.storage.db import LocalProject, get_session as get_db_session
+                _db = get_db_session()
+                try:
+                    _proj = _db.query(LocalProject).filter_by(name=name).first()
+                    if _proj:
+                        _proj.cover_image_url = cover_url
+                        _db.commit()
+                        logger.info(f"Cover image URL saved for {name!r}: {cover_url}")
+                except Exception:
+                    _db.rollback()
+                    logger.exception("Failed to update cover_image_url in DB")
+                finally:
+                    _db.close()
+        except Exception:
+            logger.exception(f"Background cover generation failed for {name!r}")
+
+    asyncio.ensure_future(_bg_generate_cover())
+
     return JSONResponse({"name": name, "created": True, "path": str(project_dir)})
 
 
@@ -729,26 +756,129 @@ async def api_project_detail(request: Request) -> JSONResponse:
                     _db.commit()
                 except Exception:
                     _db.rollback()
+
+            # If still no cover, trigger background generation
+            if not cover_url:
+                _cover_name = name
+                _cover_title = ctx.project.title
+                _cover_desc = ctx.project.description
+
+                async def _bg_gen_cover_on_detail() -> None:
+                    try:
+                        from systemedu.education.image_gen import generate_project_cover
+
+                        _path = SYSTEMEDU_HOME / "media" / "projects" / _cover_name / "cover.jpg"
+                        ok = await generate_project_cover(_cover_title, _cover_desc, _path)
+                        if ok:
+                            _url = f"/api/media/projects/{_cover_name}/cover.jpg"
+                            _s = get_db_session()
+                            try:
+                                _p = _s.query(LocalProject).filter_by(name=_cover_name).first()
+                                if _p:
+                                    _p.cover_image_url = _url
+                                    _s.commit()
+                                    logger.info(f"Auto-generated cover for {_cover_name!r}")
+                            except Exception:
+                                _s.rollback()
+                            finally:
+                                _s.close()
+                    except Exception:
+                        logger.exception(f"Background cover generation failed for {_cover_name!r}")
+
+                asyncio.ensure_future(_bg_gen_cover_on_detail())
         finally:
             _db.close()
 
-        return JSONResponse(
-            {
-                "project": {
-                    "name": ctx.project.name,
-                    "title": ctx.project.title,
-                    "description": ctx.project.description,
-                    "category": ctx.project.category.value,
-                    "age_range": ctx.project.age_range,
-                    "estimated_hours": ctx.project.estimated_hours,
-                    "tags": ctx.project.tags,
-                    "cover_image_url": cover_url,
-                },
-                "milestones": milestones,
-                "progress": progress,
-                "enrollment": enrollment_data,
-            }
-        )
+        # Build sub_projects with progress if available
+        sub_projects_data = []
+        if ctx.tree.sub_projects:
+            status_map: dict[int, str] = {}
+            for p in ctx.progress:
+                status_map[p.knode_id] = p.status.value if hasattr(p.status, "value") else str(p.status)
+
+            for sp in ctx.tree.sub_projects:
+                sp_node_ids: list[int] = []
+                for ms_idx in sp.milestone_indices:
+                    if ms_idx < len(ctx.tree.milestones):
+                        ms_obj = ctx.tree.milestones[ms_idx]
+                        start = sum(
+                            len(ctx.tree.milestones[i].knodes) for i in range(ms_idx)
+                        )
+                        sp_node_ids.extend(
+                            range(start, start + len(ms_obj.knodes))
+                        )
+
+                sp_passed = sum(
+                    1 for nid in sp_node_ids if status_map.get(nid) == "passed"
+                )
+                sp_total = len(sp_node_ids)
+
+                sp_data: dict = {
+                    "id": sp.id,
+                    "title": sp.title,
+                    "description": sp.description,
+                    "stage_id": sp.stage_id,
+                    "milestone_indices": sp.milestone_indices,
+                    "prerequisite_sub_project_ids": sp.prerequisite_sub_project_ids,
+                    "difficulty": sp.difficulty,
+                    "estimated_hours": sp.estimated_hours,
+                    "deliverables": sp.deliverables,
+                    "nodes_passed": sp_passed,
+                    "nodes_total": sp_total,
+                }
+                if sp.brief:
+                    sp_data["brief"] = sp.brief
+                if sp.task:
+                    sp_data["task"] = sp.task
+                if sp.core_problem:
+                    sp_data["core_problem"] = sp.core_problem
+                if sp.inputs:
+                    sp_data["inputs"] = sp.inputs
+                if sp.data_usage:
+                    sp_data["data_usage"] = sp.data_usage
+                if sp.demo_unit:
+                    sp_data["demo_unit"] = sp.demo_unit
+                if sp.why_separate:
+                    sp_data["why_separate"] = sp.why_separate
+                if sp.handover:
+                    sp_data["handover"] = sp.handover
+                if sp.acceptance_criteria:
+                    sp_data["acceptance_criteria"] = sp.acceptance_criteria
+                sub_projects_data.append(sp_data)
+
+        # Load project_brief.json if available
+        project_brief = None
+        try:
+            from systemedu.education.project_loader import find_project_dir
+
+            proj_dir = find_project_dir(name)
+            brief_file = proj_dir / "project_brief.json"
+            if brief_file.exists():
+                project_brief = json.loads(brief_file.read_text(encoding="utf-8"))
+        except Exception:
+            pass
+
+        response_data: dict = {
+            "project": {
+                "name": ctx.project.name,
+                "title": ctx.project.title,
+                "description": ctx.project.description,
+                "category": ctx.project.category.value,
+                "age_range": ctx.project.age_range,
+                "estimated_hours": ctx.project.estimated_hours,
+                "tags": ctx.project.tags,
+                "cover_image_url": cover_url,
+            },
+            "milestones": milestones,
+            "progress": progress,
+            "enrollment": enrollment_data,
+        }
+        if sub_projects_data:
+            response_data["sub_projects"] = sub_projects_data
+        if project_brief:
+            response_data["project_brief"] = project_brief
+
+        return JSONResponse(response_data)
     except FileNotFoundError:
         return JSONResponse({"error": f"Project '{name}' not found"}, status_code=404)
     except Exception as e:
@@ -1497,6 +1627,25 @@ async def api_get_course_v2_assignment(request: Request) -> JSONResponse:
             "status": lesson.status,
             "assignment": lesson.project_assignment or "",
         })
+    finally:
+        db.close()
+
+
+async def api_lesson_statuses(request: Request) -> JSONResponse:
+    """GET /api/projects/{name}/lesson-statuses - Get lesson generation status for all nodes."""
+    name = request.path_params["name"]
+
+    from systemedu.storage.db import LessonContent, get_session as get_db_session
+
+    db = get_db_session()
+    try:
+        rows = (
+            db.query(LessonContent.knode_id, LessonContent.status)
+            .filter_by(project_name=name)
+            .all()
+        )
+        statuses = {str(row.knode_id): row.status for row in rows}
+        return JSONResponse({"statuses": statuses})
     finally:
         db.close()
 
@@ -2576,6 +2725,7 @@ def create_app() -> Starlette:
 
         Route("/api/projects/{name}/enroll", api_enroll, methods=["POST"]),
         Route("/api/projects/{name}/enrollment", api_enrollment_dispatch, methods=["GET", "PATCH"]),
+        Route("/api/projects/{name}/lesson-statuses", api_lesson_statuses, methods=["GET"]),
         Route("/api/projects/{name}/nodes/{node_id:int}/context", api_node_context),
         Route("/api/projects/{name}/nodes/{node_id:int}/course/v2/generate", api_generate_course_v2, methods=["POST"]),
         Route("/api/projects/{name}/nodes/{node_id:int}/course/v2/stream", api_course_v2_stream, methods=["GET"]),

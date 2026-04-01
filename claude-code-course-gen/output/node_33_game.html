@@ -1,0 +1,355 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{width:100%;height:100%;overflow:hidden;background:#0a0e14;
+  font-family:'Noto Sans SC',system-ui,sans-serif;color:#fff}
+#game{width:600px;max-width:100%;height:560px;margin:0 auto;position:relative;
+  overflow:hidden;display:flex;flex-direction:column}
+.sci-card{background:rgba(255,255,255,0.05);border:1px solid rgba(0,210,255,0.2);
+  border-radius:12px;backdrop-filter:blur(10px);padding:16px;margin:8px}
+.sci-btn{background:linear-gradient(135deg,#00d2ff22,#00ff9d22);border:1px solid #00d2ff44;
+  border-radius:8px;color:#fff;padding:8px 20px;cursor:pointer;transition:all 0.3s;
+  font-family:inherit;font-size:14px}
+.sci-btn:hover{box-shadow:0 0 20px rgba(0,210,255,0.3);border-color:#00d2ff}
+.sci-btn:active{transform:scale(0.96)}
+.neon-text{color:#00d2ff;text-shadow:0 0 10px rgba(0,210,255,0.5)}
+.game-title{text-align:center;font-size:18px;font-weight:bold;padding:12px 0;
+  color:rgba(255,255,255,0.9);text-shadow:0 0 15px rgba(0,210,255,0.3)}
+.score-bar{display:flex;justify-content:space-between;padding:0 16px;
+  font-size:13px;color:rgba(255,255,255,0.7)}
+.score-bar span{color:#00d2ff}
+.progress-bar{height:4px;background:rgba(255,255,255,0.1);border-radius:2px;margin:8px 16px;overflow:hidden}
+.progress-fill{height:100%;background:linear-gradient(90deg,#00d2ff,#00ff9d);
+  border-radius:2px;transition:width 0.5s ease}
+@keyframes pulse{0%{transform:scale(1)}50%{transform:scale(1.05)}100%{transform:scale(1)}}
+@keyframes fadeIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+.pulse{animation:pulse 0.4s ease}
+.fade-in{animation:fadeIn 0.5s ease forwards}
+</style>
+</head>
+<body>
+<div id="game"></div>
+<script>
+(function(){
+"use strict";
+var container=document.getElementById("game");
+var TITLE="火星路径代价探索";
+
+function el(tag,attrs,children){
+  var e=document.createElement(tag);
+  if(attrs)Object.keys(attrs).forEach(function(k){
+    if(k==="className")e.className=attrs[k];
+    else if(k==="style"&&typeof attrs[k]==="object")Object.assign(e.style,attrs[k]);
+    else if(k.startsWith("on"))e.addEventListener(k.slice(2).toLowerCase(),attrs[k]);
+    else e.setAttribute(k,attrs[k]);
+  });
+  if(typeof children==="string")e.textContent=children;
+  else if(Array.isArray(children))children.forEach(function(c){if(c)e.appendChild(c)});
+  return e;
+}
+
+// ======== 游戏核心逻辑 ========
+var ROWS=6, COLS=8;
+var START={r:0,c:0};
+var END={r:5,c:7};
+
+// 地形类型: 0=平地(1), 1=沙地(2), 2=岩石(4), 3=障碍(不可通行)
+var terrainInfo=[
+  {name:"平地",cost:1,color:"#1a5c3a",border:"#2a8c5a"},
+  {name:"沙地",cost:2,color:"#8b6914",border:"#b8860b"},
+  {name:"岩石",cost:4,color:"#6b3410",border:"#8b4513"},
+  {name:"障碍",cost:999,color:"#3a0a0a",border:"#ff4b2b"}
+];
+
+// 初始地图
+var grid=[];
+for(var r=0;r<ROWS;r++){
+  grid[r]=[];
+  for(var c=0;c<COLS;c++) grid[r][c]=0;
+}
+
+var selectedTool=1; // 当前画笔: 0-3
+var path=[];        // 当前A*路径
+var totalCost=0;
+var challengeIdx=0;
+
+// 挑战任务
+var challenges=[
+  {
+    desc:"任务 1: 在地图中间放置一些沙地和岩石，让路径总代价超过 15",
+    check:function(){return totalCost>15},
+    hint:"试试在路径必经之处放沙地或岩石"
+  },
+  {
+    desc:"任务 2: 只用障碍区，迫使路径绕一个大弯",
+    check:function(){return path.length>12},
+    hint:"在地图中心横向放一排障碍"
+  },
+  {
+    desc:"任务 3: 设计一条代价最低的通道 (代价 <= 8)",
+    check:function(){return totalCost<=8&&totalCost>0},
+    hint:"清除所有障碍，保持平地通道"
+  }
+];
+
+// A* 寻路
+function astar(){
+  var open=[];
+  var closed={};
+  var gScore={};
+  var fScore={};
+  var cameFrom={};
+  var key=function(r,c){return r+","+c};
+
+  gScore[key(START.r,START.c)]=0;
+  fScore[key(START.r,START.c)]=Math.abs(END.r-START.r)+Math.abs(END.c-START.c);
+  open.push({r:START.r,c:START.c});
+
+  while(open.length>0){
+    open.sort(function(a,b){return (fScore[key(a.r,a.c)]||9999)-(fScore[key(b.r,b.c)]||9999)});
+    var cur=open.shift();
+    var ck=key(cur.r,cur.c);
+
+    if(cur.r===END.r&&cur.c===END.c){
+      var p=[],node=ck;
+      while(node){p.unshift(node);node=cameFrom[node]}
+      path=p.map(function(s){var parts=s.split(",");return{r:parseInt(parts[0]),c:parseInt(parts[1])}});
+      totalCost=gScore[ck]||0;
+      return;
+    }
+
+    closed[ck]=true;
+    var dirs=[[0,1],[0,-1],[1,0],[-1,0]];
+    for(var d=0;d<dirs.length;d++){
+      var nr=cur.r+dirs[d][0],nc=cur.c+dirs[d][1];
+      if(nr<0||nr>=ROWS||nc<0||nc>=COLS) continue;
+      var nk=key(nr,nc);
+      if(closed[nk]) continue;
+      var type=grid[nr][nc];
+      if(type===3) continue; // 障碍不可通行
+      var moveCost=terrainInfo[type].cost;
+      var ng=(gScore[ck]||0)+moveCost;
+      if(ng<(gScore[nk]||9999)){
+        cameFrom[nk]=ck;
+        gScore[nk]=ng;
+        fScore[nk]=ng+Math.abs(END.r-nr)+Math.abs(END.c-nc);
+        var inOpen=false;
+        for(var oi=0;oi<open.length;oi++){
+          if(open[oi].r===nr&&open[oi].c===nc){inOpen=true;break}
+        }
+        if(!inOpen) open.push({r:nr,c:nc});
+      }
+    }
+  }
+  path=[];
+  totalCost=0;
+}
+
+function render(){
+  astar();
+  container.innerHTML="";
+
+  // 标题
+  container.appendChild(el("div",{className:"game-title"},TITLE));
+
+  // 任务提示
+  var ch=challenges[challengeIdx];
+  var taskDiv=el("div",{style:{padding:"0 16px",fontSize:"12px",color:"rgba(255,255,255,0.7)",marginBottom:"6px"}});
+  taskDiv.innerHTML=ch.desc;
+  container.appendChild(taskDiv);
+
+  // 进度条
+  var progWrap=el("div",{className:"progress-bar"});
+  var progFill=el("div",{className:"progress-fill",style:{width:(challengeIdx/challenges.length*100)+"%"}});
+  progWrap.appendChild(progFill);
+  container.appendChild(progWrap);
+
+  // 分数和路径信息
+  var info=el("div",{className:"score-bar"});
+  info.innerHTML="<div>路径代价: <span>"+(path.length>0?totalCost:"无路径")+"</span></div>"+
+    "<div>路径长度: <span>"+(path.length>0?path.length+"步":"--")+"</span></div>"+
+    "<div>任务: <span>"+(challengeIdx+1)+"/"+challenges.length+"</span></div>";
+  container.appendChild(info);
+
+  // 工具栏
+  var toolbar=el("div",{style:{display:"flex",justifyContent:"center",gap:"8px",padding:"8px 16px"}});
+  for(var ti=0;ti<terrainInfo.length;ti++){
+    (function(idx){
+      var btn=el("button",{
+        className:"sci-btn",
+        style:{
+          padding:"4px 12px",
+          fontSize:"12px",
+          border:selectedTool===idx?"2px solid #00d2ff":"1px solid #00d2ff44",
+          background:selectedTool===idx?"rgba(0,210,255,0.2)":"transparent"
+        },
+        onClick:function(){selectedTool=idx;render()}
+      },terrainInfo[idx].name+" ("+terrainInfo[idx].cost+")");
+      toolbar.appendChild(btn);
+    })(ti);
+  }
+  container.appendChild(toolbar);
+
+  // 网格
+  var CELL=48;
+  var gridWidth=COLS*CELL;
+  var gridWrap=el("div",{style:{
+    position:"relative",width:gridWidth+"px",height:(ROWS*CELL)+"px",
+    margin:"4px auto",border:"1px solid rgba(0,210,255,0.15)",borderRadius:"8px",
+    overflow:"hidden"
+  }});
+
+  // 路径 SVG 叠加
+  if(path.length>1){
+    var svg=document.createElementNS("http://www.w3.org/2000/svg","svg");
+    svg.setAttribute("width",gridWidth);
+    svg.setAttribute("height",ROWS*CELL);
+    svg.style.position="absolute";
+    svg.style.top="0";
+    svg.style.left="0";
+    svg.style.pointerEvents="none";
+    svg.style.zIndex="10";
+
+    var points=path.map(function(p){return (p.c*CELL+CELL/2)+","+(p.r*CELL+CELL/2)}).join(" ");
+    var polyline=document.createElementNS("http://www.w3.org/2000/svg","polyline");
+    polyline.setAttribute("points",points);
+    polyline.setAttribute("fill","none");
+    polyline.setAttribute("stroke","#00ff9d");
+    polyline.setAttribute("stroke-width","3");
+    polyline.setAttribute("stroke-linecap","round");
+    polyline.setAttribute("stroke-linejoin","round");
+    polyline.setAttribute("filter","url(#glow)");
+
+    var defs=document.createElementNS("http://www.w3.org/2000/svg","defs");
+    var filter=document.createElementNS("http://www.w3.org/2000/svg","filter");
+    filter.setAttribute("id","glow");
+    var blur=document.createElementNS("http://www.w3.org/2000/svg","feGaussianBlur");
+    blur.setAttribute("stdDeviation","3");
+    blur.setAttribute("result","coloredBlur");
+    var merge=document.createElementNS("http://www.w3.org/2000/svg","feMerge");
+    var mn1=document.createElementNS("http://www.w3.org/2000/svg","feMergeNode");
+    mn1.setAttribute("in","coloredBlur");
+    var mn2=document.createElementNS("http://www.w3.org/2000/svg","feMergeNode");
+    mn2.setAttribute("in","SourceGraphic");
+    merge.appendChild(mn1);merge.appendChild(mn2);
+    filter.appendChild(blur);filter.appendChild(merge);
+    defs.appendChild(filter);
+    svg.appendChild(defs);
+    svg.appendChild(polyline);
+    gridWrap.appendChild(svg);
+  }
+
+  for(var r=0;r<ROWS;r++){
+    for(var c=0;c<COLS;c++){
+      (function(row,col){
+        var type=grid[row][col];
+        var isStart=row===START.r&&col===START.c;
+        var isEnd=row===END.r&&col===END.c;
+        var isOnPath=false;
+        for(var pi=0;pi<path.length;pi++){
+          if(path[pi].r===row&&path[pi].c===col){isOnPath=true;break}
+        }
+
+        var cell=el("div",{
+          style:{
+            position:"absolute",
+            left:(col*CELL)+"px",top:(row*CELL)+"px",
+            width:CELL+"px",height:CELL+"px",
+            background:terrainInfo[type].color,
+            border:"1px solid "+terrainInfo[type].border+"44",
+            cursor:(isStart||isEnd)?"default":"pointer",
+            display:"flex",alignItems:"center",justifyContent:"center",
+            fontSize:"10px",fontWeight:"bold",
+            color:"rgba(255,255,255,0.6)",
+            transition:"background 0.2s",
+            zIndex:"1"
+          },
+          onClick:function(){
+            if(isStart||isEnd) return;
+            grid[row][col]=selectedTool;
+            render();
+          }
+        });
+
+        if(isStart){
+          cell.style.background="rgba(0,255,157,0.3)";
+          cell.style.border="2px solid #00ff9d";
+          cell.textContent="S";
+          cell.style.color="#00ff9d";
+          cell.style.fontSize="14px";
+        } else if(isEnd){
+          cell.style.background="rgba(255,215,0,0.3)";
+          cell.style.border="2px solid #ffd700";
+          cell.textContent="E";
+          cell.style.color="#ffd700";
+          cell.style.fontSize="14px";
+        } else {
+          var costLabel=type===3?"X":String(terrainInfo[type].cost);
+          cell.textContent=costLabel;
+        }
+
+        gridWrap.appendChild(cell);
+      })(r,c);
+    }
+  }
+  container.appendChild(gridWrap);
+
+  // 操作按钮行
+  var btnRow=el("div",{style:{display:"flex",justifyContent:"center",gap:"12px",padding:"8px 16px"}});
+
+  // 重置
+  btnRow.appendChild(el("button",{className:"sci-btn",style:{fontSize:"12px",padding:"6px 16px"},
+    onClick:function(){
+      for(var rr=0;rr<ROWS;rr++)for(var cc=0;cc<COLS;cc++) grid[rr][cc]=0;
+      render();
+    }
+  },"重置地图"));
+
+  // 检查任务
+  btnRow.appendChild(el("button",{className:"sci-btn",style:{
+    fontSize:"12px",padding:"6px 16px",
+    borderColor:"#00ff9d",color:"#00ff9d"
+  },onClick:function(){
+    if(ch.check()){
+      if(challengeIdx<challenges.length-1){
+        challengeIdx++;
+        for(var rr=0;rr<ROWS;rr++)for(var cc=0;cc<COLS;cc++) grid[rr][cc]=0;
+      }
+      render();
+      // 闪烁反馈
+      container.querySelector(".game-title").style.color="#00ff9d";
+      container.querySelector(".game-title").textContent="通过!";
+      container.querySelector(".game-title").className="game-title pulse";
+      setTimeout(function(){render()},1200);
+    } else {
+      var hintDiv=container.querySelector(".hint-msg");
+      if(!hintDiv){
+        hintDiv=el("div",{className:"hint-msg fade-in",style:{
+          textAlign:"center",fontSize:"11px",color:"#ffd700",padding:"4px"
+        }},ch.hint);
+        container.appendChild(hintDiv);
+      }
+    }
+  }},"检查任务"));
+
+  container.appendChild(btnRow);
+
+  // 完成状态
+  if(challengeIdx>=challenges.length-1&&ch.check()){
+    var doneDiv=el("div",{className:"fade-in",style:{
+      textAlign:"center",padding:"12px",fontSize:"14px",color:"#00ff9d"
+    }},"全部任务完成! 你已经理解了路径代价和障碍区的关系。");
+    container.appendChild(doneDiv);
+  }
+}
+
+render();
+
+})();
+</script>
+</body>
+</html>

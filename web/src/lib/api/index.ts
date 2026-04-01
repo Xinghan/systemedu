@@ -12,6 +12,7 @@ import type {
   FactoryQueueResponse,
   ObjectRegistryResponse,
   HighlightInfo,
+  LessonStatusesResponse,
   MCPServer,
   MilestoneInfo,
   NodeContext,
@@ -184,6 +185,8 @@ export const gateway = {
     api.put<{ ok: boolean; milestones: MilestoneInfo[] }>(
       `/api/projects/${projectName}/tree`, { milestones }
     ),
+  lessonStatuses: (projectName: string) =>
+    api.get<LessonStatusesResponse>(`/api/projects/${encodeURIComponent(projectName)}/lesson-statuses`),
   objectRegistry: () => api.get<ObjectRegistryResponse>("/api/objects/registry"),
   objectQueue: (projectName?: string) => {
     const url = projectName
