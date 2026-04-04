@@ -232,6 +232,16 @@ function getSubProjectStatus(
   sp: SubProjectInfo,
   allSubProjects: SubProjectInfo[],
 ): SubProjectStatus {
+  // Use server-provided status if available
+  if (sp.status) {
+    // Map server status to SubProjectStatus
+    if (sp.status === "passed") return "completed"
+    if (sp.status === "in_progress") return "in_progress"
+    if (sp.status === "available") return "available"
+    if (sp.status === "locked") return "locked"
+  }
+  
+  // Fallback to computed status
   if (sp.nodes_total > 0 && sp.nodes_passed >= sp.nodes_total) return "completed"
   if (sp.nodes_passed > 0) return "in_progress"
   if (sp.prerequisite_sub_project_ids.length === 0) return "available"

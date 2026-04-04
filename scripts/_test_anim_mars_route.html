@@ -1,0 +1,1058 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>MARS ROVER ROUTE REPLAY</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;700&family=Noto+Sans+SC:wght@400;700&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{width:100%;height:100vh;overflow:hidden;background:#131313;font-family:'Noto Sans SC',sans-serif;color:#e5e2e1}
+.wrapper{display:flex;flex-direction:column;height:100vh}
+.header{text-align:center;padding:8px 0 4px;flex-shrink:0}
+.header h1{font-family:'Space Grotesk',sans-serif;font-size:18px;font-weight:700;letter-spacing:2px;background:linear-gradient(90deg,#ffb59c,#ff7f50);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+.header p{font-size:11px;color:#8a8886;margin-top:2px}
+.canvas-wrap{flex:1;min-height:0;position:relative}
+.canvas-wrap canvas{display:block;width:100%;height:100%}
+.narration-bar{flex-shrink:0;min-height:40px;max-height:56px;display:flex;align-items:center;justify-content:center;padding:6px 24px;background:rgba(20,20,35,0.88);backdrop-filter:blur(12px);border-top:1px solid rgba(255,255,255,0.06)}
+.narration-bar p{font-family:'Noto Sans SC',sans-serif;font-size:12px;color:#c6c6c6;text-align:center;line-height:1.5}
+.controls{flex-shrink:0;display:flex;justify-content:center;align-items:center;gap:12px;padding:6px;background:rgba(28,27,27,0.92)}
+.ctrl-btn{font-family:'Space Grotesk',sans-serif;font-size:11px;font-weight:700;letter-spacing:1px;padding:5px 16px;cursor:pointer;border:none;color:#e5e2e1;background:rgba(53,53,52,0.8);border:1px solid rgba(138,136,134,0.15);transition:box-shadow 0.2s}
+.ctrl-btn:hover{box-shadow:0 0 15px rgba(255,127,80,0.2)}
+.ctrl-btn.active{color:#131313;background:linear-gradient(135deg,#ffb59c,#ff7f50)}
+.frame-indicator{font-family:'Space Grotesk',sans-serif;font-size:11px;color:#8a8886;min-width:60px;text-align:center}
+.hud{flex-shrink:0;display:flex;justify-content:space-around;align-items:center;height:52px;background:rgba(0,0,0,0.55);padding:0 16px}
+.hud-item{text-align:center}
+.hud-item .label{font-size:9px;color:#8a8886;letter-spacing:1px;font-family:'Space Grotesk',sans-serif}
+.hud-item .value{font-family:'Space Grotesk',sans-serif;font-size:13px;font-weight:700}
+.guide-panel{position:fixed;top:8px;right:8px;width:260px;max-height:45vh;overflow-y:auto;background:rgba(20,20,35,0.85);backdrop-filter:blur(12px);border:1px solid rgba(255,255,255,0.08);padding:10px;z-index:100;font-size:11px;color:rgba(255,255,255,0.85)}
+.guide-panel h3{font-family:'Space Grotesk',sans-serif;font-size:12px;margin-bottom:6px;cursor:pointer;color:#ffb59c;display:flex;justify-content:space-between;align-items:center}
+.guide-panel p{margin-bottom:6px;line-height:1.5;color:#c6c6c6}
+.guide-panel ul{padding-left:14px;line-height:1.6}
+.guide-panel .section-label{font-family:'Space Grotesk',sans-serif;font-size:9px;color:#8a8886;letter-spacing:1px;margin-top:8px;margin-bottom:2px}
+.guide-panel .collapsed{display:none}
+.lang-btn{position:fixed;top:8px;left:8px;z-index:100;font-family:'Space Grotesk',sans-serif;font-size:11px;font-weight:700;padding:4px 10px;cursor:pointer;border:1px solid rgba(255,255,255,0.08);background:rgba(20,20,35,0.85);backdrop-filter:blur(12px);color:#ffb59c;letter-spacing:1px}
+</style>
+</head>
+<body>
+<button class="lang-btn" id="langBtn">CN</button>
+<div class="wrapper">
+  <div class="header">
+    <h1 id="mainTitle"></h1>
+    <p id="mainSubtitle"></p>
+  </div>
+  <div class="canvas-wrap" id="canvasWrap">
+    <canvas id="c"></canvas>
+  </div>
+  <div class="narration-bar">
+    <p id="narrationText"></p>
+  </div>
+  <div class="controls">
+    <button class="ctrl-btn" id="btnPrev"></button>
+    <button class="ctrl-btn" id="btnPlay"></button>
+    <button class="ctrl-btn" id="btnNext"></button>
+    <span class="frame-indicator" id="frameInd">1 / 4</span>
+  </div>
+  <div class="hud">
+    <div class="hud-item"><div class="label" id="hudLabelDist"></div><div class="value" id="hudDist" style="color:#ffb59c">0m</div></div>
+    <div class="hud-item"><div class="label" id="hudLabelTerrain"></div><div class="value" id="hudTerrain" style="color:#c6c6c6">---</div></div>
+    <div class="hud-item"><div class="label" id="hudLabelSafety"></div><div class="value" id="hudSafety" style="color:#10b981">---</div></div>
+    <div class="hud-item"><div class="label" id="hudLabelDetour"></div><div class="value" id="hudDetour" style="color:#8a8886">---</div></div>
+  </div>
+</div>
+
+<div class="guide-panel">
+  <h3 id="guideToggle"><span id="guideTitle"></span> <span id="guideArrow">-</span></h3>
+  <div id="guideContent">
+    <p id="guideWhat"></p>
+    <div class="section-label" id="guideObsLabel"></div>
+    <ul id="guideList"></ul>
+    <div class="section-label" id="guideCtrlLabel"></div>
+    <p id="guideCtrl"></p>
+    <div class="section-label" id="guideTakeLabel"></div>
+    <p id="guideTake"></p>
+  </div>
+</div>
+
+<script>
+(function(){
+  // ---- i18n ----
+  var LANG = 'cn';
+  var I18N = {
+    title:        {en:'MARS ROVER ROUTE REPLAY', cn:'\u706b\u661f\u8f66\u8def\u7ebf\u56de\u653e'},
+    subtitle:     {en:'TERRAIN-AWARE PATH PLANNING', cn:'\u5730\u5f62\u611f\u77e5\u8def\u5f84\u89c4\u5212'},
+    btnPrev:      {en:'PREV', cn:'\u4e0a\u4e00\u5e27'},
+    btnPlay:      {en:'PLAY', cn:'\u64ad\u653e'},
+    btnPause:     {en:'PAUSE', cn:'\u6682\u505c'},
+    btnNext:      {en:'NEXT', cn:'\u4e0b\u4e00\u5e27'},
+    guideTitle:   {en:'OBSERVATION GUIDE', cn:'\u89c2\u5bdf\u6307\u5357'},
+    guideShow:    {en:'Show', cn:'\u5c55\u5f00'},
+    guideHide:    {en:'Hide', cn:'\u6536\u8d77'},
+    guideWhatShows:{en:'Step-by-step replay of a Mars rover route with terrain analysis.', cn:'\u9010\u6b65\u56de\u653e\u706b\u661f\u8f66\u8def\u7ebf\u89c4\u5212\u8fc7\u7a0b\uff0c\u5206\u6790\u4e0d\u540c\u5730\u5f62\u533a\u57df\u3002'},
+    guideObsLabel:{en:'OBSERVE POINTS', cn:'\u89c2\u5bdf\u8981\u70b9'},
+    guideObs1:    {en:'Notice how the route avoids soft sand and craters', cn:'\u6ce8\u610f\u8def\u7ebf\u5982\u4f55\u7ed5\u5f00\u677e\u8f6f\u6c99\u5730\u548c\u9668\u77f3\u5751'},
+    guideObs2:    {en:'The safe bare-rock segment is the only straight part', cn:'\u5b89\u5168\u7684\u88f8\u5ca9\u6bb5\u662f\u552f\u4e00\u7684\u76f4\u7ebf\u90e8\u5206'},
+    guideObs3:    {en:'Compare total distance vs straight-line distance', cn:'\u5bf9\u6bd4\u603b\u8ddd\u79bb\u4e0e\u76f4\u7ebf\u8ddd\u79bb\u7684\u5dee\u5f02'},
+    guideCtrlLabel:{en:'CONTROLS', cn:'\u64cd\u4f5c\u8bf4\u660e'},
+    guideControls:{en:'Use PREV/NEXT to step through, or PLAY for auto playback.', cn:'\u7528 PREV/NEXT \u9010\u5e27\u67e5\u770b\uff0c\u6216\u70b9 PLAY \u81ea\u52a8\u64ad\u653e\u3002'},
+    guideTakeLabel:{en:'TAKEAWAY', cn:'\u6838\u5fc3\u8981\u70b9'},
+    guideTakeaway:{en:'A good route explains WHERE it goes, WHAT terrain it crosses, and WHY each decision was made.', cn:'\u597d\u7684\u8def\u7ebf\u89c4\u5212\u8981\u8bf4\u660e\u53bb\u54ea\u91cc\u3001\u7ecf\u8fc7\u4ec0\u4e48\u5730\u5f62\u3001\u4e3a\u4ec0\u4e48\u8fd9\u6837\u51b3\u7b56\u3002'},
+    // Frame titles
+    frame0Title:  {en:'OVERVIEW', cn:'\u603b\u89c8'},
+    frame1Title:  {en:'SEGMENT 1: BOULDER EDGE', cn:'\u7b2c1\u6bb5: \u6cbf\u5ca9\u77f3\u8fb9\u7f18'},
+    frame2Title:  {en:'SEGMENT 2: BARE ROCK EXPRESS', cn:'\u7b2c2\u6bb5: \u88f8\u5ca9\u5feb\u901f\u901a\u9053'},
+    frame3Title:  {en:'SEGMENT 3: CRATER DETOUR', cn:'\u7b2c3\u6bb5: \u7ed5\u884c\u9668\u77f3\u5751'},
+    // Frame narrations
+    frame0Narr:   {en:'The rover needs to travel from point A to point B. The straight-line distance is 87m, but can it go straight?', cn:'\u706b\u661f\u8f66\u9700\u8981\u4ece A \u70b9\u884c\u9a76\u5230 B \u70b9\u3002\u76f4\u7ebf\u8ddd\u79bb 87m\uff0c\u4f46\u5b83\u80fd\u8d70\u76f4\u7ebf\u5417\uff1f'},
+    frame1Narr:   {en:'First, the rover follows the edge of the boulder field, avoiding the soft sand to the south where wheels could sink.', cn:'\u9996\u5148\uff0c\u706b\u661f\u8f66\u6cbf\u5ca9\u77f3\u7fa4\u8fb9\u7f18\u884c\u9a76\uff0c\u907f\u5f00\u5357\u4fa7\u7684\u677e\u8f6f\u6c99\u5730\u2014\u2014\u8f66\u8f6e\u4f1a\u9677\u5165\u3002'},
+    frame2Narr:   {en:'Then it crosses a flat bare-rock area at full speed -- this is the safest terrain.', cn:'\u7136\u540e\u7a7f\u8d8a\u5e73\u5766\u88f8\u5ca9\u533a\u5168\u901f\u524d\u8fdb\u2014\u2014\u8fd9\u662f\u6700\u5b89\u5168\u7684\u5730\u5f62\u3002'},
+    frame3Narr:   {en:'Finally, it detours around a crater to reach the destination. Total: 110m, +26% detour, 2 danger zones avoided.', cn:'\u6700\u540e\u7ed5\u884c\u9668\u77f3\u5751\u62b5\u8fbe\u7ec8\u70b9\u3002\u603b\u8ddd\u79bb 110m\uff0c\u591a\u7ed5 26%\uff0c\u907f\u5f00\u4e86 2 \u4e2a\u5371\u9669\u533a\u3002'},
+    // HUD labels
+    hudDist:      {en:'DISTANCE', cn:'\u884c\u9a76\u8ddd\u79bb'},
+    hudTerrain:   {en:'TERRAIN', cn:'\u5730\u5f62'},
+    hudSafety:    {en:'SAFETY', cn:'\u5b89\u5168\u7b49\u7ea7'},
+    hudDetour:    {en:'DETOUR RATIO', cn:'\u7ed5\u884c\u6bd4'},
+    // Terrain names
+    terrainRocky: {en:'ROCKY', cn:'\u5ca9\u77f3\u533a'},
+    terrainSand:  {en:'SOFT SAND', cn:'\u677e\u8f6f\u6c99\u5730'},
+    terrainBareRock:{en:'BARE ROCK', cn:'\u88f8\u5ca9'},
+    terrainCrater:{en:'CRATER', cn:'\u9668\u77f3\u5751'},
+    terrainMixed: {en:'MIXED', cn:'\u6df7\u5408'},
+    // Annotations
+    labelAvoidSand:  {en:'Avoid soft sand', cn:'\u907f\u5f00\u677e\u8f6f\u6c99\u5730'},
+    labelFollowEdge: {en:'Follow rock edge', cn:'\u6cbf\u5ca9\u77f3\u8fb9\u7f18'},
+    labelSafeZone:   {en:'Safe zone -- full speed', cn:'\u5b89\u5168\u533a\u2014\u2014\u5168\u901f\u524d\u8fdb'},
+    labelDetourCrater:{en:'Detour around crater', cn:'\u7ed5\u884c\u9668\u77f3\u5751'},
+    directDist:   {en:'Direct: 87m', cn:'\u76f4\u7ebf: 87m'},
+    totalDist:    {en:'Total: 110m', cn:'\u603b\u8ddd\u79bb: 110m'},
+    detourPct:    {en:'+26%', cn:'+26%'},
+    riskAvoided:  {en:'Risks avoided: 2', cn:'\u89c4\u907f\u5371\u9669: 2'},
+    pointA:       {en:'A  START', cn:'A  \u8d77\u70b9'},
+    pointB:       {en:'B  DEST', cn:'B  \u7ec8\u70b9'},
+    // Safety levels
+    safeHigh:     {en:'HIGH', cn:'\u9ad8'},
+    safeMed:      {en:'MEDIUM', cn:'\u4e2d'},
+    safeLow:      {en:'LOW', cn:'\u4f4e'},
+    safeNA:       {en:'---', cn:'---'},
+    // HUD frame data
+    hud0Dist:     {en:'0m', cn:'0m'},
+    hud1Dist:     {en:'28m', cn:'28m'},
+    hud2Dist:     {en:'59m', cn:'59m'},
+    hud3Dist:     {en:'110m', cn:'110m'},
+    hud0Terrain:  {en:'---', cn:'---'},
+    hud1Terrain:  {en:'ROCKY EDGE', cn:'\u5ca9\u77f3\u8fb9\u7f18'},
+    hud2Terrain:  {en:'BARE ROCK', cn:'\u88f8\u5ca9'},
+    hud3Terrain:  {en:'CRATER RIM', cn:'\u5751\u7f18'},
+    hud0Safety:   {en:'---', cn:'---'},
+    hud1Safety:   {en:'MEDIUM', cn:'\u4e2d'},
+    hud2Safety:   {en:'HIGH', cn:'\u9ad8'},
+    hud3Safety:   {en:'MEDIUM', cn:'\u4e2d'},
+    hud0Detour:   {en:'---', cn:'---'},
+    hud1Detour:   {en:'---', cn:'---'},
+    hud2Detour:   {en:'---', cn:'---'},
+    hud3Detour:   {en:'+26%', cn:'+26%'},
+    arrival:      {en:'ARRIVED', cn:'\u5df2\u62b5\u8fbe'}
+  };
+
+  function t(key) {
+    var entry = I18N[key];
+    if (!entry) return key;
+    return entry[LANG] || entry['en'] || key;
+  }
+
+  // ---- DOM refs ----
+  var canvas = document.getElementById('c');
+  var ctx = canvas.getContext('2d');
+  var wrap = document.getElementById('canvasWrap');
+  var W = 0, H = 0, dpr = Math.min(window.devicePixelRatio || 1, 2);
+  var currentFrame = 0, totalFrames = 4;
+  var playing = false, playTimer = null;
+  var transitioning = false;
+
+  // ---- HUD frame data ----
+  var FRAMES_HUD = [
+    {distC:'#8a8886', terrainC:'#8a8886', safetyC:'#8a8886', detourC:'#8a8886'},
+    {distC:'#ffb59c', terrainC:'#c6c6c6', safetyC:'#ff7f50', detourC:'#8a8886'},
+    {distC:'#ffb59c', terrainC:'#10b981', safetyC:'#10b981', detourC:'#8a8886'},
+    {distC:'#ffb59c', terrainC:'#c6c6c6', safetyC:'#10b981', detourC:'#ff7f50'}
+  ];
+
+  // ---- utility functions ----
+  function lerp(a, b, p) { return a + (b - a) * p; }
+  function easeInOut(x) { return x < 0.5 ? 2*x*x : 1 - Math.pow(-2*x+2, 2)/2; }
+  function merge(base, overrides) {
+    var r = {};
+    for (var k in base) r[k] = base[k];
+    for (var k2 in overrides) r[k2] = overrides[k2];
+    return r;
+  }
+
+  // ---- i18n refresh ----
+  function refreshI18N() {
+    document.getElementById('mainTitle').textContent = t('title');
+    document.getElementById('mainSubtitle').textContent = t('subtitle');
+    document.getElementById('btnPrev').textContent = t('btnPrev');
+    document.getElementById('btnNext').textContent = t('btnNext');
+    document.getElementById('btnPlay').textContent = playing ? t('btnPause') : t('btnPlay');
+    document.getElementById('hudLabelDist').textContent = t('hudDist');
+    document.getElementById('hudLabelTerrain').textContent = t('hudTerrain');
+    document.getElementById('hudLabelSafety').textContent = t('hudSafety');
+    document.getElementById('hudLabelDetour').textContent = t('hudDetour');
+    document.getElementById('guideTitle').textContent = t('guideTitle');
+    document.getElementById('guideWhat').textContent = t('guideWhatShows');
+    document.getElementById('guideObsLabel').textContent = t('guideObsLabel');
+    document.getElementById('guideCtrlLabel').textContent = t('guideCtrlLabel');
+    document.getElementById('guideCtrl').textContent = t('guideControls');
+    document.getElementById('guideTakeLabel').textContent = t('guideTakeLabel');
+    document.getElementById('guideTake').textContent = t('guideTakeaway');
+    var guideList = document.getElementById('guideList');
+    guideList.innerHTML = '';
+    for (var i = 1; i <= 3; i++) {
+      var li = document.createElement('li');
+      li.textContent = t('guideObs' + i);
+      guideList.appendChild(li);
+    }
+    document.getElementById('narrationText').textContent = t('frame' + currentFrame + 'Narr');
+    updateHUD(currentFrame);
+    drawFrame(currentFrame);
+  }
+
+  function updateHUD(f) {
+    var hd = FRAMES_HUD[f];
+    document.getElementById('hudDist').textContent = t('hud' + f + 'Dist');
+    document.getElementById('hudDist').style.color = hd.distC;
+    document.getElementById('hudTerrain').textContent = t('hud' + f + 'Terrain');
+    document.getElementById('hudTerrain').style.color = hd.terrainC;
+    document.getElementById('hudSafety').textContent = t('hud' + f + 'Safety');
+    document.getElementById('hudSafety').style.color = hd.safetyC;
+    document.getElementById('hudDetour').textContent = t('hud' + f + 'Detour');
+    document.getElementById('hudDetour').style.color = hd.detourC;
+    document.getElementById('frameInd').textContent = (f + 1) + ' / ' + totalFrames;
+    document.getElementById('narrationText').textContent = t('frame' + f + 'Narr');
+  }
+
+  // ---- resize ----
+  function resize() {
+    var rect = wrap.getBoundingClientRect();
+    if (rect.width < 1 || rect.height < 1) return;
+    W = rect.width; H = rect.height;
+    canvas.width = W * dpr; canvas.height = H * dpr;
+    canvas.style.width = W + 'px'; canvas.style.height = H + 'px';
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    drawFrame(currentFrame);
+  }
+
+  // ---- drawing primitives ----
+  function drawBg() {
+    var g = ctx.createLinearGradient(0, 0, 0, H);
+    g.addColorStop(0, '#0f0a1e'); g.addColorStop(1, '#1a1035');
+    ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+    ctx.strokeStyle = 'rgba(255,255,255,0.03)'; ctx.lineWidth = 1;
+    for (var x = 0; x < W; x += 40) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke(); }
+    for (var y = 0; y < H; y += 40) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke(); }
+  }
+
+  // Terrain map geometry (relative to a bounding box)
+  // mapX, mapY, mapW, mapH define the terrain map area
+  function getMapRect() {
+    var pad = 20;
+    var mapW = Math.max(1, Math.min(W - pad * 2, (H - 20) * 1.5));
+    var mapH = Math.max(1, mapW / 1.5);
+    if (mapH > H * 0.82) { mapH = Math.max(1, H * 0.82); mapW = Math.max(1, mapH * 1.5); }
+    var mapX = (W - mapW) / 2;
+    var mapY = (H - mapH) / 2 - 5;
+    return {x: mapX, y: mapY, w: mapW, h: mapH};
+  }
+
+  // Route waypoints (normalized 0-1 within map rect)
+  var POINT_A = {nx: 0.08, ny: 0.45};
+  var POINT_B = {nx: 0.92, ny: 0.52};
+
+  // Segment 1: curve around boulders, avoid sand to south
+  var SEG1 = [
+    {nx: 0.08, ny: 0.45},
+    {nx: 0.15, ny: 0.38},
+    {nx: 0.22, ny: 0.30},
+    {nx: 0.30, ny: 0.28},
+    {nx: 0.38, ny: 0.32}
+  ];
+  // Segment 2: straight across bare rock
+  var SEG2 = [
+    {nx: 0.38, ny: 0.32},
+    {nx: 0.50, ny: 0.35},
+    {nx: 0.62, ny: 0.38}
+  ];
+  // Segment 3: curve around crater to B
+  var SEG3 = [
+    {nx: 0.62, ny: 0.38},
+    {nx: 0.70, ny: 0.42},
+    {nx: 0.76, ny: 0.50},
+    {nx: 0.82, ny: 0.55},
+    {nx: 0.88, ny: 0.53},
+    {nx: 0.92, ny: 0.52}
+  ];
+
+  function mapPt(np, mr) {
+    return {x: mr.x + np.nx * mr.w, y: mr.y + np.ny * mr.h};
+  }
+
+  // ---- Terrain drawing ----
+  function drawTerrainMap(mr, dimAlpha) {
+    var alpha = dimAlpha !== undefined ? dimAlpha : 1;
+    ctx.save();
+    ctx.globalAlpha = alpha;
+
+    // Map border
+    ctx.strokeStyle = 'rgba(255,181,156,0.12)';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(mr.x, mr.y, mr.w, mr.h);
+
+    // Mars surface base gradient
+    var baseG = ctx.createLinearGradient(mr.x, mr.y, mr.x + mr.w, mr.y + mr.h);
+    baseG.addColorStop(0, '#2A1F15');
+    baseG.addColorStop(0.5, '#3B2B1A');
+    baseG.addColorStop(1, '#2A1F15');
+    ctx.fillStyle = baseG;
+    ctx.fillRect(mr.x, mr.y, mr.w, mr.h);
+
+    // Rocky area (upper-left cluster of boulders)
+    drawRockyArea(mr);
+
+    // Sandy area (southern zone)
+    drawSandyArea(mr);
+
+    // Bare rock (central flat area)
+    drawBareRockArea(mr);
+
+    // Crater (right side)
+    drawCrater(mr);
+
+    // Faint coordinate grid
+    ctx.strokeStyle = 'rgba(255,181,156,0.04)';
+    ctx.lineWidth = 0.5;
+    for (var gx = 0; gx < 10; gx++) {
+      var lx = mr.x + gx * mr.w / 10;
+      ctx.beginPath(); ctx.moveTo(lx, mr.y); ctx.lineTo(lx, mr.y + mr.h); ctx.stroke();
+    }
+    for (var gy = 0; gy < 8; gy++) {
+      var ly = mr.y + gy * mr.h / 8;
+      ctx.beginPath(); ctx.moveTo(mr.x, ly); ctx.lineTo(mr.x + mr.w, ly); ctx.stroke();
+    }
+
+    ctx.restore();
+  }
+
+  function drawRockyArea(mr) {
+    // Boulder cluster: upper-left quadrant
+    var cx = mr.x + mr.w * 0.22;
+    var cy = mr.y + mr.h * 0.25;
+    var rw = mr.w * 0.25;
+    var rh = mr.h * 0.35;
+
+    // Area fill
+    var rg = ctx.createRadialGradient(cx, cy, 0, cx, cy, Math.max(0.1, rw, rh));
+    rg.addColorStop(0, 'rgba(139,105,20,0.5)');
+    rg.addColorStop(0.6, 'rgba(101,67,33,0.35)');
+    rg.addColorStop(1, 'rgba(101,67,33,0)');
+    ctx.fillStyle = rg;
+    ctx.fillRect(mr.x, mr.y, mr.w * 0.45, mr.h * 0.55);
+
+    // Individual boulders
+    var boulders = [
+      {dx:0,   dy:0,   r:12}, {dx:-30, dy:15,  r:8},  {dx:20,  dy:-20, r:10},
+      {dx:-15, dy:-25, r:7},  {dx:35,  dy:10,  r:9},  {dx:-40, dy:-5,  r:6},
+      {dx:10,  dy:30,  r:8},  {dx:-25, dy:35,  r:7},  {dx:45,  dy:-10, r:11},
+      {dx:50,  dy:25,  r:6},  {dx:-10, dy:45,  r:5},  {dx:25,  dy:40,  r:7}
+    ];
+    var scale = Math.max(0.001, Math.min(mr.w, mr.h) / 400);
+    boulders.forEach(function(b) {
+      var bx = cx + b.dx * scale;
+      var by = cy + b.dy * scale;
+      var br = Math.max(0.1, b.r * scale);
+      var bg = ctx.createRadialGradient(bx - br * 0.3, by - br * 0.3, 0, bx, by, br);
+      bg.addColorStop(0, '#8B6914');
+      bg.addColorStop(0.7, '#654321');
+      bg.addColorStop(1, '#3A2510');
+      ctx.beginPath();
+      ctx.arc(bx, by, br, 0, Math.PI * 2);
+      ctx.fillStyle = bg;
+      ctx.fill();
+      ctx.strokeStyle = 'rgba(139,105,20,0.3)';
+      ctx.lineWidth = 0.5;
+      ctx.stroke();
+    });
+
+    // Label
+    ctx.font = '700 ' + Math.max(8, 9 * scale) + 'px "Space Grotesk"';
+    ctx.fillStyle = 'rgba(139,105,20,0.6)';
+    ctx.textAlign = 'center';
+    ctx.fillText('ROCKY', cx, cy - rh * 0.5 - 4 * scale);
+    ctx.textAlign = 'left';
+  }
+
+  function drawSandyArea(mr) {
+    // Southern band
+    var sy = mr.y + mr.h * 0.60;
+    var sh = mr.h * 0.40;
+
+    var sg = ctx.createLinearGradient(mr.x, sy, mr.x, sy + sh);
+    sg.addColorStop(0, 'rgba(196,163,90,0.3)');
+    sg.addColorStop(0.5, 'rgba(196,163,90,0.45)');
+    sg.addColorStop(1, 'rgba(139,125,60,0.25)');
+    ctx.fillStyle = sg;
+
+    // Wavy top edge
+    ctx.beginPath();
+    ctx.moveTo(mr.x, sy + sh);
+    ctx.lineTo(mr.x, sy + 10);
+    for (var sx = mr.x; sx <= mr.x + mr.w; sx += 3) {
+      var wave = Math.sin((sx - mr.x) * 0.03) * 8 + Math.sin((sx - mr.x) * 0.07) * 4;
+      ctx.lineTo(sx, sy + wave);
+    }
+    ctx.lineTo(mr.x + mr.w, sy + sh);
+    ctx.closePath();
+    ctx.fill();
+
+    // Sand ripple lines
+    ctx.strokeStyle = 'rgba(196,163,90,0.2)';
+    ctx.lineWidth = 1;
+    for (var ri = 0; ri < 6; ri++) {
+      ctx.beginPath();
+      var ry = sy + 15 + ri * (sh * 0.12);
+      for (var rx = mr.x; rx < mr.x + mr.w; rx += 2) {
+        var yo = Math.sin((rx - mr.x) * 0.06 + ri * 1.2) * 3;
+        if (rx === mr.x) ctx.moveTo(rx, ry + yo); else ctx.lineTo(rx, ry + yo);
+      }
+      ctx.stroke();
+    }
+
+    var scale = Math.min(mr.w, mr.h) / 400;
+    ctx.font = '700 ' + Math.max(8, 9 * scale) + 'px "Space Grotesk"';
+    ctx.fillStyle = 'rgba(196,163,90,0.5)';
+    ctx.textAlign = 'center';
+    ctx.fillText('SAND', mr.x + mr.w * 0.35, sy + sh * 0.5);
+    ctx.textAlign = 'left';
+  }
+
+  function drawBareRockArea(mr) {
+    // Central area
+    var bx = mr.x + mr.w * 0.35;
+    var by = mr.y + mr.h * 0.25;
+    var bw = mr.w * 0.30;
+    var bh = mr.h * 0.30;
+
+    var bg = ctx.createLinearGradient(bx, by, bx + bw, by + bh);
+    bg.addColorStop(0, 'rgba(74,74,74,0.4)');
+    bg.addColorStop(0.5, 'rgba(45,45,45,0.5)');
+    bg.addColorStop(1, 'rgba(74,74,74,0.3)');
+    ctx.fillStyle = bg;
+
+    ctx.beginPath();
+    ctx.moveTo(bx + bw * 0.1, by);
+    ctx.quadraticCurveTo(bx + bw * 0.5, by - bh * 0.08, bx + bw * 0.9, by + bh * 0.05);
+    ctx.quadraticCurveTo(bx + bw * 1.05, by + bh * 0.5, bx + bw * 0.85, by + bh);
+    ctx.quadraticCurveTo(bx + bw * 0.5, by + bh * 1.1, bx + bw * 0.1, by + bh * 0.9);
+    ctx.quadraticCurveTo(bx - bw * 0.05, by + bh * 0.4, bx + bw * 0.1, by);
+    ctx.closePath();
+    ctx.fill();
+
+    // Subtle texture lines
+    ctx.strokeStyle = 'rgba(100,100,100,0.15)';
+    ctx.lineWidth = 0.5;
+    for (var ti = 0; ti < 5; ti++) {
+      var tx1 = bx + bw * 0.15 + Math.random() * bw * 0.2;
+      var ty1 = by + bh * 0.2 + ti * bh * 0.15;
+      ctx.beginPath();
+      ctx.moveTo(tx1, ty1);
+      ctx.lineTo(tx1 + bw * 0.3 + Math.random() * bw * 0.3, ty1 + Math.random() * 6 - 3);
+      ctx.stroke();
+    }
+
+    var scale = Math.min(mr.w, mr.h) / 400;
+    ctx.font = '700 ' + Math.max(8, 9 * scale) + 'px "Space Grotesk"';
+    ctx.fillStyle = 'rgba(120,120,120,0.5)';
+    ctx.textAlign = 'center';
+    ctx.fillText('BARE ROCK', bx + bw * 0.5, by + bh * 0.5 + 3);
+    ctx.textAlign = 'left';
+  }
+
+  function drawCrater(mr) {
+    var cx = mr.x + mr.w * 0.74;
+    var cy = mr.y + mr.h * 0.48;
+    var cr = Math.max(0.1, Math.min(mr.w, mr.h) * 0.10);
+
+    // Outer rim
+    var rimG = ctx.createRadialGradient(cx, cy, cr * 0.6, cx, cy, cr * 1.3);
+    rimG.addColorStop(0, 'rgba(58,58,58,0)');
+    rimG.addColorStop(0.5, 'rgba(58,58,58,0.4)');
+    rimG.addColorStop(0.8, 'rgba(80,70,55,0.3)');
+    rimG.addColorStop(1, 'rgba(58,58,58,0)');
+    ctx.fillStyle = rimG;
+    ctx.beginPath();
+    ctx.arc(cx, cy, cr * 1.3, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Crater body
+    var cg = ctx.createRadialGradient(cx, cy, 0, cx, cy, cr);
+    cg.addColorStop(0, '#0E0E0E');
+    cg.addColorStop(0.5, '#1A1A1A');
+    cg.addColorStop(0.85, '#2A2A2A');
+    cg.addColorStop(1, '#3A3A3A');
+    ctx.beginPath();
+    ctx.arc(cx, cy, cr, 0, Math.PI * 2);
+    ctx.fillStyle = cg;
+    ctx.fill();
+
+    // Rim highlight (top-left crescent)
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(cx, cy, cr, 0, Math.PI * 2);
+    ctx.clip();
+    var hlG = ctx.createRadialGradient(cx - cr * 0.3, cy - cr * 0.3, 0, cx, cy, cr);
+    hlG.addColorStop(0, 'rgba(100,90,70,0.4)');
+    hlG.addColorStop(0.5, 'rgba(60,55,45,0.1)');
+    hlG.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = hlG;
+    ctx.fillRect(cx - cr, cy - cr, cr * 2, cr * 2);
+    ctx.restore();
+
+    var scale = Math.min(mr.w, mr.h) / 400;
+    ctx.font = '700 ' + Math.max(7, 8 * scale) + 'px "Space Grotesk"';
+    ctx.fillStyle = 'rgba(100,90,70,0.5)';
+    ctx.textAlign = 'center';
+    ctx.fillText('CRATER', cx, cy + cr + 10 * scale);
+    ctx.textAlign = 'left';
+  }
+
+  // ---- Route drawing ----
+  function drawRouteSegment(points, mr, color, glowColor) {
+    if (points.length < 2) return;
+    ctx.save();
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 3;
+    ctx.lineJoin = 'round';
+    ctx.lineCap = 'round';
+    ctx.shadowColor = glowColor || color;
+    ctx.shadowBlur = 10;
+    ctx.beginPath();
+    var p0 = mapPt(points[0], mr);
+    ctx.moveTo(p0.x, p0.y);
+    for (var i = 1; i < points.length; i++) {
+      var pi = mapPt(points[i], mr);
+      ctx.lineTo(pi.x, pi.y);
+    }
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+    ctx.restore();
+  }
+
+  function drawDashedLine(p1, p2, mr, color) {
+    ctx.save();
+    var a = mapPt(p1, mr);
+    var b = mapPt(p2, mr);
+    ctx.setLineDash([6, 4]);
+    ctx.strokeStyle = color || 'rgba(255,181,156,0.35)';
+    ctx.lineWidth = 1.5;
+    ctx.shadowColor = color || 'rgba(255,181,156,0.2)';
+    ctx.shadowBlur = 4;
+    ctx.beginPath();
+    ctx.moveTo(a.x, a.y);
+    ctx.lineTo(b.x, b.y);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.shadowBlur = 0;
+    ctx.restore();
+  }
+
+  function drawMarker(np, mr, label, color, pulseRadius) {
+    var pt = mapPt(np, mr);
+    var r = pulseRadius || 6;
+
+    // Outer glow pulse
+    ctx.save();
+    var og = ctx.createRadialGradient(pt.x, pt.y, 0, pt.x, pt.y, r * 3);
+    og.addColorStop(0, color + '40');
+    og.addColorStop(1, color + '00');
+    ctx.fillStyle = og;
+    ctx.beginPath();
+    ctx.arc(pt.x, pt.y, r * 3, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Inner dot
+    var ig = ctx.createRadialGradient(pt.x, pt.y, 0, pt.x, pt.y, r);
+    ig.addColorStop(0, '#ffffff');
+    ig.addColorStop(0.4, color);
+    ig.addColorStop(1, color + '80');
+    ctx.fillStyle = ig;
+    ctx.shadowColor = color;
+    ctx.shadowBlur = 12;
+    ctx.beginPath();
+    ctx.arc(pt.x, pt.y, r, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.shadowBlur = 0;
+
+    // Label
+    if (label) {
+      var scale = Math.min(mr.w, mr.h) / 400;
+      ctx.font = '700 ' + Math.max(9, 10 * scale) + 'px "Space Grotesk"';
+      ctx.fillStyle = color;
+      ctx.shadowColor = color;
+      ctx.shadowBlur = 6;
+      ctx.textAlign = 'center';
+      ctx.fillText(label, pt.x, pt.y - r - 6 * scale);
+      ctx.shadowBlur = 0;
+      ctx.textAlign = 'left';
+    }
+    ctx.restore();
+  }
+
+  function drawRover(np, mr, size) {
+    var pt = mapPt(np, mr);
+    var s = size || 8;
+    var scale = Math.min(mr.w, mr.h) / 400;
+    s = s * scale;
+    if (s < 4) s = 4;
+
+    ctx.save();
+    // Rover body gradient
+    var rg = ctx.createLinearGradient(pt.x - s, pt.y - s, pt.x + s, pt.y + s);
+    rg.addColorStop(0, '#ffb59c');
+    rg.addColorStop(1, '#ff7f50');
+    ctx.fillStyle = rg;
+    ctx.shadowColor = '#ff7f50';
+    ctx.shadowBlur = 12;
+    // Diamond shape
+    ctx.beginPath();
+    ctx.moveTo(pt.x, pt.y - s);
+    ctx.lineTo(pt.x + s, pt.y);
+    ctx.lineTo(pt.x, pt.y + s);
+    ctx.lineTo(pt.x - s, pt.y);
+    ctx.closePath();
+    ctx.fill();
+
+    // Center dot
+    ctx.fillStyle = '#ffffff';
+    ctx.shadowBlur = 0;
+    ctx.beginPath();
+    ctx.arc(pt.x, pt.y, s * 0.25, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  }
+
+  function drawAnnotationArrow(fromNp, toNp, mr, text, color) {
+    var from = mapPt(fromNp, mr);
+    var to = mapPt(toNp, mr);
+    ctx.save();
+    ctx.strokeStyle = color || '#ff5f1f';
+    ctx.fillStyle = color || '#ff5f1f';
+    ctx.lineWidth = 1.5;
+    ctx.shadowColor = color || '#ff5f1f';
+    ctx.shadowBlur = 6;
+
+    ctx.beginPath();
+    ctx.moveTo(from.x, from.y);
+    ctx.lineTo(to.x, to.y);
+    ctx.stroke();
+
+    // Arrowhead
+    var angle = Math.atan2(to.y - from.y, to.x - from.x);
+    ctx.beginPath();
+    ctx.moveTo(to.x, to.y);
+    ctx.lineTo(to.x - 6 * Math.cos(angle - 0.4), to.y - 6 * Math.sin(angle - 0.4));
+    ctx.lineTo(to.x - 6 * Math.cos(angle + 0.4), to.y - 6 * Math.sin(angle + 0.4));
+    ctx.closePath();
+    ctx.fill();
+
+    ctx.shadowBlur = 0;
+    // Text label near the start
+    var scale = Math.min(mr.w, mr.h) / 400;
+    ctx.font = '700 ' + Math.max(8, 9 * scale) + 'px "Space Grotesk"';
+    var tx = from.x + (from.x < to.x ? -5 : 5);
+    ctx.textAlign = from.x < to.x ? 'right' : 'left';
+    ctx.fillText(text, tx, from.y - 4 * scale);
+    ctx.textAlign = 'left';
+    ctx.restore();
+  }
+
+  function drawLabelOnMap(text, np, mr, color, offsetY) {
+    var pt = mapPt(np, mr);
+    var scale = Math.min(mr.w, mr.h) / 400;
+    ctx.save();
+    ctx.font = '700 ' + Math.max(9, 10 * scale) + 'px "Space Grotesk"';
+    ctx.fillStyle = color || '#ffb59c';
+    ctx.shadowColor = color || '#ffb59c';
+    ctx.shadowBlur = 8;
+    ctx.textAlign = 'center';
+    ctx.fillText(text, pt.x, pt.y + (offsetY || 0));
+    ctx.shadowBlur = 0;
+    ctx.textAlign = 'left';
+    ctx.restore();
+  }
+
+  function drawCheckmark(np, mr) {
+    var pt = mapPt(np, mr);
+    var scale = Math.min(mr.w, mr.h) / 400;
+    var s = 10 * scale;
+    ctx.save();
+    ctx.strokeStyle = '#10b981';
+    ctx.lineWidth = 3 * scale;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    ctx.shadowColor = '#10b981';
+    ctx.shadowBlur = 12;
+    ctx.beginPath();
+    ctx.moveTo(pt.x - s * 0.6, pt.y);
+    ctx.lineTo(pt.x - s * 0.1, pt.y + s * 0.5);
+    ctx.lineTo(pt.x + s * 0.7, pt.y - s * 0.4);
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+    ctx.restore();
+  }
+
+  // ---- getFrameElements ----
+  function getFrameElements(f) {
+    var mr = getMapRect();
+    var elems = [];
+
+    // Terrain is always present (shared element)
+    var terrainDim = (f === 0) ? 1 : 0.75;
+    elems.push({id:'terrain', type:'custom', x:mr.x, y:mr.y, w:mr.w, h:mr.h, alpha:1, dimAlpha:terrainDim, draw:function(alpha) {
+      ctx.save(); ctx.globalAlpha = alpha;
+      drawTerrainMap(mr, this.dimAlpha);
+      ctx.restore();
+    }});
+
+    // Title (shared, changes text)
+    var titleKey = 'frame' + f + 'Title';
+    elems.push({id:'title', type:'label', text:t(titleKey), x:mr.x + mr.w * 0.5, y:mr.y - 8, color:'#ffb59c', size:14, align:'center', alpha:1});
+
+    // Point A marker always shown
+    elems.push({id:'markerA', type:'custom', x:mr.x + POINT_A.nx * mr.w, y:mr.y + POINT_A.ny * mr.h, w:12, h:12, alpha:1, draw:function(alpha) {
+      ctx.save(); ctx.globalAlpha = alpha;
+      drawMarker(POINT_A, mr, t('pointA'), '#00daf3', 6);
+      ctx.restore();
+    }});
+
+    // Point B marker always shown
+    elems.push({id:'markerB', type:'custom', x:mr.x + POINT_B.nx * mr.w, y:mr.y + POINT_B.ny * mr.h, w:12, h:12, alpha:1, draw:function(alpha) {
+      ctx.save(); ctx.globalAlpha = alpha;
+      drawMarker(POINT_B, mr, t('pointB'), '#ff5f1f', 6);
+      ctx.restore();
+    }});
+
+    // Rover position (shared, moves between frames)
+    var roverPos;
+    if (f === 0) roverPos = POINT_A;
+    else if (f === 1) roverPos = SEG1[SEG1.length - 1];
+    else if (f === 2) roverPos = SEG2[SEG2.length - 1];
+    else roverPos = POINT_B;
+
+    elems.push({id:'rover', type:'custom', x:mr.x + roverPos.nx * mr.w, y:mr.y + roverPos.ny * mr.h, w:16, h:16, alpha:1, draw:function(alpha) {
+      ctx.save(); ctx.globalAlpha = alpha;
+      drawRover(roverPos, mr, 10);
+      ctx.restore();
+    }});
+
+    // HUD distance text (shared, changes)
+    var distText = t('hud' + f + 'Dist');
+    elems.push({id:'hud_dist', type:'label', text:distText, x:mr.x + mr.w - 10, y:mr.y + mr.h - 8, color:'#ffb59c', size:12, align:'right', alpha:1});
+
+    if (f === 0) {
+      // Dashed straight line A->B
+      elems.push({id:'direct_line', type:'custom', x:mr.x, y:mr.y, w:mr.w, h:mr.h, alpha:1, draw:function(alpha) {
+        ctx.save(); ctx.globalAlpha = alpha;
+        drawDashedLine(POINT_A, POINT_B, mr, 'rgba(255,181,156,0.35)');
+        ctx.restore();
+      }});
+      // Direct distance label
+      var midNp = {nx: (POINT_A.nx + POINT_B.nx) / 2, ny: (POINT_A.ny + POINT_B.ny) / 2 - 0.06};
+      elems.push({id:'direct_label', type:'custom', x:mr.x + midNp.nx * mr.w, y:mr.y + midNp.ny * mr.h, w:80, h:20, alpha:1, draw:function(alpha) {
+        ctx.save(); ctx.globalAlpha = alpha;
+        drawLabelOnMap(t('directDist'), midNp, mr, '#c6c6c6', 0);
+        ctx.restore();
+      }});
+
+    } else if (f === 1) {
+      // Segment 1 lit (cyan)
+      elems.push({id:'route_seg1', type:'custom', x:mr.x, y:mr.y, w:mr.w, h:mr.h, alpha:1, draw:function(alpha) {
+        ctx.save(); ctx.globalAlpha = alpha;
+        drawRouteSegment(SEG1, mr, '#00daf3', '#00daf3');
+        ctx.restore();
+      }});
+      // Annotation: avoid sand
+      elems.push({id:'ann_sand', type:'custom', x:mr.x + 0.18 * mr.w, y:mr.y + 0.60 * mr.h, w:80, h:20, alpha:1, draw:function(alpha) {
+        ctx.save(); ctx.globalAlpha = alpha;
+        drawAnnotationArrow(
+          {nx:0.18, ny:0.55},
+          {nx:0.25, ny:0.62},
+          mr, t('labelAvoidSand'), '#ff5f1f'
+        );
+        ctx.restore();
+      }});
+      // Annotation: follow edge
+      elems.push({id:'ann_edge', type:'custom', x:mr.x + 0.32 * mr.w, y:mr.y + 0.20 * mr.h, w:80, h:20, alpha:1, draw:function(alpha) {
+        ctx.save(); ctx.globalAlpha = alpha;
+        drawAnnotationArrow(
+          {nx:0.35, ny:0.22},
+          {nx:0.30, ny:0.28},
+          mr, t('labelFollowEdge'), '#00daf3'
+        );
+        ctx.restore();
+      }});
+
+    } else if (f === 2) {
+      // Segment 1 still visible
+      elems.push({id:'route_seg1', type:'custom', x:mr.x, y:mr.y, w:mr.w, h:mr.h, alpha:1, draw:function(alpha) {
+        ctx.save(); ctx.globalAlpha = alpha * 0.6;
+        drawRouteSegment(SEG1, mr, '#00daf3', '#00daf3');
+        ctx.restore();
+      }});
+      // Segment 2 lit (green)
+      elems.push({id:'route_seg2', type:'custom', x:mr.x, y:mr.y, w:mr.w, h:mr.h, alpha:1, draw:function(alpha) {
+        ctx.save(); ctx.globalAlpha = alpha;
+        drawRouteSegment(SEG2, mr, '#10b981', '#10b981');
+        ctx.restore();
+      }});
+      // Safe zone label
+      elems.push({id:'safe_label', type:'custom', x:mr.x + 0.50 * mr.w, y:mr.y + 0.28 * mr.h, w:100, h:20, alpha:1, draw:function(alpha) {
+        ctx.save(); ctx.globalAlpha = alpha;
+        drawLabelOnMap(t('labelSafeZone'), {nx:0.50, ny:0.26}, mr, '#10b981', 0);
+        ctx.restore();
+      }});
+
+    } else if (f === 3) {
+      // All segments visible
+      elems.push({id:'route_seg1', type:'custom', x:mr.x, y:mr.y, w:mr.w, h:mr.h, alpha:1, draw:function(alpha) {
+        ctx.save(); ctx.globalAlpha = alpha * 0.5;
+        drawRouteSegment(SEG1, mr, '#00daf3', '#00daf3');
+        ctx.restore();
+      }});
+      elems.push({id:'route_seg2', type:'custom', x:mr.x, y:mr.y, w:mr.w, h:mr.h, alpha:1, draw:function(alpha) {
+        ctx.save(); ctx.globalAlpha = alpha * 0.5;
+        drawRouteSegment(SEG2, mr, '#10b981', '#10b981');
+        ctx.restore();
+      }});
+      elems.push({id:'route_seg3', type:'custom', x:mr.x, y:mr.y, w:mr.w, h:mr.h, alpha:1, draw:function(alpha) {
+        ctx.save(); ctx.globalAlpha = alpha;
+        drawRouteSegment(SEG3, mr, '#ff7f50', '#ff7f50');
+        ctx.restore();
+      }});
+      // Detour label
+      elems.push({id:'detour_label', type:'custom', x:mr.x + 0.72 * mr.w, y:mr.y + 0.40 * mr.h, w:100, h:20, alpha:1, draw:function(alpha) {
+        ctx.save(); ctx.globalAlpha = alpha;
+        drawLabelOnMap(t('labelDetourCrater'), {nx:0.76, ny:0.38}, mr, '#ff7f50', 0);
+        ctx.restore();
+      }});
+      // Checkmark at B
+      elems.push({id:'checkmark', type:'custom', x:mr.x + POINT_B.nx * mr.w + 15, y:mr.y + POINT_B.ny * mr.h - 18, w:20, h:20, alpha:1, draw:function(alpha) {
+        ctx.save(); ctx.globalAlpha = alpha;
+        drawCheckmark({nx: POINT_B.nx + 0.03, ny: POINT_B.ny - 0.06}, mr);
+        ctx.restore();
+      }});
+      // Stats panel
+      elems.push({id:'stats', type:'custom', x:mr.x + mr.w * 0.02, y:mr.y + mr.h * 0.72, w:mr.w * 0.30, h:mr.h * 0.24, alpha:1, draw:function(alpha) {
+        ctx.save(); ctx.globalAlpha = alpha;
+        var sx = mr.x + mr.w * 0.02;
+        var sy = mr.y + mr.h * 0.72;
+        var sw = mr.w * 0.30;
+        var sh = mr.h * 0.24;
+
+        // Glass panel background
+        ctx.fillStyle = 'rgba(20,20,35,0.8)';
+        ctx.fillRect(sx, sy, sw, sh);
+        ctx.strokeStyle = 'rgba(255,181,156,0.15)';
+        ctx.lineWidth = 1;
+        ctx.strokeRect(sx, sy, sw, sh);
+
+        var scale = Math.min(mr.w, mr.h) / 400;
+        var fs = Math.max(8, 9 * scale);
+        var lineH = Math.max(14, 16 * scale);
+        var pad = 8 * scale;
+
+        ctx.font = '700 ' + fs + 'px "Space Grotesk"';
+        ctx.textAlign = 'left';
+
+        ctx.fillStyle = '#ffb59c';
+        ctx.fillText(t('totalDist'), sx + pad, sy + pad + fs);
+        ctx.fillStyle = '#ff7f50';
+        ctx.fillText(t('detourPct'), sx + pad, sy + pad + fs + lineH);
+        ctx.fillStyle = '#10b981';
+        ctx.fillText(t('riskAvoided'), sx + pad, sy + pad + fs + lineH * 2);
+
+        ctx.textAlign = 'left';
+        ctx.restore();
+      }});
+    }
+
+    return elems;
+  }
+
+  // ---- drawElement dispatcher ----
+  function drawElement(el) {
+    if (!el || el.alpha <= 0.01) return;
+    ctx.save();
+    ctx.globalAlpha = el.alpha;
+    switch(el.type) {
+      case 'label':
+        ctx.font = '700 ' + (el.size || 12) + 'px "Space Grotesk"';
+        ctx.fillStyle = el.color || '#ffb59c';
+        ctx.textAlign = el.align || 'left';
+        ctx.shadowColor = el.color || '#ffb59c';
+        ctx.shadowBlur = 8;
+        ctx.fillText(el.text, el.x, el.y);
+        ctx.shadowBlur = 0;
+        break;
+      case 'text':
+        ctx.font = '400 ' + (el.size || 11) + 'px "Noto Sans SC"';
+        ctx.fillStyle = el.color || '#c6c6c6';
+        ctx.textAlign = el.align || 'left';
+        ctx.fillText(el.text, el.x, el.y);
+        break;
+      case 'custom':
+        if (el.draw) el.draw(el.alpha);
+        break;
+    }
+    ctx.restore();
+  }
+
+  // ---- drawFrame ----
+  function drawFrame(f) {
+    drawBg();
+    var elems = getFrameElements(f);
+    elems.forEach(function(el) { drawElement(el); });
+  }
+
+  // ---- shared element transition ----
+  function transitionTo(newFrame) {
+    if (newFrame < 0) newFrame = 0;
+    if (newFrame >= totalFrames) newFrame = totalFrames - 1;
+    if (newFrame === currentFrame && !transitioning) { drawFrame(currentFrame); updateHUD(currentFrame); return; }
+    if (transitioning) return;
+
+    var oldElems = getFrameElements(currentFrame);
+    var newElems = getFrameElements(newFrame);
+
+    var oldMap = {};
+    oldElems.forEach(function(e) { oldMap[e.id] = e; });
+    var newMap = {};
+    newElems.forEach(function(e) { newMap[e.id] = e; });
+
+    currentFrame = newFrame;
+    updateHUD(newFrame);
+    transitioning = true;
+
+    var startTime = null;
+    var duration = 500;
+
+    function step(timestamp) {
+      if (!startTime) startTime = timestamp;
+      var raw = Math.min((timestamp - startTime) / duration, 1);
+      var p = easeInOut(raw);
+
+      drawBg();
+
+      // Old-only elements: fade out
+      oldElems.forEach(function(oe) {
+        if (!newMap[oe.id]) {
+          drawElement(merge(oe, {alpha: 1 - p}));
+        }
+      });
+
+      // New elements (shared or new-only)
+      newElems.forEach(function(ne) {
+        var oe = oldMap[ne.id];
+        if (oe) {
+          // Shared element: lerp position/size
+          var merged = merge(ne, {
+            x: lerp(oe.x || 0, ne.x || 0, p),
+            y: lerp(oe.y || 0, ne.y || 0, p),
+            w: lerp(oe.w || 0, ne.w || 0, p),
+            h: lerp(oe.h || 0, ne.h || 0, p),
+            alpha: 1
+          });
+          // Text changed: crossfade
+          if ((ne.type === 'label' || ne.type === 'text') && oe.text !== ne.text) {
+            drawElement(merge(oe, {alpha: 1 - p}));
+            drawElement(merge(ne, {alpha: p}));
+          } else {
+            drawElement(merged);
+          }
+        } else {
+          // New-only element: fade in
+          drawElement(merge(ne, {alpha: p}));
+        }
+      });
+
+      if (raw < 1) {
+        requestAnimationFrame(step);
+      } else {
+        transitioning = false;
+      }
+    }
+    requestAnimationFrame(step);
+  }
+
+  // ---- playback controls ----
+  function startPlay() {
+    if (playing) return;
+    playing = true;
+    document.getElementById('btnPlay').textContent = t('btnPause');
+    document.getElementById('btnPlay').classList.add('active');
+    if (currentFrame >= totalFrames - 1) { currentFrame = -1; }
+    transitionTo(currentFrame + 1);
+    scheduleNext();
+  }
+  function scheduleNext() {
+    if (!playing) return;
+    playTimer = setTimeout(function() {
+      if (!playing) return;
+      var next = currentFrame + 1;
+      if (next >= totalFrames) { stopPlay(); return; }
+      transitionTo(next);
+      scheduleNext();
+    }, 2500);
+  }
+  function stopPlay() {
+    playing = false;
+    document.getElementById('btnPlay').textContent = t('btnPlay');
+    document.getElementById('btnPlay').classList.remove('active');
+    if (playTimer) { clearTimeout(playTimer); playTimer = null; }
+  }
+
+  // ---- event bindings (addEventListener only) ----
+  document.getElementById('btnPrev').addEventListener('click', function() {
+    stopPlay(); transitionTo(currentFrame - 1);
+  });
+  document.getElementById('btnNext').addEventListener('click', function() {
+    stopPlay(); transitionTo(currentFrame + 1);
+  });
+  document.getElementById('btnPlay').addEventListener('click', function() {
+    if (playing) stopPlay(); else startPlay();
+  });
+
+  // Language toggle
+  document.getElementById('langBtn').addEventListener('click', function() {
+    LANG = LANG === 'en' ? 'cn' : 'en';
+    document.getElementById('langBtn').textContent = LANG.toUpperCase();
+    refreshI18N();
+  });
+
+  // Guide panel toggle
+  var guideCollapsed = false;
+  document.getElementById('guideToggle').addEventListener('click', function() {
+    guideCollapsed = !guideCollapsed;
+    document.getElementById('guideContent').className = guideCollapsed ? 'collapsed' : '';
+    document.getElementById('guideArrow').textContent = guideCollapsed ? '+' : '-';
+  });
+
+  // ---- init ----
+  window.addEventListener('resize', resize);
+  refreshI18N();
+  resize();
+  setTimeout(resize, 200);
+  setTimeout(resize, 600);
+  document.fonts.ready.then(function() { resize(); });
+})();
+</script>
+</body>
+</html>

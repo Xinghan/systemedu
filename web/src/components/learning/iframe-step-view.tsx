@@ -78,8 +78,8 @@ export function IframeStepView({
           ref={iframeRef}
           srcDoc={html}
           sandbox="allow-scripts allow-same-origin"
-          className="w-full rounded-lg border border-border bg-white"
-          style={{ height: 520 }}
+          className="w-full rounded-lg border border-border bg-white min-h-[600px]"
+          style={{ height: "auto", minHeight: 600 }}
           onError={() => setLoadError(true)}
           title={title}
         />

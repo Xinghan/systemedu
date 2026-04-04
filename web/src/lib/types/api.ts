@@ -123,6 +123,7 @@ export interface SubProjectInfo {
   deliverables: string[]
   nodes_passed: number
   nodes_total: number
+  status?: "locked" | "available" | "in_progress" | "submitted" | "passed" | "failed"
   brief?: string
   task?: string
   core_problem?: string
@@ -463,6 +464,7 @@ export interface CourseIdeaSummary {
   generation_backend?: CourseGenerationBackend
   style_key?: string
   mode_reason?: string
+  user_guide?: string
 }
 
 export interface StoryParagraph {
@@ -489,6 +491,7 @@ export interface RenderedSection {
   story_paragraphs: StoryParagraph[] | null
   exercises: InlineExercise[] | null
   generation_backend?: CourseGenerationBackend
+  user_guide?: string
 }
 
 export interface CourseSection {
