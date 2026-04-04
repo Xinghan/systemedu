@@ -1,0 +1,388 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>TERRAIN DICTIONARY BUILDER</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;700&family=Noto+Sans+SC:wght@400;700&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{width:100%;height:100vh;overflow:hidden;background:#131313;font-family:'Noto Sans SC',sans-serif;color:#e5e2e1}
+.wrapper{display:flex;flex-direction:column;height:100vh;padding:6px}
+.header{text-align:center;padding:4px 0;flex-shrink:0}
+.header h1{font-family:'Space Grotesk',sans-serif;font-size:16px;font-weight:700;letter-spacing:2px;background:linear-gradient(90deg,#ffb59c,#ff7f50);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+.header p{font-size:10px;color:#8a8886;margin-top:1px}
+.cards-area{display:flex;flex-wrap:wrap;justify-content:center;gap:4px;padding:4px 2px;flex-shrink:0}
+.card{width:calc(25% - 6px);max-width:160px;padding:5px 6px;background:rgba(28,27,27,0.92);border:1px solid rgba(138,136,134,0.15);cursor:grab;user-select:none;-webkit-user-select:none;transition:box-shadow 0.2s,transform 0.15s}
+.card:active{cursor:grabbing}
+.card.dragging{opacity:0.5;transform:scale(0.95)}
+.card .card-name{font-family:'Space Grotesk',sans-serif;font-size:9px;font-weight:700;color:#ffb59c;letter-spacing:0.5px;margin-bottom:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.card .card-desc{font-size:9px;color:#c6c6c6;line-height:1.3}
+.card.placed{opacity:0.35;pointer-events:none}
+.zones-area{flex:1;min-height:0;display:flex;gap:4px;padding:3px 0}
+.zone{flex:1;display:flex;flex-direction:column;padding:4px;position:relative;transition:background 0.3s;overflow:hidden}
+.zone-label{font-family:'Space Grotesk',sans-serif;font-size:11px;font-weight:700;letter-spacing:1.5px;margin-bottom:3px;flex-shrink:0;text-align:center}
+.zone-items{flex:1;width:100%;overflow-y:auto;display:flex;flex-direction:column;gap:3px;min-height:0}
+.zone-item{padding:3px 6px;font-size:9px;color:#e5e2e1;background:rgba(28,27,27,0.8);border:1px solid rgba(138,136,134,0.1);display:flex;justify-content:space-between;align-items:center}
+.zone-item .remove-btn{cursor:pointer;color:#8a8886;font-size:11px;padding:0 3px}
+.zone-item .remove-btn:hover{color:#ff5f1f}
+.zone[data-zone="SAFE"]{background:rgba(16,185,129,0.05);border:1px solid rgba(16,185,129,0.18)}
+.zone[data-zone="SAFE"] .zone-label{color:#10b981}
+.zone[data-zone="SAFE"].drag-over{background:rgba(16,185,129,0.12);box-shadow:0 0 25px rgba(16,185,129,0.15)}
+.zone[data-zone="SLIP"]{background:rgba(255,127,80,0.05);border:1px solid rgba(255,127,80,0.18)}
+.zone[data-zone="SLIP"] .zone-label{color:#ff7f50}
+.zone[data-zone="SLIP"].drag-over{background:rgba(255,127,80,0.12);box-shadow:0 0 25px rgba(255,127,80,0.15)}
+.zone[data-zone="STUCK"]{background:rgba(255,95,31,0.05);border:1px solid rgba(255,95,31,0.18)}
+.zone[data-zone="STUCK"] .zone-label{color:#ff5f1f}
+.zone[data-zone="STUCK"].drag-over{background:rgba(255,95,31,0.12);box-shadow:0 0 25px rgba(255,95,31,0.15)}
+.bottom-bar{flex-shrink:0;display:flex;justify-content:center;align-items:center;padding:4px;gap:10px}
+.btn{font-family:'Space Grotesk',sans-serif;font-size:11px;font-weight:700;letter-spacing:1px;padding:5px 16px;cursor:pointer;border:none;color:#131313;background:linear-gradient(135deg,#ffb59c,#ff7f50);transition:box-shadow 0.2s}
+.btn:hover{box-shadow:0 0 18px rgba(255,127,80,0.4)}
+.btn:disabled{opacity:0.3;cursor:default;box-shadow:none}
+.btn-reset{background:rgba(28,27,27,0.92);color:#c6c6c6;border:1px solid rgba(138,136,134,0.15)}
+.score-text{font-family:'Space Grotesk',sans-serif;font-size:11px;color:#8a8886}
+.result-overlay{position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(19,19,19,0.94);backdrop-filter:blur(12px);display:none;justify-content:center;align-items:flex-start;z-index:200;padding:16px;overflow-y:auto}
+.result-overlay.show{display:flex}
+.result-panel{max-width:620px;width:100%;padding:16px}
+.result-panel h2{font-family:'Space Grotesk',sans-serif;font-size:18px;text-align:center;margin-bottom:6px;background:linear-gradient(90deg,#ffb59c,#ff7f50);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+.score-big{text-align:center;font-family:'Space Grotesk',sans-serif;font-size:32px;font-weight:700;margin-bottom:12px}
+.dict-table{width:100%;border-collapse:collapse;font-size:10px;margin-bottom:12px}
+.dict-table th{font-family:'Space Grotesk',sans-serif;font-size:9px;letter-spacing:0.5px;color:#8a8886;text-align:left;padding:4px 6px;border-bottom:1px solid rgba(138,136,134,0.15)}
+.dict-table td{padding:4px 6px;border-bottom:1px solid rgba(138,136,134,0.08);color:#c6c6c6}
+.dict-table .td-name{font-family:'Space Grotesk',sans-serif;font-weight:700;color:#ffb59c;font-size:9px}
+.dict-table .risk-safe{color:#10b981}
+.dict-table .risk-slip{color:#ff7f50}
+.dict-table .risk-stuck{color:#ff5f1f}
+.dict-table .pick-ok{background:rgba(16,185,129,0.06)}
+.dict-table .pick-wrong{background:rgba(255,95,31,0.06)}
+.guide-panel{position:fixed;top:6px;right:6px;width:220px;max-height:36vh;overflow-y:auto;background:rgba(20,20,35,0.85);backdrop-filter:blur(12px);border:1px solid rgba(255,255,255,0.08);padding:8px;z-index:100;font-size:10px;color:rgba(255,255,255,0.85)}
+.guide-panel h3{font-family:'Space Grotesk',sans-serif;font-size:11px;margin-bottom:4px;cursor:pointer;color:#ffb59c;display:flex;justify-content:space-between;align-items:center}
+.guide-panel ul{padding-left:12px;line-height:1.5}
+.guide-panel .collapsed{display:none}
+.ghost{position:fixed;pointer-events:none;z-index:300;opacity:0.85;transform:rotate(-2deg)}
+.lang-btn{position:fixed;top:6px;left:6px;z-index:100;font-family:'Space Grotesk',sans-serif;font-size:11px;font-weight:700;padding:4px 10px;cursor:pointer;border:1px solid rgba(255,255,255,0.08);background:rgba(20,20,35,0.85);backdrop-filter:blur(12px);color:#ffb59c;letter-spacing:1px}
+</style>
+</head>
+<body>
+<button class="lang-btn" id="langBtn">CN</button>
+<div class="wrapper">
+  <div class="header">
+    <h1 id="mainTitle"></h1>
+    <p id="mainSubtitle"></p>
+  </div>
+  <div class="cards-area" id="cardsArea"></div>
+  <div class="zones-area">
+    <div class="zone" data-zone="SAFE">
+      <div class="zone-label" id="zoneLabelSafe"></div>
+      <div class="zone-items" id="zone-SAFE"></div>
+    </div>
+    <div class="zone" data-zone="SLIP">
+      <div class="zone-label" id="zoneLabelSlip"></div>
+      <div class="zone-items" id="zone-SLIP"></div>
+    </div>
+    <div class="zone" data-zone="STUCK">
+      <div class="zone-label" id="zoneLabelStuck"></div>
+      <div class="zone-items" id="zone-STUCK"></div>
+    </div>
+  </div>
+  <div class="bottom-bar">
+    <button class="btn btn-reset" id="btnReset"></button>
+    <span class="score-text" id="scoreText">0 / 8</span>
+    <button class="btn" id="btnAnalyze" disabled></button>
+  </div>
+</div>
+
+<div class="result-overlay" id="resultOverlay">
+  <div class="result-panel" id="resultPanel"></div>
+</div>
+
+<div class="guide-panel">
+  <h3 id="guideToggle"><span id="guideTitle"></span> <span id="guideArrow">-</span></h3>
+  <div id="guideContent">
+    <ul id="guideList"></ul>
+  </div>
+</div>
+
+<script>
+(function(){
+  // ---- i18n ----
+  var LANG = 'cn';
+  var I18N = {
+    title:        {en:'TERRAIN DICTIONARY BUILDER', cn:'\u5730\u8c8c\u8bcd\u5178\u6784\u5efa\u5668'},
+    subtitle:     {en:'CLASSIFY ALL 8 TERRAIN TYPES BY HAZARD CATEGORY', cn:'\u5c06 8 \u79cd\u5730\u8c8c\u6309\u98ce\u9669\u7c7b\u578b\u5206\u7c7b'},
+    btnReset:     {en:'RESET', cn:'\u91cd\u7f6e'},
+    btnAnalyze:   {en:'BUILD DICTIONARY', cn:'\u751f\u6210\u8bcd\u5178'},
+    zoneSafe:     {en:'SAFE', cn:'\u5b89\u5168'},
+    zoneSlip:     {en:'SLIP RISK', cn:'\u6253\u6ed1\u98ce\u9669'},
+    zoneStuck:    {en:'STUCK RISK', cn:'\u5361\u8f6e\u98ce\u9669'},
+    guideTitle:   {en:'GUIDE', cn:'\u64cd\u4f5c\u6307\u5357'},
+    guide1:       {en:'Classify 8 Mars terrain types by risk category', cn:'\u5c06 8 \u79cd\u706b\u661f\u5730\u8c8c\u6309\u98ce\u9669\u7c7b\u578b\u5206\u7c7b'},
+    guide2:       {en:'SAFE: Safe to traverse', cn:'SAFE: \u5b89\u5168\u901a\u884c'},
+    guide3:       {en:'SLIP RISK: Slip hazard (insufficient friction)', cn:'SLIP: \u6253\u6ed1\u98ce\u9669\uff08\u6469\u64e6\u529b\u4e0d\u8db3\uff09'},
+    guide4:       {en:'STUCK RISK: Wheel stuck hazard (physical blocking)', cn:'STUCK: \u5361\u8f6e\u98ce\u9669\uff08\u7269\u7406\u5361\u963b\uff09'},
+    guide5:       {en:'Drag cards to zones, click x to undo', cn:'\u62d6\u62fd\u5361\u7247\u5230\u5bf9\u5e94\u533a\u57df\uff0c\u70b9 x \u53ef\u64a4\u56de'},
+    guide6:       {en:'Place all cards then click BUILD DICTIONARY', cn:'\u5168\u90e8\u653e\u7f6e\u540e\u70b9\u51fb\u751f\u6210\u8bcd\u5178'},
+    guide7:       {en:'Goal: At least 7/8 correct', cn:'\u76ee\u6807: \u81f3\u5c11 7/8 \u6b63\u786e'},
+    // card names
+    c1name:       {en:'FLAT BEDROCK', cn:'\u5e73\u5766\u57fa\u5ca9'},
+    c2name:       {en:'COMPACTED REGOLITH', cn:'\u538b\u5b9e\u706b\u661f\u571f'},
+    c3name:       {en:'RIPPLE FIELD', cn:'\u6ce2\u7eb9\u6c99\u5730'},
+    c4name:       {en:'SMOOTH ROCK SLOPE', cn:'\u5149\u6ed1\u5ca9\u9762\u5761'},
+    c5name:       {en:'COLOR BOUNDARY', cn:'\u989c\u8272\u8fb9\u754c'},
+    c6name:       {en:'DEEP SAND DRIFT', cn:'\u6df1\u5c42\u6c99\u5806'},
+    c7name:       {en:'COBBLE FIELD', cn:'\u5bc6\u96c6\u77f3\u5757\u533a'},
+    c8name:       {en:'FRACTURE ZONE', cn:'\u88c2\u7f1d\u5e26'},
+    // card descriptions
+    c1desc:       {en:'Flat bedrock with rough surface texture', cn:'\u5e73\u5766\u57fa\u5ca9\uff0c\u8868\u9762\u7c97\u7cd9\u7eb9\u7406\u6e05\u6670'},
+    c2desc:       {en:'Compacted Martian soil, shallow even tracks', cn:'\u538b\u5b9e\u706b\u661f\u571f\uff0c\u8f66\u8f99\u6d45\u800c\u5747\u5300'},
+    c3desc:       {en:'Rippled sandy surface, loose unconsolidated grains', cn:'\u6ce2\u7eb9\u72b6\u6c99\u9762\uff0c\u98a0\u7c92\u677e\u6563\u672a\u56fa\u7ed3'},
+    c4desc:       {en:'Smooth rock face + 15-20 deg slope', cn:'\u5149\u6ed1\u5ca9\u9762 + \u5761\u5ea6 15-20\u00b0'},
+    c5desc:       {en:'Dark bedrock transitions to light sand cover', cn:'\u6df1\u8272\u57fa\u5ca9\u7a81\u53d8\u4e3a\u6d45\u8272\u6c99\u8986\u76d6'},
+    c6desc:       {en:'Fine sand accumulation, no consolidation marks', cn:'\u7ec6\u6c99\u5806\u79ef\u533a\uff0c\u8868\u9762\u65e0\u56fa\u7ed3\u75d5\u8ff9'},
+    c7desc:       {en:'Dense cobble area, 10-35cm height', cn:'\u5bc6\u96c6\u77f3\u5757\u533a\uff0c\u9ad8\u5ea6 10-35cm'},
+    c8desc:       {en:'Linear fractures, 5-15cm wide, >20cm deep', cn:'\u7ebf\u6027\u88c2\u7f1d\uff0c\u5bbd 5-15cm\uff0c\u6df1 >20cm'},
+    // card detailed fields (for result table)
+    c1risk:       {en:'NONE', cn:'\u65e0'},
+    c2risk:       {en:'NONE', cn:'\u65e0'},
+    c3risk:       {en:'SLIP', cn:'\u6253\u6ed1'},
+    c4risk:       {en:'SLIP', cn:'\u6253\u6ed1'},
+    c5risk:       {en:'SLIP', cn:'\u6253\u6ed1'},
+    c6risk:       {en:'SLIP', cn:'\u6253\u6ed1'},
+    c7risk:       {en:'STUCK', cn:'\u5361\u8f6e'},
+    c8risk:       {en:'STUCK', cn:'\u5361\u8f6e'},
+    c1level:      {en:'SAFE', cn:'\u5b89\u5168'},
+    c2level:      {en:'SAFE', cn:'\u5b89\u5168'},
+    c3level:      {en:'HAZARD', cn:'\u5371\u9669'},
+    c4level:      {en:'CAUTION', cn:'\u6ce8\u610f'},
+    c5level:      {en:'CAUTION', cn:'\u6ce8\u610f'},
+    c6level:      {en:'HAZARD', cn:'\u5371\u9669'},
+    c7level:      {en:'HAZARD', cn:'\u5371\u9669'},
+    c8level:      {en:'HAZARD', cn:'\u5371\u9669'},
+    c1response:   {en:'Normal traverse', cn:'\u6b63\u5e38\u901a\u884c'},
+    c2response:   {en:'Normal traverse', cn:'\u6b63\u5e38\u901a\u884c'},
+    c3response:   {en:'Must reroute', cn:'\u5fc5\u987b\u7ed5\u884c'},
+    c4response:   {en:'Evaluate slope then decide', cn:'\u8bc4\u4f30\u5761\u5ea6\u540e\u51b3\u7b56'},
+    c5response:   {en:'Cautious traverse or reroute', cn:'\u8c28\u614e\u901a\u8fc7\u6216\u7ed5\u884c'},
+    c6response:   {en:'Must reroute', cn:'\u5fc5\u987b\u7ed5\u884c'},
+    c7response:   {en:'Reroute', cn:'\u7ed5\u884c'},
+    c8response:   {en:'Reroute or traverse parallel', cn:'\u7ed5\u884c\u6216\u5e73\u884c\u65b9\u5411\u901a\u8fc7'},
+    // result panel
+    resultTitle:  {en:'MARS TERRAIN DICTIONARY', cn:'\u706b\u661f\u5730\u8c8c\u8bcd\u5178'},
+    thTerrain:    {en:'TERRAIN', cn:'\u5730\u8c8c'},
+    thVisual:     {en:'VISUAL', cn:'\u89c6\u89c9\u7279\u5f81'},
+    thHazard:     {en:'HAZARD', cn:'\u98ce\u9669'},
+    thLevel:      {en:'LEVEL', cn:'\u7b49\u7ea7'},
+    thResponse:   {en:'RESPONSE', cn:'\u5e94\u5bf9'},
+    passMsg:      {en:'DICTIONARY COMPLETE -- Your terrain classification skills are confirmed.', cn:'\u8bcd\u5178\u5b8c\u6210 -- \u4f60\u7684\u5730\u8c8c\u5206\u7c7b\u80fd\u529b\u5df2\u786e\u8ba4\u3002'},
+    failMsg:      {en:'NEEDS REVIEW -- Some terrain types were misclassified.', cn:'\u9700\u8981\u590d\u67e5 -- \u90e8\u5206\u5730\u8c8c\u7c7b\u578b\u5206\u7c7b\u6709\u8bef\u3002'},
+    btnRetry:     {en:'RETRY', cn:'\u91cd\u8bd5'},
+  };
+  function t(key) { return (I18N[key] && I18N[key][LANG]) || (I18N[key] && I18N[key]['en']) || key; }
+
+  var CARDS = [
+    {id:'c1', nameKey:'c1name', descKey:'c1desc', correct:'SAFE', riskKey:'c1risk', levelKey:'c1level', responseKey:'c1response'},
+    {id:'c2', nameKey:'c2name', descKey:'c2desc', correct:'SAFE', riskKey:'c2risk', levelKey:'c2level', responseKey:'c2response'},
+    {id:'c3', nameKey:'c3name', descKey:'c3desc', correct:'SLIP', riskKey:'c3risk', levelKey:'c3level', responseKey:'c3response'},
+    {id:'c4', nameKey:'c4name', descKey:'c4desc', correct:'SLIP', riskKey:'c4risk', levelKey:'c4level', responseKey:'c4response'},
+    {id:'c5', nameKey:'c5name', descKey:'c5desc', correct:'SLIP', riskKey:'c5risk', levelKey:'c5level', responseKey:'c5response'},
+    {id:'c6', nameKey:'c6name', descKey:'c6desc', correct:'SLIP', riskKey:'c6risk', levelKey:'c6level', responseKey:'c6response'},
+    {id:'c7', nameKey:'c7name', descKey:'c7desc', correct:'STUCK', riskKey:'c7risk', levelKey:'c7level', responseKey:'c7response'},
+    {id:'c8', nameKey:'c8name', descKey:'c8desc', correct:'STUCK', riskKey:'c8risk', levelKey:'c8level', responseKey:'c8response'},
+  ];
+
+  var placements = {};
+  var ghost = null;
+  var dragCard = null;
+  var dragOffsetX = 0, dragOffsetY = 0;
+  var cardsArea = document.getElementById('cardsArea');
+  var scoreText = document.getElementById('scoreText');
+  var btnAnalyze = document.getElementById('btnAnalyze');
+
+  function refreshI18N() {
+    document.getElementById('mainTitle').textContent = t('title');
+    document.getElementById('mainSubtitle').textContent = t('subtitle');
+    document.getElementById('btnReset').textContent = t('btnReset');
+    document.getElementById('btnAnalyze').textContent = t('btnAnalyze');
+    document.getElementById('zoneLabelSafe').textContent = t('zoneSafe');
+    document.getElementById('zoneLabelSlip').textContent = t('zoneSlip');
+    document.getElementById('zoneLabelStuck').textContent = t('zoneStuck');
+    document.getElementById('guideTitle').textContent = t('guideTitle');
+    var guideList = document.getElementById('guideList');
+    guideList.innerHTML = '';
+    for (var i = 1; i <= 7; i++) {
+      var li = document.createElement('li');
+      li.textContent = t('guide' + i);
+      guideList.appendChild(li);
+    }
+    renderCards();
+    renderZones();
+  }
+
+  function renderCards() {
+    cardsArea.innerHTML = '';
+    CARDS.forEach(function(c) {
+      var el = document.createElement('div');
+      el.className = 'card' + (placements[c.id] ? ' placed' : '');
+      el.setAttribute('data-id', c.id);
+      el.innerHTML = '<div class="card-name">' + t(c.nameKey) + '</div><div class="card-desc">' + t(c.descKey) + '</div>';
+      cardsArea.appendChild(el);
+      if (!placements[c.id]) {
+        el.addEventListener('mousedown', function(e) { startDrag(e, c.id); });
+        el.addEventListener('touchstart', function(e) { startDrag(e, c.id); }, {passive:false});
+      }
+    });
+  }
+
+  function renderZones() {
+    ['SAFE','SLIP','STUCK'].forEach(function(z) {
+      var container = document.getElementById('zone-' + z);
+      container.innerHTML = '';
+      Object.keys(placements).forEach(function(cid) {
+        if (placements[cid] !== z) return;
+        var c = CARDS.find(function(x){return x.id===cid});
+        var item = document.createElement('div');
+        item.className = 'zone-item';
+        item.innerHTML = '<span>' + t(c.nameKey) + '</span><span class="remove-btn">x</span>';
+        item.querySelector('.remove-btn').addEventListener('click', function() {
+          delete placements[cid];
+          renderCards(); renderZones(); updateScore();
+        });
+        container.appendChild(item);
+      });
+    });
+  }
+
+  function updateScore() {
+    var count = Object.keys(placements).length;
+    scoreText.textContent = count + ' / ' + CARDS.length;
+    btnAnalyze.disabled = count < CARDS.length;
+  }
+
+  function startDrag(e, cardId) {
+    e.preventDefault();
+    dragCard = cardId;
+    var cardEl = cardsArea.querySelector('[data-id="'+cardId+'"]');
+    var rect = cardEl.getBoundingClientRect();
+    var pt = e.touches ? e.touches[0] : e;
+    dragOffsetX = pt.clientX - rect.left;
+    dragOffsetY = pt.clientY - rect.top;
+    ghost = document.createElement('div');
+    ghost.className = 'ghost';
+    ghost.style.width = rect.width + 'px';
+    ghost.innerHTML = cardEl.innerHTML;
+    ghost.style.background = 'rgba(28,27,27,0.95)';
+    ghost.style.border = '1px solid rgba(255,181,156,0.4)';
+    ghost.style.padding = '5px 6px';
+    ghost.style.fontSize = '9px';
+    ghost.style.left = (pt.clientX - dragOffsetX) + 'px';
+    ghost.style.top = (pt.clientY - dragOffsetY) + 'px';
+    document.body.appendChild(ghost);
+    cardEl.classList.add('dragging');
+    document.addEventListener('mousemove', onDragMove);
+    document.addEventListener('mouseup', onDragEnd);
+    document.addEventListener('touchmove', onDragMove, {passive:false});
+    document.addEventListener('touchend', onDragEnd);
+  }
+
+  function onDragMove(e) {
+    if (!ghost) return;
+    e.preventDefault();
+    var pt = e.touches ? e.touches[0] : e;
+    ghost.style.left = (pt.clientX - dragOffsetX) + 'px';
+    ghost.style.top = (pt.clientY - dragOffsetY) + 'px';
+    document.querySelectorAll('.zone').forEach(function(z) {
+      var r = z.getBoundingClientRect();
+      if (pt.clientX >= r.left && pt.clientX <= r.right && pt.clientY >= r.top && pt.clientY <= r.bottom)
+        z.classList.add('drag-over');
+      else z.classList.remove('drag-over');
+    });
+  }
+
+  function onDragEnd(e) {
+    document.removeEventListener('mousemove', onDragMove);
+    document.removeEventListener('mouseup', onDragEnd);
+    document.removeEventListener('touchmove', onDragMove);
+    document.removeEventListener('touchend', onDragEnd);
+    if (ghost) { document.body.removeChild(ghost); ghost = null; }
+    var pt = e.changedTouches ? e.changedTouches[0] : e;
+    document.querySelectorAll('.zone').forEach(function(z) {
+      z.classList.remove('drag-over');
+      var r = z.getBoundingClientRect();
+      if (pt.clientX >= r.left && pt.clientX <= r.right && pt.clientY >= r.top && pt.clientY <= r.bottom) {
+        placements[dragCard] = z.getAttribute('data-zone');
+      }
+    });
+    var cardEl = cardsArea.querySelector('[data-id="'+dragCard+'"]');
+    if (cardEl) cardEl.classList.remove('dragging');
+    renderCards(); renderZones(); updateScore();
+    dragCard = null;
+  }
+
+  function analyze() {
+    var correct = 0;
+    CARDS.forEach(function(c) { if (placements[c.id] === c.correct) correct++; });
+    var color = correct >= 7 ? '#10b981' : (correct >= 5 ? '#ff7f50' : '#ff5f1f');
+    var pass = correct >= 7;
+
+    var html = '<h2>' + t('resultTitle') + '</h2>';
+    html += '<div class="score-big" style="color:' + color + '">' + correct + ' / ' + CARDS.length + '</div>';
+    html += '<table class="dict-table"><thead><tr>';
+    html += '<th>' + t('thTerrain') + '</th>';
+    html += '<th>' + t('thVisual') + '</th>';
+    html += '<th>' + t('thHazard') + '</th>';
+    html += '<th>' + t('thLevel') + '</th>';
+    html += '<th>' + t('thResponse') + '</th>';
+    html += '</tr></thead><tbody>';
+    CARDS.forEach(function(c) {
+      var pick = placements[c.id];
+      var ok = pick === c.correct;
+      var cls = ok ? 'pick-ok' : 'pick-wrong';
+      var riskCls = c.correct === 'SAFE' ? 'risk-safe' : (c.correct === 'SLIP' ? 'risk-slip' : 'risk-stuck');
+      html += '<tr class="' + cls + '">';
+      html += '<td class="td-name">' + t(c.nameKey) + '</td>';
+      html += '<td>' + t(c.descKey) + '</td>';
+      html += '<td class="' + riskCls + '">' + t(c.riskKey) + '</td>';
+      html += '<td class="' + riskCls + '">' + t(c.levelKey) + '</td>';
+      html += '<td>' + t(c.responseKey) + '</td>';
+      html += '</tr>';
+    });
+    html += '</tbody></table>';
+    html += '<div style="text-align:center;font-size:12px;color:' + (pass ? '#10b981' : '#ff7f50') + ';margin-bottom:10px">' +
+      (pass ? t('passMsg') : t('failMsg')) + '</div>';
+    html += '<div style="text-align:center"><button class="btn btn-reset" id="btnRetry2">' + t('btnRetry') + '</button></div>';
+
+    document.getElementById('resultPanel').innerHTML = html;
+    document.getElementById('resultOverlay').classList.add('show');
+    document.getElementById('btnRetry2').addEventListener('click', reset);
+  }
+
+  function reset() {
+    placements = {};
+    document.getElementById('resultOverlay').classList.remove('show');
+    renderCards(); renderZones(); updateScore();
+  }
+
+  btnAnalyze.addEventListener('click', analyze);
+  document.getElementById('btnReset').addEventListener('click', reset);
+
+  // language toggle
+  document.getElementById('langBtn').addEventListener('click', function(){
+    LANG = LANG === 'en' ? 'cn' : 'en';
+    document.getElementById('langBtn').textContent = LANG.toUpperCase();
+    refreshI18N();
+  });
+
+  var guideCollapsed = false;
+  document.getElementById('guideToggle').addEventListener('click', function() {
+    guideCollapsed = !guideCollapsed;
+    document.getElementById('guideContent').className = guideCollapsed ? 'collapsed' : '';
+    document.getElementById('guideArrow').textContent = guideCollapsed ? '+' : '-';
+  });
+
+  // ---- init ----
+  refreshI18N();
+  updateScore();
+})();
+</script>
+</body>
+</html>

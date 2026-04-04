@@ -1,0 +1,526 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>STUCK MECHANISMS</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;700&family=Noto+Sans+SC:wght@400;700&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{width:100%;height:100vh;overflow:hidden;background:#131313;font-family:'Noto Sans SC',sans-serif;color:#e5e2e1}
+.wrapper{display:flex;flex-direction:column;height:100vh}
+.header{text-align:center;padding:8px 0 4px;flex-shrink:0}
+.header h1{font-family:'Space Grotesk',sans-serif;font-size:18px;font-weight:700;letter-spacing:2px;background:linear-gradient(90deg,#ffb59c,#ff7f50);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+.header p{font-size:11px;color:#8a8886;margin-top:2px}
+.canvas-wrap{flex:1;min-height:0;position:relative}
+.canvas-wrap canvas{display:block;width:100%;height:100%}
+.controls{flex-shrink:0;display:flex;justify-content:center;align-items:center;gap:12px;padding:6px;background:rgba(28,27,27,0.92)}
+.ctrl-btn{font-family:'Space Grotesk',sans-serif;font-size:11px;font-weight:700;letter-spacing:1px;padding:5px 16px;cursor:pointer;border:none;color:#e5e2e1;background:rgba(53,53,52,0.8);border:1px solid rgba(138,136,134,0.15);transition:box-shadow 0.2s}
+.ctrl-btn:hover{box-shadow:0 0 15px rgba(255,127,80,0.2)}
+.ctrl-btn.active{color:#131313;background:linear-gradient(135deg,#ffb59c,#ff7f50)}
+.frame-indicator{font-family:'Space Grotesk',sans-serif;font-size:11px;color:#8a8886;min-width:60px;text-align:center}
+.hud{flex-shrink:0;display:flex;justify-content:space-around;align-items:center;height:44px;background:rgba(0,0,0,0.55);padding:0 16px}
+.hud-item{text-align:center}
+.hud-item .label{font-size:9px;color:#8a8886;letter-spacing:1px;font-family:'Space Grotesk',sans-serif}
+.hud-item .value{font-family:'Space Grotesk',sans-serif;font-size:13px;font-weight:700}
+.guide-panel{position:fixed;top:8px;right:8px;width:240px;max-height:40vh;overflow-y:auto;background:rgba(20,20,35,0.85);backdrop-filter:blur(12px);border:1px solid rgba(255,255,255,0.08);padding:10px;z-index:100;font-size:11px;color:rgba(255,255,255,0.85)}
+.guide-panel h3{font-family:'Space Grotesk',sans-serif;font-size:12px;margin-bottom:6px;cursor:pointer;color:#ffb59c;display:flex;justify-content:space-between;align-items:center}
+.guide-panel ul{padding-left:14px;line-height:1.6}
+.guide-panel .collapsed{display:none}
+</style>
+</head>
+<body>
+<div class="wrapper">
+  <div class="header">
+    <h1>WHEEL STUCK MECHANISMS</h1>
+    <p>THREE WAYS A MARS ROVER GETS TRAPPED</p>
+  </div>
+  <div class="canvas-wrap" id="canvasWrap">
+    <canvas id="c"></canvas>
+  </div>
+  <div class="controls">
+    <button class="ctrl-btn" id="btnPrev">PREV</button>
+    <button class="ctrl-btn" id="btnPlay">PLAY</button>
+    <button class="ctrl-btn" id="btnNext">NEXT</button>
+    <span class="frame-indicator" id="frameInd">1 / 5</span>
+  </div>
+  <div class="hud">
+    <div class="hud-item"><div class="label">MECHANISM</div><div class="value" id="hudMech" style="color:#ffb59c">OVERVIEW</div></div>
+    <div class="hud-item"><div class="label">SEVERITY</div><div class="value" id="hudSev" style="color:#10b981">---</div></div>
+    <div class="hud-item"><div class="label">RECOVERY</div><div class="value" id="hudRec" style="color:#10b981">---</div></div>
+    <div class="hud-item"><div class="label">TRIGGER</div><div class="value" id="hudTrig" style="color:#8a8886">---</div></div>
+  </div>
+</div>
+
+<div class="guide-panel" id="guidePanel">
+  <h3 id="guideToggle">GUIDE <span id="guideArrow">-</span></h3>
+  <div id="guideContent">
+    <ul>
+      <li>展示火星车卡轮的三种机制</li>
+      <li>Frame 1: 正常行驶 vs 卡轮概览</li>
+      <li>Frame 2: 机械卡阻 -- 轮子卡进石缝</li>
+      <li>Frame 3: 高中心搁浅 -- 底盘骑上岩石</li>
+      <li>Frame 4: 软硬交界陷落 -- 前轮陷入</li>
+      <li>Frame 5: 三种机制数据对比</li>
+      <li>PREV/NEXT 切换帧，PLAY 自动播放</li>
+    </ul>
+  </div>
+</div>
+
+<script>
+(function(){
+  var canvas = document.getElementById('c');
+  var ctx = canvas.getContext('2d');
+  var wrap = document.getElementById('canvasWrap');
+  var W = 0, H = 0, dpr = Math.min(window.devicePixelRatio || 1, 2);
+
+  var currentFrame = 0;
+  var totalFrames = 5;
+  var playing = false;
+  var playTimer = null;
+
+  var FRAMES = [
+    {mech:'OVERVIEW', sev:'---', sevC:'#8a8886', rec:'---', recC:'#8a8886', trig:'---'},
+    {mech:'MECHANICAL JAM', sev:'HIGH', sevC:'#ff5f1f', rec:'VERY HARD', recC:'#ff5f1f', trig:'ROCK CREVICE'},
+    {mech:'HIGH-CENTERING', sev:'CRITICAL', sevC:'#ff5f1f', rec:'NEAR IMPOSSIBLE', recC:'#ff5f1f', trig:'PROTRUDING ROCK'},
+    {mech:'TRANSITION TRAP', sev:'HIGH', sevC:'#ff7f50', rec:'HARD', recC:'#ff7f50', trig:'SOFT/HARD BOUNDARY'},
+    {mech:'COMPARISON', sev:'---', sevC:'#ffb59c', rec:'---', recC:'#ffb59c', trig:'---'}
+  ];
+
+  function resize() {
+    var rect = wrap.getBoundingClientRect();
+    if (rect.width < 1 || rect.height < 1) return;
+    W = rect.width; H = rect.height;
+    canvas.width = W * dpr; canvas.height = H * dpr;
+    canvas.style.width = W + 'px'; canvas.style.height = H + 'px';
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    drawFrame(currentFrame);
+  }
+
+  function updateHUD(f) {
+    var d = FRAMES[f];
+    document.getElementById('hudMech').textContent = d.mech;
+    document.getElementById('hudSev').textContent = d.sev;
+    document.getElementById('hudSev').style.color = d.sevC;
+    document.getElementById('hudRec').textContent = d.rec;
+    document.getElementById('hudRec').style.color = d.recC;
+    document.getElementById('hudTrig').textContent = d.trig;
+    document.getElementById('frameInd').textContent = (f + 1) + ' / ' + totalFrames;
+  }
+
+  function drawBg() {
+    var grad = ctx.createLinearGradient(0, 0, 0, H);
+    grad.addColorStop(0, '#0f0a1e'); grad.addColorStop(1, '#1a1035');
+    ctx.fillStyle = grad; ctx.fillRect(0, 0, W, H);
+    ctx.strokeStyle = 'rgba(255,255,255,0.03)'; ctx.lineWidth = 1;
+    for (var x = 0; x < W; x += 40) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke(); }
+    for (var y = 0; y < H; y += 40) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke(); }
+  }
+
+  function drawGround(y, color1, color2) {
+    var g = ctx.createLinearGradient(0, y, 0, H);
+    g.addColorStop(0, color1); g.addColorStop(1, color2);
+    ctx.fillStyle = g; ctx.fillRect(0, y, W, H - y);
+  }
+
+  function drawWheel(cx, cy, r, rot) {
+    ctx.save(); ctx.translate(cx, cy);
+    var wG = ctx.createRadialGradient(0, 0, r * 0.3, 0, 0, r);
+    wG.addColorStop(0, '#555'); wG.addColorStop(0.7, '#333'); wG.addColorStop(1, '#1a1a1a');
+    ctx.beginPath(); ctx.arc(0, 0, r, 0, Math.PI * 2); ctx.fillStyle = wG; ctx.fill();
+    ctx.strokeStyle = 'rgba(255,181,156,0.3)'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.arc(0, 0, r, 0, Math.PI * 2); ctx.stroke();
+    ctx.save(); ctx.rotate(rot || 0);
+    ctx.strokeStyle = 'rgba(255,181,156,0.15)'; ctx.lineWidth = 3;
+    for (var i = 0; i < 8; i++) {
+      var a = (Math.PI * 2 / 8) * i;
+      ctx.beginPath(); ctx.moveTo(Math.cos(a) * r * 0.6, Math.sin(a) * r * 0.6);
+      ctx.lineTo(Math.cos(a) * r * 0.95, Math.sin(a) * r * 0.95); ctx.stroke();
+    }
+    ctx.restore();
+    ctx.beginPath(); ctx.arc(0, 0, r * 0.18, 0, Math.PI * 2);
+    ctx.fillStyle = '#ffb59c'; ctx.shadowColor = '#ff7f50'; ctx.shadowBlur = 8; ctx.fill();
+    ctx.shadowBlur = 0; ctx.restore();
+  }
+
+  function drawRock(x, y, w, h, color) {
+    ctx.save();
+    var rG = ctx.createLinearGradient(x, y, x, y + h);
+    rG.addColorStop(0, color || '#6a6050'); rG.addColorStop(1, '#3a3020');
+    ctx.fillStyle = rG;
+    ctx.beginPath();
+    ctx.moveTo(x, y + h);
+    ctx.lineTo(x + w * 0.1, y + h * 0.3);
+    ctx.lineTo(x + w * 0.3, y);
+    ctx.lineTo(x + w * 0.7, y + h * 0.1);
+    ctx.lineTo(x + w * 0.9, y + h * 0.25);
+    ctx.lineTo(x + w, y + h);
+    ctx.closePath(); ctx.fill();
+    ctx.strokeStyle = 'rgba(255,181,156,0.1)'; ctx.lineWidth = 1; ctx.stroke();
+    ctx.restore();
+  }
+
+  function drawLabel(text, x, y, color, size) {
+    ctx.font = '700 ' + (size || 14) + 'px "Space Grotesk"';
+    ctx.fillStyle = color || '#ffb59c';
+    ctx.shadowColor = color || '#ffb59c'; ctx.shadowBlur = 12;
+    ctx.fillText(text, x, y);
+    ctx.shadowBlur = 0;
+  }
+
+  function drawDesc(text, x, y) {
+    ctx.font = '400 12px "Noto Sans SC"';
+    ctx.fillStyle = '#c6c6c6';
+    ctx.fillText(text, x, y);
+  }
+
+  function drawChassis(x1, y, x2, h) {
+    var cG = ctx.createLinearGradient(0, y, 0, y + h);
+    cG.addColorStop(0, '#555'); cG.addColorStop(1, '#2a2a2a');
+    ctx.fillStyle = cG;
+    ctx.fillRect(x1, y, x2 - x1, h);
+    ctx.strokeStyle = 'rgba(255,181,156,0.15)'; ctx.lineWidth = 1;
+    ctx.strokeRect(x1, y, x2 - x1, h);
+  }
+
+  function drawWarningZone(x, y, w, h, color) {
+    ctx.save();
+    ctx.setLineDash([6, 4]);
+    ctx.strokeStyle = color || '#ff5f1f';
+    ctx.lineWidth = 1.5;
+    ctx.strokeRect(x, y, w, h);
+    ctx.setLineDash([]);
+    ctx.restore();
+  }
+
+  function drawFrame(f) {
+    drawBg();
+    var wheelR = Math.min(W, H) * 0.09;
+    var groundY = H * 0.62;
+
+    if (f === 0) {
+      // Overview: normal rover vs stuck concept
+      drawGround(groundY, '#4a3f35', '#1a1510');
+      var roverX = W * 0.3;
+      var chassisH = wheelR * 0.6;
+      var chassisY = groundY - wheelR * 2 - chassisH;
+      drawChassis(roverX - wheelR * 1.5, chassisY, roverX + wheelR * 3.5, chassisH);
+      drawWheel(roverX, groundY - wheelR, wheelR, 0);
+      drawWheel(roverX + wheelR * 2, groundY - wheelR, wheelR, 0);
+
+      // vs text
+      ctx.textAlign = 'center';
+      drawLabel('STUCK vs SLIP', W / 2, H * 0.15, '#ffb59c', 16);
+      ctx.textAlign = 'left';
+
+      // two columns
+      var col1 = W * 0.15, col2 = W * 0.55;
+      drawLabel('SLIP', col1, H * 0.28, '#ff7f50', 12);
+      drawDesc('车轮能转，但抓不住地面', col1, H * 0.28 + 18);
+      drawDesc('摩擦力不足', col1, H * 0.28 + 36);
+      drawDesc('可减速、换路线', col1, H * 0.28 + 54);
+
+      drawLabel('STUCK', col2, H * 0.28, '#ff5f1f', 12);
+      drawDesc('车轮被物理阻碍锁住', col2, H * 0.28 + 18);
+      drawDesc('机械卡阻/搁浅/陷落', col2, H * 0.28 + 36);
+      drawDesc('脱困极其困难', col2, H * 0.28 + 54);
+
+    } else if (f === 1) {
+      // Mechanical Jam: wheel stuck in rock crevice
+      drawGround(groundY, '#4a3f35', '#1a1510');
+
+      // draw crevice
+      var crevX = W * 0.48;
+      var crevW = wheelR * 0.8;
+      ctx.fillStyle = '#0a0805';
+      ctx.beginPath();
+      ctx.moveTo(crevX, groundY);
+      ctx.lineTo(crevX + crevW * 0.2, groundY + wheelR * 2);
+      ctx.lineTo(crevX + crevW * 0.8, groundY + wheelR * 2);
+      ctx.lineTo(crevX + crevW, groundY);
+      ctx.closePath(); ctx.fill();
+
+      // rocks on sides
+      drawRock(crevX - wheelR * 1.2, groundY - wheelR * 0.5, wheelR * 1.3, wheelR * 0.8);
+      drawRock(crevX + crevW - wheelR * 0.1, groundY - wheelR * 0.4, wheelR * 1.2, wheelR * 0.7);
+
+      // wheel stuck in crevice
+      var stuckWheelY = groundY + wheelR * 0.3;
+      drawWheel(crevX + crevW / 2, stuckWheelY, wheelR, 0);
+
+      // warning indicator
+      drawWarningZone(crevX - 5, groundY - 5, crevW + 10, wheelR * 1.5);
+
+      // dimension lines
+      ctx.save();
+      ctx.strokeStyle = '#00daf3'; ctx.lineWidth = 1;
+      ctx.setLineDash([3, 3]);
+      ctx.beginPath(); ctx.moveTo(crevX, groundY - wheelR * 0.8);
+      ctx.lineTo(crevX + crevW, groundY - wheelR * 0.8); ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.font = '700 10px "Space Grotesk"'; ctx.fillStyle = '#00daf3';
+      ctx.fillText('~10cm', crevX + crevW / 2 - 15, groundY - wheelR * 0.8 - 5);
+      ctx.restore();
+
+      drawLabel('MECHANICAL JAM', W * 0.08, H * 0.15, '#ff5f1f', 16);
+      drawDesc('车轮卡进岩石裂缝，无法转动', W * 0.08, H * 0.15 + 22);
+      drawDesc('裂缝宽 5-15cm 最危险 -- 刚好卡住轮子', W * 0.08, H * 0.15 + 42);
+
+    } else if (f === 2) {
+      // High-centering: chassis on rock
+      drawGround(groundY, '#4a3f35', '#1a1510');
+
+      // protruding rock under chassis
+      var rockX = W * 0.4;
+      var rockW = wheelR * 1.8;
+      var rockH = wheelR * 1.5;
+      drawRock(rockX, groundY - rockH, rockW, rockH, '#7a7060');
+
+      // rover with lifted wheels
+      var liftAmt = wheelR * 0.6;
+      var chassisY2 = groundY - rockH - wheelR * 0.3;
+      drawChassis(rockX - wheelR * 1.5, chassisY2, rockX + rockW + wheelR * 1.5, wheelR * 0.5);
+
+      // front wheel (hanging)
+      drawWheel(rockX - wheelR * 0.8, chassisY2 + wheelR * 0.5 + wheelR, wheelR, 0);
+      // rear wheel (hanging)
+      drawWheel(rockX + rockW + wheelR * 0.8, chassisY2 + wheelR * 0.5 + wheelR, wheelR, 0);
+
+      // gap indicators
+      ctx.save();
+      ctx.setLineDash([4, 3]); ctx.strokeStyle = '#ff5f1f'; ctx.lineWidth = 1;
+      // front wheel gap
+      var fwY = chassisY2 + wheelR * 0.5 + wheelR * 2;
+      ctx.beginPath(); ctx.moveTo(rockX - wheelR * 0.8 - 15, fwY);
+      ctx.lineTo(rockX - wheelR * 0.8 + 15, fwY); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(rockX - wheelR * 0.8 - 15, groundY);
+      ctx.lineTo(rockX - wheelR * 0.8 + 15, groundY); ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.font = '700 9px "Space Grotesk"'; ctx.fillStyle = '#ff5f1f';
+      ctx.fillText('GAP', rockX - wheelR * 0.8 - 30, (fwY + groundY) / 2 + 4);
+      ctx.restore();
+
+      // rock height label
+      ctx.save();
+      ctx.strokeStyle = '#00daf3'; ctx.lineWidth = 1;
+      ctx.setLineDash([3, 3]);
+      ctx.beginPath(); ctx.moveTo(rockX + rockW + 10, groundY);
+      ctx.lineTo(rockX + rockW + 10, groundY - rockH); ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.font = '700 10px "Space Grotesk"'; ctx.fillStyle = '#00daf3';
+      ctx.fillText('>30cm', rockX + rockW + 15, groundY - rockH / 2 + 4);
+      ctx.restore();
+
+      drawLabel('HIGH-CENTERING', W * 0.08, H * 0.12, '#ff5f1f', 16);
+      drawDesc('底盘骑在凸岩上，车轮悬空', W * 0.08, H * 0.12 + 22);
+      drawDesc('凸岩高度 > 底盘间隙 (30cm) 即可触发', W * 0.08, H * 0.12 + 42);
+
+    } else if (f === 3) {
+      // Transition Trap: front sinking in soft ground
+      var midX = W * 0.45;
+
+      // hard ground (left)
+      var gL = ctx.createLinearGradient(0, groundY, 0, H);
+      gL.addColorStop(0, '#4a3f35'); gL.addColorStop(1, '#1a1510');
+      ctx.fillStyle = gL; ctx.fillRect(0, groundY, midX, H - groundY);
+
+      // soft ground (right) - slightly lower
+      var softDip = wheelR * 0.4;
+      var gR = ctx.createLinearGradient(0, groundY, 0, H);
+      gR.addColorStop(0, '#8B7355'); gR.addColorStop(1, '#3B2820');
+      ctx.fillStyle = gR;
+      ctx.beginPath();
+      ctx.moveTo(midX, groundY);
+      ctx.quadraticCurveTo(midX + 30, groundY + softDip * 0.5, midX + 60, groundY + softDip);
+      ctx.lineTo(W, groundY + softDip);
+      ctx.lineTo(W, H); ctx.lineTo(midX, H);
+      ctx.closePath(); ctx.fill();
+
+      // boundary marker
+      ctx.save();
+      ctx.strokeStyle = '#ff7f50'; ctx.lineWidth = 2;
+      ctx.setLineDash([6, 4]);
+      ctx.beginPath(); ctx.moveTo(midX, groundY - 10); ctx.lineTo(midX, H); ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.font = '700 9px "Space Grotesk"'; ctx.fillStyle = '#ff7f50';
+      ctx.fillText('BOUNDARY', midX + 5, groundY - 15);
+      ctx.restore();
+
+      // front wheel sinking deep
+      var fwX = midX + wheelR * 2;
+      var fwSink = wheelR * 0.9;
+      drawWheel(fwX, groundY + softDip + fwSink - wheelR * 0.1, wheelR, 0);
+
+      // rear wheel on hard ground (still pushing)
+      var rwX = midX - wheelR * 1.5;
+      drawWheel(rwX, groundY - wheelR, wheelR, 0.3);
+
+      // chassis tilting
+      ctx.save();
+      var chassisH3 = wheelR * 0.5;
+      var rearTop = groundY - wheelR * 2 - chassisH3;
+      var frontTop = groundY + softDip + fwSink - wheelR * 0.1 - wheelR - chassisH3;
+      var cG = ctx.createLinearGradient(0, rearTop, 0, frontTop + chassisH3);
+      cG.addColorStop(0, '#555'); cG.addColorStop(1, '#2a2a2a');
+      ctx.fillStyle = cG;
+      ctx.beginPath();
+      ctx.moveTo(rwX - wheelR * 0.5, rearTop);
+      ctx.lineTo(fwX + wheelR * 0.5, frontTop);
+      ctx.lineTo(fwX + wheelR * 0.5, frontTop + chassisH3);
+      ctx.lineTo(rwX - wheelR * 0.5, rearTop + chassisH3);
+      ctx.closePath(); ctx.fill();
+      ctx.strokeStyle = 'rgba(255,181,156,0.15)'; ctx.lineWidth = 1; ctx.stroke();
+      ctx.restore();
+
+      // push arrow on rear wheel
+      ctx.save();
+      ctx.strokeStyle = '#10b981'; ctx.fillStyle = '#10b981';
+      ctx.lineWidth = 2; ctx.shadowColor = '#10b981'; ctx.shadowBlur = 8;
+      ctx.beginPath(); ctx.moveTo(rwX + wheelR + 5, groundY - wheelR);
+      ctx.lineTo(rwX + wheelR + 35, groundY - wheelR); ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(rwX + wheelR + 35, groundY - wheelR);
+      ctx.lineTo(rwX + wheelR + 28, groundY - wheelR - 4);
+      ctx.lineTo(rwX + wheelR + 28, groundY - wheelR + 4); ctx.closePath(); ctx.fill();
+      ctx.shadowBlur = 0;
+      ctx.font = '700 9px "Space Grotesk"';
+      ctx.fillText('PUSH', rwX + wheelR + 8, groundY - wheelR - 10);
+      ctx.restore();
+
+      // sink arrow on front wheel
+      ctx.save();
+      ctx.strokeStyle = '#ff5f1f'; ctx.fillStyle = '#ff5f1f';
+      ctx.lineWidth = 2; ctx.shadowColor = '#ff5f1f'; ctx.shadowBlur = 8;
+      var arrowX = fwX + wheelR + 10;
+      ctx.beginPath(); ctx.moveTo(arrowX, groundY + softDip - 5);
+      ctx.lineTo(arrowX, groundY + softDip + fwSink + 5); ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(arrowX, groundY + softDip + fwSink + 5);
+      ctx.lineTo(arrowX - 4, groundY + softDip + fwSink - 2);
+      ctx.lineTo(arrowX + 4, groundY + softDip + fwSink - 2); ctx.closePath(); ctx.fill();
+      ctx.shadowBlur = 0;
+      ctx.font = '700 9px "Space Grotesk"';
+      ctx.fillText('SINK', arrowX + 5, groundY + softDip + fwSink / 2 + 4);
+      ctx.restore();
+
+      drawLabel('TRANSITION TRAP', W * 0.08, H * 0.12, '#ff7f50', 16);
+      drawDesc('前轮陷入软地，后轮在硬面上继续推进', W * 0.08, H * 0.12 + 22);
+      drawDesc('前后不对称受力 -- 越推越深', W * 0.08, H * 0.12 + 42);
+
+    } else if (f === 4) {
+      // Comparison view
+      var colW = W / 3;
+      var cols = [
+        {name:'MECHANICAL JAM', trigger:'Rock Crevice', sev:'HIGH', rec:'Very Hard', color:'#ff5f1f'},
+        {name:'HIGH-CENTERING', trigger:'Protruding Rock', sev:'CRITICAL', rec:'Near Impossible', color:'#ff5f1f'},
+        {name:'TRANSITION TRAP', trigger:'Soft/Hard Edge', sev:'HIGH', rec:'Hard', color:'#ff7f50'}
+      ];
+
+      ctx.textAlign = 'center';
+      drawLabel('STUCK MECHANISM COMPARISON', W / 2, H * 0.1, '#ffb59c', 14);
+      ctx.textAlign = 'left';
+
+      cols.forEach(function(col, i) {
+        var cx = colW * i + colW / 2;
+        var startY = H * 0.2;
+
+        if (i > 0) {
+          ctx.strokeStyle = 'rgba(138,136,134,0.15)'; ctx.lineWidth = 1;
+          ctx.beginPath(); ctx.moveTo(colW * i, H * 0.15); ctx.lineTo(colW * i, H * 0.85); ctx.stroke();
+        }
+
+        ctx.textAlign = 'center';
+        ctx.font = '700 11px "Space Grotesk"'; ctx.fillStyle = col.color;
+        ctx.fillText(col.name, cx, startY);
+
+        // mini illustration
+        var mGroundY = H * 0.55;
+        var mR = wheelR * 0.5;
+
+        if (i === 0) {
+          // mini crevice
+          drawGround(mGroundY, '#4a3f35', '#1a1510');
+          ctx.fillStyle = '#0a0805';
+          ctx.fillRect(cx - mR * 0.4, mGroundY, mR * 0.8, mR);
+          drawWheel(cx, mGroundY + mR * 0.2, mR, 0);
+        } else if (i === 1) {
+          // mini high-center
+          drawGround(mGroundY, '#4a3f35', '#1a1510');
+          drawRock(cx - mR * 0.8, mGroundY - mR * 0.8, mR * 1.6, mR * 1);
+          drawWheel(cx - mR * 1.5, mGroundY - mR * 0.3, mR * 0.6, 0);
+          drawWheel(cx + mR * 1.5, mGroundY - mR * 0.3, mR * 0.6, 0);
+        } else {
+          // mini transition
+          var mMid = cx;
+          ctx.fillStyle = '#4a3f35'; ctx.fillRect(colW * i + 2, mGroundY, colW / 2, H - mGroundY);
+          ctx.fillStyle = '#8B7355'; ctx.fillRect(mMid, mGroundY, colW / 2 - 2, H - mGroundY);
+          drawWheel(cx + mR, mGroundY + mR * 0.3, mR, 0);
+        }
+
+        // data rows
+        ctx.font = '400 10px "Space Grotesk"'; ctx.fillStyle = '#c6c6c6';
+        var dy = H * 0.72;
+        ctx.fillText('Trigger: ' + col.trigger, cx, dy);
+        ctx.fillText('Severity: ' + col.sev, cx, dy + 16);
+        ctx.fillText('Recovery: ' + col.rec, cx, dy + 32);
+        ctx.textAlign = 'left';
+      });
+
+      ctx.textAlign = 'center';
+      ctx.font = '400 11px "Noto Sans SC"'; ctx.fillStyle = '#8a8886';
+      ctx.fillText('卡轮比打滑更危险 -- 一旦发生，脱困概率极低', W / 2, H * 0.92);
+      ctx.textAlign = 'left';
+    }
+  }
+
+  function goToFrame(f) {
+    if (f < 0) f = 0;
+    if (f >= totalFrames) f = totalFrames - 1;
+    currentFrame = f;
+    drawFrame(f); updateHUD(f);
+  }
+
+  function startPlay() {
+    if (playing) return;
+    playing = true;
+    document.getElementById('btnPlay').textContent = 'PAUSE';
+    document.getElementById('btnPlay').classList.add('active');
+    if (currentFrame >= totalFrames - 1) currentFrame = 0;
+    updateHUD(currentFrame); drawFrame(currentFrame);
+    scheduleNext();
+  }
+  function scheduleNext() {
+    if (!playing) return;
+    playTimer = setTimeout(function() {
+      if (!playing) return;
+      currentFrame++;
+      if (currentFrame >= totalFrames) { stopPlay(); currentFrame = totalFrames - 1; return; }
+      drawFrame(currentFrame); updateHUD(currentFrame); scheduleNext();
+    }, 2500);
+  }
+  function stopPlay() {
+    playing = false;
+    document.getElementById('btnPlay').textContent = 'PLAY';
+    document.getElementById('btnPlay').classList.remove('active');
+    if (playTimer) { clearTimeout(playTimer); playTimer = null; }
+  }
+
+  document.getElementById('btnPrev').addEventListener('click', function() { stopPlay(); goToFrame(currentFrame - 1); });
+  document.getElementById('btnNext').addEventListener('click', function() { stopPlay(); goToFrame(currentFrame + 1); });
+  document.getElementById('btnPlay').addEventListener('click', function() { if (playing) stopPlay(); else startPlay(); });
+
+  var guideCollapsed = false;
+  document.getElementById('guideToggle').addEventListener('click', function() {
+    guideCollapsed = !guideCollapsed;
+    document.getElementById('guideContent').className = guideCollapsed ? 'collapsed' : '';
+    document.getElementById('guideArrow').textContent = guideCollapsed ? '+' : '-';
+  });
+
+  window.addEventListener('resize', resize);
+  resize(); setTimeout(resize, 200); setTimeout(resize, 600);
+  document.fonts.ready.then(function() { resize(); });
+  updateHUD(0);
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>TERRAIN GRIP ANALYSIS</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;700&family=Noto+Sans+SC:wght@400;700&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{width:100%;height:100vh;overflow:hidden;background:#131313;font-family:'Noto Sans SC',sans-serif;color:#e5e2e1}
+.wrapper{display:flex;flex-direction:column;height:100vh;padding:8px}
+.header{text-align:center;padding:6px 0 4px;flex-shrink:0}
+.header h1{font-family:'Space Grotesk',sans-serif;font-size:18px;font-weight:700;letter-spacing:2px;background:linear-gradient(90deg,#ffb59c,#ff7f50);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+.header p{font-size:11px;color:#8a8886;margin-top:2px}
+.cards-area{display:flex;flex-wrap:wrap;justify-content:center;gap:6px;padding:6px 4px;flex-shrink:0}
+.card{width:calc(33.33% - 8px);max-width:180px;padding:8px;background:rgba(28,27,27,0.92);border:1px solid rgba(138,136,134,0.15);cursor:grab;user-select:none;-webkit-user-select:none;transition:box-shadow 0.2s,transform 0.15s}
+.card:active{cursor:grabbing}
+.card.dragging{opacity:0.5;transform:scale(0.95)}
+.card .card-name{font-family:'Space Grotesk',sans-serif;font-size:11px;font-weight:700;color:#ffb59c;letter-spacing:1px;margin-bottom:3px}
+.card .card-desc{font-size:10px;color:#c6c6c6;line-height:1.4}
+.card.placed{opacity:0.4;pointer-events:none}
+.zones-area{flex:1;min-height:0;display:flex;gap:6px;padding:4px}
+.zone{flex:1;display:flex;flex-direction:column;align-items:center;padding:6px;position:relative;transition:background 0.3s}
+.zone-label{font-family:'Space Grotesk',sans-serif;font-size:13px;font-weight:700;letter-spacing:2px;margin-bottom:4px;flex-shrink:0}
+.zone-items{flex:1;width:100%;overflow-y:auto;display:flex;flex-direction:column;gap:4px;min-height:0}
+.zone-item{padding:5px 8px;font-size:10px;color:#e5e2e1;background:rgba(28,27,27,0.8);border:1px solid rgba(138,136,134,0.15);display:flex;justify-content:space-between;align-items:center}
+.zone-item .remove-btn{cursor:pointer;color:#8a8886;font-size:12px;padding:0 4px}
+.zone-item .remove-btn:hover{color:#ff5f1f}
+.zone[data-zone="SAFE"]{background:rgba(16,185,129,0.06);border:1px solid rgba(16,185,129,0.2)}
+.zone[data-zone="SAFE"] .zone-label{color:#10b981}
+.zone[data-zone="SAFE"].drag-over{background:rgba(16,185,129,0.15);box-shadow:0 0 30px rgba(16,185,129,0.2)}
+.zone[data-zone="CAUTION"]{background:rgba(255,127,80,0.06);border:1px solid rgba(255,127,80,0.2)}
+.zone[data-zone="CAUTION"] .zone-label{color:#ff7f50}
+.zone[data-zone="CAUTION"].drag-over{background:rgba(255,127,80,0.15);box-shadow:0 0 30px rgba(255,127,80,0.2)}
+.zone[data-zone="HAZARD"]{background:rgba(255,95,31,0.06);border:1px solid rgba(255,95,31,0.2)}
+.zone[data-zone="HAZARD"] .zone-label{color:#ff5f1f}
+.zone[data-zone="HAZARD"].drag-over{background:rgba(255,95,31,0.15);box-shadow:0 0 30px rgba(255,95,31,0.2)}
+.bottom-bar{flex-shrink:0;display:flex;justify-content:center;align-items:center;padding:6px;gap:12px}
+.btn{font-family:'Space Grotesk',sans-serif;font-size:12px;font-weight:700;letter-spacing:1px;padding:6px 20px;cursor:pointer;border:none;color:#131313;background:linear-gradient(135deg,#ffb59c,#ff7f50);transition:box-shadow 0.2s}
+.btn:hover{box-shadow:0 0 20px rgba(255,127,80,0.4)}
+.btn:disabled{opacity:0.3;cursor:default;box-shadow:none}
+.btn-reset{background:rgba(28,27,27,0.92);color:#c6c6c6;border:1px solid rgba(138,136,134,0.15)}
+.btn-reset:hover{box-shadow:0 0 15px rgba(138,136,134,0.15)}
+.score-text{font-family:'Space Grotesk',sans-serif;font-size:12px;color:#8a8886}
+.result-overlay{position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(19,19,19,0.92);backdrop-filter:blur(12px);display:none;justify-content:center;align-items:center;z-index:200;flex-direction:column;padding:20px}
+.result-overlay.show{display:flex}
+.result-panel{max-width:520px;width:100%;max-height:80vh;overflow-y:auto;padding:20px}
+.result-panel h2{font-family:'Space Grotesk',sans-serif;font-size:20px;text-align:center;margin-bottom:12px}
+.result-panel .score-big{text-align:center;font-family:'Space Grotesk',sans-serif;font-size:36px;font-weight:700;margin-bottom:16px}
+.result-row{display:flex;align-items:flex-start;gap:10px;padding:8px;margin-bottom:6px;background:rgba(28,27,27,0.6);border:1px solid rgba(138,136,134,0.1)}
+.result-row .icon{font-size:16px;flex-shrink:0;width:20px;text-align:center}
+.result-row .info{flex:1}
+.result-row .info .name{font-family:'Space Grotesk',sans-serif;font-size:12px;font-weight:700;color:#ffb59c}
+.result-row .info .explain{font-size:11px;color:#c6c6c6;margin-top:2px;line-height:1.4}
+.result-row .info .your-pick{font-size:10px;color:#8a8886;margin-top:2px}
+.guide-panel{position:fixed;top:8px;right:8px;width:240px;max-height:40vh;overflow-y:auto;background:rgba(20,20,35,0.85);backdrop-filter:blur(12px);border:1px solid rgba(255,255,255,0.08);padding:10px;z-index:100;font-size:11px;color:rgba(255,255,255,0.85);transition:height 0.3s}
+.guide-panel h3{font-family:'Space Grotesk',sans-serif;font-size:12px;margin-bottom:6px;display:flex;align-items:center;justify-content:space-between;cursor:pointer;color:#ffb59c}
+.guide-panel .guide-content ul{padding-left:14px;line-height:1.6}
+.guide-panel .guide-content.collapsed{display:none}
+.ghost{position:fixed;pointer-events:none;z-index:300;opacity:0.85;transform:rotate(-2deg)}
+</style>
+</head>
+<body>
+<div class="wrapper">
+  <div class="header">
+    <h1>TERRAIN GRIP ANALYSIS</h1>
+    <p>MARS SURFACE TRAVERSABILITY ASSESSMENT</p>
+  </div>
+  <div class="cards-area" id="cardsArea"></div>
+  <div class="zones-area" id="zonesArea">
+    <div class="zone" data-zone="SAFE">
+      <div class="zone-label">SAFE</div>
+      <div class="zone-items" id="zone-SAFE"></div>
+    </div>
+    <div class="zone" data-zone="CAUTION">
+      <div class="zone-label">CAUTION</div>
+      <div class="zone-items" id="zone-CAUTION"></div>
+    </div>
+    <div class="zone" data-zone="HAZARD">
+      <div class="zone-label">HAZARD</div>
+      <div class="zone-items" id="zone-HAZARD"></div>
+    </div>
+  </div>
+  <div class="bottom-bar">
+    <button class="btn btn-reset" id="btnReset">RESET</button>
+    <span class="score-text" id="scoreText">0 / 6 PLACED</span>
+    <button class="btn" id="btnAnalyze" disabled>ANALYZE</button>
+  </div>
+</div>
+
+<div class="result-overlay" id="resultOverlay">
+  <div class="result-panel" id="resultPanel"></div>
+  <div style="margin-top:12px">
+    <button class="btn btn-reset" id="btnRetry">RETRY</button>
+  </div>
+</div>
+
+<div class="guide-panel" id="guidePanel">
+  <h3 id="guideToggle">GUIDE <span id="guideArrow">-</span></h3>
+  <div class="guide-content" id="guideContent">
+    <ul>
+      <li>将 6 种火星地形按打滑风险分类</li>
+      <li>长按/拖拽卡片到 SAFE / CAUTION / HAZARD 区域</li>
+      <li>点击已放置卡片右侧 x 可撤回</li>
+      <li>全部放置后点击 ANALYZE 查看结果</li>
+      <li>目标：至少 5/6 正确分类</li>
+      <li>提示：注意波纹纹路和颜色突变</li>
+    </ul>
+  </div>
+</div>
+
+<script>
+(function(){
+  var CARDS = [
+    {id:'c1',name:'FLAT BEDROCK',desc:'平坦基岩，表面粗糙纹理清晰',correct:'SAFE',explain:'基岩表面摩擦系数高，车轮咬合力强，沉陷量几乎为零，是最安全的行驶地面。'},
+    {id:'c2',name:'COMPACTED REGOLITH',desc:'压实的火星土，车辙浅而均匀',correct:'SAFE',explain:'压实土壤承载力足够，浅而均匀的车辙说明地面密度稳定，不会突然下沉。'},
+    {id:'c3',name:'RIPPLE FIELD',desc:'整齐波纹状沙面，颗粒松散',correct:'HAZARD',explain:'波纹是风成地貌特征，说明沙粒被风反复搬运、未固结，承载力极低。机遇号就是陷入类似地形。'},
+    {id:'c4',name:'SMOOTH ROCK SLOPE',desc:'光滑岩面，坡度约 18 度',correct:'CAUTION',explain:'虽然岩石不会导致沉陷，但光滑面摩擦系数低，18 度坡度接近安全极限。低摩擦+高坡度组合有打滑风险。'},
+    {id:'c5',name:'COLOR BOUNDARY',desc:'深色基岩突变为浅色沙覆盖带',correct:'CAUTION',explain:'颜色突变意味着地表材质从硬（基岩）变软（沙层），沙层厚度不均，车辆可能前段正常后段陷入。'},
+    {id:'c6',name:'DEEP SAND DRIFT',desc:'细沙堆积区，表面无固结痕迹',correct:'HAZARD',explain:'未固结的深层细沙是最危险地形，车轮会迅速下沉超过轮径1/4，驱动效率急剧下降导致完全困住。'}
+  ];
+
+  var placements = {};
+  var ghost = null;
+  var dragCard = null;
+  var dragOffsetX = 0, dragOffsetY = 0;
+
+  var cardsArea = document.getElementById('cardsArea');
+  var scoreText = document.getElementById('scoreText');
+  var btnAnalyze = document.getElementById('btnAnalyze');
+  var resultOverlay = document.getElementById('resultOverlay');
+  var resultPanel = document.getElementById('resultPanel');
+
+  function renderCards() {
+    cardsArea.innerHTML = '';
+    CARDS.forEach(function(c) {
+      var el = document.createElement('div');
+      el.className = 'card' + (placements[c.id] ? ' placed' : '');
+      el.setAttribute('data-id', c.id);
+      el.innerHTML = '<div class="card-name">' + c.name + '</div><div class="card-desc">' + c.desc + '</div>';
+      cardsArea.appendChild(el);
+      if (!placements[c.id]) {
+        el.addEventListener('mousedown', function(e) { startDrag(e, c.id); });
+        el.addEventListener('touchstart', function(e) { startDrag(e, c.id); }, {passive:false});
+      }
+    });
+  }
+
+  function renderZones() {
+    ['SAFE','CAUTION','HAZARD'].forEach(function(z) {
+      var container = document.getElementById('zone-' + z);
+      container.innerHTML = '';
+      Object.keys(placements).forEach(function(cid) {
+        if (placements[cid] !== z) return;
+        var c = CARDS.find(function(x){return x.id===cid});
+        var item = document.createElement('div');
+        item.className = 'zone-item';
+        item.innerHTML = '<span>' + c.name + '</span><span class="remove-btn">x</span>';
+        item.querySelector('.remove-btn').addEventListener('click', function() {
+          delete placements[cid];
+          renderCards();
+          renderZones();
+          updateScore();
+        });
+        container.appendChild(item);
+      });
+    });
+  }
+
+  function updateScore() {
+    var count = Object.keys(placements).length;
+    scoreText.textContent = count + ' / 6 PLACED';
+    btnAnalyze.disabled = count < 6;
+  }
+
+  function startDrag(e, cardId) {
+    e.preventDefault();
+    dragCard = cardId;
+    var cardEl = cardsArea.querySelector('[data-id="'+cardId+'"]');
+    var rect = cardEl.getBoundingClientRect();
+    var pt = e.touches ? e.touches[0] : e;
+    dragOffsetX = pt.clientX - rect.left;
+    dragOffsetY = pt.clientY - rect.top;
+
+    ghost = document.createElement('div');
+    ghost.className = 'ghost';
+    ghost.style.width = rect.width + 'px';
+    ghost.innerHTML = cardEl.innerHTML;
+    ghost.style.background = 'rgba(28,27,27,0.95)';
+    ghost.style.border = '1px solid rgba(255,181,156,0.4)';
+    ghost.style.padding = '8px';
+    ghost.style.left = (pt.clientX - dragOffsetX) + 'px';
+    ghost.style.top = (pt.clientY - dragOffsetY) + 'px';
+    document.body.appendChild(ghost);
+
+    cardEl.classList.add('dragging');
+
+    document.addEventListener('mousemove', onDragMove);
+    document.addEventListener('mouseup', onDragEnd);
+    document.addEventListener('touchmove', onDragMove, {passive:false});
+    document.addEventListener('touchend', onDragEnd);
+  }
+
+  function onDragMove(e) {
+    if (!ghost) return;
+    e.preventDefault();
+    var pt = e.touches ? e.touches[0] : e;
+    ghost.style.left = (pt.clientX - dragOffsetX) + 'px';
+    ghost.style.top = (pt.clientY - dragOffsetY) + 'px';
+
+    var zones = document.querySelectorAll('.zone');
+    var cx = pt.clientX, cy = pt.clientY;
+    zones.forEach(function(z) {
+      var r = z.getBoundingClientRect();
+      if (cx >= r.left && cx <= r.right && cy >= r.top && cy <= r.bottom) {
+        z.classList.add('drag-over');
+      } else {
+        z.classList.remove('drag-over');
+      }
+    });
+  }
+
+  function onDragEnd(e) {
+    document.removeEventListener('mousemove', onDragMove);
+    document.removeEventListener('mouseup', onDragEnd);
+    document.removeEventListener('touchmove', onDragMove);
+    document.removeEventListener('touchend', onDragEnd);
+
+    if (ghost) {
+      document.body.removeChild(ghost);
+      ghost = null;
+    }
+
+    var pt = e.changedTouches ? e.changedTouches[0] : e;
+    var zones = document.querySelectorAll('.zone');
+    var dropped = false;
+    zones.forEach(function(z) {
+      z.classList.remove('drag-over');
+      var r = z.getBoundingClientRect();
+      if (pt.clientX >= r.left && pt.clientX <= r.right && pt.clientY >= r.top && pt.clientY <= r.bottom) {
+        placements[dragCard] = z.getAttribute('data-zone');
+        dropped = true;
+      }
+    });
+
+    var cardEl = cardsArea.querySelector('[data-id="'+dragCard+'"]');
+    if (cardEl) cardEl.classList.remove('dragging');
+
+    if (dropped) {
+      renderCards();
+      renderZones();
+      updateScore();
+    }
+    dragCard = null;
+  }
+
+  function analyze() {
+    var correct = 0;
+    var html = '<h2 style="background:linear-gradient(90deg,#ffb59c,#ff7f50);-webkit-background-clip:text;-webkit-text-fill-color:transparent">ANALYSIS COMPLETE</h2>';
+    CARDS.forEach(function(c) {
+      var pick = placements[c.id] || '?';
+      var ok = pick === c.correct;
+      if (ok) correct++;
+      var iconColor = ok ? '#10b981' : '#ff5f1f';
+      var iconChar = ok ? 'OK' : 'X';
+      html += '<div class="result-row"><div class="icon" style="color:'+iconColor+';font-family:Space Grotesk;font-weight:700;font-size:12px">'+iconChar+'</div><div class="info"><div class="name">'+c.name+'</div><div class="explain">'+c.explain+'</div><div class="your-pick">Your pick: '+pick+' | Correct: '+c.correct+'</div></div></div>';
+    });
+    var color = correct >= 5 ? '#10b981' : (correct >= 3 ? '#ff7f50' : '#ff5f1f');
+    html = '<div class="score-big" style="color:'+color+'">'+correct+' / 6</div>' + html.replace('<h2', '<h2');
+    html = html.replace('<h2', '<h2');
+    var pass = correct >= 5;
+    html += '<div style="text-align:center;margin-top:12px;font-size:13px;color:'+(pass?'#10b981':'#ff7f50')+'">'+(pass?'MISSION PASSED -- Terrain analysis skills confirmed.':'NEEDS REVIEW -- Study the slip signals and try again.')+'</div>';
+    resultPanel.innerHTML = html;
+    resultOverlay.classList.add('show');
+  }
+
+  function reset() {
+    placements = {};
+    resultOverlay.classList.remove('show');
+    renderCards();
+    renderZones();
+    updateScore();
+  }
+
+  btnAnalyze.addEventListener('click', analyze);
+  document.getElementById('btnReset').addEventListener('click', reset);
+  document.getElementById('btnRetry').addEventListener('click', reset);
+
+  var guideCollapsed = false;
+  document.getElementById('guideToggle').addEventListener('click', function() {
+    guideCollapsed = !guideCollapsed;
+    document.getElementById('guideContent').className = 'guide-content' + (guideCollapsed ? ' collapsed' : '');
+    document.getElementById('guideArrow').textContent = guideCollapsed ? '+' : '-';
+  });
+
+  renderCards();
+  updateScore();
+})();
+</script>
+</body>
+</html>

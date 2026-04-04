@@ -21,9 +21,10 @@ async def generate_course_v2(
     1. CoursePlannerAgent.plan_detailed() -> plan_markdown
     2. CourseIdeaAgent.identify() -> (plan_with_placeholders, ideas)
     3. CourseIdeaDetailAgent x N (parallel) -> ideas with detail_plan
-    4. AnimationGenAgent / GameGenAgent / StoryGenAgent (parallel per idea)
-    5. IntegrationAgent.integrate() -> CourseContent
-    6. Save to DB course_content field
+    4. DebateAgent.evaluate_all() -> 评估详细方案，质疑有理则不生成
+    5. AnimationGenAgent / GameGenAgent / StoryGenAgent / ExerciseGenAgent (parallel per approved idea)
+    6. IntegrationAgent.integrate() -> CourseContent
+    7. Save to DB course_content field
 
     progress_cb(event, data): optional callback for SSE progress events.
     Returns dict with status and course_content.
@@ -33,6 +34,7 @@ async def generate_course_v2(
     from systemedu.storage.db import LessonContent, get_session as get_db_session
     from systemedu.agents.builtin.course_planner import CoursePlannerAgent
     from systemedu.agents.builtin.course_idea_agent import CourseIdeaAgent
+    from systemedu.agents.builtin.debate_agent import DebateAgent
     from systemedu.agents.builtin.course_idea_detail_agent import CourseIdeaDetailAgent
     from systemedu.agents.builtin.animation_gen_agent import AnimationGenAgent
     from systemedu.agents.builtin.game_gen_agent import GameGenAgent
@@ -168,26 +170,22 @@ async def generate_course_v2(
             if progress_cb:
                 progress_cb("details_ready", {"count": len(ideas)})
 
-        # Step 4: Generate content for each idea in parallel
-        # Note: game mode is temporarily disabled; use exercise mode instead.
-        _GAME_DISABLED = True
+        # Step 4: DebateAgent evaluates detailed plans (DISABLED - all ideas proceed to generation)
+        # TODO: Re-enable debate when standards are calibrated
+        if ideas:
+            logger.info(f"[v2] Step 4: DebateAgent skipped - all {len(ideas)} ideas proceed to generation")
+            if progress_cb:
+                progress_cb("ideas_debated", {
+                    "approved": len(ideas),
+                    "rejected": 0,
+                    "needs_revision": 0,
+                })
 
+        # Step 5: Generate content for each approved idea in parallel
         async def _generate_idea(idea: dict) -> dict:
             mode = idea.get("mode", "")
             detail_plan = idea.get("detail_plan")
             result_idea = dict(idea)
-
-            # game temporarily disabled — skip silently
-            if mode == "game" and _GAME_DISABLED:
-                logger.info("[v2] game mode disabled, skipping idea '%s'", idea.get("idea_id"))
-                result_idea["result"] = None
-                if progress_cb:
-                    progress_cb("idea_complete", {
-                        "idea_id": idea.get("idea_id", ""),
-                        "mode": mode,
-                        "status": "skipped",
-                    })
-                return result_idea
 
             if not detail_plan:
                 result_idea["result"] = None
@@ -304,6 +302,8 @@ async def generate_course_v2(
         )
 
         # Step 6a: Segment plan + generate audio scripts
+        # Segmentation is pure Python (split on ## headings) — placeholders are
+        # guaranteed to be preserved. LLM only generates audio_script per section.
         logger.info(f"[v2] Step 6a: CourseSegmentAgent for node {knode_id}")
         from systemedu.agents.builtin.course_segment_agent import CourseSegmentAgent
         segments = await CourseSegmentAgent(llm).segment(

@@ -1,0 +1,574 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>PURGATORY DUNE INCIDENT</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;700&family=Noto+Sans+SC:wght@400;700&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{width:100%;height:100vh;overflow:hidden;background:#131313;
+  font-family:'Noto Sans SC','PingFang SC',system-ui,sans-serif;color:#e5e2e1}
+
+.wrapper{display:flex;flex-direction:column;height:100vh;overflow:hidden}
+
+/* guide panel */
+.guide-panel{position:fixed;top:8px;right:8px;width:230px;max-height:36vh;
+  overflow-y:auto;z-index:200;padding:10px 12px;
+  background:rgba(28,27,27,0.88);backdrop-filter:blur(14px);
+  border:1px solid rgba(138,136,134,0.15);font-size:12px;line-height:1.55;
+  color:rgba(229,226,225,0.85)}
+.guide-panel h3{font-family:'Space Grotesk',sans-serif;font-size:13px;font-weight:700;
+  margin-bottom:6px;display:flex;align-items:center;justify-content:space-between;cursor:pointer;
+  color:#ffb59c;text-transform:uppercase;letter-spacing:0.05em}
+.guide-panel h3 .arrow{transition:transform .2s;font-size:10px}
+.guide-panel h3 .arrow.collapsed{transform:rotate(-90deg)}
+.guide-panel ul{padding-left:14px;margin:4px 0}
+.guide-panel .gl{color:#8a8886;font-size:11px;text-transform:uppercase;
+  letter-spacing:0.08em;margin-top:6px;font-family:'Space Grotesk',sans-serif}
+
+/* header */
+.header{height:40px;min-height:40px;display:flex;align-items:center;padding:0 16px;
+  background:rgba(28,27,27,0.92);border-bottom:1px solid rgba(138,136,134,0.1)}
+.header h1{font-family:'Space Grotesk',sans-serif;font-size:14px;font-weight:700;
+  color:#ffb59c;text-transform:uppercase;letter-spacing:0.06em}
+
+/* canvas container */
+.canvas-wrap{flex:1;min-height:0;position:relative;overflow:hidden;background:#131313}
+.canvas-wrap canvas{position:absolute;top:0;left:0;width:100%;height:100%}
+
+/* controls */
+.controls{height:44px;min-height:44px;display:flex;align-items:center;justify-content:center;gap:12px;
+  background:rgba(28,27,27,0.92);border-top:1px solid rgba(138,136,134,0.08);
+  border-bottom:1px solid rgba(138,136,134,0.08)}
+.ctrl-btn{padding:6px 16px;border:1px solid rgba(255,181,156,0.25);background:transparent;
+  color:#ffb59c;cursor:pointer;font-family:'Space Grotesk',sans-serif;font-size:12px;
+  font-weight:700;text-transform:uppercase;letter-spacing:0.06em;transition:all .15s}
+.ctrl-btn:hover{background:rgba(255,127,80,0.15);box-shadow:0 0 16px rgba(255,127,80,0.2)}
+.ctrl-btn.active{background:linear-gradient(45deg,rgba(255,181,156,0.2),rgba(255,127,80,0.15))}
+.frame-dots{display:flex;gap:6px;align-items:center;margin:0 12px}
+.frame-dot{width:10px;height:10px;border:1px solid rgba(255,181,156,0.3);cursor:pointer;
+  transition:all .2s}
+.frame-dot.active{background:#ff7f50;border-color:#ff7f50;box-shadow:0 0 12px rgba(255,127,80,0.5)}
+.frame-dot:hover{border-color:#ffb59c}
+
+/* HUD */
+.hud{height:52px;min-height:52px;display:flex;align-items:center;
+  background:rgba(0,0,0,0.55);border-top:1px solid rgba(255,255,255,0.06);padding:0 16px}
+.hud-col{flex:1;text-align:center}
+.hud-label{font-family:'Space Grotesk',sans-serif;font-size:10px;
+  color:rgba(255,181,156,0.5);text-transform:uppercase;letter-spacing:0.1em}
+.hud-val{font-family:'Space Grotesk',sans-serif;font-size:14px;font-weight:700;
+  color:rgba(229,226,225,0.88);margin-top:2px}
+</style>
+</head>
+<body>
+
+<div class="guide-panel" id="guidePanel">
+  <h3 id="guideToggle">OBSERVER GUIDE <span class="arrow" id="guideArrow">&#9660;</span></h3>
+  <div id="guideContent">
+    <div class="gl">WHAT IT SHOWS</div>
+    <p>火星车陷入伪安全沙地的完整物理过程</p>
+    <div class="gl" style="margin-top:6px">OBSERVE</div>
+    <ul>
+      <li>注意地面剖面中薄壳层的厚度</li>
+      <li>观察轮子空转时沙粒的运动方向</li>
+    </ul>
+    <div class="gl" style="margin-top:6px">CONTROLS</div>
+    <p>点击 PLAY 自动播放，或用 PREV/NEXT 逐帧查看</p>
+    <div class="gl" style="margin-top:6px">TAKEAWAY</div>
+    <p style="color:#ff5f1f">平坦的表面不等于安全的地面</p>
+  </div>
+</div>
+
+<div class="wrapper">
+  <div class="header">
+    <h1>PURGATORY DUNE INCIDENT -- SOL 446, 2005</h1>
+  </div>
+
+  <div class="canvas-wrap">
+    <canvas id="c"></canvas>
+  </div>
+
+  <div class="controls">
+    <button class="ctrl-btn" id="btnPrev">PREV</button>
+    <button class="ctrl-btn active" id="btnPlay">PLAY</button>
+    <button class="ctrl-btn" id="btnNext">NEXT</button>
+    <div class="frame-dots" id="frameDots"></div>
+  </div>
+
+  <div class="hud">
+    <div class="hud-col"><div class="hud-label">FRAME</div><div class="hud-val" id="hudFrame">1/5</div></div>
+    <div class="hud-col"><div class="hud-label">DEPTH</div><div class="hud-val" id="hudDepth">0.0 cm</div></div>
+    <div class="hud-col"><div class="hud-label">TRACTION</div><div class="hud-val" id="hudTraction">100%</div></div>
+    <div class="hud-col"><div class="hud-label">STATUS</div><div class="hud-val" id="hudStatus">NOMINAL</div></div>
+  </div>
+</div>
+
+<script>
+(function(){
+"use strict";
+
+/* ── canvas setup ── */
+var canvas = document.getElementById("c");
+var ctx = canvas.getContext("2d");
+var W = 800, H = 500;
+var DPR = Math.min(window.devicePixelRatio || 1, 2);
+
+function resize(){
+  var rect = canvas.parentElement.getBoundingClientRect();
+  if(rect.width < 1 || rect.height < 1) return;
+  canvas.width = rect.width * DPR;
+  canvas.height = rect.height * DPR;
+  ctx.setTransform(1,0,0,1,0,0);
+  ctx.scale(canvas.width / W, canvas.height / H);
+  render();
+}
+
+/* ── palette ── */
+var PRIMARY = "#ffb59c";
+var PRIMARY_C = "#ff7f50";
+var TERTIARY = "#00daf3";
+var SIGNAL = "#ff5f1f";
+var TEXT = "#e5e2e1";
+var MUTED = "#8a8886";
+
+/* ── frame data ── */
+var FRAMES = [
+  {title:"APPROACH",  zh:"接近目标区域", depth:0,  traction:100, status:"NOMINAL",   narr:"看起来很安全..."},
+  {title:"CRACK",     zh:"表面出现裂纹", depth:2,  traction:75,  status:"CAUTION",   narr:"薄壳开始碎裂"},
+  {title:"SINKING",   zh:"开始下陷",     depth:12, traction:40,  status:"WARNING",   narr:"轮子陷入松沙"},
+  {title:"WHEEL SPIN",zh:"轮子空转",     depth:22, traction:15,  status:"CRITICAL",  narr:"越挣扎越深"},
+  {title:"STRANDED",  zh:"搁浅",         depth:30, traction:5,   status:"EMERGENCY", narr:"任务暂停"}
+];
+
+var cur = 0;         // current frame index
+var t = 0;           // 0..1 interpolation within frame
+var playing = false;
+var rafId = null;
+
+/* ── HUD / dots ── */
+var dotsEl = document.getElementById("frameDots");
+for(var i = 0; i < FRAMES.length; i++){
+  var dot = document.createElement("div");
+  dot.className = "frame-dot" + (i === 0 ? " active" : "");
+  dot.dataset.idx = i;
+  dotsEl.appendChild(dot);
+}
+dotsEl.addEventListener("click", function(e){
+  var d = e.target.closest(".frame-dot");
+  if(!d) return;
+  goTo(parseInt(d.dataset.idx, 10));
+});
+
+function syncUI(){
+  var f = FRAMES[cur];
+  document.getElementById("hudFrame").textContent    = (cur+1)+"/"+FRAMES.length;
+  document.getElementById("hudDepth").textContent     = f.depth.toFixed(1)+" cm";
+  document.getElementById("hudTraction").textContent  = f.traction+"%";
+  var st = document.getElementById("hudStatus");
+  st.textContent = f.status;
+  st.style.color = (f.status==="EMERGENCY"||f.status==="CRITICAL") ? SIGNAL
+                 : (f.status==="WARNING"||f.status==="CAUTION")    ? PRIMARY
+                 : "rgba(229,226,225,0.88)";
+  dotsEl.querySelectorAll(".frame-dot").forEach(function(d,i){
+    d.classList.toggle("active", i===cur);
+  });
+  document.getElementById("btnPlay").textContent = playing ? "PAUSE" : "PLAY";
+}
+
+function goTo(idx){
+  cur = Math.max(0, Math.min(FRAMES.length-1, idx));
+  t = 0;
+  syncUI();
+  render();
+}
+
+/* ── controls ── */
+document.getElementById("btnPrev").addEventListener("click", function(){ if(cur>0) goTo(cur-1); });
+document.getElementById("btnNext").addEventListener("click", function(){ if(cur<FRAMES.length-1) goTo(cur+1); else stopAnim(); });
+document.getElementById("btnPlay").addEventListener("click", function(){
+  if(playing) stopAnim(); else startAnim();
+});
+document.getElementById("guideToggle").addEventListener("click", function(){
+  var c = document.getElementById("guideContent");
+  var a = document.getElementById("guideArrow");
+  var hidden = c.style.display === "none";
+  c.style.display = hidden ? "block" : "none";
+  a.classList.toggle("collapsed", !hidden);
+});
+
+function startAnim(){
+  playing = true;
+  if(cur >= FRAMES.length - 1){ cur = 0; t = 0; }
+  syncUI();
+  var last = performance.now();
+  function tick(now){
+    var dt = (now - last) / 1000;
+    last = now;
+    t += dt * 0.4;           // ~2.5s per frame
+    if(t >= 1){
+      t = 0;
+      cur++;
+      if(cur >= FRAMES.length){ cur = FRAMES.length - 1; t = 0; stopAnim(); render(); return; }
+      syncUI();
+    }
+    render();
+    if(playing) rafId = requestAnimationFrame(tick);
+  }
+  rafId = requestAnimationFrame(tick);
+}
+
+function stopAnim(){
+  playing = false;
+  if(rafId){ cancelAnimationFrame(rafId); rafId = null; }
+  syncUI();
+}
+
+/* ══════════════════════════════════════════
+   DRAWING
+   ══════════════════════════════════════════ */
+
+function lerp(a,b,p){ return a + (b - a) * p; }
+
+/* current interpolated depth */
+function curDepth(){
+  var d0 = FRAMES[cur].depth;
+  var d1 = (cur < FRAMES.length-1) ? FRAMES[cur+1].depth : d0;
+  return lerp(d0, d1, t);
+}
+function curTraction(){
+  var t0 = FRAMES[cur].traction;
+  var t1 = (cur < FRAMES.length-1) ? FRAMES[cur+1].traction : t0;
+  return lerp(t0, t1, t);
+}
+
+function render(){
+  /* bg */
+  var g = ctx.createRadialGradient(W/2, H*0.4, 40, W/2, H*0.4, W*0.9);
+  g.addColorStop(0, "#1c1b1b");
+  g.addColorStop(1, "#131313");
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, W, H);
+
+  /* wireframe grid */
+  ctx.strokeStyle = "rgba(0,218,243,0.035)";
+  ctx.lineWidth = 0.5;
+  for(var gx = 0; gx <= W; gx += 20){ ctx.beginPath(); ctx.moveTo(gx,0); ctx.lineTo(gx,H); ctx.stroke(); }
+  for(var gy = 0; gy <= H; gy += 20){ ctx.beginPath(); ctx.moveTo(0,gy); ctx.lineTo(W,gy); ctx.stroke(); }
+
+  var depth = curDepth();
+
+  /* --- Mars sky (above ground) --- */
+  var skyG = ctx.createLinearGradient(0, 0, 0, 260);
+  skyG.addColorStop(0, "#1a1210");
+  skyG.addColorStop(1, "#2a1e18");
+  ctx.fillStyle = skyG;
+  ctx.fillRect(0, 0, W, 260);
+
+  /* distant mountains silhouette */
+  ctx.fillStyle = "#2a2018";
+  ctx.beginPath();
+  ctx.moveTo(0, 260);
+  ctx.lineTo(60, 220); ctx.lineTo(140, 240); ctx.lineTo(220, 200); ctx.lineTo(320, 235);
+  ctx.lineTo(400, 210); ctx.lineTo(500, 245); ctx.lineTo(580, 215); ctx.lineTo(680, 240);
+  ctx.lineTo(740, 225); ctx.lineTo(W, 250); ctx.lineTo(W, 260);
+  ctx.fill();
+
+  /* Mars ground surface (above cross-section) */
+  var surfY = 260;
+  var surfG = ctx.createLinearGradient(0, surfY, 0, surfY + 30);
+  surfG.addColorStop(0, "#6a4a30");
+  surfG.addColorStop(1, "#5a3a25");
+  ctx.fillStyle = surfG;
+  ctx.fillRect(0, surfY, W, 30);
+
+  /* --- cross-section indicator line --- */
+  var csY = 290;     // cross-section starts here
+  ctx.strokeStyle = TERTIARY;
+  ctx.lineWidth = 1;
+  ctx.setLineDash([6,4]);
+  ctx.beginPath(); ctx.moveTo(0, csY); ctx.lineTo(W, csY); ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.font = "bold 10px 'Space Grotesk',sans-serif";
+  ctx.fillStyle = TERTIARY;
+  ctx.textAlign = "left";
+  ctx.fillText("CROSS-SECTION VIEW", 12, csY - 5);
+
+  /* --- crust layer --- */
+  var crustY = csY;
+  var crustH = 10;
+  var cg = ctx.createLinearGradient(0, crustY, 0, crustY + crustH);
+  cg.addColorStop(0, "#b8a080");
+  cg.addColorStop(0.5, "#a09070");
+  cg.addColorStop(1, "#8a7a60");
+  ctx.fillStyle = cg;
+  ctx.fillRect(0, crustY, W, crustH);
+
+  /* crust label */
+  ctx.font = "9px 'Space Grotesk',sans-serif";
+  ctx.fillStyle = "#c8b898";
+  ctx.textAlign = "right";
+  ctx.fillText("MINERAL CRUST ~5mm", W - 12, crustY + 8);
+
+  /* cracks */
+  var roverCX = 400;
+  if(cur >= 1 || (cur === 0 && t > 0.8)){
+    var ci = Math.min(1, cur >= 2 ? 1 : (cur - 1 + t) / 1.5);
+    ctx.strokeStyle = "#4a3a28";
+    ctx.lineWidth = 1.5 + ci;
+    var cracks = [-50,-25,0,20,45,65];
+    for(var c = 0; c < cracks.length; c++){
+      var cx = roverCX + cracks[c] * ci;
+      if(Math.abs(cracks[c]) > 40 && cur < 2) continue;
+      ctx.beginPath();
+      ctx.moveTo(cx, crustY);
+      ctx.lineTo(cx + (cracks[c] > 0 ? -5 : 5), crustY + crustH);
+      ctx.stroke();
+    }
+    /* broken gap in center */
+    if(cur >= 2){
+      var gapW = 40 + (cur - 2 + t) * 20;
+      ctx.fillStyle = "#5a4030";
+      ctx.fillRect(roverCX - gapW/2, crustY, gapW, crustH);
+    }
+  }
+
+  /* --- loose sand below crust --- */
+  var sandY = crustY + crustH;
+  var sandH = H - sandY;
+  var sg = ctx.createLinearGradient(0, sandY, 0, H);
+  sg.addColorStop(0, "#8b5e3c");
+  sg.addColorStop(0.4, "#7a5030");
+  sg.addColorStop(1, "#4a3020");
+  ctx.fillStyle = sg;
+  ctx.fillRect(0, sandY, W, sandH);
+
+  /* sand particles */
+  ctx.fillStyle = "rgba(160,120,80,0.25)";
+  for(var si = 0; si < 40; si++){
+    var spx = (si * 43 + 17) % W;
+    var spy = sandY + 8 + (si * 31 + 11) % (sandH - 16);
+    ctx.beginPath();
+    ctx.arc(spx, spy, 1 + si % 3, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  /* sand label */
+  ctx.font = "9px 'Space Grotesk',sans-serif";
+  ctx.fillStyle = "rgba(200,160,120,0.5)";
+  ctx.textAlign = "right";
+  ctx.fillText("LOOSE SAND (LOW BEARING CAPACITY)", W - 12, sandY + 20);
+
+  /* --- depth indicator --- */
+  if(depth > 0.5){
+    var dpx = depth * 2;
+    var diX = roverCX + 120;
+    ctx.strokeStyle = TERTIARY;
+    ctx.lineWidth = 1;
+    ctx.setLineDash([3,3]);
+    ctx.beginPath();
+    ctx.moveTo(diX, crustY);
+    ctx.lineTo(diX, crustY + dpx);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    /* arrows */
+    ctx.fillStyle = TERTIARY;
+    ctx.beginPath(); ctx.moveTo(diX-3, crustY+3); ctx.lineTo(diX+3, crustY+3); ctx.lineTo(diX, crustY); ctx.fill();
+    ctx.beginPath(); ctx.moveTo(diX-3, crustY+dpx-3); ctx.lineTo(diX+3, crustY+dpx-3); ctx.lineTo(diX, crustY+dpx); ctx.fill();
+    ctx.font = "bold 11px 'Space Grotesk',sans-serif";
+    ctx.fillStyle = TERTIARY;
+    ctx.textAlign = "left";
+    ctx.fillText(depth.toFixed(1) + " cm", diX + 6, crustY + dpx / 2 + 4);
+  }
+
+  /* --- rover --- */
+  var sinkPx = depth * 1.5;
+  var roverY = surfY - 50 + sinkPx * 0.5;
+  var tilt = cur >= 3 ? 3 + t * 2 : cur >= 2 ? t * 3 : 0;
+  var roverX = roverCX - 60;
+
+  ctx.save();
+  ctx.translate(roverCX, roverY + 40);
+  ctx.rotate(tilt * Math.PI / 180);
+  ctx.translate(-roverCX, -(roverY + 40));
+
+  /* chassis */
+  var chG = ctx.createLinearGradient(roverX, roverY + 8, roverX, roverY + 38);
+  chG.addColorStop(0, "#9a9896");
+  chG.addColorStop(0.5, "#7a7876");
+  chG.addColorStop(1, "#5a5856");
+  ctx.fillStyle = chG;
+  ctx.fillRect(roverX + 15, roverY + 12, 90, 22);
+
+  /* top box */
+  ctx.fillStyle = "#606060";
+  ctx.fillRect(roverX + 28, roverY + 2, 55, 12);
+
+  /* antenna */
+  ctx.strokeStyle = PRIMARY;
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.moveTo(roverX + 55, roverY + 2);
+  ctx.lineTo(roverX + 55, roverY - 16);
+  ctx.stroke();
+  ctx.fillStyle = PRIMARY;
+  ctx.beginPath(); ctx.arc(roverX + 55, roverY - 18, 3, 0, Math.PI*2); ctx.fill();
+  ctx.shadowColor = PRIMARY_C;
+  ctx.shadowBlur = 10;
+  ctx.beginPath(); ctx.arc(roverX + 55, roverY - 18, 2, 0, Math.PI*2); ctx.fill();
+  ctx.shadowBlur = 0;
+
+  /* solar panels */
+  var spG = ctx.createLinearGradient(0, roverY + 4, 0, roverY + 10);
+  spG.addColorStop(0, "#2a4a6a");
+  spG.addColorStop(1, "#1a3a5a");
+  ctx.fillStyle = spG;
+  ctx.fillRect(roverX + 5, roverY + 4, 20, 7);
+  ctx.fillRect(roverX + 85, roverY + 4, 20, 7);
+
+  /* rocker-bogie arms */
+  ctx.strokeStyle = "#7a7a78";
+  ctx.lineWidth = 2;
+  /* front arm */
+  ctx.beginPath(); ctx.moveTo(roverX+20, roverY+30); ctx.lineTo(roverX+8, roverY+38); ctx.stroke();
+  /* rear arm */
+  ctx.beginPath(); ctx.moveTo(roverX+100, roverY+30); ctx.lineTo(roverX+112, roverY+38); ctx.stroke();
+
+  /* 6 wheels */
+  var wps = [
+    [roverX + 8,   roverY + 40],
+    [roverX + 30,  roverY + 38],
+    [roverX + 55,  roverY + 38],
+    [roverX + 75,  roverY + 38],
+    [roverX + 95,  roverY + 38],
+    [roverX + 112, roverY + 40]
+  ];
+  var spinT = playing ? performance.now() * 0.003 : 0;
+  wps.forEach(function(wp, wi){
+    var wx = wp[0], wy = wp[1];
+    var wg = ctx.createRadialGradient(wx-1, wy-1, 0, wx, wy, 8);
+    wg.addColorStop(0, "#8a8a88");
+    wg.addColorStop(1, "#4a4a48");
+    ctx.fillStyle = wg;
+    ctx.beginPath(); ctx.arc(wx, wy, 7, 0, Math.PI*2); ctx.fill();
+    ctx.strokeStyle = "#3a3a38";
+    ctx.lineWidth = 1;
+    ctx.stroke();
+    /* tread marks */
+    ctx.strokeStyle = "rgba(255,255,255,0.15)";
+    ctx.lineWidth = 0.5;
+    for(var ti = 0; ti < 6; ti++){
+      var ta = (ti / 6) * Math.PI * 2 + spinT + wi;
+      ctx.beginPath();
+      ctx.moveTo(wx + Math.cos(ta) * 4, wy + Math.sin(ta) * 4);
+      ctx.lineTo(wx + Math.cos(ta) * 7, wy + Math.sin(ta) * 7);
+      ctx.stroke();
+    }
+    /* spin glow (frames 3-4) */
+    if(cur >= 3){
+      ctx.strokeStyle = "rgba(255,181,156,0.4)";
+      ctx.lineWidth = 1;
+      var sa = spinT * 3 + wi * 1.2;
+      ctx.beginPath(); ctx.arc(wx, wy, 10, sa, sa + 1.2); ctx.stroke();
+    }
+  });
+
+  /* sand spray (frames 3-4) */
+  if(cur >= 3 || (cur === 2 && t > 0.7)){
+    var sprayIntensity = cur >= 3 ? 1 : (t - 0.7) / 0.3;
+    ctx.globalAlpha = 0.7 * sprayIntensity;
+    for(var p = 0; p < 16; p++){
+      var phase = playing ? performance.now() * 0.004 : t * 8;
+      var px = roverCX + Math.sin(p * 1.7 + phase) * 70;
+      var py = roverY + 35 - Math.abs(Math.sin(p * 2.3 + phase * 0.7)) * 35 - p;
+      var pr = 1.5 + (p % 3);
+      ctx.fillStyle = p % 2 === 0 ? "#a07050" : "#c89070";
+      ctx.beginPath(); ctx.arc(px, py, pr, 0, Math.PI*2); ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+  }
+
+  ctx.restore();
+
+  /* rover label */
+  ctx.font = "10px 'Space Grotesk',sans-serif";
+  ctx.fillStyle = TERTIARY;
+  ctx.textAlign = "center";
+  ctx.fillText("MER-B OPPORTUNITY", roverCX, roverY - 26);
+
+  /* --- narration box --- */
+  var f = FRAMES[cur];
+  ctx.fillStyle = "rgba(28,27,27,0.85)";
+  ctx.fillRect(14, 14, 280, 54);
+  ctx.strokeStyle = "rgba(138,136,134,0.15)";
+  ctx.lineWidth = 1;
+  ctx.strokeRect(14, 14, 280, 54);
+
+  ctx.font = "bold 12px 'Space Grotesk',sans-serif";
+  ctx.fillStyle = PRIMARY;
+  ctx.textAlign = "left";
+  ctx.fillText("FRAME " + (cur+1) + ": " + f.title, 24, 34);
+
+  ctx.font = "14px 'Noto Sans SC',sans-serif";
+  ctx.fillStyle = TEXT;
+  ctx.fillText(f.narr, 24, 56);
+
+  /* --- warning overlay --- */
+  if(f.status === "CRITICAL" || f.status === "EMERGENCY"){
+    var flash = playing ? Math.sin(performance.now() * 0.006) > 0 : true;
+    if(flash){
+      ctx.fillStyle = "rgba(255,95,31,0.06)";
+      ctx.fillRect(0, 0, W, H);
+    }
+    ctx.font = "bold 14px 'Space Grotesk',sans-serif";
+    ctx.fillStyle = flash ? "rgba(255,95,31,0.7)" : "rgba(255,95,31,0.3)";
+    ctx.textAlign = "right";
+    ctx.fillText("WARNING: " + f.status, W - 16, 30);
+  }
+
+  /* --- scale bar --- */
+  ctx.strokeStyle = "rgba(0,218,243,0.3)";
+  ctx.lineWidth = 1;
+  var sbX = W - 100, sbY = H - 16;
+  ctx.beginPath(); ctx.moveTo(sbX,sbY); ctx.lineTo(sbX+50,sbY); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(sbX,sbY-3); ctx.lineTo(sbX,sbY+3); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(sbX+50,sbY-3); ctx.lineTo(sbX+50,sbY+3); ctx.stroke();
+  ctx.font = "9px 'Space Grotesk',sans-serif";
+  ctx.fillStyle = "rgba(0,218,243,0.4)";
+  ctx.textAlign = "center";
+  ctx.fillText("~20 cm", sbX+25, sbY-5);
+
+  /* --- traction bar (visual) --- */
+  var tbX = 14, tbY = H - 30, tbW = 120, tbH = 10;
+  ctx.fillStyle = "rgba(28,27,27,0.7)";
+  ctx.fillRect(tbX, tbY, tbW, tbH);
+  var trPct = curTraction() / 100;
+  var tColor = trPct > 0.5 ? "#10b981" : trPct > 0.2 ? PRIMARY_C : SIGNAL;
+  var tbG = ctx.createLinearGradient(tbX, 0, tbX + tbW * trPct, 0);
+  tbG.addColorStop(0, tColor);
+  tbG.addColorStop(1, "rgba(19,19,19,0.5)");
+  ctx.fillStyle = tbG;
+  ctx.fillRect(tbX, tbY, tbW * trPct, tbH);
+  ctx.font = "9px 'Space Grotesk',sans-serif";
+  ctx.fillStyle = MUTED;
+  ctx.textAlign = "left";
+  ctx.fillText("TRACTION", tbX, tbY - 4);
+}
+
+/* ── init ── */
+resize();
+window.addEventListener("resize", resize);
+
+/* safety: re-render after fonts load */
+if(document.fonts && document.fonts.ready){
+  document.fonts.ready.then(function(){ resize(); });
+}
+/* also re-render after a short delay for iframe scenarios */
+setTimeout(resize, 200);
+setTimeout(resize, 600);
+
+})();
+</script>
+</body>
+</html>

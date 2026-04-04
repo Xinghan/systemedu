@@ -1,10 +1,11 @@
 "use client"
 
 import { createContext, useContext, useEffect, useRef, useState } from "react"
+import { createPortal } from "react-dom"
 import {
   X, CheckCircle2, Loader2, BookOpen, Zap, Gamepad2, BookMarked,
   Terminal, ChevronDown, ChevronRight, Circle, Play, Square,
-  ClipboardList, CheckCircle, XCircle, Lightbulb,
+  ClipboardList, CheckCircle, XCircle, Lightbulb, Sparkles, Clock,
 } from "lucide-react"
 import ReactMarkdown from "react-markdown"
 import remarkGfm from "remark-gfm"
@@ -224,6 +225,64 @@ function backendBadgeLabel(backend?: string): string {
 // ---------------------------------------------------------------------------
 // IdeaIframeBlock (animation / game)
 // ---------------------------------------------------------------------------
+
+/** Full-screen modal for iframe content */
+function IframeModal({
+  open, onClose, html, title, resetKey,
+}: {
+  open: boolean
+  onClose: () => void
+  html: string
+  title: string
+  resetKey: number
+}) {
+  useEffect(() => {
+    if (!open) return
+    const handleKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose() }
+    document.addEventListener("keydown", handleKey)
+    document.body.style.overflow = "hidden"
+    return () => {
+      document.removeEventListener("keydown", handleKey)
+      document.body.style.overflow = ""
+    }
+  }, [open, onClose])
+
+  if (!open) return null
+
+  return createPortal(
+    <div className="fixed inset-0 z-[9999] flex items-center justify-center">
+      {/* Backdrop */}
+      <div
+        className="absolute inset-0 bg-black/70 backdrop-blur-sm"
+        onClick={onClose}
+      />
+      {/* Modal container */}
+      <div className="relative w-[96vw] h-[92vh] flex flex-col rounded-2xl overflow-hidden shadow-2xl bg-[#0a0e14] border border-white/10">
+        {/* Header bar */}
+        <div className="flex items-center justify-between px-5 py-3 bg-white/5 border-b border-white/10 shrink-0">
+          <span className="text-sm font-semibold text-white/80">{title}</span>
+          <button
+            onClick={onClose}
+            className="w-8 h-8 rounded-lg flex items-center justify-center text-white/60 hover:text-white hover:bg-white/10 transition-colors"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+        {/* Iframe fills remaining space */}
+        <iframe
+          key={resetKey}
+          srcDoc={html}
+          sandbox="allow-scripts allow-same-origin"
+          className="flex-1 w-full block"
+          style={{ border: "none" }}
+          title={title}
+        />
+      </div>
+    </div>,
+    document.body,
+  )
+}
+
 function IdeaIframeBlock({
   idea, html, darkMode, backend,
 }: {
@@ -233,105 +292,87 @@ function IdeaIframeBlock({
   backend?: string
 }) {
   const [resetKey, setResetKey] = useState(0)
-  const [expanded, setExpanded] = useState(false)
+  const [modalOpen, setModalOpen] = useState(false)
   const backendLabel = backendBadgeLabel(backend)
+  const modalTitle = darkMode ? `动画演示 - ${idea.topic}` : `互动游戏 - ${idea.topic}`
 
   if (darkMode) {
-    // Animation block — inverse-surface deep dark style (#000341)
+    // Animation card
     return (
-      <section
-        className="rounded-2xl overflow-hidden shadow-2xl border border-white/10"
-        style={{ background: "#000341" }}
-      >
-        <button
-          onClick={() => setExpanded((e) => !e)}
-          className="w-full flex items-center justify-between p-8 hover:bg-white/10 transition-colors"
-          style={{ backdropFilter: "blur(20px)", background: "rgba(255,255,255,0.05)" }}
+      <>
+        <section
+          className="rounded-2xl overflow-hidden shadow-2xl border border-white/10"
+          style={{ background: "#000341" }}
         >
-          <div className="flex items-center gap-6">
-            <div className="w-14 h-14 rounded-xl bg-primary/20 flex items-center justify-center border border-primary/30 shrink-0">
-              <Zap className="h-7 w-7 text-primary" />
-            </div>
-            <div className="text-left">
-              <div className="flex items-center gap-2 mb-0.5">
-                <h3 className="font-bold text-white text-xl leading-tight">动画演示</h3>
-                {backendLabel && (
-                  <span className="inline-flex items-center rounded-full border border-primary/30 bg-primary/15 px-2 py-0.5 text-[11px] font-semibold text-primary">
-                    {backendLabel}
-                  </span>
-                )}
+          <div
+            className="flex items-center justify-between p-8 cursor-pointer hover:bg-white/5 transition-colors"
+            style={{ backdropFilter: "blur(20px)", background: "rgba(255,255,255,0.05)" }}
+            onClick={() => setModalOpen(true)}
+          >
+            <div className="flex items-center gap-6">
+              <div className="w-14 h-14 rounded-xl bg-primary/20 flex items-center justify-center border border-primary/30 shrink-0">
+                <Zap className="h-7 w-7 text-primary" />
               </div>
-              <p className="text-white/60 text-sm">{idea.topic}</p>
+              <div className="text-left">
+                <div className="flex items-center gap-2 mb-0.5">
+                  <h3 className="font-bold text-white text-xl leading-tight">动画演示</h3>
+                  {backendLabel && (
+                    <span className="inline-flex items-center rounded-full border border-primary/30 bg-primary/15 px-2 py-0.5 text-[11px] font-semibold text-primary">
+                      {backendLabel}
+                    </span>
+                  )}
+                </div>
+                <p className="text-white/60 text-sm">{idea.topic}</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2 text-white/40 text-xs">
+              <span>点击打开</span>
+              <Play className="h-4 w-4" />
             </div>
           </div>
-          <ChevronDown
-            className={`h-5 w-5 text-white/40 transition-transform duration-200 ${expanded ? "rotate-180" : ""}`}
-          />
-        </button>
-        {expanded && (
-          <div className="p-8 pt-4">
-            <iframe
-              key={resetKey}
-              srcDoc={html}
-              sandbox="allow-scripts allow-same-origin"
-              className="w-full rounded-xl block"
-              style={{ height: 460, border: "none" }}
-              title={`动画演示 - ${idea.topic}`}
-            />
-          </div>
-        )}
-        {!expanded && (
-          <div className="px-8 py-4 text-white/30 text-sm">点击展开查看动画演示</div>
-        )}
-      </section>
+        </section>
+        <IframeModal
+          open={modalOpen}
+          onClose={() => setModalOpen(false)}
+          html={html}
+          title={modalTitle}
+          resetKey={resetKey}
+        />
+      </>
     )
   }
 
-  // Game block — surface-container-low light style
+  // Game card
   return (
-    <section className="rounded-2xl overflow-hidden shadow-lg bg-surface-container-low border border-outline-variant/10">
-      <button
-        onClick={() => setExpanded((e) => !e)}
-        className="w-full flex items-center justify-between p-8 bg-white/50 hover:bg-white transition-colors"
-      >
-        <div className="flex items-center gap-6">
-          <div className="w-14 h-14 rounded-xl bg-secondary/10 flex items-center justify-center border border-secondary/20 shrink-0">
-            <Gamepad2 className="h-7 w-7 text-secondary" />
+    <>
+      <section className="rounded-2xl overflow-hidden shadow-lg bg-surface-container-low border border-outline-variant/10">
+        <div
+          className="flex items-center justify-between p-8 bg-white/50 cursor-pointer hover:bg-white/70 transition-colors"
+          onClick={() => setModalOpen(true)}
+        >
+          <div className="flex items-center gap-6">
+            <div className="w-14 h-14 rounded-xl bg-secondary/10 flex items-center justify-center border border-secondary/20 shrink-0">
+              <Gamepad2 className="h-7 w-7 text-secondary" />
+            </div>
+            <div className="text-left">
+              <h3 className="font-bold text-on-surface text-xl leading-tight mb-0.5">互动游戏</h3>
+              <p className="text-on-surface-variant text-sm">{idea.topic}</p>
+            </div>
           </div>
-          <div className="text-left">
-            <h3 className="font-bold text-on-surface text-xl leading-tight mb-0.5">互动游戏</h3>
-            <p className="text-on-surface-variant text-sm">{idea.topic}</p>
+          <div className="flex items-center gap-2 text-on-surface-variant/50 text-xs">
+            <span>点击打开</span>
+            <Gamepad2 className="h-4 w-4" />
           </div>
         </div>
-        <div className="flex items-center gap-3">
-          {expanded && (
-            <span
-              role="button"
-              onClick={(e) => { e.stopPropagation(); setResetKey((k) => k + 1) }}
-              className="text-xs text-on-surface-variant hover:text-on-surface transition-colors px-3 py-1.5 rounded-lg border border-outline-variant/30"
-            >
-              重置游戏
-            </span>
-          )}
-          <ChevronDown
-            className={`h-5 w-5 text-on-surface-variant/40 transition-transform duration-200 ${expanded ? "rotate-180" : ""}`}
-          />
-        </div>
-      </button>
-      {expanded && (
-        <iframe
-          key={resetKey}
-          srcDoc={html}
-          sandbox="allow-scripts allow-same-origin"
-          className="w-full block"
-          style={{ height: 560, border: "none" }}
-          title={`互动游戏 - ${idea.topic}`}
-        />
-      )}
-      {!expanded && (
-        <div className="px-8 py-4 text-on-surface-variant text-sm opacity-60">点击展开开始游戏</div>
-      )}
-    </section>
+      </section>
+      <IframeModal
+        open={modalOpen}
+        onClose={() => setModalOpen(false)}
+        html={html}
+        title={modalTitle}
+        resetKey={resetKey}
+      />
+    </>
   )
 }
 
@@ -666,46 +707,46 @@ function SectionBlock({
 }) {
   const parts = section.body_markdown.split(/(\[\[IDEA:[^\]]+\]\])/g)
 
-  // Separate text parts from idea placeholders
+  // Check if there is any real text content (for audio button)
   const textParts = parts.filter((p) => !p.match(/^\[\[IDEA:[^\]]+\]\]$/))
   const hasText = textParts.some((p) => p.replace(/^##\s+.+\n?/, "").trim())
 
+  // Render parts in order: text and idea blocks interleaved
+  let headingRendered = false
+
   return (
     <div className="space-y-6">
-      {/* Text content with right-gutter audio button */}
-      {hasText && (
-        <div className="group relative flex gap-8 items-start">
-          <div className="flex-1 space-y-4 min-w-0">
-            {section.heading && (
-              <h2 className="text-2xl font-bold text-on-surface tracking-tight">{section.heading}</h2>
-            )}
-            {parts.map((part, idx) => {
-              if (part.match(/^\[\[IDEA:[^\]]+\]\]$/)) return null
-              const stripped = part.replace(/^##\s+.+\n?/, "")
-              if (!stripped.trim()) return null
-              return <MarkdownBlock key={idx} content={stripped} />
-            })}
-          </div>
-          {/* Right gutter — visible on hover */}
+      <div className="group relative flex gap-8 items-start">
+        <div className="flex-1 space-y-6 min-w-0">
+          {section.heading && !headingRendered && (
+            <h2 className="text-2xl font-bold text-on-surface tracking-tight">{section.heading}</h2>
+          )}
+          {parts.map((part, idx) => {
+            // Idea placeholder -> render idea block inline
+            const match = part.match(/^\[\[IDEA:([^\]]+)\]\]$/)
+            if (match) {
+              const ideaId = match[1]
+              const idea = ideaMap.get(ideaId)
+              if (!idea) return null
+              const rendered = renderedSections[ideaId] ?? null
+              return <IdeaBlock key={idx} idea={idea} section={rendered} />
+            }
+            // Text content -> render markdown
+            const stripped = part.replace(/^##\s+.+\n?/, "")
+            if (!stripped.trim()) return null
+            return <MarkdownBlock key={idx} content={stripped} />
+          })}
+        </div>
+        {/* Right gutter — visible on hover */}
+        {hasText && (
           <div className="w-16 flex flex-col gap-3 opacity-40 group-hover:opacity-100 transition-opacity duration-300 sticky top-24 shrink-0 pt-1">
             <SectionAudioButton
               sectionId={section.section_id}
               audioUrl={section.audio_url}
             />
           </div>
-        </div>
-      )}
-
-      {/* Idea blocks (animation / game / story) */}
-      {parts.map((part, idx) => {
-        const match = part.match(/^\[\[IDEA:([^\]]+)\]\]$/)
-        if (!match) return null
-        const ideaId = match[1]
-        const idea = ideaMap.get(ideaId)
-        if (!idea) return null
-        const rendered = renderedSections[ideaId] ?? null
-        return <IdeaBlock key={idx} idea={idea} section={rendered} />
-      })}
+        )}
+      </div>
     </div>
   )
 }
@@ -770,10 +811,8 @@ function EditorialHeader({ knode }: { knode: KnodeInfo | null }) {
       <div className="inline-flex items-center gap-2 px-3 py-1 bg-secondary-container rounded-full text-on-secondary-container text-xs font-bold tracking-widest uppercase">
         难度 {knode.difficulty_level} / 5 · {knode.estimated_minutes} 分钟
       </div>
-      <h1 className="font-extrabold text-3xl text-on-surface tracking-tight leading-[1.2]">
-        <span className="text-transparent bg-clip-text bg-gradient-to-r from-primary to-tertiary">
-          {knode.title}
-        </span>
+      <h1 className="font-extrabold text-3xl tracking-tight leading-[1.2] bg-gradient-to-r from-primary to-tertiary bg-clip-text text-transparent pb-1">
+        {knode.title}
       </h1>
       {knode.summary && (
         <p className="text-base text-on-surface-variant leading-relaxed max-w-2xl">
@@ -1122,7 +1161,7 @@ function GeneratingProgress({
             desc: t("gen.feat_sync_desc"),
           },
         ].map((item) => (
-          <div key={item.label} className="flex flex-col items-start gap-2 pt-2">
+          <div key={item.label} className="flex flex-col items-center gap-2 pt-2 text-center">
             <div
               className="w-10 h-10 rounded-xl flex items-center justify-center"
               style={{ background: "rgba(158,166,255,0.12)", color: M.mutedFg }}
@@ -1249,6 +1288,8 @@ export function CourseContentView({
 }: CourseContentViewProps) {
   const [courseData, setCourseData] = useState<CourseContentData | null>(null)
   const [generating, setGenerating] = useState(false)
+  const [notGenerated, setNotGenerated] = useState(false) // true when no content exists yet
+  const [checking, setChecking] = useState(true)          // initial check in progress
   const [stopped, setStopped] = useState(false)   // user explicitly stopped, backend task cancelled
   const [stage, setStage] = useState<PipelineStage>("connecting")
   const [ideaProgress, setIdeaProgress] = useState<{ done: number; total: number }>({ done: 0, total: 0 })
@@ -1279,6 +1320,7 @@ export function CourseContentView({
     const myLoadId = ++loadIdRef.current
     abortRef.current = false
     setStopped(false)
+    setNotGenerated(false)
     setError(null)
     setGenerating(true)
     setStage("connecting")
@@ -1380,19 +1422,44 @@ export function CourseContentView({
 
   useEffect(() => {
     setError(null)
+    setChecking(true)
+    setNotGenerated(false)
+    setCourseData(null)
+    setGenerating(false)
+    setStopped(false)
+
     gateway.getCourseV2(projectName, nodeId).then((data) => {
       if (data.status === "ready" && data.course_content && Object.keys(data.course_content).length > 0) {
         setCourseData(data)
-        setGenerating(false)
-      } else {
+        setChecking(false)
+      } else if (data.status === "generating") {
+        // Already generating on the backend — connect to SSE stream
+        setChecking(false)
         load(false)
+      } else {
+        setNotGenerated(true)
+        setChecking(false)
       }
     }).catch(() => {
-      load(false)
+      setNotGenerated(true)
+      setChecking(false)
     })
 
     return () => { abortRef.current = true }
   }, [projectName, nodeId]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Loading / checking state
+  if (checking) {
+    return (
+      <div className="flex flex-col h-full">
+        <Header knode={knode} onClose={onClose} />
+        <div className="flex-1 flex flex-col items-center justify-center gap-3 text-muted-foreground">
+          <Loader2 className="h-6 w-6 animate-spin text-primary/50" />
+          <p className="text-xs">正在检查课程内容...</p>
+        </div>
+      </div>
+    )
+  }
 
   if (error) {
     return (
@@ -1406,6 +1473,52 @@ export function CourseContentView({
     )
   }
 
+  // Not yet generated — show prompt to generate
+  if (notGenerated && !generating) {
+    return (
+      <div className="flex flex-col h-full">
+        <Header knode={knode} onClose={onClose} />
+        <div className="flex-1 flex items-center justify-center">
+          <div className="max-w-md text-center space-y-6 px-6">
+            <div className="w-16 h-16 rounded-2xl bg-primary/10 border border-primary/20 flex items-center justify-center mx-auto">
+              <Sparkles className="h-8 w-8 text-primary" />
+            </div>
+            <div className="space-y-2">
+              <h2 className="text-lg font-bold text-foreground">
+                {knode?.title ?? "本节课程"}
+              </h2>
+              <p className="text-sm text-muted-foreground leading-relaxed">
+                课程内容尚未生成。点击下方按钮，AI 将为你生成包含讲解文本、动画演示和互动游戏的完整课程，整个过程大约需要 1-3 分钟。
+              </p>
+            </div>
+            {knode && (
+              <div className="flex items-center justify-center gap-4 text-xs text-muted-foreground">
+                <span className="flex items-center gap-1">
+                  <Zap className="h-3 w-3" />
+                  难度 {knode.difficulty_level}/10
+                </span>
+                <span className="flex items-center gap-1">
+                  <Clock className="h-3 w-3" />
+                  {knode.estimated_minutes} 分钟
+                </span>
+              </div>
+            )}
+            <button
+              onClick={() => load(false)}
+              className="inline-flex items-center gap-2 px-8 h-12 rounded-2xl bg-primary text-primary-foreground text-sm font-bold hover:bg-primary/90 active:scale-95 transition-all shadow-lg shadow-primary/20"
+            >
+              <Sparkles className="h-4 w-4" />
+              开始生成课程
+            </button>
+            <p className="text-[11px] text-muted-foreground/60">
+              生成过程中可以随时停止
+            </p>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <AudioProvider>
       <div className="flex flex-col h-full">
@@ -1413,7 +1526,7 @@ export function CourseContentView({
 
         <div className="flex-1 min-h-0 overflow-y-auto">
           {generating && (
-            <div className="px-6 py-5">
+            <div className="max-w-4xl mx-auto px-6 py-5 w-full">
               <GeneratingProgress
                 stage={stage}
                 ideaProgress={ideaProgress}

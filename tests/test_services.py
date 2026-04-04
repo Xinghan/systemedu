@@ -4,6 +4,7 @@ import pytest
 
 from systemedu.education.services import (
     convert_uploaded_tree,
+    extract_project_brief,
     extract_project_meta,
     validate_knowledge_tree,
 )
@@ -188,3 +189,212 @@ class TestExtractProjectMeta:
         """Should not crash on milestones format (just return minimal meta)."""
         meta = extract_project_meta(MILESTONES_DATA)
         assert isinstance(meta, dict)
+
+
+# -- v4.1 format sample data --
+
+V41_DATA = {
+    "schema_version": "4.1",
+    "title": "Test Project v4.1",
+    "description": "A test v4.1 project",
+    "project_identity": {
+        "project_id": "P-TEST-01",
+        "domain": "space_robotics",
+    },
+    "target_learner": {
+        "entry_profile": "Approx 10 years old",
+    },
+    "project_positioning": {
+        "project_summary": "Test summary",
+        "why_it_is_industrial": "Industrial reason",
+        "final_system_goal": "Build something",
+        "real_world_scope": "Real world",
+    },
+    "stages": [
+        {
+            "stage_id": "S1",
+            "title": "Stage One",
+            "stage_description": "First stage description",
+            "stage_goal": "Goal of S1",
+            "stage_output": "Output of S1",
+        },
+        {
+            "stage_id": "S2",
+            "title": "Stage Two",
+            "stage_description": "Second stage description",
+            "stage_goal": "Goal of S2",
+            "stage_output": "Output of S2",
+        },
+    ],
+    "modules": [
+        {
+            "module_id": "P-TEST-01-M01",
+            "title": "Module A",
+            "stage_id": "S1",
+            "sequence_order": 1,
+            "module_role": "foundation",
+            "summary": "Module A summary",
+            "detailed_description": "Module A details",
+            "core_question": "Why A?",
+            "depends_on": [],
+            "estimated_duration_months": "1",
+            "knowledge_level": "K1",
+            "acceptance_artifacts": [
+                {"artifact_id": "A1", "title": "Report", "format": "report"}
+            ],
+            "acceptance_standard": ["Standard 1"],
+            "hands_on_components": ["Hands on 1"],
+            "outputs_produced": ["Output 1"],
+        },
+        {
+            "module_id": "P-TEST-01-M02",
+            "title": "Module B",
+            "stage_id": "S1",
+            "sequence_order": 2,
+            "module_role": "integration",
+            "summary": "Module B summary",
+            "detailed_description": "Module B details",
+            "core_question": "Why B?",
+            "depends_on": ["P-TEST-01-M01"],
+            "estimated_duration_months": "1-2",
+            "knowledge_level": "K2",
+            "acceptance_artifacts": [],
+            "acceptance_standard": [],
+            "hands_on_components": [],
+            "outputs_produced": [],
+        },
+        {
+            "module_id": "P-TEST-01-M03",
+            "title": "Module C",
+            "stage_id": "S2",
+            "sequence_order": 1,
+            "module_role": "capstone",
+            "summary": "Module C summary",
+            "detailed_description": "",
+            "core_question": "Why C?",
+            "depends_on": ["P-TEST-01-M01", "P-TEST-01-M02"],
+            "estimated_duration_months": "2",
+            "knowledge_level": "K4",
+            "acceptance_artifacts": [],
+            "acceptance_standard": [],
+            "hands_on_components": [],
+            "outputs_produced": [],
+        },
+    ],
+}
+
+
+class TestConvertV41Tree:
+    def test_detects_v41_format(self):
+        """v4.1 format should be detected and converted."""
+        result = convert_uploaded_tree(V41_DATA)
+        assert "milestones" in result
+        assert len(result["milestones"]) == 2
+
+    def test_milestone_titles(self):
+        result = convert_uploaded_tree(V41_DATA)
+        assert result["milestones"][0]["title"] == "Stage One"
+        assert result["milestones"][1]["title"] == "Stage Two"
+
+    def test_milestone_descriptions(self):
+        result = convert_uploaded_tree(V41_DATA)
+        assert result["milestones"][0]["description"] == "First stage description"
+
+    def test_knode_count(self):
+        result = convert_uploaded_tree(V41_DATA)
+        assert len(result["milestones"][0]["knodes"]) == 2  # M01, M02
+        assert len(result["milestones"][1]["knodes"]) == 1  # M03
+
+    def test_knode_titles(self):
+        result = convert_uploaded_tree(V41_DATA)
+        assert result["milestones"][0]["knodes"][0]["title"] == "Module A"
+        assert result["milestones"][0]["knodes"][1]["title"] == "Module B"
+
+    def test_knode_summary(self):
+        """Summary combines summary + detailed_description."""
+        result = convert_uploaded_tree(V41_DATA)
+        kn = result["milestones"][0]["knodes"][0]
+        assert "Module A summary" in kn["summary"]
+        assert "Module A details" in kn["summary"]
+
+    def test_difficulty_mapping(self):
+        """knowledge_level should map to difficulty_level."""
+        result = convert_uploaded_tree(V41_DATA)
+        ms = result["milestones"]
+        assert ms[0]["knodes"][0]["difficulty_level"] == 1  # K1
+        assert ms[0]["knodes"][1]["difficulty_level"] == 3  # K2
+        assert ms[1]["knodes"][0]["difficulty_level"] == 6  # K4
+
+    def test_prerequisite_indices(self):
+        """depends_on module_ids should convert to global integer indices."""
+        result = convert_uploaded_tree(V41_DATA)
+        ms = result["milestones"]
+        # M01 -> index 0, no deps
+        assert ms[0]["knodes"][0]["prerequisite_indices"] == []
+        # M02 -> index 1, depends on M01 -> index 0
+        assert ms[0]["knodes"][1]["prerequisite_indices"] == [0]
+        # M03 -> index 2, depends on M01(0) + M02(1)
+        assert ms[1]["knodes"][0]["prerequisite_indices"] == [0, 1]
+
+    def test_estimated_minutes(self):
+        """Duration months should convert to minutes."""
+        result = convert_uploaded_tree(V41_DATA)
+        ms = result["milestones"]
+        # "1" month -> 360 minutes
+        assert ms[0]["knodes"][0]["estimated_minutes"] == 360
+        # "1-2" months -> avg 1.5 -> 540 minutes
+        assert ms[0]["knodes"][1]["estimated_minutes"] == 540
+
+    def test_v41_metadata_preserved(self):
+        """v4.1 metadata fields should be preserved in knodes."""
+        result = convert_uploaded_tree(V41_DATA)
+        kn = result["milestones"][0]["knodes"][0]
+        assert kn["module_id"] == "P-TEST-01-M01"
+        assert kn["module_role"] == "foundation"
+        assert kn["core_question"] == "Why A?"
+        assert len(kn["acceptance_artifacts"]) == 1
+        assert kn["acceptance_standard"] == ["Standard 1"]
+        assert kn["hands_on_components"] == ["Hands on 1"]
+        assert kn["outputs_produced"] == ["Output 1"]
+
+    def test_sub_projects(self):
+        result = convert_uploaded_tree(V41_DATA)
+        sps = result.get("sub_projects", [])
+        assert len(sps) == 2
+        assert sps[0]["id"] == "S1"
+        assert sps[1]["id"] == "S2"
+
+    def test_validates_after_conversion(self):
+        """Converted v4.1 tree should pass validation."""
+        result = convert_uploaded_tree(V41_DATA)
+        errors = validate_knowledge_tree(result)
+        assert errors == []
+
+
+class TestExtractProjectMetaV41:
+    def test_extracts_title(self):
+        meta = extract_project_meta(V41_DATA)
+        assert meta["title"] == "Test Project v4.1"
+
+    def test_extracts_description(self):
+        meta = extract_project_meta(V41_DATA)
+        assert meta["description"] == "A test v4.1 project"
+
+    def test_extracts_category(self):
+        meta = extract_project_meta(V41_DATA)
+        assert meta["category"] == "aerospace"
+
+    def test_extracts_estimated_hours(self):
+        meta = extract_project_meta(V41_DATA)
+        assert meta["estimated_hours"] >= 1
+
+
+class TestExtractProjectBriefV41:
+    def test_extracts_brief(self):
+        brief = extract_project_brief(V41_DATA)
+        assert brief is not None
+        assert brief["one_liner"] == "Test summary"
+
+    def test_extracts_industry_relation(self):
+        brief = extract_project_brief(V41_DATA)
+        assert brief["industry_relation"] == "Industrial reason"

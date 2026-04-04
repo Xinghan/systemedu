@@ -40,76 +40,457 @@ KATEX_PROMPT_HINT = """数学公式渲染：页面已自动加载 KaTeX，可直
 
 
 STYLE_KITS: dict[str, dict] = {
-    "edu_soft_tech": {
-        "background_family": "cool-light",
+    # -- 1. Aether Clinic: 医疗诊断 HUD --
+    # 基于 animation_game_design/aether_clinic + medicine_neural_sync_hud
+    "aether_clinic": {
+        "background_family": "dark-hud",
+        "description": "医疗诊断 HUD -- 适合医学、神经科学、人体解剖、生理学、健康科学",
         "palette": {
-            "bg": "#f2f7fb",
-            "surface": "#ffffff",
-            "primary": "#1d4ed8",
-            "secondary": "#0ea5e9",
+            "bg": "#111318",
+            "surface": "rgba(26,28,32,0.92)",
+            "surface_high": "#282a2e",
+            "primary": "#98cbff",
+            "primary_container": "#00a3ff",
+            "secondary": "#b9f1ff",
             "signal": "#ef4444",
-            "success": "#16a34a",
-            "text": "#0f172a",
-            "muted": "#475569",
+            "success": "#10b981",
+            "text": "#e2e2e2",
+            "muted": "#6b6d72",
+            "outline_variant": "rgba(107,109,114,0.15)",
+        },
+        "radius": {"sm": 0, "md": 0, "lg": 0},
+        "stroke_width": {"base": 1, "focus": 2},
+        "shadow": {
+            "soft": "0 0 32px rgba(152,203,255,0.08)",
+            "focus": "0 0 20px rgba(0,163,255,0.15)",
+        },
+        "font_pairing": "Space Grotesk + Inter",
+        "glassmorphism": "backdrop-filter: blur(12px); background: rgba(26,28,32,0.4)",
+        "gradient_cta": "linear-gradient(135deg, #98cbff, #00a3ff)",
+        "special_effects": [
+            "Diagnostic Glow: primary (#98cbff) at 8% opacity with 32px blur",
+            "Pulse-monitoring animation: opacity 0.6 to 1.0 on critical states",
+            "Holographic panel: rgba(51,53,57,0.4) + backdrop-blur(12px)",
+            "Scanner line: 2px linear-gradient(90deg, transparent, #00A3FF, transparent)",
+            "Grid pattern: radial-gradient(#98cbff 0.5px, transparent 0.5px), size 24px",
+            "Ghost Border: outline_variant at 15% opacity (no traditional borders)",
+        ],
+        "css_rules": [
+            "border-radius: 0px (sharp 90-degree angles, no rounded corners)",
+            "No traditional drop shadows, only ambient glow",
+            "Label-SM: 0.6875rem for metadata, ALL CAPS optional",
+            "Display-LG: 3.5rem for critical metrics",
+        ],
+    },
+    # -- 2. Ares Mission Control: 火星任务控制 --
+    # 基于 animation_game_design/ares_mission_control + mars_rover_mission_control
+    "ares_mission": {
+        "background_family": "dark-brutalist",
+        "description": "火星任务控制 -- 适合航天、火箭、天文、物理、行星科学、地质",
+        "palette": {
+            "bg": "#131313",
+            "surface": "rgba(28,27,27,0.92)",
+            "surface_high": "#353534",
+            "primary": "#ffb59c",
+            "primary_container": "#ff7f50",
+            "secondary": "#c6c6c6",
+            "tertiary": "#00daf3",
+            "signal": "#ff5f1f",
+            "success": "#10b981",
+            "text": "#e5e2e1",
+            "muted": "#8a8886",
+            "outline_variant": "rgba(138,136,134,0.15)",
+        },
+        "radius": {"sm": 0, "md": 0, "lg": 0},
+        "stroke_width": {"base": 1, "focus": 2},
+        "shadow": {
+            "soft": "0 0 16px rgba(229,226,225,0.08)",
+            "focus": "0 0 30px rgba(255,127,80,0.4)",
+        },
+        "font_pairing": "Space Grotesk + Inter",
+        "glassmorphism": "backdrop-filter: blur(12px); background: rgba(53,53,52,0.4)",
+        "gradient_cta": "linear-gradient(45deg, #ffb59c, #ff7f50)",
+        "special_effects": [
+            "Kinetic Brutalism: hard industrial edges, 0px radius globally",
+            "Wireframe grid: linear-gradient with rgba(0,218,243,0.1), size 20px",
+            "Martian Crust: radial-gradient(circle at center, #1c1b1b, #131313)",
+            "Scanline overlay: rgba(255,127,80,0.1) repeating horizontal lines",
+            "LIDAR cyan overlays: #00daf3 for data visualization elements",
+            "Label-SM: ALL CAPS for telemetry labels (LATITUDE, BATTERY)",
+            "Ghost Border: outline_variant at 15% opacity",
+        ],
+        "css_rules": [
+            "border-radius: 0px (sharp industrial 90-degree angles)",
+            "No traditional drop shadows, only ambient tint",
+            "Spacing-8 or spacing-10 for mission-critical layouts",
+            "Display-LG for mission clocks and critical data",
+        ],
+    },
+    # -- 3. Celestial Observatory: 星空天文台 --
+    # 基于 animation_game_design/celestial_observatory + astronomy_cosmos_lens
+    "celestial_observatory": {
+        "background_family": "dark-cosmic",
+        "description": "星空天文台 -- 适合天文、宇宙、恒星、黑洞、引力、光学",
+        "palette": {
+            "bg": "#111220",
+            "surface": "rgba(30,30,45,0.92)",
+            "surface_high": "#1e1e2d",
+            "primary": "#c9bfff",
+            "primary_container": "#1e006e",
+            "secondary": "#fff9ef",
+            "secondary_container": "#ffdb3c",
+            "tertiary": "#85ecff",
+            "signal": "#ef4444",
+            "success": "#10b981",
+            "text": "#e8e4f0",
+            "muted": "#7a7590",
+            "outline_variant": "rgba(122,117,144,0.15)",
+        },
+        "radius": {"sm": 4, "md": 12, "lg": 24},
+        "stroke_width": {"base": 1, "focus": 2},
+        "shadow": {
+            "soft": "0 0 40px rgba(30,0,110,0.2)",
+            "focus": "0 0 60px rgba(201,191,255,0.25)",
+        },
+        "font_pairing": "Space Grotesk + Manrope",
+        "glassmorphism": "backdrop-filter: blur(20px); background: rgba(30,30,45,0.4)",
+        "gradient_cta": "linear-gradient(135deg, #c9bfff, #8771ff)",
+        "special_effects": [
+            "Nebular Glass: surface_variant at 40% opacity + backdrop-blur(20px)",
+            "Noise texture: feTurbulence SVG filter, fractalNoise, opacity 0.02-0.03",
+            "Ambient Shadow: primary_container (#1e006e) at 20% opacity, 40px blur",
+            "Radial gradients: primary_container at 10-15% opacity for soft boundaries",
+            "Scale hover: 1.02x with fade transitions 95% to 100%",
+            "Letter-spacing: 0.05em for expansive cosmic feel",
+            "Gravitational lens: radial-gradient(circle, transparent 30%, primary 0.05, transparent 70%)",
+            "Buttons: pill-shaped (rounded-full), Cards: xl radius (1.5rem)",
+        ],
+        "css_rules": [
+            "Buttons use full/pill radius, cards use xl (1.5rem) radius",
+            "No traditional drop shadows, only glow from primary_container",
+            "Display-LG: 3.5rem, Headline-LG: 2rem",
+            "Generous negative space (spacing-16/20)",
+        ],
+    },
+    # -- 4. Helix Lab: 生物发光实验室 --
+    # 基于 animation_game_design/helix_lab_hud + genetic_mapping_dna_sequence
+    "helix_lab": {
+        "background_family": "dark-bioluminescent",
+        "description": "生物发光实验室 -- 适合基因、DNA、细胞、微生物、生物化学、遗传学",
+        "palette": {
+            "bg": "#0c0e12",
+            "surface": "rgba(17,19,24,0.92)",
+            "surface_high": "#1a1d22",
+            "primary": "#50ffb0",
+            "primary_container": "#17df93",
+            "secondary": "#acf900",
+            "tertiary": "#85ecff",
+            "signal": "#ef4444",
+            "success": "#10b981",
+            "text": "#f6f6fc",
+            "muted": "#aaabb0",
+            "outline_variant": "rgba(70,72,77,0.15)",
+        },
+        "radius": {"sm": 16, "md": 24, "lg": 9999},
+        "stroke_width": {"base": 1, "focus": 2},
+        "shadow": {
+            "soft": "0 0 40px rgba(80,255,176,0.08)",
+            "focus": "0 0 60px rgba(80,255,176,0.15)",
+        },
+        "font_pairing": "Space Grotesk",
+        "glassmorphism": "backdrop-filter: blur(20px); background: rgba(23,26,31,0.6)",
+        "gradient_cta": "linear-gradient(135deg, #50ffb0, #17df93)",
+        "special_effects": [
+            "Emerald Ambient Shadow: primary at 8% opacity, 40-60px blur",
+            "Bioluminescent pulse: opacity 1.0 to 0.6 on live monitoring chips",
+            "DNA helix gradient: linear-gradient from #50ffb0 to #acf900",
+            "Glass panel: backdrop-blur(20px), border 1px solid rgba(70,72,77,0.15)",
+            "Sequence probe: thin primary line (0.5px) connecting data points",
+            "Drop shadow glow: 0 0 15px rgba(80,255,176,0.3)",
+            "Tight letter-spacing: -0.02em for dense data blocks",
+            "Primary buttons: rounded-full (pill shape)",
+        ],
+        "css_rules": [
+            "Primary buttons: rounded-full, secondary: ghost style",
+            "No borders on components, use ghost borders as fallback",
+            "Label-SM: ALL CAPS with +0.1em letter-spacing for telemetry",
+            "Spacing-8: 1.75rem between data clusters",
+        ],
+    },
+    # -- 5. Neural Circuit: 电路神经网络 --
+    # 基于 animation_game_design/neural_circuit + computer_science + bio_tech
+    "neural_circuit": {
+        "background_family": "dark-circuit",
+        "description": "电路神经网络 -- 适合计算机科学、AI、机器人、电路、编程、数据结构",
+        "palette": {
+            "bg": "#121318",
+            "surface": "rgba(26,27,33,0.92)",
+            "surface_high": "#34343a",
+            "primary": "#dbfcff",
+            "primary_container": "#00F0FF",
+            "secondary": "#2ff801",
+            "secondary_dim": "#2ae500",
+            "tertiary": "#ebb2ff",
+            "signal": "#ef4444",
+            "success": "#10b981",
+            "text": "#e8e8ec",
+            "muted": "#8a8a90",
+            "outline_variant": "rgba(138,138,144,0.15)",
+        },
+        "radius": {"sm": 0, "md": 0, "lg": 0},
+        "stroke_width": {"base": 1, "focus": 2},
+        "shadow": {
+            "soft": "0 0 15px rgba(0,240,255,0.08)",
+            "focus": "0 0 30px rgba(0,219,233,0.15)",
+        },
+        "font_pairing": "Space Grotesk + Manrope",
+        "glassmorphism": "backdrop-filter: blur(12px); background: rgba(26,27,33,0.4)",
+        "gradient_cta": "linear-gradient(45deg, #dbfcff, #006970)",
+        "special_effects": [
+            "Circuit Header: 2px top-border in primary, extending only 20% of card width",
+            "Circuit grid: radial-gradient(#00F0FF 0.05px, transparent), size 24px, opacity 0.05",
+            "Scanning overlay: linear-gradient primary to #006970 at 45deg, 15% opacity",
+            "Ultra-thin circuit lines: 1px using secondary or tertiary colors",
+            "Neon phosphor accents: high-contrast primary against dark background",
+            "Scanline effect: rgba(0,240,255,0.1) repeating 2px horizontal lines",
+            "SVG glow filter: feGaussianBlur stdDeviation 2.5 with feMerge",
+            "Ghost Border: outline_variant at 15% (circuit trace feel)",
+        ],
+        "css_rules": [
+            "border-radius: 0px (absolute rule, hard edges only)",
+            "No rounded corners permitted anywhere",
+            "Label-MD/SM: ALL CAPS with 0.1rem letter-spacing",
+            "Display-LG: 3.5rem for heroic data points",
+        ],
+    },
+    # -- 6. Subatomic Matrix: 亚原子量子场 --
+    # 基于 animation_game_design/subatomic_matrix + quantum_matrix_field
+    "subatomic_matrix": {
+        "background_family": "dark-quantum",
+        "description": "亚原子量子场 -- 适合量子物理、粒子物理、原子结构、波动力学、化学键",
+        "palette": {
+            "bg": "#0c0e17",
+            "surface": "rgba(23,25,36,0.92)",
+            "surface_high": "#282b3a",
+            "primary": "#ff7cf5",
+            "primary_container": "#ff5af9",
+            "secondary": "#00fbfb",
+            "secondary_container": "#006a6a",
+            "tertiary": "#ac89ff",
+            "signal": "#ef4444",
+            "success": "#10b981",
+            "text": "#e8e8f0",
+            "muted": "#aaaab7",
+            "outline_variant": "rgba(70,71,82,0.2)",
+        },
+        "radius": {"sm": 0, "md": 0, "lg": 0},
+        "stroke_width": {"base": 1, "focus": 2},
+        "shadow": {
+            "soft": "0 0 40px rgba(0,251,251,0.05)",
+            "focus": "0 0 60px rgba(255,124,245,0.12)",
+        },
+        "font_pairing": "Space Grotesk",
+        "glassmorphism": "backdrop-filter: blur(12px); background: rgba(34,37,50,0.6)",
+        "gradient_cta": "linear-gradient(135deg, #ff7cf5, #ff5af9)",
+        "special_effects": [
+            "Quantum Glow: secondary (#00fbfb) at 5% opacity, 40px+ blur",
+            "Quantum field: radial-gradient circles with magenta(0.03) and cyan(0.05)",
+            "Wavefunction: SVG opacity 0.15, filter blur(1px)",
+            "Particle drift animation: custom duration, opacity 0.3 to 0.8",
+            "Pulse wave: stroke-dasharray 50 150, 10s linear infinite",
+            "Glitch hover: background shifts to primary on chips",
+            "Faint shifting 10% opacity grid overlay (Matrix feel)",
+            "Ghost Border: outline_variant at 20% opacity (blueprint grid feel)",
+        ],
+        "css_rules": [
+            "border-radius: 0px (sharp technical geometry)",
+            "No rounded corners ever",
+            "Display-LG: 3.5rem with 0.1em letter-spacing",
+            "Label-SM: ALL CAPS for scientific metadata",
+        ],
+    },
+    # -- 7. Rocketry Control: 工业火箭控制台 --
+    # 基于 animation_game_design/rocketry_mission_control_v2
+    "rocketry_control": {
+        "background_family": "dark-industrial",
+        "description": "工业火箭控制台 -- 适合火箭工程、推进系统、轨道力学、工程力学",
+        "palette": {
+            "bg": "#05070A",
+            "surface": "rgba(13,17,31,0.92)",
+            "surface_high": "#0B1026",
+            "primary": "#FFB000",
+            "primary_container": "#FF5F1F",
+            "secondary": "#FFB08E",
+            "signal": "#FF5F1F",
+            "success": "#10b981",
+            "text": "#e0dfe6",
+            "muted": "#8e90a6",
+            "outline_variant": "rgba(142,144,166,0.2)",
+        },
+        "radius": {"sm": 4, "md": 8, "lg": 12},
+        "stroke_width": {"base": 1, "focus": 2},
+        "shadow": {
+            "soft": "0 0 15px rgba(255,176,0,0.15)",
+            "focus": "inset 0 0 15px rgba(0,0,0,0.5)",
+        },
+        "font_pairing": "Space Grotesk + Manrope",
+        "glassmorphism": "backdrop-filter: blur(12px); background: rgba(13,17,31,0.6)",
+        "gradient_cta": "linear-gradient(135deg, #FFB000, #FF5F1F)",
+        "special_effects": [
+            "Industrial bezel: border 1px solid rgba(142,144,166,0.2), border-top 3px solid #FFB000",
+            "Radar sweep: conic-gradient animation 4s linear infinite",
+            "Scanning overlay: repeating-linear-gradient rgba(255,176,0,0.03) 1px",
+            "Amber glow: box-shadow 0 0 15px rgba(255,176,0,0.15)",
+            "Grid pattern: radial-gradient(#FFB000 0.1 1px, transparent), size 20px",
+            "Radar SVG: circles with stroke #FFB000, dashed orbital paths",
+            "Body gradient: radial-gradient + scanlines + RGB noise layers",
+        ],
+        "css_rules": [
+            "border-radius: 4-12px (slightly softened industrial)",
+            "Industrial bezel: border-top 3px accent, radius 8px 8px 2px 2px",
+            "Radar/gauge aesthetic for data visualization",
+            "Deep dark base (#05070A) with amber instrumentation",
+        ],
+    },
+    # -- 8. Aqua Flow: 水流海洋 --
+    # 基于 animation_game_design/aqua_flow 概念 + ocean_deep 设计语言
+    "aqua_flow": {
+        "background_family": "dark-ocean",
+        "description": "水流海洋 -- 适合海洋科学、水文、流体力学、化学溶液、环境科学",
+        "palette": {
+            "bg": "#040d1a",
+            "surface": "rgba(8,22,42,0.92)",
+            "surface_high": "#0f1d30",
+            "primary": "#06b6d4",
+            "primary_container": "#0891b2",
+            "secondary": "#22d3ee",
+            "tertiary": "#34d399",
+            "signal": "#f59e0b",
+            "success": "#34d399",
+            "text": "#c8dce8",
+            "muted": "#4a6a80",
+            "outline_variant": "rgba(74,106,128,0.15)",
         },
         "radius": {"sm": 8, "md": 14, "lg": 22},
-        "stroke_width": {"base": 2, "focus": 3},
+        "stroke_width": {"base": 1.5, "focus": 2.5},
         "shadow": {
-            "soft": "0 10px 30px rgba(15, 23, 42, 0.12)",
-            "focus": "0 8px 20px rgba(29, 78, 216, 0.18)",
+            "soft": "0 0 30px rgba(6,182,212,0.12)",
+            "focus": "0 0 40px rgba(6,182,212,0.25)",
         },
-        "font_pairing": "Noto Sans SC + Nunito",
-        "spacing_scale": [4, 8, 12, 16, 24, 32, 40],
+        "font_pairing": "Space Grotesk + Inter",
+        "glassmorphism": "backdrop-filter: blur(16px); background: rgba(8,22,42,0.5)",
+        "gradient_cta": "linear-gradient(135deg, #06b6d4, #22d3ee)",
+        "special_effects": [
+            "Water caustic: animated radial-gradient light patterns",
+            "Bubble particles: floating upward, blue-cyan, varying sizes",
+            "Depth gradient: darker at bottom, lighter at top",
+            "Glass-morphism cards with blue tint and subtle borders",
+            "Wave animation: gentle sine-wave motion on surface elements",
+            "Bioluminescent dots: small glowing particles, opacity pulse",
+        ],
+        "css_rules": [
+            "Rounded corners (8-22px) for organic feel",
+            "Depth-pressure color gradient on background",
+            "Gentle, flowing animations (no sharp movements)",
+            "Blue-cyan dominant palette with warm accent signals",
+        ],
     },
-    "concept_lab_clean": {
-        "background_family": "lab-neutral",
+    # -- 9. Ember Forge: 熔炉火焰 --
+    # 基于 animation_game_design/ember_forge 概念 + geo_stratum/terra_nova 设计语言
+    "ember_forge": {
+        "background_family": "dark-volcanic",
+        "description": "熔炉火焰 -- 适合地质学、火山、地球内部结构、冶金、热力学、化学反应",
         "palette": {
-            "bg": "#eef2ff",
-            "surface": "#ffffff",
-            "primary": "#0891b2",
-            "secondary": "#22c55e",
-            "signal": "#f97316",
-            "success": "#16a34a",
-            "text": "#0b1220",
-            "muted": "#475569",
-        },
-        "radius": {"sm": 8, "md": 14, "lg": 20},
-        "stroke_width": {"base": 2, "focus": 3},
-        "shadow": {
-            "soft": "0 8px 24px rgba(8, 145, 178, 0.14)",
-            "focus": "0 12px 26px rgba(34, 197, 94, 0.18)",
-        },
-        "font_pairing": "Noto Sans SC + Rubik",
-        "spacing_scale": [4, 8, 12, 16, 24, 32, 40],
-    },
-    "storybook_vivid": {
-        "background_family": "warm-paper",
-        "palette": {
-            "bg": "#fff8ee",
-            "surface": "#fffdf8",
-            "primary": "#d97706",
-            "secondary": "#0ea5e9",
+            "bg": "#0a0604",
+            "surface": "rgba(18,12,8,0.92)",
+            "surface_high": "#1a1210",
+            "primary": "#ff6b35",
+            "primary_container": "#cc4400",
+            "secondary": "#fbbf24",
+            "tertiary": "#ef4444",
             "signal": "#ef4444",
-            "success": "#16a34a",
-            "text": "#3f2b1d",
-            "muted": "#7c5e47",
+            "success": "#10b981",
+            "text": "#e8d8c8",
+            "muted": "#8a7060",
+            "outline_variant": "rgba(138,112,96,0.15)",
         },
-        "radius": {"sm": 10, "md": 16, "lg": 24},
-        "stroke_width": {"base": 2, "focus": 3},
+        "radius": {"sm": 4, "md": 8, "lg": 16},
+        "stroke_width": {"base": 1.5, "focus": 2.5},
         "shadow": {
-            "soft": "0 10px 24px rgba(217, 119, 6, 0.16)",
-            "focus": "0 10px 26px rgba(239, 68, 68, 0.16)",
+            "soft": "0 0 30px rgba(255,107,53,0.12)",
+            "focus": "0 0 50px rgba(255,107,53,0.25)",
         },
-        "font_pairing": "Noto Serif SC + Nunito",
-        "spacing_scale": [4, 8, 12, 16, 24, 32, 40],
+        "font_pairing": "Space Grotesk + Inter",
+        "glassmorphism": "backdrop-filter: blur(12px); background: rgba(18,12,8,0.5)",
+        "gradient_cta": "linear-gradient(135deg, #ff6b35, #cc4400)",
+        "special_effects": [
+            "Magma glow: radial-gradient from #ff6b35 core to transparent",
+            "Ember particles: floating upward, orange-red, with blur trail",
+            "Heat distortion: subtle CSS transform skew animation",
+            "Stratum layers: horizontal gradient bands for geological layers",
+            "Warm ambient: primary at 8% opacity, 30px blur background glow",
+            "Crack patterns: thin lines (#fbbf24 at 10% opacity) on surfaces",
+        ],
+        "css_rules": [
+            "Slightly rounded corners (4-16px) for geological feel",
+            "Warm color temperature throughout (no cool blues)",
+            "Upward-moving particle effects (heat rises)",
+            "Red-orange-amber gradient palette",
+        ],
+    },
+    # -- 10. Flora Pulse: 植物脉动 --
+    # 基于 animation_game_design/flora_pulse 概念
+    "flora_pulse": {
+        "background_family": "dark-botanical",
+        "description": "植物脉动 -- 适合植物学、光合作用、生态系统、农业、食物链、进化论",
+        "palette": {
+            "bg": "#080e08",
+            "surface": "rgba(12,20,12,0.92)",
+            "surface_high": "#142014",
+            "primary": "#4ade80",
+            "primary_container": "#16a34a",
+            "secondary": "#a3e635",
+            "tertiary": "#fbbf24",
+            "signal": "#ef4444",
+            "success": "#10b981",
+            "text": "#d8e8d8",
+            "muted": "#5a7a5a",
+            "outline_variant": "rgba(90,122,90,0.15)",
+        },
+        "radius": {"sm": 12, "md": 20, "lg": 9999},
+        "stroke_width": {"base": 1.5, "focus": 2.5},
+        "shadow": {
+            "soft": "0 0 30px rgba(74,222,128,0.1)",
+            "focus": "0 0 50px rgba(74,222,128,0.2)",
+        },
+        "font_pairing": "Space Grotesk + Manrope",
+        "glassmorphism": "backdrop-filter: blur(16px); background: rgba(12,20,12,0.5)",
+        "gradient_cta": "linear-gradient(135deg, #4ade80, #16a34a)",
+        "special_effects": [
+            "Chlorophyll glow: primary at 8% opacity, 30px blur",
+            "Pollen/spore particles: gentle floating, green-yellow, varying sizes",
+            "Growth pulse: scale 1.0 to 1.02 animation on living elements",
+            "Vine pattern: thin organic curves connecting nodes",
+            "Photosynthesis gradient: green to yellow directional light",
+            "Leaf vein: thin secondary lines radiating from center",
+        ],
+        "css_rules": [
+            "Organic rounded corners (12px-full) for natural feel",
+            "Pill-shaped buttons (rounded-full)",
+            "Green dominant palette with yellow/amber accents",
+            "Gentle, breathing animations (no sharp movements)",
+        ],
     },
 }
 
 DEFAULT_STYLE_KEY_BY_MODE = {
-    "animation": "edu_soft_tech",
-    "game": "concept_lab_clean",
-    "story": "storybook_vivid",
+    "animation": "neural_circuit",
+    "game": "neural_circuit",
+    "story": "celestial_observatory",
 }
+
+# All available style_key values (for prompt injection)
+ALL_STYLE_KEYS = "|".join(STYLE_KITS.keys())
 
 ANIMATION_COMPONENT_LIBRARY = [
     "device_frame",
@@ -137,26 +518,25 @@ def get_style_kit(mode: str, preferred_key: str | None = None) -> tuple[str, dic
     """Return (style_key, style_kit) with safe fallback."""
     style_key = preferred_key if preferred_key in STYLE_KITS else None
     if not style_key:
-        style_key = DEFAULT_STYLE_KEY_BY_MODE.get(mode, "edu_soft_tech")
+        style_key = DEFAULT_STYLE_KEY_BY_MODE.get(mode, "neural_circuit")
     return style_key, STYLE_KITS[style_key]
 
 
 def style_kit_prompt_block(mode: str, preferred_key: str | None = None) -> str:
-    """Return a compact text block used in agent prompts."""
+    """Return a compact text block used in detail planner prompts."""
     style_key, kit = get_style_kit(mode=mode, preferred_key=preferred_key)
     palette = kit["palette"]
     radius = kit["radius"]
-    shadow = kit["shadow"]
+    desc = kit.get("description", "")
     return (
         f"固定风格系统（必须严格遵守，不可自由发挥）：\n"
         f"- style_key: {style_key}\n"
-        f"- 背景家族: {kit['background_family']}，bg={palette['bg']}，surface={palette['surface']}\n"
+        f"- 风格说明: {desc}\n"
+        f"- 背景: {palette['bg']}，面板: {palette['surface']}\n"
         f"- 主色: {palette['primary']}，辅助色: {palette['secondary']}，信号色: {palette['signal']}\n"
         f"- 文本色: {palette['text']}，弱化文本: {palette['muted']}\n"
         f"- 圆角: sm={radius['sm']}px, md={radius['md']}px, lg={radius['lg']}px\n"
-        f"- 阴影: soft={shadow['soft']} / focus={shadow['focus']}\n"
         f"- 字体: {kit['font_pairing']}\n"
-        f"- 间距尺度: {', '.join(str(i) for i in kit['spacing_scale'])} px\n"
     )
 
 
@@ -309,6 +689,7 @@ def inject_game_style_overrides(html: str, style_key: str | None = None) -> str:
     """Inject shared game CSS tokens to keep output style consistent across mechanics."""
     resolved_key, kit = get_style_kit("game", preferred_key=style_key)
     palette = kit["palette"]
+    font = kit.get("font_pairing", "Space Grotesk").split("+")[0].strip()
     style_block = f"""
 <style id="edu-game-style-kit">
 :root {{
@@ -322,7 +703,7 @@ def inject_game_style_overrides(html: str, style_key: str | None = None) -> str:
   --dim: {palette['muted']} !important;
 }}
 html, body {{
-  font-family: "Noto Sans SC", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif !important;
+  font-family: "{font}", "Noto Sans SC", "PingFang SC", system-ui, sans-serif !important;
 }}
 </style>
 """.strip()

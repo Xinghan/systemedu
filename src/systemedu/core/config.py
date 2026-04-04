@@ -158,12 +158,17 @@ def _default_config_dict() -> dict:
     """Return the default config as a dict (for writing to YAML)."""
     return {
         "llm": {
-            "default": "qwen",
+            "default": "kimi",
             "providers": {
                 "qwen": {
                     "base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1",
                     "api_key": "${DASHSCOPE_API_KEY}",
                     "model": "qwen3-max",
+                },
+                "kimi": {
+                    "base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1",
+                    "api_key": "${DASHSCOPE_API_KEY}",
+                    "model": "kimi-k2.5",
                 },
             },
         },
