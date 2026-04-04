@@ -796,6 +796,9 @@ async def api_project_detail(request: Request) -> JSONResponse:
             for p in ctx.progress:
                 status_map[p.knode_id] = p.status.value if hasattr(p.status, "value") else str(p.status)
 
+            # Sub-project knode_id mapping: P0=-101, P1=-102, ..., P8=-109
+            sp_id_to_knode_id = {f"P{i}": -(101 + i) for i in range(9)}
+
             for sp in ctx.tree.sub_projects:
                 sp_node_ids: list[int] = []
                 for ms_idx in sp.milestone_indices:
@@ -813,6 +816,10 @@ async def api_project_detail(request: Request) -> JSONResponse:
                 )
                 sp_total = len(sp_node_ids)
 
+                # Get sub-project's own status from negative knode_id
+                sp_knode_id = sp_id_to_knode_id.get(sp.id)
+                sp_status = status_map.get(sp_knode_id, "locked") if sp_knode_id else "locked"
+
                 sp_data: dict = {
                     "id": sp.id,
                     "title": sp.title,
@@ -825,6 +832,7 @@ async def api_project_detail(request: Request) -> JSONResponse:
                     "deliverables": sp.deliverables,
                     "nodes_passed": sp_passed,
                     "nodes_total": sp_total,
+                    "status": sp_status,
                 }
                 if sp.brief:
                     sp_data["brief"] = sp.brief

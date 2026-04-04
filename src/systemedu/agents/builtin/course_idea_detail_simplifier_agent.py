@@ -18,7 +18,7 @@ class CourseIdeaDetailSimplifierAgent:
         style_key = idea.get("style_key", "")
         if mode == "animation":
             return {
-                "style_key": style_key or "edu_soft_tech",
+                "style_key": style_key or "neural_circuit",
                 "title": topic[:10],
                 "frame_count": 4,
                 "layout": {
@@ -51,7 +51,7 @@ class CourseIdeaDetailSimplifierAgent:
 
         if mode == "game":
             return {
-                "style_key": style_key or "concept_lab_clean",
+                "style_key": style_key or "neural_circuit",
                 "game_mechanic": "simulation",
                 "game_concept": f"通过调参理解{topic}中的因果关系",
                 "game_title": topic[:10],
@@ -73,7 +73,7 @@ class CourseIdeaDetailSimplifierAgent:
             }
 
         return {
-            "style_key": style_key or "storybook_vivid",
+            "style_key": style_key or "celestial_observatory",
             "title": topic[:10],
             "character_bible": [{"name": "小探险家", "appearance": "短发背包", "personality": "好奇勇敢"}],
             "persuasion": {

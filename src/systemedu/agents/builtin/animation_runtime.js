@@ -372,13 +372,20 @@
   };
 
   AnimationRuntime.prototype._palette = function () {
-    var sk = (this.spec.style_key || "edu_soft_tech");
+    var sk = (this.spec.style_key || "neural_circuit");
     var palettes = {
-      edu_soft_tech:    { bg: "#f2f7fb", bg2: "#e8f3ff", primary: "#1d4ed8", secondary: "#0ea5e9", accent: "#7c3aed" },
-      concept_lab_clean:{ bg: "#f0fdfa", bg2: "#e0f7f4", primary: "#0891b2", secondary: "#22c55e", accent: "#0284c7" },
-      storybook_vivid:  { bg: "#fffbeb", bg2: "#fef3c7", primary: "#d97706", secondary: "#0ea5e9", accent: "#dc2626" },
+      aether_clinic:          { bg: "#111318", bg2: "#1a1c20", primary: "#98cbff", secondary: "#b9f1ff", accent: "#00a3ff" },
+      ares_mission:           { bg: "#131313", bg2: "#1c1b1b", primary: "#ffb59c", secondary: "#c6c6c6", accent: "#00daf3" },
+      celestial_observatory:  { bg: "#111220", bg2: "#1e1e2d", primary: "#c9bfff", secondary: "#fff9ef", accent: "#ffdb3c" },
+      helix_lab:              { bg: "#0c0e12", bg2: "#111318", primary: "#50ffb0", secondary: "#acf900", accent: "#17df93" },
+      neural_circuit:         { bg: "#121318", bg2: "#1a1b21", primary: "#dbfcff", secondary: "#2ff801", accent: "#00F0FF" },
+      subatomic_matrix:       { bg: "#0c0e17", bg2: "#171924", primary: "#ff7cf5", secondary: "#00fbfb", accent: "#ac89ff" },
+      rocketry_control:       { bg: "#05070A", bg2: "#0B1026", primary: "#FFB000", secondary: "#FFB08E", accent: "#FF5F1F" },
+      aqua_flow:              { bg: "#040d1a", bg2: "#0f1d30", primary: "#06b6d4", secondary: "#22d3ee", accent: "#34d399" },
+      ember_forge:            { bg: "#0a0604", bg2: "#1a1210", primary: "#ff6b35", secondary: "#fbbf24", accent: "#cc4400" },
+      flora_pulse:            { bg: "#080e08", bg2: "#142014", primary: "#4ade80", secondary: "#a3e635", accent: "#16a34a" },
     };
-    return palettes[sk] || palettes["edu_soft_tech"];
+    return palettes[sk] || palettes["neural_circuit"];
   };
 
   AnimationRuntime.prototype._buildHUD = function () {

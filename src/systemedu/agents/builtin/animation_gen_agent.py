@@ -1,77 +1,208 @@
-"""AnimationGenAgent — generates animation HTML via AnimationSpec DSL.
+"""AnimationGenAgent — generates animation HTML directly via LLM.
 
-Pipeline:
-  1. LLM generates AnimationSpec JSON (structured scene description)
-  2. AnimationCompiler converts spec to self-contained HTML
-  3. AnimationRuntime (JS) renders the SVG animation in the browser
-
-This avoids asking LLM to write raw SVG/CSS code directly.
+Simplified architecture: receives detail_plan, directly prompts LLM to generate HTML.
+No complex pipelines, no fallbacks.
 """
 
-import json
 import logging
 
-from systemedu.agents.builtin.animation_backend_router_agent import (
-    AnimationBackendRouterAgent,
-)
-from systemedu.agents.builtin.animation_spec import (
-    ANIMATION_SPEC_PROMPT,
-    ANIMATION_SPEC_SCHEMA,
-    compile_animation_spec,
-    validate_animation_spec,
-)
-from systemedu.agents.builtin.manim_gen_agent import ManimGenAgent
 from systemedu.agents.builtin.media_art_direction import (
+    STYLE_KITS,
     inject_katex_if_needed,
 )
-from systemedu.agents.builtin.pattern_router_agent import PatternRouterAgent
-from systemedu.agents.builtin.scientific_model_agent import ScientificModelAgent
 
 logger = logging.getLogger(__name__)
 
-# ─────────────────────────────────────────────────────────────
-# Repair Agent prompt（A4）
-# ─────────────────────────────────────────────────────────────
+ANIMATION_GENERATION_PROMPT = """你是一位教育动画开发专家。请根据以下详细创意方案，生成一个教育动画的完整 HTML 代码。
 
-REPAIR_PROMPT = """\
-以下 AnimationSpec 存在几何/质量问题，请修复并返回完整的修复后 JSON：
+知识点：{topic}
+上下文：{context_summary}
 
-问题列表：
-{issues}
+详细创意方案：
+{detail_plan_json}
 
-原始 AnimationSpec：
-{spec_json}
+【用户操作说明 -- 必须严格实现】
+以下是面向学生的操作说明，你生成的动画必须完全匹配这些描述：
+{user_guide_text}
 
-修复规则：
-1. 只修改有问题的帧/元素，保持其他内容不变
-2. 超出边界的元素：调整 x/y/w/h 使其在 0-600(x) 和 0-360(y) 范围内
-3. 字体过小：将 font_size 调整至至少 12
-4. 缺少 objective：为每帧补充一句教学目标说明（不是视觉描述，是教学意图）
-5. enter.duration <= 0：修正为 0.4
-6. enter.delay < 0：修正为 0
-7. enter 动画超出 frame_duration：缩短 duration 或减小 delay
-8. 直接输出修复后的完整 JSON，不要任何说明
+如果说明中提到了播放控制方式，你必须实现对应的控制按钮。
+如果说明中提到了阶段数量，你必须实现对应数量的阶段。
+如果说明中提到了观察重点，你必须确保对应的视觉元素清晰可见。
 
-修复后的 AnimationSpec JSON："""
+【视觉风格指南 -- 必须遵循】
+{style_guide}
+
+动画效果：
+- 平滑过渡：使用 CSS transition 或 requestAnimationFrame
+- 脉冲发光：关键节点添加 pulse animation
+- 数据流动：使用虚线动画（stroke-dasharray）表现传输
+
+【物理常识与视觉方向 -- 必须遵守】
+这是面向学生的教育内容，任何违反物理常识的画面都会严重误导学生。
+1. 重力方向：物体自然下落，向画面下方。陨石坑、水面、地面必须在画面下方或底部。
+   天空、太阳、星空在画面上方。树木从地面向上生长。雨和雪从上往下落。
+2. SVG/Canvas 坐标系：y 轴向下递增。y=0 是顶部（天空），y=max 是底部（地面）。
+   如果要画一个从天上落下的物体，y 值应从小到大变化。
+3. 方向性：箭头指向运动方向。河流从高处流向低处。火焰和烟雾向上飘。
+   电流从正极到负极（传统方向）。光从光源向外发散。
+4. 比例关系：远处物体小，近处物体大。太阳比地球大。细胞比人小。
+   原子比分子小。确保标注和比例尺与实际科学一致。
+5. 颜色常识：天空为蓝色系，植物为绿色系，岩浆/火为红橙色系，
+   水为蓝色透明系，土壤为棕色系。不要用反直觉的颜色。
+
+请生成一个完整的、独立的 HTML 文件，包含：
+1. 教育动画展示（使用 SVG 或 Canvas）
+2. 帧序列控制（播放、暂停、上一帧、下一帧）
+3. 清晰展示知识点的动态过程
+4. 符合上述风格指南的 UI
+5. 【内嵌操作说明面板】在页面顶部或侧边放置一个简洁的说明区域，内容来自上方的「用户操作说明」。
+   要求：默认展开，用户可以点击折叠。使用图标 + 短文本，排版紧凑美观。
+   面板标题为「观看指南」，风格与页面整体一致。
+
+技术要求：
+- 严格遵循上方风格指南的配色方案
+- 响应式布局，整个页面必须在 100vh 内完成展示，禁止出现垂直滚动条
+- body 设置 overflow: hidden; height: 100vh; 所有内容必须在一屏内布局完成
+- 单文件 HTML，可使用 Google Fonts CDN
+- 发光效果和渐变
+
+【输出前自检 -- 在脑中逐条检查，不要输出检查过程】
+- 重力方向是否正确？物体是否向下落而非向上飞？
+- 地面/水面是否在画面底部？天空是否在上方？
+- 所有箭头方向是否符合物理规律？
+- 颜色是否符合常识（水是蓝的、火是红的、植物是绿的）？
+- 动画每一帧的物体位置变化是否符合因果逻辑？
+- 所有按钮和控件是否真的绑定了事件并能正常工作？
+
+请直接输出完整的 HTML 代码（包含 <!DOCTYPE html> 到 </html>），不要有任何其他说明文字。
+"""
 
 
-def _strip_code_fence(text: str) -> str:
-    """Strip markdown code fences."""
-    if not text.startswith("```"):
-        return text
-    lines = text.split("\n")
-    return "\n".join(lines[1:-1] if lines[-1].strip() == "```" else lines[1:]).strip()
+def _build_style_guide(style_key: str) -> str:
+    """Build a detailed style guide text from a style_key.
+
+    Generates comprehensive CSS/design specification from STYLE_KITS,
+    based on real design systems extracted from animation_game_design/ directory.
+    """
+    kit = STYLE_KITS.get(style_key)
+    if not kit:
+        style_key = "neural_circuit"
+        kit = STYLE_KITS["neural_circuit"]
+
+    palette = kit["palette"]
+    desc = kit.get("description", "")
+    effects = kit.get("special_effects", [])
+    font = kit.get("font_pairing", "Space Grotesk")
+    radius = kit.get("radius", {})
+    shadow = kit.get("shadow", {})
+    glassmorphism = kit.get("glassmorphism", "")
+    gradient_cta = kit.get("gradient_cta", "")
+    css_rules = kit.get("css_rules", [])
+
+    lines = [f"风格名称: {style_key}"]
+    if desc:
+        lines.append(f"风格说明: {desc}")
+
+    # -- 配色方案 (完整) --
+    lines.append(f"\n配色方案 (必须严格使用这些颜色值):")
+    lines.append(f"- 页面背景 (body/html): {palette.get('bg', '#121318')}")
+    lines.append(f"- 面板/卡片背景: {palette.get('surface', 'rgba(26,27,33,0.92)')}")
+    if palette.get("surface_high"):
+        lines.append(f"- 高层级面板: {palette['surface_high']}")
+    lines.append(f"- 主色调 (primary): {palette.get('primary', '#dbfcff')}")
+    if palette.get("primary_container"):
+        lines.append(f"- 主色容器 (primary-container): {palette['primary_container']}")
+    lines.append(f"- 辅助色 (secondary): {palette.get('secondary', '#2ff801')}")
+    if palette.get("secondary_container"):
+        lines.append(f"- 辅助色容器: {palette['secondary_container']}")
+    if palette.get("tertiary"):
+        lines.append(f"- 第三色 (tertiary): {palette['tertiary']}")
+    lines.append(f"- 信号色/警告: {palette.get('signal', '#ef4444')}")
+    lines.append(f"- 成功色: {palette.get('success', '#10b981')}")
+    lines.append(f"- 主文字: {palette.get('text', '#e8e8ec')}")
+    lines.append(f"- 次要文字: {palette.get('muted', '#8a8a90')}")
+    if palette.get("outline_variant"):
+        lines.append(f"- 边框/分割线: {palette['outline_variant']}")
+
+    # -- 字体 --
+    lines.append(f"\n字体: {font}")
+
+    # -- 圆角 --
+    r_sm = radius.get("sm", 0)
+    r_md = radius.get("md", 0)
+    r_lg = radius.get("lg", 0)
+    lines.append(f"圆角: sm={r_sm}px, md={r_md}px, lg={r_lg}px")
+
+    # -- 阴影 --
+    lines.append(f"柔和阴影: {shadow.get('soft', 'none')}")
+    lines.append(f"焦点阴影: {shadow.get('focus', 'none')}")
+
+    # -- 玻璃态 --
+    if glassmorphism:
+        lines.append(f"\n玻璃态效果 (glassmorphism): {glassmorphism}")
+
+    # -- 渐变 CTA --
+    if gradient_cta:
+        lines.append(f"渐变按钮/CTA: {gradient_cta}")
+
+    # -- 特殊效果 --
+    if effects:
+        lines.append(f"\n特殊视觉效果 (必须至少实现 2-3 个):")
+        for eff in effects:
+            lines.append(f"- {eff}")
+
+    # -- CSS 硬性规则 --
+    if css_rules:
+        lines.append(f"\nCSS 硬性规则:")
+        for rule in css_rules:
+            lines.append(f"- {rule}")
+
+    # -- 通用深色主题规则 --
+    lines.append(f"\n整体基调: 深色沉浸式主题")
+    lines.append("通用规则:")
+    lines.append("- body 背景必须使用上方指定的 bg 颜色")
+    lines.append("- 所有面板使用 glassmorphism (半透明 + backdrop-blur)")
+    lines.append("- 不要使用传统 drop-shadow，改用发光效果 (glow)")
+    lines.append("- 交互元素 hover 时添加发光或微缩放效果")
+    lines.append("- Google Fonts CDN 加载字体: " + font.split("+")[0].strip())
+
+    return "\n".join(lines)
 
 
 class AnimationGenAgent:
-    """Generates animation HTML from a frame detail plan via AnimationSpec DSL."""
+    """Generates animation HTML directly via LLM.
+
+    Simplified architecture: no complex pipelines, no fallbacks.
+    Receives detail_plan, directly prompts LLM to generate HTML.
+    """
 
     def __init__(self, llm):
         self.llm = llm
-        self.router = AnimationBackendRouterAgent(llm)
-        self.manim = ManimGenAgent(llm)
-        self.science_model = ScientificModelAgent(llm)
-        self.pattern_router = PatternRouterAgent(llm)
+
+    @staticmethod
+    def _format_animation_user_guide(detail_plan: dict) -> str:
+        """Format user_guide from detail_plan into readable text for prompt injection."""
+        guide = detail_plan.get("user_guide")
+        if not isinstance(guide, dict):
+            return "(无用户操作说明)"
+
+        parts: list[str] = []
+        what = guide.get("what_it_shows", "")
+        if what:
+            parts.append(f"- 这个动画展示了: {what}")
+        observe = guide.get("observe_points", [])
+        if isinstance(observe, list) and observe:
+            parts.append("- 观察重点:")
+            for pt in observe:
+                if isinstance(pt, str):
+                    parts.append(f"  * {pt}")
+        controls = guide.get("controls", "")
+        if controls:
+            parts.append(f"- 播放控制: {controls}")
+        takeaway = guide.get("takeaway", "")
+        if takeaway:
+            parts.append(f"- 看完后能回答: {takeaway}")
+        return "\n".join(parts) if parts else "(无用户操作说明)"
 
     async def generate(
         self,
@@ -82,291 +213,65 @@ class AnimationGenAgent:
     ) -> str:
         """Generate animation HTML from detail_plan.
 
-        Returns HTML string, or empty string on failure.
+        Args:
+            detail_plan: The detailed animation plan from CourseIdeaDetailPlannerAgent.
+            node_title: The knowledge node title.
+            node_summary: Optional node summary.
+            project_category: Optional project category.
 
-        Layer 1: Parametric template library (highest quality, physics equations)
-        Layer 2: AnimationSpec DSL (current system, frame-snapshot based)
-        Layer 3: Fallback HTML
+        Returns:
+            HTML string, or empty string on failure.
         """
-        frames = detail_plan.get("frames", [])
+        import asyncio
+        import json
+        from langchain_core.messages import HumanMessage
+
         topic = detail_plan.get("topic", node_title)
-        context = detail_plan.get("context_summary", "")
+        context_summary = detail_plan.get("context_summary", node_summary)
 
-        # Layer 1: Try parametric template library first
-        pattern_result = await self.pattern_router.route(
-            node_title=node_title,
-            node_summary=node_summary,
+        user_guide_text = self._format_animation_user_guide(detail_plan)
+        style_key = detail_plan.get("style_key", "neural_circuit")
+        style_guide = _build_style_guide(style_key)
+
+        prompt = ANIMATION_GENERATION_PROMPT.format(
             topic=topic,
-            context=context,
-        )
-        if pattern_result.get("matched") and pattern_result.get("html"):
-            logger.info(
-                "AnimationGenAgent: Layer 1 pattern match for '%s' -> %s",
-                node_title,
-                pattern_result.get("pattern_id"),
-            )
-            detail_plan["generation_backend"] = "pattern_template"
-            detail_plan["pattern_id"] = pattern_result["pattern_id"]
-            return pattern_result["html"]
-
-        if not frames:
-            logger.warning("AnimationGenAgent: no frames in detail_plan for '%s'", node_title)
-            return ""
-
-        # Route: Manim vs html_svg (Manim currently disabled via _MANIM_DISABLED)
-        route = await self.router.route(
-            node_title=node_title,
-            node_summary=node_summary,
-            detail_plan=detail_plan,
-            project_category=project_category,
-        )
-        detail_plan.setdefault("generation_backend", route["backend"])
-
-        if route["backend"] == "manim":
-            logger.info(
-                "AnimationGenAgent: routing '%s' to Manim (%s)",
-                node_title,
-                route.get("reason", ""),
-            )
-            import asyncio
-            manim_html = await self.manim.generate(
-                detail_plan=detail_plan,
-                node_title=node_title,
-                node_summary=node_summary,
-                subject_hint=route.get("subject_hint", "math_formula"),
-            )
-            if manim_html:
-                return inject_katex_if_needed(manim_html)
-            logger.warning(
-                "AnimationGenAgent: Manim failed for '%s', falling back to AnimationSpec",
-                node_title,
-            )
-
-        return await self._generate_via_spec(
-            detail_plan=detail_plan,
-            node_title=node_title,
-            node_summary=node_summary,
-            project_category=project_category,
-        )
-
-    async def _repair_spec(self, spec: dict, issues: list[str]) -> dict:
-        """A4: 单次 LLM 修复调用，修正几何/质量问题后返回修复后的 spec。"""
-        import asyncio
-        from langchain_core.messages import HumanMessage
-
-        prompt = REPAIR_PROMPT.format(
-            issues="\n".join(f"- {issue}" for issue in issues),
-            spec_json=json.dumps(spec, ensure_ascii=False, indent=2),
-        )
-        try:
-            response = await asyncio.to_thread(self.llm.invoke, [HumanMessage(content=prompt)])
-            raw = _strip_code_fence(response.content.strip())
-            repaired = json.loads(raw)
-            logger.info("AnimationGenAgent: repair successful, issues fixed: %d", len(issues))
-            return repaired
-        except Exception as exc:
-            logger.warning("AnimationGenAgent: repair failed (%s), using original spec", exc)
-            return spec
-
-    async def _generate_via_spec(
-        self,
-        detail_plan: dict,
-        node_title: str,
-        node_summary: str,
-        project_category: str,
-    ) -> str:
-        """Generate animation via AnimationSpec DSL pipeline."""
-        import asyncio
-        from langchain_core.messages import HumanMessage
-
-        frames = detail_plan.get("frames", [])
-
-        # Build frames description for prompt
-        frames_desc_parts = []
-        for f in frames:
-            idx = f.get("frame_index", 0)
-            desc = f.get("description", "")
-            elements = ", ".join(f.get("visual_elements", []))
-            narration = f.get("narration", "")
-            part = f"帧 {idx + 1}: {desc}\n  视觉元素: {elements}"
-            if narration:
-                part += f"\n  旁白: {narration}"
-            frames_desc_parts.append(part)
-        frames_description = "\n".join(frames_desc_parts)
-
-        layout = detail_plan.get("layout", {})
-        beats = detail_plan.get("beats", [])
-        beats_summary = " | ".join(
-            f"t={b.get('t', '')}:{b.get('action', '')}/{b.get('focus', '')}"
-            for b in beats[:6]
-            if isinstance(b, dict)
-        ) or "anticipation → main_action → settle"
-
-        # Pre-step: extract scientific model for science-domain nodes
-        scientific_model_block = ""
-        if ScientificModelAgent.should_run(project_category, node_title, node_summary):
-            science_model = await self.science_model.extract(
-                node_title=node_title,
-                node_summary=node_summary,
-                mode="animation",
-            )
-            if science_model:
-                scientific_model_block = ScientificModelAgent.build_prompt_block(science_model)
-                logger.info("AnimationGenAgent: scientific model injected for '%s'", node_title)
-
-        style_key = detail_plan.get("style_key", "edu_soft_tech")
-        prompt = ANIMATION_SPEC_PROMPT.format(
-            node_title=node_title,
-            anim_title=detail_plan.get("title", node_title),
-            animation_type=detail_plan.get("animation_type", "流程演示"),
-            style_hint=detail_plan.get("style_hint", "科技感"),
-            frame_count=len(frames),
-            focal_object=layout.get("focal_object", "主焦点"),
-            secondary_object=layout.get("secondary_object", "次焦点"),
-            beats_summary=beats_summary,
-            scientific_model_block=scientific_model_block,
-            style_key=style_key,
-            frames_description=frames_description,
-            schema=ANIMATION_SPEC_SCHEMA,
+            context_summary=context_summary[:500] if context_summary else "",
+            detail_plan_json=json.dumps(detail_plan, ensure_ascii=False, indent=2),
+            user_guide_text=user_guide_text,
+            style_guide=style_guide,
         )
 
         try:
-            response = await asyncio.to_thread(self.llm.invoke, [HumanMessage(content=prompt)])
-            raw = _strip_code_fence(response.content.strip())
+            response = await asyncio.to_thread(
+                self.llm.invoke, [HumanMessage(content=prompt)]
+            )
+            html = response.content.strip()
 
-            # Parse JSON spec
-            try:
-                spec = json.loads(raw)
-            except json.JSONDecodeError as exc:
-                logger.warning(
-                    "AnimationGenAgent: JSON parse failed for '%s': %s", node_title, exc
-                )
-                return _build_fallback_html(detail_plan, node_title)
+            # Strip markdown code fences if present
+            if html.startswith("```"):
+                lines = html.split("\n")
+                if lines[0].startswith("```html"):
+                    lines = lines[1:]
+                elif lines[0].startswith("```"):
+                    lines = lines[1:]
+                if lines and lines[-1].strip() == "```":
+                    lines = lines[:-1]
+                html = "\n".join(lines).strip()
 
-            # Validate spec（A3/A6 几何+时间线校验）
-            valid, issues = validate_animation_spec(spec)
-            if issues:
-                logger.info(
-                    "AnimationGenAgent: spec has %d issues for '%s', calling repair",
-                    len(issues),
-                    node_title,
-                )
-                spec = await self._repair_spec(spec, issues)
-                # 修复后不再重复校验，避免无限循环
+            if not html.startswith("<!DOCTYPE") and not html.startswith("<html"):
+                logger.warning("AnimationGenAgent: response is not valid HTML for '%s'", node_title)
+                return ""
 
-            if not valid and not spec.get("frames"):
-                return _build_fallback_html(detail_plan, node_title)
+            html = inject_katex_if_needed(html)
 
-            # Ensure style_key
-            if not spec.get("style_key"):
-                spec["style_key"] = style_key
-
-            html = compile_animation_spec(spec, node_title=node_title)
             logger.info(
-                "AnimationGenAgent: compiled spec for '%s' -> %d chars, %d frames",
-                node_title,
+                "AnimationGenAgent: generated %d chars (style=%s) for '%s'",
                 len(html),
-                len(spec.get("frames", [])),
+                style_key,
+                node_title,
             )
             return html
 
         except Exception:
-            logger.exception("AnimationGenAgent: unexpected error for '%s'", node_title)
-            return _build_fallback_html(detail_plan, node_title)
-
-
-def _build_fallback_html(detail_plan: dict, node_title: str) -> str:
-    """Deterministic fallback: build a minimal AnimationSpec from detail_plan and compile it."""
-    frames = detail_plan.get("frames") or []
-    style_key = detail_plan.get("style_key", "edu_soft_tech")
-
-    # Build a simple spec from the detail_plan frames
-    spec_frames = []
-    for i, frame in enumerate(frames[:6]):
-        if not isinstance(frame, dict):
-            continue
-        desc = str(frame.get("description") or f"步骤 {i + 1}")
-        elements_text = frame.get("visual_elements", [])
-        narration = str(frame.get("narration") or "")
-
-        frame_elements: list[dict] = [
-            # 背景卡片
-            {
-                "type": "rect",
-                "x": 32, "y": 20, "w": 536, "h": 300,
-                "fill": {"type": "linear", "stops": [
-                    {"offset": "0%", "color": "#eff6ff"},
-                    {"offset": "100%", "color": "#dbeafe"},
-                ]},
-                "rx": 18,
-                "enter": {"duration": 0.3, "easing": "easeOut", "from_scale": 0.95},
-            },
-            # 帧序号标识
-            {
-                "type": "circle",
-                "cx": 76, "cy": 58, "r": 22,
-                "fill": {"type": "linear", "stops": [
-                    {"offset": "0%", "color": "#1d4ed8"},
-                    {"offset": "100%", "color": "#0ea5e9"},
-                ]},
-                "enter": {"duration": 0.4, "delay": 0.1, "easing": "spring", "from_scale": 0.2},
-            },
-            {
-                "type": "text",
-                "x": 76, "y": 64, "text": str(i + 1),
-                "font_size": 18, "bold": True, "color": "#ffffff",
-                "enter": {"duration": 0.3, "delay": 0.2, "easing": "easeOut", "from_y": 8},
-            },
-            # 主描述文字
-            {
-                "type": "text",
-                "x": 300, "y": 180, "text": desc[:20],
-                "font_size": 18, "bold": True, "color": "#1e3a8a",
-                "enter": {"duration": 0.5, "delay": 0.15, "easing": "easeInOut", "from_y": 20},
-            },
-        ]
-
-        # 添加视觉元素标签
-        for j, elem_text in enumerate(elements_text[:3]):
-            x_pos = 120 + j * 140
-            frame_elements.append({
-                "type": "label_bubble",
-                "x": x_pos, "y": 260,
-                "text": str(elem_text)[:8],
-                "font_size": 12,
-                "bg": "#1d4ed8",
-                "enter": {"duration": 0.35, "delay": 0.2 + j * 0.08, "easing": "spring", "from_scale": 0.3},
-            })
-
-        if narration:
-            frame_elements.append({
-                "type": "text",
-                "x": 300, "y": 215, "text": narration[:16],
-                "font_size": 13, "color": "#475569",
-                "enter": {"duration": 0.4, "delay": 0.3, "easing": "easeOut", "from_y": 10},
-            })
-
-        spec_frames.append({
-            "caption": desc[:12],
-            "objective": f"展示{desc[:10]}的核心概念",
-            "narration": narration[:10],
-            "elements": frame_elements,
-        })
-
-    if not spec_frames:
-        # 最소化 fallback
-        title = detail_plan.get("title") or node_title
-        spec_frames = [{
-            "caption": title[:12],
-            "objective": f"介绍{title[:10]}",
-            "narration": "",
-            "elements": [
-                {"type": "rect", "x": 32, "y": 20, "w": 536, "h": 300, "fill": "#eff6ff", "rx": 18},
-                {"type": "text", "x": 300, "y": 175, "text": title[:20], "font_size": 20, "bold": True, "color": "#1d4ed8",
-                 "enter": {"duration": 0.6, "easing": "spring", "from_scale": 0.6}},
-            ],
-        }]
-
-    spec = {"style_key": style_key, "frame_duration": 3.0, "frames": spec_frames}
-    logger.info("AnimationGenAgent: using deterministic fallback spec for '%s'", node_title)
-    return compile_animation_spec(spec, node_title=node_title)
+            logger.exception("AnimationGenAgent: failed to generate for '%s'", node_title)
+            return ""

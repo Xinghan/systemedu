@@ -1,0 +1,626 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>DICTIONARY LOOKUP FLOW</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;700&family=Noto+Sans+SC:wght@400;700&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{width:100%;height:100vh;overflow:hidden;background:#131313;font-family:'Noto Sans SC',sans-serif;color:#e5e2e1}
+.wrapper{display:flex;flex-direction:column;height:100vh}
+.header{text-align:center;padding:8px 0 4px;flex-shrink:0}
+.header h1{font-family:'Space Grotesk',sans-serif;font-size:18px;font-weight:700;letter-spacing:2px;background:linear-gradient(90deg,#ffb59c,#ff7f50);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+.header p{font-size:11px;color:#8a8886;margin-top:2px}
+.canvas-wrap{flex:1;min-height:0;position:relative}
+.canvas-wrap canvas{display:block;width:100%;height:100%}
+.controls{flex-shrink:0;display:flex;justify-content:center;align-items:center;gap:12px;padding:6px;background:rgba(28,27,27,0.92)}
+.ctrl-btn{font-family:'Space Grotesk',sans-serif;font-size:11px;font-weight:700;letter-spacing:1px;padding:5px 16px;cursor:pointer;border:none;color:#e5e2e1;background:rgba(53,53,52,0.8);border:1px solid rgba(138,136,134,0.15);transition:box-shadow 0.2s}
+.ctrl-btn:hover{box-shadow:0 0 15px rgba(255,127,80,0.2)}
+.ctrl-btn.active{color:#131313;background:linear-gradient(135deg,#ffb59c,#ff7f50)}
+.frame-indicator{font-family:'Space Grotesk',sans-serif;font-size:11px;color:#8a8886;min-width:60px;text-align:center}
+.hud{flex-shrink:0;display:flex;justify-content:space-around;align-items:center;height:44px;background:rgba(0,0,0,0.55);padding:0 16px}
+.hud-item{text-align:center}
+.hud-item .label{font-size:9px;color:#8a8886;letter-spacing:1px;font-family:'Space Grotesk',sans-serif}
+.hud-item .value{font-family:'Space Grotesk',sans-serif;font-size:13px;font-weight:700}
+.guide-panel{position:fixed;top:8px;right:8px;width:240px;max-height:40vh;overflow-y:auto;background:rgba(20,20,35,0.85);backdrop-filter:blur(12px);border:1px solid rgba(255,255,255,0.08);padding:10px;z-index:100;font-size:11px;color:rgba(255,255,255,0.85)}
+.guide-panel h3{font-family:'Space Grotesk',sans-serif;font-size:12px;margin-bottom:6px;cursor:pointer;color:#ffb59c;display:flex;justify-content:space-between;align-items:center}
+.guide-panel ul{padding-left:14px;line-height:1.6}
+.guide-panel .collapsed{display:none}
+.lang-btn{position:fixed;top:8px;left:8px;z-index:100;font-family:'Space Grotesk',sans-serif;font-size:11px;font-weight:700;padding:4px 10px;cursor:pointer;border:1px solid rgba(255,255,255,0.08);background:rgba(20,20,35,0.85);backdrop-filter:blur(12px);color:#ffb59c;letter-spacing:1px}
+</style>
+</head>
+<body>
+<button class="lang-btn" id="langBtn">CN</button>
+<div class="wrapper">
+  <div class="header">
+    <h1 id="mainTitle"></h1>
+    <p id="mainSubtitle"></p>
+  </div>
+  <div class="canvas-wrap" id="canvasWrap">
+    <canvas id="c"></canvas>
+  </div>
+  <div class="controls">
+    <button class="ctrl-btn" id="btnPrev"></button>
+    <button class="ctrl-btn" id="btnPlay"></button>
+    <button class="ctrl-btn" id="btnNext"></button>
+    <span class="frame-indicator" id="frameInd">1 / 4</span>
+  </div>
+  <div class="hud">
+    <div class="hud-item"><div class="label" id="hudLabelStep"></div><div class="value" id="hudStep" style="color:#ffb59c"></div></div>
+    <div class="hud-item"><div class="label" id="hudLabelInput"></div><div class="value" id="hudInput" style="color:#00daf3"></div></div>
+    <div class="hud-item"><div class="label" id="hudLabelMatch"></div><div class="value" id="hudMatch" style="color:#8a8886"></div></div>
+    <div class="hud-item"><div class="label" id="hudLabelDecision"></div><div class="value" id="hudDecision" style="color:#8a8886"></div></div>
+  </div>
+</div>
+
+<div class="guide-panel">
+  <h3 id="guideToggle"><span id="guideTitle"></span> <span id="guideArrow">-</span></h3>
+  <div id="guideContent">
+    <ul id="guideList"></ul>
+  </div>
+</div>
+
+<script>
+(function(){
+  // ---- i18n ----
+  var LANG = 'cn';
+  var I18N = {
+    title:       {en:'DICTIONARY LOOKUP FLOW', cn:'\u8bcd\u5178\u67e5\u8be2\u6d41\u7a0b'},
+    subtitle:    {en:'HOW TO USE YOUR TERRAIN DICTIONARY', cn:'\u5982\u4f55\u4f7f\u7528\u4f60\u7684\u5730\u8c8c\u8bcd\u5178'},
+    btnPrev:     {en:'PREV', cn:'\u4e0a\u4e00\u5e27'},
+    btnPlay:     {en:'PLAY', cn:'\u64ad\u653e'},
+    btnPause:    {en:'PAUSE', cn:'\u6682\u505c'},
+    btnNext:     {en:'NEXT', cn:'\u4e0b\u4e00\u5e27'},
+    hudStep:     {en:'STEP', cn:'\u6b65\u9aa4'},
+    hudInput:    {en:'INPUT', cn:'\u8f93\u5165'},
+    hudMatch:    {en:'MATCH', cn:'\u5339\u914d'},
+    hudDecision: {en:'DECISION', cn:'\u51b3\u7b56'},
+    guideTitle:  {en:'GUIDE', cn:'\u64cd\u4f5c\u6307\u5357'},
+    guide1:      {en:'Shows the complete flow: Photo -> Dictionary Lookup -> Decision', cn:'\u5c55\u793a"\u7167\u7247 -> \u8bcd\u5178\u67e5\u8be2 -> \u51b3\u7b56"\u7684\u5b8c\u6574\u6d41\u7a0b'},
+    guide2:      {en:'Frame 1: Observe -- Extract visual features from photo', cn:'\u5e27 1: \u89c2\u5bdf -- \u4ece\u7167\u7247\u4e2d\u63d0\u53d6\u89c6\u89c9\u7279\u5f81'},
+    guide3:      {en:'Frame 2: Match -- Look up terrain type in dictionary', cn:'\u5e27 2: \u5339\u914d -- \u5728\u8bcd\u5178\u4e2d\u67e5\u627e\u5bf9\u5e94\u5730\u8c8c'},
+    guide4:      {en:'Frame 3: Decide -- Read risk level and response strategy', cn:'\u5e27 3: \u51b3\u7b56 -- \u8bfb\u53d6\u98ce\u9669\u7b49\u7ea7\u548c\u5e94\u5bf9\u7b56\u7565'},
+    guide5:      {en:'Frame 4: Summary -- Complete flow diagram', cn:'\u5e27 4: \u603b\u7ed3 -- \u5b8c\u6574\u6d41\u7a0b\u56fe'},
+    // Frame data
+    step0:       {en:'OBSERVE', cn:'\u89c2\u5bdf'},
+    step1:       {en:'EXTRACT', cn:'\u63d0\u53d6'},
+    step2:       {en:'MATCH', cn:'\u5339\u914d'},
+    step3:       {en:'SUMMARY', cn:'\u603b\u7ed3'},
+    input0:      {en:'NAV PHOTO', cn:'\u5bfc\u822a\u7167\u7247'},
+    input1:      {en:'VISUAL FEATURES', cn:'\u89c6\u89c9\u7279\u5f81'},
+    input2:      {en:'RIPPLE + FINE SAND', cn:'\u6ce2\u7eb9 + \u7ec6\u6c99'},
+    input3:      {en:'COMPLETE FLOW', cn:'\u5b8c\u6574\u6d41\u7a0b'},
+    match0:      {en:'---', cn:'---'},
+    match1:      {en:'SCANNING...', cn:'\u626b\u63cf\u4e2d...'},
+    match2:      {en:'RIPPLE FIELD', cn:'\u6ce2\u7eb9\u6c99\u5730'},
+    match3:      {en:'---', cn:'---'},
+    decision0:   {en:'---', cn:'---'},
+    decision1:   {en:'---', cn:'---'},
+    decision2:   {en:'HAZARD / REROUTE', cn:'\u5371\u9669 / \u7ed5\u884c'},
+    decision3:   {en:'---', cn:'---'},
+    // Canvas drawing text
+    navCam:        {en:'NAV-CAM', cn:'\u5bfc\u822a\u76f8\u673a'},
+    terrainDict:   {en:'TERRAIN DICTIONARY', cn:'\u5730\u8c8c\u8bcd\u5178'},
+    flatBedrock:   {en:'FLAT BEDROCK', cn:'\u5e73\u5766\u57fa\u5ca9'},
+    rippleField:   {en:'RIPPLE FIELD', cn:'\u6ce2\u7eb9\u6c99\u5730'},
+    cobbleField:   {en:'COBBLE FIELD', cn:'\u77f3\u5757\u5730'},
+    smoothSlope:   {en:'SMOOTH SLOPE', cn:'\u5149\u6ed1\u5761\u9762'},
+    safe:          {en:'SAFE', cn:'\u5b89\u5168'},
+    slipHazard:    {en:'SLIP/HAZARD', cn:'\u6253\u6ed1/\u5371\u9669'},
+    stuckHazard:   {en:'STUCK/HAZARD', cn:'\u5361\u8f6e/\u5371\u9669'},
+    slipCaution:   {en:'SLIP/CAUTION', cn:'\u6253\u6ed1/\u6ce8\u610f'},
+    decisionTitle: {en:'DECISION', cn:'\u51b3\u7b56'},
+    riskHazard:    {en:'Risk: HAZARD', cn:'\u98ce\u9669: \u5371\u9669'},
+    actionReroute: {en:'Action: REROUTE', cn:'\u64cd\u4f5c: \u7ed5\u884c'},
+    reasonLoose:   {en:'Reason: Loose ripple sand', cn:'\u539f\u56e0: \u677e\u6563\u6ce2\u7eb9\u6c99'},
+    awaitAnalysis: {en:'Awaiting analysis...', cn:'\u7b49\u5f85\u5206\u6790...'},
+    rippleDetected:{en:'Ripple patterns detected', cn:'\u68c0\u6d4b\u5230\u6ce2\u7eb9\u56fe\u6848'},
+    step1Title:    {en:'STEP 1: OBSERVE', cn:'\u7b2c1\u6b65: \u89c2\u5bdf'},
+    step1Desc:     {en:'NavCam photo received -- scan for visual features', cn:'\u6536\u5230\u5bfc\u822a\u76f8\u673a\u7167\u7247 -- \u626b\u63cf\u89c6\u89c9\u7279\u5f81'},
+    extractTitle:  {en:'EXTRACTED FEATURES', cn:'\u63d0\u53d6\u7684\u7279\u5f81'},
+    feat1:         {en:'Regular wave-like ripples', cn:'\u89c4\u5219\u7684\u6ce2\u6d6a\u72b6\u7eb9\u7406'},
+    feat2:         {en:'Fine grain texture', cn:'\u7ec6\u7c92\u8d28\u5730'},
+    feat3:         {en:'No rock fragments', cn:'\u65e0\u5ca9\u77f3\u788e\u7247'},
+    feat4:         {en:'Light brown color', cn:'\u6d45\u68d5\u8272'},
+    feat5:         {en:'Low slope (~5 deg)', cn:'\u4f4e\u5761\u5ea6 (~5\u00b0)'},
+    step2Title:    {en:'STEP 2: EXTRACT FEATURES', cn:'\u7b2c2\u6b65: \u63d0\u53d6\u7279\u5f81'},
+    step2Desc:     {en:'Identify observable characteristics from the photo', cn:'\u4ece\u7167\u7247\u4e2d\u8bc6\u522b\u53ef\u89c2\u5bdf\u7684\u7279\u5f81'},
+    inputLabel:    {en:'Input', cn:'\u8f93\u5165'},
+    step3Title:    {en:'STEP 3: MATCH & DECIDE', cn:'\u7b2c3\u6b65: \u5339\u914d\u4e0e\u51b3\u7b56'},
+    step3Desc:     {en:'Features match RIPPLE FIELD -> HAZARD -> REROUTE', cn:'\u7279\u5f81\u5339\u914d \u6ce2\u7eb9\u6c99\u5730 -> \u5371\u9669 -> \u7ed5\u884c'},
+    observe:       {en:'OBSERVE', cn:'\u89c2\u5bdf'},
+    extract:       {en:'EXTRACT', cn:'\u63d0\u53d6'},
+    match:         {en:'MATCH', cn:'\u5339\u914d'},
+    decide:        {en:'DECIDE', cn:'\u51b3\u7b56'},
+    subObserve:    {en:'NavCam Photo', cn:'\u5bfc\u822a\u7167\u7247'},
+    subExtract:    {en:'Visual Features', cn:'\u89c6\u89c9\u7279\u5f81'},
+    subMatch:      {en:'Dictionary Lookup', cn:'\u8bcd\u5178\u67e5\u8be2'},
+    subDecide:     {en:'Risk + Response', cn:'\u98ce\u9669 + \u5e94\u5bf9'},
+    example:       {en:'Example:', cn:'\u793a\u4f8b:'},
+    exLine1:       {en:'Photo shows ripple patterns', cn:'\u7167\u7247\u663e\u793a\u6ce2\u7eb9\u56fe\u6848'},
+    exLine2:       {en:'Ripples + Fine sand', cn:'\u6ce2\u7eb9 + \u7ec6\u6c99'},
+    exLine3:       {en:'RIPPLE FIELD', cn:'\u6ce2\u7eb9\u6c99\u5730'},
+    exLine4:       {en:'HAZARD / REROUTE', cn:'\u5371\u9669 / \u7ed5\u884c'},
+    completeFlow:  {en:'COMPLETE FLOW', cn:'\u5b8c\u6574\u6d41\u7a0b'},
+    flowDesc:      {en:'Feature -> Classification -> Decision', cn:'\u7279\u5f81 -> \u5206\u7c7b -> \u51b3\u7b56'},
+    flowDesc2:     {en:'This pattern applies to any domain: medical imaging, weather maps, error logs...', cn:'\u8fd9\u4e2a\u6a21\u5f0f\u9002\u7528\u4e8e\u4efb\u4f55\u9886\u57df: \u533b\u5b66\u5f71\u50cf\u3001\u5929\u6c14\u56fe\u3001\u9519\u8bef\u65e5\u5fd7...'},
+  };
+  function t(key) { return (I18N[key] && I18N[key][LANG]) || (I18N[key] && I18N[key]['en']) || key; }
+
+  // ---- DOM refs ----
+  var canvas = document.getElementById('c');
+  var ctx = canvas.getContext('2d');
+  var wrap = document.getElementById('canvasWrap');
+  var W = 0, H = 0, dpr = Math.min(window.devicePixelRatio || 1, 2);
+  var currentFrame = 0, totalFrames = 4;
+  var playing = false, playTimer = null;
+  var transitioning = false;
+
+  var FRAMES_META = [
+    {matchC:'#8a8886', decC:'#8a8886'},
+    {matchC:'#ff7f50', decC:'#8a8886'},
+    {matchC:'#ff5f1f', decC:'#ff5f1f'},
+    {matchC:'#ffb59c', decC:'#ffb59c'}
+  ];
+
+  function getFrameData(f) {
+    return {
+      step: t('step' + f),
+      input: t('input' + f),
+      match: t('match' + f),
+      matchC: FRAMES_META[f].matchC,
+      decision: t('decision' + f),
+      decC: FRAMES_META[f].decC
+    };
+  }
+
+  // ---- utility functions ----
+  function lerp(a, b, p) { return a + (b - a) * p; }
+  function easeInOut(x) { return x < 0.5 ? 2*x*x : 1 - Math.pow(-2*x+2, 2)/2; }
+  function merge(base, overrides) {
+    var r = {};
+    for (var k in base) r[k] = base[k];
+    for (var k2 in overrides) r[k2] = overrides[k2];
+    return r;
+  }
+
+  // ---- i18n refresh ----
+  function refreshI18N() {
+    document.getElementById('mainTitle').textContent = t('title');
+    document.getElementById('mainSubtitle').textContent = t('subtitle');
+    document.getElementById('btnPrev').textContent = t('btnPrev');
+    document.getElementById('btnNext').textContent = t('btnNext');
+    document.getElementById('btnPlay').textContent = playing ? t('btnPause') : t('btnPlay');
+    document.getElementById('hudLabelStep').textContent = t('hudStep');
+    document.getElementById('hudLabelInput').textContent = t('hudInput');
+    document.getElementById('hudLabelMatch').textContent = t('hudMatch');
+    document.getElementById('hudLabelDecision').textContent = t('hudDecision');
+    document.getElementById('guideTitle').textContent = t('guideTitle');
+    var guideList = document.getElementById('guideList');
+    guideList.innerHTML = '';
+    for (var i = 1; i <= 5; i++) {
+      var li = document.createElement('li');
+      li.textContent = t('guide' + i);
+      guideList.appendChild(li);
+    }
+    updateHUD(currentFrame);
+    drawFrame(currentFrame);
+  }
+
+  function resize() {
+    var rect = wrap.getBoundingClientRect();
+    if (rect.width < 1 || rect.height < 1) return;
+    W = rect.width; H = rect.height;
+    canvas.width = W * dpr; canvas.height = H * dpr;
+    canvas.style.width = W + 'px'; canvas.style.height = H + 'px';
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    drawFrame(currentFrame);
+  }
+
+  function updateHUD(f) {
+    var d = getFrameData(f);
+    document.getElementById('hudStep').textContent = d.step;
+    document.getElementById('hudInput').textContent = d.input;
+    document.getElementById('hudMatch').textContent = d.match;
+    document.getElementById('hudMatch').style.color = d.matchC;
+    document.getElementById('hudDecision').textContent = d.decision;
+    document.getElementById('hudDecision').style.color = d.decC;
+    document.getElementById('frameInd').textContent = (f + 1) + ' / ' + totalFrames;
+  }
+
+  // ---- drawing primitives ----
+  function drawBg() {
+    var g = ctx.createLinearGradient(0,0,0,H);
+    g.addColorStop(0,'#0f0a1e'); g.addColorStop(1,'#1a1035');
+    ctx.fillStyle = g; ctx.fillRect(0,0,W,H);
+    ctx.strokeStyle = 'rgba(255,255,255,0.03)'; ctx.lineWidth = 1;
+    for (var x=0;x<W;x+=40){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,H);ctx.stroke();}
+    for (var y=0;y<H;y+=40){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke();}
+  }
+
+  function drawBox(x, y, w, h, borderColor, fillColor) {
+    ctx.fillStyle = fillColor || 'rgba(28,27,27,0.85)';
+    ctx.fillRect(x, y, w, h);
+    ctx.strokeStyle = borderColor || 'rgba(138,136,134,0.15)';
+    ctx.lineWidth = 1.5; ctx.strokeRect(x, y, w, h);
+  }
+
+  function drawArrowPrimitive(x1, y1, x2, y2, color) {
+    ctx.save();
+    ctx.strokeStyle = color; ctx.fillStyle = color;
+    ctx.lineWidth = 2; ctx.shadowColor = color; ctx.shadowBlur = 8;
+    ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+    var angle = Math.atan2(y2 - y1, x2 - x1);
+    ctx.beginPath();
+    ctx.moveTo(x2, y2);
+    ctx.lineTo(x2 - 8 * Math.cos(angle - 0.4), y2 - 8 * Math.sin(angle - 0.4));
+    ctx.lineTo(x2 - 8 * Math.cos(angle + 0.4), y2 - 8 * Math.sin(angle + 0.4));
+    ctx.closePath(); ctx.fill();
+    ctx.shadowBlur = 0; ctx.restore();
+  }
+
+  function drawLabelPrimitive(text, x, y, color, size, align) {
+    ctx.save();
+    ctx.font = '700 ' + (size||12) + 'px "Space Grotesk"';
+    ctx.fillStyle = color || '#ffb59c';
+    ctx.textAlign = align || 'left';
+    ctx.shadowColor = color || '#ffb59c'; ctx.shadowBlur = 8;
+    ctx.fillText(text, x, y);
+    ctx.shadowBlur = 0; ctx.restore();
+  }
+
+  function drawTextPrimitive(text, x, y, color, size, align) {
+    ctx.save();
+    ctx.font = '400 ' + (size||11) + 'px "Noto Sans SC"';
+    ctx.fillStyle = color || '#c6c6c6';
+    ctx.textAlign = align || 'left';
+    ctx.fillText(text, x, y);
+    ctx.restore();
+  }
+
+  function drawPhotoBoxPrimitive(x, y, w, h) {
+    drawBox(x, y, w, h, 'rgba(0,218,243,0.3)', 'rgba(20,20,30,0.9)');
+    var sg = ctx.createLinearGradient(x, y, x, y + h * 0.3);
+    sg.addColorStop(0, '#1a1520'); sg.addColorStop(1, '#2a2030');
+    ctx.fillStyle = sg; ctx.fillRect(x+1, y+1, w-2, h * 0.3);
+    var gg = ctx.createLinearGradient(x, y + h*0.3, x, y + h);
+    gg.addColorStop(0, '#8B7355'); gg.addColorStop(1, '#5B4330');
+    ctx.fillStyle = gg; ctx.fillRect(x+1, y + h*0.3, w-2, h*0.7-1);
+    ctx.strokeStyle = 'rgba(255,200,150,0.25)'; ctx.lineWidth = 1;
+    for (var r = 0; r < 6; r++) {
+      ctx.beginPath();
+      var ry = y + h * 0.35 + r * (h * 0.1);
+      for (var rx = x; rx < x + w; rx += 2) {
+        var yo = Math.sin((rx - x) * 0.12 + r * 1.3) * 2;
+        if (rx === x) ctx.moveTo(rx, ry + yo); else ctx.lineTo(rx, ry + yo);
+      }
+      ctx.stroke();
+    }
+    drawLabelPrimitive(t('navCam'), x + 5, y + 14, '#00daf3', 9);
+  }
+
+  function drawDictBoxPrimitive(x, y, w, h, highlight) {
+    drawBox(x, y, w, h, 'rgba(255,181,156,0.25)', 'rgba(20,18,18,0.9)');
+    drawLabelPrimitive(t('terrainDict'), x + w/2, y + 16, '#ffb59c', 10, 'center');
+    var entries = [
+      {nameKey:'flatBedrock', riskKey:'safe', color:'#10b981'},
+      {nameKey:'rippleField', riskKey:'slipHazard', color:'#ff5f1f'},
+      {nameKey:'cobbleField', riskKey:'stuckHazard', color:'#ff5f1f'},
+      {nameKey:'smoothSlope', riskKey:'slipCaution', color:'#ff7f50'},
+    ];
+    var ey = y + 28;
+    var eh = 16;
+    entries.forEach(function(e, i) {
+      var isHL = highlight === i;
+      if (isHL) {
+        ctx.fillStyle = 'rgba(255,127,80,0.15)';
+        ctx.fillRect(x + 4, ey + i * eh - 2, w - 8, eh);
+      }
+      ctx.font = '700 9px "Space Grotesk"';
+      ctx.fillStyle = isHL ? '#ffb59c' : '#8a8886';
+      ctx.textAlign = 'left';
+      ctx.fillText(t(e.nameKey), x + 8, ey + i * eh + 9);
+      ctx.fillStyle = e.color;
+      ctx.textAlign = 'right';
+      ctx.fillText(t(e.riskKey), x + w - 8, ey + i * eh + 9);
+      ctx.textAlign = 'left';
+    });
+  }
+
+  function drawDecisionBoxPrimitive(x, y, w, h, active) {
+    var bc = active ? 'rgba(255,95,31,0.4)' : 'rgba(138,136,134,0.15)';
+    var fc = active ? 'rgba(40,20,10,0.9)' : 'rgba(20,18,18,0.7)';
+    drawBox(x, y, w, h, bc, fc);
+    if (active) {
+      drawLabelPrimitive(t('decisionTitle'), x + w/2, y + 18, '#ff5f1f', 11, 'center');
+      drawTextPrimitive(t('riskHazard'), x + w/2, y + 36, '#ff5f1f', 10, 'center');
+      drawTextPrimitive(t('actionReroute'), x + w/2, y + 52, '#ff7f50', 10, 'center');
+      drawTextPrimitive(t('reasonLoose'), x + w/2, y + 68, '#c6c6c6', 9, 'center');
+    } else {
+      drawLabelPrimitive(t('decisionTitle'), x + w/2, y + 18, '#8a8886', 11, 'center');
+      drawTextPrimitive(t('awaitAnalysis'), x + w/2, y + 40, '#555', 10, 'center');
+    }
+  }
+
+  // ---- drawElement dispatcher ----
+  function drawElement(el) {
+    if (!el || el.alpha <= 0.01) return;
+    ctx.save();
+    ctx.globalAlpha = el.alpha;
+    switch(el.type) {
+      case 'photo':
+        drawPhotoBoxPrimitive(el.x, el.y, el.w, el.h);
+        break;
+      case 'label':
+        drawLabelPrimitive(el.text, el.x, el.y, el.color, el.size, el.align);
+        break;
+      case 'text':
+        drawTextPrimitive(el.text, el.x, el.y, el.color, el.size, el.align);
+        break;
+      case 'arrow':
+        drawArrowPrimitive(el.x1, el.y1, el.x2, el.y2, el.color);
+        break;
+      case 'dict':
+        drawDictBoxPrimitive(el.x, el.y, el.w, el.h, el.highlight);
+        break;
+      case 'decision':
+        drawDecisionBoxPrimitive(el.x, el.y, el.w, el.h, el.active);
+        break;
+      case 'box':
+        drawBox(el.x, el.y, el.w, el.h, el.borderColor, el.fillColor);
+        break;
+      case 'features':
+        drawBox(el.x, el.y, el.w, el.h, 'rgba(0,218,243,0.2)', 'rgba(20,25,35,0.9)');
+        drawLabelPrimitive(t('extractTitle'), el.x + el.w/2, el.y + 18, '#00daf3', 10, 'center');
+        var featKeys = ['feat1','feat2','feat3','feat4','feat5'];
+        featKeys.forEach(function(fk, i) {
+          ctx.fillStyle = '#00daf3';
+          ctx.font = '400 10px "Noto Sans SC"';
+          ctx.fillText('> ' + t(fk), el.x + 8, el.y + 36 + i * 16);
+        });
+        break;
+      case 'ripple_box':
+        ctx.save();
+        ctx.setLineDash([3,3]); ctx.strokeStyle = '#00daf3'; ctx.lineWidth = 1;
+        ctx.strokeRect(el.x, el.y, el.w, el.h);
+        ctx.setLineDash([]);
+        ctx.restore();
+        break;
+      case 'custom':
+        if (el.draw) el.draw(el.alpha);
+        break;
+    }
+    ctx.restore();
+  }
+
+  // ---- getFrameElements: declarative element list per frame ----
+  function getFrameElements(f) {
+    var margin = 20;
+    var boxW = Math.min(200, (W - margin * 5) / 3);
+    var boxH = H * 0.45;
+    var startY = H * 0.18;
+    var elems = [];
+
+    if (f === 0) {
+      // Frame 0: large centered photo, ripple detection, title
+      var pw = boxW * 1.2;
+      var ph = H * 0.55;
+      var px = W / 2 - pw / 2;
+      var py = H * 0.15;
+      elems.push({id:'photo', type:'photo', x:px, y:py, w:pw, h:ph, alpha:1});
+      elems.push({id:'ripple_box', type:'ripple_box', x:px + pw*0.1, y:py + ph*0.4, w:pw*0.8, h:ph*0.15, alpha:1});
+      elems.push({id:'ripple_text', type:'text', text:t('rippleDetected'), x:px + pw + 10, y:py + ph*0.48, color:'#00daf3', size:10, align:'left', alpha:1});
+      elems.push({id:'title', type:'label', text:t('step1Title'), x:W/2, y:H*0.08, color:'#ffb59c', size:14, align:'center', alpha:1});
+      elems.push({id:'desc', type:'text', text:t('step1Desc'), x:W/2, y:H*0.88, color:'#8a8886', size:11, align:'center', alpha:1});
+
+    } else if (f === 1) {
+      // Frame 1: photo shrinks to left, feature list appears
+      var px2 = margin;
+      var py2 = startY;
+      elems.push({id:'photo', type:'photo', x:px2, y:py2, w:boxW, h:boxH, alpha:1});
+      var featureX = px2 + boxW + margin * 2;
+      elems.push({id:'arrow_pf', type:'arrow', x1:px2 + boxW + 5, y1:py2 + boxH/2, x2:featureX - 5, y2:py2 + boxH/2, color:'#00daf3', alpha:1});
+      elems.push({id:'features', type:'features', x:featureX, y:py2, w:boxW * 1.2, h:boxH, alpha:1});
+      elems.push({id:'title', type:'label', text:t('step2Title'), x:W/2, y:H*0.08, color:'#00daf3', size:14, align:'center', alpha:1});
+      elems.push({id:'desc', type:'text', text:t('step2Desc'), x:W/2, y:H*0.88, color:'#8a8886', size:11, align:'center', alpha:1});
+
+    } else if (f === 2) {
+      // Frame 2: photo even smaller, dict + decision appear
+      var col1X = margin;
+      var col2X = margin + boxW + margin;
+      var col3X = col2X + boxW + margin;
+      var bh = boxH * 0.7;
+      elems.push({id:'photo', type:'photo', x:col1X, y:startY, w:boxW * 0.8, h:bh * 0.6, alpha:1});
+      elems.push({id:'input_label', type:'text', text:t('inputLabel'), x:col1X + boxW*0.4, y:startY + bh*0.6 + 16, color:'#8a8886', size:10, align:'center', alpha:1});
+      elems.push({id:'arrow_pd', type:'arrow', x1:col1X + boxW*0.8 + 5, y1:startY + bh*0.3, x2:col2X - 5, y2:startY + bh*0.3, color:'#ffb59c', alpha:1});
+      elems.push({id:'dict', type:'dict', x:col2X, y:startY, w:boxW, h:bh, highlight:1, alpha:1});
+      elems.push({id:'arrow_dd', type:'arrow', x1:col2X + boxW + 5, y1:startY + bh*0.3, x2:col3X - 5, y2:startY + bh*0.3, color:'#ff5f1f', alpha:1});
+      elems.push({id:'decision', type:'decision', x:col3X, y:startY, w:boxW, h:bh, active:true, alpha:1});
+      elems.push({id:'title', type:'label', text:t('step3Title'), x:W/2, y:H*0.08, color:'#ff5f1f', size:14, align:'center', alpha:1});
+      elems.push({id:'desc', type:'text', text:t('step3Desc'), x:W/2, y:H*0.88, color:'#8a8886', size:11, align:'center', alpha:1});
+
+    } else if (f === 3) {
+      // Frame 3: flow diagram
+      var flowY = H * 0.25;
+      var bw = Math.min(140, (W - margin * 6) / 4);
+      var bh2 = 70;
+      var gap = (W - bw * 4) / 5;
+      var steps = [
+        {titleKey:'observe', subKey:'subObserve', color:'#00daf3'},
+        {titleKey:'extract', subKey:'subExtract', color:'#00daf3'},
+        {titleKey:'match',   subKey:'subMatch',   color:'#ffb59c'},
+        {titleKey:'decide',  subKey:'subDecide',  color:'#ff5f1f'},
+      ];
+      steps.forEach(function(s, i) {
+        var bx = gap + i * (bw + gap);
+        elems.push({id:'flow_' + i, type:'box', x:bx, y:flowY, w:bw, h:bh2, borderColor:s.color + '40', fillColor:'rgba(20,18,18,0.85)', alpha:1});
+        elems.push({id:'flow_label_' + i, type:'label', text:t(s.titleKey), x:bx + bw/2, y:flowY + 28, color:s.color, size:12, align:'center', alpha:1});
+        elems.push({id:'flow_sub_' + i, type:'text', text:t(s.subKey), x:bx + bw/2, y:flowY + 48, color:'#c6c6c6', size:10, align:'center', alpha:1});
+        if (i < 3) {
+          elems.push({id:'flow_arr_' + i, type:'arrow', x1:bx + bw + 3, y1:flowY + bh2/2, x2:bx + bw + gap - 3, y2:flowY + bh2/2, color:s.color, alpha:1});
+        }
+      });
+
+      var exY = flowY + bh2 + 40;
+      elems.push({id:'example_label', type:'text', text:t('example'), x:margin + gap, y:exY, color:'#8a8886', size:11, align:'left', alpha:1});
+      elems.push({id:'example_1', type:'text', text:t('exLine1'), x:margin + gap, y:exY + 18, color:'#00daf3', size:11, align:'left', alpha:1});
+      elems.push({id:'example_arr_1', type:'arrow', x1:margin + gap + 180, y1:exY + 14, x2:margin + gap + 210, y2:exY + 14, color:'#8a8886', alpha:1});
+      elems.push({id:'example_2', type:'text', text:t('exLine2'), x:margin + gap + 220, y:exY + 18, color:'#00daf3', size:11, align:'left', alpha:1});
+      elems.push({id:'example_arr_2', type:'arrow', x1:margin + gap + 370, y1:exY + 14, x2:margin + gap + 400, y2:exY + 14, color:'#8a8886', alpha:1});
+      elems.push({id:'example_3', type:'text', text:t('exLine3'), x:margin + gap + 410, y:exY + 18, color:'#ffb59c', size:11, align:'left', alpha:1});
+      elems.push({id:'example_arr_3', type:'arrow', x1:margin + gap + 510, y1:exY + 14, x2:margin + gap + 540, y2:exY + 14, color:'#8a8886', alpha:1});
+      elems.push({id:'example_4', type:'text', text:t('exLine4'), x:margin + gap + 550, y:exY + 18, color:'#ff5f1f', size:11, align:'left', alpha:1});
+
+      elems.push({id:'title', type:'label', text:t('completeFlow'), x:W/2, y:H*0.08, color:'#ffb59c', size:14, align:'center', alpha:1});
+      elems.push({id:'flow_desc', type:'text', text:t('flowDesc'), x:W/2, y:H*0.9, color:'#8a8886', size:11, align:'center', alpha:1});
+      elems.push({id:'flow_desc2', type:'text', text:t('flowDesc2'), x:W/2, y:H*0.94, color:'#555', size:10, align:'center', alpha:1});
+    }
+    return elems;
+  }
+
+  // ---- drawFrame: immediate render (used for resize / language switch) ----
+  function drawFrame(f) {
+    drawBg();
+    var elems = getFrameElements(f);
+    elems.forEach(function(el) { drawElement(el); });
+  }
+
+  // ---- shared element transition ----
+  function transitionTo(newFrame) {
+    if (newFrame < 0) newFrame = 0;
+    if (newFrame >= totalFrames) newFrame = totalFrames - 1;
+    if (newFrame === currentFrame && !transitioning) { drawFrame(currentFrame); updateHUD(currentFrame); return; }
+    if (transitioning) return; // ignore during active transition
+
+    var oldElems = getFrameElements(currentFrame);
+    var newElems = getFrameElements(newFrame);
+
+    var oldMap = {};
+    oldElems.forEach(function(e) { oldMap[e.id] = e; });
+    var newMap = {};
+    newElems.forEach(function(e) { newMap[e.id] = e; });
+
+    currentFrame = newFrame;
+    updateHUD(newFrame);
+    transitioning = true;
+
+    var startTime = null;
+    var duration = 500;
+
+    function step(timestamp) {
+      if (!startTime) startTime = timestamp;
+      var raw = Math.min((timestamp - startTime) / duration, 1);
+      var p = easeInOut(raw);
+
+      drawBg();
+
+      // old-only elements: fade out
+      oldElems.forEach(function(oe) {
+        if (!newMap[oe.id]) {
+          drawElement(merge(oe, {alpha: 1 - p}));
+        }
+      });
+
+      // new elements (shared or new-only)
+      newElems.forEach(function(ne) {
+        var oe = oldMap[ne.id];
+        if (oe) {
+          // shared element: lerp position/size
+          var merged = merge(ne, {
+            x:     lerp(oe.x  || 0, ne.x  || 0, p),
+            y:     lerp(oe.y  || 0, ne.y  || 0, p),
+            w:     lerp(oe.w  || 0, ne.w  || 0, p),
+            h:     lerp(oe.h  || 0, ne.h  || 0, p),
+            alpha: 1
+          });
+          // arrow type: also lerp endpoints
+          if (ne.type === 'arrow' && oe.type === 'arrow') {
+            merged.x1 = lerp(oe.x1, ne.x1, p);
+            merged.y1 = lerp(oe.y1, ne.y1, p);
+            merged.x2 = lerp(oe.x2, ne.x2, p);
+            merged.y2 = lerp(oe.y2, ne.y2, p);
+          }
+          // text changed: crossfade old text -> new text
+          if ((ne.type === 'label' || ne.type === 'text') && oe.text !== ne.text) {
+            drawElement(merge(oe, {alpha: 1 - p}));
+            drawElement(merge(ne, {alpha: p}));
+          } else {
+            drawElement(merged);
+          }
+        } else {
+          // new-only element: fade in
+          drawElement(merge(ne, {alpha: p}));
+        }
+      });
+
+      if (raw < 1) {
+        requestAnimationFrame(step);
+      } else {
+        transitioning = false;
+      }
+    }
+    requestAnimationFrame(step);
+  }
+
+  // ---- playback controls ----
+  function startPlay() {
+    if(playing) return; playing=true;
+    document.getElementById('btnPlay').textContent = t('btnPause');
+    document.getElementById('btnPlay').classList.add('active');
+    if(currentFrame>=totalFrames-1) { currentFrame = -1; }
+    transitionTo(currentFrame + 1);
+    scheduleNext();
+  }
+  function scheduleNext() {
+    if(!playing) return;
+    playTimer=setTimeout(function(){
+      if(!playing) return;
+      var next = currentFrame + 1;
+      if(next>=totalFrames){stopPlay();return;}
+      transitionTo(next);
+      scheduleNext();
+    },2500);
+  }
+  function stopPlay() {
+    playing=false;
+    document.getElementById('btnPlay').textContent = t('btnPlay');
+    document.getElementById('btnPlay').classList.remove('active');
+    if(playTimer){clearTimeout(playTimer);playTimer=null;}
+  }
+
+  // ---- event bindings ----
+  document.getElementById('btnPrev').addEventListener('click', function(){
+    stopPlay(); transitionTo(currentFrame - 1);
+  });
+  document.getElementById('btnNext').addEventListener('click', function(){
+    stopPlay(); transitionTo(currentFrame + 1);
+  });
+  document.getElementById('btnPlay').addEventListener('click', function(){
+    if(playing) stopPlay(); else startPlay();
+  });
+
+  // language toggle
+  document.getElementById('langBtn').addEventListener('click', function(){
+    LANG = LANG === 'en' ? 'cn' : 'en';
+    document.getElementById('langBtn').textContent = LANG.toUpperCase();
+    refreshI18N();
+  });
+
+  // guide panel toggle
+  var guideCollapsed=false;
+  document.getElementById('guideToggle').addEventListener('click',function(){
+    guideCollapsed=!guideCollapsed;
+    document.getElementById('guideContent').className=guideCollapsed?'collapsed':'';
+    document.getElementById('guideArrow').textContent=guideCollapsed?'+':'-';
+  });
+
+  // ---- init ----
+  window.addEventListener('resize', resize);
+  refreshI18N();
+  resize(); setTimeout(resize,200); setTimeout(resize,600);
+  document.fonts.ready.then(function(){resize();});
+})();
+</script>
+</body>
+</html>

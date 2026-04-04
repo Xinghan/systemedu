@@ -66,6 +66,14 @@ class KnowledgeNode(BaseModel):
     xp_reward: int = 20
     order: int = 0
     prerequisite_indices: list[int] = Field(default_factory=list)
+    # v4.1 optional metadata
+    module_id: str = ""
+    module_role: str = ""
+    core_question: str = ""
+    acceptance_artifacts: list[dict] = Field(default_factory=list)
+    acceptance_standard: list[str] = Field(default_factory=list)
+    hands_on_components: list[str] = Field(default_factory=list)
+    outputs_produced: list[str] = Field(default_factory=list)
 
 
 class Milestone(BaseModel):

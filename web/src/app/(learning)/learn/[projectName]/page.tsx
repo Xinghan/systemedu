@@ -465,9 +465,43 @@ export default function LearnPage() {
           </div>
         )}
 
-        {/* Center: course content (v2 pipeline) */}
+        {/* Center: course content (v2 pipeline) or assignment */}
         <div className="flex-1 min-w-0 min-h-0 flex flex-col">
-          {activeNodeId !== null ? (
+          {assignmentOpen ? (
+            <div className="flex-1 flex flex-col min-h-0">
+              {/* Assignment header */}
+              <div className="flex items-center gap-3 px-5 py-3 border-b border-border/50 shrink-0">
+                <button
+                  onClick={() => setAssignmentOpen(false)}
+                  className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors"
+                >
+                  <ArrowRight className="h-4 w-4 rotate-180" />
+                </button>
+                <div className="w-7 h-7 rounded-lg bg-indigo-100 dark:bg-indigo-500/15 flex items-center justify-center">
+                  <ClipboardList className="h-4 w-4 text-indigo-600" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-semibold text-foreground">{t("learn.assignment")}</p>
+                  <p className="text-[10px] text-muted-foreground font-[var(--font-manrope)]">
+                    {activeKnode?.title ?? ""}
+                  </p>
+                </div>
+              </div>
+              {/* Assignment body */}
+              <ScrollArea className="flex-1 min-h-0">
+                <div className="px-6 py-5 max-w-3xl mx-auto">
+                  {assignmentLoading ? (
+                    <div className="flex flex-col items-center justify-center h-40 gap-3 text-muted-foreground">
+                      <div className="w-5 h-5 border-2 border-indigo-500/30 border-t-indigo-500 rounded-full animate-spin" />
+                      <p className="text-xs">{t("learn.assignment_loading")}</p>
+                    </div>
+                  ) : (
+                    <AssignmentView content={assignmentText ?? ""} />
+                  )}
+                </div>
+              </ScrollArea>
+            </div>
+          ) : activeNodeId !== null ? (
             <CourseContentView
               projectName={params.projectName}
               nodeId={activeNodeId}
@@ -778,48 +812,6 @@ export default function LearnPage() {
         </div>
       </div>
 
-      {/* Assignment slide-in panel */}
-      {assignmentOpen && (
-        <div className="absolute inset-0 z-40 flex items-stretch pointer-events-none">
-          {/* Backdrop */}
-          <div
-            className="absolute inset-0 bg-black/20 backdrop-blur-[1px] pointer-events-auto"
-            onClick={() => setAssignmentOpen(false)}
-          />
-          {/* Panel */}
-          <div className="absolute right-0 top-0 bottom-0 w-[480px] bg-background border-l border-border/60 shadow-2xl flex flex-col pointer-events-auto">
-            {/* Header */}
-            <div className="flex items-center gap-3 px-5 py-4 border-b border-border/50 shrink-0">
-              <div className="w-7 h-7 rounded-lg bg-indigo-100 dark:bg-indigo-500/15 flex items-center justify-center">
-                <ClipboardList className="h-4 w-4 text-indigo-600" />
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-semibold text-foreground">{t("learn.assignment")}</p>
-                <p className="text-[10px] text-muted-foreground font-[var(--font-manrope)]">
-                  {activeKnode?.title ?? ""}
-                </p>
-              </div>
-              <button
-                onClick={() => setAssignmentOpen(false)}
-                className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors"
-              >
-                <X className="h-4 w-4" />
-              </button>
-            </div>
-            {/* Content */}
-            <div className="flex-1 overflow-y-auto px-5 py-4">
-              {assignmentLoading ? (
-                <div className="flex flex-col items-center justify-center h-40 gap-3 text-muted-foreground">
-                  <div className="w-5 h-5 border-2 border-indigo-500/30 border-t-indigo-500 rounded-full animate-spin" />
-                  <p className="text-xs">{t("learn.assignment_loading")}</p>
-                </div>
-              ) : (
-                <AssignmentView content={assignmentText ?? ""} />
-              )}
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   )
 }
