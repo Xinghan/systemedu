@@ -9,26 +9,75 @@
 
 在开始之前，确认以下输入参数（向用户询问缺失项）：
 
+### 基础参数
+
 | 参数 | 说明 | 示例 |
 |------|------|------|
-| `project_idea` | 项目主题（一句话） | "牛顿三定律" |
-| `project_name` | 英文 slug | "newton-laws" |
-| `node_title` | 当前知识节点标题 | "牛顿第二定律 F=ma" |
-| `node_summary` | 节点摘要（1-2 句） | "理解力、质量、加速度的关系" |
-| `difficulty` | 难度 1-5 | 3 |
-| `milestone_title` | 所属里程碑 | "力与运动" |
-| `category` | 学科分类 | science / physics / biology / chemistry / math |
+| `project_idea` | 项目主题（一句话） | "NASA 火星车风险地图" |
+| `project_name` | 英文 slug | "mars-risk-map" |
+| `node_title` | 当前知识节点标题 | "在火星图像里看见路况而不是风景" |
+| `node_summary` | 节点摘要（1-2 句或多段描述） | "能够用任务目标、可通行区、危险区和未知区四类语言描述一张火星场景图…" |
+| `difficulty` | 难度 1-5（来自 `difficulty_level`） | 1 |
+| `milestone_title` | 所属里程碑 | "看懂火星任务、图像和风险语言" |
+| `category` | 学科分类 | science / physics / biology / aerospace / cs |
 | `age_range` | 目标年龄 | [12, 15] |
 
-如果用户提供的是已有项目，从 `projects/{name}/knowledge_tree.json` 读取节点信息。
+### v4.1 知识树扩展字段（**必须读取，不能忽略**）
+
+v4.1 知识树为每个 knode 和 sub_project 提供了项目级工程锚点，course_factory 必须将它们消费进入 Step 1 和 Step 2，否则生成的课程会脱离真实工程任务而退化成"科普作文"。
+
+**knode 级扩展字段**（`knowledge_tree.json > milestones[].knodes[]`）：
+
+| 字段 | 说明 | 消费位置 |
+|------|------|---------|
+| `module_id` | 模块全局 ID（如 `P-MARS-01-M01`） | 作为 plan_markdown 标题角标，便于追溯 |
+| `module_role` | 模块角色（`foundation` / `core` / `deepening` / `synthesis` / `capstone`） | Step 2 影响 mode 选择策略（见 Step 2）|
+| `core_question` | 本节的核心驱动问题 | **Step 1 plan_markdown 必须围绕该问题展开**，放在"引入"段落 |
+| `hands_on_components` | 学生必须亲手做的工程动作列表 | **Step 1 的"深入理解/应用与拓展"段必须出现这些动作**；**Step 2 的 exercise/game 必须至少覆盖一项** |
+| `acceptance_artifacts` | 本模块必须交付的作品（报告/代码/数据/演示）| Step 2 的 exercise 出题方向要对标这些产物 |
+| `acceptance_standard` | 验收标准（可运行/可演示/可追溯）| Step 1 的"学习目标"段必须与这些标准一一对应 |
+| `outputs_produced` | 本模块产生的输出物名称 | 作为 Step 1 末尾"学习路径建议"的 handover 说明 |
+
+**sub_project 级扩展字段**（`knowledge_tree.json > sub_projects[]`）：
+
+| 字段 | 说明 | 消费位置 |
+|------|------|---------|
+| `brief` | 阶段目标一句话 | 作为 plan_markdown 顶部上下文帽子（为什么这个 knode 属于这个阶段）|
+| `core_problem` | 阶段要解决的工程真实问题 | Step 1 引入段落的背景锚定 |
+| `task` | 阶段主任务 | 同上 |
+| `deliverables` | 阶段最终交付物 | 确保 knode 的 exercise 能推进这些交付 |
+
+### 如何从 knowledge_tree.json 读取
+
+如果用户提供的是已有项目，优先从 `projects/{name}/knowledge_tree.json` 读取，构造完整 knode 上下文对象。`scripts/course_factory.py` 已内置 `load_knode_context()` 工具函数，直接调用即可：
+
+```python
+from scripts.course_factory import load_knode_context
+
+ctx = load_knode_context("mars-risk-map", knode_global_idx=0)
+knode = ctx["knode"]              # v4.1 knode dict（含 module_id/core_question/hands_on_components 等）
+milestone = ctx["milestone"]      # {"title": ..., "description": ...}
+sub_project = ctx["sub_project"]  # v4.1 sub_project（含 brief/core_problem/task/deliverables）
+```
+
+内部实现会根据 global index 展开 milestones 下的 knodes，并通过 `sub_projects[].milestone_indices` 反查所属阶段。未找到时抛 `ValueError`。
+
+**禁止跳过 v4.1 字段**：如果字段为空/缺失，按旧版流程退化；只要存在就必须消费进入 plan_markdown 与 ideas。
 
 ---
 
 ## Step 1: 撰写学习计划 (plan_markdown)
 
-**你是**：一位资深科学教育者，擅长将复杂概念拆解为阶梯式学习路径。
+**你是**：一位资深项目制学习教育者，擅长把一个真实工程模块拆成学生可走通的学习路径。你不是写百科词条，是写"为了完成这个工程动作所需要的学习内容"。
 
-**输入**：node_title, node_summary, difficulty, milestone_title
+**输入**（**v4.1 必须全部读取**）：
+- `node_title`, `node_summary`, `difficulty_level`, `milestone.title`, `milestone.description`
+- `knode.core_question`（核心驱动问题）
+- `knode.hands_on_components`（学生必须亲手做的动作列表）
+- `knode.acceptance_artifacts`（必须交付的作品）
+- `knode.acceptance_standard`（验收标准）
+- `knode.outputs_produced`（本模块产出物名称）
+- `sub_project.brief`, `sub_project.core_problem`, `sub_project.task`（阶段目标与工程背景）
 
 **输出**：800-1500 字的 Markdown 学习计划
 
@@ -38,10 +87,16 @@
 ## 学习目标
 
 [3-5 条具体可衡量的学习目标，用"能够..."开头]
+[**每条目标必须对应一条 acceptance_standard 或 hands_on_components**]
+[示例对应关系：
+ - 目标 "能够圈出至少 20 张样例图中的危险区域并写出理由" → 对应 hands_on_components "在样例图上手工圈出危险区域并写理由"
+ - 目标 "能够将观察笔记整理成报告并被教师打开检查" → 对应 acceptance_standard "提交的笔记能够被教师或同伴直接打开、检查或运行"]
 
 ## 引入：[引人入胜的标题]
 
-[用生活实例或故事引入核心概念，100-200 字]
+[**必须以 knode.core_question 作为引导问题**，100-200 字]
+[结合 sub_project.core_problem / sub_project.task 说明"为什么这个问题在这个阶段里值得被回答"]
+[禁止脱离项目上下文写通用科普导入]
 
 ## 核心概念：[标题]
 
@@ -52,14 +107,16 @@
 ## 深入理解：[标题]
 
 [进一步展开，包含示例、对比、或推导过程，200-400 字]
+[**必须显式呼应 hands_on_components**：在叙述中说明学生将要手动执行的工程动作与本段概念的关系]
 
 ## 应用与拓展
 
-[知识在现实世界的应用，100-200 字]
+[**必须围绕 acceptance_artifacts 展开**：告诉学生本节学完之后要完成哪些具体交付物，以及这些交付物长什么样，100-200 字]
 
 ## 学习路径建议
 
-[学生学完本节后的推荐方向，50-100 字]
+[本节产出物（outputs_produced）如何被下一个模块消费，50-100 字]
+[如果 knode 有下游依赖，说明 handover 方向]
 ```
 
 **质量标准**：
@@ -67,6 +124,12 @@
 - 语言面向 age_range 年龄段学生，不要过于学术化
 - 每段都要有具体例子或类比
 - 渐进式难度，从直觉到严谨
+- **工程性约束（v4.1 新增）**：
+  - 每条学习目标必须可回溯到一条 `acceptance_standard` 或 `hands_on_components`
+  - 引入段必须出现 `core_question` 或其等价改写，不能凭空换题
+  - 应用段必须点名 `acceptance_artifacts` 中的作品标题
+  - 如果 knode 的 `module_role` 是 `foundation`，plan_markdown 侧重认知锚定与观察训练；如果是 `core` / `deepening`，侧重方法与工具；如果是 `synthesis` / `capstone`，侧重整合和交付
+- **禁止脱项**：在 plan_markdown 顶部必须出现 `> Module: {module_id} · {module_role}` 一行引用块，让人能一眼看出这节课挂在项目的哪个工程模块上
 
 ---
 
@@ -76,17 +139,32 @@
 
 **从 Step 1 的 plan_markdown 中识别适合做富媒体（animation/game）的知识点，加上 exercise。**
 
-不要为凑数量而强加富媒体。exercise 必须有，animation/game 按难度决定。
+不要为凑数量而强加富媒体。exercise 必须有，animation/game 按难度与 `module_role` 决定。
 
-### 数量决策依据（按 difficulty 分级）
+### v4.1 强制约束：对齐验收 & 动手动作
 
-| difficulty | animation 上限 | game 上限 | exercise | 说明 |
-|-----------|---------------|----------|----------|------|
-| 1（入门型） | **0** | **0** | 1+ | 内容量小，exercise 就够巩固 |
-| 2（印象型） | **0-1** | **0** | 1+ | 可以有 1 个 animation 辅助理解，不生成 game |
-| 3（核心概念型） | **1** | **1** | 1+ | 有足够内容支撑富媒体交互，各不超过 1 个 |
-| 4（深入应用型） | **1-2** | **1-2** | 1+ | 根据内容复杂度灵活选择 1 或 2 个 |
-| 5（综合/设计型） | **2** | **2** | 1+ | 复杂概念需要可视化 + 互动双重支撑 |
+在数量/模式决策之前，先做两个验收对齐：
+
+1. **exercise 必须可追溯到 acceptance_standard 或 hands_on_components**
+   - 选择题/填空题/简答题的题干必须直接检验一条验收标准，例如：
+     - acceptance_standard = "学生能够现场说明本模块至少两项动手动作" → exercise 出一道多选题列出候选动作让学生选本模块真正做过的
+     - hands_on_components = "在样例图上手工圈出危险区域" → exercise 给出 1 张图片问"如果是你，你会把红框画在以下哪个区域？"
+   - **禁止出通用科普题**（例如"下面哪个行星最大"这种与本节工程动作无关的题）
+2. **至少一个 idea（exercise 或 game）必须覆盖 hands_on_components 中的一项动作**
+   - 如果 hands_on_components 有 3 条，理想情况下 ideas 整体覆盖 ≥ 1 条（难度 1-2）、≥ 2 条（难度 3-4）、全部（难度 5）
+3. **game 的 game_concept 必须映射到 acceptance_artifacts 里的一个产物或一项 hands_on 动作**
+   - 反例：acceptance_artifacts = "火星图像风险观察笔记" 时，不应做一个"炼金术合成反应"的 game
+   - 正例：做一个 drag_sort game 让学生把 20 张图分类到"可通行/危险/未知"三个桶里，直接对应交付物
+
+### 数量决策依据（按 difficulty × module_role 分级）
+
+| difficulty | module_role 典型值 | animation 上限 | game 上限 | exercise | 说明 |
+|-----------|-------------------|---------------|----------|----------|------|
+| 1（入门型） | foundation | **0** | **0-1** | 1+ | foundation 角色可以用 1 个轻量 game 锚定观察习惯；core 角色保持 0 |
+| 2（印象型） | foundation / core | **0-1** | **0-1** | 1+ | 1 个 animation 或 1 个 game，二选一 |
+| 3（核心概念型） | core / deepening | **1** | **1** | 1+ | 有足够内容支撑富媒体交互，各不超过 1 个 |
+| 4（深入应用型） | deepening / synthesis | **1-2** | **1-2** | 1+ | synthesis 角色优先 game（互动整合）|
+| 5（综合/设计型） | synthesis / capstone | **2** | **2** | 1+ | capstone 必须有 1 个 game 模拟最终交付场景 |
 
 **核心原则：animation/game 是昂贵资源，只在教学增益明显大于纯文字时才使用。上限不代表必须用满。**
 
@@ -124,40 +202,61 @@
 
 ### Ideas 列表格式
 
+每条 idea **必须附带 `hands_on_ref` 和 `acceptance_ref` 字段**（v4.1 新增），用于说明这条 idea 对应哪个动手动作和哪条验收标准，不能凭空创作。
+
 ```json
 [
   {
     "idea_id": "game_1712000000_abcd",
     "mode": "game",
     "style_key": "ares_mission",
-    "topic": "牛顿第二定律模拟",
-    "context_summary": "通过调节质量和力的大小，观察加速度的变化，理解 F=ma",
-    "mode_reason": "参数调节因果探索适合 game 模式"
+    "topic": "火星路况三分类",
+    "context_summary": "学生拖拽 12 张真实火星样本图片到可通行/危险/未知三个桶，系统给出得分与专家注释",
+    "mode_reason": "drag_sort 直接对应 hands_on_components 中的人工风险分类动作，并产出接近 acceptance_artifacts 的分类结果",
+    "hands_on_ref": "在样例图上手工圈出危险区域并写理由",
+    "acceptance_ref": "20 张样例图的人工风险说明"
   },
   {
     "idea_id": "anim_1712000001_efgh",
     "mode": "animation",
     "style_key": "ares_mission",
-    "topic": "力的合成与分解",
-    "context_summary": "展示力的矢量分解过程和平行四边形法则",
-    "mode_reason": "矢量变化适合动态可视化"
+    "topic": "从风景到路况的视角切换",
+    "context_summary": "同一张火星图叠加四色图层（目标/可通行/危险/未知），展示专家如何读图",
+    "mode_reason": "视角切换是静态文字无法说清的视觉过程",
+    "hands_on_ref": "浏览并筛选真实火星图像样本",
+    "acceptance_ref": "火星图像风险观察笔记"
   },
   {
     "idea_id": "ex_1712000002_ijkl",
     "mode": "exercise",
     "style_key": "",
-    "topic": "F=ma 计算练习",
-    "context_summary": "通过选择题巩固对牛顿第二定律的理解",
-    "mode_reason": "巩固知识点"
+    "topic": "火星路况观察练习",
+    "context_summary": "3 道多选 + 1 道简答：给出火星图样张，检验学生能否说出危险区域和理由",
+    "mode_reason": "直接检验 acceptance_standard 中的「能够现场说明本模块动手动作」",
+    "hands_on_ref": "在样例图上手工圈出危险区域并写理由",
+    "acceptance_ref": "学生能够现场说明并演示本模块中的至少两项动手动作"
   }
 ]
 ```
+
+**校验清单**（输出 ideas 之前逐条检查）：
+- [ ] 每个 idea 都有 `hands_on_ref` 和 `acceptance_ref`，且二者的值必须能在 knode 对应字段列表里找到原文匹配
+- [ ] `hands_on_components` 中至少一条被 ideas 覆盖（出现在某个 idea 的 `hands_on_ref`）
+- [ ] 所有 exercise 的 `context_summary` 都提及具体 knode 内容，禁止"通过选择题巩固知识点"这种空话
+- [ ] game/animation 的 `topic` 禁止使用项目外的题材（例如在 mars-risk-map 项目里出现"牛顿第二定律"即为违规）
 
 ---
 
 ## Step 3: 为每个 Idea 撰写详细实现描述
 
 **你是**：一位教育互动设计师，需要为内容实现者（也就是你自己在 Step 5 中）提供详尽的执行蓝图。
+
+### v4.1 透传约束
+
+Step 3 的详细描述必须显式引用 Step 2 得到的 `hands_on_ref` 和 `acceptance_ref`，保证 Step 5 实现时不会"脱项"：
+- Animation 的 `persuasion.learning_claim` 必须回答 `core_question`；`user_guide.takeaway` 必须指向 `acceptance_ref`
+- Game 的 `game_concept` 必须把 `hands_on_ref` 描述的动作转化为具体的玩法操作（拖拽/滑动/选择/排序等）
+- Exercise 的每一道题都必须绑定一个 `hands_on_ref` 或 `acceptance_ref`（在题目 JSON 里用 `ref` 字段记录，用于后续自检）
 
 ### Animation 详细描述
 
@@ -925,19 +1024,57 @@ open scripts/_test_game_xxx.html
 
 ## Step 6: 组装 CourseContent 并写入 DB
 
+### 6.0. v4.1 预写入自检（必须通过才允许 upsert）
+
+`scripts/course_factory.py` 已内置 `preflight_v41(knode, course_content) -> list[str]` 工具函数，并且在 `make_course_content(..., knode=knode)` 传入 knode 时会**自动调用**一次（默认 `preflight=True`）。违规时直接抛 `ValueError`，Step 6a 的组装调用就会失败，不需要再手动写一遍校验逻辑。
+
+规则覆盖：
+
+1. 每个 `mode in {animation, game, exercise}` 的 idea 必须有 `hands_on_ref` / `acceptance_ref`，且二者必须能在 `knode.hands_on_components` / `acceptance_artifacts.title` / `acceptance_standard` 里找到原文匹配
+2. `knode.hands_on_components` 中至少一条被 ideas 覆盖（某个 idea 的 `hands_on_ref` 命中）
+3. `knode.core_question` 必须在 `course_content.plan_markdown` 中出现
+
+如果 knode 是旧版（缺 `hands_on_components` 等 v4.1 字段），`preflight_v41` 会静默跳过，不影响老项目的运行。
+
+如果自检失败（抛 `ValueError`），回到 Step 1/2 修正（补上 `core_question` 到 plan、修正 ideas 的 `hands_on_ref`），不要"强行写入然后下次再说"。如果确实需要临时绕过（比如 story-only 内容、没有 ideas），在 `make_course_content(..., preflight=False)` 显式关闭。
+
+需要手动调用时：
+
+```python
+from scripts.course_factory import preflight_v41
+
+errors = preflight_v41(knode, course_content)
+if errors:
+    for e in errors:
+        print(f"  - {e}")
+    raise SystemExit(1)
+```
+
 ### 6a. 组装 CourseContent
 
-使用 `scripts/course_factory.py` 中的 `make_course_content()` 函数：
+使用 `scripts/course_factory.py` 中的 `make_course_content()` 函数（v4.1 已支持 `knode` + `*_hands_on_ref` / `*_acceptance_ref` 参数，传入 knode 时会自动执行 `preflight_v41` 校验）：
 
 ```python
 python3 << 'PYEOF'
-import sys, json, time, random, string
+import sys
 sys.path.insert(0, "src")
 sys.path.insert(0, ".")
-from scripts.course_factory import make_course_content, make_exercises, _upsert_lesson, _ensure_db_tables
+from scripts.course_factory import (
+    load_knode_context,
+    make_course_content,
+    make_exercises,
+    _upsert_lesson,
+    _ensure_db_tables,
+)
 
-# -- plan_markdown (从 Step 1 粘贴) --
+# -- 载入 knode v4.1 上下文（自动拼齐 knode + milestone + sub_project）--
+ctx = load_knode_context("项目名", knode_global_idx=0)
+knode = ctx["knode"]
+
+# -- plan_markdown (从 Step 1 粘贴，必须含 core_question & module_id 角标) --
 plan_markdown = """
+> Module: P-MARS-01-M01 · foundation
+
 ...Step 1 的完整 Markdown...
 """
 
@@ -946,13 +1083,14 @@ animation_html = """
 ...完整 HTML...
 """
 
-# -- exercises (从 Step 5 粘贴) --
+# -- exercises (从 Step 5 粘贴，每道题带 ref 字段，make_exercises 会保留) --
 exercises = make_exercises([
-    {"question": "...", "options": ["A","B","C","D"], "correct": 0, "explanation": "..."},
+    {"question": "...", "options": ["A","B","C","D"], "correct": 0, "explanation": "...",
+     "ref": "在样例图上手工圈出危险区域并写理由"},
     # ...
 ])
 
-# -- 组装 --
+# -- 组装：传入 knode 后 preflight 自动生效，ideas 自动注入 *_ref --
 course_content = make_course_content(
     plan_markdown=plan_markdown,
     animation_html=animation_html,
@@ -960,13 +1098,19 @@ course_content = make_course_content(
     exercises=exercises,
     exercise_topic="练习主题",
     story_paragraphs=None,  # 或 [{"text": "...", "image_url": ""}]
+    knode=knode,  # v4.1：传入后自动 preflight
+    animation_hands_on_ref="浏览并筛选真实火星图像样本",
+    animation_acceptance_ref="火星图像风险观察笔记",
+    exercise_hands_on_ref="在样例图上手工圈出危险区域并写理由",
+    exercise_acceptance_ref="学生能够现场说明并演示本模块中的至少两项动手动作",
 )
+# 如果 preflight 检出违规，此处会直接 raise ValueError，回到 Step 1/2 修正。
 
 # -- 写入 DB --
 _ensure_db_tables()
 _upsert_lesson(
     project_name="项目名",
-    knode_id=0,  # 节点 ID
+    knode_id=0,  # global knode id
     content_type="interactive",
     course_content=course_content,
 )
@@ -974,21 +1118,23 @@ _upsert_lesson(
 print("写入成功!")
 print(f"ideas 数量: {len(course_content['ideas'])}")
 for idea in course_content["ideas"]:
-    print(f"  [{idea['mode']}] {idea['topic']}")
+    print(f"  [{idea['mode']}] {idea['topic']}  <- {idea.get('hands_on_ref','')}")
 PYEOF
 ```
 
 ### 6b. 如果有 game（make_course_content 不够用时手动组装）
 
 当有 game 类型的 idea 时，`make_course_content()` 只支持 animation + exercise + story，
-需要手动构造 CourseContent：
+需要手动构造 CourseContent。这条路径走的是手动 ideas 字典，所以**必须手动调用 `preflight_v41`** 保持与 6a 同等的校验强度：
 
 ```python
 python3 << 'PYEOF'
 import sys, json, time, random, string
 sys.path.insert(0, "src")
 sys.path.insert(0, ".")
-from scripts.course_factory import _upsert_lesson, _ensure_db_tables
+from scripts.course_factory import _upsert_lesson, _ensure_db_tables, load_knode_context, preflight_v41
+
+knode = load_knode_context("项目名", knode_global_idx=0)["knode"]
 
 def _id(prefix):
     ts = int(time.time() * 1000)
@@ -1011,6 +1157,9 @@ ideas = [
         "generation_backend": "claude_code",
         "style_key": "...",
         "mode_reason": "...",
+        # v4.1 对齐字段（必填）
+        "hands_on_ref": "在样例图上手工圈出危险区域并写理由",
+        "acceptance_ref": "20 张样例图的人工风险说明",
     },
     {
         "idea_id": anim_id,
@@ -1020,6 +1169,8 @@ ideas = [
         "generation_backend": "claude_code",
         "style_key": "...",
         "mode_reason": "...",
+        "hands_on_ref": "浏览并筛选真实火星图像样本",
+        "acceptance_ref": "火星图像风险观察笔记",
     },
     {
         "idea_id": ex_id,
@@ -1028,7 +1179,9 @@ ideas = [
         "context_summary": "...",
         "generation_backend": "",
         "style_key": "",
-        "mode_reason": "巩固知识点",
+        "mode_reason": "直接检验 acceptance_standard 中的「能够现场说明本模块动手动作」",
+        "hands_on_ref": "在样例图上手工圈出危险区域并写理由",
+        "acceptance_ref": "学生能够现场说明并演示本模块中的至少两项动手动作",
     },
 ]
 
@@ -1068,6 +1221,13 @@ course_content = {
     "ideas": ideas,
     "rendered_sections": rendered_sections,
 }
+
+# -- 手动 v4.1 自检（6b 没有 make_course_content 的自动兜底）--
+errors = preflight_v41(knode, course_content)
+if errors:
+    for e in errors:
+        print(f"  - {e}")
+    raise SystemExit("v4.1 预写入自检失败，禁止写入")
 
 _ensure_db_tables()
 _upsert_lesson("项目名", 0, "interactive", course_content)
@@ -1137,14 +1297,18 @@ PYEOF
 ## 完整执行流程检查清单
 
 ```
-[ ] Step 1: plan_markdown 800-1500 字，科学准确，有具体例子
+[ ] 前置：已从 knowledge_tree.json 读取 knode 的 v4.1 字段（core_question/hands_on_components/acceptance_*）
+[ ] Step 1: plan_markdown 800-1500 字，顶部含 "> Module: {module_id} · {module_role}"，core_question 出现在引入段
+[ ] Step 1: 每条学习目标可追溯到 acceptance_standard 或 hands_on_components 中的原文
 [ ] Step 2: 3-4 个 ideas，mode/style_key 选择合理，占位符已插入
-[ ] Step 3: 每个 idea 的 detail_plan 完整（含 user_guide）
+[ ] Step 2: 每个 idea 含 hands_on_ref / acceptance_ref，且至少一条 hands_on_components 被覆盖
+[ ] Step 3: 每个 idea 的 detail_plan 完整（含 user_guide），exercise 每道题带 ref 字段
 [ ] Step 4: debate 完成，reject 的已移除，向用户确认
 [ ] Step 5: HTML 通过自检清单，exercises 有 4 题且有解析
 [ ] Step 5.5a: Code Review 通过（事件绑定、Canvas 时序、flex 布局、rAF）
 [ ] Step 5.5b: Playwright 验证通过: node scripts/html_validate.mjs <file> 返回 exit 0
 [ ] Step 5.5b: 批量验证通过: cd scripts && npx playwright test --config=playwright.config.mjs
+[ ] Step 6.0: v4.1 预写入自检（`preflight_v41` 或 `make_course_content(knode=...)` 自动调用）通过，无任何违规
 [ ] Step 6: 成功写入 DB，验证查询通过
 [ ] 启动前端确认：./scripts/restart.sh 后访问对应页面查看效果
 ```
@@ -1155,7 +1319,7 @@ PYEOF
 
 ```json
 {
-  "plan_markdown": "完整学习计划 Markdown（含 [[IDEA:xxx]] 占位符）",
+  "plan_markdown": "完整学习计划 Markdown（含 [[IDEA:xxx]] 占位符 + 顶部 Module 引用块）",
   "ideas": [
     {
       "idea_id": "唯一ID",
@@ -1164,7 +1328,9 @@ PYEOF
       "context_summary": "30-50字摘要",
       "generation_backend": "claude_code",
       "style_key": "STYLE_KITS中的key",
-      "mode_reason": "选择原因"
+      "mode_reason": "选择原因",
+      "hands_on_ref": "v4.1: 对应 knode.hands_on_components 中的某一条原文",
+      "acceptance_ref": "v4.1: 对应 knode.acceptance_standard 或 acceptance_artifacts.title"
     }
   ],
   "rendered_sections": {
@@ -1173,10 +1339,30 @@ PYEOF
       "status": "ready",
       "html": "完整HTML字符串 或 null",
       "story_paragraphs": "[{text,image_url}] 或 null",
-      "exercises": "[{type,question,options,correct,explanation}] 或 null",
+      "exercises": "[{type,question,options,correct,explanation,ref}] 或 null",
       "generation_backend": "claude_code",
       "user_guide": "操作说明文本"
     }
   }
 }
 ```
+
+---
+
+## v4.1 工具就绪状态
+
+`scripts/course_factory.py` 已完成 v4.1 升级，手册 6a 路径直接走工具函数即可，不再需要手动绕开：
+
+| 工具 | 状态 | 说明 |
+|------|------|------|
+| `load_knode_context(project_name, knode_global_idx) -> dict` | 已就绪 | 一次性加载 `{knode, milestone, sub_project}`，按 global index 展开，未找到抛 `ValueError` |
+| `preflight_v41(knode, course_content) -> list[str]` | 已就绪 | 实现 Step 6.0 的 3 条硬性规则；旧版 knode（无 v4.1 字段）自动跳过 |
+| `make_exercises(items)` 保留 `ref` 字段 | 已就绪 | 题目 item 里写 `"ref": "..."`，会被一一透传到 rendered_sections 的 questions |
+| `make_course_content(..., knode, *_hands_on_ref, *_acceptance_ref)` | 已就绪 | 传入 knode 时默认 `preflight=True`，自动校验，违规直接 `raise ValueError` |
+| Gateway API `api_project_detail` 返回 v4.1 字段 | 已就绪 | 前端 / LLM 可以直接读取 `knode.module_id` / `core_question` 等 |
+| 单元测试 `tests/test_course_factory_v41.py` | 已就绪 | 21 个 case 覆盖 preflight 所有分支、make_course_content 注入、load_knode_context 边界 |
+
+**使用约定**：
+- 有 animation + exercise + story 的常规组合，直接走 Step 6a（`make_course_content(knode=...)` 一次完成组装与自检）
+- 有 game 的组合，走 Step 6b（手动构造 ideas/rendered_sections），在写入前**手动调用** `preflight_v41(knode, course_content)` 并检查返回列表为空
+- 临时关闭自检（比如 story-only、或 knode 是旧版但你确定要写入）：`make_course_content(..., preflight=False)`
