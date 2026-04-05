@@ -532,6 +532,139 @@ function drawHUD(cols){{
 </html>"""
 
 
+# ── v4.1 知识树上下文加载与对齐校验 ──────────────────────────────
+
+def load_knode_context(project_name: str, knode_global_idx: int) -> dict:
+    """
+    从 projects/{name}/knowledge_tree.json 读取指定 global index 的 knode，
+    并返回完整上下文（knode + milestone + sub_project）。
+
+    参数：
+        project_name: 项目英文 slug，例如 "mars-risk-map"
+        knode_global_idx: 跨 milestone 的全局知识节点序号（与后端 api_project_detail 中的 id 一致）
+
+    返回：
+        {
+            "knode": dict,           # 完整 knode dict，包含 v4.1 字段
+            "milestone": dict,       # 所属 milestone 的 title/description
+            "sub_project": dict|None, # 所属 sub_project（按 milestone_indices 匹配，可能为 None）
+        }
+
+    异常：
+        FileNotFoundError: 项目目录不存在
+        ValueError: knode_global_idx 超出范围
+    """
+    tree_path = ROOT / "projects" / project_name / "knowledge_tree.json"
+    if not tree_path.exists():
+        raise FileNotFoundError(f"knowledge_tree.json not found: {tree_path}")
+
+    tree = json.loads(tree_path.read_text(encoding="utf-8"))
+    milestones = tree.get("milestones", [])
+    sub_projects = tree.get("sub_projects", [])
+
+    idx = 0
+    for ms_i, ms in enumerate(milestones):
+        for kn in ms.get("knodes", []):
+            if idx == knode_global_idx:
+                sub = next(
+                    (sp for sp in sub_projects if ms_i in sp.get("milestone_indices", [])),
+                    None,
+                )
+                return {
+                    "knode": kn,
+                    "milestone": {
+                        "title": ms.get("title", ""),
+                        "description": ms.get("description", ""),
+                    },
+                    "sub_project": sub,
+                }
+            idx += 1
+
+    raise ValueError(
+        f"knode global index {knode_global_idx} out of range (project has {idx} knodes)"
+    )
+
+
+def preflight_v41(knode: dict, course_content: dict) -> list[str]:
+    """
+    校验 course_content 是否满足 v4.1 知识树对齐约束。
+
+    返回违规列表；空列表表示通过。
+
+    三条硬约束：
+    1. 每个 game/animation/exercise 类型的 idea 都必须带 hands_on_ref 和 acceptance_ref，
+       且值必须能在 knode.hands_on_components / acceptance_standard / acceptance_artifacts 中找到。
+    2. 如果 knode.hands_on_components 非空，ideas 中必须至少有一条覆盖其中的某一项动作。
+    3. 如果 knode.core_question 非空，plan_markdown 中必须出现该问题（或其等价改写）。
+
+    对于旧版（v4.0 或更早）knode，如果 hands_on_components / acceptance_* / core_question 都为空，
+    则跳过所有校验，返回空列表（向后兼容）。
+    """
+    errors: list[str] = []
+
+    hands_on = set(knode.get("hands_on_components", []) or [])
+    standards = set(knode.get("acceptance_standard", []) or [])
+    artifacts_titles = {
+        a.get("title", "")
+        for a in (knode.get("acceptance_artifacts", []) or [])
+        if a.get("title")
+    }
+    core_question = (knode.get("core_question", "") or "").strip()
+
+    # 旧版兼容：无任何 v4.1 字段则跳过校验
+    has_v41 = bool(hands_on or standards or artifacts_titles or core_question)
+    if not has_v41:
+        return errors
+
+    ideas = course_content.get("ideas", []) or []
+    plan_markdown = course_content.get("plan_markdown", "") or ""
+
+    # 约束 1: 每个 rich-media idea 都必须有 refs 且值合法
+    ref_modes = {"game", "animation", "exercise"}
+    for idea in ideas:
+        if idea.get("mode") not in ref_modes:
+            continue
+        idea_id = idea.get("idea_id", "<no-id>")
+        href = (idea.get("hands_on_ref", "") or "").strip()
+        aref = (idea.get("acceptance_ref", "") or "").strip()
+
+        if hands_on and not href:
+            errors.append(f"idea {idea_id} 缺少 hands_on_ref")
+        elif href and hands_on and href not in hands_on:
+            errors.append(
+                f"idea {idea_id} hands_on_ref '{href[:40]}...' 不在 knode.hands_on_components 中"
+            )
+
+        if (standards or artifacts_titles) and not aref:
+            errors.append(f"idea {idea_id} 缺少 acceptance_ref")
+        elif aref and (standards or artifacts_titles):
+            if aref not in standards and aref not in artifacts_titles:
+                errors.append(
+                    f"idea {idea_id} acceptance_ref '{aref[:40]}...' "
+                    f"不在 knode.acceptance_standard / acceptance_artifacts 中"
+                )
+
+    # 约束 2: hands_on_components 至少被一条 idea 覆盖
+    if hands_on:
+        covered = {
+            (idea.get("hands_on_ref", "") or "").strip()
+            for idea in ideas
+            if idea.get("mode") in ref_modes
+        }
+        if not (hands_on & covered):
+            errors.append(
+                f"hands_on_components 未被任何 idea 覆盖（共 {len(hands_on)} 条动作）"
+            )
+
+    # 约束 3: plan_markdown 必须出现 core_question
+    if core_question and core_question not in plan_markdown:
+        errors.append(
+            f"plan_markdown 未出现 core_question: '{core_question[:40]}...'"
+        )
+
+    return errors
+
+
 # ── 练习题构造辅助函数 ─────────────────────────────────────────
 
 def make_exercises(items: list[dict]) -> list[dict]:
@@ -544,18 +677,23 @@ def make_exercises(items: list[dict]) -> list[dict]:
       "options": [str, str, str, str],  # 4个选项
       "correct": int,                    # 0-3
       "explanation": str,
+      "ref": str,                        # v4.1 可选：对应的 hands_on_components 或 acceptance_standard 原文
     }
     返回符合 InlineExercise 格式的列表。
     """
     result = []
     for item in items:
-        result.append({
+        exercise = {
             "type": "choice",
             "question": item["question"],
             "options": item["options"],
             "correct": item["correct"],
             "explanation": item["explanation"],
-        })
+        }
+        # v4.1: 保留题目的对齐引用
+        if "ref" in item and item["ref"]:
+            exercise["ref"] = item["ref"]
+        result.append(exercise)
     return result
 
 
@@ -566,13 +704,35 @@ def make_course_content(
     exercises: list[dict],
     exercise_topic: str,
     story_paragraphs: list[dict] | None = None,
+    *,
+    # v4.1 对齐字段（可选，但传入 knode 时会自动校验）
+    knode: dict | None = None,
+    animation_hands_on_ref: str = "",
+    animation_acceptance_ref: str = "",
+    exercise_hands_on_ref: str = "",
+    exercise_acceptance_ref: str = "",
+    preflight: bool = True,
 ) -> dict:
     """
     构造标准 CourseContent dict，供写入数据库。
 
-    animation_html: 完整 Canvas HTML 字符串
-    exercises: make_exercises() 的返回值
-    story_paragraphs: [{"text": str, "image_url": ""}] 或 None
+    基础参数：
+        animation_html: 完整 Canvas HTML 字符串
+        exercises: make_exercises() 的返回值
+        story_paragraphs: [{"text": str, "image_url": ""}] 或 None
+
+    v4.1 参数（都是可选，但 knode 含 v4.1 字段时应该全部提供）：
+        knode: 完整的 v4.1 knode dict（来自 load_knode_context() 或直接读 JSON）。
+               传入后会自动调用 preflight_v41() 校验生成的 course_content。
+        animation_hands_on_ref: animation idea 对应的 hands_on_components 原文
+        animation_acceptance_ref: animation idea 对应的 acceptance_standard/artifact title 原文
+        exercise_hands_on_ref: exercise idea 对应的 hands_on_components 原文
+        exercise_acceptance_ref: exercise idea 对应的 acceptance_standard/artifact title 原文
+        preflight: 是否在 knode 非空时自动校验（默认 True）。
+
+    异常：
+        ValueError: 当 knode 非空且 preflight=True 且校验失败时抛出，
+                    异常消息包含所有违规项，便于调试。
     """
     import time, random, string
 
@@ -584,26 +744,35 @@ def make_course_content(
     anim_id = _id("anim")
     ex_id = _id("ex")
 
-    ideas = [
-        {
-            "idea_id": anim_id,
-            "mode": "animation",
-            "topic": animation_topic,
-            "context_summary": animation_topic,
-            "generation_backend": "canvas_direct",
-            "style_key": "chromatic_depth",
-            "mode_reason": "核心概念需要动态可视化演示",
-        },
-        {
-            "idea_id": ex_id,
-            "mode": "exercise",
-            "topic": exercise_topic,
-            "context_summary": exercise_topic,
-            "generation_backend": "",
-            "style_key": "",
-            "mode_reason": "需要练习题巩固知识点",
-        },
-    ]
+    anim_idea: dict = {
+        "idea_id": anim_id,
+        "mode": "animation",
+        "topic": animation_topic,
+        "context_summary": animation_topic,
+        "generation_backend": "canvas_direct",
+        "style_key": "chromatic_depth",
+        "mode_reason": "核心概念需要动态可视化演示",
+    }
+    if animation_hands_on_ref:
+        anim_idea["hands_on_ref"] = animation_hands_on_ref
+    if animation_acceptance_ref:
+        anim_idea["acceptance_ref"] = animation_acceptance_ref
+
+    ex_idea: dict = {
+        "idea_id": ex_id,
+        "mode": "exercise",
+        "topic": exercise_topic,
+        "context_summary": exercise_topic,
+        "generation_backend": "",
+        "style_key": "",
+        "mode_reason": "需要练习题巩固知识点",
+    }
+    if exercise_hands_on_ref:
+        ex_idea["hands_on_ref"] = exercise_hands_on_ref
+    if exercise_acceptance_ref:
+        ex_idea["acceptance_ref"] = exercise_acceptance_ref
+
+    ideas = [anim_idea, ex_idea]
 
     rendered_sections: dict = {
         anim_id: {
@@ -644,11 +813,20 @@ def make_course_content(
             "generation_backend": "",
         }
 
-    return {
+    course_content = {
         "plan_markdown": plan_markdown,
         "ideas": ideas,
         "rendered_sections": rendered_sections,
     }
+
+    # v4.1 自动校验
+    if preflight and knode is not None:
+        errors = preflight_v41(knode, course_content)
+        if errors:
+            msg = "v4.1 preflight failed:\n" + "\n".join(f"  - {e}" for e in errors)
+            raise ValueError(msg)
+
+    return course_content
 
 
 if __name__ == "__main__":
