@@ -665,6 +665,335 @@ def preflight_v41(knode: dict, course_content: dict) -> list[str]:
     return errors
 
 
+# ── 外部资料研究（Tavily Search 集成）───────────────────────────
+
+# 需要外部资料的知识节点的典型关键词（工程/科学/数据/算法/仪器/标准）
+_RESEARCH_KEYWORDS_EN = {
+    "algorithm", "model", "dataset", "sensor", "camera", "spectrum", "frequency",
+    "wavelength", "protocol", "standard", "pipeline", "benchmark", "metric",
+    "neural", "cnn", "transformer", "bayesian", "gradient", "optimization",
+    "simulation", "finite element", "fourier", "laplace", "eigen", "tensor",
+    "api", "library", "framework", "sdk",
+    "mars", "hirise", "terrain", "satellite", "telescope", "lidar", "radar",
+    "dna", "rna", "protein", "enzyme", "genome", "mitochondria", "neuron",
+    "quantum", "photon", "electron", "isotope", "crystalline",
+    "geological", "seismic", "hydrology", "meteorology",
+}
+_RESEARCH_KEYWORDS_ZH = {
+    "算法", "模型", "数据集", "传感器", "相机", "光谱", "频率",
+    "波长", "协议", "标准", "流水线", "基准", "指标",
+    "神经网络", "梯度", "优化", "仿真", "有限元", "傅立叶",
+    "火星", "地形", "卫星", "望远镜", "激光雷达", "雷达",
+    "蛋白", "基因", "酶", "神经元", "量子", "光子", "电子",
+    "地质", "地震", "水文", "气象", "绘制地图", "地图", "地形数据",
+    "工程", "测量", "观测", "实验", "仪器",
+}
+
+# 不需要外部资料的知识节点（方法论、元认知、项目前置说明）
+_SKIP_RESEARCH_KEYWORDS_ZH = {
+    "介绍", "导入", "概述", "预备", "前置", "开篇", "总结", "回顾", "反思",
+    "学习方法", "如何学习", "项目说明", "流程说明", "规则说明", "评分标准",
+    "展示与分享", "答辩", "汇报", "路演",
+}
+
+
+def should_research_knode(knode: dict, milestone: dict | None = None) -> bool:
+    """
+    判断一个知识节点是否应该通过 Tavily 搜索补充外部资料。
+
+    启发式规则（按优先级）：
+    1. 显式跳过：title/summary 命中"介绍/导入/展示"等方法论关键词 → False
+    2. 显式研究：title/summary/hands_on_components 命中科学/工程关键词 → True
+    3. 难度托底：difficulty_level >= 5（中等以上）且 knode 有 hands_on_components 或 module_role in {engineering, application, investigation} → True
+    4. 默认：False（前置说明类节点不需要联网）
+
+    参数：
+        knode: v4.1 knode dict
+        milestone: 所属 milestone dict（可选，用于补充上下文）
+
+    返回：
+        True 表示建议调用 research_knode()；False 表示跳过。
+    """
+    title = (knode.get("title", "") or "").lower()
+    summary = (knode.get("summary", "") or "").lower()
+    hands_on_text = " ".join(knode.get("hands_on_components", []) or []).lower()
+    combined = f"{title} {summary} {hands_on_text}"
+
+    # 规则 1: 显式跳过
+    for kw in _SKIP_RESEARCH_KEYWORDS_ZH:
+        if kw in title or kw in summary:
+            return False
+
+    # 规则 2: 关键词命中
+    for kw in _RESEARCH_KEYWORDS_EN:
+        if kw in combined:
+            return True
+    for kw in _RESEARCH_KEYWORDS_ZH:
+        if kw in combined:
+            return True
+
+    # 规则 3: 难度 + 工程角色托底
+    difficulty = int(knode.get("difficulty_level", 0) or 0)
+    module_role = (knode.get("module_role", "") or "").lower()
+    engineering_roles = {"engineering", "application", "investigation", "implementation", "analysis"}
+    if difficulty >= 5 and (
+        knode.get("hands_on_components") or module_role in engineering_roles
+    ):
+        return True
+
+    return False
+
+
+def _extract_youtube_id(url: str) -> str | None:
+    """
+    从 YouTube URL 提取 video id。
+    支持：
+      - https://www.youtube.com/watch?v=ID
+      - https://m.youtube.com/watch?v=ID
+      - https://youtu.be/ID
+      - https://www.youtube.com/embed/ID
+      - https://www.youtube.com/v/ID
+      - https://www.youtube.com/shorts/ID
+    """
+    try:
+        from urllib.parse import urlparse, parse_qs
+
+        u = urlparse(url)
+        host = u.netloc.lower()
+        if "youtube.com" in host:
+            qs = parse_qs(u.query)
+            if "v" in qs and qs["v"]:
+                return qs["v"][0]
+            # /embed/{id} / /v/{id} / /shorts/{id}
+            parts = [p for p in u.path.split("/") if p]
+            if len(parts) >= 2 and parts[0] in ("embed", "v", "shorts"):
+                return parts[1]
+        if host == "youtu.be":
+            return u.path.lstrip("/").split("/")[0] or None
+    except Exception:
+        pass
+    return None
+
+
+def research_knode(
+    knode: dict,
+    milestone: dict | None = None,
+    sub_project: dict | None = None,
+    *,
+    web_query: str | None = None,
+    youtube_query: str | None = None,
+    max_web: int = 4,
+    max_youtube: int = 2,
+    api_key: str | None = None,
+) -> dict:
+    """
+    为一个知识节点调用 Tavily Search 抓取外部资料。
+
+    调用方应先用 should_research_knode() 判断是否值得搜索。
+    本函数不做启发式判断，调用即搜索。
+
+    参数：
+        knode: 完整的 v4.1 knode dict
+        milestone: 所属 milestone（用于丰富查询词）
+        sub_project: 所属 sub_project（用于丰富查询词）
+        web_query: 网页查询词。为 None 时自动从 knode/milestone/sub_project 组合。
+                   建议 Claude Code 显式传入针对该 knode 的高质量英文或中文查询词，
+                   例如 "Mars HiRISE DEM stereo reconstruction"。
+        youtube_query: YouTube 查询词。为 None 时自动使用 "{title} tutorial explained"。
+                       建议传入**英文**查询词以获得更广的视频覆盖。
+        max_web: 网页结果最大条数（默认 4）
+        max_youtube: YouTube 结果最大条数（默认 2）
+        api_key: Tavily API key；为 None 时从 ~/.systemedu/config.yaml 读取
+
+    返回：
+        {
+            "web_query": str,
+            "youtube_query": str,
+            "web_results": [
+                {"title": str, "url": str, "snippet": str, "score": float},
+                ...
+            ],
+            "youtube_results": [
+                {"title": str, "url": str, "video_id": str, "snippet": str, "score": float},
+                ...
+            ],
+            "researched_at": ISO-8601 timestamp,
+        }
+
+    异常：
+        RuntimeError: Tavily API key 不可用或 Tavily 调用失败
+    """
+    # 1. API key 解析
+    if api_key is None:
+        try:
+            from systemedu.core.config import get_config
+
+            api_key = get_config().search.tavily_api_key
+        except Exception:
+            api_key = ""
+    if not api_key:
+        raise RuntimeError(
+            "Tavily API key 不可用：请在 ~/.systemedu/config.yaml 的 search.tavily_api_key 中配置"
+        )
+
+    # 2. 构造查询词（调用方未显式传入时回退到自动合并）
+    title = (knode.get("title", "") or "").strip()
+    ms_title = (milestone or {}).get("title", "") if milestone else ""
+    sp_topic = ""
+    if sub_project:
+        sp_topic = (sub_project.get("title", "") or sub_project.get("id", "") or "").strip()
+
+    if not web_query:
+        web_query_parts = [p for p in [sp_topic, ms_title, title] if p]
+        web_query = " ".join(web_query_parts[:3]) or title
+    if not youtube_query:
+        youtube_query = f"{title} tutorial explained"
+
+    # 3. 调用 Tavily
+    from datetime import datetime
+
+    try:
+        from tavily import TavilyClient  # type: ignore
+
+        client = TavilyClient(api_key=api_key)
+
+        web_raw = client.search(
+            web_query,
+            max_results=max_web,
+            include_answer=False,
+            include_raw_content=False,
+        )
+
+        yt_raw = client.search(
+            youtube_query,
+            max_results=max_youtube,
+            include_domains=["youtube.com"],
+            include_answer=False,
+            include_raw_content=False,
+        )
+    except Exception as e:
+        raise RuntimeError(f"Tavily 搜索失败: {e}") from e
+
+    # 4. 整理网页结果
+    web_results: list[dict] = []
+    for item in (web_raw.get("results") or [])[:max_web]:
+        url = item.get("url", "")
+        if not url or "youtube.com" in url or "youtu.be" in url:
+            continue  # 网页通道排除 YouTube
+        web_results.append({
+            "title": (item.get("title") or "").strip(),
+            "url": url,
+            "snippet": (item.get("content") or "").strip()[:400],
+            "score": float(item.get("score") or 0.0),
+        })
+
+    # 5. 整理 YouTube 结果（提取 video_id）
+    youtube_results: list[dict] = []
+    for item in (yt_raw.get("results") or [])[:max_youtube]:
+        url = item.get("url", "")
+        vid = _extract_youtube_id(url) if url else None
+        if not vid:
+            continue
+        youtube_results.append({
+            "title": (item.get("title") or "").strip(),
+            "url": url,
+            "video_id": vid,
+            "snippet": (item.get("content") or "").strip()[:300],
+            "score": float(item.get("score") or 0.0),
+        })
+
+    return {
+        "web_query": web_query,
+        "youtube_query": youtube_query,
+        "web_results": web_results,
+        "youtube_results": youtube_results,
+        "researched_at": datetime.now().isoformat(),
+    }
+
+
+def merge_resources_into_plan(plan_markdown: str, research: dict | None) -> str:
+    """
+    把 research_knode() 的返回结果融入 plan_markdown。
+
+    融入策略（保持纯 markdown，前端 ReactMarkdown 默认可渲染）：
+    - YouTube 视频：插入在"## 深入理解"之后（如果找不到该段，则插在"## 核心概念"后；再没有则附在末尾）。
+      格式：
+        ## 推荐视频
+        [![视频标题](https://img.youtube.com/vi/{id}/hqdefault.jpg)](https://www.youtube.com/watch?v={id})
+        > 点击图片观看：**视频标题** — 简短摘要
+    - 网页资料：追加一个"## 延伸阅读"段落，列表形式：
+        - [**标题**](url) — 一句话摘要
+
+    如果 research 为 None 或没有任何结果，原样返回 plan_markdown。
+    """
+    if not research:
+        return plan_markdown
+    web = research.get("web_results") or []
+    youtube = research.get("youtube_results") or []
+    if not web and not youtube:
+        return plan_markdown
+
+    text = plan_markdown.rstrip() + "\n"
+
+    # 1. 视频部分（优先插入到"深入理解"之后）
+    if youtube:
+        video_lines: list[str] = ["## 推荐视频", ""]
+        for v in youtube:
+            vid = v.get("video_id", "")
+            title = v.get("title", "").replace("[", "(").replace("]", ")")
+            url = v.get("url", "")
+            snippet = v.get("snippet", "")
+            if not vid or not url:
+                continue
+            thumb = f"https://img.youtube.com/vi/{vid}/hqdefault.jpg"
+            video_lines.append(f"[![{title}]({thumb})]({url})")
+            video_lines.append("")
+            if snippet:
+                video_lines.append(f"> **{title}** — {snippet}")
+            else:
+                video_lines.append(f"> **{title}** — [在 YouTube 上观看]({url})")
+            video_lines.append("")
+
+        video_block = "\n".join(video_lines)
+
+        # 尝试插入到"## 深入理解"或"## 核心概念"之后
+        anchors = ["## 深入理解", "## 核心概念"]
+        inserted = False
+        for anchor in anchors:
+            idx = text.find(anchor)
+            if idx < 0:
+                continue
+            # 找到该段下一个 "## " 同级标题
+            search_start = idx + len(anchor)
+            next_h2 = text.find("\n## ", search_start)
+            insert_pos = next_h2 + 1 if next_h2 >= 0 else len(text)
+            text = text[:insert_pos] + video_block + "\n" + text[insert_pos:]
+            inserted = True
+            break
+        if not inserted:
+            text = text.rstrip() + "\n\n" + video_block + "\n"
+
+    # 2. 网页资料（追加到末尾）
+    if web:
+        lines: list[str] = ["", "## 延伸阅读", ""]
+        lines.append("> 以下资料由系统自动检索并筛选，供深入研究参考：")
+        lines.append("")
+        for r in web:
+            title = (r.get("title") or "").replace("[", "(").replace("]", ")")
+            url = r.get("url", "")
+            snippet = (r.get("snippet") or "").strip()
+            if not title or not url:
+                continue
+            if snippet:
+                lines.append(f"- [**{title}**]({url}) — {snippet[:200]}")
+            else:
+                lines.append(f"- [**{title}**]({url})")
+        lines.append("")
+        text = text.rstrip() + "\n" + "\n".join(lines)
+
+    return text
+
+
 # ── 练习题构造辅助函数 ─────────────────────────────────────────
 
 def make_exercises(items: list[dict]) -> list[dict]:
@@ -712,6 +1041,8 @@ def make_course_content(
     exercise_hands_on_ref: str = "",
     exercise_acceptance_ref: str = "",
     preflight: bool = True,
+    # 外部资料（Tavily research_knode() 的返回值）
+    research: dict | None = None,
 ) -> dict:
     """
     构造标准 CourseContent dict，供写入数据库。
@@ -730,6 +1061,12 @@ def make_course_content(
         exercise_acceptance_ref: exercise idea 对应的 acceptance_standard/artifact title 原文
         preflight: 是否在 knode 非空时自动校验（默认 True）。
 
+    外部资料参数：
+        research: research_knode() 返回的 dict。传入后会：
+                  1) 调用 merge_resources_into_plan() 把视频和网页融入 plan_markdown
+                  2) 在 course_content 顶层添加 external_resources 字段（结构化保留）
+                  调用方应先用 should_research_knode() 判断节点是否需要联网。
+
     异常：
         ValueError: 当 knode 非空且 preflight=True 且校验失败时抛出，
                     异常消息包含所有违规项，便于调试。
@@ -740,6 +1077,10 @@ def make_course_content(
         ts = int(time.time() * 1000)
         rand = "".join(random.choices(string.ascii_lowercase, k=4))
         return f"{prefix}_{ts}_{rand}"
+
+    # 0. 把外部资料融入 plan_markdown（如果传入了 research）
+    if research:
+        plan_markdown = merge_resources_into_plan(plan_markdown, research)
 
     anim_id = _id("anim")
     ex_id = _id("ex")
@@ -818,6 +1159,16 @@ def make_course_content(
         "ideas": ideas,
         "rendered_sections": rendered_sections,
     }
+
+    # 外部资料结构化字段（前端未来可以直接 iframe 嵌入；当前前端会忽略此字段）
+    if research:
+        course_content["external_resources"] = {
+            "web_query": research.get("web_query", ""),
+            "youtube_query": research.get("youtube_query", ""),
+            "web_results": research.get("web_results", []),
+            "youtube_results": research.get("youtube_results", []),
+            "researched_at": research.get("researched_at", ""),
+        }
 
     # v4.1 自动校验
     if preflight and knode is not None:
