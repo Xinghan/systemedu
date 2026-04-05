@@ -66,6 +66,86 @@ sub_project = ctx["sub_project"]  # v4.1 sub_project（含 brief/core_problem/ta
 
 ---
 
+## Step 0.5: 外部资料研究（Tavily Search）
+
+在动笔写 plan_markdown 之前，**先判断这个 knode 是否值得联网抓取外部资料**。工程、科学、数据、算法、仪器类节点应该联网研究；方法论/项目说明/答辩展示类节点直接跳过。
+
+### 判断标准
+
+`scripts/course_factory.py` 提供 `should_research_knode(knode, milestone)` 工具函数，按下面启发式规则返回 True/False：
+
+1. **显式跳过**：`title` / `summary` 命中"介绍/导入/概述/前置/展示/答辩/学习方法"等方法论关键词 → 跳过
+2. **显式研究**：`title` / `summary` / `hands_on_components` 命中工程科学关键词（`algorithm`/`sensor`/`HiRISE`/`DNA`/`神经元`/`算法`/`地形数据`/`绘制地图`/`火星`/`工程`…） → 研究
+3. **难度托底**：`difficulty_level >= 5` 且（有 `hands_on_components` 或 `module_role in {engineering, application, investigation, implementation, analysis}`）→ 研究
+4. **默认跳过**
+
+Claude Code 在执行时**不要盲目信任启发式**，对判断结果有把握才走启发式；有疑问就读一遍 knode 上下文自己决定。
+
+### 调用方式
+
+```python
+from scripts.course_factory import load_knode_context, should_research_knode, research_knode
+
+ctx = load_knode_context("mars-risk-map", knode_global_idx=3)
+knode = ctx["knode"]
+milestone = ctx["milestone"]
+sub_project = ctx["sub_project"]
+
+if should_research_knode(knode, milestone):
+    research = research_knode(
+        knode,
+        milestone=milestone,
+        sub_project=sub_project,
+        # 建议显式传入高质量的英文查询词（YouTube 中文查询常常没结果）
+        web_query="Mars HiRISE DEM stereo reconstruction",
+        youtube_query="Mars HiRISE digital elevation model",
+        max_web=4,
+        max_youtube=2,
+    )
+else:
+    research = None  # 跳过联网
+```
+
+返回结构：
+
+```json
+{
+  "web_query": "Mars HiRISE DEM stereo reconstruction",
+  "youtube_query": "Mars HiRISE digital elevation model",
+  "web_results": [
+    {"title": "...", "url": "https://...", "snippet": "一段摘要", "score": 0.91},
+    ...
+  ],
+  "youtube_results": [
+    {"title": "...", "url": "https://www.youtube.com/watch?v=XXX",
+     "video_id": "XXX", "snippet": "...", "score": 0.84},
+    ...
+  ],
+  "researched_at": "2026-04-05T16:00:00"
+}
+```
+
+### 资料如何融入课程
+
+`make_course_content(..., research=research)` 在 Step 6a 会**自动**：
+
+1. 调用 `merge_resources_into_plan(plan_markdown, research)` 把资料以纯 markdown 形式插入 `plan_markdown`：
+   - **YouTube 视频**：插入到"## 深入理解"段之后的"## 推荐视频"小节，使用 `[![标题](缩略图 URL)](视频 URL)` 语法——ReactMarkdown 会渲染成可点击的缩略图（点击跳转 YouTube）
+   - **网页资料**：追加到文末的"## 延伸阅读"小节，使用 `- [标题](url) — 摘要` 列表
+2. 在 `course_content["external_resources"]` 顶层字段中保留结构化数据，便于前端未来升级为 iframe 嵌入
+
+不需要任何额外步骤——只要把 `research` 对象透传给 `make_course_content` 即可。
+
+### 质量要求
+
+- **web_query** 要精准：带上项目领域 + milestone + knode 标题关键词（例如 `Mars HiRISE DEM stereo reconstruction`），避免只写 knode 标题
+- **youtube_query** 必须用**英文**：Tavily YouTube 通道对中文查询命中率极低
+- 不要把 research 结果直接贴进 plan_markdown 的叙述段落，让 `merge_resources_into_plan` 自动处理
+- 如果 research 返回的 web_results / youtube_results 都是空的（例如查询词质量差），考虑换一个更通用的查询再跑一次
+- 敏感话题不要联网（例如涉及个人隐私、政治等）
+
+---
+
 ## Step 1: 撰写学习计划 (plan_markdown)
 
 **你是**：一位资深项目制学习教育者，擅长把一个真实工程模块拆成学生可走通的学习路径。你不是写百科词条，是写"为了完成这个工程动作所需要的学习内容"。
@@ -1052,7 +1132,7 @@ if errors:
 
 ### 6a. 组装 CourseContent
 
-使用 `scripts/course_factory.py` 中的 `make_course_content()` 函数（v4.1 已支持 `knode` + `*_hands_on_ref` / `*_acceptance_ref` 参数，传入 knode 时会自动执行 `preflight_v41` 校验）：
+使用 `scripts/course_factory.py` 中的 `make_course_content()` 函数（v4.1 已支持 `knode` + `*_hands_on_ref` / `*_acceptance_ref` 参数；同时支持 `research` 参数注入 Step 0.5 抓取的外部资料）：
 
 ```python
 python3 << 'PYEOF'
@@ -1061,6 +1141,8 @@ sys.path.insert(0, "src")
 sys.path.insert(0, ".")
 from scripts.course_factory import (
     load_knode_context,
+    should_research_knode,
+    research_knode,
     make_course_content,
     make_exercises,
     _upsert_lesson,
@@ -1070,6 +1152,19 @@ from scripts.course_factory import (
 # -- 载入 knode v4.1 上下文（自动拼齐 knode + milestone + sub_project）--
 ctx = load_knode_context("项目名", knode_global_idx=0)
 knode = ctx["knode"]
+milestone = ctx["milestone"]
+sub_project = ctx["sub_project"]
+
+# -- Step 0.5: 外部资料研究（只在启发式判定需要时调用）--
+research = None
+if should_research_knode(knode, milestone):
+    research = research_knode(
+        knode,
+        milestone=milestone,
+        sub_project=sub_project,
+        web_query="Mars HiRISE DEM stereo reconstruction",      # 精准项目领域查询
+        youtube_query="Mars HiRISE digital elevation model",    # 英文 YouTube 查询
+    )
 
 # -- plan_markdown (从 Step 1 粘贴，必须含 core_question & module_id 角标) --
 plan_markdown = """
@@ -1090,7 +1185,7 @@ exercises = make_exercises([
     # ...
 ])
 
-# -- 组装：传入 knode 后 preflight 自动生效，ideas 自动注入 *_ref --
+# -- 组装：传入 knode 后 preflight 自动生效；传入 research 后自动融入 plan_markdown --
 course_content = make_course_content(
     plan_markdown=plan_markdown,
     animation_html=animation_html,
@@ -1103,6 +1198,7 @@ course_content = make_course_content(
     animation_acceptance_ref="火星图像风险观察笔记",
     exercise_hands_on_ref="在样例图上手工圈出危险区域并写理由",
     exercise_acceptance_ref="学生能够现场说明并演示本模块中的至少两项动手动作",
+    research=research,  # 0.5：外部资料自动融入 plan_markdown + external_resources
 )
 # 如果 preflight 检出违规，此处会直接 raise ValueError，回到 Step 1/2 修正。
 
@@ -1119,6 +1215,9 @@ print("写入成功!")
 print(f"ideas 数量: {len(course_content['ideas'])}")
 for idea in course_content["ideas"]:
     print(f"  [{idea['mode']}] {idea['topic']}  <- {idea.get('hands_on_ref','')}")
+if "external_resources" in course_content:
+    ext = course_content["external_resources"]
+    print(f"外部资料: {len(ext['web_results'])} 网页 / {len(ext['youtube_results'])} 视频")
 PYEOF
 ```
 
@@ -1298,6 +1397,8 @@ PYEOF
 
 ```
 [ ] 前置：已从 knowledge_tree.json 读取 knode 的 v4.1 字段（core_question/hands_on_components/acceptance_*）
+[ ] Step 0.5: 用 `should_research_knode(knode)` 判断是否需要外部资料；工程/科学/算法/数据类节点必须联网，前置说明/答辩类节点跳过
+[ ] Step 0.5: 需要研究时，`research_knode()` 返回的 web_results / youtube_results 至少有一个非空（否则换查询词重试）
 [ ] Step 1: plan_markdown 800-1500 字，顶部含 "> Module: {module_id} · {module_role}"，core_question 出现在引入段
 [ ] Step 1: 每条学习目标可追溯到 acceptance_standard 或 hands_on_components 中的原文
 [ ] Step 2: 3-4 个 ideas，mode/style_key 选择合理，占位符已插入
@@ -1358,11 +1459,16 @@ PYEOF
 | `load_knode_context(project_name, knode_global_idx) -> dict` | 已就绪 | 一次性加载 `{knode, milestone, sub_project}`，按 global index 展开，未找到抛 `ValueError` |
 | `preflight_v41(knode, course_content) -> list[str]` | 已就绪 | 实现 Step 6.0 的 3 条硬性规则；旧版 knode（无 v4.1 字段）自动跳过 |
 | `make_exercises(items)` 保留 `ref` 字段 | 已就绪 | 题目 item 里写 `"ref": "..."`，会被一一透传到 rendered_sections 的 questions |
-| `make_course_content(..., knode, *_hands_on_ref, *_acceptance_ref)` | 已就绪 | 传入 knode 时默认 `preflight=True`，自动校验，违规直接 `raise ValueError` |
+| `make_course_content(..., knode, *_hands_on_ref, *_acceptance_ref, research)` | 已就绪 | 传入 knode 时默认 `preflight=True` 自动校验；传入 research 时自动融入 plan_markdown + external_resources |
+| `should_research_knode(knode, milestone) -> bool` | 已就绪 | 启发式判断节点是否需要联网搜索外部资料 |
+| `research_knode(knode, ..., web_query, youtube_query) -> dict` | 已就绪 | 调用 Tavily Search 抓取网页 + YouTube 资料，返回结构化结果 |
+| `merge_resources_into_plan(plan, research) -> str` | 已就绪 | 把资料以纯 markdown 形式注入 plan_markdown（推荐视频 + 延伸阅读） |
 | Gateway API `api_project_detail` 返回 v4.1 字段 | 已就绪 | 前端 / LLM 可以直接读取 `knode.module_id` / `core_question` 等 |
 | 单元测试 `tests/test_course_factory_v41.py` | 已就绪 | 21 个 case 覆盖 preflight 所有分支、make_course_content 注入、load_knode_context 边界 |
+| 单元测试 `tests/test_course_factory_research.py` | 已就绪 | 31 个 case 覆盖 should_research 启发式、YouTube URL 解析、merge_resources 融入、research_knode 的 mocked Tavily 调用 |
 
 **使用约定**：
-- 有 animation + exercise + story 的常规组合，直接走 Step 6a（`make_course_content(knode=...)` 一次完成组装与自检）
-- 有 game 的组合，走 Step 6b（手动构造 ideas/rendered_sections），在写入前**手动调用** `preflight_v41(knode, course_content)` 并检查返回列表为空
+- 有 animation + exercise + story 的常规组合，直接走 Step 6a（`make_course_content(knode=..., research=...)` 一次完成研究/组装/自检）
+- 有 game 的组合，走 Step 6b（手动构造 ideas/rendered_sections），在写入前**手动调用** `preflight_v41(knode, course_content)` 并检查返回列表为空；如需外部资料，手动在写入前调用 `merge_resources_into_plan(plan, research)` 并把 `research` 结构存到 `course_content["external_resources"]`
 - 临时关闭自检（比如 story-only、或 knode 是旧版但你确定要写入）：`make_course_content(..., preflight=False)`
+- 跳过外部资料研究：不传 `research` 参数即可（或显式 `research=None`）
