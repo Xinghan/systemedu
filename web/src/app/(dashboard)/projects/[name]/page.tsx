@@ -511,9 +511,23 @@ function SubProjectTree({ subProjects, milestones, lessonStatuses, onNodeClick, 
                 <h4 className="text-sm font-semibold text-foreground leading-tight mb-1 group-hover:text-primary transition-colors">
                   {sp.title}
                 </h4>
-                <p className="text-xs text-muted-foreground leading-relaxed line-clamp-1 mb-2">
+                <p className="text-xs text-muted-foreground leading-relaxed line-clamp-3 mb-1">
                   {sp.description}
                 </p>
+                {sp.brief && (
+                  <p className="text-[11px] italic text-muted-foreground/80 leading-relaxed line-clamp-2 mb-1">
+                    {sp.brief}
+                  </p>
+                )}
+                {sp.deliverables && sp.deliverables.length > 0 && (
+                  <div className="flex flex-wrap gap-1 mb-1">
+                    {sp.deliverables.map((d, i) => (
+                      <span key={i} className="text-[9px] font-[var(--font-manrope)] px-1.5 py-0.5 rounded bg-secondary text-muted-foreground">
+                        {d}
+                      </span>
+                    ))}
+                  </div>
+                )}
               </button>
 
               {/* Lesson progress + expand toggle */}
@@ -815,7 +829,7 @@ const [editCoverFile, setEditCoverFile] = useState<File | null>(null)
   const passed = detail.progress.filter((p) => p.status === "passed").length
   const total = detail.progress.length
   const pct = total > 0 ? Math.round((passed / total) * 100) : 0
-  const subProjects = detail.sub_projects ?? []
+  const subProjects = [...(detail.sub_projects ?? [])].sort((a, b) => (a.display_order ?? 50) - (b.display_order ?? 50))
   const hasSubProjects = subProjects.length > 0
 
   const enrollment = detail.enrollment

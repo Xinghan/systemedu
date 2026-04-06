@@ -99,6 +99,7 @@ class SubProject(BaseModel):
     difficulty: int = 1
     estimated_hours: float = 0
     deliverables: list[str] = Field(default_factory=list)
+    display_order: int = 50
     brief: str = ""
     task: str = ""
     core_problem: str = ""

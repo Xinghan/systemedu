@@ -129,6 +129,7 @@ export interface SubProjectInfo {
   difficulty: number
   estimated_hours: number
   deliverables: string[]
+  display_order?: number
   nodes_passed: number
   nodes_total: number
   status?: "locked" | "available" | "in_progress" | "submitted" | "passed" | "failed"
@@ -164,44 +165,6 @@ export interface ProjectBrief {
   industry_relation: string
 }
 
-export interface SpecialNode {
-  node_id: string
-  node_role: "project_overview" | "future_extension"
-  display_order_hint: "first" | "last"
-  title: string
-  summary: string
-  detailed_description: string
-  project_background?: string | null
-  core_mission?: string | null
-  knowledge_coverage_domains?: string[]
-  real_industry_examples?: Array<{
-    example_id: string
-    name: string
-    description: string
-    relation_to_this_project: string
-  }>
-  real_data_and_resource_sources?: Array<{
-    source_id: string
-    name: string
-    resource_type: string
-    description: string
-    role_in_project: string
-  }>
-  why_this_node_exists?: string
-  connection_to_main_tree?: string
-  related_stage_ids?: string[]
-  future_extension_paths?: Array<{
-    path_id: string
-    title: string
-    direction_type: string
-    description: string
-    reuses_existing_assets?: string
-    new_capabilities_needed?: string[]
-    real_world_value?: string
-    open_problems_or_unsolved_challenges?: string[]
-  }>
-}
-
 export interface ProjectDetail {
   project: Omit<ProjectSummary, "path">
   milestones: MilestoneInfo[]
@@ -209,7 +172,6 @@ export interface ProjectDetail {
   enrollment: EnrollmentInfo | null
   sub_projects?: SubProjectInfo[]
   project_brief?: ProjectBrief | null
-  special_nodes?: SpecialNode[]
 }
 
 export interface AgentInfo {

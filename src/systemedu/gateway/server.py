@@ -857,6 +857,7 @@ async def api_project_detail(request: Request) -> JSONResponse:
                     "difficulty": sp.difficulty,
                     "estimated_hours": sp.estimated_hours,
                     "deliverables": sp.deliverables,
+                    "display_order": sp.display_order,
                     "nodes_passed": sp_passed,
                     "nodes_total": sp_total,
                     "status": sp_status,
@@ -909,11 +910,10 @@ async def api_project_detail(request: Request) -> JSONResponse:
             "enrollment": enrollment_data,
         }
         if sub_projects_data:
+            sub_projects_data.sort(key=lambda sp: sp.get("display_order", 50))
             response_data["sub_projects"] = sub_projects_data
         if project_brief:
             response_data["project_brief"] = project_brief
-        if ctx.tree.special_nodes:
-            response_data["special_nodes"] = ctx.tree.special_nodes
 
         return JSONResponse(response_data)
     except FileNotFoundError:
