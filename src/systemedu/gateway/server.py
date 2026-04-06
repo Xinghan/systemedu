@@ -661,19 +661,33 @@ async def api_project_detail(request: Request) -> JSONResponse:
         for ms in ctx.tree.milestones:
             knodes_serialized = []
             for node in ms.knodes:
-                knodes_serialized.append(
-                    {
-                        "id": global_idx,
-                        "title": node.title,
-                        "summary": node.summary,
-                        "difficulty_level": node.difficulty_level,
-                        "content_type": node.content_type.value,
-                        "acceptance_type": node.acceptance_type.value,
-                        "estimated_minutes": node.estimated_minutes,
-                        "xp_reward": node.xp_reward,
-                        "prerequisite_indices": node.prerequisite_indices,
-                    }
-                )
+                knode_data: dict = {
+                    "id": global_idx,
+                    "title": node.title,
+                    "summary": node.summary,
+                    "difficulty_level": node.difficulty_level,
+                    "content_type": node.content_type.value,
+                    "acceptance_type": node.acceptance_type.value,
+                    "estimated_minutes": node.estimated_minutes,
+                    "xp_reward": node.xp_reward,
+                    "prerequisite_indices": node.prerequisite_indices,
+                }
+                # v4.1 optional metadata — only include when non-empty
+                if node.module_id:
+                    knode_data["module_id"] = node.module_id
+                if node.module_role:
+                    knode_data["module_role"] = node.module_role
+                if node.core_question:
+                    knode_data["core_question"] = node.core_question
+                if node.acceptance_artifacts:
+                    knode_data["acceptance_artifacts"] = node.acceptance_artifacts
+                if node.acceptance_standard:
+                    knode_data["acceptance_standard"] = node.acceptance_standard
+                if node.hands_on_components:
+                    knode_data["hands_on_components"] = node.hands_on_components
+                if node.outputs_produced:
+                    knode_data["outputs_produced"] = node.outputs_produced
+                knodes_serialized.append(knode_data)
                 global_idx += 1
             milestones.append(
                 {
@@ -796,9 +810,8 @@ async def api_project_detail(request: Request) -> JSONResponse:
             for p in ctx.progress:
                 status_map[p.knode_id] = p.status.value if hasattr(p.status, "value") else str(p.status)
 
-            # Sub-project knode_id mapping: P0=-101, P1=-102, ..., P8=-109
-            sp_id_to_knode_id = {f"P{i}": -(101 + i) for i in range(9)}
-
+            # First pass: compute knode progress per sub-project
+            sp_progress: dict[str, tuple[int, int]] = {}  # sp.id -> (passed, total)
             for sp in ctx.tree.sub_projects:
                 sp_node_ids: list[int] = []
                 for ms_idx in sp.milestone_indices:
@@ -810,15 +823,29 @@ async def api_project_detail(request: Request) -> JSONResponse:
                         sp_node_ids.extend(
                             range(start, start + len(ms_obj.knodes))
                         )
-
                 sp_passed = sum(
                     1 for nid in sp_node_ids if status_map.get(nid) == "passed"
                 )
-                sp_total = len(sp_node_ids)
+                sp_progress[sp.id] = (sp_passed, len(sp_node_ids))
 
-                # Get sub-project's own status from negative knode_id
-                sp_knode_id = sp_id_to_knode_id.get(sp.id)
-                sp_status = status_map.get(sp_knode_id, "locked") if sp_knode_id else "locked"
+            # Second pass: compute status with prerequisite check
+            for sp in ctx.tree.sub_projects:
+                sp_passed, sp_total = sp_progress[sp.id]
+
+                if sp_total > 0 and sp_passed >= sp_total:
+                    sp_status = "passed"
+                elif sp_passed > 0:
+                    sp_status = "in_progress"
+                elif not sp.prerequisite_sub_project_ids:
+                    sp_status = "available"
+                else:
+                    # Check if all prerequisites are completed
+                    all_prereqs_done = all(
+                        sp_progress.get(pid, (0, 1))[0] >= sp_progress.get(pid, (0, 1))[1]
+                        and sp_progress.get(pid, (0, 1))[1] > 0
+                        for pid in sp.prerequisite_sub_project_ids
+                    )
+                    sp_status = "available" if all_prereqs_done else "locked"
 
                 sp_data: dict = {
                     "id": sp.id,
@@ -885,6 +912,8 @@ async def api_project_detail(request: Request) -> JSONResponse:
             response_data["sub_projects"] = sub_projects_data
         if project_brief:
             response_data["project_brief"] = project_brief
+        if ctx.tree.special_nodes:
+            response_data["special_nodes"] = ctx.tree.special_nodes
 
         return JSONResponse(response_data)
     except FileNotFoundError:
