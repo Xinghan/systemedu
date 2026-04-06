@@ -377,6 +377,13 @@ const translations = {
     "learn.assignment": "Assignment",
     "learn.assignment_subtitle": "MCQ \u00b7 Q&A \u00b7 Hands-on",
     "learn.assignment_loading": "Loading assignment...",
+    "learn.select_node": "Select a knowledge node from the sidebar to start learning",
+    "learn.project_overview": "Project Overview",
+    "learn.core_mission": "Core Mission",
+    "learn.coverage_domains": "Knowledge Domains",
+    "learn.industry_examples": "Real Industry Examples",
+    "learn.future_extension": "Future Extension",
+    "learn.extension_paths": "Extension Paths",
 
     // GeneratingProgress UI
     "gen.stage_planning_name": "Curriculum Planner",
@@ -909,6 +916,13 @@ const translations = {
     "learn.assignment": "作业练习",
     "learn.assignment_subtitle": "选择题 \u00b7 问答 \u00b7 动手项目",
     "learn.assignment_loading": "加载作业中...",
+    "learn.select_node": "从左侧选择一个知识节点开始学习",
+    "learn.project_overview": "项目总概述",
+    "learn.core_mission": "核心使命",
+    "learn.coverage_domains": "知识覆盖领域",
+    "learn.industry_examples": "真实工业案例",
+    "learn.future_extension": "未来扩展方向",
+    "learn.extension_paths": "扩展路径",
 
     // GeneratingProgress UI
     "gen.stage_planning_name": "课程规划师",

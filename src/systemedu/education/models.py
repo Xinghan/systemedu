@@ -115,6 +115,7 @@ class KnowledgeTree(BaseModel):
 
     milestones: list[Milestone] = Field(default_factory=list)
     sub_projects: list[SubProject] = Field(default_factory=list)
+    special_nodes: list[dict] = Field(default_factory=list)
 
 
 class ProjectAgentConfig(BaseModel):

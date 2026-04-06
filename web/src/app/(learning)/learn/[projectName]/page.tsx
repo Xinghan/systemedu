@@ -32,6 +32,8 @@ import {
   Clock,
   ClipboardList,
   Languages,
+  Target,
+  Info,
 } from "lucide-react"
 import { PageLoading } from "@/components/ui/page-loading"
 import { ScrollArea } from "@/components/ui/scroll-area"
@@ -40,7 +42,7 @@ import { NotePanel } from "@/components/learning/note-panel"
 import { CourseContentView } from "@/components/learning/course-content-view"
 import { AssignmentView } from "@/components/learning/assignment-view"
 import { gateway } from "@/lib/api"
-import type { KnodeInfo, MilestoneInfo, NodeProgress, ProjectDetail, SubProjectInfo } from "@/lib/types/api"
+import type { KnodeInfo, MilestoneInfo, NodeProgress, ProjectDetail, SubProjectInfo, SpecialNode } from "@/lib/types/api"
 import { useT } from "@/lib/hooks/use-t"
 import { useAppStore } from "@/lib/stores/app-store"
 
@@ -93,6 +95,18 @@ function NodeTooltip({ data }: { data: NodeTooltipData }) {
         {knode.summary && (
           <p className="text-xs text-muted-foreground leading-relaxed line-clamp-3">{knode.summary}</p>
         )}
+        {knode.core_question && (
+          <p className="text-[11px] text-primary/80 leading-relaxed italic line-clamp-2">{knode.core_question}</p>
+        )}
+        {knode.hands_on_components && knode.hands_on_components.length > 0 && (
+          <div className="flex flex-wrap gap-1">
+            {knode.hands_on_components.map((c, i) => (
+              <span key={i} className="text-[9px] font-[var(--font-manrope)] px-1.5 py-0.5 rounded bg-secondary/80 text-muted-foreground">
+                {c}
+              </span>
+            ))}
+          </div>
+        )}
         <div className="flex items-center gap-3 pt-1.5 border-t border-border/60 text-[11px] text-muted-foreground">
           <span className="flex items-center gap-1">
             <Zap className="h-3 w-3" />
@@ -106,6 +120,218 @@ function NodeTooltip({ data }: { data: NodeTooltipData }) {
             <BookOpen className="h-3 w-3" />
             {knode.xp_reward} XP
           </span>
+        </div>
+      </div>
+    </div>,
+    document.body,
+  )
+}
+
+function SubProjectDetailModal({
+  subProject,
+  onClose,
+}: {
+  subProject: SubProjectInfo
+  onClose: () => void
+}) {
+  useEffect(() => {
+    const handleEsc = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose()
+    }
+    window.addEventListener("keydown", handleEsc)
+    return () => window.removeEventListener("keydown", handleEsc)
+  }, [onClose])
+
+  const sp = subProject
+
+  return createPortal(
+    <div
+      className="fixed inset-0 z-[9998] flex items-center justify-center p-4 bg-background/80 backdrop-blur-sm"
+      onClick={onClose}
+    >
+      <div
+        className="relative w-full max-w-2xl max-h-[85vh] flex flex-col rounded-2xl border border-border bg-popover text-popover-foreground shadow-2xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div className="flex items-start gap-3 px-6 pt-6 pb-4 border-b border-border/60 shrink-0">
+          <div className="h-10 w-10 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
+            <Target className="h-5 w-5 text-primary" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-[10px] font-[var(--font-manrope)] font-bold uppercase tracking-widest text-muted-foreground mb-0.5">
+              {sp.id} · Level {sp.difficulty} · {sp.estimated_hours}h
+            </p>
+            <h2 className="text-lg font-bold text-foreground leading-tight">{sp.title}</h2>
+          </div>
+          <button
+            onClick={onClose}
+            className="shrink-0 p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+
+        {/* Body */}
+        <ScrollArea className="flex-1 min-h-0">
+          <div className="px-6 py-5 space-y-5 text-sm">
+            {sp.description && (
+              <section>
+                <p className="text-foreground leading-relaxed">{sp.description}</p>
+              </section>
+            )}
+
+            {sp.brief && (
+              <section className="px-4 py-3 rounded-lg bg-secondary/40 border-l-2 border-primary/60">
+                <p className="text-[10px] font-[var(--font-manrope)] font-bold uppercase tracking-widest text-primary mb-1.5">
+                  阶段目标
+                </p>
+                <p className="italic text-foreground/85 leading-relaxed">{sp.brief}</p>
+              </section>
+            )}
+
+            {sp.core_problem && (
+              <section>
+                <p className="text-[10px] font-[var(--font-manrope)] font-bold uppercase tracking-widest text-muted-foreground mb-1.5">
+                  核心问题
+                </p>
+                <p className="text-foreground/85 leading-relaxed">{sp.core_problem}</p>
+              </section>
+            )}
+
+            {sp.task && (
+              <section>
+                <p className="text-[10px] font-[var(--font-manrope)] font-bold uppercase tracking-widest text-muted-foreground mb-1.5">
+                  任务描述
+                </p>
+                <p className="text-foreground/85 leading-relaxed">{sp.task}</p>
+              </section>
+            )}
+
+            {sp.inputs && sp.inputs.length > 0 && (
+              <section>
+                <p className="text-[10px] font-[var(--font-manrope)] font-bold uppercase tracking-widest text-muted-foreground mb-1.5">
+                  输入
+                </p>
+                <ul className="space-y-1 text-foreground/85">
+                  {sp.inputs.map((item, i) => (
+                    <li key={i} className="flex gap-2 leading-relaxed">
+                      <span className="text-primary/60 shrink-0">·</span>
+                      <span>{item}</span>
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            )}
+
+            {sp.data_usage && sp.data_usage.length > 0 && (
+              <section>
+                <p className="text-[10px] font-[var(--font-manrope)] font-bold uppercase tracking-widest text-muted-foreground mb-1.5">
+                  数据使用
+                </p>
+                <ul className="space-y-1 text-foreground/85">
+                  {sp.data_usage.map((item, i) => (
+                    <li key={i} className="flex gap-2 leading-relaxed">
+                      <span className="text-primary/60 shrink-0">·</span>
+                      <span>{item}</span>
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            )}
+
+            {sp.deliverables && sp.deliverables.length > 0 && (
+              <section>
+                <p className="text-[10px] font-[var(--font-manrope)] font-bold uppercase tracking-widest text-muted-foreground mb-2">
+                  交付物
+                </p>
+                <div className="flex flex-wrap gap-1.5">
+                  {sp.deliverables.map((d, i) => (
+                    <span
+                      key={i}
+                      className="text-xs font-[var(--font-manrope)] px-2.5 py-1 rounded-md bg-secondary text-foreground/85"
+                    >
+                      {d}
+                    </span>
+                  ))}
+                </div>
+              </section>
+            )}
+
+            {sp.acceptance_criteria && sp.acceptance_criteria.length > 0 && (
+              <section>
+                <p className="text-[10px] font-[var(--font-manrope)] font-bold uppercase tracking-widest text-muted-foreground mb-1.5">
+                  验收标准
+                </p>
+                <ul className="space-y-1.5 text-foreground/85">
+                  {sp.acceptance_criteria.map((item, i) => (
+                    <li key={i} className="flex gap-2 leading-relaxed">
+                      <CheckCircle className="h-3.5 w-3.5 text-cyan-600 shrink-0 mt-0.5" />
+                      <span>{item}</span>
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            )}
+
+            {sp.demo_unit && (
+              <section>
+                <p className="text-[10px] font-[var(--font-manrope)] font-bold uppercase tracking-widest text-muted-foreground mb-1.5">
+                  演示单元
+                </p>
+                <p className="text-foreground/85 leading-relaxed">{sp.demo_unit}</p>
+              </section>
+            )}
+
+            {sp.handover && (sp.handover.outputs?.length > 0 || sp.handover.method) && (
+              <section>
+                <p className="text-[10px] font-[var(--font-manrope)] font-bold uppercase tracking-widest text-muted-foreground mb-1.5">
+                  交接
+                </p>
+                {sp.handover.outputs && sp.handover.outputs.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5 mb-1.5">
+                    {sp.handover.outputs.map((d, i) => (
+                      <span
+                        key={i}
+                        className="text-xs font-[var(--font-manrope)] px-2 py-0.5 rounded-md bg-secondary text-foreground/85"
+                      >
+                        {d}
+                      </span>
+                    ))}
+                  </div>
+                )}
+                {sp.handover.method && (
+                  <p className="text-foreground/80 text-xs leading-relaxed">{sp.handover.method}</p>
+                )}
+              </section>
+            )}
+
+            {sp.why_separate && (
+              <section className="px-4 py-3 rounded-lg bg-secondary/30">
+                <p className="text-[10px] font-[var(--font-manrope)] font-bold uppercase tracking-widest text-muted-foreground mb-1.5">
+                  为什么独立成阶段
+                </p>
+                <p className="text-foreground/75 text-xs leading-relaxed">{sp.why_separate}</p>
+              </section>
+            )}
+          </div>
+        </ScrollArea>
+
+        {/* Footer progress */}
+        <div className="px-6 py-4 border-t border-border/60 shrink-0">
+          <div className="flex items-center gap-3 text-xs text-muted-foreground">
+            <div className="flex-1 h-1.5 rounded-full bg-secondary overflow-hidden">
+              <div
+                className="h-full rounded-full bg-gradient-to-r from-teal-500 to-cyan-500 transition-all duration-700"
+                style={{
+                  width: `${sp.nodes_total > 0 ? Math.round((sp.nodes_passed / sp.nodes_total) * 100) : 0}%`,
+                }}
+              />
+            </div>
+            <span className="font-[var(--font-manrope)] font-semibold text-foreground">
+              {sp.nodes_passed}/{sp.nodes_total}
+            </span>
+          </div>
         </div>
       </div>
     </div>,
@@ -151,6 +377,7 @@ export default function LearnPage() {
   const [assignmentLoading, setAssignmentLoading] = useState(false)
   const [noteStatus, setNoteStatus] = useState<"idle" | "saving" | "saved">("idle")
   const [hoveredNode, setHoveredNode] = useState<NodeTooltipData | null>(null)
+  const [spModalOpen, setSpModalOpen] = useState(false)
   const sessionStartRef = useRef<number>(Date.now())
 
   useEffect(() => {
@@ -283,6 +510,14 @@ export default function LearnPage() {
       {/* Node hover tooltip */}
       {hoveredNode && <NodeTooltip data={hoveredNode} />}
 
+      {/* Sub-project detail modal */}
+      {spModalOpen && activeSubProject && (
+        <SubProjectDetailModal
+          subProject={activeSubProject}
+          onClose={() => setSpModalOpen(false)}
+        />
+      )}
+
       {/* Top header bar */}
       <div className="flex items-center gap-3 px-5 py-3 border-b border-border/50 bg-background/80 backdrop-blur-sm shrink-0">
         <Link href={`/projects/${params.projectName}`} className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors">
@@ -357,6 +592,22 @@ export default function LearnPage() {
                 />
               </div>
             </div>
+
+            {/* Sub-project overview trigger */}
+            {activeSubProject && (
+              <div className="px-3 pb-2 shrink-0">
+                <button
+                  onClick={() => setSpModalOpen(true)}
+                  className="w-full flex items-center gap-2 px-3 py-2 rounded-lg bg-secondary/50 hover:bg-secondary/80 transition-colors text-left group"
+                >
+                  <Target className="h-3.5 w-3.5 text-primary shrink-0" />
+                  <span className="text-xs font-semibold text-foreground flex-1 min-w-0 truncate">
+                    {activeSubProject.id}: {activeSubProject.title}
+                  </span>
+                  <Info className="h-3.5 w-3.5 text-muted-foreground group-hover:text-foreground shrink-0" />
+                </button>
+              </div>
+            )}
 
             <ScrollArea className="flex-1 min-h-0">
               <div className="px-3 pb-4 space-y-4">
@@ -510,10 +761,124 @@ export default function LearnPage() {
               onMarkComplete={handleMarkComplete}
             />
           ) : (
-            <div className="flex-1 flex flex-col items-center justify-center gap-3 text-muted-foreground">
-              <BookOpen className="h-8 w-8 opacity-20" />
-              <p className="text-sm">从左侧选择一个知识节点开始学习</p>
-            </div>
+            <ScrollArea className="flex-1 min-h-0">
+              <div className="max-w-3xl mx-auto px-6 py-8 space-y-6">
+                {/* Project overview card */}
+                {detail.special_nodes?.filter((sn) => sn.node_role === "project_overview").map((sn) => (
+                  <div key={sn.node_id} className="rounded-2xl border border-border bg-card p-6 space-y-4">
+                    <div className="flex items-start gap-3">
+                      <div className="h-10 w-10 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
+                        <BookOpen className="h-5 w-5 text-primary" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-[10px] font-[var(--font-manrope)] font-bold uppercase tracking-widest text-primary mb-1">
+                          {t("learn.project_overview")}
+                        </p>
+                        <h2 className="text-lg font-bold text-foreground leading-tight">{sn.title}</h2>
+                      </div>
+                    </div>
+                    <p className="text-sm text-foreground/85 leading-relaxed">{sn.summary}</p>
+                    {sn.detailed_description && (
+                      <p className="text-xs text-muted-foreground leading-relaxed">{sn.detailed_description}</p>
+                    )}
+                    {sn.core_mission && (
+                      <div className="px-4 py-3 rounded-lg bg-primary/5 border-l-2 border-primary/40">
+                        <p className="text-[10px] font-[var(--font-manrope)] font-bold uppercase tracking-widest text-primary mb-1">
+                          {t("learn.core_mission")}
+                        </p>
+                        <p className="text-sm text-foreground/85 leading-relaxed">{sn.core_mission}</p>
+                      </div>
+                    )}
+                    {sn.knowledge_coverage_domains && sn.knowledge_coverage_domains.length > 0 && (
+                      <div>
+                        <p className="text-[10px] font-[var(--font-manrope)] font-bold uppercase tracking-widest text-muted-foreground mb-2">
+                          {t("learn.coverage_domains")}
+                        </p>
+                        <div className="flex flex-wrap gap-1.5">
+                          {sn.knowledge_coverage_domains.map((d, i) => (
+                            <span key={i} className="text-xs font-[var(--font-manrope)] px-2.5 py-1 rounded-md bg-secondary text-foreground/85">
+                              {d}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    {sn.real_industry_examples && sn.real_industry_examples.length > 0 && (
+                      <div>
+                        <p className="text-[10px] font-[var(--font-manrope)] font-bold uppercase tracking-widest text-muted-foreground mb-2">
+                          {t("learn.industry_examples")}
+                        </p>
+                        <div className="space-y-2">
+                          {sn.real_industry_examples.map((ex) => (
+                            <div key={ex.example_id} className="px-3 py-2 rounded-lg bg-secondary/40">
+                              <p className="text-xs font-semibold text-foreground">{ex.name}</p>
+                              <p className="text-[11px] text-muted-foreground leading-relaxed mt-0.5">{ex.description}</p>
+                              <p className="text-[11px] text-primary/70 leading-relaxed mt-0.5 italic">{ex.relation_to_this_project}</p>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ))}
+
+                {/* Prompt to select a node */}
+                <div className="flex flex-col items-center justify-center gap-3 text-muted-foreground py-4">
+                  <BookOpen className="h-8 w-8 opacity-20" />
+                  <p className="text-sm">{t("learn.select_node")}</p>
+                </div>
+
+                {/* Future extension card */}
+                {detail.special_nodes?.filter((sn) => sn.node_role === "future_extension").map((sn) => (
+                  <div key={sn.node_id} className="rounded-2xl border border-border bg-card p-6 space-y-4">
+                    <div className="flex items-start gap-3">
+                      <div className="h-10 w-10 rounded-xl bg-violet-100 dark:bg-violet-500/15 flex items-center justify-center shrink-0">
+                        <Sparkles className="h-5 w-5 text-violet-600" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-[10px] font-[var(--font-manrope)] font-bold uppercase tracking-widest text-violet-600 mb-1">
+                          {t("learn.future_extension")}
+                        </p>
+                        <h2 className="text-lg font-bold text-foreground leading-tight">{sn.title}</h2>
+                      </div>
+                    </div>
+                    <p className="text-sm text-foreground/85 leading-relaxed">{sn.summary}</p>
+                    {sn.detailed_description && (
+                      <p className="text-xs text-muted-foreground leading-relaxed">{sn.detailed_description}</p>
+                    )}
+                    {sn.future_extension_paths && sn.future_extension_paths.length > 0 && (
+                      <div>
+                        <p className="text-[10px] font-[var(--font-manrope)] font-bold uppercase tracking-widest text-muted-foreground mb-2">
+                          {t("learn.extension_paths")}
+                        </p>
+                        <div className="space-y-2">
+                          {sn.future_extension_paths.map((path) => (
+                            <div key={path.path_id} className="px-3 py-2 rounded-lg bg-secondary/40">
+                              <div className="flex items-center gap-2 mb-0.5">
+                                <p className="text-xs font-semibold text-foreground">{path.title}</p>
+                                <span className="text-[9px] font-[var(--font-manrope)] px-1.5 py-0.5 rounded-full bg-violet-100 dark:bg-violet-500/15 text-violet-600 font-semibold">
+                                  {path.direction_type}
+                                </span>
+                              </div>
+                              <p className="text-[11px] text-muted-foreground leading-relaxed">{path.description}</p>
+                              {path.new_capabilities_needed && path.new_capabilities_needed.length > 0 && (
+                                <div className="flex flex-wrap gap-1 mt-1.5">
+                                  {path.new_capabilities_needed.map((cap, i) => (
+                                    <span key={i} className="text-[9px] font-[var(--font-manrope)] px-1.5 py-0.5 rounded bg-secondary text-muted-foreground">
+                                      {cap}
+                                    </span>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </ScrollArea>
           )}
         </div>
 
