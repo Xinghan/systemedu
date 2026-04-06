@@ -23,7 +23,6 @@ import {
   Quote,
   Link2,
   Image,
-  Sparkles,
   History,
   FileDown,
   Save,
@@ -42,7 +41,7 @@ import { NotePanel } from "@/components/learning/note-panel"
 import { CourseContentView } from "@/components/learning/course-content-view"
 import { AssignmentView } from "@/components/learning/assignment-view"
 import { gateway } from "@/lib/api"
-import type { KnodeInfo, MilestoneInfo, NodeProgress, ProjectDetail, SubProjectInfo, SpecialNode } from "@/lib/types/api"
+import type { KnodeInfo, MilestoneInfo, NodeProgress, ProjectDetail, SubProjectInfo } from "@/lib/types/api"
 import { useT } from "@/lib/hooks/use-t"
 import { useAppStore } from "@/lib/stores/app-store"
 
@@ -763,120 +762,11 @@ export default function LearnPage() {
           ) : (
             <ScrollArea className="flex-1 min-h-0">
               <div className="max-w-3xl mx-auto px-6 py-8 space-y-6">
-                {/* Project overview card */}
-                {detail.special_nodes?.filter((sn) => sn.node_role === "project_overview").map((sn) => (
-                  <div key={sn.node_id} className="rounded-2xl border border-border bg-card p-6 space-y-4">
-                    <div className="flex items-start gap-3">
-                      <div className="h-10 w-10 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
-                        <BookOpen className="h-5 w-5 text-primary" />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-[10px] font-[var(--font-manrope)] font-bold uppercase tracking-widest text-primary mb-1">
-                          {t("learn.project_overview")}
-                        </p>
-                        <h2 className="text-lg font-bold text-foreground leading-tight">{sn.title}</h2>
-                      </div>
-                    </div>
-                    <p className="text-sm text-foreground/85 leading-relaxed">{sn.summary}</p>
-                    {sn.detailed_description && (
-                      <p className="text-xs text-muted-foreground leading-relaxed">{sn.detailed_description}</p>
-                    )}
-                    {sn.core_mission && (
-                      <div className="px-4 py-3 rounded-lg bg-primary/5 border-l-2 border-primary/40">
-                        <p className="text-[10px] font-[var(--font-manrope)] font-bold uppercase tracking-widest text-primary mb-1">
-                          {t("learn.core_mission")}
-                        </p>
-                        <p className="text-sm text-foreground/85 leading-relaxed">{sn.core_mission}</p>
-                      </div>
-                    )}
-                    {sn.knowledge_coverage_domains && sn.knowledge_coverage_domains.length > 0 && (
-                      <div>
-                        <p className="text-[10px] font-[var(--font-manrope)] font-bold uppercase tracking-widest text-muted-foreground mb-2">
-                          {t("learn.coverage_domains")}
-                        </p>
-                        <div className="flex flex-wrap gap-1.5">
-                          {sn.knowledge_coverage_domains.map((d, i) => (
-                            <span key={i} className="text-xs font-[var(--font-manrope)] px-2.5 py-1 rounded-md bg-secondary text-foreground/85">
-                              {d}
-                            </span>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                    {sn.real_industry_examples && sn.real_industry_examples.length > 0 && (
-                      <div>
-                        <p className="text-[10px] font-[var(--font-manrope)] font-bold uppercase tracking-widest text-muted-foreground mb-2">
-                          {t("learn.industry_examples")}
-                        </p>
-                        <div className="space-y-2">
-                          {sn.real_industry_examples.map((ex) => (
-                            <div key={ex.example_id} className="px-3 py-2 rounded-lg bg-secondary/40">
-                              <p className="text-xs font-semibold text-foreground">{ex.name}</p>
-                              <p className="text-[11px] text-muted-foreground leading-relaxed mt-0.5">{ex.description}</p>
-                              <p className="text-[11px] text-primary/70 leading-relaxed mt-0.5 italic">{ex.relation_to_this_project}</p>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                ))}
-
                 {/* Prompt to select a node */}
                 <div className="flex flex-col items-center justify-center gap-3 text-muted-foreground py-4">
                   <BookOpen className="h-8 w-8 opacity-20" />
                   <p className="text-sm">{t("learn.select_node")}</p>
                 </div>
-
-                {/* Future extension card */}
-                {detail.special_nodes?.filter((sn) => sn.node_role === "future_extension").map((sn) => (
-                  <div key={sn.node_id} className="rounded-2xl border border-border bg-card p-6 space-y-4">
-                    <div className="flex items-start gap-3">
-                      <div className="h-10 w-10 rounded-xl bg-violet-100 dark:bg-violet-500/15 flex items-center justify-center shrink-0">
-                        <Sparkles className="h-5 w-5 text-violet-600" />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-[10px] font-[var(--font-manrope)] font-bold uppercase tracking-widest text-violet-600 mb-1">
-                          {t("learn.future_extension")}
-                        </p>
-                        <h2 className="text-lg font-bold text-foreground leading-tight">{sn.title}</h2>
-                      </div>
-                    </div>
-                    <p className="text-sm text-foreground/85 leading-relaxed">{sn.summary}</p>
-                    {sn.detailed_description && (
-                      <p className="text-xs text-muted-foreground leading-relaxed">{sn.detailed_description}</p>
-                    )}
-                    {sn.future_extension_paths && sn.future_extension_paths.length > 0 && (
-                      <div>
-                        <p className="text-[10px] font-[var(--font-manrope)] font-bold uppercase tracking-widest text-muted-foreground mb-2">
-                          {t("learn.extension_paths")}
-                        </p>
-                        <div className="space-y-2">
-                          {sn.future_extension_paths.map((path) => (
-                            <div key={path.path_id} className="px-3 py-2 rounded-lg bg-secondary/40">
-                              <div className="flex items-center gap-2 mb-0.5">
-                                <p className="text-xs font-semibold text-foreground">{path.title}</p>
-                                <span className="text-[9px] font-[var(--font-manrope)] px-1.5 py-0.5 rounded-full bg-violet-100 dark:bg-violet-500/15 text-violet-600 font-semibold">
-                                  {path.direction_type}
-                                </span>
-                              </div>
-                              <p className="text-[11px] text-muted-foreground leading-relaxed">{path.description}</p>
-                              {path.new_capabilities_needed && path.new_capabilities_needed.length > 0 && (
-                                <div className="flex flex-wrap gap-1 mt-1.5">
-                                  {path.new_capabilities_needed.map((cap, i) => (
-                                    <span key={i} className="text-[9px] font-[var(--font-manrope)] px-1.5 py-0.5 rounded bg-secondary text-muted-foreground">
-                                      {cap}
-                                    </span>
-                                  ))}
-                                </div>
-                              )}
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                ))}
               </div>
             </ScrollArea>
           )}
