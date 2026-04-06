@@ -210,6 +210,20 @@ else:
   - 应用段必须点名 `acceptance_artifacts` 中的作品标题
   - 如果 knode 的 `module_role` 是 `foundation`，plan_markdown 侧重认知锚定与观察训练；如果是 `core` / `deepening`，侧重方法与工具；如果是 `synthesis` / `capstone`，侧重整合和交付
 - **禁止脱项**：在 plan_markdown 顶部必须出现 `> Module: {module_id} · {module_role}` 一行引用块，让人能一眼看出这节课挂在项目的哪个工程模块上
+- **外部资源链接必须使用 shortcode**：plan_markdown 中引用项目级外部数据集/工具/论文时，**禁止硬编码完整 URL**，必须使用 `{{KEY}}` shortcode。`make_course_content()` 入口会自动将 shortcode 替换为 `[title](url)` 格式的 Markdown 链接。
+  - 可用 shortcode 列表定义在 `course_factory.py` 的 `EXTERNAL_RESOURCE_URLS` 常量中
+  - 示例：写 `{{AI4Mars}} 数据集` 而不是 `[AI4Mars](https://data.nasa.gov/...)`
+  - 示例：写 `从 {{curiosity_raw}} 下载` 而不是 `[Curiosity 原始图像库](https://mars.nasa.gov/...)`
+  - 如果需要引用注册表中没有的 URL，先在 `EXTERNAL_RESOURCE_URLS` 中注册，再使用 shortcode
+  - 当前注册表包含（KEY 不区分大小写）：
+    - `ai4mars` — AI4Mars 数据集
+    - `ai4mars_paper` — AI4Mars 论文 (CVPR 2021)
+    - `curiosity_raw` — Curiosity 原始图像库
+    - `perseverance_raw` — Perseverance 原始图像库
+    - `curiosity_navcam` — Curiosity Navcam
+    - `mastcamz` — Perseverance Mastcam-Z
+    - `hirise` — HiRISE
+    - `pds_imaging` — NASA PDS Imaging Node
 
 ---
 
@@ -1400,6 +1414,7 @@ PYEOF
 [ ] Step 0.5: 用 `should_research_knode(knode)` 判断是否需要外部资料；工程/科学/算法/数据类节点必须联网，前置说明/答辩类节点跳过
 [ ] Step 0.5: 需要研究时，`research_knode()` 返回的 web_results / youtube_results 至少有一个非空（否则换查询词重试）
 [ ] Step 1: plan_markdown 800-1500 字，顶部含 "> Module: {module_id} · {module_role}"，core_question 出现在引入段
+[ ] Step 1: 外部资源链接全部使用 `{{KEY}}` shortcode，不含硬编码 URL（grep `https://` 结果应为 0）
 [ ] Step 1: 每条学习目标可追溯到 acceptance_standard 或 hands_on_components 中的原文
 [ ] Step 2: 3-4 个 ideas，mode/style_key 选择合理，占位符已插入
 [ ] Step 2: 每个 idea 含 hands_on_ref / acceptance_ref，且至少一条 hands_on_components 被覆盖

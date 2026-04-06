@@ -1,5 +1,6 @@
 """
-Tests for course_factory external research integration (Tavily + merge).
+Tests for course_factory external research integration (Tavily + merge)
+and {{KEY}} shortcode expansion.
 
 Covers:
 - should_research_knode() heuristic classification
@@ -7,6 +8,8 @@ Covers:
 - merge_resources_into_plan() markdown injection locations
 - make_course_content(research=...) end-to-end integration
 - research_knode() with mocked Tavily client
+- expand_resource_shortcodes() shortcode → Markdown link replacement
+- EXTERNAL_RESOURCE_URLS registry consistency
 """
 
 from __future__ import annotations
@@ -476,3 +479,105 @@ class TestResearchKnodeMocked:
         with patch.object(tavily_mod, "TavilyClient", return_value=fake_client):
             with pytest.raises(RuntimeError, match="Tavily 搜索失败"):
                 cf.research_knode(_engineering_knode(), api_key="fake-key")
+
+
+# ─── expand_resource_shortcodes ─────────────────────────────────────────────
+
+
+class TestExpandResourceShortcodes:
+    """Tests for {{KEY}} shortcode expansion."""
+
+    def test_basic_replacement(self):
+        """已注册的 shortcode 被替换为 [title](url) 链接。"""
+        text = "来自 {{AI4Mars}} 数据集"
+        result = cf.expand_resource_shortcodes(text)
+        assert "{{" not in result
+        assert "[AI4Mars]" in result
+        assert "data.nasa.gov" in result
+
+    def test_case_insensitive(self):
+        """KEY 不区分大小写。"""
+        for variant in ("{{ai4mars}}", "{{AI4MARS}}", "{{Ai4Mars}}"):
+            result = cf.expand_resource_shortcodes(variant)
+            assert "[AI4Mars]" in result
+
+    def test_multiple_shortcodes(self):
+        """一段文本中多个不同 shortcode 全部替换。"""
+        text = "从 {{curiosity_raw}} 和 {{perseverance_raw}} 下载"
+        result = cf.expand_resource_shortcodes(text)
+        assert "{{" not in result
+        assert "mars.nasa.gov/msl" in result
+        assert "mars.nasa.gov/mars2020" in result
+
+    def test_unregistered_key_preserved(self):
+        """未注册的 shortcode 保持原样不变。"""
+        text = "参考 {{nonexistent_resource}} 的数据"
+        result = cf.expand_resource_shortcodes(text)
+        assert "{{nonexistent_resource}}" in result
+
+    def test_mixed_registered_and_unregistered(self):
+        """注册和未注册 shortcode 混合时各自正确处理。"""
+        text = "{{AI4Mars}} 和 {{unknown_key}}"
+        result = cf.expand_resource_shortcodes(text)
+        assert "[AI4Mars]" in result
+        assert "{{unknown_key}}" in result
+
+    def test_no_shortcodes(self):
+        """无 shortcode 的文本原样返回。"""
+        text = "这段文字没有任何 shortcode"
+        result = cf.expand_resource_shortcodes(text)
+        assert result == text
+
+    def test_empty_string(self):
+        """空字符串处理。"""
+        assert cf.expand_resource_shortcodes("") == ""
+
+    def test_all_registered_keys(self):
+        """注册表中每个 key 都能正��替换。"""
+        for key, entry in cf.EXTERNAL_RESOURCE_URLS.items():
+            text = f"{{{{{key}}}}}"
+            result = cf.expand_resource_shortcodes(text)
+            assert entry["title"] in result, f"key={key} title not found"
+            assert entry["url"] in result, f"key={key} url not found"
+
+    def test_duplicate_shortcode(self):
+        """同一 shortcode 出现多次时全部替换���"""
+        text = "{{AI4Mars}} 第一处，{{AI4Mars}} 第二处"
+        result = cf.expand_resource_shortcodes(text)
+        assert result.count("[AI4Mars]") == 2
+        assert "{{" not in result
+
+    def test_output_is_valid_markdown_link(self):
+        """替换结果是合法的 Markdown 链接格式 [title](url)。"""
+        import re
+        result = cf.expand_resource_shortcodes("{{hirise}}")
+        md_link_pattern = re.compile(r"\[.+?\]\(https?://.+?\)")
+        assert md_link_pattern.search(result), f"不是合法 Markdown 链接: {result}"
+
+
+class TestExternalResourceUrlsRegistry:
+    """Verify EXTERNAL_RESOURCE_URLS registry integrity."""
+
+    def test_all_entries_have_title_and_url(self):
+        """每条注册项必须有 title 和 url 字段。"""
+        for key, entry in cf.EXTERNAL_RESOURCE_URLS.items():
+            assert "title" in entry, f"key={key} missing title"
+            assert "url" in entry, f"key={key} missing url"
+            assert entry["title"].strip(), f"key={key} has empty title"
+            assert entry["url"].startswith("https://"), f"key={key} url not https"
+
+    def test_keys_are_lowercase(self):
+        """注册表的 key 全部是小写（匹配时转小写，key 本身也应一致）。"""
+        for key in cf.EXTERNAL_RESOURCE_URLS:
+            assert key == key.lower(), f"key={key} should be lowercase"
+
+    def test_no_duplicate_urls(self):
+        """不同 key 不应指向完全相同的 URL（curiosity_raw 和 curiosity_navcam 除外）。"""
+        urls = {}
+        # 允许 curiosity_raw 和 curiosity_navcam 共享 URL
+        allowed_duplicates = {"curiosity_raw", "curiosity_navcam"}
+        for key, entry in cf.EXTERNAL_RESOURCE_URLS.items():
+            url = entry["url"]
+            if url in urls and key not in allowed_duplicates and urls[url] not in allowed_duplicates:
+                pytest.fail(f"Duplicate URL: {key} and {urls[url]} -> {url}")
+            urls[url] = key

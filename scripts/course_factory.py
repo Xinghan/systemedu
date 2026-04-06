@@ -24,6 +24,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import sys
 import textwrap
 from datetime import datetime
@@ -64,6 +65,19 @@ VISUAL_DESIGN_LANGUAGE = """
 - **标题**：顶部居中，`bold 16px`，`rgba(255,255,255,0.9)`
 - **网格线**：`rgba(255,255,255,0.03)`，40px间距
 - **DPR 感知**：必须实现 `Math.min(window.devicePixelRatio||1, 2)` 缩放
+- **等比缩放（禁止非等比拉伸）**：动画必须在固定的 W×H 逻辑坐标系
+  （如 600×420）中作画，`resize()` 采用 letterbox 策略：
+  `scale = Math.min(rectW/W, rectH/H)`，然后 `ctx.setTransform(
+  DPR*scale, 0, 0, DPR*scale, DPR*offsetX, DPR*offsetY)`（offset 居中）。
+  **严禁**使用 `ctx.scale(rectW/W, rectH/H)` 这种**非等比**缩放，会导致
+  字体和图形在宽高比变化时被拉宽/压扁。
+- **Resize 健壮性**：动画 HTML 会被 iframe 嵌入并在前端动态调整大小。
+  `resize()` 函数必须（1）重分配 canvas backing store 后**立即调用一次**
+  `drawCurrent()`/等价重绘函数；（2）同时挂接 `window.resize` 事件和
+  `ResizeObserver(canvas.parentElement)`，因为 iframe 内的 window 对
+  父页面 resize 不敏感。course_factory 会在写入数据库前调用
+  `inject_animation_resize_patch()` 自动补丁，但 LLM 生成的原始 HTML
+  也应该尽量在源头就写对，避免依赖补丁。
 
 ### 动画物理性原则
 - 所有运动量必须来自数学/物理公式，禁止关键帧插值
@@ -460,19 +474,37 @@ var TITLE = {json.dumps(title, ensure_ascii=False)};
 {params_js}
 
 /* ── canvas setup ── */
+/* 采用等比缩放 + 居中偏移（letterbox），保证字体和图形不被非等比拉伸。
+   所有 js_body 代码以 W×H 逻辑坐标系作画，实际显示时 canvas 按
+   min(rectW/W, rectH/H) 等比缩放，多余空间留黑。*/
 var canvas = document.getElementById("c");
 var ctx = canvas.getContext("2d");
 var W = 600, H = 420;
 var DPR = Math.min(window.devicePixelRatio||1, 2);
 function resize(){{
   var rect = canvas.getBoundingClientRect();
+  if (rect.width < 1 || rect.height < 1) return;
   canvas.width = rect.width * DPR;
   canvas.height = rect.height * DPR;
-  ctx.setTransform(1,0,0,1,0,0);
-  ctx.scale(DPR * rect.width / W, DPR * rect.height / H);
+  var scale = Math.min(rect.width / W, rect.height / H);
+  var drawW = W * scale;
+  var drawH = H * scale;
+  var offsetX = (rect.width - drawW) / 2;
+  var offsetY = (rect.height - drawH) / 2;
+  ctx.setTransform(DPR*scale, 0, 0, DPR*scale, DPR*offsetX, DPR*offsetY);
 }}
 resize();
-window.addEventListener("resize", resize);
+window.addEventListener("resize", function(){{ resize(); if(typeof drawCurrent==="function") drawCurrent(); }});
+/* iframe 容器 resize 不会触发 window.resize；用 ResizeObserver 兜底。
+   具体防反馈循环由 inject_animation_resize_patch() 注入的补丁负责。*/
+if (typeof ResizeObserver !== "undefined" && canvas.parentElement) {{
+  try {{
+    new ResizeObserver(function(){{
+      resize();
+      if (typeof drawCurrent === "function") drawCurrent();
+    }}).observe(canvas.parentElement);
+  }} catch (e) {{}}
+}}
 
 /* ── color ── */
 var COLOR = {json.dumps(color_main)};
@@ -525,6 +557,475 @@ function drawHUD(cols){{
 
 /* ── main ── */
 {js_body}
+
+}})();
+</script>
+</body>
+</html>"""
+
+
+# ── make_spec_html: 严格遵循 COURSE_FACTORY.md 规范的 HTML 生成 ───
+# ares_mission palette + Space Grotesk + 0px radius + i18n + guide-panel
+# + glassmorphism + ambient glow + flex column 布局
+
+def make_spec_html(
+    title: str,
+    js_body: str,
+    mode: str = "animation",  # "animation" | "game"
+    style_key: str = "ares_mission",
+    i18n: dict | None = None,
+    guide_html: str = "",
+    params_js: str = "",
+) -> str:
+    """
+    生成严格遵循 COURSE_FACTORY.md 规范的 Canvas HTML。
+
+    与 make_canvas_html() 的区别：
+    - ares_mission 调色板 (bg:#131313, primary:#ffb59c, tertiary:#00daf3)
+    - 0px border-radius 全局
+    - Space Grotesk + Inter + Noto Sans SC (Google Fonts CDN)
+    - i18n 双语 (I18N object + t(key) + CN/EN 切换按钮)
+    - guide-panel 为 HTML DOM div + 玻璃态 CSS
+    - flex column 布局 (wrapper + canvas flex:1)
+    - ambient glow (ctx.shadowColor/shadowBlur)
+    - 渐变填充
+    - animation: 共享元素过渡 (getFrameElements + transitionTo + lerp)
+    """
+    # 从 STYLE_KITS 加载调色板（如果可用），否则使用 ares_mission 默认值
+    palette = {
+        "bg": "#131313",
+        "surface": "rgba(28,27,27,0.92)",
+        "surface_high": "#353534",
+        "primary": "#ffb59c",
+        "primary_container": "#ff7f50",
+        "secondary": "#c6c6c6",
+        "tertiary": "#00daf3",
+        "signal": "#ff5f1f",
+        "success": "#10b981",
+        "text": "#e5e2e1",
+        "muted": "#8a8886",
+        "outline_variant": "rgba(138,136,134,0.15)",
+    }
+    try:
+        from systemedu.agents.builtin.media_art_direction import STYLE_KITS
+        if style_key in STYLE_KITS:
+            palette = STYLE_KITS[style_key]["palette"]
+    except Exception:
+        pass
+
+    # rgba(...) 值转 hex，使 JS 中 P.xxx + "AA" 拼接可用
+    import re
+    _rgba_re = re.compile(r"rgba?\((\d+)\s*,\s*(\d+)\s*,\s*(\d+)(?:\s*,\s*[\d.]+)?\)")
+    for _pk, _pv in list(palette.items()):
+        m = _rgba_re.match(str(_pv))
+        if m:
+            palette[_pk] = "#{:02x}{:02x}{:02x}".format(
+                int(m.group(1)), int(m.group(2)), int(m.group(3))
+            )
+
+    pal_js = json.dumps(palette, ensure_ascii=False)
+    i18n_js = json.dumps(i18n or {}, ensure_ascii=False)
+
+    # guide-panel 折叠内容
+    guide_section = ""
+    if guide_html:
+        guide_section = f"""<div class="guide-panel" id="guidePanel">
+    <h3 id="guideHeader"><span id="guideTitle"></span> <span class="toggle" id="guideToggle">[-]</span></h3>
+    <div class="guide-content" id="guideContent">{guide_html}</div>
+  </div>"""
+
+    # animation mode 额外的控制栏 + HUD
+    controls_html = ""
+    hud_html = ""
+    if mode == "animation":
+        controls_html = """<div class="controls" id="controls">
+      <button id="btnPrev"></button>
+      <button id="btnPlay"></button>
+      <button id="btnNext"></button>
+      <span class="frame-indicator" id="frameIndicator"></span>
+    </div>"""
+        hud_html = '<div class="hud" id="hud"></div>'
+
+    # game mode 额外的反馈面板
+    feedback_html = ""
+    if mode == "game":
+        feedback_html = '<div class="feedback-panel" id="feedback"></div>'
+
+    # animation mode 额外的 JS (lerp/easeInOut/merge/transitionTo/drawElement/drawFrame)
+    anim_transition_js = ""
+    if mode == "animation":
+        anim_transition_js = """
+/* ── shared element transition engine ── */
+function lerp(a,b,p){return a+(b-a)*p;}
+function easeInOut(x){return x<0.5?2*x*x:1-Math.pow(-2*x+2,2)/2;}
+function merge(base,ov){var r={};for(var k in base)r[k]=base[k];for(var k2 in ov)r[k2]=ov[k2];return r;}
+
+function drawElement(el){
+  if(!el||el.alpha<=0.01)return;
+  ctx.save();
+  ctx.globalAlpha=el.alpha;
+  switch(el.type){
+    case 'photo':drawPhotoBoxPrimitive(el);break;
+    case 'label':drawLabelPrimitive(el);break;
+    case 'text':drawTextPrimitive(el);break;
+    case 'arrow':drawArrowPrimitive(el);break;
+    case 'box':drawBoxPrimitive(el);break;
+    case 'custom':if(el.draw)el.draw(el.alpha);break;
+  }
+  ctx.restore();
+}
+function drawPhotoBoxPrimitive(el){
+  ctx.fillStyle=P.surface_high;
+  ctx.fillRect(el.x,el.y,el.w,el.h);
+  ctx.strokeStyle=P.outline_variant;ctx.lineWidth=1;
+  ctx.strokeRect(el.x,el.y,el.w,el.h);
+}
+function drawLabelPrimitive(el){
+  ctx.font=(el.bold?'bold ':'')+(el.size||14)+"px 'Space Grotesk','Inter',sans-serif";
+  ctx.textAlign=el.align||'left';ctx.textBaseline=el.baseline||'top';
+  if(el.glow){ctx.shadowColor=el.glowColor||P.primary;ctx.shadowBlur=el.glow;}
+  ctx.fillStyle=el.color||P.text;
+  ctx.fillText(typeof el.text==='function'?el.text():el.text,el.x,el.y);
+  ctx.shadowBlur=0;
+}
+function drawTextPrimitive(el){
+  ctx.font=(el.size||13)+"px 'Noto Sans SC','Inter',sans-serif";
+  ctx.textAlign=el.align||'left';ctx.textBaseline=el.baseline||'top';
+  ctx.fillStyle=el.color||P.text;
+  var lines=(typeof el.text==='function'?el.text():el.text).split('\\n');
+  var lh=el.lineHeight||(el.size||13)*1.5;
+  lines.forEach(function(ln,i){ctx.fillText(ln,el.x,el.y+i*lh);});
+}
+function drawArrowPrimitive(el){
+  ctx.strokeStyle=el.color||P.tertiary;ctx.lineWidth=el.lineWidth||2;
+  if(el.glow){ctx.shadowColor=el.color||P.tertiary;ctx.shadowBlur=el.glow;}
+  ctx.beginPath();ctx.moveTo(el.x1,el.y1);ctx.lineTo(el.x2,el.y2);ctx.stroke();
+  var ang=Math.atan2(el.y2-el.y1,el.x2-el.x1);var hl=8;
+  ctx.beginPath();
+  ctx.moveTo(el.x2,el.y2);
+  ctx.lineTo(el.x2-hl*Math.cos(ang-0.4),el.y2-hl*Math.sin(ang-0.4));
+  ctx.moveTo(el.x2,el.y2);
+  ctx.lineTo(el.x2-hl*Math.cos(ang+0.4),el.y2-hl*Math.sin(ang+0.4));
+  ctx.stroke();ctx.shadowBlur=0;
+}
+function drawBoxPrimitive(el){
+  if(el.fill){
+    ctx.fillStyle=el.fill;
+    if(el.glow){ctx.shadowColor=el.glowColor||el.fill;ctx.shadowBlur=el.glow;}
+    ctx.fillRect(el.x,el.y,el.w,el.h);ctx.shadowBlur=0;
+  }
+  if(el.borderColor){
+    ctx.strokeStyle=el.borderColor;ctx.lineWidth=el.borderWidth||1;
+    ctx.strokeRect(el.x,el.y,el.w,el.h);
+  }
+}
+
+var transitioning=false;
+function transitionTo(newFrame){
+  if(newFrame<0)newFrame=0;
+  if(typeof totalFrames!=='undefined'&&newFrame>=totalFrames)newFrame=totalFrames-1;
+  if(newFrame===currentFrame&&!transitioning){drawFrame(currentFrame);updateHUD(currentFrame);return;}
+  if(transitioning)return;
+  var oldElems=getFrameElements(currentFrame);
+  var newElems=getFrameElements(newFrame);
+  var oldMap={};oldElems.forEach(function(e){oldMap[e.id]=e;});
+  var newMap={};newElems.forEach(function(e){newMap[e.id]=e;});
+  currentFrame=newFrame;
+  updateHUD(newFrame);
+  transitioning=true;
+  var startTime=null,duration=500;
+  function step(ts){
+    if(!startTime)startTime=ts;
+    var raw=Math.min((ts-startTime)/duration,1);
+    var p=easeInOut(raw);
+    drawBg();
+    oldElems.forEach(function(oe){
+      if(!newMap[oe.id])drawElement(merge(oe,{alpha:1-p}));
+    });
+    newElems.forEach(function(ne){
+      var oe=oldMap[ne.id];
+      if(oe){
+        var merged=merge(ne,{
+          x:lerp(oe.x||0,ne.x||0,p),y:lerp(oe.y||0,ne.y||0,p),
+          w:lerp(oe.w||0,ne.w||0,p),h:lerp(oe.h||0,ne.h||0,p),alpha:1
+        });
+        if(ne.type==='arrow'&&oe.type==='arrow'){
+          merged.x1=lerp(oe.x1,ne.x1,p);merged.y1=lerp(oe.y1,ne.y1,p);
+          merged.x2=lerp(oe.x2,ne.x2,p);merged.y2=lerp(oe.y2,ne.y2,p);
+        }
+        if((ne.type==='label'||ne.type==='text')&&oe.text!==ne.text){
+          drawElement(merge(oe,{alpha:1-p}));drawElement(merge(ne,{alpha:p}));
+        }else{drawElement(merged);}
+      }else{drawElement(merge(ne,{alpha:p}));}
+    });
+    if(raw<1){requestAnimationFrame(step);}else{transitioning=false;}
+  }
+  requestAnimationFrame(step);
+}
+function drawFrame(f){
+  drawBg();
+  var elems=getFrameElements(f);
+  elems.forEach(function(el){drawElement(el);});
+}
+
+/* ── animation controls binding ── */
+var currentFrame=0;
+var playing=false;var playTimer=null;
+function updateControlsText(){
+  var bp=document.getElementById('btnPlay');
+  var bi=document.getElementById('frameIndicator');
+  if(bp)bp.textContent=playing?t('btnPause'):t('btnPlay');
+  if(bi&&typeof totalFrames!=='undefined')bi.textContent=(currentFrame+1)+' / '+totalFrames;
+}
+function updateHUD(f){updateControlsText();}
+document.getElementById('btnPrev').addEventListener('click',function(){
+  if(playing){playing=false;clearInterval(playTimer);}
+  transitionTo(currentFrame-1);
+});
+document.getElementById('btnNext').addEventListener('click',function(){
+  if(playing){playing=false;clearInterval(playTimer);}
+  transitionTo(currentFrame+1);
+});
+document.getElementById('btnPlay').addEventListener('click',function(){
+  playing=!playing;
+  if(playing){
+    playTimer=setInterval(function(){
+      if(typeof totalFrames!=='undefined'&&currentFrame>=totalFrames-1){
+        playing=false;clearInterval(playTimer);updateControlsText();return;
+      }
+      transitionTo(currentFrame+1);
+    },3000);
+  }else{clearInterval(playTimer);}
+  updateControlsText();
+});
+"""
+
+    return f"""<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;700&family=Inter:wght@400;500&family=Noto+Sans+SC:wght@400;700&display=swap" rel="stylesheet">
+<style>
+*{{box-sizing:border-box;margin:0;padding:0;border-radius:0}}
+html,body{{width:100%;height:100vh;overflow:hidden;
+  background:{palette['bg']};
+  font-family:'Space Grotesk','Inter','Noto Sans SC',sans-serif;
+  color:{palette['text']};
+}}
+.lang-btn{{
+  position:fixed;top:8px;left:8px;z-index:100;
+  font-family:'Space Grotesk',sans-serif;font-size:11px;font-weight:700;
+  padding:4px 10px;cursor:pointer;
+  border:1px solid rgba(255,255,255,0.08);
+  background:rgba(20,20,35,0.85);backdrop-filter:blur(12px);
+  color:{palette['primary']};letter-spacing:1px;
+}}
+.guide-panel{{
+  position:fixed;top:8px;right:8px;width:260px;max-height:40vh;
+  overflow-y:auto;z-index:100;
+  background:rgba(20,20,35,0.85);backdrop-filter:blur(12px);
+  border:1px solid rgba(255,255,255,0.08);padding:12px;
+  font-family:'Noto Sans SC',sans-serif;font-size:13px;
+  color:rgba(255,255,255,0.85);
+}}
+.guide-panel h3{{
+  font-family:'Space Grotesk',sans-serif;font-size:14px;
+  margin-bottom:8px;display:flex;align-items:center;
+  justify-content:space-between;cursor:pointer;
+  color:{palette['primary']};
+}}
+.guide-panel .toggle{{font-size:12px;opacity:0.6;}}
+.guide-panel ul{{padding-left:16px;line-height:1.6;}}
+.guide-panel .guide-content.collapsed{{display:none;}}
+.wrapper{{display:flex;flex-direction:column;height:100vh;}}
+.canvas-wrap{{flex:1;min-height:0;position:relative;}}
+.canvas-wrap canvas{{display:block;width:100%;height:100%;position:absolute;top:0;left:0;}}
+.controls{{
+  display:flex;align-items:center;gap:8px;
+  padding:6px 12px;
+  background:{palette['surface']};
+  border-top:1px solid {palette['outline_variant']};
+}}
+.controls button{{
+  font-family:'Space Grotesk',sans-serif;font-size:12px;font-weight:700;
+  padding:4px 14px;cursor:pointer;letter-spacing:1px;
+  border:1px solid {palette['outline_variant']};
+  background:transparent;color:{palette['primary']};
+}}
+.controls button:hover{{background:{palette['surface_high']};}}
+.controls .frame-indicator{{
+  font-family:'Space Grotesk',sans-serif;font-size:12px;
+  color:{palette['muted']};margin-left:auto;
+}}
+.hud{{
+  display:flex;align-items:center;justify-content:space-around;
+  height:52px;
+  background:rgba(0,0,0,0.55);
+  border-top:1px solid rgba(255,255,255,0.06);
+}}
+.hud .hud-col{{text-align:center;}}
+.hud .hud-label{{
+  font-family:'Space Grotesk',sans-serif;font-size:10px;
+  color:{palette['muted']};letter-spacing:1px;text-transform:uppercase;
+}}
+.hud .hud-val{{
+  font-family:'Space Grotesk',sans-serif;font-size:14px;font-weight:700;
+  color:{palette['text']};
+}}
+.feedback-panel{{
+  padding:8px 12px;
+  background:{palette['surface']};
+  border-top:1px solid {palette['outline_variant']};
+  font-family:'Noto Sans SC',sans-serif;font-size:13px;
+  min-height:36px;
+}}
+</style>
+</head>
+<body>
+<button class="lang-btn" id="langBtn">CN</button>
+{guide_section}
+<div class="wrapper">
+  <div class="canvas-wrap">
+    <canvas id="c"></canvas>
+  </div>
+  {controls_html}
+  {hud_html}
+  {feedback_html}
+</div>
+<script>
+(function(){{
+"use strict";
+
+/* ── palette ── */
+var P = {pal_js};
+
+/* ── i18n ── */
+var LANG = 'cn';
+var I18N = {i18n_js};
+function t(key){{return(I18N[key]&&I18N[key][LANG])||(I18N[key]&&I18N[key]['en'])||key;}}
+function refreshI18N(){{
+  document.getElementById('langBtn').textContent=LANG.toUpperCase();
+  /* guide panel title */
+  var gt=document.getElementById('guideTitle');
+  if(gt)gt.textContent=t('guideTitle');
+  /* animation controls */
+  var bp=document.getElementById('btnPrev');
+  var bpl=document.getElementById('btnPlay');
+  var bn=document.getElementById('btnNext');
+  if(bp)bp.textContent=t('btnPrev');
+  if(bpl)bpl.textContent=playing?t('btnPause'):t('btnPlay');
+  if(bn)bn.textContent=t('btnNext');
+  /* redraw canvas */
+  if(typeof drawCurrent==='function')drawCurrent();
+  if(typeof onLangChange==='function')onLangChange();
+}}
+document.getElementById('langBtn').addEventListener('click',function(){{
+  LANG=LANG==='en'?'cn':'en';
+  refreshI18N();
+}});
+
+/* ── params ── */
+var TITLE = {json.dumps(title, ensure_ascii=False)};
+{params_js}
+
+/* ── canvas setup ── */
+var canvas = document.getElementById("c");
+var ctx = canvas.getContext("2d");
+var W = 600, H = 420;
+var DPR = Math.min(window.devicePixelRatio||1, 2);
+function resize(){{
+  var rect = canvas.getBoundingClientRect();
+  if (rect.width < 1 || rect.height < 1) return;
+  canvas.width = rect.width * DPR;
+  canvas.height = rect.height * DPR;
+  var scale = Math.min(rect.width / W, rect.height / H);
+  var drawW = W * scale;
+  var drawH = H * scale;
+  var offsetX = (rect.width - drawW) / 2;
+  var offsetY = (rect.height - drawH) / 2;
+  ctx.setTransform(DPR*scale, 0, 0, DPR*scale, DPR*offsetX, DPR*offsetY);
+}}
+resize();
+window.addEventListener("resize", function(){{ resize(); if(typeof drawCurrent==="function") drawCurrent(); }});
+if (typeof ResizeObserver !== "undefined" && canvas.parentElement) {{
+  try {{
+    new ResizeObserver(function(){{
+      resize();
+      if (typeof drawCurrent === "function") drawCurrent();
+    }}).observe(canvas.parentElement);
+  }} catch (e) {{}}
+}}
+
+/* ── color helpers ── */
+function hex2rgb(h){{
+  h=h.replace("#","");
+  if(h.length===3)h=h[0]+h[0]+h[1]+h[1]+h[2]+h[2];
+  return[parseInt(h.slice(0,2),16),parseInt(h.slice(2,4),16),parseInt(h.slice(4,6),16)];
+}}
+var COLOR = P.primary;
+var RGB = hex2rgb(COLOR);
+var C = "rgb("+RGB[0]+","+RGB[1]+","+RGB[2]+")";
+var CA = function(a){{return"rgba("+RGB[0]+","+RGB[1]+","+RGB[2]+","+a+")"}};
+
+/* ── drawing utils ── */
+function drawBg(){{
+  /* Martian Crust radial gradient */
+  var g=ctx.createRadialGradient(W/2,H/2,0,W/2,H/2,Math.max(W,H)*0.7);
+  g.addColorStop(0,"#1c1b1b");g.addColorStop(1,P.bg);
+  ctx.fillStyle=g;ctx.fillRect(0,0,W,H);
+  /* wireframe grid */
+  ctx.strokeStyle="rgba(0,218,243,0.06)";ctx.lineWidth=1;
+  for(var x=0;x<=W;x+=20){{ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,H);ctx.stroke();}}
+  for(var y=0;y<=H;y+=20){{ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke();}}
+}}
+function drawTitle(){{
+  ctx.font="bold 16px 'Space Grotesk','Inter',sans-serif";
+  ctx.textAlign="center";ctx.fillStyle=P.text;
+  ctx.shadowColor=P.primary;ctx.shadowBlur=8;
+  ctx.fillText(t('title')||TITLE,W/2,28);
+  ctx.shadowBlur=0;
+}}
+function drawHUD(cols){{
+  var hud=document.getElementById('hud');
+  if(!hud)return;
+  hud.innerHTML='';
+  cols.forEach(function(c){{
+    var d=document.createElement('div');d.className='hud-col';
+    d.innerHTML='<div class="hud-label">'+c.label+'</div><div class="hud-val">'+c.val+'</div>';
+    hud.appendChild(d);
+  }});
+}}
+/* ambient glow helper */
+function withGlow(color,blur,fn){{
+  ctx.save();ctx.shadowColor=color;ctx.shadowBlur=blur||12;
+  fn();ctx.shadowBlur=0;ctx.restore();
+}}
+
+{anim_transition_js}
+
+/* ── guide panel toggle ── */
+(function(){{
+  var tog=document.getElementById('guideToggle');
+  var gc=document.getElementById('guideContent');
+  if(tog&&gc){{
+    document.getElementById('guideHeader').addEventListener('click',function(){{
+      var collapsed=gc.classList.toggle('collapsed');
+      tog.textContent=collapsed?'[+]':'[-]';
+    }});
+  }}
+}})();
+
+/* ── main (js_body) ── */
+{js_body}
+
+/* ── init ── */
+refreshI18N();
+setTimeout(function(){{resize();if(typeof drawCurrent==='function')drawCurrent();}},200);
+setTimeout(function(){{resize();if(typeof drawCurrent==='function')drawCurrent();}},600);
+if(document.fonts&&document.fonts.ready){{
+  document.fonts.ready.then(function(){{resize();if(typeof drawCurrent==='function')drawCurrent();}});
+}}
 
 }})();
 </script>
@@ -663,6 +1164,62 @@ def preflight_v41(knode: dict, course_content: dict) -> list[str]:
         )
 
     return errors
+
+
+# ── 项目级外部资源 URL 注册表 ──────────────────────────────
+# plan_markdown 中使用 {{KEY}} shortcode 引用，make_course_content() 入口自动替换
+# 为完整的 Markdown 链接 [显示文字](url)。
+# KEY 不区分大小写，匹配时统一转小写。
+EXTERNAL_RESOURCE_URLS: dict[str, dict[str, str]] = {
+    "ai4mars": {
+        "title": "AI4Mars",
+        "url": "https://data.nasa.gov/dataset/ai4mars-a-dataset-for-terrain-aware-autonomous-driving-on-mars",
+    },
+    "ai4mars_paper": {
+        "title": "AI4Mars 论文 (CVPR 2021)",
+        "url": "https://openaccess.thecvf.com/content/CVPR2021W/AI4Space/papers/Swan_AI4MARS_A_Dataset_for_Terrain-Aware_Autonomous_Driving_on_Mars_CVPRW_2021_paper.pdf",
+    },
+    "curiosity_raw": {
+        "title": "Curiosity 原始图像库",
+        "url": "https://mars.nasa.gov/msl/multimedia/raw-images/",
+    },
+    "perseverance_raw": {
+        "title": "Perseverance 原始图像库",
+        "url": "https://mars.nasa.gov/mars2020/multimedia/raw-images/",
+    },
+    "curiosity_navcam": {
+        "title": "Curiosity Navcam",
+        "url": "https://mars.nasa.gov/msl/multimedia/raw-images/",
+    },
+    "mastcamz": {
+        "title": "Perseverance Mastcam-Z",
+        "url": "https://mastcamz.asu.edu/",
+    },
+    "hirise": {
+        "title": "HiRISE",
+        "url": "https://hirise.lpl.arizona.edu/",
+    },
+    "pds_imaging": {
+        "title": "NASA PDS Imaging Node",
+        "url": "https://pds-imaging.jpl.nasa.gov/",
+    },
+}
+
+_SHORTCODE_RE = re.compile(r"\{\{(\w+)\}\}")
+
+
+def expand_resource_shortcodes(text: str) -> str:
+    """
+    将 plan_markdown 中的 {{KEY}} shortcode 替换为 [title](url) Markdown 链接。
+    KEY 不区分大小写。未匹配的 shortcode 保持原样不变。
+    """
+    def _replace(m: re.Match) -> str:
+        key = m.group(1).lower()
+        entry = EXTERNAL_RESOURCE_URLS.get(key)
+        if entry:
+            return f"[{entry['title']}]({entry['url']})"
+        return m.group(0)  # 未注册的 key，原样保留
+    return _SHORTCODE_RE.sub(_replace, text)
 
 
 # ── 外部资料研究（Tavily Search 集成）───────────────────────────
@@ -994,6 +1551,405 @@ def merge_resources_into_plan(plan_markdown: str, research: dict | None) -> str:
     return text
 
 
+def inject_idea_markers(
+    plan_markdown: str,
+    anim_id: str | None = None,
+    ex_id: str | None = None,
+    story_id: str | None = None,
+    game_id: str | None = None,
+) -> str:
+    """
+    在 plan_markdown 中插入 [[IDEA:<id>]] 标记，让前端能在正确位置渲染
+    动画 / 游戏 / 练习题 / 故事段落。
+
+    插入策略（按二级标题锚点）：
+    - story_id  → 插入到 "## 引入" 标题后（情境导入）
+    - anim_id   → 插入到 "## 深入理解" 标题后；找不到则插到 "## 核心概念" 后
+    - game_id   → 插入到 "## 动手探索" 或 "## 应用与拓展" 之前；找不到则插到
+                  anim_id 之后的位置，或 "## 深入理解" 最末
+    - ex_id     → 插入到 "## 应用与拓展" 标题后；找不到则追加到末尾
+
+    已存在的相同标记不会重复插入（通过子串检查）。
+    """
+    if not plan_markdown:
+        return plan_markdown
+
+    text = plan_markdown
+
+    def _insert_after_heading(doc: str, heading_candidates: list[str], marker: str) -> tuple[str, bool]:
+        """
+        在首个匹配的二级标题所在行之后插入 marker（独占一段）。
+        返回 (新文档, 是否成功插入)。
+        """
+        if marker in doc:
+            return doc, True  # 已存在，视为成功
+        for anchor in heading_candidates:
+            idx = doc.find(anchor)
+            if idx < 0:
+                continue
+            # 找到该行的行尾（下一个 \n）
+            line_end = doc.find("\n", idx)
+            if line_end < 0:
+                line_end = len(doc)
+            # 在行尾后插入独立段落
+            new_doc = (
+                doc[: line_end + 1]
+                + "\n"
+                + marker
+                + "\n"
+                + doc[line_end + 1 :]
+            )
+            return new_doc, True
+        return doc, False
+
+    # 1. story_id → 引入段
+    if story_id:
+        marker = f"[[IDEA:{story_id}]]"
+        text, _ = _insert_after_heading(text, ["## 引入"], marker)
+
+    # 2. anim_id → 深入理解 / 核心概念
+    if anim_id:
+        marker = f"[[IDEA:{anim_id}]]"
+        text, ok = _insert_after_heading(
+            text, ["## 深入理解", "## 核心概念"], marker
+        )
+        if not ok:
+            # 完全找不到锚点，追加到末尾
+            text = text.rstrip() + "\n\n" + marker + "\n"
+
+    # 3. game_id → 动手探索 / 互动实验 / 应用与拓展 前
+    #    策略：优先放到 "## 动手探索" 之后；其次 "## 应用与拓展" 之前
+    #    如果都找不到，则插在 "## 深入理解" 段的末尾（即 anim 下方）
+    if game_id:
+        marker = f"[[IDEA:{game_id}]]"
+        if marker not in text:
+            # 优先尝试独立章节
+            text2, ok = _insert_after_heading(
+                text,
+                ["## 动手探索", "## 互动实验", "## 动手练习"],
+                marker,
+            )
+            if ok:
+                text = text2
+            else:
+                # 尝试插入到 "## 应用与拓展" 之前（作为独立段）
+                app_idx = text.find("## 应用与拓展")
+                if app_idx >= 0:
+                    text = (
+                        text[:app_idx]
+                        + marker
+                        + "\n\n"
+                        + text[app_idx:]
+                    )
+                else:
+                    # fallback：追加到末尾（在 exercise 之前会再被追加）
+                    text = text.rstrip() + "\n\n" + marker + "\n"
+
+    # 4. ex_id → 应用与拓展 / 末尾
+    if ex_id:
+        marker = f"[[IDEA:{ex_id}]]"
+        text, ok = _insert_after_heading(
+            text, ["## 应用与拓展", "## 课堂任务", "## 练习"], marker
+        )
+        if not ok:
+            # fallback：追加到末尾（在延伸阅读之前会更合适，但末尾也可接受）
+            text = text.rstrip() + "\n\n" + marker + "\n"
+
+    return text
+
+
+# ── 动画 HTML resize 补丁 ─────────────────────────────────────
+#
+# 修复 iframe 嵌入时 canvas 动画的两个顽疾：
+#  1. 父容器 resize 后 canvas 留空白：典型的 Canvas2D 动画 `resize()`
+#     函数只重分配 backing store（等价于清空 canvas），但没有重绘。
+#  2. iframe 内的 `window.addEventListener('resize', ...)` 不会被父
+#     页面对 iframe 尺寸变化触发，必须使用 ResizeObserver。
+#
+# 防反馈循环：
+#  - canvas 常见 CSS `width:100%;height:100%` 在原 resize() 里会被
+#    覆盖成固定像素（`canvas.style.width = W+"px"`），由于 flex item
+#    默认 `min-height:auto`，canvas 会撑大父容器，ResizeObserver 再
+#    次回调，形成正反馈。
+#  - 补丁注入 CSS 让 canvas `position:absolute` 脱离文档流，父容器
+#    强制 `min-height:0; overflow:hidden`。
+#  - ResizeObserver 使用 `entry.contentRect`（不受子元素反馈污染）。
+#
+# 这段 JS 在真实环境（playwright + iframe 动态 resize 900x560 → 600x400）
+# 中验证过：resize 前后 canvas 稳定渲染，非背景像素 42.5% → 47%。
+ANIMATION_RESIZE_PATCH_JS = r"""
+(function () {
+  if (window.__systemedu_resize_patched) return;
+  window.__systemedu_resize_patched = true;
+
+  const canvas =
+    document.querySelector('canvas#c') ||
+    document.querySelector('canvas');
+  if (!canvas || !canvas.parentElement) return;
+  const container = canvas.parentElement;
+
+  // 注入防撑大 CSS：canvas 脱离流，父容器约束高度
+  // 同时把浮动的操作指南面板（.guide-panel 等）改成可折叠，避免
+  // 在小视口（iframe 缩小）下覆盖标题栏和控件。
+  try {
+    const style = document.createElement('style');
+    style.setAttribute('data-systemedu-resize-patch', '1');
+    style.textContent =
+      // canvas 防撑大
+      '.systemedu-canvas-host{position:relative!important;min-width:0!important;min-height:0!important;overflow:hidden!important;}' +
+      '.systemedu-canvas-host > canvas{position:absolute!important;top:0!important;left:0!important;width:100%!important;height:100%!important;}' +
+      // 浮动指南面板折叠态（默认折叠为一个小按钮，避免遮挡）
+      '.guide-panel.systemedu-guide-collapsed{max-width:28px!important;max-height:28px!important;min-width:28px!important;min-height:28px!important;' +
+      'padding:0!important;overflow:hidden!important;cursor:pointer!important;display:flex!important;align-items:center!important;justify-content:center!important;' +
+      'border-radius:50%!important;}' +
+      '.guide-panel.systemedu-guide-collapsed > *{display:none!important;}' +
+      '.guide-panel.systemedu-guide-collapsed::before{content:"?";color:#38bdf8;font-weight:700;font-size:14px;}' +
+      // 小视口时强制 guide-panel 宽度收紧
+      '.guide-panel{max-width:min(220px,35vw)!important;z-index:50!important;}';
+    document.head.appendChild(style);
+    container.classList.add('systemedu-canvas-host');
+  } catch (e) {}
+
+  // 让 .guide-panel 默认折叠为问号按钮，点击展开/收起
+  try {
+    const guides = document.querySelectorAll('.guide-panel');
+    guides.forEach(function (g) {
+      g.classList.add('systemedu-guide-collapsed');
+      g.setAttribute('title', '点击查看操作指南');
+      g.addEventListener('click', function (e) {
+        // 折叠时点击任意处展开；展开时只有点击面板本身（不是内部链接）才收回
+        if (g.classList.contains('systemedu-guide-collapsed')) {
+          g.classList.remove('systemedu-guide-collapsed');
+          e.stopPropagation();
+        } else {
+          // 展开状态下点击面板空白区域也能再次折叠
+          if (e.target === g) {
+            g.classList.add('systemedu-guide-collapsed');
+          }
+        }
+      });
+    });
+  } catch (e) {}
+
+  const redraw = function () {
+    try { if (typeof window.drawCurrent === 'function') { window.drawCurrent(); return; } } catch (e) {}
+    try {
+      if (typeof window.gotoFrame === 'function' &&
+          typeof window.currentFrame !== 'undefined') {
+        window.gotoFrame(window.currentFrame); return;
+      }
+    } catch (e) {}
+    try { if (typeof window.draw === 'function') { window.draw(); return; } } catch (e) {}
+    try { if (typeof window.render === 'function') { window.render(); return; } } catch (e) {}
+  };
+
+  let rafId = 0;
+  let prevW = 0, prevH = 0;
+
+  // 校正 canvas backing store 与 CSS 显示尺寸，保证宽高比一致。
+  // 防止 canvas 被浏览器按不同比例拉伸（典型症状：文字被水平拉宽或压扁）。
+  // 必要时重新调用原 resize() 让动画内部坐标系也更新。
+  const enforceSizeConsistency = function () {
+    const rect = canvas.getBoundingClientRect();
+    if (rect.width < 1 || rect.height < 1) return false;
+    const dpr = Math.max(1, window.devicePixelRatio || 1);
+    const targetW = Math.round(rect.width * dpr);
+    const targetH = Math.round(rect.height * dpr);
+    // 允许 1 像素误差
+    if (Math.abs(canvas.width - targetW) > 1 || Math.abs(canvas.height - targetH) > 1) {
+      return true; // 需要修复
+    }
+    return false;
+  };
+
+  // 调用动画内部的 resize 钩子。优先级：
+  //   1) window.resize（老式全局挂载）
+  //   2) window 上的 'resize' 事件（addEventListener 注册的 local resize）
+  // 多数 knode 动画通过 addEventListener('resize', resize) 挂事件监听，
+  // 此时 window.resize 是 undefined，唯一能驱动它的方式是 dispatchEvent。
+  const callInternalResize = function () {
+    try {
+      if (typeof window.resize === 'function') {
+        window.resize();
+        return true;
+      }
+    } catch (e) {}
+    try {
+      window.dispatchEvent(new Event('resize'));
+      return true;
+    } catch (e) {}
+    return false;
+  };
+
+  const doResize = function () {
+    // 让动画的 local resize 读最新 rect 并重写 canvas backing store
+    callInternalResize();
+
+    // 校正 backing store：若 canvas.width/height 与 CSS 显示尺寸不一致
+    // （典型症状：文字被水平或垂直拉伸），反复触发 local resize 让它
+    // 重新计算。浏览器 layout 已稳定时通常一次就能修复。
+    try {
+      let guard = 0;
+      while (enforceSizeConsistency() && guard < 3) {
+        guard++;
+        // 触发 reflow 让 getBoundingClientRect 读到最新值
+        void canvas.offsetHeight;
+        callInternalResize();
+      }
+      // 最终保障：某些动画的 resize 可能读到错值（例如 parentElement 被
+      // 缓存，或 CSS !important 锁死尺寸）。此时直接硬写 canvas.width/height
+      // 保证宽高比正确；drawCurrent 会把内容重新画到正确的 backing store。
+      const rect = canvas.getBoundingClientRect();
+      const dpr = Math.max(1, window.devicePixelRatio || 1);
+      const tw = Math.round(rect.width * dpr);
+      const th = Math.round(rect.height * dpr);
+      if (rect.width >= 1 && rect.height >= 1 &&
+          (Math.abs(canvas.width - tw) > 1 || Math.abs(canvas.height - th) > 1)) {
+        canvas.width = tw;
+        canvas.height = th;
+        // 同步动画内部坐标系变量（若挂在 window 上）
+        try {
+          if (typeof window.W !== 'undefined') window.W = rect.width;
+          if (typeof window.H !== 'undefined') window.H = rect.height;
+        } catch (e) {}
+        // 再跑一次 local resize，让它重新 setTransform 并更新自身 W/H
+        callInternalResize();
+      }
+    } catch (e) {}
+
+    redraw();
+  };
+
+  const ro = new ResizeObserver(function (entries) {
+    const entry = entries[0];
+    if (!entry) return;
+    const cr = entry.contentRect;
+    const w = cr.width, h = cr.height;
+    if (w < 1 || h < 1) return;
+    if (Math.abs(w - prevW) < 1 && Math.abs(h - prevH) < 1) return;
+    prevW = w; prevH = h;
+
+    // 第一次回调也要处理：iframe 内的动画可能把错值写到 canvas backing
+    // store（例如 load 时 parent rect 还不稳定），第一次 RO 回调正是
+    // layout 已稳定的时机，必须借此纠正。
+    if (rafId) cancelAnimationFrame(rafId);
+    rafId = requestAnimationFrame(function () {
+      rafId = 0;
+      doResize();
+    });
+  });
+
+  try { ro.observe(container); } catch (e) {}
+
+  // iframe 初始化阶段 parent rect 可能不稳定，导致动画原始 resize()
+  // 写入错误的 canvas.width/height（尤其在 iframe 外层 div 宽高变化时）。
+  // load 后始终跑一次 doResize 做最终校正，不依赖 canvas.width<4 的判断。
+  window.addEventListener('load', function () {
+    setTimeout(function () { doResize(); }, 50);
+  });
+})();
+"""
+
+ANIMATION_RESIZE_PATCH_MARKER = "__systemedu_resize_patched"
+
+
+def fix_nonuniform_scale_in_html(html: str) -> str:
+    """
+    修复动画 HTML 里的非等比缩放问题。
+
+    背景：早期 make_canvas_html 模板和部分 LLM 生成的动画使用
+        ctx.scale(canvas.width / W, canvas.height / H)
+    或
+        ctx.scale(DPR * rect.width / W, DPR * rect.height / H)
+    这种**非等比缩放**。当宽高比和 W/H（通常 600/420 ≈ 1.43）不一致
+    时，字体和图形都会被 x/y 方向以不同比例拉伸，导致大屏下字体
+    "被拉宽"。
+
+    正确做法是 letterbox 等比缩放：
+        scale = Math.min(rect.width/W, rect.height/H)
+        offsetX = (rect.width - W*scale) / 2
+        offsetY = (rect.height - H*scale) / 2
+        ctx.setTransform(DPR*scale, 0, 0, DPR*scale, DPR*offsetX, DPR*offsetY)
+
+    本函数用正则把所有符合特征的非等比 scale 行替换为等比版本。
+    匹配两种常见变体：
+      - `ctx.scale(canvas.width / W, canvas.height / H)`
+      - `ctx.scale(DPR * rect.width / W, DPR * rect.height / H)`
+    同时移除同一函数体内的 `ctx.setTransform(1,0,0,1,0,0)`（否则会
+    清除我们重新设置的 transform）。
+
+    幂等：已经是等比缩放（出现 `Math.min(` + `setTransform(DPR*scale`）
+    的 HTML 不会被二次修改。
+    """
+    if not html:
+        return html
+
+    import re
+
+    # 幂等检查
+    if "systemedu-uniform-scale" in html:
+        return html
+
+    # 模式 1: ctx.scale(canvas.width / W, canvas.height / H)
+    pattern1 = re.compile(
+        r'ctx\.setTransform\s*\(\s*1\s*,\s*0\s*,\s*0\s*,\s*1\s*,\s*0\s*,\s*0\s*\)\s*;\s*'
+        r'ctx\.scale\s*\(\s*canvas\.width\s*/\s*W\s*,\s*canvas\.height\s*/\s*H\s*\)\s*;?'
+    )
+    # 模式 2: ctx.scale(DPR * rect.width / W, DPR * rect.height / H)
+    pattern2 = re.compile(
+        r'ctx\.setTransform\s*\(\s*1\s*,\s*0\s*,\s*0\s*,\s*1\s*,\s*0\s*,\s*0\s*\)\s*;\s*'
+        r'ctx\.scale\s*\(\s*DPR\s*\*\s*rect\.width\s*/\s*W\s*,\s*DPR\s*\*\s*rect\.height\s*/\s*H\s*\)\s*;?'
+    )
+
+    replacement = (
+        "/* systemedu-uniform-scale: letterbox 等比缩放 */"
+        "var __seRect = canvas.getBoundingClientRect();"
+        "var __seScale = Math.min(__seRect.width / W, __seRect.height / H);"
+        "var __seOX = (__seRect.width - W * __seScale) / 2;"
+        "var __seOY = (__seRect.height - H * __seScale) / 2;"
+        "var __seDPR = (typeof DPR === 'number' ? DPR : 1);"
+        "ctx.setTransform(__seDPR*__seScale, 0, 0, __seDPR*__seScale, __seDPR*__seOX, __seDPR*__seOY);"
+    )
+
+    new_html = pattern1.sub(replacement, html)
+    new_html = pattern2.sub(replacement, new_html)
+    return new_html
+
+
+_ANIMATION_RESIZE_PATCH_BLOCK_RE = re.compile(
+    r"<script>\s*\n?\(function\s*\(\)\s*\{[^<]*?"
+    + re.escape(ANIMATION_RESIZE_PATCH_MARKER)
+    + r"[\s\S]*?</script>\s*",
+    re.IGNORECASE,
+)
+
+
+def inject_animation_resize_patch(html: str) -> str:
+    """
+    往动画 HTML 尾部注入 resize 补丁 <script>。
+
+    - 幂等升级：如果已有旧 patch（通过 `__systemedu_resize_patched` 标记识别），
+      先剥离旧 patch script 再注入当前版本，保证升级能生效。
+    - 对空字符串或 None 直接返回原值。
+    - 不会修改原有 <script> / <style> / DOM；只追加一段独立 script 到 </body> 前。
+      如果找不到 </body>，则追加到字符串末尾。
+    """
+    if not html:
+        return html
+
+    # 若旧 patch 存在，先剥离它，再用最新版本重新注入。
+    if ANIMATION_RESIZE_PATCH_MARKER in html:
+        html = _ANIMATION_RESIZE_PATCH_BLOCK_RE.sub("", html)
+        # 防御：如果正则没匹配到（说明存储格式变了），仍然早退避免重复注入。
+        if ANIMATION_RESIZE_PATCH_MARKER in html:
+            return html
+
+    snippet = "<script>\n" + ANIMATION_RESIZE_PATCH_JS + "\n</script>\n"
+    if "</body>" in html:
+        return html.replace("</body>", snippet + "</body>", 1)
+    return html + snippet
+
+
 # ── 练习题构造辅助函数 ─────────────────────────────────────────
 
 def make_exercises(items: list[dict]) -> list[dict]:
@@ -1028,7 +1984,7 @@ def make_exercises(items: list[dict]) -> list[dict]:
 
 def make_course_content(
     plan_markdown: str,
-    animation_html: str,
+    animation_html: str | None,
     animation_topic: str,
     exercises: list[dict],
     exercise_topic: str,
@@ -1040,6 +1996,12 @@ def make_course_content(
     animation_acceptance_ref: str = "",
     exercise_hands_on_ref: str = "",
     exercise_acceptance_ref: str = "",
+    # 游戏互动（可选）—— 当 game_html 非空时生成 game idea + rendered_section
+    game_html: str | None = None,
+    game_topic: str = "",
+    game_hands_on_ref: str = "",
+    game_acceptance_ref: str = "",
+    game_mode_reason: str = "互动操作直接检验动手动作",
     preflight: bool = True,
     # 外部资料（Tavily research_knode() 的返回值）
     research: dict | None = None,
@@ -1048,15 +2010,18 @@ def make_course_content(
     构造标准 CourseContent dict，供写入数据库。
 
     基础参数：
-        animation_html: 完整 Canvas HTML 字符串
+        animation_html: 完整 Canvas HTML 字符串；d=1 foundation 等无需动画的
+                        knode 可传 None 跳过 animation idea。
         exercises: make_exercises() 的返回值
         story_paragraphs: [{"text": str, "image_url": ""}] 或 None
+        game_html: 完整游戏 HTML（自包含 iframe 可用）；非空时生成 game idea。
 
     v4.1 参数（都是可选，但 knode 含 v4.1 字段时应该全部提供）：
         knode: 完整的 v4.1 knode dict（来自 load_knode_context() 或直接读 JSON）。
                传入后会自动调用 preflight_v41() 校验生成的 course_content。
         animation_hands_on_ref: animation idea 对应的 hands_on_components 原文
         animation_acceptance_ref: animation idea 对应的 acceptance_standard/artifact title 原文
+        game_hands_on_ref / game_acceptance_ref: 同上，给 game idea 使用
         exercise_hands_on_ref: exercise idea 对应的 hands_on_components 原文
         exercise_acceptance_ref: exercise idea 对应的 acceptance_standard/artifact title 原文
         preflight: 是否在 knode 非空时自动校验（默认 True）。
@@ -1078,26 +2043,81 @@ def make_course_content(
         rand = "".join(random.choices(string.ascii_lowercase, k=4))
         return f"{prefix}_{ts}_{rand}"
 
-    # 0. 把外部资料融入 plan_markdown（如果传入了 research）
+    # 0a. 展开 {{KEY}} shortcode 为完整 Markdown 链接
+    plan_markdown = expand_resource_shortcodes(plan_markdown)
+
+    # 0b. 把外部资料融入 plan_markdown（如果传入了 research）
     if research:
         plan_markdown = merge_resources_into_plan(plan_markdown, research)
 
-    anim_id = _id("anim")
+    # 0.5 动画 HTML 双重修复：
+    #   (a) 把非等比 ctx.scale(w/W, h/H) 替换为 letterbox 等比缩放
+    #       （避免大屏下字体被拉宽）
+    #   (b) 注入 ResizeObserver + drawCurrent 补丁
+    #       （修复 iframe 容器 resize 后 canvas 空白的 bug）
+    if animation_html:
+        animation_html = fix_nonuniform_scale_in_html(animation_html)
+        animation_html = inject_animation_resize_patch(animation_html)
+    if game_html:
+        game_html = fix_nonuniform_scale_in_html(game_html)
+        game_html = inject_animation_resize_patch(game_html)
+
     ex_id = _id("ex")
 
-    anim_idea: dict = {
-        "idea_id": anim_id,
-        "mode": "animation",
-        "topic": animation_topic,
-        "context_summary": animation_topic,
-        "generation_backend": "canvas_direct",
-        "style_key": "chromatic_depth",
-        "mode_reason": "核心概念需要动态可视化演示",
-    }
-    if animation_hands_on_ref:
-        anim_idea["hands_on_ref"] = animation_hands_on_ref
-    if animation_acceptance_ref:
-        anim_idea["acceptance_ref"] = animation_acceptance_ref
+    ideas: list[dict] = []
+    rendered_sections: dict = {}
+
+    anim_id: str | None = None
+    if animation_html:
+        anim_id = _id("anim")
+        anim_idea: dict = {
+            "idea_id": anim_id,
+            "mode": "animation",
+            "topic": animation_topic,
+            "context_summary": animation_topic,
+            "generation_backend": "canvas_direct",
+            "style_key": "chromatic_depth",
+            "mode_reason": "核心概念需要动态可视化演示",
+        }
+        if animation_hands_on_ref:
+            anim_idea["hands_on_ref"] = animation_hands_on_ref
+        if animation_acceptance_ref:
+            anim_idea["acceptance_ref"] = animation_acceptance_ref
+        ideas.append(anim_idea)
+        rendered_sections[anim_id] = {
+            "mode": "animation",
+            "status": "ready",
+            "html": animation_html,
+            "story_paragraphs": None,
+            "exercises": None,
+            "generation_backend": "canvas_direct",
+        }
+
+    game_id: str | None = None
+    if game_html:
+        game_id = _id("game")
+        game_idea: dict = {
+            "idea_id": game_id,
+            "mode": "game",
+            "topic": game_topic or animation_topic,
+            "context_summary": game_topic or animation_topic,
+            "generation_backend": "canvas_direct",
+            "style_key": "chromatic_depth",
+            "mode_reason": game_mode_reason,
+        }
+        if game_hands_on_ref:
+            game_idea["hands_on_ref"] = game_hands_on_ref
+        if game_acceptance_ref:
+            game_idea["acceptance_ref"] = game_acceptance_ref
+        ideas.append(game_idea)
+        rendered_sections[game_id] = {
+            "mode": "game",
+            "status": "ready",
+            "html": game_html,
+            "story_paragraphs": None,
+            "exercises": None,
+            "generation_backend": "canvas_direct",
+        }
 
     ex_idea: dict = {
         "idea_id": ex_id,
@@ -1112,31 +2132,22 @@ def make_course_content(
         ex_idea["hands_on_ref"] = exercise_hands_on_ref
     if exercise_acceptance_ref:
         ex_idea["acceptance_ref"] = exercise_acceptance_ref
-
-    ideas = [anim_idea, ex_idea]
-
-    rendered_sections: dict = {
-        anim_id: {
-            "mode": "animation",
-            "status": "ready",
-            "html": animation_html,
-            "story_paragraphs": None,
-            "exercises": None,
-            "generation_backend": "canvas_direct",
-        },
-        ex_id: {
-            "mode": "exercise",
-            "status": "ready",
-            "html": None,
-            "story_paragraphs": None,
-            "exercises": exercises,
-            "generation_backend": "",
-        },
+    ideas.append(ex_idea)
+    rendered_sections[ex_id] = {
+        "mode": "exercise",
+        "status": "ready",
+        "html": None,
+        "story_paragraphs": None,
+        "exercises": exercises,
+        "generation_backend": "",
     }
 
+    story_id: str | None = None
     if story_paragraphs:
         story_id = _id("story")
-        ideas.insert(1, {
+        # story 放在 animation 之后、game 之前；这里直接插入到 ideas 第 0 位之后
+        insert_pos = 1 if anim_id else 0
+        ideas.insert(insert_pos, {
             "idea_id": story_id,
             "mode": "story",
             "topic": "情境导入",
@@ -1153,6 +2164,16 @@ def make_course_content(
             "exercises": None,
             "generation_backend": "",
         }
+
+    # 在 plan_markdown 中插入 [[IDEA:...]] 标记，让前端能在正确位置渲染
+    # animation / game / exercise / story。没有标记时前端无法显示这些互动内容。
+    plan_markdown = inject_idea_markers(
+        plan_markdown,
+        anim_id=anim_id,
+        ex_id=ex_id,
+        story_id=story_id,
+        game_id=game_id,
+    )
 
     course_content = {
         "plan_markdown": plan_markdown,
