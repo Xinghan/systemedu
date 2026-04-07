@@ -405,7 +405,7 @@ async def api_create_project(request: Request) -> JSONResponse:
     from systemedu.education.services import (
         convert_uploaded_tree,
         extract_project_meta,
-        validate_knowledge_tree,
+        validate_v5_tree,
     )
 
     body = await request.json()
@@ -423,7 +423,7 @@ async def api_create_project(request: Request) -> JSONResponse:
     except ValueError as e:
         return JSONResponse({"error": f"Format error: {e}"}, status_code=400)
 
-    errors = validate_knowledge_tree(converted)
+    errors = validate_v5_tree(converted)
     if errors:
         return JSONResponse({"error": "Validation failed", "errors": errors}, status_code=400)
 
@@ -507,8 +507,10 @@ async def api_preview_tree(request: Request) -> JSONResponse:
     from systemedu.education.services import (
         convert_uploaded_tree,
         extract_project_meta,
-        validate_knowledge_tree,
+        validate_v5_tree,
     )
+    from systemedu.education.tree_adapter import v5_to_milestones_view
+    from systemedu.education.models import V5KnowledgeTree
 
     body = await request.json()
     tree_data = body.get("tree_data")
@@ -521,15 +523,32 @@ async def api_preview_tree(request: Request) -> JSONResponse:
     except ValueError as e:
         return JSONResponse({"error": f"Format error: {e}"}, status_code=400)
 
-    errors = validate_knowledge_tree(converted)
+    errors = validate_v5_tree(converted)
 
-    # Compute stats
-    milestones = converted.get("milestones", [])
-    total_nodes = sum(len(ms.get("knodes", [])) for ms in milestones)
+    # Derive milestones view for frontend-compatible stats and preview
+    v5_tree = V5KnowledgeTree.model_validate(converted)
+    ms_view = v5_to_milestones_view(v5_tree)
+    milestones = [
+        {
+            "title": ms.title,
+            "description": ms.description,
+            "knodes": [
+                {
+                    "title": kn.title,
+                    "summary": kn.summary,
+                    "difficulty_level": kn.difficulty_level,
+                    "estimated_minutes": kn.estimated_minutes,
+                    "prerequisite_indices": kn.prerequisite_indices,
+                }
+                for kn in ms.knodes
+            ],
+        }
+        for ms in ms_view.milestones
+    ]
+
+    total_nodes = sum(len(ms.knodes) for ms in ms_view.milestones)
     total_minutes = sum(
-        kn.get("estimated_minutes", 15)
-        for ms in milestones
-        for kn in ms.get("knodes", [])
+        kn.estimated_minutes for ms in ms_view.milestones for kn in ms.knodes
     )
 
     meta = extract_project_meta(tree_data)
@@ -625,7 +644,10 @@ async def api_generate_tree(request: Request) -> JSONResponse:
             {"error": f"AI 生成失败: {e}"}, status_code=500
         )
 
-    milestones = [ms.model_dump() for ms in tree.milestones]
+    # tree is V5KnowledgeTree; derive milestones view for frontend
+    from systemedu.education.tree_adapter import v5_to_milestones_view
+    ms_view = v5_to_milestones_view(tree)
+    milestones = [ms.model_dump() for ms in ms_view.milestones]
     total_nodes = sum(len(ms.get("knodes", [])) for ms in milestones)
     total_minutes = sum(
         kn.get("estimated_minutes", 15)
@@ -1297,9 +1319,14 @@ async def api_objects_queue_trigger(request: Request) -> JSONResponse:
 
 
 async def api_update_tree(request: Request) -> JSONResponse:
-    """PUT /api/projects/{name}/tree - Full-replace the knowledge_tree.json for a project."""
+    """PUT /api/projects/{name}/tree - Full-replace the knowledge_tree.json for a project.
+
+    Accepts milestones format from frontend, converts to v5 for storage,
+    and merges with existing v5 metadata (stages, edges, special_nodes etc).
+    """
     from systemedu.education.project_loader import find_project_dir
-    from systemedu.education.services import validate_knowledge_tree
+    from systemedu.education.services import validate_milestones_tree
+    from systemedu.education.tree_adapter import milestones_to_v5
 
     name = request.path_params["name"]
     try:
@@ -1317,13 +1344,37 @@ async def api_update_tree(request: Request) -> JSONResponse:
         return JSONResponse({"error": "milestones must be a list"}, status_code=400)
 
     tree_dict = {"milestones": milestones_data}
-    errors = validate_knowledge_tree(tree_dict)
+    errors = validate_milestones_tree(tree_dict)
     if errors:
         return JSONResponse({"error": errors[0]}, status_code=422)
 
+    # Convert milestones to v5
+    v5_dict = milestones_to_v5(tree_dict)
+
+    # Merge with existing v5 metadata from disk (preserve edges, stage descriptions, etc.)
     tree_path = project_dir / "knowledge_tree.json"
+    if tree_path.exists():
+        try:
+            existing = json.loads(tree_path.read_text(encoding="utf-8"))
+            if "stages" in existing and "modules" in existing:
+                # Preserve top-level metadata fields that frontend doesn't send
+                for key in (
+                    "schema_version", "tree_type", "title", "description",
+                    "project_identity", "target_learner", "project_positioning",
+                    "decomposition_strategy", "safety_boundaries", "knowledge_levels",
+                    "stage_relationship_rule", "global_integration_rule",
+                    "special_nodes",
+                ):
+                    if key in existing and key not in v5_dict:
+                        v5_dict[key] = existing[key]
+                # Preserve edges if not regenerated
+                if "edges" not in v5_dict or not v5_dict["edges"]:
+                    v5_dict["edges"] = existing.get("edges", [])
+        except Exception:
+            pass  # If existing file is corrupt, just overwrite
+
     tree_path.write_text(
-        json.dumps(tree_dict, ensure_ascii=False, indent=2), encoding="utf-8"
+        json.dumps(v5_dict, ensure_ascii=False, indent=2), encoding="utf-8"
     )
 
     return JSONResponse({"ok": True, "milestones": milestones_data})
