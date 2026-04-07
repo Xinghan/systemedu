@@ -270,6 +270,19 @@ def load_project_context(
     if progress is None:
         progress = initialize_progress(tree)
         save_progress(user_id, name, progress)
+    elif len(progress) < node_count:
+        # Tree grew (new knodes added) — backfill missing progress records
+        existing_ids = {p.knode_id for p in progress}
+        for idx in range(node_count):
+            if idx not in existing_ids:
+                progress.append(
+                    UserNodeProgress(
+                        knode_id=idx,
+                        status=NodeStatus.AVAILABLE,
+                    )
+                )
+        progress.sort(key=lambda p: p.knode_id)
+        save_progress(user_id, name, progress)
 
     return ProjectContext(
         project=project,
