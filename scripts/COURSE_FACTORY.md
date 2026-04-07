@@ -17,7 +17,7 @@
 | `project_name` | 英文 slug | "mars-risk-map" |
 | `node_title` | 当前知识节点标题 | "在火星图像里看见路况而不是风景" |
 | `node_summary` | 节点摘要（1-2 句或多段描述） | "能够用任务目标、可通行区、危险区和未知区四类语言描述一张火星场景图…" |
-| `difficulty` | 难度 1-5（来自 `difficulty_level`） | 1 |
+| `difficulty` | 难度 1-10（来自 `difficulty_level`） | 1 |
 | `milestone_title` | 所属里程碑 | "看懂火星任务、图像和风险语言" |
 | `category` | 学科分类 | science / physics / biology / aerospace / cs |
 | `age_range` | 目标年龄 | [12, 15] |
@@ -252,15 +252,16 @@ else:
 
 ### 数量决策依据（按 difficulty × module_role 分级）
 
-| difficulty | module_role 典型值 | animation 上限 | game 上限 | exercise | 说明 |
-|-----------|-------------------|---------------|----------|----------|------|
-| 1（入门型） | foundation | **0** | **0-1** | 1+ | foundation 角色可以用 1 个轻量 game 锚定观察习惯；core 角色保持 0 |
-| 2（印象型） | foundation / core | **0-1** | **0-1** | 1+ | 1 个 animation 或 1 个 game，二选一 |
-| 3（核心概念型） | core / deepening | **1** | **1** | 1+ | 有足够内容支撑富媒体交互，各不超过 1 个 |
-| 4（深入应用型） | deepening / synthesis | **1-2** | **1-2** | 1+ | synthesis 角色优先 game（互动整合）|
-| 5（综合/设计型） | synthesis / capstone | **2** | **2** | 1+ | capstone 必须有 1 个 game 模拟最终交付场景 |
+难度采用 10 分制（`difficulty_level` 范围 1-10），区间有重叠以便灵活判断。
 
-**核心原则：animation/game 是昂贵资源，只在教学增益明显大于纯文字时才使用。上限不代表必须用满。**
+| difficulty_level | 档位 | module_role 典型值 | animation 上限 | game 上限 | exercise | 说明 |
+|-----------------|------|-------------------|---------------|----------|----------|------|
+| 1-2 | 入门型 | foundation / overview | **0** | **0-1** | 1+ | foundation 角色可以用 1 个轻量 game 锚定观察习惯；overview 保持 0 |
+| 3-5 | 核心概念型 | foundation / core / skill | **1** | **1** | 1+ | 有足够内容支撑富媒体交互，各不超过 1 个 |
+| 5-8 | 深入应用型 | core / skill / integration | **1-2** | **1-2** | 1+ | integration 角色优先 game（互动整合）；不要每个节点都机械地 1+1，应根据内容适配数量和类型 |
+| 8-9 | 综合设计型 | integration / capstone | **2** | **2** | 1+ | capstone 必须有 1 个 game 模拟最终交付场景；鼓励 2 animation + 1 game 或 1 animation + 2 game 等非对称组合 |
+
+**核心原则：animation/game 是昂贵资源，只在教学增益明显大于纯文字时才使用。上限不代表必须用满，但也不要机械地每个节点都只生成 1 animation + 1 game。应根据内容特点决定：有的节点适合 2 个 animation（多个可视化流程），有的适合 2 个 game（多种互动维度），有的只需要 1 个 game + exercise 就够了。**
 
 ### Mode 选择规则
 
