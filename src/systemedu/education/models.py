@@ -157,6 +157,90 @@ class Project(BaseModel):
     )
 
 
+class Edge(BaseModel):
+    """A directed relationship between two modules in the knowledge tree."""
+
+    edge_id: str
+    from_module_id: str
+    to_module_id: str
+    relation_type: str = ""
+    what_is_transferred: str = ""
+    reason: str = ""
+
+
+class Module(BaseModel):
+    """A learning module in the v5 knowledge tree (replaces KnowledgeNode)."""
+
+    module_id: str
+    title: str
+    stage_id: str
+    sequence_order: int = 0
+    module_role: str = ""
+    is_acceptance_unit: bool = True
+    summary: str = ""
+    detailed_description: str = ""
+    mission_role: str = ""
+    core_question: str = ""
+    why_non_skippable: str = ""
+    rough_learning_topics: list[str] = Field(default_factory=list)
+    what_it_inherits: str = ""
+    outputs_produced: list[str] = Field(default_factory=list)
+    what_it_passes_forward: str = ""
+    real_world_anchor: str = ""
+    capstone_scope: str | None = None
+    integrates_previous_stage_outputs: list[str] = Field(default_factory=list)
+    hands_on_components: list[str] = Field(default_factory=list)
+    engineering_practice_evidence: str = ""
+    acceptance_artifacts: list[dict] = Field(default_factory=list)
+    acceptance_standard: list[str] = Field(default_factory=list)
+    depends_on: list[str] = Field(default_factory=list)
+    dependency_reason: str = ""
+    estimated_duration_months: str | int | float = "1"
+    knowledge_level: str = "K1"
+    expansion_priority: str = ""
+
+
+class Stage(BaseModel):
+    """A learning stage in the v5 knowledge tree (replaces SubProject)."""
+
+    stage_id: str
+    title: str
+    stage_goal: str = ""
+    stage_description: str = ""
+    why_this_stage_exists: str = ""
+    concept_density_class: str = ""
+    new_concept_count_estimate: str = ""
+    module_count_reason: str = ""
+    stage_output: str = ""
+    closing_capstone_module_id: str = ""
+    capstone_scope: str = ""
+    capstone_reuses_outputs_from_stages: list[str] = Field(default_factory=list)
+    capstone_hands_on_expectation: str = ""
+    capstone_integration_reason: str = ""
+    expansion_priority: str = ""
+
+
+class V5KnowledgeTree(BaseModel):
+    """Native v5 knowledge tree with stages, modules, and edges."""
+
+    schema_version: str = "5.0"
+    tree_type: str = ""
+    title: str = ""
+    description: str = ""
+    stages: list[Stage] = Field(default_factory=list)
+    modules: list[Module] = Field(default_factory=list)
+    edges: list[Edge] = Field(default_factory=list)
+    special_nodes: list[dict] = Field(default_factory=list)
+    project_identity: dict = Field(default_factory=dict)
+    target_learner: dict = Field(default_factory=dict)
+    project_positioning: dict = Field(default_factory=dict)
+    decomposition_strategy: dict = Field(default_factory=dict)
+    safety_boundaries: dict = Field(default_factory=dict)
+    knowledge_levels: list[dict] = Field(default_factory=list)
+    stage_relationship_rule: str = ""
+    global_integration_rule: str = ""
+
+
 class UserNodeProgress(BaseModel):
     """Track progress on a single knowledge node."""
 
