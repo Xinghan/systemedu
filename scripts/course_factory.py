@@ -1038,7 +1038,9 @@ if(document.fonts&&document.fonts.ready){{
 def load_knode_context(project_name: str, knode_global_idx: int) -> dict:
     """
     从 projects/{name}/knowledge_tree.json 读取指定 global index 的 knode，
-    并返回完整上下文（knode + milestone + sub_project）。
+    并返回完整上下文（knode + milestone/stage + sub_project + v5 module）。
+
+    支持 v5 格式（stages/modules）和旧 milestones 格式（自动检测）。
 
     参数：
         project_name: 项目英文 slug，例如 "mars-risk-map"
@@ -1046,20 +1048,73 @@ def load_knode_context(project_name: str, knode_global_idx: int) -> dict:
 
     返回：
         {
-            "knode": dict,           # 完整 knode dict，包含 v4.1 字段
-            "milestone": dict,       # 所属 milestone 的 title/description
-            "sub_project": dict|None, # 所属 sub_project（按 milestone_indices 匹配，可能为 None）
+            "knode": dict,           # 完整 knode dict（兼容旧字段）
+            "milestone": dict,       # 所属 milestone/stage 的 title/description
+            "sub_project": dict|None, # 所属 sub_project/stage
+            "module": dict|None,     # 完整 v5 module dict（仅 v5 格式有值）
+            "stage": dict|None,      # 完整 v5 stage dict（仅 v5 格式有值）
         }
 
     异常：
         FileNotFoundError: 项目目录不存在
         ValueError: knode_global_idx 超出范围
     """
+    import sys
+    sys.path.insert(0, str(ROOT))
+
     tree_path = ROOT / "projects" / project_name / "knowledge_tree.json"
     if not tree_path.exists():
         raise FileNotFoundError(f"knowledge_tree.json not found: {tree_path}")
 
     tree = json.loads(tree_path.read_text(encoding="utf-8"))
+
+    # v5 format: stages + modules
+    if "stages" in tree and "modules" in tree:
+        from systemedu.education.tree_adapter import (
+            build_module_index_map,
+            sorted_modules as _sorted_modules,
+            v5_to_milestones_view,
+        )
+        from systemedu.education.models import V5KnowledgeTree
+
+        v5_tree = V5KnowledgeTree.model_validate(tree)
+        index_map = build_module_index_map(v5_tree)
+        modules = _sorted_modules(v5_tree)
+
+        if knode_global_idx < 0 or knode_global_idx >= len(modules):
+            raise ValueError(
+                f"knode global index {knode_global_idx} out of range "
+                f"(project has {len(modules)} modules)"
+            )
+
+        mod = modules[knode_global_idx]
+        stage = next((s for s in v5_tree.stages if s.stage_id == mod.stage_id), None)
+
+        # Build backward-compat knode dict from v5 module
+        ms_view = v5_to_milestones_view(v5_tree)
+        knode_dict = None
+        idx = 0
+        for ms in ms_view.milestones:
+            for kn in ms.knodes:
+                if idx == knode_global_idx:
+                    knode_dict = kn.model_dump()
+                    break
+                idx += 1
+            if knode_dict is not None:
+                break
+
+        return {
+            "knode": knode_dict or {},
+            "milestone": {
+                "title": stage.title if stage else "",
+                "description": stage.stage_description if stage else "",
+            },
+            "sub_project": stage.model_dump() if stage else None,
+            "module": mod.model_dump(),
+            "stage": stage.model_dump() if stage else None,
+        }
+
+    # Legacy milestones format
     milestones = tree.get("milestones", [])
     sub_projects = tree.get("sub_projects", [])
 
@@ -1078,6 +1133,8 @@ def load_knode_context(project_name: str, knode_global_idx: int) -> dict:
                         "description": ms.get("description", ""),
                     },
                     "sub_project": sub,
+                    "module": None,
+                    "stage": None,
                 }
             idx += 1
 
@@ -1686,7 +1743,20 @@ ANIMATION_RESIZE_PATCH_JS = r"""
     document.querySelector('canvas#c') ||
     document.querySelector('canvas');
   if (!canvas || !canvas.parentElement) return;
-  const container = canvas.parentElement;
+  let container = canvas.parentElement;
+
+  // 如果 canvas 的父容器还包含 controls/hud 等兄弟元素，
+  // 就给 canvas 包一层 div 作为 host，避免 position:absolute 覆盖按钮
+  try {
+    const siblings = container.querySelectorAll('.controls, .hud, button');
+    if (siblings.length > 0 && container.children.length > 1) {
+      const host = document.createElement('div');
+      host.style.cssText = 'flex:1;min-height:0;min-width:0;';
+      container.insertBefore(host, canvas);
+      host.appendChild(canvas);
+      container = host;
+    }
+  } catch (e) {}
 
   // 注入防撑大 CSS：canvas 脱离流，父容器约束高度
   // 同时把浮动的操作指南面板（.guide-panel 等）改成可折叠，避免
