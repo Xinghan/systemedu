@@ -34,10 +34,14 @@ async def generate_project_cover(title: str, description: str, save_path: Path) 
         logger.warning("No DashScope API key found, skipping cover generation")
         return False
 
+    topic = description[:120] if description else title
     prompt = (
-        f"A beautiful, modern, educational illustration for a learning project titled '{title}'. "
-        f"Topic: {description[:120] if description else title}. "
-        "Digital art style, vibrant colors, futuristic, clean composition, no text."
+        f"Sci-fi cartoon style illustration about '{title}'. "
+        f"Topic: {topic}. "
+        "Futuristic sci-fi aesthetic with slight cartoon feel, glowing neon accents, "
+        "clean vector-like shapes, vibrant colors on dark background, "
+        "absolutely no text, no letters, no words, no characters, no writing of any kind. "
+        "Pure visual illustration only."
     )
 
     headers = {
