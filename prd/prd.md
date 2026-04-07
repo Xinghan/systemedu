@@ -45,7 +45,7 @@
                           │
 ┌─────────────────────────▼───────────────────────────────────┐
 │                    教育层 (Education Layer)                   │
-│  知识树 DAG │ 学习进度 │ XP/成就 │ AI 导师 │ 学习计划生成      │
+│  知识树 DAG │ 学习进度 │ 升级路线/勋章 │ AI 导师 │ 课程工厂  │
 └─────────────────────────┬───────────────────────────────────┘
                           │
 ┌─────────────────────────▼───────────────────────────────────┐
@@ -250,8 +250,46 @@
 - [x] `web/src/lib/project-icon.ts`：`findProjectIcon()` 本地查询（类别优先列表 + 文本评分 + 品牌色 #7c3aed）
 - [x] ProjectCard 使用前端图标库，无需后端生成
 
+#### 3o: v5 知识树原生支持 ✅
+内部模型原生支持 v5 格式（stages/modules/edges），消除有损转换层。
+
+- [x] **v5 Pydantic 模型**: `Stage`, `Module`, `Edge`, `V5KnowledgeTree` (`models.py`)
+- [x] **双向适配器**: `tree_adapter.py` -- `v5_to_milestones_view()` / `milestones_to_v5()` / `sorted_modules()` / `build_module_index_map()`
+- [x] **services.py 重写**: `convert_uploaded_tree()` 统一转 v5; `parse_knowledge_tree()` 返回 V5KnowledgeTree; 删除 `_convert_v41_tree()`
+- [x] **project_loader.py**: `ProjectContext` 新增 `v5_tree` 字段，`tree` 由 `v5_to_milestones_view()` 派生
+- [x] **server.py 适配**: `api_update_tree()` 接收 milestones 格式后转 v5 存盘
+- [x] **磁盘存储 v5 格式**: 不再存有损的 milestones 格式，保留 17+ 个 v5 字段
+- [x] **前端/DB/progress 无改动**: API 层通过适配器输出 milestones 格式，前端无感知
+
+#### 3p: Course Factory 手册 ✅
+`scripts/COURSE_FACTORY.md` -- 1490+ 行的完整内容创作手册，由 Claude Code 按手册执行。
+
+- [x] **Step 0.5 - 联网研究**: `should_research_knode()` 判断 + `research_knode()` Tavily 搜索 (web + YouTube)
+- [x] **Step 1 - plan_markdown**: 800-1500 字学习计划，core_question 驱动，对齐 acceptance_standard / hands_on_components
+- [x] **Step 2 - Ideas 抽取**: difficulty x module_role 查表决定 animation/game 上限; 10 套视觉主题 (helix_lab/aether_clinic/ares_mission 等)
+- [x] **Step 3 - 详细描述**: 每个 idea 撰写 context_summary + mode_reason + hands_on_ref + acceptance_ref
+- [x] **Step 4 - Debate 自我质疑**: 强制规则 -- game 本质是选择题时 reject; animation 无动态过程时 reject
+- [x] **Step 5 - 实现代码**: HTML animation (shared element transition + getFrameElements + transitionTo) / game (simulation/drag_sort 等 5 种机制) / exercise (选择题)
+- [x] **Step 5.5 - Code Review + Browser Verify**: Playwright (`html_validate.mjs`) 自动验证 JS 错误/滚动条/交互元素
+- [x] **Step 6 - DB 写入**: `make_course_content()` + `preflight_v41()` 验证 + `_upsert_lesson()` 写入
+- [x] **HTML 规范**: 深色主题 100vh, i18n 双语 (cn/en), guide-panel 右上角, DPR-aware Canvas, helix_lab 等视觉系统
+- [x] **工具函数**: `course_factory.py` -- load_knode_context / research_knode / merge_resources_into_plan / make_exercises / preflight_v41
+
+#### 3q: 升级路线 (Career Path) -- Phase 1 数据层 ✅
+把松散项目串成有身份感的成长主线（如"成为火箭科学家"需完成多个项目），沿途获得勋章，卡通形象进化。
+
+- [x] **Pydantic 模型**: `CareerPath`, `PathStage`, `PathBadge`, `AvatarStage` (`models.py`)
+- [x] **DB 表**: `career_paths` (路线注册), `career_path_progress` (用户进度), `earned_badges` (已获勋章)
+- [x] **服务层**: `career_path.py` -- scan_paths / load_path / enroll_path / get_path_progress / recalculate_progress / on_project_completed / get_paths_for_project
+- [x] **存储策略**: YAML 定义 (`paths/{name}/path.yaml`) + DB 存进度; 勋章/形象为 SVG 文件
+- [x] **进度派生**: 读取 enrollments 表 completed 记录，项目完成时自动触发路线进度重算和勋章发放
+- [x] **示例路线**: `paths/rocket-scientist/path.yaml` (4 阶段, 3 形象进化)
+- [x] **测试**: 17 个测试全部通过 (scan/load/enroll/progress/badge/hook)
+- [ ] **API 端点**: GET/POST /api/career-paths (Phase 2 待实施)
+- [ ] **前端页面**: /career-paths 列表 + /career-paths/[name] 详情 (Phase 3 待实施)
+- [ ] **勋章/形象 SVG 素材**: 待制作
+
 #### 3h: 待完成
-- [ ] XP / 成就 / 等级系统
 - [ ] `systemedu chat --agent tutor --project <name>` (CLI 端项目模式)
 - [ ] Quiz 结构化交互（选项点击 + 即时反馈 + AI 批改简答题）
 - [ ] 课程 Outline 预览 + 用户确认后再生成（借鉴 OpenMAIC 两阶段）
@@ -347,6 +385,24 @@ memory:
 | GET | `/api/projects/:name/nodes/:id/course/v2` | 获取 v2 课程内容 (CourseContent JSON) |
 | POST | `/api/projects/:name/nodes/:id/course/v2/generate` | 生成 v2 课程（SSE 流式进度） |
 | GET | `/api/media/:path` | 获取生成的媒体文件（TTS 音频等） |
+| DELETE | `/api/projects/:name` | 删除项目及关联数据 |
+| PATCH | `/api/projects/:name` | 更新项目元数据 (title/description/category 等) |
+| POST | `/api/projects/:name/cover` | 上传封面图 |
+| GET | `/api/projects/:name/lesson-statuses` | 获取所有节点课程生成状态 |
+| GET | `/api/projects/:name/nodes/:id/resources` | 获取节点搜索资源 |
+| POST | `/api/projects/:name/nodes/:id/resources/search` | 搜索节点相关资源 |
+| PUT | `/api/projects/:name/nodes/:id/note` | 保存/更新用户笔记 |
+| GET | `/api/projects/:name/nodes/:id/note` | 获取用户笔记 |
+
+**升级路线** (Career Path, 待实施)
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/api/career-paths` | 升级路线列表（含基本进度） |
+| GET | `/api/career-paths/:name` | 路线详情（阶段/进度/勋章/当前形象） |
+| POST | `/api/career-paths/:name/enroll` | 开始一条升级路线 |
+| GET | `/api/career-paths/:name/badges/:order` | 获取勋章 SVG |
+| GET | `/api/career-paths/:name/avatar/:stage` | 获取形象 SVG |
+| GET | `/api/badges` | 获取用户所有已获得的勋章 |
 
 ### Project Config: `<project>/project.yaml`
 ```yaml
