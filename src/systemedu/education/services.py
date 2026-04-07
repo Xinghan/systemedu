@@ -1,11 +1,13 @@
 """Knowledge tree validation and import/export services.
 
 Migrated from backend/apps/projects/services.py, removing Django ORM dependency.
+All formats are normalized to v5 (stages/modules/edges) as the canonical internal format.
 """
 
 from collections import deque
 
-from .models import AcceptanceType, ContentType, KnowledgeTree
+from .models import AcceptanceType, ContentType, V5KnowledgeTree
+from .tree_adapter import milestones_to_v5
 
 _CONTENT_TYPES = {e.value for e in ContentType}
 _ACCEPTANCE_TYPES = {e.value for e in AcceptanceType}
@@ -19,8 +21,12 @@ class KnowledgeTreeValidationError(Exception):
         super().__init__(f"Validation failed: {errors}")
 
 
-def validate_knowledge_tree(tree_data: dict) -> list[str]:
-    """Validate a knowledge tree JSON structure.
+# ---------------------------------------------------------------------------
+# Validation for legacy milestones format (used by adapter output validation)
+# ---------------------------------------------------------------------------
+
+def validate_milestones_tree(tree_data: dict) -> list[str]:
+    """Validate a legacy milestones-format knowledge tree dict.
 
     Checks:
     - Required fields and types
@@ -137,6 +143,123 @@ def validate_knowledge_tree(tree_data: dict) -> list[str]:
     return errors
 
 
+# Keep backward-compat alias
+validate_knowledge_tree = validate_milestones_tree
+
+
+# ---------------------------------------------------------------------------
+# v5 native validation
+# ---------------------------------------------------------------------------
+
+def validate_v5_tree(tree_data: dict) -> list[str]:
+    """Validate a v5-format knowledge tree dict (stages/modules/edges).
+
+    Returns a list of error strings (empty = valid).
+    """
+    errors: list[str] = []
+
+    if not isinstance(tree_data, dict):
+        return ["tree_data must be a dict"]
+
+    stages = tree_data.get("stages")
+    if not isinstance(stages, list) or len(stages) == 0:
+        return ["'stages' must be a non-empty list"]
+
+    modules = tree_data.get("modules")
+    if not isinstance(modules, list) or len(modules) == 0:
+        return ["'modules' must be a non-empty list"]
+
+    # Collect valid stage_ids
+    stage_ids = set()
+    for s_idx, stage in enumerate(stages):
+        if not isinstance(stage, dict):
+            errors.append(f"stages[{s_idx}] must be a dict")
+            continue
+        sid = stage.get("stage_id")
+        if not sid or not isinstance(sid, str):
+            errors.append(f"stages[{s_idx}].stage_id is required and must be a string")
+        else:
+            if sid in stage_ids:
+                errors.append(f"stages[{s_idx}].stage_id '{sid}' is duplicate")
+            stage_ids.add(sid)
+        if "title" not in stage or not isinstance(stage.get("title"), str):
+            errors.append(f"stages[{s_idx}].title is required and must be a string")
+
+    # Collect valid module_ids and check references
+    module_ids = set()
+    for m_idx, mod in enumerate(modules):
+        if not isinstance(mod, dict):
+            errors.append(f"modules[{m_idx}] must be a dict")
+            continue
+        mid = mod.get("module_id")
+        if not mid or not isinstance(mid, str):
+            errors.append(f"modules[{m_idx}].module_id is required and must be a string")
+        else:
+            if mid in module_ids:
+                errors.append(f"modules[{m_idx}].module_id '{mid}' is duplicate")
+            module_ids.add(mid)
+        if "title" not in mod or not isinstance(mod.get("title"), str):
+            errors.append(f"modules[{m_idx}].title is required and must be a string")
+        msid = mod.get("stage_id", "")
+        if msid and stage_ids and msid not in stage_ids:
+            errors.append(f"modules[{m_idx}].stage_id '{msid}' not found in stages")
+
+    if errors:
+        return errors
+
+    # Validate depends_on references and detect cycles
+    adjacency: dict[str, list[str]] = {mid: [] for mid in module_ids}
+    in_degree: dict[str, int] = {mid: 0 for mid in module_ids}
+
+    for mod in modules:
+        mid = mod.get("module_id", "")
+        for dep_id in mod.get("depends_on", []):
+            if dep_id == mid:
+                errors.append(f"modules '{mid}' depends_on contains self-reference")
+            elif dep_id not in module_ids:
+                errors.append(f"modules '{mid}' depends_on references unknown module '{dep_id}'")
+            else:
+                adjacency[dep_id].append(mid)
+                in_degree[mid] += 1
+
+    if errors:
+        return errors
+
+    # Kahn's algorithm for cycle detection
+    queue = deque([mid for mid in module_ids if in_degree[mid] == 0])
+    visited_count = 0
+
+    while queue:
+        node = queue.popleft()
+        visited_count += 1
+        for neighbor in adjacency.get(node, []):
+            in_degree[neighbor] -= 1
+            if in_degree[neighbor] == 0:
+                queue.append(neighbor)
+
+    if visited_count < len(module_ids):
+        errors.append("Knowledge tree contains a cycle in module dependencies")
+
+    # Validate edges (optional section)
+    edges = tree_data.get("edges", [])
+    for e_idx, edge in enumerate(edges):
+        if not isinstance(edge, dict):
+            errors.append(f"edges[{e_idx}] must be a dict")
+            continue
+        from_id = edge.get("from_module_id", "")
+        to_id = edge.get("to_module_id", "")
+        if from_id and from_id not in module_ids:
+            errors.append(f"edges[{e_idx}].from_module_id '{from_id}' not found in modules")
+        if to_id and to_id not in module_ids:
+            errors.append(f"edges[{e_idx}].to_module_id '{to_id}' not found in modules")
+
+    return errors
+
+
+# ---------------------------------------------------------------------------
+# Format detection and conversion -- all paths normalize to v5
+# ---------------------------------------------------------------------------
+
 _K_LEVEL_MAP = {
     "K1": 1, "K2": 3, "K3": 5, "K4": 6, "K5": 8, "K6": 9,
 }
@@ -157,120 +280,6 @@ def _parse_duration_months(dur: str | int | float) -> float:
         return float(dur)
     except ValueError:
         return 1.0
-
-
-def _convert_v41_tree(raw_data: dict) -> dict:
-    """Convert v4.1 knowledge tree (stages + modules) to internal milestones format."""
-    stages = raw_data["stages"]
-    modules = raw_data["modules"]
-
-    # Build stage_id -> stage info lookup
-    stage_map = {s["stage_id"]: s for s in stages}
-    stage_order = [s["stage_id"] for s in stages]
-
-    # Group modules by stage_id, sorted by sequence_order
-    stage_modules: dict[str, list[dict]] = {}
-    for mod in modules:
-        sid = mod.get("stage_id", "")
-        stage_modules.setdefault(sid, []).append(mod)
-    for sid in stage_modules:
-        stage_modules[sid].sort(key=lambda m: m.get("sequence_order", 0))
-
-    # Build module_id -> global_index mapping (ordered by stage then sequence)
-    module_id_to_index: dict[str, int] = {}
-    global_idx = 0
-    for sid in stage_order:
-        for mod in stage_modules.get(sid, []):
-            module_id_to_index[mod["module_id"]] = global_idx
-            global_idx += 1
-
-    # Convert stages -> milestones, modules -> knodes
-    milestones = []
-    for sid in stage_order:
-        stage = stage_map[sid]
-        mods = stage_modules.get(sid, [])
-
-        knodes = []
-        for mod in mods:
-            # difficulty from knowledge_level
-            kl = mod.get("knowledge_level", "K1")
-            difficulty = _K_LEVEL_MAP.get(kl, 1)
-
-            # prerequisite_indices from depends_on
-            depends_on = mod.get("depends_on", [])
-            prereq_indices = []
-            for dep_id in depends_on:
-                if dep_id in module_id_to_index:
-                    prereq_indices.append(module_id_to_index[dep_id])
-
-            # estimated_minutes from duration_months
-            dur_months = _parse_duration_months(
-                mod.get("estimated_duration_months", "1")
-            )
-            estimated_minutes = max(15, round(dur_months * 360))
-
-            # Build summary from summary + detailed_description
-            summary_parts = []
-            if mod.get("summary"):
-                summary_parts.append(mod["summary"])
-            if mod.get("detailed_description"):
-                summary_parts.append(mod["detailed_description"])
-            summary = "\n\n".join(summary_parts)
-
-            knodes.append({
-                "title": mod.get("title", ""),
-                "summary": summary,
-                "difficulty_level": difficulty,
-                "estimated_minutes": estimated_minutes,
-                "prerequisite_indices": prereq_indices,
-                "module_id": mod.get("module_id", ""),
-                "module_role": mod.get("module_role", ""),
-                "core_question": mod.get("core_question", ""),
-                "acceptance_artifacts": mod.get("acceptance_artifacts", []),
-                "acceptance_standard": mod.get("acceptance_standard", []),
-                "hands_on_components": mod.get("hands_on_components", []),
-                "outputs_produced": mod.get("outputs_produced", []),
-            })
-
-        milestones.append({
-            "title": stage.get("title", sid),
-            "description": stage.get("stage_description", ""),
-            "knodes": knodes,
-        })
-
-    # Build sub_projects from stages
-    sub_projects = []
-    # Build stage_id -> milestone index
-    stage_id_to_ms_idx = {sid: idx for idx, sid in enumerate(stage_order)}
-
-    for stage in stages:
-        sid = stage["stage_id"]
-        ms_idx = stage_id_to_ms_idx.get(sid, 0)
-
-        # Get module indices for this stage
-        mods = stage_modules.get(sid, [])
-        milestone_indices = [ms_idx]
-
-        sub_projects.append({
-            "id": sid,
-            "title": stage.get("title", ""),
-            "description": stage.get("stage_description", ""),
-            "stage_id": sid,
-            "milestone_indices": milestone_indices,
-            "prerequisite_sub_project_ids": [],
-            "difficulty": 1,
-            "estimated_hours": 0,
-            "deliverables": [stage.get("stage_output", "")],
-            "brief": stage.get("stage_goal", ""),
-            "task": stage.get("stage_goal", ""),
-            "core_problem": stage.get("why_this_stage_exists", ""),
-            "acceptance_criteria": [],
-        })
-
-    result: dict = {"milestones": milestones}
-    if sub_projects:
-        result["sub_projects"] = sub_projects
-    return result
 
 
 _LEVEL_MAP = {
@@ -294,56 +303,30 @@ _LEVEL_MAP = {
 }
 
 
-def convert_uploaded_tree(raw_data: dict) -> dict:
-    """Convert uploaded knowledge tree to internal milestones format.
-
-    Auto-detects format:
-    - If `raw_data` has "milestones" key → already internal format, return as-is.
-    - If `raw_data` has "stages" + "modules" → v4.1 format, convert.
-    - If `raw_data` has "知识树节点" key → tree_leaf format, convert.
-
-    Raises ValueError if format is unrecognized.
-    """
-    if "milestones" in raw_data:
-        return raw_data
-
-    if "stages" in raw_data and "modules" in raw_data:
-        return _convert_v41_tree(raw_data)
-
-    if "知识树节点" not in raw_data:
-        raise ValueError(
-            "Unrecognized format: must contain 'milestones', "
-            "'stages'+'modules', or '知识树节点' key"
-        )
-
+def _convert_chinese_to_milestones(raw_data: dict) -> dict:
+    """Convert Chinese-key format to legacy milestones dict."""
     nodes = raw_data["知识树节点"]
     module_graph = raw_data.get("模块依赖图", [])
 
-    # Build module order from dependency graph
     module_order = [m["模块id"] for m in module_graph] if module_graph else []
 
-    # Group nodes by module id
     modules: dict[str, list[dict]] = {}
     for node in nodes:
         mid = node.get("模块id", "M00")
         modules.setdefault(mid, []).append(node)
 
-    # Sort modules: use dependency graph order, then fallback to key sort
     if module_order:
         sorted_module_ids = [mid for mid in module_order if mid in modules]
-        # Add any modules not in graph
         for mid in sorted(modules.keys()):
             if mid not in sorted_module_ids:
                 sorted_module_ids.append(mid)
     else:
         sorted_module_ids = sorted(modules.keys())
 
-    # Build module title lookup from dependency graph
     module_titles = {}
     for m in module_graph:
         module_titles[m["模块id"]] = m.get("模块标题", m["模块id"])
 
-    # Build global node id → index mapping
     node_id_to_index: dict[str, int] = {}
     global_idx = 0
     for mid in sorted_module_ids:
@@ -351,17 +334,14 @@ def convert_uploaded_tree(raw_data: dict) -> dict:
             node_id_to_index[node["id"]] = global_idx
             global_idx += 1
 
-    # Convert to milestones format
     milestones = []
     for mid in sorted_module_ids:
         module_nodes = modules[mid]
         knodes = []
         for node in module_nodes:
-            # Convert level
             level_str = node.get("知识等级", "L0")
             difficulty = _LEVEL_MAP.get(level_str, 1)
 
-            # Convert prerequisites
             prereq_ids = node.get("先修节点", [])
             prereq_indices = []
             for pid in prereq_ids:
@@ -385,11 +365,9 @@ def convert_uploaded_tree(raw_data: dict) -> dict:
             }
         )
 
-    # Build sub_projects from stage overview if available
     sub_projects = []
     stage_overview = raw_data.get("阶段总览", [])
     if stage_overview:
-        # Map module_id -> milestone index
         module_id_to_ms_idx = {mid: idx for idx, mid in enumerate(sorted_module_ids)}
 
         for stage in stage_overview:
@@ -400,7 +378,6 @@ def convert_uploaded_tree(raw_data: dict) -> dict:
                 if mid in module_id_to_ms_idx
             ]
             prereq_stages = stage.get("前置阶段_全部满足", stage.get("前置阶段", []))
-            # Map stage_id -> sub_project_id via lookup
             stage_to_sp = {s.get("阶段id", ""): s.get("子项目id", "") for s in stage_overview}
             prereq_sp_ids = [
                 stage_to_sp[sid] for sid in prereq_stages if sid in stage_to_sp
@@ -443,15 +420,44 @@ def convert_uploaded_tree(raw_data: dict) -> dict:
     return result
 
 
+def convert_uploaded_tree(raw_data: dict) -> dict:
+    """Convert uploaded knowledge tree to v5 format dict.
+
+    Auto-detects format:
+    - If `raw_data` has "stages" + "modules" -> already v5, return as-is.
+    - If `raw_data` has "milestones" key -> legacy format, upgrade to v5.
+    - If `raw_data` has "知识树节点" key -> Chinese format, convert to milestones then v5.
+
+    Raises ValueError if format is unrecognized.
+    """
+    # Already v5 format
+    if "stages" in raw_data and "modules" in raw_data:
+        return raw_data
+
+    # Legacy milestones format
+    if "milestones" in raw_data:
+        return milestones_to_v5(raw_data)
+
+    # Chinese format -> milestones -> v5
+    if "知识树节点" in raw_data:
+        milestones_dict = _convert_chinese_to_milestones(raw_data)
+        return milestones_to_v5(milestones_dict)
+
+    raise ValueError(
+        "Unrecognized format: must contain 'stages'+'modules', "
+        "'milestones', or '知识树节点' key"
+    )
+
+
 def extract_project_brief(raw_data: dict) -> dict | None:
     """Extract project brief card from uploaded knowledge tree.
 
-    Supports v2 tree_leaf format (项目总说明卡) and v4.1 format (project_positioning).
+    Supports v2 tree_leaf format (项目总说明卡) and v4.1/v5 format (project_positioning).
 
     Returns a dict suitable for writing as project_brief.json,
     or None if no brief card is present.
     """
-    # v4.1 format
+    # v4.1/v5 format
     positioning = raw_data.get("project_positioning")
     if isinstance(positioning, dict):
         return {
@@ -500,26 +506,27 @@ def extract_project_brief(raw_data: dict) -> dict | None:
 def extract_project_meta(raw_data: dict) -> dict:
     """Extract project metadata from uploaded knowledge tree.
 
-    Supports v2 tree_leaf format and v4.1 format.
+    Supports v2 tree_leaf format and v4.1/v5 format.
 
     Returns a dict suitable for project.yaml fields.
     """
     meta: dict = {}
 
-    # v4.1 format
+    # v4.1/v5 format
     if "stages" in raw_data and "modules" in raw_data:
         if "title" in raw_data:
             meta["title"] = raw_data["title"]
         if "description" in raw_data:
             meta["description"] = raw_data["description"]
 
-        # Extract domain -> category mapping
         identity = raw_data.get("project_identity", {})
         domain = identity.get("domain", "")
         domain_to_category = {
             "space_robotics": "aerospace",
             "aerospace": "aerospace",
             "biotech": "biotech",
+            "biotech_health_ai": "biotech",
+            "health_ai": "biotech",
             "ai": "ai",
             "music": "music",
             "climate": "climate",
@@ -530,23 +537,19 @@ def extract_project_meta(raw_data: dict) -> dict:
         }
         meta["category"] = domain_to_category.get(domain, "other")
 
-        # Extract age from target_learner
         learner = raw_data.get("target_learner", {})
         entry = learner.get("entry_profile", "")
-        # Try to extract age like "10 岁" or "约 10 岁"
         import re
         age_match = re.search(r"(\d+)\s*岁", entry)
         if age_match:
             start_age = int(age_match.group(1))
             meta["age_range"] = [start_age, 18]
 
-        # Estimate hours from module durations
         modules = raw_data.get("modules", [])
         total_months = 0.0
         for m in modules:
             dur = m.get("estimated_duration_months", "1")
             total_months += _parse_duration_months(dur)
-        # Roughly 6 hours per month of study
         meta["estimated_hours"] = max(1, round(total_months * 6))
 
         return meta
@@ -567,7 +570,6 @@ def extract_project_meta(raw_data: dict) -> dict:
             except (ValueError, IndexError):
                 pass
 
-    # Estimate total hours from node minutes
     nodes = raw_data.get("知识树节点", [])
     total_minutes = sum(n.get("预估学习时长_分钟", 15) for n in nodes)
     meta["estimated_hours"] = max(1, round(total_minutes / 60))
@@ -575,14 +577,31 @@ def extract_project_meta(raw_data: dict) -> dict:
     return meta
 
 
-def parse_knowledge_tree(tree_data: dict, *, validate: bool = True) -> KnowledgeTree:
-    """Parse and validate a knowledge tree dict into a KnowledgeTree model.
+def parse_v5_knowledge_tree(
+    tree_data: dict, *, validate: bool = True
+) -> V5KnowledgeTree:
+    """Parse and validate a v5 knowledge tree dict into a V5KnowledgeTree model.
 
+    Auto-detects format and converts to v5 if needed.
     Raises KnowledgeTreeValidationError if validation fails.
     """
+    # Auto-convert to v5 if needed
+    if "stages" not in tree_data or "modules" not in tree_data:
+        tree_data = convert_uploaded_tree(tree_data)
+
     if validate:
-        errors = validate_knowledge_tree(tree_data)
+        errors = validate_v5_tree(tree_data)
         if errors:
             raise KnowledgeTreeValidationError(errors)
 
-    return KnowledgeTree.model_validate(tree_data)
+    return V5KnowledgeTree.model_validate(tree_data)
+
+
+def parse_knowledge_tree(
+    tree_data: dict, *, validate: bool = True
+) -> V5KnowledgeTree:
+    """Parse a knowledge tree dict into V5KnowledgeTree.
+
+    Backward-compatible entry point -- delegates to parse_v5_knowledge_tree.
+    """
+    return parse_v5_knowledge_tree(tree_data, validate=validate)
