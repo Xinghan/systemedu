@@ -7,7 +7,10 @@ from systemedu.education.services import (
     extract_project_brief,
     extract_project_meta,
     validate_knowledge_tree,
+    validate_v5_tree,
 )
+from systemedu.education.tree_adapter import v5_to_milestones_view
+from systemedu.education.models import V5KnowledgeTree
 
 
 # -- Sample data --
@@ -91,66 +94,47 @@ MILESTONES_DATA = {
 
 
 class TestConvertUploadedTree:
-    def test_milestones_format_passthrough(self):
-        """Already-milestones format should be returned as-is."""
+    def test_milestones_format_upgraded_to_v5(self):
+        """Milestones format should be upgraded to v5 (stages/modules)."""
         result = convert_uploaded_tree(MILESTONES_DATA)
-        assert result is MILESTONES_DATA
-        assert "milestones" in result
+        assert "stages" in result
+        assert "modules" in result
 
     def test_tree_leaf_conversion(self):
-        """tree_leaf format should be converted to milestones."""
+        """tree_leaf format should be converted to v5."""
         result = convert_uploaded_tree(TREE_LEAF_DATA)
-        assert "milestones" in result
-        milestones = result["milestones"]
-        assert len(milestones) == 2
-        assert milestones[0]["title"] == "数据收集"
-        assert milestones[1]["title"] == "模型训练"
+        assert "stages" in result
+        assert "modules" in result
+        assert len(result["stages"]) == 2
+        assert result["stages"][0]["title"] == "数据收集"
+        assert result["stages"][1]["title"] == "模型训练"
 
-    def test_tree_leaf_node_count(self):
-        """Converted tree should have correct node counts per milestone."""
+    def test_tree_leaf_module_count(self):
+        """Converted tree should have correct module counts."""
         result = convert_uploaded_tree(TREE_LEAF_DATA)
-        ms = result["milestones"]
-        assert len(ms[0]["knodes"]) == 2  # M01: 2 nodes
-        assert len(ms[1]["knodes"]) == 2  # M02: 2 nodes
+        s1_mods = [m for m in result["modules"] if m["stage_id"] == result["stages"][0]["stage_id"]]
+        s2_mods = [m for m in result["modules"] if m["stage_id"] == result["stages"][1]["stage_id"]]
+        assert len(s1_mods) == 2  # M01: 2 nodes
+        assert len(s2_mods) == 2  # M02: 2 nodes
 
     def test_tree_leaf_title_mapping(self):
-        """Node titles should be mapped from 标题."""
+        """Module titles should be mapped from node titles."""
         result = convert_uploaded_tree(TREE_LEAF_DATA)
-        first_node = result["milestones"][0]["knodes"][0]
-        assert first_node["title"] == "认识树叶"
+        assert result["modules"][0]["title"] == "认识树叶"
 
     def test_tree_leaf_summary_mapping(self):
-        """Node summaries should be mapped from 详细描述."""
+        """Module summaries should be mapped from node descriptions."""
         result = convert_uploaded_tree(TREE_LEAF_DATA)
-        first_node = result["milestones"][0]["knodes"][0]
-        assert first_node["summary"] == "学习不同树叶的特征"
+        assert result["modules"][0]["summary"] == "学习不同树叶的特征"
 
-    def test_tree_leaf_difficulty_mapping(self):
-        """Knowledge levels should be mapped to difficulty_level."""
+    def test_tree_leaf_depends_on(self):
+        """String node IDs should be converted to module_id depends_on."""
         result = convert_uploaded_tree(TREE_LEAF_DATA)
-        ms = result["milestones"]
-        assert ms[0]["knodes"][0]["difficulty_level"] == 1  # L0-启蒙
-        assert ms[0]["knodes"][1]["difficulty_level"] == 2  # L1-入门
-        assert ms[1]["knodes"][0]["difficulty_level"] == 3  # L2-基础
-        assert ms[1]["knodes"][1]["difficulty_level"] == 5  # L3-进阶
-
-    def test_tree_leaf_estimated_minutes(self):
-        """estimated_minutes should be preserved."""
-        result = convert_uploaded_tree(TREE_LEAF_DATA)
-        assert result["milestones"][0]["knodes"][0]["estimated_minutes"] == 10
-
-    def test_tree_leaf_prerequisite_indices(self):
-        """String node IDs should be converted to global integer indices."""
-        result = convert_uploaded_tree(TREE_LEAF_DATA)
-        ms = result["milestones"]
-        # M01N01 → index 0, no prereqs
-        assert ms[0]["knodes"][0]["prerequisite_indices"] == []
-        # M01N02 → index 1, prereq M01N01 → index 0
-        assert ms[0]["knodes"][1]["prerequisite_indices"] == [0]
-        # M02N01 → index 2, prereq M01N02 → index 1
-        assert ms[1]["knodes"][0]["prerequisite_indices"] == [1]
-        # M02N02 → index 3, prereq M02N01 → index 2
-        assert ms[1]["knodes"][1]["prerequisite_indices"] == [2]
+        mods = result["modules"]
+        # First module has no deps
+        assert mods[0]["depends_on"] == []
+        # Second module depends on first
+        assert len(mods[1]["depends_on"]) == 1
 
     def test_unrecognized_format_raises(self):
         """Unrecognized format should raise ValueError."""
@@ -158,10 +142,21 @@ class TestConvertUploadedTree:
             convert_uploaded_tree({"random_key": "value"})
 
     def test_converted_tree_validates(self):
-        """Converted tree should pass validation."""
+        """Converted v5 tree should pass v5 validation."""
         result = convert_uploaded_tree(TREE_LEAF_DATA)
-        errors = validate_knowledge_tree(result)
+        errors = validate_v5_tree(result)
         assert errors == []
+
+    def test_milestones_view_roundtrip(self):
+        """Converted v5 tree should produce valid milestones view."""
+        result = convert_uploaded_tree(TREE_LEAF_DATA)
+        v5_tree = V5KnowledgeTree.model_validate(result)
+        ms_view = v5_to_milestones_view(v5_tree)
+        assert len(ms_view.milestones) == 2
+        assert ms_view.milestones[0].title == "数据收集"
+        # Check knode count
+        assert len(ms_view.milestones[0].knodes) == 2
+        assert len(ms_view.milestones[1].knodes) == 2
 
 
 class TestExtractProjectMeta:
@@ -286,88 +281,100 @@ V41_DATA = {
 
 class TestConvertV41Tree:
     def test_detects_v41_format(self):
-        """v4.1 format should be detected and converted."""
+        """v4.1 format should be detected and passed through as v5."""
         result = convert_uploaded_tree(V41_DATA)
-        assert "milestones" in result
-        assert len(result["milestones"]) == 2
+        assert "stages" in result
+        assert "modules" in result
+        assert len(result["stages"]) == 2
 
-    def test_milestone_titles(self):
+    def test_v5_passthrough(self):
+        """v4.1/v5 format (stages+modules) should pass through as-is."""
         result = convert_uploaded_tree(V41_DATA)
-        assert result["milestones"][0]["title"] == "Stage One"
-        assert result["milestones"][1]["title"] == "Stage Two"
+        assert result is V41_DATA
 
-    def test_milestone_descriptions(self):
-        result = convert_uploaded_tree(V41_DATA)
-        assert result["milestones"][0]["description"] == "First stage description"
+    def test_milestones_view_titles(self):
+        """Derived milestones view should have correct stage titles."""
+        v5_tree = V5KnowledgeTree.model_validate(V41_DATA)
+        ms_view = v5_to_milestones_view(v5_tree)
+        assert ms_view.milestones[0].title == "Stage One"
+        assert ms_view.milestones[1].title == "Stage Two"
 
-    def test_knode_count(self):
-        result = convert_uploaded_tree(V41_DATA)
-        assert len(result["milestones"][0]["knodes"]) == 2  # M01, M02
-        assert len(result["milestones"][1]["knodes"]) == 1  # M03
+    def test_milestones_view_descriptions(self):
+        v5_tree = V5KnowledgeTree.model_validate(V41_DATA)
+        ms_view = v5_to_milestones_view(v5_tree)
+        assert ms_view.milestones[0].description == "First stage description"
 
-    def test_knode_titles(self):
-        result = convert_uploaded_tree(V41_DATA)
-        assert result["milestones"][0]["knodes"][0]["title"] == "Module A"
-        assert result["milestones"][0]["knodes"][1]["title"] == "Module B"
+    def test_milestones_view_knode_count(self):
+        v5_tree = V5KnowledgeTree.model_validate(V41_DATA)
+        ms_view = v5_to_milestones_view(v5_tree)
+        assert len(ms_view.milestones[0].knodes) == 2  # M01, M02
+        assert len(ms_view.milestones[1].knodes) == 1  # M03
 
-    def test_knode_summary(self):
+    def test_milestones_view_knode_titles(self):
+        v5_tree = V5KnowledgeTree.model_validate(V41_DATA)
+        ms_view = v5_to_milestones_view(v5_tree)
+        assert ms_view.milestones[0].knodes[0].title == "Module A"
+        assert ms_view.milestones[0].knodes[1].title == "Module B"
+
+    def test_milestones_view_knode_summary(self):
         """Summary combines summary + detailed_description."""
-        result = convert_uploaded_tree(V41_DATA)
-        kn = result["milestones"][0]["knodes"][0]
-        assert "Module A summary" in kn["summary"]
-        assert "Module A details" in kn["summary"]
+        v5_tree = V5KnowledgeTree.model_validate(V41_DATA)
+        ms_view = v5_to_milestones_view(v5_tree)
+        kn = ms_view.milestones[0].knodes[0]
+        assert "Module A summary" in kn.summary
+        assert "Module A details" in kn.summary
 
-    def test_difficulty_mapping(self):
+    def test_milestones_view_difficulty_mapping(self):
         """knowledge_level should map to difficulty_level."""
-        result = convert_uploaded_tree(V41_DATA)
-        ms = result["milestones"]
-        assert ms[0]["knodes"][0]["difficulty_level"] == 1  # K1
-        assert ms[0]["knodes"][1]["difficulty_level"] == 3  # K2
-        assert ms[1]["knodes"][0]["difficulty_level"] == 6  # K4
+        v5_tree = V5KnowledgeTree.model_validate(V41_DATA)
+        ms_view = v5_to_milestones_view(v5_tree)
+        assert ms_view.milestones[0].knodes[0].difficulty_level == 1  # K1
+        assert ms_view.milestones[0].knodes[1].difficulty_level == 3  # K2
+        assert ms_view.milestones[1].knodes[0].difficulty_level == 6  # K4
 
-    def test_prerequisite_indices(self):
+    def test_milestones_view_prerequisite_indices(self):
         """depends_on module_ids should convert to global integer indices."""
-        result = convert_uploaded_tree(V41_DATA)
-        ms = result["milestones"]
+        v5_tree = V5KnowledgeTree.model_validate(V41_DATA)
+        ms_view = v5_to_milestones_view(v5_tree)
         # M01 -> index 0, no deps
-        assert ms[0]["knodes"][0]["prerequisite_indices"] == []
+        assert ms_view.milestones[0].knodes[0].prerequisite_indices == []
         # M02 -> index 1, depends on M01 -> index 0
-        assert ms[0]["knodes"][1]["prerequisite_indices"] == [0]
+        assert ms_view.milestones[0].knodes[1].prerequisite_indices == [0]
         # M03 -> index 2, depends on M01(0) + M02(1)
-        assert ms[1]["knodes"][0]["prerequisite_indices"] == [0, 1]
+        assert ms_view.milestones[1].knodes[0].prerequisite_indices == [0, 1]
 
-    def test_estimated_minutes(self):
+    def test_milestones_view_estimated_minutes(self):
         """Duration months should convert to minutes."""
-        result = convert_uploaded_tree(V41_DATA)
-        ms = result["milestones"]
+        v5_tree = V5KnowledgeTree.model_validate(V41_DATA)
+        ms_view = v5_to_milestones_view(v5_tree)
         # "1" month -> 360 minutes
-        assert ms[0]["knodes"][0]["estimated_minutes"] == 360
+        assert ms_view.milestones[0].knodes[0].estimated_minutes == 360
         # "1-2" months -> avg 1.5 -> 540 minutes
-        assert ms[0]["knodes"][1]["estimated_minutes"] == 540
+        assert ms_view.milestones[0].knodes[1].estimated_minutes == 540
 
-    def test_v41_metadata_preserved(self):
-        """v4.1 metadata fields should be preserved in knodes."""
-        result = convert_uploaded_tree(V41_DATA)
-        kn = result["milestones"][0]["knodes"][0]
-        assert kn["module_id"] == "P-TEST-01-M01"
-        assert kn["module_role"] == "foundation"
-        assert kn["core_question"] == "Why A?"
-        assert len(kn["acceptance_artifacts"]) == 1
-        assert kn["acceptance_standard"] == ["Standard 1"]
-        assert kn["hands_on_components"] == ["Hands on 1"]
-        assert kn["outputs_produced"] == ["Output 1"]
+    def test_milestones_view_metadata_preserved(self):
+        """v5 metadata fields should be preserved in milestones view knodes."""
+        v5_tree = V5KnowledgeTree.model_validate(V41_DATA)
+        ms_view = v5_to_milestones_view(v5_tree)
+        kn = ms_view.milestones[0].knodes[0]
+        assert kn.module_id == "P-TEST-01-M01"
+        assert kn.module_role == "foundation"
+        assert kn.core_question == "Why A?"
+        assert len(kn.acceptance_artifacts) == 1
+        assert kn.acceptance_standard == ["Standard 1"]
+        assert kn.hands_on_components == ["Hands on 1"]
+        assert kn.outputs_produced == ["Output 1"]
 
-    def test_sub_projects(self):
-        result = convert_uploaded_tree(V41_DATA)
-        sps = result.get("sub_projects", [])
-        assert len(sps) == 2
-        assert sps[0]["id"] == "S1"
-        assert sps[1]["id"] == "S2"
+    def test_milestones_view_sub_projects(self):
+        v5_tree = V5KnowledgeTree.model_validate(V41_DATA)
+        ms_view = v5_to_milestones_view(v5_tree)
+        assert len(ms_view.sub_projects) == 2
+        assert ms_view.sub_projects[0].id == "S1"
+        assert ms_view.sub_projects[1].id == "S2"
 
-    def test_validates_after_conversion(self):
-        """Converted v4.1 tree should pass validation."""
-        result = convert_uploaded_tree(V41_DATA)
-        errors = validate_knowledge_tree(result)
+    def test_validates_v5(self):
+        """v4.1/v5 tree should pass v5 validation."""
+        errors = validate_v5_tree(V41_DATA)
         assert errors == []
 
 

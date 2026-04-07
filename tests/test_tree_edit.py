@@ -163,10 +163,12 @@ class TestUpdateTreeAPI:
         data = resp.json()
         assert data["ok"] is True
 
-        # Verify file was written
+        # Verify file was written (now stored as v5 format)
         written = json.loads((project_dir / "knowledge_tree.json").read_text())
-        assert written["milestones"][0]["title"] == "Updated Milestone"
-        assert written["milestones"][0]["knodes"][0]["title"] == "Updated Node"
+        assert "stages" in written
+        assert "modules" in written
+        assert written["stages"][0]["title"] == "Updated Milestone"
+        assert written["modules"][0]["title"] == "Updated Node"
 
     def test_put_tree_not_found(self, client):
         """PUT for non-existent project should return 404."""
@@ -227,8 +229,8 @@ class TestUpdateTreeAPI:
         assert resp.status_code == 200
 
         written = json.loads((project_dir / "knowledge_tree.json").read_text())
-        assert len(written["milestones"]) == 2
-        assert written["milestones"][1]["title"] == "MS B"
+        assert len(written["stages"]) == 2
+        assert written["stages"][1]["title"] == "MS B"
 
     def test_put_tree_returns_milestones(self, client):
         """PUT response body should include the updated milestones."""
