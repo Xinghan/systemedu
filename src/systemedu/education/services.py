@@ -420,11 +420,145 @@ def _convert_chinese_to_milestones(raw_data: dict) -> dict:
     return result
 
 
+def _promote_special_nodes(tree_data: dict) -> dict:
+    """Promote special_nodes to real stages + modules.
+
+    Rules (hard-coded):
+    - project_overview (SN-OV-*) -> stage S0, inserted first
+    - project_integration_and_final_validation (SN-IV-*) -> stage S-INT, inserted second-to-last
+    - future_extension (SN-FE-*) -> stage S-FE, inserted last
+    """
+    special_nodes = tree_data.get("special_nodes", [])
+    if not special_nodes:
+        return tree_data
+
+    stages = list(tree_data.get("stages", []))
+    modules = list(tree_data.get("modules", []))
+    existing_stage_ids = {s["stage_id"] if isinstance(s, dict) else s.stage_id for s in stages}
+
+    # Check which roles are already represented in existing modules
+    existing_roles = set()
+    for m in modules:
+        mr = m.get("module_role", "") if isinstance(m, dict) else getattr(m, "module_role", "")
+        if mr:
+            existing_roles.add(mr)
+
+    # Classify special nodes by role
+    role_map: dict[str, list[dict]] = {}
+    for sn in special_nodes:
+        role = sn.get("node_role", "")
+        role_map.setdefault(role, []).append(sn)
+
+    def _make_stage_and_module(sn: dict, stage_id: str) -> tuple[dict, dict]:
+        stage = {
+            "stage_id": stage_id,
+            "title": sn.get("title", ""),
+            "stage_description": sn.get("summary", ""),
+            "stage_goal": sn.get("core_mission", "") or sn.get("summary", ""),
+            "stage_output": "",
+        }
+        module = {
+            "module_id": sn.get("node_id", stage_id + "-M01"),
+            "title": sn.get("title", ""),
+            "stage_id": stage_id,
+            "sequence_order": 1,
+            "module_role": sn.get("node_role", ""),
+            "summary": sn.get("summary", ""),
+            "detailed_description": sn.get("detailed_description", ""),
+            "knowledge_level": "K1",
+            "estimated_duration_months": "1",
+            "depends_on": [],
+        }
+        return stage, module
+
+    # 1. project_overview -> S0, insert first
+    for sn in role_map.get("project_overview", []):
+        sid = "S0"
+        if sid not in existing_stage_ids and not (existing_roles & {"project_overview", "overview"}):
+            stage, mod = _make_stage_and_module(sn, sid)
+            stages.insert(0, stage)
+            modules.insert(0, mod)
+            existing_stage_ids.add(sid)
+
+    # 2. project_integration_and_final_validation -> S-INT, insert second-to-last
+    for sn in role_map.get("project_integration_and_final_validation", []):
+        sid = "S-INT"
+        if sid not in existing_stage_ids and not (existing_roles & {"project_integration_and_final_validation", "integration_validation"}):
+            stage, mod = _make_stage_and_module(sn, sid)
+            # All core stages as dependencies
+            core_stage_ids = [s["stage_id"] if isinstance(s, dict) else s.stage_id
+                              for s in stages if (s["stage_id"] if isinstance(s, dict) else s.stage_id) not in ("S0",)]
+            last_modules = []
+            for cs_id in core_stage_ids:
+                stage_mods = [m for m in modules
+                              if (m["stage_id"] if isinstance(m, dict) else m.stage_id) == cs_id]
+                if stage_mods:
+                    last_mod = max(stage_mods,
+                                   key=lambda m: m.get("sequence_order", 0) if isinstance(m, dict) else m.sequence_order)
+                    last_modules.append(last_mod["module_id"] if isinstance(last_mod, dict) else last_mod.module_id)
+            mod["depends_on"] = last_modules
+            stages.append(stage)
+            modules.append(mod)
+            existing_stage_ids.add(sid)
+
+    # 3. future_extension -> S-FE, insert last
+    for sn in role_map.get("future_extension", []):
+        sid = "S-FE"
+        if sid not in existing_stage_ids and not (existing_roles & {"future_extension", "extension"}):
+            stage, mod = _make_stage_and_module(sn, sid)
+            # Depends on S-INT if it exists
+            int_mods = [m for m in modules
+                        if (m["stage_id"] if isinstance(m, dict) else m.stage_id) == "S-INT"]
+            if int_mods:
+                mod["depends_on"] = [int_mods[0]["module_id"] if isinstance(int_mods[0], dict) else int_mods[0].module_id]
+            stages.append(stage)
+            modules.append(mod)
+            existing_stage_ids.add(sid)
+
+    # Reorder stages: S0/overview first, core stages in original order,
+    # S-INT/integration second-to-last, S-FE/extension last
+    stage_id_to_pos = {}
+    for i, s in enumerate(stages):
+        sid = s["stage_id"] if isinstance(s, dict) else s.stage_id
+        stage_id_to_pos[sid] = i
+
+    # Identify which stages hold overview/integration/extension modules
+    overview_stages = {"S0"}
+    integration_stages = {"S-INT"}
+    extension_stages = {"S-FE"}
+    for m in modules:
+        mr = m.get("module_role", "") if isinstance(m, dict) else getattr(m, "module_role", "")
+        msid = m["stage_id"] if isinstance(m, dict) else m.stage_id
+        if mr in ("overview", "project_overview"):
+            overview_stages.add(msid)
+        elif mr in ("integration_validation", "project_integration_and_final_validation"):
+            integration_stages.add(msid)
+        elif mr in ("extension", "future_extension"):
+            extension_stages.add(msid)
+
+    def _stage_sort_key(s):
+        sid = s["stage_id"] if isinstance(s, dict) else s.stage_id
+        if sid in overview_stages:
+            return (0, 0)
+        if sid in integration_stages:
+            return (2, 0)
+        if sid in extension_stages:
+            return (3, 0)
+        return (1, stage_id_to_pos.get(sid, 999))
+
+    stages.sort(key=_stage_sort_key)
+
+    result = dict(tree_data)
+    result["stages"] = stages
+    result["modules"] = modules
+    return result
+
+
 def convert_uploaded_tree(raw_data: dict) -> dict:
     """Convert uploaded knowledge tree to v5 format dict.
 
     Auto-detects format:
-    - If `raw_data` has "stages" + "modules" -> already v5, return as-is.
+    - If `raw_data` has "stages" + "modules" -> already v5, promote special_nodes.
     - If `raw_data` has "milestones" key -> legacy format, upgrade to v5.
     - If `raw_data` has "知识树节点" key -> Chinese format, convert to milestones then v5.
 
@@ -432,11 +566,15 @@ def convert_uploaded_tree(raw_data: dict) -> dict:
     """
     # Already v5 format
     if "stages" in raw_data and "modules" in raw_data:
-        return raw_data
+        return _promote_special_nodes(raw_data)
 
     # Legacy milestones format
     if "milestones" in raw_data:
-        return milestones_to_v5(raw_data)
+        v5 = milestones_to_v5(raw_data)
+        # Carry over special_nodes from original data for promotion
+        if "special_nodes" in raw_data and "special_nodes" not in v5:
+            v5["special_nodes"] = raw_data["special_nodes"]
+        return _promote_special_nodes(v5)
 
     # Chinese format -> milestones -> v5
     if "知识树节点" in raw_data:
