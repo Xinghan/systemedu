@@ -14,9 +14,11 @@ from systemedu.education.models import (
     NodeStatus,
     Project,
     UserNodeProgress,
+    V5KnowledgeTree,
 )
 from systemedu.education.progress import initialize_progress
 from systemedu.education.services import parse_knowledge_tree
+from systemedu.education.tree_adapter import v5_to_milestones_view
 
 logger = logging.getLogger(__name__)
 
@@ -29,6 +31,7 @@ class ProjectContext:
     tree: KnowledgeTree
     progress: list[UserNodeProgress]
     project_dir: Path
+    v5_tree: V5KnowledgeTree = field(default_factory=V5KnowledgeTree)
 
     def all_nodes_flat(self) -> list[KnowledgeNode]:
         """Return all nodes across all milestones, in global index order."""
@@ -101,14 +104,22 @@ def _load_project_yaml(project_dir: Path) -> Project:
     return Project.model_validate(data)
 
 
-def _load_knowledge_tree(project_dir: Path, tree_path: str) -> KnowledgeTree:
-    """Load and parse a knowledge tree JSON file."""
+def _load_knowledge_tree(
+    project_dir: Path, tree_path: str
+) -> tuple[V5KnowledgeTree, KnowledgeTree]:
+    """Load and parse a knowledge tree JSON file.
+
+    Returns (v5_tree, milestones_view) tuple.
+    Auto-detects format and converts to v5 if needed.
+    """
     resolved = (project_dir / tree_path).resolve()
     if not resolved.exists():
         raise FileNotFoundError(f"Knowledge tree not found: {resolved}")
 
     data = json.loads(resolved.read_text(encoding="utf-8"))
-    return parse_knowledge_tree(data)
+    v5_tree = parse_knowledge_tree(data)
+    milestones_view = v5_to_milestones_view(v5_tree)
+    return v5_tree, milestones_view
 
 
 def load_progress(
@@ -260,7 +271,7 @@ def load_project_context(
         project_dir = find_project_dir(name)
 
     project = _load_project_yaml(project_dir)
-    tree = _load_knowledge_tree(project_dir, project.knowledge_tree_path)
+    v5_tree, tree = _load_knowledge_tree(project_dir, project.knowledge_tree_path)
 
     # Count total nodes
     node_count = sum(len(ms.knodes) for ms in tree.milestones)
@@ -286,6 +297,7 @@ def load_project_context(
 
     return ProjectContext(
         project=project,
+        v5_tree=v5_tree,
         tree=tree,
         progress=progress,
         project_dir=project_dir,

@@ -4,7 +4,7 @@ import json
 import logging
 import re
 
-from .models import KnowledgeTree
+from .models import V5KnowledgeTree
 from .services import parse_knowledge_tree
 
 logger = logging.getLogger(__name__)
@@ -62,11 +62,11 @@ async def generate_knowledge_tree(
     target_nodes: int = 20,
     llm_provider: str | None = None,
     max_retries: int = 3,
-) -> KnowledgeTree:
+) -> V5KnowledgeTree:
     """Generate a knowledge tree for a project using the Planner agent.
 
     Retries up to max_retries times on failure.
-    Returns a validated KnowledgeTree model.
+    Returns a validated V5KnowledgeTree model (auto-converted from planner output).
     """
     from systemedu.agents.base import AgentConfig
     from systemedu.agents.builtin.planner import PlannerAgent
