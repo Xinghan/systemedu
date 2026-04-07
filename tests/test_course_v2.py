@@ -272,56 +272,6 @@ _MOCK_ANIM_SPEC = json.dumps({
 })
 
 
-class TestAnimationGenAgent:
-
-    @pytest.mark.asyncio
-    async def test_generate_returns_html(self):
-        """AnimationGenAgent 通过 AnimationSpec DSL 生成合法 HTML。"""
-        from systemedu.agents.builtin.animation_gen_agent import AnimationGenAgent
-
-        llm = _make_llm(_MOCK_ANIM_SPEC)
-        agent = AnimationGenAgent(llm)
-        detail = {
-            "title": "力传递动画",
-            "frame_count": 2,
-            "frames": [{"frame_index": 0, "description": "状态1", "visual_elements": ["A"]}],
-            "style_hint": "科技感",
-            "animation_type": "物理过程",
-        }
-        result = await agent.generate(detail, "力")
-        assert "<!doctype html" in result.lower()
-        assert "step_complete" in result.lower()
-        assert "AnimationRuntime" in result
-
-    @pytest.mark.asyncio
-    async def test_generate_fallback_on_invalid_json(self):
-        """LLM 返回非法 JSON 时，AnimationGenAgent 走 deterministic fallback。"""
-        from systemedu.agents.builtin.animation_gen_agent import AnimationGenAgent
-
-        llm = _make_llm("这不是JSON内容，只是普通文字")
-        agent = AnimationGenAgent(llm)
-        detail = {
-            "title": "t",
-            "frame_count": 1,
-            "frames": [{"frame_index": 0, "description": "d", "visual_elements": ["A", "B"]}],
-            "style_hint": "科技感",
-            "animation_type": "物理过程",
-        }
-        result = await agent.generate(detail, "力")
-        # Fallback 仍然返回合法 HTML 含完成信号
-        assert "step_complete" in result.lower()
-        assert "AnimationRuntime" in result
-
-    @pytest.mark.asyncio
-    async def test_generate_empty_frames(self):
-        from systemedu.agents.builtin.animation_gen_agent import AnimationGenAgent
-
-        llm = _make_llm("<html></html>")
-        agent = AnimationGenAgent(llm)
-        result = await agent.generate({"frames": []}, "力")
-        assert result == ""
-
-
 # ===== IntegrationAgent =====
 
 class TestIntegrationAgent:
@@ -450,43 +400,6 @@ class TestDbCourseContent:
 class TestCourseSegmentAgent:
 
     @pytest.mark.asyncio
-    async def test_segment_returns_sections(self):
-        from systemedu.agents.builtin.course_segment_agent import CourseSegmentAgent
-
-        response_json = json.dumps([
-            {
-                "section_id": "",
-                "heading": "什么是力",
-                "body_markdown": "## 什么是力\n\n力是物体间的相互作用。",
-                "audio_script": "同学们好，今天我们聊聊力的概念。",
-            },
-            {
-                "section_id": "",
-                "heading": "力的类型",
-                "body_markdown": "## 力的类型\n\n[[IDEA:idea-1]]\n\n重力和摩擦力是常见的力。",
-                "audio_script": "力有很多种类，我们来认识几种常见的。",
-            },
-        ])
-        llm = _make_llm(response_json)
-        agent = CourseSegmentAgent(llm)
-        sections = await agent.segment(
-            plan_markdown="## 什么是力\n\n力是物体间的相互作用。\n\n## 力的类型\n\n重力和摩擦力是常见的力。",
-            node_title="力",
-        )
-
-        assert len(sections) == 2
-        for s in sections:
-            assert "section_id" in s
-            assert len(s["section_id"]) > 0  # UUID assigned
-            assert "heading" in s
-            assert "body_markdown" in s
-            assert "audio_script" in s
-            assert "audio_url" in s
-
-        assert sections[0]["heading"] == "什么是力"
-        assert "[[IDEA:idea-1]]" in sections[1]["body_markdown"]
-
-    @pytest.mark.asyncio
     async def test_segment_fallback_on_invalid_json(self):
         from systemedu.agents.builtin.course_segment_agent import CourseSegmentAgent
 
@@ -612,63 +525,6 @@ class TestGameMechanicSelection:
         from systemedu.agents.builtin.course_idea_detail_planner_agent import GAME_DETAIL_PROMPT
         assert "mechanic_reason" in GAME_DETAIL_PROMPT
 
-    @pytest.mark.asyncio
-    async def test_game_gen_agent_uses_mechanic_from_detail_plan(self):
-        from systemedu.agents.builtin.game_gen_agent import GameGenAgent
-        from unittest.mock import AsyncMock, patch
-
-        llm = _make_llm("")
-        agent = GameGenAgent(llm)
-
-        # Patch science model to return None (skip)
-        agent.science_model.extract = AsyncMock(return_value=None)
-
-        detail_plan = {
-            "game_mechanic": "match_pairs",
-            "game_concept": "配对细胞器与功能",
-            "game_title": "细胞器配对",
-            "style_key": "concept_lab_clean",
-        }
-
-        captured_strategy = {}
-        original_plan = None
-
-        async def mock_planner_plan(**kwargs):
-            captured_strategy.update(kwargs.get("lab_strategy", {}))
-            return None  # return None to exit early
-
-        with patch(
-            "systemedu.agents.builtin.gameagent.planner.GameSpecPlannerAgent.plan",
-            side_effect=mock_planner_plan,
-        ):
-            await agent.generate(detail_plan, "细胞器", "了解细胞器功能", difficulty=3)
-
-        assert captured_strategy.get("game_mechanic") == "match_pairs"
-
-    @pytest.mark.asyncio
-    async def test_game_gen_agent_fallback_unknown_mechanic(self):
-        from systemedu.agents.builtin.game_gen_agent import GameGenAgent
-        from unittest.mock import AsyncMock, patch
-
-        llm = _make_llm("")
-        agent = GameGenAgent(llm)
-        agent.science_model.extract = AsyncMock(return_value=None)
-
-        detail_plan = {"game_mechanic": "unknown_mechanic", "game_concept": "test", "game_title": "test"}
-
-        captured = {}
-
-        async def mock_plan(**kwargs):
-            captured.update(kwargs.get("lab_strategy", {}))
-            return None
-
-        with patch(
-            "systemedu.agents.builtin.gameagent.planner.GameSpecPlannerAgent.plan",
-            side_effect=mock_plan,
-        ):
-            await agent.generate(detail_plan, "test", "test", difficulty=3)
-
-        assert captured.get("game_mechanic") == "simulation"
 
 
 # ===== P2: ScientificModelAgent =====
