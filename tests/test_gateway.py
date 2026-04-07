@@ -1116,30 +1116,32 @@ class TestGatewayGenerateTree:
 
     def test_generate_tree_success(self, config_env):
         """POST /api/projects/generate-tree returns TreePreviewResponse on success."""
-        from systemedu.education.models import KnowledgeTree, Milestone, KnowledgeNode
+        from systemedu.education.models import V5KnowledgeTree, Stage, Module
 
-        mock_tree = KnowledgeTree(
-            milestones=[
-                Milestone(
-                    title="基础模块",
-                    knodes=[
-                        KnowledgeNode(
-                            title="节点1",
-                            summary="描述",
-                            difficulty_level=1,
-                            estimated_minutes=20,
-                            prerequisite_indices=[],
-                        ),
-                        KnowledgeNode(
-                            title="节点2",
-                            summary="描述2",
-                            difficulty_level=2,
-                            estimated_minutes=30,
-                            prerequisite_indices=[0],
-                        ),
-                    ],
-                )
-            ]
+        mock_tree = V5KnowledgeTree(
+            stages=[Stage(stage_id="S1", title="基础模块", stage_description="")],
+            modules=[
+                Module(
+                    module_id="M01",
+                    title="节点1",
+                    stage_id="S1",
+                    sequence_order=1,
+                    summary="描述",
+                    knowledge_level="K1",
+                    estimated_duration_months="1",
+                    depends_on=[],
+                ),
+                Module(
+                    module_id="M02",
+                    title="节点2",
+                    stage_id="S1",
+                    sequence_order=2,
+                    summary="描述2",
+                    knowledge_level="K1",
+                    estimated_duration_months="1",
+                    depends_on=["M01"],
+                ),
+            ],
         )
 
         with patch(
@@ -1158,8 +1160,8 @@ class TestGatewayGenerateTree:
             assert data["valid"] is True
             assert data["stats"]["milestone_count"] == 1
             assert data["stats"]["node_count"] == 2
-            assert data["stats"]["total_minutes"] == 50
-            assert data["stats"]["estimated_hours"] == 1
+            assert data["stats"]["total_minutes"] == 720
+            assert data["stats"]["estimated_hours"] == 12
             assert len(data["milestones"]) == 1
             assert data["meta"]["title"] == "AI 树叶识别"
             assert data["errors"] == []
@@ -1182,20 +1184,17 @@ class TestGatewayGenerateTree:
 
     def test_generate_tree_with_node_count(self, config_env):
         """POST /api/projects/generate-tree passes node_count to generate_knowledge_tree."""
-        from systemedu.education.models import KnowledgeTree, Milestone, KnowledgeNode
+        from systemedu.education.models import V5KnowledgeTree, Stage, Module
 
-        mock_tree = KnowledgeTree(
-            milestones=[
-                Milestone(
-                    title="M1",
-                    knodes=[
-                        KnowledgeNode(
-                            title="N1", summary="d", difficulty_level=1,
-                            estimated_minutes=10, prerequisite_indices=[],
-                        ),
-                    ],
-                )
-            ]
+        mock_tree = V5KnowledgeTree(
+            stages=[Stage(stage_id="S1", title="M1")],
+            modules=[
+                Module(
+                    module_id="M01", title="N1", stage_id="S1",
+                    sequence_order=1, summary="d", knowledge_level="K1",
+                    estimated_duration_months="1", depends_on=[],
+                ),
+            ],
         )
 
         with patch(
@@ -1216,20 +1215,17 @@ class TestGatewayGenerateTree:
 
     def test_generate_tree_node_count_clamped(self, config_env):
         """node_count should be clamped to [5, 500]."""
-        from systemedu.education.models import KnowledgeTree, Milestone, KnowledgeNode
+        from systemedu.education.models import V5KnowledgeTree, Stage, Module
 
-        mock_tree = KnowledgeTree(
-            milestones=[
-                Milestone(
-                    title="M1",
-                    knodes=[
-                        KnowledgeNode(
-                            title="N1", summary="d", difficulty_level=1,
-                            estimated_minutes=10, prerequisite_indices=[],
-                        ),
-                    ],
-                )
-            ]
+        mock_tree = V5KnowledgeTree(
+            stages=[Stage(stage_id="S1", title="M1")],
+            modules=[
+                Module(
+                    module_id="M01", title="N1", stage_id="S1",
+                    sequence_order=1, summary="d", knowledge_level="K1",
+                    estimated_duration_months="1", depends_on=[],
+                ),
+            ],
         )
 
         with patch(
@@ -1249,20 +1245,17 @@ class TestGatewayGenerateTree:
 
     def test_generate_tree_node_count_default(self, config_env):
         """node_count defaults to 20 when not provided."""
-        from systemedu.education.models import KnowledgeTree, Milestone, KnowledgeNode
+        from systemedu.education.models import V5KnowledgeTree, Stage, Module
 
-        mock_tree = KnowledgeTree(
-            milestones=[
-                Milestone(
-                    title="M1",
-                    knodes=[
-                        KnowledgeNode(
-                            title="N1", summary="d", difficulty_level=1,
-                            estimated_minutes=10, prerequisite_indices=[],
-                        ),
-                    ],
-                )
-            ]
+        mock_tree = V5KnowledgeTree(
+            stages=[Stage(stage_id="S1", title="M1")],
+            modules=[
+                Module(
+                    module_id="M01", title="N1", stage_id="S1",
+                    sequence_order=1, summary="d", knowledge_level="K1",
+                    estimated_duration_months="1", depends_on=[],
+                ),
+            ],
         )
 
         with patch(
