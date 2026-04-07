@@ -241,6 +241,46 @@ class V5KnowledgeTree(BaseModel):
     global_integration_rule: str = ""
 
 
+class PathBadge(BaseModel):
+    """Badge earned by completing a career path stage."""
+
+    name: str
+    description: str = ""
+    icon: str = ""  # Relative path to SVG, e.g. badges/mars-explorer.svg
+
+
+class PathStage(BaseModel):
+    """A stage in a career path, tied to a project."""
+
+    order: int = 0
+    project_name: str
+    required: bool = True
+    badge: PathBadge | None = None
+    avatar_stage: int = 0
+
+
+class AvatarStage(BaseModel):
+    """An avatar evolution stage in a career path."""
+
+    stage: int = 0
+    title: str
+    description: str = ""
+    image: str = ""  # Relative path to SVG, e.g. avatars/stage-0.svg
+
+
+class CareerPath(BaseModel):
+    """A career path connecting multiple projects into a progression."""
+
+    name: str
+    title: str
+    description: str = ""
+    category: Category = Category.OTHER
+    age_range: list[int] = Field(default_factory=lambda: [6, 18])
+    estimated_months: int = 12
+    stages: list[PathStage] = Field(default_factory=list)
+    avatar_stages: list[AvatarStage] = Field(default_factory=list)
+
+
 class UserNodeProgress(BaseModel):
     """Track progress on a single knowledge node."""
 

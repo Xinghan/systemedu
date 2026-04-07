@@ -294,6 +294,54 @@ class UserNote(Base):
     updated_at = Column(DateTime, default=datetime.now)
 
 
+class CareerPathRecord(Base):
+    """A locally loaded career path."""
+
+    __tablename__ = "career_paths"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    name = Column(String(200), unique=True, nullable=False)
+    title = Column(String(200), nullable=False)
+    description = Column(Text, default="")
+    path = Column(String(500), nullable=False)  # Filesystem path to path directory
+    category = Column(String(50), default="other")
+    loaded_at = Column(DateTime, default=datetime.now)
+
+
+class CareerPathProgress(Base):
+    """User progress on a career path."""
+
+    __tablename__ = "career_path_progress"
+    __table_args__ = (
+        UniqueConstraint("user_id", "path_name", name="uq_career_progress"),
+    )
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(String(100), nullable=False, default="default")
+    path_name = Column(String(200), nullable=False)
+    current_stage = Column(Integer, default=0)
+    current_avatar_stage = Column(Integer, default=0)
+    status = Column(String(20), default="active")  # active / completed
+    started_at = Column(DateTime, nullable=True)
+    completed_at = Column(DateTime, nullable=True)
+
+
+class EarnedBadge(Base):
+    """Badge earned by completing a career path stage."""
+
+    __tablename__ = "earned_badges"
+    __table_args__ = (
+        UniqueConstraint("user_id", "path_name", "stage_order", name="uq_earned_badge"),
+    )
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(String(100), nullable=False, default="default")
+    path_name = Column(String(200), nullable=False)
+    stage_order = Column(Integer, nullable=False)
+    badge_name = Column(String(200), nullable=False)
+    earned_at = Column(DateTime, default=datetime.now)
+
+
 _engine = None
 _session_factory = None
 
