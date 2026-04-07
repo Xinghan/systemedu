@@ -209,7 +209,7 @@ class Stage(BaseModel):
     stage_description: str = ""
     why_this_stage_exists: str = ""
     concept_density_class: str = ""
-    new_concept_count_estimate: str = ""
+    new_concept_count_estimate: str | int = ""
     module_count_reason: str = ""
     stage_output: str = ""
     closing_capstone_module_id: str = ""
