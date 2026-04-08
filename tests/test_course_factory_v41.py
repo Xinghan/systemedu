@@ -809,3 +809,99 @@ class TestInjectAnimationResizePatch:
         upgraded = inject_animation_resize_patch(self.SIMPLE_HTML)
         twice = inject_animation_resize_patch(upgraded)
         assert twice == upgraded
+
+
+# ── Theories 功能测试 ─────────────────────────────────────────
+
+
+class TestTheories:
+    """测试 make_course_content 的 theories 参数注入。"""
+
+    def _sample_theories(self):
+        return [
+            {
+                "theory_id": "theory_phys_friction",
+                "title": "摩擦力",
+                "subject": "physics",
+                "body_markdown": "## 摩擦力\n\n摩擦力是两个接触表面之间的阻力。",
+                "related_paragraph": "核心概念段",
+            },
+            {
+                "theory_id": "theory_math_coord",
+                "title": "坐标系",
+                "subject": "math",
+                "body_markdown": "## 笛卡尔坐标系\n\n用两条垂直的数轴来定位平面上的点。",
+                "related_paragraph": "深入理解段",
+            },
+        ]
+
+    def test_theories_included_in_course_content(self):
+        """传入 theories 时，course_content 中包含 theories 字段。"""
+        theories = self._sample_theories()
+        knode = _v41_knode()
+        cc = make_course_content(
+            plan_markdown="> Module: M01\n\n## 学习目标\n\n能够...\n\n"
+                + "[[THEORY:theory_phys_friction]]\n\n## 核心概念：测试\n\n"
+                + f"内容 core_question={knode['core_question']}\n\n"
+                + "## 深入理解：测试\n\nhands_on\n\n"
+                + "[[THEORY:theory_math_coord]]\n\n## 应用与拓展\n\n"
+                + f"acceptance_artifacts title={knode['acceptance_artifacts'][0]['title']}\n\n",
+            animation_html=None,
+            animation_topic="",
+            exercises=make_exercises([
+                {"question": "Q1", "options": ["A", "B", "C", "D"], "correct": 0,
+                 "explanation": "E1"},
+            ]),
+            exercise_topic="测试练习",
+            knode=knode,
+            exercise_hands_on_ref=knode["hands_on_components"][0],
+            exercise_acceptance_ref=knode["acceptance_standard"][0],
+            theories=theories,
+        )
+        assert "theories" in cc
+        assert len(cc["theories"]) == 2
+        assert cc["theories"][0]["theory_id"] == "theory_phys_friction"
+        assert cc["theories"][1]["subject"] == "math"
+
+    def test_no_theories_omits_field(self):
+        """不传入 theories 时，course_content 中没有 theories 字段。"""
+        knode = _v41_knode()
+        cc = make_course_content(
+            plan_markdown="> Module: M01\n\n## 学习目标\n\n能够...\n\n"
+                + f"## 核心概念：测试\n\ncore_question={knode['core_question']}\n\n"
+                + "## 深入理解：测试\n\nhands_on\n\n## 应用与拓展\n\n"
+                + f"acceptance_artifacts title={knode['acceptance_artifacts'][0]['title']}\n\n",
+            animation_html=None,
+            animation_topic="",
+            exercises=make_exercises([
+                {"question": "Q1", "options": ["A", "B", "C", "D"], "correct": 0,
+                 "explanation": "E1"},
+            ]),
+            exercise_topic="测试练习",
+            knode=knode,
+            exercise_hands_on_ref=knode["hands_on_components"][0],
+            exercise_acceptance_ref=knode["acceptance_standard"][0],
+        )
+        assert "theories" not in cc
+
+    def test_empty_theories_omits_field(self):
+        """传入空列表时，course_content 中没有 theories 字段。"""
+        knode = _v41_knode()
+        cc = make_course_content(
+            plan_markdown="> Module: M01\n\n## 学习目标\n\n能够...\n\n"
+                + f"## 核心概念：测试\n\ncore_question={knode['core_question']}\n\n"
+                + "## 深入理解：测试\n\nhands_on\n\n## 应用与拓展\n\n"
+                + f"acceptance_artifacts title={knode['acceptance_artifacts'][0]['title']}\n\n",
+            animation_html=None,
+            animation_topic="",
+            exercises=make_exercises([
+                {"question": "Q1", "options": ["A", "B", "C", "D"], "correct": 0,
+                 "explanation": "E1"},
+            ]),
+            exercise_topic="测试练习",
+            knode=knode,
+            exercise_hands_on_ref=knode["hands_on_components"][0],
+            exercise_acceptance_ref=knode["acceptance_standard"][0],
+            theories=[],
+        )
+        assert "theories" not in cc
