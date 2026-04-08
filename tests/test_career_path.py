@@ -92,9 +92,9 @@ def paths_dir(tmp_path):
             },
         ],
         "avatar_stages": [
-            {"stage": 0, "title": "Beginner", "description": "Just started", "image": "avatars/stage-0.svg"},
-            {"stage": 1, "title": "Intermediate", "description": "Making progress", "image": "avatars/stage-1.svg"},
-            {"stage": 2, "title": "Expert", "description": "Path complete", "image": "avatars/stage-2.svg"},
+            {"stage": 0, "title": "Beginner", "description": "Just started", "image": "avatars/stage-0.svg", "xp_threshold": 0},
+            {"stage": 1, "title": "Intermediate", "description": "Making progress", "image": "avatars/stage-1.svg", "xp_threshold": 100},
+            {"stage": 2, "title": "Expert", "description": "Path complete", "image": "avatars/stage-2.svg", "xp_threshold": 300},
         ],
     }
 
@@ -235,6 +235,46 @@ class TestEnrollAndProgress:
         assert progress["current_avatar"]["title"] == "Expert"
 
 
+class TestAutoEnroll:
+    def test_auto_enroll_on_project_start(self, paths_dir, tmp_path):
+        """Starting a project auto-enrolls user in related career paths."""
+        from systemedu.education.career_path import auto_enroll_for_project
+
+        _setup_db(tmp_path)
+        scan_paths(paths_dir)
+
+        enrolled = auto_enroll_for_project("default", "project-alpha")
+        assert "test-scientist" in enrolled
+
+        # Verify progress record was created
+        progress = get_path_progress("default", "test-scientist")
+        assert progress is not None
+        assert progress["progress"]["status"] == "active"
+
+    def test_auto_enroll_idempotent(self, paths_dir, tmp_path):
+        """Auto-enroll doesn't duplicate if already enrolled."""
+        from systemedu.education.career_path import auto_enroll_for_project
+
+        _setup_db(tmp_path)
+        scan_paths(paths_dir)
+
+        enrolled1 = auto_enroll_for_project("default", "project-alpha")
+        assert len(enrolled1) == 1
+
+        enrolled2 = auto_enroll_for_project("default", "project-alpha")
+        assert len(enrolled2) == 0  # Already enrolled
+
+    def test_auto_enroll_unrelated_project(self, paths_dir, tmp_path):
+        """Unrelated projects don't trigger auto-enroll."""
+        from systemedu.education.career_path import auto_enroll_for_project
+
+        _setup_db(tmp_path)
+        scan_paths(paths_dir)
+
+        enrolled = auto_enroll_for_project("default", "unrelated-project")
+        assert enrolled == []
+
+
 class TestOnProjectCompleted:
     def test_hook_triggers_recalculation(self, paths_dir, tmp_path):
         _setup_db(tmp_path)
@@ -310,6 +350,121 @@ class TestBadgeSvg:
 
         svg = get_badge_svg("test-scientist", "badges/nonexistent.svg")
         assert svg is None
+
+
+class TestXPAccumulation:
+    def test_add_xp_basic(self, paths_dir, tmp_path):
+        """XP accumulates on career path progress."""
+        from systemedu.education.career_path import add_xp
+
+        _setup_db(tmp_path)
+        scan_paths(paths_dir)
+        enroll_path("default", "test-scientist")
+
+        results = add_xp("default", "project-alpha", 50)
+        assert len(results) == 1
+        assert results[0]["path_name"] == "test-scientist"
+        assert results[0]["total_xp"] == 50
+        assert results[0]["new_avatar_stage"] is None  # threshold is 100
+
+    def test_add_xp_triggers_avatar_evolution(self, paths_dir, tmp_path):
+        """XP crossing threshold triggers avatar stage upgrade."""
+        from systemedu.education.career_path import add_xp
+
+        _setup_db(tmp_path)
+        scan_paths(paths_dir)
+        enroll_path("default", "test-scientist")
+
+        # Add enough XP to reach stage 1 (threshold=100)
+        results = add_xp("default", "project-alpha", 120)
+        assert results[0]["total_xp"] == 120
+        assert results[0]["new_avatar_stage"] == 1
+        assert results[0]["badge_earned"] == "Beta Badge"  # avatar_stage=1 maps to project-beta
+
+    def test_add_xp_cumulative(self, paths_dir, tmp_path):
+        """Multiple XP additions accumulate correctly."""
+        from systemedu.education.career_path import add_xp
+
+        _setup_db(tmp_path)
+        scan_paths(paths_dir)
+        enroll_path("default", "test-scientist")
+
+        add_xp("default", "project-alpha", 50)
+        results = add_xp("default", "project-alpha", 60)
+        assert results[0]["total_xp"] == 110
+        assert results[0]["new_avatar_stage"] == 1  # crossed 100 threshold
+
+    def test_add_xp_skips_unenrolled_path(self, paths_dir, tmp_path):
+        """XP is not added if user is not enrolled in the path."""
+        from systemedu.education.career_path import add_xp
+
+        _setup_db(tmp_path)
+        scan_paths(paths_dir)
+        # Don't enroll
+
+        results = add_xp("default", "project-alpha", 50)
+        assert results == []
+
+    def test_add_xp_unrelated_project(self, paths_dir, tmp_path):
+        """XP from unrelated project has no effect."""
+        from systemedu.education.career_path import add_xp
+
+        _setup_db(tmp_path)
+        scan_paths(paths_dir)
+        enroll_path("default", "test-scientist")
+
+        results = add_xp("default", "unrelated-project", 50)
+        assert results == []
+
+    def test_add_xp_zero_or_negative(self, paths_dir, tmp_path):
+        """Zero or negative XP is rejected."""
+        from systemedu.education.career_path import add_xp
+
+        _setup_db(tmp_path)
+        scan_paths(paths_dir)
+        enroll_path("default", "test-scientist")
+
+        assert add_xp("default", "project-alpha", 0) == []
+        assert add_xp("default", "project-alpha", -10) == []
+
+    def test_add_xp_multi_stage_evolution(self, paths_dir, tmp_path):
+        """Large XP can skip to higher avatar stages."""
+        from systemedu.education.career_path import add_xp
+
+        _setup_db(tmp_path)
+        scan_paths(paths_dir)
+        enroll_path("default", "test-scientist")
+
+        # Add enough XP to reach stage 2 directly (threshold=300)
+        results = add_xp("default", "project-alpha", 350)
+        assert results[0]["total_xp"] == 350
+        assert results[0]["new_avatar_stage"] == 2
+
+    def test_progress_includes_xp_info(self, paths_dir, tmp_path):
+        """get_path_progress returns XP and next threshold."""
+        from systemedu.education.career_path import add_xp
+
+        _setup_db(tmp_path)
+        scan_paths(paths_dir)
+        enroll_path("default", "test-scientist")
+
+        add_xp("default", "project-alpha", 50)
+        progress = get_path_progress("default", "test-scientist")
+        assert progress["progress"]["total_xp"] == 50
+        assert progress["progress"]["next_avatar_xp"] == 100  # next threshold
+
+    def test_list_paths_includes_xp(self, paths_dir, tmp_path):
+        """list_paths returns total_xp and next_avatar_xp."""
+        from systemedu.education.career_path import add_xp
+
+        _setup_db(tmp_path)
+        scan_paths(paths_dir)
+        enroll_path("default", "test-scientist")
+
+        add_xp("default", "project-alpha", 50)
+        paths = list_paths()
+        assert paths[0]["total_xp"] == 50
+        assert paths[0]["next_avatar_xp"] == 100
 
 
 class TestAllEarnedBadges:

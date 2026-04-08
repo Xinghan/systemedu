@@ -204,47 +204,6 @@ Internet -> nginx:80 -> /api/*  -> uvicorn:18820 (Python gateway)
 - No over-engineering: build what's needed now, not what might be needed later
 - **禁止使用 emoji**：所有代码、prompt、UI 文案、PRD 中不使用任何 emoji 符号（包括 ✓✗★♥ 等 Unicode 符号）。反馈用纯文字或 SVG 图形表达。
 
-### Object 渲染质量标准（强制）
-
-本项目对教育游戏 Object 的视觉质量有明确的高标准要求。所有进入 ObjectRegistry 的 object，无论是手写还是 LLM/ObjectFactory 生成，都必须达到以下标准：
-
-**渲染架构：必须使用 `defs_svg` + `body_svg` 路径**
-- 禁止使用纯 shapes 列表（`RectShape`/`EllipseShape` 堆叠）作为最终产物进入 Registry
-- shapes pipeline 仅用于 LLM 候选阶段（staging），通过 validator 后必须升级为 body_svg
-- `defs_svg`：SVG `<defs>` 内容，包含渐变、滤镜、clipPath
-- `body_svg`：完整场景 SVG 字符串，直接注入 `#scene-group`
-
-**几何质量：必须使用有机曲线**
-- 禁止用矩形叠矩形（"积木人"/"乐高块"风格）来表示人体、生物等有机形态
-- 人形/生物类：必须用 cubic bezier 路径（`C`/`S` 命令）做头型（下颌收窄）、四肢（锥形渐细）、耳朵（C 型曲线）
-- 机械/建筑类：允许直线+弯角，但轮廓边必须有倒角或曲线过渡，不能是纯矩形
-- 无机/科学图示类（细胞、原子、地球）：轮廓可用椭圆，但内部结构必须区分层次
-
-**色彩质量：必须使用渐变 + 多层阴影**
-- 禁止单色平涂（`fill="#FFCC80"` 无渐变）
-- 所有主要部件必须有至少 2 层颜色（基色 + 高光 or 基色 + 阴影）
-- 皮肤/有机材质：使用 3 层暖色系（高光 `#F5C8A0` / 中调 `#E0956A` / 暖影 `#A85C30`），禁止灰调阴影
-- 金属/机械材质：使用线性渐变模拟反光（亮面 / 中调 / 暗边）
-- 发光/能量材质（电子、火焰、内核）：使用径向渐变 + 外发光滤镜（`<feGaussianBlur>`）
-
-**信息密度：物体必须填满 viewBox**
-- 主体元素应占 viewBox 面积的 60% 以上，不允许大片空白
-- 每个 labelable 部件必须在视觉上清晰可辨（大小足够、颜色有区分度）
-- anchor 点坐标必须精确落在对应部件的视觉中心，误差 < 5% viewBox
-
-**ObjectFactory（C pipeline）生成标准**
-- 当前 `CandidateGenerator` 的 Step 2（LLM 输出 shapes JSON）仅产生 staging 候选，不能直接进入 Registry
-- 目标架构（方案 A）：Step 2 改为 LLM 输出 Python `build()` 函数代码，遵循现有手写 object 的模板风格（defs_svg + body_svg + 贝塞尔曲线 + 渐变）
-- 在方案 A 实现前：LLM 生成的候选必须经过人工或 Claude 审核升级后才能 promote 到 Registry
-- 任何人说"先用简单形状 fallback 一下"，必须拒绝，正确做法是保持 MissQueue/fallback 到已有高质量 object
-
-**验收检查清单（新 object 进入 Registry 前）**
-1. `ObjectRegistry.build(key)` 返回 `body_svg` 非空，`shapes` 为空列表
-2. 在浏览器中渲染，主体充满 viewBox，无大片空白
-3. 至少有 2 种颜色层次（渐变或阴影）
-4. anchor 点落在对应部件上（不在空白处）
-5. `python -m pytest tests/ -v` 全部通过
-
 ### Development Loop (必须遵循)
 每个功能的开发必须严格按照以下循环执行：
 
@@ -286,5 +245,3 @@ Internet -> nginx:80 -> /api/*  -> uvicorn:18820 (Python gateway)
 | 2026-03-14 | SQLite for local storage | 本地优先，无需安装数据库服务器 |
 | 2026-03-14 | SKILL.md format | 兼容 OpenClaw，YAML frontmatter + markdown body |
 | 2026-03-14 | Pydantic models (no Django ORM) | 核心包不依赖 Django，轻量化 |
-| 2026-03-21 | Object 渲染使用 defs_svg + body_svg 架构 | LLM shapes pipeline 仅用于 staging，最终产物必须是原始 SVG + 渐变 + 贝塞尔曲线 |
-| 2026-03-21 | ObjectFactory C pipeline 目标架构为方案 A（LLM 生成 Python build() 代码） | 保证新生成 object 与手写 object 质量一致，禁止积木人风格进入 Registry |

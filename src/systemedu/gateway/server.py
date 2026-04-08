@@ -463,15 +463,6 @@ async def api_create_project(request: Request) -> JSONResponse:
     finally:
         db.close()
 
-    # Auto-scan first-layer nodes and enqueue missing objects (non-fatal)
-    try:
-        from systemedu.education.object_scan import scan_and_enqueue_project_nodes
-        enqueued = scan_and_enqueue_project_nodes(name)
-        if enqueued:
-            logger.info(f"Auto-enqueued {len(enqueued)} objects for {name!r}: {enqueued}")
-    except Exception:
-        logger.exception("Auto-enqueue scan failed (non-fatal)")
-
     # Background: generate cover image via DashScope Wanx
     async def _bg_generate_cover() -> None:
         try:
@@ -1178,146 +1169,6 @@ async def api_upload_project_cover(request: Request) -> JSONResponse:
         return JSONResponse({"error": str(e)}, status_code=500)
 
 
-async def api_objects_registry(request: Request) -> JSONResponse:
-    """GET /api/objects/registry - Return all objects in ObjectRegistry with metadata."""
-    from systemedu.agents.builtin.gameagent.objects import ObjectRegistry
-
-    keys = ObjectRegistry.supported_keys()
-    items = []
-    for key in keys:
-        meta = ObjectRegistry.get_meta(key)
-        family = key.split(".")[0]
-        variant = key.split(".", 1)[1] if "." in key else key
-        items.append({
-            "object_key": key,
-            "family": family,
-            "variant": variant,
-            "views": meta.get("views", []),
-            "must_have": meta.get("must_have", []),
-            "optional": meta.get("optional", []),
-            "labelable": meta.get("labelable", []),
-            "source": "registry",
-        })
-
-    # Also include done items from FactoryQueue (promoted to registry)
-    from systemedu.agents.builtin.gameagent.object_factory import FactoryQueue
-    queue = FactoryQueue()
-    staging_items = []
-    for item in queue.all_items():
-        if item.status in ("pending", "in_progress", "done", "failed"):
-            family = item.object_key.split(".")[0]
-            variant = item.object_key.split(".", 1)[1] if "." in item.object_key else item.object_key
-            staging_items.append({
-                "object_key": item.object_key,
-                "family": family,
-                "variant": variant,
-                "status": item.status,
-                "source": "factory_queue",
-                "project_name": item.project_name,
-                "created_at": item.created_at,
-                "error": item.error,
-            })
-
-    # Deduplicate: remove staging items already in registry
-    registry_keys = {i["object_key"] for i in items}
-    staging_items = [i for i in staging_items if i["object_key"] not in registry_keys]
-
-    return JSONResponse({
-        "registry": items,
-        "staging": staging_items,
-        "total_registry": len(items),
-        "total_staging": len(staging_items),
-    })
-
-
-async def api_objects_queue(request: Request) -> JSONResponse:
-    """GET /api/objects/queue - Return FactoryQueue items, optionally filtered by project."""
-    from systemedu.agents.builtin.gameagent.object_factory import FactoryQueue
-
-    queue = FactoryQueue()
-    project_filter = request.query_params.get("project", "").strip()
-
-    if project_filter:
-        items = queue.items_for_project(project_filter)
-    else:
-        items = queue.all_items()
-
-    return JSONResponse(
-        {
-            "items": [i.model_dump() for i in items],
-            "stats": queue.stats(),
-        }
-    )
-
-
-async def api_objects_queue_add(request: Request) -> JSONResponse:
-    """POST /api/objects/queue/add - Manually add an item to FactoryQueue."""
-    from systemedu.agents.builtin.gameagent.object_factory import (
-        FactoryQueue,
-        FactoryQueueItem,
-    )
-
-    try:
-        body = await request.json()
-    except Exception:
-        return JSONResponse({"error": "Invalid JSON body"}, status_code=400)
-
-    object_key = body.get("object_key", "").strip()
-    if not object_key:
-        return JSONResponse({"error": "object_key is required"}, status_code=400)
-
-    item = FactoryQueueItem(
-        object_key=object_key,
-        description=body.get("description", ""),
-        source="manual",
-        project_name=body.get("project_name", ""),
-    )
-
-    queue = FactoryQueue()
-    added = queue.enqueue(item)
-    return JSONResponse({"object_key": object_key, "added": added})
-
-
-async def api_objects_queue_trigger(request: Request) -> JSONResponse:
-    """POST /api/objects/queue/trigger - Trigger factory pipeline for pending/failed items.
-
-    Query params:
-      project=name   filter by project
-      retry_failed=1 also retry failed items (reset to pending first)
-    """
-    from systemedu.agents.builtin.gameagent.object_factory import FactoryQueue
-    from systemedu.education.object_scan import trigger_factory_for_keys
-
-    project_filter = request.query_params.get("project", "").strip()
-    retry_failed = request.query_params.get("retry_failed", "0") == "1"
-    queue = FactoryQueue()
-
-    items = queue.items_for_project(project_filter) if project_filter else queue.all_items()
-
-    # Optionally reset failed items so they can be re-triggered
-    if retry_failed:
-        for item in items:
-            if item.status == "failed":
-                # Reset by re-writing with pending status
-                from systemedu.agents.builtin.gameagent.object_factory import FactoryQueueItem
-                all_items = queue.all_items()
-                for qi in all_items:
-                    if qi.object_key == item.object_key and qi.status == "failed":
-                        qi.status = "pending"
-                        qi.error = ""
-                queue._write_all(all_items)
-
-    to_trigger = [(i.object_key, i.description) for i in queue.all_items()
-                  if i.status == "pending"
-                  and (not project_filter or i.project_name == project_filter)]
-
-    if not to_trigger:
-        return JSONResponse({"triggered": 0, "message": "no pending items"})
-
-    trigger_factory_for_keys(to_trigger)
-    return JSONResponse({"triggered": len(to_trigger), "object_keys": [k for k, _ in to_trigger]})
-
-
 async def api_update_tree(request: Request) -> JSONResponse:
     """PUT /api/projects/{name}/tree - Full-replace the knowledge_tree.json for a project.
 
@@ -1781,6 +1632,7 @@ async def api_update_progress(request: Request) -> JSONResponse:
 
         # When a node is passed, unlock dependent nodes and sync enrollment
         unlocked_ids: list[int] = []
+        xp_updates: list[dict] = []
         if new_status == "passed":
             from systemedu.education.project_loader import load_project_context, save_progress
             from systemedu.education.progress import unlock_next_nodes
@@ -1793,14 +1645,6 @@ async def api_update_progress(request: Request) -> JSONResponse:
                     save_progress(user_id, name, ctx.progress)
             except Exception:
                 logger.exception("Failed to unlock next nodes")
-
-            # Scan newly unlocked nodes for missing objects and trigger factory
-            if unlocked_ids:
-                try:
-                    from systemedu.education.object_scan import scan_and_enqueue_unlocked_nodes
-                    scan_and_enqueue_unlocked_nodes(name, unlocked_ids)
-                except Exception:
-                    logger.exception("Failed to scan unlocked nodes for object factory (non-fatal)")
 
             enrollment = (
                 db.query(Enrollment)
@@ -1821,6 +1665,25 @@ async def api_update_progress(request: Request) -> JSONResponse:
                     enrollment.status = "completed"
                 db.commit()
 
+            # Add XP to career paths
+            xp_updates = []
+            try:
+                from systemedu.education.career_path import add_xp
+                from systemedu.education.project_loader import load_project_context
+
+                ctx = load_project_context(name, user_id=user_id)
+                xp_reward = 20  # default
+                for ms in ctx.tree.milestones:
+                    for kn in ms.knodes:
+                        if kn.id == node_id:
+                            xp_reward = kn.xp_reward
+                            break
+                xp_updates = add_xp(user_id, name, xp_reward)
+                if xp_updates:
+                    logger.info("XP update for %s node %d: %s", name, node_id, xp_updates)
+            except Exception as e:
+                logger.warning("Career path XP update failed: %s", e)
+
         # Return full progress list so frontend can update all nodes
         all_records = (
             db.query(ProgressRecord)
@@ -1839,16 +1702,17 @@ async def api_update_progress(request: Request) -> JSONResponse:
             for r in all_records
         ]
 
-        return JSONResponse(
-            {
-                "knode_id": node_id,
-                "status": record.status,
-                "attempts": record.attempts,
-                "best_score": record.best_score,
-                "unlocked": unlocked_ids,
-                "progress": progress_list,
-            }
-        )
+        result = {
+            "knode_id": node_id,
+            "status": record.status,
+            "attempts": record.attempts,
+            "best_score": record.best_score,
+            "unlocked": unlocked_ids,
+            "progress": progress_list,
+        }
+        if xp_updates:
+            result["xp_updates"] = xp_updates
+        return JSONResponse(result)
     finally:
         db.close()
 
@@ -1906,6 +1770,16 @@ async def api_enroll(request: Request) -> JSONResponse:
             if total_nodes > 0:
                 enrollment.total_nodes = total_nodes
         db.commit()
+
+        # Auto-enroll in any career paths that include this project
+        auto_enrolled_paths = []
+        try:
+            from systemedu.education.career_path import auto_enroll_for_project
+
+            auto_enrolled_paths = auto_enroll_for_project(user_id, name)
+        except Exception as e:
+            logger.warning("Career path auto-enroll failed for %s/%s: %s", user_id, name, e)
+
         return JSONResponse({
             "status": enrollment.status,
             "started_at": enrollment.started_at.isoformat() if enrollment.started_at else None,
@@ -1913,6 +1787,7 @@ async def api_enroll(request: Request) -> JSONResponse:
             "total_time_seconds": enrollment.total_time_seconds,
             "nodes_passed": enrollment.nodes_passed,
             "total_nodes": enrollment.total_nodes,
+            "auto_enrolled_career_paths": auto_enrolled_paths,
         })
     finally:
         db.close()
@@ -1977,6 +1852,21 @@ async def api_update_enrollment(request: Request) -> JSONResponse:
         enrollment.last_activity_at = datetime.now()
         db.commit()
 
+        # Career path hook: when a project is completed, recalculate career path progress
+        career_path_results = []
+        if new_status == "completed":
+            try:
+                from systemedu.education.career_path import on_project_completed
+
+                career_path_results = on_project_completed(user_id, name)
+                if career_path_results:
+                    logger.info(
+                        "Career path update for %s completing %s: %s",
+                        user_id, name, career_path_results,
+                    )
+            except Exception as e:
+                logger.warning("Career path hook failed for %s/%s: %s", user_id, name, e)
+
         return JSONResponse({
             "status": enrollment.status,
             "started_at": enrollment.started_at.isoformat() if enrollment.started_at else None,
@@ -1984,6 +1874,7 @@ async def api_update_enrollment(request: Request) -> JSONResponse:
             "total_time_seconds": enrollment.total_time_seconds,
             "nodes_passed": enrollment.nodes_passed,
             "total_nodes": enrollment.total_nodes,
+            "career_path_updates": career_path_results,
         })
     finally:
         db.close()
@@ -2217,24 +2108,40 @@ async def _on_startup():
 
     _runtime = AgentRuntime(mcp_manager=mcp_manager)
 
-    # Resume any pending FactoryQueue items from previous sessions (non-fatal)
+    # Scan career paths directory and auto-enroll existing enrollments
     try:
-        from systemedu.agents.builtin.gameagent.object_factory import FactoryQueue
-        from systemedu.education.object_scan import trigger_factory_for_keys
+        from systemedu.education.career_path import auto_enroll_for_project, scan_paths
 
-        queue = FactoryQueue()
-        # Reset stale in_progress items (crashed mid-run) back to pending
-        for item in queue.all_items():
-            if item.status == "in_progress":
-                queue.mark_failed(item.object_key, error="reset: server restarted mid-run")
+        paths_dir = Path(__file__).resolve().parent.parent.parent.parent / "paths"
+        if paths_dir.is_dir():
+            loaded = scan_paths(paths_dir)
+            if loaded:
+                logger.info(f"Startup: loaded {len(loaded)} career paths: {loaded}")
 
-        pending = queue.pending_items()
-        if pending:
-            logger.info(f"Startup: resuming {len(pending)} pending factory queue items")
-            trigger_factory_for_keys([(i.object_key, i.description) for i in pending])
+                # Auto-enroll users who already have project enrollments
+                from systemedu.storage.db import Enrollment, get_session as get_db_session
+
+                db = get_db_session()
+                try:
+                    enrollments = db.query(Enrollment).filter(
+                        Enrollment.status.in_(["active", "completed"])
+                    ).all()
+                    seen = set()
+                    for e in enrollments:
+                        key = (e.user_id, e.project_name)
+                        if key in seen:
+                            continue
+                        seen.add(key)
+                        try:
+                            auto_enroll_for_project(e.user_id, e.project_name)
+                        except Exception:
+                            pass
+                    if seen:
+                        logger.info(f"Startup: checked {len(seen)} enrollments for career path auto-enroll")
+                finally:
+                    db.close()
     except Exception:
-        logger.exception("Startup factory queue resume failed (non-fatal)")
-
+        logger.exception("Startup career path scan failed (non-fatal)")
 
 async def api_get_highlights(request: Request) -> JSONResponse:
     """GET /api/projects/{name}/nodes/{node_id}/highlights - List highlights for a node."""
@@ -2792,6 +2699,94 @@ class _AuthMiddleware:
         await self.app(scope, receive, send)
 
 
+# --- Career Path (Upgrade Route) API ---
+
+
+async def api_career_paths_list(request: Request) -> JSONResponse:
+    """GET /api/career-paths - List all career paths with basic progress."""
+    from systemedu.education.career_path import list_paths
+
+    paths = list_paths()
+    return JSONResponse(paths)
+
+
+async def api_career_path_detail(request: Request) -> JSONResponse:
+    """GET /api/career-paths/{name} - Career path detail with progress."""
+    from systemedu.education.career_path import get_path_progress
+
+    name = request.path_params["name"]
+    user_id = request.query_params.get("user_id", "default")
+    progress = get_path_progress(user_id, name)
+    if not progress:
+        return JSONResponse({"error": "Career path not found"}, status_code=404)
+    return JSONResponse(progress)
+
+
+async def api_career_path_enroll(request: Request) -> JSONResponse:
+    """POST /api/career-paths/{name}/enroll - Enroll in a career path."""
+    from systemedu.education.career_path import enroll_path, load_path
+
+    name = request.path_params["name"]
+    body = await request.json()
+    user_id = body.get("user_id", "default")
+
+    cp = load_path(name)
+    if not cp:
+        return JSONResponse({"error": "Career path not found"}, status_code=404)
+
+    result = enroll_path(user_id, name)
+    return JSONResponse(result)
+
+
+async def api_career_path_badge_svg(request: Request) -> JSONResponse:
+    """GET /api/career-paths/{name}/badges/{order} - Get badge SVG."""
+    from starlette.responses import Response
+
+    from systemedu.education.career_path import get_badge_svg, load_path
+
+    name = request.path_params["name"]
+    order = int(request.path_params["order"])
+
+    cp = load_path(name)
+    if not cp:
+        return JSONResponse({"error": "Career path not found"}, status_code=404)
+
+    stage = next((s for s in cp.stages if s.order == order), None)
+    if not stage or not stage.badge or not stage.badge.icon:
+        return JSONResponse({"error": "Badge not found"}, status_code=404)
+
+    svg = get_badge_svg(name, stage.badge.icon)
+    if not svg:
+        return JSONResponse({"error": "Badge SVG file not found"}, status_code=404)
+
+    return Response(content=svg, media_type="image/svg+xml")
+
+
+async def api_career_path_avatar_svg(request: Request) -> JSONResponse:
+    """GET /api/career-paths/{name}/avatar/{stage} - Get avatar SVG."""
+    from starlette.responses import Response
+
+    from systemedu.education.career_path import get_avatar_svg
+
+    name = request.path_params["name"]
+    stage = int(request.path_params["stage"])
+
+    svg = get_avatar_svg(name, stage)
+    if not svg:
+        return JSONResponse({"error": "Avatar SVG not found"}, status_code=404)
+
+    return Response(content=svg, media_type="image/svg+xml")
+
+
+async def api_all_badges(request: Request) -> JSONResponse:
+    """GET /api/badges - Get all earned badges for a user."""
+    from systemedu.education.career_path import get_all_earned_badges
+
+    user_id = request.query_params.get("user_id", "default")
+    badges = get_all_earned_badges(user_id)
+    return JSONResponse(badges)
+
+
 def create_app() -> Starlette:
     """Create the Starlette ASGI application."""
     global _start_time
@@ -2836,10 +2831,14 @@ def create_app() -> Starlette:
 
         Route("/api/projects/{name}/tree", api_update_tree, methods=["PUT"]),
         Route("/api/projects/{name}", api_project_dispatch, methods=["GET", "PATCH", "DELETE"]),
-        Route("/api/objects/registry", api_objects_registry, methods=["GET"]),
-        Route("/api/objects/queue", api_objects_queue, methods=["GET"]),
-        Route("/api/objects/queue/add", api_objects_queue_add, methods=["POST"]),
-        Route("/api/objects/queue/trigger", api_objects_queue_trigger, methods=["POST"]),
+        # Career path (upgrade route) endpoints
+        Route("/api/career-paths", api_career_paths_list, methods=["GET"]),
+        Route("/api/career-paths/{name}", api_career_path_detail, methods=["GET"]),
+        Route("/api/career-paths/{name}/enroll", api_career_path_enroll, methods=["POST"]),
+        Route("/api/career-paths/{name}/badges/{order:int}", api_career_path_badge_svg, methods=["GET"]),
+        Route("/api/career-paths/{name}/avatar/{stage:int}", api_career_path_avatar_svg, methods=["GET"]),
+        Route("/api/badges", api_all_badges, methods=["GET"]),
+
         Route("/api/agents", api_agents),
         Route("/api/skills", api_skills),
         Route("/api/mcp/servers", api_mcp_dispatch, methods=["GET", "POST"]),

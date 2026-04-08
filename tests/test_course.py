@@ -1,7 +1,7 @@
 """Tests for course planning and step generation."""
 
 import json
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from langchain_core.messages import AIMessage
@@ -214,15 +214,10 @@ class TestStepGenerator:
             "spec": {"game_mechanic": "drag_sort", "game_concept": "赋值"},
         }
 
-        with patch("systemedu.agents.builtin.gameagent.planner.GameSpecPlannerAgent") as mock_planner:
-            mock_instance = AsyncMock()
-            mock_instance.plan = AsyncMock(return_value=None)
-            mock_planner.return_value = mock_instance
-
-            result = await generate_step(step_spec, "变量", "变量概念", 3, "基础", llm)
+        result = await generate_step(step_spec, "变量", "变量概念", 3, "基础", llm)
 
         assert result["status"] == "ready"
-        # Falls back to concept type
+        # Game steps fall back to concept type
         assert result["type"] == "concept"
         assert result["content"] != ""
 
