@@ -9,8 +9,6 @@ import type {
   CourseContentData,
   CreateProjectResponse,
   EnrollmentInfo,
-  FactoryQueueResponse,
-  ObjectRegistryResponse,
   HighlightInfo,
   LessonStatusesResponse,
   MCPServer,
@@ -187,26 +185,75 @@ export const gateway = {
     ),
   lessonStatuses: (projectName: string) =>
     api.get<LessonStatusesResponse>(`/api/projects/${encodeURIComponent(projectName)}/lesson-statuses`),
-  objectRegistry: () => api.get<ObjectRegistryResponse>("/api/objects/registry"),
-  objectQueue: (projectName?: string) => {
-    const url = projectName
-      ? `/api/objects/queue?project=${encodeURIComponent(projectName)}`
-      : "/api/objects/queue"
-    return api.get<FactoryQueueResponse>(url)
-  },
-  objectQueueAdd: (objectKey: string, description?: string, projectName?: string) =>
-    api.post<{ object_key: string; added: boolean }>("/api/objects/queue/add", {
-      object_key: objectKey,
-      description: description ?? "",
-      project_name: projectName ?? "",
-    }),
-  objectQueueTrigger: (projectName?: string, retryFailed = true) => {
-    const params = new URLSearchParams()
-    if (projectName) params.set("project", projectName)
-    if (retryFailed) params.set("retry_failed", "1")
-    const qs = params.toString()
-    return api.post<{ triggered: number; object_keys?: string[] }>(
-      `/api/objects/queue/trigger${qs ? `?${qs}` : ""}`, {}
-    )
-  },
+  // Career path (upgrade route) endpoints
+  careerPaths: () => api.get<CareerPathSummary[]>("/api/career-paths"),
+  careerPathDetail: (name: string, userId = "default") =>
+    api.get<CareerPathDetail>(`/api/career-paths/${encodeURIComponent(name)}?user_id=${userId}`),
+  allBadges: (userId = "default") =>
+    api.get<EarnedBadgeInfo[]>(`/api/badges?user_id=${userId}`),
+}
+
+// Career path types
+export interface CareerPathSummary {
+  name: string
+  title: string
+  description: string
+  category: string
+  age_range: number[]
+  estimated_months: number
+  total_stages: number
+  completed_stages: number
+  status: string
+  current_avatar_stage: number
+  total_xp: number
+  next_avatar_xp: number | null
+}
+
+export interface CareerPathStageInfo {
+  order: number
+  project_name: string
+  required: boolean
+  completed: boolean
+  badge: { name: string; description: string; icon: string } | null
+  avatar_stage: number
+}
+
+export interface AvatarStageInfo {
+  stage: number
+  title: string
+  description: string
+  image: string
+  xp_threshold: number
+}
+
+export interface CareerPathDetail {
+  path: {
+    name: string
+    title: string
+    description: string
+    category: string
+    age_range: number[]
+    estimated_months: number
+  }
+  stages: CareerPathStageInfo[]
+  avatar_stages: AvatarStageInfo[]
+  progress: {
+    completed_stages: number
+    total_stages: number
+    completion_percent: number
+    next_project: string | null
+    status: string
+    current_avatar_stage: number
+    total_xp: number
+    next_avatar_xp: number | null
+  }
+  current_avatar: AvatarStageInfo | null
+  earned_badges: EarnedBadgeInfo[]
+}
+
+export interface EarnedBadgeInfo {
+  path_name: string
+  stage_order: number
+  badge_name: string
+  earned_at: string | null
 }

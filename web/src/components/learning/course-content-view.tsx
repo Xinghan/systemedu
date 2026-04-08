@@ -111,11 +111,88 @@ const STAGE_ORDER: PipelineStage[] = [
 ]
 
 // ---------------------------------------------------------------------------
+// YouTube URL → video ID extractor
+// ---------------------------------------------------------------------------
+function extractYouTubeId(url: string): string | null {
+  if (!url) return null
+  try {
+    const u = new URL(url)
+    const host = u.hostname.replace(/^www\.|^m\./, "")
+    if (host === "youtu.be") {
+      const id = u.pathname.slice(1).split("/")[0]
+      return id || null
+    }
+    if (host === "youtube.com" || host === "youtube-nocookie.com") {
+      if (u.pathname === "/watch") return u.searchParams.get("v")
+      const m = u.pathname.match(/^\/(embed|v|shorts)\/([^/?#]+)/)
+      if (m) return m[2]
+    }
+  } catch {
+    return null
+  }
+  return null
+}
+
+// ---------------------------------------------------------------------------
+// YouTubeModal — in-page player (iframe embed) with backdrop + ESC to close
+// ---------------------------------------------------------------------------
+function YouTubeModal({
+  videoId, title, onClose,
+}: {
+  videoId: string
+  title: string
+  onClose: () => void
+}) {
+  useEffect(() => {
+    const handleKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose() }
+    document.addEventListener("keydown", handleKey)
+    document.body.style.overflow = "hidden"
+    return () => {
+      document.removeEventListener("keydown", handleKey)
+      document.body.style.overflow = ""
+    }
+  }, [onClose])
+
+  return createPortal(
+    <div className="fixed inset-0 z-[9999] flex items-center justify-center">
+      <div
+        className="absolute inset-0 bg-black/80 backdrop-blur-sm"
+        onClick={onClose}
+      />
+      <div className="relative w-[90vw] max-w-5xl aspect-video rounded-2xl overflow-hidden shadow-2xl bg-black border border-white/10">
+        <div className="absolute top-0 left-0 right-0 flex items-center justify-between px-5 py-3 bg-gradient-to-b from-black/80 to-transparent z-10">
+          <span className="text-sm font-semibold text-white/90 truncate pr-4">{title}</span>
+          <button
+            onClick={onClose}
+            className="w-8 h-8 rounded-lg flex items-center justify-center text-white/70 hover:text-white hover:bg-white/15 transition-colors shrink-0"
+            aria-label="关闭视频"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+        <iframe
+          src={`https://www.youtube-nocookie.com/embed/${videoId}?autoplay=1&rel=0`}
+          className="w-full h-full block"
+          style={{ border: "none" }}
+          title={title}
+          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+          allowFullScreen
+        />
+      </div>
+    </div>,
+    document.body,
+  )
+}
+
+// ---------------------------------------------------------------------------
 // Markdown renderer — ReactMarkdown + GFM (tables, strikethrough, etc.)
 // ---------------------------------------------------------------------------
 function MarkdownBlock({ content }: { content: string }) {
+  const [ytModal, setYtModal] = useState<{ videoId: string; title: string } | null>(null)
+
   if (!content?.trim()) return null
   return (
+    <>
     <ReactMarkdown
       remarkPlugins={[remarkGfm]}
       components={{
@@ -149,6 +226,53 @@ function MarkdownBlock({ content }: { content: string }) {
         blockquote: ({ children }) => (
           <blockquote className="border-l-2 border-primary/40 pl-4 italic text-on-surface-variant my-4">{children}</blockquote>
         ),
+        a: ({ href, children }) => {
+          const videoId = href ? extractYouTubeId(href) : null
+          if (videoId) {
+            // Extract a readable title: prefer the alt of an inner <img>, otherwise fall back to the text
+            let title = ""
+            const childArr = Array.isArray(children) ? children : [children]
+            for (const c of childArr) {
+              if (c && typeof c === "object" && "props" in c) {
+                const props = (c as { props?: { alt?: string } }).props
+                if (props?.alt) { title = props.alt; break }
+              }
+              if (typeof c === "string" && c.trim()) { title = c; break }
+            }
+            return (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.preventDefault()
+                  setYtModal({ videoId, title: title || "YouTube video" })
+                }}
+                className="group inline-block relative my-2 rounded-xl overflow-hidden border border-outline-variant/25 hover:border-primary/50 hover:shadow-lg transition-all cursor-pointer bg-transparent p-0"
+                title={`播放：${title || "YouTube 视频"}`}
+              >
+                {children}
+                <span className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                  <span className="w-16 h-16 rounded-full bg-black/60 backdrop-blur-sm flex items-center justify-center group-hover:bg-primary/80 group-hover:scale-110 transition-all shadow-xl">
+                    <Play className="h-7 w-7 text-white fill-white ml-1" />
+                  </span>
+                </span>
+              </button>
+            )
+          }
+          return (
+            <a
+              href={href}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-primary underline decoration-primary/40 hover:decoration-primary transition-colors"
+            >
+              {children}
+            </a>
+          )
+        },
+        img: ({ src, alt }) => (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={src} alt={alt || ""} className="max-w-full h-auto rounded-lg block" />
+        ),
         table: ({ children }) => (
           <div className="overflow-x-auto my-4">
             <table className="w-full border-collapse text-sm">{children}</table>
@@ -176,6 +300,14 @@ function MarkdownBlock({ content }: { content: string }) {
     >
       {content}
     </ReactMarkdown>
+    {ytModal && (
+      <YouTubeModal
+        videoId={ytModal.videoId}
+        title={ytModal.title}
+        onClose={() => setYtModal(null)}
+      />
+    )}
+    </>
   )
 }
 
@@ -791,7 +923,7 @@ function PlanWithIdeas({ content }: { content: CourseContent }) {
           const ideaId = match[1]
           const idea = ideaMap.get(ideaId)
           if (!idea) return null
-          const section = content.rendered_sections[ideaId] ?? null
+          const section = content.rendered_sections?.[ideaId] ?? null
           return <IdeaBlock key={idx} idea={idea} section={section} />
         }
         if (!part.trim()) return null
@@ -809,9 +941,9 @@ function EditorialHeader({ knode }: { knode: KnodeInfo | null }) {
   return (
     <header className="space-y-6">
       <div className="inline-flex items-center gap-2 px-3 py-1 bg-secondary-container rounded-full text-on-secondary-container text-xs font-bold tracking-widest uppercase">
-        难度 {knode.difficulty_level} / 5 · {knode.estimated_minutes} 分钟
+        难度 {knode.difficulty_level} / 10 · {knode.estimated_minutes} 分钟
       </div>
-      <h1 className="font-extrabold text-3xl tracking-tight leading-[1.2] bg-gradient-to-r from-primary to-tertiary bg-clip-text text-transparent pb-1">
+      <h1 className="font-extrabold text-3xl tracking-tight leading-[1.2] text-primary pb-1">
         {knode.title}
       </h1>
       {knode.summary && (

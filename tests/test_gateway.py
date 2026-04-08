@@ -1345,3 +1345,198 @@ class TestGatewayDeleteProject:
             assert count == 0
         finally:
             db.close()
+
+
+class TestCareerPathAPI:
+    """Tests for career path (upgrade route) API endpoints."""
+
+    @pytest.fixture
+    def career_client(self, config_env, tmp_path, monkeypatch):
+        """Create a test client with a career path loaded."""
+        # Create paths directory with a test career path
+        paths_dir = tmp_path / "paths" / "test-path"
+        paths_dir.mkdir(parents=True)
+        (paths_dir / "badges").mkdir()
+        (paths_dir / "avatars").mkdir()
+
+        path_yaml = {
+            "name": "test-path",
+            "title": "Test Path",
+            "description": "A test career path",
+            "category": "ai",
+            "age_range": [10, 18],
+            "estimated_months": 12,
+            "stages": [
+                {
+                    "order": 0,
+                    "project_name": "proj-a",
+                    "required": True,
+                    "badge": {"name": "Badge A", "description": "First badge", "icon": "badges/a.svg"},
+                    "avatar_stage": 0,
+                },
+                {
+                    "order": 1,
+                    "project_name": "proj-b",
+                    "required": True,
+                    "badge": {"name": "Badge B", "description": "Second badge", "icon": "badges/b.svg"},
+                    "avatar_stage": 1,
+                },
+            ],
+            "avatar_stages": [
+                {"stage": 0, "title": "Novice", "description": "Just started", "image": "avatars/s0.svg"},
+                {"stage": 1, "title": "Expert", "description": "Done", "image": "avatars/s1.svg"},
+            ],
+        }
+        (paths_dir / "path.yaml").write_text(yaml.dump(path_yaml, allow_unicode=True))
+        (paths_dir / "badges" / "a.svg").write_text('<svg xmlns="http://www.w3.org/2000/svg"><circle r="5"/></svg>')
+        (paths_dir / "avatars" / "s0.svg").write_text('<svg xmlns="http://www.w3.org/2000/svg"><rect width="10" height="10"/></svg>')
+
+        # Register the career path in DB
+        from systemedu.education.career_path import scan_paths
+        scan_paths(tmp_path / "paths")
+
+        from systemedu.gateway import server
+        server._runtime = None
+        app = create_app()
+        c = TestClient(app)
+        token = c.post("/api/auth/login", json={"username": "root", "password": "123systemedu"}).json()["token"]
+        c.headers.update({"Authorization": f"Bearer {token}"})
+        return c
+
+    def test_list_career_paths(self, career_client):
+        resp = career_client.get("/api/career-paths")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert len(data) == 1
+        assert data[0]["name"] == "test-path"
+        assert data[0]["total_stages"] == 2
+        assert data[0]["status"] == "not_enrolled"
+
+    def test_career_path_detail_not_found(self, career_client):
+        resp = career_client.get("/api/career-paths/nonexistent")
+        assert resp.status_code == 404
+
+    def test_career_path_detail(self, career_client):
+        # Enroll first
+        career_client.post("/api/career-paths/test-path/enroll", json={"user_id": "default"})
+        resp = career_client.get("/api/career-paths/test-path")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["progress"]["completed_stages"] == 0
+        assert data["progress"]["total_stages"] == 2
+        assert data["progress"]["next_project"] == "proj-a"
+        assert len(data["stages"]) == 2
+
+    def test_enroll_career_path(self, career_client):
+        resp = career_client.post("/api/career-paths/test-path/enroll", json={"user_id": "default"})
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["status"] == "active"
+        assert data["already_enrolled"] is False
+
+        # Enroll again
+        resp2 = career_client.post("/api/career-paths/test-path/enroll", json={"user_id": "default"})
+        assert resp2.json()["already_enrolled"] is True
+
+    def test_enroll_nonexistent_path(self, career_client):
+        resp = career_client.post("/api/career-paths/nonexistent/enroll", json={})
+        assert resp.status_code == 404
+
+    def test_badge_svg(self, career_client):
+        resp = career_client.get("/api/career-paths/test-path/badges/0")
+        assert resp.status_code == 200
+        assert resp.headers["content-type"] == "image/svg+xml"
+        assert b"<svg" in resp.content
+
+    def test_badge_svg_missing_file(self, career_client):
+        # Badge b.svg doesn't exist
+        resp = career_client.get("/api/career-paths/test-path/badges/1")
+        assert resp.status_code == 404
+
+    def test_avatar_svg(self, career_client):
+        resp = career_client.get("/api/career-paths/test-path/avatar/0")
+        assert resp.status_code == 200
+        assert resp.headers["content-type"] == "image/svg+xml"
+        assert b"<svg" in resp.content
+
+    def test_avatar_svg_not_found(self, career_client):
+        resp = career_client.get("/api/career-paths/test-path/avatar/99")
+        assert resp.status_code == 404
+
+    def test_all_badges_empty(self, career_client):
+        resp = career_client.get("/api/badges")
+        assert resp.status_code == 200
+        assert resp.json() == []
+
+    def test_project_enroll_auto_enrolls_career_path(self, career_client, config_env, tmp_path, monkeypatch):
+        """Enrolling in a project auto-enrolls user in related career paths."""
+        # Create a minimal project so enroll doesn't 404
+        projects_dir = tmp_path / "projects" / "proj-a"
+        projects_dir.mkdir(parents=True)
+        (projects_dir / "project.yaml").write_text(
+            yaml.dump({"name": "proj-a", "title": "Project A", "category": "ai"})
+        )
+        (projects_dir / "knowledge_tree.json").write_text(
+            '{"milestones": [{"title": "M1", "knodes": [{"title": "K1", "summary": "s"}]}]}'
+        )
+        monkeypatch.chdir(tmp_path)
+
+        resp = career_client.post("/api/projects/proj-a/enroll", json={"user_id": "default"})
+        assert resp.status_code == 200
+        data = resp.json()
+        assert "auto_enrolled_career_paths" in data
+        assert "test-path" in data["auto_enrolled_career_paths"]
+
+        # Verify career path progress was created
+        resp2 = career_client.get("/api/career-paths/test-path")
+        assert resp2.status_code == 200
+        assert resp2.json()["progress"]["status"] == "active"
+
+    def test_project_completion_triggers_career_path(self, career_client):
+        """When a project enrollment is completed, career path progress updates."""
+        from datetime import datetime
+        from systemedu.storage.db import Enrollment, get_session as get_db_session
+
+        # Enroll in career path
+        career_client.post("/api/career-paths/test-path/enroll", json={"user_id": "default"})
+
+        # Create project enrollment
+        db = get_db_session()
+        try:
+            db.add(Enrollment(
+                user_id="default",
+                project_name="proj-a",
+                status="active",
+                started_at=datetime.now(),
+            ))
+            db.commit()
+        finally:
+            db.close()
+
+        # Mark project as completed via PATCH
+        resp = career_client.patch(
+            "/api/projects/proj-a/enrollment",
+            json={"user_id": "default", "status": "completed"},
+        )
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["status"] == "completed"
+
+        # Check that career path was updated
+        assert "career_path_updates" in data
+        updates = data["career_path_updates"]
+        assert len(updates) == 1
+        assert updates[0]["path_name"] == "test-path"
+        assert "Badge A" in updates[0]["new_badges"]
+
+        # Verify badge was earned
+        resp2 = career_client.get("/api/badges")
+        badges = resp2.json()
+        assert len(badges) == 1
+        assert badges[0]["badge_name"] == "Badge A"
+
+        # Verify career path detail shows progress
+        resp3 = career_client.get("/api/career-paths/test-path")
+        progress = resp3.json()
+        assert progress["progress"]["completed_stages"] == 1
+        assert progress["progress"]["next_project"] == "proj-b"

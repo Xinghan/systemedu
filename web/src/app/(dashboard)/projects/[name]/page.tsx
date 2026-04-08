@@ -25,9 +25,10 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog"
 import { gateway } from "@/lib/api"
-import type { FactoryQueueItem, LessonStatus, MilestoneInfo, ProjectBrief, ProjectDetail, SubProjectInfo } from "@/lib/types/api"
+import type { LessonStatus, MilestoneInfo, ProjectBrief, ProjectDetail, SubProjectInfo } from "@/lib/types/api"
 import { useT } from "@/lib/hooks/use-t"
 import type { TranslationKey } from "@/lib/i18n"
+import { CareerPathCard } from "@/components/career-path/career-path-card"
 
 const CATEGORY_OPTIONS = [
   { value: "ai", label: "AI" },
@@ -210,21 +211,6 @@ function IconAICourse() {
   )
 }
 
-function IconObjectQueue() {
-  return (
-    <div className="relative w-14 h-14 rounded-2xl bg-gradient-to-br from-violet-400/10 to-purple-300/10 flex items-center justify-center">
-      <div className="absolute inset-0 bg-violet-400/8 rounded-2xl blur-xl" />
-      <div className="relative w-12 h-12 rounded-xl bg-white/60 backdrop-blur-sm border border-white/50 shadow-[0_8px_32px_rgba(167,139,250,0.1)] flex items-center justify-center">
-        <svg viewBox="0 0 24 24" fill="none" stroke="#7c3aed" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="w-6 h-6">
-          <path d="M12 3l9 5v8l-9 5-9-5V8l9-5z" />
-          <line x1="12" y1="13" x2="12" y2="21" />
-          <line x1="12" y1="13" x2="3" y2="8" />
-          <line x1="12" y1="13" x2="21" y2="8" />
-        </svg>
-      </div>
-    </div>
-  )
-}
 
 type SubProjectStatus = "completed" | "in_progress" | "available" | "locked"
 
@@ -667,9 +653,6 @@ export default function ProjectDetailPage() {
   const [editAgeMin, setEditAgeMin] = useState(6)
   const [editAgeMax, setEditAgeMax] = useState(18)
   const [editTags, setEditTags] = useState("")
-  const [queueItems, setQueueItems] = useState<FactoryQueueItem[]>([])
-  const [queueOpen, setQueueOpen] = useState(false)
-  const [triggering, setTriggering] = useState(false)
 const [editCoverFile, setEditCoverFile] = useState<File | null>(null)
   const [editCoverPreview, setEditCoverPreview] = useState<string | null>(null)
 
@@ -714,10 +697,6 @@ const [editCoverFile, setEditCoverFile] = useState<File | null>(null)
       })
       .catch((e) => setError(e.message))
       .finally(() => setLoading(false))
-
-    gateway.objectQueue(params.name)
-      .then((r) => setQueueItems(r.items.filter((i) => i.status === "pending" || i.status === "in_progress")))
-      .catch(() => {})
 
     gateway.lessonStatuses(params.name)
       .then((r) => setLessonStatuses(r.statuses as Record<string, LessonStatus>))
@@ -1228,6 +1207,11 @@ const [editCoverFile, setEditCoverFile] = useState<File | null>(null)
             </div>
           )}
 
+          {/* Career Path */}
+          {enrollment && (
+            <CareerPathCard projectName={params.name} t={t} />
+          )}
+
           {/* Project Resources */}
           <div>
             <div className="flex items-center justify-between mb-4">
@@ -1262,71 +1246,8 @@ const [editCoverFile, setEditCoverFile] = useState<File | null>(null)
                 disabled
                 badge={t("project.soon")}
               />
-              <ResourceCard
-                icon={<IconObjectQueue />}
-                title={t("project.object_queue")}
-                description={t("project.object_queue_desc")}
-                onClick={() => setQueueOpen((v) => !v)}
-                badge={queueItems.length > 0 ? `${queueItems.length}` : undefined}
-              />
             </div>
           </div>
-
-          {/* Object Queue expandable */}
-          {queueOpen && (
-            <div className="card-elevated overflow-hidden">
-              <div className="flex items-center justify-between px-5 py-3 border-b border-border/50">
-                <h3 className="text-sm font-semibold">{t("project.object_queue")}</h3>
-                <div className="flex items-center gap-3">
-                  {queueItems.length > 0 && (
-                    <button
-                      onClick={async () => {
-                        setTriggering(true)
-                        try {
-                          const r = await gateway.objectQueueTrigger(params.name)
-                          toast.success(`Triggered ${r.triggered} tasks`)
-                          const fresh = await gateway.objectQueue(params.name)
-                          setQueueItems(fresh.items.filter((i) => i.status === "pending" || i.status === "in_progress"))
-                        } catch (e: unknown) {
-                          toast.error(`Trigger failed: ${e instanceof Error ? e.message : "Unknown error"}`)
-                        } finally {
-                          setTriggering(false)
-                        }
-                      }}
-                      disabled={triggering}
-                      className="text-xs text-primary hover:text-primary/80 disabled:opacity-50 transition-colors"
-                    >
-                      {triggering ? t("project.triggering") : t("project.trigger_build")}
-                    </button>
-                  )}
-                  <button onClick={() => setQueueOpen(false)} className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1">
-                    <ChevronUp className="h-3.5 w-3.5" />{t("project.collapse")}
-                  </button>
-                </div>
-              </div>
-              {queueItems.length === 0 ? (
-                <div className="px-5 py-8 text-center text-sm text-muted-foreground">{t("project.no_pending")}</div>
-              ) : (
-                <div className="divide-y divide-border/50">
-                  {queueItems.map((item) => (
-                    <div key={item.object_key} className="flex items-center gap-4 px-5 py-3">
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-mono font-medium truncate">{item.object_key}</p>
-                        {item.description && <p className="text-xs text-muted-foreground mt-0.5 truncate">{item.description}</p>}
-                      </div>
-                      <span className={`text-[10px] font-[var(--font-manrope)] uppercase tracking-wider px-2 py-0.5 rounded-full ${
-                        item.status === "pending"
-                          ? "bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-400"
-                          : "bg-primary/15 text-primary"
-                      }`}>
-                        {item.status === "pending" ? t("project.pending") : t("project.building")}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
 
           {/* Active Roadmap — Knowledge Tree preview (only for legacy projects without sub-projects) */}
           {!hasSubProjects && (

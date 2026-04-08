@@ -96,6 +96,8 @@ def list_paths() -> list[dict]:
             progress = _get_progress_record(session, "default", rec.name)
             completed_count = _count_completed_stages(session, "default", cp)
 
+            total_xp = progress.total_xp if progress else 0
+            current_avatar = progress.current_avatar_stage if progress else 0
             result.append({
                 "name": cp.name,
                 "title": cp.title,
@@ -106,7 +108,9 @@ def list_paths() -> list[dict]:
                 "total_stages": len(cp.stages),
                 "completed_stages": completed_count,
                 "status": progress.status if progress else "not_enrolled",
-                "current_avatar_stage": progress.current_avatar_stage if progress else 0,
+                "current_avatar_stage": current_avatar,
+                "total_xp": total_xp,
+                "next_avatar_xp": _next_avatar_xp(cp, current_avatar),
             })
         return result
 
@@ -168,6 +172,8 @@ def get_path_progress(user_id: str, path_name: str) -> dict | None:
             "next_project": next_project,
             "status": progress.status if progress else "not_enrolled",
             "current_avatar_stage": current_avatar,
+            "total_xp": progress.total_xp if progress else 0,
+            "next_avatar_xp": _next_avatar_xp(cp, current_avatar),
         },
         "current_avatar": current_avatar_info,
         "earned_badges": [
@@ -261,6 +267,106 @@ def recalculate_progress(user_id: str, path_name: str) -> dict:
         "new_badges": new_badges,
         "avatar_advanced": max_avatar_stage > old_avatar,
     }
+
+
+def add_xp(user_id: str, project_name: str, xp_amount: int) -> list[dict]:
+    """Add XP to all career paths that include this project.
+
+    Called when a knode is passed. Checks if any avatar stage threshold is crossed.
+    Returns list of {path_name, total_xp, new_avatar_stage, badge_earned} for updated paths.
+    """
+    if xp_amount <= 0:
+        return []
+
+    results = []
+    with get_session() as session:
+        all_paths = session.query(CareerPathRecord).all()
+
+    for rec in all_paths:
+        cp = load_path(rec.name)
+        if not cp:
+            continue
+        if not any(s.project_name == project_name for s in cp.stages):
+            continue
+
+        with get_session() as session:
+            progress = _get_progress_record(session, user_id, rec.name)
+            if not progress:
+                continue
+
+            old_xp = progress.total_xp or 0
+            new_xp = old_xp + xp_amount
+            progress.total_xp = new_xp
+
+            # Check avatar evolution
+            old_avatar = progress.current_avatar_stage
+            new_avatar = old_avatar
+            for av in sorted(cp.avatar_stages, key=lambda a: a.stage, reverse=True):
+                if av.xp_threshold > 0 and new_xp >= av.xp_threshold:
+                    new_avatar = av.stage
+                    break
+
+            avatar_evolved = new_avatar > old_avatar
+            if avatar_evolved:
+                progress.current_avatar_stage = new_avatar
+
+            # Award badge for the newly reached avatar stage
+            badge_earned = None
+            if avatar_evolved:
+                # Find the stage that corresponds to this avatar level
+                for ps in cp.stages:
+                    if ps.avatar_stage == new_avatar and ps.badge:
+                        existing = (
+                            session.query(EarnedBadge)
+                            .filter_by(user_id=user_id, path_name=rec.name, stage_order=ps.order)
+                            .first()
+                        )
+                        if not existing:
+                            session.add(EarnedBadge(
+                                user_id=user_id,
+                                path_name=rec.name,
+                                stage_order=ps.order,
+                                badge_name=ps.badge.name,
+                                earned_at=datetime.now(),
+                            ))
+                            badge_earned = ps.badge.name
+                        break
+
+            session.commit()
+
+            results.append({
+                "path_name": rec.name,
+                "total_xp": new_xp,
+                "new_avatar_stage": new_avatar if avatar_evolved else None,
+                "badge_earned": badge_earned,
+            })
+
+    return results
+
+
+def auto_enroll_for_project(user_id: str, project_name: str) -> list[str]:
+    """Auto-enroll user in all career paths that contain this project.
+
+    Called when a user starts learning a project. Returns list of path names enrolled.
+    """
+    enrolled = []
+    with get_session() as session:
+        all_paths = session.query(CareerPathRecord).all()
+
+    for rec in all_paths:
+        cp = load_path(rec.name)
+        if not cp:
+            continue
+        if not any(s.project_name == project_name for s in cp.stages):
+            continue
+
+        result = enroll_path(user_id, rec.name)
+        if not result["already_enrolled"]:
+            enrolled.append(rec.name)
+            logger.info("Auto-enrolled user '%s' in career path '%s' via project '%s'",
+                        user_id, rec.name, project_name)
+
+    return enrolled
 
 
 def on_project_completed(user_id: str, project_name: str) -> list[dict]:
@@ -378,3 +484,12 @@ def _get_completed_projects(session, user_id: str) -> set[str]:
 def _count_completed_stages(session, user_id: str, cp: CareerPath) -> int:
     completed_projects = _get_completed_projects(session, user_id)
     return sum(1 for s in cp.stages if s.project_name in completed_projects)
+
+
+def _next_avatar_xp(cp: CareerPath, current_stage: int) -> int | None:
+    """Return the XP threshold for the next avatar stage, or None if at max."""
+    sorted_stages = sorted(cp.avatar_stages, key=lambda a: a.stage)
+    for av in sorted_stages:
+        if av.stage > current_stage and av.xp_threshold > 0:
+            return av.xp_threshold
+    return None
