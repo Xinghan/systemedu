@@ -227,13 +227,153 @@ else:
 
 ---
 
+## Step 1.5: 标注基础理论 (Theory Tags)
+
+**你是**：一位跨学科教育设计师，能从工程项目内容中识别出底层的数学、物理、化学、生物等基础学科原理，并将它们标注出来供学生按需展开学习。
+
+### 什么是基础理论标注
+
+工程项目的课程内容以"做事"为主线，但做事背后往往依赖基础学科知识。例如：
+- 讲"通行性分析"时，背后是**摩擦力**和**坡度角**（物理）
+- 讲"坐标定位"时，背后是**笛卡尔坐标系**（数学）
+- 讲"地形扫描"时，背后是**光的反射与散射**（物理/光学）
+- 讲"风险评级"时，背后是**概率与统计**（数学）
+
+这些基础理论不应打断工程叙事的主线，而是作为**可展开的旁注**嵌入 plan_markdown 中。学生在阅读工程内容时，看到"基础理论"图标，可以选择展开学习底层原理，也可以跳过继续工程主线。
+
+### 操作步骤
+
+1. **识别理论点**：通读 Step 1 生成的 plan_markdown，找出 2-5 个可以追溯到基础学科的知识点
+2. **撰写理论内容**：为每个理论点写一段 100-300 字的 Markdown 解释，包含：
+   - 理论名称和所属学科（如"摩擦力 -- 物理"）
+   - 核心原理的简明解释（面向 age_range 年龄段）
+   - 与当前工程内容的关联（"这就是为什么..."）
+   - 可选：一个简单的公式或示意图描述
+3. **插入占位符**：在 plan_markdown 中相关段落的末尾插入 `[[THEORY:theory_id]]` 占位符
+4. **构建 theories 列表**
+
+### Theories 列表格式
+
+```json
+[
+  {
+    "theory_id": "theory_friction_basics",
+    "title": "摩擦力",
+    "subject": "physics",
+    "body_markdown": "## 摩擦力\n\n当两个物体表面接触并相对滑动时，会产生摩擦力...\n\n公式：$f = \\mu N$，其中 $\\mu$ 是摩擦系数，$N$ 是法向力。",
+    "animation_html": "<!DOCTYPE html>...(可选，自包含 HTML 动画)...",
+    "related_paragraph": "在 plan_markdown 中对应的段落标题或关键句"
+  }
+]
+```
+
+**字段说明**：
+
+| 字段 | 说明 |
+|------|------|
+| `theory_id` | 唯一 ID，格式：`theory_{学科缩写}_{关键词}`，如 `theory_phys_friction` |
+| `title` | 理论名称，5 字以内，如"摩擦力""坐标系""概率" |
+| `subject` | 所属学科：`math` / `physics` / `chemistry` / `biology` / `cs` / `geography` / `other` |
+| `body_markdown` | 理论内容的 Markdown 文本，100-300 字。支持 LaTeX 公式：行内公式用 `$...$`，独立公式用 `$$...$$` |
+| `animation_html` | 可选。自包含浅色主题 HTML 动画，用于可视化展示理论概念。前端以 iframe 嵌入在毛玻璃弹窗左侧（7/12 列宽） |
+| `related_paragraph` | 对应 plan_markdown 中的段落标题或关键句，便于定位 |
+
+### Theory Animation 视觉规范（Cognitive Sanctuary 浅色主题）
+
+Theory animation **不使用** `animation_runtime.js`（那是主课程深色主题），而是纯自包含 HTML，采用与主站一致的 **Cognitive Sanctuary 浅色主题**。
+
+**参考实现**：`scripts/_test_theory_friction.html`
+
+#### 配色
+
+| 角色 | 色值 | 用途 |
+|------|------|------|
+| 背景 | `#f8f5ff` → `#f1efff` 渐变 | Canvas 背景，与主站 surface 一致 |
+| 网格线 | `rgba(158,166,255,0.12)` | 30px 间距的辅助网格 |
+| 主体物 | `#6a1cf6` → `#5000c8` 渐变 | primary 色，用于方块/焦点物体 |
+| 力/向量箭头 | `#6a1cf6`（施加力）/ `#b41340`（摩擦力/阻力）/ `#006859`（法向力/支持力）| 分别对应 primary / error / secondary |
+| 标注文字 | `#19227d`（标题）/ `#4953ac`（副文字）/ `#9ea6ff`（辅助线标注）| 对应 on-surface / on-surface-variant / outline-variant |
+
+#### 布局与字体
+
+```
+- 字体：Plus Jakarta Sans（标题/数据，800/700）+ Inter（正文，400/500）+ Manrope（标签/HUD，500/600/700）
+- Canvas 100vh flex 列布局：canvas(flex:1) + controls + hud
+- 控件栏背景：#f1efff（surface-container-low）
+- 主按钮：linear-gradient(135deg, #6a1cf6, #ac8eff) + 白色文字 + shadow-primary/25
+- 次按钮：bg #e6e6ff，color #4953ac（ghost 风格）
+- HUD 标签：Manrope 9px uppercase tracking-0.12em，color #4953ac
+- HUD 数值：Plus Jakarta Sans 14px 700，color #6a1cf6
+```
+
+#### 毛玻璃公式面板
+
+在 Canvas 内部右上角绘制一个半透明公式面板：
+
+```
+- 背景：rgba(255,255,255,0.6)，圆角 8px
+- 标题：Manrope 9px 700 uppercase，color #6a1cf6，文案"MATHEMATICAL FORMULA"
+- 公式：Times New Roman italic 20px，color #19227d
+- 当前参数高亮：Plus Jakarta Sans 12px 700，color #b41340
+```
+
+#### 与主课程 animation 的区别
+
+| | 主课程 animation | Theory animation |
+|--|-----------------|-----------------|
+| 主题 | 深色（animation_runtime.js 10 种 palette） | 浅色 Cognitive Sanctuary |
+| 运行时 | 依赖 animation_runtime.js | 纯自包含，不依赖外部 JS |
+| 帧数 | 4-6 帧 | 2-4 帧，聚焦单一概念 |
+| 内容 | 项目场景（火星地形、传感器数据等） | 纯理论图形（力学图、坐标系、示意图等） |
+| 交互 | 帧控制 + HUD + 观看指南面板 | 帧控制 + HUD（简化，不需要观看指南） |
+| 嵌入方式 | rendered_sections + [[IDEA:...]] | theories[].animation_html + [[THEORY:...]] |
+
+#### 适用判断
+
+不是每个 theory 都需要 animation。适合加 animation 的：
+
+- 力学/运动/向量（箭头、方块滑动、力的对比）
+- 坐标系/几何（网格、点的定位、距离计算）
+- 波动/振动/周期（正弦波、频率对比）
+- 化学反应/分子结构（粒子运动、键的断裂）
+
+不需要 animation 的：
+- 纯定义类（如"什么是标度"）
+- 纯文字/表格能讲清楚的概念
+- 过于抽象无法可视化的（如"科学方法论"）
+
+### 质量标准
+
+- **不打断主线**：理论标注是旁注，plan_markdown 的工程叙事即使删掉所有 `[[THEORY:...]]` 也必须完整通顺
+- **精准定位**：`[[THEORY:...]]` 必须插在**第一次出现相关概念**的段落末尾，不要在后续重复插入
+- **适龄表达**：body_markdown 的解释难度匹配 age_range，低龄段用类比和生活例子，高龄段可以引入公式
+- **数量适度**：每个 knode 一般 2-5 个理论标注，不超过 5 个（避免喧宾夺主）
+- **禁止凑数**：如果某个 knode 的内容确实没有可追溯的基础理论（纯方法论/项目说明节点），可以 0 个
+
+### 占位符示例
+
+```markdown
+## 核心概念：通行性分析
+
+通行性就是回答一个问题：这个地方，走得过去吗？...
+地面的硬度和粗糙度直接影响你能不能安全通过。
+
+[[THEORY:theory_phys_friction]]
+
+## 深入理解：用眼睛给场景"涂色"
+
+做通行性标注时，你需要判断坡度...
+```
+
+---
+
 ## Step 2: 抽取 Ideas + 插入占位符
 
 **你是**：一位教育媒体策划师，判断哪些知识点最适合用富媒体呈现。
 
 **从 Step 1 的 plan_markdown 中识别适合做富媒体（animation/game）的知识点，加上 exercise。**
 
-不要为凑数量而强加富媒体。exercise 必须有，animation/game 按难度与 `module_role` 决定。
+exercise 必须有。animation 和 game 的数量不设上限，即使是简单的入门节点，也可以为儿童提供有趣的动画和互动游戏来增强学习体验。根据内容特点自由决定数量和类型。
 
 ### v4.1 强制约束：对齐验收 & 动手动作
 
@@ -250,25 +390,18 @@ else:
    - 反例：acceptance_artifacts = "火星图像风险观察笔记" 时，不应做一个"炼金术合成反应"的 game
    - 正例：做一个 drag_sort game 让学生把 20 张图分类到"可通行/危险/未知"三个桶里，直接对应交付物
 
-### 数量决策依据（按 difficulty × module_role 分级）
+### 数量决策
 
-难度采用 10 分制（`difficulty_level` 范围 1-10），区间有重叠以便灵活判断。
+animation 和 game 的数量**不设硬性上限**。任何难度和角色的节点都可以自由创建 animation 和 game，只要它们对学习有帮助。即使是 difficulty=1 的入门节点，也鼓励为儿童提供生动的动画演示和互动游戏。
 
-| difficulty_level | 档位 | module_role 典型值 | animation 上限 | game 上限 | exercise | 说明 |
-|-----------------|------|-------------------|---------------|----------|----------|------|
-| 1-2 | 入门型 | foundation / overview | **0** | **0-1** | 1+ | foundation 角色可以用 1 个轻量 game 锚定观察习惯；overview 保持 0 |
-| 3-5 | 核心概念型 | foundation / core / skill | **1** | **1** | 1+ | 有足够内容支撑富媒体交互，各不超过 1 个 |
-| 5-8 | 深入应用型 | core / skill / integration | **1-2** | **1-2** | 1+ | integration 角色优先 game（互动整合）；不要每个节点都机械地 1+1，应根据内容适配数量和类型 |
-| 8-9 | 综合设计型 | integration / capstone | **2** | **2** | 1+ | capstone 必须有 1 个 game 模拟最终交付场景；鼓励 2 animation + 1 game 或 1 animation + 2 game 等非对称组合 |
-
-**核心原则：animation/game 是昂贵资源，只在教学增益明显大于纯文字时才使用。上限不代表必须用满，但也不要机械地每个节点都只生成 1 animation + 1 game。应根据内容特点决定：有的节点适合 2 个 animation（多个可视化流程），有的适合 2 个 game（多种互动维度），有的只需要 1 个 game + exercise 就够了。**
+**核心原则：根据内容特点自由决定数量和类型。有的节点适合多个 animation（多个可视化流程），有的适合多个 game（多种互动维度），有的一个 game + exercise 就够了。exercise 至少 1 个。**
 
 ### Mode 选择规则
 
 | Mode | 适合场景 | 约束 |
 |------|---------|------|
-| `animation` | 动态过程、物理/化学变化、算法步骤、时序流程 | 按上表上限，**不是必须有** |
-| `game` | 互动操作、参数调节、因果探索、分类排序 | 按上表上限，**不是必须有** |
+| `animation` | 动态过程、物理/化学变化、算法步骤、时序流程 | 数量不限，按需创建 |
+| `game` | 互动操作、参数调节、因果探索、分类排序 | 数量不限，按需创建 |
 | `exercise` | 检测理解、巩固记忆 | **必须有** 1 个 |
 | `story` | 抽象概念引入、历史背景、类比解释 | 可选 |
 
@@ -397,20 +530,12 @@ Step 3 的详细描述必须显式引用 Step 2 得到的 `hands_on_ref` 和 `ac
 
 ### Game 详细描述
 
-**Mechanic 选择**（必须从以下 5 种中选 1 种）：
-
-| mechanic | 适合场景 | 交互方式 |
-|----------|---------|---------|
-| `simulation` | 参数 -> 结果因果规律 | 2-4 个滑块控制变量 |
-| `drag_sort` | 多概念/事物归类 | 拖拽到目标区域 |
-| `match_pairs` | 配对记忆（概念 <-> 定义） | 点击两个匹配项 |
-| `timeline_order` | 先后顺序或步骤流程 | 拖拽排序 |
-| `boss_quiz` | 综合选择题测验 | 点击选项 |
+Game 的交互方式不设固定模板，可以自由设计适合教学内容的玩法（拖拽、滑块、点击、绘制、排序等任意组合）。
 
 ```json
 {
   "style_key": "选定主题",
-  "game_mechanic": "simulation",
+  "game_mechanic": "自由设计的交互方式描述",
   "mechanic_reason": "15-25 字解释",
   "game_concept": "20-40 字核心概念",
   "game_title": "10 字以内",
@@ -571,81 +696,73 @@ Step 3 的详细描述必须显式引用 Step 2 得到的 `hands_on_ref` 和 `ac
    水蓝色透明系，土壤棕色系。不要用反直觉的颜色。
 ```
 
-### Animation HTML 实现
+### Animation Runtime (推荐方式)
 
-**结构**：
+**所有新 animation 应使用 `animation_runtime.js` 共享运行时。**
 
-```html
-<!DOCTYPE html>
-<html lang="zh">
-<head>
-<meta charset="UTF-8"/>
-<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;700&family=Inter:wght@400;500&family=Noto+Sans+SC:wght@400;700&display=swap" rel="stylesheet">
-<style>
-  /* 全局重置 + 深色主题 + 玻璃态 */
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  html, body { width: 100%; height: 100vh; overflow: hidden; background: #0f0a1e; }
-  /* ... 根据 style_key 的 palette 定制配色 ... */
-</style>
-</head>
-<body>
-  <!-- 观看指南面板（可折叠） -->
-  <div class="guide-panel">...</div>
+运行时提供：i18n 双语切换、Canvas DPR 缩放、帧间共享元素过渡动画、HUD 数据栏、观看指南面板、播放/暂停控制。
 
-  <!-- 主动画区域（Canvas 或 SVG） -->
-  <canvas id="c"></canvas>
+内容脚本只需提供：
+1. `CONFIG` 对象（style、totalFrames、i18n、hudLabels/hudValues、guideItems）
+2. `getFrameElements(f, W, H)` 函数（返回当前帧的元素数组）
+3. 可选：`drawBg(ctx, W, H)`、`customDrawElement(ctx, el)`
 
-  <!-- 控制栏（播放/暂停/上一帧/下一帧） -->
-  <div class="controls">...</div>
+**HTML 结构**：使用 `scripts/animation_skeleton.html` 作为模板，复制全部 HTML 结构，`<script src="animation_runtime.js">` 后接内容脚本。
 
-  <!-- HUD 数据栏 -->
-  <div class="hud">...</div>
+**CONFIG 格式**：
 
-<script>
-  // 动画逻辑
-</script>
-</body>
-</html>
+```javascript
+var CONFIG = {
+  style: 'ares_mission',   // 10 个主题之一，见下方
+  totalFrames: 5,
+  i18n: {
+    title:    {en: 'TITLE', cn: '标题'},
+    subtitle: {en: 'SUBTITLE', cn: '副标题'},
+    // ... 所有 UI 文案
+  },
+  hudLabels: ['hudL1', 'hudL2', 'hudL3', 'hudL4'],  // i18n key
+  hudValues: [
+    ['val_key_or_literal', ...],  // 每帧 4 个值（i18n key 或直接字符串）
+  ],
+  guideTitle: 'guideTitle',       // i18n key
+  guideItems: ['g1', 'g2', 'g3'], // i18n keys
+};
 ```
 
-**Canvas 动画规范**：
-- 使用 `scripts/course_factory.py` 中的 `make_canvas_html()` 格式作为参考
-- 底色：深夜蓝黑渐变 `#0f0a1e -> #1a1035`，带微弱网格（3% 透明白）
-- 主发光色根据学科选择（见下方色板）
-- 渐变质感：`createLinearGradient` 或 `createRadialGradient`，3 层色
-- 发光效果：`ctx.shadowColor = color; ctx.shadowBlur = 12-20`
-- HUD 底栏：`rgba(0,0,0,0.55)` 半透明条，高 52px，显示 4 列数据
-- DPR 感知：`Math.min(window.devicePixelRatio||1, 2)` 缩放
-- 动画运动必须由数学/物理公式驱动，禁止关键帧插值
+所有元素必须有 `id`（用于帧间共享元素过渡），相同 id 的元素会自动 lerp 位置/尺寸。元素类型和绘制方式参考 `animation_game_design/` 目录下对应 style_key 的 `code.html` 实现。
 
-**学科色板**：
+**公共 API**（通过 `AnimRuntime` 访问）：
+- `AnimRuntime.t(key)` -- i18n 翻译
+- `AnimRuntime.PAL` -- 当前 palette 对象（`.primary`, `.muted`, `.bg` 等）
+- `AnimRuntime.W` / `AnimRuntime.H` -- 当前 canvas 尺寸
+- `AnimRuntime.ctx` -- Canvas 2D context
+- `AnimRuntime.lerp(a, b, p)` / `AnimRuntime.easeInOut(x)` / `AnimRuntime.merge(base, ov)`
+- `AnimRuntime.boot()` -- 启动（在内容脚本末尾调用）
 
-| 学科 | 主发光色 | 辅色 |
-|------|---------|------|
-| 物理/力学 | `#818cf8` 幽蓝紫 | `#6366f1` |
-| 数学/几何 | `#34d399` 翡翠绿 | `#10b981` |
-| 化学/生物 | `#f472b6` 荧光粉 | `#ec4899` |
-| 地球/天文 | `#fb923c` 橙焰 | `#f97316` |
-| 通用/综合 | `#38bdf8` 天蓝 | `#0ea5e9` |
+**10 个视觉主题**（`CONFIG.style`）：
 
-### Game HTML 实现
+| style key | 适用场景 | 主色 |
+|-----------|---------|------|
+| `helix_lab` | 生物/遗传/实验室 | `#50ffb0` 荧光绿 |
+| `aether_clinic` | 医疗/诊断 | `#98cbff` 柔蓝 |
+| `ares_mission` | 火星/航天/探测 | `#ffb59c` 暖橙 |
+| `celestial_observatory` | 天文/星空 | `#c9bfff` 薰衣紫 |
+| `neural_circuit` | AI/神经网络 | `#dbfcff` 冰蓝 |
+| `subatomic_matrix` | 量子/粒子物理 | `#ff7cf5` 霓虹粉 |
+| `rocketry_control` | 火箭/飞控 | `#ffb000` 琥珀 |
+| `aqua_flow` | 海洋/水文 | `#22d3ee` 青蓝 |
+| `ember_forge` | 冶金/热力学 | `#f59e0b` 炉火橙 |
+| `flora_pulse` | 植物/生态 | `#4ade80` 叶绿 |
 
-**结构**同 Animation，但增加交互逻辑：
+每个 palette 包含：bg, bg2, surface, primary, primaryDim, secondary, secondaryDim, tertiary, tertiaryDim, text, muted, error, outline, glow, glowStrong, glass, glassBlur, radius。runtime 启动时自动将 palette 注入 CSS custom properties。
 
-```html
-<!-- 额外需要的元素 -->
-<div class="game-area">
-  <!-- simulation: 滑块 + 实时模拟画面 -->
-  <!-- drag_sort: 可拖拽元素 + 目标区域 -->
-  <!-- match_pairs: 卡片网格 -->
-  <!-- timeline_order: 可排序列表 -->
-  <!-- boss_quiz: 选项卡片 -->
-</div>
+**参考示例**：`scripts/_test_anim_runtime_demo.html`（capability boundary 动画的 runtime 版本）
 
-<div class="feedback-panel">
-  <!-- 得分/进度/通关提示 -->
-</div>
-```
+---
+
+### Animation 和 Game 的视觉设计参考
+
+**实现 animation 和 game HTML 时，必须先阅读 `animation_game_design/` 目录下对应 style_key 的 `DESIGN.md` 和 `code.html`**，参考其真实的 CSS 和 JS 实现，了解该主题的视觉风格、色彩搭配和交互模式。
 
 **Game 特有要求**：
 - 每个按钮/滑块必须绑定事件处理函数
@@ -716,161 +833,11 @@ document.getElementById('langBtn').addEventListener('click', function(){
 
 核心思路：每帧定义一组元素列表（`getFrameElements(f)`），过渡时对两帧中同 ID 的元素做 lerp 位置/大小插值，非共享元素做 alpha 淡入/淡出。
 
-#### 元素模型
-
-每帧返回一个元素数组，每个元素有统一结构：
-
-```js
-// 常用元素类型
-{id:'photo', type:'photo', x:..., y:..., w:..., h:..., alpha:1}
-{id:'title', type:'label', text:'...', x:..., y:..., color:'...', size:14, align:'center', alpha:1}
-{id:'arrow01', type:'arrow', x1:..., y1:..., x2:..., y2:..., color:'...', alpha:1}
-{id:'dict', type:'dict', x:..., y:..., w:..., h:..., highlight:1, alpha:1}
-{id:'decision', type:'decision', x:..., y:..., w:..., h:..., active:true, alpha:1}
-{id:'features', type:'features', x:..., y:..., w:..., h:..., alpha:1}
-{id:'custom1', type:'custom', draw:function(alpha){...}, alpha:1}
-```
-
-`getFrameElements(f)` 根据帧号和当前 W/H 计算并返回元素列表。
-
-#### drawElement(el) 分发绘制
-
-```js
-function drawElement(el) {
-  if (!el || el.alpha <= 0.01) return;
-  ctx.save();
-  ctx.globalAlpha = el.alpha;
-  switch(el.type) {
-    case 'photo':    drawPhotoBoxPrimitive(el.x, el.y, el.w, el.h); break;
-    case 'label':    drawLabelPrimitive(el.text, el.x, el.y, el.color, el.size, el.align); break;
-    case 'text':     drawTextPrimitive(el.text, el.x, el.y, el.color, el.size, el.align); break;
-    case 'arrow':    drawArrowPrimitive(el.x1, el.y1, el.x2, el.y2, el.color); break;
-    case 'dict':     drawDictBoxPrimitive(el.x, el.y, el.w, el.h, el.highlight); break;
-    case 'decision': drawDecisionBoxPrimitive(el.x, el.y, el.w, el.h, el.active); break;
-    case 'box':      drawBox(el.x, el.y, el.w, el.h, el.borderColor, el.fillColor); break;
-    case 'custom':   el.draw(el.alpha); break;
-  }
-  ctx.restore();
-}
-```
-
-#### 工具函数
-
-```js
-function lerp(a, b, p) { return a + (b - a) * p; }
-function easeInOut(x) { return x < 0.5 ? 2*x*x : 1 - Math.pow(-2*x+2, 2)/2; }
-function merge(base, overrides) {
-  var r = {};
-  for (var k in base) r[k] = base[k];
-  for (var k2 in overrides) r[k2] = overrides[k2];
-  return r;
-}
-```
-
-#### 过渡动画核心
-
-```js
-var transitioning = false;
-
-function transitionTo(newFrame) {
-  if (newFrame < 0) newFrame = 0;
-  if (newFrame >= totalFrames) newFrame = totalFrames - 1;
-  if (newFrame === currentFrame && !transitioning) { drawFrame(currentFrame); updateHUD(currentFrame); return; }
-  if (transitioning) return;
-
-  var oldElems = getFrameElements(currentFrame);
-  var newElems = getFrameElements(newFrame);
-  var oldMap = {}; oldElems.forEach(function(e){ oldMap[e.id] = e; });
-  var newMap = {}; newElems.forEach(function(e){ newMap[e.id] = e; });
-
-  currentFrame = newFrame;
-  updateHUD(newFrame);
-  transitioning = true;
-
-  var startTime = null;
-  var duration = 500; // ms
-
-  function step(timestamp) {
-    if (!startTime) startTime = timestamp;
-    var raw = Math.min((timestamp - startTime) / duration, 1);
-    var p = easeInOut(raw);
-
-    drawBg();
-
-    // 旧帧独有元素：淡出
-    oldElems.forEach(function(oe) {
-      if (!newMap[oe.id]) drawElement(merge(oe, {alpha: 1 - p}));
-    });
-
-    // 新帧元素
-    newElems.forEach(function(ne) {
-      var oe = oldMap[ne.id];
-      if (oe) {
-        // 共享元素：lerp 位置/大小
-        var merged = merge(ne, {
-          x: lerp(oe.x||0, ne.x||0, p),
-          y: lerp(oe.y||0, ne.y||0, p),
-          w: lerp(oe.w||0, ne.w||0, p),
-          h: lerp(oe.h||0, ne.h||0, p),
-          alpha: 1
-        });
-        // 箭头类型额外 lerp 端点
-        if (ne.type === 'arrow' && oe.type === 'arrow') {
-          merged.x1 = lerp(oe.x1, ne.x1, p);
-          merged.y1 = lerp(oe.y1, ne.y1, p);
-          merged.x2 = lerp(oe.x2, ne.x2, p);
-          merged.y2 = lerp(oe.y2, ne.y2, p);
-        }
-        // 文本不同时做交叉渐变
-        if ((ne.type==='label'||ne.type==='text') && oe.text !== ne.text) {
-          drawElement(merge(oe, {alpha: 1 - p}));
-          drawElement(merge(ne, {alpha: p}));
-        } else {
-          drawElement(merged);
-        }
-      } else {
-        // 新帧独有元素：淡入
-        drawElement(merge(ne, {alpha: p}));
-      }
-    });
-
-    if (raw < 1) {
-      requestAnimationFrame(step);
-    } else {
-      transitioning = false;
-    }
-  }
-  requestAnimationFrame(step);
-}
-```
-
-#### drawFrame 保留为即时绘制
-
-`drawFrame(f)` 仍然存在，用于 resize / 语言切换等需要立即重绘的场景：
-
-```js
-function drawFrame(f) {
-  drawBg();
-  var elems = getFrameElements(f);
-  elems.forEach(function(el) { drawElement(el); });
-}
-```
-
-#### 共享元素 ID 约定
-
-animation 作者需要为每帧中相同的物体使用相同的 `id`，这样过渡引擎会自动做平滑插值。例如：
-
-| 元素 ID | Frame 0 | Frame 1 | Frame 2 | Frame 3 |
-|---------|---------|---------|---------|---------|
-| `photo` | 居中大照片 | 左侧缩小 | 更小照片 | (淡出) |
-| `title` | 步骤标题 | 步骤标题(文本变) | 步骤标题(文本变) | 步骤标题(文本变) |
-| `desc`  | 底部说明 | 底部说明(文本变) | 底部说明(文本变) | - |
-
-文本变化的共享元素（同 ID 但 text 不同）会自动做交叉渐变（旧文本淡出 + 新文本淡入）。
+元素类型、绘制函数和过渡动画的具体实现参考 `animation_game_design/` 目录下对应 style_key 的 `code.html`，以及 `scripts/_test_anim_runtime_demo.html` 示例。
 
 **使用规则**：
-- PREV/NEXT 按钮调用 `transitionTo(f)` 而非直接 `drawFrame(f)`
-- PLAY 自动播放时也使用 `transitionTo()`
+- 每个元素必须有 `id`，同 ID 元素在帧间自动 lerp 插值
+- PREV/NEXT/PLAY 按钮调用 `transitionTo(f)` 而非直接 `drawFrame(f)`
 - 过渡时长 500ms，easeInOut 缓动
 - `drawFrame(f)` 仅用于 resize / 语言切换等即时重绘场景
 
@@ -958,7 +925,8 @@ palette = kit["palette"]  # bg, surface, primary, secondary, text, muted 等
 [ ] 字体使用了 Space Grotesk + Noto Sans SC?
 [ ] 包含 I18N 对象和 t() 函数，所有可见文本通过 t(key) 查表?
 [ ] 左上角有语言切换按钮（CN/EN），点击可切换所有文本?
-[ ] Animation 帧切换使用共享元素过渡（getFrameElements + transitionTo + lerp）?（animation 适用）
+[ ] Animation 帧切换使用共享元素过渡（transitionTo + lerp）?（animation 适用）
+[ ] 视觉风格参考了 animation_game_design/ 对应 style_key 的 DESIGN.md 和 code.html?
 ```
 
 ### Exercise 实现
@@ -1058,11 +1026,9 @@ story_paragraphs = [
 ```
 [ ] 定义了 getFrameElements(f) 返回每帧的元素列表（声明式）
 [ ] 每个元素有 id 字段，同 ID 元素在帧间自动 lerp 插值
-[ ] transitionTo() 函数实现共享元素动画（lerp 位置/大小 + 淡入淡出）
 [ ] PREV/NEXT/PLAY 按钮均调用 transitionTo() 而非直接 drawFrame()
-[ ] drawFrame(f) 保留用于 resize / 语言切换等即时重绘
-[ ] 包含 lerp(), easeInOut(), merge() 工具函数
 [ ] 过渡时长 500ms，easeInOut 缓动
+[ ] 视觉风格参考了 animation_game_design/ 对应 style_key 的实现
 ```
 
 ### 5.5b. Playwright 自动化浏览器验证
@@ -1200,6 +1166,12 @@ exercises = make_exercises([
     # ...
 ])
 
+# -- theories (从 Step 1.5 生成) --
+theories = [
+    {"theory_id": "theory_phys_friction", "title": "摩擦力", "subject": "physics",
+     "body_markdown": "## 摩擦力\n\n当两个物体...", "related_paragraph": "核心概念段"},
+]
+
 # -- 组装：传入 knode 后 preflight 自动生效；传入 research 后自动融入 plan_markdown --
 course_content = make_course_content(
     plan_markdown=plan_markdown,
@@ -1214,6 +1186,7 @@ course_content = make_course_content(
     exercise_hands_on_ref="在样例图上手工圈出危险区域并写理由",
     exercise_acceptance_ref="学生能够现场说明并演示本模块中的至少两项动手动作",
     research=research,  # 0.5：外部资料自动融入 plan_markdown + external_resources
+    theories=theories,  # Step 1.5：基础理论标注
 )
 # 如果 preflight 检出违规，此处会直接 raise ValueError，回到 Step 1/2 修正。
 
@@ -1330,10 +1303,17 @@ rendered_sections = {
     },
 }
 
+# theories (从 Step 1.5 生成)
+theories = [
+    {"theory_id": "theory_phys_friction", "title": "摩擦力", "subject": "physics",
+     "body_markdown": "## 摩擦力\n\n...", "related_paragraph": "核心概念段"},
+]
+
 course_content = {
     "plan_markdown": plan_markdown,
     "ideas": ideas,
     "rendered_sections": rendered_sections,
+    "theories": theories,
 }
 
 # -- 手动 v4.1 自检（6b 没有 make_course_content 的自动兜底）--

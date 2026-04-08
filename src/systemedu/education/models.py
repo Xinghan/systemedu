@@ -266,6 +266,7 @@ class AvatarStage(BaseModel):
     title: str
     description: str = ""
     image: str = ""  # Relative path to SVG, e.g. avatars/stage-0.svg
+    xp_threshold: int = 0  # XP needed to reach this stage
 
 
 class CareerPath(BaseModel):

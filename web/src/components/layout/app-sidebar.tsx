@@ -4,7 +4,6 @@ import Link from "next/link"
 import { usePathname } from "next/navigation"
 import {
   Bot,
-  Box,
   Brain,
   FolderKanban,
   LayoutDashboard,
@@ -17,6 +16,7 @@ import {
   HelpCircle,
   LogOut,
   Languages,
+  Trophy,
 } from "lucide-react"
 import {
   Sidebar,
@@ -42,7 +42,7 @@ export function AppSidebar() {
     { href: "/dashboard", label: t("nav.dashboard"), icon: LayoutDashboard },
     { href: "/projects", label: t("nav.library"), icon: FolderKanban },
     { href: "/chat", label: t("nav.chat"), icon: MessageSquare },
-    { href: "/objects", label: t("nav.objects"), icon: Box },
+    { href: "/career-paths", label: t("career.title"), icon: Trophy },
   ]
 
   const manageItems = [

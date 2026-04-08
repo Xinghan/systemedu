@@ -382,34 +382,6 @@ export interface WSMessage {
   result?: string
 }
 
-export interface ObjectRegistryItem {
-  object_key: string
-  family: string
-  variant: string
-  views: string[]
-  must_have: string[]
-  optional: string[]
-  labelable: string[]
-  source: "registry"
-}
-
-export interface ObjectStagingItem {
-  object_key: string
-  family: string
-  variant: string
-  status: "pending" | "in_progress" | "done" | "failed"
-  source: "factory_queue"
-  project_name: string
-  created_at: string
-  error: string
-}
-
-export interface ObjectRegistryResponse {
-  registry: ObjectRegistryItem[]
-  staging: ObjectStagingItem[]
-  total_registry: number
-  total_staging: number
-}
 
 export interface LessonQueueItem {
   id: number
@@ -440,25 +412,6 @@ export interface LessonStatusesResponse {
   statuses: Record<string, LessonStatus>
 }
 
-export interface FactoryQueueItem {
-  object_key: string
-  description: string
-  source: "auto_project" | "miss_queue" | "manual"
-  project_name: string
-  status: "pending" | "in_progress" | "done" | "failed"
-  created_at: string
-  error: string
-}
-
-export interface FactoryQueueResponse {
-  items: FactoryQueueItem[]
-  stats: {
-    pending: number
-    in_progress: number
-    done: number
-    failed: number
-  }
-}
 
 // --- Course v2 types (multi-agent pipeline) ---
 
@@ -511,11 +464,21 @@ export interface CourseSection {
   audio_url: string
 }
 
+export interface TheoryEntry {
+  theory_id: string
+  title: string
+  subject: string
+  body_markdown: string
+  related_paragraph?: string
+  animation_html?: string
+}
+
 export interface CourseContent {
   plan_markdown: string
   sections?: CourseSection[]
   ideas: CourseIdeaSummary[]
   rendered_sections: Record<string, RenderedSection>
+  theories?: TheoryEntry[]
 }
 
 export interface CourseContentData {
