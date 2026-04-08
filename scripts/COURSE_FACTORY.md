@@ -390,20 +390,12 @@ Step 3 的详细描述必须显式引用 Step 2 得到的 `hands_on_ref` 和 `ac
 
 ### Game 详细描述
 
-**Mechanic 选择**（必须从以下 5 种中选 1 种）：
-
-| mechanic | 适合场景 | 交互方式 |
-|----------|---------|---------|
-| `simulation` | 参数 -> 结果因果规律 | 2-4 个滑块控制变量 |
-| `drag_sort` | 多概念/事物归类 | 拖拽到目标区域 |
-| `match_pairs` | 配对记忆（概念 <-> 定义） | 点击两个匹配项 |
-| `timeline_order` | 先后顺序或步骤流程 | 拖拽排序 |
-| `boss_quiz` | 综合选择题测验 | 点击选项 |
+Game 的交互方式不设固定模板，可以自由设计适合教学内容的玩法（拖拽、滑块、点击、绘制、排序等任意组合）。
 
 ```json
 {
   "style_key": "选定主题",
-  "game_mechanic": "simulation",
+  "game_mechanic": "自由设计的交互方式描述",
   "mechanic_reason": "15-25 字解释",
   "game_concept": "20-40 字核心概念",
   "game_title": "10 字以内",
