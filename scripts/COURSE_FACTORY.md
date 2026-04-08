@@ -233,7 +233,7 @@ else:
 
 **从 Step 1 的 plan_markdown 中识别适合做富媒体（animation/game）的知识点，加上 exercise。**
 
-不要为凑数量而强加富媒体。exercise 必须有，animation/game 按难度与 `module_role` 决定。
+exercise 必须有。animation 和 game 的数量不设上限，即使是简单的入门节点，也可以为儿童提供有趣的动画和互动游戏来增强学习体验。根据内容特点自由决定数量和类型。
 
 ### v4.1 强制约束：对齐验收 & 动手动作
 
@@ -250,25 +250,18 @@ else:
    - 反例：acceptance_artifacts = "火星图像风险观察笔记" 时，不应做一个"炼金术合成反应"的 game
    - 正例：做一个 drag_sort game 让学生把 20 张图分类到"可通行/危险/未知"三个桶里，直接对应交付物
 
-### 数量决策依据（按 difficulty × module_role 分级）
+### 数量决策
 
-难度采用 10 分制（`difficulty_level` 范围 1-10），区间有重叠以便灵活判断。
+animation 和 game 的数量**不设硬性上限**。任何难度和角色的节点都可以自由创建 animation 和 game，只要它们对学习有帮助。即使是 difficulty=1 的入门节点，也鼓励为儿童提供生动的动画演示和互动游戏。
 
-| difficulty_level | 档位 | module_role 典型值 | animation 上限 | game 上限 | exercise | 说明 |
-|-----------------|------|-------------------|---------------|----------|----------|------|
-| 1-2 | 入门型 | foundation / overview | **0** | **0-1** | 1+ | foundation 角色可以用 1 个轻量 game 锚定观察习惯；overview 保持 0 |
-| 3-5 | 核心概念型 | foundation / core / skill | **1** | **1** | 1+ | 有足够内容支撑富媒体交互，各不超过 1 个 |
-| 5-8 | 深入应用型 | core / skill / integration | **1-2** | **1-2** | 1+ | integration 角色优先 game（互动整合）；不要每个节点都机械地 1+1，应根据内容适配数量和类型 |
-| 8-9 | 综合设计型 | integration / capstone | **2** | **2** | 1+ | capstone 必须有 1 个 game 模拟最终交付场景；鼓励 2 animation + 1 game 或 1 animation + 2 game 等非对称组合 |
-
-**核心原则：animation/game 是昂贵资源，只在教学增益明显大于纯文字时才使用。上限不代表必须用满，但也不要机械地每个节点都只生成 1 animation + 1 game。应根据内容特点决定：有的节点适合 2 个 animation（多个可视化流程），有的适合 2 个 game（多种互动维度），有的只需要 1 个 game + exercise 就够了。**
+**核心原则：根据内容特点自由决定数量和类型。有的节点适合多个 animation（多个可视化流程），有的适合多个 game（多种互动维度），有的一个 game + exercise 就够了。exercise 至少 1 个。**
 
 ### Mode 选择规则
 
 | Mode | 适合场景 | 约束 |
 |------|---------|------|
-| `animation` | 动态过程、物理/化学变化、算法步骤、时序流程 | 按上表上限，**不是必须有** |
-| `game` | 互动操作、参数调节、因果探索、分类排序 | 按上表上限，**不是必须有** |
+| `animation` | 动态过程、物理/化学变化、算法步骤、时序流程 | 数量不限，按需创建 |
+| `game` | 互动操作、参数调节、因果探索、分类排序 | 数量不限，按需创建 |
 | `exercise` | 检测理解、巩固记忆 | **必须有** 1 个 |
 | `story` | 抽象概念引入、历史背景、类比解释 | 可选 |
 
@@ -604,20 +597,7 @@ var CONFIG = {
 };
 ```
 
-**getFrameElements 返回的元素类型**：
-
-| type | 必需属性 | 可选属性 |
-|------|---------|---------|
-| `label` | id, x, y, text, color, size | align, bold, glow, baseline |
-| `text` | id, x, y, text | color, size, align |
-| `box` | id, x, y, w, h | fill, stroke, lineWidth |
-| `circle` | id, x, y, r | fill, stroke, glow, glowSize |
-| `arrow` | id, x1, y1, x2, y2 | color, lineWidth, headSize |
-| `line` | id, x1, y1, x2, y2 | color, lineWidth, dash |
-| `gradient_box` | id, x, y, w, h | color1, color2, glow |
-| `custom` | id, draw(alpha) | 任意附加属性 |
-
-所有元素必须有 `id`（用于帧间共享元素过渡），相同 id 的元素会自动 lerp 位置/尺寸。
+所有元素必须有 `id`（用于帧间共享元素过渡），相同 id 的元素会自动 lerp 位置/尺寸。元素类型和绘制方式参考 `animation_game_design/` 目录下对应 style_key 的 `code.html` 实现。
 
 **公共 API**（通过 `AnimRuntime` 访问）：
 - `AnimRuntime.t(key)` -- i18n 翻译
@@ -648,36 +628,9 @@ var CONFIG = {
 
 ---
 
-### Animation HTML 实现 (旧方式，仅用于维护已有动画)
+### Animation 和 Game 的视觉设计参考
 
-**注意：新动画请使用上方的 Animation Runtime 方式。以下仅供理解已有独立 HTML 动画的结构。**
-
-**Canvas 动画规范**：
-- 底色：深色渐变（根据 style_key palette）
-- 渐变质感：`createLinearGradient` 或 `createRadialGradient`，3 层色
-- 发光效果：`ctx.shadowColor = color; ctx.shadowBlur = 12-20`
-- HUD 底栏：`rgba(0,0,0,0.55)` 半透明条，高 48-52px，显示 4 列数据
-- DPR 感知：`Math.min(window.devicePixelRatio||1, 2)` 缩放
-- 动画运动必须由数学/物理公式驱动，禁止关键帧插值
-
-### Game HTML 实现
-
-**结构**同 Animation，但增加交互逻辑：
-
-```html
-<!-- 额外需要的元素 -->
-<div class="game-area">
-  <!-- simulation: 滑块 + 实时模拟画面 -->
-  <!-- drag_sort: 可拖拽元素 + 目标区域 -->
-  <!-- match_pairs: 卡片网格 -->
-  <!-- timeline_order: 可排序列表 -->
-  <!-- boss_quiz: 选项卡片 -->
-</div>
-
-<div class="feedback-panel">
-  <!-- 得分/进度/通关提示 -->
-</div>
-```
+**实现 animation 和 game HTML 时，必须先阅读 `animation_game_design/` 目录下对应 style_key 的 `DESIGN.md` 和 `code.html`**，参考其真实的 CSS 和 JS 实现，了解该主题的视觉风格、色彩搭配和交互模式。
 
 **Game 特有要求**：
 - 每个按钮/滑块必须绑定事件处理函数
@@ -748,161 +701,11 @@ document.getElementById('langBtn').addEventListener('click', function(){
 
 核心思路：每帧定义一组元素列表（`getFrameElements(f)`），过渡时对两帧中同 ID 的元素做 lerp 位置/大小插值，非共享元素做 alpha 淡入/淡出。
 
-#### 元素模型
-
-每帧返回一个元素数组，每个元素有统一结构：
-
-```js
-// 常用元素类型
-{id:'photo', type:'photo', x:..., y:..., w:..., h:..., alpha:1}
-{id:'title', type:'label', text:'...', x:..., y:..., color:'...', size:14, align:'center', alpha:1}
-{id:'arrow01', type:'arrow', x1:..., y1:..., x2:..., y2:..., color:'...', alpha:1}
-{id:'dict', type:'dict', x:..., y:..., w:..., h:..., highlight:1, alpha:1}
-{id:'decision', type:'decision', x:..., y:..., w:..., h:..., active:true, alpha:1}
-{id:'features', type:'features', x:..., y:..., w:..., h:..., alpha:1}
-{id:'custom1', type:'custom', draw:function(alpha){...}, alpha:1}
-```
-
-`getFrameElements(f)` 根据帧号和当前 W/H 计算并返回元素列表。
-
-#### drawElement(el) 分发绘制
-
-```js
-function drawElement(el) {
-  if (!el || el.alpha <= 0.01) return;
-  ctx.save();
-  ctx.globalAlpha = el.alpha;
-  switch(el.type) {
-    case 'photo':    drawPhotoBoxPrimitive(el.x, el.y, el.w, el.h); break;
-    case 'label':    drawLabelPrimitive(el.text, el.x, el.y, el.color, el.size, el.align); break;
-    case 'text':     drawTextPrimitive(el.text, el.x, el.y, el.color, el.size, el.align); break;
-    case 'arrow':    drawArrowPrimitive(el.x1, el.y1, el.x2, el.y2, el.color); break;
-    case 'dict':     drawDictBoxPrimitive(el.x, el.y, el.w, el.h, el.highlight); break;
-    case 'decision': drawDecisionBoxPrimitive(el.x, el.y, el.w, el.h, el.active); break;
-    case 'box':      drawBox(el.x, el.y, el.w, el.h, el.borderColor, el.fillColor); break;
-    case 'custom':   el.draw(el.alpha); break;
-  }
-  ctx.restore();
-}
-```
-
-#### 工具函数
-
-```js
-function lerp(a, b, p) { return a + (b - a) * p; }
-function easeInOut(x) { return x < 0.5 ? 2*x*x : 1 - Math.pow(-2*x+2, 2)/2; }
-function merge(base, overrides) {
-  var r = {};
-  for (var k in base) r[k] = base[k];
-  for (var k2 in overrides) r[k2] = overrides[k2];
-  return r;
-}
-```
-
-#### 过渡动画核心
-
-```js
-var transitioning = false;
-
-function transitionTo(newFrame) {
-  if (newFrame < 0) newFrame = 0;
-  if (newFrame >= totalFrames) newFrame = totalFrames - 1;
-  if (newFrame === currentFrame && !transitioning) { drawFrame(currentFrame); updateHUD(currentFrame); return; }
-  if (transitioning) return;
-
-  var oldElems = getFrameElements(currentFrame);
-  var newElems = getFrameElements(newFrame);
-  var oldMap = {}; oldElems.forEach(function(e){ oldMap[e.id] = e; });
-  var newMap = {}; newElems.forEach(function(e){ newMap[e.id] = e; });
-
-  currentFrame = newFrame;
-  updateHUD(newFrame);
-  transitioning = true;
-
-  var startTime = null;
-  var duration = 500; // ms
-
-  function step(timestamp) {
-    if (!startTime) startTime = timestamp;
-    var raw = Math.min((timestamp - startTime) / duration, 1);
-    var p = easeInOut(raw);
-
-    drawBg();
-
-    // 旧帧独有元素：淡出
-    oldElems.forEach(function(oe) {
-      if (!newMap[oe.id]) drawElement(merge(oe, {alpha: 1 - p}));
-    });
-
-    // 新帧元素
-    newElems.forEach(function(ne) {
-      var oe = oldMap[ne.id];
-      if (oe) {
-        // 共享元素：lerp 位置/大小
-        var merged = merge(ne, {
-          x: lerp(oe.x||0, ne.x||0, p),
-          y: lerp(oe.y||0, ne.y||0, p),
-          w: lerp(oe.w||0, ne.w||0, p),
-          h: lerp(oe.h||0, ne.h||0, p),
-          alpha: 1
-        });
-        // 箭头类型额外 lerp 端点
-        if (ne.type === 'arrow' && oe.type === 'arrow') {
-          merged.x1 = lerp(oe.x1, ne.x1, p);
-          merged.y1 = lerp(oe.y1, ne.y1, p);
-          merged.x2 = lerp(oe.x2, ne.x2, p);
-          merged.y2 = lerp(oe.y2, ne.y2, p);
-        }
-        // 文本不同时做交叉渐变
-        if ((ne.type==='label'||ne.type==='text') && oe.text !== ne.text) {
-          drawElement(merge(oe, {alpha: 1 - p}));
-          drawElement(merge(ne, {alpha: p}));
-        } else {
-          drawElement(merged);
-        }
-      } else {
-        // 新帧独有元素：淡入
-        drawElement(merge(ne, {alpha: p}));
-      }
-    });
-
-    if (raw < 1) {
-      requestAnimationFrame(step);
-    } else {
-      transitioning = false;
-    }
-  }
-  requestAnimationFrame(step);
-}
-```
-
-#### drawFrame 保留为即时绘制
-
-`drawFrame(f)` 仍然存在，用于 resize / 语言切换等需要立即重绘的场景：
-
-```js
-function drawFrame(f) {
-  drawBg();
-  var elems = getFrameElements(f);
-  elems.forEach(function(el) { drawElement(el); });
-}
-```
-
-#### 共享元素 ID 约定
-
-animation 作者需要为每帧中相同的物体使用相同的 `id`，这样过渡引擎会自动做平滑插值。例如：
-
-| 元素 ID | Frame 0 | Frame 1 | Frame 2 | Frame 3 |
-|---------|---------|---------|---------|---------|
-| `photo` | 居中大照片 | 左侧缩小 | 更小照片 | (淡出) |
-| `title` | 步骤标题 | 步骤标题(文本变) | 步骤标题(文本变) | 步骤标题(文本变) |
-| `desc`  | 底部说明 | 底部说明(文本变) | 底部说明(文本变) | - |
-
-文本变化的共享元素（同 ID 但 text 不同）会自动做交叉渐变（旧文本淡出 + 新文本淡入）。
+元素类型、绘制函数和过渡动画的具体实现参考 `animation_game_design/` 目录下对应 style_key 的 `code.html`，以及 `scripts/_test_anim_runtime_demo.html` 示例。
 
 **使用规则**：
-- PREV/NEXT 按钮调用 `transitionTo(f)` 而非直接 `drawFrame(f)`
-- PLAY 自动播放时也使用 `transitionTo()`
+- 每个元素必须有 `id`，同 ID 元素在帧间自动 lerp 插值
+- PREV/NEXT/PLAY 按钮调用 `transitionTo(f)` 而非直接 `drawFrame(f)`
 - 过渡时长 500ms，easeInOut 缓动
 - `drawFrame(f)` 仅用于 resize / 语言切换等即时重绘场景
 
@@ -990,7 +793,8 @@ palette = kit["palette"]  # bg, surface, primary, secondary, text, muted 等
 [ ] 字体使用了 Space Grotesk + Noto Sans SC?
 [ ] 包含 I18N 对象和 t() 函数，所有可见文本通过 t(key) 查表?
 [ ] 左上角有语言切换按钮（CN/EN），点击可切换所有文本?
-[ ] Animation 帧切换使用共享元素过渡（getFrameElements + transitionTo + lerp）?（animation 适用）
+[ ] Animation 帧切换使用共享元素过渡（transitionTo + lerp）?（animation 适用）
+[ ] 视觉风格参考了 animation_game_design/ 对应 style_key 的 DESIGN.md 和 code.html?
 ```
 
 ### Exercise 实现
@@ -1090,11 +894,9 @@ story_paragraphs = [
 ```
 [ ] 定义了 getFrameElements(f) 返回每帧的元素列表（声明式）
 [ ] 每个元素有 id 字段，同 ID 元素在帧间自动 lerp 插值
-[ ] transitionTo() 函数实现共享元素动画（lerp 位置/大小 + 淡入淡出）
 [ ] PREV/NEXT/PLAY 按钮均调用 transitionTo() 而非直接 drawFrame()
-[ ] drawFrame(f) 保留用于 resize / 语言切换等即时重绘
-[ ] 包含 lerp(), easeInOut(), merge() 工具函数
 [ ] 过渡时长 500ms，easeInOut 缓动
+[ ] 视觉风格参考了 animation_game_design/ 对应 style_key 的实现
 ```
 
 ### 5.5b. Playwright 自动化浏览器验证
