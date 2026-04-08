@@ -224,29 +224,11 @@ async def generate_step(
             if game_spec_info.get("game_concept"):
                 lab_strategy["game_concept"] = game_spec_info["game_concept"]
 
-            try:
-                from systemedu.agents.builtin.gameagent.compiler import GameCompiler
-                from systemedu.agents.builtin.gameagent.planner import GameSpecPlannerAgent
-
-                planner = GameSpecPlannerAgent(llm=llm)
-                spec = await planner.plan(node_title, node_summary, difficulty, lab_strategy)
-                if spec:
-                    html = GameCompiler().compile(spec)
-                    base["html"] = html
-                    logger.info(f"Game step {step_index} compiled: {len(html)} chars")
-                else:
-                    # Fallback: generate markdown description
-                    prompt = _build_concept_prompt(node_title, node_summary, difficulty, step_spec)
-                    response = llm.invoke([HumanMessage(content=prompt)])
-                    base["content"] = response.content
-                    base["type"] = "concept"
-                    logger.warning(f"Game step {step_index}: planner returned None, fallback to concept")
-            except Exception:
-                logger.exception(f"Game step {step_index}: generation failed, fallback to concept")
-                prompt = _build_concept_prompt(node_title, node_summary, difficulty, step_spec)
-                response = llm.invoke([HumanMessage(content=prompt)])
-                base["content"] = response.content
-                base["type"] = "concept"
+            # Fallback: generate markdown description for game steps
+            prompt = _build_concept_prompt(node_title, node_summary, difficulty, step_spec)
+            response = llm.invoke([HumanMessage(content=prompt)])
+            base["content"] = response.content
+            base["type"] = "concept"
 
         else:
             # Unknown type: generate as concept
