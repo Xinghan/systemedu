@@ -571,62 +571,94 @@ Step 3 的详细描述必须显式引用 Step 2 得到的 `hands_on_ref` 和 `ac
    水蓝色透明系，土壤棕色系。不要用反直觉的颜色。
 ```
 
-### Animation HTML 实现
+### Animation Runtime (推荐方式)
 
-**结构**：
+**所有新 animation 应使用 `animation_runtime.js` 共享运行时。**
 
-```html
-<!DOCTYPE html>
-<html lang="zh">
-<head>
-<meta charset="UTF-8"/>
-<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;700&family=Inter:wght@400;500&family=Noto+Sans+SC:wght@400;700&display=swap" rel="stylesheet">
-<style>
-  /* 全局重置 + 深色主题 + 玻璃态 */
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  html, body { width: 100%; height: 100vh; overflow: hidden; background: #0f0a1e; }
-  /* ... 根据 style_key 的 palette 定制配色 ... */
-</style>
-</head>
-<body>
-  <!-- 观看指南面板（可折叠） -->
-  <div class="guide-panel">...</div>
+运行时提供：i18n 双语切换、Canvas DPR 缩放、帧间共享元素过渡动画、HUD 数据栏、观看指南面板、播放/暂停控制。
 
-  <!-- 主动画区域（Canvas 或 SVG） -->
-  <canvas id="c"></canvas>
+内容脚本只需提供：
+1. `CONFIG` 对象（style、totalFrames、i18n、hudLabels/hudValues、guideItems）
+2. `getFrameElements(f, W, H)` 函数（返回当前帧的元素数组）
+3. 可选：`drawBg(ctx, W, H)`、`customDrawElement(ctx, el)`
 
-  <!-- 控制栏（播放/暂停/上一帧/下一帧） -->
-  <div class="controls">...</div>
+**HTML 结构**：使用 `scripts/animation_skeleton.html` 作为模板，复制全部 HTML 结构，`<script src="animation_runtime.js">` 后接内容脚本。
 
-  <!-- HUD 数据栏 -->
-  <div class="hud">...</div>
+**CONFIG 格式**：
 
-<script>
-  // 动画逻辑
-</script>
-</body>
-</html>
+```javascript
+var CONFIG = {
+  style: 'ares_mission',   // 10 个主题之一，见下方
+  totalFrames: 5,
+  i18n: {
+    title:    {en: 'TITLE', cn: '标题'},
+    subtitle: {en: 'SUBTITLE', cn: '副标题'},
+    // ... 所有 UI 文案
+  },
+  hudLabels: ['hudL1', 'hudL2', 'hudL3', 'hudL4'],  // i18n key
+  hudValues: [
+    ['val_key_or_literal', ...],  // 每帧 4 个值（i18n key 或直接字符串）
+  ],
+  guideTitle: 'guideTitle',       // i18n key
+  guideItems: ['g1', 'g2', 'g3'], // i18n keys
+};
 ```
 
+**getFrameElements 返回的元素类型**：
+
+| type | 必需属性 | 可选属性 |
+|------|---------|---------|
+| `label` | id, x, y, text, color, size | align, bold, glow, baseline |
+| `text` | id, x, y, text | color, size, align |
+| `box` | id, x, y, w, h | fill, stroke, lineWidth |
+| `circle` | id, x, y, r | fill, stroke, glow, glowSize |
+| `arrow` | id, x1, y1, x2, y2 | color, lineWidth, headSize |
+| `line` | id, x1, y1, x2, y2 | color, lineWidth, dash |
+| `gradient_box` | id, x, y, w, h | color1, color2, glow |
+| `custom` | id, draw(alpha) | 任意附加属性 |
+
+所有元素必须有 `id`（用于帧间共享元素过渡），相同 id 的元素会自动 lerp 位置/尺寸。
+
+**公共 API**（通过 `AnimRuntime` 访问）：
+- `AnimRuntime.t(key)` -- i18n 翻译
+- `AnimRuntime.PAL` -- 当前 palette 对象（`.primary`, `.muted`, `.bg` 等）
+- `AnimRuntime.W` / `AnimRuntime.H` -- 当前 canvas 尺寸
+- `AnimRuntime.ctx` -- Canvas 2D context
+- `AnimRuntime.lerp(a, b, p)` / `AnimRuntime.easeInOut(x)` / `AnimRuntime.merge(base, ov)`
+- `AnimRuntime.boot()` -- 启动（在内容脚本末尾调用）
+
+**10 个视觉主题**（`CONFIG.style`）：
+
+| style key | 适用场景 | 主色 |
+|-----------|---------|------|
+| `helix_lab` | 生物/遗传/实验室 | `#50ffb0` 荧光绿 |
+| `aether_clinic` | 医疗/诊断 | `#98cbff` 柔蓝 |
+| `ares_mission` | 火星/航天/探测 | `#ffb59c` 暖橙 |
+| `celestial_observatory` | 天文/星空 | `#c9bfff` 薰衣紫 |
+| `neural_circuit` | AI/神经网络 | `#dbfcff` 冰蓝 |
+| `subatomic_matrix` | 量子/粒子物理 | `#ff7cf5` 霓虹粉 |
+| `rocketry_control` | 火箭/飞控 | `#ffb000` 琥珀 |
+| `aqua_flow` | 海洋/水文 | `#22d3ee` 青蓝 |
+| `ember_forge` | 冶金/热力学 | `#f59e0b` 炉火橙 |
+| `flora_pulse` | 植物/生态 | `#4ade80` 叶绿 |
+
+每个 palette 包含：bg, bg2, surface, primary, primaryDim, secondary, secondaryDim, tertiary, tertiaryDim, text, muted, error, outline, glow, glowStrong, glass, glassBlur, radius。runtime 启动时自动将 palette 注入 CSS custom properties。
+
+**参考示例**：`scripts/_test_anim_runtime_demo.html`（capability boundary 动画的 runtime 版本）
+
+---
+
+### Animation HTML 实现 (旧方式，仅用于维护已有动画)
+
+**注意：新动画请使用上方的 Animation Runtime 方式。以下仅供理解已有独立 HTML 动画的结构。**
+
 **Canvas 动画规范**：
-- 使用 `scripts/course_factory.py` 中的 `make_canvas_html()` 格式作为参考
-- 底色：深夜蓝黑渐变 `#0f0a1e -> #1a1035`，带微弱网格（3% 透明白）
-- 主发光色根据学科选择（见下方色板）
+- 底色：深色渐变（根据 style_key palette）
 - 渐变质感：`createLinearGradient` 或 `createRadialGradient`，3 层色
 - 发光效果：`ctx.shadowColor = color; ctx.shadowBlur = 12-20`
-- HUD 底栏：`rgba(0,0,0,0.55)` 半透明条，高 52px，显示 4 列数据
+- HUD 底栏：`rgba(0,0,0,0.55)` 半透明条，高 48-52px，显示 4 列数据
 - DPR 感知：`Math.min(window.devicePixelRatio||1, 2)` 缩放
 - 动画运动必须由数学/物理公式驱动，禁止关键帧插值
-
-**学科色板**：
-
-| 学科 | 主发光色 | 辅色 |
-|------|---------|------|
-| 物理/力学 | `#818cf8` 幽蓝紫 | `#6366f1` |
-| 数学/几何 | `#34d399` 翡翠绿 | `#10b981` |
-| 化学/生物 | `#f472b6` 荧光粉 | `#ec4899` |
-| 地球/天文 | `#fb923c` 橙焰 | `#f97316` |
-| 通用/综合 | `#38bdf8` 天蓝 | `#0ea5e9` |
 
 ### Game HTML 实现
 
