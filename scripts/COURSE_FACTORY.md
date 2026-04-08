@@ -227,6 +227,146 @@ else:
 
 ---
 
+## Step 1.5: 标注基础理论 (Theory Tags)
+
+**你是**：一位跨学科教育设计师，能从工程项目内容中识别出底层的数学、物理、化学、生物等基础学科原理，并将它们标注出来供学生按需展开学习。
+
+### 什么是基础理论标注
+
+工程项目的课程内容以"做事"为主线，但做事背后往往依赖基础学科知识。例如：
+- 讲"通行性分析"时，背后是**摩擦力**和**坡度角**（物理）
+- 讲"坐标定位"时，背后是**笛卡尔坐标系**（数学）
+- 讲"地形扫描"时，背后是**光的反射与散射**（物理/光学）
+- 讲"风险评级"时，背后是**概率与统计**（数学）
+
+这些基础理论不应打断工程叙事的主线，而是作为**可展开的旁注**嵌入 plan_markdown 中。学生在阅读工程内容时，看到"基础理论"图标，可以选择展开学习底层原理，也可以跳过继续工程主线。
+
+### 操作步骤
+
+1. **识别理论点**：通读 Step 1 生成的 plan_markdown，找出 2-5 个可以追溯到基础学科的知识点
+2. **撰写理论内容**：为每个理论点写一段 100-300 字的 Markdown 解释，包含：
+   - 理论名称和所属学科（如"摩擦力 -- 物理"）
+   - 核心原理的简明解释（面向 age_range 年龄段）
+   - 与当前工程内容的关联（"这就是为什么..."）
+   - 可选：一个简单的公式或示意图描述
+3. **插入占位符**：在 plan_markdown 中相关段落的末尾插入 `[[THEORY:theory_id]]` 占位符
+4. **构建 theories 列表**
+
+### Theories 列表格式
+
+```json
+[
+  {
+    "theory_id": "theory_friction_basics",
+    "title": "摩擦力",
+    "subject": "physics",
+    "body_markdown": "## 摩擦力\n\n当两个物体表面接触并相对滑动时，会产生摩擦力...\n\n公式：$f = \\mu N$，其中 $\\mu$ 是摩擦系数，$N$ 是法向力。",
+    "animation_html": "<!DOCTYPE html>...(可选，自包含 HTML 动画)...",
+    "related_paragraph": "在 plan_markdown 中对应的段落标题或关键句"
+  }
+]
+```
+
+**字段说明**：
+
+| 字段 | 说明 |
+|------|------|
+| `theory_id` | 唯一 ID，格式：`theory_{学科缩写}_{关键词}`，如 `theory_phys_friction` |
+| `title` | 理论名称，5 字以内，如"摩擦力""坐标系""概率" |
+| `subject` | 所属学科：`math` / `physics` / `chemistry` / `biology` / `cs` / `geography` / `other` |
+| `body_markdown` | 理论内容的 Markdown 文本，100-300 字。支持 LaTeX 公式：行内公式用 `$...$`，独立公式用 `$$...$$` |
+| `animation_html` | 可选。自包含浅色主题 HTML 动画，用于可视化展示理论概念。前端以 iframe 嵌入在毛玻璃弹窗左侧（7/12 列宽） |
+| `related_paragraph` | 对应 plan_markdown 中的段落标题或关键句，便于定位 |
+
+### Theory Animation 视觉规范（Cognitive Sanctuary 浅色主题）
+
+Theory animation **不使用** `animation_runtime.js`（那是主课程深色主题），而是纯自包含 HTML，采用与主站一致的 **Cognitive Sanctuary 浅色主题**。
+
+**参考实现**：`scripts/_test_theory_friction.html`
+
+#### 配色
+
+| 角色 | 色值 | 用途 |
+|------|------|------|
+| 背景 | `#f8f5ff` → `#f1efff` 渐变 | Canvas 背景，与主站 surface 一致 |
+| 网格线 | `rgba(158,166,255,0.12)` | 30px 间距的辅助网格 |
+| 主体物 | `#6a1cf6` → `#5000c8` 渐变 | primary 色，用于方块/焦点物体 |
+| 力/向量箭头 | `#6a1cf6`（施加力）/ `#b41340`（摩擦力/阻力）/ `#006859`（法向力/支持力）| 分别对应 primary / error / secondary |
+| 标注文字 | `#19227d`（标题）/ `#4953ac`（副文字）/ `#9ea6ff`（辅助线标注）| 对应 on-surface / on-surface-variant / outline-variant |
+
+#### 布局与字体
+
+```
+- 字体：Plus Jakarta Sans（标题/数据，800/700）+ Inter（正文，400/500）+ Manrope（标签/HUD，500/600/700）
+- Canvas 100vh flex 列布局：canvas(flex:1) + controls + hud
+- 控件栏背景：#f1efff（surface-container-low）
+- 主按钮：linear-gradient(135deg, #6a1cf6, #ac8eff) + 白色文字 + shadow-primary/25
+- 次按钮：bg #e6e6ff，color #4953ac（ghost 风格）
+- HUD 标签：Manrope 9px uppercase tracking-0.12em，color #4953ac
+- HUD 数值：Plus Jakarta Sans 14px 700，color #6a1cf6
+```
+
+#### 毛玻璃公式面板
+
+在 Canvas 内部右上角绘制一个半透明公式面板：
+
+```
+- 背景：rgba(255,255,255,0.6)，圆角 8px
+- 标题：Manrope 9px 700 uppercase，color #6a1cf6，文案"MATHEMATICAL FORMULA"
+- 公式：Times New Roman italic 20px，color #19227d
+- 当前参数高亮：Plus Jakarta Sans 12px 700，color #b41340
+```
+
+#### 与主课程 animation 的区别
+
+| | 主课程 animation | Theory animation |
+|--|-----------------|-----------------|
+| 主题 | 深色（animation_runtime.js 10 种 palette） | 浅色 Cognitive Sanctuary |
+| 运行时 | 依赖 animation_runtime.js | 纯自包含，不依赖外部 JS |
+| 帧数 | 4-6 帧 | 2-4 帧，聚焦单一概念 |
+| 内容 | 项目场景（火星地形、传感器数据等） | 纯理论图形（力学图、坐标系、示意图等） |
+| 交互 | 帧控制 + HUD + 观看指南面板 | 帧控制 + HUD（简化，不需要观看指南） |
+| 嵌入方式 | rendered_sections + [[IDEA:...]] | theories[].animation_html + [[THEORY:...]] |
+
+#### 适用判断
+
+不是每个 theory 都需要 animation。适合加 animation 的：
+
+- 力学/运动/向量（箭头、方块滑动、力的对比）
+- 坐标系/几何（网格、点的定位、距离计算）
+- 波动/振动/周期（正弦波、频率对比）
+- 化学反应/分子结构（粒子运动、键的断裂）
+
+不需要 animation 的：
+- 纯定义类（如"什么是标度"）
+- 纯文字/表格能讲清楚的概念
+- 过于抽象无法可视化的（如"科学方法论"）
+
+### 质量标准
+
+- **不打断主线**：理论标注是旁注，plan_markdown 的工程叙事即使删掉所有 `[[THEORY:...]]` 也必须完整通顺
+- **精准定位**：`[[THEORY:...]]` 必须插在**第一次出现相关概念**的段落末尾，不要在后续重复插入
+- **适龄表达**：body_markdown 的解释难度匹配 age_range，低龄段用类比和生活例子，高龄段可以引入公式
+- **数量适度**：每个 knode 一般 2-5 个理论标注，不超过 5 个（避免喧宾夺主）
+- **禁止凑数**：如果某个 knode 的内容确实没有可追溯的基础理论（纯方法论/项目说明节点），可以 0 个
+
+### 占位符示例
+
+```markdown
+## 核心概念：通行性分析
+
+通行性就是回答一个问题：这个地方，走得过去吗？...
+地面的硬度和粗糙度直接影响你能不能安全通过。
+
+[[THEORY:theory_phys_friction]]
+
+## 深入理解：用眼睛给场景"涂色"
+
+做通行性标注时，你需要判断坡度...
+```
+
+---
+
 ## Step 2: 抽取 Ideas + 插入占位符
 
 **你是**：一位教育媒体策划师，判断哪些知识点最适合用富媒体呈现。
@@ -1026,6 +1166,12 @@ exercises = make_exercises([
     # ...
 ])
 
+# -- theories (从 Step 1.5 生成) --
+theories = [
+    {"theory_id": "theory_phys_friction", "title": "摩擦力", "subject": "physics",
+     "body_markdown": "## 摩擦力\n\n当两个物体...", "related_paragraph": "核心概念段"},
+]
+
 # -- 组装：传入 knode 后 preflight 自动生效；传入 research 后自动融入 plan_markdown --
 course_content = make_course_content(
     plan_markdown=plan_markdown,
@@ -1040,6 +1186,7 @@ course_content = make_course_content(
     exercise_hands_on_ref="在样例图上手工圈出危险区域并写理由",
     exercise_acceptance_ref="学生能够现场说明并演示本模块中的至少两项动手动作",
     research=research,  # 0.5：外部资料自动融入 plan_markdown + external_resources
+    theories=theories,  # Step 1.5：基础理论标注
 )
 # 如果 preflight 检出违规，此处会直接 raise ValueError，回到 Step 1/2 修正。
 
@@ -1156,10 +1303,17 @@ rendered_sections = {
     },
 }
 
+# theories (从 Step 1.5 生成)
+theories = [
+    {"theory_id": "theory_phys_friction", "title": "摩擦力", "subject": "physics",
+     "body_markdown": "## 摩擦力\n\n...", "related_paragraph": "核心概念段"},
+]
+
 course_content = {
     "plan_markdown": plan_markdown,
     "ideas": ideas,
     "rendered_sections": rendered_sections,
+    "theories": theories,
 }
 
 # -- 手动 v4.1 自检（6b 没有 make_course_content 的自动兜底）--

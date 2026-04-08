@@ -6,9 +6,13 @@ import {
   X, CheckCircle2, Loader2, BookOpen, Zap, Gamepad2, BookMarked,
   Terminal, ChevronDown, ChevronRight, Circle, Play, Square,
   ClipboardList, CheckCircle, XCircle, Lightbulb, Sparkles, Clock,
+  Atom,
 } from "lucide-react"
 import ReactMarkdown from "react-markdown"
 import remarkGfm from "remark-gfm"
+import remarkMath from "remark-math"
+import rehypeKatex from "rehype-katex"
+import "katex/dist/katex.min.css"
 import { gateway } from "@/lib/api"
 import type {
   CourseContent,
@@ -18,6 +22,7 @@ import type {
   InlineExercise,
   KnodeInfo,
   RenderedSection,
+  TheoryEntry,
 } from "@/lib/types/api"
 
 // ---------------------------------------------------------------------------
@@ -194,7 +199,8 @@ function MarkdownBlock({ content }: { content: string }) {
   return (
     <>
     <ReactMarkdown
-      remarkPlugins={[remarkGfm]}
+      remarkPlugins={[remarkGfm, remarkMath]}
+      rehypePlugins={[rehypeKatex]}
       components={{
         h2: ({ children }) => (
           <h2 className="text-2xl font-bold mt-8 mb-3 text-on-surface tracking-tight">{children}</h2>
@@ -307,6 +313,122 @@ function MarkdownBlock({ content }: { content: string }) {
         onClose={() => setYtModal(null)}
       />
     )}
+    </>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// TheoryBlock — collapsible panel for fundamental theory knowledge
+// ---------------------------------------------------------------------------
+const SUBJECT_LABELS: Record<string, string> = {
+  math: "数学",
+  physics: "物理",
+  chemistry: "化学",
+  biology: "生物",
+  cs: "计算机科学",
+  geography: "地理",
+  other: "基础理论",
+}
+
+function TheoryBlock({ theory }: { theory: TheoryEntry }) {
+  const [open, setOpen] = useState(false)
+  const label = SUBJECT_LABELS[theory.subject] || SUBJECT_LABELS.other
+
+  // Split body_markdown into before-formula and formula sections for styled rendering
+  // We render the entire markdown, but wrap it with proper text styling
+  return (
+    <>
+      {/* Inline trigger — tonal pill, no hard border (per No-Line Rule) */}
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className="my-5 w-full flex items-center gap-3 px-5 py-3.5 text-left rounded-lg bg-accent/50 hover:bg-accent transition-all duration-300 ease-[cubic-bezier(0.2,0.8,0.2,1)] cursor-pointer group"
+      >
+        <span className="flex items-center justify-center w-8 h-8 rounded-lg bg-primary/10 text-primary flex-shrink-0 group-hover:bg-primary/15 transition-colors duration-300">
+          <Atom className="h-4 w-4" />
+        </span>
+        <span className="flex-1 min-w-0">
+          <span className="text-sm font-semibold text-foreground">{theory.title}</span>
+          <span className="ml-2 text-[10px] text-muted-foreground font-semibold uppercase tracking-[0.15em]">{label}</span>
+        </span>
+        <BookOpen className="h-4 w-4 text-muted-foreground flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+      </button>
+
+      {/* Modal overlay */}
+      {open && createPortal(
+        <div
+          className="fixed inset-0 z-[200] flex items-center justify-center p-4 sm:p-8 bg-foreground/10 backdrop-blur-sm"
+          onClick={(e) => { if (e.target === e.currentTarget) setOpen(false) }}
+        >
+          <div className="glass-surface w-full max-w-5xl max-h-[85vh] rounded-xl shadow-[0_32px_64px_-16px_rgba(25,34,125,0.15)] flex flex-col overflow-hidden border border-white/40 dark:border-white/10">
+            {/* Header */}
+            <div className="flex items-center justify-between px-8 py-6 border-b border-foreground/5">
+              <div className="flex flex-col">
+                <span className="text-[10px] font-bold uppercase tracking-[0.15em] text-primary mb-1">
+                  {theory.subject.toUpperCase()} -- {label}
+                </span>
+                <h1 className="text-xl sm:text-2xl font-extrabold text-foreground tracking-tight">
+                  {theory.title}
+                </h1>
+              </div>
+              <button
+                onClick={() => setOpen(false)}
+                className="w-10 h-10 flex items-center justify-center rounded-full bg-accent hover:bg-muted transition-colors duration-300 text-muted-foreground"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            {/* Body — asymmetric 12-col grid */}
+            <div className="flex-1 overflow-y-auto p-8">
+              <div className={`grid gap-10 ${theory.animation_html ? "grid-cols-1 lg:grid-cols-12" : "grid-cols-1 max-w-2xl mx-auto"}`}>
+                {/* Simulation column (7/12) */}
+                {theory.animation_html && (
+                  <div className="lg:col-span-7 flex flex-col gap-6">
+                    <div className="relative aspect-video rounded-xl overflow-hidden shadow-[0_8px_32px_-8px_rgba(25,34,125,0.12)]">
+                      <iframe
+                        srcDoc={theory.animation_html}
+                        sandbox="allow-scripts allow-same-origin"
+                        className="w-full h-full border-0"
+                        title={`${theory.title} animation`}
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {/* Documentation column (5/12) */}
+                <div className={theory.animation_html ? "lg:col-span-5 flex flex-col gap-6" : "flex flex-col gap-6"}>
+                  {/* Core Concept tag */}
+                  <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-secondary/10 text-secondary rounded-full text-[11px] font-bold uppercase tracking-[0.12em] w-fit">
+                    <Lightbulb className="h-3.5 w-3.5" />
+                    {label}
+                  </div>
+
+                  {/* Theory body text — full opacity foreground */}
+                  <div className="theory-body text-foreground leading-relaxed text-sm [&_p]:mb-4 [&_p]:text-foreground [&_ul]:text-foreground [&_li]:text-foreground [&_strong]:text-foreground [&_strong]:font-semibold [&_.katex-display]:my-5 [&_.katex-display]:py-4 [&_.katex-display]:px-5 [&_.katex-display]:bg-card [&_.katex-display]:rounded-lg [&_.katex-display]:shadow-sm">
+                    <MarkdownBlock content={theory.body_markdown} />
+                  </div>
+
+                  {/* Pro Insight callout */}
+                  <div className="p-4 bg-primary/5 rounded-xl border-l-4 border-primary flex gap-4 mt-auto">
+                    <Lightbulb className="h-5 w-5 text-primary flex-shrink-0 mt-0.5" />
+                    <div>
+                      <h5 className="text-sm font-bold text-foreground">Pro Insight</h5>
+                      <p className="text-xs text-muted-foreground leading-relaxed mt-1">
+                        {theory.subject === "physics" && "理解这个公式后，你就能解释为什么不同地面走起来感觉不同——一切都和系数有关。"}
+                        {theory.subject === "math" && "量化是科学思维的起点：只有把感觉变成数字，不同人的观察才能互相比较。"}
+                        {theory.subject === "chemistry" && "化学反应的本质是原子间键的断裂和形成，理解这个就理解了变化的根源。"}
+                        {!["physics", "math", "chemistry"].includes(theory.subject) && "掌握基础理论后，你会发现工程问题背后都有简洁的科学规律。"}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>,
+        document.body,
+      )}
     </>
   )
 }
@@ -831,19 +953,20 @@ function IdeaBlock({
 // SectionBlock: one section of plan_markdown + right-gutter audio button
 // ---------------------------------------------------------------------------
 function SectionBlock({
-  section, ideaMap, renderedSections,
+  section, ideaMap, renderedSections, theoryMap,
 }: {
   section: CourseSection
   ideaMap: Map<string, CourseIdeaSummary>
   renderedSections: Record<string, RenderedSection>
+  theoryMap?: Map<string, TheoryEntry>
 }) {
-  const parts = section.body_markdown.split(/(\[\[IDEA:[^\]]+\]\])/g)
+  const parts = section.body_markdown.split(/(\[\[(?:IDEA|THEORY):[^\]]+\]\])/g)
 
   // Check if there is any real text content (for audio button)
-  const textParts = parts.filter((p) => !p.match(/^\[\[IDEA:[^\]]+\]\]$/))
+  const textParts = parts.filter((p) => !p.match(/^\[\[(?:IDEA|THEORY):[^\]]+\]\]$/))
   const hasText = textParts.some((p) => p.replace(/^##\s+.+\n?/, "").trim())
 
-  // Render parts in order: text and idea blocks interleaved
+  // Render parts in order: text, idea blocks, and theory blocks interleaved
   let headingRendered = false
 
   return (
@@ -855,13 +978,21 @@ function SectionBlock({
           )}
           {parts.map((part, idx) => {
             // Idea placeholder -> render idea block inline
-            const match = part.match(/^\[\[IDEA:([^\]]+)\]\]$/)
-            if (match) {
-              const ideaId = match[1]
+            const ideaMatch = part.match(/^\[\[IDEA:([^\]]+)\]\]$/)
+            if (ideaMatch) {
+              const ideaId = ideaMatch[1]
               const idea = ideaMap.get(ideaId)
               if (!idea) return null
               const rendered = renderedSections[ideaId] ?? null
               return <IdeaBlock key={idx} idea={idea} section={rendered} />
+            }
+            // Theory placeholder -> render collapsible theory block
+            const theoryMatch = part.match(/^\[\[THEORY:([^\]]+)\]\]$/)
+            if (theoryMatch) {
+              const theoryId = theoryMatch[1]
+              const theory = theoryMap?.get(theoryId)
+              if (!theory) return null
+              return <TheoryBlock key={idx} theory={theory} />
             }
             // Text content -> render markdown
             const stripped = part.replace(/^##\s+.+\n?/, "")
@@ -888,6 +1019,7 @@ function SectionBlock({
 // ---------------------------------------------------------------------------
 function PlanWithSections({ content }: { content: CourseContent }) {
   const ideaMap = new Map(content.ideas.map((i) => [i.idea_id, i]))
+  const theoryMap = new Map((content.theories ?? []).map((t) => [t.theory_id, t]))
 
   return (
     <div className="space-y-16">
@@ -897,6 +1029,7 @@ function PlanWithSections({ content }: { content: CourseContent }) {
           section={section}
           ideaMap={ideaMap}
           renderedSections={content.rendered_sections}
+          theoryMap={theoryMap}
         />
       ))}
     </div>
@@ -907,8 +1040,9 @@ function PlanWithSections({ content }: { content: CourseContent }) {
 // PlanWithIdeas: fallback for old data (no sections)
 // ---------------------------------------------------------------------------
 function PlanWithIdeas({ content }: { content: CourseContent }) {
-  const parts = content.plan_markdown.split(/(\[\[IDEA:[^\]]+\]\])/g)
+  const parts = content.plan_markdown.split(/(\[\[(?:IDEA|THEORY):[^\]]+\]\])/g)
   const ideaMap = new Map(content.ideas.map((i) => [i.idea_id, i]))
+  const theoryMap = new Map((content.theories ?? []).map((t) => [t.theory_id, t]))
 
   return (
     <div className="space-y-10">
@@ -918,13 +1052,20 @@ function PlanWithIdeas({ content }: { content: CourseContent }) {
         点击「重新生成」以获得分段音频讲解
       </div>
       {parts.map((part, idx) => {
-        const match = part.match(/^\[\[IDEA:([^\]]+)\]\]$/)
-        if (match) {
-          const ideaId = match[1]
+        const ideaMatch = part.match(/^\[\[IDEA:([^\]]+)\]\]$/)
+        if (ideaMatch) {
+          const ideaId = ideaMatch[1]
           const idea = ideaMap.get(ideaId)
           if (!idea) return null
           const section = content.rendered_sections?.[ideaId] ?? null
           return <IdeaBlock key={idx} idea={idea} section={section} />
+        }
+        const theoryMatch = part.match(/^\[\[THEORY:([^\]]+)\]\]$/)
+        if (theoryMatch) {
+          const theoryId = theoryMatch[1]
+          const theory = theoryMap.get(theoryId)
+          if (!theory) return null
+          return <TheoryBlock key={idx} theory={theory} />
         }
         if (!part.trim()) return null
         return <MarkdownBlock key={idx} content={part} />

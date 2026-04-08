@@ -116,9 +116,52 @@ def _upsert_project(name: str, title: str, description: str, category: str,
         db.close()
 
 
+_IFRAME_LAYOUT_PATCH = """<style>
+/* iframe 嵌入补丁: 防止 fixed 元素和 header 重叠 */
+.lang-btn{top:auto!important;bottom:100px!important;left:8px!important;}
+.guide-panel{top:40px!important;right:8px!important;max-width:200px!important;max-height:30vh!important;font-size:11px!important;}
+</style>"""
+
+
+def _inline_runtime(html: str) -> str:
+    """将 animation_runtime.js 的 <script src> 引用替换为内联代码。
+
+    iframe srcdoc 嵌入时无法加载相对路径的外部脚本，
+    所以必须把 runtime 代码直接内联到 HTML 中。
+    同时注入布局补丁防止 fixed 元素在 iframe 中重叠。
+    """
+    if '<script src="animation_runtime.js">' not in html:
+        return html
+    runtime_path = ROOT / "scripts" / "animation_runtime.js"
+    if not runtime_path.exists():
+        return html
+    runtime_code = runtime_path.read_text(encoding="utf-8")
+    result = html.replace(
+        '<script src="animation_runtime.js"></script>',
+        f"<script>\n{runtime_code}\n</script>",
+    )
+    # 注入 iframe 布局补丁 (在 </head> 前)
+    if "</head>" in result:
+        result = result.replace("</head>", f"{_IFRAME_LAYOUT_PATCH}\n</head>")
+    return result
+
+
 def _upsert_lesson(project_name: str, knode_id: int, content_type: str,
                    course_content: dict) -> None:
-    """写入 LessonContent 表（upsert）。"""
+    """写入 LessonContent 表（upsert）。自动内联 animation_runtime.js。"""
+    # 内联 runtime 到所有 rendered_sections 的 html 中
+    rendered = course_content.get("rendered_sections", {})
+    for section_id, section in rendered.items():
+        html = section.get("html")
+        if html and "animation_runtime.js" in html:
+            section["html"] = _inline_runtime(html)
+
+    # 内联 runtime 到 theories 的 animation_html 中
+    for theory in course_content.get("theories", []):
+        anim = theory.get("animation_html")
+        if anim and "animation_runtime.js" in anim:
+            theory["animation_html"] = _inline_runtime(anim)
+
     from systemedu.storage.db import LessonContent, get_session
     db = get_session()
     try:
@@ -2075,6 +2118,8 @@ def make_course_content(
     preflight: bool = True,
     # 外部资料（Tavily research_knode() 的返回值）
     research: dict | None = None,
+    # 基础理论标注（Step 1.5 生成的 theories 列表）
+    theories: list[dict] | None = None,
 ) -> dict:
     """
     构造标准 CourseContent dict，供写入数据库。
@@ -2250,6 +2295,10 @@ def make_course_content(
         "ideas": ideas,
         "rendered_sections": rendered_sections,
     }
+
+    # 基础理论标注（Step 1.5）
+    if theories:
+        course_content["theories"] = theories
 
     # 外部资料结构化字段（前端未来可以直接 iframe 嵌入；当前前端会忽略此字段）
     if research:

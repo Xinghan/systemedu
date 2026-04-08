@@ -464,11 +464,21 @@ export interface CourseSection {
   audio_url: string
 }
 
+export interface TheoryEntry {
+  theory_id: string
+  title: string
+  subject: string
+  body_markdown: string
+  related_paragraph?: string
+  animation_html?: string
+}
+
 export interface CourseContent {
   plan_markdown: string
   sections?: CourseSection[]
   ideas: CourseIdeaSummary[]
   rendered_sections: Record<string, RenderedSection>
+  theories?: TheoryEntry[]
 }
 
 export interface CourseContentData {

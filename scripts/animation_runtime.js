@@ -239,11 +239,11 @@ var AnimRuntime = (function () {
         break;
 
       case 'custom':
-        if (typeof el.draw === 'function') el.draw(el.alpha);
+        if (typeof el.draw === 'function') el.draw(ctx, el);
         break;
 
       default:
-        if (typeof el.draw === 'function') el.draw(el.alpha);
+        if (typeof el.draw === 'function') el.draw(ctx, el);
         break;
     }
     ctx.restore();
