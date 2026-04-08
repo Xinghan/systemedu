@@ -190,8 +190,9 @@ var AnimRuntime = (function () {
     switch (el.type) {
       case 'label':
         ctx.fillStyle = el.color || PAL.text;
-        ctx.font = (el.size >= 14 ? 'bold ' : '') + (el.size || 12) + "px " +
-          (el.size >= 14 ? "'Space Grotesk','Inter','Noto Sans SC'" : "'Inter','Noto Sans SC'") + ",sans-serif";
+        var isBold = el.bold !== undefined ? el.bold : (el.size >= 14);
+        ctx.font = (isBold ? 'bold ' : '') + (el.size || 12) + "px " +
+          (isBold ? "'Space Grotesk','Inter','Noto Sans SC'" : "'Inter','Noto Sans SC'") + ",sans-serif";
         ctx.textAlign = el.align || 'center';
         ctx.textBaseline = el.baseline || 'middle';
         if (el.glow) { ctx.shadowColor = el.glow; ctx.shadowBlur = 10; }
