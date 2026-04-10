@@ -1,0 +1,1032 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mars Landform Classifier</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=Inter:wght@400;500&family=Noto+Sans+SC:wght@400;700&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box;border-radius:0;}
+html,body{width:100%;height:100vh;overflow:hidden;}
+body{
+  background:
+    radial-gradient(ellipse at 20% 0%, rgba(255,140,80,0.12), transparent 60%),
+    radial-gradient(ellipse at 80% 100%, rgba(180,60,40,0.15), transparent 55%),
+    linear-gradient(180deg,#0c0710 0%,#1a0c14 50%,#0c0710 100%);
+  color:#f6f6fc;
+  font-family:'Inter','Noto Sans SC',sans-serif;
+  display:flex;flex-direction:column;
+}
+.wrapper{display:flex;flex-direction:column;height:100vh;overflow:hidden;position:relative;}
+.header{padding:10px 18px 6px;display:flex;justify-content:space-between;align-items:flex-end;flex-shrink:0;}
+.header h1{font-family:'Space Grotesk',sans-serif;font-size:clamp(15px,2.1vw,20px);font-weight:700;letter-spacing:-0.02em;background:linear-gradient(135deg,#ffb59c,#ff6a3a);-webkit-background-clip:text;-webkit-text-fill-color:transparent;filter:drop-shadow(0 0 18px rgba(255,120,60,0.4));}
+.header .sub{font-size:10px;color:#aaabb0;letter-spacing:0.18em;text-transform:uppercase;margin-top:3px;}
+.header .hdr-right{text-align:right;font-size:11px;color:#aaabb0;}
+.header .hdr-right strong{color:#ffb59c;font-family:'Space Grotesk',sans-serif;font-size:13px;}
+.game-area{flex:1;min-height:0;display:flex;flex-direction:column;padding:4px 18px 6px;overflow:hidden;gap:6px;}
+.zones{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;flex:1;min-height:0;}
+.zone{
+  display:flex;flex-direction:column;
+  background:linear-gradient(180deg,rgba(255,255,255,0.035),rgba(255,255,255,0.01));
+  border:1px solid rgba(255,255,255,0.08);
+  padding:8px 8px 6px;overflow:hidden;position:relative;
+  transition:border-color 0.15s, background 0.15s;
+}
+.zone::before{
+  content:'';position:absolute;top:0;left:0;right:0;height:3px;
+  background:var(--zone-color, #888);
+  box-shadow:0 0 14px var(--zone-color, #888);
+}
+.zone-crater{--zone-color:#ff6a3a;}
+.zone-dune{--zone-color:#f4c06c;}
+.zone-volcano{--zone-color:#ef4444;}
+.zone-valley{--zone-color:#a78bfa;}
+.zone-title{
+  font-family:'Space Grotesk',sans-serif;font-size:11px;font-weight:700;
+  letter-spacing:0.15em;text-transform:uppercase;text-align:center;
+  padding:4px 0 6px;color:var(--zone-color);
+}
+.zone-title .zh{display:block;font-family:'Noto Sans SC',sans-serif;font-size:13px;font-weight:700;margin-top:1px;}
+.zone-items{
+  flex:1;min-height:50px;display:grid;
+  grid-template-columns:repeat(2,1fr);gap:4px;
+  align-content:start;padding:2px;overflow-y:auto;
+}
+.zone.drag-over{border-color:var(--zone-color);background:linear-gradient(180deg,rgba(255,255,255,0.07),rgba(255,255,255,0.02));}
+.zone-count{
+  font-family:'Space Grotesk',sans-serif;font-size:10px;color:rgba(255,255,255,0.5);
+  text-align:center;padding-top:3px;border-top:1px dashed rgba(255,255,255,0.08);
+}
+.card-tray{
+  display:flex;flex-wrap:wrap;gap:6px;justify-content:center;align-items:center;
+  padding:4px;background:rgba(0,0,0,0.25);min-height:72px;max-height:80px;overflow-y:auto;
+  border:1px dashed rgba(255,255,255,0.08);
+}
+.landform-card{
+  width:58px;height:58px;cursor:grab;user-select:none;
+  position:relative;flex-shrink:0;
+  border:1px solid rgba(255,181,156,0.25);
+  background:#1a0c14;
+  transition:transform 0.15s,box-shadow 0.15s,border-color 0.15s;
+  overflow:hidden;
+}
+.zone-items .landform-card{width:100%;height:42px;}
+.landform-card svg{width:100%;height:100%;display:block;}
+.landform-card:hover{transform:scale(1.08);box-shadow:0 0 16px rgba(255,181,156,0.45);border-color:#ffb59c;z-index:5;}
+.landform-card.dragging{opacity:0.4;transform:scale(0.9);}
+.landform-card.correct{border-color:#4ade80;box-shadow:0 0 10px rgba(74,222,128,0.4);}
+.landform-card.correct::after{content:'';position:absolute;inset:0;background:rgba(74,222,128,0.15);pointer-events:none;}
+.landform-card.wrong{border-color:#f87171;box-shadow:0 0 10px rgba(248,113,113,0.4);}
+.landform-card.wrong::after{content:'';position:absolute;inset:0;background:rgba(248,113,113,0.18);pointer-events:none;}
+.landform-card .label{
+  position:absolute;bottom:0;left:0;right:0;
+  font-family:'Space Grotesk',sans-serif;font-size:8px;font-weight:700;
+  text-align:center;background:rgba(0,0,0,0.75);
+  color:rgba(255,255,255,0.8);padding:1px 0;line-height:1;
+  letter-spacing:0.05em;
+}
+.control-row{
+  display:flex;justify-content:space-between;align-items:center;
+  padding:4px 0;gap:10px;flex-shrink:0;
+}
+.btn{
+  font-family:'Space Grotesk',sans-serif;font-size:11px;font-weight:700;
+  letter-spacing:0.12em;text-transform:uppercase;
+  padding:7px 20px;cursor:pointer;border:none;
+  transition:transform 0.1s,box-shadow 0.15s;
+}
+.btn-primary{
+  color:#1a0608;
+  background:linear-gradient(135deg,#ffb59c,#ff6a3a);
+  box-shadow:0 0 14px rgba(255,120,60,0.35);
+}
+.btn-primary:hover:not(:disabled){transform:scale(1.04);box-shadow:0 0 20px rgba(255,120,60,0.55);}
+.btn-primary:disabled{opacity:0.35;cursor:default;transform:none;}
+.btn-ghost{
+  color:#ffb59c;
+  background:rgba(255,255,255,0.05);
+  border:1px solid rgba(255,181,156,0.3);
+}
+.btn-ghost:hover{background:rgba(255,181,156,0.12);transform:scale(1.04);}
+.hud{
+  height:42px;display:flex;align-items:center;justify-content:space-around;
+  background:rgba(0,0,0,0.6);backdrop-filter:blur(14px);padding:0 20px;
+  border-top:1px solid rgba(255,255,255,0.06);flex-shrink:0;
+}
+.hud-item{text-align:center;}
+.hud-label{font-family:'Space Grotesk',sans-serif;font-size:8px;letter-spacing:0.18em;text-transform:uppercase;color:#aaabb0;}
+.hud-val{font-family:'Space Grotesk',sans-serif;font-size:14px;font-weight:700;color:#ffb59c;line-height:1.2;}
+.lang-btn{
+  position:fixed;top:8px;left:8px;z-index:100;
+  font-family:'Space Grotesk',sans-serif;font-size:10px;font-weight:700;
+  padding:5px 12px;cursor:pointer;border:none;
+  background:rgba(20,10,18,0.85);backdrop-filter:blur(14px);
+  color:#ffb59c;letter-spacing:2px;
+  border:1px solid rgba(255,181,156,0.25);
+}
+.guide-panel{
+  position:fixed;top:8px;right:8px;width:250px;max-height:48vh;overflow-y:auto;
+  background:rgba(20,10,18,0.88);backdrop-filter:blur(16px);
+  padding:12px 14px;z-index:100;
+  font-family:'Noto Sans SC',sans-serif;font-size:11px;
+  color:rgba(255,255,255,0.82);line-height:1.6;
+  border:1px solid rgba(255,181,156,0.2);
+}
+.guide-panel h3{
+  font-family:'Space Grotesk',sans-serif;font-size:12px;margin-bottom:6px;
+  color:#ffb59c;cursor:pointer;display:flex;justify-content:space-between;
+  letter-spacing:0.08em;
+}
+.guide-panel ul{padding-left:14px;margin-top:4px;}
+.guide-panel li{margin-bottom:3px;}
+.guide-panel .collapsed{display:none;}
+.overlay{
+  display:none;position:fixed;inset:0;background:rgba(0,0,0,0.72);
+  backdrop-filter:blur(3px);z-index:199;
+}
+.modal{
+  display:none;position:fixed;top:50%;left:50%;
+  transform:translate(-50%,-50%);
+  width:min(560px,92vw);max-height:85vh;overflow-y:auto;
+  background:
+    linear-gradient(135deg,rgba(30,15,22,0.96),rgba(40,20,28,0.96));
+  backdrop-filter:blur(22px);
+  border:1px solid rgba(255,181,156,0.28);
+  padding:24px 28px;z-index:200;
+}
+.modal h2{
+  font-family:'Space Grotesk',sans-serif;font-size:20px;color:#ffb59c;
+  margin-bottom:8px;letter-spacing:-0.01em;
+  text-shadow:0 0 18px rgba(255,181,156,0.4);
+}
+.modal .sub-msg{font-size:13px;color:rgba(255,255,255,0.75);margin-bottom:14px;line-height:1.6;}
+.modal .big-score{
+  font-family:'Space Grotesk',sans-serif;font-size:42px;font-weight:700;
+  text-align:center;color:#ffb59c;margin:10px 0;
+  text-shadow:0 0 24px rgba(255,181,156,0.5);letter-spacing:-0.02em;
+}
+.modal .stars{text-align:center;margin-bottom:8px;font-family:'Space Grotesk',sans-serif;letter-spacing:4px;}
+.modal .star{display:inline-block;width:18px;height:18px;background:currentColor;
+  -webkit-mask:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><polygon points='12,2 15,9 22,10 17,15 18,22 12,18 6,22 7,15 2,10 9,9'/></svg>") center/contain no-repeat;
+  mask:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><polygon points='12,2 15,9 22,10 17,15 18,22 12,18 6,22 7,15 2,10 9,9'/></svg>") center/contain no-repeat;
+  color:#555;margin:0 2px;
+}
+.modal .star.on{color:#ffb59c;filter:drop-shadow(0 0 6px rgba(255,181,156,0.7));}
+.modal .feedback-list{
+  margin-top:12px;max-height:38vh;overflow-y:auto;
+  font-size:12px;color:rgba(255,255,255,0.8);line-height:1.55;
+  border-top:1px solid rgba(255,255,255,0.1);padding-top:10px;
+}
+.modal .fb-item{
+  display:flex;align-items:flex-start;gap:8px;
+  padding:6px 0;border-bottom:1px dashed rgba(255,255,255,0.06);
+}
+.modal .fb-item:last-child{border-bottom:none;}
+.modal .fb-thumb{
+  width:36px;height:36px;flex-shrink:0;border:1px solid rgba(255,181,156,0.3);
+  background:#1a0c14;
+}
+.modal .fb-thumb svg{width:100%;height:100%;display:block;}
+.modal .fb-text{flex:1;}
+.modal .fb-name{font-weight:700;font-size:12px;}
+.modal .fb-ok{color:#4ade80;}
+.modal .fb-bad{color:#f87171;}
+.modal .fb-expl{color:rgba(255,255,255,0.65);font-size:11px;line-height:1.5;margin-top:1px;}
+.modal .actions{display:flex;justify-content:center;gap:12px;margin-top:18px;}
+.info-modal .info-grid{
+  display:grid;grid-template-columns:120px 1fr;gap:14px;align-items:start;
+  margin-bottom:10px;
+}
+.info-modal .info-thumb{
+  width:120px;height:120px;border:1px solid rgba(255,181,156,0.3);
+  background:#1a0c14;
+}
+.info-modal .info-thumb svg{width:100%;height:100%;display:block;}
+.info-modal .info-title{
+  font-family:'Space Grotesk',sans-serif;font-size:18px;color:#ffb59c;margin-bottom:6px;
+}
+.info-modal .info-desc{font-size:12px;line-height:1.65;color:rgba(255,255,255,0.78);}
+.info-modal .info-features{
+  list-style:none;padding:8px 0 0;font-size:12px;color:rgba(255,255,255,0.7);
+}
+.info-modal .info-features li{padding:3px 0;border-bottom:1px dashed rgba(255,255,255,0.08);}
+.info-modal .info-features li:last-child{border-bottom:none;}
+.info-modal .info-features li strong{color:#ffb59c;font-weight:700;}
+
+/* Level selector */
+.levels{
+  display:flex;gap:6px;align-items:center;
+  padding:0 4px;
+}
+.level-btn{
+  font-family:'Space Grotesk',sans-serif;font-size:9px;font-weight:700;
+  letter-spacing:0.12em;text-transform:uppercase;
+  padding:5px 11px;cursor:pointer;border:1px solid rgba(255,181,156,0.25);
+  background:rgba(255,255,255,0.03);color:rgba(255,255,255,0.6);
+}
+.level-btn.active{
+  color:#1a0608;
+  background:linear-gradient(135deg,#ffb59c,#ff6a3a);
+  border-color:transparent;
+  box-shadow:0 0 10px rgba(255,120,60,0.4);
+}
+
+@media (max-width:820px){
+  .zones{grid-template-columns:repeat(2,1fr);gap:6px;}
+  .landform-card{width:52px;height:52px;}
+  .guide-panel{width:200px;}
+}
+</style>
+</head>
+<body>
+<button class="lang-btn" id="langBtn">CN</button>
+<div class="guide-panel" id="guide">
+  <h3 id="guideToggle">HOW TO PLAY <span id="guideArrow">[-]</span></h3>
+  <div id="guideContent"></div>
+</div>
+<div class="wrapper">
+  <div class="header">
+    <div>
+      <h1 id="title"></h1>
+      <div class="sub" id="subtitle"></div>
+    </div>
+    <div class="hdr-right">
+      <div id="hdrLevelLabel"></div>
+      <div class="levels">
+        <button class="level-btn active" data-level="1" id="lv1Btn"></button>
+        <button class="level-btn" data-level="2" id="lv2Btn"></button>
+        <button class="level-btn" data-level="3" id="lv3Btn"></button>
+      </div>
+    </div>
+  </div>
+  <div class="game-area">
+    <div class="card-tray" id="cardTray"></div>
+    <div class="zones">
+      <div class="zone zone-crater" data-zone="crater">
+        <div class="zone-title" id="zCraterTitle"></div>
+        <div class="zone-items" data-zone="crater"></div>
+        <div class="zone-count" id="zCraterCount">0</div>
+      </div>
+      <div class="zone zone-dune" data-zone="dune">
+        <div class="zone-title" id="zDuneTitle"></div>
+        <div class="zone-items" data-zone="dune"></div>
+        <div class="zone-count" id="zDuneCount">0</div>
+      </div>
+      <div class="zone zone-volcano" data-zone="volcano">
+        <div class="zone-title" id="zVolcanoTitle"></div>
+        <div class="zone-items" data-zone="volcano"></div>
+        <div class="zone-count" id="zVolcanoCount">0</div>
+      </div>
+      <div class="zone zone-valley" data-zone="valley">
+        <div class="zone-title" id="zValleyTitle"></div>
+        <div class="zone-items" data-zone="valley"></div>
+        <div class="zone-count" id="zValleyCount">0</div>
+      </div>
+    </div>
+    <div class="control-row">
+      <button class="btn btn-ghost" id="btnLearn"></button>
+      <div style="display:flex;gap:8px;">
+        <button class="btn btn-ghost" id="btnReset"></button>
+        <button class="btn btn-primary" id="btnSubmit"></button>
+      </div>
+    </div>
+  </div>
+  <div class="hud">
+    <div class="hud-item"><div class="hud-label" id="hudL1"></div><div class="hud-val" id="hudV1">0/12</div></div>
+    <div class="hud-item"><div class="hud-label" id="hudL2"></div><div class="hud-val" id="hudV2">1</div></div>
+    <div class="hud-item"><div class="hud-label" id="hudL3"></div><div class="hud-val" id="hudV3">--</div></div>
+    <div class="hud-item"><div class="hud-label" id="hudL4"></div><div class="hud-val" id="hudV4">0</div></div>
+  </div>
+</div>
+<div class="overlay" id="overlay"></div>
+<div class="modal" id="resultModal">
+  <h2 id="resultTitle"></h2>
+  <div class="sub-msg" id="resultMsg"></div>
+  <div class="stars" id="resultStars"></div>
+  <div class="big-score" id="resultScore">0/12</div>
+  <div class="feedback-list" id="feedbackList"></div>
+  <div class="actions">
+    <button class="btn btn-ghost" id="btnReview"></button>
+    <button class="btn btn-primary" id="btnRetry"></button>
+  </div>
+</div>
+<div class="modal info-modal" id="infoModal">
+  <div class="info-grid">
+    <div class="info-thumb" id="infoThumb"></div>
+    <div>
+      <div class="info-title" id="infoTitle"></div>
+      <div class="info-desc" id="infoDesc"></div>
+    </div>
+  </div>
+  <ul class="info-features" id="infoFeatures"></ul>
+  <div class="actions">
+    <button class="btn btn-primary" id="btnInfoClose"></button>
+  </div>
+</div>
+
+<script>
+(function(){
+'use strict';
+
+/* ==================== i18n ==================== */
+var LANG = 'cn';
+var I18N = {
+  title:       {en:'MARS LANDFORM CLASSIFIER', cn:'火星地貌分类所'},
+  subtitle:    {en:'DRAG 12 SAMPLES INTO 4 TERRAIN CATEGORIES', cn:'把 12 个样本拖进 4 类地形'},
+  levelLabel:  {en:'LEVEL', cn:'关卡'},
+  lv1:         {en:'EASY', cn:'简单'},
+  lv2:         {en:'NORMAL', cn:'普通'},
+  lv3:         {en:'HARD', cn:'挑战'},
+  crater:      {en:'CRATER', cn:'陨石坑'},
+  dune:        {en:'SAND DUNE', cn:'沙丘'},
+  volcano:     {en:'VOLCANO', cn:'火山'},
+  valley:      {en:'VALLEY', cn:'峡谷'},
+  submit:      {en:'SUBMIT', cn:'提交'},
+  reset:       {en:'RESET', cn:'重置'},
+  learn:       {en:'LEARN FIRST', cn:'学习模式'},
+  retry:       {en:'TRY AGAIN', cn:'再试一次'},
+  review:      {en:'REVIEW', cn:'复盘'},
+  close:       {en:'CLOSE', cn:'关闭'},
+  placed:      {en:'PLACED', cn:'已放置'},
+  level:       {en:'LEVEL', cn:'关卡'},
+  best:        {en:'BEST', cn:'最好'},
+  score:       {en:'SCORE', cn:'得分'},
+  result:      {en:'RESULT', cn:'结果'},
+  pass:        {en:'Excellent! You can tell Mars terrains apart.', cn:'太棒了！你能区分火星地貌了。'},
+  partial:     {en:'Good start. Review the wrong ones and try again.', cn:'不错的开始。复盘错题再来一次。'},
+  fail:        {en:'Keep looking at the features — each terrain has its own fingerprint.', cn:'继续观察特征——每种地貌都有独特的"指纹"。'},
+  guideTitle:  {en:'HOW TO PLAY', cn:'操作指南'},
+  g1:          {en:'Drag each card to the correct terrain zone', cn:'把每张卡片拖到正确的地貌分区'},
+  g2:          {en:'Look for: shape, edges, and texture', cn:'观察：形状、边缘、纹理'},
+  g3:          {en:'Tap LEARN FIRST to preview each sample', cn:'点"学习模式"先看每个样本的解说'},
+  g4:          {en:'Levels get harder: more deceptive details', cn:'关卡越高，干扰细节越多'},
+  g5:          {en:'9/12 correct to pass; 12/12 earns 3 stars', cn:'9/12 正确即可通关，满分得 3 星'},
+  /* landform names + descriptions */
+  crater_name: {en:'Impact Crater', cn:'陨石坑'},
+  crater_desc: {en:'A circular bowl formed when meteorites or asteroids slammed into Mars. The rim is raised, the floor is sunken, and the central area is usually flat with smaller sub-craters.', cn:'陨石或小行星高速撞击火星表面留下的圆形凹坑。边缘抬升，内部下陷，中央通常较平坦还会有更小的撞击坑。'},
+  crater_f1:   {en:'Circular rim with raised edge', cn:'圆形边缘，边沿明显抬升'},
+  crater_f2:   {en:'Central depression below surrounding plain', cn:'中央比周围平原更低'},
+  crater_f3:   {en:'Often has smaller craters inside (younger hits)', cn:'内部常见更小的撞击坑（后来的撞击）'},
+  dune_name:   {en:'Sand Dune Field', cn:'沙丘群'},
+  dune_desc:   {en:'Wind blows fine iron-oxide sand into long parallel ridges. On Mars the dunes often look darker than the surrounding dust because fresh basalt sand is nearly black.', cn:'风把细小的氧化铁沙子吹成一条条平行的山脊。火星上的沙丘常常比周围尘土更深色，因为新的玄武岩沙几乎是黑色的。'},
+  dune_f1:     {en:'Parallel ridges or ripples', cn:'平行的山脊或波纹'},
+  dune_f2:     {en:'Smooth, flowing outlines', cn:'轮廓光滑、呈流线形'},
+  dune_f3:     {en:'Dark grey/black color against rusty ground', cn:'在锈红色地面上显得偏深灰/黑'},
+  volcano_name:{en:'Volcano', cn:'火山'},
+  volcano_desc:{en:'Mars has the tallest volcanoes in the solar system, including Olympus Mons (22 km high). They are shield volcanoes: very wide and gently sloped, with a caldera (collapse pit) at the summit.', cn:'火星拥有太阳系最高的火山，例如高达 22 公里的奥林帕斯山。它们是盾状火山——非常宽、坡度很缓，山顶有一个"火山口"（塌陷坑）。'},
+  volcano_f1:  {en:'Broad circular base, gentle slopes', cn:'底部圆而宽，坡度很缓'},
+  volcano_f2:  {en:'Summit caldera (a pit at the top)', cn:'山顶有一个"坑"（火山口）'},
+  volcano_f3:  {en:'Often taller than any mountain on Earth', cn:'往往比地球上任何山都高'},
+  valley_name: {en:'Canyon / Valley', cn:'峡谷'},
+  valley_desc: {en:'Valles Marineris is the biggest canyon system on Mars — 4000 km long, 7 km deep. Valleys form from tectonic rifting and ancient water flow. Walls are steep and layered.', cn:'水手号峡谷是火星上最大的峡谷系统——长 4000 公里、深 7 公里。峡谷来自地壳拉裂和古代水流的冲刷，峡壁陡峭而层次分明。'},
+  valley_f1:   {en:'Long, narrow cut across the plain', cn:'在平原上长而窄的裂口'},
+  valley_f2:   {en:'Steep layered walls', cn:'陡峭且分层的峡壁'},
+  valley_f3:   {en:'Bottom is far below the surrounding surface', cn:'谷底远远低于周围地面'},
+};
+function t(key) { return (I18N[key] && I18N[key][LANG]) || (I18N[key] && I18N[key]['en']) || key; }
+
+/* ==================== Landform sample data ==================== */
+/* Each sample describes how to render a distinct visual for one landform.
+   variant 0/1/2 at level 1 = very clear,
+   variants at levels 2/3 add deceptive twists (dust cover, off-angle view, etc.)
+*/
+var SAMPLES = [
+  {id:'s01', zone:'crater',  name:'crater_name',  variant:0, tricky:1},
+  {id:'s02', zone:'crater',  name:'crater_name',  variant:1, tricky:2},
+  {id:'s03', zone:'crater',  name:'crater_name',  variant:2, tricky:3},
+  {id:'s04', zone:'dune',    name:'dune_name',    variant:0, tricky:1},
+  {id:'s05', zone:'dune',    name:'dune_name',    variant:1, tricky:2},
+  {id:'s06', zone:'dune',    name:'dune_name',    variant:2, tricky:3},
+  {id:'s07', zone:'volcano', name:'volcano_name', variant:0, tricky:1},
+  {id:'s08', zone:'volcano', name:'volcano_name', variant:1, tricky:2},
+  {id:'s09', zone:'volcano', name:'volcano_name', variant:2, tricky:3},
+  {id:'s10', zone:'valley',  name:'valley_name',  variant:0, tricky:1},
+  {id:'s11', zone:'valley',  name:'valley_name',  variant:1, tricky:2},
+  {id:'s12', zone:'valley',  name:'valley_name',  variant:2, tricky:3},
+];
+
+/* ==================== SVG sprite renderer ==================== */
+/* Each sprite is 200x200 viewbox; the zoom happens in CSS. */
+function skyGradient(id) {
+  return '<defs><linearGradient id="'+id+'" x1="0" y1="0" x2="0" y2="1">'
+    +'<stop offset="0%" stop-color="#3a1a15"/>'
+    +'<stop offset="55%" stop-color="#a23a20"/>'
+    +'<stop offset="100%" stop-color="#4a1a10"/></linearGradient></defs>';
+}
+function groundGradient(id, dark) {
+  var c1 = dark ? '#5a1a0e' : '#a64230';
+  var c2 = dark ? '#2a0a05' : '#5a1a0e';
+  return '<linearGradient id="'+id+'" x1="0" y1="0" x2="0" y2="1">'
+    +'<stop offset="0%" stop-color="'+c1+'"/>'
+    +'<stop offset="100%" stop-color="'+c2+'"/></linearGradient>';
+}
+function starSpecks(count, seed) {
+  var s=''; var r = seed;
+  for (var i=0;i<count;i++) {
+    r = (r * 9301 + 49297) % 233280;
+    var x = (r / 233280) * 200;
+    r = (r * 9301 + 49297) % 233280;
+    var y = (r / 233280) * 70;
+    r = (r * 9301 + 49297) % 233280;
+    var sz = 0.4 + (r / 233280) * 0.8;
+    s += '<circle cx="'+x.toFixed(1)+'" cy="'+y.toFixed(1)+'" r="'+sz.toFixed(2)+'" fill="#fff" opacity="0.35"/>';
+  }
+  return s;
+}
+
+function renderCrater(variant) {
+  var g = '<svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">';
+  g += skyGradient('sk_cr_'+variant);
+  g += '<defs>'+groundGradient('gd_cr_'+variant, false)+'</defs>';
+  g += '<rect width="200" height="75" fill="url(#sk_cr_'+variant+')"/>';
+  g += starSpecks(18, variant*11+3);
+  g += '<rect y="75" width="200" height="125" fill="url(#gd_cr_'+variant+')"/>';
+  /* Distant crater rim */
+  if (variant === 0) {
+    /* Clean clear crater */
+    g += '<ellipse cx="100" cy="140" rx="78" ry="35" fill="#3a120a" stroke="#c9543a" stroke-width="3"/>';
+    g += '<ellipse cx="100" cy="144" rx="62" ry="26" fill="#250805"/>';
+    g += '<ellipse cx="100" cy="152" rx="42" ry="15" fill="#180402"/>';
+    /* Inner small craters */
+    g += '<circle cx="82" cy="148" r="5" fill="#120202" stroke="#7a2a18" stroke-width="1"/>';
+    g += '<circle cx="120" cy="146" r="4" fill="#120202" stroke="#7a2a18" stroke-width="1"/>';
+    /* Raised rim highlight */
+    g += '<path d="M 22 140 Q 100 103 178 140" stroke="#f4a070" stroke-width="2" fill="none" opacity="0.55"/>';
+    /* Rocks on rim */
+    g += '<circle cx="35" cy="128" r="3" fill="#7a2a18"/><circle cx="165" cy="130" r="3" fill="#7a2a18"/>';
+  } else if (variant === 1) {
+    /* Dusty crater, partly buried */
+    g += '<ellipse cx="95" cy="140" rx="72" ry="30" fill="#4a1a10" stroke="#b0523a" stroke-width="2" stroke-dasharray="4 2"/>';
+    g += '<ellipse cx="97" cy="145" rx="55" ry="22" fill="#321008"/>';
+    g += '<ellipse cx="100" cy="152" rx="35" ry="12" fill="#220a05" opacity="0.8"/>';
+    /* Dust particles floating */
+    g += '<circle cx="60" cy="110" r="1.2" fill="#c06040" opacity="0.6"/>';
+    g += '<circle cx="140" cy="100" r="1.5" fill="#c06040" opacity="0.6"/>';
+    g += '<circle cx="100" cy="95" r="1.2" fill="#c06040" opacity="0.5"/>';
+    /* Partial rim */
+    g += '<path d="M 30 142 Q 90 113 160 138" stroke="#e08060" stroke-width="2" fill="none" opacity="0.5"/>';
+    /* Sub crater */
+    g += '<circle cx="100" cy="148" r="6" fill="#180403" stroke="#6a1e10" stroke-width="1.2"/>';
+  } else {
+    /* Crater cluster, oblique angle */
+    g += '<ellipse cx="75" cy="135" rx="42" ry="18" fill="#2a0c05" stroke="#b0423a" stroke-width="2"/>';
+    g += '<ellipse cx="140" cy="150" rx="35" ry="14" fill="#2a0c05" stroke="#b0423a" stroke-width="2"/>';
+    g += '<ellipse cx="110" cy="170" rx="28" ry="10" fill="#210805" stroke="#9a3a2a" stroke-width="1.5"/>';
+    /* Rim rocks */
+    g += '<circle cx="45" cy="128" r="2.5" fill="#8a3a20"/>';
+    g += '<circle cx="110" cy="138" r="2.5" fill="#8a3a20"/>';
+    g += '<circle cx="170" cy="145" r="2.5" fill="#8a3a20"/>';
+    /* Raised rims */
+    g += '<path d="M 35 135 Q 75 118 115 135" stroke="#f0905a" stroke-width="1.5" fill="none" opacity="0.6"/>';
+    g += '<path d="M 108 148 Q 140 134 172 148" stroke="#f0905a" stroke-width="1.5" fill="none" opacity="0.6"/>';
+  }
+  g += '</svg>';
+  return g;
+}
+
+function renderDune(variant) {
+  var g = '<svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">';
+  g += skyGradient('sk_dn_'+variant);
+  g += '<defs>'+groundGradient('gd_dn_'+variant, false)+'</defs>';
+  g += '<rect width="200" height="70" fill="url(#sk_dn_'+variant+')"/>';
+  g += starSpecks(14, variant*13+7);
+  g += '<rect y="70" width="200" height="130" fill="url(#gd_dn_'+variant+')"/>';
+  if (variant === 0) {
+    /* Classic parallel ripple dunes, dark basalt */
+    for (var i = 0; i < 7; i++) {
+      var y = 100 + i * 15;
+      g += '<path d="M 0 '+y+' Q 50 '+(y-10)+' 100 '+y+' T 200 '+y+' L 200 '+(y+12)+' L 0 '+(y+12)+' Z" fill="#1a0a05" opacity="'+(0.95 - i*0.08)+'"/>';
+      g += '<path d="M 0 '+y+' Q 50 '+(y-10)+' 100 '+y+' T 200 '+y+'" stroke="#3a1a0a" stroke-width="0.5" fill="none"/>';
+    }
+  } else if (variant === 1) {
+    /* Crescent barchan dunes */
+    for (var j = 0; j < 3; j++) {
+      var cx = 40 + j * 60;
+      var cy = 130 + (j % 2) * 18;
+      g += '<path d="M '+(cx-30)+' '+(cy+10)+' Q '+(cx)+' '+(cy-18)+' '+(cx+30)+' '+(cy+10)+' L '+(cx+18)+' '+(cy+14)+' Q '+(cx)+' '+(cy-4)+' '+(cx-18)+' '+(cy+14)+' Z" fill="#0f0605" stroke="#3a1a10" stroke-width="0.8"/>';
+      g += '<path d="M '+(cx-28)+' '+(cy+10)+' Q '+(cx)+' '+(cy-16)+' '+(cx+28)+' '+(cy+10)+'" stroke="#5a2a14" stroke-width="0.6" fill="none"/>';
+    }
+    /* Small ripples */
+    g += '<path d="M 0 180 Q 40 177 80 180 T 160 180 T 200 180" stroke="#3a1a0a" stroke-width="0.5" fill="none"/>';
+    g += '<path d="M 0 190 Q 40 187 80 190 T 160 190 T 200 190" stroke="#3a1a0a" stroke-width="0.5" fill="none"/>';
+  } else {
+    /* Rolling wave dunes with sand movement hint */
+    for (var k = 0; k < 6; k++) {
+      var yy = 95 + k * 18;
+      var phase = k * 20;
+      g += '<path d="M 0 '+yy+' Q '+(40+phase%60)+' '+(yy-14)+' '+(80+phase%40)+' '+yy+' T 200 '+yy+' L 200 '+(yy+16)+' L 0 '+(yy+16)+' Z" fill="#180805" opacity="'+(0.92 - k*0.1)+'"/>';
+    }
+    /* Wind arrow lines */
+    g += '<line x1="160" y1="80" x2="190" y2="78" stroke="#ffb59c" stroke-width="0.8" opacity="0.5"/>';
+    g += '<line x1="165" y1="86" x2="192" y2="84" stroke="#ffb59c" stroke-width="0.8" opacity="0.5"/>';
+  }
+  g += '</svg>';
+  return g;
+}
+
+function renderVolcano(variant) {
+  var g = '<svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">';
+  g += skyGradient('sk_vc_'+variant);
+  g += '<defs>'+groundGradient('gd_vc_'+variant, false)+'</defs>';
+  g += '<rect width="200" height="80" fill="url(#sk_vc_'+variant+')"/>';
+  g += starSpecks(12, variant*17+5);
+  g += '<rect y="150" width="200" height="50" fill="url(#gd_vc_'+variant+')"/>';
+  if (variant === 0) {
+    /* Classic wide shield volcano with caldera */
+    g += '<path d="M 10 170 Q 60 150 100 90 Q 140 150 190 170 L 190 180 L 10 180 Z" fill="#6a1a08" stroke="#c8502a" stroke-width="2"/>';
+    /* Lighting on left slope */
+    g += '<path d="M 10 170 Q 60 150 100 90 L 100 95 Q 65 155 20 172 Z" fill="#8a2a12" opacity="0.6"/>';
+    /* Caldera */
+    g += '<ellipse cx="100" cy="90" rx="18" ry="5" fill="#140303" stroke="#9a2a10" stroke-width="1.5"/>';
+    /* Rim highlight */
+    g += '<path d="M 10 170 Q 60 150 100 90 Q 140 150 190 170" stroke="#f4a070" stroke-width="1.5" fill="none" opacity="0.7"/>';
+    /* Lava streaks */
+    g += '<line x1="85" y1="105" x2="75" y2="140" stroke="#8a2a10" stroke-width="1"/>';
+    g += '<line x1="115" y1="105" x2="128" y2="140" stroke="#8a2a10" stroke-width="1"/>';
+  } else if (variant === 1) {
+    /* Dusty shield volcano, oblique view */
+    g += '<path d="M 20 170 Q 70 155 110 110 Q 145 155 180 170 L 180 180 L 20 180 Z" fill="#5a1a0a" stroke="#a84028" stroke-width="1.8"/>';
+    /* Caldera - two collapse pits */
+    g += '<ellipse cx="108" cy="110" rx="16" ry="4" fill="#100201" stroke="#8a2010" stroke-width="1.2"/>';
+    g += '<ellipse cx="94" cy="114" rx="6" ry="2" fill="#100201"/>';
+    /* Distant haze */
+    g += '<rect width="200" height="20" y="98" fill="#a84030" opacity="0.1"/>';
+    /* Caldera highlight */
+    g += '<path d="M 20 170 Q 70 155 110 110 Q 145 155 180 170" stroke="#e08055" stroke-width="1" fill="none" opacity="0.6"/>';
+    g += '<path d="M 110 110 L 108 108" stroke="#e08055" stroke-width="1.5" fill="none"/>';
+  } else {
+    /* Twin peak volcano */
+    g += '<path d="M 0 175 Q 35 160 65 120 Q 90 130 110 105 Q 135 145 170 160 Q 185 165 200 175 L 200 185 L 0 185 Z" fill="#4a1508" stroke="#982a12" stroke-width="1.5"/>';
+    /* Calderas */
+    g += '<ellipse cx="65" cy="120" rx="9" ry="3" fill="#100201" stroke="#6a1810" stroke-width="1"/>';
+    g += '<ellipse cx="110" cy="105" rx="11" ry="3" fill="#100201" stroke="#6a1810" stroke-width="1"/>';
+    /* Slope highlights */
+    g += '<path d="M 0 175 Q 35 160 65 120" stroke="#c8603a" stroke-width="1" fill="none" opacity="0.6"/>';
+    g += '<path d="M 65 120 Q 90 130 110 105" stroke="#c8603a" stroke-width="1" fill="none" opacity="0.5"/>';
+    g += '<path d="M 110 105 Q 135 145 200 175" stroke="#c8603a" stroke-width="1" fill="none" opacity="0.5"/>';
+  }
+  g += '</svg>';
+  return g;
+}
+
+function renderValley(variant) {
+  var g = '<svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">';
+  g += skyGradient('sk_vl_'+variant);
+  g += '<defs>'+groundGradient('gd_vl_'+variant, false)+'</defs>';
+  g += '<rect width="200" height="60" fill="url(#sk_vl_'+variant+')"/>';
+  g += starSpecks(10, variant*19+11);
+  g += '<rect y="60" width="200" height="140" fill="url(#gd_vl_'+variant+')"/>';
+  if (variant === 0) {
+    /* Classic wide canyon - Valles Marineris style */
+    g += '<path d="M 0 115 L 70 115 L 85 160 L 115 160 L 130 115 L 200 115 L 200 200 L 0 200 Z" fill="#280803" stroke="#7a2010" stroke-width="1.5"/>';
+    /* Bottom of canyon */
+    g += '<rect x="85" y="158" width="30" height="42" fill="#180403"/>';
+    /* Wall layers */
+    g += '<line x1="70" y1="115" x2="85" y2="160" stroke="#c8503a" stroke-width="1"/>';
+    g += '<line x1="130" y1="115" x2="115" y2="160" stroke="#c8503a" stroke-width="1"/>';
+    g += '<line x1="73" y1="125" x2="87" y2="130" stroke="#a84028" stroke-width="0.7"/>';
+    g += '<line x1="75" y1="140" x2="90" y2="145" stroke="#a84028" stroke-width="0.7"/>';
+    g += '<line x1="125" y1="125" x2="112" y2="130" stroke="#a84028" stroke-width="0.7"/>';
+    g += '<line x1="123" y1="140" x2="110" y2="145" stroke="#a84028" stroke-width="0.7"/>';
+    /* Plateau top highlights */
+    g += '<line x1="0" y1="115" x2="70" y2="115" stroke="#f4a070" stroke-width="1.2" opacity="0.7"/>';
+    g += '<line x1="130" y1="115" x2="200" y2="115" stroke="#f4a070" stroke-width="1.2" opacity="0.7"/>';
+    /* Shadow on left wall */
+    g += '<path d="M 70 115 L 85 160 L 100 160 L 100 115 Z" fill="#000" opacity="0.35"/>';
+  } else if (variant === 1) {
+    /* Winding canyon from above */
+    g += '<path d="M 0 90 Q 40 110 80 100 Q 120 80 160 100 Q 180 110 200 100 L 200 200 L 0 200 Z" fill="#3a0f05" stroke="#9a2a12" stroke-width="1.5"/>';
+    /* Canyon center line (dark) */
+    g += '<path d="M 0 120 Q 40 140 80 130 Q 120 110 160 130 Q 180 140 200 130" stroke="#150302" stroke-width="14" fill="none"/>';
+    g += '<path d="M 0 120 Q 40 140 80 130 Q 120 110 160 130 Q 180 140 200 130" stroke="#080102" stroke-width="7" fill="none"/>';
+    /* Plateau cracks */
+    g += '<line x1="30" y1="155" x2="35" y2="180" stroke="#6a1a08" stroke-width="1"/>';
+    g += '<line x1="130" y1="155" x2="140" y2="185" stroke="#6a1a08" stroke-width="1"/>';
+    /* Plateau edge highlight */
+    g += '<path d="M 0 90 Q 40 110 80 100 Q 120 80 160 100 Q 180 110 200 100" stroke="#e8805a" stroke-width="0.8" fill="none" opacity="0.65"/>';
+  } else {
+    /* Deep chasma with layered walls */
+    g += '<path d="M 0 95 L 55 95 L 75 180 L 125 180 L 145 95 L 200 95 L 200 200 L 0 200 Z" fill="#1a0402" stroke="#8a2510" stroke-width="1.2"/>';
+    /* Multiple layers on canyon walls */
+    for (var i = 0; i < 5; i++) {
+      var yL = 110 + i * 14;
+      g += '<line x1="58" y1="'+yL+'" x2="72" y2="'+(yL+15)+'" stroke="#c8503a" stroke-width="0.7" opacity="'+(0.9 - i*0.1)+'"/>';
+      g += '<line x1="142" y1="'+yL+'" x2="128" y2="'+(yL+15)+'" stroke="#c8503a" stroke-width="0.7" opacity="'+(0.9 - i*0.1)+'"/>';
+    }
+    /* Rubble at bottom */
+    g += '<circle cx="90" cy="185" r="1.5" fill="#6a1a08"/>';
+    g += '<circle cx="105" cy="187" r="2" fill="#6a1a08"/>';
+    g += '<circle cx="115" cy="185" r="1.5" fill="#6a1a08"/>';
+    /* Highlight top edges */
+    g += '<line x1="0" y1="95" x2="55" y2="95" stroke="#f0a070" stroke-width="1.2" opacity="0.7"/>';
+    g += '<line x1="145" y1="95" x2="200" y2="95" stroke="#f0a070" stroke-width="1.2" opacity="0.7"/>';
+    /* Left wall shadow */
+    g += '<path d="M 55 95 L 75 180 L 92 180 L 92 95 Z" fill="#000" opacity="0.4"/>';
+  }
+  g += '</svg>';
+  return g;
+}
+
+function renderSample(s) {
+  switch (s.zone) {
+    case 'crater':  return renderCrater(s.variant);
+    case 'dune':    return renderDune(s.variant);
+    case 'volcano': return renderVolcano(s.variant);
+    case 'valley':  return renderValley(s.variant);
+  }
+  return '';
+}
+
+/* ==================== Game state ==================== */
+var state = {
+  level: 1,
+  submitted: false,
+  bestScore: 0,
+  attempts: 0,
+  active: null,          /* the currently dragged card */
+};
+
+/* ==================== Utility ==================== */
+function shuffle(arr) {
+  var a = arr.slice();
+  for (var i = a.length - 1; i > 0; i--) {
+    var j = Math.floor(Math.random() * (i + 1));
+    var tmp = a[i]; a[i] = a[j]; a[j] = tmp;
+  }
+  return a;
+}
+
+function currentSamples() {
+  /* level 1 = variant 0 (easy) + variant 1 for half
+     level 2 = mix
+     level 3 = all variants including trickiest */
+  var picked;
+  if (state.level === 1) {
+    picked = SAMPLES.filter(function(s){ return s.variant <= 1; }).slice(0, 12);
+    /* ensure 3 from each zone */
+    var buckets = {crater:[], dune:[], volcano:[], valley:[]};
+    SAMPLES.forEach(function(s){ if (s.variant <= 1) buckets[s.zone].push(s); });
+    picked = [];
+    ['crater','dune','volcano','valley'].forEach(function(z){
+      picked = picked.concat(buckets[z].slice(0, 3));
+    });
+    /* but we only have 2 per zone at variant<=1, so fill with 0 twice */
+    if (picked.length < 12) {
+      var need = 12 - picked.length;
+      var extras = SAMPLES.filter(function(s){ return s.variant === 0; });
+      picked = picked.concat(extras.slice(0, need));
+    }
+  } else if (state.level === 2) {
+    picked = SAMPLES.slice();
+  } else {
+    /* hard: all samples with extra reshuffled variants */
+    picked = SAMPLES.slice();
+  }
+  return shuffle(picked);
+}
+
+/* ==================== Render ==================== */
+function renderCards() {
+  var tray = document.getElementById('cardTray');
+  tray.innerHTML = '';
+  document.querySelectorAll('.zone-items').forEach(function(z){ z.innerHTML = ''; });
+  var samples = currentSamples();
+  samples.forEach(function(s, idx) {
+    var card = document.createElement('div');
+    card.className = 'landform-card';
+    card.setAttribute('data-id', s.id + '_' + idx);
+    card.setAttribute('data-correct', s.zone);
+    card.setAttribute('data-name', s.name);
+    card.setAttribute('data-variant', s.variant);
+    card.setAttribute('draggable', 'true');
+    card.innerHTML = renderSample(s);
+    card.addEventListener('dragstart', onDragStart);
+    card.addEventListener('dragend', onDragEnd);
+    card.addEventListener('touchstart', onTouchStart, {passive:false});
+    card.addEventListener('click', onCardClick);
+    tray.appendChild(card);
+  });
+  updateHUD();
+}
+
+/* ==================== Drag and drop ==================== */
+function onDragStart(e) {
+  if (state.submitted) return;
+  state.active = e.currentTarget;
+  e.currentTarget.classList.add('dragging');
+  e.dataTransfer.effectAllowed = 'move';
+  e.dataTransfer.setData('text/plain', e.currentTarget.getAttribute('data-id'));
+}
+function onDragEnd(e) {
+  e.currentTarget.classList.remove('dragging');
+  state.active = null;
+}
+var touchClone = null, touchSource = null;
+function onTouchStart(e) {
+  if (state.submitted) return;
+  e.preventDefault();
+  touchSource = e.currentTarget;
+  touchSource.classList.add('dragging');
+  var rect = touchSource.getBoundingClientRect();
+  touchClone = touchSource.cloneNode(true);
+  touchClone.style.position = 'fixed';
+  touchClone.style.width = rect.width + 'px';
+  touchClone.style.height = rect.height + 'px';
+  touchClone.style.zIndex = '300';
+  touchClone.style.pointerEvents = 'none';
+  touchClone.style.opacity = '0.85';
+  document.body.appendChild(touchClone);
+  moveClone(e.touches[0]);
+  document.addEventListener('touchmove', onTouchMove, {passive:false});
+  document.addEventListener('touchend', onTouchEnd);
+}
+function moveClone(touch) {
+  if (!touchClone) return;
+  touchClone.style.left = (touch.clientX - touchClone.offsetWidth/2) + 'px';
+  touchClone.style.top  = (touch.clientY - touchClone.offsetHeight/2) + 'px';
+}
+function onTouchMove(e) {
+  e.preventDefault();
+  moveClone(e.touches[0]);
+  var el = document.elementFromPoint(e.touches[0].clientX, e.touches[0].clientY);
+  document.querySelectorAll('.zone').forEach(function(z){ z.classList.remove('drag-over'); });
+  if (el) {
+    var zone = el.closest('.zone');
+    if (zone) zone.classList.add('drag-over');
+  }
+}
+function onTouchEnd(e) {
+  document.removeEventListener('touchmove', onTouchMove);
+  document.removeEventListener('touchend', onTouchEnd);
+  document.querySelectorAll('.zone').forEach(function(z){ z.classList.remove('drag-over'); });
+  if (touchClone) {
+    var touch = e.changedTouches[0];
+    var el = document.elementFromPoint(touch.clientX, touch.clientY);
+    if (el && touchSource) {
+      var zoneItems = el.closest('.zone-items');
+      var tray = el.closest('#cardTray');
+      if (zoneItems) zoneItems.appendChild(touchSource);
+      else if (tray) tray.appendChild(touchSource);
+    }
+    touchClone.remove();
+    touchClone = null;
+  }
+  if (touchSource) {
+    touchSource.classList.remove('dragging');
+    touchSource = null;
+  }
+  updateHUD();
+}
+
+document.querySelectorAll('.zone-items').forEach(function(zone) {
+  zone.addEventListener('dragover', function(e) {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    zone.closest('.zone').classList.add('drag-over');
+  });
+  zone.addEventListener('dragleave', function(e) {
+    zone.closest('.zone').classList.remove('drag-over');
+  });
+  zone.addEventListener('drop', function(e) {
+    e.preventDefault();
+    zone.closest('.zone').classList.remove('drag-over');
+    if (state.active && !state.submitted) {
+      state.active.classList.remove('dragging');
+      zone.appendChild(state.active);
+      state.active = null;
+      updateHUD();
+    }
+  });
+});
+
+var trayEl = document.getElementById('cardTray');
+trayEl.addEventListener('dragover', function(e) { e.preventDefault(); });
+trayEl.addEventListener('drop', function(e) {
+  e.preventDefault();
+  if (state.active && !state.submitted) {
+    state.active.classList.remove('dragging');
+    trayEl.appendChild(state.active);
+    state.active = null;
+    updateHUD();
+  }
+});
+
+/* ==================== HUD update ==================== */
+function updateHUD() {
+  var placed = document.querySelectorAll('.zone-items .landform-card').length;
+  document.getElementById('hudV1').textContent = placed + '/12';
+  document.getElementById('hudV2').textContent = state.level;
+  document.getElementById('hudV3').textContent = state.bestScore > 0 ? (state.bestScore + '/12') : '--';
+  document.getElementById('hudV4').textContent = state.attempts;
+  ['crater','dune','volcano','valley'].forEach(function(z){
+    var count = document.querySelectorAll('.zone[data-zone="'+z+'"] .landform-card').length;
+    var el = document.getElementById('z' + z.charAt(0).toUpperCase() + z.slice(1) + 'Count');
+    if (el) el.textContent = count;
+  });
+}
+
+/* ==================== Submit / feedback ==================== */
+function submit() {
+  if (state.submitted) return;
+  state.submitted = true;
+  state.attempts++;
+  var correct = 0;
+  var feedback = [];
+  var all = document.querySelectorAll('.landform-card');
+  all.forEach(function(card) {
+    var correctZone = card.getAttribute('data-correct');
+    var nameKey = card.getAttribute('data-name');
+    var container = card.closest('.zone-items');
+    var actualZone = container ? container.getAttribute('data-zone') : null;
+    var ok = actualZone === correctZone;
+    if (ok) {
+      correct++;
+      card.classList.add('correct');
+    } else {
+      card.classList.add('wrong');
+    }
+    feedback.push({
+      html: card.innerHTML,
+      name: t(nameKey),
+      correctZone: correctZone,
+      actualZone: actualZone,
+      ok: ok,
+    });
+  });
+  if (correct > state.bestScore) state.bestScore = correct;
+  showResult(correct, feedback);
+  document.getElementById('btnSubmit').disabled = true;
+  updateHUD();
+}
+
+function showResult(correct, feedback) {
+  document.getElementById('overlay').style.display = 'block';
+  document.getElementById('resultModal').style.display = 'block';
+  document.getElementById('resultTitle').textContent = t('result');
+  document.getElementById('resultScore').textContent = correct + '/12';
+  var stars = correct >= 12 ? 3 : correct >= 10 ? 2 : correct >= 9 ? 1 : 0;
+  var starHTML = '';
+  for (var i = 0; i < 3; i++) {
+    starHTML += '<span class="star '+(i<stars?'on':'')+'"></span>';
+  }
+  document.getElementById('resultStars').innerHTML = starHTML;
+  var msgKey = correct >= 12 ? 'pass' : (correct >= 9 ? 'pass' : (correct >= 5 ? 'partial' : 'fail'));
+  document.getElementById('resultMsg').textContent = t(msgKey);
+  /* feedback list */
+  var list = document.getElementById('feedbackList');
+  list.innerHTML = '';
+  feedback.forEach(function(f){
+    var item = document.createElement('div');
+    item.className = 'fb-item';
+    var status = f.ok ? '[OK]' : '[X]';
+    var cls = f.ok ? 'fb-ok' : 'fb-bad';
+    var expText;
+    if (f.ok) {
+      expText = t(f.correctZone + '_f1');
+    } else {
+      var act = f.actualZone ? t(f.actualZone + '_name') : '(' + t('placed') + ' --' + ')';
+      expText = t(f.correctZone + '_f1') + ' -- ' + t(f.correctZone + '_f2');
+    }
+    item.innerHTML =
+      '<div class="fb-thumb">' + f.html + '</div>' +
+      '<div class="fb-text">' +
+        '<div class="fb-name ' + cls + '">' + status + ' ' + f.name + '</div>' +
+        '<div class="fb-expl">' + expText + '</div>' +
+      '</div>';
+    list.appendChild(item);
+  });
+}
+
+function hideResult() {
+  document.getElementById('resultModal').style.display = 'none';
+  document.getElementById('overlay').style.display = 'none';
+}
+
+function reset() {
+  state.submitted = false;
+  renderCards();
+  document.getElementById('btnSubmit').disabled = false;
+  hideResult();
+  hideInfo();
+}
+
+/* ==================== Info modal (learn mode) ==================== */
+var learnIdx = 0;
+var learnOrder = ['crater','dune','volcano','valley'];
+function showInfoFor(zone) {
+  var thumb = document.getElementById('infoThumb');
+  /* pick variant 0 */
+  var sample = SAMPLES.filter(function(s){ return s.zone === zone && s.variant === 0; })[0];
+  thumb.innerHTML = renderSample(sample);
+  document.getElementById('infoTitle').textContent = t(zone + '_name');
+  document.getElementById('infoDesc').textContent = t(zone + '_desc');
+  var ul = document.getElementById('infoFeatures');
+  ul.innerHTML = '';
+  [1,2,3].forEach(function(i){
+    var li = document.createElement('li');
+    li.innerHTML = '<strong>' + i + '.</strong> ' + t(zone + '_f' + i);
+    ul.appendChild(li);
+  });
+  document.getElementById('infoModal').style.display = 'block';
+  document.getElementById('overlay').style.display = 'block';
+}
+function hideInfo() {
+  document.getElementById('infoModal').style.display = 'none';
+  if (document.getElementById('resultModal').style.display !== 'block') {
+    document.getElementById('overlay').style.display = 'none';
+  }
+}
+function learnFlow() {
+  showInfoFor(learnOrder[learnIdx % learnOrder.length]);
+  learnIdx++;
+}
+
+function onCardClick(e) {
+  if (state.submitted) return;
+  /* clicking a card in the tray shows info for that landform's correct zone */
+  var card = e.currentTarget;
+  if (card.classList.contains('dragging')) return;
+  /* Only show on double-tap equivalent: hold shift, or skip for now to avoid confusing UX */
+  /* Simpler: only long-hold shows info. We'll skip this and rely on LEARN button. */
+}
+
+/* ==================== i18n refresh ==================== */
+function refreshI18N() {
+  document.getElementById('title').textContent = t('title');
+  document.getElementById('subtitle').textContent = t('subtitle');
+  document.getElementById('hdrLevelLabel').textContent = t('levelLabel');
+  document.getElementById('lv1Btn').textContent = t('lv1');
+  document.getElementById('lv2Btn').textContent = t('lv2');
+  document.getElementById('lv3Btn').textContent = t('lv3');
+  document.getElementById('zCraterTitle').innerHTML  = t('crater')  + '<span class="zh">' + I18N.crater.cn  + '</span>';
+  document.getElementById('zDuneTitle').innerHTML    = t('dune')    + '<span class="zh">' + I18N.dune.cn    + '</span>';
+  document.getElementById('zVolcanoTitle').innerHTML = t('volcano') + '<span class="zh">' + I18N.volcano.cn + '</span>';
+  document.getElementById('zValleyTitle').innerHTML  = t('valley')  + '<span class="zh">' + I18N.valley.cn  + '</span>';
+  document.getElementById('btnSubmit').textContent = t('submit');
+  document.getElementById('btnReset').textContent = t('reset');
+  document.getElementById('btnLearn').textContent = t('learn');
+  document.getElementById('btnRetry').textContent = t('retry');
+  document.getElementById('btnReview').textContent = t('review');
+  document.getElementById('btnInfoClose').textContent = t('close');
+  document.getElementById('hudL1').textContent = t('placed');
+  document.getElementById('hudL2').textContent = t('level');
+  document.getElementById('hudL3').textContent = t('best');
+  document.getElementById('hudL4').textContent = t('score');
+  /* guide */
+  document.getElementById('guideToggle').innerHTML =
+    t('guideTitle') + ' <span id="guideArrow">[-]</span>';
+  var gc = document.getElementById('guideContent');
+  gc.innerHTML =
+    '<ul>' +
+    '<li>' + t('g1') + '</li>' +
+    '<li>' + t('g2') + '</li>' +
+    '<li>' + t('g3') + '</li>' +
+    '<li>' + t('g4') + '</li>' +
+    '<li>' + t('g5') + '</li>' +
+    '</ul>';
+  updateHUD();
+}
+
+/* ==================== Event wiring ==================== */
+document.getElementById('langBtn').addEventListener('click', function() {
+  LANG = LANG === 'en' ? 'cn' : 'en';
+  this.textContent = LANG.toUpperCase();
+  refreshI18N();
+});
+document.getElementById('btnSubmit').addEventListener('click', submit);
+document.getElementById('btnReset').addEventListener('click', reset);
+document.getElementById('btnLearn').addEventListener('click', learnFlow);
+document.getElementById('btnRetry').addEventListener('click', reset);
+document.getElementById('btnReview').addEventListener('click', function(){
+  hideResult();
+  /* keep the colored feedback visible on the cards */
+});
+document.getElementById('btnInfoClose').addEventListener('click', hideInfo);
+document.getElementById('overlay').addEventListener('click', function(){
+  hideInfo();
+});
+document.querySelectorAll('.level-btn').forEach(function(btn){
+  btn.addEventListener('click', function(){
+    var lv = parseInt(btn.getAttribute('data-level'), 10);
+    if (lv === state.level) return;
+    state.level = lv;
+    document.querySelectorAll('.level-btn').forEach(function(b){ b.classList.remove('active'); });
+    btn.classList.add('active');
+    reset();
+  });
+});
+document.getElementById('guideToggle').addEventListener('click', function() {
+  var content = document.getElementById('guideContent');
+  var arrow = document.getElementById('guideArrow');
+  var collapsed = content.style.display === 'none';
+  content.style.display = collapsed ? '' : 'none';
+  if (arrow) arrow.textContent = collapsed ? '[-]' : '[+]';
+});
+
+renderCards();
+refreshI18N();
+
+})();
+</script>
+</body>
+</html>
