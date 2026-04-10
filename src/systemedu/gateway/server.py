@@ -907,6 +907,16 @@ async def api_project_detail(request: Request) -> JSONResponse:
         except Exception:
             pass
 
+        # Read knowledge_level from project.yaml (not in Pydantic model)
+        _kl = "K1"
+        try:
+            from systemedu.education.project_loader import find_project_dir as _fpd
+            import yaml as _yl
+            _yaml_data = _yl.safe_load((_fpd(name) / "project.yaml").read_text(encoding="utf-8")) or {}
+            _kl = _yaml_data.get("knowledge_level", "K1")
+        except Exception:
+            pass
+
         response_data: dict = {
             "project": {
                 "name": ctx.project.name,
@@ -917,6 +927,7 @@ async def api_project_detail(request: Request) -> JSONResponse:
                 "estimated_hours": ctx.project.estimated_hours,
                 "tags": ctx.project.tags,
                 "cover_image_url": cover_url,
+                "knowledge_level": _kl,
             },
             "milestones": milestones,
             "progress": progress,
@@ -957,7 +968,7 @@ async def api_update_project(request: Request) -> JSONResponse:
     data = _yaml.safe_load(yaml_path.read_text(encoding="utf-8")) or {}
 
     # Apply only allowed fields
-    allowed = {"title", "description", "category", "age_range", "estimated_hours", "tags", "author"}
+    allowed = {"title", "description", "category", "age_range", "estimated_hours", "tags", "author", "knowledge_level"}
     for key in allowed:
         if key in body:
             data[key] = body[key]
@@ -2851,6 +2862,19 @@ def create_app() -> Starlette:
     media_dir = SYSTEMEDU_HOME / "media"
     media_dir.mkdir(parents=True, exist_ok=True)
     routes.append(Mount("/api/media", StaticFiles(directory=str(media_dir)), name="media"))
+
+    # Mount static course images directory (populated by scripts/course_factory.py
+    # when downloading CC-BY/CC0 images referenced in knode content)
+    from pathlib import Path as _Path
+    course_images_dir = _Path(__file__).parent.parent.parent.parent / "scripts" / "course_images"
+    course_images_dir.mkdir(parents=True, exist_ok=True)
+    routes.append(
+        Mount(
+            "/api/course-images",
+            StaticFiles(directory=str(course_images_dir)),
+            name="course-images",
+        )
+    )
 
     # Auth routes (public)
     routes.insert(0, Route("/api/auth/login", api_auth_login, methods=["POST"]))

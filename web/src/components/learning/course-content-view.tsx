@@ -6,7 +6,7 @@ import {
   X, CheckCircle2, Loader2, BookOpen, Zap, Gamepad2, BookMarked,
   Terminal, ChevronDown, ChevronRight, Circle, Play, Square,
   ClipboardList, CheckCircle, XCircle, Lightbulb, Sparkles, Clock,
-  Atom,
+  Atom, Image as ImageIcon,
 } from "lucide-react"
 import ReactMarkdown from "react-markdown"
 import remarkGfm from "remark-gfm"
@@ -34,6 +34,7 @@ interface CourseContentViewProps {
   knode: KnodeInfo | null
   onClose: () => void
   onMarkComplete?: () => void
+  knowledgeLevel?: import("@/lib/types/api").KnowledgeLevel
 }
 
 // ---------------------------------------------------------------------------
@@ -44,6 +45,11 @@ interface AudioCtxValue {
   play: (sectionId: string, url: string) => void
   stop: () => void
 }
+
+// ---------------------------------------------------------------------------
+// Knowledge Level Context — lets nested components pick the right theory body
+// ---------------------------------------------------------------------------
+const KnowledgeLevelContext = createContext<import("@/lib/types/api").KnowledgeLevel>("K1")
 
 const AudioPlayContext = createContext<AudioCtxValue>({
   playing: null,
@@ -232,36 +238,67 @@ function MarkdownBlock({ content }: { content: string }) {
         blockquote: ({ children }) => (
           <blockquote className="border-l-2 border-primary/40 pl-4 italic text-on-surface-variant my-4">{children}</blockquote>
         ),
-        a: ({ href, children }) => {
+        a: ({ href, children, node }) => {
           const videoId = href ? extractYouTubeId(href) : null
           if (videoId) {
-            // Extract a readable title: prefer the alt of an inner <img>, otherwise fall back to the text
+            // Check if hast node contains an <img> child (thumbnail embed style: [![alt](src)](href))
+            // If yes, render as clickable player button; if no (plain text link), render as normal link
+            let hasImage = false
             let title = ""
-            const childArr = Array.isArray(children) ? children : [children]
-            for (const c of childArr) {
-              if (c && typeof c === "object" && "props" in c) {
-                const props = (c as { props?: { alt?: string } }).props
-                if (props?.alt) { title = props.alt; break }
+            const hastChildren = (node as { children?: Array<{ tagName?: string; properties?: { alt?: string; src?: string }; value?: string }> } | undefined)?.children || []
+            for (const c of hastChildren) {
+              if (c.tagName === "img") {
+                hasImage = true
+                if (c.properties?.alt) title = c.properties.alt
               }
-              if (typeof c === "string" && c.trim()) { title = c; break }
+              if (c.value && !title) title = c.value
             }
+            // Fallback: check React children for backwards compat
+            if (!hasImage) {
+              const childArr = Array.isArray(children) ? children : [children]
+              for (const c of childArr) {
+                if (c && typeof c === "object" && "props" in c) {
+                  const props = (c as { props?: { alt?: string; src?: string } }).props
+                  if (props?.src) { hasImage = true }
+                  if (props?.alt) { title = props.alt }
+                }
+                if (typeof c === "string" && c.trim() && !title) { title = c }
+              }
+            }
+
+            if (hasImage) {
+              // Thumbnail embed style: render as player button
+              return (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.preventDefault()
+                    setYtModal({ videoId, title: title || "YouTube video" })
+                  }}
+                  className="group inline-block relative my-2 rounded-xl overflow-hidden border border-outline-variant/25 hover:border-primary/50 hover:shadow-lg transition-all cursor-pointer bg-transparent p-0"
+                  title={`播放：${title || "YouTube 视频"}`}
+                >
+                  {children}
+                  <span className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                    <span className="w-16 h-16 rounded-full bg-black/60 backdrop-blur-sm flex items-center justify-center group-hover:bg-primary/80 group-hover:scale-110 transition-all shadow-xl">
+                      <Play className="h-7 w-7 text-white fill-white ml-1" />
+                    </span>
+                  </span>
+                </button>
+              )
+            }
+            // Plain text link style: render as normal link with click-to-play
             return (
-              <button
-                type="button"
+              <a
+                href={href}
                 onClick={(e) => {
                   e.preventDefault()
                   setYtModal({ videoId, title: title || "YouTube video" })
                 }}
-                className="group inline-block relative my-2 rounded-xl overflow-hidden border border-outline-variant/25 hover:border-primary/50 hover:shadow-lg transition-all cursor-pointer bg-transparent p-0"
-                title={`播放：${title || "YouTube 视频"}`}
+                className="text-primary underline decoration-primary/40 hover:decoration-primary transition-colors cursor-pointer"
               >
                 {children}
-                <span className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                  <span className="w-16 h-16 rounded-full bg-black/60 backdrop-blur-sm flex items-center justify-center group-hover:bg-primary/80 group-hover:scale-110 transition-all shadow-xl">
-                    <Play className="h-7 w-7 text-white fill-white ml-1" />
-                  </span>
-                </span>
-              </button>
+              </a>
             )
           }
           return (
@@ -330,9 +367,42 @@ const SUBJECT_LABELS: Record<string, string> = {
   other: "基础理论",
 }
 
+// Strip leading heading that duplicates the modal title (e.g. K3 body starts with "## 硬度与支撑力").
+// This prevents the theory modal from showing the same title twice with extra blank space.
+function stripDuplicateTitle(markdown: string, title: string): string {
+  if (!markdown || !title) return markdown
+  const trimmed = markdown.replace(/^\s+/, "")
+  // Match "## Title" (with optional trailing whitespace, then newline or end)
+  const escaped = title.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+  const pattern = new RegExp(`^#{1,4}\\s+${escaped}\\s*\\n+`)
+  if (pattern.test(trimmed)) {
+    return trimmed.replace(pattern, "")
+  }
+  return markdown
+}
+
 function TheoryBlock({ theory }: { theory: TheoryEntry }) {
   const [open, setOpen] = useState(false)
   const label = SUBJECT_LABELS[theory.subject] || SUBJECT_LABELS.other
+  const knowledgeLevel = useContext(KnowledgeLevelContext)
+
+  // Pick the body_markdown matching the current knowledge level.
+  // Fallback chain: exact level -> nearest lower level -> default body_markdown
+  const bodyMarkdown = (() => {
+    const levels = theory.level_bodies
+    if (!levels || levels.length === 0) return theory.body_markdown
+    const levelOrder = ["K1", "K2", "K3", "K4", "K5"]
+    const targetIdx = levelOrder.indexOf(knowledgeLevel)
+    // Exact match first
+    const exact = levels.find((lb) => lb.level === knowledgeLevel)
+    if (exact) return exact.body_markdown
+    // Nearest lower level
+    for (let i = targetIdx - 1; i >= 0; i--) {
+      const lower = levels.find((lb) => lb.level === levelOrder[i])
+      if (lower) return lower.body_markdown
+    }
+    return theory.body_markdown
+  })()
 
   // Split body_markdown into before-formula and formula sections for styled rendering
   // We render the entire markdown, but wrap it with proper text styling
@@ -379,11 +449,11 @@ function TheoryBlock({ theory }: { theory: TheoryEntry }) {
               </button>
             </div>
 
-            {/* Body — asymmetric 12-col grid */}
-            <div className="flex-1 overflow-y-auto p-8">
-              <div className={`grid gap-10 ${theory.animation_html ? "grid-cols-1 lg:grid-cols-12" : "grid-cols-1 max-w-2xl mx-auto"}`}>
-                {/* Simulation column (7/12) */}
-                {theory.animation_html && (
+            {/* Body — grid when animation, simple flex when text-only */}
+            <div className="flex-1 overflow-y-auto px-8 pt-3 pb-6">
+              {theory.animation_html ? (
+                <div className="grid gap-10 grid-cols-1 lg:grid-cols-12">
+                  {/* Simulation column (7/12) */}
                   <div className="lg:col-span-7 flex flex-col gap-6">
                     <div className="relative aspect-video rounded-xl overflow-hidden shadow-[0_8px_32px_-8px_rgba(25,34,125,0.12)]">
                       <iframe
@@ -394,23 +464,33 @@ function TheoryBlock({ theory }: { theory: TheoryEntry }) {
                       />
                     </div>
                   </div>
-                )}
 
-                {/* Documentation column (5/12) */}
-                <div className={theory.animation_html ? "lg:col-span-5 flex flex-col gap-6" : "flex flex-col gap-6"}>
-                  {/* Core Concept tag */}
-                  <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-secondary/10 text-secondary rounded-full text-[11px] font-bold uppercase tracking-[0.12em] w-fit">
-                    <Lightbulb className="h-3.5 w-3.5" />
-                    {label}
+                  {/* Documentation column (5/12) */}
+                  <div className="lg:col-span-5 flex flex-col gap-4">
+                    <div className="theory-body text-foreground leading-relaxed text-sm [&>*:first-child]:!mt-0 [&_p]:mb-4 [&_p]:text-foreground [&_ul]:text-foreground [&_li]:text-foreground [&_strong]:text-foreground [&_strong]:font-semibold [&_.katex-display]:my-5 [&_.katex-display]:py-4 [&_.katex-display]:px-5 [&_.katex-display]:bg-card [&_.katex-display]:rounded-lg [&_.katex-display]:shadow-sm">
+                      <MarkdownBlock content={stripDuplicateTitle(bodyMarkdown, theory.title)} />
+                    </div>
+                    <div className="p-4 bg-primary/5 rounded-xl border-l-4 border-primary flex gap-4 mt-auto">
+                      <Lightbulb className="h-5 w-5 text-primary flex-shrink-0 mt-0.5" />
+                      <div>
+                        <h5 className="text-sm font-bold text-foreground">Pro Insight</h5>
+                        <p className="text-xs text-muted-foreground leading-relaxed mt-1">
+                          {theory.subject === "physics" && "理解这个公式后，你就能解释为什么不同地面走起来感觉不同——一切都和系数有关。"}
+                          {theory.subject === "math" && "量化是科学思维的起点：只有把感觉变成数字，不同人的观察才能互相比较。"}
+                          {theory.subject === "chemistry" && "化学反应的本质是原子间键的断裂和形成，理解这个就理解了变化的根源。"}
+                          {!["physics", "math", "chemistry"].includes(theory.subject) && "掌握基础理论后，你会发现工程问题背后都有简洁的科学规律。"}
+                        </p>
+                      </div>
+                    </div>
                   </div>
-
-                  {/* Theory body text — full opacity foreground */}
-                  <div className="theory-body text-foreground leading-relaxed text-sm [&_p]:mb-4 [&_p]:text-foreground [&_ul]:text-foreground [&_li]:text-foreground [&_strong]:text-foreground [&_strong]:font-semibold [&_.katex-display]:my-5 [&_.katex-display]:py-4 [&_.katex-display]:px-5 [&_.katex-display]:bg-card [&_.katex-display]:rounded-lg [&_.katex-display]:shadow-sm">
-                    <MarkdownBlock content={theory.body_markdown} />
+                </div>
+              ) : (
+                /* Text-only layout — no pill, tight top */
+                <div className="max-w-2xl mx-auto">
+                  <div className="theory-body text-foreground leading-relaxed text-base [&>*:first-child]:!mt-0 [&_p]:mb-4 [&_p]:text-foreground [&_ul]:text-foreground [&_li]:text-foreground [&_strong]:text-foreground [&_strong]:font-semibold [&_.katex-display]:my-5 [&_.katex-display]:py-4 [&_.katex-display]:px-5 [&_.katex-display]:bg-card [&_.katex-display]:rounded-lg [&_.katex-display]:shadow-sm">
+                    <MarkdownBlock content={stripDuplicateTitle(bodyMarkdown, theory.title)} />
                   </div>
-
-                  {/* Pro Insight callout */}
-                  <div className="p-4 bg-primary/5 rounded-xl border-l-4 border-primary flex gap-4 mt-auto">
+                  <div className="mt-5 p-4 bg-primary/5 rounded-xl border-l-4 border-primary flex gap-4">
                     <Lightbulb className="h-5 w-5 text-primary flex-shrink-0 mt-0.5" />
                     <div>
                       <h5 className="text-sm font-bold text-foreground">Pro Insight</h5>
@@ -423,7 +503,7 @@ function TheoryBlock({ theory }: { theory: TheoryEntry }) {
                     </div>
                   </div>
                 </div>
-              </div>
+              )}
             </div>
           </div>
         </div>,
@@ -883,6 +963,111 @@ function ExerciseBlock({
 }
 
 // ---------------------------------------------------------------------------
+// ImageBlock: 静态图片（互联网照片 / 本地下载）
+// ---------------------------------------------------------------------------
+function ImageBlock({
+  idea,
+  section,
+}: {
+  idea: CourseIdeaSummary
+  section: RenderedSection
+}) {
+  const src = section.src || ""
+  const alt = section.alt || idea.topic || ""
+  const caption = section.caption || ""
+  const sourceUrl = section.source_url || ""
+  const license = section.license || ""
+
+  return (
+    <figure className="rounded-2xl overflow-hidden bg-surface-container-low border border-outline-variant/20 shadow-md">
+      <div className="w-full bg-neutral-900/5 flex items-center justify-center">
+        <img
+          src={src}
+          alt={alt}
+          className="max-w-full h-auto object-contain block"
+          loading="lazy"
+        />
+      </div>
+      {(caption || sourceUrl || license) && (
+        <figcaption className="px-6 py-4 space-y-1">
+          {caption && (
+            <p className="text-sm text-on-surface leading-relaxed">{caption}</p>
+          )}
+          {(sourceUrl || license) && (
+            <p className="text-xs text-on-surface-variant">
+              {sourceUrl && (
+                <a
+                  href={sourceUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="underline hover:text-primary"
+                >
+                  来源
+                </a>
+              )}
+              {sourceUrl && license && <span> · </span>}
+              {license && <span>{license}</span>}
+            </p>
+          )}
+        </figcaption>
+      )}
+    </figure>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// DiagramBlock: 静态 HTML 示意图（SVG/Canvas，无交互控制）
+// 以 iframe 内嵌，采用浅色背景，相比动画更轻量。
+// ---------------------------------------------------------------------------
+function DiagramBlock({
+  idea,
+  html,
+  caption,
+}: {
+  idea: CourseIdeaSummary
+  html: string
+  caption: string
+}) {
+  const [modalOpen, setModalOpen] = useState(false)
+
+  return (
+    <>
+      <section className="rounded-2xl overflow-hidden shadow-md bg-surface-container-low border border-outline-variant/20">
+        <div
+          className="flex items-center justify-between p-6 cursor-pointer hover:bg-white/40 transition-colors"
+          onClick={() => setModalOpen(true)}
+        >
+          <div className="flex items-center gap-5">
+            <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center border border-primary/20 shrink-0">
+              <ImageIcon className="h-6 w-6 text-primary" />
+            </div>
+            <div className="text-left">
+              <h3 className="font-semibold text-on-surface text-lg leading-tight mb-0.5">
+                示意图
+              </h3>
+              <p className="text-on-surface-variant text-sm">{idea.topic}</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 text-on-surface-variant/50 text-xs">
+            <span>点击放大</span>
+          </div>
+        </div>
+        {caption && (
+          <p className="px-6 pb-5 text-sm text-on-surface-variant">{caption}</p>
+        )}
+      </section>
+      <IframeModal
+        open={modalOpen}
+        onClose={() => setModalOpen(false)}
+        html={html}
+        title={`示意图 - ${idea.topic}`}
+        resetKey={0}
+      />
+    </>
+  )
+}
+
+// ---------------------------------------------------------------------------
 // IdeaBlock (dispatcher)
 // ---------------------------------------------------------------------------
 function IdeaBlock({
@@ -925,6 +1110,14 @@ function IdeaBlock({
         backend={section.generation_backend || idea.generation_backend}
       />
     )
+  }
+
+  if (idea.mode === "image" && section.src) {
+    return <ImageBlock idea={idea} section={section} />
+  }
+
+  if (idea.mode === "diagram" && section.html) {
+    return <DiagramBlock idea={idea} html={section.html} caption={section.caption || ""} />
   }
 
   if (idea.mode === "game" && section.html) {
@@ -1558,6 +1751,7 @@ export function CourseContentView({
   knode,
   onClose,
   onMarkComplete,
+  knowledgeLevel = "K1",
 }: CourseContentViewProps) {
   const [courseData, setCourseData] = useState<CourseContentData | null>(null)
   const [generating, setGenerating] = useState(false)
@@ -1793,6 +1987,7 @@ export function CourseContentView({
   }
 
   return (
+    <KnowledgeLevelContext.Provider value={knowledgeLevel}>
     <AudioProvider>
       <div className="flex flex-col h-full">
         <Header knode={knode} onClose={onClose} />
@@ -1867,6 +2062,7 @@ export function CourseContentView({
         )}
       </div>
     </AudioProvider>
+    </KnowledgeLevelContext.Provider>
   )
 }
 

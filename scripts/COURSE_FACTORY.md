@@ -5,6 +5,69 @@
 
 ---
 
+## 强制执行清单 (Execution Checklist)
+
+**每次生成任何 knode 课程前，必须按此清单逐项对齐。不允许跳步，不允许凭记忆省略。**
+
+本手册有 1700+ 行，很容易漏读中间章节。这份清单是权威摘要，每个 knode 生成前先回头核对一遍，再去翻对应章节的细节。
+
+### 硬规则（违反即不合格）
+
+1. **顺序执行**：Step 0.5 → 0.7 → 1 → 1.5 → 2 → 3 → 4 → 5 → 5.5 → 6。不得乱序。
+2. **不得跳步**：每一步都必须完成（除非"可跳过"列明允许）。
+3. **对齐清单**：生成前在大脑里跑一遍这张表，确认每一步都有明确产物。
+4. **禁止预合并外部资源**：`plan_markdown` 原文中只写"## 推荐互动资源"（LabXchange），`## 推荐视频` 和 `## 延伸阅读` 由 `make_course_content(research=...)` 自动合并。不要在外部调 `merge_resources_into_plan`。
+5. **acceptance_ref / hands_on_ref 必须原文匹配**：包括末尾句号。差一个字就 preflight 失败。
+
+### 步骤清单
+
+| Step | 必做? | 输入 | 产物 | 章节位置 | 关键规则 |
+|------|:-----:|------|------|---------|---------|
+| **0** 加载上下文 | 必做 | project_name, knode_global_idx | `ctx = {knode, milestone, sub_project}` | 前置信息收集 | 用 `load_knode_context()`，v4.1 字段不得忽略 |
+| **0.5** Tavily 搜索 | 必做 | knode + milestone + 英文 web_query / youtube_query | `research = {web_results, youtube_results}` | Step 0.5 | 每个 knode 都必须调用，不做筛选。youtube_query 必须英文 |
+| **0.7** LabXchange 匹配 | 必做 | keywords 英文列表 + subject_filter | `lx_results = [{title, url, score, ...}]` | Step 0.7 | 本地搜 1467 pathway，top_k=2~4，URL 形如 `/library/pathway/lx-pathway:{uuid}` |
+| **1** 撰写 plan_markdown | 必做 | ctx + core_question + hands_on + acceptance | 800-1500 字 markdown 正文 | Step 1 | 正文必须围绕 core_question；末尾写"## 推荐互动资源"段落列 LabXchange |
+| **1.5** 标注基础理论 theories | 必做 | plan_markdown | `theories = [{theory_id, title, subject, level_bodies, ...}]` + `[[THEORY:xxx]]` 占位符 | Step 1.5 | **每个 knode 2-5 个 theory**（纯方法论节点允许 0 个但需说明理由）。每个 theory 必须带 `level_bodies`，K1 必选 |
+| **2** 抽取 Ideas | 必做 | plan_markdown + difficulty × module_role 表 | ideas 列表（animation / game / exercise） | Step 2 | 按 difficulty × module_role 决定动画/游戏数量，不凭直觉 |
+| **3** Ideas 详细描述 | 必做 | ideas | 每个 idea 的 detailed_description | Step 3 | 每个 idea 说明交互流程、数据结构、视觉要素 |
+| **4** Debate | 必做 | ideas + 详述 | 保留 / 拒绝决策 | Step 4 | 自我质疑：是否重复、是否对应 hands_on、是否过于抽象 |
+| **5** 实现代码 | 必做 | 保留的 ideas | animation HTML / game HTML / exercise JSON | Step 5 | 动画遵守深色主题、100vh、i18n 双语、`animation_runtime.js` |
+| **5.5** Code Review & Verify | 必做 | 动画 HTML 文件 | `node scripts/html_validate.mjs` 全绿 | Step 5.5 | 6 项检查必须全过：无控制台错误/canvas 不黑/无竖向滚动条/按钮与语言切换等 |
+| **6** 组装 & 写入 DB | 必做 | plan + animation + exercises + research + labxchange + theories | `course_content` dict + DB 行 | Step 6 | 用 `make_course_content(..., research=..., labxchange_results=..., theories=...)`。preflight 必须通过 |
+
+### 产物自检清单（Step 6 写入前）
+
+**写入 DB 前必须逐项打勾。任何一条未过都要回头修。**
+
+输入参数检查：
+- [ ] plan_markdown 含 core_question、学习目标、hands_on_components 动作
+- [ ] plan_markdown 末尾有"## 推荐互动资源"LabXchange 段
+- [ ] plan_markdown 未预合并 Tavily 视频/延伸阅读（手写版本里不能出现"## 推荐视频"或"## 延伸阅读"）
+- [ ] theories 列表非空（除非纯方法论节点），每个 theory 有 level_bodies（K1 必选）
+- [ ] `[[THEORY:xxx]]` 占位符已插入对应段落
+- [ ] ideas 数量符合 difficulty × module_role 表
+- [ ] animation HTML 通过 html_validate.mjs 全 6 项
+- [ ] exercises 用 `correct` 字段（不是 `answer`）
+- [ ] `make_course_content` 直接传入 **未经重包装的** `research=research_knode() 返回值`、`labxchange_results=lx`、`theories=theories`
+- [ ] acceptance_ref / hands_on_ref 完全匹配 knode 原文（含句号）
+
+调用 `make_course_content` 后的**输出检查**（不只是看 preflight）：
+- [ ] **检查 `course_content["plan_markdown"]` 末尾是否多了 "## 推荐视频" 段**（当 research 有 youtube_results 时）
+- [ ] **检查 `course_content["plan_markdown"]` 末尾是否多了 "## 延伸阅读" 段**（当 research 有 web_results 时）
+- [ ] 如果上面两项没出现，说明传入的 research dict 结构错误（常见：用了 `web`/`youtube` 而不是 `web_results`/`youtube_results`）
+- [ ] preflight 返回空列表
+
+### 常见遗漏（历史踩坑）
+
+- **research dict 结构错误** (2026-04-09)：`research_knode()` 返回 `{"web_results": ..., "youtube_results": ...}`（带 `_results` 后缀）。不要用 `{"web": ..., "youtube": ...}` 这种 key 名手动包装——`make_course_content` 会读不到内容，结果是 plan_markdown 里没有"## 推荐视频"段落但又不报错。**正确做法：直接把 `research_knode()` 的返回整个传给 `make_course_content` 的 `research=` 参数**。
+- 遗漏 Step 1.5：手册中 Step 1.5 夹在 Step 1 和 Step 2 之间，容易跳过。**每次生成前先对齐清单，确认 theories 已写**。
+- 外部预合并 Tavily：见硬规则 4。
+- acceptance_ref 少句号：见硬规则 5。
+- 忘传 `labxchange_results` 参数：导致 LabXchange 资源不进 DB 的 node_resources 表。
+- exercise 字段用 `answer` 而不是 `correct`：`make_exercises` 会报错。
+
+---
+
 ## 前置信息收集
 
 在开始之前，确认以下输入参数（向用户询问缺失项）：
@@ -68,42 +131,28 @@ sub_project = ctx["sub_project"]  # v4.1 sub_project（含 brief/core_problem/ta
 
 ## Step 0.5: 外部资料研究（Tavily Search）
 
-在动笔写 plan_markdown 之前，**先判断这个 knode 是否值得联网抓取外部资料**。工程、科学、数据、算法、仪器类节点应该联网研究；方法论/项目说明/答辩展示类节点直接跳过。
-
-### 判断标准
-
-`scripts/course_factory.py` 提供 `should_research_knode(knode, milestone)` 工具函数，按下面启发式规则返回 True/False：
-
-1. **显式跳过**：`title` / `summary` 命中"介绍/导入/概述/前置/展示/答辩/学习方法"等方法论关键词 → 跳过
-2. **显式研究**：`title` / `summary` / `hands_on_components` 命中工程科学关键词（`algorithm`/`sensor`/`HiRISE`/`DNA`/`神经元`/`算法`/`地形数据`/`绘制地图`/`火星`/`工程`…） → 研究
-3. **难度托底**：`difficulty_level >= 5` 且（有 `hands_on_components` 或 `module_role in {engineering, application, investigation, implementation, analysis}`）→ 研究
-4. **默认跳过**
-
-Claude Code 在执行时**不要盲目信任启发式**，对判断结果有把握才走启发式；有疑问就读一遍 knode 上下文自己决定。
+在动笔写 plan_markdown 之前，**每个 knode 都必须调用 Tavily 搜索补充外部资料**。搜索结果会自动写入右侧"外部资源"面板。
 
 ### 调用方式
 
 ```python
-from scripts.course_factory import load_knode_context, should_research_knode, research_knode
+from scripts.course_factory import load_knode_context, research_knode
 
 ctx = load_knode_context("mars-risk-map", knode_global_idx=3)
 knode = ctx["knode"]
 milestone = ctx["milestone"]
 sub_project = ctx["sub_project"]
 
-if should_research_knode(knode, milestone):
-    research = research_knode(
-        knode,
-        milestone=milestone,
-        sub_project=sub_project,
-        # 建议显式传入高质量的英文查询词（YouTube 中文查询常常没结果）
-        web_query="Mars HiRISE DEM stereo reconstruction",
-        youtube_query="Mars HiRISE digital elevation model",
-        max_web=4,
-        max_youtube=2,
-    )
-else:
-    research = None  # 跳过联网
+research = research_knode(
+    knode,
+    milestone=milestone,
+    sub_project=sub_project,
+    # 建议显式传入高质量的英文查询词（YouTube 中文查询常常没结果）
+    web_query="Mars HiRISE DEM stereo reconstruction",
+    youtube_query="Mars HiRISE digital elevation model",
+    max_web=4,
+    max_youtube=2,
+)
 ```
 
 返回结构：
@@ -127,14 +176,42 @@ else:
 
 ### 资料如何融入课程
 
-`make_course_content(..., research=research)` 在 Step 6a 会**自动**：
+`make_course_content(..., research=research, labxchange_results=lx_results)` 在 Step 6a 会**自动**：
 
-1. 调用 `merge_resources_into_plan(plan_markdown, research)` 把资料以纯 markdown 形式插入 `plan_markdown`：
+> **重要**：传给 `make_course_content` 的 `plan_markdown` **必须是原始未合并版**——不要在外部预先调用 `merge_resources_into_plan`，否则视频/延伸阅读会被插入两次（重复显示）。
+
+1. 调用 `merge_resources_into_plan(plan_markdown, research)` 把 Tavily 资料以纯 markdown 形式插入 `plan_markdown`：
    - **YouTube 视频**：插入到"## 深入理解"段之后的"## 推荐视频"小节，使用 `[![标题](缩略图 URL)](视频 URL)` 语法——ReactMarkdown 会渲染成可点击的缩略图（点击跳转 YouTube）
    - **网页资料**：追加到文末的"## 延伸阅读"小节，使用 `- [标题](url) — 摘要` 列表
-2. 在 `course_content["external_resources"]` 顶层字段中保留结构化数据，便于前端未来升级为 iframe 嵌入
+2. 在 `course_content["external_resources"]` 顶层字段中保留结构化数据（含 `web_results`、`youtube_results`、`labxchange_results`）
+3. **自动写入 DB**：`_upsert_lesson()` 调用时，自动将 `external_resources` 中的所有资源同步到 `node_resources` 表，在前端右侧"外部资源"面板中展示
 
-不需要任何额外步骤——只要把 `research` 对象透传给 `make_course_content` 即可。
+完整调用示例：
+
+```python
+from scripts.course_factory import search_labxchange, research_knode
+
+# Step 0.5: Tavily 搜索（每个节点都执行）
+research = research_knode(knode, milestone, sub_project,
+                          web_query="Mars terrain traversability analysis",
+                          youtube_query="Mars rover terrain classification tutorial")
+
+# Step 0.7: LabXchange 匹配
+lx_results = search_labxchange(
+    keywords=["mars", "terrain", "rock", "geology"],
+    subject_filter="Earth Science",
+    top_k=3
+)
+
+# Step 6a: 组装（research + labxchange 自动写入 DB 外部资源）
+course_content = make_course_content(
+    ...,
+    research=research,
+    labxchange_results=lx_results,
+)
+```
+
+不需要任何额外步骤——`research` 和 `labxchange_results` 透传给 `make_course_content`，写入 DB 时自动同步到右侧外部资源面板。
 
 ### 质量要求
 
@@ -143,6 +220,165 @@ else:
 - 不要把 research 结果直接贴进 plan_markdown 的叙述段落，让 `merge_resources_into_plan` 自动处理
 - 如果 research 返回的 web_results / youtube_results 都是空的（例如查询词质量差），考虑换一个更通用的查询再跑一次
 - 敏感话题不要联网（例如涉及个人隐私、政治等）
+
+---
+
+## Step 0.7: 外部资源发现（强制步骤）
+
+**本步骤为强制步骤，每次生成课文都必须执行。**
+
+LabXchange (哈佛大学) 拥有 22000+ 高质量教育资源，涵盖几乎所有 STEM 学科。在写 plan_markdown 之前，**必须**在 LabXchange 和 PhET 搜索与当前 knode 相关的资源，将优质资源作为外链或参考纳入课文。
+
+### LabXchange Pathway 学科索引
+
+以下是 LabXchange 的 pathway 主要学科领域及资源数量（截至 2026-04）：
+
+| 学科 | 资源数 | 搜索 URL 模板 |
+|------|--------|--------------|
+| Biological Sciences | 856 | `https://www.labxchange.org/library?t=Subject%3ABiological+Sciences&t=ItemType%3Apathway` |
+| Physics | 250 | `https://www.labxchange.org/library?t=Subject%3APhysics&t=ItemType%3Apathway` |
+| Health Science | 235 | `https://www.labxchange.org/library?t=Subject%3AHealth+Science&t=ItemType%3Apathway` |
+| Earth & Space Science | 228 | `https://www.labxchange.org/library?t=Subject%3AEarth+%26+Space+Science&t=ItemType%3Apathway` |
+| Scientific Process | 213 | `https://www.labxchange.org/library?t=Subject%3AScientific+Process&t=ItemType%3Apathway` |
+| Chemistry | 198 | `https://www.labxchange.org/library?t=Subject%3AChemistry&t=ItemType%3Apathway` |
+| Environmental Science | 173 | `https://www.labxchange.org/library?t=Subject%3AEnvironmental+Science&t=ItemType%3Apathway` |
+| Prepare For Careers | 171 | `https://www.labxchange.org/library?t=Subject%3APrepare+For+Careers&t=ItemType%3Apathway` |
+| Science & Society | 156 | `https://www.labxchange.org/library?t=Subject%3AScience+%26+Society&t=ItemType%3Apathway` |
+| Educator Skills | 132 | `https://www.labxchange.org/library?t=Subject%3AEducator+Skills&t=ItemType%3Apathway` |
+| Data Science | 120 | `https://www.labxchange.org/library?t=Subject%3AData+Science&t=ItemType%3Apathway` |
+| Global Health | 109 | `https://www.labxchange.org/library?t=Subject%3AGlobal+Health&t=ItemType%3Apathway` |
+| Economics | 65 | `https://www.labxchange.org/library?t=Subject%3AEconomics&t=ItemType%3Apathway` |
+| Learner Support | 40 | `https://www.labxchange.org/library?t=Subject%3ALearner+Support&t=ItemType%3Apathway` |
+| Mathematics | 28 | `https://www.labxchange.org/library?t=Subject%3AMathematics&t=ItemType%3Apathway` |
+
+### LabXchange 本地索引与搜索
+
+已预先爬取全部 1467 个 LabXchange pathway 元数据到 `knowledge_base_doc/labxchange_pathways.json`，
+`course_factory.py` 提供 `search_labxchange()` 函数用于本地匹配：
+
+```python
+from scripts.course_factory import search_labxchange
+
+# 从 knode 的 core_question 和学科提取关键词搜索
+results = search_labxchange(
+    keywords=["friction", "force", "motion"],
+    subject_filter="Physics",   # 可选：按学科过滤
+    top_k=5                     # 返回前 N 条
+)
+for r in results:
+    print(f"[{r['score']}] {r['title']}")
+    print(f"  {r['url']}")
+    print(f"  {r['description'][:100]}")
+```
+
+每条结果包含：`title`, `description`, `url`, `subject_tags`, `learning_objectives`, `score`
+
+### 操作流程
+
+1. 从 knode 的 `core_question`、`node_title`、`hands_on_components` 中提取 3-5 个英文关键词
+2. 调用 `search_labxchange(keywords, subject_filter=..., top_k=5)` 获取匹配 pathway
+3. 人工审查结果，选择 1-3 条最相关的 pathway
+4. 在 plan_markdown 的"推荐互动资源"段落中插入外链：
+   `- [LabXchange: {title}]({url}) -- {一句话说明与本课的关联}`
+5. 如果 PhET 有对应的可嵌入 simulation，优先嵌入
+
+### 可用的开放 Simulation 来源
+
+| 来源 | 资源数量 | 许可证 | 嵌入方式 | 资源索引 |
+|------|----------|--------|----------|----------|
+| **PhET** (科罗拉多大学) | 160+ | CC-BY | iframe 直接嵌入 | https://phet.colorado.edu/en/simulations/filter |
+| **Concord Consortium** | 数十个 | 开放 | iframe 直接嵌入 | https://concord.org/our-work/research-projects/ |
+| **LabXchange** (哈佛) | 22000+ 混合资源 | 非统一许可 | 仅外链跳转 | https://www.labxchange.org/library |
+
+### 使用策略
+
+**策略 1: 直接嵌入 PhET/Concord simulation**
+
+PhET 和 Concord 的 simulation 可以作为 `external_simulation` 类型的 idea 直接 iframe 嵌入课程：
+
+```json
+{
+  "idea_id": "ext_sim_xxxx",
+  "mode": "external_simulation",
+  "topic": "摩擦力模拟器",
+  "source": "phet",
+  "embed_url": "https://phet.colorado.edu/sims/html/friction/latest/friction_all.html",
+  "source_page": "https://phet.colorado.edu/en/simulations/friction",
+  "license": "CC-BY-4.0",
+  "context_summary": "PhET 摩擦力交互式模拟，学生可拖动物体观察不同表面的摩擦效果",
+  "user_guide": "拖动上方的书本，观察原子间的摩擦力变化。尝试不同的材质组合。"
+}
+```
+
+rendered_sections 中对应：
+
+```json
+{
+  "ext_sim_xxxx": {
+    "mode": "external_simulation",
+    "status": "ready",
+    "embed_url": "https://phet.colorado.edu/sims/html/friction/latest/friction_all.html",
+    "html": null,
+    "source": "phet",
+    "license": "CC-BY-4.0",
+    "user_guide": "拖动上方的书本..."
+  }
+}
+```
+
+PhET simulation URL 格式：
+- 完整嵌入：`https://phet.colorado.edu/sims/html/{sim-name}/latest/{sim-name}_all.html`
+- 中文版本（如有）：`https://phet.colorado.edu/sims/html/{sim-name}/latest/{sim-name}_zh_CN.html`
+
+常用 PhET simulation 速查（与本项目相关）：
+
+| Simulation | URL slug | 适用 knode |
+|------------|----------|-----------|
+| Friction | `friction` | 摩擦力、通行性 |
+| Forces and Motion | `forces-and-motion-basics` | 力与运动 |
+| Gravity Force Lab | `gravity-force-lab` | 重力 |
+| Proportion Playground | `proportion-playground` | 比例尺 |
+| Wave on a String | `wave-on-a-string` | 传感器信号 |
+| Energy Skate Park | `energy-skate-park-basics` | 坡度与能量 |
+
+**策略 2: 外链跳转（LabXchange 等封闭平台）**
+
+LabXchange 不支持 iframe 嵌入，但其资源质量极高，可以作为**推荐外部资源**链接到 plan_markdown 中：
+
+```markdown
+## 推荐互动资源
+
+如果想要更深入地体验摩擦力模拟实验，可以访问以下资源：
+- [LabXchange: 摩擦力虚拟实验](https://www.labxchange.org/library/items/lb:LabXchange:xxx)
+```
+
+使用 `{{LABXCHANGE_xxx}}` shortcode 格式（需先在 `EXTERNAL_RESOURCE_URLS` 中注册）。
+
+**策略 3: 参考设计，自研实现**
+
+LabXchange 和 PhET 的 simulation 设计可以作为**参考蓝本**，用我们自己的 HTML canvas 重新实现：
+
+1. 访问 LabXchange/PhET 的对应 simulation，观察交互模式和视觉设计
+2. 提取核心交互逻辑（可调节的参数、可视化方式、反馈机制）
+3. 用 animation_runtime.js（主课程）或自包含 HTML（theory）重新实现
+4. 保留原始资源作为 `reference_url`，在代码注释中注明参考来源
+
+### 操作步骤
+
+1. 根据 knode 的 core_question 和学科领域，在 PhET 和 LabXchange 搜索相关 simulation
+2. 评估找到的资源：
+   - **完全匹配**（概念和难度都对）：直接嵌入（PhET）或外链（LabXchange）
+   - **部分匹配**（概念对但难度/场景不对）：参考其设计自研
+   - **无匹配**：跳过，继续用自研 animation/game
+3. 在 plan_markdown 的适当位置插入 `[[IDEA:ext_sim_xxx]]`（嵌入）或推荐链接（外链）
+
+### 质量标准
+
+- PhET 嵌入时必须确认 simulation 存在且 URL 可访问
+- 每个 knode 最多嵌入 1 个外部 simulation（避免喧宾夺主）
+- 外部 simulation 不替代自研 animation/game，而是**补充**
+- 必须提供 `user_guide` 告诉学生如何操作这个 simulation
+- 注明许可证（PhET 是 CC-BY-4.0）
 
 ---
 
@@ -192,6 +428,13 @@ else:
 ## 应用与拓展
 
 [**必须围绕 acceptance_artifacts 展开**：告诉学生本节学完之后要完成哪些具体交付物，以及这些交付物长什么样，100-200 字]
+
+## 推荐互动资源
+
+[**强制段落**：列出 Step 0.7 中找到的 LabXchange/PhET 相关资源链接]
+[格式：`- [资源标题](URL) -- 一句话描述资源内容和使用方式`]
+[至少列出 1 条 LabXchange pathway 或 PhET simulation 链接]
+[如果确实没有相关资源（非 STEM 类 knode），标注"本节暂无推荐外部资源"并说明原因]
 
 ## 学习路径建议
 
@@ -260,7 +503,12 @@ else:
     "theory_id": "theory_friction_basics",
     "title": "摩擦力",
     "subject": "physics",
-    "body_markdown": "## 摩擦力\n\n当两个物体表面接触并相对滑动时，会产生摩擦力...\n\n公式：$f = \\mu N$，其中 $\\mu$ 是摩擦系数，$N$ 是法向力。",
+    "body_markdown": "(K1 版本，最浅显的默认内容)",
+    "level_bodies": [
+      {"level": "K1", "body_markdown": "摩擦力就是你走路时脚底和地面之间的阻力...（纯生活类比，无公式）"},
+      {"level": "K3", "body_markdown": "## 摩擦力\n\n公式：$f = \\mu N$...（可含字母公式）"},
+      {"level": "K5", "body_markdown": "## 摩擦力\n\n库仑摩擦模型 + 动静摩擦分析...（大学级）"}
+    ],
     "animation_html": "<!DOCTYPE html>...(可选，自包含 HTML 动画)...",
     "related_paragraph": "在 plan_markdown 中对应的段落标题或关键句"
   }
@@ -274,9 +522,30 @@ else:
 | `theory_id` | 唯一 ID，格式：`theory_{学科缩写}_{关键词}`，如 `theory_phys_friction` |
 | `title` | 理论名称，5 字以内，如"摩擦力""坐标系""概率" |
 | `subject` | 所属学科：`math` / `physics` / `chemistry` / `biology` / `cs` / `geography` / `other` |
-| `body_markdown` | 理论内容的 Markdown 文本，100-300 字。支持 LaTeX 公式：行内公式用 `$...$`，独立公式用 `$$...$$` |
+| `body_markdown` | 默认内容（= K1 版本），100-300 字，向后兼容 |
+| `level_bodies` | **必填**。按知识等级提供多个版本的 body_markdown（见下方"知识等级"） |
 | `animation_html` | 可选。自包含浅色主题 HTML 动画，用于可视化展示理论概念。前端以 iframe 嵌入在毛玻璃弹窗左侧（7/12 列宽） |
 | `related_paragraph` | 对应 plan_markdown 中的段落标题或关键句，便于定位 |
+
+### 知识等级 (Knowledge Level)
+
+每个 theory 必须提供**至少两个等级**的 body_markdown（K1 必选，另选 1-2 个更高等级）。
+前端根据项目设置中的 `knowledge_level` 自动选择对应等级显示，回退到最近的低等级。
+
+| 等级 | 名称 | 写作规范 |
+|------|------|----------|
+| `K1` | 小学低年级 (1-3年级) | **必选**。纯生活类比，零公式，零字母符号。用"想象你..."开头的场景，100-250 字 |
+| `K2` | 小学高年级 (4-6年级) | 可用简单四则运算（如 10 x 100 = 1000），但不出现字母公式 |
+| `K3` | 初中 | 可用字母公式（$f = \mu N$），基础物理化学概念，需解释每个符号含义 |
+| `K4` | 高中 | 可用三角函数（$\sin\theta$）、向量分解、力学分析，允许更严谨的推导 |
+| `K5` | 大学 | 不限制。微积分、线性代数、概率论等均可 |
+
+**核心原则**：
+
+- `body_markdown`（顶层字段）的内容必须与 K1 版本一致，确保向后兼容
+- K1 版本**绝对不能**出现：$g=9.8$、$W=mg$、$f=\mu N$、$\sin$、积分号等任何数学符号
+- 每个等级版本独立完整，不依赖其他等级的内容
+- 同一个概念在不同等级的解释角度可以不同（K1 用类比，K3 用公式，K5 用推导）
 
 ### Theory Animation 视觉规范（Cognitive Sanctuary 浅色主题）
 
@@ -346,7 +615,7 @@ Theory animation **不使用** `animation_runtime.js`（那是主课程深色主
 
 - **不打断主线**：理论标注是旁注，plan_markdown 的工程叙事即使删掉所有 `[[THEORY:...]]` 也必须完整通顺
 - **精准定位**：`[[THEORY:...]]` 必须插在**第一次出现相关概念**的段落末尾，不要在后续重复插入
-- **适龄表达**：body_markdown 的解释难度匹配 age_range，低龄段用类比和生活例子，高龄段可以引入公式
+- **多等级适配**：每个 theory 必须提供 `level_bodies` 数组，K1 必选；`body_markdown` 顶层字段等于 K1 版本
 - **数量适度**：每个 knode 一般 2-5 个理论标注，不超过 5 个（避免喧宾夺主）
 - **禁止凑数**：如果某个 knode 的内容确实没有可追溯的基础理论（纯方法论/项目说明节点），可以 0 个
 
@@ -404,8 +673,17 @@ animation 和 game 的数量**不设硬性上限**。任何难度和角色的节
 | `game` | 互动操作、参数调节、因果探索、分类排序 | 数量不限，按需创建 |
 | `exercise` | 检测理解、巩固记忆 | **必须有** 1 个 |
 | `story` | 抽象概念引入、历史背景、类比解释 | 可选 |
+| `image` | 真实照片（NASA/Wikimedia/USGS CC-BY/CC0） | 可选，成本低 |
+| `diagram` | 静态示意图（HTML/SVG）—— 坐标系、流程图、对比图 | 可选，成本低 |
 
 **优先级**：game > animation > story。如果只选 1 个富媒体，优先选 game（互动性最强）。
+
+**何时用 image / diagram 替代或补充 animation**：
+
+- **image（真实照片）**：当知识点需要看到"真实的样子"而非"动态过程"时——例如火星车长什么样、NASA 某张标志性火星地貌图、真实的实验装置。可以用 `make_course_content(..., images=[...])` 下载后内联展示。来源必须是 CC-BY/CC0（NASA/JPL、ESA、USGS、Wikimedia Commons），每张图必须提供 `source_url` 和 `license`。
+- **diagram（HTML/SVG 示意图）**：当知识点是静态的概念对比、结构分层、流程图或几何关系时，一张不动的示意图比一段动画更清晰。写成本地 HTML 文件（遵循动画的深色主题或浅色主题皆可），通过 `make_course_content(..., diagrams=[{"html_path": ..., "topic": ...}])` 嵌入。diagram 比 animation 成本低（不需要 totalFrames / 帧间过渡），适合作为 animation 的补充。
+- **image/diagram 不计入 hands_on_components 覆盖**：它们不参与 v4.1 preflight 的 hands_on/acceptance 校验——只是辅助呈现，真正满足验收的仍然是 game/animation/exercise。
+- **推荐组合**：对于低难度节点（d=1 概念类），可以考虑 `1 image + 1 game + 1 exercise`，比传统的 `1 animation + 1 exercise` 更高效且互动性更强。
 
 ### Style Key 选择（10 个可用主题）
 
@@ -1166,10 +1444,15 @@ exercises = make_exercises([
     # ...
 ])
 
-# -- theories (从 Step 1.5 生成) --
+# -- theories (从 Step 1.5 生成，必须包含 level_bodies) --
 theories = [
     {"theory_id": "theory_phys_friction", "title": "摩擦力", "subject": "physics",
-     "body_markdown": "## 摩擦力\n\n当两个物体...", "related_paragraph": "核心概念段"},
+     "body_markdown": "摩擦力就是走路时脚底的阻力...(K1 内容，无公式)",
+     "level_bodies": [
+         {"level": "K1", "body_markdown": "摩擦力就是走路时脚底的阻力...(纯生活类比)"},
+         {"level": "K3", "body_markdown": "## 摩擦力\n\n$f = \\mu N$...(含公式)"},
+     ],
+     "related_paragraph": "核心概念段"},
 ]
 
 # -- 组装：传入 knode 后 preflight 自动生效；传入 research 后自动融入 plan_markdown --
@@ -1303,10 +1586,15 @@ rendered_sections = {
     },
 }
 
-# theories (从 Step 1.5 生成)
+# theories (从 Step 1.5 生成，必须包含 level_bodies)
 theories = [
     {"theory_id": "theory_phys_friction", "title": "摩擦力", "subject": "physics",
-     "body_markdown": "## 摩擦力\n\n...", "related_paragraph": "核心概念段"},
+     "body_markdown": "摩擦力就是走路时脚底的阻力...(K1)",
+     "level_bodies": [
+         {"level": "K1", "body_markdown": "摩擦力就是走路时脚底的阻力...(纯生活类比)"},
+         {"level": "K3", "body_markdown": "## 摩擦力\n\n$f = \\mu N$...(含公式)"},
+     ],
+     "related_paragraph": "核心概念段"},
 ]
 
 course_content = {
@@ -1392,8 +1680,9 @@ PYEOF
 
 ```
 [ ] 前置：已从 knowledge_tree.json 读取 knode 的 v4.1 字段（core_question/hands_on_components/acceptance_*）
-[ ] Step 0.5: 用 `should_research_knode(knode)` 判断是否需要外部资料；工程/科学/算法/数据类节点必须联网，前置说明/答辩类节点跳过
-[ ] Step 0.5: 需要研究时，`research_knode()` 返回的 web_results / youtube_results 至少有一个非空（否则换查询词重试）
+[ ] Step 0.5: 对每个 knode 调用 `research_knode()` 搜索外部资料（不再跳过任何节点）
+[ ] Step 0.5: `research_knode()` 返回的 web_results / youtube_results 至少有一个非空（否则换查询词重试）
+[ ] Step 0.7: 已在 LabXchange/PhET 搜索相关资源，plan_markdown 含"推荐互动资源"段落（至少 1 条链接，或注明无相关资源的原因）
 [ ] Step 1: plan_markdown 800-1500 字，顶部含 "> Module: {module_id} · {module_role}"，core_question 出现在引入段
 [ ] Step 1: 外部资源链接全部使用 `{{KEY}}` shortcode，不含硬编码 URL（grep `https://` 结果应为 0）
 [ ] Step 1: 每条学习目标可追溯到 acceptance_standard 或 hands_on_components 中的原文
@@ -1455,8 +1744,9 @@ PYEOF
 | `load_knode_context(project_name, knode_global_idx) -> dict` | 已就绪 | 一次性加载 `{knode, milestone, sub_project}`，按 global index 展开，未找到抛 `ValueError` |
 | `preflight_v41(knode, course_content) -> list[str]` | 已就绪 | 实现 Step 6.0 的 3 条硬性规则；旧版 knode（无 v4.1 字段）自动跳过 |
 | `make_exercises(items)` 保留 `ref` 字段 | 已就绪 | 题目 item 里写 `"ref": "..."`，会被一一透传到 rendered_sections 的 questions |
-| `make_course_content(..., knode, *_hands_on_ref, *_acceptance_ref, research)` | 已就绪 | 传入 knode 时默认 `preflight=True` 自动校验；传入 research 时自动融入 plan_markdown + external_resources |
-| `should_research_knode(knode, milestone) -> bool` | 已就绪 | 启发式判断节点是否需要联网搜索外部资料 |
+| `make_course_content(..., knode, *_hands_on_ref, *_acceptance_ref, research, labxchange_results)` | 已就绪 | 传入 knode 时默认 `preflight=True` 自动校验；research + labxchange_results 自动融入 plan_markdown + external_resources + DB node_resources |
+| `should_research_knode(knode, milestone) -> bool` | 已就绪 | 始终返回 True（每个节点都搜索外部资料） |
+| `search_labxchange(keywords, subject_filter, top_k) -> list[dict]` | 已就绪 | 本地搜索 1467 个 LabXchange pathway，返回匹配结果（title/description/url/score） |
 | `research_knode(knode, ..., web_query, youtube_query) -> dict` | 已就绪 | 调用 Tavily Search 抓取网页 + YouTube 资料，返回结构化结果 |
 | `merge_resources_into_plan(plan, research) -> str` | 已就绪 | 把资料以纯 markdown 形式注入 plan_markdown（推荐视频 + 延伸阅读） |
 | Gateway API `api_project_detail` 返回 v4.1 字段 | 已就绪 | 前端 / LLM 可以直接读取 `knode.module_id` / `core_question` 等 |

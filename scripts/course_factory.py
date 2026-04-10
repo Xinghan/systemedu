@@ -187,6 +187,93 @@ def _upsert_lesson(project_name: str, knode_id: int, content_type: str,
     finally:
         db.close()
 
+    # 自动同步 external_resources 到 node_resources 表（右侧"外部资源"面板）
+    ext = course_content.get("external_resources")
+    if ext:
+        _sync_external_resources_to_db(project_name, knode_id, ext)
+
+
+def _sync_external_resources_to_db(project_name: str, knode_id: int, ext: dict) -> None:
+    """
+    将 course_content.external_resources 中的所有资源写入 node_resources 表。
+    包含三类来源：Tavily web_results、Tavily youtube_results、LabXchange pathways。
+    已存在的 URL 不会重复插入。
+    """
+    from systemedu.storage.db import get_session
+    from systemedu.education.search_service import NodeResource
+
+    items: list[dict] = []
+
+    # Tavily web results
+    for r in ext.get("web_results", []):
+        if r.get("url"):
+            items.append({
+                "source_type": "web",
+                "title": r.get("title", "") or r["url"],
+                "url": r["url"],
+                "snippet": r.get("snippet", ""),
+                "score": float(r.get("score", 0)),
+            })
+
+    # Tavily YouTube results
+    for r in ext.get("youtube_results", []):
+        if r.get("url"):
+            items.append({
+                "source_type": "youtube",
+                "title": r.get("title", "") or r["url"],
+                "url": r["url"],
+                "snippet": r.get("snippet", ""),
+                "score": float(r.get("score", 0)),
+            })
+
+    # LabXchange pathway results
+    for r in ext.get("labxchange_results", []):
+        if r.get("url"):
+            items.append({
+                "source_type": "labxchange",
+                "title": r.get("title", "") or r["url"],
+                "url": r["url"],
+                "snippet": r.get("description", ""),
+                "score": float(r.get("score", 0)),
+            })
+
+    if not items:
+        return
+
+    db = get_session()
+    try:
+        # 获取该节点已有的 URL 集合，避免重复
+        existing_urls = {
+            row.url
+            for row in db.query(NodeResource).filter_by(
+                project_name=project_name, knode_id=knode_id
+            ).all()
+        }
+
+        added = 0
+        for item in items:
+            if item["url"] in existing_urls:
+                continue
+            db.add(NodeResource(
+                project_name=project_name,
+                knode_id=knode_id,
+                source_type=item["source_type"],
+                title=item["title"],
+                url=item["url"],
+                snippet=item["snippet"],
+                score=item["score"],
+                saved=0,
+                searched_at=datetime.now(),
+            ))
+            existing_urls.add(item["url"])
+            added += 1
+
+        if added > 0:
+            db.commit()
+            console.print(f"[dim]  -> {added} 条外部资源已写入 node_resources 表[/dim]")
+    finally:
+        db.close()
+
 
 def _init_progress(project_name: str, node_count: int) -> None:
     """初始化用户学习进度（第一个节点 available，其余 locked）。"""
@@ -1307,6 +1394,85 @@ EXTERNAL_RESOURCE_URLS: dict[str, dict[str, str]] = {
 
 _SHORTCODE_RE = re.compile(r"\{\{(\w+)\}\}")
 
+# ── LabXchange Pathway 本地索引 ─────────────────────────────────
+_LABXCHANGE_INDEX_PATH = ROOT / "knowledge_base_doc" / "labxchange_pathways.json"
+_labxchange_cache: list[dict] | None = None
+
+
+def _load_labxchange_index() -> list[dict]:
+    """懒加载 LabXchange pathway 索引（首次调用时读入内存）。"""
+    global _labxchange_cache
+    if _labxchange_cache is not None:
+        return _labxchange_cache
+    if not _LABXCHANGE_INDEX_PATH.exists():
+        console.print("[yellow]LabXchange 索引文件不存在，跳过。"
+                       "运行 python scripts/crawl_labxchange_pathways.py 爬取。[/yellow]")
+        _labxchange_cache = []
+        return _labxchange_cache
+    data = json.loads(_LABXCHANGE_INDEX_PATH.read_text("utf-8"))
+    _labxchange_cache = data.get("pathways", [])
+    console.print(f"[dim]LabXchange 索引已加载: {len(_labxchange_cache)} pathways[/dim]")
+    return _labxchange_cache
+
+
+def search_labxchange(keywords: list[str], subject_filter: str | None = None,
+                      top_k: int = 5) -> list[dict]:
+    """
+    在本地 LabXchange pathway 索引中搜索与 keywords 最相关的 pathway。
+
+    匹配逻辑：对每个 pathway 的 title + description + learning_objectives 拼接为文本，
+    计算 keywords 命中数（不区分大小写），按命中数降序排列。
+
+    Args:
+        keywords: 搜索关键词列表，如 ["friction", "force", "motion"]
+        subject_filter: 可选学科过滤，如 "Physics"、"Biological Sciences"
+        top_k: 返回前 N 条结果
+
+    Returns:
+        命中的 pathway 列表，每条含 title, description, url, subject_tags, score
+    """
+    index = _load_labxchange_index()
+    if not index:
+        return []
+
+    kw_lower = [k.lower() for k in keywords]
+    scored: list[tuple[int, dict]] = []
+
+    for pw in index:
+        # 学科过滤
+        if subject_filter:
+            tags_flat = " ".join(pw.get("subject_tags", [])).lower()
+            if subject_filter.lower() not in tags_flat:
+                continue
+
+        # 拼接可搜索文本
+        text_parts = [
+            pw.get("title", ""),
+            pw.get("description", ""),
+        ]
+        for obj in pw.get("learning_objectives", []):
+            if isinstance(obj, str):
+                text_parts.append(obj)
+        searchable = " ".join(text_parts).lower()
+
+        # 计算关键词命中数
+        score = sum(1 for kw in kw_lower if kw in searchable)
+        if score > 0:
+            scored.append((score, pw))
+
+    scored.sort(key=lambda x: -x[0])
+    results = []
+    for score, pw in scored[:top_k]:
+        results.append({
+            "title": pw["title"],
+            "description": pw["description"],
+            "url": pw["url"],
+            "subject_tags": pw["subject_tags"],
+            "learning_objectives": pw.get("learning_objectives", []),
+            "score": score,
+        })
+    return results
+
 
 def expand_resource_shortcodes(text: str) -> str:
     """
@@ -1358,47 +1524,17 @@ def should_research_knode(knode: dict, milestone: dict | None = None) -> bool:
     """
     判断一个知识节点是否应该通过 Tavily 搜索补充外部资料。
 
-    启发式规则（按优先级）：
-    1. 显式跳过：title/summary 命中"介绍/导入/展示"等方法论关键词 → False
-    2. 显式研究：title/summary/hands_on_components 命中科学/工程关键词 → True
-    3. 难度托底：difficulty_level >= 5（中等以上）且 knode 有 hands_on_components 或 module_role in {engineering, application, investigation} → True
-    4. 默认：False（前置说明类节点不需要联网）
+    当前策略：始终返回 True。每个节点都应该通过外部搜索补充资料，
+    搜索结果和 LabXchange pathway 匹配结果会自动写入右侧"外部资源"面板。
 
     参数：
         knode: v4.1 knode dict
         milestone: 所属 milestone dict（可选，用于补充上下文）
 
     返回：
-        True 表示建议调用 research_knode()；False 表示跳过。
+        始终返回 True。
     """
-    title = (knode.get("title", "") or "").lower()
-    summary = (knode.get("summary", "") or "").lower()
-    hands_on_text = " ".join(knode.get("hands_on_components", []) or []).lower()
-    combined = f"{title} {summary} {hands_on_text}"
-
-    # 规则 1: 显式跳过
-    for kw in _SKIP_RESEARCH_KEYWORDS_ZH:
-        if kw in title or kw in summary:
-            return False
-
-    # 规则 2: 关键词命中
-    for kw in _RESEARCH_KEYWORDS_EN:
-        if kw in combined:
-            return True
-    for kw in _RESEARCH_KEYWORDS_ZH:
-        if kw in combined:
-            return True
-
-    # 规则 3: 难度 + 工程角色托底
-    difficulty = int(knode.get("difficulty_level", 0) or 0)
-    module_role = (knode.get("module_role", "") or "").lower()
-    engineering_roles = {"engineering", "application", "investigation", "implementation", "analysis"}
-    if difficulty >= 5 and (
-        knode.get("hands_on_components") or module_role in engineering_roles
-    ):
-        return True
-
-    return False
+    return True
 
 
 def _extract_youtube_id(url: str) -> str | None:
@@ -1573,13 +1709,8 @@ def merge_resources_into_plan(plan_markdown: str, research: dict | None) -> str:
     把 research_knode() 的返回结果融入 plan_markdown。
 
     融入策略（保持纯 markdown，前端 ReactMarkdown 默认可渲染）：
-    - YouTube 视频：插入在"## 深入理解"之后（如果找不到该段，则插在"## 核心概念"后；再没有则附在末尾）。
-      格式：
-        ## 推荐视频
-        [![视频标题](https://img.youtube.com/vi/{id}/hqdefault.jpg)](https://www.youtube.com/watch?v={id})
-        > 点击图片观看：**视频标题** — 简短摘要
-    - 网页资料：追加一个"## 延伸阅读"段落，列表形式：
-        - [**标题**](url) — 一句话摘要
+    - YouTube 视频：追加到"## 推荐视频"段落，使用缩略图嵌入格式（前端渲染为播放器）
+    - 网页资料：追加到"## 延伸阅读"段落，列表形式
 
     如果 research 为 None 或没有任何结果，原样返回 plan_markdown。
     """
@@ -1592,24 +1723,26 @@ def merge_resources_into_plan(plan_markdown: str, research: dict | None) -> str:
 
     text = plan_markdown.rstrip() + "\n"
 
-    # 1. 视频部分（优先插入到"深入理解"之后）
+    # 1. 视频部分（缩略图嵌入格式，前端 ReactMarkdown 渲染为播放器）
     if youtube:
         video_lines: list[str] = ["## 推荐视频", ""]
         for v in youtube:
-            vid = v.get("video_id", "")
             title = v.get("title", "").replace("[", "(").replace("]", ")")
             url = v.get("url", "")
-            snippet = v.get("snippet", "")
-            if not vid or not url:
+            if not url:
                 continue
-            thumb = f"https://img.youtube.com/vi/{vid}/hqdefault.jpg"
-            video_lines.append(f"[![{title}]({thumb})]({url})")
-            video_lines.append("")
-            if snippet:
-                video_lines.append(f"> **{title}** — {snippet}")
+            # 提取 YouTube video ID 生成缩略图
+            vid = ""
+            if "youtu.be/" in url:
+                vid = url.split("youtu.be/")[-1].split("?")[0]
+            elif "v=" in url:
+                vid = url.split("v=")[-1].split("&")[0]
+            if vid:
+                thumb = f"https://img.youtube.com/vi/{vid}/hqdefault.jpg"
+                video_lines.append(f"[![{title}]({thumb})]({url})")
             else:
-                video_lines.append(f"> **{title}** — [在 YouTube 上观看]({url})")
-            video_lines.append("")
+                video_lines.append(f"- [**{title}**]({url})")
+        video_lines.append("")
 
         video_block = "\n".join(video_lines)
 
@@ -1620,7 +1753,6 @@ def merge_resources_into_plan(plan_markdown: str, research: dict | None) -> str:
             idx = text.find(anchor)
             if idx < 0:
                 continue
-            # 找到该段下一个 "## " 同级标题
             search_start = idx + len(anchor)
             next_h2 = text.find("\n## ", search_start)
             insert_pos = next_h2 + 1 if next_h2 >= 0 else len(text)
@@ -1651,16 +1783,118 @@ def merge_resources_into_plan(plan_markdown: str, research: dict | None) -> str:
     return text
 
 
+# ── 静态图片资源支持 ─────────────────────────────────────
+#
+# 除了 animation 和 game 之外，knode 内容还可以包含静态图片：
+#  - image:   互联网照片（NASA, Wikimedia CC0/CC-BY 等），下载到本地
+#  - diagram: Claude 自己写的 HTML/SVG 示意图，本地文件
+#
+# 图片存储策略：`scripts/course_images/<knode_hash>/<filename>`，
+# 由 gateway 的 `/api/course-images` 静态挂载对外服务。
+
+COURSE_IMAGES_DIR = ROOT / "scripts" / "course_images"
+
+
+def download_course_image(
+    src_url: str,
+    knode_key: str,
+    *,
+    filename: str | None = None,
+    timeout: float = 30.0,
+) -> dict:
+    """
+    从互联网下载图片到 `scripts/course_images/<knode_key>/<filename>`。
+
+    参数：
+        src_url: 图片 URL（必须是 http/https）
+        knode_key: 用于命名子目录的标识，例如 `mars-risk-map_5`
+        filename: 目标文件名；为空时从 URL 推断，不含扩展名时追加 `.jpg`
+        timeout: HTTP 请求超时秒数
+
+    返回：
+        {
+            "local_path": "scripts/course_images/<key>/<file>",
+            "web_path":   "/api/course-images/<key>/<file>",
+            "size_bytes": int,
+            "content_type": str,
+        }
+
+    失败时抛出 RuntimeError。
+    """
+    import httpx
+    import hashlib
+    import mimetypes
+    from urllib.parse import urlparse, unquote
+
+    if not src_url.startswith(("http://", "https://")):
+        raise ValueError(f"src_url must be http(s): {src_url}")
+
+    # 推断文件名
+    if not filename:
+        parsed = urlparse(src_url)
+        name = Path(unquote(parsed.path)).name or "image"
+        # 去掉 query string 残留
+        filename = name.split("?")[0] or "image"
+
+    # 如果没有扩展名，先按内容推断
+    suffix = Path(filename).suffix.lower()
+    if not suffix:
+        filename = f"{filename}.jpg"
+        suffix = ".jpg"
+
+    target_dir = COURSE_IMAGES_DIR / knode_key
+    target_dir.mkdir(parents=True, exist_ok=True)
+    target_path = target_dir / filename
+
+    # 若已存在且非空，直接复用
+    if target_path.exists() and target_path.stat().st_size > 0:
+        return {
+            "local_path": str(target_path.relative_to(ROOT)),
+            "web_path": f"/api/course-images/{knode_key}/{filename}",
+            "size_bytes": target_path.stat().st_size,
+            "content_type": mimetypes.guess_type(str(target_path))[0] or "",
+        }
+
+    try:
+        with httpx.Client(timeout=timeout, follow_redirects=True) as client:
+            resp = client.get(src_url, headers={"User-Agent": "SystemEdu CourseFactory/1.0"})
+            resp.raise_for_status()
+            content_type = resp.headers.get("content-type", "").split(";")[0].strip()
+            data = resp.content
+    except Exception as e:
+        raise RuntimeError(f"download_course_image failed for {src_url}: {e}") from e
+
+    if not data:
+        raise RuntimeError(f"download_course_image got empty body for {src_url}")
+
+    # 根据 content-type 重新判断扩展名（如果原 filename 不合理）
+    if content_type and suffix not in (".jpg", ".jpeg", ".png", ".gif", ".webp", ".svg"):
+        ext_from_ct = mimetypes.guess_extension(content_type) or ".jpg"
+        filename = Path(filename).stem + ext_from_ct
+        target_path = target_dir / filename
+
+    target_path.write_bytes(data)
+
+    return {
+        "local_path": str(target_path.relative_to(ROOT)),
+        "web_path": f"/api/course-images/{knode_key}/{filename}",
+        "size_bytes": len(data),
+        "content_type": content_type,
+    }
+
+
 def inject_idea_markers(
     plan_markdown: str,
     anim_id: str | None = None,
     ex_id: str | None = None,
     story_id: str | None = None,
     game_id: str | None = None,
+    image_markers: list[tuple[str, str]] | None = None,
+    diagram_markers: list[tuple[str, str]] | None = None,
 ) -> str:
     """
     在 plan_markdown 中插入 [[IDEA:<id>]] 标记，让前端能在正确位置渲染
-    动画 / 游戏 / 练习题 / 故事段落。
+    动画 / 游戏 / 练习题 / 故事段落 / 静态图片 / 示意图。
 
     插入策略（按二级标题锚点）：
     - story_id  → 插入到 "## 引入" 标题后（情境导入）
@@ -1668,6 +1902,10 @@ def inject_idea_markers(
     - game_id   → 插入到 "## 动手探索" 或 "## 应用与拓展" 之前；找不到则插到
                   anim_id 之后的位置，或 "## 深入理解" 最末
     - ex_id     → 插入到 "## 应用与拓展" 标题后；找不到则追加到末尾
+    - image_markers / diagram_markers: 每项是 (id, anchor) 元组，
+      anchor 是二级或三级标题关键字（如 "## 核心概念"、"### 动手实践"）；
+      支持关键字匹配变体（如 "核心概念" 会匹配 "## 核心概念：xxx"）。
+      anchor 留空字符串时插入到研究资料章节之前。
 
     已存在的相同标记不会重复插入（通过子串检查）。
     """
@@ -1678,20 +1916,25 @@ def inject_idea_markers(
 
     def _insert_after_heading(doc: str, heading_candidates: list[str], marker: str) -> tuple[str, bool]:
         """
-        在首个匹配的二级标题所在行之后插入 marker（独占一段）。
+        在首个匹配的标题所在行之后插入 marker（独占一段）。
+        匹配支持二级（##）和三级（###）标题：候选 "## 动手实践" 会同时匹配
+        `## 动手实践` 和 `### 动手实践` 以及 `## 动手实践：xxx` 等变体。
         返回 (新文档, 是否成功插入)。
         """
+        import re as _re
         if marker in doc:
             return doc, True  # 已存在，视为成功
         for anchor in heading_candidates:
-            idx = doc.find(anchor)
-            if idx < 0:
+            # 去掉 anchor 前的 `## ` 前缀，保留关键字
+            key = anchor.lstrip("#").strip()
+            # 匹配 ##/### 标题行，关键字可后接任意文字（中文冒号、破折号等）
+            pattern = _re.compile(rf"^#{{2,4}}\s+{_re.escape(key)}[^\n]*$", _re.MULTILINE)
+            m = pattern.search(doc)
+            if not m:
                 continue
-            # 找到该行的行尾（下一个 \n）
-            line_end = doc.find("\n", idx)
+            line_end = doc.find("\n", m.end())
             if line_end < 0:
                 line_end = len(doc)
-            # 在行尾后插入独立段落
             new_doc = (
                 doc[: line_end + 1]
                 + "\n"
@@ -1702,58 +1945,79 @@ def inject_idea_markers(
             return new_doc, True
         return doc, False
 
+    def _insert_before_tail_sections(doc: str, marker: str) -> str:
+        """
+        把 marker 插入到正文结尾、研究资料章节之前的位置。
+        研究资料章节包括 "## 推荐视频"、"## 推荐互动资源"、"## 延伸阅读"。
+        找不到时追加到末尾。
+        """
+        tail_anchors = ["## 推荐视频", "## 推荐互动资源", "## 延伸阅读"]
+        earliest = len(doc)
+        for a in tail_anchors:
+            idx = doc.find(a)
+            if idx >= 0 and idx < earliest:
+                earliest = idx
+        if earliest < len(doc):
+            # 在 tail 之前插入
+            return doc[:earliest].rstrip() + "\n\n" + marker + "\n\n" + doc[earliest:]
+        return doc.rstrip() + "\n\n" + marker + "\n"
+
     # 1. story_id → 引入段
     if story_id:
         marker = f"[[IDEA:{story_id}]]"
-        text, _ = _insert_after_heading(text, ["## 引入"], marker)
+        text, _ = _insert_after_heading(text, ["## 引入", "## 情境导入", "## 开场"], marker)
 
-    # 2. anim_id → 深入理解 / 核心概念
+    # 2. anim_id → 深入理解 / 核心概念 / 动手实践
     if anim_id:
         marker = f"[[IDEA:{anim_id}]]"
         text, ok = _insert_after_heading(
-            text, ["## 深入理解", "## 核心概念"], marker
+            text,
+            ["## 深入理解", "## 核心概念", "## 动手实践", "## 动手探索", "## 动手", "## 原理"],
+            marker,
         )
         if not ok:
-            # 完全找不到锚点，追加到末尾
-            text = text.rstrip() + "\n\n" + marker + "\n"
+            # 正文找不到锚点：放到研究资料前，而不是追加到最末尾
+            text = _insert_before_tail_sections(text, marker)
 
     # 3. game_id → 动手探索 / 互动实验 / 应用与拓展 前
-    #    策略：优先放到 "## 动手探索" 之后；其次 "## 应用与拓展" 之前
-    #    如果都找不到，则插在 "## 深入理解" 段的末尾（即 anim 下方）
     if game_id:
         marker = f"[[IDEA:{game_id}]]"
         if marker not in text:
-            # 优先尝试独立章节
             text2, ok = _insert_after_heading(
                 text,
-                ["## 动手探索", "## 互动实验", "## 动手练习"],
+                ["## 动手探索", "## 互动实验", "## 动手练习", "## 动手实践", "## 游戏挑战"],
                 marker,
             )
             if ok:
                 text = text2
             else:
-                # 尝试插入到 "## 应用与拓展" 之前（作为独立段）
-                app_idx = text.find("## 应用与拓展")
-                if app_idx >= 0:
-                    text = (
-                        text[:app_idx]
-                        + marker
-                        + "\n\n"
-                        + text[app_idx:]
-                    )
-                else:
-                    # fallback：追加到末尾（在 exercise 之前会再被追加）
-                    text = text.rstrip() + "\n\n" + marker + "\n"
+                text = _insert_before_tail_sections(text, marker)
 
-    # 4. ex_id → 应用与拓展 / 末尾
+    # 4. ex_id → 应用与拓展 / 练习 / 末尾
     if ex_id:
         marker = f"[[IDEA:{ex_id}]]"
         text, ok = _insert_after_heading(
-            text, ["## 应用与拓展", "## 课堂任务", "## 练习"], marker
+            text,
+            ["## 应用与拓展", "## 课堂任务", "## 练习", "## 动手实践", "## 小测验", "## 巩固"],
+            marker,
         )
         if not ok:
-            # fallback：追加到末尾（在延伸阅读之前会更合适，但末尾也可接受）
-            text = text.rstrip() + "\n\n" + marker + "\n"
+            text = _insert_before_tail_sections(text, marker)
+
+    # 5. image_markers / diagram_markers → 按调用方指定的 anchor 插入
+    for ids_list, kind in ((image_markers or [], "image"), (diagram_markers or [], "diagram")):
+        for item_id, anchor in ids_list:
+            if not item_id:
+                continue
+            marker = f"[[IDEA:{item_id}]]"
+            if marker in text:
+                continue
+            if anchor:
+                text, ok = _insert_after_heading(text, [anchor], marker)
+                if not ok:
+                    text = _insert_before_tail_sections(text, marker)
+            else:
+                text = _insert_before_tail_sections(text, marker)
 
     return text
 
@@ -2118,8 +2382,31 @@ def make_course_content(
     preflight: bool = True,
     # 外部资料（Tavily research_knode() 的返回值）
     research: dict | None = None,
+    # LabXchange 匹配结果（search_labxchange() 的返回值）
+    labxchange_results: list[dict] | None = None,
     # 基础理论标注（Step 1.5 生成的 theories 列表）
     theories: list[dict] | None = None,
+    # 静态图片资源（互联网照片）
+    # 每项 dict 接受以下字段：
+    #   src (必填): 图片 URL（http/https）；调用方已经下载过则可直接传 web_path
+    #   web_path (可选): 若已下载，直接使用本地服务路径 /api/course-images/...
+    #   alt (必填): 替代文本
+    #   caption (可选): 图片说明文字
+    #   source_url (可选): 图片来源页面 URL
+    #   license (可选): 版权信息，如 "CC-BY 4.0 / NASA"
+    #   topic (可选): idea.topic，默认用 caption 或 alt
+    #   anchor (可选): 插入位置的标题关键字（如 "### 动手实践"），默认放研究资料前
+    #   knode_key (可选): 用于图片下载目录；默认从 knode 推断
+    #   hands_on_ref / acceptance_ref (可选): 对齐 v4.1 hands_on_components / acceptance
+    images: list[dict] | None = None,
+    # 静态 HTML 示意图（Claude 自己写的 SVG/HTML 图）
+    # 每项 dict 接受以下字段：
+    #   html_path (必填): 本地 HTML 文件路径（相对 ROOT 或绝对路径）
+    #   topic (必填): 示意图标题，会变成 idea.topic
+    #   caption (可选): 示意图下的说明
+    #   anchor (可选): 插入位置的标题关键字，默认 "## 核心概念"
+    #   hands_on_ref / acceptance_ref (可选): v4.1 对齐
+    diagrams: list[dict] | None = None,
 ) -> dict:
     """
     构造标准 CourseContent dict，供写入数据库。
@@ -2280,14 +2567,133 @@ def make_course_content(
             "generation_backend": "",
         }
 
+    # 5. 静态图片（image）
+    image_markers: list[tuple[str, str]] = []
+    if images:
+        # 推断 knode_key（用于图片本地子目录）：优先 knode.project_name + knode_index，
+        # 否则 fallback 到 knode.id 或 "shared"
+        default_key = "shared"
+        if knode is not None:
+            key_parts = []
+            proj = knode.get("project_name") or ""
+            if proj:
+                key_parts.append(str(proj))
+            idx = knode.get("knode_index") if "knode_index" in knode else knode.get("id")
+            if idx is not None:
+                key_parts.append(str(idx))
+            if key_parts:
+                default_key = "_".join(key_parts)
+
+        for img in images:
+            img_id = _id("img")
+            anchor = img.get("anchor", "")
+            alt = img.get("alt", "")
+            caption = img.get("caption", "")
+            source_url = img.get("source_url", "")
+            license_txt = img.get("license", "")
+            topic = img.get("topic") or caption or alt or "静态图片"
+            knode_key = img.get("knode_key") or default_key
+
+            # web_path 优先级：
+            #   1. 显式传入 web_path（已下载的本地图片）
+            #   2. src 是 /api/... 开头 → 视为已经是 web 路径
+            #   3. src 是 http(s):// → 下载到本地
+            web_path = img.get("web_path", "")
+            src = img.get("src", "")
+            if not web_path:
+                if src.startswith("/api/course-images/") or src.startswith("/static/"):
+                    web_path = src
+                elif src.startswith(("http://", "https://")):
+                    info = download_course_image(src, knode_key, filename=img.get("filename"))
+                    web_path = info["web_path"]
+                else:
+                    raise ValueError(f"image entry must provide web_path or http(s) src: {img}")
+
+            img_idea: dict = {
+                "idea_id": img_id,
+                "mode": "image",
+                "topic": topic,
+                "context_summary": caption or alt or topic,
+                "generation_backend": "",
+                "style_key": "",
+                "mode_reason": "概念用静态图片比动画更高效",
+            }
+            if "hands_on_ref" in img:
+                img_idea["hands_on_ref"] = img["hands_on_ref"]
+            if "acceptance_ref" in img:
+                img_idea["acceptance_ref"] = img["acceptance_ref"]
+            ideas.append(img_idea)
+            rendered_sections[img_id] = {
+                "mode": "image",
+                "status": "ready",
+                "html": None,
+                "story_paragraphs": None,
+                "exercises": None,
+                "generation_backend": "",
+                "src": web_path,
+                "alt": alt,
+                "caption": caption,
+                "source_url": source_url,
+                "license": license_txt,
+            }
+            image_markers.append((img_id, anchor))
+
+    # 6. 静态 HTML 示意图（diagram）
+    diagram_markers: list[tuple[str, str]] = []
+    if diagrams:
+        for d in diagrams:
+            dia_id = _id("diagram")
+            html_path = d.get("html_path")
+            if not html_path:
+                raise ValueError("diagram entry must provide html_path")
+            p = Path(html_path)
+            if not p.is_absolute():
+                p = ROOT / p
+            if not p.exists():
+                raise FileNotFoundError(f"diagram html not found: {p}")
+            html_text = p.read_text(encoding="utf-8")
+            # 示意图 iframe 尺寸较小，也可能需要 resize patch
+            html_text = fix_nonuniform_scale_in_html(html_text)
+            html_text = inject_animation_resize_patch(html_text)
+
+            topic = d.get("topic") or "示意图"
+            anchor = d.get("anchor", "## 核心概念")
+            caption = d.get("caption", "")
+            dia_idea: dict = {
+                "idea_id": dia_id,
+                "mode": "diagram",
+                "topic": topic,
+                "context_summary": caption or topic,
+                "generation_backend": "html_static",
+                "style_key": "",
+                "mode_reason": "概念用静态示意图比动画更直观",
+            }
+            if "hands_on_ref" in d:
+                dia_idea["hands_on_ref"] = d["hands_on_ref"]
+            if "acceptance_ref" in d:
+                dia_idea["acceptance_ref"] = d["acceptance_ref"]
+            ideas.append(dia_idea)
+            rendered_sections[dia_id] = {
+                "mode": "diagram",
+                "status": "ready",
+                "html": html_text,
+                "story_paragraphs": None,
+                "exercises": None,
+                "generation_backend": "html_static",
+                "caption": caption,
+            }
+            diagram_markers.append((dia_id, anchor))
+
     # 在 plan_markdown 中插入 [[IDEA:...]] 标记，让前端能在正确位置渲染
-    # animation / game / exercise / story。没有标记时前端无法显示这些互动内容。
+    # animation / game / exercise / story / image / diagram。没有标记时前端无法显示。
     plan_markdown = inject_idea_markers(
         plan_markdown,
         anim_id=anim_id,
         ex_id=ex_id,
         story_id=story_id,
         game_id=game_id,
+        image_markers=image_markers,
+        diagram_markers=diagram_markers,
     )
 
     course_content = {
@@ -2300,15 +2706,18 @@ def make_course_content(
     if theories:
         course_content["theories"] = theories
 
-    # 外部资料结构化字段（前端未来可以直接 iframe 嵌入；当前前端会忽略此字段）
+    # 外部资料结构化字段：合并 Tavily 搜索 + LabXchange 匹配
+    ext: dict = {}
     if research:
-        course_content["external_resources"] = {
-            "web_query": research.get("web_query", ""),
-            "youtube_query": research.get("youtube_query", ""),
-            "web_results": research.get("web_results", []),
-            "youtube_results": research.get("youtube_results", []),
-            "researched_at": research.get("researched_at", ""),
-        }
+        ext["web_query"] = research.get("web_query", "")
+        ext["youtube_query"] = research.get("youtube_query", "")
+        ext["web_results"] = research.get("web_results", [])
+        ext["youtube_results"] = research.get("youtube_results", [])
+        ext["researched_at"] = research.get("researched_at", "")
+    if labxchange_results:
+        ext["labxchange_results"] = labxchange_results
+    if ext:
+        course_content["external_resources"] = ext
 
     # v4.1 自动校验
     if preflight and knode is not None:
