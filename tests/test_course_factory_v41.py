@@ -905,3 +905,229 @@ class TestTheories:
             theories=[],
         )
         assert "theories" not in cc
+
+
+# ── images / diagrams 支持 ───────────────────────────────────────
+
+
+class TestImagesAndDiagrams:
+    """静态图片（image）和 HTML 示意图（diagram）作为第三类 idea。"""
+
+    def _minimal_plan(self, knode: dict) -> str:
+        return (
+            "> Module: M01\n\n## 学习目标\n\n- 目标 1\n\n"
+            + f"## 引入\n\n{knode['core_question']}\n\n"
+            + "## 核心概念\n\n概念段。\n\n"
+            + "## 深入理解\n\n"
+            + f"浏览并筛选真实火星图像样本。笔记就是{knode['acceptance_artifacts'][0]['title']}。\n\n"
+            + "## 应用与拓展\n\n在样例图上手工圈出危险区域并写理由。\n"
+        )
+
+    def test_image_via_web_path_no_download(self, tmp_path):
+        """web_path 直接传入时，不应触发下载。"""
+        knode = _v41_knode()
+        plan = self._minimal_plan(knode)
+        cc = make_course_content(
+            plan_markdown=plan,
+            animation_html=None,
+            animation_topic="",
+            exercises=make_exercises([
+                {"question": "Q1", "options": ["A", "B", "C", "D"], "correct": 0,
+                 "explanation": "E1"},
+            ]),
+            exercise_topic="练习",
+            knode=knode,
+            exercise_hands_on_ref="在样例图上手工圈出危险区域并写理由",
+            exercise_acceptance_ref="学生能够现场说明并演示本模块中的至少两项动手动作",
+            images=[
+                {
+                    "web_path": "/api/course-images/test/rover.jpg",
+                    "alt": "NASA 火星车 Curiosity",
+                    "caption": "Curiosity 在 Gale 撞击坑拍摄的自拍",
+                    "source_url": "https://mars.nasa.gov/",
+                    "license": "Public Domain / NASA-JPL",
+                    "anchor": "## 核心概念",
+                },
+            ],
+        )
+        img_ideas = [i for i in cc["ideas"] if i["mode"] == "image"]
+        assert len(img_ideas) == 1
+        img = img_ideas[0]
+        assert img["topic"]  # 有标题
+        iid = img["idea_id"]
+        sec = cc["rendered_sections"][iid]
+        assert sec["mode"] == "image"
+        assert sec["src"] == "/api/course-images/test/rover.jpg"
+        assert sec["alt"] == "NASA 火星车 Curiosity"
+        assert sec["license"].startswith("Public Domain")
+        # 占位符应该插入到"## 核心概念"之后
+        pm = cc["plan_markdown"]
+        marker = f"[[IDEA:{iid}]]"
+        assert marker in pm
+        assert pm.index("## 核心概念") < pm.index(marker)
+
+    def test_image_requires_src_or_web_path(self):
+        """image 条目必须提供 web_path 或 http(s) src。"""
+        knode = _v41_knode()
+        plan = self._minimal_plan(knode)
+        with pytest.raises(ValueError, match="web_path or http"):
+            make_course_content(
+                plan_markdown=plan,
+                animation_html=None,
+                animation_topic="",
+                exercises=make_exercises([
+                    {"question": "Q1", "options": ["A", "B", "C", "D"], "correct": 0,
+                     "explanation": "E1"},
+                ]),
+                exercise_topic="练习",
+                knode=knode,
+                exercise_hands_on_ref="在样例图上手工圈出危险区域并写理由",
+                exercise_acceptance_ref="学生能够现场说明并演示本模块中的至少两项动手动作",
+                images=[{"alt": "broken"}],  # 没 src 也没 web_path
+            )
+
+    def test_diagram_from_local_html(self, tmp_path):
+        """diagram 从本地 HTML 文件读取并注入 resize patch。"""
+        knode = _v41_knode()
+        plan = self._minimal_plan(knode)
+
+        # 构造一个最小的 diagram HTML（含 canvas + resize 函数，便于 patch 注入）
+        diagram_html = """<!DOCTYPE html><html><head><title>diag</title></head>
+<body><canvas id="c" width="400" height="300"></canvas>
+<script>
+const c = document.getElementById('c');
+const ctx = c.getContext('2d');
+function resize() { c.width = 400; c.height = 300; }
+function draw() { ctx.fillStyle = '#fff'; ctx.fillRect(0,0,400,300); }
+resize(); draw();
+</script></body></html>"""
+        html_file = tmp_path / "diag.html"
+        html_file.write_text(diagram_html, encoding="utf-8")
+
+        cc = make_course_content(
+            plan_markdown=plan,
+            animation_html=None,
+            animation_topic="",
+            exercises=make_exercises([
+                {"question": "Q1", "options": ["A", "B", "C", "D"], "correct": 0,
+                 "explanation": "E1"},
+            ]),
+            exercise_topic="练习",
+            knode=knode,
+            exercise_hands_on_ref="在样例图上手工圈出危险区域并写理由",
+            exercise_acceptance_ref="学生能够现场说明并演示本模块中的至少两项动手动作",
+            diagrams=[
+                {
+                    "html_path": str(html_file),
+                    "topic": "坐标系示意图",
+                    "caption": "展示网格坐标的基本概念",
+                    "anchor": "## 核心概念",
+                },
+            ],
+        )
+        diag_ideas = [i for i in cc["ideas"] if i["mode"] == "diagram"]
+        assert len(diag_ideas) == 1
+        d = diag_ideas[0]
+        assert d["topic"] == "坐标系示意图"
+        assert d["generation_backend"] == "html_static"
+        did = d["idea_id"]
+        sec = cc["rendered_sections"][did]
+        assert sec["mode"] == "diagram"
+        assert sec["html"] is not None
+        assert "<canvas" in sec["html"]
+        assert sec["caption"] == "展示网格坐标的基本概念"
+        # 占位符应该插到 "## 核心概念" 之后
+        marker = f"[[IDEA:{did}]]"
+        assert marker in cc["plan_markdown"]
+        assert cc["plan_markdown"].index("## 核心概念") < cc["plan_markdown"].index(marker)
+
+    def test_diagram_missing_file_raises(self, tmp_path):
+        knode = _v41_knode()
+        plan = self._minimal_plan(knode)
+        with pytest.raises(FileNotFoundError):
+            make_course_content(
+                plan_markdown=plan,
+                animation_html=None,
+                animation_topic="",
+                exercises=make_exercises([
+                    {"question": "Q1", "options": ["A", "B", "C", "D"], "correct": 0,
+                     "explanation": "E1"},
+                ]),
+                exercise_topic="练习",
+                knode=knode,
+                exercise_hands_on_ref="在样例图上手工圈出危险区域并写理由",
+                exercise_acceptance_ref="学生能够现场说明并演示本模块中的至少两项动手动作",
+                diagrams=[
+                    {
+                        "html_path": str(tmp_path / "does_not_exist.html"),
+                        "topic": "缺失的示意图",
+                    },
+                ],
+            )
+
+    def test_image_and_diagram_together(self, tmp_path):
+        """同一个 knode 可以同时有 image 和 diagram，exercise 依然独立。"""
+        knode = _v41_knode()
+        plan = self._minimal_plan(knode)
+
+        html_file = tmp_path / "diag.html"
+        html_file.write_text(
+            "<!DOCTYPE html><html><body><svg><rect width='10' height='10'/></svg></body></html>",
+            encoding="utf-8",
+        )
+        cc = make_course_content(
+            plan_markdown=plan,
+            animation_html=None,
+            animation_topic="",
+            exercises=make_exercises([
+                {"question": "Q1", "options": ["A", "B", "C", "D"], "correct": 0,
+                 "explanation": "E1"},
+            ]),
+            exercise_topic="练习",
+            knode=knode,
+            exercise_hands_on_ref="在样例图上手工圈出危险区域并写理由",
+            exercise_acceptance_ref="学生能够现场说明并演示本模块中的至少两项动手动作",
+            images=[{
+                "web_path": "/api/course-images/shared/curiosity.jpg",
+                "alt": "火星车",
+                "caption": "NASA Curiosity",
+                "anchor": "## 核心概念",
+            }],
+            diagrams=[{
+                "html_path": str(html_file),
+                "topic": "坐标系",
+                "anchor": "## 深入理解",
+            }],
+        )
+        modes = [i["mode"] for i in cc["ideas"]]
+        assert "image" in modes
+        assert "diagram" in modes
+        assert "exercise" in modes
+        # 每条都有对应的 rendered_section
+        for idea in cc["ideas"]:
+            assert idea["idea_id"] in cc["rendered_sections"]
+
+    def test_image_does_not_trigger_preflight_ref_check(self):
+        """image idea 不需要 hands_on_ref/acceptance_ref，preflight 应放行。"""
+        knode = _v41_knode()
+        plan = self._minimal_plan(knode)
+        # 只靠 exercise 覆盖一条 hands_on；image 不参与 ref 校验
+        cc = make_course_content(
+            plan_markdown=plan,
+            animation_html=None,
+            animation_topic="",
+            exercises=make_exercises([
+                {"question": "Q1", "options": ["A", "B", "C", "D"], "correct": 0,
+                 "explanation": "E1"},
+            ]),
+            exercise_topic="练习",
+            knode=knode,
+            exercise_hands_on_ref="在样例图上手工圈出危险区域并写理由",
+            exercise_acceptance_ref="学生能够现场说明并演示本模块中的至少两项动手动作",
+            images=[{
+                "web_path": "/api/course-images/x/y.jpg",
+                "alt": "x",
+            }],
+        )
+        # 没抛异常 → preflight pass
+        assert any(i["mode"] == "image" for i in cc["ideas"])

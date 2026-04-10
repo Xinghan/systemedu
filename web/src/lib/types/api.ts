@@ -1,5 +1,16 @@
 /** Gateway API type definitions. */
 
+/** Knowledge level identifiers, ordered from easiest to hardest. */
+export type KnowledgeLevel = "K1" | "K2" | "K3" | "K4" | "K5"
+
+export const KNOWLEDGE_LEVEL_LABELS: Record<KnowledgeLevel, string> = {
+  K1: "小学低年级",
+  K2: "小学高年级",
+  K3: "初中",
+  K4: "高中",
+  K5: "大学",
+}
+
 export interface StatusResponse {
   version: string
   running: boolean
@@ -63,6 +74,7 @@ export interface ProjectSummary {
   path: string
   cover_image_url?: string | null
   icon_svg?: string | null
+  knowledge_level?: KnowledgeLevel
 }
 
 export interface KnodeInfo {
@@ -415,8 +427,14 @@ export interface LessonStatusesResponse {
 
 // --- Course v2 types (multi-agent pipeline) ---
 
-export type CourseIdeaMode = "animation" | "game" | "story" | "exercise"
-export type CourseGenerationBackend = "manim" | "html_svg" | ""
+export type CourseIdeaMode =
+  | "animation"
+  | "game"
+  | "story"
+  | "exercise"
+  | "image"
+  | "diagram"
+export type CourseGenerationBackend = "manim" | "html_svg" | "html_static" | ""
 
 export interface CourseIdeaSummary {
   idea_id: string
@@ -454,6 +472,12 @@ export interface RenderedSection {
   exercises: InlineExercise[] | null
   generation_backend?: CourseGenerationBackend
   user_guide?: string
+  // image mode (静态图片)
+  src?: string
+  alt?: string
+  caption?: string
+  source_url?: string
+  license?: string
 }
 
 export interface CourseSection {
@@ -464,13 +488,22 @@ export interface CourseSection {
   audio_url: string
 }
 
+/** A single level-specific body for a theory entry. */
+export interface TheoryLevelBody {
+  level: KnowledgeLevel
+  body_markdown: string
+}
+
 export interface TheoryEntry {
   theory_id: string
   title: string
   subject: string
+  /** Default body (shown when no level-specific body matches). */
   body_markdown: string
   related_paragraph?: string
   animation_html?: string
+  /** Level-specific bodies. Front-end picks the one matching project level. */
+  level_bodies?: TheoryLevelBody[]
 }
 
 export interface CourseContent {

@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=Inter:wght@400;500&family=Noto+Sans+SC:wght@400;700&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box;}
+html,body{width:100%;height:100vh;overflow:hidden;}
+body{background:var(--bg,#0c0e12);color:var(--text,#f6f6fc);font-family:'Inter','Noto Sans SC',sans-serif;display:flex;flex-direction:column;}
+.wrapper{display:flex;flex-direction:column;height:100vh;overflow:hidden;}
+.header{padding:12px 16px 8px;display:flex;justify-content:space-between;align-items:center;}
+.header h1{font-family:'Space Grotesk',sans-serif;font-size:clamp(14px,2vw,18px);font-weight:700;letter-spacing:-0.02em;color:var(--primary,#ffb59c);text-shadow:0 0 15px var(--glow,rgba(255,181,156,0.3));}
+.header .sub{font-size:11px;color:var(--muted,#aaabb0);letter-spacing:0.1em;text-transform:uppercase;}
+.canvas-wrap{flex:1;min-height:0;position:relative;}
+canvas{width:100%;height:100%;display:block;}
+.controls{display:flex;justify-content:center;align-items:center;gap:12px;padding:8px 16px;}
+.ctrl-btn{font-family:'Space Grotesk',sans-serif;font-size:12px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;padding:6px 18px;border:none;cursor:pointer;color:#1a0e08;background:linear-gradient(135deg,#ffb59c,#ff8a6a);transition:transform 0.1s,box-shadow 0.2s;box-shadow:0 0 12px rgba(255,181,156,0.3);}
+.ctrl-btn:hover{transform:scale(1.04);}
+.ctrl-btn:active{transform:scale(0.96);}
+.ctrl-btn.secondary{background:rgba(23,26,31,0.92);color:#aaabb0;box-shadow:none;backdrop-filter:blur(12px);}
+.ctrl-btn.secondary:hover{color:#ffb59c;}
+.hud{height:48px;display:flex;align-items:center;justify-content:space-around;background:rgba(0,0,0,0.55);backdrop-filter:blur(12px);padding:0 16px;}
+.hud-item{text-align:center;}
+.hud-label{font-family:'Space Grotesk',sans-serif;font-size:9px;letter-spacing:0.15em;text-transform:uppercase;color:#aaabb0;}
+.hud-val{font-family:'Space Grotesk',sans-serif;font-size:14px;font-weight:700;color:#ffb59c;}
+.lang-btn{position:fixed;top:8px;left:8px;z-index:100;font-family:'Space Grotesk',sans-serif;font-size:11px;font-weight:700;padding:4px 10px;cursor:pointer;border:none;background:rgba(20,20,35,0.85);backdrop-filter:blur(12px);color:#ffb59c;letter-spacing:1px;}
+.guide-panel{position:fixed;top:8px;right:8px;width:240px;max-height:40vh;overflow-y:auto;background:rgba(20,20,35,0.85);backdrop-filter:blur(12px);padding:12px;z-index:100;font-family:'Noto Sans SC',sans-serif;font-size:12px;color:rgba(255,255,255,0.85);line-height:1.6;}
+.guide-panel h3{font-family:'Space Grotesk',sans-serif;font-size:13px;margin-bottom:6px;color:#ffb59c;cursor:pointer;display:flex;justify-content:space-between;align-items:center;}
+.guide-panel ul{padding-left:14px;}
+.guide-panel .collapsed{display:none;}
+</style>
+</head>
+<body>
+<button class="lang-btn" id="langBtn">CN</button>
+<div class="guide-panel" id="guide"><h3 id="guideTitle"></h3><div class="guide-content" id="guideContent"></div></div>
+<div class="wrapper">
+<div class="header"><div><h1 id="title"></h1><div class="sub" id="subtitle"></div></div><div id="frameIndicator" style="font-family:'Space Grotesk';font-size:11px;color:#aaabb0;letter-spacing:0.1em;"></div></div>
+<div class="canvas-wrap"><canvas id="c"></canvas></div>
+<div class="controls">
+<button class="ctrl-btn secondary" id="btnPrev"></button>
+<button class="ctrl-btn" id="btnPlay"></button>
+<button class="ctrl-btn secondary" id="btnNext"></button>
+</div>
+<div class="hud">
+<div class="hud-item"><div class="hud-label" id="hudL1"></div><div class="hud-val" id="hudV1"></div></div>
+<div class="hud-item"><div class="hud-label" id="hudL2"></div><div class="hud-val" id="hudV2"></div></div>
+<div class="hud-item"><div class="hud-label" id="hudL3"></div><div class="hud-val" id="hudV3"></div></div>
+<div class="hud-item"><div class="hud-label" id="hudL4"></div><div class="hud-val" id="hudV4"></div></div>
+</div>
+</div>
+<script src="animation_runtime.js"></script>
+<script>
+var CONFIG = {
+  style: 'ares_mission',
+  totalFrames: 4,
+  i18n: {
+    title:    {en:'DISTANCE & DIRECTION', cn:'距离与方向'},
+    subtitle: {en:'HOW FAR, WHICH WAY', cn:'有多远，往哪走'},
+
+    f0_title: {en:'TWO POINTS ON A GRID', cn:'网格上的两个点'},
+    f0_desc:  {en:'How far apart are they? Which way?', cn:'它们离多远？往哪个方向？'},
+    f1_title: {en:'COUNT THE CELLS', cn:'数格子'},
+    f1_desc:  {en:'3 right + 2 up = 5 cells of travel', cn:'右 3 格 + 上 2 格 = 走 5 格'},
+    f2_title: {en:'STRAIGHT LINE DISTANCE', cn:'直线距离'},
+    f2_desc:  {en:'Diagonal is shorter than path along grid', cn:'对角线比沿格走要短'},
+    f3_title: {en:'MARS ROVER NAVIGATION', cn:'火星车导航'},
+    f3_desc:  {en:'Distance + direction = move command', cn:'距离 + 方向 = 行动命令'},
+
+    hudL1k:{en:'POINTS',cn:'坐标'}, hudL2k:{en:'GRID DIST',cn:'格数'}, hudL3k:{en:'DIRECTION',cn:'方向'}, hudL4k:{en:'STEP',cn:'步骤'},
+    none:{en:'—',cn:'—'}, two:{en:'2',cn:'2'},
+    n5:{en:'5',cn:'5'}, n36:{en:'3.6',cn:'3.6'},
+    north_east:{en:'NE',cn:'东北'}, straight:{en:'STRAIGHT',cn:'直线'}, command:{en:'COMMAND',cn:'命令'},
+    s1:{en:'1/4',cn:'1/4'}, s2:{en:'2/4',cn:'2/4'}, s3:{en:'3/4',cn:'3/4'}, s4:{en:'4/4',cn:'4/4'},
+
+    guideTitle:{en:'OBSERVE',cn:'观察要点'},
+    g1:{en:'Two points look close but the real distance depends on cell count',cn:'两点看似近，但真实距离取决于格子数量'},
+    g2:{en:'Right+Up counts give the Manhattan distance',cn:'向右和向上的格数相加就是曼哈顿距离'},
+    g3:{en:'Diagonal straight-line distance is shorter than grid travel',cn:'对角直线距离比沿格走更短'},
+    g4:{en:'A Mars rover needs both distance and heading to move',cn:'火星车必须同时知道距离和方向才能行动'},
+  },
+  hudLabels: ['hudL1k','hudL2k','hudL3k','hudL4k'],
+  hudValues: [
+    ['two','none','none','s1'],
+    ['two','n5','north_east','s2'],
+    ['two','n36','straight','s3'],
+    ['two','n36','command','s4'],
+  ],
+  guideTitle:'guideTitle',
+  guideItems:['g1','g2','g3','g4'],
+};
+
+function drawBg(ctx, W, H) {
+  var PAL = AnimRuntime.PAL;
+  var grd = ctx.createLinearGradient(0,0,0,H);
+  grd.addColorStop(0, PAL.bg);
+  grd.addColorStop(1, PAL.bg2 || '#0a0c10');
+  ctx.fillStyle = grd;
+  ctx.fillRect(0,0,W,H);
+}
+
+function drawGrid(ctx, ox, oy, cell, rows, cols) {
+  ctx.strokeStyle = 'rgba(255,255,255,0.12)';
+  ctx.lineWidth = 1;
+  for (var r=0; r<=rows; r++){
+    ctx.beginPath(); ctx.moveTo(ox, oy+r*cell); ctx.lineTo(ox+cols*cell, oy+r*cell); ctx.stroke();
+  }
+  for (var c=0; c<=cols; c++){
+    ctx.beginPath(); ctx.moveTo(ox+c*cell, oy); ctx.lineTo(ox+c*cell, oy+rows*cell); ctx.stroke();
+  }
+}
+
+function drawMarker(ctx, cx, cy, radius, color, label){
+  ctx.save();
+  ctx.shadowColor = color; ctx.shadowBlur = 12;
+  ctx.fillStyle = color;
+  ctx.beginPath(); ctx.arc(cx, cy, radius, 0, Math.PI*2); ctx.fill();
+  ctx.shadowBlur = 0;
+  if (label){
+    ctx.font = '700 '+Math.max(9, radius*0.9)+'px "Space Grotesk"';
+    ctx.fillStyle = '#0c0e12'; ctx.textAlign='center'; ctx.textBaseline='middle';
+    ctx.fillText(label, cx, cy+1);
+  }
+  ctx.restore();
+}
+
+function getFrameElements(f, W, H){
+  var PAL = AnimRuntime.PAL;
+  var t = AnimRuntime.t;
+  var els = [];
+  var titles = ['f0_title','f1_title','f2_title','f3_title'];
+  var descs  = ['f0_desc','f1_desc','f2_desc','f3_desc'];
+
+  /* Title */
+  els.push({id:'title_text', type:'custom', x:W*0.5, y:H*0.09, w:1, h:1, draw:function(ctx, el){
+    ctx.font = '700 '+Math.max(15,W*0.026)+'px "Space Grotesk"';
+    ctx.fillStyle = PAL.text; ctx.textAlign='center';
+    ctx.fillText(t(titles[f]), el.x, el.y);
+    ctx.font = '400 '+Math.max(10,W*0.015)+'px "Noto Sans SC"';
+    ctx.fillStyle = PAL.muted;
+    ctx.fillText(t(descs[f]), el.x, el.y+22);
+  }});
+
+  var ROWS = 6, COLS = 6;
+  var cell = Math.min((W*0.6)/COLS, (H*0.55)/ROWS);
+  var gridW = COLS*cell, gridH = ROWS*cell;
+  var ox = (W - gridW)/2;
+  var oy = H*0.22;
+
+  /* Two points A=(1,1) B=(4,3) — displayed as row,col — but we render: A bottom-left region, B top-right region */
+  var Ar=4, Ac=1, Br=2, Bc=4;
+  var ax = ox + Ac*cell + cell/2;
+  var ay = oy + Ar*cell + cell/2;
+  var bx = ox + Bc*cell + cell/2;
+  var by = oy + Br*cell + cell/2;
+
+  /* Frame 0: bare grid with A and B only */
+  if (f === 0){
+    els.push({id:'grid', type:'custom', x:0, y:0, w:W, h:H, draw:function(ctx){
+      drawGrid(ctx, ox, oy, cell, ROWS, COLS);
+      drawMarker(ctx, ax, ay, cell*0.28, PAL.primary, 'A');
+      drawMarker(ctx, bx, by, cell*0.28, PAL.secondary || '#6ea8fe', 'B');
+
+      /* question mark in middle */
+      ctx.font = '700 '+Math.max(14, cell*0.42)+'px "Space Grotesk"';
+      ctx.fillStyle = 'rgba(255,255,255,0.55)';
+      ctx.textAlign='center';
+      ctx.fillText('?', (ax+bx)/2, (ay+by)/2 - cell*0.2);
+
+      var msg = AnimRuntime.lang==='en' ? 'How many cells from A to B?' : '从A到B有几格？';
+      ctx.font = '500 '+Math.max(11, cell*0.28)+'px "Noto Sans SC"';
+      ctx.fillStyle = PAL.text;
+      ctx.fillText(msg, W/2, oy + gridH + cell*0.8);
+    }});
+  }
+
+  /* Frame 1: Manhattan path — step right + step up, highlighted cells */
+  if (f === 1){
+    els.push({id:'grid', type:'custom', x:0, y:0, w:W, h:H, draw:function(ctx){
+      drawGrid(ctx, ox, oy, cell, ROWS, COLS);
+
+      /* Highlight path: from A (row4,col1) right to (row4,col4), then up to (row2,col4) */
+      ctx.fillStyle = 'rgba(255,181,156,0.18)';
+      /* right moves */
+      for (var c=Ac+1; c<=Bc; c++){
+        ctx.fillRect(ox+c*cell+1, oy+Ar*cell+1, cell-2, cell-2);
+      }
+      /* up moves */
+      for (var r=Ar-1; r>=Br; r--){
+        ctx.fillRect(ox+Bc*cell+1, oy+r*cell+1, cell-2, cell-2);
+      }
+
+      /* arrows along path */
+      ctx.strokeStyle = PAL.primary; ctx.lineWidth = 2.5;
+      ctx.beginPath();
+      ctx.moveTo(ax, ay);
+      ctx.lineTo(ox+Bc*cell+cell/2, ay);
+      ctx.lineTo(ox+Bc*cell+cell/2, by);
+      ctx.stroke();
+
+      /* step count labels */
+      ctx.font = '700 '+Math.max(11, cell*0.32)+'px "Space Grotesk"';
+      ctx.fillStyle = PAL.primary; ctx.textAlign='center';
+      var rightMid = (ax + ox+Bc*cell+cell/2)/2;
+      var upMid = (ay + by)/2;
+      var rightLabel = AnimRuntime.lang==='en' ? '3 right' : '右 3 格';
+      var upLabel    = AnimRuntime.lang==='en' ? '2 up'    : '上 2 格';
+      ctx.fillText(rightLabel, rightMid, ay - cell*0.2);
+      ctx.fillText(upLabel, ox+Bc*cell+cell/2+cell*0.8, upMid);
+
+      drawMarker(ctx, ax, ay, cell*0.28, PAL.primary, 'A');
+      drawMarker(ctx, bx, by, cell*0.28, PAL.secondary || '#6ea8fe', 'B');
+
+      var msg = AnimRuntime.lang==='en'
+        ? 'Total: 3 + 2 = 5 cells  (Manhattan)'
+        : '总共 3 + 2 = 5 格  (曼哈顿距离)';
+      ctx.font = '500 '+Math.max(11, cell*0.28)+'px "Noto Sans SC"';
+      ctx.fillStyle = PAL.text;
+      ctx.fillText(msg, W/2, oy + gridH + cell*0.8);
+    }});
+  }
+
+  /* Frame 2: straight-line diagonal */
+  if (f === 2){
+    els.push({id:'grid', type:'custom', x:0, y:0, w:W, h:H, draw:function(ctx){
+      drawGrid(ctx, ox, oy, cell, ROWS, COLS);
+
+      /* diagonal line A -> B */
+      ctx.strokeStyle = '#00cc88'; ctx.lineWidth = 2.5;
+      ctx.setLineDash([]);
+      ctx.beginPath(); ctx.moveTo(ax, ay); ctx.lineTo(bx, by); ctx.stroke();
+
+      /* ghost Manhattan path */
+      ctx.strokeStyle = 'rgba(255,181,156,0.35)';
+      ctx.setLineDash([4,3]); ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.moveTo(ax, ay);
+      ctx.lineTo(ox+Bc*cell+cell/2, ay);
+      ctx.lineTo(ox+Bc*cell+cell/2, by);
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      drawMarker(ctx, ax, ay, cell*0.28, PAL.primary, 'A');
+      drawMarker(ctx, bx, by, cell*0.28, PAL.secondary || '#6ea8fe', 'B');
+
+      /* distance label */
+      var midx = (ax+bx)/2, midy = (ay+by)/2;
+      ctx.font = '700 '+Math.max(12, cell*0.32)+'px "Space Grotesk"';
+      ctx.fillStyle = '#00cc88'; ctx.textAlign='center';
+      var diagLabel = AnimRuntime.lang==='en' ? '3.6 cells' : '3.6 格';
+      ctx.fillText(diagLabel, midx + cell*0.9, midy - cell*0.1);
+
+      var msg = AnimRuntime.lang==='en'
+        ? 'Straight distance 3.6 < Grid travel 5'
+        : '直线距离 3.6 < 沿格走 5';
+      ctx.font = '500 '+Math.max(11, cell*0.28)+'px "Noto Sans SC"';
+      ctx.fillStyle = PAL.text;
+      ctx.fillText(msg, W/2, oy + gridH + cell*0.8);
+    }});
+  }
+
+  /* Frame 3: Mars command card */
+  if (f === 3){
+    els.push({id:'grid', type:'custom', x:0, y:0, w:W, h:H, draw:function(ctx){
+      /* Mars tint */
+      ctx.fillStyle = 'rgba(180,100,60,0.08)';
+      ctx.fillRect(ox-2, oy-2, gridW+4, gridH+4);
+      drawGrid(ctx, ox, oy, cell, ROWS, COLS);
+
+      /* rover at A, target at B */
+      ctx.strokeStyle = '#00cc88'; ctx.lineWidth = 3;
+      ctx.beginPath(); ctx.moveTo(ax, ay); ctx.lineTo(bx, by); ctx.stroke();
+
+      /* Rover body at A */
+      ctx.save();
+      ctx.translate(ax, ay);
+      ctx.fillStyle = PAL.primary;
+      ctx.shadowColor = PAL.primary; ctx.shadowBlur = 10;
+      ctx.fillRect(-cell*0.22, -cell*0.14, cell*0.44, cell*0.28);
+      ctx.shadowBlur = 0;
+      /* wheels */
+      ctx.fillStyle = '#222';
+      ctx.beginPath(); ctx.arc(-cell*0.18, cell*0.16, cell*0.06, 0, Math.PI*2); ctx.fill();
+      ctx.beginPath(); ctx.arc( cell*0.18, cell*0.16, cell*0.06, 0, Math.PI*2); ctx.fill();
+      ctx.restore();
+
+      /* target flag at B */
+      ctx.fillStyle = '#ffd56b';
+      ctx.beginPath();
+      ctx.moveTo(bx, by - cell*0.3);
+      ctx.lineTo(bx + cell*0.28, by - cell*0.18);
+      ctx.lineTo(bx, by - cell*0.06);
+      ctx.closePath(); ctx.fill();
+      ctx.strokeStyle = '#ffd56b'; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.moveTo(bx, by - cell*0.3); ctx.lineTo(bx, by + cell*0.2); ctx.stroke();
+
+      /* Command card */
+      var cx0 = W/2 - cell*1.8;
+      var cy0 = oy + gridH + cell*0.4;
+      var cw = cell*3.6, ch = cell*1.2;
+      ctx.fillStyle = 'rgba(20,20,35,0.85)';
+      ctx.fillRect(cx0, cy0, cw, ch);
+      ctx.strokeStyle = PAL.primary; ctx.lineWidth = 1;
+      ctx.strokeRect(cx0, cy0, cw, ch);
+
+      ctx.font = '700 '+Math.max(9, cell*0.2)+'px "Space Grotesk"';
+      ctx.fillStyle = PAL.muted; ctx.textAlign='left';
+      var cmdTitle = AnimRuntime.lang==='en' ? 'MOVE COMMAND' : '行动命令';
+      ctx.fillText(cmdTitle, cx0 + cell*0.15, cy0 + cell*0.3);
+
+      ctx.font = '700 '+Math.max(11, cell*0.28)+'px "Space Grotesk"';
+      ctx.fillStyle = PAL.primary;
+      var distLine = AnimRuntime.lang==='en' ? 'distance: 3.6 cells' : '距离: 3.6 格';
+      var dirLine  = AnimRuntime.lang==='en' ? 'direction: north-east' : '方向: 东北';
+      ctx.fillText(distLine, cx0 + cell*0.15, cy0 + cell*0.65);
+      ctx.fillText(dirLine,  cx0 + cell*0.15, cy0 + cell*0.95);
+    }});
+  }
+
+  return els;
+}
+
+AnimRuntime.boot();
+</script>
+</body>
+</html>
