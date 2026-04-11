@@ -1,0 +1,595 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=Inter:wght@400;500&family=Noto+Sans+SC:wght@400;700&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box;}
+html,body{width:100%;height:100vh;overflow:hidden;}
+body{background:var(--bg,#0c0e12);color:var(--text,#f6f6fc);font-family:'Inter','Noto Sans SC',sans-serif;display:flex;flex-direction:column;}
+.wrapper{display:flex;flex-direction:column;height:100vh;overflow:hidden;}
+.header{padding:12px 16px 8px;display:flex;justify-content:space-between;align-items:center;}
+.header h1{font-family:'Space Grotesk',sans-serif;font-size:clamp(14px,2vw,18px);font-weight:700;letter-spacing:-0.02em;color:var(--primary,#50ffb0);text-shadow:0 0 15px var(--glow,rgba(80,255,176,0.3));}
+.header .sub{font-size:11px;color:var(--muted,#aaabb0);letter-spacing:0.1em;text-transform:uppercase;}
+.canvas-wrap{flex:1;min-height:0;position:relative;}
+canvas{width:100%;height:100%;display:block;}
+.controls{display:flex;justify-content:center;align-items:center;gap:12px;padding:8px 16px;}
+.ctrl-btn{font-family:'Space Grotesk',sans-serif;font-size:12px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;padding:6px 18px;border:none;cursor:pointer;color:var(--bg,#0c0e12);background:linear-gradient(135deg,var(--primary,#50ffb0),var(--primary-dim,#17df93));transition:transform 0.1s,box-shadow 0.2s;box-shadow:0 0 12px var(--glow-strong,rgba(80,255,176,0.3));}
+.ctrl-btn:hover{transform:scale(1.04);box-shadow:0 0 20px var(--glow-strong,rgba(80,255,176,0.5));}
+.ctrl-btn:active{transform:scale(0.96);}
+.ctrl-btn.secondary{background:var(--glass,rgba(23,26,31,0.92));color:var(--muted,#aaabb0);box-shadow:none;backdrop-filter:blur(12px);}
+.ctrl-btn.secondary:hover{color:var(--primary,#50ffb0);}
+.hud{height:48px;display:flex;align-items:center;justify-content:space-around;background:rgba(0,0,0,0.55);backdrop-filter:blur(12px);padding:0 16px;}
+.hud-item{text-align:center;}
+.hud-label{font-family:'Space Grotesk',sans-serif;font-size:9px;letter-spacing:0.15em;text-transform:uppercase;color:var(--muted,#aaabb0);}
+.hud-val{font-family:'Space Grotesk',sans-serif;font-size:14px;font-weight:700;color:var(--primary,#50ffb0);}
+.lang-btn{position:fixed;top:8px;left:8px;z-index:100;font-family:'Space Grotesk',sans-serif;font-size:11px;font-weight:700;padding:4px 10px;cursor:pointer;border:none;background:rgba(20,20,35,0.85);backdrop-filter:blur(12px);color:#ffb59c;letter-spacing:1px;}
+.guide-panel{position:fixed;top:8px;right:8px;width:240px;max-height:40vh;overflow-y:auto;background:var(--glass,rgba(20,20,35,0.85));backdrop-filter:blur(12px);padding:12px;z-index:100;font-family:'Noto Sans SC',sans-serif;font-size:12px;color:rgba(255,255,255,0.85);line-height:1.6;}
+.guide-panel h3{font-family:'Space Grotesk',sans-serif;font-size:13px;margin-bottom:6px;color:var(--primary,#50ffb0);cursor:pointer;display:flex;justify-content:space-between;align-items:center;}
+.guide-panel ul{padding-left:14px;}
+.guide-panel .collapsed{display:none;}
+</style>
+</head>
+<body>
+<button class="lang-btn" id="langBtn">CN</button>
+<div class="guide-panel" id="guide">
+<h3 id="guideTitle"></h3>
+<div class="guide-content" id="guideContent"></div>
+</div>
+<div class="wrapper">
+<div class="header">
+<div><h1 id="title"></h1><div class="sub" id="subtitle"></div></div>
+<div id="frameIndicator" style="font-family:'Space Grotesk';font-size:11px;color:var(--muted,#aaabb0);letter-spacing:0.1em;"></div>
+</div>
+<div class="canvas-wrap"><canvas id="c"></canvas></div>
+<div class="controls">
+<button class="ctrl-btn secondary" id="btnPrev"></button>
+<button class="ctrl-btn" id="btnPlay"></button>
+<button class="ctrl-btn secondary" id="btnNext"></button>
+</div>
+<div class="hud">
+<div class="hud-item"><div class="hud-label" id="hudL1"></div><div class="hud-val" id="hudV1"></div></div>
+<div class="hud-item"><div class="hud-label" id="hudL2"></div><div class="hud-val" id="hudV2"></div></div>
+<div class="hud-item"><div class="hud-label" id="hudL3"></div><div class="hud-val" id="hudV3"></div></div>
+<div class="hud-item"><div class="hud-label" id="hudL4"></div><div class="hud-val" id="hudV4"></div></div>
+</div>
+</div>
+
+<!-- Shared Runtime -->
+<script src="animation_runtime.js"></script>
+
+<!-- Content: Sense-Think-Act Loop -->
+<script>
+// Phase colors
+var PH = {
+  sense:  {main:'#50ffb0', glow:'rgba(80,255,176,0.35)'},
+  think:  {main:'#ffd050', glow:'rgba(255,208,80,0.35)'},
+  act:    {main:'#ff6b9d', glow:'rgba(255,107,157,0.35)'},
+  idle:   {main:'#3a3f4c', glow:'rgba(58,63,76,0)'}
+};
+
+// Which phase is active in each frame
+var frameActive = ['none','sense','think','act','sense'];
+
+var CONFIG = {
+  style: 'helix_lab',
+  totalFrames: 5,
+
+  i18n: {
+    title:    {en:'SENSE - THINK - ACT LOOP', cn:'\u611f\u77e5\uff0d\u51b3\u7b56\uff0d\u884c\u52a8\u5faa\u73af'},
+    subtitle: {en:'How an Autonomous Robot Thinks', cn:'\u81ea\u4e3b\u673a\u5668\u4eba\u662f\u600e\u4e48\u600f\u7684'},
+    guideTitle: {en:'OBSERVATION GUIDE', cn:'\u89c2\u5bdf\u6307\u5357'},
+    g1: {en:'Green = SENSE, Yellow = THINK, Pink = ACT', cn:'\u7eff=\u611f\u77e5\u3001\u9ec4=\u51b3\u7b56\u3001\u7c89=\u884c\u52a8'},
+    g2: {en:'Each tick runs all three phases in order', cn:'\u6bcf\u4e00\u6b21 tick \u4f9d\u6b21\u6267\u884c\u4e09\u4e2a\u9636\u6bb5'},
+    g3: {en:'Frame 4 returns to SENSE - the loop never stops', cn:'\u7b2c4\u5e27\u56de\u5230\u611f\u77e5\u2014\u2014\u5faa\u73af\u6c38\u8fdc\u4e0d\u505c'},
+
+    // Phase labels
+    phaseSense: {en:'SENSE',  cn:'\u611f\u77e5'},
+    phaseThink: {en:'THINK',  cn:'\u51b3\u7b56'},
+    phaseAct:   {en:'ACT',    cn:'\u884c\u52a8'},
+    phaseSenseSub: {en:'Read sensors',        cn:'\u8bfb\u53d6\u4f20\u611f\u5668'},
+    phaseThinkSub: {en:'Run decision logic',  cn:'\u6267\u884c\u51b3\u7b56\u903b\u8f91'},
+    phaseActSub:   {en:'Drive actuators',     cn:'\u9a71\u52a8\u6267\u884c\u5668'},
+
+    // Frame narrations
+    f0_narr: {en:'The robot repeats three steps forever', cn:'\u673a\u5668\u4eba\u6c38\u8fdc\u91cd\u590d\u4e09\u4ef6\u4e8b'},
+    f1_narr: {en:'SENSE: the front rangefinder reports 2 cells',     cn:'\u611f\u77e5\uff1a\u524d\u65b9\u6d4b\u8ddd\u5668\u62a5\u544a 2 \u683c'},
+    f2_narr: {en:'THINK: rule matched - distance < 3, turn right',   cn:'\u51b3\u7b56\uff1a\u89c4\u5219\u547d\u4e2d\u2014\u8ddd\u79bb<3\uff0c\u53f3\u8f6c'},
+    f3_narr: {en:'ACT: motors spin, the robot rotates',              cn:'\u884c\u52a8\uff1a\u7535\u673a\u8f6c\u52a8\uff0c\u673a\u5668\u4eba\u65cb\u8f6c'},
+    f4_narr: {en:'Loop again - new SENSE, new distance = 5',         cn:'\u518d\u5faa\u73af\u2014\u65b0\u611f\u77e5\uff0c\u65b0\u8ddd\u79bb = 5'},
+
+    // HUD labels
+    hudL1: {en:'TICK',     cn:'\u5468\u671f'},
+    hudL2: {en:'PHASE',    cn:'\u9636\u6bb5'},
+    hudL3: {en:'DISTANCE', cn:'\u8ddd\u79bb'},
+    hudL4: {en:'ACTION',   cn:'\u52a8\u4f5c'},
+
+    // HUD values
+    hudT_0: {en:'--',     cn:'--'},
+    hudT_1: {en:'1',      cn:'1'},
+    hudT_2: {en:'1',      cn:'1'},
+    hudT_3: {en:'1',      cn:'1'},
+    hudT_4: {en:'2',      cn:'2'},
+
+    hudP_0: {en:'IDLE',   cn:'\u5f85\u673a'},
+    hudP_1: {en:'SENSE',  cn:'\u611f\u77e5'},
+    hudP_2: {en:'THINK',  cn:'\u51b3\u7b56'},
+    hudP_3: {en:'ACT',    cn:'\u884c\u52a8'},
+    hudP_4: {en:'SENSE',  cn:'\u611f\u77e5'},
+
+    hudD_0: {en:'--',     cn:'--'},
+    hudD_1: {en:'2 CELLS',cn:'2 \u683c'},
+    hudD_2: {en:'2 CELLS',cn:'2 \u683c'},
+    hudD_3: {en:'2 CELLS',cn:'2 \u683c'},
+    hudD_4: {en:'5 CELLS',cn:'5 \u683c'},
+
+    hudA_0: {en:'--',     cn:'--'},
+    hudA_1: {en:'READ',   cn:'\u8bfb\u6570'},
+    hudA_2: {en:'MATCH',  cn:'\u5339\u914d'},
+    hudA_3: {en:'TURN R', cn:'\u53f3\u8f6c'},
+    hudA_4: {en:'READ',   cn:'\u8bfb\u6570'},
+
+    // Rule labels
+    ruleIf:   {en:'IF',   cn:'\u5982\u679c'},
+    ruleThen: {en:'THEN', cn:'\u90a3\u4e48'},
+    ruleCond: {en:'distance < 3', cn:'\u8ddd\u79bb<3'},
+    ruleAct:  {en:'turn right',   cn:'\u53f3\u8f6c'},
+
+    // Robot labels
+    robot: {en:'ROBOT', cn:'\u673a\u5668\u4eba'},
+    wall:  {en:'WALL',  cn:'\u5899'},
+    beam:  {en:'BEAM',  cn:'\u63a2\u6d4b\u5149\u675f'}
+  },
+
+  hudLabels: ['hudL1','hudL2','hudL3','hudL4'],
+  hudValues: [
+    ['hudT_0','hudP_0','hudD_0','hudA_0'],
+    ['hudT_1','hudP_1','hudD_1','hudA_1'],
+    ['hudT_2','hudP_2','hudD_2','hudA_2'],
+    ['hudT_3','hudP_3','hudD_3','hudA_3'],
+    ['hudT_4','hudP_4','hudD_4','hudA_4']
+  ],
+
+  guideTitle: 'guideTitle',
+  guideItems: ['g1','g2','g3']
+};
+
+// Custom element: phase ring (glowing circle for one phase)
+function customDrawElement(ctx, el) {
+  if (el.type === 'phaseRing') {
+    var active = el.active;
+    var c = active ? el.colors.main : PH.idle.main;
+    var glow = active ? el.colors.glow : 'rgba(0,0,0,0)';
+
+    // Outer glow
+    if (active) {
+      ctx.shadowColor = glow;
+      ctx.shadowBlur = 32;
+    }
+    ctx.strokeStyle = c;
+    ctx.lineWidth = active ? 4 : 2;
+    ctx.beginPath();
+    ctx.arc(el.x, el.y, el.r, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+
+    // Inner fill (subtle)
+    if (active) {
+      var grad = ctx.createRadialGradient(el.x, el.y, 0, el.x, el.y, el.r);
+      grad.addColorStop(0, glow);
+      grad.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.fillStyle = grad;
+      ctx.beginPath();
+      ctx.arc(el.x, el.y, el.r, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    // Label in the center
+    ctx.fillStyle = active ? c : '#5a5f6c';
+    ctx.font = "bold " + el.labelSize + "px 'Space Grotesk','Noto Sans SC',sans-serif";
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(el.label, el.x, el.y - el.labelSize * 0.3);
+
+    // Sublabel
+    ctx.fillStyle = active ? c : '#4a4f5c';
+    ctx.font = (el.labelSize * 0.48) + "px 'Inter','Noto Sans SC',sans-serif";
+    ctx.fillText(el.sub, el.x, el.y + el.labelSize * 0.7);
+    return true;
+  }
+
+  if (el.type === 'loopArrow') {
+    // Curved arrow from one ring to next
+    var active = el.active;
+    ctx.strokeStyle = active ? el.color : '#2a2f3c';
+    ctx.lineWidth = active ? 3 : 1.5;
+    if (active) {
+      ctx.shadowColor = el.glow;
+      ctx.shadowBlur = 12;
+    }
+    ctx.beginPath();
+    ctx.moveTo(el.x1, el.y1);
+    ctx.quadraticCurveTo(el.cx, el.cy, el.x2, el.y2);
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+
+    // Arrowhead
+    var angle = Math.atan2(el.y2 - el.cy, el.x2 - el.cx);
+    var hs = 8;
+    ctx.fillStyle = active ? el.color : '#2a2f3c';
+    ctx.beginPath();
+    ctx.moveTo(el.x2, el.y2);
+    ctx.lineTo(el.x2 - hs * Math.cos(angle - 0.5), el.y2 - hs * Math.sin(angle - 0.5));
+    ctx.lineTo(el.x2 - hs * Math.cos(angle + 0.5), el.y2 - hs * Math.sin(angle + 0.5));
+    ctx.fill();
+    return true;
+  }
+
+  if (el.type === 'robotCell') {
+    // Mini robot icon at a grid cell
+    var rot = el.rotation || 0;
+    ctx.save();
+    ctx.translate(el.x, el.y);
+    ctx.rotate(rot);
+
+    // Body (rounded square)
+    var grad = ctx.createLinearGradient(-el.size, -el.size, el.size, el.size);
+    grad.addColorStop(0, '#60ffc0');
+    grad.addColorStop(1, '#17a070');
+    ctx.fillStyle = grad;
+    ctx.shadowColor = 'rgba(80,255,176,0.4)';
+    ctx.shadowBlur = 14;
+    ctx.beginPath();
+    ctx.arc(0, 0, el.size, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.shadowBlur = 0;
+
+    // Facing triangle
+    ctx.fillStyle = '#ffffff';
+    ctx.beginPath();
+    ctx.moveTo(el.size * 0.8, 0);
+    ctx.lineTo(-el.size * 0.3, el.size * 0.45);
+    ctx.lineTo(-el.size * 0.3, -el.size * 0.45);
+    ctx.closePath();
+    ctx.fill();
+
+    // Center dot
+    ctx.fillStyle = '#0c0e12';
+    ctx.beginPath();
+    ctx.arc(0, 0, el.size * 0.18, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.restore();
+    return true;
+  }
+
+  if (el.type === 'sensorBeam') {
+    // Dashed beam from robot to wall
+    ctx.save();
+    ctx.strokeStyle = el.color;
+    ctx.lineWidth = 2;
+    ctx.shadowColor = el.glow;
+    ctx.shadowBlur = 14;
+    ctx.setLineDash([6, 4]);
+    ctx.beginPath();
+    ctx.moveTo(el.x1, el.y1);
+    ctx.lineTo(el.x2, el.y2);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.shadowBlur = 0;
+    // Beam dots
+    for (var i = 1; i <= 5; i++) {
+      var p = i / 6;
+      var bx = el.x1 + (el.x2 - el.x1) * p;
+      var by = el.y1 + (el.y2 - el.y1) * p;
+      ctx.fillStyle = el.color;
+      ctx.beginPath();
+      ctx.arc(bx, by, 2.5, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.restore();
+    return true;
+  }
+
+  if (el.type === 'wallCell') {
+    ctx.save();
+    var wg = ctx.createLinearGradient(el.x - el.w / 2, el.y - el.h / 2, el.x + el.w / 2, el.y + el.h / 2);
+    wg.addColorStop(0, '#4a3020');
+    wg.addColorStop(1, '#2a1810');
+    ctx.fillStyle = wg;
+    ctx.fillRect(el.x - el.w / 2, el.y - el.h / 2, el.w, el.h);
+    // Diagonal stripes
+    ctx.strokeStyle = 'rgba(255,150,80,0.25)';
+    ctx.lineWidth = 1;
+    for (var k = -el.h; k < el.w; k += 6) {
+      ctx.beginPath();
+      ctx.moveTo(el.x - el.w / 2 + k, el.y - el.h / 2);
+      ctx.lineTo(el.x - el.w / 2 + k + el.h, el.y + el.h / 2);
+      ctx.stroke();
+    }
+    ctx.restore();
+    return true;
+  }
+
+  if (el.type === 'rulePanel') {
+    // IF-THEN panel
+    ctx.save();
+    // Background
+    var pg = ctx.createLinearGradient(el.x, el.y, el.x, el.y + el.h);
+    pg.addColorStop(0, 'rgba(255,208,80,0.18)');
+    pg.addColorStop(1, 'rgba(255,208,80,0.06)');
+    ctx.fillStyle = pg;
+    ctx.shadowColor = PH.think.glow;
+    ctx.shadowBlur = 18;
+    ctx.fillRect(el.x, el.y, el.w, el.h);
+    ctx.shadowBlur = 0;
+    // Border
+    ctx.strokeStyle = PH.think.main;
+    ctx.lineWidth = 1.5;
+    ctx.strokeRect(el.x, el.y, el.w, el.h);
+    // IF line
+    ctx.fillStyle = PH.think.main;
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'middle';
+    ctx.font = "bold 13px 'Space Grotesk','Noto Sans SC',sans-serif";
+    ctx.fillText(el.ifLabel, el.x + 14, el.y + 20);
+    ctx.fillStyle = '#ffffff';
+    ctx.font = "14px 'Inter','Noto Sans SC',sans-serif";
+    ctx.fillText(el.ifText, el.x + 50, el.y + 20);
+    // arrow
+    ctx.fillStyle = PH.think.main;
+    ctx.font = "bold 16px 'Space Grotesk',sans-serif";
+    ctx.textAlign = 'center';
+    ctx.fillText('\u2193', el.x + el.w / 2, el.y + el.h / 2 + 2);
+    // THEN line
+    ctx.fillStyle = PH.think.main;
+    ctx.font = "bold 13px 'Space Grotesk','Noto Sans SC',sans-serif";
+    ctx.textAlign = 'left';
+    ctx.fillText(el.thenLabel, el.x + 14, el.y + el.h - 20);
+    ctx.fillStyle = '#ffffff';
+    ctx.font = "14px 'Inter','Noto Sans SC',sans-serif";
+    ctx.fillText(el.thenText, el.x + 60, el.y + el.h - 20);
+    ctx.restore();
+    return true;
+  }
+
+  if (el.type === 'motorArc') {
+    // Rotating motor indicator around robot
+    ctx.save();
+    ctx.strokeStyle = el.color;
+    ctx.lineWidth = 3;
+    ctx.shadowColor = el.glow;
+    ctx.shadowBlur = 16;
+    ctx.beginPath();
+    ctx.arc(el.x, el.y, el.r, el.a1, el.a2);
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+    // Arrow head on arc
+    var ah = el.a2;
+    var hx = el.x + el.r * Math.cos(ah);
+    var hy = el.y + el.r * Math.sin(ah);
+    ctx.fillStyle = el.color;
+    ctx.beginPath();
+    ctx.arc(hx, hy, 5, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+    return true;
+  }
+
+  return false;
+}
+
+function getFrameElements(f, W, H) {
+  var t = AnimRuntime.t;
+  var P = AnimRuntime.PAL;
+  var elems = [];
+
+  var cx = W / 2;
+  var cy = H * 0.46;
+
+  // --- Three phase rings in triangle layout ---
+  var ringR = Math.min(W * 0.08, 70);
+  var triR = Math.min(W * 0.16, 140);
+  var positions = [
+    {label:t('phaseSense'), sub:t('phaseSenseSub'), key:'sense', ax: cx - triR * 0.87, ay: cy - triR * 0.5},
+    {label:t('phaseThink'), sub:t('phaseThinkSub'), key:'think', ax: cx + triR * 0.87, ay: cy - triR * 0.5},
+    {label:t('phaseAct'),   sub:t('phaseActSub'),   key:'act',   ax: cx,               ay: cy + triR * 1.0}
+  ];
+
+  var active = frameActive[f];
+
+  // Phase rings
+  for (var i = 0; i < positions.length; i++) {
+    var ph = positions[i];
+    var isActive = (ph.key === active);
+    elems.push({
+      id: 'ring_' + ph.key,
+      type: 'phaseRing',
+      x: ph.ax,
+      y: ph.ay,
+      r: ringR,
+      label: ph.label,
+      sub: ph.sub,
+      labelSize: ringR * 0.32,
+      colors: PH[ph.key],
+      active: isActive,
+      alpha: 1
+    });
+  }
+
+  // Loop arrows between rings (Sense -> Think -> Act -> Sense)
+  var arrPairs = [
+    {from:'sense', to:'think'},
+    {from:'think', to:'act'},
+    {from:'act',   to:'sense'}
+  ];
+  function findPos(key) {
+    for (var j = 0; j < positions.length; j++) if (positions[j].key === key) return positions[j];
+    return null;
+  }
+  for (var a = 0; a < arrPairs.length; a++) {
+    var pair = arrPairs[a];
+    var from = findPos(pair.from);
+    var to = findPos(pair.to);
+    // Compute arrow anchor points at ring edges
+    var dx = to.ax - from.ax;
+    var dy = to.ay - from.ay;
+    var dist = Math.sqrt(dx * dx + dy * dy);
+    var nx = dx / dist, ny = dy / dist;
+    var ax1 = from.ax + nx * ringR * 1.08;
+    var ay1 = from.ay + ny * ringR * 1.08;
+    var ax2 = to.ax - nx * ringR * 1.18;
+    var ay2 = to.ay - ny * ringR * 1.18;
+    // Midpoint with outward bulge
+    var mx = (ax1 + ax2) / 2;
+    var my = (ay1 + ay2) / 2;
+    var ox = -ny * 28;
+    var oy = nx * 28;
+
+    var isArrActive = (active !== 'none') && (from.key === active || to.key === active);
+    var arrCol = isArrActive ? PH[active].main : '#3a3f4c';
+    var arrGlow = isArrActive ? PH[active].glow : 'rgba(0,0,0,0)';
+
+    elems.push({
+      id: 'loop_' + a,
+      type: 'loopArrow',
+      x1: ax1, y1: ay1,
+      x2: ax2, y2: ay2,
+      cx: mx + ox, cy: my + oy,
+      color: arrCol,
+      glow: arrGlow,
+      active: isArrActive,
+      alpha: 1
+    });
+  }
+
+  // --- Mini world panel (bottom-right): shows what the robot is doing ---
+  var panelW = Math.min(W * 0.28, 300);
+  var panelH = Math.min(H * 0.32, 180);
+  var panelX = W - panelW - 24;
+  var panelY = H * 0.58;
+
+  // Panel frame
+  elems.push({id:'panelBg', type:'box',
+    x: panelX, y: panelY, w: panelW, h: panelH,
+    fill:'rgba(20,22,32,0.85)', stroke:'rgba(80,255,176,0.2)', lineWidth:1, alpha:1});
+  elems.push({id:'panelTitle', type:'label',
+    text: t('robot') + ' WORLD',
+    x: panelX + 12, y: panelY + 16,
+    color: P.muted, size: 10, align:'left', alpha:1});
+
+  // 6-cell corridor inside panel (3 cells visible forward of robot)
+  var cells = 6;
+  var cellGap = 2;
+  var cellW = (panelW - 40 - cellGap * (cells - 1)) / cells;
+  var cellH = Math.min(28, panelH * 0.28);
+  var cellY = panelY + panelH * 0.55;
+  var cellStartX = panelX + 20;
+
+  // Frame 0: empty (just title), Frames 1-3: corridor with wall, Frame 4: corridor with wall further
+  if (f > 0) {
+    // Robot position (cell 1, facing right)
+    var robotCell = 1;
+    // Wall distance: frames 1-3 distance=2 (wall at cell 3), frame 4 distance=5 (wall at cell 6... but only 6 cells so at index 5 which is last)
+    var wallCell = (f === 4) ? 5 : 3;
+    if (f === 3) wallCell = 3; // act frame still shows same wall, robot rotating
+
+    // Draw cells (grid)
+    for (var ci = 0; ci < cells; ci++) {
+      var cxCell = cellStartX + ci * (cellW + cellGap);
+      elems.push({id:'cell_' + ci, type:'box',
+        x: cxCell, y: cellY, w: cellW, h: cellH,
+        fill:'rgba(40,45,58,0.6)', stroke:'rgba(80,100,140,0.2)', lineWidth:1, alpha:1});
+    }
+
+    // Wall at wallCell
+    var wallX = cellStartX + wallCell * (cellW + cellGap) + cellW / 2;
+    var wallY = cellY + cellH / 2;
+    elems.push({id:'wall', type:'wallCell',
+      x: wallX, y: wallY, w: cellW * 0.96, h: cellH * 0.96, alpha:1});
+
+    // Robot
+    var roboX = cellStartX + robotCell * (cellW + cellGap) + cellW / 2;
+    var roboY = cellY + cellH / 2;
+    var roboRot = 0;
+    if (f === 3) roboRot = Math.PI * 0.5; // turning right
+    if (f === 4) roboRot = Math.PI * 1.5; // facing up after rotation (but forward now clear)
+    // Actually for f=4 we show new SENSE from a new orientation - keep as 0 for simplicity
+    if (f === 4) roboRot = -Math.PI * 0.25;
+
+    elems.push({id:'robo', type:'robotCell',
+      x: roboX, y: roboY,
+      size: cellW * 0.32,
+      rotation: roboRot, alpha:1});
+
+    // Sensor beam for SENSE frames (1, 4)
+    if (f === 1 || f === 4) {
+      var beamEndX = wallX - cellW * 0.5;
+      elems.push({id:'beam', type:'sensorBeam',
+        x1: roboX + cellW * 0.4, y1: roboY,
+        x2: beamEndX, y2: roboY,
+        color: PH.sense.main, glow: PH.sense.glow, alpha:1});
+      // distance label above beam
+      var distN = (f === 4) ? '5' : '2';
+      elems.push({id:'beamLabel', type:'label',
+        text: 'd = ' + distN,
+        x: (roboX + beamEndX) / 2,
+        y: roboY - 14,
+        color: PH.sense.main, size: 11, align:'center', alpha:1});
+    }
+
+    // Motor arc for ACT frame (3)
+    if (f === 3) {
+      elems.push({id:'arc', type:'motorArc',
+        x: roboX, y: roboY,
+        r: cellW * 0.55,
+        a1: -Math.PI * 0.9,
+        a2: Math.PI * 0.3,
+        color: PH.act.main, glow: PH.act.glow, alpha:1});
+    }
+  }
+
+  // Rule panel for THINK frame (2)
+  if (f === 2) {
+    var rpW = Math.min(W * 0.28, 300);
+    var rpH = 88;
+    var rpX = (W - rpW) / 2;
+    var rpY = H * 0.12;
+    elems.push({id:'rulePanel', type:'rulePanel',
+      x: rpX, y: rpY, w: rpW, h: rpH,
+      ifLabel: t('ruleIf'), ifText: t('ruleCond'),
+      thenLabel: t('ruleThen'), thenText: t('ruleAct'),
+      alpha: 1});
+  }
+
+  // Frame narration (bottom-left)
+  var narrText = t('f' + f + '_narr');
+  elems.push({id:'narr', type:'label',
+    text: narrText,
+    x: 32, y: H * 0.92,
+    color: (active !== 'none' ? PH[active].main : P.muted),
+    size: Math.max(13, W * 0.014),
+    align: 'left', alpha: 1});
+
+  // Big title at top-center for frame 0
+  if (f === 0) {
+    elems.push({id:'bigTitle', type:'label',
+      text: t('title'),
+      x: cx, y: H * 0.12,
+      color: P.primary, size: Math.max(20, W * 0.028),
+      align: 'center', alpha: 1});
+    elems.push({id:'bigSub', type:'label',
+      text: t('subtitle'),
+      x: cx, y: H * 0.18,
+      color: P.muted, size: Math.max(11, W * 0.012),
+      align: 'center', alpha: 1});
+  }
+
+  return elems;
+}
+
+AnimRuntime.boot();
+</script>
+</body>
+</html>
