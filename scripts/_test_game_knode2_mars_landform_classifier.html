@@ -844,14 +844,16 @@ body{
     var terrainTop = H*0.58;
     var terrainH = H - terrainTop;
 
-    // Draw each segment side-profile
+    // Draw each segment side-profile — derive shape from heightAt so rover aligns
+    // Rover's baseY formula (see drawRover): baseY = terrainTop + terrainH*0.55 - hOff*terrainH*0.4
+    // So the ground surface at local u is exactly: terrainTop + terrainH*0.55 - heightAt(u)*terrainH*0.4
     var anchors = state.segmentAnchors;
     for(var i=0;i<anchors.length;i++){
       var a = anchors[i];
       var x1 = a.start * W;
       var x2 = a.end * W;
       var lf = LANDFORMS[a.lf];
-      lf.drawProfile(ctx, x1, terrainTop, x2 - x1, terrainH);
+      drawLandformStrip(ctx, x1, terrainTop, x2 - x1, terrainH, lf);
       // segment boundary marker
       if(i < anchors.length - 1){
         ctx.strokeStyle = 'rgba(255,181,156,0.25)';
@@ -909,6 +911,105 @@ body{
     drawProgressBar();
   }
 
+  // Draw a landform strip whose top surface exactly follows lf.heightAt(u).
+  // Uses the same baseY formula as drawRover so rover wheels land on the ground.
+  function drawLandformStrip(ctx, x, y, w, h, lf){
+    ctx.save();
+    // Build the top-surface polyline
+    var steps = Math.max(24, Math.floor(w/6));
+    var pts = [];
+    for(var i=0;i<=steps;i++){
+      var u = i/steps;
+      var hOff = lf.heightAt(u);
+      var px = x + u * w;
+      var py = y + h * 0.55 - hOff * h * 0.4;  // MATCHES drawRover baseY formula
+      pts.push([px, py]);
+    }
+    // Filled body
+    var grad = ctx.createLinearGradient(x, y, x, y+h);
+    // pick gradient based on landform id
+    if(lf.nameKey==='lf_crater_name'){
+      grad.addColorStop(0,'#8a3322'); grad.addColorStop(1,'#2a0e08');
+    } else if(lf.nameKey==='lf_dune_name'){
+      grad.addColorStop(0,'#f4c06c'); grad.addColorStop(1,'#5a4020');
+    } else if(lf.nameKey==='lf_volcano_name'){
+      grad.addColorStop(0,'#7a2020'); grad.addColorStop(0.4,'#4a1010'); grad.addColorStop(1,'#1a0404');
+    } else {
+      grad.addColorStop(0,'#4a3468'); grad.addColorStop(0.5,'#2a1a3e'); grad.addColorStop(1,'#140828');
+    }
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    ctx.moveTo(pts[0][0], y + h);
+    for(var j=0;j<pts.length;j++){ ctx.lineTo(pts[j][0], pts[j][1]); }
+    ctx.lineTo(pts[pts.length-1][0], y + h);
+    ctx.closePath();
+    ctx.fill();
+
+    // Outline the surface line in a contrasting stroke for clarity
+    ctx.strokeStyle = 'rgba(255,255,255,0.18)';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    for(var k=0;k<pts.length;k++){
+      if(k===0) ctx.moveTo(pts[k][0], pts[k][1]);
+      else ctx.lineTo(pts[k][0], pts[k][1]);
+    }
+    ctx.stroke();
+
+    // Texture overlay: rocks, sand ripples, lava, wall lines depending on type
+    if(lf.nameKey==='lf_crater_name'){
+      // rocks scattered on surface
+      ctx.fillStyle = '#3a140e';
+      for(var ri=0;ri<10;ri++){
+        var u1 = (ri+0.5)/10;
+        var px1 = x + u1 * w;
+        var py1 = y + h * 0.55 - lf.heightAt(u1) * h * 0.4 + 4 + (ri%3)*2;
+        ctx.beginPath();
+        ctx.arc(px1, py1, 2 + (ri%3), 0, Math.PI*2);
+        ctx.fill();
+      }
+    } else if(lf.nameKey==='lf_dune_name'){
+      // sand ripples (dots on surface)
+      ctx.fillStyle = 'rgba(255,220,160,0.35)';
+      for(var di=0;di<40;di++){
+        var u2 = di/40;
+        var px2 = x + u2 * w;
+        var py2 = y + h * 0.55 - lf.heightAt(u2) * h * 0.4 + 2 + (di%5)*2;
+        ctx.fillRect(px2, py2, 1.2, 1);
+      }
+    } else if(lf.nameKey==='lf_volcano_name'){
+      // lava glow near peak
+      var uPeak = 0.5;
+      var pxP = x + uPeak * w;
+      var pyP = y + h * 0.55 - lf.heightAt(uPeak) * h * 0.4;
+      ctx.fillStyle = 'rgba(255,80,20,0.6)';
+      ctx.beginPath();
+      ctx.ellipse(pxP, pyP + 2, w*0.06, h*0.015, 0, 0, Math.PI*2);
+      ctx.fill();
+      // boulders
+      ctx.fillStyle = '#140404';
+      for(var bi=0;bi<10;bi++){
+        var u3 = (bi+0.3)/10;
+        var px3 = x + u3*w;
+        var py3 = y + h*0.55 - lf.heightAt(u3) * h * 0.4 + 6 + (bi%4)*3;
+        ctx.beginPath();
+        ctx.arc(px3, py3, 2+(bi%3), 0, Math.PI*2);
+        ctx.fill();
+      }
+    } else {
+      // valley: horizontal wall lines
+      ctx.strokeStyle = 'rgba(120,100,180,0.25)';
+      ctx.lineWidth = 1;
+      for(var wi=0;wi<5;wi++){
+        var ly = y + h*0.5 + wi*h*0.08;
+        ctx.beginPath();
+        ctx.moveTo(x, ly);
+        ctx.lineTo(x+w, ly);
+        ctx.stroke();
+      }
+    }
+    ctx.restore();
+  }
+
   function drawRover(){
     var u = state.rover.u;
     var anchors = state.segmentAnchors;
@@ -939,7 +1040,9 @@ body{
     state.rover.tilt = tilt * 180 / Math.PI;
 
     ctx.save();
-    ctx.translate(rx, baseY - 18);
+    // Place rover so its wheels' bottom edge sits exactly on baseY.
+    // In local rover frame, wheel center y = 4, radius = 3.5 → bottom = 7.5.
+    ctx.translate(rx, baseY - 7.5);
     ctx.rotate(tilt);
 
     // shadow / glow
