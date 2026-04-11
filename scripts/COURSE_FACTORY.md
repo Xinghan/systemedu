@@ -11,6 +11,24 @@
 
 本手册有 1700+ 行，很容易漏读中间章节。这份清单是权威摘要，每个 knode 生成前先回头核对一遍，再去翻对应章节的细节。
 
+### 富媒体全集（每个 knode 都要检查这 7 类是否已考虑）
+
+一个完整的 knode 课程会呈现多种"富媒体"给学生，前端右侧富媒体栏对应地列出这 7 类。**每次生成前都要逐条确认**——不一定每类都要有，但任何一类被"遗漏 / 忘记考虑"都算不合格：
+
+| # | 类型 | 产物位置 | 哪一步生成 | 允许为 0？ |
+|---|------|---------|-----------|:-----:|
+| 1 | **theory（基础知识）** | `course_content.theories[]` + `[[THEORY:xxx]]` | Step 1.5 | 只有"纯方法论节点"允许 0 个，否则 2-5 个 |
+| 2 | **animation（动画）** | `ideas[mode='animation']` + `rendered_sections` | Step 2-5 | 按 difficulty × module_role 决定，通常 ≥ 1 |
+| 3 | **game（小游戏）** | `ideas[mode='game']` + `rendered_sections` | Step 2-5 | 同上。概念节点至少 1 个 |
+| 4 | **image（真实照片）** | `ideas[mode='image']` + `rendered_sections.src` | Step 2-5 | 允许 0，低难度节点鼓励 1 张 |
+| 5 | **diagram（静态示意图）** | `ideas[mode='diagram']` + `rendered_sections.html` | Step 2-5 | 允许 0 |
+| 6 | **youtube（外部视频）** | `external_resources.youtube_results[]` | Step 0.5 Tavily | 非 0（除非搜索无命中） |
+| 7 | **labxchange（外部互动路径）** | `external_resources.labxchange_results[]` | Step 0.7 本地匹配 | 非 0（除非学科不匹配） |
+
+> exercise 也是必做产物（每个 knode ≥ 1 个），但它是"评测/练习"而非"呈现媒介"，不计入富媒体栏。
+
+**在 Step 2 的 Ideas 枚举和 Step 4 的 Debate 过程中必须逐行走完上面这张表**。不允许"我感觉这个节点只要 animation + exercise 就够了"——至少要显式说出 theory / image / diagram / game 各自被考虑过（哪怕最终决定 reject）。
+
 ### 硬规则（违反即不合格）
 
 1. **顺序执行**：Step 0.5 → 0.7 → 1 → 1.5 → 2 → 3 → 4 → 5 → 5.5 → 6。不得乱序。
@@ -51,6 +69,15 @@
 - [ ] `make_course_content` 直接传入 **未经重包装的** `research=research_knode() 返回值`、`labxchange_results=lx`、`theories=theories`
 - [ ] acceptance_ref / hands_on_ref 完全匹配 knode 原文（含句号）
 
+富媒体全集检查（7 类）——每类都要显式确认"考虑过"：
+- [ ] **theory**：`len(theories) ≥ 2`（纯方法论节点除外），且 `[[THEORY:xxx]]` 占位符对应完整
+- [ ] **animation**：至少 1 个 animation idea 或已在 Debate 中写明 reject 理由
+- [ ] **game**：至少 1 个 game idea 或已在 Debate 中写明 reject 理由
+- [ ] **image**：是否有必要用一张真实 CC-BY/CC0 照片？如果 reject 需写明理由
+- [ ] **diagram**：是否有必要用一张静态示意图（SVG/HTML）？如果 reject 需写明理由
+- [ ] **youtube**：`research_knode(youtube_query=...)` 已调用，`external_resources.youtube_results` 有值（除非 Tavily 命中为 0）
+- [ ] **labxchange**：`search_labxchange(keywords=...)` 已调用，`labxchange_results=lx` 已传入 `make_course_content`
+
 调用 `make_course_content` 后的**输出检查**（不只是看 preflight）：
 - [ ] **检查 `course_content["plan_markdown"]` 末尾是否多了 "## 推荐视频" 段**（当 research 有 youtube_results 时）
 - [ ] **检查 `course_content["plan_markdown"]` 末尾是否多了 "## 延伸阅读" 段**（当 research 有 web_results 时）
@@ -61,10 +88,12 @@
 
 - **research dict 结构错误** (2026-04-09)：`research_knode()` 返回 `{"web_results": ..., "youtube_results": ...}`（带 `_results` 后缀）。不要用 `{"web": ..., "youtube": ...}` 这种 key 名手动包装——`make_course_content` 会读不到内容，结果是 plan_markdown 里没有"## 推荐视频"段落但又不报错。**正确做法：直接把 `research_knode()` 的返回整个传给 `make_course_content` 的 `research=` 参数**。
 - 遗漏 Step 1.5：手册中 Step 1.5 夹在 Step 1 和 Step 2 之间，容易跳过。**每次生成前先对齐清单，确认 theories 已写**。
+- `theories` 写了但 `[[THEORY:xxx]]` 占位符没插进 plan_markdown：前端不会渲染基础知识块，右侧富媒体栏 theory 计数为 0。修复方法：在 plan_markdown 的相关段落前/后插入占位符（参考 mars-risk-map knode 0/1 的修正案例：在"地面有三个关键特性"等 h3 之前插）。
 - 外部预合并 Tavily：见硬规则 4。
 - acceptance_ref 少句号：见硬规则 5。
 - 忘传 `labxchange_results` 参数：导致 LabXchange 资源不进 DB 的 node_resources 表。
 - exercise 字段用 `answer` 而不是 `correct`：`make_exercises` 会报错。
+- **"漏考虑富媒体类型"**：例如整个 knode 只生成了 animation + exercise，没有 theory / image / diagram / game 的 Debate 记录。正确做法：在 Step 2 的 Ideas 枚举里逐条走完 7 类富媒体（theory/animation/game/image/diagram/youtube/labxchange），哪怕最终 reject 也要显式写明理由。
 
 ---
 
@@ -676,7 +705,125 @@ animation 和 game 的数量**不设硬性上限**。任何难度和角色的节
 | `image` | 真实照片（NASA/Wikimedia/USGS CC-BY/CC0） | 可选，成本低 |
 | `diagram` | 静态示意图（HTML/SVG）—— 坐标系、流程图、对比图 | 可选，成本低 |
 
+**注意：theory（基础知识）不是 Step 2 的 `ideas[]` 产物**，它由 Step 1.5 产出写入 `course_content.theories[]`。但在本步的 Debate 里仍要把 theory 作为富媒体的一员一起评审，确保"这节课涉及哪些基础物理/数学/化学"被明确记下来——否则前端右侧富媒体栏就会缺"基础知识"这一项。
+
+**富媒体完整清单（与前端右侧栏一致）**：`theory` · `animation` · `game` · `image` · `diagram` · `youtube` · `labxchange`。exercise 是评测而非呈现媒介，不计入富媒体栏。
+
 **优先级**：game > animation > story。如果只选 1 个富媒体，优先选 game（互动性最强）。
+
+### Game Ideation Patterns（game 创意模式库）
+
+**硬规则：Step 2 抽取 game idea 时必须先从本库中选一个主模式。** 如果必须退回到 Pattern X（判断类），Debate 阶段要显式说明"为什么这个知识点只能用判断类玩法",并给出无法用 simulation/sandbox 实现的具体理由。
+
+下面 10 个模式按"可玩性与认知深度"排序（越前越优先）。它们的共同特征是**玩家通过操纵一个动态系统来内化知识**，而不是"判断对错再点一下"。
+
+#### Pattern 1 — Sandbox Simulation（沙盒仿真）
+
+玩家调节 2-5 个参数，系统按真实物理/规则实时运行，玩家必须理解参数对结果的影响才能达成目标。
+- **认知动作**：形成/验证关于"参数 → 结果"的心智模型
+- **交互结构**：滑块/输入 → 实时运行的可视化引擎 → 结果反馈（成功/失败/距离目标）
+- **适合知识点**：物理定律、控制系统、生态平衡、经济机制、化学反应条件
+- **示例**：火箭发射模拟器（调推力/倾角/燃料，观察轨道）；细胞渗透压仿真（调离子浓度，观察细胞膨胀/收缩）
+- **反例**：把"选对参数"做成选择题 → 已经退化成 Pattern X
+
+#### Pattern 2 — Build & Test（建造与测试）
+
+玩家从零件库中拼接一个方案（机械/电路/代码/流程），然后按"运行"让它在真实规则下执行，观察是否达成目标。
+- **认知动作**：拆解目标 → 组合原件 → 根据失败反馈迭代
+- **交互结构**：零件 palette → 拖拽拼接区 → Run 按钮 → 仿真执行
+- **适合知识点**：电路、机械传动、数据管线、算法流程、有机化学合成路径
+- **示例**：用齿轮/杠杆搭一个能把重物举起的装置；用积木拼一个图像处理管线把火星图切成 8x8 网格
+- **反例**：提供"正确答案"模板让玩家拖到对应位置 → Pattern X
+
+#### Pattern 3 — Causal Chain Discovery（因果链发现）
+
+系统有隐藏规则，玩家通过反复实验推断规则是什么。每次实验给出数据，玩家逐步收窄假设空间。
+- **认知动作**：假设 → 实验 → 观察 → 修正假设
+- **交互结构**：多变量面板 + 实验日志 + "我猜规则是 X"提交框
+- **适合知识点**：科学方法、隐藏变量分析、机器学习特征选择、化学反应条件
+- **示例**：玩家调整 3 个火星样本特征（颜色/反光/形状），仿真告知"可通行概率"，要求推出哪个特征决定结果
+- **反例**：把规则写在说明里让玩家执行 → 毫无探索
+
+#### Pattern 4 — Resource Management（资源管理 / 决策权衡）
+
+有限预算 + 多个冲突目标 + 时间压力。玩家每一步决策都要权衡"牺牲什么换什么"。
+- **认知动作**：量化权衡、优化多目标、规划顺序
+- **交互结构**：资源条（电量/时间/存储）+ 行动菜单 + 目标列表 + 回合推进
+- **适合知识点**：项目管理、工程约束、生态承载力、经济学取舍
+- **示例**：火星车每日任务调度——电量只够 3 个动作，拍照/行驶/采样/通信如何分配
+- **反例**：给一份"最优方案"让玩家复刻
+
+#### Pattern 5 — Detective / Diagnosis（侦查与诊断）
+
+呈现一组线索（传感器读数、样本数据、错误日志），玩家通过排查、对比、排除诊断根因。
+- **认知动作**：差异分析、排除法、证据链推理
+- **交互结构**：线索面板（可切换/放大/标注）+ 假设列表 + "提交诊断"按钮，错误诊断消耗尝试次数
+- **适合知识点**：故障排查、医学诊断、代码 debug、科学异常分析
+- **示例**：火星车无法前进——查四路传感器读数、电机电流、温度，找出是轮胎卡石头还是电池故障
+- **反例**：把候选项列出来让玩家选对的那个
+
+#### Pattern 6 — Live Tuning / Real-Time Control（实时调参 / 实时控制）
+
+玩家控制一个正在运行的动态系统，必须实时调整才能维持目标（倒立摆、追踪目标、保持温度）。
+- **认知动作**：感知 → 响应 → 校正的闭环
+- **交互结构**：实时画面 + 控制按钮/滑块 + 瞬时反馈
+- **适合知识点**：反馈控制、PID、机器人控制、生理稳态
+- **示例**：实时调整方向盘让火星车沿预定路径走，地面起伏会造成偏航；手动调加热功率让培养箱维持 37°C
+- **反例**：让玩家"选择合适的参数值"（这是 Pattern X）
+
+#### Pattern 7 — Strategy Map / Path Planning（策略地图 / 路径规划）
+
+在一张地图（或图结构）上规划路径或资源布局，每一步都有代价/收益，最终评估方案质量。
+- **认知动作**：搜索空间、权衡路径、预见后果
+- **交互结构**：地图 + 可选节点/道路 + 累计代价显示 + 提交方案按钮
+- **适合知识点**：图算法、地理决策、运筹学、基础生态学
+- **示例**：给火星车规划从着陆点到目标点的路径，地形有斜坡/沙丘/岩石，每种地形消耗不同能量，要求在能量限制内找可行路径
+- **反例**：把最优路径高亮让玩家拖节点过去
+
+#### Pattern 8 — Construction Language / Visual Programming（构造型语言 / 可视化编程）
+
+玩家用"积木块"或可视化指令拼出一段程序，让角色/机器人/系统执行任务。本质上是微型编程环境。
+- **认知动作**：把目标分解成可执行指令，理解指令的顺序与组合
+- **交互结构**：积木库（指令）+ 拼装区 + 运行按钮 + 角色执行动画
+- **适合知识点**：算法思维、顺序/分支/循环、机器人指令、任务分解
+- **示例**：用"前进/转弯/拍照"积木让火星车访问 5 个采样点；用"筛选/排序/分组"积木处理一批样本数据
+- **反例**：提供已拼好的积木序列让玩家复制
+
+#### Pattern 9 — Experimental Design（实验设计）
+
+给定一个待验证的科学问题和一组可用工具，玩家设计实验（选变量、设对照、定样本量），系统按科学规则反馈结果有效性。
+- **认知动作**：控制变量、对照组、可重复性、样本量
+- **交互结构**：问题陈述 + 变量面板（选哪些作为自变量）+ 对照设置 + 执行 + 统计结果
+- **适合知识点**：科学方法论、统计学基础、药物试验设计
+- **示例**：证明"阳光强度影响火星苔藓生长"——玩家要选择变量、对照组和测量指标，错误设计会得到无效结果
+- **反例**：直接告诉玩家实验步骤让他点"开始"
+
+#### Pattern 10 — Role-Play Simulation（角色扮演仿真）
+
+玩家扮演一个真实角色（任务调度官、医生、航天工程师），在多轮决策中推进故事，每个决策有后果并解锁新事件。
+- **认知动作**：在有限信息下做职业化决策
+- **交互结构**：情境文本 + 多选项决策 + 状态条（声望/资源/时间）+ 后续情节分支
+- **适合知识点**：工程决策、医学伦理、项目管理、历史还原
+- **示例**：扮演火星车任务官，每天选择任务，天气/能量/故障会动态影响选项
+- **反例**：把剧情做成线性选择题
+
+#### Pattern X — Classification / Matching（分类与匹配）【降级使用】
+
+玩家把对象拖到正确的桶里、匹配正确的标签。**除非知识点本质上就是"学会识别 N 个类别"（例如"认识 5 种火星地貌"），否则不允许选用 Pattern X**。在 Debate 阶段必须写明"这个知识点的本质要求就是分类"。即使采用 Pattern X，也要加入至少一个以下"活化"机制：
+- 数据来自真实源（NASA 图像），而不是卡通化的手绘
+- 分类后要对被分类的对象写一句理由，系统记录
+- 分类完后进入 Pattern 4/5 的后续阶段（例如：把火星样本分类后，再用"诊断"模式找出错误分类的原因）
+
+### Pattern 选择流程（Step 2 强制）
+
+1. 读 knode 的 `core_question`、`hands_on_components`、`acceptance_artifacts`
+2. 依次检查 Pattern 1-10：哪一个最贴合这个知识点？给出 1-2 行理由
+3. 如果 Pattern 1-10 全都不合适，才允许降级到 Pattern X，且 Debate 必须解释为什么
+4. 写到 `mode_reason` 字段里，格式：`Pattern {N} ({name}): {why this fits}`
+
+### Debate 强化（game 专项）
+
+Step 4 Debate 时对每个 game idea 问一次："**这个 game 要求玩家操纵一个动态系统吗？还是只是判断题的变装？**" 如果是后者，必须重做或写明不可避免的理由。
 
 **何时用 image / diagram 替代或补充 animation**：
 
@@ -716,9 +863,9 @@ animation 和 game 的数量**不设硬性上限**。任何难度和角色的节
     "idea_id": "game_1712000000_abcd",
     "mode": "game",
     "style_key": "ares_mission",
-    "topic": "火星路况三分类",
-    "context_summary": "学生拖拽 12 张真实火星样本图片到可通行/危险/未知三个桶，系统给出得分与专家注释",
-    "mode_reason": "drag_sort 直接对应 hands_on_components 中的人工风险分类动作，并产出接近 acceptance_artifacts 的分类结果",
+    "topic": "火星车越野仿真",
+    "context_summary": "学生在一张真实火星地形图上规划火星车路线，系统用能耗/坡度/岩石密度三个变量实时仿真，学生必须调整路线和速度让车辆在电量耗尽前到达目标；失败会看到火星车在哪一步抛锚",
+    "mode_reason": "Pattern 1 Sandbox Simulation: hands_on_components 要求学生理解地形对通行性的影响，simulation 让学生通过反复试错建立『地形特征 → 通行风险』的因果模型，比拖拽分类更接近真实工程决策",
     "hands_on_ref": "在样例图上手工圈出危险区域并写理由",
     "acceptance_ref": "20 张样例图的人工风险说明"
   },
@@ -912,11 +1059,18 @@ Game 的交互方式不设固定模板，可以自由设计适合教学内容的
 - 交互逻辑是否过于复杂导致 bug 风险高？
 - 有没有更简单的方式达到同样的教学效果？
 
+**Game 专项质疑（必问）**：
+- 这个 game 是不是又一个"分类/匹配/放置到正确位置"的判断类玩法（Pattern X）？
+- 如果是，它能否改写成 Step 2 Game Ideation Patterns 库里的 Pattern 1-10 之一（sandbox / build&test / causal chain / resource / detective / live tuning / strategy map / visual programming / experimental design / role-play）？
+- 玩家在这个 game 里是"操纵一个动态系统"还是"挑选正确答案"？只有前者才算合格 game。
+- 如果玩家不知道答案就无法开始游戏，说明 game 只是 exercise 的变装，应直接 reject。
+
 **裁决标准**：
 - 如果教学逻辑有错误 -> 直接 **reject**
 - 如果技术不可行（100vh 内无法布局、交互过于复杂）-> **reject**
 - 如果纯文字就能讲清楚，富媒体增益不大 -> **reject**
 - **如果 game 的本质就是选择题（如 boss_quiz 只有点选项），和 exercise 重复 -> reject game，保留 exercise 即可**
+- **如果 game 落入 Pattern X（分类/匹配）且不属于"本质就是分类"的知识点 -> reject 或 revise 成 Pattern 1-10 之一**
 - 其他情况 -> **approve** 或 **revise**（简化后通过）
 
 **操作**：
@@ -1686,8 +1840,11 @@ PYEOF
 [ ] Step 1: plan_markdown 800-1500 字，顶部含 "> Module: {module_id} · {module_role}"，core_question 出现在引入段
 [ ] Step 1: 外部资源链接全部使用 `{{KEY}}` shortcode，不含硬编码 URL（grep `https://` 结果应为 0）
 [ ] Step 1: 每条学习目标可追溯到 acceptance_standard 或 hands_on_components 中的原文
+[ ] Step 1.5: theories 列表非空（≥ 2 个，或显式说明"纯方法论节点"理由），每个 theory 带 level_bodies 且 K1 必选
+[ ] Step 1.5: `[[THEORY:xxx]]` 占位符已插入 plan_markdown 的相关段落（否则前端不渲染基础知识）
 [ ] Step 2: 3-4 个 ideas，mode/style_key 选择合理，占位符已插入
 [ ] Step 2: 每个 idea 含 hands_on_ref / acceptance_ref，且至少一条 hands_on_components 被覆盖
+[ ] Step 2: 富媒体全集 7 类逐条对齐（theory/animation/game/image/diagram/youtube/labxchange），被 reject 的类型要写明理由
 [ ] Step 3: 每个 idea 的 detail_plan 完整（含 user_guide），exercise 每道题带 ref 字段
 [ ] Step 4: debate 完成，reject 的已移除，向用户确认
 [ ] Step 5: HTML 通过自检清单，exercises 有 4 题且有解析
