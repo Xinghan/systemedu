@@ -1089,6 +1089,8 @@ Game 的交互方式不设固定模板，可以自由设计适合教学内容的
 
 **你是**：一位高级前端开发者 + 教育游戏设计师。
 
+**重要：animation 和 game 的 HTML 代码长度没有上限。** 不要因为"代码太长"而简化设计。如果一个 animation 需要 800 行来充分表达概念，就写 800 行。如果一个 game 需要 2000 行来实现丰富的交互，就写 2000 行。唯一的标准是：概念是否表达清楚、交互是否有吸引力。浅薄比冗长更糟糕。
+
 ### 通用 HTML 硬性约束（animation 和 game 共用）
 
 ```
@@ -1132,9 +1134,15 @@ Game 的交互方式不设固定模板，可以自由设计适合教学内容的
    水蓝色透明系，土壤棕色系。不要用反直觉的颜色。
 ```
 
+### Animation 设计原则
+
+1. **一个 animation = 一个概念**。多帧用来展开同一概念的不同面/阶段（递进关系），不要把多个独立概念塞进同一个动画。如果一个节点有 3 个核心概念需要可视化，就创建 3 个 animation ideas。
+2. **必须使用 skeleton + runtime**。不要手写独立 HTML。skeleton 提供 Play/Pause 按钮、Prev/Next 导航、语言切换、HUD、resize 等标准功能。
+3. **代码长度不设上限**。复杂概念可以需要丰富的 canvas 绘制逻辑、多层动画、详细的数据面板。
+
 ### Animation Runtime (推荐方式)
 
-**所有新 animation 应使用 `animation_runtime.js` 共享运行时。**
+**所有新 animation 必须使用 `animation_runtime.js` 共享运行时。** 禁止手写独立 animation HTML。
 
 运行时提供：i18n 双语切换、Canvas DPR 缩放、帧间共享元素过渡动画、HUD 数据栏、观看指南面板、播放/暂停控制。
 

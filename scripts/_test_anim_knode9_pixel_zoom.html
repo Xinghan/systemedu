@@ -1,0 +1,353 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=Inter:wght@400;500&family=Noto+Sans+SC:wght@400;700&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box;}
+html,body{width:100%;height:100vh;overflow:hidden;}
+body{background:var(--bg,#0c0e12);color:var(--text,#f6f6fc);font-family:'Inter','Noto Sans SC',sans-serif;display:flex;flex-direction:column;}
+.wrapper{display:flex;flex-direction:column;height:100vh;overflow:hidden;}
+.header{padding:12px 16px 8px;display:flex;justify-content:space-between;align-items:center;}
+.header h1{font-family:'Space Grotesk',sans-serif;font-size:clamp(14px,2vw,18px);font-weight:700;letter-spacing:-0.02em;color:var(--primary,#50ffb0);text-shadow:0 0 15px var(--glow,rgba(80,255,176,0.3));}
+.header .sub{font-size:11px;color:var(--muted,#aaabb0);letter-spacing:0.1em;text-transform:uppercase;}
+.canvas-wrap{flex:1;min-height:0;position:relative;}
+canvas{width:100%;height:100%;display:block;}
+.controls{display:flex;justify-content:center;align-items:center;gap:12px;padding:8px 16px;}
+.ctrl-btn{font-family:'Space Grotesk',sans-serif;font-size:12px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;padding:6px 18px;border:none;cursor:pointer;color:var(--bg,#0c0e12);background:linear-gradient(135deg,var(--primary,#50ffb0),var(--primary-dim,#17df93));transition:transform 0.1s,box-shadow 0.2s;box-shadow:0 0 12px var(--glow-strong,rgba(80,255,176,0.3));}
+.ctrl-btn:hover{transform:scale(1.04);box-shadow:0 0 20px var(--glow-strong,rgba(80,255,176,0.5));}
+.ctrl-btn:active{transform:scale(0.96);}
+.ctrl-btn.secondary{background:var(--glass,rgba(23,26,31,0.92));color:var(--muted,#aaabb0);box-shadow:none;backdrop-filter:blur(12px);}
+.ctrl-btn.secondary:hover{color:var(--primary,#50ffb0);}
+.hud{height:48px;display:flex;align-items:center;justify-content:space-around;background:rgba(0,0,0,0.55);backdrop-filter:blur(12px);padding:0 16px;}
+.hud-item{text-align:center;}
+.hud-label{font-family:'Space Grotesk',sans-serif;font-size:9px;letter-spacing:0.15em;text-transform:uppercase;color:var(--muted,#aaabb0);}
+.hud-val{font-family:'Space Grotesk',sans-serif;font-size:14px;font-weight:700;color:var(--primary,#50ffb0);}
+.lang-btn{position:fixed;top:8px;left:8px;z-index:100;font-family:'Space Grotesk',sans-serif;font-size:11px;font-weight:700;padding:4px 10px;cursor:pointer;border:none;background:rgba(20,20,35,0.85);backdrop-filter:blur(12px);color:#ffb59c;letter-spacing:1px;}
+.guide-panel{position:fixed;top:8px;right:8px;width:240px;max-height:40vh;overflow-y:auto;background:var(--glass,rgba(20,20,35,0.85));backdrop-filter:blur(12px);padding:12px;z-index:100;font-family:'Noto Sans SC',sans-serif;font-size:12px;color:rgba(255,255,255,0.85);line-height:1.6;}
+.guide-panel h3{font-family:'Space Grotesk',sans-serif;font-size:13px;margin-bottom:6px;color:var(--primary,#50ffb0);cursor:pointer;display:flex;justify-content:space-between;align-items:center;}
+.guide-panel ul{padding-left:14px;}
+.guide-panel .collapsed{display:none;}
+</style>
+</head>
+<body>
+<button class="lang-btn" id="langBtn">CN</button>
+<div class="guide-panel" id="guide">
+<h3 id="guideTitle"></h3>
+<div class="guide-content" id="guideContent"></div>
+</div>
+<div class="wrapper">
+<div class="header">
+<div><h1 id="title"></h1><div class="sub" id="subtitle"></div></div>
+<div id="frameIndicator" style="font-family:'Space Grotesk';font-size:11px;color:var(--muted,#aaabb0);letter-spacing:0.1em;"></div>
+</div>
+<div class="canvas-wrap"><canvas id="c"></canvas></div>
+<div class="controls">
+<button class="ctrl-btn secondary" id="btnPrev"></button>
+<button class="ctrl-btn" id="btnPlay"></button>
+<button class="ctrl-btn secondary" id="btnNext"></button>
+</div>
+<div class="hud">
+<div class="hud-item"><div class="hud-label" id="hudL1"></div><div class="hud-val" id="hudV1"></div></div>
+<div class="hud-item"><div class="hud-label" id="hudL2"></div><div class="hud-val" id="hudV2"></div></div>
+<div class="hud-item"><div class="hud-label" id="hudL3"></div><div class="hud-val" id="hudV3"></div></div>
+<div class="hud-item"><div class="hud-label" id="hudL4"></div><div class="hud-val" id="hudV4"></div></div>
+</div>
+</div>
+
+<script src="animation_runtime.js"></script>
+
+<script>
+// ============================================================
+// Animation: Pixel Zoom -- What are photos made of?
+// Concept: pixels as building blocks of images, resolution
+// 4 frames: normal view -> 4x zoom -> 16x zoom -> resolution comparison
+// ============================================================
+
+// Pre-generate a small "Mars landscape" pixel art (16x12) for zoom demo
+var MARS_IMG = (function() {
+  // 16x12 pixel art of Mars landscape (sky + horizon + rocks)
+  // Colors: sky pinkish-orange, ground rust-red, rocks dark brown, highlights
+  var SKY   = '#c47a5a'; // Mars sky pinkish
+  var SKY2  = '#b06840'; // darker sky near horizon
+  var GND   = '#a0522d'; // rust ground
+  var GND2  = '#8b4513'; // darker ground
+  var ROCK  = '#5a3010'; // dark rock
+  var ROCK2 = '#6b3a18'; // lighter rock
+  var HILL  = '#7a4020'; // hill
+  var PEAK  = '#6b3518'; // peak
+  var SAND  = '#c08050'; // sand highlight
+
+  return [
+    [SKY, SKY, SKY, SKY, SKY, SKY, SKY, SKY, SKY, SKY, SKY, SKY, SKY, SKY, SKY, SKY],
+    [SKY, SKY, SKY, SKY, SKY, SKY, SKY, SKY, SKY, SKY, SKY, SKY, SKY, SKY, SKY, SKY],
+    [SKY, SKY, SKY, SKY, SKY2,SKY2,SKY, SKY, SKY, SKY, SKY2,SKY2,SKY2,SKY, SKY, SKY],
+    [SKY2,SKY2,SKY2,SKY2,HILL,PEAK,HILL,SKY2,SKY2,SKY2,HILL,PEAK,HILL,SKY2,SKY2,SKY2],
+    [GND, GND, GND, HILL,HILL,HILL,HILL,HILL,GND, HILL,HILL,HILL,HILL,HILL,GND, GND],
+    [GND, GND, GND2,GND, GND, GND, GND, GND, GND, GND, GND, GND, GND, GND2,GND, GND],
+    [GND, GND2,GND, GND, ROCK,ROCK,GND, GND, GND, GND, GND, ROCK,GND, GND, GND, GND2],
+    [GND2,GND, GND, ROCK,ROCK2,ROCK,ROCK,GND, GND, GND, ROCK,ROCK2,ROCK,GND, GND, GND],
+    [GND, GND, GND, GND, ROCK,ROCK,GND, GND, SAND,GND, GND, ROCK,GND, GND, GND, GND],
+    [GND, GND2,GND, GND, GND, GND, GND, SAND,SAND,SAND,GND, GND, GND, GND, GND2,GND],
+    [GND2,GND, GND, GND, GND, GND2,GND, GND, SAND,GND, GND, GND2,GND, GND, GND, GND2],
+    [GND, GND, GND2,GND, GND, GND, GND, GND, GND, GND, GND, GND, GND, GND2,GND, GND],
+  ];
+})();
+
+var CONFIG = {
+  style: 'ares_mission',
+  totalFrames: 4,
+
+  i18n: {
+    title:     {en:'PIXEL ZOOM', cn:'\u50cf\u7d20\u653e\u5927\u955c'},
+    subtitle:  {en:'WHAT ARE PHOTOS MADE OF?', cn:'\u7167\u7247\u7531\u4ec0\u4e48\u7ec4\u6210\uff1f'},
+    // Frame 0
+    f0_title:  {en:'A MARS LANDSCAPE', cn:'\u4e00\u5f20\u706b\u661f\u98ce\u666f\u7167'},
+    f0_desc:   {en:'This looks like a normal photo...', cn:'\u770b\u8d77\u6765\u50cf\u4e00\u5f20\u666e\u901a\u7684\u7167\u7247...'},
+    f0_try:    {en:'Try zooming in!', cn:'\u8bd5\u8bd5\u653e\u5927\u770b\u770b\uff01'},
+    // Frame 1
+    f1_title:  {en:'ZOOM 4x', cn:'\u653e\u5927 4 \u500d'},
+    f1_desc:   {en:'Getting closer... edges start to blur', cn:'\u653e\u5927\u4e2d...\u8fb9\u7f18\u5f00\u59cb\u6a21\u7cca'},
+    f1_note:   {en:'Can you see the individual squares forming?', cn:'\u4f60\u80fd\u770b\u5230\u65b9\u5757\u5f62\u6210\u4e86\u5417\uff1f'},
+    // Frame 2
+    f2_title:  {en:'ZOOM 16x -- PIXELS!', cn:'\u653e\u5927 16 \u500d -- \u50cf\u7d20\uff01'},
+    f2_desc:   {en:'Now you can see: photos are made of tiny squares!', cn:'\u73b0\u5728\u4f60\u80fd\u770b\u5230\uff1a\u7167\u7247\u7531\u5c0f\u65b9\u5757\u7ec4\u6210\uff01'},
+    f2_pixel:  {en:'Each square = 1 PIXEL = 1 color', cn:'\u6bcf\u4e2a\u65b9\u5757 = 1\u4e2a\u50cf\u7d20 = 1\u79cd\u989c\u8272'},
+    // Frame 3
+    f3_title:  {en:'RESOLUTION COMPARISON', cn:'\u5206\u8fa8\u7387\u5bf9\u6bd4'},
+    f3_desc:   {en:'More pixels = clearer image', cn:'\u50cf\u7d20\u8d8a\u591a = \u56fe\u50cf\u8d8a\u6e05\u6670'},
+    f3_low:    {en:'4x4 = 16 px', cn:'4x4 = 16 \u50cf\u7d20'},
+    f3_med:    {en:'8x8 = 64 px', cn:'8x8 = 64 \u50cf\u7d20'},
+    f3_high:   {en:'16x12 = 192 px', cn:'16x12 = 192 \u50cf\u7d20'},
+    f3_phone:  {en:'Phone: 12,000,000 px!', cn:'\u624b\u673a\uff1a1200\u4e07\u50cf\u7d20\uff01'},
+    // HUD
+    hudL_zoom:   {en:'ZOOM', cn:'\u653e\u5927'},
+    hudL_pixels: {en:'VISIBLE PX', cn:'\u53ef\u89c1\u50cf\u7d20'},
+    hudL_size:   {en:'CELL SIZE', cn:'\u683c\u5b50\u5927\u5c0f'},
+    hudL_res:    {en:'RESOLUTION', cn:'\u5206\u8fa8\u7387'},
+    // Guide
+    guideTitle:{en:'VIEWING GUIDE', cn:'\u89c2\u770b\u6307\u5357'},
+    g1: {en:'Frame 1: Normal Mars photo', cn:'\u7b2c1\u5e27\uff1a\u6b63\u5e38\u706b\u661f\u7167\u7247'},
+    g2: {en:'Frame 2: Start seeing squares at 4x zoom', cn:'\u7b2c2\u5e27\uff1a4\u500d\u653e\u5927\u5f00\u59cb\u770b\u5230\u65b9\u5757'},
+    g3: {en:'Frame 3: 16x zoom reveals individual pixels', cn:'\u7b2c3\u5e27\uff1a16\u500d\u653e\u5927\u663e\u793a\u5355\u4e2a\u50cf\u7d20'},
+    g4: {en:'Frame 4: Compare different resolutions', cn:'\u7b2c4\u5e27\uff1a\u5bf9\u6bd4\u4e0d\u540c\u5206\u8fa8\u7387'},
+  },
+
+  hudLabels: ['hudL_zoom', 'hudL_pixels', 'hudL_size', 'hudL_res'],
+  hudValues: [
+    ['1x', '192', '~0.1mm', '16x12'],
+    ['4x', '48', '~0.4mm', '8x6 area'],
+    ['16x', '12', '~1.6mm', '4x3 area'],
+    ['--', '--', '--', 'Compare'],
+  ],
+
+  guideTitle: 'guideTitle',
+  guideItems: ['g1', 'g2', 'g3', 'g4'],
+};
+
+// ============================================================
+// Helper: draw pixel grid from MARS_IMG data
+// ============================================================
+
+function drawPixelImage(ctx, img, startRow, startCol, rows, cols, x, y, totalW, totalH, showGrid) {
+  var cellW = totalW / cols;
+  var cellH = totalH / rows;
+  for (var r = 0; r < rows; r++) {
+    var sr = startRow + r;
+    if (sr >= img.length) continue;
+    for (var c = 0; c < cols; c++) {
+      var sc = startCol + c;
+      if (sc >= img[sr].length) continue;
+      var px = x + c * cellW;
+      var py = y + r * cellH;
+      ctx.fillStyle = img[sr][sc];
+      ctx.fillRect(px, py, cellW + 0.5, cellH + 0.5);
+      if (showGrid) {
+        ctx.strokeStyle = 'rgba(255,255,255,0.25)';
+        ctx.lineWidth = 0.5;
+        ctx.strokeRect(px, py, cellW, cellH);
+      }
+    }
+  }
+}
+
+// Downscale: average colors in blocks
+function downscaleImage(img, blockR, blockC) {
+  var result = [];
+  for (var r = 0; r < img.length; r += blockR) {
+    var row = [];
+    for (var c = 0; c < img[0].length; c += blockC) {
+      // Pick the most common color in the block (simple: just use top-left)
+      row.push(img[r][c]);
+    }
+    result.push(row);
+  }
+  return result;
+}
+
+// ============================================================
+// FRAME ELEMENTS
+// ============================================================
+
+function getFrameElements(f, W, H) {
+  var t = AnimRuntime.t;
+  var P = AnimRuntime.PAL;
+  var cx = W / 2, cy = H / 2;
+
+  // Frame 0: Normal view (smooth rendering of the pixel art)
+  if (f === 0) {
+    return [
+      {id:'title', type:'label', text:t('f0_title'), x:cx, y:30, color:P.primary, size:16, align:'center', glow:P.glowStrong},
+      {id:'desc', type:'text', text:t('f0_desc'), x:cx, y:52, color:P.muted, size:12, align:'center'},
+      {id:'mars_img', type:'custom', x:0, y:0, draw:function(ctx) {
+        var imgW = W * 0.7, imgH = H * 0.55;
+        var imgX = cx - imgW/2, imgY = cy*0.65 - imgH/2;
+        // Draw full 16x12 image without grid lines (smooth look)
+        drawPixelImage(ctx, MARS_IMG, 0, 0, 12, 16, imgX, imgY, imgW, imgH, false);
+        // Border
+        ctx.strokeStyle = P.outline;
+        ctx.lineWidth = 1;
+        ctx.strokeRect(imgX, imgY, imgW, imgH);
+        // Zoom target indicator (magnifying glass area)
+        var zx = imgX + imgW * 0.25, zy = imgY + imgH * 0.4;
+        var zSize = Math.min(imgW, imgH) * 0.25;
+        ctx.strokeStyle = P.primary;
+        ctx.lineWidth = 1.5;
+        ctx.setLineDash([4,4]);
+        ctx.strokeRect(zx - zSize/2, zy - zSize/2, zSize, zSize);
+        ctx.setLineDash([]);
+      }, alpha:1},
+      {id:'hint', type:'text', text:t('f0_try'), x:cx, y:H*0.9, color:P.secondary, size:13, align:'center'},
+    ];
+  }
+
+  // Frame 1: 4x zoom -- showing a 8x6 section, slightly pixelated
+  if (f === 1) {
+    return [
+      {id:'title', type:'label', text:t('f1_title'), x:cx, y:30, color:P.primary, size:16, align:'center', glow:P.glowStrong},
+      {id:'desc', type:'text', text:t('f1_desc'), x:cx, y:52, color:P.muted, size:12, align:'center'},
+      {id:'mars_img', type:'custom', x:0, y:0, draw:function(ctx) {
+        var imgW = W * 0.7, imgH = H * 0.55;
+        var imgX = cx - imgW/2, imgY = cy*0.65 - imgH/2;
+        // Show 8x6 center section with slight grid
+        drawPixelImage(ctx, MARS_IMG, 2, 4, 6, 8, imgX, imgY, imgW, imgH, false);
+        // Light grid overlay
+        var cellW = imgW / 8, cellH = imgH / 6;
+        ctx.strokeStyle = 'rgba(255,255,255,0.08)';
+        ctx.lineWidth = 0.5;
+        for (var c = 0; c <= 8; c++) {
+          ctx.beginPath(); ctx.moveTo(imgX + c*cellW, imgY); ctx.lineTo(imgX + c*cellW, imgY+imgH); ctx.stroke();
+        }
+        for (var r = 0; r <= 6; r++) {
+          ctx.beginPath(); ctx.moveTo(imgX, imgY + r*cellH); ctx.lineTo(imgX+imgW, imgY + r*cellH); ctx.stroke();
+        }
+        ctx.strokeStyle = P.outline;
+        ctx.lineWidth = 1;
+        ctx.strokeRect(imgX, imgY, imgW, imgH);
+      }, alpha:1},
+      {id:'hint', type:'text', text:t('f1_note'), x:cx, y:H*0.9, color:P.secondary, size:12, align:'center'},
+    ];
+  }
+
+  // Frame 2: 16x zoom -- showing 4x3 section with clear pixel grid
+  if (f === 2) {
+    return [
+      {id:'title', type:'label', text:t('f2_title'), x:cx, y:30, color:P.primary, size:18, align:'center', glow:P.glowStrong},
+      {id:'desc', type:'text', text:t('f2_desc'), x:cx, y:54, color:P.muted, size:12, align:'center'},
+      {id:'mars_img', type:'custom', x:0, y:0, draw:function(ctx) {
+        var imgW = W * 0.65, imgH = H * 0.5;
+        var imgX = cx - imgW/2, imgY = cy*0.6 - imgH/2;
+        // Show 4x3 deep zoom section with thick grid
+        drawPixelImage(ctx, MARS_IMG, 5, 6, 3, 4, imgX, imgY, imgW, imgH, true);
+        ctx.strokeStyle = P.primary;
+        ctx.lineWidth = 2;
+        ctx.strokeRect(imgX, imgY, imgW, imgH);
+        // Label individual pixels
+        var cellW = imgW / 4, cellH = imgH / 3;
+        ctx.font = "bold 10px 'Space Grotesk',sans-serif";
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillStyle = 'rgba(255,255,255,0.7)';
+        for (var r = 0; r < 3; r++) {
+          for (var c = 0; c < 4; c++) {
+            var color = MARS_IMG[5+r][6+c];
+            ctx.fillStyle = 'rgba(255,255,255,0.6)';
+            ctx.fillText(color, imgX + c*cellW + cellW/2, imgY + r*cellH + cellH/2);
+          }
+        }
+      }, alpha:1},
+      {id:'pixel_label', type:'label', text:t('f2_pixel'), x:cx, y:H*0.85, color:P.primary, size:14, align:'center', glow:P.glowStrong},
+    ];
+  }
+
+  // Frame 3: Resolution comparison -- 3 versions side by side
+  if (f === 3) {
+    return [
+      {id:'title', type:'label', text:t('f3_title'), x:cx, y:30, color:P.primary, size:16, align:'center', glow:P.glowStrong},
+      {id:'desc', type:'text', text:t('f3_desc'), x:cx, y:52, color:P.muted, size:12, align:'center'},
+      {id:'compare', type:'custom', x:0, y:0, draw:function(ctx) {
+        var pad = 20;
+        var totalW = W - pad * 2;
+        var boxW = (totalW - pad * 2) / 3;
+        var boxH = H * 0.42;
+        var topY = cy * 0.5;
+
+        // Low res: 4x3
+        var low = downscaleImage(MARS_IMG, 3, 4);
+        var x1 = pad;
+        drawPixelImage(ctx, low, 0, 0, low.length, low[0].length, x1, topY, boxW, boxH, true);
+        ctx.strokeStyle = P.error; ctx.lineWidth = 1.5;
+        ctx.strokeRect(x1, topY, boxW, boxH);
+        ctx.font = "bold 12px 'Space Grotesk',sans-serif";
+        ctx.textAlign = 'center'; ctx.fillStyle = P.error;
+        ctx.fillText(t('f3_low'), x1 + boxW/2, topY + boxH + 18);
+
+        // Medium res: 8x6
+        var med = downscaleImage(MARS_IMG, 2, 2);
+        var x2 = pad + boxW + pad;
+        drawPixelImage(ctx, med, 0, 0, med.length, med[0].length, x2, topY, boxW, boxH, true);
+        ctx.strokeStyle = P.secondary; ctx.lineWidth = 1.5;
+        ctx.strokeRect(x2, topY, boxW, boxH);
+        ctx.fillStyle = P.secondary;
+        ctx.fillText(t('f3_med'), x2 + boxW/2, topY + boxH + 18);
+
+        // High res: 16x12
+        var x3 = pad + (boxW + pad) * 2;
+        drawPixelImage(ctx, MARS_IMG, 0, 0, 12, 16, x3, topY, boxW, boxH, false);
+        ctx.strokeStyle = P.primary; ctx.lineWidth = 1.5;
+        ctx.strokeRect(x3, topY, boxW, boxH);
+        ctx.fillStyle = P.primary;
+        ctx.fillText(t('f3_high'), x3 + boxW/2, topY + boxH + 18);
+      }, alpha:1},
+      {id:'phone_note', type:'label', text:t('f3_phone'), x:cx, y:H*0.9, color:P.tertiary, size:14, align:'center', glow:'rgba(0,212,238,0.3)'},
+    ];
+  }
+
+  return [];
+}
+
+// ============================================================
+// CUSTOM BACKGROUND
+// ============================================================
+
+function drawBg(ctx, W, H) {
+  var g = ctx.createLinearGradient(0, 0, 0, H);
+  g.addColorStop(0, '#0a0806');
+  g.addColorStop(1, '#1a0c06');
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, W, H);
+  ctx.strokeStyle = 'rgba(255,127,80,0.03)';
+  ctx.lineWidth = 0.5;
+  for (var x = 0; x < W; x += 40) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke(); }
+  for (var y = 0; y < H; y += 40) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke(); }
+}
+
+// ============================================================
+// BOOT
+// ============================================================
+
+AnimRuntime.boot();
+</script>
+</body>
+</html>
