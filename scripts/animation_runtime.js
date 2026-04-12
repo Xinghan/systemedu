@@ -144,6 +144,51 @@ var AnimRuntime = (function () {
   // --- Math helpers ---
   function lerp(a, b, p) { return a + (b - a) * p; }
   function easeInOut(x) { return x < 0.5 ? 2 * x * x : 1 - Math.pow(-2 * x + 2, 2) / 2; }
+
+  /**
+   * interpolate -- Remotion 风格的多段帧插值函数。
+   *
+   * 用法:
+   *   interpolate(frame, [0, 30, 60], [0, 1, 0])
+   *   // frame=0 → 0, frame=15 → 0.5, frame=30 → 1, frame=45 → 0.5, frame=60 → 0
+   *
+   *   interpolate(frame, [0, 30], [100, 400], { easing: easeInOut })
+   *
+   * @param {number} value     当前值（通常是帧号或时间）
+   * @param {number[]} input   输入区间端点（必须递增，至少 2 个）
+   * @param {number[]} output  输出区间端点（与 input 等长）
+   * @param {object} [opts]    可选配置
+   * @param {function} [opts.easing]  缓动函数 (0→1) → (0→1)，默认线性
+   * @param {string} [opts.extrapolate]  "clamp"(默认) | "extend"
+   * @returns {number}
+   */
+  function interpolate(value, input, output, opts) {
+    var n = input.length;
+    var easing = (opts && opts.easing) || null;
+    var clamp = !(opts && opts.extrapolate === 'extend');
+
+    // 边界处理
+    if (value <= input[0]) {
+      if (clamp) return output[0];
+      var p0 = (value - input[0]) / (input[1] - input[0]);
+      return lerp(output[0], output[1], easing ? easing(p0) : p0);
+    }
+    if (value >= input[n - 1]) {
+      if (clamp) return output[n - 1];
+      var pn = (value - input[n - 2]) / (input[n - 1] - input[n - 2]);
+      return lerp(output[n - 2], output[n - 1], easing ? easing(pn) : pn);
+    }
+
+    // 找到所在区间
+    for (var i = 1; i < n; i++) {
+      if (value <= input[i]) {
+        var p = (value - input[i - 1]) / (input[i] - input[i - 1]);
+        if (easing) p = easing(p);
+        return lerp(output[i - 1], output[i], p);
+      }
+    }
+    return output[n - 1];
+  }
   function merge(base, ov) { var r = {}; for (var k in base) r[k] = base[k]; for (var k2 in ov) r[k2] = ov[k2]; return r; }
 
   // --- i18n ---
@@ -514,6 +559,7 @@ var AnimRuntime = (function () {
     // Expose for content scripts
     t: t,
     lerp: lerp,
+    interpolate: interpolate,
     easeInOut: easeInOut,
     merge: merge,
     drawElement: drawElement,
