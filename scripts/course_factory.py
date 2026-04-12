@@ -1704,21 +1704,25 @@ def research_knode(
     }
 
 
-def merge_resources_into_plan(plan_markdown: str, research: dict | None) -> str:
+def merge_resources_into_plan(
+    plan_markdown: str,
+    research: dict | None,
+    labxchange_results: list[dict] | None = None,
+) -> str:
     """
-    把 research_knode() 的返回结果融入 plan_markdown。
+    把 research_knode() 的返回结果以及 LabXchange 匹配结果融入 plan_markdown。
 
     融入策略（保持纯 markdown，前端 ReactMarkdown 默认可渲染）：
-    - YouTube 视频：追加到"## 推荐视频"段落，使用缩略图嵌入格式（前端渲染为播放器）
-    - 网页资料：追加到"## 延伸阅读"段落，列表形式
+    - YouTube 视频：追加到「## 推荐视频」段落，使用缩略图嵌入格式（前端渲染为播放器）
+    - 网页资料：追加到「## 延伸阅读」段落，列表形式
+    - LabXchange pathways：单独的「## 推荐互动资源」段落，带 Harvard 学习库标识
 
-    如果 research 为 None 或没有任何结果，原样返回 plan_markdown。
+    如果 research 和 labxchange_results 都为空，原样返回 plan_markdown。
     """
-    if not research:
-        return plan_markdown
-    web = research.get("web_results") or []
-    youtube = research.get("youtube_results") or []
-    if not web and not youtube:
+    web = (research or {}).get("web_results") or []
+    youtube = (research or {}).get("youtube_results") or []
+    labxchange = labxchange_results or []
+    if not web and not youtube and not labxchange:
         return plan_markdown
 
     text = plan_markdown.rstrip() + "\n"
@@ -1779,6 +1783,24 @@ def merge_resources_into_plan(plan_markdown: str, research: dict | None) -> str:
                 lines.append(f"- [**{title}**]({url})")
         lines.append("")
         text = text.rstrip() + "\n" + "\n".join(lines)
+
+    # 3. LabXchange pathways（追加到末尾，单独标识）
+    if labxchange:
+        lx_lines: list[str] = ["", "## 推荐互动资源", ""]
+        lx_lines.append("> 来自 Harvard LabXchange 的开放学习路径，可免费注册学习：")
+        lx_lines.append("")
+        for r in labxchange:
+            title = (r.get("title") or "").replace("[", "(").replace("]", ")")
+            url = r.get("url", "")
+            desc = (r.get("description") or r.get("snippet") or "").strip()
+            if not title or not url:
+                continue
+            if desc:
+                lx_lines.append(f"- [**{title}**]({url}) — {desc[:200]}")
+            else:
+                lx_lines.append(f"- [**{title}**]({url})")
+        lx_lines.append("")
+        text = text.rstrip() + "\n" + "\n".join(lx_lines)
 
     return text
 
@@ -2307,11 +2329,18 @@ def inject_animation_resize_patch(html: str) -> str:
 
     - 幂等升级：如果已有旧 patch（通过 `__systemedu_resize_patched` 标记识别），
       先剥离旧 patch script 再注入当前版本，保证升级能生效。
+    - 若 HTML 显式声明 `window.__systemedu_resize_patch_optout = true`，
+      则跳过注入（用于有自己完整 RAF resize 循环的游戏，patch 反而会
+      破坏其布局）。
     - 对空字符串或 None 直接返回原值。
     - 不会修改原有 <script> / <style> / DOM；只追加一段独立 script 到 </body> 前。
       如果找不到 </body>，则追加到字符串末尾。
     """
     if not html:
+        return html
+
+    # Opt-out: game/animation 作者显式声明不需要 patch。
+    if "__systemedu_resize_patch_optout" in html:
         return html
 
     # 若旧 patch 存在，先剥离它，再用最新版本重新注入。
@@ -2448,9 +2477,11 @@ def make_course_content(
     # 0a. 展开 {{KEY}} shortcode 为完整 Markdown 链接
     plan_markdown = expand_resource_shortcodes(plan_markdown)
 
-    # 0b. 把外部资料融入 plan_markdown（如果传入了 research）
-    if research:
-        plan_markdown = merge_resources_into_plan(plan_markdown, research)
+    # 0b. 把外部资料融入 plan_markdown（如果传入了 research / labxchange）
+    if research or labxchange_results:
+        plan_markdown = merge_resources_into_plan(
+            plan_markdown, research, labxchange_results=labxchange_results
+        )
 
     # 0.5 动画 HTML 双重修复：
     #   (a) 把非等比 ctx.scale(w/W, h/H) 替换为 letterbox 等比缩放
