@@ -1,0 +1,1798 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Sol Planner - Mars Mission Simulator</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=Noto+Sans+SC:wght@400;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --primary: #38bdf8;
+  --accent: #50ffb0;
+  --warn: #ff6b6b;
+  --bg: #0c0e12;
+  --panel: #12151d;
+  --border: rgba(80,100,140,0.2);
+  --text: #d1d5db;
+  --text-dim: rgba(180,190,210,0.6);
+  --energy-bar: #facc15;
+  --comm-active: #38bdf8;
+  --comm-off: #ff6b6b;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{width:100%;height:100vh;overflow:hidden;background:var(--bg);
+  font-family:'Inter','Noto Sans SC',sans-serif;color:var(--text)}
+
+/* ---------- layout ---------- */
+.app{display:flex;flex-direction:column;height:100vh;overflow:hidden}
+.header{height:40px;min-height:40px;display:flex;align-items:center;justify-content:space-between;
+  padding:0 16px;background:var(--panel);border-bottom:1px solid var(--border)}
+.header h1{font-size:13px;font-weight:700;color:var(--primary);letter-spacing:0.06em;
+  text-transform:uppercase}
+.header-right{display:flex;align-items:center;gap:10px}
+.lang-btn{padding:3px 10px;border:1px solid var(--border);background:transparent;
+  color:var(--primary);cursor:pointer;font-size:11px;font-weight:700;letter-spacing:0.04em}
+.lang-btn:hover{background:rgba(56,189,248,0.1)}
+
+.main{flex:1;display:flex;min-height:0;overflow:hidden}
+
+/* ---------- left panel ---------- */
+.left-panel{width:240px;min-width:240px;background:var(--panel);border-right:1px solid var(--border);
+  display:flex;flex-direction:column;overflow:hidden}
+.panel-title{font-size:11px;font-weight:700;color:var(--primary);text-transform:uppercase;
+  letter-spacing:0.06em;padding:10px 12px 6px;border-bottom:1px solid var(--border)}
+.task-list{flex:1;overflow-y:auto;padding:6px 8px}
+.task-list::-webkit-scrollbar{width:4px}
+.task-list::-webkit-scrollbar-thumb{background:rgba(56,189,248,0.2);border-radius:2px}
+
+.task-card{padding:8px 10px;margin-bottom:5px;background:rgba(56,189,248,0.04);
+  border:1px solid var(--border);cursor:pointer;transition:all 0.15s;position:relative}
+.task-card:hover{background:rgba(56,189,248,0.1);border-color:rgba(56,189,248,0.3)}
+.task-card.disabled{opacity:0.35;pointer-events:none}
+.task-card .tc-top{display:flex;align-items:center;gap:6px;margin-bottom:4px}
+.task-card .tc-icon{font-size:16px;width:22px;text-align:center;flex-shrink:0}
+.task-card .tc-name{font-size:12px;font-weight:600;color:var(--text)}
+.task-card .tc-stats{display:flex;gap:10px;font-size:10px;color:var(--text-dim)}
+.task-card .tc-stats span{display:flex;align-items:center;gap:3px}
+.tc-energy{color:var(--energy-bar) !important}
+.tc-science{color:var(--accent) !important}
+.tc-time{color:var(--primary) !important}
+
+/* ---------- center ---------- */
+.center{flex:1;display:flex;flex-direction:column;min-width:0;position:relative}
+.canvas-wrap{flex:1;position:relative;overflow:hidden}
+.canvas-wrap canvas{position:absolute;top:0;left:0;width:100%;height:100%}
+.comm-indicator{position:absolute;top:8px;left:50%;transform:translateX(-50%);
+  padding:4px 14px;font-size:11px;font-weight:700;letter-spacing:0.04em;
+  border:1px solid var(--border);background:rgba(18,21,29,0.9);z-index:10;
+  display:flex;align-items:center;gap:6px}
+.comm-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+.comm-dot.on{background:var(--accent);box-shadow:0 0 8px var(--accent)}
+.comm-dot.off{background:var(--warn);box-shadow:0 0 8px var(--warn)}
+.comm-dot.pending{background:var(--energy-bar);box-shadow:0 0 8px var(--energy-bar)}
+
+/* tutorial overlay */
+.tutorial-overlay{position:absolute;top:0;left:0;right:0;bottom:0;z-index:20;
+  background:rgba(12,14,18,0.85);display:flex;align-items:center;justify-content:center}
+.tutorial-box{max-width:420px;padding:24px 28px;background:var(--panel);
+  border:1px solid rgba(56,189,248,0.3);text-align:center}
+.tutorial-box h2{font-size:16px;color:var(--primary);margin-bottom:10px;font-weight:700}
+.tutorial-box p{font-size:13px;line-height:1.7;color:var(--text);margin-bottom:14px}
+.tutorial-box button{padding:8px 24px;border:1px solid var(--primary);background:rgba(56,189,248,0.15);
+  color:var(--primary);cursor:pointer;font-size:13px;font-weight:700}
+.tutorial-box button:hover{background:rgba(56,189,248,0.25)}
+
+/* ---------- right panel ---------- */
+.right-panel{width:300px;min-width:300px;background:var(--panel);border-left:1px solid var(--border);
+  display:flex;flex-direction:column;overflow:hidden}
+
+.sol-header{padding:10px 12px;border-bottom:1px solid var(--border)}
+.sol-row{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px}
+.sol-label{font-size:13px;font-weight:700;color:var(--primary)}
+.sol-science{font-size:12px;font-weight:600;color:var(--accent)}
+.energy-wrap{height:14px;background:rgba(250,204,21,0.1);border:1px solid rgba(250,204,21,0.2);
+  position:relative;overflow:hidden}
+.energy-fill{height:100%;background:linear-gradient(90deg,rgba(250,204,21,0.6),var(--energy-bar));
+  transition:width 0.3s}
+.energy-text{position:absolute;top:0;left:0;right:0;bottom:0;display:flex;align-items:center;
+  justify-content:center;font-size:10px;font-weight:700;color:var(--bg)}
+
+.timeline-title{font-size:11px;font-weight:700;color:var(--primary);text-transform:uppercase;
+  letter-spacing:0.06em;padding:8px 12px 4px;display:flex;align-items:center;
+  justify-content:space-between}
+.timeline-count{font-size:10px;color:var(--text-dim);font-weight:400}
+.timeline{flex:1;overflow-y:auto;padding:4px 8px;min-height:0}
+.timeline::-webkit-scrollbar{width:4px}
+.timeline::-webkit-scrollbar-thumb{background:rgba(56,189,248,0.2);border-radius:2px}
+
+.tl-item{display:flex;align-items:center;gap:6px;padding:6px 8px;margin-bottom:4px;
+  background:rgba(56,189,248,0.04);border:1px solid var(--border);cursor:grab;
+  position:relative;transition:all 0.15s}
+.tl-item:hover{background:rgba(56,189,248,0.08)}
+.tl-item.dragging{opacity:0.4;border-color:var(--primary)}
+.tl-item.drag-over{border-top:2px solid var(--primary)}
+.tl-item.executing{border-color:var(--accent);background:rgba(80,255,176,0.08)}
+.tl-item.done{opacity:0.5}
+.tl-item.failed{border-color:var(--warn);opacity:0.5}
+.tl-idx{width:18px;height:18px;display:flex;align-items:center;justify-content:center;
+  font-size:10px;font-weight:700;color:var(--primary);border:1px solid var(--border);flex-shrink:0}
+.tl-icon{font-size:14px;flex-shrink:0}
+.tl-name{flex:1;font-size:11px;font-weight:600;min-width:0;overflow:hidden;
+  text-overflow:ellipsis;white-space:nowrap}
+.tl-cost{font-size:10px;color:var(--energy-bar);flex-shrink:0}
+.tl-remove{width:18px;height:18px;display:flex;align-items:center;justify-content:center;
+  font-size:12px;color:var(--warn);cursor:pointer;opacity:0.5;flex-shrink:0;
+  background:transparent;border:none}
+.tl-remove:hover{opacity:1}
+
+.event-log-title{font-size:11px;font-weight:700;color:var(--primary);text-transform:uppercase;
+  letter-spacing:0.06em;padding:6px 12px 4px;border-top:1px solid var(--border)}
+.event-log{height:130px;min-height:100px;overflow-y:auto;padding:4px 10px;font-size:11px;
+  line-height:1.6;color:var(--text-dim)}
+.event-log::-webkit-scrollbar{width:4px}
+.event-log::-webkit-scrollbar-thumb{background:rgba(56,189,248,0.2);border-radius:2px}
+.event-log .ev{margin-bottom:2px}
+.ev-info{color:var(--primary)}
+.ev-good{color:var(--accent)}
+.ev-bad{color:var(--warn)}
+.ev-comm{color:var(--comm-active)}
+
+.btn-row{padding:8px 10px;border-top:1px solid var(--border);display:flex;gap:8px}
+.btn-exec{flex:1;padding:8px 0;border:1px solid var(--accent);background:rgba(80,255,176,0.1);
+  color:var(--accent);cursor:pointer;font-size:12px;font-weight:700;letter-spacing:0.04em;
+  text-transform:uppercase;transition:all 0.15s}
+.btn-exec:hover{background:rgba(80,255,176,0.2)}
+.btn-exec:disabled{opacity:0.3;pointer-events:none}
+.btn-reset{flex:0.6;padding:8px 0;border:1px solid var(--border);background:transparent;
+  color:var(--text-dim);cursor:pointer;font-size:12px;font-weight:700;letter-spacing:0.04em;
+  text-transform:uppercase;transition:all 0.15s}
+.btn-reset:hover{color:var(--warn);border-color:var(--warn)}
+.btn-reset:disabled{opacity:0.3;pointer-events:none}
+
+/* result overlay */
+.result-overlay{position:absolute;top:0;left:0;right:0;bottom:0;z-index:30;
+  background:rgba(12,14,18,0.88);display:flex;align-items:center;justify-content:center}
+.result-box{max-width:380px;padding:24px 28px;background:var(--panel);
+  border:1px solid rgba(80,255,176,0.3);text-align:center}
+.result-box h2{font-size:16px;color:var(--accent);margin-bottom:12px;font-weight:700}
+.result-box .rb-stats{display:flex;gap:16px;justify-content:center;margin-bottom:14px}
+.result-box .rb-stat{text-align:center}
+.result-box .rb-val{font-size:20px;font-weight:700;color:var(--primary)}
+.result-box .rb-lbl{font-size:10px;color:var(--text-dim);margin-top:2px}
+.result-box button{padding:8px 24px;border:1px solid var(--accent);
+  background:rgba(80,255,176,0.15);color:var(--accent);cursor:pointer;
+  font-size:13px;font-weight:700}
+.result-box button:hover{background:rgba(80,255,176,0.25)}
+
+/* final win/lose overlay */
+.final-overlay{position:absolute;top:0;left:0;right:0;bottom:0;z-index:40;
+  background:rgba(12,14,18,0.92);display:flex;align-items:center;justify-content:center}
+.final-box{max-width:440px;padding:28px 32px;background:var(--panel);
+  border:1px solid var(--primary);text-align:center}
+.final-box h2{font-size:18px;margin-bottom:8px;font-weight:700}
+.final-box.win h2{color:var(--accent)}
+.final-box.lose h2{color:var(--warn)}
+.final-box p{font-size:13px;line-height:1.7;color:var(--text);margin-bottom:16px}
+.final-box button{padding:8px 24px;border:1px solid var(--primary);
+  background:rgba(56,189,248,0.15);color:var(--primary);cursor:pointer;
+  font-size:13px;font-weight:700}
+.final-box button:hover{background:rgba(56,189,248,0.25)}
+
+/* delay timer bar */
+.delay-bar{position:absolute;bottom:8px;left:50%;transform:translateX(-50%);
+  padding:4px 14px;font-size:10px;font-weight:700;letter-spacing:0.04em;
+  background:rgba(18,21,29,0.9);border:1px solid var(--border);z-index:10;
+  display:none;color:var(--warn)}
+.delay-bar.visible{display:flex;align-items:center;gap:8px}
+.delay-bar .db-fill{width:120px;height:6px;background:rgba(255,107,107,0.15);
+  border:1px solid rgba(255,107,107,0.2);position:relative;overflow:hidden}
+.delay-bar .db-inner{height:100%;background:var(--warn);transition:width 0.3s}
+
+/* energy preview */
+.energy-preview{font-size:10px;color:var(--warn);margin-top:3px;min-height:14px}
+
+/* objective badge */
+.obj-badge{padding:6px 10px;margin:4px 8px;font-size:10px;line-height:1.5;
+  color:var(--primary);background:rgba(56,189,248,0.06);
+  border:1px solid rgba(56,189,248,0.15)}
+
+/* task description tooltip */
+.task-card .tc-desc{font-size:10px;color:var(--text-dim);margin-top:3px;
+  line-height:1.4;display:none}
+.task-card:hover .tc-desc{display:block}
+</style>
+</head>
+<body>
+<div class="app" id="app">
+  <!-- header -->
+  <div class="header">
+    <h1 id="titleText">SOL PLANNER</h1>
+    <div class="header-right">
+      <span id="totalScoreHdr" style="font-size:11px;color:var(--accent);font-weight:700"></span>
+      <button class="lang-btn" id="langBtn">EN</button>
+    </div>
+  </div>
+  <div class="main">
+    <!-- left: tasks -->
+    <div class="left-panel">
+      <div class="panel-title" id="taskPanelTitle">AVAILABLE TASKS</div>
+      <div class="task-list" id="taskList"></div>
+    </div>
+    <!-- center: canvas -->
+    <div class="center" id="centerCol">
+      <div class="comm-indicator" id="commInd">
+        <span class="comm-dot on" id="commDot"></span>
+        <span id="commText">Uplink Ready</span>
+      </div>
+      <div class="canvas-wrap">
+        <canvas id="marsCanvas"></canvas>
+      </div>
+      <div class="delay-bar" id="delayBar">
+        <span id="delayText">Signal delay: 14 min</span>
+        <div class="db-fill"><div class="db-inner" id="delayFill" style="width:0%"></div></div>
+      </div>
+    </div>
+    <!-- right: timeline + log -->
+    <div class="right-panel">
+      <div class="sol-header">
+        <div class="sol-row">
+          <span class="sol-label" id="solLabel">SOL 1</span>
+          <span class="sol-science" id="sciLabel">Science: 0</span>
+        </div>
+        <div class="energy-wrap">
+          <div class="energy-fill" id="energyFill" style="width:100%"></div>
+          <div class="energy-text" id="energyText">100 / 100</div>
+        </div>
+        <div class="energy-preview" id="energyPreview"></div>
+      </div>
+      <div class="obj-badge" id="objBadge"></div>
+      <div class="timeline-title">
+        <span id="tlTitle">TIMELINE</span>
+        <span class="timeline-count" id="tlCount">0 / 8</span>
+      </div>
+      <div class="timeline" id="timeline"></div>
+      <div class="event-log-title" id="logTitle">EVENT LOG</div>
+      <div class="event-log" id="eventLog"></div>
+      <div class="btn-row">
+        <button class="btn-exec" id="btnExec" disabled>EXECUTE</button>
+        <button class="btn-reset" id="btnReset">RESET</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+'use strict';
+window.__systemedu_resize_patch_optout = true;
+
+/* ============================================================
+   I18N
+   ============================================================ */
+var T = {
+  zh: {
+    title: 'SOL PLANNER - 火星任务规划器',
+    taskPanel: '可用任务',
+    timeline: '任务时间线',
+    eventLog: '事件日志',
+    execute: '执行计划',
+    reset: '重置',
+    science: '科学分',
+    energy: '能量',
+    sol: 'SOL',
+    totalScore: '总分',
+    commUplink: '上行通信窗口 - 发送指令',
+    commExec: '自主执行中 - 无法联系',
+    commDownlink: '下行通信窗口 - 接收数据',
+    commReady: '等待规划指令',
+    /* tasks */
+    DRIVE: '导航行驶',
+    NAVCAM_PANO: '全景拍摄',
+    SUPERCAM_LIBS: '激光岩石分析',
+    DRILL_SAMPLE: '钻取岩芯样本',
+    WEATHER_CHECK: 'REMS气象测量',
+    MAST_PHOTO: '桅杆特写拍摄',
+    /* stats */
+    energyCost: '能量',
+    scienceVal: '科学',
+    duration: '时长',
+    ticks: '拍',
+    /* events */
+    evDust: '镜头积尘 - 丢失一张照片数据',
+    evMineral: '发现罕见矿物 - 额外科学分 +10',
+    evSlip: '车轮打滑 - 额外消耗 8 能量',
+    evCold: '温度骤降 - 跳过一个任务',
+    evUplink: '上行链路建立... 指令包上传中',
+    evUplinkDone: '指令上传完毕，火星车开始自主执行',
+    evDownlink: '下行链路建立... 接收遥测数据',
+    evDownlinkDone: '数据接收完毕，Sol 结束',
+    evExecTask: '执行中: ',
+    evTaskDone: '完成: ',
+    evTaskFail: '失败: ',
+    evNoEnergy: '能量不足，跳过: ',
+    /* tutorial */
+    tutTitle: '欢迎来到 JPL 任务控制中心',
+    tutBody: '你是火星车任务规划师。每个 Sol（火星日），你需要为火星车制定当天的工作计划。\n\n' +
+      '从左侧选择任务 -> 它们会出现在右侧时间线中\n' +
+      '注意能量预算 -> 每个任务消耗不同能量\n' +
+      '点击「执行计划」-> 观察火星车自主执行\n\n' +
+      '由于地火通信延迟（3-24分钟），你无法实时操控火星车。\n' +
+      '这就是为什么火星车必须具备自主能力 -- 它需要独立应对意外情况。',
+    tutStart: '开始任务',
+    /* result */
+    resTitle: 'Sol 报告',
+    resPhotos: '照片',
+    resSamples: '样本',
+    resScience: '科学分',
+    resDistance: '行驶距离',
+    resNext: '下一个 Sol',
+    /* final */
+    winTitle: '任务成功！',
+    winBody: '你成功完成了5个Sol的火星探测任务！火星车在你的规划下高效运作，科学回报丰厚。' +
+      '\n\n关键认知：由于地火通信延迟，火星车的每日计划必须提前精心设计，一旦上传就无法实时修改。' +
+      '这就是为什么自主导航和异常处理能力对火星车至关重要。',
+    loseTitle: '任务结束',
+    loseBody: '5个Sol的探测任务结束了，但科学回报未达标。\n\n' +
+      '提示：合理分配能量，优先高科学价值任务（钻取样本、激光分析），并为意外事件预留能量余量。',
+    replay: '重新开始',
+    /* sol objectives */
+    obj1: 'Sol 1: 熟悉操作 - 拍摄全景，检测气象',
+    obj2: 'Sol 2: 绕过岩石障碍，到达分析点',
+    obj3: 'Sol 3: 能量受限 - 精选高优先级任务',
+    obj4: 'Sol 4: 沙尘暴预警 - 部分任务可能失败',
+    obj5: 'Sol 5: 复杂地形 - 综合规划挑战',
+    /* signal delay */
+    signalDelay: '信号延迟',
+    signalMin: '分钟',
+    plannedCost: '计划消耗',
+    remaining: '剩余',
+    /* task descriptions */
+    desc_DRIVE: '控制火星车导航至下一个路点',
+    desc_NAVCAM_PANO: '使用导航相机拍摄360度全景图',
+    desc_SUPERCAM_LIBS: '用激光蒸发岩石表面，光谱分析成分',
+    desc_DRILL_SAMPLE: '使用钻头获取岩芯样本，最高科学价值',
+    desc_WEATHER_CHECK: 'REMS气象站测量温度/风速/气压',
+    desc_MAST_PHOTO: '桅杆相机近距离拍摄岩石纹理'
+  },
+  en: {
+    title: 'SOL PLANNER - Mars Mission Simulator',
+    taskPanel: 'AVAILABLE TASKS',
+    timeline: 'TIMELINE',
+    eventLog: 'EVENT LOG',
+    execute: 'EXECUTE',
+    reset: 'RESET',
+    science: 'Science',
+    energy: 'Energy',
+    sol: 'SOL',
+    totalScore: 'Total',
+    commUplink: 'Uplink Window - Sending Commands',
+    commExec: 'Autonomous Execution - No Contact',
+    commDownlink: 'Downlink Window - Receiving Data',
+    commReady: 'Awaiting Plan',
+    DRIVE: 'Drive / Navigate',
+    NAVCAM_PANO: 'NavCam Panorama',
+    SUPERCAM_LIBS: 'SuperCam LIBS',
+    DRILL_SAMPLE: 'Drill Core Sample',
+    WEATHER_CHECK: 'REMS Weather',
+    MAST_PHOTO: 'MastCam Close-up',
+    energyCost: 'Energy',
+    scienceVal: 'Science',
+    duration: 'Duration',
+    ticks: 'ticks',
+    evDust: 'Dust on lens - lost one photo',
+    evMineral: 'Rare mineral found - bonus science +10',
+    evSlip: 'Wheel slip - extra 8 energy consumed',
+    evCold: 'Temperature drop - skipping one task',
+    evUplink: 'Uplink established... uploading command package',
+    evUplinkDone: 'Commands uploaded. Rover begins autonomous execution.',
+    evDownlink: 'Downlink established... receiving telemetry',
+    evDownlinkDone: 'Data received. Sol complete.',
+    evExecTask: 'Executing: ',
+    evTaskDone: 'Completed: ',
+    evTaskFail: 'Failed: ',
+    evNoEnergy: 'Insufficient energy, skipping: ',
+    tutTitle: 'Welcome to JPL Mission Control',
+    tutBody: 'You are a Mars rover mission planner. Each Sol (Mars day), you design the rover\'s work schedule.\n\n' +
+      'Select tasks from the left panel -> they appear in the timeline\n' +
+      'Watch your energy budget -> each task has a cost\n' +
+      'Click "Execute" -> watch the rover work autonomously\n\n' +
+      'Due to Earth-Mars communication delay (3-24 min one-way), you cannot control the rover in real time.\n' +
+      'That is why rovers must be autonomous -- they handle surprises on their own.',
+    tutStart: 'Start Mission',
+    resTitle: 'Sol Report',
+    resPhotos: 'Photos',
+    resSamples: 'Samples',
+    resScience: 'Science',
+    resDistance: 'Distance',
+    resNext: 'Next Sol',
+    winTitle: 'Mission Success!',
+    winBody: 'You completed 5 Sols of Mars exploration! Your planning led to excellent scientific returns.' +
+      '\n\nKey insight: Due to Earth-Mars communication delay, each day\'s plan must be carefully designed in advance. ' +
+      'Once uploaded, commands cannot be modified in real time. This is why autonomous navigation and fault handling are critical for rovers.',
+    loseTitle: 'Mission Complete',
+    loseBody: 'The 5-Sol mission is over, but science goals were not met.\n\n' +
+      'Tip: Balance energy usage, prioritize high-value tasks (drill samples, LIBS analysis), and keep energy reserves for unexpected events.',
+    replay: 'Play Again',
+    obj1: 'Sol 1: Get familiar - take panoramas, check weather',
+    obj2: 'Sol 2: Navigate rock obstacles to reach analysis sites',
+    obj3: 'Sol 3: Limited energy - choose wisely',
+    obj4: 'Sol 4: Dust storm warning - some tasks may fail',
+    obj5: 'Sol 5: Complex terrain - full planning challenge',
+    signalDelay: 'Signal delay',
+    signalMin: 'min',
+    plannedCost: 'Planned cost',
+    remaining: 'Remaining',
+    desc_DRIVE: 'Navigate rover to the next waypoint',
+    desc_NAVCAM_PANO: 'Capture 360-degree panorama with NavCam',
+    desc_SUPERCAM_LIBS: 'Laser-ablate rock surface, spectral analysis',
+    desc_DRILL_SAMPLE: 'Drill core sample - highest science value',
+    desc_WEATHER_CHECK: 'REMS station: temperature, wind, pressure',
+    desc_MAST_PHOTO: 'MastCam close-up of rock texture'
+  }
+};
+
+var lang = 'zh';
+function t(key) { return T[lang][key] || key; }
+
+/* ============================================================
+   TASK DEFINITIONS
+   ============================================================ */
+var TASK_DEFS = [
+  { id: 'DRIVE',         icon: '\u{1F697}', energy: 10, science: 0,  dur: 2, cat: 'move' },
+  { id: 'NAVCAM_PANO',   icon: '\u{1F4F7}', energy: 8,  science: 8,  dur: 2, cat: 'photo' },
+  { id: 'SUPERCAM_LIBS', icon: '\u{1F52C}', energy: 15, science: 15, dur: 3, cat: 'analysis' },
+  { id: 'DRILL_SAMPLE',  icon: '\u26CF',    energy: 25, science: 25, dur: 4, cat: 'sample' },
+  { id: 'WEATHER_CHECK', icon: '\u{1F321}', energy: 5,  science: 10, dur: 1, cat: 'weather' },
+  { id: 'MAST_PHOTO',    icon: '\u{1F4F8}', energy: 6,  science: 5,  dur: 1, cat: 'photo' }
+];
+
+function getTaskDef(id) {
+  return TASK_DEFS.find(function(d) { return d.id === id; });
+}
+
+/* ============================================================
+   LEVEL / SOL DEFINITIONS
+   ============================================================ */
+// grid: 12 cols x 10 rows
+// terrain: 0=flat, 1=rock, 2=sand_dune, 3=target/waypoint
+function makeSolDef(solNum) {
+  var defs = [];
+  // Sol 1 - simple, mostly flat
+  defs[1] = {
+    energy: 100,
+    grid: [
+      [0,0,0,0,0,0,0,0,0,0,0,0],
+      [0,0,0,0,0,0,0,0,0,0,0,0],
+      [0,0,0,0,0,3,0,0,0,0,0,0],
+      [0,0,0,0,0,0,0,0,0,0,0,0],
+      [0,0,0,0,0,0,0,0,0,0,0,0],
+      [0,0,0,0,0,0,0,0,3,0,0,0],
+      [0,0,0,0,0,0,0,0,0,0,0,0],
+      [0,0,3,0,0,0,0,0,0,0,0,0],
+      [0,0,0,0,0,0,0,0,0,0,0,0],
+      [0,0,0,0,0,0,0,0,0,0,0,0]
+    ],
+    roverStart: [1, 8],
+    waypoints: [[5,2],[8,5],[2,7]],
+    dustStormChance: 0,
+    eventWeights: { mineral: 0.3, dust: 0.2, slip: 0.15, cold: 0 }
+  };
+  // Sol 2 - rocks appear
+  defs[2] = {
+    energy: 100,
+    grid: [
+      [0,0,0,0,1,0,0,0,0,0,0,0],
+      [0,0,0,1,1,0,0,0,0,0,0,0],
+      [0,0,0,0,0,0,0,1,0,0,0,0],
+      [0,0,0,0,0,3,0,1,0,0,0,0],
+      [0,0,1,0,0,0,0,0,0,0,0,0],
+      [0,0,1,1,0,0,0,0,0,3,0,0],
+      [0,0,0,0,0,0,0,0,0,0,0,0],
+      [0,0,0,0,0,0,1,0,0,0,0,0],
+      [0,0,0,3,0,0,1,1,0,0,0,0],
+      [0,0,0,0,0,0,0,0,0,0,0,0]
+    ],
+    roverStart: [0, 9],
+    waypoints: [[5,3],[9,5],[3,8]],
+    dustStormChance: 0,
+    eventWeights: { mineral: 0.25, dust: 0.25, slip: 0.25, cold: 0 }
+  };
+  // Sol 3 - limited energy
+  defs[3] = {
+    energy: 65,
+    grid: [
+      [0,0,0,0,0,0,0,0,0,0,0,0],
+      [0,0,0,0,0,0,0,2,2,0,0,0],
+      [0,0,0,3,0,0,0,2,0,0,0,0],
+      [0,0,0,0,0,1,0,0,0,0,0,0],
+      [0,0,0,0,0,1,0,0,0,0,0,0],
+      [0,0,0,0,0,0,0,0,0,3,0,0],
+      [0,0,1,0,0,0,0,0,0,0,0,0],
+      [0,0,0,0,0,0,0,0,0,0,0,0],
+      [0,0,0,0,0,0,0,3,0,0,0,0],
+      [0,0,0,0,0,0,0,0,0,0,0,0]
+    ],
+    roverStart: [0, 4],
+    waypoints: [[3,2],[9,5],[7,8]],
+    dustStormChance: 0,
+    eventWeights: { mineral: 0.3, dust: 0.15, slip: 0.2, cold: 0.1 }
+  };
+  // Sol 4 - dust storm
+  defs[4] = {
+    energy: 90,
+    grid: [
+      [0,0,2,2,0,0,0,0,0,0,0,0],
+      [0,0,2,0,0,0,1,0,0,0,0,0],
+      [0,0,0,0,0,0,1,0,0,3,0,0],
+      [0,0,0,0,1,0,0,0,0,0,0,0],
+      [0,0,0,0,1,0,0,0,0,0,0,0],
+      [0,3,0,0,0,0,0,2,0,0,0,0],
+      [0,0,0,0,0,0,0,2,2,0,0,0],
+      [0,0,0,0,0,0,0,0,0,0,3,0],
+      [0,0,0,0,0,1,0,0,0,0,0,0],
+      [0,0,0,0,0,0,0,0,0,0,0,0]
+    ],
+    roverStart: [6, 9],
+    waypoints: [[1,5],[9,2],[10,7]],
+    dustStormChance: 0.4,
+    eventWeights: { mineral: 0.15, dust: 0.35, slip: 0.2, cold: 0.2 }
+  };
+  // Sol 5 - complex
+  defs[5] = {
+    energy: 80,
+    grid: [
+      [0,0,1,0,0,2,0,0,0,1,0,0],
+      [0,0,1,0,0,2,0,0,3,1,0,0],
+      [0,0,0,0,0,0,0,0,0,0,0,0],
+      [0,0,0,1,0,0,0,1,0,0,0,0],
+      [0,3,0,1,0,0,0,1,0,0,0,0],
+      [0,0,0,0,0,0,0,0,0,0,2,0],
+      [0,0,0,0,0,1,0,0,0,0,2,0],
+      [0,0,0,0,0,1,0,0,3,0,0,0],
+      [0,0,0,0,0,0,0,0,0,0,0,0],
+      [0,0,0,0,0,0,0,0,0,0,0,0]
+    ],
+    roverStart: [5, 9],
+    waypoints: [[1,4],[8,1],[8,7]],
+    dustStormChance: 0.2,
+    eventWeights: { mineral: 0.2, dust: 0.2, slip: 0.25, cold: 0.2 }
+  };
+  return defs[solNum] || defs[1];
+}
+
+/* ============================================================
+   GAME STATE
+   ============================================================ */
+var state = {
+  sol: 1,
+  energy: 100,
+  maxEnergy: 100,
+  scienceThisSol: 0,
+  totalScience: 0,
+  photosThisSol: 0,
+  samplesThisSol: 0,
+  timeline: [],        // [{taskId, ...}]
+  phase: 'planning',   // planning | uplink | executing | event | downlink | result
+  roverPos: [1, 8],    // grid col, row
+  roverAngle: 0,       // degrees
+  targetWpIdx: 0,
+  solDef: null,
+  execIdx: -1,
+  showTutorial: true,
+  gameOver: false,
+  showResult: false,
+  eventQueue: [],
+  driveTarget: null,
+  animFrame: 0,
+  commBeamAlpha: 0,
+  roverTrail: [],         // [{x, y}] positions the rover has visited
+  distanceDriven: 0
+};
+
+var WIN_SCORE = 180;
+var MAX_SOLS = 5;
+var MAX_TIMELINE = 8;
+
+/* ============================================================
+   DOM REFERENCES
+   ============================================================ */
+var $taskList = document.getElementById('taskList');
+var $timeline = document.getElementById('timeline');
+var $eventLog = document.getElementById('eventLog');
+var $energyFill = document.getElementById('energyFill');
+var $energyText = document.getElementById('energyText');
+var $solLabel = document.getElementById('solLabel');
+var $sciLabel = document.getElementById('sciLabel');
+var $tlCount = document.getElementById('tlCount');
+var $btnExec = document.getElementById('btnExec');
+var $btnReset = document.getElementById('btnReset');
+var $commDot = document.getElementById('commDot');
+var $commText = document.getElementById('commText');
+var $canvas = document.getElementById('marsCanvas');
+var ctx = $canvas.getContext('2d');
+var $center = document.getElementById('centerCol');
+
+/* ============================================================
+   CANVAS SIZING
+   ============================================================ */
+var cw = 600, ch = 500;
+function resizeCanvas() {
+  var rect = $canvas.parentElement.getBoundingClientRect();
+  cw = Math.floor(rect.width);
+  ch = Math.floor(rect.height);
+  $canvas.width = cw;
+  $canvas.height = ch;
+}
+window.addEventListener('resize', resizeCanvas);
+
+/* ============================================================
+   INIT SOL
+   ============================================================ */
+function initSol(solNum) {
+  state.sol = solNum;
+  state.solDef = makeSolDef(solNum);
+  state.energy = state.solDef.energy;
+  state.maxEnergy = state.solDef.energy;
+  state.scienceThisSol = 0;
+  state.photosThisSol = 0;
+  state.samplesThisSol = 0;
+  state.timeline = [];
+  state.phase = 'planning';
+  state.roverPos = state.solDef.roverStart.slice();
+  state.roverAngle = 0;
+  state.targetWpIdx = 0;
+  state.execIdx = -1;
+  state.showResult = false;
+  state.eventQueue = [];
+  state.driveTarget = null;
+  state.commBeamAlpha = 0;
+  state.roverTrail = [state.solDef.roverStart.slice()];
+  state.distanceDriven = 0;
+  $eventLog.innerHTML = '';
+  updateUI();
+  renderTaskList();
+  renderTimeline();
+  logEvent(t('obj' + solNum), 'info');
+}
+
+/* ============================================================
+   UI UPDATES
+   ============================================================ */
+function updateUI() {
+  $solLabel.textContent = t('sol') + ' ' + state.sol;
+  $sciLabel.textContent = t('science') + ': ' + state.scienceThisSol;
+  var pct = Math.max(0, Math.min(100, (state.energy / state.maxEnergy) * 100));
+  $energyFill.style.width = pct + '%';
+  $energyText.textContent = state.energy + ' / ' + state.maxEnergy;
+  $tlCount.textContent = state.timeline.length + ' / ' + MAX_TIMELINE;
+  document.getElementById('totalScoreHdr').textContent = t('totalScore') + ': ' + state.totalScience;
+
+  var canExec = state.phase === 'planning' && state.timeline.length > 0;
+  $btnExec.disabled = !canExec;
+  $btnReset.disabled = state.phase !== 'planning';
+
+  // comm indicator
+  if (state.phase === 'uplink') {
+    $commDot.className = 'comm-dot on';
+    $commText.textContent = t('commUplink');
+  } else if (state.phase === 'executing' || state.phase === 'event') {
+    $commDot.className = 'comm-dot off';
+    $commText.textContent = t('commExec');
+  } else if (state.phase === 'downlink') {
+    $commDot.className = 'comm-dot pending';
+    $commText.textContent = t('commDownlink');
+  } else {
+    $commDot.className = 'comm-dot on';
+    $commText.textContent = t('commReady');
+  }
+
+  // energy preview: show planned total cost
+  var plannedCost = 0;
+  for (var i = 0; i < state.timeline.length; i++) {
+    var td = getTaskDef(state.timeline[i].taskId);
+    if (td) plannedCost += td.energy;
+  }
+  var $ep = document.getElementById('energyPreview');
+  if (state.phase === 'planning' && state.timeline.length > 0) {
+    var afterCost = state.maxEnergy - plannedCost;
+    var warnClass = afterCost < 0 ? 'color:var(--warn)' : '';
+    $ep.innerHTML = '<span style="' + warnClass + '">' +
+      t('plannedCost') + ': ' + plannedCost + ' | ' +
+      t('remaining') + ': ' + afterCost + '</span>';
+  } else {
+    $ep.textContent = '';
+  }
+
+  // objective badge
+  var $obj = document.getElementById('objBadge');
+  $obj.textContent = t('obj' + state.sol);
+
+  // delay timer
+  var $delayBar = document.getElementById('delayBar');
+  if (state.phase === 'uplink' || state.phase === 'downlink') {
+    $delayBar.classList.add('visible');
+    var delayMin = 3 + Math.floor(Math.random() * 21);
+    document.getElementById('delayText').textContent =
+      t('signalDelay') + ': ' + delayMin + ' ' + t('signalMin');
+  } else {
+    $delayBar.classList.remove('visible');
+  }
+
+  // update i18n labels
+  document.getElementById('taskPanelTitle').textContent = t('taskPanel');
+  document.getElementById('tlTitle').textContent = t('timeline');
+  document.getElementById('logTitle').textContent = t('eventLog');
+  $btnExec.textContent = t('execute');
+  $btnReset.textContent = t('reset');
+  document.getElementById('titleText').textContent = 'SOL PLANNER';
+}
+
+function updateLang() {
+  updateUI();
+  renderTaskList();
+  renderTimeline();
+}
+
+/* ============================================================
+   TASK LIST (left panel)
+   ============================================================ */
+function renderTaskList() {
+  $taskList.innerHTML = '';
+  TASK_DEFS.forEach(function(td) {
+    var card = document.createElement('div');
+    card.className = 'task-card';
+    if (state.phase !== 'planning') card.className += ' disabled';
+    if (state.timeline.length >= MAX_TIMELINE) card.className += ' disabled';
+    card.innerHTML =
+      '<div class="tc-top">' +
+        '<span class="tc-icon">' + td.icon + '</span>' +
+        '<span class="tc-name">' + t(td.id) + '</span>' +
+      '</div>' +
+      '<div class="tc-stats">' +
+        '<span class="tc-energy">' + t('energyCost') + ': ' + td.energy + '</span>' +
+        '<span class="tc-science">' + t('scienceVal') + ': ' + td.science + '</span>' +
+        '<span class="tc-time">' + td.dur + ' ' + t('ticks') + '</span>' +
+      '</div>' +
+      '<div class="tc-desc">' + t('desc_' + td.id) + '</div>';
+    card.addEventListener('click', function() {
+      addToTimeline(td.id);
+    });
+    $taskList.appendChild(card);
+  });
+}
+
+/* ============================================================
+   TIMELINE (right panel)
+   ============================================================ */
+function addToTimeline(taskId) {
+  if (state.phase !== 'planning') return;
+  if (state.timeline.length >= MAX_TIMELINE) return;
+  state.timeline.push({ taskId: taskId, status: 'pending' });
+  renderTimeline();
+  updateUI();
+}
+
+function removeFromTimeline(idx) {
+  if (state.phase !== 'planning') return;
+  state.timeline.splice(idx, 1);
+  renderTimeline();
+  updateUI();
+}
+
+var dragSrcIdx = -1;
+
+function renderTimeline() {
+  $timeline.innerHTML = '';
+  state.timeline.forEach(function(item, idx) {
+    var td = getTaskDef(item.taskId);
+    var el = document.createElement('div');
+    el.className = 'tl-item';
+    if (item.status === 'executing') el.className += ' executing';
+    if (item.status === 'done') el.className += ' done';
+    if (item.status === 'failed') el.className += ' failed';
+    el.setAttribute('draggable', state.phase === 'planning' ? 'true' : 'false');
+    el.dataset.idx = idx;
+    el.innerHTML =
+      '<span class="tl-idx">' + (idx + 1) + '</span>' +
+      '<span class="tl-icon">' + td.icon + '</span>' +
+      '<span class="tl-name">' + t(item.taskId) + '</span>' +
+      '<span class="tl-cost">' + td.energy + '</span>' +
+      (state.phase === 'planning' ? '<button class="tl-remove">X</button>' : '');
+
+    if (state.phase === 'planning') {
+      // drag
+      el.addEventListener('dragstart', function(e) {
+        dragSrcIdx = idx;
+        el.classList.add('dragging');
+        e.dataTransfer.effectAllowed = 'move';
+      });
+      el.addEventListener('dragend', function() {
+        el.classList.remove('dragging');
+        dragSrcIdx = -1;
+        clearDragOver();
+      });
+      el.addEventListener('dragover', function(e) {
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'move';
+        clearDragOver();
+        el.classList.add('drag-over');
+      });
+      el.addEventListener('drop', function(e) {
+        e.preventDefault();
+        clearDragOver();
+        if (dragSrcIdx < 0) return;
+        var targetIdx = idx;
+        if (dragSrcIdx === targetIdx) return;
+        var moved = state.timeline.splice(dragSrcIdx, 1)[0];
+        state.timeline.splice(targetIdx, 0, moved);
+        dragSrcIdx = -1;
+        renderTimeline();
+      });
+      // remove button
+      var rmBtn = el.querySelector('.tl-remove');
+      if (rmBtn) {
+        rmBtn.addEventListener('click', function(e) {
+          e.stopPropagation();
+          removeFromTimeline(idx);
+        });
+      }
+    }
+    $timeline.appendChild(el);
+  });
+  $tlCount.textContent = state.timeline.length + ' / ' + MAX_TIMELINE;
+}
+
+function clearDragOver() {
+  var items = $timeline.querySelectorAll('.tl-item');
+  for (var i = 0; i < items.length; i++) {
+    items[i].classList.remove('drag-over');
+  }
+}
+
+/* ============================================================
+   EVENT LOG
+   ============================================================ */
+function logEvent(msg, type) {
+  var cls = 'ev';
+  if (type === 'info') cls += ' ev-info';
+  else if (type === 'good') cls += ' ev-good';
+  else if (type === 'bad') cls += ' ev-bad';
+  else if (type === 'comm') cls += ' ev-comm';
+  var div = document.createElement('div');
+  div.className = cls;
+  div.textContent = '> ' + msg;
+  $eventLog.appendChild(div);
+  $eventLog.scrollTop = $eventLog.scrollHeight;
+}
+
+/* ============================================================
+   EXECUTION ENGINE
+   ============================================================ */
+function startExecution() {
+  if (state.phase !== 'planning' || state.timeline.length === 0) return;
+  state.phase = 'uplink';
+  state.execIdx = -1;
+  updateUI();
+  renderTaskList();
+  logEvent(t('evUplink'), 'comm');
+
+  // animate delay bar fill
+  animateDelayBar(2000);
+
+  // uplink animation 2s
+  setTimeout(function() {
+    logEvent(t('evUplinkDone'), 'comm');
+    state.phase = 'executing';
+    updateUI();
+    executeNextTask();
+  }, 2000);
+}
+
+function executeNextTask() {
+  state.execIdx++;
+  if (state.execIdx >= state.timeline.length) {
+    // all tasks done, trigger random events then downlink
+    triggerRandomEvents(function() {
+      startDownlink();
+    });
+    return;
+  }
+
+  var item = state.timeline[state.execIdx];
+  var td = getTaskDef(item.taskId);
+  item.status = 'executing';
+  renderTimeline();
+  logEvent(t('evExecTask') + t(item.taskId), 'info');
+
+  // check energy
+  if (state.energy < td.energy) {
+    item.status = 'failed';
+    logEvent(t('evNoEnergy') + t(item.taskId), 'bad');
+    renderTimeline();
+    setTimeout(executeNextTask, 600);
+    return;
+  }
+
+  // if DRIVE, pick next waypoint as target
+  if (item.taskId === 'DRIVE') {
+    var wps = state.solDef.waypoints;
+    if (state.targetWpIdx < wps.length) {
+      state.driveTarget = wps[state.targetWpIdx];
+      state.targetWpIdx++;
+    } else {
+      // drive randomly
+      state.driveTarget = [
+        Math.floor(Math.random() * 10) + 1,
+        Math.floor(Math.random() * 8) + 1
+      ];
+    }
+  }
+
+  // consume energy
+  state.energy -= td.energy;
+
+  // animate execution
+  var execTime = td.dur * 700;
+  animateTask(item, td, execTime, function() {
+    // task complete
+    item.status = 'done';
+    state.scienceThisSol += td.science;
+    if (td.cat === 'photo') state.photosThisSol++;
+    if (td.cat === 'sample') state.samplesThisSol++;
+    logEvent(t('evTaskDone') + t(item.taskId) + ' (+' + td.science + ')', 'good');
+    renderTimeline();
+    updateUI();
+    setTimeout(executeNextTask, 400);
+  });
+}
+
+/* ============================================================
+   TASK ANIMATION
+   ============================================================ */
+var taskAnim = { active: false, type: '', progress: 0, x: 0, y: 0, callback: null };
+
+function animateTask(item, td, duration, cb) {
+  taskAnim.active = true;
+  taskAnim.type = item.taskId;
+  taskAnim.progress = 0;
+  taskAnim.callback = cb;
+
+  if (item.taskId === 'DRIVE' && state.driveTarget) {
+    // smooth drive
+    var startPos = state.roverPos.slice();
+    var endPos = state.driveTarget;
+    var dx = endPos[0] - startPos[0];
+    var dy = endPos[1] - startPos[1];
+    state.roverAngle = Math.atan2(dy, dx) * 180 / Math.PI;
+    var startTime = Date.now();
+    function driveTick() {
+      var elapsed = Date.now() - startTime;
+      var p = Math.min(1, elapsed / duration);
+      taskAnim.progress = p;
+      state.roverPos[0] = startPos[0] + dx * easeInOut(p);
+      state.roverPos[1] = startPos[1] + dy * easeInOut(p);
+      if (p < 1) {
+        requestAnimationFrame(driveTick);
+      } else {
+        state.roverPos = endPos.slice();
+        state.roverTrail.push(endPos.slice());
+        var dist = Math.sqrt(dx * dx + dy * dy);
+        state.distanceDriven += dist;
+        state.driveTarget = null;
+        taskAnim.active = false;
+        cb();
+      }
+    }
+    driveTick();
+  } else {
+    // non-drive: animate in place
+    var startTime = Date.now();
+    function tick() {
+      var elapsed = Date.now() - startTime;
+      var p = Math.min(1, elapsed / duration);
+      taskAnim.progress = p;
+      if (p < 1) {
+        requestAnimationFrame(tick);
+      } else {
+        taskAnim.active = false;
+        cb();
+      }
+    }
+    tick();
+  }
+}
+
+function easeInOut(t) {
+  return t < 0.5 ? 2 * t * t : -1 + (4 - 2 * t) * t;
+}
+
+/* ============================================================
+   RANDOM EVENTS
+   ============================================================ */
+function triggerRandomEvents(cb) {
+  state.phase = 'event';
+  updateUI();
+  var events = [];
+  var w = state.solDef.eventWeights;
+
+  // 1-2 events per sol
+  var numEvents = 1 + (Math.random() < 0.5 ? 1 : 0);
+  var possibleEvents = ['mineral', 'dust', 'slip', 'cold'];
+  for (var e = 0; e < numEvents; e++) {
+    var r = Math.random();
+    for (var i = 0; i < possibleEvents.length; i++) {
+      var evType = possibleEvents[i];
+      if (r < (w[evType] || 0)) {
+        if (events.indexOf(evType) === -1) {
+          events.push(evType);
+        }
+        break;
+      }
+      r -= (w[evType] || 0);
+    }
+  }
+
+  // dust storm chance - can cause task failure
+  if (state.solDef.dustStormChance > 0 && Math.random() < state.solDef.dustStormChance) {
+    // mark a random completed task as failed retroactively
+    var doneOnes = [];
+    for (var i = 0; i < state.timeline.length; i++) {
+      if (state.timeline[i].status === 'done') doneOnes.push(i);
+    }
+    if (doneOnes.length > 0) {
+      var victim = doneOnes[Math.floor(Math.random() * doneOnes.length)];
+      var victimTask = state.timeline[victim];
+      var victimDef = getTaskDef(victimTask.taskId);
+      victimTask.status = 'failed';
+      state.scienceThisSol -= victimDef.science;
+      if (state.scienceThisSol < 0) state.scienceThisSol = 0;
+      logEvent(t('evTaskFail') + t(victimTask.taskId) + ' (dust storm)', 'bad');
+      renderTimeline();
+    }
+  }
+
+  function processEvent(idx) {
+    if (idx >= events.length) {
+      updateUI();
+      setTimeout(cb, 500);
+      return;
+    }
+    var ev = events[idx];
+    if (ev === 'dust') {
+      logEvent(t('evDust'), 'bad');
+      if (state.photosThisSol > 0) state.photosThisSol--;
+    } else if (ev === 'mineral') {
+      logEvent(t('evMineral'), 'good');
+      state.scienceThisSol += 10;
+    } else if (ev === 'slip') {
+      logEvent(t('evSlip'), 'bad');
+      state.energy = Math.max(0, state.energy - 8);
+    } else if (ev === 'cold') {
+      logEvent(t('evCold'), 'bad');
+      // mark last completed task as failed
+      for (var j = state.timeline.length - 1; j >= 0; j--) {
+        if (state.timeline[j].status === 'done') {
+          var lostDef = getTaskDef(state.timeline[j].taskId);
+          state.timeline[j].status = 'failed';
+          state.scienceThisSol -= lostDef.science;
+          if (state.scienceThisSol < 0) state.scienceThisSol = 0;
+          renderTimeline();
+          break;
+        }
+      }
+    }
+    updateUI();
+    setTimeout(function() { processEvent(idx + 1); }, 800);
+  }
+  if (events.length === 0) {
+    setTimeout(cb, 300);
+  } else {
+    processEvent(0);
+  }
+}
+
+/* ============================================================
+   DOWNLINK + SOL END
+   ============================================================ */
+function startDownlink() {
+  state.phase = 'downlink';
+  state.commBeamAlpha = 1;
+  updateUI();
+  logEvent(t('evDownlink'), 'comm');
+  animateDelayBar(2000);
+  setTimeout(function() {
+    logEvent(t('evDownlinkDone'), 'comm');
+    state.totalScience += state.scienceThisSol;
+    state.commBeamAlpha = 0;
+    showSolResult();
+  }, 2000);
+}
+
+function showSolResult() {
+  state.phase = 'result';
+  state.showResult = true;
+  updateUI();
+}
+
+function nextSol() {
+  state.showResult = false;
+  if (state.sol >= MAX_SOLS) {
+    endGame();
+    return;
+  }
+  initSol(state.sol + 1);
+}
+
+function endGame() {
+  state.gameOver = true;
+  state.phase = 'gameover';
+}
+
+function resetTimeline() {
+  if (state.phase !== 'planning') return;
+  state.timeline = [];
+  state.energy = state.maxEnergy;
+  renderTimeline();
+  updateUI();
+}
+
+function restartGame() {
+  state.gameOver = false;
+  state.totalScience = 0;
+  state.showTutorial = false;
+  initSol(1);
+}
+
+/* ============================================================
+   DELAY BAR ANIMATION
+   ============================================================ */
+function animateDelayBar(duration) {
+  var $fill = document.getElementById('delayFill');
+  var start = Date.now();
+  function tick() {
+    var elapsed = Date.now() - start;
+    var p = Math.min(1, elapsed / duration);
+    $fill.style.width = (p * 100) + '%';
+    if (p < 1) requestAnimationFrame(tick);
+  }
+  tick();
+}
+
+/* ============================================================
+   BUTTON HANDLERS
+   ============================================================ */
+$btnExec.addEventListener('click', startExecution);
+$btnReset.addEventListener('click', resetTimeline);
+
+document.getElementById('langBtn').addEventListener('click', function() {
+  lang = lang === 'zh' ? 'en' : 'zh';
+  document.getElementById('langBtn').textContent = lang === 'zh' ? 'EN' : 'ZH';
+  updateLang();
+});
+
+/* ============================================================
+   CANVAS RENDERING
+   ============================================================ */
+var TERRAIN_COLORS = {
+  0: '#3d2b1a',  // flat
+  1: '#5c4033',  // rock
+  2: '#b89060',  // sand dune
+  3: '#2a4030'   // target area
+};
+
+// seeded random for stable terrain features (so they do not flicker per frame)
+function seededRandom(seed) {
+  var x = Math.sin(seed * 12.9898 + seed * 78.233) * 43758.5453;
+  return x - Math.floor(x);
+}
+
+// pre-generate stars (once)
+var stars = [];
+for (var si = 0; si < 60; si++) {
+  stars.push({
+    x: seededRandom(si * 7 + 1),
+    y: seededRandom(si * 13 + 3) * 0.15,
+    r: 0.3 + seededRandom(si * 19 + 5) * 1.2,
+    a: 0.3 + seededRandom(si * 23 + 7) * 0.6
+  });
+}
+
+// pre-generate craters per-sol (seeded by sol number)
+function generateCraters(solNum) {
+  var craters = [];
+  var count = 3 + solNum;
+  for (var i = 0; i < count; i++) {
+    craters.push({
+      col: Math.floor(seededRandom(solNum * 100 + i * 17) * 12),
+      row: Math.floor(seededRandom(solNum * 100 + i * 31) * 10),
+      size: 0.15 + seededRandom(solNum * 100 + i * 43) * 0.2,
+      depth: 0.02 + seededRandom(solNum * 100 + i * 59) * 0.04
+    });
+  }
+  return craters;
+}
+
+var currentCraters = [];
+
+function drawMars() {
+  ctx.clearRect(0, 0, cw, ch);
+
+  // sky gradient at top (dark Mars sky)
+  var skyGrad = ctx.createLinearGradient(0, 0, 0, ch * 0.12);
+  skyGrad.addColorStop(0, '#0c0810');
+  skyGrad.addColorStop(1, '#1a120a');
+  ctx.fillStyle = skyGrad;
+  ctx.fillRect(0, 0, cw, ch * 0.12);
+
+  // draw stars in sky area
+  for (var si = 0; si < stars.length; si++) {
+    var s = stars[si];
+    var twinkle = Math.sin(Date.now() * 0.002 + si * 2) * 0.2 + 0.8;
+    ctx.beginPath();
+    ctx.arc(s.x * cw, s.y * ch, s.r, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(220,230,255,' + (s.a * twinkle) + ')';
+    ctx.fill();
+  }
+
+  // background terrain fill
+  ctx.fillStyle = '#1a120a';
+  ctx.fillRect(0, ch * 0.1, cw, ch * 0.9);
+
+  var grid = state.solDef ? state.solDef.grid : [];
+  var rows = grid.length || 10;
+  var cols = (grid[0] || []).length || 12;
+  var cellW = cw / cols;
+  var cellH = ch / rows;
+
+  // draw terrain grid
+  for (var r = 0; r < rows; r++) {
+    for (var c = 0; c < cols; c++) {
+      var type = grid[r] ? (grid[r][c] || 0) : 0;
+      var x = c * cellW;
+      var y = r * cellH;
+
+      // base color with subtle variation per cell
+      var baseColor = TERRAIN_COLORS[type] || TERRAIN_COLORS[0];
+      ctx.fillStyle = baseColor;
+      ctx.fillRect(x, y, cellW, cellH);
+
+      // stable per-cell texture (not random per frame)
+      var cellSeed = r * 100 + c + state.sol * 1000;
+      var noiseVal = seededRandom(cellSeed) * 0.06;
+      ctx.fillStyle = 'rgba(0,0,0,' + noiseVal + ')';
+      ctx.fillRect(x, y, cellW, cellH);
+
+      // second layer: lighter spots
+      if (seededRandom(cellSeed + 500) > 0.7) {
+        ctx.fillStyle = 'rgba(200,160,100,0.04)';
+        ctx.fillRect(x, y, cellW, cellH);
+      }
+
+      // grid lines
+      ctx.strokeStyle = 'rgba(80,60,40,0.15)';
+      ctx.lineWidth = 0.5;
+      ctx.strokeRect(x, y, cellW, cellH);
+
+      // rock details
+      if (type === 1) {
+        drawRock(x + cellW * 0.5, y + cellH * 0.5, Math.min(cellW, cellH) * 0.3);
+      }
+      // sand dune ripples
+      if (type === 2) {
+        drawDunes(x, y, cellW, cellH);
+      }
+    }
+  }
+
+  // draw craters
+  if (currentCraters.length === 0 || currentCraters._sol !== state.sol) {
+    currentCraters = generateCraters(state.sol);
+    currentCraters._sol = state.sol;
+  }
+  for (var ci = 0; ci < currentCraters.length; ci++) {
+    var cr = currentCraters[ci];
+    var cx = cr.col * cellW + cellW * 0.5;
+    var cy = cr.row * cellH + cellH * 0.5;
+    var crad = Math.min(cellW, cellH) * cr.size;
+    // outer ring
+    ctx.beginPath();
+    ctx.arc(cx, cy, crad, 0, Math.PI * 2);
+    ctx.strokeStyle = 'rgba(100,80,50,0.3)';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+    // shadow inside
+    ctx.beginPath();
+    ctx.arc(cx + 1, cy + 1, crad * 0.85, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(0,0,0,' + cr.depth + ')';
+    ctx.fill();
+    // highlight rim
+    ctx.beginPath();
+    ctx.arc(cx - 1, cy - 1, crad, Math.PI * 1.2, Math.PI * 1.8);
+    ctx.strokeStyle = 'rgba(180,140,90,0.15)';
+    ctx.lineWidth = 0.8;
+    ctx.stroke();
+  }
+
+  // draw waypoints
+  if (state.solDef) {
+    state.solDef.waypoints.forEach(function(wp, idx) {
+      var wx = wp[0] * cellW + cellW * 0.5;
+      var wy = wp[1] * cellH + cellH * 0.5;
+      var isReached = idx < state.targetWpIdx;
+      var pulse = Math.sin(Date.now() * 0.004 + idx) * 0.3 + 0.7;
+
+      // waypoint marker
+      ctx.beginPath();
+      ctx.arc(wx, wy, Math.min(cellW, cellH) * 0.25, 0, Math.PI * 2);
+      if (isReached) {
+        ctx.fillStyle = 'rgba(80,255,176,0.15)';
+        ctx.strokeStyle = 'rgba(80,255,176,0.4)';
+      } else {
+        ctx.fillStyle = 'rgba(80,255,176,' + (0.08 * pulse) + ')';
+        ctx.strokeStyle = 'rgba(80,255,176,' + (0.6 * pulse) + ')';
+      }
+      ctx.fill();
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+
+      // label
+      ctx.fillStyle = isReached ? 'rgba(80,255,176,0.5)' : 'rgba(80,255,176,0.9)';
+      ctx.font = '10px Inter, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText('WP' + (idx + 1), wx, wy + 3);
+    });
+  }
+
+  // draw rover trail
+  if (state.roverTrail.length > 1) {
+    ctx.beginPath();
+    ctx.moveTo(
+      state.roverTrail[0][0] * cellW + cellW * 0.5,
+      state.roverTrail[0][1] * cellH + cellH * 0.5
+    );
+    for (var ti = 1; ti < state.roverTrail.length; ti++) {
+      ctx.lineTo(
+        state.roverTrail[ti][0] * cellW + cellW * 0.5,
+        state.roverTrail[ti][1] * cellH + cellH * 0.5
+      );
+    }
+    // extend to current pos
+    ctx.lineTo(
+      state.roverPos[0] * cellW + cellW * 0.5,
+      state.roverPos[1] * cellH + cellH * 0.5
+    );
+    ctx.strokeStyle = 'rgba(56,189,248,0.2)';
+    ctx.lineWidth = 2;
+    ctx.setLineDash([3, 5]);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // small dots at each trail point
+    for (var ti = 0; ti < state.roverTrail.length; ti++) {
+      ctx.beginPath();
+      ctx.arc(
+        state.roverTrail[ti][0] * cellW + cellW * 0.5,
+        state.roverTrail[ti][1] * cellH + cellH * 0.5,
+        2, 0, Math.PI * 2
+      );
+      ctx.fillStyle = 'rgba(56,189,248,0.3)';
+      ctx.fill();
+    }
+  }
+
+  // draw drive path (if driving)
+  if (taskAnim.active && taskAnim.type === 'DRIVE' && state.driveTarget) {
+    var sx = state.roverPos[0] * cellW + cellW * 0.5;
+    var sy = state.roverPos[1] * cellH + cellH * 0.5;
+    var tx = state.driveTarget[0] * cellW + cellW * 0.5;
+    var ty = state.driveTarget[1] * cellH + cellH * 0.5;
+    ctx.beginPath();
+    ctx.setLineDash([4, 4]);
+    ctx.moveTo(sx, sy);
+    ctx.lineTo(tx, ty);
+    ctx.strokeStyle = 'rgba(56,189,248,0.3)';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+    ctx.setLineDash([]);
+  }
+
+  // draw rover
+  drawRover(
+    state.roverPos[0] * cellW + cellW * 0.5,
+    state.roverPos[1] * cellH + cellH * 0.5,
+    cellW, cellH
+  );
+
+  // draw task effects
+  if (taskAnim.active) {
+    drawTaskEffect(
+      state.roverPos[0] * cellW + cellW * 0.5,
+      state.roverPos[1] * cellH + cellH * 0.5,
+      cellW, cellH
+    );
+  }
+
+  // communication beam
+  if (state.phase === 'uplink' || state.phase === 'downlink') {
+    drawCommBeam(
+      state.roverPos[0] * cellW + cellW * 0.5,
+      state.roverPos[1] * cellH + cellH * 0.5
+    );
+  }
+
+  // dust storm overlay for sol 4
+  if (state.sol === 4 && (state.phase === 'executing' || state.phase === 'event')) {
+    var dustAlpha = 0.05 + Math.sin(Date.now() * 0.001) * 0.03;
+    ctx.fillStyle = 'rgba(180,130,70,' + dustAlpha + ')';
+    ctx.fillRect(0, 0, cw, ch);
+  }
+
+  // coordinate labels along edges
+  ctx.fillStyle = 'rgba(56,189,248,0.2)';
+  ctx.font = '9px Inter, sans-serif';
+  ctx.textAlign = 'center';
+  for (var lc = 0; lc < cols; lc++) {
+    ctx.fillText(String(lc), lc * cellW + cellW * 0.5, ch - 3);
+  }
+  ctx.textAlign = 'right';
+  for (var lr = 0; lr < rows; lr++) {
+    ctx.fillText(String(lr), cellW * 0.15, lr * cellH + cellH * 0.55);
+  }
+
+  // HUD overlay (bottom-left)
+  ctx.fillStyle = 'rgba(18,21,29,0.75)';
+  ctx.fillRect(4, ch - 50, 150, 44);
+  ctx.strokeStyle = 'rgba(56,189,248,0.15)';
+  ctx.lineWidth = 0.5;
+  ctx.strokeRect(4, ch - 50, 150, 44);
+
+  ctx.fillStyle = 'rgba(56,189,248,0.5)';
+  ctx.font = '10px Inter, sans-serif';
+  ctx.textAlign = 'left';
+  ctx.fillText(t('sol') + ' ' + state.sol + '/' + MAX_SOLS, 10, ch - 36);
+
+  ctx.fillStyle = 'rgba(80,255,176,0.5)';
+  ctx.fillText(
+    'Pos: (' + state.roverPos[0].toFixed(1) + ', ' + state.roverPos[1].toFixed(1) + ')',
+    10, ch - 22
+  );
+
+  ctx.fillStyle = 'rgba(250,204,21,0.5)';
+  ctx.fillText(
+    'Dist: ' + state.distanceDriven.toFixed(1) + ' units',
+    10, ch - 10
+  );
+
+  // phase indicator (top-right of canvas)
+  if (state.phase !== 'planning' && state.phase !== 'result' && state.phase !== 'gameover') {
+    var phaseLabel = state.phase.toUpperCase();
+    ctx.fillStyle = 'rgba(18,21,29,0.75)';
+    var plw = ctx.measureText(phaseLabel).width + 16;
+    ctx.fillRect(cw - plw - 8, 4, plw + 4, 20);
+    ctx.fillStyle = state.phase === 'executing' ? 'rgba(255,107,107,0.8)' : 'rgba(56,189,248,0.8)';
+    ctx.font = '10px Inter, sans-serif';
+    ctx.textAlign = 'right';
+    ctx.fillText(phaseLabel, cw - 12, 17);
+  }
+}
+
+function drawRock(x, y, r) {
+  ctx.beginPath();
+  ctx.arc(x - r * 0.2, y, r * 0.8, 0, Math.PI * 2);
+  ctx.fillStyle = '#7a5c44';
+  ctx.fill();
+  ctx.beginPath();
+  ctx.arc(x + r * 0.3, y - r * 0.1, r * 0.5, 0, Math.PI * 2);
+  ctx.fillStyle = '#6b4e3a';
+  ctx.fill();
+  ctx.strokeStyle = 'rgba(0,0,0,0.2)';
+  ctx.lineWidth = 0.5;
+  ctx.stroke();
+}
+
+function drawDunes(x, y, w, h) {
+  ctx.strokeStyle = 'rgba(160,110,50,0.4)';
+  ctx.lineWidth = 0.7;
+  for (var i = 0; i < 4; i++) {
+    var yy = y + h * 0.2 + i * h * 0.2;
+    ctx.beginPath();
+    ctx.moveTo(x + 2, yy);
+    ctx.quadraticCurveTo(x + w * 0.5, yy - h * 0.08, x + w - 2, yy);
+    ctx.stroke();
+  }
+}
+
+function drawRover(x, y, cellW, cellH) {
+  var size = Math.min(cellW, cellH) * 0.35;
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.rotate(state.roverAngle * Math.PI / 180);
+
+  // body
+  ctx.fillStyle = '#c0c8d8';
+  ctx.fillRect(-size * 0.6, -size * 0.4, size * 1.2, size * 0.8);
+  ctx.strokeStyle = '#90a0b8';
+  ctx.lineWidth = 1;
+  ctx.strokeRect(-size * 0.6, -size * 0.4, size * 1.2, size * 0.8);
+
+  // wheels
+  ctx.fillStyle = '#404854';
+  ctx.fillRect(-size * 0.7, -size * 0.5, size * 0.2, size * 0.2);
+  ctx.fillRect(-size * 0.7, size * 0.3, size * 0.2, size * 0.2);
+  ctx.fillRect(size * 0.5, -size * 0.5, size * 0.2, size * 0.2);
+  ctx.fillRect(size * 0.5, size * 0.3, size * 0.2, size * 0.2);
+
+  // mast
+  ctx.strokeStyle = '#a0a8b8';
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.moveTo(size * 0.2, -size * 0.4);
+  ctx.lineTo(size * 0.2, -size * 0.9);
+  ctx.stroke();
+  // camera head
+  ctx.fillStyle = '#38bdf8';
+  ctx.fillRect(size * 0.1, -size * 1.0, size * 0.2, size * 0.12);
+
+  // solar panel
+  ctx.fillStyle = 'rgba(56,189,248,0.25)';
+  ctx.fillRect(-size * 0.5, -size * 0.35, size * 0.4, size * 0.15);
+
+  // direction indicator
+  ctx.beginPath();
+  ctx.moveTo(size * 0.6, 0);
+  ctx.lineTo(size * 0.8, -size * 0.15);
+  ctx.lineTo(size * 0.8, size * 0.15);
+  ctx.closePath();
+  ctx.fillStyle = 'rgba(80,255,176,0.6)';
+  ctx.fill();
+
+  ctx.restore();
+
+  // glow
+  var grad = ctx.createRadialGradient(x, y, 0, x, y, size * 1.5);
+  grad.addColorStop(0, 'rgba(56,189,248,0.08)');
+  grad.addColorStop(1, 'rgba(56,189,248,0)');
+  ctx.fillStyle = grad;
+  ctx.beginPath();
+  ctx.arc(x, y, size * 1.5, 0, Math.PI * 2);
+  ctx.fill();
+}
+
+function drawTaskEffect(x, y, cellW, cellH) {
+  var p = taskAnim.progress;
+  var size = Math.min(cellW, cellH) * 0.4;
+
+  if (taskAnim.type === 'SUPERCAM_LIBS') {
+    // laser beam
+    var beamLen = size * 3 * p;
+    var angle = state.roverAngle * Math.PI / 180;
+    var bx = x + Math.cos(angle) * beamLen;
+    var by = y + Math.sin(angle) * beamLen;
+    ctx.beginPath();
+    ctx.moveTo(x, y - size * 0.5);
+    ctx.lineTo(bx, by - size * 0.5);
+    ctx.strokeStyle = 'rgba(255,80,80,' + (0.8 * (1 - p)) + ')';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    // impact flash
+    if (p > 0.3 && p < 0.8) {
+      ctx.beginPath();
+      ctx.arc(bx, by - size * 0.5, 4 + Math.random() * 3, 0, Math.PI * 2);
+      ctx.fillStyle = 'rgba(255,200,50,' + (0.6 * (1 - p)) + ')';
+      ctx.fill();
+    }
+  } else if (taskAnim.type === 'NAVCAM_PANO' || taskAnim.type === 'MAST_PHOTO') {
+    // camera flash / sweep
+    var flashAlpha = Math.sin(p * Math.PI * 4) * 0.3;
+    if (flashAlpha > 0) {
+      ctx.beginPath();
+      if (taskAnim.type === 'NAVCAM_PANO') {
+        // panorama sweep arc
+        ctx.arc(x, y, size * 2.5, -Math.PI * p, Math.PI * p);
+      } else {
+        ctx.arc(x, y, size * 1.5, 0, Math.PI * 2);
+      }
+      ctx.fillStyle = 'rgba(255,255,255,' + flashAlpha + ')';
+      ctx.fill();
+    }
+    // viewfinder lines
+    ctx.strokeStyle = 'rgba(56,189,248,' + (0.4 * (1 - p)) + ')';
+    ctx.lineWidth = 0.5;
+    ctx.setLineDash([2, 3]);
+    ctx.beginPath();
+    ctx.arc(x, y, size * 2, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.setLineDash([]);
+  } else if (taskAnim.type === 'DRILL_SAMPLE') {
+    // drill animation
+    var drillDepth = size * 1.5 * p;
+    ctx.beginPath();
+    ctx.moveTo(x, y + size * 0.3);
+    ctx.lineTo(x, y + size * 0.3 + drillDepth);
+    ctx.strokeStyle = 'rgba(200,200,200,' + (0.7) + ')';
+    ctx.lineWidth = 3;
+    ctx.stroke();
+    // debris particles
+    if (p > 0.2) {
+      for (var i = 0; i < 3; i++) {
+        var px = x + (Math.random() - 0.5) * size;
+        var py = y + size * 0.3 + drillDepth + Math.random() * 8;
+        ctx.beginPath();
+        ctx.arc(px, py, 1.5, 0, Math.PI * 2);
+        ctx.fillStyle = 'rgba(180,140,80,0.5)';
+        ctx.fill();
+      }
+    }
+    // vibration
+    ctx.save();
+    ctx.translate(Math.sin(Date.now() * 0.05) * 1.5, 0);
+    ctx.restore();
+  } else if (taskAnim.type === 'WEATHER_CHECK') {
+    // weather sensor waves
+    for (var ring = 0; ring < 3; ring++) {
+      var rp = (p + ring * 0.33) % 1;
+      ctx.beginPath();
+      ctx.arc(x, y - size * 0.5, size * 0.5 + size * 2 * rp, 0, Math.PI * 2);
+      ctx.strokeStyle = 'rgba(80,255,176,' + (0.4 * (1 - rp)) + ')';
+      ctx.lineWidth = 1;
+      ctx.stroke();
+    }
+  }
+}
+
+function drawCommBeam(x, y) {
+  var t = Date.now() * 0.003;
+  var alpha = 0.4 + Math.sin(t) * 0.2;
+
+  // beam upward
+  ctx.beginPath();
+  ctx.moveTo(x - 3, y - 15);
+  ctx.lineTo(x - 15, 0);
+  ctx.lineTo(x + 15, 0);
+  ctx.lineTo(x + 3, y - 15);
+  ctx.closePath();
+  var grad = ctx.createLinearGradient(x, y, x, 0);
+  grad.addColorStop(0, 'rgba(56,189,248,' + alpha + ')');
+  grad.addColorStop(1, 'rgba(56,189,248,0)');
+  ctx.fillStyle = grad;
+  ctx.fill();
+
+  // data packets
+  var packetY = y - ((Date.now() * 0.1) % y);
+  ctx.fillStyle = 'rgba(56,189,248,0.6)';
+  ctx.fillRect(x - 1, packetY, 2, 4);
+  ctx.fillRect(x - 1, (packetY + y * 0.3) % y, 2, 4);
+}
+
+/* ============================================================
+   RENDER LOOP
+   ============================================================ */
+function renderLoop() {
+  resizeCanvas();
+  drawMars();
+  requestAnimationFrame(renderLoop);
+}
+
+/* ============================================================
+   TUTORIAL OVERLAY
+   ============================================================ */
+function renderTutorial() {
+  var existing = document.querySelector('.tutorial-overlay');
+  if (existing) existing.remove();
+
+  if (!state.showTutorial) return;
+  var overlay = document.createElement('div');
+  overlay.className = 'tutorial-overlay';
+  var box = document.createElement('div');
+  box.className = 'tutorial-box';
+  box.innerHTML =
+    '<h2>' + t('tutTitle') + '</h2>' +
+    '<p>' + t('tutBody').replace(/\n/g, '<br>') + '</p>' +
+    '<button id="tutStartBtn">' + t('tutStart') + '</button>';
+  overlay.appendChild(box);
+  $center.appendChild(overlay);
+
+  document.getElementById('tutStartBtn').addEventListener('click', function() {
+    state.showTutorial = false;
+    overlay.remove();
+  });
+}
+
+/* ============================================================
+   RESULT OVERLAY
+   ============================================================ */
+function renderResultOverlay() {
+  var existing = document.querySelector('.result-overlay');
+  if (existing) existing.remove();
+
+  if (!state.showResult) return;
+  var overlay = document.createElement('div');
+  overlay.className = 'result-overlay';
+  var box = document.createElement('div');
+  box.className = 'result-box';
+  var nextLabel = state.sol >= MAX_SOLS ? t('replay') : t('resNext');
+  box.innerHTML =
+    '<h2>' + t('resTitle') + ' - ' + t('sol') + ' ' + state.sol + '</h2>' +
+    '<div class="rb-stats">' +
+      '<div class="rb-stat"><div class="rb-val">' + state.photosThisSol + '</div><div class="rb-lbl">' + t('resPhotos') + '</div></div>' +
+      '<div class="rb-stat"><div class="rb-val">' + state.samplesThisSol + '</div><div class="rb-lbl">' + t('resSamples') + '</div></div>' +
+      '<div class="rb-stat"><div class="rb-val">' + state.scienceThisSol + '</div><div class="rb-lbl">' + t('resScience') + '</div></div>' +
+      '<div class="rb-stat"><div class="rb-val">' + state.distanceDriven.toFixed(1) + '</div><div class="rb-lbl">' + t('resDistance') + '</div></div>' +
+    '</div>' +
+    '<p style="font-size:12px;color:var(--text-dim);margin-bottom:12px">' +
+      t('totalScore') + ': ' + state.totalScience + '</p>' +
+    '<button id="nextSolBtn">' + nextLabel + '</button>';
+  overlay.appendChild(box);
+  $center.appendChild(overlay);
+
+  document.getElementById('nextSolBtn').addEventListener('click', function() {
+    overlay.remove();
+    nextSol();
+  });
+}
+
+/* ============================================================
+   GAME OVER OVERLAY
+   ============================================================ */
+function renderGameOverOverlay() {
+  var existing = document.querySelector('.final-overlay');
+  if (existing) existing.remove();
+
+  if (!state.gameOver) return;
+  var won = state.totalScience >= WIN_SCORE;
+  var overlay = document.createElement('div');
+  overlay.className = 'final-overlay';
+  var box = document.createElement('div');
+  box.className = 'final-box ' + (won ? 'win' : 'lose');
+  box.innerHTML =
+    '<h2>' + (won ? t('winTitle') : t('loseTitle')) + '</h2>' +
+    '<p style="font-size:14px;color:var(--primary);margin-bottom:8px;font-weight:700">' +
+      t('totalScore') + ': ' + state.totalScience + ' / ' + WIN_SCORE + '</p>' +
+    '<p>' + (won ? t('winBody') : t('loseBody')).replace(/\n/g, '<br>') + '</p>' +
+    '<button id="replayBtn">' + t('replay') + '</button>';
+  overlay.appendChild(box);
+  $center.appendChild(overlay);
+
+  document.getElementById('replayBtn').addEventListener('click', function() {
+    overlay.remove();
+    restartGame();
+  });
+}
+
+/* ============================================================
+   OVERLAY WATCH (polls state to show/hide overlays)
+   ============================================================ */
+var prevShowResult = false;
+var prevGameOver = false;
+var prevShowTutorial = true;
+
+function checkOverlays() {
+  if (state.showResult !== prevShowResult) {
+    prevShowResult = state.showResult;
+    renderResultOverlay();
+  }
+  if (state.gameOver !== prevGameOver) {
+    prevGameOver = state.gameOver;
+    renderGameOverOverlay();
+  }
+  if (state.showTutorial !== prevShowTutorial) {
+    prevShowTutorial = state.showTutorial;
+    renderTutorial();
+  }
+  requestAnimationFrame(checkOverlays);
+}
+
+/* ============================================================
+   BOOT
+   ============================================================ */
+function boot() {
+  initSol(1);
+  resizeCanvas();
+  renderLoop();
+  renderTutorial();
+  checkOverlays();
+}
+
+boot();
+</script>
+</body>
+</html>
