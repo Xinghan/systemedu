@@ -1913,10 +1913,11 @@ def inject_idea_markers(
     game_id: str | None = None,
     image_markers: list[tuple[str, str]] | None = None,
     diagram_markers: list[tuple[str, str]] | None = None,
+    kit_markers: list[tuple[str, str]] | None = None,
 ) -> str:
     """
     在 plan_markdown 中插入 [[IDEA:<id>]] 标记，让前端能在正确位置渲染
-    动画 / 游戏 / 练习题 / 故事段落 / 静态图片 / 示意图。
+    动画 / 游戏 / 练习题 / 故事段落 / 静态图片 / 示意图 / 实物套件。
 
     插入策略（按二级标题锚点）：
     - story_id  → 插入到 "## 引入" 标题后（情境导入）
@@ -1924,7 +1925,7 @@ def inject_idea_markers(
     - game_id   → 插入到 "## 动手探索" 或 "## 应用与拓展" 之前；找不到则插到
                   anim_id 之后的位置，或 "## 深入理解" 最末
     - ex_id     → 插入到 "## 应用与拓展" 标题后；找不到则追加到末尾
-    - image_markers / diagram_markers: 每项是 (id, anchor) 元组，
+    - image_markers / diagram_markers / kit_markers: 每项是 (id, anchor) 元组，
       anchor 是二级或三级标题关键字（如 "## 核心概念"、"### 动手实践"）；
       支持关键字匹配变体（如 "核心概念" 会匹配 "## 核心概念：xxx"）。
       anchor 留空字符串时插入到研究资料章节之前。
@@ -2026,8 +2027,12 @@ def inject_idea_markers(
         if not ok:
             text = _insert_before_tail_sections(text, marker)
 
-    # 5. image_markers / diagram_markers → 按调用方指定的 anchor 插入
-    for ids_list, kind in ((image_markers or [], "image"), (diagram_markers or [], "diagram")):
+    # 5. image_markers / diagram_markers / kit_markers → 按调用方指定的 anchor 插入
+    for ids_list, kind in (
+        (image_markers or [], "image"),
+        (diagram_markers or [], "diagram"),
+        (kit_markers or [], "hands_on_kit"),
+    ):
         for item_id, anchor in ids_list:
             if not item_id:
                 continue
@@ -2436,6 +2441,18 @@ def make_course_content(
     #   anchor (可选): 插入位置的标题关键字，默认 "## 核心概念"
     #   hands_on_ref / acceptance_ref (可选): v4.1 对齐
     diagrams: list[dict] | None = None,
+    # 实物动手套件（购买元器件 + 动手操作环节）
+    # 每项 dict 接受以下字段：
+    #   topic (必填): 套件名称，如 "传感器入门套件"
+    #   total_cost_cny (必填): 总价估算（人民币元）
+    #   age_min (可选): 建议最低年龄，默认 8
+    #   safety_level (可选): "low" / "medium" / "high"，默认 "low"
+    #   components (必填): 元器件列表，每项含 name/name_en/spec/qty/price_cny/search_keyword
+    #   tools (可选): 工具列表，每项含 name/name_en/price_cny/included
+    #   steps (必填): 操作步骤列表，每项含 step/title/description/safety_warning/expected_result
+    #   anchor (可选): 插入位置的标题关键字，默认 "## 动手实践"
+    #   hands_on_ref / acceptance_ref (可选): v4.1 对齐
+    hands_on_kits: list[dict] | None = None,
 ) -> dict:
     """
     构造标准 CourseContent dict，供写入数据库。
@@ -2715,8 +2732,53 @@ def make_course_content(
             }
             diagram_markers.append((dia_id, anchor))
 
+    # 7. 实物动手套件（hands_on_kit）
+    kit_markers: list[tuple[str, str]] = []
+    if hands_on_kits:
+        for kit in hands_on_kits:
+            kit_id = _id("kit")
+            topic = kit.get("topic") or "实物动手套件"
+            anchor = kit.get("anchor", "## 动手实践")
+
+            if not kit.get("components"):
+                raise ValueError("hands_on_kit entry must provide components list")
+            if not kit.get("steps"):
+                raise ValueError("hands_on_kit entry must provide steps list")
+
+            kit_idea: dict = {
+                "idea_id": kit_id,
+                "mode": "hands_on_kit",
+                "topic": topic,
+                "context_summary": topic,
+                "generation_backend": "",
+                "style_key": "",
+                "mode_reason": "需要实物元器件动手操作来加深理解",
+            }
+            if "hands_on_ref" in kit:
+                kit_idea["hands_on_ref"] = kit["hands_on_ref"]
+            if "acceptance_ref" in kit:
+                kit_idea["acceptance_ref"] = kit["acceptance_ref"]
+            ideas.append(kit_idea)
+
+            rendered_sections[kit_id] = {
+                "mode": "hands_on_kit",
+                "status": "ready",
+                "html": None,
+                "story_paragraphs": None,
+                "exercises": None,
+                "generation_backend": "",
+                "kit_topic": topic,
+                "total_cost_cny": kit.get("total_cost_cny", 0),
+                "age_min": kit.get("age_min", 8),
+                "safety_level": kit.get("safety_level", "low"),
+                "components": kit.get("components", []),
+                "tools": kit.get("tools", []),
+                "steps": kit.get("steps", []),
+            }
+            kit_markers.append((kit_id, anchor))
+
     # 在 plan_markdown 中插入 [[IDEA:...]] 标记，让前端能在正确位置渲染
-    # animation / game / exercise / story / image / diagram。没有标记时前端无法显示。
+    # animation / game / exercise / story / image / diagram / hands_on_kit。
     plan_markdown = inject_idea_markers(
         plan_markdown,
         anim_id=anim_id,
@@ -2725,6 +2787,7 @@ def make_course_content(
         game_id=game_id,
         image_markers=image_markers,
         diagram_markers=diagram_markers,
+        kit_markers=kit_markers,
     )
 
     course_content = {

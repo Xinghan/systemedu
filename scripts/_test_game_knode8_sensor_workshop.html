@@ -1,0 +1,1602 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mars Rover Sensor Assembly Workshop</title>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { margin: 0; height: 100vh; overflow: hidden; background: #0d1117; color: #e6edf3; font-family: 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif; }
+
+#app {
+  display: flex; width: 100vw; height: 100vh;
+}
+
+/* Left column: Sensor Library */
+#sensor-library {
+  width: 200px; min-width: 200px;
+  background: #161b22; border-right: 1px solid #30363d;
+  display: flex; flex-direction: column; overflow: hidden;
+}
+#sensor-library-header {
+  padding: 10px 12px; border-bottom: 1px solid #30363d;
+  font-size: 14px; font-weight: 600; color: #58a6ff;
+  text-align: center; flex-shrink: 0;
+}
+#sensor-list {
+  flex: 1; overflow-y: auto; padding: 8px;
+  scrollbar-width: thin; scrollbar-color: #30363d #161b22;
+}
+.sensor-card {
+  background: #0d1117; border: 1px solid #30363d; border-radius: 6px;
+  margin-bottom: 6px; padding: 8px 8px 8px 12px;
+  cursor: grab; user-select: none; position: relative;
+  transition: transform 0.15s, box-shadow 0.15s, opacity 0.3s;
+  border-left: 3px solid #555;
+}
+.sensor-card:hover { transform: translateX(3px); box-shadow: 0 2px 8px rgba(0,0,0,0.4); }
+.sensor-card.dragging { opacity: 0.3; }
+.sensor-card.placed { opacity: 0.35; pointer-events: none; }
+.sensor-card .s-icon { font-size: 18px; margin-bottom: 2px; }
+.sensor-card .s-name { font-size: 12px; font-weight: 600; color: #e6edf3; }
+.sensor-card .s-desc { font-size: 10px; color: #8b949e; margin-top: 2px; line-height: 1.3; }
+
+/* Center: Rover Display */
+#center-panel {
+  flex: 1; display: flex; flex-direction: column; min-width: 0;
+}
+#center-header {
+  padding: 8px 16px; border-bottom: 1px solid #30363d;
+  display: flex; align-items: center; justify-content: space-between;
+  flex-shrink: 0; background: #161b22;
+}
+#center-header h1 { font-size: 16px; color: #f0f6fc; font-weight: 700; }
+#lang-toggle {
+  background: #21262d; border: 1px solid #30363d; color: #8b949e;
+  padding: 4px 10px; border-radius: 4px; cursor: pointer; font-size: 12px;
+}
+#lang-toggle:hover { color: #e6edf3; border-color: #58a6ff; }
+#canvas-wrapper {
+  flex: 1; position: relative; overflow: hidden;
+}
+#roverCanvas {
+  display: block; width: 100%; height: 100%;
+}
+
+/* Right column: Mission Panel */
+#mission-panel {
+  width: 250px; min-width: 250px;
+  background: #161b22; border-left: 1px solid #30363d;
+  display: flex; flex-direction: column; overflow: hidden;
+}
+#mission-header {
+  padding: 10px 12px; border-bottom: 1px solid #30363d;
+  font-size: 14px; font-weight: 600; color: #f0883e;
+  text-align: center; flex-shrink: 0;
+}
+#mission-content {
+  flex: 1; overflow-y: auto; padding: 12px;
+  scrollbar-width: thin; scrollbar-color: #30363d #161b22;
+}
+#score-panel {
+  padding: 10px 12px; border-top: 1px solid #30363d;
+  flex-shrink: 0; background: #0d1117;
+}
+
+.mission-title { font-size: 15px; font-weight: 700; color: #f0f6fc; margin-bottom: 8px; }
+.mission-desc { font-size: 12px; color: #8b949e; line-height: 1.5; margin-bottom: 12px; }
+.mission-section-label { font-size: 11px; color: #58a6ff; font-weight: 600; margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.5px; }
+.req-list { list-style: none; margin-bottom: 12px; }
+.req-item {
+  font-size: 12px; padding: 4px 0; display: flex; align-items: center; gap: 6px;
+  color: #8b949e; transition: color 0.3s;
+}
+.req-item.fulfilled { color: #3fb950; }
+.req-check {
+  width: 14px; height: 14px; border: 1.5px solid #30363d; border-radius: 3px;
+  display: inline-flex; align-items: center; justify-content: center;
+  font-size: 10px; flex-shrink: 0; transition: all 0.3s;
+}
+.req-item.fulfilled .req-check { border-color: #3fb950; background: #3fb950; color: #0d1117; }
+
+.score-row { display: flex; justify-content: space-between; font-size: 12px; padding: 2px 0; }
+.score-label { color: #8b949e; }
+.score-value { color: #f0883e; font-weight: 700; }
+.score-total { font-size: 16px; border-top: 1px solid #30363d; padding-top: 6px; margin-top: 4px; }
+.score-total .score-value { color: #3fb950; font-size: 16px; }
+
+#mission-progress {
+  margin-top: 10px; padding: 8px 0;
+  border-top: 1px solid #30363d;
+}
+.progress-bar-bg {
+  width: 100%; height: 6px; background: #21262d; border-radius: 3px; overflow: hidden;
+}
+.progress-bar-fill {
+  height: 100%; background: linear-gradient(90deg, #f0883e, #3fb950);
+  border-radius: 3px; transition: width 0.5s ease;
+}
+.progress-label { font-size: 11px; color: #8b949e; margin-top: 4px; text-align: center; }
+
+/* Drag ghost */
+#drag-ghost {
+  position: fixed; pointer-events: none; z-index: 9999;
+  background: #161b22; border: 1px solid #58a6ff; border-radius: 6px;
+  padding: 6px 10px; font-size: 12px; font-weight: 600; color: #58a6ff;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.6);
+  display: none; white-space: nowrap;
+}
+
+/* Overlay messages */
+#overlay {
+  position: absolute; top: 0; left: 0; right: 0; bottom: 0;
+  display: none; align-items: center; justify-content: center;
+  background: rgba(13,17,23,0.85); z-index: 100;
+  flex-direction: column; gap: 16px;
+}
+#overlay.visible { display: flex; }
+#overlay h2 { font-size: 28px; color: #3fb950; text-align: center; }
+#overlay p { font-size: 14px; color: #8b949e; text-align: center; max-width: 360px; line-height: 1.6; }
+#overlay button {
+  background: #238636; border: 1px solid #2ea043; color: #fff;
+  padding: 10px 28px; border-radius: 6px; font-size: 14px; cursor: pointer;
+  font-weight: 600;
+}
+#overlay button:hover { background: #2ea043; }
+
+/* Hint toast */
+#hint-toast {
+  position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%);
+  background: #da3633; color: #fff; padding: 8px 16px; border-radius: 6px;
+  font-size: 13px; font-weight: 500; opacity: 0; transition: opacity 0.3s;
+  pointer-events: none; z-index: 50; white-space: nowrap;
+}
+#hint-toast.visible { opacity: 1; }
+
+/* Discovery text */
+#discovery-text {
+  position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+  color: #f0883e; font-size: 14px; text-align: center; max-width: 320px;
+  line-height: 1.6; opacity: 0; transition: opacity 0.5s;
+  pointer-events: none; z-index: 40; background: rgba(13,17,23,0.8);
+  padding: 16px 20px; border-radius: 8px; border: 1px solid #30363d;
+}
+#discovery-text.visible { opacity: 1; }
+
+/* Start screen */
+#start-screen {
+  position: absolute; top: 0; left: 0; right: 0; bottom: 0;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(13,17,23,0.92); z-index: 200;
+  flex-direction: column; gap: 20px;
+}
+#start-screen h2 { font-size: 24px; color: #f0883e; text-align: center; }
+#start-screen p { font-size: 13px; color: #8b949e; text-align: center; max-width: 380px; line-height: 1.6; }
+#start-screen button {
+  background: #f0883e; border: none; color: #0d1117;
+  padding: 12px 36px; border-radius: 6px; font-size: 16px; cursor: pointer;
+  font-weight: 700;
+}
+#start-screen button:hover { background: #d2701e; }
+
+/* Final screen */
+#final-screen {
+  position: absolute; top: 0; left: 0; right: 0; bottom: 0;
+  display: none; align-items: center; justify-content: center;
+  background: rgba(13,17,23,0.92); z-index: 200;
+  flex-direction: column; gap: 16px;
+}
+#final-screen.visible { display: flex; }
+#final-screen h2 { font-size: 28px; color: #3fb950; text-align: center; }
+#final-screen .final-score { font-size: 48px; color: #f0883e; font-weight: 800; }
+#final-screen p { font-size: 13px; color: #8b949e; text-align: center; max-width: 380px; line-height: 1.6; }
+#final-screen button {
+  background: #238636; border: 1px solid #2ea043; color: #fff;
+  padding: 10px 28px; border-radius: 6px; font-size: 14px; cursor: pointer;
+  font-weight: 600;
+}
+</style>
+</head>
+<body>
+<div id="app">
+  <!-- Left: Sensor Library -->
+  <div id="sensor-library">
+    <div id="sensor-library-header"></div>
+    <div id="sensor-list"></div>
+  </div>
+
+  <!-- Center: Rover Display -->
+  <div id="center-panel">
+    <div id="center-header">
+      <h1 id="game-title"></h1>
+      <button id="lang-toggle" onclick="toggleLang()">EN / ZH</button>
+    </div>
+    <div id="canvas-wrapper">
+      <canvas id="roverCanvas"></canvas>
+      <div id="hint-toast"></div>
+      <div id="discovery-text"></div>
+      <div id="overlay">
+        <h2 id="overlay-title"></h2>
+        <p id="overlay-desc"></p>
+        <button id="overlay-btn" onclick="nextMission()"></button>
+      </div>
+      <div id="start-screen">
+        <h2 id="start-title"></h2>
+        <p id="start-desc"></p>
+        <button id="start-btn" onclick="startGame()"></button>
+      </div>
+      <div id="final-screen">
+        <h2 id="final-title"></h2>
+        <div class="final-score" id="final-score-num"></div>
+        <p id="final-desc"></p>
+        <button id="final-btn" onclick="restartGame()"></button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Right: Mission Panel -->
+  <div id="mission-panel">
+    <div id="mission-header"></div>
+    <div id="mission-content"></div>
+    <div id="score-panel"></div>
+  </div>
+</div>
+
+<div id="drag-ghost"></div>
+
+<script>
+window.__systemedu_resize_patch_optout = true;
+
+// ========== I18N ==========
+let lang = 'zh';
+const i18n = {
+  zh: {
+    gameTitle: '火星车传感器装配站',
+    sensorLib: '传感器零件库',
+    missionPanel: '任务面板',
+    startTitle: '火星车传感器装配站',
+    startDesc: '你是 JPL 的工程师，负责为"毅力号"火星车装配正确的传感器来完成不同的火星任务。将左侧的传感器拖拽到火星车的对应位置，完成任务装配。',
+    startBtn: '开始任务',
+    score: '得分',
+    totalScore: '总分',
+    missionBonus: '任务基础分',
+    perfectBonus: '零失误奖励',
+    speedBonus: '速度奖励',
+    missionProgress: '任务进度',
+    nextMission: '下一个任务',
+    wrongSlot: '这个传感器不适合这个位置',
+    notNeeded: '当前任务不需要这个传感器',
+    capUnlocked: '能力解锁',
+    missionComplete: '任务完成!',
+    requirements: '所需能力',
+    installedSensors: '已安装传感器',
+    finalTitle: '全部任务完成!',
+    finalDesc: '你已经掌握了"毅力号"火星车所有传感器的用途。你是一名合格的 JPL 工程师!',
+    finalBtn: '重新开始',
+    sensors: {
+      mastcamz: { name: 'Mastcam-Z', sub: '立体相机', desc: '拍摄火星表面的彩色立体照片和视频' },
+      navcam:   { name: 'NavCam', sub: '导航相机', desc: '帮助火星车看清前方道路，规划行驶路线' },
+      supercam: { name: 'SuperCam', sub: '激光光谱仪', desc: '远距离用激光分析岩石的化学成分' },
+      meda:     { name: 'MEDA', sub: '气象站', desc: '测量火星的温度、风速、湿度和辐射' },
+      rimfax:   { name: 'RIMFAX', sub: '地面穿透雷达', desc: '透视地面以下的地质结构和水冰' },
+      sherloc:  { name: 'SHERLOC', sub: '紫外光谱仪', desc: '探测岩石中的有机分子和矿物成分' },
+      hazcam:   { name: 'HazCam', sub: '避障相机', desc: '近距离检测障碍物，防止碰撞' },
+      mic:      { name: 'Microphone', sub: '麦克风', desc: '录制火星上的声音 -- 风声、激光声' }
+    },
+    missions: [
+      {
+        title: '任务 1: 拍一张火星全景照',
+        desc: '科学家们想看到 Jezero 撞击坑的全貌。我们需要装一台能拍高清照片的相机。',
+        reqs: ['拍摄地表高清照片'],
+        discovery: '"毅力号"拍下了 Jezero 撞击坑壮丽的360度全景照，科学家发现这里曾经是一片巨大的湖泊!'
+      },
+      {
+        title: '任务 2: 安全驶过乱石滩',
+        desc: '前方是一片布满岩石的危险区域。火星车需要看清远处的路，也要检测近处的障碍物。',
+        reqs: ['远距离路线规划', '近距离障碍检测'],
+        discovery: '凭借两种相机的配合，"毅力号"成功穿越了乱石滩，创下单日最长行驶记录!'
+      },
+      {
+        title: '任务 3: 分析 Jezero 撞击坑的岩石',
+        desc: '科学家认为这些岩石中可能保存着古代生命的痕迹。我们需要能分析岩石成分的仪器。',
+        reqs: ['远距离岩石成分分析', '有机分子探测'],
+        discovery: '分析发现这些岩石含有碳酸盐矿物和可能的有机分子 -- 这是古代湖泊存在的有力证据!'
+      },
+      {
+        title: '任务 4: 记录火星的一天',
+        desc: '我们想全面记录火星上一天的变化 -- 天气、景色和声音。这需要多种感知手段。',
+        reqs: ['拍摄地表高清照片', '气象数据采集', '声音录制'],
+        discovery: '火星上的一天被完整记录了! 日出时气温从 -80C 升到 -20C，风速变化剧烈，还录到了火星风的呼啸声!'
+      },
+      {
+        title: '任务 5: 寻找地下水源',
+        desc: '科学家推测地下可能有水冰。我们需要透视地面的雷达、分析矿物的仪器，以及导航能力。',
+        reqs: ['地下结构探测', '有机分子探测', '远距离路线规划'],
+        discovery: 'RIMFAX 在地下 10 米处发现了疑似冰层的信号! SHERLOC 在附近岩石中检测到含水矿物，进一步验证了这一发现!'
+      },
+      {
+        title: '任务 6: 完整的科学考察',
+        desc: '这是最终任务! 装备所有8个传感器，让"毅力号"以完整装备执行一次全面的科学考察。',
+        reqs: ['拍摄地表高清照片', '远距离路线规划', '远距离岩石成分分析', '气象数据采集', '地下结构探测', '有机分子探测', '近距离障碍检测', '声音录制'],
+        discovery: '全副装备的"毅力号"完成了有史以来最全面的火星科学考察! 你已经是一名出色的 JPL 工程师了!'
+      }
+    ]
+  },
+  en: {
+    gameTitle: 'Mars Rover Sensor Workshop',
+    sensorLib: 'Sensor Library',
+    missionPanel: 'Mission Panel',
+    startTitle: 'Mars Rover Sensor Workshop',
+    startDesc: 'You are a JPL engineer. Equip the Perseverance rover with the right sensors for each Mars mission. Drag sensors from the left panel to the correct slots on the rover.',
+    startBtn: 'Start Mission',
+    score: 'Score',
+    totalScore: 'Total',
+    missionBonus: 'Mission Base',
+    perfectBonus: 'Perfect Bonus',
+    speedBonus: 'Speed Bonus',
+    missionProgress: 'Mission Progress',
+    nextMission: 'Next Mission',
+    wrongSlot: 'This sensor does not fit this slot',
+    notNeeded: 'This sensor is not needed for the current mission',
+    capUnlocked: 'Capability Unlocked',
+    missionComplete: 'Mission Complete!',
+    requirements: 'Required Capabilities',
+    installedSensors: 'Installed Sensors',
+    finalTitle: 'All Missions Complete!',
+    finalDesc: 'You have mastered all sensors on the Perseverance rover. You are a qualified JPL engineer!',
+    finalBtn: 'Play Again',
+    sensors: {
+      mastcamz: { name: 'Mastcam-Z', sub: 'Stereo Camera', desc: 'Takes color stereo photos and videos of Mars surface' },
+      navcam:   { name: 'NavCam', sub: 'Navigation Cam', desc: 'Helps rover see the road ahead and plan routes' },
+      supercam: { name: 'SuperCam', sub: 'Laser Spectrometer', desc: 'Analyzes rock composition from a distance using lasers' },
+      meda:     { name: 'MEDA', sub: 'Weather Station', desc: 'Measures Mars temperature, wind, humidity, and radiation' },
+      rimfax:   { name: 'RIMFAX', sub: 'Ground Radar', desc: 'Sees underground geological structures and water ice' },
+      sherloc:  { name: 'SHERLOC', sub: 'UV Spectrometer', desc: 'Detects organic molecules and minerals in rocks' },
+      hazcam:   { name: 'HazCam', sub: 'Hazard Camera', desc: 'Detects close-range obstacles to prevent collisions' },
+      mic:      { name: 'Microphone', sub: 'Microphone', desc: 'Records sounds on Mars -- wind, laser sounds' }
+    },
+    missions: [
+      {
+        title: 'Mission 1: Take a Mars Panorama',
+        desc: 'Scientists want to see the full view of Jezero Crater. We need a camera for high-definition photos.',
+        reqs: ['High-definition surface imaging'],
+        discovery: 'Perseverance captured a stunning 360-degree panorama of Jezero Crater, revealing it was once a vast lake!'
+      },
+      {
+        title: 'Mission 2: Navigate Rocky Terrain',
+        desc: 'A dangerous rocky field ahead. The rover needs to see far for route planning and detect nearby obstacles.',
+        reqs: ['Long-range route planning', 'Close-range obstacle detection'],
+        discovery: 'With two cameras working together, Perseverance navigated the rocky terrain and set a single-day distance record!'
+      },
+      {
+        title: 'Mission 3: Analyze Jezero Crater Rocks',
+        desc: 'Scientists believe these rocks may preserve traces of ancient life. We need instruments to analyze rock composition.',
+        reqs: ['Remote rock composition analysis', 'Organic molecule detection'],
+        discovery: 'Analysis found carbonate minerals and possible organic molecules -- strong evidence of an ancient lake!'
+      },
+      {
+        title: 'Mission 4: Record a Martian Day',
+        desc: 'We want a complete record of one Martian day -- weather, scenery, and sounds. Multiple sensing methods needed.',
+        reqs: ['High-definition surface imaging', 'Weather data collection', 'Sound recording'],
+        discovery: 'A full Martian day was recorded! Temperature ranged from -80C to -20C, winds shifted dramatically, and Martian wind howls were captured!'
+      },
+      {
+        title: 'Mission 5: Search for Underground Water',
+        desc: 'Scientists suspect underground water ice. We need ground-penetrating radar, mineral analysis, and navigation.',
+        reqs: ['Underground structure detection', 'Organic molecule detection', 'Long-range route planning'],
+        discovery: 'RIMFAX detected an ice-like signal 10m underground! SHERLOC found hydrated minerals in nearby rocks, confirming the discovery!'
+      },
+      {
+        title: 'Mission 6: Full Science Expedition',
+        desc: 'The final mission! Install all 8 sensors for a comprehensive scientific expedition with full equipment.',
+        reqs: ['High-definition surface imaging', 'Long-range route planning', 'Remote rock composition analysis', 'Weather data collection', 'Underground structure detection', 'Organic molecule detection', 'Close-range obstacle detection', 'Sound recording'],
+        discovery: 'Fully equipped Perseverance completed the most comprehensive Mars science expedition ever! You are an outstanding JPL engineer!'
+      }
+    ]
+  }
+};
+
+function T(key) {
+  const keys = key.split('.');
+  let val = i18n[lang];
+  for (const k of keys) { val = val?.[k]; }
+  return val ?? key;
+}
+
+function toggleLang() {
+  lang = lang === 'zh' ? 'en' : 'zh';
+  renderUI();
+}
+
+// ========== SENSOR DATA ==========
+const SENSORS = [
+  {
+    id: 'mastcamz', color: '#58a6ff', icon: '\u{1F4F7}',
+    capability: { zh: '拍摄地表高清照片', en: 'High-definition surface imaging' },
+    slot: 'mast_top'
+  },
+  {
+    id: 'navcam', color: '#a371f7', icon: '\u{1F9ED}',
+    capability: { zh: '远距离路线规划', en: 'Long-range route planning' },
+    slot: 'mast_mid'
+  },
+  {
+    id: 'supercam', color: '#f97583', icon: '\u{1F52C}',
+    capability: { zh: '远距离岩石成分分析', en: 'Remote rock composition analysis' },
+    slot: 'mast_laser'
+  },
+  {
+    id: 'meda', color: '#3fb950', icon: '\u{1F321}',
+    capability: { zh: '气象数据采集', en: 'Weather data collection' },
+    slot: 'body_top_left'
+  },
+  {
+    id: 'rimfax', color: '#d2a8ff', icon: '\u{1F4E1}',
+    capability: { zh: '地下结构探测', en: 'Underground structure detection' },
+    slot: 'body_bottom'
+  },
+  {
+    id: 'sherloc', color: '#f0883e', icon: '\u{1F52E}',
+    capability: { zh: '有机分子探测', en: 'Organic molecule detection' },
+    slot: 'arm_end'
+  },
+  {
+    id: 'hazcam', color: '#79c0ff', icon: '\u{26A0}',
+    capability: { zh: '近距离障碍检测', en: 'Close-range obstacle detection' },
+    slot: 'body_front'
+  },
+  {
+    id: 'mic', color: '#ffa657', icon: '\u{1F3A4}',
+    capability: { zh: '声音录制', en: 'Sound recording' },
+    slot: 'body_top_right'
+  }
+];
+
+// Mission required sensor IDs
+const MISSION_SENSORS = [
+  ['mastcamz'],
+  ['navcam', 'hazcam'],
+  ['supercam', 'sherloc'],
+  ['meda', 'mastcamz', 'mic'],
+  ['rimfax', 'sherloc', 'navcam'],
+  ['mastcamz', 'navcam', 'supercam', 'meda', 'rimfax', 'sherloc', 'hazcam', 'mic']
+];
+
+// Slot positions (relative to canvas, calculated on resize)
+// 8 unique slots -- one per sensor
+const SLOT_DEFS = [
+  { id: 'mast_top',       label: { zh: '桅杆顶部', en: 'Mast Top' } },
+  { id: 'mast_mid',       label: { zh: '桅杆中部', en: 'Mast Mid' } },
+  { id: 'mast_laser',     label: { zh: '桅杆激光口', en: 'Mast Laser' } },
+  { id: 'arm_end',        label: { zh: '机械臂末端', en: 'Arm End' } },
+  { id: 'body_front',     label: { zh: '车身前方', en: 'Body Front' } },
+  { id: 'body_bottom',    label: { zh: '车身底部', en: 'Body Bottom' } },
+  { id: 'body_top_left',  label: { zh: '车顶左侧', en: 'Top Left' } },
+  { id: 'body_top_right', label: { zh: '车顶右侧', en: 'Top Right' } }
+];
+
+// ========== GAME STATE ==========
+let gameState = {
+  started: false,
+  currentMission: 0,
+  totalScore: 0,
+  missionScore: 0,
+  wrongAttempts: 0,
+  missionStartTime: 0,
+  placedSensors: {},       // slotId -> sensorId
+  installedForMission: [], // sensor IDs installed in current mission
+  missionComplete: false,
+  roverDriveAnim: 0,
+  particles: [],
+  slotGlows: {},
+  finished: false
+};
+
+// ========== CANVAS ==========
+let canvas, ctx;
+let canvasW, canvasH;
+let slotPositions = {};  // slotId -> {x, y, w, h}
+let roverX, roverY;      // rover center
+
+// Drag state
+let dragSensor = null;
+let dragX = 0, dragY = 0;
+let ghostEl;
+
+// Timers
+let hintTimer = null;
+let discoveryTimer = null;
+
+function initCanvas() {
+  canvas = document.getElementById('roverCanvas');
+  ctx = canvas.getContext('2d');
+  ghostEl = document.getElementById('drag-ghost');
+  resizeCanvas();
+}
+
+function resizeCanvas() {
+  const wrapper = document.getElementById('canvas-wrapper');
+  const rect = wrapper.getBoundingClientRect();
+  canvas.width = rect.width * window.devicePixelRatio;
+  canvas.height = rect.height * window.devicePixelRatio;
+  canvas.style.width = rect.width + 'px';
+  canvas.style.height = rect.height + 'px';
+  ctx.setTransform(window.devicePixelRatio, 0, 0, window.devicePixelRatio, 0, 0);
+  canvasW = rect.width;
+  canvasH = rect.height;
+  computeSlotPositions();
+}
+
+function computeSlotPositions() {
+  // Rover body centered
+  const rw = Math.min(canvasW * 0.55, 320);
+  const rh = rw * 0.45;
+  roverX = canvasW * 0.5;
+  roverY = canvasH * 0.52;
+
+  const slotW = 38, slotH = 28;
+
+  // Mast is on top-left of rover body
+  const mastBaseX = roverX - rw * 0.25;
+  const mastBaseY = roverY - rh * 0.5;
+
+  slotPositions = {
+    mast_top:       { x: mastBaseX - 12, y: mastBaseY - rh * 0.58, w: slotW, h: slotH },
+    mast_mid:       { x: mastBaseX - 12, y: mastBaseY - rh * 0.28, w: slotW, h: slotH },
+    mast_laser:     { x: mastBaseX + 28,  y: mastBaseY - rh * 0.48, w: slotW, h: slotH },
+    arm_end:        { x: roverX + rw * 0.55, y: roverY + rh * 0.1, w: slotW, h: slotH },
+    body_front:     { x: roverX - rw * 0.52 - 8, y: roverY + rh * 0.05, w: slotW, h: slotH },
+    body_bottom:    { x: roverX + rw * 0.08, y: roverY + rh * 0.48, w: slotW, h: slotH },
+    body_top_left:  { x: roverX - rw * 0.08, y: roverY - rh * 0.38, w: slotW, h: slotH },
+    body_top_right: { x: roverX + rw * 0.18, y: roverY - rh * 0.38, w: slotW, h: slotH }
+  };
+}
+
+// ========== DRAWING ==========
+function drawFrame() {
+  ctx.clearRect(0, 0, canvasW, canvasH);
+  drawMarsSurface();
+  drawRover();
+  drawSlots();
+  drawInstalledSensors();
+  drawParticles();
+  drawDragHighlight();
+  drawFloatingTexts();
+  requestAnimationFrame(drawFrame);
+}
+
+function drawMarsSurface() {
+  // gradient sky
+  const skyGrad = ctx.createLinearGradient(0, 0, 0, canvasH);
+  skyGrad.addColorStop(0, '#1a0e08');
+  skyGrad.addColorStop(0.4, '#2d1810');
+  skyGrad.addColorStop(1, '#3d2216');
+  ctx.fillStyle = skyGrad;
+  ctx.fillRect(0, 0, canvasW, canvasH);
+
+  // ground line
+  const groundY = roverY + 80;
+  const groundGrad = ctx.createLinearGradient(0, groundY - 20, 0, canvasH);
+  groundGrad.addColorStop(0, '#5c3a28');
+  groundGrad.addColorStop(1, '#3d2216');
+  ctx.fillStyle = groundGrad;
+  ctx.beginPath();
+  ctx.moveTo(0, groundY);
+  // wavy ground
+  for (let x = 0; x <= canvasW; x += 20) {
+    ctx.lineTo(x, groundY + Math.sin(x * 0.02) * 5 + Math.sin(x * 0.05) * 3);
+  }
+  ctx.lineTo(canvasW, canvasH);
+  ctx.lineTo(0, canvasH);
+  ctx.closePath();
+  ctx.fill();
+
+  // some rocks
+  const rocks = [
+    { x: 0.1, y: 0.78, r: 8 },
+    { x: 0.25, y: 0.82, r: 5 },
+    { x: 0.7, y: 0.80, r: 10 },
+    { x: 0.85, y: 0.83, r: 6 },
+    { x: 0.55, y: 0.85, r: 4 },
+    { x: 0.15, y: 0.88, r: 7 },
+    { x: 0.92, y: 0.79, r: 9 },
+    { x: 0.4, y: 0.87, r: 5 }
+  ];
+  for (const rock of rocks) {
+    const rx = rock.x * canvasW;
+    const ry = rock.y * canvasH;
+    ctx.fillStyle = '#4a2e1e';
+    ctx.beginPath();
+    ctx.ellipse(rx, ry, rock.r * 1.3, rock.r, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#5c3a28';
+    ctx.beginPath();
+    ctx.ellipse(rx - 1, ry - 1, rock.r * 1.1, rock.r * 0.8, 0, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  // distant mountains
+  ctx.fillStyle = '#2a1a10';
+  ctx.beginPath();
+  ctx.moveTo(0, groundY);
+  ctx.lineTo(canvasW * 0.15, groundY - 40);
+  ctx.lineTo(canvasW * 0.3, groundY - 15);
+  ctx.lineTo(canvasW * 0.45, groundY - 55);
+  ctx.lineTo(canvasW * 0.6, groundY - 20);
+  ctx.lineTo(canvasW * 0.75, groundY - 45);
+  ctx.lineTo(canvasW * 0.9, groundY - 25);
+  ctx.lineTo(canvasW, groundY - 35);
+  ctx.lineTo(canvasW, groundY);
+  ctx.closePath();
+  ctx.fill();
+
+  // Stars
+  ctx.fillStyle = 'rgba(255,255,255,0.3)';
+  const starSeed = [12,45,78,102,156,189,223,267,290,312,340,15,60,95,130,175,210,255,280,305];
+  for (let i = 0; i < starSeed.length; i++) {
+    const sx = (starSeed[i] * 3.7 + i * 47) % canvasW;
+    const sy = (starSeed[i] * 2.3 + i * 23) % (canvasH * 0.35);
+    ctx.fillRect(sx, sy, 1.5, 1.5);
+  }
+}
+
+function drawRover() {
+  const rw = Math.min(canvasW * 0.55, 320);
+  const rh = rw * 0.45;
+  const bx = roverX - rw / 2;
+  const by = roverY - rh / 2;
+
+  // Drive animation offset
+  const driving = gameState.roverDriveAnim > 0;
+  const driveOff = driving ? Math.sin(Date.now() * 0.008) * 2 : 0;
+  const bounceOff = driving ? Math.sin(Date.now() * 0.012) * 1.2 : 0;
+  ctx.save();
+  ctx.translate(driveOff, bounceOff);
+
+  // -- Rocker-bogie suspension (6 wheels like real Perseverance) --
+  const wheelR = rh * 0.16;
+  const wheelY = by + rh + wheelR * 0.4;
+  // Left side: 3 wheels, Right side: 3 wheels (shown as 6 in side view)
+  const wheelXPositions = [
+    bx + rw * 0.08,  // front-left
+    bx + rw * 0.28,  // mid-left
+    bx + rw * 0.48,  // rear-left bogie
+    bx + rw * 0.58,  // rear-right bogie
+    bx + rw * 0.76,  // mid-right
+    bx + rw * 0.92   // front-right (actually rear in rover orientation)
+  ];
+
+  // Rocker-bogie linkage bars
+  ctx.strokeStyle = '#6a6a7a';
+  ctx.lineWidth = 2.5;
+  // Left rocker: connects front wheel to body, then to bogie
+  ctx.beginPath();
+  ctx.moveTo(wheelXPositions[0], wheelY - wheelR * 0.4);
+  ctx.lineTo(bx + rw * 0.18, by + rh * 0.82);
+  ctx.lineTo(wheelXPositions[1], wheelY - wheelR * 0.4);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(wheelXPositions[1], wheelY - wheelR * 0.4);
+  ctx.lineTo(bx + rw * 0.38, by + rh * 0.78);
+  ctx.lineTo(wheelXPositions[2], wheelY - wheelR * 0.4);
+  ctx.stroke();
+  // Right rocker
+  ctx.beginPath();
+  ctx.moveTo(wheelXPositions[3], wheelY - wheelR * 0.4);
+  ctx.lineTo(bx + rw * 0.67, by + rh * 0.78);
+  ctx.lineTo(wheelXPositions[4], wheelY - wheelR * 0.4);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(wheelXPositions[4], wheelY - wheelR * 0.4);
+  ctx.lineTo(bx + rw * 0.84, by + rh * 0.82);
+  ctx.lineTo(wheelXPositions[5], wheelY - wheelR * 0.4);
+  ctx.stroke();
+
+  // Draw 6 wheels
+  const treadAngle = driving ? Date.now() * 0.005 : 0;
+  for (const wx of wheelXPositions) {
+    // Strut connecting linkage to wheel
+    ctx.strokeStyle = '#5a5a6a';
+    ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    ctx.moveTo(wx, by + rh * 0.88);
+    ctx.lineTo(wx, wheelY - wheelR * 0.5);
+    ctx.stroke();
+    // Wheel body
+    ctx.fillStyle = '#3a3a4a';
+    ctx.beginPath();
+    ctx.ellipse(wx, wheelY, wheelR, wheelR * 0.65, 0, 0, Math.PI * 2);
+    ctx.fill();
+    // Wheel rim
+    ctx.strokeStyle = '#5a5a6a';
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+    // Tread pattern (chevron-like, like real Perseverance wheels)
+    for (let a = 0; a < 8; a++) {
+      const angle = treadAngle + a * Math.PI / 4;
+      ctx.strokeStyle = '#4a4a5a';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(wx + Math.cos(angle) * wheelR * 0.35, wheelY + Math.sin(angle) * wheelR * 0.3);
+      ctx.lineTo(wx + Math.cos(angle) * wheelR * 0.9, wheelY + Math.sin(angle) * wheelR * 0.6);
+      ctx.stroke();
+    }
+    // Wheel hub
+    ctx.fillStyle = '#5a5a6a';
+    ctx.beginPath();
+    ctx.arc(wx, wheelY, wheelR * 0.2, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  // -- Main body --
+  const bodyGrad = ctx.createLinearGradient(bx, by, bx, by + rh);
+  bodyGrad.addColorStop(0, '#e8dcc8');
+  bodyGrad.addColorStop(0.3, '#ddd0b8');
+  bodyGrad.addColorStop(0.7, '#d4c4a8');
+  bodyGrad.addColorStop(1, '#bfaf92');
+  ctx.fillStyle = bodyGrad;
+  roundRect(ctx, bx + rw * 0.05, by + rh * 0.2, rw * 0.85, rh * 0.65, 8);
+  ctx.fill();
+  ctx.strokeStyle = '#9a8a6e';
+  ctx.lineWidth = 1.5;
+  ctx.stroke();
+
+  // Body panel lines (equipment mounting rails)
+  ctx.strokeStyle = 'rgba(154,138,110,0.35)';
+  ctx.lineWidth = 0.5;
+  for (let li = 0; li < 4; li++) {
+    ctx.beginPath();
+    ctx.moveTo(bx + rw * 0.08, by + rh * 0.3 + li * rh * 0.13);
+    ctx.lineTo(bx + rw * 0.65, by + rh * 0.3 + li * rh * 0.13);
+    ctx.stroke();
+  }
+
+  // Equipment deck (top of body, slightly raised)
+  ctx.fillStyle = '#cfc0a5';
+  roundRect(ctx, bx + rw * 0.08, by + rh * 0.15, rw * 0.52, rh * 0.1, 3);
+  ctx.fill();
+  ctx.strokeStyle = 'rgba(154,138,110,0.4)';
+  ctx.lineWidth = 0.5;
+  ctx.stroke();
+
+  // RTG (Multi-Mission Radioisotope Thermoelectric Generator) at rear
+  ctx.fillStyle = '#8a4a2a';
+  roundRect(ctx, bx + rw * 0.7, by + rh * 0.15, rw * 0.18, rh * 0.32, 4);
+  ctx.fill();
+  ctx.strokeStyle = '#6a3a1a';
+  ctx.lineWidth = 1;
+  ctx.stroke();
+  // RTG cooling fins
+  for (let f = 0; f < 5; f++) {
+    const fy = by + rh * 0.17 + f * rh * 0.06;
+    ctx.strokeStyle = '#6a3a1a';
+    ctx.lineWidth = 0.8;
+    ctx.beginPath();
+    ctx.moveTo(bx + rw * 0.7, fy);
+    ctx.lineTo(bx + rw * 0.88, fy);
+    ctx.stroke();
+  }
+  // RTG glow (warm)
+  if (driving) {
+    const glowAlpha = 0.15 + 0.1 * Math.sin(Date.now() * 0.003);
+    ctx.fillStyle = `rgba(255,120,50,${glowAlpha})`;
+    roundRect(ctx, bx + rw * 0.7, by + rh * 0.15, rw * 0.18, rh * 0.32, 4);
+    ctx.fill();
+  }
+
+  // -- Mast (Remote Sensing Mast) --
+  const mastBaseX = bx + rw * 0.25;
+  const mastBaseY = by + rh * 0.2;
+  const mastTopY = by - rh * 0.48;
+  // Mast pole
+  ctx.strokeStyle = '#9a8a6e';
+  ctx.lineWidth = 4;
+  ctx.beginPath();
+  ctx.moveTo(mastBaseX, mastBaseY);
+  ctx.lineTo(mastBaseX, mastTopY + 10);
+  ctx.stroke();
+  // Mast elbow (slight bend like real RSM)
+  ctx.lineWidth = 3.5;
+  ctx.beginPath();
+  ctx.moveTo(mastBaseX, mastTopY + 10);
+  ctx.lineTo(mastBaseX + 3, mastTopY);
+  ctx.stroke();
+  // Mast head housing (contains Mastcam-Z, SuperCam, NavCam)
+  ctx.fillStyle = '#c4b498';
+  roundRect(ctx, mastBaseX - 16, mastTopY - 14, 32, 20, 4);
+  ctx.fill();
+  ctx.strokeStyle = '#9a8a6e';
+  ctx.lineWidth = 1;
+  ctx.stroke();
+  // Camera "eyes" on mast head (Mastcam-Z pair)
+  ctx.fillStyle = '#2a4a6a';
+  ctx.beginPath();
+  ctx.arc(mastBaseX - 5, mastTopY - 4, 4, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.beginPath();
+  ctx.arc(mastBaseX + 5, mastTopY - 4, 4, 0, Math.PI * 2);
+  ctx.fill();
+  // Lens reflection
+  ctx.fillStyle = 'rgba(100,180,255,0.3)';
+  ctx.beginPath();
+  ctx.arc(mastBaseX - 4, mastTopY - 5, 1.5, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.beginPath();
+  ctx.arc(mastBaseX + 6, mastTopY - 5, 1.5, 0, Math.PI * 2);
+  ctx.fill();
+
+  // SuperCam laser port (side of mast head)
+  ctx.fillStyle = '#6a3a3a';
+  ctx.beginPath();
+  ctx.arc(mastBaseX + 18, mastTopY - 4, 3, 0, Math.PI * 2);
+  ctx.fill();
+  // Laser beam when SuperCam is installed and driving
+  if (gameState.placedSensors['mast_laser'] && driving) {
+    const laserAlpha = 0.3 + 0.2 * Math.sin(Date.now() * 0.01);
+    ctx.strokeStyle = `rgba(255,50,50,${laserAlpha})`;
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(mastBaseX + 20, mastTopY - 3);
+    ctx.lineTo(mastBaseX + 60, mastTopY + 40);
+    ctx.stroke();
+    // Impact point
+    ctx.fillStyle = `rgba(255,100,50,${laserAlpha})`;
+    ctx.beginPath();
+    ctx.arc(mastBaseX + 60, mastTopY + 40, 3, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  // -- Robotic arm (5-DOF like real Perseverance) --
+  const armStartX = bx + rw * 0.85;
+  const armStartY = by + rh * 0.5;
+  const armElbow1X = armStartX + rw * 0.08;
+  const armElbow1Y = armStartY - rh * 0.15;
+  const armElbow2X = armElbow1X + rw * 0.08;
+  const armElbow2Y = armElbow1Y + rh * 0.12;
+  const armEndX = armElbow2X + rw * 0.06;
+  const armEndY = armElbow2Y + rh * 0.08;
+  // Arm segments
+  ctx.strokeStyle = '#9a8a6e';
+  ctx.lineWidth = 4;
+  ctx.beginPath();
+  ctx.moveTo(armStartX, armStartY);
+  ctx.lineTo(armElbow1X, armElbow1Y);
+  ctx.stroke();
+  ctx.lineWidth = 3.5;
+  ctx.beginPath();
+  ctx.moveTo(armElbow1X, armElbow1Y);
+  ctx.lineTo(armElbow2X, armElbow2Y);
+  ctx.stroke();
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  ctx.moveTo(armElbow2X, armElbow2Y);
+  ctx.lineTo(armEndX, armEndY);
+  ctx.stroke();
+  // Joint circles
+  ctx.fillStyle = '#b0a48a';
+  for (const [jx, jy] of [[armElbow1X, armElbow1Y], [armElbow2X, armElbow2Y]]) {
+    ctx.beginPath();
+    ctx.arc(jx, jy, 3.5, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  // Turret (end effector housing -- SHERLOC, PIXL, etc.)
+  ctx.fillStyle = '#c4b498';
+  ctx.beginPath();
+  ctx.arc(armEndX, armEndY, 9, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = '#9a8a6e';
+  ctx.lineWidth = 1.5;
+  ctx.stroke();
+  // Turret detail
+  ctx.fillStyle = '#a09480';
+  ctx.beginPath();
+  ctx.arc(armEndX, armEndY, 4, 0, Math.PI * 2);
+  ctx.fill();
+
+  // -- High-Gain Antenna --
+  ctx.strokeStyle = '#9a8a6e';
+  ctx.lineWidth = 2;
+  const antX = bx + rw * 0.55;
+  const antBaseY = by + rh * 0.1;
+  const antTopY = by - rh * 0.18;
+  ctx.beginPath();
+  ctx.moveTo(antX, antBaseY);
+  ctx.lineTo(antX, antTopY);
+  ctx.stroke();
+  // Dish (high-gain antenna for Earth communication)
+  ctx.fillStyle = '#d4c4a8';
+  ctx.beginPath();
+  ctx.ellipse(antX, antTopY, 13, 6, -0.2, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = '#9a8a6e';
+  ctx.lineWidth = 1;
+  ctx.stroke();
+  // Feed horn
+  ctx.strokeStyle = '#b0a48a';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(antX, antTopY);
+  ctx.lineTo(antX + 2, antTopY - 8);
+  ctx.stroke();
+
+  // -- Low-Gain Antenna (UHF) --
+  ctx.strokeStyle = '#b0a48a';
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.moveTo(bx + rw * 0.45, by + rh * 0.15);
+  ctx.lineTo(bx + rw * 0.45, by - rh * 0.05);
+  ctx.stroke();
+  ctx.fillStyle = '#c4b498';
+  ctx.beginPath();
+  ctx.arc(bx + rw * 0.45, by - rh * 0.05, 3, 0, Math.PI * 2);
+  ctx.fill();
+
+  // -- Sample caching tubes (visible on side of body) --
+  ctx.fillStyle = '#e0d8c8';
+  for (let t = 0; t < 3; t++) {
+    ctx.beginPath();
+    ctx.ellipse(bx + rw * 0.15 + t * 12, by + rh * 0.78, 3, 6, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(154,138,110,0.5)';
+    ctx.lineWidth = 0.5;
+    ctx.stroke();
+  }
+
+  // -- MOXIE experiment box (oxygen generation) --
+  ctx.fillStyle = '#b8a888';
+  roundRect(ctx, bx + rw * 0.58, by + rh * 0.55, rw * 0.08, rh * 0.18, 2);
+  ctx.fill();
+  ctx.strokeStyle = 'rgba(154,138,110,0.5)';
+  ctx.lineWidth = 0.5;
+  ctx.stroke();
+
+  // Wind sensor indicators (if MEDA installed)
+  if (gameState.placedSensors['body_top_left'] && driving) {
+    const windAlpha = 0.3 + 0.2 * Math.sin(Date.now() * 0.004);
+    ctx.strokeStyle = `rgba(63,185,80,${windAlpha})`;
+    ctx.lineWidth = 1;
+    // Wind data lines
+    for (let w = 0; w < 3; w++) {
+      const wy = by + rh * 0.05 - w * 6;
+      ctx.beginPath();
+      ctx.moveTo(bx + rw * 0.12, wy);
+      ctx.bezierCurveTo(bx + rw * 0.2, wy - 3, bx + rw * 0.28, wy + 3, bx + rw * 0.36, wy);
+      ctx.stroke();
+    }
+  }
+
+  ctx.restore();
+}
+
+function drawSlots() {
+  const mission = MISSION_SENSORS[gameState.currentMission];
+  const requiredSlots = new Set();
+  for (const sid of mission) {
+    const sensor = SENSORS.find(s => s.id === sid);
+    if (sensor) requiredSlots.add(sensor.slot);
+  }
+
+  for (const slotDef of SLOT_DEFS) {
+    const pos = slotPositions[slotDef.id];
+    if (!pos) continue;
+
+    const isRequired = requiredSlots.has(slotDef.id);
+    const isOccupied = !!gameState.placedSensors[slotDef.id];
+    const glowPhase = gameState.slotGlows[slotDef.id] || 0;
+
+    // Draw slot outline
+    if (glowPhase > 0) {
+      // Green glow for just-placed
+      ctx.shadowColor = '#3fb950';
+      ctx.shadowBlur = 15 * glowPhase;
+    }
+
+    ctx.strokeStyle = isOccupied ? '#3fb950' : (isRequired ? 'rgba(88,166,255,0.6)' : 'rgba(48,54,61,0.4)');
+    ctx.lineWidth = isRequired ? 2 : 1;
+    ctx.setLineDash(isOccupied ? [] : [4, 3]);
+    roundRect(ctx, pos.x, pos.y, pos.w, pos.h, 4);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.shadowBlur = 0;
+
+    // Slot label
+    if (!isOccupied && isRequired) {
+      const pulse = 0.5 + 0.5 * Math.sin(Date.now() * 0.003);
+      ctx.fillStyle = `rgba(88,166,255,${0.15 + 0.1 * pulse})`;
+      roundRect(ctx, pos.x, pos.y, pos.w, pos.h, 4);
+      ctx.fill();
+
+      ctx.fillStyle = 'rgba(88,166,255,0.8)';
+      ctx.font = '9px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText(slotDef.label[lang], pos.x + pos.w / 2, pos.y + pos.h / 2 + 3);
+    }
+  }
+}
+
+function drawInstalledSensors() {
+  for (const [slotId, sensorId] of Object.entries(gameState.placedSensors)) {
+    const pos = slotPositions[slotId];
+    const sensor = SENSORS.find(s => s.id === sensorId);
+    if (!pos || !sensor) continue;
+
+    // Sensor icon in slot
+    ctx.fillStyle = sensor.color;
+    roundRect(ctx, pos.x + 2, pos.y + 2, pos.w - 4, pos.h - 4, 3);
+    ctx.fill();
+
+    ctx.fillStyle = '#0d1117';
+    ctx.font = '14px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(sensor.icon, pos.x + pos.w / 2, pos.y + pos.h / 2);
+
+    // Small label
+    const sLabel = T('sensors.' + sensorId + '.name');
+    ctx.fillStyle = '#e6edf3';
+    ctx.font = 'bold 8px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText(sLabel, pos.x + pos.w / 2, pos.y + pos.h + 10);
+  }
+}
+
+function drawParticles() {
+  const now = Date.now();
+  gameState.particles = gameState.particles.filter(p => now - p.born < p.life);
+  for (const p of gameState.particles) {
+    const age = (now - p.born) / p.life;
+    const alpha = 1 - age;
+    const x = p.x + p.vx * age * p.life * 0.001;
+    const y = p.y + p.vy * age * p.life * 0.001;
+    ctx.fillStyle = p.color.replace(')', `,${alpha})`).replace('rgb', 'rgba');
+    ctx.beginPath();
+    ctx.arc(x, y, p.r * (1 - age * 0.5), 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  // Decay slot glows
+  for (const slotId of Object.keys(gameState.slotGlows)) {
+    if (gameState.slotGlows[slotId] > 0) {
+      gameState.slotGlows[slotId] = Math.max(0, gameState.slotGlows[slotId] - 0.015);
+    }
+  }
+
+  // Decay drive animation
+  if (gameState.roverDriveAnim > 0) {
+    gameState.roverDriveAnim -= 0.005;
+  }
+}
+
+function drawDragHighlight() {
+  if (!dragSensor) return;
+  const sensor = SENSORS.find(s => s.id === dragSensor);
+  if (!sensor) return;
+
+  // Get mouse position relative to canvas
+  const canvasRect = canvas.getBoundingClientRect();
+  const mx = dragX - canvasRect.left;
+  const my = dragY - canvasRect.top;
+
+  // Highlight the correct slot with blue pulsing border
+  const correctSlot = sensor.slot;
+  const correctPos = slotPositions[correctSlot];
+  if (correctPos && !gameState.placedSensors[correctSlot]) {
+    const pulse = 0.5 + 0.5 * Math.sin(Date.now() * 0.005);
+    ctx.strokeStyle = `rgba(88,166,255,${0.4 + 0.3 * pulse})`;
+    ctx.lineWidth = 2.5;
+    roundRect(ctx, correctPos.x - 4, correctPos.y - 4, correctPos.w + 8, correctPos.h + 8, 6);
+    ctx.stroke();
+
+    // Arrow or distance indicator
+    const cx = correctPos.x + correctPos.w / 2;
+    const cy = correctPos.y + correctPos.h / 2;
+    const dist = Math.sqrt((mx - cx) ** 2 + (my - cy) ** 2);
+    if (dist < 65) {
+      // Close enough -- strong green highlight
+      ctx.fillStyle = `rgba(63,185,80,${0.15 + 0.1 * pulse})`;
+      roundRect(ctx, correctPos.x - 4, correctPos.y - 4, correctPos.w + 8, correctPos.h + 8, 6);
+      ctx.fill();
+    }
+  }
+
+  // Show red highlight on wrong slots if mouse is near them
+  for (const slotDef of SLOT_DEFS) {
+    if (slotDef.id === correctSlot) continue;
+    const pos = slotPositions[slotDef.id];
+    if (!pos || gameState.placedSensors[slotDef.id]) continue;
+    const cx = pos.x + pos.w / 2;
+    const cy = pos.y + pos.h / 2;
+    const dist = Math.sqrt((mx - cx) ** 2 + (my - cy) ** 2);
+    if (dist < 50) {
+      const nearAlpha = Math.max(0, 0.4 * (1 - dist / 50));
+      ctx.strokeStyle = `rgba(218,54,51,${nearAlpha})`;
+      ctx.lineWidth = 2;
+      roundRect(ctx, pos.x - 2, pos.y - 2, pos.w + 4, pos.h + 4, 5);
+      ctx.stroke();
+    }
+  }
+}
+
+// Floating text effects
+let floatingTexts = [];
+
+function addFloatingText(text, x, y, color) {
+  floatingTexts.push({
+    text, x, y, color,
+    born: Date.now(),
+    life: 1500
+  });
+}
+
+function drawFloatingTexts() {
+  const now = Date.now();
+  floatingTexts = floatingTexts.filter(ft => now - ft.born < ft.life);
+  for (const ft of floatingTexts) {
+    const age = (now - ft.born) / ft.life;
+    const alpha = 1 - age;
+    const yOff = age * 30;
+    ctx.fillStyle = ft.color.replace(')', `,${alpha})`).replace('rgb', 'rgba');
+    ctx.font = 'bold 12px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText(ft.text, ft.x, ft.y - yOff);
+  }
+}
+
+function spawnParticles(x, y, color, count) {
+  for (let i = 0; i < count; i++) {
+    const angle = Math.random() * Math.PI * 2;
+    const speed = 0.5 + Math.random() * 2;
+    gameState.particles.push({
+      x, y,
+      vx: Math.cos(angle) * speed,
+      vy: Math.sin(angle) * speed,
+      r: 2 + Math.random() * 3,
+      color: color,
+      born: Date.now(),
+      life: 600 + Math.random() * 600
+    });
+  }
+}
+
+function roundRect(ctx, x, y, w, h, r) {
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.lineTo(x + w - r, y);
+  ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+  ctx.lineTo(x + w, y + h - r);
+  ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+  ctx.lineTo(x + r, y + h);
+  ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+  ctx.lineTo(x, y + r);
+  ctx.quadraticCurveTo(x, y, x + r, y);
+  ctx.closePath();
+}
+
+// ========== SLOT COMPATIBILITY ==========
+// Each sensor has exactly one correct slot (8 sensors, 8 slots).
+function getCompatibleSlots(sensor) {
+  return [sensor.slot];
+}
+
+function findBestSlot(sensorId, mouseX, mouseY) {
+  const sensor = SENSORS.find(s => s.id === sensorId);
+  if (!sensor) return null;
+
+  // Sensor's one correct slot
+  const targetSlot = sensor.slot;
+  if (gameState.placedSensors[targetSlot]) return null; // already occupied
+
+  const pos = slotPositions[targetSlot];
+  if (!pos) return null;
+  const cx = pos.x + pos.w / 2;
+  const cy = pos.y + pos.h / 2;
+  const dist = Math.sqrt((mouseX - cx) ** 2 + (mouseY - cy) ** 2);
+
+  // Accept if within 65px of slot center
+  if (dist < 65) return targetSlot;
+  return null;
+}
+
+// ========== DRAG AND DROP ==========
+function setupDragDrop() {
+  document.addEventListener('mousedown', onMouseDown);
+  document.addEventListener('mousemove', onMouseMove);
+  document.addEventListener('mouseup', onMouseUp);
+  // Touch support
+  document.addEventListener('touchstart', onTouchStart, { passive: false });
+  document.addEventListener('touchmove', onTouchMove, { passive: false });
+  document.addEventListener('touchend', onTouchEnd);
+}
+
+function onMouseDown(e) {
+  if (gameState.missionComplete || !gameState.started || gameState.finished) return;
+  const card = e.target.closest('.sensor-card');
+  if (!card || card.classList.contains('placed')) return;
+  const sensorId = card.dataset.sensorId;
+  startDrag(sensorId, e.clientX, e.clientY);
+  card.classList.add('dragging');
+}
+
+function onMouseMove(e) {
+  if (!dragSensor) return;
+  moveDrag(e.clientX, e.clientY);
+}
+
+function onMouseUp(e) {
+  if (!dragSensor) return;
+  endDrag(e.clientX, e.clientY);
+}
+
+function onTouchStart(e) {
+  if (gameState.missionComplete || !gameState.started || gameState.finished) return;
+  const touch = e.touches[0];
+  const card = touch.target.closest('.sensor-card');
+  if (!card || card.classList.contains('placed')) return;
+  e.preventDefault();
+  const sensorId = card.dataset.sensorId;
+  startDrag(sensorId, touch.clientX, touch.clientY);
+  card.classList.add('dragging');
+}
+
+function onTouchMove(e) {
+  if (!dragSensor) return;
+  e.preventDefault();
+  const touch = e.touches[0];
+  moveDrag(touch.clientX, touch.clientY);
+}
+
+function onTouchEnd(e) {
+  if (!dragSensor) return;
+  const touch = e.changedTouches[0];
+  endDrag(touch.clientX, touch.clientY);
+}
+
+function startDrag(sensorId, clientX, clientY) {
+  dragSensor = sensorId;
+  const sensor = SENSORS.find(s => s.id === sensorId);
+  ghostEl.textContent = sensor.icon + ' ' + T('sensors.' + sensorId + '.name');
+  ghostEl.style.borderColor = sensor.color;
+  ghostEl.style.color = sensor.color;
+  ghostEl.style.display = 'block';
+  moveDrag(clientX, clientY);
+}
+
+function moveDrag(clientX, clientY) {
+  dragX = clientX;
+  dragY = clientY;
+  ghostEl.style.left = (clientX + 12) + 'px';
+  ghostEl.style.top = (clientY - 20) + 'px';
+}
+
+function endDrag(clientX, clientY) {
+  const sensorId = dragSensor;
+  dragSensor = null;
+  ghostEl.style.display = 'none';
+
+  // Remove dragging class
+  const card = document.querySelector(`.sensor-card[data-sensor-id="${sensorId}"]`);
+  if (card) card.classList.remove('dragging');
+
+  // Check if dropped on canvas
+  const canvasRect = canvas.getBoundingClientRect();
+  const mx = clientX - canvasRect.left;
+  const my = clientY - canvasRect.top;
+
+  // Check if sensor is needed for this mission
+  const mission = MISSION_SENSORS[gameState.currentMission];
+  if (!mission.includes(sensorId)) {
+    showHint(T('notNeeded'));
+    gameState.wrongAttempts++;
+    shakeCard(sensorId);
+    return;
+  }
+
+  // Already installed?
+  if (gameState.installedForMission.includes(sensorId)) return;
+
+  // Find best slot
+  const slotId = findBestSlot(sensorId, mx, my);
+  if (!slotId) {
+    showHint(T('wrongSlot'));
+    gameState.wrongAttempts++;
+    shakeCard(sensorId);
+    return;
+  }
+
+  // Place sensor
+  placeSensor(sensorId, slotId);
+}
+
+function placeSensor(sensorId, slotId) {
+  gameState.placedSensors[slotId] = sensorId;
+  gameState.installedForMission.push(sensorId);
+
+  // Visual feedback
+  const pos = slotPositions[slotId];
+  const sensor = SENSORS.find(s => s.id === sensorId);
+  spawnParticles(pos.x + pos.w / 2, pos.y + pos.h / 2, sensor.color, 20);
+  gameState.slotGlows[slotId] = 1.0;
+
+  // Floating text: capability unlocked
+  const capText = T('capUnlocked') + ': ' + sensor.capability[lang];
+  addFloatingText(capText, pos.x + pos.w / 2, pos.y - 5, sensor.color);
+
+  // Mark card as placed
+  const card = document.querySelector(`.sensor-card[data-sensor-id="${sensorId}"]`);
+  if (card) card.classList.add('placed');
+
+  // Update mission panel
+  renderMissionPanel();
+
+  // Check mission completion
+  const mission = MISSION_SENSORS[gameState.currentMission];
+  const allPlaced = mission.every(sid => gameState.installedForMission.includes(sid));
+  if (allPlaced) {
+    completeMission();
+  }
+}
+
+function completeMission() {
+  gameState.missionComplete = true;
+  const elapsed = (Date.now() - gameState.missionStartTime) / 1000;
+
+  // Calculate score
+  let score = 100;
+  if (gameState.wrongAttempts === 0) score += 50;
+  if (elapsed < 15) score += 30;
+  gameState.missionScore = score;
+  gameState.totalScore += score;
+
+  // Drive animation
+  gameState.roverDriveAnim = 1.0;
+
+  // Show success overlay
+  const missionData = T('missions')[gameState.currentMission];
+  const overlay = document.getElementById('overlay');
+  document.getElementById('overlay-title').textContent = T('missionComplete');
+  document.getElementById('overlay-desc').textContent = missionData.discovery;
+
+  const isLast = gameState.currentMission >= MISSION_SENSORS.length - 1;
+  document.getElementById('overlay-btn').textContent = isLast ? (lang === 'zh' ? '查看总分' : 'View Final Score') : T('nextMission');
+
+  // Particles burst
+  spawnParticles(canvasW / 2, canvasH / 2, 'rgb(63,185,80)', 40);
+  spawnParticles(canvasW / 2 - 40, canvasH / 2, 'rgb(240,136,62)', 20);
+  spawnParticles(canvasW / 2 + 40, canvasH / 2, 'rgb(88,166,255)', 20);
+
+  setTimeout(() => {
+    overlay.classList.add('visible');
+    renderScorePanel();
+    renderMissionPanel();
+  }, 800);
+}
+
+function nextMission() {
+  const overlay = document.getElementById('overlay');
+  overlay.classList.remove('visible');
+
+  if (gameState.currentMission >= MISSION_SENSORS.length - 1) {
+    // Show final screen
+    showFinalScreen();
+    return;
+  }
+
+  gameState.currentMission++;
+  resetMissionState();
+  renderUI();
+}
+
+function resetMissionState() {
+  gameState.missionComplete = false;
+  gameState.missionScore = 0;
+  gameState.wrongAttempts = 0;
+  gameState.missionStartTime = Date.now();
+  gameState.placedSensors = {};
+  gameState.installedForMission = [];
+  gameState.slotGlows = {};
+  gameState.roverDriveAnim = 0;
+  gameState.particles = [];
+
+  // Reset card states
+  document.querySelectorAll('.sensor-card').forEach(card => {
+    card.classList.remove('placed', 'dragging');
+  });
+}
+
+function showFinalScreen() {
+  gameState.finished = true;
+  document.getElementById('final-title').textContent = T('finalTitle');
+  document.getElementById('final-score-num').textContent = gameState.totalScore;
+  document.getElementById('final-desc').textContent = T('finalDesc');
+  document.getElementById('final-btn').textContent = T('finalBtn');
+  document.getElementById('final-screen').classList.add('visible');
+}
+
+function restartGame() {
+  document.getElementById('final-screen').classList.remove('visible');
+  gameState = {
+    started: true,
+    currentMission: 0,
+    totalScore: 0,
+    missionScore: 0,
+    wrongAttempts: 0,
+    missionStartTime: Date.now(),
+    placedSensors: {},
+    installedForMission: [],
+    missionComplete: false,
+    roverDriveAnim: 0,
+    particles: [],
+    slotGlows: {},
+    finished: false
+  };
+  document.querySelectorAll('.sensor-card').forEach(card => {
+    card.classList.remove('placed', 'dragging');
+  });
+  renderUI();
+}
+
+function startGame() {
+  document.getElementById('start-screen').style.display = 'none';
+  gameState.started = true;
+  gameState.missionStartTime = Date.now();
+  renderUI();
+}
+
+// ========== HINTS ==========
+function showHint(text) {
+  const toast = document.getElementById('hint-toast');
+  toast.textContent = text;
+  toast.classList.add('visible');
+  if (hintTimer) clearTimeout(hintTimer);
+  hintTimer = setTimeout(() => {
+    toast.classList.remove('visible');
+  }, 1500);
+}
+
+function shakeCard(sensorId) {
+  const card = document.querySelector(`.sensor-card[data-sensor-id="${sensorId}"]`);
+  if (!card) return;
+  card.style.animation = 'none';
+  card.offsetHeight; // reflow
+  card.style.animation = 'shake 0.4s ease';
+  setTimeout(() => { card.style.animation = ''; }, 400);
+}
+
+// ========== UI RENDERING ==========
+function renderUI() {
+  renderHeader();
+  renderSensorLibrary();
+  renderMissionPanel();
+  renderScorePanel();
+  renderStartScreen();
+}
+
+function renderHeader() {
+  document.getElementById('game-title').textContent = T('gameTitle');
+}
+
+function renderStartScreen() {
+  document.getElementById('start-title').textContent = T('startTitle');
+  document.getElementById('start-desc').textContent = T('startDesc');
+  document.getElementById('start-btn').textContent = T('startBtn');
+}
+
+function renderSensorLibrary() {
+  document.getElementById('sensor-library-header').textContent = T('sensorLib');
+  const list = document.getElementById('sensor-list');
+  list.innerHTML = '';
+
+  for (const sensor of SENSORS) {
+    const t = T('sensors.' + sensor.id);
+    const card = document.createElement('div');
+    card.className = 'sensor-card';
+    card.dataset.sensorId = sensor.id;
+    card.style.borderLeftColor = sensor.color;
+
+    if (gameState.installedForMission.includes(sensor.id)) {
+      card.classList.add('placed');
+    }
+
+    card.innerHTML = `
+      <div class="s-icon">${sensor.icon}</div>
+      <div class="s-name" style="color:${sensor.color}">${t.name}</div>
+      <div class="s-desc">${t.sub} -- ${t.desc}</div>
+    `;
+    list.appendChild(card);
+  }
+}
+
+function renderMissionPanel() {
+  const header = document.getElementById('mission-header');
+  header.textContent = T('missionPanel');
+
+  const content = document.getElementById('mission-content');
+  const missionData = T('missions')[gameState.currentMission];
+  const missionSensors = MISSION_SENSORS[gameState.currentMission];
+
+  let reqsHtml = '';
+  for (let i = 0; i < missionSensors.length; i++) {
+    const sid = missionSensors[i];
+    const sensor = SENSORS.find(s => s.id === sid);
+    const isFulfilled = gameState.installedForMission.includes(sid);
+    const sName = T('sensors.' + sid + '.name');
+    const cap = sensor.capability[lang];
+    reqsHtml += `
+      <li class="req-item ${isFulfilled ? 'fulfilled' : ''}">
+        <span class="req-check">${isFulfilled ? 'V' : ''}</span>
+        <span>${sName}: ${cap}</span>
+      </li>
+    `;
+  }
+
+  content.innerHTML = `
+    <div class="mission-title">${missionData.title}</div>
+    <div class="mission-desc">${missionData.desc}</div>
+    <div class="mission-section-label">${T('requirements')}</div>
+    <ul class="req-list">${reqsHtml}</ul>
+    <div id="mission-progress">
+      <div class="progress-bar-bg">
+        <div class="progress-bar-fill" style="width: ${((gameState.currentMission + (gameState.missionComplete ? 1 : 0)) / MISSION_SENSORS.length) * 100}%"></div>
+      </div>
+      <div class="progress-label">${T('missionProgress')}: ${gameState.currentMission + (gameState.missionComplete ? 1 : 0)} / ${MISSION_SENSORS.length}</div>
+    </div>
+  `;
+}
+
+function renderScorePanel() {
+  const panel = document.getElementById('score-panel');
+  const elapsed = gameState.missionStartTime > 0 ? (Date.now() - gameState.missionStartTime) / 1000 : 0;
+
+  let mBase = gameState.missionComplete ? 100 : '--';
+  let mPerfect = gameState.missionComplete ? (gameState.wrongAttempts === 0 ? '+50' : '0') : '--';
+  let mSpeed = gameState.missionComplete ? (elapsed < 15 ? '+30' : '0') : '--';
+
+  panel.innerHTML = `
+    <div class="score-row">
+      <span class="score-label">${T('missionBonus')}</span>
+      <span class="score-value">${mBase}</span>
+    </div>
+    <div class="score-row">
+      <span class="score-label">${T('perfectBonus')}</span>
+      <span class="score-value">${mPerfect}</span>
+    </div>
+    <div class="score-row">
+      <span class="score-label">${T('speedBonus')}</span>
+      <span class="score-value">${mSpeed}</span>
+    </div>
+    <div class="score-row score-total">
+      <span class="score-label">${T('totalScore')}</span>
+      <span class="score-value">${gameState.totalScore}</span>
+    </div>
+  `;
+}
+
+// ========== INIT ==========
+function init() {
+  initCanvas();
+  setupDragDrop();
+  renderUI();
+  drawFrame();
+
+  window.addEventListener('resize', () => {
+    resizeCanvas();
+  });
+}
+
+// Shake animation keyframes (injected via JS since we avoid external CSS files)
+const shakeStyle = document.createElement('style');
+shakeStyle.textContent = `
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  20% { transform: translateX(-6px); }
+  40% { transform: translateX(6px); }
+  60% { transform: translateX(-4px); }
+  80% { transform: translateX(4px); }
+}
+`;
+document.head.appendChild(shakeStyle);
+
+window.addEventListener('DOMContentLoaded', init);
+</script>
+</body>
+</html>

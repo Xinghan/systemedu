@@ -33,6 +33,12 @@ import {
   Languages,
   Target,
   Info,
+  Film,
+  Gamepad2,
+  Youtube,
+  GraduationCap,
+  LayoutDashboard,
+  Package,
 } from "lucide-react"
 import { PageLoading } from "@/components/ui/page-loading"
 import { ScrollArea } from "@/components/ui/scroll-area"
@@ -377,7 +383,104 @@ export default function LearnPage() {
   const [noteStatus, setNoteStatus] = useState<"idle" | "saving" | "saved">("idle")
   const [hoveredNode, setHoveredNode] = useState<NodeTooltipData | null>(null)
   const [spModalOpen, setSpModalOpen] = useState(false)
+  const [mediaStats, setMediaStats] = useState<import("@/components/learning/course-content-view").MediaStats | null>(null)
+  const [outline, setOutline] = useState<import("@/components/learning/course-content-view").OutlineSection[]>([])
+  const [activeOutlineId, setActiveOutlineId] = useState<string | null>(null)
+  // Each entry is a 0..1 vertical position for the corresponding outline section
+  const [outlinePositions, setOutlinePositions] = useState<number[]>([])
   const sessionStartRef = useRef<number>(Date.now())
+  const cleanupRef = useRef<(() => void) | null>(null)
+
+  // Measure outline dot positions — distribute dots by each heading's real
+  // vertical offset within the scrollable content container. Re-measures on
+  // outline change, window resize, and periodically (in case images/iframes
+  // load and shift layout).
+  useEffect(() => {
+    if (outline.length === 0) {
+      setOutlinePositions([])
+      return
+    }
+    const measure = () => {
+      const first = document.getElementById(outline[0].id)
+      if (!first) return
+      // Find the nearest scrollable ancestor for coordinate-space reference
+      const scrollParent: HTMLElement = (() => {
+        let el: HTMLElement | null = first.parentElement
+        while (el) {
+          const style = window.getComputedStyle(el)
+          const overflowY = style.overflowY
+          if (overflowY === "auto" || overflowY === "scroll") return el
+          el = el.parentElement
+        }
+        return document.scrollingElement as HTMLElement
+      })()
+      const scrollHeight = Math.max(scrollParent.scrollHeight, 1)
+      const viewportH = scrollParent.clientHeight || window.innerHeight
+      // Usable track range within the rail, in fraction of full content
+      const positions: number[] = []
+      for (const s of outline) {
+        const el = document.getElementById(s.id)
+        if (!el) {
+          positions.push(0)
+          continue
+        }
+        // offsetTop relative to scroll parent via bounding rects
+        const top = el.getBoundingClientRect().top - scrollParent.getBoundingClientRect().top + scrollParent.scrollTop
+        // Clamp so the last dot can't fall below the rail bottom
+        const frac = Math.max(0, Math.min(1, top / Math.max(1, scrollHeight - viewportH * 0.2)))
+        positions.push(frac)
+      }
+      setOutlinePositions(positions)
+    }
+    // Initial measurement after a small delay so content has laid out
+    const t1 = window.setTimeout(measure, 250)
+    const t2 = window.setTimeout(measure, 800)
+    const t3 = window.setTimeout(measure, 2000)
+    window.addEventListener("resize", measure)
+    return () => {
+      window.clearTimeout(t1)
+      window.clearTimeout(t2)
+      window.clearTimeout(t3)
+      window.removeEventListener("resize", measure)
+    }
+  }, [outline, activeNodeId])
+
+  // Scroll spy: highlight the outline entry closest to the top of the viewport.
+  useEffect(() => {
+    if (outline.length === 0) {
+      setActiveOutlineId(null)
+      return
+    }
+    // Wait for DOM elements to exist after content renders
+    const timer = window.setTimeout(() => {
+      const targets = outline
+        .map((s) => document.getElementById(s.id))
+        .filter((el): el is HTMLElement => el !== null)
+      if (targets.length === 0) return
+      const observer = new IntersectionObserver(
+        (entries) => {
+          const visible = entries
+            .filter((e) => e.isIntersecting)
+            .sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top)
+          if (visible[0]?.target.id) {
+            setActiveOutlineId(visible[0].target.id)
+          }
+        },
+        { rootMargin: "-80px 0px -60% 0px", threshold: 0 }
+      )
+      targets.forEach((t) => observer.observe(t))
+      // Cleanup stored on closure via ref
+      ;(cleanupRef.current as (() => void) | null) = () => observer.disconnect()
+    }, 200)
+    return () => {
+      window.clearTimeout(timer)
+      if (cleanupRef.current) {
+        cleanupRef.current()
+        cleanupRef.current = null
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [outline, activeNodeId])
 
   useEffect(() => {
     if (!params.projectName) return
@@ -752,13 +855,74 @@ export default function LearnPage() {
               </ScrollArea>
             </div>
           ) : activeNodeId !== null ? (
-            <CourseContentView
-              projectName={params.projectName}
-              nodeId={activeNodeId}
-              knode={allKnodes[activeNodeId] ?? null}
-              onClose={() => setActiveNodeId(null)}
-              onMarkComplete={handleMarkComplete}
-            />
+            <div className="flex-1 flex min-h-0 min-w-0">
+              {/* Outline rail — vertical bar, dots distributed by each h2's
+                  real offset within the scrollable content (not evenly spaced) */}
+              {outline.length > 0 && (
+                <nav
+                  className="shrink-0 w-10 border-r border-border/40 bg-card/10 hidden lg:block"
+                  aria-label={t("learn.outline")}
+                >
+                  <div className="relative w-full h-full py-8">
+                    {/* Vertical rail line */}
+                    <div className="absolute left-1/2 top-8 bottom-8 -translate-x-1/2 w-px bg-border/50" aria-hidden="true" />
+                    {outline.map((s, i) => {
+                      const isActive = s.id === activeOutlineId
+                      const frac = outlinePositions[i] ?? i / Math.max(1, outline.length - 1)
+                      return (
+                        <button
+                          key={s.id}
+                          type="button"
+                          onClick={() => {
+                            const el = document.getElementById(s.id)
+                            if (el) {
+                              el.scrollIntoView({ behavior: "smooth", block: "start" })
+                              setActiveOutlineId(s.id)
+                            }
+                          }}
+                          title={`${i + 1}. ${s.title}`}
+                          style={{
+                            position: "absolute",
+                            top: `calc(2rem + ${frac * 100}% - ${frac * 4}rem)`,
+                            left: "50%",
+                            transform: "translate(-50%, -50%)",
+                          }}
+                          className={`z-10 group flex items-center justify-center transition-all ${
+                            isActive ? "scale-110" : "hover:scale-110"
+                          }`}
+                          aria-label={s.title}
+                          aria-current={isActive ? "true" : undefined}
+                        >
+                          <span
+                            className={`block rounded-full transition-all ${
+                              isActive
+                                ? "w-3 h-3 bg-primary ring-2 ring-primary/30"
+                                : "w-2 h-2 bg-muted-foreground/40 group-hover:bg-primary/70"
+                            }`}
+                          />
+                          {/* Hover tooltip */}
+                          <span className="pointer-events-none absolute left-full ml-3 px-2 py-1 rounded-md bg-popover text-popover-foreground text-xs whitespace-nowrap shadow-lg border border-border opacity-0 group-hover:opacity-100 transition-opacity z-20">
+                            {s.title}
+                          </span>
+                        </button>
+                      )
+                    })}
+                  </div>
+                </nav>
+              )}
+              <div className="flex-1 min-w-0 min-h-0 flex flex-col">
+                <CourseContentView
+                  projectName={params.projectName}
+                  nodeId={activeNodeId}
+                  knode={allKnodes[activeNodeId] ?? null}
+                  onClose={() => setActiveNodeId(null)}
+                  onMarkComplete={handleMarkComplete}
+                  knowledgeLevel={(detail?.project as { knowledge_level?: import("@/lib/types/api").KnowledgeLevel }).knowledge_level || "K1"}
+                  onMediaStats={setMediaStats}
+                  onOutline={setOutline}
+                />
+              </div>
+            </div>
           ) : (
             <ScrollArea className="flex-1 min-h-0">
               <div className="max-w-3xl mx-auto px-6 py-8 space-y-6">
@@ -807,6 +971,66 @@ export default function LearnPage() {
                   <span className="text-xs font-medium text-foreground">{t("learn.view_syllabus")}</span>
                   <ArrowRight className="h-3.5 w-3.5 text-muted-foreground/50 group-hover:text-primary transition-colors" />
                 </Link>
+
+                {/* Rich Media Summary — counts of animation/game/image/youtube/labxchange in current knode */}
+                {activeNodeId !== null && mediaStats && (() => {
+                  const rows: Array<{
+                    key: import("@/components/learning/course-content-view").MediaKind
+                    Icon: typeof Film
+                    label: string
+                    tooltip: string
+                    color: string
+                    bg: string
+                  }> = [
+                    { key: "theory", Icon: BookOpen, label: t("learn.media.theory"), tooltip: t("learn.media.theory_desc"), color: "text-amber-600 dark:text-amber-400", bg: "bg-amber-100 dark:bg-amber-500/15" },
+                    { key: "animation", Icon: Film, label: t("learn.media.animation"), tooltip: t("learn.media.animation_desc"), color: "text-sky-600 dark:text-sky-400", bg: "bg-sky-100 dark:bg-sky-500/15" },
+                    { key: "game", Icon: Gamepad2, label: t("learn.media.game"), tooltip: t("learn.media.game_desc"), color: "text-emerald-600 dark:text-emerald-400", bg: "bg-emerald-100 dark:bg-emerald-500/15" },
+                    { key: "hands_on_kit", Icon: Package, label: t("learn.media.hands_on_kit"), tooltip: t("learn.media.hands_on_kit_desc"), color: "text-orange-600 dark:text-orange-400", bg: "bg-orange-100 dark:bg-orange-500/15" },
+                    { key: "image", Icon: Image, label: t("learn.media.image"), tooltip: t("learn.media.image_desc"), color: "text-pink-600 dark:text-pink-400", bg: "bg-pink-100 dark:bg-pink-500/15" },
+                    { key: "youtube", Icon: Youtube, label: t("learn.media.youtube"), tooltip: t("learn.media.youtube_desc"), color: "text-red-600 dark:text-red-400", bg: "bg-red-100 dark:bg-red-500/15" },
+                    { key: "labxchange", Icon: GraduationCap, label: t("learn.media.labxchange"), tooltip: t("learn.media.labxchange_desc"), color: "text-purple-600 dark:text-purple-400", bg: "bg-purple-100 dark:bg-purple-500/15" },
+                  ]
+                  const available = rows.filter((r) => (mediaStats.counts[r.key] ?? 0) > 0)
+                  if (available.length === 0) return null
+                  const scrollToMedia = (id: string) => {
+                    const el = document.getElementById(id)
+                    if (el) el.scrollIntoView({ behavior: "smooth", block: "start" })
+                  }
+                  return (
+                    <div>
+                      <p className="text-[10px] font-[var(--font-manrope)] uppercase tracking-widest text-muted-foreground font-semibold mb-2 px-1 flex items-center gap-1.5">
+                        <LayoutDashboard className="h-3 w-3" />
+                        {t("learn.rich_media")}
+                      </p>
+                      <div className="rounded-xl border border-border/40 bg-card/40 divide-y divide-border/30 overflow-hidden">
+                        {available.map((r) => {
+                          const count = mediaStats.counts[r.key] ?? 0
+                          const targetId = mediaStats.firstIds[r.key]
+                          return (
+                            <button
+                              key={r.key}
+                              type="button"
+                              title={r.tooltip}
+                              onClick={() => targetId && scrollToMedia(targetId)}
+                              disabled={!targetId}
+                              className="w-full flex items-center gap-3 px-3 py-2 hover:bg-secondary/50 transition-colors group disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                              <div className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 ${r.bg}`}>
+                                <r.Icon className={`h-3.5 w-3.5 ${r.color}`} />
+                              </div>
+                              <span className="flex-1 text-left text-xs font-medium text-foreground truncate">
+                                {r.label}
+                              </span>
+                              <span className="shrink-0 text-xs font-bold tabular-nums text-muted-foreground group-hover:text-primary transition-colors">
+                                {count}
+                              </span>
+                            </button>
+                          )
+                        })}
+                      </div>
+                    </div>
+                  )
+                })()}
 
                 {/* Materials & Resources */}
                 <div>
