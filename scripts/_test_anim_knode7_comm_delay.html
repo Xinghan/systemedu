@@ -1,0 +1,527 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Communication Delay: Earth to Mars</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;}
+html,body{width:100%;height:100vh;overflow:hidden;background:#08090c;color:#e8e8f0;font-family:'Inter','Noto Sans SC',system-ui,sans-serif;}
+body{display:flex;flex-direction:column;}
+canvas{flex:1;display:block;background:#08090c;cursor:pointer;}
+.controls{
+  display:flex;align-items:center;justify-content:center;gap:12px;
+  padding:10px 16px;background:#0e1118;border-top:1px solid rgba(120,140,180,0.15);
+  font-size:13px;
+}
+.controls button{
+  background:rgba(56,189,248,0.12);color:#38bdf8;border:1px solid rgba(56,189,248,0.3);
+  padding:5px 14px;cursor:pointer;font-size:12px;font-family:inherit;
+  transition:all 0.15s;
+}
+.controls button:hover{background:rgba(56,189,248,0.2);}
+.frame-info{color:rgba(200,210,230,0.6);font-size:11px;min-width:80px;text-align:center;}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div class="controls">
+  <button id="btnPrev">&lt;</button>
+  <span class="frame-info" id="frameInfo">1 / 5</span>
+  <button id="btnNext">&gt;</button>
+  <button id="langBtn">EN</button>
+</div>
+<script src="animation_runtime.js"></script>
+<script>
+'use strict';
+
+var LANG = 'zh';
+var T = {
+  zh: {
+    title: '地球 ↔ 火星 通信延迟',
+    earth: '地球',
+    mars: '火星',
+    rover: '火星车',
+    sun: '太阳',
+    dsnLabel: 'DSN 天线',
+    relayLabel: 'MRO 中继卫星',
+
+    f0_title: '地球和火星',
+    f0_desc: '地球和火星的距离不断变化：最近 5500 万公里，最远 4 亿公里',
+    f0_near: '最近 ~5500万km\n单程 ~3分钟',
+    f0_far: '最远 ~4亿km\n单程 ~22分钟',
+
+    f1_title: '发送指令',
+    f1_desc: '地球操控团队通过 DSN 天线发出当天的 sol plan',
+    f1_signal: 'sol plan',
+    f1_wait: '信号正在以光速穿越太空...',
+
+    f2_title: '信号到达',
+    f2_desc: '火星车通过 MRO 卫星中转接收到 sol plan，开始自主执行',
+    f2_exec: '自主执行任务...',
+    f2_delay: '延迟 3-22 分钟',
+
+    f3_title: '回传数据',
+    f3_desc: '傍晚时分，火星车把一天收集的照片和数据回传给 MRO 卫星',
+    f3_data: '照片 + 科学数据',
+
+    f4_title: '往返延迟',
+    f4_desc: '一来一回，最快 6 分钟，最慢 44 分钟。在此期间火星车只能靠自己。',
+    f4_round: '往返 6~44 分钟',
+    f4_auto: '所以火星车必须自主！',
+  },
+  en: {
+    title: 'Earth ↔ Mars Communication Delay',
+    earth: 'Earth',
+    mars: 'Mars',
+    rover: 'Rover',
+    sun: 'Sun',
+    dsnLabel: 'DSN Antenna',
+    relayLabel: 'MRO Relay',
+
+    f0_title: 'Earth & Mars',
+    f0_desc: 'Distance varies: nearest ~55M km, farthest ~400M km',
+    f0_near: 'Nearest ~55M km\nOne-way ~3 min',
+    f0_far: 'Farthest ~400M km\nOne-way ~22 min',
+
+    f1_title: 'Send Command',
+    f1_desc: 'Mission control sends the sol plan via DSN antenna',
+    f1_signal: 'sol plan',
+    f1_wait: 'Signal traveling at light speed...',
+
+    f2_title: 'Signal Arrives',
+    f2_desc: 'Rover receives sol plan via MRO relay and begins autonomous execution',
+    f2_exec: 'Executing autonomously...',
+    f2_delay: 'Delay: 3-22 min',
+
+    f3_title: 'Data Return',
+    f3_desc: 'At dusk, rover sends collected photos and data to MRO satellite',
+    f3_data: 'Photos + Science Data',
+
+    f4_title: 'Round-Trip Delay',
+    f4_desc: 'One round trip: 6 to 44 minutes. The rover must act on its own.',
+    f4_round: 'Round trip: 6-44 min',
+    f4_auto: 'That\'s why the rover must be autonomous!',
+  }
+};
+function t(key){ return (T[LANG] || T.zh)[key] || key; }
+
+var totalFrames = 5;
+var currentFrame = 0;
+window.currentFrame = currentFrame;
+
+var canvas = document.getElementById('c');
+var ctx = canvas.getContext('2d');
+var W, H;
+
+function resize(){
+  var rect = canvas.getBoundingClientRect();
+  var dpr = window.devicePixelRatio || 1;
+  canvas.width = Math.floor(rect.width * dpr);
+  canvas.height = Math.floor(rect.height * dpr);
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  W = rect.width;
+  H = rect.height;
+}
+
+// animation progress (0-1) for each frame
+var animT = 0;
+var animDir = 1;
+var lastTs = 0;
+
+// =====================================================================
+// DRAWING HELPERS
+// =====================================================================
+
+function drawStar(x, y, r){
+  ctx.save();
+  ctx.fillStyle = 'rgba(200,220,255,0.7)';
+  ctx.beginPath();
+  ctx.arc(x, y, r, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+}
+
+function drawStarField(){
+  // deterministic star positions based on canvas size
+  var seed = 42;
+  function rng(){ seed = (seed * 1103515245 + 12345) & 0x7fffffff; return seed / 0x7fffffff; }
+  for (var i = 0; i < 120; i++){
+    var sx = rng() * W;
+    var sy = rng() * H;
+    var sr = rng() * 1.2 + 0.3;
+    var alpha = rng() * 0.5 + 0.2;
+    ctx.fillStyle = 'rgba(200,220,255,' + alpha + ')';
+    ctx.beginPath();
+    ctx.arc(sx, sy, sr, 0, Math.PI * 2);
+    ctx.fill();
+  }
+}
+
+function drawEarth(cx, cy, r){
+  var grad = ctx.createRadialGradient(cx - r*0.3, cy - r*0.3, r*0.1, cx, cy, r);
+  grad.addColorStop(0, '#4fa8ff');
+  grad.addColorStop(0.5, '#1a6fcc');
+  grad.addColorStop(1, '#0a3060');
+  ctx.fillStyle = grad;
+  ctx.beginPath();
+  ctx.arc(cx, cy, r, 0, Math.PI * 2);
+  ctx.fill();
+  // land masses (simplified)
+  ctx.fillStyle = 'rgba(80,200,100,0.4)';
+  ctx.beginPath();
+  ctx.arc(cx - r*0.2, cy - r*0.1, r*0.3, 0, Math.PI*2);
+  ctx.fill();
+  ctx.fillStyle = 'rgba(80,200,100,0.3)';
+  ctx.beginPath();
+  ctx.arc(cx + r*0.3, cy + r*0.2, r*0.25, 0, Math.PI*2);
+  ctx.fill();
+  // label
+  ctx.fillStyle = '#b8d8ff';
+  ctx.font = Math.max(11, r*0.5) + 'px Inter, Noto Sans SC, sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillText(t('earth'), cx, cy + r + Math.max(14, r*0.6));
+}
+
+function drawMars(cx, cy, r){
+  var grad = ctx.createRadialGradient(cx - r*0.3, cy - r*0.3, r*0.1, cx, cy, r);
+  grad.addColorStop(0, '#e88044');
+  grad.addColorStop(0.5, '#c4522a');
+  grad.addColorStop(1, '#6e2810');
+  ctx.fillStyle = grad;
+  ctx.beginPath();
+  ctx.arc(cx, cy, r, 0, Math.PI * 2);
+  ctx.fill();
+  // dark feature
+  ctx.fillStyle = 'rgba(80,30,10,0.4)';
+  ctx.beginPath();
+  ctx.arc(cx + r*0.1, cy - r*0.2, r*0.2, 0, Math.PI*2);
+  ctx.fill();
+  // label
+  ctx.fillStyle = '#ffb088';
+  ctx.font = Math.max(11, r*0.5) + 'px Inter, Noto Sans SC, sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillText(t('mars'), cx, cy + r + Math.max(14, r*0.6));
+}
+
+function drawSun(cx, cy, r){
+  var grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, r*2);
+  grad.addColorStop(0, 'rgba(255,220,100,0.6)');
+  grad.addColorStop(0.5, 'rgba(255,180,50,0.15)');
+  grad.addColorStop(1, 'rgba(255,180,50,0)');
+  ctx.fillStyle = grad;
+  ctx.beginPath();
+  ctx.arc(cx, cy, r*2, 0, Math.PI*2);
+  ctx.fill();
+  ctx.fillStyle = '#ffe080';
+  ctx.beginPath();
+  ctx.arc(cx, cy, r, 0, Math.PI*2);
+  ctx.fill();
+}
+
+function drawRover(cx, cy, scale){
+  var s = scale || 1;
+  ctx.save();
+  ctx.translate(cx, cy);
+  ctx.scale(s, s);
+  // body
+  ctx.fillStyle = '#c0c8d8';
+  ctx.fillRect(-18, -10, 36, 16);
+  // mast
+  ctx.fillStyle = '#a0a8b8';
+  ctx.fillRect(-2, -22, 4, 12);
+  // camera head
+  ctx.fillStyle = '#80e0ff';
+  ctx.fillRect(-4, -26, 8, 5);
+  // wheels
+  ctx.fillStyle = '#606870';
+  ctx.beginPath(); ctx.arc(-14, 8, 5, 0, Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.arc(0, 8, 5, 0, Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.arc(14, 8, 5, 0, Math.PI*2); ctx.fill();
+  ctx.restore();
+}
+
+function drawDSN(cx, cy, scale){
+  var s = scale || 1;
+  ctx.save();
+  ctx.translate(cx, cy);
+  ctx.scale(s, s);
+  // dish
+  ctx.strokeStyle = '#70a0d0';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.ellipse(0, -8, 16, 6, 0, Math.PI, 0);
+  ctx.stroke();
+  // support
+  ctx.beginPath();
+  ctx.moveTo(0, -8);
+  ctx.lineTo(0, 10);
+  ctx.stroke();
+  // base
+  ctx.fillStyle = '#506070';
+  ctx.fillRect(-8, 8, 16, 6);
+  ctx.restore();
+}
+
+function drawSignalPulse(x1, y1, x2, y2, progress, color, label){
+  // draw a traveling pulse along the line from (x1,y1) to (x2,y2)
+  var px = x1 + (x2 - x1) * progress;
+  var py = y1 + (y2 - y1) * progress;
+  // trail
+  ctx.strokeStyle = color || 'rgba(56,189,248,0.3)';
+  ctx.lineWidth = 1;
+  ctx.setLineDash([4, 6]);
+  ctx.beginPath();
+  ctx.moveTo(x1, y1);
+  ctx.lineTo(px, py);
+  ctx.stroke();
+  ctx.setLineDash([]);
+  // pulse dot
+  var grad = ctx.createRadialGradient(px, py, 0, px, py, 12);
+  grad.addColorStop(0, color || '#38bdf8');
+  grad.addColorStop(1, 'rgba(56,189,248,0)');
+  ctx.fillStyle = grad;
+  ctx.beginPath();
+  ctx.arc(px, py, 12, 0, Math.PI*2);
+  ctx.fill();
+  ctx.fillStyle = '#38bdf8';
+  ctx.beginPath();
+  ctx.arc(px, py, 3, 0, Math.PI*2);
+  ctx.fill();
+  // label
+  if (label){
+    ctx.fillStyle = '#b0d8ff';
+    ctx.font = '11px Inter, Noto Sans SC, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText(label, px, py - 18);
+  }
+}
+
+function drawTextBox(cx, cy, text, opts){
+  opts = opts || {};
+  var fontSize = opts.fontSize || 13;
+  var color = opts.color || '#e0e8f0';
+  var bg = opts.bg || 'rgba(14,17,24,0.85)';
+  var border = opts.border || 'rgba(56,189,248,0.3)';
+  var maxW = opts.maxWidth || 280;
+  ctx.font = fontSize + 'px Inter, Noto Sans SC, sans-serif';
+  var lines = text.split('\n');
+  var lineH = fontSize * 1.5;
+  var textW = 0;
+  for (var i = 0; i < lines.length; i++){
+    var lw = ctx.measureText(lines[i]).width;
+    if (lw > textW) textW = lw;
+  }
+  textW = Math.min(textW, maxW);
+  var pad = 10;
+  var bw = textW + pad * 2;
+  var bh = lines.length * lineH + pad * 2;
+  var bx = cx - bw / 2;
+  var by = cy - bh / 2;
+  ctx.fillStyle = bg;
+  ctx.strokeStyle = border;
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.roundRect(bx, by, bw, bh, 4);
+  ctx.fill();
+  ctx.stroke();
+  ctx.fillStyle = color;
+  ctx.textAlign = 'center';
+  for (var j = 0; j < lines.length; j++){
+    ctx.fillText(lines[j], cx, by + pad + (j + 0.8) * lineH);
+  }
+}
+
+function drawTitle(text){
+  ctx.fillStyle = 'rgba(200,220,240,0.7)';
+  ctx.font = 'bold 16px Inter, Noto Sans SC, sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillText(text, W/2, 30);
+}
+
+function drawDesc(text){
+  ctx.fillStyle = 'rgba(180,200,220,0.5)';
+  ctx.font = '12px Inter, Noto Sans SC, sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillText(text, W/2, H - 16);
+}
+
+// =====================================================================
+// FRAMES
+// =====================================================================
+
+function drawFrame(f, aT){
+  // bg
+  var bgGrad = ctx.createLinearGradient(0, 0, 0, H);
+  bgGrad.addColorStop(0, '#08090c');
+  bgGrad.addColorStop(1, '#050608');
+  ctx.fillStyle = bgGrad;
+  ctx.fillRect(0, 0, W, H);
+  drawStarField();
+
+  var earthX = W * 0.2;
+  var marsX = W * 0.8;
+  var midY = H * 0.45;
+  var planetR = Math.min(W, H) * 0.06;
+
+  if (f === 0){
+    // Overview: Earth, Sun, Mars with distance annotations
+    drawSun(W*0.5, midY, planetR * 0.7);
+    drawEarth(earthX, midY, planetR);
+    drawMars(marsX, midY, planetR);
+    // distance line
+    ctx.strokeStyle = 'rgba(56,189,248,0.25)';
+    ctx.lineWidth = 1;
+    ctx.setLineDash([6, 4]);
+    ctx.beginPath();
+    ctx.moveTo(earthX + planetR + 10, midY);
+    ctx.lineTo(marsX - planetR - 10, midY);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    // near annotation (upper)
+    drawTextBox(W*0.38, midY - planetR*2.5, t('f0_near'), {fontSize: 11, color: '#80d8ff'});
+    // far annotation (lower)
+    drawTextBox(W*0.62, midY + planetR*2.5, t('f0_far'), {fontSize: 11, color: '#ffb088'});
+    drawTitle(t('f0_title'));
+    drawDesc(t('f0_desc'));
+  }
+  else if (f === 1){
+    // Earth sends signal
+    drawEarth(earthX, midY, planetR);
+    drawMars(marsX, midY, planetR);
+    drawDSN(earthX + planetR + 30, midY + planetR + 20, 0.8);
+    drawRover(marsX, midY + planetR + 25, 0.7);
+    var progress = Math.min(1, aT);
+    drawSignalPulse(earthX + planetR + 30, midY, marsX - planetR - 10, midY, progress, '#38bdf8', t('f1_signal'));
+    if (progress < 0.9){
+      drawTextBox(W*0.5, midY + H*0.25, t('f1_wait'), {fontSize: 12, color: '#80c0e0'});
+    }
+    drawTitle(t('f1_title'));
+    drawDesc(t('f1_desc'));
+  }
+  else if (f === 2){
+    // Signal arrives, rover starts executing
+    drawEarth(earthX, midY, planetR);
+    drawMars(marsX, midY, planetR);
+    drawDSN(earthX + planetR + 30, midY + planetR + 20, 0.8);
+    drawRover(marsX, midY + planetR + 25, 0.7);
+    // signal arrived indicator
+    var grad = ctx.createRadialGradient(marsX, midY, 0, marsX, midY, planetR*2);
+    grad.addColorStop(0, 'rgba(80,255,176,0.15)');
+    grad.addColorStop(1, 'rgba(80,255,176,0)');
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    ctx.arc(marsX, midY, planetR*2, 0, Math.PI*2);
+    ctx.fill();
+    // execution indicator
+    drawTextBox(marsX, midY - planetR*2.5, t('f2_exec'), {fontSize: 12, color: '#50ffb0', border: 'rgba(80,255,176,0.4)'});
+    drawTextBox(W*0.5, midY + H*0.25, t('f2_delay'), {fontSize: 14, color: '#ffb060'});
+    drawTitle(t('f2_title'));
+    drawDesc(t('f2_desc'));
+  }
+  else if (f === 3){
+    // Rover sends data back
+    drawEarth(earthX, midY, planetR);
+    drawMars(marsX, midY, planetR);
+    drawDSN(earthX + planetR + 30, midY + planetR + 20, 0.8);
+    drawRover(marsX, midY + planetR + 25, 0.7);
+    var progress3 = Math.min(1, aT);
+    drawSignalPulse(marsX - planetR - 10, midY, earthX + planetR + 30, midY, progress3, '#50ffb0', t('f3_data'));
+    drawTitle(t('f3_title'));
+    drawDesc(t('f3_desc'));
+  }
+  else if (f === 4){
+    // Round trip summary
+    drawEarth(earthX, midY, planetR);
+    drawMars(marsX, midY, planetR);
+    drawDSN(earthX + planetR + 30, midY + planetR + 20, 0.8);
+    drawRover(marsX, midY + planetR + 25, 0.7);
+    // bidirectional arrows
+    var arrowY1 = midY - planetR - 10;
+    var arrowY2 = midY + planetR + 8;
+    ctx.strokeStyle = 'rgba(56,189,248,0.4)';
+    ctx.lineWidth = 1.5;
+    // forward arrow
+    ctx.beginPath();
+    ctx.moveTo(earthX + planetR + 10, arrowY1);
+    ctx.lineTo(marsX - planetR - 10, arrowY1);
+    ctx.stroke();
+    ctx.fillStyle = '#38bdf8';
+    ctx.beginPath();
+    ctx.moveTo(marsX - planetR - 10, arrowY1);
+    ctx.lineTo(marsX - planetR - 20, arrowY1 - 5);
+    ctx.lineTo(marsX - planetR - 20, arrowY1 + 5);
+    ctx.fill();
+    // return arrow
+    ctx.strokeStyle = 'rgba(80,255,176,0.4)';
+    ctx.beginPath();
+    ctx.moveTo(marsX - planetR - 10, arrowY2);
+    ctx.lineTo(earthX + planetR + 10, arrowY2);
+    ctx.stroke();
+    ctx.fillStyle = '#50ffb0';
+    ctx.beginPath();
+    ctx.moveTo(earthX + planetR + 10, arrowY2);
+    ctx.lineTo(earthX + planetR + 20, arrowY2 - 5);
+    ctx.lineTo(earthX + planetR + 20, arrowY2 + 5);
+    ctx.fill();
+    // round trip box
+    drawTextBox(W*0.5, midY - planetR*3, t('f4_round'), {fontSize: 15, color: '#ffcc44', border: 'rgba(255,200,60,0.4)'});
+    // conclusion
+    drawTextBox(W*0.5, midY + H*0.28, t('f4_auto'), {fontSize: 16, color: '#50ffb0', bg: 'rgba(20,60,40,0.7)', border: 'rgba(80,255,176,0.5)'});
+    drawTitle(t('f4_title'));
+    drawDesc(t('f4_desc'));
+  }
+}
+
+// =====================================================================
+// FRAME LOOP
+// =====================================================================
+
+function gotoFrame(f){
+  currentFrame = f;
+  window.currentFrame = f;
+  animT = 0;
+  lastTs = 0;
+  document.getElementById('frameInfo').textContent = (f + 1) + ' / ' + totalFrames;
+}
+window.gotoFrame = gotoFrame;
+
+function drawCurrent(){
+  resize();
+  if (W < 50 || H < 50) return;
+  drawFrame(currentFrame, animT);
+}
+window.drawCurrent = drawCurrent;
+
+function frame(ts){
+  if (!lastTs) lastTs = ts;
+  var dt = (ts - lastTs) / 1000;
+  lastTs = ts;
+  animT += dt * 0.4; // slow pulse
+  if (animT > 1) animT = 0;
+  drawCurrent();
+  requestAnimationFrame(frame);
+}
+
+document.getElementById('btnNext').addEventListener('click', function(){
+  gotoFrame((currentFrame + 1) % totalFrames);
+});
+document.getElementById('btnPrev').addEventListener('click', function(){
+  gotoFrame((currentFrame - 1 + totalFrames) % totalFrames);
+});
+document.getElementById('langBtn').addEventListener('click', function(){
+  LANG = LANG === 'zh' ? 'en' : 'zh';
+  this.textContent = LANG === 'zh' ? 'EN' : 'ZH';
+});
+canvas.addEventListener('click', function(){
+  gotoFrame((currentFrame + 1) % totalFrames);
+});
+
+window.addEventListener('load', function(){
+  resize();
+  gotoFrame(0);
+  requestAnimationFrame(frame);
+});
+</script>
+</body>
+</html>
