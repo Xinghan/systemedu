@@ -11,23 +11,24 @@
 
 本手册有 1700+ 行，很容易漏读中间章节。这份清单是权威摘要，每个 knode 生成前先回头核对一遍，再去翻对应章节的细节。
 
-### 富媒体全集（每个 knode 都要检查这 7 类是否已考虑）
+### 富媒体全集（每个 knode 都要检查这 8 类是否已考虑）
 
-一个完整的 knode 课程会呈现多种"富媒体"给学生，前端右侧富媒体栏对应地列出这 7 类。**每次生成前都要逐条确认**——不一定每类都要有，但任何一类被"遗漏 / 忘记考虑"都算不合格：
+一个完整的 knode 课程会呈现多种"富媒体"给学生，前端右侧富媒体栏对应地列出这 8 类。**每次生成前都要逐条确认**——不一定每类都要有，但任何一类被"遗漏 / 忘记考虑"都算不合格：
 
 | # | 类型 | 产物位置 | 哪一步生成 | 允许为 0？ |
 |---|------|---------|-----------|:-----:|
 | 1 | **theory（基础知识）** | `course_content.theories[]` + `[[THEORY:xxx]]` | Step 1.5 | 只有"纯方法论节点"允许 0 个，否则 2-5 个 |
 | 2 | **animation（动画）** | `ideas[mode='animation']` + `rendered_sections` | Step 2-5 | 按 difficulty × module_role 决定，通常 ≥ 1 |
 | 3 | **game（小游戏）** | `ideas[mode='game']` + `rendered_sections` | Step 2-5 | 同上。概念节点至少 1 个 |
-| 4 | **image（真实照片）** | `ideas[mode='image']` + `rendered_sections.src` | Step 2-5 | 允许 0，低难度节点鼓励 1 张 |
-| 5 | **diagram（静态示意图）** | `ideas[mode='diagram']` + `rendered_sections.html` | Step 2-5 | 允许 0 |
-| 6 | **youtube（外部视频）** | `external_resources.youtube_results[]` | Step 0.5 Tavily | 非 0（除非搜索无命中） |
-| 7 | **labxchange（外部互动路径）** | `external_resources.labxchange_results[]` | Step 0.7 本地匹配 | 非 0（除非学科不匹配） |
+| 4 | **hands_on_kit（实物套件）** | `ideas[mode='hands_on_kit']` + `rendered_sections.components/steps` | Step 2-5 | 允许 0，仅适用于有实体元器件的工程节点（传感器/电机/面包板等），总费用 ≤ ¥100，元器件优先中国产 |
+| 5 | **image（真实照片）** | `ideas[mode='image']` + `rendered_sections.src` | Step 2-5 | 允许 0，低难度节点鼓励 1 张 |
+| 6 | **diagram（静态示意图）** | `ideas[mode='diagram']` + `rendered_sections.html` | Step 2-5 | 允许 0 |
+| 7 | **youtube（外部视频）** | `external_resources.youtube_results[]` | Step 0.5 Tavily | 非 0（除非搜索无命中） |
+| 8 | **labxchange（外部互动路径）** | `external_resources.labxchange_results[]` | Step 0.7 本地匹配 | 非 0（除非学科不匹配） |
 
 > exercise 也是必做产物（每个 knode ≥ 1 个），但它是"评测/练习"而非"呈现媒介"，不计入富媒体栏。
 
-**在 Step 2 的 Ideas 枚举和 Step 4 的 Debate 过程中必须逐行走完上面这张表**。不允许"我感觉这个节点只要 animation + exercise 就够了"——至少要显式说出 theory / image / diagram / game 各自被考虑过（哪怕最终决定 reject）。
+**在 Step 2 的 Ideas 枚举和 Step 4 的 Debate 过程中必须逐行走完上面这张表**。不允许"我感觉这个节点只要 animation + exercise 就够了"——至少要显式说出 theory / image / diagram / game / hands_on_kit 各自被考虑过（哪怕最终决定 reject）。
 
 ### 硬规则（违反即不合格）
 
@@ -69,10 +70,11 @@
 - [ ] `make_course_content` 直接传入 **未经重包装的** `research=research_knode() 返回值`、`labxchange_results=lx`、`theories=theories`
 - [ ] acceptance_ref / hands_on_ref 完全匹配 knode 原文（含句号）
 
-富媒体全集检查（7 类）——每类都要显式确认"考虑过"：
+富媒体全集检查（8 类）——每类都要显式确认"考虑过"：
 - [ ] **theory**：`len(theories) ≥ 2`（纯方法论节点除外），且 `[[THEORY:xxx]]` 占位符对应完整
 - [ ] **animation**：至少 1 个 animation idea 或已在 Debate 中写明 reject 理由
 - [ ] **game**：至少 1 个 game idea 或已在 Debate 中写明 reject 理由
+- [ ] **hands_on_kit**：节点涉及实体元器件（传感器/电机/面包板等）时，是否需要实物套件？如果 reject 需写明理由。总费用 ≤ ¥100，元器件优先中国产
 - [ ] **image**：是否有必要用一张真实 CC-BY/CC0 照片？如果 reject 需写明理由
 - [ ] **diagram**：是否有必要用一张静态示意图（SVG/HTML）？如果 reject 需写明理由
 - [ ] **youtube**：`research_knode(youtube_query=...)` 已调用，`external_resources.youtube_results` 有值（除非 Tavily 命中为 0）

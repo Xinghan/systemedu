@@ -350,7 +350,7 @@ export type ResourceSearchStatus = "idle" | "searching" | "done" | "failed"
 
 export interface ResourceItem {
   id: number
-  source_type: "web" | "youtube"
+  source_type: "web" | "youtube" | "labxchange"
   title: string
   url: string
   snippet: string
@@ -434,6 +434,7 @@ export type CourseIdeaMode =
   | "exercise"
   | "image"
   | "diagram"
+  | "hands_on_kit"
 export type CourseGenerationBackend = "manim" | "html_svg" | "html_static" | ""
 
 export interface CourseIdeaSummary {
@@ -478,6 +479,38 @@ export interface RenderedSection {
   caption?: string
   source_url?: string
   license?: string
+  // hands_on_kit mode (实物动手套件)
+  kit_topic?: string
+  total_cost_cny?: number
+  age_min?: number
+  safety_level?: "low" | "medium" | "high"
+  components?: HandsOnComponent[]
+  tools?: HandsOnTool[]
+  steps?: HandsOnStep[]
+}
+
+export interface HandsOnComponent {
+  name: string
+  name_en: string
+  spec: string
+  qty: number
+  price_cny: number
+  search_keyword: string
+}
+
+export interface HandsOnTool {
+  name: string
+  name_en: string
+  price_cny: number
+  included: boolean
+}
+
+export interface HandsOnStep {
+  step: number
+  title: string
+  description: string
+  safety_warning: string | null
+  expected_result: string
 }
 
 export interface CourseSection {
@@ -506,12 +539,30 @@ export interface TheoryEntry {
   level_bodies?: TheoryLevelBody[]
 }
 
+export interface ExternalResourceItem {
+  title: string
+  url: string
+  snippet?: string
+  description?: string
+  [key: string]: unknown
+}
+
+export interface ExternalResources {
+  web_query?: string
+  youtube_query?: string
+  web_results?: ExternalResourceItem[]
+  youtube_results?: ExternalResourceItem[]
+  labxchange_results?: ExternalResourceItem[]
+  researched_at?: string
+}
+
 export interface CourseContent {
   plan_markdown: string
   sections?: CourseSection[]
   ideas: CourseIdeaSummary[]
   rendered_sections: Record<string, RenderedSection>
   theories?: TheoryEntry[]
+  external_resources?: ExternalResources
 }
 
 export interface CourseContentData {

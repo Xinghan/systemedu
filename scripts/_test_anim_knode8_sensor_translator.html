@@ -1,0 +1,449 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>传感器翻译官 / Sensor Translator</title>
+<style>
+html, body {
+  margin: 0; padding: 0; height: 100vh; overflow: hidden;
+  background: #0d1117;
+  font-family: 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+}
+#wrap { width: 100vw; height: 100vh; display: flex; flex-direction: column; }
+canvas { flex: 1; display: block; }
+#nav {
+  position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%);
+  display: flex; align-items: center; gap: 12px; z-index: 10;
+}
+#nav button {
+  background: #21262d; color: #c9d1d9; border: 1px solid #30363d;
+  border-radius: 6px; padding: 6px 16px; font-size: 14px; cursor: pointer;
+}
+#nav button:hover { background: #30363d; }
+#dots { display: flex; gap: 6px; }
+.dot {
+  width: 10px; height: 10px; border-radius: 50%;
+  background: #30363d; cursor: pointer; transition: background .2s;
+}
+.dot.active { background: #58a6ff; }
+#langBtn {
+  position: fixed; top: 14px; right: 18px; background: #21262d; color: #c9d1d9;
+  border: 1px solid #30363d; border-radius: 6px; padding: 4px 12px;
+  font-size: 13px; cursor: pointer; z-index: 10;
+}
+#langBtn:hover { background: #30363d; }
+</style>
+</head>
+<body>
+<div id="wrap"><canvas id="c"></canvas></div>
+<button id="langBtn">EN</button>
+<div id="nav">
+  <button id="btnPrev">上一步</button>
+  <div id="dots"></div>
+  <button id="btnNext">下一步</button>
+</div>
+<script>
+window.__systemedu_resize_patch_optout = true;
+
+const I18N = {
+  zh: {
+    prev: '上一步', next: '下一步', langToggle: 'EN',
+    titles: ['人体感官 vs 机器人传感器', '眼睛 → 相机', '耳朵 → 麦克风',
+             '触觉 → 力传感器', '平衡感 → 惯性测量单元', '超能力 → 激光雷达'],
+    subtitles: ['我们的身体和机器人，都需要"翻译"外界信息',
+      '光 → 像素矩阵 [R:180, G:40, B:20]', '声波 → 电信号波形',
+      '压力 → 数值 (牛顿)', '加速度 + 旋转 → 三轴数据', '激光反射 → 精确距离 (厘米级)'],
+    human: '人体', robot: '机器人',
+    senses: ['眼睛', '耳朵', '皮肤', '鼻子', '内耳'],
+    sensors: ['相机', '麦克风', '力传感器', '气体传感器', 'IMU'],
+    translate: '翻译', superSensor: '超越人类的传感器!',
+    pressure: '压力', newtons: '牛顿',
+    cantMeasure: '无法精确测距?', lidarDesc: 'LiDAR 激光雷达'
+  },
+  en: {
+    prev: 'Prev', next: 'Next', langToggle: '中文',
+    titles: ['Human Senses vs Robot Sensors', 'Eyes → Camera', 'Ears → Microphone',
+             'Touch → Force Sensor', 'Balance → IMU', 'Superpower → LiDAR'],
+    subtitles: ['Both our body and robots need to "translate" the physical world',
+      'Light → Pixel Matrix [R:180, G:40, B:20]', 'Sound Wave → Electrical Waveform',
+      'Pressure → Value (Newtons)', 'Acceleration + Rotation → 3-Axis Data',
+      'Laser Reflection → Precise Distance (cm-level)'],
+    human: 'Human', robot: 'Robot',
+    senses: ['Eyes', 'Ears', 'Skin', 'Nose', 'Inner Ear'],
+    sensors: ['Camera', 'Microphone', 'Force Sensor', 'Gas Sensor', 'IMU'],
+    translate: 'Translate', superSensor: 'Beyond human senses!',
+    pressure: 'Pressure', newtons: 'Newtons',
+    cantMeasure: "Can't measure distance?", lidarDesc: 'LiDAR Scanner'
+  }
+};
+
+let lang = 'zh', frame = 0, frameStartTime = 0;
+const TOTAL = 6;
+const cv = document.getElementById('c'), cx = cv.getContext('2d');
+const btnPrev = document.getElementById('btnPrev');
+const btnNext = document.getElementById('btnNext');
+const langBtnEl = document.getElementById('langBtn');
+const dotsEl = document.getElementById('dots');
+function L() { return I18N[lang]; }
+
+function buildDots() {
+  dotsEl.innerHTML = '';
+  for (let i = 0; i < TOTAL; i++) {
+    const d = document.createElement('div');
+    d.className = 'dot' + (i === frame ? ' active' : '');
+    d.onclick = () => goFrame(i);
+    dotsEl.appendChild(d);
+  }
+}
+function goFrame(f) {
+  frame = Math.max(0, Math.min(TOTAL - 1, f));
+  frameStartTime = performance.now();
+  buildDots();
+}
+btnPrev.onclick = () => goFrame(frame - 1);
+btnNext.onclick = () => goFrame(frame + 1);
+langBtnEl.onclick = () => {
+  lang = lang === 'zh' ? 'en' : 'zh';
+  langBtnEl.textContent = L().langToggle;
+  btnPrev.textContent = L().prev;
+  btnNext.textContent = L().next;
+};
+
+function resize() {
+  const dpr = window.devicePixelRatio || 1;
+  const r = cv.getBoundingClientRect();
+  cv.width = r.width * dpr; cv.height = r.height * dpr;
+  cx.setTransform(dpr, 0, 0, dpr, 0, 0);
+}
+window.addEventListener('resize', resize); resize(); buildDots();
+
+function W() { return cv.getBoundingClientRect().width; }
+function H() { return cv.getBoundingClientRect().height; }
+
+// --- shared drawing helpers ---
+function drawTitle(t, s) {
+  cx.textAlign = 'center'; cx.fillStyle = '#58a6ff';
+  cx.font = 'bold ' + Math.min(28, W() * 0.04) + 'px sans-serif';
+  cx.fillText(t, W() / 2, 44);
+  cx.fillStyle = '#8b949e'; cx.font = Math.min(16, W() * 0.025) + 'px sans-serif';
+  cx.fillText(s, W() / 2, 70);
+}
+
+function drawArrow(x1, y1, x2, y2, col, lbl) {
+  cx.strokeStyle = col || '#58a6ff'; cx.lineWidth = 2;
+  cx.beginPath(); cx.moveTo(x1, y1); cx.lineTo(x2, y2);
+  const a = Math.atan2(y2 - y1, x2 - x1);
+  cx.lineTo(x2 - 10 * Math.cos(a - 0.4), y2 - 10 * Math.sin(a - 0.4));
+  cx.moveTo(x2, y2);
+  cx.lineTo(x2 - 10 * Math.cos(a + 0.4), y2 - 10 * Math.sin(a + 0.4));
+  cx.stroke();
+  if (lbl) {
+    cx.fillStyle = '#f0883e'; cx.font = 'bold 13px sans-serif'; cx.textAlign = 'center';
+    cx.fillText(lbl, (x1 + x2) / 2, (y1 + y2) / 2 - 8);
+  }
+}
+
+function drawStick(px, py, s, lbl) {
+  s = s || 1; cx.strokeStyle = '#c9d1d9'; cx.lineWidth = 2;
+  cx.beginPath(); cx.arc(px, py - 50 * s, 16 * s, 0, Math.PI * 2); cx.stroke();
+  cx.beginPath(); cx.moveTo(px, py - 34 * s); cx.lineTo(px, py + 20 * s); cx.stroke();
+  cx.beginPath(); cx.moveTo(px - 24 * s, py - 10 * s); cx.lineTo(px + 24 * s, py - 10 * s); cx.stroke();
+  cx.beginPath(); cx.moveTo(px, py + 20 * s); cx.lineTo(px - 16 * s, py + 52 * s); cx.stroke();
+  cx.beginPath(); cx.moveTo(px, py + 20 * s); cx.lineTo(px + 16 * s, py + 52 * s); cx.stroke();
+  if (lbl) {
+    cx.fillStyle = '#c9d1d9'; cx.font = '13px sans-serif'; cx.textAlign = 'center';
+    cx.fillText(lbl, px, py + 72 * s);
+  }
+}
+
+function drawBot(px, py, s, lbl) {
+  s = s || 1; cx.strokeStyle = '#58a6ff'; cx.lineWidth = 2;
+  cx.strokeRect(px - 14 * s, py - 62 * s, 28 * s, 24 * s);
+  cx.fillStyle = '#7ee787';
+  cx.fillRect(px - 8 * s, py - 56 * s, 5 * s, 5 * s);
+  cx.fillRect(px + 3 * s, py - 56 * s, 5 * s, 5 * s);
+  cx.beginPath(); cx.moveTo(px, py - 62 * s); cx.lineTo(px, py - 72 * s); cx.stroke();
+  cx.beginPath(); cx.arc(px, py - 74 * s, 3 * s, 0, Math.PI * 2); cx.stroke();
+  cx.strokeRect(px - 18 * s, py - 38 * s, 36 * s, 42 * s);
+  cx.beginPath(); cx.moveTo(px - 18 * s, py - 28 * s); cx.lineTo(px - 32 * s, py); cx.stroke();
+  cx.beginPath(); cx.moveTo(px + 18 * s, py - 28 * s); cx.lineTo(px + 32 * s, py); cx.stroke();
+  cx.beginPath(); cx.moveTo(px - 8 * s, py + 4 * s); cx.lineTo(px - 8 * s, py + 30 * s); cx.stroke();
+  cx.beginPath(); cx.moveTo(px + 8 * s, py + 4 * s); cx.lineTo(px + 8 * s, py + 30 * s); cx.stroke();
+  cx.strokeRect(px - 14 * s, py + 28 * s, 12 * s, 6 * s);
+  cx.strokeRect(px + 2 * s, py + 28 * s, 12 * s, 6 * s);
+  if (lbl) {
+    cx.fillStyle = '#58a6ff'; cx.font = '13px sans-serif'; cx.textAlign = 'center';
+    cx.fillText(lbl, px, py + 46 * s);
+  }
+}
+
+function rrect(x, y, w, h, r, f, st) {
+  cx.beginPath(); cx.moveTo(x + r, y); cx.lineTo(x + w - r, y);
+  cx.quadraticCurveTo(x + w, y, x + w, y + r); cx.lineTo(x + w, y + h - r);
+  cx.quadraticCurveTo(x + w, y + h, x + w - r, y + h); cx.lineTo(x + r, y + h);
+  cx.quadraticCurveTo(x, y + h, x, y + h - r); cx.lineTo(x, y + r);
+  cx.quadraticCurveTo(x, y, x + r, y); cx.closePath();
+  if (f) { cx.fillStyle = f; cx.fill(); }
+  if (st) { cx.strokeStyle = st; cx.lineWidth = 2; cx.stroke(); }
+}
+
+// --- Frame 0: Overview ---
+function drawFrame0(dt) {
+  const w = W(), h = H(), lx = w * 0.25, rx = w * 0.75, by = h * 0.38;
+  drawStick(lx, by, 1.3, L().human);
+  drawBot(rx, by, 1.3, L().robot);
+  const sns = L().senses, sen = L().sensors;
+  const ofs = [{ h: -68, r: -68 }, { h: -48, r: -48 }, { h: -10, r: -18 },
+               { h: -30, r: -30 }, { h: 10, r: 0 }];
+  const clrs = ['#f97583', '#d2a8ff', '#79c0ff', '#7ee787', '#f0883e'];
+  for (let i = 0; i < 5; i++) {
+    const p = Math.min(1, Math.max(0, (dt - i * 0.3) / 0.6));
+    if (p <= 0) continue;
+    const ly = by + ofs[i].h * 1.3, ry = by + ofs[i].r * 1.3;
+    cx.globalAlpha = p; cx.fillStyle = clrs[i]; cx.font = '13px sans-serif';
+    cx.textAlign = 'right'; cx.fillText(sns[i], lx - 50, ly + 4);
+    cx.textAlign = 'left'; cx.fillText(sen[i], rx + 50, ry + 4);
+    cx.strokeStyle = clrs[i]; cx.lineWidth = 1.5; cx.setLineDash([4, 4]);
+    cx.beginPath(); cx.moveTo(lx + 40, ly); cx.lineTo(lx + 40 + (rx - lx - 80) * p, ry); cx.stroke();
+    cx.setLineDash([]); cx.globalAlpha = 1;
+  }
+}
+
+// --- Frame 1: Camera ---
+function drawFrame1(dt) {
+  const w = W(), h = H(), my = h * 0.48, rX = w * 0.1, eX = w * 0.26;
+  // rock
+  cx.fillStyle = '#b44030'; cx.beginPath(); cx.ellipse(rX, my, 28, 18, 0, 0, Math.PI * 2); cx.fill();
+  // eye
+  cx.strokeStyle = '#c9d1d9'; cx.lineWidth = 2;
+  cx.beginPath(); cx.ellipse(eX, my, 22, 14, 0, 0, Math.PI * 2); cx.stroke();
+  cx.fillStyle = '#58a6ff'; cx.beginPath(); cx.arc(eX, my, 7, 0, Math.PI * 2); cx.fill();
+  cx.fillStyle = '#0d1117'; cx.beginPath(); cx.arc(eX, my, 3, 0, Math.PI * 2); cx.fill();
+  // light rays
+  for (let i = 0; i < 5; i++) {
+    const rp = (Math.sin(dt * 3 + i) + 1) / 2;
+    cx.strokeStyle = `rgba(249,117,131,${0.3 + rp * 0.4})`; cx.lineWidth = 1;
+    cx.beginPath(); cx.moveTo(rX + 28, my + Math.sin(-0.3 + i * 0.15) * 10);
+    cx.lineTo(eX - 22, my + (i - 2) * 4); cx.stroke();
+  }
+  drawArrow(w * 0.36, my, w * 0.48, my, '#f0883e', L().translate);
+  // camera
+  const cX = w * 0.56;
+  rrect(cX - 20, my - 16, 40, 32, 4, '#161b22', '#58a6ff');
+  cx.strokeStyle = '#79c0ff'; cx.lineWidth = 2;
+  cx.beginPath(); cx.arc(cX, my, 10, 0, Math.PI * 2); cx.stroke();
+  // pixel grid
+  const gX = w * 0.68, gY = my - 40, cs = Math.min(12, w * 0.015), cols = 8, rows = 7;
+  const filled = Math.min(cols * rows, Math.floor(dt * 12));
+  for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) {
+    const idx = r * cols + c, px = gX + c * (cs + 1), py = gY + r * (cs + 1);
+    if (idx < filled) {
+      const rd = 120 + Math.floor(Math.random() * 60 + Math.sin(idx) * 30);
+      cx.fillStyle = `rgb(${rd},${20 + Math.floor(Math.random() * 30)},${10 + Math.floor(Math.random() * 20)})`;
+    } else { cx.fillStyle = '#21262d'; }
+    cx.fillRect(px, py, cs, cs);
+  }
+  cx.strokeStyle = '#30363d'; cx.lineWidth = 1;
+  cx.strokeRect(gX - 1, gY - 1, cols * (cs + 1) + 1, rows * (cs + 1) + 1);
+  if (dt > 2) {
+    cx.fillStyle = '#7ee787'; cx.font = 'bold 13px monospace'; cx.textAlign = 'left';
+    cx.fillText('[R:180, G:40, B:20]', gX, gY + rows * (cs + 1) + 18);
+  }
+}
+
+// --- Frame 2: Microphone ---
+function drawFrame2(dt) {
+  const w = W(), h = H(), my = h * 0.48, sX = w * 0.12;
+  rrect(sX - 12, my - 14, 24, 28, 4, '#21262d', '#d2a8ff');
+  for (let i = 1; i <= 4; i++) {
+    const a = Math.max(0, Math.sin(dt * 4 - i * 0.8) * 0.5 + 0.3);
+    cx.strokeStyle = `rgba(210,168,255,${a})`; cx.lineWidth = 2;
+    cx.beginPath(); cx.arc(sX, my, 20 + i * 18, -0.6, 0.6); cx.stroke();
+  }
+  // ear
+  const earX = w * 0.3;
+  cx.strokeStyle = '#c9d1d9'; cx.lineWidth = 2;
+  cx.beginPath(); cx.ellipse(earX, my, 10, 18, 0, -0.3, Math.PI + 0.3); cx.stroke();
+  cx.beginPath(); cx.ellipse(earX + 4, my, 5, 10, 0, 0, Math.PI * 2); cx.stroke();
+  drawArrow(w * 0.38, my, w * 0.48, my, '#f0883e', L().translate);
+  // microphone
+  const mX = w * 0.56;
+  cx.strokeStyle = '#58a6ff'; cx.lineWidth = 2;
+  cx.beginPath(); cx.arc(mX, my - 14, 12, Math.PI, 0);
+  cx.lineTo(mX + 12, my + 4); cx.lineTo(mX - 12, my + 4); cx.closePath(); cx.stroke();
+  cx.beginPath(); cx.moveTo(mX, my + 4); cx.lineTo(mX, my + 22); cx.stroke();
+  cx.beginPath(); cx.moveTo(mX - 10, my + 22); cx.lineTo(mX + 10, my + 22); cx.stroke();
+  // waveform display
+  const wX = w * 0.65, wW = w * 0.22, wH = 60;
+  rrect(wX, my - wH / 2, wW, wH, 4, '#161b22', '#30363d');
+  cx.strokeStyle = '#21262d'; cx.lineWidth = 1;
+  cx.beginPath(); cx.moveTo(wX + 4, my); cx.lineTo(wX + wW - 4, my); cx.stroke();
+  cx.strokeStyle = '#7ee787'; cx.lineWidth = 2; cx.beginPath();
+  for (let x = 0; x < wW - 8; x++) {
+    const xp = wX + 4 + x, amp = 20 * Math.min(1, dt / 1.5);
+    const yp = my + Math.sin((x + dt * 80) * 0.08) * amp * 0.7 + Math.sin((x + dt * 120) * 0.2) * amp * 0.3;
+    x === 0 ? cx.moveTo(xp, yp) : cx.lineTo(xp, yp);
+  }
+  cx.stroke();
+}
+
+// --- Frame 3: Force Sensor ---
+function drawFrame3(dt) {
+  const w = W(), h = H(), my = h * 0.48;
+  const pp = Math.min(1, (Math.sin(dt * 1.5) + 1) / 2), fX = w * 0.15;
+  // surface + finger
+  cx.fillStyle = '#21262d'; cx.fillRect(fX - 30, my + 10, 60, 8);
+  cx.fillStyle = '#f0c8a0'; cx.beginPath();
+  cx.ellipse(fX, my - 16 + pp * 8, 10, 20, 0, 0, Math.PI * 2); cx.fill();
+  cx.strokeStyle = '#c9d1d9'; cx.lineWidth = 1; cx.stroke();
+  // nerve signals
+  for (let i = 0; i < 3; i++) {
+    cx.fillStyle = (Math.sin(dt * 6 + i * 1.5) > 0.3 && pp > 0.3) ? '#f97583' : '#30363d';
+    cx.beginPath(); cx.arc(fX, my + 24 + i * 14, 3, 0, Math.PI * 2); cx.fill();
+  }
+  drawArrow(w * 0.3, my, w * 0.42, my, '#f0883e', L().translate);
+  // robotic gripper
+  const gX = w * 0.55, go = 16 - pp * 10;
+  cx.strokeStyle = '#58a6ff'; cx.lineWidth = 3;
+  cx.beginPath(); cx.moveTo(gX - 6, my - 30); cx.lineTo(gX - 6, my - 8);
+  cx.lineTo(gX - 6 - go, my + 10); cx.stroke();
+  cx.beginPath(); cx.moveTo(gX + 6, my - 30); cx.lineTo(gX + 6, my - 8);
+  cx.lineTo(gX + 6 + go, my + 10); cx.stroke();
+  // gripped object + sensor dots
+  cx.fillStyle = '#f0883e'; cx.beginPath(); cx.arc(gX, my + 4, 8, 0, Math.PI * 2); cx.fill();
+  cx.fillStyle = pp > 0.5 ? '#7ee787' : '#30363d';
+  cx.beginPath(); cx.arc(gX - 6 - go, my + 10, 3, 0, Math.PI * 2); cx.fill();
+  cx.beginPath(); cx.arc(gX + 6 + go, my + 10, 3, 0, Math.PI * 2); cx.fill();
+  // readout panel
+  const dX = w * 0.7, dW = w * 0.18;
+  rrect(dX, my - 20, dW, 50, 6, '#161b22', '#30363d');
+  cx.fillStyle = '#7ee787'; cx.font = 'bold ' + Math.min(28, w * 0.035) + 'px monospace';
+  cx.textAlign = 'center'; cx.fillText((pp * 4.8 + 0.2).toFixed(1) + ' N', dX + dW / 2, my + 14);
+  cx.fillStyle = '#8b949e'; cx.font = '11px sans-serif';
+  cx.fillText(L().pressure + ' (' + L().newtons + ')', dX + dW / 2, my + 28);
+  // pressure bar
+  cx.fillStyle = '#21262d'; cx.fillRect(dX + 6, my - 16, dW - 12, 6);
+  cx.fillStyle = pp > 0.7 ? '#f97583' : '#7ee787'; cx.fillRect(dX + 6, my - 16, (dW - 12) * pp, 6);
+}
+
+// --- Frame 4: IMU ---
+function drawFrame4(dt) {
+  const w = W(), h = H(), my = h * 0.48, ta = Math.sin(dt * 1.2) * 0.35;
+  // tilting person
+  const pX = w * 0.18;
+  cx.save(); cx.translate(pX, my + 30); cx.rotate(ta); cx.translate(-pX, -(my + 30));
+  drawStick(pX, my, 1, ''); cx.restore();
+  // slope
+  cx.strokeStyle = '#30363d'; cx.lineWidth = 2;
+  cx.beginPath(); cx.moveTo(pX - 60, my + 80); cx.lineTo(pX + 60, my + 40); cx.stroke();
+  // inner ear
+  const eaX = pX + 50, eaY = my - 50;
+  cx.strokeStyle = '#d2a8ff'; cx.lineWidth = 1.5;
+  cx.beginPath(); cx.arc(eaX, eaY, 12, 0, Math.PI * 1.5); cx.stroke();
+  cx.beginPath(); cx.arc(eaX + 8, eaY + 6, 6, 0.5, Math.PI * 1.8); cx.stroke();
+  cx.fillStyle = '#d2a8ff'; cx.beginPath();
+  cx.arc(eaX + Math.sin(ta) * 8, eaY + Math.cos(ta) * 4, 3, 0, Math.PI * 2); cx.fill();
+  drawArrow(w * 0.32, my, w * 0.44, my, '#f0883e', L().translate);
+  // IMU chip (tilts)
+  const chX = w * 0.54;
+  cx.save(); cx.translate(chX, my); cx.rotate(ta * 0.6);
+  rrect(-22, -22, 44, 44, 4, '#161b22', '#58a6ff');
+  cx.fillStyle = '#58a6ff'; cx.font = 'bold 10px monospace'; cx.textAlign = 'center';
+  cx.fillText('IMU', 0, 4);
+  cx.strokeStyle = '#58a6ff'; cx.lineWidth = 1;
+  for (let i = -1; i <= 1; i++) {
+    cx.beginPath(); cx.moveTo(-22, i * 10); cx.lineTo(-28, i * 10); cx.stroke();
+    cx.beginPath(); cx.moveTo(22, i * 10); cx.lineTo(28, i * 10); cx.stroke();
+  }
+  cx.restore();
+  // 3-axis display
+  const dX = w * 0.66, dY = my - 50, dW = w * 0.22;
+  rrect(dX, dY, dW, 100, 6, '#161b22', '#30363d');
+  const ax = ['X', 'Y', 'Z'], ac = ['#f97583', '#7ee787', '#79c0ff'];
+  const av = [(Math.sin(ta) * 9.8).toFixed(1), (Math.cos(ta) * 9.8).toFixed(1),
+              (Math.sin(dt * 0.5) * 0.3).toFixed(1)];
+  for (let i = 0; i < 3; i++) {
+    const row = dY + 18 + i * 28;
+    cx.fillStyle = ac[i]; cx.font = 'bold 13px monospace'; cx.textAlign = 'left';
+    cx.fillText(ax[i] + ':', dX + 10, row);
+    cx.font = '13px monospace'; cx.fillText(av[i] + ' m/s\u00B2', dX + 32, row);
+    const bv = parseFloat(av[i]), bw = (bv / 10) * (dW * 0.4);
+    cx.fillStyle = ac[i] + '40'; cx.fillRect(dX + 90, row - 10, dW * 0.4, 12);
+    cx.fillStyle = ac[i]; cx.fillRect(dX + 90 + dW * 0.2, row - 10, bw, 12);
+  }
+}
+
+// --- Frame 5: LiDAR ---
+function drawFrame5(dt) {
+  const w = W(), h = H(), my = h * 0.46, eX = w * 0.14;
+  // human eyes with "?"
+  cx.strokeStyle = '#c9d1d9'; cx.lineWidth = 2;
+  cx.beginPath(); cx.ellipse(eX - 14, my, 12, 8, 0, 0, Math.PI * 2); cx.stroke();
+  cx.beginPath(); cx.ellipse(eX + 14, my, 12, 8, 0, 0, Math.PI * 2); cx.stroke();
+  cx.fillStyle = '#58a6ff';
+  cx.beginPath(); cx.arc(eX - 14, my, 4, 0, Math.PI * 2); cx.fill();
+  cx.beginPath(); cx.arc(eX + 14, my, 4, 0, Math.PI * 2); cx.fill();
+  cx.fillStyle = '#f97583'; cx.font = 'bold 22px sans-serif'; cx.textAlign = 'center';
+  cx.fillText('?', eX, my - 24);
+  cx.fillStyle = '#8b949e'; cx.font = '11px sans-serif'; cx.fillText(L().cantMeasure, eX, my + 28);
+  // super-sensor label + arrow
+  const midX = w * 0.34;
+  cx.fillStyle = '#f0883e'; cx.font = 'bold 14px sans-serif'; cx.textAlign = 'center';
+  cx.fillText(L().superSensor, midX, my - 6);
+  drawArrow(midX + 60, my, w * 0.48, my, '#f0883e', '');
+  // LiDAR device
+  const lX = w * 0.54;
+  rrect(lX - 18, my - 18, 36, 36, 6, '#161b22', '#58a6ff');
+  cx.fillStyle = '#79c0ff'; cx.font = 'bold 9px monospace'; cx.textAlign = 'center';
+  cx.fillText('LiDAR', lX, my + 3);
+  // laser beams
+  const bO = lX + 20, nB = 12;
+  for (let i = 0; i < nB; i++) {
+    const ang = -0.5 + (i / (nB - 1));
+    const dist = 60 + Math.sin(i * 1.7 + 3) * 30 + Math.cos(i * 0.9) * 20;
+    const bL = Math.min(w * 0.28, dist);
+    const ph = ((dt * 2 + i * 0.15) % 2), oL = ph < 1 ? bL * ph : bL;
+    cx.strokeStyle = `rgba(249,117,131,${ph < 1 ? 0.7 : 0.2})`; cx.lineWidth = 1;
+    cx.beginPath(); cx.moveTo(bO, my);
+    cx.lineTo(bO + Math.cos(ang) * oL, my + Math.sin(ang) * oL); cx.stroke();
+    if (ph >= 0.9) {
+      const hx = bO + Math.cos(ang) * bL, hy = my + Math.sin(ang) * bL;
+      cx.fillStyle = '#7ee787'; cx.beginPath(); cx.arc(hx, hy, 2.5, 0, Math.PI * 2); cx.fill();
+      if (ph >= 1) {
+        const rL = bL * (2 - ph);
+        cx.strokeStyle = `rgba(126,231,135,${Math.max(0, 0.6 * (1 - (ph - 1)))})`;
+        cx.beginPath(); cx.moveTo(hx, hy);
+        cx.lineTo(hx - Math.cos(ang) * rL, hy - Math.sin(ang) * rL); cx.stroke();
+      }
+    }
+  }
+  // accumulated point cloud
+  const cD = Math.min(60, Math.floor(dt * 8));
+  for (let i = 0; i < cD; i++) {
+    const sd = i * 7.13 + 2.71;
+    const ang = -0.5 + (Math.sin(sd) + 1) / 2;
+    const dist = 60 + Math.sin(sd * 1.7) * 30 + Math.cos(sd * 0.9) * 20;
+    cx.fillStyle = `hsl(${120 + (dist / 120) * 120},70%,60%)`;
+    cx.beginPath(); cx.arc(bO + Math.cos(ang) * dist, my + Math.sin(ang) * dist, 2, 0, Math.PI * 2); cx.fill();
+  }
+  cx.fillStyle = '#8b949e'; cx.font = '12px sans-serif'; cx.textAlign = 'left';
+  cx.fillText(L().lidarDesc, lX - 18, my + 40);
+}
+
+// --- Main render loop ---
+const frameFns = [drawFrame0, drawFrame1, drawFrame2, drawFrame3, drawFrame4, drawFrame5];
+function draw(now) {
+  const w = W(), h = H();
+  cx.clearRect(0, 0, w, h); cx.fillStyle = '#0d1117'; cx.fillRect(0, 0, w, h);
+  drawTitle(L().titles[frame], L().subtitles[frame]);
+  frameFns[frame]((now - frameStartTime) / 1000);
+  cx.fillStyle = '#30363d'; cx.font = '11px sans-serif'; cx.textAlign = 'right';
+  cx.fillText((frame + 1) + ' / ' + TOTAL, w - 16, h - 50);
+  requestAnimationFrame(draw);
+}
+frameStartTime = performance.now();
+requestAnimationFrame(draw);
+</script>
+</body>
+</html>

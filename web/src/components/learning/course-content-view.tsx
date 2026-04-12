@@ -6,7 +6,7 @@ import {
   X, CheckCircle2, Loader2, BookOpen, Zap, Gamepad2, BookMarked,
   Terminal, ChevronDown, ChevronRight, Circle, Play, Square,
   ClipboardList, CheckCircle, XCircle, Lightbulb, Sparkles, Clock,
-  Atom, Image as ImageIcon,
+  Atom, Image as ImageIcon, Package, AlertTriangle,
 } from "lucide-react"
 import ReactMarkdown from "react-markdown"
 import remarkGfm from "remark-gfm"
@@ -28,6 +28,44 @@ import type {
 // ---------------------------------------------------------------------------
 // Props
 // ---------------------------------------------------------------------------
+export type MediaKind =
+  | "animation"
+  | "game"
+  | "image"
+  | "diagram"
+  | "hands_on_kit"
+  | "youtube"
+  | "labxchange"
+  | "theory"
+
+export interface MediaStats {
+  counts: Record<MediaKind, number>
+  // For each media kind, the DOM id to scroll into view when user clicks the icon
+  firstIds: Partial<Record<MediaKind, string>>
+}
+
+/** 一个章节（h2）条目，用于左侧导航条 */
+export interface OutlineSection {
+  id: string       // DOM id for scroll target
+  title: string    // plain text of the heading
+}
+
+/**
+ * Slugify a heading text into a stable DOM id.
+ * - Keeps Chinese characters and ASCII letters/digits
+ * - Replaces all other runs with a single dash
+ * - Always prefixed with `h2-` to avoid collisions
+ */
+export function slugifyHeading(text: string): string {
+  const cleaned = text
+    .trim()
+    .replace(/[\s]+/g, "-")
+    .replace(/[^\u4e00-\u9fffA-Za-z0-9\-]/g, "")
+    .replace(/-+/g, "-")
+    .replace(/^-|-$/g, "")
+  return `h2-${cleaned || "section"}`
+}
+
 interface CourseContentViewProps {
   projectName: string
   nodeId: number
@@ -35,6 +73,8 @@ interface CourseContentViewProps {
   onClose: () => void
   onMarkComplete?: () => void
   knowledgeLevel?: import("@/lib/types/api").KnowledgeLevel
+  onMediaStats?: (stats: MediaStats) => void
+  onOutline?: (sections: OutlineSection[]) => void
 }
 
 // ---------------------------------------------------------------------------
@@ -208,9 +248,33 @@ function MarkdownBlock({ content }: { content: string }) {
       remarkPlugins={[remarkGfm, remarkMath]}
       rehypePlugins={[rehypeKatex]}
       components={{
-        h2: ({ children }) => (
-          <h2 className="text-2xl font-bold mt-8 mb-3 text-on-surface tracking-tight">{children}</h2>
-        ),
+        h2: ({ children }) => {
+          // Compute both a slug-based id (for left-side outline nav) and
+          // a well-known alias id (for right-side media summary).
+          const text = Array.isArray(children)
+            ? children.filter((c) => typeof c === "string").join("")
+            : typeof children === "string"
+              ? children
+              : ""
+          const HEADING_IDS: Record<string, string> = {
+            "推荐视频": "section-youtube",
+            "推荐互动资源": "section-labxchange",
+            "延伸阅读": "section-web",
+          }
+          const aliasId = Object.entries(HEADING_IDS).find(([k]) => text.includes(k))?.[1]
+          const slugId = slugifyHeading(text)
+          // Use slug id as primary so outline nav clicks anchor here; also emit
+          // an invisible <span> with the alias id for media summary scroll targets.
+          return (
+            <h2
+              id={slugId}
+              className="text-2xl font-bold mt-8 mb-3 text-on-surface tracking-tight scroll-mt-20"
+            >
+              {aliasId && <span id={aliasId} className="block h-0 -mt-20 pt-20" aria-hidden="true" />}
+              {children}
+            </h2>
+          )
+        },
         h3: ({ children }) => (
           <h3 className="text-lg font-semibold mt-6 mb-2 text-on-surface">{children}</h3>
         ),
@@ -972,7 +1036,12 @@ function ImageBlock({
   idea: CourseIdeaSummary
   section: RenderedSection
 }) {
-  const src = section.src || ""
+  const rawSrc = section.src || ""
+  // Local gateway paths (/api/...) must be prefixed with the gateway base URL,
+  // because the Next.js dev server on :3000 doesn't proxy to the backend on :18820.
+  const gatewayBase =
+    process.env.NEXT_PUBLIC_GATEWAY_URL || "http://localhost:18820"
+  const src = rawSrc.startsWith("/api/") ? `${gatewayBase}${rawSrc}` : rawSrc
   const alt = section.alt || idea.topic || ""
   const caption = section.caption || ""
   const sourceUrl = section.source_url || ""
@@ -1068,6 +1137,153 @@ function DiagramBlock({
 }
 
 // ---------------------------------------------------------------------------
+// HandsOnKitBlock: 实物动手套件（购买元器件 + 动手操作步骤）
+// ---------------------------------------------------------------------------
+function HandsOnKitBlock({
+  idea,
+  section,
+}: {
+  idea: CourseIdeaSummary
+  section: RenderedSection
+}) {
+  const components = section.components ?? []
+  const tools = section.tools ?? []
+  const steps = section.steps ?? []
+  const totalCost = section.total_cost_cny ?? 0
+  const safetyLevel = section.safety_level ?? "low"
+  const ageMin = section.age_min ?? 8
+
+  const safetyColors: Record<string, string> = {
+    low: "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400",
+    medium: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400",
+    high: "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400",
+  }
+  const safetyLabels: Record<string, string> = {
+    low: "独立操作",
+    medium: "建议家长陪同",
+    high: "需家长全程陪同",
+  }
+
+  return (
+    <section className="rounded-2xl overflow-hidden shadow-md bg-card border border-border/40 my-6">
+      {/* 标题栏 */}
+      <div className="flex items-center justify-between p-5 border-b border-border/30">
+        <div className="flex items-center gap-4">
+          <div className="w-11 h-11 rounded-xl bg-orange-500/10 flex items-center justify-center border border-orange-500/20 shrink-0">
+            <Package className="h-5 w-5 text-orange-600 dark:text-orange-400" />
+          </div>
+          <div className="text-left">
+            <h3 className="font-semibold text-foreground text-base leading-tight mb-0.5">
+              实物动手套件
+            </h3>
+            <p className="text-muted-foreground text-sm">{idea.topic}</p>
+          </div>
+        </div>
+        <div className="flex items-center gap-2">
+          <span className={`text-xs px-2 py-1 rounded-full font-medium ${safetyColors[safetyLevel]}`}>
+            {safetyLabels[safetyLevel]}
+          </span>
+          <span className="text-xs text-muted-foreground">
+            {ageMin}+ 岁
+          </span>
+        </div>
+      </div>
+
+      {/* 元器件清单 */}
+      {components.length > 0 && (
+        <div className="px-5 py-4 border-b border-border/30">
+          <h4 className="text-sm font-semibold text-foreground mb-3">元器件清单</h4>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-left text-xs text-muted-foreground border-b border-border/30">
+                  <th className="pb-2 pr-4">名称</th>
+                  <th className="pb-2 pr-4">型号/规格</th>
+                  <th className="pb-2 pr-4 text-center">数量</th>
+                  <th className="pb-2 pr-4 text-right">参考价</th>
+                  <th className="pb-2">搜索关键词</th>
+                </tr>
+              </thead>
+              <tbody>
+                {components.map((c, i) => (
+                  <tr key={i} className="border-b border-border/20 last:border-0">
+                    <td className="py-2 pr-4">
+                      <div className="font-medium text-foreground">{c.name}</div>
+                      <div className="text-xs text-muted-foreground">{c.name_en}</div>
+                    </td>
+                    <td className="py-2 pr-4 text-muted-foreground">{c.spec}</td>
+                    <td className="py-2 pr-4 text-center">{c.qty}</td>
+                    <td className="py-2 pr-4 text-right whitespace-nowrap">
+                      ¥{c.price_cny.toFixed(1)}
+                    </td>
+                    <td className="py-2 text-xs text-muted-foreground">{c.search_keyword}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* 工具 */}
+      {tools.length > 0 && (
+        <div className="px-5 py-3 border-b border-border/30">
+          <h4 className="text-sm font-semibold text-foreground mb-2">所需工具</h4>
+          <div className="flex flex-wrap gap-2">
+            {tools.map((t, i) => (
+              <span key={i} className="inline-flex items-center gap-1 text-xs px-3 py-1.5 rounded-full bg-secondary/40 text-foreground">
+                {t.name}
+                {!t.included && <span className="text-muted-foreground">(¥{t.price_cny.toFixed(1)})</span>}
+                {t.included && <span className="text-green-600 dark:text-green-400">(已含)</span>}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* 操作步骤 */}
+      {steps.length > 0 && (
+        <div className="px-5 py-4 border-b border-border/30">
+          <h4 className="text-sm font-semibold text-foreground mb-4">动手步骤</h4>
+          <ol className="space-y-4">
+            {steps.map((s) => (
+              <li key={s.step} className="flex gap-4">
+                <div className="w-7 h-7 rounded-full bg-orange-500/10 flex items-center justify-center shrink-0 mt-0.5">
+                  <span className="text-xs font-bold text-orange-600 dark:text-orange-400">{s.step}</span>
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="font-medium text-foreground text-sm">{s.title}</p>
+                  <p className="text-sm text-muted-foreground mt-1">{s.description}</p>
+                  {s.safety_warning && (
+                    <div className="mt-2 flex items-start gap-2 text-xs bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-400 rounded-lg px-3 py-2">
+                      <AlertTriangle className="h-3.5 w-3.5 shrink-0 mt-0.5" />
+                      <span>{s.safety_warning}</span>
+                    </div>
+                  )}
+                  {s.expected_result && (
+                    <p className="mt-1 text-xs text-muted-foreground italic">
+                      预期结果: {s.expected_result}
+                    </p>
+                  )}
+                </div>
+              </li>
+            ))}
+          </ol>
+        </div>
+      )}
+
+      {/* 费用汇总 */}
+      <div className="px-5 py-3 flex items-center justify-between">
+        <span className="text-sm text-muted-foreground">预估总费用</span>
+        <span className="text-lg font-bold text-orange-600 dark:text-orange-400">
+          ¥{totalCost.toFixed(0)}
+        </span>
+      </div>
+    </section>
+  )
+}
+
+// ---------------------------------------------------------------------------
 // IdeaBlock (dispatcher)
 // ---------------------------------------------------------------------------
 function IdeaBlock({
@@ -1139,6 +1355,10 @@ function IdeaBlock({
     return <ExerciseBlock idea={idea} exercises={section.exercises} />
   }
 
+  if (idea.mode === "hands_on_kit" && section.components && section.components.length > 0) {
+    return <HandsOnKitBlock idea={idea} section={section} />
+  }
+
   return null
 }
 
@@ -1177,7 +1397,11 @@ function SectionBlock({
               const idea = ideaMap.get(ideaId)
               if (!idea) return null
               const rendered = renderedSections[ideaId] ?? null
-              return <IdeaBlock key={idx} idea={idea} section={rendered} />
+              return (
+                <div key={idx} id={`idea-${ideaId}`} className="scroll-mt-20">
+                  <IdeaBlock idea={idea} section={rendered} />
+                </div>
+              )
             }
             // Theory placeholder -> render collapsible theory block
             const theoryMatch = part.match(/^\[\[THEORY:([^\]]+)\]\]$/)
@@ -1185,7 +1409,11 @@ function SectionBlock({
               const theoryId = theoryMatch[1]
               const theory = theoryMap?.get(theoryId)
               if (!theory) return null
-              return <TheoryBlock key={idx} theory={theory} />
+              return (
+                <div key={idx} id={`theory-${theoryId}`} className="scroll-mt-20">
+                  <TheoryBlock theory={theory} />
+                </div>
+              )
             }
             // Text content -> render markdown
             const stripped = part.replace(/^##\s+.+\n?/, "")
@@ -1251,14 +1479,22 @@ function PlanWithIdeas({ content }: { content: CourseContent }) {
           const idea = ideaMap.get(ideaId)
           if (!idea) return null
           const section = content.rendered_sections?.[ideaId] ?? null
-          return <IdeaBlock key={idx} idea={idea} section={section} />
+          return (
+            <div key={idx} id={`idea-${ideaId}`} className="scroll-mt-20">
+              <IdeaBlock idea={idea} section={section} />
+            </div>
+          )
         }
         const theoryMatch = part.match(/^\[\[THEORY:([^\]]+)\]\]$/)
         if (theoryMatch) {
           const theoryId = theoryMatch[1]
           const theory = theoryMap.get(theoryId)
           if (!theory) return null
-          return <TheoryBlock key={idx} theory={theory} />
+          return (
+            <div key={idx} id={`theory-${theoryId}`} className="scroll-mt-20">
+              <TheoryBlock theory={theory} />
+            </div>
+          )
         }
         if (!part.trim()) return null
         return <MarkdownBlock key={idx} content={part} />
@@ -1752,6 +1988,8 @@ export function CourseContentView({
   onClose,
   onMarkComplete,
   knowledgeLevel = "K1",
+  onMediaStats,
+  onOutline,
 }: CourseContentViewProps) {
   const [courseData, setCourseData] = useState<CourseContentData | null>(null)
   const [generating, setGenerating] = useState(false)
@@ -1766,6 +2004,94 @@ export function CourseContentView({
   const loadIdRef = useRef(0)
 
   const content = courseData?.course_content as CourseContent | undefined
+
+  // Compute rich-media stats and report to parent whenever content changes.
+  useEffect(() => {
+    if (!onMediaStats) return
+    const emptyCounts: Record<MediaKind, number> = {
+      animation: 0,
+      game: 0,
+      image: 0,
+      diagram: 0,
+      hands_on_kit: 0,
+      youtube: 0,
+      labxchange: 0,
+      theory: 0,
+    }
+    if (!content || !content.ideas) {
+      onMediaStats({ counts: emptyCounts, firstIds: {} })
+      return
+    }
+    const counts: Record<MediaKind, number> = { ...emptyCounts }
+    const firstIds: Partial<Record<MediaKind, string>> = {}
+    for (const idea of content.ideas) {
+      const mode = idea.mode as MediaKind
+      if (mode in counts) {
+        counts[mode] += 1
+        if (!firstIds[mode]) {
+          firstIds[mode] = `idea-${idea.idea_id}`
+        }
+      }
+    }
+    // Theories (基础知识) — count from content.theories and use first theory id
+    const theories = content.theories ?? []
+    if (theories.length > 0) {
+      counts.theory = theories.length
+      firstIds.theory = `theory-${theories[0].theory_id}`
+    }
+    const ext = content.external_resources
+    if (ext?.youtube_results?.length) {
+      counts.youtube = ext.youtube_results.length
+      firstIds.youtube = "section-youtube"
+    }
+    if (ext?.labxchange_results?.length) {
+      counts.labxchange = ext.labxchange_results.length
+      firstIds.labxchange = "section-labxchange"
+    }
+    onMediaStats({ counts, firstIds })
+  }, [content, onMediaStats])
+
+  // Extract h2 section outline from plan_markdown (or sections[]) for left nav.
+  useEffect(() => {
+    if (!onOutline) return
+    if (!content) {
+      onOutline([])
+      return
+    }
+    const sections: OutlineSection[] = []
+    const seen = new Set<string>()
+    // Prefer CourseSection[] if present (new structured pipeline)
+    if (content.sections && content.sections.length > 0) {
+      for (const s of content.sections) {
+        const title = (s.heading || "").trim()
+        if (!title) continue
+        const id = slugifyHeading(title)
+        if (seen.has(id)) continue
+        seen.add(id)
+        sections.push({ id, title })
+      }
+    } else if (content.plan_markdown) {
+      // Fallback: scan markdown for `## ` headings (skip h1, h3+)
+      const lines = content.plan_markdown.split("\n")
+      let inCodeFence = false
+      for (const raw of lines) {
+        if (raw.startsWith("```")) {
+          inCodeFence = !inCodeFence
+          continue
+        }
+        if (inCodeFence) continue
+        const m = raw.match(/^##\s+(.+?)\s*$/)
+        if (!m) continue
+        const title = m[1].trim()
+        if (!title) continue
+        const id = slugifyHeading(title)
+        if (seen.has(id)) continue
+        seen.add(id)
+        sections.push({ id, title })
+      }
+    }
+    onOutline(sections)
+  }, [content, onOutline])
 
   const handleStop = async () => {
     abortRef.current = true          // stop SSE reader loop
