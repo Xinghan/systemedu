@@ -3093,6 +3093,13 @@ def make_course_content(
 
     # 基础理论标注（Step 1.5）
     if theories:
+        # Normalize level_bodies: dict {"K1":"..."} -> array [{level,body_markdown}]
+        for th in theories:
+            lb = th.get("level_bodies")
+            if isinstance(lb, dict):
+                th["level_bodies"] = [
+                    {"level": k, "body_markdown": v} for k, v in lb.items()
+                ]
         course_content["theories"] = theories
 
     # 外部资料结构化字段：合并 Tavily 搜索 + LabXchange 匹配

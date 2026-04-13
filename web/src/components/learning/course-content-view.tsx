@@ -454,7 +454,7 @@ function TheoryBlock({ theory }: { theory: TheoryEntry }) {
   // Fallback chain: exact level -> nearest lower level -> default body_markdown
   const bodyMarkdown = (() => {
     const levels = theory.level_bodies
-    if (!levels || levels.length === 0) return theory.body_markdown
+    if (!Array.isArray(levels) || levels.length === 0) return theory.body_markdown
     const levelOrder = ["K1", "K2", "K3", "K4", "K5"]
     const targetIdx = levelOrder.indexOf(knowledgeLevel)
     // Exact match first
