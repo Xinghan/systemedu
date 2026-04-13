@@ -849,7 +849,17 @@ export default function LearnPage() {
                       <p className="text-xs">{t("learn.assignment_loading")}</p>
                     </div>
                   ) : (
-                    <AssignmentView content={assignmentText ?? ""} />
+                    <AssignmentView
+                      content={assignmentText ?? ""}
+                      knode={activeKnode}
+                      progress={activeNodeId !== null ? progressList.find((p) => p.knode_id === activeNodeId) ?? null : null}
+                      projectName={params.projectName}
+                      onStatusChange={() => {
+                        gateway.updateNodeProgress(params.projectName, activeNodeId!, "passed")
+                          .then((result) => setDetail((prev) => prev ? { ...prev, progress: result.progress } : prev))
+                          .catch(() => {})
+                      }}
+                    />
                   )}
                 </div>
               </ScrollArea>
