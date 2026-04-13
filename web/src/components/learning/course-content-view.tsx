@@ -1461,7 +1461,7 @@ function PlanWithSections({ content }: { content: CourseContent }) {
 // PlanWithIdeas: fallback for old data (no sections)
 // ---------------------------------------------------------------------------
 function PlanWithIdeas({ content }: { content: CourseContent }) {
-  const parts = content.plan_markdown.split(/(\[\[(?:IDEA|THEORY):[^\]]+\]\])/g)
+  const parts = (content.plan_markdown ?? "").split(/(\[\[(?:IDEA|THEORY):[^\]]+\]\])/g)
   const ideaMap = new Map(content.ideas.map((i) => [i.idea_id, i]))
   const theoryMap = new Map((content.theories ?? []).map((t) => [t.theory_id, t]))
 
