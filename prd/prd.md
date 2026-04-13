@@ -273,7 +273,9 @@
 - [x] **Step 5.5 - Code Review + Browser Verify**: Playwright (`html_validate.mjs`) 自动验证 JS 错误/滚动条/交互元素
 - [x] **Step 6 - DB 写入**: `make_course_content()` + `preflight_v41()` 验证 + `_upsert_lesson()` 写入
 - [x] **HTML 规范**: 深色主题 100vh, i18n 双语 (cn/en), guide-panel 右上角, DPR-aware Canvas, helix_lab 等视觉系统
-- [x] **工具函数**: `course_factory.py` -- load_knode_context / research_knode / merge_resources_into_plan / make_exercises / preflight_v41
+- [x] **Step 6.5 - 作业生成**: `generate_assignment()` 普通/capstone 双模式 + `upsert_assignment()` 独立写入
+- [x] **Step 6.6 - 讲课稿生成**: `generate_audio_scripts()` 按 section 生成口语化讲解，存入 `sections[].audio_script`
+- [x] **工具函数**: `course_factory.py` -- load_knode_context / research_knode / merge_resources_into_plan / make_exercises / preflight_v41 / generate_assignment / generate_audio_scripts
 
 #### 3q: 升级路线 (Career Path) -- Phase 1 数据层 ✅
 把松散项目串成有身份感的成长主线（如"成为火箭科学家"需完成多个项目），沿途获得勋章，卡通形象进化。
@@ -288,6 +290,27 @@
 - [ ] **API 端点**: GET/POST /api/career-paths (Phase 2 待实施)
 - [ ] **前端页面**: /career-paths 列表 + /career-paths/[name] 详情 (Phase 3 待实施)
 - [ ] **勋章/形象 SVG 素材**: 待制作
+
+#### 3r: 大作业提交 + AI 批改 (Capstone Submission)
+大作业节点 (module_role=capstone) 的完整提交 -> 批改 -> 反馈闭环。
+
+- [x] **CapstoneSubmission DB 模型**: user_id, project_name, knode_id, attempt, checklist_json, reflections_json, file_url, score, feedback_json, status (submitted/grading/graded)
+- [x] **3 个 API 端点**:
+  - `POST /api/projects/{name}/nodes/{id}/capstone/submit` — multipart 上传 (文件 + 清单 + 自评说明)
+  - `GET /api/projects/{name}/nodes/{id}/capstone/status` — 轮询批改状态
+  - `GET /api/projects/{name}/nodes/{id}/capstone/submissions` — 提交历史
+- [x] **AI 批改逻辑** (`_grade_capstone_sync`): 后台线程逐条对照 acceptance_standard 评分学生自评说明，LLM 打分 + 反馈，>=60% 为 passed
+- [x] **CapstoneSubmissionPanel 前端组件**: 三阶段 UI (填写表单 -> 批改中动画 -> 结果展示)，匹配系统设计语言 (rounded-xl, gradient, font-manrope)
+- [x] **AssignmentView 改造**: capstone 节点渲染 block-based 考核指南 (parseCapstoneBlocks) + CapstoneSubmissionPanel
+
+#### 3s: Course Factory Step 6.5/6.6 -- 作业 + 讲课稿生成
+Course Factory 手册新增两个必做步骤，补全课程内容的"练习"和"音频"维度。
+
+- [x] **Step 6.5 -- generate_assignment()**: 普通节点生成选择题(3)+问答题(2)+动手项目(1)；capstone 节点生成考核指南+自检清单+自评写作指引。两套 LLM prompt，写入 `project_assignment` 字段
+- [x] **Step 6.6 -- generate_audio_scripts()**: 按 ##/### 标题拆分 plan_markdown，每段 LLM 生成 150-300 字口语化讲解稿，写入 `course_content.sections[].audio_script`
+- [x] **批量回填**: mars-risk-map 13 个 knode 全部补生成 assignment + audio_script
+- [x] **COURSE_FACTORY.md 更新**: 步骤表、产物自检清单、常见遗漏均已更新
+- [ ] **TTS 集成**: 讲课稿已存储，待接入 TTS 模型批量生成音频文件
 
 #### 3h: 待完成
 - [ ] `systemedu chat --agent tutor --project <name>` (CLI 端项目模式)
@@ -393,6 +416,13 @@ memory:
 | POST | `/api/projects/:name/nodes/:id/resources/search` | 搜索节点相关资源 |
 | PUT | `/api/projects/:name/nodes/:id/note` | 保存/更新用户笔记 |
 | GET | `/api/projects/:name/nodes/:id/note` | 获取用户笔记 |
+
+**大作业提交** (Capstone)
+| Method | Path | Description |
+|--------|------|-------------|
+| POST | `/api/projects/:name/nodes/:id/capstone/submit` | 提交大作业 (multipart: 文件 + 清单 + 自评说明) |
+| GET | `/api/projects/:name/nodes/:id/capstone/status` | 查询最新提交的批改状态 (3s 轮询) |
+| GET | `/api/projects/:name/nodes/:id/capstone/submissions` | 获取提交历史列表 |
 
 **升级路线** (Career Path, 待实施)
 | Method | Path | Description |
