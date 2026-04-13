@@ -18,6 +18,9 @@ import type {
   NoteInfo,
   PracticeSubmissionResult,
   PracticeSubmissionSummary,
+  CapstoneSubmissionResult,
+  CapstoneSubmissionDetail,
+  CapstoneStatusResponse,
   ProjectNotesResponse,
   ProjectResourcesResponse,
   ResourceItem,
@@ -81,7 +84,7 @@ export const gateway = {
   chat: (req: ChatRequest) => api.post<ChatResponse>("/api/chat", req),
   projects: () => api.get<ProjectSummary[]>("/api/projects"),
   project: (name: string) => api.get<ProjectDetail>(`/api/projects/${name}`),
-  updateProject: (name: string, body: { title?: string; description?: string; category?: string; age_range?: number[]; estimated_hours?: number; tags?: string[] }) =>
+  updateProject: (name: string, body: { title?: string; description?: string; category?: string; age_range?: number[]; estimated_hours?: number; tags?: string[]; knowledge_level?: string }) =>
     api.patch<{ name: string; updated: boolean }>(`/api/projects/${name}`, body),
   agents: () => api.get<AgentInfo[]>("/api/agents"),
   skills: () => api.get<SkillInfo[]>("/api/skills"),
@@ -163,6 +166,37 @@ export const gateway = {
     api.post<PracticeSubmissionResult>(`/api/projects/${projectName}/nodes/${nodeId}/practice/submit`, { answers, user_id: userId }),
   practiceSubmissions: (projectName: string, nodeId: number, userId = "default") =>
     api.get<PracticeSubmissionSummary[]>(`/api/projects/${projectName}/nodes/${nodeId}/practice/submissions?user_id=${userId}`),
+  submitCapstone: async (
+    projectName: string, nodeId: number,
+    file: File | null,
+    checklist: Array<{ artifact_id: string; checked: boolean }>,
+    reflections: Array<{ criterion_idx: number; description: string }>,
+    userId = "default",
+  ): Promise<CapstoneSubmissionResult> => {
+    const formData = new FormData()
+    if (file) formData.append("file", file)
+    formData.append("checklist", JSON.stringify(checklist))
+    formData.append("reflections", JSON.stringify(reflections))
+    formData.append("user_id", userId)
+    const token = getToken()
+    const res = await fetch(
+      `${GATEWAY_URL}/api/projects/${encodeURIComponent(projectName)}/nodes/${nodeId}/capstone/submit`,
+      {
+        method: "POST",
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        body: formData,
+      },
+    )
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}))
+      throw new Error(body.error || "Capstone submission failed")
+    }
+    return res.json()
+  },
+  capstoneSubmissions: (projectName: string, nodeId: number, userId = "default") =>
+    api.get<CapstoneSubmissionDetail[]>(`/api/projects/${projectName}/nodes/${nodeId}/capstone/submissions?user_id=${userId}`),
+  capstoneStatus: (projectName: string, nodeId: number, userId = "default") =>
+    api.get<CapstoneStatusResponse>(`/api/projects/${projectName}/nodes/${nodeId}/capstone/status?user_id=${userId}`),
   getResources: (projectName: string, nodeId: number) =>
     api.get<ResourceSearchResponse>(`/api/projects/${projectName}/nodes/${nodeId}/resources`),
   addResource: (projectName: string, nodeId: number, url: string, title: string, snippet?: string) =>

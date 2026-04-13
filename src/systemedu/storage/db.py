@@ -167,6 +167,35 @@ class PracticeSubmission(Base):
     graded_at = Column(DateTime, nullable=True)
 
 
+class CapstoneSubmission(Base):
+    """Tracks capstone assignment submissions, file uploads, and AI grading."""
+
+    __tablename__ = "capstone_submissions"
+    __table_args__ = (
+        UniqueConstraint(
+            "user_id", "project_name", "knode_id", "attempt",
+            name="uq_capstone_sub",
+        ),
+    )
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(String(100), nullable=False, default="default")
+    project_name = Column(String(200), nullable=False)
+    knode_id = Column(Integer, nullable=False)
+    attempt = Column(Integer, nullable=False, default=1)
+    checklist_json = Column(Text, default="[]")     # [{artifact_id, checked}]
+    reflections_json = Column(Text, default="[]")   # [{criterion_idx, description}]
+    file_url = Column(Text, default="")
+    file_name = Column(String(500), default="")
+    file_size = Column(Integer, default=0)
+    score = Column(Float, default=0.0)
+    max_score = Column(Float, default=0.0)
+    feedback_json = Column(Text, default="[]")      # [{criterion_idx, score, max_score, feedback}]
+    status = Column(String(20), default="submitted")  # submitted | grading | graded
+    submitted_at = Column(DateTime, default=datetime.now)
+    graded_at = Column(DateTime, nullable=True)
+
+
 class LessonGenerationProgress(Base):
     """Tracks step-by-step progress of lesson generation pipeline."""
 
@@ -390,6 +419,31 @@ def _migrate_schema(engine):
                     started_at DATETIME,
                     completed_at DATETIME,
                     error TEXT DEFAULT ''
+                )
+            """))
+            conn.commit()
+
+        # Create capstone_submissions table if it doesn't exist
+        if not inspector.has_table("capstone_submissions"):
+            conn.execute(sa.text("""
+                CREATE TABLE capstone_submissions (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id VARCHAR(100) NOT NULL DEFAULT 'default',
+                    project_name VARCHAR(200) NOT NULL,
+                    knode_id INTEGER NOT NULL,
+                    attempt INTEGER NOT NULL DEFAULT 1,
+                    checklist_json TEXT DEFAULT '[]',
+                    reflections_json TEXT DEFAULT '[]',
+                    file_url TEXT DEFAULT '',
+                    file_name VARCHAR(500) DEFAULT '',
+                    file_size INTEGER DEFAULT 0,
+                    score FLOAT DEFAULT 0.0,
+                    max_score FLOAT DEFAULT 0.0,
+                    feedback_json TEXT DEFAULT '[]',
+                    status VARCHAR(20) DEFAULT 'submitted',
+                    submitted_at DATETIME,
+                    graded_at DATETIME,
+                    UNIQUE(user_id, project_name, knode_id, attempt)
                 )
             """))
             conn.commit()

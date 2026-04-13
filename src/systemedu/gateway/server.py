@@ -2456,6 +2456,389 @@ async def api_practice_submissions(request: Request) -> JSONResponse:
         db.close()
 
 
+# ── Capstone submission endpoints ──────────────────────────────────
+
+
+def _grade_capstone_sync(
+    submission_id: int,
+    project_name: str,
+    node_id: int,
+    user_id: str,
+    acceptance_standard: list[str],
+    reflections: list[dict],
+    checklist: list[dict],
+) -> None:
+    """Background thread: grade capstone reflections with LLM, update DB."""
+    from systemedu.storage.db import (
+        CapstoneSubmission,
+        ProgressRecord,
+        get_session as get_db_session,
+    )
+
+    db = get_db_session()
+    try:
+        sub = db.query(CapstoneSubmission).filter_by(id=submission_id).first()
+        if not sub:
+            return
+        sub.status = "grading"
+        db.commit()
+
+        points_per = 100.0 / max(len(acceptance_standard), 1)
+        feedback_items: list[dict] = []
+        total_score = 0.0
+
+        # Build a summary of checked artifacts
+        checked_summary = ", ".join(
+            c.get("title", c.get("artifact_id", ""))
+            for c in checklist if c.get("checked")
+        ) or "(none)"
+
+        for idx, criterion in enumerate(acceptance_standard):
+            reflection_text = ""
+            for r in reflections:
+                if r.get("criterion_idx") == idx:
+                    reflection_text = r.get("description", "")
+                    break
+
+            fb_item: dict = {
+                "criterion_idx": idx,
+                "score": 0,
+                "max_score": round(points_per, 1),
+                "feedback": "",
+            }
+
+            if not reflection_text.strip():
+                fb_item["feedback"] = "未填写自评说明，无法评分。"
+                feedback_items.append(fb_item)
+                continue
+
+            try:
+                from langchain_core.messages import HumanMessage
+                from systemedu.core.llm_client import get_llm
+
+                grading_llm = get_llm(streaming=False)
+                prompt = (
+                    f"你是一位严格但公正的阅卷老师，正在批改学生的大作业自评说明。\n\n"
+                    f"验收标准：{criterion}\n"
+                    f"学生自评说明：{reflection_text}\n"
+                    f"学生勾选的交付物：{checked_summary}\n"
+                    f"满分：{round(points_per)}分\n\n"
+                    f"评分维度：\n"
+                    f"1. 说明是否表明学生确实完成了该标准要求的内容\n"
+                    f"2. 说明是否具体、有细节，而非泛泛而谈\n\n"
+                    f"请严格按以下 JSON 格式输出（不要包含代码块标记）：\n"
+                    f'{{"score": <0到{round(points_per)}的整数>, "feedback": "评语"}}'
+                )
+                resp = grading_llm.invoke([HumanMessage(content=prompt)])
+                grade_text = resp.content.strip()
+                if grade_text.startswith("```"):
+                    lines = grade_text.split("\n")
+                    grade_text = "\n".join(
+                        lines[1:-1] if lines[-1].strip() == "```" else lines[1:]
+                    )
+                    grade_text = grade_text.strip()
+                grade_result = json.loads(grade_text)
+                earned = min(max(int(grade_result.get("score", 0)), 0), round(points_per))
+                fb_item["score"] = earned
+                fb_item["feedback"] = grade_result.get("feedback", "")
+            except Exception as e:
+                logger.exception("Capstone LLM grading failed for criterion %d", idx)
+                fb_item["feedback"] = f"批改出错，请稍后重试。({str(e)[:80]})"
+
+            total_score += fb_item["score"]
+            feedback_items.append(fb_item)
+
+        max_score = round(points_per * len(acceptance_standard), 1)
+        passed = total_score >= max_score * 0.6
+
+        sub.score = total_score
+        sub.max_score = max_score
+        sub.feedback_json = json.dumps(feedback_items, ensure_ascii=False)
+        sub.status = "graded"
+        sub.graded_at = datetime.now()
+        db.commit()
+
+        # Update progress
+        record = (
+            db.query(ProgressRecord)
+            .filter_by(user_id=user_id, project_name=project_name, knode_id=node_id)
+            .first()
+        )
+        if record:
+            record.attempts = (record.attempts or 0) + 1
+            if passed:
+                record.status = "passed"
+                record.passed_at = datetime.now()
+                record.best_score = max(record.best_score or 0, total_score)
+            else:
+                record.status = "failed"
+                record.best_score = max(record.best_score or 0, total_score)
+            db.commit()
+
+        # Unlock next nodes if passed
+        if passed:
+            try:
+                from systemedu.education.progress import unlock_next_nodes
+                from systemedu.education.project_loader import (
+                    load_project_context,
+                    save_progress,
+                )
+
+                ctx = load_project_context(project_name, user_id=user_id)
+                unlocked = unlock_next_nodes(ctx.tree, ctx.progress, node_id)
+                if unlocked:
+                    save_progress(user_id, project_name, ctx.progress)
+                    logger.info(
+                        "Capstone passed: unlocked nodes %s for %s/%d",
+                        unlocked, project_name, node_id,
+                    )
+            except Exception:
+                logger.exception("Failed to unlock next nodes after capstone pass")
+
+    except Exception:
+        db.rollback()
+        logger.exception("Capstone grading failed for submission %d", submission_id)
+        # Mark as graded with zero score so frontend doesn't poll forever
+        try:
+            sub = db.query(CapstoneSubmission).filter_by(id=submission_id).first()
+            if sub and sub.status != "graded":
+                sub.status = "graded"
+                sub.feedback_json = json.dumps(
+                    [{"criterion_idx": 0, "score": 0, "max_score": 100, "feedback": "批改过程出错，请重新提交。"}],
+                    ensure_ascii=False,
+                )
+                db.commit()
+        except Exception:
+            pass
+    finally:
+        db.close()
+
+
+async def api_submit_capstone(request: Request) -> JSONResponse:
+    """POST /api/projects/{name}/nodes/{node_id}/capstone/submit"""
+    import threading
+
+    from systemedu.core.config import SYSTEMEDU_HOME
+    from systemedu.education.project_loader import load_project_context
+    from systemedu.storage.db import (
+        CapstoneSubmission,
+        ProgressRecord,
+        get_session as get_db_session,
+    )
+
+    name = request.path_params["name"]
+    node_id = int(request.path_params["node_id"])
+
+    try:
+        form = await request.form()
+    except Exception:
+        return JSONResponse({"error": "Invalid form data"}, status_code=400)
+
+    file_field = form.get("file")
+    checklist_str = form.get("checklist", "[]")
+    reflections_str = form.get("reflections", "[]")
+    user_id = form.get("user_id", "default") or "default"
+
+    # Parse JSON fields
+    try:
+        checklist = json.loads(checklist_str) if isinstance(checklist_str, str) else []
+        reflections = json.loads(reflections_str) if isinstance(reflections_str, str) else []
+    except (json.JSONDecodeError, TypeError):
+        return JSONResponse({"error": "Invalid checklist or reflections JSON"}, status_code=400)
+
+    if not reflections:
+        return JSONResponse({"error": "Reflections are required"}, status_code=400)
+
+    # Handle file upload (optional but encouraged)
+    file_url = ""
+    file_name_val = ""
+    file_size_val = 0
+
+    if file_field is not None and hasattr(file_field, "read"):
+        content = await file_field.read()
+        file_size_val = len(content)
+        if file_size_val > 50 * 1024 * 1024:  # 50 MB
+            return JSONResponse({"error": "File too large (max 50MB)"}, status_code=400)
+
+        filename = getattr(file_field, "filename", "submission.zip") or "submission.zip"
+        ext = Path(filename).suffix.lower()
+        allowed = {".zip", ".pdf", ".jpg", ".jpeg", ".png", ".doc", ".docx"}
+        if ext not in allowed:
+            return JSONResponse(
+                {"error": f"File type {ext} not allowed. Allowed: {', '.join(sorted(allowed))}"},
+                status_code=400,
+            )
+        file_name_val = filename
+
+        db = get_db_session()
+        try:
+            prev_count = (
+                db.query(CapstoneSubmission)
+                .filter_by(user_id=user_id, project_name=name, knode_id=node_id)
+                .count()
+            )
+        finally:
+            db.close()
+        attempt = prev_count + 1
+
+        save_dir = (
+            SYSTEMEDU_HOME / "media" / "capstone" / name
+            / str(node_id) / user_id / f"attempt_{attempt}"
+        )
+        save_dir.mkdir(parents=True, exist_ok=True)
+        save_path = save_dir / filename
+        save_path.write_bytes(content)
+        file_url = f"/api/media/capstone/{name}/{node_id}/{user_id}/attempt_{attempt}/{filename}"
+    else:
+        # No file — still allow submission (file is optional)
+        db = get_db_session()
+        try:
+            prev_count = (
+                db.query(CapstoneSubmission)
+                .filter_by(user_id=user_id, project_name=name, knode_id=node_id)
+                .count()
+            )
+        finally:
+            db.close()
+        attempt = prev_count + 1
+
+    # Load acceptance_standard from knowledge tree
+    acceptance_standard: list[str] = []
+    try:
+        ctx = load_project_context(name)
+        knode = ctx.get_node_by_id(node_id)
+        if knode and hasattr(knode, "acceptance_standard"):
+            acceptance_standard = knode.acceptance_standard or []
+    except Exception:
+        logger.warning("Could not load acceptance_standard for %s/%d", name, node_id)
+
+    # Save to DB
+    db = get_db_session()
+    try:
+        submission = CapstoneSubmission(
+            user_id=user_id,
+            project_name=name,
+            knode_id=node_id,
+            attempt=attempt,
+            checklist_json=json.dumps(checklist, ensure_ascii=False),
+            reflections_json=json.dumps(reflections, ensure_ascii=False),
+            file_url=file_url,
+            file_name=file_name_val,
+            file_size=file_size_val,
+            status="submitted",
+            submitted_at=datetime.now(),
+        )
+        db.add(submission)
+        db.commit()
+        db.refresh(submission)
+
+        # Update progress to submitted
+        record = (
+            db.query(ProgressRecord)
+            .filter_by(user_id=user_id, project_name=name, knode_id=node_id)
+            .first()
+        )
+        if record:
+            record.status = "submitted"
+            db.commit()
+
+        submission_id = submission.id
+
+        # Launch background grading
+        if acceptance_standard:
+            thread = threading.Thread(
+                target=_grade_capstone_sync,
+                args=(
+                    submission_id, name, node_id, user_id,
+                    acceptance_standard, reflections, checklist,
+                ),
+                daemon=True,
+            )
+            thread.start()
+
+        return JSONResponse({
+            "submission_id": submission_id,
+            "attempt": attempt,
+            "status": "submitted",
+            "file_url": file_url,
+        })
+    except Exception as e:
+        db.rollback()
+        logger.exception("Capstone submission failed")
+        return JSONResponse({"error": str(e)}, status_code=500)
+    finally:
+        db.close()
+
+
+async def api_capstone_submissions(request: Request) -> JSONResponse:
+    """GET /api/projects/{name}/nodes/{node_id}/capstone/submissions"""
+    from systemedu.storage.db import CapstoneSubmission, get_session as get_db_session
+
+    name = request.path_params["name"]
+    node_id = int(request.path_params["node_id"])
+    user_id = request.query_params.get("user_id", "default")
+
+    db = get_db_session()
+    try:
+        submissions = (
+            db.query(CapstoneSubmission)
+            .filter_by(user_id=user_id, project_name=name, knode_id=node_id)
+            .order_by(CapstoneSubmission.attempt.desc())
+            .all()
+        )
+        result = []
+        for s in submissions:
+            result.append({
+                "submission_id": s.id,
+                "attempt": s.attempt,
+                "checklist": json.loads(s.checklist_json) if s.checklist_json else [],
+                "reflections": json.loads(s.reflections_json) if s.reflections_json else [],
+                "file_url": s.file_url,
+                "file_name": s.file_name,
+                "score": s.score,
+                "max_score": s.max_score,
+                "feedback": json.loads(s.feedback_json) if s.feedback_json else [],
+                "status": s.status,
+                "submitted_at": s.submitted_at.isoformat() if s.submitted_at else None,
+                "graded_at": s.graded_at.isoformat() if s.graded_at else None,
+            })
+        return JSONResponse(result)
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
+    finally:
+        db.close()
+
+
+async def api_capstone_status(request: Request) -> JSONResponse:
+    """GET /api/projects/{name}/nodes/{node_id}/capstone/status"""
+    from systemedu.storage.db import CapstoneSubmission, get_session as get_db_session
+
+    name = request.path_params["name"]
+    node_id = int(request.path_params["node_id"])
+    user_id = request.query_params.get("user_id", "default")
+
+    db = get_db_session()
+    try:
+        latest = (
+            db.query(CapstoneSubmission)
+            .filter_by(user_id=user_id, project_name=name, knode_id=node_id)
+            .order_by(CapstoneSubmission.attempt.desc())
+            .first()
+        )
+        if not latest:
+            return JSONResponse({"status": "none", "submission_id": None})
+        return JSONResponse({
+            "status": latest.status,
+            "submission_id": latest.id,
+            "score": latest.score,
+            "max_score": latest.max_score,
+        })
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
+    finally:
+        db.close()
+
+
 async def api_search_resources(request: Request) -> JSONResponse:
     """POST /api/projects/{name}/nodes/{node_id}/resources/search - Trigger resource search via SearchAgent."""
     import threading
@@ -2684,7 +3067,11 @@ class _AuthMiddleware:
             return
 
         # Public paths skip auth
-        if path in _AUTH_PUBLIC_PATHS or path.startswith("/api/media/"):
+        if (
+            path in _AUTH_PUBLIC_PATHS
+            or path.startswith("/api/media/")
+            or path.startswith("/api/course-images/")
+        ):
             await self.app(scope, receive, send)
             return
 
@@ -2830,6 +3217,9 @@ def create_app() -> Starlette:
         Route("/api/projects/{name}/nodes/{node_id:int}/highlights", api_highlights_dispatch, methods=["GET", "POST"]),
         Route("/api/projects/{name}/nodes/{node_id:int}/practice/submit", api_submit_practice, methods=["POST"]),
         Route("/api/projects/{name}/nodes/{node_id:int}/practice/submissions", api_practice_submissions, methods=["GET"]),
+        Route("/api/projects/{name}/nodes/{node_id:int}/capstone/submit", api_submit_capstone, methods=["POST"]),
+        Route("/api/projects/{name}/nodes/{node_id:int}/capstone/submissions", api_capstone_submissions, methods=["GET"]),
+        Route("/api/projects/{name}/nodes/{node_id:int}/capstone/status", api_capstone_status, methods=["GET"]),
         Route("/api/projects/{name}/nodes/{node_id:int}/highlights/{highlight_id:int}", api_delete_highlight, methods=["DELETE"]),
         Route("/api/projects/{name}/nodes/{node_id:int}/resources/search", api_search_resources, methods=["POST"]),
         Route("/api/projects/{name}/nodes/{node_id:int}/resources", api_resources_dispatch, methods=["GET", "POST"]),

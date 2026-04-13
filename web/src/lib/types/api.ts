@@ -91,7 +91,7 @@ export interface KnodeInfo {
   module_id?: string
   module_role?: string
   core_question?: string
-  acceptance_artifacts?: Array<{ type: string; format: string }>
+  acceptance_artifacts?: Array<{ artifact_id: string; title: string; description: string; format: string }>
   acceptance_standard?: string[]
   hands_on_components?: string[]
   outputs_produced?: string[]
@@ -575,6 +575,44 @@ export interface CourseContentData {
 export interface CourseAssignmentData {
   status: "pending" | "generating" | "ready" | "failed"
   assignment: string
+}
+
+// Capstone submission types
+
+export interface CapstoneSubmissionResult {
+  submission_id: number
+  attempt: number
+  status: "submitted" | "grading" | "graded"
+  file_url: string
+}
+
+export interface CapstoneFeedbackItem {
+  criterion_idx: number
+  score: number
+  max_score: number
+  feedback: string
+}
+
+export interface CapstoneSubmissionDetail {
+  submission_id: number
+  attempt: number
+  checklist: Array<{ artifact_id: string; checked: boolean }>
+  reflections: Array<{ criterion_idx: number; description: string }>
+  file_url: string
+  file_name: string
+  score: number
+  max_score: number
+  feedback: CapstoneFeedbackItem[]
+  status: string
+  submitted_at: string | null
+  graded_at: string | null
+}
+
+export interface CapstoneStatusResponse {
+  status: string
+  submission_id: number | null
+  score?: number
+  max_score?: number
 }
 
 export type CourseStepType =
