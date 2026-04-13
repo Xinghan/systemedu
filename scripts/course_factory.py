@@ -146,8 +146,276 @@ def _inline_runtime(html: str) -> str:
     return result
 
 
+# ---------------------------------------------------------------------------
+# Assignment generation (Step 6.5)
+# ---------------------------------------------------------------------------
+
+_ASSIGNMENT_PROMPT_NORMAL = """你是一位经验丰富的教育内容设计师。请根据以下知识节点信息，生成一份循序渐进的作业练习。
+
+知识节点：{node_title}
+内容摘要：{node_summary}
+难度等级：{difficulty}/5
+所属模块：{milestone_title}
+
+请按照以下结构生成作业（全部用中文）：
+
+## 一、选择题（3题）
+
+每题给出4个选项，标注正确答案。格式：
+**1. 题目内容**
+A. 选项A
+B. 选项B
+C. 选项C
+D. 选项D
+**答案：X**
+
+## 二、问答题（2题）
+
+开放性问题，引导学生深入思考。每题后附参考答案要点。
+
+## 三、动手项目
+
+设计一个可以在家完成的动手操作项目（实验/制作/观察均可），要求：
+- 使用身边容易获得的材料
+- 步骤清晰，适合独立完成
+- 与本节知识点紧密相关
+
+在动手项目标题前加上 [HANDS_ON] 标记。
+
+请直接输出作业内容，不要有额外的前言说明。"""
+
+_ASSIGNMENT_PROMPT_CAPSTONE = """你是一位经验丰富的教育内容设计师。请根据以下大作业节点信息，生成一份严谨的大作业提交考核指南。
+
+大作业名称：{node_title}
+所属模块：{milestone_title}
+
+交付物清单：
+{artifacts_text}
+
+验收标准：
+{standards_text}
+
+请按照以下结构生成考核指南（全部用中文）：
+
+## 一、考核要点说明
+
+逐条对照验收标准，详细解释每条标准的评判要点、常见扣分原因和满分示例。每条标准用以下格式：
+
+**标准 N：[标准内容]**
+- 评判要点：具体说明达标需要满足哪些条件
+- 常见扣分原因：列举 2-3 个学生容易犯的错误
+- 满分示例：描述一个理想的达标表现
+
+## 二、交付物自检清单
+
+为每个交付物列出 3-5 个自检项，帮助学生在提交前确认作品质量：
+
+**交付物：[名称]（格式：[format]）**
+- [ ] 自检项 1
+- [ ] 自检项 2
+- ...
+
+## 三、自评说明写作指引
+
+指导学生如何撰写高质量的自评说明，包括：
+- 自评说明应包含哪些要素（具体做了什么、用了什么方法、遇到什么困难、如何解决）
+- 避免笼统空泛的描述
+- 给出一个好的自评说明示例和一个差的自评说明示例
+
+请直接输出考核指南内容，不要有额外的前言说明。"""
+
+
+def generate_assignment(knode: dict, milestone: dict, plan_markdown: str = "") -> str:
+    """
+    生成作业练习内容。普通节点生成选择题+问答题+动手项目，
+    大作业节点生成考核指南+自检清单+自评写作指引。
+
+    返回 Markdown 文本，用于写入 LessonContent.project_assignment。
+    需要 LLM 调用，使用配置中的默认 provider。
+    """
+    from systemedu.core.config import get_config
+    from langchain_openai import ChatOpenAI
+
+    cfg = get_config()
+    provider = cfg.llm.providers[cfg.llm.default]
+    llm = ChatOpenAI(
+        base_url=provider.base_url,
+        api_key=provider.api_key,
+        model=provider.model,
+        temperature=0.7,
+    )
+
+    module_role = knode.get("module_role", "")
+    node_title = knode.get("name") or knode.get("title", "")
+    milestone_title = milestone.get("title", "")
+
+    if module_role == "capstone":
+        # 大作业节点：生成考核指南
+        artifacts = knode.get("acceptance_artifacts", [])
+        standards = knode.get("acceptance_standard", [])
+        artifacts_text = "\n".join(
+            f"- {a.get('title', '')}: {a.get('description', '')} (格式: {a.get('format', '')})"
+            for a in artifacts
+        ) or "(无)"
+        standards_text = "\n".join(
+            f"- {i+1}. {s}" for i, s in enumerate(standards)
+        ) or "(无)"
+        prompt = _ASSIGNMENT_PROMPT_CAPSTONE.format(
+            node_title=node_title,
+            milestone_title=milestone_title,
+            artifacts_text=artifacts_text,
+            standards_text=standards_text,
+        )
+    else:
+        # 普通节点：生成选择题+问答题+动手项目
+        difficulty = knode.get("difficulty", 3)
+        node_summary = plan_markdown[:500] if plan_markdown else ""
+        prompt = _ASSIGNMENT_PROMPT_NORMAL.format(
+            node_title=node_title,
+            node_summary=node_summary,
+            difficulty=difficulty,
+            milestone_title=milestone_title,
+        )
+
+    messages = [
+        {"role": "system", "content": "你是专业的教育内容设计师，擅长为中小学生设计循序渐进的练习题和考核方案。"},
+        {"role": "user", "content": prompt},
+    ]
+    response = llm.invoke(messages)
+    text = response.content if hasattr(response, "content") else str(response)
+    return text.strip()
+
+
+def upsert_assignment(project_name: str, knode_id: int, assignment: str) -> None:
+    """仅更新 LessonContent.project_assignment 字段。"""
+    from systemedu.storage.db import LessonContent, get_session
+    db = get_session()
+    try:
+        lesson = db.query(LessonContent).filter_by(
+            project_name=project_name, knode_id=knode_id,
+        ).first()
+        if lesson:
+            lesson.project_assignment = assignment
+            db.commit()
+        else:
+            print(f"[WARN] knode {knode_id} 没有 LessonContent 记录，跳过")
+    finally:
+        db.close()
+
+
+# ---------------------------------------------------------------------------
+# Audio script generation (Step 6a equivalent for Course Factory)
+# ---------------------------------------------------------------------------
+
+_TEACHER_SCRIPT_PROMPT = """你是一位经验丰富的教育内容讲解师，正在为面向 {age_range} 岁学生的课程录制讲解音频。
+
+课程主题：{node_title}
+段落标题：{heading}
+段落正文：
+{body}
+
+请生成一段口语化的讲解稿。要求：
+- 长度：150-300 字
+- 风格：像一位亲切的老师在课堂上对学生讲解，不是照着课文念
+- 内容：提炼段落核心要点，用通俗易懂的语言重新讲述
+- 技巧：适当补充背景知识、举生活中的例子、用设问引导思考
+- 语气词：可以用"同学们"、"大家想想看"、"你们有没有注意到"等课堂用语
+- 语言：中文
+- 不要加标题、前言或"以下是讲解稿"之类的元描述
+- 直接输出可朗读的讲解内容"""
+
+
+def generate_audio_scripts(project_name: str, knode_id: int,
+                           knode: dict, milestone: dict) -> list[dict]:
+    """
+    为一个 knode 的 plan_markdown 生成分段讲课稿。
+
+    流程：
+    1. 从 DB 读取 course_content.plan_markdown
+    2. 按 ##/### 标题分段（纯 Python，保留占位符）
+    3. 对每段调用 LLM 生成 audio_script
+    4. 将 sections 写回 course_content 并保存 DB
+
+    返回生成的 sections 列表。
+    """
+    import re
+    import uuid
+    from systemedu.storage.db import LessonContent, get_session
+    from systemedu.core.config import get_config
+    from langchain_openai import ChatOpenAI
+
+    db = get_session()
+    try:
+        lesson = db.query(LessonContent).filter_by(
+            project_name=project_name, knode_id=knode_id
+        ).first()
+        if not lesson or not lesson.course_content:
+            print(f"[WARN] knode {knode_id} 没有 course_content，跳过")
+            return []
+
+        cc = json.loads(lesson.course_content)
+        plan_md = cc.get("plan_markdown", "")
+        if not plan_md:
+            print(f"[WARN] knode {knode_id} 没有 plan_markdown，跳过")
+            return []
+
+        # 如果已有 sections 且 audio_script 非空，跳过
+        existing = cc.get("sections", [])
+        if existing and all(s.get("audio_script") for s in existing):
+            print(f"[SKIP] knode {knode_id} 已有 {len(existing)} 段讲课稿")
+            return existing
+
+        # Step 1: 分段
+        from systemedu.agents.builtin.course_segment_agent import _split_by_headings
+        sections = _split_by_headings(plan_md)
+
+        # Step 2: LLM 生成 audio_script
+        cfg = get_config()
+        provider = cfg.llm.providers[cfg.llm.default]
+        llm = ChatOpenAI(
+            base_url=provider.base_url,
+            api_key=provider.api_key,
+            model=provider.model,
+            temperature=0.7,
+        )
+
+        node_title = knode.get("name") or knode.get("title", "")
+        age_range = "6-18"
+
+        for sec in sections:
+            # 去掉占位符和标题，检查是否有实质正文
+            body_text = re.sub(r'\[\[IDEA:[^\]]+\]\]', '', sec["body_markdown"]).strip()
+            body_text = re.sub(r'^#{2,3}\s+.*$', '', body_text, flags=re.MULTILINE).strip()
+            body_text = re.sub(r'\[\[THEORY:[^\]]+\]\]', '', body_text).strip()
+            if len(body_text) < 30:
+                continue
+
+            prompt = _TEACHER_SCRIPT_PROMPT.format(
+                node_title=node_title,
+                heading=sec["heading"] or node_title,
+                body=body_text[:1000],
+                age_range=age_range,
+            )
+            try:
+                response = llm.invoke([{"role": "user", "content": prompt}])
+                text = response.content if hasattr(response, "content") else str(response)
+                sec["audio_script"] = text.strip()
+            except Exception as e:
+                print(f"  [ERR] section '{sec['heading']}': {e}")
+
+        # Step 3: 写回 DB
+        cc["sections"] = sections
+        lesson.course_content = json.dumps(cc, ensure_ascii=False)
+        db.commit()
+
+        return sections
+    finally:
+        db.close()
+
+
 def _upsert_lesson(project_name: str, knode_id: int, content_type: str,
-                   course_content: dict) -> None:
+                   course_content: dict, *,
+                   project_assignment: str = "") -> None:
     """写入 LessonContent 表（upsert）。自动内联 animation_runtime.js。"""
     # 内联 runtime 到所有 rendered_sections 的 html 中
     rendered = course_content.get("rendered_sections", {})
@@ -174,6 +442,8 @@ def _upsert_lesson(project_name: str, knode_id: int, content_type: str,
             lesson.course_content = content_json
             lesson.content_type = content_type
             lesson.generated_at = datetime.now()
+            if project_assignment:
+                lesson.project_assignment = project_assignment
         else:
             db.add(LessonContent(
                 project_name=project_name,
@@ -182,6 +452,7 @@ def _upsert_lesson(project_name: str, knode_id: int, content_type: str,
                 course_content=content_json,
                 content_type=content_type,
                 generated_at=datetime.now(),
+                project_assignment=project_assignment,
             ))
         db.commit()
     finally:
@@ -2511,6 +2782,30 @@ def make_course_content(
     if game_html:
         game_html = fix_nonuniform_scale_in_html(game_html)
         game_html = inject_animation_resize_patch(game_html)
+        # 0.6 检查 game HTML 中的尺寸硬编码上限
+        #     常见错误：Math.min(..., 480) / Math.min(..., 200) 等会导致
+        #     canvas 在大屏 iframe 中只占很小一块。
+        _size_cap_pat = re.compile(
+            r'Math\.min\s*\([^)]*,\s*(\d+)\s*\)',
+        )
+        for m in _size_cap_pat.finditer(game_html):
+            cap_val = int(m.group(1))
+            context = game_html[max(0, m.start()-60):m.end()+20]
+            # 排除非尺寸相关的 Math.min（如 dt, percentage, score 等）
+            # 排除 DPR 相关 (devicePixelRatio, dpr) 和极小值 (<10)
+            ctx_lower = context.lower()
+            is_dpr = any(kw in ctx_lower for kw in ['pixelratio', 'dpr'])
+            is_size_related = not is_dpr and cap_val >= 10 and any(
+                kw in ctx_lower
+                for kw in ['sz', 'size', 'canvas', 'width', 'height',
+                           'availw', 'availh', 'block', 'card']
+            )
+            if is_size_related and cap_val < 600:
+                console.print(
+                    f"[yellow]WARNING: game HTML 中检测到尺寸硬编码上限 "
+                    f"Math.min(..., {cap_val})。大屏 iframe 中 canvas 会很小。"
+                    f"建议去掉硬编码上限，改用容器百分比计算。[/yellow]"
+                )
 
     ex_id = _id("ex")
 
