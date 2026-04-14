@@ -3,447 +3,592 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>传感器翻译官 / Sensor Translator</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=Inter:wght@400;500&family=Noto+Sans+SC:wght@400;700&display=swap" rel="stylesheet">
 <style>
-html, body {
-  margin: 0; padding: 0; height: 100vh; overflow: hidden;
-  background: #0d1117;
-  font-family: 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
-}
-#wrap { width: 100vw; height: 100vh; display: flex; flex-direction: column; }
-canvas { flex: 1; display: block; }
-#nav {
-  position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%);
-  display: flex; align-items: center; gap: 12px; z-index: 10;
-}
-#nav button {
-  background: #21262d; color: #c9d1d9; border: 1px solid #30363d;
-  border-radius: 6px; padding: 6px 16px; font-size: 14px; cursor: pointer;
-}
-#nav button:hover { background: #30363d; }
-#dots { display: flex; gap: 6px; }
-.dot {
-  width: 10px; height: 10px; border-radius: 50%;
-  background: #30363d; cursor: pointer; transition: background .2s;
-}
-.dot.active { background: #58a6ff; }
-#langBtn {
-  position: fixed; top: 14px; right: 18px; background: #21262d; color: #c9d1d9;
-  border: 1px solid #30363d; border-radius: 6px; padding: 4px 12px;
-  font-size: 13px; cursor: pointer; z-index: 10;
-}
-#langBtn:hover { background: #30363d; }
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box;}
+html,body{width:100%;height:100vh;overflow:hidden;}
+body{background:var(--bg,#0c0e12);color:var(--text,#f6f6fc);font-family:'Inter','Noto Sans SC',sans-serif;display:flex;flex-direction:column;}
+.wrapper{display:flex;flex-direction:column;height:100vh;overflow:hidden;}
+.header{padding:12px 16px 8px;display:flex;justify-content:space-between;align-items:center;}
+.header h1{font-family:'Space Grotesk',sans-serif;font-size:clamp(14px,2vw,18px);font-weight:700;letter-spacing:-0.02em;color:var(--primary,#50ffb0);text-shadow:0 0 15px var(--glow,rgba(80,255,176,0.3));}
+.header .sub{font-size:11px;color:var(--muted,#aaabb0);letter-spacing:0.1em;text-transform:uppercase;}
+.canvas-wrap{flex:1;min-height:0;position:relative;}
+canvas{width:100%;height:100%;display:block;}
+.controls{display:flex;justify-content:center;align-items:center;gap:12px;padding:8px 16px;}
+.ctrl-btn{font-family:'Space Grotesk',sans-serif;font-size:12px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;padding:6px 18px;border:none;cursor:pointer;color:var(--bg,#0c0e12);background:linear-gradient(135deg,var(--primary,#50ffb0),var(--primary-dim,#17df93));transition:transform 0.1s,box-shadow 0.2s;box-shadow:0 0 12px var(--glow-strong,rgba(80,255,176,0.3));}
+.ctrl-btn:hover{transform:scale(1.04);box-shadow:0 0 20px var(--glow-strong,rgba(80,255,176,0.5));}
+.ctrl-btn:active{transform:scale(0.96);}
+.ctrl-btn.secondary{background:var(--glass,rgba(23,26,31,0.92));color:var(--muted,#aaabb0);box-shadow:none;backdrop-filter:blur(12px);}
+.ctrl-btn.secondary:hover{color:var(--primary,#50ffb0);}
+.hud{height:48px;display:flex;align-items:center;justify-content:space-around;background:rgba(0,0,0,0.55);backdrop-filter:blur(12px);padding:0 16px;}
+.hud-item{text-align:center;}
+.hud-label{font-family:'Space Grotesk',sans-serif;font-size:9px;letter-spacing:0.15em;text-transform:uppercase;color:var(--muted,#aaabb0);}
+.hud-val{font-family:'Space Grotesk',sans-serif;font-size:14px;font-weight:700;color:var(--primary,#50ffb0);}
+.lang-btn{position:fixed;top:8px;left:8px;z-index:100;font-family:'Space Grotesk',sans-serif;font-size:11px;font-weight:700;padding:4px 10px;cursor:pointer;border:none;background:rgba(20,20,35,0.85);backdrop-filter:blur(12px);color:#ffb59c;letter-spacing:1px;}
+.guide-panel{position:fixed;top:8px;right:8px;width:240px;max-height:40vh;overflow-y:auto;background:var(--glass,rgba(20,20,35,0.85));backdrop-filter:blur(12px);padding:12px;z-index:100;font-family:'Noto Sans SC',sans-serif;font-size:12px;color:rgba(255,255,255,0.85);line-height:1.6;}
+.guide-panel h3{font-family:'Space Grotesk',sans-serif;font-size:13px;margin-bottom:6px;color:var(--primary,#50ffb0);cursor:pointer;display:flex;justify-content:space-between;align-items:center;}
+.guide-panel ul{padding-left:14px;}
+.guide-panel .collapsed{display:none;}
 </style>
 </head>
 <body>
-<div id="wrap"><canvas id="c"></canvas></div>
-<button id="langBtn">EN</button>
-<div id="nav">
-  <button id="btnPrev">上一步</button>
-  <div id="dots"></div>
-  <button id="btnNext">下一步</button>
+<button class="lang-btn" id="langBtn">CN</button>
+<div class="guide-panel" id="guide">
+<h3 id="guideTitle"></h3>
+<div class="guide-content" id="guideContent"></div>
 </div>
+<div class="wrapper">
+<div class="header">
+<div><h1 id="title"></h1><div class="sub" id="subtitle"></div></div>
+<div id="frameIndicator" style="font-family:'Space Grotesk';font-size:11px;color:var(--muted,#aaabb0);letter-spacing:0.1em;"></div>
+</div>
+<div class="canvas-wrap"><canvas id="c"></canvas></div>
+<div class="controls">
+<button class="ctrl-btn secondary" id="btnPrev"></button>
+<button class="ctrl-btn" id="btnPlay"></button>
+<button class="ctrl-btn secondary" id="btnNext"></button>
+</div>
+<div class="hud">
+<div class="hud-item"><div class="hud-label" id="hudL1"></div><div class="hud-val" id="hudV1"></div></div>
+<div class="hud-item"><div class="hud-label" id="hudL2"></div><div class="hud-val" id="hudV2"></div></div>
+<div class="hud-item"><div class="hud-label" id="hudL3"></div><div class="hud-val" id="hudV3"></div></div>
+<div class="hud-item"><div class="hud-label" id="hudL4"></div><div class="hud-val" id="hudV4"></div></div>
+</div>
+</div>
+
+<!-- Runtime (shared skeleton) -->
+<script src="animation_runtime.js"></script>
+
+<!-- Content -->
 <script>
-window.__systemedu_resize_patch_optout = true;
+// ============================================================
+// CONFIG
+// ============================================================
 
-const I18N = {
-  zh: {
-    prev: '上一步', next: '下一步', langToggle: 'EN',
-    titles: ['人体感官 vs 机器人传感器', '眼睛 → 相机', '耳朵 → 麦克风',
-             '触觉 → 力传感器', '平衡感 → 惯性测量单元', '超能力 → 激光雷达'],
-    subtitles: ['我们的身体和机器人，都需要"翻译"外界信息',
-      '光 → 像素矩阵 [R:180, G:40, B:20]', '声波 → 电信号波形',
-      '压力 → 数值 (牛顿)', '加速度 + 旋转 → 三轴数据', '激光反射 → 精确距离 (厘米级)'],
-    human: '人体', robot: '机器人',
-    senses: ['眼睛', '耳朵', '皮肤', '鼻子', '内耳'],
-    sensors: ['相机', '麦克风', '力传感器', '气体传感器', 'IMU'],
-    translate: '翻译', superSensor: '超越人类的传感器!',
-    pressure: '压力', newtons: '牛顿',
-    cantMeasure: '无法精确测距?', lidarDesc: 'LiDAR 激光雷达'
+var CONFIG = {
+  style: 'ares_mission',
+  totalFrames: 5,
+
+  i18n: {
+    title:    {en:'SENSOR TRANSLATOR', cn:'\u4f20\u611f\u5668\u7ffb\u8bd1\u5b98'},
+    subtitle: {en:'How sensors bridge physical and digital worlds', cn:'\u4f20\u611f\u5668\u5982\u4f55\u8fde\u63a5\u7269\u7406\u4e16\u754c\u548c\u6570\u5b57\u4e16\u754c'},
+
+    // Frame 0 - Overview: the translation chain
+    f0_physical:  {en:'Physical World', cn:'\u7269\u7406\u4e16\u754c'},
+    f0_sensor:    {en:'Sensor', cn:'\u4f20\u611f\u5668'},
+    f0_digital:   {en:'Digital World', cn:'\u6570\u5b57\u4e16\u754c'},
+    f0_arrow1:    {en:'Detect', cn:'\u611f\u77e5'},
+    f0_arrow2:    {en:'Convert', cn:'\u8f6c\u6362'},
+    f0_light:     {en:'Light', cn:'\u5149'},
+    f0_sound:     {en:'Sound', cn:'\u58f0\u97f3'},
+    f0_heat:      {en:'Heat', cn:'\u6e29\u5ea6'},
+    f0_force:     {en:'Force', cn:'\u538b\u529b'},
+    f0_numbers:   {en:'Numbers', cn:'\u6570\u5b57'},
+    f0_question:  {en:'How does this translation work?', cn:'\u8fd9\u4e2a\u201c\u7ffb\u8bd1\u201d\u662f\u600e\u4e48\u5de5\u4f5c\u7684\uff1f'},
+
+    // Frame 1 - Temperature sensor deep dive
+    f1_title:     {en:'Temperature Sensor: Step by Step', cn:'\u6e29\u5ea6\u4f20\u611f\u5668\uff1a\u9010\u6b65\u62c6\u89e3'},
+    f1_thermo:    {en:'Thermistor', cn:'\u70ed\u654f\u7535\u963b'},
+    f1_resist:    {en:'Resistance', cn:'\u7535\u963b\u503c'},
+    f1_voltage:   {en:'Voltage', cn:'\u7535\u538b'},
+    f1_adc:       {en:'ADC', cn:'ADC'},
+    f1_binary:    {en:'Binary', cn:'\u4e8c\u8fdb\u5236'},
+    f1_celsius:   {en:'Celsius', cn:'\u6444\u6c0f\u5ea6'},
+    f1_step1:     {en:'Heat changes resistance', cn:'\u6e29\u5ea6\u6539\u53d8\u7535\u963b'},
+    f1_step2:     {en:'Resistance changes voltage', cn:'\u7535\u963b\u6539\u53d8\u7535\u538b'},
+    f1_step3:     {en:'ADC converts to number', cn:'ADC\u8f6c\u4e3a\u6570\u5b57'},
+    f1_step4:     {en:'Math gives temperature', cn:'\u8ba1\u7b97\u5f97\u51fa\u6e29\u5ea6'},
+
+    // Frame 2 - Analog vs Digital
+    f2_title:     {en:'Analog Signal vs Digital Signal', cn:'\u6a21\u62df\u4fe1\u53f7 vs \u6570\u5b57\u4fe1\u53f7'},
+    f2_analog:    {en:'ANALOG', cn:'\u6a21\u62df'},
+    f2_digital:   {en:'DIGITAL', cn:'\u6570\u5b57'},
+    f2_continuous: {en:'Continuous, smooth', cn:'\u8fde\u7eed\u3001\u5e73\u6ed1'},
+    f2_discrete:  {en:'Discrete, exact', cn:'\u79bb\u6563\u3001\u7cbe\u786e'},
+    f2_adc_role:  {en:'ADC is the core translator', cn:'ADC \u662f\u6838\u5fc3\u7ffb\u8bd1\u5b98'},
+
+    // Frame 3 - Multiple sensor types, same pattern
+    f3_title:     {en:'Same Pattern, Different Senses', cn:'\u76f8\u540c\u6a21\u5f0f\uff0c\u4e0d\u540c\u611f\u5b98'},
+    f3_camera:    {en:'Camera', cn:'\u76f8\u673a'},
+    f3_mic:       {en:'Microphone', cn:'\u9ea6\u514b\u98ce'},
+    f3_force:     {en:'Force Sensor', cn:'\u529b\u4f20\u611f\u5668'},
+    f3_imu:       {en:'IMU', cn:'\u60ef\u6027\u6d4b\u91cf'},
+    f3_light_in:  {en:'Light', cn:'\u5149'},
+    f3_sound_in:  {en:'Sound wave', cn:'\u58f0\u6ce2'},
+    f3_press_in:  {en:'Pressure', cn:'\u538b\u529b'},
+    f3_motion_in: {en:'Motion', cn:'\u8fd0\u52a8'},
+    f3_pix_out:   {en:'[R,G,B]', cn:'[R,G,B]'},
+    f3_wav_out:   {en:'Waveform', cn:'\u6ce2\u5f62'},
+    f3_n_out:     {en:'Newtons', cn:'\u725b\u987f'},
+    f3_xyz_out:   {en:'X,Y,Z', cn:'X,Y,Z'},
+    f3_same:      {en:'All follow: Physical -> Sensor -> Number', cn:'\u90fd\u9075\u5faa\uff1a\u7269\u7406 -> \u4f20\u611f\u5668 -> \u6570\u5b57'},
+
+    // Frame 4 - Mars rover sensor fusion
+    f4_title:     {en:'Curiosity Rover: Sensor Fusion', cn:'\u597d\u5947\u53f7\u706b\u661f\u8f66\uff1a\u4f20\u611f\u5668\u878d\u5408'},
+    f4_rover:     {en:'ROVER', cn:'\u706b\u661f\u8f66'},
+    f4_cam:       {en:'Camera', cn:'\u76f8\u673a'},
+    f4_temp:      {en:'Temp', cn:'\u6e29\u5ea6'},
+    f4_wind:      {en:'Wind', cn:'\u98ce\u901f'},
+    f4_lidar:     {en:'LiDAR', cn:'\u6fc0\u5149'},
+    f4_brain:     {en:'Computer Brain', cn:'\u8ba1\u7b97\u673a\u5927\u8111'},
+    f4_decision:  {en:'Decision', cn:'\u51b3\u7b56'},
+    f4_fusion:    {en:'Multiple sensors -> richer understanding', cn:'\u591a\u4f20\u611f\u5668 -> \u66f4\u4e30\u5bcc\u7684\u7406\u89e3'},
+
+    // Guide
+    guideTitle: {en:'Key Takeaway', cn:'\u6838\u5fc3\u8981\u70b9'},
+    g1: {en:'Sensors translate physical phenomena into numbers', cn:'\u4f20\u611f\u5668\u628a\u7269\u7406\u73b0\u8c61\u7ffb\u8bd1\u6210\u6570\u5b57'},
+    g2: {en:'ADC (Analog-to-Digital Converter) is the key translator', cn:'ADC\uff08\u6a21\u6570\u8f6c\u6362\u5668\uff09\u662f\u6838\u5fc3\u7ffb\u8bd1\u5b98'},
+    g3: {en:'All sensors follow the same Physical -> Digital pattern', cn:'\u6240\u6709\u4f20\u611f\u5668\u90fd\u9075\u5faa\u76f8\u540c\u7684 \u7269\u7406->\u6570\u5b57 \u6a21\u5f0f'},
+
+    // HUD labels
+    hudL1: {en:'CONCEPT', cn:'\u6982\u5ff5'},
+    hudL2: {en:'PATTERN', cn:'\u6a21\u5f0f'},
+    hudL3: {en:'SIGNAL', cn:'\u4fe1\u53f7'},
+    hudL4: {en:'DEPTH', cn:'\u6df1\u5ea6'},
+
+    // HUD values (referenced by key in hudValues)
+    hv_translation: {en:'Translation', cn:'\u7ffb\u8bd1'},
+    hv_overview:    {en:'Overview', cn:'\u6982\u89c8'},
+    hv_physical:    {en:'Physical', cn:'\u7269\u7406'},
+    hv_temperature: {en:'Temperature', cn:'\u6e29\u5ea6'},
+    hv_stepbystep:  {en:'Step-by-step', cn:'\u9010\u6b65'},
+    hv_analog:      {en:'Analog', cn:'\u6a21\u62df'},
+    hv_avsd:        {en:'A vs D', cn:'\u6a21vs\u6570'},
+    hv_conversion:  {en:'Conversion', cn:'\u8f6c\u6362'},
+    hv_adc:         {en:'ADC', cn:'ADC'},
+    hv_multisense:  {en:'Multi-sense', cn:'\u591a\u611f\u5b98'},
+    hv_universal:   {en:'Universal', cn:'\u901a\u7528'},
+    hv_various:     {en:'Various', cn:'\u591a\u79cd'},
+    hv_marsrover:   {en:'Mars Rover', cn:'\u706b\u661f\u8f66'},
+    hv_fusion:      {en:'Fusion', cn:'\u878d\u5408'},
+    hv_combined:    {en:'Combined', cn:'\u7efc\u5408'},
   },
-  en: {
-    prev: 'Prev', next: 'Next', langToggle: '中文',
-    titles: ['Human Senses vs Robot Sensors', 'Eyes → Camera', 'Ears → Microphone',
-             'Touch → Force Sensor', 'Balance → IMU', 'Superpower → LiDAR'],
-    subtitles: ['Both our body and robots need to "translate" the physical world',
-      'Light → Pixel Matrix [R:180, G:40, B:20]', 'Sound Wave → Electrical Waveform',
-      'Pressure → Value (Newtons)', 'Acceleration + Rotation → 3-Axis Data',
-      'Laser Reflection → Precise Distance (cm-level)'],
-    human: 'Human', robot: 'Robot',
-    senses: ['Eyes', 'Ears', 'Skin', 'Nose', 'Inner Ear'],
-    sensors: ['Camera', 'Microphone', 'Force Sensor', 'Gas Sensor', 'IMU'],
-    translate: 'Translate', superSensor: 'Beyond human senses!',
-    pressure: 'Pressure', newtons: 'Newtons',
-    cantMeasure: "Can't measure distance?", lidarDesc: 'LiDAR Scanner'
-  }
+
+  hudLabels: ['hudL1', 'hudL2', 'hudL3', 'hudL4'],
+  hudValues: [
+    ['hv_translation', 'hv_overview',   'hv_physical',  '1/5'],
+    ['hv_temperature', 'hv_stepbystep', 'hv_analog',    '2/5'],
+    ['hv_avsd',        'hv_conversion', 'hv_adc',       '3/5'],
+    ['hv_multisense',  'hv_universal',  'hv_various',   '4/5'],
+    ['hv_marsrover',   'hv_fusion',     'hv_combined',  '5/5'],
+  ],
+
+  guideTitle: 'guideTitle',
+  guideItems: ['g1', 'g2', 'g3'],
 };
 
-let lang = 'zh', frame = 0, frameStartTime = 0;
-const TOTAL = 6;
-const cv = document.getElementById('c'), cx = cv.getContext('2d');
-const btnPrev = document.getElementById('btnPrev');
-const btnNext = document.getElementById('btnNext');
-const langBtnEl = document.getElementById('langBtn');
-const dotsEl = document.getElementById('dots');
-function L() { return I18N[lang]; }
+// ============================================================
+// HELPER DRAWING FUNCTIONS
+// ============================================================
 
-function buildDots() {
-  dotsEl.innerHTML = '';
-  for (let i = 0; i < TOTAL; i++) {
-    const d = document.createElement('div');
-    d.className = 'dot' + (i === frame ? ' active' : '');
-    d.onclick = () => goFrame(i);
-    dotsEl.appendChild(d);
-  }
-}
-function goFrame(f) {
-  frame = Math.max(0, Math.min(TOTAL - 1, f));
-  frameStartTime = performance.now();
-  buildDots();
-}
-btnPrev.onclick = () => goFrame(frame - 1);
-btnNext.onclick = () => goFrame(frame + 1);
-langBtnEl.onclick = () => {
-  lang = lang === 'zh' ? 'en' : 'zh';
-  langBtnEl.textContent = L().langToggle;
-  btnPrev.textContent = L().prev;
-  btnNext.textContent = L().next;
-};
-
-function resize() {
-  const dpr = window.devicePixelRatio || 1;
-  const r = cv.getBoundingClientRect();
-  cv.width = r.width * dpr; cv.height = r.height * dpr;
-  cx.setTransform(dpr, 0, 0, dpr, 0, 0);
-}
-window.addEventListener('resize', resize); resize(); buildDots();
-
-function W() { return cv.getBoundingClientRect().width; }
-function H() { return cv.getBoundingClientRect().height; }
-
-// --- shared drawing helpers ---
-function drawTitle(t, s) {
-  cx.textAlign = 'center'; cx.fillStyle = '#58a6ff';
-  cx.font = 'bold ' + Math.min(28, W() * 0.04) + 'px sans-serif';
-  cx.fillText(t, W() / 2, 44);
-  cx.fillStyle = '#8b949e'; cx.font = Math.min(16, W() * 0.025) + 'px sans-serif';
-  cx.fillText(s, W() / 2, 70);
+function drawRoundedRect(ctx, x, y, w, h, r, fill, stroke) {
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.lineTo(x + w - r, y);
+  ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+  ctx.lineTo(x + w, y + h - r);
+  ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+  ctx.lineTo(x + r, y + h);
+  ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+  ctx.lineTo(x, y + r);
+  ctx.quadraticCurveTo(x, y, x + r, y);
+  ctx.closePath();
+  if (fill) { ctx.fillStyle = fill; ctx.fill(); }
+  if (stroke) { ctx.strokeStyle = stroke; ctx.lineWidth = 2; ctx.stroke(); }
 }
 
-function drawArrow(x1, y1, x2, y2, col, lbl) {
-  cx.strokeStyle = col || '#58a6ff'; cx.lineWidth = 2;
-  cx.beginPath(); cx.moveTo(x1, y1); cx.lineTo(x2, y2);
-  const a = Math.atan2(y2 - y1, x2 - x1);
-  cx.lineTo(x2 - 10 * Math.cos(a - 0.4), y2 - 10 * Math.sin(a - 0.4));
-  cx.moveTo(x2, y2);
-  cx.lineTo(x2 - 10 * Math.cos(a + 0.4), y2 - 10 * Math.sin(a + 0.4));
-  cx.stroke();
-  if (lbl) {
-    cx.fillStyle = '#f0883e'; cx.font = 'bold 13px sans-serif'; cx.textAlign = 'center';
-    cx.fillText(lbl, (x1 + x2) / 2, (y1 + y2) / 2 - 8);
+function drawArrowLine(ctx, x1, y1, x2, y2, color, label) {
+  ctx.strokeStyle = color; ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+  var angle = Math.atan2(y2 - y1, x2 - x1);
+  ctx.beginPath();
+  ctx.moveTo(x2, y2);
+  ctx.lineTo(x2 - 10 * Math.cos(angle - 0.4), y2 - 10 * Math.sin(angle - 0.4));
+  ctx.moveTo(x2, y2);
+  ctx.lineTo(x2 - 10 * Math.cos(angle + 0.4), y2 - 10 * Math.sin(angle + 0.4));
+  ctx.stroke();
+  if (label) {
+    ctx.fillStyle = color;
+    ctx.font = '700 11px "Space Grotesk", sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText(label, (x1 + x2) / 2, (y1 + y2) / 2 - 10);
   }
 }
 
-function drawStick(px, py, s, lbl) {
-  s = s || 1; cx.strokeStyle = '#c9d1d9'; cx.lineWidth = 2;
-  cx.beginPath(); cx.arc(px, py - 50 * s, 16 * s, 0, Math.PI * 2); cx.stroke();
-  cx.beginPath(); cx.moveTo(px, py - 34 * s); cx.lineTo(px, py + 20 * s); cx.stroke();
-  cx.beginPath(); cx.moveTo(px - 24 * s, py - 10 * s); cx.lineTo(px + 24 * s, py - 10 * s); cx.stroke();
-  cx.beginPath(); cx.moveTo(px, py + 20 * s); cx.lineTo(px - 16 * s, py + 52 * s); cx.stroke();
-  cx.beginPath(); cx.moveTo(px, py + 20 * s); cx.lineTo(px + 16 * s, py + 52 * s); cx.stroke();
-  if (lbl) {
-    cx.fillStyle = '#c9d1d9'; cx.font = '13px sans-serif'; cx.textAlign = 'center';
-    cx.fillText(lbl, px, py + 72 * s);
+function drawWaveform(ctx, x, y, w, h, time, color, freq, amp) {
+  ctx.strokeStyle = color; ctx.lineWidth = 2;
+  ctx.beginPath();
+  for (var i = 0; i < w; i++) {
+    var px = x + i;
+    var py = y + Math.sin((i * freq + time * 80) * 0.05) * amp;
+    i === 0 ? ctx.moveTo(px, py) : ctx.lineTo(px, py);
+  }
+  ctx.stroke();
+}
+
+function drawThermometer(ctx, x, y, size, tempPct) {
+  var s = size;
+  // Bulb
+  ctx.fillStyle = AnimRuntime.PAL.error;
+  ctx.beginPath(); ctx.arc(x, y + s * 0.6, s * 0.22, 0, Math.PI * 2); ctx.fill();
+  // Tube
+  ctx.fillStyle = AnimRuntime.PAL.surface;
+  ctx.fillRect(x - s * 0.06, y - s * 0.4, s * 0.12, s);
+  ctx.strokeStyle = AnimRuntime.PAL.outline;
+  ctx.lineWidth = 1.5;
+  ctx.strokeRect(x - s * 0.06, y - s * 0.4, s * 0.12, s);
+  // Mercury level
+  var mH = s * tempPct * 0.85;
+  ctx.fillStyle = AnimRuntime.PAL.error;
+  ctx.fillRect(x - s * 0.04, y + s * 0.6 - mH, s * 0.08, mH);
+  // Tick marks
+  ctx.strokeStyle = AnimRuntime.PAL.muted; ctx.lineWidth = 1;
+  for (var i = 0; i < 5; i++) {
+    var ty = y + s * 0.55 - i * s * 0.2;
+    ctx.beginPath(); ctx.moveTo(x + s * 0.08, ty); ctx.lineTo(x + s * 0.15, ty); ctx.stroke();
   }
 }
 
-function drawBot(px, py, s, lbl) {
-  s = s || 1; cx.strokeStyle = '#58a6ff'; cx.lineWidth = 2;
-  cx.strokeRect(px - 14 * s, py - 62 * s, 28 * s, 24 * s);
-  cx.fillStyle = '#7ee787';
-  cx.fillRect(px - 8 * s, py - 56 * s, 5 * s, 5 * s);
-  cx.fillRect(px + 3 * s, py - 56 * s, 5 * s, 5 * s);
-  cx.beginPath(); cx.moveTo(px, py - 62 * s); cx.lineTo(px, py - 72 * s); cx.stroke();
-  cx.beginPath(); cx.arc(px, py - 74 * s, 3 * s, 0, Math.PI * 2); cx.stroke();
-  cx.strokeRect(px - 18 * s, py - 38 * s, 36 * s, 42 * s);
-  cx.beginPath(); cx.moveTo(px - 18 * s, py - 28 * s); cx.lineTo(px - 32 * s, py); cx.stroke();
-  cx.beginPath(); cx.moveTo(px + 18 * s, py - 28 * s); cx.lineTo(px + 32 * s, py); cx.stroke();
-  cx.beginPath(); cx.moveTo(px - 8 * s, py + 4 * s); cx.lineTo(px - 8 * s, py + 30 * s); cx.stroke();
-  cx.beginPath(); cx.moveTo(px + 8 * s, py + 4 * s); cx.lineTo(px + 8 * s, py + 30 * s); cx.stroke();
-  cx.strokeRect(px - 14 * s, py + 28 * s, 12 * s, 6 * s);
-  cx.strokeRect(px + 2 * s, py + 28 * s, 12 * s, 6 * s);
-  if (lbl) {
-    cx.fillStyle = '#58a6ff'; cx.font = '13px sans-serif'; cx.textAlign = 'center';
-    cx.fillText(lbl, px, py + 46 * s);
+function drawChipBox(ctx, x, y, w, h, label, color) {
+  drawRoundedRect(ctx, x - w/2, y - h/2, w, h, 4, AnimRuntime.PAL.surface, color);
+  // Pins
+  ctx.strokeStyle = color; ctx.lineWidth = 1.5;
+  var pins = 3;
+  for (var i = 0; i < pins; i++) {
+    var py = y - h/2 + h * (i + 1) / (pins + 1);
+    ctx.beginPath(); ctx.moveTo(x - w/2, py); ctx.lineTo(x - w/2 - 8, py); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(x + w/2, py); ctx.lineTo(x + w/2 + 8, py); ctx.stroke();
   }
+  ctx.fillStyle = color;
+  ctx.font = '700 ' + Math.min(12, w * 0.28) + 'px "Space Grotesk", sans-serif';
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillText(label, x, y);
+  ctx.textBaseline = 'alphabetic';
 }
 
-function rrect(x, y, w, h, r, f, st) {
-  cx.beginPath(); cx.moveTo(x + r, y); cx.lineTo(x + w - r, y);
-  cx.quadraticCurveTo(x + w, y, x + w, y + r); cx.lineTo(x + w, y + h - r);
-  cx.quadraticCurveTo(x + w, y + h, x + w - r, y + h); cx.lineTo(x + r, y + h);
-  cx.quadraticCurveTo(x, y + h, x, y + h - r); cx.lineTo(x, y + r);
-  cx.quadraticCurveTo(x, y, x + r, y); cx.closePath();
-  if (f) { cx.fillStyle = f; cx.fill(); }
-  if (st) { cx.strokeStyle = st; cx.lineWidth = 2; cx.stroke(); }
+// ============================================================
+// FRAME ELEMENTS
+// ============================================================
+
+function getFrameElements(f, W, H) {
+  var t = AnimRuntime.t;
+  var P = AnimRuntime.PAL;
+  var cx = W / 2, cy = H / 2;
+
+  if (f === 0) return buildFrame0(W, H, t, P, cx, cy);
+  if (f === 1) return buildFrame1(W, H, t, P, cx, cy);
+  if (f === 2) return buildFrame2(W, H, t, P, cx, cy);
+  if (f === 3) return buildFrame3(W, H, t, P, cx, cy);
+  if (f === 4) return buildFrame4(W, H, t, P, cx, cy);
+  return [];
 }
 
-// --- Frame 0: Overview ---
-function drawFrame0(dt) {
-  const w = W(), h = H(), lx = w * 0.25, rx = w * 0.75, by = h * 0.38;
-  drawStick(lx, by, 1.3, L().human);
-  drawBot(rx, by, 1.3, L().robot);
-  const sns = L().senses, sen = L().sensors;
-  const ofs = [{ h: -68, r: -68 }, { h: -48, r: -48 }, { h: -10, r: -18 },
-               { h: -30, r: -30 }, { h: 10, r: 0 }];
-  const clrs = ['#f97583', '#d2a8ff', '#79c0ff', '#7ee787', '#f0883e'];
-  for (let i = 0; i < 5; i++) {
-    const p = Math.min(1, Math.max(0, (dt - i * 0.3) / 0.6));
-    if (p <= 0) continue;
-    const ly = by + ofs[i].h * 1.3, ry = by + ofs[i].r * 1.3;
-    cx.globalAlpha = p; cx.fillStyle = clrs[i]; cx.font = '13px sans-serif';
-    cx.textAlign = 'right'; cx.fillText(sns[i], lx - 50, ly + 4);
-    cx.textAlign = 'left'; cx.fillText(sen[i], rx + 50, ry + 4);
-    cx.strokeStyle = clrs[i]; cx.lineWidth = 1.5; cx.setLineDash([4, 4]);
-    cx.beginPath(); cx.moveTo(lx + 40, ly); cx.lineTo(lx + 40 + (rx - lx - 80) * p, ry); cx.stroke();
-    cx.setLineDash([]); cx.globalAlpha = 1;
-  }
+// Helper: create a box centered at (cx, cy) with width w, height h
+// Runtime box type uses (x,y) as top-left corner, so we offset
+function cbox(id, cx, cy, w, h, fill, stroke) {
+  return {id:id, type:'box', x:cx-w/2, y:cy-h/2, w:w, h:h, fill:fill, stroke:stroke};
 }
 
-// --- Frame 1: Camera ---
-function drawFrame1(dt) {
-  const w = W(), h = H(), my = h * 0.48, rX = w * 0.1, eX = w * 0.26;
-  // rock
-  cx.fillStyle = '#b44030'; cx.beginPath(); cx.ellipse(rX, my, 28, 18, 0, 0, Math.PI * 2); cx.fill();
-  // eye
-  cx.strokeStyle = '#c9d1d9'; cx.lineWidth = 2;
-  cx.beginPath(); cx.ellipse(eX, my, 22, 14, 0, 0, Math.PI * 2); cx.stroke();
-  cx.fillStyle = '#58a6ff'; cx.beginPath(); cx.arc(eX, my, 7, 0, Math.PI * 2); cx.fill();
-  cx.fillStyle = '#0d1117'; cx.beginPath(); cx.arc(eX, my, 3, 0, Math.PI * 2); cx.fill();
-  // light rays
-  for (let i = 0; i < 5; i++) {
-    const rp = (Math.sin(dt * 3 + i) + 1) / 2;
-    cx.strokeStyle = `rgba(249,117,131,${0.3 + rp * 0.4})`; cx.lineWidth = 1;
-    cx.beginPath(); cx.moveTo(rX + 28, my + Math.sin(-0.3 + i * 0.15) * 10);
-    cx.lineTo(eX - 22, my + (i - 2) * 4); cx.stroke();
-  }
-  drawArrow(w * 0.36, my, w * 0.48, my, '#f0883e', L().translate);
-  // camera
-  const cX = w * 0.56;
-  rrect(cX - 20, my - 16, 40, 32, 4, '#161b22', '#58a6ff');
-  cx.strokeStyle = '#79c0ff'; cx.lineWidth = 2;
-  cx.beginPath(); cx.arc(cX, my, 10, 0, Math.PI * 2); cx.stroke();
-  // pixel grid
-  const gX = w * 0.68, gY = my - 40, cs = Math.min(12, w * 0.015), cols = 8, rows = 7;
-  const filled = Math.min(cols * rows, Math.floor(dt * 12));
-  for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) {
-    const idx = r * cols + c, px = gX + c * (cs + 1), py = gY + r * (cs + 1);
-    if (idx < filled) {
-      const rd = 120 + Math.floor(Math.random() * 60 + Math.sin(idx) * 30);
-      cx.fillStyle = `rgb(${rd},${20 + Math.floor(Math.random() * 30)},${10 + Math.floor(Math.random() * 20)})`;
-    } else { cx.fillStyle = '#21262d'; }
-    cx.fillRect(px, py, cs, cs);
-  }
-  cx.strokeStyle = '#30363d'; cx.lineWidth = 1;
-  cx.strokeRect(gX - 1, gY - 1, cols * (cs + 1) + 1, rows * (cs + 1) + 1);
-  if (dt > 2) {
-    cx.fillStyle = '#7ee787'; cx.font = 'bold 13px monospace'; cx.textAlign = 'left';
-    cx.fillText('[R:180, G:40, B:20]', gX, gY + rows * (cs + 1) + 18);
-  }
+// --- Frame 0: Overview - The Translation Chain ---
+function buildFrame0(W, H, t, P, cx, cy) {
+  var bw = Math.min(140, W * 0.16);
+  var bh = Math.min(100, H * 0.22);
+  var gap = Math.min(80, W * 0.1);
+  var x1 = cx - bw - gap;
+  var x2 = cx;
+  var x3 = cx + bw + gap;
+  var y = cy - 10;
+
+  return [
+    // Three main boxes (centered)
+    cbox('box_phys', x1, y, bw, bh, P.surface, P.error),
+    {id:'lbl_phys', type:'label', text:t('f0_physical'), x:x1, y:y-bh/2+14, color:P.error, size:14, align:'center', bold:true},
+    cbox('box_sens', x2, y, bw, bh, P.surface, P.primary),
+    {id:'lbl_sens', type:'label', text:t('f0_sensor'), x:x2, y:y-bh/2+14, color:P.primary, size:16, align:'center', bold:true},
+    cbox('box_digi', x3, y, bw, bh, P.surface, P.tertiary),
+    {id:'lbl_digi', type:'label', text:t('f0_digital'), x:x3, y:y-bh/2+14, color:P.tertiary, size:14, align:'center', bold:true},
+
+    // Physical examples inside left box
+    {id:'ex_light', type:'label', text:t('f0_light'), x:x1, y:y-5, color:P.error, size:11, align:'center'},
+    {id:'ex_sound', type:'label', text:t('f0_sound'), x:x1, y:y+10, color:P.error, size:11, align:'center'},
+    {id:'ex_heat',  type:'label', text:t('f0_heat'),  x:x1, y:y+25, color:P.error, size:11, align:'center'},
+    {id:'ex_force', type:'label', text:t('f0_force'), x:x1, y:y+40, color:P.error, size:11, align:'center'},
+
+    // Digital output inside right box
+    {id:'ex_nums', type:'label', text:t('f0_numbers'), x:x3, y:y+5, color:P.tertiary, size:13, align:'center'},
+    {id:'ex_code', type:'label', text:'0110 1001', x:x3, y:y+25, color:P.tertiary, size:11, align:'center', font:'monospace'},
+
+    // Arrows between boxes
+    {id:'arr1', type:'arrow', x1:x1+bw/2+6, y1:y, x2:x2-bw/2-6, y2:y, color:P.muted, label:t('f0_arrow1')},
+    {id:'arr2', type:'arrow', x1:x2+bw/2+6, y1:y, x2:x3-bw/2-6, y2:y, color:P.muted, label:t('f0_arrow2')},
+
+    // Question at bottom
+    {id:'question', type:'label', text:t('f0_question'), x:cx, y:y+bh/2+40, color:P.secondary, size:14, align:'center', bold:true},
+  ];
 }
 
-// --- Frame 2: Microphone ---
-function drawFrame2(dt) {
-  const w = W(), h = H(), my = h * 0.48, sX = w * 0.12;
-  rrect(sX - 12, my - 14, 24, 28, 4, '#21262d', '#d2a8ff');
-  for (let i = 1; i <= 4; i++) {
-    const a = Math.max(0, Math.sin(dt * 4 - i * 0.8) * 0.5 + 0.3);
-    cx.strokeStyle = `rgba(210,168,255,${a})`; cx.lineWidth = 2;
-    cx.beginPath(); cx.arc(sX, my, 20 + i * 18, -0.6, 0.6); cx.stroke();
-  }
-  // ear
-  const earX = w * 0.3;
-  cx.strokeStyle = '#c9d1d9'; cx.lineWidth = 2;
-  cx.beginPath(); cx.ellipse(earX, my, 10, 18, 0, -0.3, Math.PI + 0.3); cx.stroke();
-  cx.beginPath(); cx.ellipse(earX + 4, my, 5, 10, 0, 0, Math.PI * 2); cx.stroke();
-  drawArrow(w * 0.38, my, w * 0.48, my, '#f0883e', L().translate);
-  // microphone
-  const mX = w * 0.56;
-  cx.strokeStyle = '#58a6ff'; cx.lineWidth = 2;
-  cx.beginPath(); cx.arc(mX, my - 14, 12, Math.PI, 0);
-  cx.lineTo(mX + 12, my + 4); cx.lineTo(mX - 12, my + 4); cx.closePath(); cx.stroke();
-  cx.beginPath(); cx.moveTo(mX, my + 4); cx.lineTo(mX, my + 22); cx.stroke();
-  cx.beginPath(); cx.moveTo(mX - 10, my + 22); cx.lineTo(mX + 10, my + 22); cx.stroke();
-  // waveform display
-  const wX = w * 0.65, wW = w * 0.22, wH = 60;
-  rrect(wX, my - wH / 2, wW, wH, 4, '#161b22', '#30363d');
-  cx.strokeStyle = '#21262d'; cx.lineWidth = 1;
-  cx.beginPath(); cx.moveTo(wX + 4, my); cx.lineTo(wX + wW - 4, my); cx.stroke();
-  cx.strokeStyle = '#7ee787'; cx.lineWidth = 2; cx.beginPath();
-  for (let x = 0; x < wW - 8; x++) {
-    const xp = wX + 4 + x, amp = 20 * Math.min(1, dt / 1.5);
-    const yp = my + Math.sin((x + dt * 80) * 0.08) * amp * 0.7 + Math.sin((x + dt * 120) * 0.2) * amp * 0.3;
-    x === 0 ? cx.moveTo(xp, yp) : cx.lineTo(xp, yp);
-  }
-  cx.stroke();
-}
+// --- Frame 1: Temperature Sensor Deep Dive ---
+function buildFrame1(W, H, t, P, cx, cy) {
+  var stepW = Math.min(120, W * 0.13);
+  var stepH = 80;
+  var stepGap = Math.min(40, W * 0.04);
+  var totalW = stepW * 4 + stepGap * 3;
+  var startX = cx - totalW / 2 + stepW / 2;
+  var topY = cy - 10;
+  var els = [];
 
-// --- Frame 3: Force Sensor ---
-function drawFrame3(dt) {
-  const w = W(), h = H(), my = h * 0.48;
-  const pp = Math.min(1, (Math.sin(dt * 1.5) + 1) / 2), fX = w * 0.15;
-  // surface + finger
-  cx.fillStyle = '#21262d'; cx.fillRect(fX - 30, my + 10, 60, 8);
-  cx.fillStyle = '#f0c8a0'; cx.beginPath();
-  cx.ellipse(fX, my - 16 + pp * 8, 10, 20, 0, 0, Math.PI * 2); cx.fill();
-  cx.strokeStyle = '#c9d1d9'; cx.lineWidth = 1; cx.stroke();
-  // nerve signals
-  for (let i = 0; i < 3; i++) {
-    cx.fillStyle = (Math.sin(dt * 6 + i * 1.5) > 0.3 && pp > 0.3) ? '#f97583' : '#30363d';
-    cx.beginPath(); cx.arc(fX, my + 24 + i * 14, 3, 0, Math.PI * 2); cx.fill();
-  }
-  drawArrow(w * 0.3, my, w * 0.42, my, '#f0883e', L().translate);
-  // robotic gripper
-  const gX = w * 0.55, go = 16 - pp * 10;
-  cx.strokeStyle = '#58a6ff'; cx.lineWidth = 3;
-  cx.beginPath(); cx.moveTo(gX - 6, my - 30); cx.lineTo(gX - 6, my - 8);
-  cx.lineTo(gX - 6 - go, my + 10); cx.stroke();
-  cx.beginPath(); cx.moveTo(gX + 6, my - 30); cx.lineTo(gX + 6, my - 8);
-  cx.lineTo(gX + 6 + go, my + 10); cx.stroke();
-  // gripped object + sensor dots
-  cx.fillStyle = '#f0883e'; cx.beginPath(); cx.arc(gX, my + 4, 8, 0, Math.PI * 2); cx.fill();
-  cx.fillStyle = pp > 0.5 ? '#7ee787' : '#30363d';
-  cx.beginPath(); cx.arc(gX - 6 - go, my + 10, 3, 0, Math.PI * 2); cx.fill();
-  cx.beginPath(); cx.arc(gX + 6 + go, my + 10, 3, 0, Math.PI * 2); cx.fill();
-  // readout panel
-  const dX = w * 0.7, dW = w * 0.18;
-  rrect(dX, my - 20, dW, 50, 6, '#161b22', '#30363d');
-  cx.fillStyle = '#7ee787'; cx.font = 'bold ' + Math.min(28, w * 0.035) + 'px monospace';
-  cx.textAlign = 'center'; cx.fillText((pp * 4.8 + 0.2).toFixed(1) + ' N', dX + dW / 2, my + 14);
-  cx.fillStyle = '#8b949e'; cx.font = '11px sans-serif';
-  cx.fillText(L().pressure + ' (' + L().newtons + ')', dX + dW / 2, my + 28);
-  // pressure bar
-  cx.fillStyle = '#21262d'; cx.fillRect(dX + 6, my - 16, dW - 12, 6);
-  cx.fillStyle = pp > 0.7 ? '#f97583' : '#7ee787'; cx.fillRect(dX + 6, my - 16, (dW - 12) * pp, 6);
-}
+  // Title
+  els.push({id:'f1_ttl', type:'label', text:t('f1_title'), x:cx, y:topY - stepH/2 - 30, color:P.primary, size:15, align:'center', bold:true});
 
-// --- Frame 4: IMU ---
-function drawFrame4(dt) {
-  const w = W(), h = H(), my = h * 0.48, ta = Math.sin(dt * 1.2) * 0.35;
-  // tilting person
-  const pX = w * 0.18;
-  cx.save(); cx.translate(pX, my + 30); cx.rotate(ta); cx.translate(-pX, -(my + 30));
-  drawStick(pX, my, 1, ''); cx.restore();
-  // slope
-  cx.strokeStyle = '#30363d'; cx.lineWidth = 2;
-  cx.beginPath(); cx.moveTo(pX - 60, my + 80); cx.lineTo(pX + 60, my + 40); cx.stroke();
-  // inner ear
-  const eaX = pX + 50, eaY = my - 50;
-  cx.strokeStyle = '#d2a8ff'; cx.lineWidth = 1.5;
-  cx.beginPath(); cx.arc(eaX, eaY, 12, 0, Math.PI * 1.5); cx.stroke();
-  cx.beginPath(); cx.arc(eaX + 8, eaY + 6, 6, 0.5, Math.PI * 1.8); cx.stroke();
-  cx.fillStyle = '#d2a8ff'; cx.beginPath();
-  cx.arc(eaX + Math.sin(ta) * 8, eaY + Math.cos(ta) * 4, 3, 0, Math.PI * 2); cx.fill();
-  drawArrow(w * 0.32, my, w * 0.44, my, '#f0883e', L().translate);
-  // IMU chip (tilts)
-  const chX = w * 0.54;
-  cx.save(); cx.translate(chX, my); cx.rotate(ta * 0.6);
-  rrect(-22, -22, 44, 44, 4, '#161b22', '#58a6ff');
-  cx.fillStyle = '#58a6ff'; cx.font = 'bold 10px monospace'; cx.textAlign = 'center';
-  cx.fillText('IMU', 0, 4);
-  cx.strokeStyle = '#58a6ff'; cx.lineWidth = 1;
-  for (let i = -1; i <= 1; i++) {
-    cx.beginPath(); cx.moveTo(-22, i * 10); cx.lineTo(-28, i * 10); cx.stroke();
-    cx.beginPath(); cx.moveTo(22, i * 10); cx.lineTo(28, i * 10); cx.stroke();
-  }
-  cx.restore();
-  // 3-axis display
-  const dX = w * 0.66, dY = my - 50, dW = w * 0.22;
-  rrect(dX, dY, dW, 100, 6, '#161b22', '#30363d');
-  const ax = ['X', 'Y', 'Z'], ac = ['#f97583', '#7ee787', '#79c0ff'];
-  const av = [(Math.sin(ta) * 9.8).toFixed(1), (Math.cos(ta) * 9.8).toFixed(1),
-              (Math.sin(dt * 0.5) * 0.3).toFixed(1)];
-  for (let i = 0; i < 3; i++) {
-    const row = dY + 18 + i * 28;
-    cx.fillStyle = ac[i]; cx.font = 'bold 13px monospace'; cx.textAlign = 'left';
-    cx.fillText(ax[i] + ':', dX + 10, row);
-    cx.font = '13px monospace'; cx.fillText(av[i] + ' m/s\u00B2', dX + 32, row);
-    const bv = parseFloat(av[i]), bw = (bv / 10) * (dW * 0.4);
-    cx.fillStyle = ac[i] + '40'; cx.fillRect(dX + 90, row - 10, dW * 0.4, 12);
-    cx.fillStyle = ac[i]; cx.fillRect(dX + 90 + dW * 0.2, row - 10, bw, 12);
-  }
-}
+  var steps = [
+    {label: t('f1_thermo'), sub: t('f1_step1'), color: P.error, icon: 'thermo'},
+    {label: t('f1_resist') + ' / ' + t('f1_voltage'), sub: t('f1_step2'), color: P.secondary, icon: 'wave'},
+    {label: t('f1_adc'), sub: t('f1_step3'), color: P.primary, icon: 'chip'},
+    {label: t('f1_celsius'), sub: t('f1_step4'), color: P.tertiary, icon: 'number'},
+  ];
 
-// --- Frame 5: LiDAR ---
-function drawFrame5(dt) {
-  const w = W(), h = H(), my = h * 0.46, eX = w * 0.14;
-  // human eyes with "?"
-  cx.strokeStyle = '#c9d1d9'; cx.lineWidth = 2;
-  cx.beginPath(); cx.ellipse(eX - 14, my, 12, 8, 0, 0, Math.PI * 2); cx.stroke();
-  cx.beginPath(); cx.ellipse(eX + 14, my, 12, 8, 0, 0, Math.PI * 2); cx.stroke();
-  cx.fillStyle = '#58a6ff';
-  cx.beginPath(); cx.arc(eX - 14, my, 4, 0, Math.PI * 2); cx.fill();
-  cx.beginPath(); cx.arc(eX + 14, my, 4, 0, Math.PI * 2); cx.fill();
-  cx.fillStyle = '#f97583'; cx.font = 'bold 22px sans-serif'; cx.textAlign = 'center';
-  cx.fillText('?', eX, my - 24);
-  cx.fillStyle = '#8b949e'; cx.font = '11px sans-serif'; cx.fillText(L().cantMeasure, eX, my + 28);
-  // super-sensor label + arrow
-  const midX = w * 0.34;
-  cx.fillStyle = '#f0883e'; cx.font = 'bold 14px sans-serif'; cx.textAlign = 'center';
-  cx.fillText(L().superSensor, midX, my - 6);
-  drawArrow(midX + 60, my, w * 0.48, my, '#f0883e', '');
-  // LiDAR device
-  const lX = w * 0.54;
-  rrect(lX - 18, my - 18, 36, 36, 6, '#161b22', '#58a6ff');
-  cx.fillStyle = '#79c0ff'; cx.font = 'bold 9px monospace'; cx.textAlign = 'center';
-  cx.fillText('LiDAR', lX, my + 3);
-  // laser beams
-  const bO = lX + 20, nB = 12;
-  for (let i = 0; i < nB; i++) {
-    const ang = -0.5 + (i / (nB - 1));
-    const dist = 60 + Math.sin(i * 1.7 + 3) * 30 + Math.cos(i * 0.9) * 20;
-    const bL = Math.min(w * 0.28, dist);
-    const ph = ((dt * 2 + i * 0.15) % 2), oL = ph < 1 ? bL * ph : bL;
-    cx.strokeStyle = `rgba(249,117,131,${ph < 1 ? 0.7 : 0.2})`; cx.lineWidth = 1;
-    cx.beginPath(); cx.moveTo(bO, my);
-    cx.lineTo(bO + Math.cos(ang) * oL, my + Math.sin(ang) * oL); cx.stroke();
-    if (ph >= 0.9) {
-      const hx = bO + Math.cos(ang) * bL, hy = my + Math.sin(ang) * bL;
-      cx.fillStyle = '#7ee787'; cx.beginPath(); cx.arc(hx, hy, 2.5, 0, Math.PI * 2); cx.fill();
-      if (ph >= 1) {
-        const rL = bL * (2 - ph);
-        cx.strokeStyle = `rgba(126,231,135,${Math.max(0, 0.6 * (1 - (ph - 1)))})`;
-        cx.beginPath(); cx.moveTo(hx, hy);
-        cx.lineTo(hx - Math.cos(ang) * rL, hy - Math.sin(ang) * rL); cx.stroke();
-      }
+  for (var i = 0; i < 4; i++) {
+    var sx = startX + i * (stepW + stepGap);
+    var s = steps[i];
+    // Box centered at (sx, topY)
+    els.push(cbox('f1_box'+i, sx, topY, stepW, stepH, P.surface, s.color));
+    // Label near top of box
+    els.push({id:'f1_lbl'+i, type:'label', text:s.label, x:sx, y:topY-stepH/2+16, color:s.color, size:11, align:'center', bold:true});
+    // Sub label near bottom of box
+    els.push({id:'f1_sub'+i, type:'label', text:s.sub, x:sx, y:topY+stepH/2-12, color:P.muted, size:9, align:'center'});
+
+    if (s.icon === 'number') {
+      els.push({id:'f1_num', type:'label', text:'36.5', x:sx, y:topY+5, color:s.color, size:22, align:'center', bold:true, font:'monospace'});
+    }
+
+    // Arrow between boxes
+    if (i < 3) {
+      var arrStartX = sx + stepW/2 + 4;
+      var arrEndX = sx + stepW/2 + stepGap - 4;
+      els.push({id:'f1_arr'+i, type:'arrow', x1:arrStartX, y1:topY, x2:arrEndX, y2:topY, color:P.muted});
     }
   }
-  // accumulated point cloud
-  const cD = Math.min(60, Math.floor(dt * 8));
-  for (let i = 0; i < cD; i++) {
-    const sd = i * 7.13 + 2.71;
-    const ang = -0.5 + (Math.sin(sd) + 1) / 2;
-    const dist = 60 + Math.sin(sd * 1.7) * 30 + Math.cos(sd * 0.9) * 20;
-    cx.fillStyle = `hsl(${120 + (dist / 120) * 120},70%,60%)`;
-    cx.beginPath(); cx.arc(bO + Math.cos(ang) * dist, my + Math.sin(ang) * dist, 2, 0, Math.PI * 2); cx.fill();
-  }
-  cx.fillStyle = '#8b949e'; cx.font = '12px sans-serif'; cx.textAlign = 'left';
-  cx.fillText(L().lidarDesc, lX - 18, my + 40);
+
+  return els;
 }
 
-// --- Main render loop ---
-const frameFns = [drawFrame0, drawFrame1, drawFrame2, drawFrame3, drawFrame4, drawFrame5];
-function draw(now) {
-  const w = W(), h = H();
-  cx.clearRect(0, 0, w, h); cx.fillStyle = '#0d1117'; cx.fillRect(0, 0, w, h);
-  drawTitle(L().titles[frame], L().subtitles[frame]);
-  frameFns[frame]((now - frameStartTime) / 1000);
-  cx.fillStyle = '#30363d'; cx.font = '11px sans-serif'; cx.textAlign = 'right';
-  cx.fillText((frame + 1) + ' / ' + TOTAL, w - 16, h - 50);
-  requestAnimationFrame(draw);
+// --- Frame 2: Analog vs Digital ---
+function buildFrame2(W, H, t, P, cx, cy) {
+  var boxW = Math.min(W * 0.32, 240);
+  var boxH = 80;
+  var spacing = Math.min(60, W * 0.06);
+  var els = [];
+
+  // Title
+  els.push({id:'f2_ttl', type:'label', text:t('f2_title'), x:cx, y:cy-100, color:P.primary, size:15, align:'center', bold:true});
+
+  // Left: Analog
+  var lx = cx - boxW/2 - spacing/2;
+  els.push({id:'f2_albl', type:'label', text:t('f2_analog'), x:lx, y:cy-55, color:P.error, size:14, align:'center', bold:true});
+  els.push({id:'f2_adesc', type:'label', text:t('f2_continuous'), x:lx, y:cy-35, color:P.muted, size:10, align:'center'});
+  els.push(cbox('f2_abox', lx, cy+20, boxW, boxH, P.bg2, P.outline));
+
+  // Right: Digital
+  var rx = cx + boxW/2 + spacing/2;
+  els.push({id:'f2_dlbl', type:'label', text:t('f2_digital'), x:rx, y:cy-55, color:P.tertiary, size:14, align:'center', bold:true});
+  els.push({id:'f2_ddesc', type:'label', text:t('f2_discrete'), x:rx, y:cy-35, color:P.muted, size:10, align:'center'});
+  els.push(cbox('f2_dbox', rx, cy+20, boxW, boxH, P.bg2, P.outline));
+
+  // Center: ADC arrow
+  els.push({id:'f2_arrow', type:'arrow', x1:lx+boxW/2+6, y1:cy+20, x2:rx-boxW/2-6, y2:cy+20, color:P.primary, label:t('f1_adc')});
+  els.push({id:'f2_adc', type:'label', text:t('f2_adc_role'), x:cx, y:cy+80, color:P.primary, size:12, align:'center', bold:true});
+
+  return els;
 }
-frameStartTime = performance.now();
-requestAnimationFrame(draw);
+
+// --- Frame 3: Multiple sensor types, same pattern ---
+function buildFrame3(W, H, t, P, cx, cy) {
+  var els = [];
+  els.push({id:'f3_ttl', type:'label', text:t('f3_title'), x:cx, y:cy-110, color:P.primary, size:15, align:'center', bold:true});
+
+  var rows = [
+    {name:t('f3_camera'), input:t('f3_light_in'), output:t('f3_pix_out'), color:'#f97583'},
+    {name:t('f3_mic'),    input:t('f3_sound_in'), output:t('f3_wav_out'), color:'#d2a8ff'},
+    {name:t('f3_force'),  input:t('f3_press_in'), output:t('f3_n_out'),   color:'#79c0ff'},
+    {name:t('f3_imu'),    input:t('f3_motion_in'),output:t('f3_xyz_out'), color:'#7ee787'},
+  ];
+
+  var rowH = Math.min(40, H * 0.08);
+  var startY = cy - rows.length * rowH / 2 - 20;
+  var colSpan = Math.min(200, W * 0.22);
+  var colIn = cx - colSpan;
+  var colSens = cx;
+  var colOut = cx + colSpan;
+
+  // Column headers
+  els.push({id:'f3_hIn', type:'label', text:t('f0_physical'), x:colIn, y:startY-25, color:P.error, size:11, align:'center', bold:true});
+  els.push({id:'f3_hS',  type:'label', text:t('f0_sensor'),   x:colSens, y:startY-25, color:P.primary, size:11, align:'center', bold:true});
+  els.push({id:'f3_hOut', type:'label', text:t('f0_digital'),  x:colOut, y:startY-25, color:P.tertiary, size:11, align:'center', bold:true});
+
+  for (var i = 0; i < rows.length; i++) {
+    var ry = startY + i * rowH;
+    var r = rows[i];
+    els.push({id:'f3_in'+i,   type:'label', text:r.input, x:colIn,   y:ry, color:r.color, size:12, align:'center'});
+    els.push({id:'f3_arr1_'+i, type:'arrow', x1:colIn+50, y1:ry-4, x2:colSens-50, y2:ry-4, color:P.muted});
+    els.push({id:'f3_sens'+i, type:'label', text:r.name,  x:colSens, y:ry, color:r.color, size:12, align:'center', bold:true});
+    els.push({id:'f3_arr2_'+i, type:'arrow', x1:colSens+50, y1:ry-4, x2:colOut-45, y2:ry-4, color:P.muted});
+    els.push({id:'f3_out'+i,  type:'label', text:r.output, x:colOut,  y:ry, color:r.color, size:12, align:'center', font:'monospace'});
+  }
+
+  els.push({id:'f3_same', type:'label', text:t('f3_same'), x:cx, y:startY + rows.length * rowH + 30, color:P.secondary, size:13, align:'center', bold:true});
+
+  return els;
+}
+
+// --- Frame 4: Mars Rover Sensor Fusion ---
+function buildFrame4(W, H, t, P, cx, cy) {
+  var els = [];
+  els.push({id:'f4_ttl', type:'label', text:t('f4_title'), x:cx, y:cy-120, color:P.primary, size:15, align:'center', bold:true});
+
+  // Rover body centered
+  var roverW = Math.min(100, W * 0.12);
+  var roverH = Math.min(60, H * 0.12);
+  var roverY = cy - 20;
+  els.push(cbox('f4_rover', cx, roverY, roverW, roverH, P.surface, P.primary));
+  els.push({id:'f4_rlbl', type:'label', text:t('f4_rover'), x:cx, y:roverY, color:P.primary, size:11, align:'center', bold:true});
+
+  // Sensor boxes around rover (spread in an arc above)
+  var sensors = [
+    {name:t('f4_cam'),  color:'#f97583'},
+    {name:t('f4_temp'), color:'#7ee787'},
+    {name:t('f4_wind'), color:'#79c0ff'},
+    {name:t('f4_lidar'),color:'#d2a8ff'},
+  ];
+
+  var sensorW = 70, sensorH = 30;
+  var arcRadius = Math.min(130, W * 0.15);
+  var arcStart = -Math.PI * 0.85;
+  var arcEnd = -Math.PI * 0.15;
+
+  for (var i = 0; i < sensors.length; i++) {
+    var s = sensors[i];
+    var angle = arcStart + (arcEnd - arcStart) * i / (sensors.length - 1);
+    var sx = cx + Math.cos(angle) * arcRadius;
+    var sy = roverY + Math.sin(angle) * arcRadius * 0.65;
+    els.push(cbox('f4_s'+i, sx, sy, sensorW, sensorH, P.bg2, s.color));
+    els.push({id:'f4_sl'+i, type:'label', text:s.name, x:sx, y:sy, color:s.color, size:10, align:'center', bold:true});
+    // Arrow from sensor to rover
+    var arrowEndY = roverY - roverH/2;
+    els.push({id:'f4_sa'+i, type:'arrow', x1:sx, y1:sy+sensorH/2+2, x2:cx, y2:arrowEndY, color:s.color});
+  }
+
+  // Brain box below rover
+  var brainY = roverY + roverH/2 + 50;
+  var brainW = Math.min(160, W*0.2);
+  var brainH = 36;
+  els.push(cbox('f4_brain', cx, brainY, brainW, brainH, P.surface, P.secondary));
+  els.push({id:'f4_blbl', type:'label', text:t('f4_brain'), x:cx, y:brainY, color:P.secondary, size:12, align:'center', bold:true});
+  els.push({id:'f4_barr', type:'arrow', x1:cx, y1:roverY+roverH/2, x2:cx, y2:brainY-brainH/2, color:P.muted, label:t('f4_decision')});
+
+  // Bottom summary
+  els.push({id:'f4_fusion', type:'label', text:t('f4_fusion'), x:cx, y:brainY+brainH/2+25, color:P.primary, size:13, align:'center', bold:true});
+
+  return els;
+}
+
+// ============================================================
+// CUSTOM DRAW: analog wave & digital steps, thermometer, chip
+// ============================================================
+
+function customDrawElement(ctx, el) {
+  // No custom element types needed -- all handled by runtime built-in types
+  return false;
+}
+
+// ============================================================
+// CUSTOM BACKGROUND: dark with subtle grid
+// ============================================================
+
+function drawBg(ctx, W, H) {
+  var P = AnimRuntime.PAL;
+  // Dark gradient
+  var grd = ctx.createLinearGradient(0, 0, 0, H);
+  grd.addColorStop(0, P.bg);
+  grd.addColorStop(1, P.bg2);
+  ctx.fillStyle = grd;
+  ctx.fillRect(0, 0, W, H);
+
+  // Subtle grid
+  ctx.strokeStyle = 'rgba(255,255,255,0.03)';
+  ctx.lineWidth = 1;
+  var gs = 40;
+  for (var x = 0; x < W; x += gs) {
+    ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke();
+  }
+  for (var y = 0; y < H; y += gs) {
+    ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke();
+  }
+
+  // Frame-specific custom drawing
+  var f = AnimRuntime.currentFrame !== undefined ? AnimRuntime.currentFrame : 0;
+  var time = (performance.now() / 1000) % 1000;
+
+  if (f === 1) {
+    // Coordinates match buildFrame1: boxes centered at (sx, topY=H/2-10)
+    var stepW = Math.min(120, W * 0.13);
+    var stepGap = Math.min(40, W * 0.04);
+    var totalW = stepW * 4 + stepGap * 3;
+    var firstX = W/2 - totalW/2 + stepW/2;
+    var topY = H/2 - 10;
+    var tempPct = 0.5 + Math.sin(time * 1.5) * 0.3;
+    drawThermometer(ctx, firstX, topY - 10, 50, tempPct);
+
+    // Draw wave in second box (centered)
+    var secondX = firstX + stepW + stepGap;
+    drawWaveform(ctx, secondX - stepW/2 + 10, topY, stepW - 20, 30, time, AnimRuntime.PAL.secondary, 2, 15);
+
+    // Draw ADC chip in third box (centered)
+    var thirdX = secondX + stepW + stepGap;
+    drawChipBox(ctx, thirdX, topY, 50, 35, 'ADC', AnimRuntime.PAL.primary);
+  }
+
+  if (f === 2) {
+    // Coordinates match buildFrame2: boxes centered at (lx/rx, cy+20)
+    var boxW = Math.min(W * 0.32, 240);
+    var spacing = Math.min(60, W * 0.06);
+    var lx = W/2 - boxW/2 - spacing/2;
+    var rx = W/2 + boxW/2 + spacing/2;
+    var waveY = H/2 + 20;
+    var wW = boxW - 30;
+
+    // Analog: smooth sine wave
+    drawWaveform(ctx, lx - wW/2, waveY, wW, 30, time, AnimRuntime.PAL.error, 1.5, 25);
+
+    // Digital: stepped signal
+    ctx.strokeStyle = AnimRuntime.PAL.tertiary; ctx.lineWidth = 2;
+    ctx.beginPath();
+    var steps = 10;
+    var sw = wW / steps;
+    for (var i = 0; i < steps; i++) {
+      var px = rx - wW/2 + i * sw;
+      var level = Math.round(Math.sin((i * 0.8 + time * 1.5) * 0.5) * 3 + 3);
+      var py = waveY - level * 7;
+      if (i === 0) ctx.moveTo(px, py);
+      else { ctx.lineTo(px, py); }
+      ctx.lineTo(px + sw, py);
+    }
+    ctx.stroke();
+
+    // Sample points on analog wave
+    ctx.fillStyle = AnimRuntime.PAL.secondary;
+    for (var i = 0; i < 8; i++) {
+      var sx = lx - wW/2 + i * (wW / 8) + wW/16;
+      var sy = waveY + Math.sin((sx - lx + wW/2) * 0.05 + time * 1.5 * 0.05 * 80) * 25;
+      ctx.beginPath(); ctx.arc(sx, sy, 3, 0, Math.PI * 2); ctx.fill();
+    }
+  }
+}
+
+// ============================================================
+// BOOT
+// ============================================================
+
+AnimRuntime.boot();
 </script>
 </body>
 </html>

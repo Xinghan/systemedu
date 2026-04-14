@@ -6,7 +6,7 @@ import Link from "next/link"
 import dynamic from "next/dynamic"
 import { toast } from "sonner"
 import {
-  ArrowLeft, Clock, Play, GraduationCap, Highlighter,
+  ArrowLeft, Clock, Play, GraduationCap, Highlighter, Settings,
   Pencil, Save, X, ChevronUp, ChevronDown, ArrowRight, Zap, ImageIcon, Upload, Trash2,
   Lock, CheckCircle2, Target, Compass, BookOpen, Search, Layers, Map, BarChart3,
   Puzzle, Cpu, Presentation, Info, Database, FileCheck, Eye,
@@ -25,7 +25,8 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog"
 import { gateway } from "@/lib/api"
-import type { LessonStatus, MilestoneInfo, ProjectBrief, ProjectDetail, SubProjectInfo } from "@/lib/types/api"
+import type { KnowledgeLevel, LessonStatus, MilestoneInfo, ProjectBrief, ProjectDetail, SubProjectInfo } from "@/lib/types/api"
+import { KNOWLEDGE_LEVEL_LABELS } from "@/lib/types/api"
 import { useT } from "@/lib/hooks/use-t"
 import type { TranslationKey } from "@/lib/i18n"
 import { CareerPathCard } from "@/components/career-path/career-path-card"
@@ -653,6 +654,7 @@ export default function ProjectDetailPage() {
   const [editAgeMin, setEditAgeMin] = useState(6)
   const [editAgeMax, setEditAgeMax] = useState(18)
   const [editTags, setEditTags] = useState("")
+  const [editKnowledgeLevel, setEditKnowledgeLevel] = useState<KnowledgeLevel>("K1")
 const [editCoverFile, setEditCoverFile] = useState<File | null>(null)
   const [editCoverPreview, setEditCoverPreview] = useState<string | null>(null)
 
@@ -676,6 +678,7 @@ const [editCoverFile, setEditCoverFile] = useState<File | null>(null)
         setEditAgeMin(d.project.age_range[0] ?? 6)
         setEditAgeMax(d.project.age_range[1] ?? 18)
         setEditTags(d.project.tags.join(", "))
+        setEditKnowledgeLevel((d.project as { knowledge_level?: KnowledgeLevel }).knowledge_level || "K1")
 
         // If no cover yet, poll until backend finishes generating it
         if (!d.project.cover_image_url) {
@@ -715,6 +718,7 @@ const [editCoverFile, setEditCoverFile] = useState<File | null>(null)
         estimated_hours: editHours,
         age_range: [editAgeMin, editAgeMax],
         tags: editTags.split(",").map((t) => t.trim()).filter(Boolean),
+        knowledge_level: editKnowledgeLevel,
       })
       let newCoverUrl = detail.project.cover_image_url
       if (editCoverFile) {
@@ -859,11 +863,6 @@ const [editCoverFile, setEditCoverFile] = useState<File | null>(null)
                     {detail.project.title}
                   </h1>
                   <Dialog open={editOpen} onOpenChange={(v) => { setEditOpen(v); if (!v) setDeleteConfirmOpen(false) }}>
-                    <DialogTrigger render={
-                      <button className="p-1.5 rounded-lg text-[#1e2d6b]/40 hover:text-[#1e2d6b] hover:bg-white/30 dark:text-white/40 dark:hover:text-white transition-colors">
-                        <Pencil className="h-4 w-4" />
-                      </button>
-                    } />
                     <DialogContent className="max-w-lg">
                       <DialogHeader>
                         <DialogTitle>{t("project.edit")}</DialogTitle>
@@ -904,6 +903,21 @@ const [editCoverFile, setEditCoverFile] = useState<File | null>(null)
                         <div>
                           <Label htmlFor="edit-tags">{t("project.tags")}</Label>
                           <Input id="edit-tags" value={editTags} onChange={(e) => setEditTags(e.target.value)} placeholder={t("project.tags_placeholder")} className="mt-2" />
+                        </div>
+                        {/* Knowledge level */}
+                        <div>
+                          <Label htmlFor="edit-knowledge-level">基础知识等级</Label>
+                          <select
+                            id="edit-knowledge-level"
+                            value={editKnowledgeLevel}
+                            onChange={(e) => setEditKnowledgeLevel(e.target.value as KnowledgeLevel)}
+                            className="mt-2 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                          >
+                            {(Object.entries(KNOWLEDGE_LEVEL_LABELS) as [KnowledgeLevel, string][]).map(([k, v]) => (
+                              <option key={k} value={k}>{v} ({k})</option>
+                            ))}
+                          </select>
+                          <p className="text-xs text-muted-foreground mt-1">选择后，基础知识弹窗将显示对应等级的内容</p>
                         </div>
                         {/* Cover image */}
                         <div>
@@ -998,15 +1012,24 @@ const [editCoverFile, setEditCoverFile] = useState<File | null>(null)
                   {detail.project.description}
                 </p>
 
-                {/* CTA button — wide purple pill */}
-                <button
-                  onClick={handleStartLearning}
-                  disabled={enrolling}
-                  className="h-14 px-10 rounded-2xl bg-violet-600 hover:bg-violet-700 text-white text-base font-bold flex items-center gap-3 shadow-[0_4px_20px_0_rgba(109,40,217,0.35)] hover:shadow-[0_6px_28px_0_rgba(109,40,217,0.45)] transition-all duration-[350ms] disabled:opacity-60"
-                >
-                  {enrolling ? t("project.loading") : buttonLabel}
-                  <ArrowRight className="h-5 w-5" />
-                </button>
+                {/* CTA + Settings buttons */}
+                <div className="flex items-center gap-3">
+                  <button
+                    onClick={handleStartLearning}
+                    disabled={enrolling}
+                    className="h-14 px-10 rounded-2xl bg-violet-600 hover:bg-violet-700 text-white text-base font-bold flex items-center gap-3 shadow-[0_4px_20px_0_rgba(109,40,217,0.35)] hover:shadow-[0_6px_28px_0_rgba(109,40,217,0.45)] transition-all duration-[350ms] disabled:opacity-60"
+                  >
+                    {enrolling ? t("project.loading") : buttonLabel}
+                    <ArrowRight className="h-5 w-5" />
+                  </button>
+                  <button
+                    onClick={() => setEditOpen(true)}
+                    className="h-14 px-5 rounded-2xl bg-white/60 hover:bg-white/80 dark:bg-white/10 dark:hover:bg-white/20 text-[#3d4f7c] dark:text-white/70 text-sm font-semibold flex items-center gap-2 backdrop-blur-sm transition-all duration-[350ms]"
+                  >
+                    <Settings className="h-4.5 w-4.5" />
+                    {t("project.settings")}
+                  </button>
+                </div>
               </div>
 
               {/* Right: cover image card — tilted like design mockup */}

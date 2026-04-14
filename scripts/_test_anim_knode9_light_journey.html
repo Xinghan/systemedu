@@ -62,12 +62,62 @@ canvas{width:100%;height:100%;display:block;}
 // ============================================================
 // Animation: Light Journey -- How camera turns light into photo
 // Concept: camera imaging pipeline (light -> lens -> sensor -> photo)
-// 4 frames, each a stage of the same pipeline
+// 5 frames expanding ONE concept: the translation chain
 // ============================================================
+
+// --- Animated photon particles (persistent state for requestAnimationFrame) ---
+var photons = [];
+var _animFrame = 0;
+var _animRunning = false;
+
+function initPhotons(W, H, count, region) {
+  photons = [];
+  for (var i = 0; i < count; i++) {
+    photons.push({
+      x: region.x + Math.random() * region.w,
+      y: region.y + Math.random() * region.h,
+      vx: (region.vx || 0) + (Math.random() - 0.5) * 0.3,
+      vy: (region.vy || 0) + (Math.random() - 0.5) * 0.3,
+      r: 1 + Math.random() * 1.5,
+      alpha: 0.3 + Math.random() * 0.7,
+      color: region.color || '#ffdb3c',
+      life: 60 + Math.floor(Math.random() * 120),
+      age: Math.floor(Math.random() * 60),
+    });
+  }
+}
+
+function updatePhotons(W, H) {
+  for (var i = photons.length - 1; i >= 0; i--) {
+    var p = photons[i];
+    p.x += p.vx;
+    p.y += p.vy;
+    p.age++;
+    if (p.age > p.life) p.alpha *= 0.95;
+    if (p.alpha < 0.01 || p.x < -10 || p.x > W + 10 || p.y < -10 || p.y > H + 10) {
+      photons.splice(i, 1);
+    }
+  }
+}
+
+function drawPhotons(ctx) {
+  for (var i = 0; i < photons.length; i++) {
+    var p = photons[i];
+    ctx.globalAlpha = p.alpha;
+    ctx.fillStyle = p.color;
+    ctx.shadowColor = p.color;
+    ctx.shadowBlur = 6;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+  ctx.shadowBlur = 0;
+}
 
 var CONFIG = {
   style: 'ares_mission',
-  totalFrames: 4,
+  totalFrames: 5,
 
   i18n: {
     title:      {en:'LIGHT JOURNEY', cn:'\u5149\u7684\u65c5\u7a0b'},
@@ -75,32 +125,59 @@ var CONFIG = {
     // Frame 0
     f0_q:       {en:'What happens when you press the shutter?', cn:'\u6309\u4e0b\u5feb\u95e8\u7684\u77ac\u95f4\u53d1\u751f\u4e86\u4ec0\u4e48\uff1f'},
     f0_sub:     {en:'A chain of translations: Light to Photo', cn:'\u4e00\u6761\u7ffb\u8bd1\u94fe\uff1a\u5149 \u2192 \u7167\u7247'},
-    f0_step1:   {en:'Light', cn:'\u5149\u7ebf'},
-    f0_step2:   {en:'Lens', cn:'\u955c\u5934'},
-    f0_step3:   {en:'Sensor', cn:'\u4f20\u611f\u5668'},
-    f0_step4:   {en:'Photo', cn:'\u7167\u7247'},
-    // Frame 1
-    f1_title:   {en:'STEP 1: LIGHT REFLECTION', cn:'\u7b2c1\u6b65\uff1a\u5149\u7ebf\u53cd\u5c04'},
-    f1_desc:    {en:'Light bounces off the Mars rock surface', cn:'\u5149\u7ebf\u4ece\u706b\u661f\u5ca9\u77f3\u8868\u9762\u53cd\u5c04\u51fa\u6765'},
-    f1_sun:     {en:'Sunlight', cn:'\u592a\u9633\u5149'},
-    f1_rock:    {en:'Mars Rock', cn:'\u706b\u661f\u5ca9\u77f3'},
-    f1_reflect: {en:'Reflected rays carry color info', cn:'\u53cd\u5c04\u5149\u7ebf\u643a\u5e26\u989c\u8272\u4fe1\u606f'},
-    // Frame 2
-    f2_title:   {en:'STEP 2: LENS FOCUSES LIGHT', cn:'\u7b2c2\u6b65\uff1a\u955c\u5934\u805a\u7126'},
-    f2_desc:    {en:'Convex lens bends light rays to converge', cn:'\u51f8\u900f\u955c\u628a\u5149\u7ebf\u5f2f\u66f2\u6c47\u805a'},
-    f2_lens:    {en:'Convex Lens', cn:'\u51f8\u900f\u955c'},
-    f2_focal:   {en:'Focal Point', cn:'\u7126\u70b9'},
-    f2_note:    {en:'Like your eye\'s crystalline lens!', cn:'\u548c\u4f60\u773c\u775b\u7684\u6676\u4f53\u4e00\u6837\uff01'},
-    // Frame 3
+    f0_step1:   {en:'1. LIGHT', cn:'1. \u5149\u7ebf'},
+    f0_step2:   {en:'2. LENS', cn:'2. \u955c\u5934'},
+    f0_step3:   {en:'3. SENSOR', cn:'3. \u4f20\u611f\u5668'},
+    f0_step4:   {en:'4. PHOTO', cn:'4. \u7167\u7247'},
+    f0_eye:     {en:'Just like your eye!', cn:'\u548c\u4f60\u7684\u773c\u775b\u4e00\u6837\uff01'},
+    f0_eye_lens:{en:'Crystalline lens', cn:'\u6676\u4f53'},
+    f0_eye_ret: {en:'Retina', cn:'\u89c6\u7f51\u819c'},
+    f0_eye_brain:{en:'Brain', cn:'\u5927\u8111'},
+    // Frame 1 - Light reflection
+    f1_title:   {en:'STEP 1: LIGHT BOUNCES', cn:'\u7b2c1\u6b65\uff1a\u5149\u7ebf\u53cd\u5c04'},
+    f1_desc:    {en:'Sunlight hits the Mars rock and bounces off in all directions', cn:'\u592a\u9633\u5149\u7167\u5c04\u706b\u661f\u5ca9\u77f3\uff0c\u5411\u56db\u9762\u516b\u65b9\u53cd\u5c04'},
+    f1_sun:     {en:'SUNLIGHT', cn:'\u592a\u9633\u5149'},
+    f1_rock:    {en:'MARS ROCK', cn:'\u706b\u661f\u5ca9\u77f3'},
+    f1_cam:     {en:'CAMERA', cn:'\u76f8\u673a'},
+    f1_note:    {en:'Different minerals reflect different colors!', cn:'\u4e0d\u540c\u77ff\u7269\u53cd\u5c04\u4e0d\u540c\u989c\u8272\uff01'},
+    f1_iron:    {en:'Iron oxide = rust red', cn:'\u6c27\u5316\u94c1 = \u94c1\u9508\u7ea2'},
+    f1_basalt:  {en:'Basalt = dark gray', cn:'\u7384\u6b66\u5ca9 = \u6df1\u7070'},
+    f1_sulfate: {en:'Sulfate = pale yellow', cn:'\u786b\u9178\u76d0 = \u6de1\u9ec4'},
+    // Frame 2 - Lens focuses
+    f2_title:   {en:'STEP 2: LENS BENDS LIGHT', cn:'\u7b2c2\u6b65\uff1a\u955c\u5934\u6298\u5c04\u5149\u7ebf'},
+    f2_desc:    {en:'The convex lens curves scattered rays into a focused point', cn:'\u51f8\u900f\u955c\u628a\u6563\u5c04\u5149\u7ebf\u5f2f\u66f2\u6c47\u805a\u5230\u7126\u70b9'},
+    f2_lens:    {en:'CONVEX LENS', cn:'\u51f8\u900f\u955c'},
+    f2_focal:   {en:'FOCAL POINT', cn:'\u7126\u70b9'},
+    f2_eye:     {en:'Your eye does this too!', cn:'\u4f60\u7684\u773c\u775b\u4e5f\u5728\u505a\u540c\u6837\u7684\u4e8b\uff01'},
+    f2_parallel:{en:'Scattered rays', cn:'\u6563\u5c04\u5149\u7ebf'},
+    f2_converge:{en:'Converged rays', cn:'\u6c47\u805a\u5149\u7ebf'},
+    f2_short:   {en:'Short focal = wide view', cn:'\u77ed\u7126\u8ddd = \u5e7f\u89c6\u89d2'},
+    f2_long:    {en:'Long focal = zoom in', cn:'\u957f\u7126\u8ddd = \u653e\u5927'},
+    // Frame 3 - Sensor grid + Bayer filter
     f3_title:   {en:'STEP 3: SENSOR RECORDS', cn:'\u7b2c3\u6b65\uff1a\u4f20\u611f\u5668\u8bb0\u5f55'},
-    f3_desc:    {en:'Each pixel captures brightness and color', cn:'\u6bcf\u4e2a\u50cf\u7d20\u8bb0\u5f55\u4eae\u5ea6\u548c\u989c\u8272'},
-    f3_grid:    {en:'Sensor Grid', cn:'\u4f20\u611f\u5668\u7f51\u683c'},
-    f3_pixel:   {en:'1 pixel = 1 color', cn:'1\u50cf\u7d20 = 1\u79cd\u989c\u8272'},
-    f3_bayer:   {en:'Bayer Filter: R G G B', cn:'\u62dc\u8033\u6ee4\u955c\uff1aR G G B'},
-    f3_result:  {en:'Digital Photo!', cn:'\u6570\u5b57\u7167\u7247\uff01'},
+    f3_desc:    {en:'Millions of tiny light-catchers, each recording ONE color', cn:'\u6570\u767e\u4e07\u4e2a\u5fae\u5c0f\u611f\u5149\u5355\u5143\uff0c\u6bcf\u4e2a\u53ea\u8bb0\u5f55\u4e00\u79cd\u989c\u8272'},
+    f3_grid:    {en:'SENSOR GRID', cn:'\u4f20\u611f\u5668\u7f51\u683c'},
+    f3_pixel:   {en:'1 cell = 1 pixel = 1 color', cn:'1\u4e2a\u683c\u5b50 = 1\u4e2a\u50cf\u7d20 = 1\u79cd\u989c\u8272'},
+    f3_bayer:   {en:'BAYER FILTER', cn:'\u62dc\u8033\u6ee4\u955c'},
+    f3_red:     {en:'Red filter', cn:'\u7ea2\u8272\u6ee4\u5149'},
+    f3_green:   {en:'Green filter (50%!)', cn:'\u7eff\u8272\u6ee4\u5149\uff0850%\uff01\uff09'},
+    f3_blue:    {en:'Blue filter', cn:'\u84dd\u8272\u6ee4\u5149'},
+    f3_why:     {en:'Why more green? Your eyes are most sensitive to green!', cn:'\u4e3a\u4ec0\u4e48\u7eff\u8272\u6700\u591a\uff1f\u56e0\u4e3a\u4eba\u773c\u5bf9\u7eff\u8272\u6700\u654f\u611f\uff01'},
+    f3_demo:    {en:'DEMOSAICING', cn:'\u53bb\u9a6c\u8d5b\u514b'},
+    f3_demo_d:  {en:'Camera guesses neighbors to rebuild full color', cn:'\u76f8\u673a\u201c\u731c\u6d4b\u201d\u76f8\u90bb\u683c\u5b50\u8fd8\u539f\u5168\u5f69'},
+    // Frame 4 - Complete pipeline + Mastcam-Z
+    f4_title:   {en:'THE COMPLETE CHAIN', cn:'\u5b8c\u6574\u7684\u7ffb\u8bd1\u94fe'},
+    f4_desc:    {en:'From photons hitting Mars rock to pixels on your screen', cn:'\u4ece\u5149\u5b50\u649e\u51fb\u706b\u661f\u5ca9\u77f3\u5230\u5c4f\u5e55\u4e0a\u7684\u50cf\u7d20'},
+    f4_mast:    {en:'MASTCAM-Z', cn:'Mastcam-Z'},
+    f4_mast_d:  {en:'Perseverance rover\'s "eyes"', cn:'\u6bc5\u529b\u53f7\u7684\u201c\u773c\u775b\u201d'},
+    f4_stereo:  {en:'2 cameras, 24.2cm apart = 3D vision', cn:'\u53cc\u76f8\u673a\u76f8\u8ddd24.2cm = \u7acb\u4f53\u89c6\u89c9'},
+    f4_zoom:    {en:'26-110mm zoom lens', cn:'26-110mm \u53d8\u7126\u955c\u5934'},
+    f4_filter:  {en:'11 special filters (UV to near-IR)', cn:'11\u4e2a\u7279\u6b8a\u6ee4\u5149\u7247\uff08\u7d2b\u5916\u5230\u8fd1\u7ea2\u5916\uff09'},
+    f4_dist:    {en:'Photos travel 200 million km to Earth!', cn:'\u7167\u7247\u8de8\u8d8a2\u4ebf\u516c\u91cc\u4f20\u56de\u5730\u7403\uff01'},
+    f4_time:    {en:'Signal delay: 3-22 minutes', cn:'\u4fe1\u53f7\u5ef6\u8fdf\uff1a3-22\u5206\u949f'},
     // HUD labels
     hudL_phase:  {en:'PHASE', cn:'\u9636\u6bb5'},
-    hudL_photons:{en:'PHOTONS', cn:'\u5149\u5b50\u6570'},
+    hudL_photons:{en:'PHOTONS', cn:'\u5149\u5b50'},
     hudL_focal:  {en:'FOCAL', cn:'\u7126\u8ddd'},
     hudL_pixels: {en:'PIXELS', cn:'\u50cf\u7d20'},
     // HUD values
@@ -108,25 +185,179 @@ var CONFIG = {
     hud_reflect:  {en:'Reflection', cn:'\u53cd\u5c04'},
     hud_focus:    {en:'Focusing', cn:'\u805a\u7126'},
     hud_record:   {en:'Recording', cn:'\u8bb0\u5f55'},
+    hud_complete: {en:'Complete', cn:'\u5b8c\u6210'},
     // Guide
     guideTitle: {en:'VIEWING GUIDE', cn:'\u89c2\u770b\u6307\u5357'},
-    g1: {en:'Frame 1: See how light bounces off objects', cn:'\u7b2c1\u5e27\uff1a\u89c2\u5bdf\u5149\u7ebf\u5982\u4f55\u4ece\u7269\u4f53\u53cd\u5c04'},
-    g2: {en:'Frame 2: Watch the lens bend and focus light', cn:'\u7b2c2\u5e27\uff1a\u89c2\u5bdf\u955c\u5934\u5982\u4f55\u5f2f\u66f2\u548c\u805a\u7126\u5149\u7ebf'},
-    g3: {en:'Frame 3: See the sensor grid recording colors', cn:'\u7b2c3\u5e27\uff1a\u89c2\u5bdf\u4f20\u611f\u5668\u7f51\u683c\u8bb0\u5f55\u989c\u8272'},
-    g4: {en:'Notice how each step is like a translation', cn:'\u6ce8\u610f\u6bcf\u4e00\u6b65\u90fd\u50cf\u4e00\u6b21\u201c\u7ffb\u8bd1\u201d'},
+    g1: {en:'Each frame is one step in the same process', cn:'\u6bcf\u4e00\u5e27\u662f\u540c\u4e00\u6d41\u7a0b\u7684\u4e00\u4e2a\u6b65\u9aa4'},
+    g2: {en:'Notice the eye-camera parallel in frame 1', cn:'\u6ce8\u610f\u7b2c1\u5e27\u773c\u775b\u4e0e\u76f8\u673a\u7684\u5bf9\u6bd4'},
+    g3: {en:'Frame 3: colored minerals reflect different wavelengths', cn:'\u7b2c3\u5e27\uff1a\u4e0d\u540c\u77ff\u7269\u53cd\u5c04\u4e0d\u540c\u6ce2\u957f'},
+    g4: {en:'Frame 4: the Bayer filter is the key trick', cn:'\u7b2c4\u5e27\uff1a\u62dc\u8033\u6ee4\u955c\u662f\u6838\u5fc3\u5de7\u5999'},
+    g5: {en:'Frame 5: Mastcam-Z sends photos 200M km!', cn:'\u7b2c5\u5e27\uff1aMastcam-Z\u4f20\u56de2\u4ebf\u516c\u91cc\u7684\u7167\u7247'},
   },
 
   hudLabels: ['hudL_phase', 'hudL_photons', 'hudL_focal', 'hudL_pixels'],
   hudValues: [
     ['hud_overview', '--', '--', '--'],
-    ['hud_reflect', '~10^15/s', '--', '--'],
-    ['hud_focus', '~10^15/s', '26-110mm', '--'],
-    ['hud_record', '~10^15/s', '26-110mm', '1600x1200'],
+    ['hud_reflect',  '~10^15/s', '--', '--'],
+    ['hud_focus',    '~10^15/s', '26-110mm', '--'],
+    ['hud_record',   '~10^15/s', '26-110mm', '1.92M'],
+    ['hud_complete', '~10^15/s', '26-110mm', '1600x1200'],
   ],
 
   guideTitle: 'guideTitle',
-  guideItems: ['g1', 'g2', 'g3', 'g4'],
+  guideItems: ['g1', 'g2', 'g3', 'g4', 'g5'],
 };
+
+// ============================================================
+// Helper drawing functions
+// ============================================================
+
+function drawMarsRock(ctx, cx, cy, scale) {
+  var s = scale || 1;
+  // Multi-layered rock with texture
+  // Base shadow
+  ctx.fillStyle = 'rgba(40,20,5,0.6)';
+  ctx.beginPath();
+  ctx.ellipse(cx, cy + 35*s, 70*s, 12*s, 0, 0, Math.PI*2);
+  ctx.fill();
+  // Main rock body
+  var g = ctx.createLinearGradient(cx-50*s, cy-30*s, cx+50*s, cy+30*s);
+  g.addColorStop(0, '#8B4513'); g.addColorStop(0.4, '#A0522D'); g.addColorStop(1, '#6b3518');
+  ctx.fillStyle = g;
+  ctx.beginPath();
+  ctx.moveTo(cx-65*s, cy+30*s); ctx.lineTo(cx-45*s, cy-15*s); ctx.lineTo(cx-20*s, cy-35*s);
+  ctx.lineTo(cx+15*s, cy-30*s); ctx.lineTo(cx+40*s, cy-15*s);
+  ctx.lineTo(cx+55*s, cy+5*s); ctx.lineTo(cx+65*s, cy+30*s);
+  ctx.closePath(); ctx.fill();
+  // Highlight layer
+  ctx.fillStyle = '#c08050';
+  ctx.beginPath();
+  ctx.moveTo(cx-25*s, cy+5*s); ctx.lineTo(cx-10*s, cy-12*s);
+  ctx.lineTo(cx+10*s, cy-8*s); ctx.lineTo(cx+15*s, cy+8*s);
+  ctx.closePath(); ctx.fill();
+  // Iron oxide streak
+  ctx.fillStyle = 'rgba(180,60,30,0.5)';
+  ctx.beginPath();
+  ctx.moveTo(cx+20*s, cy-20*s); ctx.lineTo(cx+35*s, cy-10*s);
+  ctx.lineTo(cx+30*s, cy); ctx.lineTo(cx+15*s, cy-5*s);
+  ctx.closePath(); ctx.fill();
+}
+
+function drawCamera(ctx, cx, cy, scale) {
+  var s = scale || 1;
+  // Camera body
+  var g = ctx.createLinearGradient(cx-30*s, cy-18*s, cx+30*s, cy+18*s);
+  g.addColorStop(0, '#2a2520'); g.addColorStop(1, '#1a1510');
+  ctx.fillStyle = g;
+  ctx.fillRect(cx-30*s, cy-18*s, 60*s, 36*s);
+  ctx.strokeStyle = '#ff7f50';
+  ctx.lineWidth = 1.5;
+  ctx.strokeRect(cx-30*s, cy-18*s, 60*s, 36*s);
+  // Lens barrel
+  ctx.fillStyle = '#0a0a0a';
+  ctx.beginPath(); ctx.arc(cx-5*s, cy, 14*s, 0, Math.PI*2); ctx.fill();
+  ctx.strokeStyle = '#85ecff';
+  ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.arc(cx-5*s, cy, 14*s, 0, Math.PI*2); ctx.stroke();
+  // Inner lens glass
+  var lg = ctx.createRadialGradient(cx-5*s, cy, 0, cx-5*s, cy, 10*s);
+  lg.addColorStop(0, 'rgba(133,236,255,0.2)'); lg.addColorStop(1, 'rgba(133,236,255,0.02)');
+  ctx.fillStyle = lg;
+  ctx.beginPath(); ctx.arc(cx-5*s, cy, 10*s, 0, Math.PI*2); ctx.fill();
+  // Viewfinder bump
+  ctx.fillStyle = '#2a2520';
+  ctx.fillRect(cx+5*s, cy-24*s, 18*s, 8*s);
+  ctx.strokeStyle = '#ff7f50';
+  ctx.lineWidth = 0.8;
+  ctx.strokeRect(cx+5*s, cy-24*s, 18*s, 8*s);
+}
+
+function drawEye(ctx, cx, cy, scale) {
+  var s = scale || 1;
+  // Eye shape
+  ctx.fillStyle = '#f5f0e8';
+  ctx.beginPath();
+  ctx.moveTo(cx-30*s, cy);
+  ctx.quadraticCurveTo(cx, cy-22*s, cx+30*s, cy);
+  ctx.quadraticCurveTo(cx, cy+22*s, cx-30*s, cy);
+  ctx.fill();
+  // Iris
+  var ig = ctx.createRadialGradient(cx, cy, 0, cx, cy, 12*s);
+  ig.addColorStop(0, '#4a2810'); ig.addColorStop(0.6, '#6b4020'); ig.addColorStop(1, '#2a1808');
+  ctx.fillStyle = ig;
+  ctx.beginPath(); ctx.arc(cx, cy, 12*s, 0, Math.PI*2); ctx.fill();
+  // Pupil
+  ctx.fillStyle = '#0a0804';
+  ctx.beginPath(); ctx.arc(cx, cy, 5*s, 0, Math.PI*2); ctx.fill();
+  // Highlight
+  ctx.fillStyle = 'rgba(255,255,255,0.7)';
+  ctx.beginPath(); ctx.arc(cx+3*s, cy-3*s, 2*s, 0, Math.PI*2); ctx.fill();
+}
+
+function drawSun(ctx, cx, cy, r) {
+  // Glow layers
+  for (var i = 3; i > 0; i--) {
+    ctx.fillStyle = 'rgba(255,219,60,' + (0.05 * i) + ')';
+    ctx.beginPath(); ctx.arc(cx, cy, r + i * 15, 0, Math.PI*2); ctx.fill();
+  }
+  // Core
+  var sg = ctx.createRadialGradient(cx, cy, 0, cx, cy, r);
+  sg.addColorStop(0, '#fff8e0'); sg.addColorStop(0.5, '#ffdb3c'); sg.addColorStop(1, '#e0a000');
+  ctx.fillStyle = sg;
+  ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI*2); ctx.fill();
+}
+
+function drawConvexLens(ctx, cx, topY, botY) {
+  var h = botY - topY;
+  var bulge = h * 0.12;
+  // Glass fill
+  ctx.fillStyle = 'rgba(133,236,255,0.06)';
+  ctx.beginPath();
+  ctx.moveTo(cx, topY);
+  ctx.quadraticCurveTo(cx + bulge, topY + h/2, cx, botY);
+  ctx.quadraticCurveTo(cx - bulge, topY + h/2, cx, topY);
+  ctx.fill();
+  // Edges
+  ctx.strokeStyle = '#85ecff';
+  ctx.lineWidth = 2.5;
+  ctx.beginPath();
+  ctx.moveTo(cx, topY);
+  ctx.quadraticCurveTo(cx + bulge, topY + h/2, cx, botY);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(cx, topY);
+  ctx.quadraticCurveTo(cx - bulge, topY + h/2, cx, topY);
+  // re-draw left edge
+  ctx.moveTo(cx, topY);
+  ctx.quadraticCurveTo(cx - bulge, topY + h/2, cx, botY);
+  ctx.stroke();
+  // Center axis
+  ctx.strokeStyle = 'rgba(133,236,255,0.15)';
+  ctx.lineWidth = 0.5;
+  ctx.setLineDash([4,4]);
+  ctx.beginPath(); ctx.moveTo(cx - h*0.4, topY + h/2); ctx.lineTo(cx + h*0.4, topY + h/2); ctx.stroke();
+  ctx.setLineDash([]);
+}
+
+function drawBayerGrid(ctx, x, y, cellSize, cols, rows) {
+  var pattern = [['R','G'],['G','B']];
+  var colors = {'R':'rgba(255,60,60,0.55)','G':'rgba(60,220,60,0.45)','B':'rgba(60,100,255,0.55)'};
+  for (var r = 0; r < rows; r++) {
+    for (var c = 0; c < cols; c++) {
+      var ch = pattern[r%2][c%2];
+      ctx.fillStyle = colors[ch];
+      ctx.fillRect(x + c*cellSize, y + r*cellSize, cellSize-0.5, cellSize-0.5);
+      ctx.strokeStyle = 'rgba(255,255,255,0.2)';
+      ctx.lineWidth = 0.5;
+      ctx.strokeRect(x + c*cellSize, y + r*cellSize, cellSize-0.5, cellSize-0.5);
+      // Letter
+      ctx.fillStyle = 'rgba(255,255,255,0.7)';
+      ctx.font = "bold " + Math.max(8, cellSize*0.35) + "px 'Space Grotesk',sans-serif";
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText(ch, x + c*cellSize + cellSize/2, y + r*cellSize + cellSize/2);
+    }
+  }
+}
 
 // ============================================================
 // FRAME ELEMENTS
@@ -136,217 +367,411 @@ function getFrameElements(f, W, H) {
   var t = AnimRuntime.t;
   var P = AnimRuntime.PAL;
   var cx = W / 2, cy = H / 2;
-  var lerp = AnimRuntime.lerp;
 
-  // ---- Frame 0: Title + Pipeline Overview ----
+  // ---- Frame 0: Overview -- eye vs camera parallel ----
   if (f === 0) {
-    var els = [
-      {id:'mainQ', type:'label', text:t('f0_q'), x:cx, y:cy*0.35, color:P.primary, size:20, align:'center', glow:P.glowStrong},
-      {id:'subQ', type:'text', text:t('f0_sub'), x:cx, y:cy*0.35+30, color:P.muted, size:13, align:'center'},
+    return [
+      {id:'mainQ', type:'label', text:t('f0_q'), x:cx, y:H*0.08, color:P.primary, size:20, align:'center', glow:P.glowStrong},
+      {id:'subQ', type:'text', text:t('f0_sub'), x:cx, y:H*0.08+28, color:P.muted, size:12, align:'center'},
+      // Pipeline chain across middle
+      {id:'chain', type:'custom', x:0, y:0, draw:function(ctx) {
+        var boxW = W * 0.14, boxH = 38;
+        var gap = 16;
+        var totalW = boxW * 4 + gap * 3;
+        var startX = cx - totalW/2;
+        var pipeY = H * 0.32;
+        var labels = ['f0_step1','f0_step2','f0_step3','f0_step4'];
+        var colors = ['#ffdb3c','#85ecff','#ff7f50','#50ffb0'];
+        var icons = ['\u2600','\u25CE','\u25A6','\u25A3']; // sun, lens, grid, photo
+        for (var i = 0; i < 4; i++) {
+          var bx = startX + i * (boxW + gap);
+          // Box with gradient
+          var g = ctx.createLinearGradient(bx, pipeY, bx+boxW, pipeY+boxH);
+          g.addColorStop(0, 'rgba(255,255,255,0.04)'); g.addColorStop(1, 'rgba(255,255,255,0.01)');
+          ctx.fillStyle = g; ctx.fillRect(bx, pipeY, boxW, boxH);
+          ctx.strokeStyle = colors[i]; ctx.lineWidth = 1.5; ctx.strokeRect(bx, pipeY, boxW, boxH);
+          // Icon
+          ctx.fillStyle = colors[i]; ctx.font = "16px sans-serif"; ctx.textAlign = 'center';
+          ctx.fillText(icons[i], bx + 16, pipeY + boxH/2 + 5);
+          // Label
+          ctx.font = "bold 12px 'Space Grotesk',sans-serif";
+          ctx.fillStyle = colors[i]; ctx.textAlign = 'left';
+          ctx.fillText(t(labels[i]), bx + 30, pipeY + boxH/2 + 4);
+          // Arrow
+          if (i < 3) {
+            ctx.strokeStyle = P.muted; ctx.lineWidth = 1.5;
+            var ax = bx + boxW + 2, ay = pipeY + boxH/2;
+            ctx.beginPath(); ctx.moveTo(ax, ay); ctx.lineTo(ax+gap-4, ay); ctx.stroke();
+            ctx.fillStyle = P.muted;
+            ctx.beginPath(); ctx.moveTo(ax+gap-4, ay-4); ctx.lineTo(ax+gap, ay); ctx.lineTo(ax+gap-4, ay+4); ctx.fill();
+          }
+        }
+      }, alpha:1},
+      // Eye-camera comparison below
+      {id:'comparison', type:'custom', x:0, y:0, draw:function(ctx) {
+        var rowY = H * 0.58;
+        // Left: eye
+        var eyeX = W * 0.28;
+        drawEye(ctx, eyeX, rowY, 1.2);
+        ctx.fillStyle = P.tertiary;
+        ctx.font = "bold 11px 'Space Grotesk',sans-serif";
+        ctx.textAlign = 'center';
+        ctx.fillText(t('f0_eye'), eyeX, rowY + 35);
+        // Labels for eye parts
+        ctx.font = "9px 'Inter','Noto Sans SC',sans-serif";
+        ctx.fillStyle = P.muted;
+        ctx.fillText(t('f0_eye_lens'), eyeX, rowY + 48);
+        ctx.fillText(t('f0_eye_ret'), eyeX, rowY + 60);
+        ctx.fillText(t('f0_eye_brain'), eyeX, rowY + 72);
+        // = sign
+        ctx.fillStyle = P.primary; ctx.font = "bold 24px 'Space Grotesk',sans-serif";
+        ctx.textAlign = 'center';
+        ctx.fillText('=', cx, rowY);
+        // Right: camera
+        var camX = W * 0.72;
+        drawCamera(ctx, camX, rowY, 1.3);
+        ctx.fillStyle = P.primary;
+        ctx.font = "bold 11px 'Space Grotesk',sans-serif";
+        ctx.textAlign = 'center';
+        ctx.fillText('Mastcam-Z', camX, rowY + 35);
+        // Connection lines
+        ctx.strokeStyle = 'rgba(255,181,156,0.2)'; ctx.lineWidth = 0.5; ctx.setLineDash([3,3]);
+        ctx.beginPath(); ctx.moveTo(eyeX+35, rowY-5); ctx.lineTo(camX-35, rowY-5); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(eyeX+35, rowY+5); ctx.lineTo(camX-35, rowY+5); ctx.stroke();
+        ctx.setLineDash([]);
+      }, alpha:1},
     ];
-    // Pipeline boxes
-    var boxW = W * 0.15, boxH = 44;
-    var startX = cx - boxW * 2 - 30;
-    var pipeY = cy * 0.75;
-    var labels = ['f0_step1','f0_step2','f0_step3','f0_step4'];
-    var colors = ['#ffdb3c','#85ecff','#ff7f50','#50ffb0'];
-    for (var i = 0; i < 4; i++) {
-      var bx = startX + i * (boxW + 20);
-      els.push({id:'pipe_box'+i, type:'box', x:bx, y:pipeY - boxH/2, w:boxW, h:boxH,
-        fill:'rgba(255,255,255,0.06)', stroke:colors[i]});
-      els.push({id:'pipe_label'+i, type:'label', text:t(labels[i]), x:bx+boxW/2, y:pipeY,
-        color:colors[i], size:14, align:'center', glow:colors[i]+'40'});
-      if (i < 3) {
-        els.push({id:'pipe_arrow'+i, type:'arrow', x1:bx+boxW+2, y1:pipeY, x2:bx+boxW+18, y2:pipeY,
-          color:P.muted, lineWidth:1.5, headSize:5});
-      }
-    }
-    // Camera icon (simple)
-    els.push({id:'cam_body', type:'box', x:cx-30, y:cy*1.15, w:60, h:40, fill:'rgba(255,127,80,0.15)', stroke:P.primary});
-    els.push({id:'cam_lens', type:'circle', x:cx, y:cy*1.15+20, r:12, stroke:P.tertiary, lineWidth:2});
-    els.push({id:'cam_label', type:'text', text:'Mastcam-Z', x:cx, y:cy*1.15+50, color:P.muted, size:10, align:'center'});
-    return els;
   }
 
-  // ---- Frame 1: Light Reflection ----
+  // ---- Frame 1: Light reflection from Mars rock ----
   if (f === 1) {
-    var els = [
-      {id:'mainQ', type:'label', text:t('f1_title'), x:cx, y:36, color:P.primary, size:16, align:'center', glow:P.glowStrong},
-      {id:'subQ', type:'text', text:t('f1_desc'), x:cx, y:58, color:P.muted, size:12, align:'center'},
+    return [
+      {id:'mainQ', type:'label', text:t('f1_title'), x:cx, y:H*0.06, color:P.primary, size:17, align:'center', glow:P.glowStrong},
+      {id:'subQ', type:'text', text:t('f1_desc'), x:cx, y:H*0.06+24, color:P.muted, size:11, align:'center'},
+      {id:'scene', type:'custom', x:0, y:0, draw:function(ctx) {
+        // Sun
+        var sunX = W * 0.83, sunY = H * 0.12;
+        drawSun(ctx, sunX, sunY, 22);
+        ctx.fillStyle = '#ffdb3c'; ctx.font = "bold 10px 'Space Grotesk',sans-serif";
+        ctx.textAlign = 'center'; ctx.fillText(t('f1_sun'), sunX, sunY + 35);
+        // Mars rock
+        var rockX = W * 0.3, rockY = H * 0.6;
+        drawMarsRock(ctx, rockX, rockY, 1.3);
+        ctx.fillStyle = '#A0522D'; ctx.font = "bold 10px 'Space Grotesk',sans-serif";
+        ctx.textAlign = 'center'; ctx.fillText(t('f1_rock'), rockX, rockY + 55);
+        // Incident rays (sun -> rock)
+        ctx.strokeStyle = 'rgba(255,219,60,0.6)'; ctx.lineWidth = 1.5;
+        var rays = [[sunX-15,sunY+22, rockX+10,rockY-32],[sunX-25,sunY+20, rockX-15,rockY-28],[sunX-10,sunY+24, rockX+25,rockY-20]];
+        for (var i = 0; i < rays.length; i++) {
+          var r = rays[i];
+          ctx.beginPath(); ctx.moveTo(r[0],r[1]); ctx.lineTo(r[2],r[3]); ctx.stroke();
+          // arrowhead
+          var a = Math.atan2(r[3]-r[1],r[2]-r[0]);
+          ctx.fillStyle = 'rgba(255,219,60,0.6)';
+          ctx.beginPath(); ctx.moveTo(r[2],r[3]);
+          ctx.lineTo(r[2]-6*Math.cos(a-0.4),r[3]-6*Math.sin(a-0.4));
+          ctx.lineTo(r[2]-6*Math.cos(a+0.4),r[3]-6*Math.sin(a+0.4)); ctx.fill();
+        }
+        // Reflected rays (rock -> camera, scattered)
+        var camX = W * 0.75, camY = H * 0.55;
+        var refRays = [
+          [rockX+15,rockY-30, camX-20,camY-8, '#ff7f50'],
+          [rockX+20,rockY-25, camX-15,camY+5, '#c08050'],
+          [rockX+5,rockY-32, camX-25,camY-15, '#ff9060'],
+          // Scattered rays not hitting camera
+          [rockX-15,rockY-30, W*0.1,H*0.3, 'rgba(255,127,80,0.15)'],
+          [rockX+30,rockY-18, W*0.9,H*0.85, 'rgba(255,127,80,0.1)'],
+          [rockX-5,rockY-35, W*0.15,H*0.08, 'rgba(255,127,80,0.1)'],
+        ];
+        for (var i = 0; i < refRays.length; i++) {
+          var r = refRays[i];
+          ctx.strokeStyle = r[4]; ctx.lineWidth = i < 3 ? 1.5 : 0.8;
+          ctx.beginPath(); ctx.moveTo(r[0],r[1]); ctx.lineTo(r[2],r[3]); ctx.stroke();
+          if (i < 3) {
+            var a = Math.atan2(r[3]-r[1],r[2]-r[0]);
+            ctx.fillStyle = r[4];
+            ctx.beginPath(); ctx.moveTo(r[2],r[3]);
+            ctx.lineTo(r[2]-5*Math.cos(a-0.4),r[3]-5*Math.sin(a-0.4));
+            ctx.lineTo(r[2]-5*Math.cos(a+0.4),r[3]-5*Math.sin(a+0.4)); ctx.fill();
+          }
+        }
+        // Camera
+        drawCamera(ctx, camX, camY, 1);
+        ctx.fillStyle = P.primary; ctx.font = "bold 10px 'Space Grotesk',sans-serif";
+        ctx.textAlign = 'center'; ctx.fillText(t('f1_cam'), camX, camY + 28);
+        // Mineral color key (bottom)
+        var keyY = H * 0.85;
+        var keys = [['f1_iron','#B03C1E'],['f1_basalt','#505050'],['f1_sulfate','#D4C870']];
+        var keyStartX = cx - 180;
+        for (var i = 0; i < keys.length; i++) {
+          var kx = keyStartX + i * 140;
+          ctx.fillStyle = keys[i][1];
+          ctx.fillRect(kx, keyY, 12, 12);
+          ctx.fillStyle = P.muted; ctx.font = "10px 'Inter','Noto Sans SC',sans-serif"; ctx.textAlign = 'left';
+          ctx.fillText(t(keys[i][0]), kx + 16, keyY + 10);
+        }
+        ctx.fillStyle = P.secondary; ctx.font = "11px 'Inter','Noto Sans SC',sans-serif"; ctx.textAlign = 'center';
+        ctx.fillText(t('f1_note'), cx, keyY - 14);
+      }, alpha:1},
     ];
-    // Sun in top-right
-    var sunX = W * 0.82, sunY = H * 0.15;
-    els.push({id:'sun', type:'circle', x:sunX, y:sunY, r:28, fill:'#ffdb3c', glow:'rgba(255,219,60,0.4)', glowSize:30});
-    els.push({id:'sun_label', type:'text', text:t('f1_sun'), x:sunX, y:sunY+42, color:'#ffdb3c', size:11, align:'center'});
-    // Mars rock at bottom-left
-    var rockX = W * 0.25, rockY = H * 0.72;
-    els.push({id:'rock', type:'custom', x:rockX, y:rockY, draw:function(ctx, el) {
-      ctx.fillStyle = '#8B4513';
-      ctx.beginPath();
-      ctx.moveTo(el.x-60, el.y+30); ctx.lineTo(el.x-40, el.y-20); ctx.lineTo(el.x-10, el.y-35);
-      ctx.lineTo(el.x+20, el.y-25); ctx.lineTo(el.x+50, el.y-10); ctx.lineTo(el.x+60, el.y+30);
-      ctx.closePath(); ctx.fill();
-      ctx.fillStyle = '#A0522D';
-      ctx.beginPath();
-      ctx.moveTo(el.x-30, el.y+10); ctx.lineTo(el.x-15, el.y-10); ctx.lineTo(el.x+5, el.y-5);
-      ctx.lineTo(el.x+15, el.y+10); ctx.closePath(); ctx.fill();
-    }, alpha:1});
-    els.push({id:'rock_label', type:'text', text:t('f1_rock'), x:rockX, y:rockY+48, color:'#A0522D', size:11, align:'center'});
-    // Sunlight rays (incident)
-    els.push({id:'ray_in1', type:'arrow', x1:sunX-20, y1:sunY+28, x2:rockX+10, y2:rockY-30, color:'#ffdb3c', lineWidth:1.5, headSize:5});
-    els.push({id:'ray_in2', type:'arrow', x1:sunX-30, y1:sunY+25, x2:rockX-10, y2:rockY-25, color:'rgba(255,219,60,0.5)', lineWidth:1, headSize:4});
-    // Reflected rays (toward camera/right side)
-    var camX = W * 0.75, camY = H * 0.6;
-    els.push({id:'ray_out1', type:'arrow', x1:rockX+10, y1:rockY-30, x2:camX-15, y2:camY-5, color:'#ff7f50', lineWidth:1.5, headSize:5});
-    els.push({id:'ray_out2', type:'arrow', x1:rockX+20, y1:rockY-25, x2:camX-10, y2:camY+10, color:'rgba(255,127,80,0.5)', lineWidth:1, headSize:4});
-    els.push({id:'ray_out3', type:'arrow', x1:rockX, y1:rockY-30, x2:camX-20, y2:camY-15, color:'rgba(255,127,80,0.3)', lineWidth:1, headSize:3});
-    // Camera body (simple)
-    els.push({id:'cam_body', type:'box', x:camX-25, y:camY-20, w:50, h:40, fill:'rgba(255,127,80,0.12)', stroke:P.primaryDim});
-    els.push({id:'cam_lens', type:'circle', x:camX, y:camY, r:10, stroke:P.tertiary, lineWidth:2});
-    // Explanation
-    els.push({id:'reflect_note', type:'text', text:t('f1_reflect'), x:cx, y:H*0.92, color:P.secondary, size:12, align:'center'});
-    return els;
   }
 
-  // ---- Frame 2: Lens Focuses Light ----
+  // ---- Frame 2: Lens focuses light ----
   if (f === 2) {
-    var els = [
-      {id:'mainQ', type:'label', text:t('f2_title'), x:cx, y:36, color:P.primary, size:16, align:'center', glow:P.glowStrong},
-      {id:'subQ', type:'text', text:t('f2_desc'), x:cx, y:58, color:P.muted, size:12, align:'center'},
+    return [
+      {id:'mainQ', type:'label', text:t('f2_title'), x:cx, y:H*0.06, color:P.primary, size:17, align:'center', glow:P.glowStrong},
+      {id:'subQ', type:'text', text:t('f2_desc'), x:cx, y:H*0.06+24, color:P.muted, size:11, align:'center'},
+      {id:'lens_scene', type:'custom', x:0, y:0, draw:function(ctx) {
+        var lensX = cx * 0.85;
+        var topY = H * 0.18, botY = H * 0.75;
+        var lensH = botY - topY;
+        var lensCY = topY + lensH/2;
+        // Draw lens
+        drawConvexLens(ctx, lensX, topY, botY);
+        ctx.fillStyle = P.tertiary; ctx.font = "bold 10px 'Space Grotesk',sans-serif";
+        ctx.textAlign = 'center'; ctx.fillText(t('f2_lens'), lensX, topY - 10);
+        // Incoming scattered rays (left)
+        var rayStartX = W * 0.05;
+        var rayYs = [lensCY - lensH*0.35, lensCY - lensH*0.12, lensCY + lensH*0.12, lensCY + lensH*0.35];
+        var rayColors = ['#ff7f50','#ffdb3c','#c08050','#ff9060'];
+        ctx.font = "9px 'Inter','Noto Sans SC',sans-serif";
+        ctx.fillStyle = P.muted; ctx.textAlign = 'left';
+        ctx.fillText(t('f2_parallel'), rayStartX, lensCY - lensH*0.42);
+        for (var i = 0; i < rayYs.length; i++) {
+          ctx.strokeStyle = rayColors[i]; ctx.lineWidth = 1.5;
+          ctx.beginPath(); ctx.moveTo(rayStartX + 20, rayYs[i]); ctx.lineTo(lensX - 8, rayYs[i]); ctx.stroke();
+          var a = 0;
+          ctx.fillStyle = rayColors[i];
+          ctx.beginPath(); ctx.moveTo(lensX-8, rayYs[i]);
+          ctx.lineTo(lensX-14, rayYs[i]-3); ctx.lineTo(lensX-14, rayYs[i]+3); ctx.fill();
+        }
+        // Focal point
+        var focalX = W * 0.72;
+        // Converging rays
+        ctx.fillStyle = P.muted; ctx.textAlign = 'left';
+        ctx.fillText(t('f2_converge'), focalX + 12, lensCY - lensH*0.42);
+        for (var i = 0; i < rayYs.length; i++) {
+          ctx.strokeStyle = rayColors[i]; ctx.lineWidth = 1.5;
+          ctx.beginPath(); ctx.moveTo(lensX + 8, rayYs[i]); ctx.lineTo(focalX, lensCY); ctx.stroke();
+        }
+        // Focal glow
+        for (var g = 3; g > 0; g--) {
+          ctx.fillStyle = 'rgba(80,255,176,' + (0.08*g) + ')';
+          ctx.beginPath(); ctx.arc(focalX, lensCY, 5+g*6, 0, Math.PI*2); ctx.fill();
+        }
+        ctx.fillStyle = P.primary;
+        ctx.beginPath(); ctx.arc(focalX, lensCY, 5, 0, Math.PI*2); ctx.fill();
+        ctx.font = "bold 10px 'Space Grotesk',sans-serif"; ctx.textAlign = 'center';
+        ctx.fillText(t('f2_focal'), focalX, lensCY + 20);
+        // Sensor plane
+        var sensorX = W * 0.88;
+        ctx.strokeStyle = P.secondary; ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.moveTo(sensorX, topY+10); ctx.lineTo(sensorX, botY-10); ctx.stroke();
+        // Diverging rays to sensor
+        ctx.setLineDash([3,3]);
+        for (var i = 0; i < 3; i++) {
+          var sy = topY + 20 + i * (lensH-40)/2;
+          ctx.strokeStyle = 'rgba(255,127,80,0.25)'; ctx.lineWidth = 0.8;
+          ctx.beginPath(); ctx.moveTo(focalX+5, lensCY); ctx.lineTo(sensorX, sy); ctx.stroke();
+        }
+        ctx.setLineDash([]);
+        ctx.fillStyle = P.secondary; ctx.font = "9px 'Space Grotesk',sans-serif";
+        ctx.textAlign = 'center'; ctx.fillText('SENSOR', sensorX, botY+4);
+        // Focal length comparison (bottom panel)
+        var panelY = H * 0.84;
+        var panelW = W * 0.35;
+        // Short focal
+        ctx.fillStyle = 'rgba(255,255,255,0.03)'; ctx.fillRect(cx - panelW - 10, panelY, panelW, 28);
+        ctx.strokeStyle = P.tertiary; ctx.lineWidth = 0.5; ctx.strokeRect(cx - panelW - 10, panelY, panelW, 28);
+        ctx.fillStyle = P.tertiary; ctx.font = "10px 'Inter','Noto Sans SC',sans-serif"; ctx.textAlign = 'center';
+        ctx.fillText(t('f2_short') + '  [26mm]', cx - panelW/2 - 10, panelY + 17);
+        // Long focal
+        ctx.fillStyle = 'rgba(255,255,255,0.03)'; ctx.fillRect(cx + 10, panelY, panelW, 28);
+        ctx.strokeStyle = P.primary; ctx.lineWidth = 0.5; ctx.strokeRect(cx + 10, panelY, panelW, 28);
+        ctx.fillStyle = P.primary; ctx.font = "10px 'Inter','Noto Sans SC',sans-serif"; ctx.textAlign = 'center';
+        ctx.fillText(t('f2_long') + '  [110mm]', cx + panelW/2 + 10, panelY + 17);
+        // Eye note
+        ctx.fillStyle = P.secondary; ctx.font = "11px 'Inter','Noto Sans SC',sans-serif"; ctx.textAlign = 'center';
+        ctx.fillText(t('f2_eye'), cx, panelY - 8);
+      }, alpha:1},
     ];
-    // Convex lens in center
-    var lensX = cx, lensTop = H * 0.22, lensBot = H * 0.78;
-    els.push({id:'lens', type:'custom', x:lensX, y:cy, draw:function(ctx, el) {
-      // Draw convex lens shape
-      ctx.strokeStyle = P.tertiary; ctx.lineWidth = 3;
-      ctx.beginPath();
-      ctx.moveTo(el.x, lensTop);
-      ctx.quadraticCurveTo(el.x + 30, cy, el.x, lensBot);
-      ctx.stroke();
-      ctx.beginPath();
-      ctx.moveTo(el.x, lensTop);
-      ctx.quadraticCurveTo(el.x - 30, cy, el.x, lensBot);
-      ctx.stroke();
-      // Fill with glass effect
-      ctx.fillStyle = 'rgba(133,236,255,0.08)';
-      ctx.beginPath();
-      ctx.moveTo(el.x, lensTop);
-      ctx.quadraticCurveTo(el.x + 30, cy, el.x, lensBot);
-      ctx.quadraticCurveTo(el.x - 30, cy, el.x, lensTop);
-      ctx.fill();
-    }, alpha:1});
-    els.push({id:'lens_label', type:'label', text:t('f2_lens'), x:lensX, y:lensTop-16, color:P.tertiary, size:12, align:'center'});
-    // Incoming parallel rays (left side)
-    var rayStartX = W * 0.08;
-    var rayColors = ['#ff7f50','#ffdb3c','#ff7f50'];
-    var rayYs = [cy - 60, cy, cy + 60];
-    for (var i = 0; i < 3; i++) {
-      els.push({id:'ray_in'+i, type:'arrow', x1:rayStartX, y1:rayYs[i], x2:lensX-15, y2:rayYs[i],
-        color:rayColors[i], lineWidth:1.5, headSize:5});
-    }
-    // Converging rays (right side) -> focal point
-    var focalX = W * 0.72, focalY = cy;
-    for (var i = 0; i < 3; i++) {
-      els.push({id:'ray_out'+i, type:'arrow', x1:lensX+15, y1:rayYs[i], x2:focalX, y2:focalY,
-        color:rayColors[i], lineWidth:1.5, headSize:5});
-    }
-    // Focal point glow
-    els.push({id:'focal', type:'circle', x:focalX, y:focalY, r:8, fill:P.primary, glow:P.glowStrong, glowSize:20});
-    els.push({id:'focal_label', type:'label', text:t('f2_focal'), x:focalX, y:focalY+24, color:P.primary, size:11, align:'center'});
-    // Sensor plane behind focal point
-    var sensorX = W * 0.85;
-    els.push({id:'sensor_plane', type:'line', x1:sensorX, y1:cy-70, x2:sensorX, y2:cy+70, color:P.secondary, lineWidth:2});
-    els.push({id:'sensor_label', type:'text', text:'SENSOR', x:sensorX, y:cy+86, color:P.secondary, size:10, align:'center'});
-    // Diverging rays from focal to sensor
-    els.push({id:'ray_div0', type:'line', x1:focalX, y1:focalY, x2:sensorX, y2:cy-50, color:'rgba(255,127,80,0.3)', lineWidth:1, dash:[4,4]});
-    els.push({id:'ray_div1', type:'line', x1:focalX, y1:focalY, x2:sensorX, y2:cy, color:'rgba(255,127,80,0.3)', lineWidth:1, dash:[4,4]});
-    els.push({id:'ray_div2', type:'line', x1:focalX, y1:focalY, x2:sensorX, y2:cy+50, color:'rgba(255,127,80,0.3)', lineWidth:1, dash:[4,4]});
-    // Eye comparison note
-    els.push({id:'reflect_note', type:'text', text:t('f2_note'), x:cx, y:H*0.92, color:P.secondary, size:12, align:'center'});
-    return els;
   }
 
-  // ---- Frame 3: Sensor Records Pixels ----
+  // ---- Frame 3: Sensor grid + Bayer filter ----
   if (f === 3) {
-    var els = [
-      {id:'mainQ', type:'label', text:t('f3_title'), x:cx, y:36, color:P.primary, size:16, align:'center', glow:P.glowStrong},
-      {id:'subQ', type:'text', text:t('f3_desc'), x:cx, y:58, color:P.muted, size:12, align:'center'},
+    return [
+      {id:'mainQ', type:'label', text:t('f3_title'), x:cx, y:H*0.06, color:P.primary, size:17, align:'center', glow:P.glowStrong},
+      {id:'subQ', type:'text', text:t('f3_desc'), x:cx, y:H*0.06+24, color:P.muted, size:11, align:'center'},
+      {id:'sensor', type:'custom', x:0, y:0, draw:function(ctx) {
+        // Left: Bayer grid
+        var gridCols = 8, gridRows = 6;
+        var cellSize = Math.min(W * 0.05, H * 0.07);
+        var gridW = gridCols * cellSize, gridH = gridRows * cellSize;
+        var gridX = W * 0.08, gridY = H * 0.22;
+        // Grid title
+        ctx.fillStyle = P.secondary; ctx.font = "bold 10px 'Space Grotesk',sans-serif"; ctx.textAlign = 'center';
+        ctx.fillText(t('f3_bayer'), gridX + gridW/2, gridY - 10);
+        drawBayerGrid(ctx, gridX, gridY, cellSize, gridCols, gridRows);
+        // Per-pixel annotation
+        ctx.fillStyle = P.muted; ctx.font = "10px 'Inter','Noto Sans SC',sans-serif"; ctx.textAlign = 'center';
+        ctx.fillText(t('f3_pixel'), gridX + gridW/2, gridY + gridH + 16);
+        // Color legend (right side of grid)
+        var legX = gridX + gridW + 15;
+        var legItems = [['f3_red','rgba(255,60,60,0.7)'],['f3_green','rgba(60,220,60,0.6)'],['f3_blue','rgba(60,100,255,0.7)']];
+        for (var i = 0; i < legItems.length; i++) {
+          var ly = gridY + 8 + i * 22;
+          ctx.fillStyle = legItems[i][1];
+          ctx.fillRect(legX, ly, 10, 10);
+          ctx.fillStyle = P.muted; ctx.font = "9px 'Inter','Noto Sans SC',sans-serif"; ctx.textAlign = 'left';
+          ctx.fillText(t(legItems[i][0]), legX + 14, ly + 9);
+        }
+        // Why green note
+        ctx.fillStyle = P.secondary; ctx.font = "10px 'Inter','Noto Sans SC',sans-serif"; ctx.textAlign = 'left';
+        ctx.fillText(t('f3_why'), legX, gridY + 8 + 3*22 + 8);
+        // Right: Demosaicing arrow + result
+        var arrowX = cx + W*0.08;
+        ctx.strokeStyle = P.primary; ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.moveTo(arrowX, cy); ctx.lineTo(arrowX + 40, cy); ctx.stroke();
+        ctx.fillStyle = P.primary; ctx.beginPath();
+        ctx.moveTo(arrowX+40, cy-5); ctx.lineTo(arrowX+48, cy); ctx.lineTo(arrowX+40, cy+5); ctx.fill();
+        ctx.fillStyle = P.primary; ctx.font = "bold 9px 'Space Grotesk',sans-serif"; ctx.textAlign = 'center';
+        ctx.fillText(t('f3_demo'), arrowX + 24, cy - 12);
+        // Result: reconstructed color grid
+        var resX = arrowX + 60, resY = gridY;
+        var rCellSize = cellSize;
+        // Simulated full-color pixels
+        var marsColors = [
+          ['#c47a5a','#c47a5a','#c47a5a','#b06840','#b06840','#c47a5a','#c47a5a','#c47a5a'],
+          ['#c47a5a','#b06840','#b06840','#7a4020','#6b3518','#b06840','#c47a5a','#b06840'],
+          ['#a0522d','#a0522d','#7a4020','#7a4020','#7a4020','#7a4020','#a0522d','#a0522d'],
+          ['#a0522d','#8b4513','#a0522d','#c08050','#a0522d','#8b4513','#a0522d','#a0522d'],
+          ['#8b4513','#5a3010','#5a3010','#8b4513','#a0522d','#5a3010','#8b4513','#a0522d'],
+          ['#5a3010','#3a2008','#5a3010','#6b3518','#8b4513','#5a3010','#3a2008','#5a3010'],
+        ];
+        for (var r = 0; r < 6; r++) {
+          for (var c = 0; c < 8; c++) {
+            ctx.fillStyle = marsColors[r][c];
+            ctx.fillRect(resX + c*rCellSize, resY + r*rCellSize, rCellSize-0.5, rCellSize-0.5);
+          }
+        }
+        ctx.strokeStyle = P.primary; ctx.lineWidth = 1;
+        ctx.strokeRect(resX, resY, 8*rCellSize, 6*rCellSize);
+        ctx.fillStyle = P.primary; ctx.font = "bold 10px 'Space Grotesk',sans-serif"; ctx.textAlign = 'center';
+        ctx.fillText(t('f3_grid'), resX + 4*rCellSize, resY - 10);
+        // Demosaicing explanation
+        ctx.fillStyle = P.muted; ctx.font = "10px 'Inter','Noto Sans SC',sans-serif"; ctx.textAlign = 'center';
+        ctx.fillText(t('f3_demo_d'), cx + W*0.15, resY + 6*rCellSize + 16);
+      }, alpha:1},
     ];
-    // Sensor grid (8x6 pixel grid)
-    var gridCols = 8, gridRows = 6;
-    var cellSize = Math.min(W * 0.06, H * 0.08);
-    var gridW = gridCols * cellSize, gridH = gridRows * cellSize;
-    var gridX = cx - gridW / 2, gridY = cy * 0.55;
-    // Bayer pattern colors
-    var bayerColors = [
-      ['R','G','R','G','R','G','R','G'],
-      ['G','B','G','B','G','B','G','B'],
-      ['R','G','R','G','R','G','R','G'],
-      ['G','B','G','B','G','B','G','B'],
-      ['R','G','R','G','R','G','R','G'],
-      ['G','B','G','B','G','B','G','B'],
+  }
+
+  // ---- Frame 4: Complete chain + Mastcam-Z specs ----
+  if (f === 4) {
+    return [
+      {id:'mainQ', type:'label', text:t('f4_title'), x:cx, y:H*0.06, color:P.primary, size:17, align:'center', glow:P.glowStrong},
+      {id:'subQ', type:'text', text:t('f4_desc'), x:cx, y:H*0.06+24, color:P.muted, size:11, align:'center'},
+      {id:'mastcam', type:'custom', x:0, y:0, draw:function(ctx) {
+        // Mini pipeline recap at top
+        var pipeY = H * 0.18;
+        var steps = [
+          ['\u2600',t('f0_step1'),'#ffdb3c'],
+          ['\u25CE',t('f0_step2'),'#85ecff'],
+          ['\u25A6',t('f0_step3'),'#ff7f50'],
+          ['\u25A3',t('f0_step4'),'#50ffb0'],
+        ];
+        var stepW = 60, gap = W * 0.04;
+        var totalW = stepW * 4 + gap * 3;
+        var sx = cx - totalW/2;
+        for (var i = 0; i < 4; i++) {
+          var x = sx + i * (stepW + gap);
+          ctx.strokeStyle = steps[i][2]; ctx.lineWidth = 1;
+          ctx.strokeRect(x, pipeY, stepW, 22);
+          ctx.fillStyle = steps[i][2]; ctx.font = "bold 10px 'Space Grotesk',sans-serif"; ctx.textAlign = 'center';
+          ctx.fillText(steps[i][0] + ' ' + steps[i][1], x + stepW/2, pipeY + 14);
+          if (i < 3) {
+            ctx.strokeStyle = P.muted; ctx.lineWidth = 1;
+            ctx.beginPath(); ctx.moveTo(x+stepW+2, pipeY+11); ctx.lineTo(x+stepW+gap-2, pipeY+11); ctx.stroke();
+            ctx.fillStyle = P.muted; ctx.beginPath();
+            ctx.moveTo(x+stepW+gap-2,pipeY+8); ctx.lineTo(x+stepW+gap+2,pipeY+11); ctx.lineTo(x+stepW+gap-2,pipeY+14); ctx.fill();
+          }
+        }
+        // Mastcam-Z dual camera illustration
+        var mastY = H * 0.45;
+        // Left camera
+        drawCamera(ctx, cx - 50, mastY, 0.9);
+        // Right camera
+        drawCamera(ctx, cx + 50, mastY, 0.9);
+        // Baseline indicator
+        ctx.strokeStyle = P.primary; ctx.lineWidth = 1;
+        ctx.setLineDash([3,3]);
+        ctx.beginPath(); ctx.moveTo(cx-50, mastY+25); ctx.lineTo(cx+50, mastY+25); ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.fillStyle = P.primary; ctx.font = "bold 10px 'Space Grotesk',sans-serif"; ctx.textAlign = 'center';
+        ctx.fillText('24.2 cm', cx, mastY + 38);
+        // Title
+        ctx.fillStyle = P.primary; ctx.font = "bold 14px 'Space Grotesk',sans-serif";
+        ctx.fillText(t('f4_mast'), cx, mastY - 30);
+        ctx.fillStyle = P.muted; ctx.font = "10px 'Inter','Noto Sans SC',sans-serif";
+        ctx.fillText(t('f4_mast_d'), cx, mastY - 16);
+        // Spec cards (right side)
+        var specX = W * 0.08, specY = H * 0.65;
+        var specs = [
+          [t('f4_stereo'), P.tertiary],
+          [t('f4_zoom'), P.secondary],
+          [t('f4_filter'), '#c9bfff'],
+        ];
+        for (var i = 0; i < specs.length; i++) {
+          var sy = specY + i * 28;
+          ctx.fillStyle = 'rgba(255,255,255,0.03)';
+          ctx.fillRect(specX, sy, W * 0.84, 24);
+          ctx.strokeStyle = specs[i][1]; ctx.lineWidth = 0.5;
+          ctx.strokeRect(specX, sy, W * 0.84, 24);
+          // Dot indicator
+          ctx.fillStyle = specs[i][1];
+          ctx.beginPath(); ctx.arc(specX + 12, sy + 12, 3, 0, Math.PI*2); ctx.fill();
+          // Text
+          ctx.fillStyle = specs[i][1]; ctx.font = "11px 'Inter','Noto Sans SC',sans-serif"; ctx.textAlign = 'left';
+          ctx.fillText(specs[i][0], specX + 22, sy + 16);
+        }
+        // Distance note (bottom)
+        var distY = specY + 3 * 28 + 12;
+        ctx.fillStyle = P.primary; ctx.font = "bold 12px 'Inter','Noto Sans SC',sans-serif"; ctx.textAlign = 'center';
+        ctx.fillText(t('f4_dist'), cx, distY);
+        ctx.fillStyle = P.muted; ctx.font = "10px 'Inter','Noto Sans SC',sans-serif";
+        ctx.fillText(t('f4_time'), cx, distY + 16);
+      }, alpha:1},
     ];
-    var colorMap = {
-      'R': 'rgba(255,80,80,0.5)',
-      'G': 'rgba(80,255,80,0.4)',
-      'B': 'rgba(80,120,255,0.5)'
-    };
-    // Draw grid cells
-    for (var r = 0; r < gridRows; r++) {
-      for (var c = 0; c < gridCols; c++) {
-        var px = gridX + c * cellSize;
-        var py = gridY + r * cellSize;
-        var bayer = bayerColors[r][c];
-        els.push({id:'cell_'+r+'_'+c, type:'box', x:px, y:py, w:cellSize-1, h:cellSize-1,
-          fill:colorMap[bayer], stroke:'rgba(255,255,255,0.15)'});
-      }
-    }
-    // Grid label
-    els.push({id:'grid_label', type:'label', text:t('f3_grid'), x:cx, y:gridY-14, color:P.secondary, size:12, align:'center'});
-    // Bayer filter explanation
-    var bayerY = gridY + gridH + 20;
-    els.push({id:'bayer_note', type:'text', text:t('f3_bayer'), x:cx, y:bayerY, color:P.muted, size:11, align:'center'});
-    // Pixel = 1 color note
-    els.push({id:'pixel_note', type:'text', text:t('f3_pixel'), x:cx, y:bayerY+20, color:P.tertiary, size:11, align:'center'});
-    // Arrow from grid to "photo" result
-    var photoY = H * 0.82;
-    els.push({id:'grid_to_photo', type:'arrow', x1:cx, y1:bayerY+35, x2:cx, y2:photoY-18, color:P.primary, lineWidth:2, headSize:7});
-    // Photo result
-    els.push({id:'photo_box', type:'box', x:cx-50, y:photoY-10, w:100, h:30, fill:'rgba(80,255,176,0.12)', stroke:P.primary});
-    els.push({id:'photo_label', type:'label', text:t('f3_result'), x:cx, y:photoY+5, color:P.primary, size:14, align:'center', glow:P.glowStrong});
-    return els;
   }
 
   return [];
 }
 
 // ============================================================
-// CUSTOM BACKGROUND: Mars-themed dark gradient
+// CUSTOM BACKGROUND: Mars-themed dark gradient with stars
 // ============================================================
 
 function drawBg(ctx, W, H) {
-  var P = AnimRuntime.PAL;
-  // Dark gradient with warm Mars undertone
   var g = ctx.createLinearGradient(0, 0, 0, H);
   g.addColorStop(0, '#0a0806');
-  g.addColorStop(0.5, '#131010');
+  g.addColorStop(0.4, '#110d0a');
   g.addColorStop(1, '#1a0c06');
   ctx.fillStyle = g;
   ctx.fillRect(0, 0, W, H);
-  // Subtle grid
-  ctx.strokeStyle = 'rgba(255,127,80,0.04)';
+  // Grid
+  ctx.strokeStyle = 'rgba(255,127,80,0.03)';
   ctx.lineWidth = 0.5;
   for (var x = 0; x < W; x += 40) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke(); }
   for (var y = 0; y < H; y += 40) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke(); }
-  // Subtle stars
-  ctx.fillStyle = 'rgba(255,255,255,0.3)';
+  // Stars
+  ctx.fillStyle = 'rgba(255,255,255,0.25)';
   var seed = 42;
-  for (var i = 0; i < 30; i++) {
+  for (var i = 0; i < 40; i++) {
     seed = (seed * 1103515245 + 12345) & 0x7fffffff;
     var sx = (seed % W);
     seed = (seed * 1103515245 + 12345) & 0x7fffffff;
-    var sy = (seed % (H * 0.4));
-    ctx.beginPath(); ctx.arc(sx, sy, 0.8, 0, Math.PI * 2); ctx.fill();
+    var sy = (seed % (H * 0.5));
+    var sz = 0.5 + (seed % 10) / 10;
+    ctx.beginPath(); ctx.arc(sx, sy, sz, 0, Math.PI * 2); ctx.fill();
   }
 }
 

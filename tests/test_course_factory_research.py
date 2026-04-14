@@ -127,49 +127,22 @@ class TestShouldResearchKnode:
     def test_engineering_knode_is_researched(self):
         assert cf.should_research_knode(_engineering_knode()) is True
 
-    def test_intro_knode_is_skipped(self):
-        assert cf.should_research_knode(_intro_knode()) is False
-
-    def test_science_knode_is_researched(self):
-        # "神经元" 命中中文关键词
+    def test_always_returns_true(self):
+        # should_research_knode 当前策略：始终返回 True
+        assert cf.should_research_knode(_intro_knode()) is True
         assert cf.should_research_knode(_science_knode()) is True
-
-    def test_legacy_knode_default_false(self):
-        assert cf.should_research_knode(_legacy_knode()) is False
-
-    def test_showcase_knode_skipped(self):
-        k = {
+        assert cf.should_research_knode(_legacy_knode()) is True
+        assert cf.should_research_knode(_engineering_knode()) is True
+        assert cf.should_research_knode({
             "title": "项目答辩与展示",
             "summary": "向评审团展示最终成果",
             "difficulty_level": 4,
-        }
-        assert cf.should_research_knode(k) is False
-
-    def test_difficulty_fallback_for_engineering_role(self):
-        k = {
-            "title": "未命名主题",
-            "summary": "无关键词",
-            "difficulty_level": 6,
-            "module_role": "engineering",
-            "hands_on_components": ["构建一个系统"],
-        }
-        assert cf.should_research_knode(k) is True
-
-    def test_low_difficulty_no_keywords_skipped(self):
-        k = {
+        }) is True
+        assert cf.should_research_knode({
             "title": "随便的主题",
             "summary": "没有关键词",
             "difficulty_level": 2,
-        }
-        assert cf.should_research_knode(k) is False
-
-    def test_english_keyword_hit(self):
-        k = {
-            "title": "CNN Architecture",
-            "summary": "Convolutional neural network basics",
-            "difficulty_level": 5,
-        }
-        assert cf.should_research_knode(k) is True
+        }) is True
 
 
 # ─── _extract_youtube_id ────────────────────────────────────────────────────
