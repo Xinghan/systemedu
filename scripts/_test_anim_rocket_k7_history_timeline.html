@@ -1,0 +1,1477 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=Inter:wght@400;500&family=Noto+Sans+SC:wght@400;700&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box;}
+html,body{width:100%;height:100vh;overflow:hidden;}
+body{background:var(--bg,#05070a);color:var(--text,#e2e2e9);font-family:'Inter','Noto Sans SC',sans-serif;display:flex;flex-direction:column;}
+.wrapper{display:flex;flex-direction:column;height:100vh;overflow:hidden;}
+.header{padding:12px 16px 8px;display:flex;justify-content:space-between;align-items:center;}
+.header h1{font-family:'Space Grotesk',sans-serif;font-size:clamp(14px,2vw,18px);font-weight:700;letter-spacing:-0.02em;color:var(--primary,#ffb000);text-shadow:0 0 15px var(--glow,rgba(255,176,0,0.3));}
+.header .sub{font-size:11px;color:var(--muted,#8e90a6);letter-spacing:0.1em;text-transform:uppercase;}
+.canvas-wrap{flex:1;min-height:0;position:relative;}
+canvas{width:100%;height:100%;display:block;}
+.controls{display:flex;justify-content:center;align-items:center;gap:12px;padding:8px 16px;}
+.ctrl-btn{font-family:'Space Grotesk',sans-serif;font-size:12px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;padding:6px 18px;border:none;cursor:pointer;color:var(--bg,#05070a);background:linear-gradient(135deg,var(--primary,#ffb000),var(--primary-dim,#cc8d00));transition:transform 0.1s,box-shadow 0.2s;box-shadow:0 0 12px var(--glow-strong,rgba(255,176,0,0.3));}
+.ctrl-btn:hover{transform:scale(1.04);box-shadow:0 0 20px var(--glow-strong,rgba(255,176,0,0.5));}
+.ctrl-btn:active{transform:scale(0.96);}
+.ctrl-btn.secondary{background:var(--glass,rgba(17,20,37,0.92));color:var(--muted,#8e90a6);box-shadow:none;backdrop-filter:blur(12px);}
+.ctrl-btn.secondary:hover{color:var(--primary,#ffb000);}
+.hud{height:48px;display:flex;align-items:center;justify-content:space-around;background:rgba(0,0,0,0.55);backdrop-filter:blur(12px);padding:0 16px;}
+.hud-item{text-align:center;}
+.hud-label{font-family:'Space Grotesk',sans-serif;font-size:9px;letter-spacing:0.15em;text-transform:uppercase;color:var(--muted,#8e90a6);}
+.hud-val{font-family:'Space Grotesk',sans-serif;font-size:14px;font-weight:700;color:var(--primary,#ffb000);}
+.lang-btn{position:fixed;top:8px;left:8px;z-index:100;font-family:'Space Grotesk',sans-serif;font-size:11px;font-weight:700;padding:4px 10px;cursor:pointer;border:none;background:rgba(20,20,35,0.85);backdrop-filter:blur(12px);color:#ffb08e;letter-spacing:1px;}
+.guide-panel{position:fixed;top:8px;right:8px;width:240px;max-height:40vh;overflow-y:auto;background:var(--glass,rgba(17,20,37,0.85));backdrop-filter:blur(12px);padding:12px;z-index:100;font-family:'Noto Sans SC',sans-serif;font-size:12px;color:rgba(255,255,255,0.85);line-height:1.6;}
+.guide-panel h3{font-family:'Space Grotesk',sans-serif;font-size:13px;margin-bottom:6px;color:var(--primary,#ffb000);cursor:pointer;display:flex;justify-content:space-between;align-items:center;}
+.guide-panel ul{padding-left:14px;}
+.guide-panel .collapsed{display:none;}
+</style>
+</head>
+<body>
+<button class="lang-btn" id="langBtn">CN</button>
+<div class="guide-panel" id="guide">
+<h3 id="guideTitle"></h3>
+<div class="guide-content" id="guideContent"></div>
+</div>
+<div class="wrapper">
+<div class="header">
+<div><h1 id="title"></h1><div class="sub" id="subtitle"></div></div>
+<div id="frameIndicator" style="font-family:'Space Grotesk';font-size:11px;color:var(--muted,#8e90a6);letter-spacing:0.1em;"></div>
+</div>
+<div class="canvas-wrap"><canvas id="c"></canvas></div>
+<div class="controls">
+<button class="ctrl-btn secondary" id="btnPrev"></button>
+<button class="ctrl-btn" id="btnPlay"></button>
+<button class="ctrl-btn secondary" id="btnNext"></button>
+</div>
+<div class="hud">
+<div class="hud-item"><div class="hud-label" id="hudL1"></div><div class="hud-val" id="hudV1"></div></div>
+<div class="hud-item"><div class="hud-label" id="hudL2"></div><div class="hud-val" id="hudV2"></div></div>
+<div class="hud-item"><div class="hud-label" id="hudL3"></div><div class="hud-val" id="hudV3"></div></div>
+<div class="hud-item"><div class="hud-label" id="hudL4"></div><div class="hud-val" id="hudV4"></div></div>
+</div>
+</div>
+
+<script src="animation_runtime.js"></script>
+
+<script>
+// ============================================================
+// Animation: 飞行故事 - 600 年时间线列车
+// 一个核心概念: 5 个真实的飞行故事, 串在 600 年的一条时间线上,
+// 让孩子看见"飞"这件事从 1500 年到今天一代接一代的接力。
+//
+// Frames:
+//   0 封面 — 标题 + 副标题 + 迷你时间线提示
+//   1 1500 AD 万户 — 坐椅 + 47 支火箭 + 火焰烟雾
+//   2 1961 加加林 — 蓝色地球 + 小舱绕轨道一圈
+//   3 1969 阿姆斯特朗 — 灰色月面 + 脚印 + 国旗剪影
+//   4 2013-2024 嫦娥/玉兔 — 月面 + 着陆器 + 小巡视车
+//   5 2021 祝融 — 红色火星地面 + 降落伞尾迹 + 小巡视车
+//   6 合成帧 — 完整 600 年时间线, 5 站都点亮, 彗星横扫接力
+// ============================================================
+
+var CONFIG = {
+  style: 'rocketry_control',
+  totalFrames: 7,
+  i18n: {
+    title:    {en:'FLIGHT STORIES: 600-YEAR RELAY', cn:'\u98de\u884c\u6545\u4e8b\uff1a600 \u5e74\u7684\u63a5\u529b'},
+    subtitle: {en:'1500 \u2192 1961 \u2192 1969 \u2192 2013 \u2192 2021', cn:'1500 \u2192 1961 \u2192 1969 \u2192 2013 \u2192 2021'},
+
+    // Frame 0 cover
+    f0_main: {en:'Flight Stories: A 600-Year Relay', cn:'\u98de\u884c\u6545\u4e8b\uff1a600 \u5e74\u7684\u63a5\u529b'},
+    f0_sub:  {en:'5 real stories, 1 timeline', cn:'5 \u4e2a\u771f\u5b9e\u6545\u4e8b\uff0c1 \u6761\u65f6\u95f4\u7ebf'},
+    f0_hint: {en:'1500 -> 1961 -> 1969 -> 2013 -> 2021 ...', cn:'1500 \u2192 1961 \u2192 1969 \u2192 2013 \u2192 2021 ...'},
+    f0_tag:  {en:'Press PLAY to travel 600 years', cn:'\u6309 \u64ad\u653e\uff0c\u7a7f\u8d8a 600 \u5e74'},
+
+    // Frame 1 Wan Hu 1500
+    f1_year:  {en:'1500 AD', cn:'\u516c\u5143 1500 \u5e74'},
+    f1_place: {en:'Ming China', cn:'\u660e\u671d \u4e2d\u56fd'},
+    f1_who:   {en:'Wan Hu - The First to Try', cn:'\u4e07\u6237 \u00b7 \u7b2c\u4e00\u4e2a\u60f3\u98de\u7684\u4eba'},
+    f1_why:   {en:'Tied 47 firework rockets to a chair. He never flew. But he tried first.', cn:'\u628a 47 \u652f\u70df\u82b1\u7ed1\u5728\u6905\u5b50\u4e0a\u3002\u4ed6\u6ca1\u98de\u8d77\u6765\uff0c\u4f46\u4ed6\u662f\u7b2c\u4e00\u4e2a\u8bd5\u7684\u4eba\u3002'},
+    f1_chip:  {en:'47 firework sticks', cn:'47 \u652f\u70df\u82b1'},
+
+    // Frame 2 Gagarin 1961
+    f2_year:  {en:'April 12, 1961', cn:'1961 \u5e74 4 \u6708 12 \u65e5'},
+    f2_place: {en:'Earth Orbit', cn:'\u5730\u7403\u8f68\u9053'},
+    f2_who:   {en:'Gagarin - First human in orbit', cn:'\u52a0\u52a0\u6797 \u00b7 \u7b2c\u4e00\u4e2a\u770b\u89c1\u84dd\u8272\u5730\u7403\u7684\u4eba'},
+    f2_why:   {en:'"The Earth is blue." 108 minutes, 1 orbit, whole world listened.', cn:'\u201c\u5730\u7403\u662f\u84dd\u8272\u7684\u3002\u201d 108 \u5206\u949f\u7ed5\u4e00\u5708\uff0c\u4e16\u754c\u90fd\u5728\u542c\u3002'},
+    f2_quote: {en:'"The Earth is blue"', cn:'\u201c\u5730\u7403\u662f\u84dd\u8272\u7684\u201d'},
+    f2_chip:  {en:'Vostok 1 . 108 min . 1 orbit', cn:'\u4e1c\u65b9 1 \u53f7 \u00b7 108 \u5206\u949f \u00b7 \u7ed5 1 \u5708'},
+
+    // Frame 3 Apollo 11 1969
+    f3_year:  {en:'July 20, 1969', cn:'1969 \u5e74 7 \u6708 20 \u65e5'},
+    f3_place: {en:'Sea of Tranquility, Moon', cn:'\u6708\u9762 \u00b7 \u9759\u6d77\u57fa\u5730'},
+    f3_who:   {en:'Armstrong - One giant leap', cn:'\u963f\u59c6\u65af\u7279\u6717 \u00b7 \u4eba\u7c7b\u7684\u4e00\u5927\u6b65'},
+    f3_why:   {en:'First human footprint on another world. Left there forever - no wind, no rain.', cn:'\u5728\u53e6\u4e00\u4e2a\u4e16\u754c\u4e0a\u7559\u4e0b\u7684\u7b2c\u4e00\u4e2a\u811a\u5370\u3002\u7559\u5728\u90a3\u91cc \u2014 \u6ca1\u98ce\u6ca1\u96e8\uff0c\u6c38\u8fdc\u4e0d\u6d88\u5931\u3002'},
+    f3_quote: {en:'"one giant leap for mankind"', cn:'\u201c\u4eba\u7c7b\u7684\u4e00\u5927\u6b65\u201d'},
+    f3_chip:  {en:'Apollo 11 . Saturn V', cn:'\u963f\u6ce2\u7f57 11 \u53f7 \u00b7 \u571f\u661f\u4e94\u53f7\u706b\u7bad'},
+
+    // Frame 4 Chang'e / Yutu
+    f4_year:  {en:'2013 - 2024', cn:'2013 \u2212 2024'},
+    f4_place: {en:'Moon (including far side)', cn:'\u6708\u9762 \u00b7 \u542b\u6708\u7403\u80cc\u9762'},
+    f4_who:   {en:"Chang'e + Yutu - The far side too", cn:'\u5ae6\u5a25 + \u7389\u5154 \u00b7 \u6708\u4eae\u80cc\u9762\u4e5f\u662f\u6211\u4eec\u7684'},
+    f4_why:   {en:"Chang'e 4 (2019): first ever far-side landing. Chang'e 6 (2024): brought soil back from the far side.", cn:'\u5ae6\u5a25\u56db\u53f7 (2019) \u9996\u6b21\u5728\u6708\u7403\u80cc\u9762\u7740\u9646\u3002\u5ae6\u5a25\u516d\u53f7 (2024) \u4ece\u80cc\u9762\u5e26\u56de\u4e86\u6708\u58e4\u3002'},
+    f4_chip1: {en:"Chang'e 3/4/5/6", cn:'\u5ae6\u5a25 3/4/5/6 \u53f7'},
+    f4_chip2: {en:'Yutu rover', cn:'\u7389\u5154\u5df2\u89c6\u8f66'},
+
+    // Frame 5 Zhurong 2021
+    f5_year:  {en:'May 15, 2021', cn:'2021 \u5e74 5 \u6708 15 \u65e5'},
+    f5_place: {en:'Utopia Planitia, Mars', cn:'\u706b\u661f \u00b7 \u4e4c\u6258\u90a6\u5e73\u539f'},
+    f5_who:   {en:'Zhurong - Fire god on the red planet', cn:'\u795d\u878d \u00b7 \u628a\u706b\u795e\u9001\u5230\u706b\u661f'},
+    f5_why:   {en:"China's first Mars rover. Named after the ancient god of fire.", cn:'\u4e2d\u56fd\u9996\u4e2a\u706b\u661f\u5df2\u89c6\u8f66\u3002\u7528\u53e4\u4ee3\u706b\u795e\u7684\u540d\u5b57\u547d\u540d\u3002'},
+    f5_chip1: {en:'Tianwen-1 orbiter', cn:'\u5929\u95ee 1 \u53f7 \u73af\u7ed5\u5668'},
+    f5_chip2: {en:'Zhurong rover', cn:'\u795d\u878d\u5df2\u89c6\u8f66'},
+
+    // Frame 6 synthesis
+    f6_title: {en:'600 Years. One Relay. You Are Next.', cn:'600 \u5e74\u3002\u4e00\u6b21\u63a5\u529b\u3002\u4f60\u662f\u4e0b\u4e00\u68d2\u3002'},
+    f6_sub:   {en:'461 years from Wan Hu to Gagarin. 60 from Gagarin to Zhurong.', cn:'\u4e07\u6237 \u2192 \u52a0\u52a0\u6797 \u96b4\u4e86 461 \u5e74\u3002\u52a0\u52a0\u6797 \u2192 \u795d\u878d \u53ea\u9694\u4e86 60 \u5e74\u3002'},
+    f6_s1:    {en:'1500', cn:'1500'},
+    f6_s2:    {en:'1961', cn:'1961'},
+    f6_s3:    {en:'1969', cn:'1969'},
+    f6_s4:    {en:'2013', cn:'2013'},
+    f6_s5:    {en:'2021', cn:'2021'},
+    f6_gap:   {en:'461 years of dreaming', cn:'461 \u5e74\u7684\u505a\u68a6'},
+    f6_now:   {en:'You are here', cn:'\u4f60\u5728\u8fd9\u91cc'},
+
+    // HUD labels
+    hud_year:  {en:'YEAR', cn:'\u5e74\u4efd'},
+    hud_place: {en:'PLACE', cn:'\u5730\u70b9'},
+    hud_who:   {en:'FIGURE', cn:'\u4eba\u7269'},
+    hud_why:   {en:'WHY', cn:'\u4e3a\u4ec0\u4e48'},
+
+    // Guide panel
+    gt: {en:'WHY WATCH THIS', cn:'\u4e3a\u4ec0\u4e48\u770b\u8fd9\u4e2a'},
+    g1: {en:'5 stories are real, not legend', cn:'5 \u4e2a\u6545\u4e8b\u90fd\u662f\u771f\u7684\uff0c\u4e0d\u662f\u4f20\u8bf4'},
+    g2: {en:'For 600 years, one dream: to fly', cn:'600 \u5e74\u6765\uff0c\u5927\u5bb6\u90fd\u60f3\u505a\u4e00\u4ef6\u4e8b\uff1a\u98de'},
+    g3: {en:'You are picking up the baton now', cn:'\u4f60\u73b0\u5728\u6b63\u5728\u63a5\u8fc7\u63a5\u529b\u68d2'},
+
+    // HUD values text keys
+    v_allyears: {en:'1500 - 2025', cn:'1500 \u2014 2025'},
+    v_5places:  {en:'Earth -> Moon -> Mars', cn:'\u5730\u7403 \u2192 \u6708 \u2192 \u706b\u661f'},
+    v_5figs:    {en:'5 pioneers', cn:'5 \u4f4d\u5148\u9a71'},
+    v_dream:    {en:'To fly', cn:'\u4e3a\u4e86\u98de'},
+  },
+  hudLabels: ['hud_year', 'hud_place', 'hud_who', 'hud_why'],
+  hudValues: [
+    ['v_allyears', 'v_5places', 'v_5figs', 'v_dream'],            // 0 cover
+    ['f1_year',    'f1_place',  'f1_who',  'f1_chip'],           // 1 Wan Hu
+    ['f2_year',    'f2_place',  'f2_who',  'f2_chip'],           // 2 Gagarin
+    ['f3_year',    'f3_place',  'f3_who',  'f3_chip'],           // 3 Armstrong
+    ['f4_year',    'f4_place',  'f4_who',  'f4_chip1'],          // 4 Chang'e
+    ['f5_year',    'f5_place',  'f5_who',  'f5_chip2'],          // 5 Zhurong
+    ['v_allyears', 'v_5places', 'v_5figs', 'v_dream'],            // 6 synthesis
+  ],
+  guideTitle: 'gt',
+  guideItems: ['g1', 'g2', 'g3'],
+};
+
+// ============================================================
+// Helpers — time scale for 600-year timeline (1500 → 2025)
+// ============================================================
+
+// Map a year in [1500, 2025] → x coordinate in [xL, xR].
+// Linear scale so Wan Hu (1500) ends up far left and the modern
+// cluster (1961, 1969, 2013, 2021) clumps on the right.
+function yearToX(year, xL, xR) {
+  var t = (year - 1500) / (2025 - 1500);
+  if (t < 0) t = 0;
+  if (t > 1) t = 1;
+  return xL + (xR - xL) * t;
+}
+
+// Easing for pulse
+function pulse(phase) {
+  // phase 0..1 → 0..1..0 breathing
+  var p = phase - Math.floor(phase);
+  return 0.5 - 0.5 * Math.cos(p * Math.PI * 2);
+}
+
+// Global animation clock
+var T0 = performance.now();
+function now() { return (performance.now() - T0) / 1000; }
+
+// Request continuous redraw while the tab is visible, so the
+// pulse / comet / smoke keep animating without needing a frame
+// transition. Detect transitions by watching currentFrame change
+// and suppress our own rAF redraw during the runtime's 500ms
+// transition window (otherwise we'd fight the transition render).
+var _lastFrameSeen = 0;
+var _transitionEndsAt = 0;
+function _rafLoop() {
+  if (!AnimRuntime) { requestAnimationFrame(_rafLoop); return; }
+  var cf = AnimRuntime.currentFrame;
+  if (cf !== _lastFrameSeen) {
+    // A transition just started — skip redraws for 550ms.
+    _transitionEndsAt = performance.now() + 550;
+    _lastFrameSeen = cf;
+  }
+  if (performance.now() > _transitionEndsAt &&
+      typeof AnimRuntime.drawFrame === 'function') {
+    AnimRuntime.drawFrame(cf);
+  }
+  requestAnimationFrame(_rafLoop);
+}
+function onReady() {
+  _lastFrameSeen = AnimRuntime.currentFrame;
+  requestAnimationFrame(_rafLoop);
+}
+
+// ============================================================
+// Custom element: wrapped multi-line text (CJK-aware char wrap)
+// Use: {type:'wrap', text, x, y, color, size, maxWidth, lineHeight, align}
+// For CJK we break per character; for ASCII we break per word.
+// ============================================================
+
+function customDrawElement(ctx, el) {
+  if (el.type !== 'wrap') return false;
+  var color = el.color || '#fff';
+  var size = el.size || 12;
+  var mw = el.maxWidth || 300;
+  var lh = el.lineHeight || size * 1.45;
+  var align = el.align || 'center';
+  var bold = el.bold || false;
+  ctx.fillStyle = color;
+  ctx.font = (bold ? 'bold ' : '') + size + "px 'Inter','Noto Sans SC',sans-serif";
+  ctx.textAlign = align;
+  ctx.textBaseline = 'middle';
+  var text = el.text || '';
+  var lines = [];
+  // Greedy wrapping: walk characters, push when width would exceed mw.
+  // This treats CJK as per-character and still lets ASCII break at spaces.
+  var cur = '';
+  function flush() { if (cur.length) { lines.push(cur); cur = ''; } }
+  for (var i = 0; i < text.length; i++) {
+    var ch = text.charAt(i);
+    if (ch === '\n') { flush(); continue; }
+    var next = cur + ch;
+    var w = ctx.measureText(next).width;
+    if (w > mw && cur.length > 0) {
+      // If the current ends mid-word (ASCII), try to split at last space.
+      var lastSp = cur.lastIndexOf(' ');
+      if (lastSp > 0 && ch !== ' ' && /[a-zA-Z0-9]/.test(ch)) {
+        var before = cur.slice(0, lastSp);
+        var after  = cur.slice(lastSp + 1);
+        lines.push(before);
+        cur = after + ch;
+      } else {
+        lines.push(cur);
+        cur = ch;
+      }
+    } else {
+      cur = next;
+    }
+  }
+  flush();
+  var total = lines.length;
+  var startY = el.y - ((total - 1) * lh) / 2;
+  for (var li = 0; li < total; li++) {
+    ctx.fillText(lines[li], el.x, startY + li * lh);
+  }
+  return true;
+}
+
+// ============================================================
+// FRAME ELEMENTS
+// ============================================================
+
+function getFrameElements(f, W, H) {
+  var t = AnimRuntime.t;
+  var P = AnimRuntime.PAL;
+  var cx = W / 2, cy = H / 2;
+  var elems = [];
+
+  // Shared timeline band y-location (we vary it per frame)
+  var TL_Y_FULL = 320; // for synthesis frame
+
+  if (f === 0) {
+    // ---- Frame 0: cover card ----
+    // Main title, subtitle, a small preview timeline.
+    elems.push({
+      id:'f0_title', type:'label',
+      text:t('f0_main'), x:cx, y:cy-70,
+      color:P.primary, size:24, align:'center', bold:true,
+      glow:P.glowStrong,
+    });
+    elems.push({
+      id:'f0_sub', type:'label',
+      text:t('f0_sub'), x:cx, y:cy-38,
+      color:P.text, size:14, align:'center',
+    });
+
+    // Mini preview line (simple linear, 5 stations)
+    var halfW = Math.min(380, W * 0.45);
+    var xL = cx - halfW, xR = cx + halfW;
+    elems.push({
+      id:'f0_line', type:'line',
+      x1:xL, y1:cy+30, x2:xR, y2:cy+30,
+      color:P.primaryDim, lineWidth:2,
+    });
+    // Five mini stations on the preview
+    var yrs0 = [1500, 1961, 1969, 2013, 2021];
+    var cols0 = [P.secondary, P.primary, P.primary, P.tertiary, P.secondaryDim];
+    // Alternate label y-offsets so crowded years (1961/1969 and 2013/2021) don't overlap
+    var lblDy0 = [22, 22, 42, 22, 42];
+    for (var i0 = 0; i0 < yrs0.length; i0++) {
+      var px = yearToX(yrs0[i0], xL, xR);
+      elems.push({
+        id:'f0_stn_'+i0, type:'circle',
+        x:px, y:cy+30, r:5,
+        fill:cols0[i0], stroke:P.text, lineWidth:1,
+        glow:P.glowStrong, glowSize:10,
+      });
+      elems.push({
+        id:'f0_yr_'+i0, type:'label',
+        text:yrs0[i0]+'', x:px, y:cy+30+lblDy0[i0],
+        color:P.muted, size:10, align:'center',
+      });
+    }
+
+    elems.push({
+      id:'f0_hint', type:'label',
+      text:t('f0_tag'), x:cx, y:cy+90,
+      color:P.primary, size:12, align:'center',
+    });
+
+  } else if (f === 1) {
+    // ---- Frame 1: Wan Hu, 1500 AD ----
+    // Tiny seated figure on a chair loaded with 47 firework sticks,
+    // flames / smoke around him.
+    // Composition: scene left, caption block right.
+    var sceneCX = W * 0.32;
+    var groundY = 270;
+
+    // Ground line
+    elems.push({
+      id:'f1_ground', type:'line',
+      x1:sceneCX-140, y1:groundY, x2:sceneCX+140, y2:groundY,
+      color:P.outline, lineWidth:1,
+    });
+
+    // Smoke puffs (animated by now())
+    for (var s = 0; s < 5; s++) {
+      var ph = (now() * 0.5 + s * 0.2) % 1;
+      elems.push({
+        id:'f1_smoke_'+s, type:'circle',
+        x:sceneCX - 60 + s*25 + Math.sin(now()+s)*4,
+        y:groundY + 10 - ph*80,
+        r: 6 + ph*10,
+        fill: 'rgba(200,200,210,' + (0.3*(1-ph)) + ')',
+      });
+    }
+
+    // The firework chair + 47 sticks (we draw a grid suggesting 47)
+    elems.push({
+      id:'f1_scene', type:'custom',
+      draw: function(ctx){
+        ctx.save();
+        ctx.translate(sceneCX, groundY);
+
+        // Chair (simple trapezoid back + seat)
+        ctx.fillStyle = '#6b3a1e';
+        ctx.strokeStyle = P.outline;
+        ctx.lineWidth = 1.2;
+        // Seat
+        ctx.fillRect(-28, -22, 56, 8);
+        ctx.strokeRect(-28, -22, 56, 8);
+        // Back
+        ctx.fillRect(-24, -55, 48, 33);
+        ctx.strokeRect(-24, -55, 48, 33);
+        // Legs
+        ctx.fillRect(-24, -14, 6, 14);
+        ctx.fillRect(18, -14, 6, 14);
+
+        // Wan Hu (tiny seated figure)
+        ctx.fillStyle = P.text;
+        // Head
+        ctx.beginPath();
+        ctx.arc(0, -62, 6, 0, Math.PI*2);
+        ctx.fill();
+        // Body (robe triangle)
+        ctx.beginPath();
+        ctx.moveTo(-10, -55); ctx.lineTo(10, -55);
+        ctx.lineTo(14, -24); ctx.lineTo(-14, -24);
+        ctx.closePath();
+        ctx.fillStyle = '#caa36a';
+        ctx.fill();
+        ctx.strokeStyle = P.outline;
+        ctx.stroke();
+        // Arms
+        ctx.strokeStyle = P.text;
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(-10, -48); ctx.lineTo(-22, -32);
+        ctx.moveTo(10, -48); ctx.lineTo(22, -32);
+        ctx.stroke();
+
+        // 47 firework sticks: 7 rows x ~7 cols arranged in a cluster
+        // behind and around the chair.
+        ctx.strokeStyle = '#c97a3a';
+        ctx.lineWidth = 1.3;
+        var count = 0;
+        for (var r = 0; r < 7 && count < 47; r++) {
+          for (var k = 0; k < 7 && count < 47; k++) {
+            var dx = -40 + k*13 + (r%2)*5;
+            var dy = -22 - r*4;
+            // Stick
+            ctx.beginPath();
+            ctx.moveTo(dx, dy);
+            ctx.lineTo(dx + 2, dy - 22);
+            ctx.stroke();
+            // Tip (lit)
+            ctx.fillStyle = P.primary;
+            ctx.beginPath();
+            ctx.arc(dx+2, dy-22, 1.4, 0, Math.PI*2);
+            ctx.fill();
+            count++;
+          }
+        }
+
+        // Flame bursts at the bottom of sticks (animated)
+        var flick = pulse(now()*1.5);
+        for (var fl = 0; fl < 9; fl++) {
+          var fx = -40 + fl*10;
+          var fh = 10 + flick*10 + Math.sin(now()*4+fl)*3;
+          var grad = ctx.createLinearGradient(fx, -10, fx, -10-fh);
+          grad.addColorStop(0, 'rgba(255,120,40,0.9)');
+          grad.addColorStop(1, 'rgba(255,200,80,0)');
+          ctx.fillStyle = grad;
+          ctx.beginPath();
+          ctx.moveTo(fx-4, -10);
+          ctx.quadraticCurveTo(fx, -10-fh, fx+4, -10);
+          ctx.closePath();
+          ctx.fill();
+        }
+
+        ctx.restore();
+      }
+    });
+
+    // Caption panel right side
+    var capX = W * 0.70;
+    elems.push({
+      id:'f1_yearTag', type:'label',
+      text:t('f1_year'), x:capX, y:100,
+      color:P.primary, size:26, align:'center', bold:true,
+      glow:P.glowStrong,
+    });
+    elems.push({
+      id:'f1_who', type:'label',
+      text:t('f1_who'), x:capX, y:140,
+      color:P.text, size:15, align:'center', bold:true,
+    });
+    elems.push({
+      id:'f1_chip', type:'label',
+      text:t('f1_chip'), x:capX, y:170,
+      color:P.secondaryDim, size:12, align:'center',
+    });
+    // Body text (multi-line)
+    var f1Text = t('f1_why');
+    elems.push({
+      id:'f1_why', type:'wrap',
+      text:f1Text, x:capX, y:230,
+      color:P.muted, size:12, align:'center',
+      maxWidth: Math.max(180, W*0.28), lineHeight: 18,
+    });
+
+    // Mini station indicator below
+    addMiniTimeline(elems, 'f1', W, 1500, P);
+
+  } else if (f === 2) {
+    // ---- Frame 2: Gagarin, 1961 — blue Earth + capsule orbiting ----
+    var sceneCX = W * 0.34, sceneCY = 180;
+    var earthR = 70;
+
+    // Earth
+    elems.push({
+      id:'f2_earth', type:'custom',
+      draw: function(ctx){
+        ctx.save();
+        ctx.translate(sceneCX, sceneCY);
+        // Radial blue gradient
+        var g = ctx.createRadialGradient(-earthR*0.3, -earthR*0.3, earthR*0.2, 0, 0, earthR);
+        g.addColorStop(0, '#8dc8ff');
+        g.addColorStop(0.5, '#3a7dd6');
+        g.addColorStop(1, '#123a6b');
+        ctx.fillStyle = g;
+        ctx.beginPath();
+        ctx.arc(0, 0, earthR, 0, Math.PI*2);
+        ctx.fill();
+        // Continent blobs (stylized)
+        ctx.fillStyle = 'rgba(100,180,110,0.65)';
+        ctx.beginPath();
+        ctx.ellipse(-18, -10, 22, 16, 0.3, 0, Math.PI*2); ctx.fill();
+        ctx.beginPath();
+        ctx.ellipse(25, 18, 14, 10, -0.2, 0, Math.PI*2); ctx.fill();
+        ctx.beginPath();
+        ctx.ellipse(10, -35, 10, 7, 0.1, 0, Math.PI*2); ctx.fill();
+        // Atmosphere glow
+        ctx.strokeStyle = 'rgba(140,200,255,0.45)';
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.arc(0, 0, earthR+2, 0, Math.PI*2);
+        ctx.stroke();
+        ctx.restore();
+      }
+    });
+
+    // Orbit path
+    var orbitR = earthR + 36;
+    elems.push({
+      id:'f2_orbit', type:'custom',
+      draw: function(ctx){
+        ctx.save();
+        ctx.translate(sceneCX, sceneCY);
+        ctx.strokeStyle = 'rgba(255,176,0,0.35)';
+        ctx.lineWidth = 1;
+        ctx.setLineDash([4,4]);
+        ctx.beginPath();
+        ctx.ellipse(0, 0, orbitR, orbitR*0.9, 0, 0, Math.PI*2);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.restore();
+      }
+    });
+
+    // Capsule orbiting
+    var ang = now() * 0.9;
+    var cpx = sceneCX + Math.cos(ang) * orbitR;
+    var cpy = sceneCY + Math.sin(ang) * orbitR * 0.9;
+    elems.push({
+      id:'f2_capsule', type:'custom',
+      draw: function(ctx){
+        ctx.save();
+        ctx.translate(cpx, cpy);
+        ctx.rotate(ang + Math.PI/2);
+        // Vostok-style sphere + instrument module
+        ctx.fillStyle = P.tertiary;
+        ctx.strokeStyle = P.outline;
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.arc(0, 0, 6, 0, Math.PI*2);
+        ctx.fill(); ctx.stroke();
+        // Small instrument tail
+        ctx.fillStyle = P.secondaryDim;
+        ctx.fillRect(-2.5, 4, 5, 5);
+        ctx.strokeRect(-2.5, 4, 5, 5);
+        // Glow
+        ctx.shadowColor = P.primary;
+        ctx.shadowBlur = 10;
+        ctx.beginPath();
+        ctx.arc(0, 0, 3, 0, Math.PI*2);
+        ctx.fillStyle = P.primary;
+        ctx.fill();
+        ctx.restore();
+      }
+    });
+
+    // Trailing orbit arc behind the capsule
+    elems.push({
+      id:'f2_trail', type:'custom',
+      draw: function(ctx){
+        ctx.save();
+        ctx.translate(sceneCX, sceneCY);
+        ctx.strokeStyle = 'rgba(255,176,0,0.75)';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        var a0 = ang - 1.2;
+        ctx.ellipse(0, 0, orbitR, orbitR*0.9, 0, a0, ang);
+        ctx.stroke();
+        ctx.restore();
+      }
+    });
+
+    // Star field behind
+    for (var st = 0; st < 14; st++) {
+      var sx = (W*0.05) + (st*41)%(W*0.55);
+      var sy = 50 + ((st*73)%220);
+      elems.push({
+        id:'f2_star_'+st, type:'circle',
+        x:sx, y:sy, r:1 + (st%3)*0.5,
+        fill:'rgba(255,255,255,' + (0.3 + (st%4)*0.15) + ')',
+      });
+    }
+
+    // Right side caption
+    var capX2 = W * 0.78;
+    elems.push({
+      id:'f2_yearTag', type:'label',
+      text:t('f2_year'), x:capX2, y:70,
+      color:P.primary, size:18, align:'center', bold:true,
+      glow:P.glowStrong,
+    });
+    elems.push({
+      id:'f2_who', type:'label',
+      text:t('f2_who'), x:capX2, y:108,
+      color:P.text, size:14, align:'center', bold:true,
+    });
+    elems.push({
+      id:'f2_quote', type:'label',
+      text:t('f2_quote'), x:capX2, y:150,
+      color:'#8dc8ff', size:16, align:'center', bold:true,
+      glow:'rgba(141,200,255,0.5)',
+    });
+    elems.push({
+      id:'f2_chip', type:'label',
+      text:t('f2_chip'), x:capX2, y:180,
+      color:P.secondaryDim, size:11, align:'center',
+    });
+    elems.push({
+      id:'f2_why', type:'wrap',
+      text:t('f2_why'), x:capX2, y:230,
+      color:P.muted, size:12, align:'center',
+      maxWidth: Math.max(180, W*0.28), lineHeight: 18,
+    });
+
+    addMiniTimeline(elems, 'f2', W, 1961, P);
+
+  } else if (f === 3) {
+    // ---- Frame 3: Apollo 11, 1969 — moon surface + bootprint + flag ----
+    var sceneCX = W * 0.33, sceneCY = 200;
+
+    // Starfield + black moon sky
+    for (var ss = 0; ss < 20; ss++) {
+      var ssx = (W*0.03) + (ss*29)%(W*0.6);
+      var ssy = 50 + ((ss*53)%150);
+      elems.push({
+        id:'f3_star_'+ss, type:'circle',
+        x:ssx, y:ssy, r: (ss%4===0)?1.4:0.8,
+        fill:'rgba(255,255,255,' + (0.4 + (ss%3)*0.15) + ')',
+      });
+    }
+
+    // Gray moon surface + crater + footprint + flag
+    elems.push({
+      id:'f3_moonScene', type:'custom',
+      draw: function(ctx){
+        ctx.save();
+        ctx.translate(sceneCX, sceneCY);
+
+        // Moon ground (horizon curve)
+        var grad = ctx.createLinearGradient(0, 0, 0, 120);
+        grad.addColorStop(0, '#aeadaa');
+        grad.addColorStop(1, '#5a5955');
+        ctx.fillStyle = grad;
+        ctx.beginPath();
+        ctx.moveTo(-180, 120);
+        ctx.lineTo(-180, 20);
+        ctx.quadraticCurveTo(0, -15, 180, 20);
+        ctx.lineTo(180, 120);
+        ctx.closePath();
+        ctx.fill();
+
+        // Craters
+        ctx.fillStyle = 'rgba(50,50,50,0.3)';
+        [[-110,55,18],[70,35,12],[30,90,10],[-40,100,14]].forEach(function(c){
+          ctx.beginPath();
+          ctx.ellipse(c[0], c[1], c[2], c[2]*0.45, 0, 0, Math.PI*2);
+          ctx.fill();
+        });
+
+        // Earth in black sky
+        ctx.save();
+        ctx.translate(100, -40);
+        var eg = ctx.createRadialGradient(-3, -3, 1, 0, 0, 10);
+        eg.addColorStop(0, '#8dc8ff');
+        eg.addColorStop(0.6, '#3a7dd6');
+        eg.addColorStop(1, '#123a6b');
+        ctx.fillStyle = eg;
+        ctx.beginPath();
+        ctx.arc(0, 0, 10, 0, Math.PI*2);
+        ctx.fill();
+        ctx.restore();
+
+        // Footprint (stylized boot, heel left, toe right)
+        ctx.save();
+        ctx.translate(-35, 70);
+        ctx.fillStyle = 'rgba(25,25,25,0.85)';
+        // Heel (oval)
+        ctx.beginPath();
+        ctx.ellipse(0, 0, 9, 7, 0, 0, Math.PI*2);
+        ctx.fill();
+        // Toe (larger oval right)
+        ctx.beginPath();
+        ctx.ellipse(18, -2, 14, 8, 0.1, 0, Math.PI*2);
+        ctx.fill();
+        // Tread marks
+        ctx.strokeStyle = 'rgba(174,173,170,0.6)';
+        ctx.lineWidth = 1;
+        for (var tr = 0; tr < 4; tr++) {
+          var tx = 6 + tr*5;
+          ctx.beginPath();
+          ctx.moveTo(tx, -6);
+          ctx.lineTo(tx, 4);
+          ctx.stroke();
+        }
+        ctx.restore();
+
+        // US flag silhouette
+        ctx.save();
+        ctx.translate(50, 20);
+        // Pole
+        ctx.strokeStyle = '#d7d7d7';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(0, 0);
+        ctx.lineTo(0, -60);
+        ctx.stroke();
+        // Flag (stars+stripes shape but just silhouette with blue canton)
+        ctx.fillStyle = '#d52e2e';
+        ctx.fillRect(0, -60, 34, 22);
+        // White stripes
+        ctx.fillStyle = '#f3f3f3';
+        for (var sp = 0; sp < 3; sp++) {
+          ctx.fillRect(0, -56 + sp*6, 34, 2.5);
+        }
+        // Blue canton
+        ctx.fillStyle = '#2a3b8f';
+        ctx.fillRect(0, -60, 14, 10);
+        // Stars
+        ctx.fillStyle = '#ffffff';
+        for (var sr = 0; sr < 2; sr++) {
+          for (var sc = 0; sc < 3; sc++) {
+            ctx.beginPath();
+            ctx.arc(3 + sc*4, -57 + sr*4, 0.8, 0, Math.PI*2);
+            ctx.fill();
+          }
+        }
+        ctx.restore();
+
+        // Tiny astronaut silhouette (helmet + suit)
+        ctx.save();
+        ctx.translate(25, 30);
+        ctx.fillStyle = '#f2f2f2';
+        ctx.strokeStyle = '#555';
+        ctx.lineWidth = 1;
+        // Body
+        ctx.fillRect(-5, -14, 10, 16);
+        ctx.strokeRect(-5, -14, 10, 16);
+        // Helmet
+        ctx.beginPath();
+        ctx.arc(0, -18, 5, 0, Math.PI*2);
+        ctx.fill(); ctx.stroke();
+        // Visor
+        ctx.fillStyle = '#1b1b1b';
+        ctx.beginPath();
+        ctx.ellipse(0, -18, 3, 2.5, 0, 0, Math.PI*2);
+        ctx.fill();
+        // Legs
+        ctx.fillStyle = '#f2f2f2';
+        ctx.fillRect(-4, 2, 3, 8);
+        ctx.fillRect(1, 2, 3, 8);
+        ctx.strokeRect(-4, 2, 3, 8);
+        ctx.strokeRect(1, 2, 3, 8);
+        ctx.restore();
+
+        ctx.restore();
+      }
+    });
+
+    // Caption right
+    var capX3 = W * 0.78;
+    elems.push({
+      id:'f3_yearTag', type:'label',
+      text:t('f3_year'), x:capX3, y:70,
+      color:P.primary, size:18, align:'center', bold:true,
+      glow:P.glowStrong,
+    });
+    elems.push({
+      id:'f3_who', type:'label',
+      text:t('f3_who'), x:capX3, y:108,
+      color:P.text, size:14, align:'center', bold:true,
+    });
+    elems.push({
+      id:'f3_quote', type:'label',
+      text:t('f3_quote'), x:capX3, y:148,
+      color:P.secondary, size:14, align:'center', bold:true,
+      glow:P.glowStrong,
+    });
+    elems.push({
+      id:'f3_chip', type:'label',
+      text:t('f3_chip'), x:capX3, y:178,
+      color:P.secondaryDim, size:11, align:'center',
+    });
+    elems.push({
+      id:'f3_why', type:'wrap',
+      text:t('f3_why'), x:capX3, y:230,
+      color:P.muted, size:12, align:'center',
+      maxWidth: Math.max(180, W*0.28), lineHeight: 18,
+    });
+
+    addMiniTimeline(elems, 'f3', W, 1969, P);
+
+  } else if (f === 4) {
+    // ---- Frame 4: Chang'e + Yutu — moon with lander + tiny rover ----
+    var sceneCX = W * 0.33, sceneCY = 190;
+
+    // Starfield
+    for (var ss4 = 0; ss4 < 18; ss4++) {
+      var s4x = (W*0.03) + (ss4*31)%(W*0.6);
+      var s4y = 50 + ((ss4*47)%140);
+      elems.push({
+        id:'f4_star_'+ss4, type:'circle',
+        x:s4x, y:s4y, r: (ss4%4===0)?1.4:0.8,
+        fill:'rgba(255,255,255,' + (0.4 + (ss4%3)*0.15) + ')',
+      });
+    }
+
+    elems.push({
+      id:'f4_moonScene', type:'custom',
+      draw: function(ctx){
+        ctx.save();
+        ctx.translate(sceneCX, sceneCY);
+
+        // Moon ground
+        var grad = ctx.createLinearGradient(0, 0, 0, 120);
+        grad.addColorStop(0, '#b0adaa');
+        grad.addColorStop(1, '#5f5d59');
+        ctx.fillStyle = grad;
+        ctx.beginPath();
+        ctx.moveTo(-180, 120);
+        ctx.lineTo(-180, 25);
+        ctx.quadraticCurveTo(0, -10, 180, 25);
+        ctx.lineTo(180, 120);
+        ctx.closePath();
+        ctx.fill();
+
+        // Craters
+        ctx.fillStyle = 'rgba(50,50,50,0.3)';
+        [[-100,60,15],[80,40,10],[20,95,12]].forEach(function(c){
+          ctx.beginPath();
+          ctx.ellipse(c[0], c[1], c[2], c[2]*0.45, 0, 0, Math.PI*2);
+          ctx.fill();
+        });
+
+        // Chang'e lander (gold foil quad with legs + high-gain antenna)
+        ctx.save();
+        ctx.translate(-60, 35);
+        // Body (gold octagonal box)
+        ctx.fillStyle = '#e8b04a';
+        ctx.strokeStyle = '#7a5b20';
+        ctx.lineWidth = 1.2;
+        ctx.beginPath();
+        ctx.moveTo(-14, -6); ctx.lineTo(-10, -14);
+        ctx.lineTo(10, -14);  ctx.lineTo(14, -6);
+        ctx.lineTo(14, 6);    ctx.lineTo(10, 14);
+        ctx.lineTo(-10, 14);  ctx.lineTo(-14, 6);
+        ctx.closePath();
+        ctx.fill(); ctx.stroke();
+        // Solar panel
+        ctx.fillStyle = '#1a3a7a';
+        ctx.strokeStyle = '#6990d0';
+        ctx.fillRect(-24, -4, 10, 10);
+        ctx.strokeRect(-24, -4, 10, 10);
+        ctx.beginPath();
+        ctx.moveTo(-20, -4); ctx.lineTo(-20, 6);
+        ctx.moveTo(-17, -4); ctx.lineTo(-17, 6);
+        ctx.stroke();
+        // Legs
+        ctx.strokeStyle = '#888';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.moveTo(-12, 14); ctx.lineTo(-18, 24);
+        ctx.moveTo(12, 14); ctx.lineTo(18, 24);
+        ctx.stroke();
+        // High-gain dish
+        ctx.fillStyle = '#d8d8dc';
+        ctx.beginPath();
+        ctx.arc(0, -22, 5, 0, Math.PI*2);
+        ctx.fill();
+        ctx.strokeStyle = '#888';
+        ctx.beginPath();
+        ctx.moveTo(0, -17); ctx.lineTo(0, -12);
+        ctx.stroke();
+        ctx.restore();
+
+        // Yutu rover (small box with wheels + solar wing) — moving slowly
+        var rv = (now() * 6) % 90 - 20; // rover drifts back and forth
+        ctx.save();
+        ctx.translate(30 + rv, 55);
+
+        // Tracks left behind on ground
+        ctx.strokeStyle = 'rgba(60,60,60,0.6)';
+        ctx.lineWidth = 1.2;
+        ctx.setLineDash([3,3]);
+        ctx.beginPath();
+        ctx.moveTo(-50, 8);
+        ctx.lineTo(-2, 8);
+        ctx.stroke();
+        ctx.setLineDash([]);
+
+        // Body
+        ctx.fillStyle = '#f0c25a';
+        ctx.strokeStyle = '#6b4a10';
+        ctx.lineWidth = 1;
+        ctx.fillRect(-8, -6, 16, 10);
+        ctx.strokeRect(-8, -6, 16, 10);
+        // Mast
+        ctx.strokeStyle = '#888';
+        ctx.beginPath();
+        ctx.moveTo(0, -6); ctx.lineTo(0, -12);
+        ctx.stroke();
+        // Camera head
+        ctx.fillStyle = '#d8d8dc';
+        ctx.fillRect(-2, -15, 4, 3);
+        // Solar wings
+        ctx.fillStyle = '#1a3a7a';
+        ctx.strokeStyle = '#6990d0';
+        ctx.fillRect(-16, -5, 6, 5);
+        ctx.strokeRect(-16, -5, 6, 5);
+        ctx.fillRect(10, -5, 6, 5);
+        ctx.strokeRect(10, -5, 6, 5);
+        // Wheels (6)
+        ctx.fillStyle = '#333';
+        for (var wi = 0; wi < 3; wi++) {
+          var wx = -7 + wi*7;
+          ctx.beginPath();
+          ctx.arc(wx, 6, 2.5, 0, Math.PI*2);
+          ctx.fill();
+        }
+        ctx.restore();
+
+        // Chinese flag next to lander
+        ctx.save();
+        ctx.translate(-30, 12);
+        ctx.strokeStyle = '#d7d7d7';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.moveTo(0, 0);
+        ctx.lineTo(0, -30);
+        ctx.stroke();
+        ctx.fillStyle = '#d52e2e';
+        ctx.fillRect(0, -30, 20, 12);
+        // Yellow stars
+        ctx.fillStyle = '#ffde2e';
+        ctx.beginPath(); ctx.arc(4, -26, 1.5, 0, Math.PI*2); ctx.fill();
+        ctx.beginPath(); ctx.arc(9, -28, 0.7, 0, Math.PI*2); ctx.fill();
+        ctx.beginPath(); ctx.arc(11, -25, 0.7, 0, Math.PI*2); ctx.fill();
+        ctx.beginPath(); ctx.arc(11, -22, 0.7, 0, Math.PI*2); ctx.fill();
+        ctx.beginPath(); ctx.arc(9, -20, 0.7, 0, Math.PI*2); ctx.fill();
+        ctx.restore();
+
+        ctx.restore();
+      }
+    });
+
+    // Labels next to lander/rover
+    elems.push({
+      id:'f4_labelLander', type:'label',
+      text:t('f4_chip1'), x:sceneCX - 60, y:sceneCY + 95,
+      color:P.primary, size:10, align:'center',
+    });
+    elems.push({
+      id:'f4_labelRover', type:'label',
+      text:t('f4_chip2'), x:sceneCX + 40, y:sceneCY + 95,
+      color:P.secondaryDim, size:10, align:'center',
+    });
+
+    // Caption right
+    var capX4 = W * 0.78;
+    elems.push({
+      id:'f4_yearTag', type:'label',
+      text:t('f4_year'), x:capX4, y:70,
+      color:P.primary, size:20, align:'center', bold:true,
+      glow:P.glowStrong,
+    });
+    elems.push({
+      id:'f4_who', type:'label',
+      text:t('f4_who'), x:capX4, y:108,
+      color:P.text, size:14, align:'center', bold:true,
+    });
+    elems.push({
+      id:'f4_place', type:'label',
+      text:t('f4_place'), x:capX4, y:140,
+      color:P.secondaryDim, size:11, align:'center',
+    });
+    elems.push({
+      id:'f4_why', type:'wrap',
+      text:t('f4_why'), x:capX4, y:215,
+      color:P.muted, size:11, align:'center',
+      maxWidth: Math.max(180, W*0.28), lineHeight: 17,
+    });
+
+    addMiniTimeline(elems, 'f4', W, 2013, P);
+
+  } else if (f === 5) {
+    // ---- Frame 5: Zhurong on Mars, 2021 ----
+    var sceneCX = W * 0.33, sceneCY = 190;
+
+    // Mars sky (ochre)
+    elems.push({
+      id:'f5_sky', type:'custom',
+      draw: function(ctx){
+        ctx.save();
+        ctx.translate(sceneCX, sceneCY);
+        var sky = ctx.createLinearGradient(0, -120, 0, 0);
+        sky.addColorStop(0, '#3a1509');
+        sky.addColorStop(1, '#8a3a1c');
+        ctx.fillStyle = sky;
+        ctx.fillRect(-180, -120, 360, 135);
+        ctx.restore();
+      }
+    });
+
+    // Mars ground + rover + parachute trail
+    elems.push({
+      id:'f5_marsScene', type:'custom',
+      draw: function(ctx){
+        ctx.save();
+        ctx.translate(sceneCX, sceneCY);
+
+        // Ground (reddish-ochre)
+        var g = ctx.createLinearGradient(0, 10, 0, 130);
+        g.addColorStop(0, '#c56a3d');
+        g.addColorStop(1, '#6a2e13');
+        ctx.fillStyle = g;
+        ctx.beginPath();
+        ctx.moveTo(-180, 130);
+        ctx.lineTo(-180, 20);
+        ctx.quadraticCurveTo(0, 5, 180, 20);
+        ctx.lineTo(180, 130);
+        ctx.closePath();
+        ctx.fill();
+
+        // Small rocks
+        ctx.fillStyle = 'rgba(90,40,20,0.7)';
+        [[-100,80,7],[40,100,5],[-20,50,4],[90,65,6],[-60,40,3]].forEach(function(r){
+          ctx.beginPath();
+          ctx.ellipse(r[0], r[1], r[2], r[2]*0.5, 0, 0, Math.PI*2);
+          ctx.fill();
+        });
+
+        // Parachute trail (descending arc, stylized)
+        ctx.save();
+        ctx.translate(80, -70);
+        // Parachute canopy
+        ctx.fillStyle = '#f0f0f0';
+        ctx.strokeStyle = '#ffb000';
+        ctx.lineWidth = 1.2;
+        ctx.beginPath();
+        ctx.moveTo(-18, 0);
+        ctx.quadraticCurveTo(0, -22, 18, 0);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+        // Red segment
+        ctx.fillStyle = '#d52e2e';
+        ctx.beginPath();
+        ctx.moveTo(-9, -11);
+        ctx.quadraticCurveTo(0, -22, 9, -11);
+        ctx.quadraticCurveTo(0, -6, -9, -11);
+        ctx.closePath();
+        ctx.fill();
+        // Lines to capsule
+        ctx.strokeStyle = '#ccc';
+        ctx.lineWidth = 0.8;
+        ctx.beginPath();
+        ctx.moveTo(-15, -1); ctx.lineTo(0, 14);
+        ctx.moveTo(-5, -1);  ctx.lineTo(0, 14);
+        ctx.moveTo(5, -1);   ctx.lineTo(0, 14);
+        ctx.moveTo(15, -1);  ctx.lineTo(0, 14);
+        ctx.stroke();
+        // Capsule
+        ctx.fillStyle = '#d0b060';
+        ctx.beginPath();
+        ctx.moveTo(-6, 12); ctx.lineTo(6, 12);
+        ctx.lineTo(4, 20); ctx.lineTo(-4, 20);
+        ctx.closePath();
+        ctx.fill();
+        ctx.restore();
+
+        // Dashed descent line from parachute to ground
+        ctx.strokeStyle = 'rgba(255,176,0,0.35)';
+        ctx.lineWidth = 1;
+        ctx.setLineDash([3,4]);
+        ctx.beginPath();
+        ctx.moveTo(80, -40);
+        ctx.quadraticCurveTo(60, -10, 20, 55);
+        ctx.stroke();
+        ctx.setLineDash([]);
+
+        // Zhurong rover (box + 6 wheels + solar wings + mast)
+        ctx.save();
+        ctx.translate(0, 62);
+
+        // Wheel tracks behind
+        ctx.strokeStyle = 'rgba(60,25,10,0.7)';
+        ctx.lineWidth = 2;
+        ctx.setLineDash([5,4]);
+        ctx.beginPath();
+        ctx.moveTo(-80, 14);
+        ctx.lineTo(-8, 14);
+        ctx.stroke();
+        ctx.setLineDash([]);
+
+        // Main body
+        ctx.fillStyle = '#d7c06c';
+        ctx.strokeStyle = '#6b5510';
+        ctx.lineWidth = 1.2;
+        ctx.fillRect(-14, -10, 28, 15);
+        ctx.strokeRect(-14, -10, 28, 15);
+        // Solar wings (butterfly)
+        ctx.fillStyle = '#1a3a7a';
+        ctx.strokeStyle = '#6990d0';
+        ctx.fillRect(-30, -6, 14, 8);
+        ctx.strokeRect(-30, -6, 14, 8);
+        ctx.fillRect(16, -6, 14, 8);
+        ctx.strokeRect(16, -6, 14, 8);
+        // Panel stripes
+        ctx.strokeStyle = '#a7c0e8';
+        ctx.lineWidth = 0.5;
+        for (var pl = 0; pl < 3; pl++) {
+          var plx = -26 + pl*4;
+          ctx.beginPath();
+          ctx.moveTo(plx, -6); ctx.lineTo(plx, 2);
+          ctx.stroke();
+          ctx.beginPath();
+          ctx.moveTo(plx+46, -6); ctx.lineTo(plx+46, 2);
+          ctx.stroke();
+        }
+        // Mast
+        ctx.strokeStyle = '#aaa';
+        ctx.lineWidth = 1.2;
+        ctx.beginPath();
+        ctx.moveTo(0, -10); ctx.lineTo(0, -20);
+        ctx.stroke();
+        // Camera head
+        ctx.fillStyle = '#2a2a2a';
+        ctx.fillRect(-4, -24, 8, 4);
+        // Red "祝融" stripe / CNSA marking
+        ctx.fillStyle = '#d52e2e';
+        ctx.fillRect(-10, -4, 20, 3);
+        // Wheels (6 visible sides)
+        ctx.fillStyle = '#2a2a2a';
+        for (var zw = 0; zw < 3; zw++) {
+          var zwx = -10 + zw*10;
+          ctx.beginPath();
+          ctx.arc(zwx, 8, 3, 0, Math.PI*2);
+          ctx.fill();
+          ctx.strokeStyle = '#999';
+          ctx.lineWidth = 0.5;
+          ctx.stroke();
+        }
+        ctx.restore();
+
+        ctx.restore();
+      }
+    });
+
+    // Rover label
+    elems.push({
+      id:'f5_roverLabel', type:'label',
+      text:t('f5_chip2'), x:sceneCX, y:sceneCY + 90,
+      color:P.primary, size:11, align:'center',
+    });
+
+    // Caption right
+    var capX5 = W * 0.78;
+    elems.push({
+      id:'f5_yearTag', type:'label',
+      text:t('f5_year'), x:capX5, y:70,
+      color:P.primary, size:18, align:'center', bold:true,
+      glow:P.glowStrong,
+    });
+    elems.push({
+      id:'f5_who', type:'label',
+      text:t('f5_who'), x:capX5, y:108,
+      color:P.text, size:14, align:'center', bold:true,
+    });
+    elems.push({
+      id:'f5_place', type:'label',
+      text:t('f5_place'), x:capX5, y:140,
+      color:P.secondaryDim, size:11, align:'center',
+    });
+    elems.push({
+      id:'f5_why', type:'wrap',
+      text:t('f5_why'), x:capX5, y:215,
+      color:P.muted, size:12, align:'center',
+      maxWidth: Math.max(180, W*0.28), lineHeight: 18,
+    });
+
+    addMiniTimeline(elems, 'f5', W, 2021, P);
+
+  } else if (f === 6) {
+    // ---- Frame 6: synthesis — full 600-year timeline with comet sweep ----
+    var xL = W * 0.06, xR = W * 0.94;
+
+    // Title
+    elems.push({
+      id:'f6_title', type:'label',
+      text:t('f6_title'), x:cx, y:70,
+      color:P.primary, size:20, align:'center', bold:true,
+      glow:P.glowStrong,
+    });
+    elems.push({
+      id:'f6_sub', type:'wrap',
+      text:t('f6_sub'), x:cx, y:105,
+      color:P.text, size:13, align:'center',
+      maxWidth: W*0.8, lineHeight: 20,
+    });
+
+    // Main timeline band
+    var lineY = 220;
+
+    // Gradient "rail"
+    elems.push({
+      id:'f6_rail', type:'custom',
+      draw: function(ctx){
+        ctx.save();
+        var g = ctx.createLinearGradient(xL, 0, xR, 0);
+        g.addColorStop(0.0, 'rgba(255,176,0,0.15)');
+        g.addColorStop(0.5, 'rgba(255,176,0,0.3)');
+        g.addColorStop(1.0, 'rgba(255,176,0,0.8)');
+        ctx.strokeStyle = g;
+        ctx.lineWidth = 4;
+        ctx.lineCap = 'round';
+        ctx.beginPath();
+        ctx.moveTo(xL, lineY);
+        ctx.lineTo(xR, lineY);
+        ctx.stroke();
+        ctx.restore();
+      }
+    });
+
+    // Year ticks every 100 years 1500..2000
+    var ticksYears = [1500,1600,1700,1800,1900,2000];
+    ticksYears.forEach(function(y, i) {
+      var tx = yearToX(y, xL, xR);
+      elems.push({
+        id:'f6_tick_'+i, type:'line',
+        x1:tx, y1:lineY-6, x2:tx, y2:lineY+6,
+        color:'rgba(255,255,255,0.4)', lineWidth:1,
+      });
+      elems.push({
+        id:'f6_tickL_'+i, type:'label',
+        text:y+'', x:tx, y:lineY+22,
+        color:P.muted, size:10, align:'center',
+      });
+    });
+
+    // Gap annotation (1500..1961 = 461 years)
+    var gx1 = yearToX(1500, xL, xR);
+    var gx2 = yearToX(1961, xL, xR);
+    elems.push({
+      id:'f6_gapBracket', type:'custom',
+      draw: function(ctx){
+        ctx.save();
+        ctx.strokeStyle = 'rgba(255,176,142,0.6)';
+        ctx.lineWidth = 1;
+        ctx.setLineDash([3,3]);
+        ctx.beginPath();
+        ctx.moveTo(gx1, lineY-30); ctx.lineTo(gx2, lineY-30);
+        ctx.moveTo(gx1, lineY-30); ctx.lineTo(gx1, lineY-6);
+        ctx.moveTo(gx2, lineY-30); ctx.lineTo(gx2, lineY-6);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.restore();
+      }
+    });
+    elems.push({
+      id:'f6_gapLabel', type:'label',
+      text:t('f6_gap'), x:(gx1+gx2)/2, y:lineY-42,
+      color:'#ffb08e', size:12, align:'center',
+    });
+
+    // 5 stations with names + years
+    var stations = [
+      {y:1500, key:'f6_s1', name:'Wan Hu', nameCn:'\u4e07\u6237',  col:P.secondary,   dy:48},
+      {y:1961, key:'f6_s2', name:'Gagarin',nameCn:'\u52a0\u52a0\u6797', col:P.primary, dy:48},
+      {y:1969, key:'f6_s3', name:'Apollo', nameCn:'\u963f\u6ce2\u7f57', col:P.primary, dy:82},
+      {y:2013, key:'f6_s4', name:"Chang'e",nameCn:'\u5ae6\u5a25',   col:P.tertiary,   dy:48},
+      {y:2021, key:'f6_s5', name:'Zhurong',nameCn:'\u795d\u878d',   col:P.secondaryDim, dy:82},
+    ];
+    var lang = (AnimRuntime && AnimRuntime.LANG) || 'cn';
+    stations.forEach(function(st, i){
+      var sx = yearToX(st.y, xL, xR);
+      // Pulsing station
+      var ph = pulse(now()*0.5 + i*0.15);
+      var r = 7 + ph*3;
+      // Halo
+      elems.push({
+        id:'f6_halo_'+i, type:'circle',
+        x:sx, y:lineY, r:14 + ph*6,
+        fill:'rgba(255,176,0,' + (0.1 + ph*0.1) + ')',
+      });
+      // Core
+      elems.push({
+        id:'f6_st_'+i, type:'circle',
+        x:sx, y:lineY, r:r,
+        fill:st.col, stroke:P.text, lineWidth:1.2,
+        glow:st.col, glowSize:14,
+      });
+      // Year label (alt y-offset for crowded pairs 1961/1969 and 2013/2021)
+      elems.push({
+        id:'f6_yr_'+i, type:'label',
+        text:st.y+'', x:sx, y:lineY+st.dy,
+        color:P.primary, size:12, align:'center', bold:true,
+      });
+      // Figure name (language-aware)
+      elems.push({
+        id:'f6_nm_'+i, type:'label',
+        text: (lang === 'en' ? st.name : st.nameCn),
+        x:sx, y:lineY+st.dy+18,
+        color:P.text, size:11, align:'center',
+      });
+      // Vertical tick
+      elems.push({
+        id:'f6_vt_'+i, type:'line',
+        x1:sx, y1:lineY-12, x2:sx, y2:lineY+12,
+        color:st.col, lineWidth:1.5,
+      });
+    });
+
+    // Moving comet (baton sweep)
+    var sweep = (now() * 0.16) % 1.2; // slight pause between sweeps
+    var sweepP = Math.min(1, sweep / 1);
+    var cmx = xL + (xR - xL) * sweepP;
+    if (sweepP < 1) {
+      // Tail
+      elems.push({
+        id:'f6_cometTail', type:'custom',
+        draw: function(ctx){
+          ctx.save();
+          var tailLen = 110;
+          var gr = ctx.createLinearGradient(cmx - tailLen, lineY, cmx, lineY);
+          gr.addColorStop(0, 'rgba(255,176,0,0)');
+          gr.addColorStop(1, 'rgba(255,220,120,0.9)');
+          ctx.fillStyle = gr;
+          ctx.beginPath();
+          ctx.moveTo(cmx - tailLen, lineY);
+          ctx.quadraticCurveTo(cmx - tailLen/2, lineY-8, cmx, lineY-3);
+          ctx.lineTo(cmx, lineY+3);
+          ctx.quadraticCurveTo(cmx - tailLen/2, lineY+8, cmx - tailLen, lineY);
+          ctx.closePath();
+          ctx.fill();
+          ctx.restore();
+        }
+      });
+      // Comet head
+      elems.push({
+        id:'f6_comet', type:'circle',
+        x:cmx, y:lineY, r:6,
+        fill:'#fff3c4', stroke:'#ffb000', lineWidth:1.5,
+        glow:'#ffb000', glowSize:18,
+      });
+    }
+
+    // Arrow "You are here" pointing to 2025 end
+    var nowX = yearToX(2025, xL, xR);
+    elems.push({
+      id:'f6_nowMark', type:'custom',
+      draw: function(ctx){
+        ctx.save();
+        // Pulsing vertical mark
+        var p = pulse(now()*0.8);
+        ctx.strokeStyle = 'rgba(255,220,120,' + (0.5 + p*0.4) + ')';
+        ctx.lineWidth = 2;
+        ctx.setLineDash([3,3]);
+        ctx.beginPath();
+        ctx.moveTo(nowX, lineY-40);
+        ctx.lineTo(nowX, lineY+40);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        // Arrow head down
+        ctx.fillStyle = P.primary;
+        ctx.beginPath();
+        ctx.moveTo(nowX, lineY-14);
+        ctx.lineTo(nowX - 5, lineY-22);
+        ctx.lineTo(nowX + 5, lineY-22);
+        ctx.closePath();
+        ctx.fill();
+        ctx.restore();
+      }
+    });
+    elems.push({
+      id:'f6_now', type:'label',
+      text:t('f6_now'), x:nowX, y:lineY-32,
+      color:P.primary, size:11, align:'center', bold:true,
+    });
+
+    // Legend chip bar top-right of canvas (but still inside safe area)
+    // We skip a legend to keep it clean; stations already labeled.
+
+  }
+
+  return elems;
+}
+
+// ============================================================
+// Shared mini-timeline helper — appears on frames 1..5 at y≈370
+// The active year is highlighted.
+// ============================================================
+
+function addMiniTimeline(elems, prefix, W, activeYear, P) {
+  var xL = W * 0.08, xR = W * 0.92;
+  var y = 372;
+  // Base line
+  elems.push({
+    id:prefix+'_mini_line', type:'line',
+    x1:xL, y1:y, x2:xR, y2:y,
+    color:'rgba(255,176,0,0.3)', lineWidth:2,
+  });
+  // Stations
+  var years = [1500, 1961, 1969, 2013, 2021];
+  years.forEach(function(yr, i){
+    var px = yearToX(yr, xL, xR);
+    var active = (yr === activeYear);
+    elems.push({
+      id:prefix+'_mini_st_'+i, type:'circle',
+      x:px, y:y, r: active ? 6 : 3,
+      fill: active ? P.primary : P.secondaryDim,
+      stroke: active ? P.text : null,
+      lineWidth: active ? 1.2 : 0,
+      glow: active ? P.primary : null,
+      glowSize: active ? 14 : 0,
+    });
+    if (active) {
+      elems.push({
+        id:prefix+'_mini_year_'+i, type:'label',
+        text: yr+'',
+        x:px, y:y-14,
+        color:P.primary, size:10, align:'center', bold:true,
+      });
+    }
+  });
+}
+
+// ============================================================
+// Custom background — starfield + subtle warm glow
+// ============================================================
+
+function drawBg(ctx, W, H) {
+  var P = AnimRuntime.PAL;
+  // Deep background gradient
+  var g = ctx.createLinearGradient(0, 0, 0, H);
+  g.addColorStop(0, P.bg);
+  g.addColorStop(1, P.bg2);
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, W, H);
+
+  // Subtle stars
+  for (var i = 0; i < 60; i++) {
+    var sx = ((i*113) % W);
+    var sy = ((i*197) % H);
+    var a = 0.15 + ((i*7) % 10) / 50;
+    ctx.fillStyle = 'rgba(255,255,255,' + a + ')';
+    ctx.fillRect(sx, sy, 1, 1);
+  }
+
+  // Warm radial glow at bottom
+  var rg = ctx.createRadialGradient(W*0.5, H*1.1, H*0.2, W*0.5, H*1.1, H*1.2);
+  rg.addColorStop(0, 'rgba(255,120,40,0.12)');
+  rg.addColorStop(1, 'rgba(255,120,40,0)');
+  ctx.fillStyle = rg;
+  ctx.fillRect(0, 0, W, H);
+}
+
+// ============================================================
+// BOOT
+// ============================================================
+
+AnimRuntime.boot();
+</script>
+</body>
+</html>

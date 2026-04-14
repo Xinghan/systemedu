@@ -1,0 +1,481 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=Inter:wght@400;500&family=Noto+Sans+SC:wght@400;700&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box;}
+html,body{width:100%;height:100vh;overflow:hidden;}
+body{background:var(--bg,#05070a);color:var(--text,#e2e2e9);font-family:'Inter','Noto Sans SC',sans-serif;display:flex;flex-direction:column;}
+.wrapper{display:flex;flex-direction:column;height:100vh;overflow:hidden;}
+.header{padding:12px 16px 8px;display:flex;justify-content:space-between;align-items:center;}
+.header h1{font-family:'Space Grotesk',sans-serif;font-size:clamp(14px,2vw,18px);font-weight:700;letter-spacing:-0.02em;color:var(--primary,#ffb000);text-shadow:0 0 15px var(--glow,rgba(255,176,0,0.3));}
+.header .sub{font-size:11px;color:var(--muted,#8e90a6);letter-spacing:0.1em;text-transform:uppercase;}
+.canvas-wrap{flex:1;min-height:0;position:relative;}
+canvas{width:100%;height:100%;display:block;}
+.controls{display:flex;justify-content:center;align-items:center;gap:12px;padding:8px 16px;}
+.ctrl-btn{font-family:'Space Grotesk',sans-serif;font-size:12px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;padding:6px 18px;border:none;cursor:pointer;color:var(--bg,#05070a);background:linear-gradient(135deg,var(--primary,#ffb000),var(--primary-dim,#cc8d00));transition:transform 0.1s,box-shadow 0.2s;box-shadow:0 0 12px var(--glow-strong,rgba(255,176,0,0.3));}
+.ctrl-btn:hover{transform:scale(1.04);box-shadow:0 0 20px var(--glow-strong,rgba(255,176,0,0.5));}
+.ctrl-btn:active{transform:scale(0.96);}
+.ctrl-btn.secondary{background:var(--glass,rgba(17,20,37,0.92));color:var(--muted,#8e90a6);box-shadow:none;backdrop-filter:blur(12px);}
+.ctrl-btn.secondary:hover{color:var(--primary,#ffb000);}
+.hud{height:48px;display:flex;align-items:center;justify-content:space-around;background:rgba(0,0,0,0.55);backdrop-filter:blur(12px);padding:0 16px;}
+.hud-item{text-align:center;}
+.hud-label{font-family:'Space Grotesk',sans-serif;font-size:9px;letter-spacing:0.15em;text-transform:uppercase;color:var(--muted,#8e90a6);}
+.hud-val{font-family:'Space Grotesk',sans-serif;font-size:14px;font-weight:700;color:var(--primary,#ffb000);}
+.lang-btn{position:fixed;top:8px;left:8px;z-index:100;font-family:'Space Grotesk',sans-serif;font-size:11px;font-weight:700;padding:4px 10px;cursor:pointer;border:none;background:rgba(20,20,35,0.85);backdrop-filter:blur(12px);color:#ffb08e;letter-spacing:1px;}
+.guide-panel{position:fixed;top:8px;right:8px;width:240px;max-height:40vh;overflow-y:auto;background:var(--glass,rgba(17,20,37,0.85));backdrop-filter:blur(12px);padding:12px;z-index:100;font-family:'Noto Sans SC',sans-serif;font-size:12px;color:rgba(255,255,255,0.85);line-height:1.6;}
+.guide-panel h3{font-family:'Space Grotesk',sans-serif;font-size:13px;margin-bottom:6px;color:var(--primary,#ffb000);cursor:pointer;display:flex;justify-content:space-between;align-items:center;}
+.guide-panel ul{padding-left:14px;}
+.guide-panel .collapsed{display:none;}
+</style>
+</head>
+<body>
+<button class="lang-btn" id="langBtn">CN</button>
+<div class="guide-panel" id="guide">
+<h3 id="guideTitle"></h3>
+<div class="guide-content" id="guideContent"></div>
+</div>
+<div class="wrapper">
+<div class="header">
+<div><h1 id="title"></h1><div class="sub" id="subtitle"></div></div>
+<div id="frameIndicator" style="font-family:'Space Grotesk';font-size:11px;color:var(--muted,#8e90a6);letter-spacing:0.1em;"></div>
+</div>
+<div class="canvas-wrap"><canvas id="c"></canvas></div>
+<div class="controls">
+<button class="ctrl-btn secondary" id="btnPrev"></button>
+<button class="ctrl-btn" id="btnPlay"></button>
+<button class="ctrl-btn secondary" id="btnNext"></button>
+</div>
+<div class="hud">
+<div class="hud-item"><div class="hud-label" id="hudL1"></div><div class="hud-val" id="hudV1"></div></div>
+<div class="hud-item"><div class="hud-label" id="hudL2"></div><div class="hud-val" id="hudV2"></div></div>
+<div class="hud-item"><div class="hud-label" id="hudL3"></div><div class="hud-val" id="hudV3"></div></div>
+<div class="hud-item"><div class="hud-label" id="hudL4"></div><div class="hud-val" id="hudV4"></div></div>
+</div>
+</div>
+
+<script src="animation_runtime.js"></script>
+
+<script>
+// Animation: "三枚火箭，60年演化 — 4 个部件都在"
+// Frames:
+//   0 intro — 3 rocket silhouettes side-by-side, years + names
+//   1 nose cone compare  — zoom on 3 nose cones, shape annotations
+//   2 body compare       — 3 body tubes, height labels
+//   3 fins compare       — 3 fin configs (none / grid / triangle)  ← surprise
+//   4 nozzle compare     — 5 / 9 / 2+8 nozzle layouts
+//   5 summary timeline   — recap: 4 parts survived, each evolved
+
+var CONFIG = {
+  style: 'rocketry_control',
+  totalFrames: 6,
+  i18n: {
+    title:    {en:'THREE ROCKETS, 60 YEARS', cn:'\u4e09\u679a\u706b\u7bad\uff0c60 \u5e74'},
+    subtitle: {en:'Same 4 parts, very different styles', cn:'\u56db\u4e2a\u90e8\u4ef6\u90fd\u5728\uff0c\u6f14\u5316\u5404\u4e0d\u76f8\u540c'},
+
+    // rocket names
+    sat5_name:  {en:'Saturn V', cn:'\u571f\u661f\u4e94\u53f7'},
+    f9_name:    {en:'Falcon 9', cn:'\u730e\u9e70 9 \u53f7'},
+    cz5_name:   {en:'Long March 5', cn:'\u957f\u5f81\u4e94\u53f7'},
+
+    sat5_year:  {en:'1967 · USA', cn:'1967 \u00b7 \u7f8e\u56fd'},
+    f9_year:    {en:'2010 · SpaceX', cn:'2010 \u00b7 SpaceX'},
+    cz5_year:   {en:'2016 · China', cn:'2016 \u00b7 \u4e2d\u56fd'},
+
+    // frame headers
+    f0_sub: {en:'Three famous rockets, 60 years apart', cn:'\u4e09\u679a\u8457\u540d\u706b\u7bad\uff0c\u76f8\u9694 60 \u5e74'},
+    f1_sub: {en:'Nose Cone — cutting through air', cn:'\u9f3b\u9525 \u2014 \u5207\u5f00\u7a7a\u6c14'},
+    f2_sub: {en:'Body Tube — where the fuel lives', cn:'\u7bad\u4f53 \u2014 \u71c3\u6599\u7684\u5bb6'},
+    f3_sub: {en:'Fins — what keeps it straight', cn:'\u5c3e\u7ffc \u2014 \u8ba9\u5b83\u4e0d\u7ffb\u8ddf\u5934'},
+    f4_sub: {en:'Nozzle — fire comes out here', cn:'\u55b7\u7ba1 \u2014 \u706b\u7130\u4ece\u8fd9\u91cc\u55b7\u51fa'},
+    f5_sub: {en:'Summary — 4 parts survived 60 years', cn:'\u603b\u7ed3 \u2014 4 \u4e2a\u90e8\u4ef6\u8de8\u8d8a 60 \u5e74\u90fd\u5728'},
+
+    // nose cone labels
+    f1_sat5: {en:'Blunt cone · carried 3 astronauts to Moon', cn:'\u949d\u9525 \u00b7 \u66fe\u9001 3 \u540d\u822a\u5929\u5458\u767b\u6708'},
+    f1_f9:   {en:'Sharp payload fairing · opens to drop satellite', cn:'\u5c16\u9502\u25e6\u6574\u6d41\u7f69 \u00b7 \u53ef\u5f00\u542f\u653e\u536b\u661f'},
+    f1_cz5:  {en:'Long fairing · wraps heavy space station modules', cn:'\u957f\u6574\u6d41\u7f69 \u00b7 \u8fd0\u9001\u7a7a\u95f4\u7ad9\u6a21\u5757'},
+
+    // body labels
+    f2_sat5: {en:'110m tall · 3 stages · kerosene + liquid H2', cn:'\u9ad8 110m \u00b7 \u4e09\u6bb5\u5f0f \u00b7 \u716e\u6cb9+\u6db2\u6c22'},
+    f2_f9:   {en:'70m tall · 2 stages · returnable first stage', cn:'\u9ad8 70m \u00b7 \u4e8c\u6bb5\u5f0f \u00b7 \u4e00\u7ea7\u53ef\u56de\u6536'},
+    f2_cz5:  {en:'57m tall · 4 boosters strapped on', cn:'\u9ad8 57m \u00b7 \u56db\u4e2a\u6346\u7ed1\u52a9\u63a8\u5668'},
+
+    // fins labels  (THE SURPRISE FRAME)
+    f3_sat5: {en:'4 TINY fins + gimbaled F-1 engines do most of the work', cn:'\u53ea\u6709 4 \u7247\u5f88\u5c0f\u7684\u7a33\u5b9a\u9e4d \u2014 \u4e3b\u8981\u9760 F-1 \u53d1\u52a8\u673a\u6446\u52a8'},
+    f3_f9:   {en:'GRID FINS — fold in, open for landing', cn:'\u6808\u683c\u7ffc \u2014 \u53d1\u5c04\u65f6\u6536\u8d77\uff0c\u7740\u9646\u65f6\u5c55\u5f00'},
+    f3_cz5:  {en:'Small triangular fins on boosters', cn:'\u52a9\u63a8\u5668\u4e0a\u7684\u4e09\u89d2\u5c3e\u7ffc'},
+    f3_aha:  {en:'Surprise: the OLDEST rocket has the SMALLEST fins!', cn:'\u610f\u5916\uff1a\u6700\u8001\u7684\u706b\u7bad\u5c3e\u7ffc\u53cd\u800c\u6700\u5c0f\uff01'},
+
+    // nozzle labels
+    f4_sat5: {en:'5 F-1 engines · 4 gimbal + 1 fixed', cn:'5 \u53f0 F-1 \u53d1\u52a8\u673a \u00b7 4 \u53ef\u6446\u52a8 + 1 \u56fa\u5b9a'},
+    f4_f9:   {en:'9 Merlins · octagon layout · center gimbaled', cn:'9 \u53f0 Merlin \u00b7 \u516b\u89d2\u5f62\u5e03\u5c40 \u00b7 \u4e2d\u5fc3\u53ef\u6446\u52a8'},
+    f4_cz5:  {en:'2 main + 8 booster · 10 total', cn:'2 \u53f0\u4e3b + 8 \u53f0\u52a9\u63a8\u5668 \u00b7 \u5171 10 \u53f0'},
+
+    // summary
+    f5_row1: {en:'Nose', cn:'\u9f3b\u9525'},
+    f5_row2: {en:'Body', cn:'\u7bad\u4f53'},
+    f5_row3: {en:'Fins', cn:'\u5c3e\u7ffc'},
+    f5_row4: {en:'Nozzle', cn:'\u55b7\u7ba1'},
+    f5_msg:  {en:'Same 4 parts. Because physics stayed the same.', cn:'4 \u4e2a\u90e8\u4ef6\u90fd\u5728\u3002\u56e0\u4e3a\u7269\u7406\u89c4\u5f8b\u6ca1\u53d8\u3002'},
+
+    // hud labels
+    hud_year:  {en:'Year', cn:'\u5e74\u4efd'},
+    hud_height:{en:'Height', cn:'\u9ad8\u5ea6'},
+    hud_fins:  {en:'Fins', cn:'\u5c3e\u7ffc'},
+    hud_eng:   {en:'Engines', cn:'\u53d1\u52a8\u673a'},
+
+    // guide panel
+    gt: {en:'HOW TO READ', cn:'\u600e\u4e48\u770b'},
+    g1: {en:'Look left-to-right: Saturn V -> Falcon 9 -> Long March 5', cn:'\u4ece\u5de6\u5230\u53f3\uff1a\u571f\u661f5 -> \u730e\u9e709 -> \u957f\u5f815'},
+    g2: {en:'Each frame zooms into one of the 4 key parts', cn:'\u6bcf\u5e27\u653e\u5927\u4e00\u4e2a\u5173\u952e\u90e8\u4ef6'},
+    g3: {en:'Frame 4 has a surprise — which rocket has the tiniest fins?', cn:'\u7b2c 4 \u5e27\u6709\u60ca\u559c \u2014 \u54ea\u679a\u5c3e\u7ffc\u6700\u5c0f\uff1f'},
+  },
+  hudLabels: ['hud_year', 'hud_height', 'hud_fins', 'hud_eng'],
+  hudValues: [
+    ['1967-2016', '57~110m',  '4~grid', '2~10'  ],
+    ['1967 S5',   '110m',     '4 tiny', '5'     ],
+    ['--',        '110/70/57m','--',    '--'    ],
+    ['--',        '--',       'tiny/grid/tri',  '--' ],
+    ['--',        '--',       '--',     '5/9/10'],
+    ['60 years',  'varies',   'evolved','evolved'],
+  ],
+  guideTitle: 'gt',
+  guideItems: ['g1', 'g2', 'g3'],
+};
+
+// ============================================================
+// FRAME HELPERS — draw a silhouette rocket
+// ============================================================
+// variant: 0 = saturn_v, 1 = falcon_9, 2 = cz5
+// (x, baseY) is the BOTTOM CENTER of rocket; h = full height px
+
+function rocketSilhouette(variant, cx, baseY, h) {
+  var P = AnimRuntime.PAL;
+  var w = h * 0.12;      // body width
+  var top = baseY - h;
+  var out = [];
+
+  if (variant === 0) { // Saturn V — long cylinder, blunt nose, no fins, 5 small engines flared
+    // body stages
+    out.push({type:'rect', x:cx-w/2, y:top+h*0.12, w:w, h:h*0.88, fill:'#e6e6ec', stroke:P.muted, sw:1});
+    // stripes (stage separators)
+    out.push({type:'line', x1:cx-w/2, y1:top+h*0.32, x2:cx+w/2, y2:top+h*0.32, color:P.muted, width:1});
+    out.push({type:'line', x1:cx-w/2, y1:top+h*0.58, x2:cx+w/2, y2:top+h*0.58, color:P.muted, width:1});
+    // nose blunt cone
+    out.push({type:'triangle', x1:cx-w/2, y1:top+h*0.12, x2:cx+w/2, y2:top+h*0.12, x3:cx, y3:top, fill:'#e6e6ec', stroke:P.muted});
+    // 5 engine bells
+    var ey = baseY;
+    for (var i=-2; i<=2; i++) {
+      out.push({type:'trapezoid', x:cx+i*w*0.18, y:ey, tw:w*0.16, bw:w*0.22, h:h*0.06, fill:P.secondary, stroke:P.secondaryDim});
+    }
+    // 4 tiny stabilizer fins at base (very small compared to CZ-5's)
+    out.push({type:'triangle', x1:cx-w/2, y1:baseY, x2:cx-w/2-w*0.2, y2:baseY, x3:cx-w/2, y3:baseY-h*0.04, fill:'#bcbcc4', stroke:P.muted});
+    out.push({type:'triangle', x1:cx+w/2, y1:baseY, x2:cx+w/2+w*0.2, y2:baseY, x3:cx+w/2, y3:baseY-h*0.04, fill:'#bcbcc4', stroke:P.muted});
+  }
+  if (variant === 1) { // Falcon 9 — slimmer, sharp payload fairing, grid fins (stowed small rect near top of stage 1)
+    out.push({type:'rect', x:cx-w/2, y:top+h*0.18, w:w, h:h*0.82, fill:'#f4f4f8', stroke:P.muted, sw:1});
+    // stage separator
+    out.push({type:'line', x1:cx-w/2, y1:top+h*0.45, x2:cx+w/2, y2:top+h*0.45, color:P.muted, width:1});
+    // nose pointed fairing
+    out.push({type:'triangle', x1:cx-w/2, y1:top+h*0.18, x2:cx+w/2, y2:top+h*0.18, x3:cx, y3:top-h*0.02, fill:'#f4f4f8', stroke:P.muted});
+    // grid fins near top of stage 1 (small squares jutting out)
+    out.push({type:'rect', x:cx-w/2-w*0.3, y:top+h*0.48, w:w*0.3, h:h*0.05, fill:'#c8c8d2', stroke:P.muted, sw:1});
+    out.push({type:'rect', x:cx+w/2, y:top+h*0.48, w:w*0.3, h:h*0.05, fill:'#c8c8d2', stroke:P.muted, sw:1});
+    // 9 engines (octagon + 1 center) — we draw a row of 9 small bells along bottom
+    for (var j=-4; j<=4; j++) {
+      out.push({type:'trapezoid', x:cx+j*w*0.11, y:baseY, tw:w*0.08, bw:w*0.10, h:h*0.045, fill:P.secondary, stroke:P.secondaryDim});
+    }
+  }
+  if (variant === 2) { // Long March 5 — main core + 4 strap-on boosters, small tri fins
+    // main body
+    out.push({type:'rect', x:cx-w/2, y:top+h*0.14, w:w, h:h*0.86, fill:'#ffffff', stroke:P.muted, sw:1});
+    // nose long pointed fairing
+    out.push({type:'triangle', x1:cx-w/2, y1:top+h*0.14, x2:cx+w/2, y2:top+h*0.14, x3:cx, y3:top, fill:'#ffffff', stroke:P.muted});
+    // two strap-on boosters (left + right) — shorter than main
+    var boosterTop = top + h*0.35, boosterH = h*0.55;
+    out.push({type:'rect', x:cx-w*1.1, y:boosterTop, w:w*0.55, h:boosterH, fill:'#d8d8e0', stroke:P.muted, sw:1});
+    out.push({type:'rect', x:cx+w*0.55, y:boosterTop, w:w*0.55, h:boosterH, fill:'#d8d8e0', stroke:P.muted, sw:1});
+    // booster noses
+    out.push({type:'triangle', x1:cx-w*1.1, y1:boosterTop, x2:cx-w*1.1+w*0.55, y2:boosterTop, x3:cx-w*1.1+w*0.27, y3:boosterTop-h*0.04, fill:'#d8d8e0', stroke:P.muted});
+    out.push({type:'triangle', x1:cx+w*0.55, y1:boosterTop, x2:cx+w*1.1, y2:boosterTop, x3:cx+w*0.82, y3:boosterTop-h*0.04, fill:'#d8d8e0', stroke:P.muted});
+    // small triangle fins at booster base
+    out.push({type:'triangle', x1:cx-w*1.1, y1:baseY, x2:cx-w*1.1-w*0.15, y2:baseY, x3:cx-w*1.1, y3:baseY-h*0.06, fill:P.tertiaryDim, stroke:P.muted});
+    out.push({type:'triangle', x1:cx+w*1.1, y1:baseY, x2:cx+w*1.1+w*0.15, y2:baseY, x3:cx+w*1.1, y3:baseY-h*0.06, fill:P.tertiaryDim, stroke:P.muted});
+    // main nozzle (2 center)
+    out.push({type:'trapezoid', x:cx-w*0.2, y:baseY, tw:w*0.15, bw:w*0.2, h:h*0.05, fill:P.secondary, stroke:P.secondaryDim});
+    out.push({type:'trapezoid', x:cx+w*0.2, y:baseY, tw:w*0.15, bw:w*0.2, h:h*0.05, fill:P.secondary, stroke:P.secondaryDim});
+    // booster nozzles (2 on each booster)
+    out.push({type:'trapezoid', x:cx-w*0.95, y:baseY, tw:w*0.1, bw:w*0.15, h:h*0.04, fill:P.secondary, stroke:P.secondaryDim});
+    out.push({type:'trapezoid', x:cx-w*0.75, y:baseY, tw:w*0.1, bw:w*0.15, h:h*0.04, fill:P.secondary, stroke:P.secondaryDim});
+    out.push({type:'trapezoid', x:cx+w*0.75, y:baseY, tw:w*0.1, bw:w*0.15, h:h*0.04, fill:P.secondary, stroke:P.secondaryDim});
+    out.push({type:'trapezoid', x:cx+w*0.95, y:baseY, tw:w*0.1, bw:w*0.15, h:h*0.04, fill:P.secondary, stroke:P.secondaryDim});
+  }
+  return out;
+}
+
+// Draw only the NOSE CONE for zoom frames (variant 0/1/2) — much larger
+function noseZoom(variant, cx, cy, size) {
+  var P = AnimRuntime.PAL;
+  if (variant === 0) {
+    return [
+      {type:'triangle', x1:cx-size*0.5, y1:cy+size*0.3, x2:cx+size*0.5, y2:cy+size*0.3, x3:cx, y3:cy-size*0.35, fill:'#e6e6ec', stroke:P.primary, sw:2},
+      {type:'rect', x:cx-size*0.5, y:cy+size*0.3, w:size, h:size*0.2, fill:'#e6e6ec', stroke:P.primary, sw:2},
+    ];
+  }
+  if (variant === 1) {
+    return [
+      {type:'triangle', x1:cx-size*0.4, y1:cy+size*0.35, x2:cx+size*0.4, y2:cy+size*0.35, x3:cx, y3:cy-size*0.5, fill:'#f4f4f8', stroke:P.primary, sw:2},
+      {type:'rect', x:cx-size*0.4, y:cy+size*0.35, w:size*0.8, h:size*0.15, fill:'#f4f4f8', stroke:P.primary, sw:2},
+    ];
+  }
+  if (variant === 2) {
+    return [
+      {type:'triangle', x1:cx-size*0.32, y1:cy+size*0.4, x2:cx+size*0.32, y2:cy+size*0.4, x3:cx, y3:cy-size*0.5, fill:'#ffffff', stroke:P.primary, sw:2},
+      {type:'rect', x:cx-size*0.32, y:cy+size*0.4, w:size*0.64, h:size*0.1, fill:'#ffffff', stroke:P.primary, sw:2},
+    ];
+  }
+  return [];
+}
+
+function finsZoom(variant, cx, cy, size) {
+  var P = AnimRuntime.PAL;
+  var out = [];
+  var bodyW = size*0.2, bodyH = size*0.9;
+  // body cylinder (always)
+  out.push({type:'rect', x:cx-bodyW/2, y:cy-bodyH/2, w:bodyW, h:bodyH, fill:'#cacacf', stroke:P.muted, sw:1});
+  if (variant === 0) {
+    // SATURN V — 4 TINY triangular fins + a callout that the F-1 engines gimbal
+    var sy = cy+bodyH*0.45, sw = size*0.08, sh = size*0.08;
+    out.push({type:'triangle', x1:cx-bodyW/2, y1:sy, x2:cx-bodyW/2-sw, y2:sy, x3:cx-bodyW/2, y3:sy-sh, fill:P.tertiaryDim, stroke:P.muted});
+    out.push({type:'triangle', x1:cx+bodyW/2, y1:sy, x2:cx+bodyW/2+sw, y2:sy, x3:cx+bodyW/2, y3:sy-sh, fill:P.tertiaryDim, stroke:P.muted});
+    // compare pointer
+    out.push({type:'label', text:'\u2190 tiny', x:cx-bodyW/2-size*0.22, y:sy-4, color:P.muted, size:11, align:'center'});
+    out.push({type:'label', text:'tiny \u2192', x:cx+bodyW/2+size*0.22, y:sy-4, color:P.muted, size:11, align:'center'});
+  }
+  if (variant === 1) {
+    // grid fins (two rectangles w/ cross pattern) at top
+    var gy = cy-bodyH*0.3, gw = size*0.22, gh = size*0.14;
+    out.push({type:'rect', x:cx-bodyW/2-gw, y:gy, w:gw, h:gh, fill:'#b0b0ba', stroke:P.primary, sw:2});
+    out.push({type:'rect', x:cx+bodyW/2,    y:gy, w:gw, h:gh, fill:'#b0b0ba', stroke:P.primary, sw:2});
+    // grid cross pattern
+    out.push({type:'line', x1:cx-bodyW/2-gw, y1:gy+gh/2, x2:cx-bodyW/2, y2:gy+gh/2, color:P.primary, width:1});
+    out.push({type:'line', x1:cx-bodyW/2-gw/2, y1:gy, x2:cx-bodyW/2-gw/2, y2:gy+gh, color:P.primary, width:1});
+    out.push({type:'line', x1:cx+bodyW/2, y1:gy+gh/2, x2:cx+bodyW/2+gw, y2:gy+gh/2, color:P.primary, width:1});
+    out.push({type:'line', x1:cx+bodyW/2+gw/2, y1:gy, x2:cx+bodyW/2+gw/2, y2:gy+gh, color:P.primary, width:1});
+  }
+  if (variant === 2) {
+    // 4 small triangle fins at bottom
+    var fx = size*0.18, fy = cy+bodyH*0.4;
+    out.push({type:'triangle', x1:cx-bodyW/2, y1:fy, x2:cx-bodyW/2-fx, y2:fy, x3:cx-bodyW/2, y3:fy-fx*0.7, fill:P.tertiary, stroke:P.primary});
+    out.push({type:'triangle', x1:cx+bodyW/2, y1:fy, x2:cx+bodyW/2+fx, y2:fy, x3:cx+bodyW/2, y3:fy-fx*0.7, fill:P.tertiary, stroke:P.primary});
+  }
+  return out;
+}
+
+// Nozzle bottom with N engines arranged in a row
+function nozzleZoom(variant, cx, cy, size) {
+  var P = AnimRuntime.PAL;
+  var out = [];
+  // body cap
+  out.push({type:'rect', x:cx-size*0.35, y:cy-size*0.3, w:size*0.7, h:size*0.2, fill:'#cacacf', stroke:P.muted, sw:1});
+  var count = variant === 0 ? 5 : variant === 1 ? 9 : 10;
+  // draw engines in a row
+  var spacing = (size*0.7) / (count+0.5);
+  var bellW = spacing * 0.85;
+  var bellH = size*0.25;
+  for (var i=0; i<count; i++) {
+    var ex = cx-size*0.35 + spacing*0.5 + i*spacing;
+    out.push({type:'trapezoid', x:ex, y:cy+bellH-size*0.1, tw:bellW*0.7, bw:bellW, h:bellH, fill:P.secondary, stroke:P.primary, sw:1.5});
+  }
+  // count badge
+  out.push({type:'label', text:count+'x', x:cx, y:cy+size*0.45, color:P.primary, size:20, align:'center'});
+  return out;
+}
+
+// ============================================================
+// FRAMES
+// ============================================================
+
+function getFrameElements(f, W, H) {
+  var t = AnimRuntime.t;
+  var P = AnimRuntime.PAL;
+  var cx = W/2, cy = H/2;
+
+  // 3 column positions
+  var col1 = W*0.22, col2 = W*0.5, col3 = W*0.78;
+
+  if (f === 0) {
+    // Intro: 3 small rockets side by side
+    var baseY = H*0.75;
+    var h = H*0.52;
+    var els = [
+      {id:'sub', type:'label', text:t('f0_sub'), x:cx, y:16, color:P.muted, size:13, align:'center'},
+    ];
+    els = els.concat(rocketSilhouette(0, col1, baseY, h));
+    els = els.concat(rocketSilhouette(1, col2, baseY, h));
+    els = els.concat(rocketSilhouette(2, col3, baseY, h));
+    // names + years
+    els.push({type:'label', text:t('sat5_name'), x:col1, y:baseY+18, color:P.primary, size:13, align:'center'});
+    els.push({type:'label', text:t('sat5_year'), x:col1, y:baseY+34, color:P.muted, size:10, align:'center'});
+    els.push({type:'label', text:t('f9_name'),   x:col2, y:baseY+18, color:P.primary, size:13, align:'center'});
+    els.push({type:'label', text:t('f9_year'),   x:col2, y:baseY+34, color:P.muted, size:10, align:'center'});
+    els.push({type:'label', text:t('cz5_name'),  x:col3, y:baseY+18, color:P.primary, size:13, align:'center'});
+    els.push({type:'label', text:t('cz5_year'),  x:col3, y:baseY+34, color:P.muted, size:10, align:'center'});
+    return els;
+  }
+
+  if (f === 1) {
+    // Nose cone zoom row
+    var zy = H*0.35, size = H*0.25;
+    var els = [
+      {id:'sub', type:'label', text:t('f1_sub'), x:cx, y:16, color:P.primary, size:14, align:'center'},
+    ];
+    els = els.concat(noseZoom(0, col1, zy, size));
+    els = els.concat(noseZoom(1, col2, zy, size));
+    els = els.concat(noseZoom(2, col3, zy, size));
+    // annotations below
+    els.push({type:'label', text:t('sat5_name'), x:col1, y:zy+size*0.55, color:P.primary, size:12, align:'center'});
+    els.push({type:'label', text:t('f1_sat5'),   x:col1, y:zy+size*0.72, color:P.muted, size:10, align:'center', maxWidth:W*0.25});
+    els.push({type:'label', text:t('f9_name'),   x:col2, y:zy+size*0.55, color:P.primary, size:12, align:'center'});
+    els.push({type:'label', text:t('f1_f9'),     x:col2, y:zy+size*0.72, color:P.muted, size:10, align:'center', maxWidth:W*0.25});
+    els.push({type:'label', text:t('cz5_name'),  x:col3, y:zy+size*0.55, color:P.primary, size:12, align:'center'});
+    els.push({type:'label', text:t('f1_cz5'),    x:col3, y:zy+size*0.72, color:P.muted, size:10, align:'center', maxWidth:W*0.25});
+    return els;
+  }
+
+  if (f === 2) {
+    // Body compare: 3 full rockets at different heights (scale proportional)
+    var els = [
+      {id:'sub', type:'label', text:t('f2_sub'), x:cx, y:16, color:P.primary, size:14, align:'center'},
+    ];
+    // Saturn V ~110m, Falcon 9 ~70m, CZ-5 ~57m
+    var maxH = H*0.62;
+    var baseY = H*0.8;
+    var h1 = maxH * 1.0;        // 110m -> max
+    var h2 = maxH * (70/110);   // 70/110
+    var h3 = maxH * (57/110);   // 57/110
+    els = els.concat(rocketSilhouette(0, col1, baseY, h1));
+    els = els.concat(rocketSilhouette(1, col2, baseY, h2));
+    els = els.concat(rocketSilhouette(2, col3, baseY, h3));
+    // height labels
+    els.push({type:'label', text:'110 m',  x:col1, y:baseY-h1-16, color:P.primary, size:12, align:'center'});
+    els.push({type:'label', text:'70 m',   x:col2, y:baseY-h2-16, color:P.primary, size:12, align:'center'});
+    els.push({type:'label', text:'57 m',   x:col3, y:baseY-h3-16, color:P.primary, size:12, align:'center'});
+    // bottom annotations
+    els.push({type:'label', text:t('f2_sat5'), x:col1, y:baseY+22, color:P.muted, size:10, align:'center', maxWidth:W*0.25});
+    els.push({type:'label', text:t('f2_f9'),   x:col2, y:baseY+22, color:P.muted, size:10, align:'center', maxWidth:W*0.25});
+    els.push({type:'label', text:t('f2_cz5'),  x:col3, y:baseY+22, color:P.muted, size:10, align:'center', maxWidth:W*0.25});
+    return els;
+  }
+
+  if (f === 3) {
+    // Fins compare — THE SURPRISE
+    var zy = H*0.35, size = H*0.25;
+    var els = [
+      {id:'sub', type:'label', text:t('f3_sub'), x:cx, y:16, color:P.primary, size:14, align:'center'},
+      {id:'aha', type:'label', text:t('f3_aha'), x:cx, y:36, color:P.error, size:12, align:'center'},
+    ];
+    els = els.concat(finsZoom(0, col1, zy, size));
+    els = els.concat(finsZoom(1, col2, zy, size));
+    els = els.concat(finsZoom(2, col3, zy, size));
+    els.push({type:'label', text:t('sat5_name'), x:col1, y:zy+size*0.6, color:P.primary, size:12, align:'center'});
+    els.push({type:'label', text:t('f3_sat5'),   x:col1, y:zy+size*0.78, color:P.muted, size:10, align:'center', maxWidth:W*0.25});
+    els.push({type:'label', text:t('f9_name'),   x:col2, y:zy+size*0.6, color:P.primary, size:12, align:'center'});
+    els.push({type:'label', text:t('f3_f9'),     x:col2, y:zy+size*0.78, color:P.muted, size:10, align:'center', maxWidth:W*0.25});
+    els.push({type:'label', text:t('cz5_name'),  x:col3, y:zy+size*0.6, color:P.primary, size:12, align:'center'});
+    els.push({type:'label', text:t('f3_cz5'),    x:col3, y:zy+size*0.78, color:P.muted, size:10, align:'center', maxWidth:W*0.25});
+    return els;
+  }
+
+  if (f === 4) {
+    // Nozzle compare
+    var zy = H*0.38, size = H*0.22;
+    var els = [
+      {id:'sub', type:'label', text:t('f4_sub'), x:cx, y:16, color:P.primary, size:14, align:'center'},
+    ];
+    els = els.concat(nozzleZoom(0, col1, zy, size));
+    els = els.concat(nozzleZoom(1, col2, zy, size));
+    els = els.concat(nozzleZoom(2, col3, zy, size));
+    els.push({type:'label', text:t('sat5_name'), x:col1, y:zy+size*0.7, color:P.primary, size:12, align:'center'});
+    els.push({type:'label', text:t('f4_sat5'),   x:col1, y:zy+size*0.88, color:P.muted, size:10, align:'center', maxWidth:W*0.25});
+    els.push({type:'label', text:t('f9_name'),   x:col2, y:zy+size*0.7, color:P.primary, size:12, align:'center'});
+    els.push({type:'label', text:t('f4_f9'),     x:col2, y:zy+size*0.88, color:P.muted, size:10, align:'center', maxWidth:W*0.25});
+    els.push({type:'label', text:t('cz5_name'),  x:col3, y:zy+size*0.7, color:P.primary, size:12, align:'center'});
+    els.push({type:'label', text:t('f4_cz5'),    x:col3, y:zy+size*0.88, color:P.muted, size:10, align:'center', maxWidth:W*0.25});
+    return els;
+  }
+
+  if (f === 5) {
+    // Summary: 4 rows x 3 cols table
+    var els = [
+      {id:'sub', type:'label', text:t('f5_sub'), x:cx, y:16, color:P.primary, size:14, align:'center'},
+    ];
+    var colLabels = [t('sat5_name'), t('f9_name'), t('cz5_name')];
+    var years     = [t('sat5_year'), t('f9_year'), t('cz5_year')];
+    var rowKeys = ['f5_row1','f5_row2','f5_row3','f5_row4'];
+    var values = [
+      [t('f1_sat5').split(' \u00b7 ')[0], t('f1_f9').split(' \u00b7 ')[0], t('f1_cz5').split(' \u00b7 ')[0]],
+      ['110 m',                             '70 m',                            '57 m'                          ],
+      ['4 tiny',                             '4 grid fins',                     '4 triangle fins'                ],
+      ['5',                                  '9',                                '10'                             ],
+    ];
+    // column headers
+    var headerY = H*0.14;
+    els.push({type:'label', text:colLabels[0], x:col1, y:headerY, color:P.primary, size:13, align:'center'});
+    els.push({type:'label', text:years[0],     x:col1, y:headerY+14, color:P.muted, size:9, align:'center'});
+    els.push({type:'label', text:colLabels[1], x:col2, y:headerY, color:P.primary, size:13, align:'center'});
+    els.push({type:'label', text:years[1],     x:col2, y:headerY+14, color:P.muted, size:9, align:'center'});
+    els.push({type:'label', text:colLabels[2], x:col3, y:headerY, color:P.primary, size:13, align:'center'});
+    els.push({type:'label', text:years[2],     x:col3, y:headerY+14, color:P.muted, size:9, align:'center'});
+    // separator
+    els.push({type:'line', x1:W*0.05, y1:headerY+28, x2:W*0.95, y2:headerY+28, color:P.muted, width:1});
+    // rows
+    for (var i=0; i<4; i++) {
+      var ry = headerY + 44 + i*40;
+      els.push({type:'label', text:t(rowKeys[i]), x:W*0.05, y:ry, color:P.secondary, size:12, align:'left'});
+      els.push({type:'label', text:values[i][0], x:col1, y:ry, color:P.text, size:11, align:'center'});
+      els.push({type:'label', text:values[i][1], x:col2, y:ry, color:P.text, size:11, align:'center'});
+      els.push({type:'label', text:values[i][2], x:col3, y:ry, color:P.text, size:11, align:'center'});
+    }
+    // message
+    els.push({type:'label', text:t('f5_msg'), x:cx, y:H*0.85, color:P.primary, size:14, align:'center'});
+    return els;
+  }
+
+  return [];
+}
+
+// custom elements: triangle (3 points) and trapezoid
+function customDrawElement(ctx, el) {
+  if (el.type === 'triangle') {
+    ctx.beginPath();
+    ctx.moveTo(el.x1, el.y1);
+    ctx.lineTo(el.x2, el.y2);
+    ctx.lineTo(el.x3, el.y3);
+    ctx.closePath();
+    if (el.fill) { ctx.fillStyle = el.fill; ctx.fill(); }
+    if (el.stroke) { ctx.strokeStyle = el.stroke; ctx.lineWidth = el.sw || 1; ctx.stroke(); }
+    return true;
+  }
+  if (el.type === 'trapezoid') {
+    // x,y is bottom center. tw=top width, bw=bottom width, h=height. Engine bell: wider at bottom
+    var cx = el.x, by = el.y;
+    ctx.beginPath();
+    ctx.moveTo(cx - el.tw/2, by - el.h);
+    ctx.lineTo(cx + el.tw/2, by - el.h);
+    ctx.lineTo(cx + el.bw/2, by);
+    ctx.lineTo(cx - el.bw/2, by);
+    ctx.closePath();
+    if (el.fill) { ctx.fillStyle = el.fill; ctx.fill(); }
+    if (el.stroke) { ctx.strokeStyle = el.stroke; ctx.lineWidth = el.sw || 1; ctx.stroke(); }
+    return true;
+  }
+  return false;
+}
+
+AnimRuntime.boot();
+</script>
+</body>
+</html>

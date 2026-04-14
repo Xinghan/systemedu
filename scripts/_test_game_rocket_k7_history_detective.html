@@ -1,0 +1,993 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=Inter:wght@400;500&family=Noto+Sans+SC:wght@400;500;700&display=swap" rel="stylesheet">
+<title>Spaceflight History Detective</title>
+<style>
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box;}
+html,body{width:100%;height:100vh;overflow:hidden;}
+body{background:#05070a;color:#e2e2e9;font-family:'Inter','Noto Sans SC',sans-serif;display:flex;flex-direction:column;}
+.wrapper{display:flex;flex-direction:column;height:100vh;overflow:hidden;}
+.header{display:flex;align-items:center;justify-content:space-between;padding:10px 16px 8px;background:#070a14;border-bottom:1px solid rgba(255,176,0,0.18);flex-shrink:0;}
+.header h1{font-family:'Space Grotesk','Noto Sans SC',sans-serif;font-size:clamp(14px,2vw,18px);font-weight:700;color:#ffb000;letter-spacing:-0.02em;}
+.header .sub{font-size:10px;color:#8e90a6;letter-spacing:0.08em;text-transform:uppercase;margin-top:2px;}
+.header .right{display:flex;align-items:center;gap:18px;}
+.header .stat{font-family:'Space Grotesk';font-size:10px;color:#8e90a6;letter-spacing:0.08em;text-align:right;}
+.header .stat b{display:block;font-size:16px;color:#ffb000;font-weight:700;font-family:'Space Grotesk';letter-spacing:0.02em;}
+.hearts{display:flex;gap:3px;}
+.heart{width:14px;height:14px;transition:opacity .3s;}
+.heart.lost{opacity:0.18;filter:grayscale(1);}
+.lang-btn{font-family:'Space Grotesk';font-size:10px;padding:5px 11px;cursor:pointer;border:1px solid rgba(255,176,0,0.35);background:rgba(17,20,37,0.85);color:#ffb59c;letter-spacing:1px;}
+.lang-btn:hover{border-color:#ffb000;color:#ffb000;}
+.reset-btn{font-family:'Space Grotesk';font-size:9px;padding:5px 10px;background:transparent;border:1px solid rgba(142,144,166,0.3);color:#8e90a6;cursor:pointer;letter-spacing:0.08em;text-transform:uppercase;}
+.reset-btn:hover{color:#ff716c;border-color:#ff716c;}
+.stage-wrap{flex:1;min-height:0;display:flex;flex-direction:column;gap:8px;padding:10px 14px;overflow:hidden;}
+.round-bar{display:flex;align-items:center;justify-content:space-between;padding:4px 0;flex-shrink:0;}
+.round-label{font-family:'Space Grotesk';font-size:10px;letter-spacing:0.14em;color:#8e90a6;text-transform:uppercase;}
+.round-label b{color:#ffb000;font-size:13px;margin:0 4px;}
+.round-dots{display:flex;gap:5px;}
+.round-dot{width:8px;height:8px;border-radius:50%;background:rgba(142,144,166,0.2);}
+.round-dot.active{background:#ffb000;box-shadow:0 0 6px rgba(255,176,0,0.55);}
+.round-dot.done{background:#50ffb0;}
+.round-dot.missed{background:#ff716c;}
+.section-title{font-family:'Space Grotesk';font-size:10px;letter-spacing:0.16em;color:#ffb000;text-transform:uppercase;padding:2px 0 4px;display:flex;align-items:center;gap:10px;}
+.section-title .sep{flex:1;height:1px;background:rgba(255,176,0,0.15);}
+
+/* Candidates */
+.candidates-row{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;flex-shrink:0;}
+.cand-card{background:rgba(17,20,37,0.85);border:1.5px solid rgba(142,144,166,0.22);padding:10px 8px;display:flex;flex-direction:column;align-items:center;gap:6px;cursor:pointer;transition:border-color .15s,transform .1s,background .15s;position:relative;overflow:hidden;}
+.cand-card:hover:not(.locked):not(.disabled){border-color:#ffb000;background:rgba(255,176,0,0.05);transform:translateY(-2px);}
+.cand-card.locked{cursor:not-allowed;opacity:0.55;}
+.cand-card.disabled{cursor:not-allowed;opacity:0.35;}
+.cand-card.correct{border-color:#50ffb0;background:rgba(80,255,176,0.1);animation:flashCorrect 0.6s ease-out;}
+.cand-card.wrong{border-color:#ff716c;background:rgba(255,113,108,0.08);animation:shakeWrong 0.45s ease-out;}
+@keyframes flashCorrect{0%,100%{box-shadow:0 0 0 0 rgba(80,255,176,0);}50%{box-shadow:0 0 0 6px rgba(80,255,176,0.3);}}
+@keyframes shakeWrong{0%,100%{transform:translateX(0);}25%{transform:translateX(-4px);}75%{transform:translateX(4px);}}
+.cand-icon{width:44px;height:44px;display:flex;align-items:center;justify-content:center;background:rgba(7,10,20,0.9);border:1px solid rgba(255,176,0,0.25);border-radius:50%;flex-shrink:0;}
+.cand-icon svg{width:30px;height:30px;}
+.cand-name{font-family:'Space Grotesk','Noto Sans SC',sans-serif;font-size:12px;font-weight:700;color:#e2e2e9;text-align:center;line-height:1.25;}
+.cand-year{font-family:'Space Grotesk';font-size:9px;color:#8e90a6;letter-spacing:0.12em;}
+.cand-card.correct .cand-name,.cand-card.correct .cand-year{color:#50ffb0;}
+.cand-card.wrong .cand-name,.cand-card.wrong .cand-year{color:#ff716c;}
+
+/* Clues */
+.clues-row{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;flex-shrink:0;}
+.clue-card{aspect-ratio:1.6;background:linear-gradient(135deg,#141831,#0a0d1d);border:1.5px solid rgba(255,176,0,0.22);position:relative;cursor:pointer;perspective:800px;transition:transform .15s,border-color .15s;}
+.clue-card:hover:not(.revealed):not(.locked){border-color:#ffb000;transform:translateY(-2px);}
+.clue-card.locked{cursor:not-allowed;opacity:0.45;}
+.clue-card.revealed{cursor:default;border-color:rgba(255,176,0,0.45);}
+.clue-inner{position:absolute;inset:0;transform-style:preserve-3d;transition:transform .6s cubic-bezier(.4,.1,.2,1);}
+.clue-card.revealed .clue-inner{transform:rotateY(180deg);}
+.clue-face{position:absolute;inset:0;backface-visibility:hidden;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:10px;text-align:center;}
+.clue-face.back{transform:rotateY(180deg);background:rgba(7,10,20,0.92);justify-content:flex-start;align-items:flex-start;padding:8px 10px 10px;}
+.clue-icon{width:32px;height:32px;margin-bottom:6px;opacity:0.7;display:flex;align-items:center;justify-content:center;}
+.clue-icon svg{width:100%;height:100%;}
+.clue-kind{font-family:'Space Grotesk';font-size:10px;letter-spacing:0.16em;color:#ffb000;text-transform:uppercase;}
+.clue-hint-front{font-family:'Space Grotesk';font-size:9px;color:#8e90a6;letter-spacing:0.08em;margin-top:4px;}
+.clue-face.back .clue-kind-small{font-family:'Space Grotesk';font-size:8px;letter-spacing:0.2em;color:#ff9d3d;text-transform:uppercase;margin-bottom:4px;opacity:0.75;}
+.clue-face.back .clue-text{font-size:12px;color:#e2e2e9;line-height:1.5;text-align:left;font-family:'Inter','Noto Sans SC',sans-serif;}
+
+/* Prompt banner */
+.prompt-banner{background:rgba(17,20,37,0.85);border:1px solid rgba(255,176,0,0.25);border-left:3px solid #ffb000;padding:10px 14px;display:flex;align-items:center;gap:12px;flex-shrink:0;}
+.prompt-banner .icon{width:22px;height:22px;flex-shrink:0;opacity:0.85;}
+.prompt-banner .txt{flex:1;font-size:12px;color:#e2e2e9;line-height:1.5;}
+.prompt-banner .txt b{color:#ffb000;}
+.prompt-banner.ok{border-left-color:#50ffb0;}
+.prompt-banner.ok .txt b{color:#50ffb0;}
+.prompt-banner.warn{border-left-color:#ff716c;}
+.prompt-banner.warn .txt b{color:#ff716c;}
+
+/* Bottom actions */
+.bottom-bar{display:flex;align-items:center;justify-content:space-between;padding:6px 0 4px;flex-shrink:0;gap:10px;margin-top:auto;}
+.bottom-bar .hint{font-size:10px;color:#8e90a6;font-family:'Space Grotesk';letter-spacing:0.1em;text-transform:uppercase;}
+.bottom-actions{display:flex;gap:8px;align-items:center;}
+
+/* Overlay (recap + synthesis) */
+.overlay{position:fixed;inset:0;background:rgba(3,4,8,0.96);z-index:80;display:none;flex-direction:column;align-items:center;justify-content:center;padding:20px;overflow-y:auto;}
+.overlay.show{display:flex;}
+.overlay-card{background:rgba(17,20,37,0.95);border:1px solid rgba(255,176,0,0.35);padding:22px 28px;max-width:min(92%,720px);width:100%;max-height:92vh;overflow-y:auto;}
+.overlay-title{font-family:'Space Grotesk','Noto Sans SC',sans-serif;font-size:20px;color:#ffb000;letter-spacing:0.02em;font-weight:700;text-align:center;margin-bottom:4px;}
+.overlay-sub{font-size:11px;color:#8e90a6;letter-spacing:0.12em;text-transform:uppercase;text-align:center;margin-bottom:18px;}
+.recap-head{display:flex;align-items:center;gap:12px;padding-bottom:12px;margin-bottom:12px;border-bottom:1px solid rgba(255,176,0,0.18);}
+.recap-head .icon-big{width:56px;height:56px;flex-shrink:0;background:rgba(7,10,20,0.9);border:1px solid rgba(255,176,0,0.3);border-radius:50%;display:flex;align-items:center;justify-content:center;}
+.recap-head .icon-big svg{width:38px;height:38px;}
+.recap-head .name-block h2{font-family:'Space Grotesk','Noto Sans SC',sans-serif;font-size:20px;color:#ffb000;font-weight:700;letter-spacing:-0.01em;}
+.recap-head .name-block .y{font-family:'Space Grotesk';font-size:11px;color:#8e90a6;letter-spacing:0.14em;margin-top:2px;}
+.recap-story{font-size:13px;color:#e2e2e9;line-height:1.75;margin-bottom:14px;}
+.recap-story p{margin-bottom:8px;}
+.recap-quote{border-left:3px solid #ffb000;padding:8px 14px;font-family:'Inter','Noto Sans SC',sans-serif;font-style:italic;color:#ffb59c;background:rgba(255,176,0,0.05);font-size:13px;line-height:1.7;margin:10px 0 14px;}
+.recap-tags{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px;}
+.tag-chip{font-family:'Space Grotesk';font-size:10px;padding:3px 8px;border:1px solid rgba(142,144,166,0.3);color:#8e90a6;letter-spacing:0.08em;text-transform:uppercase;}
+.round-score{text-align:center;font-family:'Space Grotesk';font-size:14px;color:#50ffb0;letter-spacing:0.06em;padding:8px;background:rgba(80,255,176,0.06);border:1px solid rgba(80,255,176,0.25);margin-bottom:14px;}
+.round-score b{font-size:22px;font-weight:700;color:#50ffb0;}
+.round-score.zero{color:#ff716c;background:rgba(255,113,108,0.06);border-color:rgba(255,113,108,0.25);}
+.round-score.zero b{color:#ff716c;}
+.done-btn{display:block;margin:6px auto 0;font-family:'Space Grotesk';font-size:11px;font-weight:700;letter-spacing:0.14em;text-transform:uppercase;padding:10px 28px;border:none;cursor:pointer;color:#05070a;background:linear-gradient(135deg,#ffb000,#ff5f1f);transition:transform .1s;}
+.done-btn:hover{transform:scale(1.04);}
+.done-btn.final{background:linear-gradient(135deg,#50ffb0,#00daf3);}
+
+/* Synthesis timeline */
+.timeline-box{padding:18px 0 10px;position:relative;}
+.timeline-svg{width:100%;height:auto;display:block;}
+.summary-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:14px 0 16px;}
+.stat-box{background:rgba(7,10,20,0.7);border:1px solid rgba(255,176,0,0.18);padding:10px;text-align:center;}
+.stat-box .lab{font-family:'Space Grotesk';font-size:9px;letter-spacing:0.14em;color:#8e90a6;text-transform:uppercase;}
+.stat-box .val{font-family:'Space Grotesk';font-size:22px;color:#ffb000;font-weight:700;margin-top:3px;}
+.stat-box.good .val{color:#50ffb0;}
+.synthesis-caption{text-align:center;font-size:13px;color:#e2e2e9;line-height:1.7;margin-top:10px;padding:0 10px;}
+.synthesis-caption b{color:#ffb000;}
+
+/* Toast */
+.toast{position:fixed;top:58px;left:50%;transform:translateX(-50%);background:rgba(17,20,37,0.95);border:1px solid #ffb000;padding:8px 18px;font-size:12px;color:#ffb000;letter-spacing:0.04em;z-index:50;display:none;font-family:'Space Grotesk','Noto Sans SC',sans-serif;}
+.toast.show{display:block;animation:toastIn 0.3s ease-out;}
+.toast.ok{border-color:#50ffb0;color:#50ffb0;}
+.toast.bad{border-color:#ff716c;color:#ff716c;}
+@keyframes toastIn{from{opacity:0;transform:translate(-50%,-10px);}to{opacity:1;transform:translate(-50%,0);}}
+
+/* Intro overlay */
+.intro-card{text-align:center;max-width:520px;}
+.intro-card h2{font-family:'Space Grotesk','Noto Sans SC',sans-serif;font-size:22px;color:#ffb000;margin-bottom:6px;font-weight:700;}
+.intro-card .intro-sub{font-size:11px;color:#8e90a6;letter-spacing:0.16em;text-transform:uppercase;margin-bottom:18px;}
+.intro-rules{text-align:left;margin:14px 0 22px;padding:14px 18px;background:rgba(7,10,20,0.6);border:1px solid rgba(255,176,0,0.2);font-size:13px;line-height:1.8;color:#e2e2e9;}
+.intro-rules li{list-style:none;padding-left:22px;position:relative;margin-bottom:4px;}
+.intro-rules li::before{content:"";position:absolute;left:4px;top:9px;width:6px;height:6px;background:#ffb000;border-radius:50%;}
+.intro-rules b{color:#ffb000;}
+
+@media (max-width:780px){
+  .candidates-row{grid-template-columns:repeat(5,1fr);gap:5px;}
+  .cand-icon{width:36px;height:36px;}
+  .cand-icon svg{width:24px;height:24px;}
+  .cand-name{font-size:11px;}
+  .cand-year{font-size:8px;}
+  .clues-row{grid-template-columns:repeat(2,1fr);}
+  .clue-face.back .clue-text{font-size:11px;}
+}
+</style>
+</head>
+<body>
+<div class="wrapper">
+  <header class="header">
+    <div>
+      <h1 id="titleText"></h1>
+      <div class="sub" id="subtitleText"></div>
+    </div>
+    <div class="right">
+      <div class="stat"><span id="scoreLabel"></span><b id="scoreVal">0</b></div>
+      <div>
+        <div class="stat" style="text-align:left;"><span id="heartsLabel"></span></div>
+        <div class="hearts" id="heartsBox"></div>
+      </div>
+      <button class="reset-btn" id="resetBtn"></button>
+      <button class="lang-btn" id="langBtn">EN</button>
+    </div>
+  </header>
+
+  <main class="stage-wrap">
+    <div class="round-bar">
+      <div class="round-label"><span id="roundWord"></span> <b id="roundNum">1</b> / <span id="roundTotal">5</span></div>
+      <div class="round-dots" id="roundDots"></div>
+      <div class="round-label"><span id="cluesUsedLabel"></span> <b id="cluesUsedVal">0</b>/4</div>
+    </div>
+
+    <div class="section-title"><span id="suspectsTitle"></span><span class="sep"></span><span id="suspectsHint"></span></div>
+    <div class="candidates-row" id="candidatesRow"></div>
+
+    <div class="section-title"><span id="cluesTitle"></span><span class="sep"></span><span id="cluesHint"></span></div>
+    <div class="clues-row" id="cluesRow"></div>
+
+    <div class="prompt-banner" id="promptBanner">
+      <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="#ffb000" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16h.01"/></svg>
+      <div class="txt" id="promptText"></div>
+    </div>
+
+    <div class="bottom-bar">
+      <div class="hint" id="bottomHint"></div>
+      <div class="bottom-actions">
+        <button class="reset-btn" id="newCaseBtn" style="display:none;"></button>
+      </div>
+    </div>
+  </main>
+</div>
+
+<!-- Intro overlay -->
+<div class="overlay show" id="introOverlay">
+  <div class="overlay-card intro-card">
+    <h2 id="introTitle"></h2>
+    <div class="intro-sub" id="introSub"></div>
+    <ul class="intro-rules">
+      <li id="introRule1"></li>
+      <li id="introRule2"></li>
+      <li id="introRule3"></li>
+      <li id="introRule4"></li>
+    </ul>
+    <button class="done-btn" id="introStartBtn"></button>
+  </div>
+</div>
+
+<!-- Recap overlay -->
+<div class="overlay" id="recapOverlay">
+  <div class="overlay-card">
+    <div id="recapBody"></div>
+    <button class="done-btn" id="recapNextBtn"></button>
+  </div>
+</div>
+
+<!-- Final synthesis overlay -->
+<div class="overlay" id="finalOverlay">
+  <div class="overlay-card">
+    <div class="overlay-title" id="finalTitle"></div>
+    <div class="overlay-sub" id="finalSub"></div>
+    <div class="summary-stats">
+      <div class="stat-box good"><div class="lab" id="finalScoreLab"></div><div class="val" id="finalScoreVal">0</div></div>
+      <div class="stat-box"><div class="lab" id="finalSolvedLab"></div><div class="val" id="finalSolvedVal">0/5</div></div>
+      <div class="stat-box"><div class="lab" id="finalAvgLab"></div><div class="val" id="finalAvgVal">0.0</div></div>
+    </div>
+    <div class="timeline-box">
+      <svg class="timeline-svg" id="timelineSvg" viewBox="0 0 720 220" preserveAspectRatio="xMidYMid meet"></svg>
+    </div>
+    <div class="synthesis-caption" id="synthesisCaption"></div>
+    <button class="done-btn final" id="finalRestartBtn"></button>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ========================= DATA =========================
+const CANDIDATES = [
+  {
+    id:'wanhu',
+    year:1500,
+    yearLabel:{zh:'约 1500 年·明朝', en:'c. 1500 · Ming Dynasty'},
+    name:{zh:'万户', en:'Wan Hu'},
+    icon:'chair',
+    color:'#d45a1e',
+    clues:{
+      time:{
+        zh:['这是中国古代的事情，比美国独立还要早两百多年。','大约发生在 1500 年前后的明朝中期。'],
+        en:['Ancient China, more than two centuries before the USA existed.','Around the year 1500, middle of the Ming Dynasty.']
+      },
+      place:{
+        zh:['故事发生在中国一个安静的院子里。','一间明朝官员自家的后院，地上铺着青砖。'],
+        en:['A quiet courtyard somewhere in China.','The back yard of a Ming Dynasty official, paved with grey brick.']
+      },
+      event:{
+        zh:['这个人把自己绑在了一件家具上——那是一张椅子。','他把 47 支火药筒绑到椅子背上，两手各拎一只风筝。'],
+        en:['He strapped himself to a chair.','He tied 47 gunpowder rockets behind the chair, held a kite in each hand.']
+      },
+      outcome:{
+        zh:['点火之后一声巨响，人没能活下来。','但六百年后，月球背面有一座环形山用他的名字命名。'],
+        en:['After ignition there was a loud boom; he did not survive.','Yet six centuries later a crater on the far side of the Moon was named after him.']
+      }
+    },
+    story:{
+      zh:[
+        '大约在 1500 年前后的明朝中期，有一位名叫万户（也写作"万虎"）的官员。他痴迷于一个念头：人能不能飞上天？',
+        '于是他把自己绑在一把木椅上，在椅子背后绑了 47 支当时最强的火药筒，两只手各拿一只风筝——他希望火药把他推上去，风筝让他飘下来。',
+        '点火的那一刻，浓烟翻滚，爆炸声震动院子。等烟散去的时候，万户已经不在了。',
+        '他的实验没有成功，可是故事被传了下来。1970 年，国际天文学联合会把月球背面一座环形山命名为 "Wan-Hoo"，用来纪念这位敢想敢做的古代先驱。'
+      ],
+      en:[
+        'Around 1500 AD, during the middle of the Ming Dynasty, a Chinese official named Wan Hu became obsessed with one question: could a person fly?',
+        'He strapped himself to a wooden chair, tied 47 of the strongest gunpowder rockets of his era to its back, and held a kite in each hand. The rockets would lift him; the kites would let him glide down.',
+        'At the moment of ignition, smoke billowed and a thunderous boom shook the courtyard. When the smoke cleared, Wan Hu was gone.',
+        'The experiment failed, but the story was passed down. In 1970, the International Astronomical Union named a crater on the far side of the Moon "Wan-Hoo" to honor this ancient dreamer.'
+      ]
+    },
+    quote:{zh:'"一个六百年前，敢把自己绑在火药上的人。"', en:'"A man who, six centuries ago, dared to strap himself to gunpowder."'},
+    tags:{zh:['明朝','中国','第一次尝试','梦想先驱'], en:['Ming Dynasty','China','First Attempt','Pioneer']}
+  },
+  {
+    id:'gagarin',
+    year:1961,
+    yearLabel:{zh:'1961 年·苏联', en:'1961 · USSR'},
+    name:{zh:'尤里·加加林', en:'Yuri Gagarin'},
+    icon:'capsule',
+    color:'#ff716c',
+    clues:{
+      time:{
+        zh:['事情发生在冷战时期，大约是 20 世纪 60 年代初。','1961 年 4 月 12 日的早上，一个春天的清晨。'],
+        en:['During the Cold War, early 1960s.','On the morning of April 12, 1961, a spring dawn.']
+      },
+      place:{
+        zh:['发射地点在苏联，拜科努尔航天中心。','飞船叫"东方一号"（Vostok 1），沿着椭圆轨道绕地球飞了 108 分钟。'],
+        en:['Launched from the Baikonur Cosmodrome in the Soviet Union.','The spacecraft, Vostok 1, orbited Earth once in 108 minutes.']
+      },
+      event:{
+        zh:['他成为人类历史上第一个进入外太空的人。','从轨道上俯瞰，他说了一句著名的话。'],
+        en:['He became the first human ever to enter outer space.','Looking down from orbit, he said one famous thing.']
+      },
+      outcome:{
+        zh:['他说："地球是蓝色的。"','这句话成了整个 20 世纪最被引用的航天语录之一。'],
+        en:['He said: "The Earth is blue."','That sentence became one of the most quoted lines of the space age.']
+      }
+    },
+    story:{
+      zh:[
+        '1961 年 4 月 12 日清晨，在苏联拜科努尔航天中心的发射台上，一枚名叫 R-7 的火箭点火升空。',
+        '火箭顶端坐着 27 岁的空军中尉尤里·加加林。他乘坐的是"东方一号"（Vostok 1）飞船。',
+        '108 分钟，一整圈——他绕地球飞了一周，成为人类历史上第一个进入太空的人。',
+        '从轨道上俯瞰这颗星球，他通过无线电发回了一句朴素的话："Земля — голубая"（地球——是蓝色的）。',
+        '加加林回到地面时变成了世界英雄。这一天后来被定为"国际载人航天日"。'
+      ],
+      en:[
+        'On the morning of April 12, 1961, a rocket called R-7 ignited at the Baikonur Cosmodrome in the Soviet Union.',
+        'At the top sat a 27-year-old Air Force lieutenant named Yuri Gagarin, aboard a capsule called Vostok 1.',
+        'In 108 minutes, he completed a single orbit of the Earth — becoming the first human ever to reach outer space.',
+        'Looking down at the planet from above, he radioed back a simple sentence: "Земля — голубая" — "The Earth is blue."',
+        'Gagarin returned a world hero. April 12 is now observed as the International Day of Human Space Flight.'
+      ]
+    },
+    quote:{zh:'"地球是蓝色的。"', en:'"The Earth is blue."'},
+    tags:{zh:['1961','苏联','首次载人','轨道飞行'], en:['1961','USSR','First Human','Orbit']}
+  },
+  {
+    id:'armstrong',
+    year:1969,
+    yearLabel:{zh:'1969 年·美国阿波罗 11', en:'1969 · Apollo 11 · USA'},
+    name:{zh:'尼尔·阿姆斯特朗', en:'Neil Armstrong'},
+    icon:'moon',
+    color:'#ffb000',
+    clues:{
+      time:{
+        zh:['这是 20 世纪 60 年代末的事。','确切日期是 1969 年 7 月 20 日。'],
+        en:['Late 1960s.','July 20, 1969, to be exact.']
+      },
+      place:{
+        zh:['地点在月球上——一片叫"静海"的平原。','飞船从美国佛罗里达州的肯尼迪航天中心发射。'],
+        en:['On the Moon, a plain called the Sea of Tranquility.','Launched from the Kennedy Space Center in Florida, USA.']
+      },
+      event:{
+        zh:['他是第一个在月球上留下脚印的人。','他走下登月舱"鹰"号（Eagle）的梯子，慢慢把左脚踩上月壤。'],
+        en:['He was the first person ever to step on the Moon.','He climbed down the ladder of the lunar module "Eagle" and slowly pressed his left boot into lunar soil.']
+      },
+      outcome:{
+        zh:['他留下了一句影响几代人的话。','"这是我的一小步，但却是人类的一大步。"'],
+        en:['He left humanity with one unforgettable sentence.','"That\'s one small step for [a] man, one giant leap for mankind."']
+      }
+    },
+    story:{
+      zh:[
+        '1969 年 7 月 16 日，巨大的土星五号火箭从美国佛罗里达州的肯尼迪航天中心点火升空。',
+        '四天之后的 7 月 20 日，登月舱"鹰"号降落在月球表面一片叫"静海"的平原上。',
+        '指令长尼尔·阿姆斯特朗慢慢走下梯子，把左脚踩上了月壤。他通过无线电说："这是我的一小步，但却是人类的一大步。"',
+        '阿姆斯特朗和奥尔德林在月面行走了大约两小时。他们插上美国国旗，安置了反射镜，采集了 21.5 千克月岩。',
+        '那是人类第一次真正站在另一颗天体上。全世界约有 6 亿人通过电视观看了这一时刻。'
+      ],
+      en:[
+        'On July 16, 1969, the gigantic Saturn V rocket lifted off from Kennedy Space Center in Florida.',
+        'Four days later, on July 20, the lunar module "Eagle" touched down on a Moon plain called the Sea of Tranquility.',
+        'Commander Neil Armstrong stepped slowly down the ladder and pressed his left boot into the lunar soil. Over the radio he said: "That\'s one small step for [a] man, one giant leap for mankind."',
+        'Armstrong and Aldrin walked on the Moon for roughly two hours. They planted a US flag, set up a reflector, and collected 21.5 kg of rock.',
+        'It was the first time humans had ever stood on another world. About 600 million people watched on television.'
+      ]
+    },
+    quote:{zh:'"这是我的一小步，但却是人类的一大步。"', en:'"That\'s one small step for [a] man, one giant leap for mankind."'},
+    tags:{zh:['1969','美国','阿波罗 11','登月第一人'], en:['1969','USA','Apollo 11','Moon Landing']}
+  },
+  {
+    id:'change',
+    year:2019,
+    yearLabel:{zh:'2013–2024·中国嫦娥 / 玉兔', en:'2013–2024 · China · Chang\'e / Yutu'},
+    name:{zh:'嫦娥 / 玉兔', en:'Chang\'e / Yutu'},
+    icon:'rover',
+    color:'#50ffb0',
+    clues:{
+      time:{
+        zh:['21 世纪的事——大概是 2010 年代到 2020 年代。','2019 年 1 月 3 日，有一件"第一次"发生了。'],
+        en:['21st century — the 2010s into the 2020s.','On January 3, 2019, a historic "first" happened.']
+      },
+      place:{
+        zh:['故事发生在月球上——但不是大家平时看到的那一面。','月球有一面永远背对地球，这个探测器是史上第一个软着陆到那里的。'],
+        en:['On the Moon — but not the side we normally see.','One side of the Moon always faces away from Earth; this probe was the first ever to soft-land there.']
+      },
+      event:{
+        zh:['这个任务由中国完成，探测器的名字来自一个神话故事。','名字取自奔月的仙女，和她身边那只捣药的玉兔。'],
+        en:['The mission was by China, and the probe is named after a mythological figure.','Named after the goddess who flew to the Moon, and her jade rabbit companion.']
+      },
+      outcome:{
+        zh:['同一系列任务还把月球土壤带回了地球。','2020 年和 2024 年，这个系列完成了正面和背面的土壤取样，各自带回约 1.7 千克月壤。'],
+        en:['Sister missions also brought lunar soil back to Earth.','In 2020 and 2024, the series returned ~1.7 kg of soil from the near side and the far side respectively.']
+      }
+    },
+    story:{
+      zh:[
+        '"嫦娥"和"玉兔"的名字来自中国古代神话——奔月的仙女嫦娥，以及她身边那只捣药的玉兔。',
+        '2013 年 12 月，嫦娥三号带着月球车"玉兔一号"在月球正面着陆。这是中国第一次实现月球软着陆。',
+        '2019 年 1 月 3 日，嫦娥四号降落在月球背面冯·卡门环形山——成为人类历史上第一个软着陆月球背面的探测器。它带着"玉兔二号"在月背工作了超过五年。',
+        '2020 年 11 月，嫦娥五号去月球正面取土，带回约 1.731 千克月壤；2024 年 6 月，嫦娥六号完成了月球背面取样——这又是人类第一次。',
+        '这一系列任务把中国航天一步步送到了月球的另一面。'
+      ],
+      en:[
+        'The names "Chang\'e" and "Yutu" come from Chinese myth — the goddess Chang\'e who flew to the Moon, and her jade rabbit companion.',
+        'In December 2013, Chang\'e 3 landed on the near side of the Moon with the rover Yutu-1. It was China\'s first soft landing on the Moon.',
+        'On January 3, 2019, Chang\'e 4 landed in Von Kármán crater on the far side — the first soft landing ever on the far side of the Moon. Its Yutu-2 rover has now worked there for over five years.',
+        'In November 2020, Chang\'e 5 scooped up ~1.731 kg of soil from the near side. In June 2024, Chang\'e 6 collected the first-ever samples from the far side.',
+        'This series of missions has walked China, step by step, to the hidden face of the Moon.'
+      ]
+    },
+    quote:{zh:'"第一次，我们去了月亮背对着我们的那一面。"', en:'"For the first time, we went to the side of the Moon that turns away from us."'},
+    tags:{zh:['中国','月球背面','首次','取样返回'], en:['China','Far Side','First Ever','Sample Return']}
+  },
+  {
+    id:'zhurong',
+    year:2021,
+    yearLabel:{zh:'2021 年·中国祝融号', en:'2021 · China · Zhurong'},
+    name:{zh:'祝融号', en:'Zhurong'},
+    icon:'mars',
+    color:'#ff9d3d',
+    clues:{
+      time:{
+        zh:['事情发生在 21 世纪 20 年代。','2021 年 5 月 15 日，一个中国的探测器完成了一个全新的"第一次"。'],
+        en:['Early 2020s.','On May 15, 2021, a Chinese probe pulled off a brand-new "first".']
+      },
+      place:{
+        zh:['这次的目的地不是月球，而是另一颗行星。','着陆点在火星北半球的"乌托邦平原"——这里可能藏有古代海洋的痕迹。'],
+        en:['This time the target was not the Moon but another planet.','It touched down in Utopia Planitia in the northern hemisphere of Mars, a plain that may hide traces of an ancient ocean.']
+      },
+      event:{
+        zh:['这是中国第一次成功在另一颗行星上释放一辆巡视器。','这辆巡视器的名字取自中国神话里的火神。'],
+        en:['China\'s first successful rover on another planet.','Its name comes from the Chinese god of fire.']
+      },
+      outcome:{
+        zh:['它在火星上总共行走了大约 1921 米。','大约一年后，因为覆盖太阳能板的火星尘太厚，它进入休眠，至今没有醒来。'],
+        en:['On Mars it traveled about 1,921 meters in total.','After about a year, dust clogged its solar panels and it went to sleep — still unanswered.']
+      }
+    },
+    story:{
+      zh:[
+        '2020 年 7 月，中国发射了名为"天问一号"的火星探测器。它飞了将近七个月才到达火星。',
+        '2021 年 5 月 15 日，天问一号的着陆平台带着巡视器成功降落在火星北半球的乌托邦平原。',
+        '五月二十二日，这辆巡视器驶下着陆平台，在火星表面留下了第一道中国车轮印——它就是"祝融号"，名字来自中国神话里的火神。',
+        '祝融号在火星上总共行驶了大约 1921 米，拍照、做土壤分析、测磁场，直到 2022 年 5 月进入休眠。按原计划它会在新一个火星年醒来，但太阳能板被积尘盖住，它至今没再发回信号。',
+        '无论如何，祝融号让中国成为世界上第二个能在火星上成功驾驶巡视器的国家。'
+      ],
+      en:[
+        'In July 2020 China launched a Mars probe called Tianwen-1. After nearly seven months of cruise, it arrived at Mars.',
+        'On May 15, 2021, the lander carrying the rover touched down on Utopia Planitia in the northern hemisphere of Mars.',
+        'On May 22, the rover drove down the ramp and left the first Chinese tire tracks on Mars — its name, Zhurong, comes from the Chinese god of fire.',
+        'Zhurong covered roughly 1,921 meters on Mars, taking images, analysing soil, measuring magnetic fields, until it went into hibernation in May 2022. It was supposed to wake up the next Mars year, but dust had covered its solar panels, and it has not called home since.',
+        'Either way, Zhurong made China the second country ever to drive a rover on the surface of Mars.'
+      ]
+    },
+    quote:{zh:'"中国的第一道车印留在了另一颗星球。"', en:'"China left its first tire tracks on another planet."'},
+    tags:{zh:['2021','中国','火星','巡视器'], en:['2021','China','Mars','Rover']}
+  }
+];
+
+const CLUE_KINDS = [
+  {key:'time',    label:{zh:'时间',en:'When'},    icon:'clock'},
+  {key:'place',   label:{zh:'地点',en:'Where'},   icon:'pin'},
+  {key:'event',   label:{zh:'事件',en:'What'},    icon:'flame'},
+  {key:'outcome', label:{zh:'结果',en:'Legacy'},  icon:'medal'}
+];
+
+// ========================= I18N =========================
+const I18N = {
+  title:{zh:'小小航天史侦探', en:'Little Spaceflight History Detective'},
+  subtitle:{zh:'用四条线索找出神秘人物·共 5 轮', en:'Four clues, five rounds — name the mystery'},
+  score:{zh:'总分', en:'Score'},
+  hearts:{zh:'生命', en:'Lives'},
+  roundWord:{zh:'第', en:'Round'},
+  cluesUsed:{zh:'已翻线索', en:'Clues used'},
+  suspectsTitle:{zh:'五位候选人物', en:'Five Candidates'},
+  suspectsHint:{zh:'点击来作答', en:'Click to guess'},
+  cluesTitle:{zh:'四张线索卡', en:'Four Clue Cards'},
+  cluesHint:{zh:'翻开一张再猜，分更高', en:'Fewer clues = more score'},
+  promptInit:{zh:'一个神秘人物已经藏起来了。翻开任意一张线索，或直接猜。', en:'A mystery figure is hidden. Flip any clue, or guess right away.'},
+  promptAfterClue:{zh:'线索已翻开。继续翻还是就此作答？', en:'Clue revealed. Flip another, or guess now?'},
+  promptCorrect:{zh:'侦破成功！', en:'Case solved!'},
+  promptWrong:{zh:'不是这个人——再看看别的线索。', en:'Wrong suspect — look at other clues.'},
+  promptOutOfClues:{zh:'四张线索都翻开了，凭这些做最后判断吧。', en:'All four clues revealed. Make your final call.'},
+  promptNoHearts:{zh:'生命耗尽，这一轮结束。来看看答案。', en:'Out of lives. Round ends — reveal the answer.'},
+  bottomHint:{zh:'提示：越早猜中分数越高（4·3·2·1 张线索 = 100·75·50·25 分）', en:'Tip: Fewer clues = higher score (4·3·2·1 clues = 100·75·50·25 pts)'},
+  newCase:{zh:'下一轮', en:'Next Case'},
+  reset:{zh:'重开', en:'Reset'},
+  introTitle:{zh:'欢迎来到小小航天史侦探', en:'Welcome, Little Detective'},
+  introSub:{zh:'五位真实的太空先驱·等你来辨认', en:'Five real space pioneers — who is who?'},
+  introRule1:{zh:'每一轮，游戏会从 <b>5 位候选人物</b> 里选出 1 位藏起来。', en:'Each round, the game secretly picks <b>1 of 5 candidates</b>.'},
+  introRule2:{zh:'你有 <b>4 张线索卡</b>：时间、地点、事件、结果。一次翻一张。', en:'You have <b>4 clue cards</b>: when, where, what, legacy. Flip one at a time.'},
+  introRule3:{zh:'用得线索越少，分数越高（<b>100</b> / 75 / 50 / 25 分）。', en:'Fewer clues used = higher score (<b>100</b> / 75 / 50 / 25 pts).'},
+  introRule4:{zh:'猜错会失去一颗生命。打完 5 轮还能看见每个人的完整故事。', en:'A wrong guess costs one life. After 5 rounds, see all five stories.'},
+  introStart:{zh:'开始侦查', en:'Start Investigation'},
+  recapNext:{zh:'进入下一轮', en:'Next Round'},
+  recapReveal:{zh:'查看答案', en:'Reveal Answer'},
+  recapFinish:{zh:'查看总结', en:'See Summary'},
+  finalTitle:{zh:'侦查报告', en:'Case File Complete'},
+  finalSub:{zh:'五个故事都是真的', en:'All five stories are real'},
+  finalScoreLab:{zh:'总分', en:'Total Score'},
+  finalSolvedLab:{zh:'侦破', en:'Solved'},
+  finalAvgLab:{zh:'平均用线索', en:'Avg clues'},
+  synthesisCap:{zh:'你现在知道 <b>5 个真实的航天故事</b>了。从明朝的椅子到火星的车印，人类造火箭的梦想跨越了 <b>500 多年</b>。', en:'You now know <b>5 real spaceflight stories</b>. From a Ming Dynasty chair to tire tracks on Mars, the dream of reaching the sky spans <b>more than 500 years</b>.'},
+  finalRestart:{zh:'再玩一次', en:'Play Again'},
+  toastCorrect:{zh:'+{n} 分', en:'+{n} pts'},
+  toastWrong:{zh:'猜错了', en:'Wrong'},
+  toastHint:{zh:'提示：有一张线索卡没翻开，奖励分数！', en:'Bonus: one clue unused!'},
+  scoreBreakdown:{zh:'本轮 {n} 分（用了 {c} 张线索）', en:'Round score: {n} pts ({c} clues used)'},
+  scoreZero:{zh:'本轮 0 分', en:'Round score: 0 pts'},
+  revealedAs:{zh:'答案是：', en:'Answer:'}
+};
+
+let LANG = 'zh';
+const t = (key, vars) => {
+  let s = I18N[key][LANG];
+  if(vars) for(const k in vars) s = s.replace('{'+k+'}', vars[k]);
+  return s;
+};
+
+// ========================= STATE =========================
+const STATE = {
+  order: [],
+  currentIdx: 0,
+  target: null,
+  revealed: [false,false,false,false],
+  revealOrder: [null,null,null,null],  // which nth-click revealed each position
+  nextReveal: 0,                        // 0..3, counter of clicks so far
+  clueOrder: [],
+  score: 0,
+  hearts: 3,
+  roundScores: [],
+  roundClueCounts: [],
+  roundOutcome: [],
+  locked: false,
+  answered: false
+};
+
+// ========================= ICONS (SVG strings) =========================
+const ICON_SVGS = {
+  chair:'<svg viewBox="0 0 32 32" fill="none" stroke="#ffb000" stroke-width="1.6" stroke-linecap="round"><path d="M8 10v12M24 10v12M8 22h16M10 14h12M6 28l2-6M26 28l-2-6"/><path d="M12 8l8 0M13 4l6 0 1 4-8 0z" fill="rgba(255,176,0,0.2)"/></svg>',
+  capsule:'<svg viewBox="0 0 32 32" fill="none" stroke="#ff716c" stroke-width="1.6" stroke-linecap="round"><path d="M16 4l5 6v11l-5 4-5-4V10z" fill="rgba(255,113,108,0.2)"/><circle cx="16" cy="13" r="2.2" fill="#ff716c"/><path d="M11 21l-3 6M21 21l3 6M16 25v3"/></svg>',
+  moon:'<svg viewBox="0 0 32 32" fill="none" stroke="#ffb000" stroke-width="1.6"><circle cx="16" cy="16" r="10" fill="rgba(255,176,0,0.12)"/><path d="M22 10a8 8 0 0 1-12 12" fill="rgba(255,176,0,0.25)"/><circle cx="11" cy="18" r="1.2" fill="#ffb000"/><circle cx="19" cy="20" r="1" fill="#ffb000"/><circle cx="14" cy="12" r="0.9" fill="#ffb000"/></svg>',
+  rover:'<svg viewBox="0 0 32 32" fill="none" stroke="#50ffb0" stroke-width="1.6" stroke-linecap="round"><rect x="6" y="14" width="20" height="8" fill="rgba(80,255,176,0.15)"/><circle cx="10" cy="24" r="2.4" fill="#50ffb0"/><circle cx="22" cy="24" r="2.4" fill="#50ffb0"/><path d="M12 14v-4h8v4M16 10V6"/><path d="M16 6l-2-2h4l-2 2" fill="#50ffb0"/></svg>',
+  mars:'<svg viewBox="0 0 32 32" fill="none" stroke="#ff9d3d" stroke-width="1.6"><circle cx="16" cy="16" r="10" fill="rgba(255,157,61,0.18)"/><path d="M9 14c2 1 5 2 7 2s5-1 7-2M12 19c1.5.8 3.3 1.2 4 1.2s2.5-.4 4-1.2" stroke="#d45a1e"/><circle cx="13" cy="13" r="0.8" fill="#d45a1e"/><circle cx="20" cy="17" r="0.8" fill="#d45a1e"/></svg>',
+  clock:'<svg viewBox="0 0 32 32" fill="none" stroke="#ffb000" stroke-width="1.6"><circle cx="16" cy="16" r="10"/><path d="M16 10v6l4 3" stroke-linecap="round"/></svg>',
+  pin:'<svg viewBox="0 0 32 32" fill="none" stroke="#ffb000" stroke-width="1.6" stroke-linecap="round"><path d="M16 4c5 0 8 3.4 8 8 0 6-8 16-8 16S8 18 8 12c0-4.6 3-8 8-8z"/><circle cx="16" cy="12" r="3"/></svg>',
+  flame:'<svg viewBox="0 0 32 32" fill="none" stroke="#ffb000" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M16 4c0 4-6 6-6 12a6 6 0 0 0 12 0c0-3-2-5-3-6-.2 2-1.4 3-2.2 3-.8 0-1-1-1-3 .2-3-.5-5 .2-6z" fill="rgba(255,176,0,0.2)"/></svg>',
+  medal:'<svg viewBox="0 0 32 32" fill="none" stroke="#ffb000" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M10 4l6 10 6-10"/><circle cx="16" cy="20" r="7" fill="rgba(255,176,0,0.2)"/><path d="M14 20l2 2 3-4"/></svg>',
+  heart:'<svg viewBox="0 0 16 16" class="heart"><path d="M8 14s-5-3.2-5-7.4A3 3 0 0 1 8 4.6 3 3 0 0 1 13 6.6C13 10.8 8 14 8 14z" fill="#ff716c"/></svg>',
+  questionMark:'<svg viewBox="0 0 32 32" fill="none" stroke="#ffb000" stroke-width="1.8"><circle cx="16" cy="16" r="12" stroke-dasharray="3 3"/><path d="M12 12c0-2 2-4 4-4s4 1.8 4 4-4 2.5-4 5" stroke-linecap="round"/><circle cx="16" cy="22.5" r="1.1" fill="#ffb000"/></svg>'
+};
+
+// ========================= HELPERS =========================
+function shuffle(arr){
+  const a = arr.slice();
+  for(let i = a.length-1; i > 0; i--){
+    const j = Math.floor(Math.random()*(i+1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
+function toast(msg, kind){
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.className = 'toast show';
+  if(kind) el.classList.add(kind);
+  clearTimeout(el._to);
+  el._to = setTimeout(() => el.classList.remove('show'), 1800);
+}
+
+// ========================= RENDER =========================
+function renderStaticLabels(){
+  document.getElementById('titleText').textContent = t('title');
+  document.getElementById('subtitleText').textContent = t('subtitle');
+  document.getElementById('scoreLabel').textContent = t('score');
+  document.getElementById('heartsLabel').textContent = t('hearts');
+  document.getElementById('roundWord').textContent = t('roundWord');
+  document.getElementById('roundTotal').textContent = '5';
+  document.getElementById('cluesUsedLabel').textContent = t('cluesUsed');
+  document.getElementById('suspectsTitle').textContent = t('suspectsTitle');
+  document.getElementById('suspectsHint').textContent = t('suspectsHint');
+  document.getElementById('cluesTitle').textContent = t('cluesTitle');
+  document.getElementById('cluesHint').textContent = t('cluesHint');
+  document.getElementById('bottomHint').textContent = t('bottomHint');
+  document.getElementById('resetBtn').textContent = t('reset');
+  document.getElementById('newCaseBtn').textContent = t('newCase');
+  document.getElementById('introTitle').textContent = t('introTitle');
+  document.getElementById('introSub').textContent = t('introSub');
+  document.getElementById('introRule1').innerHTML = t('introRule1');
+  document.getElementById('introRule2').innerHTML = t('introRule2');
+  document.getElementById('introRule3').innerHTML = t('introRule3');
+  document.getElementById('introRule4').innerHTML = t('introRule4');
+  document.getElementById('introStartBtn').textContent = t('introStart');
+  document.getElementById('finalTitle').textContent = t('finalTitle');
+  document.getElementById('finalSub').textContent = t('finalSub');
+  document.getElementById('finalScoreLab').textContent = t('finalScoreLab');
+  document.getElementById('finalSolvedLab').textContent = t('finalSolvedLab');
+  document.getElementById('finalAvgLab').textContent = t('finalAvgLab');
+  document.getElementById('synthesisCaption').innerHTML = t('synthesisCap');
+  document.getElementById('finalRestartBtn').textContent = t('finalRestart');
+  document.title = t('title');
+}
+
+function renderHearts(){
+  const box = document.getElementById('heartsBox');
+  box.innerHTML = '';
+  for(let i = 0; i < 3; i++){
+    const span = document.createElement('span');
+    span.innerHTML = ICON_SVGS.heart;
+    const svg = span.firstElementChild;
+    svg.classList.add('heart');
+    if(i >= STATE.hearts) svg.classList.add('lost');
+    box.appendChild(svg);
+  }
+}
+
+function renderRoundDots(){
+  const box = document.getElementById('roundDots');
+  box.innerHTML = '';
+  for(let i = 0; i < 5; i++){
+    const dot = document.createElement('span');
+    dot.className = 'round-dot';
+    if(i < STATE.currentIdx){
+      const ok = STATE.roundOutcome[i];
+      dot.classList.add(ok === 'solved' ? 'done' : 'missed');
+    } else if(i === STATE.currentIdx){
+      dot.classList.add('active');
+    }
+    box.appendChild(dot);
+  }
+}
+
+function renderCandidates(){
+  const row = document.getElementById('candidatesRow');
+  row.innerHTML = '';
+  CANDIDATES.forEach(c => {
+    const card = document.createElement('div');
+    card.className = 'cand-card';
+    card.dataset.id = c.id;
+    card.innerHTML = `
+      <div class="cand-icon">${ICON_SVGS[c.icon]}</div>
+      <div class="cand-name">${c.name[LANG]}</div>
+      <div class="cand-year">${c.yearLabel[LANG]}</div>
+    `;
+    card.addEventListener('click', () => handleGuess(c.id));
+    row.appendChild(card);
+  });
+}
+
+function renderClues(){
+  const row = document.getElementById('cluesRow');
+  row.innerHTML = '';
+  STATE.clueOrder.forEach((kind, i) => {
+    const card = document.createElement('div');
+    card.className = 'clue-card';
+    if(STATE.revealed[i]) card.classList.add('revealed');
+    const kindDef = CLUE_KINDS.find(k => k.key === kind);
+    const clueTexts = STATE.target.clues[kind][LANG];
+    // Earlier click order = vaguer clue (index 0); later click = precise (index 1)
+    const order = STATE.revealOrder[i];
+    const textIdx = order === null ? 0 : (order < 2 ? 0 : 1);
+    const txt = clueTexts[Math.min(textIdx, clueTexts.length-1)];
+    card.innerHTML = `
+      <div class="clue-inner">
+        <div class="clue-face front">
+          <div class="clue-icon">${ICON_SVGS[kindDef.icon]}</div>
+          <div class="clue-kind">${kindDef.label[LANG]}</div>
+          <div class="clue-hint-front">${LANG === 'zh' ? '点击翻开' : 'Click to flip'}</div>
+        </div>
+        <div class="clue-face back">
+          <div class="clue-kind-small">${kindDef.label[LANG]}</div>
+          <div class="clue-text">${txt}</div>
+        </div>
+      </div>
+    `;
+    card.addEventListener('click', () => handleClueClick(i));
+    row.appendChild(card);
+  });
+  document.getElementById('cluesUsedVal').textContent = STATE.revealed.filter(Boolean).length;
+}
+
+function updatePrompt(kind, text){
+  const banner = document.getElementById('promptBanner');
+  banner.classList.remove('ok','warn');
+  if(kind === 'ok') banner.classList.add('ok');
+  if(kind === 'warn') banner.classList.add('warn');
+  document.getElementById('promptText').innerHTML = text;
+}
+
+function updateScore(){
+  document.getElementById('scoreVal').textContent = STATE.score;
+}
+
+function updateRoundNum(){
+  document.getElementById('roundNum').textContent = STATE.currentIdx + 1;
+}
+
+// ========================= GAME LOGIC =========================
+function startRound(){
+  STATE.target = CANDIDATES.find(c => c.id === STATE.order[STATE.currentIdx]);
+  STATE.revealed = [false,false,false,false];
+  STATE.revealOrder = [null,null,null,null];
+  STATE.nextReveal = 0;
+  STATE.clueOrder = shuffle(CLUE_KINDS.map(k => k.key));
+  STATE.locked = false;
+  STATE.answered = false;
+  renderCandidates();
+  renderClues();
+  renderRoundDots();
+  updateRoundNum();
+  updatePrompt(null, t('promptInit'));
+  document.getElementById('cluesUsedVal').textContent = 0;
+  document.getElementById('newCaseBtn').style.display = 'none';
+}
+
+function handleClueClick(i){
+  if(STATE.locked || STATE.answered) return;
+  if(STATE.revealed[i]) return;
+  STATE.revealed[i] = true;
+  STATE.revealOrder[i] = STATE.nextReveal;
+  STATE.nextReveal += 1;
+  renderClues();
+  const used = STATE.revealed.filter(Boolean).length;
+  if(used >= 4){
+    updatePrompt('warn', t('promptOutOfClues'));
+  } else {
+    updatePrompt(null, t('promptAfterClue'));
+  }
+}
+
+function handleGuess(candId){
+  if(STATE.locked || STATE.answered) return;
+  const isCorrect = candId === STATE.target.id;
+  const row = document.getElementById('candidatesRow');
+  const card = row.querySelector(`[data-id="${candId}"]`);
+  if(!card) return;
+  if(isCorrect){
+    card.classList.add('correct');
+    STATE.answered = true;
+    STATE.locked = true;
+    const cluesUsed = STATE.revealed.filter(Boolean).length;
+    const effective = Math.max(1, cluesUsed); // if guessed at 0 clues revealed, count as 1
+    const roundPts = (5 - effective) * 25;
+    STATE.score += roundPts;
+    STATE.roundScores.push(roundPts);
+    STATE.roundClueCounts.push(cluesUsed);
+    STATE.roundOutcome.push('solved');
+    updateScore();
+    updatePrompt('ok', t('promptCorrect'));
+    toast(t('toastCorrect', {n: roundPts}), 'ok');
+    row.querySelectorAll('.cand-card').forEach(c => { if(c !== card) c.classList.add('locked'); });
+    // reveal all clues for consolidation then show recap
+    setTimeout(() => {
+      STATE.revealed = [true,true,true,true];
+      // fill in revealOrder for any still-null positions as "late" so they show precise text
+      for(let k = 0; k < 4; k++){
+        if(STATE.revealOrder[k] === null){ STATE.revealOrder[k] = STATE.nextReveal++; }
+      }
+      renderClues();
+      document.getElementById('cluesUsedVal').textContent = cluesUsed;
+      setTimeout(() => openRecap(true, roundPts, cluesUsed), 650);
+    }, 900);
+  } else {
+    card.classList.add('wrong');
+    STATE.hearts -= 1;
+    renderHearts();
+    toast(t('toastWrong'), 'bad');
+    if(STATE.hearts <= 0){
+      STATE.answered = true;
+      STATE.locked = true;
+      STATE.roundScores.push(0);
+      STATE.roundClueCounts.push(STATE.revealed.filter(Boolean).length);
+      STATE.roundOutcome.push('missed');
+      updatePrompt('warn', t('promptNoHearts'));
+      setTimeout(() => {
+        STATE.revealed = [true,true,true,true];
+        for(let k = 0; k < 4; k++){
+          if(STATE.revealOrder[k] === null){ STATE.revealOrder[k] = STATE.nextReveal++; }
+        }
+        renderClues();
+        setTimeout(() => openRecap(false, 0, STATE.roundClueCounts[STATE.roundClueCounts.length-1]), 700);
+      }, 700);
+    } else {
+      setTimeout(() => {
+        card.classList.remove('wrong');
+        card.classList.add('disabled');
+        card.style.pointerEvents = 'none';
+        updatePrompt('warn', t('promptWrong'));
+      }, 650);
+    }
+  }
+}
+
+function openRecap(solved, pts, cluesUsed){
+  const body = document.getElementById('recapBody');
+  const c = STATE.target;
+  const scoreClass = solved ? '' : 'zero';
+  const scoreTxt = solved ? t('scoreBreakdown', {n: pts, c: cluesUsed}) : t('scoreZero');
+  body.innerHTML = `
+    <div class="overlay-title">${solved ? t('promptCorrect') : t('revealedAs')}</div>
+    <div class="overlay-sub">${c.yearLabel[LANG]}</div>
+    <div class="recap-head">
+      <div class="icon-big">${ICON_SVGS[c.icon]}</div>
+      <div class="name-block">
+        <h2>${c.name[LANG]}</h2>
+        <div class="y">${c.yearLabel[LANG]}</div>
+      </div>
+    </div>
+    <div class="recap-story">
+      ${c.story[LANG].map(p => `<p>${p}</p>`).join('')}
+    </div>
+    <div class="recap-quote">${c.quote[LANG]}</div>
+    <div class="recap-tags">
+      ${c.tags[LANG].map(tag => `<span class="tag-chip">${tag}</span>`).join('')}
+    </div>
+    <div class="round-score ${scoreClass}">
+      <b>${solved ? '+' + pts : 0}</b>
+      <div>${scoreTxt}</div>
+    </div>
+  `;
+  const isLast = STATE.currentIdx >= 4;
+  document.getElementById('recapNextBtn').textContent = isLast ? t('recapFinish') : t('recapNext');
+  document.getElementById('recapOverlay').classList.add('show');
+}
+
+function nextRound(){
+  document.getElementById('recapOverlay').classList.remove('show');
+  STATE.currentIdx += 1;
+  STATE.hearts = 3;  // refill hearts per round so single bad round doesn't doom game
+  renderHearts();
+  if(STATE.currentIdx >= 5){
+    openFinal();
+  } else {
+    startRound();
+  }
+}
+
+function openFinal(){
+  const solved = STATE.roundOutcome.filter(o => o === 'solved').length;
+  const totalClues = STATE.roundClueCounts.reduce((a,b) => a+b, 0);
+  const avg = solved > 0 ? (STATE.roundClueCounts.filter((_,i) => STATE.roundOutcome[i] === 'solved').reduce((a,b) => a+b, 0) / solved).toFixed(1) : '—';
+  document.getElementById('finalScoreVal').textContent = STATE.score;
+  document.getElementById('finalSolvedVal').textContent = solved + '/5';
+  document.getElementById('finalAvgVal').textContent = avg;
+  drawTimeline();
+  document.getElementById('finalOverlay').classList.add('show');
+}
+
+function drawTimeline(){
+  const svg = document.getElementById('timelineSvg');
+  const W = 720, H = 220;
+  const marginL = 40, marginR = 40, marginT = 40, marginB = 70;
+  const baseY = H - marginB;
+  // sort by year
+  const sorted = CANDIDATES.slice().sort((a,b) => a.year - b.year);
+  const yearMin = sorted[0].year - 40;  // 1460
+  const yearMax = sorted[sorted.length-1].year + 30;  // 2051
+  const xFor = y => marginL + (y - yearMin)/(yearMax - yearMin) * (W - marginL - marginR);
+
+  let html = '';
+  // background axis
+  html += `<line x1="${marginL-10}" y1="${baseY}" x2="${W-marginR+10}" y2="${baseY}" stroke="rgba(255,176,0,0.5)" stroke-width="1.5"/>`;
+  // decorative tick marks at century boundaries
+  [1500,1600,1700,1800,1900,2000].forEach(yr => {
+    const x = xFor(yr);
+    html += `<line x1="${x}" y1="${baseY-4}" x2="${x}" y2="${baseY+4}" stroke="rgba(142,144,166,0.5)" stroke-width="1"/>`;
+    html += `<text x="${x}" y="${baseY+18}" text-anchor="middle" font-family="'Space Grotesk',sans-serif" font-size="10" fill="#8e90a6">${yr}</text>`;
+  });
+
+  // distribute labels to avoid overlap — alternate above / below
+  const bubbles = sorted.map((c, i) => {
+    const x = xFor(c.year);
+    const above = i % 2 === 0;
+    const y = above ? baseY - 60 : baseY - 30;
+    const labelY = above ? y - 18 : baseY + 40;
+    return {c, x, y, labelY, above};
+  });
+  // stems + dots
+  bubbles.forEach(({c,x,y}) => {
+    html += `<line x1="${x}" y1="${baseY}" x2="${x}" y2="${y}" stroke="rgba(255,176,0,0.35)" stroke-width="1" stroke-dasharray="2 2"/>`;
+    html += `<circle cx="${x}" cy="${baseY}" r="4.5" fill="${c.color}" stroke="#05070a" stroke-width="1.5"/>`;
+  });
+  // icons / name bubbles
+  bubbles.forEach(({c,x,y,labelY,above}, idx) => {
+    const solvedIdx = STATE.order.indexOf(c.id);
+    const wasSolved = STATE.roundOutcome[solvedIdx] === 'solved';
+    const outlineColor = wasSolved ? '#50ffb0' : (STATE.roundOutcome[solvedIdx] === 'missed' ? '#ff716c' : c.color);
+    html += `<g transform="translate(${x},${y})">`;
+    html += `<circle r="14" fill="rgba(7,10,20,0.95)" stroke="${outlineColor}" stroke-width="1.5"/>`;
+    // inline the icon SVG at scale: replace root viewBox with positioned attributes
+    const iconMarkup = ICON_SVGS[c.icon].replace('<svg ', '<svg x="-10" y="-10" width="20" height="20" ');
+    html += iconMarkup;
+    html += `</g>`;
+    // label (name + year)
+    const labelAnchor = 'middle';
+    html += `<text x="${x}" y="${labelY}" text-anchor="${labelAnchor}" font-family="'Space Grotesk','Noto Sans SC',sans-serif" font-size="11" font-weight="700" fill="${c.color}">${c.name[LANG]}</text>`;
+    html += `<text x="${x}" y="${labelY + 13}" text-anchor="${labelAnchor}" font-family="'Space Grotesk',sans-serif" font-size="9" fill="#8e90a6" letter-spacing="0.08em">${c.year}</text>`;
+  });
+  // arrows showing direction of time
+  html += `<polygon points="${W-marginR+5},${baseY} ${W-marginR-2},${baseY-4} ${W-marginR-2},${baseY+4}" fill="rgba(255,176,0,0.7)"/>`;
+  html += `<text x="${W-marginR+2}" y="${baseY-8}" text-anchor="end" font-family="'Space Grotesk',sans-serif" font-size="9" fill="#8e90a6" letter-spacing="0.1em">${LANG === 'zh' ? '时间' : 'TIME'}</text>`;
+
+  svg.innerHTML = html;
+}
+
+function resetGame(){
+  STATE.order = shuffle(CANDIDATES.map(c => c.id));
+  STATE.currentIdx = 0;
+  STATE.score = 0;
+  STATE.hearts = 3;
+  STATE.roundScores = [];
+  STATE.roundClueCounts = [];
+  STATE.roundOutcome = [];
+  renderHearts();
+  updateScore();
+  renderRoundDots();
+  startRound();
+  document.getElementById('recapOverlay').classList.remove('show');
+  document.getElementById('finalOverlay').classList.remove('show');
+}
+
+// ========================= EVENTS =========================
+document.getElementById('langBtn').addEventListener('click', () => {
+  LANG = LANG === 'zh' ? 'en' : 'zh';
+  document.getElementById('langBtn').textContent = LANG === 'zh' ? 'EN' : 'ZH';
+  document.documentElement.lang = LANG;
+  renderStaticLabels();
+  renderCandidates();
+  if(STATE.target) renderClues();
+  if(document.getElementById('recapOverlay').classList.contains('show')){
+    // refresh recap
+    const last = STATE.roundOutcome[STATE.currentIdx];
+    const solved = last === 'solved';
+    const pts = STATE.roundScores[STATE.roundScores.length-1] || 0;
+    const cluesUsed = STATE.roundClueCounts[STATE.roundClueCounts.length-1] || 0;
+    openRecap(solved, pts, cluesUsed);
+  }
+  if(document.getElementById('finalOverlay').classList.contains('show')){
+    drawTimeline();
+    document.getElementById('synthesisCaption').innerHTML = t('synthesisCap');
+  }
+  // current-state-aware prompt
+  if(STATE.answered){
+    // leave last prompt alone
+  } else if(STATE.revealed.some(Boolean) && STATE.revealed.every(Boolean)){
+    updatePrompt('warn', t('promptOutOfClues'));
+  } else if(STATE.revealed.some(Boolean)){
+    updatePrompt(null, t('promptAfterClue'));
+  } else if(STATE.target){
+    updatePrompt(null, t('promptInit'));
+  }
+});
+
+document.getElementById('resetBtn').addEventListener('click', () => {
+  resetGame();
+});
+
+document.getElementById('newCaseBtn').addEventListener('click', () => {
+  nextRound();
+});
+
+document.getElementById('recapNextBtn').addEventListener('click', () => {
+  nextRound();
+});
+
+document.getElementById('finalRestartBtn').addEventListener('click', () => {
+  document.getElementById('finalOverlay').classList.remove('show');
+  resetGame();
+});
+
+document.getElementById('introStartBtn').addEventListener('click', () => {
+  document.getElementById('introOverlay').classList.remove('show');
+  resetGame();
+});
+
+// ========================= INIT =========================
+STATE.order = shuffle(CANDIDATES.map(c => c.id));
+renderStaticLabels();
+renderHearts();
+updateScore();
+renderRoundDots();
+// placeholder first render (no target yet until user starts)
+STATE.target = CANDIDATES[0];
+STATE.clueOrder = CLUE_KINDS.map(k => k.key);
+renderCandidates();
+renderClues();
+// Lock board until intro dismissed
+STATE.locked = true;
+document.getElementById('promptText').innerHTML = t('promptInit');
+</script>
+</body>
+</html>

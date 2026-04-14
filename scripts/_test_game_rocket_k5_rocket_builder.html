@@ -1,0 +1,654 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=Inter:wght@400;500&family=Noto+Sans+SC:wght@400;700&display=swap" rel="stylesheet">
+<title>Rocket Builder</title>
+<style>
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box;}
+html,body{width:100%;height:100vh;overflow:hidden;}
+body{background:#05070a;color:#e2e2e9;font-family:'Inter','Noto Sans SC',sans-serif;display:flex;flex-direction:column;}
+.wrapper{display:flex;flex-direction:column;height:100vh;overflow:hidden;}
+.header{display:flex;align-items:center;justify-content:space-between;padding:8px 14px 4px;background:#070a14;}
+.header h1{font-family:'Space Grotesk',sans-serif;font-size:clamp(14px,2vw,17px);font-weight:700;color:#ffb000;letter-spacing:-0.02em;}
+.header .sub{font-size:10px;color:#8e90a6;letter-spacing:0.08em;text-transform:uppercase;}
+.challenge-bar{display:flex;gap:6px;align-items:center;justify-content:center;font-family:'Space Grotesk',sans-serif;font-size:10px;letter-spacing:0.08em;padding:5px 0;background:rgba(17,20,37,0.6);flex-wrap:wrap;}
+.challenge-bar .chip{padding:3px 10px;background:#171a1f;color:#8e90a6;cursor:pointer;border:1px solid transparent;}
+.challenge-bar .chip.active{background:rgba(255,176,0,0.18);color:#ffb000;border-color:#ffb000;}
+.stage-wrap{flex:1;min-height:0;position:relative;display:flex;flex-direction:column;gap:4px;padding:4px 8px;}
+.main-row{flex:1;min-height:0;min-width:0;display:flex;gap:4px;}
+.part-rail{width:100px;background:rgba(17,20,37,0.85);overflow-y:auto;display:flex;flex-direction:column;padding:4px;gap:3px;}
+.rail-section{display:flex;flex-direction:column;gap:2px;}
+.rail-title{font-family:'Space Grotesk';font-size:9px;letter-spacing:0.1em;color:#ffb000;padding:2px 4px;text-transform:uppercase;border-bottom:1px solid rgba(255,176,0,0.2);}
+.part-btn{background:rgba(7,10,20,0.8);border:1px solid rgba(142,144,166,0.25);color:#e2e2e9;padding:4px;cursor:pointer;display:flex;align-items:center;gap:4px;font-size:10px;font-family:'Space Grotesk';transition:border-color .1s;}
+.part-btn:hover{border-color:#ffb000;}
+.part-btn.selected{border-color:#50ffb0;background:rgba(80,255,176,0.1);}
+.part-btn svg{flex-shrink:0;}
+.canvas-col{flex:1;min-height:0;min-width:0;display:flex;flex-direction:column;position:relative;background:linear-gradient(to bottom,rgba(8,12,24,.95) 0%,rgba(3,4,8,.95) 60%,rgba(18,28,10,.95) 100%);box-shadow:inset 0 0 0 1px rgba(142,144,166,0.2);overflow:hidden;}
+canvas{width:100%;height:100%;display:block;}
+.hud{height:48px;display:grid;grid-template-columns:repeat(4,1fr);align-items:center;gap:2px;background:rgba(0,0,0,0.55);padding:3px 8px;}
+.hud-item{text-align:center;}
+.hud-label{font-family:'Space Grotesk',sans-serif;font-size:8px;letter-spacing:0.14em;text-transform:uppercase;color:#8e90a6;}
+.hud-val{font-family:'Space Grotesk',sans-serif;font-size:13px;font-weight:700;color:#ffb000;}
+.hud-bar{height:3px;background:rgba(255,255,255,0.08);margin-top:2px;position:relative;overflow:hidden;}
+.hud-bar > span{display:block;height:100%;background:#ffb000;width:0%;transition:width .2s;}
+.controls{display:flex;gap:6px;padding:5px 10px;justify-content:center;flex-wrap:wrap;background:#070a14;}
+.ctrl-btn{font-family:'Space Grotesk',sans-serif;font-size:10px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;padding:6px 14px;border:none;cursor:pointer;color:#05070a;background:linear-gradient(135deg,#ffb000,#ff5f1f);transition:transform 0.1s;}
+.ctrl-btn:hover{transform:scale(1.04);}
+.ctrl-btn:disabled{opacity:0.4;cursor:not-allowed;transform:none;}
+.ctrl-btn.secondary{background:#171a1f;color:#8e90a6;}
+.ctrl-btn.secondary:hover{color:#ffb000;}
+.ctrl-btn.blue{background:linear-gradient(135deg,#00daf3,#0fa3bd);color:#05070a;}
+.panel{position:absolute;background:rgba(17,20,37,0.92);backdrop-filter:blur(10px);padding:8px 12px;border:1px solid rgba(255,176,0,0.3);font-size:11px;color:#e2e2e9;z-index:8;pointer-events:none;line-height:1.5;}
+.panel.tl{top:6px;left:6px;max-width:62%;}
+.panel.br{bottom:6px;right:6px;max-width:40%;text-align:right;}
+.panel b{color:#ffb000;}
+.panel .ok{color:#50ffb0;}
+.panel .bad{color:#ff716c;}
+.toast{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);background:rgba(17,20,37,0.95);color:#e2e2e9;padding:14px 22px;font-size:12px;border:2px solid #ffb000;z-index:20;display:none;text-align:center;line-height:1.55;min-width:240px;max-width:88%;}
+.toast.show{display:block;}
+.toast .big{font-size:16px;color:#ffb000;display:block;margin-bottom:6px;font-weight:700;}
+.toast .pass{color:#50ffb0;}
+.toast .fail{color:#ff716c;}
+.lang-btn{position:absolute;top:6px;right:6px;z-index:50;font-family:'Space Grotesk',sans-serif;font-size:10px;padding:3px 9px;cursor:pointer;border:none;background:rgba(17,20,37,0.85);color:#ffb59c;letter-spacing:1px;}
+.part-rail::-webkit-scrollbar{width:5px;}
+.part-rail::-webkit-scrollbar-thumb{background:rgba(255,176,0,0.3);}
+</style>
+</head>
+<body>
+<div class="wrapper">
+  <header class="header">
+    <div><h1 id="title"></h1><div class="sub" id="subtitle"></div></div>
+    <div id="roundInfo" style="font-family:'Space Grotesk';font-size:10px;color:#8e90a6;"></div>
+  </header>
+  <div class="challenge-bar">
+    <span id="challengePrompt" style="color:#e2e2e9;font-size:11px;letter-spacing:normal;margin-right:6px;"></span>
+    <div class="chip active" id="chip1"></div>
+    <div class="chip" id="chip2"></div>
+    <div class="chip" id="chip3"></div>
+  </div>
+  <div class="stage-wrap">
+    <div class="main-row">
+      <aside class="part-rail" id="partRail"></aside>
+      <div class="canvas-col">
+        <button class="lang-btn" id="langBtn">EN</button>
+        <canvas id="c"></canvas>
+        <div class="panel tl" id="panelTL"></div>
+        <div class="panel br" id="panelBR"></div>
+        <div class="toast" id="toast"><span class="big" id="toastBig"></span><span id="toastBody"></span></div>
+      </div>
+    </div>
+  </div>
+  <div class="hud">
+    <div class="hud-item"><div class="hud-label" id="hudL1"></div><div class="hud-val" id="hudV1">--</div><div class="hud-bar"><span id="hudB1"></span></div></div>
+    <div class="hud-item"><div class="hud-label" id="hudL2"></div><div class="hud-val" id="hudV2">--</div><div class="hud-bar"><span id="hudB2"></span></div></div>
+    <div class="hud-item"><div class="hud-label" id="hudL3"></div><div class="hud-val" id="hudV3">--</div><div class="hud-bar"><span id="hudB3"></span></div></div>
+    <div class="hud-item"><div class="hud-label" id="hudL4"></div><div class="hud-val" id="hudV4">0 m</div></div>
+  </div>
+  <div class="controls">
+    <button class="ctrl-btn" id="btnLaunch"></button>
+    <button class="ctrl-btn blue" id="btnNext" disabled></button>
+    <button class="ctrl-btn secondary" id="btnReset"></button>
+  </div>
+</div>
+<script>
+'use strict';
+
+var I18N = {
+  en: {
+    title: 'Rocket Builder',
+    subtitle: 'Pick parts · launch · reach the target',
+    chip1: 'L1 · 100 m',
+    chip2: 'L2 · 500 m',
+    chip3: 'L3 · 1000 m',
+    challengePrompt: 'Goal:',
+    hudL1: 'DRAG',
+    hudL2: 'STABILITY',
+    hudL3: 'THRUST',
+    hudL4: 'HEIGHT',
+    btnLaunch: 'LAUNCH',
+    btnNext: 'NEXT LEVEL',
+    btnReset: 'RESET',
+    railNose: 'NOSE',
+    railBody: 'BODY',
+    railFin: 'FINS',
+    railNozzle: 'NOZZLE',
+    panelTL: '<b>Pick one</b> nose, body, fin, nozzle from the left.<br>Watch the bars move. Hit <b>LAUNCH</b> when ready.',
+    panelBR: 'Form follows <b>function</b>.',
+    roundInfo: 'ROUND 1 / 3',
+    passTitle: 'LAUNCH SUCCESS',
+    failTitle: 'LAUNCH FAILED',
+    allDoneTitle: 'ALL THREE LEVELS PASSED',
+    allDoneBody: 'You have built a rocket that reached 1000 m. Every part you picked solved a physics problem.',
+    goalL1: 'Any build that lifts off 100 m will pass.',
+    goalL2: 'Need 500 m. Drag must be low AND thrust must be enough.',
+    goalL3: 'Need 1000 m. Every part must match its physics role.',
+    missNose: 'No nose cone — air resistance is too high.',
+    missBody: 'No body — no fuel tank.',
+    missFin: 'No fin — rocket tumbles.',
+    missNozzle: 'No nozzle — no thrust.',
+    failDrag: 'Air drag too high — blunt nose on a fat body.',
+    failStab: 'Stability too low — tumbled before climbing.',
+    failThrust: 'Thrust too low — could not fight gravity.',
+    failLow: 'Height not enough for this level.',
+    tumble: 'TUMBLE',
+    explode: 'EXPLODE',
+    partSharp: 'Sharp cone', partBlunt: 'Blunt cone', partRound: 'Rounded',
+    partSlim: 'Slim body', partStd: 'Standard body', partFat: 'Fat body',
+    partFinBig: 'Large fins', partFinSmall: 'Small fins', partFinNone: 'No fins',
+    partNozSmall: 'Small bell', partNozStd: 'Standard bell', partNozBig: 'Large bell',
+    launching: 'LAUNCHING…',
+  },
+  cn: {
+    title: '火箭组装员',
+    subtitle: '挑零件 · 发射 · 够到目标高度',
+    chip1: '关卡1 · 100 米',
+    chip2: '关卡2 · 500 米',
+    chip3: '关卡3 · 1000 米',
+    challengePrompt: '目标：',
+    hudL1: '阻力',
+    hudL2: '稳定性',
+    hudL3: '推力',
+    hudL4: '高度',
+    btnLaunch: '发射',
+    btnNext: '下一关',
+    btnReset: '重来',
+    railNose: '鼻锥',
+    railBody: '箭体',
+    railFin: '尾翼',
+    railNozzle: '喷管',
+    panelTL: '<b>从左边</b>各挑一个鼻锥、箭体、尾翼、喷管。<br>看下面的条怎么变。选完按<b>发射</b>。',
+    panelBR: '形式<b>服从</b>功能。',
+    roundInfo: '关卡 1 / 3',
+    passTitle: '发射成功',
+    failTitle: '发射失败',
+    allDoneTitle: '三关全部通过',
+    allDoneBody: '你造出了一枚能冲到 1000 米的火箭。每一个你挑的零件，都对应一个物理问题。',
+    goalL1: '只要能飞到 100 米就算过关。',
+    goalL2: '要到 500 米。阻力要低，推力要够。',
+    goalL3: '要到 1000 米。每个部件都要选对物理角色。',
+    missNose: '没有鼻锥——空气阻力太大。',
+    missBody: '没有箭体——没有油箱。',
+    missFin: '没有尾翼——火箭会翻跟头。',
+    missNozzle: '没有喷管——没有推力。',
+    failDrag: '阻力太大——钝头鼻锥配粗箭体。',
+    failStab: '稳定性太差——还没飞高就翻了。',
+    failThrust: '推力不够——斗不过重力。',
+    failLow: '高度不够通关。',
+    tumble: '翻滚',
+    explode: '炸了',
+    partSharp: '尖锥', partBlunt: '钝锥', partRound: '圆锥',
+    partSlim: '细箭体', partStd: '标准箭体', partFat: '粗箭体',
+    partFinBig: '大尾翼', partFinSmall: '小尾翼', partFinNone: '无尾翼',
+    partNozSmall: '小喷管', partNozStd: '标准喷管', partNozBig: '大喷管',
+    launching: '发射中…',
+  }
+};
+
+var LANG = 'cn';
+var cv = document.getElementById('c');
+var ctx = cv.getContext('2d');
+var DPR = Math.min(window.devicePixelRatio || 1, 2);
+var W = 800, H = 400;
+
+function fit() {
+  var rect = cv.getBoundingClientRect();
+  W = Math.max(200, rect.width);
+  H = Math.max(200, rect.height);
+  cv.width = W * DPR;
+  cv.height = H * DPR;
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  draw();
+}
+window.addEventListener('resize', fit);
+
+// Part definitions (drag:0-100 low=good; stability:0-100 high=good; thrust:0-100 high=good)
+var PARTS = {
+  nose: [
+    { id:'sharp', labelKey:'partSharp', drag: 10, stability: 0, thrust: 0, draw: drawNoseSharp },
+    { id:'blunt', labelKey:'partBlunt', drag: 50, stability: 0, thrust: 0, draw: drawNoseBlunt },
+    { id:'round', labelKey:'partRound', drag: 25, stability: 0, thrust: 0, draw: drawNoseRound },
+  ],
+  body: [
+    { id:'slim',  labelKey:'partSlim',  drag: 12, stability: 0, thrust: 0, fuel: 55, draw: drawBodySlim },
+    { id:'std',   labelKey:'partStd',   drag: 22, stability: 0, thrust: 0, fuel: 75, draw: drawBodyStd },
+    { id:'fat',   labelKey:'partFat',   drag: 38, stability: -5, thrust: 0, fuel: 95, draw: drawBodyFat },
+  ],
+  fin: [
+    { id:'big',   labelKey:'partFinBig',   drag: 10, stability: 85, thrust: 0, draw: drawFinBig },
+    { id:'small', labelKey:'partFinSmall', drag: 4,  stability: 45, thrust: 0, draw: drawFinSmall },
+    { id:'none',  labelKey:'partFinNone',  drag: 0,  stability: 0,  thrust: 0, draw: drawFinNone },
+  ],
+  nozzle: [
+    { id:'small', labelKey:'partNozSmall', drag: 0, stability: 0, thrust: 35, draw: drawNozSmall },
+    { id:'std',   labelKey:'partNozStd',   drag: 0, stability: 0, thrust: 65, draw: drawNozStd },
+    { id:'big',   labelKey:'partNozBig',   drag: 0, stability: 0, thrust: 90, draw: drawNozBig },
+  ],
+};
+
+var picked = { nose: null, body: null, fin: null, nozzle: null };
+var round = 1;
+var wonRounds = { 1:false, 2:false, 3:false };
+var launchState = null; // {t, y, vy, tumble, explode, phase}
+
+function t(key) { return (I18N[LANG] && I18N[LANG][key]) || (I18N.en[key] || key); }
+
+function applyI18N() {
+  document.getElementById('title').textContent = t('title');
+  document.getElementById('subtitle').textContent = t('subtitle');
+  document.getElementById('chip1').textContent = t('chip1');
+  document.getElementById('chip2').textContent = t('chip2');
+  document.getElementById('chip3').textContent = t('chip3');
+  document.getElementById('challengePrompt').textContent = t('challengePrompt');
+  document.getElementById('hudL1').textContent = t('hudL1');
+  document.getElementById('hudL2').textContent = t('hudL2');
+  document.getElementById('hudL3').textContent = t('hudL3');
+  document.getElementById('hudL4').textContent = t('hudL4');
+  document.getElementById('btnLaunch').textContent = t('btnLaunch');
+  document.getElementById('btnNext').textContent = t('btnNext');
+  document.getElementById('btnReset').textContent = t('btnReset');
+  document.getElementById('panelTL').innerHTML = t('panelTL');
+  document.getElementById('panelBR').innerHTML = t('panelBR');
+  document.getElementById('langBtn').textContent = LANG === 'cn' ? 'EN' : '中';
+  document.getElementById('roundInfo').textContent = 'ROUND ' + round + ' / 3';
+  buildRail();
+  updateChipActive();
+  updateHUD();
+}
+
+function buildRail() {
+  var rail = document.getElementById('partRail');
+  rail.innerHTML = '';
+  ['nose','body','fin','nozzle'].forEach(function(cat){
+    var sec = document.createElement('div');
+    sec.className = 'rail-section';
+    var title = document.createElement('div');
+    title.className = 'rail-title';
+    title.textContent = t('rail' + cat.charAt(0).toUpperCase() + cat.slice(1));
+    sec.appendChild(title);
+    PARTS[cat].forEach(function(p){
+      var btn = document.createElement('div');
+      btn.className = 'part-btn' + (picked[cat] && picked[cat].id===p.id ? ' selected' : '');
+      var iconSvg = partIconSvg(cat, p.id);
+      btn.innerHTML = iconSvg + '<span>' + t(p.labelKey) + '</span>';
+      btn.onclick = function() {
+        picked[cat] = p;
+        buildRail();
+        updateHUD();
+        draw();
+      };
+      sec.appendChild(btn);
+    });
+    rail.appendChild(sec);
+  });
+}
+
+function partIconSvg(cat, id) {
+  var s = 18, col = '#ffb000';
+  if (cat === 'nose') {
+    if (id === 'sharp') return '<svg width="'+s+'" height="'+s+'" viewBox="0 0 20 20"><path d="M10 2 L14 16 L6 16 Z" fill="'+col+'"/></svg>';
+    if (id === 'blunt') return '<svg width="'+s+'" height="'+s+'" viewBox="0 0 20 20"><path d="M5 16 Q10 3 15 16 Z" fill="'+col+'"/></svg>';
+    return '<svg width="'+s+'" height="'+s+'" viewBox="0 0 20 20"><path d="M5 16 Q10 6 15 16 Z" fill="'+col+'"/></svg>';
+  }
+  if (cat === 'body') {
+    if (id === 'slim') return '<svg width="'+s+'" height="'+s+'" viewBox="0 0 20 20"><rect x="8" y="3" width="4" height="14" fill="'+col+'"/></svg>';
+    if (id === 'std')  return '<svg width="'+s+'" height="'+s+'" viewBox="0 0 20 20"><rect x="7" y="3" width="6" height="14" fill="'+col+'"/></svg>';
+    return '<svg width="'+s+'" height="'+s+'" viewBox="0 0 20 20"><rect x="5" y="3" width="10" height="14" fill="'+col+'"/></svg>';
+  }
+  if (cat === 'fin') {
+    if (id === 'big')   return '<svg width="'+s+'" height="'+s+'" viewBox="0 0 20 20"><rect x="8" y="3" width="4" height="14" fill="'+col+'"/><path d="M8 14 L3 18 L8 18 Z" fill="'+col+'"/><path d="M12 14 L17 18 L12 18 Z" fill="'+col+'"/></svg>';
+    if (id === 'small') return '<svg width="'+s+'" height="'+s+'" viewBox="0 0 20 20"><rect x="8" y="3" width="4" height="14" fill="'+col+'"/><path d="M8 15 L5 18 L8 18 Z" fill="'+col+'"/><path d="M12 15 L15 18 L12 18 Z" fill="'+col+'"/></svg>';
+    return '<svg width="'+s+'" height="'+s+'" viewBox="0 0 20 20"><rect x="8" y="3" width="4" height="14" fill="'+col+'"/></svg>';
+  }
+  if (cat === 'nozzle') {
+    if (id === 'small') return '<svg width="'+s+'" height="'+s+'" viewBox="0 0 20 20"><path d="M8 3 L12 3 L13 12 L7 12 Z" fill="'+col+'"/></svg>';
+    if (id === 'std')   return '<svg width="'+s+'" height="'+s+'" viewBox="0 0 20 20"><path d="M7 3 L13 3 L15 14 L5 14 Z" fill="'+col+'"/></svg>';
+    return '<svg width="'+s+'" height="'+s+'" viewBox="0 0 20 20"><path d="M6 3 L14 3 L17 16 L3 16 Z" fill="'+col+'"/></svg>';
+  }
+  return '';
+}
+
+function updateChipActive(){
+  ['chip1','chip2','chip3'].forEach(function(id,i){
+    document.getElementById(id).classList.toggle('active', (i+1) === round);
+  });
+  document.getElementById('roundInfo').textContent = 'ROUND ' + round + ' / 3';
+}
+
+function computeMetrics() {
+  var drag = 0, stab = 0, thrust = 0;
+  ['nose','body','fin','nozzle'].forEach(function(c){
+    var p = picked[c];
+    if (p) { drag += p.drag||0; stab += p.stability||0; thrust += p.thrust||0; }
+  });
+  // Penalty if body fuel too small vs big nozzle
+  if (picked.body && picked.nozzle) {
+    if (picked.body.fuel < picked.nozzle.thrust * 0.8) {
+      thrust = Math.max(0, thrust - 20);
+    }
+  }
+  drag = Math.max(0, Math.min(100, drag));
+  stab = Math.max(0, Math.min(100, stab));
+  thrust = Math.max(0, Math.min(100, thrust));
+  return { drag: drag, stab: stab, thrust: thrust };
+}
+
+function updateHUD() {
+  var m = computeMetrics();
+  document.getElementById('hudV1').textContent = Math.round(m.drag);
+  document.getElementById('hudV2').textContent = Math.round(m.stab);
+  document.getElementById('hudV3').textContent = Math.round(m.thrust);
+  document.getElementById('hudB1').style.width = m.drag + '%';
+  document.getElementById('hudB1').style.background = m.drag > 60 ? '#ff716c' : (m.drag > 35 ? '#ffb000' : '#50ffb0');
+  document.getElementById('hudB2').style.width = m.stab + '%';
+  document.getElementById('hudB2').style.background = m.stab < 40 ? '#ff716c' : (m.stab < 65 ? '#ffb000' : '#50ffb0');
+  document.getElementById('hudB3').style.width = m.thrust + '%';
+  document.getElementById('hudB3').style.background = m.thrust < 40 ? '#ff716c' : (m.thrust < 65 ? '#ffb000' : '#50ffb0');
+  if (!launchState) document.getElementById('hudV4').textContent = '0 m';
+}
+
+// --- Canvas drawing ---
+function draw() {
+  ctx.clearRect(0,0,W,H);
+  // ground line
+  ctx.strokeStyle = 'rgba(142,144,166,0.3)';
+  ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(0, H-30); ctx.lineTo(W, H-30); ctx.stroke();
+  ctx.font = '10px "Space Grotesk"';
+  ctx.fillStyle = '#8e90a6';
+  ctx.fillText('GROUND', 8, H-14);
+
+  // target altitude line
+  var targetM = round === 1 ? 100 : (round === 2 ? 500 : 1000);
+  var maxM = 1200;
+  var scalePx = (H - 60) / maxM;
+  var targetY = H - 30 - targetM * scalePx;
+  ctx.strokeStyle = 'rgba(80,255,176,0.5)';
+  ctx.setLineDash([4,4]);
+  ctx.beginPath(); ctx.moveTo(0, targetY); ctx.lineTo(W, targetY); ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.fillStyle = '#50ffb0';
+  ctx.fillText('TARGET ' + targetM + 'm', W - 90, targetY - 4);
+
+  // draw rocket
+  var rx = W/2;
+  var baseY = H - 32;
+  var topY = baseY;
+  if (launchState) {
+    var flightAlt = launchState.y; // meters
+    var heightPx = flightAlt * scalePx;
+    topY = baseY - heightPx;
+    document.getElementById('hudV4').textContent = Math.round(flightAlt) + ' m';
+  }
+  drawRocket(ctx, rx, topY, launchState);
+}
+
+function drawRocket(ctx, cx, baseY, st) {
+  var bodyH = 90, bodyW = (picked.body ? (picked.body.id==='fat'?28:(picked.body.id==='std'?20:14)) : 18);
+  var rocketTumbleAng = 0;
+  if (st && st.tumble) rocketTumbleAng = (st.t * 0.004) * (Math.PI);
+  ctx.save();
+  ctx.translate(cx, baseY);
+  ctx.rotate(rocketTumbleAng);
+  // fin
+  if (picked.fin) picked.fin.draw(ctx, 0, 0, bodyW, bodyH);
+  // body
+  if (picked.body) picked.body.draw(ctx, 0, 0, bodyW, bodyH);
+  else drawGhostBody(ctx, 0, 0, 18, 90);
+  // nose
+  if (picked.nose) picked.nose.draw(ctx, 0, -bodyH, bodyW);
+  // nozzle
+  if (picked.nozzle) picked.nozzle.draw(ctx, 0, 0, bodyW);
+  // flames during launch
+  if (st && !st.tumble && !st.explode && st.phase==='fly') {
+    var flameH = 18 + Math.random()*10;
+    var g = ctx.createLinearGradient(0, 6, 0, 6+flameH);
+    g.addColorStop(0, 'rgba(255,176,0,0.95)');
+    g.addColorStop(0.5, 'rgba(255,95,31,0.8)');
+    g.addColorStop(1, 'rgba(255,95,31,0)');
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    ctx.moveTo(-bodyW*0.6, 6);
+    ctx.lineTo(bodyW*0.6, 6);
+    ctx.lineTo(0, 6+flameH);
+    ctx.closePath();
+    ctx.fill();
+  }
+  if (st && st.explode) {
+    ctx.fillStyle = 'rgba(255,95,31,0.8)';
+    ctx.beginPath(); ctx.arc(0, -bodyH/2, 22 + Math.random()*6, 0, Math.PI*2); ctx.fill();
+    ctx.fillStyle = 'rgba(255,176,0,0.9)';
+    ctx.beginPath(); ctx.arc(0, -bodyH/2, 14 + Math.random()*4, 0, Math.PI*2); ctx.fill();
+  }
+  ctx.restore();
+}
+
+function drawGhostBody(ctx, cx, baseY, w, h) {
+  ctx.strokeStyle = 'rgba(142,144,166,0.4)';
+  ctx.setLineDash([3,3]);
+  ctx.strokeRect(cx - w/2, baseY - h, w, h);
+  ctx.setLineDash([]);
+}
+
+// Part drawers — all drawn relative to local coord (0,0) = base center
+function drawNoseSharp(ctx, cx, topY, bw) {
+  ctx.fillStyle = '#c6c8ce';
+  ctx.beginPath();
+  ctx.moveTo(cx - bw/2, topY);
+  ctx.lineTo(cx, topY - bw*1.6);
+  ctx.lineTo(cx + bw/2, topY);
+  ctx.closePath(); ctx.fill();
+}
+function drawNoseBlunt(ctx, cx, topY, bw) {
+  ctx.fillStyle = '#c6c8ce';
+  ctx.beginPath();
+  ctx.moveTo(cx - bw/2, topY);
+  ctx.quadraticCurveTo(cx, topY - bw*0.3, cx + bw/2, topY);
+  ctx.closePath(); ctx.fill();
+}
+function drawNoseRound(ctx, cx, topY, bw) {
+  ctx.fillStyle = '#c6c8ce';
+  ctx.beginPath();
+  ctx.moveTo(cx - bw/2, topY);
+  ctx.quadraticCurveTo(cx, topY - bw*0.9, cx + bw/2, topY);
+  ctx.closePath(); ctx.fill();
+}
+function drawBodySlim(ctx, cx, baseY, bw, h) {
+  ctx.fillStyle = '#dfe1e8';
+  ctx.fillRect(cx - bw/2, baseY - h, bw, h);
+  ctx.strokeStyle = 'rgba(17,20,37,0.35)';
+  ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(cx-bw/2, baseY - h*0.4); ctx.lineTo(cx+bw/2, baseY - h*0.4); ctx.stroke();
+}
+function drawBodyStd(ctx, cx, baseY, bw, h) { drawBodySlim(ctx,cx,baseY,bw,h); }
+function drawBodyFat(ctx, cx, baseY, bw, h) { drawBodySlim(ctx,cx,baseY,bw,h); }
+function drawFinBig(ctx, cx, baseY, bw, h) {
+  ctx.fillStyle = '#ff5f1f';
+  ctx.beginPath();
+  ctx.moveTo(cx - bw/2, baseY - 12);
+  ctx.lineTo(cx - bw/2 - 14, baseY + 8);
+  ctx.lineTo(cx - bw/2, baseY + 4);
+  ctx.closePath(); ctx.fill();
+  ctx.beginPath();
+  ctx.moveTo(cx + bw/2, baseY - 12);
+  ctx.lineTo(cx + bw/2 + 14, baseY + 8);
+  ctx.lineTo(cx + bw/2, baseY + 4);
+  ctx.closePath(); ctx.fill();
+}
+function drawFinSmall(ctx, cx, baseY, bw, h) {
+  ctx.fillStyle = '#ff5f1f';
+  ctx.beginPath();
+  ctx.moveTo(cx - bw/2, baseY - 6);
+  ctx.lineTo(cx - bw/2 - 6, baseY + 4);
+  ctx.lineTo(cx - bw/2, baseY + 2);
+  ctx.closePath(); ctx.fill();
+  ctx.beginPath();
+  ctx.moveTo(cx + bw/2, baseY - 6);
+  ctx.lineTo(cx + bw/2 + 6, baseY + 4);
+  ctx.lineTo(cx + bw/2, baseY + 2);
+  ctx.closePath(); ctx.fill();
+}
+function drawFinNone(ctx, cx, baseY, bw, h) {}
+function drawNozSmall(ctx, cx, baseY, bw) {
+  ctx.fillStyle = '#ffb000';
+  ctx.beginPath();
+  ctx.moveTo(cx - bw*0.35, baseY);
+  ctx.lineTo(cx + bw*0.35, baseY);
+  ctx.lineTo(cx + bw*0.5, baseY + 7);
+  ctx.lineTo(cx - bw*0.5, baseY + 7);
+  ctx.closePath(); ctx.fill();
+}
+function drawNozStd(ctx, cx, baseY, bw) {
+  ctx.fillStyle = '#ffb000';
+  ctx.beginPath();
+  ctx.moveTo(cx - bw*0.45, baseY);
+  ctx.lineTo(cx + bw*0.45, baseY);
+  ctx.lineTo(cx + bw*0.7, baseY + 11);
+  ctx.lineTo(cx - bw*0.7, baseY + 11);
+  ctx.closePath(); ctx.fill();
+}
+function drawNozBig(ctx, cx, baseY, bw) {
+  ctx.fillStyle = '#ffb000';
+  ctx.beginPath();
+  ctx.moveTo(cx - bw*0.55, baseY);
+  ctx.lineTo(cx + bw*0.55, baseY);
+  ctx.lineTo(cx + bw*0.95, baseY + 15);
+  ctx.lineTo(cx - bw*0.95, baseY + 15);
+  ctx.closePath(); ctx.fill();
+}
+
+// --- Launch sim ---
+function tryLaunch() {
+  // require all four parts
+  var missing = null;
+  if (!picked.nose) missing = 'missNose';
+  else if (!picked.body) missing = 'missBody';
+  else if (!picked.fin && picked.fin !== undefined && !picked.fin) missing = null; // no fin is allowed, see below
+  if (!picked.nose) missing = 'missNose';
+  if (!picked.body) missing = 'missBody';
+  if (!picked.nozzle) missing = 'missNozzle';
+  if (missing) { showToast('failTitle', t(missing), 'fail'); return; }
+
+  var m = computeMetrics();
+  var targetM = round === 1 ? 100 : (round === 2 ? 500 : 1000);
+
+  // Predict max altitude
+  // Simple model: maxAlt = (thrust - drag*0.6) * factor - gravity
+  var liftScore = m.thrust - (m.drag * 0.5);
+  var maxAlt = Math.max(0, liftScore * 14); // up to ~1260 m if thrust=100, drag=0
+
+  // Stability check — if stab < threshold AND wants to climb, tumble partway up
+  var tumbleAt = null;
+  if (m.stab < 25) tumbleAt = 60;
+  else if (m.stab < 45 && targetM >= 500) tumbleAt = Math.min(maxAlt * 0.6, 250);
+  else if (m.stab < 65 && targetM >= 1000) tumbleAt = Math.min(maxAlt * 0.7, 600);
+
+  // Explode if oversized nozzle + slim body
+  var willExplode = picked.nozzle.id === 'big' && picked.body.id === 'slim';
+
+  var finalAlt = tumbleAt !== null ? tumbleAt : maxAlt;
+  if (willExplode) finalAlt = Math.min(finalAlt, 180);
+  var pass = finalAlt >= targetM && !tumbleAt && !willExplode;
+
+  // Animate
+  launchState = { t:0, y:0, maxY: finalAlt, phase:'fly', tumble:false, explode:false, vy: 0 };
+  document.getElementById('btnLaunch').disabled = true;
+  document.getElementById('btnReset').disabled = true;
+  var startT = performance.now();
+  var totalMs = Math.min(3500, 800 + finalAlt * 1.4);
+
+  function step(now) {
+    launchState.t = now - startT;
+    var p = Math.min(1, launchState.t / totalMs);
+    var ease = p < 0.85 ? (p/0.85) : 1;
+    launchState.y = launchState.maxY * ease;
+    if (tumbleAt && launchState.y >= tumbleAt - 1) {
+      launchState.tumble = true;
+    }
+    if (willExplode && launchState.y >= 180 - 1) {
+      launchState.explode = true;
+    }
+    draw();
+    if (launchState.t < totalMs) {
+      requestAnimationFrame(step);
+    } else {
+      // result
+      document.getElementById('btnLaunch').disabled = false;
+      document.getElementById('btnReset').disabled = false;
+      if (pass) {
+        wonRounds[round] = true;
+        showToast('passTitle', buildPassMsg(finalAlt, targetM), 'pass');
+        if (round < 3) document.getElementById('btnNext').disabled = false;
+        else { showFinalToast(); }
+      } else {
+        var reason = tumbleAt ? 'failStab' : (willExplode ? 'failDrag' : (m.thrust < 40 ? 'failThrust' : (m.drag > 65 ? 'failDrag' : 'failLow')));
+        showToast('failTitle', t(reason) + ' · ' + Math.round(finalAlt) + ' m', 'fail');
+      }
+    }
+  }
+  requestAnimationFrame(step);
+}
+
+function buildPassMsg(alt, target) {
+  return Math.round(alt) + ' m ≥ ' + target + ' m';
+}
+
+function showToast(titleKey, body, cls) {
+  var tEl = document.getElementById('toast');
+  var big = document.getElementById('toastBig');
+  big.textContent = t(titleKey);
+  big.className = 'big ' + (cls || '');
+  document.getElementById('toastBody').innerHTML = body;
+  tEl.classList.add('show');
+  setTimeout(function(){ tEl.classList.remove('show'); }, 2600);
+}
+
+function showFinalToast() {
+  var tEl = document.getElementById('toast');
+  document.getElementById('toastBig').textContent = t('allDoneTitle');
+  document.getElementById('toastBig').className = 'big pass';
+  document.getElementById('toastBody').textContent = t('allDoneBody');
+  tEl.classList.add('show');
+}
+
+function resetLaunch() {
+  launchState = null;
+  document.getElementById('toast').classList.remove('show');
+  document.getElementById('hudV4').textContent = '0 m';
+  draw();
+}
+
+function nextRound() {
+  if (round < 3) {
+    round++;
+    resetLaunch();
+    updateChipActive();
+    document.getElementById('btnNext').disabled = true;
+  }
+}
+
+// --- wiring ---
+document.getElementById('btnLaunch').onclick = tryLaunch;
+document.getElementById('btnReset').onclick = resetLaunch;
+document.getElementById('btnNext').onclick = nextRound;
+document.getElementById('langBtn').onclick = function(){
+  LANG = LANG === 'cn' ? 'en' : 'cn';
+  applyI18N();
+  draw();
+};
+['chip1','chip2','chip3'].forEach(function(id, i){
+  document.getElementById(id).onclick = function(){
+    if (wonRounds[round] || i+1 <= round) {
+      round = i+1;
+      resetLaunch();
+      updateChipActive();
+    }
+  };
+});
+
+applyI18N();
+fit();
+</script>
+</body>
+</html>
