@@ -22,11 +22,9 @@ SystemEdu Course Factory — Claude Code 离线课程生成流水线
 
 from __future__ import annotations
 
-import argparse
 import json
 import re
 import sys
-import textwrap
 from datetime import datetime
 from pathlib import Path
 
@@ -34,13 +32,57 @@ from pathlib import Path
 ROOT = Path(__file__).parent.parent
 sys.path.insert(0, str(ROOT / "src"))
 
+from dataclasses import dataclass, field
 from rich.console import Console
-from rich.panel import Panel
-from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn
-from rich.table import Table
-from rich.markdown import Markdown
 
 console = Console()
+
+
+# ── 数据类型 ─────────────────────────────────────────────────────
+
+@dataclass
+class MediaItem:
+    """统一的富媒体描述对象，一个 MediaItem 对应一个 idea + rendered_section。"""
+    mode: str  # "animation" | "game" | "diagram" | "image" | "hands_on_kit" | "story"
+    topic: str = ""
+    html: str | None = None
+    hands_on_ref: str = ""
+    acceptance_ref: str = ""
+    mode_reason: str = ""
+    # story
+    story_paragraphs: list[dict] | None = None
+    # image
+    src: str = ""
+    alt: str = ""
+    caption: str = ""
+    source_url: str = ""
+    license: str = ""
+    web_path: str = ""
+    knode_key: str = ""
+    # diagram
+    html_path: str = ""
+    # hands_on_kit
+    total_cost_cny: float = 0
+    components: list[dict] | None = None
+    steps: list[dict] | None = None
+    tools: list[dict] | None = None
+    age_min: int = 8
+    safety_level: str = "low"
+    # 通用
+    anchor: str = ""
+
+
+@dataclass
+class KnodeContext:
+    """load_context() 的返回类型，包含当前 knode 的完整上下文。"""
+    project_name: str
+    knode_global_idx: int
+    knode: dict
+    milestone: dict
+    sub_project: dict | None = None
+    module: dict | None = None
+    stage: dict | None = None
+
 
 # ── 视觉设计语言（所有动画的统一美学基准）────────────────────────
 VISUAL_DESIGN_LANGUAGE = """
@@ -87,13 +129,13 @@ VISUAL_DESIGN_LANGUAGE = """
 
 # ── 数据库写入 ──────────────────────────────────────────────────
 
-def _ensure_db_tables() -> None:
+def ensure_db_tables() -> None:
     """确保所有表存在。"""
     from systemedu.storage.db import Base, get_engine
     Base.metadata.create_all(get_engine())
 
 
-def _upsert_project(name: str, title: str, description: str, category: str,
+def upsert_project(name: str, title: str, description: str, category: str,
                     age_range: list[int], estimated_hours: float, tags: list[str]) -> None:
     """注册或更新项目到 LocalProject 表。"""
     from systemedu.storage.db import LocalProject, get_session
@@ -413,7 +455,7 @@ def generate_audio_scripts(project_name: str, knode_id: int,
         db.close()
 
 
-def _upsert_lesson(project_name: str, knode_id: int, content_type: str,
+def upsert_lesson(project_name: str, knode_id: int, content_type: str,
                    course_content: dict, *,
                    project_assignment: str = "") -> None:
     """写入 LessonContent 表（upsert）。自动内联 animation_runtime.js。"""
@@ -423,12 +465,6 @@ def _upsert_lesson(project_name: str, knode_id: int, content_type: str,
         html = section.get("html")
         if html and "animation_runtime.js" in html:
             section["html"] = _inline_runtime(html)
-
-    # 内联 runtime 到 theories 的 animation_html 中
-    for theory in course_content.get("theories", []):
-        anim = theory.get("animation_html")
-        if anim and "animation_runtime.js" in anim:
-            theory["animation_html"] = _inline_runtime(anim)
 
     from systemedu.storage.db import LessonContent, get_session
     db = get_session()
@@ -546,7 +582,7 @@ def _sync_external_resources_to_db(project_name: str, knode_id: int, ext: dict) 
         db.close()
 
 
-def _init_progress(project_name: str, node_count: int) -> None:
+def init_progress(project_name: str, node_count: int) -> None:
     """初始化用户学习进度（第一个节点 available，其余 locked）。"""
     from systemedu.storage.db import ProgressRecord, get_session
     from systemedu.education.models import NodeStatus
@@ -570,7 +606,7 @@ def _init_progress(project_name: str, node_count: int) -> None:
 
 # ── 项目文件写入 ────────────────────────────────────────────────
 
-def _write_project_files(name: str, title: str, description: str, category: str,
+def write_project_files(name: str, title: str, description: str, category: str,
                           age_range: list[int], estimated_hours: float, tags: list[str],
                           tree_data: dict) -> Path:
     """写入 project.yaml 和 knowledge_tree.json。"""
@@ -599,370 +635,6 @@ def _write_project_files(name: str, title: str, description: str, category: str,
         encoding="utf-8",
     )
     return project_dir
-
-
-# ── 核心生成函数（由 Claude Code 直接调用自身能力）──────────────
-
-def design_knowledge_tree(idea: str, name: str, age_range: list[int],
-                           category: str) -> dict:
-    """
-    根据 idea 设计知识树。
-
-    返回格式与 knowledge_tree.json 完全一致：
-    {
-      "milestones": [
-        {
-          "title": str, "description": str, "order": int, "xp_reward": int,
-          "knodes": [
-            {
-              "title": str, "summary": str, "difficulty_level": int (1-5),
-              "content_type": "interactive"|"experiment"|"text",
-              "acceptance_type": "quiz",
-              "estimated_minutes": int, "xp_reward": int,
-              "order": int (global), "prerequisite_indices": [int, ...]
-            }
-          ]
-        }
-      ]
-    }
-
-    此函数在 Claude Code 上下文中运行，直接由 Claude 填充内容。
-    外部调用者从此函数的返回值读取结果。
-    """
-    raise NotImplementedError(
-        "此函数由 Claude Code 直接实现，不通过 LLM API 调用。"
-        "请使用 --generate 模式运行脚本，Claude Code 会直接填充内容。"
-    )
-
-
-def generate_node_course(
-    project_name: str,
-    node_title: str,
-    node_summary: str,
-    milestone_title: str,
-    difficulty: int,
-    knode_id: int,
-    category: str,
-    design_language: str,
-) -> dict:
-    """
-    为单个知识节点生成完整课程内容（CourseContent 格式）。
-
-    返回格式：
-    {
-      "plan_markdown": str,       # 完整学习计划，Markdown
-      "ideas": [CourseIdeaSummary],
-      "rendered_sections": {
-        idea_id: {
-          "mode": "animation"|"exercise"|"story",
-          "status": "ready",
-          "html": str|null,       # 动画为 Canvas HTML，其余 null
-          "story_paragraphs": list|null,
-          "exercises": list|null,
-          "generation_backend": str,
-        }
-      }
-    }
-
-    此函数在 Claude Code 上下文中运行，直接由 Claude 填充内容。
-    """
-    raise NotImplementedError(
-        "此函数由 Claude Code 直接实现，不通过 LLM API 调用。"
-    )
-
-
-# ── CLI 入口 ──────────────────────────────────────────────────
-
-def main() -> None:
-    parser = argparse.ArgumentParser(
-        description="SystemEdu Course Factory — 从 idea 到完整课程",
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog=textwrap.dedent(__doc__ or ""),
-    )
-    parser.add_argument("idea", help="项目主题 idea（一句话描述）")
-    parser.add_argument("--name", default=None,
-                        help="项目英文名（slug，如 newton-laws）。不填则自动生成")
-    parser.add_argument("--age", default="12-15",
-                        help="目标年龄段，格式 min-max，如 10-14（默认 12-15）")
-    parser.add_argument("--category", default="science",
-                        choices=["science", "math", "biology", "chemistry", "physics",
-                                 "history", "language", "other"],
-                        help="学科分类（默认 science）")
-    parser.add_argument("--hours", type=float, default=None,
-                        help="预计学习时长（小时）。不填则根据节点数自动计算")
-    parser.add_argument("--dry-run", action="store_true",
-                        help="只打印知识树设计，不写入数据库")
-    args = parser.parse_args()
-
-    # 解析年龄段
-    try:
-        age_parts = args.age.split("-")
-        age_range = [int(age_parts[0]), int(age_parts[1])]
-    except Exception:
-        console.print(f"[red]年龄格式错误：{args.age}，应为如 12-15[/red]")
-        sys.exit(1)
-
-    console.print(Panel.fit(
-        f"[bold cyan]SystemEdu Course Factory[/bold cyan]\n\n"
-        f"Idea: [yellow]{args.idea}[/yellow]\n"
-        f"年龄段: {age_range[0]}-{age_range[1]} 岁\n"
-        f"分类: {args.category}",
-        title="启动",
-    ))
-
-    console.print("\n[bold]此脚本是 Claude Code 的工作框架。[/bold]")
-    console.print("Claude Code 负责：")
-    console.print("  1. 调用 [cyan]design_knowledge_tree()[/cyan] → 设计知识树")
-    console.print("  2. 调用 [cyan]generate_node_course()[/cyan] → 为每节点生成课程内容")
-    console.print("  3. 调用 [cyan]write_to_db()[/cyan] → 写入数据库")
-    console.print()
-    console.print("[dim]请直接运行：[/dim]")
-    console.print(f'  [green]python scripts/course_factory.py "{args.idea}"[/green]')
-    console.print()
-    console.print("[yellow]注：此脚本的实际执行由 Claude Code 在对话中完成，不通过 LLM API 调用。[/yellow]")
-
-
-def write_to_db(
-    name: str,
-    title: str,
-    description: str,
-    category: str,
-    age_range: list[int],
-    estimated_hours: float,
-    tags: list[str],
-    tree_data: dict,
-    course_contents: list[dict],  # 按 knode_id 顺序
-    dry_run: bool = False,
-) -> None:
-    """
-    将完整项目数据写入数据库和文件系统。
-
-    course_contents: 列表，索引对应 knode_id，每项是 CourseContent dict。
-    """
-    console.rule("[bold cyan]写入数据库[/bold cyan]")
-
-    # 计算节点总数
-    node_count = sum(len(ms["knodes"]) for ms in tree_data["milestones"])
-    assert len(course_contents) == node_count, (
-        f"course_contents 数量 {len(course_contents)} 与节点数 {node_count} 不符"
-    )
-
-    if dry_run:
-        console.print("[yellow]--dry-run 模式，跳过数据库写入[/yellow]")
-        _show_dry_run_summary(name, title, tree_data, course_contents)
-        return
-
-    _ensure_db_tables()
-
-    with Progress(
-        SpinnerColumn(),
-        TextColumn("[progress.description]{task.description}"),
-        BarColumn(),
-        TextColumn("{task.completed}/{task.total}"),
-        console=console,
-    ) as progress:
-        task = progress.add_task("写入课程内容", total=node_count + 3)
-
-        # 1. 写文件
-        progress.update(task, description="写入项目文件 (project.yaml + knowledge_tree.json)")
-        _write_project_files(name, title, description, category, age_range, estimated_hours, tags, tree_data)
-        progress.advance(task)
-
-        # 2. 注册项目
-        progress.update(task, description="注册项目到数据库")
-        _upsert_project(name, title, description, category, age_range, estimated_hours, tags)
-        progress.advance(task)
-
-        # 3. 初始化进度
-        progress.update(task, description="初始化学习进度")
-        _init_progress(name, node_count)
-        progress.advance(task)
-
-        # 4. 写入每个节点的课程内容
-        for knode_id, course_content in enumerate(course_contents):
-            # 找到节点的 content_type
-            global_idx = 0
-            content_type = "interactive"
-            for ms in tree_data["milestones"]:
-                for knode in ms["knodes"]:
-                    if global_idx == knode_id:
-                        content_type = knode.get("content_type", "interactive")
-                        node_title = knode["title"]
-                    global_idx += 1
-
-            progress.update(task, description=f"节点 {knode_id}: {node_title[:20]}")
-            _upsert_lesson(name, knode_id, content_type, course_content)
-            progress.advance(task)
-
-    console.print(f"\n[bold green]完成！[/bold green] 项目 '{name}' 已写入数据库")
-    console.print(f"共 {node_count} 个知识节点，所有内容 status=ready")
-    console.print(f"\n启动 systemedu 查看：[dim]./scripts/restart.sh[/dim]")
-    console.print(f"或直接访问：[dim]http://localhost:3000/projects/{name}[/dim]")
-
-
-def _show_dry_run_summary(name: str, title: str, tree_data: dict,
-                           course_contents: list[dict]) -> None:
-    """打印 dry-run 时的摘要。"""
-    table = Table(title=f"知识树预览：{title} ({name})")
-    table.add_column("ID", style="dim", width=4)
-    table.add_column("里程碑", style="cyan", max_width=20)
-    table.add_column("节点标题", style="white", max_width=28)
-    table.add_column("难度", width=4)
-    table.add_column("分钟", width=6)
-    table.add_column("前置", max_width=12)
-
-    global_idx = 0
-    for ms in tree_data["milestones"]:
-        for knode in ms["knodes"]:
-            prereqs = ",".join(str(p) for p in knode.get("prerequisite_indices", []))
-            table.add_row(
-                str(global_idx),
-                ms["title"],
-                knode["title"],
-                str(knode.get("difficulty_level", 1)),
-                str(knode.get("estimated_minutes", 20)),
-                prereqs or "-",
-            )
-            global_idx += 1
-
-    console.print(table)
-
-    if course_contents:
-        console.print(f"\n课程内容预览（节点 0）：")
-        c = course_contents[0]
-        plan = c.get("plan_markdown", "")
-        console.print(Markdown(plan[:800] + ("..." if len(plan) > 800 else "")))
-        ideas = c.get("ideas", [])
-        console.print(f"\n富媒体单元：{len(ideas)} 个")
-        for idea in ideas:
-            console.print(f"  - [{idea['mode']}] {idea['topic']}")
-
-
-# ── Canvas 动画 HTML 生成辅助函数（供 Claude Code 调用）──────────
-
-def make_canvas_html(
-    title: str,
-    js_body: str,
-    params_js: str = "",
-    color_main: str = "#818cf8",
-) -> str:
-    """
-    生成标准 Canvas 2D 动画 HTML。
-
-    js_body: 完整的 JS 逻辑（不含 params 声明和 canvas setup）
-    params_js: 参数声明部分（var TITLE=...; var X=...;）
-    返回完整自包含 HTML。
-    """
-    return f"""<!DOCTYPE html>
-<html lang="zh">
-<head>
-<meta charset="UTF-8"/>
-<style>
-*{{box-sizing:border-box;margin:0;padding:0}}
-html,body{{width:100%;height:100%;overflow:hidden;background:#0f0a1e;
-  font-family:"Noto Sans SC","PingFang SC","Microsoft YaHei",system-ui,sans-serif}}
-canvas{{display:block;width:100%;height:100%;position:absolute;top:0;left:0}}
-</style>
-</head>
-<body>
-<canvas id="c"></canvas>
-<script>
-(function(){{
-"use strict";
-
-/* ── params ── */
-var TITLE = {json.dumps(title, ensure_ascii=False)};
-{params_js}
-
-/* ── canvas setup ── */
-/* 采用等比缩放 + 居中偏移（letterbox），保证字体和图形不被非等比拉伸。
-   所有 js_body 代码以 W×H 逻辑坐标系作画，实际显示时 canvas 按
-   min(rectW/W, rectH/H) 等比缩放，多余空间留黑。*/
-var canvas = document.getElementById("c");
-var ctx = canvas.getContext("2d");
-var W = 600, H = 420;
-var DPR = Math.min(window.devicePixelRatio||1, 2);
-function resize(){{
-  var rect = canvas.getBoundingClientRect();
-  if (rect.width < 1 || rect.height < 1) return;
-  canvas.width = rect.width * DPR;
-  canvas.height = rect.height * DPR;
-  var scale = Math.min(rect.width / W, rect.height / H);
-  var drawW = W * scale;
-  var drawH = H * scale;
-  var offsetX = (rect.width - drawW) / 2;
-  var offsetY = (rect.height - drawH) / 2;
-  ctx.setTransform(DPR*scale, 0, 0, DPR*scale, DPR*offsetX, DPR*offsetY);
-}}
-resize();
-window.addEventListener("resize", function(){{ resize(); if(typeof drawCurrent==="function") drawCurrent(); }});
-/* iframe 容器 resize 不会触发 window.resize；用 ResizeObserver 兜底。
-   具体防反馈循环由 inject_animation_resize_patch() 注入的补丁负责。*/
-if (typeof ResizeObserver !== "undefined" && canvas.parentElement) {{
-  try {{
-    new ResizeObserver(function(){{
-      resize();
-      if (typeof drawCurrent === "function") drawCurrent();
-    }}).observe(canvas.parentElement);
-  }} catch (e) {{}}
-}}
-
-/* ── color ── */
-var COLOR = {json.dumps(color_main)};
-function hex2rgb(h){{
-  h=h.replace("#","");
-  if(h.length===3)h=h[0]+h[0]+h[1]+h[1]+h[2]+h[2];
-  return[parseInt(h.slice(0,2),16),parseInt(h.slice(2,4),16),parseInt(h.slice(4,6),16)];
-}}
-var RGB = hex2rgb(COLOR);
-var C = "rgb("+RGB[0]+","+RGB[1]+","+RGB[2]+")";
-var CA = function(a){{return"rgba("+RGB[0]+","+RGB[1]+","+RGB[2]+","+a+")"}};
-
-/* ── utils ── */
-function roundRect(x,y,w,h,r){{
-  ctx.beginPath();
-  ctx.moveTo(x+r,y);ctx.lineTo(x+w-r,y);ctx.quadraticCurveTo(x+w,y,x+w,y+r);
-  ctx.lineTo(x+w,y+h-r);ctx.quadraticCurveTo(x+w,y+h,x+w-r,y+h);
-  ctx.lineTo(x+r,y+h);ctx.quadraticCurveTo(x,y+h,x,y+h-r);
-  ctx.lineTo(x,y+r);ctx.quadraticCurveTo(x,y,x+r,y);
-  ctx.closePath();
-}}
-function drawBg(){{
-  var g=ctx.createLinearGradient(0,0,0,H);
-  g.addColorStop(0,"#0f0a1e");g.addColorStop(1,"#1a1035");
-  ctx.fillStyle=g;ctx.fillRect(0,0,W,H);
-  ctx.strokeStyle="rgba(255,255,255,0.03)";ctx.lineWidth=1;
-  for(var x=0;x<=W;x+=40){{ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,H);ctx.stroke();}}
-  for(var y=0;y<=H;y+=40){{ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke();}}
-}}
-function drawTitle(){{
-  ctx.font="bold 16px 'Noto Sans SC',system-ui";
-  ctx.textAlign="center";ctx.fillStyle="rgba(255,255,255,0.9)";
-  ctx.fillText(TITLE,W/2,28);
-}}
-function drawHUD(cols){{
-  var by=H-52;
-  ctx.fillStyle="rgba(0,0,0,0.55)";
-  roundRect(0,by,W,52,0);ctx.fill();
-  ctx.strokeStyle="rgba(255,255,255,0.06)";ctx.lineWidth=1;
-  ctx.beginPath();ctx.moveTo(0,by);ctx.lineTo(W,by);ctx.stroke();
-  var cw=W/cols.length;
-  cols.forEach(function(c,i){{
-    var cx=cw*i+cw/2;
-    ctx.font="10px 'Noto Sans SC',system-ui";ctx.textAlign="center";
-    ctx.fillStyle=CA(0.5);ctx.fillText(c.label,cx,by+17);
-    ctx.font="bold 14px 'Noto Sans SC',system-ui";
-    ctx.fillStyle="rgba(255,255,255,0.88)";ctx.fillText(c.val,cx,by+38);
-  }});
-}}
-
-/* ── main ── */
-{js_body}
-
-}})();
-</script>
-</body>
-</html>"""
 
 
 # ── make_spec_html: 严格遵循 COURSE_FACTORY.md 规范的 HTML 生成 ───
@@ -1463,6 +1135,7 @@ def load_knode_context(project_name: str, knode_global_idx: int) -> dict:
     import sys
     sys.path.insert(0, str(ROOT))
 
+    knode_global_idx = int(knode_global_idx)
     tree_path = ROOT / "projects" / project_name / "knowledge_tree.json"
     if not tree_path.exists():
         raise FileNotFoundError(f"knowledge_tree.json not found: {tree_path}")
@@ -1541,6 +1214,45 @@ def load_knode_context(project_name: str, knode_global_idx: int) -> dict:
 
     raise ValueError(
         f"knode global index {knode_global_idx} out of range (project has {idx} knodes)"
+    )
+
+
+def load_context(project: str, idx: int) -> KnodeContext:
+    """加载 knode 上下文，返回 typed KnodeContext dataclass。
+
+    这是 load_knode_context() 的高层封装，返回 dataclass 而非 dict，
+    方便在 plan mode 和代码中通过属性访问。
+    """
+    raw = load_knode_context(project, idx)
+    return KnodeContext(
+        project_name=project,
+        knode_global_idx=idx,
+        knode=raw["knode"],
+        milestone=raw["milestone"],
+        sub_project=raw.get("sub_project"),
+        module=raw.get("module"),
+        stage=raw.get("stage"),
+    )
+
+
+def save_knode(
+    ctx: KnodeContext,
+    course_content: dict,
+    *,
+    assignment: str = "",
+) -> None:
+    """一步完成 DB 写入：ensure_db_tables + upsert_lesson。
+
+    content_type 固定为 "cf"（course factory 标准）。
+    若提供 assignment 则同时写入 project_assignment 字段。
+    """
+    ensure_db_tables()
+    upsert_lesson(
+        ctx.project_name,
+        ctx.knode_global_idx,
+        "cf",
+        course_content,
+        project_assignment=assignment or None,
     )
 
 
@@ -1742,6 +1454,61 @@ def search_labxchange(keywords: list[str], subject_filter: str | None = None,
             "learning_objectives": pw.get("learning_objectives", []),
             "score": score,
         })
+    return results
+
+
+def search_labxchange_for_knode(knode: dict, *, top_k: int = 5) -> list[dict]:
+    """从 knode 自动提取关键词搜索 LabXchange。
+
+    策略：从 title、core_question、summary、hands_on_components 中提取
+    英文单词（>= 3 字母），去掉常见停用词，用多组关键词搜索后合并去重。
+    这样即使 Claude Code 忘记手动调用 search_labxchange，
+    make_course_content 也能自动兜底。
+    """
+    import re as _re
+
+    _STOP = {
+        "the", "and", "for", "are", "but", "not", "you", "all", "can", "had",
+        "her", "was", "one", "our", "out", "has", "his", "how", "its", "may",
+        "new", "now", "old", "see", "way", "who", "did", "get", "let", "say",
+        "she", "too", "use", "with", "from", "this", "that", "what", "which",
+        "will", "each", "make", "like", "been", "have", "does", "than", "them",
+        "then", "into", "over", "such", "take", "about", "could", "would",
+        "should", "their", "there", "these", "those", "being", "where", "after",
+        "other", "through", "student", "students", "learn", "learning",
+        "understand", "understanding", "able", "identify", "describe",
+    }
+
+    # 收集原始文本
+    texts = [
+        knode.get("title", ""),
+        knode.get("core_question", ""),
+        knode.get("summary", ""),
+    ]
+    for comp in knode.get("hands_on_components", []):
+        if isinstance(comp, str):
+            texts.append(comp)
+
+    raw = " ".join(texts).lower()
+    # 提取英文单词（>= 3 字母）
+    words = set(_re.findall(r"[a-z]{3,}", raw))
+    words -= _STOP
+    keywords = sorted(words)
+
+    if not keywords:
+        return []
+
+    # 搜索：用全部关键词搜一次
+    results = search_labxchange(keywords, top_k=top_k)
+
+    # 如果全部关键词搜不到，退化到更宽泛的方式：
+    # 取 title 中的英文词单独搜
+    if not results:
+        title_words = set(_re.findall(r"[a-z]{3,}", knode.get("title", "").lower()))
+        title_words -= _STOP
+        if title_words and title_words != words:
+            results = search_labxchange(sorted(title_words), top_k=top_k)
+
     return results
 
 
@@ -2150,7 +1917,13 @@ def download_course_image(
 
     try:
         with httpx.Client(timeout=timeout, follow_redirects=True) as client:
-            resp = client.get(src_url, headers={"User-Agent": "SystemEdu CourseFactory/1.0"})
+            # Wikimedia requires a descriptive UA with contact info per
+            # https://meta.wikimedia.org/wiki/User-Agent_policy
+            ua = (
+                "SystemEduCourseFactory/1.0 (educational content pipeline; "
+                "https://github.com/systemedu; contact=admin@systemedu.local)"
+            )
+            resp = client.get(src_url, headers={"User-Agent": ua, "Accept": "image/*,*/*"})
             resp.raise_for_status()
             content_type = resp.headers.get("content-type", "").split(";")[0].strip()
             data = resp.content
@@ -2528,7 +2301,7 @@ ANIMATION_RESIZE_PATCH_JS = r"""
 ANIMATION_RESIZE_PATCH_MARKER = "__systemedu_resize_patched"
 
 
-def fix_nonuniform_scale_in_html(html: str) -> str:
+def _fix_nonuniform_scale(html: str) -> str:
     """
     修复动画 HTML 里的非等比缩放问题。
 
@@ -2636,29 +2409,46 @@ def inject_animation_resize_patch(html: str) -> str:
 
 def make_exercises(items: list[dict]) -> list[dict]:
     """
-    构造标准练习题列表。
+    构造标准练习题列表。支持 choice 和 short_answer 两种类型。
 
-    items 每项：
+    choice 类型：
     {
+      "type": "choice",              # 可省略，默认 choice
       "question": str,
-      "options": [str, str, str, str],  # 4个选项
-      "correct": int,                    # 0-3
+      "options": [str, str, str, str],
+      "correct": int,                # 0-3
       "explanation": str,
-      "ref": str,                        # v4.1 可选：对应的 hands_on_components 或 acceptance_standard 原文
+      "ref": str,                    # v4.1 可选
     }
+
+    short_answer 类型：
+    {
+      "type": "short_answer",
+      "question": str,
+      "sample_answer": str,
+      "ref": str,                    # v4.1 可选
+    }
+
     返回符合 InlineExercise 格式的列表。
     """
     result = []
     for item in items:
-        exercise = {
-            "type": "choice",
-            "question": item["question"],
-            "options": item["options"],
-            "correct": item["correct"],
-            "explanation": item["explanation"],
-        }
-        # v4.1: 保留题目的对齐引用
-        if "ref" in item and item["ref"]:
+        ex_type = item.get("type", "choice")
+        if ex_type == "short_answer":
+            exercise = {
+                "type": "short_answer",
+                "question": item["question"],
+                "sample_answer": item.get("sample_answer", ""),
+            }
+        else:
+            exercise = {
+                "type": "choice",
+                "question": item["question"],
+                "options": item["options"],
+                "correct": item["correct"],
+                "explanation": item.get("explanation", ""),
+            }
+        if item.get("ref"):
             exercise["ref"] = item["ref"]
         result.append(exercise)
     return result
@@ -2777,10 +2567,10 @@ def make_course_content(
     #   (b) 注入 ResizeObserver + drawCurrent 补丁
     #       （修复 iframe 容器 resize 后 canvas 空白的 bug）
     if animation_html:
-        animation_html = fix_nonuniform_scale_in_html(animation_html)
+        animation_html = _fix_nonuniform_scale(animation_html)
         animation_html = inject_animation_resize_patch(animation_html)
     if game_html:
-        game_html = fix_nonuniform_scale_in_html(game_html)
+        game_html = _fix_nonuniform_scale(game_html)
         game_html = inject_animation_resize_patch(game_html)
         # 0.6 检查 game HTML 中的尺寸硬编码上限
         #     常见错误：Math.min(..., 480) / Math.min(..., 200) 等会导致
@@ -2996,7 +2786,7 @@ def make_course_content(
                 raise FileNotFoundError(f"diagram html not found: {p}")
             html_text = p.read_text(encoding="utf-8")
             # 示意图 iframe 尺寸较小，也可能需要 resize patch
-            html_text = fix_nonuniform_scale_in_html(html_text)
+            html_text = _fix_nonuniform_scale(html_text)
             html_text = inject_animation_resize_patch(html_text)
 
             topic = d.get("topic") or "示意图"
@@ -3110,6 +2900,14 @@ def make_course_content(
         ext["web_results"] = research.get("web_results", [])
         ext["youtube_results"] = research.get("youtube_results", [])
         ext["researched_at"] = research.get("researched_at", "")
+    # labxchange 兜底：如果调用方没传结果且有 knode，自动搜索
+    if not labxchange_results and knode is not None:
+        labxchange_results = search_labxchange_for_knode(knode, top_k=3)
+        if labxchange_results:
+            console.print(
+                f"[dim]labxchange 自动兜底: 从 knode 提取关键词搜到 "
+                f"{len(labxchange_results)} 条结果[/dim]"
+            )
     if labxchange_results:
         ext["labxchange_results"] = labxchange_results
     if ext:
@@ -3125,5 +2923,10 @@ def make_course_content(
     return course_content
 
 
-if __name__ == "__main__":
-    main()
+# ── 临时兼容别名（下次清理时移除）─────────────────────────────────
+_ensure_db_tables = ensure_db_tables
+_upsert_project = upsert_project
+_upsert_lesson = upsert_lesson
+_init_progress = init_progress
+_write_project_files = write_project_files
+fix_nonuniform_scale_in_html = _fix_nonuniform_scale

@@ -25,6 +25,44 @@ var AnimRuntime = (function () {
   var LANG = 'cn';
   var I18N = {};
 
+  // Reference coordinate system -- all animation content is authored
+  // against this virtual canvas size. The runtime auto-scales to fit.
+  var REF_W = 700, REF_H = 400;
+
+  // --- Safe area ---
+  // The guide-panel and lang-btn overlay the canvas with position:fixed.
+  // We measure their actual pixel sizes and subtract from the content
+  // coordinate space, so getFrameElements() receives W/H that only
+  // cover the unobstructed region. The content transform auto-offsets
+  // so (0,0) maps to the safe area's top-left corner.
+  var _safeInset = { top: 0, right: 0, bottom: 0, left: 0 }; // in real px
+
+  function _measureSafeArea() {
+    var guide = document.getElementById('guide');
+    var lang  = document.getElementById('langBtn');
+    var right = 0, left = 0;
+    var cvRect = cv.getBoundingClientRect();
+    if (guide) {
+      var gs = guide.getBoundingClientRect();
+      // guide-panel is position:fixed; measure how much it overlaps canvas horizontally
+      if (gs.right > cvRect.left && gs.left < cvRect.right) {
+        right = Math.max(0, cvRect.right - gs.left + 8); // 8px extra margin
+      }
+    }
+    if (lang) {
+      var ls = lang.getBoundingClientRect();
+      if (ls.left < cvRect.right && ls.right > cvRect.left) {
+        left = Math.max(0, ls.right - cvRect.left + 4);
+      }
+    }
+    _safeInset.right = right;
+    _safeInset.left = left;
+    // Vertical: DOM header/controls/hud are outside canvas-wrap in flex layout.
+    // Add a fixed top padding so content y=0 has breathing room below the
+    // DOM header area. This is a percentage of canvas height.
+    _safeInset.top = Math.round(H * 0.04);
+  }
+
   // --- Palette presets (from animation_game_design/ DESIGN.md + code.html) ---
   var PALETTES = {
     helix_lab: {
@@ -305,12 +343,45 @@ var AnimRuntime = (function () {
     ctx.fill();
   }
 
+  // --- Content scaling ---
+  // Scale factor is determined by height (fit REF_H into H).
+  // The virtual width adapts to fill the actual canvas width,
+  // so content scripts always get the full horizontal span.
+  //
+  // Safe area: the coordinate space passed to getFrameElements is
+  // automatically shrunk to exclude areas obstructed by guide-panel
+  // and lang-btn overlays. The transform offsets the origin so
+  // content (0,0) maps to the safe area top-left corner.
+  var _vw = REF_W, _vh = REF_H;
+
+  function _contentTransform() {
+    var safeW = W - _safeInset.left - _safeInset.right;
+    var safeH = H - _safeInset.top;
+    if (safeW < 200) safeW = W;
+    if (safeH < 100) safeH = H;
+    // Scale factor based on safe height
+    var s = safeH / REF_H;
+    _vh = REF_H;
+    _vw = safeW / s;
+    if (_vw < REF_W) _vw = REF_W;
+    return { s: s, ox: _safeInset.left, oy: _safeInset.top, vw: _vw, vh: _vh };
+  }
+
+  function _applyContentScale(ct) {
+    ctx.save();
+    ctx.translate(ct.ox, ct.oy);
+    ctx.scale(ct.s, ct.s);
+  }
+
   // --- Frame rendering ---
   function drawFrame(f) {
     var bgFn = (typeof drawBg === 'function') ? drawBg : _defaultDrawBg;
     bgFn(ctx, W, H);
-    var elems = getFrameElements(f, W, H);
+    var ct = _contentTransform();
+    _applyContentScale(ct);
+    var elems = getFrameElements(f, ct.vw, ct.vh);
     elems.forEach(function (el) { drawElement(el); });
+    ctx.restore();
   }
 
   // --- Shared element transition ---
@@ -320,8 +391,9 @@ var AnimRuntime = (function () {
     if (nf === currentFrame && !transitioning) { drawFrame(currentFrame); _updateHUD(currentFrame); return; }
     if (transitioning) return;
 
-    var oldElems = getFrameElements(currentFrame, W, H);
-    var newElems = getFrameElements(nf, W, H);
+    var ct0 = _contentTransform();
+    var oldElems = getFrameElements(currentFrame, ct0.vw, ct0.vh);
+    var newElems = getFrameElements(nf, ct0.vw, ct0.vh);
     var oldMap = {}; oldElems.forEach(function (e) { oldMap[e.id] = e; });
     var newMap = {}; newElems.forEach(function (e) { newMap[e.id] = e; });
 
@@ -338,6 +410,8 @@ var AnimRuntime = (function () {
       var p = easeInOut(raw);
 
       bgFn(ctx, W, H);
+      var ct = _contentTransform();
+      _applyContentScale(ct);
 
       // Old-only elements: fade out
       oldElems.forEach(function (oe) {
@@ -380,6 +454,8 @@ var AnimRuntime = (function () {
         }
       });
 
+      ctx.restore();
+
       if (raw < 1) { requestAnimationFrame(step); }
       else { transitioning = false; }
     }
@@ -418,9 +494,15 @@ var AnimRuntime = (function () {
     html += '</ul>';
     guideContent.innerHTML = html;
 
+    // Re-measure safe area after guide content is filled
+    if (cv) _measureSafeArea();
+
     // Collapse toggle
     guideTitle.addEventListener('click', function () {
       guideContent.classList.toggle('collapsed');
+      // Re-measure and redraw after collapse/expand changes overlay size
+      _measureSafeArea();
+      drawFrame(currentFrame);
     });
   }
 
@@ -454,6 +536,7 @@ var AnimRuntime = (function () {
     cv.width = W * DPR; cv.height = H * DPR;
     cv.style.width = W + 'px'; cv.style.height = H + 'px';
     ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+    _measureSafeArea();
     drawFrame(currentFrame);
   }
 
@@ -567,11 +650,19 @@ var AnimRuntime = (function () {
     transitionTo: transitionTo,
     refreshI18N: refreshI18N,
     get PAL() { return PAL; },
-    get W() { return W; },
-    get H() { return H; },
+    get W() { return _vw; },
+    get H() { return _vh; },
     get ctx() { return ctx; },
     get currentFrame() { return currentFrame; },
     get totalFrames() { return totalFrames; },
     get LANG() { return LANG; },
+    get _lang() { return LANG; },
+    get REF_W() { return REF_W; },
+    get REF_H() { return REF_H; },
+    get realW() { return W; },
+    get realH() { return H; },
+    get safeInset() { return _safeInset; },
+    applyContentScale: function () { var ct = _contentTransform(); _applyContentScale(ct); },
+    restoreContentScale: function () { ctx.restore(); },
   };
 })();

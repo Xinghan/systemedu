@@ -3,7 +3,20 @@
 import { useEffect, useState } from "react"
 import { useParams, useRouter } from "next/navigation"
 import Link from "next/link"
-import { ArrowLeft, Bookmark, BookmarkCheck, ChevronDown, ChevronRight, ExternalLink, Loader2, Plus, X } from "lucide-react"
+import {
+  ArrowLeft,
+  Bookmark,
+  BookmarkCheck,
+  ChevronDown,
+  ChevronRight,
+  ExternalLink,
+  Globe,
+  GraduationCap,
+  Loader2,
+  Plus,
+  Youtube,
+  X,
+} from "lucide-react"
 import { AppHeader } from "@/components/layout/app-header"
 import { PageLoading } from "@/components/ui/page-loading"
 import { Badge } from "@/components/ui/badge"
@@ -39,8 +52,32 @@ function ResourceRow({
       <div className="flex items-start gap-3 p-3">
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 mb-0.5">
-            <Badge variant="secondary" className="text-xs shrink-0">
-              {resource.source_type === "youtube" ? "视频" : "网页"}
+            <Badge
+              variant="secondary"
+              className={`text-xs shrink-0 inline-flex items-center gap-1 ${
+                resource.source_type === "labxchange"
+                  ? "bg-purple-100 text-purple-700 dark:bg-purple-950/40 dark:text-purple-300"
+                  : resource.source_type === "youtube"
+                    ? "bg-red-100 text-red-700 dark:bg-red-950/40 dark:text-red-300"
+                    : ""
+              }`}
+            >
+              {resource.source_type === "youtube" ? (
+                <>
+                  <Youtube className="h-3 w-3" />
+                  视频
+                </>
+              ) : resource.source_type === "labxchange" ? (
+                <>
+                  <GraduationCap className="h-3 w-3" />
+                  LabXchange
+                </>
+              ) : (
+                <>
+                  <Globe className="h-3 w-3" />
+                  网页
+                </>
+              )}
             </Badge>
             <a
               href={resource.url}
