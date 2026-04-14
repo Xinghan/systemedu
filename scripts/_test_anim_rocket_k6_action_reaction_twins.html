@@ -1,0 +1,776 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=Inter:wght@400;500&family=Noto+Sans+SC:wght@400;700&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box;}
+html,body{width:100%;height:100vh;overflow:hidden;}
+body{background:var(--bg,#05070a);color:var(--text,#e2e2e9);font-family:'Inter','Noto Sans SC',sans-serif;display:flex;flex-direction:column;}
+.wrapper{display:flex;flex-direction:column;height:100vh;overflow:hidden;}
+.header{padding:12px 16px 8px;display:flex;justify-content:space-between;align-items:center;}
+.header h1{font-family:'Space Grotesk',sans-serif;font-size:clamp(14px,2vw,18px);font-weight:700;letter-spacing:-0.02em;color:var(--primary,#ffb000);text-shadow:0 0 15px var(--glow,rgba(255,176,0,0.3));}
+.header .sub{font-size:11px;color:var(--muted,#8e90a6);letter-spacing:0.1em;text-transform:uppercase;}
+.canvas-wrap{flex:1;min-height:0;position:relative;}
+canvas{width:100%;height:100%;display:block;}
+.controls{display:flex;justify-content:center;align-items:center;gap:12px;padding:8px 16px;}
+.ctrl-btn{font-family:'Space Grotesk',sans-serif;font-size:12px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;padding:6px 18px;border:none;cursor:pointer;color:var(--bg,#05070a);background:linear-gradient(135deg,var(--primary,#ffb000),var(--primary-dim,#cc8d00));transition:transform 0.1s,box-shadow 0.2s;box-shadow:0 0 12px var(--glow-strong,rgba(255,176,0,0.3));}
+.ctrl-btn:hover{transform:scale(1.04);box-shadow:0 0 20px var(--glow-strong,rgba(255,176,0,0.5));}
+.ctrl-btn:active{transform:scale(0.96);}
+.ctrl-btn.secondary{background:var(--glass,rgba(17,20,37,0.92));color:var(--muted,#8e90a6);box-shadow:none;backdrop-filter:blur(12px);}
+.ctrl-btn.secondary:hover{color:var(--primary,#ffb000);}
+.hud{height:48px;display:flex;align-items:center;justify-content:space-around;background:rgba(0,0,0,0.55);backdrop-filter:blur(12px);padding:0 16px;}
+.hud-item{text-align:center;}
+.hud-label{font-family:'Space Grotesk',sans-serif;font-size:9px;letter-spacing:0.15em;text-transform:uppercase;color:var(--muted,#8e90a6);}
+.hud-val{font-family:'Space Grotesk',sans-serif;font-size:14px;font-weight:700;color:var(--primary,#ffb000);}
+.lang-btn{position:fixed;top:8px;left:8px;z-index:100;font-family:'Space Grotesk',sans-serif;font-size:11px;font-weight:700;padding:4px 10px;cursor:pointer;border:none;background:rgba(20,20,35,0.85);backdrop-filter:blur(12px);color:#ffb08e;letter-spacing:1px;}
+.guide-panel{position:fixed;top:8px;right:8px;width:240px;max-height:40vh;overflow-y:auto;background:var(--glass,rgba(17,20,37,0.85));backdrop-filter:blur(12px);padding:12px;z-index:100;font-family:'Noto Sans SC',sans-serif;font-size:12px;color:rgba(255,255,255,0.85);line-height:1.6;}
+.guide-panel h3{font-family:'Space Grotesk',sans-serif;font-size:13px;margin-bottom:6px;color:var(--primary,#ffb000);cursor:pointer;display:flex;justify-content:space-between;align-items:center;}
+.guide-panel ul{padding-left:14px;}
+.guide-panel .collapsed{display:none;}
+</style>
+</head>
+<body>
+<button class="lang-btn" id="langBtn">CN</button>
+<div class="guide-panel" id="guide">
+<h3 id="guideTitle"></h3>
+<div class="guide-content" id="guideContent"></div>
+</div>
+<div class="wrapper">
+<div class="header">
+<div><h1 id="title"></h1><div class="sub" id="subtitle"></div></div>
+<div id="frameIndicator" style="font-family:'Space Grotesk';font-size:11px;color:var(--muted,#8e90a6);letter-spacing:0.1em;"></div>
+</div>
+<div class="canvas-wrap"><canvas id="c"></canvas></div>
+<div class="controls">
+<button class="ctrl-btn secondary" id="btnPrev"></button>
+<button class="ctrl-btn" id="btnPlay"></button>
+<button class="ctrl-btn secondary" id="btnNext"></button>
+</div>
+<div class="hud">
+<div class="hud-item"><div class="hud-label" id="hudL1"></div><div class="hud-val" id="hudV1"></div></div>
+<div class="hud-item"><div class="hud-label" id="hudL2"></div><div class="hud-val" id="hudV2"></div></div>
+<div class="hud-item"><div class="hud-label" id="hudL3"></div><div class="hud-val" id="hudV3"></div></div>
+<div class="hud-item"><div class="hud-label" id="hudL4"></div><div class="hud-val" id="hudV4"></div></div>
+</div>
+</div>
+
+<script src="animation_runtime.js"></script>
+
+<script>
+// Animation: 作用 ⇄ 反作用 · 同一张图,四个场景
+// Concept: Newton's 3rd law — pairs of forces are equal, opposite, simultaneous.
+// Frames:
+//   0 push the wall (skater)  — establish the blue/red arrow pair vocabulary
+//   1 balloon twin            — same diagram, air replaces wall
+//   2 octopus twin            — same diagram, water replaces air
+//   3 rocket twin             — same diagram, exhaust gas replaces water
+//   4 four-scene synthesis    — 2x2 grid: it's ONE law shown 4 ways
+
+var CONFIG = {
+  style: 'rocketry_control',
+  totalFrames: 5,
+  i18n: {
+    title:    {en:'ACTION \u21c4 REACTION', cn:'\u4f5c\u7528 \u21c4 \u53cd\u4f5c\u7528'},
+    subtitle: {en:'One law, four twins', cn:'\u540c\u4e00\u5f20\u56fe\uff0c\u56db\u4e2a\u573a\u666f'},
+
+    // frame sub-titles
+    f0_sub: {en:'Push the wall on ice', cn:'\u5728\u51b0\u9762\u4e0a\u63a8\u5899'},
+    f1_sub: {en:'Balloon on a fishing line', cn:'\u6302\u5728\u9c7c\u7ebf\u4e0a\u7684\u6c14\u7403'},
+    f2_sub: {en:'Octopus jetting in water', cn:'\u7ae0\u9c7c\u5728\u6c34\u91cc\u55b7\u6c34'},
+    f3_sub: {en:'Falcon 9 leaving the pad', cn:'Falcon 9 \u79bb\u5f00\u53d1\u5c04\u53f0'},
+    f4_sub: {en:'Same law, four twins', cn:'\u540c\u4e00\u5b9a\u5f8b\uff0c\u56db\u5bf9\u5b6a\u751f\u56fe'},
+
+    // captions per frame (main takeaway)
+    cap0: {en:'The wall didn\u2019t move. I did. The wall pushes me.',
+           cn:'\u5899\u6ca1\u52a8\uff0c\u6211\u53cd\u800c\u6ed1\u4e86\u3002\u5899\u5728\u63a8\u6211\u3002'},
+    cap1: {en:'Same diagram as the wall push \u2014 just replacing the wall with air.',
+           cn:'\u548c\u63a8\u5899\u4e00\u6a21\u4e00\u6837\u7684\u56fe \u2014 \u53ea\u662f\u6362\u6210\u4e86\u7a7a\u6c14\u3002'},
+    cap2: {en:'Octopuses used reaction force hundreds of millions of years before rockets.',
+           cn:'\u7ae0\u9c7c\u6bd4\u706b\u7bad\u65e9\u51e0\u4ebf\u5e74\u5c31\u5728\u7528\u53cd\u4f5c\u7528\u529b\u3002'},
+    cap3: {en:'Same law as your balloon \u2014 just turned vertical.',
+           cn:'\u548c\u4f60\u7684\u6c14\u7403\u662f\u540c\u4e00\u6761\u5b9a\u5f8b \u2014 \u53ea\u662f\u7ad6\u8d77\u6765\u3002'},
+    cap4_a: {en:'Action \u21c4 Reaction \u00b7 They always come in pairs',
+             cn:'\u4f5c\u7528 \u21c4 \u53cd\u4f5c\u7528 \u00b7 \u5b83\u4eec\u603b\u662f\u6210\u5bf9\u51fa\u73b0'},
+    cap4_b: {en:'You push it \u2192 it pushes you. You throw back \u2192 you move forward.',
+             cn:'\u4f60\u63a8\u5b83 \u2192 \u5b83\u63a8\u4f60\u3002\u4f60\u5411\u540e\u6254 \u2192 \u4f60\u5411\u524d\u8d70\u3002'},
+
+    // force pair labels (blue = I push outward, red = it pushes back)
+    lbl_blue_0: {en:'My push', cn:'\u6211\u65bd\u7684\u529b'},
+    lbl_red_0:  {en:'Wall\u2019s reaction', cn:'\u5899\u53cd\u63a8\u6211'},
+    lbl_blue_1: {en:'Balloon pushes air', cn:'\u6c14\u7403\u63a8\u7a7a\u6c14'},
+    lbl_red_1:  {en:'Air pushes balloon', cn:'\u7a7a\u6c14\u63a8\u6c14\u7403'},
+    lbl_blue_2: {en:'Octopus pushes water', cn:'\u7ae0\u9c7c\u63a8\u6c34'},
+    lbl_red_2:  {en:'Water pushes octopus', cn:'\u6c34\u63a8\u7ae0\u9c7c'},
+    lbl_blue_3: {en:'Rocket pushes exhaust', cn:'\u706b\u7bad\u63a8\u5c3e\u6c14'},
+    lbl_red_3:  {en:'Exhaust pushes rocket', cn:'\u5c3e\u6c14\u63a8\u706b\u7bad'},
+
+    // labels inside scenes
+    lbl_me:      {en:'ME', cn:'\u6211'},
+    lbl_wall:    {en:'WALL', cn:'\u5899'},
+    lbl_ice:     {en:'slippery ice', cn:'\u6ed1\u51b0'},
+    lbl_slide_l: {en:'I slide left', cn:'\u6211\u5411\u5de6\u6ed1'},
+    lbl_string:  {en:'fishing line', cn:'\u9c7c\u7ebf'},
+    lbl_air:     {en:'air stream', cn:'\u6c14\u6d41'},
+    lbl_fly_r:   {en:'balloon flies right', cn:'\u6c14\u7403\u5411\u53f3\u98de'},
+    lbl_water:   {en:'water jet', cn:'\u6c34\u6d41'},
+    lbl_move_r:  {en:'octopus moves right', cn:'\u7ae0\u9c7c\u5411\u53f3\u8d70'},
+    lbl_exhaust: {en:'hot exhaust', cn:'\u7070\u70ed\u5c3e\u6c14'},
+    lbl_up:      {en:'rocket lifts up', cn:'\u706b\u7bad\u4e0a\u5347'},
+    lbl_pad:     {en:'launch pad', cn:'\u53d1\u5c04\u53f0'},
+
+    // synthesis labels
+    lbl_scene0: {en:'Wall', cn:'\u63a8\u5899'},
+    lbl_scene1: {en:'Balloon', cn:'\u6c14\u7403'},
+    lbl_scene2: {en:'Octopus', cn:'\u7ae0\u9c7c'},
+    lbl_scene3: {en:'Rocket', cn:'\u706b\u7bad'},
+    lbl_equal:  {en:'same length = equal force', cn:'\u957f\u5ea6\u76f8\u7b49 = \u5927\u5c0f\u76f8\u7b49'},
+
+    // HUD labels
+    hud_frame: {en:'Frame', cn:'\u5e27\u5e8f\u53f7'},
+    hud_actor: {en:'Actor', cn:'\u65bd\u529b\u65b9'},
+    hud_react: {en:'Reactor', cn:'\u53cd\u4f5c\u7528\u5bf9\u8c61'},
+    hud_move:  {en:'Motion', cn:'\u8fd0\u52a8\u7ed3\u679c'},
+
+    // HUD values
+    h_me:    {en:'Me', cn:'\u6211'},
+    h_ball:  {en:'Balloon', cn:'\u6c14\u7403'},
+    h_octo:  {en:'Octopus', cn:'\u7ae0\u9c7c'},
+    h_rkt:   {en:'Rocket', cn:'\u706b\u7bad'},
+    h_wall:  {en:'Wall', cn:'\u5899'},
+    h_air:   {en:'Air', cn:'\u7a7a\u6c14'},
+    h_wtr:   {en:'Water', cn:'\u6c34'},
+    h_exh:   {en:'Exhaust', cn:'\u5c3e\u6c14'},
+    h_ml:    {en:'Slide left', cn:'\u5411\u5de6\u6ed1'},
+    h_br:    {en:'Fly right', cn:'\u5411\u53f3\u98de'},
+    h_or:    {en:'Move right', cn:'\u5411\u53f3\u8d70'},
+    h_ru:    {en:'Lift up', cn:'\u5411\u4e0a\u98de'},
+    h_all:   {en:'All 4', cn:'\u56db\u4e2a'},
+    h_uni:   {en:'Universal', cn:'\u666e\u9002'},
+    h_same:  {en:'Same law', cn:'\u540c\u4e00\u5b9a\u5f8b'},
+
+    // guide panel
+    gt: {en:'WHAT TO WATCH', cn:'\u89c2\u5bdf\u8981\u70b9'},
+    g1: {en:'Each frame has a blue-red arrow pair', cn:'\u6bcf\u5e27\u90fd\u6709\u4e00\u5bf9\u7ea2\u84dd\u7bad\u5934'},
+    g2: {en:'Arrow lengths are always equal', cn:'\u7bad\u5934\u957f\u5ea6\u603b\u662f\u76f8\u7b49'},
+    g3: {en:'Same law, 4 different scenes', cn:'\u540c\u4e00\u6761\u7269\u7406\u89c4\u5f8b\uff0c4 \u4e2a\u4e0d\u540c\u573a\u666f'},
+  },
+  hudLabels: ['hud_frame', 'hud_actor', 'hud_react', 'hud_move'],
+  hudValues: [
+    ['1/5', 'h_me',   'h_wall', 'h_ml'],
+    ['2/5', 'h_ball', 'h_air',  'h_br'],
+    ['3/5', 'h_octo', 'h_wtr',  'h_or'],
+    ['4/5', 'h_rkt',  'h_exh',  'h_ru'],
+    ['5/5', 'h_all',  'h_uni',  'h_same'],
+  ],
+  guideTitle: 'gt',
+  guideItems: ['g1', 'g2', 'g3'],
+};
+
+// ============================================================
+// Resolve HUD i18n keys to actual strings at render time
+// ============================================================
+// (Runtime already calls t() on hudValues if they look like keys.)
+
+// ============================================================
+// COLORS: blue = action (I push outward), red = reaction (it pushes back)
+// ============================================================
+var C_BLUE   = '#4fc3ff';        // action arrow (outgoing from actor)
+var C_BLUE_G = 'rgba(79,195,255,0.45)';
+var C_RED    = '#ff5f6d';        // reaction arrow (incoming onto actor)
+var C_RED_G  = 'rgba(255,95,109,0.45)';
+
+// Shared arrow length — emphasizes equal magnitude across all frames
+var ARROW_LEN_MAIN = 96;
+var ARROW_LEN_MINI = 38;
+
+// ============================================================
+// HELPERS — draw a blue/red force pair at (cx,cy) with direction
+// dir = 'h' (horizontal: blue right, red left) or 'v' (vertical: blue down, red up)
+// Actor is assumed to straddle the gap; arrows point outward from the gap.
+// ============================================================
+function forcePairH(cxBlue, cxRed, cy, len, labelBlue, labelRed, labelSize) {
+  // blue arrow goes further right from cxBlue (actor pushes wall rightward)
+  // red arrow goes further left from cxRed (wall pushes actor leftward)
+  var out = [];
+  var ls = labelSize || 11;
+  // glow shadow under each arrow for depth
+  out.push({type:'line', x1:cxBlue, y1:cy+2, x2:cxBlue+len, y2:cy+2, color:C_BLUE_G, lineWidth:6});
+  out.push({type:'arrow', x1:cxBlue, y1:cy, x2:cxBlue+len, y2:cy, color:C_BLUE, lineWidth:3, headSize:10});
+  out.push({type:'line', x1:cxRed, y1:cy+2, x2:cxRed-len, y2:cy+2, color:C_RED_G, lineWidth:6});
+  out.push({type:'arrow', x1:cxRed, y1:cy, x2:cxRed-len, y2:cy, color:C_RED, lineWidth:3, headSize:10});
+  if (labelBlue) out.push({type:'label', text:labelBlue, x:cxBlue+len/2, y:cy-14, color:C_BLUE, size:ls, align:'center'});
+  if (labelRed)  out.push({type:'label', text:labelRed,  x:cxRed-len/2,  y:cy-14, color:C_RED,  size:ls, align:'center'});
+  return out;
+}
+
+// Vertical pair: blue goes down from cxBlueY, red goes up from cxRedY
+function forcePairV(cx, yBlueStart, yRedStart, len, labelBlue, labelRed, labelSize) {
+  var out = [];
+  var ls = labelSize || 11;
+  out.push({type:'line', x1:cx+2, y1:yBlueStart, x2:cx+2, y2:yBlueStart+len, color:C_BLUE_G, lineWidth:6});
+  out.push({type:'arrow', x1:cx, y1:yBlueStart, x2:cx, y2:yBlueStart+len, color:C_BLUE, lineWidth:3, headSize:10});
+  out.push({type:'line', x1:cx+2, y1:yRedStart, x2:cx+2, y2:yRedStart-len, color:C_RED_G, lineWidth:6});
+  out.push({type:'arrow', x1:cx, y1:yRedStart, x2:cx, y2:yRedStart-len, color:C_RED, lineWidth:3, headSize:10});
+  if (labelBlue) out.push({type:'label', text:labelBlue, x:cx+len*0.1+60, y:yBlueStart+len/2, color:C_BLUE, size:ls, align:'left'});
+  if (labelRed)  out.push({type:'label', text:labelRed,  x:cx+len*0.1+60, y:yRedStart-len/2, color:C_RED,  size:ls, align:'left'});
+  return out;
+}
+
+// ============================================================
+// SCENE BUILDERS — each returns an array of elements.
+// Use custom types: 'skater','wall','balloon','octopus','rocket','fishingLine','flame'
+// ============================================================
+
+// Frame 0: skater + wall on ice
+function sceneWall(cx, baseY, scale) {
+  var P = AnimRuntime.PAL;
+  var out = [];
+  var ice_y = baseY + 8 * scale;
+  // ice surface (subtle)
+  out.push({type:'line', x1:cx - 220*scale, y1:ice_y, x2:cx + 220*scale, y2:ice_y, color:'#6da6c4', lineWidth:2});
+  // ice sparkle ticks
+  for (var i=-5; i<=5; i++) {
+    out.push({type:'line', x1:cx + i*38*scale, y1:ice_y+3, x2:cx + i*38*scale + 6*scale, y2:ice_y+3, color:'#446c85', lineWidth:1});
+  }
+  // skater on the LEFT, body center around cx-70
+  var sx = cx - 70*scale;
+  out.push({type:'skater', x:sx, baseY:ice_y, scale:scale, arm:'right'});
+  // wall on the RIGHT
+  var wx = cx + 80*scale;
+  out.push({type:'wall', x:wx, baseY:ice_y, h:120*scale, w:20*scale});
+  return out;
+}
+
+// Frame 1: balloon hanging on fishing line, straw taped on top
+function sceneBalloon(cx, cy, scale) {
+  var P = AnimRuntime.PAL;
+  var out = [];
+  // fishing line across the scene
+  var ly = cy - 60*scale;
+  out.push({type:'line', x1:cx - 230*scale, y1:ly, x2:cx + 230*scale, y2:ly, color:'#aab0c0', lineWidth:1, dash:[4,3]});
+  // knots at both ends
+  out.push({type:'circle', x:cx - 230*scale, y:ly, r:3, fill:'#aab0c0'});
+  out.push({type:'circle', x:cx + 230*scale, y:ly, r:3, fill:'#aab0c0'});
+  // straw hanging below line (threaded)
+  var sx = cx;
+  out.push({type:'rect', x:sx - 50*scale, y:ly-3, w:100*scale, h:6, fill:'#f0e68c', stroke:'#aab0c0', sw:1});
+  // tape to line
+  out.push({type:'line', x1:sx - 20*scale, y1:ly-3, x2:sx - 20*scale, y2:ly+3, color:'#ddd', lineWidth:1});
+  out.push({type:'line', x1:sx + 20*scale, y1:ly-3, x2:sx + 20*scale, y2:ly+3, color:'#ddd', lineWidth:1});
+  // balloon below straw, opening faces LEFT (so air shoots left, balloon moves right)
+  out.push({type:'balloon', cx:sx + 10*scale, cy:ly + 40*scale, rx:52*scale, ry:36*scale, tailDir:-1});
+  return out;
+}
+
+// Frame 2: octopus in water, siphon jetting LEFT, body moves RIGHT
+function sceneOctopus(cx, cy, scale) {
+  var out = [];
+  // water "wavy" background hint
+  var wy = cy + 80*scale;
+  for (var i=-5; i<=5; i++) {
+    var x0 = cx + i*46*scale;
+    out.push({type:'line', x1:x0-14*scale, y1:wy+8, x2:x0-6*scale, y2:wy+4, color:'#3c8aa0', lineWidth:1});
+    out.push({type:'line', x1:x0-6*scale,  y1:wy+4, x2:x0+6*scale, y2:wy+8, color:'#3c8aa0', lineWidth:1});
+    out.push({type:'line', x1:x0+6*scale,  y1:wy+8, x2:x0+14*scale, y2:wy+4, color:'#3c8aa0', lineWidth:1});
+  }
+  // bubbles rising on the left (exhaust from siphon)
+  for (var b=0; b<5; b++) {
+    out.push({type:'circle', x:cx - 180*scale - b*14*scale, y:cy + (b%2? -10:10), r:3+b*0.5, fill:'rgba(120,200,220,0.5)'});
+  }
+  // octopus centered at cx, facing so siphon points LEFT
+  out.push({type:'octopus', cx:cx + 10*scale, cy:cy, size:78*scale, facing:-1});
+  return out;
+}
+
+// Frame 3: Falcon 9 + pad + flames
+function sceneRocket(cx, baseY, scale) {
+  var P = AnimRuntime.PAL;
+  var out = [];
+  // launch pad horizon
+  var py = baseY;
+  out.push({type:'line', x1:cx - 220*scale, y1:py, x2:cx + 220*scale, y2:py, color:'#6a6d7a', lineWidth:2});
+  // pad structure (tower silhouette on the right)
+  out.push({type:'rect', x:cx + 90*scale, y:py - 160*scale, w:8*scale, h:160*scale, fill:'#3a3d4a', stroke:'#6a6d7a', sw:1});
+  out.push({type:'line', x1:cx + 94*scale, y1:py-140*scale, x2:cx + 30*scale, y2:py-130*scale, color:'#6a6d7a', lineWidth:1});
+  out.push({type:'line', x1:cx + 94*scale, y1:py-80*scale, x2:cx + 30*scale, y2:py-70*scale, color:'#6a6d7a', lineWidth:1});
+  // rocket (Falcon 9 silhouette)
+  out.push({type:'rocket', cx:cx - 30*scale, baseY:py - 10*scale, h:200*scale, w:26*scale});
+  // flame plume below rocket
+  out.push({type:'flame', cx:cx - 30*scale, topY:py - 10*scale, h:70*scale, w:36*scale});
+  // smoke billow at pad
+  out.push({type:'circle', x:cx - 65*scale, y:py + 10*scale, r:14*scale, fill:'rgba(180,180,190,0.35)'});
+  out.push({type:'circle', x:cx + 10*scale, y:py + 14*scale, r:16*scale, fill:'rgba(180,180,190,0.35)'});
+  out.push({type:'circle', x:cx - 20*scale, y:py + 6*scale,  r:10*scale, fill:'rgba(200,200,210,0.4)'});
+  return out;
+}
+
+// ============================================================
+// FRAME BUILDERS
+// ============================================================
+function getFrameElements(f, W, H) {
+  var t = AnimRuntime.t;
+  var P = AnimRuntime.PAL;
+  var cx = W / 2;
+
+  // Main scene vertical anchor: scene in upper 2/3, caption below
+  var sceneCy = H * 0.42;
+  var baseY = H * 0.60;
+
+  if (f === 0) {
+    // ============ FRAME 0: PUSH THE WALL ============
+    var els = [
+      {type:'label', text:t('f0_sub'), x:cx, y:24, color:P.primary, size:15, align:'center'},
+    ];
+    els = els.concat(sceneWall(cx, baseY, 1.0));
+    // labels under entities
+    els.push({type:'label', text:t('lbl_me'),   x:cx - 70, y:baseY + 28, color:P.muted, size:11, align:'center'});
+    els.push({type:'label', text:t('lbl_wall'), x:cx + 80, y:baseY + 28, color:P.muted, size:11, align:'center'});
+    els.push({type:'label', text:t('lbl_ice'),  x:cx, y:baseY + 48, color:'#6da6c4', size:10, align:'center'});
+    // force pair between skater hand and wall face
+    // skater hand tip is at approximately (cx-42, baseY-44*scale)
+    // wall left face is at cx+80
+    // blue: skater pushes wall — arrow from hand pointing RIGHT toward wall
+    // red:  wall pushes skater — arrow from wall face pointing LEFT toward skater
+    var fy = baseY - 42;
+    var blueStart = cx - 42, redStart = cx + 80;
+    var halfLen = ARROW_LEN_MAIN / 2;
+    // blue: start at hand, point right to (blueStart + halfLen)
+    els.push({type:'line', x1:blueStart, y1:fy+2, x2:blueStart + halfLen, y2:fy+2, color:C_BLUE_G, lineWidth:7});
+    els.push({type:'arrow', x1:blueStart, y1:fy, x2:blueStart + halfLen, y2:fy, color:C_BLUE, lineWidth:3.5, headSize:11});
+    els.push({type:'label', text:t('lbl_blue_0'), x:blueStart + halfLen/2, y:fy-14, color:C_BLUE, size:11, align:'center'});
+    // red: start at wall face, point left to (redStart - halfLen)
+    els.push({type:'line', x1:redStart, y1:fy+14, x2:redStart - halfLen, y2:fy+14, color:C_RED_G, lineWidth:7});
+    els.push({type:'arrow', x1:redStart, y1:fy+12, x2:redStart - halfLen, y2:fy+12, color:C_RED, lineWidth:3.5, headSize:11});
+    els.push({type:'label', text:t('lbl_red_0'), x:redStart - halfLen/2, y:fy+28, color:C_RED, size:11, align:'center'});
+    // motion indicator (skater slides LEFT)
+    els.push({type:'arrow', x1:cx - 100, y1:baseY + 68, x2:cx - 160, y2:baseY + 68, color:P.primary, lineWidth:2, headSize:8});
+    els.push({type:'label', text:t('lbl_slide_l'), x:cx - 130, y:baseY + 82, color:P.primary, size:11, align:'center'});
+    // caption bottom
+    els.push({type:'label', text:t('cap0'), x:cx, y:H * 0.88, color:P.text, size:13, align:'center'});
+    return els;
+  }
+
+  if (f === 1) {
+    // ============ FRAME 1: BALLOON ============
+    var els = [
+      {type:'label', text:t('f1_sub'), x:cx, y:24, color:P.primary, size:15, align:'center'},
+    ];
+    els = els.concat(sceneBalloon(cx, sceneCy, 1.0));
+    // labels
+    els.push({type:'label', text:t('lbl_string'), x:cx + 180, y:sceneCy - 72, color:'#aab0c0', size:10, align:'center'});
+    // force pair at balloon opening (left side of balloon):
+    // balloon center ~ cx+10, balloon left edge ~ cx-42 (rx=52 so left=cx+10-52=cx-42)
+    // blue: balloon pushes air LEFT — arrow from (cx-42) pointing LEFT
+    // red: air pushes balloon RIGHT — arrow from (cx-42) pointing RIGHT into balloon body
+    var fy = sceneCy + 40;
+    var openX = cx - 42;
+    var halfLen = ARROW_LEN_MAIN / 2;
+    // blue (air pushed out left)
+    els.push({type:'line', x1:openX, y1:fy+2, x2:openX - halfLen, y2:fy+2, color:C_BLUE_G, lineWidth:7});
+    els.push({type:'arrow', x1:openX, y1:fy, x2:openX - halfLen, y2:fy, color:C_BLUE, lineWidth:3.5, headSize:11});
+    els.push({type:'label', text:t('lbl_blue_1'), x:openX - halfLen/2, y:fy-14, color:C_BLUE, size:11, align:'center'});
+    // red (air pushes balloon right) — drawn a bit lower for clarity
+    els.push({type:'line', x1:openX, y1:fy+18, x2:openX + halfLen, y2:fy+18, color:C_RED_G, lineWidth:7});
+    els.push({type:'arrow', x1:openX, y1:fy+16, x2:openX + halfLen, y2:fy+16, color:C_RED, lineWidth:3.5, headSize:11});
+    els.push({type:'label', text:t('lbl_red_1'), x:openX + halfLen/2 + 12, y:fy+32, color:C_RED, size:11, align:'center'});
+    // air stream puffs (decorative, blue)
+    for (var a=0; a<4; a++) {
+      els.push({type:'circle', x:openX - halfLen - 14 - a*14, y:fy + (a%2?-4:4), r:3+a*0.6, fill:'rgba(120,200,255,0.45)'});
+    }
+    // motion indicator (balloon moves RIGHT)
+    els.push({type:'arrow', x1:cx + 80, y1:sceneCy + 110, x2:cx + 140, y2:sceneCy + 110, color:P.primary, lineWidth:2, headSize:8});
+    els.push({type:'label', text:t('lbl_fly_r'), x:cx + 110, y:sceneCy + 124, color:P.primary, size:11, align:'center'});
+    // caption
+    els.push({type:'label', text:t('cap1'), x:cx, y:H * 0.88, color:P.text, size:13, align:'center'});
+    return els;
+  }
+
+  if (f === 2) {
+    // ============ FRAME 2: OCTOPUS ============
+    var els = [
+      {type:'label', text:t('f2_sub'), x:cx, y:24, color:P.primary, size:15, align:'center'},
+    ];
+    els = els.concat(sceneOctopus(cx, sceneCy, 1.0));
+    // force pair near siphon opening (left side of octopus body):
+    // body center ~ cx+10, siphon opens toward LEFT at (cx-50) approx
+    var fy = sceneCy + 4;
+    var siphonX = cx - 60;
+    var halfLen = ARROW_LEN_MAIN / 2;
+    // blue (water pushed out left)
+    els.push({type:'line', x1:siphonX, y1:fy+2, x2:siphonX - halfLen, y2:fy+2, color:C_BLUE_G, lineWidth:7});
+    els.push({type:'arrow', x1:siphonX, y1:fy, x2:siphonX - halfLen, y2:fy, color:C_BLUE, lineWidth:3.5, headSize:11});
+    els.push({type:'label', text:t('lbl_blue_2'), x:siphonX - halfLen/2, y:fy-14, color:C_BLUE, size:11, align:'center'});
+    // red (water pushes octopus right)
+    els.push({type:'line', x1:siphonX, y1:fy+18, x2:siphonX + halfLen, y2:fy+18, color:C_RED_G, lineWidth:7});
+    els.push({type:'arrow', x1:siphonX, y1:fy+16, x2:siphonX + halfLen, y2:fy+16, color:C_RED, lineWidth:3.5, headSize:11});
+    els.push({type:'label', text:t('lbl_red_2'), x:siphonX + halfLen/2 + 20, y:fy+32, color:C_RED, size:11, align:'center'});
+    // motion indicator
+    els.push({type:'arrow', x1:cx + 90, y1:sceneCy + 110, x2:cx + 150, y2:sceneCy + 110, color:P.primary, lineWidth:2, headSize:8});
+    els.push({type:'label', text:t('lbl_move_r'), x:cx + 120, y:sceneCy + 124, color:P.primary, size:11, align:'center'});
+    // caption
+    els.push({type:'label', text:t('cap2'), x:cx, y:H * 0.88, color:P.text, size:13, align:'center'});
+    return els;
+  }
+
+  if (f === 3) {
+    // ============ FRAME 3: ROCKET ============
+    var els = [
+      {type:'label', text:t('f3_sub'), x:cx, y:24, color:P.primary, size:15, align:'center'},
+    ];
+    var padY = H * 0.72;
+    els = els.concat(sceneRocket(cx, padY, 1.0));
+    // force pair is VERTICAL:
+    // rocket nozzle at (cx-30, padY-10), flame extends down to (padY-10+70)
+    // blue: rocket pushes exhaust DOWN — arrow at nozzle pointing DOWN
+    // red:  exhaust pushes rocket UP — arrow at nozzle pointing UP (along rocket body)
+    // Using same ARROW_LEN_MAIN/2 as all other main frames — equal magnitude is the key rule.
+    var nozX = cx - 30, nozY = padY - 10;
+    var halfLen = ARROW_LEN_MAIN / 2;
+    // blue (down)
+    els.push({type:'line', x1:nozX + 40 +2, y1:nozY, x2:nozX + 40 +2, y2:nozY + halfLen, color:C_BLUE_G, lineWidth:7});
+    els.push({type:'arrow', x1:nozX + 40, y1:nozY, x2:nozX + 40, y2:nozY + halfLen, color:C_BLUE, lineWidth:3.5, headSize:11});
+    els.push({type:'label', text:t('lbl_blue_3'), x:nozX + 40 + 80, y:nozY + halfLen/2, color:C_BLUE, size:11, align:'left'});
+    // red (up, along rocket body)
+    els.push({type:'line', x1:nozX - 40 +2, y1:nozY - 20, x2:nozX - 40 +2, y2:nozY - 20 - halfLen, color:C_RED_G, lineWidth:7});
+    els.push({type:'arrow', x1:nozX - 40, y1:nozY - 20, x2:nozX - 40, y2:nozY - 20 - halfLen, color:C_RED, lineWidth:3.5, headSize:11});
+    els.push({type:'label', text:t('lbl_red_3'), x:nozX - 40 - 80, y:nozY - 20 - halfLen/2, color:C_RED, size:11, align:'right'});
+    // motion indicator (rocket lifts) — small upward arrow placed high, out of the rocket body path
+    var motX = nozX - 100;
+    var motY = nozY - 160;
+    els.push({type:'arrow', x1:motX, y1:motY + 30, x2:motX, y2:motY, color:P.primary, lineWidth:2, headSize:8});
+    els.push({type:'label', text:t('lbl_up'), x:motX, y:motY - 14, color:P.primary, size:11, align:'center'});
+    // pad label
+    els.push({type:'label', text:t('lbl_pad'), x:cx + 94, y:padY + 14, color:P.muted, size:10, align:'center'});
+    els.push({type:'label', text:t('lbl_exhaust'), x:nozX, y:padY + 46, color:P.secondary, size:10, align:'center'});
+    // caption
+    els.push({type:'label', text:t('cap3'), x:cx, y:H * 0.88, color:P.text, size:13, align:'center'});
+    return els;
+  }
+
+  if (f === 4) {
+    // ============ FRAME 4: 2x2 SYNTHESIS GRID ============
+    var els = [
+      {type:'label', text:t('f4_sub'), x:cx, y:22, color:P.primary, size:14, align:'center'},
+    ];
+    // grid positions (2 cols x 2 rows)
+    var colL = cx - W * 0.22;
+    var colR = cx + W * 0.22;
+    var rowT = H * 0.28;
+    var rowB = H * 0.58;
+
+    // central title banner in the middle
+    els.push({type:'label', text:t('cap4_a'), x:cx, y:H * 0.43, color:P.primary, size:14, align:'center', bold:true});
+    els.push({type:'line', x1:cx - 140, y1:H * 0.48, x2:cx + 140, y2:H * 0.48, color:P.primary, lineWidth:1, dash:[3,3]});
+
+    // Each mini-scene is a small icon + a force pair of EQUAL length
+    // Top-left: wall
+    drawMini(els, colL, rowT, 0, t);
+    // Top-right: balloon
+    drawMini(els, colR, rowT, 1, t);
+    // Bottom-left: octopus
+    drawMini(els, colL, rowB, 2, t);
+    // Bottom-right: rocket
+    drawMini(els, colR, rowB, 3, t);
+
+    // connector dots — showing all 4 equal
+    els.push({type:'label', text:t('lbl_equal'), x:cx, y:H * 0.505, color:P.muted, size:10, align:'center'});
+
+    // bottom caption
+    els.push({type:'label', text:t('cap4_b'), x:cx, y:H * 0.90, color:P.text, size:13, align:'center'});
+    return els;
+  }
+
+  return [];
+}
+
+// Mini scene for 2x2 grid — sceneIdx 0=wall,1=balloon,2=octopus,3=rocket
+function drawMini(els, cx, cy, sceneIdx, t) {
+  var P = AnimRuntime.PAL;
+  var scale = 0.45;
+  var boxW = 180, boxH = 110;
+  // panel background
+  els.push({type:'box', x:cx - boxW/2, y:cy - boxH/2, w:boxW, h:boxH, fill:'rgba(17,20,37,0.55)', stroke:P.outline, lineWidth:1});
+  // corner label
+  var sceneLabels = [t('lbl_scene0'), t('lbl_scene1'), t('lbl_scene2'), t('lbl_scene3')];
+  els.push({type:'label', text:sceneLabels[sceneIdx], x:cx - boxW/2 + 8, y:cy - boxH/2 + 10, color:P.primary, size:10, align:'left'});
+
+  if (sceneIdx === 0) {
+    // tiny skater + wall
+    els.push({type:'skater', x:cx - 30, baseY:cy + 20, scale:scale, arm:'right'});
+    els.push({type:'wall', x:cx + 30, baseY:cy + 20, h:54*scale*1.4, w:10*scale*1.4});
+    // force pair (mini, same length)
+    var bx = cx - 8, rx = cx + 22;
+    var fy = cy;
+    els.push({type:'arrow', x1:bx, y1:fy, x2:bx + ARROW_LEN_MINI, y2:fy, color:C_BLUE, lineWidth:2.5, headSize:7});
+    els.push({type:'arrow', x1:rx, y1:fy + 10, x2:rx - ARROW_LEN_MINI, y2:fy + 10, color:C_RED, lineWidth:2.5, headSize:7});
+  }
+  if (sceneIdx === 1) {
+    // tiny balloon
+    els.push({type:'balloon', cx:cx + 10, cy:cy + 4, rx:28, ry:20, tailDir:-1});
+    // tiny fishing line
+    els.push({type:'line', x1:cx - 75, y1:cy - 24, x2:cx + 75, y2:cy - 24, color:'#aab0c0', lineWidth:1, dash:[3,2]});
+    var openX = cx - 18;
+    els.push({type:'arrow', x1:openX, y1:cy, x2:openX - ARROW_LEN_MINI, y2:cy, color:C_BLUE, lineWidth:2.5, headSize:7});
+    els.push({type:'arrow', x1:openX, y1:cy + 12, x2:openX + ARROW_LEN_MINI, y2:cy + 12, color:C_RED, lineWidth:2.5, headSize:7});
+  }
+  if (sceneIdx === 2) {
+    // tiny octopus
+    els.push({type:'octopus', cx:cx + 15, cy:cy + 2, size:36, facing:-1});
+    var siphonX = cx - 16;
+    els.push({type:'arrow', x1:siphonX, y1:cy, x2:siphonX - ARROW_LEN_MINI, y2:cy, color:C_BLUE, lineWidth:2.5, headSize:7});
+    els.push({type:'arrow', x1:siphonX, y1:cy + 10, x2:siphonX + ARROW_LEN_MINI, y2:cy + 10, color:C_RED, lineWidth:2.5, headSize:7});
+  }
+  if (sceneIdx === 3) {
+    // tiny rocket vertical
+    els.push({type:'rocket', cx:cx - 10, baseY:cy + 36, h:76, w:11});
+    els.push({type:'flame', cx:cx - 10, topY:cy + 36, h:18, w:14});
+    // vertical pair
+    els.push({type:'arrow', x1:cx + 10, y1:cy + 14, x2:cx + 10, y2:cy + 14 + ARROW_LEN_MINI, color:C_BLUE, lineWidth:2.5, headSize:7});
+    els.push({type:'arrow', x1:cx - 28, y1:cy + 10, x2:cx - 28, y2:cy + 10 - ARROW_LEN_MINI, color:C_RED, lineWidth:2.5, headSize:7});
+  }
+}
+
+// ============================================================
+// CUSTOM ELEMENT TYPES
+// ============================================================
+function customDrawElement(ctx, el) {
+  var P = AnimRuntime.PAL;
+
+  if (el.type === 'skater') {
+    // stick figure skater. x = body center x; baseY = ice level; scale = drawing scale.
+    var x = el.x, by = el.baseY, s = el.scale || 1;
+    // body
+    ctx.strokeStyle = '#e2e2e9'; ctx.lineWidth = 2 * s;
+    // legs (slight A)
+    ctx.beginPath();
+    ctx.moveTo(x - 6*s, by);
+    ctx.lineTo(x, by - 30*s);
+    ctx.lineTo(x + 6*s, by);
+    ctx.stroke();
+    // torso
+    ctx.beginPath();
+    ctx.moveTo(x, by - 30*s);
+    ctx.lineTo(x, by - 58*s);
+    ctx.stroke();
+    // head
+    ctx.fillStyle = '#ffe0c2'; ctx.beginPath();
+    ctx.arc(x, by - 66*s, 8*s, 0, Math.PI*2); ctx.fill();
+    ctx.strokeStyle = '#e2e2e9'; ctx.stroke();
+    // arm extending right (pushing wall)
+    ctx.strokeStyle = '#e2e2e9'; ctx.lineWidth = 2 * s;
+    ctx.beginPath();
+    ctx.moveTo(x, by - 50*s);
+    ctx.lineTo(x + 28*s, by - 44*s);
+    ctx.stroke();
+    // hand (small circle at end of arm)
+    ctx.fillStyle = '#ffe0c2'; ctx.beginPath();
+    ctx.arc(x + 28*s, by - 44*s, 3*s, 0, Math.PI*2); ctx.fill();
+    // other arm relaxed at side
+    ctx.strokeStyle = '#e2e2e9'; ctx.beginPath();
+    ctx.moveTo(x, by - 50*s);
+    ctx.lineTo(x - 12*s, by - 30*s);
+    ctx.stroke();
+    // skates (small lines under feet)
+    ctx.strokeStyle = '#aab0c0'; ctx.lineWidth = 1.5 * s;
+    ctx.beginPath();
+    ctx.moveTo(x - 12*s, by); ctx.lineTo(x - 2*s, by);
+    ctx.moveTo(x + 2*s, by); ctx.lineTo(x + 12*s, by);
+    ctx.stroke();
+    return true;
+  }
+
+  if (el.type === 'wall') {
+    // brick wall
+    var wx = el.x, by = el.baseY, wh = el.h || 120, ww = el.w || 20;
+    ctx.fillStyle = '#6e4a3a';
+    ctx.fillRect(wx, by - wh, ww, wh);
+    ctx.strokeStyle = '#3a2418'; ctx.lineWidth = 1;
+    ctx.strokeRect(wx, by - wh, ww, wh);
+    // brick rows (horizontal lines)
+    ctx.strokeStyle = '#3a2418'; ctx.lineWidth = 0.8;
+    for (var r=1; r<6; r++) {
+      var y = by - wh + (wh/6)*r;
+      ctx.beginPath(); ctx.moveTo(wx, y); ctx.lineTo(wx+ww, y); ctx.stroke();
+      // staggered vertical joint
+      if (r % 2 === 0) {
+        ctx.beginPath(); ctx.moveTo(wx + ww/2, y); ctx.lineTo(wx + ww/2, y - wh/6); ctx.stroke();
+      } else {
+        ctx.beginPath(); ctx.moveTo(wx + ww/2, y); ctx.lineTo(wx + ww/2, y - wh/6); ctx.stroke();
+      }
+    }
+    // shading highlight on left edge
+    ctx.fillStyle = 'rgba(255,255,255,0.12)';
+    ctx.fillRect(wx, by - wh, 3, wh);
+    return true;
+  }
+
+  if (el.type === 'balloon') {
+    // ellipse balloon with a small tail on one side
+    var bx = el.cx, by = el.cy, rx = el.rx, ry = el.ry, dir = el.tailDir || -1;
+    // glow
+    ctx.save();
+    ctx.fillStyle = 'rgba(255,95,109,0.15)';
+    ctx.beginPath(); ctx.ellipse(bx, by, rx+6, ry+6, 0, 0, Math.PI*2); ctx.fill();
+    ctx.restore();
+    // body
+    var grad = ctx.createRadialGradient(bx - rx*0.3, by - ry*0.3, 2, bx, by, rx);
+    grad.addColorStop(0, '#ffb5c0');
+    grad.addColorStop(1, '#ff5f6d');
+    ctx.fillStyle = grad;
+    ctx.beginPath(); ctx.ellipse(bx, by, rx, ry, 0, 0, Math.PI*2); ctx.fill();
+    ctx.strokeStyle = '#c24a58'; ctx.lineWidth = 1.2;
+    ctx.stroke();
+    // tail (nozzle) — small trapezoid on specified side
+    var tx = bx + dir * rx;
+    ctx.fillStyle = '#c24a58';
+    ctx.beginPath();
+    ctx.moveTo(tx, by - 4);
+    ctx.lineTo(tx + dir*10, by - 6);
+    ctx.lineTo(tx + dir*10, by + 6);
+    ctx.lineTo(tx, by + 4);
+    ctx.closePath();
+    ctx.fill();
+    // highlight
+    ctx.fillStyle = 'rgba(255,255,255,0.35)';
+    ctx.beginPath(); ctx.ellipse(bx - rx*0.35, by - ry*0.4, rx*0.18, ry*0.12, 0, 0, Math.PI*2); ctx.fill();
+    return true;
+  }
+
+  if (el.type === 'octopus') {
+    // octopus body (round mantle) + 8 tentacles + siphon on facing side
+    var ox = el.cx, oy = el.cy, sz = el.size || 70, facing = el.facing || -1;
+    // mantle (oval)
+    var grad = ctx.createRadialGradient(ox - sz*0.2, oy - sz*0.3, 2, ox, oy, sz);
+    grad.addColorStop(0, '#ff9ec2');
+    grad.addColorStop(1, '#b63d74');
+    ctx.fillStyle = grad;
+    ctx.beginPath(); ctx.ellipse(ox, oy - sz*0.1, sz*0.75, sz*0.7, 0, 0, Math.PI*2); ctx.fill();
+    ctx.strokeStyle = '#7a2a52'; ctx.lineWidth = 1;
+    ctx.stroke();
+    // eyes
+    ctx.fillStyle = '#ffffff';
+    ctx.beginPath(); ctx.arc(ox - sz*0.2, oy - sz*0.2, sz*0.10, 0, Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.arc(ox + sz*0.2, oy - sz*0.2, sz*0.10, 0, Math.PI*2); ctx.fill();
+    ctx.fillStyle = '#222';
+    ctx.beginPath(); ctx.arc(ox - sz*0.2 + facing*sz*0.02, oy - sz*0.18, sz*0.05, 0, Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.arc(ox + sz*0.2 + facing*sz*0.02, oy - sz*0.18, sz*0.05, 0, Math.PI*2); ctx.fill();
+    // tentacles — 8 wavy lines trailing on the side OPPOSITE facing (since siphon faces forward)
+    ctx.strokeStyle = '#b63d74'; ctx.lineWidth = Math.max(1.2, sz*0.04);
+    for (var tn=0; tn<8; tn++) {
+      var ang = Math.PI + (tn - 3.5) * 0.22; // angles trailing behind
+      // flip so tentacles go opposite to facing direction
+      var startAng = facing < 0 ? ang : (2*Math.PI - ang);
+      var sx = ox + Math.cos(startAng) * sz*0.55;
+      var sy = oy + Math.sin(startAng) * sz*0.4 + sz*0.2;
+      ctx.beginPath();
+      ctx.moveTo(sx, sy);
+      var curlX = sx + (-facing) * sz*0.35;
+      var curlY = sy + sz*0.15;
+      var endX = sx + (-facing) * sz*0.55 + (tn%2===0 ? sz*0.05 : -sz*0.05);
+      var endY = sy + sz*0.35;
+      ctx.quadraticCurveTo(curlX, curlY, endX, endY);
+      ctx.stroke();
+    }
+    // siphon (funnel) — on the facing side, horizontal cone
+    ctx.fillStyle = '#7a2a52';
+    ctx.beginPath();
+    ctx.moveTo(ox + facing * sz*0.55, oy);
+    ctx.lineTo(ox + facing * sz*0.75, oy - sz*0.12);
+    ctx.lineTo(ox + facing * sz*0.75, oy + sz*0.12);
+    ctx.closePath();
+    ctx.fill();
+    return true;
+  }
+
+  if (el.type === 'rocket') {
+    // Falcon 9 silhouette: vertical body, nose cone, 2 stripes, small grid fins
+    var rx = el.cx, by = el.baseY, h = el.h || 180, w = el.w || 22;
+    var top = by - h;
+    // body
+    var grad = ctx.createLinearGradient(rx - w/2, 0, rx + w/2, 0);
+    grad.addColorStop(0, '#d8d8df');
+    grad.addColorStop(0.5, '#ffffff');
+    grad.addColorStop(1, '#b0b0b8');
+    ctx.fillStyle = grad;
+    ctx.fillRect(rx - w/2, top + h*0.12, w, h*0.88);
+    ctx.strokeStyle = '#7a7d8a'; ctx.lineWidth = 1;
+    ctx.strokeRect(rx - w/2, top + h*0.12, w, h*0.88);
+    // stage separator
+    ctx.beginPath();
+    ctx.moveTo(rx - w/2, top + h*0.45);
+    ctx.lineTo(rx + w/2, top + h*0.45);
+    ctx.stroke();
+    // nose cone
+    ctx.fillStyle = '#f0f0f5';
+    ctx.beginPath();
+    ctx.moveTo(rx - w/2, top + h*0.12);
+    ctx.lineTo(rx + w/2, top + h*0.12);
+    ctx.lineTo(rx, top);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+    // grid fins — FOLDED against body during ascent (not deployed)
+    ctx.strokeStyle = '#7a7d8a';
+    ctx.lineWidth = 0.8;
+    ctx.strokeRect(rx - w/2 + w*0.02, top + h*0.48, w*0.18, h*0.035);
+    ctx.strokeRect(rx + w/2 - w*0.2, top + h*0.48, w*0.18, h*0.035);
+    // SpaceX logo area (subtle text position)
+    ctx.fillStyle = '#444';
+    ctx.font = Math.max(6, w*0.25) + "px 'Space Grotesk', sans-serif";
+    ctx.textAlign = 'center';
+    ctx.fillText('F9', rx, top + h*0.28);
+    // nozzles (9 small bells at bottom)
+    var bellN = 9;
+    for (var bn=0; bn<bellN; bn++) {
+      var ex = rx - w*0.45 + (w*0.9) * (bn + 0.5)/bellN;
+      ctx.fillStyle = '#ff8c5e';
+      ctx.beginPath();
+      ctx.moveTo(ex - w*0.04, by - h*0.02);
+      ctx.lineTo(ex + w*0.04, by - h*0.02);
+      ctx.lineTo(ex + w*0.05, by);
+      ctx.lineTo(ex - w*0.05, by);
+      ctx.closePath();
+      ctx.fill();
+    }
+    return true;
+  }
+
+  if (el.type === 'flame') {
+    // flame plume — gradient orange cone widening downward
+    var fx = el.cx, ty = el.topY, fh = el.h || 60, fw = el.w || 30;
+    var grad = ctx.createLinearGradient(fx, ty, fx, ty + fh);
+    grad.addColorStop(0, 'rgba(255,220,140,0.9)');
+    grad.addColorStop(0.4, 'rgba(255,140,60,0.8)');
+    grad.addColorStop(1, 'rgba(255,60,40,0.25)');
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    ctx.moveTo(fx - fw*0.3, ty);
+    ctx.lineTo(fx + fw*0.3, ty);
+    ctx.lineTo(fx + fw*0.6, ty + fh);
+    ctx.lineTo(fx - fw*0.6, ty + fh);
+    ctx.closePath();
+    ctx.fill();
+    // inner hot core
+    grad = ctx.createLinearGradient(fx, ty, fx, ty + fh*0.6);
+    grad.addColorStop(0, 'rgba(255,255,220,1)');
+    grad.addColorStop(1, 'rgba(255,180,80,0.4)');
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    ctx.moveTo(fx - fw*0.15, ty);
+    ctx.lineTo(fx + fw*0.15, ty);
+    ctx.lineTo(fx + fw*0.25, ty + fh*0.7);
+    ctx.lineTo(fx - fw*0.25, ty + fh*0.7);
+    ctx.closePath();
+    ctx.fill();
+    return true;
+  }
+
+  return false;
+}
+
+AnimRuntime.boot();
+</script>
+</body>
+</html>
