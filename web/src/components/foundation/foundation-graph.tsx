@@ -21,8 +21,13 @@ interface Node {
 interface Edge {
   a: string
   b: string
-  kind: "subproject" | "tag"
+  kind: "subject" | "tag"
   weight: number
+}
+
+function theoryTopLevel(th: AggregatedTheory): string {
+  const first = (th.tags || [])[0] || ""
+  return first.split("/")[0] || th.subject || "other"
 }
 
 function tagSharedDepth(a: string[], b: string[]): number {
@@ -54,33 +59,32 @@ export function FoundationGraph({ theories, subjectColors, onNodeClick }: Founda
     const list: Edge[] = []
     const idOf = (th: AggregatedTheory) => `${th.theory_id}-${th.knode_id}`
 
-    // 1) Sub-project co-occurrence: full mesh for small groups, hub+chain for large
-    const bySub: Record<string, { id: string; th: AggregatedTheory }[]> = {}
+    // 1) Subject top-level co-occurrence: full mesh for small groups, hub+chain for large
+    const bySubject: Record<string, { id: string; th: AggregatedTheory }[]> = {}
     for (const th of theories) {
-      const k = th.sub_project_id || `stage-${th.stage_idx}`
-      if (!bySub[k]) bySub[k] = []
-      bySub[k].push({ id: idOf(th), th })
+      const k = theoryTopLevel(th)
+      if (!bySubject[k]) bySubject[k] = []
+      bySubject[k].push({ id: idOf(th), th })
     }
-    for (const group of Object.values(bySub)) {
+    for (const group of Object.values(bySubject)) {
       if (group.length <= 6) {
         for (let i = 0; i < group.length; i++) {
           for (let j = i + 1; j < group.length; j++) {
-            list.push({ a: group[i].id, b: group[j].id, kind: "subproject", weight: 1 })
+            list.push({ a: group[i].id, b: group[j].id, kind: "subject", weight: 1 })
           }
         }
       } else {
-        // Chain + spoke (first as hub) to avoid dense clumping
         const hub = group[0]
         for (let i = 1; i < group.length; i++) {
-          list.push({ a: hub.id, b: group[i].id, kind: "subproject", weight: 1 })
+          list.push({ a: hub.id, b: group[i].id, kind: "subject", weight: 1 })
           if (i > 1) {
-            list.push({ a: group[i - 1].id, b: group[i].id, kind: "subproject", weight: 1 })
+            list.push({ a: group[i - 1].id, b: group[i].id, kind: "subject", weight: 1 })
           }
         }
       }
     }
 
-    // 2) Tag intersection across sub_projects (don't duplicate same-sub edges)
+    // 2) Tag intersection across subjects (don't duplicate same-subject edges)
     const sameSubSet = new Set<string>()
     for (const e of list) sameSubSet.add(e.a < e.b ? `${e.a}|${e.b}` : `${e.b}|${e.a}`)
     const items = theories.map((th) => ({ id: idOf(th), th }))
@@ -152,8 +156,8 @@ export function FoundationGraph({ theories, subjectColors, onNodeClick }: Founda
         if (!a || !b) continue
         const dx = b.x - a.x, dy = b.y - a.y
         const d = Math.sqrt(dx * dx + dy * dy) || 0.01
-        const target = e.kind === "subproject" ? 90 : 150
-        const k = e.kind === "subproject" ? 0.025 : 0.008 * e.weight
+        const target = e.kind === "subject" ? 90 : 150
+        const k = e.kind === "subject" ? 0.025 : 0.008 * e.weight
         const f = (d - target) * k
         const fx = (dx / d) * f
         const fy = (dy / d) * f
@@ -184,6 +188,21 @@ export function FoundationGraph({ theories, subjectColors, onNodeClick }: Founda
 
   const nodes = nodesRef.current
 
+  // Compute per-cluster centroid + count for label badges
+  const clusters: Record<string, { cx: number; cy: number; minY: number; count: number }> = {}
+  for (const n of nodes) {
+    const k = theoryTopLevel(n.theory)
+    if (!clusters[k]) clusters[k] = { cx: 0, cy: 0, minY: H, count: 0 }
+    clusters[k].cx += n.x
+    clusters[k].cy += n.y
+    if (n.y < clusters[k].minY) clusters[k].minY = n.y
+    clusters[k].count += 1
+  }
+  for (const k of Object.keys(clusters)) {
+    clusters[k].cx /= clusters[k].count
+    clusters[k].cy /= clusters[k].count
+  }
+
   return (
     <div className="rounded-2xl border border-border/60 bg-card overflow-hidden">
       <svg
@@ -197,17 +216,20 @@ export function FoundationGraph({ theories, subjectColors, onNodeClick }: Founda
           const b = nodes.find((n) => n.id === e.b)
           if (!a || !b) return null
           const isHighlight = hovered === e.a || hovered === e.b
-          const isSub = e.kind === "subproject"
-          const baseOpacity = isSub ? 0.5 : 0.15 + 0.15 * Math.min(e.weight, 3)
-          const baseWidth = isSub ? 1.4 : 0.6 + 0.3 * Math.min(e.weight, 3)
+          const isSubjectEdge = e.kind === "subject"
+          // Color subject edges by the subject's top-level to visually separate clusters
+          const subjTop = isSubjectEdge ? theoryTopLevel(a.theory) : ""
+          const subjColor = subjTop ? (subjectColors[subjTop] || "#a78bfa") : "#a78bfa"
+          const baseOpacity = isSubjectEdge ? 0.35 : 0.15 + 0.15 * Math.min(e.weight, 3)
+          const baseWidth = isSubjectEdge ? 1.2 : 0.6 + 0.3 * Math.min(e.weight, 3)
           return (
             <line
               key={i}
               x1={a.x} y1={a.y} x2={b.x} y2={b.y}
-              stroke={isSub ? "#a78bfa" : "#94a3b8"}
+              stroke={isSubjectEdge ? subjColor : "#94a3b8"}
               strokeOpacity={isHighlight ? 0.9 : baseOpacity}
               strokeWidth={isHighlight ? baseWidth + 0.6 : baseWidth}
-              strokeDasharray={isSub ? undefined : "3 3"}
+              strokeDasharray={isSubjectEdge ? undefined : "3 3"}
             />
           )
         })}
@@ -249,17 +271,37 @@ export function FoundationGraph({ theories, subjectColors, onNodeClick }: Founda
             </g>
           )
         })}
+        {/* Per-subject cluster label badges */}
+        {Object.entries(clusters).map(([subj, c]) => {
+          if (c.count < 2) return null
+          const color = subjectColors[subj] || "#6b7280"
+          const label = `${subj} · ${c.count}`
+          const y = Math.max(18, c.minY - 14)
+          const w = Math.max(60, label.length * 7 + 14)
+          return (
+            <g key={`cl-${subj}`} transform={`translate(${c.cx}, ${y})`} pointerEvents="none">
+              <rect
+                x={-w / 2} y={-10} width={w} height={18} rx={9}
+                fill="#ffffff" fillOpacity={0.92}
+                stroke={color} strokeOpacity={0.6} strokeWidth={1}
+              />
+              <text x={0} y={3} textAnchor="middle" fontSize="11" fontWeight="700" fill={color}>
+                {label}
+              </text>
+            </g>
+          )
+        })}
       </svg>
       <div className="px-4 py-2 border-t border-border/50 flex items-center gap-4 text-[10px] text-muted-foreground">
         <div className="flex items-center gap-1.5">
           <span className="w-6 h-[2px] rounded" style={{ background: "#a78bfa" }} />
-          <span>同子项目</span>
+          <span>同学科（颜色 = 顶级学科）</span>
         </div>
         <div className="flex items-center gap-1.5">
           <span className="w-6 h-[2px] rounded" style={{ background: "#94a3b8", borderTop: "1px dashed" }} />
           <span>同 tag（粗细 = 共享层级深度）</span>
         </div>
-        <span className="ml-auto">{nodes.length} 个理论 · {edges.length} 条连边</span>
+        <span className="ml-auto">{nodes.length} 个理论 · {edges.length} 条连边 · {Object.keys(clusters).length} 个学科簇</span>
       </div>
     </div>
   )
