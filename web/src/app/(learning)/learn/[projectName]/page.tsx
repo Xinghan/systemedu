@@ -611,25 +611,18 @@ export default function LearnPage() {
     return { kind: "jump", options: jumpable }
   }, [activeNodeId, allKnodes, progressList, scopedNodeIds])
 
-  // Jump-over-lock marker: a node is "jumpable" if it's unlocked but the node
-  // immediately before it (in the visible milestone order) is locked, so the
-  // user can reach it without doing the previous item first.
+  // Jump-available marker: any node currently enterable (not locked, not yet
+  // passed) should be highlighted so the user can see every viable entry point.
   const jumpOverLockIds = useMemo(() => {
-    if (!detail) return new Set<number>()
-    const flat: KnodeInfo[] = []
-    for (const ms of visibleMilestones) flat.push(...ms.knodes)
-    const statusOf = (id: number) =>
-      progressList.find((p) => p.knode_id === id)?.status ?? "locked"
     const set = new Set<number>()
-    for (let i = 1; i < flat.length; i++) {
-      const cur = flat[i]
-      const prev = flat[i - 1]
-      const curS = statusOf(cur.id)
-      if (curS === "locked" || curS === "passed") continue
-      if (statusOf(prev.id) === "locked") set.add(cur.id)
+    for (const p of progressList) {
+      if (p.status === "available" || p.status === "in_progress" ||
+          p.status === "failed" || p.status === "submitted") {
+        set.add(p.knode_id)
+      }
     }
     return set
-  }, [detail, visibleMilestones, progressList])
+  }, [progressList])
 
   // Search filtering for sidebar — uses visibleMilestones (scoped to sub-project)
   const filteredMilestones = useMemo(() => {
