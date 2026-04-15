@@ -1,4 +1,4 @@
-// Usage: node scripts/verify/learn_page.mjs <project> <knode_id> [--user root --pw 123systemedu] [--out DIR]
+// Usage: node course_factory/validate/verify/learn_page.mjs <project> <knode_id> [--user root --pw 123systemedu] [--out DIR]
 // Logs in, navigates to /learn/<project>?node=<id>, verifies:
 //  - theory pills present (count, titles)
 //  - animation/game cards can be launched (iframe opens)
@@ -8,7 +8,7 @@ import { chromium } from 'playwright';
 
 const [project, knodeIdStr, ...rest] = process.argv.slice(2);
 if (!project || !knodeIdStr) {
-  console.error('usage: node scripts/verify/learn_page.mjs <project> <knode_id> [--user U --pw P --out DIR]');
+  console.error('usage: node course_factory/validate/verify/learn_page.mjs <project> <knode_id> [--user U --pw P --out DIR]');
   process.exit(1);
 }
 const knodeId = parseInt(knodeIdStr, 10);

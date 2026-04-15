@@ -1,9 +1,9 @@
 // DB regression verifier for all animation/game HTML saved in lesson_content.
 //
 // Usage (after Python extract step writes manifest):
-//   node scripts/verify/db_regression.mjs <manifest-json> [--out DIR] [--json PATH]
+//   node course_factory/validate/verify/db_regression.mjs <manifest-json> [--out DIR] [--json PATH]
 //
-// manifest-json format (produced by scripts/verify/_extract_db_html.py):
+// manifest-json format (produced by course_factory/validate/verify/_extract_db_html.py):
 //   {
 //     "items": [
 //       { "project": "...", "knode_id": 0, "key": "anim_...", "kind": "animation", "htmlFile": "/tmp/.../file.html" },
@@ -23,7 +23,7 @@ const args = process.argv.slice(2);
 const manifestPath = args[0];
 if (!manifestPath || manifestPath.startsWith("--")) {
   console.error(
-    "usage: node scripts/verify/db_regression.mjs <manifest-json> [--json PATH] [--out DIR]",
+    "usage: node course_factory/validate/verify/db_regression.mjs <manifest-json> [--json PATH] [--out DIR]",
   );
   process.exit(2);
 }

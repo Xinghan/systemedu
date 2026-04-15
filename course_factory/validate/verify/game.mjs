@@ -1,4 +1,4 @@
-// Usage: node scripts/verify/game.mjs <html-path> [--iframe] [--out DIR]
+// Usage: node course_factory/validate/verify/game.mjs <html-path> [--iframe] [--out DIR]
 // Renders the game HTML either standalone or wrapped in an iframe (which exercises the flex-chain rule).
 // Verifies canvas is present AND has clientHeight > 100 (catches the "canvas collapses in iframe" bug).
 import { chromium } from 'playwright';
@@ -8,7 +8,7 @@ import os from 'os';
 
 const args = process.argv.slice(2);
 if (!args.length) {
-  console.error('usage: node scripts/verify/game.mjs <html-path> [--iframe] [--out DIR]');
+  console.error('usage: node course_factory/validate/verify/game.mjs <html-path> [--iframe] [--out DIR]');
   process.exit(1);
 }
 const htmlPath = path.resolve(args[0]);

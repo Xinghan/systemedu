@@ -1,12 +1,12 @@
 """Extract animation/game HTML from lesson_content DB to tmp files + manifest.
 
 Usage:
-    python scripts/verify/_extract_db_html.py [--project NAME] [--out DIR]
+    python course_factory/validate/verify/_extract_db_html.py [--project NAME] [--out DIR]
                                               [--manifest PATH]
 
 Writes one HTML file per (project, knode_id, section_key) under --out, and a
 JSON manifest listing them. The manifest is the input for
-`scripts/verify/db_regression.mjs`.
+`course_factory/validate/verify/db_regression.mjs`.
 """
 from __future__ import annotations
 
