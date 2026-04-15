@@ -401,7 +401,9 @@ function TabButton({ active, icon, onClick, children }: { active: boolean; icon:
 function TheoryCard({ theory, level, onClick, t }: { theory: AggregatedTheory; level: KnowledgeLevel; onClick: () => void; t: (k: string, p?: Record<string, unknown>) => string }) {
   const { level: usedLevel, body } = pickBody(theory, level)
   const preview = body.replace(/[#*_`$\[\]()]+/g, " ").replace(/\s+/g, " ").trim().slice(0, 120)
-  const color = SUBJECT_COLORS[theory.subject] || "#6b7280"
+  const firstTag = (theory.tags || [])[0] || ""
+  const topLevel = firstTag.split("/")[0] || theory.subject || "other"
+  const color = SUBJECT_COLORS[topLevel] || SUBJECT_COLORS[theory.subject] || "#6b7280"
 
   return (
     <button
@@ -411,7 +413,7 @@ function TheoryCard({ theory, level, onClick, t }: { theory: AggregatedTheory; l
       <div className="flex items-center gap-2 mb-2">
         <span className="w-1.5 h-1.5 rounded-full" style={{ background: color }} />
         <span className="text-[10px] font-semibold uppercase tracking-wider" style={{ color }}>
-          {theory.subject || "other"}
+          {topLevel}
         </span>
         <span className={`ml-auto text-[10px] font-semibold px-1.5 py-0.5 rounded ${
           usedLevel === level ? "bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-300" : "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300"
@@ -424,6 +426,22 @@ function TheoryCard({ theory, level, onClick, t }: { theory: AggregatedTheory; l
         {theory.title}
       </h3>
       <p className="text-[11px] text-muted-foreground mb-2 line-clamp-3">{preview}</p>
+      {(theory.tags || []).length > 0 && (
+        <div className="flex flex-wrap gap-1 mb-2">
+          {(theory.tags || []).slice(0, 2).map((tg) => {
+            const leaf = tg.split("/").slice(-1)[0]
+            return (
+              <span
+                key={tg}
+                className="inline-flex items-center h-4 px-1.5 rounded text-[9px] font-mono bg-secondary/60 text-muted-foreground"
+                title={tg}
+              >
+                {leaf}
+              </span>
+            )
+          })}
+        </div>
+      )}
       <div className="text-[10px] text-muted-foreground/80 flex items-center gap-1.5">
         <BookOpen className="h-3 w-3" />
         <span className="truncate">{theory.knode_title}</span>
@@ -441,7 +459,9 @@ function TheoryModal({ theory, level, onClose, t, projectName, router }: {
   router: ReturnType<typeof useRouter>
 }) {
   const { level: usedLevel, body } = pickBody(theory, level)
-  const color = SUBJECT_COLORS[theory.subject] || "#6b7280"
+  const firstTag = (theory.tags || [])[0] || ""
+  const topLevel = firstTag.split("/")[0] || theory.subject || "other"
+  const color = SUBJECT_COLORS[topLevel] || SUBJECT_COLORS[theory.subject] || "#6b7280"
   return (
     <div
       className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4"
@@ -456,7 +476,7 @@ function TheoryModal({ theory, level, onClose, t, projectName, router }: {
             <div className="flex items-center gap-2 mb-1.5">
               <span className="w-2 h-2 rounded-full" style={{ background: color }} />
               <span className="text-[10px] font-semibold uppercase tracking-wider" style={{ color }}>
-                {theory.subject || "other"}
+                {topLevel}
               </span>
               <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-300">
                 {usedLevel}
@@ -464,11 +484,27 @@ function TheoryModal({ theory, level, onClose, t, projectName, router }: {
               {usedLevel !== level && (
                 <span className="text-[10px] text-amber-600">{t("foundation.fallback_level")}</span>
               )}
+              {theory.sub_project_title && (
+                <span className="text-[10px] text-muted-foreground">· {theory.sub_project_title}</span>
+              )}
             </div>
             <h2 className="text-lg font-extrabold text-foreground">{theory.title}</h2>
+            {(theory.tags || []).length > 0 && (
+              <div className="mt-1.5 flex flex-wrap items-center gap-1">
+                {(theory.tags || []).map((tg) => (
+                  <span
+                    key={tg}
+                    className="inline-flex items-center h-5 px-2 rounded text-[10px] font-mono bg-secondary/60 text-muted-foreground border border-border/40"
+                    title={tg}
+                  >
+                    {tg}
+                  </span>
+                ))}
+              </div>
+            )}
             <button
               onClick={() => router.push(`/learn/${projectName}?node=${theory.knode_id}`)}
-              className="mt-1 text-xs text-violet-600 hover:underline"
+              className="mt-1.5 text-xs text-violet-600 hover:underline"
             >
               {t("foundation.go_to_knode", { title: theory.knode_title })}
             </button>
