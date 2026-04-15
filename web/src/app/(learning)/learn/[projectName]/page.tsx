@@ -39,6 +39,7 @@ import {
   GraduationCap,
   LayoutDashboard,
   Package,
+  CornerDownRight,
 } from "lucide-react"
 import { PageLoading } from "@/components/ui/page-loading"
 import { ScrollArea } from "@/components/ui/scroll-area"
@@ -610,6 +611,26 @@ export default function LearnPage() {
     return { kind: "jump", options: jumpable }
   }, [activeNodeId, allKnodes, progressList, scopedNodeIds])
 
+  // Jump-over-lock marker: a node is "jumpable" if it's unlocked but the node
+  // immediately before it (in the visible milestone order) is locked, so the
+  // user can reach it without doing the previous item first.
+  const jumpOverLockIds = useMemo(() => {
+    if (!detail) return new Set<number>()
+    const flat: KnodeInfo[] = []
+    for (const ms of visibleMilestones) flat.push(...ms.knodes)
+    const statusOf = (id: number) =>
+      progressList.find((p) => p.knode_id === id)?.status ?? "locked"
+    const set = new Set<number>()
+    for (let i = 1; i < flat.length; i++) {
+      const cur = flat[i]
+      const prev = flat[i - 1]
+      const curS = statusOf(cur.id)
+      if (curS === "locked" || curS === "passed") continue
+      if (statusOf(prev.id) === "locked") set.add(cur.id)
+    }
+    return set
+  }, [detail, visibleMilestones, progressList])
+
   // Search filtering for sidebar — uses visibleMilestones (scoped to sub-project)
   const filteredMilestones = useMemo(() => {
     if (!detail) return []
@@ -755,6 +776,7 @@ export default function LearnPage() {
                         const isPassed = status === "passed"
                         const isLocked = status === "locked"
                         const isInProgress = status === "in_progress"
+                        const isJumpable = jumpOverLockIds.has(knode.id)
                         const globalIdx = allKnodes.findIndex((k) => k.id === knode.id)
                         const displayIdx = globalIdx + 1
 
@@ -768,11 +790,14 @@ export default function LearnPage() {
                               setHoveredNode({ knode, status, rect })
                             }}
                             onMouseLeave={() => setHoveredNode(null)}
+                            title={isJumpable ? t("learn.jump_available_hint") : undefined}
                             className={`w-full flex items-start gap-3 px-3 py-2.5 rounded-xl text-left transition-all duration-[250ms] group ${
                               isActive
                                 ? "bg-primary/10 text-foreground"
                                 : isLocked
                                 ? "opacity-40 cursor-not-allowed"
+                                : isJumpable
+                                ? "bg-amber-50/60 dark:bg-amber-950/20 ring-1 ring-amber-300/60 dark:ring-amber-800/40 hover:bg-amber-100/70 dark:hover:bg-amber-900/30 text-foreground cursor-pointer"
                                 : "hover:bg-secondary/60 text-foreground cursor-pointer"
                             }`}
                           >
@@ -786,6 +811,8 @@ export default function LearnPage() {
                                 </div>
                               ) : isLocked ? (
                                 <Lock className="h-4 w-4 text-muted-foreground/40" />
+                              ) : isJumpable ? (
+                                <CornerDownRight className="h-4 w-4 text-amber-500" strokeWidth={2.5} />
                               ) : (
                                 <Circle className="h-4 w-4 text-muted-foreground/60" />
                               )}
