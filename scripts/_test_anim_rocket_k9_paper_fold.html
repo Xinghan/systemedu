@@ -1,0 +1,364 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=Inter:wght@400;500&family=Noto+Sans+SC:wght@400;700&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box;}
+html,body{width:100%;height:100vh;overflow:hidden;}
+body{background:var(--bg,#0c0e12);color:var(--text,#f6f6fc);font-family:'Inter','Noto Sans SC',sans-serif;display:flex;flex-direction:column;}
+.wrapper{display:flex;flex-direction:column;height:100vh;overflow:hidden;}
+.header{padding:12px 16px 8px;display:flex;justify-content:space-between;align-items:center;}
+.header h1{font-family:'Space Grotesk',sans-serif;font-size:clamp(14px,2vw,18px);font-weight:700;letter-spacing:-0.02em;color:var(--primary,#50ffb0);text-shadow:0 0 15px var(--glow,rgba(80,255,176,0.3));}
+.header .sub{font-size:11px;color:var(--muted,#aaabb0);letter-spacing:0.1em;text-transform:uppercase;}
+.canvas-wrap{flex:1;min-height:0;position:relative;}
+canvas{width:100%;height:100%;display:block;}
+.controls{display:flex;justify-content:center;align-items:center;gap:12px;padding:8px 16px;}
+.ctrl-btn{font-family:'Space Grotesk',sans-serif;font-size:12px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;padding:6px 18px;border:none;cursor:pointer;color:var(--bg,#0c0e12);background:linear-gradient(135deg,var(--primary,#50ffb0),var(--primary-dim,#17df93));transition:transform 0.1s,box-shadow 0.2s;box-shadow:0 0 12px var(--glow-strong,rgba(80,255,176,0.3));}
+.ctrl-btn:hover{transform:scale(1.04);box-shadow:0 0 20px var(--glow-strong,rgba(80,255,176,0.5));}
+.ctrl-btn:active{transform:scale(0.96);}
+.ctrl-btn.secondary{background:var(--glass,rgba(23,26,31,0.92));color:var(--muted,#aaabb0);box-shadow:none;backdrop-filter:blur(12px);}
+.ctrl-btn.secondary:hover{color:var(--primary,#50ffb0);}
+.hud{height:48px;display:flex;align-items:center;justify-content:space-around;background:rgba(0,0,0,0.55);backdrop-filter:blur(12px);padding:0 16px;}
+.hud-item{text-align:center;}
+.hud-label{font-family:'Space Grotesk',sans-serif;font-size:9px;letter-spacing:0.15em;text-transform:uppercase;color:var(--muted,#aaabb0);}
+.hud-val{font-family:'Space Grotesk',sans-serif;font-size:14px;font-weight:700;color:var(--primary,#50ffb0);}
+.lang-btn{position:fixed;top:8px;left:8px;z-index:100;font-family:'Space Grotesk',sans-serif;font-size:11px;font-weight:700;padding:4px 10px;cursor:pointer;border:none;background:rgba(20,20,35,0.85);backdrop-filter:blur(12px);color:#ffb59c;letter-spacing:1px;}
+.guide-panel{position:fixed;top:8px;right:8px;width:240px;max-height:40vh;overflow-y:auto;background:var(--glass,rgba(20,20,35,0.85));backdrop-filter:blur(12px);padding:12px;z-index:100;font-family:'Noto Sans SC',sans-serif;font-size:12px;color:rgba(255,255,255,0.85);line-height:1.6;}
+.guide-panel h3{font-family:'Space Grotesk',sans-serif;font-size:13px;margin-bottom:6px;color:var(--primary,#50ffb0);cursor:pointer;display:flex;justify-content:space-between;align-items:center;}
+.guide-panel ul{padding-left:14px;}
+.guide-panel .collapsed{display:none;}
+</style>
+</head>
+<body>
+<button class="lang-btn" id="langBtn">CN</button>
+<div class="guide-panel" id="guide">
+<h3 id="guideTitle"></h3>
+<div class="guide-content" id="guideContent"></div>
+</div>
+<div class="wrapper">
+<div class="header">
+<div><h1 id="title"></h1><div class="sub" id="subtitle"></div></div>
+<div id="frameIndicator" style="font-family:'Space Grotesk';font-size:11px;color:var(--muted,#aaabb0);letter-spacing:0.1em;"></div>
+</div>
+<div class="canvas-wrap"><canvas id="c"></canvas></div>
+<div class="controls">
+<button class="ctrl-btn secondary" id="btnPrev"></button>
+<button class="ctrl-btn" id="btnPlay"></button>
+<button class="ctrl-btn secondary" id="btnNext"></button>
+</div>
+<div class="hud">
+<div class="hud-item"><div class="hud-label" id="hudL1"></div><div class="hud-val" id="hudV1"></div></div>
+<div class="hud-item"><div class="hud-label" id="hudL2"></div><div class="hud-val" id="hudV2"></div></div>
+<div class="hud-item"><div class="hud-label" id="hudL3"></div><div class="hud-val" id="hudV3"></div></div>
+<div class="hud-item"><div class="hud-label" id="hudL4"></div><div class="hud-val" id="hudV4"></div></div>
+</div>
+</div>
+
+<script src="animation_runtime.js"></script>
+
+<script>
+var CONFIG = {
+  style: 'helix_lab',
+  totalFrames: 6,
+
+  i18n: {
+    title:    {en:'Fold Your First Paper Plane', cn:'\u6298\u4f60\u7684\u7b2c\u4e00\u67b6\u7eb8\u98de\u673a'},
+    subtitle: {en:'FROM A FLAT SHEET TO A FLYING THING', cn:'\u4ece\u4e00\u5f20\u5e73\u7eb8\u5230\u4f1a\u98de\u7684\u4e1c\u897f'},
+
+    f0_title: {en:'Start: A Flat Sheet', cn:'\u7b2c1\u6b65\uff1a\u4e00\u5f20\u5e73\u7eb8'},
+    f0_desc:  {en:'An A4 sheet. Can it fly? Not yet.', cn:'\u4e00\u5f20A4\u7eb8\u3002\u4f1a\u98de\u5417\uff1f\u8fd8\u4e0d\u4f1a\u3002'},
+
+    f1_title: {en:'Step 2: Fold in Half', cn:'\u7b2c2\u6b65\uff1a\u5bf9\u6298'},
+    f1_desc:  {en:'Fold length-wise. Press the crease HARD with your nail.', cn:'\u6cbf\u957f\u8fb9\u5bf9\u6298\u3002\u7528\u6307\u7532\u628a\u6298\u75d5\u538b\u5b9e\u3002'},
+
+    f2_title: {en:'Step 3: Fold the Nose', cn:'\u7b2c3\u6b65\uff1a\u6298\u51fa\u673a\u5934'},
+    f2_desc:  {en:'Open and fold the top two corners toward the center line. Now it has a POINT.', cn:'\u5c55\u5f00\uff0c\u628a\u4e0a\u9762\u4e24\u4e2a\u89d2\u6298\u5411\u4e2d\u7ebf\u3002\u73b0\u5728\u5b83\u6709\u4e86\u5c16\u5934\u3002'},
+
+    f3_title: {en:'Step 4: Fold Again', cn:'\u7b2c4\u6b65\uff1a\u518d\u6298\u4e00\u6b21'},
+    f3_desc:  {en:'Fold both edges to the center again. The nose becomes sharp.', cn:'\u518d\u628a\u4e24\u8fb9\u6298\u5411\u4e2d\u7ebf\u3002\u673a\u5934\u53d8\u5c16\u3002'},
+
+    f4_title: {en:'Step 5: Fold the Wings', cn:'\u7b2c5\u6b65\uff1a\u6298\u673a\u7ffc'},
+    f4_desc:  {en:'Fold back on itself. Two wings come out — they MUST match.', cn:'\u5411\u5916\u5c06\u4e24\u7ffc\u6298\u56de\u3002\u4e24\u8fb9\u673a\u7ffc\u5fc5\u987b\u4e00\u6a21\u4e00\u6837\u3002'},
+
+    f5_title: {en:'Ready to Fly', cn:'\u5b8c\u6210\uff1a\u51c6\u5907\u8d77\u98de'},
+    f5_desc:  {en:'Sharp nose + two matching wings + tail = a plane shape. Throw it!', cn:'\u5c16\u5934 + \u5bf9\u79f0\u673a\u7ffc + \u673a\u5c3e = \u98de\u673a\u5f62\u72b6\u3002\u6254\u51fa\u53bb\uff01'},
+
+    hudL1: {en:'STEP', cn:'\u7b2c\u51e0\u6b65'},
+    hudL2: {en:'WHAT CHANGED', cn:'\u53d8\u5316'},
+    hudL3: {en:'KEY POINT', cn:'\u5173\u952e'},
+    hudL4: {en:'CAN IT FLY?', cn:'\u4f1a\u98de\u5417'},
+
+    hud_step1: {en:'1 / 6', cn:'1 / 6'},
+    hud_step2: {en:'2 / 6', cn:'2 / 6'},
+    hud_step3: {en:'3 / 6', cn:'3 / 6'},
+    hud_step4: {en:'4 / 6', cn:'4 / 6'},
+    hud_step5: {en:'5 / 6', cn:'5 / 6'},
+    hud_step6: {en:'6 / 6', cn:'6 / 6'},
+
+    hud_change_1: {en:'nothing yet', cn:'\u8fd8\u6ca1\u6298'},
+    hud_change_2: {en:'has a center line', cn:'\u6709\u4e86\u4e2d\u7ebf'},
+    hud_change_3: {en:'has a point', cn:'\u6709\u4e86\u5c16\u5934'},
+    hud_change_4: {en:'point is sharper', cn:'\u5c16\u5934\u66f4\u5c16'},
+    hud_change_5: {en:'wings come out', cn:'\u673a\u7ffc\u5f00\u5c55'},
+    hud_change_6: {en:'plane shape', cn:'\u98de\u673a\u5f62\u72b6'},
+
+    hud_key_1: {en:'flat & big', cn:'\u5e73\u4e14\u5927'},
+    hud_key_2: {en:'press crease', cn:'\u538b\u5b9e\u6298\u75d5'},
+    hud_key_3: {en:'symmetry', cn:'\u5de6\u53f3\u5bf9\u79f0'},
+    hud_key_4: {en:'symmetry', cn:'\u5de6\u53f3\u5bf9\u79f0'},
+    hud_key_5: {en:'both wings match', cn:'\u4e24\u7ffc\u4e00\u6837'},
+    hud_key_6: {en:'point + wings', cn:'\u5c16\u5934+\u673a\u7ffc'},
+
+    hud_fly_no:    {en:'NO (flutters)', cn:'\u4e0d\u4f1a\uff08\u98d8\u843d\uff09'},
+    hud_fly_maybe: {en:'ALMOST', cn:'\u5feb\u4e86'},
+    hud_fly_yes:   {en:'YES', cn:'\u4f1a\u4e86'},
+
+    guideTitle: {en:'Why a Plane Shape Flies', cn:'\u4e3a\u4ec0\u4e48\u98de\u673a\u5f62\u72b6\u80fd\u98de'},
+    g1: {en:'Sharp nose: pushes air aside, doesn\u2019t catch wind head-on.', cn:'\u5c16\u5934\uff1a\u628a\u7a7a\u6c14\u63a8\u5230\u4e24\u8fb9\uff0c\u4e0d\u6b63\u9762\u6324\u98ce\u3002'},
+    g2: {en:'Wings: flat surface rides on air, keeps it from falling fast.', cn:'\u673a\u7ffc\uff1a\u5e73\u9762\u9a7e\u5728\u7a7a\u6c14\u4e0a\uff0c\u4e0d\u4f1a\u76f4\u63a5\u638e\u4e0b\u3002'},
+    g3: {en:'Symmetric: same on left and right \u2192 it won\u2019t swerve.', cn:'\u5bf9\u79f0\uff1a\u5de6\u53f3\u4e00\u6a21\u4e00\u6837\u2192\u4e0d\u8dd1\u504f\u3002'},
+    g4: {en:'Tail: the back keeps the plane from flipping over.', cn:'\u673a\u5c3e\uff1a\u5c3e\u90e8\u4e0d\u8ba9\u98de\u673a\u7ffb\u8eab\u3002'},
+  },
+
+  hudLabels: ['hudL1', 'hudL2', 'hudL3', 'hudL4'],
+  hudValues: [
+    ['hud_step1', 'hud_change_1', 'hud_key_1', 'hud_fly_no'],
+    ['hud_step2', 'hud_change_2', 'hud_key_2', 'hud_fly_no'],
+    ['hud_step3', 'hud_change_3', 'hud_key_3', 'hud_fly_no'],
+    ['hud_step4', 'hud_change_4', 'hud_key_4', 'hud_fly_maybe'],
+    ['hud_step5', 'hud_change_5', 'hud_key_5', 'hud_fly_maybe'],
+    ['hud_step6', 'hud_change_6', 'hud_key_6', 'hud_fly_yes'],
+  ],
+
+  guideTitle: 'guideTitle',
+  guideItems: ['g1', 'g2', 'g3', 'g4'],
+};
+
+// ============================================================
+// Paper-folding visualisation
+// ============================================================
+
+// Base reference: a 260-wide x 180-tall "paper" sheet centered at (cx, cy).
+// We draw the paper as polygons of (x,y) points whose shape evolves per frame.
+// Coordinates are in the safe virtual space.
+
+function paperColor(f) { return '#f5f2e8'; }     // paper
+function creaseColor(f) { return 'rgba(120,110,90,0.55)'; }  // crease line
+function outlineColor(f) { return '#8a8472'; }
+
+function drawPolygon(ctx, points, fill, outline) {
+  if (points.length < 2) return;
+  ctx.beginPath();
+  ctx.moveTo(points[0].x, points[0].y);
+  for (var i = 1; i < points.length; i++) ctx.lineTo(points[i].x, points[i].y);
+  ctx.closePath();
+  if (fill) { ctx.fillStyle = fill; ctx.fill(); }
+  if (outline) { ctx.strokeStyle = outline; ctx.lineWidth = 1.5; ctx.stroke(); }
+}
+
+function drawCrease(ctx, x1, y1, x2, y2, dash) {
+  ctx.save();
+  ctx.strokeStyle = creaseColor();
+  ctx.lineWidth = 1.2;
+  if (dash) ctx.setLineDash([4, 3]); else ctx.setLineDash([]);
+  ctx.beginPath();
+  ctx.moveTo(x1, y1);
+  ctx.lineTo(x2, y2);
+  ctx.stroke();
+  ctx.restore();
+}
+
+function customDrawElement(ctx, el) {
+  if (el.type === 'paper') {
+    ctx.save();
+    ctx.translate(el.cx, el.cy);
+    // Shadow so it feels like a physical sheet
+    ctx.fillStyle = 'rgba(0,0,0,0.25)';
+    var pts = el.points;
+    ctx.beginPath();
+    ctx.moveTo(pts[0].x + 3, pts[0].y + 4);
+    for (var i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x + 3, pts[i].y + 4);
+    ctx.closePath();
+    ctx.fill();
+    // The paper itself
+    drawPolygon(ctx, pts, paperColor(), outlineColor());
+    // Creases
+    if (el.creases) {
+      for (var j = 0; j < el.creases.length; j++) {
+        var c = el.creases[j];
+        drawCrease(ctx, c.x1, c.y1, c.x2, c.y2, c.dash);
+      }
+    }
+    // Optional inner triangles to show folded areas
+    if (el.inners) {
+      for (var k = 0; k < el.inners.length; k++) {
+        var inn = el.inners[k];
+        ctx.fillStyle = inn.fill || 'rgba(200,180,140,0.35)';
+        ctx.beginPath();
+        var ip = inn.points;
+        ctx.moveTo(ip[0].x, ip[0].y);
+        for (var m = 1; m < ip.length; m++) ctx.lineTo(ip[m].x, ip[m].y);
+        ctx.closePath();
+        ctx.fill();
+      }
+    }
+    // Arrows indicating next fold
+    if (el.arrows) {
+      for (var a = 0; a < el.arrows.length; a++) drawArrow(ctx, el.arrows[a]);
+    }
+    ctx.restore();
+    return true;
+  }
+  if (el.type === 'hint') {
+    ctx.save();
+    ctx.fillStyle = el.color || '#ffb59c';
+    ctx.font = (el.bold ? 'bold ' : '') + el.size + "px 'Noto Sans SC', 'Space Grotesk', sans-serif";
+    ctx.textAlign = el.align || 'left';
+    ctx.fillText(el.text, el.x, el.y);
+    ctx.restore();
+    return true;
+  }
+  return false;
+}
+
+function drawArrow(ctx, a) {
+  ctx.save();
+  ctx.strokeStyle = a.color || '#ff7a00';
+  ctx.fillStyle = a.color || '#ff7a00';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(a.x1, a.y1);
+  ctx.lineTo(a.x2, a.y2);
+  ctx.stroke();
+  // arrowhead
+  var dx = a.x2 - a.x1, dy = a.y2 - a.y1;
+  var len = Math.sqrt(dx * dx + dy * dy) || 1;
+  var ux = dx / len, uy = dy / len;
+  var hx = a.x2 - ux * 8, hy = a.y2 - uy * 8;
+  var px = -uy, py = ux;
+  ctx.beginPath();
+  ctx.moveTo(a.x2, a.y2);
+  ctx.lineTo(hx + px * 4, hy + py * 4);
+  ctx.lineTo(hx - px * 4, hy - py * 4);
+  ctx.closePath();
+  ctx.fill();
+  ctx.restore();
+}
+
+function getFrameElements(f, W, H) {
+  var t = AnimRuntime.t;
+  var P = AnimRuntime.PAL;
+  var cx = W / 2, cy = H / 2;
+  var paperCx = cx, paperCy = cy + 20;
+
+  // Every frame: step title/desc above + paper below.
+  var base = [
+    {id:'f_title', type:'label', text:t('f' + f + '_title'), x:cx, y:40, color:P.primary, size:20, align:'center', bold:true},
+    {id:'f_desc',  type:'label', text:t('f' + f + '_desc'),  x:cx, y:68, color:P.muted,   size:13, align:'center'},
+  ];
+
+  // Paper geometry per frame (coordinates relative to paperCx, paperCy)
+  // The sheet starts as a 260x180 rectangle. Each frame adds fold artifacts.
+
+  if (f === 0) {
+    // Flat A4 sheet
+    base.push({type:'paper', cx:paperCx, cy:paperCy,
+      points:[{x:-130,y:-90},{x:130,y:-90},{x:130,y:90},{x:-130,y:90}],
+      creases:[]
+    });
+    base.push({type:'hint', text:t('hud_fly_no'), x:cx, y:paperCy+125, color:'#ff6b6b', size:13, align:'center', bold:true});
+  }
+  else if (f === 1) {
+    // Folded in half lengthwise: shows a rectangle with a bold vertical center crease.
+    base.push({type:'paper', cx:paperCx, cy:paperCy,
+      points:[{x:-130,y:-90},{x:130,y:-90},{x:130,y:90},{x:-130,y:90}],
+      creases:[{x1:0, y1:-90, x2:0, y2:90, dash:false}]
+    });
+    base.push({type:'hint', text:'\u2190 \u4e2d\u7ebf\u2192', x:paperCx, y:paperCy, color:'#ff7a00', size:12, align:'center'});
+  }
+  else if (f === 2) {
+    // Top corners folded toward center. Paper outline is now a "home plate" pentagon.
+    // Center line at x=0. Apex at top (x=0, y=-90). Shoulders at (-130,y0) and (130,y0).
+    base.push({type:'paper', cx:paperCx, cy:paperCy,
+      points:[{x:0,y:-90},{x:130,y:-20},{x:130,y:90},{x:-130,y:90},{x:-130,y:-20}],
+      creases:[
+        {x1:0, y1:-90, x2:0, y2:90, dash:false},
+        {x1:0, y1:-90, x2:-130, y2:-20, dash:true},
+        {x1:0, y1:-90, x2:130, y2:-20, dash:true},
+      ],
+      inners:[
+        {fill:'rgba(200,180,140,0.35)', points:[{x:0,y:-90},{x:-65,y:-55},{x:0,y:-20}]},
+        {fill:'rgba(200,180,140,0.35)', points:[{x:0,y:-90},{x:65,y:-55},{x:0,y:-20}]},
+      ]
+    });
+  }
+  else if (f === 3) {
+    // Second pair of diagonal folds -- the nose becomes very narrow.
+    // Outline is a long arrowhead shape.
+    base.push({type:'paper', cx:paperCx, cy:paperCy,
+      points:[{x:0,y:-95},{x:85,y:0},{x:130,y:90},{x:-130,y:90},{x:-85,y:0}],
+      creases:[
+        {x1:0, y1:-95, x2:0, y2:90, dash:false},
+        {x1:0, y1:-95, x2:-85, y2:0, dash:false},
+        {x1:0, y1:-95, x2:85, y2:0, dash:false},
+        {x1:-85, y1:0, x2:-25, y2:-50, dash:true},
+        {x1:85, y1:0, x2:25, y2:-50, dash:true},
+      ],
+      inners:[
+        {fill:'rgba(180,160,120,0.45)', points:[{x:0,y:-95},{x:-25,y:-55},{x:0,y:-25}]},
+        {fill:'rgba(180,160,120,0.45)', points:[{x:0,y:-95},{x:25,y:-55},{x:0,y:-25}]},
+      ]
+    });
+  }
+  else if (f === 4) {
+    // Folded in half again along center, then wings folded out. Side view with two wings visible.
+    // We show a side view: fuselage + two flared wings.
+    // Fuselage is a thin vertical triangle; wings spread outward from the spine.
+    base.push({type:'paper', cx:paperCx, cy:paperCy,
+      points:[
+        {x:-120,y:80},{x:-14,y:10},{x:-4,y:-90},  // left wing top
+        {x:4,y:-90},{x:14,y:10},{x:120,y:80}     // right wing top
+      ],
+      creases:[
+        {x1:0, y1:-90, x2:0, y2:80, dash:false},
+        {x1:-14, y1:10, x2:-120, y2:80, dash:true},
+        {x1:14,  y1:10, x2:120,  y2:80, dash:true},
+      ],
+      arrows:[
+        {x1:-40, y1:-30, x2:-95, y2:50, color:'#ff7a00'},
+        {x1:40,  y1:-30, x2:95,  y2:50, color:'#ff7a00'}
+      ]
+    });
+    base.push({type:'hint', text:'\u673a\u7ffc\u5fc5\u987b\u5bf9\u79f0', x:cx, y:paperCy+120, color:'#ff7a00', size:12, align:'center', bold:true});
+  }
+  else if (f === 5) {
+    // Finished paper plane, perspective side view. Point faces right.
+    base.push({type:'paper', cx:paperCx, cy:paperCy,
+      points:[
+        {x:-130,y:40},       // tail bottom left
+        {x:-100,y:50},       // tail trailing edge
+        {x:-90,y:15},        // wing trailing edge
+        {x:40,y:-60},        // wing top
+        {x:130,y:-30},       // nose
+        {x:40,y:-10},        // belly front
+        {x:-30,y:30}         // belly back
+      ],
+      creases:[
+        {x1:-90, y1:15, x2:130, y2:-30, dash:false},
+        {x1:-100,y1:50, x2:-30, y2:30,  dash:false},
+        {x1:40,  y1:-60, x2:40, y2:-10, dash:true}
+      ]
+    });
+    base.push({type:'hint', text:'\u2192', x:paperCx+150, y:paperCy-15, color:'#50ffb0', size:28, bold:true, align:'center'});
+    base.push({type:'hint', text:t('hud_fly_yes'), x:cx, y:paperCy+125, color:'#50ffb0', size:14, align:'center', bold:true});
+  }
+
+  return base;
+}
+
+AnimRuntime.boot();
+</script>
+</body>
+</html>
