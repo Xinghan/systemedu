@@ -62,7 +62,7 @@
 
 ### 资源目录保留规则
 - `animation_game_design/`、`knowledge_base_doc/`、`stitch_systemedu_dashboard/` 为用户管理的素材目录，**禁止自动清理**
-- `scripts/test_anim_*.html`、`scripts/_fix_*.py`、`scripts/_gen_*.py` 为 Course Factory 固定产物，保留
+- `course_factory/tests/anim/*.html`、`course_factory/tests/game/*.html`、`course_factory/fixtures/_fix_*.py`、`scripts/_gen_*.py` 为 Course Factory 固定产物，保留
 - `scripts/_debug_*`、`scripts/_regen_*` 为临时调试脚本，可定期清理
 
 ### Course Factory 纪律
