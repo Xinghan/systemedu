@@ -1,0 +1,418 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=Inter:wght@400;500&family=Noto+Sans+SC:wght@400;700&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box;}
+html,body{width:100%;height:100vh;overflow:hidden;}
+body{background:var(--bg,#0c0e12);color:var(--text,#f6f6fc);font-family:'Inter','Noto Sans SC',sans-serif;display:flex;flex-direction:column;}
+.wrapper{display:flex;flex-direction:column;height:100vh;overflow:hidden;}
+.header{padding:12px 16px 8px;display:flex;justify-content:space-between;align-items:center;}
+.header h1{font-family:'Space Grotesk',sans-serif;font-size:clamp(14px,2vw,18px);font-weight:700;letter-spacing:-0.02em;color:var(--primary,#ffb59c);text-shadow:0 0 15px var(--glow,rgba(255,181,156,0.3));}
+.header .sub{font-size:11px;color:var(--muted,#aaabb0);letter-spacing:0.1em;text-transform:uppercase;}
+.canvas-wrap{flex:1;min-height:0;position:relative;}
+canvas{width:100%;height:100%;display:block;}
+.controls{display:flex;justify-content:center;align-items:center;gap:12px;padding:8px 16px;}
+.ctrl-btn{font-family:'Space Grotesk',sans-serif;font-size:12px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;padding:6px 18px;border:none;cursor:pointer;color:#1a0e08;background:linear-gradient(135deg,#ffb59c,#ff8a6a);transition:transform 0.1s,box-shadow 0.2s;box-shadow:0 0 12px rgba(255,181,156,0.3);}
+.ctrl-btn:hover{transform:scale(1.04);}
+.ctrl-btn:active{transform:scale(0.96);}
+.ctrl-btn.secondary{background:rgba(23,26,31,0.92);color:#aaabb0;box-shadow:none;backdrop-filter:blur(12px);}
+.ctrl-btn.secondary:hover{color:#ffb59c;}
+.hud{height:48px;display:flex;align-items:center;justify-content:space-around;background:rgba(0,0,0,0.55);backdrop-filter:blur(12px);padding:0 16px;}
+.hud-item{text-align:center;}
+.hud-label{font-family:'Space Grotesk',sans-serif;font-size:9px;letter-spacing:0.15em;text-transform:uppercase;color:#aaabb0;}
+.hud-val{font-family:'Space Grotesk',sans-serif;font-size:14px;font-weight:700;color:#ffb59c;}
+.lang-btn{position:fixed;top:8px;left:8px;z-index:100;font-family:'Space Grotesk',sans-serif;font-size:11px;font-weight:700;padding:4px 10px;cursor:pointer;border:none;background:rgba(20,20,35,0.85);backdrop-filter:blur(12px);color:#ffb59c;letter-spacing:1px;}
+.guide-panel{position:fixed;top:8px;right:8px;width:240px;max-height:40vh;overflow-y:auto;background:rgba(20,20,35,0.85);backdrop-filter:blur(12px);padding:12px;z-index:100;font-family:'Noto Sans SC',sans-serif;font-size:12px;color:rgba(255,255,255,0.85);line-height:1.6;}
+.guide-panel h3{font-family:'Space Grotesk',sans-serif;font-size:13px;margin-bottom:6px;color:#ffb59c;cursor:pointer;display:flex;justify-content:space-between;align-items:center;}
+.guide-panel ul{padding-left:14px;}
+.guide-panel .collapsed{display:none;}
+</style>
+</head>
+<body>
+<button class="lang-btn" id="langBtn">CN</button>
+<div class="guide-panel" id="guide"><h3 id="guideTitle"></h3><div class="guide-content" id="guideContent"></div></div>
+<div class="wrapper">
+<div class="header"><div><h1 id="title"></h1><div class="sub" id="subtitle"></div></div><div id="frameIndicator" style="font-family:'Space Grotesk';font-size:11px;color:#aaabb0;letter-spacing:0.1em;"></div></div>
+<div class="canvas-wrap"><canvas id="c"></canvas></div>
+<div class="controls">
+<button class="ctrl-btn secondary" id="btnPrev"></button>
+<button class="ctrl-btn" id="btnPlay"></button>
+<button class="ctrl-btn secondary" id="btnNext"></button>
+</div>
+<div class="hud">
+<div class="hud-item"><div class="hud-label" id="hudL1"></div><div class="hud-val" id="hudV1"></div></div>
+<div class="hud-item"><div class="hud-label" id="hudL2"></div><div class="hud-val" id="hudV2"></div></div>
+<div class="hud-item"><div class="hud-label" id="hudL3"></div><div class="hud-val" id="hudV3"></div></div>
+<div class="hud-item"><div class="hud-label" id="hudL4"></div><div class="hud-val" id="hudV4"></div></div>
+</div>
+</div>
+<script src="animation_runtime.js"></script>
+<script>
+var CONFIG = {
+  style: 'ares_mission',
+  totalFrames: 4,
+  i18n: {
+    title:    {en:'WHAT IS A MAP', cn:'什么是地图'},
+    subtitle: {en:'FROM REAL SPACE TO 2D PLANE', cn:'从真实空间到二维平面'},
+    f0_title: {en:'SIDE VIEW: CLASSROOM', cn:'侧视图：教室'},
+    f1_title: {en:'BIRD\'S EYE VIEW', cn:'鸟瞰俯视图'},
+    f2_title: {en:'SIMPLIFIED SYMBOLS', cn:'符号简化'},
+    f3_title: {en:'FINAL MAP', cn:'最终地图'},
+    f0_desc: {en:'A 3D perspective of a classroom with desks, chairs, door and windows', cn:'一个教室的三维透视图，包含桌椅、门和窗户'},
+    f1_desc: {en:'The same classroom seen from above -- objects become flat shapes', cn:'同一间教室从上方看 -- 物体变成了平面形状'},
+    f2_desc: {en:'Top-down view simplified into symbols with a legend', cn:'俯视图进一步简化成符号，并加上图例'},
+    f3_desc: {en:'A clean symbol map with legend and scale bar', cn:'干净的符号地图 + 图例 + 比例尺'},
+    hudL1k:{en:'VIEW',cn:'视角'}, hudL2k:{en:'ZOOM',cn:'缩放级别'}, hudL3k:{en:'INFO DENSITY',cn:'信息密度'}, hudL4k:{en:'STEP',cn:'步骤'},
+    side:{en:'SIDE',cn:'侧视'}, top:{en:'TOP-DOWN',cn:'俯视'}, symbol:{en:'SYMBOL',cn:'符号化'}, mapView:{en:'MAP',cn:'地图'},
+    z1:{en:'1:1',cn:'1:1'}, z2:{en:'1:5',cn:'1:5'}, z3:{en:'1:10',cn:'1:10'}, z4:{en:'1:20',cn:'1:20'},
+    dHigh:{en:'HIGH',cn:'高'}, dMed:{en:'MEDIUM',cn:'中'}, dLow:{en:'LOW',cn:'低'}, dMin:{en:'MINIMAL',cn:'极简'},
+    s1:{en:'1/4',cn:'1/4'}, s2:{en:'2/4',cn:'2/4'}, s3:{en:'3/4',cn:'3/4'}, s4:{en:'4/4',cn:'4/4'},
+    guideTitle:{en:'OBSERVE',cn:'观察要点'},
+    g1:{en:'Notice how viewpoint changes from side to top-down',cn:'注意视角如何从侧面变为俯视'},
+    g2:{en:'Objects get simplified into abstract symbols step by step',cn:'物体被逐步简化为抽象符号'},
+    g3:{en:'The final map adds a legend and scale bar for reference',cn:'最终地图加上图例和比例尺用于参考'},
+  },
+  hudLabels: ['hudL1k','hudL2k','hudL3k','hudL4k'],
+  hudValues: [
+    ['side','z1','dHigh','s1'],
+    ['top','z2','dMed','s2'],
+    ['symbol','z3','dLow','s3'],
+    ['mapView','z4','dMin','s4'],
+  ],
+  guideTitle:'guideTitle',
+  guideItems:['g1','g2','g3'],
+};
+
+function drawBg(ctx, W, H) {
+  var PAL = AnimRuntime.PAL;
+  var grd = ctx.createLinearGradient(0,0,0,H);
+  grd.addColorStop(0, PAL.bg);
+  grd.addColorStop(1, PAL.bg2 || '#0a0c10');
+  ctx.fillStyle = grd;
+  ctx.fillRect(0,0,W,H);
+}
+
+function getFrameElements(f, W, H) {
+  var PAL = AnimRuntime.PAL;
+  var t = AnimRuntime.t;
+  var els = [];
+  var titles = ['f0_title','f1_title','f2_title','f3_title'];
+  var descs = ['f0_desc','f1_desc','f2_desc','f3_desc'];
+
+  els.push({id:'title_text', type:'custom', x:W*0.5, y:H*0.1, w:1, h:1, draw:function(ctx,el){
+    ctx.font='700 clamp(15px,2.2vw,20px) "Space Grotesk"';
+    ctx.fillStyle=PAL.text; ctx.textAlign='center';
+    ctx.fillText(t(titles[f]), el.x, el.y);
+    ctx.font='400 clamp(10px,1.3vw,13px) "Noto Sans SC"';
+    ctx.fillStyle=PAL.muted;
+    ctx.fillText(t(descs[f]), el.x, el.y+20);
+  }});
+
+  if(f === 0){
+    // Side view of classroom (3D perspective)
+    els.push({id:'room_view', type:'custom', x:0, y:0, w:W, h:H, draw:function(ctx){
+      var floorY = H*0.72;
+      var wallX = W*0.1; var wallW = W*0.8;
+      var wallTop = H*0.18;
+      // Floor (perspective trapezoid)
+      ctx.fillStyle = 'rgba(100,90,70,0.15)';
+      ctx.beginPath();
+      ctx.moveTo(wallX-W*0.05, floorY+H*0.12);
+      ctx.lineTo(wallX+wallW+W*0.05, floorY+H*0.12);
+      ctx.lineTo(wallX+wallW, floorY);
+      ctx.lineTo(wallX, floorY);
+      ctx.closePath(); ctx.fill();
+      // Back wall
+      ctx.fillStyle = 'rgba(60,55,50,0.15)';
+      ctx.fillRect(wallX, wallTop, wallW, floorY-wallTop);
+      ctx.strokeStyle = PAL.outline; ctx.lineWidth = 1.5;
+      ctx.strokeRect(wallX, wallTop, wallW, floorY-wallTop);
+      // Ceiling line
+      ctx.strokeStyle = 'rgba(255,255,255,0.08)'; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(wallX, wallTop); ctx.lineTo(wallX+wallW, wallTop); ctx.stroke();
+      // Blackboard on back wall
+      ctx.fillStyle = 'rgba(30,80,50,0.45)';
+      ctx.fillRect(wallX+wallW*0.25, wallTop+15, wallW*0.5, (floorY-wallTop)*0.3);
+      ctx.strokeStyle = PAL.primary; ctx.lineWidth = 1.5;
+      ctx.strokeRect(wallX+wallW*0.25, wallTop+15, wallW*0.5, (floorY-wallTop)*0.3);
+      // Window on back wall
+      ctx.fillStyle = 'rgba(100,160,220,0.12)';
+      ctx.fillRect(wallX+wallW*0.05, wallTop+20, wallW*0.12, (floorY-wallTop)*0.35);
+      ctx.strokeStyle = '#6699cc'; ctx.lineWidth = 1.5;
+      ctx.strokeRect(wallX+wallW*0.05, wallTop+20, wallW*0.12, (floorY-wallTop)*0.35);
+      // Window cross
+      var wxc = wallX+wallW*0.05, wyc = wallTop+20, ww = wallW*0.12, wh = (floorY-wallTop)*0.35;
+      ctx.beginPath(); ctx.moveTo(wxc+ww/2, wyc); ctx.lineTo(wxc+ww/2, wyc+wh); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(wxc, wyc+wh/2); ctx.lineTo(wxc+ww, wyc+wh/2); ctx.stroke();
+      // Door on right side
+      ctx.fillStyle = 'rgba(140,100,60,0.25)';
+      ctx.fillRect(wallX+wallW*0.85, wallTop+(floorY-wallTop)*0.15, wallW*0.1, (floorY-wallTop)*0.85);
+      ctx.strokeStyle = 'rgba(140,100,60,0.6)'; ctx.lineWidth = 1.5;
+      ctx.strokeRect(wallX+wallW*0.85, wallTop+(floorY-wallTop)*0.15, wallW*0.1, (floorY-wallTop)*0.85);
+      // Door handle
+      ctx.fillStyle = PAL.primary;
+      ctx.beginPath(); ctx.arc(wallX+wallW*0.87, wallTop+(floorY-wallTop)*0.6, 2.5, 0, Math.PI*2); ctx.fill();
+      // Desks (side view with perspective depth)
+      for(var row=0;row<2;row++){
+        for(var i=0;i<3;i++){
+          var dx = wallX + wallW*0.15 + i*wallW*0.22;
+          var scale = 0.7 + row*0.3;
+          var dy = floorY - 10 - (1-row)*45;
+          var dw = wallW*0.13*scale; var dh = 4*scale;
+          var legH = 28*scale;
+          ctx.fillStyle = PAL.primary; ctx.globalAlpha = 0.35 + row*0.2;
+          // Desk top
+          ctx.fillRect(dx, dy-legH, dw, dh);
+          // Desk legs
+          ctx.fillRect(dx+2, dy-legH+dh, 2*scale, legH-dh);
+          ctx.fillRect(dx+dw-3*scale, dy-legH+dh, 2*scale, legH-dh);
+          // Chair (small shape in front)
+          var chX = dx+dw*0.2, chY = dy-legH*0.55;
+          ctx.fillRect(chX, chY, dw*0.5, dh*0.8);
+          ctx.fillRect(chX+1, chY-legH*0.3, 2*scale, legH*0.3);
+          ctx.globalAlpha = 1;
+        }
+      }
+      // Labels
+      ctx.font = '500 10px "Noto Sans SC"'; ctx.textAlign = 'center';
+      ctx.fillStyle = PAL.primary;
+      ctx.fillText(AnimRuntime.LANG==='cn'?'黑板':'Blackboard', wallX+wallW*0.5, wallTop+8);
+      ctx.fillStyle = '#6699cc';
+      ctx.fillText(AnimRuntime.LANG==='cn'?'窗户':'Window', wallX+wallW*0.11, wallTop+12);
+      ctx.fillStyle = 'rgba(140,100,60,0.8)';
+      ctx.fillText(AnimRuntime.LANG==='cn'?'门':'Door', wallX+wallW*0.9, wallTop+8);
+      ctx.fillStyle = PAL.muted;
+      ctx.fillText(AnimRuntime.LANG==='cn'?'桌椅':'Desks', wallX+wallW*0.5, floorY+10);
+    }});
+  } else if(f === 1){
+    // Bird's eye (top-down) view -- objects become flat shapes
+    els.push({id:'room_view', type:'custom', x:0, y:0, w:W, h:H, draw:function(ctx){
+      var rx = W*0.15; var ry = H*0.18; var rw = W*0.7; var rh = H*0.55;
+      // Room outline
+      ctx.strokeStyle = PAL.outline; ctx.lineWidth = 2;
+      ctx.strokeRect(rx, ry, rw, rh);
+      ctx.fillStyle = 'rgba(60,55,50,0.08)';
+      ctx.fillRect(rx, ry, rw, rh);
+      // Blackboard (thick bar at top wall)
+      ctx.fillStyle = 'rgba(30,80,50,0.5)';
+      ctx.fillRect(rx+rw*0.2, ry, rw*0.6, rh*0.035);
+      ctx.strokeStyle = PAL.primary; ctx.lineWidth = 1;
+      ctx.strokeRect(rx+rw*0.2, ry, rw*0.6, rh*0.035);
+      // Desks from top (filled rectangles with visible shape)
+      for(var row=0;row<2;row++){
+        for(var col=0;col<3;col++){
+          var dx = rx + rw*0.08 + col*rw*0.28;
+          var dy = ry + rh*0.18 + row*rh*0.38;
+          var dw = rw*0.16; var dh = rh*0.13;
+          ctx.fillStyle = 'rgba(160,120,80,0.3)';
+          ctx.fillRect(dx, dy, dw, dh);
+          ctx.strokeStyle = 'rgba(160,120,80,0.6)'; ctx.lineWidth = 1;
+          ctx.strokeRect(dx, dy, dw, dh);
+          // Chair (circle behind desk)
+          ctx.fillStyle = 'rgba(100,80,60,0.35)';
+          ctx.beginPath();
+          ctx.arc(dx+dw*0.5, dy+dh+rh*0.045, rh*0.03, 0, Math.PI*2);
+          ctx.fill();
+          ctx.strokeStyle = 'rgba(100,80,60,0.6)';
+          ctx.stroke();
+        }
+      }
+      // Door (gap on right wall + swing arc)
+      ctx.fillStyle = PAL.bg;
+      ctx.fillRect(rx+rw-2, ry+rh*0.65, 6, rh*0.2);
+      ctx.strokeStyle = 'rgba(140,100,60,0.5)'; ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.arc(rx+rw, ry+rh*0.65, rh*0.2, Math.PI*0.5, Math.PI);
+      ctx.stroke();
+      // Window (dashed double line on left wall)
+      ctx.strokeStyle = '#6699cc'; ctx.lineWidth = 2;
+      ctx.setLineDash([4,3]);
+      ctx.beginPath(); ctx.moveTo(rx, ry+rh*0.25); ctx.lineTo(rx, ry+rh*0.5); ctx.stroke();
+      ctx.setLineDash([]);
+      // Labels
+      ctx.font = '500 10px "Noto Sans SC"'; ctx.textAlign = 'center';
+      ctx.fillStyle = PAL.primary;
+      ctx.fillText(AnimRuntime.LANG==='cn'?'黑板':'Board', rx+rw*0.5, ry-6);
+      ctx.fillStyle = '#6699cc'; ctx.textAlign = 'right';
+      ctx.fillText(AnimRuntime.LANG==='cn'?'窗':'Win', rx-6, ry+rh*0.38);
+      ctx.fillStyle = 'rgba(140,100,60,0.8)'; ctx.textAlign = 'left';
+      ctx.fillText(AnimRuntime.LANG==='cn'?'门':'Door', rx+rw+8, ry+rh*0.76);
+      // Top-down indicator
+      ctx.font = '500 10px "Space Grotesk"'; ctx.fillStyle = PAL.muted; ctx.textAlign = 'center';
+      ctx.fillText(AnimRuntime.LANG==='cn'?'[俯视]':'[TOP VIEW]', rx+rw*0.5, ry+rh+14);
+    }});
+  } else if(f === 2){
+    // Simplified symbols + legend
+    els.push({id:'room_view', type:'custom', x:0, y:0, w:W, h:H, draw:function(ctx){
+      var rx = W*0.12; var ry = H*0.18; var rw = W*0.52; var rh = H*0.55;
+      // Room outline (clean)
+      ctx.strokeStyle = PAL.outline; ctx.lineWidth = 2;
+      ctx.strokeRect(rx, ry, rw, rh);
+      // Blackboard symbol (solid bar)
+      ctx.fillStyle = PAL.primary;
+      ctx.fillRect(rx+rw*0.2, ry, rw*0.6, 4);
+      // Desk symbols (plain filled squares)
+      for(var row=0;row<2;row++){
+        for(var col=0;col<3;col++){
+          var dx = rx + rw*0.08 + col*rw*0.28;
+          var dy = ry + rh*0.18 + row*rh*0.38;
+          ctx.fillStyle = 'rgba(160,120,80,0.45)';
+          ctx.fillRect(dx, dy, rw*0.14, rh*0.1);
+          // Chair symbol (small square)
+          ctx.fillStyle = 'rgba(100,80,60,0.4)';
+          ctx.fillRect(dx+rw*0.04, dy+rh*0.13, rw*0.06, rh*0.05);
+        }
+      }
+      // Door symbol (gap + arc)
+      ctx.fillStyle = PAL.bg;
+      ctx.fillRect(rx+rw-2, ry+rh*0.65, 6, rh*0.2);
+      ctx.strokeStyle = PAL.muted; ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.arc(rx+rw, ry+rh*0.65, rh*0.2, Math.PI*0.5, Math.PI);
+      ctx.stroke();
+      // Window symbol (double parallel lines)
+      ctx.strokeStyle = '#6699cc'; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.moveTo(rx, ry+rh*0.25); ctx.lineTo(rx, ry+rh*0.5); ctx.stroke();
+      ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(rx-3, ry+rh*0.25); ctx.lineTo(rx-3, ry+rh*0.5); ctx.stroke();
+      // Legend panel
+      var lgX=W*0.7, lgY=ry, lgW=W*0.25, lgH=rh*0.9;
+      ctx.fillStyle = 'rgba(20,20,30,0.45)';
+      ctx.fillRect(lgX, lgY, lgW, lgH);
+      ctx.strokeStyle = PAL.outline; ctx.lineWidth = 1;
+      ctx.strokeRect(lgX, lgY, lgW, lgH);
+      ctx.font = '700 11px "Space Grotesk"'; ctx.fillStyle = PAL.primary; ctx.textAlign = 'center';
+      ctx.fillText(AnimRuntime.LANG==='cn'?'图例':'LEGEND', lgX+lgW*0.5, lgY+16);
+      // Legend items with matching symbols
+      var lgItems = [
+        {label:AnimRuntime.LANG==='cn'?'桌子':'Desk', color:'rgba(160,120,80,0.6)', type:'rect'},
+        {label:AnimRuntime.LANG==='cn'?'椅子':'Chair', color:'rgba(100,80,60,0.5)', type:'smallRect'},
+        {label:AnimRuntime.LANG==='cn'?'门':'Door', color:PAL.muted, type:'arc'},
+        {label:AnimRuntime.LANG==='cn'?'窗户':'Window', color:'#6699cc', type:'lines'},
+        {label:AnimRuntime.LANG==='cn'?'黑板':'Blackboard', color:PAL.primary, type:'bar'},
+      ];
+      for(var i=0;i<lgItems.length;i++){
+        var iy = lgY+30+i*(lgH-45)/5;
+        var ix = lgX+12;
+        ctx.fillStyle = lgItems[i].color;
+        ctx.strokeStyle = lgItems[i].color;
+        ctx.lineWidth = 1.5;
+        if(lgItems[i].type==='rect') ctx.fillRect(ix, iy, 16, 10);
+        else if(lgItems[i].type==='smallRect') ctx.fillRect(ix+2, iy+2, 12, 7);
+        else if(lgItems[i].type==='arc'){ ctx.beginPath(); ctx.arc(ix+4, iy+4, 8, 0, Math.PI*0.5); ctx.stroke(); }
+        else if(lgItems[i].type==='lines'){ ctx.beginPath(); ctx.moveTo(ix+4,iy); ctx.lineTo(ix+4,iy+12); ctx.moveTo(ix+8,iy); ctx.lineTo(ix+8,iy+12); ctx.stroke(); }
+        else if(lgItems[i].type==='bar') ctx.fillRect(ix, iy+3, 18, 4);
+        ctx.font = '400 10px "Noto Sans SC"'; ctx.fillStyle = PAL.text; ctx.textAlign = 'left';
+        ctx.fillText(lgItems[i].label, ix+24, iy+9);
+      }
+    }});
+  } else {
+    // Final clean map with legend + scale bar + north arrow
+    els.push({id:'room_view', type:'custom', x:0, y:0, w:W, h:H, draw:function(ctx){
+      var rx = W*0.1; var ry = H*0.2; var rw = W*0.52; var rh = H*0.55;
+      // Map title
+      ctx.font = '700 12px "Space Grotesk"'; ctx.fillStyle = PAL.primary; ctx.textAlign = 'center';
+      ctx.fillText(AnimRuntime.LANG==='cn'?'教室平面图 1:100':'CLASSROOM MAP 1:100', rx+rw/2, ry-10);
+      // Room outline (clean, white)
+      ctx.strokeStyle = PAL.text; ctx.lineWidth = 2;
+      ctx.strokeRect(rx, ry, rw, rh);
+      ctx.fillStyle = 'rgba(255,255,255,0.025)';
+      ctx.fillRect(rx, ry, rw, rh);
+      // Blackboard (clean bar at top)
+      ctx.fillStyle = PAL.primary;
+      ctx.fillRect(rx+rw*0.2, ry, rw*0.6, 4);
+      // Desks (clean rectangles with outlines)
+      for(var row=0;row<2;row++){
+        for(var col=0;col<3;col++){
+          var dx = rx + rw*0.08 + col*rw*0.28;
+          var dy = ry + rh*0.15 + row*rh*0.38;
+          ctx.fillStyle = 'rgba(180,140,100,0.35)';
+          ctx.fillRect(dx, dy, rw*0.16, rh*0.1);
+          ctx.strokeStyle = PAL.text; ctx.lineWidth = 0.8;
+          ctx.strokeRect(dx, dy, rw*0.16, rh*0.1);
+          // Chair (small rect)
+          ctx.fillStyle = 'rgba(120,100,80,0.35)';
+          ctx.fillRect(dx+rw*0.04, dy+rh*0.13, rw*0.08, rh*0.05);
+          ctx.strokeRect(dx+rw*0.04, dy+rh*0.13, rw*0.08, rh*0.05);
+        }
+      }
+      // Door (gap + arc)
+      ctx.fillStyle = PAL.bg;
+      ctx.fillRect(rx+rw-2, ry+rh*0.65, 6, rh*0.2);
+      ctx.strokeStyle = PAL.text; ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.arc(rx+rw, ry+rh*0.65, rh*0.2, Math.PI*0.5, Math.PI);
+      ctx.stroke();
+      // Window (double line)
+      ctx.strokeStyle = PAL.text; ctx.lineWidth = 1.5;
+      ctx.beginPath(); ctx.moveTo(rx, ry+rh*0.2); ctx.lineTo(rx, ry+rh*0.48); ctx.stroke();
+      ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(rx-3, ry+rh*0.2); ctx.lineTo(rx-3, ry+rh*0.48); ctx.stroke();
+      // Scale bar
+      var sbX = rx, sbY = ry+rh+14, sbW = rw*0.35;
+      ctx.strokeStyle = PAL.text; ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(sbX, sbY); ctx.lineTo(sbX+sbW, sbY);
+      ctx.moveTo(sbX, sbY-4); ctx.lineTo(sbX, sbY+4);
+      ctx.moveTo(sbX+sbW*0.5, sbY-3); ctx.lineTo(sbX+sbW*0.5, sbY+3);
+      ctx.moveTo(sbX+sbW, sbY-4); ctx.lineTo(sbX+sbW, sbY+4);
+      ctx.stroke();
+      // Alternating black/white fill
+      ctx.fillStyle = PAL.text;
+      ctx.fillRect(sbX, sbY-1, sbW*0.5, 2);
+      ctx.font = '500 9px "Space Grotesk"'; ctx.fillStyle = PAL.muted; ctx.textAlign = 'center';
+      ctx.fillText('0', sbX, sbY+14);
+      ctx.fillText('3m', sbX+sbW*0.5, sbY+14);
+      ctx.fillText('6m', sbX+sbW, sbY+14);
+      ctx.font = '700 9px "Space Grotesk"'; ctx.fillStyle = PAL.primary;
+      ctx.fillText(AnimRuntime.LANG==='cn'?'比例尺':'SCALE', sbX+sbW*0.5, sbY+25);
+      // Legend panel
+      var lgX = W*0.68, lgY = ry, lgW = W*0.27, lgH = rh*0.85;
+      ctx.fillStyle = 'rgba(20,20,30,0.4)';
+      ctx.fillRect(lgX, lgY, lgW, lgH);
+      ctx.strokeStyle = PAL.outline; ctx.lineWidth = 1;
+      ctx.strokeRect(lgX, lgY, lgW, lgH);
+      ctx.font = '700 12px "Space Grotesk"'; ctx.fillStyle = PAL.primary; ctx.textAlign = 'center';
+      ctx.fillText(AnimRuntime.LANG==='cn'?'图例':'LEGEND', lgX+lgW*0.5, lgY+18);
+      var lgItems = [
+        {label:AnimRuntime.LANG==='cn'?'桌子':'Desk', color:'rgba(180,140,100,0.5)', type:'rect'},
+        {label:AnimRuntime.LANG==='cn'?'椅子':'Chair', color:'rgba(120,100,80,0.5)', type:'smallRect'},
+        {label:AnimRuntime.LANG==='cn'?'门':'Door', color:PAL.text, type:'arc'},
+        {label:AnimRuntime.LANG==='cn'?'窗户':'Window', color:PAL.text, type:'lines'},
+        {label:AnimRuntime.LANG==='cn'?'黑板':'Blackboard', color:PAL.primary, type:'bar'},
+      ];
+      for(var i=0;i<lgItems.length;i++){
+        var iy = lgY+34+i*(lgH-50)/5;
+        var ix = lgX+14;
+        ctx.fillStyle = lgItems[i].color;
+        ctx.strokeStyle = lgItems[i].color;
+        ctx.lineWidth = 1.5;
+        if(lgItems[i].type==='rect'){ ctx.fillRect(ix, iy, 18, 10); ctx.strokeStyle=PAL.text; ctx.lineWidth=0.5; ctx.strokeRect(ix,iy,18,10); }
+        else if(lgItems[i].type==='smallRect'){ ctx.fillRect(ix+3, iy+2, 12, 7); ctx.strokeStyle=PAL.text; ctx.lineWidth=0.5; ctx.strokeRect(ix+3,iy+2,12,7); }
+        else if(lgItems[i].type==='arc'){ ctx.beginPath(); ctx.arc(ix+4, iy+4, 8, 0, Math.PI*0.5); ctx.stroke(); }
+        else if(lgItems[i].type==='lines'){ ctx.beginPath(); ctx.moveTo(ix+4,iy); ctx.lineTo(ix+4,iy+12); ctx.moveTo(ix+8,iy); ctx.lineTo(ix+8,iy+12); ctx.stroke(); }
+        else if(lgItems[i].type==='bar') ctx.fillRect(ix, iy+3, 20, 4);
+        ctx.font = '400 11px "Noto Sans SC"'; ctx.fillStyle = PAL.text; ctx.textAlign = 'left';
+        ctx.fillText(lgItems[i].label, ix+28, iy+9);
+      }
+      // North arrow
+      var nx = lgX+lgW*0.5, ny = lgY+lgH-16;
+      ctx.strokeStyle = PAL.text; ctx.lineWidth = 1.5;
+      ctx.beginPath(); ctx.moveTo(nx, ny+8); ctx.lineTo(nx, ny-8); ctx.stroke();
+      ctx.fillStyle = PAL.text; ctx.beginPath();
+      ctx.moveTo(nx, ny-12); ctx.lineTo(nx-4, ny-5); ctx.lineTo(nx+4, ny-5); ctx.closePath(); ctx.fill();
+      ctx.font = '700 9px "Space Grotesk"'; ctx.textAlign = 'center';
+      ctx.fillText('N', nx, ny-16);
+    }});
+  }
+
+  return els;
+}
+
+AnimRuntime.boot();
+</script>
+</body>
+</html>

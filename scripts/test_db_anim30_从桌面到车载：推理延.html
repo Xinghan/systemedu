@@ -1,0 +1,681 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>From Desktop to Rover: Inference Latency Journey</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;700&family=Inter:wght@400;500&family=Noto+Sans+SC:wght@400;700&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0;}
+html,body{width:100%;height:100vh;overflow:hidden;background:#131313;font-family:'Inter','Noto Sans SC',sans-serif;color:#e0e0e0;}
+.wrapper{display:flex;flex-direction:column;width:100%;height:100vh;}
+.top-bar{display:flex;justify-content:space-between;align-items:center;padding:8px 16px;background:rgba(20,20,20,0.9);border-bottom:1px solid rgba(255,95,31,0.15);flex-shrink:0;}
+.top-bar h1{font-family:'Space Grotesk',sans-serif;font-size:15px;font-weight:700;color:#ffb59c;letter-spacing:1px;}
+.top-bar .sub{font-size:11px;color:rgba(255,181,156,0.6);margin-left:8px;}
+canvas{flex:1;display:block;width:100%;cursor:default;}
+.controls{display:flex;justify-content:center;gap:12px;padding:6px 16px;background:rgba(20,20,20,0.9);border-top:1px solid rgba(255,95,31,0.1);flex-shrink:0;}
+.controls button{font-family:'Space Grotesk',sans-serif;font-size:11px;font-weight:700;padding:4px 14px;cursor:pointer;border:1px solid rgba(255,95,31,0.25);background:rgba(255,95,31,0.08);color:#ffb59c;letter-spacing:1px;transition:background 0.2s;}
+.controls button:hover{background:rgba(255,95,31,0.2);}
+.controls button.active{background:rgba(255,95,31,0.3);border-color:#ff5f1f;}
+.hud{display:flex;justify-content:space-around;padding:6px 16px;background:rgba(0,0,0,0.55);flex-shrink:0;height:48px;align-items:center;}
+.hud .col{text-align:center;}
+.hud .col .label{font-size:9px;color:rgba(255,181,156,0.5);letter-spacing:1px;font-family:'Space Grotesk',sans-serif;}
+.hud .col .value{font-size:14px;color:#ffb59c;font-weight:700;font-family:'Space Grotesk',sans-serif;}
+.lang-btn{position:fixed;top:8px;left:8px;z-index:100;font-family:'Space Grotesk',sans-serif;font-size:11px;font-weight:700;padding:4px 10px;cursor:pointer;border:1px solid rgba(255,255,255,0.08);background:rgba(20,20,35,0.85);backdrop-filter:blur(12px);color:#ffb59c;letter-spacing:1px;}
+.guide-panel{position:fixed;top:40px;left:8px;z-index:50;background:rgba(20,20,35,0.85);backdrop-filter:blur(12px);border:1px solid rgba(255,95,31,0.15);padding:10px;max-width:200px;font-size:11px;color:rgba(255,181,156,0.7);line-height:1.5;}
+.guide-panel h3{font-size:11px;color:#ffb59c;margin-bottom:4px;font-family:'Space Grotesk',sans-serif;}
+</style>
+</head>
+<body>
+<button class="lang-btn" id="langBtn">CN</button>
+<div class="guide-panel" id="guidePanel">
+<h3 id="guideTitle"></h3>
+<p id="guideText"></p>
+</div>
+<div class="wrapper">
+<div class="top-bar">
+<div style="display:flex;align-items:baseline;">
+<h1 id="titleText"></h1>
+<span class="sub" id="subtitleText"></span>
+</div>
+</div>
+<canvas id="c"></canvas>
+<div class="controls">
+<button id="btnPrev"></button>
+<button id="btnPlay"></button>
+<button id="btnNext"></button>
+</div>
+<div class="hud">
+<div class="col"><div class="label" id="hudLabel0"></div><div class="value" id="hudVal0">--</div></div>
+<div class="col"><div class="label" id="hudLabel1"></div><div class="value" id="hudVal1">--</div></div>
+<div class="col"><div class="label" id="hudLabel2"></div><div class="value" id="hudVal2">--</div></div>
+<div class="col"><div class="label" id="hudLabel3"></div><div class="value" id="hudVal3">--</div></div>
+</div>
+</div>
+<script>
+var LANG='cn';
+var I18N={
+title:{en:'DESKTOP vs ROVER INFERENCE',cn:'\u684c\u9762 vs \u8f66\u8f7d\u63a8\u7406'},
+subtitle:{en:'Same model, different hardware',cn:'\u540c\u4e00\u6a21\u578b\uff0c\u4e0d\u540c\u786c\u4ef6'},
+btnPrev:{en:'PREV',cn:'\u4e0a\u4e00\u5e27'},
+btnPlay:{en:'PLAY',cn:'\u64ad\u653e'},
+btnPause:{en:'PAUSE',cn:'\u6682\u505c'},
+btnNext:{en:'NEXT',cn:'\u4e0b\u4e00\u5e27'},
+guideTitle:{en:'Viewing Guide',cn:'\u89c2\u770b\u6307\u5357'},
+guideText:{en:'Compare inference speed on desktop GPU vs rover edge device. Watch how the same model processes images at vastly different speeds.',cn:'\u5bf9\u6bd4\u540c\u4e00\u6a21\u578b\u5728\u684c\u9762GPU\u548c\u8f66\u8f7d\u8fb9\u7f18\u8bbe\u5907\u4e0a\u7684\u63a8\u7406\u901f\u5ea6\u5dee\u5f02\u3002\u89c2\u5bdf\u56fe\u50cf\u5904\u7406\u7684\u65f6\u95f4\u5dee\u8ddd\u3002'},
+frame0:{en:'Model Architecture',cn:'\u6a21\u578b\u67b6\u6784'},
+frame1:{en:'Desktop GPU Inference',cn:'\u684c\u9762GPU\u63a8\u7406'},
+frame2:{en:'Rover Edge Inference',cn:'\u8f66\u8f7d\u8fb9\u7f18\u63a8\u7406'},
+frame3:{en:'Latency Comparison',cn:'\u5ef6\u8fdf\u5bf9\u6bd4'},
+frame4:{en:'Safety Impact',cn:'\u5b89\u5168\u5f71\u54cd'},
+hudPlatform:{en:'PLATFORM',cn:'\u5e73\u53f0'},
+hudLatency:{en:'LATENCY',cn:'\u5ef6\u8fdf'},
+hudFPS:{en:'FPS',cn:'\u5e27\u7387'},
+hudFrame:{en:'FRAME',cn:'\u5e27'},
+desktop:{en:'Desktop GPU',cn:'\u684c\u9762GPU'},
+rover:{en:'Rover Edge',cn:'\u8f66\u8f7d\u8fb9\u7f18'},
+both:{en:'Comparison',cn:'\u5bf9\u6bd4'},
+ms:{en:'ms',cn:'ms'},
+na:{en:'N/A',cn:'N/A'},
+modelLabel:{en:'CNN Model',cn:'CNN\u6a21\u578b'},
+inputLabel:{en:'Input Image',cn:'\u8f93\u5165\u56fe\u50cf'},
+outputLabel:{en:'Risk Map',cn:'\u98ce\u9669\u5730\u56fe'},
+gpuLabel:{en:'NVIDIA RTX',cn:'NVIDIA RTX'},
+jetsonLabel:{en:'Jetson Nano',cn:'Jetson Nano'},
+fast:{en:'FAST',cn:'\u5feb'},
+slow:{en:'SLOW',cn:'\u6162'},
+safeTitle:{en:'SAFETY MARGIN',cn:'\u5b89\u5168\u4f59\u91cf'},
+safeTxt:{en:'At 0.3m/s, 500ms delay = 15cm blind zone',cn:'\u4ee50.3m/s\u884c\u9a76\uff0c500ms\u5ef6\u8fdf=15cm\u76f2\u533a'},
+dangerTxt:{en:'Obstacle within blind zone = COLLISION',cn:'\u969c\u788d\u7269\u5728\u76f2\u533a\u5185 = \u78b0\u649e'}
+};
+function t(k){return(I18N[k]&&I18N[k][LANG])||(I18N[k]&&I18N[k]['en'])||k;}
+
+var canvas=document.getElementById('c');
+var ctx=canvas.getContext('2d');
+var DPR=Math.min(window.devicePixelRatio||1,2);
+var W=700,H=440;
+var currentFrame=0;
+var totalFrames=5;
+var playing=false;
+var playTimer=null;
+var animProgress=0;
+var animStart=0;
+var animating=false;
+
+function refreshI18N(){
+document.getElementById('titleText').textContent=t('title');
+document.getElementById('subtitleText').textContent=t('subtitle');
+document.getElementById('btnPrev').textContent=t('btnPrev');
+document.getElementById('btnPlay').textContent=playing?t('btnPause'):t('btnPlay');
+document.getElementById('btnNext').textContent=t('btnNext');
+document.getElementById('guideTitle').textContent=t('guideTitle');
+document.getElementById('guideText').textContent=t('guideText');
+document.getElementById('hudLabel0').textContent=t('hudPlatform');
+document.getElementById('hudLabel1').textContent=t('hudLatency');
+document.getElementById('hudLabel2').textContent=t('hudFPS');
+document.getElementById('hudLabel3').textContent=t('hudFrame');
+document.getElementById('langBtn').textContent=LANG==='cn'?'CN':'EN';
+}
+
+function resize(){
+var rect=canvas.getBoundingClientRect();
+canvas.width=Math.round(rect.width*DPR);
+canvas.height=Math.round(rect.height*DPR);
+drawCurrent();
+}
+
+function easeInOut(t){return t<0.5?2*t*t:1-Math.pow(-2*t+2,2)/2;}
+
+function drawGrid(ox,oy,s){
+ctx.save();
+ctx.strokeStyle='rgba(255,255,255,0.03)';
+ctx.lineWidth=1;
+for(var x=0;x<W;x+=40){ctx.beginPath();ctx.moveTo(ox+x*s,oy);ctx.lineTo(ox+x*s,oy+H*s);ctx.stroke();}
+for(var y=0;y<H;y+=40){ctx.beginPath();ctx.moveTo(ox,oy+y*s);ctx.lineTo(ox+W*s,oy+y*s);ctx.stroke();}
+ctx.restore();
+}
+
+function drawBg(ox,oy,s){
+var g=ctx.createLinearGradient(ox,oy,ox,oy+H*s);
+g.addColorStop(0,'#131313');g.addColorStop(1,'#1a1510');
+ctx.fillStyle=g;ctx.fillRect(ox,oy,W*s,H*s);
+drawGrid(ox,oy,s);
+}
+
+function drawChip(cx,cy,w,h,label,color1,color2,s){
+ctx.save();
+var g=ctx.createLinearGradient(cx-w/2*s,cy-h/2*s,cx+w/2*s,cy+h/2*s);
+g.addColorStop(0,color1);g.addColorStop(0.5,color2);g.addColorStop(1,color1);
+ctx.fillStyle=g;
+ctx.shadowColor=color2;ctx.shadowBlur=15*s;
+ctx.fillRect(cx-w/2*s,cy-h/2*s,w*s,h*s);
+ctx.shadowBlur=0;
+ctx.strokeStyle='rgba(255,181,156,0.3)';ctx.lineWidth=1.5*s;
+ctx.strokeRect(cx-w/2*s,cy-h/2*s,w*s,h*s);
+// pins
+for(var i=0;i<6;i++){
+var px=cx-w/2*s+10*s+i*(w-20)/5*s;
+ctx.fillStyle='rgba(255,181,156,0.4)';
+ctx.fillRect(px-2*s,cy-h/2*s-6*s,4*s,6*s);
+ctx.fillRect(px-2*s,cy+h/2*s,4*s,6*s);
+}
+ctx.fillStyle='#fff';ctx.font='bold '+Math.round(11*s)+'px "Space Grotesk"';
+ctx.textAlign='center';ctx.textBaseline='middle';
+ctx.fillText(label,cx,cy);
+ctx.restore();
+}
+
+function drawProgressBar(x,y,w,h,progress,color,s){
+ctx.save();
+ctx.fillStyle='rgba(255,255,255,0.05)';
+ctx.fillRect(x,y,w*s,h*s);
+var g=ctx.createLinearGradient(x,y,x+w*progress*s,y);
+g.addColorStop(0,color);g.addColorStop(1,'rgba(255,95,31,0.3)');
+ctx.fillStyle=g;
+ctx.shadowColor=color;ctx.shadowBlur=8*s;
+ctx.fillRect(x,y,w*progress*s,h*s);
+ctx.shadowBlur=0;
+ctx.restore();
+}
+
+function drawImage(cx,cy,w,h,label,s){
+ctx.save();
+// Mars surface-like image placeholder
+var g=ctx.createRadialGradient(cx,cy,0,cx,cy,w*0.6*s);
+g.addColorStop(0,'#8B4513');g.addColorStop(0.5,'#A0522D');g.addColorStop(1,'#654321');
+ctx.fillStyle=g;
+ctx.fillRect(cx-w/2*s,cy-h/2*s,w*s,h*s);
+// terrain features
+ctx.fillStyle='rgba(139,69,19,0.7)';
+ctx.beginPath();ctx.arc(cx-15*s,cy+10*s,12*s,0,Math.PI*2);ctx.fill();
+ctx.fillStyle='rgba(160,82,45,0.5)';
+ctx.beginPath();ctx.arc(cx+20*s,cy-8*s,8*s,0,Math.PI*2);ctx.fill();
+ctx.strokeStyle='rgba(255,181,156,0.3)';ctx.lineWidth=1*s;
+ctx.strokeRect(cx-w/2*s,cy-h/2*s,w*s,h*s);
+ctx.fillStyle='rgba(255,181,156,0.7)';ctx.font=Math.round(9*s)+'px "Space Grotesk"';
+ctx.textAlign='center';ctx.fillText(label,cx,cy+h/2*s+12*s);
+ctx.restore();
+}
+
+function drawRiskMap(cx,cy,w,h,label,s){
+ctx.save();
+var g=ctx.createRadialGradient(cx,cy,0,cx,cy,w*0.6*s);
+g.addColorStop(0,'rgba(0,255,0,0.3)');g.addColorStop(0.4,'rgba(255,255,0,0.3)');g.addColorStop(0.7,'rgba(255,0,0,0.3)');g.addColorStop(1,'rgba(128,0,128,0.2)');
+ctx.fillStyle='#1a1510';
+ctx.fillRect(cx-w/2*s,cy-h/2*s,w*s,h*s);
+ctx.fillStyle=g;
+ctx.fillRect(cx-w/2*s,cy-h/2*s,w*s,h*s);
+// risk zones
+ctx.fillStyle='rgba(0,200,0,0.4)';ctx.fillRect(cx-w/2*s+5*s,cy-h/2*s+5*s,w*0.3*s,h*0.4*s);
+ctx.fillStyle='rgba(255,50,0,0.4)';ctx.fillRect(cx+5*s,cy-5*s,w*0.3*s,h*0.3*s);
+ctx.fillStyle='rgba(255,200,0,0.3)';ctx.fillRect(cx-w/4*s,cy+5*s,w*0.4*s,h*0.25*s);
+ctx.strokeStyle='rgba(255,181,156,0.3)';ctx.lineWidth=1*s;
+ctx.strokeRect(cx-w/2*s,cy-h/2*s,w*s,h*s);
+ctx.fillStyle='rgba(255,181,156,0.7)';ctx.font=Math.round(9*s)+'px "Space Grotesk"';
+ctx.textAlign='center';ctx.fillText(label,cx,cy+h/2*s+12*s);
+ctx.restore();
+}
+
+function drawArrow(x1,y1,x2,y2,color,s,progress){
+if(!progress)progress=1;
+var dx=(x2-x1)*progress,dy=(y2-y1)*progress;
+var ex=x1+dx,ey=y1+dy;
+ctx.save();
+ctx.strokeStyle=color;ctx.lineWidth=2*s;
+ctx.shadowColor=color;ctx.shadowBlur=6*s;
+ctx.beginPath();ctx.moveTo(x1,y1);ctx.lineTo(ex,ey);ctx.stroke();
+// arrowhead
+var angle=Math.atan2(dy,dx);
+ctx.fillStyle=color;
+ctx.beginPath();
+ctx.moveTo(ex,ey);
+ctx.lineTo(ex-10*s*Math.cos(angle-0.4),ey-10*s*Math.sin(angle-0.4));
+ctx.lineTo(ex-10*s*Math.cos(angle+0.4),ey-10*s*Math.sin(angle+0.4));
+ctx.closePath();ctx.fill();
+ctx.shadowBlur=0;
+ctx.restore();
+}
+
+function drawFrame0(s,ox,oy,p){
+// Model Architecture Overview
+ctx.save();
+ctx.fillStyle='rgba(255,181,156,0.9)';ctx.font='bold '+Math.round(16*s)+'px "Space Grotesk"';
+ctx.textAlign='center';ctx.fillText(t('frame0'),ox+W/2*s,oy+35*s);
+// Input image
+var ip=Math.min(p*2,1);
+ctx.globalAlpha=ip;
+drawImage(ox+120*s,oy+200*s,80,60,t('inputLabel'),s);
+// CNN chip
+var cp=Math.max(0,Math.min((p-0.2)*2,1));
+ctx.globalAlpha=cp;
+drawChip(ox+350*s,oy+200*s,120,70,t('modelLabel'),'#2a1a0a','#ff5f1f',s);
+// Output risk map
+var op=Math.max(0,Math.min((p-0.4)*2,1));
+ctx.globalAlpha=op;
+drawRiskMap(ox+580*s,oy+200*s,80,60,t('outputLabel'),s);
+// Arrows
+ctx.globalAlpha=Math.max(0,Math.min((p-0.3)*2,1));
+drawArrow(ox+165*s,oy+200*s,ox+285*s,oy+200*s,'#ff5f1f',s);
+ctx.globalAlpha=Math.max(0,Math.min((p-0.5)*2,1));
+drawArrow(ox+415*s,oy+200*s,ox+535*s,oy+200*s,'#ff5f1f',s);
+// Question
+ctx.globalAlpha=Math.max(0,Math.min((p-0.7)*3,1));
+ctx.fillStyle='rgba(255,181,156,0.6)';ctx.font=Math.round(12*s)+'px "Noto Sans SC"';
+ctx.textAlign='center';
+var qText=LANG==='cn'?'\u540c\u4e00\u4e2a\u6a21\u578b\uff0c\u5728\u4e0d\u540c\u786c\u4ef6\u4e0a\u8dd1\u591a\u5feb\uff1f':'Same model, how fast on different hardware?';
+ctx.fillText(qText,ox+W/2*s,oy+340*s);
+ctx.globalAlpha=1;
+ctx.restore();
+}
+
+function drawFrame1(s,ox,oy,p){
+// Desktop GPU Inference
+ctx.save();
+ctx.fillStyle='rgba(255,181,156,0.9)';ctx.font='bold '+Math.round(16*s)+'px "Space Grotesk"';
+ctx.textAlign='center';ctx.fillText(t('frame1'),ox+W/2*s,oy+35*s);
+// GPU chip
+drawChip(ox+W/2*s,oy+130*s,160,80,t('gpuLabel'),'#1a2a1a','#34d399',s);
+// Processing animation
+var barP=Math.min(p*1.5,1);
+drawProgressBar(ox+200*s,oy+240*s,300,12,barP,'#34d399',s);
+// Latency indicator
+ctx.fillStyle='#34d399';ctx.font='bold '+Math.round(24*s)+'px "Space Grotesk"';
+ctx.textAlign='center';
+ctx.shadowColor='#34d399';ctx.shadowBlur=10*s;
+ctx.fillText('~30ms',ox+W/2*s,oy+290*s);
+ctx.shadowBlur=0;
+// FPS
+ctx.fillStyle='rgba(52,211,153,0.7)';ctx.font=Math.round(14*s)+'px "Space Grotesk"';
+ctx.fillText('~33 FPS',ox+W/2*s,oy+315*s);
+// Status
+ctx.fillStyle='#34d399';ctx.font='bold '+Math.round(14*s)+'px "Space Grotesk"';
+ctx.fillText(t('fast')+' !',ox+W/2*s,oy+360*s);
+// Input/Output flow
+var fp=Math.min(p*2,1);
+drawImage(ox+80*s,oy+130*s,55,40,t('inputLabel'),s);
+drawArrow(ox+112*s,oy+130*s,ox+265*s,oy+130*s,'rgba(52,211,153,0.5)',s,fp);
+drawRiskMap(ox+580*s,oy+130*s,55,40,t('outputLabel'),s);
+drawArrow(ox+435*s,oy+130*s,ox+548*s,oy+130*s,'rgba(52,211,153,0.5)',s,Math.max(0,(p-0.5)*2));
+ctx.restore();
+}
+
+function drawFrame2(s,ox,oy,p){
+// Rover Edge Inference
+ctx.save();
+ctx.fillStyle='rgba(255,181,156,0.9)';ctx.font='bold '+Math.round(16*s)+'px "Space Grotesk"';
+ctx.textAlign='center';ctx.fillText(t('frame2'),ox+W/2*s,oy+35*s);
+// Jetson chip
+drawChip(ox+W/2*s,oy+130*s,160,80,t('jetsonLabel'),'#2a1a0a','#ff5f1f',s);
+// Processing animation (slower)
+var barP=Math.min(p*0.6,1);
+drawProgressBar(ox+200*s,oy+240*s,300,12,barP,'#ff5f1f',s);
+// Latency indicator
+ctx.fillStyle='#ff5f1f';ctx.font='bold '+Math.round(24*s)+'px "Space Grotesk"';
+ctx.textAlign='center';
+ctx.shadowColor='#ff5f1f';ctx.shadowBlur=10*s;
+ctx.fillText('~500ms',ox+W/2*s,oy+290*s);
+ctx.shadowBlur=0;
+// FPS
+ctx.fillStyle='rgba(255,95,31,0.7)';ctx.font=Math.round(14*s)+'px "Space Grotesk"';
+ctx.fillText('~2 FPS',ox+W/2*s,oy+315*s);
+// Status
+ctx.fillStyle='#ff5f1f';ctx.font='bold '+Math.round(14*s)+'px "Space Grotesk"';
+var slowText=t('slow')+' ... '+(LANG==='cn'?'\u5b89\u5168\u5417\uff1f':'Safe?');
+ctx.fillText(slowText,ox+W/2*s,oy+360*s);
+// Input/Output flow
+drawImage(ox+80*s,oy+130*s,55,40,t('inputLabel'),s);
+drawArrow(ox+112*s,oy+130*s,ox+265*s,oy+130*s,'rgba(255,95,31,0.4)',s,Math.min(p*1.2,1));
+if(p>0.7){
+drawRiskMap(ox+580*s,oy+130*s,55,40,t('outputLabel'),s);
+drawArrow(ox+435*s,oy+130*s,ox+548*s,oy+130*s,'rgba(255,95,31,0.4)',s,Math.min((p-0.7)*3,1));
+}
+ctx.restore();
+}
+
+function drawFrame3(s,ox,oy,p){
+// Latency Comparison
+ctx.save();
+ctx.fillStyle='rgba(255,181,156,0.9)';ctx.font='bold '+Math.round(16*s)+'px "Space Grotesk"';
+ctx.textAlign='center';ctx.fillText(t('frame3'),ox+W/2*s,oy+35*s);
+// Bar chart
+var barW=200*s,barH=20*s;
+var y1=oy+120*s,y2=oy+220*s;
+// Desktop bar
+ctx.fillStyle='rgba(255,181,156,0.7)';ctx.font=Math.round(12*s)+'px "Space Grotesk"';
+ctx.textAlign='right';ctx.fillText(t('gpuLabel'),ox+150*s,y1+barH/2+4*s);
+var gd=ctx.createLinearGradient(ox+170*s,y1,ox+170*s+barW*0.06*p,y1);
+gd.addColorStop(0,'#34d399');gd.addColorStop(1,'rgba(52,211,153,0.3)');
+ctx.fillStyle=gd;ctx.shadowColor='#34d399';ctx.shadowBlur=8*s;
+ctx.fillRect(ox+170*s,y1,barW*0.06*Math.min(p*2,1),barH);
+ctx.shadowBlur=0;
+ctx.fillStyle='#34d399';ctx.textAlign='left';ctx.font='bold '+Math.round(11*s)+'px "Space Grotesk"';
+if(p>0.3)ctx.fillText('30ms',ox+170*s+barW*0.06+8*s,y1+barH/2+4*s);
+// Rover bar
+ctx.fillStyle='rgba(255,181,156,0.7)';ctx.font=Math.round(12*s)+'px "Space Grotesk"';
+ctx.textAlign='right';ctx.fillText(t('jetsonLabel'),ox+150*s,y2+barH/2+4*s);
+var gr=ctx.createLinearGradient(ox+170*s,y2,ox+170*s+barW*p,y2);
+gr.addColorStop(0,'#ff5f1f');gr.addColorStop(1,'rgba(255,95,31,0.3)');
+ctx.fillStyle=gr;ctx.shadowColor='#ff5f1f';ctx.shadowBlur=8*s;
+ctx.fillRect(ox+170*s,y2,barW*Math.min(p*1.2,1),barH);
+ctx.shadowBlur=0;
+ctx.fillStyle='#ff5f1f';ctx.textAlign='left';ctx.font='bold '+Math.round(11*s)+'px "Space Grotesk"';
+if(p>0.5)ctx.fillText('500ms',ox+170*s+barW+8*s,y2+barH/2+4*s);
+// Ratio text
+if(p>0.7){
+var rp=Math.min((p-0.7)*3,1);
+ctx.globalAlpha=rp;
+ctx.fillStyle='#ffb59c';ctx.font='bold '+Math.round(18*s)+'px "Space Grotesk"';
+ctx.textAlign='center';
+var ratioText=LANG==='cn'?'\u8f66\u8f7d\u6bd4\u684c\u9762\u6162 ~17\u500d':'Rover ~17x slower than desktop';
+ctx.fillText(ratioText,ox+W/2*s,oy+300*s);
+ctx.globalAlpha=1;
+}
+// Scale
+ctx.fillStyle='rgba(255,181,156,0.3)';ctx.font=Math.round(9*s)+'px "Space Grotesk"';
+ctx.textAlign='center';
+for(var i=0;i<=5;i++){
+var xp=ox+170*s+barW*i/5;
+ctx.fillText((i*100)+'ms',xp,y2+barH+16*s);
+ctx.beginPath();ctx.moveTo(xp,y1-5*s);ctx.lineTo(xp,y2+barH+3*s);ctx.strokeStyle='rgba(255,181,156,0.08)';ctx.stroke();
+}
+ctx.restore();
+}
+
+function drawFrame4(s,ox,oy,p){
+// Safety Impact
+ctx.save();
+ctx.fillStyle='rgba(255,181,156,0.9)';ctx.font='bold '+Math.round(16*s)+'px "Space Grotesk"';
+ctx.textAlign='center';ctx.fillText(t('frame4'),ox+W/2*s,oy+35*s);
+// Rover moving visualization
+var roverX=ox+100*s+p*200*s;
+var groundY=oy+250*s;
+// Ground
+ctx.fillStyle='rgba(139,69,19,0.3)';
+ctx.fillRect(ox+50*s,groundY,600*s,4*s);
+// Rover body
+ctx.save();
+var rg=ctx.createLinearGradient(roverX-20*s,groundY-40*s,roverX+20*s,groundY-15*s);
+rg.addColorStop(0,'#666');rg.addColorStop(0.5,'#888');rg.addColorStop(1,'#555');
+ctx.fillStyle=rg;
+ctx.fillRect(roverX-25*s,groundY-35*s,50*s,20*s);
+// Wheels
+ctx.fillStyle='#444';
+ctx.beginPath();ctx.arc(roverX-18*s,groundY-12*s,8*s,0,Math.PI*2);ctx.fill();
+ctx.beginPath();ctx.arc(roverX+18*s,groundY-12*s,8*s,0,Math.PI*2);ctx.fill();
+ctx.fillStyle='#333';
+ctx.beginPath();ctx.arc(roverX-18*s,groundY-12*s,4*s,0,Math.PI*2);ctx.fill();
+ctx.beginPath();ctx.arc(roverX+18*s,groundY-12*s,4*s,0,Math.PI*2);ctx.fill();
+// Camera mast
+ctx.fillStyle='#777';
+ctx.fillRect(roverX-2*s,groundY-55*s,4*s,20*s);
+ctx.fillStyle='#999';
+ctx.fillRect(roverX-6*s,groundY-60*s,12*s,8*s);
+ctx.restore();
+// Blind zone
+var blindW=150*s*Math.min(p*1.5,1);
+ctx.fillStyle='rgba(255,0,0,0.1)';
+ctx.fillRect(roverX+25*s,groundY-50*s,blindW,55*s);
+ctx.strokeStyle='rgba(255,50,0,0.4)';ctx.setLineDash([4,4]);ctx.lineWidth=1*s;
+ctx.strokeRect(roverX+25*s,groundY-50*s,blindW,55*s);
+ctx.setLineDash([]);
+// Blind zone label
+if(p>0.3){
+ctx.fillStyle='rgba(255,50,0,0.7)';ctx.font=Math.round(10*s)+'px "Space Grotesk"';
+ctx.textAlign='center';
+var blindLabel=LANG==='cn'?'\u76f2\u533a (15cm)':'Blind Zone (15cm)';
+ctx.fillText(blindLabel,roverX+25*s+blindW/2,groundY-55*s);
+}
+// Obstacle
+if(p>0.5){
+var obsX=roverX+25*s+blindW*0.7;
+ctx.fillStyle='rgba(255,50,0,0.6)';
+ctx.beginPath();
+ctx.moveTo(obsX,groundY);ctx.lineTo(obsX-12*s,groundY);ctx.lineTo(obsX-6*s,groundY-25*s);
+ctx.lineTo(obsX+6*s,groundY-25*s);ctx.lineTo(obsX+12*s,groundY);ctx.closePath();ctx.fill();
+}
+// Text explanations
+ctx.fillStyle='rgba(255,181,156,0.8)';ctx.font=Math.round(12*s)+'px "Noto Sans SC"';
+ctx.textAlign='center';
+if(p>0.4)ctx.fillText(t('safeTxt'),ox+W/2*s,oy+330*s);
+if(p>0.7){
+ctx.fillStyle='rgba(255,50,0,0.8)';ctx.font='bold '+Math.round(12*s)+'px "Noto Sans SC"';
+ctx.fillText(t('dangerTxt'),ox+W/2*s,oy+360*s);
+}
+ctx.restore();
+}
+
+var frameDrawers=[drawFrame0,drawFrame1,drawFrame2,drawFrame3,drawFrame4];
+var framePlatforms=[t('na'),t('desktop'),t('rover'),t('both'),t('rover')];
+var frameLatencies=['--','~30ms','~500ms','30 vs 500','500ms'];
+var frameFPSes=['--','~33','~2','33 vs 2','~2'];
+
+function drawCurrent(){
+var rect=canvas.getBoundingClientRect();
+var scale=Math.min(rect.width/W,rect.height/H);
+var offsetX=(rect.width-W*scale)/2;
+var offsetY=(rect.height-H*scale)/2;
+ctx.setTransform(DPR*scale,0,0,DPR*scale,DPR*offsetX,DPR*offsetY);
+drawBg(0,0,1);
+frameDrawers[currentFrame](1,0,0,animProgress);
+ctx.setTransform(1,0,0,1,0,0);
+// Update HUD
+document.getElementById('hudVal0').textContent=framePlatforms[currentFrame];
+document.getElementById('hudVal1').textContent=frameLatencies[currentFrame];
+document.getElementById('hudVal2').textContent=frameFPSes[currentFrame];
+document.getElementById('hudVal3').textContent=(currentFrame+1)+'/'+totalFrames;
+}
+window.drawCurrent=drawCurrent;
+
+function gotoFrame(f){
+currentFrame=Math.max(0,Math.min(f,totalFrames-1));
+animProgress=0;animStart=performance.now();animating=true;
+framePlatforms=[t('na'),t('desktop'),t('rover'),t('both'),t('rover')];
+requestAnimationFrame(animate);
+}
+window.gotoFrame=gotoFrame;
+window.currentFrame=currentFrame;
+
+function animate(ts){
+if(!animating)return;
+var elapsed=ts-animStart;
+animProgress=easeInOut(Math.min(elapsed/1500,1));
+drawCurrent();
+if(animProgress<1){requestAnimationFrame(animate);}
+else{animating=false;animProgress=1;drawCurrent();}
+}
+
+function playNext(){
+if(currentFrame<totalFrames-1){gotoFrame(currentFrame+1);}
+else{stopPlay();}
+}
+function startPlay(){playing=true;refreshI18N();playTimer=setInterval(playNext,2500);}
+function stopPlay(){playing=false;refreshI18N();if(playTimer){clearInterval(playTimer);playTimer=null;}}
+
+document.getElementById('btnPrev').addEventListener('click',function(){stopPlay();if(currentFrame>0)gotoFrame(currentFrame-1);});
+document.getElementById('btnNext').addEventListener('click',function(){stopPlay();if(currentFrame<totalFrames-1)gotoFrame(currentFrame+1);});
+document.getElementById('btnPlay').addEventListener('click',function(){if(playing){stopPlay();}else{startPlay();playNext();}});
+document.getElementById('langBtn').addEventListener('click',function(){LANG=LANG==='cn'?'en':'cn';refreshI18N();drawCurrent();});
+
+window.addEventListener('resize',resize);
+new ResizeObserver(function(){resize();}).observe(canvas.parentElement||canvas);
+
+refreshI18N();
+document.fonts.ready.then(function(){resize();gotoFrame(0);});
+setTimeout(function(){resize();gotoFrame(0);},200);
+</script>
+<script>
+
+(function () {
+  if (window.__systemedu_resize_patched) return;
+  window.__systemedu_resize_patched = true;
+
+  const canvas =
+    document.querySelector('canvas#c') ||
+    document.querySelector('canvas');
+  if (!canvas || !canvas.parentElement) return;
+  const container = canvas.parentElement;
+
+  // 注入防撑大 CSS：canvas 脱离流，父容器约束高度
+  // 同时把浮动的操作指南面板（.guide-panel 等）改成可折叠，避免
+  // 在小视口（iframe 缩小）下覆盖标题栏和控件。
+  try {
+    const style = document.createElement('style');
+    style.setAttribute('data-systemedu-resize-patch', '1');
+    style.textContent =
+      // canvas 防撑大
+      '.systemedu-canvas-host{position:relative!important;min-width:0!important;min-height:0!important;overflow:hidden!important;}' +
+      '.systemedu-canvas-host > canvas{position:absolute!important;top:0!important;left:0!important;width:100%!important;height:100%!important;}' +
+      // 浮动指南面板折叠态（默认折叠为一个小按钮，避免遮挡）
+      '.guide-panel.systemedu-guide-collapsed{max-width:28px!important;max-height:28px!important;min-width:28px!important;min-height:28px!important;' +
+      'padding:0!important;overflow:hidden!important;cursor:pointer!important;display:flex!important;align-items:center!important;justify-content:center!important;' +
+      'border-radius:50%!important;}' +
+      '.guide-panel.systemedu-guide-collapsed > *{display:none!important;}' +
+      '.guide-panel.systemedu-guide-collapsed::before{content:"?";color:#38bdf8;font-weight:700;font-size:14px;}' +
+      // 小视口时强制 guide-panel 宽度收紧
+      '.guide-panel{max-width:min(220px,35vw)!important;z-index:50!important;}';
+    document.head.appendChild(style);
+    container.classList.add('systemedu-canvas-host');
+  } catch (e) {}
+
+  // 让 .guide-panel 默认折叠为问号按钮，点击展开/收起
+  try {
+    const guides = document.querySelectorAll('.guide-panel');
+    guides.forEach(function (g) {
+      g.classList.add('systemedu-guide-collapsed');
+      g.setAttribute('title', '点击查看操作指南');
+      g.addEventListener('click', function (e) {
+        // 折叠时点击任意处展开；展开时只有点击面板本身（不是内部链接）才收回
+        if (g.classList.contains('systemedu-guide-collapsed')) {
+          g.classList.remove('systemedu-guide-collapsed');
+          e.stopPropagation();
+        } else {
+          // 展开状态下点击面板空白区域也能再次折叠
+          if (e.target === g) {
+            g.classList.add('systemedu-guide-collapsed');
+          }
+        }
+      });
+    });
+  } catch (e) {}
+
+  const redraw = function () {
+    try { if (typeof window.drawCurrent === 'function') { window.drawCurrent(); return; } } catch (e) {}
+    try {
+      if (typeof window.gotoFrame === 'function' &&
+          typeof window.currentFrame !== 'undefined') {
+        window.gotoFrame(window.currentFrame); return;
+      }
+    } catch (e) {}
+    try { if (typeof window.draw === 'function') { window.draw(); return; } } catch (e) {}
+    try { if (typeof window.render === 'function') { window.render(); return; } } catch (e) {}
+  };
+
+  let rafId = 0;
+  let prevW = 0, prevH = 0;
+
+  // 校正 canvas backing store 与 CSS 显示尺寸，保证宽高比一致。
+  // 防止 canvas 被浏览器按不同比例拉伸（典型症状：文字被水平拉宽或压扁）。
+  // 必要时重新调用原 resize() 让动画内部坐标系也更新。
+  const enforceSizeConsistency = function () {
+    const rect = canvas.getBoundingClientRect();
+    if (rect.width < 1 || rect.height < 1) return false;
+    const dpr = Math.max(1, window.devicePixelRatio || 1);
+    const targetW = Math.round(rect.width * dpr);
+    const targetH = Math.round(rect.height * dpr);
+    // 允许 1 像素误差
+    if (Math.abs(canvas.width - targetW) > 1 || Math.abs(canvas.height - targetH) > 1) {
+      return true; // 需要修复
+    }
+    return false;
+  };
+
+  // 调用动画内部的 resize 钩子。优先级：
+  //   1) window.resize（老式全局挂载）
+  //   2) window 上的 'resize' 事件（addEventListener 注册的 local resize）
+  // 多数 knode 动画通过 addEventListener('resize', resize) 挂事件监听，
+  // 此时 window.resize 是 undefined，唯一能驱动它的方式是 dispatchEvent。
+  const callInternalResize = function () {
+    try {
+      if (typeof window.resize === 'function') {
+        window.resize();
+        return true;
+      }
+    } catch (e) {}
+    try {
+      window.dispatchEvent(new Event('resize'));
+      return true;
+    } catch (e) {}
+    return false;
+  };
+
+  const doResize = function () {
+    // 让动画的 local resize 读最新 rect 并重写 canvas backing store
+    callInternalResize();
+
+    // 校正 backing store：若 canvas.width/height 与 CSS 显示尺寸不一致
+    // （典型症状：文字被水平或垂直拉伸），反复触发 local resize 让它
+    // 重新计算。浏览器 layout 已稳定时通常一次就能修复。
+    try {
+      let guard = 0;
+      while (enforceSizeConsistency() && guard < 3) {
+        guard++;
+        // 触发 reflow 让 getBoundingClientRect 读到最新值
+        void canvas.offsetHeight;
+        callInternalResize();
+      }
+      // 最终保障：某些动画的 resize 可能读到错值（例如 parentElement 被
+      // 缓存，或 CSS !important 锁死尺寸）。此时直接硬写 canvas.width/height
+      // 保证宽高比正确；drawCurrent 会把内容重新画到正确的 backing store。
+      const rect = canvas.getBoundingClientRect();
+      const dpr = Math.max(1, window.devicePixelRatio || 1);
+      const tw = Math.round(rect.width * dpr);
+      const th = Math.round(rect.height * dpr);
+      if (rect.width >= 1 && rect.height >= 1 &&
+          (Math.abs(canvas.width - tw) > 1 || Math.abs(canvas.height - th) > 1)) {
+        canvas.width = tw;
+        canvas.height = th;
+        // 同步动画内部坐标系变量（若挂在 window 上）
+        try {
+          if (typeof window.W !== 'undefined') window.W = rect.width;
+          if (typeof window.H !== 'undefined') window.H = rect.height;
+        } catch (e) {}
+        // 再跑一次 local resize，让它重新 setTransform 并更新自身 W/H
+        callInternalResize();
+      }
+    } catch (e) {}
+
+    redraw();
+  };
+
+  const ro = new ResizeObserver(function (entries) {
+    const entry = entries[0];
+    if (!entry) return;
+    const cr = entry.contentRect;
+    const w = cr.width, h = cr.height;
+    if (w < 1 || h < 1) return;
+    if (Math.abs(w - prevW) < 1 && Math.abs(h - prevH) < 1) return;
+    prevW = w; prevH = h;
+
+    // 第一次回调也要处理：iframe 内的动画可能把错值写到 canvas backing
+    // store（例如 load 时 parent rect 还不稳定），第一次 RO 回调正是
+    // layout 已稳定的时机，必须借此纠正。
+    if (rafId) cancelAnimationFrame(rafId);
+    rafId = requestAnimationFrame(function () {
+      rafId = 0;
+      doResize();
+    });
+  });
+
+  try { ro.observe(container); } catch (e) {}
+
+  // iframe 初始化阶段 parent rect 可能不稳定，导致动画原始 resize()
+  // 写入错误的 canvas.width/height（尤其在 iframe 外层 div 宽高变化时）。
+  // load 后始终跑一次 doResize 做最终校正，不依赖 canvas.width<4 的判断。
+  window.addEventListener('load', function () {
+    setTimeout(function () { doResize(); }, 50);
+  });
+})();
+
+</script>
+</body>
+</html>

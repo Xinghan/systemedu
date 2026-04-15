@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=Inter:wght@400;500&family=Noto+Sans+SC:wght@400;700&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box;}
+html,body{width:100%;height:100vh;overflow:hidden;}
+body{background:var(--bg,#05070a);color:var(--text,#e2e2e9);font-family:'Inter','Noto Sans SC',sans-serif;display:flex;flex-direction:column;}
+.wrapper{display:flex;flex-direction:column;height:100vh;overflow:hidden;}
+.header{padding:12px 16px 8px;display:flex;justify-content:space-between;align-items:center;}
+.header h1{font-family:'Space Grotesk',sans-serif;font-size:clamp(14px,2vw,18px);font-weight:700;letter-spacing:-0.02em;color:var(--primary,#ffb000);text-shadow:0 0 15px var(--glow,rgba(255,176,0,0.3));}
+.header .sub{font-size:11px;color:var(--muted,#8e90a6);letter-spacing:0.1em;text-transform:uppercase;}
+.canvas-wrap{flex:1;min-height:0;position:relative;}
+canvas{width:100%;height:100%;display:block;}
+.controls{display:flex;justify-content:center;align-items:center;gap:12px;padding:8px 16px;}
+.ctrl-btn{font-family:'Space Grotesk',sans-serif;font-size:12px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;padding:6px 18px;border:none;cursor:pointer;color:#05070a;background:linear-gradient(135deg,#ffb000,#ff5f1f);transition:transform 0.1s,box-shadow 0.2s;box-shadow:0 0 12px rgba(255,176,0,0.3);}
+.ctrl-btn:hover{transform:scale(1.04);box-shadow:0 0 20px rgba(255,176,0,0.5);}
+.ctrl-btn:active{transform:scale(0.96);}
+.ctrl-btn.secondary{background:rgba(17,20,37,0.92);color:#8e90a6;box-shadow:none;backdrop-filter:blur(12px);}
+.ctrl-btn.secondary:hover{color:#ffb000;}
+.hud{height:48px;display:flex;align-items:center;justify-content:space-around;background:rgba(0,0,0,0.55);backdrop-filter:blur(12px);padding:0 16px;}
+.hud-item{text-align:center;}
+.hud-label{font-family:'Space Grotesk',sans-serif;font-size:9px;letter-spacing:0.15em;text-transform:uppercase;color:#8e90a6;}
+.hud-val{font-family:'Space Grotesk',sans-serif;font-size:14px;font-weight:700;color:#ffb000;}
+.lang-btn{position:fixed;top:8px;left:8px;z-index:100;font-family:'Space Grotesk',sans-serif;font-size:11px;font-weight:700;padding:4px 10px;cursor:pointer;border:none;background:rgba(20,20,35,0.85);backdrop-filter:blur(12px);color:#ffb59c;letter-spacing:1px;}
+.guide-panel{position:fixed;top:8px;right:8px;width:240px;max-height:40vh;overflow-y:auto;background:rgba(20,20,35,0.85);backdrop-filter:blur(12px);padding:12px;z-index:100;font-family:'Noto Sans SC',sans-serif;font-size:12px;color:rgba(255,255,255,0.85);line-height:1.6;}
+.guide-panel h3{font-family:'Space Grotesk',sans-serif;font-size:13px;margin-bottom:6px;color:#ffb000;cursor:pointer;display:flex;justify-content:space-between;align-items:center;}
+.guide-panel ul{padding-left:14px;}
+.guide-panel .collapsed{display:none;}
+</style>
+</head>
+<body>
+<button class="lang-btn" id="langBtn">CN</button>
+<div class="guide-panel" id="guide">
+<h3 id="guideTitle"></h3>
+<div class="guide-content" id="guideContent"></div>
+</div>
+<div class="wrapper">
+<div class="header">
+<div><h1 id="title"></h1><div class="sub" id="subtitle"></div></div>
+<div id="frameIndicator" style="font-family:'Space Grotesk';font-size:11px;color:#8e90a6;letter-spacing:0.1em;"></div>
+</div>
+<div class="canvas-wrap"><canvas id="c"></canvas></div>
+<div class="controls">
+<button class="ctrl-btn secondary" id="btnPrev"></button>
+<button class="ctrl-btn" id="btnPlay"></button>
+<button class="ctrl-btn secondary" id="btnNext"></button>
+</div>
+<div class="hud">
+<div class="hud-item"><div class="hud-label" id="hudL1"></div><div class="hud-val" id="hudV1"></div></div>
+<div class="hud-item"><div class="hud-label" id="hudL2"></div><div class="hud-val" id="hudV2"></div></div>
+<div class="hud-item"><div class="hud-label" id="hudL3"></div><div class="hud-val" id="hudV3"></div></div>
+<div class="hud-item"><div class="hud-label" id="hudL4"></div><div class="hud-val" id="hudV4"></div></div>
+</div>
+</div>
+
+<script src="animation_runtime.js"></script>
+<script>
+var CONFIG = {
+  style: 'rocketry_control',
+  totalFrames: 4,
+
+  i18n: {
+    title:    {en:'THREE PATH SHAPES', cn:'\u8def\u5f84\u7684\u4e09\u79cd\u5f62\u72b6'},
+    subtitle: {en:'Same A to B, different lines', cn:'\u4ece A \u5230 B\uff0c\u8d70\u7ebf\u4e0d\u540c'},
+
+    // Frame 0: overview three balls three paths
+    f0_q:       {en:'From A to B -- same start, same end.', cn:'\u4ece A \u5230 B\uff0c\u8d77\u70b9\u7ec8\u70b9\u5b8c\u5168\u4e00\u6837'},
+    f0_hint:    {en:'But three things walk three lines.', cn:'\u4f46\u4e09\u4e2a\u4e1c\u897f\uff0c\u8d70\u51fa\u4e09\u6761\u4e0d\u540c\u7684\u7ebf'},
+    f0_lblA:    {en:'A (start)', cn:'A\uff08\u8d77\u70b9\uff09'},
+    f0_lblB:    {en:'B (end)',   cn:'B\uff08\u7ec8\u70b9\uff09'},
+
+    // Frame 1: straight path (rolling ball)
+    f1_title:   {en:'Path 1: STRAIGHT', cn:'\u8def\u5f84 1\uff1a\u76f4\u7ebf'},
+    f1_desc:    {en:'A ball rolls on a smooth floor', cn:'\u6ed1\u7684\u5730\u9762\u4e0a\u6eda\u4e00\u4e2a\u7403'},
+    f1_note:    {en:'Shortest line from A to B', cn:'\u4ece A \u5230 B \u6700\u77ed\u7684\u4e00\u6761'},
+    f1_ex:      {en:'e.g. a puck on smooth ice', cn:'\u4f8b\u5982\u5728\u51b0\u9762\u4e0a\u6ed1\u884c\u7684\u51b0\u7403'},
+
+    // Frame 2: arc path (projectile)
+    f2_title:   {en:'Path 2: ARC', cn:'\u8def\u5f84 2\uff1a\u5f27\u7ebf'},
+    f2_desc:    {en:'A ball tossed across the room', cn:'\u6254\u4e00\u56e2\u7eb8\u56e2\u6a2a\u8de8\u6574\u4e2a\u5c4b'},
+    f2_note:    {en:'Up then down -- makes a curve', cn:'\u5148\u5411\u4e0a\uff0c\u518d\u843d\u4e0b\u2014\u2014\u753b\u4e00\u6761\u5f27\u7ebf'},
+    f2_ex:      {en:'e.g. shooting a basketball', cn:'\u4f8b\u5982\u6295\u7bee\u7403\u7684\u8f68\u8ff9'},
+
+    // Frame 3: loop path (satellite / bug)
+    f3_title:   {en:'Path 3: LOOP', cn:'\u8def\u5f84 3\uff1a\u7ed5\u5708'},
+    f3_desc:    {en:'A bug circles under a lamp',   cn:'\u4e00\u53ea\u5c0f\u866b\u5728\u706f\u4e0b\u7ed5\u5708'},
+    f3_note:    {en:'Comes back to where it started', cn:'\u7ed5\u5708\u56de\u5230\u8d77\u70b9'},
+    f3_ex:      {en:'e.g. satellite orbiting Earth', cn:'\u4f8b\u5982\u536b\u661f\u7ed5\u5730\u7403'},
+
+    // HUD labels
+    hLen:       {en:'PATH LEN', cn:'\u8def\u5f84\u957f\u5ea6'},
+    hAB:        {en:'A TO B',   cn:'A \u5230 B'},
+    hShape:     {en:'SHAPE',    cn:'\u5f62\u72b6'},
+    hExample:   {en:'EXAMPLE',  cn:'\u4f8b\u5b50'},
+
+    // Guide panel
+    guideTitle: {en:'How to read this', cn:'\u600e\u4e48\u770b\u8fd9\u4e2a\u52a8\u753b'},
+    g1:         {en:'A and B stay the same in all four frames', cn:'4 \u5e27 A \u3001 B \u4f4d\u7f6e\u5b8c\u5168\u4e00\u6837'},
+    g2:         {en:'Arrow shows where the ball is heading right now', cn:'\u7bad\u5934\u6307\u7740\u7403\u6b63\u5728\u8d70\u7684\u65b9\u5411'},
+    g3:         {en:'Path length (red) differs even when A/B distance (gray) is the same', cn:'\u8def\u5f84\u957f\u5ea6\uff08\u7ea2\uff09\u548c A\u2194B \u76f4\u7ebf\u8ddd\u79bb\uff08\u7070\uff09\u4e0d\u4e00\u6837'},
+  },
+
+  hudLabels: ['hLen', 'hAB', 'hShape', 'hExample'],
+  hudValues: [
+    ['? m', '10 m', '---', '---'],
+    ['10 m', '10 m', 'STRAIGHT', 'ice puck'],
+    ['15 m', '10 m', 'ARC',      'basketball'],
+    ['31 m', '0 m (A=B)', 'LOOP', 'satellite orbit'],
+  ],
+  guideTitle: 'guideTitle',
+  guideItems: ['g1', 'g2', 'g3'],
+};
+
+// Custom rocketry_control palette (match k3 style)
+AnimRuntime.PALETTES = AnimRuntime.PALETTES || {};
+AnimRuntime.PALETTES.rocketry_control = {
+  bg: '#05070a', bg2: '#0a0e14', surface: '#111418',
+  primary: '#ffb000', primaryDim: '#ff5f1f',
+  secondary: '#00d4ee', secondaryDim: '#0b90a6',
+  tertiary: '#50ffb0', tertiaryDim: '#17df93',
+  text: '#e2e2e9', muted: '#8e90a6',
+  error: '#ff716c', outline: '#3a3d47',
+  glow: 'rgba(255,176,0,0.08)', glowStrong: 'rgba(255,176,0,0.3)',
+  glass: 'rgba(17,20,24,0.6)', glassBlur: 16,
+  radius: '0px',
+};
+
+// Helper: draw a point marker (labeled A/B)
+function pointMarker(id, x, y, labelText, color, align) {
+  return [
+    {id:id+'_dot', type:'circle', x:x, y:y, r:7, fill:color, stroke:'#fff', strokeWidth:1.5},
+    {id:id+'_inner', type:'circle', x:x, y:y, r:3, fill:'#05070a'},
+    {id:id+'_lbl', type:'label', text:labelText, x:x, y:y+22, color:color, size:11, align:align||'center'},
+  ];
+}
+
+// Helper: arrow element
+function arrowEl(id, x1, y1, x2, y2, color, width) {
+  return {id:id, type:'arrow', x1:x1, y1:y1, x2:x2, y2:y2, color:color, width:width||2.5, head:9};
+}
+
+function getFrameElements(f, W, H) {
+  var t = AnimRuntime.t;
+  var P = AnimRuntime.PAL;
+  var cx = W / 2, cy = H / 2;
+
+  // A and B stay fixed across all frames -- key design point
+  // A is at 22% of W, B is at 78% of W, both at y = 55% H
+  var Ax = W * 0.22, Bx = W * 0.78, yBaseline = H * 0.60;
+
+  var els = [];
+
+  if (f === 0) {
+    // Overview: show A and B, question text, preview of all three paths dimmed
+    els.push({id:'q', type:'label', text:t('f0_q'), x:cx, y:H*0.12, color:P.text, size:15, align:'center'});
+    els.push({id:'hint', type:'label', text:t('f0_hint'), x:cx, y:H*0.18, color:P.muted, size:11, align:'center'});
+    // Dashed ghost lines of all three paths (previews)
+    // straight preview
+    els.push({id:'ghost1', type:'line', x1:Ax, y1:yBaseline, x2:Bx, y2:yBaseline, color:'rgba(255,176,0,0.25)', width:1, dash:[4,4]});
+    // arc preview (bezier-ish: use quadratic via 'curve' if supported; fallback polyline)
+    var arcMidX = (Ax+Bx)/2, arcMidY = yBaseline - H*0.18;
+    els.push({id:'ghost2', type:'curve', x1:Ax, y1:yBaseline, cx:arcMidX, cy:arcMidY, x2:Bx, y2:yBaseline, color:'rgba(0,212,238,0.25)', width:1, dash:[4,4]});
+    // loop preview (ellipse passing through A and B)
+    var g3_rx = (Bx-Ax)/2 * 0.85, g3_ry = H*0.16;
+    els.push({id:'ghost3', type:'ellipse', x:(Ax+Bx)/2, y:yBaseline - g3_ry, rx:g3_rx, ry:g3_ry, stroke:'rgba(80,255,176,0.3)', width:1, dash:[4,4]});
+    // A and B markers
+    [].push.apply(els, pointMarker('A', Ax, yBaseline, t('f0_lblA'), P.primary));
+    [].push.apply(els, pointMarker('B', Bx, yBaseline, t('f0_lblB'), P.primary));
+    // Big arrow from A toward B area
+    els.push({id:'cta', type:'label', text:t('f0_hint'), x:cx, y:H*0.88, color:P.muted, size:11, align:'center'});
+    return els;
+  }
+
+  if (f === 1) {
+    // Straight path: ball rolling A -> B in straight line
+    els.push({id:'title', type:'label', text:t('f1_title'), x:cx, y:H*0.10, color:P.primary, size:17, align:'center'});
+    els.push({id:'desc', type:'label', text:t('f1_desc'), x:cx, y:H*0.18, color:P.text, size:12, align:'center'});
+    // Straight path line (solid, red to emphasize length)
+    els.push({id:'pathLine', type:'line', x1:Ax, y1:yBaseline, x2:Bx, y2:yBaseline, color:P.primary, width:3});
+    // Ball at 60% along the path (animated over time)
+    var ballX = Ax + (Bx - Ax) * 0.55;
+    els.push({id:'ball', type:'circle', x:ballX, y:yBaseline, r:11, fill:P.tertiary, stroke:'#fff', strokeWidth:2});
+    // Direction arrow (forward)
+    els.push(arrowEl('arrow', ballX - 14, yBaseline, ballX + 24, yBaseline, P.tertiary, 3));
+    // A and B markers
+    [].push.apply(els, pointMarker('A', Ax, yBaseline, t('f0_lblA'), P.primary));
+    [].push.apply(els, pointMarker('B', Bx, yBaseline, t('f0_lblB'), P.primary));
+    // note + example
+    els.push({id:'note', type:'label', text:t('f1_note'), x:cx, y:H*0.78, color:P.tertiary, size:12, align:'center'});
+    els.push({id:'ex',   type:'label', text:t('f1_ex'),   x:cx, y:H*0.86, color:P.muted, size:11, align:'center'});
+    return els;
+  }
+
+  if (f === 2) {
+    // Arc path: projectile tossed from A to B
+    els.push({id:'title', type:'label', text:t('f2_title'), x:cx, y:H*0.10, color:P.primary, size:17, align:'center'});
+    els.push({id:'desc', type:'label', text:t('f2_desc'), x:cx, y:H*0.18, color:P.text, size:12, align:'center'});
+    // Arc curve (parabolic): draw via 'curve' quadratic Bezier
+    var peakX = (Ax + Bx) / 2, peakY = yBaseline - H * 0.32;
+    els.push({id:'arc', type:'curve', x1:Ax, y1:yBaseline, cx:peakX, cy:peakY - H*0.08, x2:Bx, y2:yBaseline, color:P.secondary, width:3});
+    // Reference gray line A-B (to show chord vs arc)
+    els.push({id:'chord', type:'line', x1:Ax, y1:yBaseline, x2:Bx, y2:yBaseline, color:'rgba(142,144,166,0.4)', width:1, dash:[5,5]});
+    // Ball on arc at parametric t=0.55 (approx quadratic bezier point)
+    var tP = 0.55, omt = 1 - tP;
+    var bX = omt*omt*Ax + 2*omt*tP*peakX + tP*tP*Bx;
+    var bY = omt*omt*yBaseline + 2*omt*tP*(peakY - H*0.08) + tP*tP*yBaseline;
+    els.push({id:'ball', type:'circle', x:bX, y:bY, r:11, fill:P.secondary, stroke:'#fff', strokeWidth:2});
+    // Tangent arrow at the ball (derivative of quadratic bezier)
+    var tx = 2*omt*(peakX - Ax) + 2*tP*(Bx - peakX);
+    var ty = 2*omt*((peakY - H*0.08) - yBaseline) + 2*tP*(yBaseline - (peakY - H*0.08));
+    var mag = Math.sqrt(tx*tx + ty*ty) || 1;
+    tx /= mag; ty /= mag;
+    els.push(arrowEl('arrow', bX - tx*14, bY - ty*14, bX + tx*28, bY + ty*28, P.secondary, 3));
+    // A and B markers
+    [].push.apply(els, pointMarker('A', Ax, yBaseline, t('f0_lblA'), P.primary));
+    [].push.apply(els, pointMarker('B', Bx, yBaseline, t('f0_lblB'), P.primary));
+    els.push({id:'note', type:'label', text:t('f2_note'), x:cx, y:H*0.82, color:P.secondary, size:12, align:'center'});
+    els.push({id:'ex',   type:'label', text:t('f2_ex'),   x:cx, y:H*0.90, color:P.muted, size:11, align:'center'});
+    return els;
+  }
+
+  if (f === 3) {
+    // Loop path: bug circles under lamp (closed ellipse passing through A and B)
+    // To clearly show "goes around and returns to start", place A and B at SAME location (bottom of loop).
+    els.push({id:'title', type:'label', text:t('f3_title'), x:cx, y:H*0.10, color:P.primary, size:17, align:'center'});
+    els.push({id:'desc', type:'label', text:t('f3_desc'), x:cx, y:H*0.18, color:P.text, size:12, align:'center'});
+    // Lamp at top center
+    els.push({id:'lamp', type:'circle', x:cx, y:H*0.25, r:10, fill:'rgba(255,219,60,0.7)', stroke:P.primary, strokeWidth:2});
+    els.push({id:'lampRay', type:'line', x1:cx, y1:H*0.27, x2:cx, y2:H*0.35, color:'rgba(255,219,60,0.3)', width:2, dash:[3,3]});
+    // Ellipse centered so its BOTTOM is at yBaseline (where A and B will be).
+    var rx = (Bx - Ax)/2 * 0.85, ry = H*0.16;
+    var elcx = cx, elcy = yBaseline - ry; // so bottom of ellipse == yBaseline
+    els.push({id:'loop', type:'ellipse', x:elcx, y:elcy, rx:rx, ry:ry, stroke:P.tertiary, width:3});
+    // Ball on ellipse, somewhere on top-left
+    var ang = Math.PI * 1.25;
+    var lbx = elcx + rx * Math.cos(ang);
+    var lby = elcy + ry * Math.sin(ang);
+    els.push({id:'ball', type:'circle', x:lbx, y:lby, r:10, fill:P.tertiary, stroke:'#fff', strokeWidth:2});
+    // Tangent arrow
+    var dx = -rx * Math.sin(ang), dy = ry * Math.cos(ang);
+    var dmag = Math.sqrt(dx*dx + dy*dy) || 1;
+    dx /= dmag; dy /= dmag;
+    els.push(arrowEl('arrow', lbx - dx*14, lby - dy*14, lbx + dx*28, lby + dy*28, P.tertiary, 3));
+    // A and B both at bottom of ellipse (same point) -- offset so labels are readable
+    var sharedX = cx;
+    [].push.apply(els, pointMarker('AB', sharedX, yBaseline, t('f0_lblA') + ' = ' + t('f0_lblB'), P.primary));
+    els.push({id:'note', type:'label', text:t('f3_note'), x:cx, y:H*0.83, color:P.tertiary, size:12, align:'center'});
+    els.push({id:'ex',   type:'label', text:t('f3_ex'),   x:cx, y:H*0.91, color:P.muted, size:11, align:'center'});
+    return els;
+  }
+
+  return els;
+}
+
+// Custom draw for 'curve' (quadratic Bezier) and 'ellipse' stroke types
+function customDrawElement(ctx2d, el) {
+  var P = AnimRuntime.PAL;
+  if (el.type === 'curve') {
+    ctx2d.save();
+    ctx2d.strokeStyle = el.color || P.primary;
+    ctx2d.lineWidth = el.width || 2;
+    if (el.dash) ctx2d.setLineDash(el.dash);
+    ctx2d.beginPath();
+    ctx2d.moveTo(el.x1, el.y1);
+    ctx2d.quadraticCurveTo(el.cx, el.cy, el.x2, el.y2);
+    ctx2d.stroke();
+    ctx2d.restore();
+    return true;
+  }
+  if (el.type === 'ellipse' && el.stroke) {
+    ctx2d.save();
+    ctx2d.strokeStyle = el.stroke;
+    ctx2d.lineWidth = el.width || 2;
+    if (el.dash) ctx2d.setLineDash(el.dash);
+    ctx2d.beginPath();
+    ctx2d.ellipse(el.x, el.y, el.rx, el.ry, 0, 0, Math.PI * 2);
+    ctx2d.stroke();
+    ctx2d.restore();
+    return true;
+  }
+  return false;
+}
+
+AnimRuntime.boot();
+</script>
+</body>
+</html>

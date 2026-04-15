@@ -1,7 +1,7 @@
 /**
  * html_validate_test.mjs -- Auto-discovery Playwright test suite.
  *
- * Automatically discovers scripts/_test_anim_*.html and scripts/_test_game_*.html,
+ * Automatically discovers scripts/test_anim_*.html and scripts/test_game_*.html,
  * generating a common test suite for each file:
  *   - No JS errors on load + interaction
  *   - Canvas/SVG renders non-black content
@@ -26,8 +26,8 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 // Discover test HTML files
 const allFiles = readdirSync(__dirname);
-const animFiles = allFiles.filter(f => f.startsWith('_test_anim_') && f.endsWith('.html'));
-const gameFiles = allFiles.filter(f => f.startsWith('_test_game_') && f.endsWith('.html'));
+const animFiles = allFiles.filter(f => f.startsWith('test_anim_') && f.endsWith('.html'));
+const gameFiles = allFiles.filter(f => f.startsWith('test_game_') && f.endsWith('.html'));
 
 // ---- Shared test generators ----
 

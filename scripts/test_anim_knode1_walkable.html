@@ -1,0 +1,452 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=Inter:wght@400;500&family=Noto+Sans+SC:wght@400;700&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box;}
+html,body{width:100%;height:100vh;overflow:hidden;}
+body{background:var(--bg,#0c0e12);color:var(--text,#f6f6fc);font-family:'Inter','Noto Sans SC',sans-serif;display:flex;flex-direction:column;}
+.wrapper{display:flex;flex-direction:column;height:100vh;overflow:hidden;}
+.header{padding:12px 16px 8px;display:flex;justify-content:space-between;align-items:center;}
+.header h1{font-family:'Space Grotesk',sans-serif;font-size:clamp(14px,2vw,18px);font-weight:700;letter-spacing:-0.02em;color:var(--primary,#50ffb0);text-shadow:0 0 15px var(--glow,rgba(80,255,176,0.3));}
+.header .sub{font-size:11px;color:var(--muted,#aaabb0);letter-spacing:0.1em;text-transform:uppercase;}
+.canvas-wrap{flex:1;min-height:0;position:relative;}
+canvas{width:100%;height:100%;display:block;}
+.controls{display:flex;justify-content:center;align-items:center;gap:12px;padding:8px 16px;}
+.ctrl-btn{font-family:'Space Grotesk',sans-serif;font-size:12px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;padding:6px 18px;border:none;cursor:pointer;color:var(--bg,#0c0e12);background:linear-gradient(135deg,var(--primary,#50ffb0),var(--primary-dim,#17df93));transition:transform 0.1s,box-shadow 0.2s;box-shadow:0 0 12px var(--glow-strong,rgba(80,255,176,0.3));}
+.ctrl-btn:hover{transform:scale(1.04);box-shadow:0 0 20px var(--glow-strong,rgba(80,255,176,0.5));}
+.ctrl-btn:active{transform:scale(0.96);}
+.ctrl-btn.secondary{background:var(--glass,rgba(23,26,31,0.92));color:var(--muted,#aaabb0);box-shadow:none;backdrop-filter:blur(12px);}
+.ctrl-btn.secondary:hover{color:var(--primary,#50ffb0);}
+.hud{height:48px;display:flex;align-items:center;justify-content:space-around;background:rgba(0,0,0,0.55);backdrop-filter:blur(12px);padding:0 16px;}
+.hud-item{text-align:center;}
+.hud-label{font-family:'Space Grotesk',sans-serif;font-size:9px;letter-spacing:0.15em;text-transform:uppercase;color:var(--muted,#aaabb0);}
+.hud-val{font-family:'Space Grotesk',sans-serif;font-size:14px;font-weight:700;color:var(--primary,#50ffb0);}
+.lang-btn{position:fixed;top:8px;left:8px;z-index:100;font-family:'Space Grotesk',sans-serif;font-size:11px;font-weight:700;padding:4px 10px;cursor:pointer;border:none;background:rgba(20,20,35,0.85);backdrop-filter:blur(12px);color:#ffb59c;letter-spacing:1px;}
+.guide-panel{position:fixed;top:8px;right:8px;width:240px;max-height:40vh;overflow-y:auto;background:var(--glass,rgba(20,20,35,0.85));backdrop-filter:blur(12px);padding:12px;z-index:100;font-family:'Noto Sans SC',sans-serif;font-size:12px;color:rgba(255,255,255,0.85);line-height:1.6;}
+.guide-panel h3{font-family:'Space Grotesk',sans-serif;font-size:13px;margin-bottom:6px;color:var(--primary,#50ffb0);cursor:pointer;display:flex;justify-content:space-between;align-items:center;}
+.guide-panel ul{padding-left:14px;}
+.guide-panel .collapsed{display:none;}
+</style>
+</head>
+<body>
+<button class="lang-btn" id="langBtn">CN</button>
+<div class="guide-panel" id="guide">
+<h3 id="guideTitle"></h3>
+<div class="guide-content" id="guideContent"></div>
+</div>
+<div class="wrapper">
+<div class="header">
+<div><h1 id="title"></h1><div class="sub" id="subtitle"></div></div>
+<div id="frameIndicator" style="font-family:'Space Grotesk';font-size:11px;color:var(--muted,#aaabb0);letter-spacing:0.1em;"></div>
+</div>
+<div class="canvas-wrap"><canvas id="c"></canvas></div>
+<div class="controls">
+<button class="ctrl-btn secondary" id="btnPrev"></button>
+<button class="ctrl-btn" id="btnPlay"></button>
+<button class="ctrl-btn secondary" id="btnNext"></button>
+</div>
+<div class="hud">
+<div class="hud-item"><div class="hud-label" id="hudL1"></div><div class="hud-val" id="hudV1"></div></div>
+<div class="hud-item"><div class="hud-label" id="hudL2"></div><div class="hud-val" id="hudV2"></div></div>
+<div class="hud-item"><div class="hud-label" id="hudL3"></div><div class="hud-val" id="hudV3"></div></div>
+<div class="hud-item"><div class="hud-label" id="hudL4"></div><div class="hud-val" id="hudV4"></div></div>
+</div>
+</div>
+
+<script src="animation_runtime.js"></script>
+
+<script>
+// 4 个场景，每个场景有 3 个候选区域，分别对应 Safe / Caution / Forbidden
+var scenes = [
+  {
+    key: 'flat',
+    bgColor: '#3a3530',
+    zones: [
+      {label:'A', cx:0.25, cy:0.55, r:0.10, level:'safe',     reason:'flat_safe'},
+      {label:'B', cx:0.55, cy:0.50, r:0.09, level:'caution',  reason:'flat_caution'},
+      {label:'C', cx:0.78, cy:0.62, r:0.08, level:'forbidden',reason:'flat_forbidden'},
+    ]
+  },
+  {
+    key: 'rocky',
+    bgColor: '#5a4a38',
+    zones: [
+      {label:'A', cx:0.22, cy:0.50, r:0.09, level:'safe',     reason:'rocky_safe'},
+      {label:'B', cx:0.50, cy:0.58, r:0.10, level:'caution',  reason:'rocky_caution'},
+      {label:'C', cx:0.78, cy:0.45, r:0.09, level:'forbidden',reason:'rocky_forbidden'},
+    ]
+  },
+  {
+    key: 'slope',
+    bgColor: '#4a3a2e',
+    zones: [
+      {label:'A', cx:0.20, cy:0.65, r:0.08, level:'safe',     reason:'slope_safe'},
+      {label:'B', cx:0.50, cy:0.50, r:0.10, level:'caution',  reason:'slope_caution'},
+      {label:'C', cx:0.80, cy:0.35, r:0.10, level:'forbidden',reason:'slope_forbidden'},
+    ]
+  },
+  {
+    key: 'cliff',
+    bgColor: '#2c2620',
+    zones: [
+      {label:'A', cx:0.18, cy:0.55, r:0.09, level:'safe',     reason:'cliff_safe'},
+      {label:'B', cx:0.45, cy:0.55, r:0.08, level:'caution',  reason:'cliff_caution'},
+      {label:'C', cx:0.75, cy:0.50, r:0.11, level:'forbidden',reason:'cliff_forbidden'},
+    ]
+  }
+];
+
+// Level colors
+var LEVEL = {
+  safe:      {color:'#10b981', glow:'rgba(16,185,129,0.5)',  txt:'safe'},
+  caution:   {color:'#fbbf24', glow:'rgba(251,191,36,0.5)',  txt:'caution'},
+  forbidden: {color:'#ef4444', glow:'rgba(239,68,68,0.5)',   txt:'forbidden'}
+};
+
+// Procedural scene background -- ground texture
+function drawSceneBackground(ctx, x, y, w, h, scene, seed) {
+  // Base gradient sky-to-ground
+  var grad = ctx.createLinearGradient(x, y, x, y + h);
+  grad.addColorStop(0, '#1a1410');
+  grad.addColorStop(0.35, scene.bgColor);
+  grad.addColorStop(1, '#0a0805');
+  ctx.fillStyle = grad;
+  ctx.fillRect(x, y, w, h);
+
+  // Scene-specific features
+  var rng = seed;
+  function rand() {
+    rng = (rng * 1103515245 + 12345) & 0x7fffffff;
+    return (rng % 10000) / 10000;
+  }
+
+  if (scene.key === 'flat') {
+    // 平地：散落小石子
+    for (var i = 0; i < 35; i++) {
+      var rx = x + rand() * w;
+      var ry = y + h * 0.4 + rand() * h * 0.55;
+      var rs = 1 + rand() * 3;
+      ctx.fillStyle = 'rgba(120,100,80,0.6)';
+      ctx.beginPath();
+      ctx.arc(rx, ry, rs, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    // 中间一条隐约的小水沟
+    ctx.strokeStyle = 'rgba(60,80,100,0.5)';
+    ctx.lineWidth = w * 0.018;
+    ctx.beginPath();
+    ctx.moveTo(x + w * 0.50, y + h * 0.35);
+    ctx.bezierCurveTo(x + w * 0.55, y + h * 0.55, x + w * 0.52, y + h * 0.7, x + w * 0.58, y + h * 0.85);
+    ctx.stroke();
+  } else if (scene.key === 'rocky') {
+    // 多石场景：大块岩石
+    for (var i = 0; i < 18; i++) {
+      var rx = x + rand() * w;
+      var ry = y + h * 0.35 + rand() * h * 0.6;
+      var rw = 8 + rand() * 28;
+      var rh = 6 + rand() * 18;
+      ctx.fillStyle = 'rgba(110,90,70,0.85)';
+      ctx.beginPath();
+      ctx.ellipse(rx, ry, rw, rh, rand() * Math.PI, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = 'rgba(160,140,110,0.4)';
+      ctx.beginPath();
+      ctx.ellipse(rx - rw * 0.2, ry - rh * 0.3, rw * 0.6, rh * 0.5, 0, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  } else if (scene.key === 'slope') {
+    // 斜坡场景：渐变线表示坡度
+    for (var i = 0; i < 12; i++) {
+      var ly = y + h * 0.35 + i * h * 0.05;
+      ctx.strokeStyle = 'rgba(180,160,130,' + (0.15 + i * 0.025) + ')';
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.moveTo(x, ly + (i - 6) * 8);
+      ctx.lineTo(x + w, ly - (i - 6) * 8);
+      ctx.stroke();
+    }
+    // 顶部箭头标识坡度
+    ctx.fillStyle = 'rgba(255,200,100,0.7)';
+    ctx.font = 'bold ' + Math.max(11, w * 0.02) + 'px Space Grotesk';
+    ctx.textAlign = 'right';
+    ctx.fillText('↗ 30°', x + w - 12, y + 18);
+    ctx.textAlign = 'left';
+  } else if (scene.key === 'cliff') {
+    // 悬崖场景：右侧黑色区域 + 边缘
+    ctx.fillStyle = '#020100';
+    ctx.beginPath();
+    ctx.moveTo(x + w * 0.62, y);
+    ctx.lineTo(x + w, y);
+    ctx.lineTo(x + w, y + h);
+    ctx.lineTo(x + w * 0.66, y + h);
+    ctx.bezierCurveTo(
+      x + w * 0.6, y + h * 0.7,
+      x + w * 0.65, y + h * 0.4,
+      x + w * 0.62, y
+    );
+    ctx.fill();
+    // 悬崖边亮边
+    ctx.strokeStyle = 'rgba(255,140,80,0.6)';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(x + w * 0.62, y);
+    ctx.bezierCurveTo(
+      x + w * 0.6, y + h * 0.4,
+      x + w * 0.65, y + h * 0.7,
+      x + w * 0.66, y + h
+    );
+    ctx.stroke();
+    // 散落小石
+    for (var i = 0; i < 15; i++) {
+      var rx = x + rand() * w * 0.55;
+      var ry = y + h * 0.4 + rand() * h * 0.55;
+      ctx.fillStyle = 'rgba(120,100,80,0.5)';
+      ctx.beginPath();
+      ctx.arc(rx, ry, 1 + rand() * 2, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+}
+
+// Draw a labeled walkability zone
+function drawZone(ctx, cx, cy, r, level, label, t) {
+  var lvl = LEVEL[level];
+  // Outer glow
+  var glowGrad = ctx.createRadialGradient(cx, cy, r * 0.3, cx, cy, r * 1.6);
+  glowGrad.addColorStop(0, lvl.glow);
+  glowGrad.addColorStop(1, 'rgba(0,0,0,0)');
+  ctx.fillStyle = glowGrad;
+  ctx.beginPath();
+  ctx.arc(cx, cy, r * 1.6, 0, Math.PI * 2);
+  ctx.fill();
+  // Filled circle
+  ctx.fillStyle = lvl.color + '55';
+  ctx.beginPath();
+  ctx.arc(cx, cy, r, 0, Math.PI * 2);
+  ctx.fill();
+  // Border
+  ctx.strokeStyle = lvl.color;
+  ctx.lineWidth = 2.5;
+  ctx.beginPath();
+  ctx.arc(cx, cy, r, 0, Math.PI * 2);
+  ctx.stroke();
+  // Label letter
+  ctx.fillStyle = '#ffffff';
+  ctx.font = 'bold ' + Math.max(14, r * 0.7) + 'px Space Grotesk';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(label, cx, cy);
+  // Level mark below
+  ctx.fillStyle = lvl.color;
+  ctx.font = 'bold ' + Math.max(9, r * 0.32) + 'px Space Grotesk';
+  ctx.textBaseline = 'top';
+  ctx.fillText(t(lvl.txt).toUpperCase(), cx, cy + r + 4);
+  ctx.textBaseline = 'alphabetic';
+  ctx.textAlign = 'left';
+}
+
+// Draw a small explorer figure
+function drawExplorer(ctx, x, y, size) {
+  var P = AnimRuntime.PAL;
+  // Body
+  ctx.fillStyle = P.primary;
+  ctx.fillRect(x - size * 0.25, y - size * 0.5, size * 0.5, size * 0.6);
+  // Head
+  ctx.beginPath();
+  ctx.arc(x, y - size * 0.65, size * 0.18, 0, Math.PI * 2);
+  ctx.fill();
+  // Legs
+  ctx.fillRect(x - size * 0.2, y + size * 0.1, size * 0.15, size * 0.3);
+  ctx.fillRect(x + size * 0.05, y + size * 0.1, size * 0.15, size * 0.3);
+}
+
+var CONFIG = {
+  style: 'ares_mission',
+  totalFrames: 4,
+
+  i18n: {
+    title:    {en: 'WALKABLE ZONE DETECTOR', cn: '\u53ef\u901a\u884c\u533a\u57df\u63a2\u6d4b\u5668'},
+    subtitle: {en: 'Where can we safely walk?', cn: '\u54ea\u91cc\u80fd\u5b89\u5168\u8d70\u8fc7\u53bb'},
+    guideTitle: {en: 'OBSERVATION GUIDE', cn: '\u89c2\u5bdf\u6307\u5357'},
+    g1: {en: 'Each scene has 3 candidate zones (A/B/C)',
+         cn: '\u6bcf\u4e2a\u573a\u666f\u670930\u4e2a\u5019\u9009\u533a\u57df\uff08A/B/C\uff09'},
+    g2: {en: 'Green = safe, Yellow = caution, Red = forbidden',
+         cn: '\u7eff\u8272=\u5b89\u5168\uff0c\u9ec4\u8272=\u8c28\u614e\uff0c\u7ea2\u8272=\u7981\u884c'},
+    g3: {en: 'Compare reasons across scenes',
+         cn: '\u5bf9\u6bd4\u4e0d\u540c\u573a\u666f\u7684\u5224\u65ad\u4f9d\u636e'},
+
+    flat:  {en: 'FLAT GROUND',  cn: '\u5e73\u574a'},
+    rocky: {en: 'ROCKY FIELD', cn: '\u591a\u77f3\u533a'},
+    slope: {en: 'SLOPE',        cn: '\u659c\u5761'},
+    cliff: {en: 'CLIFF EDGE',   cn: '\u60ac\u5d16\u8fb9'},
+
+    safe:      {en: 'SAFE',      cn: '\u5b89\u5168'},
+    caution:   {en: 'CAUTION',   cn: '\u8c28\u614e'},
+    forbidden: {en: 'FORBID',    cn: '\u7981\u884c'},
+
+    flat_safe:        {en: 'A: Flat dry ground -- easy walking',
+                       cn: 'A\uff1a\u5e73\u5766\u5e72\u71e5\u7684\u5730\u9762\uff0c\u5bb9\u6613\u8d70'},
+    flat_caution:     {en: 'B: Loose pebbles -- watch your step',
+                       cn: 'B\uff1a\u6563\u843d\u5c0f\u77f3\u5b50\uff0c\u5c0f\u5fc3\u811a\u4e0b'},
+    flat_forbidden:   {en: 'C: Drainage ditch -- could be deep',
+                       cn: 'C\uff1a\u6c34\u6c9f\uff0c\u53ef\u80fd\u5f88\u6df1'},
+
+    rocky_safe:       {en: 'A: Open path between rocks',
+                       cn: 'A\uff1a\u77f3\u5934\u4e4b\u95f4\u7684\u7a7a\u9699'},
+    rocky_caution:    {en: 'B: Small wobbly rocks -- may slip',
+                       cn: 'B\uff1a\u4f1a\u6643\u7684\u5c0f\u77f3\u5757\uff0c\u53ef\u80fd\u6253\u6ed1'},
+    rocky_forbidden:  {en: 'C: Sharp boulder -- cannot cross',
+                       cn: 'C\uff1a\u5c16\u9510\u5927\u77f3\uff0c\u8df3\u4e0d\u8fc7\u53bb'},
+
+    slope_safe:       {en: 'A: Bottom of slope -- gentle',
+                       cn: 'A\uff1a\u659c\u5761\u4e0b\u90e8\uff0c\u5761\u5ea6\u5f88\u7f13'},
+    slope_caution:    {en: 'B: Mid slope -- still climbable',
+                       cn: 'B\uff1a\u659c\u5761\u4e2d\u90e8\uff0c\u8fd8\u80fd\u722c'},
+    slope_forbidden:  {en: 'C: Top of steep slope -- too steep',
+                       cn: 'C\uff1a\u9661\u5761\u9876\u90e8\uff0c\u592a\u966a'},
+
+    cliff_safe:       {en: 'A: Far from edge -- safe distance',
+                       cn: 'A\uff1a\u8fdc\u79bb\u8fb9\u7f18\uff0c\u5b89\u5168\u8ddd\u79bb'},
+    cliff_caution:    {en: 'B: Approaching edge -- be careful',
+                       cn: 'B\uff1a\u63a5\u8fd1\u8fb9\u7f18\uff0c\u8981\u5c0f\u5fc3'},
+    cliff_forbidden:  {en: 'C: Edge of cliff -- DO NOT GO',
+                       cn: 'C\uff1a\u60ac\u5d16\u8fb9\u7f18\uff0c\u7edd\u5bf9\u4e0d\u80fd\u53bb'},
+
+    hudL1: {en: 'SCENE',      cn: '\u573a\u666f'},
+    hudL2: {en: 'SAFE',       cn: '\u5b89\u5168'},
+    hudL3: {en: 'CAUTION',    cn: '\u8c28\u614e'},
+    hudL4: {en: 'FORBID',     cn: '\u7981\u884c'},
+  },
+
+  hudLabels: ['hudL1', 'hudL2', 'hudL3', 'hudL4'],
+  hudValues: [
+    ['flat',  '1', '1', '1'],
+    ['rocky', '1', '1', '1'],
+    ['slope', '1', '1', '1'],
+    ['cliff', '1', '1', '1'],
+  ],
+
+  guideTitle: 'guideTitle',
+  guideItems: ['g1', 'g2', 'g3'],
+};
+
+function customDrawElement(ctx, el) {
+  if (el.type === 'sceneBg') {
+    drawSceneBackground(ctx, el.x, el.y, el.w, el.h, el.scene, el.seed || 17);
+    return true;
+  }
+  if (el.type === 'zone') {
+    drawZone(ctx, el.cx, el.cy, el.r, el.level, el.zoneLabel, AnimRuntime.t);
+    return true;
+  }
+  if (el.type === 'explorer') {
+    drawExplorer(ctx, el.x, el.y, el.size);
+    return true;
+  }
+  return false;
+}
+
+function getFrameElements(f, W, H) {
+  var t = AnimRuntime.t;
+  var P = AnimRuntime.PAL;
+  var scene = scenes[f];
+  var elems = [];
+
+  // Scene name (large)
+  elems.push({id:'sceneName', type:'label', text: t(scene.key),
+    x: W * 0.5, y: H * 0.07, color: P.primary,
+    size: Math.max(18, W * 0.035), align:'center', alpha:1});
+
+  // Scene background block (full width minus margin)
+  var sceneX = W * 0.04;
+  var sceneY = H * 0.13;
+  var sceneW = W * 0.92;
+  var sceneH = H * 0.5;
+
+  elems.push({id:'sceneBg', type:'sceneBg',
+    x: sceneX, y: sceneY, w: sceneW, h: sceneH,
+    scene: scene, seed: f * 9999 + 31, alpha:1});
+
+  // Border
+  elems.push({id:'sceneBorder', type:'custom',
+    x: sceneX, y: sceneY, w: sceneW, h: sceneH, alpha:1,
+    draw: function(ctx, el) {
+      ctx.strokeStyle = P.primary;
+      ctx.lineWidth = 1.5;
+      ctx.globalAlpha = 0.4;
+      ctx.strokeRect(el.x, el.y, el.w, el.h);
+      ctx.globalAlpha = 1;
+    }});
+
+  // Zones (3 per scene)
+  scene.zones.forEach(function(z, i) {
+    var zr = Math.max(22, sceneH * z.r);
+    var zcx = sceneX + sceneW * z.cx;
+    var zcy = sceneY + sceneH * z.cy;
+    elems.push({
+      id: 'zone' + i,
+      type: 'zone',
+      x: zcx - zr, y: zcy - zr, w: zr * 2, h: zr * 2,
+      cx: zcx, cy: zcy, r: zr,
+      level: z.level, zoneLabel: z.label, alpha: 1
+    });
+  });
+
+  // Small explorer figure on first scene as a hint
+  var exX = sceneX + sceneW * 0.08;
+  var exY = sceneY + sceneH * 0.92;
+  var exSize = Math.max(20, H * 0.04);
+  elems.push({id:'explorer', type:'explorer',
+    x: exX - exSize * 0.5, y: exY - exSize, w: exSize, h: exSize * 1.5,
+    size: exSize, alpha:1});
+
+  // Reasons panel below scene
+  var rY = sceneY + sceneH + Math.max(18, H * 0.03);
+  var rowH = Math.max(14, H * 0.025);
+
+  scene.zones.forEach(function(z, i) {
+    var lvl = LEVEL[z.level];
+    // Color dot
+    elems.push({id:'dot' + i, type:'custom',
+      x: W * 0.06, y: rY + i * rowH - rowH * 0.35,
+      w: rowH * 0.7, h: rowH * 0.7, alpha:1,
+      level: z.level,
+      draw: function(ctx, el) {
+        ctx.fillStyle = LEVEL[el.level].color;
+        ctx.beginPath();
+        ctx.arc(el.x + el.w * 0.5, el.y + el.h * 0.5, el.w * 0.5, 0, Math.PI * 2);
+        ctx.fill();
+      }});
+    // Reason text
+    elems.push({id:'reason' + i, type:'label',
+      text: t(z.reason),
+      x: W * 0.10, y: rY + i * rowH,
+      color: P.text,
+      size: Math.max(11, W * 0.014),
+      align:'left', alpha:1});
+  });
+
+  // Mini scene tabs at bottom
+  var miniY = H * 0.93;
+  var miniW = (W - 80) / 4;
+  for (var i = 0; i < 4; i++) {
+    var mx = 20 + i * (miniW + 14);
+    var isCurrent = (i === f);
+    elems.push({id:'mini' + i, type:'label',
+      text: t(scenes[i].key),
+      x: mx + miniW * 0.5, y: miniY,
+      color: isCurrent ? P.primary : P.muted,
+      size: Math.max(10, W * 0.012),
+      align:'center', alpha: isCurrent ? 1 : 0.5});
+  }
+
+  return elems;
+}
+
+AnimRuntime.boot();
+</script>
+</body>
+</html>

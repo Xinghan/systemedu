@@ -1,0 +1,832 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Data Leakage Visualized</title>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=Space+Grotesk:wght@400;700&family=Noto+Sans+SC:wght@400;700&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{width:100%;height:100vh;overflow:hidden;background:#131313;
+  font-family:'Noto Sans SC','PingFang SC',system-ui,sans-serif;color:#e5e2e1}
+
+.wrapper{display:flex;flex-direction:column;height:100vh;overflow:hidden}
+
+.guide-panel{position:fixed;top:8px;right:8px;width:250px;max-height:40vh;
+  overflow-y:auto;z-index:200;padding:10px 12px;
+  background:rgba(28,27,27,0.92);backdrop-filter:blur(14px);
+  border:1px solid rgba(255,127,80,0.22);font-size:12px;line-height:1.55;
+  color:rgba(229,226,225,0.88)}
+.guide-panel h3{font-family:'Space Grotesk',sans-serif;font-size:13px;font-weight:700;
+  margin-bottom:6px;display:flex;align-items:center;justify-content:space-between;cursor:pointer;
+  color:#ffb59c;text-transform:uppercase;letter-spacing:0.05em}
+.guide-panel h3 .arrow{transition:transform .2s;font-size:10px}
+.guide-panel h3 .arrow.collapsed{transform:rotate(-90deg)}
+.guide-panel ul{padding-left:14px;margin:4px 0}
+.guide-panel .gl{color:#8a8886;font-size:11px;text-transform:uppercase;
+  letter-spacing:0.08em;margin-top:6px;font-family:'Space Grotesk',sans-serif}
+
+.header{height:42px;min-height:42px;display:flex;align-items:center;justify-content:space-between;
+  padding:0 16px;background:rgba(28,27,27,0.95);border-bottom:1px solid rgba(255,127,80,0.15)}
+.header h1{font-family:'Space Grotesk',sans-serif;font-size:14px;font-weight:700;
+  color:#ffb59c;text-transform:uppercase;letter-spacing:0.08em}
+.header .lang{padding:4px 10px;border:1px solid rgba(255,127,80,0.35);background:transparent;
+  color:#ffb59c;cursor:pointer;font-family:'Space Grotesk',sans-serif;font-size:11px;
+  font-weight:700;letter-spacing:0.05em}
+.header .lang:hover{background:rgba(255,127,80,0.15)}
+
+.canvas-wrap{flex:1;min-height:0;position:relative;overflow:hidden;background:#131313}
+.canvas-wrap canvas{position:absolute;top:0;left:0;width:100%;height:100%}
+
+.controls{height:46px;min-height:46px;display:flex;align-items:center;justify-content:center;gap:12px;
+  background:rgba(28,27,27,0.95);border-top:1px solid rgba(255,127,80,0.15);
+  border-bottom:1px solid rgba(255,127,80,0.15)}
+.ctrl-btn{padding:6px 16px;border:1px solid rgba(255,127,80,0.35);background:transparent;
+  color:#ffb59c;cursor:pointer;font-family:'Space Grotesk',sans-serif;font-size:12px;
+  font-weight:700;text-transform:uppercase;letter-spacing:0.06em;transition:all .15s}
+.ctrl-btn:hover{background:rgba(255,127,80,0.18);box-shadow:0 0 18px rgba(255,127,80,0.25)}
+.ctrl-btn.active{background:linear-gradient(45deg,rgba(255,127,80,0.3),rgba(255,181,156,0.2))}
+.frame-dots{display:flex;gap:6px;align-items:center;margin:0 12px}
+.frame-dot{width:10px;height:10px;border:1px solid rgba(255,127,80,0.35);cursor:pointer;
+  transition:all .2s;border-radius:50%}
+.frame-dot.active{background:#ff7f50;border-color:#ff7f50;box-shadow:0 0 12px rgba(255,127,80,0.6)}
+.frame-dot:hover{border-color:#ffb59c}
+
+.hud{height:54px;min-height:54px;display:flex;align-items:center;
+  background:rgba(0,0,0,0.6);border-top:1px solid rgba(255,255,255,0.06);padding:0 16px}
+.hud-col{flex:1;text-align:center}
+.hud-label{font-family:'Space Grotesk',sans-serif;font-size:10px;
+  color:rgba(255,181,156,0.6);text-transform:uppercase;letter-spacing:0.1em}
+.hud-val{font-family:'JetBrains Mono','Space Grotesk',monospace;font-size:13px;font-weight:700;
+  color:rgba(229,226,225,0.9);margin-top:2px}
+</style>
+</head>
+<body>
+
+<div class="guide-panel" id="guidePanel">
+  <h3 id="guideToggle"><span id="guideTitle">OBSERVER GUIDE</span> <span class="arrow" id="guideArrow">&#9660;</span></h3>
+  <div id="guideContent">
+    <div class="gl" id="glShow">WHAT IT SHOWS</div>
+    <p id="guideShow"></p>
+    <div class="gl" style="margin-top:6px" id="glObserve">OBSERVE</div>
+    <ul id="guideObserve"></ul>
+    <div class="gl" style="margin-top:6px" id="glControls">CONTROLS</div>
+    <p id="guideControls"></p>
+    <div class="gl" style="margin-top:6px" id="glTakeaway">TAKEAWAY</div>
+    <p style="color:#ffb59c" id="guideTakeaway"></p>
+  </div>
+</div>
+
+<div class="wrapper">
+  <div class="header">
+    <h1 id="mainTitle">DATA LEAKAGE -- VISUALIZED</h1>
+    <button class="lang" id="langBtn">CN</button>
+  </div>
+
+  <div class="canvas-wrap">
+    <canvas id="c"></canvas>
+  </div>
+
+  <div class="controls">
+    <button class="ctrl-btn" id="btnPrev">PREV</button>
+    <button class="ctrl-btn active" id="btnPlay">PLAY</button>
+    <button class="ctrl-btn" id="btnNext">NEXT</button>
+    <div class="frame-dots" id="frameDots"></div>
+  </div>
+
+  <div class="hud">
+    <div class="hud-col"><div class="hud-label" id="hudLblFrame">FRAME</div><div class="hud-val" id="frameInd">1/5</div></div>
+    <div class="hud-col"><div class="hud-label" id="hudLblStage">STAGE</div><div class="hud-val" id="hudStage">--</div></div>
+    <div class="hud-col"><div class="hud-label" id="hudLblLeak">LEAK RISK</div><div class="hud-val" id="hudLeak">--</div></div>
+    <div class="hud-col"><div class="hud-label" id="hudLblAccuracy">ACCURACY</div><div class="hud-val" id="hudAccuracy">--</div></div>
+  </div>
+</div>
+
+<script>
+(function(){
+"use strict";
+
+/* ── i18n ── */
+var LANG = 'cn';
+var I18N = {
+  mainTitle:    {en:'DATA LEAKAGE -- VISUALIZED',      cn:'\u6570\u636e\u6cc4\u6f0f\u53ef\u89c6\u5316'},
+  guideTitle:   {en:'OBSERVER GUIDE',                  cn:'\u89c2\u5bdf\u6307\u5357'},
+  glShow:       {en:'WHAT IT SHOWS',                   cn:'\u5c55\u793a\u5185\u5bb9'},
+  guideShow:    {en:'How patch-based splitting of satellite images causes data leakage, and how image-level splitting prevents it.',
+                 cn:'\u5c55\u793a\u57fa\u4e8e\u5207\u7247\u7684\u5206\u5272\u5982\u4f55\u5bfc\u81f4\u6570\u636e\u6cc4\u6f0f\uff0c\u4ee5\u53ca\u57fa\u4e8e\u56fe\u50cf\u7684\u5206\u5272\u5982\u4f55\u9632\u6b62\u5b83\u3002'},
+  glObserve:    {en:'OBSERVE',                         cn:'\u89c2\u5bdf\u91cd\u70b9'},
+  obs1:         {en:'Adjacent patches from the same image share textures and terrain patterns',
+                 cn:'\u6765\u81ea\u540c\u4e00\u5f20\u56fe\u50cf\u7684\u76f8\u90bb\u5207\u7247\u5171\u4eab\u7eb9\u7406\u548c\u5730\u8c8c\u6a21\u5f0f'},
+  obs2:         {en:'When leaked patches appear in both train and test, accuracy is inflated',
+                 cn:'\u5f53\u6cc4\u6f0f\u5207\u7247\u540c\u65f6\u51fa\u73b0\u5728\u8bad\u7ec3\u548c\u6d4b\u8bd5\u96c6\u65f6\uff0c\u51c6\u786e\u7387\u4f1a\u865a\u9ad8'},
+  obs3:         {en:'Image-level split eliminates leakage completely',
+                 cn:'\u56fe\u50cf\u7ea7\u5206\u5272\u5b8c\u5168\u6d88\u9664\u6cc4\u6f0f'},
+  glControls:   {en:'CONTROLS',                        cn:'\u64cd\u4f5c\u65b9\u5f0f'},
+  guideCtrl:    {en:'PLAY auto-advance, PREV / NEXT step through frames',
+                 cn:'PLAY \u81ea\u52a8\u64ad\u653e\uff0cPREV / NEXT \u9010\u5e27\u67e5\u770b'},
+  glTakeaway:   {en:'TAKEAWAY',                        cn:'\u6838\u5fc3\u7ed3\u8bba'},
+  guideTake:    {en:'Split by IMAGE, not by PATCH -- this one rule prevents most leakage in spatial data.',
+                 cn:'\u6309\u56fe\u50cf\u5207\u5206\uff0c\u4e0d\u8981\u6309\u5207\u7247\u5207\u5206 -- \u8fd9\u4e00\u6761\u89c4\u5219\u5c31\u80fd\u9632\u6b62\u7a7a\u95f4\u6570\u636e\u7684\u5927\u90e8\u5206\u6cc4\u6f0f\u3002'},
+  btnPrev:      {en:'PREV',       cn:'PREV'},
+  btnPlay:      {en:'PLAY',       cn:'PLAY'},
+  btnPause:     {en:'PAUSE',      cn:'PAUSE'},
+  btnNext:      {en:'NEXT',       cn:'NEXT'},
+  hudFrame:     {en:'FRAME',      cn:'FRAME'},
+  hudStage:     {en:'STAGE',      cn:'STAGE'},
+  hudLeak:      {en:'LEAK RISK',  cn:'LEAK RISK'},
+  hudAccuracy:  {en:'ACCURACY',   cn:'ACCURACY'},
+  /* frame labels */
+  f0title:      {en:'MARS SURFACE IMAGE',              cn:'\u706b\u661f\u8868\u9762\u56fe\u50cf'},
+  f0desc:       {en:'A single Mars terrain image with 4 terrain classes',
+                 cn:'\u4e00\u5f20\u706b\u661f\u5730\u8c8c\u56fe\u50cf\uff0c\u542b 4 \u79cd\u5730\u8c8c\u7c7b\u522b'},
+  f1title:      {en:'PATCH EXTRACTION',                cn:'\u5207\u7247\u63d0\u53d6'},
+  f1desc:       {en:'Cut into 16 overlapping patches for training',
+                 cn:'\u5207\u6210 16 \u4e2a\u91cd\u53e0\u5207\u7247\u7528\u4e8e\u8bad\u7ec3'},
+  f2title:      {en:'RANDOM SPLIT (LEAKAGE!)',         cn:'\u968f\u673a\u5207\u5206\uff08\u6cc4\u6f0f\uff01\uff09'},
+  f2desc:       {en:'Adjacent patches split into train & test -- model sees "answers"',
+                 cn:'\u76f8\u90bb\u5207\u7247\u88ab\u5206\u5230\u8bad\u7ec3\u548c\u6d4b\u8bd5 -- \u6a21\u578b\u63d0\u524d\u770b\u8fc7\u7b54\u6848'},
+  f3title:      {en:'IMAGE-LEVEL SPLIT (CORRECT)',     cn:'\u56fe\u50cf\u7ea7\u5207\u5206\uff08\u6b63\u786e\uff09'},
+  f3desc:       {en:'All patches from one image stay in same set',
+                 cn:'\u540c\u4e00\u5f20\u56fe\u7684\u6240\u6709\u5207\u7247\u90fd\u7559\u5728\u540c\u4e00\u96c6\u5408'},
+  f4title:      {en:'ACCURACY COMPARISON',             cn:'\u51c6\u786e\u7387\u5bf9\u6bd4'},
+  f4desc:       {en:'Leaked split shows 95%, honest split shows 78% -- the gap is leakage',
+                 cn:'\u6cc4\u6f0f\u5207\u5206\u663e\u793a 95%\uff0c\u8bda\u5b9e\u5207\u5206\u663e\u793a 78% -- \u5dee\u8ddd\u5c31\u662f\u6cc4\u6f0f'},
+  /* HUD stage labels */
+  stg0:         {en:'ORIGINAL',   cn:'\u539f\u56fe'},
+  stg1:         {en:'PATCHING',   cn:'\u5207\u7247'},
+  stg2:         {en:'BAD SPLIT',  cn:'\u9519\u8bef\u5207\u5206'},
+  stg3:         {en:'GOOD SPLIT', cn:'\u6b63\u786e\u5207\u5206'},
+  stg4:         {en:'COMPARE',    cn:'\u5bf9\u6bd4'},
+  leakNone:     {en:'NONE',       cn:'\u65e0'},
+  leakHigh:     {en:'HIGH',       cn:'\u9ad8'},
+  leakZero:     {en:'ZERO',       cn:'\u96f6'},
+  leakCompare:  {en:'SEE BELOW',  cn:'\u89c1\u4e0b\u65b9'},
+  accNA:        {en:'N/A',        cn:'N/A'},
+  acc95:        {en:'95% (FAKE)', cn:'95%\uff08\u865a\u9ad8\uff09'},
+  acc78:        {en:'78% (REAL)', cn:'78%\uff08\u771f\u5b9e\uff09'},
+  accBoth:      {en:'95% vs 78%', cn:'95% vs 78%'},
+  /* chart labels */
+  chartTrain:   {en:'TRAIN',      cn:'\u8bad\u7ec3\u96c6'},
+  chartVal:     {en:'VALID',      cn:'\u9a8c\u8bc1\u96c6'},
+  chartTest:    {en:'TEST',       cn:'\u6d4b\u8bd5\u96c6'},
+  chartLeaked:  {en:'LEAKED',     cn:'\u6cc4\u6f0f'},
+  chartClean:   {en:'CLEAN',      cn:'\u5e72\u51c0'},
+  soil:         {en:'soil',       cn:'\u571f\u58e4'},
+  bedrock:      {en:'bedrock',    cn:'\u5ca9\u77f3'},
+  sand:         {en:'sand',       cn:'\u6c99\u5730'},
+  bigrock:      {en:'big rock',   cn:'\u5927\u77f3'},
+  imgA:         {en:'IMG-A',      cn:'\u56fe-A'},
+  imgB:         {en:'IMG-B',      cn:'\u56fe-B'},
+  imgC:         {en:'IMG-C',      cn:'\u56fe-C'},
+};
+function t(key){ return (I18N[key] && I18N[key][LANG]) || (I18N[key] && I18N[key]['en']) || key; }
+
+/* ── canvas setup ── */
+var canvas = document.getElementById("c");
+var ctx = canvas.getContext("2d");
+var W = 800, H = 500;
+var DPR = Math.min(window.devicePixelRatio || 1, 2);
+var totalFrames = 5;
+var currentFrame = 0;
+var transitioning = false;
+var playing = false;
+var playRAF = null;
+
+/* resize */
+function resize(){
+  var wrap = canvas.parentElement;
+  var rect = wrap.getBoundingClientRect();
+  if(rect.width < 1 || rect.height < 1) return;
+  W = rect.width; H = rect.height;
+  canvas.width = W * DPR; canvas.height = H * DPR;
+  canvas.style.width = W + 'px'; canvas.style.height = H + 'px';
+  ctx.setTransform(DPR,0,0,DPR,0,0);
+  drawFrame(currentFrame);
+}
+window.addEventListener('resize', resize);
+
+/* ── utility ── */
+function lerp(a,b,p){ return a+(b-a)*p; }
+function easeInOut(x){ return x<0.5?2*x*x:1-Math.pow(-2*x+2,2)/2; }
+function merge(base,over){
+  var r={};
+  for(var k in base) r[k]=base[k];
+  for(var k2 in over) r[k2]=over[k2];
+  return r;
+}
+
+/* ── terrain colors ── */
+var TERRAIN_COLORS = {
+  soil:'#C4956A', bedrock:'#7A7A7A', sand:'#E8D5A8', bigrock:'#4A4A4A'
+};
+var TRAIN_COLOR = '#00daf3';
+var TEST_COLOR  = '#ff7f50';
+var VAL_COLOR   = '#ffb59c';
+var LEAK_COLOR  = '#ff5f1f';
+
+/* ── draw primitives ── */
+function drawBg(){
+  var g = ctx.createRadialGradient(W/2,H/2,0,W/2,H/2,Math.max(W,H)*0.7);
+  g.addColorStop(0,'#1c1b1b');
+  g.addColorStop(1,'#131313');
+  ctx.fillStyle = g;
+  ctx.fillRect(0,0,W,H);
+  /* grid */
+  ctx.strokeStyle = 'rgba(0,218,243,0.04)';
+  ctx.lineWidth = 0.5;
+  for(var gx=0;gx<W;gx+=20){ctx.beginPath();ctx.moveTo(gx,0);ctx.lineTo(gx,H);ctx.stroke();}
+  for(var gy=0;gy<H;gy+=20){ctx.beginPath();ctx.moveTo(0,gy);ctx.lineTo(W,gy);ctx.stroke();}
+}
+
+function drawLabelPrimitive(text,x,y,color,size,align){
+  ctx.save();
+  ctx.font = (size >= 16 ? '700 ' : '400 ') + size + 'px "Space Grotesk","Noto Sans SC",sans-serif';
+  ctx.fillStyle = color || '#ffb59c';
+  ctx.textAlign = align || 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(text, x, y);
+  ctx.restore();
+}
+
+function drawTextPrimitive(text,x,y,color,size,align){
+  ctx.save();
+  ctx.font = '400 ' + size + 'px "Noto Sans SC","PingFang SC",sans-serif';
+  ctx.fillStyle = color || '#e5e2e1';
+  ctx.textAlign = align || 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(text, x, y);
+  ctx.restore();
+}
+
+function drawBox(x,y,w,h,borderColor,fillColor){
+  ctx.save();
+  if(fillColor){ctx.fillStyle=fillColor;ctx.fillRect(x,y,w,h);}
+  if(borderColor){ctx.strokeStyle=borderColor;ctx.lineWidth=1.5;ctx.strokeRect(x,y,w,h);}
+  ctx.restore();
+}
+
+function drawArrowPrimitive(x1,y1,x2,y2,color){
+  ctx.save();
+  ctx.strokeStyle = color||'#ffb59c';
+  ctx.lineWidth = 2;
+  ctx.beginPath();ctx.moveTo(x1,y1);ctx.lineTo(x2,y2);ctx.stroke();
+  var angle = Math.atan2(y2-y1,x2-x1);
+  var hl=8;
+  ctx.beginPath();
+  ctx.moveTo(x2,y2);
+  ctx.lineTo(x2-hl*Math.cos(angle-0.35),y2-hl*Math.sin(angle-0.35));
+  ctx.lineTo(x2-hl*Math.cos(angle+0.35),y2-hl*Math.sin(angle+0.35));
+  ctx.closePath();
+  ctx.fillStyle=color||'#ffb59c';
+  ctx.fill();
+  ctx.restore();
+}
+
+/* ── Mars terrain image simulation ── */
+function drawMarsImage(x,y,w,h,alpha){
+  ctx.save();
+  ctx.globalAlpha = alpha||1;
+  /* base terrain gradient */
+  var g = ctx.createLinearGradient(x,y,x+w,y+h);
+  g.addColorStop(0,'#8B6B4A');
+  g.addColorStop(0.3,'#A08060');
+  g.addColorStop(0.6,'#6B5B4A');
+  g.addColorStop(1,'#9B8B70');
+  ctx.fillStyle = g;
+  ctx.fillRect(x,y,w,h);
+  /* terrain zones (4 types) */
+  var zones = [
+    {cx:0.2,cy:0.25,r:0.18,col:TERRAIN_COLORS.soil},
+    {cx:0.7,cy:0.2,r:0.2,col:TERRAIN_COLORS.bedrock},
+    {cx:0.3,cy:0.7,r:0.22,col:TERRAIN_COLORS.sand},
+    {cx:0.8,cy:0.75,r:0.15,col:TERRAIN_COLORS.bigrock},
+  ];
+  zones.forEach(function(z){
+    var rg = ctx.createRadialGradient(x+z.cx*w,y+z.cy*h,0,x+z.cx*w,y+z.cy*h,z.r*Math.min(w,h));
+    rg.addColorStop(0,z.col);
+    rg.addColorStop(1,'transparent');
+    ctx.fillStyle = rg;
+    ctx.fillRect(x,y,w,h);
+  });
+  /* texture noise */
+  ctx.fillStyle = 'rgba(0,0,0,0.08)';
+  for(var i=0;i<60;i++){
+    var nx = x+Math.random()*w;
+    var ny = y+Math.random()*h;
+    ctx.fillRect(nx,ny,2+Math.random()*3,2+Math.random()*3);
+  }
+  /* border glow */
+  ctx.strokeStyle = 'rgba(255,127,80,0.3)';
+  ctx.lineWidth = 2;
+  ctx.strokeRect(x,y,w,h);
+  ctx.restore();
+}
+
+/* draw patch grid overlay */
+function drawPatchGrid(x,y,w,h,rows,cols,alpha,highlightPatches){
+  ctx.save();
+  ctx.globalAlpha = alpha||1;
+  var pw = w/cols, ph = h/rows;
+  for(var r=0;r<rows;r++){
+    for(var c=0;c<cols;c++){
+      var px = x+c*pw, py = y+r*ph;
+      var idx = r*cols+c;
+      var hl = highlightPatches ? highlightPatches[idx] : null;
+      if(hl){
+        ctx.fillStyle = hl.fill || 'transparent';
+        ctx.fillRect(px+1,py+1,pw-2,ph-2);
+        ctx.strokeStyle = hl.border || 'rgba(255,255,255,0.3)';
+        ctx.lineWidth = hl.lineWidth || 1;
+        ctx.strokeRect(px+1,py+1,pw-2,ph-2);
+      } else {
+        ctx.strokeStyle = 'rgba(255,255,255,0.15)';
+        ctx.lineWidth = 0.5;
+        ctx.strokeRect(px,py,pw,ph);
+      }
+    }
+  }
+  ctx.restore();
+}
+
+/* ── frame elements ── */
+function getFrameElements(f){
+  var cx = W/2, cy = H/2;
+  var imgW = Math.min(W*0.55, 360);
+  var imgH = imgW * 0.75;
+  var elems = [];
+
+  if(f === 0){
+    /* Frame 0: Single Mars image */
+    elems.push({id:'title', type:'label', text:t('f0title'), x:cx, y:48, color:'#ffb59c', size:20, align:'center', alpha:1});
+    elems.push({id:'desc', type:'text', text:t('f0desc'), x:cx, y:H-36, color:'#c6c6c6', size:13, align:'center', alpha:1});
+    elems.push({id:'marsImg', type:'custom', x:cx-imgW/2, y:cy-imgH/2-10, w:imgW, h:imgH, alpha:1,
+      draw:function(a){ drawMarsImage(cx-imgW/2, cy-imgH/2-10, imgW, imgH, a); }
+    });
+    /* terrain legend */
+    var legendY = cy + imgH/2 + 12;
+    var labels = ['soil','bedrock','sand','bigrock'];
+    var cols = [TERRAIN_COLORS.soil, TERRAIN_COLORS.bedrock, TERRAIN_COLORS.sand, TERRAIN_COLORS.bigrock];
+    labels.forEach(function(lb,i){
+      var lx = cx - 130 + i*85;
+      elems.push({id:'leg'+i, type:'custom', x:lx, y:legendY, alpha:1,
+        draw:function(a){
+          ctx.save(); ctx.globalAlpha=a;
+          ctx.fillStyle=cols[i]; ctx.fillRect(lx,legendY,12,12);
+          ctx.font='400 11px "Space Grotesk",sans-serif'; ctx.fillStyle='#c6c6c6';
+          ctx.textAlign='left'; ctx.textBaseline='middle';
+          ctx.fillText(t(labels[i]), lx+16, legendY+6);
+          ctx.restore();
+        }
+      });
+    });
+  }
+  else if(f === 1){
+    /* Frame 1: Patch extraction */
+    var smImgW = imgW * 0.85;
+    var smImgH = smImgW * 0.75;
+    elems.push({id:'title', type:'label', text:t('f1title'), x:cx, y:48, color:'#ffb59c', size:20, align:'center', alpha:1});
+    elems.push({id:'desc', type:'text', text:t('f1desc'), x:cx, y:H-36, color:'#c6c6c6', size:13, align:'center', alpha:1});
+    elems.push({id:'marsImg', type:'custom', x:cx-smImgW/2, y:cy-smImgH/2-10, w:smImgW, h:smImgH, alpha:1,
+      draw:function(a){
+        drawMarsImage(cx-smImgW/2, cy-smImgH/2-10, smImgW, smImgH, a);
+        drawPatchGrid(cx-smImgW/2, cy-smImgH/2-10, smImgW, smImgH, 4, 4, a, null);
+      }
+    });
+    /* patch count label */
+    elems.push({id:'patchCount', type:'label', text:'4x4 = 16 patches', x:cx, y:cy+smImgH/2+18, color:'#00daf3', size:14, align:'center', alpha:1});
+  }
+  else if(f === 2){
+    /* Frame 2: Random split (LEAKAGE!) */
+    var splitImgW = imgW * 0.7;
+    var splitImgH = splitImgW * 0.75;
+    var leftX = cx - splitImgW - 40;
+    var rightX = cx + 40;
+    elems.push({id:'title', type:'label', text:t('f2title'), x:cx, y:38, color:'#ff5f1f', size:20, align:'center', alpha:1});
+    elems.push({id:'desc', type:'text', text:t('f2desc'), x:cx, y:H-30, color:'#c6c6c6', size:12, align:'center', alpha:1});
+    /* Train set */
+    var trainHL = {};
+    var testHL = {};
+    /* random-looking assignment: patches 0,2,3,5,6,8,10,11,13,14 = train; 1,4,7,9,12,15 = test */
+    var trainIdx = [0,2,3,5,6,8,10,11,13,14];
+    var testIdx = [1,4,7,9,12,15];
+    trainIdx.forEach(function(i){ trainHL[i] = {fill:'rgba(0,218,243,0.2)', border:TRAIN_COLOR, lineWidth:1.5}; });
+    testIdx.forEach(function(i){ testHL[i] = {fill:'rgba(255,127,80,0.25)', border:TEST_COLOR, lineWidth:1.5}; });
+    /* leaked pairs highlighted */
+    var leakPairs = [[0,1],[2,3],[5,6],[8,9],[10,11],[14,15]]; /* adjacent pairs across sets */
+    /* mark leaked ones with red glow */
+    [1,4,9].forEach(function(i){ testHL[i].fill = 'rgba(255,95,31,0.4)'; testHL[i].border = LEAK_COLOR; testHL[i].lineWidth = 2; });
+    [0,3,8].forEach(function(i){ trainHL[i].fill = 'rgba(255,95,31,0.25)'; trainHL[i].border = LEAK_COLOR; trainHL[i].lineWidth = 2; });
+
+    elems.push({id:'trainLabel', type:'label', text:t('chartTrain'), x:leftX+splitImgW/2, y:cy-splitImgH/2-22, color:TRAIN_COLOR, size:14, align:'center', alpha:1});
+    elems.push({id:'trainImg', type:'custom', x:leftX, y:cy-splitImgH/2, w:splitImgW, h:splitImgH, alpha:1,
+      draw:function(a){
+        drawMarsImage(leftX, cy-splitImgH/2, splitImgW, splitImgH, a*0.5);
+        drawPatchGrid(leftX, cy-splitImgH/2, splitImgW, splitImgH, 4, 4, a, trainHL);
+      }
+    });
+    elems.push({id:'testLabel', type:'label', text:t('chartTest'), x:rightX+splitImgW/2, y:cy-splitImgH/2-22, color:TEST_COLOR, size:14, align:'center', alpha:1});
+    elems.push({id:'testImg', type:'custom', x:rightX, y:cy-splitImgH/2, w:splitImgW, h:splitImgH, alpha:1,
+      draw:function(a){
+        drawMarsImage(rightX, cy-splitImgH/2, splitImgW, splitImgH, a*0.5);
+        drawPatchGrid(rightX, cy-splitImgH/2, splitImgW, splitImgH, 4, 4, a, testHL);
+      }
+    });
+    /* leak warning */
+    elems.push({id:'leakWarn', type:'custom', x:cx, y:cy+splitImgH/2+24, alpha:1,
+      draw:function(a){
+        ctx.save(); ctx.globalAlpha=a;
+        ctx.font='700 14px "Space Grotesk",sans-serif';
+        ctx.fillStyle='#ff5f1f'; ctx.textAlign='center'; ctx.textBaseline='middle';
+        var warnText = LANG==='cn' ? 'LEAKAGE: \u76f8\u90bb\u5207\u7247\u8de8\u96c6\u5408\uff01\u6a21\u578b\u63d0\u524d\u770b\u8fc7\u7b54\u6848' : 'LEAKAGE: Adjacent patches cross sets! Model peeked at answers';
+        ctx.fillText(warnText, cx, cy+splitImgH/2+24);
+        /* glow */
+        ctx.shadowColor='#ff5f1f'; ctx.shadowBlur=20;
+        ctx.fillText(warnText, cx, cy+splitImgH/2+24);
+        ctx.restore();
+      }
+    });
+    /* arrow */
+    elems.push({id:'arrow01', type:'arrow', x1:leftX+splitImgW+4, y1:cy, x2:rightX-4, y2:cy, color:'rgba(255,95,31,0.6)', alpha:1});
+  }
+  else if(f === 3){
+    /* Frame 3: Image-level split (CORRECT) */
+    var boxW = Math.min(W*0.26, 180);
+    var boxH = boxW*0.65;
+    var gap = 20;
+    var totalW = boxW*3 + gap*2;
+    var startX = cx - totalW/2;
+    var boxY = cy - boxH/2;
+    elems.push({id:'title', type:'label', text:t('f3title'), x:cx, y:38, color:'#10b981', size:20, align:'center', alpha:1});
+    elems.push({id:'desc', type:'text', text:t('f3desc'), x:cx, y:H-30, color:'#c6c6c6', size:12, align:'center', alpha:1});
+    var setLabels = ['chartTrain','chartVal','chartTest'];
+    var setCols = [TRAIN_COLOR, VAL_COLOR, TEST_COLOR];
+    var imgLabels = [['imgA','imgB'],['imgC'],['imgA']]; /* conceptual: each image stays together */
+    for(var s=0;s<3;s++){
+      (function(si){
+        var bx = startX + si*(boxW+gap);
+        elems.push({id:'set'+si+'label', type:'label', text:t(setLabels[si]), x:bx+boxW/2, y:boxY-22, color:setCols[si], size:14, align:'center', alpha:1});
+        elems.push({id:'set'+si+'box', type:'custom', x:bx, y:boxY, w:boxW, h:boxH, alpha:1,
+          draw:function(a){
+            ctx.save(); ctx.globalAlpha=a;
+            /* draw mini mars images inside the box */
+            var miniH = boxH*0.7;
+            var miniW = boxW/2 - 6;
+            if(si===0){
+              /* train: 2 full images */
+              drawMarsImage(bx+4, boxY+4, miniW, miniH, a*0.8);
+              drawMarsImage(bx+miniW+8, boxY+4, miniW, miniH, a*0.8);
+              drawLabelPrimitive(t('imgA'), bx+4+miniW/2, boxY+miniH+14, '#c6c6c6', 10, 'center');
+              drawLabelPrimitive(t('imgB'), bx+miniW+8+miniW/2, boxY+miniH+14, '#c6c6c6', 10, 'center');
+            } else if(si===1){
+              /* val: 1 image */
+              drawMarsImage(bx+boxW/4, boxY+4, boxW/2, miniH, a*0.8);
+              drawLabelPrimitive(t('imgC'), bx+boxW/2, boxY+miniH+14, '#c6c6c6', 10, 'center');
+            } else {
+              /* test: 1 image (different) */
+              var g2 = ctx.createLinearGradient(bx+boxW/4,boxY+4,bx+boxW*3/4,boxY+4+miniH);
+              g2.addColorStop(0,'#6B5B4A'); g2.addColorStop(0.5,'#9B8B70'); g2.addColorStop(1,'#5A4B3A');
+              ctx.fillStyle=g2;
+              ctx.fillRect(bx+boxW/4,boxY+4,boxW/2,miniH);
+              ctx.strokeStyle='rgba(255,127,80,0.3)'; ctx.lineWidth=1.5;
+              ctx.strokeRect(bx+boxW/4,boxY+4,boxW/2,miniH);
+              drawLabelPrimitive('IMG-D', bx+boxW/2, boxY+miniH+14, '#c6c6c6', 10, 'center');
+            }
+            ctx.strokeStyle = setCols[si];
+            ctx.lineWidth = 2;
+            ctx.strokeRect(bx,boxY,boxW,boxH);
+            ctx.restore();
+          }
+        });
+      })(s);
+    }
+    /* check mark */
+    elems.push({id:'checkMark', type:'custom', x:cx, y:cy+boxH/2+30, alpha:1,
+      draw:function(a){
+        ctx.save(); ctx.globalAlpha=a;
+        ctx.font='700 14px "Space Grotesk",sans-serif';
+        ctx.fillStyle='#10b981'; ctx.textAlign='center'; ctx.textBaseline='middle';
+        var msg = LANG==='cn' ? 'ZERO LEAKAGE: \u540c\u4e00\u56fe\u50cf\u7684\u6240\u6709\u5207\u7247\u4e0d\u4f1a\u8de8\u96c6\u5408' : 'ZERO LEAKAGE: All patches from same image stay together';
+        ctx.fillText(msg, cx, cy+boxH/2+30);
+        ctx.shadowColor='#10b981'; ctx.shadowBlur=15;
+        ctx.fillText(msg, cx, cy+boxH/2+30);
+        ctx.restore();
+      }
+    });
+  }
+  else if(f === 4){
+    /* Frame 4: Accuracy comparison bar chart */
+    elems.push({id:'title', type:'label', text:t('f4title'), x:cx, y:38, color:'#ffb59c', size:20, align:'center', alpha:1});
+    elems.push({id:'desc', type:'text', text:t('f4desc'), x:cx, y:H-30, color:'#c6c6c6', size:12, align:'center', alpha:1});
+    var barW = Math.min(W*0.15, 100);
+    var maxBarH = H*0.45;
+    var barGap = Math.min(W*0.12, 80);
+    var bar1X = cx - barGap - barW;
+    var bar2X = cx + barGap;
+    var baseY = cy + maxBarH/2 + 10;
+    elems.push({id:'bar1', type:'custom', x:bar1X, y:baseY-maxBarH*0.95, w:barW, h:maxBarH*0.95, alpha:1,
+      draw:function(a){
+        ctx.save(); ctx.globalAlpha=a;
+        var g1 = ctx.createLinearGradient(bar1X,baseY-maxBarH*0.95,bar1X,baseY);
+        g1.addColorStop(0,'#ff5f1f'); g1.addColorStop(1,'rgba(255,95,31,0.4)');
+        ctx.fillStyle=g1;
+        ctx.fillRect(bar1X, baseY-maxBarH*0.95, barW, maxBarH*0.95);
+        ctx.strokeStyle='#ff7f50'; ctx.lineWidth=1.5;
+        ctx.strokeRect(bar1X, baseY-maxBarH*0.95, barW, maxBarH*0.95);
+        /* label */
+        ctx.font='700 24px "JetBrains Mono","Space Grotesk",monospace';
+        ctx.fillStyle='#ffffff'; ctx.textAlign='center'; ctx.textBaseline='bottom';
+        ctx.fillText('95%', bar1X+barW/2, baseY-maxBarH*0.95-8);
+        ctx.font='400 12px "Space Grotesk",sans-serif';
+        ctx.fillStyle='#ff7f50'; ctx.textBaseline='top';
+        var lb1 = LANG==='cn'?'\u6cc4\u6f0f\u5207\u5206':'LEAKED SPLIT';
+        ctx.fillText(lb1, bar1X+barW/2, baseY+8);
+        ctx.font='400 11px "Noto Sans SC",sans-serif';
+        ctx.fillStyle='rgba(255,181,156,0.6)';
+        var sub1 = LANG==='cn'?'(\u865a\u9ad8)':'(INFLATED)';
+        ctx.fillText(sub1, bar1X+barW/2, baseY+26);
+        ctx.restore();
+      }
+    });
+    elems.push({id:'bar2', type:'custom', x:bar2X, y:baseY-maxBarH*0.78, w:barW, h:maxBarH*0.78, alpha:1,
+      draw:function(a){
+        ctx.save(); ctx.globalAlpha=a;
+        var g2 = ctx.createLinearGradient(bar2X,baseY-maxBarH*0.78,bar2X,baseY);
+        g2.addColorStop(0,'#10b981'); g2.addColorStop(1,'rgba(16,185,129,0.4)');
+        ctx.fillStyle=g2;
+        ctx.fillRect(bar2X, baseY-maxBarH*0.78, barW, maxBarH*0.78);
+        ctx.strokeStyle='#34d399'; ctx.lineWidth=1.5;
+        ctx.strokeRect(bar2X, baseY-maxBarH*0.78, barW, maxBarH*0.78);
+        ctx.font='700 24px "JetBrains Mono","Space Grotesk",monospace';
+        ctx.fillStyle='#ffffff'; ctx.textAlign='center'; ctx.textBaseline='bottom';
+        ctx.fillText('78%', bar2X+barW/2, baseY-maxBarH*0.78-8);
+        ctx.font='400 12px "Space Grotesk",sans-serif';
+        ctx.fillStyle='#34d399'; ctx.textBaseline='top';
+        var lb2 = LANG==='cn'?'\u8bda\u5b9e\u5207\u5206':'HONEST SPLIT';
+        ctx.fillText(lb2, bar2X+barW/2, baseY+8);
+        ctx.font='400 11px "Noto Sans SC",sans-serif';
+        ctx.fillStyle='rgba(52,211,153,0.6)';
+        var sub2 = LANG==='cn'?'(\u771f\u5b9e\u6c34\u5e73)':'(REAL LEVEL)';
+        ctx.fillText(sub2, bar2X+barW/2, baseY+26);
+        ctx.restore();
+      }
+    });
+    /* gap annotation */
+    elems.push({id:'gapArrow', type:'custom', x:cx, y:cy-20, alpha:1,
+      draw:function(a){
+        ctx.save(); ctx.globalAlpha=a;
+        var midY = baseY - maxBarH*0.86;
+        ctx.strokeStyle='rgba(255,181,156,0.5)'; ctx.lineWidth=1; ctx.setLineDash([4,4]);
+        ctx.beginPath();ctx.moveTo(bar1X+barW+8,midY);ctx.lineTo(bar2X-8,midY);ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.font='700 13px "Space Grotesk",sans-serif';
+        ctx.fillStyle='#ffb59c'; ctx.textAlign='center'; ctx.textBaseline='bottom';
+        var gapLabel = LANG==='cn'?'17% \u5dee\u8ddd = \u6cc4\u6f0f\u5e45\u5ea6':'17% GAP = LEAKAGE';
+        ctx.fillText(gapLabel, cx, midY-6);
+        ctx.restore();
+      }
+    });
+    /* baseline */
+    elems.push({id:'baseline', type:'custom', x:0, y:baseY, alpha:1,
+      draw:function(a){
+        ctx.save(); ctx.globalAlpha=a*0.4;
+        ctx.strokeStyle='#c6c6c6'; ctx.lineWidth=1;
+        ctx.beginPath();ctx.moveTo(bar1X-20,baseY);ctx.lineTo(bar2X+barW+20,baseY);ctx.stroke();
+        ctx.restore();
+      }
+    });
+  }
+
+  return elems;
+}
+
+/* ── draw element dispatcher ── */
+function drawElement(el){
+  if(!el || el.alpha <= 0.01) return;
+  ctx.save();
+  ctx.globalAlpha = el.alpha;
+  switch(el.type){
+    case 'label': drawLabelPrimitive(el.text,el.x,el.y,el.color,el.size,el.align); break;
+    case 'text':  drawTextPrimitive(el.text,el.x,el.y,el.color,el.size,el.align); break;
+    case 'arrow': drawArrowPrimitive(el.x1,el.y1,el.x2,el.y2,el.color); break;
+    case 'box':   drawBox(el.x,el.y,el.w,el.h,el.borderColor,el.fillColor); break;
+    case 'custom': el.draw(el.alpha); break;
+  }
+  ctx.restore();
+}
+
+/* ── draw frame (immediate) ── */
+function drawFrame(f){
+  drawBg();
+  var elems = getFrameElements(f);
+  elems.forEach(function(el){ drawElement(el); });
+}
+
+/* ── transition ── */
+function transitionTo(newFrame){
+  if(newFrame < 0) newFrame = 0;
+  if(newFrame >= totalFrames) newFrame = totalFrames - 1;
+  if(newFrame === currentFrame && !transitioning){ drawFrame(currentFrame); updateHUD(currentFrame); return; }
+  if(transitioning) return;
+
+  var oldElems = getFrameElements(currentFrame);
+  var newElems = getFrameElements(newFrame);
+  var oldMap = {}; oldElems.forEach(function(e){ oldMap[e.id] = e; });
+  var newMap = {}; newElems.forEach(function(e){ newMap[e.id] = e; });
+
+  currentFrame = newFrame;
+  updateHUD(newFrame);
+  updateDots();
+  transitioning = true;
+
+  var startTime = null;
+  var duration = 500;
+
+  function step(timestamp){
+    if(!startTime) startTime = timestamp;
+    var raw = Math.min((timestamp - startTime) / duration, 1);
+    var p = easeInOut(raw);
+
+    drawBg();
+
+    oldElems.forEach(function(oe){
+      if(!newMap[oe.id]) drawElement(merge(oe, {alpha: 1 - p}));
+    });
+
+    newElems.forEach(function(ne){
+      var oe = oldMap[ne.id];
+      if(oe){
+        var merged = merge(ne, {
+          x: lerp(oe.x||0, ne.x||0, p),
+          y: lerp(oe.y||0, ne.y||0, p),
+          w: lerp(oe.w||0, ne.w||0, p),
+          h: lerp(oe.h||0, ne.h||0, p),
+          alpha: 1
+        });
+        if(ne.type === 'arrow' && oe.type === 'arrow'){
+          merged.x1 = lerp(oe.x1, ne.x1, p);
+          merged.y1 = lerp(oe.y1, ne.y1, p);
+          merged.x2 = lerp(oe.x2, ne.x2, p);
+          merged.y2 = lerp(oe.y2, ne.y2, p);
+        }
+        if((ne.type==='label'||ne.type==='text') && oe.text !== ne.text){
+          drawElement(merge(oe, {alpha: 1 - p}));
+          drawElement(merge(ne, {alpha: p}));
+        } else {
+          drawElement(merged);
+        }
+      } else {
+        drawElement(merge(ne, {alpha: p}));
+      }
+    });
+
+    if(raw < 1){
+      requestAnimationFrame(step);
+    } else {
+      transitioning = false;
+    }
+  }
+  requestAnimationFrame(step);
+}
+
+/* ── HUD update ── */
+var hudData = [
+  {stage:'stg0', leak:'leakNone', acc:'accNA'},
+  {stage:'stg1', leak:'leakNone', acc:'accNA'},
+  {stage:'stg2', leak:'leakHigh', acc:'acc95'},
+  {stage:'stg3', leak:'leakZero', acc:'acc78'},
+  {stage:'stg4', leak:'leakCompare', acc:'accBoth'},
+];
+function updateHUD(f){
+  var d = hudData[f];
+  document.getElementById('frameInd').textContent = (f+1)+'/'+totalFrames;
+  document.getElementById('hudStage').textContent = t(d.stage);
+  document.getElementById('hudLeak').textContent = t(d.leak);
+  var leakEl = document.getElementById('hudLeak');
+  leakEl.style.color = d.leak==='leakHigh' ? '#ff5f1f' : d.leak==='leakZero' ? '#10b981' : '';
+  document.getElementById('hudAccuracy').textContent = t(d.acc);
+}
+
+/* ── frame dots ── */
+function buildDots(){
+  var container = document.getElementById('frameDots');
+  container.innerHTML = '';
+  for(var i=0;i<totalFrames;i++){
+    var dot = document.createElement('div');
+    dot.className = 'frame-dot' + (i===currentFrame?' active':'');
+    dot.dataset.frame = i;
+    (function(fi){
+      dot.addEventListener('click', function(){ transitionTo(fi); });
+    })(i);
+    container.appendChild(dot);
+  }
+}
+function updateDots(){
+  var dots = document.querySelectorAll('.frame-dot');
+  dots.forEach(function(d,i){ d.className = 'frame-dot' + (i===currentFrame?' active':''); });
+}
+
+/* ── controls ── */
+document.getElementById('btnPrev').addEventListener('click', function(){
+  if(playing) stopPlay();
+  transitionTo(currentFrame - 1);
+});
+document.getElementById('btnNext').addEventListener('click', function(){
+  if(playing) stopPlay();
+  transitionTo(currentFrame + 1);
+});
+document.getElementById('btnPlay').addEventListener('click', function(){
+  if(playing){ stopPlay(); } else { startPlay(); }
+});
+
+function startPlay(){
+  playing = true;
+  document.getElementById('btnPlay').textContent = t('btnPause');
+  document.getElementById('btnPlay').classList.add('active');
+  if(currentFrame >= totalFrames-1) transitionTo(0);
+  scheduleNext();
+}
+function stopPlay(){
+  playing = false;
+  document.getElementById('btnPlay').textContent = t('btnPlay');
+  document.getElementById('btnPlay').classList.remove('active');
+  if(playRAF) cancelAnimationFrame(playRAF);
+  playRAF = null;
+}
+function scheduleNext(){
+  if(!playing) return;
+  var lastTime = null;
+  var delay = 2500;
+  function tick(ts){
+    if(!playing) return;
+    if(!lastTime) lastTime = ts;
+    if(ts - lastTime >= delay){
+      if(currentFrame >= totalFrames-1){ stopPlay(); return; }
+      transitionTo(currentFrame + 1);
+      lastTime = ts;
+      delay = 2500;
+    }
+    playRAF = requestAnimationFrame(tick);
+  }
+  playRAF = requestAnimationFrame(tick);
+}
+
+/* ── guide panel toggle ── */
+document.getElementById('guideToggle').addEventListener('click', function(){
+  var content = document.getElementById('guideContent');
+  var arrow = document.getElementById('guideArrow');
+  if(content.style.display === 'none'){
+    content.style.display = 'block';
+    arrow.classList.remove('collapsed');
+  } else {
+    content.style.display = 'none';
+    arrow.classList.add('collapsed');
+  }
+});
+
+/* ── lang toggle ── */
+document.getElementById('langBtn').addEventListener('click', function(){
+  LANG = LANG === 'en' ? 'cn' : 'en';
+  document.getElementById('langBtn').textContent = LANG.toUpperCase();
+  refreshI18N();
+});
+
+function refreshI18N(){
+  document.getElementById('mainTitle').textContent = t('mainTitle');
+  document.getElementById('guideTitle').textContent = t('guideTitle');
+  document.getElementById('glShow').textContent = t('glShow');
+  document.getElementById('guideShow').textContent = t('guideShow');
+  document.getElementById('glObserve').textContent = t('glObserve');
+  var obsUl = document.getElementById('guideObserve');
+  obsUl.innerHTML = '';
+  ['obs1','obs2','obs3'].forEach(function(k){
+    var li = document.createElement('li');
+    li.textContent = t(k);
+    obsUl.appendChild(li);
+  });
+  document.getElementById('glControls').textContent = t('glControls');
+  document.getElementById('guideControls').textContent = t('guideCtrl');
+  document.getElementById('glTakeaway').textContent = t('glTakeaway');
+  document.getElementById('guideTakeaway').textContent = t('guideTake');
+  document.getElementById('btnPrev').textContent = t('btnPrev');
+  document.getElementById('btnPlay').textContent = playing ? t('btnPause') : t('btnPlay');
+  document.getElementById('btnNext').textContent = t('btnNext');
+  document.getElementById('hudLblFrame').textContent = t('hudFrame');
+  document.getElementById('hudLblStage').textContent = t('hudStage');
+  document.getElementById('hudLblLeak').textContent = t('hudLeak');
+  document.getElementById('hudLblAccuracy').textContent = t('hudAccuracy');
+  updateHUD(currentFrame);
+  drawFrame(currentFrame);
+}
+
+/* ── init ── */
+buildDots();
+refreshI18N();
+resize();
+setTimeout(resize, 200);
+setTimeout(resize, 600);
+document.fonts.ready.then(function(){ resize(); });
+
+})();
+</script>
+</body>
+</html>

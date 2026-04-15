@@ -1,0 +1,617 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>火星图像的三种看法</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;700&family=Noto+Sans+SC:wght@400;700&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{width:100%;height:100vh;overflow:hidden;background:#0d0604;
+  font-family:'Noto Sans SC','PingFang SC',system-ui,sans-serif;color:#f5e9d9}
+
+.wrapper{display:flex;flex-direction:column;height:100vh;overflow:hidden}
+
+/* guide panel */
+.guide-panel{position:fixed;top:8px;right:8px;width:240px;max-height:40vh;
+  overflow-y:auto;z-index:200;padding:10px 12px;
+  background:rgba(30,14,6,0.88);backdrop-filter:blur(14px);
+  border:1px solid rgba(251,146,60,0.22);font-size:12px;line-height:1.55;
+  color:rgba(245,233,217,0.88)}
+.guide-panel h3{font-family:'Space Grotesk',sans-serif;font-size:13px;font-weight:700;
+  margin-bottom:6px;display:flex;align-items:center;justify-content:space-between;cursor:pointer;
+  color:#fb923c;text-transform:uppercase;letter-spacing:0.05em}
+.guide-panel h3 .arrow{transition:transform .2s;font-size:10px}
+.guide-panel h3 .arrow.collapsed{transform:rotate(-90deg)}
+.guide-panel ul{padding-left:14px;margin:4px 0}
+.guide-panel .gl{color:#c98a5c;font-size:11px;text-transform:uppercase;
+  letter-spacing:0.08em;margin-top:6px;font-family:'Space Grotesk',sans-serif}
+
+/* header */
+.header{height:40px;min-height:40px;display:flex;align-items:center;justify-content:space-between;
+  padding:0 16px;background:rgba(30,14,6,0.92);border-bottom:1px solid rgba(251,146,60,0.12)}
+.header h1{font-family:'Space Grotesk',sans-serif;font-size:14px;font-weight:700;
+  color:#fb923c;text-transform:uppercase;letter-spacing:0.06em}
+.header .lang{padding:4px 10px;border:1px solid rgba(251,146,60,0.3);background:transparent;
+  color:#fb923c;cursor:pointer;font-family:'Space Grotesk',sans-serif;font-size:11px;
+  font-weight:700;letter-spacing:0.05em}
+.header .lang:hover{background:rgba(251,146,60,0.15)}
+
+/* canvas container */
+.canvas-wrap{flex:1;min-height:0;position:relative;overflow:hidden;background:#0d0604}
+.canvas-wrap canvas{position:absolute;top:0;left:0;width:100%;height:100%}
+
+/* controls */
+.controls{height:44px;min-height:44px;display:flex;align-items:center;justify-content:center;gap:12px;
+  background:rgba(30,14,6,0.92);border-top:1px solid rgba(251,146,60,0.12);
+  border-bottom:1px solid rgba(251,146,60,0.12)}
+.ctrl-btn{padding:6px 16px;border:1px solid rgba(251,146,60,0.3);background:transparent;
+  color:#fb923c;cursor:pointer;font-family:'Space Grotesk',sans-serif;font-size:12px;
+  font-weight:700;text-transform:uppercase;letter-spacing:0.06em;transition:all .15s}
+.ctrl-btn:hover{background:rgba(251,146,60,0.15);box-shadow:0 0 16px rgba(251,146,60,0.25)}
+.ctrl-btn.active{background:linear-gradient(45deg,rgba(251,146,60,0.25),rgba(239,68,68,0.15))}
+.frame-dots{display:flex;gap:6px;align-items:center;margin:0 12px}
+.frame-dot{width:10px;height:10px;border:1px solid rgba(251,146,60,0.35);cursor:pointer;
+  transition:all .2s;border-radius:50%}
+.frame-dot.active{background:#fb923c;border-color:#fb923c;box-shadow:0 0 12px rgba(251,146,60,0.55)}
+.frame-dot:hover{border-color:#fde68a}
+
+/* HUD */
+.hud{height:52px;min-height:52px;display:flex;align-items:center;
+  background:rgba(0,0,0,0.55);border-top:1px solid rgba(255,255,255,0.06);padding:0 16px}
+.hud-col{flex:1;text-align:center}
+.hud-label{font-family:'Space Grotesk',sans-serif;font-size:10px;
+  color:rgba(251,146,60,0.55);text-transform:uppercase;letter-spacing:0.1em}
+.hud-val{font-family:'Space Grotesk',sans-serif;font-size:14px;font-weight:700;
+  color:rgba(245,233,217,0.9);margin-top:2px}
+</style>
+</head>
+<body>
+
+<div class="guide-panel" id="guidePanel">
+  <h3 id="guideToggle">OBSERVER GUIDE <span class="arrow" id="guideArrow">&#9660;</span></h3>
+  <div id="guideContent">
+    <div class="gl">WHAT IT SHOWS</div>
+    <p>同一张火星地形图在摄影师、地质学家、任务工程师三种视角下的不同含义</p>
+    <div class="gl" style="margin-top:6px">OBSERVE</div>
+    <ul>
+      <li>摄影师视角只关心构图与色彩</li>
+      <li>地质学家视角注意岩层与采样点</li>
+      <li>任务工程师视角标出危险区与可通行走廊</li>
+    </ul>
+    <div class="gl" style="margin-top:6px">CONTROLS</div>
+    <p>点击 PLAY 自动切换视角，或用 PREV/NEXT 手动对比</p>
+    <div class="gl" style="margin-top:6px">TAKEAWAY</div>
+    <p style="color:#fb923c">同一张图不存在"客观"看法，只有被任务目标重构的风险图</p>
+  </div>
+</div>
+
+<div class="wrapper">
+  <div class="header">
+    <h1>MARS IMAGE -- THREE VIEWPOINTS</h1>
+    <button class="lang" id="langBtn">中 / EN</button>
+  </div>
+
+  <div class="canvas-wrap">
+    <canvas id="c"></canvas>
+  </div>
+
+  <div class="controls">
+    <button class="ctrl-btn" id="btnPrev">PREV</button>
+    <button class="ctrl-btn active" id="btnPlay">PLAY</button>
+    <button class="ctrl-btn" id="btnNext">NEXT</button>
+    <div class="frame-dots" id="frameDots"></div>
+  </div>
+
+  <div class="hud">
+    <div class="hud-col"><div class="hud-label">FRAME</div><div class="hud-val" id="frameInd">1/3</div></div>
+    <div class="hud-col"><div class="hud-label">VIEWPOINT</div><div class="hud-val" id="hudView">摄影师</div></div>
+    <div class="hud-col"><div class="hud-label">HAZARDS</div><div class="hud-val" id="hudHazard">--</div></div>
+    <div class="hud-col"><div class="hud-label">TRAVERSABLE</div><div class="hud-val" id="hudTrav">--</div></div>
+  </div>
+</div>
+
+<script>
+(function(){
+"use strict";
+
+/* ── canvas setup ── */
+var canvas = document.getElementById("c");
+var ctx = canvas.getContext("2d");
+var W = 800, H = 500;
+var DPR = Math.min(window.devicePixelRatio || 1, 2);
+
+function resize(){
+  var rect = canvas.parentElement.getBoundingClientRect();
+  if(rect.width < 1 || rect.height < 1) return;
+  canvas.width = rect.width * DPR;
+  canvas.height = rect.height * DPR;
+  ctx.setTransform(1,0,0,1,0,0);
+  ctx.scale(canvas.width / W, canvas.height / H);
+  render();
+}
+
+/* ── palette ── */
+var MARS_ORANGE = "#fb923c";
+var MARS_RED    = "#ef4444";
+var MARS_GREEN  = "#34d399";
+var TEXT        = "#f5e9d9";
+
+/* ── frame data ── */
+var FRAMES = [
+  {
+    key: "photo",
+    zh:  "摄影师的眼睛",
+    en:  "Photographer's Eye",
+    desc_zh: "只看颜色与构图",
+    desc_en: "color and composition only",
+    hazard_zh: "—",
+    trav_zh:   "—"
+  },
+  {
+    key: "geology",
+    zh:  "地质学家的眼睛",
+    en:  "Geologist's Eye",
+    desc_zh: "注意岩层与沉积结构",
+    desc_en: "rock layers and sediments",
+    hazard_zh: "—",
+    trav_zh:   "—"
+  },
+  {
+    key: "mission",
+    zh:  "任务工程师",
+    en:  "Mission Engineer",
+    desc_zh: "看路况与风险",
+    desc_en: "terrain and risk",
+    hazard_zh: "6 处",
+    trav_zh:   "42 %"
+  }
+];
+
+var cur = 0;
+var t = 0;
+var playing = false;
+var rafId = null;
+var lang = "zh";  // zh | en
+
+/* ── Mars scene data (shared across frames) ── */
+var HORIZON = 240;
+var ROCKS = [
+  {x:120,y:340,r:22,kind:"hazard"},
+  {x:170,y:370,r:12,kind:"ok"},
+  {x:250,y:320,r:16,kind:"ok"},
+  {x:420,y:360,r:26,kind:"hazard"},
+  {x:460,y:380,r:18,kind:"hazard"},
+  {x:390,y:395,r:14,kind:"hazard"},
+  {x:580,y:330,r:10,kind:"ok"},
+  {x:640,y:365,r:24,kind:"hazard"}
+];
+var SAND = [
+  {pts:[[40,395],[160,410],[180,445],[60,430]]},
+  {pts:[[280,410],[380,420],[390,455],[290,450]]}
+];
+var CRATER = {cx:540,cy:430,rx:70,ry:22};
+var SLOPE_PTS = [[0,HORIZON+12],[230,HORIZON+24],[270,HORIZON+75],[0,HORIZON+110]];
+var GOAL = {x:710,y:310,r:8};
+var ROVER = {x:90,y:405};
+
+/* geology layers */
+var LAYERS = [
+  {y:HORIZON+5,  h:18, color:"rgba(240,160,100,0.38)"},
+  {y:HORIZON+25, h:35, color:"rgba(200,90,65,0.38)"},
+  {y:HORIZON+62, h:48, color:"rgba(150,65,50,0.38)"},
+  {y:HORIZON+112,h:70, color:"rgba(110,48,42,0.38)"}
+];
+
+/* ── HUD / dots ── */
+var dotsEl = document.getElementById("frameDots");
+for(var i = 0; i < FRAMES.length; i++){
+  var dot = document.createElement("div");
+  dot.className = "frame-dot" + (i === 0 ? " active" : "");
+  dot.dataset.idx = i;
+  dotsEl.appendChild(dot);
+}
+dotsEl.addEventListener("click", function(e){
+  var d = e.target.closest(".frame-dot");
+  if(!d) return;
+  goTo(parseInt(d.dataset.idx, 10));
+});
+
+function syncUI(){
+  var f = FRAMES[cur];
+  document.getElementById("frameInd").textContent = (cur+1)+"/"+FRAMES.length;
+  document.getElementById("hudView").textContent  = (lang==="zh" ? f.zh : f.en);
+  document.getElementById("hudHazard").textContent= f.hazard_zh;
+  document.getElementById("hudTrav").textContent  = f.trav_zh;
+  dotsEl.querySelectorAll(".frame-dot").forEach(function(d,i){
+    d.classList.toggle("active", i===cur);
+  });
+  document.getElementById("btnPlay").textContent = playing ? "PAUSE" : "PLAY";
+}
+
+function goTo(idx){
+  cur = Math.max(0, Math.min(FRAMES.length-1, idx));
+  t = 0;
+  syncUI();
+  render();
+}
+
+/* ── controls ── */
+document.getElementById("btnPrev").addEventListener("click", function(){ if(cur>0) goTo(cur-1); });
+document.getElementById("btnNext").addEventListener("click", function(){
+  if(cur<FRAMES.length-1) goTo(cur+1);
+  else { cur=0; t=0; syncUI(); render(); }
+});
+document.getElementById("btnPlay").addEventListener("click", function(){
+  if(playing) stopAnim(); else startAnim();
+});
+document.getElementById("langBtn").addEventListener("click", function(){
+  lang = (lang === "zh") ? "en" : "zh";
+  syncUI();
+  render();
+});
+document.getElementById("guideToggle").addEventListener("click", function(){
+  var c = document.getElementById("guideContent");
+  var a = document.getElementById("guideArrow");
+  var hidden = c.style.display === "none";
+  c.style.display = hidden ? "block" : "none";
+  a.classList.toggle("collapsed", !hidden);
+});
+
+function startAnim(){
+  playing = true;
+  if(cur >= FRAMES.length - 1){ cur = 0; t = 0; }
+  syncUI();
+  var last = performance.now();
+  function tick(now){
+    var dt = (now - last) / 1000;
+    last = now;
+    t += dt * 0.35;
+    if(t >= 1){
+      t = 0;
+      cur++;
+      if(cur >= FRAMES.length){ cur = FRAMES.length - 1; t = 0; stopAnim(); render(); return; }
+      syncUI();
+    }
+    render();
+    if(playing) rafId = requestAnimationFrame(tick);
+  }
+  rafId = requestAnimationFrame(tick);
+}
+function stopAnim(){
+  playing = false;
+  if(rafId){ cancelAnimationFrame(rafId); rafId = null; }
+  syncUI();
+}
+
+/* ── rendering ── */
+function drawMarsScene(){
+  /* 天空渐变 */
+  var sky = ctx.createLinearGradient(0,0,0,HORIZON);
+  sky.addColorStop(0,"#2b1410");
+  sky.addColorStop(0.5,"#5a2818");
+  sky.addColorStop(1,"#a04822");
+  ctx.fillStyle = sky;
+  ctx.fillRect(0,0,W,HORIZON);
+
+  /* 远山轮廓 */
+  ctx.fillStyle = "#6b2817";
+  ctx.beginPath();
+  ctx.moveTo(0,HORIZON);
+  ctx.lineTo(100,HORIZON-55);
+  ctx.lineTo(210,HORIZON-20);
+  ctx.lineTo(320,HORIZON-70);
+  ctx.lineTo(440,HORIZON-25);
+  ctx.lineTo(560,HORIZON-65);
+  ctx.lineTo(680,HORIZON-30);
+  ctx.lineTo(W,HORIZON-45);
+  ctx.lineTo(W,HORIZON);
+  ctx.closePath();
+  ctx.fill();
+
+  /* 近景地面 */
+  var ground = ctx.createLinearGradient(0,HORIZON,0,H);
+  ground.addColorStop(0,"#a04020");
+  ground.addColorStop(0.5,"#8b3015");
+  ground.addColorStop(1,"#5a1e0c");
+  ctx.fillStyle = ground;
+  ctx.fillRect(0,HORIZON,W,H-HORIZON);
+
+  /* 地面微纹理 */
+  for(var i=0;i<260;i++){
+    var gx = (i*41)%W;
+    var gy = HORIZON + ((i*67)%(H-HORIZON));
+    ctx.fillStyle = "rgba(255,180,120,"+(0.03+((i*7)%5)/100)+")";
+    ctx.fillRect(gx,gy,2,2);
+  }
+
+  /* 岩石 */
+  ROCKS.forEach(function(r){
+    var rg = ctx.createRadialGradient(r.x-r.r*0.3,r.y-r.r*0.3,1,r.x,r.y,r.r);
+    rg.addColorStop(0,"#6a3020");
+    rg.addColorStop(0.6,"#3e1808");
+    rg.addColorStop(1,"#1a0804");
+    ctx.fillStyle = rg;
+    ctx.beginPath();
+    ctx.arc(r.x,r.y,r.r,0,Math.PI*2);
+    ctx.fill();
+  });
+
+  /* 陨石坑 */
+  var cg = ctx.createRadialGradient(CRATER.cx,CRATER.cy,2,CRATER.cx,CRATER.cy,CRATER.rx);
+  cg.addColorStop(0,"#1a0804");
+  cg.addColorStop(0.7,"#3e1808");
+  cg.addColorStop(1,"#6a3020");
+  ctx.fillStyle = cg;
+  ctx.beginPath();
+  ctx.ellipse(CRATER.cx,CRATER.cy,CRATER.rx,CRATER.ry,0,0,Math.PI*2);
+  ctx.fill();
+  ctx.strokeStyle = "#2a0f06";
+  ctx.lineWidth = 1;
+  ctx.stroke();
+}
+
+function drawRover(){
+  ctx.save();
+  ctx.translate(ROVER.x,ROVER.y);
+  /* 车身 */
+  var bg = ctx.createLinearGradient(-20,-14,20,4);
+  bg.addColorStop(0,"#e6dcc8");
+  bg.addColorStop(1,"#8a8270");
+  ctx.fillStyle = bg;
+  roundRect(-20,-14,40,16,3);
+  ctx.fill();
+  /* 太阳能板 */
+  var pg = ctx.createLinearGradient(-18,-20,18,-14);
+  pg.addColorStop(0,"#1f2a48");
+  pg.addColorStop(0.5,"#3a4a72");
+  pg.addColorStop(1,"#1f2a48");
+  ctx.fillStyle = pg;
+  ctx.fillRect(-18,-20,36,6);
+  ctx.strokeStyle = "#0a1020";
+  ctx.lineWidth = 0.5;
+  for(var i=0;i<4;i++){
+    ctx.beginPath();
+    ctx.moveTo(-18+i*9, -20);
+    ctx.lineTo(-18+i*9, -14);
+    ctx.stroke();
+  }
+  /* 车轮 */
+  ctx.fillStyle = "#1a1a1a";
+  ctx.beginPath();ctx.arc(-14,6,4,0,Math.PI*2);ctx.fill();
+  ctx.beginPath();ctx.arc(0,6,4,0,Math.PI*2);ctx.fill();
+  ctx.beginPath();ctx.arc(14,6,4,0,Math.PI*2);ctx.fill();
+  /* 通信天线 */
+  ctx.strokeStyle = "#c8c0b0";
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(-8,-20);
+  ctx.lineTo(-8,-28);
+  ctx.stroke();
+  ctx.fillStyle = "#fb923c";
+  ctx.beginPath();
+  ctx.arc(-8,-29,1.5,0,Math.PI*2);
+  ctx.fill();
+  ctx.restore();
+}
+
+function roundRect(x,y,w,h,r){
+  ctx.beginPath();
+  ctx.moveTo(x+r,y);ctx.lineTo(x+w-r,y);ctx.quadraticCurveTo(x+w,y,x+w,y+r);
+  ctx.lineTo(x+w,y+h-r);ctx.quadraticCurveTo(x+w,y+h,x+w-r,y+h);
+  ctx.lineTo(x+r,y+h);ctx.quadraticCurveTo(x,y+h,x,y+h-r);
+  ctx.lineTo(x,y+r);ctx.quadraticCurveTo(x,y,x+r,y);
+  ctx.closePath();
+}
+
+function drawPhotoOverlay(alpha){
+  if(alpha<=0) return;
+  ctx.save();
+  ctx.globalAlpha = alpha;
+  /* 三分法构图线 */
+  ctx.strokeStyle = "rgba(255,255,255,0.28)";
+  ctx.lineWidth = 1;
+  ctx.setLineDash([6,6]);
+  ctx.beginPath();ctx.moveTo(W/3,0);ctx.lineTo(W/3,H);ctx.stroke();
+  ctx.beginPath();ctx.moveTo(2*W/3,0);ctx.lineTo(2*W/3,H);ctx.stroke();
+  ctx.beginPath();ctx.moveTo(0,H/3);ctx.lineTo(W,H/3);ctx.stroke();
+  ctx.beginPath();ctx.moveTo(0,2*H/3);ctx.lineTo(W,2*H/3);ctx.stroke();
+  ctx.setLineDash([]);
+  /* 文字标注 */
+  ctx.fillStyle = "rgba(255,255,255,0.7)";
+  ctx.font = "italic 13px 'Noto Sans SC',system-ui";
+  ctx.textAlign = "left";
+  var label = (lang==="zh") ? "三分法构图" : "rule of thirds";
+  ctx.fillText(label, 20, 30);
+  ctx.fillText((lang==="zh" ? "暖色调" : "warm palette"), 20, 50);
+  ctx.fillText((lang==="zh" ? "戏剧性光影" : "dramatic light"), 20, 70);
+  ctx.restore();
+}
+
+function drawGeologyOverlay(alpha){
+  if(alpha<=0) return;
+  ctx.save();
+  ctx.globalAlpha = alpha;
+  LAYERS.forEach(function(L){
+    ctx.fillStyle = L.color;
+    ctx.fillRect(0,L.y,W,L.h);
+  });
+  /* 标注 */
+  ctx.fillStyle = "rgba(255,220,180,0.92)";
+  ctx.font = "bold 12px 'Noto Sans SC',system-ui";
+  ctx.textAlign = "right";
+  var L1 = (lang==="zh" ? "干沙层" : "dry sand");
+  var L2 = (lang==="zh" ? "氧化铁层" : "iron oxide");
+  var L3 = (lang==="zh" ? "玄武岩" : "basalt");
+  ctx.fillText(L1, W-14, HORIZON+15);
+  ctx.fillText(L2, W-14, HORIZON+45);
+  ctx.fillText(L3, W-14, HORIZON+85);
+  /* 采样点 */
+  ctx.strokeStyle = "#ffeebb";
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.arc(340,HORIZON+55,10,0,Math.PI*2);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(340,HORIZON+55);
+  ctx.lineTo(340,HORIZON-8);
+  ctx.stroke();
+  ctx.fillStyle = "#ffeebb";
+  ctx.font = "12px 'Noto Sans SC',system-ui";
+  ctx.textAlign = "center";
+  ctx.fillText((lang==="zh" ? "采样点" : "sample site"),340,HORIZON-14);
+  ctx.restore();
+}
+
+function drawMissionOverlay(alpha){
+  if(alpha<=0) return;
+  ctx.save();
+  ctx.globalAlpha = alpha;
+
+  /* 陡坡 */
+  ctx.fillStyle = "rgba(251,146,60,0.35)";
+  ctx.beginPath();
+  SLOPE_PTS.forEach(function(p,i){
+    if(i===0) ctx.moveTo(p[0],p[1]);
+    else ctx.lineTo(p[0],p[1]);
+  });
+  ctx.closePath();
+  ctx.fill();
+
+  /* 沙地陷车 */
+  ctx.fillStyle = "rgba(239,68,68,0.4)";
+  SAND.forEach(function(S){
+    ctx.beginPath();
+    S.pts.forEach(function(p,i){
+      if(i===0) ctx.moveTo(p[0],p[1]);
+      else ctx.lineTo(p[0],p[1]);
+    });
+    ctx.closePath();
+    ctx.fill();
+  });
+
+  /* 陨石坑脉动红环 */
+  var pulse = 0.4 + 0.3*Math.sin(performance.now()/250);
+  ctx.strokeStyle = "rgba(239,68,68,"+pulse+")";
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  ctx.ellipse(CRATER.cx,CRATER.cy,CRATER.rx+5,CRATER.ry+4,0,0,Math.PI*2);
+  ctx.stroke();
+
+  /* 危险岩石：红色十字 */
+  ctx.strokeStyle = "#ef4444";
+  ctx.lineWidth = 2.5;
+  ROCKS.forEach(function(r){
+    if(r.kind==="hazard"){
+      ctx.beginPath();
+      ctx.moveTo(r.x-r.r-3,r.y-r.r-3);
+      ctx.lineTo(r.x+r.r+3,r.y+r.r+3);
+      ctx.moveTo(r.x+r.r+3,r.y-r.r-3);
+      ctx.lineTo(r.x-r.r-3,r.y+r.r+3);
+      ctx.stroke();
+    }
+  });
+
+  /* 可通行走廊 */
+  ctx.fillStyle = "rgba(52,211,153,0.22)";
+  ctx.beginPath();
+  ctx.moveTo(100,410);
+  ctx.bezierCurveTo(220,370,340,340,460,320);
+  ctx.bezierCurveTo(560,310,660,305,710,310);
+  ctx.lineTo(710,330);
+  ctx.bezierCurveTo(660,325,560,330,460,340);
+  ctx.bezierCurveTo(340,360,220,390,100,430);
+  ctx.closePath();
+  ctx.fill();
+  ctx.strokeStyle = "rgba(52,211,153,0.75)";
+  ctx.lineWidth = 1.8;
+  ctx.setLineDash([5,4]);
+  ctx.beginPath();
+  ctx.moveTo(100,420);
+  ctx.bezierCurveTo(220,380,340,350,460,330);
+  ctx.bezierCurveTo(560,320,660,315,710,320);
+  ctx.stroke();
+  ctx.setLineDash([]);
+
+  /* 目标点 */
+  var gpulse = 0.65 + 0.3*Math.sin(performance.now()/300);
+  ctx.fillStyle = "rgba(52,211,153,"+gpulse+")";
+  ctx.beginPath();
+  ctx.arc(GOAL.x,GOAL.y,GOAL.r+4,0,Math.PI*2);
+  ctx.fill();
+  ctx.fillStyle = "#34d399";
+  ctx.beginPath();
+  ctx.arc(GOAL.x,GOAL.y,GOAL.r,0,Math.PI*2);
+  ctx.fill();
+  ctx.fillStyle = "#fff";
+  ctx.font = "bold 12px 'Noto Sans SC',system-ui";
+  ctx.textAlign = "center";
+  ctx.fillText((lang==="zh" ? "目标" : "GOAL"),GOAL.x,GOAL.y-14);
+
+  /* 图例 */
+  var legendY = HORIZON+15;
+  ctx.textAlign = "left";
+  ctx.font = "bold 11px 'Noto Sans SC',system-ui";
+  ctx.fillStyle = "rgba(52,211,153,0.9)"; ctx.fillRect(14,legendY,12,12);
+  ctx.fillStyle="#fff"; ctx.fillText((lang==="zh" ? "可通行" : "traversable"),32,legendY+10);
+  ctx.fillStyle = "rgba(239,68,68,0.9)"; ctx.fillRect(14,legendY+18,12,12);
+  ctx.fillStyle="#fff"; ctx.fillText((lang==="zh" ? "危险" : "hazard"),32,legendY+28);
+  ctx.fillStyle = "rgba(251,146,60,0.9)"; ctx.fillRect(14,legendY+36,12,12);
+  ctx.fillStyle="#fff"; ctx.fillText((lang==="zh" ? "陡坡" : "slope"),32,legendY+46);
+
+  ctx.restore();
+}
+
+/* 当前帧标题（在画面顶部） */
+function drawFrameTitle(){
+  var f = FRAMES[cur];
+  ctx.save();
+  ctx.fillStyle = "rgba(0,0,0,0.55)";
+  roundRect(W/2-180,18,360,48,6);
+  ctx.fill();
+  ctx.strokeStyle = "rgba(251,146,60,0.3)";
+  ctx.lineWidth = 1;
+  ctx.stroke();
+  ctx.fillStyle = "#fb923c";
+  ctx.font = "bold 18px 'Noto Sans SC',system-ui";
+  ctx.textAlign = "center";
+  ctx.fillText((lang==="zh" ? f.zh : f.en), W/2, 40);
+  ctx.fillStyle = "rgba(245,233,217,0.7)";
+  ctx.font = "12px 'Noto Sans SC',system-ui";
+  ctx.fillText((lang==="zh" ? f.desc_zh : f.desc_en), W/2, 58);
+  ctx.restore();
+}
+
+function render(){
+  ctx.clearRect(0,0,W,H);
+  drawMarsScene();
+  drawRover();
+
+  /* 按当前帧绘制 overlay，带淡入效果 */
+  var alpha = Math.min(1, 0.5 + t);
+  if(cur === 0) drawPhotoOverlay(alpha);
+  else if(cur === 1) drawGeologyOverlay(alpha);
+  else drawMissionOverlay(alpha);
+
+  drawFrameTitle();
+}
+
+/* ── init ── */
+window.addEventListener("resize", resize);
+resize();
+syncUI();
+render();
+
+/* 自动播放首次渲染后 500ms */
+setTimeout(function(){ startAnim(); }, 500);
+
+/* 脉动持续刷新（当非 playing 时仍刷新 mission 帧以驱动脉冲） */
+(function pulseLoop(){
+  if(!playing && cur === 2) render();
+  requestAnimationFrame(pulseLoop);
+})();
+
+})();
+</script>
+</body>
+</html>

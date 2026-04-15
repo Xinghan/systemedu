@@ -1,0 +1,486 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=Inter:wght@400;500&family=Noto+Sans+SC:wght@400;700&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box;}
+html,body{width:100%;height:100vh;overflow:hidden;}
+body{background:#05070a;color:#e2e2e9;font-family:'Inter','Noto Sans SC',sans-serif;display:flex;flex-direction:column;}
+.wrapper{display:flex;flex-direction:column;height:100vh;overflow:hidden;}
+.header{padding:10px 16px 6px;display:flex;justify-content:space-between;align-items:center;background:rgba(17,20,37,0.9);}
+.header h1{font-family:'Space Grotesk',sans-serif;font-size:clamp(13px,2vw,17px);font-weight:700;letter-spacing:-0.02em;color:#ffb000;text-shadow:0 0 12px rgba(255,176,0,0.3);}
+.header .sub{font-size:10px;color:#8e90a6;letter-spacing:0.1em;text-transform:uppercase;}
+.game-area{flex:1;min-height:0;display:flex;overflow:hidden;}
+.left-panel{flex:1;min-width:0;position:relative;}
+canvas{width:100%;height:100%;display:block;}
+.right-panel{width:clamp(200px,28vw,320px);background:rgba(17,20,37,0.85);backdrop-filter:blur(12px);border-left:1px solid rgba(142,144,166,0.1);display:flex;flex-direction:column;padding:12px;overflow-y:auto;gap:10px;}
+.section{background:rgba(255,255,255,0.03);border:1px solid rgba(142,144,166,0.08);padding:10px;}
+.section h3{font-family:'Space Grotesk',sans-serif;font-size:11px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:#ffb000;margin-bottom:8px;}
+.slider-wrap{display:flex;flex-direction:column;gap:4px;}
+.slider-wrap label{font-size:10px;color:#8e90a6;font-family:'Space Grotesk',sans-serif;letter-spacing:0.05em;}
+.slider-wrap input[type=range]{-webkit-appearance:none;width:100%;height:6px;background:rgba(255,176,0,0.15);outline:none;border-radius:3px;cursor:pointer;}
+.slider-wrap input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:16px;height:16px;border-radius:50%;background:#ffb000;box-shadow:0 0 8px rgba(255,176,0,0.4);cursor:pointer;}
+.val-display{font-family:'Space Grotesk',sans-serif;font-size:20px;font-weight:700;color:#ffb000;text-align:center;}
+.val-unit{font-size:10px;color:#8e90a6;text-align:center;}
+.meter{height:8px;background:rgba(255,255,255,0.05);border-radius:4px;overflow:hidden;margin-top:4px;}
+.meter-fill{height:100%;border-radius:4px;transition:width 0.3s ease;}
+.status-row{display:flex;justify-content:space-between;font-size:11px;margin-top:4px;}
+.status-label{color:#8e90a6;font-family:'Space Grotesk',sans-serif;font-size:9px;letter-spacing:0.08em;text-transform:uppercase;}
+.status-val{font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:12px;}
+.ai-card{padding:10px;border:1px solid rgba(255,176,0,0.15);background:rgba(255,176,0,0.03);margin-top:6px;}
+.ai-card .model-name{font-family:'Space Grotesk',sans-serif;font-size:13px;font-weight:700;color:#d6d9f3;}
+.ai-card .model-params{font-size:10px;color:#8e90a6;}
+.ai-card .model-tasks{font-size:11px;color:#bfc2e0;margin-top:4px;line-height:1.5;}
+.launch-btn{font-family:'Space Grotesk',sans-serif;font-size:13px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;padding:10px;border:none;cursor:pointer;color:#05070a;background:linear-gradient(135deg,#ffb000,#cc8d00);box-shadow:0 0 16px rgba(255,176,0,0.3);transition:transform 0.1s,box-shadow 0.2s;margin-top:auto;}
+.launch-btn:hover{transform:scale(1.03);box-shadow:0 0 24px rgba(255,176,0,0.5);}
+.launch-btn:active{transform:scale(0.97);}
+.launch-btn:disabled{opacity:0.4;cursor:not-allowed;transform:none;box-shadow:none;}
+.result-panel{display:none;padding:10px;border:1px solid rgba(255,176,0,0.2);background:rgba(255,176,0,0.05);text-align:center;}
+.result-panel.show{display:block;}
+.result-panel .orbit-result{font-family:'Space Grotesk',sans-serif;font-size:16px;font-weight:700;margin:6px 0;}
+.result-panel .ai-result{font-size:12px;color:#bfc2e0;line-height:1.6;}
+.hud{height:44px;display:flex;align-items:center;justify-content:space-around;background:rgba(0,0,0,0.55);backdrop-filter:blur(12px);padding:0 16px;flex-shrink:0;}
+.hud-item{text-align:center;}
+.hud-label{font-family:'Space Grotesk',sans-serif;font-size:8px;color:#8e90a6;letter-spacing:1.5px;text-transform:uppercase;}
+.hud-value{font-family:'Space Grotesk',sans-serif;font-size:13px;font-weight:700;color:#ffb000;}
+.lang-btn{position:fixed;top:8px;left:8px;z-index:100;font-family:'Space Grotesk',sans-serif;font-size:11px;font-weight:700;padding:4px 10px;cursor:pointer;border:none;background:rgba(20,20,35,0.85);backdrop-filter:blur(12px);color:#ffb59c;letter-spacing:1px;}
+.guide-panel{position:fixed;top:8px;right:8px;width:220px;max-height:36vh;overflow-y:auto;background:rgba(20,20,35,0.85);backdrop-filter:blur(12px);padding:10px;z-index:100;font-family:'Noto Sans SC',sans-serif;font-size:11px;color:rgba(255,255,255,0.8);line-height:1.6;display:none;}
+.guide-panel.show{display:block;}
+.guide-panel h3{font-family:'Space Grotesk',sans-serif;font-size:12px;margin-bottom:4px;color:#ffb000;cursor:pointer;}
+.guide-panel ul{padding-left:12px;}
+</style>
+</head>
+<body>
+<button class="lang-btn" id="langBtn">CN</button>
+
+<div class="wrapper">
+<div class="header">
+<div><h1 id="title"></h1><div class="sub" id="subtitle"></div></div>
+</div>
+
+<div class="game-area">
+<!-- Left: Canvas visualization -->
+<div class="left-panel"><canvas id="c"></canvas></div>
+
+<!-- Right: Controls -->
+<div class="right-panel">
+  <div class="section">
+    <h3 id="secThrust"></h3>
+    <div class="slider-wrap">
+      <label id="thrustSliderLabel"></label>
+      <input type="range" id="thrustSlider" min="0" max="100" value="30">
+    </div>
+    <div class="val-display" id="thrustVal">120 kN</div>
+    <div class="val-unit" id="thrustUnit"></div>
+    <div class="meter"><div class="meter-fill" id="thrustMeter" style="width:30%;background:#ffb000;"></div></div>
+  </div>
+
+  <div class="section">
+    <h3 id="secVelocity"></h3>
+    <div class="val-display" id="velVal">0 km/s</div>
+    <div class="meter"><div class="meter-fill" id="velMeter" style="width:0%;background:#67e8f9;"></div></div>
+    <div class="status-row">
+      <div><span class="status-label" id="labelV1"></span><br><span class="status-val" style="color:#67e8f9;">7.9 km/s</span></div>
+      <div><span class="status-label" id="labelV2"></span><br><span class="status-val" style="color:#ffb000;">11.2 km/s</span></div>
+    </div>
+  </div>
+
+  <div class="section">
+    <h3 id="secOrbit"></h3>
+    <div class="status-val" id="orbitStatus" style="color:#8e90a6;font-size:14px;text-align:center;">--</div>
+  </div>
+
+  <div class="section">
+    <h3 id="secAI"></h3>
+    <div class="ai-card" id="aiCard">
+      <div class="model-name" id="aiModelName">--</div>
+      <div class="model-params" id="aiModelParams">--</div>
+      <div class="model-tasks" id="aiModelTasks">--</div>
+    </div>
+  </div>
+
+  <div class="result-panel" id="resultPanel">
+    <div class="status-label" id="resultTitle"></div>
+    <div class="orbit-result" id="resultOrbit"></div>
+    <div class="ai-result" id="resultAI"></div>
+  </div>
+
+  <button class="launch-btn" id="launchBtn"></button>
+</div>
+</div>
+
+<div class="hud">
+  <div class="hud-item"><div class="hud-label" id="hudL1"></div><div class="hud-value" id="hudV1">--</div></div>
+  <div class="hud-item"><div class="hud-label" id="hudL2"></div><div class="hud-value" id="hudV2">--</div></div>
+  <div class="hud-item"><div class="hud-label" id="hudL3"></div><div class="hud-value" id="hudV3">--</div></div>
+  <div class="hud-item"><div class="hud-label" id="hudL4"></div><div class="hud-value" id="hudV4">--</div></div>
+</div>
+</div>
+
+<script>
+(function(){
+'use strict';
+
+// --- i18n ---
+var LANG = 'cn';
+var I18N = {
+  title:    {en:'ROCKET LAUNCH SIMULATOR', cn:'\u706b\u7bad\u53d1\u5c04\u6a21\u62df\u5668'},
+  subtitle: {en:'Adjust thrust, observe orbit & AI analogy', cn:'\u8c03\u8282\u63a8\u529b\uff0c\u89c2\u5bdf\u8f68\u9053\u4e0eAI\u7c7b\u6bd4'},
+  secThrust: {en:'THRUST CONTROL', cn:'\u63a8\u529b\u63a7\u5236'},
+  thrustSliderLabel: {en:'Drag to set thrust', cn:'\u62d6\u52a8\u8bbe\u7f6e\u63a8\u529b'},
+  thrustUnit: {en:'kilonewtons', cn:'\u5343\u725b\u987f'},
+  secVelocity: {en:'VELOCITY', cn:'\u901f\u5ea6'},
+  secOrbit: {en:'TARGET ORBIT', cn:'\u76ee\u6807\u8f68\u9053'},
+  secAI: {en:'AI ANALOGY', cn:'AI\u7c7b\u6bd4'},
+  labelV1: {en:'1ST COSMIC', cn:'\u7b2c\u4e00\u5b87\u5b99\u901f\u5ea6'},
+  labelV2: {en:'2ND COSMIC', cn:'\u7b2c\u4e8c\u5b87\u5b99\u901f\u5ea6'},
+  launchBtn: {en:'LAUNCH', cn:'\u53d1\u5c04'},
+  resultTitle: {en:'LAUNCH RESULT', cn:'\u53d1\u5c04\u7ed3\u679c'},
+
+  orbitSub:   {en:'SUB-ORBITAL', cn:'\u4e9a\u8f68\u9053'},
+  orbitLEO:   {en:'LOW EARTH ORBIT (LEO)', cn:'\u8fd1\u5730\u8f68\u9053 (LEO)'},
+  orbitGTO:   {en:'GEOSTATIONARY TRANSFER', cn:'\u5730\u7403\u540c\u6b65\u8f6c\u79fb\u8f68\u9053 (GTO)'},
+  orbitDeep:  {en:'DEEP SPACE', cn:'\u6df1\u7a7a\u8f68\u9053'},
+  orbitEscape:{en:'SOLAR SYSTEM ESCAPE', cn:'\u592a\u9633\u7cfb\u9003\u9038'},
+
+  aiTiny:  {en:'Tiny Model (<1B)', cn:'\u5fae\u578b\u6a21\u578b (<1B)'},
+  aiSmall: {en:'Small Model (7B)', cn:'\u5c0f\u6a21\u578b (7B)'},
+  aiMed:   {en:'Medium Model (13-30B)', cn:'\u4e2d\u578b\u6a21\u578b (13-30B)'},
+  aiBig:   {en:'Large Model (70B+)', cn:'\u5927\u6a21\u578b (70B+)'},
+  aiFront: {en:'Frontier Model (400B+)', cn:'\u524d\u6cbf\u6a21\u578b (400B+)'},
+
+  taskTiny:  {en:'Text completion, simple patterns', cn:'\u6587\u672c\u8865\u5168\u3001\u7b80\u5355\u6a21\u5f0f'},
+  taskSmall: {en:'Classification, extraction, summarization', cn:'\u5206\u7c7b\u3001\u62bd\u53d6\u3001\u6458\u8981'},
+  taskMed:   {en:'Translation, Q&A, basic reasoning', cn:'\u7ffb\u8bd1\u3001\u95ee\u7b54\u3001\u57fa\u7840\u63a8\u7406'},
+  taskBig:   {en:'Complex reasoning, planning, code gen', cn:'\u590d\u6742\u63a8\u7406\u3001\u89c4\u5212\u3001\u4ee3\u7801\u751f\u6210'},
+  taskFront: {en:'Research, multi-step agents, discovery', cn:'\u7814\u7a76\u3001\u591a\u6b65\u667a\u80fd\u4f53\u3001\u53d1\u73b0'},
+
+  costLabel: {en:'EST. COST', cn:'\u9884\u4f30\u6210\u672c'},
+  fuelLabel: {en:'FUEL', cn:'\u71c3\u6599'},
+  orbitLabel:{en:'ORBIT', cn:'\u8f68\u9053'},
+  modelLabel:{en:'MODEL', cn:'\u6a21\u578b'},
+
+  successLEO: {en:'Satellite successfully placed in LEO!', cn:'\u536b\u661f\u6210\u529f\u8fdb\u5165\u8fd1\u5730\u8f68\u9053\uff01'},
+  successDeep:{en:'Probe heading to deep space!', cn:'\u63a2\u6d4b\u5668\u6b63\u98de\u5411\u6df1\u7a7a\uff01'},
+  failSub:    {en:'Insufficient thrust -- fell back to Earth', cn:'\u63a8\u529b\u4e0d\u8db3\u2014\u2014\u706b\u7bad\u843d\u56de\u5730\u9762'},
+};
+function t(k){return(I18N[k]&&I18N[k][LANG])||(I18N[k]&&I18N[k]['en'])||k;}
+
+// --- Canvas ---
+var cv = document.getElementById('c');
+var ctx = cv.getContext('2d');
+var wrap = cv.parentElement;
+var W=0, H=0, DPR = Math.min(window.devicePixelRatio||1, 2);
+
+// --- State ---
+var thrustPercent = 30; // 0-100
+var launching = false;
+var launchProgress = 0; // 0-1
+var rocketY = 0;
+var rocketVel = 0;
+var maxAltitude = 0;
+var launchDone = false;
+var stars = [];
+for (var i=0;i<50;i++) stars.push({x:Math.random(),y:Math.random(),r:0.3+Math.random()*1.2,a:0.3+Math.random()*0.6});
+
+// Exhaust particles
+var particles = [];
+
+// --- Thrust -> velocity/orbit mapping ---
+function thrustToKN(pct) { return Math.round(20 + pct * 38); } // 20-3820 kN
+function thrustToVelocity(pct) { return (pct/100) * 16.5; }    // 0-16.5 km/s
+function velocityToOrbit(v) {
+  if (v < 5)    return {key:'orbitSub',    color:'#8e90a6', level:0};
+  if (v < 7.9)  return {key:'orbitSub',    color:'#8e90a6', level:0};
+  if (v < 10)   return {key:'orbitLEO',    color:'#67e8f9', level:1};
+  if (v < 11.2) return {key:'orbitGTO',    color:'#22d3ee', level:2};
+  if (v < 14)   return {key:'orbitDeep',   color:'#ffb000', level:3};
+  return                {key:'orbitEscape', color:'#ff5f1f', level:4};
+}
+function velocityToAI(v) {
+  if (v < 3)    return {name:'aiTiny',  params:'<1B',   tasks:'taskTiny',  color:'#8e90a6'};
+  if (v < 7.9)  return {name:'aiSmall', params:'7B',    tasks:'taskSmall', color:'#67e8f9'};
+  if (v < 10)   return {name:'aiMed',   params:'13-30B',tasks:'taskMed',   color:'#22d3ee'};
+  if (v < 11.2) return {name:'aiBig',   params:'70B+',  tasks:'taskBig',   color:'#ffb000'};
+  return                {name:'aiFront', params:'400B+', tasks:'taskFront', color:'#ff5f1f'};
+}
+
+// --- Update UI from slider ---
+function updateFromSlider() {
+  thrustPercent = parseInt(document.getElementById('thrustSlider').value);
+  var kn = thrustToKN(thrustPercent);
+  var vel = thrustToVelocity(thrustPercent);
+  var orbit = velocityToOrbit(vel);
+  var ai = velocityToAI(vel);
+
+  document.getElementById('thrustVal').textContent = kn + ' kN';
+  document.getElementById('thrustMeter').style.width = thrustPercent + '%';
+  document.getElementById('velVal').textContent = vel.toFixed(1) + ' km/s';
+  document.getElementById('velMeter').style.width = Math.min(100, (vel/16.5)*100) + '%';
+  document.getElementById('velMeter').style.background = vel >= 11.2 ? '#ffb000' : vel >= 7.9 ? '#67e8f9' : '#8e90a6';
+  document.getElementById('orbitStatus').textContent = t(orbit.key);
+  document.getElementById('orbitStatus').style.color = orbit.color;
+
+  document.getElementById('aiModelName').textContent = t(ai.name);
+  document.getElementById('aiModelName').style.color = ai.color;
+  document.getElementById('aiModelParams').textContent = ai.params + ' params';
+  document.getElementById('aiModelTasks').textContent = t(ai.tasks);
+
+  // HUD
+  document.getElementById('hudV1').textContent = kn + ' kN';
+  document.getElementById('hudV2').textContent = vel.toFixed(1) + ' km/s';
+  document.getElementById('hudV3').textContent = t(orbit.key).split('(')[0].trim();
+  document.getElementById('hudV4').textContent = t(ai.name).split('(')[0].trim();
+}
+
+// --- Launch animation ---
+function startLaunch() {
+  if (launching) return;
+  launching = true;
+  launchDone = false;
+  launchProgress = 0;
+  rocketY = 0;
+  rocketVel = 0;
+  particles = [];
+  document.getElementById('launchBtn').disabled = true;
+  document.getElementById('resultPanel').classList.remove('show');
+
+  var vel = thrustToVelocity(thrustPercent);
+  var targetAlt = vel / 16.5; // normalized 0-1
+  var accel = thrustPercent / 100;
+
+  function tick() {
+    if (!launching) return;
+    rocketVel += accel * 0.008;
+    rocketY += rocketVel;
+    launchProgress = Math.min(rocketY / (targetAlt * 1.2 + 0.1), 1);
+
+    // Spawn exhaust
+    if (launchProgress < 0.9) {
+      var rx = W * 0.5;
+      var ry = H * (0.82 - rocketY * H * 0.6 / H);
+      for (var i=0;i<3;i++) {
+        particles.push({
+          x: rx + (Math.random()-0.5)*8,
+          y: ry + 18,
+          vx: (Math.random()-0.5)*2,
+          vy: Math.random()*4+1,
+          life:1, decay:0.025+Math.random()*0.02,
+          color: vel>=11.2?'#ffb000':'#67e8f9',
+          r: 1+Math.random()*2.5
+        });
+      }
+    }
+
+    // Update particles
+    for (var j=particles.length-1;j>=0;j--) {
+      var p=particles[j];
+      p.x+=p.vx;p.y+=p.vy;p.life-=p.decay;p.r*=0.97;
+      if(p.life<=0)particles.splice(j,1);
+    }
+
+    drawScene();
+
+    if (launchProgress >= 1) {
+      launching = false;
+      launchDone = true;
+      showResult();
+      document.getElementById('launchBtn').disabled = false;
+      return;
+    }
+    requestAnimationFrame(tick);
+  }
+  tick();
+}
+
+function showResult() {
+  var vel = thrustToVelocity(thrustPercent);
+  var orbit = velocityToOrbit(vel);
+  var ai = velocityToAI(vel);
+  var panel = document.getElementById('resultPanel');
+  panel.classList.add('show');
+
+  document.getElementById('resultOrbit').textContent = t(orbit.key);
+  document.getElementById('resultOrbit').style.color = orbit.color;
+
+  var resultText = orbit.level === 0 ? t('failSub') :
+                   orbit.level <= 2 ? t('successLEO') : t('successDeep');
+  var aiText = t(ai.name) + ' -- ' + t(ai.tasks);
+  document.getElementById('resultAI').textContent = resultText + '\nAI: ' + aiText;
+}
+
+// --- Canvas drawing ---
+function drawScene() {
+  var vel = thrustToVelocity(thrustPercent);
+  var orbit = velocityToOrbit(vel);
+
+  // Background
+  var bg = ctx.createLinearGradient(0,0,0,H);
+  bg.addColorStop(0,'#05070a');
+  bg.addColorStop(0.5,'#0d111f');
+  bg.addColorStop(1,'#111425');
+  ctx.fillStyle = bg; ctx.fillRect(0,0,W,H);
+
+  // Stars
+  for (var i=0;i<stars.length;i++){
+    var s=stars[i];
+    ctx.globalAlpha=s.a*(0.6+0.4*Math.sin(Date.now()*0.002+i*1.3));
+    ctx.fillStyle='#d6d9f3';
+    ctx.beginPath();ctx.arc(s.x*W,s.y*H,s.r,0,Math.PI*2);ctx.fill();
+  }
+  ctx.globalAlpha=1;
+
+  // Earth at bottom
+  var earthR = Math.min(W,H)*0.14;
+  var earthCx = W*0.5, earthCy = H*0.92;
+  // Atmosphere
+  var atm = ctx.createRadialGradient(earthCx,earthCy,earthR*0.8,earthCx,earthCy,earthR*1.5);
+  atm.addColorStop(0,'rgba(34,211,238,0.12)');atm.addColorStop(1,'rgba(34,211,238,0)');
+  ctx.fillStyle=atm;ctx.beginPath();ctx.arc(earthCx,earthCy,earthR*1.5,0,Math.PI*2);ctx.fill();
+  // Earth body
+  var eg=ctx.createRadialGradient(earthCx-earthR*0.2,earthCy-earthR*0.2,earthR*0.1,earthCx,earthCy,earthR);
+  eg.addColorStop(0,'#22d3ee');eg.addColorStop(0.5,'#0891b2');eg.addColorStop(1,'#155e75');
+  ctx.fillStyle=eg;ctx.beginPath();ctx.arc(earthCx,earthCy,earthR,0,Math.PI*2);ctx.fill();
+  ctx.fillStyle='rgba(74,222,128,0.3)';
+  ctx.beginPath();ctx.ellipse(earthCx-earthR*0.2,earthCy-earthR*0.1,earthR*0.25,earthR*0.18,0.3,0,Math.PI*2);ctx.fill();
+
+  // LEO orbit line
+  ctx.save();
+  ctx.strokeStyle='rgba(103,232,249,0.2)';ctx.lineWidth=1;ctx.setLineDash([4,4]);
+  ctx.beginPath();ctx.ellipse(earthCx,earthCy,earthR*2.2,earthR*0.8,0,Math.PI,0);ctx.stroke();
+  ctx.restore();
+  // LEO label
+  ctx.fillStyle='rgba(103,232,249,0.4)';
+  ctx.font="9px 'Space Grotesk',sans-serif";ctx.textAlign='left';
+  ctx.fillText('LEO',earthCx+earthR*2.3,earthCy-earthR*0.5);
+
+  // V1 / V2 lines
+  var v1Y = H*0.52, v2Y = H*0.28;
+  ctx.save();ctx.setLineDash([5,5]);
+  ctx.strokeStyle='rgba(103,232,249,0.15)';ctx.lineWidth=0.5;
+  ctx.beginPath();ctx.moveTo(0,v1Y);ctx.lineTo(W,v1Y);ctx.stroke();
+  ctx.strokeStyle='rgba(255,176,0,0.15)';
+  ctx.beginPath();ctx.moveTo(0,v2Y);ctx.lineTo(W,v2Y);ctx.stroke();
+  ctx.restore();
+  ctx.fillStyle='rgba(103,232,249,0.3)';ctx.font="8px 'Space Grotesk',sans-serif";ctx.textAlign='left';
+  ctx.fillText('V1 = 7.9 km/s',4,v1Y-3);
+  ctx.fillStyle='rgba(255,176,0,0.3)';
+  ctx.fillText('V2 = 11.2 km/s',4,v2Y-3);
+
+  // Rocket
+  var rAlt = launching || launchDone ? Math.min(rocketY, 0.8) : 0;
+  var rX = W*0.5;
+  var rY = H*0.82 - rAlt * H * 0.7;
+  var rScale = vel >= 11.2 ? 1.0 : vel >= 7.9 ? 0.8 : 0.6;
+  var rColor = vel >= 11.2 ? '#ffb000' : '#67e8f9';
+
+  // Rocket body
+  var s = rScale * 14;
+  ctx.save();ctx.translate(rX,rY);
+  var bodyG=ctx.createLinearGradient(-s*0.4,-s*2,s*0.4,-s*2);
+  bodyG.addColorStop(0,'#111425');bodyG.addColorStop(0.5,rColor);bodyG.addColorStop(1,'#111425');
+  ctx.fillStyle=bodyG;
+  ctx.beginPath();
+  ctx.moveTo(0,-s*2.8);
+  ctx.quadraticCurveTo(s*0.5,-s*2,s*0.45,-s*0.5);
+  ctx.lineTo(s*0.7,s*0.3);ctx.lineTo(s*0.2,0);
+  ctx.lineTo(-s*0.2,0);ctx.lineTo(-s*0.7,s*0.3);
+  ctx.lineTo(-s*0.45,-s*0.5);
+  ctx.quadraticCurveTo(-s*0.5,-s*2,0,-s*2.8);
+  ctx.closePath();ctx.fill();
+  ctx.fillStyle='#d6d9f3';ctx.shadowColor='#d6d9f3';ctx.shadowBlur=3;
+  ctx.beginPath();ctx.arc(0,-s*1.6,s*0.16,0,Math.PI*2);ctx.fill();
+  ctx.shadowBlur=0;
+  if (!launchDone || launching) {
+    ctx.fillStyle=rColor;ctx.shadowColor=rColor;ctx.shadowBlur=8;
+    ctx.beginPath();ctx.arc(0,s*0.1,s*0.22,0,Math.PI);ctx.fill();
+    ctx.shadowBlur=0;
+  }
+  ctx.restore();
+
+  // Particles
+  for (var j=0;j<particles.length;j++){
+    var p=particles[j];
+    ctx.globalAlpha=p.life*0.5;ctx.fillStyle=p.color;
+    ctx.shadowColor=p.color;ctx.shadowBlur=3;
+    ctx.beginPath();ctx.arc(p.x,p.y,p.r,0,Math.PI*2);ctx.fill();
+  }
+  ctx.shadowBlur=0;ctx.globalAlpha=1;
+
+  // Orbit achieved indicator
+  if (launchDone && orbit.level >= 1) {
+    ctx.fillStyle = orbit.color;
+    ctx.shadowColor = orbit.color; ctx.shadowBlur = 12;
+    ctx.font = "bold " + Math.max(14,W*0.025) + "px 'Space Grotesk',sans-serif";
+    ctx.textAlign = 'center';
+    ctx.fillText(t(orbit.key), W*0.5, Math.max(rY - 30, 20));
+    ctx.shadowBlur = 0;
+  }
+}
+
+// --- Resize ---
+function resize() {
+  var rect = wrap.getBoundingClientRect();
+  if (rect.width<1||rect.height<1) return;
+  W=rect.width;H=rect.height;
+  cv.width=W*DPR;cv.height=H*DPR;
+  cv.style.width=W+'px';cv.style.height=H+'px';
+  ctx.setTransform(DPR,0,0,DPR,0,0);
+  drawScene();
+}
+
+// --- Refresh i18n ---
+function refreshI18N() {
+  document.getElementById('langBtn').textContent = LANG.toUpperCase();
+  document.getElementById('title').textContent = t('title');
+  document.getElementById('subtitle').textContent = t('subtitle');
+  document.getElementById('secThrust').textContent = t('secThrust');
+  document.getElementById('thrustSliderLabel').textContent = t('thrustSliderLabel');
+  document.getElementById('thrustUnit').textContent = t('thrustUnit');
+  document.getElementById('secVelocity').textContent = t('secVelocity');
+  document.getElementById('secOrbit').textContent = t('secOrbit');
+  document.getElementById('secAI').textContent = t('secAI');
+  document.getElementById('labelV1').textContent = t('labelV1');
+  document.getElementById('labelV2').textContent = t('labelV2');
+  document.getElementById('launchBtn').textContent = t('launchBtn');
+  document.getElementById('resultTitle').textContent = t('resultTitle');
+  document.getElementById('hudL1').textContent = t('fuelLabel');
+  document.getElementById('hudL2').textContent = t('secVelocity');
+  document.getElementById('hudL3').textContent = t('orbitLabel');
+  document.getElementById('hudL4').textContent = t('modelLabel');
+  updateFromSlider();
+  drawScene();
+}
+
+// --- Events ---
+document.getElementById('langBtn').addEventListener('click', function(){
+  LANG = LANG==='en'?'cn':'en'; refreshI18N();
+});
+document.getElementById('thrustSlider').addEventListener('input', function(){
+  if(!launching) updateFromSlider();
+  drawScene();
+});
+document.getElementById('launchBtn').addEventListener('click', startLaunch);
+
+// --- Init ---
+window.addEventListener('resize', resize);
+refreshI18N();
+resize();
+setTimeout(resize,200);
+setTimeout(resize,600);
+document.fonts.ready.then(resize);
+
+// Idle animation loop
+var idleRaf;
+function idleTick() {
+  if (!launching) drawScene();
+  idleRaf = requestAnimationFrame(idleTick);
+}
+idleTick();
+
+})();
+</script>
+</body>
+</html>

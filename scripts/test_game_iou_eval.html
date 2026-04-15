@@ -1,0 +1,442 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Metric Eval Lab</title>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=Space+Grotesk:wght@400;700&family=Noto+Sans+SC:wght@400;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css" crossorigin="anonymous">
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js" crossorigin="anonymous"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js" crossorigin="anonymous"
+  onload="renderMathInElement(document.body,{delimiters:[{left:'$$',right:'$$',display:true},{left:'\\(',right:'\\)',display:false},{left:'\\[',right:'\\]',display:true}]})"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{width:100%;height:100vh;overflow:hidden;background:#131313;
+  font-family:'Noto Sans SC','PingFang SC',system-ui,sans-serif;color:#e5e2e1}
+
+.wrapper{display:flex;flex-direction:column;height:100vh;overflow:hidden}
+
+.lang-btn{position:fixed;top:8px;left:8px;z-index:100;
+  font-family:'Space Grotesk',sans-serif;font-size:11px;font-weight:700;
+  padding:4px 10px;cursor:pointer;
+  border:1px solid rgba(255,255,255,0.08);
+  background:rgba(20,20,20,0.85);backdrop-filter:blur(12px);
+  color:#ffb59c;letter-spacing:1px}
+
+.guide-panel{position:fixed;top:8px;right:8px;width:240px;max-height:38vh;
+  overflow-y:auto;z-index:200;padding:10px 12px;
+  background:rgba(28,27,27,0.92);backdrop-filter:blur(14px);
+  border:1px solid rgba(255,191,156,0.18);font-size:12px;line-height:1.55;
+  color:rgba(229,226,225,0.88)}
+.guide-panel h3{font-family:'Space Grotesk',sans-serif;font-size:12px;font-weight:700;
+  margin-bottom:6px;display:flex;align-items:center;justify-content:space-between;cursor:pointer;
+  color:#ffb59c;text-transform:uppercase;letter-spacing:0.05em}
+.guide-panel h3 .arrow{transition:transform .2s;font-size:10px}
+.guide-panel h3 .arrow.collapsed{transform:rotate(-90deg)}
+.guide-panel ul{padding-left:14px;margin:4px 0}
+.guide-panel .gl{color:#8a8886;font-size:10px;text-transform:uppercase;
+  letter-spacing:0.08em;margin-top:5px;font-family:'Space Grotesk',sans-serif}
+
+.header{height:42px;min-height:42px;display:flex;align-items:center;justify-content:space-between;
+  padding:0 16px;background:rgba(28,27,27,0.95);border-bottom:1px solid rgba(255,191,156,0.15)}
+.header h1{font-family:'Space Grotesk',sans-serif;font-size:13px;font-weight:700;
+  color:#ffb59c;text-transform:uppercase;letter-spacing:0.08em}
+.header .score-display{font-family:'JetBrains Mono',monospace;font-size:13px;color:#e5e2e1}
+
+.game-area{flex:1;min-height:0;display:flex;flex-direction:column;overflow:hidden;padding:10px 16px}
+
+/* Scenario section */
+.scenario{background:rgba(28,27,27,0.6);backdrop-filter:blur(8px);border:1px solid rgba(255,191,156,0.12);
+  padding:10px 14px;margin-bottom:8px}
+.scenario-title{font-family:'Space Grotesk',sans-serif;font-size:12px;color:#ffb59c;
+  text-transform:uppercase;letter-spacing:0.06em;margin-bottom:4px}
+.scenario-desc{font-size:13px;color:#c6c6c6;line-height:1.5}
+
+/* Prediction cards */
+.predictions{display:flex;gap:10px;flex:1;min-height:0}
+.pred-card{flex:1;background:rgba(28,27,27,0.5);border:1px solid rgba(138,136,134,0.15);
+  padding:10px;display:flex;flex-direction:column;position:relative;transition:border-color 0.2s}
+.pred-card:hover{border-color:rgba(255,191,156,0.3)}
+.pred-card.selected{border-color:#ffb59c;box-shadow:0 0 16px rgba(255,127,80,0.2)}
+.pred-card.correct{border-color:#10b981;box-shadow:0 0 16px rgba(16,185,129,0.3)}
+.pred-card.wrong{border-color:#ef4444;box-shadow:0 0 16px rgba(239,68,68,0.2)}
+.pred-label{font-family:'Space Grotesk',sans-serif;font-size:11px;color:#8a8886;
+  text-transform:uppercase;letter-spacing:0.06em;margin-bottom:4px}
+.pred-grid{display:grid;grid-template-columns:repeat(8,1fr);gap:1px;margin-bottom:6px;flex-shrink:0}
+.pred-pixel{width:100%;aspect-ratio:1;border:none}
+.pred-metrics{font-family:'JetBrains Mono',monospace;font-size:11px;color:#e5e2e1;line-height:1.6}
+.pred-metrics .metric-row{display:flex;justify-content:space-between;padding:1px 0}
+.metric-name{color:#8a8886}
+.metric-val{color:#ffb59c;font-weight:700}
+
+/* Question + buttons */
+.question-bar{padding:8px 0;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.q-text{font-size:13px;color:#e5e2e1;flex:1;min-width:200px}
+.answer-btns{display:flex;gap:6px}
+.ans-btn{padding:6px 14px;border:1px solid rgba(255,191,156,0.35);background:transparent;
+  color:#ffb59c;cursor:pointer;font-family:'Space Grotesk',sans-serif;font-size:12px;
+  font-weight:700;letter-spacing:0.04em;transition:all .15s}
+.ans-btn:hover{background:rgba(255,191,156,0.15)}
+.ans-btn.chosen{background:rgba(255,191,156,0.25);border-color:#ffb59c}
+
+/* Feedback */
+.feedback-panel{min-height:48px;background:rgba(0,0,0,0.55);border-top:1px solid rgba(255,255,255,0.06);
+  padding:8px 16px;display:flex;align-items:center;gap:12px}
+.fb-icon{font-family:'JetBrains Mono',monospace;font-size:16px;font-weight:700}
+.fb-text{font-size:12px;color:#c6c6c6;line-height:1.4;flex:1}
+.fb-next{padding:6px 16px;border:1px solid rgba(0,218,243,0.4);background:transparent;
+  color:#00daf3;cursor:pointer;font-family:'Space Grotesk',sans-serif;font-size:12px;
+  font-weight:700;letter-spacing:0.04em;display:none}
+.fb-next:hover{background:rgba(0,218,243,0.12)}
+
+/* Summary panel */
+.summary-overlay{display:none;position:fixed;top:0;left:0;width:100%;height:100%;
+  background:rgba(19,19,19,0.92);backdrop-filter:blur(16px);z-index:300;
+  justify-content:center;align-items:center}
+.summary-box{background:rgba(28,27,27,0.95);border:1px solid rgba(255,191,156,0.2);
+  padding:28px 36px;max-width:460px;text-align:center}
+.summary-box h2{font-family:'Space Grotesk',sans-serif;font-size:18px;color:#ffb59c;
+  margin-bottom:12px;text-transform:uppercase;letter-spacing:0.06em}
+.summary-score{font-family:'JetBrains Mono',monospace;font-size:32px;color:#10b981;
+  font-weight:700;margin:12px 0}
+.summary-text{font-size:13px;color:#c6c6c6;line-height:1.6;margin-bottom:16px}
+.summary-btn{padding:8px 24px;border:1px solid rgba(255,191,156,0.4);background:linear-gradient(45deg,rgba(255,191,156,0.15),rgba(255,127,80,0.1));
+  color:#ffb59c;cursor:pointer;font-family:'Space Grotesk',sans-serif;font-size:13px;
+  font-weight:700;letter-spacing:0.04em}
+</style>
+</head>
+<body>
+
+<button class="lang-btn" id="langBtn">CN</button>
+
+<div class="guide-panel" id="guidePanel">
+  <h3 id="guideToggle"><span id="guideTitle">MISSION BRIEF</span> <span class="arrow" id="guideArrow">&#9660;</span></h3>
+  <div id="guideContent">
+    <div class="gl">GOAL</div>
+    <p id="guideGoal"></p>
+    <div class="gl" style="margin-top:5px">CONTROLS</div>
+    <ul>
+      <li id="guideC1"></li>
+      <li id="guideC2"></li>
+    </ul>
+    <div class="gl" style="margin-top:5px">WIN</div>
+    <p id="guideWin"></p>
+  </div>
+</div>
+
+<div class="wrapper">
+  <div class="header">
+    <h1 id="headerTitle">METRIC EVAL LAB</h1>
+    <div class="score-display" id="scoreDisplay">0 / 0</div>
+  </div>
+
+  <div class="game-area" id="gameArea">
+    <div class="scenario" id="scenario">
+      <div class="scenario-title" id="scenarioTitle">SCENARIO 1</div>
+      <div class="scenario-desc" id="scenarioDesc"></div>
+    </div>
+    <div class="predictions" id="predictions"></div>
+    <div class="question-bar" id="questionBar">
+      <div class="q-text" id="qText"></div>
+      <div class="answer-btns" id="answerBtns"></div>
+    </div>
+  </div>
+
+  <div class="feedback-panel" id="feedbackPanel">
+    <div class="fb-icon" id="fbIcon">--</div>
+    <div class="fb-text" id="fbText"></div>
+    <button class="fb-next" id="fbNext">NEXT</button>
+  </div>
+</div>
+
+<div class="summary-overlay" id="summaryOverlay">
+  <div class="summary-box">
+    <h2 id="summaryTitle">MISSION COMPLETE</h2>
+    <div class="summary-score" id="summaryScore"></div>
+    <div class="summary-text" id="summaryText"></div>
+    <button class="summary-btn" id="summaryBtn">RETRY</button>
+  </div>
+</div>
+
+<script>
+(function(){
+"use strict";
+
+var LANG='cn';
+var I18N={
+  headerTitle:{en:'METRIC EVAL LAB',cn:'METRIC EVAL LAB'},
+  guideTitle:{en:'MISSION BRIEF',cn:'MISSION BRIEF'},
+  guideGoal:{en:'Compare predictions under different metrics. Pick the best model for each scenario.',
+             cn:'比较不同预测结果在多个指标下的差异，为每个场景选出最合适的模型。'},
+  guideC1:{en:'Read metrics for each prediction card',cn:'阅读每张预测卡片的指标数据'},
+  guideC2:{en:'Click the card that best answers the question',cn:'点击最符合问题要求的卡片'},
+  guideWin:{en:'Answer all 4 scenarios correctly.',cn:'正确回答全部 4 个场景。'},
+  scenario:{en:'SCENARIO',cn:'SCENARIO'},
+  summaryTitle:{en:'MISSION COMPLETE',cn:'MISSION COMPLETE'},
+  summaryGood:{en:'Excellent! You understand how different metrics expose different model behaviors.',
+               cn:'出色！你理解了不同指标如何暴露不同的模型行为。'},
+  summaryOk:{en:'Good start. Review the scenarios where FN cost matters more than FP cost.',
+             cn:'还不错。复习一下 FN 代价大于 FP 代价的场景。'},
+  retry:{en:'RETRY',cn:'RETRY'},
+  next:{en:'NEXT',cn:'NEXT'},
+  correct:{en:'CORRECT',cn:'CORRECT'},
+  wrong:{en:'WRONG',cn:'WRONG'},
+  btnA:{en:'Model A',cn:'Model A'},
+  btnB:{en:'Model B',cn:'Model B'},
+  btnC:{en:'Model C',cn:'Model C'},
+};
+function t(key){return(I18N[key]&&I18N[key][LANG])||(I18N[key]&&I18N[key]['en'])||key;}
+
+// Color constants
+var COL_TP='#10b981',COL_FP='#fbbf24',COL_FN='#ef4444',COL_TN='rgba(74,85,104,0.35)';
+
+// 4 scenarios, each with 2-3 prediction models
+var scenarios=[
+  {
+    qcn:'哪个模型对 rover 导航更安全？（提示：漏掉岩石比误报更危险）',
+    qen:'Which model is safer for rover navigation? (Hint: missing a rock is worse than false alarm)',
+    explanationCn:'Model B 的 Recall 最高（0.93），意味着几乎没有漏掉真正的危险区域。对于 rover 导航，漏报（FN）的代价远大于误报（FP）。',
+    explanationEn:'Model B has the highest Recall (0.93), meaning it catches almost all real dangers. For rover navigation, FN cost is much higher than FP cost.',
+    correct:1,
+    models:[
+      {label:'A',tp:35,fp:5,fn:15,tn:245},
+      {label:'B',tp:45,fp:18,fn:3,tn:234},
+      {label:'C',tp:30,fp:2,fn:20,tn:248},
+    ]
+  },
+  {
+    qcn:'哪个模型的 IoU 最高？',
+    qen:'Which model has the highest IoU?',
+    explanationCn:'Model A 的 IoU = 40/(40+6+10) = 0.714，比 B 的 0.625 和 C 的 0.600 都高。IoU 同时惩罚 FP 和 FN。',
+    explanationEn:'Model A has IoU = 40/(40+6+10) = 0.714, higher than B (0.625) and C (0.600). IoU penalizes both FP and FN.',
+    correct:0,
+    models:[
+      {label:'A',tp:40,fp:6,fn:10,tn:244},
+      {label:'B',tp:30,fp:6,fn:12,tn:252},
+      {label:'C',tp:36,fp:12,fn:12,tn:240},
+    ]
+  },
+  {
+    qcn:'如果你想减少不必要的绕路（减少误报），哪个模型更好？',
+    qen:'If you want to reduce unnecessary detours (reduce false alarms), which model is better?',
+    explanationCn:'Model A 的 Precision 最高（0.95），意味着它预测为危险的区域几乎都是真正的危险，不会让 rover 做太多不必要的绕路。',
+    explanationEn:'Model A has the highest Precision (0.95), meaning its danger predictions are almost all real. The rover will not take unnecessary detours.',
+    correct:0,
+    models:[
+      {label:'A',tp:38,fp:2,fn:14,tn:246},
+      {label:'B',tp:42,fp:16,fn:6,tn:236},
+    ]
+  },
+  {
+    qcn:'综合考虑安全性和效率，你会推荐哪个模型部署到火星车上？',
+    qen:'Considering both safety and efficiency, which model would you deploy on a Mars rover?',
+    explanationCn:'Model B 在 Recall（0.90）和 IoU（0.68）之间取得了最好的平衡。虽然 Model A 的 Precision 更高，但 Recall 太低（0.73），会漏掉太多危险区域。Model C 虽然 Recall 最高，但 IoU 最低，整体分割质量不够好。',
+    explanationEn:'Model B achieves the best balance between Recall (0.90) and IoU (0.68). Model A has low Recall (0.73), missing too many dangers. Model C has the highest Recall but lowest IoU.',
+    correct:1,
+    models:[
+      {label:'A',tp:33,fp:3,fn:12,tn:252},
+      {label:'B',tp:41,fp:8,fn:5,tn:246},
+      {label:'C',tp:44,fp:22,fn:2,tn:232},
+    ]
+  }
+];
+
+var currentScenario=0, score=0, answered=false;
+
+function computeMetrics(m){
+  var iou=m.tp/(m.tp+m.fp+m.fn);
+  var prec=m.tp/(m.tp+m.fp);
+  var rec=m.tp/(m.tp+m.fn);
+  var acc=(m.tp+m.tn)/(m.tp+m.fp+m.fn+m.tn);
+  return{iou:iou.toFixed(3),precision:prec.toFixed(3),recall:rec.toFixed(3),accuracy:acc.toFixed(3)};
+}
+
+function generatePixelGrid(m){
+  // Create an 8x8 pixel visualization from TP/FP/FN/TN ratios
+  var total=m.tp+m.fp+m.fn+m.tn;
+  var cells=64;
+  var tpC=Math.round(m.tp/total*cells);
+  var fpC=Math.round(m.fp/total*cells);
+  var fnC=Math.round(m.fn/total*cells);
+  var tnC=cells-tpC-fpC-fnC;
+  var arr=[];
+  for(var i=0;i<tpC;i++)arr.push('tp');
+  for(var i=0;i<fpC;i++)arr.push('fp');
+  for(var i=0;i<fnC;i++)arr.push('fn');
+  for(var i=0;i<tnC;i++)arr.push('tn');
+  // shuffle deterministically based on model label
+  for(var i=arr.length-1;i>0;i--){
+    var j=(i*7+m.tp*3+m.fp*5)%arr.length;
+    var tmp=arr[i];arr[i]=arr[j];arr[j]=tmp;
+  }
+  return arr;
+}
+
+function renderScenario(idx){
+  answered=false;
+  var sc=scenarios[idx];
+  document.getElementById('scenarioTitle').textContent=t('scenario')+' '+(idx+1)+' / '+scenarios.length;
+  document.getElementById('scenarioDesc').textContent='';
+  document.getElementById('qText').textContent=LANG==='cn'?sc.qcn:sc.qen;
+  document.getElementById('scoreDisplay').textContent=score+' / '+scenarios.length;
+
+  // Render prediction cards
+  var container=document.getElementById('predictions');
+  container.innerHTML='';
+  sc.models.forEach(function(m,mi){
+    var metrics=computeMetrics(m);
+    var pixels=generatePixelGrid(m);
+    var card=document.createElement('div');
+    card.className='pred-card';
+    card.dataset.idx=mi;
+
+    var labelDiv=document.createElement('div');
+    labelDiv.className='pred-label';
+    labelDiv.textContent='MODEL '+m.label;
+    card.appendChild(labelDiv);
+
+    var gridDiv=document.createElement('div');
+    gridDiv.className='pred-grid';
+    pixels.forEach(function(p){
+      var px=document.createElement('div');
+      px.className='pred-pixel';
+      var col=p==='tp'?COL_TP:p==='fp'?COL_FP:p==='fn'?COL_FN:COL_TN;
+      px.style.background=col;
+      gridDiv.appendChild(px);
+    });
+    card.appendChild(gridDiv);
+
+    var metricsDiv=document.createElement('div');
+    metricsDiv.className='pred-metrics';
+    var rows=[
+      {name:'IoU',val:metrics.iou},
+      {name:'Precision',val:metrics.precision},
+      {name:'Recall',val:metrics.recall},
+      {name:'TP / FP / FN',val:m.tp+' / '+m.fp+' / '+m.fn}
+    ];
+    rows.forEach(function(r){
+      var row=document.createElement('div');
+      row.className='metric-row';
+      var nm=document.createElement('span');nm.className='metric-name';nm.textContent=r.name;
+      var vl=document.createElement('span');vl.className='metric-val';vl.textContent=r.val;
+      row.appendChild(nm);row.appendChild(vl);
+      metricsDiv.appendChild(row);
+    });
+    card.appendChild(metricsDiv);
+
+    card.addEventListener('click',function(){
+      if(answered)return;
+      handleAnswer(mi);
+    });
+
+    container.appendChild(card);
+  });
+
+  // Answer buttons
+  var btnContainer=document.getElementById('answerBtns');
+  btnContainer.innerHTML='';
+  sc.models.forEach(function(m,mi){
+    var btn=document.createElement('button');
+    btn.className='ans-btn';
+    btn.textContent='Model '+m.label;
+    btn.addEventListener('click',function(){
+      if(answered)return;
+      handleAnswer(mi);
+    });
+    btnContainer.appendChild(btn);
+  });
+
+  // Clear feedback
+  document.getElementById('fbIcon').textContent='--';
+  document.getElementById('fbText').textContent='';
+  document.getElementById('fbNext').style.display='none';
+}
+
+function handleAnswer(chosenIdx){
+  if(answered)return;
+  answered=true;
+  var sc=scenarios[currentScenario];
+  var isCorrect=chosenIdx===sc.correct;
+  if(isCorrect)score++;
+
+  // Highlight cards
+  var cards=document.querySelectorAll('.pred-card');
+  cards.forEach(function(card,i){
+    if(i===sc.correct)card.classList.add('correct');
+    else if(i===chosenIdx&&!isCorrect)card.classList.add('wrong');
+  });
+
+  // Highlight answer buttons
+  var btns=document.querySelectorAll('.ans-btn');
+  btns.forEach(function(btn,i){
+    if(i===chosenIdx)btn.classList.add('chosen');
+  });
+
+  // Feedback
+  document.getElementById('fbIcon').textContent=isCorrect?'[+]':'[x]';
+  document.getElementById('fbIcon').style.color=isCorrect?COL_TP:COL_FN;
+  document.getElementById('fbText').textContent=(isCorrect?(LANG==='cn'?'正确！':'Correct! '):(LANG==='cn'?'错误。':'Wrong. '))
+    +(LANG==='cn'?sc.explanationCn:sc.explanationEn);
+  document.getElementById('scoreDisplay').textContent=score+' / '+scenarios.length;
+
+  if(currentScenario<scenarios.length-1){
+    document.getElementById('fbNext').style.display='block';
+    document.getElementById('fbNext').textContent=t('next');
+  }else{
+    setTimeout(showSummary,1200);
+  }
+}
+
+document.getElementById('fbNext').addEventListener('click',function(){
+  currentScenario++;
+  renderScenario(currentScenario);
+});
+
+function showSummary(){
+  var overlay=document.getElementById('summaryOverlay');
+  overlay.style.display='flex';
+  document.getElementById('summaryTitle').textContent=t('summaryTitle');
+  document.getElementById('summaryScore').textContent=score+' / '+scenarios.length;
+  document.getElementById('summaryText').textContent=score>=3?(LANG==='cn'?I18N.summaryGood.cn:I18N.summaryGood.en):(LANG==='cn'?I18N.summaryOk.cn:I18N.summaryOk.en);
+  document.getElementById('summaryBtn').textContent=t('retry');
+}
+
+document.getElementById('summaryBtn').addEventListener('click',function(){
+  document.getElementById('summaryOverlay').style.display='none';
+  currentScenario=0;score=0;answered=false;
+  renderScenario(0);
+});
+
+// Guide toggle
+document.getElementById('guideToggle').addEventListener('click',function(){
+  var content=document.getElementById('guideContent');
+  var arrow=document.getElementById('guideArrow');
+  if(content.style.display==='none'){content.style.display='block';arrow.classList.remove('collapsed');}
+  else{content.style.display='none';arrow.classList.add('collapsed');}
+});
+
+// Language toggle
+document.getElementById('langBtn').addEventListener('click',function(){
+  LANG=LANG==='en'?'cn':'en';
+  document.getElementById('langBtn').textContent=LANG.toUpperCase();
+  refreshI18N();
+});
+
+function refreshI18N(){
+  document.getElementById('headerTitle').textContent=t('headerTitle');
+  document.getElementById('guideTitle').textContent=t('guideTitle');
+  document.getElementById('guideGoal').textContent=t('guideGoal');
+  document.getElementById('guideC1').textContent=t('guideC1');
+  document.getElementById('guideC2').textContent=t('guideC2');
+  document.getElementById('guideWin').textContent=t('guideWin');
+  // Re-render current scenario to update question text
+  renderScenario(currentScenario);
+}
+
+// Init
+refreshI18N();
+
+})();
+</script>
+</body>
+</html>

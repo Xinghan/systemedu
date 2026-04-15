@@ -1,0 +1,592 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;700&family=Inter:wght@400;500&family=Noto+Sans+SC:wght@400;700&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0;border-radius:0}
+html,body{width:100%;height:100vh;overflow:hidden;
+  background:#131313;
+  font-family:'Space Grotesk','Inter','Noto Sans SC',sans-serif;
+  color:#e5e2e1;
+}
+.lang-btn{
+  position:fixed;top:8px;left:8px;z-index:100;
+  font-family:'Space Grotesk',sans-serif;font-size:11px;font-weight:700;
+  padding:4px 10px;cursor:pointer;
+  border:1px solid rgba(255,255,255,0.08);
+  background:rgba(20,20,35,0.85);backdrop-filter:blur(12px);
+  color:#ffb59c;letter-spacing:1px;
+}
+.guide-panel{
+  position:fixed;top:8px;right:8px;width:260px;max-height:40vh;
+  overflow-y:auto;z-index:100;
+  background:rgba(20,20,35,0.85);backdrop-filter:blur(12px);
+  border:1px solid rgba(255,255,255,0.08);padding:12px;
+  font-family:'Noto Sans SC',sans-serif;font-size:13px;
+  color:rgba(255,255,255,0.85);
+}
+.guide-panel h3{
+  font-family:'Space Grotesk',sans-serif;font-size:14px;
+  margin-bottom:8px;display:flex;align-items:center;
+  justify-content:space-between;cursor:pointer;
+  color:#ffb59c;
+}
+.guide-panel .toggle{font-size:12px;opacity:0.6;}
+.guide-panel ul{padding-left:16px;line-height:1.6;}
+.guide-panel .guide-content.collapsed{display:none;}
+.wrapper{display:flex;flex-direction:column;height:100vh;}
+.canvas-wrap{flex:1;min-height:0;position:relative;}
+.canvas-wrap canvas{display:block;width:100%;height:100%;position:absolute;top:0;left:0;}
+.controls{
+  display:flex;align-items:center;gap:8px;
+  padding:6px 12px;
+  background:rgba(28,27,27,0.92);
+  border-top:1px solid rgba(138,136,134,0.15);
+}
+.controls button{
+  font-family:'Space Grotesk',sans-serif;font-size:12px;font-weight:700;
+  padding:4px 14px;cursor:pointer;letter-spacing:1px;
+  border:1px solid rgba(138,136,134,0.15);
+  background:transparent;color:#ffb59c;
+}
+.controls button:hover{background:#353534;}
+.controls .frame-indicator{
+  font-family:'Space Grotesk',sans-serif;font-size:12px;
+  color:#8a8886;margin-left:auto;
+}
+.hud{
+  display:flex;align-items:center;justify-content:space-around;
+  height:52px;
+  background:rgba(0,0,0,0.55);
+  border-top:1px solid rgba(255,255,255,0.06);
+}
+.hud .hud-col{text-align:center;}
+.hud .hud-label{
+  font-family:'Space Grotesk',sans-serif;font-size:10px;
+  color:#8a8886;letter-spacing:1px;text-transform:uppercase;
+}
+.hud .hud-val{
+  font-family:'Space Grotesk',sans-serif;font-size:14px;font-weight:700;
+  color:#e5e2e1;
+}
+</style>
+</head>
+<body>
+<button class="lang-btn" id="langBtn">CN</button>
+<div class="guide-panel" id="guidePanel">
+  <h3 id="guideHeader"><span id="guideTitle"></span> <span class="toggle" id="guideToggle">[-]</span></h3>
+  <div class="guide-content" id="guideContent">
+    <p id="guideWhat"></p>
+    <ul id="guidePoints"></ul>
+    <p id="guideControls"></p>
+    <p id="guideTakeaway" style="margin-top:6px;font-weight:700;"></p>
+  </div>
+</div>
+<div class="wrapper">
+  <div class="canvas-wrap">
+    <canvas id="c"></canvas>
+  </div>
+  <div class="controls" id="controls">
+    <button id="btnPrev"></button>
+    <button id="btnPlay"></button>
+    <button id="btnNext"></button>
+    <span class="frame-indicator" id="frameIndicator"></span>
+  </div>
+  <div class="hud" id="hud"></div>
+</div>
+<script>
+(function(){
+"use strict";
+
+var P = {"bg":"#131313","surface_high":"#353534","primary":"#ffb59c","primary_container":"#ff7f50","tertiary":"#00daf3","signal":"#ff5f1f","success":"#10b981","text":"#e5e2e1","muted":"#8a8886"};
+
+var LANG = 'cn';
+var I18N = {
+  title:         {en:'Time Synchronization Principles', cn:'\u65f6\u95f4\u6233\u540c\u6b65\u539f\u7406'},
+  guideTitle:    {en:'Observation Guide', cn:'\u89c2\u770b\u6307\u5357'},
+  guideWhat:     {en:'Compares hardware-trigger and software-timestamp sync approaches', cn:'\u5bf9\u6bd4\u786c\u4ef6\u89e6\u53d1\u548c\u8f6f\u4ef6\u65f6\u95f4\u6233\u4e24\u79cd\u540c\u6b65\u65b9\u6848'},
+  guideP1:       {en:'Different sensors sample at very different rates', cn:'\u4e0d\u540c\u4f20\u611f\u5668\u7684\u91c7\u6837\u9891\u7387\u5dee\u5f02\u5f88\u5927'},
+  guideP2:       {en:'Hardware trigger aligns all sensors simultaneously', cn:'\u786c\u4ef6\u89e6\u53d1\u8ba9\u4e09\u8def\u6570\u636e\u540c\u65f6\u91c7\u6837'},
+  guideP3:       {en:'Software interpolation estimates values at target time', cn:'\u8f6f\u4ef6\u63d2\u503c\u4ece\u76f8\u90bb\u70b9\u63a8\u7b97\u76ee\u6807\u65f6\u523b\u7684\u503c'},
+  guideCtrl:     {en:'Use PREV/NEXT to step through', cn:'\u4f7f\u7528 PREV/NEXT \u9010\u5e27\u67e5\u770b'},
+  guideTakeaway: {en:'Understand why time sync is critical in multi-sensor systems', cn:'\u7406\u89e3\u4e3a\u4ec0\u4e48\u65f6\u95f4\u540c\u6b65\u662f\u591a\u4f20\u611f\u5668\u7cfb\u7edf\u7684\u5173\u952e\u95ee\u9898'},
+  btnPrev:       {en:'PREV', cn:'\u4e0a\u4e00\u5e27'},
+  btnPlay:       {en:'PLAY', cn:'\u64ad\u653e'},
+  btnPause:      {en:'PAUSE', cn:'\u6682\u505c'},
+  btnNext:       {en:'NEXT', cn:'\u4e0b\u4e00\u5e27'},
+  f0Title:       {en:'Independent Sampling', cn:'\u4e09\u8def\u72ec\u7acb\u91c7\u6837'},
+  f1Title:       {en:'Misalignment Problem', cn:'\u6570\u636e\u4e0d\u5bf9\u9f50\u7684\u95ee\u9898'},
+  f2Title:       {en:'Hardware Trigger Sync', cn:'\u786c\u4ef6\u89e6\u53d1\u540c\u6b65'},
+  f3Title:       {en:'Software Timestamp Alignment', cn:'\u8f6f\u4ef6\u65f6\u95f4\u6233\u5bf9\u9f50'},
+  f4Title:       {en:'Comparison', cn:'\u65b9\u6848\u5bf9\u6bd4'},
+  camLine:       {en:'Camera 30Hz', cn:'\u76f8\u673a 30Hz'},
+  imuLine:       {en:'IMU 200Hz', cn:'IMU 200Hz'},
+  odomLine:      {en:'Odometry 100Hz', cn:'\u91cc\u7a0b\u8ba1 100Hz'},
+  timeAxis:      {en:'Time (ms)', cn:'\u65f6\u95f4 (ms)'},
+  misalignNote:  {en:'Data points not aligned!', cn:'\u6570\u636e\u70b9\u672a\u5bf9\u9f50\uff01'},
+  triggerPulse:  {en:'Trigger Pulse', cn:'\u89e6\u53d1\u8109\u51b2'},
+  hwSync:        {en:'HW Trigger', cn:'\u786c\u4ef6\u89e6\u53d1'},
+  swSync:        {en:'SW Interpolation', cn:'\u8f6f\u4ef6\u63d2\u503c'},
+  refTime:       {en:'Reference Time', cn:'\u53c2\u8003\u65f6\u523b'},
+  interpNote:    {en:'Interpolated', cn:'\u63d2\u503c\u63a8\u7b97'},
+  hwPrecision:   {en:'Precision: us level', cn:'\u7cbe\u5ea6\uff1a\u5fae\u79d2\u7ea7'},
+  hwNeed:        {en:'Requires HW support', cn:'\u9700\u8981\u786c\u4ef6\u652f\u6301'},
+  swPrecision:   {en:'Precision: ms level', cn:'\u7cbe\u5ea6\uff1a\u6beb\u79d2\u7ea7'},
+  swEasy:        {en:'Easy to implement', cn:'\u5b9e\u73b0\u7b80\u5355'},
+  hudMode:       {en:'SYNC MODE', cn:'\u540c\u6b65\u65b9\u5f0f'},
+  hudPrecision:  {en:'PRECISION', cn:'\u7cbe\u5ea6'},
+  hudComplexity: {en:'COMPLEXITY', cn:'\u5b9e\u73b0\u96be\u5ea6'},
+  hudStatus:     {en:'STATUS', cn:'\u72b6\u6001'},
+  modeNone:      {en:'None', cn:'\u65e0'},
+  modeMisalign:  {en:'Misaligned', cn:'\u672a\u5bf9\u9f50'},
+  modeHW:        {en:'HW Trigger', cn:'\u786c\u4ef6\u89e6\u53d1'},
+  modeSW:        {en:'SW Interp.', cn:'\u8f6f\u4ef6\u63d2\u503c'},
+  modeBoth:      {en:'Comparison', cn:'\u5bf9\u6bd4'},
+  precNone:      {en:'--', cn:'--'},
+  precUS:        {en:'< 1 us', cn:'< 1 us'},
+  precMS:        {en:'1~10 ms', cn:'1~10 ms'},
+  precBoth:      {en:'See below', cn:'\u89c1\u4e0b\u65b9'},
+  compNone:      {en:'--', cn:'--'},
+  compHigh:      {en:'High', cn:'\u9ad8'},
+  compLow:       {en:'Low', cn:'\u4f4e'},
+  compBoth:      {en:'Varies', cn:'\u5404\u5f02'},
+  statusOK:      {en:'Aligned', cn:'\u5df2\u5bf9\u9f50'},
+};
+function t(key){return(I18N[key]&&I18N[key][LANG])||(I18N[key]&&I18N[key]['en'])||key;}
+
+function refreshGuide(){
+  var gt=document.getElementById('guideTitle');if(gt)gt.textContent=t('guideTitle');
+  var gw=document.getElementById('guideWhat');if(gw)gw.textContent=t('guideWhat');
+  var gp=document.getElementById('guidePoints');
+  if(gp)gp.innerHTML='<li>'+t('guideP1')+'</li><li>'+t('guideP2')+'</li><li>'+t('guideP3')+'</li>';
+  var gc=document.getElementById('guideControls');if(gc)gc.textContent=t('guideCtrl');
+  var gta=document.getElementById('guideTakeaway');if(gta)gta.textContent=t('guideTakeaway');
+}
+function refreshI18N(){
+  document.getElementById('langBtn').textContent=LANG.toUpperCase();
+  var bp=document.getElementById('btnPrev');
+  var bpl=document.getElementById('btnPlay');
+  var bn=document.getElementById('btnNext');
+  if(bp)bp.textContent=t('btnPrev');
+  if(bpl)bpl.textContent=playing?t('btnPause'):t('btnPlay');
+  if(bn)bn.textContent=t('btnNext');
+  refreshGuide();
+  if(typeof drawCurrent==='function')drawCurrent();
+}
+document.getElementById('langBtn').addEventListener('click',function(){
+  LANG=LANG==='en'?'cn':'en';refreshI18N();
+});
+document.getElementById('guideHeader').addEventListener('click',function(){
+  var gc=document.getElementById('guideContent');
+  var gt=document.getElementById('guideToggle');
+  if(gc.classList.contains('collapsed')){gc.classList.remove('collapsed');gt.textContent='[-]';}
+  else{gc.classList.add('collapsed');gt.textContent='[+]';}
+});
+
+var canvas = document.getElementById("c");
+var ctx = canvas.getContext("2d");
+var W = 600, H = 420;
+var DPR = Math.min(window.devicePixelRatio||1, 2);
+function resize(){
+  var rect = canvas.getBoundingClientRect();
+  if (rect.width < 1 || rect.height < 1) return;
+  canvas.width = rect.width * DPR;
+  canvas.height = rect.height * DPR;
+  var scale = Math.min(rect.width / W, rect.height / H);
+  var offsetX = (rect.width - W*scale) / 2;
+  var offsetY = (rect.height - H*scale) / 2;
+  ctx.setTransform(DPR*scale, 0, 0, DPR*scale, DPR*offsetX, DPR*offsetY);
+}
+resize();
+window.addEventListener("resize", function(){ resize(); if(typeof drawCurrent==="function") drawCurrent(); });
+if (typeof ResizeObserver !== "undefined" && canvas.parentElement) {
+  try { new ResizeObserver(function(){ resize(); if (typeof drawCurrent === "function") drawCurrent(); }).observe(canvas.parentElement); } catch (e) {}
+}
+
+function drawBg(){
+  var g=ctx.createRadialGradient(W/2,H/2,0,W/2,H/2,Math.max(W,H)*0.7);
+  g.addColorStop(0,"#1c1b1b");g.addColorStop(1,P.bg);
+  ctx.fillStyle=g;ctx.fillRect(0,0,W,H);
+  ctx.strokeStyle="rgba(0,218,243,0.04)";ctx.lineWidth=1;
+  for(var x=0;x<=W;x+=20){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,H);ctx.stroke();}
+  for(var y=0;y<=H;y+=20){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke();}
+}
+
+/* ── Timeline drawing helpers ── */
+var TL_LEFT=60, TL_RIGHT=540, TL_WIDTH=TL_RIGHT-TL_LEFT;
+var TL_Y_CAM=100, TL_Y_IMU=200, TL_Y_ODOM=290;
+var TIME_SPAN=200; // 200ms window
+
+function drawTimeAxis(y, label, color, freq, showDots, alpha){
+  ctx.save();ctx.globalAlpha=alpha;
+  // Axis line
+  var g=ctx.createLinearGradient(TL_LEFT,y,TL_RIGHT,y);
+  g.addColorStop(0,color+'33');g.addColorStop(0.5,color);g.addColorStop(1,color+'33');
+  ctx.strokeStyle=g;ctx.lineWidth=2;
+  ctx.beginPath();ctx.moveTo(TL_LEFT,y);ctx.lineTo(TL_RIGHT,y);ctx.stroke();
+  // Label
+  ctx.font="bold 12px 'Space Grotesk',sans-serif";
+  ctx.textAlign="right";ctx.fillStyle=color;
+  ctx.shadowColor=color;ctx.shadowBlur=6;
+  ctx.fillText(label, TL_LEFT-8, y+4);
+  ctx.shadowBlur=0;
+  // Data points
+  if(showDots){
+    var interval=TIME_SPAN/freq*1000; // how many ms per sample
+    var step=TL_WIDTH/(TIME_SPAN/interval);
+    // Actually: freq samples in TIME_SPAN ms
+    var numSamples=Math.floor(freq*TIME_SPAN/1000);
+    var sampleInterval=TL_WIDTH/numSamples;
+    ctx.fillStyle=color;
+    for(var i=0;i<=numSamples;i++){
+      var dx=TL_LEFT+i*sampleInterval;
+      ctx.shadowColor=color;ctx.shadowBlur=8;
+      ctx.beginPath();ctx.arc(dx,y,3,0,Math.PI*2);ctx.fill();
+    }
+    ctx.shadowBlur=0;
+  }
+  ctx.restore();
+}
+
+function drawMisalignMarkers(alpha){
+  ctx.save();ctx.globalAlpha=alpha;
+  // Show a zoomed region around t=100ms
+  var zoomX=TL_LEFT+TL_WIDTH*0.5; // center
+  var zoomW=120, zoomH=160;
+  var zx=zoomX-zoomW/2, zy=60;
+  // Zoom box background
+  ctx.fillStyle='rgba(20,20,35,0.85)';
+  ctx.fillRect(zx,zy,zoomW,zoomH);
+  ctx.strokeStyle='rgba(255,95,31,0.4)';ctx.lineWidth=1;
+  ctx.strokeRect(zx,zy,zoomW,zoomH);
+  // Header
+  ctx.font="10px 'Space Grotesk',sans-serif";
+  ctx.textAlign="center";ctx.fillStyle=P.signal;
+  ctx.fillText('t = 100ms',zoomX,zy+14);
+  // Three dots with offsets
+  var dotY=[zy+40,zy+80,zy+120];
+  var colors=['#00daf3','#ff7f50','#10b981'];
+  var labels=[t('camLine').split(' ')[0],t('imuLine').split(' ')[0],t('odomLine').split(' ')[0]];
+  var offsets=[33.3, 5, 10]; // ms offset
+  var maxOff=35;
+  for(var i=0;i<3;i++){
+    var dotX=zoomX+(offsets[i]/maxOff)*(zoomW/2-10);
+    ctx.fillStyle=colors[i];
+    ctx.shadowColor=colors[i];ctx.shadowBlur=10;
+    ctx.beginPath();ctx.arc(dotX,dotY[i],5,0,Math.PI*2);ctx.fill();
+    ctx.shadowBlur=0;
+    ctx.font="10px 'Noto Sans SC',sans-serif";
+    ctx.textAlign="left";ctx.fillStyle=P.text;
+    ctx.fillText(labels[i]+' +'+offsets[i]+'ms', dotX+10, dotY[i]+4);
+  }
+  // Red warning
+  ctx.font="bold 12px 'Noto Sans SC',sans-serif";
+  ctx.textAlign="center";ctx.fillStyle=P.signal;
+  ctx.shadowColor=P.signal;ctx.shadowBlur=10;
+  ctx.fillText(t('misalignNote'), zoomX, zy+zoomH+18);
+  ctx.shadowBlur=0;
+  ctx.restore();
+}
+
+function drawHWTrigger(alpha){
+  ctx.save();ctx.globalAlpha=alpha;
+  // Trigger pulse line sweeping across
+  var pulseX=TL_LEFT+TL_WIDTH*0.5;
+  ctx.strokeStyle='#ffb59c';ctx.lineWidth=2;
+  ctx.shadowColor='#ffb59c';ctx.shadowBlur=12;
+  ctx.setLineDash([4,4]);
+  ctx.beginPath();ctx.moveTo(pulseX,TL_Y_CAM-20);ctx.lineTo(pulseX,TL_Y_ODOM+20);ctx.stroke();
+  ctx.setLineDash([]);ctx.shadowBlur=0;
+  // Label
+  ctx.font="bold 11px 'Space Grotesk',sans-serif";
+  ctx.textAlign="center";ctx.fillStyle='#ffb59c';
+  ctx.fillText(t('triggerPulse'), pulseX, TL_Y_CAM-28);
+  // Aligned dots at pulse position
+  var colors=['#00daf3','#ff7f50','#10b981'];
+  var ys=[TL_Y_CAM,TL_Y_IMU,TL_Y_ODOM];
+  for(var i=0;i<3;i++){
+    ctx.fillStyle=colors[i];
+    ctx.shadowColor=colors[i];ctx.shadowBlur=12;
+    ctx.beginPath();ctx.arc(pulseX,ys[i],6,0,Math.PI*2);ctx.fill();
+    // Ring
+    ctx.strokeStyle=colors[i];ctx.lineWidth=2;
+    ctx.beginPath();ctx.arc(pulseX,ys[i],10,0,Math.PI*2);ctx.stroke();
+    ctx.shadowBlur=0;
+  }
+  // Success indicator
+  ctx.font="bold 12px 'Noto Sans SC',sans-serif";
+  ctx.textAlign="center";ctx.fillStyle=P.success;
+  ctx.shadowColor=P.success;ctx.shadowBlur=10;
+  ctx.fillText(t('statusOK')+' (< 1 us)', pulseX, TL_Y_ODOM+40);
+  ctx.shadowBlur=0;
+  ctx.restore();
+}
+
+function drawSWInterp(alpha){
+  ctx.save();ctx.globalAlpha=alpha;
+  var refX=TL_LEFT+TL_WIDTH*0.5;
+  // Reference time line
+  ctx.strokeStyle='#ffb59c88';ctx.lineWidth=1;
+  ctx.setLineDash([3,3]);
+  ctx.beginPath();ctx.moveTo(refX,TL_Y_CAM-20);ctx.lineTo(refX,TL_Y_ODOM+20);ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.font="10px 'Space Grotesk',sans-serif";
+  ctx.textAlign="center";ctx.fillStyle='#ffb59c';
+  ctx.fillText(t('refTime'), refX, TL_Y_CAM-28);
+
+  // For each sensor: show two nearest samples + interpolation arc
+  var colors=['#00daf3','#ff7f50','#10b981'];
+  var ys=[TL_Y_CAM,TL_Y_IMU,TL_Y_ODOM];
+  var nearOffsets=[[-18,15],[-3,2],[-6,4]]; // left/right ms offsets
+  for(var i=0;i<3;i++){
+    var leftX=refX+nearOffsets[i][0]*2;
+    var rightX=refX+nearOffsets[i][1]*2;
+    // Nearest dots
+    ctx.fillStyle=colors[i]+'88';
+    ctx.beginPath();ctx.arc(leftX,ys[i],3,0,Math.PI*2);ctx.fill();
+    ctx.beginPath();ctx.arc(rightX,ys[i],3,0,Math.PI*2);ctx.fill();
+    // Interpolation curve
+    ctx.strokeStyle=colors[i];ctx.lineWidth=1.5;
+    ctx.beginPath();
+    ctx.moveTo(leftX,ys[i]);
+    ctx.quadraticCurveTo(refX,ys[i]-15,rightX,ys[i]);
+    ctx.stroke();
+    // Interpolated point at refX
+    ctx.fillStyle=colors[i];
+    ctx.shadowColor=colors[i];ctx.shadowBlur=10;
+    ctx.beginPath();ctx.arc(refX,ys[i]-4,4,0,Math.PI*2);ctx.fill();
+    ctx.shadowBlur=0;
+    // Label
+    ctx.font="9px 'Space Grotesk',sans-serif";
+    ctx.textAlign="left";ctx.fillStyle=colors[i];
+    ctx.fillText(t('interpNote'),refX+14,ys[i]-2);
+  }
+  // Info
+  ctx.font="bold 12px 'Noto Sans SC',sans-serif";
+  ctx.textAlign="center";ctx.fillStyle='#00daf3';
+  ctx.shadowColor='#00daf3';ctx.shadowBlur=8;
+  ctx.fillText(t('statusOK')+' (1~10 ms)', refX, TL_Y_ODOM+40);
+  ctx.shadowBlur=0;
+  ctx.restore();
+}
+
+function drawComparison(alpha){
+  ctx.save();ctx.globalAlpha=alpha;
+  var midX=W/2;
+  // Two panels
+  var pw=220, ph=200;
+  var leftX=midX-pw-10, rightX=midX+10, py=80;
+  // HW panel
+  ctx.fillStyle='rgba(20,20,35,0.85)';
+  ctx.fillRect(leftX,py,pw,ph);
+  ctx.strokeStyle=P.success+'66';ctx.lineWidth=1;
+  ctx.strokeRect(leftX,py,pw,ph);
+  ctx.font="bold 14px 'Space Grotesk',sans-serif";
+  ctx.textAlign="center";ctx.fillStyle=P.success;
+  ctx.shadowColor=P.success;ctx.shadowBlur=6;
+  ctx.fillText(t('hwSync'),leftX+pw/2,py+24);
+  ctx.shadowBlur=0;
+  ctx.font="12px 'Noto Sans SC',sans-serif";ctx.fillStyle=P.text;
+  ctx.fillText(t('hwPrecision'),leftX+pw/2,py+55);
+  ctx.fillText(t('hwNeed'),leftX+pw/2,py+80);
+  // Mini timeline illustration
+  var tly=py+120;
+  ctx.strokeStyle=P.muted;ctx.lineWidth=1;
+  ctx.beginPath();ctx.moveTo(leftX+20,tly);ctx.lineTo(leftX+pw-20,tly);ctx.stroke();
+  // Aligned dots
+  var cx_mid=leftX+pw/2;
+  var colors=['#00daf3','#ff7f50','#10b981'];
+  for(var i=0;i<3;i++){
+    ctx.fillStyle=colors[i];ctx.shadowColor=colors[i];ctx.shadowBlur=8;
+    ctx.beginPath();ctx.arc(cx_mid,tly-8+i*8,4,0,Math.PI*2);ctx.fill();
+  }
+  ctx.shadowBlur=0;
+  // Vertical pulse line
+  ctx.strokeStyle='#ffb59c';ctx.lineWidth=1;ctx.setLineDash([3,3]);
+  ctx.beginPath();ctx.moveTo(cx_mid,tly-20);ctx.lineTo(cx_mid,tly+20);ctx.stroke();
+  ctx.setLineDash([]);
+
+  // SW panel
+  ctx.fillStyle='rgba(20,20,35,0.85)';
+  ctx.fillRect(rightX,py,pw,ph);
+  ctx.strokeStyle='#00daf366';ctx.lineWidth=1;
+  ctx.strokeRect(rightX,py,pw,ph);
+  ctx.font="bold 14px 'Space Grotesk',sans-serif";
+  ctx.textAlign="center";ctx.fillStyle='#00daf3';
+  ctx.shadowColor='#00daf3';ctx.shadowBlur=6;
+  ctx.fillText(t('swSync'),rightX+pw/2,py+24);
+  ctx.shadowBlur=0;
+  ctx.font="12px 'Noto Sans SC',sans-serif";ctx.fillStyle=P.text;
+  ctx.fillText(t('swPrecision'),rightX+pw/2,py+55);
+  ctx.fillText(t('swEasy'),rightX+pw/2,py+80);
+  // Mini timeline with interpolation
+  var tly2=py+120;
+  ctx.strokeStyle=P.muted;ctx.lineWidth=1;
+  ctx.beginPath();ctx.moveTo(rightX+20,tly2);ctx.lineTo(rightX+pw-20,tly2);ctx.stroke();
+  var cx_mid2=rightX+pw/2;
+  // Show offset dots + interpolation arcs
+  for(var j=0;j<3;j++){
+    var off=[-12,3,7][j];
+    ctx.fillStyle=colors[j]+'88';
+    ctx.beginPath();ctx.arc(cx_mid2+off,tly2,3,0,Math.PI*2);ctx.fill();
+    ctx.fillStyle=colors[j];ctx.shadowColor=colors[j];ctx.shadowBlur=6;
+    ctx.beginPath();ctx.arc(cx_mid2,tly2-6+j*6,3,0,Math.PI*2);ctx.fill();
+    ctx.shadowBlur=0;
+  }
+  // Ref line
+  ctx.strokeStyle='#ffb59c88';ctx.lineWidth=1;ctx.setLineDash([2,2]);
+  ctx.beginPath();ctx.moveTo(cx_mid2,tly2-20);ctx.lineTo(cx_mid2,tly2+20);ctx.stroke();
+  ctx.setLineDash([]);
+
+  // "VS" label
+  ctx.font="bold 20px 'Space Grotesk',sans-serif";
+  ctx.textAlign="center";ctx.fillStyle=P.primary;
+  ctx.shadowColor=P.primary;ctx.shadowBlur=10;
+  ctx.fillText("VS", midX, py+ph/2+5);
+  ctx.shadowBlur=0;
+  ctx.restore();
+}
+
+/* ── Frame elements ── */
+var totalFrames=5;
+var currentFrame=0;
+
+function getFrameElements(f){
+  var elems=[];
+  var titles=['f0Title','f1Title','f2Title','f3Title','f4Title'];
+  elems.push({id:'title',type:'label',text:function(){return t(titles[f]);},x:W/2,y:20,color:P.text,size:16,bold:true,align:'center',glow:8,glowColor:P.primary,alpha:1});
+
+  if(f<=3){
+    // Show timelines in frames 0-3
+    elems.push({id:'tl_cam',type:'custom',draw:function(a){drawTimeAxis(TL_Y_CAM,t('camLine'),'#00daf3',30,f<4,a);},alpha:1});
+    elems.push({id:'tl_imu',type:'custom',draw:function(a){drawTimeAxis(TL_Y_IMU,t('imuLine'),'#ff7f50',200,f<4,a);},alpha:1});
+    elems.push({id:'tl_odom',type:'custom',draw:function(a){drawTimeAxis(TL_Y_ODOM,t('odomLine'),'#10b981',100,f<4,a);},alpha:1});
+    // Time axis label
+    elems.push({id:'time_label',type:'label',text:function(){return t('timeAxis');},x:TL_RIGHT+5,y:TL_Y_ODOM+20,color:P.muted,size:10,align:'right',alpha:1});
+  }
+
+  if(f===1){
+    elems.push({id:'misalign',type:'custom',draw:function(a){drawMisalignMarkers(a);},alpha:1});
+  }
+  if(f===2){
+    elems.push({id:'hw_trigger',type:'custom',draw:function(a){drawHWTrigger(a);},alpha:1});
+  }
+  if(f===3){
+    elems.push({id:'sw_interp',type:'custom',draw:function(a){drawSWInterp(a);},alpha:1});
+  }
+  if(f===4){
+    elems.push({id:'comparison',type:'custom',draw:function(a){drawComparison(a);},alpha:1});
+  }
+  return elems;
+}
+
+/* ── shared element transition engine ── */
+function lerp(a,b,p){return a+(b-a)*p;}
+function easeInOut(x){return x<0.5?2*x*x:1-Math.pow(-2*x+2,2)/2;}
+function merge(base,ov){var r={};for(var k in base)r[k]=base[k];for(var k2 in ov)r[k2]=ov[k2];return r;}
+function drawElement(el){
+  if(!el||el.alpha<=0.01)return;
+  ctx.save();ctx.globalAlpha=el.alpha;
+  switch(el.type){
+    case 'label':
+      ctx.font=(el.bold?'bold ':'')+(el.size||14)+"px 'Space Grotesk','Inter',sans-serif";
+      ctx.textAlign=el.align||'left';ctx.textBaseline=el.baseline||'top';
+      if(el.glow){ctx.shadowColor=el.glowColor||P.primary;ctx.shadowBlur=el.glow;}
+      ctx.fillStyle=el.color||P.text;
+      ctx.fillText(typeof el.text==='function'?el.text():el.text,el.x,el.y);
+      ctx.shadowBlur=0;break;
+    case 'custom':if(el.draw)el.draw(el.alpha);break;
+  }
+  ctx.restore();
+}
+var transitioning=false;
+function transitionTo(newFrame){
+  if(newFrame<0)newFrame=0;
+  if(newFrame>=totalFrames)newFrame=totalFrames-1;
+  if(newFrame===currentFrame&&!transitioning){drawFrame(currentFrame);updateHUD(currentFrame);return;}
+  if(transitioning)return;
+  var oldElems=getFrameElements(currentFrame);
+  var newElems=getFrameElements(newFrame);
+  var oldMap={};oldElems.forEach(function(e){oldMap[e.id]=e;});
+  var newMap={};newElems.forEach(function(e){newMap[e.id]=e;});
+  currentFrame=newFrame;updateHUD(newFrame);transitioning=true;
+  var startTime=null,duration=500;
+  function step(ts){
+    if(!startTime)startTime=ts;
+    var raw=Math.min((ts-startTime)/duration,1);var p=easeInOut(raw);
+    drawBg();
+    oldElems.forEach(function(oe){if(!newMap[oe.id])drawElement(merge(oe,{alpha:1-p}));});
+    newElems.forEach(function(ne){
+      var oe=oldMap[ne.id];
+      if(oe){
+        var merged=merge(ne,{alpha:1});
+        if(ne.type==='label'){
+          var nt=typeof ne.text==='function'?ne.text():ne.text;
+          var ot=typeof oe.text==='function'?oe.text():oe.text;
+          if(nt!==ot){drawElement(merge(oe,{alpha:1-p}));drawElement(merge(ne,{alpha:p}));}
+          else{drawElement(merged);}
+        }else{drawElement(merged);}
+      }else{drawElement(merge(ne,{alpha:p}));}
+    });
+    if(raw<1){requestAnimationFrame(step);}else{transitioning=false;}
+  }
+  requestAnimationFrame(step);
+}
+function drawFrame(f){drawBg();var elems=getFrameElements(f);elems.forEach(function(el){drawElement(el);});}
+function drawCurrent(){drawFrame(currentFrame);updateHUD(currentFrame);}
+
+/* ── HUD ── */
+function updateHUD(f){
+  updateControlsText();
+  var hud=document.getElementById('hud');if(!hud)return;
+  var modes=[t('modeNone'),t('modeMisalign'),t('modeHW'),t('modeSW'),t('modeBoth')];
+  var precs=[t('precNone'),t('precNone'),t('precUS'),t('precMS'),t('precBoth')];
+  var comps=[t('compNone'),t('compNone'),t('compHigh'),t('compLow'),t('compBoth')];
+  var stats=['--','--',t('statusOK'),t('statusOK'),'--'];
+  hud.innerHTML='';
+  [{label:t('hudMode'),val:modes[f]},{label:t('hudPrecision'),val:precs[f]},{label:t('hudComplexity'),val:comps[f]},{label:t('hudStatus'),val:stats[f]}].forEach(function(c){
+    var d=document.createElement('div');d.className='hud-col';
+    d.innerHTML='<div class="hud-label">'+c.label+'</div><div class="hud-val">'+c.val+'</div>';
+    hud.appendChild(d);
+  });
+}
+
+/* ── Controls ── */
+var playing=false;var playTimer=null;
+function updateControlsText(){
+  var bp=document.getElementById('btnPlay');
+  var bi=document.getElementById('frameIndicator');
+  if(bp)bp.textContent=playing?t('btnPause'):t('btnPlay');
+  if(bi)bi.textContent=(currentFrame+1)+' / '+totalFrames;
+}
+document.getElementById('btnPrev').addEventListener('click',function(){
+  if(playing){playing=false;clearInterval(playTimer);}transitionTo(currentFrame-1);
+});
+document.getElementById('btnNext').addEventListener('click',function(){
+  if(playing){playing=false;clearInterval(playTimer);}transitionTo(currentFrame+1);
+});
+document.getElementById('btnPlay').addEventListener('click',function(){
+  playing=!playing;
+  if(playing){
+    if(currentFrame>=totalFrames-1)transitionTo(0);
+    playTimer=setInterval(function(){
+      if(currentFrame>=totalFrames-1){playing=false;clearInterval(playTimer);updateControlsText();return;}
+      transitionTo(currentFrame+1);
+    },3000);
+  }else{clearInterval(playTimer);}
+  updateControlsText();
+});
+
+/* ── init ── */
+refreshGuide();refreshI18N();
+drawFrame(0);updateHUD(0);
+setTimeout(function(){resize();drawCurrent();},200);
+setTimeout(function(){resize();drawCurrent();},600);
+document.fonts.ready.then(function(){resize();drawCurrent();});
+
+})();
+</script>
+</body>
+</html>

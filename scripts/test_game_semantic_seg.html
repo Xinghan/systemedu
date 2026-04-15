@@ -1,0 +1,741 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Segmentation Training Simulator</title>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=Space+Grotesk:wght@400;700&family=Noto+Sans+SC:wght@400;700&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{width:100%;height:100vh;overflow:hidden;background:#131313;
+  font-family:'Noto Sans SC','PingFang SC',system-ui,sans-serif;color:#e5e2e1}
+
+.wrapper{display:flex;flex-direction:column;height:100vh;overflow:hidden}
+
+.guide-panel{position:fixed;top:8px;right:8px;width:250px;max-height:40vh;
+  overflow-y:auto;z-index:200;padding:10px 12px;
+  background:rgba(28,27,27,0.92);backdrop-filter:blur(14px);
+  border:1px solid rgba(255,191,156,0.18);font-size:12px;line-height:1.55;
+  color:rgba(229,226,225,0.88)}
+.guide-panel h3{font-family:'Space Grotesk',sans-serif;font-size:13px;font-weight:700;
+  margin-bottom:6px;display:flex;align-items:center;justify-content:space-between;cursor:pointer;
+  color:#ffb59c;text-transform:uppercase;letter-spacing:0.05em}
+.guide-panel h3 .arrow{transition:transform .2s;font-size:10px}
+.guide-panel h3 .arrow.collapsed{transform:rotate(-90deg)}
+.guide-panel ul{padding-left:14px;margin:4px 0}
+.guide-panel .gl{color:#8a8886;font-size:11px;text-transform:uppercase;
+  letter-spacing:0.08em;margin-top:6px;font-family:'Space Grotesk',sans-serif}
+
+.header{height:42px;min-height:42px;display:flex;align-items:center;justify-content:space-between;
+  padding:0 16px;background:rgba(28,27,27,0.95);border-bottom:1px solid rgba(255,191,156,0.15)}
+.header h1{font-family:'Space Grotesk',sans-serif;font-size:14px;font-weight:700;
+  color:#ffb59c;text-transform:uppercase;letter-spacing:0.08em}
+
+.lang-btn{position:fixed;top:8px;left:8px;z-index:100;
+  font-family:'Space Grotesk',sans-serif;font-size:11px;font-weight:700;
+  padding:4px 10px;cursor:pointer;
+  border:1px solid rgba(255,255,255,0.08);
+  background:rgba(20,20,20,0.85);backdrop-filter:blur(12px);
+  color:#ffb59c;letter-spacing:1px}
+
+.game-body{flex:1;min-height:0;display:flex;overflow:hidden}
+
+.control-panel{width:220px;min-width:220px;padding:12px;
+  background:rgba(28,27,27,0.85);border-right:1px solid rgba(255,191,156,0.12);
+  display:flex;flex-direction:column;gap:10px;overflow-y:auto}
+
+.param-group{padding:8px;background:rgba(0,0,0,0.3);border:1px solid rgba(255,191,156,0.1)}
+.param-label{font-family:'Space Grotesk',sans-serif;font-size:10px;font-weight:700;
+  color:#ffb59c;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:4px}
+.param-value{font-family:'JetBrains Mono',monospace;font-size:12px;color:#e5e2e1;margin-bottom:4px}
+.param-slider{width:100%;-webkit-appearance:none;appearance:none;height:4px;
+  background:linear-gradient(90deg,#ff7f50,#ffb59c);outline:none;cursor:pointer}
+.param-slider::-webkit-slider-thumb{-webkit-appearance:none;width:14px;height:14px;
+  background:#ffb59c;border:2px solid #ff7f50;cursor:pointer}
+.param-slider::-moz-range-thumb{width:14px;height:14px;
+  background:#ffb59c;border:2px solid #ff7f50;cursor:pointer}
+
+.toggle-row{display:flex;align-items:center;gap:8px}
+.toggle-switch{width:36px;height:18px;background:rgba(138,136,134,0.4);cursor:pointer;
+  position:relative;transition:background .2s}
+.toggle-switch.on{background:linear-gradient(90deg,#ff7f50,#ffb59c)}
+.toggle-switch .knob{width:14px;height:14px;background:#e5e2e1;position:absolute;top:2px;left:2px;
+  transition:left .2s}
+.toggle-switch.on .knob{left:20px}
+.toggle-label{font-size:11px;color:#8a8886;font-family:'Space Grotesk',sans-serif}
+
+.train-btn{width:100%;padding:10px;border:1px solid #ff7f50;background:linear-gradient(45deg,rgba(255,127,80,0.3),rgba(255,191,156,0.15));
+  color:#ffb59c;cursor:pointer;font-family:'Space Grotesk',sans-serif;font-size:13px;
+  font-weight:700;text-transform:uppercase;letter-spacing:0.08em;transition:all .2s}
+.train-btn:hover{background:linear-gradient(45deg,rgba(255,127,80,0.5),rgba(255,191,156,0.3));
+  box-shadow:0 0 20px rgba(255,127,80,0.4)}
+.train-btn:disabled{opacity:0.4;cursor:not-allowed}
+
+.viz-area{flex:1;min-width:0;display:flex;flex-direction:column;overflow:hidden}
+
+.viz-top{flex:1;min-height:0;display:flex;gap:0}
+.viz-chart{flex:1;min-width:0;position:relative;overflow:hidden}
+.viz-chart canvas{position:absolute;top:0;left:0;width:100%;height:100%}
+.viz-preview{width:220px;min-width:220px;display:flex;flex-direction:column;
+  border-left:1px solid rgba(255,191,156,0.1);padding:8px}
+.preview-title{font-family:'Space Grotesk',sans-serif;font-size:10px;color:#ffb59c;
+  text-transform:uppercase;letter-spacing:0.08em;margin-bottom:6px;text-align:center}
+.preview-canvas{flex:1;min-height:0;position:relative}
+.preview-canvas canvas{position:absolute;top:0;left:0;width:100%;height:100%}
+
+.hud{height:48px;min-height:48px;display:flex;align-items:center;
+  background:rgba(0,0,0,0.6);border-top:1px solid rgba(255,255,255,0.06);padding:0 16px}
+.hud-col{flex:1;text-align:center}
+.hud-label{font-family:'Space Grotesk',sans-serif;font-size:10px;
+  color:rgba(255,191,156,0.6);text-transform:uppercase;letter-spacing:0.1em}
+.hud-val{font-family:'JetBrains Mono','Space Grotesk',monospace;font-size:13px;font-weight:700;
+  color:rgba(229,226,225,0.9);margin-top:2px}
+
+.result-panel{display:none;position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);
+  width:400px;max-width:90vw;padding:24px;z-index:300;
+  background:rgba(28,27,27,0.96);backdrop-filter:blur(16px);
+  border:1px solid rgba(255,191,156,0.3)}
+.result-panel h2{font-family:'Space Grotesk',sans-serif;font-size:18px;color:#ffb59c;
+  text-transform:uppercase;margin-bottom:12px}
+.result-panel p{font-size:13px;line-height:1.6;color:rgba(229,226,225,0.85);margin-bottom:8px}
+.result-panel .close-btn{margin-top:12px;padding:8px 20px;border:1px solid #ff7f50;
+  background:transparent;color:#ffb59c;cursor:pointer;font-family:'Space Grotesk',sans-serif;
+  font-size:12px;font-weight:700;text-transform:uppercase}
+</style>
+</head>
+<body>
+
+<button class="lang-btn" id="langBtn">CN</button>
+
+<div class="guide-panel" id="guidePanel">
+  <h3 id="guideToggle"><span id="guideTitle">MISSION GUIDE</span> <span class="arrow" id="guideArrow">&#9660;</span></h3>
+  <div id="guideContent">
+    <div class="gl" id="glGoal">GOAL</div>
+    <p id="guideGoal"></p>
+    <div class="gl" style="margin-top:6px" id="glSteps">STEPS</div>
+    <ul>
+      <li id="step1"></li>
+      <li id="step2"></li>
+      <li id="step3"></li>
+    </ul>
+    <div class="gl" style="margin-top:6px" id="glWin">WIN CONDITION</div>
+    <p style="color:#ffb59c" id="guideWin"></p>
+    <div class="gl" style="margin-top:6px" id="glTips">TIPS</div>
+    <p id="guideTips"></p>
+  </div>
+</div>
+
+<div class="wrapper">
+  <div class="header">
+    <h1 id="headerTitle">SEGMENTATION TRAINING SIM</h1>
+  </div>
+
+  <div class="game-body">
+    <div class="control-panel" id="controlPanel">
+      <div class="param-group">
+        <div class="param-label" id="lblLR">LEARNING RATE</div>
+        <div class="param-value" id="valLR">0.001</div>
+        <input type="range" class="param-slider" id="sliderLR" min="0" max="4" step="1" value="2">
+      </div>
+      <div class="param-group">
+        <div class="param-label" id="lblEpochs">EPOCHS</div>
+        <div class="param-value" id="valEpochs">20</div>
+        <input type="range" class="param-slider" id="sliderEpochs" min="5" max="100" step="5" value="20">
+      </div>
+      <div class="param-group">
+        <div class="param-label" id="lblBatch">BATCH SIZE</div>
+        <div class="param-value" id="valBatch">8</div>
+        <input type="range" class="param-slider" id="sliderBatch" min="0" max="3" step="1" value="1">
+      </div>
+      <div class="param-group">
+        <div class="param-label" id="lblAug">DATA AUGMENTATION</div>
+        <div class="toggle-row">
+          <div class="toggle-switch" id="toggleAug"><div class="knob"></div></div>
+          <span class="toggle-label" id="augLabel">OFF</span>
+        </div>
+      </div>
+      <button class="train-btn" id="btnTrain">START TRAINING</button>
+      <button class="train-btn" id="btnReset" style="display:none">RESET</button>
+    </div>
+
+    <div class="viz-area">
+      <div class="viz-top">
+        <div class="viz-chart">
+          <canvas id="chartCanvas"></canvas>
+        </div>
+        <div class="viz-preview">
+          <div class="preview-title" id="previewTitle">PREDICTION PREVIEW</div>
+          <div class="preview-canvas">
+            <canvas id="previewCanvas"></canvas>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="hud">
+    <div class="hud-col"><div class="hud-label" id="hudL1">EPOCH</div><div class="hud-val" id="hudV1">0</div></div>
+    <div class="hud-col"><div class="hud-label" id="hudL2">TRAIN LOSS</div><div class="hud-val" id="hudV2">--</div></div>
+    <div class="hud-col"><div class="hud-label" id="hudL3">VAL LOSS</div><div class="hud-val" id="hudV3">--</div></div>
+    <div class="hud-col"><div class="hud-label" id="hudL4">mIoU</div><div class="hud-val" id="hudV4">--</div></div>
+  </div>
+</div>
+
+<div class="result-panel" id="resultPanel">
+  <h2 id="resultTitle">TRAINING COMPLETE</h2>
+  <p id="resultText"></p>
+  <p id="resultAdvice"></p>
+  <button class="close-btn" id="btnClose">CLOSE</button>
+</div>
+
+<script>
+(function(){
+"use strict";
+
+var LANG = 'cn';
+var I18N = {
+  headerTitle:   {en:'SEGMENTATION TRAINING SIM', cn:'SEGMENTATION TRAINING SIM'},
+  guideTitle:    {en:'MISSION GUIDE', cn:'MISSION GUIDE'},
+  glGoal:        {en:'GOAL', cn:'GOAL'},
+  glSteps:       {en:'STEPS', cn:'STEPS'},
+  glWin:         {en:'WIN CONDITION', cn:'WIN CONDITION'},
+  glTips:        {en:'TIPS', cn:'TIPS'},
+  guideGoal:     {en:'Train a U-Net to segment Mars terrain. Adjust hyperparameters and observe how loss and mIoU change.',
+                  cn:'训练一个 U-Net 分割火星地形。调节超参数，观察 loss 和 mIoU 的变化规律。'},
+  step1:         {en:'Adjust learning rate, epochs, batch size, and augmentation',
+                  cn:'调节学习率、训练轮数、批大小、数据增强开关'},
+  step2:         {en:'Click START TRAINING and watch the loss curve',
+                  cn:'点击 START TRAINING 观察损失曲线'},
+  step3:         {en:'Observe how the prediction mask improves over epochs',
+                  cn:'观察预测掩膜在训练过程中如何逐步改善'},
+  guideWin:      {en:'Reach mIoU >= 0.60 to pass the mission.',
+                  cn:'mIoU >= 0.60 即为通关。'},
+  guideTips:     {en:'Too high LR causes divergence. Too few epochs causes underfitting. Augmentation helps with small datasets.',
+                  cn:'学习率过高会导致发散。训练轮数太少会欠拟合。数据增强能帮助小数据集。'},
+  lblLR:         {en:'LEARNING RATE', cn:'LEARNING RATE'},
+  lblEpochs:     {en:'EPOCHS', cn:'EPOCHS'},
+  lblBatch:      {en:'BATCH SIZE', cn:'BATCH SIZE'},
+  lblAug:        {en:'DATA AUGMENTATION', cn:'DATA AUGMENTATION'},
+  augOn:         {en:'ON', cn:'ON'},
+  augOff:        {en:'OFF', cn:'OFF'},
+  btnTrain:      {en:'START TRAINING', cn:'START TRAINING'},
+  btnReset:      {en:'RESET', cn:'RESET'},
+  previewTitle:  {en:'PREDICTION PREVIEW', cn:'PREDICTION PREVIEW'},
+  hudEpoch:      {en:'EPOCH', cn:'EPOCH'},
+  hudTLoss:      {en:'TRAIN LOSS', cn:'TRAIN LOSS'},
+  hudVLoss:      {en:'VAL LOSS', cn:'VAL LOSS'},
+  hudMIoU:       {en:'mIoU', cn:'mIoU'},
+  resultTitle:   {en:'TRAINING COMPLETE', cn:'TRAINING COMPLETE'},
+  resultPass:    {en:'Mission passed! Your model achieved mIoU >= 0.60. This model is ready for exporting prediction masks on new images.',
+                  cn:'通关成功! 模型 mIoU >= 0.60。该模型已可用于导出新图像的预测掩膜。'},
+  resultFail:    {en:'Mission not passed. mIoU < 0.60. Try adjusting hyperparameters.',
+                  cn:'未通关。mIoU < 0.60。请尝试调整超参数后重新训练。'},
+  adviceLRHigh:  {en:'Hint: Learning rate might be too high, causing divergence.',
+                  cn:'提示: 学习率可能过高，导致损失发散。'},
+  adviceLRLow:   {en:'Hint: Learning rate might be too low, training converges slowly.',
+                  cn:'提示: 学习率可能过低，收敛缓慢。'},
+  adviceEpochLow:{en:'Hint: More epochs may help the model converge further.',
+                  cn:'提示: 增加训练轮数可能有助于模型进一步收敛。'},
+  adviceAugHelp: {en:'Hint: Try enabling data augmentation for better generalization.',
+                  cn:'提示: 尝试开启数据增强以改善泛化性能。'},
+  adviceGood:    {en:'Great configuration! The model trained well.',
+                  cn:'配置良好! 模型训练效果不错。'},
+  btnClose:      {en:'CLOSE', cn:'CLOSE'},
+  chartTitle:    {en:'LOSS CURVE', cn:'LOSS CURVE'},
+  chartTrain:    {en:'Train', cn:'Train'},
+  chartVal:      {en:'Val', cn:'Val'},
+};
+function t(key) { return (I18N[key] && I18N[key][LANG]) || (I18N[key] && I18N[key]['en']) || key; }
+
+// ── State ──
+var lrOptions = [0.0001, 0.0005, 0.001, 0.005, 0.01];
+var batchOptions = [4, 8, 16, 32];
+var lr = 0.001, epochs = 20, batchSize = 8, augEnabled = false;
+var training = false, trainDone = false;
+var trainLosses = [], valLosses = [], miouValues = [];
+var currentEpoch = 0;
+var animFrameId = null;
+
+// ── Charts ──
+var chartCanvas = document.getElementById('chartCanvas');
+var chartCtx = chartCanvas.getContext('2d');
+var prevCanvas = document.getElementById('previewCanvas');
+var prevCtx = prevCanvas.getContext('2d');
+
+// ── Simulation engine ──
+function simulateTraining(lr, epochs, batchSize, augEnabled) {
+  var tLoss = [], vLoss = [], miou = [];
+  // Base convergence speed depends on LR
+  var lrIdx = lrOptions.indexOf(lr);
+  var convergenceRate, noiseLevel, diverges = false;
+  var finalMiou;
+
+  if(lr >= 0.01) {
+    // too high -- diverges after a few epochs
+    diverges = true;
+    convergenceRate = 0.15;
+    noiseLevel = 0.08;
+    finalMiou = 0.15;
+  } else if(lr >= 0.005) {
+    // slightly high -- noisy convergence
+    convergenceRate = 0.12;
+    noiseLevel = 0.06;
+    finalMiou = 0.48;
+  } else if(lr >= 0.001) {
+    // good range
+    convergenceRate = 0.08;
+    noiseLevel = 0.03;
+    finalMiou = 0.65;
+  } else if(lr >= 0.0005) {
+    // a bit slow
+    convergenceRate = 0.04;
+    noiseLevel = 0.02;
+    finalMiou = 0.58;
+  } else {
+    // very slow
+    convergenceRate = 0.02;
+    noiseLevel = 0.015;
+    finalMiou = 0.42;
+  }
+
+  // Augmentation bonus
+  if(augEnabled) {
+    finalMiou = Math.min(finalMiou + 0.08, 0.82);
+    noiseLevel *= 0.8;
+  }
+
+  // Batch size effect
+  if(batchSize <= 4) { noiseLevel *= 1.3; finalMiou -= 0.03; }
+  if(batchSize >= 32) { convergenceRate *= 0.85; }
+
+  // Epoch effect
+  var epochFactor = Math.min(epochs / 50, 1.0);
+  finalMiou *= (0.6 + 0.4 * epochFactor);
+
+  var startLoss = 2.5;
+  var seed = lr * 1000 + batchSize + (augEnabled ? 7 : 0);
+
+  for(var e = 0; e < epochs; e++) {
+    var progress = (e + 1) / epochs;
+    var noise1 = Math.sin(seed + e * 3.7) * noiseLevel;
+    var noise2 = Math.sin(seed + e * 5.3 + 1) * noiseLevel * 1.2;
+
+    if(diverges && e > Math.floor(epochs * 0.2)) {
+      // Loss explodes
+      var divFactor = Math.pow(1.15, e - Math.floor(epochs * 0.2));
+      tLoss.push(Math.min(startLoss * divFactor + noise1, 10));
+      vLoss.push(Math.min(startLoss * divFactor * 1.1 + noise2, 10));
+      miou.push(Math.max(0.05, 0.3 - progress * 0.25));
+    } else {
+      var decay = Math.exp(-convergenceRate * (e + 1));
+      var tl = startLoss * decay + (1 - decay) * 0.3 + noise1;
+      var vl = startLoss * decay + (1 - decay) * 0.4 + noise2;
+      tLoss.push(Math.max(0.1, tl));
+      vLoss.push(Math.max(0.15, vl));
+      // mIoU grows as loss drops
+      var miouProg = finalMiou * (1 - Math.exp(-convergenceRate * (e + 1) * 2));
+      miou.push(Math.min(Math.max(0.05, miouProg + noise1 * 0.5), 0.85));
+    }
+  }
+  return {trainLoss: tLoss, valLoss: vLoss, miou: miou};
+}
+
+// ── Chart drawing ──
+function drawChart() {
+  var wrap = document.querySelector('.viz-chart');
+  var rect = wrap.getBoundingClientRect();
+  if(rect.width < 1 || rect.height < 1) return;
+  var dpr = Math.min(window.devicePixelRatio || 1, 2);
+  chartCanvas.width = rect.width * dpr;
+  chartCanvas.height = rect.height * dpr;
+  chartCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+  var cw = rect.width, ch = rect.height;
+  // bg
+  var g = chartCtx.createLinearGradient(0,0,0,ch);
+  g.addColorStop(0,'#0f0a1e');
+  g.addColorStop(1,'#1a1035');
+  chartCtx.fillStyle = g;
+  chartCtx.fillRect(0,0,cw,ch);
+  // grid
+  chartCtx.strokeStyle = 'rgba(255,255,255,0.04)';
+  chartCtx.lineWidth = 0.5;
+  for(var i=0;i<cw;i+=40){chartCtx.beginPath();chartCtx.moveTo(i,0);chartCtx.lineTo(i,ch);chartCtx.stroke();}
+  for(var j=0;j<ch;j+=40){chartCtx.beginPath();chartCtx.moveTo(0,j);chartCtx.lineTo(cw,j);chartCtx.stroke();}
+
+  // Title
+  chartCtx.font = 'bold 12px "Space Grotesk", sans-serif';
+  chartCtx.fillStyle = '#ffb59c';
+  chartCtx.textAlign = 'left';
+  chartCtx.fillText(t('chartTitle'), 40, 24);
+
+  if(trainLosses.length === 0) {
+    chartCtx.font = '14px "Noto Sans SC", sans-serif';
+    chartCtx.fillStyle = 'rgba(229,226,225,0.4)';
+    chartCtx.textAlign = 'center';
+    chartCtx.fillText('--', cw/2, ch/2);
+    return;
+  }
+
+  var padL = 50, padR = 20, padT = 40, padB = 30;
+  var plotW = cw - padL - padR;
+  var plotH = ch - padT - padB;
+
+  // Find max loss for scale
+  var allLoss = trainLosses.concat(valLosses);
+  var dispLosses = allLoss.slice(0, currentEpoch + 1);
+  var maxLoss = Math.max.apply(null, dispLosses.length > 0 ? dispLosses : [3]);
+  maxLoss = Math.ceil(maxLoss * 1.2);
+  if(maxLoss < 1) maxLoss = 1;
+
+  // Y axis
+  chartCtx.font = '9px "JetBrains Mono", monospace';
+  chartCtx.fillStyle = '#8a8886';
+  chartCtx.textAlign = 'right';
+  for(var yi=0;yi<=4;yi++){
+    var yv = (maxLoss * yi / 4);
+    var yy = padT + plotH - (yi/4)*plotH;
+    chartCtx.fillText(yv.toFixed(1), padL - 6, yy + 3);
+    chartCtx.strokeStyle = 'rgba(255,255,255,0.05)';
+    chartCtx.beginPath(); chartCtx.moveTo(padL, yy); chartCtx.lineTo(padL+plotW, yy); chartCtx.stroke();
+  }
+
+  // X axis labels
+  chartCtx.textAlign = 'center';
+  var totalE = trainLosses.length;
+  var step = Math.max(1, Math.floor(totalE / 6));
+  for(var xi=0;xi<totalE;xi+=step){
+    var xx = padL + (xi/(totalE-1||1))*plotW;
+    chartCtx.fillText(''+(xi+1), xx, padT+plotH+16);
+  }
+
+  var count = Math.min(currentEpoch + 1, trainLosses.length);
+
+  // Draw train loss line
+  function drawLine(data, color, glowColor) {
+    if(count < 1) return;
+    chartCtx.save();
+    chartCtx.strokeStyle = color;
+    chartCtx.lineWidth = 2;
+    chartCtx.shadowColor = glowColor;
+    chartCtx.shadowBlur = 8;
+    chartCtx.beginPath();
+    for(var i=0;i<count;i++){
+      var px = padL + (i/(totalE-1||1))*plotW;
+      var py = padT + plotH - (Math.min(data[i],maxLoss)/maxLoss)*plotH;
+      if(i===0) chartCtx.moveTo(px,py); else chartCtx.lineTo(px,py);
+    }
+    chartCtx.stroke();
+    // dot at current
+    if(count > 0){
+      var lastX = padL + ((count-1)/(totalE-1||1))*plotW;
+      var lastY = padT + plotH - (Math.min(data[count-1],maxLoss)/maxLoss)*plotH;
+      chartCtx.beginPath();
+      chartCtx.arc(lastX, lastY, 3, 0, Math.PI*2);
+      chartCtx.fillStyle = color;
+      chartCtx.fill();
+    }
+    chartCtx.restore();
+  }
+
+  drawLine(trainLosses, '#ff7f50', '#ff7f50');
+  drawLine(valLosses, '#00daf3', '#00daf3');
+
+  // Legend
+  chartCtx.font = '10px "Space Grotesk", sans-serif';
+  chartCtx.fillStyle = '#ff7f50';
+  chartCtx.fillRect(cw - 120, 14, 12, 3);
+  chartCtx.fillText(t('chartTrain'), cw - 104, 18);
+  chartCtx.fillStyle = '#00daf3';
+  chartCtx.fillRect(cw - 60, 14, 12, 3);
+  chartCtx.fillText(t('chartVal'), cw - 44, 18);
+}
+
+// ── Preview mask drawing ──
+function drawPreview() {
+  var wrap = document.querySelector('.preview-canvas');
+  var rect = wrap.getBoundingClientRect();
+  if(rect.width < 1 || rect.height < 1) return;
+  var dpr = Math.min(window.devicePixelRatio || 1, 2);
+  prevCanvas.width = rect.width * dpr;
+  prevCanvas.height = rect.height * dpr;
+  prevCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+  var pw = rect.width, ph = rect.height;
+  prevCtx.fillStyle = '#0f0a1e';
+  prevCtx.fillRect(0,0,pw,ph);
+
+  if(miouValues.length === 0 || currentEpoch < 0) {
+    prevCtx.font = '12px "Noto Sans SC", sans-serif';
+    prevCtx.fillStyle = 'rgba(229,226,225,0.3)';
+    prevCtx.textAlign = 'center';
+    prevCtx.fillText('--', pw/2, ph/2);
+    return;
+  }
+
+  var miou = miouValues[Math.min(currentEpoch, miouValues.length - 1)];
+  var imgSize = Math.min(pw - 16, (ph - 24) / 2 - 4);
+  var imgX = (pw - imgSize) / 2;
+
+  // Ground truth mask (top)
+  prevCtx.font = '9px "Space Grotesk", sans-serif';
+  prevCtx.fillStyle = '#8a8886';
+  prevCtx.textAlign = 'center';
+  prevCtx.fillText('GROUND TRUTH', pw/2, 12);
+  drawSimMask(prevCtx, imgX, 16, imgSize, imgSize, 1.0);
+
+  // Prediction mask (bottom) -- quality depends on mIoU
+  prevCtx.fillText('PREDICTION (mIoU: ' + miou.toFixed(2) + ')', pw/2, imgSize + 30);
+  drawSimMask(prevCtx, imgX, imgSize + 34, imgSize, imgSize, miou);
+}
+
+// Simulated segmentation mask
+function drawSimMask(cx, x, y, w, h, quality) {
+  // Ground truth regions
+  var regions = [
+    {rx:0, ry:0.4, rw:0.5, rh:0.6, color:'rgba(16,185,129,0.8)'},   // safe
+    {rx:0.5, ry:0, rw:0.5, rh:0.4, color:'rgba(59,130,246,0.7)'},    // rock
+    {rx:0.5, ry:0.4, rw:0.5, rh:0.6, color:'rgba(245,158,11,0.7)'},  // sand
+    {rx:0, ry:0, rw:0.5, rh:0.4, color:'rgba(239,68,68,0.6)'},       // danger
+  ];
+  cx.fillStyle = '#1a1a2e';
+  cx.fillRect(x, y, w, h);
+
+  var blockSize = Math.max(2, Math.floor(w / 16));
+  for(var bx = 0; bx < w; bx += blockSize) {
+    for(var by = 0; by < h; by += blockSize) {
+      var fx = bx / w, fy = by / h;
+      // find which region this pixel belongs to
+      var trueColor = 'rgba(100,100,100,0.3)';
+      for(var r = 0; r < regions.length; r++) {
+        if(fx >= regions[r].rx && fx < regions[r].rx + regions[r].rw &&
+           fy >= regions[r].ry && fy < regions[r].ry + regions[r].rh) {
+          trueColor = regions[r].color;
+          break;
+        }
+      }
+      // Add noise based on quality
+      if(quality < 0.95) {
+        var noise = Math.sin(bx*7.3+by*11.1+quality*100) * 0.5 + 0.5;
+        if(noise > quality) {
+          // wrong prediction -- show noise color
+          var wrongIdx = Math.floor(noise * 4) % 4;
+          trueColor = regions[wrongIdx].color;
+        }
+      }
+      cx.fillStyle = trueColor;
+      cx.fillRect(x + bx, y + by, blockSize - 0.5, blockSize - 0.5);
+    }
+  }
+  cx.strokeStyle = 'rgba(255,191,156,0.3)';
+  cx.lineWidth = 1;
+  cx.strokeRect(x, y, w, h);
+}
+
+// ── Training animation ──
+function runTraining() {
+  // Read params
+  var lrIdx = parseInt(document.getElementById('sliderLR').value);
+  lr = lrOptions[lrIdx];
+  epochs = parseInt(document.getElementById('sliderEpochs').value);
+  var bIdx = parseInt(document.getElementById('sliderBatch').value);
+  batchSize = batchOptions[bIdx];
+
+  var result = simulateTraining(lr, epochs, batchSize, augEnabled);
+  trainLosses = result.trainLoss;
+  valLosses = result.valLoss;
+  miouValues = result.miou;
+  currentEpoch = 0;
+  training = true;
+  trainDone = false;
+
+  document.getElementById('btnTrain').disabled = true;
+  disableControls(true);
+
+  animateEpoch();
+}
+
+function animateEpoch() {
+  if(!training) return;
+  if(currentEpoch >= epochs) {
+    finishTraining();
+    return;
+  }
+
+  updateHUD();
+  drawChart();
+  drawPreview();
+
+  currentEpoch++;
+  var delay = Math.max(40, 2000 / epochs);
+  setTimeout(animateEpoch, delay);
+}
+
+function finishTraining() {
+  training = false;
+  trainDone = true;
+  currentEpoch = epochs - 1;
+  updateHUD();
+  drawChart();
+  drawPreview();
+
+  document.getElementById('btnTrain').disabled = false;
+  document.getElementById('btnTrain').style.display = 'none';
+  document.getElementById('btnReset').style.display = '';
+  disableControls(false);
+
+  // Show result
+  var finalMiou = miouValues[miouValues.length - 1];
+  var passed = finalMiou >= 0.60;
+
+  document.getElementById('resultTitle').textContent = t('resultTitle');
+  document.getElementById('resultText').textContent = passed ? t('resultPass') : t('resultFail');
+
+  // Advice
+  var advice = '';
+  if(lr >= 0.01) advice = t('adviceLRHigh');
+  else if(lr <= 0.0001) advice = t('adviceLRLow');
+  else if(epochs < 20) advice = t('adviceEpochLow');
+  else if(!augEnabled && !passed) advice = t('adviceAugHelp');
+  else advice = t('adviceGood');
+  document.getElementById('resultAdvice').textContent = advice;
+
+  document.getElementById('resultPanel').style.display = 'block';
+}
+
+function disableControls(disabled) {
+  document.getElementById('sliderLR').disabled = disabled;
+  document.getElementById('sliderEpochs').disabled = disabled;
+  document.getElementById('sliderBatch').disabled = disabled;
+}
+
+function resetTraining() {
+  trainLosses = []; valLosses = []; miouValues = [];
+  currentEpoch = 0; training = false; trainDone = false;
+  document.getElementById('btnTrain').style.display = '';
+  document.getElementById('btnTrain').disabled = false;
+  document.getElementById('btnReset').style.display = 'none';
+  document.getElementById('resultPanel').style.display = 'none';
+  updateHUD();
+  drawChart();
+  drawPreview();
+}
+
+function updateHUD() {
+  document.getElementById('hudL1').textContent = t('hudEpoch');
+  document.getElementById('hudL2').textContent = t('hudTLoss');
+  document.getElementById('hudL3').textContent = t('hudVLoss');
+  document.getElementById('hudL4').textContent = t('hudMIoU');
+
+  var e = Math.min(currentEpoch, trainLosses.length - 1);
+  document.getElementById('hudV1').textContent = (e >= 0 ? (e+1) + '/' + epochs : '0');
+  document.getElementById('hudV2').textContent = (e >= 0 && trainLosses[e] !== undefined) ? trainLosses[e].toFixed(3) : '--';
+  document.getElementById('hudV3').textContent = (e >= 0 && valLosses[e] !== undefined) ? valLosses[e].toFixed(3) : '--';
+  document.getElementById('hudV4').textContent = (e >= 0 && miouValues[e] !== undefined) ? miouValues[e].toFixed(3) : '--';
+}
+
+function refreshI18N() {
+  document.getElementById('headerTitle').textContent = t('headerTitle');
+  document.getElementById('guideTitle').textContent = t('guideTitle');
+  document.getElementById('glGoal').textContent = t('glGoal');
+  document.getElementById('glSteps').textContent = t('glSteps');
+  document.getElementById('glWin').textContent = t('glWin');
+  document.getElementById('glTips').textContent = t('glTips');
+  document.getElementById('guideGoal').textContent = t('guideGoal');
+  document.getElementById('step1').textContent = t('step1');
+  document.getElementById('step2').textContent = t('step2');
+  document.getElementById('step3').textContent = t('step3');
+  document.getElementById('guideWin').textContent = t('guideWin');
+  document.getElementById('guideTips').textContent = t('guideTips');
+  document.getElementById('lblLR').textContent = t('lblLR');
+  document.getElementById('lblEpochs').textContent = t('lblEpochs');
+  document.getElementById('lblBatch').textContent = t('lblBatch');
+  document.getElementById('lblAug').textContent = t('lblAug');
+  document.getElementById('augLabel').textContent = augEnabled ? t('augOn') : t('augOff');
+  document.getElementById('btnTrain').textContent = t('btnTrain');
+  document.getElementById('btnReset').textContent = t('btnReset');
+  document.getElementById('previewTitle').textContent = t('previewTitle');
+  document.getElementById('btnClose').textContent = t('btnClose');
+  updateHUD();
+  drawChart();
+  drawPreview();
+}
+
+// ── Event bindings ──
+document.getElementById('sliderLR').addEventListener('input', function(){
+  var idx = parseInt(this.value);
+  lr = lrOptions[idx];
+  document.getElementById('valLR').textContent = lr.toFixed(4);
+});
+
+document.getElementById('sliderEpochs').addEventListener('input', function(){
+  epochs = parseInt(this.value);
+  document.getElementById('valEpochs').textContent = epochs;
+});
+
+document.getElementById('sliderBatch').addEventListener('input', function(){
+  var idx = parseInt(this.value);
+  batchSize = batchOptions[idx];
+  document.getElementById('valBatch').textContent = batchSize;
+});
+
+document.getElementById('toggleAug').addEventListener('click', function(){
+  augEnabled = !augEnabled;
+  this.classList.toggle('on', augEnabled);
+  document.getElementById('augLabel').textContent = augEnabled ? t('augOn') : t('augOff');
+});
+
+document.getElementById('btnTrain').addEventListener('click', function(){
+  if(!training) runTraining();
+});
+
+document.getElementById('btnReset').addEventListener('click', function(){
+  resetTraining();
+});
+
+document.getElementById('btnClose').addEventListener('click', function(){
+  document.getElementById('resultPanel').style.display = 'none';
+});
+
+// Guide toggle
+document.getElementById('guideToggle').addEventListener('click', function(){
+  var content = document.getElementById('guideContent');
+  var arrow = document.getElementById('guideArrow');
+  if(content.style.display === 'none') {
+    content.style.display = '';
+    arrow.classList.remove('collapsed');
+  } else {
+    content.style.display = 'none';
+    arrow.classList.add('collapsed');
+  }
+});
+
+// Language switch
+document.getElementById('langBtn').addEventListener('click', function(){
+  LANG = LANG === 'en' ? 'cn' : 'en';
+  document.getElementById('langBtn').textContent = LANG.toUpperCase();
+  refreshI18N();
+});
+
+// Resize
+function handleResize() {
+  drawChart();
+  drawPreview();
+}
+window.addEventListener('resize', handleResize);
+if(window.ResizeObserver){
+  new ResizeObserver(handleResize).observe(document.querySelector('.viz-chart'));
+}
+
+// Init
+refreshI18N();
+drawChart();
+drawPreview();
+setTimeout(function(){ drawChart(); drawPreview(); }, 200);
+setTimeout(function(){ drawChart(); drawPreview(); }, 600);
+document.fonts.ready.then(function(){ drawChart(); drawPreview(); });
+
+})();
+</script>
+</body>
+</html>

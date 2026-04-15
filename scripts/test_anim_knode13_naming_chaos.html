@@ -1,0 +1,400 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=Inter:wght@400;500&family=Noto+Sans+SC:wght@400;700&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box;}
+html,body{width:100%;height:100vh;overflow:hidden;}
+body{background:var(--bg,#0c0e12);color:var(--text,#f6f6fc);font-family:'Inter','Noto Sans SC',sans-serif;display:flex;flex-direction:column;}
+.wrapper{display:flex;flex-direction:column;height:100vh;overflow:hidden;}
+.header{padding:12px 16px 8px;display:flex;justify-content:space-between;align-items:center;}
+.header h1{font-family:'Space Grotesk',sans-serif;font-size:clamp(14px,2vw,18px);font-weight:700;letter-spacing:-0.02em;color:var(--primary,#50ffb0);text-shadow:0 0 15px var(--glow,rgba(80,255,176,0.3));}
+.header .sub{font-size:11px;color:var(--muted,#aaabb0);letter-spacing:0.1em;text-transform:uppercase;}
+.canvas-wrap{flex:1;min-height:0;position:relative;}
+canvas{width:100%;height:100%;display:block;}
+.controls{display:flex;justify-content:center;align-items:center;gap:12px;padding:8px 16px;}
+.ctrl-btn{font-family:'Space Grotesk',sans-serif;font-size:12px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;padding:6px 18px;border:none;cursor:pointer;color:var(--bg,#0c0e12);background:linear-gradient(135deg,var(--primary,#50ffb0),var(--primary-dim,#17df93));transition:transform 0.1s,box-shadow 0.2s;box-shadow:0 0 12px var(--glow-strong,rgba(80,255,176,0.3));}
+.ctrl-btn:hover{transform:scale(1.04);box-shadow:0 0 20px var(--glow-strong,rgba(80,255,176,0.5));}
+.ctrl-btn:active{transform:scale(0.96);}
+.ctrl-btn.secondary{background:var(--glass,rgba(23,26,31,0.92));color:var(--muted,#aaabb0);box-shadow:none;backdrop-filter:blur(12px);}
+.ctrl-btn.secondary:hover{color:var(--primary,#50ffb0);}
+.hud{height:48px;display:flex;align-items:center;justify-content:space-around;background:rgba(0,0,0,0.55);backdrop-filter:blur(12px);padding:0 16px;}
+.hud-item{text-align:center;}
+.hud-label{font-family:'Space Grotesk',sans-serif;font-size:9px;letter-spacing:0.15em;text-transform:uppercase;color:var(--muted,#aaabb0);}
+.hud-val{font-family:'Space Grotesk',sans-serif;font-size:14px;font-weight:700;color:var(--primary,#50ffb0);}
+.lang-btn{position:fixed;top:8px;left:8px;z-index:100;font-family:'Space Grotesk',sans-serif;font-size:11px;font-weight:700;padding:4px 10px;cursor:pointer;border:none;background:rgba(20,20,35,0.85);backdrop-filter:blur(12px);color:#ffb59c;letter-spacing:1px;}
+.guide-panel{position:fixed;top:8px;right:8px;width:240px;max-height:40vh;overflow-y:auto;background:var(--glass,rgba(20,20,35,0.85));backdrop-filter:blur(12px);padding:12px;z-index:100;font-family:'Noto Sans SC',sans-serif;font-size:12px;color:rgba(255,255,255,0.85);line-height:1.6;}
+.guide-panel h3{font-family:'Space Grotesk',sans-serif;font-size:13px;margin-bottom:6px;color:var(--primary,#50ffb0);cursor:pointer;display:flex;justify-content:space-between;align-items:center;}
+.guide-panel ul{padding-left:14px;}
+.guide-panel .collapsed{display:none;}
+</style>
+</head>
+<body>
+<button class="lang-btn" id="langBtn">CN</button>
+<div class="guide-panel" id="guide">
+<h3 id="guideTitle"></h3>
+<div class="guide-content" id="guideContent"></div>
+</div>
+<div class="wrapper">
+<div class="header">
+<div><h1 id="title"></h1><div class="sub" id="subtitle"></div></div>
+<div id="frameIndicator" style="font-family:'Space Grotesk';font-size:11px;color:var(--muted,#aaabb0);letter-spacing:0.1em;"></div>
+</div>
+<div class="canvas-wrap"><canvas id="c"></canvas></div>
+<div class="controls">
+<button class="ctrl-btn secondary" id="btnPrev"></button>
+<button class="ctrl-btn" id="btnPlay"></button>
+<button class="ctrl-btn secondary" id="btnNext"></button>
+</div>
+<div class="hud">
+<div class="hud-item"><div class="hud-label" id="hudL1"></div><div class="hud-val" id="hudV1"></div></div>
+<div class="hud-item"><div class="hud-label" id="hudL2"></div><div class="hud-val" id="hudV2"></div></div>
+<div class="hud-item"><div class="hud-label" id="hudL3"></div><div class="hud-val" id="hudV3"></div></div>
+<div class="hud-item"><div class="hud-label" id="hudL4"></div><div class="hud-val" id="hudV4"></div></div>
+</div>
+</div>
+
+<script src="animation_runtime.js"></script>
+
+<script>
+var CONFIG = {
+  style: 'ares_mission',
+  totalFrames: 4,
+
+  i18n: {
+    title:    {en:'NAMING CHAOS vs ORDER', cn:'\u547d\u540d\u6df7\u4e71 vs \u6807\u51c6\u5316'},
+    subtitle: {en:'Why Naming Terrain Matters', cn:'\u4e3a\u4ec0\u4e48\u7ed9\u5730\u5f62\u8d77\u540d\u5b57\u5f88\u91cd\u8981'},
+    prev:     {en:'PREV', cn:'\u4e0a\u4e00\u5e27'},
+    next:     {en:'NEXT', cn:'\u4e0b\u4e00\u5e27'},
+    play:     {en:'AUTO', cn:'\u81ea\u52a8'},
+    pause:    {en:'PAUSE', cn:'\u6682\u505c'},
+    guideTitle:{en:'Learning Guide', cn:'\u5b66\u4e60\u5bfc\u822a'},
+    g1: {en:'Three scientists name the same crater differently -- chaos!', cn:'\u4e09\u4e2a\u79d1\u5b66\u5bb6\u5bf9\u540c\u4e00\u4e2a\u5751\u53eb\u4e0d\u540c\u540d\u5b57\u2014\u2014\u6df7\u4e71\uff01'},
+    g2: {en:'Unified naming: everyone points to Crater-A7', cn:'\u7edf\u4e00\u547d\u540d\uff1a\u6240\u6709\u4eba\u90fd\u6307\u5411\u649e\u51fb\u5751-A7'},
+    g3: {en:'Five basic terrain types on Mars', cn:'\u706b\u661f\u4e0a\u7684\u4e94\u79cd\u57fa\u672c\u5730\u5f62\u7c7b\u578b'},
+    g4: {en:'Naming is the foundation of data annotation', cn:'\u547d\u540d\u662f\u6570\u636e\u6807\u6ce8\u7684\u57fa\u7840'},
+    // HUD
+    hud_frame:  {en:'FRAME', cn:'\u5e27'},
+    hud_mode:   {en:'MODE', cn:'\u6a21\u5f0f'},
+    hud_types:  {en:'TYPES', cn:'\u7c7b\u578b\u6570'},
+    hud_status: {en:'STATUS', cn:'\u72b6\u6001'},
+    chaos:      {en:'CHAOS', cn:'\u6df7\u4e71'},
+    standard:   {en:'STANDARD', cn:'\u6807\u51c6'},
+    catalog:    {en:'CATALOG', cn:'\u76ee\u5f55'},
+    bridge:     {en:'BRIDGE', cn:'\u8854\u63a5'},
+    ok:         {en:'OK', cn:'\u6b63\u5e38'},
+    fail:       {en:'FAIL', cn:'\u5931\u8d25'},
+  },
+
+  hudLabels: ['hud_frame', 'hud_mode', 'hud_types', 'hud_status'],
+  hudValues: [
+    ['1/4', 'chaos',    '--', 'fail'],
+    ['2/4', 'standard', '--', 'ok'],
+    ['3/4', 'catalog',  '5',  'ok'],
+    ['4/4', 'bridge',   '5',  'ok'],
+  ],
+
+  guideTitle: 'guideTitle',
+  guideItems: ['g1', 'g2', 'g3', 'g4'],
+};
+
+/* ---- Drawing helpers (sized for 700x400 ref canvas) ---- */
+function _person(ctx, x, y, color) {
+  ctx.fillStyle = color;
+  ctx.beginPath(); ctx.arc(x, y - 26, 10, 0, Math.PI * 2); ctx.fill();
+  ctx.strokeStyle = color; ctx.lineWidth = 3;
+  ctx.beginPath(); ctx.moveTo(x, y - 16); ctx.lineTo(x, y + 8); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(x - 14, y - 6); ctx.lineTo(x + 14, y - 6); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(x, y + 8); ctx.lineTo(x - 10, y + 26); ctx.moveTo(x, y + 8); ctx.lineTo(x + 10, y + 26); ctx.stroke();
+}
+
+function _bubble(ctx, x, y, text, color) {
+  ctx.font = "bold 13px 'Noto Sans SC',sans-serif";
+  var tw = ctx.measureText(text).width + 18;
+  var bh = 22;
+  var bx = x - tw / 2, by = y - bh;
+  ctx.fillStyle = 'rgba(15,15,25,0.92)';
+  ctx.strokeStyle = color; ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.moveTo(bx + 4, by); ctx.lineTo(bx + tw - 4, by);
+  ctx.quadraticCurveTo(bx + tw, by, bx + tw, by + 4);
+  ctx.lineTo(bx + tw, by + bh - 4); ctx.quadraticCurveTo(bx + tw, by + bh, bx + tw - 4, by + bh);
+  ctx.lineTo(bx + 4, by + bh); ctx.quadraticCurveTo(bx, by + bh, bx, by + bh - 4);
+  ctx.lineTo(bx, by + 4); ctx.quadraticCurveTo(bx, by, bx + 4, by);
+  ctx.closePath(); ctx.fill(); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(x - 5, by + bh); ctx.lineTo(x, by + bh + 7); ctx.lineTo(x + 5, by + bh); ctx.fillStyle = 'rgba(15,15,25,0.92)'; ctx.fill(); ctx.stroke();
+  ctx.fillStyle = color; ctx.textAlign = 'center'; ctx.fillText(text, x, y - 5);
+}
+
+function _crater(ctx, x, y, r, P) {
+  ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2);
+  ctx.fillStyle = 'rgba(80,255,176,0.12)'; ctx.fill();
+  ctx.strokeStyle = P.primary; ctx.lineWidth = 2; ctx.stroke();
+  ctx.beginPath(); ctx.arc(x, y, r * 0.55, 0, Math.PI * 2);
+  ctx.fillStyle = 'rgba(0,0,0,0.25)'; ctx.fill();
+}
+
+function _terrainIcon(ctx, x, y, type, P) {
+  var s = 28;
+  ctx.save();
+  switch(type) {
+    case 'plains':
+      ctx.fillStyle = 'rgba(200,160,100,0.5)';
+      ctx.fillRect(x - s, y - 4, s * 2, 8);
+      ctx.strokeStyle = P.primary; ctx.lineWidth = 1; ctx.strokeRect(x - s, y - 4, s * 2, 8);
+      break;
+    case 'crater':
+      _crater(ctx, x, y, s * 0.65, P);
+      break;
+    case 'volcano':
+      ctx.beginPath(); ctx.moveTo(x - s, y + s * 0.5); ctx.lineTo(x, y - s * 0.7); ctx.lineTo(x + s, y + s * 0.5); ctx.closePath();
+      ctx.fillStyle = '#ff6b4a'; ctx.fill(); ctx.strokeStyle = P.primary; ctx.lineWidth = 1.5; ctx.stroke();
+      ctx.beginPath(); ctx.arc(x, y - s * 0.7 - 5, 4, 0, Math.PI * 2); ctx.fillStyle = 'rgba(255,255,255,0.25)'; ctx.fill();
+      break;
+    case 'canyon':
+      ctx.beginPath(); ctx.moveTo(x - s, y - 8); ctx.lineTo(x - 6, y + 10); ctx.lineTo(x + 6, y + 10); ctx.lineTo(x + s, y - 8);
+      ctx.strokeStyle = P.primary; ctx.lineWidth = 2; ctx.stroke();
+      ctx.fillStyle = 'rgba(80,255,176,0.08)'; ctx.fill();
+      break;
+    case 'dune':
+      ctx.beginPath(); ctx.moveTo(x - s, y + 8);
+      ctx.quadraticCurveTo(x - s * 0.4, y - s * 0.5, x, y);
+      ctx.quadraticCurveTo(x + s * 0.4, y - s * 0.3, x + s, y + 8);
+      ctx.strokeStyle = '#f0c060'; ctx.lineWidth = 2.5; ctx.stroke();
+      break;
+  }
+  ctx.restore();
+}
+
+/* ---- Frame elements ---- */
+function getFrameElements(f, W, H) {
+  var t = AnimRuntime.t;
+  var P = AnimRuntime.PAL;
+  var cx = W / 2, cy = H / 2;
+
+  // All frames share a "scene" custom element for complex drawing
+  return [{
+    id: 'scene', type: 'custom', x: cx, y: cy,
+    draw: function(ctx) {
+      if (f === 0) drawFrameChaos(ctx, W, H, t, P);
+      else if (f === 1) drawFrameStandard(ctx, W, H, t, P);
+      else if (f === 2) drawFrameCatalog(ctx, W, H, t, P);
+      else if (f === 3) drawFrameBridge(ctx, W, H, t, P);
+    }
+  }];
+}
+
+function drawFrameChaos(ctx, W, H, t, P) {
+  var cx = W / 2;
+  var lang = AnimRuntime._lang || 'cn';
+  // No title in canvas -- DOM header already shows it.
+  // Use full H (0 to H) for content.
+
+  // Layout: divide H into bands
+  var bubbleY  = H * 0.10;
+  var personY  = H * 0.28;
+  var craterY  = H * 0.58;
+  var confY    = H * 0.80;
+
+  var colors = ['#50ffb0', '#ffb59c', '#6ec6ff'];
+  var sx = [cx - W * 0.28, cx, cx + W * 0.28];
+  var names = [
+    {en:'"That hole"', cn:'\u201c\u90a3\u4e2a\u5751\u201d'},
+    {en:'"The round thing"', cn:'\u201c\u90a3\u4e2a\u5706\u4e1c\u897f\u201d'},
+    {en:'"The pit"', cn:'\u201c\u90a3\u4e2a\u51f9\u964d\u201d'},
+  ];
+  var scNames = [
+    {en:'Scientist A', cn:'\u79d1\u5b66\u5bb6 A'},
+    {en:'Scientist B', cn:'\u79d1\u5b66\u5bb6 B'},
+    {en:'Scientist C', cn:'\u79d1\u5b66\u5bb6 C'},
+  ];
+
+  for (var i = 0; i < 3; i++) {
+    _bubble(ctx, sx[i], bubbleY, names[i][lang], colors[i]);
+    _person(ctx, sx[i], personY, colors[i]);
+    ctx.font = "bold 10px 'Noto Sans SC',sans-serif";
+    ctx.textAlign = 'center'; ctx.fillStyle = colors[i];
+    ctx.fillText(scNames[i][lang], sx[i], personY + 32);
+  }
+
+  _crater(ctx, cx, craterY, H * 0.10, P);
+
+  for (var i = 0; i < 3; i++) {
+    var tx = cx + (i - 1) * 22;
+    var ty = craterY + (i === 1 ? -H * 0.04 : H * 0.02);
+    ctx.save();
+    ctx.strokeStyle = colors[i]; ctx.lineWidth = 1.5; ctx.setLineDash([5, 4]);
+    ctx.beginPath(); ctx.moveTo(sx[i], personY + 35); ctx.lineTo(tx, ty); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.restore();
+  }
+
+  ctx.font = "bold 14px 'Noto Sans SC',sans-serif";
+  ctx.textAlign = 'center'; ctx.fillStyle = '#ff6b4a';
+  var confText = lang === 'cn' ? '??? \u54ea\u4e2a ???' : '??? Which one ???';
+  ctx.fillText(confText, cx, confY);
+  ctx.strokeStyle = '#ff6b4a'; ctx.lineWidth = 3;
+  ctx.beginPath(); ctx.moveTo(cx - 8, confY + 10); ctx.lineTo(cx + 8, confY + 25); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(cx + 8, confY + 10); ctx.lineTo(cx - 8, confY + 25); ctx.stroke();
+}
+
+function drawFrameStandard(ctx, W, H, t, P) {
+  var cx = W / 2;
+  var lang = AnimRuntime._lang || 'cn';
+  var craterLabel = lang === 'cn' ? '\u649e\u51fb\u5751-A7' : 'Crater-A7';
+
+  var bubbleY  = H * 0.10;
+  var personY  = H * 0.28;
+  var craterY  = H * 0.58;
+  var checkY   = H * 0.80;
+
+  var colors = ['#50ffb0', '#ffb59c', '#6ec6ff'];
+  var sx = [cx - W * 0.28, cx, cx + W * 0.28];
+  var scNames = [
+    {en:'Scientist A', cn:'\u79d1\u5b66\u5bb6 A'},
+    {en:'Scientist B', cn:'\u79d1\u5b66\u5bb6 B'},
+    {en:'Scientist C', cn:'\u79d1\u5b66\u5bb6 C'},
+  ];
+
+  for (var i = 0; i < 3; i++) {
+    _bubble(ctx, sx[i], bubbleY, craterLabel, P.primary);
+    _person(ctx, sx[i], personY, colors[i]);
+    ctx.font = "bold 10px 'Noto Sans SC',sans-serif";
+    ctx.textAlign = 'center'; ctx.fillStyle = colors[i];
+    ctx.fillText(scNames[i][lang], sx[i], personY + 32);
+  }
+
+  _crater(ctx, cx, craterY, H * 0.10, P);
+  ctx.font = "bold 12px 'Space Grotesk',sans-serif";
+  ctx.textAlign = 'center'; ctx.fillStyle = P.primary;
+  ctx.fillText(craterLabel, cx, craterY + 5);
+
+  for (var i = 0; i < 3; i++) {
+    ctx.save();
+    ctx.strokeStyle = P.primary; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.moveTo(sx[i], personY + 35); ctx.lineTo(cx, craterY - H * 0.11); ctx.stroke();
+    var arrowTip = craterY - H * 0.11;
+    var ang = Math.atan2(arrowTip - (personY + 35), cx - sx[i]);
+    ctx.fillStyle = P.primary; ctx.beginPath();
+    ctx.moveTo(cx, arrowTip);
+    ctx.lineTo(cx - 6 * Math.cos(ang - 0.5), arrowTip - 6 * Math.sin(ang - 0.5));
+    ctx.lineTo(cx - 6 * Math.cos(ang + 0.5), arrowTip - 6 * Math.sin(ang + 0.5));
+    ctx.fill();
+    ctx.restore();
+  }
+
+  var agreeText = lang === 'cn' ? '\u6240\u6709\u4eba\u90fd\u6307\u5411\u649e\u51fb\u5751-A7!' : 'All pointing to Crater-A7!';
+  ctx.font = "bold 13px 'Noto Sans SC',sans-serif";
+  ctx.textAlign = 'center'; ctx.fillStyle = P.primary;
+  ctx.fillText(agreeText, cx, checkY);
+  ctx.strokeStyle = P.primary; ctx.lineWidth = 3;
+  ctx.beginPath(); ctx.moveTo(cx - 10, checkY + 12); ctx.lineTo(cx - 2, checkY + 22); ctx.lineTo(cx + 12, checkY + 6); ctx.stroke();
+}
+
+function drawFrameCatalog(ctx, W, H, t, P) {
+  var cx = W / 2;
+  var lang = AnimRuntime._lang || 'cn';
+
+  var types = ['plains', 'crater', 'volcano', 'canyon', 'dune'];
+  var typeNames = {
+    plains:  {en:'Plains',  cn:'\u5e73\u539f'},
+    crater:  {en:'Crater',  cn:'\u649e\u51fb\u5751'},
+    volcano: {en:'Volcano', cn:'\u706b\u5c71'},
+    canyon:  {en:'Canyon',  cn:'\u5ce1\u8c37'},
+    dune:    {en:'Dune',    cn:'\u6c99\u4e18'},
+  };
+  var descs = {
+    plains:  {en:'Flat, open areas',           cn:'\u5e73\u5766\u5f00\u9614\u7684\u533a\u57df'},
+    crater:  {en:'Round impact hollows',       cn:'\u5706\u5f62\u649e\u51fb\u51f9\u964d'},
+    volcano: {en:'Tall volcanic peaks',        cn:'\u9ad8\u8038\u7684\u706b\u5c71\u5cf0'},
+    canyon:  {en:'Deep ground cracks',         cn:'\u5730\u9762\u4e0a\u7684\u6df1\u88c2\u7f1d'},
+    dune:    {en:'Wind-blown sand waves',      cn:'\u98ce\u5439\u7684\u6c99\u6ce2'},
+  };
+  var spacing = W / 6;
+  var iconY = H * 0.40;
+
+  for (var i = 0; i < 5; i++) {
+    var tx = spacing * (i + 1);
+    _terrainIcon(ctx, tx, iconY, types[i], P);
+    ctx.beginPath(); ctx.arc(tx + 22, iconY - 30, 10, 0, Math.PI * 2);
+    ctx.fillStyle = P.primary; ctx.fill();
+    ctx.font = "bold 10px 'Space Grotesk',sans-serif";
+    ctx.textAlign = 'center'; ctx.fillStyle = '#0c0e12';
+    ctx.fillText(String(i + 1), tx + 22, iconY - 27);
+    ctx.font = "bold 12px 'Noto Sans SC',sans-serif";
+    ctx.fillStyle = P.text || '#f6f6fc'; ctx.textAlign = 'center';
+    ctx.fillText(typeNames[types[i]][lang], tx, iconY + 40);
+    ctx.font = "10px 'Noto Sans SC',sans-serif";
+    ctx.fillStyle = P.muted;
+    ctx.fillText(descs[types[i]][lang], tx, iconY + 56);
+  }
+}
+
+function drawFrameBridge(ctx, W, H, t, P) {
+  var cx = W / 2, cy = H / 2;
+  var lang = AnimRuntime._lang || 'cn';
+
+  // subtitle inside canvas (small, this frame needs explanation)
+  ctx.font = "12px 'Noto Sans SC',sans-serif"; ctx.fillStyle = P.muted;
+  ctx.textAlign = 'center';
+  var subText = lang === 'cn' ? '\u547d\u540d = \u4e3a\u6570\u636e\u6807\u6ce8\u521b\u5efa\u6807\u7b7e\u4f53\u7cfb' : 'Naming = Creating a label system for data annotation';
+  ctx.fillText(subText, cx, H * 0.06);
+
+  // Three columns: left=label system, center=annotator, right=terrain sample
+  var colL = W * 0.2, colC = cx, colR = W * 0.8;
+
+  // Left box
+  var lbw = 150, lbh = H * 0.55;
+  var lbx = colL - lbw / 2, lby = H * 0.15;
+  ctx.strokeStyle = P.primary; ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(lbx + 4, lby); ctx.lineTo(lbx + lbw - 4, lby);
+  ctx.quadraticCurveTo(lbx + lbw, lby, lbx + lbw, lby + 4);
+  ctx.lineTo(lbx + lbw, lby + lbh - 4);
+  ctx.quadraticCurveTo(lbx + lbw, lby + lbh, lbx + lbw - 4, lby + lbh);
+  ctx.lineTo(lbx + 4, lby + lbh); ctx.quadraticCurveTo(lbx, lby + lbh, lbx, lby + lbh - 4);
+  ctx.lineTo(lbx, lby + 4); ctx.quadraticCurveTo(lbx, lby, lbx + 4, lby);
+  ctx.closePath();
+  ctx.fillStyle = 'rgba(80,255,176,0.06)'; ctx.fill(); ctx.stroke();
+
+  ctx.font = "bold 12px 'Space Grotesk',sans-serif";
+  ctx.fillStyle = P.primary; ctx.textAlign = 'center';
+  ctx.fillText(lang === 'cn' ? '\u6807\u7b7e\u4f53\u7cfb' : 'Label System', colL, lby + 20);
+
+  var terrains = lang === 'cn'
+    ? ['\u5e73\u539f', '\u649e\u51fb\u5751', '\u706b\u5c71', '\u5ce1\u8c37', '\u6c99\u4e18']
+    : ['Plains', 'Crater', 'Volcano', 'Canyon', 'Dune'];
+  ctx.font = "11px 'Noto Sans SC',sans-serif";
+  ctx.fillStyle = P.text || '#f6f6fc'; ctx.textAlign = 'left';
+  for (var i = 0; i < 5; i++) {
+    ctx.fillText((i + 1) + '. ' + terrains[i], lbx + 12, lby + 40 + i * 18);
+  }
+
+  // Center: annotator
+  _person(ctx, colC, cy, '#6ec6ff');
+  ctx.font = "bold 10px 'Noto Sans SC',sans-serif";
+  ctx.textAlign = 'center'; ctx.fillStyle = '#6ec6ff';
+  ctx.fillText(lang === 'cn' ? '\u6807\u6ce8\u5458' : 'Annotator', colC, cy + 34);
+
+  // Right: terrain sample
+  _crater(ctx, colR, cy, H * 0.08, P);
+  _bubble(ctx, colR, cy - H * 0.12, terrains[1], P.primary);
+
+  // Arrows
+  ctx.strokeStyle = P.primary; ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.moveTo(lbx + lbw + 6, lby + lbh / 2); ctx.lineTo(colC - 22, cy); ctx.stroke();
+  ctx.strokeStyle = '#6ec6ff'; ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.moveTo(colC + 22, cy); ctx.lineTo(colR - H * 0.1 - 8, cy); ctx.stroke();
+
+  // Bottom
+  ctx.font = "bold 14px 'Noto Sans SC',sans-serif";
+  ctx.fillStyle = P.primary; ctx.textAlign = 'center';
+  ctx.fillText(lang === 'cn' ? '\u540c\u4e00\u5730\u5f62 = \u540c\u4e00\u6807\u7b7e' : 'Same terrain = Same label', cx, H * 0.92);
+}
+
+AnimRuntime.boot();
+</script>
+</body>
+</html>

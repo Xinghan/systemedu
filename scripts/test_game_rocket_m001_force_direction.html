@@ -1,0 +1,1396 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=Inter:wght@400;500&family=Noto+Sans+SC:wght@400;700&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box;}
+html,body{width:100%;height:100vh;overflow:hidden;touch-action:none;}
+body{
+  background:#05070a;
+  color:#e2e2e9;
+  font-family:'Inter','Noto Sans SC',sans-serif;
+  display:flex;flex-direction:column;
+}
+.wrapper{display:flex;flex-direction:column;height:100vh;overflow:hidden;}
+.header{
+  padding:10px 16px 6px;
+  display:flex;justify-content:space-between;align-items:center;
+  background:linear-gradient(180deg,rgba(5,7,10,0.95) 0%,rgba(13,17,31,0.9) 100%);
+  backdrop-filter:blur(12px);
+  border-bottom:1px solid rgba(255,176,0,0.1);
+}
+.header h1{
+  font-family:'Space Grotesk',sans-serif;font-size:clamp(13px,2vw,17px);
+  font-weight:700;letter-spacing:-0.02em;color:#ffb000;
+  text-shadow:0 0 15px rgba(255,176,0,0.3);
+}
+.header .sub{font-size:10px;color:#8e90a6;letter-spacing:0.1em;text-transform:uppercase;}
+.game-area{flex:1;min-height:0;position:relative;display:flex;flex-direction:column;align-items:stretch;padding:8px 16px;}
+.scene-container{
+  position:relative;flex:1;min-height:0;width:100%;
+  background:linear-gradient(180deg,#0d111f 0%,#111425 100%);
+  overflow:hidden;
+  border:1px solid rgba(255,176,0,0.08);
+}
+canvas.scene-canvas{width:100%;height:100%;display:block;}
+.overlay-ui{
+  position:absolute;top:0;left:0;right:0;bottom:0;
+  pointer-events:none;z-index:5;
+}
+.scene-label{
+  position:absolute;top:10px;left:10px;
+  font-family:'Space Grotesk',sans-serif;font-size:13px;font-weight:700;
+  color:#ffb000;letter-spacing:0.05em;
+  text-shadow:0 0 12px rgba(255,176,0,0.3);
+  pointer-events:none;
+}
+.scene-hint{
+  position:absolute;bottom:8px;left:10px;right:10px;
+  font-size:11px;color:#8e90a6;text-align:center;line-height:1.4;
+  pointer-events:none;
+  background:rgba(5,7,10,0.6);
+  backdrop-filter:blur(8px);
+  padding:6px 10px;
+  border:1px solid rgba(255,255,255,0.04);
+}
+.angle-display{
+  position:absolute;top:10px;right:10px;
+  font-family:'Space Grotesk',sans-serif;font-size:12px;font-weight:700;
+  color:#ffb000;letter-spacing:0.05em;
+  background:rgba(17,20,37,0.7);
+  backdrop-filter:blur(8px);
+  padding:4px 10px;
+  border:1px solid rgba(255,176,0,0.15);
+  pointer-events:none;
+}
+.feedback{
+  position:absolute;top:0;left:0;right:0;bottom:0;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  pointer-events:none;opacity:0;transition:opacity 0.3s;z-index:10;
+}
+.feedback.show{opacity:1;}
+.feedback .fb-icon{font-size:48px;margin-bottom:8px;}
+.feedback .fb-text{
+  font-family:'Space Grotesk',sans-serif;font-size:22px;font-weight:700;
+}
+.feedback.correct .fb-text{color:#4ade80;text-shadow:0 0 30px rgba(74,222,128,0.5);}
+.feedback.wrong .fb-text{color:#ffb4ab;text-shadow:0 0 30px rgba(255,180,171,0.5);}
+.feedback .fb-detail{font-size:13px;color:#8e90a6;margin-top:4px;}
+.controls-row{
+  display:flex;gap:10px;padding:6px 16px;justify-content:center;align-items:center;
+}
+.ctrl-btn{
+  font-family:'Space Grotesk',sans-serif;font-size:12px;font-weight:700;
+  letter-spacing:0.1em;text-transform:uppercase;padding:7px 22px;
+  border:none;cursor:pointer;color:#05070a;
+  background:linear-gradient(135deg,#ffb000,#cc8d00);
+  transition:transform 0.1s,box-shadow 0.2s;
+  box-shadow:0 0 12px rgba(255,176,0,0.3);
+}
+.ctrl-btn:hover{transform:scale(1.04);box-shadow:0 0 20px rgba(255,176,0,0.5);}
+.ctrl-btn:active{transform:scale(0.96);}
+.ctrl-btn:disabled{opacity:0.3;cursor:default;transform:none;box-shadow:none;}
+.ctrl-btn.secondary{
+  background:rgba(17,20,37,0.8);color:#8e90a6;box-shadow:none;
+  backdrop-filter:blur(12px);border:1px solid rgba(255,255,255,0.06);
+}
+.ctrl-btn.secondary:hover{color:#ffb000;border-color:rgba(255,176,0,0.2);}
+.hud{
+  height:44px;display:flex;align-items:center;justify-content:space-around;
+  background:linear-gradient(180deg,rgba(0,0,0,0.5) 0%,rgba(0,0,0,0.65) 100%);
+  backdrop-filter:blur(12px);padding:0 16px;
+  border-top:1px solid rgba(255,176,0,0.06);
+}
+.hud-item{text-align:center;}
+.hud-label{font-family:'Space Grotesk',sans-serif;font-size:9px;letter-spacing:0.15em;text-transform:uppercase;color:#8e90a6;}
+.hud-val{font-family:'Space Grotesk',sans-serif;font-size:13px;font-weight:700;color:#ffb000;}
+.lang-btn{
+  position:fixed;top:8px;left:8px;z-index:100;
+  font-family:'Space Grotesk',sans-serif;font-size:11px;font-weight:700;
+  padding:4px 10px;cursor:pointer;border:none;
+  background:rgba(20,20,35,0.85);backdrop-filter:blur(12px);
+  color:#ffb59c;letter-spacing:1px;
+  border:1px solid rgba(255,255,255,0.06);
+}
+.guide-panel{
+  position:fixed;top:8px;right:8px;width:220px;max-height:36vh;overflow-y:auto;
+  background:rgba(17,20,37,0.85);backdrop-filter:blur(12px);
+  padding:10px;z-index:100;
+  font-family:'Noto Sans SC',sans-serif;font-size:11px;
+  color:rgba(255,255,255,0.8);line-height:1.5;
+  border:1px solid rgba(255,255,255,0.06);
+}
+.guide-panel h3{
+  font-family:'Space Grotesk',sans-serif;font-size:12px;margin-bottom:5px;
+  color:#ffb000;cursor:pointer;display:flex;justify-content:space-between;align-items:center;
+}
+.guide-panel ul{padding-left:14px;}
+.guide-panel .collapsed{display:none;}
+.result-panel{
+  position:absolute;top:0;left:0;right:0;bottom:0;
+  background:rgba(5,7,10,0.93);backdrop-filter:blur(20px);
+  display:none;flex-direction:column;align-items:center;justify-content:center;
+  z-index:20;gap:12px;padding:20px;
+}
+.result-panel.show{display:flex;}
+.result-header{font-family:'Space Grotesk',sans-serif;font-size:14px;letter-spacing:0.15em;text-transform:uppercase;color:#8e90a6;}
+.result-score{font-family:'Space Grotesk',sans-serif;font-size:52px;font-weight:700;color:#ffb000;text-shadow:0 0 30px rgba(255,176,0,0.4);}
+.result-text{font-size:15px;color:#e2e2e9;text-align:center;max-width:360px;}
+.result-summary{
+  margin-top:8px;width:100%;max-width:360px;
+  background:rgba(17,20,37,0.6);
+  border:1px solid rgba(255,176,0,0.1);
+  padding:12px 16px;
+}
+.result-summary h4{
+  font-family:'Space Grotesk',sans-serif;font-size:12px;color:#ffb000;
+  letter-spacing:0.1em;margin-bottom:8px;
+}
+.result-summary ul{padding-left:16px;font-size:12px;color:#d6d9f3;line-height:1.7;}
+.progress-dots{display:flex;gap:6px;margin:4px 0;}
+.progress-dot{
+  width:10px;height:10px;
+  background:rgba(142,144,166,0.2);
+  border:1px solid rgba(142,144,166,0.3);
+  transition:all 0.3s;
+}
+.progress-dot.correct{background:#4ade80;border-color:#4ade80;box-shadow:0 0 8px rgba(74,222,128,0.4);}
+.progress-dot.wrong{background:#ffb4ab;border-color:#ffb4ab;}
+.progress-dot.current{border-color:#ffb000;box-shadow:0 0 8px rgba(255,176,0,0.4);}
+</style>
+</head>
+<body>
+<button class="lang-btn" id="langBtn">CN</button>
+<div class="guide-panel" id="guide">
+<h3 id="guideTitle"></h3>
+<div class="guide-content" id="guideContent"></div>
+</div>
+
+<div class="wrapper">
+  <div class="header">
+    <div>
+      <h1 id="title"></h1>
+      <div class="sub" id="subtitle"></div>
+    </div>
+    <div style="display:flex;align-items:center;gap:12px;">
+      <div class="progress-dots" id="progressDots"></div>
+      <div id="levelIndicator" style="font-family:'Space Grotesk';font-size:12px;color:#ffb000;letter-spacing:0.1em;"></div>
+    </div>
+  </div>
+
+  <div class="game-area">
+    <div class="scene-container" id="sceneBox">
+      <canvas class="scene-canvas" id="sceneCanvas"></canvas>
+      <div class="overlay-ui">
+        <div class="scene-label" id="sceneLabel"></div>
+        <div class="angle-display" id="angleDisplay">0&deg;</div>
+        <div class="scene-hint" id="sceneHint"></div>
+      </div>
+      <div class="feedback" id="feedback">
+        <div class="fb-icon" id="fbIcon"></div>
+        <div class="fb-text" id="fbText"></div>
+        <div class="fb-detail" id="fbDetail"></div>
+      </div>
+      <div class="result-panel" id="resultPanel">
+        <div class="result-header" id="resultHeader"></div>
+        <div class="result-score" id="resultScore"></div>
+        <div class="result-text" id="resultText"></div>
+        <div class="result-summary" id="resultSummary">
+          <h4 id="summaryTitle"></h4>
+          <ul id="summaryList"></ul>
+        </div>
+        <button class="ctrl-btn" id="btnReplay" style="margin-top:12px;"></button>
+      </div>
+    </div>
+  </div>
+
+  <div class="controls-row">
+    <button class="ctrl-btn secondary" id="btnReset"></button>
+    <button class="ctrl-btn" id="btnConfirm"></button>
+  </div>
+
+  <div class="hud">
+    <div class="hud-item"><div class="hud-label" id="hudL1"></div><div class="hud-val" id="hudV1"></div></div>
+    <div class="hud-item"><div class="hud-label" id="hudL2"></div><div class="hud-val" id="hudV2"></div></div>
+    <div class="hud-item"><div class="hud-label" id="hudL3"></div><div class="hud-val" id="hudV3"></div></div>
+    <div class="hud-item"><div class="hud-label" id="hudL4"></div><div class="hud-val" id="hudV4"></div></div>
+  </div>
+</div>
+
+<script>
+// ============================================================
+// GAME: Force Direction Detective
+// M001 - knode 0: "推一推、拉一拉：力是什么感觉"
+// Pattern 7 (Drag & Label)
+//
+// 5 levels, each showing a richly rendered scene.
+// Player rotates an arrow to match the force direction,
+// then confirms. Includes particle effects, detailed scene
+// rendering, learning summary on completion.
+// ============================================================
+
+var lang = 'cn';
+
+var I18N = {
+  title:      {en:'FORCE DIRECTION DETECTIVE', cn:'\u529b\u573a\u5927\u4fa6\u63a2\uff1a\u627e\u51fa\u529b\u7684\u65b9\u5411'},
+  subtitle:   {en:'M001 \u00b7 INTERACTIVE GAME', cn:'M001 \u00b7 \u4e92\u52a8\u6e38\u620f'},
+  confirm:    {en:'CONFIRM', cn:'\u786e\u8ba4'},
+  reset:      {en:'RESET ARROW', cn:'\u91cd\u7f6e\u7bad\u5934'},
+  replay:     {en:'PLAY AGAIN', cn:'\u518d\u73a9\u4e00\u6b21'},
+  level:      {en:'LEVEL', cn:'\u5173\u5361'},
+  score:      {en:'SCORE', cn:'\u5f97\u5206'},
+  hudLevel:   {en:'LEVEL', cn:'\u5173\u5361'},
+  hudScore:   {en:'SCORE', cn:'\u5f97\u5206'},
+  hudAngle:   {en:'ANGLE', cn:'\u89d2\u5ea6'},
+  hudStatus:  {en:'STATUS', cn:'\u72b6\u6001'},
+  ready:      {en:'READY', cn:'\u5c31\u7eea'},
+  pass:       {en:'PASS', cn:'\u901a\u8fc7'},
+  fail:       {en:'RETRY', cn:'\u518d\u8bd5'},
+  correctFB:  {en:'CORRECT!', cn:'\u6b63\u786e\uff01'},
+  wrongFB:    {en:'Not quite right...', cn:'\u4e0d\u592a\u5bf9\u54e6\u2026\u2026'},
+  wrongHint:  {en:'Think: what is pushing or pulling? Where is the force going?', cn:'\u60f3\u4e00\u60f3\uff1a\u4ec0\u4e48\u5728\u63a8\u6216\u62c9\uff1f\u529b\u671d\u54ea\u4e2a\u65b9\u5411\uff1f'},
+  correctDetail: {en:'The force direction is exactly right!', cn:'\u529b\u7684\u65b9\u5411\u5b8c\u5168\u6b63\u786e\uff01'},
+  resultHeader: {en:'MISSION COMPLETE', cn:'\u4efb\u52a1\u5b8c\u6210'},
+  result1:    {en:'Outstanding! You found all force directions!', cn:'\u592a\u68d2\u4e86\uff01\u4f60\u627e\u5230\u4e86\u6240\u6709\u529b\u7684\u65b9\u5411\uff01'},
+  result2:    {en:'Good effort! Practice makes perfect!', cn:'\u4e0d\u9519\u7684\u5c1d\u8bd5\uff01\u591a\u7ec3\u4e60\u5c31\u80fd\u66f4\u597d\uff01'},
+  summaryTitle: {en:'WHAT YOU LEARNED', cn:'\u4f60\u5b66\u5230\u4e86\u4ec0\u4e48'},
+  sum1:       {en:'Spring pushes ball to the right', cn:'\u5f39\u7c27\u628a\u7403\u5411\u53f3\u63a8'},
+  sum2:       {en:'Magnet pulls metal toward itself', cn:'\u78c1\u94c1\u628a\u91d1\u5c5e\u62c9\u5411\u81ea\u5df1'},
+  sum3:       {en:'Fan blows objects in wind direction', cn:'\u98ce\u6247\u628a\u7269\u4f53\u5439\u5411\u98ce\u7684\u65b9\u5411'},
+  sum4:       {en:'Gravity pulls everything downward', cn:'\u91cd\u529b\u628a\u6240\u6709\u4e1c\u897f\u62c9\u5411\u4e0b\u65b9'},
+  sum5:       {en:'Rocket thrust pushes upward', cn:'\u706b\u7bad\u63a8\u529b\u5411\u4e0a\u63a8'},
+  dragHint:   {en:'Drag to rotate the arrow, then click CONFIRM', cn:'\u62d6\u52a8\u65cb\u8f6c\u7bad\u5934\uff0c\u7136\u540e\u70b9\u51fb\u786e\u8ba4'},
+  guideTitle: {en:'How to Play', cn:'\u73a9\u6cd5\u6307\u5357'},
+  g1:         {en:'Look at the scene: what object is being pushed or pulled?', cn:'\u89c2\u5bdf\u573a\u666f\uff1a\u4ec0\u4e48\u7269\u4f53\u5728\u88ab\u63a8\u6216\u62c9\uff1f'},
+  g2:         {en:'Drag on the canvas to rotate the force arrow', cn:'\u5728\u753b\u9762\u4e0a\u62d6\u52a8\u65cb\u8f6c\u529b\u7684\u7bad\u5934'},
+  g3:         {en:'Point the arrow in the force direction', cn:'\u8ba9\u7bad\u5934\u6307\u5411\u529b\u7684\u65b9\u5411'},
+  g4:         {en:'Click CONFIRM to check your answer', cn:'\u70b9\u51fb\u786e\u8ba4\u68c0\u67e5\u7b54\u6848'},
+  g5:         {en:'Complete all 5 levels to finish!', cn:'\u5b8c\u6210\u5168\u90e85\u5173\u5373\u53ef\u8fc7\u5173\uff01'},
+};
+
+function t(key) { return (I18N[key] && I18N[key][lang]) || key; }
+
+// ================================================================
+// Particle systems
+// ================================================================
+
+// Ambient floating particles
+var ambientParticles = [];
+for (var ap = 0; ap < 25; ap++) {
+  ambientParticles.push({
+    x: Math.random(), y: Math.random(),
+    vx: (Math.random() - 0.5) * 0.0003,
+    vy: -Math.random() * 0.0002 - 0.00005,
+    size: Math.random() * 1.2 + 0.4,
+    alpha: Math.random() * 0.2 + 0.03,
+    pulse: Math.random() * Math.PI * 2
+  });
+}
+
+// Celebration particles (spawned on correct answer)
+var celebParticles = [];
+
+function spawnCelebration(cx, cy) {
+  for (var ci = 0; ci < 35; ci++) {
+    var angle = Math.random() * Math.PI * 2;
+    var speed = 60 + Math.random() * 120;
+    celebParticles.push({
+      x: cx, y: cy,
+      vx: Math.cos(angle) * speed,
+      vy: Math.sin(angle) * speed,
+      life: 0.8 + Math.random() * 0.6,
+      maxLife: 1.4,
+      alpha: 0.8,
+      size: 1.5 + Math.random() * 3,
+      color: ['#ffb000', '#4ade80', '#22d3ee', '#ff5f1f', '#d6d9f3'][Math.floor(Math.random() * 5)]
+    });
+  }
+}
+
+// ================================================================
+// Shared drawing helpers (no human figures -- only physical objects)
+// ================================================================
+
+// Metallic ball with radial gradient and specular highlight
+function drawBall(ctx, x, y, r, baseColor, hlColor) {
+  ctx.save();
+  ctx.shadowColor = 'rgba(0,0,0,0.35)';
+  ctx.shadowBlur = r * 0.4;
+  ctx.shadowOffsetY = r * 0.12;
+  var g = ctx.createRadialGradient(x - r * 0.3, y - r * 0.35, r * 0.08, x, y, r);
+  g.addColorStop(0, hlColor);
+  g.addColorStop(0.55, baseColor);
+  g.addColorStop(1, '#1a1a28');
+  ctx.fillStyle = g;
+  ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
+  ctx.restore();
+  ctx.save(); ctx.globalAlpha = 0.55;
+  ctx.fillStyle = '#fff';
+  ctx.beginPath(); ctx.arc(x - r * 0.25, y - r * 0.3, r * 0.14, 0, Math.PI * 2); ctx.fill();
+  ctx.restore();
+}
+
+// Coil spring
+function drawSpring(ctx, x, y, len, coils, amp, thick, color) {
+  ctx.strokeStyle = color; ctx.lineWidth = thick;
+  ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+  ctx.beginPath(); ctx.moveTo(x, y);
+  var seg = len / (coils * 2);
+  for (var i = 0; i < coils * 2; i++) {
+    ctx.lineTo(x + (i + 1) * seg, y + (i % 2 === 0 ? -amp : amp));
+  }
+  ctx.lineTo(x + len, y); ctx.stroke();
+}
+
+// Wall bracket with hatch lines
+function drawWall(ctx, x, y, h) {
+  ctx.fillStyle = '#2a2d40';
+  ctx.fillRect(x - 8, y - h / 2, 8, h);
+  ctx.strokeStyle = 'rgba(142,144,166,0.15)'; ctx.lineWidth = 1;
+  for (var hy = y - h / 2; hy < y + h / 2; hy += 7) {
+    ctx.beginPath(); ctx.moveTo(x - 8, hy); ctx.lineTo(x - 1, hy + 5); ctx.stroke();
+  }
+}
+
+// Ground with hash marks
+function drawGround(ctx, x, groundY, w, totalH, scrollOff) {
+  var gg = ctx.createLinearGradient(x, groundY, x, totalH);
+  gg.addColorStop(0, '#1a1d2d'); gg.addColorStop(1, '#0d111f');
+  ctx.fillStyle = gg; ctx.fillRect(x, groundY, w, totalH - groundY);
+  ctx.strokeStyle = 'rgba(255,176,0,0.1)'; ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(x, groundY); ctx.lineTo(x + w, groundY); ctx.stroke();
+  var sp = 26, st = x - ((scrollOff || 0) % sp);
+  ctx.strokeStyle = 'rgba(142,144,166,0.07)'; ctx.lineWidth = 0.5;
+  for (var hx = st; hx < x + w; hx += sp) {
+    if (hx < x) continue;
+    ctx.beginPath(); ctx.moveTo(hx, groundY + 2); ctx.lineTo(hx - 3, groundY + 8); ctx.stroke();
+  }
+}
+
+// Horseshoe magnet (rotated so opening faces right)
+function drawMagnet(ctx, x, y, size) {
+  var w = size * 0.5, h = size, armW = w * 0.32;
+  ctx.save(); ctx.translate(x, y);
+  // Top arm (red N)
+  var tg = ctx.createLinearGradient(-w/2, -h/2, w/2, -h/2);
+  tg.addColorStop(0, '#cc2222'); tg.addColorStop(0.5, '#ee3333'); tg.addColorStop(1, '#cc2222');
+  ctx.fillStyle = tg;
+  ctx.beginPath();
+  ctx.moveTo(-w/2, -h/2); ctx.lineTo(w/2, -h/2); ctx.lineTo(w/2, -h/2+armW);
+  ctx.lineTo(-w/2+armW, -h/2+armW); ctx.lineTo(-w/2+armW, -h*0.17); ctx.lineTo(-w/2, -h*0.17);
+  ctx.closePath(); ctx.fill();
+  // Bottom arm (blue S)
+  var bg = ctx.createLinearGradient(-w/2, h/2, w/2, h/2);
+  bg.addColorStop(0, '#2244cc'); bg.addColorStop(0.5, '#3355ee'); bg.addColorStop(1, '#2244cc');
+  ctx.fillStyle = bg;
+  ctx.beginPath();
+  ctx.moveTo(-w/2, h/2); ctx.lineTo(w/2, h/2); ctx.lineTo(w/2, h/2-armW);
+  ctx.lineTo(-w/2+armW, h/2-armW); ctx.lineTo(-w/2+armW, h*0.17); ctx.lineTo(-w/2, h*0.17);
+  ctx.closePath(); ctx.fill();
+  // Back connector
+  var cg = ctx.createLinearGradient(-w/2, -h/2, -w/2, h/2);
+  cg.addColorStop(0, '#cc2222'); cg.addColorStop(0.5, '#888'); cg.addColorStop(1, '#2244cc');
+  ctx.fillStyle = cg; ctx.fillRect(-w/2, -h/2, armW, h);
+  // Labels
+  ctx.font = "bold " + (armW * 0.65) + "px 'Space Grotesk',sans-serif";
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillStyle = '#fff';
+  ctx.fillText('N', w/2 - armW*0.5, -h/2 + armW*0.5);
+  ctx.fillText('S', w/2 - armW*0.5, h/2 - armW*0.5);
+  ctx.restore();
+}
+
+// Fan / blower with spinning blades
+function drawFan(ctx, x, y, r, bladeAngle) {
+  // Housing ring
+  ctx.strokeStyle = '#555'; ctx.lineWidth = 3;
+  ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.stroke();
+  ctx.fillStyle = 'rgba(17,20,37,0.8)';
+  ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
+  // Blades
+  ctx.save(); ctx.translate(x, y); ctx.rotate(bladeAngle);
+  var bladeCount = 5;
+  for (var b = 0; b < bladeCount; b++) {
+    var ba = b * (Math.PI * 2 / bladeCount);
+    ctx.save(); ctx.rotate(ba);
+    var bg2 = ctx.createLinearGradient(0, 0, r * 0.85, 0);
+    bg2.addColorStop(0, '#666'); bg2.addColorStop(1, '#333');
+    ctx.fillStyle = bg2;
+    ctx.beginPath();
+    ctx.moveTo(4, -3); ctx.lineTo(r * 0.8, -r * 0.15);
+    ctx.lineTo(r * 0.8, r * 0.08); ctx.lineTo(4, 3);
+    ctx.closePath(); ctx.fill();
+    ctx.restore();
+  }
+  // Center hub
+  ctx.fillStyle = '#ffb000';
+  ctx.beginPath(); ctx.arc(0, 0, r * 0.15, 0, Math.PI * 2); ctx.fill();
+  ctx.restore();
+}
+
+// Tree with trunk and foliage
+function drawTree(ctx, x, groundY, size) {
+  // Trunk
+  ctx.fillStyle = '#3a2a15';
+  ctx.fillRect(x - size * 0.06, groundY - size * 0.7, size * 0.12, size * 0.7);
+  // Foliage layers
+  ctx.fillStyle = 'rgba(40,120,50,0.7)';
+  ctx.beginPath(); ctx.arc(x, groundY - size * 0.75, size * 0.28, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = 'rgba(50,140,60,0.6)';
+  ctx.beginPath(); ctx.arc(x - size * 0.12, groundY - size * 0.85, size * 0.2, 0, Math.PI * 2); ctx.fill();
+  ctx.beginPath(); ctx.arc(x + size * 0.15, groundY - size * 0.65, size * 0.22, 0, Math.PI * 2); ctx.fill();
+}
+
+// Rocket with flame
+function drawRocket(ctx, x, y, size, flamePhase) {
+  var w = size * 0.3, h = size;
+  // Body
+  var bodyGrad = ctx.createLinearGradient(x - w/2, y, x + w/2, y);
+  bodyGrad.addColorStop(0, '#aab'); bodyGrad.addColorStop(0.3, '#dde');
+  bodyGrad.addColorStop(0.7, '#ccd'); bodyGrad.addColorStop(1, '#889');
+  ctx.fillStyle = bodyGrad;
+  ctx.beginPath();
+  ctx.moveTo(x, y - h * 0.5); // nose tip
+  ctx.quadraticCurveTo(x + w * 0.6, y - h * 0.3, x + w / 2, y + h * 0.2);
+  ctx.lineTo(x + w / 2, y + h * 0.4);
+  ctx.lineTo(x - w / 2, y + h * 0.4);
+  ctx.lineTo(x - w / 2, y + h * 0.2);
+  ctx.quadraticCurveTo(x - w * 0.6, y - h * 0.3, x, y - h * 0.5);
+  ctx.closePath(); ctx.fill();
+  // Window
+  ctx.fillStyle = '#22d3ee';
+  ctx.save(); ctx.shadowColor = 'rgba(34,211,238,0.5)'; ctx.shadowBlur = 8;
+  ctx.beginPath(); ctx.arc(x, y - h * 0.15, w * 0.22, 0, Math.PI * 2); ctx.fill();
+  ctx.restore();
+  // Fins
+  ctx.fillStyle = '#cc2222';
+  // Left fin
+  ctx.beginPath();
+  ctx.moveTo(x - w/2, y + h * 0.25); ctx.lineTo(x - w * 0.85, y + h * 0.45);
+  ctx.lineTo(x - w/2, y + h * 0.4); ctx.closePath(); ctx.fill();
+  // Right fin
+  ctx.beginPath();
+  ctx.moveTo(x + w/2, y + h * 0.25); ctx.lineTo(x + w * 0.85, y + h * 0.45);
+  ctx.lineTo(x + w/2, y + h * 0.4); ctx.closePath(); ctx.fill();
+  // Flame
+  var fh = h * 0.25 * (0.7 + 0.3 * Math.sin(flamePhase * 15));
+  var fw = w * 0.6;
+  var fg = ctx.createLinearGradient(x, y + h * 0.4, x, y + h * 0.4 + fh);
+  fg.addColorStop(0, '#ffcc00'); fg.addColorStop(0.4, '#ff6600'); fg.addColorStop(1, 'rgba(255,0,0,0)');
+  ctx.fillStyle = fg;
+  ctx.beginPath();
+  ctx.moveTo(x - fw/2, y + h * 0.4);
+  ctx.quadraticCurveTo(x, y + h * 0.4 + fh * 1.2, x + fw/2, y + h * 0.4);
+  ctx.closePath(); ctx.fill();
+  // Inner flame
+  var fw2 = fw * 0.4, fh2 = fh * 0.7;
+  var fg2 = ctx.createLinearGradient(x, y + h * 0.4, x, y + h * 0.4 + fh2);
+  fg2.addColorStop(0, '#fff8e0'); fg2.addColorStop(1, 'rgba(255,200,0,0)');
+  ctx.fillStyle = fg2;
+  ctx.beginPath();
+  ctx.moveTo(x - fw2/2, y + h * 0.4);
+  ctx.quadraticCurveTo(x, y + h * 0.4 + fh2 * 1.3, x + fw2/2, y + h * 0.4);
+  ctx.closePath(); ctx.fill();
+}
+
+// ================================================================
+// Scene definitions -- all physical objects, no human figures
+// ================================================================
+var SCENES = [
+  // Level 1: Spring pushes ball to the right
+  {
+    id: 1,
+    label: {en:'Spring Push', cn:'\u5f39\u7c27\u63a8\u7403'},
+    hint: {en:'The spring pushes the ball. Which direction is the force?', cn:'\u5f39\u7c27\u628a\u7403\u63a8\u51fa\u53bb\u3002\u529b\u7684\u65b9\u5411\u662f\u54ea\u8fb9\uff1f'},
+    correctAngle: 0,
+    tolerance: 35,
+    arrowCenter: {x: 0.55, y: 0.50},
+    draw: function(ctx, W, H, time) {
+      var groundY = H * 0.75;
+      drawGround(ctx, 0, groundY, W, H, time * 30);
+      // Wall on left
+      drawWall(ctx, W * 0.18, groundY * 0.5, groundY * 0.8);
+
+      // Compressed spring against wall
+      var springX = W * 0.18;
+      var springLen = W * 0.15 + Math.sin(time * 6) * W * 0.02; // pulsing
+      var ballR = Math.min(W, H) * 0.06;
+      var ballX = springX + springLen + ballR + 4;
+      var ballY2 = groundY - ballR;
+
+      // Spring
+      drawSpring(ctx, springX, ballY2, springLen, 8, ballR * 0.5, 3, '#ffb000');
+
+      // Compression lines near wall
+      ctx.strokeStyle = 'rgba(255,176,0,0.15)';
+      ctx.lineWidth = 1;
+      for (var ci = 0; ci < 3; ci++) {
+        var cx = springX - 14 - ci * 6;
+        var cy1 = ballY2 - 8 - ci * 2;
+        var cy2 = ballY2 + 8 + ci * 2;
+        ctx.beginPath(); ctx.moveTo(cx, cy1); ctx.lineTo(cx - 3, cy2); ctx.stroke();
+      }
+
+      // Ball being pushed
+      drawBall(ctx, ballX, ballY2, ballR, '#ff5f1f', '#ffb08e');
+
+      // Motion lines to the right of ball
+      ctx.strokeStyle = 'rgba(255,176,0,0.12)';
+      ctx.lineWidth = 1.5;
+      for (var mi = 0; mi < 4; mi++) {
+        var mOff = ((time * 60 + mi * 15) % 40);
+        var mAlpha = 1 - mOff / 40;
+        ctx.save(); ctx.globalAlpha = mAlpha * 0.3;
+        ctx.beginPath();
+        ctx.moveTo(ballX + ballR + 6 + mOff, ballY2 - 6 + mi * 4);
+        ctx.lineTo(ballX + ballR + 18 + mOff, ballY2 - 6 + mi * 4);
+        ctx.stroke();
+        ctx.restore();
+      }
+
+      // Label: spring + ball
+      ctx.font = "bold 11px 'Space Grotesk',sans-serif";
+      ctx.fillStyle = 'rgba(142,144,166,0.5)';
+      ctx.textAlign = 'center';
+      ctx.fillText(lang === 'cn' ? '\u5f39\u7c27' : 'Spring', springX + springLen * 0.5, groundY + 20);
+      ctx.fillText(lang === 'cn' ? '\u7403' : 'Ball', ballX, groundY + 20);
+    }
+  },
+  // Level 2: Magnet pulls metal ball to the left
+  {
+    id: 2,
+    label: {en:'Magnet Pull', cn:'\u78c1\u94c1\u5438\u7403'},
+    hint: {en:'The magnet attracts the metal ball. Which direction is the force?', cn:'\u78c1\u94c1\u5438\u5f15\u91d1\u5c5e\u7403\u3002\u529b\u7684\u65b9\u5411\u662f\u54ea\u8fb9\uff1f'},
+    correctAngle: 180,
+    tolerance: 35,
+    arrowCenter: {x: 0.55, y: 0.48},
+    draw: function(ctx, W, H, time) {
+      var groundY = H * 0.75;
+      drawGround(ctx, 0, groundY, W, H, 0);
+
+      // Table surface
+      var tableY = H * 0.55;
+      var tableGrad = ctx.createLinearGradient(0, tableY, 0, tableY + 12);
+      tableGrad.addColorStop(0, '#2a2440'); tableGrad.addColorStop(1, '#1a1830');
+      ctx.fillStyle = tableGrad;
+      ctx.fillRect(W * 0.08, tableY, W * 0.84, 12);
+      ctx.strokeStyle = 'rgba(255,176,0,0.08)';
+      ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(W * 0.08, tableY); ctx.lineTo(W * 0.92, tableY); ctx.stroke();
+
+      // Table legs
+      ctx.fillStyle = '#222';
+      ctx.fillRect(W * 0.12, tableY + 12, 6, groundY - tableY - 12);
+      ctx.fillRect(W * 0.82, tableY + 12, 6, groundY - tableY - 12);
+
+      // Magnet on left side of table
+      var magX = W * 0.28, magY = tableY - 28;
+      drawMagnet(ctx, magX, magY, 56);
+
+      // Metal ball on right side, being attracted
+      var ballR = Math.min(W, H) * 0.05;
+      var drift = Math.sin(time * 2) * 4; // slight oscillation toward magnet
+      var ballX = W * 0.65 - drift;
+      var ballY = tableY - ballR;
+      drawBall(ctx, ballX, ballY, ballR, '#aabbcc', '#eef4ff');
+
+      // Magnetic field lines (curved lines from magnet to ball)
+      ctx.save();
+      ctx.strokeStyle = 'rgba(255,176,0,0.1)';
+      ctx.lineWidth = 1;
+      ctx.setLineDash([4, 6]);
+      var fieldPhase = time * 2;
+      for (var fi = 0; fi < 5; fi++) {
+        var fy = magY - 18 + fi * 9;
+        var sagY = -12 + fi * 6 + Math.sin(fieldPhase + fi) * 3;
+        ctx.beginPath();
+        ctx.moveTo(magX + 16, fy);
+        ctx.quadraticCurveTo((magX + ballX) * 0.5, fy + sagY, ballX - ballR, ballY);
+        ctx.stroke();
+      }
+      ctx.setLineDash([]);
+      ctx.restore();
+
+      // Attraction sparkles near ball
+      ctx.save();
+      for (var si = 0; si < 3; si++) {
+        var sparkOff = ((time * 40 + si * 14) % 30);
+        var sAlpha = (1 - sparkOff / 30) * 0.4;
+        ctx.globalAlpha = sAlpha;
+        ctx.fillStyle = '#ffb000';
+        ctx.beginPath();
+        ctx.arc(ballX - ballR - 4 - sparkOff, ballY - 4 + si * 5, 1.5, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.restore();
+
+      // Labels
+      ctx.font = "bold 11px 'Space Grotesk',sans-serif";
+      ctx.fillStyle = 'rgba(142,144,166,0.5)';
+      ctx.textAlign = 'center';
+      ctx.fillText(lang === 'cn' ? '\u78c1\u94c1' : 'Magnet', magX, tableY + 28);
+      ctx.fillText(lang === 'cn' ? '\u94c1\u7403' : 'Iron Ball', ballX, tableY + 28);
+    }
+  },
+  // Level 3: Fan blows ball to the right
+  {
+    id: 3,
+    label: {en:'Fan Blows Ball', cn:'\u98ce\u6247\u5439\u7403'},
+    hint: {en:'The fan blows the ball. Which direction is the force?', cn:'\u98ce\u6247\u5439\u52a8\u5c0f\u7403\u3002\u529b\u7684\u65b9\u5411\u662f\u54ea\u8fb9\uff1f'},
+    correctAngle: 0,
+    tolerance: 35,
+    arrowCenter: {x: 0.55, y: 0.48},
+    draw: function(ctx, W, H, time) {
+      var groundY = H * 0.75;
+      drawGround(ctx, 0, groundY, W, H, 0);
+
+      // Fan on left
+      var fanX = W * 0.20, fanY = groundY - W * 0.12;
+      var fanR = Math.min(W, H) * 0.10;
+      drawFan(ctx, fanX, fanY, fanR, time * 8);
+
+      // Fan stand
+      ctx.strokeStyle = '#555'; ctx.lineWidth = 3;
+      ctx.beginPath(); ctx.moveTo(fanX, fanY + fanR); ctx.lineTo(fanX, groundY); ctx.stroke();
+      ctx.fillStyle = '#333';
+      ctx.fillRect(fanX - 14, groundY - 4, 28, 4);
+
+      // Wind lines from fan to ball
+      ctx.save();
+      ctx.strokeStyle = 'rgba(255,176,0,0.12)';
+      ctx.lineWidth = 1.5;
+      for (var wi = 0; wi < 7; wi++) {
+        var wy = fanY - fanR * 0.6 + wi * (fanR * 0.2);
+        var wOff = ((time * 70 + wi * 20) % (W * 0.4));
+        var wAlpha = (1 - wOff / (W * 0.4)) * 0.25;
+        ctx.globalAlpha = wAlpha;
+        ctx.beginPath();
+        ctx.moveTo(fanX + fanR + 6 + wOff, wy);
+        ctx.lineTo(fanX + fanR + 22 + wOff + wi * 3, wy);
+        ctx.stroke();
+      }
+      ctx.restore();
+
+      // Ball being blown
+      var ballR = Math.min(W, H) * 0.05;
+      var drift = Math.sin(time * 3) * 3;
+      var ballX = W * 0.65 + drift;
+      var ballY = groundY - ballR;
+      drawBall(ctx, ballX, ballY, ballR, '#22d3ee', '#aaf4ff');
+
+      // Rolling indicator on ball
+      ctx.save();
+      ctx.strokeStyle = 'rgba(255,255,255,0.2)';
+      ctx.lineWidth = 1;
+      ctx.translate(ballX, ballY);
+      ctx.rotate(time * 4);
+      ctx.beginPath(); ctx.moveTo(-ballR * 0.6, 0); ctx.lineTo(ballR * 0.6, 0); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(0, -ballR * 0.6); ctx.lineTo(0, ballR * 0.6); ctx.stroke();
+      ctx.restore();
+
+      // Small dust near ball base
+      ctx.save();
+      for (var di = 0; di < 3; di++) {
+        var dOff = ((time * 30 + di * 12) % 20);
+        ctx.globalAlpha = (1 - dOff / 20) * 0.15;
+        ctx.fillStyle = '#8e90a6';
+        ctx.beginPath();
+        ctx.arc(ballX + ballR + dOff, groundY - 2 - di * 2, 1.5, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.restore();
+
+      // Labels
+      ctx.font = "bold 11px 'Space Grotesk',sans-serif";
+      ctx.fillStyle = 'rgba(142,144,166,0.5)';
+      ctx.textAlign = 'center';
+      ctx.fillText(lang === 'cn' ? '\u98ce\u6247' : 'Fan', fanX, groundY + 20);
+      ctx.fillText(lang === 'cn' ? '\u7403' : 'Ball', ballX, groundY + 20);
+    }
+  },
+  // Level 4: Gravity pulls apple down from tree
+  {
+    id: 4,
+    label: {en:'Apple Falls', cn:'\u82f9\u679c\u4e0b\u843d'},
+    hint: {en:'Gravity pulls the apple downward. Which direction is the force?', cn:'\u91cd\u529b\u628a\u82f9\u679c\u62c9\u5411\u4e0b\u65b9\u3002\u529b\u7684\u65b9\u5411\u662f\u54ea\u8fb9\uff1f'},
+    correctAngle: 90,
+    tolerance: 35,
+    arrowCenter: {x: 0.46, y: 0.55},
+    draw: function(ctx, W, H, time) {
+      // Sky
+      var skyGrad = ctx.createLinearGradient(0, 0, 0, H * 0.65);
+      skyGrad.addColorStop(0, '#0a0e20');
+      skyGrad.addColorStop(1, '#111830');
+      ctx.fillStyle = skyGrad;
+      ctx.fillRect(0, 0, W, H * 0.65);
+
+      // Stars
+      ctx.fillStyle = 'rgba(214,217,243,0.2)';
+      var starSeeds = [0.08, 0.22, 0.38, 0.58, 0.72, 0.88, 0.15, 0.45];
+      for (var si = 0; si < starSeeds.length; si++) {
+        var tw = 0.5 + 0.5 * Math.sin(time * 1.5 + si * 2);
+        ctx.globalAlpha = 0.08 + 0.12 * tw;
+        ctx.beginPath();
+        ctx.arc(starSeeds[si] * W, starSeeds[(si + 3) % starSeeds.length] * H * 0.4, 1, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.globalAlpha = 1;
+
+      // Ground (grass)
+      var groundY = H * 0.78;
+      var grassGrad = ctx.createLinearGradient(0, groundY, 0, H);
+      grassGrad.addColorStop(0, '#1a2a1a');
+      grassGrad.addColorStop(1, '#0d150d');
+      ctx.fillStyle = grassGrad;
+      ctx.fillRect(0, groundY, W, H - groundY);
+      ctx.strokeStyle = 'rgba(74,222,128,0.15)';
+      ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(0, groundY); ctx.lineTo(W, groundY); ctx.stroke();
+
+      // Tree
+      var treeX = W * 0.40;
+      var treeSize = Math.min(W, H) * 0.6;
+      drawTree(ctx, treeX, groundY, treeSize);
+
+      // Apple falling (animated y position)
+      var fallCycle = (time * 0.4) % 3; // 3 second cycle
+      var appleX = treeX + treeSize * 0.08;
+      var appleStartY = groundY - treeSize * 0.68;
+      var appleEndY = groundY - 14;
+      var appleY, appleAlpha;
+      if (fallCycle < 0.5) {
+        // Hanging on tree
+        appleY = appleStartY + Math.sin(time * 3) * 1.5;
+        appleAlpha = 1;
+        // Stem line
+        ctx.strokeStyle = '#5a3a15'; ctx.lineWidth = 1.5;
+        ctx.beginPath(); ctx.moveTo(appleX, appleY - 10); ctx.lineTo(appleX + 2, appleY - 18); ctx.stroke();
+      } else if (fallCycle < 2) {
+        // Falling
+        var fallT = (fallCycle - 0.5) / 1.5;
+        appleY = appleStartY + (appleEndY - appleStartY) * fallT * fallT; // quadratic
+        appleAlpha = 1;
+        // Motion trail
+        ctx.strokeStyle = 'rgba(255,60,60,0.1)';
+        ctx.lineWidth = 2;
+        ctx.setLineDash([4, 6]);
+        ctx.beginPath(); ctx.moveTo(appleX, appleStartY); ctx.lineTo(appleX, appleY - 10); ctx.stroke();
+        ctx.setLineDash([]);
+      } else {
+        // Resting on ground, fade to reset
+        appleY = appleEndY;
+        appleAlpha = 1 - (fallCycle - 2);
+      }
+
+      // Draw apple
+      ctx.save(); ctx.globalAlpha = appleAlpha;
+      var apR = Math.min(W, H) * 0.032;
+      var ag = ctx.createRadialGradient(appleX - apR * 0.3, appleY - apR * 0.3, apR * 0.1, appleX, appleY, apR);
+      ag.addColorStop(0, '#ff4444'); ag.addColorStop(0.6, '#cc2222'); ag.addColorStop(1, '#881111');
+      ctx.fillStyle = ag;
+      ctx.beginPath(); ctx.arc(appleX, appleY, apR, 0, Math.PI * 2); ctx.fill();
+      // Highlight
+      ctx.fillStyle = 'rgba(255,255,255,0.4)';
+      ctx.beginPath(); ctx.arc(appleX - apR * 0.25, appleY - apR * 0.3, apR * 0.18, 0, Math.PI * 2); ctx.fill();
+      // Leaf
+      ctx.fillStyle = '#2a8a2a';
+      ctx.beginPath();
+      ctx.ellipse(appleX + apR * 0.3, appleY - apR * 0.9, apR * 0.35, apR * 0.15, 0.3, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+
+      // Gravity arrow hint (dashed downward line near apple when falling)
+      if (fallCycle >= 0.5 && fallCycle < 2) {
+        ctx.save();
+        ctx.strokeStyle = 'rgba(255,176,0,0.08)';
+        ctx.lineWidth = 1;
+        ctx.setLineDash([3, 5]);
+        ctx.beginPath(); ctx.moveTo(appleX + 20, appleY); ctx.lineTo(appleX + 20, appleY + 30); ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.restore();
+      }
+
+      // Labels
+      ctx.font = "bold 11px 'Space Grotesk',sans-serif";
+      ctx.fillStyle = 'rgba(142,144,166,0.5)';
+      ctx.textAlign = 'center';
+      ctx.fillText(lang === 'cn' ? '\u82f9\u679c' : 'Apple', appleX, groundY + 16);
+      ctx.fillText(lang === 'cn' ? '\u91cd\u529b' : 'Gravity', W * 0.72, H * 0.50);
+      // Gravity symbol
+      ctx.font = "bold 16px 'Space Grotesk',sans-serif";
+      ctx.fillStyle = 'rgba(255,176,0,0.15)';
+      ctx.fillText('g', W * 0.72, H * 0.54);
+    }
+  },
+  // Level 5: Rocket thrust pushes rocket upward
+  {
+    id: 5,
+    label: {en:'Rocket Thrust', cn:'\u706b\u7bad\u63a8\u529b'},
+    hint: {en:'The engine pushes the rocket upward. Which direction is the thrust?', cn:'\u53d1\u52a8\u673a\u628a\u706b\u7bad\u5411\u4e0a\u63a8\u3002\u63a8\u529b\u7684\u65b9\u5411\u662f\u54ea\u8fb9\uff1f'},
+    correctAngle: 270,
+    tolerance: 35,
+    arrowCenter: {x: 0.50, y: 0.36},
+    draw: function(ctx, W, H, time) {
+      // Deep space background
+      var skyGrad = ctx.createLinearGradient(0, 0, 0, H);
+      skyGrad.addColorStop(0, '#050710');
+      skyGrad.addColorStop(0.7, '#0a0e20');
+      skyGrad.addColorStop(1, '#111830');
+      ctx.fillStyle = skyGrad;
+      ctx.fillRect(0, 0, W, H);
+
+      // Stars
+      ctx.fillStyle = 'rgba(214,217,243,0.25)';
+      var seeds = [0.05, 0.18, 0.32, 0.48, 0.62, 0.78, 0.92, 0.25, 0.55, 0.85, 0.12, 0.70];
+      for (var si = 0; si < seeds.length; si++) {
+        var tw = 0.5 + 0.5 * Math.sin(time * 1.8 + si * 1.3);
+        ctx.globalAlpha = 0.1 + 0.2 * tw;
+        ctx.beginPath();
+        ctx.arc(seeds[si] * W, seeds[(si + 5) % seeds.length] * H * 0.7, 0.8 + tw * 0.4, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.globalAlpha = 1;
+
+      // Launch pad / ground
+      var groundY = H * 0.85;
+      var padGrad = ctx.createLinearGradient(0, groundY, 0, H);
+      padGrad.addColorStop(0, '#1e2030'); padGrad.addColorStop(1, '#14162a');
+      ctx.fillStyle = padGrad;
+      ctx.fillRect(0, groundY, W, H - groundY);
+      ctx.strokeStyle = 'rgba(255,176,0,0.1)';
+      ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(0, groundY); ctx.lineTo(W, groundY); ctx.stroke();
+
+      // Launch tower (left side)
+      ctx.fillStyle = '#222'; ctx.fillRect(W * 0.32, groundY - H * 0.45, 5, H * 0.45);
+      ctx.fillRect(W * 0.28, groundY - H * 0.45, 14, 3);
+      // Tower braces
+      ctx.strokeStyle = 'rgba(142,144,166,0.1)'; ctx.lineWidth = 1;
+      for (var bi = 0; bi < 4; bi++) {
+        var by = groundY - H * 0.1 * (bi + 1);
+        ctx.beginPath(); ctx.moveTo(W * 0.32, by); ctx.lineTo(W * 0.38, by + H * 0.05); ctx.stroke();
+      }
+
+      // Rocket (hovering above pad with thrust)
+      var rocketSize = Math.min(W, H) * 0.30;
+      var hover = Math.sin(time * 2) * 3;
+      var rocketX = W * 0.50;
+      var rocketY = groundY - rocketSize * 0.6 + hover;
+      drawRocket(ctx, rocketX, rocketY, rocketSize, time);
+
+      // Exhaust smoke / particles below rocket
+      ctx.save();
+      for (var ei = 0; ei < 8; ei++) {
+        var ePhase = (time * 3 + ei * 0.8) % 2;
+        var eX = rocketX + (Math.sin(ei * 3.7) * 12);
+        var eY = rocketY + rocketSize * 0.4 + ePhase * 40;
+        var eSize = 3 + ePhase * 8;
+        var eAlpha = (1 - ePhase / 2) * 0.15;
+        ctx.globalAlpha = eAlpha;
+        ctx.fillStyle = '#888';
+        ctx.beginPath(); ctx.arc(eX, eY, eSize, 0, Math.PI * 2); ctx.fill();
+      }
+      ctx.restore();
+
+      // Ground heat shimmer
+      ctx.save();
+      ctx.globalAlpha = 0.04;
+      ctx.fillStyle = '#ffb000';
+      var shimW = 60 + Math.sin(time * 5) * 10;
+      ctx.beginPath();
+      ctx.ellipse(rocketX, groundY - 2, shimW, 6, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+
+      // Labels
+      ctx.font = "bold 11px 'Space Grotesk',sans-serif";
+      ctx.fillStyle = 'rgba(142,144,166,0.5)';
+      ctx.textAlign = 'center';
+      ctx.fillText(lang === 'cn' ? '\u706b\u7bad' : 'Rocket', rocketX, groundY + 16);
+      ctx.fillText(lang === 'cn' ? '\u63a8\u529b' : 'Thrust', W * 0.75, H * 0.50);
+    }
+  }
+];
+
+// ================================================================
+// Game State
+// ================================================================
+var currentLevel = 0;
+var score = 0;
+var attempts = []; // track pass/fail per level
+var arrowAngle = 45;
+var isDragging = false;
+var dragStartAngle = 0;
+var feedbackTimer = null;
+var gameOver = false;
+var animTime = 0;
+var lastFrameTime = 0;
+
+// ================================================================
+// DOM Refs
+// ================================================================
+var canvas, ctx;
+var sceneBox, sceneLabel, sceneHint, feedback, fbIcon, fbText, fbDetail;
+var resultPanel, resultHeader, resultScore, resultText, summaryTitle, summaryList;
+var btnConfirm, btnReset, btnReplay, langBtnEl;
+var levelIndicator, angleDisplay;
+var hudV1, hudV2, hudV3, hudV4;
+var hudL1, hudL2, hudL3, hudL4;
+var progressDots;
+
+function init() {
+  canvas = document.getElementById('sceneCanvas');
+  ctx = canvas.getContext('2d');
+  sceneBox = document.getElementById('sceneBox');
+  sceneLabel = document.getElementById('sceneLabel');
+  sceneHint = document.getElementById('sceneHint');
+  feedback = document.getElementById('feedback');
+  fbIcon = document.getElementById('fbIcon');
+  fbText = document.getElementById('fbText');
+  fbDetail = document.getElementById('fbDetail');
+  resultPanel = document.getElementById('resultPanel');
+  resultHeader = document.getElementById('resultHeader');
+  resultScore = document.getElementById('resultScore');
+  resultText = document.getElementById('resultText');
+  summaryTitle = document.getElementById('summaryTitle');
+  summaryList = document.getElementById('summaryList');
+  btnConfirm = document.getElementById('btnConfirm');
+  btnReset = document.getElementById('btnReset');
+  btnReplay = document.getElementById('btnReplay');
+  langBtnEl = document.getElementById('langBtn');
+  levelIndicator = document.getElementById('levelIndicator');
+  angleDisplay = document.getElementById('angleDisplay');
+  hudV1 = document.getElementById('hudV1');
+  hudV2 = document.getElementById('hudV2');
+  hudV3 = document.getElementById('hudV3');
+  hudV4 = document.getElementById('hudV4');
+  hudL1 = document.getElementById('hudL1');
+  hudL2 = document.getElementById('hudL2');
+  hudL3 = document.getElementById('hudL3');
+  hudL4 = document.getElementById('hudL4');
+  progressDots = document.getElementById('progressDots');
+
+  // Build guide panel
+  buildGuide();
+
+  // Events
+  btnConfirm.addEventListener('click', onConfirm);
+  btnReset.addEventListener('click', onResetArrow);
+  btnReplay.addEventListener('click', onReplay);
+  langBtnEl.addEventListener('click', toggleLang);
+
+  canvas.addEventListener('mousedown', onDragStart);
+  canvas.addEventListener('mousemove', onDragMove);
+  canvas.addEventListener('mouseup', onDragEnd);
+  canvas.addEventListener('mouseleave', onDragEnd);
+  canvas.addEventListener('touchstart', onTouchStart, {passive: false});
+  canvas.addEventListener('touchmove', onTouchMove, {passive: false});
+  canvas.addEventListener('touchend', onDragEnd);
+
+  resizeCanvas();
+  window.addEventListener('resize', resizeCanvas);
+
+  updateUI();
+  requestAnimationFrame(gameLoop);
+}
+
+function buildGuide() {
+  var guideEl = document.getElementById('guide');
+  var titleEl = document.getElementById('guideTitle');
+  var contentEl = document.getElementById('guideContent');
+  titleEl.textContent = t('guideTitle');
+  var items = ['g1', 'g2', 'g3', 'g4', 'g5'];
+  var html = '<ul>';
+  for (var i = 0; i < items.length; i++) {
+    html += '<li>' + t(items[i]) + '</li>';
+  }
+  html += '</ul>';
+  contentEl.innerHTML = html;
+  titleEl.addEventListener('click', function() {
+    contentEl.classList.toggle('collapsed');
+  });
+}
+
+function resizeCanvas() {
+  var rect = sceneBox.getBoundingClientRect();
+  var dpr = Math.min(window.devicePixelRatio || 1, 2);
+  canvas.width = rect.width * dpr;
+  canvas.height = rect.height * dpr;
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+}
+
+function updateUI() {
+  document.getElementById('title').textContent = t('title');
+  document.getElementById('subtitle').textContent = t('subtitle');
+  btnConfirm.textContent = t('confirm');
+  btnReset.textContent = t('reset');
+  btnReplay.textContent = t('replay');
+  langBtnEl.textContent = lang.toUpperCase();
+
+  var scene = SCENES[currentLevel];
+  sceneLabel.textContent = scene.label[lang];
+  sceneHint.textContent = scene.hint[lang];
+  levelIndicator.textContent = t('level') + ' ' + (currentLevel + 1) + '/5';
+  angleDisplay.textContent = Math.round(((arrowAngle % 360) + 360) % 360) + '\u00b0';
+
+  hudL1.textContent = t('hudLevel');
+  hudL2.textContent = t('hudScore');
+  hudL3.textContent = t('hudAngle');
+  hudL4.textContent = t('hudStatus');
+  hudV1.textContent = (currentLevel + 1) + '/5';
+  hudV2.textContent = score + '/' + SCENES.length;
+  hudV3.textContent = Math.round(((arrowAngle % 360) + 360) % 360) + '\u00b0';
+  hudV4.textContent = t('ready');
+
+  btnConfirm.disabled = gameOver;
+  btnReset.disabled = gameOver;
+
+  // Progress dots
+  var dotsHtml = '';
+  for (var d = 0; d < SCENES.length; d++) {
+    var cls = 'progress-dot';
+    if (d < attempts.length) {
+      cls += attempts[d] ? ' correct' : ' wrong';
+    } else if (d === currentLevel && !gameOver) {
+      cls += ' current';
+    }
+    dotsHtml += '<div class="' + cls + '"></div>';
+  }
+  progressDots.innerHTML = dotsHtml;
+}
+
+function toggleLang() {
+  lang = lang === 'cn' ? 'en' : 'cn';
+  buildGuide();
+  updateUI();
+}
+
+// ================================================================
+// Rendering
+// ================================================================
+function gameLoop(ts) {
+  var dt = lastFrameTime ? (ts - lastFrameTime) / 1000 : 0.016;
+  lastFrameTime = ts;
+  animTime += dt;
+
+  // Update celebration particles
+  for (var ci = celebParticles.length - 1; ci >= 0; ci--) {
+    var cp = celebParticles[ci];
+    cp.life -= dt;
+    cp.x += cp.vx * dt;
+    cp.y += cp.vy * dt;
+    cp.vy += 80 * dt; // gravity
+    cp.alpha = Math.max(0, cp.life / cp.maxLife) * 0.8;
+    if (cp.life <= 0) celebParticles.splice(ci, 1);
+  }
+
+  // Update ambient particles
+  for (var ai = 0; ai < ambientParticles.length; ai++) {
+    var ap = ambientParticles[ai];
+    ap.x += ap.vx; ap.y += ap.vy;
+    ap.pulse += 0.02;
+    if (ap.x < 0) ap.x = 1; if (ap.x > 1) ap.x = 0;
+    if (ap.y < 0) ap.y = 1; if (ap.y > 1) ap.y = 0;
+  }
+
+  render();
+  requestAnimationFrame(gameLoop);
+}
+
+function render() {
+  var W = canvas.width / (Math.min(window.devicePixelRatio || 1, 2));
+  var H = canvas.height / (Math.min(window.devicePixelRatio || 1, 2));
+
+  ctx.clearRect(0, 0, W, H);
+
+  // Background
+  var bgGrad = ctx.createLinearGradient(0, 0, 0, H);
+  bgGrad.addColorStop(0, '#0d111f');
+  bgGrad.addColorStop(1, '#111425');
+  ctx.fillStyle = bgGrad;
+  ctx.fillRect(0, 0, W, H);
+
+  // Ambient particles
+  for (var ai = 0; ai < ambientParticles.length; ai++) {
+    var ap = ambientParticles[ai];
+    ctx.save();
+    ctx.globalAlpha = ap.alpha * (0.6 + 0.4 * Math.sin(ap.pulse));
+    ctx.fillStyle = '#ffb000';
+    ctx.beginPath();
+    ctx.arc(ap.x * W, ap.y * H, ap.size, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  }
+
+  // Draw current scene
+  if (!gameOver) {
+    SCENES[currentLevel].draw(ctx, W, H, animTime);
+  }
+
+  // Draw rotatable arrow
+  if (!gameOver) {
+    var scene = SCENES[currentLevel];
+    var arrowCx = W * scene.arrowCenter.x;
+    var arrowCy = H * scene.arrowCenter.y;
+    var arrowLen = Math.min(W, H) * 0.16;
+    var rad = arrowAngle * Math.PI / 180;
+    var pulse = 0.7 + 0.3 * Math.sin(animTime * 3);
+
+    ctx.save();
+    ctx.translate(arrowCx, arrowCy);
+
+    // Rotation guide circle
+    ctx.strokeStyle = 'rgba(255,176,0,0.06)';
+    ctx.lineWidth = 1;
+    ctx.setLineDash([3, 6]);
+    ctx.beginPath();
+    ctx.arc(0, 0, arrowLen + 15, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // Compass marks (N E S W)
+    ctx.strokeStyle = 'rgba(142,144,166,0.15)';
+    ctx.lineWidth = 1;
+    for (var cm = 0; cm < 4; cm++) {
+      var cma = cm * Math.PI / 2;
+      var cmR = arrowLen + 15;
+      ctx.beginPath();
+      ctx.moveTo(Math.cos(cma) * (cmR - 4), Math.sin(cma) * (cmR - 4));
+      ctx.lineTo(Math.cos(cma) * (cmR + 4), Math.sin(cma) * (cmR + 4));
+      ctx.stroke();
+    }
+
+    // Arrow glow base
+    ctx.save();
+    ctx.rotate(rad);
+    ctx.shadowColor = 'rgba(255,176,0,' + (0.2 * pulse) + ')';
+    ctx.shadowBlur = 18;
+
+    // Arrow shaft with gradient
+    var shaftGrad = ctx.createLinearGradient(-arrowLen * 0.25, 0, arrowLen, 0);
+    shaftGrad.addColorStop(0, 'rgba(255,176,0,0.3)');
+    shaftGrad.addColorStop(0.4, '#ffb000');
+    shaftGrad.addColorStop(1, '#ffb000');
+    ctx.strokeStyle = shaftGrad;
+    ctx.lineWidth = 4.5;
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(-arrowLen * 0.25, 0);
+    ctx.lineTo(arrowLen, 0);
+    ctx.stroke();
+
+    // Arrow head
+    ctx.fillStyle = '#ffb000';
+    ctx.shadowBlur = 14 * pulse;
+    ctx.beginPath();
+    ctx.moveTo(arrowLen + 2, 0);
+    ctx.lineTo(arrowLen - 16, -10);
+    ctx.lineTo(arrowLen - 12, 0);
+    ctx.lineTo(arrowLen - 16, 10);
+    ctx.closePath();
+    ctx.fill();
+    ctx.shadowBlur = 0;
+
+    ctx.restore(); // un-rotate
+
+    // Center hub
+    ctx.fillStyle = 'rgba(255,176,0,0.12)';
+    ctx.beginPath();
+    ctx.arc(0, 0, 18, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = '#ffb000';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+
+    // Inner dot
+    ctx.fillStyle = '#ffb000';
+    ctx.beginPath();
+    ctx.arc(0, 0, 4, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.restore(); // un-translate
+  }
+
+  // Celebration particles
+  for (var ci = 0; ci < celebParticles.length; ci++) {
+    var cp = celebParticles[ci];
+    ctx.save();
+    ctx.globalAlpha = cp.alpha;
+    ctx.fillStyle = cp.color;
+    ctx.beginPath();
+    ctx.arc(cp.x, cp.y, cp.size, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  }
+}
+
+// ================================================================
+// Drag handling
+// ================================================================
+function getCanvasPos(e) {
+  var rect = canvas.getBoundingClientRect();
+  return {x: e.clientX - rect.left, y: e.clientY - rect.top};
+}
+
+function getAngleFromCenter(pos) {
+  var W = canvas.width / (Math.min(window.devicePixelRatio || 1, 2));
+  var H = canvas.height / (Math.min(window.devicePixelRatio || 1, 2));
+  var scene = SCENES[currentLevel];
+  var cx = W * scene.arrowCenter.x;
+  var cy = H * scene.arrowCenter.y;
+  var rect = sceneBox.getBoundingClientRect();
+  var scaleX = W / rect.width;
+  var scaleY = H / rect.height;
+  var dx = pos.x * scaleX - cx;
+  var dy = pos.y * scaleY - cy;
+  return Math.atan2(dy, dx) * 180 / Math.PI;
+}
+
+function onDragStart(e) {
+  if (gameOver) return;
+  isDragging = true;
+  var pos = getCanvasPos(e);
+  dragStartAngle = getAngleFromCenter(pos) - arrowAngle;
+}
+
+function onDragMove(e) {
+  if (!isDragging || gameOver) return;
+  var pos = getCanvasPos(e);
+  arrowAngle = getAngleFromCenter(pos) - dragStartAngle;
+  arrowAngle = ((arrowAngle % 360) + 360) % 360;
+  hudV3.textContent = Math.round(arrowAngle) + '\u00b0';
+  angleDisplay.textContent = Math.round(arrowAngle) + '\u00b0';
+}
+
+function onDragEnd() { isDragging = false; }
+
+function onTouchStart(e) {
+  e.preventDefault();
+  if (gameOver || e.touches.length === 0) return;
+  isDragging = true;
+  var touch = e.touches[0];
+  var pos = {x: touch.clientX - canvas.getBoundingClientRect().left, y: touch.clientY - canvas.getBoundingClientRect().top};
+  dragStartAngle = getAngleFromCenter(pos) - arrowAngle;
+}
+
+function onTouchMove(e) {
+  e.preventDefault();
+  if (!isDragging || gameOver || e.touches.length === 0) return;
+  var touch = e.touches[0];
+  var pos = {x: touch.clientX - canvas.getBoundingClientRect().left, y: touch.clientY - canvas.getBoundingClientRect().top};
+  arrowAngle = getAngleFromCenter(pos) - dragStartAngle;
+  arrowAngle = ((arrowAngle % 360) + 360) % 360;
+  hudV3.textContent = Math.round(arrowAngle) + '\u00b0';
+  angleDisplay.textContent = Math.round(arrowAngle) + '\u00b0';
+}
+
+// ================================================================
+// Game logic
+// ================================================================
+function angleDiff(a, b) {
+  return Math.abs(((a - b + 180) % 360 + 360) % 360 - 180);
+}
+
+function onConfirm() {
+  if (gameOver) return;
+  var scene = SCENES[currentLevel];
+  var diff = angleDiff(arrowAngle, scene.correctAngle);
+
+  if (diff <= scene.tolerance) {
+    score++;
+    attempts.push(true);
+    showFeedback(true);
+    hudV4.textContent = t('pass');
+    hudV4.style.color = '#4ade80';
+
+    // Spawn celebration
+    var W = canvas.width / (Math.min(window.devicePixelRatio || 1, 2));
+    var H = canvas.height / (Math.min(window.devicePixelRatio || 1, 2));
+    spawnCelebration(W * scene.arrowCenter.x, H * scene.arrowCenter.y);
+
+    setTimeout(function() { nextLevel(); }, 1400);
+  } else {
+    attempts.push(false);
+    showFeedback(false);
+    hudV4.textContent = t('fail');
+    hudV4.style.color = '#ffb4ab';
+    setTimeout(function() {
+      attempts.pop(); // allow retry (don't count failed attempt permanently)
+      arrowAngle = Math.random() * 360;
+      hudV3.textContent = Math.round(arrowAngle) + '\u00b0';
+      angleDisplay.textContent = Math.round(arrowAngle) + '\u00b0';
+      hudV4.textContent = t('ready');
+      hudV4.style.color = '#ffb000';
+    }, 1800);
+  }
+  hudV2.textContent = score + '/' + SCENES.length;
+  updateUI();
+}
+
+function showFeedback(isCorrect) {
+  if (feedbackTimer) clearTimeout(feedbackTimer);
+  fbText.textContent = isCorrect ? t('correctFB') : t('wrongFB');
+  fbDetail.textContent = isCorrect ? t('correctDetail') : t('wrongHint');
+  feedback.className = 'feedback show ' + (isCorrect ? 'correct' : 'wrong');
+  feedbackTimer = setTimeout(function() {
+    feedback.className = 'feedback';
+  }, 1300);
+}
+
+function nextLevel() {
+  currentLevel++;
+  if (currentLevel >= SCENES.length) {
+    gameOver = true;
+    showResult();
+    return;
+  }
+  arrowAngle = Math.random() * 360;
+  hudV4.textContent = t('ready');
+  hudV4.style.color = '#ffb000';
+  updateUI();
+}
+
+function showResult() {
+  resultHeader.textContent = t('resultHeader');
+  resultScore.textContent = score + '/' + SCENES.length;
+  resultText.textContent = score >= 4 ? t('result1') : t('result2');
+  summaryTitle.textContent = t('summaryTitle');
+  summaryList.innerHTML =
+    '<li>' + t('sum1') + '</li>' +
+    '<li>' + t('sum2') + '</li>' +
+    '<li>' + t('sum3') + '</li>' +
+    '<li>' + t('sum4') + '</li>' +
+    '<li>' + t('sum5') + '</li>';
+  resultPanel.className = 'result-panel show';
+  btnConfirm.disabled = true;
+  btnReset.disabled = true;
+  updateUI();
+}
+
+function onResetArrow() {
+  if (gameOver) return;
+  arrowAngle = 0;
+  hudV3.textContent = '0\u00b0';
+  angleDisplay.textContent = '0\u00b0';
+}
+
+function onReplay() {
+  currentLevel = 0;
+  score = 0;
+  attempts = [];
+  gameOver = false;
+  arrowAngle = 45;
+  celebParticles = [];
+  resultPanel.className = 'result-panel';
+  hudV4.style.color = '#ffb000';
+  updateUI();
+}
+
+// ================================================================
+// Boot
+// ================================================================
+document.fonts.ready.then(init);
+</script>
+</body>
+</html>

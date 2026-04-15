@@ -1,0 +1,512 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;700&family=Inter:wght@400;500&family=Noto+Sans+SC:wght@400;700&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0;border-radius:0}
+html,body{width:100%;height:100vh;overflow:hidden;
+  background:#131313;
+  font-family:'Space Grotesk','Inter','Noto Sans SC',sans-serif;
+  color:#e5e2e1;
+}
+.lang-btn{
+  position:fixed;top:8px;left:8px;z-index:100;
+  font-family:'Space Grotesk',sans-serif;font-size:11px;font-weight:700;
+  padding:4px 10px;cursor:pointer;
+  border:1px solid rgba(255,255,255,0.08);
+  background:rgba(20,20,35,0.85);backdrop-filter:blur(12px);
+  color:#ffb59c;letter-spacing:1px;
+}
+.guide-panel{
+  position:fixed;top:8px;right:8px;width:260px;max-height:40vh;
+  overflow-y:auto;z-index:100;
+  background:rgba(20,20,35,0.85);backdrop-filter:blur(12px);
+  border:1px solid rgba(255,255,255,0.08);padding:12px;
+  font-family:'Noto Sans SC',sans-serif;font-size:13px;
+  color:rgba(255,255,255,0.85);
+}
+.guide-panel h3{
+  font-family:'Space Grotesk',sans-serif;font-size:14px;
+  margin-bottom:8px;display:flex;align-items:center;
+  justify-content:space-between;cursor:pointer;
+  color:#ffb59c;
+}
+.guide-panel .toggle{font-size:12px;opacity:0.6;}
+.guide-panel ul{padding-left:16px;line-height:1.6;}
+.guide-panel .guide-content.collapsed{display:none;}
+.wrapper{display:flex;flex-direction:column;height:100vh;}
+.header{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:6px 16px;
+  background:rgba(28,27,27,0.95);
+  border-bottom:1px solid rgba(138,136,134,0.15);
+}
+.header h2{
+  font-family:'Space Grotesk',sans-serif;font-size:14px;font-weight:700;
+  color:#ffb59c;letter-spacing:1px;
+}
+.header .sub{font-size:11px;color:#8a8886;margin-left:8px;font-weight:400;}
+.game-area{
+  flex:1;min-height:0;display:flex;flex-direction:column;
+  align-items:center;justify-content:center;
+  padding:12px;gap:8px;overflow:hidden;
+}
+.timeline-container{
+  width:100%;max-width:650px;
+  background:rgba(28,27,27,0.7);
+  border:1px solid rgba(138,136,134,0.15);
+  padding:12px 16px;
+}
+.timeline-row{
+  display:flex;align-items:center;gap:8px;margin-bottom:6px;
+  height:36px;
+}
+.timeline-row:last-child{margin-bottom:0;}
+.sensor-label{
+  width:60px;font-size:11px;font-weight:700;
+  font-family:'Space Grotesk',sans-serif;
+  text-align:right;flex-shrink:0;
+}
+.timeline-track{
+  flex:1;height:28px;position:relative;
+  background:rgba(20,20,35,0.6);
+  border:1px solid rgba(138,136,134,0.1);
+}
+.data-point{
+  position:absolute;top:50%;transform:translateY(-50%);
+  width:8px;height:8px;cursor:grab;
+  transition:box-shadow 0.2s;
+}
+.data-point:hover{box-shadow:0 0 12px currentColor;}
+.data-point.dragging{cursor:grabbing;z-index:10;}
+.data-point.locked{cursor:default;opacity:0.7;}
+.align-marker{
+  position:absolute;top:0;bottom:0;width:1px;
+  background:rgba(255,181,156,0.25);
+  pointer-events:none;
+}
+.controls-bar{
+  display:flex;justify-content:center;align-items:center;gap:12px;
+  padding:8px 0;
+  background:rgba(28,27,27,0.92);
+  border-top:1px solid rgba(138,136,134,0.15);
+}
+.ctrl-btn{
+  background:linear-gradient(135deg,rgba(53,53,52,0.8),rgba(28,27,27,0.8));
+  border:1px solid rgba(138,136,134,0.15);
+  color:#e5e2e1;padding:6px 18px;font-size:12px;cursor:pointer;
+  font-family:'Space Grotesk',sans-serif;letter-spacing:0.5px;
+}
+.ctrl-btn:hover{border-color:rgba(255,181,156,0.4);}
+.ctrl-btn.primary{
+  background:linear-gradient(135deg,rgba(255,181,156,0.3),rgba(255,127,80,0.2));
+  color:#ffb59c;border-color:rgba(255,181,156,0.4);
+}
+.hud{
+  display:flex;justify-content:space-around;align-items:center;
+  padding:6px 12px;
+  background:rgba(28,27,27,0.95);
+  border-top:1px solid rgba(138,136,134,0.15);
+  font-size:11px;color:#8a8886;
+}
+.hud .item{display:flex;flex-direction:column;align-items:center;}
+.hud .label{font-size:9px;text-transform:uppercase;letter-spacing:0.5px;opacity:0.7;}
+.hud .value{font-size:13px;color:#e5e2e1;font-weight:500;margin-top:2px;}
+.instruction{
+  font-size:12px;color:#8a8886;text-align:center;
+  font-family:'Noto Sans SC',sans-serif;
+  padding:4px 0;
+}
+.feedback{
+  display:none;position:fixed;top:0;left:0;right:0;bottom:0;
+  background:rgba(19,19,19,0.92);backdrop-filter:blur(8px);
+  z-index:200;display:none;
+  align-items:center;justify-content:center;
+}
+.feedback.show{display:flex;}
+.feedback-card{
+  max-width:420px;padding:28px;
+  background:rgba(28,27,27,0.95);
+  border:1px solid rgba(255,181,156,0.3);
+  text-align:center;
+}
+.feedback-card h2{
+  font-family:'Space Grotesk',sans-serif;font-size:20px;
+  color:#ffb59c;margin-bottom:12px;
+}
+.feedback-card p{
+  font-family:'Noto Sans SC',sans-serif;font-size:14px;
+  color:rgba(255,255,255,0.85);line-height:1.7;margin-bottom:16px;
+}
+.feedback-card .score{
+  font-family:'Space Grotesk',sans-serif;font-size:36px;
+  font-weight:700;color:#10b981;margin-bottom:8px;
+}
+</style>
+</head>
+<body>
+<button class="lang-btn" id="langBtn">CN</button>
+<div class="guide-panel" id="guidePanel">
+  <h3 id="guideTitle"><span id="guideTitleText"></span><span class="toggle" id="guideToggle">[-]</span></h3>
+  <div class="guide-content" id="guideContent">
+    <p id="guideDesc" style="margin-bottom:8px;"></p>
+    <ul>
+      <li id="guideStep1"></li>
+      <li id="guideStep2"></li>
+      <li id="guideStep3"></li>
+    </ul>
+  </div>
+</div>
+<div class="wrapper">
+  <div class="header">
+    <h2 id="mainTitle"></h2>
+    <span class="sub">P-MARS-01-M30 &middot; foundation</span>
+  </div>
+  <div class="game-area" id="gameArea">
+    <p class="instruction" id="instrText"></p>
+    <div class="timeline-container" id="timelineContainer"></div>
+    <p class="instruction" id="roundInfo"></p>
+  </div>
+  <div class="controls-bar">
+    <button class="ctrl-btn" id="btnCheck"></button>
+    <button class="ctrl-btn" id="btnReset"></button>
+    <button class="ctrl-btn primary" id="btnNext"></button>
+  </div>
+  <div class="hud">
+    <div class="item"><div class="label">ROUND</div><div class="value" id="hudRound">1 / 5</div></div>
+    <div class="item"><div class="label" id="hudErrorLabel">MAX ERROR</div><div class="value" id="hudError">--</div></div>
+    <div class="item"><div class="label" id="hudScoreLabel">SCORE</div><div class="value" id="hudScore">0</div></div>
+    <div class="item"><div class="label" id="hudStatusLabel">STATUS</div><div class="value" id="hudStatus"></div></div>
+  </div>
+</div>
+<div class="feedback" id="feedbackPanel">
+  <div class="feedback-card">
+    <h2 id="fbTitle"></h2>
+    <div class="score" id="fbScore"></div>
+    <p id="fbText"></p>
+    <button class="ctrl-btn primary" id="fbClose"></button>
+  </div>
+</div>
+<script>
+(function(){
+var LANG = 'cn';
+var I18N = {
+  title:      {en:'TIMESTAMP SYNC CALIBRATOR', cn:'\u65f6\u95f4\u6233\u540c\u6b65\u6821\u51c6\u5668'},
+  guide:      {en:'GUIDE',    cn:'\u64cd\u4f5c\u6307\u5357'},
+  guideDesc:  {en:'Drag sensor data points to align timestamps. Camera, IMU, and Odometry must sync within 20ms tolerance.',
+               cn:'\u62d6\u62fd\u4f20\u611f\u5668\u6570\u636e\u70b9\u6765\u5bf9\u9f50\u65f6\u95f4\u6233\u3002\u76f8\u673a\u3001IMU \u548c\u91cc\u7a0b\u8ba1\u5fc5\u987b\u5728 20ms \u5bb9\u5dee\u5185\u540c\u6b65\u3002'},
+  step1:      {en:'Observe the reference line (dashed orange)',
+               cn:'\u89c2\u5bdf\u53c2\u8003\u7ebf\uff08\u6a59\u8272\u865a\u7ebf\uff09'},
+  step2:      {en:'Drag colored dots to align with the reference',
+               cn:'\u62d6\u62fd\u5f69\u8272\u6570\u636e\u70b9\u5bf9\u9f50\u5230\u53c2\u8003\u7ebf'},
+  step3:      {en:'Click CHECK to verify, aim for < 20ms error',
+               cn:'\u70b9\u51fb\u68c0\u67e5\u9a8c\u8bc1\uff0c\u76ee\u6807\u8bef\u5dee < 20ms'},
+  instrText:  {en:'Drag the sensor data points to align them to the reference timestamps',
+               cn:'\u62d6\u52a8\u4f20\u611f\u5668\u6570\u636e\u70b9\uff0c\u5c06\u5b83\u4eec\u5bf9\u9f50\u5230\u53c2\u8003\u65f6\u95f4\u6233'},
+  btnCheck:   {en:'CHECK',    cn:'\u68c0\u67e5'},
+  btnReset:   {en:'RESET',    cn:'\u91cd\u7f6e'},
+  btnNext:    {en:'NEXT ROUND',cn:'\u4e0b\u4e00\u8f6e'},
+  camLabel:   {en:'CAM',      cn:'\u76f8\u673a'},
+  imuLabel:   {en:'IMU',      cn:'IMU'},
+  odomLabel:  {en:'ODOM',     cn:'\u91cc\u7a0b\u8ba1'},
+  refLabel:   {en:'REF',      cn:'\u53c2\u8003'},
+  statusReady:{en:'READY',    cn:'\u5c31\u7eea'},
+  statusPass: {en:'PASS',     cn:'\u901a\u8fc7'},
+  statusFail: {en:'FAIL',     cn:'\u672a\u901a\u8fc7'},
+  statusDone: {en:'COMPLETE', cn:'\u5b8c\u6210'},
+  fbTitleWin: {en:'CALIBRATION COMPLETE',  cn:'\u6821\u51c6\u5b8c\u6210'},
+  fbText:     {en:'You successfully aligned sensor timestamps! In real rover engineering, this process uses hardware triggers and NTP/PTP protocols to achieve sub-millisecond synchronization.',
+               cn:'\u4f60\u6210\u529f\u5bf9\u9f50\u4e86\u4f20\u611f\u5668\u65f6\u95f4\u6233\uff01\u5728\u771f\u5b9e\u7684\u5c0f\u8f66\u5de5\u7a0b\u4e2d\uff0c\u8fd9\u4e2a\u8fc7\u7a0b\u4f7f\u7528\u786c\u4ef6\u89e6\u53d1\u5668\u548c NTP/PTP \u534f\u8bae\u6765\u5b9e\u73b0\u4e9a\u6beb\u79d2\u7ea7\u540c\u6b65\u3002'},
+  fbClose:    {en:'CLOSE',    cn:'\u5173\u95ed'},
+  roundInfo:  {en:'Round {n} of {total}: Align {count} data points within 20ms tolerance',
+               cn:'\u7b2c {n} \u8f6e / \u5171 {total} \u8f6e\uff1a\u5c06 {count} \u4e2a\u6570\u636e\u70b9\u5bf9\u9f50\u5230 20ms \u5bb9\u5dee\u5185'},
+};
+function t(key){ return (I18N[key] && I18N[key][LANG]) || (I18N[key] && I18N[key]['en']) || key; }
+
+// ---- Game State ----
+var totalRounds = 5;
+var currentRound = 0;
+var score = 0;
+var tolerance = 20; // ms
+var trackWidth = 0;
+var rounds = [];
+var completed = false;
+
+// Generate round data
+function generateRounds(){
+  rounds = [];
+  for(var r=0; r<totalRounds; r++){
+    var refTime = 100 + Math.random() * 800; // reference timestamp 100-900ms
+    var numPoints = 3; // cam, imu, odom
+    var points = [];
+    // Each sensor has an offset error that the player must correct
+    var offsets = [
+      (Math.random() - 0.5) * 200, // cam offset: -100 to +100ms
+      (Math.random() - 0.5) * 150, // imu offset: -75 to +75ms
+      (Math.random() - 0.5) * 180, // odom offset: -90 to +90ms
+    ];
+    var sensors = ['cam', 'imu', 'odom'];
+    var colors = ['#00daf3', '#ff7f50', '#10b981'];
+    for(var p=0; p<numPoints; p++){
+      points.push({
+        sensor: sensors[p],
+        color: colors[p],
+        refTime: refTime,
+        offset: offsets[p],
+        currentPos: refTime + offsets[p], // starting position (wrong)
+      });
+    }
+    rounds.push({refTime: refTime, points: points, checked: false, passed: false});
+  }
+}
+
+function msToPercent(ms){
+  return (ms / 1000) * 100;
+}
+function percentToMs(pct){
+  return (pct / 100) * 1000;
+}
+
+// ---- Render Timeline ----
+function renderTimeline(){
+  var container = document.getElementById('timelineContainer');
+  container.innerHTML = '';
+  var round = rounds[currentRound];
+  if(!round) return;
+
+  // Reference row
+  var refRow = document.createElement('div');
+  refRow.className = 'timeline-row';
+  var refLabel = document.createElement('div');
+  refLabel.className = 'sensor-label';
+  refLabel.style.color = '#ffb59c';
+  refLabel.textContent = t('refLabel');
+  refRow.appendChild(refLabel);
+  var refTrack = document.createElement('div');
+  refTrack.className = 'timeline-track';
+  // Reference marker
+  var refMarker = document.createElement('div');
+  refMarker.style.cssText = 'position:absolute;top:0;bottom:0;width:2px;background:#ffb59c;left:'+msToPercent(round.refTime)+'%;box-shadow:0 0 8px rgba(255,181,156,0.5);';
+  refTrack.appendChild(refMarker);
+  // Tolerance zone
+  var tolLeft = msToPercent(round.refTime - tolerance);
+  var tolWidth = msToPercent(tolerance * 2);
+  var tolZone = document.createElement('div');
+  tolZone.style.cssText = 'position:absolute;top:0;bottom:0;left:'+tolLeft+'%;width:'+tolWidth+'%;background:rgba(255,181,156,0.08);border-left:1px dashed rgba(255,181,156,0.2);border-right:1px dashed rgba(255,181,156,0.2);pointer-events:none;';
+  refTrack.appendChild(tolZone);
+  refRow.appendChild(refTrack);
+  container.appendChild(refRow);
+
+  // Sensor rows
+  var sensorLabels = {cam: 'camLabel', imu: 'imuLabel', odom: 'odomLabel'};
+  for(var i=0; i<round.points.length; i++){
+    var pt = round.points[i];
+    var row = document.createElement('div');
+    row.className = 'timeline-row';
+    var label = document.createElement('div');
+    label.className = 'sensor-label';
+    label.style.color = pt.color;
+    label.textContent = t(sensorLabels[pt.sensor]);
+    row.appendChild(label);
+    var track = document.createElement('div');
+    track.className = 'timeline-track';
+    // Alignment marker (reference position)
+    var alignMk = document.createElement('div');
+    alignMk.className = 'align-marker';
+    alignMk.style.left = msToPercent(round.refTime) + '%';
+    track.appendChild(alignMk);
+    // Data point (draggable)
+    var dot = document.createElement('div');
+    dot.className = 'data-point';
+    dot.style.left = 'calc(' + msToPercent(pt.currentPos) + '% - 4px)';
+    dot.style.background = pt.color;
+    dot.style.boxShadow = '0 0 6px ' + pt.color;
+    dot.dataset.idx = i;
+    if(round.checked) dot.classList.add('locked');
+    track.appendChild(dot);
+    row.appendChild(track);
+    container.appendChild(row);
+    // Make draggable
+    if(!round.checked) setupDrag(dot, track, i);
+  }
+
+  // Time axis labels
+  var axisRow = document.createElement('div');
+  axisRow.style.cssText = 'display:flex;align-items:center;gap:8px;margin-top:4px;';
+  var axLbl = document.createElement('div');
+  axLbl.style.cssText = 'width:60px;';
+  axisRow.appendChild(axLbl);
+  var axTrack = document.createElement('div');
+  axTrack.style.cssText = 'flex:1;display:flex;justify-content:space-between;font-size:9px;color:#8a8886;font-family:"Space Grotesk",sans-serif;';
+  for(var ti=0; ti<=10; ti++){
+    var tick = document.createElement('span');
+    tick.textContent = (ti*100)+'ms';
+    axTrack.appendChild(tick);
+  }
+  axisRow.appendChild(axTrack);
+  container.appendChild(axisRow);
+
+  updateRoundInfo();
+}
+
+function setupDrag(dot, track, idx){
+  var dragging = false;
+  function onStart(e){
+    e.preventDefault();
+    dragging = true;
+    dot.classList.add('dragging');
+  }
+  function onMove(e){
+    if(!dragging) return;
+    e.preventDefault();
+    var rect = track.getBoundingClientRect();
+    var clientX = e.touches ? e.touches[0].clientX : e.clientX;
+    var pct = ((clientX - rect.left) / rect.width) * 100;
+    pct = Math.max(0, Math.min(100, pct));
+    dot.style.left = 'calc(' + pct + '% - 4px)';
+    rounds[currentRound].points[idx].currentPos = percentToMs(pct);
+  }
+  function onEnd(){
+    if(!dragging) return;
+    dragging = false;
+    dot.classList.remove('dragging');
+  }
+  dot.addEventListener('mousedown', onStart);
+  document.addEventListener('mousemove', onMove);
+  document.addEventListener('mouseup', onEnd);
+  dot.addEventListener('touchstart', onStart);
+  document.addEventListener('touchmove', onMove, {passive:false});
+  document.addEventListener('touchend', onEnd);
+}
+
+function updateRoundInfo(){
+  var round = rounds[currentRound];
+  var text = t('roundInfo')
+    .replace('{n}', currentRound+1)
+    .replace('{total}', totalRounds)
+    .replace('{count}', round.points.length);
+  document.getElementById('roundInfo').textContent = text;
+}
+
+// ---- Check alignment ----
+function checkAlignment(){
+  var round = rounds[currentRound];
+  if(round.checked) return;
+  round.checked = true;
+  var maxError = 0;
+  for(var i=0; i<round.points.length; i++){
+    var error = Math.abs(round.points[i].currentPos - round.refTime);
+    if(error > maxError) maxError = error;
+  }
+  document.getElementById('hudError').textContent = maxError.toFixed(0) + 'ms';
+  if(maxError <= tolerance){
+    round.passed = true;
+    score += Math.max(10, Math.round(30 - maxError));
+    document.getElementById('hudStatus').textContent = t('statusPass');
+    document.getElementById('hudStatus').style.color = '#10b981';
+  } else {
+    document.getElementById('hudStatus').textContent = t('statusFail');
+    document.getElementById('hudStatus').style.color = '#ff5f1f';
+  }
+  document.getElementById('hudScore').textContent = score;
+  renderTimeline(); // re-render with locked dots
+}
+
+function nextRound(){
+  var round = rounds[currentRound];
+  if(!round.checked) return;
+  if(currentRound >= totalRounds - 1){
+    showFeedback();
+    return;
+  }
+  currentRound++;
+  document.getElementById('hudRound').textContent = (currentRound+1) + ' / ' + totalRounds;
+  document.getElementById('hudError').textContent = '--';
+  document.getElementById('hudStatus').textContent = t('statusReady');
+  document.getElementById('hudStatus').style.color = '#e5e2e1';
+  renderTimeline();
+}
+
+function resetRound(){
+  var round = rounds[currentRound];
+  if(round.checked && round.passed) score -= Math.max(10, Math.round(30 - Math.abs(round.points[0].currentPos - round.refTime)));
+  round.checked = false;
+  round.passed = false;
+  // Regenerate offsets
+  for(var i=0; i<round.points.length; i++){
+    var off = (Math.random() - 0.5) * 200;
+    round.points[i].offset = off;
+    round.points[i].currentPos = round.refTime + off;
+  }
+  document.getElementById('hudError').textContent = '--';
+  document.getElementById('hudStatus').textContent = t('statusReady');
+  document.getElementById('hudStatus').style.color = '#e5e2e1';
+  document.getElementById('hudScore').textContent = score;
+  renderTimeline();
+}
+
+function showFeedback(){
+  completed = true;
+  document.getElementById('hudStatus').textContent = t('statusDone');
+  document.getElementById('hudStatus').style.color = '#ffb59c';
+  document.getElementById('fbTitle').textContent = t('fbTitleWin');
+  document.getElementById('fbScore').textContent = score + ' / ' + (totalRounds * 30);
+  document.getElementById('fbText').textContent = t('fbText');
+  document.getElementById('fbClose').textContent = t('fbClose');
+  document.getElementById('feedbackPanel').classList.add('show');
+}
+
+// ---- Event Bindings ----
+document.getElementById('btnCheck').addEventListener('click', checkAlignment);
+document.getElementById('btnReset').addEventListener('click', resetRound);
+document.getElementById('btnNext').addEventListener('click', nextRound);
+document.getElementById('fbClose').addEventListener('click', function(){
+  document.getElementById('feedbackPanel').classList.remove('show');
+});
+
+// ---- Guide Panel ----
+document.getElementById('guideTitle').addEventListener('click', function(){
+  var content = document.getElementById('guideContent');
+  var toggle = document.getElementById('guideToggle');
+  if(content.classList.contains('collapsed')){
+    content.classList.remove('collapsed');
+    toggle.textContent = '[-]';
+  } else {
+    content.classList.add('collapsed');
+    toggle.textContent = '[+]';
+  }
+});
+
+// ---- i18n ----
+function refreshI18N(){
+  document.getElementById('mainTitle').textContent = t('title');
+  document.getElementById('btnCheck').textContent = t('btnCheck');
+  document.getElementById('btnReset').textContent = t('btnReset');
+  document.getElementById('btnNext').textContent = t('btnNext');
+  document.getElementById('guideTitleText').textContent = t('guide');
+  document.getElementById('guideDesc').textContent = t('guideDesc');
+  document.getElementById('guideStep1').textContent = t('step1');
+  document.getElementById('guideStep2').textContent = t('step2');
+  document.getElementById('guideStep3').textContent = t('step3');
+  document.getElementById('instrText').textContent = t('instrText');
+  document.getElementById('hudStatus').textContent = completed ? t('statusDone') : t('statusReady');
+  renderTimeline();
+}
+
+document.getElementById('langBtn').addEventListener('click', function(){
+  LANG = LANG === 'en' ? 'cn' : 'en';
+  document.getElementById('langBtn').textContent = LANG.toUpperCase();
+  refreshI18N();
+});
+
+// ---- Init ----
+generateRounds();
+refreshI18N();
+document.getElementById('hudRound').textContent = '1 / ' + totalRounds;
+document.getElementById('hudStatus').textContent = t('statusReady');
+})();
+</script>
+</body>
+</html>

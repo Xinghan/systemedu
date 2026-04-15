@@ -1,0 +1,651 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=Inter:wght@400;500&family=Noto+Sans+SC:wght@400;700&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box;}
+html,body{width:100%;height:100vh;overflow:hidden;touch-action:none;}
+body{background:#05070a;color:#e2e2e9;font-family:'Inter','Noto Sans SC',sans-serif;display:flex;flex-direction:column;}
+.wrapper{display:flex;flex-direction:column;height:100vh;overflow:hidden;}
+.header{
+  padding:10px 16px 6px;display:flex;justify-content:space-between;align-items:center;
+  background:linear-gradient(180deg,rgba(5,7,10,0.95) 0%,rgba(13,17,31,0.9) 100%);
+  backdrop-filter:blur(12px);border-bottom:1px solid rgba(255,176,0,0.1);
+}
+.header h1{font-family:'Space Grotesk',sans-serif;font-size:clamp(13px,2vw,17px);font-weight:700;letter-spacing:-0.02em;color:#ffb000;text-shadow:0 0 15px rgba(255,176,0,0.3);}
+.header .sub{font-size:10px;color:#8e90a6;letter-spacing:0.1em;text-transform:uppercase;}
+.game-area{flex:1;min-height:0;position:relative;display:flex;flex-direction:column;align-items:stretch;padding:8px 16px;}
+.scene-container{position:relative;flex:1;min-height:0;width:100%;background:linear-gradient(180deg,#0d111f 0%,#111425 100%);overflow:hidden;border:1px solid rgba(255,176,0,0.08);}
+canvas.scene-canvas{width:100%;height:100%;display:block;}
+.overlay-ui{position:absolute;top:0;left:0;right:0;bottom:0;pointer-events:none;z-index:5;}
+.scene-label{position:absolute;top:10px;left:10px;font-family:'Space Grotesk',sans-serif;font-size:13px;font-weight:700;color:#ffb000;letter-spacing:0.05em;pointer-events:none;}
+.scene-hint{position:absolute;bottom:8px;left:10px;right:10px;font-size:11px;color:#8e90a6;text-align:center;line-height:1.4;pointer-events:none;background:rgba(5,7,10,0.6);backdrop-filter:blur(8px);padding:6px 10px;}
+.feedback{position:absolute;top:0;left:0;right:0;bottom:0;display:flex;flex-direction:column;align-items:center;justify-content:center;pointer-events:none;opacity:0;transition:opacity 0.3s;z-index:10;}
+.feedback.show{opacity:1;}
+.feedback .fb-text{font-family:'Space Grotesk',sans-serif;font-size:22px;font-weight:700;}
+.feedback.correct .fb-text{color:#4ade80;text-shadow:0 0 30px rgba(74,222,128,0.5);}
+.feedback.wrong .fb-text{color:#ffb4ab;text-shadow:0 0 30px rgba(255,180,171,0.5);}
+.feedback .fb-detail{font-size:13px;color:#8e90a6;margin-top:4px;}
+.result-panel{position:absolute;top:0;left:0;right:0;bottom:0;background:rgba(5,7,10,0.93);backdrop-filter:blur(20px);display:none;flex-direction:column;align-items:center;justify-content:center;z-index:20;gap:12px;padding:20px;}
+.result-panel.show{display:flex;}
+.result-header{font-family:'Space Grotesk',sans-serif;font-size:14px;letter-spacing:0.15em;text-transform:uppercase;color:#8e90a6;}
+.result-score{font-family:'Space Grotesk',sans-serif;font-size:42px;font-weight:700;color:#ffb000;text-shadow:0 0 30px rgba(255,176,0,0.4);}
+.result-text{font-size:14px;color:#e2e2e9;text-align:center;max-width:360px;}
+.controls-row{display:flex;gap:10px;padding:6px 16px;justify-content:center;align-items:center;}
+.ctrl-btn{font-family:'Space Grotesk',sans-serif;font-size:12px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;padding:7px 22px;border:none;cursor:pointer;color:#05070a;background:linear-gradient(135deg,#ffb000,#cc8d00);transition:transform 0.1s,box-shadow 0.2s;box-shadow:0 0 12px rgba(255,176,0,0.3);}
+.ctrl-btn:hover{transform:scale(1.04);box-shadow:0 0 20px rgba(255,176,0,0.5);}
+.ctrl-btn:active{transform:scale(0.96);}
+.ctrl-btn.secondary{background:rgba(17,20,37,0.8);color:#8e90a6;box-shadow:none;backdrop-filter:blur(12px);border:1px solid rgba(255,255,255,0.06);}
+.ctrl-btn.secondary:hover{color:#ffb000;border-color:rgba(255,176,0,0.2);}
+.hud{height:44px;display:flex;align-items:center;justify-content:space-around;background:linear-gradient(180deg,rgba(0,0,0,0.5) 0%,rgba(0,0,0,0.65) 100%);backdrop-filter:blur(12px);padding:0 16px;border-top:1px solid rgba(255,176,0,0.06);}
+.hud-item{text-align:center;}
+.hud-label{font-family:'Space Grotesk',sans-serif;font-size:9px;letter-spacing:0.15em;text-transform:uppercase;color:#8e90a6;}
+.hud-val{font-family:'Space Grotesk',sans-serif;font-size:13px;font-weight:700;color:#ffb000;}
+.lang-btn{position:fixed;top:8px;left:8px;z-index:100;font-family:'Space Grotesk',sans-serif;font-size:11px;font-weight:700;padding:4px 10px;cursor:pointer;border:none;background:rgba(20,20,35,0.85);backdrop-filter:blur(12px);color:#ffb59c;letter-spacing:1px;border:1px solid rgba(255,255,255,0.06);}
+.guide-panel{position:fixed;top:8px;right:8px;width:220px;max-height:36vh;overflow-y:auto;background:rgba(17,20,37,0.85);backdrop-filter:blur(12px);padding:10px;z-index:100;font-family:'Noto Sans SC',sans-serif;font-size:11px;color:rgba(255,255,255,0.8);line-height:1.5;border:1px solid rgba(255,255,255,0.06);}
+.guide-panel h3{font-family:'Space Grotesk',sans-serif;font-size:12px;margin-bottom:5px;color:#ffb000;cursor:pointer;display:flex;justify-content:space-between;align-items:center;}
+.guide-panel ul{padding-left:14px;}
+.guide-panel .collapsed{display:none;}
+</style>
+</head>
+<body>
+<button class="lang-btn" id="langBtn">CN</button>
+<div class="guide-panel" id="guide">
+<h3 id="guideTitle"></h3>
+<div class="guide-content" id="guideContent"></div>
+</div>
+<div class="wrapper">
+  <div class="header">
+    <div><h1 id="title"></h1><div class="sub" id="subtitle"></div></div>
+    <div id="scoreDisplay" style="font-family:'Space Grotesk';font-size:13px;color:#ffb000;letter-spacing:0.1em;"></div>
+  </div>
+  <div class="game-area">
+    <div class="scene-container" id="sceneBox">
+      <canvas class="scene-canvas" id="sceneCanvas"></canvas>
+      <div class="overlay-ui">
+        <div class="scene-label" id="sceneLabel"></div>
+        <div class="scene-hint" id="sceneHint"></div>
+      </div>
+      <div class="feedback" id="feedback">
+        <div class="fb-text" id="fbText"></div>
+        <div class="fb-detail" id="fbDetail"></div>
+      </div>
+      <div class="result-panel" id="resultPanel">
+        <div class="result-header" id="resultHeader"></div>
+        <div class="result-score" id="resultScore"></div>
+        <div class="result-text" id="resultText"></div>
+        <button class="ctrl-btn" id="btnReplay" style="margin-top:12px;"></button>
+      </div>
+    </div>
+  </div>
+  <div class="controls-row">
+    <button class="ctrl-btn secondary" id="btnReset"></button>
+    <button class="ctrl-btn" id="btnConfirm"></button>
+  </div>
+  <div class="hud">
+    <div class="hud-item"><div class="hud-label" id="hudL1"></div><div class="hud-val" id="hudV1"></div></div>
+    <div class="hud-item"><div class="hud-label" id="hudL2"></div><div class="hud-val" id="hudV2"></div></div>
+    <div class="hud-item"><div class="hud-label" id="hudL3"></div><div class="hud-val" id="hudV3"></div></div>
+  </div>
+</div>
+
+<script>
+// ============================================================
+// GAME: Weight Sorting -- Drag objects to sort by weight
+// M002 knode 1: no human figures, physical objects only
+// ============================================================
+
+var lang = 'cn';
+
+var I18N = {
+  title:    {en:'WEIGHT SORT', cn:'\u91cd\u91cf\u6392\u6392\u7ad9'},
+  subtitle: {en:'M002 \u00b7 DRAG TO SORT', cn:'M002 \u00b7 \u62d6\u52a8\u6392\u5e8f'},
+  label:    {en:'Sort by Weight: Light \u2192 Heavy', cn:'\u6309\u91cd\u91cf\u6392\u5e8f\uff1a\u8f7b \u2192 \u91cd'},
+  hint:     {en:'Drag objects to the slots below, lightest on left', cn:'\u628a\u7269\u4f53\u62d6\u5230\u4e0b\u65b9\u7684\u69fd\u4f4d\uff0c\u6700\u8f7b\u7684\u653e\u5de6\u8fb9'},
+  confirm:  {en:'CHECK', cn:'\u68c0\u67e5'},
+  reset:    {en:'RESET', cn:'\u91cd\u7f6e'},
+  replay:   {en:'PLAY AGAIN', cn:'\u518d\u73a9\u4e00\u6b21'},
+  correct:  {en:'CORRECT!', cn:'\u6b63\u786e\uff01'},
+  wrong:    {en:'Not right... try again!', cn:'\u4e0d\u5bf9\u54e6\u2026\u2026\u518d\u8bd5\u8bd5\uff01'},
+  correctDetail:{en:'You sorted them perfectly!', cn:'\u4f60\u6392\u5bf9\u4e86\uff01'},
+  wrongDetail:{en:'Remember: big does not mean heavy!', cn:'\u8bb0\u4f4f\uff1a\u5927\u4e0d\u7b49\u4e8e\u91cd\uff01'},
+  resultH:  {en:'WELL DONE!', cn:'\u505a\u5f97\u597d\uff01'},
+  resultT:  {en:'Big things can be light, small things can be heavy. Size \u2260 Weight!', cn:'\u5927\u7684\u4e1c\u897f\u53ef\u80fd\u5f88\u8f7b\uff0c\u5c0f\u7684\u4e1c\u897f\u53ef\u80fd\u5f88\u91cd\u3002\u5927\u5c0f \u2260 \u91cd\u91cf\uff01'},
+  hudPlaced:{en:'PLACED', cn:'\u5df2\u653e\u7f6e'},
+  hudAttempt:{en:'ATTEMPTS', cn:'\u5c1d\u8bd5'},
+  hudStatus:{en:'STATUS', cn:'\u72b6\u6001'},
+  ready:    {en:'READY', cn:'\u5c31\u7eea'},
+  guideTitle:{en:'How to Play', cn:'\u73a9\u6cd5\u6307\u5357'},
+  g1: {en:'Drag each object to a slot below', cn:'\u628a\u6bcf\u4e2a\u7269\u4f53\u62d6\u5230\u4e0b\u65b9\u69fd\u4f4d'},
+  g2: {en:'Lightest goes on the left, heaviest on the right', cn:'\u6700\u8f7b\u7684\u653e\u5de6\u8fb9\uff0c\u6700\u91cd\u7684\u653e\u53f3\u8fb9'},
+  g3: {en:'Click CHECK when done', cn:'\u5b8c\u6210\u540e\u70b9\u51fb\u68c0\u67e5'},
+  g4: {en:'Careful: big objects might be light!', cn:'\u6ce8\u610f\uff1a\u5927\u7684\u7269\u4f53\u53ef\u80fd\u5f88\u8f7b\uff01'},
+};
+
+function t(key) { return (I18N[key] && I18N[key][lang]) || key; }
+
+// ============================================================
+// Object definitions: name, weight(g), visual size, color, drawFn
+// Sorted by weight for answer checking
+// ============================================================
+var OBJECTS = [
+  { id:'feather', nameEn:'Feather', nameCn:'\u7fbd\u6bdb', weight:2, visualSize:0.7, color:'#d6d9f3' },
+  { id:'balloon', nameEn:'Balloon', nameCn:'\u6c14\u7403', weight:5, visualSize:1.4, color:'#22d3ee' },
+  { id:'apple',   nameEn:'Apple',   nameCn:'\u82f9\u679c', weight:200, visualSize:0.6, color:'#cc2222' },
+  { id:'book',    nameEn:'Book',    nameCn:'\u8bcd\u5178', weight:500, visualSize:1.0, color:'#ffb000' },
+  { id:'iron',    nameEn:'Iron Ball',nameCn:'\u94c1\u7403', weight:800, visualSize:0.45, color:'#aabbcc' },
+];
+
+// Shuffled order for display
+var shuffled = [];
+var slots = [null, null, null, null, null]; // slot index -> object index in shuffled
+var dragging = null; // {idx, offsetX, offsetY}
+var objPositions = []; // current {x, y} for each shuffled object
+var slotPositions = []; // {x, y, w, h} for each slot
+var animTime = 0;
+var lastFrameTime = 0;
+var attempts = 0;
+var gameOver = false;
+var feedbackTimer = null;
+
+// Celebration particles
+var celebParticles = [];
+function spawnCelebration(cx, cy) {
+  for (var i = 0; i < 30; i++) {
+    var a = Math.random() * Math.PI * 2;
+    var spd = 50 + Math.random() * 100;
+    celebParticles.push({
+      x:cx, y:cy, vx:Math.cos(a)*spd, vy:Math.sin(a)*spd,
+      life:0.8+Math.random()*0.6, maxLife:1.4, alpha:0.8,
+      size:1.5+Math.random()*3,
+      color:['#ffb000','#4ade80','#22d3ee','#ff5f1f','#d6d9f3'][Math.floor(Math.random()*5)]
+    });
+  }
+}
+
+// ============================================================
+// Drawing helpers (no human figures)
+// ============================================================
+function drawFeather(ctx, x, y, scale) {
+  var s = 20 * scale;
+  ctx.save(); ctx.translate(x, y); ctx.rotate(-0.2);
+  // Quill
+  ctx.strokeStyle = '#d6d9f3'; ctx.lineWidth = 1.5;
+  ctx.beginPath(); ctx.moveTo(0, s); ctx.lineTo(0, -s); ctx.stroke();
+  // Vane
+  ctx.fillStyle = 'rgba(214,217,243,0.25)';
+  ctx.beginPath();
+  ctx.moveTo(0, -s); ctx.quadraticCurveTo(s*0.8, -s*0.3, s*0.3, s*0.5);
+  ctx.lineTo(0, s); ctx.fill();
+  ctx.beginPath();
+  ctx.moveTo(0, -s); ctx.quadraticCurveTo(-s*0.6, -s*0.2, -s*0.2, s*0.5);
+  ctx.lineTo(0, s); ctx.fill();
+  ctx.restore();
+}
+
+function drawBalloonObj(ctx, x, y, scale) {
+  var rx = 22 * scale, ry = 28 * scale;
+  ctx.save(); ctx.globalAlpha = 0.6;
+  var bg = ctx.createRadialGradient(x - rx*0.2, y - ry*0.3, rx*0.1, x, y, Math.max(rx,ry));
+  bg.addColorStop(0, '#22d3ee'); bg.addColorStop(0.7, '#22d3ee'); bg.addColorStop(1, 'rgba(0,0,0,0.2)');
+  ctx.fillStyle = bg;
+  ctx.beginPath(); ctx.ellipse(x, y, rx, ry, 0, 0, Math.PI*2); ctx.fill();
+  ctx.restore();
+  ctx.fillStyle = 'rgba(255,255,255,0.2)';
+  ctx.beginPath(); ctx.ellipse(x-rx*0.3, y-ry*0.3, rx*0.15, ry*0.1, -0.3, 0, Math.PI*2); ctx.fill();
+  ctx.fillStyle = '#22d3ee';
+  ctx.beginPath(); ctx.moveTo(x-2,y+ry); ctx.lineTo(x+2,y+ry); ctx.lineTo(x,y+ry+4); ctx.closePath(); ctx.fill();
+  ctx.strokeStyle = 'rgba(255,255,255,0.2)'; ctx.lineWidth = 0.8;
+  ctx.beginPath(); ctx.moveTo(x,y+ry+4); ctx.lineTo(x-2,y+ry+14); ctx.stroke();
+}
+
+function drawAppleObj(ctx, x, y, scale) {
+  var r = 14 * scale;
+  var ag = ctx.createRadialGradient(x-r*0.25,y-r*0.25,r*0.1,x,y,r);
+  ag.addColorStop(0,'#ff5555'); ag.addColorStop(0.6,'#cc2222'); ag.addColorStop(1,'#881111');
+  ctx.fillStyle = ag;
+  ctx.beginPath(); ctx.arc(x,y,r,0,Math.PI*2); ctx.fill();
+  ctx.fillStyle='rgba(255,255,255,0.3)';
+  ctx.beginPath(); ctx.arc(x-r*0.25,y-r*0.3,r*0.15,0,Math.PI*2); ctx.fill();
+  ctx.strokeStyle='#5a3a15'; ctx.lineWidth=1.5;
+  ctx.beginPath(); ctx.moveTo(x,y-r); ctx.lineTo(x+1,y-r-r*0.4); ctx.stroke();
+  ctx.fillStyle='#2a8a2a';
+  ctx.beginPath(); ctx.ellipse(x+r*0.3,y-r-r*0.2,r*0.3,r*0.1,0.3,0,Math.PI*2); ctx.fill();
+}
+
+function drawBookObj(ctx, x, y, scale) {
+  var w = 24*scale, h = 30*scale;
+  var bg = ctx.createLinearGradient(x-w/2,y-h/2,x+w/2,y+h/2);
+  bg.addColorStop(0,'#ffb000'); bg.addColorStop(1,'#cc8d00');
+  ctx.fillStyle = bg;
+  ctx.fillRect(x-w/2,y-h/2,w,h);
+  // Pages
+  ctx.fillStyle='rgba(255,255,255,0.15)';
+  ctx.fillRect(x-w/2+3,y-h/2+2,w-6,h-4);
+  // Spine
+  ctx.strokeStyle='rgba(0,0,0,0.3)'; ctx.lineWidth=2;
+  ctx.beginPath(); ctx.moveTo(x-w/2,y-h/2); ctx.lineTo(x-w/2,y+h/2); ctx.stroke();
+  // Title lines
+  ctx.strokeStyle='rgba(255,255,255,0.2)'; ctx.lineWidth=1;
+  ctx.beginPath(); ctx.moveTo(x-w/2+6,y-h*0.2); ctx.lineTo(x+w/2-4,y-h*0.2); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(x-w/2+6,y); ctx.lineTo(x+w/2-8,y); ctx.stroke();
+}
+
+function drawIronBallObj(ctx, x, y, scale) {
+  var r = 12*scale;
+  ctx.save();
+  ctx.shadowColor='rgba(0,0,0,0.4)'; ctx.shadowBlur=r*0.5;
+  var g = ctx.createRadialGradient(x-r*0.3,y-r*0.3,r*0.08,x,y,r);
+  g.addColorStop(0,'#dde4ee'); g.addColorStop(0.4,'#aabbcc'); g.addColorStop(1,'#556677');
+  ctx.fillStyle = g;
+  ctx.beginPath(); ctx.arc(x,y,r,0,Math.PI*2); ctx.fill();
+  ctx.restore();
+  ctx.fillStyle='rgba(255,255,255,0.45)';
+  ctx.beginPath(); ctx.arc(x-r*0.25,y-r*0.3,r*0.1,0,Math.PI*2); ctx.fill();
+}
+
+var drawFns = {
+  feather: drawFeather,
+  balloon: drawBalloonObj,
+  apple: drawAppleObj,
+  book: drawBookObj,
+  iron: drawIronBallObj,
+};
+
+// ============================================================
+// DOM
+// ============================================================
+var canvas, ctx, sceneBox;
+
+function init() {
+  canvas = document.getElementById('sceneCanvas');
+  ctx = canvas.getContext('2d');
+  sceneBox = document.getElementById('sceneBox');
+
+  document.getElementById('btnConfirm').addEventListener('click', onCheck);
+  document.getElementById('btnReset').addEventListener('click', onReset);
+  document.getElementById('btnReplay').addEventListener('click', onReplay);
+  document.getElementById('langBtn').addEventListener('click', toggleLang);
+
+  canvas.addEventListener('mousedown', onDragStart);
+  canvas.addEventListener('mousemove', onDragMove);
+  canvas.addEventListener('mouseup', onDragEnd);
+  canvas.addEventListener('mouseleave', onDragEnd);
+  canvas.addEventListener('touchstart', onTouchStart, {passive:false});
+  canvas.addEventListener('touchmove', onTouchMove, {passive:false});
+  canvas.addEventListener('touchend', onDragEnd);
+
+  resetGame();
+  resizeCanvas();
+  window.addEventListener('resize', resizeCanvas);
+  updateUI();
+  requestAnimationFrame(gameLoop);
+}
+
+function resetGame() {
+  shuffled = OBJECTS.slice();
+  // Fisher-Yates shuffle
+  for (var i = shuffled.length - 1; i > 0; i--) {
+    var j = Math.floor(Math.random() * (i + 1));
+    var tmp = shuffled[i]; shuffled[i] = shuffled[j]; shuffled[j] = tmp;
+  }
+  slots = [null, null, null, null, null];
+  objPositions = [];
+  dragging = null;
+  gameOver = false;
+  celebParticles = [];
+}
+
+function resizeCanvas() {
+  var rect = sceneBox.getBoundingClientRect();
+  if (rect.width < 1 || rect.height < 1) return;
+  var dpr = Math.min(window.devicePixelRatio || 1, 2);
+  canvas.width = rect.width * dpr;
+  canvas.height = rect.height * dpr;
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+  var W = rect.width, H = rect.height;
+
+  // Compute initial object positions (top row, spread out)
+  objPositions = [];
+  for (var i = 0; i < shuffled.length; i++) {
+    objPositions.push({
+      x: W * (0.12 + i * 0.19),
+      y: H * 0.22,
+      inSlot: -1,
+    });
+  }
+
+  // Restore slot placements
+  for (var s = 0; s < slots.length; s++) {
+    if (slots[s] !== null) {
+      var slotX = W * (0.1 + s * 0.2);
+      var slotY = H * 0.68;
+      objPositions[slots[s]].x = slotX;
+      objPositions[slots[s]].y = slotY;
+      objPositions[slots[s]].inSlot = s;
+    }
+  }
+
+  // Compute slot positions
+  slotPositions = [];
+  for (var s2 = 0; s2 < 5; s2++) {
+    slotPositions.push({
+      x: W * (0.1 + s2 * 0.2) - W * 0.08,
+      y: H * 0.58,
+      w: W * 0.16,
+      h: H * 0.22,
+    });
+  }
+}
+
+function updateUI() {
+  document.getElementById('title').textContent = t('title');
+  document.getElementById('subtitle').textContent = t('subtitle');
+  document.getElementById('sceneLabel').textContent = t('label');
+  document.getElementById('sceneHint').textContent = t('hint');
+  document.getElementById('btnConfirm').textContent = t('confirm');
+  document.getElementById('btnReset').textContent = t('reset');
+  document.getElementById('btnReplay').textContent = t('replay');
+  document.getElementById('langBtn').textContent = lang.toUpperCase();
+
+  var placed = 0;
+  for (var i = 0; i < slots.length; i++) { if (slots[i] !== null) placed++; }
+  document.getElementById('hudL1').textContent = t('hudPlaced');
+  document.getElementById('hudV1').textContent = placed + '/5';
+  document.getElementById('hudL2').textContent = t('hudAttempt');
+  document.getElementById('hudV2').textContent = '' + attempts;
+  document.getElementById('hudL3').textContent = t('hudStatus');
+  document.getElementById('hudV3').textContent = t('ready');
+  document.getElementById('scoreDisplay').textContent = placed + '/5';
+
+  // Guide
+  var guideTitle = document.getElementById('guideTitle');
+  var guideContent = document.getElementById('guideContent');
+  guideTitle.textContent = t('guideTitle');
+  var items = ['g1','g2','g3','g4'];
+  var html = '<ul>';
+  for (var g = 0; g < items.length; g++) html += '<li>' + t(items[g]) + '</li>';
+  html += '</ul>';
+  guideContent.innerHTML = html;
+  guideTitle.addEventListener('click', function() {
+    guideContent.classList.toggle('collapsed');
+  });
+}
+
+function toggleLang() { lang = lang === 'cn' ? 'en' : 'cn'; updateUI(); }
+
+// ============================================================
+// Rendering
+// ============================================================
+function gameLoop(ts) {
+  var dt = lastFrameTime ? (ts - lastFrameTime) / 1000 : 0.016;
+  lastFrameTime = ts;
+  animTime += dt;
+
+  // Update celebration particles
+  for (var ci = celebParticles.length - 1; ci >= 0; ci--) {
+    var cp = celebParticles[ci];
+    cp.life -= dt; cp.x += cp.vx * dt; cp.y += cp.vy * dt; cp.vy += 80 * dt;
+    cp.alpha = Math.max(0, cp.life / cp.maxLife) * 0.8;
+    if (cp.life <= 0) celebParticles.splice(ci, 1);
+  }
+
+  render();
+  requestAnimationFrame(gameLoop);
+}
+
+function render() {
+  var rect = sceneBox.getBoundingClientRect();
+  var W = rect.width, H = rect.height;
+  if (W < 1 || H < 1) return;
+
+  ctx.clearRect(0, 0, W, H);
+
+  // Background
+  var bgG = ctx.createLinearGradient(0, 0, 0, H);
+  bgG.addColorStop(0, '#0d111f'); bgG.addColorStop(1, '#111425');
+  ctx.fillStyle = bgG; ctx.fillRect(0, 0, W, H);
+
+  // Slot boxes
+  for (var s = 0; s < 5; s++) {
+    var sp = slotPositions[s];
+    if (!sp) continue;
+    ctx.fillStyle = 'rgba(255,176,0,0.03)';
+    ctx.fillRect(sp.x, sp.y, sp.w, sp.h);
+    ctx.strokeStyle = 'rgba(255,176,0,0.1)'; ctx.lineWidth = 1;
+    ctx.strokeRect(sp.x, sp.y, sp.w, sp.h);
+
+    // Slot number
+    ctx.font = "bold 10px 'Space Grotesk',sans-serif";
+    ctx.fillStyle = 'rgba(142,144,166,0.3)'; ctx.textAlign = 'center';
+    ctx.fillText('' + (s + 1), sp.x + sp.w / 2, sp.y + sp.h + 12);
+  }
+
+  // Arrow: light -> heavy
+  if (slotPositions.length >= 5) {
+    ctx.strokeStyle = 'rgba(142,144,166,0.1)'; ctx.lineWidth = 1;
+    ctx.setLineDash([4, 4]);
+    var arrowY = slotPositions[0].y + slotPositions[0].h + 20;
+    ctx.beginPath();
+    ctx.moveTo(slotPositions[0].x + slotPositions[0].w / 2, arrowY);
+    ctx.lineTo(slotPositions[4].x + slotPositions[4].w / 2, arrowY);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = 'rgba(142,144,166,0.1)';
+    ctx.beginPath();
+    var ax = slotPositions[4].x + slotPositions[4].w / 2;
+    ctx.moveTo(ax, arrowY); ctx.lineTo(ax - 6, arrowY - 3); ctx.lineTo(ax - 6, arrowY + 3);
+    ctx.closePath(); ctx.fill();
+    ctx.font = "9px 'Space Grotesk',sans-serif";
+    ctx.fillStyle = 'rgba(142,144,166,0.25)'; ctx.textAlign = 'center';
+    ctx.fillText(lang === 'cn' ? '\u8f7b' : 'Light', slotPositions[0].x + slotPositions[0].w / 2, arrowY + 12);
+    ctx.fillText(lang === 'cn' ? '\u91cd' : 'Heavy', slotPositions[4].x + slotPositions[4].w / 2, arrowY + 12);
+  }
+
+  // Draw objects
+  for (var i = 0; i < shuffled.length; i++) {
+    if (dragging && dragging.idx === i) continue; // draw dragged last
+    var obj = shuffled[i];
+    var pos = objPositions[i];
+    if (!pos) continue;
+    drawFns[obj.id](ctx, pos.x, pos.y, obj.visualSize);
+    // Name label
+    ctx.font = "bold 10px 'Space Grotesk',sans-serif";
+    ctx.fillStyle = obj.color; ctx.textAlign = 'center';
+    ctx.fillText(lang === 'cn' ? obj.nameCn : obj.nameEn, pos.x, pos.y + 30 * obj.visualSize + 10);
+  }
+
+  // Draw dragged object on top
+  if (dragging) {
+    var dObj = shuffled[dragging.idx];
+    var dPos = objPositions[dragging.idx];
+    ctx.save(); ctx.globalAlpha = 0.85;
+    drawFns[dObj.id](ctx, dPos.x, dPos.y, dObj.visualSize * 1.1);
+    ctx.restore();
+  }
+
+  // Celebration particles
+  for (var ci = 0; ci < celebParticles.length; ci++) {
+    var cp = celebParticles[ci];
+    ctx.save(); ctx.globalAlpha = cp.alpha; ctx.fillStyle = cp.color;
+    ctx.beginPath(); ctx.arc(cp.x, cp.y, cp.size, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+  }
+}
+
+// ============================================================
+// Drag handling
+// ============================================================
+function getCanvasPos(e) {
+  var rect = canvas.getBoundingClientRect();
+  return {x: e.clientX - rect.left, y: e.clientY - rect.top};
+}
+
+function hitTest(pos) {
+  for (var i = shuffled.length - 1; i >= 0; i--) {
+    var p = objPositions[i];
+    if (!p) continue;
+    var r = 25 * shuffled[i].visualSize;
+    if (Math.abs(pos.x - p.x) < r + 10 && Math.abs(pos.y - p.y) < r + 10) {
+      return i;
+    }
+  }
+  return -1;
+}
+
+function findSlot(pos) {
+  for (var s = 0; s < slotPositions.length; s++) {
+    var sp = slotPositions[s];
+    if (pos.x >= sp.x && pos.x <= sp.x + sp.w && pos.y >= sp.y && pos.y <= sp.y + sp.h) {
+      return s;
+    }
+  }
+  return -1;
+}
+
+function onDragStart(e) {
+  if (gameOver) return;
+  var pos = getCanvasPos(e);
+  var idx = hitTest(pos);
+  if (idx >= 0) {
+    // Remove from slot if in one
+    for (var s = 0; s < slots.length; s++) {
+      if (slots[s] === idx) { slots[s] = null; objPositions[idx].inSlot = -1; }
+    }
+    dragging = {idx: idx, offsetX: pos.x - objPositions[idx].x, offsetY: pos.y - objPositions[idx].y};
+  }
+}
+
+function onDragMove(e) {
+  if (!dragging || gameOver) return;
+  var pos = getCanvasPos(e);
+  objPositions[dragging.idx].x = pos.x - dragging.offsetX;
+  objPositions[dragging.idx].y = pos.y - dragging.offsetY;
+}
+
+function onDragEnd() {
+  if (!dragging || gameOver) return;
+  var pos = {x: objPositions[dragging.idx].x, y: objPositions[dragging.idx].y};
+  var slotIdx = findSlot(pos);
+
+  if (slotIdx >= 0) {
+    // If slot occupied, swap
+    if (slots[slotIdx] !== null) {
+      var prevIdx = slots[slotIdx];
+      objPositions[prevIdx].inSlot = -1;
+      // Move previous back to top row
+      var rect = sceneBox.getBoundingClientRect();
+      objPositions[prevIdx].x = rect.width * (0.12 + prevIdx * 0.19);
+      objPositions[prevIdx].y = rect.height * 0.22;
+    }
+    slots[slotIdx] = dragging.idx;
+    objPositions[dragging.idx].inSlot = slotIdx;
+    // Snap to slot center
+    var sp = slotPositions[slotIdx];
+    objPositions[dragging.idx].x = sp.x + sp.w / 2;
+    objPositions[dragging.idx].y = sp.y + sp.h / 2;
+  }
+
+  dragging = null;
+  updateUI();
+}
+
+function onTouchStart(e) {
+  e.preventDefault();
+  if (gameOver || e.touches.length === 0) return;
+  var touch = e.touches[0];
+  var pos = {x: touch.clientX - canvas.getBoundingClientRect().left, y: touch.clientY - canvas.getBoundingClientRect().top};
+  var idx = hitTest(pos);
+  if (idx >= 0) {
+    for (var s = 0; s < slots.length; s++) {
+      if (slots[s] === idx) { slots[s] = null; objPositions[idx].inSlot = -1; }
+    }
+    dragging = {idx: idx, offsetX: pos.x - objPositions[idx].x, offsetY: pos.y - objPositions[idx].y};
+  }
+}
+
+function onTouchMove(e) {
+  e.preventDefault();
+  if (!dragging || gameOver || e.touches.length === 0) return;
+  var touch = e.touches[0];
+  var pos = {x: touch.clientX - canvas.getBoundingClientRect().left, y: touch.clientY - canvas.getBoundingClientRect().top};
+  objPositions[dragging.idx].x = pos.x - dragging.offsetX;
+  objPositions[dragging.idx].y = pos.y - dragging.offsetY;
+}
+
+// ============================================================
+// Game logic
+// ============================================================
+function onCheck() {
+  if (gameOver) return;
+  // Check all slots filled
+  var allFilled = true;
+  for (var s = 0; s < slots.length; s++) {
+    if (slots[s] === null) { allFilled = false; break; }
+  }
+  if (!allFilled) return;
+
+  attempts++;
+
+  // Check order: slots should be sorted by weight ascending
+  var correct = true;
+  for (var s2 = 0; s2 < slots.length - 1; s2++) {
+    if (shuffled[slots[s2]].weight >= shuffled[slots[s2 + 1]].weight) {
+      correct = false; break;
+    }
+  }
+
+  if (correct) {
+    gameOver = true;
+    showFeedback(true);
+    var rect = sceneBox.getBoundingClientRect();
+    spawnCelebration(rect.width / 2, rect.height / 2);
+    setTimeout(showResult, 1500);
+  } else {
+    showFeedback(false);
+  }
+  updateUI();
+}
+
+function showFeedback(isCorrect) {
+  if (feedbackTimer) clearTimeout(feedbackTimer);
+  var fb = document.getElementById('feedback');
+  document.getElementById('fbText').textContent = isCorrect ? t('correct') : t('wrong');
+  document.getElementById('fbDetail').textContent = isCorrect ? t('correctDetail') : t('wrongDetail');
+  fb.className = 'feedback show ' + (isCorrect ? 'correct' : 'wrong');
+  feedbackTimer = setTimeout(function() { fb.className = 'feedback'; }, 1300);
+}
+
+function showResult() {
+  document.getElementById('resultHeader').textContent = t('resultH');
+  document.getElementById('resultScore').textContent = attempts + (lang === 'cn' ? ' \u6b21\u5c1d\u8bd5' : ' attempts');
+  document.getElementById('resultText').textContent = t('resultT');
+  document.getElementById('resultPanel').className = 'result-panel show';
+}
+
+function onReset() {
+  if (gameOver) return;
+  resetGame();
+  resizeCanvas();
+  updateUI();
+}
+
+function onReplay() {
+  attempts = 0;
+  resetGame();
+  document.getElementById('resultPanel').className = 'result-panel';
+  resizeCanvas();
+  updateUI();
+}
+
+// ============================================================
+// Boot
+// ============================================================
+document.fonts.ready.then(init);
+setTimeout(function() { if (!canvas) init(); }, 500);
+</script>
+</body>
+</html>

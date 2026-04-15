@@ -1,0 +1,745 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;700&family=Inter:wght@400;500&family=Noto+Sans+SC:wght@400;700&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0;border-radius:0}
+html,body{width:100%;height:100vh;overflow:hidden;
+  background:#131313;
+  font-family:'Space Grotesk','Inter','Noto Sans SC',sans-serif;
+  color:#e5e2e1;
+}
+.lang-btn{
+  position:fixed;top:8px;left:8px;z-index:100;
+  font-family:'Space Grotesk',sans-serif;font-size:11px;font-weight:700;
+  padding:4px 10px;cursor:pointer;
+  border:1px solid rgba(255,255,255,0.08);
+  background:rgba(20,20,35,0.85);backdrop-filter:blur(12px);
+  color:#ffb59c;letter-spacing:1px;
+}
+.guide-panel{
+  position:fixed;top:8px;right:8px;width:260px;max-height:40vh;
+  overflow-y:auto;z-index:100;
+  background:rgba(20,20,35,0.85);backdrop-filter:blur(12px);
+  border:1px solid rgba(255,255,255,0.08);padding:12px;
+  font-family:'Noto Sans SC',sans-serif;font-size:13px;
+  color:rgba(255,255,255,0.85);
+}
+.guide-panel h3{
+  font-family:'Space Grotesk',sans-serif;font-size:14px;
+  margin-bottom:8px;display:flex;align-items:center;
+  justify-content:space-between;cursor:pointer;
+  color:#ffb59c;
+}
+.guide-panel .toggle{font-size:12px;opacity:0.6;}
+.guide-panel ul{padding-left:16px;line-height:1.6;}
+.guide-panel .guide-content.collapsed{display:none;}
+.wrapper{display:flex;flex-direction:column;height:100vh;}
+.canvas-wrap{flex:1;min-height:0;position:relative;}
+.canvas-wrap canvas{display:block;width:100%;height:100%;position:absolute;top:0;left:0;}
+.controls{
+  display:flex;align-items:center;gap:8px;
+  padding:6px 12px;
+  background:rgba(28,27,27,0.92);
+  border-top:1px solid rgba(138,136,134,0.15);
+}
+.controls button{
+  font-family:'Space Grotesk',sans-serif;font-size:12px;font-weight:700;
+  padding:4px 14px;cursor:pointer;letter-spacing:1px;
+  border:1px solid rgba(138,136,134,0.15);
+  background:transparent;color:#ffb59c;
+}
+.controls button:hover{background:#353534;}
+.controls .frame-indicator{
+  font-family:'Space Grotesk',sans-serif;font-size:12px;
+  color:#8a8886;margin-left:auto;
+}
+.hud{
+  display:flex;align-items:center;justify-content:space-around;
+  height:52px;
+  background:rgba(0,0,0,0.55);
+  border-top:1px solid rgba(255,255,255,0.06);
+}
+.hud .hud-col{text-align:center;}
+.hud .hud-label{
+  font-family:'Space Grotesk',sans-serif;font-size:10px;
+  color:#8a8886;letter-spacing:1px;text-transform:uppercase;
+}
+.hud .hud-val{
+  font-family:'Space Grotesk',sans-serif;font-size:14px;font-weight:700;
+  color:#e5e2e1;
+}
+</style>
+</head>
+<body>
+<button class="lang-btn" id="langBtn">CN</button>
+<div class="guide-panel" id="guidePanel">
+  <h3 id="guideHeader"><span id="guideTitle"></span> <span class="toggle" id="guideToggle">[-]</span></h3>
+  <div class="guide-content" id="guideContent">
+    <p id="guideWhat"></p>
+    <ul id="guidePoints"></ul>
+    <p id="guideControls"></p>
+    <p id="guideTakeaway" style="margin-top:6px;font-weight:700;"></p>
+  </div>
+</div>
+<div class="wrapper">
+  <div class="canvas-wrap">
+    <canvas id="c"></canvas>
+  </div>
+  <div class="controls" id="controls">
+    <button id="btnPrev"></button>
+    <button id="btnPlay"></button>
+    <button id="btnNext"></button>
+    <span class="frame-indicator" id="frameIndicator"></span>
+  </div>
+  <div class="hud" id="hud"></div>
+</div>
+<script>
+(function(){
+var LANG='cn';
+var I18N={
+  guideTitle:{en:'GUIDE',cn:'\u89c2\u770b\u6307\u5357'},
+  guideWhat:{en:'Shows why a test field needs terrain diversity for rover validation, not just flat ground.',cn:'\u5c55\u793a\u4e3a\u4ec0\u4e48\u706b\u661f\u8f66\u9a8c\u8bc1\u573a\u5730\u9700\u8981\u5730\u8c8c\u5dee\u5f02\uff0c\u800c\u4e0d\u80fd\u53ea\u5728\u5e73\u5730\u4e0a\u8dd1\u3002'},
+  guideObs1:{en:'Frame 1: Flat ground hides all navigation challenges',cn:'\u7b2c1\u5e27\uff1a\u5e73\u5730\u65e0\u6cd5\u66b4\u9732\u5bfc\u822a\u95ee\u9898'},
+  guideObs2:{en:'Frame 2: Adding slopes reveals traction & climbing issues',cn:'\u7b2c2\u5e27\uff1a\u52a0\u5165\u5761\u9762\u53d1\u73b0\u9644\u7740\u529b\u4e0e\u722c\u5761\u95ee\u9898'},
+  guideObs3:{en:'Frame 3: Obstacles force path replanning',cn:'\u7b2c3\u5e27\uff1a\u969c\u788d\u7269\u8feb\u4f7f\u8def\u5f84\u91cd\u89c4\u5212'},
+  guideObs4:{en:'Frame 4: Calibrated field with coordinates enables repeatable tests',cn:'\u7b2c4\u5e27\uff1a\u6807\u5b9a\u540e\u7684\u573a\u5730\u652f\u6301\u53ef\u91cd\u590d\u6d4b\u8bd5'},
+  guideCtrl:{en:'Use PREV / NEXT to step through frames, or PLAY for auto advance.',cn:'\u4f7f\u7528 \u4e0a\u4e00\u5e27/\u4e0b\u4e00\u5e27 \u6b65\u8fdb\uff0c\u6216\u70b9\u64ad\u653e\u81ea\u52a8\u63a8\u8fdb\u3002'},
+  guideTakeaway:{en:'A field with terrain variety is essential for validating real rover navigation.',cn:'\u5177\u6709\u5730\u8c8c\u5dee\u5f02\u7684\u573a\u5730\u662f\u9a8c\u8bc1\u771f\u5b9e\u706b\u661f\u8f66\u5bfc\u822a\u7684\u5fc5\u8981\u6761\u4ef6\u3002'},
+  btnPrev:{en:'PREV',cn:'\u4e0a\u4e00\u5e27'},
+  btnPlay:{en:'PLAY',cn:'\u64ad\u653e'},
+  btnPause:{en:'PAUSE',cn:'\u6682\u505c'},
+  btnNext:{en:'NEXT',cn:'\u4e0b\u4e00\u5e27'},
+  title:{en:'FIELD CALIBRATION PRINCIPLES',cn:'\u573a\u5730\u6807\u5b9a\u539f\u7406'},
+  f0title:{en:'FLAT GROUND ONLY',cn:'\u7eaf\u5e73\u5730\u573a\u666f'},
+  f0desc:{en:'No slopes, no obstacles -- rover runs perfectly but learns nothing about real terrain.',cn:'\u65e0\u5761\u9762\u3001\u65e0\u969c\u788d\u2014\u2014\u706b\u661f\u8f66\u8dd1\u5f97\u987a\u7545\u4f46\u5b66\u4e0d\u5230\u4efb\u4f55\u771f\u5b9e\u5730\u5f62\u7ecf\u9a8c\u3002'},
+  f1title:{en:'ADD SLOPES & SAND',cn:'\u52a0\u5165\u5761\u9762\u4e0e\u6c99\u77f3'},
+  f1desc:{en:'Slope zones expose wheel slip, traction loss, and IMU drift during climbing.',cn:'\u5761\u9762\u533a\u66b4\u9732\u8f6e\u5b50\u6253\u6ed1\u3001\u9644\u7740\u529b\u4e0b\u964d\u548c IMU \u6f02\u79fb\u7b49\u95ee\u9898\u3002'},
+  f2title:{en:'ADD OBSTACLES',cn:'\u52a0\u5165\u969c\u788d\u7269'},
+  f2desc:{en:'Rocks and barriers force the rover to replan paths, testing real-time avoidance.',cn:'\u5ca9\u77f3\u548c\u58c1\u969c\u8feb\u4f7f\u706b\u661f\u8f66\u91cd\u65b0\u89c4\u5212\u8def\u5f84\uff0c\u6d4b\u8bd5\u5b9e\u65f6\u907f\u969c\u80fd\u529b\u3002'},
+  f3title:{en:'CALIBRATED FIELD',cn:'\u6807\u5b9a\u573a\u5730'},
+  f3desc:{en:'Reference markers, measured coordinates, and safety boundaries enable repeatable quantitative tests.',cn:'\u53c2\u8003\u6807\u5fd7\u3001\u5750\u6807\u6d4b\u91cf\u548c\u5b89\u5168\u8fb9\u754c\u4f7f\u5f97\u53ef\u91cd\u590d\u5b9a\u91cf\u6d4b\u8bd5\u6210\u4e3a\u53ef\u80fd\u3002'},
+  hudTerrain:{en:'TERRAIN',cn:'\u5730\u5f62'},
+  hudChallenge:{en:'CHALLENGE',cn:'\u6311\u6218'},
+  hudCalib:{en:'CALIBRATION',cn:'\u6807\u5b9a'},
+  hudScore:{en:'NAV SCORE',cn:'\u5bfc\u822a\u5f97\u5206'},
+  terrainFlat:{en:'FLAT',cn:'\u5e73\u5766'},
+  terrainSlope:{en:'SLOPE+SAND',cn:'\u5761\u9762+\u6c99\u77f3'},
+  terrainObstacle:{en:'OBSTACLES',cn:'\u969c\u788d\u7269'},
+  terrainFull:{en:'FULL FIELD',cn:'\u5b8c\u6574\u573a\u5730'},
+  challengeNone:{en:'NONE',cn:'\u65e0'},
+  challengeSlip:{en:'SLIP/DRIFT',cn:'\u6253\u6ed1/\u6f02\u79fb'},
+  challengeAvoid:{en:'AVOIDANCE',cn:'\u907f\u969c'},
+  challengeAll:{en:'ALL',cn:'\u5168\u90e8'},
+  calibNone:{en:'NONE',cn:'\u65e0'},
+  calibPartial:{en:'PARTIAL',cn:'\u90e8\u5206'},
+  calibFull:{en:'FULL',cn:'\u5b8c\u6574'}
+};
+function t(k){return(I18N[k]&&I18N[k][LANG])||(I18N[k]&&I18N[k]['en'])||k;}
+
+var canvas=document.getElementById('c');
+var ctx=canvas.getContext('2d');
+var W=0,H=0;
+var currentFrame=0;
+var totalFrames=4;
+var transitioning=false;
+var playing=false;
+var playTimer=null;
+var DPR=Math.min(window.devicePixelRatio||1,2);
+
+function lerp(a,b,p){return a+(b-a)*p;}
+function easeInOut(x){return x<0.5?2*x*x:1-Math.pow(-2*x+2,2)/2;}
+function merge(base,ov){var r={};for(var k in base)r[k]=base[k];for(var k2 in ov)r[k2]=ov[k2];return r;}
+
+/* ── Drawing Primitives ── */
+
+function drawBg(){
+  var grd=ctx.createLinearGradient(0,0,0,H);
+  grd.addColorStop(0,'#131313');
+  grd.addColorStop(1,'#1a1510');
+  ctx.fillStyle=grd;
+  ctx.fillRect(0,0,W,H);
+  // Grid
+  ctx.strokeStyle='rgba(255,255,255,0.03)';
+  ctx.lineWidth=1;
+  var step=40;
+  for(var x=0;x<W;x+=step){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,H);ctx.stroke();}
+  for(var y=0;y<H;y+=step){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke();}
+}
+
+function drawField(x,y,w,h,alpha){
+  // Mars-colored ground plane
+  ctx.save();
+  ctx.globalAlpha=alpha;
+  var grd=ctx.createLinearGradient(x,y,x,y+h);
+  grd.addColorStop(0,'#5a3a20');
+  grd.addColorStop(0.5,'#7a4a28');
+  grd.addColorStop(1,'#4a2a15');
+  ctx.fillStyle=grd;
+  ctx.fillRect(x,y,w,h);
+  // Border
+  ctx.strokeStyle='rgba(255,181,156,0.3)';
+  ctx.lineWidth=2;
+  ctx.strokeRect(x,y,w,h);
+  ctx.restore();
+}
+
+function drawRover(cx,cy,size,alpha){
+  ctx.save();
+  ctx.globalAlpha=alpha;
+  // Body
+  var bw=size*0.7,bh=size*0.35;
+  var grd=ctx.createLinearGradient(cx-bw/2,cy-bh/2,cx+bw/2,cy+bh/2);
+  grd.addColorStop(0,'#c6c6c6');
+  grd.addColorStop(0.5,'#8a8886');
+  grd.addColorStop(1,'#555');
+  ctx.fillStyle=grd;
+  ctx.fillRect(cx-bw/2,cy-bh/2,bw,bh);
+  // Wheels
+  ctx.fillStyle='#333';
+  var wr=size*0.12;
+  ctx.beginPath();ctx.arc(cx-bw*0.35,cy+bh/2,wr,0,Math.PI*2);ctx.fill();
+  ctx.beginPath();ctx.arc(cx+bw*0.35,cy+bh/2,wr,0,Math.PI*2);ctx.fill();
+  ctx.beginPath();ctx.arc(cx,cy+bh/2,wr,0,Math.PI*2);ctx.fill();
+  // Mast
+  ctx.strokeStyle='#aaa';
+  ctx.lineWidth=2;
+  ctx.beginPath();ctx.moveTo(cx,cy-bh/2);ctx.lineTo(cx,cy-bh/2-size*0.3);ctx.stroke();
+  // Camera head
+  ctx.fillStyle='#ffb59c';
+  ctx.fillRect(cx-4,cy-bh/2-size*0.3-4,8,8);
+  ctx.restore();
+}
+
+function drawSlope(x,y,w,h,alpha){
+  ctx.save();
+  ctx.globalAlpha=alpha;
+  var grd=ctx.createLinearGradient(x,y+h,x+w,y);
+  grd.addColorStop(0,'#8a6030');
+  grd.addColorStop(0.5,'#b07840');
+  grd.addColorStop(1,'#6a4020');
+  ctx.beginPath();
+  ctx.moveTo(x,y+h);
+  ctx.lineTo(x+w,y+h);
+  ctx.lineTo(x+w,y);
+  ctx.closePath();
+  ctx.fillStyle=grd;
+  ctx.fill();
+  // Sand texture dots
+  ctx.fillStyle='rgba(255,200,150,0.3)';
+  for(var i=0;i<12;i++){
+    var sx=x+Math.random()*w*0.8+w*0.1;
+    var sy=y+h-Math.random()*h*0.6;
+    if(sy>y+h-(sx-x)/(w)*h) continue;
+    ctx.beginPath();ctx.arc(sx,sy,2,0,Math.PI*2);ctx.fill();
+  }
+  ctx.restore();
+}
+
+function drawRock(cx,cy,r,alpha){
+  ctx.save();
+  ctx.globalAlpha=alpha;
+  var grd=ctx.createRadialGradient(cx-r*0.2,cy-r*0.2,r*0.1,cx,cy,r);
+  grd.addColorStop(0,'#888');
+  grd.addColorStop(0.5,'#5a5a5a');
+  grd.addColorStop(1,'#333');
+  ctx.beginPath();
+  // Organic rock shape using bezier
+  ctx.moveTo(cx-r,cy+r*0.2);
+  ctx.bezierCurveTo(cx-r*0.8,cy-r*0.9,cx+r*0.3,cy-r,cx+r,cy-r*0.3);
+  ctx.bezierCurveTo(cx+r*1.1,cy+r*0.5,cx+r*0.4,cy+r,cx-r*0.1,cy+r*0.8);
+  ctx.bezierCurveTo(cx-r*0.7,cy+r*0.9,cx-r*1.1,cy+r*0.6,cx-r,cy+r*0.2);
+  ctx.fillStyle=grd;
+  ctx.fill();
+  ctx.strokeStyle='rgba(255,255,255,0.1)';
+  ctx.lineWidth=1;
+  ctx.stroke();
+  ctx.restore();
+}
+
+function drawSafetyBoundary(x,y,w,h,alpha){
+  ctx.save();
+  ctx.globalAlpha=alpha;
+  ctx.setLineDash([8,6]);
+  ctx.strokeStyle='#ff5f1f';
+  ctx.lineWidth=2;
+  ctx.strokeRect(x,y,w,h);
+  ctx.setLineDash([]);
+  // Corner markers
+  var ms=8;
+  ctx.fillStyle='#ff5f1f';
+  [[x,y],[x+w-ms,y],[x,y+h-ms],[x+w-ms,y+h-ms]].forEach(function(p){
+    ctx.fillRect(p[0],p[1],ms,ms);
+  });
+  ctx.restore();
+}
+
+function drawRefMarker(cx,cy,label,alpha){
+  ctx.save();
+  ctx.globalAlpha=alpha;
+  // Crosshair
+  var s=10;
+  ctx.strokeStyle='#00daf3';
+  ctx.lineWidth=1.5;
+  ctx.beginPath();ctx.moveTo(cx-s,cy);ctx.lineTo(cx+s,cy);ctx.stroke();
+  ctx.beginPath();ctx.moveTo(cx,cy-s);ctx.lineTo(cx,cy+s);ctx.stroke();
+  ctx.beginPath();ctx.arc(cx,cy,s*0.6,0,Math.PI*2);ctx.stroke();
+  // Label
+  ctx.font="bold 10px 'Space Grotesk'";
+  ctx.fillStyle='#00daf3';
+  ctx.textAlign='left';
+  ctx.fillText(label,cx+s+4,cy+3);
+  ctx.restore();
+}
+
+function drawPathLine(points,color,alpha){
+  if(points.length<2)return;
+  ctx.save();
+  ctx.globalAlpha=alpha;
+  ctx.strokeStyle=color;
+  ctx.lineWidth=2;
+  ctx.setLineDash([4,4]);
+  ctx.beginPath();
+  ctx.moveTo(points[0][0],points[0][1]);
+  for(var i=1;i<points.length;i++){
+    ctx.lineTo(points[i][0],points[i][1]);
+  }
+  ctx.stroke();
+  ctx.setLineDash([]);
+  // Arrow at end
+  var last=points[points.length-1];
+  var prev=points[points.length-2];
+  var ang=Math.atan2(last[1]-prev[1],last[0]-prev[0]);
+  ctx.fillStyle=color;
+  ctx.beginPath();
+  ctx.moveTo(last[0],last[1]);
+  ctx.lineTo(last[0]-10*Math.cos(ang-0.4),last[1]-10*Math.sin(ang-0.4));
+  ctx.lineTo(last[0]-10*Math.cos(ang+0.4),last[1]-10*Math.sin(ang+0.4));
+  ctx.closePath();
+  ctx.fill();
+  ctx.restore();
+}
+
+function drawWarningSign(cx,cy,size,alpha){
+  ctx.save();
+  ctx.globalAlpha=alpha;
+  ctx.fillStyle='#ff5f1f';
+  ctx.font="bold "+size+"px 'Space Grotesk'";
+  ctx.textAlign='center';
+  ctx.textBaseline='middle';
+  ctx.shadowColor='#ff5f1f';
+  ctx.shadowBlur=12;
+  ctx.fillText('!',cx,cy);
+  ctx.shadowBlur=0;
+  ctx.restore();
+}
+
+function drawCoordLabel(x,y,text,alpha){
+  ctx.save();
+  ctx.globalAlpha=alpha;
+  ctx.font="10px 'Space Grotesk'";
+  ctx.fillStyle='rgba(255,181,156,0.7)';
+  ctx.textAlign='center';
+  ctx.fillText(text,x,y);
+  ctx.restore();
+}
+
+/* ── Frame Elements (declarative) ── */
+
+function getFrameElements(f){
+  var fw=W*0.6, fh=H*0.5;
+  var fx=(W-fw)/2, fy=(H-fh)/2-H*0.04;
+  var roverSize=Math.min(W,H)*0.08;
+  var elems=[];
+
+  // Title (shared across all frames)
+  var titles=[t('f0title'),t('f1title'),t('f2title'),t('f3title')];
+  var descs=[t('f0desc'),t('f1desc'),t('f2desc'),t('f3desc')];
+  elems.push({id:'title',type:'label',text:titles[f],x:W/2,y:H*0.06,color:'#ffb59c',size:18,align:'center',alpha:1});
+  elems.push({id:'desc',type:'text',text:descs[f],x:W/2,y:H*0.12,color:'#8a8886',size:12,align:'center',alpha:1});
+
+  // Field (shared, position shifts slightly)
+  elems.push({id:'field',type:'custom',x:fx,y:fy,w:fw,h:fh,alpha:1,
+    draw:function(a){drawField(this.x,this.y,this.w,this.h,a);}});
+
+  // Rover (shared, position changes)
+  var roverPositions=[
+    [fx+fw*0.2,fy+fh*0.5],
+    [fx+fw*0.25,fy+fh*0.35],
+    [fx+fw*0.15,fy+fh*0.55],
+    [fx+fw*0.15,fy+fh*0.3]
+  ];
+  elems.push({id:'rover',type:'custom',x:roverPositions[f][0],y:roverPositions[f][1],w:roverSize,h:roverSize,alpha:1,
+    draw:function(a){drawRover(this.x,this.y,this.w,a);}});
+
+  // Frame 0: straight path on flat ground
+  if(f===0){
+    elems.push({id:'path0',type:'custom',x:0,y:0,w:0,h:0,alpha:1,
+      draw:function(a){
+        drawPathLine([
+          [fx+fw*0.2,fy+fh*0.5],
+          [fx+fw*0.5,fy+fh*0.5],
+          [fx+fw*0.85,fy+fh*0.5]
+        ],'#10b981',a);
+      }});
+    elems.push({id:'checkmark',type:'label',text:'100%',x:fx+fw*0.85+30,y:fy+fh*0.5,color:'#10b981',size:14,align:'left',alpha:1});
+  }
+
+  // Frame 1: slopes + sand zones
+  if(f===1){
+    elems.push({id:'slope1',type:'custom',x:fx+fw*0.4,y:fy+fh*0.15,w:fw*0.25,h:fh*0.4,alpha:1,
+      draw:function(a){drawSlope(this.x,this.y,this.w,this.h,a);}});
+    elems.push({id:'slope2',type:'custom',x:fx+fw*0.7,y:fy+fh*0.5,w:fw*0.2,h:fh*0.35,alpha:1,
+      draw:function(a){drawSlope(this.x,this.y,this.w,this.h,a);}});
+    // Sand zone indicator
+    elems.push({id:'sandlbl',type:'label',text:'SAND',x:fx+fw*0.52,y:fy+fh*0.08,color:'#ffb59c',size:10,align:'center',alpha:1});
+    // Slip warning
+    elems.push({id:'warn1',type:'custom',x:fx+fw*0.45,y:fy+fh*0.4,w:0,h:0,alpha:1,
+      draw:function(a){drawWarningSign(this.x,this.y,18,a);}});
+    // Path with deviation
+    elems.push({id:'path1',type:'custom',x:0,y:0,w:0,h:0,alpha:1,
+      draw:function(a){
+        drawPathLine([
+          [fx+fw*0.25,fy+fh*0.35],
+          [fx+fw*0.38,fy+fh*0.4],
+          [fx+fw*0.42,fy+fh*0.55],
+          [fx+fw*0.55,fy+fh*0.65],
+          [fx+fw*0.85,fy+fh*0.7]
+        ],'#ff5f1f',a);
+      }});
+  }
+
+  // Frame 2: obstacles
+  if(f===2){
+    elems.push({id:'slope1',type:'custom',x:fx+fw*0.4,y:fy+fh*0.15,w:fw*0.25,h:fh*0.4,alpha:1,
+      draw:function(a){drawSlope(this.x,this.y,this.w,this.h,a);}});
+    // Rocks
+    elems.push({id:'rock1',type:'custom',x:fx+fw*0.35,y:fy+fh*0.55,w:0,h:0,alpha:1,
+      draw:function(a){drawRock(this.x,this.y,15,a);}});
+    elems.push({id:'rock2',type:'custom',x:fx+fw*0.55,y:fy+fh*0.35,w:0,h:0,alpha:1,
+      draw:function(a){drawRock(this.x,this.y,20,a);}});
+    elems.push({id:'rock3',type:'custom',x:fx+fw*0.7,y:fy+fh*0.6,w:0,h:0,alpha:1,
+      draw:function(a){drawRock(this.x,this.y,12,a);}});
+    // Replanned path
+    elems.push({id:'path2',type:'custom',x:0,y:0,w:0,h:0,alpha:1,
+      draw:function(a){
+        drawPathLine([
+          [fx+fw*0.15,fy+fh*0.55],
+          [fx+fw*0.25,fy+fh*0.7],
+          [fx+fw*0.4,fy+fh*0.75],
+          [fx+fw*0.5,fy+fh*0.6],
+          [fx+fw*0.6,fy+fh*0.45],
+          [fx+fw*0.75,fy+fh*0.5],
+          [fx+fw*0.85,fy+fh*0.45]
+        ],'#ff5f1f',a);
+      }});
+    elems.push({id:'replanlbl',type:'label',text:'REPLAN',x:fx+fw*0.5,y:fy+fh*0.82,color:'#ff5f1f',size:10,align:'center',alpha:1});
+  }
+
+  // Frame 3: full calibrated field
+  if(f===3){
+    elems.push({id:'slope1',type:'custom',x:fx+fw*0.4,y:fy+fh*0.15,w:fw*0.25,h:fh*0.4,alpha:1,
+      draw:function(a){drawSlope(this.x,this.y,this.w,this.h,a);}});
+    elems.push({id:'rock1',type:'custom',x:fx+fw*0.35,y:fy+fh*0.55,w:0,h:0,alpha:1,
+      draw:function(a){drawRock(this.x,this.y,15,a);}});
+    elems.push({id:'rock2',type:'custom',x:fx+fw*0.55,y:fy+fh*0.35,w:0,h:0,alpha:1,
+      draw:function(a){drawRock(this.x,this.y,18,a);}});
+    // Safety boundary
+    elems.push({id:'boundary',type:'custom',x:fx+4,y:fy+4,w:fw-8,h:fh-8,alpha:1,
+      draw:function(a){drawSafetyBoundary(this.x,this.y,this.w,this.h,a);}});
+    // Reference markers
+    elems.push({id:'ref1',type:'custom',x:fx+fw*0.1,y:fy+fh*0.1,w:0,h:0,alpha:1,
+      draw:function(a){drawRefMarker(this.x,this.y,'P0(0,0)',a);}});
+    elems.push({id:'ref2',type:'custom',x:fx+fw*0.9,y:fy+fh*0.1,w:0,h:0,alpha:1,
+      draw:function(a){drawRefMarker(this.x,this.y,'P1(3.0,0)',a);}});
+    elems.push({id:'ref3',type:'custom',x:fx+fw*0.9,y:fy+fh*0.9,w:0,h:0,alpha:1,
+      draw:function(a){drawRefMarker(this.x,this.y,'P2(3.0,2.0)',a);}});
+    elems.push({id:'ref4',type:'custom',x:fx+fw*0.1,y:fy+fh*0.9,w:0,h:0,alpha:1,
+      draw:function(a){drawRefMarker(this.x,this.y,'P3(0,2.0)',a);}});
+    // Start/End markers
+    elems.push({id:'startlbl',type:'label',text:'START',x:fx+fw*0.15,y:fy+fh*0.32,color:'#10b981',size:11,align:'center',alpha:1});
+    elems.push({id:'endlbl',type:'label',text:'GOAL',x:fx+fw*0.85,y:fy+fh*0.45,color:'#10b981',size:11,align:'center',alpha:1});
+    // Calibrated path
+    elems.push({id:'path3',type:'custom',x:0,y:0,w:0,h:0,alpha:1,
+      draw:function(a){
+        drawPathLine([
+          [fx+fw*0.15,fy+fh*0.3],
+          [fx+fw*0.25,fy+fh*0.5],
+          [fx+fw*0.38,fy+fh*0.7],
+          [fx+fw*0.55,fy+fh*0.6],
+          [fx+fw*0.7,fy+fh*0.5],
+          [fx+fw*0.85,fy+fh*0.45]
+        ],'#10b981',a);
+      }});
+    // Coordinate labels on edges
+    elems.push({id:'coordX',type:'custom',x:0,y:0,w:0,h:0,alpha:1,
+      draw:function(a){
+        drawCoordLabel(fx+fw*0.5,fy+fh+16,'3.0 m',a);
+      }});
+    elems.push({id:'coordY',type:'custom',x:0,y:0,w:0,h:0,alpha:1,
+      draw:function(a){
+        drawCoordLabel(fx-20,fy+fh*0.5,'2.0 m',a);
+      }});
+  }
+
+  return elems;
+}
+
+/* ── drawElement dispatcher ── */
+function drawLabelPrimitive(text,x,y,color,size,align){
+  ctx.font="bold "+size+"px 'Space Grotesk','Noto Sans SC'";
+  ctx.fillStyle=color;
+  ctx.textAlign=align||'center';
+  ctx.textBaseline='middle';
+  ctx.shadowColor=color;
+  ctx.shadowBlur=8;
+  ctx.fillText(text,x,y);
+  ctx.shadowBlur=0;
+}
+function drawTextPrimitive(text,x,y,color,size,align){
+  ctx.font=size+"px 'Noto Sans SC','Inter'";
+  ctx.fillStyle=color;
+  ctx.textAlign=align||'center';
+  ctx.textBaseline='middle';
+  // Word wrap for long text
+  var maxW=W*0.7;
+  var words=text.split('');
+  var line='';
+  var lineY=y;
+  for(var i=0;i<words.length;i++){
+    var test=line+words[i];
+    if(ctx.measureText(test).width>maxW&&line.length>0){
+      ctx.fillText(line,x,lineY);
+      line=words[i];
+      lineY+=size*1.5;
+    }else{
+      line=test;
+    }
+  }
+  ctx.fillText(line,x,lineY);
+}
+function drawElement(el){
+  if(!el||el.alpha<=0.01)return;
+  ctx.save();
+  ctx.globalAlpha=el.alpha;
+  switch(el.type){
+    case'label':drawLabelPrimitive(el.text,el.x,el.y,el.color,el.size,el.align);break;
+    case'text':drawTextPrimitive(el.text,el.x,el.y,el.color,el.size,el.align);break;
+    case'custom':el.draw.call(el,el.alpha);break;
+  }
+  ctx.restore();
+}
+
+/* ── Frame drawing ── */
+function drawFrame(f){
+  drawBg();
+  var elems=getFrameElements(f);
+  elems.forEach(function(el){drawElement(el);});
+}
+
+/* ── Transition engine ── */
+function transitionTo(newFrame){
+  if(newFrame<0)newFrame=0;
+  if(newFrame>=totalFrames)newFrame=totalFrames-1;
+  if(newFrame===currentFrame&&!transitioning){drawFrame(currentFrame);updateHUD(currentFrame);return;}
+  if(transitioning)return;
+
+  var oldElems=getFrameElements(currentFrame);
+  var newElems=getFrameElements(newFrame);
+  var oldMap={};oldElems.forEach(function(e){oldMap[e.id]=e;});
+  var newMap={};newElems.forEach(function(e){newMap[e.id]=e;});
+
+  currentFrame=newFrame;
+  updateHUD(newFrame);
+  transitioning=true;
+
+  var startTime=null;
+  var duration=500;
+
+  function step(timestamp){
+    if(!startTime)startTime=timestamp;
+    var raw=Math.min((timestamp-startTime)/duration,1);
+    var p=easeInOut(raw);
+
+    drawBg();
+
+    oldElems.forEach(function(oe){
+      if(!newMap[oe.id])drawElement(merge(oe,{alpha:1-p}));
+    });
+
+    newElems.forEach(function(ne){
+      var oe=oldMap[ne.id];
+      if(oe){
+        var merged=merge(ne,{
+          x:lerp(oe.x||0,ne.x||0,p),
+          y:lerp(oe.y||0,ne.y||0,p),
+          w:lerp(oe.w||0,ne.w||0,p),
+          h:lerp(oe.h||0,ne.h||0,p),
+          alpha:1
+        });
+        if((ne.type==='label'||ne.type==='text')&&oe.text!==ne.text){
+          drawElement(merge(oe,{alpha:1-p}));
+          drawElement(merge(ne,{alpha:p}));
+        }else{
+          drawElement(merged);
+        }
+      }else{
+        drawElement(merge(ne,{alpha:p}));
+      }
+    });
+
+    if(raw<1){
+      requestAnimationFrame(step);
+    }else{
+      transitioning=false;
+    }
+  }
+  requestAnimationFrame(step);
+}
+
+/* ── HUD ── */
+var hudData=[
+  function(){return{terrain:t('terrainFlat'),challenge:t('challengeNone'),calib:t('calibNone'),score:'100%'};},
+  function(){return{terrain:t('terrainSlope'),challenge:t('challengeSlip'),calib:t('calibNone'),score:'62%'};},
+  function(){return{terrain:t('terrainObstacle'),challenge:t('challengeAvoid'),calib:t('calibPartial'),score:'45%'};},
+  function(){return{terrain:t('terrainFull'),challenge:t('challengeAll'),calib:t('calibFull'),score:'78%'};}
+];
+
+function updateHUD(f){
+  var d=hudData[f]();
+  var hud=document.getElementById('hud');
+  hud.innerHTML='';
+  var cols=[
+    [t('hudTerrain'),d.terrain],
+    [t('hudChallenge'),d.challenge],
+    [t('hudCalib'),d.calib],
+    [t('hudScore'),d.score]
+  ];
+  cols.forEach(function(c){
+    var div=document.createElement('div');
+    div.className='hud-col';
+    var lbl=document.createElement('div');
+    lbl.className='hud-label';
+    lbl.textContent=c[0];
+    var val=document.createElement('div');
+    val.className='hud-val';
+    val.textContent=c[1];
+    if(c[1]==='100%')val.style.color='#10b981';
+    else if(c[1]==='45%')val.style.color='#ff5f1f';
+    else if(c[1]==='78%')val.style.color='#ffb59c';
+    div.appendChild(lbl);
+    div.appendChild(val);
+    hud.appendChild(div);
+  });
+}
+
+/* ── Controls ── */
+function updateControls(){
+  document.getElementById('btnPrev').textContent=t('btnPrev');
+  document.getElementById('btnNext').textContent=t('btnNext');
+  document.getElementById('btnPlay').textContent=playing?t('btnPause'):t('btnPlay');
+  document.getElementById('frameIndicator').textContent=(currentFrame+1)+' / '+totalFrames;
+}
+
+function stopPlay(){
+  playing=false;
+  if(playTimer)clearTimeout(playTimer);
+  playTimer=null;
+  updateControls();
+}
+
+function doPlay(){
+  if(currentFrame>=totalFrames-1){
+    currentFrame=-1;// will become 0
+  }
+  playing=true;
+  updateControls();
+  function advance(){
+    if(!playing)return;
+    if(currentFrame>=totalFrames-1){stopPlay();return;}
+    transitionTo(currentFrame+1);
+    playTimer=setTimeout(advance,2000);
+  }
+  advance();
+}
+
+document.getElementById('btnPrev').addEventListener('click',function(){
+  stopPlay();
+  if(currentFrame>0)transitionTo(currentFrame-1);
+});
+document.getElementById('btnNext').addEventListener('click',function(){
+  stopPlay();
+  if(currentFrame<totalFrames-1)transitionTo(currentFrame+1);
+});
+document.getElementById('btnPlay').addEventListener('click',function(){
+  if(playing){stopPlay();}else{doPlay();}
+});
+
+/* ── Guide Panel ── */
+function refreshGuide(){
+  document.getElementById('guideTitle').textContent=t('guideTitle');
+  document.getElementById('guideWhat').textContent=t('guideWhat');
+  var pts=document.getElementById('guidePoints');
+  pts.innerHTML='';
+  ['guideObs1','guideObs2','guideObs3','guideObs4'].forEach(function(k){
+    var li=document.createElement('li');
+    li.textContent=t(k);
+    pts.appendChild(li);
+  });
+  document.getElementById('guideControls').textContent=t('guideCtrl');
+  document.getElementById('guideTakeaway').textContent=t('guideTakeaway');
+}
+
+var guideCollapsed=false;
+document.getElementById('guideHeader').addEventListener('click',function(){
+  guideCollapsed=!guideCollapsed;
+  document.getElementById('guideContent').className='guide-content'+(guideCollapsed?' collapsed':'');
+  document.getElementById('guideToggle').textContent=guideCollapsed?'[+]':'[-]';
+});
+
+/* ── i18n ── */
+document.getElementById('langBtn').addEventListener('click',function(){
+  LANG=LANG==='en'?'cn':'en';
+  document.getElementById('langBtn').textContent=LANG.toUpperCase();
+  refreshI18N();
+});
+
+function refreshI18N(){
+  refreshGuide();
+  updateControls();
+  updateHUD(currentFrame);
+  drawFrame(currentFrame);
+}
+
+/* ── Resize ── */
+function resize(){
+  var wrap=document.querySelector('.canvas-wrap');
+  var rect=wrap.getBoundingClientRect();
+  if(rect.width<1||rect.height<1)return;
+  W=rect.width;
+  H=rect.height;
+  canvas.width=W*DPR;
+  canvas.height=H*DPR;
+  canvas.style.width=W+'px';
+  canvas.style.height=H+'px';
+  ctx.setTransform(DPR,0,0,DPR,0,0);
+  drawFrame(currentFrame);
+}
+
+var ro=new ResizeObserver(function(){resize();});
+ro.observe(document.querySelector('.canvas-wrap'));
+
+setTimeout(resize,200);
+setTimeout(resize,600);
+document.fonts.ready.then(function(){resize();});
+
+refreshGuide();
+updateControls();
+updateHUD(0);
+resize();
+})();
+</script>
+</body>
+</html>

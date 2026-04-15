@@ -1,0 +1,553 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=Inter:wght@400;500&family=Noto+Sans+SC:wght@400;700&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box;}
+html,body{width:100%;height:100vh;overflow:hidden;}
+body{background:var(--bg,#0c0e12);color:var(--text,#f6f6fc);font-family:'Inter','Noto Sans SC',sans-serif;display:flex;flex-direction:column;}
+.wrapper{display:flex;flex-direction:column;height:100vh;overflow:hidden;}
+.header{padding:12px 16px 8px;display:flex;justify-content:space-between;align-items:center;}
+.header h1{font-family:'Space Grotesk',sans-serif;font-size:clamp(14px,2vw,18px);font-weight:700;letter-spacing:-0.02em;color:var(--primary,#50ffb0);text-shadow:0 0 15px var(--glow,rgba(80,255,176,0.3));}
+.header .sub{font-size:11px;color:var(--muted,#aaabb0);letter-spacing:0.1em;text-transform:uppercase;}
+.canvas-wrap{flex:1;min-height:0;position:relative;}
+canvas{width:100%;height:100%;display:block;}
+.controls{display:flex;justify-content:center;align-items:center;gap:12px;padding:8px 16px;}
+.ctrl-btn{font-family:'Space Grotesk',sans-serif;font-size:12px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;padding:6px 18px;border:none;cursor:pointer;color:var(--bg,#0c0e12);background:linear-gradient(135deg,var(--primary,#50ffb0),var(--primary-dim,#17df93));transition:transform 0.1s,box-shadow 0.2s;box-shadow:0 0 12px var(--glow-strong,rgba(80,255,176,0.3));}
+.ctrl-btn:hover{transform:scale(1.04);box-shadow:0 0 20px var(--glow-strong,rgba(80,255,176,0.5));}
+.ctrl-btn:active{transform:scale(0.96);}
+.ctrl-btn.secondary{background:var(--glass,rgba(23,26,31,0.92));color:var(--muted,#aaabb0);box-shadow:none;backdrop-filter:blur(12px);}
+.ctrl-btn.secondary:hover{color:var(--primary,#50ffb0);}
+.hud{height:48px;display:flex;align-items:center;justify-content:space-around;background:rgba(0,0,0,0.55);backdrop-filter:blur(12px);padding:0 16px;}
+.hud-item{text-align:center;}
+.hud-label{font-family:'Space Grotesk',sans-serif;font-size:9px;letter-spacing:0.15em;text-transform:uppercase;color:var(--muted,#aaabb0);}
+.hud-val{font-family:'Space Grotesk',sans-serif;font-size:14px;font-weight:700;color:var(--primary,#50ffb0);}
+.lang-btn{position:fixed;top:8px;left:8px;z-index:100;font-family:'Space Grotesk',sans-serif;font-size:11px;font-weight:700;padding:4px 10px;cursor:pointer;border:none;background:rgba(20,20,35,0.85);backdrop-filter:blur(12px);color:#ffb59c;letter-spacing:1px;}
+.guide-panel{position:fixed;top:8px;right:8px;width:240px;max-height:40vh;overflow-y:auto;background:var(--glass,rgba(20,20,35,0.85));backdrop-filter:blur(12px);padding:12px;z-index:100;font-family:'Noto Sans SC',sans-serif;font-size:12px;color:rgba(255,255,255,0.85);line-height:1.6;}
+.guide-panel h3{font-family:'Space Grotesk',sans-serif;font-size:13px;margin-bottom:6px;color:var(--primary,#50ffb0);cursor:pointer;display:flex;justify-content:space-between;align-items:center;}
+.guide-panel ul{padding-left:14px;}
+.guide-panel .collapsed{display:none;}
+</style>
+</head>
+<body>
+<button class="lang-btn" id="langBtn">CN</button>
+<div class="guide-panel" id="guide">
+<h3 id="guideTitle"></h3>
+<div class="guide-content" id="guideContent"></div>
+</div>
+<div class="wrapper">
+<div class="header">
+<div><h1 id="title"></h1><div class="sub" id="subtitle"></div></div>
+<div id="frameIndicator" style="font-family:'Space Grotesk';font-size:11px;color:var(--muted,#aaabb0);letter-spacing:0.1em;"></div>
+</div>
+<div class="canvas-wrap"><canvas id="c"></canvas></div>
+<div class="controls">
+<button class="ctrl-btn secondary" id="btnPrev"></button>
+<button class="ctrl-btn" id="btnPlay"></button>
+<button class="ctrl-btn secondary" id="btnNext"></button>
+</div>
+<div class="hud">
+<div class="hud-item"><div class="hud-label" id="hudL1"></div><div class="hud-val" id="hudV1"></div></div>
+<div class="hud-item"><div class="hud-label" id="hudL2"></div><div class="hud-val" id="hudV2"></div></div>
+<div class="hud-item"><div class="hud-label" id="hudL3"></div><div class="hud-val" id="hudV3"></div></div>
+<div class="hud-item"><div class="hud-label" id="hudL4"></div><div class="hud-val" id="hudV4"></div></div>
+</div>
+</div>
+
+<script src="animation_runtime.js"></script>
+
+<script>
+// ============================================================
+// WEIGHT VISUALIZATION -- No human figures
+// M002 knode 1: "重的和轻的：为什么有的东西拿不动"
+//
+// Frame 0: Title -- spring scale bouncing idle
+// Frame 1: Apple on scale -- spring compresses medium, dial 200g
+// Frame 2: Iron ball on scale -- spring slams down, dial 800g
+// Frame 3: Big balloon on scale -- spring barely moves, dial 5g
+// Frame 4: Summary -- all three side by side with weight labels
+// ============================================================
+
+var CONFIG = {
+  style: 'rocketry_control',
+  totalFrames: 5,
+  i18n: {
+    title:    {en:'HEAVY & LIGHT', cn:'\u91cd\u7684\u548c\u8f7b\u7684'},
+    subtitle: {en:'M002 \u00b7 WEIGHT VISUALIZATION', cn:'M002 \u00b7 \u91cd\u91cf\u53ef\u89c6\u5316'},
+    f0title:  {en:'How Heavy Is It?', cn:'\u5b83\u6709\u591a\u91cd\uff1f'},
+    f0sub:    {en:'Put objects on the spring scale and see!', cn:'\u628a\u7269\u4f53\u653e\u5230\u5f39\u7c27\u79e4\u4e0a\u770b\u770b\uff01'},
+    f1label:  {en:'Apple', cn:'\u82f9\u679c'},
+    f1note:   {en:'Medium weight -- the spring compresses a bit', cn:'\u4e2d\u7b49\u91cd\u91cf\u2014\u2014\u5f39\u7c27\u538b\u4e0b\u4e00\u70b9'},
+    f2label:  {en:'Iron Ball', cn:'\u94c1\u7403'},
+    f2note:   {en:'Very heavy! The spring compresses a lot', cn:'\u975e\u5e38\u91cd\uff01\u5f39\u7c27\u538b\u4e0b\u5f88\u591a'},
+    f3label:  {en:'Big Balloon', cn:'\u5927\u6c14\u7403'},
+    f3note:   {en:'Huge but almost weightless!', cn:'\u5de8\u5927\u4f46\u51e0\u4e4e\u6ca1\u6709\u91cd\u91cf\uff01'},
+    f4label:  {en:'Size \u2260 Weight', cn:'\u5927\u5c0f \u2260 \u91cd\u91cf'},
+    f4note:   {en:'Big things can be light, small things can be heavy!', cn:'\u5927\u7684\u4e1c\u897f\u53ef\u80fd\u5f88\u8f7b\uff0c\u5c0f\u7684\u4e1c\u897f\u53ef\u80fd\u5f88\u91cd\uff01'},
+    hudFrame: {en:'FRAME', cn:'\u5e27'},
+    hudObject:{en:'OBJECT', cn:'\u7269\u4f53'},
+    hudWeight:{en:'WEIGHT', cn:'\u91cd\u91cf'},
+    hudSpring:{en:'SPRING', cn:'\u5f39\u7c27'},
+    guideTitle:{en:'What to Watch', cn:'\u89c2\u5bdf\u8981\u70b9'},
+    g1: {en:'Watch the spring compress under each object', cn:'\u89c2\u5bdf\u5f39\u7c27\u5728\u6bcf\u4e2a\u7269\u4f53\u4e0b\u538b\u7f29\u7684\u7a0b\u5ea6'},
+    g2: {en:'Compare the dial readings for different objects', cn:'\u5bf9\u6bd4\u4e0d\u540c\u7269\u4f53\u7684\u8868\u76d8\u8bfb\u6570'},
+    g3: {en:'Notice: the balloon is BIG but very light!', cn:'\u6ce8\u610f\uff1a\u6c14\u7403\u5f88\u5927\u4f46\u5f88\u8f7b\uff01'},
+    prev:  {en:'PREV', cn:'\u4e0a\u4e00\u5e27'},
+    next:  {en:'NEXT', cn:'\u4e0b\u4e00\u5e27'},
+    play:  {en:'PLAY', cn:'\u64ad\u653e'},
+    pause: {en:'PAUSE', cn:'\u6682\u505c'},
+    obj_none:{en:'--', cn:'--'},
+    obj_apple:{en:'Apple', cn:'\u82f9\u679c'},
+    obj_iron:{en:'Iron Ball', cn:'\u94c1\u7403'},
+    obj_balloon:{en:'Balloon', cn:'\u6c14\u7403'},
+    obj_all:{en:'All', cn:'\u5168\u90e8'},
+    w_none:{en:'--', cn:'--'},
+    w_200:{en:'200g', cn:'200g'},
+    w_800:{en:'800g', cn:'800g'},
+    w_5:{en:'5g', cn:'5g'},
+    w_compare:{en:'Compare!', cn:'\u5bf9\u6bd4\uff01'},
+    spr_idle:{en:'Idle', cn:'\u7a7a\u95f2'},
+    spr_med:{en:'Medium', cn:'\u4e2d\u7b49'},
+    spr_heavy:{en:'Heavy', cn:'\u91cd\u538b'},
+    spr_light:{en:'Barely', cn:'\u5fae\u52a8'},
+    spr_all:{en:'--', cn:'--'},
+  },
+  hudLabels: ['hudFrame', 'hudObject', 'hudWeight', 'hudSpring'],
+  hudValues: [
+    ['obj_none', 'w_none', 'spr_idle'],
+    ['obj_apple', 'w_200', 'spr_med'],
+    ['obj_iron', 'w_800', 'spr_heavy'],
+    ['obj_balloon', 'w_5', 'spr_light'],
+    ['obj_all', 'w_compare', 'spr_all'],
+  ],
+  guideTitle: 'guideTitle',
+  guideItems: ['g1', 'g2', 'g3'],
+};
+
+function getFrameElements(f, W, H) {
+  // All rendering via drawBg -- return empty
+  return [];
+}
+
+// ============================================================
+// Continuous animation state
+// ============================================================
+var aTime = 0;
+
+function animLoop() {
+  aTime += 0.016;
+  var cf = AnimRuntime.currentFrame;
+  AnimRuntime.drawFrame(cf);
+  requestAnimationFrame(animLoop);
+}
+
+// ============================================================
+// Drawing helpers -- physical objects only
+// ============================================================
+
+function drawSpring(ctx, x, y, len, coils, amp, thick, color) {
+  ctx.strokeStyle = color; ctx.lineWidth = thick;
+  ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+  ctx.beginPath(); ctx.moveTo(x, y);
+  var seg = len / (coils * 2);
+  for (var i = 0; i < coils * 2; i++) {
+    ctx.lineTo(x, y + (i + 1) * seg + (i % 2 === 0 ? -amp : amp));
+  }
+  ctx.lineTo(x, y + len); ctx.stroke();
+}
+
+function drawApple(ctx, x, y, r) {
+  // Apple body
+  var ag = ctx.createRadialGradient(x - r * 0.25, y - r * 0.25, r * 0.1, x, y, r);
+  ag.addColorStop(0, '#ff5555'); ag.addColorStop(0.6, '#cc2222'); ag.addColorStop(1, '#881111');
+  ctx.fillStyle = ag;
+  ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
+  // Highlight
+  ctx.fillStyle = 'rgba(255,255,255,0.35)';
+  ctx.beginPath(); ctx.arc(x - r * 0.25, y - r * 0.3, r * 0.18, 0, Math.PI * 2); ctx.fill();
+  // Stem
+  ctx.strokeStyle = '#5a3a15'; ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.moveTo(x, y - r); ctx.lineTo(x + 2, y - r - r * 0.5); ctx.stroke();
+  // Leaf
+  ctx.fillStyle = '#2a8a2a';
+  ctx.beginPath();
+  ctx.ellipse(x + r * 0.3, y - r - r * 0.3, r * 0.35, r * 0.12, 0.3, 0, Math.PI * 2);
+  ctx.fill();
+}
+
+function drawIronBall(ctx, x, y, r) {
+  ctx.save();
+  ctx.shadowColor = 'rgba(0,0,0,0.4)'; ctx.shadowBlur = r * 0.5;
+  var g = ctx.createRadialGradient(x - r * 0.3, y - r * 0.3, r * 0.08, x, y, r);
+  g.addColorStop(0, '#dde4ee'); g.addColorStop(0.4, '#aabbcc'); g.addColorStop(1, '#556677');
+  ctx.fillStyle = g;
+  ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
+  ctx.restore();
+  // Specular
+  ctx.fillStyle = 'rgba(255,255,255,0.5)';
+  ctx.beginPath(); ctx.arc(x - r * 0.25, y - r * 0.3, r * 0.12, 0, Math.PI * 2); ctx.fill();
+}
+
+function drawBalloon(ctx, x, y, rx, ry, color) {
+  // Balloon body (translucent)
+  ctx.save(); ctx.globalAlpha = 0.6;
+  var bg = ctx.createRadialGradient(x - rx * 0.2, y - ry * 0.3, rx * 0.1, x, y, Math.max(rx, ry));
+  bg.addColorStop(0, color); bg.addColorStop(0.7, color); bg.addColorStop(1, 'rgba(0,0,0,0.2)');
+  ctx.fillStyle = bg;
+  ctx.beginPath(); ctx.ellipse(x, y, rx, ry, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.restore();
+  // Highlight
+  ctx.fillStyle = 'rgba(255,255,255,0.2)';
+  ctx.beginPath(); ctx.ellipse(x - rx * 0.3, y - ry * 0.35, rx * 0.2, ry * 0.15, -0.3, 0, Math.PI * 2); ctx.fill();
+  // Knot
+  ctx.fillStyle = color;
+  ctx.beginPath(); ctx.moveTo(x - 3, y + ry); ctx.lineTo(x + 3, y + ry); ctx.lineTo(x, y + ry + 6); ctx.closePath(); ctx.fill();
+  // String
+  ctx.strokeStyle = 'rgba(255,255,255,0.3)'; ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(x, y + ry + 6);
+  ctx.quadraticCurveTo(x + 5, y + ry + 20, x - 3, y + ry + 35);
+  ctx.stroke();
+}
+
+function drawScaleBase(ctx, cx, baseY, baseW) {
+  // Base plate
+  var bg = ctx.createLinearGradient(cx - baseW / 2, baseY, cx + baseW / 2, baseY);
+  bg.addColorStop(0, '#2a2d40'); bg.addColorStop(0.5, '#3a3d55'); bg.addColorStop(1, '#2a2d40');
+  ctx.fillStyle = bg;
+  ctx.fillRect(cx - baseW / 2, baseY, baseW, 12);
+  // Feet
+  ctx.fillStyle = '#222';
+  ctx.fillRect(cx - baseW / 2 + 6, baseY + 12, 10, 6);
+  ctx.fillRect(cx + baseW / 2 - 16, baseY + 12, 10, 6);
+}
+
+function drawDial(ctx, cx, cy, r, reading, maxReading) {
+  // Dial background
+  var dg = ctx.createRadialGradient(cx, cy, r * 0.1, cx, cy, r);
+  dg.addColorStop(0, '#1a1d2d'); dg.addColorStop(1, '#0d111f');
+  ctx.fillStyle = dg;
+  ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.fill();
+  // Dial border
+  ctx.strokeStyle = 'rgba(255,176,0,0.2)'; ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.stroke();
+  // Scale marks
+  ctx.strokeStyle = 'rgba(142,144,166,0.3)'; ctx.lineWidth = 1;
+  for (var m = 0; m <= 10; m++) {
+    var a = -Math.PI * 0.75 + m * (Math.PI * 1.5 / 10);
+    var inner = r * 0.78, outer = r * 0.9;
+    ctx.beginPath();
+    ctx.moveTo(cx + Math.cos(a) * inner, cy + Math.sin(a) * inner);
+    ctx.lineTo(cx + Math.cos(a) * outer, cy + Math.sin(a) * outer);
+    ctx.stroke();
+  }
+  // Needle
+  var needleAngle = -Math.PI * 0.75 + (reading / maxReading) * Math.PI * 1.5;
+  ctx.save();
+  ctx.translate(cx, cy);
+  ctx.rotate(needleAngle);
+  ctx.strokeStyle = '#ffb000'; ctx.lineWidth = 2.5;
+  ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(r * 0.72, 0); ctx.stroke();
+  // Needle tip glow
+  ctx.shadowColor = 'rgba(255,176,0,0.5)'; ctx.shadowBlur = 6;
+  ctx.fillStyle = '#ffb000';
+  ctx.beginPath(); ctx.arc(r * 0.72, 0, 3, 0, Math.PI * 2); ctx.fill();
+  ctx.restore();
+  // Center hub
+  ctx.fillStyle = '#555';
+  ctx.beginPath(); ctx.arc(cx, cy, 4, 0, Math.PI * 2); ctx.fill();
+}
+
+// ============================================================
+// drawBg -- all rendering happens here
+// ============================================================
+
+function drawBg(ctx, W, H) {
+  var cf = AnimRuntime.currentFrame;
+  var P = AnimRuntime.PAL;
+  var t = AnimRuntime.t;
+
+  // Clear entire canvas + fill dark bg
+  ctx.clearRect(0, 0, W, H);
+  ctx.fillStyle = '#05070a';
+  ctx.fillRect(0, 0, W, H);
+
+  // Common layout
+  var cx = W / 2;
+  var baseY = H * 0.72;
+  var baseW = W * 0.35;
+  var springTopY = baseY - H * 0.35;
+
+  // Ground
+  var gg = ctx.createLinearGradient(0, baseY + 18, 0, H);
+  gg.addColorStop(0, '#1a1d2d'); gg.addColorStop(1, '#0d111f');
+  ctx.fillStyle = gg; ctx.fillRect(0, baseY + 18, W, H - baseY - 18);
+
+  if (cf === 0) {
+    drawFrame0(ctx, W, H, cx, springTopY, baseY, baseW, P, t);
+  } else if (cf === 1) {
+    drawFrame1(ctx, W, H, cx, springTopY, baseY, baseW, P, t);
+  } else if (cf === 2) {
+    drawFrame2(ctx, W, H, cx, springTopY, baseY, baseW, P, t);
+  } else if (cf === 3) {
+    drawFrame3(ctx, W, H, cx, springTopY, baseY, baseW, P, t);
+  } else if (cf === 4) {
+    drawFrame4(ctx, W, H, cx, springTopY, baseY, baseW, P, t);
+  }
+}
+
+// Frame 0: Title -- idle bouncing spring scale
+function drawFrame0(ctx, W, H, cx, springTopY, baseY, baseW, P, t) {
+  var bounce = Math.sin(aTime * 3) * 4;
+  var springLen = baseY - springTopY + bounce;
+
+  // Spring
+  drawSpring(ctx, cx, springTopY, springLen, 10, 12, 3, P.primary);
+
+  // Top plate (weighing pan)
+  var panY = springTopY - 4;
+  ctx.fillStyle = '#3a3d55';
+  ctx.fillRect(cx - baseW * 0.4, panY - 6, baseW * 0.8, 6);
+
+  // Base
+  drawScaleBase(ctx, cx, baseY, baseW);
+
+  // Dial
+  var dialR = Math.min(W, H) * 0.08;
+  drawDial(ctx, cx, baseY - 14, dialR, 0, 1000);
+
+  // Title text
+  ctx.font = "bold " + Math.max(16, W * 0.04) + "px 'Space Grotesk',sans-serif";
+  ctx.fillStyle = P.primary; ctx.textAlign = 'center';
+  ctx.fillText(t('f0title'), cx, H * 0.15);
+  ctx.font = Math.max(11, W * 0.025) + "px 'Noto Sans SC',sans-serif";
+  ctx.fillStyle = P.muted;
+  ctx.fillText(t('f0sub'), cx, H * 0.22);
+
+  // Floating question marks
+  ctx.font = "bold 20px 'Space Grotesk',sans-serif";
+  ctx.fillStyle = 'rgba(255,176,0,0.15)';
+  for (var qi = 0; qi < 4; qi++) {
+    var qx = W * (0.15 + qi * 0.22);
+    var qy = H * 0.35 + Math.sin(aTime * 2 + qi * 1.5) * 10;
+    ctx.fillText('?', qx, qy);
+  }
+}
+
+// Frame 1: Apple -- 200g
+function drawFrame1(ctx, W, H, cx, springTopY, baseY, baseW, P, t) {
+  var targetCompress = H * 0.06;
+  var compress = targetCompress + Math.sin(aTime * 4) * 2;
+  var panY = springTopY + compress - 4;
+  var springLen = baseY - springTopY - compress;
+
+  // Spring (compressed medium)
+  drawSpring(ctx, cx, springTopY + compress, springLen, 10, 10, 3, P.primary);
+
+  // Pan
+  ctx.fillStyle = '#3a3d55';
+  ctx.fillRect(cx - baseW * 0.4, panY - 6, baseW * 0.8, 6);
+
+  // Apple on pan
+  var appleR = Math.min(W, H) * 0.045;
+  drawApple(ctx, cx, panY - 6 - appleR, appleR);
+
+  // Base
+  drawScaleBase(ctx, cx, baseY, baseW);
+
+  // Dial reading 200g
+  var dialR = Math.min(W, H) * 0.08;
+  drawDial(ctx, cx, baseY - 14, dialR, 200, 1000);
+
+  // Label
+  ctx.font = "bold " + Math.max(14, W * 0.035) + "px 'Space Grotesk',sans-serif";
+  ctx.fillStyle = P.primary; ctx.textAlign = 'center';
+  ctx.fillText(t('f1label') + ' -- 200g', cx, H * 0.12);
+  ctx.font = Math.max(11, W * 0.025) + "px 'Noto Sans SC',sans-serif";
+  ctx.fillStyle = P.muted;
+  ctx.fillText(t('f1note'), cx, H * 0.18);
+
+  // Weight arrow
+  drawWeightArrow(ctx, cx + baseW * 0.5, panY - 20, 30, P.secondary);
+}
+
+// Frame 2: Iron ball -- 800g
+function drawFrame2(ctx, W, H, cx, springTopY, baseY, baseW, P, t) {
+  var targetCompress = H * 0.18;
+  var compress = targetCompress + Math.sin(aTime * 3) * 2;
+  var panY = springTopY + compress - 4;
+  var springLen = baseY - springTopY - compress;
+
+  // Spring (heavily compressed)
+  drawSpring(ctx, cx, springTopY + compress, springLen, 10, 6, 3.5, '#ff5f1f');
+
+  // Pan
+  ctx.fillStyle = '#3a3d55';
+  ctx.fillRect(cx - baseW * 0.4, panY - 6, baseW * 0.8, 6);
+
+  // Iron ball on pan
+  var ballR = Math.min(W, H) * 0.035;
+  drawIronBall(ctx, cx, panY - 6 - ballR, ballR);
+
+  // Stress marks around spring
+  ctx.strokeStyle = 'rgba(255,95,31,0.2)'; ctx.lineWidth = 1;
+  for (var si = 0; si < 4; si++) {
+    var sx = cx + (si % 2 === 0 ? -1 : 1) * (15 + si * 5);
+    var sy = springTopY + compress + springLen * 0.5 + Math.sin(aTime * 5 + si) * 3;
+    ctx.beginPath();
+    ctx.moveTo(sx - 4, sy - 3); ctx.lineTo(sx + 4, sy + 3); ctx.stroke();
+  }
+
+  // Base
+  drawScaleBase(ctx, cx, baseY, baseW);
+
+  // Dial reading 800g
+  var dialR = Math.min(W, H) * 0.08;
+  drawDial(ctx, cx, baseY - 14, dialR, 800, 1000);
+
+  // Label
+  ctx.font = "bold " + Math.max(14, W * 0.035) + "px 'Space Grotesk',sans-serif";
+  ctx.fillStyle = '#ff5f1f'; ctx.textAlign = 'center';
+  ctx.fillText(t('f2label') + ' -- 800g', cx, H * 0.12);
+  ctx.font = Math.max(11, W * 0.025) + "px 'Noto Sans SC',sans-serif";
+  ctx.fillStyle = P.muted;
+  ctx.fillText(t('f2note'), cx, H * 0.18);
+
+  // Weight arrow (larger)
+  drawWeightArrow(ctx, cx + baseW * 0.5, panY - 20, 50, '#ff5f1f');
+}
+
+// Frame 3: Big balloon -- 5g
+function drawFrame3(ctx, W, H, cx, springTopY, baseY, baseW, P, t) {
+  var compress = H * 0.005 + Math.sin(aTime * 5) * 1;
+  var panY = springTopY + compress - 4;
+  var springLen = baseY - springTopY - compress;
+
+  // Spring (barely compressed)
+  drawSpring(ctx, cx, springTopY + compress, springLen, 10, 12, 3, 'rgba(80,255,176,0.5)');
+
+  // Pan
+  ctx.fillStyle = '#3a3d55';
+  ctx.fillRect(cx - baseW * 0.4, panY - 6, baseW * 0.8, 6);
+
+  // Big balloon on pan
+  var bRx = Math.min(W, H) * 0.11;
+  var bRy = Math.min(W, H) * 0.14;
+  var bFloat = Math.sin(aTime * 2) * 3;
+  drawBalloon(ctx, cx, panY - 6 - bRy + bFloat, bRx, bRy, '#22d3ee');
+
+  // Base
+  drawScaleBase(ctx, cx, baseY, baseW);
+
+  // Dial reading 5g (barely moves)
+  var dialR = Math.min(W, H) * 0.08;
+  drawDial(ctx, cx, baseY - 14, dialR, 5, 1000);
+
+  // Label
+  ctx.font = "bold " + Math.max(14, W * 0.035) + "px 'Space Grotesk',sans-serif";
+  ctx.fillStyle = '#22d3ee'; ctx.textAlign = 'center';
+  ctx.fillText(t('f3label') + ' -- 5g', cx, H * 0.08);
+  ctx.font = Math.max(11, W * 0.025) + "px 'Noto Sans SC',sans-serif";
+  ctx.fillStyle = P.muted;
+  ctx.fillText(t('f3note'), cx, H * 0.14);
+
+  // Tiny weight arrow
+  drawWeightArrow(ctx, cx + baseW * 0.5, panY - 10, 10, 'rgba(34,211,238,0.5)');
+}
+
+// Frame 4: Summary -- three objects side by side
+function drawFrame4(ctx, W, H, cx, springTopY, baseY, baseW, P, t) {
+  var colW = W / 3;
+
+  // Three columns
+  var items = [
+    {name: t('f3label'), weight: '5g', color: '#22d3ee', drawFn: function(x, y) {
+      drawBalloon(ctx, x, y - 20, 28, 35, '#22d3ee');
+    }},
+    {name: t('f1label'), weight: '200g', color: '#cc2222', drawFn: function(x, y) {
+      drawApple(ctx, x, y, Math.min(W, H) * 0.035);
+    }},
+    {name: t('f2label'), weight: '800g', color: '#aabbcc', drawFn: function(x, y) {
+      drawIronBall(ctx, x, y, Math.min(W, H) * 0.03);
+    }},
+  ];
+
+  // Title
+  ctx.font = "bold " + Math.max(15, W * 0.038) + "px 'Space Grotesk',sans-serif";
+  ctx.fillStyle = P.primary; ctx.textAlign = 'center';
+  ctx.fillText(t('f4label'), cx, H * 0.10);
+  ctx.font = Math.max(11, W * 0.025) + "px 'Noto Sans SC',sans-serif";
+  ctx.fillStyle = P.muted;
+  ctx.fillText(t('f4note'), cx, H * 0.17);
+
+  for (var i = 0; i < items.length; i++) {
+    var ix = colW * (i + 0.5);
+    var iy = H * 0.48;
+
+    // Object
+    items[i].drawFn(ix, iy);
+
+    // Name
+    ctx.font = "bold 12px 'Space Grotesk',sans-serif";
+    ctx.fillStyle = items[i].color; ctx.textAlign = 'center';
+    ctx.fillText(items[i].name, ix, H * 0.68);
+
+    // Weight bar
+    var barMax = W * 0.18;
+    var barH = 8;
+    var barW = barMax * (parseFloat(items[i].weight) / 800);
+    if (barW < 3) barW = 3;
+    ctx.fillStyle = 'rgba(142,144,166,0.15)';
+    ctx.fillRect(ix - barMax / 2, H * 0.73, barMax, barH);
+    var barGrad = ctx.createLinearGradient(ix - barMax / 2, 0, ix - barMax / 2 + barW, 0);
+    barGrad.addColorStop(0, items[i].color); barGrad.addColorStop(1, 'rgba(255,176,0,0.5)');
+    ctx.fillStyle = barGrad;
+    ctx.fillRect(ix - barMax / 2, H * 0.73, barW, barH);
+
+    // Weight text
+    ctx.font = "bold 14px 'Space Grotesk',sans-serif";
+    ctx.fillStyle = P.text;
+    ctx.fillText(items[i].weight, ix, H * 0.80);
+  }
+
+  // Animated comparison arrows
+  ctx.strokeStyle = 'rgba(255,176,0,0.15)'; ctx.lineWidth = 1;
+  ctx.setLineDash([4, 4]);
+  var arrowBob = Math.sin(aTime * 3) * 3;
+  ctx.beginPath(); ctx.moveTo(colW * 0.5, H * 0.85 + arrowBob); ctx.lineTo(colW * 2.5, H * 0.85 + arrowBob); ctx.stroke();
+  ctx.setLineDash([]);
+  // Arrow head
+  ctx.fillStyle = 'rgba(255,176,0,0.15)';
+  ctx.beginPath();
+  ctx.moveTo(colW * 2.5, H * 0.85 + arrowBob);
+  ctx.lineTo(colW * 2.5 - 8, H * 0.85 + arrowBob - 4);
+  ctx.lineTo(colW * 2.5 - 8, H * 0.85 + arrowBob + 4);
+  ctx.closePath(); ctx.fill();
+
+  // Labels at ends
+  ctx.font = "10px 'Space Grotesk',sans-serif";
+  ctx.fillStyle = P.muted; ctx.textAlign = 'center';
+  ctx.fillText(AnimRuntime.lang === 'cn' ? '\u8f7b' : 'Light', colW * 0.5, H * 0.91);
+  ctx.fillText(AnimRuntime.lang === 'cn' ? '\u91cd' : 'Heavy', colW * 2.5, H * 0.91);
+}
+
+function drawWeightArrow(ctx, x, y, len, color) {
+  ctx.save();
+  ctx.strokeStyle = color; ctx.lineWidth = 2.5;
+  ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x, y + len); ctx.stroke();
+  ctx.fillStyle = color;
+  ctx.beginPath();
+  ctx.moveTo(x, y + len + 2); ctx.lineTo(x - 5, y + len - 6); ctx.lineTo(x + 5, y + len - 6);
+  ctx.closePath(); ctx.fill();
+  ctx.restore();
+}
+
+// ============================================================
+// BOOT
+// ============================================================
+AnimRuntime.boot();
+requestAnimationFrame(animLoop);
+</script>
+</body>
+</html>

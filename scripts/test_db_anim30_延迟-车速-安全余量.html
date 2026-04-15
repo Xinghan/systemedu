@@ -1,0 +1,505 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Latency-Speed-Safety Triangle</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;700&family=Inter:wght@400;500&family=Noto+Sans+SC:wght@400;700&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0;}
+html,body{width:100%;height:100vh;overflow:hidden;background:#131313;font-family:'Inter','Noto Sans SC',sans-serif;color:#e0e0e0;}
+.wrapper{display:flex;flex-direction:column;width:100%;height:100vh;}
+.top-bar{display:flex;justify-content:space-between;align-items:center;padding:8px 16px;background:rgba(20,20,20,0.9);border-bottom:1px solid rgba(255,95,31,0.15);flex-shrink:0;}
+.top-bar h1{font-family:'Space Grotesk',sans-serif;font-size:15px;font-weight:700;color:#ffb59c;letter-spacing:1px;}
+canvas{flex:1;display:block;width:100%;}
+.controls{display:flex;justify-content:center;gap:12px;padding:6px 16px;background:rgba(20,20,20,0.9);border-top:1px solid rgba(255,95,31,0.1);flex-shrink:0;}
+.controls button{font-family:'Space Grotesk',sans-serif;font-size:11px;font-weight:700;padding:4px 14px;cursor:pointer;border:1px solid rgba(255,95,31,0.25);background:rgba(255,95,31,0.08);color:#ffb59c;letter-spacing:1px;transition:background 0.2s;}
+.controls button:hover{background:rgba(255,95,31,0.2);}
+.hud{display:flex;justify-content:space-around;padding:6px 16px;background:rgba(0,0,0,0.55);flex-shrink:0;height:48px;align-items:center;}
+.hud .col{text-align:center;}
+.hud .col .label{font-size:9px;color:rgba(255,181,156,0.5);letter-spacing:1px;font-family:'Space Grotesk',sans-serif;}
+.hud .col .value{font-size:14px;color:#ffb59c;font-weight:700;font-family:'Space Grotesk',sans-serif;}
+.lang-btn{position:fixed;top:8px;left:8px;z-index:100;font-family:'Space Grotesk',sans-serif;font-size:11px;font-weight:700;padding:4px 10px;cursor:pointer;border:1px solid rgba(255,255,255,0.08);background:rgba(20,20,35,0.85);backdrop-filter:blur(12px);color:#ffb59c;letter-spacing:1px;}
+.guide-panel{position:fixed;top:40px;left:8px;z-index:50;background:rgba(20,20,35,0.85);backdrop-filter:blur(12px);border:1px solid rgba(255,95,31,0.15);padding:10px;max-width:200px;font-size:11px;color:rgba(255,181,156,0.7);line-height:1.5;}
+.guide-panel h3{font-size:11px;color:#ffb59c;margin-bottom:4px;font-family:'Space Grotesk',sans-serif;}
+</style>
+</head>
+<body>
+<button class="lang-btn" id="langBtn">CN</button>
+<div class="guide-panel" id="guidePanel">
+<h3 id="guideTitle"></h3>
+<p id="guideText"></p>
+</div>
+<div class="wrapper">
+<div class="top-bar">
+<h1 id="titleText"></h1>
+</div>
+<canvas id="c"></canvas>
+<div class="controls">
+<button id="btnPrev"></button>
+<button id="btnPlay"></button>
+<button id="btnNext"></button>
+</div>
+<div class="hud">
+<div class="col"><div class="label" id="hudLabel0"></div><div class="value" id="hudVal0">--</div></div>
+<div class="col"><div class="label" id="hudLabel1"></div><div class="value" id="hudVal1">--</div></div>
+<div class="col"><div class="label" id="hudLabel2"></div><div class="value" id="hudVal2">--</div></div>
+<div class="col"><div class="label" id="hudLabel3"></div><div class="value" id="hudVal3">--</div></div>
+</div>
+</div>
+<script>
+var LANG='cn';
+var I18N={
+title:{en:'LATENCY - SPEED - SAFETY TRIANGLE',cn:'\u5ef6\u8fdf - \u8f66\u901f - \u5b89\u5168\u4f59\u91cf \u4e09\u89d2\u5173\u7cfb'},
+guideTitle:{en:'Viewing Guide',cn:'\u89c2\u770b\u6307\u5357'},
+guideText:{en:'Observe how inference latency, rover speed, and safety margin form a constraint triangle. Higher speed or higher latency reduces safety margin.',cn:'\u89c2\u5bdf\u63a8\u7406\u5ef6\u8fdf\u3001\u8f66\u901f\u548c\u5b89\u5168\u4f59\u91cf\u5982\u4f55\u5f62\u6210\u7ea6\u675f\u4e09\u89d2\u3002\u8f66\u901f\u8d8a\u5feb\u6216\u5ef6\u8fdf\u8d8a\u9ad8\uff0c\u5b89\u5168\u4f59\u91cf\u8d8a\u5c0f\u3002'},
+btnPrev:{en:'PREV',cn:'\u4e0a\u4e00\u5e27'},
+btnPlay:{en:'PLAY',cn:'\u64ad\u653e'},
+btnPause:{en:'PAUSE',cn:'\u6682\u505c'},
+btnNext:{en:'NEXT',cn:'\u4e0b\u4e00\u5e27'},
+hudSpeed:{en:'SPEED',cn:'\u8f66\u901f'},
+hudLatency:{en:'LATENCY',cn:'\u5ef6\u8fdf'},
+hudBlind:{en:'BLIND ZONE',cn:'\u76f2\u533a'},
+hudFrame:{en:'FRAME',cn:'\u5e27'},
+frame0title:{en:'The Constraint Triangle',cn:'\u7ea6\u675f\u4e09\u89d2'},
+frame1title:{en:'Low Speed + Low Latency',cn:'\u4f4e\u901f + \u4f4e\u5ef6\u8fdf'},
+frame2title:{en:'Low Speed + High Latency',cn:'\u4f4e\u901f + \u9ad8\u5ef6\u8fdf'},
+frame3title:{en:'High Speed + High Latency',cn:'\u9ad8\u901f + \u9ad8\u5ef6\u8fdf'},
+frame4title:{en:'Optimization Strategies',cn:'\u4f18\u5316\u7b56\u7565'},
+latency:{en:'Inference\nLatency',cn:'\u63a8\u7406\n\u5ef6\u8fdf'},
+speed:{en:'Rover\nSpeed',cn:'\u8f66\u8f7d\n\u8f66\u901f'},
+safety:{en:'Safety\nMargin',cn:'\u5b89\u5168\n\u4f59\u91cf'},
+formula:{en:'blind_zone = speed x latency',cn:'\u76f2\u533a = \u8f66\u901f x \u5ef6\u8fdf'},
+safe:{en:'SAFE',cn:'\u5b89\u5168'},
+warning:{en:'WARNING',cn:'\u8b66\u544a'},
+danger:{en:'DANGER',cn:'\u5371\u9669'},
+opt1:{en:'1. Reduce latency (quantize/prune)',cn:'1. \u964d\u4f4e\u5ef6\u8fdf (\u91cf\u5316/\u526a\u679d)'},
+opt2:{en:'2. Reduce input resolution',cn:'2. \u964d\u4f4e\u8f93\u5165\u5206\u8fa8\u7387'},
+opt3:{en:'3. Limit max speed',cn:'3. \u9650\u5236\u6700\u9ad8\u8f66\u901f'},
+opt4:{en:'4. Add safety buffer distance',cn:'4. \u589e\u52a0\u5b89\u5168\u7f13\u51b2\u8ddd\u79bb'}
+};
+function t(k){return(I18N[k]&&I18N[k][LANG])||(I18N[k]&&I18N[k]['en'])||k;}
+
+var canvas=document.getElementById('c');
+var ctx=canvas.getContext('2d');
+var DPR=Math.min(window.devicePixelRatio||1,2);
+var W=700,H=440;
+var currentFrame=0,totalFrames=5,playing=false,playTimer=null;
+var animProgress=0,animStart=0,animating=false;
+
+function refreshI18N(){
+document.getElementById('titleText').textContent=t('title');
+document.getElementById('btnPrev').textContent=t('btnPrev');
+document.getElementById('btnPlay').textContent=playing?t('btnPause'):t('btnPlay');
+document.getElementById('btnNext').textContent=t('btnNext');
+document.getElementById('guideTitle').textContent=t('guideTitle');
+document.getElementById('guideText').textContent=t('guideText');
+document.getElementById('hudLabel0').textContent=t('hudSpeed');
+document.getElementById('hudLabel1').textContent=t('hudLatency');
+document.getElementById('hudLabel2').textContent=t('hudBlind');
+document.getElementById('hudLabel3').textContent=t('hudFrame');
+document.getElementById('langBtn').textContent=LANG==='cn'?'CN':'EN';
+}
+
+function resize(){
+var rect=canvas.getBoundingClientRect();
+canvas.width=Math.round(rect.width*DPR);
+canvas.height=Math.round(rect.height*DPR);
+drawCurrent();
+}
+
+function easeInOut(tt){return tt<0.5?2*tt*tt:1-Math.pow(-2*tt+2,2)/2;}
+
+function drawBg(){
+var g=ctx.createLinearGradient(0,0,0,H);
+g.addColorStop(0,'#131313');g.addColorStop(1,'#1a1510');
+ctx.fillStyle=g;ctx.fillRect(0,0,W,H);
+ctx.strokeStyle='rgba(255,255,255,0.03)';ctx.lineWidth=1;
+for(var x=0;x<W;x+=40){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,H);ctx.stroke();}
+for(var y=0;y<H;y+=40){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke();}
+}
+
+function drawTriangle(cx,cy,r,latVal,spdVal,safVal,p){
+// Triangle vertices
+var ax=cx,ay=cy-r; // top (latency)
+var bx=cx-r*0.866,by=cy+r*0.5; // bottom-left (speed)
+var ccx=cx+r*0.866,ccy=cy+r*0.5; // bottom-right (safety)
+// Draw edges with glow
+ctx.save();
+ctx.strokeStyle='rgba(255,95,31,0.3)';ctx.lineWidth=2;
+ctx.shadowColor='#ff5f1f';ctx.shadowBlur=8;
+ctx.beginPath();ctx.moveTo(ax,ay);ctx.lineTo(bx,by);ctx.lineTo(ccx,ccy);ctx.closePath();ctx.stroke();
+ctx.shadowBlur=0;
+// Fill
+ctx.fillStyle='rgba(255,95,31,0.03)';ctx.fill();
+// Vertices
+var verts=[
+{x:ax,y:ay,label:t('latency'),val:latVal,color:'#ff5f1f'},
+{x:bx,y:by,label:t('speed'),val:spdVal,color:'#fb923c'},
+{x:ccx,y:ccy,label:t('safety'),val:safVal,color:safVal==='--'?'#666':parseFloat(safVal)>10?'#34d399':parseFloat(safVal)>5?'#fbbf24':'#ef4444'}
+];
+verts.forEach(function(v,i){
+var vp=Math.min(p*(3-i),1);
+ctx.globalAlpha=vp;
+ctx.fillStyle=v.color;ctx.shadowColor=v.color;ctx.shadowBlur=12;
+ctx.beginPath();ctx.arc(v.x,v.y,8,0,Math.PI*2);ctx.fill();
+ctx.shadowBlur=0;
+var lines=v.label.split('\n');
+ctx.font='bold 11px "Space Grotesk"';ctx.textAlign='center';
+ctx.fillStyle=v.color;
+lines.forEach(function(l,li){
+var yoff=i===0?-18+li*14:18+li*14;
+ctx.fillText(l,v.x,v.y+yoff);
+});
+if(v.val!=='--'){
+ctx.font='bold 13px "Space Grotesk"';
+ctx.fillStyle='#fff';
+var valY=i===0?-38:38;
+ctx.fillText(v.val,v.x,v.y+valY);
+}
+ctx.globalAlpha=1;
+});
+ctx.restore();
+}
+
+function drawRoverScene(y,speed,latency,blindZone,status,p){
+ctx.save();
+var groundY=y;
+// Ground line
+ctx.strokeStyle='rgba(139,69,19,0.4)';ctx.lineWidth=2;
+ctx.beginPath();ctx.moveTo(50,groundY);ctx.lineTo(650,groundY);ctx.stroke();
+// Rover
+var rx=150;
+var rg=ctx.createLinearGradient(rx-15,groundY-25,rx+15,groundY-10);
+rg.addColorStop(0,'#666');rg.addColorStop(0.5,'#888');rg.addColorStop(1,'#555');
+ctx.fillStyle=rg;ctx.fillRect(rx-20,groundY-25,40,15);
+ctx.fillStyle='#444';
+ctx.beginPath();ctx.arc(rx-12,groundY-8,5,0,Math.PI*2);ctx.fill();
+ctx.beginPath();ctx.arc(rx+12,groundY-8,5,0,Math.PI*2);ctx.fill();
+// Speed arrow
+if(speed>0){
+var arrowLen=speed*80*p;
+ctx.strokeStyle='#fb923c';ctx.lineWidth=2;ctx.shadowColor='#fb923c';ctx.shadowBlur=6;
+ctx.beginPath();ctx.moveTo(rx+25,groundY-17);ctx.lineTo(rx+25+arrowLen,groundY-17);ctx.stroke();
+ctx.fillStyle='#fb923c';ctx.beginPath();
+ctx.moveTo(rx+25+arrowLen,groundY-17);
+ctx.lineTo(rx+20+arrowLen,groundY-22);ctx.lineTo(rx+20+arrowLen,groundY-12);ctx.closePath();ctx.fill();
+ctx.shadowBlur=0;
+}
+// Blind zone
+var bzWidth=blindZone*300*p;
+if(bzWidth>0){
+var statusColor=status==='safe'?'rgba(52,211,153,0.12)':status==='warning'?'rgba(251,191,36,0.15)':'rgba(239,68,68,0.2)';
+var borderColor=status==='safe'?'rgba(52,211,153,0.4)':status==='warning'?'rgba(251,191,36,0.5)':'rgba(239,68,68,0.6)';
+ctx.fillStyle=statusColor;
+ctx.fillRect(rx+25,groundY-35,bzWidth,30);
+ctx.strokeStyle=borderColor;ctx.setLineDash([3,3]);ctx.lineWidth=1;
+ctx.strokeRect(rx+25,groundY-35,bzWidth,30);
+ctx.setLineDash([]);
+// Blind zone label
+ctx.fillStyle=borderColor;ctx.font='9px "Space Grotesk"';ctx.textAlign='center';
+var bzLabel=(blindZone*100).toFixed(0)+'cm';
+ctx.fillText(bzLabel,rx+25+bzWidth/2,groundY-38);
+}
+// Status badge
+if(p>0.5){
+var badgeColor=status==='safe'?'#34d399':status==='warning'?'#fbbf24':'#ef4444';
+var badgeText=status==='safe'?t('safe'):status==='warning'?t('warning'):t('danger');
+ctx.fillStyle=badgeColor;ctx.font='bold 12px "Space Grotesk"';ctx.textAlign='right';
+ctx.shadowColor=badgeColor;ctx.shadowBlur=8;
+ctx.fillText(badgeText,640,groundY-20);
+ctx.shadowBlur=0;
+}
+ctx.restore();
+}
+
+function drawFrame0(p){
+ctx.fillStyle='rgba(255,181,156,0.9)';ctx.font='bold 16px "Space Grotesk"';
+ctx.textAlign='center';ctx.fillText(t('frame0title'),W/2,35);
+drawTriangle(W/2,200,120,'--','--','--',p);
+// Formula
+if(p>0.6){
+ctx.globalAlpha=Math.min((p-0.6)*2.5,1);
+ctx.fillStyle='rgba(255,181,156,0.7)';ctx.font='14px "Space Grotesk"';
+ctx.textAlign='center';ctx.fillText(t('formula'),W/2,380);
+ctx.globalAlpha=1;
+}
+}
+
+function drawFrame1(p){
+ctx.fillStyle='rgba(255,181,156,0.9)';ctx.font='bold 16px "Space Grotesk"';
+ctx.textAlign='center';ctx.fillText(t('frame1title'),W/2,35);
+drawTriangle(W/2,150,90,'30ms','0.1m/s','97cm',p);
+drawRoverScene(340,0.1,30,0.03,'safe',p);
+}
+
+function drawFrame2(p){
+ctx.fillStyle='rgba(255,181,156,0.9)';ctx.font='bold 16px "Space Grotesk"';
+ctx.textAlign='center';ctx.fillText(t('frame2title'),W/2,35);
+drawTriangle(W/2,150,90,'500ms','0.1m/s','5cm',p);
+drawRoverScene(340,0.1,500,0.15,'warning',p);
+}
+
+function drawFrame3(p){
+ctx.fillStyle='rgba(255,181,156,0.9)';ctx.font='bold 16px "Space Grotesk"';
+ctx.textAlign='center';ctx.fillText(t('frame3title'),W/2,35);
+drawTriangle(W/2,150,90,'500ms','0.5m/s','<0',p);
+drawRoverScene(340,0.5,500,0.75,'danger',p);
+}
+
+function drawFrame4(p){
+ctx.fillStyle='rgba(255,181,156,0.9)';ctx.font='bold 16px "Space Grotesk"';
+ctx.textAlign='center';ctx.fillText(t('frame4title'),W/2,35);
+var opts=[t('opt1'),t('opt2'),t('opt3'),t('opt4')];
+var colors=['#34d399','#38bdf8','#fbbf24','#fb923c'];
+opts.forEach(function(opt,i){
+var yy=100+i*70;
+var op=Math.min(Math.max((p-i*0.15)*2,0),1);
+ctx.globalAlpha=op;
+// Background bar
+ctx.fillStyle='rgba(255,255,255,0.03)';
+ctx.fillRect(120,yy,460,50);
+ctx.strokeStyle=colors[i]+'66';ctx.lineWidth=1;
+ctx.strokeRect(120,yy,460,50);
+// Icon circle
+ctx.fillStyle=colors[i];ctx.shadowColor=colors[i];ctx.shadowBlur=8;
+ctx.beginPath();ctx.arc(155,yy+25,12,0,Math.PI*2);ctx.fill();
+ctx.shadowBlur=0;
+ctx.fillStyle='#131313';ctx.font='bold 14px "Space Grotesk"';ctx.textAlign='center';
+ctx.fillText(String(i+1),155,yy+30);
+// Text
+ctx.fillStyle='rgba(255,181,156,0.9)';ctx.font='13px "Noto Sans SC"';ctx.textAlign='left';
+ctx.fillText(opt.replace(/^\d+\.\s*/,''),180,yy+30);
+ctx.globalAlpha=1;
+});
+}
+
+var frameDrawers=[drawFrame0,drawFrame1,drawFrame2,drawFrame3,drawFrame4];
+var hudSpeeds=['--','0.1 m/s','0.1 m/s','0.5 m/s','--'];
+var hudLatencies=['--','30ms','500ms','500ms','--'];
+var hudBlinds=['--','3cm','15cm','25cm+','--'];
+
+function drawCurrent(){
+var rect=canvas.getBoundingClientRect();
+var scale=Math.min(rect.width/W,rect.height/H);
+var offsetX=(rect.width-W*scale)/2;
+var offsetY=(rect.height-H*scale)/2;
+ctx.setTransform(DPR*scale,0,0,DPR*scale,DPR*offsetX,DPR*offsetY);
+drawBg();
+frameDrawers[currentFrame](animProgress);
+ctx.setTransform(1,0,0,1,0,0);
+document.getElementById('hudVal0').textContent=hudSpeeds[currentFrame];
+document.getElementById('hudVal1').textContent=hudLatencies[currentFrame];
+document.getElementById('hudVal2').textContent=hudBlinds[currentFrame];
+document.getElementById('hudVal3').textContent=(currentFrame+1)+'/'+totalFrames;
+}
+window.drawCurrent=drawCurrent;
+
+function gotoFrame(f){
+currentFrame=Math.max(0,Math.min(f,totalFrames-1));
+animProgress=0;animStart=performance.now();animating=true;
+requestAnimationFrame(animate);
+}
+window.gotoFrame=gotoFrame;
+window.currentFrame=currentFrame;
+
+function animate(ts){
+if(!animating)return;
+var elapsed=ts-animStart;
+animProgress=easeInOut(Math.min(elapsed/1500,1));
+drawCurrent();
+if(animProgress<1)requestAnimationFrame(animate);
+else{animating=false;animProgress=1;drawCurrent();}
+}
+
+function playNext(){if(currentFrame<totalFrames-1)gotoFrame(currentFrame+1);else stopPlay();}
+function startPlay(){playing=true;refreshI18N();playTimer=setInterval(playNext,2500);}
+function stopPlay(){playing=false;refreshI18N();if(playTimer){clearInterval(playTimer);playTimer=null;}}
+
+document.getElementById('btnPrev').addEventListener('click',function(){stopPlay();if(currentFrame>0)gotoFrame(currentFrame-1);});
+document.getElementById('btnNext').addEventListener('click',function(){stopPlay();if(currentFrame<totalFrames-1)gotoFrame(currentFrame+1);});
+document.getElementById('btnPlay').addEventListener('click',function(){if(playing)stopPlay();else{startPlay();playNext();}});
+document.getElementById('langBtn').addEventListener('click',function(){LANG=LANG==='cn'?'en':'cn';refreshI18N();drawCurrent();});
+
+window.addEventListener('resize',resize);
+new ResizeObserver(function(){resize();}).observe(canvas.parentElement||canvas);
+refreshI18N();
+document.fonts.ready.then(function(){resize();gotoFrame(0);});
+setTimeout(function(){resize();gotoFrame(0);},200);
+</script>
+<script>
+
+(function () {
+  if (window.__systemedu_resize_patched) return;
+  window.__systemedu_resize_patched = true;
+
+  const canvas =
+    document.querySelector('canvas#c') ||
+    document.querySelector('canvas');
+  if (!canvas || !canvas.parentElement) return;
+  const container = canvas.parentElement;
+
+  // 注入防撑大 CSS：canvas 脱离流，父容器约束高度
+  // 同时把浮动的操作指南面板（.guide-panel 等）改成可折叠，避免
+  // 在小视口（iframe 缩小）下覆盖标题栏和控件。
+  try {
+    const style = document.createElement('style');
+    style.setAttribute('data-systemedu-resize-patch', '1');
+    style.textContent =
+      // canvas 防撑大
+      '.systemedu-canvas-host{position:relative!important;min-width:0!important;min-height:0!important;overflow:hidden!important;}' +
+      '.systemedu-canvas-host > canvas{position:absolute!important;top:0!important;left:0!important;width:100%!important;height:100%!important;}' +
+      // 浮动指南面板折叠态（默认折叠为一个小按钮，避免遮挡）
+      '.guide-panel.systemedu-guide-collapsed{max-width:28px!important;max-height:28px!important;min-width:28px!important;min-height:28px!important;' +
+      'padding:0!important;overflow:hidden!important;cursor:pointer!important;display:flex!important;align-items:center!important;justify-content:center!important;' +
+      'border-radius:50%!important;}' +
+      '.guide-panel.systemedu-guide-collapsed > *{display:none!important;}' +
+      '.guide-panel.systemedu-guide-collapsed::before{content:"?";color:#38bdf8;font-weight:700;font-size:14px;}' +
+      // 小视口时强制 guide-panel 宽度收紧
+      '.guide-panel{max-width:min(220px,35vw)!important;z-index:50!important;}';
+    document.head.appendChild(style);
+    container.classList.add('systemedu-canvas-host');
+  } catch (e) {}
+
+  // 让 .guide-panel 默认折叠为问号按钮，点击展开/收起
+  try {
+    const guides = document.querySelectorAll('.guide-panel');
+    guides.forEach(function (g) {
+      g.classList.add('systemedu-guide-collapsed');
+      g.setAttribute('title', '点击查看操作指南');
+      g.addEventListener('click', function (e) {
+        // 折叠时点击任意处展开；展开时只有点击面板本身（不是内部链接）才收回
+        if (g.classList.contains('systemedu-guide-collapsed')) {
+          g.classList.remove('systemedu-guide-collapsed');
+          e.stopPropagation();
+        } else {
+          // 展开状态下点击面板空白区域也能再次折叠
+          if (e.target === g) {
+            g.classList.add('systemedu-guide-collapsed');
+          }
+        }
+      });
+    });
+  } catch (e) {}
+
+  const redraw = function () {
+    try { if (typeof window.drawCurrent === 'function') { window.drawCurrent(); return; } } catch (e) {}
+    try {
+      if (typeof window.gotoFrame === 'function' &&
+          typeof window.currentFrame !== 'undefined') {
+        window.gotoFrame(window.currentFrame); return;
+      }
+    } catch (e) {}
+    try { if (typeof window.draw === 'function') { window.draw(); return; } } catch (e) {}
+    try { if (typeof window.render === 'function') { window.render(); return; } } catch (e) {}
+  };
+
+  let rafId = 0;
+  let prevW = 0, prevH = 0;
+
+  // 校正 canvas backing store 与 CSS 显示尺寸，保证宽高比一致。
+  // 防止 canvas 被浏览器按不同比例拉伸（典型症状：文字被水平拉宽或压扁）。
+  // 必要时重新调用原 resize() 让动画内部坐标系也更新。
+  const enforceSizeConsistency = function () {
+    const rect = canvas.getBoundingClientRect();
+    if (rect.width < 1 || rect.height < 1) return false;
+    const dpr = Math.max(1, window.devicePixelRatio || 1);
+    const targetW = Math.round(rect.width * dpr);
+    const targetH = Math.round(rect.height * dpr);
+    // 允许 1 像素误差
+    if (Math.abs(canvas.width - targetW) > 1 || Math.abs(canvas.height - targetH) > 1) {
+      return true; // 需要修复
+    }
+    return false;
+  };
+
+  // 调用动画内部的 resize 钩子。优先级：
+  //   1) window.resize（老式全局挂载）
+  //   2) window 上的 'resize' 事件（addEventListener 注册的 local resize）
+  // 多数 knode 动画通过 addEventListener('resize', resize) 挂事件监听，
+  // 此时 window.resize 是 undefined，唯一能驱动它的方式是 dispatchEvent。
+  const callInternalResize = function () {
+    try {
+      if (typeof window.resize === 'function') {
+        window.resize();
+        return true;
+      }
+    } catch (e) {}
+    try {
+      window.dispatchEvent(new Event('resize'));
+      return true;
+    } catch (e) {}
+    return false;
+  };
+
+  const doResize = function () {
+    // 让动画的 local resize 读最新 rect 并重写 canvas backing store
+    callInternalResize();
+
+    // 校正 backing store：若 canvas.width/height 与 CSS 显示尺寸不一致
+    // （典型症状：文字被水平或垂直拉伸），反复触发 local resize 让它
+    // 重新计算。浏览器 layout 已稳定时通常一次就能修复。
+    try {
+      let guard = 0;
+      while (enforceSizeConsistency() && guard < 3) {
+        guard++;
+        // 触发 reflow 让 getBoundingClientRect 读到最新值
+        void canvas.offsetHeight;
+        callInternalResize();
+      }
+      // 最终保障：某些动画的 resize 可能读到错值（例如 parentElement 被
+      // 缓存，或 CSS !important 锁死尺寸）。此时直接硬写 canvas.width/height
+      // 保证宽高比正确；drawCurrent 会把内容重新画到正确的 backing store。
+      const rect = canvas.getBoundingClientRect();
+      const dpr = Math.max(1, window.devicePixelRatio || 1);
+      const tw = Math.round(rect.width * dpr);
+      const th = Math.round(rect.height * dpr);
+      if (rect.width >= 1 && rect.height >= 1 &&
+          (Math.abs(canvas.width - tw) > 1 || Math.abs(canvas.height - th) > 1)) {
+        canvas.width = tw;
+        canvas.height = th;
+        // 同步动画内部坐标系变量（若挂在 window 上）
+        try {
+          if (typeof window.W !== 'undefined') window.W = rect.width;
+          if (typeof window.H !== 'undefined') window.H = rect.height;
+        } catch (e) {}
+        // 再跑一次 local resize，让它重新 setTransform 并更新自身 W/H
+        callInternalResize();
+      }
+    } catch (e) {}
+
+    redraw();
+  };
+
+  const ro = new ResizeObserver(function (entries) {
+    const entry = entries[0];
+    if (!entry) return;
+    const cr = entry.contentRect;
+    const w = cr.width, h = cr.height;
+    if (w < 1 || h < 1) return;
+    if (Math.abs(w - prevW) < 1 && Math.abs(h - prevH) < 1) return;
+    prevW = w; prevH = h;
+
+    // 第一次回调也要处理：iframe 内的动画可能把错值写到 canvas backing
+    // store（例如 load 时 parent rect 还不稳定），第一次 RO 回调正是
+    // layout 已稳定的时机，必须借此纠正。
+    if (rafId) cancelAnimationFrame(rafId);
+    rafId = requestAnimationFrame(function () {
+      rafId = 0;
+      doResize();
+    });
+  });
+
+  try { ro.observe(container); } catch (e) {}
+
+  // iframe 初始化阶段 parent rect 可能不稳定，导致动画原始 resize()
+  // 写入错误的 canvas.width/height（尤其在 iframe 外层 div 宽高变化时）。
+  // load 后始终跑一次 doResize 做最终校正，不依赖 canvas.width<4 的判断。
+  window.addEventListener('load', function () {
+    setTimeout(function () { doResize(); }, 50);
+  });
+})();
+
+</script>
+</body>
+</html>

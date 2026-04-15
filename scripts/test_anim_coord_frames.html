@@ -1,0 +1,652 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;700&family=Inter:wght@400;500&family=Noto+Sans+SC:wght@400;700&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0;border-radius:0}
+html,body{width:100%;height:100vh;overflow:hidden;
+  background:#131313;
+  font-family:'Space Grotesk','Inter','Noto Sans SC',sans-serif;
+  color:#e5e2e1;
+}
+.lang-btn{
+  position:fixed;top:8px;left:8px;z-index:100;
+  font-family:'Space Grotesk',sans-serif;font-size:11px;font-weight:700;
+  padding:4px 10px;cursor:pointer;
+  border:1px solid rgba(255,255,255,0.08);
+  background:rgba(20,20,35,0.85);backdrop-filter:blur(12px);
+  color:#ffb59c;letter-spacing:1px;
+}
+.guide-panel{
+  position:fixed;top:8px;right:8px;width:260px;max-height:40vh;
+  overflow-y:auto;z-index:100;
+  background:rgba(20,20,35,0.85);backdrop-filter:blur(12px);
+  border:1px solid rgba(255,255,255,0.08);padding:12px;
+  font-family:'Noto Sans SC',sans-serif;font-size:13px;
+  color:rgba(255,255,255,0.85);
+}
+.guide-panel h3{
+  font-family:'Space Grotesk',sans-serif;font-size:14px;
+  margin-bottom:8px;display:flex;align-items:center;
+  justify-content:space-between;cursor:pointer;
+  color:#ffb59c;
+}
+.guide-panel .toggle{font-size:12px;opacity:0.6;}
+.guide-panel ul{padding-left:16px;line-height:1.6;}
+.guide-panel .guide-content.collapsed{display:none;}
+.wrapper{display:flex;flex-direction:column;height:100vh;}
+.canvas-wrap{flex:1;min-height:0;position:relative;}
+.canvas-wrap canvas{display:block;width:100%;height:100%;position:absolute;top:0;left:0;}
+.controls{
+  display:flex;align-items:center;gap:8px;
+  padding:6px 12px;
+  background:rgba(28,27,27,0.92);
+  border-top:1px solid rgba(138,136,134,0.15);
+}
+.controls button{
+  font-family:'Space Grotesk',sans-serif;font-size:12px;font-weight:700;
+  padding:4px 14px;cursor:pointer;letter-spacing:1px;
+  border:1px solid rgba(138,136,134,0.15);
+  background:transparent;color:#ffb59c;
+}
+.controls button:hover{background:#353534;}
+.controls .frame-indicator{
+  font-family:'Space Grotesk',sans-serif;font-size:12px;
+  color:#8a8886;margin-left:auto;
+}
+.hud{
+  display:flex;align-items:center;justify-content:space-around;
+  height:52px;
+  background:rgba(0,0,0,0.55);
+  border-top:1px solid rgba(255,255,255,0.06);
+}
+.hud .hud-col{text-align:center;}
+.hud .hud-label{
+  font-family:'Space Grotesk',sans-serif;font-size:10px;
+  color:#8a8886;letter-spacing:1px;text-transform:uppercase;
+}
+.hud .hud-val{
+  font-family:'Space Grotesk',sans-serif;font-size:14px;font-weight:700;
+  color:#e5e2e1;
+}
+</style>
+</head>
+<body>
+<button class="lang-btn" id="langBtn">CN</button>
+<div class="guide-panel" id="guidePanel">
+  <h3 id="guideHeader"><span id="guideTitle"></span> <span class="toggle" id="guideToggle">[-]</span></h3>
+  <div class="guide-content" id="guideContent">
+    <p id="guideWhat"></p>
+    <ul id="guidePoints"></ul>
+    <p id="guideControls"></p>
+    <p id="guideTakeaway" style="margin-top:6px;font-weight:700;"></p>
+  </div>
+</div>
+<div class="wrapper">
+  <div class="canvas-wrap">
+    <canvas id="c"></canvas>
+  </div>
+  <div class="controls" id="controls">
+    <button id="btnPrev"></button>
+    <button id="btnPlay"></button>
+    <button id="btnNext"></button>
+    <span class="frame-indicator" id="frameIndicator"></span>
+  </div>
+  <div class="hud" id="hud"></div>
+</div>
+<script>
+(function(){
+var LANG='cn';
+var I18N={
+  guideTitle:{en:'GUIDE',cn:'\u64cd\u4f5c\u6307\u5357'},
+  guideWhat:{en:'Shows how world frame, body frame and camera frame relate to each other on a rover, and why misalignment causes path deviation.',cn:'\u5c55\u793a\u4e16\u754c\u5750\u6807\u7cfb\u3001\u8f66\u4f53\u5750\u6807\u7cfb\u548c\u76f8\u673a\u5750\u6807\u7cfb\u5728\u706b\u661f\u8f66\u4e0a\u7684\u5173\u7cfb\uff0c\u4ee5\u53ca\u5750\u6807\u672a\u5bf9\u9f50\u65f6\u8def\u5f84\u504f\u79fb\u7684\u539f\u56e0\u3002'},
+  guideObs1:{en:'Observe: 3 coordinate frames each have different origins and orientations',cn:'\u89c2\u5bdf\uff1a\u4e09\u4e2a\u5750\u6807\u7cfb\u5404\u6709\u4e0d\u540c\u7684\u539f\u70b9\u548c\u671d\u5411'},
+  guideObs2:{en:'Observe: rotation between body and world frame changes with rover heading',cn:'\u89c2\u5bdf\uff1a\u8f66\u4f53\u5750\u6807\u4e0e\u4e16\u754c\u5750\u6807\u7684\u65cb\u8f6c\u89d2\u968f\u8f66\u5934\u671d\u5411\u53d8\u5316'},
+  guideObs3:{en:'Observe: camera frame has a fixed offset relative to body frame',cn:'\u89c2\u5bdf\uff1a\u76f8\u673a\u5750\u6807\u7cfb\u76f8\u5bf9\u8f66\u4f53\u6709\u56fa\u5b9a\u504f\u79fb'},
+  guideObs4:{en:'Observe: if frames are not aligned, the planned path deviates from actual path',cn:'\u89c2\u5bdf\uff1a\u5982\u679c\u5750\u6807\u7cfb\u672a\u5bf9\u9f50\uff0c\u89c4\u5212\u8def\u5f84\u4e0e\u5b9e\u9645\u8def\u5f84\u504f\u79fb'},
+  guideCtrl:{en:'Use PREV/NEXT to step through frames, PLAY for auto playback.',cn:'\u4f7f\u7528 PREV/NEXT \u9010\u5e27\u67e5\u770b\uff0cPLAY \u81ea\u52a8\u64ad\u653e\u3002'},
+  guideTake:{en:'Takeaway: Coordinate alignment is the bridge between software path planning and physical rover motion.',cn:'\u6536\u83b7\uff1a\u5750\u6807\u5bf9\u9f50\u662f\u8f6f\u4ef6\u8def\u5f84\u89c4\u5212\u4e0e\u7269\u7406\u8f66\u8f86\u8fd0\u52a8\u7684\u6865\u6881\u3002'},
+  title:{en:'THREE COORDINATE FRAMES',cn:'\u4e09\u5927\u5750\u6807\u7cfb'},
+  subtitle:{en:'World / Body / Camera',cn:'\u4e16\u754c / \u8f66\u4f53 / \u76f8\u673a'},
+  btnPrev:{en:'PREV',cn:'\u4e0a\u4e00\u5e27'},
+  btnPlay:{en:'PLAY',cn:'\u64ad\u653e'},
+  btnPause:{en:'PAUSE',cn:'\u6682\u505c'},
+  btnNext:{en:'NEXT',cn:'\u4e0b\u4e00\u5e27'},
+  frame0title:{en:'WORLD COORDINATE FRAME',cn:'\u4e16\u754c\u5750\u6807\u7cfb'},
+  frame0desc:{en:'The field map uses a fixed world frame (N-E-D). All waypoints are defined here.',cn:'\u573a\u5730\u5730\u56fe\u4f7f\u7528\u56fa\u5b9a\u7684\u4e16\u754c\u5750\u6807\u7cfb (N-E-D)\u3002\u6240\u6709\u8def\u70b9\u90fd\u5728\u6b64\u5750\u6807\u7cfb\u4e0b\u5b9a\u4e49\u3002'},
+  frame1title:{en:'BODY COORDINATE FRAME',cn:'\u8f66\u4f53\u5750\u6807\u7cfb'},
+  frame1desc:{en:'The rover body frame moves with the vehicle. Forward = X-axis of body frame.',cn:'\u8f66\u4f53\u5750\u6807\u7cfb\u968f\u8f66\u8f86\u8fd0\u52a8\u3002\u8f66\u5934\u524d\u8fdb\u65b9\u5411 = \u8f66\u4f53 X \u8f74\u3002'},
+  frame2title:{en:'CAMERA COORDINATE FRAME',cn:'\u76f8\u673a\u5750\u6807\u7cfb'},
+  frame2desc:{en:'Camera has its own optical frame. Mounted offset from body center introduces transform.',cn:'\u76f8\u673a\u6709\u81ea\u5df1\u7684\u5149\u5b66\u5750\u6807\u7cfb\u3002\u5b89\u88c5\u504f\u79fb\u5f15\u5165\u989d\u5916\u53d8\u6362\u3002'},
+  frame3title:{en:'MISALIGNMENT CAUSES DRIFT',cn:'\u672a\u5bf9\u9f50\u5bfc\u81f4\u504f\u822a'},
+  frame3desc:{en:'If body-to-world transform has a 5-deg error, the rover drifts further the longer it drives.',cn:'\u5982\u679c\u8f66\u4f53\u5230\u4e16\u754c\u7684\u53d8\u6362\u6709 5\u00b0 \u8bef\u5dee\uff0c\u8f66\u8d70\u5f97\u8d8a\u8fdc\u504f\u79fb\u8d8a\u5927\u3002'},
+  frame4title:{en:'ALIGNED FRAMES = CORRECT PATH',cn:'\u5bf9\u9f50\u5750\u6807 = \u8def\u5f84\u6b63\u786e'},
+  frame4desc:{en:'After calibration, the planned path matches the actual driven path.',cn:'\u6807\u5b9a\u5b8c\u6210\u540e\uff0c\u89c4\u5212\u8def\u5f84\u4e0e\u5b9e\u9645\u884c\u9a76\u8def\u5f84\u5339\u914d\u3002'},
+  worldFrame:{en:'WORLD',cn:'\u4e16\u754c'},
+  bodyFrame:{en:'BODY',cn:'\u8f66\u4f53'},
+  camFrame:{en:'CAMERA',cn:'\u76f8\u673a'},
+  plannedPath:{en:'PLANNED',cn:'\u89c4\u5212'},
+  actualPath:{en:'ACTUAL',cn:'\u5b9e\u9645'},
+  hudFrame:{en:'FRAME',cn:'\u5e27'},
+  hudAngle:{en:'HEADING',cn:'\u8f66\u5934\u89d2'},
+  hudError:{en:'ERROR',cn:'\u8bef\u5dee'},
+  hudDrift:{en:'DRIFT',cn:'\u504f\u79fb'},
+  north:{en:'N',cn:'N'},
+  east:{en:'E',cn:'E'},
+  forward:{en:'FWD',cn:'\u524d'},
+  right:{en:'RIGHT',cn:'\u53f3'},
+  opticalZ:{en:'Z(opt)',cn:'Z(\u5149)'},
+  opticalX:{en:'X(opt)',cn:'X(\u5149)'}
+};
+function t(k){return(I18N[k]&&I18N[k][LANG])||(I18N[k]&&I18N[k]['en'])||k;}
+
+var canvas=document.getElementById('c');
+var ctx=canvas.getContext('2d');
+var W=0,H=0,DPR=Math.min(window.devicePixelRatio||1,2);
+var currentFrame=0,totalFrames=5,playing=false,playTimer=null;
+var transitioning=false;
+
+/* HUD data per frame */
+var hudData=[
+  {angle:'0\u00b0',error:'--',drift:'--'},
+  {angle:'30\u00b0',error:'0\u00b0',drift:'0 cm'},
+  {angle:'30\u00b0',error:'0\u00b0',drift:'0 cm'},
+  {angle:'30\u00b0',error:'5\u00b0',drift:'8.7 cm/m'},
+  {angle:'30\u00b0',error:'0\u00b0',drift:'0 cm'}
+];
+
+/* ---- drawing primitives ---- */
+function drawBg(){
+  var g=ctx.createLinearGradient(0,0,0,H);
+  g.addColorStop(0,'#131313');g.addColorStop(1,'#1a1035');
+  ctx.fillStyle=g;ctx.fillRect(0,0,W,H);
+  /* wireframe grid */
+  ctx.strokeStyle='rgba(255,255,255,0.03)';ctx.lineWidth=1;
+  var step=20*DPR;
+  for(var x=0;x<W;x+=step){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,H);ctx.stroke();}
+  for(var y=0;y<H;y+=step){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke();}
+}
+
+function drawArrowLine(x1,y1,x2,y2,color,lineW){
+  ctx.save();ctx.strokeStyle=color;ctx.fillStyle=color;ctx.lineWidth=lineW||2*DPR;
+  ctx.beginPath();ctx.moveTo(x1,y1);ctx.lineTo(x2,y2);ctx.stroke();
+  var angle=Math.atan2(y2-y1,x2-x1);
+  var hl=10*DPR;
+  ctx.beginPath();
+  ctx.moveTo(x2,y2);
+  ctx.lineTo(x2-hl*Math.cos(angle-0.4),y2-hl*Math.sin(angle-0.4));
+  ctx.lineTo(x2-hl*Math.cos(angle+0.4),y2-hl*Math.sin(angle+0.4));
+  ctx.closePath();ctx.fill();
+  ctx.restore();
+}
+
+function drawAxis(ox,oy,angle,len,xColor,yColor,xLabel,yLabel){
+  var cosA=Math.cos(angle),sinA=Math.sin(angle);
+  /* x-axis */
+  drawArrowLine(ox,oy,ox+len*cosA,oy+len*sinA,xColor,2*DPR);
+  ctx.save();ctx.font='bold '+Math.round(11*DPR)+'px "Space Grotesk"';
+  ctx.fillStyle=xColor;ctx.textAlign='center';
+  ctx.fillText(xLabel,ox+len*cosA*1.15,oy+len*sinA*1.15+4*DPR);
+  ctx.restore();
+  /* y-axis (90 deg CCW from x) */
+  var cosB=Math.cos(angle-Math.PI/2),sinB=Math.sin(angle-Math.PI/2);
+  drawArrowLine(ox,oy,ox+len*cosB,oy+len*sinB,yColor,2*DPR);
+  ctx.save();ctx.font='bold '+Math.round(11*DPR)+'px "Space Grotesk"';
+  ctx.fillStyle=yColor;ctx.textAlign='center';
+  ctx.fillText(yLabel,ox+len*cosB*1.15,oy+len*sinB*1.15+4*DPR);
+  ctx.restore();
+}
+
+function drawRover(cx,cy,angle,size,alpha){
+  ctx.save();ctx.globalAlpha=alpha||1;
+  ctx.translate(cx,cy);ctx.rotate(angle);
+  /* body */
+  var bw=size*1.6,bh=size;
+  var bg=ctx.createLinearGradient(-bw/2,-bh/2,-bw/2,bh/2);
+  bg.addColorStop(0,'#555');bg.addColorStop(0.5,'#888');bg.addColorStop(1,'#444');
+  ctx.fillStyle=bg;
+  ctx.fillRect(-bw/2,-bh/2,bw,bh);
+  /* direction indicator */
+  ctx.fillStyle='#ff5f1f';
+  ctx.beginPath();ctx.moveTo(bw/2,0);ctx.lineTo(bw/2-size*0.3,-bh*0.3);ctx.lineTo(bw/2-size*0.3,bh*0.3);ctx.closePath();ctx.fill();
+  /* wheels */
+  ctx.fillStyle='#333';
+  var ww=size*0.3,wh=size*0.2;
+  ctx.fillRect(-bw/2,-bh/2-wh,ww,wh);
+  ctx.fillRect(bw/2-ww,-bh/2-wh,ww,wh);
+  ctx.fillRect(-bw/2,bh/2,ww,wh);
+  ctx.fillRect(bw/2-ww,bh/2,ww,wh);
+  /* camera mount */
+  ctx.fillStyle='#00daf3';
+  ctx.fillRect(bw/2-size*0.15,-bh*0.15,size*0.2,bh*0.3);
+  ctx.restore();
+}
+
+function drawPath(points,color,dashed,alpha){
+  if(points.length<2)return;
+  ctx.save();ctx.globalAlpha=alpha||1;
+  ctx.strokeStyle=color;ctx.lineWidth=2*DPR;
+  if(dashed)ctx.setLineDash([6*DPR,4*DPR]);
+  ctx.beginPath();ctx.moveTo(points[0][0],points[0][1]);
+  for(var i=1;i<points.length;i++)ctx.lineTo(points[i][0],points[i][1]);
+  ctx.stroke();
+  if(dashed)ctx.setLineDash([]);
+  ctx.restore();
+}
+
+function drawGlow(cx,cy,radius,color,alpha){
+  ctx.save();ctx.globalAlpha=alpha||0.3;
+  var g=ctx.createRadialGradient(cx,cy,0,cx,cy,radius);
+  g.addColorStop(0,color);g.addColorStop(1,'rgba(0,0,0,0)');
+  ctx.fillStyle=g;ctx.beginPath();ctx.arc(cx,cy,radius,0,Math.PI*2);ctx.fill();
+  ctx.restore();
+}
+
+function drawLabel(text,x,y,color,size,alpha,align){
+  ctx.save();ctx.globalAlpha=alpha||1;
+  ctx.font='bold '+Math.round((size||13)*DPR)+'px "Space Grotesk"';
+  ctx.fillStyle=color||'#ffb59c';ctx.textAlign=align||'center';
+  ctx.fillText(text,x,y);ctx.restore();
+}
+
+function drawTextBlock(text,x,y,maxW,color,size,alpha){
+  ctx.save();ctx.globalAlpha=alpha||1;
+  ctx.font=Math.round((size||12)*DPR)+'px "Noto Sans SC","Inter",sans-serif';
+  ctx.fillStyle=color||'#c6c6c6';
+  var words=text.split('');var line='';var lineH=(size||12)*1.5*DPR;var yy=y;
+  for(var i=0;i<words.length;i++){
+    var test=line+words[i];
+    if(ctx.measureText(test).width>maxW&&line.length>0){
+      ctx.fillText(line,x,yy);yy+=lineH;line=words[i];
+    }else{line=test;}
+  }
+  ctx.fillText(line,x,yy);
+  ctx.restore();
+}
+
+function drawFieldGrid(ox,oy,gw,gh,color,alpha){
+  ctx.save();ctx.globalAlpha=alpha||0.15;
+  ctx.strokeStyle=color||'#00daf3';ctx.lineWidth=1;
+  var cellSize=gw/8;
+  for(var i=0;i<=8;i++){
+    ctx.beginPath();ctx.moveTo(ox+i*cellSize,oy);ctx.lineTo(ox+i*cellSize,oy+gh);ctx.stroke();
+    ctx.beginPath();ctx.moveTo(ox,oy+i*(gh/8));ctx.lineTo(ox+gw,oy+i*(gh/8));ctx.stroke();
+  }
+  ctx.restore();
+}
+
+function drawWaypoint(x,y,label,color,alpha){
+  ctx.save();ctx.globalAlpha=alpha||1;
+  drawGlow(x,y,12*DPR,color||'#ff5f1f',0.4*(alpha||1));
+  ctx.fillStyle=color||'#ff5f1f';
+  ctx.beginPath();ctx.arc(x,y,4*DPR,0,Math.PI*2);ctx.fill();
+  ctx.font='bold '+Math.round(10*DPR)+'px "Space Grotesk"';
+  ctx.fillStyle=color||'#ff5f1f';ctx.textAlign='center';
+  ctx.fillText(label,x,y-8*DPR);
+  ctx.restore();
+}
+
+/* ---- shared element model ---- */
+function lerp(a,b,p){return a+(b-a)*p;}
+function easeInOut(x){return x<0.5?2*x*x:1-Math.pow(-2*x+2,2)/2;}
+function merge(base,over){var r={};for(var k in base)r[k]=base[k];for(var k2 in over)r[k2]=over[k2];return r;}
+
+function getFrameElements(f){
+  var cx=W/2, cy=H/2;
+  var axLen=Math.min(W,H)*0.18;
+  var roverSize=Math.min(W,H)*0.06;
+  var fieldW=Math.min(W*0.55,H*0.55);
+  var fieldH=fieldW;
+  var fieldOx=cx-fieldW/2, fieldOy=cy-fieldH/2+10*DPR;
+
+  if(f===0){
+    /* Frame 0: World coordinate system alone */
+    return [
+      {id:'title',type:'label',text:t('frame0title'),x:cx,y:30*DPR,color:'#ffb59c',size:16,align:'center',alpha:1},
+      {id:'desc',type:'label',text:t('frame0desc'),x:cx,y:52*DPR,color:'#c6c6c6',size:11,align:'center',alpha:1},
+      {id:'field',type:'custom',x:fieldOx,y:fieldOy,w:fieldW,h:fieldH,alpha:1,draw:function(a){
+        drawFieldGrid(fieldOx,fieldOy,fieldW,fieldH,'#00daf3',0.2*a);
+      }},
+      {id:'worldAxis',type:'custom',x:fieldOx+15*DPR,y:fieldOy+fieldH-15*DPR,w:axLen,h:axLen,alpha:1,draw:function(a){
+        ctx.save();ctx.globalAlpha=a;
+        var ox=fieldOx+15*DPR, oy=fieldOy+fieldH-15*DPR;
+        drawAxis(ox,oy,-Math.PI/2,axLen,'#00daf3','#10b981',t('north'),t('east'));
+        drawLabel(t('worldFrame'),ox+axLen*0.5,oy+20*DPR,'#00daf3',12,a,'center');
+        ctx.restore();
+      }},
+      {id:'wp1',type:'custom',x:fieldOx+fieldW*0.2,y:fieldOy+fieldH*0.8,w:8,h:8,alpha:1,draw:function(a){
+        drawWaypoint(fieldOx+fieldW*0.2,fieldOy+fieldH*0.8,'A','#ffb59c',a);
+      }},
+      {id:'wp2',type:'custom',x:fieldOx+fieldW*0.5,y:fieldOy+fieldH*0.4,w:8,h:8,alpha:1,draw:function(a){
+        drawWaypoint(fieldOx+fieldW*0.5,fieldOy+fieldH*0.4,'B','#ffb59c',a);
+      }},
+      {id:'wp3',type:'custom',x:fieldOx+fieldW*0.8,y:fieldOy+fieldH*0.2,w:8,h:8,alpha:1,draw:function(a){
+        drawWaypoint(fieldOx+fieldW*0.8,fieldOy+fieldH*0.2,'C','#ffb59c',a);
+      }},
+      {id:'pathPlanned',type:'custom',x:0,y:0,w:0,h:0,alpha:1,draw:function(a){
+        drawPath([
+          [fieldOx+fieldW*0.2,fieldOy+fieldH*0.8],
+          [fieldOx+fieldW*0.5,fieldOy+fieldH*0.4],
+          [fieldOx+fieldW*0.8,fieldOy+fieldH*0.2]
+        ],'#ffb59c',true,a*0.7);
+      }}
+    ];
+  }
+  if(f===1){
+    /* Frame 1: Body coordinate system appears with rover */
+    var roverAngle=Math.PI/6;/* 30 deg */
+    var roverX=fieldOx+fieldW*0.35, roverY=fieldOy+fieldH*0.6;
+    return [
+      {id:'title',type:'label',text:t('frame1title'),x:cx,y:30*DPR,color:'#ffb59c',size:16,align:'center',alpha:1},
+      {id:'desc',type:'label',text:t('frame1desc'),x:cx,y:52*DPR,color:'#c6c6c6',size:11,align:'center',alpha:1},
+      {id:'field',type:'custom',x:fieldOx,y:fieldOy,w:fieldW,h:fieldH,alpha:1,draw:function(a){
+        drawFieldGrid(fieldOx,fieldOy,fieldW,fieldH,'#00daf3',0.12*a);
+      }},
+      {id:'worldAxis',type:'custom',x:fieldOx+15*DPR,y:fieldOy+fieldH-15*DPR,w:axLen*0.7,h:axLen*0.7,alpha:0.5,draw:function(a){
+        ctx.save();ctx.globalAlpha=a;
+        var ox=fieldOx+15*DPR, oy=fieldOy+fieldH-15*DPR;
+        drawAxis(ox,oy,-Math.PI/2,axLen*0.7,'#00daf3','#10b981',t('north'),t('east'));
+        drawLabel(t('worldFrame'),ox+axLen*0.35,oy+16*DPR,'#00daf3',10,a,'center');
+        ctx.restore();
+      }},
+      {id:'rover',type:'custom',x:roverX,y:roverY,w:roverSize,h:roverSize,alpha:1,draw:function(a){
+        drawRover(roverX,roverY,-roverAngle,roverSize,a);
+      }},
+      {id:'bodyAxis',type:'custom',x:roverX,y:roverY,w:axLen,h:axLen,alpha:1,draw:function(a){
+        ctx.save();ctx.globalAlpha=a;
+        drawAxis(roverX,roverY,-roverAngle,axLen*0.9,'#ff5f1f','#ffb59c',t('forward'),t('right'));
+        drawLabel(t('bodyFrame'),roverX+axLen*0.6,roverY+25*DPR,'#ff5f1f',12,a,'center');
+        ctx.restore();
+      }},
+      {id:'wp1',type:'custom',x:fieldOx+fieldW*0.2,y:fieldOy+fieldH*0.8,w:8,h:8,alpha:0.4,draw:function(a){
+        drawWaypoint(fieldOx+fieldW*0.2,fieldOy+fieldH*0.8,'A','#ffb59c',a);
+      }},
+      {id:'wp2',type:'custom',x:fieldOx+fieldW*0.5,y:fieldOy+fieldH*0.4,w:8,h:8,alpha:0.4,draw:function(a){
+        drawWaypoint(fieldOx+fieldW*0.5,fieldOy+fieldH*0.4,'B','#ffb59c',a);
+      }},
+      {id:'wp3',type:'custom',x:fieldOx+fieldW*0.8,y:fieldOy+fieldH*0.2,w:8,h:8,alpha:0.4,draw:function(a){
+        drawWaypoint(fieldOx+fieldW*0.8,fieldOy+fieldH*0.2,'C','#ffb59c',a);
+      }},
+      {id:'pathPlanned',type:'custom',x:0,y:0,w:0,h:0,alpha:0.3,draw:function(a){
+        drawPath([
+          [fieldOx+fieldW*0.2,fieldOy+fieldH*0.8],
+          [fieldOx+fieldW*0.5,fieldOy+fieldH*0.4],
+          [fieldOx+fieldW*0.8,fieldOy+fieldH*0.2]
+        ],'#ffb59c',true,a*0.5);
+      }}
+    ];
+  }
+  if(f===2){
+    /* Frame 2: Camera coordinate system */
+    var roverAngle=Math.PI/6;
+    var roverX=fieldOx+fieldW*0.35, roverY=fieldOy+fieldH*0.6;
+    var camX=roverX+roverSize*0.8*Math.cos(-roverAngle);
+    var camY=roverY+roverSize*0.8*Math.sin(-roverAngle);
+    return [
+      {id:'title',type:'label',text:t('frame2title'),x:cx,y:30*DPR,color:'#ffb59c',size:16,align:'center',alpha:1},
+      {id:'desc',type:'label',text:t('frame2desc'),x:cx,y:52*DPR,color:'#c6c6c6',size:11,align:'center',alpha:1},
+      {id:'field',type:'custom',x:fieldOx,y:fieldOy,w:fieldW,h:fieldH,alpha:1,draw:function(a){
+        drawFieldGrid(fieldOx,fieldOy,fieldW,fieldH,'#00daf3',0.1*a);
+      }},
+      {id:'worldAxis',type:'custom',x:fieldOx+15*DPR,y:fieldOy+fieldH-15*DPR,w:axLen*0.5,h:axLen*0.5,alpha:0.3,draw:function(a){
+        ctx.save();ctx.globalAlpha=a;
+        var ox=fieldOx+15*DPR,oy=fieldOy+fieldH-15*DPR;
+        drawAxis(ox,oy,-Math.PI/2,axLen*0.5,'#00daf3','#10b981',t('north'),t('east'));
+        ctx.restore();
+      }},
+      {id:'rover',type:'custom',x:roverX,y:roverY,w:roverSize,h:roverSize,alpha:1,draw:function(a){
+        drawRover(roverX,roverY,-roverAngle,roverSize,a);
+      }},
+      {id:'bodyAxis',type:'custom',x:roverX,y:roverY,w:axLen*0.7,h:axLen*0.7,alpha:0.4,draw:function(a){
+        ctx.save();ctx.globalAlpha=a;
+        drawAxis(roverX,roverY,-roverAngle,axLen*0.6,'#ff5f1f','#ffb59c',t('forward'),t('right'));
+        ctx.restore();
+      }},
+      {id:'camAxis',type:'custom',x:camX,y:camY,w:axLen,h:axLen,alpha:1,draw:function(a){
+        ctx.save();ctx.globalAlpha=a;
+        /* camera optical frame: Z forward, X right (rotated) */
+        var camAngle=-roverAngle-Math.PI*0.05;
+        drawAxis(camX,camY,camAngle,axLen*0.7,'#00daf3','#f472b6',t('opticalZ'),t('opticalX'));
+        drawLabel(t('camFrame'),camX+axLen*0.5,camY-20*DPR,'#00daf3',12,a,'center');
+        /* FOV cone */
+        ctx.strokeStyle='rgba(0,218,243,0.3)';ctx.lineWidth=1;
+        ctx.beginPath();
+        ctx.moveTo(camX,camY);
+        var fovAngle=0.4;
+        ctx.lineTo(camX+axLen*1.2*Math.cos(camAngle-fovAngle),camY+axLen*1.2*Math.sin(camAngle-fovAngle));
+        ctx.moveTo(camX,camY);
+        ctx.lineTo(camX+axLen*1.2*Math.cos(camAngle+fovAngle),camY+axLen*1.2*Math.sin(camAngle+fovAngle));
+        ctx.stroke();
+        /* FOV arc */
+        ctx.beginPath();ctx.arc(camX,camY,axLen*1.0,camAngle-fovAngle,camAngle+fovAngle);ctx.stroke();
+        ctx.restore();
+      }}
+    ];
+  }
+  if(f===3){
+    /* Frame 3: Misalignment demonstration */
+    var roverAngle=Math.PI/6;
+    var errorAngle=Math.PI/36;/* 5 deg */
+    var roverX=fieldOx+fieldW*0.2, roverY=fieldOy+fieldH*0.75;
+    /* planned path */
+    var pPts=[];var aPts=[];
+    var dist=fieldW*0.7;
+    for(var i=0;i<=10;i++){
+      var frac=i/10;
+      pPts.push([roverX+dist*frac*Math.cos(-roverAngle),roverY+dist*frac*Math.sin(-roverAngle)]);
+      aPts.push([roverX+dist*frac*Math.cos(-roverAngle-errorAngle),roverY+dist*frac*Math.sin(-roverAngle-errorAngle)]);
+    }
+    var endP=pPts[pPts.length-1],endA=aPts[aPts.length-1];
+    return [
+      {id:'title',type:'label',text:t('frame3title'),x:cx,y:30*DPR,color:'#ff5f1f',size:16,align:'center',alpha:1},
+      {id:'desc',type:'label',text:t('frame3desc'),x:cx,y:52*DPR,color:'#c6c6c6',size:11,align:'center',alpha:1},
+      {id:'field',type:'custom',x:fieldOx,y:fieldOy,w:fieldW,h:fieldH,alpha:1,draw:function(a){
+        drawFieldGrid(fieldOx,fieldOy,fieldW,fieldH,'#00daf3',0.1*a);
+      }},
+      {id:'rover',type:'custom',x:roverX,y:roverY,w:roverSize,h:roverSize,alpha:1,draw:function(a){
+        drawRover(roverX,roverY,-roverAngle,roverSize*0.8,a);
+      }},
+      {id:'pathPlanned',type:'custom',x:0,y:0,w:0,h:0,alpha:1,draw:function(a){
+        drawPath(pPts,'#10b981',true,a*0.8);
+        drawLabel(t('plannedPath'),endP[0]+10*DPR,endP[1]-10*DPR,'#10b981',11,a,'left');
+      }},
+      {id:'pathActual',type:'custom',x:0,y:0,w:0,h:0,alpha:1,draw:function(a){
+        drawPath(aPts,'#ff5f1f',false,a*0.9);
+        drawLabel(t('actualPath'),endA[0]+10*DPR,endA[1]+15*DPR,'#ff5f1f',11,a,'left');
+      }},
+      {id:'driftLine',type:'custom',x:0,y:0,w:0,h:0,alpha:1,draw:function(a){
+        ctx.save();ctx.globalAlpha=a*0.6;
+        ctx.strokeStyle='#ff5f1f';ctx.lineWidth=1;ctx.setLineDash([3*DPR,3*DPR]);
+        ctx.beginPath();ctx.moveTo(endP[0],endP[1]);ctx.lineTo(endA[0],endA[1]);ctx.stroke();
+        ctx.setLineDash([]);
+        /* drift distance label */
+        var mx=(endP[0]+endA[0])/2, my=(endP[1]+endA[1])/2;
+        drawLabel('8.7 cm/m',mx+15*DPR,my,'#ff5f1f',11,a,'left');
+        ctx.restore();
+      }},
+      {id:'errorArc',type:'custom',x:0,y:0,w:0,h:0,alpha:1,draw:function(a){
+        ctx.save();ctx.globalAlpha=a*0.5;
+        ctx.strokeStyle='#ff5f1f';ctx.lineWidth=1.5*DPR;
+        ctx.beginPath();
+        ctx.arc(roverX,roverY,axLen*0.5,-(roverAngle+errorAngle),-(roverAngle));
+        ctx.stroke();
+        drawLabel('5\u00b0',roverX+axLen*0.55*Math.cos(-roverAngle-errorAngle/2),roverY+axLen*0.55*Math.sin(-roverAngle-errorAngle/2)-5*DPR,'#ff5f1f',10,a,'center');
+        ctx.restore();
+      }}
+    ];
+  }
+  if(f===4){
+    /* Frame 4: Aligned -- paths match */
+    var roverAngle=Math.PI/6;
+    var roverX=fieldOx+fieldW*0.2, roverY=fieldOy+fieldH*0.75;
+    var pPts=[];
+    var dist=fieldW*0.7;
+    for(var i=0;i<=10;i++){
+      var frac=i/10;
+      pPts.push([roverX+dist*frac*Math.cos(-roverAngle),roverY+dist*frac*Math.sin(-roverAngle)]);
+    }
+    var endP=pPts[pPts.length-1];
+    return [
+      {id:'title',type:'label',text:t('frame4title'),x:cx,y:30*DPR,color:'#10b981',size:16,align:'center',alpha:1},
+      {id:'desc',type:'label',text:t('frame4desc'),x:cx,y:52*DPR,color:'#c6c6c6',size:11,align:'center',alpha:1},
+      {id:'field',type:'custom',x:fieldOx,y:fieldOy,w:fieldW,h:fieldH,alpha:1,draw:function(a){
+        drawFieldGrid(fieldOx,fieldOy,fieldW,fieldH,'#10b981',0.15*a);
+      }},
+      {id:'rover',type:'custom',x:roverX,y:roverY,w:roverSize,h:roverSize,alpha:1,draw:function(a){
+        drawRover(roverX,roverY,-roverAngle,roverSize*0.8,a);
+      }},
+      {id:'pathPlanned',type:'custom',x:0,y:0,w:0,h:0,alpha:1,draw:function(a){
+        drawPath(pPts,'#10b981',false,a*0.9);
+        drawLabel(t('plannedPath')+' = '+t('actualPath'),endP[0]+10*DPR,endP[1]-5*DPR,'#10b981',11,a,'left');
+      }},
+      {id:'worldAxis',type:'custom',x:fieldOx+15*DPR,y:fieldOy+fieldH-15*DPR,w:axLen*0.5,h:axLen*0.5,alpha:0.6,draw:function(a){
+        ctx.save();ctx.globalAlpha=a;
+        var ox=fieldOx+15*DPR,oy=fieldOy+fieldH-15*DPR;
+        drawAxis(ox,oy,-Math.PI/2,axLen*0.5,'#00daf3','#10b981','N','E');
+        ctx.restore();
+      }},
+      {id:'bodyAxis',type:'custom',x:roverX,y:roverY,w:axLen*0.6,h:axLen*0.6,alpha:0.7,draw:function(a){
+        ctx.save();ctx.globalAlpha=a;
+        drawAxis(roverX,roverY,-roverAngle,axLen*0.5,'#ff5f1f','#ffb59c',t('forward'),t('right'));
+        ctx.restore();
+      }},
+      {id:'checkmark',type:'custom',x:cx,y:cy+fieldH*0.35,w:0,h:0,alpha:1,draw:function(a){
+        ctx.save();ctx.globalAlpha=a;
+        ctx.strokeStyle='#10b981';ctx.lineWidth=3*DPR;
+        ctx.beginPath();
+        ctx.moveTo(cx-15*DPR,cy+fieldH*0.35);
+        ctx.lineTo(cx-3*DPR,cy+fieldH*0.35+12*DPR);
+        ctx.lineTo(cx+18*DPR,cy+fieldH*0.35-10*DPR);
+        ctx.stroke();
+        ctx.restore();
+      }}
+    ];
+  }
+  return [];
+}
+
+function drawElement(el){
+  if(!el||el.alpha<=0.01)return;
+  ctx.save();ctx.globalAlpha=el.alpha;
+  switch(el.type){
+    case 'label':
+      ctx.font='bold '+Math.round((el.size||13)*DPR)+'px "Space Grotesk","Noto Sans SC"';
+      ctx.fillStyle=el.color||'#ffb59c';ctx.textAlign=el.align||'center';
+      ctx.fillText(el.text,el.x,el.y);break;
+    case 'custom':el.draw(el.alpha);break;
+  }
+  ctx.restore();
+}
+
+function drawFrame(f){drawBg();var el=getFrameElements(f);el.forEach(function(e){drawElement(e);});}
+
+function transitionTo(nf){
+  if(nf<0)nf=0;if(nf>=totalFrames)nf=totalFrames-1;
+  if(nf===currentFrame&&!transitioning){drawFrame(currentFrame);updateHUD(currentFrame);return;}
+  if(transitioning)return;
+  var oldEls=getFrameElements(currentFrame);
+  var newEls=getFrameElements(nf);
+  var oldMap={};oldEls.forEach(function(e){oldMap[e.id]=e;});
+  var newMap={};newEls.forEach(function(e){newMap[e.id]=e;});
+  currentFrame=nf;updateHUD(nf);transitioning=true;
+  var startTime=null,duration=500;
+  function step(ts){
+    if(!startTime)startTime=ts;
+    var raw=Math.min((ts-startTime)/duration,1);var p=easeInOut(raw);
+    drawBg();
+    oldEls.forEach(function(oe){if(!newMap[oe.id])drawElement(merge(oe,{alpha:1-p}));});
+    newEls.forEach(function(ne){
+      var oe=oldMap[ne.id];
+      if(oe){
+        if((ne.type==='label')&&oe.text!==ne.text){
+          drawElement(merge(oe,{alpha:1-p}));drawElement(merge(ne,{alpha:p}));
+        }else{
+          drawElement(merge(ne,{x:lerp(oe.x||0,ne.x||0,p),y:lerp(oe.y||0,ne.y||0,p),w:lerp(oe.w||0,ne.w||0,p),h:lerp(oe.h||0,ne.h||0,p),alpha:1}));
+        }
+      }else{drawElement(merge(ne,{alpha:p}));}
+    });
+    if(raw<1)requestAnimationFrame(step);else transitioning=false;
+  }
+  requestAnimationFrame(step);
+}
+
+function updateHUD(f){
+  var hd=hudData[f]||{};
+  var html='';
+  html+='<div class="hud-col"><div class="hud-label">'+t('hudFrame')+'</div><div class="hud-val">'+(f+1)+'/'+totalFrames+'</div></div>';
+  html+='<div class="hud-col"><div class="hud-label">'+t('hudAngle')+'</div><div class="hud-val">'+(hd.angle||'--')+'</div></div>';
+  html+='<div class="hud-col"><div class="hud-label">'+t('hudError')+'</div><div class="hud-val">'+(hd.error||'--')+'</div></div>';
+  html+='<div class="hud-col"><div class="hud-label">'+t('hudDrift')+'</div><div class="hud-val">'+(hd.drift||'--')+'</div></div>';
+  document.getElementById('hud').innerHTML=html;
+}
+
+function updateGuide(){
+  document.getElementById('guideTitle').textContent=t('guideTitle');
+  document.getElementById('guideWhat').textContent=t('guideWhat');
+  var ul=document.getElementById('guidePoints');
+  ul.innerHTML='<li>'+t('guideObs1')+'</li><li>'+t('guideObs2')+'</li><li>'+t('guideObs3')+'</li><li>'+t('guideObs4')+'</li>';
+  document.getElementById('guideControls').textContent=t('guideCtrl');
+  document.getElementById('guideTakeaway').textContent=t('guideTake');
+}
+
+function refreshI18N(){
+  document.getElementById('btnPrev').textContent=t('btnPrev');
+  document.getElementById('btnPlay').textContent=playing?t('btnPause'):t('btnPlay');
+  document.getElementById('btnNext').textContent=t('btnNext');
+  updateGuide();updateHUD(currentFrame);drawFrame(currentFrame);
+}
+
+function resize(){
+  var wrap=document.querySelector('.canvas-wrap');
+  var rect=wrap.getBoundingClientRect();
+  if(rect.width<1||rect.height<1)return;
+  W=rect.width*DPR;H=rect.height*DPR;
+  canvas.width=W;canvas.height=H;
+  canvas.style.width=rect.width+'px';canvas.style.height=rect.height+'px';
+  drawFrame(currentFrame);
+}
+
+/* events */
+document.getElementById('btnPrev').addEventListener('click',function(){if(playing)stopPlay();transitionTo(currentFrame-1);});
+document.getElementById('btnNext').addEventListener('click',function(){if(playing)stopPlay();transitionTo(currentFrame+1);});
+document.getElementById('btnPlay').addEventListener('click',function(){
+  if(playing){stopPlay();}
+  else{
+    playing=true;
+    document.getElementById('btnPlay').textContent=t('btnPause');
+    if(currentFrame>=totalFrames-1)currentFrame=-1;
+    autoStep();
+  }
+});
+function autoStep(){
+  if(!playing)return;
+  if(currentFrame<totalFrames-1){
+    transitionTo(currentFrame+1);
+    playTimer=setTimeout(autoStep,1800);
+  }else{stopPlay();}
+}
+function stopPlay(){playing=false;if(playTimer)clearTimeout(playTimer);playTimer=null;document.getElementById('btnPlay').textContent=t('btnPlay');}
+
+document.getElementById('langBtn').addEventListener('click',function(){
+  LANG=LANG==='en'?'cn':'en';
+  document.getElementById('langBtn').textContent=LANG.toUpperCase();
+  refreshI18N();
+});
+
+document.getElementById('guideHeader').addEventListener('click',function(){
+  var gc=document.getElementById('guideContent');
+  var gt=document.getElementById('guideToggle');
+  if(gc.classList.contains('collapsed')){gc.classList.remove('collapsed');gt.textContent='[-]';}
+  else{gc.classList.add('collapsed');gt.textContent='[+]';}
+});
+
+window.addEventListener('resize',resize);
+refreshI18N();resize();
+setTimeout(resize,200);setTimeout(resize,600);
+document.fonts.ready.then(function(){resize();});
+})();
+</script>
+</body>
+</html>

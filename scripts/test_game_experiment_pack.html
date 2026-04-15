@@ -1,0 +1,516 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Experiment Pack Assembly</title>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=Space+Grotesk:wght@400;700&family=Noto+Sans+SC:wght@400;700&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{width:100%;height:100vh;overflow:hidden;background:#131313;
+  font-family:'Noto Sans SC','PingFang SC',system-ui,sans-serif;color:#e5e2e1}
+
+.wrapper{display:flex;flex-direction:column;height:100vh;overflow:hidden}
+
+.guide-panel{position:fixed;top:8px;right:8px;width:250px;max-height:40vh;
+  overflow-y:auto;z-index:200;padding:10px 12px;
+  background:rgba(28,27,27,0.92);backdrop-filter:blur(14px);
+  border:1px solid rgba(255,127,80,0.22);font-size:12px;line-height:1.55;
+  color:rgba(229,226,225,0.88)}
+.guide-panel h3{font-family:'Space Grotesk',sans-serif;font-size:13px;font-weight:700;
+  margin-bottom:6px;display:flex;align-items:center;justify-content:space-between;cursor:pointer;
+  color:#ffb59c;text-transform:uppercase;letter-spacing:0.05em}
+.guide-panel h3 .arrow{transition:transform .2s;font-size:10px}
+.guide-panel h3 .arrow.collapsed{transform:rotate(-90deg)}
+.guide-panel ul{padding-left:14px;margin:4px 0}
+.guide-panel .gl{color:#8a8886;font-size:11px;text-transform:uppercase;
+  letter-spacing:0.08em;margin-top:6px;font-family:'Space Grotesk',sans-serif}
+
+.lang-btn{position:fixed;top:8px;left:8px;z-index:100;
+  font-family:'Space Grotesk',sans-serif;font-size:11px;font-weight:700;
+  padding:4px 10px;cursor:pointer;
+  border:1px solid rgba(255,127,80,0.35);
+  background:rgba(20,20,25,0.85);backdrop-filter:blur(12px);
+  color:#ffb59c;letter-spacing:1px}
+
+.header{height:42px;min-height:42px;display:flex;align-items:center;justify-content:center;
+  padding:0 16px;background:rgba(28,27,27,0.95);border-bottom:1px solid rgba(255,127,80,0.15)}
+.header h1{font-family:'Space Grotesk',sans-serif;font-size:14px;font-weight:700;
+  color:#ffb59c;text-transform:uppercase;letter-spacing:0.08em}
+
+.game-area{flex:1;min-height:0;display:flex;overflow:hidden;position:relative}
+
+.source-panel{flex:0 0 200px;display:flex;flex-direction:column;padding:8px;gap:6px;
+  background:rgba(28,27,27,0.6);border-right:1px solid rgba(255,127,80,0.1);overflow-y:auto}
+.source-panel .panel-title{font-family:'Space Grotesk',sans-serif;font-size:11px;font-weight:700;
+  color:#ffb59c;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:4px;text-align:center}
+
+.target-area{flex:1;display:grid;grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr;gap:8px;padding:8px}
+
+.asset-card{padding:6px 8px;cursor:grab;user-select:none;
+  font-family:'Space Grotesk',sans-serif;font-size:11px;font-weight:700;
+  text-transform:uppercase;letter-spacing:0.04em;
+  border:1px solid rgba(255,127,80,0.3);transition:all .15s;position:relative}
+.asset-card:hover{border-color:rgba(255,127,80,0.6);box-shadow:0 0 12px rgba(255,127,80,0.2)}
+.asset-card .stage-tag{position:absolute;top:2px;right:4px;font-size:8px;font-weight:700;
+  letter-spacing:0.08em;opacity:0.7}
+.asset-card.dragging{opacity:0.4}
+.asset-card.placed{opacity:0.3;cursor:default;pointer-events:none;border-style:dashed}
+
+.dir-zone{display:flex;flex-direction:column;padding:8px;
+  border:1px solid rgba(255,255,255,0.08);transition:all .25s;position:relative;overflow-y:auto}
+.dir-zone.hover{border-color:rgba(255,127,80,0.6);box-shadow:inset 0 0 20px rgba(255,127,80,0.1)}
+.dir-zone .dir-label{font-family:'JetBrains Mono',monospace;font-size:13px;font-weight:700;
+  margin-bottom:6px;text-align:center}
+.dir-zone .dir-desc{font-size:10px;color:#8a8886;text-align:center;margin-bottom:6px}
+.dir-zone .placed-items{display:flex;flex-direction:column;gap:4px;flex:1}
+
+.placed-card{padding:4px 6px;font-family:'Space Grotesk',sans-serif;font-size:10px;
+  font-weight:700;text-transform:uppercase;letter-spacing:0.04em;
+  animation:placeIn .3s ease-out}
+@keyframes placeIn{from{opacity:0;transform:scale(0.8)}to{opacity:1;transform:scale(1)}}
+
+.feedback-bar{height:48px;min-height:48px;display:flex;align-items:center;justify-content:space-between;
+  padding:0 16px;background:rgba(0,0,0,0.6);border-top:1px solid rgba(255,255,255,0.06)}
+.score-display{font-family:'JetBrains Mono',monospace;font-size:14px;font-weight:700}
+.msg-display{font-size:12px;color:rgba(229,226,225,0.7);max-width:60%;overflow:hidden;
+  text-overflow:ellipsis;white-space:nowrap}
+.reset-btn{padding:5px 14px;border:1px solid rgba(255,127,80,0.35);background:transparent;
+  color:#ffb59c;cursor:pointer;font-family:'Space Grotesk',sans-serif;font-size:11px;
+  font-weight:700;text-transform:uppercase;letter-spacing:0.06em}
+.reset-btn:hover{background:rgba(255,127,80,0.15)}
+
+.completion-overlay{position:fixed;top:0;left:0;width:100%;height:100%;z-index:300;
+  display:none;align-items:center;justify-content:center;
+  background:rgba(0,0,0,0.75);backdrop-filter:blur(8px)}
+.completion-panel{width:420px;max-width:90%;padding:28px;
+  background:rgba(28,27,27,0.95);border:1px solid rgba(16,185,129,0.4)}
+.completion-panel h2{font-family:'Space Grotesk',sans-serif;font-size:18px;font-weight:700;
+  color:#10b981;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:12px}
+.completion-panel p{font-size:13px;line-height:1.7;color:rgba(229,226,225,0.85);margin-bottom:8px}
+.completion-panel .final-score{font-family:'JetBrains Mono',monospace;font-size:24px;
+  font-weight:700;color:#ffb59c;margin:12px 0}
+.completion-panel .close-btn{margin-top:16px;padding:8px 24px;
+  border:1px solid rgba(16,185,129,0.5);background:transparent;
+  color:#10b981;cursor:pointer;font-family:'Space Grotesk',sans-serif;font-size:12px;
+  font-weight:700;text-transform:uppercase}
+.completion-panel .close-btn:hover{background:rgba(16,185,129,0.15)}
+</style>
+</head>
+<body>
+
+<button class="lang-btn" id="langBtn">CN</button>
+
+<div class="guide-panel" id="guidePanel">
+  <h3 id="guideToggle"><span id="guideTitle"></span> <span class="arrow" id="guideArrow">&#9660;</span></h3>
+  <div id="guideContent">
+    <div class="gl" id="glGoal"></div>
+    <p id="guideGoal"></p>
+    <div class="gl" style="margin-top:6px" id="glSteps"></div>
+    <ul id="guideSteps"></ul>
+    <div class="gl" style="margin-top:6px" id="glWin"></div>
+    <p id="guideWin"></p>
+    <div class="gl" style="margin-top:6px" id="glTips"></div>
+    <p style="color:#ffb59c" id="guideTips"></p>
+  </div>
+</div>
+
+<div class="wrapper">
+  <div class="header">
+    <h1 id="titleText"></h1>
+  </div>
+  <div class="game-area" id="gameArea">
+    <div class="source-panel" id="sourcePanel">
+      <div class="panel-title" id="sourcePanelTitle"></div>
+    </div>
+    <div class="target-area" id="targetArea"></div>
+  </div>
+  <div class="feedback-bar">
+    <div class="score-display" id="scoreDisplay"></div>
+    <div class="msg-display" id="msgDisplay"></div>
+    <button class="reset-btn" id="resetBtn"></button>
+  </div>
+</div>
+
+<div class="completion-overlay" id="completionOverlay">
+  <div class="completion-panel">
+    <h2 id="compTitle"></h2>
+    <div class="final-score" id="compScore"></div>
+    <p id="compSummary1"></p>
+    <p id="compSummary2"></p>
+    <p id="compSummary3"></p>
+    <button class="close-btn" id="compClose"></button>
+  </div>
+</div>
+
+<script>
+(function(){
+var LANG='cn';
+var I18N={
+  title:{en:'EXPERIMENT PACK ASSEMBLY',cn:'\u5b9e\u9a8c\u5305\u7ec4\u88c5\u53f0'},
+  sourcePanelTitle:{en:'ASSET CARDS',cn:'\u8d44\u4ea7\u5361\u7247'},
+  guideTitle:{en:'GAME GUIDE',cn:'\u6e38\u620f\u6307\u5357'},
+  glGoal:{en:'GOAL',cn:'\u76ee\u6807'},
+  guideGoal:{en:'Sort 12 experiment assets into 4 correct directories',cn:'\u5c06 12 \u4e2a\u5b9e\u9a8c\u8d44\u4ea7\u62d6\u5165 4 \u4e2a\u6b63\u786e\u76ee\u5f55'},
+  glSteps:{en:'STEPS',cn:'\u6b65\u9aa4'},
+  step1:{en:'Read each asset card title and source stage',cn:'\u9605\u8bfb\u6bcf\u5f20\u5361\u7247\u7684\u6807\u9898\u548c\u6765\u6e90\u9636\u6bb5'},
+  step2:{en:'Think about which directory it belongs to',cn:'\u601d\u8003\u8be5\u8d44\u4ea7\u5c5e\u4e8e\u54ea\u4e2a\u76ee\u5f55'},
+  step3:{en:'Drag the card to the matching directory zone',cn:'\u62d6\u62fd\u5361\u7247\u5230\u5339\u914d\u7684\u76ee\u5f55\u533a\u57df'},
+  step4:{en:'Observe the feedback and try again if wrong',cn:'\u89c2\u5bdf\u53cd\u9988\uff0c\u9519\u8bef\u65f6\u91cd\u8bd5'},
+  glWin:{en:'WIN CONDITION',cn:'\u901a\u5173\u6761\u4ef6'},
+  guideWin:{en:'All 12 cards correctly placed',cn:'\u5168\u90e8 12 \u5f20\u5361\u7247\u6b63\u786e\u653e\u7f6e'},
+  glTips:{en:'TIPS',cn:'\u63d0\u793a'},
+  guideTips:{en:'Data files go to data/, scripts go to scripts/, documentation goes to docs/',cn:'\u6570\u636e\u6587\u4ef6\u5f52\u5165 data/\uff0c\u811a\u672c\u5f52\u5165 scripts/\uff0c\u6587\u6863\u5f52\u5165 docs/'},
+  score:{en:'SCORE',cn:'\u5f97\u5206'},
+  reset:{en:'RESET',cn:'\u91cd\u7f6e'},
+  correct:{en:'Correct! Well placed.',cn:'\u6b63\u786e\uff01\u653e\u7f6e\u6b63\u786e\u3002'},
+  wrongPrefix:{en:'Wrong! This belongs to ',cn:'\u9519\u8bef\uff01\u8fd9\u4e2a\u5e94\u8be5\u653e\u5728 '},
+  compTitle:{en:'PACK ASSEMBLED',cn:'\u5b9e\u9a8c\u5305\u7ec4\u88c5\u5b8c\u6210'},
+  compSummary1:{en:'You have successfully organized all S1/S2/S3 assets into a reproducible experiment pack directory structure.',cn:'\u4f60\u5df2\u6210\u529f\u5c06\u6240\u6709 S1/S2/S3 \u8d44\u4ea7\u6574\u7406\u4e3a\u53ef\u590d\u73b0\u5b9e\u9a8c\u5305\u76ee\u5f55\u7ed3\u6784\u3002'},
+  compSummary2:{en:'data/ holds datasets and split protocols; models/ holds weights; scripts/ holds training, inference, and evaluation scripts; docs/ holds model card, error log, and terminology.',cn:'data/ \u5b58\u653e\u6570\u636e\u96c6\u548c\u5207\u5206\u534f\u8bae\uff1bmodels/ \u5b58\u653e\u6a21\u578b\u6743\u91cd\uff1bscripts/ \u5b58\u653e\u8bad\u7ec3\u3001\u63a8\u7406\u548c\u8bc4\u6d4b\u811a\u672c\uff1bdocs/ \u5b58\u653e\u6a21\u578b\u5361\u3001\u9519\u8bef\u7c3f\u548c\u672f\u8bed\u5b9a\u4e49\u3002'},
+  compSummary3:{en:'A well-organized experiment pack ensures anyone can open, inspect, and reproduce your results.',cn:'\u826f\u597d\u7ec4\u7ec7\u7684\u5b9e\u9a8c\u5305\u786e\u4fdd\u4efb\u4f55\u4eba\u90fd\u80fd\u6253\u5f00\u3001\u68c0\u67e5\u548c\u590d\u73b0\u4f60\u7684\u7ed3\u679c\u3002'},
+  compClose:{en:'CLOSE',cn:'\u5173\u95ed'},
+  dirData:{en:'data/',cn:'data/'},
+  dirModels:{en:'models/',cn:'models/'},
+  dirScripts:{en:'scripts/',cn:'scripts/'},
+  dirDocs:{en:'docs/',cn:'docs/'},
+  dirDataDesc:{en:'Datasets, split files, ledgers',cn:'\u6570\u636e\u96c6\u3001\u5207\u5206\u6587\u4ef6\u3001\u53f0\u8d26'},
+  dirModelsDesc:{en:'Model weights, configs',cn:'\u6a21\u578b\u6743\u91cd\u3001\u914d\u7f6e'},
+  dirScriptsDesc:{en:'Train, infer, eval scripts',cn:'\u8bad\u7ec3/\u63a8\u7406/\u8bc4\u6d4b\u811a\u672c'},
+  dirDocsDesc:{en:'Model card, error log, terminology',cn:'\u6a21\u578b\u5361\u3001\u9519\u8bef\u7c3f\u3001\u672f\u8bed'},
+  dictionary:{en:'Terminology Dict',cn:'\u672f\u8bed\u8bcd\u5178'},
+  obsNotes:{en:'Observation Notes',cn:'\u89c2\u5bdf\u7b14\u8bb0'},
+  ruleBaseline:{en:'Rule Baseline',cn:'\u89c4\u5219\u6cd5\u57fa\u7ebf'},
+  baselineReport:{en:'Baseline Report',cn:'\u57fa\u7ebf\u62a5\u544a'},
+  dataLedger:{en:'Data Ledger',cn:'\u6570\u636e\u53f0\u8d26'},
+  splitProtocol:{en:'Split Protocol',cn:'\u5207\u5206\u534f\u8bae'},
+  trainScript:{en:'Train Script',cn:'\u8bad\u7ec3\u811a\u672c'},
+  inferScript:{en:'Infer Script',cn:'\u63a8\u7406\u811a\u672c'},
+  evalScript:{en:'Eval Script',cn:'\u8bc4\u6d4b\u811a\u672c'},
+  modelWeights:{en:'Model Weights',cn:'\u6a21\u578b\u6743\u91cd'},
+  modelCard:{en:'Model Card',cn:'\u6a21\u578b\u5361'},
+  errorLog:{en:'Error Log',cn:'\u9519\u8bef\u7c3f'}
+};
+function t(k){return(I18N[k]&&I18N[k][LANG])||(I18N[k]&&I18N[k]['en'])||k;}
+
+// Game data
+var ASSETS=[
+  {key:'dictionary',stage:'S1',color:'#38bdf8',dir:'docs'},
+  {key:'obsNotes',stage:'S1',color:'#38bdf8',dir:'docs'},
+  {key:'ruleBaseline',stage:'S2',color:'#a78bfa',dir:'scripts'},
+  {key:'baselineReport',stage:'S2',color:'#a78bfa',dir:'docs'},
+  {key:'dataLedger',stage:'S3',color:'#fb923c',dir:'data'},
+  {key:'splitProtocol',stage:'S3',color:'#fb923c',dir:'data'},
+  {key:'trainScript',stage:'S3',color:'#fb923c',dir:'scripts'},
+  {key:'inferScript',stage:'S3',color:'#fb923c',dir:'scripts'},
+  {key:'evalScript',stage:'S3',color:'#fb923c',dir:'scripts'},
+  {key:'modelWeights',stage:'S3',color:'#fb923c',dir:'models'},
+  {key:'modelCard',stage:'S3',color:'#fb923c',dir:'docs'},
+  {key:'errorLog',stage:'S3',color:'#fb923c',dir:'docs'}
+];
+
+var DIRS=[
+  {key:'data',color:'#34d399',labelKey:'dirData',descKey:'dirDataDesc'},
+  {key:'models',color:'#f472b6',labelKey:'dirModels',descKey:'dirModelsDesc'},
+  {key:'scripts',color:'#818cf8',labelKey:'dirScripts',descKey:'dirScriptsDesc'},
+  {key:'docs',color:'#ffb59c',labelKey:'dirDocs',descKey:'dirDocsDesc'}
+];
+
+var score=0;
+var placed=0;
+var totalAssets=ASSETS.length;
+var assetStates=[];// 'ready','placed'
+var dragIdx=-1;
+var dragGhost=null;
+
+function hexToRgba(hex,a){
+  var r=parseInt(hex.slice(1,3),16),g=parseInt(hex.slice(3,5),16),b=parseInt(hex.slice(5,7),16);
+  return 'rgba('+r+','+g+','+b+','+a+')';
+}
+
+function initGame(){
+  score=0;placed=0;
+  assetStates=ASSETS.map(function(){return 'ready';});
+  buildSourceCards();
+  buildTargetZones();
+  updateScore();
+  document.getElementById('msgDisplay').textContent='';
+  document.getElementById('completionOverlay').style.display='none';
+}
+
+function shuffleArray(arr){
+  var a=arr.slice();
+  for(var i=a.length-1;i>0;i--){
+    var j=Math.floor(Math.random()*(i+1));
+    var tmp=a[i];a[i]=a[j];a[j]=tmp;
+  }
+  return a;
+}
+
+var shuffledOrder=[];
+
+function buildSourceCards(){
+  var panel=document.getElementById('sourcePanel');
+  panel.innerHTML='<div class="panel-title" id="sourcePanelTitle">'+t('sourcePanelTitle')+'</div>';
+  shuffledOrder=shuffleArray(ASSETS.map(function(_,i){return i;}));
+  shuffledOrder.forEach(function(i){
+    var a=ASSETS[i];
+    var card=document.createElement('div');
+    card.className='asset-card';
+    card.setAttribute('data-idx',i);
+    card.style.background='linear-gradient(135deg,'+hexToRgba(a.color,0.2)+','+hexToRgba(a.color,0.05)+')';
+    card.style.borderColor=hexToRgba(a.color,0.4);
+    card.style.color=a.color;
+    card.innerHTML='<span>'+t(a.key)+'</span><span class="stage-tag" style="color:'+a.color+'">'+a.stage+'</span>';
+    // Drag events (mouse)
+    card.addEventListener('mousedown',function(e){onDragStart(e,i);});
+    card.addEventListener('touchstart',function(e){onTouchStart(e,i);},{passive:false});
+    panel.appendChild(card);
+  });
+}
+
+function buildTargetZones(){
+  var area=document.getElementById('targetArea');
+  area.innerHTML='';
+  DIRS.forEach(function(d){
+    var zone=document.createElement('div');
+    zone.className='dir-zone';
+    zone.setAttribute('data-dir',d.key);
+    zone.style.background='linear-gradient(180deg,'+hexToRgba(d.color,0.08)+','+hexToRgba(d.color,0.02)+')';
+    zone.style.borderColor=hexToRgba(d.color,0.15);
+    zone.innerHTML='<div class="dir-label" style="color:'+d.color+'">'+t(d.labelKey)+'</div>'+
+      '<div class="dir-desc">'+t(d.descKey)+'</div>'+
+      '<div class="placed-items" data-dir="'+d.key+'"></div>';
+    area.appendChild(zone);
+  });
+}
+
+function updateScore(){
+  document.getElementById('scoreDisplay').textContent=t('score')+': '+score+' / '+totalAssets;
+}
+
+function showMsg(text,isError){
+  var el=document.getElementById('msgDisplay');
+  el.textContent=text;
+  el.style.color=isError?'#ff5f1f':'#10b981';
+}
+
+function placeAsset(assetIdx,dirKey){
+  var a=ASSETS[assetIdx];
+  if(a.dir===dirKey){
+    // Correct
+    score++;placed++;
+    assetStates[assetIdx]='placed';
+    updateScore();
+    showMsg(t('correct'),false);
+    // Mark source card
+    var srcCards=document.querySelectorAll('.asset-card[data-idx="'+assetIdx+'"]');
+    srcCards.forEach(function(c){c.classList.add('placed');});
+    // Add to target zone
+    var targetItems=document.querySelector('.placed-items[data-dir="'+dirKey+'"]');
+    if(targetItems){
+      var pc=document.createElement('div');
+      pc.className='placed-card';
+      pc.style.background='linear-gradient(135deg,'+hexToRgba(a.color,0.2)+','+hexToRgba(a.color,0.05)+')';
+      pc.style.border='1px solid '+hexToRgba(a.color,0.35);
+      pc.style.color=a.color;
+      pc.textContent=t(a.key);
+      targetItems.appendChild(pc);
+    }
+    // Flash zone green
+    var zone=document.querySelector('.dir-zone[data-dir="'+dirKey+'"]');
+    if(zone){
+      zone.style.boxShadow='inset 0 0 30px rgba(16,185,129,0.3)';
+      setTimeout(function(){zone.style.boxShadow='none';},500);
+    }
+    // Check completion
+    if(placed>=totalAssets){
+      setTimeout(showCompletion,600);
+    }
+    return true;
+  }else{
+    // Wrong
+    showMsg(t('wrongPrefix')+t('dir'+a.dir.charAt(0).toUpperCase()+a.dir.slice(1)),true);
+    // Flash zone red
+    var zone2=document.querySelector('.dir-zone[data-dir="'+dirKey+'"]');
+    if(zone2){
+      zone2.style.boxShadow='inset 0 0 30px rgba(255,95,31,0.3)';
+      setTimeout(function(){zone2.style.boxShadow='none';},500);
+    }
+    return false;
+  }
+}
+
+function showCompletion(){
+  var overlay=document.getElementById('completionOverlay');
+  overlay.style.display='flex';
+  document.getElementById('compTitle').textContent=t('compTitle');
+  document.getElementById('compScore').textContent=score+' / '+totalAssets;
+  document.getElementById('compSummary1').textContent=t('compSummary1');
+  document.getElementById('compSummary2').textContent=t('compSummary2');
+  document.getElementById('compSummary3').textContent=t('compSummary3');
+  document.getElementById('compClose').textContent=t('compClose');
+}
+
+// Drag & Drop (mouse)
+function onDragStart(e,idx){
+  if(assetStates[idx]==='placed')return;
+  e.preventDefault();
+  dragIdx=idx;
+  var a=ASSETS[idx];
+  var srcCard=e.currentTarget;
+  srcCard.classList.add('dragging');
+
+  dragGhost=document.createElement('div');
+  dragGhost.style.cssText='position:fixed;z-index:500;pointer-events:none;padding:6px 10px;'+
+    'font-family:"Space Grotesk",sans-serif;font-size:11px;font-weight:700;text-transform:uppercase;'+
+    'letter-spacing:0.04em;border:1px solid '+hexToRgba(a.color,0.6)+';'+
+    'background:'+hexToRgba(a.color,0.3)+';color:'+a.color+';'+
+    'backdrop-filter:blur(8px);transform:translate(-50%,-50%)';
+  dragGhost.textContent=t(a.key);
+  document.body.appendChild(dragGhost);
+  dragGhost.style.left=e.clientX+'px';
+  dragGhost.style.top=e.clientY+'px';
+
+  function onMove(ev){
+    dragGhost.style.left=ev.clientX+'px';
+    dragGhost.style.top=ev.clientY+'px';
+    updateZoneHover(ev.clientX,ev.clientY);
+  }
+  function onUp(ev){
+    document.removeEventListener('mousemove',onMove);
+    document.removeEventListener('mouseup',onUp);
+    srcCard.classList.remove('dragging');
+    if(dragGhost&&dragGhost.parentNode)dragGhost.parentNode.removeChild(dragGhost);
+    dragGhost=null;
+    clearZoneHover();
+    var dir=hitTestDir(ev.clientX,ev.clientY);
+    if(dir){placeAsset(idx,dir);}
+    dragIdx=-1;
+  }
+  document.addEventListener('mousemove',onMove);
+  document.addEventListener('mouseup',onUp);
+}
+
+// Drag & Drop (touch)
+function onTouchStart(e,idx){
+  if(assetStates[idx]==='placed')return;
+  e.preventDefault();
+  dragIdx=idx;
+  var a=ASSETS[idx];
+  var srcCard=e.currentTarget;
+  srcCard.classList.add('dragging');
+  var touch=e.touches[0];
+
+  dragGhost=document.createElement('div');
+  dragGhost.style.cssText='position:fixed;z-index:500;pointer-events:none;padding:6px 10px;'+
+    'font-family:"Space Grotesk",sans-serif;font-size:11px;font-weight:700;text-transform:uppercase;'+
+    'letter-spacing:0.04em;border:1px solid '+hexToRgba(a.color,0.6)+';'+
+    'background:'+hexToRgba(a.color,0.3)+';color:'+a.color+';'+
+    'backdrop-filter:blur(8px);transform:translate(-50%,-50%)';
+  dragGhost.textContent=t(a.key);
+  document.body.appendChild(dragGhost);
+  dragGhost.style.left=touch.clientX+'px';
+  dragGhost.style.top=touch.clientY+'px';
+
+  function onTouchMove(ev){
+    ev.preventDefault();
+    var tc=ev.touches[0];
+    dragGhost.style.left=tc.clientX+'px';
+    dragGhost.style.top=tc.clientY+'px';
+    updateZoneHover(tc.clientX,tc.clientY);
+  }
+  function onTouchEnd(ev){
+    document.removeEventListener('touchmove',onTouchMove);
+    document.removeEventListener('touchend',onTouchEnd);
+    srcCard.classList.remove('dragging');
+    if(dragGhost&&dragGhost.parentNode)dragGhost.parentNode.removeChild(dragGhost);
+    dragGhost=null;
+    clearZoneHover();
+    var tc2=ev.changedTouches[0];
+    var dir=hitTestDir(tc2.clientX,tc2.clientY);
+    if(dir){placeAsset(idx,dir);}
+    dragIdx=-1;
+  }
+  document.addEventListener('touchmove',onTouchMove,{passive:false});
+  document.addEventListener('touchend',onTouchEnd);
+}
+
+function hitTestDir(cx,cy){
+  var zones=document.querySelectorAll('.dir-zone');
+  for(var i=0;i<zones.length;i++){
+    var r=zones[i].getBoundingClientRect();
+    if(cx>=r.left&&cx<=r.right&&cy>=r.top&&cy<=r.bottom){
+      return zones[i].getAttribute('data-dir');
+    }
+  }
+  return null;
+}
+
+function updateZoneHover(cx,cy){
+  var zones=document.querySelectorAll('.dir-zone');
+  zones.forEach(function(z){
+    var r=z.getBoundingClientRect();
+    if(cx>=r.left&&cx<=r.right&&cy>=r.top&&cy<=r.bottom){
+      z.classList.add('hover');
+    }else{
+      z.classList.remove('hover');
+    }
+  });
+}
+
+function clearZoneHover(){
+  document.querySelectorAll('.dir-zone').forEach(function(z){z.classList.remove('hover');});
+}
+
+// Guide toggle
+var guideOpen=true;
+document.getElementById('guideToggle').addEventListener('click',function(){
+  guideOpen=!guideOpen;
+  document.getElementById('guideContent').style.display=guideOpen?'block':'none';
+  document.getElementById('guideArrow').className='arrow'+(guideOpen?'':' collapsed');
+});
+
+// Reset
+document.getElementById('resetBtn').addEventListener('click',function(){initGame();});
+
+// Completion close
+document.getElementById('compClose').addEventListener('click',function(){
+  document.getElementById('completionOverlay').style.display='none';
+});
+
+// i18n refresh
+function refreshI18N(){
+  document.getElementById('titleText').textContent=t('title');
+  document.getElementById('guideTitle').textContent=t('guideTitle');
+  document.getElementById('glGoal').textContent=t('glGoal');
+  document.getElementById('guideGoal').textContent=t('guideGoal');
+  document.getElementById('glSteps').textContent=t('glSteps');
+  var stepsUl=document.getElementById('guideSteps');
+  stepsUl.innerHTML='';
+  ['step1','step2','step3','step4'].forEach(function(k){
+    var li=document.createElement('li');li.textContent=t(k);stepsUl.appendChild(li);
+  });
+  document.getElementById('glWin').textContent=t('glWin');
+  document.getElementById('guideWin').textContent=t('guideWin');
+  document.getElementById('glTips').textContent=t('glTips');
+  document.getElementById('guideTips').textContent=t('guideTips');
+  document.getElementById('resetBtn').textContent=t('reset');
+  updateScore();
+  // Rebuild cards and zones text
+  initGame();
+}
+
+document.getElementById('langBtn').addEventListener('click',function(){
+  LANG=LANG==='en'?'cn':'en';
+  document.getElementById('langBtn').textContent=LANG.toUpperCase();
+  refreshI18N();
+});
+
+// Init
+refreshI18N();
+
+})();
+</script>
+</body>
+</html>

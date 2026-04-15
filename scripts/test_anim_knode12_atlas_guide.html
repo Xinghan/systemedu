@@ -1,0 +1,362 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=Inter:wght@400;500&family=Noto+Sans+SC:wght@400;700&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box;}
+html,body{width:100%;height:100vh;overflow:hidden;}
+body{background:var(--bg,#0c0e12);color:var(--text,#f6f6fc);font-family:'Inter','Noto Sans SC',sans-serif;display:flex;flex-direction:column;}
+.wrapper{display:flex;flex-direction:column;height:100vh;overflow:hidden;}
+.header{padding:12px 16px 8px;display:flex;justify-content:space-between;align-items:center;}
+.header h1{font-family:'Space Grotesk',sans-serif;font-size:clamp(14px,2vw,18px);font-weight:700;letter-spacing:-0.02em;color:var(--primary,#50ffb0);text-shadow:0 0 15px var(--glow,rgba(80,255,176,0.3));}
+.header .sub{font-size:11px;color:var(--muted,#aaabb0);letter-spacing:0.1em;text-transform:uppercase;}
+.canvas-wrap{flex:1;min-height:0;position:relative;}
+canvas{width:100%;height:100%;display:block;}
+.controls{display:flex;justify-content:center;align-items:center;gap:12px;padding:8px 16px;}
+.ctrl-btn{font-family:'Space Grotesk',sans-serif;font-size:12px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;padding:6px 18px;border:none;cursor:pointer;color:var(--bg,#0c0e12);background:linear-gradient(135deg,var(--primary,#50ffb0),var(--primary-dim,#17df93));transition:transform 0.1s,box-shadow 0.2s;box-shadow:0 0 12px var(--glow-strong,rgba(80,255,176,0.3));}
+.ctrl-btn:hover{transform:scale(1.04);box-shadow:0 0 20px var(--glow-strong,rgba(80,255,176,0.5));}
+.ctrl-btn:active{transform:scale(0.96);}
+.ctrl-btn.secondary{background:var(--glass,rgba(23,26,31,0.92));color:var(--muted,#aaabb0);box-shadow:none;backdrop-filter:blur(12px);}
+.ctrl-btn.secondary:hover{color:var(--primary,#50ffb0);}
+.hud{height:48px;display:flex;align-items:center;justify-content:space-around;background:rgba(0,0,0,0.55);backdrop-filter:blur(12px);padding:0 16px;}
+.hud-item{text-align:center;}
+.hud-label{font-family:'Space Grotesk',sans-serif;font-size:9px;letter-spacing:0.15em;text-transform:uppercase;color:var(--muted,#aaabb0);}
+.hud-val{font-family:'Space Grotesk',sans-serif;font-size:14px;font-weight:700;color:var(--primary,#50ffb0);}
+.lang-btn{position:fixed;top:8px;left:8px;z-index:100;font-family:'Space Grotesk',sans-serif;font-size:11px;font-weight:700;padding:4px 10px;cursor:pointer;border:none;background:rgba(20,20,35,0.85);backdrop-filter:blur(12px);color:#ffb59c;letter-spacing:1px;}
+.guide-panel{position:fixed;top:8px;right:8px;width:240px;max-height:40vh;overflow-y:auto;background:var(--glass,rgba(20,20,35,0.85));backdrop-filter:blur(12px);padding:12px;z-index:100;font-family:'Noto Sans SC',sans-serif;font-size:12px;color:rgba(255,255,255,0.85);line-height:1.6;}
+.guide-panel h3{font-family:'Space Grotesk',sans-serif;font-size:13px;margin-bottom:6px;color:var(--primary,#50ffb0);cursor:pointer;display:flex;justify-content:space-between;align-items:center;}
+.guide-panel ul{padding-left:14px;}
+.guide-panel .collapsed{display:none;}
+</style>
+</head>
+<body>
+<button class="lang-btn" id="langBtn">CN</button>
+<div class="guide-panel" id="guide">
+<h3 id="guideTitle"></h3>
+<div class="guide-content" id="guideContent"></div>
+</div>
+<div class="wrapper">
+<div class="header">
+<div><h1 id="title"></h1><div class="sub" id="subtitle"></div></div>
+<div id="frameIndicator" style="font-family:'Space Grotesk';font-size:11px;color:var(--muted,#aaabb0);letter-spacing:0.1em;"></div>
+</div>
+<div class="canvas-wrap"><canvas id="c"></canvas></div>
+<div class="controls">
+<button class="ctrl-btn secondary" id="btnPrev"></button>
+<button class="ctrl-btn" id="btnPlay"></button>
+<button class="ctrl-btn secondary" id="btnNext"></button>
+</div>
+<div class="hud">
+<div class="hud-item"><div class="hud-label" id="hudL1"></div><div class="hud-val" id="hudV1"></div></div>
+<div class="hud-item"><div class="hud-label" id="hudL2"></div><div class="hud-val" id="hudV2"></div></div>
+<div class="hud-item"><div class="hud-label" id="hudL3"></div><div class="hud-val" id="hudV3"></div></div>
+<div class="hud-item"><div class="hud-label" id="hudL4"></div><div class="hud-val" id="hudV4"></div></div>
+</div>
+</div>
+
+<script src="animation_runtime.js"></script>
+
+<script>
+var CONFIG = {
+  style: 'ares_mission',
+  totalFrames: 5,
+
+  i18n: {
+    title:    {en:'MARS TERRAIN ATLAS', cn:'\u706b\u661f\u5730\u5f62\u56fe\u9274'},
+    subtitle: {en:'BUILD YOUR OWN ATLAS STEP BY STEP', cn:'\u4e00\u6b65\u4e00\u6b65\u5236\u4f5c\u4f60\u7684\u56fe\u9274'},
+    // Frame 0: overview
+    f0_title:   {en:'YOUR MISSION', cn:'\u4f60\u7684\u4efb\u52a1'},
+    f0_desc:    {en:'Combine all skills into one Mars Terrain Atlas', cn:'\u628a\u6240\u6709\u77e5\u8bc6\u6574\u5408\u6210\u4e00\u4efd\u706b\u661f\u5730\u5f62\u56fe\u9274'},
+    f0_s1:      {en:'Photos', cn:'\u7167\u7247'},
+    f0_s2:      {en:'Classification', cn:'\u5206\u7c7b'},
+    f0_s3:      {en:'Map', cn:'\u5730\u56fe'},
+    f0_s4:      {en:'Description', cn:'\u8bf4\u660e'},
+    f0_s5:      {en:'Atlas', cn:'\u56fe\u9274'},
+    // Frame 1: collect photos
+    f1_title:   {en:'STEP 1: COLLECT PHOTOS', cn:'\u7b2c\u4e00\u6b65\uff1a\u6536\u96c6\u7167\u7247'},
+    f1_desc:    {en:'Select at least 6 Mars photos showing different terrains', cn:'\u9009\u62e9\u81f3\u5c116\u5f20\u5c55\u793a\u4e0d\u540c\u5730\u5f62\u7684\u706b\u661f\u7167\u7247'},
+    f1_t1:      {en:'Crater', cn:'\u649e\u51fb\u5751'},
+    f1_t2:      {en:'Canyon', cn:'\u5ce1\u8c37'},
+    f1_t3:      {en:'Dune', cn:'\u6c99\u4e18'},
+    f1_t4:      {en:'Volcano', cn:'\u706b\u5c71'},
+    f1_t5:      {en:'Plain', cn:'\u5e73\u539f'},
+    f1_t6:      {en:'Rock Field', cn:'\u5ca9\u77f3\u5730'},
+    // Frame 2: classify & label
+    f2_title:   {en:'STEP 2: CLASSIFY & LABEL', cn:'\u7b2c\u4e8c\u6b65\uff1a\u5206\u7c7b\u6807\u6ce8'},
+    f2_desc:    {en:'Label terrain type, features, and traversal difficulty', cn:'\u6807\u6ce8\u5730\u5f62\u7c7b\u578b\u3001\u7279\u5f81\u548c\u901a\u884c\u96be\u5ea6'},
+    f2_easy:    {en:'EASY', cn:'\u5bb9\u6613'},
+    f2_hard:    {en:'HARD', cn:'\u56f0\u96be'},
+    f2_danger:  {en:'DANGER', cn:'\u5371\u9669'},
+    // Frame 3: draw map
+    f3_title:   {en:'STEP 3: DRAW MAP', cn:'\u7b2c\u4e09\u6b65\uff1a\u7ed8\u5236\u5730\u56fe'},
+    f3_desc:    {en:'Draw a terrain distribution map with coordinates', cn:'\u753b\u4e00\u5f20\u5e26\u5750\u6807\u7684\u5730\u5f62\u5206\u5e03\u56fe'},
+    f3_coord:   {en:'Coordinates', cn:'\u5750\u6807'},
+    // Frame 4: final atlas
+    f4_title:   {en:'STEP 4: ASSEMBLE ATLAS', cn:'\u7b2c\u56db\u6b65\uff1a\u7ec4\u88c5\u56fe\u9274'},
+    f4_desc:    {en:'Put it all together and present to others', cn:'\u7ec4\u5408\u6240\u6709\u5185\u5bb9\uff0c\u5411\u4ed6\u4eba\u5c55\u793a'},
+    f4_cover:   {en:'Cover', cn:'\u5c01\u9762'},
+    f4_pages:   {en:'Pages', cn:'\u9875\u9762'},
+    f4_present: {en:'Present!', cn:'\u5c55\u793a!'},
+
+    guideTitle: {en:'ATLAS CHECKLIST', cn:'\u56fe\u9274\u6e05\u5355'},
+    g1: {en:'At least 6 photos of 4+ terrain types', cn:'\u81f3\u5c116\u5f20\u7167\u7247\uff0c\u8986\u76d64\u79cd\u4ee5\u4e0a\u5730\u5f62'},
+    g2: {en:'Each photo labeled with type and difficulty', cn:'\u6bcf\u5f20\u7167\u7247\u6807\u6ce8\u7c7b\u578b\u548c\u901a\u884c\u96be\u5ea6'},
+    g3: {en:'Hand-drawn map with coordinates', cn:'\u624b\u7ed8\u5730\u56fe\u5e76\u6807\u6ce8\u5750\u6807'},
+    g4: {en:'Written descriptions explain why navigation matters', cn:'\u6587\u5b57\u8bf4\u660e\u89e3\u91ca\u4e3a\u4ec0\u4e48\u9700\u8981\u81ea\u4e3b\u5bfc\u822a'},
+  },
+
+  hudLabels: ['hudL1','hudL2','hudL3','hudL4'],
+  hudValues: [
+    [{en:'PHASE',cn:'\u9636\u6bb5'}, {en:'PHOTOS',cn:'\u7167\u7247'}, {en:'TERRAINS',cn:'\u5730\u5f62'}, {en:'STATUS',cn:'\u72b6\u6001'}],
+    [{en:'COLLECT',cn:'\u6536\u96c6'}, '6+', '4+', {en:'START',cn:'\u5f00\u59cb'}],
+    [{en:'LABEL',cn:'\u6807\u6ce8'}, '6+', '4+', {en:'IN PROGRESS',cn:'\u8fdb\u884c\u4e2d'}],
+    [{en:'MAP',cn:'\u5730\u56fe'}, '1', {en:'ALL',cn:'\u5168\u90e8'}, {en:'DRAWING',cn:'\u7ed8\u5236\u4e2d'}],
+    [{en:'ASSEMBLE',cn:'\u7ec4\u88c5'}, {en:'ALL',cn:'\u5168\u90e8'}, {en:'ALL',cn:'\u5168\u90e8'}, {en:'DONE!',cn:'\u5b8c\u6210!'}],
+  ],
+
+  guideTitle: 'guideTitle',
+  guideItems: ['g1','g2','g3','g4'],
+};
+
+function getFrameElements(f, W, H) {
+  var t = AnimRuntime.t;
+  var P = AnimRuntime.PAL;
+  var cx = W / 2, cy = H / 2;
+  var els = [];
+
+  if (f === 0) {
+    // Mission overview: 5 steps flowing left to right
+    els.push({id:'f0t', type:'label', text:t('f0_title'), x:cx, y:36, color:P.primary, size:17, align:'center', glow:P.glowStrong});
+    els.push({id:'f0d', type:'text', text:t('f0_desc'), x:cx, y:56, color:P.muted, size:11, align:'center'});
+
+    var steps = ['f0_s1','f0_s2','f0_s3','f0_s4','f0_s5'];
+    var icons = ['\u{1F4F7}','\u{1F4CB}','\u{1F5FA}','\u{270D}','\u{1F4D6}']; // camera, clipboard, map, pencil, book
+    var cols = ['#ff7f50','#ffb59c','#00daf3','#c6c6c6','#ffb59c'];
+    var n = steps.length;
+    var totalW = Math.min(W * 0.85, 500);
+    var startX = cx - totalW / 2;
+    var stepW = totalW / n;
+    var boxH = 54;
+    var boxW = stepW - 12;
+
+    for (var i = 0; i < n; i++) {
+      var sx = startX + i * stepW + stepW / 2;
+      // Box
+      els.push({id:'sb' + i, type:'box', x:sx - boxW / 2, y:cy - boxH / 2, w:boxW, h:boxH, fill:'rgba(255,127,80,0.08)', stroke:cols[i], lineWidth:1.5});
+      // Step number
+      els.push({id:'sn' + i, type:'label', text:(i + 1).toString(), x:sx, y:cy - 10, color:cols[i], size:16, align:'center', glow:cols[i]});
+      // Step name
+      els.push({id:'sl' + i, type:'text', text:t(steps[i]), x:sx, y:cy + 12, color:P.text, size:10, align:'center'});
+      // Arrow between steps
+      if (i < n - 1) {
+        els.push({id:'sa' + i, type:'arrow', x1:sx + boxW / 2 + 2, y1:cy, x2:sx + stepW - boxW / 2 - 2, y2:cy, color:P.muted, lineWidth:1, headSize:5});
+      }
+    }
+  }
+
+  if (f === 1) {
+    // Step 1: Collect photos - show 6 photo thumbnails
+    els.push({id:'f1t', type:'label', text:t('f1_title'), x:cx, y:36, color:P.primary, size:17, align:'center', glow:P.glowStrong});
+    els.push({id:'f1d', type:'text', text:t('f1_desc'), x:cx, y:56, color:P.muted, size:11, align:'center'});
+
+    var terrains = ['f1_t1','f1_t2','f1_t3','f1_t4','f1_t5','f1_t6'];
+    var tColors = ['#8B4513','#D2691E','#DEB887','#A0522D','#BC8F8F','#696969'];
+    var cols3 = 3;
+    var gridW = Math.min(W * 0.75, 380);
+    var gridH = Math.min(H * 0.45, 200);
+    var cellW = gridW / cols3;
+    var cellH = gridH / 2;
+    var gx = cx - gridW / 2;
+    var gy = cy - gridH / 2 + 10;
+
+    for (var i = 0; i < 6; i++) {
+      var col = i % cols3;
+      var row = Math.floor(i / cols3);
+      var px = gx + col * cellW + cellW / 2;
+      var py = gy + row * cellH + cellH / 2;
+      var imgW = cellW - 16;
+      var imgH = cellH - 24;
+
+      // Photo frame with terrain color
+      els.push({id:'ph' + i, type:'custom', draw: (function(px, py, imgW, imgH, tc, idx) {
+        return function(c) {
+          // Background terrain gradient
+          var g = c.createLinearGradient(px - imgW / 2, py - imgH / 2, px + imgW / 2, py + imgH / 2);
+          g.addColorStop(0, tc);
+          g.addColorStop(1, '#1a1a1a');
+          c.fillStyle = g;
+          c.fillRect(px - imgW / 2, py - imgH / 2, imgW, imgH);
+          // Terrain texture (simple dots/lines)
+          c.fillStyle = 'rgba(255,255,255,0.15)';
+          for (var d = 0; d < 8; d++) {
+            var dx = px - imgW / 3 + Math.sin(d * 1.7 + idx) * imgW * 0.3;
+            var dy = py - imgH / 3 + Math.cos(d * 2.3 + idx) * imgH * 0.3;
+            c.beginPath(); c.arc(dx, dy, 2 + d % 3, 0, Math.PI * 2); c.fill();
+          }
+          // Border
+          c.strokeStyle = '#ffb59c';
+          c.lineWidth = 1;
+          c.strokeRect(px - imgW / 2, py - imgH / 2, imgW, imgH);
+        };
+      })(px, py, imgW, imgH, tColors[i], i)});
+
+      // Label
+      els.push({id:'pl' + i, type:'text', text:t(terrains[i]), x:px, y:py + imgH / 2 + 10, color:P.text, size:10, align:'center'});
+    }
+  }
+
+  if (f === 2) {
+    // Step 2: Classify and label
+    els.push({id:'f2t', type:'label', text:t('f2_title'), x:cx, y:36, color:P.primary, size:17, align:'center', glow:P.glowStrong});
+    els.push({id:'f2d', type:'text', text:t('f2_desc'), x:cx, y:56, color:P.muted, size:11, align:'center'});
+
+    // Show 3 example cards with labels
+    var cardW = Math.min(W * 0.25, 130);
+    var cardH = Math.min(H * 0.45, 180);
+    var gap = 20;
+    var totalCards = 3 * cardW + 2 * gap;
+    var startCardX = cx - totalCards / 2;
+    var cardY = cy - cardH / 2 + 15;
+
+    var cards = [
+      {terrain:'f1_t5', diff:'f2_easy', color:'#44cc44', tc:'#BC8F8F'},
+      {terrain:'f1_t1', diff:'f2_hard', color:'#ffaa00', tc:'#8B4513'},
+      {terrain:'f1_t2', diff:'f2_danger', color:'#ff4444', tc:'#D2691E'},
+    ];
+
+    for (var i = 0; i < cards.length; i++) {
+      var cd = cards[i];
+      var cardX = startCardX + i * (cardW + gap);
+
+      // Card background
+      els.push({id:'cd' + i, type:'box', x:cardX, y:cardY, w:cardW, h:cardH, fill:'rgba(32,31,31,0.6)', stroke:P.outline, lineWidth:1});
+
+      // Terrain image area
+      els.push({id:'ci' + i, type:'custom', draw: (function(x, y, w, tc) {
+        return function(c) {
+          var g = c.createLinearGradient(x + 4, y + 4, x + w - 4, y + 60);
+          g.addColorStop(0, tc); g.addColorStop(1, '#1a1a1a');
+          c.fillStyle = g;
+          c.fillRect(x + 4, y + 4, w - 8, 56);
+        };
+      })(cardX, cardY, cardW, cd.tc)});
+
+      // Terrain name
+      els.push({id:'cn' + i, type:'label', text:t(cd.terrain), x:cardX + cardW / 2, y:cardY + 76, color:P.text, size:12, align:'center'});
+
+      // Difficulty badge
+      els.push({id:'cdb' + i, type:'box', x:cardX + 8, y:cardY + cardH - 34, w:cardW - 16, h:20, fill:cd.color + '22', stroke:cd.color, lineWidth:1});
+      els.push({id:'cdl' + i, type:'label', text:t(cd.diff), x:cardX + cardW / 2, y:cardY + cardH - 24, color:cd.color, size:10, align:'center'});
+    }
+  }
+
+  if (f === 3) {
+    // Step 3: Draw map with grid and coordinates
+    els.push({id:'f3t', type:'label', text:t('f3_title'), x:cx, y:36, color:P.primary, size:17, align:'center', glow:P.glowStrong});
+    els.push({id:'f3d', type:'text', text:t('f3_desc'), x:cx, y:56, color:P.muted, size:11, align:'center'});
+
+    var mapW = Math.min(W * 0.6, 280);
+    var mapH = Math.min(H * 0.5, 220);
+    var mx = cx - mapW / 2;
+    var my = cy - mapH / 2 + 15;
+    var gridN = 6;
+    var cellW = mapW / gridN;
+    var cellH = mapH / gridN;
+
+    // Map background
+    els.push({id:'mapbg', type:'box', x:mx, y:my, w:mapW, h:mapH, fill:'rgba(139,69,19,0.15)', stroke:P.outline, lineWidth:1});
+
+    // Grid lines
+    els.push({id:'mgrid', type:'custom', draw: function(c) {
+      c.strokeStyle = 'rgba(255,181,156,0.15)';
+      c.lineWidth = 0.5;
+      for (var i = 0; i <= gridN; i++) {
+        c.beginPath(); c.moveTo(mx + i * cellW, my); c.lineTo(mx + i * cellW, my + mapH); c.stroke();
+        c.beginPath(); c.moveTo(mx, my + i * cellH); c.lineTo(mx + mapW, my + i * cellH); c.stroke();
+      }
+    }});
+
+    // Coordinate labels
+    for (var i = 0; i < gridN; i++) {
+      els.push({id:'cx' + i, type:'text', text:i.toString(), x:mx + i * cellW + cellW / 2, y:my - 6, color:P.muted, size:9, align:'center'});
+      els.push({id:'cy' + i, type:'text', text:i.toString(), x:mx - 10, y:my + i * cellH + cellH / 2, color:P.muted, size:9, align:'center'});
+    }
+    els.push({id:'f3c', type:'text', text:t('f3_coord'), x:mx - 10, y:my - 6, color:P.primary, size:9, align:'center'});
+
+    // Terrain patches on map
+    var patches = [
+      {r:0, c:0, w:2, h:2, color:'rgba(139,69,19,0.4)'},  // crater
+      {r:1, c:3, w:2, h:3, color:'rgba(210,105,30,0.4)'},  // canyon
+      {r:3, c:0, w:3, h:2, color:'rgba(222,184,135,0.3)'}, // dune
+      {r:4, c:4, w:2, h:2, color:'rgba(160,82,45,0.4)'},   // volcano
+    ];
+    for (var i = 0; i < patches.length; i++) {
+      var p = patches[i];
+      els.push({id:'mp' + i, type:'box', x:mx + p.c * cellW + 1, y:my + p.r * cellH + 1, w:p.w * cellW - 2, h:p.h * cellH - 2, fill:p.color});
+    }
+  }
+
+  if (f === 4) {
+    // Step 4: Final atlas assembly
+    els.push({id:'f4t', type:'label', text:t('f4_title'), x:cx, y:36, color:P.primary, size:17, align:'center', glow:P.glowStrong});
+    els.push({id:'f4d', type:'text', text:t('f4_desc'), x:cx, y:56, color:P.muted, size:11, align:'center'});
+
+    // Book/atlas visual
+    var bookW = Math.min(W * 0.5, 240);
+    var bookH = Math.min(H * 0.5, 200);
+    var bx = cx - bookW / 2;
+    var by = cy - bookH / 2 + 10;
+
+    // Book cover (slightly rotated pages behind)
+    els.push({id:'p3', type:'custom', draw: function(c) {
+      c.save();
+      c.translate(bx + bookW / 2, by + bookH / 2);
+      c.rotate(-0.04);
+      c.fillStyle = 'rgba(100,80,60,0.3)';
+      c.fillRect(-bookW / 2 + 6, -bookH / 2 + 6, bookW, bookH);
+      c.restore();
+    }});
+    els.push({id:'p2', type:'custom', draw: function(c) {
+      c.save();
+      c.translate(bx + bookW / 2, by + bookH / 2);
+      c.rotate(-0.02);
+      c.fillStyle = 'rgba(120,90,60,0.3)';
+      c.fillRect(-bookW / 2 + 3, -bookH / 2 + 3, bookW, bookH);
+      c.restore();
+    }});
+
+    // Main cover
+    els.push({id:'cover', type:'custom', draw: function(c) {
+      var g = c.createLinearGradient(bx, by, bx + bookW, by + bookH);
+      g.addColorStop(0, '#3d2b1a');
+      g.addColorStop(0.5, '#6b3a1f');
+      g.addColorStop(1, '#3d2b1a');
+      c.fillStyle = g;
+      c.fillRect(bx, by, bookW, bookH);
+      c.strokeStyle = '#ffb59c';
+      c.lineWidth = 2;
+      c.strokeRect(bx, by, bookW, bookH);
+      // Inner border
+      c.strokeStyle = 'rgba(255,181,156,0.3)';
+      c.lineWidth = 0.5;
+      c.strokeRect(bx + 8, by + 8, bookW - 16, bookH - 16);
+    }});
+
+    // Cover title
+    els.push({id:'ct', type:'label', text:t('title'), x:cx, y:by + bookH * 0.35, color:'#ffb59c', size:15, align:'center', glow:'rgba(255,127,80,0.4)'});
+    // Subtitle
+    els.push({id:'cs', type:'text', text:t('f4_cover'), x:cx, y:by + bookH * 0.52, color:'#dec0b6', size:10, align:'center'});
+
+    // Present label
+    els.push({id:'f4p', type:'label', text:t('f4_present'), x:cx, y:by + bookH + 22, color:P.primary, size:14, align:'center', glow:P.glowStrong});
+  }
+
+  return els;
+}
+
+AnimRuntime.boot();
+</script>
+</body>
+</html>

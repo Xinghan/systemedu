@@ -1,0 +1,376 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=Inter:wght@400;500&family=Noto+Sans+SC:wght@400;700&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box;}
+html,body{width:100%;height:100vh;overflow:hidden;}
+body{background:#0c0e12;color:#f6f6fc;font-family:'Inter','Noto Sans SC',sans-serif;display:flex;flex-direction:column;}
+.wrapper{display:flex;flex-direction:column;height:100vh;overflow:hidden;}
+.header{padding:12px 16px 8px;display:flex;justify-content:space-between;align-items:center;}
+.header h1{font-family:'Space Grotesk',sans-serif;font-size:clamp(14px,2vw,18px);font-weight:700;letter-spacing:-0.02em;color:#50ffb0;text-shadow:0 0 15px rgba(80,255,176,0.3);}
+.header .sub{font-size:11px;color:#aaabb0;letter-spacing:0.1em;text-transform:uppercase;}
+.game-area{flex:1;min-height:0;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:12px;gap:12px;overflow:hidden;}
+.terrain-display{position:relative;width:min(320px,90vw);height:min(200px,30vh);border:2px solid rgba(80,255,176,0.3);background:rgba(15,15,25,0.8);display:flex;align-items:center;justify-content:center;}
+.terrain-display canvas{width:100%;height:100%;}
+.choices{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;max-width:400px;}
+.choice-btn{font-family:'Space Grotesk',sans-serif;font-size:13px;font-weight:700;letter-spacing:0.05em;padding:8px 16px;border:2px solid rgba(80,255,176,0.3);background:rgba(20,20,35,0.9);color:#aaabb0;cursor:pointer;transition:all 0.2s;}
+.choice-btn:hover{border-color:#50ffb0;color:#50ffb0;box-shadow:0 0 12px rgba(80,255,176,0.2);}
+.choice-btn.correct{border-color:#50ffb0;background:rgba(80,255,176,0.15);color:#50ffb0;animation:pulse 0.5s;}
+.choice-btn.wrong{border-color:#ff6b4a;background:rgba(255,107,74,0.1);color:#ff6b4a;}
+.choice-btn:disabled{cursor:default;opacity:0.6;}
+.feedback{font-family:'Noto Sans SC',sans-serif;font-size:13px;min-height:40px;text-align:center;max-width:380px;line-height:1.5;color:#aaabb0;}
+.feedback.ok{color:#50ffb0;}
+.feedback.err{color:#ff6b4a;}
+.hud{height:48px;display:flex;align-items:center;justify-content:space-around;background:rgba(0,0,0,0.55);backdrop-filter:blur(12px);padding:0 16px;}
+.hud-item{text-align:center;}
+.hud-label{font-family:'Space Grotesk',sans-serif;font-size:9px;letter-spacing:0.15em;text-transform:uppercase;color:#aaabb0;}
+.hud-val{font-family:'Space Grotesk',sans-serif;font-size:14px;font-weight:700;color:#50ffb0;}
+.lang-btn{position:fixed;top:8px;left:8px;z-index:100;font-family:'Space Grotesk',sans-serif;font-size:11px;font-weight:700;padding:4px 10px;cursor:pointer;border:none;background:rgba(20,20,35,0.85);backdrop-filter:blur(12px);color:#ffb59c;letter-spacing:1px;}
+.next-btn{font-family:'Space Grotesk',sans-serif;font-size:12px;font-weight:700;letter-spacing:0.1em;padding:8px 24px;border:none;cursor:pointer;color:#0c0e12;background:linear-gradient(135deg,#50ffb0,#17df93);box-shadow:0 0 12px rgba(80,255,176,0.3);display:none;}
+.next-btn:hover{transform:scale(1.04);}
+.result-panel{display:none;text-align:center;padding:20px;}
+.result-panel h2{font-family:'Space Grotesk',sans-serif;font-size:20px;color:#50ffb0;margin-bottom:12px;}
+.result-panel p{font-size:14px;color:#aaabb0;margin-bottom:8px;}
+.restart-btn{font-family:'Space Grotesk',sans-serif;font-size:12px;font-weight:700;padding:8px 24px;border:none;cursor:pointer;color:#0c0e12;background:linear-gradient(135deg,#50ffb0,#17df93);margin-top:12px;}
+@keyframes pulse{0%{transform:scale(1)}50%{transform:scale(1.05)}100%{transform:scale(1)}}
+</style>
+</head>
+<body>
+<button class="lang-btn" id="langBtn">CN</button>
+<div class="wrapper">
+<div class="header">
+  <div>
+    <h1 id="title"></h1>
+    <div class="sub" id="subtitle"></div>
+  </div>
+  <div id="progress" style="font-family:'Space Grotesk';font-size:12px;color:#aaabb0;"></div>
+</div>
+
+<div class="game-area" id="gameArea">
+  <div class="terrain-display"><canvas id="terrainCanvas"></canvas></div>
+  <div class="choices" id="choices"></div>
+  <div class="feedback" id="feedback"></div>
+  <button class="next-btn" id="nextBtn"></button>
+</div>
+
+<div class="result-panel" id="resultPanel">
+  <h2 id="resultTitle"></h2>
+  <p id="resultScore"></p>
+  <p id="resultMsg"></p>
+  <button class="restart-btn" id="restartBtn"></button>
+</div>
+
+<div class="hud">
+  <div class="hud-item"><div class="hud-label" id="hudL1"></div><div class="hud-val" id="hudV1"></div></div>
+  <div class="hud-item"><div class="hud-label" id="hudL2"></div><div class="hud-val" id="hudV2"></div></div>
+  <div class="hud-item"><div class="hud-label" id="hudL3"></div><div class="hud-val" id="hudV3"></div></div>
+  <div class="hud-item"><div class="hud-label" id="hudL4"></div><div class="hud-val" id="hudV4"></div></div>
+</div>
+</div>
+
+<script>
+(function(){
+"use strict";
+
+var lang = 'cn';
+function t(obj) { return obj[lang] || obj.en || ''; }
+
+var I18N = {
+  title:    {en:'TERRAIN NAMER', cn:'\u5730\u5f62\u547d\u540d\u5e08'},
+  subtitle: {en:'Name each Mars terrain correctly', cn:'\u7ed9\u6bcf\u4e2a\u706b\u661f\u5730\u5f62\u8d77\u6b63\u786e\u7684\u540d\u5b57'},
+  next:     {en:'NEXT', cn:'\u4e0b\u4e00\u9898'},
+  correct:  {en:'Correct!', cn:'\u6b63\u786e\uff01'},
+  wrong:    {en:'Not quite.', cn:'\u4e0d\u592a\u5bf9\u3002'},
+  hudRound: {en:'ROUND', cn:'\u9898\u53f7'},
+  hudScore: {en:'SCORE', cn:'\u5f97\u5206'},
+  hudAccuracy:{en:'ACCURACY',cn:'\u6b63\u786e\u7387'},
+  hudBest:  {en:'STREAK', cn:'\u8fde\u7eed'},
+  resultT:  {en:'Mission Complete!', cn:'\u4efb\u52a1\u5b8c\u6210\uff01'},
+  resultS:  {en:'Score: {0}/{1}', cn:'\u5f97\u5206\uff1a{0}/{1}'},
+  restart:  {en:'RESTART', cn:'\u91cd\u65b0\u5f00\u59cb'},
+  perfect:  {en:'Perfect! You named all terrains correctly!', cn:'\u592a\u68d2\u4e86\uff01\u4f60\u6b63\u786e\u547d\u540d\u4e86\u6240\u6709\u5730\u5f62\uff01'},
+  good:     {en:'Good job! Keep practicing!', cn:'\u4e0d\u9519\uff01\u7ee7\u7eed\u52a0\u6cb9\uff01'},
+  retry:    {en:'Try again to improve!', cn:'\u518d\u8bd5\u4e00\u6b21\uff0c\u4f60\u53ef\u4ee5\u505a\u5f97\u66f4\u597d\uff01'},
+  plains:   {en:'Plains', cn:'\u5e73\u539f'},
+  crater:   {en:'Crater', cn:'\u649e\u51fb\u5751'},
+  volcano:  {en:'Volcano', cn:'\u706b\u5c71'},
+  canyon:   {en:'Canyon', cn:'\u5ce1\u8c37'},
+  dune:     {en:'Dune', cn:'\u6c99\u4e18'},
+};
+
+// terrain drawing + question data
+var TERRAINS = [
+  {
+    type: 'crater', answer: 'crater',
+    hint: {en:'A round hollow caused by an asteroid impact. It has a raised rim and a sunken center.',
+           cn:'\u5c0f\u884c\u661f\u649e\u51fb\u9020\u6210\u7684\u5706\u5f62\u51f9\u964d\u3002\u6709\u51f8\u8d77\u7684\u8fb9\u7f18\u548c\u4e0b\u51f9\u7684\u4e2d\u5fc3\u3002'},
+    draw: function(ctx,w,h){ var cx=w/2,cy=h/2,r=Math.min(w,h)*0.3;
+      ctx.beginPath();ctx.arc(cx,cy,r,0,Math.PI*2);ctx.fillStyle='rgba(180,120,70,0.3)';ctx.fill();
+      ctx.strokeStyle='#b0785a';ctx.lineWidth=3;ctx.stroke();
+      ctx.beginPath();ctx.arc(cx,cy,r*0.55,0,Math.PI*2);ctx.fillStyle='rgba(60,30,15,0.5)';ctx.fill();
+      ctx.beginPath();ctx.arc(cx,cy,r*0.55,0,Math.PI*2);ctx.strokeStyle='rgba(180,120,70,0.4)';ctx.lineWidth=1;ctx.stroke();
+      // rim highlight
+      ctx.beginPath();ctx.arc(cx,cy,r,Math.PI*1.2,Math.PI*1.8);ctx.strokeStyle='rgba(255,200,150,0.3)';ctx.lineWidth=2;ctx.stroke();
+    }
+  },
+  {
+    type: 'volcano', answer: 'volcano',
+    hint: {en:'A tall, cone-shaped mountain with a smoke plume at the top. Formed by lava eruptions.',
+           cn:'\u9ad8\u800c\u5c16\u7684\u5706\u9525\u5f62\u5c71\u5cf0\uff0c\u9876\u90e8\u6709\u70df\u96fe\u3002\u7531\u5ca9\u6d46\u55b7\u53d1\u5f62\u6210\u3002'},
+    draw: function(ctx,w,h){ var cx=w/2,cy=h/2,bw=Math.min(w,h)*0.6,bh=bw*0.8;
+      ctx.beginPath();ctx.moveTo(cx-bw/2,cy+bh/3);ctx.lineTo(cx,cy-bh/2);ctx.lineTo(cx+bw/2,cy+bh/3);ctx.closePath();
+      var g=ctx.createLinearGradient(cx,cy-bh/2,cx,cy+bh/3);g.addColorStop(0,'#c04020');g.addColorStop(1,'#601810');
+      ctx.fillStyle=g;ctx.fill();ctx.strokeStyle='#ff6b4a';ctx.lineWidth=2;ctx.stroke();
+      // crater at top
+      ctx.beginPath();ctx.arc(cx,cy-bh/2+8,8,0,Math.PI*2);ctx.fillStyle='rgba(255,100,50,0.3)';ctx.fill();
+      // smoke
+      for(var i=0;i<3;i++){ctx.beginPath();ctx.arc(cx+(i-1)*8,cy-bh/2-10-i*10,4+i*2,0,Math.PI*2);ctx.fillStyle='rgba(200,200,200,'+(0.15-i*0.03)+')';ctx.fill();}
+    }
+  },
+  {
+    type: 'plains', answer: 'plains',
+    hint: {en:'A flat, open area with very little height variation. Smooth and mostly featureless.',
+           cn:'\u5e73\u5766\u5f00\u9614\u7684\u533a\u57df\uff0c\u51e0\u4e4e\u6ca1\u6709\u9ad8\u5ea6\u53d8\u5316\u3002\u5149\u6ed1\u800c\u7279\u5f81\u4e0d\u660e\u663e\u3002'},
+    draw: function(ctx,w,h){ var cy=h*0.55;
+      // flat terrain
+      var g=ctx.createLinearGradient(0,cy-20,0,h);g.addColorStop(0,'rgba(180,140,100,0.25)');g.addColorStop(1,'rgba(120,80,50,0.15)');
+      ctx.fillStyle=g;ctx.fillRect(0,cy,w,h-cy);
+      // horizon line
+      ctx.strokeStyle='rgba(200,160,100,0.5)';ctx.lineWidth=2;
+      ctx.beginPath();ctx.moveTo(0,cy);ctx.lineTo(w,cy);ctx.stroke();
+      // subtle texture lines
+      for(var i=0;i<5;i++){ctx.strokeStyle='rgba(200,160,100,0.12)';ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(0,cy+15+i*12);ctx.lineTo(w,cy+15+i*12);ctx.stroke();}
+      // tiny rocks
+      for(var i=0;i<6;i++){var rx=w*0.1+Math.random()*w*0.8,ry=cy+10+Math.random()*30;ctx.beginPath();ctx.arc(rx,ry,2,0,Math.PI*2);ctx.fillStyle='rgba(160,120,80,0.4)';ctx.fill();}
+    }
+  },
+  {
+    type: 'canyon', answer: 'canyon',
+    hint: {en:'A deep, long crack in the ground. Steep walls on both sides with a narrow floor.',
+           cn:'\u5730\u9762\u4e0a\u7684\u6df1\u957f\u88c2\u7f1d\u3002\u4e24\u4fa7\u662f\u9661\u5cad\uff0c\u4e2d\u95f4\u662f\u72ed\u7a84\u7684\u8c37\u5e95\u3002'},
+    draw: function(ctx,w,h){ var cx=w/2,cy=h/2,cw=w*0.18,ch=h*0.65;
+      // ground surface
+      ctx.fillStyle='rgba(160,110,70,0.2)';ctx.fillRect(0,cy-ch/4,w,ch);
+      // canyon walls
+      ctx.beginPath();ctx.moveTo(cx-cw*1.8,cy-ch/4);ctx.lineTo(cx-cw/2,cy+ch/3);ctx.lineTo(cx+cw/2,cy+ch/3);ctx.lineTo(cx+cw*1.8,cy-ch/4);
+      ctx.closePath();ctx.fillStyle='rgba(40,20,10,0.6)';ctx.fill();
+      // wall edges
+      ctx.strokeStyle='#b0785a';ctx.lineWidth=2;
+      ctx.beginPath();ctx.moveTo(cx-cw*1.8,cy-ch/4);ctx.lineTo(cx-cw/2,cy+ch/3);ctx.stroke();
+      ctx.beginPath();ctx.moveTo(cx+cw*1.8,cy-ch/4);ctx.lineTo(cx+cw/2,cy+ch/3);ctx.stroke();
+      // ledges
+      ctx.strokeStyle='rgba(180,120,80,0.3)';ctx.lineWidth=1;
+      ctx.beginPath();ctx.moveTo(cx-cw*1.2,cy);ctx.lineTo(cx-cw*0.6,cy+ch/6);ctx.stroke();
+      ctx.beginPath();ctx.moveTo(cx+cw*1.2,cy);ctx.lineTo(cx+cw*0.6,cy+ch/6);ctx.stroke();
+    }
+  },
+  {
+    type: 'dune', answer: 'dune',
+    hint: {en:'Wavy sand formations created by wind. They form smooth, curved ridges.',
+           cn:'\u98ce\u5439\u5f62\u6210\u7684\u6ce2\u6d6a\u5f62\u6c99\u5806\u3002\u5b83\u4eec\u5f62\u6210\u5e73\u6ed1\u7684\u5f27\u5f62\u5c71\u810a\u3002'},
+    draw: function(ctx,w,h){ var cy=h*0.55;
+      // background sand
+      ctx.fillStyle='rgba(200,170,100,0.12)';ctx.fillRect(0,cy,w,h-cy);
+      // multiple dune ridges
+      var colors = ['rgba(220,180,100,0.4)','rgba(200,160,80,0.35)','rgba(180,140,70,0.3)'];
+      for(var d=0;d<3;d++){
+        ctx.beginPath();ctx.moveTo(0,cy+d*18+10);
+        for(var x=0;x<=w;x+=2){
+          var y=cy+d*18+10+Math.sin((x+d*50)*0.02)*18-Math.sin((x+d*30)*0.035)*8;
+          ctx.lineTo(x,y);
+        }
+        ctx.lineTo(w,h);ctx.lineTo(0,h);ctx.closePath();
+        ctx.fillStyle=colors[d];ctx.fill();
+        ctx.strokeStyle='rgba(220,180,100,0.5)';ctx.lineWidth=1.5;
+        ctx.beginPath();ctx.moveTo(0,cy+d*18+10);
+        for(var x=0;x<=w;x+=2){
+          var y=cy+d*18+10+Math.sin((x+d*50)*0.02)*18-Math.sin((x+d*30)*0.035)*8;
+          ctx.lineTo(x,y);
+        }
+        ctx.stroke();
+      }
+      // wind particles
+      ctx.fillStyle='rgba(220,200,150,0.3)';
+      for(var i=0;i<8;i++){var px=Math.random()*w,py=cy-20+Math.random()*30;ctx.beginPath();ctx.arc(px,py,1.5,0,Math.PI*2);ctx.fill();}
+    }
+  },
+  {
+    type: 'crater', answer: 'crater',
+    hint: {en:'Another impact crater, smaller but with a clearly visible raised rim.',
+           cn:'\u53e6\u4e00\u4e2a\u649e\u51fb\u5751\uff0c\u66f4\u5c0f\u4f46\u8fb9\u7f18\u6e05\u6670\u53ef\u89c1\u3002'},
+    draw: function(ctx,w,h){ var cx=w/2,cy=h/2,r=Math.min(w,h)*0.22;
+      ctx.beginPath();ctx.arc(cx,cy,r,0,Math.PI*2);ctx.fillStyle='rgba(140,90,50,0.3)';ctx.fill();
+      ctx.strokeStyle='#a06840';ctx.lineWidth=2.5;ctx.stroke();
+      ctx.beginPath();ctx.arc(cx,cy,r*0.5,0,Math.PI*2);ctx.fillStyle='rgba(40,20,10,0.4)';ctx.fill();
+      // ejecta rays
+      for(var a=0;a<6;a++){var ang=a*Math.PI/3;ctx.strokeStyle='rgba(160,100,60,0.2)';ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(cx+r*Math.cos(ang),cy+r*Math.sin(ang));ctx.lineTo(cx+(r+15)*Math.cos(ang),cy+(r+15)*Math.sin(ang));ctx.stroke();}
+    }
+  },
+];
+
+var currentQ = 0, score = 0, streak = 0, bestStreak = 0, answered = false;
+
+function shuffleArray(arr) {
+  for (var i = arr.length - 1; i > 0; i--) {
+    var j = Math.floor(Math.random() * (i + 1));
+    var tmp = arr[i]; arr[i] = arr[j]; arr[j] = tmp;
+  }
+}
+
+function init() {
+  shuffleArray(TERRAINS);
+  currentQ = 0; score = 0; streak = 0; bestStreak = 0; answered = false;
+  document.getElementById('resultPanel').style.display = 'none';
+  document.getElementById('gameArea').style.display = 'flex';
+  updateUI();
+  renderQuestion();
+}
+
+function updateUI() {
+  document.getElementById('title').textContent = t(I18N.title);
+  document.getElementById('subtitle').textContent = t(I18N.subtitle);
+  document.getElementById('progress').textContent = (currentQ + 1) + ' / ' + TERRAINS.length;
+  document.getElementById('nextBtn').textContent = t(I18N.next);
+  document.getElementById('hudL1').textContent = t(I18N.hudRound);
+  document.getElementById('hudL2').textContent = t(I18N.hudScore);
+  document.getElementById('hudL3').textContent = t(I18N.hudAccuracy);
+  document.getElementById('hudL4').textContent = t(I18N.hudBest);
+  document.getElementById('hudV1').textContent = (currentQ + 1) + '/' + TERRAINS.length;
+  document.getElementById('hudV2').textContent = score + '';
+  document.getElementById('hudV3').textContent = currentQ > 0 ? Math.round(score / currentQ * 100) + '%' : '--';
+  document.getElementById('hudV4').textContent = bestStreak + '';
+}
+
+function renderQuestion() {
+  answered = false;
+  document.getElementById('feedback').textContent = '';
+  document.getElementById('feedback').className = 'feedback';
+  document.getElementById('nextBtn').style.display = 'none';
+
+  var terrain = TERRAINS[currentQ];
+  // draw terrain
+  var canvas = document.getElementById('terrainCanvas');
+  var rect = canvas.parentElement.getBoundingClientRect();
+  var dpr = Math.min(window.devicePixelRatio || 1, 2);
+  canvas.width = rect.width * dpr;
+  canvas.height = rect.height * dpr;
+  var ctx = canvas.getContext('2d');
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  // bg
+  ctx.fillStyle = '#0f0a14';
+  ctx.fillRect(0, 0, rect.width, rect.height);
+  // stars
+  for (var i = 0; i < 20; i++) {
+    ctx.fillStyle = 'rgba(255,255,255,' + (0.1 + Math.random() * 0.15) + ')';
+    ctx.beginPath();
+    ctx.arc(Math.random() * rect.width, Math.random() * rect.height * 0.4, 1, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  terrain.draw(ctx, rect.width, rect.height);
+
+  // choices
+  var choicesDiv = document.getElementById('choices');
+  choicesDiv.innerHTML = '';
+  var types = ['plains', 'crater', 'volcano', 'canyon', 'dune'];
+  types.forEach(function(type) {
+    var btn = document.createElement('button');
+    btn.className = 'choice-btn';
+    btn.textContent = t(I18N[type]);
+    btn.dataset.type = type;
+    btn.addEventListener('click', function() { checkAnswer(type); });
+    choicesDiv.appendChild(btn);
+  });
+
+  updateUI();
+}
+
+function checkAnswer(chosen) {
+  if (answered) return;
+  answered = true;
+  var terrain = TERRAINS[currentQ];
+  var btns = document.querySelectorAll('.choice-btn');
+  btns.forEach(function(btn) {
+    btn.disabled = true;
+    if (btn.dataset.type === terrain.answer) btn.classList.add('correct');
+    if (btn.dataset.type === chosen && chosen !== terrain.answer) btn.classList.add('wrong');
+  });
+
+  var fb = document.getElementById('feedback');
+  if (chosen === terrain.answer) {
+    score++;
+    streak++;
+    if (streak > bestStreak) bestStreak = streak;
+    fb.textContent = t(I18N.correct);
+    fb.className = 'feedback ok';
+  } else {
+    streak = 0;
+    fb.textContent = t(I18N.wrong) + ' ' + t(terrain.hint);
+    fb.className = 'feedback err';
+  }
+
+  updateUI();
+
+  if (currentQ < TERRAINS.length - 1) {
+    document.getElementById('nextBtn').style.display = 'inline-block';
+  } else {
+    setTimeout(showResults, 1200);
+  }
+}
+
+function showResults() {
+  document.getElementById('gameArea').style.display = 'none';
+  var panel = document.getElementById('resultPanel');
+  panel.style.display = 'block';
+  document.getElementById('resultTitle').textContent = t(I18N.resultT);
+  document.getElementById('resultScore').textContent = t(I18N.resultS).replace('{0}', score).replace('{1}', TERRAINS.length);
+  var msg = score === TERRAINS.length ? I18N.perfect : score >= TERRAINS.length * 0.6 ? I18N.good : I18N.retry;
+  document.getElementById('resultMsg').textContent = t(msg);
+  document.getElementById('restartBtn').textContent = t(I18N.restart);
+}
+
+// next button
+document.getElementById('nextBtn').addEventListener('click', function() {
+  currentQ++;
+  renderQuestion();
+});
+
+// restart
+document.getElementById('restartBtn').addEventListener('click', init);
+
+// lang toggle
+document.getElementById('langBtn').addEventListener('click', function() {
+  lang = lang === 'cn' ? 'en' : 'cn';
+  this.textContent = lang.toUpperCase();
+  updateUI();
+  // re-render feedback if showing
+  var fb = document.getElementById('feedback');
+  if (answered && TERRAINS[currentQ]) {
+    var terrain = TERRAINS[currentQ];
+    var chosenCorrect = fb.classList.contains('ok');
+    if (chosenCorrect) {
+      fb.textContent = t(I18N.correct);
+    } else {
+      fb.textContent = t(I18N.wrong) + ' ' + t(terrain.hint);
+    }
+  }
+  // update choice buttons
+  var btns = document.querySelectorAll('.choice-btn');
+  btns.forEach(function(btn) {
+    btn.textContent = t(I18N[btn.dataset.type]);
+  });
+  // update result panel if visible
+  if (document.getElementById('resultPanel').style.display === 'block') {
+    showResults();
+  }
+});
+
+// boot
+init();
+
+})();
+</script>
+</body>
+</html>

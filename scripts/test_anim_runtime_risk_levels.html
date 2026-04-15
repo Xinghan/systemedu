@@ -1,0 +1,569 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=Inter:wght@400;500&family=Noto+Sans+SC:wght@400;700&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box;}
+html,body{width:100%;height:100vh;overflow:hidden;}
+body{background:var(--bg,#0c0e12);color:var(--text,#f6f6fc);font-family:'Inter','Noto Sans SC',sans-serif;display:flex;flex-direction:column;}
+.wrapper{display:flex;flex-direction:column;height:100vh;overflow:hidden;}
+.header{padding:12px 16px 8px;display:flex;justify-content:space-between;align-items:center;}
+.header h1{font-family:'Space Grotesk',sans-serif;font-size:clamp(14px,2vw,18px);font-weight:700;letter-spacing:-0.02em;color:var(--primary,#50ffb0);text-shadow:0 0 15px var(--glow,rgba(80,255,176,0.3));}
+.header .sub{font-size:11px;color:var(--muted,#aaabb0);letter-spacing:0.1em;text-transform:uppercase;}
+.canvas-wrap{flex:1;min-height:0;position:relative;}
+canvas{width:100%;height:100%;display:block;}
+.controls{display:flex;justify-content:center;align-items:center;gap:12px;padding:8px 16px;}
+.ctrl-btn{font-family:'Space Grotesk',sans-serif;font-size:12px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;padding:6px 18px;border:none;cursor:pointer;color:var(--bg,#0c0e12);background:linear-gradient(135deg,var(--primary,#50ffb0),var(--primary-dim,#17df93));transition:transform 0.1s,box-shadow 0.2s;box-shadow:0 0 12px var(--glow-strong,rgba(80,255,176,0.3));}
+.ctrl-btn:hover{transform:scale(1.04);box-shadow:0 0 20px var(--glow-strong,rgba(80,255,176,0.5));}
+.ctrl-btn:active{transform:scale(0.96);}
+.ctrl-btn.secondary{background:var(--glass,rgba(23,26,31,0.92));color:var(--muted,#aaabb0);box-shadow:none;backdrop-filter:blur(12px);}
+.ctrl-btn.secondary:hover{color:var(--primary,#50ffb0);}
+.hud{height:48px;display:flex;align-items:center;justify-content:space-around;background:rgba(0,0,0,0.55);backdrop-filter:blur(12px);padding:0 16px;}
+.hud-item{text-align:center;}
+.hud-label{font-family:'Space Grotesk',sans-serif;font-size:9px;letter-spacing:0.15em;text-transform:uppercase;color:var(--muted,#aaabb0);}
+.hud-val{font-family:'Space Grotesk',sans-serif;font-size:14px;font-weight:700;color:var(--primary,#50ffb0);}
+.lang-btn{position:fixed;top:8px;left:8px;z-index:100;font-family:'Space Grotesk',sans-serif;font-size:11px;font-weight:700;padding:4px 10px;cursor:pointer;border:none;background:rgba(20,20,35,0.85);backdrop-filter:blur(12px);color:#ffb59c;letter-spacing:1px;}
+.guide-panel{position:fixed;top:8px;right:8px;width:240px;max-height:40vh;overflow-y:auto;background:var(--glass,rgba(20,20,35,0.85));backdrop-filter:blur(12px);padding:12px;z-index:100;font-family:'Noto Sans SC',sans-serif;font-size:12px;color:rgba(255,255,255,0.85);line-height:1.6;}
+.guide-panel h3{font-family:'Space Grotesk',sans-serif;font-size:13px;margin-bottom:6px;color:var(--primary,#50ffb0);cursor:pointer;display:flex;justify-content:space-between;align-items:center;}
+.guide-panel ul{padding-left:14px;}
+.guide-panel .collapsed{display:none;}
+</style>
+</head>
+<body>
+<button class="lang-btn" id="langBtn">CN</button>
+<div class="guide-panel" id="guide">
+<h3 id="guideTitle"></h3>
+<div class="guide-content" id="guideContent"></div>
+</div>
+<div class="wrapper">
+<div class="header">
+<div><h1 id="title"></h1><div class="sub" id="subtitle"></div></div>
+<div id="frameIndicator" style="font-family:'Space Grotesk';font-size:11px;color:var(--muted,#aaabb0);letter-spacing:0.1em;"></div>
+</div>
+<div class="canvas-wrap"><canvas id="c"></canvas></div>
+<div class="controls">
+<button class="ctrl-btn secondary" id="btnPrev"></button>
+<button class="ctrl-btn" id="btnPlay"></button>
+<button class="ctrl-btn secondary" id="btnNext"></button>
+</div>
+<div class="hud">
+<div class="hud-item"><div class="hud-label" id="hudL1"></div><div class="hud-val" id="hudV1"></div></div>
+<div class="hud-item"><div class="hud-label" id="hudL2"></div><div class="hud-val" id="hudV2"></div></div>
+<div class="hud-item"><div class="hud-label" id="hudL3"></div><div class="hud-val" id="hudV3"></div></div>
+<div class="hud-item"><div class="hud-label" id="hudL4"></div><div class="hud-val" id="hudV4"></div></div>
+</div>
+</div>
+
+<!-- Shared Runtime -->
+<script src="animation_runtime.js"></script>
+
+<!-- Content: Danger -> Risk Levels & Task Indicators -->
+<script>
+// === Terrain data: 4 terrain types with human feel + machine risk ===
+var terrains = [
+  {key:'flat',    riskLevel:1, cost:1,   color:'#10b981', safetyMargin:0.95},
+  {key:'rocky',   riskLevel:2, cost:3,   color:'#fbbf24', safetyMargin:0.70},
+  {key:'steep',   riskLevel:3, cost:8,   color:'#f97316', safetyMargin:0.35},
+  {key:'unknown', riskLevel:4, cost:999, color:'#ef4444', safetyMargin:0.05},
+];
+
+var CONFIG = {
+  style: 'ares_mission',
+  totalFrames: 5,
+
+  i18n: {
+    title:    {en:'DANGER TO RISK TRANSLATION', cn:'\u628a\u201c\u5371\u9669\u201d\u7ffb\u8bd1\u6210\u98ce\u9669\u7b49\u7ea7'},
+    subtitle: {en:'P-MARS-01-M03 / RISK LEVEL DESIGN', cn:'P-MARS-01-M03 / \u98ce\u9669\u7b49\u7ea7\u8bbe\u8ba1'},
+    guideTitle: {en:'OBSERVATION GUIDE', cn:'\u89c2\u5bdf\u6307\u5357'},
+    g1: {en:'Frame 1: Humans describe terrain with feelings', cn:'\u7b2c1\u5e27\uff1a\u4eba\u7c7b\u7528\u611f\u89c9\u63cf\u8ff0\u5730\u5f62'},
+    g2: {en:'Frame 2: Assign discrete risk levels 1-4', cn:'\u7b2c2\u5e27\uff1a\u5206\u914d\u79bb\u6563\u98ce\u9669\u7b49\u7ea7 1-4'},
+    g3: {en:'Frame 3: Map risk to path cost numbers', cn:'\u7b2c3\u5e27\uff1a\u628a\u98ce\u9669\u6620\u5c04\u4e3a\u8def\u5f84\u4ee3\u4ef7\u6570\u5b57'},
+    g4: {en:'Frame 4: Add safety margins for mission planning', cn:'\u7b2c4\u5e27\uff1a\u52a0\u5165\u5b89\u5168\u4f59\u91cf\u7528\u4e8e\u4efb\u52a1\u89c4\u5212'},
+    g5: {en:'Frame 5: Complete risk table -- machine-readable language', cn:'\u7b2c5\u5e27\uff1a\u5b8c\u6574\u98ce\u9669\u8868\u2014\u2014\u673a\u5668\u53ef\u8bfb\u8bed\u8a00'},
+
+    // Terrain human descriptions
+    flatHuman:    {en:'"Looks safe, flat ground"', cn:'\u201c\u770b\u8d77\u6765\u5f88\u5b89\u5168\uff0c\u5e73\u5766\u5730\u9762\u201d'},
+    rockyHuman:   {en:'"A bit bumpy, need to be careful"', cn:'\u201c\u6709\u70b9\u98a0\u7c38\uff0c\u9700\u8981\u5c0f\u5fc3\u201d'},
+    steepHuman:   {en:'"Very dangerous slope!"', cn:'\u201c\u5f88\u5371\u9669\u7684\u659c\u5761\uff01\u201d'},
+    unknownHuman: {en:'"I have no idea what\'s there"', cn:'\u201c\u5b8c\u5168\u4e0d\u77e5\u9053\u90a3\u91cc\u6709\u4ec0\u4e48\u201d'},
+
+    // Terrain labels
+    flat:    {en:'FLAT',    cn:'\u5e73\u5766'},
+    rocky:   {en:'ROCKY',   cn:'\u5ca9\u77f3'},
+    steep:   {en:'STEEP',   cn:'\u9661\u5761'},
+    unknown: {en:'UNKNOWN', cn:'\u672a\u77e5'},
+
+    // Frame titles
+    f0_title: {en:'HUMAN INTUITION', cn:'\u4eba\u7c7b\u76f4\u89c9'},
+    f1_title: {en:'RISK LEVELS (1-4)', cn:'\u98ce\u9669\u7b49\u7ea7 (1-4)'},
+    f2_title: {en:'PATH COST', cn:'\u8def\u5f84\u4ee3\u4ef7'},
+    f3_title: {en:'SAFETY MARGIN', cn:'\u5b89\u5168\u4f59\u91cf'},
+    f4_title: {en:'COMPLETE RISK TABLE', cn:'\u5b8c\u6574\u98ce\u9669\u8868'},
+
+    // Labels
+    labelRisk:   {en:'RISK', cn:'\u98ce\u9669'},
+    labelCost:   {en:'COST', cn:'\u4ee3\u4ef7'},
+    labelMargin: {en:'MARGIN', cn:'\u4f59\u91cf'},
+    labelPass:   {en:'PASSABLE', cn:'\u53ef\u901a\u884c'},
+    labelCaution:{en:'CAUTION', cn:'\u8c28\u614e'},
+    labelDanger: {en:'DANGER', cn:'\u5371\u9669'},
+    labelBlock:  {en:'BLOCKED', cn:'\u7981\u884c'},
+    questionMark:{en:'?', cn:'\uff1f'},
+    arrow:       {en:'->', cn:'\u2192'},
+
+    // HUD
+    hudL1: {en:'PHASE', cn:'\u9636\u6bb5'},
+    hudL2: {en:'TERRAIN TYPES', cn:'\u5730\u5f62\u79cd\u7c7b'},
+    hudL3: {en:'QUANTIFIED', cn:'\u5df2\u91cf\u5316'},
+    hudL4: {en:'MACHINE-READY', cn:'\u673a\u5668\u53ef\u8bfb'},
+
+    hud_f0_phase: {en:'FEELING', cn:'\u611f\u89c9'},
+    hud_f1_phase: {en:'CLASSIFY', cn:'\u5206\u7c7b'},
+    hud_f2_phase: {en:'QUANTIFY', cn:'\u91cf\u5316'},
+    hud_f3_phase: {en:'MARGIN', cn:'\u4f59\u91cf'},
+    hud_f4_phase: {en:'TABLE', cn:'\u5b8c\u6210'},
+  },
+
+  hudLabels: ['hudL1', 'hudL2', 'hudL3', 'hudL4'],
+  hudValues: [
+    ['hud_f0_phase', '4', '0 / 4', 'NO'],
+    ['hud_f1_phase', '4', '1 / 4', 'NO'],
+    ['hud_f2_phase', '4', '2 / 4', 'NO'],
+    ['hud_f3_phase', '4', '3 / 4', 'NO'],
+    ['hud_f4_phase', '4', '4 / 4', 'YES'],
+  ],
+
+  guideTitle: 'guideTitle',
+  guideItems: ['g1', 'g2', 'g3', 'g4', 'g5'],
+};
+
+// Custom element types
+function customDrawElement(ctx, el) {
+  var P = AnimRuntime.PAL;
+
+  if (el.type === 'terrainCard') {
+    // Glass card with terrain visualization
+    var r = 4;
+    ctx.beginPath();
+    ctx.moveTo(el.x + r, el.y); ctx.lineTo(el.x + el.w - r, el.y);
+    ctx.quadraticCurveTo(el.x + el.w, el.y, el.x + el.w, el.y + r);
+    ctx.lineTo(el.x + el.w, el.y + el.h - r);
+    ctx.quadraticCurveTo(el.x + el.w, el.y + el.h, el.x + el.w - r, el.y + el.h);
+    ctx.lineTo(el.x + r, el.y + el.h);
+    ctx.quadraticCurveTo(el.x, el.y + el.h, el.x, el.y + el.h - r);
+    ctx.lineTo(el.x, el.y + r);
+    ctx.quadraticCurveTo(el.x, el.y, el.x + r, el.y);
+    ctx.closePath();
+
+    // Fill with glass
+    var g = ctx.createLinearGradient(el.x, el.y, el.x, el.y + el.h);
+    g.addColorStop(0, 'rgba(32,31,31,0.85)');
+    g.addColorStop(1, P.surface);
+    ctx.fillStyle = g;
+    ctx.fill();
+
+    // Top accent line
+    ctx.save();
+    ctx.beginPath();
+    ctx.moveTo(el.x, el.y); ctx.lineTo(el.x + el.w, el.y);
+    ctx.strokeStyle = el.accentColor || P.primary;
+    ctx.lineWidth = 2;
+    ctx.shadowColor = el.accentColor || P.primary;
+    ctx.shadowBlur = 8;
+    ctx.stroke();
+    ctx.restore();
+
+    // Ghost border
+    ctx.strokeStyle = 'rgba(138,136,134,0.12)';
+    ctx.lineWidth = 0.5;
+    ctx.stroke();
+    return true;
+  }
+
+  if (el.type === 'riskBar') {
+    // Horizontal bar showing risk proportion
+    var barBg = ctx.createLinearGradient(el.x, el.y, el.x + el.maxW, el.y);
+    barBg.addColorStop(0, 'rgba(138,136,134,0.15)');
+    barBg.addColorStop(1, 'rgba(138,136,134,0.05)');
+    ctx.fillStyle = barBg;
+    ctx.fillRect(el.x, el.y, el.maxW, el.h);
+
+    var fillW = el.maxW * el.ratio;
+    var barFill = ctx.createLinearGradient(el.x, el.y, el.x + fillW, el.y);
+    barFill.addColorStop(0, el.barColor);
+    barFill.addColorStop(1, el.barColor + '80');
+    ctx.fillStyle = barFill;
+    ctx.fillRect(el.x, el.y, fillW, el.h);
+
+    // Glow
+    ctx.shadowColor = el.barColor;
+    ctx.shadowBlur = 6;
+    ctx.fillRect(el.x, el.y, fillW, el.h);
+    ctx.shadowBlur = 0;
+    return true;
+  }
+
+  if (el.type === 'transArrow') {
+    // Big animated arrow showing transformation
+    var cx = el.x, cy = el.y;
+    var size = el.size || 24;
+    ctx.strokeStyle = P.tertiary || '#00daf3';
+    ctx.lineWidth = 2;
+    ctx.shadowColor = P.tertiary || '#00daf3';
+    ctx.shadowBlur = 10;
+    // Arrow body
+    ctx.beginPath();
+    ctx.moveTo(cx - size, cy);
+    ctx.lineTo(cx + size * 0.6, cy);
+    ctx.stroke();
+    // Arrow head
+    ctx.beginPath();
+    ctx.moveTo(cx + size, cy);
+    ctx.lineTo(cx + size * 0.5, cy - size * 0.35);
+    ctx.lineTo(cx + size * 0.5, cy + size * 0.35);
+    ctx.closePath();
+    ctx.fillStyle = P.tertiary || '#00daf3';
+    ctx.fill();
+    ctx.shadowBlur = 0;
+    return true;
+  }
+
+  return false;
+}
+
+function getFrameElements(f, W, H) {
+  var t = AnimRuntime.t;
+  var P = AnimRuntime.PAL;
+  var elems = [];
+  var cx = W / 2, cy = H / 2;
+
+  // Frame subtitle (what phase we're in)
+  var fTitle = t('f' + f + '_title');
+  elems.push({id:'frameTitle', type:'label', text:fTitle, x:cx, y:H*0.07,
+    color:P.tertiary || '#00daf3', size:Math.max(11, W*0.014), align:'center', bold:true, alpha:1});
+
+  // Terrain card dimensions
+  var cardCount = 4;
+  var cardW = Math.min(140, W * 0.18);
+  var cardH = Math.min(180, H * 0.55);
+  var cardGap = Math.max(12, (W * 0.85 - cardCount * cardW) / (cardCount - 1));
+  var totalCardsW = cardCount * cardW + (cardCount - 1) * cardGap;
+  var startX = (W - totalCardsW) / 2;
+  var cardY = H * 0.15;
+
+  // === FRAME 0: Human intuition -- speech bubbles over terrain icons ===
+  if (f === 0) {
+    for (var i = 0; i < 4; i++) {
+      var tx = startX + i * (cardW + cardGap);
+      var terr = terrains[i];
+      // Card
+      elems.push({id:'card'+i, type:'terrainCard', x:tx, y:cardY, w:cardW, h:cardH,
+        accentColor:terr.color, alpha:1});
+      // Terrain icon (simple shape)
+      _addTerrainIcon(elems, i, tx, cardY, cardW, cardH, terr);
+      // Terrain name
+      elems.push({id:'tname'+i, type:'label', text:t(terr.key),
+        x:tx+cardW/2, y:cardY+cardH*0.45, color:terr.color, size:Math.max(11,W*0.014),
+        align:'center', bold:true, alpha:1});
+      // Human quote
+      var quoteKey = terr.key + 'Human';
+      elems.push({id:'quote'+i, type:'text', text:t(quoteKey),
+        x:tx+cardW/2, y:cardY+cardH*0.62, color:P.text, size:Math.max(9,W*0.011),
+        align:'center', alpha:1});
+      // Question mark (machine can't read this!)
+      elems.push({id:'qmark'+i, type:'label', text:t('questionMark'),
+        x:tx+cardW/2, y:cardY+cardH*0.82, color:P.error || '#ff716c',
+        size:Math.max(18,W*0.024), align:'center', bold:true, alpha:1});
+    }
+    return elems;
+  }
+
+  // === FRAME 1: Risk levels assigned ===
+  if (f === 1) {
+    for (var i = 0; i < 4; i++) {
+      var tx = startX + i * (cardW + cardGap);
+      var terr = terrains[i];
+      elems.push({id:'card'+i, type:'terrainCard', x:tx, y:cardY, w:cardW, h:cardH,
+        accentColor:terr.color, alpha:1});
+      _addTerrainIcon(elems, i, tx, cardY, cardW, cardH, terr);
+      elems.push({id:'tname'+i, type:'label', text:t(terr.key),
+        x:tx+cardW/2, y:cardY+cardH*0.45, color:terr.color, size:Math.max(11,W*0.014),
+        align:'center', bold:true, alpha:1});
+      // Risk level number (big)
+      elems.push({id:'riskNum'+i, type:'label', text:'L' + terr.riskLevel,
+        x:tx+cardW/2, y:cardY+cardH*0.62, color:terr.color,
+        size:Math.max(20,W*0.028), align:'center', bold:true, alpha:1});
+      // Risk classification label
+      var riskLabels = ['labelPass','labelCaution','labelDanger','labelBlock'];
+      elems.push({id:'riskLabel'+i, type:'label', text:t(riskLabels[i]),
+        x:tx+cardW/2, y:cardY+cardH*0.78, color:terr.color,
+        size:Math.max(9,W*0.011), align:'center', bold:false, alpha:1});
+      // Risk bar
+      elems.push({id:'rbar'+i, type:'riskBar', x:tx+8, y:cardY+cardH*0.88,
+        maxW:cardW-16, h:4, ratio:terr.riskLevel/4, barColor:terr.color, alpha:1});
+    }
+    return elems;
+  }
+
+  // === FRAME 2: Path cost numbers ===
+  if (f === 2) {
+    for (var i = 0; i < 4; i++) {
+      var tx = startX + i * (cardW + cardGap);
+      var terr = terrains[i];
+      elems.push({id:'card'+i, type:'terrainCard', x:tx, y:cardY, w:cardW, h:cardH,
+        accentColor:terr.color, alpha:1});
+      _addTerrainIcon(elems, i, tx, cardY, cardW, cardH, terr);
+      elems.push({id:'tname'+i, type:'label', text:t(terr.key),
+        x:tx+cardW/2, y:cardY+cardH*0.40, color:terr.color, size:Math.max(10,W*0.012),
+        align:'center', bold:true, alpha:1});
+      // Risk level (smaller now)
+      elems.push({id:'riskNum'+i, type:'label', text:'L' + terr.riskLevel,
+        x:tx+cardW*0.3, y:cardY+cardH*0.54, color:terr.color,
+        size:Math.max(12,W*0.015), align:'center', bold:true, alpha:1});
+      // Arrow
+      elems.push({id:'costArrow'+i, type:'transArrow', x:tx+cardW*0.5, y:cardY+cardH*0.54,
+        size:Math.max(10,W*0.012), alpha:1});
+      // Cost value (big)
+      var costText = terr.cost >= 999 ? 'INF' : String(terr.cost);
+      elems.push({id:'costVal'+i, type:'label', text:t('labelCost') + ': ' + costText,
+        x:tx+cardW/2, y:cardY+cardH*0.68, color:P.primary,
+        size:Math.max(13,W*0.016), align:'center', bold:true, alpha:1});
+      // Cost bar
+      var costRatio = terr.cost >= 999 ? 1 : terr.cost / 10;
+      elems.push({id:'rbar'+i, type:'riskBar', x:tx+8, y:cardY+cardH*0.80,
+        maxW:cardW-16, h:6, ratio:costRatio, barColor:terr.color, alpha:1});
+      // Explanation
+      var costExplain = terr.cost >= 999 ?
+        {en:'impassable', cn:'\u4e0d\u53ef\u901a\u884c'} :
+        {en:'cost = '+terr.cost, cn:'\u4ee3\u4ef7 = '+terr.cost};
+      elems.push({id:'costExp'+i, type:'text',
+        text:costExplain[AnimRuntime.LANG] || costExplain.en,
+        x:tx+cardW/2, y:cardY+cardH*0.90, color:P.muted, size:Math.max(8,W*0.01),
+        align:'center', alpha:1});
+    }
+    return elems;
+  }
+
+  // === FRAME 3: Safety margins ===
+  if (f === 3) {
+    for (var i = 0; i < 4; i++) {
+      var tx = startX + i * (cardW + cardGap);
+      var terr = terrains[i];
+      elems.push({id:'card'+i, type:'terrainCard', x:tx, y:cardY, w:cardW, h:cardH,
+        accentColor:terr.color, alpha:1});
+      _addTerrainIcon(elems, i, tx, cardY, cardW, cardH, terr);
+      elems.push({id:'tname'+i, type:'label', text:t(terr.key),
+        x:tx+cardW/2, y:cardY+cardH*0.40, color:terr.color, size:Math.max(10,W*0.012),
+        align:'center', bold:true, alpha:1});
+      // Safety margin gauge (arc)
+      var gaugeCx = tx + cardW/2;
+      var gaugeCy = cardY + cardH * 0.62;
+      var gaugeR = Math.min(cardW * 0.25, 28);
+      elems.push({id:'gauge'+i, type:'custom', x:gaugeCx, y:gaugeCy, r:gaugeR,
+        margin:terr.safetyMargin, gaugeColor:terr.color, alpha:1,
+        draw:function(alpha) {
+          var c = AnimRuntime.ctx;
+          c.globalAlpha = alpha;
+          var e = this;
+          // Background arc
+          c.beginPath();
+          c.arc(e.x, e.y, e.r, Math.PI, 0, false);
+          c.strokeStyle = 'rgba(138,136,134,0.2)';
+          c.lineWidth = 4;
+          c.stroke();
+          // Fill arc
+          c.beginPath();
+          var endAngle = Math.PI + Math.PI * e.margin;
+          c.arc(e.x, e.y, e.r, Math.PI, endAngle, false);
+          c.strokeStyle = e.gaugeColor;
+          c.lineWidth = 4;
+          c.shadowColor = e.gaugeColor;
+          c.shadowBlur = 8;
+          c.stroke();
+          c.shadowBlur = 0;
+          // Percentage text
+          c.fillStyle = e.gaugeColor;
+          c.font = "bold " + Math.max(11, e.r * 0.6) + "px 'Space Grotesk',sans-serif";
+          c.textAlign = 'center';
+          c.textBaseline = 'middle';
+          c.fillText(Math.round(e.margin * 100) + '%', e.x, e.y + 4);
+          c.globalAlpha = 1;
+        }});
+      // Margin label
+      elems.push({id:'marginLabel'+i, type:'label', text:t('labelMargin'),
+        x:tx+cardW/2, y:cardY+cardH*0.82, color:P.muted,
+        size:Math.max(9,W*0.01), align:'center', bold:false, alpha:1});
+    }
+    return elems;
+  }
+
+  // === FRAME 4: Complete risk table ===
+  if (f === 4) {
+    // Table header
+    var tableY = H * 0.14;
+    var colWidths = [0.18, 0.14, 0.14, 0.18, 0.18, 0.18]; // proportions of W*0.85
+    var tableW = W * 0.85;
+    var tableStartX = (W - tableW) / 2;
+    var rowH = Math.min(32, H * 0.09);
+    var headers = [
+      {en:'TERRAIN', cn:'\u5730\u5f62'},
+      {en:'RISK', cn:'\u98ce\u9669'},
+      {en:'COST', cn:'\u4ee3\u4ef7'},
+      {en:'MARGIN', cn:'\u4f59\u91cf'},
+      {en:'CLASS', cn:'\u5206\u7c7b'},
+      {en:'STATUS', cn:'\u72b6\u6001'},
+    ];
+
+    // Header row background
+    elems.push({id:'headerBg', type:'box', x:tableStartX, y:tableY, w:tableW, h:rowH,
+      fill:'rgba(255,181,156,0.08)', alpha:1});
+
+    var cx0 = tableStartX;
+    for (var col = 0; col < 6; col++) {
+      var colW = tableW * colWidths[col];
+      var hText = headers[col][AnimRuntime.LANG] || headers[col].en;
+      elems.push({id:'hdr'+col, type:'label', text:hText,
+        x:cx0 + colW/2, y:tableY + rowH/2, color:P.primary,
+        size:Math.max(9,W*0.011), align:'center', bold:true, alpha:1});
+      cx0 += colW;
+    }
+
+    // Data rows
+    var riskLabels = ['labelPass','labelCaution','labelDanger','labelBlock'];
+    var statusIcons = [
+      {en:'GO',       cn:'\u901a\u884c'},
+      {en:'CAUTION',  cn:'\u8c28\u614e'},
+      {en:'AVOID',    cn:'\u89c4\u907f'},
+      {en:'BLOCKED',  cn:'\u7981\u6b62'},
+    ];
+
+    for (var row = 0; row < 4; row++) {
+      var terr = terrains[row];
+      var ry = tableY + (row + 1) * rowH;
+
+      // Row background (alternating)
+      if (row % 2 === 0) {
+        elems.push({id:'rowBg'+row, type:'box', x:tableStartX, y:ry, w:tableW, h:rowH,
+          fill:'rgba(138,136,134,0.05)', alpha:1});
+      }
+
+      // Row accent line (left edge)
+      elems.push({id:'rowAccent'+row, type:'line', x1:tableStartX, y1:ry,
+        x2:tableStartX, y2:ry+rowH, color:terr.color, lineWidth:2, alpha:1});
+
+      var cx0 = tableStartX;
+      var vals = [
+        t(terr.key),
+        'L' + terr.riskLevel,
+        terr.cost >= 999 ? 'INF' : String(terr.cost),
+        Math.round(terr.safetyMargin * 100) + '%',
+        t(riskLabels[row]),
+        statusIcons[row][AnimRuntime.LANG] || statusIcons[row].en,
+      ];
+      var colors = [terr.color, terr.color, P.primary, terr.color, terr.color, terr.color];
+
+      for (var col = 0; col < 6; col++) {
+        var colW = tableW * colWidths[col];
+        elems.push({id:'cell'+row+'_'+col, type:'label', text:vals[col],
+          x:cx0 + colW/2, y:ry + rowH/2, color:colors[col],
+          size:Math.max(10,W*0.012), align:'center', bold:col===0, alpha:1});
+        cx0 += colW;
+      }
+    }
+
+    // Summary line at bottom
+    var summaryY = tableY + 5 * rowH + 12;
+    var summaryText = {
+      en: 'Machine-readable: 4 terrain types -> 4 risk levels -> path cost + safety margin',
+      cn: '\u673a\u5668\u53ef\u8bfb\uff1a4\u79cd\u5730\u5f62 \u2192 4\u7ea7\u98ce\u9669 \u2192 \u8def\u5f84\u4ee3\u4ef7 + \u5b89\u5168\u4f59\u91cf'
+    };
+    elems.push({id:'summary', type:'label',
+      text:summaryText[AnimRuntime.LANG] || summaryText.en,
+      x:cx, y:summaryY, color:P.tertiary || '#00daf3',
+      size:Math.max(10,W*0.013), align:'center', bold:false, alpha:1});
+
+    return elems;
+  }
+
+  return elems;
+}
+
+// Helper: draw simple terrain icon inside card
+function _addTerrainIcon(elems, idx, tx, cardY, cardW, cardH, terr) {
+  var iconCx = tx + cardW / 2;
+  var iconCy = cardY + cardH * 0.22;
+  var iconR = Math.min(cardW * 0.2, 18);
+
+  elems.push({id:'icon'+idx, type:'custom', x:iconCx, y:iconCy, r:iconR,
+    terrKey:terr.key, terrColor:terr.color, alpha:1,
+    draw:function(alpha) {
+      var c = AnimRuntime.ctx;
+      var P = AnimRuntime.PAL;
+      c.globalAlpha = alpha;
+      var e = this;
+      c.save();
+      if (e.terrKey === 'flat') {
+        // Flat ground: horizontal line with gentle waves
+        c.strokeStyle = e.terrColor; c.lineWidth = 2;
+        c.shadowColor = e.terrColor; c.shadowBlur = 6;
+        c.beginPath();
+        c.moveTo(e.x - e.r * 1.2, e.y + e.r * 0.3);
+        c.quadraticCurveTo(e.x - e.r * 0.4, e.y + e.r * 0.15, e.x, e.y + e.r * 0.25);
+        c.quadraticCurveTo(e.x + e.r * 0.4, e.y + e.r * 0.35, e.x + e.r * 1.2, e.y + e.r * 0.3);
+        c.stroke();
+        // Small circle (rover)
+        c.beginPath(); c.arc(e.x, e.y - e.r * 0.2, e.r * 0.35, 0, Math.PI * 2);
+        c.fillStyle = e.terrColor + '40'; c.fill();
+        c.strokeStyle = e.terrColor; c.stroke();
+      } else if (e.terrKey === 'rocky') {
+        // Rocky: jagged peaks
+        c.strokeStyle = e.terrColor; c.lineWidth = 2;
+        c.shadowColor = e.terrColor; c.shadowBlur = 6;
+        c.beginPath();
+        c.moveTo(e.x - e.r * 1.2, e.y + e.r * 0.5);
+        c.lineTo(e.x - e.r * 0.6, e.y - e.r * 0.2);
+        c.lineTo(e.x - e.r * 0.1, e.y + e.r * 0.3);
+        c.lineTo(e.x + e.r * 0.4, e.y - e.r * 0.5);
+        c.lineTo(e.x + e.r * 1.2, e.y + e.r * 0.5);
+        c.stroke();
+      } else if (e.terrKey === 'steep') {
+        // Steep: big triangle slope
+        c.fillStyle = e.terrColor + '30';
+        c.strokeStyle = e.terrColor; c.lineWidth = 2;
+        c.shadowColor = e.terrColor; c.shadowBlur = 8;
+        c.beginPath();
+        c.moveTo(e.x - e.r * 1.0, e.y + e.r * 0.6);
+        c.lineTo(e.x + e.r * 0.4, e.y - e.r * 0.7);
+        c.lineTo(e.x + e.r * 1.0, e.y + e.r * 0.6);
+        c.closePath();
+        c.fill(); c.stroke();
+        // Danger lines
+        c.strokeStyle = e.terrColor + '60'; c.lineWidth = 1;
+        c.beginPath();
+        c.moveTo(e.x - e.r * 0.3, e.y + e.r * 0.6);
+        c.lineTo(e.x + e.r * 0.4, e.y - e.r * 0.1);
+        c.stroke();
+      } else {
+        // Unknown: question mark with dashed circle
+        c.setLineDash([3, 3]);
+        c.strokeStyle = e.terrColor; c.lineWidth = 1.5;
+        c.beginPath(); c.arc(e.x, e.y, e.r * 0.8, 0, Math.PI * 2); c.stroke();
+        c.setLineDash([]);
+        c.fillStyle = e.terrColor;
+        c.font = "bold " + Math.max(14, e.r * 1.2) + "px 'Space Grotesk',sans-serif";
+        c.textAlign = 'center'; c.textBaseline = 'middle';
+        c.shadowColor = e.terrColor; c.shadowBlur = 8;
+        c.fillText('?', e.x, e.y);
+        c.shadowBlur = 0;
+      }
+      c.restore();
+      c.globalAlpha = 1;
+    }});
+}
+
+AnimRuntime.boot();
+</script>
+</body>
+</html>

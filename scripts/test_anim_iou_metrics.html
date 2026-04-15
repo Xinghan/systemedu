@@ -1,0 +1,713 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>IoU / Precision / Recall</title>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=Space+Grotesk:wght@400;700&family=Noto+Sans+SC:wght@400;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css" crossorigin="anonymous">
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js" crossorigin="anonymous"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js" crossorigin="anonymous"
+  onload="renderMathInElement(document.body,{delimiters:[{left:'$$',right:'$$',display:true},{left:'\\(',right:'\\)',display:false},{left:'\\[',right:'\\]',display:true}]})"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{width:100%;height:100vh;overflow:hidden;background:#131313;
+  font-family:'Noto Sans SC','PingFang SC',system-ui,sans-serif;color:#e5e2e1}
+
+.wrapper{display:flex;flex-direction:column;height:100vh;overflow:hidden}
+
+.guide-panel{position:fixed;top:8px;right:8px;width:250px;max-height:40vh;
+  overflow-y:auto;z-index:200;padding:10px 12px;
+  background:rgba(28,27,27,0.92);backdrop-filter:blur(14px);
+  border:1px solid rgba(255,191,156,0.18);font-size:12px;line-height:1.55;
+  color:rgba(229,226,225,0.88)}
+.guide-panel h3{font-family:'Space Grotesk',sans-serif;font-size:13px;font-weight:700;
+  margin-bottom:6px;display:flex;align-items:center;justify-content:space-between;cursor:pointer;
+  color:#ffb59c;text-transform:uppercase;letter-spacing:0.05em}
+.guide-panel h3 .arrow{transition:transform .2s;font-size:10px}
+.guide-panel h3 .arrow.collapsed{transform:rotate(-90deg)}
+.guide-panel ul{padding-left:14px;margin:4px 0}
+.guide-panel .gl{color:#8a8886;font-size:11px;text-transform:uppercase;
+  letter-spacing:0.08em;margin-top:6px;font-family:'Space Grotesk',sans-serif}
+
+.header{height:42px;min-height:42px;display:flex;align-items:center;justify-content:space-between;
+  padding:0 16px;background:rgba(28,27,27,0.95);border-bottom:1px solid rgba(255,191,156,0.15)}
+.header h1{font-family:'Space Grotesk',sans-serif;font-size:14px;font-weight:700;
+  color:#ffb59c;text-transform:uppercase;letter-spacing:0.08em}
+
+.lang-btn{position:fixed;top:8px;left:8px;z-index:100;
+  font-family:'Space Grotesk',sans-serif;font-size:11px;font-weight:700;
+  padding:4px 10px;cursor:pointer;
+  border:1px solid rgba(255,255,255,0.08);
+  background:rgba(20,20,20,0.85);backdrop-filter:blur(12px);
+  color:#ffb59c;letter-spacing:1px}
+
+.canvas-wrap{flex:1;min-height:0;position:relative;overflow:hidden;background:#131313}
+.canvas-wrap canvas{position:absolute;top:0;left:0;width:100%;height:100%}
+
+.controls{height:46px;min-height:46px;display:flex;align-items:center;justify-content:center;gap:12px;
+  background:rgba(28,27,27,0.95);border-top:1px solid rgba(255,191,156,0.15);
+  border-bottom:1px solid rgba(255,191,156,0.15)}
+.ctrl-btn{padding:6px 16px;border:1px solid rgba(255,191,156,0.35);background:transparent;
+  color:#ffb59c;cursor:pointer;font-family:'Space Grotesk',sans-serif;font-size:12px;
+  font-weight:700;text-transform:uppercase;letter-spacing:0.06em;transition:all .15s}
+.ctrl-btn:hover{background:rgba(255,191,156,0.18);box-shadow:0 0 18px rgba(255,127,80,0.25)}
+.ctrl-btn.active{background:linear-gradient(45deg,rgba(255,191,156,0.3),rgba(255,127,80,0.2))}
+.frame-indicator{font-family:'JetBrains Mono',monospace;font-size:12px;color:#8a8886;letter-spacing:0.05em}
+
+.hud{height:54px;min-height:54px;display:flex;align-items:center;
+  background:rgba(0,0,0,0.6);border-top:1px solid rgba(255,255,255,0.06);padding:0 16px}
+.hud-col{flex:1;text-align:center}
+.hud-label{font-family:'Space Grotesk',sans-serif;font-size:10px;
+  color:rgba(255,191,156,0.6);text-transform:uppercase;letter-spacing:0.1em}
+.hud-val{font-family:'JetBrains Mono','Space Grotesk',monospace;font-size:13px;font-weight:700;
+  color:rgba(229,226,225,0.9);margin-top:2px}
+</style>
+</head>
+<body>
+
+<button class="lang-btn" id="langBtn">CN</button>
+
+<div class="guide-panel" id="guidePanel">
+  <h3 id="guideToggle"><span id="guideTitle">OBSERVER GUIDE</span> <span class="arrow" id="guideArrow">&#9660;</span></h3>
+  <div id="guideContent">
+    <div class="gl" id="glWhat">WHAT IT SHOWS</div>
+    <p id="guideWhat"></p>
+    <div class="gl" style="margin-top:6px" id="glObserve">OBSERVE</div>
+    <ul>
+      <li id="obs1"></li>
+      <li id="obs2"></li>
+      <li id="obs3"></li>
+    </ul>
+    <div class="gl" style="margin-top:6px" id="glControls">CONTROLS</div>
+    <p id="guideControls"></p>
+    <div class="gl" style="margin-top:6px" id="glTakeaway">TAKEAWAY</div>
+    <p style="color:#ffb59c" id="guideTakeaway"></p>
+  </div>
+</div>
+
+<div class="wrapper">
+  <div class="header">
+    <h1 id="headerTitle">PIXEL-LEVEL EVAL METRICS</h1>
+  </div>
+
+  <div class="canvas-wrap">
+    <canvas id="c"></canvas>
+  </div>
+
+  <div class="controls">
+    <button class="ctrl-btn" id="btnPrev">PREV</button>
+    <button class="ctrl-btn" id="btnPlay">PLAY</button>
+    <button class="ctrl-btn" id="btnNext">NEXT</button>
+    <span class="frame-indicator" id="frameIndicator">1 / 5</span>
+  </div>
+
+  <div class="hud" id="hud">
+    <div class="hud-col"><div class="hud-label" id="hudL1">METRIC</div><div class="hud-val" id="hudV1">--</div></div>
+    <div class="hud-col"><div class="hud-label" id="hudL2">TP</div><div class="hud-val" id="hudV2">--</div></div>
+    <div class="hud-col"><div class="hud-label" id="hudL3">FP</div><div class="hud-val" id="hudV3">--</div></div>
+    <div class="hud-col"><div class="hud-label" id="hudL4">FN</div><div class="hud-val" id="hudV4">--</div></div>
+  </div>
+</div>
+
+<script>
+(function(){
+"use strict";
+
+var LANG = 'cn';
+var I18N = {
+  headerTitle:  {en:'PIXEL-LEVEL EVAL METRICS', cn:'PIXEL-LEVEL EVAL METRICS'},
+  guideTitle:   {en:'OBSERVER GUIDE', cn:'OBSERVER GUIDE'},
+  glWhat:       {en:'WHAT IT SHOWS', cn:'WHAT IT SHOWS'},
+  guideWhat:    {en:'How IoU, Precision, Recall work at pixel level for Mars terrain segmentation, and why different errors have different costs.',
+                 cn:'IoU / Precision / Recall 如何在像素级评测火星地貌分割，以及不同类型的错误为什么代价不同。'},
+  glObserve:    {en:'OBSERVE', cn:'OBSERVE'},
+  obs1:         {en:'TP (green) = correctly identified danger', cn:'TP(绿色) = 正确识别的危险区'},
+  obs2:         {en:'FP (yellow) = false alarm, safe flagged as danger', cn:'FP(黄色) = 误报，安全区被标为危险'},
+  obs3:         {en:'FN (red) = missed danger, the costliest error for a rover', cn:'FN(红色) = 漏报，对 rover 来说最致命的错误'},
+  glControls:   {en:'CONTROLS', cn:'CONTROLS'},
+  guideControls:{en:'PLAY auto-advances. PREV / NEXT for step-by-step.', cn:'PLAY 自动播放，PREV / NEXT 逐帧查看。'},
+  glTakeaway:   {en:'TAKEAWAY', cn:'TAKEAWAY'},
+  guideTakeaway:{en:'Different metrics expose different failure modes; choosing the right metric depends on mission cost.', cn:'不同指标暴露不同的失败模式；选指标要看任务代价。'},
+  btnPlay:      {en:'PLAY', cn:'PLAY'},
+  btnPause:     {en:'PAUSE', cn:'PAUSE'},
+  btnPrev:      {en:'PREV', cn:'PREV'},
+  btnNext:      {en:'NEXT', cn:'NEXT'},
+  hudMetric:    {en:'METRIC', cn:'METRIC'},
+  hudTP:        {en:'TP', cn:'TP'},
+  hudFP:        {en:'FP', cn:'FP'},
+  hudFN:        {en:'FN', cn:'FN'},
+  f0title:      {en:'Confusion Matrix at Pixel Level', cn:'像素级混淆矩阵'},
+  f0sub:        {en:'Every pixel is a classification decision', cn:'每个像素都是一次分类决策'},
+  f0desc:       {en:'Ground Truth vs. Prediction\nfor a single terrain class (e.g. big_rock)', cn:'针对单一地貌类别（如 big_rock）\n真值 vs. 预测'},
+  f0tp:         {en:'TP: True Positive\nPredicted danger, IS danger', cn:'TP: 真阳性\n预测危险，确实危险'},
+  f0fp:         {en:'FP: False Positive\nPredicted danger, NOT danger', cn:'FP: 假阳性\n预测危险，实际安全'},
+  f0fn:         {en:'FN: False Negative\nPredicted safe, IS danger!', cn:'FN: 假阴性\n预测安全，实际危险！'},
+  f0tn:         {en:'TN: True Negative\nPredicted safe, IS safe', cn:'TN: 真阴性\n预测安全，确实安全'},
+  f1title:      {en:'IoU = TP / (TP + FP + FN)', cn:'IoU = TP / (TP + FP + FN)'},
+  f1sub:        {en:'Intersection over Union', cn:'交并比'},
+  f1desc:       {en:'The strictest single metric:\noverlap / total coverage', cn:'最严格的单一指标：\n重叠面积 / 总覆盖面积'},
+  f1note:       {en:'IoU punishes BOTH false alarms and misses equally', cn:'IoU 对误报和漏报的惩罚相同'},
+  f2title:      {en:'Precision = TP / (TP + FP)', cn:'Precision = TP / (TP + FP)'},
+  f2sub:        {en:'Of all predicted danger, how much is real?', cn:'预测为危险的区域中，有多少是真的？'},
+  f2desc:       {en:'High precision = few false alarms\nBut might miss real dangers!', cn:'高 Precision = 误报少\n但可能漏掉真正的危险！'},
+  f2note:       {en:'Precision ignores FN (missed dangers)', cn:'Precision 忽略了 FN（漏报）'},
+  f3title:      {en:'Recall = TP / (TP + FN)', cn:'Recall = TP / (TP + FN)'},
+  f3sub:        {en:'Of all actual dangers, how many did we catch?', cn:'真正的危险区域中，我们抓住了多少？'},
+  f3desc:       {en:'High recall = few missed dangers\nBut might have many false alarms!', cn:'高 Recall = 漏报少\n但可能有大量误报！'},
+  f3note:       {en:'For rover safety: recall on big_rock matters most!', cn:'对 rover 安全而言：big_rock 的 recall 最重要！'},
+  f4title:      {en:'Cost Asymmetry for Navigation', cn:'导航任务的代价不对称'},
+  f4sub:        {en:'Missing a rock vs. False alarm on flat ground', cn:'漏掉岩石 vs. 误报平坦地面'},
+  f4desc:       {en:'FN (missed rock) = rover stuck/damaged\nFP (false alarm) = detour, wasted time', cn:'FN（漏掉岩石）= rover 被困/损坏\nFP（误报平坦）= 绕路，浪费时间'},
+  f4cost1:      {en:'FN COST: HIGH', cn:'FN 代价：高'},
+  f4cost2:      {en:'FP COST: LOW', cn:'FP 代价：低'},
+  f4conclusion: {en:'Choose metrics that match mission cost!', cn:'选择与任务代价匹配的指标！'},
+  valIoU:       {en:'IoU', cn:'IoU'},
+  valPrecision: {en:'Precision', cn:'Precision'},
+  valRecall:    {en:'Recall', cn:'Recall'},
+  valConfusion: {en:'Confusion Matrix', cn:'Confusion Matrix'},
+  valAsymmetry: {en:'Cost Asymmetry', cn:'Cost Asymmetry'},
+};
+function t(key){return(I18N[key]&&I18N[key][LANG])||(I18N[key]&&I18N[key]['en'])||key;}
+
+var canvas = document.getElementById('c');
+var ctx = canvas.getContext('2d');
+var W = 700, H = 440;
+var DPR = Math.min(window.devicePixelRatio||1, 2);
+
+var P = {
+  bg:'#131313', surface:'#1c1b1b', surface_high:'#353534',
+  primary:'#ffb59c', primary_container:'#ff7f50',
+  secondary:'#c6c6c6', tertiary:'#00daf3',
+  signal:'#ff5f1f', success:'#10b981',
+  text:'#e5e2e1', muted:'#8a8886',
+  outline_variant:'rgba(138,136,134,0.15)'
+};
+
+function resize(){
+  var rect = canvas.parentElement.getBoundingClientRect();
+  if(rect.width<1||rect.height<1)return;
+  canvas.width = rect.width*DPR;
+  canvas.height = rect.height*DPR;
+  var scale = Math.min(rect.width/W, rect.height/H);
+  var drawW = W*scale, drawH = H*scale;
+  var offsetX = (rect.width-drawW)/2, offsetY = (rect.height-drawH)/2;
+  ctx.setTransform(DPR*scale,0,0,DPR*scale,DPR*offsetX,DPR*offsetY);
+  drawFrame(currentFrame);
+}
+resize();
+window.addEventListener('resize',function(){resize();});
+if(typeof ResizeObserver!=='undefined'&&canvas.parentElement){
+  try{new ResizeObserver(function(){resize();}).observe(canvas.parentElement);}catch(e){}
+}
+setTimeout(resize,200);setTimeout(resize,600);
+document.fonts.ready.then(function(){resize();});
+
+function drawBg(){
+  var g=ctx.createLinearGradient(0,0,0,H);
+  g.addColorStop(0,'#131313');g.addColorStop(1,'#1a1512');
+  ctx.fillStyle=g;ctx.fillRect(0,0,W,H);
+  ctx.strokeStyle='rgba(255,191,156,0.03)';ctx.lineWidth=1;
+  for(var x=0;x<=W;x+=40){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,H);ctx.stroke();}
+  for(var y=0;y<=H;y+=40){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke();}
+}
+
+/* ── shared element transition engine ── */
+function lerp(a,b,p){return a+(b-a)*p;}
+function easeInOut(x){return x<0.5?2*x*x:1-Math.pow(-2*x+2,2)/2;}
+function merge(base,ov){var r={};for(var k in base)r[k]=base[k];for(var k2 in ov)r[k2]=ov[k2];return r;}
+
+function drawElement(el){
+  if(!el||el.alpha<=0.01)return;
+  ctx.save();
+  ctx.globalAlpha=el.alpha;
+  switch(el.type){
+    case 'label':drawLabelPrimitive(el);break;
+    case 'text':drawTextPrimitive(el);break;
+    case 'box':drawBoxPrimitive(el);break;
+    case 'arrow':drawArrowPrimitive(el);break;
+    case 'custom':if(el.draw)el.draw(el.alpha);break;
+  }
+  ctx.restore();
+}
+function drawLabelPrimitive(el){
+  ctx.font=(el.bold?'bold ':'')+(el.size||14)+"px 'Space Grotesk','Inter',sans-serif";
+  ctx.textAlign=el.align||'left';ctx.textBaseline=el.baseline||'top';
+  if(el.glow){ctx.shadowColor=el.glowColor||P.primary;ctx.shadowBlur=el.glow;}
+  ctx.fillStyle=el.color||P.text;
+  ctx.fillText(typeof el.text==='function'?el.text():el.text,el.x,el.y);
+  ctx.shadowBlur=0;
+}
+function drawTextPrimitive(el){
+  ctx.font=(el.size||13)+"px 'Noto Sans SC','Inter',sans-serif";
+  ctx.textAlign=el.align||'left';ctx.textBaseline=el.baseline||'top';
+  ctx.fillStyle=el.color||P.text;
+  var lines=(typeof el.text==='function'?el.text():el.text).split('\n');
+  var lh=el.lineHeight||(el.size||13)*1.5;
+  lines.forEach(function(ln,i){ctx.fillText(ln,el.x,el.y+i*lh);});
+}
+function drawBoxPrimitive(el){
+  if(el.fill){
+    ctx.fillStyle=el.fill;
+    if(el.glow){ctx.shadowColor=el.glowColor||el.fill;ctx.shadowBlur=el.glow;}
+    ctx.fillRect(el.x,el.y,el.w,el.h);ctx.shadowBlur=0;
+  }
+  if(el.borderColor){
+    ctx.strokeStyle=el.borderColor;ctx.lineWidth=el.borderWidth||1;
+    ctx.strokeRect(el.x,el.y,el.w,el.h);
+  }
+}
+function drawArrowPrimitive(el){
+  ctx.strokeStyle=el.color||P.tertiary;ctx.lineWidth=el.lineWidth||2;
+  if(el.glow){ctx.shadowColor=el.color||P.tertiary;ctx.shadowBlur=el.glow;}
+  ctx.beginPath();ctx.moveTo(el.x1,el.y1);ctx.lineTo(el.x2,el.y2);ctx.stroke();
+  var ang=Math.atan2(el.y2-el.y1,el.x2-el.x1);var hl=8;
+  ctx.beginPath();
+  ctx.moveTo(el.x2,el.y2);
+  ctx.lineTo(el.x2-hl*Math.cos(ang-0.4),el.y2-hl*Math.sin(ang-0.4));
+  ctx.moveTo(el.x2,el.y2);
+  ctx.lineTo(el.x2-hl*Math.cos(ang+0.4),el.y2-hl*Math.sin(ang+0.4));
+  ctx.stroke();ctx.shadowBlur=0;
+}
+
+// colors for TP/FP/FN/TN
+var COL_TP = '#10b981'; // green
+var COL_FP = '#fbbf24'; // amber
+var COL_FN = '#ef4444'; // red
+var COL_TN = '#4a5568'; // dim gray
+
+// Example pixel values for demonstrations
+var TP=42, FP=8, FN=12, TN=238;
+
+function drawPixelGrid(cx,cy,gridW,gridH,cellSize,highlightSet,alpha){
+  // draw a small grid representing pixels with TP/FP/FN/TN colored
+  var rows=gridH, cols=gridW;
+  var startX=cx-cols*cellSize/2, startY=cy-rows*cellSize/2;
+  var idx=0;
+  for(var r=0;r<rows;r++){
+    for(var c=0;c<cols;c++){
+      var px=startX+c*cellSize, py=startY+r*cellSize;
+      var cat = highlightSet[idx] || 'tn';
+      var col = cat==='tp'?COL_TP : cat==='fp'?COL_FP : cat==='fn'?COL_FN : COL_TN;
+      ctx.globalAlpha = alpha * (cat==='tn' ? 0.3 : 0.85);
+      ctx.fillStyle=col;
+      ctx.fillRect(px+0.5,py+0.5,cellSize-1,cellSize-1);
+      idx++;
+    }
+  }
+  ctx.globalAlpha=alpha;
+}
+
+// Generate a pixel classification map for the demo
+var GRID_COLS=20, GRID_ROWS=15;
+var pixelMap = [];
+(function(){
+  // create a ground-truth "danger zone" in upper-right region
+  for(var r=0;r<GRID_ROWS;r++){
+    for(var c=0;c<GRID_COLS;c++){
+      var inGT = (r>=2&&r<=8&&c>=10&&c<=17); // ground truth danger zone
+      var inPred = (r>=3&&r<=9&&c>=9&&c<=16); // predicted danger zone (shifted)
+      if(inGT&&inPred) pixelMap.push('tp');
+      else if(!inGT&&inPred) pixelMap.push('fp');
+      else if(inGT&&!inPred) pixelMap.push('fn');
+      else pixelMap.push('tn');
+    }
+  }
+  // count actual TP/FP/FN
+  TP=0;FP=0;FN=0;TN=0;
+  pixelMap.forEach(function(v){
+    if(v==='tp')TP++;else if(v==='fp')FP++;else if(v==='fn')FN++;else TN++;
+  });
+})();
+
+var totalFrames = 5;
+var currentFrame = 0;
+
+function getFrameElements(f){
+  var elems = [];
+  var cs = 18; // cell size for pixel grid
+
+  if(f===0){
+    // Frame 0: Confusion Matrix concept
+    elems.push({id:'title',type:'label',text:function(){return t('f0title');},x:W/2,y:24,size:18,bold:true,color:P.primary,align:'center',glow:12,alpha:1});
+    elems.push({id:'subtitle',type:'label',text:function(){return t('f0sub');},x:W/2,y:50,size:12,color:P.muted,align:'center',alpha:1});
+
+    // pixel grid on left
+    elems.push({id:'grid',type:'custom',x:0,y:0,w:0,h:0,alpha:1,draw:function(a){
+      drawPixelGrid(200,210,GRID_COLS,GRID_ROWS,cs,pixelMap,a);
+    }});
+
+    elems.push({id:'gridlabel',type:'text',text:function(){return t('f0desc');},x:200,y:360,size:12,color:P.secondary,align:'center',alpha:1});
+
+    // Legend on right
+    var lx=430, ly=100, lsp=70;
+    elems.push({id:'leg_tp',type:'custom',x:lx,y:ly,w:180,h:50,alpha:1,draw:function(a){
+      ctx.globalAlpha=a;
+      ctx.fillStyle=COL_TP;ctx.fillRect(lx,ly,24,24);
+      ctx.font="bold 13px 'Space Grotesk',sans-serif";ctx.fillStyle=P.text;ctx.textAlign='left';
+      ctx.fillText(t('f0tp').split('\n')[0],lx+32,ly+8);
+      ctx.font="11px 'Noto Sans SC',sans-serif";ctx.fillStyle=P.muted;
+      ctx.fillText(t('f0tp').split('\n')[1]||'',lx+32,ly+24);
+    }});
+    elems.push({id:'leg_fp',type:'custom',x:lx,y:ly+lsp,w:180,h:50,alpha:1,draw:function(a){
+      ctx.globalAlpha=a;
+      ctx.fillStyle=COL_FP;ctx.fillRect(lx,ly+lsp,24,24);
+      ctx.font="bold 13px 'Space Grotesk',sans-serif";ctx.fillStyle=P.text;ctx.textAlign='left';
+      ctx.fillText(t('f0fp').split('\n')[0],lx+32,ly+lsp+8);
+      ctx.font="11px 'Noto Sans SC',sans-serif";ctx.fillStyle=P.muted;
+      ctx.fillText(t('f0fp').split('\n')[1]||'',lx+32,ly+lsp+24);
+    }});
+    elems.push({id:'leg_fn',type:'custom',x:lx,y:ly+lsp*2,w:180,h:50,alpha:1,draw:function(a){
+      ctx.globalAlpha=a;
+      ctx.fillStyle=COL_FN;ctx.fillRect(lx,ly+lsp*2,24,24);
+      ctx.font="bold 13px 'Space Grotesk',sans-serif";ctx.fillStyle=P.text;ctx.textAlign='left';
+      ctx.fillText(t('f0fn').split('\n')[0],lx+32,ly+lsp*2+8);
+      ctx.font="11px 'Noto Sans SC',sans-serif";ctx.fillStyle=P.muted;
+      ctx.fillText(t('f0fn').split('\n')[1]||'',lx+32,ly+lsp*2+24);
+    }});
+    elems.push({id:'leg_tn',type:'custom',x:lx,y:ly+lsp*3,w:180,h:50,alpha:1,draw:function(a){
+      ctx.globalAlpha=a;
+      ctx.fillStyle=COL_TN;ctx.globalAlpha=a*0.5;ctx.fillRect(lx,ly+lsp*3,24,24);ctx.globalAlpha=a;
+      ctx.font="bold 13px 'Space Grotesk',sans-serif";ctx.fillStyle=P.text;ctx.textAlign='left';
+      ctx.fillText(t('f0tn').split('\n')[0],lx+32,ly+lsp*3+8);
+      ctx.font="11px 'Noto Sans SC',sans-serif";ctx.fillStyle=P.muted;
+      ctx.fillText(t('f0tn').split('\n')[1]||'',lx+32,ly+lsp*3+24);
+    }});
+
+  } else if(f===1){
+    // Frame 1: IoU
+    elems.push({id:'title',type:'label',text:function(){return t('f1title');},x:W/2,y:24,size:18,bold:true,color:P.primary,align:'center',glow:12,alpha:1});
+    elems.push({id:'subtitle',type:'label',text:function(){return t('f1sub');},x:W/2,y:50,size:12,color:P.muted,align:'center',alpha:1});
+
+    // Venn diagram style: show intersection and union
+    elems.push({id:'venn',type:'custom',x:0,y:0,w:0,h:0,alpha:1,draw:function(a){
+      ctx.globalAlpha=a;
+      var cx1=280, cx2=380, cy=200, r=90;
+      // Union fill
+      ctx.fillStyle='rgba(255,191,156,0.08)';
+      ctx.beginPath();ctx.arc(cx1,cy,r,0,Math.PI*2);ctx.fill();
+      ctx.beginPath();ctx.arc(cx2,cy,r,0,Math.PI*2);ctx.fill();
+
+      // Intersection fill with glow
+      ctx.save();
+      ctx.beginPath();ctx.arc(cx1,cy,r,0,Math.PI*2);ctx.clip();
+      ctx.fillStyle='rgba(16,185,129,0.5)';
+      ctx.shadowColor=COL_TP;ctx.shadowBlur=20;
+      ctx.beginPath();ctx.arc(cx2,cy,r,0,Math.PI*2);ctx.fill();
+      ctx.shadowBlur=0;
+      ctx.restore();
+
+      // Outlines
+      ctx.strokeStyle=P.primary;ctx.lineWidth=2;
+      ctx.setLineDash([4,4]);
+      ctx.beginPath();ctx.arc(cx1,cy,r,0,Math.PI*2);ctx.stroke();
+      ctx.strokeStyle=P.tertiary;
+      ctx.beginPath();ctx.arc(cx2,cy,r,0,Math.PI*2);ctx.stroke();
+      ctx.setLineDash([]);
+
+      // Labels
+      ctx.font="bold 13px 'Space Grotesk',sans-serif";ctx.textAlign='center';
+      ctx.fillStyle=P.primary;ctx.fillText('GROUND TRUTH',cx1-30,cy-r-12);
+      ctx.fillStyle=P.tertiary;ctx.fillText('PREDICTION',cx2+30,cy-r-12);
+      ctx.fillStyle=COL_TP;ctx.font="bold 16px 'JetBrains Mono',monospace";
+      ctx.fillText('TP='+TP,330,cy-5);
+      ctx.fillStyle=COL_FN;ctx.font="bold 12px 'JetBrains Mono',monospace";
+      ctx.fillText('FN='+FN,cx1-45,cy+5);
+      ctx.fillStyle=COL_FP;
+      ctx.fillText('FP='+FP,cx2+45,cy+5);
+    }});
+
+    // IoU value display
+    var iouVal = (TP/(TP+FP+FN)).toFixed(3);
+    elems.push({id:'metric_val',type:'label',text:function(){return 'IoU = '+TP+' / ('+TP+'+'+FP+'+'+FN+') = '+iouVal;},x:W/2,y:320,size:16,bold:true,color:P.primary,align:'center',glow:8,alpha:1});
+    elems.push({id:'metric_note',type:'text',text:function(){return t('f1note');},x:W/2,y:355,size:13,color:P.muted,align:'center',alpha:1});
+    elems.push({id:'desc',type:'text',text:function(){return t('f1desc');},x:W/2,y:385,size:12,color:P.secondary,align:'center',alpha:1});
+
+  } else if(f===2){
+    // Frame 2: Precision
+    elems.push({id:'title',type:'label',text:function(){return t('f2title');},x:W/2,y:24,size:18,bold:true,color:P.primary,align:'center',glow:12,alpha:1});
+    elems.push({id:'subtitle',type:'label',text:function(){return t('f2sub');},x:W/2,y:50,size:12,color:P.muted,align:'center',alpha:1});
+
+    // Show only prediction area, highlight TP vs FP within it
+    elems.push({id:'pred_box',type:'custom',x:0,y:0,w:0,h:0,alpha:1,draw:function(a){
+      ctx.globalAlpha=a;
+      var bx=180,by=90,bw=340,bh=220;
+      // Prediction boundary
+      ctx.strokeStyle=P.tertiary;ctx.lineWidth=2;ctx.setLineDash([5,5]);
+      ctx.strokeRect(bx,by,bw,bh);ctx.setLineDash([]);
+      ctx.font="bold 12px 'Space Grotesk',sans-serif";ctx.textAlign='center';
+      ctx.fillStyle=P.tertiary;ctx.fillText('PREDICTION AREA',bx+bw/2,by-10);
+
+      // TP block
+      var tpw=bw*TP/(TP+FP);
+      var g1=ctx.createLinearGradient(bx,by,bx+tpw,by+bh);
+      g1.addColorStop(0,'rgba(16,185,129,0.6)');g1.addColorStop(1,'rgba(16,185,129,0.3)');
+      ctx.fillStyle=g1;ctx.fillRect(bx+4,by+4,tpw-8,bh-8);
+      ctx.font="bold 20px 'JetBrains Mono',monospace";ctx.fillStyle=COL_TP;
+      ctx.fillText('TP='+TP,bx+tpw/2,by+bh/2-10);
+      ctx.font="12px 'Noto Sans SC',sans-serif";ctx.fillStyle='rgba(16,185,129,0.8)';
+      ctx.fillText(LANG==='cn'?'真正的危险':'Real danger',bx+tpw/2,by+bh/2+15);
+
+      // FP block
+      var fpx=bx+tpw;
+      var g2=ctx.createLinearGradient(fpx,by,fpx+bw-tpw,by+bh);
+      g2.addColorStop(0,'rgba(251,191,36,0.5)');g2.addColorStop(1,'rgba(251,191,36,0.2)');
+      ctx.fillStyle=g2;ctx.fillRect(fpx+4,by+4,bw-tpw-8,bh-8);
+      ctx.font="bold 20px 'JetBrains Mono',monospace";ctx.fillStyle=COL_FP;
+      ctx.fillText('FP='+FP,fpx+(bw-tpw)/2,by+bh/2-10);
+      ctx.font="12px 'Noto Sans SC',sans-serif";ctx.fillStyle='rgba(251,191,36,0.8)';
+      ctx.fillText(LANG==='cn'?'误报':'False alarm',fpx+(bw-tpw)/2,by+bh/2+15);
+    }});
+
+    var precVal = (TP/(TP+FP)).toFixed(3);
+    elems.push({id:'metric_val',type:'label',text:function(){return 'Precision = '+TP+' / ('+TP+'+'+FP+') = '+precVal;},x:W/2,y:330,size:16,bold:true,color:P.primary,align:'center',glow:8,alpha:1});
+    elems.push({id:'metric_note',type:'text',text:function(){return t('f2note');},x:W/2,y:365,size:13,color:COL_FP,align:'center',alpha:1});
+    elems.push({id:'desc',type:'text',text:function(){return t('f2desc');},x:W/2,y:390,size:12,color:P.secondary,align:'center',alpha:1});
+
+  } else if(f===3){
+    // Frame 3: Recall
+    elems.push({id:'title',type:'label',text:function(){return t('f3title');},x:W/2,y:24,size:18,bold:true,color:P.primary,align:'center',glow:12,alpha:1});
+    elems.push({id:'subtitle',type:'label',text:function(){return t('f3sub');},x:W/2,y:50,size:12,color:P.muted,align:'center',alpha:1});
+
+    // Show ground truth area, highlight TP vs FN within it
+    elems.push({id:'gt_box',type:'custom',x:0,y:0,w:0,h:0,alpha:1,draw:function(a){
+      ctx.globalAlpha=a;
+      var bx=180,by=90,bw=340,bh=220;
+      ctx.strokeStyle=P.primary;ctx.lineWidth=2;ctx.setLineDash([5,5]);
+      ctx.strokeRect(bx,by,bw,bh);ctx.setLineDash([]);
+      ctx.font="bold 12px 'Space Grotesk',sans-serif";ctx.textAlign='center';
+      ctx.fillStyle=P.primary;ctx.fillText('GROUND TRUTH DANGER AREA',bx+bw/2,by-10);
+
+      var tpw=bw*TP/(TP+FN);
+      var g1=ctx.createLinearGradient(bx,by,bx+tpw,by+bh);
+      g1.addColorStop(0,'rgba(16,185,129,0.6)');g1.addColorStop(1,'rgba(16,185,129,0.3)');
+      ctx.fillStyle=g1;ctx.fillRect(bx+4,by+4,tpw-8,bh-8);
+      ctx.font="bold 20px 'JetBrains Mono',monospace";ctx.fillStyle=COL_TP;
+      ctx.fillText('TP='+TP,bx+tpw/2,by+bh/2-10);
+      ctx.font="12px 'Noto Sans SC',sans-serif";ctx.fillStyle='rgba(16,185,129,0.8)';
+      ctx.fillText(LANG==='cn'?'成功抓住':'Caught',bx+tpw/2,by+bh/2+15);
+
+      var fnx=bx+tpw;
+      var g2=ctx.createLinearGradient(fnx,by,fnx+bw-tpw,by+bh);
+      g2.addColorStop(0,'rgba(239,68,68,0.6)');g2.addColorStop(1,'rgba(239,68,68,0.25)');
+      ctx.fillStyle=g2;ctx.fillRect(fnx+4,by+4,bw-tpw-8,bh-8);
+      ctx.font="bold 20px 'JetBrains Mono',monospace";ctx.fillStyle=COL_FN;
+      ctx.fillText('FN='+FN,fnx+(bw-tpw)/2,by+bh/2-10);
+      ctx.font="12px 'Noto Sans SC',sans-serif";ctx.fillStyle='rgba(239,68,68,0.9)';
+      ctx.fillText(LANG==='cn'?'漏掉了！':'MISSED!',fnx+(bw-tpw)/2,by+bh/2+15);
+
+      // danger icon for FN
+      ctx.font="28px sans-serif";ctx.fillStyle='rgba(239,68,68,0.7)';
+      ctx.fillText('!',fnx+(bw-tpw)/2+35,by+bh/2+2);
+    }});
+
+    var recVal = (TP/(TP+FN)).toFixed(3);
+    elems.push({id:'metric_val',type:'label',text:function(){return 'Recall = '+TP+' / ('+TP+'+'+FN+') = '+recVal;},x:W/2,y:330,size:16,bold:true,color:P.primary,align:'center',glow:8,alpha:1});
+    elems.push({id:'metric_note',type:'text',text:function(){return t('f3note');},x:W/2,y:365,size:13,color:COL_FN,align:'center',alpha:1});
+    elems.push({id:'desc',type:'text',text:function(){return t('f3desc');},x:W/2,y:390,size:12,color:P.secondary,align:'center',alpha:1});
+
+  } else if(f===4){
+    // Frame 4: Cost Asymmetry
+    elems.push({id:'title',type:'label',text:function(){return t('f4title');},x:W/2,y:24,size:18,bold:true,color:P.primary,align:'center',glow:12,alpha:1});
+    elems.push({id:'subtitle',type:'label',text:function(){return t('f4sub');},x:W/2,y:50,size:12,color:P.muted,align:'center',alpha:1});
+
+    // Two cost comparison panels
+    elems.push({id:'cost_fn',type:'custom',x:0,y:0,w:0,h:0,alpha:1,draw:function(a){
+      ctx.globalAlpha=a;
+      // FN panel (high cost)
+      var px=80,py=90,pw=240,ph=200;
+      var gf=ctx.createLinearGradient(px,py,px,py+ph);
+      gf.addColorStop(0,'rgba(239,68,68,0.25)');gf.addColorStop(1,'rgba(239,68,68,0.05)');
+      ctx.fillStyle=gf;ctx.fillRect(px,py,pw,ph);
+      ctx.strokeStyle='rgba(239,68,68,0.5)';ctx.lineWidth=2;ctx.strokeRect(px,py,pw,ph);
+
+      ctx.font="bold 14px 'Space Grotesk',sans-serif";ctx.textAlign='center';
+      ctx.fillStyle=COL_FN;ctx.fillText(t('f4cost1'),px+pw/2,py+25);
+
+      // rover icon (simple)
+      ctx.font="40px sans-serif";ctx.fillText('!',px+pw/2,py+80);
+      ctx.font="13px 'Noto Sans SC',sans-serif";ctx.fillStyle=P.text;
+      var desc = t('f4desc').split('\n')[0];
+      ctx.fillText(desc,px+pw/2,py+130);
+
+      // severity bar
+      ctx.fillStyle='rgba(239,68,68,0.7)';
+      ctx.fillRect(px+20,py+160,pw-40,16);
+      ctx.font="bold 11px 'JetBrains Mono',monospace";ctx.fillStyle='#fff';
+      ctx.fillText('SEVERITY: CRITICAL',px+pw/2,py+172);
+    }});
+
+    elems.push({id:'cost_fp',type:'custom',x:0,y:0,w:0,h:0,alpha:1,draw:function(a){
+      ctx.globalAlpha=a;
+      var px=380,py=90,pw=240,ph=200;
+      var gf=ctx.createLinearGradient(px,py,px,py+ph);
+      gf.addColorStop(0,'rgba(251,191,36,0.2)');gf.addColorStop(1,'rgba(251,191,36,0.03)');
+      ctx.fillStyle=gf;ctx.fillRect(px,py,pw,ph);
+      ctx.strokeStyle='rgba(251,191,36,0.4)';ctx.lineWidth=2;ctx.strokeRect(px,py,pw,ph);
+
+      ctx.font="bold 14px 'Space Grotesk',sans-serif";ctx.textAlign='center';
+      ctx.fillStyle=COL_FP;ctx.fillText(t('f4cost2'),px+pw/2,py+25);
+
+      ctx.font="40px sans-serif";ctx.fillText('~',px+pw/2,py+80);
+      ctx.font="13px 'Noto Sans SC',sans-serif";ctx.fillStyle=P.text;
+      var desc = t('f4desc').split('\n')[1]||'';
+      ctx.fillText(desc,px+pw/2,py+130);
+
+      ctx.fillStyle='rgba(251,191,36,0.5)';
+      ctx.fillRect(px+20,py+160,(pw-40)*0.35,16);
+      ctx.font="bold 11px 'JetBrains Mono',monospace";ctx.fillStyle='#fff';ctx.textAlign='left';
+      ctx.fillText('SEVERITY: LOW',px+25,py+172);
+    }});
+
+    elems.push({id:'arrow_compare',type:'arrow',x1:330,y1:200,x2:370,y2:200,color:P.tertiary,lineWidth:2,glow:6,alpha:1});
+
+    elems.push({id:'desc',type:'text',text:function(){return t('f4conclusion');},x:W/2,y:340,size:16,color:P.primary,align:'center',alpha:1});
+    elems.push({id:'metric_note',type:'text',text:function(){return t('f4desc');},x:W/2,y:375,size:12,color:P.secondary,align:'center',alpha:1});
+  }
+
+  return elems;
+}
+
+var hudData = [
+  {metric:'valConfusion',tp:'--',fp:'--',fn:'--'},
+  {metric:'valIoU',tp:TP,fp:FP,fn:FN},
+  {metric:'valPrecision',tp:TP,fp:FP,fn:'--'},
+  {metric:'valRecall',tp:TP,fp:'--',fn:FN},
+  {metric:'valAsymmetry',tp:'--',fp:'LOW',fn:'HIGH'},
+];
+
+function updateHUD(f){
+  var d=hudData[f]||hudData[0];
+  document.getElementById('hudV1').textContent=t(d.metric);
+  document.getElementById('hudV2').textContent=d.tp;
+  document.getElementById('hudV3').textContent=d.fp;
+  document.getElementById('hudV4').textContent=d.fn;
+  updateControlsText();
+}
+
+function drawFrame(f){
+  drawBg();
+  var elems=getFrameElements(f);
+  elems.forEach(function(el){drawElement(el);});
+}
+
+var transitioning=false;
+function transitionTo(newFrame){
+  if(newFrame<0)newFrame=0;
+  if(newFrame>=totalFrames)newFrame=totalFrames-1;
+  if(newFrame===currentFrame&&!transitioning){drawFrame(currentFrame);updateHUD(currentFrame);return;}
+  if(transitioning)return;
+  var oldElems=getFrameElements(currentFrame);
+  var newElems=getFrameElements(newFrame);
+  var oldMap={};oldElems.forEach(function(e){oldMap[e.id]=e;});
+  var newMap={};newElems.forEach(function(e){newMap[e.id]=e;});
+  currentFrame=newFrame;
+  updateHUD(newFrame);
+  transitioning=true;
+  var startTime=null,duration=500;
+  function step(ts){
+    if(!startTime)startTime=ts;
+    var raw=Math.min((ts-startTime)/duration,1);
+    var p=easeInOut(raw);
+    drawBg();
+    oldElems.forEach(function(oe){
+      if(!newMap[oe.id])drawElement(merge(oe,{alpha:1-p}));
+    });
+    newElems.forEach(function(ne){
+      var oe=oldMap[ne.id];
+      if(oe){
+        var merged=merge(ne,{
+          x:lerp(oe.x||0,ne.x||0,p),y:lerp(oe.y||0,ne.y||0,p),
+          w:lerp(oe.w||0,ne.w||0,p),h:lerp(oe.h||0,ne.h||0,p),alpha:1
+        });
+        if(ne.type==='arrow'&&oe.type==='arrow'){
+          merged.x1=lerp(oe.x1,ne.x1,p);merged.y1=lerp(oe.y1,ne.y1,p);
+          merged.x2=lerp(oe.x2,ne.x2,p);merged.y2=lerp(oe.y2,ne.y2,p);
+        }
+        if((ne.type==='label'||ne.type==='text')&&oe.text!==ne.text){
+          drawElement(merge(oe,{alpha:1-p}));drawElement(merge(ne,{alpha:p}));
+        }else{drawElement(merged);}
+      }else{drawElement(merge(ne,{alpha:p}));}
+    });
+    if(raw<1){requestAnimationFrame(step);}else{transitioning=false;}
+  }
+  requestAnimationFrame(step);
+}
+
+// Controls
+var playing=false,playTimer=null;
+function updateControlsText(){
+  var bp=document.getElementById('btnPlay');
+  var bi=document.getElementById('frameIndicator');
+  if(bp)bp.textContent=playing?t('btnPause'):t('btnPlay');
+  if(bi)bi.textContent=(currentFrame+1)+' / '+totalFrames;
+}
+
+document.getElementById('btnPrev').addEventListener('click',function(){
+  if(playing){playing=false;clearInterval(playTimer);}
+  transitionTo(currentFrame-1);
+});
+document.getElementById('btnNext').addEventListener('click',function(){
+  if(playing){playing=false;clearInterval(playTimer);}
+  transitionTo(currentFrame+1);
+});
+document.getElementById('btnPlay').addEventListener('click',function(){
+  playing=!playing;
+  if(playing){
+    if(currentFrame>=totalFrames-1) transitionTo(0);
+    playTimer=setInterval(function(){
+      if(currentFrame>=totalFrames-1){playing=false;clearInterval(playTimer);updateControlsText();return;}
+      transitionTo(currentFrame+1);
+    },3500);
+  }else{clearInterval(playTimer);}
+  updateControlsText();
+});
+
+// Guide toggle
+document.getElementById('guideToggle').addEventListener('click',function(){
+  var content=document.getElementById('guideContent');
+  var arrow=document.getElementById('guideArrow');
+  if(content.style.display==='none'){content.style.display='block';arrow.classList.remove('collapsed');}
+  else{content.style.display='none';arrow.classList.add('collapsed');}
+});
+
+// Language toggle
+document.getElementById('langBtn').addEventListener('click',function(){
+  LANG=LANG==='en'?'cn':'en';
+  document.getElementById('langBtn').textContent=LANG.toUpperCase();
+  refreshI18N();
+});
+
+function refreshI18N(){
+  document.getElementById('headerTitle').textContent=t('headerTitle');
+  document.getElementById('guideTitle').textContent=t('guideTitle');
+  document.getElementById('glWhat').textContent=t('glWhat');
+  document.getElementById('guideWhat').textContent=t('guideWhat');
+  document.getElementById('glObserve').textContent=t('glObserve');
+  document.getElementById('obs1').textContent=t('obs1');
+  document.getElementById('obs2').textContent=t('obs2');
+  document.getElementById('obs3').textContent=t('obs3');
+  document.getElementById('glControls').textContent=t('glControls');
+  document.getElementById('guideControls').textContent=t('guideControls');
+  document.getElementById('glTakeaway').textContent=t('glTakeaway');
+  document.getElementById('guideTakeaway').textContent=t('guideTakeaway');
+  document.getElementById('btnPrev').textContent=t('btnPrev');
+  document.getElementById('btnNext').textContent=t('btnNext');
+  document.getElementById('hudL1').textContent=t('hudMetric');
+  document.getElementById('hudL2').textContent=t('hudTP');
+  document.getElementById('hudL3').textContent=t('hudFP');
+  document.getElementById('hudL4').textContent=t('hudFN');
+  updateControlsText();
+  drawFrame(currentFrame);
+  updateHUD(currentFrame);
+}
+
+// init
+refreshI18N();
+drawFrame(0);
+updateHUD(0);
+
+})();
+</script>
+</body>
+</html>

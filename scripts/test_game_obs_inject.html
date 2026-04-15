@@ -1,0 +1,560 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;700&family=Inter:wght@400;500&family=Noto+Sans+SC:wght@400;700&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0;border-radius:0}
+html,body{width:100%;height:100vh;overflow:hidden;
+  background:#131313;
+  font-family:'Space Grotesk','Inter','Noto Sans SC',sans-serif;
+  color:#e5e2e1;
+}
+.lang-btn{
+  position:fixed;top:8px;left:8px;z-index:100;
+  font-family:'Space Grotesk',sans-serif;font-size:11px;font-weight:700;
+  padding:4px 10px;cursor:pointer;
+  border:1px solid rgba(255,255,255,0.08);
+  background:rgba(20,20,35,0.85);backdrop-filter:blur(12px);
+  color:#ffb59c;letter-spacing:1px;
+}
+.guide-panel{
+  position:fixed;top:8px;right:8px;width:260px;max-height:40vh;
+  overflow-y:auto;z-index:100;
+  background:rgba(20,20,35,0.85);backdrop-filter:blur(12px);
+  border:1px solid rgba(255,255,255,0.08);padding:12px;
+  font-family:'Noto Sans SC',sans-serif;font-size:13px;
+  color:rgba(255,255,255,0.85);
+}
+.guide-panel h3{
+  font-family:'Space Grotesk',sans-serif;font-size:14px;
+  margin-bottom:8px;display:flex;align-items:center;
+  justify-content:space-between;cursor:pointer;
+  color:#ffb59c;
+}
+.guide-panel .toggle{font-size:12px;opacity:0.6;}
+.guide-panel ul{padding-left:16px;line-height:1.6;}
+.guide-panel .guide-content.collapsed{display:none;}
+.wrapper{display:flex;flex-direction:column;height:100vh;}
+.canvas-wrap{flex:1;min-height:0;position:relative;}
+.canvas-wrap canvas{display:block;width:100%;height:100%;position:absolute;top:0;left:0;}
+.controls{
+  display:flex;align-items:center;gap:8px;
+  padding:6px 12px;
+  background:#1c1b1b;
+  border-top:1px solid #8a8886;
+}
+.controls button{
+  font-family:'Space Grotesk',sans-serif;font-size:12px;font-weight:700;
+  padding:4px 14px;cursor:pointer;letter-spacing:1px;
+  border:1px solid #8a8886;
+  background:transparent;color:#ffb59c;
+}
+.controls button:hover{background:#353534;}
+.controls .frame-indicator{
+  font-family:'Space Grotesk',sans-serif;font-size:12px;
+  color:#8a8886;margin-left:auto;
+}
+.hud{
+  display:flex;align-items:center;justify-content:space-around;
+  height:52px;
+  background:rgba(0,0,0,0.55);
+  border-top:1px solid rgba(255,255,255,0.06);
+}
+.hud .hud-col{text-align:center;}
+.hud .hud-label{
+  font-family:'Space Grotesk',sans-serif;font-size:10px;
+  color:#8a8886;letter-spacing:1px;text-transform:uppercase;
+}
+.hud .hud-val{
+  font-family:'Space Grotesk',sans-serif;font-size:14px;font-weight:700;
+  color:#e5e2e1;
+}
+.feedback-panel{
+  padding:8px 12px;
+  background:#1c1b1b;
+  border-top:1px solid #8a8886;
+  font-family:'Noto Sans SC',sans-serif;font-size:13px;
+  min-height:36px;
+}
+</style>
+</head>
+<body>
+<button class="lang-btn" id="langBtn">CN</button>
+<div class="guide-panel" id="guidePanel">
+    <h3 id="guideHeader"><span id="guideTitle"></span> <span class="toggle" id="guideToggle">[-]</span></h3>
+    <div class="guide-content" id="guideContent">
+<p id="gDesc1"><strong id="gLabel1"></strong></p>
+<p id="gDescD1" style="font-size:12px;opacity:0.8;white-space:pre-line;"></p>
+<p id="gDesc2"><strong id="gLabel2"></strong></p>
+<p id="gDescD2" style="font-size:12px;opacity:0.8;white-space:pre-line;"></p>
+<p id="gDesc3"><strong id="gLabel3"></strong></p>
+<p id="gDescD3" style="font-size:12px;opacity:0.8;white-space:pre-line;"></p>
+</div>
+  </div>
+<div class="wrapper">
+  <div class="canvas-wrap">
+    <canvas id="c"></canvas>
+  </div>
+  
+  
+  <div class="feedback-panel" id="feedback"></div>
+</div>
+<script>
+(function(){
+"use strict";
+
+/* ── palette ── */
+var P = {"bg": "#131313", "surface": "#1c1b1b", "surface_high": "#353534", "primary": "#ffb59c", "primary_container": "#ff7f50", "secondary": "#c6c6c6", "tertiary": "#00daf3", "signal": "#ff5f1f", "success": "#10b981", "text": "#e5e2e1", "muted": "#8a8886", "outline_variant": "#8a8886"};
+
+/* ── i18n ── */
+var LANG = 'cn';
+var I18N = {"title": {"en": "OBSERVATION INJECTION SIMULATOR", "cn": "新观测注入模拟器"}, "guideTitle": {"en": "How to Play", "cn": "操作指南"}, "btnPlay": {"en": "PLAY", "cn": "播放"}, "btnPause": {"en": "PAUSE", "cn": "暂停"}, "riskSafe": {"en": "Safe", "cn": "安全"}, "riskMed": {"en": "Medium", "cn": "中等"}, "riskDanger": {"en": "Danger", "cn": "危险"}, "riskUnknown": {"en": "Unknown", "cn": "未知"}, "inject": {"en": "INJECT", "cn": "注入观测"}, "reset": {"en": "RESET", "cn": "重置"}, "selectRisk": {"en": "Select risk type:", "cn": "选择风险类型:"}, "clickCell": {"en": "Click cells on the map to select observation area", "cn": "点击地图网格选择观测区域"}, "injected": {"en": "injected", "cn": "已注入"}, "pathLen": {"en": "PATH LEN", "cn": "路径长度"}, "pathCostLabel": {"en": "PATH COST", "cn": "路径代价"}, "injectCount": {"en": "INJECTIONS", "cn": "注入次数"}, "detour": {"en": "DETOUR", "cn": "绕行"}, "complete": {"en": "Mission Complete! You have completed 3 observation injections.", "cn": "任务完成！你已完成3次观测注入。"}, "start": {"en": "S", "cn": "S"}, "end": {"en": "E", "cn": "E"}, "g1": {"en": "Goal", "cn": "目标"}, "g1d": {"en": "Simulate injecting new terrain observations and watch the rover path update in real-time", "cn": "模拟注入新地形观测，观察火星车路径实时更新"}, "g2": {"en": "Steps", "cn": "步骤"}, "g2d": {"en": "1. Click cells to select area\\n2. Choose risk type\\n3. Click INJECT\\n4. Observe path change\\n5. Complete 3 injections", "cn": "1. 点击网格选择区域\\n2. 选择风险类型\\n3. 点击注入观测\\n4. 观察路径变化\\n5. 完成3次注入"}, "g3": {"en": "Tips", "cn": "提示"}, "g3d": {"en": "Try injecting danger on the current path to see maximum detour effect", "cn": "尝试在当前路径上注入危险，观察最大绕行效果"}};
+function t(key){return(I18N[key]&&I18N[key][LANG])||(I18N[key]&&I18N[key]['en'])||key;}
+function refreshI18N(){
+  document.getElementById('langBtn').textContent=LANG.toUpperCase();
+  /* guide panel title */
+  var gt=document.getElementById('guideTitle');
+  if(gt)gt.textContent=t('guideTitle');
+  /* animation controls */
+  var bp=document.getElementById('btnPrev');
+  var bpl=document.getElementById('btnPlay');
+  var bn=document.getElementById('btnNext');
+  if(bp)bp.textContent=t('btnPrev');
+  if(bpl)bpl.textContent=playing?t('btnPause'):t('btnPlay');
+  if(bn)bn.textContent=t('btnNext');
+  /* redraw canvas */
+  if(typeof drawCurrent==='function')drawCurrent();
+  if(typeof onLangChange==='function')onLangChange();
+}
+document.getElementById('langBtn').addEventListener('click',function(){
+  LANG=LANG==='en'?'cn':'en';
+  refreshI18N();
+});
+
+/* ── params ── */
+var TITLE = "新观测注入模拟器";
+
+
+/* ── canvas setup ── */
+var canvas = document.getElementById("c");
+var ctx = canvas.getContext("2d");
+var W = 600, H = 420;
+var DPR = Math.min(window.devicePixelRatio||1, 2);
+function resize(){
+  var rect = canvas.getBoundingClientRect();
+  if (rect.width < 1 || rect.height < 1) return;
+  canvas.width = rect.width * DPR;
+  canvas.height = rect.height * DPR;
+  var scale = Math.min(rect.width / W, rect.height / H);
+  var drawW = W * scale;
+  var drawH = H * scale;
+  var offsetX = (rect.width - drawW) / 2;
+  var offsetY = (rect.height - drawH) / 2;
+  ctx.setTransform(DPR*scale, 0, 0, DPR*scale, DPR*offsetX, DPR*offsetY);
+}
+resize();
+window.addEventListener("resize", function(){ resize(); if(typeof drawCurrent==="function") drawCurrent(); });
+if (typeof ResizeObserver !== "undefined" && canvas.parentElement) {
+  try {
+    new ResizeObserver(function(){
+      resize();
+      if (typeof drawCurrent === "function") drawCurrent();
+    }).observe(canvas.parentElement);
+  } catch (e) {}
+}
+
+/* ── color helpers ── */
+function hex2rgb(h){
+  h=h.replace("#","");
+  if(h.length===3)h=h[0]+h[0]+h[1]+h[1]+h[2]+h[2];
+  return[parseInt(h.slice(0,2),16),parseInt(h.slice(2,4),16),parseInt(h.slice(4,6),16)];
+}
+var COLOR = P.primary;
+var RGB = hex2rgb(COLOR);
+var C = "rgb("+RGB[0]+","+RGB[1]+","+RGB[2]+")";
+var CA = function(a){return"rgba("+RGB[0]+","+RGB[1]+","+RGB[2]+","+a+")"};
+
+/* ── drawing utils ── */
+function drawBg(){
+  /* Martian Crust radial gradient */
+  var g=ctx.createRadialGradient(W/2,H/2,0,W/2,H/2,Math.max(W,H)*0.7);
+  g.addColorStop(0,"#1c1b1b");g.addColorStop(1,P.bg);
+  ctx.fillStyle=g;ctx.fillRect(0,0,W,H);
+  /* wireframe grid */
+  ctx.strokeStyle="rgba(0,218,243,0.06)";ctx.lineWidth=1;
+  for(var x=0;x<=W;x+=20){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,H);ctx.stroke();}
+  for(var y=0;y<=H;y+=20){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke();}
+}
+function drawTitle(){
+  ctx.font="bold 16px 'Space Grotesk','Inter',sans-serif";
+  ctx.textAlign="center";ctx.fillStyle=P.text;
+  ctx.shadowColor=P.primary;ctx.shadowBlur=8;
+  ctx.fillText(t('title')||TITLE,W/2,28);
+  ctx.shadowBlur=0;
+}
+function drawHUD(cols){
+  var hud=document.getElementById('hud');
+  if(!hud)return;
+  hud.innerHTML='';
+  cols.forEach(function(c){
+    var d=document.createElement('div');d.className='hud-col';
+    d.innerHTML='<div class="hud-label">'+c.label+'</div><div class="hud-val">'+c.val+'</div>';
+    hud.appendChild(d);
+  });
+}
+/* ambient glow helper */
+function withGlow(color,blur,fn){
+  ctx.save();ctx.shadowColor=color;ctx.shadowBlur=blur||12;
+  fn();ctx.shadowBlur=0;ctx.restore();
+}
+
+
+
+/* ── guide panel toggle ── */
+(function(){
+  var tog=document.getElementById('guideToggle');
+  var gc=document.getElementById('guideContent');
+  if(tog&&gc){
+    document.getElementById('guideHeader').addEventListener('click',function(){
+      var collapsed=gc.classList.toggle('collapsed');
+      tog.textContent=collapsed?'[+]':'[-]';
+    });
+  }
+})();
+
+/* ── main (js_body) ── */
+
+/* ── 10x10 grid cost map (game) ── */
+var ROWS=10, COLS=10;
+var CELL, GRID_X, GRID_Y;
+var COST_COLORS=['#10b981','#f59e0b','#ef4444','#6b7280'];
+
+/* initial map */
+var initCost=[
+  [0,0,0,1,1,0,0,0,0,0],
+  [0,0,0,0,1,0,0,3,3,0],
+  [0,0,0,0,0,0,0,3,0,0],
+  [1,0,0,0,0,0,0,0,0,0],
+  [1,1,0,0,3,3,0,0,0,0],
+  [0,0,0,0,3,0,0,0,1,0],
+  [0,0,0,0,0,0,0,0,1,1],
+  [0,0,1,0,0,0,0,0,0,0],
+  [0,0,1,1,0,0,0,0,0,0],
+  [0,0,0,0,0,0,0,0,0,0],
+];
+var costMap=initCost.map(function(r){return r.slice();});
+var START=[0,0], END=[9,9];
+var selectedCells=[];
+var selectedRisk=2; /* default danger */
+var injectCount=0;
+var origPathLen, origPathCost;
+var completed=false;
+
+function aStar(grid,sr,sc,er,ec){
+  var rows=grid.length,cols=grid[0].length;
+  var costFn=function(v){return v===2?50:v===3?10:v===1?5:1;};
+  var open=[[0,sr,sc]];var g={};var parent={};
+  var key=function(r,c){return r*100+c;};
+  g[key(sr,sc)]=0;
+  var dirs=[[0,1],[1,0],[0,-1],[-1,0]];
+  while(open.length>0){
+    open.sort(function(a,b){return a[0]-b[0];});
+    var cur=open.shift();var cr=cur[1],cc=cur[2];
+    if(cr===er&&cc===ec){
+      var path=[];var k=key(cr,cc);
+      while(k!==undefined){path.unshift([Math.floor(k/100),k%100]);k=parent[k];}
+      return path;
+    }
+    for(var d=0;d<4;d++){
+      var nr=cr+dirs[d][0],nc=cc+dirs[d][1];
+      if(nr<0||nr>=rows||nc<0||nc>=cols)continue;
+      var ng=g[key(cr,cc)]+costFn(grid[nr][nc]);
+      var nk=key(nr,nc);
+      if(g[nk]===undefined||ng<g[nk]){
+        g[nk]=ng;parent[nk]=key(cr,cc);
+        var h=Math.abs(nr-er)+Math.abs(nc-ec);
+        open.push([ng+h,nr,nc]);
+      }
+    }
+  }
+  return [];
+}
+
+function pathCostCalc(grid,path){
+  var costFn=function(v){return v===2?50:v===3?10:v===1?5:1;};
+  var s=0;for(var i=0;i<path.length;i++)s+=costFn(grid[path[i][0]][path[i][1]]);
+  return s;
+}
+
+var currentPath=aStar(costMap,START[0],START[1],END[0],END[1]);
+origPathLen=currentPath.length;
+origPathCost=pathCostCalc(costMap,currentPath);
+var oldPath=currentPath.slice();
+
+function computeLayout(){
+  var mapSize=Math.min(W*0.55,H-80);
+  CELL=Math.floor(mapSize/COLS);
+  mapSize=CELL*COLS;
+  GRID_X=20;
+  GRID_Y=Math.floor((H-mapSize)/2)+5;
+}
+computeLayout();
+
+function drawGrid(){
+  for(var r=0;r<ROWS;r++){
+    for(var c=0;c<COLS;c++){
+      var x=GRID_X+c*CELL,y=GRID_Y+r*CELL;
+      var v=costMap[r][c];
+      var rgb2=hex2rgb(COST_COLORS[v]);
+      var gg=ctx.createLinearGradient(x,y,x+CELL,y+CELL);
+      gg.addColorStop(0,'rgba('+rgb2[0]+','+rgb2[1]+','+rgb2[2]+',0.85)');
+      gg.addColorStop(1,'rgba('+rgb2[0]+','+rgb2[1]+','+rgb2[2]+',0.5)');
+      ctx.fillStyle=gg;
+      ctx.fillRect(x+1,y+1,CELL-2,CELL-2);
+      /* selected highlight */
+      var isSel=false;
+      for(var s=0;s<selectedCells.length;s++){
+        if(selectedCells[s][0]===r&&selectedCells[s][1]===c){isSel=true;break;}
+      }
+      if(isSel){
+        ctx.strokeStyle='#ffffff';ctx.lineWidth=2;
+        ctx.strokeRect(x+1,y+1,CELL-2,CELL-2);
+      }else{
+        ctx.strokeStyle='rgba(255,255,255,0.08)';ctx.lineWidth=1;
+        ctx.strokeRect(x,y,CELL,CELL);
+      }
+    }
+  }
+}
+
+function drawPathOnCanvas(path,color,lineW,glow){
+  if(path.length<2)return;
+  ctx.save();
+  if(glow){ctx.shadowColor=color;ctx.shadowBlur=glow;}
+  ctx.strokeStyle=color;ctx.lineWidth=lineW;
+  ctx.lineCap='round';ctx.lineJoin='round';
+  ctx.beginPath();
+  for(var i=0;i<path.length;i++){
+    var px=GRID_X+path[i][1]*CELL+CELL/2;
+    var py=GRID_Y+path[i][0]*CELL+CELL/2;
+    if(i===0)ctx.moveTo(px,py);else ctx.lineTo(px,py);
+  }
+  ctx.stroke();ctx.restore();
+}
+
+function drawStartEnd(){
+  var sx=GRID_X+START[1]*CELL+CELL/2,sy=GRID_Y+START[0]*CELL+CELL/2;
+  var ex=GRID_X+END[1]*CELL+CELL/2,ey=GRID_Y+END[0]*CELL+CELL/2;
+  ctx.font='bold '+Math.max(10,CELL*0.5)+'px "Space Grotesk",sans-serif';
+  ctx.textAlign='center';ctx.textBaseline='middle';
+  ctx.fillStyle='#ffffff';
+  ctx.fillText(t('start'),sx,sy);ctx.fillText(t('end'),ex,ey);
+}
+
+/* right side panel drawing */
+function drawRightPanel(){
+  var px=GRID_X+COLS*CELL+20;
+  var py=GRID_Y;
+  var pw=W-px-10;
+
+  /* risk type selector */
+  ctx.font='12px "Noto Sans SC",sans-serif';
+  ctx.textAlign='left';ctx.fillStyle=P.text;
+  ctx.fillText(t('selectRisk'),px,py+12);
+
+  var riskLabels=['riskSafe','riskMed','riskDanger','riskUnknown'];
+  var riskVals=[0,1,2,3];
+  for(var i=0;i<4;i++){
+    var bx=px,by=py+22+i*28;
+    var isActive=selectedRisk===riskVals[i];
+    if(isActive){
+      ctx.fillStyle=P.primary;ctx.globalAlpha=0.2;
+      ctx.fillRect(bx-4,by-4,pw,24);ctx.globalAlpha=1;
+    }
+    ctx.fillStyle=COST_COLORS[riskVals[i]];
+    ctx.fillRect(bx,by,14,14);
+    ctx.font='12px "Noto Sans SC",sans-serif';
+    ctx.textAlign='left';ctx.fillStyle=isActive?P.primary:P.text;
+    ctx.fillText(t(riskLabels[i]),bx+20,by+11);
+  }
+
+  /* legend for paths */
+  var ly=py+140;
+  ctx.font='11px "Noto Sans SC",sans-serif';
+  ctx.strokeStyle='rgba(0,218,243,0.5)';ctx.lineWidth=2;
+  ctx.beginPath();ctx.moveTo(px,ly);ctx.lineTo(px+20,ly);ctx.stroke();
+  ctx.fillStyle='rgba(0,218,243,0.8)';ctx.textAlign='left';
+  ctx.fillText(t('oldPath')||'Old Path',px+24,ly+4);
+
+  ctx.strokeStyle='#10b981';ctx.lineWidth=2;
+  ctx.beginPath();ctx.moveTo(px,ly+18);ctx.lineTo(px+20,ly+18);ctx.stroke();
+  ctx.fillStyle='#10b981';
+  ctx.fillText(t('newPath')||'New Path',px+24,ly+22);
+
+  /* inject count */
+  ly+=50;
+  ctx.font='bold 13px "Space Grotesk",sans-serif';
+  ctx.fillStyle=P.primary;
+  ctx.fillText(t('injectCount')+': '+injectCount+'/3',px,ly);
+
+  if(completed){
+    ctx.font='bold 12px "Noto Sans SC",sans-serif';
+    ctx.fillStyle=P.success;
+    var lines=t('complete').split('!');
+    ctx.fillText((lines[0]||'')+'!',px,ly+24);
+    if(lines[1])ctx.fillText(lines[1].trim(),px,ly+42);
+  }
+}
+
+function drawScene(){
+  drawBg();
+  drawTitle();
+  drawGrid();
+  if(oldPath.length>0&&injectCount>0){
+    drawPathOnCanvas(oldPath,'rgba(0,218,243,0.35)',2,0);
+  }
+  drawPathOnCanvas(currentPath,'#10b981',3,12);
+  drawStartEnd();
+  drawRightPanel();
+
+  /* feedback panel */
+  var fb=document.getElementById('feedback');
+  if(fb){
+    var curCost=pathCostCalc(costMap,currentPath);
+    var det=currentPath.length-origPathLen;
+    fb.innerHTML='<span style="margin-right:20px;">'+t('pathLen')+': '+currentPath.length+'</span>'+
+      '<span style="margin-right:20px;">'+t('pathCostLabel')+': '+curCost+'</span>'+
+      '<span>'+t('detour')+': '+(det>=0?'+':'')+det+'</span>';
+  }
+}
+function drawCurrent(){drawScene();}
+drawScene();
+
+/* ── click handling on canvas ── */
+canvas.addEventListener('click',function(e){
+  if(completed)return;
+  var rect=canvas.getBoundingClientRect();
+  var scale=Math.min(rect.width/W,rect.height/H);
+  var offsetX2=(rect.width-W*scale)/2;
+  var offsetY2=(rect.height-H*scale)/2;
+  var mx=(e.clientX-rect.left-offsetX2)/scale;
+  var my=(e.clientY-rect.top-offsetY2)/scale;
+
+  /* check risk selector clicks */
+  var px2=GRID_X+COLS*CELL+20;
+  var py2=GRID_Y;
+  for(var i=0;i<4;i++){
+    var bx2=px2-4, by2=py2+22+i*28-4;
+    if(mx>=bx2&&mx<=bx2+(W-px2-10)&&my>=by2&&my<=by2+24){
+      selectedRisk=[0,1,2,3][i];
+      drawScene();
+      return;
+    }
+  }
+
+  /* check grid cell click */
+  var col=Math.floor((mx-GRID_X)/CELL);
+  var row=Math.floor((my-GRID_Y)/CELL);
+  if(row>=0&&row<ROWS&&col>=0&&col<COLS){
+    /* toggle selection */
+    var found=-1;
+    for(var j=0;j<selectedCells.length;j++){
+      if(selectedCells[j][0]===row&&selectedCells[j][1]===col){found=j;break;}
+    }
+    if(found>=0){selectedCells.splice(found,1);}
+    else{if(selectedCells.length<9)selectedCells.push([row,col]);}
+    drawScene();
+  }
+});
+
+/* ── inject button via canvas click detection ── */
+/* We need DOM buttons for inject and reset. Create them dynamically. */
+var btnWrap=document.createElement('div');
+btnWrap.style.cssText='display:flex;align-items:center;gap:8px;padding:6px 12px;background:'+P.surface+';border-top:1px solid '+P.outline_variant+';';
+
+var btnInject=document.createElement('button');
+btnInject.style.cssText='font-family:"Space Grotesk",sans-serif;font-size:12px;font-weight:700;padding:4px 14px;cursor:pointer;letter-spacing:1px;border:1px solid '+P.outline_variant+';background:transparent;color:'+P.primary+';';
+btnInject.id='btnInject';
+
+var btnReset=document.createElement('button');
+btnReset.style.cssText=btnInject.style.cssText;
+btnReset.id='btnReset';
+
+var statusSpan=document.createElement('span');
+statusSpan.style.cssText='font-family:"Space Grotesk",sans-serif;font-size:12px;color:'+P.muted+';margin-left:auto;';
+statusSpan.id='statusSpan';
+
+btnWrap.appendChild(btnInject);
+btnWrap.appendChild(btnReset);
+btnWrap.appendChild(statusSpan);
+
+/* insert before feedback panel */
+var wrapper=document.querySelector('.wrapper');
+var feedbackEl=document.getElementById('feedback');
+if(wrapper&&feedbackEl){wrapper.insertBefore(btnWrap,feedbackEl);}
+
+function updateBtnText(){
+  btnInject.textContent=t('inject');
+  btnReset.textContent=t('reset');
+  statusSpan.textContent=selectedCells.length>0?(selectedCells.length+' cells '+t('clickCell')):'';
+}
+updateBtnText();
+
+btnInject.addEventListener('click',function(){
+  if(completed||selectedCells.length===0)return;
+  /* save old path before inject */
+  oldPath=currentPath.slice();
+  /* apply observation */
+  for(var i=0;i<selectedCells.length;i++){
+    costMap[selectedCells[i][0]][selectedCells[i][1]]=selectedRisk;
+  }
+  selectedCells=[];
+  /* replan */
+  currentPath=aStar(costMap,START[0],START[1],END[0],END[1]);
+  injectCount++;
+  if(injectCount>=3)completed=true;
+  drawScene();
+  updateBtnText();
+});
+
+btnReset.addEventListener('click',function(){
+  costMap=initCost.map(function(r){return r.slice();});
+  currentPath=aStar(costMap,START[0],START[1],END[0],END[1]);
+  oldPath=currentPath.slice();
+  origPathLen=currentPath.length;
+  origPathCost=pathCostCalc(costMap,currentPath);
+  selectedCells=[];
+  selectedRisk=2;
+  injectCount=0;
+  completed=false;
+  drawScene();
+  updateBtnText();
+});
+
+/* guide panel i18n refresh */
+function onLangChange(){
+  var ids=[['gLabel1','g1'],['gDescD1','g1d'],['gLabel2','g2'],['gDescD2','g2d'],['gLabel3','g3'],['gDescD3','g3d']];
+  for(var i=0;i<ids.length;i++){
+    var el=document.getElementById(ids[i][0]);
+    if(el)el.textContent=t(ids[i][1]);
+  }
+  updateBtnText();
+  drawScene();
+}
+onLangChange();
+
+
+/* ── init ── */
+refreshI18N();
+setTimeout(function(){resize();if(typeof drawCurrent==='function')drawCurrent();},200);
+setTimeout(function(){resize();if(typeof drawCurrent==='function')drawCurrent();},600);
+if(document.fonts&&document.fonts.ready){
+  document.fonts.ready.then(function(){resize();if(typeof drawCurrent==='function')drawCurrent();});
+}
+
+})();
+</script>
+</body>
+</html>

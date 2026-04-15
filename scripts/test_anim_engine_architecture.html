@@ -1,0 +1,522 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;700&family=Inter:wght@400;500&family=Noto+Sans+SC:wght@400;700&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0;border-radius:0}
+html,body{width:100%;height:100vh;overflow:hidden;
+  background:#131313;
+  font-family:'Space Grotesk','Inter','Noto Sans SC',sans-serif;
+  color:#e5e2e1;
+}
+.lang-btn{
+  position:fixed;top:8px;left:8px;z-index:100;
+  font-family:'Space Grotesk',sans-serif;font-size:11px;font-weight:700;
+  padding:4px 10px;cursor:pointer;
+  border:1px solid rgba(255,255,255,0.08);
+  background:rgba(20,20,35,0.85);backdrop-filter:blur(12px);
+  color:#ffb59c;letter-spacing:1px;
+}
+.guide-panel{
+  position:fixed;top:8px;right:8px;width:260px;max-height:40vh;
+  overflow-y:auto;z-index:100;
+  background:rgba(20,20,35,0.85);backdrop-filter:blur(12px);
+  border:1px solid rgba(255,255,255,0.08);padding:12px;
+  font-family:'Noto Sans SC',sans-serif;font-size:13px;
+  color:rgba(255,255,255,0.85);
+}
+.guide-panel h3{
+  font-family:'Space Grotesk',sans-serif;font-size:14px;
+  margin-bottom:8px;display:flex;align-items:center;
+  justify-content:space-between;cursor:pointer;
+  color:#ffb59c;
+}
+.guide-panel .toggle{font-size:12px;opacity:0.6;}
+.guide-panel ul{padding-left:16px;line-height:1.6;}
+.guide-panel .guide-content.collapsed{display:none;}
+.wrapper{display:flex;flex-direction:column;height:100vh;}
+.canvas-wrap{flex:1;min-height:0;position:relative;}
+.canvas-wrap canvas{display:block;width:100%;height:100%;position:absolute;top:0;left:0;}
+.controls{
+  display:flex;align-items:center;gap:8px;
+  padding:6px 12px;
+  background:rgba(28,27,27,0.92);
+  border-top:1px solid rgba(138,136,134,0.15);
+}
+.controls button{
+  font-family:'Space Grotesk',sans-serif;font-size:12px;font-weight:700;
+  padding:4px 14px;cursor:pointer;letter-spacing:1px;
+  border:1px solid rgba(138,136,134,0.15);
+  background:transparent;color:#ffb59c;
+}
+.controls button:hover{background:#353534;}
+.controls .frame-indicator{
+  font-family:'Space Grotesk',sans-serif;font-size:12px;
+  color:#8a8886;margin-left:auto;
+}
+.hud{
+  display:flex;align-items:center;justify-content:space-around;
+  height:52px;
+  background:rgba(0,0,0,0.55);
+  border-top:1px solid rgba(255,255,255,0.06);
+}
+.hud .hud-col{text-align:center;}
+.hud .hud-label{
+  font-family:'Space Grotesk',sans-serif;font-size:10px;
+  color:#8a8886;letter-spacing:1px;text-transform:uppercase;
+}
+.hud .hud-val{
+  font-family:'Space Grotesk',sans-serif;font-size:14px;font-weight:700;
+  color:#e5e2e1;
+}
+</style>
+</head>
+<body>
+<button class="lang-btn" id="langBtn">CN</button>
+<div class="guide-panel" id="guidePanel">
+  <h3 id="guideHeader"><span id="guideTitle"></span> <span class="toggle" id="guideToggle">[-]</span></h3>
+  <div class="guide-content" id="guideContent">
+    <ul id="guideList"></ul>
+  </div>
+</div>
+<div class="wrapper">
+  <div class="canvas-wrap">
+    <canvas id="c"></canvas>
+  </div>
+  <div class="controls" id="controls">
+    <button id="btnPrev"></button>
+    <button id="btnPlay"></button>
+    <button id="btnNext"></button>
+    <span class="frame-indicator" id="frameIndicator"></span>
+  </div>
+  <div class="hud" id="hud"></div>
+</div>
+<script>
+(function(){
+"use strict";
+
+/* ── palette ── */
+var P = {"bg":"#131313","surface":"#1c1b1b","surface_high":"#353534","primary":"#ffb59c","primary_container":"#ff7f50","secondary":"#c6c6c6","tertiary":"#00daf3","signal":"#ff5f1f","success":"#10b981","text":"#e5e2e1","muted":"#8a8886","outline_variant":"#8a8886"};
+
+/* ── i18n ── */
+var LANG = 'cn';
+var I18N = {
+  title:       {en:'RISK MAP + SAFE PATH ENGINE', cn:'\u98ce\u9669\u5730\u56fe + \u5b89\u5168\u8def\u5f84\u5f15\u64ce'},
+  subtitle:    {en:'Architecture Overview', cn:'\u67b6\u6784\u5168\u666f'},
+  guideTitle:  {en:'GUIDE', cn:'\u89c2\u770b\u6307\u5357'},
+  btnPrev:     {en:'PREV', cn:'\u4e0a\u4e00\u5e27'},
+  btnPlay:     {en:'PLAY', cn:'\u64ad\u653e'},
+  btnPause:    {en:'PAUSE', cn:'\u6682\u505c'},
+  btnNext:     {en:'NEXT', cn:'\u4e0b\u4e00\u5e27'},
+  g1:          {en:'Observe the 4-stage pipeline from image input to path output',
+                cn:'\u89c2\u5bdf\u4ece\u56fe\u50cf\u8f93\u5165\u5230\u8def\u5f84\u8f93\u51fa\u76844\u9636\u6bb5\u6d41\u6c34\u7ebf'},
+  g2:          {en:'Note how each module\'s output becomes the next module\'s input',
+                cn:'\u6ce8\u610f\u6bcf\u4e2a\u6a21\u5757\u7684\u8f93\u51fa\u5982\u4f55\u6210\u4e3a\u4e0b\u4e00\u4e2a\u6a21\u5757\u7684\u8f93\u5165'},
+  g3:          {en:'The unified API makes all modules work as one engine',
+                cn:'\u7edf\u4e00\u63a5\u53e3\u8ba9\u6240\u6709\u6a21\u5757\u4f5c\u4e3a\u4e00\u4e2a\u5f15\u64ce\u5de5\u4f5c'},
+  // Frame titles
+  f0title:     {en:'STAGE 1: IMAGE INPUT', cn:'\u7b2c1\u9636\u6bb5\uff1a\u56fe\u50cf\u8f93\u5165'},
+  f0desc:      {en:'Raw Mars image or prediction mask enters the engine',
+                cn:'\u539f\u59cb\u706b\u661f\u56fe\u50cf\u6216\u9884\u6d4b\u63a9\u819c\u8fdb\u5165\u5f15\u64ce'},
+  f1title:     {en:'STAGE 2: TERRAIN SEGMENTATION', cn:'\u7b2c2\u9636\u6bb5\uff1a\u5730\u8c8c\u5206\u5272'},
+  f1desc:      {en:'S3 model segments terrain into classes: soil, rock, sand, bedrock',
+                cn:'S3\u6a21\u578b\u5c06\u5730\u8c8c\u5206\u4e3a\u7c7b\u522b\uff1a\u571f\u58e4\u3001\u5ca9\u77f3\u3001\u6c99\u5730\u3001\u57fa\u5ca9'},
+  f2title:     {en:'STAGE 3: RISK MAP ENCODING', cn:'\u7b2c3\u9636\u6bb5\uff1a\u98ce\u9669\u5730\u56fe\u7f16\u7801'},
+  f2desc:      {en:'Risk dictionary + safety margin + unknown penalty -> cost map',
+                cn:'\u98ce\u9669\u8bcd\u5178 + \u5b89\u5168\u4f59\u91cf + \u672a\u77e5\u533a\u60e9\u7f5a -> \u4ee3\u4ef7\u5730\u56fe'},
+  f3title:     {en:'STAGE 4: PATH SEARCH + REPLAN', cn:'\u7b2c4\u9636\u6bb5\uff1a\u8def\u5f84\u641c\u7d22 + \u91cd\u89c4\u5212'},
+  f3desc:      {en:'A* search on cost map, dynamic replanning on new observations',
+                cn:'\u5728\u4ee3\u4ef7\u5730\u56fe\u4e0aA*\u641c\u7d22\uff0c\u65b0\u89c2\u6d4b\u5230\u6765\u65f6\u52a8\u6001\u91cd\u89c4\u5212'},
+  f4title:     {en:'UNIFIED ENGINE API', cn:'\u7edf\u4e00\u5f15\u64ce\u63a5\u53e3'},
+  f4desc:      {en:'engine.run(image) -> {risk_map, path, replan_log}',
+                cn:'engine.run(image) -> {risk_map, path, replan_log}'},
+  // HUD labels
+  hudStage:    {en:'STAGE', cn:'\u9636\u6bb5'},
+  hudModules:  {en:'MODULES', cn:'\u6a21\u5757\u6570'},
+  hudFlow:     {en:'DATA FLOW', cn:'\u6570\u636e\u6d41'},
+  hudOutput:   {en:'OUTPUT', cn:'\u8f93\u51fa'},
+  // Module labels
+  modImage:    {en:'IMAGE', cn:'\u56fe\u50cf'},
+  modSegment:  {en:'SEGMENT', cn:'\u5206\u5272'},
+  modRisk:     {en:'RISK MAP', cn:'\u98ce\u9669\u56fe'},
+  modPath:     {en:'PATH', cn:'\u8def\u5f84'},
+  modReplan:   {en:'REPLAN', cn:'\u91cd\u89c4\u5212'},
+  modAPI:      {en:'ENGINE API', cn:'\u5f15\u64ce\u63a5\u53e3'},
+  modDict:     {en:'RISK DICT', cn:'\u98ce\u9669\u8bcd\u5178'},
+  modMargin:   {en:'MARGIN', cn:'\u5b89\u5168\u4f59\u91cf'},
+  modModel:    {en:'S3 MODEL', cn:'S3\u6a21\u578b'},
+  modCoord:    {en:'COORD XFORM', cn:'\u5750\u6807\u53d8\u6362'},
+  modAStar:    {en:'A* SEARCH', cn:'A*\u641c\u7d22'},
+  modDynamic:  {en:'DYNAMIC', cn:'\u52a8\u6001'},
+  modErrBook:  {en:'ERROR LOG', cn:'\u9519\u8bef\u7c3f'},
+};
+function t(key){return(I18N[key]&&I18N[key][LANG])||(I18N[key]&&I18N[key]['en'])||key;}
+var playing = false;
+function refreshI18N(){
+  document.getElementById('langBtn').textContent=LANG.toUpperCase();
+  var gt=document.getElementById('guideTitle');
+  if(gt)gt.textContent=t('guideTitle');
+  var bp=document.getElementById('btnPrev');
+  var bpl=document.getElementById('btnPlay');
+  var bn=document.getElementById('btnNext');
+  if(bp)bp.textContent=t('btnPrev');
+  if(bpl)bpl.textContent=playing?t('btnPause'):t('btnPlay');
+  if(bn)bn.textContent=t('btnNext');
+  updateGuide();
+  if(typeof drawCurrent==='function')drawCurrent();
+}
+document.getElementById('langBtn').addEventListener('click',function(){
+  LANG=LANG==='en'?'cn':'en';
+  refreshI18N();
+});
+
+function updateGuide(){
+  var list=document.getElementById('guideList');
+  if(!list)return;
+  list.innerHTML='<li>'+t('g1')+'</li><li>'+t('g2')+'</li><li>'+t('g3')+'</li>';
+}
+
+/* ── canvas setup ── */
+var canvas = document.getElementById("c");
+var ctx = canvas.getContext("2d");
+var W = 700, H = 460;
+var DPR = Math.min(window.devicePixelRatio||1, 2);
+function resize(){
+  var rect = canvas.getBoundingClientRect();
+  if (rect.width < 1 || rect.height < 1) return;
+  canvas.width = rect.width * DPR;
+  canvas.height = rect.height * DPR;
+  var scale = Math.min(rect.width / W, rect.height / H);
+  var drawW = W * scale;
+  var drawH = H * scale;
+  var offsetX = (rect.width - drawW) / 2;
+  var offsetY = (rect.height - drawH) / 2;
+  ctx.setTransform(DPR*scale, 0, 0, DPR*scale, DPR*offsetX, DPR*offsetY);
+}
+resize();
+window.addEventListener("resize", function(){ resize(); if(typeof drawCurrent==="function") drawCurrent(); });
+if (typeof ResizeObserver !== "undefined" && canvas.parentElement) {
+  try {
+    new ResizeObserver(function(){
+      resize();
+      if (typeof drawCurrent === "function") drawCurrent();
+    }).observe(canvas.parentElement);
+  } catch (e) {}
+}
+
+/* ── color helpers ── */
+function hex2rgb(h){
+  h=h.replace("#","");
+  if(h.length===3)h=h[0]+h[0]+h[1]+h[1]+h[2]+h[2];
+  return[parseInt(h.slice(0,2),16),parseInt(h.slice(2,4),16),parseInt(h.slice(4,6),16)];
+}
+
+/* ── drawing utils ── */
+function drawBg(){
+  var g=ctx.createRadialGradient(W/2,H/2,0,W/2,H/2,Math.max(W,H)*0.7);
+  g.addColorStop(0,"#1c1b1b");g.addColorStop(1,P.bg);
+  ctx.fillStyle=g;ctx.fillRect(0,0,W,H);
+  ctx.strokeStyle="rgba(0,218,243,0.04)";ctx.lineWidth=0.5;
+  for(var x=0;x<=W;x+=20){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,H);ctx.stroke();}
+  for(var y=0;y<=H;y+=20){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke();}
+}
+
+/* ── shared element transition engine ── */
+function lerp(a,b,p){return a+(b-a)*p;}
+function easeInOut(x){return x<0.5?2*x*x:1-Math.pow(-2*x+2,2)/2;}
+function merge(base,ov){var r={};for(var k in base)r[k]=base[k];for(var k2 in ov)r[k2]=ov[k2];return r;}
+
+function drawElement(el){
+  if(!el||el.alpha<=0.01)return;
+  ctx.save();
+  ctx.globalAlpha=el.alpha;
+  switch(el.type){
+    case 'label':drawLabelPrimitive(el);break;
+    case 'text':drawTextPrimitive(el);break;
+    case 'box':drawBoxPrimitive(el);break;
+    case 'arrow':drawArrowPrimitive(el);break;
+    case 'custom':if(el.draw)el.draw(el.alpha);break;
+  }
+  ctx.restore();
+}
+function drawLabelPrimitive(el){
+  ctx.font=(el.bold?'bold ':'')+(el.size||14)+"px 'Space Grotesk','Inter',sans-serif";
+  ctx.textAlign=el.align||'left';ctx.textBaseline=el.baseline||'top';
+  if(el.glow){ctx.shadowColor=el.glowColor||P.primary;ctx.shadowBlur=el.glow;}
+  ctx.fillStyle=el.color||P.text;
+  ctx.fillText(typeof el.text==='function'?el.text():el.text,el.x,el.y);
+  ctx.shadowBlur=0;
+}
+function drawTextPrimitive(el){
+  ctx.font=(el.size||13)+"px 'Noto Sans SC','Inter',sans-serif";
+  ctx.textAlign=el.align||'left';ctx.textBaseline=el.baseline||'top';
+  ctx.fillStyle=el.color||P.text;
+  var lines=(typeof el.text==='function'?el.text():el.text).split('\n');
+  var lh=el.lineHeight||(el.size||13)*1.5;
+  lines.forEach(function(ln,i){ctx.fillText(ln,el.x,el.y+i*lh);});
+}
+function drawBoxPrimitive(el){
+  if(el.fill){
+    if(el.glow){ctx.shadowColor=el.glowColor||el.fill;ctx.shadowBlur=el.glow;}
+    ctx.fillStyle=el.fill;
+    ctx.fillRect(el.x,el.y,el.w,el.h);ctx.shadowBlur=0;
+  }
+  if(el.borderColor){
+    ctx.strokeStyle=el.borderColor;ctx.lineWidth=el.borderWidth||1;
+    ctx.strokeRect(el.x,el.y,el.w,el.h);
+  }
+}
+function drawArrowPrimitive(el){
+  ctx.strokeStyle=el.color||P.tertiary;ctx.lineWidth=el.lineWidth||2;
+  if(el.glow){ctx.shadowColor=el.color||P.tertiary;ctx.shadowBlur=el.glow;}
+  ctx.beginPath();ctx.moveTo(el.x1,el.y1);ctx.lineTo(el.x2,el.y2);ctx.stroke();
+  var ang=Math.atan2(el.y2-el.y1,el.x2-el.x1);var hl=8;
+  ctx.beginPath();
+  ctx.moveTo(el.x2,el.y2);
+  ctx.lineTo(el.x2-hl*Math.cos(ang-0.4),el.y2-hl*Math.sin(ang-0.4));
+  ctx.moveTo(el.x2,el.y2);
+  ctx.lineTo(el.x2-hl*Math.cos(ang+0.4),el.y2-hl*Math.sin(ang+0.4));
+  ctx.stroke();ctx.shadowBlur=0;
+}
+
+/* ── frame data ── */
+var totalFrames = 5;
+var currentFrame = 0;
+
+// Module box drawing helper
+function makeModuleBox(id, x, y, w, h, label, color, glowColor, highlight){
+  var elements = [];
+  var borderC = highlight ? color : (P.outline_variant+'26');
+  var fillC = highlight ? (color+'18') : (P.surface_high+'80');
+  elements.push({id:id+'_box', type:'box', x:x, y:y, w:w, h:h, fill:fillC, borderColor:borderC, borderWidth:highlight?2:1, glow:highlight?12:0, glowColor:glowColor||color, alpha:1});
+  elements.push({id:id+'_label', type:'label', text:function(){return t(label);}, x:x+w/2, y:y+h/2-7, size:11, bold:true, align:'center', color:highlight?color:P.secondary, alpha:1});
+  return elements;
+}
+
+function getFrameElements(f){
+  var els = [];
+  // Title
+  els.push({id:'title', type:'label', text:function(){return t('title');}, x:W/2, y:18, size:16, bold:true, align:'center', color:P.primary, glow:8, alpha:1});
+
+  // Frame-specific subtitle
+  var stKey = 'f'+f+'title';
+  var sdKey = 'f'+f+'desc';
+  els.push({id:'subtitle', type:'label', text:function(){return t(stKey);}, x:W/2, y:42, size:13, bold:true, align:'center', color:P.tertiary, glow:6, alpha:1});
+  els.push({id:'desc', type:'text', text:function(){return t(sdKey);}, x:W/2, y:62, size:12, align:'center', color:P.muted, alpha:1});
+
+  // Layout constants
+  var boxW = 110, boxH = 50;
+  var startY = 100;
+  var gap = 30;
+  var centerX = W/2;
+
+  // 4 main pipeline modules - always visible but highlighted per frame
+  var modules = [
+    {id:'mod_img',  label:'modImage',   x:centerX-boxW/2, y:startY,               color:'#fb923c'},
+    {id:'mod_seg',  label:'modSegment', x:centerX-boxW/2, y:startY+boxH+gap,      color:'#818cf8'},
+    {id:'mod_risk', label:'modRisk',    x:centerX-boxW/2, y:startY+2*(boxH+gap),  color:'#f472b6'},
+    {id:'mod_path', label:'modPath',    x:centerX-boxW/2, y:startY+3*(boxH+gap),  color:'#34d399'},
+  ];
+
+  // Highlight logic per frame
+  for(var i=0;i<modules.length;i++){
+    var m = modules[i];
+    var hl = (f === i) || (f === 4);
+    var mEls = makeModuleBox(m.id, m.x, m.y, boxW, boxH, m.label, m.color, m.color, hl);
+    for(var j=0;j<mEls.length;j++) els.push(mEls[j]);
+  }
+
+  // Arrows between pipeline stages
+  for(var a=0;a<3;a++){
+    var arrowAlpha = (f > a || f === 4) ? 1 : 0.15;
+    els.push({id:'arrow_'+a, type:'arrow', x1:centerX, y1:startY+boxH+(boxH+gap)*a, x2:centerX, y2:startY+(boxH+gap)*(a+1), color:P.tertiary, glow:(f>a||f===4)?6:0, lineWidth:2, alpha:arrowAlpha});
+  }
+
+  // Frame 0: Image input details
+  if(f === 0){
+    els.push({id:'detail_0a', type:'text', text:function(){return LANG==='cn'?'Navcam / Hazcam\n\u539f\u59cb\u56fe\u50cf':'Navcam / Hazcam\nRaw Image';}, x:modules[0].x-130, y:modules[0].y+10, size:11, color:'#fb923c', alpha:1});
+    els.push({id:'detail_0b', type:'text', text:function(){return LANG==='cn'?'\u6216\u5df2\u6709\u9884\u6d4b\u63a9\u819c':'or Prediction Mask';}, x:modules[0].x+boxW+20, y:modules[0].y+15, size:11, color:'#fb923c', alpha:1});
+    els.push({id:'detail_arr0', type:'arrow', x1:modules[0].x-20, y1:modules[0].y+boxH/2, x2:modules[0].x, y2:modules[0].y+boxH/2, color:'#fb923c', glow:4, lineWidth:1.5, alpha:1});
+  }
+
+  // Frame 1: Segmentation details - show S3 model and error book as side modules
+  if(f === 1){
+    var sideEls = makeModuleBox('side_model', modules[1].x-150, modules[1].y-5, 100, 40, 'modModel', '#818cf8', '#818cf8', true);
+    for(var s=0;s<sideEls.length;s++) els.push(sideEls[s]);
+    els.push({id:'side_arr_model', type:'arrow', x1:modules[1].x-50, y1:modules[1].y+15, x2:modules[1].x, y2:modules[1].y+boxH/2, color:'#818cf8', glow:4, lineWidth:1.5, alpha:1});
+
+    var errEls = makeModuleBox('side_errbook', modules[1].x+boxW+40, modules[1].y-5, 100, 40, 'modErrBook', '#ff5f1f', '#ff5f1f', true);
+    for(var e2=0;e2<errEls.length;e2++) els.push(errEls[e2]);
+    els.push({id:'side_arr_err', type:'arrow', x1:modules[1].x+boxW, y1:modules[1].y+boxH/2, x2:modules[1].x+boxW+40, y2:modules[1].y+15, color:'#ff5f1f', glow:4, lineWidth:1.5, alpha:1});
+  }
+
+  // Frame 2: Risk map encoding details - show risk dict, margin, coord
+  if(f === 2){
+    var dictEls = makeModuleBox('side_dict', modules[2].x-150, modules[2].y-25, 100, 35, 'modDict', '#f472b6', '#f472b6', true);
+    for(var d=0;d<dictEls.length;d++) els.push(dictEls[d]);
+    els.push({id:'side_arr_dict', type:'arrow', x1:modules[2].x-50, y1:modules[2].y-8, x2:modules[2].x, y2:modules[2].y+15, color:'#f472b6', glow:4, lineWidth:1.5, alpha:1});
+
+    var margEls = makeModuleBox('side_margin', modules[2].x-150, modules[2].y+20, 100, 35, 'modMargin', '#f472b6', '#f472b6', true);
+    for(var mg=0;mg<margEls.length;mg++) els.push(margEls[mg]);
+    els.push({id:'side_arr_marg', type:'arrow', x1:modules[2].x-50, y1:modules[2].y+37, x2:modules[2].x, y2:modules[2].y+boxH/2+5, color:'#f472b6', glow:4, lineWidth:1.5, alpha:1});
+
+    var coordEls = makeModuleBox('side_coord', modules[2].x+boxW+40, modules[2].y, 100, 35, 'modCoord', '#00daf3', '#00daf3', true);
+    for(var co=0;co<coordEls.length;co++) els.push(coordEls[co]);
+    els.push({id:'side_arr_coord', type:'arrow', x1:modules[2].x+boxW, y1:modules[2].y+boxH/2, x2:modules[2].x+boxW+40, y2:modules[2].y+17, color:'#00daf3', glow:4, lineWidth:1.5, alpha:1});
+  }
+
+  // Frame 3: Path search + replan details
+  if(f === 3){
+    var astarEls = makeModuleBox('side_astar', modules[3].x-150, modules[3].y-5, 100, 40, 'modAStar', '#34d399', '#34d399', true);
+    for(var as=0;as<astarEls.length;as++) els.push(astarEls[as]);
+    els.push({id:'side_arr_astar', type:'arrow', x1:modules[3].x-50, y1:modules[3].y+15, x2:modules[3].x, y2:modules[3].y+boxH/2, color:'#34d399', glow:4, lineWidth:1.5, alpha:1});
+
+    var dynEls = makeModuleBox('side_dynamic', modules[3].x+boxW+40, modules[3].y-5, 100, 40, 'modDynamic', '#10b981', '#10b981', true);
+    for(var dy=0;dy<dynEls.length;dy++) els.push(dynEls[dy]);
+    els.push({id:'side_arr_dyn', type:'arrow', x1:modules[3].x+boxW, y1:modules[3].y+boxH/2, x2:modules[3].x+boxW+40, y2:modules[3].y+15, color:'#10b981', glow:4, lineWidth:1.5, alpha:1});
+    // Replan feedback arrow (upward)
+    els.push({id:'replan_feedback', type:'arrow', x1:modules[3].x+boxW+90, y1:modules[3].y-5, x2:modules[3].x+boxW+90, y2:modules[1].y+boxH+5, color:'#ff5f1f', glow:6, lineWidth:1.5, alpha:1});
+    els.push({id:'replan_label', type:'label', text:function(){return t('modReplan');}, x:modules[3].x+boxW+100, y:(modules[1].y+modules[3].y)/2, size:10, bold:true, color:'#ff5f1f', alpha:1});
+  }
+
+  // Frame 4: Unified API wrapper
+  if(f === 4){
+    // API wrapper box around all modules
+    els.push({id:'api_wrapper', type:'box', x:centerX-boxW/2-20, y:startY-20, w:boxW+40, h:4*(boxH+gap)-gap+40, fill:'rgba(0,218,243,0.04)', borderColor:P.tertiary, borderWidth:2, glow:12, glowColor:P.tertiary, alpha:1});
+    els.push({id:'api_label', type:'label', text:function(){return t('modAPI');}, x:centerX, y:startY+4*(boxH+gap)-gap+30, size:14, bold:true, align:'center', color:P.tertiary, glow:8, alpha:1});
+    // Input arrow
+    els.push({id:'api_in', type:'arrow', x1:centerX-boxW/2-80, y1:startY+2*(boxH+gap)-10, x2:centerX-boxW/2-20, y2:startY+2*(boxH+gap)-10, color:P.primary, glow:6, lineWidth:2, alpha:1});
+    els.push({id:'api_in_label', type:'label', text:function(){return LANG==='cn'?'engine.run(img)':'engine.run(img)';}, x:centerX-boxW/2-85, y:startY+2*(boxH+gap)-18, size:10, bold:true, align:'right', color:P.primary, alpha:1});
+    // Output arrow
+    els.push({id:'api_out', type:'arrow', x1:centerX+boxW/2+20, y1:startY+2*(boxH+gap)-10, x2:centerX+boxW/2+80, y2:startY+2*(boxH+gap)-10, color:P.success, glow:6, lineWidth:2, alpha:1});
+    els.push({id:'api_out_label', type:'label', text:function(){return '{risk_map, path, log}';}, x:centerX+boxW/2+85, y:startY+2*(boxH+gap)-18, size:10, bold:true, color:P.success, alpha:1});
+  }
+
+  return els;
+}
+
+function drawFrame(f){
+  drawBg();
+  var elems = getFrameElements(f);
+  elems.forEach(function(el){drawElement(el);});
+}
+
+function drawCurrent(){drawFrame(currentFrame);}
+
+function updateHUD(f){
+  updateControlsText();
+  var hud=document.getElementById('hud');
+  if(!hud)return;
+  var stages = ['1/4','2/4','3/4','4/4','ALL'];
+  var mods = ['1','2','3','2','8'];
+  var flows = ['IN','SEG','RISK','PATH','E2E'];
+  var outs = ['img','mask','cost','path','engine'];
+  hud.innerHTML='';
+  [{l:t('hudStage'),v:stages[f]},{l:t('hudModules'),v:mods[f]},{l:t('hudFlow'),v:flows[f]},{l:t('hudOutput'),v:outs[f]}].forEach(function(c){
+    var d=document.createElement('div');d.className='hud-col';
+    d.innerHTML='<div class="hud-label">'+c.l+'</div><div class="hud-val">'+c.v+'</div>';
+    hud.appendChild(d);
+  });
+}
+
+var transitioning=false;
+function transitionTo(newFrame){
+  if(newFrame<0)newFrame=0;
+  if(newFrame>=totalFrames)newFrame=totalFrames-1;
+  if(newFrame===currentFrame&&!transitioning){drawFrame(currentFrame);updateHUD(currentFrame);return;}
+  if(transitioning)return;
+  var oldElems=getFrameElements(currentFrame);
+  var newElems=getFrameElements(newFrame);
+  var oldMap={};oldElems.forEach(function(e){oldMap[e.id]=e;});
+  var newMap={};newElems.forEach(function(e){newMap[e.id]=e;});
+  currentFrame=newFrame;
+  updateHUD(newFrame);
+  transitioning=true;
+  var startTime=null,duration=500;
+  function step(ts){
+    if(!startTime)startTime=ts;
+    var raw=Math.min((ts-startTime)/duration,1);
+    var p=easeInOut(raw);
+    drawBg();
+    oldElems.forEach(function(oe){
+      if(!newMap[oe.id])drawElement(merge(oe,{alpha:1-p}));
+    });
+    newElems.forEach(function(ne){
+      var oe=oldMap[ne.id];
+      if(oe){
+        var merged=merge(ne,{
+          x:lerp(oe.x||0,ne.x||0,p),y:lerp(oe.y||0,ne.y||0,p),
+          w:lerp(oe.w||0,ne.w||0,p),h:lerp(oe.h||0,ne.h||0,p),alpha:1
+        });
+        if(ne.type==='arrow'&&oe.type==='arrow'){
+          merged.x1=lerp(oe.x1,ne.x1,p);merged.y1=lerp(oe.y1,ne.y1,p);
+          merged.x2=lerp(oe.x2,ne.x2,p);merged.y2=lerp(oe.y2,ne.y2,p);
+        }
+        if((ne.type==='label'||ne.type==='text')&&oe.text!==ne.text){
+          drawElement(merge(oe,{alpha:1-p}));drawElement(merge(ne,{alpha:p}));
+        }else{drawElement(merged);}
+      }else{drawElement(merge(ne,{alpha:p}));}
+    });
+    if(raw<1){requestAnimationFrame(step);}else{transitioning=false;}
+  }
+  requestAnimationFrame(step);
+}
+
+/* ── animation controls binding ── */
+var playTimer=null;
+function updateControlsText(){
+  var bp=document.getElementById('btnPlay');
+  var bi=document.getElementById('frameIndicator');
+  if(bp)bp.textContent=playing?t('btnPause'):t('btnPlay');
+  if(bi)bi.textContent=(currentFrame+1)+' / '+totalFrames;
+}
+document.getElementById('btnPrev').addEventListener('click',function(){
+  if(playing){playing=false;clearInterval(playTimer);}
+  transitionTo(currentFrame-1);
+});
+document.getElementById('btnNext').addEventListener('click',function(){
+  if(playing){playing=false;clearInterval(playTimer);}
+  transitionTo(currentFrame+1);
+});
+document.getElementById('btnPlay').addEventListener('click',function(){
+  playing=!playing;
+  if(playing){
+    if(currentFrame>=totalFrames-1) transitionTo(0);
+    playTimer=setInterval(function(){
+      if(currentFrame>=totalFrames-1){
+        playing=false;clearInterval(playTimer);updateControlsText();return;
+      }
+      transitionTo(currentFrame+1);
+    },3000);
+  }else{clearInterval(playTimer);}
+  updateControlsText();
+});
+
+/* ── guide panel toggle ── */
+(function(){
+  var tog=document.getElementById('guideToggle');
+  var gc=document.getElementById('guideContent');
+  if(tog&&gc){
+    document.getElementById('guideHeader').addEventListener('click',function(){
+      var collapsed=gc.classList.toggle('collapsed');
+      tog.textContent=collapsed?'[+]':'[-]';
+    });
+  }
+})();
+
+/* ── init ── */
+refreshI18N();
+drawFrame(0);
+updateHUD(0);
+setTimeout(function(){resize();drawCurrent();},200);
+setTimeout(function(){resize();drawCurrent();},600);
+if(document.fonts&&document.fonts.ready){
+  document.fonts.ready.then(function(){resize();drawCurrent();});
+}
+
+})();
+</script>
+</body>
+</html>

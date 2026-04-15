@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=Inter:wght@400;500&family=Noto+Sans+SC:wght@400;700&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box;}
+html,body{width:100%;height:100vh;overflow:hidden;}
+body{background:var(--bg,#05070a);color:var(--text,#e2e2e9);font-family:'Inter','Noto Sans SC',sans-serif;display:flex;flex-direction:column;}
+.wrapper{display:flex;flex-direction:column;height:100vh;overflow:hidden;}
+.header{padding:12px 16px 8px;display:flex;justify-content:space-between;align-items:center;}
+.header h1{font-family:'Space Grotesk',sans-serif;font-size:clamp(14px,2vw,18px);font-weight:700;letter-spacing:-0.02em;color:var(--primary,#ffb000);text-shadow:0 0 15px var(--glow,rgba(255,176,0,0.3));}
+.header .sub{font-size:11px;color:var(--muted,#8e90a6);letter-spacing:0.1em;text-transform:uppercase;}
+.canvas-wrap{flex:1;min-height:0;position:relative;}
+canvas{width:100%;height:100%;display:block;}
+.controls{display:flex;justify-content:center;align-items:center;gap:12px;padding:8px 16px;}
+.ctrl-btn{font-family:'Space Grotesk',sans-serif;font-size:12px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;padding:6px 18px;border:none;cursor:pointer;color:#05070a;background:linear-gradient(135deg,#ffb000,#ff5f1f);transition:transform 0.1s,box-shadow 0.2s;box-shadow:0 0 12px rgba(255,176,0,0.3);}
+.ctrl-btn:hover{transform:scale(1.04);box-shadow:0 0 20px rgba(255,176,0,0.5);}
+.ctrl-btn:active{transform:scale(0.96);}
+.ctrl-btn.secondary{background:rgba(17,20,37,0.92);color:#8e90a6;box-shadow:none;backdrop-filter:blur(12px);}
+.ctrl-btn.secondary:hover{color:#ffb000;}
+.hud{height:48px;display:flex;align-items:center;justify-content:space-around;background:rgba(0,0,0,0.55);backdrop-filter:blur(12px);padding:0 16px;}
+.hud-item{text-align:center;}
+.hud-label{font-family:'Space Grotesk',sans-serif;font-size:9px;letter-spacing:0.15em;text-transform:uppercase;color:#8e90a6;}
+.hud-val{font-family:'Space Grotesk',sans-serif;font-size:14px;font-weight:700;color:#ffb000;}
+.lang-btn{position:fixed;top:8px;left:8px;z-index:100;font-family:'Space Grotesk',sans-serif;font-size:11px;font-weight:700;padding:4px 10px;cursor:pointer;border:none;background:rgba(20,20,35,0.85);backdrop-filter:blur(12px);color:#ffb59c;letter-spacing:1px;}
+.guide-panel{position:fixed;top:8px;right:8px;width:240px;max-height:40vh;overflow-y:auto;background:rgba(20,20,35,0.85);backdrop-filter:blur(12px);padding:12px;z-index:100;font-family:'Noto Sans SC',sans-serif;font-size:12px;color:rgba(255,255,255,0.85);line-height:1.6;}
+.guide-panel h3{font-family:'Space Grotesk',sans-serif;font-size:13px;margin-bottom:6px;color:#ffb000;cursor:pointer;display:flex;justify-content:space-between;align-items:center;}
+.guide-panel ul{padding-left:14px;}
+.guide-panel .collapsed{display:none;}
+</style>
+</head>
+<body>
+<button class="lang-btn" id="langBtn">CN</button>
+<div class="guide-panel" id="guide">
+<h3 id="guideTitle"></h3>
+<div class="guide-content" id="guideContent"></div>
+</div>
+<div class="wrapper">
+<div class="header">
+<div><h1 id="title"></h1><div class="sub" id="subtitle"></div></div>
+<div id="frameIndicator" style="font-family:'Space Grotesk';font-size:11px;color:#8e90a6;letter-spacing:0.1em;"></div>
+</div>
+<div class="canvas-wrap"><canvas id="c"></canvas></div>
+<div class="controls">
+<button class="ctrl-btn secondary" id="btnPrev"></button>
+<button class="ctrl-btn" id="btnPlay"></button>
+<button class="ctrl-btn secondary" id="btnNext"></button>
+</div>
+<div class="hud">
+<div class="hud-item"><div class="hud-label" id="hudL1"></div><div class="hud-val" id="hudV1"></div></div>
+<div class="hud-item"><div class="hud-label" id="hudL2"></div><div class="hud-val" id="hudV2"></div></div>
+<div class="hud-item"><div class="hud-label" id="hudL3"></div><div class="hud-val" id="hudV3"></div></div>
+<div class="hud-item"><div class="hud-label" id="hudL4"></div><div class="hud-val" id="hudV4"></div></div>
+</div>
+</div>
+
+<script src="animation_runtime.js"></script>
+<script>
+
+var CONFIG = {
+  style: 'rocketry_control',
+  totalFrames: 4,
+
+  i18n: {
+    title:    {en:'TWO RULES OF SPEED', cn:'\u6bd4\u5feb\u6162\u7684\u4e24\u6761\u89c4\u5219'},
+    subtitle: {en:'Same distance, or same time',   cn:'\u540c\u8ddd\u79bb\uff0c\u6216\u540c\u65f6\u95f4'},
+
+    // Frame 0: intro
+    f0_q:    {en:'Who runs faster?', cn:'\u8c01\u8dd1\u5f97\u66f4\u5feb\uff1f'},
+    f0_hint: {en:'You cannot answer without fixing one thing first.', cn:'\u5fc5\u987b\u5148\u56fa\u5b9a\u4e00\u4e2a\u6761\u4ef6\uff0c\u624d\u80fd\u6bd4'},
+    f0_optA: {en:'Fix distance, compare time', cn:'\u56fa\u5b9a\u8ddd\u79bb\uff0c\u6bd4\u65f6\u95f4'},
+    f0_optB: {en:'Fix time, compare distance', cn:'\u56fa\u5b9a\u65f6\u95f4\uff0c\u6bd4\u8ddd\u79bb'},
+    f0_kid1: {en:'Ming',  cn:'\u5c0f\u660e'},
+    f0_kid2: {en:'Hua',   cn:'\u5c0f\u534e'},
+
+    // Frame 1: same distance
+    f1_title: {en:'Rule A: same distance', cn:'\u89c4\u5219 A\uff1a\u540c\u8ddd\u79bb'},
+    f1_line:  {en:'Both run 20 m. Who arrives first?', cn:'\u4e00\u8d77\u8dd1 20 \u7c73\uff0c\u8c01\u5148\u5230\uff1f'},
+    f1_start: {en:'Start', cn:'\u8d77\u70b9'},
+    f1_end:   {en:'Finish · 20 m', cn:'\u7ec8\u70b9\u00b720\u7c73'},
+    f1_mingT: {en:'Ming · 4 s', cn:'\u5c0f\u660e\u00b74\u79d2'},
+    f1_huaT:  {en:'Hua · 5 s',  cn:'\u5c0f\u534e\u00b75\u79d2'},
+    f1_verdict:{en:'Ming is faster: same 20 m, he used less time.', cn:'\u5c0f\u660e\u66f4\u5feb\uff1a\u540c\u6837 20 \u7c73\uff0c\u4ed6\u7528\u65f6\u66f4\u5c11\u3002'},
+
+    // Frame 2: same time
+    f2_title: {en:'Rule B: same time', cn:'\u89c4\u5219 B\uff1a\u540c\u65f6\u95f4'},
+    f2_line:  {en:'Run for 5 seconds. Who went farther?', cn:'\u5927\u5bb6\u8dd1 5 \u79d2\uff0c\u8c01\u8dd1\u5f97\u66f4\u8fdc\uff1f'},
+    f2_clock: {en:'Clock · 5 s', cn:'\u8ba1\u65f6\u00b75\u79d2'},
+    f2_ming:  {en:'Ming · 20 m', cn:'\u5c0f\u660e\u00b720\u7c73'},
+    f2_hua:   {en:'Hua · 15 m',  cn:'\u5c0f\u534e\u00b715\u7c73'},
+    f2_verdict:{en:'Ming is faster: same 5 s, he went farther.', cn:'\u5c0f\u660e\u66f4\u5feb\uff1a\u540c\u6837 5 \u79d2\uff0c\u4ed6\u8dd1\u5f97\u66f4\u8fdc\u3002'},
+
+    // Frame 3: formula
+    f3_title: {en:'Speed = distance ÷ time', cn:'\u901f\u5ea6 \uff1d \u8ddd\u79bb \u00f7 \u65f6\u95f4'},
+    f3_ming:  {en:'Ming: 20 m ÷ 4 s = 5 m/s',  cn:'\u5c0f\u660e\uff1a20 \u7c73 \u00f7 4 \u79d2 \uff1d 5 \u7c73/\u79d2'},
+    f3_hua:   {en:'Hua: 20 m ÷ 5 s = 4 m/s',   cn:'\u5c0f\u534e\uff1a20 \u7c73 \u00f7 5 \u79d2 \uff1d 4 \u7c73/\u79d2'},
+    f3_pt:    {en:'Same meaning from either rule: 5 > 4, so Ming is faster.', cn:'\u4e24\u6761\u89c4\u5219\u7ed3\u679c\u4e00\u81f4\uff1a5 \uff1e 4\uff0c\u5c0f\u660e\u66f4\u5feb\u3002'},
+    f3_tip:   {en:'Numbers win over feelings.', cn:'\u7528\u6570\u5b57\u8bb2\u8bdd\uff0c\u4e0d\u9760\u611f\u89c9\u3002'},
+
+    // HUD
+    hudL1: {en:'FRAME',    cn:'\u5e27'},
+    hudL2: {en:'DISTANCE', cn:'\u8ddd\u79bb'},
+    hudL3: {en:'TIME',     cn:'\u65f6\u95f4'},
+    hudL4: {en:'VERDICT',  cn:'\u7ed3\u8bba'},
+
+    guideTitle: {en:'How to watch', cn:'\u89c2\u770b\u6307\u5357'},
+    g1: {en:'Frame 1-2 show two ways to fairly compare', cn:'\u5e271-2\uff1a\u4e24\u79cd\u516c\u5e73\u6bd4\u8f83\u65b9\u5f0f'},
+    g2: {en:'Both rules must fix one variable first', cn:'\u4e24\u6761\u89c4\u5219\u90fd\u8981\u5148\u56fa\u5b9a\u4e00\u4e2a\u91cf'},
+    g3: {en:'Frame 3: dividing distance by time gives speed', cn:'\u5e273\uff1a\u8ddd\u79bb\u9664\u65f6\u95f4\u5f97\u51fa\u901f\u5ea6'},
+  },
+
+  hudLabels: ['hudL1', 'hudL2', 'hudL3', 'hudL4'],
+  hudValues: [
+    ['1/4', '?',      '?',      'Pick rule'],
+    ['2/4', '20 m',   'compare','Ming first'],
+    ['3/4', 'compare','5 s',    'Ming farther'],
+    ['4/4', '20 m',   '4 / 5 s','5 > 4 m/s'],
+  ],
+
+  guideTitle: 'guideTitle',
+  guideItems: ['g1', 'g2', 'g3'],
+};
+
+// Reusable kid icon
+function drawKid(ctx, el) {
+  // el: { x, y, color, label }
+  ctx.save();
+  ctx.fillStyle = el.color;
+  // head
+  ctx.beginPath();
+  ctx.arc(el.x, el.y - 22, 8, 0, Math.PI * 2);
+  ctx.fill();
+  // body
+  ctx.fillRect(el.x - 6, el.y - 14, 12, 20);
+  // legs (simple trot)
+  ctx.fillRect(el.x - 6, el.y + 6, 4, 10);
+  ctx.fillRect(el.x + 2, el.y + 6, 4, 10);
+  // arms
+  ctx.fillRect(el.x - 10, el.y - 10, 4, 12);
+  ctx.fillRect(el.x + 6, el.y - 10, 4, 12);
+  ctx.restore();
+}
+
+function customDrawElement(ctx, el) {
+  if (el.type === 'kid') {
+    drawKid(ctx, el);
+    // label under
+    ctx.save();
+    ctx.fillStyle = el.color;
+    ctx.font = "bold 11px 'Inter','Noto Sans SC',sans-serif";
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'top';
+    ctx.fillText(el.label, el.x, el.y + 20);
+    ctx.restore();
+    return true;
+  }
+  if (el.type === 'stopwatch') {
+    // big digital clock
+    ctx.save();
+    var x = el.x, y = el.y, w = el.w || 140, h = el.h || 48;
+    ctx.fillStyle = 'rgba(17,20,37,0.95)';
+    ctx.fillRect(x - w/2, y - h/2, w, h);
+    ctx.strokeStyle = '#ffb000';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(x - w/2, y - h/2, w, h);
+    ctx.fillStyle = '#ffb000';
+    ctx.font = "bold 22px 'Space Grotesk',sans-serif";
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(el.text, x, y + 2);
+    ctx.restore();
+    return true;
+  }
+  if (el.type === 'track') {
+    // horizontal running track with start and finish markers
+    ctx.save();
+    var x1 = el.x1, x2 = el.x2, y = el.y;
+    ctx.strokeStyle = '#8e90a6';
+    ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(x1, y); ctx.lineTo(x2, y); ctx.stroke();
+    // tick marks every 1/4
+    ctx.strokeStyle = 'rgba(142,144,166,0.4)';
+    ctx.lineWidth = 1;
+    for (var i = 1; i < 4; i++) {
+      var tx = x1 + (x2 - x1) * i / 4;
+      ctx.beginPath(); ctx.moveTo(tx, y - 4); ctx.lineTo(tx, y + 4); ctx.stroke();
+    }
+    // start / end pillars
+    ctx.strokeStyle = '#ffb000';
+    ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(x1, y - 14); ctx.lineTo(x1, y + 14); ctx.stroke();
+    ctx.strokeStyle = '#ff5f1f';
+    ctx.beginPath(); ctx.moveTo(x2, y - 14); ctx.lineTo(x2, y + 14); ctx.stroke();
+    ctx.restore();
+    return true;
+  }
+  return false;
+}
+
+function getFrameElements(f, W, H) {
+  var t = AnimRuntime.t;
+  var P = AnimRuntime.PAL;
+  var cx = W / 2;
+  var els = [];
+
+  if (f === 0) {
+    els.push({id:'title', type:'label', text:t('f0_q'), x:cx, y:70,  color:P.primary, size:22, align:'center', glow:P.glowStrong});
+    els.push({id:'hint',  type:'label', text:t('f0_hint'), x:cx, y:108, color:P.text, size:13, align:'center'});
+    // two kids side by side
+    els.push({id:'kidM', type:'kid', x:cx - 100, y:200, color:'#ffb000', label:t('f0_kid1')});
+    els.push({id:'kidH', type:'kid', x:cx + 100, y:200, color:'#00daf3', label:t('f0_kid2')});
+    // two option boxes
+    els.push({id:'boxA', type:'box', x:cx - 220, y:260, w:200, h:60, fill:'rgba(255,176,0,0.14)', stroke:P.primary, lineWidth:1});
+    els.push({id:'labA', type:'label', text:t('f0_optA'), x:cx - 120, y:290, color:P.primary, size:13, align:'center'});
+    els.push({id:'boxB', type:'box', x:cx + 20, y:260, w:200, h:60, fill:'rgba(0,218,243,0.12)', stroke:'#00daf3', lineWidth:1});
+    els.push({id:'labB', type:'label', text:t('f0_optB'), x:cx + 120, y:290, color:'#00daf3', size:13, align:'center'});
+    return els;
+  }
+
+  if (f === 1) {
+    els.push({id:'title', type:'label', text:t('f1_title'), x:cx, y:60, color:P.primary, size:20, align:'center'});
+    els.push({id:'line',  type:'label', text:t('f1_line'),  x:cx, y:92, color:P.text, size:13, align:'center'});
+    // two parallel tracks, same length
+    var x1 = 80, x2 = W - 80;
+    els.push({id:'trackM', type:'track', x1:x1, x2:x2, y:200});
+    els.push({id:'trackH', type:'track', x1:x1, x2:x2, y:280});
+    // start / end labels
+    els.push({id:'startL', type:'text', text:t('f1_start'), x:x1, y:170, color:P.muted, size:10, align:'center'});
+    els.push({id:'endL',   type:'text', text:t('f1_end'),   x:x2, y:170, color:'#ff5f1f', size:10, align:'center'});
+    // Ming finished: icon at end
+    els.push({id:'kidM', type:'kid', x:x2 - 10, y:200, color:'#ffb000', label:t('f1_mingT')});
+    // Hua still running: at 80% of track
+    els.push({id:'kidH', type:'kid', x:x1 + (x2-x1)*0.80, y:280, color:'#00daf3', label:t('f1_huaT')});
+    // verdict
+    els.push({id:'verdict', type:'label', text:t('f1_verdict'), x:cx, y:360, color:P.primary, size:14, align:'center'});
+    return els;
+  }
+
+  if (f === 2) {
+    els.push({id:'title', type:'label', text:t('f2_title'), x:cx, y:60, color:P.primary, size:20, align:'center'});
+    els.push({id:'line',  type:'label', text:t('f2_line'),  x:cx, y:92, color:P.text, size:13, align:'center'});
+    // one shared track
+    var x1 = 60, x2 = W - 60;
+    els.push({id:'track', type:'track', x1:x1, x2:x2, y:240});
+    // big stopwatch top center
+    els.push({id:'clock', type:'stopwatch', text:t('f2_clock'), x:cx, y:150});
+    // Ming at 80% of track, Hua at 60%
+    var mingX = x1 + (x2 - x1) * 0.80;
+    var huaX  = x1 + (x2 - x1) * 0.60;
+    els.push({id:'kidH', type:'kid', x:huaX,  y:240, color:'#00daf3', label:t('f2_hua')});
+    els.push({id:'kidM', type:'kid', x:mingX, y:240, color:'#ffb000', label:t('f2_ming')});
+    // vertical dashed line from clock to each position
+    els.push({id:'lineH', type:'line', x1:huaX,  y1:175, x2:huaX,  y2:226, color:'#00daf3', dash:[4,4]});
+    els.push({id:'lineM', type:'line', x1:mingX, y1:175, x2:mingX, y2:226, color:'#ffb000', dash:[4,4]});
+    els.push({id:'verdict', type:'label', text:t('f2_verdict'), x:cx, y:355, color:P.primary, size:14, align:'center'});
+    return els;
+  }
+
+  if (f === 3) {
+    els.push({id:'title', type:'label', text:t('f3_title'), x:cx, y:70, color:P.primary, size:22, align:'center', glow:P.glowStrong});
+    // boxed equations
+    els.push({id:'eq1', type:'label', text:t('f3_ming'), x:cx, y:160, color:'#ffb000', size:18, align:'center'});
+    els.push({id:'eq2', type:'label', text:t('f3_hua'),  x:cx, y:200, color:'#00daf3', size:18, align:'center'});
+    // highlight arrow from 5 > 4
+    els.push({id:'arrL', type:'line', x1:cx - 160, y1:250, x2:cx + 160, y2:250, color:P.muted, dash:[3,3]});
+    els.push({id:'pt',  type:'label', text:t('f3_pt'), x:cx, y:285, color:P.text, size:14, align:'center'});
+    els.push({id:'tip', type:'label', text:t('f3_tip'), x:cx, y:330, color:'#ff5f1f', size:13, align:'center'});
+    return els;
+  }
+
+  return [];
+}
+
+AnimRuntime.boot();
+</script>
+</body>
+</html>

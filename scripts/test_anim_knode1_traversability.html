@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=Inter:wght@400;500&family=Noto+Sans+SC:wght@400;700&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box;}
+html,body{width:100%;height:100vh;overflow:hidden;}
+body{background:#0c0e12;color:#f6f6fc;font-family:'Inter','Noto Sans SC',sans-serif;display:flex;flex-direction:column;}
+.wrapper{display:flex;flex-direction:column;height:100vh;overflow:hidden;}
+.header{padding:12px 16px 8px;display:flex;justify-content:space-between;align-items:center;}
+.header h1{font-family:'Space Grotesk',sans-serif;font-size:clamp(14px,2vw,18px);font-weight:700;letter-spacing:-0.02em;color:#ffb59c;text-shadow:0 0 15px rgba(255,181,156,0.3);}
+.header .sub{font-size:11px;color:#aaabb0;letter-spacing:0.1em;text-transform:uppercase;}
+.canvas-wrap{flex:1;min-height:0;position:relative;}
+canvas{width:100%;height:100%;display:block;}
+.controls{display:flex;justify-content:center;align-items:center;gap:12px;padding:8px 16px;}
+.ctrl-btn{font-family:'Space Grotesk',sans-serif;font-size:12px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;padding:6px 18px;border:none;cursor:pointer;color:#1a0e08;background:linear-gradient(135deg,#ffb59c,#ff8a6a);transition:transform 0.1s,box-shadow 0.2s;box-shadow:0 0 12px rgba(255,181,156,0.3);}
+.ctrl-btn:hover{transform:scale(1.04);}
+.ctrl-btn:active{transform:scale(0.96);}
+.ctrl-btn.secondary{background:rgba(23,26,31,0.92);color:#aaabb0;box-shadow:none;backdrop-filter:blur(12px);}
+.ctrl-btn.secondary:hover{color:#ffb59c;}
+.hud{height:48px;display:flex;align-items:center;justify-content:space-around;background:rgba(0,0,0,0.55);backdrop-filter:blur(12px);padding:0 16px;}
+.hud-item{text-align:center;}
+.hud-label{font-family:'Space Grotesk',sans-serif;font-size:9px;letter-spacing:0.15em;text-transform:uppercase;color:#aaabb0;}
+.hud-val{font-family:'Space Grotesk',sans-serif;font-size:14px;font-weight:700;color:#ffb59c;}
+.lang-btn{position:fixed;top:8px;left:8px;z-index:100;font-family:'Space Grotesk',sans-serif;font-size:11px;font-weight:700;padding:4px 10px;cursor:pointer;border:none;background:rgba(20,20,35,0.85);backdrop-filter:blur(12px);color:#ffb59c;letter-spacing:1px;}
+.guide-panel{position:fixed;top:8px;right:8px;width:240px;max-height:40vh;overflow-y:auto;background:rgba(20,20,35,0.85);backdrop-filter:blur(12px);padding:12px;z-index:100;font-family:'Noto Sans SC',sans-serif;font-size:12px;color:rgba(255,255,255,0.85);line-height:1.6;}
+.guide-panel h3{font-family:'Space Grotesk',sans-serif;font-size:13px;margin-bottom:6px;color:#ffb59c;cursor:pointer;display:flex;justify-content:space-between;align-items:center;}
+.guide-panel ul{padding-left:14px;}
+.guide-panel .collapsed{display:none;}
+</style>
+</head>
+<body>
+<button class="lang-btn" id="langBtn">CN</button>
+<div class="guide-panel" id="guide">
+<h3 id="guideTitle"></h3>
+<div class="guide-content" id="guideContent"></div>
+</div>
+<div class="wrapper">
+<div class="header">
+<div><h1 id="title"></h1><div class="sub" id="subtitle"></div></div>
+<div id="frameIndicator" style="font-family:'Space Grotesk';font-size:11px;color:#aaabb0;letter-spacing:0.1em;"></div>
+</div>
+<div class="canvas-wrap"><canvas id="c"></canvas></div>
+<div class="controls">
+<button class="ctrl-btn secondary" id="btnPrev"></button>
+<button class="ctrl-btn" id="btnPlay"></button>
+<button class="ctrl-btn secondary" id="btnNext"></button>
+</div>
+<div class="hud">
+<div class="hud-item"><div class="hud-label" id="hudL1"></div><div class="hud-val" id="hudV1"></div></div>
+<div class="hud-item"><div class="hud-label" id="hudL2"></div><div class="hud-val" id="hudV2"></div></div>
+<div class="hud-item"><div class="hud-label" id="hudL3"></div><div class="hud-val" id="hudV3"></div></div>
+<div class="hud-item"><div class="hud-label" id="hudL4"></div><div class="hud-val" id="hudV4"></div></div>
+</div>
+</div>
+<script src="animation_runtime.js"></script>
+<script>
+var CONFIG = {
+  style: 'ares_mission',
+  totalFrames: 5,
+  i18n: {
+    title:     {en:'TRAVERSABILITY ANALYSIS', cn:'\u901a\u884c\u6027\u5206\u6790\u7cfb\u7edf'},
+    subtitle:  {en:'SAFE PATH IDENTIFICATION', cn:'\u5b89\u5168\u8def\u5f84\u8bc6\u522b'},
+    f0title:   {en:'WHERE CAN YOU WALK?', cn:'\u54ea\u91cc\u80fd\u8d70\uff1f'},
+    f0desc:    {en:'Learn to mark safe and\ndangerous areas in a scene', cn:'\u5b66\u4f1a\u5728\u573a\u666f\u4e2d\u6807\u8bb0\n\u5b89\u5168\u533a\u57df\u548c\u5371\u9669\u533a\u57df'},
+    scene:     {en:'SCENE', cn:'\u573a\u666f'},
+    park:      {en:'PARK', cn:'\u516c\u56ed'},
+    mountain:  {en:'MOUNTAIN TRAIL', cn:'\u5c71\u8def'},
+    city:      {en:'CITY STREET', cn:'\u57ce\u5e02\u8857\u9053'},
+    riverbank: {en:'RIVERBANK', cn:'\u6cb3\u8fb9'},
+    safe:      {en:'SAFE', cn:'\u5b89\u5168'},
+    caution:   {en:'CAUTION', cn:'\u8c28\u614e'},
+    nogo:      {en:'NO-GO', cn:'\u7981\u884c'},
+    legend:    {en:'LEGEND', cn:'\u56fe\u4f8b'},
+    step1:     {en:'Step 1: Observe the scene', cn:'\u7b2c\u4e00\u6b65\uff1a\u89c2\u5bdf\u573a\u666f'},
+    step2:     {en:'Step 2: Identify surface types', cn:'\u7b2c\u4e8c\u6b65\uff1a\u8bc6\u522b\u5730\u9762\u7c7b\u578b'},
+    step3:     {en:'Step 3: Mark traversability zones', cn:'\u7b2c\u4e09\u6b65\uff1a\u6807\u8bb0\u901a\u884c\u6027\u533a\u57df'},
+    hudL1:     {en:'SCENE', cn:'\u573a\u666f'},
+    hudL2:     {en:'ZONES', cn:'\u533a\u57df\u6570'},
+    hudL3:     {en:'SAFE %', cn:'\u5b89\u5168\u6bd4'},
+    hudL4:     {en:'STATUS', cn:'\u72b6\u6001'},
+    analyzing: {en:'ANALYZING', cn:'\u5206\u6790\u4e2d'},
+    done:      {en:'COMPLETE', cn:'\u5b8c\u6210'},
+    guideTitle:{en:'GUIDE', cn:'\u64cd\u4f5c\u6307\u5357'},
+    g1:        {en:'Watch how each scene gets analyzed', cn:'\u89c2\u5bdf\u6bcf\u4e2a\u573a\u666f\u5982\u4f55\u88ab\u5206\u6790'},
+    g2:        {en:'Green=safe, Yellow=caution, Red=no-go', cn:'\u7eff\u8272=\u5b89\u5168 \u9ec4\u8272=\u8c28\u614e \u7ea2\u8272=\u7981\u884c'},
+    g3:        {en:'Think: why is each area marked that way?', cn:'\u601d\u8003\uff1a\u4e3a\u4ec0\u4e48\u6bcf\u4e2a\u533a\u57df\u8fd9\u6837\u6807\u8bb0\uff1f'},
+    btnPlay:   {en:'PLAY', cn:'\u64ad\u653e'},
+    btnPause:  {en:'PAUSE', cn:'\u6682\u505c'},
+    btnPrev:   {en:'PREV', cn:'\u4e0a\u4e00\u5e27'},
+    btnNext:   {en:'NEXT', cn:'\u4e0b\u4e00\u5e27'},
+    parkDesc:  {en:'Paved path: SAFE\nGrass: SAFE\nPond: NO-GO\nMuddy slope: CAUTION', cn:'\u94fa\u88c5\u5c0f\u8def\uff1a\u5b89\u5168\n\u8349\u5730\uff1a\u5b89\u5168\n\u6c60\u5858\uff1a\u7981\u884c\n\u6ce5\u6ed1\u5761\uff1a\u8c28\u614e'},
+    mtDesc:    {en:'Rock steps: CAUTION\nTrail: SAFE\nCliff edge: NO-GO\nLoose scree: NO-GO', cn:'\u77f3\u9636\uff1a\u8c28\u614e\n\u5c71\u8def\uff1a\u5b89\u5168\n\u60ac\u5d16\u8fb9\uff1a\u7981\u884c\n\u677e\u6563\u788e\u77f3\uff1a\u7981\u884c'},
+    cityDesc:  {en:'Sidewalk: SAFE\nCrosswalk: CAUTION\nRoad: NO-GO\nConstruction: NO-GO', cn:'\u4eba\u884c\u9053\uff1a\u5b89\u5168\n\u659c\u9053\uff1a\u8c28\u614e\n\u8f66\u9053\uff1a\u7981\u884c\n\u65bd\u5de5\u533a\uff1a\u7981\u884c'},
+    riverDesc: {en:'Dry bank: SAFE\nWet rocks: CAUTION\nRiver: NO-GO\nSandy bank: CAUTION', cn:'\u5e72\u71e5\u6cb3\u5cb8\uff1a\u5b89\u5168\n\u6e7f\u6ed1\u77f3\u5934\uff1a\u8c28\u614e\n\u6cb3\u6d41\uff1a\u7981\u884c\n\u6c99\u8d28\u6cb3\u5cb8\uff1a\u8c28\u614e'},
+  },
+  hudLabels: ['hudL1','hudL2','hudL3','hudL4'],
+  hudValues: [
+    ['--',    '--', '--',  {en:'READY',cn:'\u5c31\u7eea'}],
+    ['park',  '4',  '50%', 'analyzing'],
+    ['mountain','4','25%', 'analyzing'],
+    ['city',  '4',  '25%', 'analyzing'],
+    ['riverbank','4','25%','done'],
+  ],
+  guideTitle: 'guideTitle',
+  guideItems: ['g1','g2','g3'],
+};
+
+// Scene definitions: each has zones with positions (relative 0-1)
+var SCENES = [
+  null, // frame 0 is intro
+  { // park
+    name: 'park',
+    bg: {top:'#3a5a3a', bottom:'#1a2a1a'},
+    zones: [
+      {x:0.05, y:0.6, w:0.3, h:0.15, level:'safe',    labelKey:'parkDesc'},
+      {x:0.35, y:0.3, w:0.3, h:0.4,  level:'safe',    labelKey:null},
+      {x:0.65, y:0.4, w:0.25,h:0.25, level:'nogo',    labelKey:null},
+      {x:0.1,  y:0.2, w:0.2, h:0.2,  level:'caution', labelKey:null},
+    ]
+  },
+  { // mountain
+    name: 'mountain',
+    bg: {top:'#4a4a5a', bottom:'#2a2a3a'},
+    zones: [
+      {x:0.1,  y:0.5, w:0.25, h:0.15, level:'caution', labelKey:'mtDesc'},
+      {x:0.3,  y:0.4, w:0.35, h:0.2,  level:'safe',    labelKey:null},
+      {x:0.7,  y:0.2, w:0.25, h:0.5,  level:'nogo',    labelKey:null},
+      {x:0.05, y:0.15,w:0.2,  h:0.25, level:'nogo',    labelKey:null},
+    ]
+  },
+  { // city
+    name: 'city',
+    bg: {top:'#3a3a4a', bottom:'#1a1a2a'},
+    zones: [
+      {x:0.05, y:0.6, w:0.35, h:0.15, level:'safe',    labelKey:'cityDesc'},
+      {x:0.4,  y:0.55,w:0.2,  h:0.2,  level:'caution', labelKey:null},
+      {x:0.15, y:0.3, w:0.5,  h:0.2,  level:'nogo',    labelKey:null},
+      {x:0.7,  y:0.3, w:0.25, h:0.4,  level:'nogo',    labelKey:null},
+    ]
+  },
+  { // riverbank
+    name: 'riverbank',
+    bg: {top:'#2a3a4a', bottom:'#1a2a3a'},
+    zones: [
+      {x:0.05, y:0.55,w:0.3,  h:0.2,  level:'safe',    labelKey:'riverDesc'},
+      {x:0.35, y:0.5, w:0.2,  h:0.15, level:'caution', labelKey:null},
+      {x:0.55, y:0.2, w:0.4,  h:0.5,  level:'nogo',    labelKey:null},
+      {x:0.1,  y:0.35,w:0.25, h:0.15, level:'caution', labelKey:null},
+    ]
+  },
+];
+
+var ZONE_COLORS = {
+  safe:    {fill:'rgba(74,222,128,0.25)',  stroke:'#4ade80', glow:'rgba(74,222,128,0.4)'},
+  caution: {fill:'rgba(251,191,36,0.25)',  stroke:'#fbbf24', glow:'rgba(251,191,36,0.4)'},
+  nogo:    {fill:'rgba(248,113,113,0.25)', stroke:'#f87171', glow:'rgba(248,113,113,0.4)'},
+};
+
+function getFrameElements(f, W, H) {
+  var t = AnimRuntime.t;
+  var P = AnimRuntime.PAL;
+  var cx = W / 2, cy = H / 2;
+
+  if (f === 0) {
+    return [
+      {id:'maintitle', type:'label', text:t('f0title'), x:cx, y:cy-50, color:P.primary, size:22, align:'center', bold:true},
+      {id:'maindesc', type:'label', text:t('f0desc'), x:cx, y:cy+10, color:P.muted, size:14, align:'center'},
+      {id:'steps', type:'custom', draw:function(alpha){
+        var ctx = AnimRuntime.ctx;
+        ctx.save();
+        ctx.globalAlpha = alpha;
+        ctx.font = "13px 'Noto Sans SC', sans-serif";
+        ctx.textAlign = 'center';
+        var steps = ['step1','step2','step3'];
+        var colors = ['#4ade80','#fbbf24','#f87171'];
+        for(var i=0;i<3;i++){
+          ctx.fillStyle = colors[i];
+          ctx.fillText(t(steps[i]), cx, cy+70+i*24);
+        }
+        ctx.restore();
+      }},
+    ];
+  }
+
+  var scene = SCENES[f];
+  var sceneW = W * 0.55;
+  var sceneH = H * 0.7;
+  var sceneX = W * 0.05;
+  var sceneY = (H - sceneH) / 2;
+
+  var elements = [
+    {id:'sceneName', type:'label', text:t(scene.name), x:sceneX + sceneW/2, y:sceneY - 15, color:P.primary, size:16, align:'center', bold:true},
+    // scene background
+    {id:'sceneBg', type:'custom', draw:function(alpha){
+      var ctx = AnimRuntime.ctx;
+      ctx.save();
+      ctx.globalAlpha = alpha;
+      var grad = ctx.createLinearGradient(sceneX, sceneY, sceneX, sceneY+sceneH);
+      grad.addColorStop(0, scene.bg.top);
+      grad.addColorStop(1, scene.bg.bottom);
+      ctx.fillStyle = grad;
+      ctx.fillRect(sceneX, sceneY, sceneW, sceneH);
+      // grid overlay
+      ctx.strokeStyle = 'rgba(255,255,255,0.05)';
+      ctx.lineWidth = 1;
+      for(var gx=0;gx<sceneW;gx+=30){
+        ctx.beginPath();ctx.moveTo(sceneX+gx,sceneY);ctx.lineTo(sceneX+gx,sceneY+sceneH);ctx.stroke();
+      }
+      for(var gy=0;gy<sceneH;gy+=30){
+        ctx.beginPath();ctx.moveTo(sceneX,sceneY+gy);ctx.lineTo(sceneX+sceneW,sceneY+gy);ctx.stroke();
+      }
+      ctx.restore();
+    }},
+    // zones overlay
+    {id:'zones', type:'custom', draw:function(alpha){
+      var ctx = AnimRuntime.ctx;
+      ctx.save();
+      ctx.globalAlpha = alpha;
+      scene.zones.forEach(function(z){
+        var zx = sceneX + z.x * sceneW;
+        var zy = sceneY + z.y * sceneH;
+        var zw = z.w * sceneW;
+        var zh = z.h * sceneH;
+        var c = ZONE_COLORS[z.level];
+        ctx.fillStyle = c.fill;
+        ctx.fillRect(zx, zy, zw, zh);
+        ctx.strokeStyle = c.stroke;
+        ctx.lineWidth = 2;
+        ctx.shadowColor = c.glow;
+        ctx.shadowBlur = 10;
+        ctx.strokeRect(zx, zy, zw, zh);
+        ctx.shadowBlur = 0;
+        // level label
+        ctx.font = "bold 10px 'Space Grotesk', sans-serif";
+        ctx.fillStyle = c.stroke;
+        ctx.textAlign = 'center';
+        ctx.fillText(t(z.level).toUpperCase(), zx+zw/2, zy+zh/2+4);
+      });
+      ctx.restore();
+    }},
+    // legend
+    {id:'legend', type:'custom', draw:function(alpha){
+      var ctx = AnimRuntime.ctx;
+      ctx.save();
+      ctx.globalAlpha = alpha;
+      var lx = sceneX + sceneW + 20;
+      var ly = sceneY;
+      ctx.font = "bold 12px 'Space Grotesk', sans-serif";
+      ctx.fillStyle = P.muted;
+      ctx.textAlign = 'left';
+      ctx.fillText(t('legend'), lx, ly);
+      var levels = ['safe','caution','nogo'];
+      levels.forEach(function(lev, i){
+        var yy = ly + 20 + i * 28;
+        var c = ZONE_COLORS[lev];
+        ctx.fillStyle = c.fill;
+        ctx.fillRect(lx, yy, 16, 16);
+        ctx.strokeStyle = c.stroke;
+        ctx.lineWidth = 1;
+        ctx.strokeRect(lx, yy, 16, 16);
+        ctx.font = "12px 'Noto Sans SC', sans-serif";
+        ctx.fillStyle = c.stroke;
+        ctx.textAlign = 'left';
+        ctx.fillText(t(lev), lx+22, yy+12);
+      });
+      ctx.restore();
+    }},
+    // description text
+    {id:'sceneDesc', type:'custom', draw:function(alpha){
+      var ctx = AnimRuntime.ctx;
+      ctx.save();
+      ctx.globalAlpha = alpha;
+      var lx = sceneX + sceneW + 20;
+      var ly = sceneY + 120;
+      var descKey = scene.zones[0].labelKey;
+      if(descKey){
+        var lines = t(descKey).split('\n');
+        ctx.font = "12px 'Noto Sans SC', sans-serif";
+        ctx.textAlign = 'left';
+        lines.forEach(function(line, i){
+          var col = '#aaabb0';
+          if(line.indexOf(t('safe'))>=0) col='#4ade80';
+          else if(line.indexOf(t('caution'))>=0) col='#fbbf24';
+          else if(line.indexOf(t('nogo'))>=0) col='#f87171';
+          ctx.fillStyle = col;
+          ctx.fillText(line, lx, ly + i * 20);
+        });
+      }
+      ctx.restore();
+    }},
+  ];
+
+  return elements;
+}
+
+AnimRuntime.boot();
+</script>
+</body>
+</html>

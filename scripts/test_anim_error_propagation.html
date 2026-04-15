@@ -1,0 +1,714 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;700&family=Inter:wght@400;500&family=Noto+Sans+SC:wght@400;700&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0;border-radius:0}
+html,body{width:100%;height:100vh;overflow:hidden;
+  background:#131313;
+  font-family:'Space Grotesk','Inter','Noto Sans SC',sans-serif;
+  color:#e5e2e1;
+}
+.lang-btn{
+  position:fixed;top:8px;left:8px;z-index:100;
+  font-family:'Space Grotesk',sans-serif;font-size:11px;font-weight:700;
+  padding:4px 10px;cursor:pointer;
+  border:1px solid rgba(255,255,255,0.08);
+  background:rgba(20,20,35,0.85);backdrop-filter:blur(12px);
+  color:#ffb59c;letter-spacing:1px;
+}
+.guide-panel{
+  position:fixed;top:8px;right:8px;width:260px;max-height:40vh;
+  overflow-y:auto;z-index:100;
+  background:rgba(20,20,35,0.85);backdrop-filter:blur(12px);
+  border:1px solid rgba(255,255,255,0.08);padding:12px;
+  font-family:'Noto Sans SC',sans-serif;font-size:13px;
+  color:rgba(255,255,255,0.85);
+}
+.guide-panel h3{
+  font-family:'Space Grotesk',sans-serif;font-size:14px;
+  margin-bottom:8px;display:flex;align-items:center;
+  justify-content:space-between;cursor:pointer;
+  color:#ffb59c;
+}
+.guide-panel .toggle{font-size:12px;opacity:0.6;}
+.guide-panel ul{padding-left:16px;line-height:1.6;}
+.guide-panel .guide-content.collapsed{display:none;}
+.wrapper{display:flex;flex-direction:column;height:100vh;}
+.header{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:6px 16px;
+  background:rgba(28,27,27,0.95);
+  border-bottom:1px solid rgba(138,136,134,0.15);
+}
+.header h2{
+  font-family:'Space Grotesk',sans-serif;font-size:14px;font-weight:700;
+  color:#ffb59c;letter-spacing:1px;
+}
+.header .sub{font-size:11px;color:#8a8886;margin-left:8px;font-weight:400;}
+.canvas-wrap{flex:1;min-height:0;position:relative;}
+.canvas-wrap canvas{display:block;width:100%;height:100%;}
+.controls{
+  display:flex;justify-content:center;align-items:center;gap:10px;
+  padding:6px 0;
+  background:rgba(28,27,27,0.92);
+  border-top:1px solid rgba(138,136,134,0.15);
+}
+.ctrl-btn{
+  background:linear-gradient(135deg,rgba(53,53,52,0.8),rgba(28,27,27,0.8));
+  border:1px solid rgba(138,136,134,0.15);
+  color:#e5e2e1;padding:5px 14px;font-size:12px;cursor:pointer;
+  font-family:'Space Grotesk',sans-serif;letter-spacing:0.5px;
+}
+.ctrl-btn:hover{border-color:rgba(255,181,156,0.4);}
+#frameDots{display:flex;gap:6px;align-items:center;}
+#frameDots .dot{
+  width:8px;height:8px;
+  background:rgba(138,136,134,0.3);cursor:pointer;
+}
+#frameDots .dot.active{background:#ffb59c;transform:scale(1.3);}
+.hud{
+  display:flex;justify-content:space-around;align-items:center;
+  padding:6px 12px;
+  background:rgba(28,27,27,0.95);
+  border-top:1px solid rgba(138,136,134,0.15);
+  font-size:11px;color:#8a8886;
+}
+.hud .item{display:flex;flex-direction:column;align-items:center;}
+.hud .label{font-size:9px;text-transform:uppercase;letter-spacing:0.5px;opacity:0.7;}
+.hud .value{font-size:13px;color:#e5e2e1;font-weight:500;margin-top:2px;}
+</style>
+</head>
+<body>
+<button class="lang-btn" id="langBtn">CN</button>
+<div class="guide-panel" id="guidePanel">
+  <h3 id="guideTitle"><span id="guideTitleText"></span><span class="toggle" id="guideToggle">[-]</span></h3>
+  <div class="guide-content" id="guideContent">
+    <p id="guideDesc" style="margin-bottom:8px;"></p>
+    <ul>
+      <li id="guideObs1"></li>
+      <li id="guideObs2"></li>
+      <li id="guideObs3"></li>
+    </ul>
+  </div>
+</div>
+<div class="wrapper">
+  <div class="header">
+    <h2 id="mainTitle"></h2>
+    <span class="sub">P-MARS-01-M25 &middot; core</span>
+  </div>
+  <div class="canvas-wrap"><canvas id="c"></canvas></div>
+  <div class="controls">
+    <button class="ctrl-btn" id="btnPrev"></button>
+    <button class="ctrl-btn" id="btnPlay"></button>
+    <button class="ctrl-btn" id="btnNext"></button>
+    <div id="frameDots"></div>
+  </div>
+  <div class="hud">
+    <div class="item"><div class="label">FRAME</div><div class="value" id="hudFrame">1 / 5</div></div>
+    <div class="item"><div class="label" id="hudStageLabel">STAGE</div><div class="value" id="hudStage"></div></div>
+    <div class="item"><div class="label" id="hudErrorLabel">ERROR TYPE</div><div class="value" id="hudError"></div></div>
+    <div class="item"><div class="label" id="hudImpactLabel">IMPACT</div><div class="value" id="hudImpact"></div></div>
+  </div>
+</div>
+<script>
+(function(){
+var LANG = 'cn';
+var I18N = {
+  title:         {en:'ERROR PROPAGATION CHAIN',  cn:'\u8bef\u5dee\u4f20\u64ad\u94fe'},
+  btnPrev:       {en:'PREV',   cn:'\u4e0a\u4e00\u5e27'},
+  btnPlay:       {en:'PLAY',   cn:'\u64ad\u653e'},
+  btnPause:      {en:'PAUSE',  cn:'\u6682\u505c'},
+  btnNext:       {en:'NEXT',   cn:'\u4e0b\u4e00\u5e27'},
+  guideTitle:    {en:'GUIDE',  cn:'\u64cd\u4f5c\u6307\u5357'},
+  guideDesc:     {en:'Shows how a small perception error (FN/FP) amplifies through risk map to path deviation.',
+                  cn:'\u5c55\u793a\u611f\u77e5\u5c42\u7684\u5c0f\u8bef\u5dee\uff08\u6f0f\u68c0/\u8bef\u68c0\uff09\u5982\u4f55\u901a\u8fc7\u98ce\u9669\u5730\u56fe\u653e\u5927\u4e3a\u8def\u5f84\u504f\u79fb\u3002'},
+  guideObs1:     {en:'Observe: correct vs. erroneous terrain labels',
+                  cn:'\u89c2\u5bdf\uff1a\u6b63\u786e vs. \u9519\u8bef\u7684\u5730\u8c8c\u6807\u7b7e'},
+  guideObs2:     {en:'Observe: how risk scores change at error zone',
+                  cn:'\u89c2\u5bdf\uff1a\u9519\u8bef\u533a\u57df\u7684\u98ce\u9669\u5206\u6570\u5982\u4f55\u6539\u53d8'},
+  guideObs3:     {en:'Observe: path shift direction and deviation distance',
+                  cn:'\u89c2\u5bdf\uff1a\u8def\u5f84\u504f\u79fb\u65b9\u5411\u548c\u504f\u79fb\u8ddd\u79bb'},
+  f0title:       {en:'CORRECT PERCEPTION',           cn:'\u6b63\u786e\u611f\u77e5\u7ed3\u679c'},
+  f0desc:        {en:'Terrain segments all labeled accurately; risk map reflects true conditions.',
+                  cn:'\u5730\u8c8c\u5206\u5272\u5168\u90e8\u6b63\u786e\u6807\u6ce8\uff0c\u98ce\u9669\u5730\u56fe\u53cd\u6620\u771f\u5b9e\u72b6\u51b5\u3002'},
+  f1title:       {en:'FN INJECTION: ROCK MISSED',    cn:'\u6f0f\u68c0\u6ce8\u5165\uff1a\u5ca9\u77f3\u672a\u68c0\u51fa'},
+  f1desc:        {en:'A false negative: dangerous rock labeled as safe soil. Risk score drops at that zone.',
+                  cn:'\u4e00\u4e2a\u6f0f\u68c0\uff1a\u5371\u9669\u5ca9\u77f3\u88ab\u6807\u8bb0\u4e3a\u5b89\u5168\u571f\u58e4\uff0c\u8be5\u533a\u57df\u98ce\u9669\u5206\u4e0b\u964d\u3002'},
+  f2title:       {en:'RISK MAP DISTORTION',          cn:'\u98ce\u9669\u5730\u56fe\u5931\u771f'},
+  f2desc:        {en:'The false-safe zone creates a "corridor" that the planner considers passable.',
+                  cn:'\u5047\u5b89\u5168\u533a\u57df\u5f62\u6210\u4e00\u6761\u201c\u8d70\u5eca\u201d\uff0c\u89c4\u5212\u5668\u8ba4\u4e3a\u53ef\u4ee5\u901a\u884c\u3002'},
+  f3title:       {en:'PATH DEVIATION',               cn:'\u8def\u5f84\u504f\u79fb'},
+  f3desc:        {en:'The planner routes through the false-safe corridor, deviating from the true safe path.',
+                  cn:'\u89c4\u5212\u5668\u9009\u62e9\u901a\u8fc7\u5047\u5b89\u5168\u8d70\u5eca\uff0c\u504f\u79bb\u771f\u5b9e\u5b89\u5168\u8def\u5f84\u3002'},
+  f4title:       {en:'COLLISION RISK',               cn:'\u78b0\u649e\u98ce\u9669'},
+  f4desc:        {en:'Rover enters the actual danger zone. A tiny FN led to a safety-critical route change.',
+                  cn:'\u706b\u661f\u8f66\u8fdb\u5165\u5b9e\u9645\u5371\u9669\u533a\u57df\u3002\u4e00\u4e2a\u5fae\u5c0f\u7684\u6f0f\u68c0\u5bfc\u81f4\u4e86\u5b89\u5168\u5173\u952e\u8def\u7ebf\u6539\u53d8\u3002'},
+  hudStage:      {en:'STAGE',      cn:'\u9636\u6bb5'},
+  hudError:      {en:'ERROR TYPE', cn:'\u8bef\u5dee\u7c7b\u578b'},
+  hudImpact:     {en:'IMPACT',     cn:'\u5f71\u54cd'},
+  stagePerception:  {en:'Perception', cn:'\u611f\u77e5\u5c42'},
+  stageRiskMap:     {en:'Risk Map',   cn:'\u98ce\u9669\u5730\u56fe'},
+  stagePlanning:    {en:'Planning',   cn:'\u8def\u5f84\u89c4\u5212'},
+  stageExecution:   {en:'Execution',  cn:'\u6267\u884c\u5c42'},
+  errNone:       {en:'None',         cn:'\u65e0'},
+  errFN:         {en:'FN (Miss)',    cn:'FN (\u6f0f\u68c0)'},
+  impNone:       {en:'None',         cn:'\u65e0'},
+  impLow:        {en:'Low risk underest.', cn:'\u98ce\u9669\u4f4e\u4f30'},
+  impMed:        {en:'False corridor',     cn:'\u5047\u5b89\u5168\u8d70\u5eca'},
+  impHigh:       {en:'Path shift 47m',     cn:'\u8def\u5f84\u504f\u79fb 47m'},
+  impCritical:   {en:'Collision zone',     cn:'\u78b0\u649e\u533a\u57df'},
+  labelSafe:     {en:'SAFE',       cn:'\u5b89\u5168'},
+  labelDanger:   {en:'DANGER',     cn:'\u5371\u9669'},
+  labelRock:     {en:'ROCK',       cn:'\u5ca9\u77f3'},
+  labelSoil:     {en:'SOIL',       cn:'\u571f\u58e4'},
+  labelSand:     {en:'SAND',       cn:'\u6c99\u5730'},
+  labelFalseSafe:{en:'FALSE SAFE', cn:'\u5047\u5b89\u5168'},
+  labelPath:     {en:'PLANNED PATH',  cn:'\u89c4\u5212\u8def\u5f84'},
+  labelTruePath: {en:'TRUE SAFE PATH',cn:'\u771f\u5b89\u5168\u8def\u5f84'},
+  labelDevPath:  {en:'DEVIATED PATH', cn:'\u504f\u79fb\u8def\u5f84'},
+  labelRover:    {en:'ROVER',      cn:'\u706b\u661f\u8f66'},
+  labelAlert:    {en:'ALERT!',     cn:'\u8b66\u544a!'},
+  takeaway:      {en:'A single missed rock changes the entire route decision.',
+                  cn:'\u4e00\u5757\u6f0f\u68c0\u7684\u5ca9\u77f3\u5c31\u80fd\u6539\u53d8\u6574\u6761\u8def\u7ebf\u51b3\u7b56\u3002'},
+};
+function t(k){return (I18N[k]&&I18N[k][LANG])||(I18N[k]&&I18N[k]['en'])||k;}
+
+var canvas = document.getElementById('c');
+var ctx = canvas.getContext('2d');
+var W, H, DPR;
+var currentFrame = 0;
+var totalFrames = 5;
+var transitioning = false;
+var playing = false;
+var playTimer = null;
+
+/* --- helpers --- */
+function lerp(a,b,p){return a+(b-a)*p;}
+function easeInOut(x){return x<0.5?2*x*x:1-Math.pow(-2*x+2,2)/2;}
+function merge(base,over){var r={};for(var k in base)r[k]=base[k];for(var k2 in over)r[k2]=over[k2];return r;}
+
+/* --- frame HUD data --- */
+var hudData = [
+  {stage:'stagePerception', error:'errNone', impact:'impNone'},
+  {stage:'stagePerception', error:'errFN',   impact:'impLow'},
+  {stage:'stageRiskMap',    error:'errFN',   impact:'impMed'},
+  {stage:'stagePlanning',   error:'errFN',   impact:'impHigh'},
+  {stage:'stageExecution',  error:'errFN',   impact:'impCritical'},
+];
+
+function updateHUD(f){
+  document.getElementById('hudFrame').textContent = (f+1)+' / '+totalFrames;
+  var hd = hudData[f];
+  document.getElementById('hudStage').textContent = t(hd.stage);
+  document.getElementById('hudError').textContent = t(hd.error);
+  document.getElementById('hudImpact').textContent = t(hd.impact);
+  var dots = document.querySelectorAll('#frameDots .dot');
+  dots.forEach(function(d,i){d.className = i===f?'dot active':'dot';});
+}
+
+/* --- grid terrain data (10x8) --- */
+/* 0=soil(safe), 1=sand(medium), 2=rock(danger) */
+var GRID_COLS = 10, GRID_ROWS = 8;
+var trueGrid = [
+  [0,0,0,1,1,2,2,1,0,0],
+  [0,0,1,1,2,2,1,1,0,0],
+  [0,0,1,2,2,1,1,0,0,0],
+  [0,1,1,2,1,1,0,0,0,1],
+  [1,1,2,2,1,0,0,0,1,1],
+  [1,2,2,1,0,0,0,1,1,0],
+  [0,1,1,0,0,0,1,1,0,0],
+  [0,0,0,0,0,1,1,0,0,0],
+];
+/* FN error: row3 col3 rock->soil, row4 col2 rock->soil */
+var errorGrid = JSON.parse(JSON.stringify(trueGrid));
+errorGrid[3][3] = 0; errorGrid[4][2] = 0;
+
+var terrainColors = {
+  0: {base:'#8B7355', hi:'#A08B6F', lo:'#6B5840'},  /* soil */
+  1: {base:'#C2A645', hi:'#D4BA58', lo:'#A08B35'},  /* sand */
+  2: {base:'#8B3A3A', hi:'#A04848', lo:'#6B2828'},  /* rock/danger */
+};
+
+/* risk scores 0=safe(green) 4=danger(red) */
+function gridToRisk(grid){
+  var r=[];
+  for(var y=0;y<GRID_ROWS;y++){r[y]=[];for(var x=0;x<GRID_COLS;x++){
+    var v=grid[y][x]; r[y][x]= v===0?0:v===1?2:4;
+  }}return r;
+}
+var trueRisk = gridToRisk(trueGrid);
+var errorRisk = gridToRisk(errorGrid);
+
+/* path: list of [col,row] */
+var truePath = [[0,7],[1,7],[2,7],[3,7],[4,6],[5,5],[6,4],[7,3],[8,2],[9,1]];
+var errorPath = [[0,7],[1,7],[2,6],[3,5],[3,4],[3,3],[4,3],[5,2],[6,1],[7,0],[8,0],[9,0]];
+
+var riskPalette = ['#22c55e','#84cc16','#eab308','#f97316','#ef4444'];
+
+/* --- drawing primitives --- */
+function drawBg(){
+  if(!W||!H||!isFinite(W)||!isFinite(H)) return;
+  var g = ctx.createLinearGradient(0,0,0,H);
+  g.addColorStop(0,'#131313');g.addColorStop(1,'#1a0f0f');
+  ctx.fillStyle = g; ctx.fillRect(0,0,W,H);
+  /* subtle grid */
+  ctx.strokeStyle = 'rgba(255,255,255,0.03)';ctx.lineWidth = 1;
+  for(var x=0;x<W;x+=40){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,H);ctx.stroke();}
+  for(var y=0;y<H;y+=40){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke();}
+}
+
+function drawTerrainGrid(ox,oy,gw,gh,grid,alpha,highlightCells){
+  if(!gw||!gh||!isFinite(gw)||!isFinite(gh)) return;
+  var cw = gw/GRID_COLS, ch = gh/GRID_ROWS;
+  ctx.save(); ctx.globalAlpha = alpha;
+  for(var r=0;r<GRID_ROWS;r++){
+    for(var c=0;c<GRID_COLS;c++){
+      var v = grid[r][c];
+      var tc = terrainColors[v];
+      var x=ox+c*cw, y=oy+r*ch;
+      var g = ctx.createLinearGradient(x,y,x,y+ch);
+      g.addColorStop(0,tc.hi);g.addColorStop(1,tc.lo);
+      ctx.fillStyle = g; ctx.fillRect(x,y,cw-1,ch-1);
+      /* highlight error cells */
+      if(highlightCells){
+        for(var h=0;h<highlightCells.length;h++){
+          if(highlightCells[h][0]===c && highlightCells[h][1]===r){
+            ctx.strokeStyle = '#ff5f1f'; ctx.lineWidth = 2;
+            ctx.strokeRect(x+1,y+1,cw-3,ch-3);
+            ctx.fillStyle = 'rgba(255,95,31,0.2)'; ctx.fillRect(x,y,cw-1,ch-1);
+          }
+        }
+      }
+    }
+  }
+  ctx.restore();
+}
+
+function drawRiskGrid(ox,oy,gw,gh,risk,alpha,highlightCells){
+  if(!gw||!gh||!isFinite(gw)||!isFinite(gh)) return;
+  var cw = gw/GRID_COLS, ch = gh/GRID_ROWS;
+  ctx.save(); ctx.globalAlpha = alpha;
+  for(var r=0;r<GRID_ROWS;r++){
+    for(var c=0;c<GRID_COLS;c++){
+      var v = risk[r][c];
+      var col = riskPalette[v];
+      var x=ox+c*cw, y=oy+r*ch;
+      ctx.fillStyle = col; ctx.globalAlpha = alpha * 0.7;
+      ctx.fillRect(x,y,cw-1,ch-1);
+      ctx.globalAlpha = alpha;
+      ctx.fillStyle = 'rgba(0,0,0,0.15)';
+      ctx.fillRect(x,y+ch*0.7,cw-1,ch*0.3);
+      if(highlightCells){
+        for(var h=0;h<highlightCells.length;h++){
+          if(highlightCells[h][0]===c && highlightCells[h][1]===r){
+            ctx.strokeStyle = '#ff5f1f'; ctx.lineWidth = 2;
+            ctx.strokeRect(x+1,y+1,cw-3,ch-3);
+          }
+        }
+      }
+    }
+  }
+  ctx.restore();
+}
+
+function drawPath(ox,oy,gw,gh,path,color,alpha,lineWidth,dashed){
+  var cw=gw/GRID_COLS, ch=gh/GRID_ROWS;
+  ctx.save(); ctx.globalAlpha=alpha; ctx.strokeStyle=color; ctx.lineWidth=lineWidth||3;
+  if(dashed) ctx.setLineDash([6,4]); else ctx.setLineDash([]);
+  ctx.beginPath();
+  for(var i=0;i<path.length;i++){
+    var px=ox+path[i][0]*cw+cw/2, py=oy+path[i][1]*ch+ch/2;
+    if(i===0) ctx.moveTo(px,py); else ctx.lineTo(px,py);
+  }
+  ctx.stroke();
+  /* glow */
+  ctx.shadowColor=color; ctx.shadowBlur=8;
+  ctx.stroke(); ctx.shadowBlur=0;
+  ctx.setLineDash([]);
+  ctx.restore();
+}
+
+function drawRover(cx,cy,size,alpha){
+  ctx.save(); ctx.globalAlpha=alpha;
+  /* body */
+  var g=ctx.createLinearGradient(cx-size,cy-size*0.5,cx+size,cy+size*0.5);
+  g.addColorStop(0,'#c6c6c6');g.addColorStop(0.5,'#e5e2e1');g.addColorStop(1,'#8a8886');
+  ctx.fillStyle=g;
+  ctx.fillRect(cx-size*0.6,cy-size*0.3,size*1.2,size*0.6);
+  /* antenna */
+  ctx.strokeStyle='#ffb59c';ctx.lineWidth=2;
+  ctx.beginPath();ctx.moveTo(cx,cy-size*0.3);ctx.lineTo(cx+size*0.2,cy-size*0.7);ctx.stroke();
+  ctx.fillStyle='#ffb59c';ctx.beginPath();ctx.arc(cx+size*0.2,cy-size*0.7,3,0,Math.PI*2);ctx.fill();
+  /* wheels */
+  ctx.fillStyle='#353534';
+  ctx.fillRect(cx-size*0.7,cy+size*0.15,size*0.25,size*0.2);
+  ctx.fillRect(cx+size*0.45,cy+size*0.15,size*0.25,size*0.2);
+  ctx.restore();
+}
+
+function drawArrowBetween(x1,y1,x2,y2,color,alpha){
+  ctx.save();ctx.globalAlpha=alpha;ctx.strokeStyle=color;ctx.fillStyle=color;ctx.lineWidth=2;
+  ctx.beginPath();ctx.moveTo(x1,y1);ctx.lineTo(x2,y2);ctx.stroke();
+  var angle=Math.atan2(y2-y1,x2-x1);
+  ctx.beginPath();ctx.moveTo(x2,y2);
+  ctx.lineTo(x2-10*Math.cos(angle-0.3),y2-10*Math.sin(angle-0.3));
+  ctx.lineTo(x2-10*Math.cos(angle+0.3),y2-10*Math.sin(angle+0.3));
+  ctx.closePath();ctx.fill();
+  ctx.restore();
+}
+
+function drawLabelPrimitive(text,x,y,color,size,align){
+  ctx.save();ctx.fillStyle=color||'#e5e2e1';ctx.font=(size||14)+'px "Space Grotesk",sans-serif';
+  ctx.textAlign=align||'center';ctx.textBaseline='middle';ctx.fillText(text,x,y);ctx.restore();
+}
+function drawTextPrimitive(text,x,y,color,size,align,maxW){
+  ctx.save();ctx.fillStyle=color||'rgba(255,255,255,0.7)';
+  ctx.font=(size||12)+'px "Noto Sans SC","Inter",sans-serif';
+  ctx.textAlign=align||'center';ctx.textBaseline='middle';
+  if(maxW) ctx.fillText(text,x,y,maxW); else ctx.fillText(text,x,y);
+  ctx.restore();
+}
+
+function drawAlertPulse(cx,cy,radius,alpha){
+  ctx.save();ctx.globalAlpha=alpha;
+  var t2=Date.now()/500;
+  var pulse = 0.5+0.5*Math.sin(t2);
+  ctx.strokeStyle='rgba(255,95,31,'+(0.4+0.4*pulse)+')';ctx.lineWidth=2;
+  ctx.beginPath();ctx.arc(cx,cy,radius*(1+0.2*pulse),0,Math.PI*2);ctx.stroke();
+  ctx.strokeStyle='rgba(255,95,31,'+(0.2+0.2*pulse)+')';ctx.lineWidth=1;
+  ctx.beginPath();ctx.arc(cx,cy,radius*(1.3+0.3*pulse),0,Math.PI*2);ctx.stroke();
+  ctx.restore();
+}
+
+/* --- frame elements (declarative) --- */
+function getFrameElements(f){
+  var pad=20;
+  var gridW=Math.min(W*0.42,320), gridH=Math.min(H*0.7,280);
+  var leftX=pad+10, topY=pad+10;
+  var rightX=W*0.52, rightTopY=topY;
+  var cw=gridW/GRID_COLS, ch=gridH/GRID_ROWS;
+  var errorCells=[[3,3],[2,4]];
+
+  switch(f){
+    case 0: /* correct perception */
+      return [
+        {id:'title',type:'label',text:t('f0title'),x:W/2,y:topY,color:'#ffb59c',size:16,align:'center',alpha:1},
+        {id:'desc',type:'text',text:t('f0desc'),x:W/2,y:topY+22,color:'rgba(255,255,255,0.6)',size:12,align:'center',alpha:1},
+        {id:'terrainGrid',type:'custom',x:leftX,y:topY+50,w:gridW,h:gridH,alpha:1,
+          draw:function(a){drawTerrainGrid(leftX,topY+50,gridW,gridH,trueGrid,a,null);}},
+        {id:'terrainLabel',type:'label',text:t('stagePerception'),x:leftX+gridW/2,y:topY+50+gridH+16,color:'#c6c6c6',size:11,align:'center',alpha:1},
+        {id:'riskGrid',type:'custom',x:rightX,y:topY+50,w:gridW,h:gridH,alpha:1,
+          draw:function(a){drawRiskGrid(rightX,topY+50,gridW,gridH,trueRisk,a,null);}},
+        {id:'riskLabel',type:'label',text:t('stageRiskMap'),x:rightX+gridW/2,y:topY+50+gridH+16,color:'#c6c6c6',size:11,align:'center',alpha:1},
+        {id:'arrow1',type:'custom',alpha:1,draw:function(a){
+          drawArrowBetween(leftX+gridW+8,topY+50+gridH/2,rightX-8,topY+50+gridH/2,'#ffb59c',a);
+        }},
+        {id:'truePath',type:'custom',alpha:1,draw:function(a){
+          drawPath(rightX,topY+50,gridW,gridH,truePath,'#22c55e',a,3,false);
+        }},
+        {id:'rover',type:'custom',alpha:1,draw:function(a){
+          var px=rightX+truePath[0][0]*cw+cw/2, py=topY+50+truePath[0][1]*ch+ch/2;
+          drawRover(px,py,18,a);
+        }},
+      ];
+    case 1: /* FN injection */
+      return [
+        {id:'title',type:'label',text:t('f1title'),x:W/2,y:topY,color:'#ff5f1f',size:16,align:'center',alpha:1},
+        {id:'desc',type:'text',text:t('f1desc'),x:W/2,y:topY+22,color:'rgba(255,255,255,0.6)',size:12,align:'center',alpha:1},
+        {id:'terrainGrid',type:'custom',x:leftX,y:topY+50,w:gridW,h:gridH,alpha:1,
+          draw:function(a){drawTerrainGrid(leftX,topY+50,gridW,gridH,errorGrid,a,errorCells);}},
+        {id:'terrainLabel',type:'label',text:t('stagePerception')+' [FN]',x:leftX+gridW/2,y:topY+50+gridH+16,color:'#ff5f1f',size:11,align:'center',alpha:1},
+        {id:'riskGrid',type:'custom',x:rightX,y:topY+50,w:gridW,h:gridH,alpha:1,
+          draw:function(a){drawRiskGrid(rightX,topY+50,gridW,gridH,trueRisk,a,null);}},
+        {id:'riskLabel',type:'label',text:t('stageRiskMap'),x:rightX+gridW/2,y:topY+50+gridH+16,color:'#c6c6c6',size:11,align:'center',alpha:1},
+        {id:'arrow1',type:'custom',alpha:1,draw:function(a){
+          drawArrowBetween(leftX+gridW+8,topY+50+gridH/2,rightX-8,topY+50+gridH/2,'#ff5f1f',a);
+        }},
+        {id:'fnMarker1',type:'custom',alpha:1,draw:function(a){
+          var x=leftX+3*cw+cw/2, y2=topY+50+3*ch+ch/2;
+          drawAlertPulse(x,y2,cw*0.6,a);
+          drawLabelPrimitive('FN',x,y2-cw*0.9,'#ff5f1f',10,'center');
+        }},
+        {id:'fnMarker2',type:'custom',alpha:1,draw:function(a){
+          var x=leftX+2*cw+cw/2, y2=topY+50+4*ch+ch/2;
+          drawAlertPulse(x,y2,cw*0.6,a);
+          drawLabelPrimitive('FN',x,y2-cw*0.9,'#ff5f1f',10,'center');
+        }},
+        {id:'truePath',type:'custom',alpha:0.3,draw:function(a){
+          drawPath(rightX,topY+50,gridW,gridH,truePath,'#22c55e',a,2,true);
+        }},
+      ];
+    case 2: /* risk map distortion */
+      return [
+        {id:'title',type:'label',text:t('f2title'),x:W/2,y:topY,color:'#ff5f1f',size:16,align:'center',alpha:1},
+        {id:'desc',type:'text',text:t('f2desc'),x:W/2,y:topY+22,color:'rgba(255,255,255,0.6)',size:12,align:'center',alpha:1},
+        {id:'terrainGrid',type:'custom',x:leftX,y:topY+50,w:gridW,h:gridH,alpha:0.5,
+          draw:function(a){drawTerrainGrid(leftX,topY+50,gridW,gridH,errorGrid,a,errorCells);}},
+        {id:'terrainLabel',type:'label',text:t('stagePerception')+' [FN]',x:leftX+gridW/2,y:topY+50+gridH+16,color:'#8a8886',size:11,align:'center',alpha:1},
+        {id:'riskGrid',type:'custom',x:rightX,y:topY+50,w:gridW,h:gridH,alpha:1,
+          draw:function(a){drawRiskGrid(rightX,topY+50,gridW,gridH,errorRisk,a,errorCells);}},
+        {id:'riskLabel',type:'label',text:t('stageRiskMap')+' [!]',x:rightX+gridW/2,y:topY+50+gridH+16,color:'#ff5f1f',size:11,align:'center',alpha:1},
+        {id:'arrow1',type:'custom',alpha:1,draw:function(a){
+          drawArrowBetween(leftX+gridW+8,topY+50+gridH/2,rightX-8,topY+50+gridH/2,'#ff5f1f',a);
+        }},
+        {id:'corridorLabel',type:'custom',alpha:1,draw:function(a){
+          var cx=rightX+3*cw+cw/2, cy=topY+50+3*ch+ch/2;
+          ctx.save();ctx.globalAlpha=a*0.6;ctx.strokeStyle='#facc15';ctx.lineWidth=2;ctx.setLineDash([4,3]);
+          ctx.strokeRect(rightX+2*cw,topY+50+3*ch,cw*2,ch*2);ctx.setLineDash([]);ctx.restore();
+          drawLabelPrimitive(t('labelFalseSafe'),cx,cy,'#facc15',10,'center');
+        }},
+        {id:'truePath',type:'custom',alpha:0.2,draw:function(a){
+          drawPath(rightX,topY+50,gridW,gridH,truePath,'#22c55e',a,2,true);
+        }},
+      ];
+    case 3: /* path deviation */
+      return [
+        {id:'title',type:'label',text:t('f3title'),x:W/2,y:topY,color:'#ff5f1f',size:16,align:'center',alpha:1},
+        {id:'desc',type:'text',text:t('f3desc'),x:W/2,y:topY+22,color:'rgba(255,255,255,0.6)',size:12,align:'center',alpha:1},
+        {id:'riskGrid',type:'custom',x:leftX,y:topY+50,w:gridW*2+W*0.02,h:gridH,alpha:1,
+          draw:function(a){
+            var fullW=gridW*2+W*0.02;
+            drawRiskGrid(leftX,topY+50,fullW,gridH,errorRisk,a*0.4,null);
+          }},
+        {id:'riskLabel',type:'label',text:t('stagePlanning'),x:W/2,y:topY+50+gridH+16,color:'#ffb59c',size:11,align:'center',alpha:1},
+        {id:'truePath',type:'custom',alpha:0.6,draw:function(a){
+          var fullW=gridW*2+W*0.02;
+          drawPath(leftX,topY+50,fullW,gridH,truePath,'#22c55e',a,2,true);
+        }},
+        {id:'truePathLabel',type:'label',text:t('labelTruePath'),x:leftX+gridW*1.8,y:topY+50+gridH-20,color:'#22c55e',size:10,align:'center',alpha:1},
+        {id:'errorPath',type:'custom',alpha:1,draw:function(a){
+          var fullW=gridW*2+W*0.02;
+          drawPath(leftX,topY+50,fullW,gridH,errorPath,'#ff5f1f',a,3,false);
+        }},
+        {id:'errorPathLabel',type:'label',text:t('labelDevPath'),x:leftX+gridW*0.6,y:topY+50+30,color:'#ff5f1f',size:10,align:'center',alpha:1},
+        {id:'devArrow',type:'custom',alpha:1,draw:function(a){
+          var fullW=gridW*2+W*0.02;
+          var fcw=fullW/GRID_COLS;
+          var px1=leftX+4*fcw+fcw/2, py1=topY+50+3*(gridH/GRID_ROWS)+gridH/GRID_ROWS/2;
+          var px2=leftX+5*fcw+fcw/2, py2=topY+50+2*(gridH/GRID_ROWS)+gridH/GRID_ROWS/2;
+          ctx.save();ctx.globalAlpha=a;ctx.strokeStyle='#facc15';ctx.lineWidth=1;ctx.setLineDash([3,3]);
+          ctx.beginPath();ctx.moveTo(px1,py1);ctx.lineTo(px2,py2);ctx.stroke();ctx.setLineDash([]);
+          drawLabelPrimitive('47m',( px1+px2)/2+12,(py1+py2)/2,'#facc15',10,'left');
+          ctx.restore();
+        }},
+        {id:'rover',type:'custom',alpha:1,draw:function(a){
+          var fullW=gridW*2+W*0.02;
+          var fcw=fullW/GRID_COLS, fch=gridH/GRID_ROWS;
+          var px=leftX+errorPath[3][0]*fcw+fcw/2, py=topY+50+errorPath[3][1]*fch+fch/2;
+          drawRover(px,py,18,a);
+        }},
+      ];
+    case 4: /* collision risk */
+      return [
+        {id:'title',type:'label',text:t('f4title'),x:W/2,y:topY,color:'#ef4444',size:16,align:'center',alpha:1},
+        {id:'desc',type:'text',text:t('f4desc'),x:W/2,y:topY+22,color:'rgba(255,255,255,0.6)',size:12,align:'center',alpha:1},
+        {id:'riskGrid',type:'custom',x:leftX,y:topY+50,w:gridW*2+W*0.02,h:gridH,alpha:1,
+          draw:function(a){
+            var fullW=gridW*2+W*0.02;
+            /* show TRUE risk to reveal actual danger */
+            drawRiskGrid(leftX,topY+50,fullW,gridH,trueRisk,a*0.5,null);
+          }},
+        {id:'riskLabel',type:'label',text:t('stageExecution'),x:W/2,y:topY+50+gridH+16,color:'#ef4444',size:11,align:'center',alpha:1},
+        {id:'truePath',type:'custom',alpha:0.4,draw:function(a){
+          var fullW=gridW*2+W*0.02;
+          drawPath(leftX,topY+50,fullW,gridH,truePath,'#22c55e',a,2,true);
+        }},
+        {id:'errorPath',type:'custom',alpha:1,draw:function(a){
+          var fullW=gridW*2+W*0.02;
+          drawPath(leftX,topY+50,fullW,gridH,errorPath,'#ef4444',a,3,false);
+        }},
+        {id:'rover',type:'custom',alpha:1,draw:function(a){
+          var fullW=gridW*2+W*0.02;
+          var fcw=fullW/GRID_COLS, fch=gridH/GRID_ROWS;
+          /* rover at danger zone */
+          var pi=5;
+          var px=leftX+errorPath[pi][0]*fcw+fcw/2, py=topY+50+errorPath[pi][1]*fch+fch/2;
+          drawRover(px,py,18,a);
+          drawAlertPulse(px,py,28,a);
+        }},
+        {id:'alertLabel',type:'label',text:t('labelAlert'),x:W/2,y:topY+50+gridH-30,color:'#ef4444',size:18,align:'center',alpha:1},
+        {id:'takeaway',type:'text',text:t('takeaway'),x:W/2,y:topY+50+gridH+36,color:'#ffb59c',size:12,align:'center',alpha:1},
+      ];
+  }
+  return [];
+}
+
+/* --- draw element dispatcher --- */
+function drawElement(el){
+  if(!el||el.alpha<=0.01)return;
+  ctx.save();ctx.globalAlpha=el.alpha;
+  switch(el.type){
+    case 'label': drawLabelPrimitive(el.text,el.x,el.y,el.color,el.size,el.align); break;
+    case 'text':  drawTextPrimitive(el.text,el.x,el.y,el.color,el.size,el.align); break;
+    case 'custom': el.draw(el.alpha); break;
+  }
+  ctx.restore();
+}
+
+function drawFrame(f){
+  if(!W||!H||W<1||H<1) return;
+  drawBg();
+  var elems=getFrameElements(f);
+  elems.forEach(function(el){drawElement(el);});
+}
+
+function transitionTo(newFrame){
+  if(newFrame<0) newFrame=0;
+  if(newFrame>=totalFrames) newFrame=totalFrames-1;
+  if(newFrame===currentFrame&&!transitioning){drawFrame(currentFrame);updateHUD(currentFrame);return;}
+  if(transitioning) return;
+
+  var oldElems=getFrameElements(currentFrame);
+  var newElems=getFrameElements(newFrame);
+  var oldMap={};oldElems.forEach(function(e){oldMap[e.id]=e;});
+  var newMap={};newElems.forEach(function(e){newMap[e.id]=e;});
+
+  currentFrame=newFrame;
+  updateHUD(newFrame);
+  transitioning=true;
+
+  var startTime=null;
+  var duration=500;
+
+  function step(timestamp){
+    if(!startTime) startTime=timestamp;
+    var raw=Math.min((timestamp-startTime)/duration,1);
+    var p=easeInOut(raw);
+
+    drawBg();
+
+    oldElems.forEach(function(oe){
+      if(!newMap[oe.id]) drawElement(merge(oe,{alpha:1-p}));
+    });
+
+    newElems.forEach(function(ne){
+      var oe=oldMap[ne.id];
+      if(oe){
+        if((ne.type==='label'||ne.type==='text')&&oe.text!==ne.text){
+          drawElement(merge(oe,{alpha:1-p}));
+          drawElement(merge(ne,{alpha:p}));
+        } else {
+          var merged=merge(ne,{
+            x:lerp(oe.x||0,ne.x||0,p),
+            y:lerp(oe.y||0,ne.y||0,p),
+            alpha:lerp(oe.alpha,ne.alpha,p)
+          });
+          drawElement(merged);
+        }
+      } else {
+        drawElement(merge(ne,{alpha:p}));
+      }
+    });
+
+    if(raw<1){requestAnimationFrame(step);}
+    else{transitioning=false;}
+  }
+  requestAnimationFrame(step);
+}
+
+/* --- resize --- */
+function resize(){
+  var wrap=document.querySelector('.canvas-wrap');
+  var rect=wrap.getBoundingClientRect();
+  if(rect.width<1||rect.height<1) return;
+  DPR=Math.min(window.devicePixelRatio||1,2);
+  W=rect.width; H=rect.height;
+  canvas.width=W*DPR; canvas.height=H*DPR;
+  canvas.style.width=W+'px'; canvas.style.height=H+'px';
+  ctx.setTransform(DPR,0,0,DPR,0,0);
+  drawFrame(currentFrame);
+}
+
+/* --- controls --- */
+function initControls(){
+  document.getElementById('btnPrev').addEventListener('click',function(){
+    if(playing) stopPlay();
+    transitionTo(currentFrame-1);
+  });
+  document.getElementById('btnNext').addEventListener('click',function(){
+    if(playing) stopPlay();
+    transitionTo(currentFrame+1);
+  });
+  document.getElementById('btnPlay').addEventListener('click',function(){
+    if(playing){stopPlay();} else {startPlay();}
+  });
+
+  /* build dots */
+  var dotsDiv=document.getElementById('frameDots');
+  for(var i=0;i<totalFrames;i++){
+    var d=document.createElement('div');d.className='dot';d.dataset.f=i;
+    d.addEventListener('click',function(){
+      if(playing) stopPlay();
+      transitionTo(parseInt(this.dataset.f));
+    });
+    dotsDiv.appendChild(d);
+  }
+}
+
+function startPlay(){
+  playing=true;
+  document.getElementById('btnPlay').textContent=t('btnPause');
+  if(currentFrame>=totalFrames-1) transitionTo(0);
+  playTick();
+}
+function stopPlay(){
+  playing=false;
+  document.getElementById('btnPlay').textContent=t('btnPlay');
+  if(playTimer) clearTimeout(playTimer);
+}
+function playTick(){
+  if(!playing) return;
+  playTimer=setTimeout(function(){
+    if(!playing) return;
+    if(currentFrame>=totalFrames-1){stopPlay();return;}
+    transitionTo(currentFrame+1);
+    playTick();
+  },2500);
+}
+
+/* --- i18n refresh --- */
+function refreshI18N(){
+  document.getElementById('mainTitle').textContent = t('title');
+  document.getElementById('btnPrev').textContent = t('btnPrev');
+  document.getElementById('btnPlay').textContent = playing?t('btnPause'):t('btnPlay');
+  document.getElementById('btnNext').textContent = t('btnNext');
+  document.getElementById('guideTitleText').textContent = t('guideTitle');
+  document.getElementById('guideDesc').textContent = t('guideDesc');
+  document.getElementById('guideObs1').textContent = t('guideObs1');
+  document.getElementById('guideObs2').textContent = t('guideObs2');
+  document.getElementById('guideObs3').textContent = t('guideObs3');
+  document.getElementById('hudStageLabel').textContent = t('hudStage');
+  document.getElementById('hudErrorLabel').textContent = t('hudError');
+  document.getElementById('hudImpactLabel').textContent = t('hudImpact');
+  updateHUD(currentFrame);
+  drawFrame(currentFrame);
+}
+
+document.getElementById('langBtn').addEventListener('click',function(){
+  LANG=LANG==='en'?'cn':'en';
+  this.textContent=LANG.toUpperCase();
+  refreshI18N();
+});
+
+document.getElementById('guideTitle').addEventListener('click',function(){
+  var gc=document.getElementById('guideContent');
+  var gt=document.getElementById('guideToggle');
+  if(gc.classList.contains('collapsed')){gc.classList.remove('collapsed');gt.textContent='[-]';}
+  else{gc.classList.add('collapsed');gt.textContent='[+]';}
+});
+
+/* --- init --- */
+initControls();
+refreshI18N();
+window.addEventListener('resize',resize);
+resize();
+setTimeout(resize,200);
+setTimeout(resize,600);
+document.fonts.ready.then(function(){resize();});
+})();
+</script>
+</body>
+</html>

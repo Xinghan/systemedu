@@ -1,0 +1,434 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=Inter:wght@400;500&family=Noto+Sans+SC:wght@400;700&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box;}
+html,body{width:100%;height:100vh;overflow:hidden;}
+body{
+  background:linear-gradient(180deg,#0c0e14 0%,#1a1520 50%,#0c0e14 100%);
+  color:#f6f6fc;
+  font-family:'Inter','Noto Sans SC',sans-serif;
+  display:flex;flex-direction:column;
+}
+.wrapper{display:flex;flex-direction:column;height:100vh;overflow:hidden;}
+.header{padding:12px 16px 8px;display:flex;justify-content:space-between;align-items:center;}
+.header h1{font-family:'Space Grotesk',sans-serif;font-size:clamp(14px,2vw,18px);font-weight:700;letter-spacing:-0.02em;color:#ffb59c;text-shadow:0 0 15px rgba(255,181,156,0.3);}
+.header .sub{font-size:11px;color:#aaabb0;letter-spacing:0.1em;text-transform:uppercase;}
+.game-area{flex:1;min-height:0;display:flex;flex-direction:column;padding:8px 16px;overflow:hidden;}
+.zones{display:flex;gap:12px;flex:1;min-height:0;}
+.zone{flex:1;display:flex;flex-direction:column;background:rgba(255,255,255,0.03);padding:10px;overflow-y:auto;}
+.zone-title{font-family:'Space Grotesk',sans-serif;font-size:12px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;text-align:center;padding:6px 0;margin-bottom:8px;}
+.zone-easy .zone-title{color:#4ade80;border-bottom:2px solid rgba(74,222,128,0.3);}
+.zone-hard .zone-title{color:#fbbf24;border-bottom:2px solid rgba(251,191,36,0.3);}
+.zone-danger .zone-title{color:#f87171;border-bottom:2px solid rgba(248,113,113,0.3);}
+.zone-items{flex:1;min-height:40px;display:flex;flex-direction:column;gap:6px;}
+.card-tray{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;padding:8px 0;min-height:60px;}
+.terrain-card{
+  font-family:'Noto Sans SC',sans-serif;font-size:13px;font-weight:700;
+  padding:8px 14px;cursor:grab;user-select:none;
+  background:linear-gradient(135deg,rgba(255,181,156,0.15),rgba(255,181,156,0.05));
+  border:1px solid rgba(255,181,156,0.2);
+  color:#ffb59c;transition:transform 0.15s,box-shadow 0.15s;
+  position:relative;
+}
+.terrain-card:hover{transform:scale(1.05);box-shadow:0 0 16px rgba(255,181,156,0.3);}
+.terrain-card.dragging{opacity:0.5;transform:scale(0.95);}
+.terrain-card.correct{border-color:#4ade80;color:#4ade80;background:linear-gradient(135deg,rgba(74,222,128,0.15),rgba(74,222,128,0.05));}
+.terrain-card.wrong{border-color:#f87171;color:#f87171;background:linear-gradient(135deg,rgba(248,113,113,0.15),rgba(248,113,113,0.05));}
+.submit-row{display:flex;justify-content:center;padding:8px 0;gap:12px;}
+.submit-btn{
+  font-family:'Space Grotesk',sans-serif;font-size:13px;font-weight:700;
+  letter-spacing:0.1em;text-transform:uppercase;padding:8px 28px;
+  border:none;cursor:pointer;color:#1a0e08;
+  background:linear-gradient(135deg,#ffb59c,#ff8a6a);
+  box-shadow:0 0 12px rgba(255,181,156,0.3);
+  transition:transform 0.1s;
+}
+.submit-btn:hover{transform:scale(1.04);}
+.submit-btn:disabled{opacity:0.4;cursor:default;transform:none;}
+.reset-btn{
+  font-family:'Space Grotesk',sans-serif;font-size:13px;font-weight:700;
+  letter-spacing:0.1em;text-transform:uppercase;padding:8px 28px;
+  border:none;cursor:pointer;color:#aaabb0;
+  background:rgba(23,26,31,0.92);backdrop-filter:blur(12px);
+  transition:transform 0.1s;
+}
+.reset-btn:hover{color:#ffb59c;transform:scale(1.04);}
+.hud{height:48px;display:flex;align-items:center;justify-content:space-around;background:rgba(0,0,0,0.55);backdrop-filter:blur(12px);padding:0 16px;}
+.hud-item{text-align:center;}
+.hud-label{font-family:'Space Grotesk',sans-serif;font-size:9px;letter-spacing:0.15em;text-transform:uppercase;color:#aaabb0;}
+.hud-val{font-family:'Space Grotesk',sans-serif;font-size:14px;font-weight:700;color:#ffb59c;}
+.lang-btn{position:fixed;top:8px;left:8px;z-index:100;font-family:'Space Grotesk',sans-serif;font-size:11px;font-weight:700;padding:4px 10px;cursor:pointer;border:none;background:rgba(20,20,35,0.85);backdrop-filter:blur(12px);color:#ffb59c;letter-spacing:1px;}
+.guide-panel{position:fixed;top:8px;right:8px;width:240px;max-height:40vh;overflow-y:auto;background:rgba(20,20,35,0.85);backdrop-filter:blur(12px);padding:12px;z-index:100;font-family:'Noto Sans SC',sans-serif;font-size:12px;color:rgba(255,255,255,0.85);line-height:1.6;}
+.guide-panel h3{font-family:'Space Grotesk',sans-serif;font-size:13px;margin-bottom:6px;color:#ffb59c;cursor:pointer;display:flex;justify-content:space-between;align-items:center;}
+.guide-panel ul{padding-left:14px;}
+.guide-panel .collapsed{display:none;}
+.result-panel{
+  display:none;position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);
+  width:360px;max-width:90vw;
+  background:linear-gradient(135deg,rgba(20,20,35,0.95),rgba(30,25,40,0.95));
+  backdrop-filter:blur(20px);border:1px solid rgba(255,181,156,0.2);
+  padding:24px;z-index:200;text-align:center;
+}
+.result-panel h2{font-family:'Space Grotesk',sans-serif;font-size:20px;color:#ffb59c;margin-bottom:12px;}
+.result-panel .score{font-family:'Space Grotesk',sans-serif;font-size:36px;font-weight:700;color:#ffb59c;text-shadow:0 0 20px rgba(255,181,156,0.4);}
+.result-panel .msg{font-size:14px;color:#aaabb0;margin:12px 0;line-height:1.6;}
+.result-panel .explanations{text-align:left;margin-top:12px;font-size:12px;color:rgba(255,255,255,0.7);line-height:1.7;}
+.result-panel .exp-item{margin-bottom:6px;}
+.result-panel .exp-name{font-weight:700;color:#ffb59c;}
+.overlay{display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.6);z-index:199;}
+.zone.drag-over{background:rgba(255,255,255,0.08);}
+</style>
+</head>
+<body>
+<button class="lang-btn" id="langBtn">CN</button>
+<div class="guide-panel" id="guide">
+<h3 id="guideToggle"></h3>
+<div class="guide-content" id="guideContent"></div>
+</div>
+<div class="wrapper">
+<div class="header">
+<div><h1 id="title"></h1><div class="sub" id="subtitle"></div></div>
+</div>
+<div class="game-area">
+<div class="card-tray" id="cardTray"></div>
+<div class="zones">
+  <div class="zone zone-easy" id="zoneEasy">
+    <div class="zone-title" id="zoneEasyTitle"></div>
+    <div class="zone-items" data-zone="easy"></div>
+  </div>
+  <div class="zone zone-hard" id="zoneHard">
+    <div class="zone-title" id="zoneHardTitle"></div>
+    <div class="zone-items" data-zone="hard"></div>
+  </div>
+  <div class="zone zone-danger" id="zoneDanger">
+    <div class="zone-title" id="zoneDangerTitle"></div>
+    <div class="zone-items" data-zone="danger"></div>
+  </div>
+</div>
+<div class="submit-row">
+  <button class="reset-btn" id="btnReset"></button>
+  <button class="submit-btn" id="btnSubmit"></button>
+</div>
+</div>
+<div class="hud">
+<div class="hud-item"><div class="hud-label" id="hudL1"></div><div class="hud-val" id="hudV1"></div></div>
+<div class="hud-item"><div class="hud-label" id="hudL2"></div><div class="hud-val" id="hudV2"></div></div>
+<div class="hud-item"><div class="hud-label" id="hudL3"></div><div class="hud-val" id="hudV3"></div></div>
+<div class="hud-item"><div class="hud-label" id="hudL4"></div><div class="hud-val" id="hudV4"></div></div>
+</div>
+</div>
+<div class="overlay" id="overlay"></div>
+<div class="result-panel" id="resultPanel">
+<h2 id="resultTitle"></h2>
+<div class="score" id="resultScore"></div>
+<div class="msg" id="resultMsg"></div>
+<div class="explanations" id="resultExplanations"></div>
+<div style="margin-top:16px;">
+  <button class="submit-btn" id="btnRetry"></button>
+</div>
+</div>
+
+<script>
+(function(){
+var LANG = 'cn';
+var I18N = {
+  title:     {en:'TERRAIN CLASSIFIER', cn:'\u5730\u5f62\u901a\u884c\u6027\u5206\u7c7b\u5668'},
+  subtitle:  {en:'DRAG SURFACES TO CORRECT ZONE', cn:'\u628a\u5730\u9762\u62d6\u5230\u6b63\u786e\u7684\u533a\u57df'},
+  easy:      {en:'EASY PASS', cn:'\u5bb9\u6613\u901a\u884c'},
+  hard:      {en:'DIFFICULT', cn:'\u56f0\u96be\u901a\u884c'},
+  danger:    {en:'DANGEROUS', cn:'\u5371\u9669'},
+  submit:    {en:'SUBMIT', cn:'\u63d0\u4ea4'},
+  reset:     {en:'RESET', cn:'\u91cd\u7f6e'},
+  retry:     {en:'TRY AGAIN', cn:'\u518d\u8bd5\u4e00\u6b21'},
+  result:    {en:'RESULT', cn:'\u7ed3\u679c'},
+  pass:      {en:'MISSION COMPLETE!', cn:'\u4efb\u52a1\u5b8c\u6210\uff01'},
+  fail:      {en:'KEEP TRYING!', cn:'\u7ee7\u7eed\u52aa\u529b\uff01'},
+  placed:    {en:'PLACED', cn:'\u5df2\u653e\u7f6e'},
+  total:     {en:'TOTAL', cn:'\u603b\u6570'},
+  score:     {en:'SCORE', cn:'\u5f97\u5206'},
+  status:    {en:'STATUS', cn:'\u72b6\u6001'},
+  ready:     {en:'READY', cn:'\u5c31\u7eea'},
+  guideTitle:{en:'HOW TO PLAY', cn:'\u64cd\u4f5c\u6307\u5357'},
+  g1:        {en:'Drag terrain cards to zones', cn:'\u62d6\u62fd\u5730\u9762\u5361\u7247\u5230\u5bf9\u5e94\u533a\u57df'},
+  g2:        {en:'Think about hardness, roughness...', cn:'\u601d\u8003\u786c\u5ea6\u3001\u7c97\u7cd9\u5ea6\u3001\u5e73\u6574\u5ea6\u3001\u677e\u7d27\u5ea6'},
+  g3:        {en:'6/8 correct to pass', cn:'6/8 \u6b63\u786e\u5373\u53ef\u901a\u5173'},
+  g4:        {en:'Click SUBMIT when done', cn:'\u5b8c\u6210\u540e\u70b9\u51fb\u63d0\u4ea4'},
+  concrete:  {en:'Concrete Road', cn:'\u6c34\u6ce5\u8def'},
+  dryGrass:  {en:'Dry Grass', cn:'\u5e72\u8349\u5730'},
+  tiles:     {en:'Stone Tiles', cn:'\u77f3\u677f\u8def'},
+  gravel:    {en:'Gravel Slope', cn:'\u788e\u77f3\u5761'},
+  wetMud:    {en:'Wet Mud', cn:'\u6e7f\u6ce5\u5730'},
+  drySand:   {en:'Dry Sand', cn:'\u5e72\u6c99\u5730'},
+  ice:       {en:'Ice Surface', cn:'\u51b0\u9762'},
+  swamp:     {en:'Swamp', cn:'\u6cbc\u6cfd'},
+  expConcrete:{en:'Hard and flat, easiest to walk on', cn:'\u786c\u4e14\u5e73\u6574\uff0c\u884c\u8d70\u6700\u8f7b\u677e'},
+  expDryGrass:{en:'Moderately soft, comfortable walking', cn:'\u9002\u5ea6\u67d4\u8f6f\uff0c\u884c\u8d70\u8212\u9002'},
+  expTiles:   {en:'Hard and flat, stable footing', cn:'\u786c\u4e14\u5e73\u6574\uff0c\u811a\u6b65\u7a33\u5b9a'},
+  expGravel:  {en:'Uneven, easy to twist ankle', cn:'\u51f9\u51f8\u4e0d\u5e73\uff0c\u5bb9\u6613\u5d34\u811a'},
+  expWetMud:  {en:'Soft and sticky, shoes get stuck', cn:'\u677e\u8f6f\u7c98\u6ed1\uff0c\u978b\u5b50\u4f1a\u7c98\u4f4f'},
+  expDrySand: {en:'Loose, feet sink in with each step', cn:'\u677e\u6563\u4e0b\u9677\uff0c\u6bcf\u6b65\u90fd\u8d39\u529b'},
+  expIce:     {en:'Extremely slippery, high fall risk', cn:'\u6781\u5ea6\u5149\u6ed1\uff0c\u6781\u6613\u6469\u5012'},
+  expSwamp:   {en:'Deep sinking, may get trapped', cn:'\u6df1\u5ea6\u4e0b\u9677\uff0c\u53ef\u80fd\u9677\u4f4f\u65e0\u6cd5\u8131\u8eab'},
+};
+function t(key) { return (I18N[key] && I18N[key][LANG]) || (I18N[key] && I18N[key]['en']) || key; }
+
+var TERRAINS = [
+  {key:'concrete', zone:'easy'},
+  {key:'dryGrass', zone:'easy'},
+  {key:'tiles',    zone:'easy'},
+  {key:'gravel',   zone:'hard'},
+  {key:'wetMud',   zone:'hard'},
+  {key:'drySand',  zone:'hard'},
+  {key:'ice',      zone:'danger'},
+  {key:'swamp',    zone:'danger'},
+];
+
+var shuffled = [];
+var submitted = false;
+var dragData = null;
+
+function shuffle(arr) {
+  var a = arr.slice();
+  for (var i = a.length - 1; i > 0; i--) {
+    var j = Math.floor(Math.random() * (i + 1));
+    var tmp = a[i]; a[i] = a[j]; a[j] = tmp;
+  }
+  return a;
+}
+
+function init() {
+  submitted = false;
+  shuffled = shuffle(TERRAINS);
+  var tray = document.getElementById('cardTray');
+  tray.innerHTML = '';
+  document.querySelectorAll('.zone-items').forEach(function(z){ z.innerHTML = ''; });
+  shuffled.forEach(function(ter, idx) {
+    var card = document.createElement('div');
+    card.className = 'terrain-card';
+    card.textContent = t(ter.key);
+    card.setAttribute('data-key', ter.key);
+    card.setAttribute('data-correct', ter.zone);
+    card.setAttribute('draggable', 'true');
+    card.addEventListener('dragstart', onDragStart);
+    card.addEventListener('touchstart', onTouchStart, {passive:false});
+    tray.appendChild(card);
+  });
+  updateHUD();
+  document.getElementById('btnSubmit').disabled = false;
+  document.getElementById('resultPanel').style.display = 'none';
+  document.getElementById('overlay').style.display = 'none';
+}
+
+function onDragStart(e) {
+  if (submitted) return;
+  dragData = e.target;
+  e.target.classList.add('dragging');
+  e.dataTransfer.effectAllowed = 'move';
+  e.dataTransfer.setData('text/plain', e.target.getAttribute('data-key'));
+}
+
+// Touch drag support
+var touchClone = null;
+var touchSource = null;
+
+function onTouchStart(e) {
+  if (submitted) return;
+  e.preventDefault();
+  touchSource = e.target;
+  touchSource.classList.add('dragging');
+  var rect = touchSource.getBoundingClientRect();
+  touchClone = touchSource.cloneNode(true);
+  touchClone.style.position = 'fixed';
+  touchClone.style.width = rect.width + 'px';
+  touchClone.style.zIndex = '300';
+  touchClone.style.pointerEvents = 'none';
+  touchClone.style.opacity = '0.8';
+  document.body.appendChild(touchClone);
+  moveClone(e.touches[0]);
+  document.addEventListener('touchmove', onTouchMove, {passive:false});
+  document.addEventListener('touchend', onTouchEnd);
+}
+
+function moveClone(touch) {
+  if (!touchClone) return;
+  touchClone.style.left = (touch.clientX - 40) + 'px';
+  touchClone.style.top = (touch.clientY - 20) + 'px';
+}
+
+function onTouchMove(e) {
+  e.preventDefault();
+  moveClone(e.touches[0]);
+  // highlight zone under finger
+  var el = document.elementFromPoint(e.touches[0].clientX, e.touches[0].clientY);
+  document.querySelectorAll('.zone').forEach(function(z){ z.classList.remove('drag-over'); });
+  if (el) {
+    var zone = el.closest('.zone');
+    if (zone) zone.classList.add('drag-over');
+  }
+}
+
+function onTouchEnd(e) {
+  document.removeEventListener('touchmove', onTouchMove);
+  document.removeEventListener('touchend', onTouchEnd);
+  document.querySelectorAll('.zone').forEach(function(z){ z.classList.remove('drag-over'); });
+  if (touchClone) {
+    var touch = e.changedTouches[0];
+    var el = document.elementFromPoint(touch.clientX, touch.clientY);
+    if (el) {
+      var zoneItems = el.closest('.zone-items') || (el.closest('.zone') && el.closest('.zone').querySelector('.zone-items'));
+      if (zoneItems && touchSource) {
+        zoneItems.appendChild(touchSource);
+      }
+    }
+    touchClone.remove();
+    touchClone = null;
+  }
+  if (touchSource) {
+    touchSource.classList.remove('dragging');
+    touchSource = null;
+  }
+  updateHUD();
+}
+
+// Zone drop handlers
+document.querySelectorAll('.zone-items').forEach(function(zone) {
+  zone.addEventListener('dragover', function(e) {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    zone.closest('.zone').classList.add('drag-over');
+  });
+  zone.addEventListener('dragleave', function(e) {
+    zone.closest('.zone').classList.remove('drag-over');
+  });
+  zone.addEventListener('drop', function(e) {
+    e.preventDefault();
+    zone.closest('.zone').classList.remove('drag-over');
+    if (dragData && !submitted) {
+      dragData.classList.remove('dragging');
+      zone.appendChild(dragData);
+      dragData = null;
+      updateHUD();
+    }
+  });
+});
+
+// also allow dropping back to tray
+var tray = document.getElementById('cardTray');
+tray.addEventListener('dragover', function(e) { e.preventDefault(); });
+tray.addEventListener('drop', function(e) {
+  e.preventDefault();
+  if (dragData && !submitted) {
+    dragData.classList.remove('dragging');
+    tray.appendChild(dragData);
+    dragData = null;
+    updateHUD();
+  }
+});
+
+function updateHUD() {
+  var placed = document.querySelectorAll('.zone-items .terrain-card').length;
+  document.getElementById('hudV1').textContent = placed + '/8';
+  document.getElementById('hudV2').textContent = t(submitted ? 'score' : 'ready');
+}
+
+function submit() {
+  if (submitted) return;
+  submitted = true;
+  var correct = 0;
+  var total = 8;
+  var explanations = [];
+  document.querySelectorAll('.zone-items .terrain-card').forEach(function(card) {
+    var key = card.getAttribute('data-key');
+    var correctZone = card.getAttribute('data-correct');
+    var actualZone = card.closest('.zone-items').getAttribute('data-zone');
+    if (actualZone === correctZone) {
+      correct++;
+      card.classList.add('correct');
+    } else {
+      card.classList.add('wrong');
+    }
+    explanations.push({name: t(key), exp: t('exp' + key.charAt(0).toUpperCase() + key.slice(1)), ok: actualZone === correctZone});
+  });
+  // cards still in tray count as wrong
+  document.querySelectorAll('#cardTray .terrain-card').forEach(function(card) {
+    var key = card.getAttribute('data-key');
+    card.classList.add('wrong');
+    explanations.push({name: t(key), exp: t('exp' + key.charAt(0).toUpperCase() + key.slice(1)), ok: false});
+  });
+
+  document.getElementById('hudV2').textContent = correct + '/' + total;
+  document.getElementById('resultTitle').textContent = t('result');
+  document.getElementById('resultScore').textContent = correct + '/' + total;
+  document.getElementById('resultMsg').textContent = correct >= 6 ? t('pass') : t('fail');
+  var expHTML = '';
+  explanations.forEach(function(e) {
+    var icon = e.ok ? '[OK]' : '[X]';
+    var color = e.ok ? '#4ade80' : '#f87171';
+    expHTML += '<div class="exp-item"><span class="exp-name" style="color:' + color + '">' + icon + ' ' + e.name + '</span>: ' + e.exp + '</div>';
+  });
+  document.getElementById('resultExplanations').innerHTML = expHTML;
+  document.getElementById('overlay').style.display = 'block';
+  document.getElementById('resultPanel').style.display = 'block';
+  document.getElementById('btnSubmit').disabled = true;
+}
+
+function refreshI18N() {
+  document.getElementById('title').textContent = t('title');
+  document.getElementById('subtitle').textContent = t('subtitle');
+  document.getElementById('zoneEasyTitle').textContent = t('easy');
+  document.getElementById('zoneHardTitle').textContent = t('hard');
+  document.getElementById('zoneDangerTitle').textContent = t('danger');
+  document.getElementById('btnSubmit').textContent = t('submit');
+  document.getElementById('btnReset').textContent = t('reset');
+  document.getElementById('btnRetry').textContent = t('retry');
+  document.getElementById('hudL1').textContent = t('placed');
+  document.getElementById('hudL2').textContent = t('status');
+  document.getElementById('hudL3').textContent = t('total');
+  document.getElementById('hudL4').textContent = t('score');
+  document.getElementById('hudV3').textContent = '8';
+  document.getElementById('hudV4').textContent = '--';
+  // guide
+  document.getElementById('guideToggle').innerHTML = t('guideTitle') + ' <span style="font-size:10px;">[-]</span>';
+  var guideHTML = '<ul>';
+  ['g1','g2','g3','g4'].forEach(function(k){ guideHTML += '<li>' + t(k) + '</li>'; });
+  guideHTML += '</ul>';
+  document.getElementById('guideContent').innerHTML = guideHTML;
+  // update card texts
+  document.querySelectorAll('.terrain-card').forEach(function(card) {
+    card.textContent = t(card.getAttribute('data-key'));
+  });
+  updateHUD();
+}
+
+// guide toggle
+document.getElementById('guideToggle').addEventListener('click', function() {
+  var content = document.getElementById('guideContent');
+  var collapsed = content.style.display === 'none';
+  content.style.display = collapsed ? '' : 'none';
+  var arrow = collapsed ? '[-]' : '[+]';
+  this.innerHTML = t('guideTitle') + ' <span style="font-size:10px;">' + arrow + '</span>';
+});
+
+document.getElementById('langBtn').addEventListener('click', function() {
+  LANG = LANG === 'en' ? 'cn' : 'en';
+  this.textContent = LANG.toUpperCase();
+  refreshI18N();
+});
+
+document.getElementById('btnSubmit').addEventListener('click', submit);
+document.getElementById('btnReset').addEventListener('click', init);
+document.getElementById('btnRetry').addEventListener('click', function() {
+  init();
+  refreshI18N();
+});
+
+init();
+refreshI18N();
+})();
+</script>
+</body>
+</html>

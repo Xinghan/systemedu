@@ -1,0 +1,440 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;700&family=Inter:wght@400;500&family=Noto+Sans+SC:wght@400;700&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0;border-radius:0}
+html,body{width:100%;height:100vh;overflow:hidden;
+  background:#131313;
+  font-family:'Space Grotesk','Inter','Noto Sans SC',sans-serif;
+  color:#e5e2e1;
+}
+.lang-btn{
+  position:fixed;top:8px;left:8px;z-index:100;
+  font-family:'Space Grotesk',sans-serif;font-size:11px;font-weight:700;
+  padding:4px 10px;cursor:pointer;
+  border:1px solid rgba(255,255,255,0.08);
+  background:rgba(20,20,35,0.85);backdrop-filter:blur(12px);
+  color:#ffb59c;letter-spacing:1px;
+}
+.guide-panel{
+  position:fixed;top:8px;right:8px;width:260px;max-height:40vh;
+  overflow-y:auto;z-index:100;
+  background:rgba(20,20,35,0.85);backdrop-filter:blur(12px);
+  border:1px solid rgba(255,255,255,0.08);padding:12px;
+  font-family:'Noto Sans SC',sans-serif;font-size:13px;
+  color:rgba(255,255,255,0.85);
+}
+.guide-panel h3{
+  font-family:'Space Grotesk',sans-serif;font-size:14px;
+  margin-bottom:8px;display:flex;align-items:center;
+  justify-content:space-between;cursor:pointer;
+  color:#ffb59c;
+}
+.guide-panel .toggle{font-size:12px;opacity:0.6;}
+.guide-panel ul{padding-left:16px;line-height:1.6;}
+.guide-panel .guide-content.collapsed{display:none;}
+.wrapper{display:flex;flex-direction:column;height:100vh;}
+.canvas-wrap{flex:1;min-height:0;position:relative;}
+.canvas-wrap canvas{display:block;width:100%;height:100%;position:absolute;top:0;left:0;}
+.controls{
+  display:flex;align-items:center;gap:8px;
+  padding:6px 12px;
+  background:rgba(28,27,27,0.92);
+  border-top:1px solid rgba(138,136,134,0.15);
+}
+.controls button{
+  font-family:'Space Grotesk',sans-serif;font-size:12px;font-weight:700;
+  padding:4px 14px;cursor:pointer;letter-spacing:1px;
+  border:1px solid rgba(138,136,134,0.15);
+  background:transparent;color:#ffb59c;
+}
+.controls button:hover{background:#353534;}
+.controls .frame-indicator{
+  font-family:'Space Grotesk',sans-serif;font-size:12px;
+  color:#8a8886;margin-left:auto;
+}
+.hud{
+  display:flex;align-items:center;justify-content:space-around;
+  height:52px;
+  background:rgba(0,0,0,0.55);
+  border-top:1px solid rgba(255,255,255,0.06);
+}
+.hud .hud-col{text-align:center;}
+.hud .hud-label{
+  font-family:'Space Grotesk',sans-serif;font-size:10px;
+  color:#8a8886;letter-spacing:1px;text-transform:uppercase;
+}
+.hud .hud-val{
+  font-family:'Space Grotesk',sans-serif;font-size:14px;font-weight:700;
+  color:#e5e2e1;
+}
+</style>
+</head>
+<body>
+<button class="lang-btn" id="langBtn">CN</button>
+<div class="guide-panel" id="guidePanel">
+  <h3 id="guideHeader"><span id="guideTitle"></span> <span class="toggle" id="guideToggle">[-]</span></h3>
+  <div class="guide-content" id="guideContent">
+    <p id="guideWhat"></p>
+    <ul id="guidePoints"></ul>
+    <p id="guideControls"></p>
+    <p id="guideTakeaway" style="margin-top:6px;font-weight:700;"></p>
+  </div>
+</div>
+<div class="wrapper">
+  <div class="canvas-wrap">
+    <canvas id="c"></canvas>
+  </div>
+  <div class="controls" id="controls">
+    <button id="btnPrev"></button>
+    <button id="btnPlay"></button>
+    <button id="btnNext"></button>
+    <span class="frame-indicator" id="frameIndicator"></span>
+  </div>
+  <div class="hud" id="hud"></div>
+</div>
+<script>
+(function(){
+var LANG='cn';
+var I18N={
+  title:{en:'TRIAL LOG TIMELINE',cn:'\u8bd5\u8dd1\u65e5\u5fd7\u65f6\u95f4\u7ebf'},
+  guideTitle:{en:'GUIDE',cn:'\u89c2\u770b\u6307\u5357'},
+  guideWhat:{en:'Shows 3 trial runs on a timeline, marking failures and attributing to fault layers.',cn:'\u5c55\u793a 3 \u8f6e\u8bd5\u8dd1\u7684\u65f6\u95f4\u7ebf\uff0c\u6807\u6ce8\u5931\u8d25\u65f6\u523b\u5e76\u5f52\u56e0\u5230\u6545\u969c\u5c42\u3002'},
+  guideObs1:{en:'Compare success/fail patterns across runs',cn:'\u5bf9\u6bd4\u5404\u8f6e\u6210\u529f/\u5931\u8d25\u6a21\u5f0f'},
+  guideObs2:{en:'Notice failure timestamps cluster near specific phases',cn:'\u6ce8\u610f\u5931\u8d25\u65f6\u95f4\u70b9\u805a\u96c6\u5728\u54ea\u4e2a\u9636\u6bb5'},
+  guideObs3:{en:'Understand how repeated runs reveal intermittent faults',cn:'\u7406\u89e3\u91cd\u590d\u8bd5\u8dd1\u5982\u4f55\u63ed\u793a\u95f4\u6b47\u6027\u6545\u969c'},
+  guideCtrl:{en:'PREV/NEXT to browse, PLAY for auto-play.',cn:'\u4e0a\u4e00\u5e27/\u4e0b\u4e00\u5e27\u6d4f\u89c8\uff0c\u64ad\u653e\u81ea\u52a8\u653e\u6620\u3002'},
+  guideTakeaway:{en:'Can annotate failure timestamps and attribute to layers.',cn:'\u80fd\u591f\u6807\u6ce8\u5931\u8d25\u65f6\u95f4\u70b9\u5e76\u5f52\u56e0\u5230\u5bf9\u5e94\u5c42\u3002'},
+  btnPlay:{en:'PLAY',cn:'\u64ad\u653e'},
+  btnPause:{en:'PAUSE',cn:'\u6682\u505c'},
+  btnPrev:{en:'PREV',cn:'\u4e0a\u4e00\u5e27'},
+  btnNext:{en:'NEXT',cn:'\u4e0b\u4e00\u5e27'},
+  frame:{en:'FRAME',cn:'\u5e27'},
+  hudTrial:{en:'TRIAL',cn:'\u8bd5\u8dd1\u8f6e\u6b21'},
+  hudStatus:{en:'STATUS',cn:'\u72b6\u6001'},
+  hudFaultLayer:{en:'FAULT',cn:'\u6545\u969c\u5c42'},
+  hudFailTime:{en:'FAIL AT',cn:'\u5931\u8d25\u65f6\u523b'},
+  run:{en:'RUN',cn:'\u7b2c'},
+  runSuffix:{en:'',cn:'\u8f6e'},
+  f0title:{en:'3-RUN TEST OVERVIEW',cn:'\u4e09\u8f6e\u8bd5\u8dd1\u603b\u89c8'},
+  f0desc:{en:'Each trial covers: Start -> Perceive -> Plan -> Move -> Arrive/Fail.',cn:'\u6bcf\u8f6e\u8bd5\u8dd1\u6d41\u7a0b\uff1a\u542f\u52a8 -> \u611f\u77e5 -> \u89c4\u5212 -> \u884c\u52a8 -> \u5230\u8fbe/\u5931\u8d25\u3002'},
+  f1title:{en:'RUN 1: CHASSIS STALL',cn:'\u7b2c 1 \u8f6e\uff1a\u5e95\u76d8\u5835\u8f6c'},
+  f1desc:{en:'T+12s: Motor current spike, wheel stuck on rock. Rover stopped.',cn:'T+12s\uff1a\u7535\u673a\u7535\u6d41\u5c16\u5cf0\uff0c\u8f6e\u5b50\u88ab\u5ca9\u77f3\u5361\u4f4f\u3002Rover \u505c\u6b62\u3002'},
+  f2title:{en:'RUN 2: PERCEPTION MISS',cn:'\u7b2c 2 \u8f6e\uff1a\u611f\u77e5\u8bef\u5224'},
+  f2desc:{en:'T+8s: Misclassified sand pit as safe. Rover drove into hazard.',cn:'T+8s\uff1a\u6c99\u5751\u88ab\u8bef\u5206\u7c7b\u4e3a\u5b89\u5168\u533a\u3002Rover \u51b2\u5165\u5371\u9669\u533a\u3002'},
+  f3title:{en:'RUN 3: SUCCESS',cn:'\u7b2c 3 \u8f6e\uff1a\u6210\u529f'},
+  f3desc:{en:'After fixing chassis clearance and retraining model, run 3 succeeded.',cn:'\u4fee\u590d\u5e95\u76d8\u95f4\u9699\u5e76\u91cd\u65b0\u8bad\u7ec3\u6a21\u578b\u540e\uff0c\u7b2c 3 \u8f6e\u6210\u529f\u3002'},
+  f4title:{en:'ATTRIBUTION SUMMARY',cn:'\u5f52\u56e0\u6c47\u603b'},
+  f4desc:{en:'2 of 3 runs failed. Root causes: 1 chassis, 1 perception. After fix: 100% pass.',cn:'3 \u8f6e\u4e2d 2 \u8f6e\u5931\u8d25\u3002\u6839\u56e0\uff1a1 \u5e95\u76d8\u30011 \u611f\u77e5\u3002\u4fee\u590d\u540e\uff1a100% \u901a\u8fc7\u3002'},
+  phaseStart:{en:'START',cn:'\u542f\u52a8'},
+  phasePerceive:{en:'PERCEIVE',cn:'\u611f\u77e5'},
+  phasePlan:{en:'PLAN',cn:'\u89c4\u5212'},
+  phaseMove:{en:'MOVE',cn:'\u884c\u52a8'},
+  phaseEnd:{en:'ARRIVE',cn:'\u5230\u8fbe'},
+  fail:{en:'FAIL',cn:'\u5931\u8d25'},
+  pass:{en:'PASS',cn:'\u901a\u8fc7'},
+  chassis:{en:'Chassis',cn:'\u5e95\u76d8'},
+  perception:{en:'Perception',cn:'\u611f\u77e5'},
+  none:{en:'None',cn:'\u65e0'},
+  na:{en:'N/A',cn:'N/A'}
+};
+function t(k){return(I18N[k]&&I18N[k][LANG])||(I18N[k]&&I18N[k]['en'])||k;}
+
+var canvas=document.getElementById('c');
+var ctx=canvas.getContext('2d');
+var W=0,H=0;
+var DPR=Math.min(window.devicePixelRatio||1,2);
+var currentFrame=0;
+var totalFrames=5;
+var playing=false;
+var playTimer=null;
+var transitioning=false;
+
+var COLORS={
+  bg:'#131313',primary:'#ffb59c',signal:'#ff5f1f',
+  tertiary:'#00daf3',success:'#10b981',
+  text:'#e5e2e1',muted:'#8a8886',
+  chassis:'#ff5f1f',perception:'#10b981',
+  planning:'#00daf3',deployment:'#ffb59c'
+};
+
+function lerp(a,b,p){return a+(b-a)*p;}
+function easeInOut(x){return x<0.5?2*x*x:1-Math.pow(-2*x+2,2)/2;}
+function merge(base,ov){var r={};for(var k in base)r[k]=base[k];for(var k2 in ov)r[k2]=ov[k2];return r;}
+
+function drawBg(){
+  var grd=ctx.createLinearGradient(0,0,0,H);
+  grd.addColorStop(0,'#131313');grd.addColorStop(1,'#1a1018');
+  ctx.fillStyle=grd;ctx.fillRect(0,0,W,H);
+  ctx.strokeStyle='rgba(255,255,255,0.03)';ctx.lineWidth=1;
+  var gs=40*DPR;
+  for(var gx=0;gx<W;gx+=gs){ctx.beginPath();ctx.moveTo(gx,0);ctx.lineTo(gx,H);ctx.stroke();}
+  for(var gy=0;gy<H;gy+=gs){ctx.beginPath();ctx.moveTo(0,gy);ctx.lineTo(W,gy);ctx.stroke();}
+}
+
+function drawTimeline(x,y,w,events,highlightIdx,failIdx,alpha){
+  ctx.save();ctx.globalAlpha=alpha;
+  ctx.strokeStyle=COLORS.muted+'88';ctx.lineWidth=2*DPR;
+  ctx.beginPath();ctx.moveTo(x,y);ctx.lineTo(x+w,y);ctx.stroke();
+  var n=events.length;
+  for(var i=0;i<n;i++){
+    var ex=x+w*i/(n-1);
+    var isFail=(i===failIdx);
+    var isHL=(i<=highlightIdx);
+    var dotR=isFail?7*DPR:5*DPR;
+    var col=isFail?COLORS.signal:isHL?COLORS.success:COLORS.muted;
+    if(isFail){ctx.shadowColor=COLORS.signal;ctx.shadowBlur=12*DPR;}
+    ctx.beginPath();ctx.arc(ex,y,dotR,0,Math.PI*2);
+    ctx.fillStyle=col;ctx.fill();
+    ctx.shadowBlur=0;
+    ctx.font=(11*DPR)+'px "Space Grotesk","Noto Sans SC",sans-serif';
+    ctx.fillStyle=isHL?COLORS.text:COLORS.muted;
+    ctx.textAlign='center';ctx.textBaseline='top';
+    ctx.fillText(events[i],ex,y+12*DPR);
+    if(i<n-1&&isHL){
+      ctx.strokeStyle=i<failIdx||(failIdx<0)?COLORS.success:COLORS.signal;
+      ctx.lineWidth=2*DPR;
+      var nx=x+w*(i+1)/(n-1);
+      ctx.beginPath();ctx.moveTo(ex+dotR,y);ctx.lineTo(nx-dotR,y);ctx.stroke();
+    }
+  }
+  ctx.restore();
+}
+
+function drawRunLabel(x,y,runNum,status,color,alpha){
+  ctx.save();ctx.globalAlpha=alpha;
+  ctx.font='bold '+(14*DPR)+'px "Space Grotesk","Noto Sans SC",sans-serif';
+  ctx.fillStyle=color;ctx.textAlign='right';ctx.textBaseline='middle';
+  ctx.fillText(t('run')+' '+runNum+' '+t('runSuffix'),x,y);
+  var tag=status==='fail'?t('fail'):t('pass');
+  var tagColor=status==='fail'?COLORS.signal:COLORS.success;
+  ctx.font='bold '+(11*DPR)+'px "Space Grotesk",sans-serif';
+  ctx.fillStyle=tagColor;
+  ctx.fillText('['+tag+']',x,y+18*DPR);
+  ctx.restore();
+}
+
+function drawAnnotation(x,y,text,color,alpha){
+  ctx.save();ctx.globalAlpha=alpha;
+  ctx.setLineDash([3*DPR,3*DPR]);
+  ctx.strokeStyle=color;ctx.lineWidth=1.5*DPR;
+  ctx.beginPath();ctx.moveTo(x,y-25*DPR);ctx.lineTo(x,y-8*DPR);ctx.stroke();
+  ctx.setLineDash([]);
+  var tw=ctx.measureText(text).width||100*DPR;
+  ctx.fillStyle='rgba(0,0,0,0.7)';ctx.fillRect(x-tw/2-6*DPR,y-48*DPR,tw+12*DPR,20*DPR);
+  ctx.strokeStyle=color;ctx.lineWidth=1;ctx.strokeRect(x-tw/2-6*DPR,y-48*DPR,tw+12*DPR,20*DPR);
+  ctx.font=(10*DPR)+'px "Space Grotesk","Noto Sans SC",sans-serif';
+  ctx.fillStyle=color;ctx.textAlign='center';ctx.textBaseline='middle';
+  ctx.fillText(text,x,y-38*DPR);
+  ctx.restore();
+}
+
+var phases=[
+  function(){return t('phaseStart');},
+  function(){return t('phasePerceive');},
+  function(){return t('phasePlan');},
+  function(){return t('phaseMove');},
+  function(){return t('phaseEnd');}
+];
+function getPhaseNames(){return phases.map(function(fn){return fn();});}
+
+function getFrameElements(f){
+  var cx=W/2,cy=H/2;
+  var tlW=W*0.5;
+  var tlX=cx-tlW/2+W*0.06;
+  var labelX=tlX-W*0.08;
+  var runSpacing=H*0.17;
+  var baseY=cy-runSpacing;
+  var elems=[];
+  var phaseNames=getPhaseNames();
+  var runs=[
+    {num:1,status:'fail',failIdx:3,failTime:'T+12s',faultLayer:t('chassis'),color:COLORS.chassis},
+    {num:2,status:'fail',failIdx:1,failTime:'T+8s',faultLayer:t('perception'),color:COLORS.perception},
+    {num:3,status:'pass',failIdx:-1,failTime:t('na'),faultLayer:t('none'),color:COLORS.success}
+  ];
+  var titles=[t('f0title'),t('f1title'),t('f2title'),t('f3title'),t('f4title')];
+  var descs=[t('f0desc'),t('f1desc'),t('f2desc'),t('f3desc'),t('f4desc')];
+
+  elems.push({id:'title',type:'label',text:titles[f],x:cx,y:baseY-H*0.12,color:COLORS.primary,size:18,align:'center',alpha:1});
+  elems.push({id:'desc',type:'label',text:descs[f],x:cx,y:H-H*0.04,color:COLORS.muted,size:11,align:'center',alpha:1});
+
+  if(f===0){
+    for(var i=0;i<3;i++){
+      var ry=baseY+i*runSpacing;
+      var r=runs[i];
+      elems.push({id:'run_label_'+i,type:'custom',x:labelX,y:ry,w:0,h:0,draw:function(a){
+        drawRunLabel(this.lx,this.ly,this.num,this.st,this.col,a);
+      }.bind({lx:labelX,ly:ry,num:r.num,st:r.status,col:r.color}),alpha:1});
+      elems.push({id:'timeline_'+i,type:'custom',x:tlX,y:ry,w:tlW,h:0,draw:function(a){
+        drawTimeline(this.tlx,this.tly,this.tlw,this.pn,4,this.fi,a);
+      }.bind({tlx:tlX,tly:ry,tlw:tlW,pn:phaseNames,fi:r.failIdx}),alpha:1});
+    }
+  }else if(f>=1&&f<=3){
+    var ri=f-1;
+    var r2=runs[ri];
+    var ry2=cy;
+    elems.push({id:'run_label_'+ri,type:'custom',x:labelX,y:ry2,w:0,h:0,draw:function(a){
+      drawRunLabel(this.lx,this.ly,this.num,this.st,this.col,a);
+    }.bind({lx:labelX,ly:ry2,num:r2.num,st:r2.status,col:r2.color}),alpha:1});
+    elems.push({id:'timeline_'+ri,type:'custom',x:tlX,y:ry2,w:tlW,h:0,draw:function(a){
+      drawTimeline(this.tlx,this.tly,this.tlw,this.pn,4,this.fi,a);
+    }.bind({tlx:tlX,tly:ry2,tlw:tlW,pn:phaseNames,fi:r2.failIdx}),alpha:1});
+    if(r2.failIdx>=0){
+      var failX=tlX+tlW*r2.failIdx/(phaseNames.length-1);
+      var annotText=r2.failTime+' | '+r2.faultLayer;
+      elems.push({id:'annotation_'+ri,type:'custom',x:failX,y:ry2,w:0,h:0,draw:function(a){
+        drawAnnotation(this.ax,this.ay,this.txt,this.col,a);
+      }.bind({ax:failX,ay:ry2,txt:annotText,col:r2.color}),alpha:1});
+    }
+  }else if(f===4){
+    var summaryY=cy-H*0.06;
+    var barW=W*0.5;var barH=30*DPR;var barX=cx-barW/2;
+    elems.push({id:'summary_bar',type:'custom',x:barX,y:summaryY,w:barW,h:barH,draw:function(a){
+      ctx.save();ctx.globalAlpha=a;
+      var chassisW=this.w*0.33;var percW=this.w*0.33;var okW=this.w*0.34;
+      ctx.fillStyle=COLORS.chassis+'88';ctx.fillRect(this.x,this.y,chassisW,this.h);
+      ctx.fillStyle=COLORS.perception+'88';ctx.fillRect(this.x+chassisW,this.y,percW,this.h);
+      ctx.fillStyle=COLORS.success+'88';ctx.fillRect(this.x+chassisW+percW,this.y,okW,this.h);
+      ctx.font='bold '+(11*DPR)+'px "Space Grotesk","Noto Sans SC",sans-serif';
+      ctx.textAlign='center';ctx.textBaseline='middle';
+      ctx.fillStyle=COLORS.text;
+      ctx.fillText(t('chassis'),this.x+chassisW/2,this.y+this.h/2);
+      ctx.fillText(t('perception'),this.x+chassisW+percW/2,this.y+this.h/2);
+      ctx.fillText(t('pass'),this.x+chassisW+percW+okW/2,this.y+this.h/2);
+      ctx.restore();
+    }.bind({x:barX,y:summaryY,w:barW,h:barH}),alpha:1});
+    for(var j=0;j<3;j++){
+      var ry3=summaryY+barH+H*0.05+j*H*0.08;
+      var r3=runs[j];
+      elems.push({id:'run_label_'+j,type:'custom',x:labelX+W*0.03,y:ry3,w:0,h:0,draw:function(a){
+        drawRunLabel(this.lx,this.ly,this.num,this.st,this.col,a);
+      }.bind({lx:labelX+W*0.03,ly:ry3,num:r3.num,st:r3.status,col:r3.color}),alpha:0.6});
+    }
+  }
+  return elems;
+}
+
+function drawElement(el){
+  if(!el||el.alpha<=0.01)return;
+  ctx.save();ctx.globalAlpha=el.alpha;
+  switch(el.type){
+    case 'label':
+      ctx.font=(el.size===18?'bold ':'')+((el.size||14)*DPR)+'px "Space Grotesk","Noto Sans SC",sans-serif';
+      ctx.fillStyle=el.color||COLORS.text;
+      ctx.textAlign=el.align||'center';ctx.textBaseline='middle';
+      ctx.fillText(el.text,el.x,el.y,W*0.9);break;
+    case 'custom':el.draw(el.alpha);break;
+  }
+  ctx.restore();
+}
+
+function drawFrame(f){drawBg();var elems=getFrameElements(f);elems.forEach(function(el){drawElement(el);});}
+
+function transitionTo(newFrame){
+  if(newFrame<0)newFrame=0;if(newFrame>=totalFrames)newFrame=totalFrames-1;
+  if(newFrame===currentFrame&&!transitioning){drawFrame(currentFrame);updateHUD(currentFrame);return;}
+  if(transitioning)return;
+  var oldElems=getFrameElements(currentFrame);var newElems=getFrameElements(newFrame);
+  var oldMap={};oldElems.forEach(function(e){oldMap[e.id]=e;});
+  var newMap={};newElems.forEach(function(e){newMap[e.id]=e;});
+  currentFrame=newFrame;updateHUD(newFrame);transitioning=true;
+  var startTime=null;var duration=500;
+  function step(ts){
+    if(!startTime)startTime=ts;var raw=Math.min((ts-startTime)/duration,1);var p=easeInOut(raw);
+    drawBg();
+    oldElems.forEach(function(oe){if(!newMap[oe.id])drawElement(merge(oe,{alpha:1-p}));});
+    newElems.forEach(function(ne){
+      var oe=oldMap[ne.id];
+      if(oe){
+        var merged=merge(ne,{x:lerp(oe.x||0,ne.x||0,p),y:lerp(oe.y||0,ne.y||0,p),
+          w:lerp(oe.w||0,ne.w||0,p),h:lerp(oe.h||0,ne.h||0,p),alpha:1});
+        if((ne.type==='label')&&oe.text!==ne.text){drawElement(merge(oe,{alpha:1-p}));drawElement(merge(ne,{alpha:p}));}
+        else{drawElement(merged);}
+      }else{drawElement(merge(ne,{alpha:p}));}
+    });
+    if(raw<1){requestAnimationFrame(step);}else{transitioning=false;}
+  }
+  requestAnimationFrame(step);
+}
+
+function updateHUD(f){
+  var runs=[
+    {trial:'--',status:'--',fault:'--',failTime:'--'},
+    {trial:'1',status:t('fail'),fault:t('chassis'),failTime:'T+12s'},
+    {trial:'2',status:t('fail'),fault:t('perception'),failTime:'T+8s'},
+    {trial:'3',status:t('pass'),fault:t('none'),failTime:t('na')},
+    {trial:'1-3',status:'2/3 '+t('fail'),fault:t('chassis')+'+'+t('perception'),failTime:'--'}
+  ];
+  var d=runs[f];
+  var hud=document.getElementById('hud');
+  hud.innerHTML='<div class="hud-col"><div class="hud-label">'+t('hudTrial')+'</div><div class="hud-val">'+d.trial+'</div></div>'+
+    '<div class="hud-col"><div class="hud-label">'+t('hudStatus')+'</div><div class="hud-val">'+d.status+'</div></div>'+
+    '<div class="hud-col"><div class="hud-label">'+t('hudFaultLayer')+'</div><div class="hud-val">'+d.fault+'</div></div>'+
+    '<div class="hud-col"><div class="hud-label">'+t('hudFailTime')+'</div><div class="hud-val">'+d.failTime+'</div></div>';
+  document.getElementById('frameIndicator').textContent=t('frame')+' '+(f+1)+'/'+totalFrames;
+}
+
+function resize(){
+  var wrap=document.querySelector('.canvas-wrap');var rect=wrap.getBoundingClientRect();
+  if(rect.width<1||rect.height<1)return;
+  W=rect.width*DPR;H=rect.height*DPR;
+  canvas.width=W;canvas.height=H;
+  canvas.style.width=rect.width+'px';canvas.style.height=rect.height+'px';
+  drawFrame(currentFrame);
+}
+
+function refreshI18N(){
+  document.getElementById('btnPrev').textContent=t('btnPrev');
+  document.getElementById('btnPlay').textContent=playing?t('btnPause'):t('btnPlay');
+  document.getElementById('btnNext').textContent=t('btnNext');
+  document.getElementById('guideTitle').textContent=t('guideTitle');
+  document.getElementById('guideWhat').textContent=t('guideWhat');
+  var pts=document.getElementById('guidePoints');
+  pts.innerHTML='<li>'+t('guideObs1')+'</li><li>'+t('guideObs2')+'</li><li>'+t('guideObs3')+'</li>';
+  document.getElementById('guideControls').textContent=t('guideCtrl');
+  document.getElementById('guideTakeaway').textContent=t('guideTakeaway');
+  updateHUD(currentFrame);drawFrame(currentFrame);
+}
+
+document.getElementById('langBtn').addEventListener('click',function(){
+  LANG=LANG==='en'?'cn':'en';
+  document.getElementById('langBtn').textContent=LANG.toUpperCase();
+  refreshI18N();
+});
+document.getElementById('guideHeader').addEventListener('click',function(){
+  var c=document.getElementById('guideContent');var tog=document.getElementById('guideToggle');
+  if(c.classList.contains('collapsed')){c.classList.remove('collapsed');tog.textContent='[-]';}
+  else{c.classList.add('collapsed');tog.textContent='[+]';}
+});
+document.getElementById('btnPrev').addEventListener('click',function(){
+  if(playing){playing=false;if(playTimer)clearTimeout(playTimer);}
+  transitionTo(currentFrame-1);document.getElementById('btnPlay').textContent=t('btnPlay');
+});
+document.getElementById('btnNext').addEventListener('click',function(){
+  if(playing){playing=false;if(playTimer)clearTimeout(playTimer);}
+  transitionTo(currentFrame+1);document.getElementById('btnPlay').textContent=t('btnPlay');
+});
+document.getElementById('btnPlay').addEventListener('click',function(){
+  if(playing){playing=false;if(playTimer)clearTimeout(playTimer);
+    document.getElementById('btnPlay').textContent=t('btnPlay');return;}
+  playing=true;document.getElementById('btnPlay').textContent=t('btnPause');
+  if(currentFrame>=totalFrames-1){currentFrame=-1;}
+  function autoPlay(){
+    if(!playing)return;transitionTo(currentFrame+1);
+    if(currentFrame>=totalFrames-1){playing=false;document.getElementById('btnPlay').textContent=t('btnPlay');return;}
+    playTimer=setTimeout(function(){requestAnimationFrame(autoPlay);},2200);
+  }
+  autoPlay();
+});
+
+window.addEventListener('resize',resize);
+refreshI18N();resize();
+setTimeout(resize,200);setTimeout(resize,600);
+document.fonts.ready.then(function(){resize();});
+})();
+</script>
+</body>
+</html>

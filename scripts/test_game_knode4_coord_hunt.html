@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Coordinate Hunt / 坐标寻宝</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=Noto+Sans+SC:wght@400;700&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box;}
+:root{
+  --bg:#0c0e12;--bg2:#12151b;--primary:#ffb59c;--secondary:#00cc88;
+  --error:#ff4444;--text:#f6f6fc;--muted:#aaabb0;
+  --glow-primary:rgba(255,181,156,0.3);--glow-secondary:rgba(0,204,136,0.3);
+}
+html,body{width:100%;height:100vh;overflow:hidden;background:var(--bg);color:var(--text);font-family:'Space Grotesk','Noto Sans SC',sans-serif;}
+.app{display:flex;flex-direction:column;height:100vh;overflow:hidden;}
+
+/* -- header -- */
+.header{padding:10px 16px 6px;display:flex;justify-content:space-between;align-items:center;}
+.header h1{font-size:clamp(14px,2.2vw,20px);font-weight:700;letter-spacing:-0.02em;color:var(--primary);text-shadow:0 0 15px var(--glow-primary);}
+.header .sub{font-size:11px;color:var(--muted);letter-spacing:0.1em;text-transform:uppercase;}
+
+/* -- HUD -- */
+.hud{height:44px;display:flex;align-items:center;justify-content:space-around;background:rgba(0,0,0,0.55);backdrop-filter:blur(12px);padding:0 16px;}
+.hud-item{text-align:center;}
+.hud-label{font-size:9px;letter-spacing:0.15em;text-transform:uppercase;color:var(--muted);}
+.hud-val{font-size:15px;font-weight:700;color:var(--primary);}
+
+/* -- grid area -- */
+.grid-area{flex:1;min-height:0;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:8px 16px;}
+.target-display{margin-bottom:10px;text-align:center;}
+.target-label{font-size:12px;color:var(--muted);letter-spacing:0.12em;text-transform:uppercase;}
+.target-coord{font-size:clamp(28px,5vw,42px);font-weight:700;color:var(--secondary);text-shadow:0 0 20px var(--glow-secondary);letter-spacing:0.08em;}
+
+.grid-container{position:relative;}
+.grid-table{border-collapse:collapse;}
+.grid-table td{width:var(--cell);height:var(--cell);text-align:center;vertical-align:middle;border:1px solid rgba(255,255,255,0.1);cursor:pointer;position:relative;transition:background 0.15s;}
+.grid-table td:hover{background:rgba(255,255,255,0.06);}
+.col-header,.row-header{font-size:clamp(10px,1.4vw,14px);font-weight:700;color:var(--primary);opacity:0.7;border:none!important;cursor:default;pointer-events:none;}
+.col-header{padding-bottom:4px;}
+.row-header{padding-right:6px;text-align:right;}
+.corner{border:none!important;cursor:default;pointer-events:none;}
+
+/* cell states */
+.cell-correct{animation:flashGreen 0.5s ease-out;}
+.cell-wrong{animation:flashRed 0.5s ease-out;}
+@keyframes flashGreen{0%{background:rgba(0,204,136,0.6);} 100%{background:transparent;}}
+@keyframes flashRed{0%{background:rgba(255,68,68,0.5);} 100%{background:transparent;}}
+
+/* treasure icon */
+.treasure{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none;font-size:clamp(16px,2.5vw,26px);filter:drop-shadow(0 0 6px rgba(255,213,107,0.7));}
+
+/* feedback toast */
+.feedback{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);font-size:clamp(18px,4vw,32px);font-weight:700;pointer-events:none;opacity:0;transition:opacity 0.3s;z-index:200;text-shadow:0 0 20px currentColor;}
+.feedback.show{opacity:1;}
+.feedback.correct{color:var(--secondary);}
+.feedback.wrong{color:var(--error);}
+
+/* final screen */
+.final-screen{position:fixed;inset:0;background:rgba(12,14,18,0.92);backdrop-filter:blur(16px);display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:300;opacity:0;pointer-events:none;transition:opacity 0.4s;}
+.final-screen.show{opacity:1;pointer-events:auto;}
+.final-title{font-size:clamp(20px,4vw,36px);font-weight:700;color:var(--primary);margin-bottom:12px;}
+.final-score{font-size:clamp(40px,8vw,64px);font-weight:700;color:var(--secondary);text-shadow:0 0 30px var(--glow-secondary);}
+.final-sub{font-size:14px;color:var(--muted);margin-top:8px;}
+.restart-btn{margin-top:24px;font-family:'Space Grotesk',sans-serif;font-size:14px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;padding:10px 32px;border:none;cursor:pointer;color:#1a0e08;background:linear-gradient(135deg,#ffb59c,#ff8a6a);box-shadow:0 0 16px var(--glow-primary);transition:transform 0.1s;}
+.restart-btn:hover{transform:scale(1.05);}
+.restart-btn:active{transform:scale(0.95);}
+
+/* lang btn */
+.lang-btn{position:fixed;top:8px;right:8px;z-index:400;font-family:'Space Grotesk',sans-serif;font-size:11px;font-weight:700;padding:4px 10px;cursor:pointer;border:none;background:rgba(20,20,35,0.85);backdrop-filter:blur(12px);color:var(--primary);letter-spacing:1px;}
+</style>
+</head>
+<body>
+<button class="lang-btn" id="langBtn">CN</button>
+<div class="app">
+  <div class="header">
+    <div><h1 id="title"></h1><div class="sub" id="subtitle"></div></div>
+  </div>
+  <div class="hud">
+    <div class="hud-item"><div class="hud-label" id="hudL1"></div><div class="hud-val" id="hudV1"></div></div>
+    <div class="hud-item"><div class="hud-label" id="hudL2"></div><div class="hud-val" id="hudV2"></div></div>
+    <div class="hud-item"><div class="hud-label" id="hudL3"></div><div class="hud-val" id="hudV3"></div></div>
+  </div>
+  <div class="grid-area">
+    <div class="target-display">
+      <div class="target-label" id="targetLabel"></div>
+      <div class="target-coord" id="targetCoord">--</div>
+    </div>
+    <div class="grid-container" id="gridContainer"></div>
+  </div>
+</div>
+<div class="feedback" id="feedback"></div>
+<div class="final-screen" id="finalScreen">
+  <div class="final-title" id="finalTitle"></div>
+  <div class="final-score" id="finalScore"></div>
+  <div class="final-sub" id="finalSub"></div>
+  <button class="restart-btn" id="restartBtn"></button>
+</div>
+
+<script>
+(function(){
+  /* ---- i18n ------------------------------------------------------------ */
+  var I = {
+    title:      {en:'COORDINATE HUNT', cn:'坐标寻宝'},
+    subtitle:   {en:'CLICK THE TARGET CELL', cn:'点击目标格子'},
+    targetLabel:{en:'FIND THIS COORDINATE', cn:'找到这个坐标'},
+    hudRound:   {en:'ROUND', cn:'轮次'},
+    hudScore:   {en:'SCORE', cn:'得分'},
+    hudTarget:  {en:'TARGET', cn:'目标'},
+    correct:    {en:'CORRECT!', cn:'正确！'},
+    wrong:      {en:'WRONG!', cn:'错误！'},
+    hintPrefix: {en:'It was at ', cn:'正确位置是 '},
+    finalTitle: {en:'MISSION COMPLETE', cn:'任务完成'},
+    finalSub:   {en:'out of 10', cn:'/ 10'},
+    restart:    {en:'PLAY AGAIN', cn:'再来一次'},
+  };
+  var lang = 'cn';
+  function t(k){ return I[k] ? (I[k][lang]||I[k].en) : k; }
+
+  /* ---- state ----------------------------------------------------------- */
+  var ROWS = 8, COLS = 8, TOTAL_ROUNDS = 10;
+  var COL_LETTERS = 'ABCDEFGH';
+  var round = 0, score = 0;
+  var targetR = -1, targetC = -1;
+  var locked = false;
+
+  /* ---- DOM refs -------------------------------------------------------- */
+  var titleEl     = document.getElementById('title');
+  var subtitleEl  = document.getElementById('subtitle');
+  var targetLabel = document.getElementById('targetLabel');
+  var targetCoord = document.getElementById('targetCoord');
+  var hudL1 = document.getElementById('hudL1');
+  var hudV1 = document.getElementById('hudV1');
+  var hudL2 = document.getElementById('hudL2');
+  var hudV2 = document.getElementById('hudV2');
+  var hudL3 = document.getElementById('hudL3');
+  var hudV3 = document.getElementById('hudV3');
+  var gridContainer = document.getElementById('gridContainer');
+  var feedbackEl = document.getElementById('feedback');
+  var finalScreen = document.getElementById('finalScreen');
+  var finalTitle  = document.getElementById('finalTitle');
+  var finalScore  = document.getElementById('finalScore');
+  var finalSub    = document.getElementById('finalSub');
+  var restartBtn  = document.getElementById('restartBtn');
+  var langBtn     = document.getElementById('langBtn');
+
+  /* ---- build grid ------------------------------------------------------ */
+  var cells = []; // 2d array [r][c] -> td
+  function buildGrid(){
+    var viewH = window.innerHeight;
+    var viewW = window.innerWidth;
+    var available = Math.min(viewW - 48, viewH * 0.52);
+    var cellPx = Math.floor(available / (COLS + 1)); // +1 for header col
+    if (cellPx < 24) cellPx = 24;
+    if (cellPx > 56) cellPx = 56;
+    gridContainer.style.setProperty('--cell', cellPx+'px');
+
+    var table = document.createElement('table');
+    table.className = 'grid-table';
+    /* header row */
+    var hrow = document.createElement('tr');
+    var corner = document.createElement('td');
+    corner.className = 'corner';
+    hrow.appendChild(corner);
+    for (var c=0;c<COLS;c++){
+      var th = document.createElement('td');
+      th.className = 'col-header';
+      th.textContent = COL_LETTERS[c];
+      hrow.appendChild(th);
+    }
+    table.appendChild(hrow);
+
+    cells = [];
+    for (var r=0;r<ROWS;r++){
+      var tr = document.createElement('tr');
+      var rh = document.createElement('td');
+      rh.className = 'row-header';
+      rh.textContent = ''+(r+1);
+      tr.appendChild(rh);
+      cells[r] = [];
+      for (var c=0;c<COLS;c++){
+        var td = document.createElement('td');
+        td.dataset.r = r;
+        td.dataset.c = c;
+        td.addEventListener('click', onCellClick);
+        tr.appendChild(td);
+        cells[r][c] = td;
+      }
+      table.appendChild(tr);
+    }
+    gridContainer.innerHTML = '';
+    gridContainer.appendChild(table);
+  }
+
+  /* ---- game logic ------------------------------------------------------ */
+  function coordLabel(r,c){ return COL_LETTERS[c]+(r+1); }
+
+  function nextRound(){
+    round++;
+    if (round > TOTAL_ROUNDS){ showFinal(); return; }
+    /* clear old treasure */
+    for (var r=0;r<ROWS;r++) for(var c=0;c<COLS;c++) cells[r][c].innerHTML = '';
+    /* pick random */
+    targetR = Math.floor(Math.random()*ROWS);
+    targetC = Math.floor(Math.random()*COLS);
+    /* place treasure visually (hidden — we show coord, player must find it) */
+    /* Actually: show treasure icon so player sees it and matches to coord */
+    var icon = document.createElement('span');
+    icon.className = 'treasure';
+    icon.textContent = '\u2666'; // diamond
+    cells[targetR][targetC].appendChild(icon);
+
+    targetCoord.textContent = coordLabel(targetR, targetC);
+    locked = false;
+    updateHUD();
+  }
+
+  function onCellClick(e){
+    if (locked) return;
+    var td = e.currentTarget;
+    var r = parseInt(td.dataset.r);
+    var c = parseInt(td.dataset.c);
+    locked = true;
+
+    if (r === targetR && c === targetC) {
+      score++;
+      td.classList.add('cell-correct');
+      showFeedback(t('correct'), 'correct');
+      setTimeout(function(){ td.classList.remove('cell-correct'); nextRound(); }, 600);
+    } else {
+      td.classList.add('cell-wrong');
+      /* highlight correct cell */
+      cells[targetR][targetC].style.background = 'rgba(0,204,136,0.35)';
+      showFeedback(t('wrong') + ' ' + t('hintPrefix') + coordLabel(targetR, targetC), 'wrong');
+      setTimeout(function(){
+        td.classList.remove('cell-wrong');
+        cells[targetR][targetC].style.background = '';
+        nextRound();
+      }, 1200);
+    }
+  }
+
+  function showFeedback(msg, cls){
+    feedbackEl.textContent = msg;
+    feedbackEl.className = 'feedback show ' + cls;
+    setTimeout(function(){ feedbackEl.className = 'feedback'; }, cls==='correct'?500:1000);
+  }
+
+  function showFinal(){
+    finalTitle.textContent = t('finalTitle');
+    finalScore.textContent = score;
+    finalSub.textContent = t('finalSub');
+    restartBtn.textContent = t('restart');
+    finalScreen.classList.add('show');
+  }
+
+  function restart(){
+    round = 0; score = 0;
+    finalScreen.classList.remove('show');
+    nextRound();
+  }
+
+  function updateHUD(){
+    hudL1.textContent = t('hudRound');
+    hudV1.textContent = round + '/' + TOTAL_ROUNDS;
+    hudL2.textContent = t('hudScore');
+    hudV2.textContent = score;
+    hudL3.textContent = t('hudTarget');
+    hudV3.textContent = coordLabel(targetR, targetC);
+  }
+
+  function updateText(){
+    titleEl.textContent = t('title');
+    subtitleEl.textContent = t('subtitle');
+    targetLabel.textContent = t('targetLabel');
+    langBtn.textContent = lang === 'cn' ? 'CN' : 'EN';
+    updateHUD();
+    if (finalScreen.classList.contains('show')){
+      finalTitle.textContent = t('finalTitle');
+      finalSub.textContent = t('finalSub');
+      restartBtn.textContent = t('restart');
+    }
+  }
+
+  /* ---- events ---------------------------------------------------------- */
+  langBtn.addEventListener('click', function(){
+    lang = lang==='cn' ? 'en' : 'cn';
+    updateText();
+  });
+  restartBtn.addEventListener('click', restart);
+  window.addEventListener('resize', function(){ buildGrid(); /* re-place treasure */ if(round>0 && round<=TOTAL_ROUNDS){ var icon=document.createElement('span'); icon.className='treasure'; icon.textContent='\u2666'; cells[targetR][targetC].appendChild(icon); }});
+
+  /* ---- init ------------------------------------------------------------ */
+  buildGrid();
+  updateText();
+  nextRound();
+})();
+</script>
+</body>
+</html>

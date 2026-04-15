@@ -1,0 +1,717 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;700&family=Inter:wght@400;500&family=Noto+Sans+SC:wght@400;700&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0;border-radius:0}
+html,body{width:100%;height:100vh;overflow:hidden;
+  background:#131313;
+  font-family:'Space Grotesk','Inter','Noto Sans SC',sans-serif;
+  color:#e5e2e1;
+}
+.lang-btn{
+  position:fixed;top:8px;left:8px;z-index:100;
+  font-family:'Space Grotesk',sans-serif;font-size:11px;font-weight:700;
+  padding:4px 10px;cursor:pointer;
+  border:1px solid rgba(255,255,255,0.08);
+  background:rgba(20,20,35,0.85);backdrop-filter:blur(12px);
+  color:#ffb59c;letter-spacing:1px;
+}
+.guide-panel{
+  position:fixed;top:8px;right:8px;width:260px;max-height:40vh;
+  overflow-y:auto;z-index:100;
+  background:rgba(20,20,35,0.85);backdrop-filter:blur(12px);
+  border:1px solid rgba(255,255,255,0.08);padding:12px;
+  font-family:'Noto Sans SC',sans-serif;font-size:13px;
+  color:rgba(255,255,255,0.85);
+}
+.guide-panel h3{
+  font-family:'Space Grotesk',sans-serif;font-size:14px;
+  margin-bottom:8px;display:flex;align-items:center;
+  justify-content:space-between;cursor:pointer;
+  color:#ffb59c;
+}
+.guide-panel .toggle{font-size:12px;opacity:0.6;}
+.guide-panel ul{padding-left:16px;line-height:1.6;}
+.guide-panel .guide-content.collapsed{display:none;}
+.wrapper{display:flex;flex-direction:column;height:100vh;}
+.header{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:6px 16px;
+  background:rgba(28,27,27,0.95);
+  border-bottom:1px solid rgba(138,136,134,0.15);
+}
+.header h2{
+  font-family:'Space Grotesk',sans-serif;font-size:14px;font-weight:700;
+  color:#ffb59c;letter-spacing:1px;
+}
+.header .sub{font-size:11px;color:#8a8886;margin-left:8px;font-weight:400;}
+.canvas-wrap{flex:1;min-height:0;position:relative;}
+.canvas-wrap canvas{display:block;width:100%;height:100%;}
+.controls{
+  display:flex;justify-content:center;align-items:center;gap:10px;
+  padding:6px 0;
+  background:rgba(28,27,27,0.92);
+  border-top:1px solid rgba(138,136,134,0.15);
+}
+.ctrl-btn{
+  background:linear-gradient(135deg,rgba(53,53,52,0.8),rgba(28,27,27,0.8));
+  border:1px solid rgba(138,136,134,0.15);
+  color:#e5e2e1;padding:5px 14px;font-size:12px;cursor:pointer;
+  font-family:'Space Grotesk',sans-serif;letter-spacing:0.5px;
+}
+.ctrl-btn:hover{border-color:rgba(255,181,156,0.4);}
+#frameDots{display:flex;gap:6px;align-items:center;}
+#frameDots .dot{
+  width:8px;height:8px;
+  background:rgba(138,136,134,0.3);cursor:pointer;
+}
+#frameDots .dot.active{background:#ffb59c;transform:scale(1.3);}
+.hud{
+  display:flex;justify-content:space-around;align-items:center;
+  padding:6px 12px;
+  background:rgba(28,27,27,0.95);
+  border-top:1px solid rgba(138,136,134,0.15);
+  font-size:11px;color:#8a8886;
+}
+.hud .item{display:flex;flex-direction:column;align-items:center;}
+.hud .label{font-size:9px;text-transform:uppercase;letter-spacing:0.5px;opacity:0.7;}
+.hud .value{font-size:13px;color:#e5e2e1;font-weight:500;margin-top:2px;}
+</style>
+</head>
+<body>
+<button class="lang-btn" id="langBtn">CN</button>
+<div class="guide-panel" id="guidePanel">
+  <h3 id="guideTitle"><span id="guideTitleText"></span><span class="toggle" id="guideToggle">[-]</span></h3>
+  <div class="guide-content" id="guideContent">
+    <p id="guideDesc" style="margin-bottom:8px;"></p>
+    <ul>
+      <li id="guideObs1"></li>
+      <li id="guideObs2"></li>
+      <li id="guideObs3"></li>
+    </ul>
+  </div>
+</div>
+<div class="wrapper">
+  <div class="header">
+    <h2 id="mainTitle"></h2>
+    <span class="sub">P-MARS-01-M30 &middot; foundation</span>
+  </div>
+  <div class="canvas-wrap"><canvas id="c"></canvas></div>
+  <div class="controls">
+    <button class="ctrl-btn" id="btnPrev"></button>
+    <button class="ctrl-btn" id="btnPlay"></button>
+    <button class="ctrl-btn" id="btnNext"></button>
+    <div id="frameDots"></div>
+  </div>
+  <div class="hud">
+    <div class="item"><div class="label">FRAME</div><div class="value" id="hudFrame">1 / 5</div></div>
+    <div class="item"><div class="label" id="hudSensorLabel">SENSOR</div><div class="value" id="hudSensor"></div></div>
+    <div class="item"><div class="label" id="hudFreqLabel">FREQ</div><div class="value" id="hudFreq"></div></div>
+    <div class="item"><div class="label" id="hudSyncLabel">SYNC</div><div class="value" id="hudSync"></div></div>
+  </div>
+</div>
+<script>
+(function(){
+var LANG = 'cn';
+var I18N = {
+  title:         {en:'SENSOR INSTALLATION & DATA FLOW', cn:'\u4f20\u611f\u5668\u5b89\u88c5\u4f4d\u7f6e\u4e0e\u6570\u636e\u6d41'},
+  guide:         {en:'GUIDE',   cn:'\u64cd\u4f5c\u6307\u5357'},
+  guideDesc:     {en:'This animation shows where camera, IMU & odometry are mounted on a rover and how their data flows synchronize.',
+                  cn:'\u672c\u52a8\u753b\u5c55\u793a\u76f8\u673a\u3001IMU \u548c\u91cc\u7a0b\u8ba1\u5728\u5c0f\u8f66\u4e0a\u7684\u5b89\u88c5\u4f4d\u7f6e\uff0c\u4ee5\u53ca\u5b83\u4eec\u7684\u6570\u636e\u6d41\u5982\u4f55\u540c\u6b65\u3002'},
+  obs1:          {en:'Observe sensor placement on rover body',
+                  cn:'\u89c2\u5bdf\u4f20\u611f\u5668\u5728\u8f66\u4f53\u4e0a\u7684\u5b89\u88c5\u4f4d\u7f6e'},
+  obs2:          {en:'Notice different sampling frequencies',
+                  cn:'\u6ce8\u610f\u4e0d\u540c\u4f20\u611f\u5668\u7684\u91c7\u6837\u9891\u7387\u5dee\u5f02'},
+  obs3:          {en:'See how timestamps must align for fusion',
+                  cn:'\u7406\u89e3\u65f6\u95f4\u6233\u5bf9\u9f50\u5bf9\u878d\u5408\u7684\u91cd\u8981\u6027'},
+  btnPrev:       {en:'PREV',    cn:'\u4e0a\u4e00\u5e27'},
+  btnPlay:       {en:'PLAY',    cn:'\u64ad\u653e'},
+  btnPause:      {en:'PAUSE',   cn:'\u6682\u505c'},
+  btnNext:       {en:'NEXT',    cn:'\u4e0b\u4e00\u5e27'},
+  f0title:       {en:'ROVER OVERVIEW',          cn:'\u5c0f\u8f66\u603b\u89c8'},
+  f0desc:        {en:'A rover needs 3 core sensors: Camera, IMU, and Wheel Odometry',
+                  cn:'\u4e00\u8f86\u5c0f\u8f66\u9700\u8981 3 \u7c7b\u6838\u5fc3\u4f20\u611f\u5668\uff1a\u76f8\u673a\u3001IMU\u3001\u8f6e\u5f0f\u91cc\u7a0b\u8ba1'},
+  f1title:       {en:'CAMERA: Visual Perception',   cn:'\u76f8\u673a\uff1a\u89c6\u89c9\u611f\u77e5'},
+  f1desc:        {en:'Mounted on mast, 10-30 fps, captures terrain images',
+                  cn:'\u5b89\u88c5\u5728\u6845\u6746\u9876\u90e8\uff0c10-30 fps\uff0c\u91c7\u96c6\u5730\u5f62\u56fe\u50cf'},
+  f2title:       {en:'IMU: Attitude Estimation',    cn:'IMU\uff1a\u59ff\u6001\u4f30\u8ba1'},
+  f2desc:        {en:'Mounted at center of mass, 100-400 Hz, measures acceleration & rotation',
+                  cn:'\u5b89\u88c5\u5728\u8d28\u5fc3\u4f4d\u7f6e\uff0c100-400 Hz\uff0c\u6d4b\u91cf\u52a0\u901f\u5ea6\u548c\u89d2\u901f\u5ea6'},
+  f3title:       {en:'ODOMETRY: Distance Tracking',  cn:'\u91cc\u7a0b\u8ba1\uff1a\u8ddd\u79bb\u8ffd\u8e2a'},
+  f3desc:        {en:'On wheel axle, 50-100 Hz, counts rotation per wheel',
+                  cn:'\u5b89\u88c5\u5728\u8f6e\u8f74\u4e0a\uff0c50-100 Hz\uff0c\u8ba1\u6570\u6bcf\u4e2a\u8f6e\u5b50\u7684\u8f6c\u6570'},
+  f4title:       {en:'TIMESTAMP ALIGNMENT',         cn:'\u65f6\u95f4\u6233\u5bf9\u9f50'},
+  f4desc:        {en:'All 3 sensor streams must share a common timeline for sensor fusion',
+                  cn:'\u4e09\u8def\u4f20\u611f\u5668\u6570\u636e\u5fc5\u987b\u5bf9\u9f50\u5230\u540c\u4e00\u65f6\u95f4\u7ebf\u624d\u80fd\u878d\u5408'},
+  sensorOverview:{en:'All 3',   cn:'\u5168\u90e8 3 \u4e2a'},
+  sensorCam:     {en:'Camera',  cn:'\u76f8\u673a'},
+  sensorIMU:     {en:'IMU',     cn:'IMU'},
+  sensorOdom:    {en:'Odometry',cn:'\u91cc\u7a0b\u8ba1'},
+  sensorSync:    {en:'Fusion',  cn:'\u878d\u5408'},
+  freqAll:       {en:'10-400 Hz',  cn:'10-400 Hz'},
+  freqCam:       {en:'10-30 fps',  cn:'10-30 fps'},
+  freqIMU:       {en:'100-400 Hz', cn:'100-400 Hz'},
+  freqOdom:      {en:'50-100 Hz',  cn:'50-100 Hz'},
+  freqSync:      {en:'Aligned',    cn:'\u5df2\u5bf9\u9f50'},
+  syncNa:        {en:'N/A',        cn:'\u672a\u5f00\u59cb'},
+  syncPartial:   {en:'Individual', cn:'\u5355\u72ec\u91c7\u96c6'},
+  syncAligned:   {en:'Aligned',    cn:'\u5df2\u5bf9\u9f50'},
+  roverBody:     {en:'ROVER BODY', cn:'\u8f66\u4f53'},
+  mast:          {en:'MAST',       cn:'\u6845\u6746'},
+  wheel:         {en:'WHEEL',      cn:'\u8f6e\u5b50'},
+  centerMass:    {en:'CENTER',     cn:'\u8d28\u5fc3'},
+  dataStream:    {en:'DATA STREAM',cn:'\u6570\u636e\u6d41'},
+  timestamp:     {en:'TIMESTAMP',  cn:'\u65f6\u95f4\u6233'},
+  camLabel:      {en:'CAM',        cn:'\u76f8\u673a'},
+  imuLabel:      {en:'IMU',        cn:'IMU'},
+  odomLabel:     {en:'ODOM',       cn:'\u91cc\u7a0b\u8ba1'},
+  fusionLabel:   {en:'FUSION BUS', cn:'\u878d\u5408\u603b\u7ebf'},
+};
+function t(key){ return (I18N[key] && I18N[key][LANG]) || (I18N[key] && I18N[key]['en']) || key; }
+
+var canvas = document.getElementById('c');
+var ctx = canvas.getContext('2d');
+var W = 700, H = 440;
+var DPR = Math.min(window.devicePixelRatio || 1, 2);
+var totalFrames = 5;
+var currentFrame = 0;
+var transitioning = false;
+var playing = false;
+var playTimer = null;
+
+function resize(){
+  var wrap = canvas.parentElement;
+  var rect = wrap ? wrap.getBoundingClientRect() : canvas.getBoundingClientRect();
+  if(rect.width < 1 || rect.height < 1) return;
+  canvas.width = rect.width * DPR;
+  canvas.height = rect.height * DPR;
+  var scale = Math.min(rect.width / W, rect.height / H);
+  var drawW = W * scale;
+  var drawH = H * scale;
+  var offsetX = (rect.width - drawW) / 2;
+  var offsetY = (rect.height - drawH) / 2;
+  ctx.setTransform(DPR*scale, 0, 0, DPR*scale, DPR*offsetX, DPR*offsetY);
+  drawFrame(currentFrame);
+}
+
+function lerp(a,b,p){ return a + (b-a)*p; }
+function easeInOut(x){ return x < 0.5 ? 2*x*x : 1 - Math.pow(-2*x+2,2)/2; }
+function merge(base, ov){
+  var r = {};
+  for(var k in base) r[k] = base[k];
+  for(var k2 in ov) r[k2] = ov[k2];
+  return r;
+}
+
+// ---- Colors ----
+var COL = {
+  bg: '#131313',
+  surface: 'rgba(28,27,27,0.92)',
+  primary: '#ffb59c',
+  prim2: '#ff7f50',
+  tert: '#00daf3',
+  signal: '#ff5f1f',
+  success: '#10b981',
+  text: '#e5e2e1',
+  muted: '#8a8886',
+  camColor: '#00daf3',
+  imuColor: '#ff7f50',
+  odomColor: '#10b981',
+};
+
+// ---- Draw Background ----
+function drawBg(){
+  var g = ctx.createRadialGradient(W/2, H/2, 50, W/2, H/2, W*0.7);
+  g.addColorStop(0, '#1c1b1b');
+  g.addColorStop(1, '#131313');
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, W, H);
+  ctx.strokeStyle = 'rgba(0,218,243,0.04)';
+  ctx.lineWidth = 0.5;
+  for(var x=0; x<=W; x+=20){ ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,H); ctx.stroke(); }
+  for(var y=0; y<=H; y+=20){ ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(W,y); ctx.stroke(); }
+}
+
+// ---- Draw Rover Body ----
+function drawRover(cx, cy, scale, highlight, alpha){
+  if(!alpha || alpha<=0.01) return;
+  ctx.save();
+  ctx.globalAlpha = alpha;
+  var s = scale || 1;
+  ctx.translate(cx, cy);
+  ctx.scale(s, s);
+  // Rover body - main chassis
+  var bodyG = ctx.createLinearGradient(-70, -20, -70, 30);
+  bodyG.addColorStop(0, '#4a4a48');
+  bodyG.addColorStop(0.5, '#353534');
+  bodyG.addColorStop(1, '#252524');
+  ctx.fillStyle = bodyG;
+  ctx.fillRect(-70, -20, 140, 50);
+  // Top plate
+  var topG = ctx.createLinearGradient(-60, -30, -60, -20);
+  topG.addColorStop(0, '#555553');
+  topG.addColorStop(1, '#4a4a48');
+  ctx.fillStyle = topG;
+  ctx.fillRect(-60, -30, 120, 12);
+  // Mast
+  var mastG = ctx.createLinearGradient(-5, -90, 5, -30);
+  mastG.addColorStop(0, '#666664');
+  mastG.addColorStop(1, '#444443');
+  ctx.fillStyle = mastG;
+  ctx.fillRect(-3, -90, 6, 60);
+  // Camera on mast
+  var camG = ctx.createRadialGradient(0, -95, 2, 0, -95, 12);
+  camG.addColorStop(0, highlight === 'cam' ? '#33f0ff' : '#1a9aa8');
+  camG.addColorStop(1, highlight === 'cam' ? '#00daf3' : '#0a6670');
+  ctx.fillStyle = camG;
+  ctx.fillRect(-10, -100, 20, 14);
+  // Camera lens
+  ctx.beginPath();
+  ctx.arc(0, -93, 4, 0, Math.PI*2);
+  ctx.fillStyle = highlight === 'cam' ? '#66f7ff' : '#00aabb';
+  ctx.fill();
+  if(highlight === 'cam'){
+    ctx.shadowColor = '#00daf3';
+    ctx.shadowBlur = 15;
+    ctx.fill();
+    ctx.shadowBlur = 0;
+  }
+  // IMU at center of mass
+  var imuG = ctx.createRadialGradient(0, 0, 2, 0, 0, 10);
+  imuG.addColorStop(0, highlight === 'imu' ? '#ffa060' : '#a06030');
+  imuG.addColorStop(1, highlight === 'imu' ? '#ff7f50' : '#804020');
+  ctx.fillStyle = imuG;
+  ctx.fillRect(-8, -8, 16, 16);
+  if(highlight === 'imu'){
+    ctx.shadowColor = '#ff7f50';
+    ctx.shadowBlur = 15;
+    ctx.fillRect(-8, -8, 16, 16);
+    ctx.shadowBlur = 0;
+  }
+  // Wheels
+  var wPositions = [[-65, 35], [-35, 35], [35, 35], [65, 35]];
+  for(var i=0; i<wPositions.length; i++){
+    var wx = wPositions[i][0], wy = wPositions[i][1];
+    var wG = ctx.createRadialGradient(wx, wy, 2, wx, wy, 12);
+    wG.addColorStop(0, highlight === 'odom' ? '#30e8a0' : '#308860');
+    wG.addColorStop(1, highlight === 'odom' ? '#10b981' : '#186040');
+    ctx.beginPath();
+    ctx.arc(wx, wy, 12, 0, Math.PI*2);
+    ctx.fillStyle = wG;
+    ctx.fill();
+    if(highlight === 'odom'){
+      ctx.shadowColor = '#10b981';
+      ctx.shadowBlur = 12;
+      ctx.fill();
+      ctx.shadowBlur = 0;
+    }
+    // Axle
+    ctx.fillStyle = '#555';
+    ctx.fillRect(wx-2, 30, 4, 5);
+  }
+  // Labels
+  if(highlight === 'cam'){
+    ctx.font = "bold 10px 'Space Grotesk',sans-serif";
+    ctx.fillStyle = COL.camColor;
+    ctx.textAlign = 'left';
+    ctx.fillText(t('camLabel'), 16, -90);
+    // Arrow from label to camera
+    ctx.strokeStyle = COL.camColor;
+    ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(14,-92); ctx.lineTo(12,-93); ctx.stroke();
+  }
+  if(highlight === 'imu'){
+    ctx.font = "bold 10px 'Space Grotesk',sans-serif";
+    ctx.fillStyle = COL.imuColor;
+    ctx.textAlign = 'left';
+    ctx.fillText(t('imuLabel'), 16, 4);
+    ctx.strokeStyle = COL.imuColor;
+    ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(14,2); ctx.lineTo(10,0); ctx.stroke();
+  }
+  if(highlight === 'odom'){
+    ctx.font = "bold 10px 'Space Grotesk',sans-serif";
+    ctx.fillStyle = COL.odomColor;
+    ctx.textAlign = 'center';
+    ctx.fillText(t('odomLabel'), 0, 58);
+  }
+  ctx.restore();
+}
+
+// ---- Draw Data Stream Timeline ----
+function drawTimeline(alpha, showCam, showIMU, showOdom, showAlign, time){
+  if(!alpha || alpha<=0.01) return;
+  ctx.save();
+  ctx.globalAlpha = alpha;
+  var tx = 380, ty = 80, tw = 280, th = 250;
+  // Panel background
+  ctx.fillStyle = 'rgba(28,27,27,0.7)';
+  ctx.fillRect(tx, ty, tw, th);
+  ctx.strokeStyle = 'rgba(138,136,134,0.2)';
+  ctx.lineWidth = 1;
+  ctx.strokeRect(tx, ty, tw, th);
+  // Title
+  ctx.font = "bold 11px 'Space Grotesk',sans-serif";
+  ctx.fillStyle = COL.primary;
+  ctx.textAlign = 'center';
+  ctx.fillText(t('dataStream'), tx + tw/2, ty + 18);
+  // Time axis
+  var axY = ty + th - 30;
+  ctx.strokeStyle = 'rgba(255,255,255,0.2)';
+  ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(tx+20, axY); ctx.lineTo(tx+tw-20, axY); ctx.stroke();
+  ctx.font = "9px 'Space Grotesk',sans-serif";
+  ctx.fillStyle = COL.muted;
+  ctx.textAlign = 'center';
+  ctx.fillText(t('timestamp'), tx+tw/2, axY+16);
+  // Time ticks
+  for(var i=0; i<6; i++){
+    var tickX = tx + 30 + i * (tw-60)/5;
+    ctx.beginPath(); ctx.moveTo(tickX, axY-3); ctx.lineTo(tickX, axY+3); ctx.stroke();
+    ctx.fillText((i*0.2).toFixed(1)+'s', tickX, axY+12);
+  }
+  // Camera data stream (sparse, 10-30 fps => few dots)
+  if(showCam){
+    var camY = ty + 50;
+    ctx.font = "bold 9px 'Space Grotesk',sans-serif";
+    ctx.fillStyle = COL.camColor;
+    ctx.textAlign = 'right';
+    ctx.fillText(t('camLabel'), tx+16, camY+4);
+    var camPts = [0, 0.033, 0.066, 0.1, 0.133, 0.166, 0.2, 0.233, 0.266, 0.3, 0.333, 0.366, 0.4, 0.433, 0.466, 0.5, 0.533, 0.566, 0.6, 0.633, 0.666, 0.7, 0.733, 0.766, 0.8, 0.833, 0.866, 0.9, 0.933, 0.966];
+    for(var ci=0; ci<camPts.length; ci++){
+      if(camPts[ci] > (time||1)) break;
+      var px = tx + 30 + camPts[ci] * (tw-60);
+      ctx.beginPath();
+      ctx.arc(px, camY, 3, 0, Math.PI*2);
+      ctx.fillStyle = COL.camColor;
+      ctx.shadowColor = COL.camColor;
+      ctx.shadowBlur = 6;
+      ctx.fill();
+      ctx.shadowBlur = 0;
+    }
+  }
+  // IMU data stream (dense, 200 Hz => lots of dots)
+  if(showIMU){
+    var imuY = ty + 100;
+    ctx.font = "bold 9px 'Space Grotesk',sans-serif";
+    ctx.fillStyle = COL.imuColor;
+    ctx.textAlign = 'right';
+    ctx.fillText(t('imuLabel'), tx+16, imuY+4);
+    for(var ii=0; ii<200; ii++){
+      var iTime = ii * 0.005;
+      if(iTime > (time||1)) break;
+      var ipx = tx + 30 + iTime * (tw-60);
+      ctx.beginPath();
+      ctx.arc(ipx, imuY, 1.2, 0, Math.PI*2);
+      ctx.fillStyle = COL.imuColor;
+      ctx.fill();
+    }
+    // Glow on latest
+    if(time){
+      var lastIpx = tx + 30 + Math.min(time, 1) * (tw-60);
+      ctx.beginPath();
+      ctx.arc(lastIpx, imuY, 3, 0, Math.PI*2);
+      ctx.shadowColor = COL.imuColor;
+      ctx.shadowBlur = 8;
+      ctx.fillStyle = COL.imuColor;
+      ctx.fill();
+      ctx.shadowBlur = 0;
+    }
+  }
+  // Odometry data stream (medium density)
+  if(showOdom){
+    var odomY = ty + 150;
+    ctx.font = "bold 9px 'Space Grotesk',sans-serif";
+    ctx.fillStyle = COL.odomColor;
+    ctx.textAlign = 'right';
+    ctx.fillText(t('odomLabel'), tx+16, odomY+4);
+    for(var oi=0; oi<80; oi++){
+      var oTime = oi * 0.0125;
+      if(oTime > (time||1)) break;
+      var opx = tx + 30 + oTime * (tw-60);
+      ctx.beginPath();
+      ctx.arc(opx, odomY, 1.8, 0, Math.PI*2);
+      ctx.fillStyle = COL.odomColor;
+      ctx.fill();
+    }
+  }
+  // Alignment lines
+  if(showAlign){
+    var alignY1 = ty + 50, alignY2 = ty + 150;
+    ctx.setLineDash([3,3]);
+    ctx.lineWidth = 0.8;
+    var alignTimes = [0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9];
+    for(var ai=0; ai<alignTimes.length; ai++){
+      if(alignTimes[ai] > (time||1)) break;
+      var apx = tx + 30 + alignTimes[ai] * (tw-60);
+      ctx.strokeStyle = 'rgba(255,181,156,0.35)';
+      ctx.beginPath(); ctx.moveTo(apx, alignY1-5); ctx.lineTo(apx, alignY2+5); ctx.stroke();
+    }
+    ctx.setLineDash([]);
+    // Fusion bus label
+    var fusY = ty + 200;
+    ctx.font = "bold 9px 'Space Grotesk',sans-serif";
+    ctx.fillStyle = COL.primary;
+    ctx.textAlign = 'right';
+    ctx.fillText(t('fusionLabel'), tx+52, fusY+4);
+    // Fused dots
+    for(var fi=0; fi<alignTimes.length; fi++){
+      if(alignTimes[fi] > (time||1)) break;
+      var fpx = tx + 30 + alignTimes[fi] * (tw-60);
+      ctx.beginPath();
+      ctx.arc(fpx, fusY, 4, 0, Math.PI*2);
+      var fG = ctx.createRadialGradient(fpx, fusY, 1, fpx, fusY, 5);
+      fG.addColorStop(0, '#ffb59c');
+      fG.addColorStop(1, 'rgba(255,181,156,0.3)');
+      ctx.fillStyle = fG;
+      ctx.shadowColor = COL.primary;
+      ctx.shadowBlur = 10;
+      ctx.fill();
+      ctx.shadowBlur = 0;
+    }
+  }
+  ctx.restore();
+}
+
+// ---- Frame Elements (Declarative) ----
+function getFrameElements(f){
+  var elems = [];
+  switch(f){
+    case 0: // Overview
+      elems.push({id:'title', type:'label', text:t('f0title'), x:W/2, y:40, color:COL.primary, size:16, align:'center', alpha:1});
+      elems.push({id:'desc', type:'label', text:t('f0desc'), x:W/2, y:H-20, color:COL.muted, size:12, align:'center', alpha:1});
+      elems.push({id:'rover', type:'custom', x:200, y:220, draw:function(a){ drawRover(200, 220, 1.4, null, a); }, alpha:1});
+      break;
+    case 1: // Camera
+      elems.push({id:'title', type:'label', text:t('f1title'), x:190, y:40, color:COL.camColor, size:16, align:'center', alpha:1});
+      elems.push({id:'desc', type:'label', text:t('f1desc'), x:190, y:H-20, color:COL.muted, size:12, align:'center', alpha:1});
+      elems.push({id:'rover', type:'custom', x:190, y:220, draw:function(a){ drawRover(190, 220, 1.2, 'cam', a); }, alpha:1});
+      elems.push({id:'timeline', type:'custom', x:380, y:80, draw:function(a){ drawTimeline(a, true, false, false, false, 1); }, alpha:1});
+      break;
+    case 2: // IMU
+      elems.push({id:'title', type:'label', text:t('f2title'), x:190, y:40, color:COL.imuColor, size:16, align:'center', alpha:1});
+      elems.push({id:'desc', type:'label', text:t('f2desc'), x:190, y:H-20, color:COL.muted, size:12, align:'center', alpha:1});
+      elems.push({id:'rover', type:'custom', x:190, y:220, draw:function(a){ drawRover(190, 220, 1.2, 'imu', a); }, alpha:1});
+      elems.push({id:'timeline', type:'custom', x:380, y:80, draw:function(a){ drawTimeline(a, true, true, false, false, 1); }, alpha:1});
+      break;
+    case 3: // Odometry
+      elems.push({id:'title', type:'label', text:t('f3title'), x:190, y:40, color:COL.odomColor, size:16, align:'center', alpha:1});
+      elems.push({id:'desc', type:'label', text:t('f3desc'), x:190, y:H-20, color:COL.muted, size:12, align:'center', alpha:1});
+      elems.push({id:'rover', type:'custom', x:190, y:220, draw:function(a){ drawRover(190, 220, 1.2, 'odom', a); }, alpha:1});
+      elems.push({id:'timeline', type:'custom', x:380, y:80, draw:function(a){ drawTimeline(a, true, true, true, false, 1); }, alpha:1});
+      break;
+    case 4: // Timestamp alignment
+      elems.push({id:'title', type:'label', text:t('f4title'), x:190, y:40, color:COL.primary, size:16, align:'center', alpha:1});
+      elems.push({id:'desc', type:'label', text:t('f4desc'), x:190, y:H-20, color:COL.muted, size:12, align:'center', alpha:1});
+      elems.push({id:'rover', type:'custom', x:190, y:220, draw:function(a){ drawRover(190, 220, 1.0, null, a); }, alpha:1});
+      elems.push({id:'timeline', type:'custom', x:380, y:80, draw:function(a){ drawTimeline(a, true, true, true, true, 1); }, alpha:1});
+      break;
+  }
+  return elems;
+}
+
+// ---- Draw primitives ----
+function drawLabelPrimitive(text, x, y, color, size, align){
+  ctx.font = "bold " + (size||14) + "px 'Space Grotesk','Noto Sans SC',sans-serif";
+  ctx.textAlign = align || 'center';
+  ctx.fillStyle = color || COL.text;
+  ctx.fillText(text, x, y);
+}
+
+function drawElement(el){
+  if(!el || el.alpha <= 0.01) return;
+  ctx.save();
+  ctx.globalAlpha = el.alpha;
+  switch(el.type){
+    case 'label':
+      drawLabelPrimitive(el.text, el.x, el.y, el.color, el.size, el.align);
+      break;
+    case 'custom':
+      el.draw(el.alpha);
+      break;
+  }
+  ctx.restore();
+}
+
+function drawFrame(f){
+  drawBg();
+  var elems = getFrameElements(f);
+  elems.forEach(function(el){ drawElement(el); });
+}
+
+// ---- Transition ----
+function transitionTo(newFrame){
+  if(newFrame < 0) newFrame = 0;
+  if(newFrame >= totalFrames) newFrame = totalFrames - 1;
+  if(newFrame === currentFrame && !transitioning){ drawFrame(currentFrame); updateHUD(currentFrame); return; }
+  if(transitioning) return;
+
+  var oldElems = getFrameElements(currentFrame);
+  var newElems = getFrameElements(newFrame);
+  var oldMap = {}; oldElems.forEach(function(e){ oldMap[e.id] = e; });
+  var newMap = {}; newElems.forEach(function(e){ newMap[e.id] = e; });
+
+  currentFrame = newFrame;
+  updateHUD(newFrame);
+  updateDots();
+  transitioning = true;
+
+  var startTime = null;
+  var duration = 500;
+
+  function step(timestamp){
+    if(!startTime) startTime = timestamp;
+    var raw = Math.min((timestamp - startTime) / duration, 1);
+    var p = easeInOut(raw);
+    drawBg();
+    oldElems.forEach(function(oe){
+      if(!newMap[oe.id]) drawElement(merge(oe, {alpha: 1 - p}));
+    });
+    newElems.forEach(function(ne){
+      var oe = oldMap[ne.id];
+      if(oe){
+        if((ne.type==='label') && oe.text !== ne.text){
+          drawElement(merge(oe, {alpha: 1 - p}));
+          drawElement(merge(ne, {alpha: p}));
+        } else {
+          var merged = merge(ne, {
+            x: lerp(oe.x||0, ne.x||0, p),
+            y: lerp(oe.y||0, ne.y||0, p),
+            alpha: 1
+          });
+          drawElement(merged);
+        }
+      } else {
+        drawElement(merge(ne, {alpha: p}));
+      }
+    });
+    if(raw < 1){
+      requestAnimationFrame(step);
+    } else {
+      transitioning = false;
+    }
+  }
+  requestAnimationFrame(step);
+}
+
+// ---- HUD ----
+var hudData = [
+  {sensor:'sensorOverview', freq:'freqAll', sync:'syncNa'},
+  {sensor:'sensorCam', freq:'freqCam', sync:'syncPartial'},
+  {sensor:'sensorIMU', freq:'freqIMU', sync:'syncPartial'},
+  {sensor:'sensorOdom', freq:'freqOdom', sync:'syncPartial'},
+  {sensor:'sensorSync', freq:'freqSync', sync:'syncAligned'},
+];
+
+function updateHUD(f){
+  var d = hudData[f];
+  document.getElementById('hudFrame').textContent = (f+1) + ' / ' + totalFrames;
+  document.getElementById('hudSensor').textContent = t(d.sensor);
+  document.getElementById('hudFreq').textContent = t(d.freq);
+  document.getElementById('hudSync').textContent = t(d.sync);
+}
+
+// ---- Frame Dots ----
+function buildDots(){
+  var container = document.getElementById('frameDots');
+  container.innerHTML = '';
+  for(var i=0; i<totalFrames; i++){
+    var dot = document.createElement('div');
+    dot.className = 'dot' + (i===currentFrame ? ' active' : '');
+    dot.dataset.idx = i;
+    dot.addEventListener('click', function(){ transitionTo(parseInt(this.dataset.idx)); });
+    container.appendChild(dot);
+  }
+}
+function updateDots(){
+  var dots = document.querySelectorAll('#frameDots .dot');
+  dots.forEach(function(d, i){ d.className = 'dot' + (i===currentFrame ? ' active' : ''); });
+}
+
+// ---- Controls ----
+document.getElementById('btnPrev').addEventListener('click', function(){
+  if(playing) stopPlay();
+  transitionTo(currentFrame - 1);
+});
+document.getElementById('btnNext').addEventListener('click', function(){
+  if(playing) stopPlay();
+  transitionTo(currentFrame + 1);
+});
+document.getElementById('btnPlay').addEventListener('click', function(){
+  if(playing){ stopPlay(); } else { startPlay(); }
+});
+
+function startPlay(){
+  playing = true;
+  document.getElementById('btnPlay').textContent = t('btnPause');
+  if(currentFrame >= totalFrames - 1) transitionTo(0);
+  playStep();
+}
+function stopPlay(){
+  playing = false;
+  document.getElementById('btnPlay').textContent = t('btnPlay');
+  if(playTimer){ clearTimeout(playTimer); playTimer = null; }
+}
+function playStep(){
+  if(!playing) return;
+  if(currentFrame >= totalFrames - 1){ stopPlay(); return; }
+  transitionTo(currentFrame + 1);
+  playTimer = setTimeout(playStep, 2500);
+}
+
+// ---- Guide Panel ----
+document.getElementById('guideTitle').addEventListener('click', function(){
+  var content = document.getElementById('guideContent');
+  var toggle = document.getElementById('guideToggle');
+  if(content.classList.contains('collapsed')){
+    content.classList.remove('collapsed');
+    toggle.textContent = '[-]';
+  } else {
+    content.classList.add('collapsed');
+    toggle.textContent = '[+]';
+  }
+});
+
+// ---- i18n ----
+function refreshI18N(){
+  document.getElementById('mainTitle').textContent = t('title');
+  document.getElementById('btnPrev').textContent = t('btnPrev');
+  document.getElementById('btnPlay').textContent = playing ? t('btnPause') : t('btnPlay');
+  document.getElementById('btnNext').textContent = t('btnNext');
+  document.getElementById('guideTitleText').textContent = t('guide');
+  document.getElementById('guideDesc').textContent = t('guideDesc');
+  document.getElementById('guideObs1').textContent = t('obs1');
+  document.getElementById('guideObs2').textContent = t('obs2');
+  document.getElementById('guideObs3').textContent = t('obs3');
+  document.getElementById('hudSensorLabel').textContent = 'SENSOR';
+  document.getElementById('hudFreqLabel').textContent = 'FREQ';
+  document.getElementById('hudSyncLabel').textContent = 'SYNC';
+  updateHUD(currentFrame);
+  drawFrame(currentFrame);
+}
+
+document.getElementById('langBtn').addEventListener('click', function(){
+  LANG = LANG === 'en' ? 'cn' : 'en';
+  document.getElementById('langBtn').textContent = LANG.toUpperCase();
+  refreshI18N();
+});
+
+// ---- Init ----
+buildDots();
+refreshI18N();
+resize();
+setTimeout(resize, 200);
+setTimeout(resize, 600);
+document.fonts.ready.then(function(){ resize(); });
+if(typeof ResizeObserver !== 'undefined' && canvas.parentElement){
+  try{
+    new ResizeObserver(function(){ resize(); }).observe(canvas.parentElement);
+  }catch(e){}
+}
+})();
+</script>
+</body>
+</html>

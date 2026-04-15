@@ -1,0 +1,663 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Data Split Simulator</title>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=Space+Grotesk:wght@400;700&family=Noto+Sans+SC:wght@400;700&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{width:100%;height:100vh;overflow:hidden;background:#131313;
+  font-family:'Noto Sans SC','PingFang SC',system-ui,sans-serif;color:#e5e2e1}
+
+.wrapper{display:flex;flex-direction:column;height:100vh;overflow:hidden}
+
+.guide-panel{position:fixed;top:8px;right:8px;width:250px;max-height:40vh;
+  overflow-y:auto;z-index:200;padding:10px 12px;
+  background:rgba(28,27,27,0.92);backdrop-filter:blur(14px);
+  border:1px solid rgba(255,127,80,0.22);font-size:12px;line-height:1.55;
+  color:rgba(229,226,225,0.88)}
+.guide-panel h3{font-family:'Space Grotesk',sans-serif;font-size:13px;font-weight:700;
+  margin-bottom:6px;display:flex;align-items:center;justify-content:space-between;cursor:pointer;
+  color:#ffb59c;text-transform:uppercase;letter-spacing:0.05em}
+.guide-panel h3 .arrow{transition:transform .2s;font-size:10px}
+.guide-panel h3 .arrow.collapsed{transform:rotate(-90deg)}
+.guide-panel ul{padding-left:14px;margin:4px 0}
+.guide-panel .gl{color:#8a8886;font-size:11px;text-transform:uppercase;
+  letter-spacing:0.08em;margin-top:6px;font-family:'Space Grotesk',sans-serif}
+
+.lang-btn{position:fixed;top:8px;left:8px;z-index:100;
+  font-family:'Space Grotesk',sans-serif;font-size:11px;font-weight:700;
+  padding:4px 10px;cursor:pointer;
+  border:1px solid rgba(255,127,80,0.35);
+  background:rgba(20,20,25,0.85);backdrop-filter:blur(12px);
+  color:#ffb59c;letter-spacing:1px}
+
+.header{height:42px;min-height:42px;display:flex;align-items:center;justify-content:center;
+  padding:0 16px;background:rgba(28,27,27,0.95);border-bottom:1px solid rgba(255,127,80,0.15)}
+.header h1{font-family:'Space Grotesk',sans-serif;font-size:14px;font-weight:700;
+  color:#ffb59c;text-transform:uppercase;letter-spacing:0.08em}
+
+.game-area{flex:1;min-height:0;display:flex;overflow:hidden;position:relative}
+
+.left-panel{flex:0 0 260px;display:flex;flex-direction:column;padding:12px 16px;gap:10px;
+  background:rgba(28,27,27,0.6);border-right:1px solid rgba(255,127,80,0.1);overflow-y:auto}
+
+.canvas-area{flex:1;min-height:0;position:relative;overflow:hidden}
+.canvas-area canvas{position:absolute;top:0;left:0;width:100%;height:100%}
+
+.ctrl-group{margin-bottom:6px}
+.ctrl-label{font-family:'Space Grotesk',sans-serif;font-size:11px;font-weight:700;
+  color:#ffb59c;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:4px}
+.ctrl-sublabel{font-size:10px;color:#8a8886;margin-bottom:4px}
+.ctrl-slider{width:100%;-webkit-appearance:none;height:4px;background:rgba(255,127,80,0.2);
+  outline:none;cursor:pointer}
+.ctrl-slider::-webkit-slider-thumb{-webkit-appearance:none;width:14px;height:14px;
+  background:#ff7f50;cursor:pointer}
+.ctrl-val{font-family:'JetBrains Mono',monospace;font-size:12px;color:#e5e2e1;margin-top:2px}
+
+.split-btn{width:100%;padding:8px;border:1px solid rgba(255,127,80,0.4);background:transparent;
+  color:#ffb59c;cursor:pointer;font-family:'Space Grotesk',sans-serif;font-size:12px;
+  font-weight:700;text-transform:uppercase;letter-spacing:0.06em;transition:all .15s;margin-top:4px}
+.split-btn:hover{background:rgba(255,127,80,0.18);box-shadow:0 0 18px rgba(255,127,80,0.25)}
+.split-btn.active{background:linear-gradient(45deg,rgba(255,127,80,0.3),rgba(255,181,156,0.2));
+  border-color:#ff7f50}
+
+.results-panel{padding:8px 10px;background:rgba(0,0,0,0.4);font-size:11px;line-height:1.6;
+  border:1px solid rgba(255,255,255,0.06)}
+.results-panel .rp-title{font-family:'Space Grotesk',sans-serif;font-size:12px;font-weight:700;
+  color:#ffb59c;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:4px}
+.results-panel .rp-row{display:flex;justify-content:space-between;color:#c6c6c6}
+.results-panel .rp-val{font-family:'JetBrains Mono',monospace;font-weight:700}
+.rp-val.danger{color:#ff5f1f}
+.rp-val.safe{color:#10b981}
+
+.hud{height:48px;min-height:48px;display:flex;align-items:center;
+  background:rgba(0,0,0,0.6);border-top:1px solid rgba(255,255,255,0.06);padding:0 16px}
+.hud-col{flex:1;text-align:center}
+.hud-label{font-family:'Space Grotesk',sans-serif;font-size:10px;
+  color:rgba(255,181,156,0.6);text-transform:uppercase;letter-spacing:0.1em}
+.hud-val{font-family:'JetBrains Mono','Space Grotesk',monospace;font-size:13px;font-weight:700;
+  color:rgba(229,226,225,0.9);margin-top:1px}
+
+/* completion overlay */
+.completion-overlay{display:none;position:absolute;top:0;left:0;width:100%;height:100%;
+  background:rgba(19,19,19,0.92);backdrop-filter:blur(16px);z-index:300;
+  flex-direction:column;align-items:center;justify-content:center;padding:24px;text-align:center}
+.completion-overlay.visible{display:flex}
+.completion-overlay h2{font-family:'Space Grotesk',sans-serif;font-size:22px;font-weight:700;
+  color:#10b981;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:12px}
+.completion-overlay p{font-size:14px;color:#c6c6c6;max-width:480px;line-height:1.7;margin-bottom:16px}
+.completion-overlay .reset-btn{padding:10px 28px;border:1px solid rgba(16,185,129,0.5);
+  background:transparent;color:#10b981;cursor:pointer;font-family:'Space Grotesk',sans-serif;
+  font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:0.06em}
+.completion-overlay .reset-btn:hover{background:rgba(16,185,129,0.15)}
+</style>
+</head>
+<body>
+
+<button class="lang-btn" id="langBtn">CN</button>
+
+<div class="guide-panel" id="guidePanel">
+  <h3 id="guideToggle"><span id="guideTitle">MISSION GUIDE</span> <span class="arrow" id="guideArrow">&#9660;</span></h3>
+  <div id="guideContent">
+    <div class="gl" id="glGoal">GOAL</div>
+    <p id="guideGoal"></p>
+    <div class="gl" style="margin-top:6px" id="glSteps">STEPS</div>
+    <ol id="guideSteps" style="padding-left:16px;margin:4px 0"></ol>
+    <div class="gl" style="margin-top:6px" id="glWin">WIN CONDITION</div>
+    <p id="guideWin" style="color:#ffb59c"></p>
+    <div class="gl" style="margin-top:6px" id="glTips">TIPS</div>
+    <p id="guideTips"></p>
+  </div>
+</div>
+
+<div class="wrapper">
+  <div class="header">
+    <h1 id="mainTitle">DATA SPLIT SIMULATOR</h1>
+  </div>
+
+  <div class="game-area">
+    <div class="left-panel" id="leftPanel">
+      <div class="ctrl-group">
+        <div class="ctrl-label" id="lblMethod">SPLIT METHOD</div>
+        <button class="split-btn active" id="btnRandom" data-method="random">RANDOM PATCH SPLIT</button>
+        <button class="split-btn" id="btnImage" data-method="image">IMAGE-LEVEL SPLIT</button>
+        <button class="split-btn" id="btnSpatial" data-method="spatial">SPATIAL BUFFER SPLIT</button>
+      </div>
+
+      <div class="ctrl-group">
+        <div class="ctrl-label" id="lblImages">TOTAL IMAGES</div>
+        <input type="range" class="ctrl-slider" id="sliderImages" min="4" max="12" value="6" step="1"/>
+        <div class="ctrl-val" id="valImages">6</div>
+      </div>
+
+      <div class="ctrl-group">
+        <div class="ctrl-label" id="lblPatches">PATCHES PER IMAGE</div>
+        <input type="range" class="ctrl-slider" id="sliderPatches" min="4" max="16" value="9" step="1"/>
+        <div class="ctrl-val" id="valPatches">9 (3x3)</div>
+      </div>
+
+      <div class="ctrl-group">
+        <div class="ctrl-label" id="lblTrainRatio">TRAIN RATIO</div>
+        <input type="range" class="ctrl-slider" id="sliderRatio" min="50" max="80" value="70" step="5"/>
+        <div class="ctrl-val" id="valRatio">70%</div>
+      </div>
+
+      <div class="results-panel" id="resultsPanel">
+        <div class="rp-title" id="rpTitle">RESULTS</div>
+        <div class="rp-row"><span id="rpLblTotal">TOTAL PATCHES</span><span class="rp-val" id="rpTotal">54</span></div>
+        <div class="rp-row"><span id="rpLblTrain">TRAIN</span><span class="rp-val" id="rpTrain">38</span></div>
+        <div class="rp-row"><span id="rpLblTest">TEST</span><span class="rp-val" id="rpTest">16</span></div>
+        <div class="rp-row"><span id="rpLblOverlap">OVERLAP RISK</span><span class="rp-val" id="rpOverlap">--</span></div>
+        <div class="rp-row"><span id="rpLblLeakRate">LEAK RATE</span><span class="rp-val" id="rpLeakRate">--</span></div>
+        <div class="rp-row"><span id="rpLblFakeAcc">REPORTED ACC</span><span class="rp-val" id="rpFakeAcc">--</span></div>
+        <div class="rp-row"><span id="rpLblRealAcc">TRUE ACC</span><span class="rp-val" id="rpRealAcc">--</span></div>
+      </div>
+    </div>
+
+    <div class="canvas-area">
+      <canvas id="c"></canvas>
+    </div>
+  </div>
+
+  <div class="hud">
+    <div class="hud-col"><div class="hud-label" id="hudLblMethod">METHOD</div><div class="hud-val" id="hudMethod">RANDOM</div></div>
+    <div class="hud-col"><div class="hud-label" id="hudLblPatch">PATCHES</div><div class="hud-val" id="hudPatch">54</div></div>
+    <div class="hud-col"><div class="hud-label" id="hudLblLeak">LEAK RATE</div><div class="hud-val" id="hudLeak">--</div></div>
+    <div class="hud-col"><div class="hud-label" id="hudLblVerdict">VERDICT</div><div class="hud-val" id="hudVerdict">--</div></div>
+  </div>
+</div>
+
+<div class="completion-overlay" id="completionOverlay">
+  <h2 id="compTitle">MISSION COMPLETE</h2>
+  <p id="compBody"></p>
+  <button class="reset-btn" id="btnReset">RESET</button>
+</div>
+
+<script>
+(function(){
+"use strict";
+
+/* ── i18n ── */
+var LANG = 'cn';
+var I18N = {
+  mainTitle:     {en:'DATA SPLIT SIMULATOR',            cn:'\u6570\u636e\u5207\u5206\u6a21\u62df\u5668'},
+  guideTitle:    {en:'MISSION GUIDE',                   cn:'\u4efb\u52a1\u6307\u5357'},
+  glGoal:        {en:'GOAL',                            cn:'\u76ee\u6807'},
+  guideGoal:     {en:'Compare three data splitting methods and find the one with zero leakage.',
+                  cn:'\u6bd4\u8f83\u4e09\u79cd\u6570\u636e\u5207\u5206\u65b9\u6cd5\uff0c\u627e\u5230\u6cc4\u6f0f\u7387\u4e3a\u96f6\u7684\u65b9\u6848\u3002'},
+  glSteps:       {en:'STEPS',                           cn:'\u64cd\u4f5c\u6b65\u9aa4'},
+  step1:         {en:'1. Try RANDOM PATCH SPLIT and observe leak rate',
+                  cn:'1. \u5c1d\u8bd5\u968f\u673a\u5207\u7247\u5207\u5206\uff0c\u89c2\u5bdf\u6cc4\u6f0f\u7387'},
+  step2:         {en:'2. Switch to IMAGE-LEVEL SPLIT and compare',
+                  cn:'2. \u5207\u6362\u5230\u56fe\u50cf\u7ea7\u5207\u5206\uff0c\u8fdb\u884c\u5bf9\u6bd4'},
+  step3:         {en:'3. Try SPATIAL BUFFER SPLIT for extra safety',
+                  cn:'3. \u5c1d\u8bd5\u7a7a\u95f4\u7f13\u51b2\u5207\u5206\uff0c\u83b7\u5f97\u989d\u5916\u5b89\u5168\u6027'},
+  glWin:         {en:'WIN CONDITION',                   cn:'\u901a\u5173\u6761\u4ef6'},
+  guideWin:      {en:'Try all 3 methods and achieve 0% leak rate.',
+                  cn:'\u5c1d\u8bd5\u5168\u90e8 3 \u79cd\u65b9\u6cd5\uff0c\u5e76\u8fbe\u5230 0% \u6cc4\u6f0f\u7387\u3002'},
+  glTips:        {en:'TIPS',                            cn:'\u63d0\u793a'},
+  guideTips:     {en:'Watch how adjacent patches from the same image cause leakage in random split.',
+                  cn:'\u89c2\u5bdf\u540c\u4e00\u56fe\u50cf\u7684\u76f8\u90bb\u5207\u7247\u5982\u4f55\u5728\u968f\u673a\u5207\u5206\u4e2d\u9020\u6210\u6cc4\u6f0f\u3002'},
+  lblMethod:     {en:'SPLIT METHOD',                    cn:'\u5207\u5206\u65b9\u6cd5'},
+  lblImages:     {en:'TOTAL IMAGES',                    cn:'\u56fe\u50cf\u603b\u6570'},
+  lblPatches:    {en:'PATCHES PER IMAGE',               cn:'\u6bcf\u56fe\u5207\u7247\u6570'},
+  lblTrainRatio: {en:'TRAIN RATIO',                     cn:'\u8bad\u7ec3\u96c6\u6bd4\u4f8b'},
+  rpTitle:       {en:'RESULTS',                         cn:'\u7ed3\u679c'},
+  rpLblTotal:    {en:'TOTAL PATCHES',                   cn:'\u603b\u5207\u7247\u6570'},
+  rpLblTrain:    {en:'TRAIN',                           cn:'\u8bad\u7ec3\u96c6'},
+  rpLblTest:     {en:'TEST',                            cn:'\u6d4b\u8bd5\u96c6'},
+  rpLblOverlap:  {en:'OVERLAP RISK',                    cn:'\u91cd\u53e0\u98ce\u9669'},
+  rpLblLeakRate: {en:'LEAK RATE',                       cn:'\u6cc4\u6f0f\u7387'},
+  rpLblFakeAcc:  {en:'REPORTED ACC',                    cn:'\u62a5\u544a\u51c6\u786e\u7387'},
+  rpLblRealAcc:  {en:'TRUE ACC',                        cn:'\u771f\u5b9e\u51c6\u786e\u7387'},
+  hudLblMethod:  {en:'METHOD',                          cn:'METHOD'},
+  hudLblPatch:   {en:'PATCHES',                         cn:'PATCHES'},
+  hudLblLeak:    {en:'LEAK RATE',                       cn:'LEAK RATE'},
+  hudLblVerdict: {en:'VERDICT',                         cn:'VERDICT'},
+  btnRandom:     {en:'RANDOM PATCH SPLIT',              cn:'\u968f\u673a\u5207\u7247\u5207\u5206'},
+  btnImage:      {en:'IMAGE-LEVEL SPLIT',               cn:'\u56fe\u50cf\u7ea7\u5207\u5206'},
+  btnSpatial:    {en:'SPATIAL BUFFER SPLIT',             cn:'\u7a7a\u95f4\u7f13\u51b2\u5207\u5206'},
+  verdictDanger: {en:'LEAKAGE DETECTED',                cn:'\u68c0\u6d4b\u5230\u6cc4\u6f0f'},
+  verdictSafe:   {en:'NO LEAKAGE',                      cn:'\u65e0\u6cc4\u6f0f'},
+  overlapYes:    {en:'YES - HIGH',                      cn:'\u6709 - \u9ad8\u98ce\u9669'},
+  overlapNo:     {en:'NONE',                            cn:'\u65e0'},
+  compTitle:     {en:'MISSION COMPLETE',                 cn:'\u4efb\u52a1\u5b8c\u6210'},
+  compBody:      {en:'You discovered that IMAGE-LEVEL SPLIT and SPATIAL BUFFER SPLIT both achieve 0% leakage. The key rule: never let patches from the same source image appear in both train and test sets.',
+                  cn:'\u4f60\u53d1\u73b0\u4e86\u56fe\u50cf\u7ea7\u5207\u5206\u548c\u7a7a\u95f4\u7f13\u51b2\u5207\u5206\u90fd\u80fd\u5b9e\u73b0 0% \u6cc4\u6f0f\u3002\u6838\u5fc3\u89c4\u5219\uff1a\u6c38\u8fdc\u4e0d\u8981\u8ba9\u540c\u4e00\u6e90\u56fe\u50cf\u7684\u5207\u7247\u540c\u65f6\u51fa\u73b0\u5728\u8bad\u7ec3\u96c6\u548c\u6d4b\u8bd5\u96c6\u4e2d\u3002'},
+  btnReset:      {en:'RESET',                           cn:'\u91cd\u7f6e'},
+  train:         {en:'TRAIN',                           cn:'\u8bad\u7ec3'},
+  test:          {en:'TEST',                            cn:'\u6d4b\u8bd5'},
+  leaked:        {en:'LEAKED',                          cn:'\u6cc4\u6f0f'},
+  buffer:        {en:'BUFFER',                          cn:'\u7f13\u51b2'},
+  img:           {en:'IMG',                             cn:'\u56fe'},
+};
+function t(key){ return (I18N[key] && I18N[key][LANG]) || (I18N[key] && I18N[key]['en']) || key; }
+
+/* ── canvas ── */
+var canvas = document.getElementById('c');
+var ctx = canvas.getContext('2d');
+var W = 600, H = 400;
+var DPR = Math.min(window.devicePixelRatio||1, 2);
+
+function resize(){
+  var wrap = canvas.parentElement;
+  var rect = wrap.getBoundingClientRect();
+  if(rect.width < 1 || rect.height < 1) return;
+  W = rect.width; H = rect.height;
+  canvas.width = W*DPR; canvas.height = H*DPR;
+  canvas.style.width = W+'px'; canvas.style.height = H+'px';
+  ctx.setTransform(DPR,0,0,DPR,0,0);
+  renderSplit();
+}
+window.addEventListener('resize', resize);
+
+/* ── state ── */
+var splitMethod = 'random';
+var numImages = 6;
+var patchesPerImage = 9;
+var trainRatio = 70;
+var triedMethods = {};
+var completed = false;
+
+/* ── simulation ── */
+var IMG_COLORS = [
+  ['#8B6B4A','#A08060'], ['#6B5B4A','#9B8B70'], ['#7A6B5A','#B09880'],
+  ['#5A4B3A','#8B7B6A'], ['#9A8A6A','#C0B090'], ['#6A5A4A','#A09070'],
+  ['#7B6A5A','#B0A080'], ['#8A7A5A','#C0B080'], ['#5B4A3A','#8A7A6A'],
+  ['#9B8A7A','#C0A890'], ['#6A5B4A','#9A8A70'], ['#8B7B6A','#B0A080'],
+];
+
+function simulate(){
+  var totalPatches = numImages * patchesPerImage;
+  var trainCount = Math.round(totalPatches * trainRatio / 100);
+  var testCount = totalPatches - trainCount;
+
+  /* generate patches: each has {imgIdx, patchIdx, set:'train'|'test'|'buffer'|'leaked'} */
+  var patches = [];
+  for(var i=0;i<numImages;i++){
+    for(var j=0;j<patchesPerImage;j++){
+      patches.push({imgIdx:i, patchIdx:j, set:'train'});
+    }
+  }
+
+  var leakedCount = 0;
+  var overlapRisk = false;
+
+  if(splitMethod === 'random'){
+    /* randomly assign patches to train/test regardless of image */
+    var indices = [];
+    for(var pi=0;pi<patches.length;pi++) indices.push(pi);
+    /* shuffle */
+    for(var si=indices.length-1;si>0;si--){
+      var sj = Math.floor(Math.random()*0.999*(si+1));
+      var tmp=indices[si]; indices[si]=indices[sj]; indices[sj]=tmp;
+    }
+    for(var ti=0;ti<patches.length;ti++){
+      patches[indices[ti]].set = ti < trainCount ? 'train' : 'test';
+    }
+    /* check for leakage: patches from same image in different sets */
+    var imgSets = {};
+    patches.forEach(function(p){
+      if(!imgSets[p.imgIdx]) imgSets[p.imgIdx] = new Set();
+      imgSets[p.imgIdx].add(p.set);
+    });
+    Object.keys(imgSets).forEach(function(k){
+      if(imgSets[k].size > 1){
+        overlapRisk = true;
+        patches.forEach(function(p){
+          if(p.imgIdx === parseInt(k)){
+            /* check if adjacent patch is in different set */
+            var adjIdx = p.patchIdx;
+            var pps = Math.round(Math.sqrt(patchesPerImage));
+            var row = Math.floor(adjIdx / pps);
+            var col = adjIdx % pps;
+            var neighbors = [];
+            if(row>0) neighbors.push((row-1)*pps+col);
+            if(row<pps-1) neighbors.push((row+1)*pps+col);
+            if(col>0) neighbors.push(row*pps+col-1);
+            if(col<pps-1) neighbors.push(row*pps+col+1);
+            var mySet = p.set;
+            neighbors.forEach(function(ni){
+              var neighbor = patches.find(function(pp){ return pp.imgIdx===p.imgIdx && pp.patchIdx===ni; });
+              if(neighbor && neighbor.set !== mySet){
+                p.leaked = true;
+                neighbor.leaked = true;
+              }
+            });
+          }
+        });
+        leakedCount = patches.filter(function(p){ return p.leaked; }).length;
+      }
+    });
+  }
+  else if(splitMethod === 'image'){
+    /* split by image: first N images -> train, rest -> test */
+    var trainImgCount = Math.round(numImages * trainRatio / 100);
+    if(trainImgCount < 1) trainImgCount = 1;
+    if(trainImgCount >= numImages) trainImgCount = numImages - 1;
+    patches.forEach(function(p){
+      p.set = p.imgIdx < trainImgCount ? 'train' : 'test';
+    });
+    trainCount = patches.filter(function(p){ return p.set==='train'; }).length;
+    testCount = patches.filter(function(p){ return p.set==='test'; }).length;
+    leakedCount = 0;
+    overlapRisk = false;
+  }
+  else if(splitMethod === 'spatial'){
+    /* spatial buffer: like image-level but with buffer zone */
+    var trainImgs2 = Math.round(numImages * trainRatio / 100);
+    if(trainImgs2 < 1) trainImgs2 = 1;
+    if(trainImgs2 >= numImages) trainImgs2 = numImages - 1;
+    /* buffer: 1 image between train and test */
+    var bufferIdx = trainImgs2;
+    patches.forEach(function(p){
+      if(p.imgIdx < bufferIdx) p.set = 'train';
+      else if(p.imgIdx === bufferIdx) p.set = 'buffer';
+      else p.set = 'test';
+    });
+    trainCount = patches.filter(function(p){ return p.set==='train'; }).length;
+    testCount = patches.filter(function(p){ return p.set==='test'; }).length;
+    leakedCount = 0;
+    overlapRisk = false;
+  }
+
+  var leakRate = patches.length > 0 ? (leakedCount / patches.length * 100) : 0;
+  /* simulated accuracy: leaked split inflates by leak proportion */
+  var trueAcc = 72 + Math.random()*8; /* 72-80% */
+  var fakeAcc = trueAcc + leakRate * 0.25; /* each 1% leak adds ~0.25% fake acc */
+  if(fakeAcc > 99) fakeAcc = 99;
+
+  return {
+    patches: patches,
+    trainCount: trainCount,
+    testCount: testCount,
+    leakedCount: leakedCount,
+    leakRate: Math.round(leakRate),
+    overlapRisk: overlapRisk,
+    fakeAcc: Math.round(fakeAcc*10)/10,
+    trueAcc: Math.round(trueAcc*10)/10,
+  };
+}
+
+/* ── draw ── */
+function drawBg(){
+  var g = ctx.createRadialGradient(W/2,H/2,0,W/2,H/2,Math.max(W,H)*0.7);
+  g.addColorStop(0,'#1c1b1b'); g.addColorStop(1,'#131313');
+  ctx.fillStyle=g; ctx.fillRect(0,0,W,H);
+  ctx.strokeStyle='rgba(0,218,243,0.03)'; ctx.lineWidth=0.5;
+  for(var gx=0;gx<W;gx+=20){ctx.beginPath();ctx.moveTo(gx,0);ctx.lineTo(gx,H);ctx.stroke();}
+  for(var gy=0;gy<H;gy+=20){ctx.beginPath();ctx.moveTo(0,gy);ctx.lineTo(W,gy);ctx.stroke();}
+}
+
+function renderSplit(){
+  var result = simulate();
+  drawBg();
+
+  var pps = Math.round(Math.sqrt(patchesPerImage));
+  var cols = Math.min(numImages, 6);
+  var rows = Math.ceil(numImages / cols);
+  var margin = 16;
+  var gap = 8;
+  var availW = W - margin*2 - gap*(cols-1);
+  var availH = H - margin*2 - gap*(rows-1) - 30;
+  var cellW = Math.min(availW / cols, 120);
+  var cellH = Math.min(availH / rows, 100);
+  cellW = Math.min(cellW, cellH * 1.2);
+  cellH = cellW / 1.2;
+  var totalW2 = cellW * cols + gap*(cols-1);
+  var totalH2 = cellH * rows + gap*(rows-1);
+  var startX2 = (W - totalW2) / 2;
+  var startY2 = (H - totalH2) / 2;
+
+  /* title label */
+  ctx.save();
+  ctx.font = '700 13px "Space Grotesk",sans-serif';
+  ctx.fillStyle = '#ffb59c';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'top';
+  var methodNames = {random: t('btnRandom'), image: t('btnImage'), spatial: t('btnSpatial')};
+  ctx.fillText(methodNames[splitMethod] || splitMethod, W/2, 8);
+  ctx.restore();
+
+  for(var ii=0;ii<numImages;ii++){
+    var imgRow = Math.floor(ii / cols);
+    var imgCol = ii % cols;
+    var ix = startX2 + imgCol * (cellW + gap);
+    var iy = startY2 + imgRow * (cellH + gap);
+
+    /* draw mini image background */
+    var imgC = IMG_COLORS[ii % IMG_COLORS.length];
+    var g2 = ctx.createLinearGradient(ix,iy,ix+cellW,iy+cellH);
+    g2.addColorStop(0, imgC[0]); g2.addColorStop(1, imgC[1]);
+    ctx.fillStyle = g2;
+    ctx.fillRect(ix, iy, cellW, cellH);
+
+    /* image label */
+    ctx.save();
+    ctx.font = '700 9px "Space Grotesk",sans-serif';
+    ctx.fillStyle = 'rgba(255,255,255,0.5)';
+    ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+    ctx.fillText(t('img')+'-'+(ii+1), ix+2, iy+1);
+    ctx.restore();
+
+    /* draw patch grid */
+    var pw = cellW / pps;
+    var ph = cellH / pps;
+    for(var pj=0;pj<patchesPerImage;pj++){
+      var pr = Math.floor(pj / pps);
+      var pc = pj % pps;
+      var px = ix + pc * pw;
+      var py = iy + pr * ph;
+      var patch = result.patches.find(function(p){ return p.imgIdx===ii && p.patchIdx===pj; });
+      if(patch){
+        var fillCol, borderCol;
+        if(patch.leaked){
+          fillCol = 'rgba(255,95,31,0.45)';
+          borderCol = '#ff5f1f';
+        } else if(patch.set === 'train'){
+          fillCol = 'rgba(0,218,243,0.25)';
+          borderCol = 'rgba(0,218,243,0.5)';
+        } else if(patch.set === 'test'){
+          fillCol = 'rgba(255,127,80,0.3)';
+          borderCol = 'rgba(255,127,80,0.5)';
+        } else if(patch.set === 'buffer'){
+          fillCol = 'rgba(198,198,198,0.15)';
+          borderCol = 'rgba(198,198,198,0.3)';
+        }
+        ctx.fillStyle = fillCol;
+        ctx.fillRect(px+0.5, py+0.5, pw-1, ph-1);
+        ctx.strokeStyle = borderCol;
+        ctx.lineWidth = patch.leaked ? 2 : 0.8;
+        ctx.strokeRect(px+0.5, py+0.5, pw-1, ph-1);
+      }
+    }
+
+    /* image outline */
+    var imgBorderCol = '#353534';
+    var imgPatches = result.patches.filter(function(p){ return p.imgIdx===ii; });
+    var imgSets = new Set(imgPatches.map(function(p){ return p.set; }));
+    if(imgSets.size > 1 && splitMethod === 'random'){
+      imgBorderCol = '#ff5f1f';
+    }
+    ctx.strokeStyle = imgBorderCol;
+    ctx.lineWidth = imgSets.size > 1 && splitMethod === 'random' ? 2 : 1;
+    ctx.strokeRect(ix, iy, cellW, cellH);
+  }
+
+  /* legend */
+  var legY = startY2 + totalH2 + 12;
+  var legItems = [
+    {label: t('train'), color: 'rgba(0,218,243,0.5)'},
+    {label: t('test'), color: 'rgba(255,127,80,0.5)'},
+  ];
+  if(splitMethod === 'random') legItems.push({label: t('leaked'), color: '#ff5f1f'});
+  if(splitMethod === 'spatial') legItems.push({label: t('buffer'), color: 'rgba(198,198,198,0.4)'});
+  var legStartX = W/2 - legItems.length * 50;
+  legItems.forEach(function(item, li){
+    var lx = legStartX + li * 100;
+    ctx.fillStyle = item.color;
+    ctx.fillRect(lx, legY, 12, 12);
+    ctx.save();
+    ctx.font = '400 11px "Space Grotesk",sans-serif';
+    ctx.fillStyle = '#c6c6c6';
+    ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+    ctx.fillText(item.label, lx+16, legY+6);
+    ctx.restore();
+  });
+
+  /* update results panel */
+  document.getElementById('rpTotal').textContent = result.patches.length;
+  document.getElementById('rpTrain').textContent = result.trainCount;
+  document.getElementById('rpTest').textContent = result.testCount;
+  var overlapEl = document.getElementById('rpOverlap');
+  overlapEl.textContent = result.overlapRisk ? t('overlapYes') : t('overlapNo');
+  overlapEl.className = 'rp-val ' + (result.overlapRisk ? 'danger' : 'safe');
+  var leakEl = document.getElementById('rpLeakRate');
+  leakEl.textContent = result.leakRate + '%';
+  leakEl.className = 'rp-val ' + (result.leakRate > 0 ? 'danger' : 'safe');
+  document.getElementById('rpFakeAcc').textContent = result.fakeAcc + '%';
+  document.getElementById('rpRealAcc').textContent = result.trueAcc + '%';
+
+  /* update HUD */
+  var methodNames2 = {random:'RANDOM', image:'IMAGE', spatial:'SPATIAL'};
+  document.getElementById('hudMethod').textContent = methodNames2[splitMethod];
+  document.getElementById('hudPatch').textContent = result.patches.length;
+  var hudLeakEl = document.getElementById('hudLeak');
+  hudLeakEl.textContent = result.leakRate + '%';
+  hudLeakEl.style.color = result.leakRate > 0 ? '#ff5f1f' : '#10b981';
+  var hudVerdictEl = document.getElementById('hudVerdict');
+  hudVerdictEl.textContent = result.leakRate > 0 ? t('verdictDanger') : t('verdictSafe');
+  hudVerdictEl.style.color = result.leakRate > 0 ? '#ff5f1f' : '#10b981';
+
+  /* track tried methods */
+  triedMethods[splitMethod] = true;
+  if(result.leakRate === 0) triedMethods[splitMethod + '_clean'] = true;
+
+  /* check completion */
+  if(!completed && Object.keys(triedMethods).length >= 3
+     && (triedMethods['image_clean'] || triedMethods['spatial_clean'])){
+    completed = true;
+    setTimeout(showCompletion, 800);
+  }
+}
+
+function showCompletion(){
+  document.getElementById('completionOverlay').classList.add('visible');
+  try{
+    window.parent.postMessage({type:'step_complete',step:'game_data_split'},'*');
+  }catch(e){}
+}
+
+/* ── event bindings ── */
+var methodBtns = document.querySelectorAll('.split-btn');
+methodBtns.forEach(function(btn){
+  btn.addEventListener('click', function(){
+    methodBtns.forEach(function(b){ b.classList.remove('active'); });
+    btn.classList.add('active');
+    splitMethod = btn.dataset.method;
+    renderSplit();
+  });
+});
+
+document.getElementById('sliderImages').addEventListener('input', function(){
+  numImages = parseInt(this.value);
+  document.getElementById('valImages').textContent = numImages;
+  renderSplit();
+});
+document.getElementById('sliderPatches').addEventListener('input', function(){
+  patchesPerImage = parseInt(this.value);
+  var pps = Math.round(Math.sqrt(patchesPerImage));
+  document.getElementById('valPatches').textContent = patchesPerImage + ' (' + pps + 'x' + pps + ')';
+  renderSplit();
+});
+document.getElementById('sliderRatio').addEventListener('input', function(){
+  trainRatio = parseInt(this.value);
+  document.getElementById('valRatio').textContent = trainRatio + '%';
+  renderSplit();
+});
+
+document.getElementById('btnReset').addEventListener('click', function(){
+  completed = false;
+  triedMethods = {};
+  document.getElementById('completionOverlay').classList.remove('visible');
+  splitMethod = 'random';
+  methodBtns.forEach(function(b){ b.classList.remove('active'); });
+  document.getElementById('btnRandom').classList.add('active');
+  renderSplit();
+});
+
+/* guide toggle */
+document.getElementById('guideToggle').addEventListener('click', function(){
+  var content = document.getElementById('guideContent');
+  var arrow = document.getElementById('guideArrow');
+  if(content.style.display === 'none'){
+    content.style.display = 'block';
+    arrow.classList.remove('collapsed');
+  } else {
+    content.style.display = 'none';
+    arrow.classList.add('collapsed');
+  }
+});
+
+/* lang toggle */
+document.getElementById('langBtn').addEventListener('click', function(){
+  LANG = LANG === 'en' ? 'cn' : 'en';
+  document.getElementById('langBtn').textContent = LANG.toUpperCase();
+  refreshI18N();
+});
+
+function refreshI18N(){
+  document.getElementById('mainTitle').textContent = t('mainTitle');
+  document.getElementById('guideTitle').textContent = t('guideTitle');
+  document.getElementById('glGoal').textContent = t('glGoal');
+  document.getElementById('guideGoal').textContent = t('guideGoal');
+  document.getElementById('glSteps').textContent = t('glSteps');
+  var stepsOl = document.getElementById('guideSteps');
+  stepsOl.innerHTML = '';
+  ['step1','step2','step3'].forEach(function(k){
+    var li = document.createElement('li');
+    li.textContent = t(k);
+    stepsOl.appendChild(li);
+  });
+  document.getElementById('glWin').textContent = t('glWin');
+  document.getElementById('guideWin').textContent = t('guideWin');
+  document.getElementById('glTips').textContent = t('glTips');
+  document.getElementById('guideTips').textContent = t('guideTips');
+  document.getElementById('lblMethod').textContent = t('lblMethod');
+  document.getElementById('btnRandom').textContent = t('btnRandom');
+  document.getElementById('btnImage').textContent = t('btnImage');
+  document.getElementById('btnSpatial').textContent = t('btnSpatial');
+  document.getElementById('lblImages').textContent = t('lblImages');
+  document.getElementById('lblPatches').textContent = t('lblPatches');
+  document.getElementById('lblTrainRatio').textContent = t('lblTrainRatio');
+  document.getElementById('rpTitle').textContent = t('rpTitle');
+  document.getElementById('rpLblTotal').textContent = t('rpLblTotal');
+  document.getElementById('rpLblTrain').textContent = t('rpLblTrain');
+  document.getElementById('rpLblTest').textContent = t('rpLblTest');
+  document.getElementById('rpLblOverlap').textContent = t('rpLblOverlap');
+  document.getElementById('rpLblLeakRate').textContent = t('rpLblLeakRate');
+  document.getElementById('rpLblFakeAcc').textContent = t('rpLblFakeAcc');
+  document.getElementById('rpLblRealAcc').textContent = t('rpLblRealAcc');
+  document.getElementById('hudLblMethod').textContent = t('hudLblMethod');
+  document.getElementById('hudLblPatch').textContent = t('hudLblPatch');
+  document.getElementById('hudLblLeak').textContent = t('hudLblLeak');
+  document.getElementById('hudLblVerdict').textContent = t('hudLblVerdict');
+  document.getElementById('compTitle').textContent = t('compTitle');
+  document.getElementById('compBody').textContent = t('compBody');
+  document.getElementById('btnReset').textContent = t('btnReset');
+  renderSplit();
+}
+
+/* ── init ── */
+refreshI18N();
+resize();
+setTimeout(resize, 200);
+setTimeout(resize, 600);
+document.fonts.ready.then(function(){ resize(); });
+
+})();
+</script>
+</body>
+</html>

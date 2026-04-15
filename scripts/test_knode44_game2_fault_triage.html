@@ -1,0 +1,377 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Fault Triage</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;700&family=Inter:wght@400;500&family=Noto+Sans+SC:wght@400;700&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{width:100%;height:100vh;overflow:hidden;background:#131313;font-family:'Noto Sans SC','Inter',sans-serif;color:#e5e2e1}
+.wrapper{display:flex;flex-direction:column;height:100vh;width:100%}
+.header{padding:8px 16px 4px;text-align:center;flex-shrink:0}
+.header h1{font-family:'Space Grotesk',sans-serif;font-size:16px;font-weight:700;color:#ffb59c;letter-spacing:2px;text-transform:uppercase}
+.header .subtitle{font-size:11px;color:#8a8886;margin-top:2px;letter-spacing:1px}
+.game-body{flex:1;min-height:0;display:flex;gap:8px;padding:8px 12px;overflow:hidden}
+.source-col{width:38%;display:flex;flex-direction:column;gap:4px;overflow-y:auto}
+.target-cols{flex:1;display:flex;gap:6px}
+.target-zone{flex:1;display:flex;flex-direction:column;background:rgba(28,27,27,0.7);border:2px dashed rgba(138,136,134,0.2);padding:6px;min-height:0;overflow-y:auto}
+.target-zone.hover{border-color:#ffb59c;background:rgba(255,127,80,0.08)}
+.target-zone .zone-title{font-family:'Space Grotesk',sans-serif;font-size:10px;color:#8a8886;letter-spacing:1px;text-transform:uppercase;text-align:center;margin-bottom:4px;flex-shrink:0}
+.target-zone .zone-count{font-family:'Space Grotesk',sans-serif;font-size:9px;color:#00daf3;text-align:center;margin-bottom:4px;flex-shrink:0}
+.fault-card{background:rgba(53,53,52,0.6);border:1px solid rgba(138,136,134,0.15);padding:6px 8px;cursor:grab;font-size:11px;line-height:1.4;margin-bottom:4px;user-select:none;-webkit-user-select:none;touch-action:none}
+.fault-card:active{cursor:grabbing}
+.fault-card .fc-stage{font-family:'Space Grotesk',sans-serif;font-size:9px;color:#00daf3;letter-spacing:1px;text-transform:uppercase}
+.fault-card .fc-msg{color:#e5e2e1;margin-top:2px}
+.fault-card.correct{border-color:#10b981;background:rgba(16,185,129,0.1)}
+.fault-card.wrong{border-color:#ff3333;background:rgba(255,51,51,0.1)}
+.fault-card.placed{opacity:0.7}
+.score-bar{flex-shrink:0;display:flex;justify-content:space-between;align-items:center;padding:6px 12px;background:rgba(0,0,0,0.4)}
+.score-bar .score-text{font-family:'Space Grotesk',sans-serif;font-size:12px;color:#ffb59c}
+.check-btn{font-family:'Space Grotesk',sans-serif;font-size:11px;font-weight:700;padding:6px 20px;cursor:pointer;border:1px solid #ffb59c;background:rgba(255,127,80,0.15);color:#ffb59c;letter-spacing:1px;text-transform:uppercase}
+.check-btn:hover{background:rgba(255,127,80,0.3)}
+.check-btn:disabled{opacity:0.4;cursor:default}
+.reset-btn{font-family:'Space Grotesk',sans-serif;font-size:11px;font-weight:700;padding:6px 16px;cursor:pointer;border:1px solid rgba(138,136,134,0.3);background:rgba(53,53,52,0.4);color:#8a8886;letter-spacing:1px;text-transform:uppercase}
+.hud{display:flex;justify-content:space-around;padding:6px 16px;flex-shrink:0;background:rgba(0,0,0,0.55);height:42px;align-items:center}
+.hud-item{text-align:center}
+.hud-item .hud-label{font-family:'Space Grotesk',sans-serif;font-size:9px;color:#8a8886;letter-spacing:1px;text-transform:uppercase}
+.hud-item .hud-value{font-family:'Space Grotesk',sans-serif;font-size:13px;color:#00daf3;font-weight:700}
+.lang-btn{position:fixed;top:8px;left:8px;z-index:100;font-family:'Space Grotesk',sans-serif;font-size:11px;font-weight:700;padding:4px 10px;cursor:pointer;border:1px solid rgba(255,255,255,0.08);background:rgba(20,20,35,0.85);backdrop-filter:blur(12px);color:#ffb59c;letter-spacing:1px}
+.guide-panel{position:fixed;top:8px;right:8px;width:220px;max-height:38vh;overflow-y:auto;background:rgba(20,20,35,0.85);backdrop-filter:blur(12px);border:1px solid rgba(255,255,255,0.08);padding:10px;z-index:100;font-family:'Noto Sans SC',sans-serif;font-size:11px;color:rgba(255,255,255,0.85)}
+.guide-panel h3{font-family:'Space Grotesk',sans-serif;font-size:12px;margin-bottom:4px;display:flex;align-items:center;justify-content:space-between;cursor:pointer;color:#ffb59c}
+.guide-panel ul{padding-left:14px;line-height:1.5}
+.guide-panel .guide-content{transition:max-height 0.3s}
+.guide-panel .collapsed .guide-content{max-height:0;overflow:hidden}
+.summary-overlay{display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.8);z-index:200;justify-content:center;align-items:center}
+.summary-box{background:rgba(28,27,27,0.95);border:1px solid rgba(255,181,156,0.3);padding:24px;max-width:400px;text-align:center}
+.summary-box h2{font-family:'Space Grotesk',sans-serif;font-size:18px;color:#ffb59c;margin-bottom:12px}
+.summary-box p{font-size:13px;color:#e5e2e1;line-height:1.6;margin-bottom:8px}
+.summary-box .final-score{font-family:'Space Grotesk',sans-serif;font-size:28px;color:#00daf3;font-weight:700;margin:12px 0}
+</style>
+</head>
+<body>
+<button class="lang-btn" id="langBtn">CN</button>
+<div class="guide-panel" id="guidePanel">
+  <h3 id="guideToggle"><span id="guideTitle"></span><span id="guideArrow">-</span></h3>
+  <div class="guide-content" id="guideContent">
+    <p id="guideWhat" style="margin-bottom:6px"></p>
+    <ul id="guideList"></ul>
+    <p id="guideTakeaway" style="margin-top:6px;color:#00daf3"></p>
+  </div>
+</div>
+<div class="summary-overlay" id="summaryOverlay">
+  <div class="summary-box" id="summaryBox"></div>
+</div>
+<div class="wrapper">
+  <div class="header">
+    <h1 id="mainTitle"></h1>
+    <div class="subtitle" id="mainSubtitle"></div>
+  </div>
+  <div class="game-body">
+    <div class="source-col" id="sourceCol"></div>
+    <div class="target-cols" id="targetCols"></div>
+  </div>
+  <div class="score-bar">
+    <span class="score-text" id="scoreText"></span>
+    <div style="display:flex;gap:8px">
+      <button class="reset-btn" id="resetBtn"></button>
+      <button class="check-btn" id="checkBtn"></button>
+    </div>
+  </div>
+  <div class="hud">
+    <div class="hud-item"><div class="hud-label" id="hudL1"></div><div class="hud-value" id="hudV1"></div></div>
+    <div class="hud-item"><div class="hud-label" id="hudL2"></div><div class="hud-value" id="hudV2"></div></div>
+    <div class="hud-item"><div class="hud-label" id="hudL3"></div><div class="hud-value" id="hudV3"></div></div>
+    <div class="hud-item"><div class="hud-label" id="hudL4"></div><div class="hud-value" id="hudV4"></div></div>
+  </div>
+</div>
+<script>
+(function(){
+var LANG='cn';
+var I18N={
+  title:{en:'FAULT TRIAGE',cn:'\u6545\u969C\u5206\u7C7B\u8BCA\u65AD'},
+  subtitle:{en:'Drag each fault log into the correct category',cn:'\u628A\u6BCF\u6761\u6545\u969C\u65E5\u5FD7\u62D6\u5165\u6B63\u786E\u5206\u7C7B'},
+  guideTitle:{en:'OPERATION GUIDE',cn:'\u64CD\u4F5C\u6307\u5357'},
+  guideWhat:{en:'Read fault log entries from E2E test results and classify them into 3 categories: interface mismatch, data format error, or latency exceeded.',cn:'\u9605\u8BFB\u7AEF\u5230\u7AEF\u6D4B\u8BD5\u7684\u6545\u969C\u65E5\u5FD7\uFF0C\u5C06\u5B83\u4EEC\u5206\u7C7B\u4E3A3\u7C7B\uFF1A\u63A5\u53E3\u4E0D\u5339\u914D\u3001\u6570\u636E\u683C\u5F0F\u9519\u8BEF\u3001\u5EF6\u8FDF\u8D85\u6807\u3002'},
+  guideStep1:{en:'1. Read the fault description on each card',cn:'1. \u9605\u8BFB\u6BCF\u5F20\u5361\u7247\u7684\u6545\u969C\u63CF\u8FF0'},
+  guideStep2:{en:'2. Drag it to the matching category column',cn:'2. \u62D6\u62FD\u5230\u5339\u914D\u7684\u5206\u7C7B\u5217'},
+  guideStep3:{en:'3. Click CHECK when all cards are placed',cn:'3. \u5168\u90E8\u653E\u7F6E\u540E\u70B9\u51FB\u68C0\u67E5'},
+  guideTakeaway:{en:'Goal: Correctly classify all 9 fault logs to demonstrate cross-stage diagnosis skill.',cn:'\u76EE\u6807\uFF1A\u6B63\u786E\u5206\u7C7B\u5168\u90E8 9 \u6761\u6545\u969C\u65E5\u5FD7\uFF0C\u8BC1\u660E\u8DE8\u9636\u6BB5\u8BCA\u65AD\u80FD\u529B\u3002'},
+  catInterface:{en:'INTERFACE MISMATCH',cn:'\u63A5\u53E3\u4E0D\u5339\u914D'},
+  catFormat:{en:'DATA FORMAT ERROR',cn:'\u6570\u636E\u683C\u5F0F\u9519\u8BEF'},
+  catLatency:{en:'LATENCY EXCEEDED',cn:'\u5EF6\u8FDF\u8D85\u6807'},
+  checkBtn:{en:'CHECK',cn:'\u68C0\u67E5'},
+  resetBtn:{en:'RESET',cn:'\u91CD\u7F6E'},
+  placed:{en:'placed',cn:'\u5DF2\u653E\u7F6E'},
+  remaining:{en:'remaining',cn:'\u5269\u4F59'},
+  scoreLabel:{en:'SCORE',cn:'\u5F97\u5206'},
+  hudTotal:{en:'TOTAL',cn:'\u603B\u6570'},
+  hudPlaced:{en:'PLACED',cn:'\u5DF2\u653E'},
+  hudCorrect:{en:'CORRECT',cn:'\u6B63\u786E'},
+  hudAccuracy:{en:'ACCURACY',cn:'\u51C6\u786E\u7387'},
+  summaryTitle:{en:'TRIAGE COMPLETE',cn:'\u5206\u7C7B\u5B8C\u6210'},
+  summaryPerfect:{en:'Perfect score! You can accurately diagnose cross-stage faults.',cn:'\u6EE1\u5206\uFF01\u4F60\u80FD\u51C6\u786E\u8BCA\u65AD\u8DE8\u9636\u6BB5\u6545\u969C\u3002'},
+  summaryGood:{en:'Good job! Review the red cards to understand misclassifications.',cn:'\u505A\u5F97\u4E0D\u9519\uFF01\u68C0\u67E5\u7EA2\u8272\u5361\u7247\u4E86\u89E3\u9519\u8BEF\u5206\u7C7B\u3002'},
+  summaryRetry:{en:'Keep practicing -- read the stage info and error type carefully.',cn:'\u7EE7\u7EED\u7EC3\u4E60 -- \u4ED4\u7EC6\u9605\u8BFB\u9636\u6BB5\u4FE1\u606F\u548C\u9519\u8BEF\u7C7B\u578B\u3002'},
+  // Fault card texts
+  f0s:{en:'SEG -> RISK',cn:'\u5206\u5272 -> \u98CE\u9669'},
+  f0m:{en:'Risk map expects uint8 labels but receives float32 tensor',cn:'\u98CE\u9669\u56FE\u671F\u671B uint8 \u6807\u7B7E\u4F46\u6536\u5230 float32 \u5F20\u91CF'},
+  f1s:{en:'RISK -> PATH',cn:'\u98CE\u9669 -> \u8DEF\u5F84'},
+  f1m:{en:'Path planner expects 2D grid but receives flattened 1D array',cn:'\u8DEF\u5F84\u89C4\u5212\u5668\u671F\u671B 2D \u7F51\u683C\u4F46\u6536\u5230\u5C55\u5E73\u7684 1D \u6570\u7EC4'},
+  f2s:{en:'PATH -> CTRL',cn:'\u8DEF\u5F84 -> \u63A7\u5236'},
+  f2m:{en:'Control module expects (lat,lon) but receives (row,col) pixel coords',cn:'\u63A7\u5236\u6A21\u5757\u671F\u671B (lat,lon) \u4F46\u6536\u5230 (row,col) \u50CF\u7D20\u5750\u6807'},
+  f3s:{en:'IMAGE -> SEG',cn:'\u56FE\u50CF -> \u5206\u5272'},
+  f3m:{en:'Segmentation model receives RGB but expects grayscale -- channel count mismatch',cn:'\u5206\u5272\u6A21\u578B\u6536\u5230 RGB \u4F46\u671F\u671B\u7070\u5EA6 -- \u901A\u9053\u6570\u4E0D\u5339\u914D'},
+  f4s:{en:'SEG -> RISK',cn:'\u5206\u5272 -> \u98CE\u9669'},
+  f4m:{en:'Label encoding uses 0-4 but cost lookup table only has entries 0-3',cn:'\u6807\u7B7E\u7F16\u7801\u4F7F\u7528 0-4 \u4F46\u4EE3\u4EF7\u67E5\u627E\u8868\u53EA\u6709 0-3 \u6761\u76EE'},
+  f5s:{en:'RISK -> PATH',cn:'\u98CE\u9669 -> \u8DEF\u5F84'},
+  f5m:{en:'Cost map has NaN values -- planner enters infinite loop',cn:'\u4EE3\u4EF7\u56FE\u5305\u542B NaN \u503C -- \u89C4\u5212\u5668\u8FDB\u5165\u65E0\u9650\u5FAA\u73AF'},
+  f6s:{en:'SEG STAGE',cn:'\u5206\u5272\u9636\u6BB5'},
+  f6m:{en:'Segmentation takes 520ms, exceeding 400ms SLA -- downstream starved',cn:'\u5206\u5272\u8017\u65F6 520ms\uFF0C\u8D85\u51FA 400ms SLA -- \u4E0B\u6E38\u9965\u997F'},
+  f7s:{en:'PATH STAGE',cn:'\u8DEF\u5F84\u9636\u6BB5'},
+  f7m:{en:'A* search on 2048x2048 grid takes 890ms, total pipeline exceeds 1s',cn:'A* \u5728 2048x2048 \u7F51\u683C\u4E0A\u641C\u7D22\u8017\u65F6 890ms\uFF0C\u603B\u7BA1\u7EBF\u8D85\u8FC7 1s'},
+  f8s:{en:'CTRL STAGE',cn:'\u63A7\u5236\u9636\u6BB5'},
+  f8m:{en:'Control loop misses 50ms deadline due to path recomputation -- rover drifts',cn:'\u63A7\u5236\u5FAA\u73AF\u56E0\u8DEF\u5F84\u91CD\u7B97\u9519\u8FC7 50ms \u622A\u6B62\u671F -- \u8F66\u8F86\u504F\u79FB'}
+};
+function t(k){return(I18N[k]&&I18N[k][LANG])||(I18N[k]&&I18N[k]['en'])||k}
+
+// Fault definitions: [stageKey, msgKey, correctCategory]
+// Categories: 0=interface, 1=format, 2=latency
+var FAULTS=[
+  {sk:'f0s',mk:'f0m',cat:1},  // data format error (type mismatch)
+  {sk:'f1s',mk:'f1m',cat:0},  // interface mismatch (shape/dim)
+  {sk:'f2s',mk:'f2m',cat:0},  // interface mismatch (coord system)
+  {sk:'f3s',mk:'f3m',cat:0},  // interface mismatch (channel count)
+  {sk:'f4s',mk:'f4m',cat:1},  // data format error (encoding range)
+  {sk:'f5s',mk:'f5m',cat:1},  // data format error (NaN)
+  {sk:'f6s',mk:'f6m',cat:2},  // latency exceeded
+  {sk:'f7s',mk:'f7m',cat:2},  // latency exceeded
+  {sk:'f8s',mk:'f8m',cat:2}   // latency exceeded
+];
+
+var CATEGORIES=['catInterface','catFormat','catLatency'];
+var placements={};  // faultIdx -> catIdx
+var checked=false;
+var correctCount=0;
+
+function shuffle(arr){
+  var a=arr.slice();
+  for(var i=a.length-1;i>0;i--){var j=Math.floor(Math.random()*(i+1));var tmp=a[i];a[i]=a[j];a[j]=tmp}
+  return a;
+}
+
+var shuffledOrder=shuffle([0,1,2,3,4,5,6,7,8]);
+
+function buildTargetZones(){
+  var tc=document.getElementById('targetCols');tc.innerHTML='';
+  CATEGORIES.forEach(function(ck,ci){
+    var zone=document.createElement('div');zone.className='target-zone';zone.id='zone'+ci;
+    zone.setAttribute('data-cat',ci);
+    zone.innerHTML='<div class="zone-title" id="zoneTitle'+ci+'"></div><div class="zone-count" id="zoneCount'+ci+'">0</div>';
+    tc.appendChild(zone);
+
+    zone.addEventListener('dragover',function(e){e.preventDefault();zone.classList.add('hover')});
+    zone.addEventListener('dragleave',function(){zone.classList.remove('hover')});
+    zone.addEventListener('drop',function(e){
+      e.preventDefault();zone.classList.remove('hover');
+      if(checked)return;
+      var fi=parseInt(e.dataTransfer.getData('text/plain'));
+      if(isNaN(fi))return;
+      placeFault(fi,ci);
+    });
+
+    // Touch drop handling
+    zone.addEventListener('touchmove',function(e){e.preventDefault()},{passive:false});
+  });
+}
+
+function buildSourceCards(){
+  var col=document.getElementById('sourceCol');col.innerHTML='';
+  shuffledOrder.forEach(function(fi){
+    var card=createFaultCard(fi);
+    col.appendChild(card);
+  });
+}
+
+function createFaultCard(fi){
+  var f=FAULTS[fi];
+  var card=document.createElement('div');card.className='fault-card';card.id='fcard'+fi;
+  card.setAttribute('draggable','true');card.setAttribute('data-fi',fi);
+  card.innerHTML='<div class="fc-stage" id="fcStage'+fi+'"></div><div class="fc-msg" id="fcMsg'+fi+'"></div>';
+
+  card.addEventListener('dragstart',function(e){
+    if(checked)return;
+    e.dataTransfer.setData('text/plain',fi.toString());
+    e.dataTransfer.effectAllowed='move';
+  });
+
+  // Touch drag support
+  var touchStartX=0,touchStartY=0;
+  var ghost=null;
+
+  card.addEventListener('touchstart',function(e){
+    if(checked)return;
+    var touch=e.touches[0];
+    touchStartX=touch.clientX;touchStartY=touch.clientY;
+    ghost=card.cloneNode(true);
+    ghost.style.cssText='position:fixed;top:'+(touch.clientY-20)+'px;left:'+(touch.clientX-40)+'px;width:200px;opacity:0.8;z-index:300;pointer-events:none';
+    document.body.appendChild(ghost);
+  },{passive:true});
+
+  card.addEventListener('touchmove',function(e){
+    e.preventDefault();
+    if(!ghost)return;
+    var touch=e.touches[0];
+    ghost.style.top=(touch.clientY-20)+'px';
+    ghost.style.left=(touch.clientX-40)+'px';
+
+    // Highlight drop zones
+    for(var ci=0;ci<3;ci++){
+      var zone=document.getElementById('zone'+ci);
+      var rect=zone.getBoundingClientRect();
+      if(touch.clientX>=rect.left&&touch.clientX<=rect.right&&touch.clientY>=rect.top&&touch.clientY<=rect.bottom){
+        zone.classList.add('hover');
+      } else {
+        zone.classList.remove('hover');
+      }
+    }
+  },{passive:false});
+
+  card.addEventListener('touchend',function(e){
+    if(ghost){document.body.removeChild(ghost);ghost=null}
+    if(checked)return;
+    var touch=e.changedTouches[0];
+    for(var ci=0;ci<3;ci++){
+      var zone=document.getElementById('zone'+ci);
+      zone.classList.remove('hover');
+      var rect=zone.getBoundingClientRect();
+      if(touch.clientX>=rect.left&&touch.clientX<=rect.right&&touch.clientY>=rect.top&&touch.clientY<=rect.bottom){
+        placeFault(fi,ci);break;
+      }
+    }
+  });
+
+  return card;
+}
+
+function placeFault(fi,catIdx){
+  // Remove from previous placement if any
+  if(placements[fi]!==undefined){
+    var oldZone=document.getElementById('zone'+placements[fi]);
+    var oldCard=document.getElementById('fcard'+fi);
+    if(oldCard&&oldCard.parentNode===oldZone){oldZone.removeChild(oldCard)}
+  }
+  placements[fi]=catIdx;
+  var card=document.getElementById('fcard'+fi);
+  if(!card){card=createFaultCard(fi)}
+  card.classList.add('placed');
+  document.getElementById('zone'+catIdx).appendChild(card);
+
+  // Remove from source if still there
+  var src=document.getElementById('sourceCol');
+  var srcCard=src.querySelector('#fcard'+fi);
+  if(srcCard)src.removeChild(srcCard);
+
+  updateCounts();
+}
+
+function updateCounts(){
+  var counts=[0,0,0];
+  for(var k in placements)counts[placements[k]]++;
+  for(var ci=0;ci<3;ci++){document.getElementById('zoneCount'+ci).textContent=counts[ci]}
+  var placed=Object.keys(placements).length;
+  document.getElementById('scoreText').textContent=t('placed')+': '+placed+'/9 | '+t('remaining')+': '+(9-placed);
+}
+
+function checkAnswers(){
+  if(Object.keys(placements).length<9)return;
+  checked=true;correctCount=0;
+  for(var fi=0;fi<9;fi++){
+    var card=document.getElementById('fcard'+fi);
+    if(placements[fi]===FAULTS[fi].cat){
+      card.classList.add('correct');correctCount++;
+    } else {
+      card.classList.add('wrong');
+    }
+  }
+  updateHUD();
+  document.getElementById('checkBtn').disabled=true;
+
+  // Show summary
+  setTimeout(function(){
+    var overlay=document.getElementById('summaryOverlay');
+    var box=document.getElementById('summaryBox');
+    var pct=Math.round(correctCount/9*100);
+    var msg=correctCount===9?t('summaryPerfect'):(correctCount>=6?t('summaryGood'):t('summaryRetry'));
+    box.innerHTML='<h2>'+t('summaryTitle')+'</h2><div class="final-score">'+correctCount+'/9 ('+pct+'%)</div><p>'+msg+'</p>';
+    overlay.style.display='flex';
+    overlay.addEventListener('click',function(){overlay.style.display='none'},{once:true});
+  },800);
+}
+
+function resetGame(){
+  placements={};checked=false;correctCount=0;
+  shuffledOrder=shuffle([0,1,2,3,4,5,6,7,8]);
+  buildSourceCards();
+  for(var ci=0;ci<3;ci++){
+    var zone=document.getElementById('zone'+ci);
+    // Remove all fault cards from zones, keep title and count
+    var cards=zone.querySelectorAll('.fault-card');
+    cards.forEach(function(c){zone.removeChild(c)});
+  }
+  document.getElementById('checkBtn').disabled=false;
+  document.getElementById('summaryOverlay').style.display='none';
+  updateCounts();updateHUD();
+}
+
+function updateHUD(){
+  document.getElementById('hudL1').textContent=t('hudTotal');
+  document.getElementById('hudV1').textContent='9';
+  document.getElementById('hudL2').textContent=t('hudPlaced');
+  document.getElementById('hudV2').textContent=Object.keys(placements).length;
+  document.getElementById('hudL3').textContent=t('hudCorrect');
+  document.getElementById('hudV3').textContent=checked?correctCount:'--';
+  document.getElementById('hudV3').style.color=checked?(correctCount>=7?'#10b981':'#ff5f1f'):'#00daf3';
+  document.getElementById('hudL4').textContent=t('hudAccuracy');
+  document.getElementById('hudV4').textContent=checked?Math.round(correctCount/9*100)+'%':'--';
+}
+
+function refreshI18N(){
+  document.getElementById('mainTitle').textContent=t('title');
+  document.getElementById('mainSubtitle').textContent=t('subtitle');
+  document.getElementById('guideTitle').textContent=t('guideTitle');
+  document.getElementById('guideWhat').textContent=t('guideWhat');
+  var list=document.getElementById('guideList');list.innerHTML='';
+  ['guideStep1','guideStep2','guideStep3'].forEach(function(k){
+    var li=document.createElement('li');li.textContent=t(k);list.appendChild(li);
+  });
+  document.getElementById('guideTakeaway').textContent=t('guideTakeaway');
+  for(var ci=0;ci<3;ci++){document.getElementById('zoneTitle'+ci).textContent=t(CATEGORIES[ci])}
+  for(var fi=0;fi<9;fi++){
+    var stEl=document.getElementById('fcStage'+fi);
+    var msgEl=document.getElementById('fcMsg'+fi);
+    if(stEl)stEl.textContent=t(FAULTS[fi].sk);
+    if(msgEl)msgEl.textContent=t(FAULTS[fi].mk);
+  }
+  document.getElementById('checkBtn').textContent=t('checkBtn');
+  document.getElementById('resetBtn').textContent=t('resetBtn');
+  updateCounts();updateHUD();
+}
+
+document.getElementById('langBtn').addEventListener('click',function(){
+  LANG=LANG==='en'?'cn':'en';
+  document.getElementById('langBtn').textContent=LANG.toUpperCase();
+  refreshI18N();
+});
+document.getElementById('guideToggle').addEventListener('click',function(){
+  document.getElementById('guidePanel').classList.toggle('collapsed');
+  document.getElementById('guideArrow').textContent=document.getElementById('guidePanel').classList.contains('collapsed')?'+':'-';
+});
+document.getElementById('checkBtn').addEventListener('click',checkAnswers);
+document.getElementById('resetBtn').addEventListener('click',resetGame);
+
+buildTargetZones();buildSourceCards();refreshI18N();updateHUD();
+})();
+</script>
+</body>
+</html>

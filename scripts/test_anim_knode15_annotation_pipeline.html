@@ -1,0 +1,724 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=Inter:wght@400;500&family=Noto+Sans+SC:wght@400;700&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box;}
+html,body{width:100%;height:100vh;overflow:hidden;}
+body{background:var(--bg,#0c0e12);color:var(--text,#f6f6fc);font-family:'Inter','Noto Sans SC',sans-serif;display:flex;flex-direction:column;}
+.wrapper{display:flex;flex-direction:column;height:100vh;overflow:hidden;}
+.header{padding:12px 16px 8px;display:flex;justify-content:space-between;align-items:center;}
+.header h1{font-family:'Space Grotesk',sans-serif;font-size:clamp(14px,2vw,18px);font-weight:700;letter-spacing:-0.02em;color:var(--primary,#50ffb0);text-shadow:0 0 15px var(--glow,rgba(80,255,176,0.3));}
+.header .sub{font-size:11px;color:var(--muted,#aaabb0);letter-spacing:0.1em;text-transform:uppercase;}
+.canvas-wrap{flex:1;min-height:0;position:relative;}
+canvas{width:100%;height:100%;display:block;}
+.controls{display:flex;justify-content:center;align-items:center;gap:12px;padding:8px 16px;}
+.ctrl-btn{font-family:'Space Grotesk',sans-serif;font-size:12px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;padding:6px 18px;border:none;cursor:pointer;color:var(--bg,#0c0e12);background:linear-gradient(135deg,var(--primary,#50ffb0),var(--primary-dim,#17df93));transition:transform 0.1s,box-shadow 0.2s;box-shadow:0 0 12px var(--glow-strong,rgba(80,255,176,0.3));}
+.ctrl-btn:hover{transform:scale(1.04);box-shadow:0 0 20px var(--glow-strong,rgba(80,255,176,0.5));}
+.ctrl-btn:active{transform:scale(0.96);}
+.ctrl-btn.secondary{background:var(--glass,rgba(23,26,31,0.92));color:var(--muted,#aaabb0);box-shadow:none;backdrop-filter:blur(12px);}
+.ctrl-btn.secondary:hover{color:var(--primary,#50ffb0);}
+.hud{height:48px;display:flex;align-items:center;justify-content:space-around;background:rgba(0,0,0,0.55);backdrop-filter:blur(12px);padding:0 16px;}
+.hud-item{text-align:center;}
+.hud-label{font-family:'Space Grotesk',sans-serif;font-size:9px;letter-spacing:0.15em;text-transform:uppercase;color:var(--muted,#aaabb0);}
+.hud-val{font-family:'Space Grotesk',sans-serif;font-size:14px;font-weight:700;color:var(--primary,#50ffb0);}
+.lang-btn{position:fixed;top:8px;left:8px;z-index:100;font-family:'Space Grotesk',sans-serif;font-size:11px;font-weight:700;padding:4px 10px;cursor:pointer;border:none;background:rgba(20,20,35,0.85);backdrop-filter:blur(12px);color:#ffb59c;letter-spacing:1px;}
+.guide-panel{position:fixed;top:8px;right:8px;width:240px;max-height:40vh;overflow-y:auto;background:var(--glass,rgba(20,20,35,0.85));backdrop-filter:blur(12px);padding:12px;z-index:100;font-family:'Noto Sans SC',sans-serif;font-size:12px;color:rgba(255,255,255,0.85);line-height:1.6;}
+.guide-panel h3{font-family:'Space Grotesk',sans-serif;font-size:13px;margin-bottom:6px;color:var(--primary,#50ffb0);cursor:pointer;display:flex;justify-content:space-between;align-items:center;}
+.guide-panel ul{padding-left:14px;}
+.guide-panel .collapsed{display:none;}
+</style>
+</head>
+<body>
+<button class="lang-btn" id="langBtn">CN</button>
+<div class="guide-panel" id="guide">
+<h3 id="guideTitle"></h3>
+<div class="guide-content" id="guideContent"></div>
+</div>
+<div class="wrapper">
+<div class="header">
+<div><h1 id="title"></h1><div class="sub" id="subtitle"></div></div>
+<div id="frameIndicator" style="font-family:'Space Grotesk';font-size:11px;color:var(--muted,#aaabb0);letter-spacing:0.1em;"></div>
+</div>
+<div class="canvas-wrap"><canvas id="c"></canvas></div>
+<div class="controls">
+<button class="ctrl-btn secondary" id="btnPrev"></button>
+<button class="ctrl-btn" id="btnPlay"></button>
+<button class="ctrl-btn secondary" id="btnNext"></button>
+</div>
+<div class="hud">
+<div class="hud-item"><div class="hud-label" id="hudL1"></div><div class="hud-val" id="hudV1"></div></div>
+<div class="hud-item"><div class="hud-label" id="hudL2"></div><div class="hud-val" id="hudV2"></div></div>
+<div class="hud-item"><div class="hud-label" id="hudL3"></div><div class="hud-val" id="hudV3"></div></div>
+<div class="hud-item"><div class="hud-label" id="hudL4"></div><div class="hud-val" id="hudV4"></div></div>
+</div>
+</div>
+
+<!-- Runtime (shared skeleton) -->
+<script src="animation_runtime.js"></script>
+
+<!-- Content -->
+<script>
+// ============================================================
+// CONFIG
+// ============================================================
+
+var CONFIG = {
+  style: 'ares_mission',
+  totalFrames: 4,
+
+  i18n: {
+    title:    {en:'ANNOTATION PRECISION LEVELS', cn:'\u6807\u6ce8\u7cbe\u5ea6\u5c42\u6b21'},
+    subtitle: {en:'From Raw Image to Pixel-level Annotation', cn:'\u4ece\u539f\u59cb\u56fe\u50cf\u5230\u50cf\u7d20\u7ea7\u6807\u6ce8'},
+    guideTitle: {en:'Learning Guide', cn:'\u5b66\u4e60\u5bfc\u822a'},
+    g1: {en:'Raw image: AI sees only pixel numbers, no semantic meaning', cn:'\u539f\u59cb\u56fe\u50cf\uff1aAI\u53ea\u770b\u5230\u50cf\u7d20\u6570\u5b57\uff0c\u65e0\u8bed\u4e49\u4fe1\u606f'},
+    g2: {en:'Classification: one label per image, cheapest but coarsest', cn:'\u5206\u7c7b\u6807\u6ce8\uff1a\u6bcf\u5f20\u56fe\u4e00\u4e2a\u6807\u7b7e\uff0c\u6700\u4fbf\u5b9c\u4f46\u6700\u7c97\u7565'},
+    g3: {en:'Bounding box: locate objects with rectangles', cn:'\u533a\u57df\u6807\u6ce8\uff1a\u7528\u77e9\u5f62\u6846\u5b9a\u4f4d\u7269\u4f53'},
+    g4: {en:'Semantic segmentation: every pixel gets a label', cn:'\u50cf\u7d20\u6807\u6ce8\uff1a\u6bcf\u4e2a\u50cf\u7d20\u90fd\u6709\u6807\u7b7e'},
+    // HUD labels
+    hud_precision: {en:'PRECISION', cn:'\u7cbe\u5ea6'},
+    hud_info:      {en:'INFO LEVEL', cn:'\u4fe1\u606f\u91cf'},
+    hud_time:      {en:'LABEL TIME', cn:'\u6807\u6ce8\u65f6\u95f4'},
+    hud_usage:     {en:'USE CASE', cn:'\u7528\u9014'},
+    // HUD values
+    prec_none:  {en:'None',         cn:'\u65e0'},
+    prec_img:   {en:'Image-level',  cn:'\u56fe\u50cf\u7ea7'},
+    prec_reg:   {en:'Region-level', cn:'\u533a\u57df\u7ea7'},
+    prec_pix:   {en:'Pixel-level',  cn:'\u50cf\u7d20\u7ea7'},
+    usage_none: {en:'N/A',          cn:'\u65e0'},
+    usage_cls:  {en:'Classification', cn:'\u5206\u7c7b'},
+    usage_det:  {en:'Detection',    cn:'\u68c0\u6d4b'},
+    usage_seg:  {en:'Segmentation', cn:'\u5206\u5272'},
+    // Frame descriptions
+    desc0: {en:'AI sees only pixel numbers -- no meaning', cn:'AI\u53ea\u770b\u5230\u50cf\u7d20\u6570\u5b57 -- \u6ca1\u6709\u8bed\u4e49'},
+    desc1: {en:'One image -> One label', cn:'\u4e00\u5f20\u56fe -> \u4e00\u4e2a\u6807\u7b7e'},
+    desc2: {en:'Rectangles locate each object', cn:'\u77e9\u5f62\u6846\u5b9a\u4f4d\u6bcf\u4e2a\u7269\u4f53'},
+    desc3: {en:'Every pixel carries a label', cn:'\u6bcf\u4e2a\u50cf\u7d20\u90fd\u643a\u5e26\u6807\u7b7e'},
+    // Terrain type labels
+    lbl_soil:    {en:'soil',    cn:'\u571f\u58e4'},
+    lbl_bedrock: {en:'bedrock', cn:'\u57fa\u5ca9'},
+    lbl_rock:    {en:'big_rock',cn:'\u5927\u77f3\u5757'},
+    lbl_sand:    {en:'sand',    cn:'\u6c99\u5730'},
+    // Frame titles
+    ftitle0: {en:'RAW IMAGE', cn:'\u539f\u59cb\u56fe\u50cf'},
+    ftitle1: {en:'IMAGE-LEVEL CLASSIFICATION', cn:'\u56fe\u50cf\u7ea7\u5206\u7c7b\u6807\u6ce8'},
+    ftitle2: {en:'BOUNDING BOX DETECTION', cn:'\u533a\u57df\u7ea7\u68c0\u6d4b\u6807\u6ce8'},
+    ftitle3: {en:'PIXEL-LEVEL SEGMENTATION', cn:'\u50cf\u7d20\u7ea7\u5206\u5272\u6807\u6ce8'},
+    // Legend
+    legend_title: {en:'TERRAIN LEGEND', cn:'\u5730\u5f62\u56fe\u4f8b'},
+  },
+
+  hudLabels: ['hud_precision', 'hud_info', 'hud_time', 'hud_usage'],
+  hudValues: [
+    ['prec_none', '0%',   '0s',    'usage_none'],
+    ['prec_img',  '20%',  '2s',    'usage_cls'],
+    ['prec_reg',  '60%',  '30s',   'usage_det'],
+    ['prec_pix',  '100%', '10min', 'usage_seg'],
+  ],
+
+  guideTitle: 'guideTitle',
+  guideItems: ['g1', 'g2', 'g3', 'g4'],
+};
+
+// ============================================================
+// Terrain map data -- shared across all frames
+// ============================================================
+
+// Grid layout for the simulated terrain (8 cols x 6 rows)
+// 0=soil, 1=bedrock, 2=big_rock, 3=sand
+var TERRAIN_GRID = [
+  [0, 0, 3, 3, 3, 0, 0, 0],
+  [0, 0, 3, 3, 0, 0, 1, 1],
+  [0, 0, 0, 0, 0, 1, 1, 1],
+  [2, 2, 0, 0, 0, 1, 1, 0],
+  [2, 2, 0, 0, 3, 3, 0, 0],
+  [0, 0, 0, 0, 3, 3, 3, 0],
+];
+
+var TERRAIN_COLORS = {
+  0: '#b89a6a', // soil
+  1: '#8a7d6e', // bedrock
+  2: '#4a4a50', // big rock
+  3: '#d4a844', // sand
+};
+
+var TERRAIN_COLORS_SEMI = {
+  0: 'rgba(184,154,106,0.55)',
+  1: 'rgba(138,125,110,0.55)',
+  2: 'rgba(74,74,80,0.55)',
+  3: 'rgba(212,168,68,0.55)',
+};
+
+// Pseudo-random for consistent texture
+var _seed = 42;
+function _prand() { _seed = (_seed * 1103515245 + 12345) & 0x7fffffff; return _seed / 0x7fffffff; }
+
+// ============================================================
+// Drawing helpers
+// ============================================================
+
+function _roundedRect(ctx, x, y, w, h, r) {
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.lineTo(x + w - r, y);
+  ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+  ctx.lineTo(x + w, y + h - r);
+  ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+  ctx.lineTo(x + r, y + h);
+  ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+  ctx.lineTo(x, y + r);
+  ctx.quadraticCurveTo(x, y, x + r, y);
+  ctx.closePath();
+}
+
+// Draw the base terrain image into a rectangular area
+function _drawTerrainImage(ctx, ix, iy, iw, ih) {
+  var cols = TERRAIN_GRID[0].length;
+  var rows = TERRAIN_GRID.length;
+  var cellW = iw / cols;
+  var cellH = ih / rows;
+
+  // Fill each cell with terrain color
+  for (var r = 0; r < rows; r++) {
+    for (var c = 0; c < cols; c++) {
+      var type = TERRAIN_GRID[r][c];
+      ctx.fillStyle = TERRAIN_COLORS[type];
+      ctx.fillRect(ix + c * cellW, iy + r * cellH, cellW + 0.5, cellH + 0.5);
+    }
+  }
+
+  // Add noise texture for realism
+  _seed = 42;
+  for (var i = 0; i < 200; i++) {
+    var nx = ix + _prand() * iw;
+    var ny = iy + _prand() * ih;
+    var nr = 1 + _prand() * 2;
+    var nb = 80 + Math.floor(_prand() * 80);
+    ctx.fillStyle = 'rgba(' + nb + ',' + nb + ',' + Math.floor(nb * 0.8) + ',0.25)';
+    ctx.beginPath();
+    ctx.arc(nx, ny, nr, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  // Grid lines between cells (subtle)
+  ctx.strokeStyle = 'rgba(0,0,0,0.15)';
+  ctx.lineWidth = 0.5;
+  for (var c = 1; c < cols; c++) {
+    ctx.beginPath();
+    ctx.moveTo(ix + c * cellW, iy);
+    ctx.lineTo(ix + c * cellW, iy + ih);
+    ctx.stroke();
+  }
+  for (var r = 1; r < rows; r++) {
+    ctx.beginPath();
+    ctx.moveTo(ix, iy + r * cellH);
+    ctx.lineTo(ix + iw, iy + r * cellH);
+    ctx.stroke();
+  }
+}
+
+// Draw pixel number overlay (to show "AI sees numbers")
+function _drawPixelNumbers(ctx, ix, iy, iw, ih) {
+  var cols = TERRAIN_GRID[0].length;
+  var rows = TERRAIN_GRID.length;
+  var cellW = iw / cols;
+  var cellH = ih / rows;
+
+  ctx.font = "bold 9px 'Space Grotesk',monospace";
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillStyle = 'rgba(255,255,255,0.7)';
+
+  // Show RGB-like values in each cell
+  _seed = 100;
+  for (var r = 0; r < rows; r++) {
+    for (var c = 0; c < cols; c++) {
+      var cx = ix + c * cellW + cellW / 2;
+      var cy = iy + r * cellH + cellH / 2;
+      var type = TERRAIN_GRID[r][c];
+      // Generate plausible pixel values based on terrain type
+      var rv, gv, bv;
+      if (type === 0) { rv = 170 + Math.floor(_prand() * 20); gv = 140 + Math.floor(_prand() * 20); bv = 90 + Math.floor(_prand() * 20); }
+      else if (type === 1) { rv = 120 + Math.floor(_prand() * 20); gv = 110 + Math.floor(_prand() * 20); bv = 95 + Math.floor(_prand() * 20); }
+      else if (type === 2) { rv = 60 + Math.floor(_prand() * 20); gv = 60 + Math.floor(_prand() * 20); bv = 65 + Math.floor(_prand() * 20); }
+      else { rv = 195 + Math.floor(_prand() * 20); gv = 155 + Math.floor(_prand() * 20); bv = 55 + Math.floor(_prand() * 20); }
+      ctx.fillText(rv + ',' + gv + ',' + bv, cx, cy);
+    }
+  }
+}
+
+// Draw terrain legend on the right side
+function _drawLegend(ctx, lx, ly, P, t) {
+  var items = [
+    { key: 'lbl_soil',    color: TERRAIN_COLORS[0] },
+    { key: 'lbl_bedrock', color: TERRAIN_COLORS[1] },
+    { key: 'lbl_rock',    color: TERRAIN_COLORS[2] },
+    { key: 'lbl_sand',    color: TERRAIN_COLORS[3] },
+  ];
+
+  ctx.font = "bold 10px 'Space Grotesk',sans-serif";
+  ctx.textAlign = 'left';
+  ctx.fillStyle = P.primary;
+  ctx.fillText(t('legend_title'), lx, ly);
+
+  var spacing = 22;
+  for (var i = 0; i < items.length; i++) {
+    var iy = ly + 18 + i * spacing;
+    // Color swatch
+    ctx.fillStyle = items[i].color;
+    ctx.fillRect(lx, iy - 5, 12, 12);
+    ctx.strokeStyle = P.outline;
+    ctx.lineWidth = 0.5;
+    ctx.strokeRect(lx, iy - 5, 12, 12);
+    // Label
+    ctx.font = "11px 'Inter','Noto Sans SC',sans-serif";
+    ctx.fillStyle = P.text;
+    ctx.textAlign = 'left';
+    ctx.fillText(t(items[i].key), lx + 18, iy + 3);
+  }
+}
+
+// ============================================================
+// FRAME ELEMENTS
+// ============================================================
+
+function getFrameElements(f, W, H) {
+  var t = AnimRuntime.t;
+  var P = AnimRuntime.PAL;
+  var cx = W / 2;
+
+  return [{
+    id: 'scene', type: 'custom', x: cx, y: H / 2,
+    draw: function(ctx) {
+      if (f === 0) drawFrame0(ctx, W, H, t, P);
+      else if (f === 1) drawFrame1(ctx, W, H, t, P);
+      else if (f === 2) drawFrame2(ctx, W, H, t, P);
+      else if (f === 3) drawFrame3(ctx, W, H, t, P);
+    }
+  }];
+}
+
+// ============================================================
+// Frame 0 -- Raw Image (no annotation)
+// ============================================================
+
+function drawFrame0(ctx, W, H, t, P) {
+  // Frame title removed -- DOM header already shows it
+
+  // Terrain image area -- left-center
+  var ix = W * 0.08, iy = H * 0.06;
+  var iw = W * 0.52, ih = H * 0.58;
+
+  // Border for the image
+  _roundedRect(ctx, ix - 2, iy - 2, iw + 4, ih + 4, 4);
+  ctx.strokeStyle = P.outline;
+  ctx.lineWidth = 1.5;
+  ctx.stroke();
+
+  // Draw terrain
+  ctx.save();
+  ctx.beginPath();
+  _roundedRect(ctx, ix, iy, iw, ih, 3);
+  ctx.clip();
+  _drawTerrainImage(ctx, ix, iy, iw, ih);
+
+  // Overlay pixel number values -- showing AI sees only numbers
+  _drawPixelNumbers(ctx, ix, iy, iw, ih);
+  ctx.restore();
+
+  // "Raw Image" label on the image
+  ctx.fillStyle = 'rgba(0,0,0,0.6)';
+  ctx.fillRect(ix, iy, iw, 18);
+  ctx.font = "bold 10px 'Space Grotesk',sans-serif";
+  ctx.textAlign = 'left';
+  ctx.fillStyle = P.primary;
+  ctx.fillText('RAW IMAGE', ix + 6, iy + 12);
+
+  // Description text below image
+  ctx.font = "12px 'Noto Sans SC','Inter',sans-serif";
+  ctx.textAlign = 'center';
+  ctx.fillStyle = P.muted;
+  ctx.fillText(t('desc0'), ix + iw / 2, iy + ih + 20);
+
+  // Right side: legend + explanation
+  var rx = W * 0.66;
+  _drawLegend(ctx, rx, H * 0.08, P, t);
+
+  // Info panel on the right
+  var panelY = H * 0.40;
+  _roundedRect(ctx, rx - 8, panelY - 10, W * 0.30, H * 0.35, 4);
+  ctx.fillStyle = 'rgba(255,181,156,0.05)';
+  ctx.fill();
+  ctx.strokeStyle = P.primaryDim;
+  ctx.lineWidth = 1;
+  ctx.stroke();
+
+  ctx.font = "bold 11px 'Space Grotesk',sans-serif";
+  ctx.textAlign = 'left';
+  ctx.fillStyle = P.primary;
+  ctx.fillText('STATUS', rx, panelY + 6);
+
+  ctx.font = "11px 'Inter','Noto Sans SC',sans-serif";
+  ctx.fillStyle = P.text;
+  var lines0 = AnimRuntime._lang === 'cn'
+    ? ['\u6807\u6ce8: \u65e0', '\u4fe1\u606f\u91cf: 0%', '\u65f6\u95f4\u6210\u672c: 0s', 'AI\u53ef\u7528: \u5426']
+    : ['Annotation: None', 'Info: 0%', 'Time cost: 0s', 'AI usable: No'];
+  for (var i = 0; i < lines0.length; i++) {
+    ctx.fillText(lines0[i], rx, panelY + 26 + i * 18);
+  }
+
+  // "?" icon array to emphasize AI sees nothing meaningful
+  ctx.font = "bold 16px 'Space Grotesk',sans-serif";
+  ctx.textAlign = 'center';
+  ctx.fillStyle = P.error;
+  ctx.fillText('?', ix + iw / 2 - 30, iy + ih / 2 + 4);
+  ctx.fillText('?', ix + iw / 2, iy + ih / 2 + 4);
+  ctx.fillText('?', ix + iw / 2 + 30, iy + ih / 2 + 4);
+}
+
+// ============================================================
+// Frame 1 -- Image-level Classification
+// ============================================================
+
+function drawFrame1(ctx, W, H, t, P) {
+  // Frame title removed -- DOM header already shows it
+
+  var ix = W * 0.08, iy = H * 0.06;
+  var iw = W * 0.52, ih = H * 0.58;
+
+  _roundedRect(ctx, ix - 2, iy - 2, iw + 4, ih + 4, 4);
+  ctx.strokeStyle = P.outline;
+  ctx.lineWidth = 1.5;
+  ctx.stroke();
+
+  ctx.save();
+  ctx.beginPath();
+  _roundedRect(ctx, ix, iy, iw, ih, 3);
+  ctx.clip();
+  _drawTerrainImage(ctx, ix, iy, iw, ih);
+  ctx.restore();
+
+  // Classification label tag floating above the image
+  var tagW = 120, tagH = 30;
+  var tagX = ix + iw / 2 - tagW / 2;
+  var tagY = iy - tagH - 8;
+
+  // Tag background
+  _roundedRect(ctx, tagX, tagY, tagW, tagH, 4);
+  ctx.fillStyle = 'rgba(255,127,80,0.2)';
+  ctx.fill();
+  ctx.strokeStyle = P.primary;
+  ctx.lineWidth = 2;
+  ctx.stroke();
+
+  // Tag text
+  ctx.font = "bold 14px 'Space Grotesk',sans-serif";
+  ctx.textAlign = 'center';
+  ctx.fillStyle = P.primary;
+  ctx.fillText('SOIL', tagX + tagW / 2, tagY + tagH / 2 + 5);
+
+  // Connector line from tag to image
+  ctx.strokeStyle = P.primaryDim;
+  ctx.lineWidth = 1;
+  ctx.setLineDash([3, 3]);
+  ctx.beginPath();
+  ctx.moveTo(ix + iw / 2, tagY + tagH);
+  ctx.lineTo(ix + iw / 2, iy);
+  ctx.stroke();
+  ctx.setLineDash([]);
+
+  // Arrow pointing to the whole image
+  ctx.strokeStyle = P.primary;
+  ctx.lineWidth = 2;
+  // Left bracket
+  ctx.beginPath();
+  ctx.moveTo(ix - 8, iy + 10);
+  ctx.lineTo(ix - 8, iy + ih - 10);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(ix - 8, iy + 10);
+  ctx.lineTo(ix - 2, iy + 10);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(ix - 8, iy + ih - 10);
+  ctx.lineTo(ix - 2, iy + ih - 10);
+  ctx.stroke();
+
+  // Description
+  ctx.font = "12px 'Noto Sans SC','Inter',sans-serif";
+  ctx.textAlign = 'center';
+  ctx.fillStyle = P.muted;
+  ctx.fillText(t('desc1'), ix + iw / 2, iy + ih + 20);
+
+  // Right side
+  var rx = W * 0.66;
+  _drawLegend(ctx, rx, H * 0.08, P, t);
+
+  var panelY = H * 0.40;
+  _roundedRect(ctx, rx - 8, panelY - 10, W * 0.30, H * 0.35, 4);
+  ctx.fillStyle = 'rgba(255,181,156,0.05)';
+  ctx.fill();
+  ctx.strokeStyle = P.primaryDim;
+  ctx.lineWidth = 1;
+  ctx.stroke();
+
+  ctx.font = "bold 11px 'Space Grotesk',sans-serif";
+  ctx.textAlign = 'left';
+  ctx.fillStyle = P.primary;
+  ctx.fillText('IMAGE-LEVEL', rx, panelY + 6);
+
+  ctx.font = "11px 'Inter','Noto Sans SC',sans-serif";
+  ctx.fillStyle = P.text;
+  var lines1 = AnimRuntime._lang === 'cn'
+    ? ['\u7cbe\u5ea6: \u56fe\u50cf\u7ea7', '\u4fe1\u606f\u91cf: 20%', '\u65f6\u95f4\u6210\u672c: 2s/\u5f20', '\u5168\u56fe\u53ea\u6709\u4e00\u4e2a\u6807\u7b7e']
+    : ['Precision: Image-level', 'Info: 20%', 'Time cost: 2s/img', 'Whole image, one label'];
+  for (var i = 0; i < lines1.length; i++) {
+    ctx.fillText(lines1[i], rx, panelY + 26 + i * 18);
+  }
+}
+
+// ============================================================
+// Frame 2 -- Bounding Box Detection
+// ============================================================
+
+function drawFrame2(ctx, W, H, t, P) {
+  // Frame title removed -- DOM header already shows it
+
+  var ix = W * 0.08, iy = H * 0.06;
+  var iw = W * 0.52, ih = H * 0.58;
+
+  _roundedRect(ctx, ix - 2, iy - 2, iw + 4, ih + 4, 4);
+  ctx.strokeStyle = P.outline;
+  ctx.lineWidth = 1.5;
+  ctx.stroke();
+
+  ctx.save();
+  ctx.beginPath();
+  _roundedRect(ctx, ix, iy, iw, ih, 3);
+  ctx.clip();
+  _drawTerrainImage(ctx, ix, iy, iw, ih);
+
+  // Compute cell sizes for bounding box positions
+  var cols = TERRAIN_GRID[0].length;
+  var rows = TERRAIN_GRID.length;
+  var cellW = iw / cols;
+  var cellH = ih / rows;
+
+  // Bounding box definitions: [startCol, startRow, endCol, endRow, type]
+  var boxes = [
+    { c1: 2, r1: 0, c2: 4, r2: 1, type: 3, label: 'sand' },
+    { c1: 5, r1: 1, c2: 7, r2: 3, type: 1, label: 'bedrock' },
+    { c1: 0, r1: 3, c2: 1, r2: 4, type: 2, label: 'big_rock' },
+    { c1: 4, r1: 4, c2: 6, r2: 5, type: 3, label: 'sand' },
+  ];
+
+  var boxColors = {
+    0: '#b89a6a',
+    1: '#8a7d6e',
+    2: '#ff716c',
+    3: '#d4a844',
+  };
+
+  // Draw bounding boxes
+  for (var b = 0; b < boxes.length; b++) {
+    var box = boxes[b];
+    var bx = ix + box.c1 * cellW;
+    var by = iy + box.r1 * cellH;
+    var bw = (box.c2 - box.c1 + 1) * cellW;
+    var bh = (box.r2 - box.r1 + 1) * cellH;
+    var color = boxColors[box.type];
+
+    // Box border
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 2.5;
+    ctx.strokeRect(bx + 2, by + 2, bw - 4, bh - 4);
+
+    // Semi-transparent fill
+    ctx.fillStyle = color.replace(')', ',0.12)').replace('rgb', 'rgba').replace('#', '');
+    // Convert hex to rgba
+    var hex = color;
+    var hr = parseInt(hex.substr(1, 2), 16);
+    var hg = parseInt(hex.substr(3, 2), 16);
+    var hb = parseInt(hex.substr(5, 2), 16);
+    ctx.fillStyle = 'rgba(' + hr + ',' + hg + ',' + hb + ',0.12)';
+    ctx.fillRect(bx + 2, by + 2, bw - 4, bh - 4);
+
+    // Label tag on top of each box
+    var lblText = box.label;
+    ctx.font = "bold 9px 'Space Grotesk',sans-serif";
+    var tw = ctx.measureText(lblText).width + 8;
+    ctx.fillStyle = color;
+    ctx.fillRect(bx + 2, by + 2, tw, 14);
+    ctx.fillStyle = '#000';
+    ctx.textAlign = 'left';
+    ctx.fillText(lblText, bx + 6, by + 13);
+  }
+
+  ctx.restore();
+
+  // Description
+  ctx.font = "12px 'Noto Sans SC','Inter',sans-serif";
+  ctx.textAlign = 'center';
+  ctx.fillStyle = P.muted;
+  ctx.fillText(t('desc2'), ix + iw / 2, iy + ih + 20);
+
+  // Right side
+  var rx = W * 0.66;
+  _drawLegend(ctx, rx, H * 0.08, P, t);
+
+  var panelY = H * 0.40;
+  _roundedRect(ctx, rx - 8, panelY - 10, W * 0.30, H * 0.35, 4);
+  ctx.fillStyle = 'rgba(255,181,156,0.05)';
+  ctx.fill();
+  ctx.strokeStyle = P.primaryDim;
+  ctx.lineWidth = 1;
+  ctx.stroke();
+
+  ctx.font = "bold 11px 'Space Grotesk',sans-serif";
+  ctx.textAlign = 'left';
+  ctx.fillStyle = P.primary;
+  ctx.fillText('REGION-LEVEL', rx, panelY + 6);
+
+  ctx.font = "11px 'Inter','Noto Sans SC',sans-serif";
+  ctx.fillStyle = P.text;
+  var lines2 = AnimRuntime._lang === 'cn'
+    ? ['\u7cbe\u5ea6: \u533a\u57df\u7ea7', '\u4fe1\u606f\u91cf: 60%', '\u65f6\u95f4\u6210\u672c: 30s/\u5f20', '4\u4e2a\u68c0\u6d4b\u6846 x 4\u7c7b\u5730\u5f62']
+    : ['Precision: Region-level', 'Info: 60%', 'Time cost: 30s/img', '4 boxes x 4 terrain types'];
+  for (var i = 0; i < lines2.length; i++) {
+    ctx.fillText(lines2[i], rx, panelY + 26 + i * 18);
+  }
+}
+
+// ============================================================
+// Frame 3 -- Pixel-level Semantic Segmentation
+// ============================================================
+
+function drawFrame3(ctx, W, H, t, P) {
+  // Frame title removed -- DOM header already shows it
+
+  var ix = W * 0.08, iy = H * 0.06;
+  var iw = W * 0.52, ih = H * 0.58;
+
+  _roundedRect(ctx, ix - 2, iy - 2, iw + 4, ih + 4, 4);
+  ctx.strokeStyle = P.outline;
+  ctx.lineWidth = 1.5;
+  ctx.stroke();
+
+  ctx.save();
+  ctx.beginPath();
+  _roundedRect(ctx, ix, iy, iw, ih, 3);
+  ctx.clip();
+
+  // Draw base terrain
+  _drawTerrainImage(ctx, ix, iy, iw, ih);
+
+  // Overlay semi-transparent segmentation mask on every cell
+  var cols = TERRAIN_GRID[0].length;
+  var rows = TERRAIN_GRID.length;
+  var cellW = iw / cols;
+  var cellH = ih / rows;
+
+  for (var r = 0; r < rows; r++) {
+    for (var c = 0; c < cols; c++) {
+      var type = TERRAIN_GRID[r][c];
+      ctx.fillStyle = TERRAIN_COLORS_SEMI[type];
+      ctx.fillRect(ix + c * cellW, iy + r * cellH, cellW + 0.5, cellH + 0.5);
+    }
+  }
+
+  // Draw boundary lines between different terrain types (thicker, colored)
+  ctx.lineWidth = 2;
+  for (var r = 0; r < rows; r++) {
+    for (var c = 0; c < cols; c++) {
+      var type = TERRAIN_GRID[r][c];
+      var px = ix + c * cellW;
+      var py = iy + r * cellH;
+      // Right neighbor
+      if (c < cols - 1 && TERRAIN_GRID[r][c + 1] !== type) {
+        ctx.strokeStyle = 'rgba(255,255,255,0.7)';
+        ctx.beginPath();
+        ctx.moveTo(px + cellW, py);
+        ctx.lineTo(px + cellW, py + cellH);
+        ctx.stroke();
+      }
+      // Bottom neighbor
+      if (r < rows - 1 && TERRAIN_GRID[r + 1][c] !== type) {
+        ctx.strokeStyle = 'rgba(255,255,255,0.7)';
+        ctx.beginPath();
+        ctx.moveTo(px, py + cellH);
+        ctx.lineTo(px + cellW, py + cellH);
+        ctx.stroke();
+      }
+    }
+  }
+
+  // Draw small label text in each cell center
+  ctx.font = "bold 7px 'Space Grotesk',monospace";
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  var typeLabels = { 0: 'S', 1: 'B', 2: 'R', 3: 'D' };
+  for (var r = 0; r < rows; r++) {
+    for (var c = 0; c < cols; c++) {
+      var type = TERRAIN_GRID[r][c];
+      var lx = ix + c * cellW + cellW / 2;
+      var ly = iy + r * cellH + cellH / 2;
+      ctx.fillStyle = 'rgba(255,255,255,0.85)';
+      ctx.fillText(typeLabels[type], lx, ly);
+    }
+  }
+
+  ctx.restore();
+
+  // "100% labeled" badge
+  var badgeX = ix + iw - 60, badgeY = iy + ih - 22;
+  _roundedRect(ctx, badgeX, badgeY, 56, 18, 3);
+  ctx.fillStyle = 'rgba(255,127,80,0.85)';
+  ctx.fill();
+  ctx.font = "bold 10px 'Space Grotesk',sans-serif";
+  ctx.textAlign = 'center';
+  ctx.fillStyle = '#000';
+  ctx.fillText('100%', badgeX + 28, badgeY + 12);
+
+  // Description
+  ctx.font = "12px 'Noto Sans SC','Inter',sans-serif";
+  ctx.textAlign = 'center';
+  ctx.fillStyle = P.muted;
+  ctx.fillText(t('desc3'), ix + iw / 2, iy + ih + 20);
+
+  // Right side
+  var rx = W * 0.66;
+  _drawLegend(ctx, rx, H * 0.08, P, t);
+
+  var panelY = H * 0.40;
+  _roundedRect(ctx, rx - 8, panelY - 10, W * 0.30, H * 0.35, 4);
+  ctx.fillStyle = 'rgba(255,181,156,0.05)';
+  ctx.fill();
+  ctx.strokeStyle = P.primaryDim;
+  ctx.lineWidth = 1;
+  ctx.stroke();
+
+  ctx.font = "bold 11px 'Space Grotesk',sans-serif";
+  ctx.textAlign = 'left';
+  ctx.fillStyle = P.primary;
+  ctx.fillText('PIXEL-LEVEL', rx, panelY + 6);
+
+  ctx.font = "11px 'Inter','Noto Sans SC',sans-serif";
+  ctx.fillStyle = P.text;
+  var lines3 = AnimRuntime._lang === 'cn'
+    ? ['\u7cbe\u5ea6: \u50cf\u7d20\u7ea7', '\u4fe1\u606f\u91cf: 100%', '\u65f6\u95f4\u6210\u672c: 10min/\u5f20', '\u6bcf\u4e2a\u50cf\u7d20\u90fd\u6709\u5730\u5f62\u6807\u7b7e']
+    : ['Precision: Pixel-level', 'Info: 100%', 'Time cost: 10min/img', 'Every pixel labeled'];
+  for (var i = 0; i < lines3.length; i++) {
+    ctx.fillText(lines3[i], rx, panelY + 26 + i * 18);
+  }
+}
+
+// ============================================================
+// BOOT
+// ============================================================
+
+AnimRuntime.boot();
+</script>
+</body>
+</html>

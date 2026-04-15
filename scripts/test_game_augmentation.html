@@ -1,0 +1,665 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Augmentation Strategy Lab</title>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=Space+Grotesk:wght@400;700&family=Noto+Sans+SC:wght@400;700&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{width:100%;height:100vh;overflow:hidden;background:#131313;
+  font-family:'Noto Sans SC','PingFang SC',system-ui,sans-serif;color:#e5e2e1}
+
+.wrapper{display:flex;flex-direction:column;height:100vh;overflow:hidden}
+
+.lang-btn{position:fixed;top:8px;left:8px;z-index:100;
+  font-family:'Space Grotesk',sans-serif;font-size:11px;font-weight:700;
+  padding:4px 10px;cursor:pointer;
+  border:1px solid rgba(255,255,255,0.08);
+  background:rgba(20,20,35,0.85);backdrop-filter:blur(12px);
+  color:#ffb59c;letter-spacing:1px}
+
+.guide-panel{position:fixed;top:8px;right:8px;width:240px;max-height:38vh;
+  overflow-y:auto;z-index:200;padding:10px 12px;
+  background:rgba(28,27,27,0.92);backdrop-filter:blur(14px);
+  border:1px solid rgba(255,127,80,0.22);font-size:12px;line-height:1.55;
+  color:rgba(229,226,225,0.88)}
+.guide-panel h3{font-family:'Space Grotesk',sans-serif;font-size:13px;font-weight:700;
+  margin-bottom:6px;display:flex;align-items:center;justify-content:space-between;cursor:pointer;
+  color:#ffb59c;text-transform:uppercase;letter-spacing:0.05em}
+.guide-panel h3 .arrow{transition:transform .2s;font-size:10px}
+.guide-panel h3 .arrow.collapsed{transform:rotate(-90deg)}
+.guide-panel ul{padding-left:14px;margin:4px 0}
+.guide-panel .gl{color:#8a8886;font-size:11px;text-transform:uppercase;
+  letter-spacing:0.08em;margin-top:6px;font-family:'Space Grotesk',sans-serif}
+
+.header{height:38px;min-height:38px;display:flex;align-items:center;justify-content:center;
+  padding:0 16px;background:rgba(28,27,27,0.95);border-bottom:1px solid rgba(255,127,80,0.15)}
+.header h1{font-family:'Space Grotesk',sans-serif;font-size:13px;font-weight:700;
+  color:#ffb59c;text-transform:uppercase;letter-spacing:0.08em}
+
+.main-area{flex:1;min-height:0;display:flex;overflow:hidden}
+
+.chart-area{flex:1;min-width:0;position:relative;overflow:hidden}
+.chart-area canvas{position:absolute;top:0;left:0;width:100%;height:100%}
+
+.controls-panel{width:220px;min-width:220px;display:flex;flex-direction:column;
+  background:rgba(28,27,27,0.85);border-left:1px solid rgba(255,127,80,0.12);
+  padding:12px;overflow-y:auto}
+.ctrl-group{margin-bottom:14px}
+.ctrl-label{font-family:'Space Grotesk',sans-serif;font-size:11px;font-weight:700;
+  color:#ffb59c;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:4px}
+.ctrl-val{font-family:'JetBrains Mono',monospace;font-size:12px;color:#00daf3;float:right}
+.ctrl-slider{width:100%;margin:4px 0;-webkit-appearance:none;appearance:none;height:4px;
+  background:linear-gradient(90deg,rgba(255,127,80,0.2),rgba(255,127,80,0.5));outline:none;cursor:pointer}
+.ctrl-slider::-webkit-slider-thumb{-webkit-appearance:none;width:14px;height:14px;
+  background:#ff7f50;cursor:pointer;border:none}
+.ctrl-slider::-moz-range-thumb{width:14px;height:14px;background:#ff7f50;cursor:pointer;border:none}
+.ctrl-desc{font-size:10px;color:#8a8886;margin-top:2px;line-height:1.4}
+
+.toggle-wrap{display:flex;align-items:center;gap:8px;margin-top:4px}
+.toggle-box{width:36px;height:18px;background:rgba(255,127,80,0.15);cursor:pointer;position:relative;
+  border:1px solid rgba(255,127,80,0.3)}
+.toggle-box.on{background:rgba(255,127,80,0.45)}
+.toggle-knob{width:14px;height:14px;background:#ff7f50;position:absolute;top:1px;left:1px;
+  transition:left .2s}
+.toggle-box.on .toggle-knob{left:19px}
+.toggle-label{font-family:'Noto Sans SC',sans-serif;font-size:11px;color:#e5e2e1}
+
+.run-btn{margin-top:8px;padding:8px 0;width:100%;border:1px solid rgba(255,127,80,0.5);
+  background:linear-gradient(135deg,rgba(255,127,80,0.25),rgba(255,95,31,0.15));
+  color:#ffb59c;cursor:pointer;font-family:'Space Grotesk',sans-serif;font-size:12px;
+  font-weight:700;text-transform:uppercase;letter-spacing:0.06em;transition:all .15s}
+.run-btn:hover{background:linear-gradient(135deg,rgba(255,127,80,0.4),rgba(255,95,31,0.3));
+  box-shadow:0 0 20px rgba(255,127,80,0.3)}
+
+.hud{height:50px;min-height:50px;display:flex;align-items:center;
+  background:rgba(0,0,0,0.6);border-top:1px solid rgba(255,255,255,0.06);padding:0 16px}
+.hud-col{flex:1;text-align:center}
+.hud-label{font-family:'Space Grotesk',sans-serif;font-size:10px;
+  color:rgba(255,181,156,0.6);text-transform:uppercase;letter-spacing:0.1em}
+.hud-val{font-family:'JetBrains Mono','Space Grotesk',monospace;font-size:13px;font-weight:700;
+  color:rgba(229,226,225,0.9);margin-top:2px}
+
+.win-overlay{position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.75);
+  display:none;z-index:300;justify-content:center;align-items:center}
+.win-overlay.show{display:flex}
+.win-card{background:rgba(28,27,27,0.95);backdrop-filter:blur(20px);
+  border:1px solid rgba(16,185,129,0.4);padding:28px 36px;max-width:400px;text-align:center}
+.win-card h2{font-family:'Space Grotesk',sans-serif;font-size:18px;font-weight:700;
+  color:#10b981;text-transform:uppercase;letter-spacing:0.1em;margin-bottom:12px}
+.win-card p{font-size:13px;line-height:1.6;color:#e5e2e1;margin-bottom:8px}
+.win-card .win-stats{font-family:'JetBrains Mono',monospace;font-size:12px;color:#00daf3;margin:10px 0}
+.win-card button{margin-top:12px;padding:8px 24px;border:1px solid rgba(16,185,129,0.5);
+  background:rgba(16,185,129,0.15);color:#10b981;cursor:pointer;
+  font-family:'Space Grotesk',sans-serif;font-size:12px;font-weight:700;
+  text-transform:uppercase;letter-spacing:0.06em}
+.win-card button:hover{background:rgba(16,185,129,0.3)}
+</style>
+</head>
+<body>
+
+<button class="lang-btn" id="langBtn">CN</button>
+
+<div class="guide-panel" id="guidePanel">
+  <h3 id="guideToggle"><span id="guideTitle">GUIDE</span> <span class="arrow" id="guideArrow">&#9660;</span></h3>
+  <div id="guideContent">
+    <div class="gl" id="glGoal">GOAL</div>
+    <p id="guideGoal"></p>
+    <div class="gl" style="margin-top:6px" id="glSteps">STEPS</div>
+    <ul id="guideSteps"></ul>
+    <div class="gl" style="margin-top:6px" id="glWin">WIN CONDITION</div>
+    <p style="color:#10b981" id="guideWin"></p>
+    <div class="gl" style="margin-top:6px" id="glTips">TIPS</div>
+    <p id="guideTips"></p>
+  </div>
+</div>
+
+<div class="wrapper">
+  <div class="header">
+    <h1 id="mainTitle">AUGMENTATION STRATEGY LAB</h1>
+  </div>
+
+  <div class="main-area">
+    <div class="chart-area" id="chartArea">
+      <canvas id="c"></canvas>
+    </div>
+
+    <div class="controls-panel">
+      <div class="ctrl-group">
+        <div class="ctrl-label" id="lblAug">AUGMENTATION <span class="ctrl-val" id="valAug">0%</span></div>
+        <input type="range" class="ctrl-slider" id="sliderAug" min="0" max="100" value="0" step="5">
+        <div class="ctrl-desc" id="descAug"></div>
+      </div>
+      <div class="ctrl-group">
+        <div class="ctrl-label" id="lblDropout">DROPOUT <span class="ctrl-val" id="valDropout">0%</span></div>
+        <input type="range" class="ctrl-slider" id="sliderDropout" min="0" max="50" value="0" step="5">
+        <div class="ctrl-desc" id="descDropout"></div>
+      </div>
+      <div class="ctrl-group">
+        <div class="ctrl-label" id="lblL2">L2 DECAY <span class="ctrl-val" id="valL2">0</span></div>
+        <input type="range" class="ctrl-slider" id="sliderL2" min="0" max="100" value="0" step="5">
+        <div class="ctrl-desc" id="descL2"></div>
+      </div>
+      <div class="ctrl-group">
+        <div class="ctrl-label" id="lblEarlyStop">EARLY STOPPING</div>
+        <div class="toggle-wrap">
+          <div class="toggle-box" id="toggleES"><div class="toggle-knob"></div></div>
+          <span class="toggle-label" id="toggleESLabel">OFF</span>
+        </div>
+        <div class="ctrl-desc" id="descES"></div>
+      </div>
+      <button class="run-btn" id="btnRun">RUN TRAINING</button>
+    </div>
+  </div>
+
+  <div class="hud">
+    <div class="hud-col"><div class="hud-label" id="hudLblEpoch">EPOCHS</div><div class="hud-val" id="hudEpoch">0</div></div>
+    <div class="hud-col"><div class="hud-label" id="hudLblTrainLoss">TRAIN LOSS</div><div class="hud-val" id="hudTrainLoss">--</div></div>
+    <div class="hud-col"><div class="hud-label" id="hudLblValLoss">VAL LOSS</div><div class="hud-val" id="hudValLoss">--</div></div>
+    <div class="hud-col"><div class="hud-label" id="hudLblGap">GAP</div><div class="hud-val" id="hudGap">--</div></div>
+    <div class="hud-col"><div class="hud-label" id="hudLblStatus">STATUS</div><div class="hud-val" id="hudStatus">--</div></div>
+  </div>
+</div>
+
+<div class="win-overlay" id="winOverlay">
+  <div class="win-card">
+    <h2 id="winTitle">MISSION COMPLETE</h2>
+    <p id="winMsg"></p>
+    <div class="win-stats" id="winStats"></div>
+    <button id="winClose">OK</button>
+  </div>
+</div>
+
+<script>
+(function(){
+
+var LANG = 'cn';
+var I18N = {
+  title:       {en:'AUGMENTATION STRATEGY LAB', cn:'\u589E\u5F3A\u7B56\u7565\u5B9E\u9A8C\u53F0'},
+  guideTitle:  {en:'GUIDE', cn:'\u64CD\u4F5C\u6307\u5357'},
+  glGoal:      {en:'GOAL', cn:'\u76EE\u6807'},
+  guideGoal:   {en:'Adjust augmentation and regularization parameters to find the best generalization config. Make Gap < 0.10 and Val Loss < 0.50.',
+                cn:'\u8C03\u6574\u589E\u5F3A\u548C\u6B63\u5219\u5316\u53C2\u6570\uFF0C\u627E\u5230\u6CDB\u5316\u6700\u4F18\u7684\u914D\u7F6E\u3002\u76EE\u6807\uFF1AGap < 0.10 \u4E14 Val Loss < 0.50\u3002'},
+  glSteps:     {en:'STEPS', cn:'\u6B65\u9AA4'},
+  step1:       {en:'Observe the default overfitting curves', cn:'\u89C2\u5BDF\u9ED8\u8BA4\u7684\u8FC7\u62DF\u5408\u66F2\u7EBF'},
+  step2:       {en:'Adjust Augmentation strength', cn:'\u8C03\u6574\u589E\u5F3A\u5F3A\u5EA6'},
+  step3:       {en:'Tune Dropout and L2 decay', cn:'\u8C03\u6574 Dropout \u548C L2 \u8870\u51CF'},
+  step4:       {en:'Toggle Early Stopping', cn:'\u5F00\u542F/\u5173\u95ED\u65E9\u505C'},
+  step5:       {en:'Click RUN TRAINING to see results', cn:'\u70B9\u51FB\u201C\u8FD0\u884C\u8BAD\u7EC3\u201D\u67E5\u770B\u7ED3\u679C'},
+  glWin:       {en:'WIN CONDITION', cn:'\u901A\u5173\u6761\u4EF6'},
+  guideWin:    {en:'Gap < 0.10 AND Val Loss < 0.50', cn:'Gap < 0.10 \u4E14 Val Loss < 0.50'},
+  glTips:      {en:'TIPS', cn:'\u63D0\u793A'},
+  guideTips:   {en:'Augmentation and Dropout have the strongest effect. L2 fine-tunes the result.',
+                cn:'\u589E\u5F3A\u548C Dropout \u6548\u679C\u6700\u663E\u8457\uFF0CL2 \u8D77\u5FAE\u8C03\u4F5C\u7528\u3002'},
+  lblAug:      {en:'AUGMENTATION', cn:'\u589E\u5F3A\u5F3A\u5EA6'},
+  lblDropout:  {en:'DROPOUT', cn:'DROPOUT'},
+  lblL2:       {en:'L2 DECAY', cn:'L2 \u8870\u51CF'},
+  lblEarlyStop:{en:'EARLY STOPPING', cn:'\u65E9\u505C\u7B56\u7565'},
+  descAug:     {en:'Flip, rotate, crop, color jitter', cn:'\u7FFB\u8F6C\u3001\u65CB\u8F6C\u3001\u88C1\u526A\u3001\u8272\u5F69\u6296\u52A8'},
+  descDropout: {en:'Randomly disable neurons during training', cn:'\u8BAD\u7EC3\u65F6\u968F\u673A\u5173\u95ED\u90E8\u5206\u795E\u7ECF\u5143'},
+  descL2:      {en:'Penalize large weights (x0.0001)', cn:'\u60E9\u7F5A\u5927\u6743\u91CD (x0.0001)'},
+  descES:      {en:'Stop when val loss stops improving', cn:'\u9A8C\u8BC1\u635F\u5931\u4E0D\u518D\u4E0B\u964D\u65F6\u505C\u6B62'},
+  toggleOn:    {en:'ON', cn:'\u5F00'},
+  toggleOff:   {en:'OFF', cn:'\u5173'},
+  btnRun:      {en:'RUN TRAINING', cn:'\u8FD0\u884C\u8BAD\u7EC3'},
+  hudEpoch:    {en:'EPOCHS', cn:'EPOCHS'},
+  hudTrainLoss:{en:'TRAIN LOSS', cn:'\u8BAD\u7EC3\u635F\u5931'},
+  hudValLoss:  {en:'VAL LOSS', cn:'\u9A8C\u8BC1\u635F\u5931'},
+  hudGap:      {en:'GAP', cn:'GAP'},
+  hudStatus:   {en:'STATUS', cn:'\u72B6\u6001'},
+  ready:       {en:'READY', cn:'\u5C31\u7EEA'},
+  training:    {en:'TRAINING...', cn:'\u8BAD\u7EC3\u4E2D...'},
+  done:        {en:'DONE', cn:'\u5B8C\u6210'},
+  overfit:     {en:'OVERFITTING', cn:'\u8FC7\u62DF\u5408'},
+  good:        {en:'WELL GENERALIZED', cn:'\u6CDB\u5316\u826F\u597D'},
+  earlyStopped:{en:'EARLY STOPPED', cn:'\u5DF2\u65E9\u505C'},
+  winTitle:    {en:'MISSION COMPLETE', cn:'\u4EFB\u52A1\u5B8C\u6210'},
+  winMsg:      {en:'You found an optimal config that minimizes overfitting!', cn:'\u4F60\u627E\u5230\u4E86\u6700\u4F18\u914D\u7F6E\uFF0C\u6210\u529F\u62B5\u5FA1\u4E86\u8FC7\u62DF\u5408\uFF01'},
+  axisEpoch:   {en:'Epoch', cn:'Epoch'},
+  axisLoss:    {en:'Loss', cn:'Loss'},
+  trainLabel:  {en:'Train Loss', cn:'\u8BAD\u7EC3\u635F\u5931'},
+  valLabel:    {en:'Val Loss', cn:'\u9A8C\u8BC1\u635F\u5931'},
+  bestValMark: {en:'Best Val', cn:'\u6700\u4F4E\u9A8C\u8BC1'}
+};
+
+function t(key){ return (I18N[key] && I18N[key][LANG]) || (I18N[key] && I18N[key]['en']) || key; }
+
+var canvas = document.getElementById('c');
+var ctx = canvas.getContext('2d');
+var chartWrap = document.getElementById('chartArea');
+var W = 0, H = 0;
+var DPR = Math.min(window.devicePixelRatio || 1, 2);
+
+/* --- Simulation model --- */
+var TOTAL_EPOCHS = 40;
+var trainCurve = [];
+var valCurve = [];
+var animEpoch = 0;
+var animRunning = false;
+var animRaf = null;
+var earlyStopEpoch = -1;
+var won = false;
+
+function simulateCurves(aug, dropout, l2, earlyStop){
+  var tCurve = [], vCurve = [];
+  var augF = aug / 100;
+  var dropF = dropout / 100;
+  var l2F = l2 * 0.0001;
+
+  for(var i=0;i<=TOTAL_EPOCHS;i++){
+    var baseTrain = 1.3 * Math.exp(-0.12*i) + 0.02;
+    baseTrain += dropF * 0.08;
+    baseTrain += augF * 0.06;
+    baseTrain += l2F * 50;
+    baseTrain += 0.01 * Math.sin(i*0.7);
+    baseTrain = Math.max(baseTrain, 0.03 + augF*0.05 + dropF*0.04);
+
+    var baseVal = 1.3 * Math.exp(-0.07*i) + 0.1;
+    var overfit = Math.max(0, 0.03 * (i - 8)) * (1 - augF*0.7) * (1 - dropF*0.8) * (1 - Math.min(l2F*200, 0.5));
+    if(overfit < 0) overfit = 0;
+    baseVal += overfit;
+    baseVal -= augF * 0.08;
+    baseVal -= dropF * 0.05;
+    baseVal -= l2F * 30;
+    baseVal += 0.015 * Math.sin(i*0.9+1);
+    baseVal = Math.max(baseVal, 0.08 + augF*0.02);
+
+    tCurve.push(baseTrain);
+    vCurve.push(baseVal);
+  }
+
+  var esEpoch = -1;
+  if(earlyStop){
+    var bestVal = Infinity;
+    var patience = 5;
+    var wait = 0;
+    for(var j=0;j<=TOTAL_EPOCHS;j++){
+      if(vCurve[j] < bestVal){
+        bestVal = vCurve[j];
+        wait = 0;
+      } else {
+        wait++;
+      }
+      if(wait >= patience){
+        esEpoch = j;
+        break;
+      }
+    }
+  }
+
+  return {train: tCurve, val: vCurve, earlyStopEpoch: esEpoch};
+}
+
+/* --- Chart drawing --- */
+function chartArea(){
+  var left = W*0.1, right = W*0.92, top = H*0.08, bottom = H*0.82;
+  return {left:left, right:right, top:top, bottom:bottom, w:right-left, h:bottom-top};
+}
+
+function epochToX(epoch, ca){ return ca.left + (epoch/TOTAL_EPOCHS)*ca.w; }
+function lossToY(loss, ca){
+  var maxL = 1.5, minL = 0;
+  return ca.top + ((maxL - loss)/(maxL - minL))*ca.h;
+}
+
+function drawBg(){
+  var g = ctx.createLinearGradient(0,0,0,H);
+  g.addColorStop(0,'#131313');
+  g.addColorStop(1,'#1a1015');
+  ctx.fillStyle = g;
+  ctx.fillRect(0,0,W,H);
+
+  ctx.strokeStyle = 'rgba(255,255,255,0.03)';
+  ctx.lineWidth = 1;
+  var step = Math.max(40, W/16);
+  for(var x=0;x<W;x+=step){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,H);ctx.stroke();}
+  for(var y=0;y<H;y+=step){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke();}
+}
+
+function drawAxes(ca){
+  ctx.strokeStyle = 'rgba(255,181,156,0.4)';
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.moveTo(ca.left, ca.top);
+  ctx.lineTo(ca.left, ca.bottom);
+  ctx.lineTo(ca.right, ca.bottom);
+  ctx.stroke();
+
+  ctx.fillStyle = '#8a8886';
+  ctx.font = '10px "Space Grotesk", sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillText(t('axisEpoch'), ca.left + ca.w/2, ca.bottom + 24);
+  ctx.save();
+  ctx.translate(ca.left - 28, ca.top + ca.h/2);
+  ctx.rotate(-Math.PI/2);
+  ctx.fillText(t('axisLoss'), 0, 0);
+  ctx.restore();
+
+  for(var e=0;e<=TOTAL_EPOCHS;e+=5){
+    var x = epochToX(e, ca);
+    ctx.fillStyle = '#8a8886';
+    ctx.font = '9px "JetBrains Mono", monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText(e.toString(), x, ca.bottom + 12);
+    ctx.strokeStyle = 'rgba(255,255,255,0.04)';
+    ctx.lineWidth = 0.5;
+    ctx.beginPath();ctx.moveTo(x,ca.top);ctx.lineTo(x,ca.bottom);ctx.stroke();
+  }
+  for(var l=0;l<=1.4;l+=0.2){
+    var y = lossToY(l, ca);
+    ctx.fillStyle = '#8a8886';
+    ctx.font = '9px "JetBrains Mono", monospace';
+    ctx.textAlign = 'right';
+    ctx.fillText(l.toFixed(1), ca.left - 6, y + 3);
+    ctx.strokeStyle = 'rgba(255,255,255,0.04)';
+    ctx.lineWidth = 0.5;
+    ctx.beginPath();ctx.moveTo(ca.left,y);ctx.lineTo(ca.right,y);ctx.stroke();
+  }
+}
+
+function drawCurve(data, maxIdx, ca, color, glowColor){
+  if(maxIdx < 1) return;
+  ctx.save();
+  ctx.shadowColor = glowColor;
+  ctx.shadowBlur = 10;
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 2.5;
+  ctx.beginPath();
+  var end = Math.min(maxIdx, data.length-1);
+  for(var i=0;i<=end;i++){
+    var x = epochToX(i, ca);
+    var y = lossToY(data[i], ca);
+    if(i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
+  }
+  ctx.stroke();
+  ctx.shadowBlur = 0;
+  ctx.restore();
+}
+
+function drawLegend(ca){
+  var items = [
+    {color:'#ff7f50', label:t('trainLabel')},
+    {color:'#00daf3', label:t('valLabel')}
+  ];
+  var sx = ca.left + 10, sy = ca.top + 14;
+  items.forEach(function(item, i){
+    var y = sy + i*18;
+    ctx.strokeStyle = item.color;
+    ctx.lineWidth = 2.5;
+    ctx.beginPath();ctx.moveTo(sx,y);ctx.lineTo(sx+24,y);ctx.stroke();
+    ctx.fillStyle = '#e5e2e1';
+    ctx.font = '10px "Noto Sans SC", sans-serif';
+    ctx.textAlign = 'left';
+    ctx.fillText(item.label, sx+30, y+4);
+  });
+}
+
+function drawEarlyStopLine(epoch, ca){
+  if(epoch < 0) return;
+  var x = epochToX(epoch, ca);
+  ctx.save();
+  ctx.strokeStyle = '#10b981';
+  ctx.lineWidth = 1.5;
+  ctx.setLineDash([6,4]);
+  ctx.beginPath();ctx.moveTo(x,ca.top);ctx.lineTo(x,ca.bottom);ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.fillStyle = '#10b981';
+  ctx.font = 'bold 10px "Space Grotesk", sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillText(t('earlyStopped'), x, ca.top - 6);
+  ctx.restore();
+}
+
+function drawBestValMarker(data, maxIdx, esEpoch, ca){
+  var end = esEpoch > 0 ? Math.min(esEpoch, maxIdx) : maxIdx;
+  end = Math.min(end, data.length-1);
+  var bestIdx = 0, bestVal = Infinity;
+  for(var i=0;i<=end;i++){
+    if(data[i] < bestVal){ bestVal = data[i]; bestIdx = i; }
+  }
+  var x = epochToX(bestIdx, ca);
+  var y = lossToY(bestVal, ca);
+  ctx.save();
+  ctx.beginPath();
+  ctx.arc(x, y, 5, 0, Math.PI*2);
+  ctx.fillStyle = '#00daf3';
+  ctx.shadowColor = '#00daf3';
+  ctx.shadowBlur = 10;
+  ctx.fill();
+  ctx.shadowBlur = 0;
+  ctx.fillStyle = '#00daf3';
+  ctx.font = '10px "JetBrains Mono", monospace';
+  ctx.textAlign = 'left';
+  ctx.fillText(t('bestValMark')+': '+bestVal.toFixed(3), x+10, y-6);
+  ctx.restore();
+}
+
+function drawChart(epoch){
+  var ca = chartArea();
+  drawBg();
+  drawAxes(ca);
+  if(trainCurve.length > 0 && epoch > 0){
+    drawCurve(trainCurve, epoch, ca, '#ff7f50', 'rgba(255,127,80,0.5)');
+    drawCurve(valCurve, epoch, ca, '#00daf3', 'rgba(0,218,243,0.5)');
+    drawLegend(ca);
+    if(earlyStopEpoch > 0 && epoch >= earlyStopEpoch){
+      drawEarlyStopLine(earlyStopEpoch, ca);
+    }
+    if(epoch >= (earlyStopEpoch > 0 ? earlyStopEpoch : TOTAL_EPOCHS)){
+      drawBestValMarker(valCurve, epoch, earlyStopEpoch, ca);
+    }
+  } else {
+    drawLegend(ca);
+    ctx.fillStyle = '#8a8886';
+    ctx.font = '14px "Noto Sans SC", sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText(t('ready'), W/2, H/2);
+  }
+}
+
+/* --- Run animation --- */
+function runTraining(){
+  if(animRunning) return;
+
+  var aug = parseInt(document.getElementById('sliderAug').value);
+  var dropout = parseInt(document.getElementById('sliderDropout').value);
+  var l2 = parseInt(document.getElementById('sliderL2').value);
+  var es = document.getElementById('toggleES').classList.contains('on');
+
+  var result = simulateCurves(aug, dropout, l2, es);
+  trainCurve = result.train;
+  valCurve = result.val;
+  earlyStopEpoch = result.earlyStopEpoch;
+
+  animEpoch = 0;
+  animRunning = true;
+  document.getElementById('hudStatus').textContent = t('training');
+  document.getElementById('hudStatus').style.color = '#ffb59c';
+
+  var lastTime = 0;
+  var epochInterval = 60;
+
+  function step(ts){
+    if(!animRunning) return;
+    if(ts - lastTime >= epochInterval){
+      lastTime = ts;
+      animEpoch++;
+
+      var maxE = (earlyStopEpoch > 0) ? earlyStopEpoch : TOTAL_EPOCHS;
+      if(animEpoch > maxE){
+        animRunning = false;
+        animEpoch = maxE;
+        drawChart(animEpoch);
+        updateHUDValues(animEpoch);
+        checkWin();
+        return;
+      }
+
+      drawChart(animEpoch);
+      updateHUDValues(animEpoch);
+    }
+    animRaf = requestAnimationFrame(step);
+  }
+  animRaf = requestAnimationFrame(step);
+}
+
+function updateHUDValues(epoch){
+  document.getElementById('hudEpoch').textContent = epoch + '/' + TOTAL_EPOCHS;
+  if(trainCurve.length > epoch){
+    var tl = trainCurve[epoch];
+    var vl = valCurve[epoch];
+    var gap = Math.abs(vl - tl);
+    document.getElementById('hudTrainLoss').textContent = tl.toFixed(3);
+    document.getElementById('hudValLoss').textContent = vl.toFixed(3);
+    document.getElementById('hudGap').textContent = gap.toFixed(3);
+    document.getElementById('hudGap').style.color = gap < 0.1 ? '#10b981' : (gap < 0.2 ? '#ffb59c' : '#ff5f1f');
+  }
+}
+
+function checkWin(){
+  var maxE = (earlyStopEpoch > 0) ? earlyStopEpoch : TOTAL_EPOCHS;
+  var bestValIdx = 0, bestVal = Infinity;
+  for(var i=0;i<=maxE && i<valCurve.length;i++){
+    if(valCurve[i] < bestVal){ bestVal = valCurve[i]; bestValIdx = i; }
+  }
+  var finalTrain = trainCurve[bestValIdx];
+  var gap = Math.abs(bestVal - finalTrain);
+
+  var status;
+  if(gap < 0.1 && bestVal < 0.5){
+    status = t('good');
+    document.getElementById('hudStatus').style.color = '#10b981';
+  } else if(gap > 0.25){
+    status = t('overfit');
+    document.getElementById('hudStatus').style.color = '#ff5f1f';
+  } else {
+    status = t('done');
+    document.getElementById('hudStatus').style.color = '#ffb59c';
+  }
+  if(earlyStopEpoch > 0) status += ' (' + t('earlyStopped') + ')';
+  document.getElementById('hudStatus').textContent = status;
+
+  if(gap < 0.1 && bestVal < 0.5 && !won){
+    won = true;
+    var aug = document.getElementById('sliderAug').value;
+    var dropout = document.getElementById('sliderDropout').value;
+    var l2 = document.getElementById('sliderL2').value;
+    var es = document.getElementById('toggleES').classList.contains('on');
+    document.getElementById('winStats').textContent =
+      'Aug: '+aug+'% | Dropout: '+dropout+'% | L2: '+(parseInt(l2)*0.0001).toFixed(4)+' | EarlyStop: '+(es?'ON':'OFF')+
+      '\nGap: '+gap.toFixed(3)+' | Best Val: '+bestVal.toFixed(3);
+    document.getElementById('winOverlay').classList.add('show');
+  }
+}
+
+/* --- Event bindings --- */
+document.getElementById('btnRun').addEventListener('click', function(){
+  if(animRunning){
+    animRunning = false;
+    if(animRaf) cancelAnimationFrame(animRaf);
+  }
+  won = false;
+  runTraining();
+});
+
+document.getElementById('sliderAug').addEventListener('input', function(){
+  document.getElementById('valAug').textContent = this.value + '%';
+});
+document.getElementById('sliderDropout').addEventListener('input', function(){
+  document.getElementById('valDropout').textContent = this.value + '%';
+});
+document.getElementById('sliderL2').addEventListener('input', function(){
+  document.getElementById('valL2').textContent = (parseInt(this.value)*0.0001).toFixed(4);
+});
+document.getElementById('toggleES').addEventListener('click', function(){
+  this.classList.toggle('on');
+  document.getElementById('toggleESLabel').textContent = this.classList.contains('on') ? t('toggleOn') : t('toggleOff');
+});
+
+document.getElementById('winClose').addEventListener('click', function(){
+  document.getElementById('winOverlay').classList.remove('show');
+});
+
+/* --- Guide panel toggle --- */
+var guideOpen = true;
+document.getElementById('guideToggle').addEventListener('click', function(){
+  guideOpen = !guideOpen;
+  document.getElementById('guideContent').style.display = guideOpen ? 'block' : 'none';
+  document.getElementById('guideArrow').className = 'arrow' + (guideOpen ? '' : ' collapsed');
+});
+
+/* --- i18n --- */
+function refreshI18N(){
+  document.getElementById('mainTitle').textContent = t('title');
+  document.getElementById('guideTitle').textContent = t('guideTitle');
+  document.getElementById('glGoal').textContent = t('glGoal');
+  document.getElementById('guideGoal').textContent = t('guideGoal');
+  document.getElementById('glSteps').textContent = t('glSteps');
+  var stepsUl = document.getElementById('guideSteps');
+  stepsUl.innerHTML = '';
+  ['step1','step2','step3','step4','step5'].forEach(function(k){
+    var li = document.createElement('li');
+    li.textContent = t(k);
+    stepsUl.appendChild(li);
+  });
+  document.getElementById('glWin').textContent = t('glWin');
+  document.getElementById('guideWin').textContent = t('guideWin');
+  document.getElementById('glTips').textContent = t('glTips');
+  document.getElementById('guideTips').textContent = t('guideTips');
+
+  document.getElementById('lblAug').innerHTML = t('lblAug') + ' <span class="ctrl-val" id="valAug">' + document.getElementById('sliderAug').value + '%</span>';
+  document.getElementById('lblDropout').innerHTML = t('lblDropout') + ' <span class="ctrl-val" id="valDropout">' + document.getElementById('sliderDropout').value + '%</span>';
+  document.getElementById('lblL2').innerHTML = t('lblL2') + ' <span class="ctrl-val" id="valL2">' + (parseInt(document.getElementById('sliderL2').value)*0.0001).toFixed(4) + '</span>';
+  document.getElementById('lblEarlyStop').textContent = t('lblEarlyStop');
+  document.getElementById('descAug').textContent = t('descAug');
+  document.getElementById('descDropout').textContent = t('descDropout');
+  document.getElementById('descL2').textContent = t('descL2');
+  document.getElementById('descES').textContent = t('descES');
+  document.getElementById('toggleESLabel').textContent = document.getElementById('toggleES').classList.contains('on') ? t('toggleOn') : t('toggleOff');
+  document.getElementById('btnRun').textContent = t('btnRun');
+
+  document.getElementById('hudLblEpoch').textContent = t('hudEpoch');
+  document.getElementById('hudLblTrainLoss').textContent = t('hudTrainLoss');
+  document.getElementById('hudLblValLoss').textContent = t('hudValLoss');
+  document.getElementById('hudLblGap').textContent = t('hudGap');
+  document.getElementById('hudLblStatus').textContent = t('hudStatus');
+  document.getElementById('winTitle').textContent = t('winTitle');
+  document.getElementById('winMsg').textContent = t('winMsg');
+
+  drawChart(animEpoch);
+}
+
+document.getElementById('langBtn').addEventListener('click', function(){
+  LANG = LANG === 'en' ? 'cn' : 'en';
+  document.getElementById('langBtn').textContent = LANG.toUpperCase();
+  refreshI18N();
+});
+
+/* --- Resize --- */
+function resize(){
+  var rect = chartWrap.getBoundingClientRect();
+  if(rect.width < 1 || rect.height < 1) return;
+  W = rect.width;
+  H = rect.height;
+  canvas.width = W * DPR;
+  canvas.height = H * DPR;
+  canvas.style.width = W + 'px';
+  canvas.style.height = H + 'px';
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  drawChart(animEpoch);
+}
+
+window.addEventListener('resize', resize);
+
+/* --- Init --- */
+refreshI18N();
+resize();
+setTimeout(resize, 200);
+setTimeout(resize, 600);
+document.fonts.ready.then(function(){ resize(); });
+
+})();
+</script>
+</body>
+</html>

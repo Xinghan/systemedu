@@ -1,0 +1,449 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Inference Tuning Simulator</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;700&family=Inter:wght@400;500&family=Noto+Sans+SC:wght@400;700&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{width:100%;height:100vh;overflow:hidden;background:#131313;font-family:'Noto Sans SC','Inter',sans-serif;color:#e5e2e1}
+.wrapper{display:flex;flex-direction:column;height:100vh}
+.header{padding:6px 16px;display:flex;align-items:center;justify-content:space-between;background:rgba(28,27,27,0.92);border-bottom:1px solid rgba(138,136,134,0.15);flex-shrink:0}
+.header h1{font-family:'Space Grotesk',sans-serif;font-size:14px;font-weight:700;color:#ffb59c;letter-spacing:1px;text-transform:uppercase}
+.header .sub{font-size:10px;color:#8a8886;font-family:'Space Grotesk',sans-serif}
+.game-area{flex:1;min-height:0;display:flex;gap:0;overflow:hidden}
+.panel-left{width:32%;display:flex;flex-direction:column;padding:12px;gap:8px;background:rgba(28,27,27,0.6);border-right:1px solid rgba(138,136,134,0.15)}
+.panel-right{flex:1;display:flex;flex-direction:column;min-width:0}
+.canvas-wrap{flex:1;min-height:0;position:relative}
+canvas{display:block;width:100%;height:100%}
+.slider-group{display:flex;flex-direction:column;gap:3px}
+.slider-label{font-family:'Space Grotesk',sans-serif;font-size:10px;color:#8a8886;letter-spacing:0.8px;text-transform:uppercase;display:flex;justify-content:space-between}
+.slider-value{color:#00daf3;font-weight:700}
+input[type=range]{-webkit-appearance:none;width:100%;height:6px;background:linear-gradient(90deg,rgba(0,218,243,0.2),rgba(255,95,31,0.3));outline:none;border-radius:0}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:14px;height:14px;background:#ffb59c;border:2px solid #ff7f50;cursor:pointer;border-radius:0}
+.metrics{display:flex;flex-wrap:wrap;gap:6px;padding:8px 0}
+.metric-card{flex:1;min-width:80px;padding:6px 8px;background:rgba(53,53,52,0.4);backdrop-filter:blur(12px);border:1px solid rgba(138,136,134,0.15)}
+.metric-label{font-family:'Space Grotesk',sans-serif;font-size:8px;color:#8a8886;letter-spacing:0.5px;text-transform:uppercase}
+.metric-value{font-family:'Space Grotesk',sans-serif;font-size:16px;font-weight:700;color:#00daf3}
+.metric-value.warning{color:#ff5f1f}
+.metric-value.danger{color:#ff0000}
+.metric-value.good{color:#10b981}
+.verdict{padding:8px;background:rgba(53,53,52,0.4);border:1px solid rgba(138,136,134,0.15);text-align:center;flex-shrink:0}
+.verdict-text{font-family:'Space Grotesk',sans-serif;font-size:12px;font-weight:700;letter-spacing:0.5px}
+.verdict-detail{font-size:11px;color:#c6c6c6;margin-top:2px}
+.hud{display:flex;justify-content:space-around;padding:6px 16px;background:rgba(0,0,0,0.55);flex-shrink:0}
+.hud-item{text-align:center}
+.hud-label{font-family:'Space Grotesk',sans-serif;font-size:8px;color:#8a8886;letter-spacing:0.5px;text-transform:uppercase}
+.hud-value{font-family:'Space Grotesk',sans-serif;font-size:13px;color:#00daf3;font-weight:700}
+.lang-btn{position:fixed;top:8px;left:8px;z-index:100;font-family:'Space Grotesk',sans-serif;font-size:11px;font-weight:700;padding:4px 10px;cursor:pointer;border:1px solid rgba(255,255,255,0.08);background:rgba(20,20,35,0.85);backdrop-filter:blur(12px);color:#ffb59c;letter-spacing:1px;border-radius:0}
+.guide-panel{position:fixed;top:8px;right:8px;width:220px;max-height:36vh;overflow-y:auto;background:rgba(20,20,35,0.85);backdrop-filter:blur(12px);border:1px solid rgba(255,255,255,0.08);padding:10px;z-index:100;font-family:'Noto Sans SC',sans-serif;font-size:11px;color:rgba(255,255,255,0.85);border-radius:0}
+.guide-panel h3{font-family:'Space Grotesk',sans-serif;font-size:12px;margin-bottom:4px;display:flex;align-items:center;justify-content:space-between;cursor:pointer;color:#ffb59c}
+.guide-panel ul{padding-left:14px;line-height:1.5}
+.guide-toggle{font-size:10px;color:#8a8886}
+.success-overlay{position:absolute;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.75);display:none;align-items:center;justify-content:center;z-index:50}
+.success-card{background:rgba(28,27,27,0.95);border:2px solid #10b981;padding:24px;max-width:380px;text-align:center}
+.success-card h2{font-family:'Space Grotesk',sans-serif;color:#10b981;font-size:18px;margin-bottom:8px}
+.success-card p{color:#c6c6c6;font-size:13px;line-height:1.6;margin-bottom:12px}
+.success-card button{font-family:'Space Grotesk',sans-serif;font-size:12px;padding:6px 18px;background:rgba(16,185,129,0.2);border:1px solid #10b981;color:#10b981;cursor:pointer;border-radius:0}
+</style>
+</head>
+<body>
+<button class="lang-btn" id="langBtn">CN</button>
+<div class="guide-panel" id="guidePanel">
+<h3 id="guideTitle"><span id="guideTitleText"></span><span class="guide-toggle" id="guideToggle">[-]</span></h3>
+<div class="guide-content" id="guideContent">
+<p id="guideGoal" style="margin-bottom:6px;color:#c6c6c6"></p>
+<ul id="guideSteps"></ul>
+<p id="guideTips" style="margin-top:6px;color:#00daf3;font-size:10px"></p>
+</div>
+</div>
+
+<div class="wrapper">
+<div class="header">
+<div><h1 id="mainTitle"></h1><div class="sub" id="mainSub"></div></div>
+<div style="text-align:right"><div class="sub">P-MARS-01-M34</div></div>
+</div>
+<div class="game-area">
+<div class="panel-left" id="panelLeft">
+<div class="slider-group">
+<div class="slider-label"><span id="sliderL1"></span><span class="slider-value" id="sliderV1">256</span></div>
+<input type="range" id="sliderRes" min="0" max="3" step="1" value="1">
+</div>
+<div class="slider-group">
+<div class="slider-label"><span id="sliderL2"></span><span class="slider-value" id="sliderV2">FP32</span></div>
+<input type="range" id="sliderQuant" min="0" max="2" step="1" value="0">
+</div>
+<div class="slider-group">
+<div class="slider-label"><span id="sliderL3"></span><span class="slider-value" id="sliderV3">1</span></div>
+<input type="range" id="sliderBatch" min="1" max="4" step="1" value="1">
+</div>
+<div class="slider-group">
+<div class="slider-label"><span id="sliderL4"></span><span class="slider-value" id="sliderV4">30</span></div>
+<input type="range" id="sliderFps" min="5" max="30" step="5" value="30">
+</div>
+<div class="metrics" id="metricsArea">
+<div class="metric-card"><div class="metric-label" id="mL1"></div><div class="metric-value" id="mV1">--</div></div>
+<div class="metric-card"><div class="metric-label" id="mL2"></div><div class="metric-value" id="mV2">--</div></div>
+<div class="metric-card"><div class="metric-label" id="mL3"></div><div class="metric-value" id="mV3">--</div></div>
+<div class="metric-card"><div class="metric-label" id="mL4"></div><div class="metric-value" id="mV4">--</div></div>
+</div>
+<div class="verdict" id="verdictBox">
+<div class="verdict-text" id="verdictText"></div>
+<div class="verdict-detail" id="verdictDetail"></div>
+</div>
+</div>
+<div class="panel-right">
+<div class="canvas-wrap" id="canvasWrap">
+<canvas id="c"></canvas>
+<div class="success-overlay" id="successOverlay">
+<div class="success-card">
+<h2 id="successTitle"></h2>
+<p id="successBody"></p>
+<button id="successBtn"></button>
+</div>
+</div>
+</div>
+</div>
+</div>
+<div class="hud">
+<div class="hud-item"><div class="hud-label" id="hudL1"></div><div class="hud-value" id="hudV1">--</div></div>
+<div class="hud-item"><div class="hud-label" id="hudL2"></div><div class="hud-value" id="hudV2">--</div></div>
+<div class="hud-item"><div class="hud-label" id="hudL3"></div><div class="hud-value" id="hudV3">--</div></div>
+<div class="hud-item"><div class="hud-label" id="hudL4"></div><div class="hud-value" id="hudV4">--</div></div>
+</div>
+</div>
+
+<script>
+(function(){
+var LANG='cn';
+var I18N={
+title:{en:'INFERENCE TUNING SIMULATOR',cn:'\u63A8\u7406\u8C03\u53C2\u6A21\u62DF\u5668'},
+sub:{en:'Balance Latency, Accuracy and Throughput',cn:'\u5E73\u8861\u5EF6\u8FDF\u3001\u7CBE\u5EA6\u4E0E\u541E\u5410\u91CF'},
+sliderL1:{en:'INPUT RESOLUTION',cn:'\u8F93\u5165\u5206\u8FA8\u7387'},
+sliderL2:{en:'QUANTIZATION',cn:'\u91CF\u5316\u7CBE\u5EA6'},
+sliderL3:{en:'BATCH SIZE',cn:'\u6279\u5904\u7406\u5927\u5C0F'},
+sliderL4:{en:'TARGET FPS',cn:'\u76EE\u6807\u5E27\u7387'},
+mL1:{en:'LATENCY',cn:'\u5EF6\u8FDF'},
+mL2:{en:'ACCURACY',cn:'\u7CBE\u5EA6'},
+mL3:{en:'REAL FPS',cn:'\u5B9E\u9645\u5E27\u7387'},
+mL4:{en:'GPU MEM',cn:'GPU \u5185\u5B58'},
+hudL1:{en:'DEVICE',cn:'\u8BBE\u5907'},
+hudL2:{en:'STATUS',cn:'\u72B6\u6001'},
+hudL3:{en:'POWER',cn:'\u529F\u8017'},
+hudL4:{en:'TEMP',cn:'\u6E29\u5EA6'},
+guideTitle:{en:'PLAY GUIDE',cn:'\u64CD\u4F5C\u6307\u5357'},
+guideGoal:{en:'Goal: Find a parameter combo that achieves >=10 FPS with >=75% accuracy.',cn:'\u76EE\u6807\uFF1A\u627E\u5230\u4E00\u7EC4\u53C2\u6570\uFF0C\u4F7F\u5B9E\u9645\u5E27\u7387 >=10 FPS \u4E14\u7CBE\u5EA6 >=75%\u3002'},
+guideStep1:{en:'1. Adjust resolution slider (lower = faster but less accurate)',cn:'1. \u8C03\u8282\u5206\u8FA8\u7387\u6ED1\u5757\uFF08\u964D\u4F4E = \u66F4\u5FEB\u4F46\u7CBE\u5EA6\u4E0B\u964D\uFF09'},
+guideStep2:{en:'2. Try quantization (FP16/INT8 reduce latency)',cn:'2. \u5C1D\u8BD5\u91CF\u5316\uFF08FP16/INT8 \u51CF\u5C11\u5EF6\u8FDF\uFF09'},
+guideStep3:{en:'3. Batch size affects throughput and memory',cn:'3. \u6279\u5904\u7406\u5927\u5C0F\u5F71\u54CD\u541E\u5410\u91CF\u548C\u5185\u5B58'},
+guideStep4:{en:'4. Watch the real-time risk map quality change',cn:'4. \u89C2\u5BDF\u5B9E\u65F6\u98CE\u9669\u56FE\u8D28\u91CF\u53D8\u5316'},
+guideTips:{en:'Tip: INT8 quantization is key for edge devices.',cn:'\u63D0\u793A\uFF1AINT8 \u91CF\u5316\u662F\u8FB9\u7F18\u8BBE\u5907\u7684\u5173\u952E\u4F18\u5316\u3002'},
+verdictPass:{en:'DEPLOYABLE',cn:'\u53EF\u90E8\u7F72'},
+verdictFail:{en:'NOT DEPLOYABLE',cn:'\u4E0D\u53EF\u90E8\u7F72'},
+verdictLatency:{en:'Latency too high, rover cannot react in time',cn:'\u5EF6\u8FDF\u8FC7\u9AD8\uFF0C\u8F66\u8F7D\u65E0\u6CD5\u53CA\u65F6\u54CD\u5E94'},
+verdictAccuracy:{en:'Accuracy too low, risk map unreliable',cn:'\u7CBE\u5EA6\u8FC7\u4F4E\uFF0C\u98CE\u9669\u56FE\u4E0D\u53EF\u9760'},
+verdictMemory:{en:'GPU memory exceeded, device will crash',cn:'GPU \u5185\u5B58\u8D85\u9650\uFF0C\u8BBE\u5907\u4F1A\u5D29\u6E83'},
+verdictGood:{en:'Latency and accuracy within deployment range',cn:'\u5EF6\u8FDF\u548C\u7CBE\u5EA6\u5747\u5728\u53EF\u90E8\u7F72\u8303\u56F4\u5185'},
+successTitle:{en:'MISSION ACCOMPLISHED',cn:'\u4EFB\u52A1\u5B8C\u6210'},
+successBody:{en:'You found a deployable configuration! On edge devices, quantization and resolution trade-offs are the key to real-time perception.',cn:'\u4F60\u627E\u5230\u4E86\u53EF\u90E8\u7F72\u7684\u914D\u7F6E\uFF01\u5728\u8FB9\u7F18\u8BBE\u5907\u4E0A\uFF0C\u91CF\u5316\u548C\u5206\u8FA8\u7387\u7684\u6743\u8861\u662F\u5B9E\u65F6\u611F\u77E5\u7684\u5173\u952E\u3002'},
+successBtn:{en:'TRY AGAIN',cn:'\u518D\u8BD5\u4E00\u6B21'},
+running:{en:'RUNNING',cn:'\u8FD0\u884C\u4E2D'},
+overloaded:{en:'OVERLOADED',cn:'\u8D85\u8F7D'}
+};
+function t(k){return(I18N[k]&&I18N[k][LANG])||(I18N[k]&&I18N[k]['en'])||k}
+
+var canvas=document.getElementById('c');
+var ctx=canvas.getContext('2d');
+var W=0,H=0,DPR=Math.min(window.devicePixelRatio||1,2);
+
+var resOptions=[128,256,512,1024];
+var quantOptions=['FP32','FP16','INT8'];
+var solved=false;
+
+// Simulation model
+function computeMetrics(){
+var resIdx=parseInt(document.getElementById('sliderRes').value);
+var quantIdx=parseInt(document.getElementById('sliderQuant').value);
+var batch=parseInt(document.getElementById('sliderBatch').value);
+var targetFps=parseInt(document.getElementById('sliderFps').value);
+
+var res=resOptions[resIdx];
+var quant=quantOptions[quantIdx];
+
+// Base latency at 256 FP32
+var baseLatency=45;
+// Resolution scaling (quadratic)
+var resScale=(res/256)*(res/256);
+var latency=baseLatency*resScale;
+// Quantization reduction
+if(quant==='FP16')latency*=0.55;
+if(quant==='INT8')latency*=0.3;
+// Batch
+latency*=(1+0.15*(batch-1));
+latency=Math.round(latency);
+
+// Accuracy
+var baseAcc=92;
+// Lower resolution reduces accuracy
+if(res===128)baseAcc-=18;
+else if(res===256)baseAcc-=8;
+else if(res===512)baseAcc-=2;
+// Quantization reduces accuracy
+if(quant==='FP16')baseAcc-=2;
+if(quant==='INT8')baseAcc-=7;
+var acc=Math.max(30,Math.min(98,baseAcc));
+
+// Real FPS
+var realFps=Math.min(targetFps,Math.floor(1000/latency));
+
+// GPU memory (MB)
+var baseMem=800;
+baseMem*=resScale*0.5+0.5;
+if(quant==='FP16')baseMem*=0.5;
+if(quant==='INT8')baseMem*=0.25;
+baseMem*=batch;
+var mem=Math.round(baseMem);
+
+var maxMem=4096; // Jetson 4GB
+var memExceeded=mem>maxMem;
+
+var deployable=realFps>=10&&acc>=75&&!memExceeded;
+
+return {latency:latency,accuracy:acc,realFps:realFps,mem:mem,memExceeded:memExceeded,deployable:deployable,res:res,quant:quant,batch:batch,targetFps:targetFps};
+}
+
+function updateUI(){
+var m=computeMetrics();
+
+document.getElementById('sliderV1').textContent=m.res+'x'+m.res;
+document.getElementById('sliderV2').textContent=m.quant;
+document.getElementById('sliderV3').textContent=m.batch;
+document.getElementById('sliderV4').textContent=m.targetFps;
+
+document.getElementById('mV1').textContent=m.latency+'ms';
+document.getElementById('mV1').className='metric-value'+(m.latency>100?' danger':m.latency>66?' warning':' good');
+
+document.getElementById('mV2').textContent=m.accuracy+'%';
+document.getElementById('mV2').className='metric-value'+(m.accuracy<75?' danger':m.accuracy<85?' warning':' good');
+
+document.getElementById('mV3').textContent=m.realFps+' fps';
+document.getElementById('mV3').className='metric-value'+(m.realFps<10?' danger':m.realFps<15?' warning':' good');
+
+document.getElementById('mV4').textContent=m.mem+'MB';
+document.getElementById('mV4').className='metric-value'+(m.memExceeded?' danger':m.mem>3000?' warning':' good');
+
+// Verdict
+var vt=document.getElementById('verdictText');
+var vd=document.getElementById('verdictDetail');
+if(m.deployable){
+vt.textContent=t('verdictPass');vt.style.color='#10b981';
+vd.textContent=t('verdictGood');
+if(!solved){
+solved=true;
+document.getElementById('successOverlay').style.display='flex';
+}
+}else{
+vt.textContent=t('verdictFail');vt.style.color='#ff5f1f';
+if(m.memExceeded)vd.textContent=t('verdictMemory');
+else if(m.realFps<10)vd.textContent=t('verdictLatency');
+else vd.textContent=t('verdictAccuracy');
+}
+
+// HUD
+document.getElementById('hudV1').textContent='Jetson Orin Nano';
+document.getElementById('hudV2').textContent=m.memExceeded?t('overloaded'):t('running');
+document.getElementById('hudV2').style.color=m.memExceeded?'#ff0000':'#10b981';
+var power=Math.round(5+m.latency*0.1+m.mem*0.002);
+document.getElementById('hudV3').textContent=Math.min(power,25)+'W';
+document.getElementById('hudV4').textContent=Math.min(40+Math.round(power*1.5),85)+'\u00B0C';
+
+drawSimulation(m);
+}
+
+function drawSimulation(m){
+if(W<1||H<1)return;
+var g=ctx.createLinearGradient(0,0,0,H);
+g.addColorStop(0,'#131313');g.addColorStop(1,'#1a1035');
+ctx.fillStyle=g;ctx.fillRect(0,0,W,H);
+
+// Grid
+ctx.strokeStyle='rgba(0,218,243,0.03)';ctx.lineWidth=1;
+for(var i=0;i<W;i+=20){ctx.beginPath();ctx.moveTo(i,0);ctx.lineTo(i,H);ctx.stroke()}
+for(var j=0;j<H;j+=20){ctx.beginPath();ctx.moveTo(0,j);ctx.lineTo(W,j);ctx.stroke()}
+
+var pad=20;
+var imgW=(W-pad*3)/2;
+var imgH=H*0.55;
+var imgY=H*0.1;
+
+// Left: simulated camera view
+drawMarsImageSim(pad,imgY,imgW,imgH,m.res);
+ctx.save();
+ctx.font='11px "Space Grotesk",sans-serif';
+ctx.fillStyle='#8a8886';ctx.textAlign='center';
+ctx.fillText(LANG==='cn'?'\u76F8\u673A\u89C6\u56FE (\u5206\u8FA8\u7387: '+m.res+')':'CAMERA VIEW (RES: '+m.res+')',pad+imgW/2,imgY-8);
+ctx.restore();
+
+// Right: risk map output
+drawRiskMapSim(pad*2+imgW,imgY,imgW,imgH,m.accuracy,m.memExceeded);
+ctx.save();
+ctx.font='11px "Space Grotesk",sans-serif';
+ctx.fillStyle='#8a8886';ctx.textAlign='center';
+ctx.fillText(LANG==='cn'?'\u98CE\u9669\u56FE\u8F93\u51FA (\u7CBE\u5EA6: '+m.accuracy+'%)':'RISK MAP (ACC: '+m.accuracy+'%)',pad*2+imgW+imgW/2,imgY-8);
+ctx.restore();
+
+// Latency bar at bottom
+var barY=imgY+imgH+20;
+var barH=16;
+var barW=W-pad*2;
+var latRatio=Math.min(m.latency/200,1);
+var barG=ctx.createLinearGradient(pad,0,pad+barW,0);
+barG.addColorStop(0,'#10b981');barG.addColorStop(0.5,'#ff7f50');barG.addColorStop(1,'#ff0000');
+ctx.fillStyle='rgba(53,53,52,0.4)';ctx.fillRect(pad,barY,barW,barH);
+ctx.fillStyle=barG;ctx.fillRect(pad,barY,barW*latRatio,barH);
+ctx.strokeStyle='rgba(138,136,134,0.15)';ctx.lineWidth=1;ctx.strokeRect(pad,barY,barW,barH);
+// Threshold line at 100ms
+var threshX=pad+barW*0.5;
+ctx.strokeStyle='rgba(255,95,31,0.6)';ctx.lineWidth=1;
+ctx.setLineDash([4,4]);ctx.beginPath();ctx.moveTo(threshX,barY-4);ctx.lineTo(threshX,barY+barH+4);ctx.stroke();ctx.setLineDash([]);
+ctx.save();ctx.font='9px "Space Grotesk",sans-serif';ctx.fillStyle='#ff5f1f';ctx.textAlign='center';
+ctx.fillText('100ms',threshX,barY+barH+14);ctx.restore();
+
+ctx.save();ctx.font='10px "Space Grotesk",sans-serif';ctx.fillStyle='#c6c6c6';ctx.textAlign='left';
+ctx.fillText(LANG==='cn'?'\u63A8\u7406\u5EF6\u8FDF: '+m.latency+'ms':'LATENCY: '+m.latency+'ms',pad,barY-4);ctx.restore();
+
+// FPS indicator
+var fpsY=barY+barH+30;
+ctx.save();ctx.font='bold 20px "Space Grotesk",sans-serif';
+ctx.fillStyle=m.realFps>=10?'#10b981':'#ff5f1f';ctx.textAlign='center';
+ctx.fillText(m.realFps+' FPS',W/2,fpsY);
+ctx.font='10px "Space Grotesk",sans-serif';ctx.fillStyle='#8a8886';
+ctx.fillText(LANG==='cn'?'(\u76EE\u6807: '+m.targetFps+' fps)':'(TARGET: '+m.targetFps+' fps)',W/2,fpsY+16);
+ctx.restore();
+}
+
+function drawMarsImageSim(x,y,w,h,res){
+ctx.save();
+var g=ctx.createLinearGradient(x,y,x,y+h);
+g.addColorStop(0,'#8B4513');g.addColorStop(0.3,'#A0522D');g.addColorStop(0.6,'#CD853F');g.addColorStop(1,'#D2691E');
+ctx.fillStyle=g;ctx.fillRect(x,y,w,h);
+// Pixelation effect based on resolution
+var pixelSize=Math.max(1,Math.round(8*(128/res)));
+for(var py=y;py<y+h;py+=pixelSize){
+for(var px=x;px<x+w;px+=pixelSize){
+var r=0.4+Math.sin(px*0.05+py*0.03)*0.15+Math.cos(px*0.03)*0.1;
+ctx.fillStyle='rgba('+(120+Math.round(r*60))+','+(60+Math.round(r*30))+','+(20+Math.round(r*15))+',0.5)';
+ctx.fillRect(px,py,pixelSize,pixelSize);
+}}
+// rocks
+ctx.fillStyle='#654321';
+for(var i=0;i<5;i++){
+var rx=x+w*(0.15+i*0.18);var ry=y+h*(0.4+Math.sin(i*2.5)*0.15);
+ctx.beginPath();ctx.ellipse(rx,ry,w*0.06,h*0.04,0,0,Math.PI*2);ctx.fill();
+}
+ctx.strokeStyle='rgba(255,181,156,0.2)';ctx.lineWidth=1;ctx.strokeRect(x,y,w,h);
+ctx.restore();
+}
+
+function drawRiskMapSim(x,y,w,h,accuracy,crashed){
+ctx.save();
+if(crashed){
+ctx.fillStyle='rgba(50,0,0,0.8)';ctx.fillRect(x,y,w,h);
+ctx.font='bold 16px "Space Grotesk",sans-serif';ctx.fillStyle='#ff0000';ctx.textAlign='center';ctx.textBaseline='middle';
+ctx.fillText('OOM ERROR',x+w/2,y+h/2);
+ctx.strokeStyle='rgba(255,0,0,0.4)';ctx.lineWidth=2;ctx.strokeRect(x,y,w,h);
+ctx.restore();return;
+}
+var cellSize=Math.max(4,Math.round(w/16));
+var riskColors=['rgba(16,185,129,0.7)','rgba(16,185,129,0.4)','rgba(255,159,31,0.4)','rgba(255,95,31,0.6)','rgba(255,0,0,0.6)'];
+var noiseAmount=Math.max(0,(90-accuracy)/10);
+for(var py=y;py<y+h;py+=cellSize){
+for(var px=x;px<x+w;px+=cellSize){
+var nx=(px-x)/w,ny=(py-y)/h;
+var baseRisk=Math.max(0,Math.min(4,Math.floor((nx*2+ny*0.5+Math.sin(nx*10)*0.3)*2)));
+if(Math.random()<noiseAmount*0.15)baseRisk=Math.floor(Math.random()*5);
+ctx.fillStyle=riskColors[baseRisk];
+ctx.fillRect(px,py,cellSize,cellSize);
+}}
+ctx.strokeStyle='rgba(0,218,243,0.3)';ctx.lineWidth=1;ctx.strokeRect(x,y,w,h);
+ctx.restore();
+}
+
+function resize(){
+var wrap=document.getElementById('canvasWrap');
+var rect=wrap.getBoundingClientRect();
+if(rect.width<1||rect.height<1)return;
+W=rect.width;H=rect.height;
+canvas.width=W*DPR;canvas.height=H*DPR;
+canvas.style.width=W+'px';canvas.style.height=H+'px';
+ctx.setTransform(DPR,0,0,DPR,0,0);
+updateUI();
+}
+
+function refreshI18N(){
+document.getElementById('mainTitle').textContent=t('title');
+document.getElementById('mainSub').textContent=t('sub');
+document.getElementById('sliderL1').textContent=t('sliderL1');
+document.getElementById('sliderL2').textContent=t('sliderL2');
+document.getElementById('sliderL3').textContent=t('sliderL3');
+document.getElementById('sliderL4').textContent=t('sliderL4');
+document.getElementById('mL1').textContent=t('mL1');
+document.getElementById('mL2').textContent=t('mL2');
+document.getElementById('mL3').textContent=t('mL3');
+document.getElementById('mL4').textContent=t('mL4');
+document.getElementById('hudL1').textContent=t('hudL1');
+document.getElementById('hudL2').textContent=t('hudL2');
+document.getElementById('hudL3').textContent=t('hudL3');
+document.getElementById('hudL4').textContent=t('hudL4');
+document.getElementById('guideTitleText').textContent=t('guideTitle');
+document.getElementById('guideGoal').textContent=t('guideGoal');
+var steps=[t('guideStep1'),t('guideStep2'),t('guideStep3'),t('guideStep4')];
+var ul=document.getElementById('guideSteps');ul.innerHTML='';
+steps.forEach(function(s){var li=document.createElement('li');li.textContent=s;ul.appendChild(li)});
+document.getElementById('guideTips').textContent=t('guideTips');
+document.getElementById('successTitle').textContent=t('successTitle');
+document.getElementById('successBody').textContent=t('successBody');
+document.getElementById('successBtn').textContent=t('successBtn');
+updateUI();
+}
+
+// Event bindings
+document.getElementById('langBtn').addEventListener('click',function(){
+LANG=LANG==='en'?'cn':'en';
+document.getElementById('langBtn').textContent=LANG.toUpperCase();
+refreshI18N();
+});
+
+document.getElementById('sliderRes').addEventListener('input',function(){updateUI()});
+document.getElementById('sliderQuant').addEventListener('input',function(){updateUI()});
+document.getElementById('sliderBatch').addEventListener('input',function(){updateUI()});
+document.getElementById('sliderFps').addEventListener('input',function(){updateUI()});
+
+document.getElementById('successBtn').addEventListener('click',function(){
+solved=false;
+document.getElementById('successOverlay').style.display='none';
+document.getElementById('sliderRes').value=1;
+document.getElementById('sliderQuant').value=0;
+document.getElementById('sliderBatch').value=1;
+document.getElementById('sliderFps').value=30;
+updateUI();
+});
+
+var guideOpen=true;
+document.getElementById('guideTitle').addEventListener('click',function(){
+guideOpen=!guideOpen;
+document.getElementById('guideContent').style.display=guideOpen?'block':'none';
+document.getElementById('guideToggle').textContent=guideOpen?'[-]':'[+]';
+});
+
+window.addEventListener('resize',resize);
+refreshI18N();
+resize();
+setTimeout(resize,200);
+setTimeout(resize,600);
+document.fonts.ready.then(function(){resize()});
+})();
+</script>
+</body>
+</html>

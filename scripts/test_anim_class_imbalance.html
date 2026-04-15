@@ -1,0 +1,665 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;700&family=Inter:wght@400;500&family=Noto+Sans+SC:wght@400;700&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0;border-radius:0}
+html,body{width:100%;height:100vh;overflow:hidden;
+  background:#131313;
+  font-family:'Space Grotesk','Inter','Noto Sans SC',sans-serif;
+  color:#e5e2e1;
+}
+.lang-btn{
+  position:fixed;top:8px;left:8px;z-index:100;
+  font-family:'Space Grotesk',sans-serif;font-size:11px;font-weight:700;
+  padding:4px 10px;cursor:pointer;
+  border:1px solid rgba(255,255,255,0.08);
+  background:rgba(20,20,35,0.85);backdrop-filter:blur(12px);
+  color:#ffb59c;letter-spacing:1px;
+}
+.guide-panel{
+  position:fixed;top:8px;right:8px;width:260px;max-height:40vh;
+  overflow-y:auto;z-index:100;
+  background:rgba(20,20,35,0.85);backdrop-filter:blur(12px);
+  border:1px solid rgba(255,255,255,0.08);padding:12px;
+  font-family:'Noto Sans SC',sans-serif;font-size:13px;
+  color:rgba(255,255,255,0.85);
+}
+.guide-panel h3{
+  font-family:'Space Grotesk',sans-serif;font-size:14px;
+  margin-bottom:8px;display:flex;align-items:center;
+  justify-content:space-between;cursor:pointer;
+  color:#ffb59c;
+}
+.guide-panel .toggle{font-size:12px;opacity:0.6;}
+.guide-panel ul{padding-left:16px;line-height:1.6;}
+.guide-panel .guide-content.collapsed{display:none;}
+.wrapper{display:flex;flex-direction:column;height:100vh;}
+.canvas-wrap{flex:1;min-height:0;position:relative;}
+.canvas-wrap canvas{display:block;width:100%;height:100%;position:absolute;top:0;left:0;}
+.controls{
+  display:flex;align-items:center;gap:8px;
+  padding:6px 12px;
+  background:rgba(28,27,27,0.92);
+  border-top:1px solid rgba(138,136,134,0.15);
+}
+.controls button{
+  font-family:'Space Grotesk',sans-serif;font-size:12px;font-weight:700;
+  padding:4px 14px;cursor:pointer;letter-spacing:1px;
+  border:1px solid rgba(138,136,134,0.15);
+  background:transparent;color:#ffb59c;
+}
+.controls button:hover{background:#353534;}
+.controls .frame-indicator{
+  font-family:'Space Grotesk',sans-serif;font-size:12px;
+  color:#8a8886;margin-left:auto;
+}
+.hud{
+  display:flex;align-items:center;justify-content:space-around;
+  height:52px;
+  background:rgba(0,0,0,0.55);
+  border-top:1px solid rgba(255,255,255,0.06);
+}
+.hud .hud-col{text-align:center;}
+.hud .hud-label{
+  font-family:'Space Grotesk',sans-serif;font-size:10px;
+  color:#8a8886;letter-spacing:1px;text-transform:uppercase;
+}
+.hud .hud-val{
+  font-family:'Space Grotesk',sans-serif;font-size:14px;font-weight:700;
+  color:#e5e2e1;
+}
+</style>
+</head>
+<body>
+<button class="lang-btn" id="langBtn">CN</button>
+<div class="guide-panel" id="guidePanel">
+  <h3 id="guideHeader"><span id="guideTitle"></span> <span class="toggle" id="guideToggle">[-]</span></h3>
+  <div class="guide-content" id="guideContent">
+    <ul id="guideList"></ul>
+  </div>
+</div>
+<div class="wrapper">
+  <div class="canvas-wrap">
+    <canvas id="c"></canvas>
+  </div>
+  <div class="controls" id="controls">
+    <button id="btnPrev"></button>
+    <button id="btnPlay"></button>
+    <button id="btnNext"></button>
+    <span class="frame-indicator" id="frameIndicator"></span>
+  </div>
+  <div class="hud" id="hud"></div>
+</div>
+<script>
+(function(){
+"use strict";
+
+/* ── palette ── */
+var P = {
+  bg:"#131313",surface:"#1c1b1b",surface_high:"#353534",
+  primary:"#ffb59c",primary_container:"#ff7f50",
+  secondary:"#c6c6c6",tertiary:"#00daf3",
+  signal:"#ff5f1f",success:"#10b981",
+  text:"#e5e2e1",muted:"#8a8886",
+  outline_variant:"rgba(138,136,134,0.15)"
+};
+
+/* ── i18n ── */
+var LANG = 'cn';
+var I18N = {
+  title:       {en:'ACCURACY TRAP: CLASS IMBALANCE', cn:'\u51c6\u786e\u7387\u9677\u9631\uff1a\u7c7b\u522b\u4e0d\u5e73\u8861'},
+  subtitle:    {en:'Why 90% accuracy can still fail on critical terrain', cn:'\u4e3a\u4ec0\u4e48 90% \u7684\u51c6\u786e\u7387\u4ecd\u53ef\u80fd\u5728\u5173\u952e\u5730\u8c8c\u4e0a\u5931\u8d25'},
+  guideTitle:  {en:'VIEWING GUIDE', cn:'\u89c2\u770b\u6307\u5357'},
+  guide1:      {en:'Observe how class distribution affects model predictions', cn:'\u89c2\u5bdf\u7c7b\u522b\u5206\u5e03\u5982\u4f55\u5f71\u54cd\u6a21\u578b\u9884\u6d4b'},
+  guide2:      {en:'Notice that overall accuracy hides per-class failures', cn:'\u6ce8\u610f\u603b\u4f53\u51c6\u786e\u7387\u5982\u4f55\u63a9\u76d6\u6bcf\u7c7b\u5931\u8d25'},
+  guide3:      {en:'Compare recall across classes in each frame', cn:'\u6bd4\u8f83\u6bcf\u5e27\u4e2d\u5404\u7c7b\u7684\u53ec\u56de\u7387'},
+  guide4:      {en:'Takeaway: always check per-class metrics', cn:'\u7ed3\u8bba\uff1a\u6c38\u8fdc\u8981\u67e5\u770b\u6bcf\u7c7b\u6307\u6807'},
+  btnPlay:     {en:'PLAY', cn:'\u64ad\u653e'},
+  btnPause:    {en:'PAUSE', cn:'\u6682\u505c'},
+  btnPrev:     {en:'PREV', cn:'\u4e0a\u4e00\u5e27'},
+  btnNext:     {en:'NEXT', cn:'\u4e0b\u4e00\u5e27'},
+  f0Title:     {en:'Mars Terrain Class Distribution', cn:'\u706b\u661f\u5730\u8c8c\u7c7b\u522b\u5206\u5e03'},
+  f0Desc:      {en:'Flat terrain dominates; hazard classes are rare', cn:'\u5e73\u5766\u5730\u5f62\u5360\u7edd\u5bf9\u591a\u6570\uff0c\u5371\u9669\u7c7b\u522b\u7a00\u5c11'},
+  f1Title:     {en:'Naive Model: 90% Overall Accuracy', cn:'\u6734\u7d20\u6a21\u578b\uff1a90% \u603b\u4f53\u51c6\u786e\u7387'},
+  f1Desc:      {en:'Looks great! But most predictions are "flat terrain"', cn:'\u770b\u8d77\u6765\u5f88\u68d2\uff01\u4f46\u5927\u591a\u6570\u9884\u6d4b\u90fd\u662f\u201c\u5e73\u5766\u5730\u5f62\u201d'},
+  f2Title:     {en:'Per-Class Recall Reveals the Truth', cn:'\u6bcf\u7c7b\u53ec\u56de\u7387\u63ed\u793a\u771f\u76f8'},
+  f2Desc:      {en:'Hazard recall: 0%. Rover has zero ability to detect danger!', cn:'\u5371\u9669\u53ec\u56de\u7387\uff1a0%\u3002\u706b\u661f\u8f66\u5b8c\u5168\u65e0\u6cd5\u68c0\u6d4b\u5371\u9669\uff01'},
+  f3Title:     {en:'Weighted Loss Rebalances Focus', cn:'\u52a0\u6743\u635f\u5931\u91cd\u65b0\u5e73\u8861\u5173\u6ce8\u70b9'},
+  f3Desc:      {en:'After applying class weights, hazard recall rises significantly', cn:'\u5e94\u7528\u7c7b\u522b\u6743\u91cd\u540e\uff0c\u5371\u9669\u53ec\u56de\u7387\u663e\u8457\u63d0\u5347'},
+  f4Title:     {en:'Final: Balanced Performance', cn:'\u6700\u7ec8\uff1a\u5e73\u8861\u7684\u6027\u80fd'},
+  f4Desc:      {en:'Accuracy drops slightly, but safety-critical classes are detected', cn:'\u51c6\u786e\u7387\u7565\u6709\u4e0b\u964d\uff0c\u4f46\u5b89\u5168\u5173\u952e\u7c7b\u522b\u5f97\u5230\u68c0\u6d4b'},
+  flat:        {en:'FLAT', cn:'\u5e73\u5766'},
+  rough:       {en:'ROUGH', cn:'\u7c97\u7cd9'},
+  hazard:      {en:'HAZARD', cn:'\u5371\u9669'},
+  unknown:     {en:'UNKNOWN', cn:'\u672a\u77e5'},
+  samples:     {en:'SAMPLES', cn:'\u6837\u672c\u6570'},
+  accuracy:    {en:'ACCURACY', cn:'\u51c6\u786e\u7387'},
+  recall:      {en:'RECALL', cn:'\u53ec\u56de\u7387'},
+  weighted:    {en:'WEIGHTED', cn:'\u52a0\u6743'},
+  hudFrame:    {en:'FRAME', cn:'\u5e27'},
+  hudAccuracy: {en:'OVERALL ACC', cn:'\u603b\u4f53\u51c6\u786e\u7387'},
+  hudHazardRec:{en:'HAZARD RECALL', cn:'\u5371\u9669\u53ec\u56de\u7387'},
+  hudStatus:   {en:'STATUS', cn:'\u72b6\u6001'},
+  statusNormal:{en:'NORMAL', cn:'\u6b63\u5e38'},
+  statusDanger:{en:'DANGEROUS', cn:'\u5371\u9669'},
+  statusFixed: {en:'REBALANCED', cn:'\u5df2\u4fee\u6b63'},
+  statusOK:    {en:'OPTIMIZED', cn:'\u5df2\u4f18\u5316'}
+};
+function t(key){return(I18N[key]&&I18N[key][LANG])||(I18N[key]&&I18N[key]['en'])||key;}
+
+function refreshI18N(){
+  document.getElementById('langBtn').textContent=LANG.toUpperCase();
+  var gt=document.getElementById('guideTitle');
+  if(gt)gt.textContent=t('guideTitle');
+  var gl=document.getElementById('guideList');
+  if(gl)gl.innerHTML='<li>'+t('guide1')+'</li><li>'+t('guide2')+'</li><li>'+t('guide3')+'</li><li>'+t('guide4')+'</li>';
+  var bp=document.getElementById('btnPrev');
+  var bpl=document.getElementById('btnPlay');
+  var bn=document.getElementById('btnNext');
+  if(bp)bp.textContent=t('btnPrev');
+  if(bpl)bpl.textContent=playing?t('btnPause'):t('btnPlay');
+  if(bn)bn.textContent=t('btnNext');
+  if(typeof drawCurrent==='function')drawCurrent();
+}
+
+document.getElementById('langBtn').addEventListener('click',function(){
+  LANG=LANG==='en'?'cn':'en';
+  refreshI18N();
+});
+
+/* ── canvas setup ── */
+var canvas = document.getElementById("c");
+var ctx = canvas.getContext("2d");
+var W = 700, H = 420;
+var DPR = Math.min(window.devicePixelRatio||1, 2);
+function resize(){
+  var rect = canvas.getBoundingClientRect();
+  if (rect.width < 1 || rect.height < 1) return;
+  canvas.width = rect.width * DPR;
+  canvas.height = rect.height * DPR;
+  var scale = Math.min(rect.width / W, rect.height / H);
+  var drawW = W * scale;
+  var drawH = H * scale;
+  var offsetX = (rect.width - drawW) / 2;
+  var offsetY = (rect.height - drawH) / 2;
+  ctx.setTransform(DPR*scale, 0, 0, DPR*scale, DPR*offsetX, DPR*offsetY);
+}
+resize();
+window.addEventListener("resize", function(){ resize(); if(typeof drawCurrent==="function") drawCurrent(); });
+if (typeof ResizeObserver !== "undefined" && canvas.parentElement) {
+  try {
+    new ResizeObserver(function(){
+      resize();
+      if (typeof drawCurrent === "function") drawCurrent();
+    }).observe(canvas.parentElement);
+  } catch (e) {}
+}
+
+/* ── color helpers ── */
+function hex2rgb(h){
+  h=h.replace("#","");
+  if(h.length===3)h=h[0]+h[0]+h[1]+h[1]+h[2]+h[2];
+  return[parseInt(h.slice(0,2),16),parseInt(h.slice(2,4),16),parseInt(h.slice(4,6),16)];
+}
+var RGB = hex2rgb(P.primary);
+var CA = function(a){return"rgba("+RGB[0]+","+RGB[1]+","+RGB[2]+","+a+")"};
+
+/* ── drawing utils ── */
+function drawBg(){
+  var g=ctx.createRadialGradient(W/2,H/2,0,W/2,H/2,Math.max(W,H)*0.7);
+  g.addColorStop(0,"#1c1b1b");g.addColorStop(1,P.bg);
+  ctx.fillStyle=g;ctx.fillRect(0,0,W,H);
+  ctx.strokeStyle="rgba(0,218,243,0.04)";ctx.lineWidth=1;
+  for(var x=0;x<=W;x+=20){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,H);ctx.stroke();}
+  for(var y=0;y<=H;y+=20){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke();}
+}
+
+/* ── data model ── */
+var classNames = ['flat','rough','hazard','unknown'];
+var classColors = ['#10b981','#facc15','#ff5f1f','#8a8886'];
+var classCounts = [900, 60, 20, 20]; // 1000 total
+
+/* Per-frame data */
+var frameData = [
+  // Frame 0: Class distribution
+  {acc:'--', hazardRec:'--', status:'statusNormal',
+   recalls:[null,null,null,null], showBars:true, showPred:false, showWeighted:false},
+  // Frame 1: Naive model
+  {acc:'90.0%', hazardRec:'0.0%', status:'statusDanger',
+   recalls:[0.99, 0.20, 0.0, 0.10], showBars:true, showPred:true, showWeighted:false},
+  // Frame 2: Per-class recall
+  {acc:'90.0%', hazardRec:'0.0%', status:'statusDanger',
+   recalls:[0.99, 0.20, 0.0, 0.10], showBars:false, showPred:false, showWeighted:false},
+  // Frame 3: Weighted loss applied
+  {acc:'82.5%', hazardRec:'75.0%', status:'statusFixed',
+   recalls:[0.88, 0.72, 0.75, 0.65], showBars:false, showPred:false, showWeighted:true},
+  // Frame 4: Final balanced
+  {acc:'84.0%', hazardRec:'80.0%', status:'statusOK',
+   recalls:[0.90, 0.78, 0.80, 0.70], showBars:false, showPred:false, showWeighted:true}
+];
+var totalFrames = 5;
+
+/* ── shared element transition engine ── */
+function lerp(a,b,p){return a+(b-a)*p;}
+function easeInOut(x){return x<0.5?2*x*x:1-Math.pow(-2*x+2,2)/2;}
+function merge(base,ov){var r={};for(var k in base)r[k]=base[k];for(var k2 in ov)r[k2]=ov[k2];return r;}
+
+function drawElement(el){
+  if(!el||el.alpha<=0.01)return;
+  ctx.save();
+  ctx.globalAlpha=el.alpha;
+  switch(el.type){
+    case 'label':drawLabelPrimitive(el);break;
+    case 'text':drawTextPrimitive(el);break;
+    case 'box':drawBoxPrimitive(el);break;
+    case 'custom':if(el.draw)el.draw(el.alpha);break;
+  }
+  ctx.restore();
+}
+function drawLabelPrimitive(el){
+  ctx.font=(el.bold?'bold ':'')+(el.size||14)+"px 'Space Grotesk','Inter',sans-serif";
+  ctx.textAlign=el.align||'left';ctx.textBaseline=el.baseline||'top';
+  if(el.glow){ctx.shadowColor=el.glowColor||P.primary;ctx.shadowBlur=el.glow;}
+  ctx.fillStyle=el.color||P.text;
+  ctx.fillText(typeof el.text==='function'?el.text():el.text,el.x,el.y);
+  ctx.shadowBlur=0;
+}
+function drawTextPrimitive(el){
+  ctx.font=(el.size||13)+"px 'Noto Sans SC','Inter',sans-serif";
+  ctx.textAlign=el.align||'left';ctx.textBaseline=el.baseline||'top';
+  ctx.fillStyle=el.color||P.text;
+  var lines=(typeof el.text==='function'?el.text():el.text).split('\n');
+  var lh=el.lineHeight||(el.size||13)*1.5;
+  lines.forEach(function(ln,i){ctx.fillText(ln,el.x,el.y+i*lh);});
+}
+function drawBoxPrimitive(el){
+  if(el.fill){
+    ctx.fillStyle=el.fill;
+    if(el.glow){ctx.shadowColor=el.glowColor||el.fill;ctx.shadowBlur=el.glow;}
+    ctx.fillRect(el.x,el.y,el.w,el.h);ctx.shadowBlur=0;
+  }
+  if(el.borderColor){
+    ctx.strokeStyle=el.borderColor;ctx.lineWidth=el.borderWidth||1;
+    ctx.strokeRect(el.x,el.y,el.w,el.h);
+  }
+}
+
+/* ── bar chart drawer ── */
+function drawBarChart(x, y, w, h, values, maxVal, colors, labels, alpha){
+  if(alpha<=0.01)return;
+  ctx.save();
+  ctx.globalAlpha=alpha;
+  var barW=w/values.length*0.7;
+  var gap=w/values.length*0.3;
+  var totalW=values.length*(barW+gap)-gap;
+  var startX=x+(w-totalW)/2;
+
+  for(var i=0;i<values.length;i++){
+    var bx=startX+i*(barW+gap);
+    var bh=Math.max(2,(values[i]/maxVal)*h*0.85);
+    var by=y+h-bh;
+
+    // bar gradient
+    var g=ctx.createLinearGradient(bx,by,bx,y+h);
+    g.addColorStop(0,colors[i]);
+    var rgb=hex2rgb(colors[i]);
+    g.addColorStop(1,'rgba('+rgb[0]+','+rgb[1]+','+rgb[2]+',0.4)');
+    ctx.fillStyle=g;
+
+    // glow
+    ctx.shadowColor=colors[i];ctx.shadowBlur=8;
+    ctx.fillRect(bx,by,barW,bh);
+    ctx.shadowBlur=0;
+
+    // value label
+    ctx.font="bold 11px 'Space Grotesk',sans-serif";
+    ctx.textAlign='center';ctx.fillStyle=P.text;
+    ctx.fillText(String(values[i]),bx+barW/2,by-8);
+
+    // category label
+    ctx.font="10px 'Noto Sans SC',sans-serif";
+    ctx.fillStyle=P.muted;
+    ctx.fillText(t(labels[i]),bx+barW/2,y+h+12);
+  }
+  ctx.restore();
+}
+
+/* ── recall bar drawer ── */
+function drawRecallBars(x, y, w, h, recalls, colors, labels, alpha, showWeightIcon){
+  if(alpha<=0.01)return;
+  ctx.save();
+  ctx.globalAlpha=alpha;
+  var barH=h/recalls.length*0.65;
+  var gap=h/recalls.length*0.35;
+
+  for(var i=0;i<recalls.length;i++){
+    if(recalls[i]===null)continue;
+    var by=y+i*(barH+gap);
+    var bw=Math.max(2,recalls[i]*w*0.7);
+
+    // label
+    ctx.font="11px 'Noto Sans SC',sans-serif";
+    ctx.textAlign='right';ctx.fillStyle=P.muted;
+    ctx.fillText(t(labels[i]),x-8,by+barH/2+4);
+
+    // bar background
+    ctx.fillStyle='rgba(255,255,255,0.05)';
+    ctx.fillRect(x,by,w*0.7,barH);
+
+    // bar fill
+    var g=ctx.createLinearGradient(x,by,x+bw,by);
+    g.addColorStop(0,colors[i]);
+    var rgb=hex2rgb(colors[i]);
+    g.addColorStop(1,'rgba('+rgb[0]+','+rgb[1]+','+rgb[2]+',0.5)');
+    ctx.fillStyle=g;
+    ctx.shadowColor=colors[i];ctx.shadowBlur=6;
+    ctx.fillRect(x,by,bw,barH);
+    ctx.shadowBlur=0;
+
+    // value
+    ctx.font="bold 12px 'Space Grotesk',sans-serif";
+    ctx.textAlign='left';
+    ctx.fillStyle=recalls[i]<0.3?P.signal:(recalls[i]<0.6?'#facc15':P.success);
+    ctx.fillText((recalls[i]*100).toFixed(0)+'%',x+bw+8,by+barH/2+5);
+
+    // weight icon for weighted frames
+    if(showWeightIcon){
+      ctx.font="9px 'Space Grotesk',sans-serif";
+      ctx.fillStyle=P.tertiary;
+      ctx.textAlign='left';
+      var weights = [1, 15, 45, 45];
+      ctx.fillText('w='+weights[i],x+w*0.7+30,by+barH/2+4);
+    }
+  }
+  ctx.restore();
+}
+
+/* ── confusion matrix mini ── */
+function drawMiniConfusion(x, y, size, alpha){
+  if(alpha<=0.01)return;
+  ctx.save();
+  ctx.globalAlpha=alpha;
+  var cellSize=size/4;
+  // Naive model: predicts almost everything as flat
+  var matrix = [
+    [891,5,2,2],  // flat: mostly correct
+    [48,12,0,0],  // rough: many misclassified as flat
+    [20,0,0,0],   // hazard: all misclassified as flat
+    [18,0,0,2]    // unknown: almost all misclassified
+  ];
+
+  for(var r=0;r<4;r++){
+    for(var c=0;c<4;c++){
+      var val=matrix[r][c];
+      var intensity=Math.min(val/900,1);
+      var cx=x+c*cellSize;
+      var cy=y+r*cellSize;
+
+      if(r===c){
+        // diagonal = correct
+        ctx.fillStyle='rgba(16,185,129,'+Math.max(0.1,intensity*0.8)+')';
+      } else {
+        // off-diagonal = errors
+        ctx.fillStyle='rgba(255,95,31,'+Math.max(0.05,intensity*0.6)+')';
+      }
+      ctx.fillRect(cx,cy,cellSize-1,cellSize-1);
+
+      if(val>0){
+        ctx.font="bold 9px 'Space Grotesk',sans-serif";
+        ctx.textAlign='center';ctx.textBaseline='middle';
+        ctx.fillStyle=val>100?P.text:'rgba(255,255,255,0.5)';
+        ctx.fillText(String(val),cx+cellSize/2,cy+cellSize/2);
+      }
+    }
+    // row labels
+    ctx.font="9px 'Noto Sans SC',sans-serif";
+    ctx.textAlign='right';ctx.textBaseline='middle';
+    ctx.fillStyle=classColors[r];
+    ctx.fillText(t(classNames[r]),x-4,y+r*cellSize+cellSize/2);
+  }
+  ctx.restore();
+}
+
+/* ── getFrameElements ── */
+function getFrameElements(f){
+  var fd=frameData[f];
+  var elems=[];
+
+  // title (shared across all frames)
+  elems.push({id:'title',type:'label',
+    text:function(){return t('f'+f+'Title');},
+    x:W/2,y:18,size:16,bold:true,align:'center',color:P.primary,glow:8,glowColor:P.primary,alpha:1});
+
+  // subtitle
+  elems.push({id:'desc',type:'text',
+    text:function(){return t('f'+f+'Desc');},
+    x:W/2,y:42,size:13,align:'center',color:P.muted,alpha:1});
+
+  if(f===0){
+    // Frame 0: bar chart of class distribution
+    elems.push({id:'barChart',type:'custom',x:100,y:80,w:500,h:250,alpha:1,
+      draw:function(a){
+        drawBarChart(100,80,500,250,classCounts,900,classColors,classNames,a);
+      }
+    });
+    // total label
+    elems.push({id:'totalLabel',type:'label',
+      text:function(){return t('samples')+': 1000';},
+      x:W/2,y:355,size:12,align:'center',color:P.secondary,alpha:1});
+  }
+
+  if(f===1){
+    // Frame 1: bar chart + prediction arrow showing everything -> flat
+    elems.push({id:'barChart',type:'custom',x:60,y:80,w:280,h:220,alpha:1,
+      draw:function(a){
+        drawBarChart(60,80,280,220,classCounts,900,classColors,classNames,a);
+      }
+    });
+    // prediction visualization: big "FLAT" dominance
+    elems.push({id:'predBox',type:'box',x:400,y:90,w:260,h:200,
+      fill:'rgba(16,185,129,0.08)',borderColor:'rgba(16,185,129,0.3)',alpha:1});
+    elems.push({id:'predLabel',type:'label',
+      text:function(){return t('accuracy')+': 90.0%';},
+      x:530,y:110,size:24,bold:true,align:'center',color:P.success,glow:12,glowColor:P.success,alpha:1});
+    elems.push({id:'predNote',type:'text',
+      text:function(){return LANG==='cn'?'\u6a21\u578b\u51e0\u4e4e\u628a\u6240\u6709\u50cf\u7d20\n\u90fd\u9884\u6d4b\u4e3a\u201c\u5e73\u5766\u5730\u5f62\u201d':'Model predicts almost\neverything as "flat terrain"';},
+      x:530,y:160,size:12,align:'center',color:P.muted,lineHeight:18,alpha:1});
+    // mini confusion matrix
+    elems.push({id:'confusion',type:'custom',x:440,y:200,w:160,h:160,alpha:1,
+      draw:function(a){
+        drawMiniConfusion(460,210,120,a);
+      }
+    });
+  }
+
+  if(f===2){
+    // Frame 2: recall bars (the truth)
+    elems.push({id:'recallBars',type:'custom',x:180,y:80,w:400,h:260,alpha:1,
+      draw:function(a){
+        drawRecallBars(180,90,400,240,fd.recalls,classColors,classNames,a,false);
+      }
+    });
+    // danger callout for hazard = 0%
+    elems.push({id:'dangerBox',type:'box',x:380,y:220,w:230,h:60,
+      fill:'rgba(255,95,31,0.12)',borderColor:P.signal,borderWidth:2,
+      glow:15,glowColor:P.signal,alpha:1});
+    elems.push({id:'dangerText',type:'text',
+      text:function(){return LANG==='cn'?'\u5371\u9669\u5730\u8c8c\u53ec\u56de\u7387 = 0%\n\u706b\u661f\u8f66\u5c06\u65e0\u6cd5\u68c0\u6d4b\u4efb\u4f55\u5371\u9669\uff01':'Hazard Recall = 0%\nRover cannot detect any danger!';},
+      x:395,y:232,size:12,color:P.signal,lineHeight:18,alpha:1});
+  }
+
+  if(f===3){
+    // Frame 3: weighted loss applied, recall bars improve
+    elems.push({id:'recallBars',type:'custom',x:180,y:80,w:400,h:260,alpha:1,
+      draw:function(a){
+        drawRecallBars(180,90,400,240,fd.recalls,classColors,classNames,a,true);
+      }
+    });
+    // weight formula
+    elems.push({id:'formulaBox',type:'box',x:50,y:100,w:110,h:90,
+      fill:'rgba(0,218,243,0.06)',borderColor:'rgba(0,218,243,0.3)',alpha:1});
+    elems.push({id:'formulaText',type:'text',
+      text:function(){return LANG==='cn'?'\u7c7b\u522b\u6743\u91cd:\nw = N / n_class\n\u5c11\u6570\u7c7b\u83b7\u5f97\n\u66f4\u9ad8\u6743\u91cd':'Class weights:\nw = N / n_class\nMinority gets\nhigher weight';},
+      x:60,y:110,size:11,color:P.tertiary,lineHeight:16,alpha:1});
+  }
+
+  if(f===4){
+    // Frame 4: final balanced view
+    elems.push({id:'recallBars',type:'custom',x:180,y:80,w:400,h:220,alpha:1,
+      draw:function(a){
+        drawRecallBars(180,80,400,200,fd.recalls,classColors,classNames,a,true);
+      }
+    });
+    // comparison box
+    elems.push({id:'compareBox',type:'box',x:60,y:310,w:580,h:60,
+      fill:'rgba(0,218,243,0.04)',borderColor:'rgba(0,218,243,0.2)',alpha:1});
+
+    elems.push({id:'compareBefore',type:'label',
+      text:function(){return LANG==='cn'?'\u4fee\u6b63\u524d: Acc=90% | \u5371\u9669\u53ec\u56de=0%':'Before: Acc=90% | Hazard Recall=0%';},
+      x:120,y:325,size:12,color:P.signal,alpha:1});
+    elems.push({id:'compareAfter',type:'label',
+      text:function(){return LANG==='cn'?'\u4fee\u6b63\u540e: Acc=84% | \u5371\u9669\u53ec\u56de=80%':'After:  Acc=84% | Hazard Recall=80%';},
+      x:120,y:348,size:12,color:P.success,glow:6,glowColor:P.success,alpha:1});
+
+    elems.push({id:'arrowIcon',type:'label',
+      text:function(){return '>>>';},
+      x:420,y:333,size:16,bold:true,color:P.tertiary,glow:10,glowColor:P.tertiary,align:'center',alpha:1});
+
+    elems.push({id:'verdict',type:'label',
+      text:function(){return LANG==='cn'?'\u5b89\u5168\u4f18\u5148\u4e8e\u51c6\u786e\u7387':'SAFETY > ACCURACY';},
+      x:500,y:333,size:14,bold:true,color:P.success,glow:8,glowColor:P.success,alpha:1});
+  }
+
+  return elems;
+}
+
+/* ── transition engine ── */
+var currentFrame=0;
+var playing=false;var playTimer=null;
+var transitioning=false;
+
+function transitionTo(newFrame){
+  if(newFrame<0)newFrame=0;
+  if(newFrame>=totalFrames)newFrame=totalFrames-1;
+  if(newFrame===currentFrame&&!transitioning){drawFrame(currentFrame);updateHUD(currentFrame);return;}
+  if(transitioning)return;
+  var oldElems=getFrameElements(currentFrame);
+  var newElems=getFrameElements(newFrame);
+  var oldMap={};oldElems.forEach(function(e){oldMap[e.id]=e;});
+  var newMap={};newElems.forEach(function(e){newMap[e.id]=e;});
+  currentFrame=newFrame;
+  updateHUD(newFrame);
+  transitioning=true;
+  var startTime=null,duration=500;
+  function step(ts){
+    if(!startTime)startTime=ts;
+    var raw=Math.min((ts-startTime)/duration,1);
+    var p=easeInOut(raw);
+    drawBg();
+    oldElems.forEach(function(oe){
+      if(!newMap[oe.id])drawElement(merge(oe,{alpha:1-p}));
+    });
+    newElems.forEach(function(ne){
+      var oe=oldMap[ne.id];
+      if(oe){
+        var merged=merge(ne,{
+          x:lerp(oe.x||0,ne.x||0,p),y:lerp(oe.y||0,ne.y||0,p),
+          w:lerp(oe.w||0,ne.w||0,p),h:lerp(oe.h||0,ne.h||0,p),alpha:1
+        });
+        if((ne.type==='label'||ne.type==='text')&&
+           (typeof oe.text==='function'?oe.text():oe.text)!==(typeof ne.text==='function'?ne.text():ne.text)){
+          drawElement(merge(oe,{alpha:1-p}));drawElement(merge(ne,{alpha:p}));
+        }else{drawElement(merged);}
+      }else{drawElement(merge(ne,{alpha:p}));}
+    });
+    if(raw<1){requestAnimationFrame(step);}else{transitioning=false;}
+  }
+  requestAnimationFrame(step);
+}
+
+function drawFrame(f){
+  drawBg();
+  var elems=getFrameElements(f);
+  elems.forEach(function(el){drawElement(el);});
+}
+
+function drawCurrent(){drawFrame(currentFrame);}
+
+function updateHUD(f){
+  var fd=frameData[f];
+  var hud=document.getElementById('hud');
+  if(!hud)return;
+  hud.innerHTML='';
+  var cols=[
+    {label:t('hudFrame'),val:(f+1)+' / '+totalFrames},
+    {label:t('hudAccuracy'),val:fd.acc},
+    {label:t('hudHazardRec'),val:fd.hazardRec},
+    {label:t('hudStatus'),val:t(fd.status)}
+  ];
+  cols.forEach(function(c){
+    var d=document.createElement('div');d.className='hud-col';
+    d.innerHTML='<div class="hud-label">'+c.label+'</div><div class="hud-val">'+c.val+'</div>';
+    hud.appendChild(d);
+  });
+  updateControlsText();
+}
+
+function updateControlsText(){
+  var bp=document.getElementById('btnPlay');
+  var bi=document.getElementById('frameIndicator');
+  if(bp)bp.textContent=playing?t('btnPause'):t('btnPlay');
+  if(bi)bi.textContent=(currentFrame+1)+' / '+totalFrames;
+}
+
+/* ── controls ── */
+document.getElementById('btnPrev').addEventListener('click',function(){
+  if(playing){playing=false;clearInterval(playTimer);}
+  transitionTo(currentFrame-1);
+});
+document.getElementById('btnNext').addEventListener('click',function(){
+  if(playing){playing=false;clearInterval(playTimer);}
+  transitionTo(currentFrame+1);
+});
+document.getElementById('btnPlay').addEventListener('click',function(){
+  playing=!playing;
+  if(playing){
+    if(currentFrame>=totalFrames-1){transitionTo(0);}
+    playTimer=setInterval(function(){
+      if(currentFrame>=totalFrames-1){
+        playing=false;clearInterval(playTimer);updateControlsText();return;
+      }
+      transitionTo(currentFrame+1);
+    },3000);
+  }else{clearInterval(playTimer);}
+  updateControlsText();
+});
+
+/* ── guide panel toggle ── */
+(function(){
+  var tog=document.getElementById('guideToggle');
+  var gc=document.getElementById('guideContent');
+  if(tog&&gc){
+    document.getElementById('guideHeader').addEventListener('click',function(){
+      var collapsed=gc.classList.toggle('collapsed');
+      tog.textContent=collapsed?'[+]':'[-]';
+    });
+  }
+})();
+
+/* ── init ── */
+refreshI18N();
+drawFrame(0);
+updateHUD(0);
+setTimeout(function(){resize();drawCurrent();},200);
+setTimeout(function(){resize();drawCurrent();},600);
+if(document.fonts&&document.fonts.ready){
+  document.fonts.ready.then(function(){resize();drawCurrent();});
+}
+
+})();
+</script>
+</body>
+</html>

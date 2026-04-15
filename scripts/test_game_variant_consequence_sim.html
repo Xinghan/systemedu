@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=Inter:wght@400;500&family=Noto+Sans+SC:wght@400;700&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box;}
+html,body{width:100%;height:100vh;overflow:hidden;}
+body{background:#0c0e12;color:#f6f6fc;font-family:'Inter','Noto Sans SC',sans-serif;display:flex;flex-direction:column;}
+.wrapper{display:flex;flex-direction:column;height:100vh;overflow:hidden;}
+.header{padding:10px 16px 6px;display:flex;justify-content:space-between;align-items:center;}
+.header h1{font-family:'Space Grotesk',sans-serif;font-size:clamp(13px,2vw,17px);font-weight:700;letter-spacing:-0.02em;color:#50ffb0;text-shadow:0 0 15px rgba(80,255,176,0.3);}
+.header .sub{font-size:10px;color:#aaabb0;letter-spacing:0.1em;text-transform:uppercase;}
+.canvas-wrap{flex:1;min-height:0;position:relative;}
+canvas{width:100%;height:100%;display:block;}
+.slider-row{display:flex;align-items:center;gap:12px;padding:8px 24px;background:rgba(23,26,31,0.92);backdrop-filter:blur(12px);}
+.slider-row label{font-family:'Space Grotesk',sans-serif;font-size:11px;letter-spacing:0.1em;text-transform:uppercase;color:#aaabb0;white-space:nowrap;}
+.slider-row input[type=range]{flex:1;-webkit-appearance:none;height:4px;background:linear-gradient(90deg,#50ffb0,#17df93);outline:none;cursor:pointer;}
+.slider-row input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:16px;height:16px;background:#50ffb0;cursor:pointer;box-shadow:0 0 10px rgba(80,255,176,0.5);}
+.slider-row .val{font-family:'Space Grotesk',sans-serif;font-size:13px;font-weight:700;color:#50ffb0;min-width:40px;text-align:right;}
+.result-bar{display:flex;align-items:center;justify-content:center;gap:16px;padding:8px 16px;background:rgba(0,0,0,0.55);backdrop-filter:blur(12px);}
+.result-bar .rlabel{font-family:'Space Grotesk',sans-serif;font-size:10px;letter-spacing:0.15em;text-transform:uppercase;color:#aaabb0;}
+.result-bar .rval{font-family:'Space Grotesk',sans-serif;font-size:16px;font-weight:700;}
+.score-bar{display:flex;align-items:center;justify-content:center;gap:8px;padding:6px 16px;background:rgba(23,26,31,0.6);}
+.score-bar span{font-family:'Space Grotesk',sans-serif;font-size:11px;color:#aaabb0;}
+.score-bar .sv{color:#acf900;font-weight:700;}
+.lang-btn{position:fixed;top:8px;left:8px;z-index:100;font-family:'Space Grotesk',sans-serif;font-size:11px;font-weight:700;padding:4px 10px;cursor:pointer;border:none;background:rgba(20,20,35,0.85);backdrop-filter:blur(12px);color:#ffb59c;letter-spacing:1px;}
+.guide-panel{position:fixed;top:8px;right:8px;width:220px;max-height:36vh;overflow-y:auto;background:rgba(20,20,35,0.85);backdrop-filter:blur(12px);padding:10px;z-index:100;font-family:'Noto Sans SC',sans-serif;font-size:11px;color:rgba(255,255,255,0.85);line-height:1.5;}
+.guide-panel h3{font-family:'Space Grotesk',sans-serif;font-size:12px;margin-bottom:4px;color:#50ffb0;cursor:pointer;}
+.guide-panel ul{padding-left:12px;}
+.guide-panel .collapsed{display:none;}
+.check-btn{font-family:'Space Grotesk',sans-serif;font-size:12px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;padding:6px 20px;border:none;cursor:pointer;color:#0c0e12;background:linear-gradient(135deg,#50ffb0,#17df93);box-shadow:0 0 12px rgba(80,255,176,0.3);margin:0 8px;}
+.check-btn:hover{box-shadow:0 0 20px rgba(80,255,176,0.5);}
+</style>
+</head>
+<body>
+<button class="lang-btn" id="langBtn">CN</button>
+<div class="guide-panel" id="guide">
+<h3 id="guideTitle"></h3>
+<div class="guide-content" id="guideContent"></div>
+</div>
+<div class="wrapper">
+<div class="header"><div><h1 id="title"></h1><div class="sub" id="subtitle"></div></div></div>
+<div class="canvas-wrap"><canvas id="c"></canvas></div>
+<div class="slider-row">
+<label id="sliderLabel"></label>
+<input type="range" id="posSlider" min="0" max="100" value="20">
+<div class="val" id="posVal">20</div>
+</div>
+<div class="result-bar">
+<div class="rlabel" id="regionLabel"></div><div class="rval" id="regionVal"></div>
+<div style="width:1px;height:20px;background:rgba(255,255,255,0.1);"></div>
+<div class="rlabel" id="conseqLabel"></div><div class="rval" id="conseqVal"></div>
+<div style="width:1px;height:20px;background:rgba(255,255,255,0.1);"></div>
+<div class="rlabel" id="sevLabel"></div><div class="rval" id="sevVal"></div>
+</div>
+<div class="score-bar">
+<span id="scoreText"></span><span class="sv" id="scoreVal">0 / 8</span>
+<button class="check-btn" id="checkBtn"></button>
+</div>
+</div>
+<script>
+var LANG='cn';
+var I18N={
+title:{en:'VARIANT CONSEQUENCE SIMULATOR',cn:'\u53d8\u5f02\u540e\u679c\u6a21\u62df\u5668'},
+subtitle:{en:'DRAG SLIDER TO PLACE VARIANT ON GENE',cn:'\u62d6\u52a8\u6ed1\u5757\u5728\u57fa\u56e0\u4e0a\u653e\u7f6e\u53d8\u5f02'},
+sliderLabel:{en:'VARIANT POS',cn:'\u53d8\u5f02\u4f4d\u7f6e'},
+regionLabel:{en:'REGION',cn:'\u533a\u57df'},
+conseqLabel:{en:'CONSEQUENCE',cn:'\u540e\u679c'},
+sevLabel:{en:'SEVERITY',cn:'\u4e25\u91cd\u5ea6'},
+scoreText:{en:'IDENTIFIED',cn:'\u5df2\u8bc6\u522b'},
+checkBtn:{en:'CONFIRM',cn:'\u786e\u8ba4'},
+guideTitle:{en:'PLAY GUIDE',cn:'\u64cd\u4f5c\u6307\u5357'},
+gg1:{en:'Goal: Find all 4 consequence types by moving the variant',cn:'\u76ee\u6807\uff1a\u901a\u8fc7\u79fb\u52a8\u53d8\u5f02\u4f4d\u7f6e\u627e\u5230\u5168\u90e8 4 \u79cd\u540e\u679c\u7c7b\u578b'},
+gg2:{en:'Drag the slider to different positions on the gene',cn:'\u62d6\u52a8\u6ed1\u5757\u5230\u57fa\u56e0\u4e0a\u7684\u4e0d\u540c\u4f4d\u7f6e'},
+gg3:{en:'Click CONFIRM when you see a new consequence type',cn:'\u770b\u5230\u65b0\u7684\u540e\u679c\u7c7b\u578b\u65f6\u70b9\u51fb\u786e\u8ba4'},
+gg4:{en:'Collect all 4 types: Missense, Nonsense, Frameshift, Splice',cn:'\u6536\u96c6\u5168\u90e8 4 \u79cd\uff1a\u9519\u4e49\u3001\u65e0\u4e49\u3001\u79fb\u7801\u3001\u526a\u63a5\u4f4d\u70b9'},
+gg5:{en:'Win: All 8 variant examples identified',cn:'\u80dc\u5229\u6761\u4ef6\uff1a\u8bc6\u522b\u5168\u90e8 8 \u4e2a\u53d8\u5f02\u793a\u4f8b'},
+exon:{en:'EXON',cn:'\u5916\u663e\u5b50'},intron:{en:'INTRON',cn:'\u5185\u542b\u5b50'},splice:{en:'SPLICE',cn:'\u526a\u63a5'},
+missense:{en:'MISSENSE',cn:'\u9519\u4e49\u53d8\u5f02'},nonsense:{en:'NONSENSE',cn:'\u65e0\u4e49\u53d8\u5f02'},
+frameshift:{en:'FRAMESHIFT',cn:'\u79fb\u7801\u53d8\u5f02'},spliceVar:{en:'SPLICE SITE',cn:'\u526a\u63a5\u4f4d\u70b9\u53d8\u5f02'},
+intronicVar:{en:'INTRONIC',cn:'\u5185\u542b\u5b50\u533a\u53d8\u5f02'},
+high:{en:'HIGH',cn:'\u9ad8'},moderate:{en:'MODERATE',cn:'\u4e2d'},low:{en:'LOW',cn:'\u4f4e'},
+complete:{en:'ALL FOUND!',cn:'\u5168\u90e8\u627e\u5230\uff01'},
+};
+function t(key){return(I18N[key]&&I18N[key][LANG])||(I18N[key]&&I18N[key]['en'])||key;}
+
+var cv=document.getElementById('c'),ctx=cv.getContext('2d');
+var W=800,H=300,DPR=Math.min(window.devicePixelRatio||1,2);
+
+// Gene layout: 5 exons with introns between
+// Positions 0-100 mapped to gene
+var REGIONS=[ // [start, end, type]
+[0,5,'intron'],[5,8,'splice'],[8,20,'exon'],[20,23,'splice'],
+[23,35,'intron'],[35,38,'splice'],[38,48,'exon'],[48,51,'splice'],
+[51,60,'intron'],[60,63,'splice'],[63,73,'exon'],[73,76,'splice'],
+[76,85,'intron'],[85,88,'splice'],[88,97,'exon'],[97,100,'intron'],
+];
+
+// Variant consequence depends on region + random seed within exon
+function getConsequence(pos){
+for(var i=0;i<REGIONS.length;i++){
+var r=REGIONS[i];if(pos>=r[0]&&pos<r[1]){
+if(r[2]==='intron')return{region:t('intron'),consequence:t('intronicVar'),severity:t('low'),color:'#50ffb0',type:'intronic'};
+if(r[2]==='splice')return{region:t('splice'),consequence:t('spliceVar'),severity:t('high'),color:'#85ecff',type:'splice'};
+if(r[2]==='exon'){
+// Within exon: position within exon determines type
+var exonPos=(pos-r[0])/(r[1]-r[0]);
+if(exonPos<0.4)return{region:t('exon'),consequence:t('missense'),severity:t('moderate'),color:'#acf900',type:'missense'};
+if(exonPos<0.65)return{region:t('exon'),consequence:t('nonsense'),severity:t('high'),color:'#ef4444',type:'nonsense'};
+return{region:t('exon'),consequence:t('frameshift'),severity:t('high'),color:'#fb923c',type:'frameshift'};
+}
+}
+}
+return{region:'?',consequence:'?',severity:'?',color:'#aaabb0',type:'unknown'};
+}
+
+var found={};var foundCount=0;var totalToFind=8;// 2 per consequence type (missense, nonsense, frameshift, splice)
+var confirmed=[];
+
+function resize(){
+var wrap=cv.parentElement;var rect=wrap.getBoundingClientRect();
+if(rect.width<1||rect.height<1)return;
+W=rect.width;H=rect.height;
+cv.width=W*DPR;cv.height=H*DPR;cv.style.width=W+'px';cv.style.height=H+'px';
+ctx.setTransform(DPR,0,0,DPR,0,0);
+drawScene();
+}
+window.addEventListener('resize',resize);
+setTimeout(resize,200);setTimeout(resize,600);
+document.fonts.ready.then(function(){resize();});
+
+function drawScene(){
+// Background
+var g=ctx.createLinearGradient(0,0,0,H);g.addColorStop(0,'#0c0e12');g.addColorStop(1,'#111318');
+ctx.fillStyle=g;ctx.fillRect(0,0,W,H);
+ctx.strokeStyle='rgba(255,255,255,0.03)';ctx.lineWidth=0.5;
+for(var x=0;x<W;x+=40){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,H);ctx.stroke();}
+for(var y=0;y<H;y+=40){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke();}
+
+var gx=W*0.08,gw=W*0.84,gy=H*0.45,gh=H*0.25;
+// Gene bar background
+ctx.fillStyle='rgba(23,26,31,0.92)';ctx.fillRect(gx,gy-gh/2,gw,gh);
+
+// Draw regions
+REGIONS.forEach(function(r){
+var x1=gx+gw*(r[0]/100),x2=gx+gw*(r[1]/100);
+if(r[2]==='exon'){
+var gr=ctx.createLinearGradient(x1,gy-gh/2,x2,gy+gh/2);
+gr.addColorStop(0,'#50ffb0');gr.addColorStop(1,'#17df93');
+ctx.fillStyle=gr;ctx.fillRect(x1,gy-gh/2,x2-x1,gh);
+ctx.shadowColor='rgba(80,255,176,0.3)';ctx.shadowBlur=6;
+ctx.fillRect(x1,gy-gh/2,x2-x1,gh);ctx.shadowBlur=0;
+}else if(r[2]==='splice'){
+ctx.fillStyle='rgba(133,236,255,0.15)';ctx.fillRect(x1,gy-gh/2,x2-x1,gh);
+}
+});
+
+// Labels
+ctx.font="9px 'Space Grotesk'";ctx.textAlign='center';ctx.fillStyle='#aaabb0';
+var exonIdx=0;
+REGIONS.forEach(function(r){
+var xm=gx+gw*((r[0]+r[1])/200);
+if(r[2]==='exon'){exonIdx++;ctx.fillStyle='#0c0e12';ctx.font="bold 10px 'Space Grotesk'";ctx.fillText('E'+exonIdx,xm,gy+3);ctx.fillStyle='#aaabb0';ctx.font="9px 'Space Grotesk'";}
+});
+
+// Variant marker
+var pos=parseInt(document.getElementById('posSlider').value);
+var vx=gx+gw*(pos/100);
+var cons=getConsequence(pos);
+ctx.fillStyle=cons.color;ctx.beginPath();ctx.moveTo(vx,gy-gh/2-4);ctx.lineTo(vx-6,gy-gh/2-16);ctx.lineTo(vx+6,gy-gh/2-16);ctx.fill();
+ctx.shadowColor=cons.color;ctx.shadowBlur=12;ctx.fill();ctx.shadowBlur=0;
+// Vertical line
+ctx.strokeStyle=cons.color+'88';ctx.lineWidth=1;ctx.setLineDash([3,3]);
+ctx.beginPath();ctx.moveTo(vx,gy-gh/2-16);ctx.lineTo(vx,gy+gh/2+4);ctx.stroke();
+ctx.setLineDash([]);
+
+// Confirmed markers
+confirmed.forEach(function(c){
+var cx2=gx+gw*(c.pos/100);
+ctx.fillStyle=c.color+'66';ctx.beginPath();ctx.arc(cx2,gy+gh/2+14,4,0,Math.PI*2);ctx.fill();
+});
+
+// Update result display
+document.getElementById('regionVal').textContent=cons.region;
+document.getElementById('regionVal').style.color=cons.color;
+document.getElementById('conseqVal').textContent=cons.consequence;
+document.getElementById('conseqVal').style.color=cons.color;
+document.getElementById('sevVal').textContent=cons.severity;
+document.getElementById('sevVal').style.color=cons.severity===t('high')?'#ef4444':cons.severity===t('moderate')?'#acf900':'#50ffb0';
+}
+
+document.getElementById('posSlider').addEventListener('input',function(){
+document.getElementById('posVal').textContent=this.value;
+drawScene();
+});
+
+document.getElementById('checkBtn').addEventListener('click',function(){
+var pos=parseInt(document.getElementById('posSlider').value);
+var cons=getConsequence(pos);
+var key=cons.type+'_'+pos;
+if(!found[key]&&cons.type!=='intronic'&&cons.type!=='unknown'){
+found[key]=true;foundCount++;
+confirmed.push({pos:pos,color:cons.color,type:cons.type});
+document.getElementById('scoreVal').textContent=foundCount+' / '+totalToFind;
+drawScene();
+if(foundCount>=totalToFind){
+document.getElementById('scoreVal').textContent=t('complete');
+try{window.parent.postMessage({type:'step_complete'},'*');}catch(e){}
+}
+}
+});
+
+function refreshI18N(){
+document.getElementById('title').textContent=t('title');
+document.getElementById('subtitle').textContent=t('subtitle');
+document.getElementById('sliderLabel').textContent=t('sliderLabel');
+document.getElementById('regionLabel').textContent=t('regionLabel');
+document.getElementById('conseqLabel').textContent=t('conseqLabel');
+document.getElementById('sevLabel').textContent=t('sevLabel');
+document.getElementById('scoreText').textContent=t('scoreText');
+document.getElementById('checkBtn').textContent=t('checkBtn');
+document.getElementById('langBtn').textContent=LANG.toUpperCase();
+document.getElementById('guideTitle').textContent=t('guideTitle');
+document.getElementById('guideContent').innerHTML='<ul><li>'+t('gg1')+'</li><li>'+t('gg2')+'</li><li>'+t('gg3')+'</li><li>'+t('gg4')+'</li><li>'+t('gg5')+'</li></ul>';
+drawScene();
+}
+document.getElementById('langBtn').addEventListener('click',function(){LANG=LANG==='en'?'cn':'en';refreshI18N();});
+document.getElementById('guideTitle').addEventListener('click',function(){document.getElementById('guideContent').classList.toggle('collapsed');});
+
+refreshI18N();resize();
+</script>
+</body>
+</html>

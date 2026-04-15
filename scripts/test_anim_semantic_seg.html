@@ -1,0 +1,793 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>U-Net Encoder-Decoder</title>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=Space+Grotesk:wght@400;700&family=Noto+Sans+SC:wght@400;700&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{width:100%;height:100vh;overflow:hidden;background:#131313;
+  font-family:'Noto Sans SC','PingFang SC',system-ui,sans-serif;color:#e5e2e1}
+
+.wrapper{display:flex;flex-direction:column;height:100vh;overflow:hidden}
+
+.guide-panel{position:fixed;top:8px;right:8px;width:250px;max-height:40vh;
+  overflow-y:auto;z-index:200;padding:10px 12px;
+  background:rgba(28,27,27,0.92);backdrop-filter:blur(14px);
+  border:1px solid rgba(255,191,156,0.18);font-size:12px;line-height:1.55;
+  color:rgba(229,226,225,0.88)}
+.guide-panel h3{font-family:'Space Grotesk',sans-serif;font-size:13px;font-weight:700;
+  margin-bottom:6px;display:flex;align-items:center;justify-content:space-between;cursor:pointer;
+  color:#ffb59c;text-transform:uppercase;letter-spacing:0.05em}
+.guide-panel h3 .arrow{transition:transform .2s;font-size:10px}
+.guide-panel h3 .arrow.collapsed{transform:rotate(-90deg)}
+.guide-panel ul{padding-left:14px;margin:4px 0}
+.guide-panel .gl{color:#8a8886;font-size:11px;text-transform:uppercase;
+  letter-spacing:0.08em;margin-top:6px;font-family:'Space Grotesk',sans-serif}
+
+.header{height:42px;min-height:42px;display:flex;align-items:center;justify-content:space-between;
+  padding:0 16px;background:rgba(28,27,27,0.95);border-bottom:1px solid rgba(255,191,156,0.15)}
+.header h1{font-family:'Space Grotesk',sans-serif;font-size:14px;font-weight:700;
+  color:#ffb59c;text-transform:uppercase;letter-spacing:0.08em}
+
+.lang-btn{position:fixed;top:8px;left:8px;z-index:100;
+  font-family:'Space Grotesk',sans-serif;font-size:11px;font-weight:700;
+  padding:4px 10px;cursor:pointer;
+  border:1px solid rgba(255,255,255,0.08);
+  background:rgba(20,20,20,0.85);backdrop-filter:blur(12px);
+  color:#ffb59c;letter-spacing:1px}
+
+.canvas-wrap{flex:1;min-height:0;position:relative;overflow:hidden;background:#131313}
+.canvas-wrap canvas{position:absolute;top:0;left:0;width:100%;height:100%}
+
+.controls{height:46px;min-height:46px;display:flex;align-items:center;justify-content:center;gap:12px;
+  background:rgba(28,27,27,0.95);border-top:1px solid rgba(255,191,156,0.15);
+  border-bottom:1px solid rgba(255,191,156,0.15)}
+.ctrl-btn{padding:6px 16px;border:1px solid rgba(255,191,156,0.35);background:transparent;
+  color:#ffb59c;cursor:pointer;font-family:'Space Grotesk',sans-serif;font-size:12px;
+  font-weight:700;text-transform:uppercase;letter-spacing:0.06em;transition:all .15s}
+.ctrl-btn:hover{background:rgba(255,191,156,0.18);box-shadow:0 0 18px rgba(255,127,80,0.25)}
+.ctrl-btn.active{background:linear-gradient(45deg,rgba(255,191,156,0.3),rgba(255,127,80,0.2))}
+.frame-indicator{font-family:'JetBrains Mono',monospace;font-size:12px;color:#8a8886;letter-spacing:0.05em}
+
+.hud{height:54px;min-height:54px;display:flex;align-items:center;
+  background:rgba(0,0,0,0.6);border-top:1px solid rgba(255,255,255,0.06);padding:0 16px}
+.hud-col{flex:1;text-align:center}
+.hud-label{font-family:'Space Grotesk',sans-serif;font-size:10px;
+  color:rgba(255,191,156,0.6);text-transform:uppercase;letter-spacing:0.1em}
+.hud-val{font-family:'JetBrains Mono','Space Grotesk',monospace;font-size:13px;font-weight:700;
+  color:rgba(229,226,225,0.9);margin-top:2px}
+</style>
+</head>
+<body>
+
+<button class="lang-btn" id="langBtn">CN</button>
+
+<div class="guide-panel" id="guidePanel">
+  <h3 id="guideToggle"><span id="guideTitle">OBSERVER GUIDE</span> <span class="arrow" id="guideArrow">&#9660;</span></h3>
+  <div id="guideContent">
+    <div class="gl" id="glWhat">WHAT IT SHOWS</div>
+    <p id="guideWhat"></p>
+    <div class="gl" style="margin-top:6px" id="glObserve">OBSERVE</div>
+    <ul>
+      <li id="obs1"></li>
+      <li id="obs2"></li>
+      <li id="obs3"></li>
+    </ul>
+    <div class="gl" style="margin-top:6px" id="glControls">CONTROLS</div>
+    <p id="guideControls"></p>
+    <div class="gl" style="margin-top:6px" id="glTakeaway">TAKEAWAY</div>
+    <p style="color:#ffb59c" id="guideTakeaway"></p>
+  </div>
+</div>
+
+<div class="wrapper">
+  <div class="header">
+    <h1 id="headerTitle">U-NET ENCODER-DECODER</h1>
+  </div>
+
+  <div class="canvas-wrap">
+    <canvas id="c"></canvas>
+  </div>
+
+  <div class="controls">
+    <button class="ctrl-btn" id="btnPrev">PREV</button>
+    <button class="ctrl-btn" id="btnPlay">PLAY</button>
+    <button class="ctrl-btn" id="btnNext">NEXT</button>
+    <span class="frame-indicator" id="frameIndicator">1 / 5</span>
+  </div>
+
+  <div class="hud" id="hud">
+    <div class="hud-col"><div class="hud-label" id="hudL1">STAGE</div><div class="hud-val" id="hudV1">--</div></div>
+    <div class="hud-col"><div class="hud-label" id="hudL2">RESOLUTION</div><div class="hud-val" id="hudV2">--</div></div>
+    <div class="hud-col"><div class="hud-label" id="hudL3">CHANNELS</div><div class="hud-val" id="hudV3">--</div></div>
+    <div class="hud-col"><div class="hud-label" id="hudL4">OPERATION</div><div class="hud-val" id="hudV4">--</div></div>
+  </div>
+</div>
+
+<script>
+(function(){
+"use strict";
+
+var LANG = 'cn';
+var I18N = {
+  headerTitle:  {en:'U-NET ENCODER-DECODER', cn:'U-NET ENCODER-DECODER'},
+  guideTitle:   {en:'OBSERVER GUIDE', cn:'OBSERVER GUIDE'},
+  glWhat:       {en:'WHAT IT SHOWS', cn:'WHAT IT SHOWS'},
+  glObserve:    {en:'OBSERVE', cn:'OBSERVE'},
+  glControls:   {en:'CONTROLS', cn:'CONTROLS'},
+  glTakeaway:   {en:'TAKEAWAY', cn:'TAKEAWAY'},
+  guideWhat:    {en:'How a U-Net transforms a Mars terrain image into a pixel-level segmentation mask through encoder downsampling, decoder upsampling, and skip connections.',
+                 cn:'U-Net 如何将一张火星地形图通过编码器下采样、解码器上采样和跳跃连接，变换为像素级分割掩膜。'},
+  obs1:         {en:'Encoder: resolution halves, channels double at each level',
+                 cn:'编码器：每层分辨率减半，通道数翻倍'},
+  obs2:         {en:'Skip connections: high-res features are copied to the decoder',
+                 cn:'跳跃连接：高分辨率特征被复制到解码器'},
+  obs3:         {en:'Decoder: resolution doubles back, producing pixel-level output',
+                 cn:'解码器：分辨率逐步恢复，产出像素级输出'},
+  guideControls:{en:'PREV / NEXT to step through, PLAY for auto.', cn:'PREV / NEXT 逐帧切换，PLAY 自动播放。'},
+  guideTakeaway:{en:'U-Net preserves spatial detail via skip connections while learning abstract features via the bottleneck.',
+                 cn:'U-Net 通过瓶颈层学习抽象特征，同时通过跳跃连接保留空间细节。'},
+  btnPlay:      {en:'PLAY', cn:'PLAY'},
+  btnPause:     {en:'PAUSE', cn:'PAUSE'},
+  btnPrev:      {en:'PREV', cn:'PREV'},
+  btnNext:      {en:'NEXT', cn:'NEXT'},
+  // HUD
+  hudStage:     {en:'STAGE', cn:'STAGE'},
+  hudRes:       {en:'RESOLUTION', cn:'RESOLUTION'},
+  hudCh:        {en:'CHANNELS', cn:'CHANNELS'},
+  hudOp:        {en:'OPERATION', cn:'OPERATION'},
+  // Frame titles
+  f0title:      {en:'INPUT: Mars Terrain Image', cn:'INPUT: Mars Terrain Image'},
+  f0desc:       {en:'Original 256x256 RGB image from Navcam', cn:'Navcam 256x256 RGB'},
+  f1title:      {en:'ENCODER: Downsampling Path', cn:'ENCODER: Downsampling Path'},
+  f1desc:       {en:'Conv + MaxPool: extract features, reduce resolution', cn:'Conv + MaxPool: extract features, reduce resolution'},
+  f2title:      {en:'BOTTLENECK: Deepest Features', cn:'BOTTLENECK: Deepest Features'},
+  f2desc:       {en:'16x16, 512 channels -- most abstract representation', cn:'16x16, 512ch -- most abstract'},
+  f3title:      {en:'DECODER: Upsampling + Skip Connections', cn:'DECODER: Upsampling + Skip'},
+  f3desc:       {en:'Upsample + concat skip features, recover spatial detail', cn:'Upsample + concat skip, recover detail'},
+  f4title:      {en:'OUTPUT: Pixel-Level Segmentation Mask', cn:'OUTPUT: Pixel-Level Mask'},
+  f4desc:       {en:'256x256 mask: each pixel assigned a terrain class', cn:'256x256 mask: pixel-level terrain class'},
+  // HUD values per frame
+  stg0: {en:'Input', cn:'Input'},
+  stg1: {en:'Encoder', cn:'Encoder'},
+  stg2: {en:'Bottleneck', cn:'Bottleneck'},
+  stg3: {en:'Decoder', cn:'Decoder'},
+  stg4: {en:'Output', cn:'Output'},
+  op0:  {en:'--', cn:'--'},
+  op1:  {en:'Conv3x3 + ReLU + MaxPool2x2', cn:'Conv3x3 + ReLU + MaxPool2x2'},
+  op2:  {en:'Conv3x3 + ReLU', cn:'Conv3x3 + ReLU'},
+  op3:  {en:'UpConv2x2 + Concat + Conv3x3', cn:'UpConv2x2 + Concat + Conv3x3'},
+  op4:  {en:'Conv1x1 (num_classes)', cn:'Conv1x1 (num_classes)'},
+  // Labels on canvas
+  lblEncoder:   {en:'ENCODER', cn:'ENCODER'},
+  lblDecoder:   {en:'DECODER', cn:'DECODER'},
+  lblBottleneck:{en:'BOTTLENECK', cn:'BOTTLENECK'},
+  lblSkip:      {en:'SKIP CONNECTION', cn:'SKIP CONNECTION'},
+  lblInput:     {en:'INPUT IMAGE', cn:'INPUT IMAGE'},
+  lblOutput:    {en:'SEGMENTATION MASK', cn:'SEGMENTATION MASK'},
+  lblConv:      {en:'Conv+Pool', cn:'Conv+Pool'},
+  lblUpConv:    {en:'UpConv+Cat', cn:'UpConv+Cat'},
+  lblMarsImg:   {en:'MARS TERRAIN', cn:'MARS TERRAIN'},
+  lblMask:      {en:'PREDICTION MASK', cn:'PREDICTION MASK'},
+};
+function t(key) { return (I18N[key] && I18N[key][LANG]) || (I18N[key] && I18N[key]['en']) || key; }
+
+var canvas = document.getElementById('c');
+var ctx = canvas.getContext('2d');
+var W = 700, H = 420;
+var totalFrames = 5;
+var currentFrame = 0;
+var playing = false;
+var playTimer = null;
+var transitioning = false;
+
+// HUD data per frame
+var hudData = [
+  function(){ return {stg:t('stg0'), res:'256x256', ch:'3 (RGB)', op:t('op0')}; },
+  function(){ return {stg:t('stg1'), res:'256->128->64->32->16', ch:'64->128->256->512', op:t('op1')}; },
+  function(){ return {stg:t('stg2'), res:'16x16', ch:'512', op:t('op2')}; },
+  function(){ return {stg:t('stg3'), res:'16->32->64->128->256', ch:'512->256->128->64', op:t('op3')}; },
+  function(){ return {stg:t('stg4'), res:'256x256', ch:'N (classes)', op:t('op4')}; },
+];
+
+function updateHUD(f) {
+  var d = hudData[f]();
+  document.getElementById('hudL1').textContent = t('hudStage');
+  document.getElementById('hudL2').textContent = t('hudRes');
+  document.getElementById('hudL3').textContent = t('hudCh');
+  document.getElementById('hudL4').textContent = t('hudOp');
+  document.getElementById('hudV1').textContent = d.stg;
+  document.getElementById('hudV2').textContent = d.res;
+  document.getElementById('hudV3').textContent = d.ch;
+  document.getElementById('hudV4').textContent = d.op;
+  document.getElementById('frameIndicator').textContent = (f+1) + ' / ' + totalFrames;
+}
+
+function refreshI18N() {
+  document.getElementById('headerTitle').textContent = t('headerTitle');
+  document.getElementById('guideTitle').textContent = t('guideTitle');
+  document.getElementById('glWhat').textContent = t('glWhat');
+  document.getElementById('glObserve').textContent = t('glObserve');
+  document.getElementById('glControls').textContent = t('glControls');
+  document.getElementById('glTakeaway').textContent = t('glTakeaway');
+  document.getElementById('guideWhat').textContent = t('guideWhat');
+  document.getElementById('obs1').textContent = t('obs1');
+  document.getElementById('obs2').textContent = t('obs2');
+  document.getElementById('obs3').textContent = t('obs3');
+  document.getElementById('guideControls').textContent = t('guideControls');
+  document.getElementById('guideTakeaway').textContent = t('guideTakeaway');
+  document.getElementById('btnPrev').textContent = t('btnPrev');
+  document.getElementById('btnNext').textContent = t('btnNext');
+  document.getElementById('btnPlay').textContent = playing ? t('btnPause') : t('btnPlay');
+  updateHUD(currentFrame);
+  drawFrame(currentFrame);
+}
+
+// ── Drawing primitives ──
+function drawBg() {
+  ctx.save();
+  var g = ctx.createLinearGradient(0,0,0,H);
+  g.addColorStop(0,'#0f0a1e');
+  g.addColorStop(1,'#1a1035');
+  ctx.fillStyle = g;
+  ctx.fillRect(0,0,W,H);
+  // grid
+  ctx.strokeStyle = 'rgba(255,255,255,0.03)';
+  ctx.lineWidth = 0.5;
+  for(var i=0;i<W;i+=30){ctx.beginPath();ctx.moveTo(i,0);ctx.lineTo(i,H);ctx.stroke();}
+  for(var j=0;j<H;j+=30){ctx.beginPath();ctx.moveTo(0,j);ctx.lineTo(W,j);ctx.stroke();}
+  ctx.restore();
+}
+
+function drawLabelPrimitive(text, x, y, color, size, align) {
+  ctx.save();
+  ctx.font = 'bold ' + (size||13) + 'px "Space Grotesk", sans-serif';
+  ctx.fillStyle = color || '#ffb59c';
+  ctx.textAlign = align || 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(text, x, y);
+  ctx.restore();
+}
+
+function drawTextPrimitive(text, x, y, color, size, align) {
+  ctx.save();
+  ctx.font = (size||12) + 'px "Noto Sans SC", sans-serif';
+  ctx.fillStyle = color || 'rgba(229,226,225,0.8)';
+  ctx.textAlign = align || 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(text, x, y);
+  ctx.restore();
+}
+
+function drawArrowPrimitive(x1, y1, x2, y2, color) {
+  ctx.save();
+  ctx.strokeStyle = color || '#ffb59c';
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.moveTo(x1,y1);
+  ctx.lineTo(x2,y2);
+  ctx.stroke();
+  // arrowhead
+  var angle = Math.atan2(y2-y1,x2-x1);
+  var hl = 8;
+  ctx.beginPath();
+  ctx.moveTo(x2,y2);
+  ctx.lineTo(x2-hl*Math.cos(angle-0.4), y2-hl*Math.sin(angle-0.4));
+  ctx.lineTo(x2-hl*Math.cos(angle+0.4), y2-hl*Math.sin(angle+0.4));
+  ctx.closePath();
+  ctx.fillStyle = color || '#ffb59c';
+  ctx.fill();
+  ctx.restore();
+}
+
+// Draw a feature map block (3D-ish box)
+function drawFeatureBlock(x, y, w, h, depth, color1, color2, label, labelColor) {
+  ctx.save();
+  var d = depth || 8;
+  // top face
+  ctx.beginPath();
+  ctx.moveTo(x,y);
+  ctx.lineTo(x+d,y-d);
+  ctx.lineTo(x+w+d,y-d);
+  ctx.lineTo(x+w,y);
+  ctx.closePath();
+  var gt = ctx.createLinearGradient(x,y-d,x,y);
+  gt.addColorStop(0, color2 || '#ff7f50');
+  gt.addColorStop(1, color1 || '#ffb59c');
+  ctx.fillStyle = gt;
+  ctx.fill();
+  // right face
+  ctx.beginPath();
+  ctx.moveTo(x+w,y);
+  ctx.lineTo(x+w+d,y-d);
+  ctx.lineTo(x+w+d,y+h-d);
+  ctx.lineTo(x+w,y+h);
+  ctx.closePath();
+  var gr = ctx.createLinearGradient(x+w,0,x+w+d,0);
+  gr.addColorStop(0, color1 || '#ffb59c');
+  gr.addColorStop(1, 'rgba(0,0,0,0.3)');
+  ctx.fillStyle = gr;
+  ctx.fill();
+  // front face
+  var gf = ctx.createLinearGradient(x,y,x,y+h);
+  gf.addColorStop(0, color1 || '#ffb59c');
+  gf.addColorStop(0.5, color2 || '#ff7f50');
+  gf.addColorStop(1, 'rgba(100,50,20,0.8)');
+  ctx.fillStyle = gf;
+  ctx.fillRect(x,y,w,h);
+  // border
+  ctx.strokeStyle = 'rgba(255,255,255,0.15)';
+  ctx.lineWidth = 0.5;
+  ctx.strokeRect(x,y,w,h);
+  // label
+  if(label){
+    ctx.font = 'bold 9px "JetBrains Mono", monospace';
+    ctx.fillStyle = labelColor || 'rgba(255,255,255,0.7)';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'top';
+    ctx.fillText(label, x+w/2, y+h+4);
+  }
+  ctx.restore();
+}
+
+// Draw Mars terrain thumbnail (procedural)
+function drawMarsImage(x, y, w, h) {
+  ctx.save();
+  // brownish terrain gradient
+  var g = ctx.createLinearGradient(x,y,x,y+h);
+  g.addColorStop(0,'#8B6B4F');
+  g.addColorStop(0.3,'#A0826A');
+  g.addColorStop(0.6,'#7A5C42');
+  g.addColorStop(1,'#5A3E2B');
+  ctx.fillStyle = g;
+  ctx.fillRect(x,y,w,h);
+  // some terrain features (rocks, craters)
+  ctx.fillStyle = 'rgba(60,40,25,0.5)';
+  ctx.beginPath(); ctx.arc(x+w*0.3,y+h*0.5,w*0.12,0,Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.arc(x+w*0.7,y+h*0.3,w*0.08,0,Math.PI*2); ctx.fill();
+  ctx.fillStyle = 'rgba(180,140,100,0.4)';
+  ctx.beginPath(); ctx.arc(x+w*0.5,y+h*0.7,w*0.15,0,Math.PI*2); ctx.fill();
+  // highlight
+  ctx.fillStyle = 'rgba(200,170,130,0.3)';
+  ctx.fillRect(x+w*0.1,y+h*0.2,w*0.3,h*0.15);
+  // border
+  ctx.strokeStyle = 'rgba(255,191,156,0.4)';
+  ctx.lineWidth = 1.5;
+  ctx.strokeRect(x,y,w,h);
+  ctx.restore();
+}
+
+// Draw segmentation mask thumbnail (procedural)
+function drawMaskImage(x, y, w, h) {
+  ctx.save();
+  // base
+  ctx.fillStyle = '#1a1a2e';
+  ctx.fillRect(x,y,w,h);
+  // colored regions representing terrain classes
+  var colors = ['rgba(16,185,129,0.7)','rgba(239,68,68,0.6)','rgba(59,130,246,0.5)','rgba(245,158,11,0.6)'];
+  // safe terrain (green)
+  ctx.fillStyle = colors[0];
+  ctx.fillRect(x,y+h*0.4,w*0.5,h*0.6);
+  // danger (red)
+  ctx.fillStyle = colors[1];
+  ctx.beginPath(); ctx.arc(x+w*0.3,y+h*0.5,w*0.12,0,Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.arc(x+w*0.7,y+h*0.3,w*0.08,0,Math.PI*2); ctx.fill();
+  // bedrock (blue)
+  ctx.fillStyle = colors[2];
+  ctx.fillRect(x+w*0.5,y,w*0.5,h*0.4);
+  // sand (yellow)
+  ctx.fillStyle = colors[3];
+  ctx.beginPath(); ctx.arc(x+w*0.5,y+h*0.7,w*0.15,0,Math.PI*2); ctx.fill();
+  // border
+  ctx.strokeStyle = 'rgba(0,218,243,0.4)';
+  ctx.lineWidth = 1.5;
+  ctx.strokeRect(x,y,w,h);
+  ctx.restore();
+}
+
+// ── Shared Element Transition system ──
+function lerp(a, b, p) { return a + (b - a) * p; }
+function easeInOut(x) { return x < 0.5 ? 2*x*x : 1 - Math.pow(-2*x+2, 2)/2; }
+function merge(base, overrides) {
+  var r = {};
+  for (var k in base) r[k] = base[k];
+  for (var k2 in overrides) r[k2] = overrides[k2];
+  return r;
+}
+
+function drawElement(el) {
+  if (!el || el.alpha <= 0.01) return;
+  ctx.save();
+  ctx.globalAlpha = el.alpha;
+  switch(el.type) {
+    case 'label':  drawLabelPrimitive(el.text, el.x, el.y, el.color, el.size, el.align); break;
+    case 'text':   drawTextPrimitive(el.text, el.x, el.y, el.color, el.size, el.align); break;
+    case 'arrow':  drawArrowPrimitive(el.x1, el.y1, el.x2, el.y2, el.color); break;
+    case 'marsimg': drawMarsImage(el.x, el.y, el.w, el.h); break;
+    case 'mask':   drawMaskImage(el.x, el.y, el.w, el.h); break;
+    case 'fblock': drawFeatureBlock(el.x, el.y, el.w, el.h, el.depth, el.c1, el.c2, el.lbl, el.lc); break;
+    case 'custom': el.draw(el.alpha); break;
+  }
+  ctx.restore();
+}
+
+// ── Frame element definitions ──
+function getFrameElements(f) {
+  var cx = W/2, cy = H/2;
+  var elems = [];
+
+  if(f === 0) {
+    // Frame 0: Input image centered
+    elems.push({id:'title', type:'label', text:t('f0title'), x:cx, y:30, color:'#ffb59c', size:16, alpha:1});
+    elems.push({id:'desc', type:'text', text:t('f0desc'), x:cx, y:52, color:'rgba(229,226,225,0.7)', size:12, alpha:1});
+    elems.push({id:'marsimg', type:'marsimg', x:cx-75, y:cy-70, w:150, h:150, alpha:1});
+    elems.push({id:'imglbl', type:'label', text:t('lblMarsImg'), x:cx, y:cy+95, color:'#ffb59c', size:11, alpha:1});
+    elems.push({id:'dimlbl', type:'text', text:'256 x 256 x 3', x:cx, y:cy+112, color:'#8a8886', size:10, alpha:1});
+  }
+
+  if(f === 1) {
+    // Frame 1: Encoder path -- show 4 progressively smaller feature blocks
+    elems.push({id:'title', type:'label', text:t('f1title'), x:cx, y:30, color:'#ffb59c', size:16, alpha:1});
+    elems.push({id:'desc', type:'text', text:t('f1desc'), x:cx, y:52, color:'rgba(229,226,225,0.7)', size:12, alpha:1});
+    // input image small
+    elems.push({id:'marsimg', type:'marsimg', x:30, y:cy-50, w:70, h:70, alpha:1});
+    // encoder blocks: progressively smaller, with more channels (deeper color)
+    var encX = [130, 220, 310, 400];
+    var encH = [80, 60, 44, 30];
+    var encW = [24, 28, 32, 36];
+    var encD = [6, 7, 8, 10];
+    var encC1 = ['#ffb59c','#ff9f7c','#ff7f50','#e65c2a'];
+    var encC2 = ['#cc8060','#b06040','#994020','#802010'];
+    var encLbl = ['64ch','128ch','256ch','512ch'];
+    for(var i=0;i<4;i++){
+      elems.push({id:'enc'+i, type:'fblock', x:encX[i], y:cy-encH[i]/2, w:encW[i], h:encH[i],
+        depth:encD[i], c1:encC1[i], c2:encC2[i], lbl:encLbl[i], lc:'#8a8886', alpha:1});
+      if(i<3){
+        elems.push({id:'earr'+i, type:'arrow', x1:encX[i]+encW[i]+encD[i]+4, y1:cy,
+          x2:encX[i+1]-4, y2:cy, color:'rgba(255,191,156,0.5)', alpha:1});
+      }
+    }
+    // arrow from image to first block
+    elems.push({id:'inarr', type:'arrow', x1:104, y1:cy, x2:126, y2:cy, color:'rgba(255,191,156,0.5)', alpha:1});
+    // label
+    elems.push({id:'enclbl', type:'label', text:t('lblEncoder'), x:280, y:H-30, color:'#ff7f50', size:12, alpha:1});
+    elems.push({id:'convlbl', type:'text', text:t('lblConv'), x:280, y:H-16, color:'#8a8886', size:10, alpha:1});
+    // resolution labels
+    elems.push({id:'res0', type:'text', text:'256', x:30+35, y:cy+48, color:'#8a8886', size:9, alpha:1});
+    elems.push({id:'res1', type:'text', text:'128', x:encX[0]+12, y:cy+encH[0]/2+14, color:'#8a8886', size:9, alpha:1});
+    elems.push({id:'res2', type:'text', text:'64', x:encX[1]+14, y:cy+encH[1]/2+14, color:'#8a8886', size:9, alpha:1});
+    elems.push({id:'res3', type:'text', text:'32', x:encX[2]+16, y:cy+encH[2]/2+14, color:'#8a8886', size:9, alpha:1});
+    elems.push({id:'res4', type:'text', text:'16', x:encX[3]+18, y:cy+encH[3]/2+14, color:'#8a8886', size:9, alpha:1});
+    // skip arrows hint (faded)
+    for(var j=0;j<3;j++){
+      elems.push({id:'skip_hint'+j, type:'custom', draw:function(al){
+        // will be shown in frame 3
+      }, alpha:0.15});
+    }
+  }
+
+  if(f === 2) {
+    // Frame 2: Bottleneck -- center block emphasized
+    elems.push({id:'title', type:'label', text:t('f2title'), x:cx, y:30, color:'#ffb59c', size:16, alpha:1});
+    elems.push({id:'desc', type:'text', text:t('f2desc'), x:cx, y:52, color:'rgba(229,226,225,0.7)', size:12, alpha:1});
+    // big bottleneck block at center
+    elems.push({id:'bneck', type:'fblock', x:cx-25, y:cy-40, w:50, h:80, depth:14,
+      c1:'#e65c2a', c2:'#802010', lbl:'512ch / 16x16', lc:'#ffb59c', alpha:1});
+    elems.push({id:'enclbl', type:'label', text:t('lblBottleneck'), x:cx, y:cy+70, color:'#ff7f50', size:13, alpha:1});
+    // glow effect
+    elems.push({id:'glow', type:'custom', draw:function(al){
+      ctx.save();
+      ctx.globalAlpha = al * 0.3;
+      ctx.shadowColor = '#ff7f50';
+      ctx.shadowBlur = 40;
+      ctx.fillStyle = '#ff7f50';
+      ctx.fillRect(cx-25, cy-40, 50, 80);
+      ctx.restore();
+    }, alpha:1});
+    // side arrows showing compression
+    elems.push({id:'compIn', type:'arrow', x1:cx-120, y1:cy, x2:cx-30, y2:cy, color:'rgba(255,191,156,0.4)', alpha:1});
+    elems.push({id:'compOut', type:'arrow', x1:cx+40, y1:cy, x2:cx+130, y2:cy, color:'rgba(0,218,243,0.4)', alpha:1});
+    elems.push({id:'inlbl', type:'text', text:t('lblEncoder') + ' >>>', x:cx-80, y:cy-20, color:'rgba(255,191,156,0.5)', size:10, alpha:1});
+    elems.push({id:'outlbl', type:'text', text:'>>> ' + t('lblDecoder'), x:cx+85, y:cy-20, color:'rgba(0,218,243,0.5)', size:10, alpha:1});
+    // abstract feature visualization
+    elems.push({id:'absfeat', type:'custom', draw:function(al){
+      ctx.save();
+      ctx.globalAlpha = al * 0.6;
+      var colors = ['#ff7f50','#ffb59c','#e65c2a','#cc4400'];
+      for(var i=0;i<8;i++){
+        for(var j=0;j<8;j++){
+          var ci = (i*3+j*7)%4;
+          ctx.fillStyle = colors[ci];
+          ctx.fillRect(cx-25+i*6+1, cy-40+j*10+1, 5, 8);
+        }
+      }
+      ctx.restore();
+    }, alpha:1});
+  }
+
+  if(f === 3) {
+    // Frame 3: Full U-Net architecture with skip connections
+    elems.push({id:'title', type:'label', text:t('f3title'), x:cx, y:22, color:'#ffb59c', size:15, alpha:1});
+    elems.push({id:'desc', type:'text', text:t('f3desc'), x:cx, y:40, color:'rgba(229,226,225,0.7)', size:11, alpha:1});
+
+    // Encoder side (left)
+    var eX = [40, 110, 180, 250];
+    var eH = [70, 52, 38, 26];
+    var eW = [20, 22, 24, 28];
+    var eD = [5, 6, 7, 8];
+    var eC1 = ['#ffb59c','#ff9f7c','#ff7f50','#e65c2a'];
+    var eC2 = ['#cc8060','#b06040','#994020','#802010'];
+    var eCh = ['64','128','256','512'];
+    for(var i=0;i<4;i++){
+      elems.push({id:'enc'+i, type:'fblock', x:eX[i], y:cy-eH[i]/2+10, w:eW[i], h:eH[i],
+        depth:eD[i], c1:eC1[i], c2:eC2[i], lbl:eCh[i], lc:'#8a8886', alpha:1});
+    }
+
+    // Bottleneck center
+    elems.push({id:'bneck', type:'fblock', x:cx-15, y:cy-13+10, w:30, h:26, depth:8,
+      c1:'#e65c2a', c2:'#802010', lbl:'512', lc:'#8a8886', alpha:1});
+
+    // Decoder side (right, mirror)
+    var dX = [610, 540, 470, 400];
+    var dC1 = ['#4ade80','#34d399','#10b981','#059669'];
+    var dC2 = ['#166534','#14532d','#064e3b','#022c22'];
+    for(var i=0;i<4;i++){
+      elems.push({id:'dec'+i, type:'fblock', x:dX[i], y:cy-eH[i]/2+10, w:eW[i], h:eH[i],
+        depth:eD[i], c1:dC1[i], c2:dC2[i], lbl:eCh[3-i], lc:'#8a8886', alpha:1});
+    }
+
+    // Arrows encoder
+    for(var i=0;i<3;i++){
+      elems.push({id:'earr'+i, type:'arrow', x1:eX[i]+eW[i]+eD[i]+3, y1:cy+10,
+        x2:eX[i+1]-3, y2:cy+10, color:'rgba(255,191,156,0.35)', alpha:1});
+    }
+    elems.push({id:'earr3', type:'arrow', x1:eX[3]+eW[3]+eD[3]+3, y1:cy+10,
+      x2:cx-18, y2:cy+10, color:'rgba(255,191,156,0.35)', alpha:1});
+
+    // Arrows decoder
+    elems.push({id:'darr0', type:'arrow', x1:cx+23, y1:cy+10,
+      x2:dX[3]-3, y2:cy+10, color:'rgba(0,218,243,0.35)', alpha:1});
+    for(var i=3;i>0;i--){
+      elems.push({id:'darr'+(4-i), type:'arrow', x1:dX[i]+eW[i]+eD[i]+3, y1:cy+10,
+        x2:dX[i-1]-3, y2:cy+10, color:'rgba(0,218,243,0.35)', alpha:1});
+    }
+
+    // Skip connections (curved arrows)
+    for(var i=0;i<4;i++){
+      (function(idx){
+        var sx = eX[idx]+eW[idx]/2;
+        var dx = dX[3-idx]+eW[idx]/2;
+        var sy = cy - eH[idx]/2 + 10 - 6;
+        var arcH = 30 + idx*16;
+        elems.push({id:'skip'+idx, type:'custom', draw:function(al){
+          ctx.save();
+          ctx.globalAlpha = al;
+          ctx.strokeStyle = '#00daf3';
+          ctx.lineWidth = 1.5;
+          ctx.setLineDash([4,3]);
+          ctx.beginPath();
+          ctx.moveTo(sx, sy);
+          ctx.quadraticCurveTo((sx+dx)/2, sy - arcH, dx, sy);
+          ctx.stroke();
+          ctx.setLineDash([]);
+          // arrowhead at end
+          ctx.fillStyle = '#00daf3';
+          ctx.beginPath();
+          ctx.moveTo(dx, sy);
+          ctx.lineTo(dx-5, sy-5);
+          ctx.lineTo(dx+5, sy-5);
+          ctx.closePath();
+          ctx.fill();
+          ctx.restore();
+        }, alpha:0.7});
+      })(i);
+    }
+
+    // Labels
+    elems.push({id:'enclbl', type:'label', text:t('lblEncoder'), x:150, y:H-20, color:'#ff7f50', size:11, alpha:1});
+    elems.push({id:'declbl', type:'label', text:t('lblDecoder'), x:550, y:H-20, color:'#10b981', size:11, alpha:1});
+    elems.push({id:'skiplbl', type:'label', text:t('lblSkip'), x:cx, y:62, color:'#00daf3', size:10, alpha:1});
+  }
+
+  if(f === 4) {
+    // Frame 4: Output -- Mars image + arrow + Mask
+    elems.push({id:'title', type:'label', text:t('f4title'), x:cx, y:30, color:'#ffb59c', size:16, alpha:1});
+    elems.push({id:'desc', type:'text', text:t('f4desc'), x:cx, y:52, color:'rgba(229,226,225,0.7)', size:12, alpha:1});
+    // input on left
+    elems.push({id:'marsimg', type:'marsimg', x:100, y:cy-60, w:120, h:120, alpha:1});
+    elems.push({id:'imglbl', type:'label', text:t('lblInput'), x:160, y:cy+75, color:'#ffb59c', size:11, alpha:1});
+    // arrow
+    elems.push({id:'oarr', type:'arrow', x1:240, y1:cy, x2:360, y2:cy, color:'#00daf3', alpha:1});
+    // U-Net label on arrow
+    elems.push({id:'unetlbl', type:'label', text:'U-NET', x:300, y:cy-14, color:'#00daf3', size:12, alpha:1});
+    // output mask on right
+    elems.push({id:'maskimg', type:'mask', x:380, y:cy-60, w:120, h:120, alpha:1});
+    elems.push({id:'masklbl', type:'label', text:t('lblOutput'), x:440, y:cy+75, color:'#10b981', size:11, alpha:1});
+    // Legend
+    var legendY = cy + 100;
+    var legColors = ['#10b981','#ef4444','#3b82f6','#f59e0b'];
+    var legLabelsEn = ['Safe','Danger','Rock','Sand'];
+    var legLabelsCn = ['Safe','Danger','Rock','Sand'];
+    for(var i=0;i<4;i++){
+      (function(idx, col){
+        elems.push({id:'leg'+idx, type:'custom', draw:function(al){
+          ctx.save();
+          ctx.globalAlpha = al;
+          ctx.fillStyle = col;
+          ctx.fillRect(220+idx*65, legendY, 12, 12);
+          ctx.font = '10px "Space Grotesk", sans-serif';
+          ctx.fillStyle = '#8a8886';
+          ctx.textAlign = 'left';
+          ctx.fillText(legLabelsEn[idx], 220+idx*65+16, legendY+9);
+          ctx.restore();
+        }, alpha:1});
+      })(i, legColors[i]);
+    }
+  }
+
+  return elems;
+}
+
+function drawFrame(f) {
+  drawBg();
+  var elems = getFrameElements(f);
+  elems.forEach(function(el) { drawElement(el); });
+}
+
+function transitionTo(newFrame) {
+  if (newFrame < 0) newFrame = 0;
+  if (newFrame >= totalFrames) newFrame = totalFrames - 1;
+  if (newFrame === currentFrame && !transitioning) { drawFrame(currentFrame); updateHUD(currentFrame); return; }
+  if (transitioning) return;
+
+  var oldElems = getFrameElements(currentFrame);
+  var newElems = getFrameElements(newFrame);
+  var oldMap = {}; oldElems.forEach(function(e){ oldMap[e.id] = e; });
+  var newMap = {}; newElems.forEach(function(e){ newMap[e.id] = e; });
+
+  currentFrame = newFrame;
+  updateHUD(newFrame);
+  transitioning = true;
+
+  var startTime = null;
+  var duration = 500;
+
+  function step(timestamp) {
+    if (!startTime) startTime = timestamp;
+    var raw = Math.min((timestamp - startTime) / duration, 1);
+    var p = easeInOut(raw);
+
+    drawBg();
+
+    // Old-only: fade out
+    oldElems.forEach(function(oe) {
+      if (!newMap[oe.id]) drawElement(merge(oe, {alpha: 1 - p}));
+    });
+
+    // New elements
+    newElems.forEach(function(ne) {
+      var oe = oldMap[ne.id];
+      if (oe) {
+        var merged = merge(ne, {
+          x: lerp(oe.x||0, ne.x||0, p),
+          y: lerp(oe.y||0, ne.y||0, p),
+          w: lerp(oe.w||0, ne.w||0, p),
+          h: lerp(oe.h||0, ne.h||0, p),
+          alpha: 1
+        });
+        if (ne.type === 'arrow' && oe.type === 'arrow') {
+          merged.x1 = lerp(oe.x1, ne.x1, p);
+          merged.y1 = lerp(oe.y1, ne.y1, p);
+          merged.x2 = lerp(oe.x2, ne.x2, p);
+          merged.y2 = lerp(oe.y2, ne.y2, p);
+        }
+        if ((ne.type==='label'||ne.type==='text') && oe.text !== ne.text) {
+          drawElement(merge(oe, {alpha: 1 - p}));
+          drawElement(merge(ne, {alpha: p}));
+        } else {
+          drawElement(merged);
+        }
+      } else {
+        drawElement(merge(ne, {alpha: p}));
+      }
+    });
+
+    if (raw < 1) {
+      requestAnimationFrame(step);
+    } else {
+      transitioning = false;
+    }
+  }
+  requestAnimationFrame(step);
+}
+
+// ── Resize / DPR ──
+function resize() {
+  var wrap = document.querySelector('.canvas-wrap');
+  var rect = wrap.getBoundingClientRect();
+  if(rect.width < 1 || rect.height < 1) return;
+  var dpr = Math.min(window.devicePixelRatio || 1, 2);
+  canvas.width = rect.width * dpr;
+  canvas.height = rect.height * dpr;
+  var scale = Math.min(rect.width / W, rect.height / H);
+  var offX = (rect.width - W * scale) / 2;
+  var offY = (rect.height - H * scale) / 2;
+  ctx.setTransform(dpr * scale, 0, 0, dpr * scale, dpr * offX, dpr * offY);
+  drawFrame(currentFrame);
+}
+
+window.addEventListener('resize', resize);
+if(window.ResizeObserver){
+  new ResizeObserver(function(){ resize(); }).observe(document.querySelector('.canvas-wrap'));
+}
+
+// ── Controls ──
+document.getElementById('btnPrev').addEventListener('click', function(){
+  if(playing) stopPlay();
+  transitionTo(currentFrame - 1);
+});
+document.getElementById('btnNext').addEventListener('click', function(){
+  if(playing) stopPlay();
+  transitionTo(currentFrame + 1);
+});
+document.getElementById('btnPlay').addEventListener('click', function(){
+  if(playing) { stopPlay(); }
+  else { startPlay(); }
+});
+
+function startPlay() {
+  playing = true;
+  document.getElementById('btnPlay').textContent = t('btnPause');
+  document.getElementById('btnPlay').classList.add('active');
+  if(currentFrame >= totalFrames - 1) {
+    currentFrame = -1;
+    // Will transition to 0
+  }
+  doPlayStep();
+}
+function doPlayStep() {
+  if(!playing) return;
+  if(currentFrame >= totalFrames - 1) { stopPlay(); return; }
+  transitionTo(currentFrame + 1);
+  playTimer = setTimeout(doPlayStep, 2500);
+}
+function stopPlay() {
+  playing = false;
+  if(playTimer) { clearTimeout(playTimer); playTimer = null; }
+  document.getElementById('btnPlay').textContent = t('btnPlay');
+  document.getElementById('btnPlay').classList.remove('active');
+}
+
+// Guide toggle
+document.getElementById('guideToggle').addEventListener('click', function(){
+  var content = document.getElementById('guideContent');
+  var arrow = document.getElementById('guideArrow');
+  if(content.style.display === 'none') {
+    content.style.display = '';
+    arrow.classList.remove('collapsed');
+  } else {
+    content.style.display = 'none';
+    arrow.classList.add('collapsed');
+  }
+});
+
+// Language switch
+document.getElementById('langBtn').addEventListener('click', function(){
+  LANG = LANG === 'en' ? 'cn' : 'en';
+  document.getElementById('langBtn').textContent = LANG.toUpperCase();
+  refreshI18N();
+});
+
+// ── Init ──
+refreshI18N();
+resize();
+setTimeout(resize, 200);
+setTimeout(resize, 600);
+document.fonts.ready.then(function(){ resize(); });
+
+})();
+</script>
+</body>
+</html>

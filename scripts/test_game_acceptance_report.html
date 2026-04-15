@@ -1,0 +1,341 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Acceptance Report Builder</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;700&family=Inter:wght@400;500&family=Noto+Sans+SC:wght@400;700&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{width:100%;height:100vh;overflow:hidden;background:#131313;font-family:'Noto Sans SC','Inter',sans-serif;color:#e5e2e1}
+.wrapper{display:flex;flex-direction:column;height:100vh;width:100%}
+.header{padding:8px 16px;background:rgba(28,27,27,0.92);display:flex;align-items:center;justify-content:space-between;flex-shrink:0}
+.header h1{font-family:'Space Grotesk',sans-serif;font-size:14px;font-weight:700;color:#ffb59c;letter-spacing:1.5px;text-transform:uppercase}
+.header .tag{font-size:10px;color:#8a8886;font-family:'Space Grotesk',sans-serif;letter-spacing:1px}
+.game-area{flex:1;min-height:0;display:flex;gap:12px;padding:12px;overflow:hidden}
+.source-col{flex:1;display:flex;flex-direction:column;gap:6px;overflow-y:auto;padding:8px;background:rgba(28,27,27,0.6)}
+.source-col h2{font-family:'Space Grotesk',sans-serif;font-size:11px;color:#8a8886;letter-spacing:1.5px;text-transform:uppercase;margin-bottom:4px;flex-shrink:0}
+.target-area{flex:2;display:flex;flex-direction:column;gap:8px;padding:8px}
+.target-area h2{font-family:'Space Grotesk',sans-serif;font-size:11px;color:#8a8886;letter-spacing:1.5px;text-transform:uppercase;margin-bottom:4px;flex-shrink:0}
+.report-sections{flex:1;display:flex;flex-direction:column;gap:6px;overflow-y:auto}
+.report-section{background:rgba(53,53,52,0.5);padding:8px 10px;min-height:60px;position:relative}
+.report-section .sec-title{font-family:'Space Grotesk',sans-serif;font-size:11px;color:#00daf3;letter-spacing:1px;margin-bottom:6px;text-transform:uppercase}
+.report-section .drop-zone{min-height:36px;border:1px dashed rgba(138,136,134,0.25);padding:4px;display:flex;flex-wrap:wrap;gap:4px}
+.report-section .drop-zone.drag-over{border-color:#ffb59c;background:rgba(255,181,156,0.05)}
+.card{padding:5px 10px;font-size:12px;cursor:grab;user-select:none;background:linear-gradient(135deg,rgba(53,53,52,0.95),rgba(28,27,27,0.95));border:1px solid rgba(138,136,134,0.15);color:#e5e2e1;white-space:nowrap;font-family:'Noto Sans SC',sans-serif;touch-action:none}
+.card.correct{border-color:#10b981;background:linear-gradient(135deg,rgba(16,185,129,0.15),rgba(16,185,129,0.05))}
+.card.wrong{border-color:#ef4444;background:linear-gradient(135deg,rgba(239,68,68,0.15),rgba(239,68,68,0.05))}
+.card:active{cursor:grabbing}
+.bottom-bar{display:flex;align-items:center;justify-content:space-between;padding:8px 16px;background:rgba(0,0,0,0.55);flex-shrink:0;height:48px}
+.score-area{font-family:'Space Grotesk',sans-serif;font-size:13px;color:#00daf3;font-weight:700}
+.check-btn{font-family:'Space Grotesk',sans-serif;font-size:11px;font-weight:700;padding:6px 20px;cursor:pointer;border:none;background:linear-gradient(135deg,#ff7f50,#ffb59c);color:#131313;letter-spacing:1px}
+.check-btn:hover{background:linear-gradient(135deg,#ffb59c,#ff7f50)}
+.reset-btn{font-family:'Space Grotesk',sans-serif;font-size:11px;font-weight:700;padding:6px 16px;cursor:pointer;border:1px solid rgba(138,136,134,0.3);background:rgba(53,53,52,0.8);color:#e5e2e1;letter-spacing:1px}
+.lang-btn{position:fixed;top:8px;left:8px;z-index:100;font-family:'Space Grotesk',sans-serif;font-size:11px;font-weight:700;padding:4px 10px;cursor:pointer;border:1px solid rgba(255,255,255,0.08);background:rgba(20,20,35,0.85);backdrop-filter:blur(12px);color:#ffb59c;letter-spacing:1px}
+.guide-panel{position:fixed;top:8px;right:8px;width:240px;max-height:40vh;overflow-y:auto;background:rgba(20,20,35,0.85);backdrop-filter:blur(12px);border:1px solid rgba(255,255,255,0.08);padding:12px;z-index:100;font-family:'Noto Sans SC',sans-serif;font-size:12px;color:rgba(255,255,255,0.85)}
+.guide-panel h3{font-family:'Space Grotesk',sans-serif;font-size:13px;margin-bottom:8px;display:flex;align-items:center;justify-content:space-between;cursor:pointer;color:#ffb59c}
+.guide-panel ul{padding-left:16px;line-height:1.7}
+.guide-content.collapsed{display:none}
+.success-overlay{display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.7);z-index:200;align-items:center;justify-content:center}
+.success-overlay.show{display:flex}
+.success-box{background:rgba(28,27,27,0.95);border:1px solid rgba(16,185,129,0.3);padding:24px 32px;max-width:400px;text-align:center}
+.success-box h2{font-family:'Space Grotesk',sans-serif;font-size:16px;color:#10b981;margin-bottom:12px;letter-spacing:1px}
+.success-box p{font-size:13px;line-height:1.7;color:#e5e2e1}
+</style>
+</head>
+<body>
+<button class="lang-btn" id="langBtn">CN</button>
+<div class="guide-panel" id="guidePanel">
+  <h3 id="guideToggle"><span id="guideTitle"></span><span id="guideArrow">-</span></h3>
+  <div class="guide-content" id="guideContent">
+    <p id="guideDesc" style="margin-bottom:8px"></p>
+    <ul id="guidePoints"></ul>
+  </div>
+</div>
+<div class="success-overlay" id="successOverlay">
+  <div class="success-box">
+    <h2 id="successTitle"></h2>
+    <p id="successMsg"></p>
+  </div>
+</div>
+<div class="wrapper">
+  <div class="header">
+    <div>
+      <h1 id="mainTitle"></h1>
+      <div class="tag">P-MARS-01-M45 / CAPSTONE</div>
+    </div>
+  </div>
+  <div class="game-area">
+    <div class="source-col" id="sourceCol">
+      <h2 id="sourceTitle"></h2>
+      <div id="sourceCards"></div>
+    </div>
+    <div class="target-area">
+      <h2 id="targetTitle"></h2>
+      <div class="report-sections" id="reportSections"></div>
+    </div>
+  </div>
+  <div class="bottom-bar">
+    <div class="score-area" id="scoreArea"></div>
+    <div style="display:flex;gap:8px">
+      <button class="reset-btn" id="btnReset"></button>
+      <button class="check-btn" id="btnCheck"></button>
+    </div>
+  </div>
+</div>
+<script>
+(function(){
+var LANG='cn';
+var I18N={
+  title:{en:'ACCEPTANCE REPORT BUILDER',cn:'\u9a8c\u6536\u62a5\u544a\u7ec4\u88c5\u5668'},
+  sourceTitle:{en:'REPORT FRAGMENTS',cn:'\u62a5\u544a\u7247\u6bb5'},
+  targetTitle:{en:'REPORT STRUCTURE',cn:'\u62a5\u544a\u7ed3\u6784'},
+  guideTitle:{en:'HOW TO PLAY',cn:'\u64cd\u4f5c\u6307\u5357'},
+  guideDesc:{en:'Drag report fragments into the correct report sections to build a complete system acceptance report.',cn:'\u5c06\u62a5\u544a\u7247\u6bb5\u62d6\u62fd\u5230\u6b63\u786e\u7684\u62a5\u544a\u7ed3\u6784\u533a\u57df\u4e2d\uff0c\u7ec4\u88c5\u4e00\u4efd\u5b8c\u6574\u7684\u7cfb\u7edf\u9a8c\u6536\u62a5\u544a\u3002'},
+  guideP1:{en:'Drag cards from left panel to right sections',cn:'\u4ece\u5de6\u4fa7\u62d6\u62fd\u5361\u7247\u5230\u53f3\u4fa7\u5bf9\u5e94\u533a\u57df'},
+  guideP2:{en:'Each section needs specific content',cn:'\u6bcf\u4e2a\u533a\u57df\u9700\u8981\u7279\u5b9a\u5185\u5bb9'},
+  guideP3:{en:'Click CHECK to verify placement',cn:'\u70b9\u51fb\u68c0\u67e5\u9a8c\u8bc1\u653e\u7f6e\u662f\u5426\u6b63\u786e'},
+  btnCheck:{en:'CHECK',cn:'\u68c0\u67e5'},
+  btnReset:{en:'RESET',cn:'\u91cd\u7f6e'},
+  score:{en:'SCORE',cn:'\u5f97\u5206'},
+  successTitle:{en:'REPORT COMPLETE',cn:'\u62a5\u544a\u5b8c\u6210'},
+  successMsg:{en:'You have correctly assembled the system acceptance report. A real report must include: capability boundary statement, known defect list, and trust conditions.',cn:'\u4f60\u5df2\u6b63\u786e\u7ec4\u88c5\u7cfb\u7edf\u9a8c\u6536\u62a5\u544a\u3002\u771f\u5b9e\u62a5\u544a\u5fc5\u987b\u5305\u542b\uff1a\u80fd\u529b\u8fb9\u754c\u58f0\u660e\u3001\u5df2\u77e5\u7f3a\u9677\u6e05\u5355\u548c\u4fe1\u4efb\u6761\u4ef6\u3002'},
+  sec1:{en:'CAPABILITY BOUNDARY',cn:'\u80fd\u529b\u8fb9\u754c\u58f0\u660e'},
+  sec2:{en:'KNOWN DEFECTS',cn:'\u5df2\u77e5\u7f3a\u9677\u6e05\u5355'},
+  sec3:{en:'TRUST CONDITIONS',cn:'\u4fe1\u4efb\u6761\u4ef6'},
+  sec4:{en:'IMPROVEMENT ITEMS',cn:'\u6539\u8fdb\u5efa\u8bae'},
+  c1:{en:'Segmentation accuracy drops below 60% under dust storm conditions',cn:'\u6c99\u5c18\u66b4\u6761\u4ef6\u4e0b\u5206\u5272\u51c6\u786e\u7387\u964d\u81f3 60% \u4ee5\u4e0b'},
+  c2:{en:'System output is trustworthy when input illumination > 200 lux',cn:'\u8f93\u5165\u5149\u7167 > 200 lux \u65f6\u7cfb\u7edf\u8f93\u51fa\u53ef\u4fe1'},
+  c3:{en:'Risk map accuracy > 85% for known terrain types',cn:'\u5df2\u77e5\u5730\u5f62\u7c7b\u578b\u7684\u98ce\u9669\u56fe\u51c6\u786e\u7387 > 85%'},
+  c4:{en:'Path planner fails on slopes > 25 degrees (reproducible)',cn:'\u8def\u5f84\u89c4\u5212\u5668\u5728\u5761\u5ea6 > 25\u00b0 \u65f6\u5931\u8d25\uff08\u53ef\u590d\u73b0\uff09'},
+  c5:{en:'Unknown terrain classification has 40% false negative rate',cn:'\u672a\u77e5\u5730\u5f62\u5206\u7c7b\u6709 40% \u6f0f\u62a5\u7387'},
+  c6:{en:'Add night vision preprocessing module',cn:'\u589e\u52a0\u591c\u89c6\u9884\u5904\u7406\u6a21\u5757'},
+  c7:{en:'System is NOT trustworthy for previously unseen terrain',cn:'\u5bf9\u672a\u89c1\u8fc7\u7684\u5730\u5f62\u7cfb\u7edf\u4e0d\u53ef\u4fe1'},
+  c8:{en:'Vehicle control latency exceeds 200ms in 5% of cases',cn:'\u8f66\u63a7\u5ef6\u8fdf\u5728 5% \u573a\u666f\u4e2d\u8d85\u8fc7 200ms'},
+  c9:{en:'Retrain segmentation model with dust-augmented dataset',cn:'\u7528\u6c99\u5c18\u589e\u5f3a\u6570\u636e\u96c6\u91cd\u65b0\u8bad\u7ec3\u5206\u5272\u6a21\u578b'},
+  c10:{en:'Implement slope-aware path cost function',cn:'\u5b9e\u73b0\u5761\u5ea6\u611f\u77e5\u7684\u8def\u5f84\u4ee3\u4ef7\u51fd\u6570'},
+  c11:{en:'Output reliable for daytime flat terrain with clear sky',cn:'\u6674\u5929\u5e73\u5766\u5730\u5f62\u767d\u5929\u573a\u666f\u8f93\u51fa\u53ef\u9760'},
+  c12:{en:'Sensor fusion drift accumulates over 30-min sessions',cn:'\u4f20\u611f\u5668\u878d\u5408\u6f02\u79fb\u5728 30 \u5206\u949f\u4f1a\u8bdd\u4e2d\u7d2f\u79ef'}
+};
+function t(k){return(I18N[k]&&I18N[k][LANG])||(I18N[k]&&I18N[k]['en'])||k;}
+
+// Sections and correct card mappings
+// sec1: capability boundary -> c3, c11 (what system CAN do)
+// sec2: known defects -> c1, c4, c5, c8, c12 (defects with reproduction)
+// sec3: trust conditions -> c2, c7 (when to trust/not trust)
+// sec4: improvement items -> c6, c9, c10 (next version fixes)
+var sections=[
+  {id:'sec1',cards:['c3','c11']},
+  {id:'sec2',cards:['c1','c4','c5','c8','c12']},
+  {id:'sec3',cards:['c2','c7']},
+  {id:'sec4',cards:['c6','c9','c10']}
+];
+var allCardIds=['c1','c2','c3','c4','c5','c6','c7','c8','c9','c10','c11','c12'];
+var cardToSection={};
+sections.forEach(function(s){s.cards.forEach(function(c){cardToSection[c]=s.id;});});
+
+var score=0;
+var checked=false;
+
+function shuffle(arr){
+  var a=arr.slice();
+  for(var i=a.length-1;i>0;i--){var j=Math.floor(Math.random()*(i+1));var tmp=a[i];a[i]=a[j];a[j]=tmp;}
+  return a;
+}
+
+function buildUI(){
+  // Source cards
+  var srcDiv=document.getElementById('sourceCards');
+  srcDiv.innerHTML='';
+  var shuffled=shuffle(allCardIds);
+  shuffled.forEach(function(cid){
+    var card=document.createElement('div');
+    card.className='card';
+    card.setAttribute('data-card-id',cid);
+    card.textContent=t(cid);
+    card.draggable=true;
+    card.style.marginBottom='4px';
+    srcDiv.appendChild(card);
+  });
+
+  // Report sections
+  var secDiv=document.getElementById('reportSections');
+  secDiv.innerHTML='';
+  sections.forEach(function(s){
+    var sec=document.createElement('div');
+    sec.className='report-section';
+    sec.innerHTML='<div class="sec-title" data-sec-label="'+s.id+'">'+t(s.id)+'</div><div class="drop-zone" data-section="'+s.id+'"></div>';
+    secDiv.appendChild(sec);
+  });
+
+  score=0;checked=false;
+  updateScore();
+  bindDrag();
+}
+
+function bindDrag(){
+  // Desktop drag events
+  var cards=document.querySelectorAll('.card');
+  cards.forEach(function(card){
+    card.addEventListener('dragstart',function(e){
+      e.dataTransfer.setData('text/plain',card.getAttribute('data-card-id'));
+      card.style.opacity='0.5';
+    });
+    card.addEventListener('dragend',function(){card.style.opacity='1';});
+  });
+
+  var zones=document.querySelectorAll('.drop-zone');
+  zones.forEach(function(zone){
+    zone.addEventListener('dragover',function(e){e.preventDefault();zone.classList.add('drag-over');});
+    zone.addEventListener('dragleave',function(){zone.classList.remove('drag-over');});
+    zone.addEventListener('drop',function(e){
+      e.preventDefault();zone.classList.remove('drag-over');
+      var cid=e.dataTransfer.getData('text/plain');
+      var cardEl=document.querySelector('.card[data-card-id="'+cid+'"]');
+      if(cardEl){
+        cardEl.className='card';
+        zone.appendChild(cardEl);
+      }
+    });
+  });
+
+  // Also allow dropping back to source
+  var srcDiv=document.getElementById('sourceCards');
+  srcDiv.addEventListener('dragover',function(e){e.preventDefault();});
+  srcDiv.addEventListener('drop',function(e){
+    e.preventDefault();
+    var cid=e.dataTransfer.getData('text/plain');
+    var cardEl=document.querySelector('.card[data-card-id="'+cid+'"]');
+    if(cardEl){
+      cardEl.className='card';
+      srcDiv.appendChild(cardEl);
+    }
+  });
+
+  // Touch events for mobile
+  var dragCard=null,ghostEl=null,startX=0,startY=0;
+  cards.forEach(function(card){
+    card.addEventListener('touchstart',function(e){
+      dragCard=card;
+      var touch=e.touches[0];
+      startX=touch.clientX;startY=touch.clientY;
+      ghostEl=card.cloneNode(true);
+      ghostEl.style.position='fixed';
+      ghostEl.style.pointerEvents='none';
+      ghostEl.style.opacity='0.7';
+      ghostEl.style.zIndex='500';
+      ghostEl.style.width=card.offsetWidth+'px';
+      document.body.appendChild(ghostEl);
+      ghostEl.style.left=(startX-card.offsetWidth/2)+'px';
+      ghostEl.style.top=(startY-20)+'px';
+    },{passive:true});
+  });
+  document.addEventListener('touchmove',function(e){
+    if(!dragCard||!ghostEl)return;
+    e.preventDefault();
+    var touch=e.touches[0];
+    ghostEl.style.left=(touch.clientX-dragCard.offsetWidth/2)+'px';
+    ghostEl.style.top=(touch.clientY-20)+'px';
+  },{passive:false});
+  document.addEventListener('touchend',function(e){
+    if(!dragCard||!ghostEl)return;
+    if(ghostEl.parentNode)ghostEl.parentNode.removeChild(ghostEl);
+    var touch=e.changedTouches[0];
+    var dropTarget=document.elementFromPoint(touch.clientX,touch.clientY);
+    ghostEl=null;
+    // Find closest drop-zone or source
+    var zone=null;
+    if(dropTarget){
+      zone=dropTarget.closest('.drop-zone');
+      if(!zone)zone=dropTarget.closest('#sourceCards');
+    }
+    if(zone){
+      dragCard.className='card';
+      zone.appendChild(dragCard);
+    }
+    dragCard=null;
+  });
+}
+
+function checkAnswers(){
+  if(checked)return;
+  checked=true;
+  var correct=0;var total=allCardIds.length;
+  var zones=document.querySelectorAll('.drop-zone');
+  zones.forEach(function(zone){
+    var secId=zone.getAttribute('data-section');
+    var cardsInZone=zone.querySelectorAll('.card');
+    cardsInZone.forEach(function(card){
+      var cid=card.getAttribute('data-card-id');
+      if(cardToSection[cid]===secId){card.classList.add('correct');correct++;}
+      else{card.classList.add('wrong');}
+    });
+  });
+  // Cards left in source are wrong
+  var srcCards=document.querySelectorAll('#sourceCards .card');
+  srcCards.forEach(function(card){card.classList.add('wrong');});
+
+  score=Math.round((correct/total)*100);
+  updateScore();
+
+  if(score>=80){
+    document.getElementById('successOverlay').classList.add('show');
+  }
+}
+
+function updateScore(){
+  document.getElementById('scoreArea').textContent=t('score')+': '+score+'%';
+}
+
+function resetGame(){
+  document.getElementById('successOverlay').classList.remove('show');
+  buildUI();
+}
+
+function refreshI18N(){
+  document.getElementById('langBtn').textContent=LANG.toUpperCase();
+  document.getElementById('mainTitle').textContent=t('title');
+  document.getElementById('sourceTitle').textContent=t('sourceTitle');
+  document.getElementById('targetTitle').textContent=t('targetTitle');
+  document.getElementById('guideTitle').textContent=t('guideTitle');
+  document.getElementById('guideDesc').textContent=t('guideDesc');
+  var pts=document.getElementById('guidePoints');
+  pts.innerHTML='<li>'+t('guideP1')+'</li><li>'+t('guideP2')+'</li><li>'+t('guideP3')+'</li>';
+  document.getElementById('btnCheck').textContent=t('btnCheck');
+  document.getElementById('btnReset').textContent=t('btnReset');
+  document.getElementById('successTitle').textContent=t('successTitle');
+  document.getElementById('successMsg').textContent=t('successMsg');
+  // Update section labels
+  document.querySelectorAll('[data-sec-label]').forEach(function(el){
+    el.textContent=t(el.getAttribute('data-sec-label'));
+  });
+  // Update card texts
+  document.querySelectorAll('.card').forEach(function(card){
+    var cid=card.getAttribute('data-card-id');
+    card.textContent=t(cid);
+  });
+  updateScore();
+}
+
+document.getElementById('langBtn').addEventListener('click',function(){
+  LANG=LANG==='en'?'cn':'en';
+  refreshI18N();
+});
+document.getElementById('guideToggle').addEventListener('click',function(){
+  var c=document.getElementById('guideContent');
+  var a=document.getElementById('guideArrow');
+  if(c.classList.contains('collapsed')){c.classList.remove('collapsed');a.textContent='-';}
+  else{c.classList.add('collapsed');a.textContent='+';}
+});
+document.getElementById('btnCheck').addEventListener('click',checkAnswers);
+document.getElementById('btnReset').addEventListener('click',resetGame);
+document.getElementById('successOverlay').addEventListener('click',function(e){
+  if(e.target===document.getElementById('successOverlay'))document.getElementById('successOverlay').classList.remove('show');
+});
+
+refreshI18N();
+buildUI();
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,475 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Path Tracker Tuner</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;700&family=Inter:wght@400;500&family=Noto+Sans+SC:wght@400;700&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0;border-radius:0!important;}
+html,body{width:100%;height:100vh;overflow:hidden;background:#131313;font-family:'Noto Sans SC','Inter',sans-serif;color:#e5e2e1;}
+.wrapper{display:flex;flex-direction:column;height:100vh;width:100%;}
+.header{padding:5px 16px;background:rgba(28,27,27,0.92);border-bottom:1px solid rgba(138,136,134,0.15);flex-shrink:0;display:flex;align-items:center;justify-content:space-between;}
+.header h1{font-family:'Space Grotesk',sans-serif;font-size:13px;font-weight:700;color:#ffb59c;letter-spacing:1px;}
+.header .sub{font-size:10px;color:#8a8886;}
+.main-row{flex:1;min-height:0;display:flex;}
+.canvas-col{flex:1;min-width:0;position:relative;overflow:hidden;}
+canvas{display:block;width:100%;height:100%;}
+.panel-col{width:220px;flex-shrink:0;background:rgba(28,27,27,0.92);border-left:1px solid rgba(138,136,134,0.15);display:flex;flex-direction:column;padding:10px;overflow-y:auto;}
+.panel-col h2{font-family:'Space Grotesk',sans-serif;font-size:12px;color:#ffb59c;margin-bottom:8px;letter-spacing:1px;}
+.slider-group{margin-bottom:12px;}
+.slider-group label{display:flex;justify-content:space-between;font-size:11px;color:#c6c6c6;margin-bottom:3px;font-family:'Space Grotesk',sans-serif;}
+.slider-group input[type=range]{width:100%;accent-color:#ff7f50;height:4px;-webkit-appearance:none;background:rgba(255,181,156,0.15);outline:none;}
+.slider-group input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:14px;height:14px;background:#ff7f50;cursor:pointer;}
+.ctrl-btn{font-family:'Space Grotesk',sans-serif;font-size:11px;font-weight:700;padding:6px 14px;cursor:pointer;border:1px solid rgba(255,255,255,0.08);background:rgba(20,20,20,0.85);backdrop-filter:blur(12px);color:#ffb59c;letter-spacing:1px;transition:background 0.2s;width:100%;margin-bottom:6px;}
+.ctrl-btn:hover{background:rgba(255,127,80,0.15);}
+.ctrl-btn.go{color:#10b981;border-color:rgba(16,185,129,0.3);}
+.ctrl-btn.go:hover{background:rgba(16,185,129,0.15);}
+.metric-row{display:flex;justify-content:space-between;font-size:11px;margin-bottom:4px;font-family:'Space Grotesk',sans-serif;}
+.metric-row .label{color:#8a8886;}
+.metric-row .val{color:#ffb59c;font-weight:700;}
+.metric-row .val.good{color:#10b981;}
+.metric-row .val.bad{color:#ff5f1f;}
+.bottom-bar{display:flex;align-items:center;justify-content:space-around;padding:4px 16px;background:rgba(0,0,0,0.55);flex-shrink:0;height:36px;font-family:'Space Grotesk',sans-serif;font-size:11px;color:#8a8886;}
+.bottom-bar .hud-val{color:#ffb59c;font-weight:700;}
+.lang-btn{position:fixed;top:8px;left:8px;z-index:100;font-family:'Space Grotesk',sans-serif;font-size:11px;font-weight:700;padding:4px 10px;cursor:pointer;border:1px solid rgba(255,255,255,0.08);background:rgba(20,20,35,0.85);backdrop-filter:blur(12px);color:#ffb59c;letter-spacing:1px;}
+.guide-panel{position:fixed;top:8px;right:230px;width:220px;max-height:36vh;overflow-y:auto;background:rgba(20,20,20,0.88);backdrop-filter:blur(12px);border:1px solid rgba(255,255,255,0.08);padding:10px;z-index:100;font-family:'Noto Sans SC',sans-serif;font-size:11px;color:rgba(255,255,255,0.85);}
+.guide-panel h3{font-family:'Space Grotesk',sans-serif;font-size:12px;margin-bottom:5px;display:flex;align-items:center;justify-content:space-between;cursor:pointer;color:#ffb59c;}
+.guide-panel ul{padding-left:14px;line-height:1.5;}
+.guide-panel .guide-content{transition:max-height 0.3s;overflow:hidden;}
+.success-overlay{position:absolute;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.7);display:none;flex-direction:column;align-items:center;justify-content:center;z-index:50;}
+.success-overlay.show{display:flex;}
+.success-box{background:rgba(20,20,20,0.95);border:1px solid rgba(16,185,129,0.3);padding:20px 28px;text-align:center;max-width:340px;}
+.success-box h2{font-family:'Space Grotesk',sans-serif;font-size:16px;color:#10b981;margin-bottom:8px;}
+.success-box p{font-size:12px;color:#e5e2e1;line-height:1.6;margin-bottom:10px;}
+</style>
+</head>
+<body>
+<button class="lang-btn" id="langBtn">CN</button>
+<div class="guide-panel" id="guidePanel">
+  <h3 id="guideToggle"><span id="guideTitle"></span><span id="guideArrow">-</span></h3>
+  <div class="guide-content" id="guideContent">
+    <p id="guideGoal" style="margin-bottom:4px;"></p>
+    <ul id="guideSteps"></ul>
+    <p id="guideTips" style="margin-top:4px;font-style:italic;color:#ffb59c;"></p>
+  </div>
+</div>
+<div class="wrapper">
+  <div class="header">
+    <div><h1 id="mainTitle"></h1><span class="sub" id="mainSub"></span></div>
+  </div>
+  <div class="main-row">
+    <div class="canvas-col" id="canvasCol">
+      <canvas id="c"></canvas>
+      <div class="success-overlay" id="successOverlay">
+        <div class="success-box">
+          <h2 id="successTitle"></h2>
+          <p id="successMsg"></p>
+          <button class="ctrl-btn" id="btnReplay"></button>
+        </div>
+      </div>
+    </div>
+    <div class="panel-col" id="panelCol">
+      <h2 id="panelTitle"></h2>
+      <div class="slider-group">
+        <label><span>Kp</span><span id="kpVal">1.0</span></label>
+        <input type="range" id="sliderKp" min="0" max="30" step="1" value="10">
+      </div>
+      <div class="slider-group">
+        <label><span>Ki</span><span id="kiVal">0.0</span></label>
+        <input type="range" id="sliderKi" min="0" max="10" step="1" value="0">
+      </div>
+      <div class="slider-group">
+        <label><span>Kd</span><span id="kdVal">0.0</span></label>
+        <input type="range" id="sliderKd" min="0" max="20" step="1" value="0">
+      </div>
+      <div class="slider-group">
+        <label><span id="speedLabel">SPEED</span><span id="speedVal">0.10</span></label>
+        <input type="range" id="sliderSpeed" min="2" max="20" step="1" value="10">
+      </div>
+      <button class="ctrl-btn go" id="btnGo"></button>
+      <button class="ctrl-btn" id="btnReset"></button>
+      <hr style="border-color:rgba(138,136,134,0.15);margin:8px 0;">
+      <h2 id="metricsTitle"></h2>
+      <div class="metric-row"><span class="label" id="metricCTE">CTE</span><span class="val" id="metricCTEVal">--</span></div>
+      <div class="metric-row"><span class="label" id="metricMaxE">MAX ERR</span><span class="val" id="metricMaxEVal">--</span></div>
+      <div class="metric-row"><span class="label" id="metricWP">WAYPOINTS</span><span class="val" id="metricWPVal">0/0</span></div>
+      <div class="metric-row"><span class="label" id="metricResult">RESULT</span><span class="val" id="metricResultVal">--</span></div>
+    </div>
+  </div>
+  <div class="bottom-bar">
+    <div><span id="hudL1"></span> <span class="hud-val" id="hudV1"></span></div>
+    <div><span id="hudL2"></span> <span class="hud-val" id="hudV2"></span></div>
+    <div><span id="hudL3"></span> <span class="hud-val" id="hudV3"></span></div>
+  </div>
+</div>
+<script>
+(function(){
+var LANG='cn';
+var I18N={
+  title:{en:'PATH TRACKER TUNER',cn:'路径跟踪控制器调参'},
+  sub:{en:'P-MARS-01-M35 | Tune PID to follow the planned path',cn:'P-MARS-01-M35 | 调 PID 参数让 rover 跟踪规划路径'},
+  guide:{en:'GUIDE',cn:'操作指南'},
+  guideGoal:{en:'Tune PID gains so the rover follows the blue planned path with minimal cross-track error.',cn:'调节 PID 增益，使 rover 以最小横向偏差跟踪蓝色规划路径。'},
+  guideS1:{en:'Adjust Kp (proportional gain) -- higher = faster correction but may overshoot',cn:'调节 Kp（比例增益）-- 越大修正越快但可能过冲'},
+  guideS2:{en:'Add Ki (integral gain) to eliminate steady-state error',cn:'加入 Ki（积分增益）消除稳态误差'},
+  guideS3:{en:'Add Kd (derivative gain) to dampen oscillation',cn:'加入 Kd（微分增益）抑制振荡'},
+  guideS4:{en:'Click GO to run simulation, observe the rover trajectory',cn:'点击 GO 运行仿真，观察 rover 轨迹'},
+  guideTips:{en:'Goal: avg CTE < 0.5m and reach all 8 waypoints without oscillation.',cn:'目标：平均横向偏差 < 0.5m，到达全部 8 个路径点，无振荡。'},
+  panelTitle:{en:'PID PARAMETERS',cn:'PID 参数'},
+  speedLabel:{en:'SPEED',cn:'速度'},
+  btnGo:{en:'GO',cn:'启动仿真'},
+  btnReset:{en:'RESET',cn:'重置'},
+  btnReplay:{en:'TRY AGAIN',cn:'再试一次'},
+  metricsTitle:{en:'METRICS',cn:'性能指标'},
+  metricCTE:{en:'AVG CTE',cn:'平均横偏'},
+  metricMaxE:{en:'MAX ERR',cn:'最大偏差'},
+  metricWP:{en:'WAYPOINTS',cn:'路径点'},
+  metricResult:{en:'RESULT',cn:'结果'},
+  resultPass:{en:'PASS',cn:'通过'},
+  resultFail:{en:'FAIL',cn:'未通过'},
+  resultOscillate:{en:'OSCILLATION',cn:'振荡'},
+  successTitle:{en:'TRACKING SUCCESS!',cn:'跟踪成功!'},
+  successMsg:{en:'Your PID parameters achieved stable path tracking. In real rovers, PID tuning is the bridge between planning and execution -- without proper gains, even a perfect path becomes a zigzag disaster.',cn:'你的 PID 参数实现了稳定的路径跟踪。在真实 rover 上，PID 调参是规划与执行之间的桥梁 -- 没有合适的增益，即使是完美的路径也会变成锯齿形灾难。'},
+  hudSim:{en:'SIM TIME',cn:'仿真时间'},
+  hudKp:{en:'Kp',cn:'Kp'},
+  hudCTE:{en:'LIVE CTE',cn:'实时横偏'},
+  lbl_planned:{en:'PLANNED PATH',cn:'规划路径'},
+  lbl_actual:{en:'ACTUAL PATH',cn:'实际轨迹'},
+  lbl_rover:{en:'ROVER',cn:'探测车'}
+};
+function t(k){return(I18N[k]&&I18N[k][LANG])||(I18N[k]&&I18N[k]['en'])||k;}
+
+var canvas=document.getElementById('c');
+var ctx=canvas.getContext('2d');
+var wrap=document.getElementById('canvasCol');
+var W=600,H=400,DPR=1;
+
+// Planned path (waypoints in normalized 0-1 coords)
+var plannedWP=[
+  {x:0.08,y:0.85},{x:0.15,y:0.70},{x:0.25,y:0.55},{x:0.38,y:0.45},
+  {x:0.52,y:0.40},{x:0.65,y:0.35},{x:0.78,y:0.30},{x:0.92,y:0.20}
+];
+
+var simState=null;
+var simRunning=false;
+var simRAF=null;
+
+function resize(){
+  var rect=wrap.getBoundingClientRect();
+  if(rect.width<1||rect.height<1)return;
+  DPR=Math.min(window.devicePixelRatio||1,2);
+  W=rect.width;H=rect.height;
+  canvas.width=W*DPR;canvas.height=H*DPR;
+  canvas.style.width=W+'px';canvas.style.height=H+'px';
+  ctx.setTransform(DPR,0,0,DPR,0,0);
+  drawScene();
+}
+window.addEventListener('resize',resize);
+setTimeout(resize,200);setTimeout(resize,600);
+document.fonts.ready.then(function(){resize();});
+
+function getKp(){return parseFloat(document.getElementById('sliderKp').value)/10;}
+function getKi(){return parseFloat(document.getElementById('sliderKi').value)/10;}
+function getKd(){return parseFloat(document.getElementById('sliderKd').value)/10;}
+function getSpeed(){return parseFloat(document.getElementById('sliderSpeed').value)/100;}
+
+function wpToScreen(wp){return{x:wp.x*W,y:wp.y*H};}
+
+function drawBg(){
+  var g=ctx.createLinearGradient(0,0,0,H);
+  g.addColorStop(0,'#131313');g.addColorStop(1,'#1a1510');
+  ctx.fillStyle=g;ctx.fillRect(0,0,W,H);
+  // Grid
+  ctx.strokeStyle='rgba(255,127,80,0.03)';ctx.lineWidth=0.5;
+  for(var i=0;i<W;i+=25){ctx.beginPath();ctx.moveTo(i,0);ctx.lineTo(i,H);ctx.stroke();}
+  for(var j=0;j<H;j+=25){ctx.beginPath();ctx.moveTo(0,j);ctx.lineTo(W,j);ctx.stroke();}
+}
+
+function drawPlannedPath(){
+  ctx.save();
+  ctx.strokeStyle='#00daf3';ctx.lineWidth=2;ctx.shadowColor='#00daf3';ctx.shadowBlur=6;
+  ctx.setLineDash([6,4]);
+  ctx.beginPath();
+  for(var i=0;i<plannedWP.length;i++){
+    var s=wpToScreen(plannedWP[i]);
+    if(i===0)ctx.moveTo(s.x,s.y);else ctx.lineTo(s.x,s.y);
+  }
+  ctx.stroke();ctx.setLineDash([]);ctx.shadowBlur=0;
+  // WP dots
+  for(var j=0;j<plannedWP.length;j++){
+    var s2=wpToScreen(plannedWP[j]);
+    ctx.beginPath();ctx.arc(s2.x,s2.y,4,0,Math.PI*2);
+    ctx.fillStyle=simState&&j<simState.wpReached?'#10b981':'#00daf3';
+    ctx.fill();
+    ctx.fillStyle='#00daf3';ctx.font='bold 9px "Space Grotesk"';ctx.textAlign='center';
+    ctx.fillText('W'+j,s2.x,s2.y-8);
+  }
+  ctx.restore();
+}
+
+function drawActualPath(){
+  if(!simState||simState.trail.length<2)return;
+  ctx.save();
+  ctx.strokeStyle='#ffb59c';ctx.lineWidth=2;ctx.shadowColor='#ff7f50';ctx.shadowBlur=4;
+  ctx.beginPath();
+  for(var i=0;i<simState.trail.length;i++){
+    var p=simState.trail[i];
+    if(i===0)ctx.moveTo(p.x*W,p.y*H);else ctx.lineTo(p.x*W,p.y*H);
+  }
+  ctx.stroke();ctx.shadowBlur=0;ctx.restore();
+}
+
+function drawRover(rx,ry,heading){
+  ctx.save();
+  var sx=rx*W,sy=ry*H;
+  ctx.translate(sx,sy);ctx.rotate(heading);
+  var sz=12;
+  var g=ctx.createLinearGradient(-sz,-sz/2,sz,sz/2);
+  g.addColorStop(0,'#c6c6c6');g.addColorStop(0.5,'#8a8886');g.addColorStop(1,'#555');
+  ctx.fillStyle=g;ctx.fillRect(-sz,-sz/2,sz*2,sz);
+  // Direction
+  ctx.fillStyle='#ff5f1f';ctx.beginPath();
+  ctx.moveTo(sz+2,0);ctx.lineTo(sz+8,-4);ctx.lineTo(sz+8,4);ctx.closePath();ctx.fill();
+  ctx.restore();
+}
+
+function drawLegend(){
+  ctx.save();
+  var lx=10,ly=H-30;
+  ctx.fillStyle='#00daf3';ctx.fillRect(lx,ly,16,2);
+  ctx.fillStyle='#00daf3';ctx.font='10px "Space Grotesk"';ctx.textAlign='left';
+  ctx.fillText(t('lbl_planned'),lx+22,ly+4);
+  ctx.fillStyle='#ffb59c';ctx.fillRect(lx+130,ly,16,2);
+  ctx.fillStyle='#ffb59c';ctx.fillText(t('lbl_actual'),lx+152,ly+4);
+  ctx.restore();
+}
+
+function drawScene(){
+  drawBg();
+  drawPlannedPath();
+  drawActualPath();
+  if(simState){
+    drawRover(simState.x,simState.y,simState.heading);
+  }else{
+    drawRover(plannedWP[0].x,plannedWP[0].y,Math.atan2(plannedWP[1].y-plannedWP[0].y,plannedWP[1].x-plannedWP[0].x));
+  }
+  drawLegend();
+}
+
+// PID simulation
+function initSim(){
+  return {
+    x:plannedWP[0].x,y:plannedWP[0].y,
+    heading:Math.atan2(plannedWP[1].y-plannedWP[0].y,plannedWP[1].x-plannedWP[0].x),
+    targetWP:1,wpReached:0,
+    trail:[{x:plannedWP[0].x,y:plannedWP[0].y}],
+    integralError:0,prevError:0,
+    cteSum:0,cteCount:0,maxCTE:0,
+    time:0,oscillations:0,prevSign:0,
+    finished:false
+  };
+}
+
+function closestPointOnSegment(px,py,ax,ay,bx,by){
+  var dx=bx-ax,dy=by-ay;
+  var len2=dx*dx+dy*dy;
+  if(len2<1e-8)return{x:ax,y:ay,t:0};
+  var tt=Math.max(0,Math.min(1,((px-ax)*dx+(py-ay)*dy)/len2));
+  return{x:ax+tt*dx,y:ay+tt*dy,t:tt};
+}
+
+function crossTrackError(px,py,ax,ay,bx,by){
+  var dx=bx-ax,dy=by-ay;
+  var len=Math.sqrt(dx*dx+dy*dy);
+  if(len<1e-8)return 0;
+  return((py-ay)*dx-(px-ax)*dy)/len;
+}
+
+function simStep(dt){
+  if(!simState||simState.finished)return;
+  var s=simState;
+  var Kp=getKp(),Ki=getKi(),Kd=getKd();
+  var speed=getSpeed();
+  if(s.targetWP>=plannedWP.length){s.finished=true;return;}
+
+  var tgt=plannedWP[s.targetWP];
+  var prev=plannedWP[Math.max(0,s.targetWP-1)];
+
+  // CTE
+  var cte=crossTrackError(s.x,s.y,prev.x,prev.y,tgt.x,tgt.y);
+
+  // PID
+  s.integralError+=cte*dt;
+  s.integralError=Math.max(-2,Math.min(2,s.integralError));
+  var derivative=(cte-s.prevError)/dt;
+  var steer=Kp*cte+Ki*s.integralError+Kd*derivative;
+  steer=Math.max(-1.5,Math.min(1.5,steer));
+  s.prevError=cte;
+
+  // Oscillation detection
+  var sign=cte>0.005?1:(cte<-0.005?-1:0);
+  if(sign!==0&&s.prevSign!==0&&sign!==s.prevSign)s.oscillations++;
+  if(sign!==0)s.prevSign=sign;
+
+  // Update heading and position
+  s.heading+=steer*dt*3;
+  s.x+=Math.cos(s.heading)*speed*dt;
+  s.y+=Math.sin(s.heading)*speed*dt;
+
+  s.trail.push({x:s.x,y:s.y});
+  s.time+=dt;
+
+  // Metrics
+  var absCTE=Math.abs(cte);
+  s.cteSum+=absCTE;s.cteCount++;
+  if(absCTE>s.maxCTE)s.maxCTE=absCTE;
+
+  // Check waypoint reached
+  var dx=s.x-tgt.x,dy=s.y-tgt.y;
+  if(Math.sqrt(dx*dx+dy*dy)<0.04){
+    s.wpReached=s.targetWP;
+    s.targetWP++;
+    s.integralError=0;
+    if(s.targetWP>=plannedWP.length)s.finished=true;
+  }
+
+  // Timeout or out of bounds
+  if(s.time>30||s.x<-0.1||s.x>1.1||s.y<-0.1||s.y>1.1){
+    s.finished=true;
+  }
+
+  updateMetrics();
+  document.getElementById('hudV1').textContent=s.time.toFixed(1)+'s';
+  document.getElementById('hudV2').textContent='Kp='+Kp.toFixed(1)+' Ki='+Ki.toFixed(1)+' Kd='+Kd.toFixed(1);
+  document.getElementById('hudV3').textContent=absCTE.toFixed(3);
+}
+
+function updateMetrics(){
+  if(!simState)return;
+  var s=simState;
+  var avgCTE=s.cteCount>0?(s.cteSum/s.cteCount):0;
+  var cteEl=document.getElementById('metricCTEVal');
+  cteEl.textContent=avgCTE.toFixed(3);
+  cteEl.className='val'+(avgCTE<0.005?'good':(avgCTE>0.015?'bad':''));
+  cteEl.className='val '+(avgCTE<0.005?'good':(avgCTE>0.015?'bad':''));
+
+  var maxEl=document.getElementById('metricMaxEVal');
+  maxEl.textContent=s.maxCTE.toFixed(3);
+  maxEl.className='val '+(s.maxCTE<0.01?'good':(s.maxCTE>0.03?'bad':''));
+
+  document.getElementById('metricWPVal').textContent=s.wpReached+'/'+plannedWP.length;
+
+  if(s.finished){
+    var rEl=document.getElementById('metricResultVal');
+    if(s.wpReached>=plannedWP.length-1&&avgCTE<0.01){
+      rEl.textContent=t('resultPass');rEl.className='val good';
+      showSuccess();
+    }else if(s.oscillations>10){
+      rEl.textContent=t('resultOscillate');rEl.className='val bad';
+    }else{
+      rEl.textContent=t('resultFail');rEl.className='val bad';
+    }
+  }
+}
+
+function showSuccess(){
+  document.getElementById('successOverlay').classList.add('show');
+  document.getElementById('successTitle').textContent=t('successTitle');
+  document.getElementById('successMsg').textContent=t('successMsg');
+  document.getElementById('btnReplay').textContent=t('btnReplay');
+}
+
+function runSim(){
+  if(simRunning)return;
+  simState=initSim();
+  simRunning=true;
+  document.getElementById('metricResultVal').textContent='--';
+  document.getElementById('metricResultVal').className='val';
+  document.getElementById('successOverlay').classList.remove('show');
+
+  var lastT=null;
+  function loop(ts){
+    if(!simRunning)return;
+    if(!lastT)lastT=ts;
+    var dt=Math.min((ts-lastT)/1000,0.05);lastT=ts;
+    for(var i=0;i<3;i++)simStep(dt/3);
+    drawScene();
+    if(simState.finished){simRunning=false;return;}
+    simRAF=requestAnimationFrame(loop);
+  }
+  simRAF=requestAnimationFrame(loop);
+}
+
+function resetSim(){
+  simRunning=false;if(simRAF)cancelAnimationFrame(simRAF);
+  simState=null;
+  document.getElementById('metricCTEVal').textContent='--';
+  document.getElementById('metricCTEVal').className='val';
+  document.getElementById('metricMaxEVal').textContent='--';
+  document.getElementById('metricMaxEVal').className='val';
+  document.getElementById('metricWPVal').textContent='0/'+plannedWP.length;
+  document.getElementById('metricResultVal').textContent='--';
+  document.getElementById('metricResultVal').className='val';
+  document.getElementById('successOverlay').classList.remove('show');
+  document.getElementById('hudV1').textContent='0.0s';
+  document.getElementById('hudV2').textContent='--';
+  document.getElementById('hudV3').textContent='--';
+  drawScene();
+}
+
+// Slider display update
+document.getElementById('sliderKp').addEventListener('input',function(){document.getElementById('kpVal').textContent=getKp().toFixed(1);});
+document.getElementById('sliderKi').addEventListener('input',function(){document.getElementById('kiVal').textContent=getKi().toFixed(1);});
+document.getElementById('sliderKd').addEventListener('input',function(){document.getElementById('kdVal').textContent=getKd().toFixed(1);});
+document.getElementById('sliderSpeed').addEventListener('input',function(){document.getElementById('speedVal').textContent=getSpeed().toFixed(2);});
+
+document.getElementById('btnGo').addEventListener('click',function(){runSim();});
+document.getElementById('btnReset').addEventListener('click',function(){resetSim();});
+document.getElementById('btnReplay').addEventListener('click',function(){resetSim();});
+
+// I18N
+function refreshI18N(){
+  document.getElementById('mainTitle').textContent=t('title');
+  document.getElementById('mainSub').textContent=t('sub');
+  document.getElementById('guideTitle').textContent=t('guide');
+  document.getElementById('guideGoal').textContent=t('guideGoal');
+  var steps=[t('guideS1'),t('guideS2'),t('guideS3'),t('guideS4')];
+  var ul=document.getElementById('guideSteps');ul.innerHTML='';
+  steps.forEach(function(s){var li=document.createElement('li');li.textContent=s;ul.appendChild(li);});
+  document.getElementById('guideTips').textContent=t('guideTips');
+  document.getElementById('panelTitle').textContent=t('panelTitle');
+  document.getElementById('speedLabel').textContent=t('speedLabel');
+  document.getElementById('btnGo').textContent=t('btnGo');
+  document.getElementById('btnReset').textContent=t('btnReset');
+  document.getElementById('metricsTitle').textContent=t('metricsTitle');
+  document.getElementById('metricCTE').textContent=t('metricCTE');
+  document.getElementById('metricMaxE').textContent=t('metricMaxE');
+  document.getElementById('metricWP').textContent=t('metricWP');
+  document.getElementById('metricResult').textContent=t('metricResult');
+  document.getElementById('hudL1').textContent=t('hudSim');
+  document.getElementById('hudL2').textContent=t('hudKp');
+  document.getElementById('hudL3').textContent=t('hudCTE');
+  document.getElementById('btnReplay').textContent=t('btnReplay');
+  drawScene();
+}
+
+document.getElementById('langBtn').addEventListener('click',function(){
+  LANG=LANG==='en'?'cn':'en';
+  document.getElementById('langBtn').textContent=LANG.toUpperCase();
+  refreshI18N();
+});
+
+document.getElementById('guideToggle').addEventListener('click',function(){
+  var gc=document.getElementById('guideContent');
+  var ga=document.getElementById('guideArrow');
+  if(gc.style.display==='none'){gc.style.display='';ga.textContent='-';}
+  else{gc.style.display='none';ga.textContent='+';}
+});
+
+refreshI18N();
+resize();
+})();
+</script>
+</body>
+</html>

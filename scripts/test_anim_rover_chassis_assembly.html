@@ -1,0 +1,513 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Rover Chassis Assembly</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;700&family=Inter:wght@400;500&family=Noto+Sans+SC:wght@400;700&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{width:100%;height:100vh;overflow:hidden;background:#121318;font-family:'Noto Sans SC','Inter',sans-serif;color:#e8e8ec}
+.wrapper{display:flex;flex-direction:column;height:100vh;width:100%}
+.header{padding:8px 16px;display:flex;align-items:center;justify-content:space-between;background:rgba(26,27,33,0.92);border-bottom:1px solid rgba(138,138,144,0.15);flex-shrink:0}
+.header h1{font-family:'Space Grotesk',sans-serif;font-size:15px;font-weight:700;color:#dbfcff;letter-spacing:1px}
+.header .subtitle{font-size:11px;color:#8a8a90;margin-left:8px}
+.canvas-wrap{flex:1;min-height:0;position:relative}
+canvas{display:block;width:100%;height:100%}
+.controls{display:flex;align-items:center;justify-content:center;gap:12px;padding:8px 16px;background:rgba(26,27,33,0.92);border-top:1px solid rgba(138,138,144,0.15);flex-shrink:0}
+.ctrl-btn{font-family:'Space Grotesk',sans-serif;font-size:11px;font-weight:700;padding:6px 16px;cursor:pointer;border:1px solid rgba(138,138,144,0.15);background:rgba(26,27,33,0.85);backdrop-filter:blur(12px);color:#dbfcff;letter-spacing:1px}
+.ctrl-btn:hover{border-color:#00F0FF;color:#00F0FF}
+.frame-ind{font-family:'Space Grotesk',sans-serif;font-size:12px;color:#8a8a90;min-width:60px;text-align:center}
+.hud{display:flex;align-items:center;justify-content:space-around;padding:6px 16px;background:rgba(0,0,0,0.55);flex-shrink:0;height:48px}
+.hud-item{text-align:center}
+.hud-label{font-family:'Space Grotesk',sans-serif;font-size:9px;color:#8a8a90;letter-spacing:1px;text-transform:uppercase}
+.hud-val{font-family:'Space Grotesk',sans-serif;font-size:13px;color:#00F0FF;font-weight:700}
+.lang-btn{position:fixed;top:8px;left:8px;z-index:100;font-family:'Space Grotesk',sans-serif;font-size:11px;font-weight:700;padding:4px 10px;cursor:pointer;border:1px solid rgba(255,255,255,0.08);background:rgba(20,20,35,0.85);backdrop-filter:blur(12px);color:#00F0FF;letter-spacing:1px}
+.guide-panel{position:fixed;top:8px;right:8px;width:240px;max-height:40vh;overflow-y:auto;background:rgba(20,20,35,0.85);backdrop-filter:blur(12px);border:1px solid rgba(138,138,144,0.15);padding:12px;z-index:100;font-family:'Noto Sans SC',sans-serif;font-size:12px;color:rgba(255,255,255,0.85)}
+.guide-panel h3{font-family:'Space Grotesk',sans-serif;font-size:13px;margin-bottom:8px;display:flex;align-items:center;justify-content:space-between;cursor:pointer;color:#dbfcff}
+.guide-panel ul{padding-left:16px;line-height:1.6}
+.guide-panel .guide-content{}
+.guide-toggle{font-size:10px;color:#8a8a90}
+</style>
+</head>
+<body>
+<button class="lang-btn" id="langBtn">CN</button>
+<div class="guide-panel" id="guidePanel">
+  <h3 id="guideTitle"></h3>
+  <div class="guide-content" id="guideContent">
+    <p id="guideDesc" style="margin-bottom:8px"></p>
+    <ul id="guideList"></ul>
+    <p id="guideTakeaway" style="margin-top:8px;color:#00F0FF;font-size:11px"></p>
+  </div>
+</div>
+<div class="wrapper">
+  <div class="header">
+    <div style="display:flex;align-items:baseline"><h1 id="titleText"></h1><span class="subtitle" id="subtitleText"></span></div>
+    <span style="font-family:'Space Grotesk';font-size:10px;color:#8a8a90;letter-spacing:1px">P-MARS-01-M29</span>
+  </div>
+  <div class="canvas-wrap" id="canvasWrap">
+    <canvas id="c"></canvas>
+  </div>
+  <div class="controls">
+    <button class="ctrl-btn" id="btnPrev"></button>
+    <span class="frame-ind" id="frameInd"></span>
+    <button class="ctrl-btn" id="btnNext"></button>
+    <button class="ctrl-btn" id="btnPlay"></button>
+  </div>
+  <div class="hud">
+    <div class="hud-item"><div class="hud-label" id="hudL1"></div><div class="hud-val" id="hudV1"></div></div>
+    <div class="hud-item"><div class="hud-label" id="hudL2"></div><div class="hud-val" id="hudV2"></div></div>
+    <div class="hud-item"><div class="hud-label" id="hudL3"></div><div class="hud-val" id="hudV3"></div></div>
+    <div class="hud-item"><div class="hud-label" id="hudL4"></div><div class="hud-val" id="hudV4"></div></div>
+  </div>
+</div>
+<script>
+(function(){
+var LANG='cn';
+var I18N={
+  title:{en:'ROVER CHASSIS ASSEMBLY',cn:'Rover \u5e95\u76d8\u88c5\u914d\u6d41\u7a0b'},
+  subtitle:{en:'ASSEMBLY SEQUENCE',cn:'\u88c5\u914d\u987a\u5e8f\u56fe\u89e3'},
+  btnPlay:{en:'PLAY',cn:'\u64ad\u653e'},
+  btnPause:{en:'PAUSE',cn:'\u6682\u505c'},
+  btnPrev:{en:'PREV',cn:'\u4e0a\u4e00\u5e27'},
+  btnNext:{en:'NEXT',cn:'\u4e0b\u4e00\u5e27'},
+  guideTitle:{en:'VIEWING GUIDE',cn:'\u89c2\u770b\u6307\u5357'},
+  guideDesc:{en:'Shows the step-by-step assembly of a rover chassis: base plate, motor mounting, wheel installation, and wiring harness.',cn:'\u5c55\u793a rover \u5e95\u76d8\u7684\u9010\u6b65\u88c5\u914d\u6d41\u7a0b\uff1a\u5e95\u677f\u3001\u7535\u673a\u5b89\u88c5\u3001\u8f66\u8f6e\u5b89\u88c5\u3001\u7ebf\u675f\u8fde\u63a5\u3002'},
+  guideObs1:{en:'Observe motor mount orientation',cn:'\u89c2\u5bdf\u7535\u673a\u5b89\u88c5\u65b9\u5411'},
+  guideObs2:{en:'Note wheel axle alignment',cn:'\u6ce8\u610f\u8f66\u8f6e\u8f74\u5bf9\u9f50'},
+  guideObs3:{en:'Wire routing path matters',cn:'\u7ebf\u675f\u8d70\u7ebf\u8def\u5f84\u5f88\u91cd\u8981'},
+  guideTakeaway:{en:'Takeaway: Correct assembly order prevents rework',cn:'\u8981\u70b9\uff1a\u6b63\u786e\u7684\u88c5\u914d\u987a\u5e8f\u907f\u514d\u8fd4\u5de5'},
+  guideToggle:{en:'[collapse]',cn:'[\u6536\u8d77]'},
+  hudL1:{en:'STEP',cn:'\u6b65\u9aa4'},
+  hudL2:{en:'COMPONENT',cn:'\u90e8\u4ef6'},
+  hudL3:{en:'TOOL',cn:'\u5de5\u5177'},
+  hudL4:{en:'STATUS',cn:'\u72b6\u6001'},
+  hudComp0:{en:'BASE PLATE',cn:'\u5e95\u677f'},
+  hudComp1:{en:'MOTORS',cn:'\u7535\u673a'},
+  hudComp2:{en:'WHEELS',cn:'\u8f66\u8f6e'},
+  hudComp3:{en:'WIRING',cn:'\u7ebf\u675f'},
+  hudComp4:{en:'COMPLETE',cn:'\u5b8c\u6210'},
+  hudTool0:{en:'--',cn:'--'},
+  hudTool1:{en:'WRENCH M3',cn:'M3 \u626e\u624b'},
+  hudTool2:{en:'HEX KEY',cn:'\u516d\u89d2\u626e\u624b'},
+  hudTool3:{en:'CRIMPER',cn:'\u538b\u7ebf\u94b3'},
+  hudTool4:{en:'MULTIMETER',cn:'\u4e07\u7528\u8868'},
+  hudStat0:{en:'READY',cn:'\u5c31\u7eea'},
+  hudStat1:{en:'MOUNTING',cn:'\u5b89\u88c5\u4e2d'},
+  hudStat2:{en:'ALIGNING',cn:'\u5bf9\u9f50\u4e2d'},
+  hudStat3:{en:'CONNECTING',cn:'\u8fde\u63a5\u4e2d'},
+  hudStat4:{en:'VERIFIED',cn:'\u5df2\u9a8c\u8bc1'},
+  f0title:{en:'STEP 1: BASE PLATE',cn:'\u6b65\u9aa4 1\uff1a\u5e95\u677f'},
+  f0desc:{en:'Aluminum base plate forms the structural foundation',cn:'\u94dd\u5408\u91d1\u5e95\u677f\u6784\u6210\u7ed3\u6784\u57fa\u7840'},
+  f1title:{en:'STEP 2: MOUNT MOTORS',cn:'\u6b65\u9aa4 2\uff1a\u5b89\u88c5\u7535\u673a'},
+  f1desc:{en:'4 DC motors bolted to motor brackets',cn:'4 \u53f0\u76f4\u6d41\u7535\u673a\u56fa\u5b9a\u5230\u7535\u673a\u652f\u67b6'},
+  f2title:{en:'STEP 3: INSTALL WHEELS',cn:'\u6b65\u9aa4 3\uff1a\u5b89\u88c5\u8f66\u8f6e'},
+  f2desc:{en:'Wheels press-fit onto motor shafts with set screws',cn:'\u8f66\u8f6e\u538b\u5165\u7535\u673a\u8f74\u5e76\u62e7\u7d27\u9876\u4e1d'},
+  f3title:{en:'STEP 4: WIRE HARNESS',cn:'\u6b65\u9aa4 4\uff1a\u7ebf\u675f\u8fde\u63a5'},
+  f3desc:{en:'Motor wires routed to driver board connectors',cn:'\u7535\u673a\u5bfc\u7ebf\u8d70\u7ebf\u81f3\u9a71\u52a8\u677f\u63a5\u53e3'},
+  f4title:{en:'ASSEMBLY COMPLETE',cn:'\u88c5\u914d\u5b8c\u6210'},
+  f4desc:{en:'Chassis ready for power-up and motion test',cn:'\u5e95\u76d8\u5c31\u7eea\uff0c\u53ef\u8fdb\u884c\u4e0a\u7535\u4e0e\u8fd0\u52a8\u6d4b\u8bd5'},
+  labelBasePlate:{en:'BASE PLATE',cn:'\u5e95\u677f'},
+  labelMotor:{en:'MOTOR',cn:'\u7535\u673a'},
+  labelBracket:{en:'BRACKET',cn:'\u652f\u67b6'},
+  labelWheel:{en:'WHEEL',cn:'\u8f66\u8f6e'},
+  labelShaft:{en:'SHAFT',cn:'\u7535\u673a\u8f74'},
+  labelWire:{en:'WIRE',cn:'\u5bfc\u7ebf'},
+  labelDriver:{en:'DRIVER',cn:'\u9a71\u52a8\u677f'},
+  labelCheckmark:{en:'OK',cn:'\u901a\u8fc7'}
+};
+function t(k){return(I18N[k]&&I18N[k][LANG])||(I18N[k]&&I18N[k]['en'])||k;}
+
+var canvas=document.getElementById('c');
+var ctx=canvas.getContext('2d');
+var wrap=document.getElementById('canvasWrap');
+var W=0,H=0,DPR=Math.min(window.devicePixelRatio||1,2);
+var currentFrame=0,totalFrames=5;
+var transitioning=false;
+var playing=false,playRAF=null;
+
+function lerp(a,b,p){return a+(b-a)*p;}
+function easeInOut(x){return x<0.5?2*x*x:1-Math.pow(-2*x+2,2)/2;}
+function merge(base,ov){var r={};for(var k in base)r[k]=base[k];for(var k2 in ov)r[k2]=ov[k2];return r;}
+
+function resize(){
+  var rect=wrap.getBoundingClientRect();
+  if(rect.width<1||rect.height<1)return;
+  W=rect.width;H=rect.height;
+  canvas.width=W*DPR;canvas.height=H*DPR;
+  canvas.style.width=W+'px';canvas.style.height=H+'px';
+  ctx.setTransform(DPR,0,0,DPR,0,0);
+  drawFrame(currentFrame);
+}
+
+function drawBg(){
+  var grd=ctx.createLinearGradient(0,0,0,H);
+  grd.addColorStop(0,'#121318');grd.addColorStop(1,'#0d0e13');
+  ctx.fillStyle=grd;ctx.fillRect(0,0,W,H);
+  ctx.strokeStyle='rgba(255,255,255,0.03)';ctx.lineWidth=0.5;
+  for(var x=0;x<W;x+=40){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,H);ctx.stroke();}
+  for(var y=0;y<H;y+=40){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke();}
+}
+
+/* --- Drawing Primitives --- */
+function drawRoundedRect(x,y,w,h,fill){
+  ctx.fillStyle=fill;ctx.fillRect(x,y,w,h);
+}
+
+function drawBasePlate(cx,cy,pw,ph,alpha){
+  ctx.save();ctx.globalAlpha=alpha;
+  var grd=ctx.createLinearGradient(cx-pw/2,cy-ph/2,cx+pw/2,cy+ph/2);
+  grd.addColorStop(0,'#4a5568');grd.addColorStop(0.5,'#718096');grd.addColorStop(1,'#4a5568');
+  ctx.fillStyle=grd;ctx.fillRect(cx-pw/2,cy-ph/2,pw,ph);
+  // mounting holes
+  ctx.fillStyle='#2d3748';
+  var holeOff=20;
+  [[cx-pw/2+holeOff,cy-ph/2+holeOff],[cx+pw/2-holeOff,cy-ph/2+holeOff],
+   [cx-pw/2+holeOff,cy+ph/2-holeOff],[cx+pw/2-holeOff,cy+ph/2-holeOff]].forEach(function(p){
+    ctx.beginPath();ctx.arc(p[0],p[1],4,0,Math.PI*2);ctx.fill();
+  });
+  // center cutout
+  ctx.fillStyle='#1a202c';ctx.fillRect(cx-pw*0.15,cy-ph*0.15,pw*0.3,ph*0.3);
+  ctx.restore();
+}
+
+function drawMotor(x,y,size,alpha,highlight){
+  ctx.save();ctx.globalAlpha=alpha;
+  var grd=ctx.createLinearGradient(x-size/2,y-size*0.6,x+size/2,y+size*0.6);
+  grd.addColorStop(0,'#555');grd.addColorStop(0.3,'#888');grd.addColorStop(0.7,'#666');grd.addColorStop(1,'#444');
+  ctx.fillStyle=grd;
+  ctx.fillRect(x-size/2,y-size*0.6,size,size*1.2);
+  // shaft
+  var shGrd=ctx.createLinearGradient(x-3,y+size*0.6,x+3,y+size*0.6);
+  shGrd.addColorStop(0,'#aaa');shGrd.addColorStop(0.5,'#ddd');shGrd.addColorStop(1,'#aaa');
+  ctx.fillStyle=shGrd;ctx.fillRect(x-3,y+size*0.6,6,size*0.4);
+  // terminals
+  ctx.fillStyle='#e53e3e';ctx.fillRect(x-size/2+2,y-size*0.6-4,6,4);
+  ctx.fillStyle='#2b6cb0';ctx.fillRect(x+size/2-8,y-size*0.6-4,6,4);
+  if(highlight){
+    ctx.shadowColor='#00F0FF';ctx.shadowBlur=12;
+    ctx.strokeStyle='#00F0FF';ctx.lineWidth=1.5;
+    ctx.strokeRect(x-size/2-2,y-size*0.6-6,size+4,size*1.6+10);
+    ctx.shadowBlur=0;
+  }
+  ctx.restore();
+}
+
+function drawWheel(x,y,r,alpha){
+  ctx.save();ctx.globalAlpha=alpha;
+  var grd=ctx.createRadialGradient(x,y,r*0.2,x,y,r);
+  grd.addColorStop(0,'#555');grd.addColorStop(0.4,'#333');grd.addColorStop(0.8,'#222');grd.addColorStop(1,'#111');
+  ctx.beginPath();ctx.arc(x,y,r,0,Math.PI*2);ctx.fillStyle=grd;ctx.fill();
+  // tread lines
+  ctx.strokeStyle='rgba(255,255,255,0.15)';ctx.lineWidth=1;
+  for(var i=0;i<8;i++){
+    var a=i*Math.PI/4;
+    ctx.beginPath();ctx.moveTo(x+Math.cos(a)*r*0.5,y+Math.sin(a)*r*0.5);
+    ctx.lineTo(x+Math.cos(a)*r*0.95,y+Math.sin(a)*r*0.95);ctx.stroke();
+  }
+  // hub
+  ctx.beginPath();ctx.arc(x,y,r*0.2,0,Math.PI*2);ctx.fillStyle='#4a5568';ctx.fill();
+  ctx.restore();
+}
+
+function drawWire(pts,color,alpha,dashAnim){
+  ctx.save();ctx.globalAlpha=alpha;
+  ctx.strokeStyle=color;ctx.lineWidth=2;
+  if(dashAnim){ctx.setLineDash([6,4]);ctx.lineDashOffset=-performance.now()/50;}
+  ctx.beginPath();ctx.moveTo(pts[0][0],pts[0][1]);
+  for(var i=1;i<pts.length;i++)ctx.lineTo(pts[i][0],pts[i][1]);
+  ctx.stroke();ctx.setLineDash([]);
+  ctx.restore();
+}
+
+function drawDriverBoard(x,y,w,h,alpha){
+  ctx.save();ctx.globalAlpha=alpha;
+  var grd=ctx.createLinearGradient(x,y,x+w,y+h);
+  grd.addColorStop(0,'#1a472a');grd.addColorStop(0.5,'#276749');grd.addColorStop(1,'#1a472a');
+  ctx.fillStyle=grd;ctx.fillRect(x,y,w,h);
+  // chip
+  ctx.fillStyle='#2d3748';ctx.fillRect(x+w*0.3,y+h*0.2,w*0.4,h*0.3);
+  // pins
+  ctx.fillStyle='#c6c6c6';
+  for(var i=0;i<4;i++){
+    ctx.fillRect(x+w*0.15+i*(w*0.2),y+h-6,8,6);
+  }
+  // LED
+  ctx.beginPath();ctx.arc(x+w*0.8,y+h*0.3,3,0,Math.PI*2);
+  ctx.fillStyle='#2ff801';ctx.fill();
+  ctx.shadowColor='#2ff801';ctx.shadowBlur=6;
+  ctx.fill();ctx.shadowBlur=0;
+  ctx.restore();
+}
+
+function drawBracket(x,y,w,h,alpha){
+  ctx.save();ctx.globalAlpha=alpha;
+  var grd=ctx.createLinearGradient(x,y,x+w,y);
+  grd.addColorStop(0,'#5a6577');grd.addColorStop(0.5,'#7b8a9e');grd.addColorStop(1,'#5a6577');
+  ctx.fillStyle=grd;ctx.fillRect(x,y,w,h);
+  // bolt holes
+  ctx.fillStyle='#2d3748';
+  ctx.beginPath();ctx.arc(x+6,y+h/2,2.5,0,Math.PI*2);ctx.fill();
+  ctx.beginPath();ctx.arc(x+w-6,y+h/2,2.5,0,Math.PI*2);ctx.fill();
+  ctx.restore();
+}
+
+function drawCheckmark(x,y,size,alpha){
+  ctx.save();ctx.globalAlpha=alpha;
+  ctx.strokeStyle='#2ff801';ctx.lineWidth=3;
+  ctx.shadowColor='#2ff801';ctx.shadowBlur=8;
+  ctx.beginPath();
+  ctx.moveTo(x-size*0.4,y);ctx.lineTo(x-size*0.1,y+size*0.3);ctx.lineTo(x+size*0.4,y-size*0.3);
+  ctx.stroke();ctx.shadowBlur=0;
+  ctx.restore();
+}
+
+function drawLabelPrimitive(text,x,y,color,size,align){
+  ctx.save();
+  ctx.font=(size||12)+'px "Space Grotesk",sans-serif';
+  ctx.fillStyle=color||'#dbfcff';ctx.textAlign=align||'center';ctx.textBaseline='middle';
+  ctx.fillText(text,x,y);ctx.restore();
+}
+
+function drawArrowPrimitive(x1,y1,x2,y2,color){
+  ctx.save();ctx.strokeStyle=color||'#00F0FF';ctx.lineWidth=1.5;
+  ctx.beginPath();ctx.moveTo(x1,y1);ctx.lineTo(x2,y2);ctx.stroke();
+  var angle=Math.atan2(y2-y1,x2-x1);var hs=8;
+  ctx.beginPath();ctx.moveTo(x2,y2);
+  ctx.lineTo(x2-hs*Math.cos(angle-0.4),y2-hs*Math.sin(angle-0.4));
+  ctx.lineTo(x2-hs*Math.cos(angle+0.4),y2-hs*Math.sin(angle+0.4));
+  ctx.closePath();ctx.fillStyle=color||'#00F0FF';ctx.fill();
+  ctx.restore();
+}
+
+/* --- Frame Elements (Shared Element Transition) --- */
+function getFrameElements(f){
+  var cx=W/2, cy=H/2;
+  var pw=Math.min(W*0.55,280), ph=Math.min(H*0.35,140);
+  var mSize=Math.min(W*0.05,24);
+  var wR=Math.min(W*0.05,22);
+  var elems=[];
+
+  // base plate (all frames)
+  elems.push({id:'plate',type:'custom',x:cx,y:cy,w:pw,h:ph,alpha:1,
+    draw:function(a){drawBasePlate(cx,cy,pw,ph,a);}});
+  // title
+  var titles=['f0title','f1title','f2title','f3title','f4title'];
+  var descs=['f0desc','f1desc','f2desc','f3desc','f4desc'];
+  elems.push({id:'title',type:'label',text:t(titles[f]),x:cx,y:30,color:'#dbfcff',size:16,align:'center',alpha:1});
+  elems.push({id:'desc',type:'label',text:t(descs[f]),x:cx,y:H-20,color:'#8a8a90',size:11,align:'center',alpha:1});
+
+  if(f===0){
+    // Just base plate + label
+    elems.push({id:'lbl_plate',type:'label',text:t('labelBasePlate'),x:cx,y:cy+ph/2+18,color:'#00F0FF',size:11,align:'center',alpha:1});
+    elems.push({id:'arrow_plate',type:'arrow',x1:cx,y1:cy+ph/2+8,x2:cx,y2:cy+ph/2+2,color:'#00F0FF',alpha:1});
+  }
+
+  if(f>=1){
+    // Motors + brackets on 4 corners
+    var motorPositions=[
+      [cx-pw/2+20, cy-ph/2+15],[cx+pw/2-20, cy-ph/2+15],
+      [cx-pw/2+20, cy+ph/2-15],[cx+pw/2-20, cy+ph/2-15]
+    ];
+    motorPositions.forEach(function(mp,i){
+      elems.push({id:'bracket'+i,type:'custom',x:mp[0],y:mp[1],w:mSize+10,h:10,alpha:1,
+        draw:function(a){drawBracket(mp[0]-mSize/2-5,mp[1]-5,mSize+10,10,a);}});
+      elems.push({id:'motor'+i,type:'custom',x:mp[0],y:mp[1],w:mSize,h:mSize,alpha:1,
+        draw:function(a){drawMotor(mp[0],mp[1],mSize,a,f===1);}});
+    });
+    if(f===1){
+      elems.push({id:'lbl_motor',type:'label',text:t('labelMotor'),x:cx,y:cy-ph/2-20,color:'#00F0FF',size:11,align:'center',alpha:1});
+      elems.push({id:'lbl_bracket',type:'label',text:t('labelBracket'),x:cx-pw/2-40,y:cy,color:'#00F0FF',size:10,align:'center',alpha:1});
+      elems.push({id:'arrow_motor',type:'arrow',x1:cx-30,y1:cy-ph/2-12,x2:motorPositions[0][0]+mSize/2+4,y2:motorPositions[0][1]-mSize*0.6-4,color:'#00F0FF',alpha:1});
+    }
+  }
+
+  if(f>=2){
+    // Wheels on motor shafts
+    var wheelPositions=[
+      [cx-pw/2-wR+10, cy-ph/2+15+mSize],[cx+pw/2+wR-10, cy-ph/2+15+mSize],
+      [cx-pw/2-wR+10, cy+ph/2-15+mSize],[cx+pw/2+wR-10, cy+ph/2-15+mSize]
+    ];
+    wheelPositions.forEach(function(wp,i){
+      elems.push({id:'wheel'+i,type:'custom',x:wp[0],y:wp[1],w:wR*2,h:wR*2,alpha:1,
+        draw:function(a){drawWheel(wp[0],wp[1],wR,a);}});
+    });
+    if(f===2){
+      elems.push({id:'lbl_wheel',type:'label',text:t('labelWheel'),x:cx,y:cy+ph/2+mSize+wR+18,color:'#00F0FF',size:11,align:'center',alpha:1});
+      elems.push({id:'lbl_shaft',type:'label',text:t('labelShaft'),x:cx+pw/2+wR+20,y:cy-ph/2+15,color:'#ebb2ff',size:10,align:'center',alpha:1});
+    }
+  }
+
+  if(f>=3){
+    // Wires + driver board
+    var dbW=Math.min(W*0.12,60),dbH=Math.min(H*0.1,40);
+    var dbX=cx-dbW/2, dbY=cy-dbH/2;
+    elems.push({id:'driver',type:'custom',x:cx,y:cy,w:dbW,h:dbH,alpha:1,
+      draw:function(a){drawDriverBoard(dbX,dbY,dbW,dbH,a);}});
+    // wires from motors to driver
+    var motorPositions2=[
+      [cx-pw/2+20, cy-ph/2+15],[cx+pw/2-20, cy-ph/2+15],
+      [cx-pw/2+20, cy+ph/2-15],[cx+pw/2-20, cy+ph/2-15]
+    ];
+    var wireColors=['#e53e3e','#2b6cb0','#e53e3e','#2b6cb0'];
+    motorPositions2.forEach(function(mp,i){
+      elems.push({id:'wire'+i,type:'custom',x:mp[0],y:mp[1],w:1,h:1,alpha:1,
+        draw:function(a){
+          var midX=lerp(mp[0],cx,0.5);
+          var midY=lerp(mp[1],cy,0.5);
+          drawWire([[mp[0],mp[1]],[midX,midY],[cx,cy]],wireColors[i],a,f===3);
+        }});
+    });
+    if(f===3){
+      elems.push({id:'lbl_wire',type:'label',text:t('labelWire'),x:cx+pw/2+10,y:cy+ph/2+10,color:'#e53e3e',size:10,align:'left',alpha:1});
+      elems.push({id:'lbl_driver',type:'label',text:t('labelDriver'),x:cx,y:cy+dbH/2+14,color:'#2ff801',size:11,align:'center',alpha:1});
+    }
+  }
+
+  if(f===4){
+    // completion checkmark
+    elems.push({id:'check',type:'custom',x:cx,y:cy-ph/2-30,w:30,h:30,alpha:1,
+      draw:function(a){drawCheckmark(cx,cy-ph/2-30,20,a);}});
+    elems.push({id:'lbl_check',type:'label',text:t('labelCheckmark'),x:cx+20,y:cy-ph/2-30,color:'#2ff801',size:12,align:'left',alpha:1});
+  }
+
+  return elems;
+}
+
+function drawElement(el){
+  if(!el||el.alpha<=0.01)return;
+  ctx.save();ctx.globalAlpha=el.alpha;
+  switch(el.type){
+    case 'label':drawLabelPrimitive(el.text,el.x,el.y,el.color,el.size,el.align);break;
+    case 'arrow':drawArrowPrimitive(el.x1,el.y1,el.x2,el.y2,el.color);break;
+    case 'custom':el.draw(el.alpha);break;
+  }
+  ctx.restore();
+}
+
+function drawFrame(f){
+  drawBg();
+  var elems=getFrameElements(f);
+  elems.forEach(function(el){drawElement(el);});
+}
+
+function transitionTo(newFrame){
+  if(newFrame<0)newFrame=0;
+  if(newFrame>=totalFrames)newFrame=totalFrames-1;
+  if(newFrame===currentFrame&&!transitioning){drawFrame(currentFrame);updateHUD(currentFrame);return;}
+  if(transitioning)return;
+  var oldElems=getFrameElements(currentFrame);
+  var newElems=getFrameElements(newFrame);
+  var oldMap={};oldElems.forEach(function(e){oldMap[e.id]=e;});
+  var newMap={};newElems.forEach(function(e){newMap[e.id]=e;});
+  currentFrame=newFrame;updateHUD(newFrame);
+  transitioning=true;
+  var startTime=null,duration=500;
+  function step(ts){
+    if(!startTime)startTime=ts;
+    var raw=Math.min((ts-startTime)/duration,1);
+    var p=easeInOut(raw);
+    drawBg();
+    oldElems.forEach(function(oe){if(!newMap[oe.id])drawElement(merge(oe,{alpha:1-p}));});
+    newElems.forEach(function(ne){
+      var oe=oldMap[ne.id];
+      if(oe){
+        var merged=merge(ne,{x:lerp(oe.x||0,ne.x||0,p),y:lerp(oe.y||0,ne.y||0,p),
+          w:lerp(oe.w||0,ne.w||0,p),h:lerp(oe.h||0,ne.h||0,p),alpha:1});
+        if(ne.type==='arrow'&&oe.type==='arrow'){
+          merged.x1=lerp(oe.x1,ne.x1,p);merged.y1=lerp(oe.y1,ne.y1,p);
+          merged.x2=lerp(oe.x2,ne.x2,p);merged.y2=lerp(oe.y2,ne.y2,p);
+        }
+        if((ne.type==='label')&&oe.text!==ne.text){
+          drawElement(merge(oe,{alpha:1-p}));drawElement(merge(ne,{alpha:p}));
+        } else {drawElement(merged);}
+      } else {drawElement(merge(ne,{alpha:p}));}
+    });
+    if(raw<1){requestAnimationFrame(step);}else{transitioning=false;}
+  }
+  requestAnimationFrame(step);
+}
+
+function updateHUD(f){
+  document.getElementById('hudV1').textContent=(f+1)+'/'+totalFrames;
+  var comps=['hudComp0','hudComp1','hudComp2','hudComp3','hudComp4'];
+  var tools=['hudTool0','hudTool1','hudTool2','hudTool3','hudTool4'];
+  var stats=['hudStat0','hudStat1','hudStat2','hudStat3','hudStat4'];
+  document.getElementById('hudV2').textContent=t(comps[f]);
+  document.getElementById('hudV3').textContent=t(tools[f]);
+  document.getElementById('hudV4').textContent=t(stats[f]);
+  document.getElementById('frameInd').textContent=(f+1)+' / '+totalFrames;
+}
+
+function refreshI18N(){
+  document.getElementById('titleText').textContent=t('title');
+  document.getElementById('subtitleText').textContent=t('subtitle');
+  document.getElementById('btnPrev').textContent=t('btnPrev');
+  document.getElementById('btnNext').textContent=t('btnNext');
+  document.getElementById('btnPlay').textContent=playing?t('btnPause'):t('btnPlay');
+  document.getElementById('hudL1').textContent=t('hudL1');
+  document.getElementById('hudL2').textContent=t('hudL2');
+  document.getElementById('hudL3').textContent=t('hudL3');
+  document.getElementById('hudL4').textContent=t('hudL4');
+  document.getElementById('guideTitle').innerHTML=t('guideTitle')+' <span class="guide-toggle">'+t('guideToggle')+'</span>';
+  document.getElementById('guideDesc').textContent=t('guideDesc');
+  var list=document.getElementById('guideList');
+  list.innerHTML='<li>'+t('guideObs1')+'</li><li>'+t('guideObs2')+'</li><li>'+t('guideObs3')+'</li>';
+  document.getElementById('guideTakeaway').textContent=t('guideTakeaway');
+  updateHUD(currentFrame);
+  drawFrame(currentFrame);
+}
+
+// Events
+document.getElementById('btnPrev').addEventListener('click',function(){
+  if(playing)stopPlay();
+  transitionTo(currentFrame-1);
+});
+document.getElementById('btnNext').addEventListener('click',function(){
+  if(playing)stopPlay();
+  transitionTo(currentFrame+1);
+});
+document.getElementById('btnPlay').addEventListener('click',function(){
+  if(playing){stopPlay();}
+  else{startPlay();}
+});
+document.getElementById('langBtn').addEventListener('click',function(){
+  LANG=LANG==='en'?'cn':'en';
+  document.getElementById('langBtn').textContent=LANG.toUpperCase();
+  refreshI18N();
+});
+document.getElementById('guideTitle').addEventListener('click',function(){
+  var c=document.getElementById('guideContent');
+  c.style.display=c.style.display==='none'?'':'none';
+});
+
+var playTimer=null;
+function startPlay(){
+  playing=true;
+  document.getElementById('btnPlay').textContent=t('btnPause');
+  if(currentFrame>=totalFrames-1)currentFrame=-1;
+  function advance(){
+    if(!playing)return;
+    if(currentFrame<totalFrames-1){
+      transitionTo(currentFrame+1);
+      playTimer=setTimeout(advance,1500);
+    } else {stopPlay();}
+  }
+  advance();
+}
+function stopPlay(){
+  playing=false;
+  if(playTimer){clearTimeout(playTimer);playTimer=null;}
+  document.getElementById('btnPlay').textContent=t('btnPlay');
+}
+
+window.addEventListener('resize',resize);
+refreshI18N();
+resize();
+setTimeout(resize,200);
+setTimeout(resize,600);
+document.fonts.ready.then(function(){resize();});
+})();
+</script>
+</body>
+</html>

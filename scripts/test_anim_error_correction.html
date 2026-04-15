@@ -1,0 +1,502 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;700&family=Inter:wght@400;500&family=Noto+Sans+SC:wght@400;700&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0;border-radius:0}
+html,body{width:100%;height:100vh;overflow:hidden;
+  background:#131313;
+  font-family:'Space Grotesk','Inter','Noto Sans SC',sans-serif;
+  color:#e5e2e1;
+}
+.lang-btn{
+  position:fixed;top:8px;left:8px;z-index:100;
+  font-family:'Space Grotesk',sans-serif;font-size:11px;font-weight:700;
+  padding:4px 10px;cursor:pointer;
+  border:1px solid rgba(255,255,255,0.08);
+  background:rgba(20,20,35,0.85);backdrop-filter:blur(12px);
+  color:#ffb59c;letter-spacing:1px;
+}
+.guide-panel{
+  position:fixed;top:8px;right:8px;width:260px;max-height:40vh;
+  overflow-y:auto;z-index:100;
+  background:rgba(20,20,35,0.85);backdrop-filter:blur(12px);
+  border:1px solid rgba(255,255,255,0.08);padding:12px;
+  font-family:'Noto Sans SC',sans-serif;font-size:13px;
+  color:rgba(255,255,255,0.85);
+}
+.guide-panel h3{
+  font-family:'Space Grotesk',sans-serif;font-size:14px;
+  margin-bottom:8px;display:flex;align-items:center;
+  justify-content:space-between;cursor:pointer;
+  color:#ffb59c;
+}
+.guide-panel .toggle{font-size:12px;opacity:0.6;}
+.guide-panel ul{padding-left:16px;line-height:1.6;}
+.guide-panel .guide-content.collapsed{display:none;}
+.wrapper{display:flex;flex-direction:column;height:100vh;}
+.header{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:6px 16px;
+  background:rgba(28,27,27,0.95);
+  border-bottom:1px solid rgba(138,136,134,0.15);
+}
+.header h2{
+  font-family:'Space Grotesk',sans-serif;font-size:14px;font-weight:700;
+  color:#ffb59c;letter-spacing:1px;
+}
+.header .sub{font-size:11px;color:#8a8886;margin-left:8px;font-weight:400;}
+.canvas-wrap{flex:1;min-height:0;position:relative;}
+.canvas-wrap canvas{display:block;width:100%;height:100%;}
+.controls{
+  display:flex;justify-content:center;align-items:center;gap:10px;
+  padding:6px 0;
+  background:rgba(28,27,27,0.92);
+  border-top:1px solid rgba(138,136,134,0.15);
+}
+.ctrl-btn{
+  background:linear-gradient(135deg,rgba(53,53,52,0.8),rgba(28,27,27,0.8));
+  border:1px solid rgba(138,136,134,0.15);
+  color:#e5e2e1;padding:5px 14px;font-size:12px;cursor:pointer;
+  font-family:'Space Grotesk',sans-serif;letter-spacing:0.5px;
+}
+.ctrl-btn:hover{border-color:rgba(255,181,156,0.4);}
+#frameDots{display:flex;gap:6px;align-items:center;}
+#frameDots .dot{
+  width:8px;height:8px;
+  background:rgba(138,136,134,0.3);cursor:pointer;
+}
+#frameDots .dot.active{background:#ffb59c;transform:scale(1.3);}
+.hud{
+  display:flex;justify-content:space-around;align-items:center;
+  padding:6px 12px;
+  background:rgba(28,27,27,0.95);
+  border-top:1px solid rgba(138,136,134,0.15);
+  font-size:11px;color:#8a8886;
+}
+.hud .item{display:flex;flex-direction:column;align-items:center;}
+.hud .label{font-size:9px;text-transform:uppercase;letter-spacing:0.5px;opacity:0.7;}
+.hud .value{font-size:13px;color:#e5e2e1;font-weight:500;margin-top:2px;}
+</style>
+</head>
+<body>
+<button class="lang-btn" id="langBtn">CN</button>
+<div class="guide-panel" id="guidePanel">
+  <h3 id="guideTitle"><span id="guideTitleText"></span><span class="toggle" id="guideToggle">[-]</span></h3>
+  <div class="guide-content" id="guideContent">
+    <p id="guideDesc" style="margin-bottom:8px;"></p>
+    <ul>
+      <li id="guideObs1"></li>
+      <li id="guideObs2"></li>
+      <li id="guideObs3"></li>
+    </ul>
+  </div>
+</div>
+<div class="wrapper">
+  <div class="header">
+    <h2 id="mainTitle"></h2>
+    <span class="sub">P-MARS-01-M25 &middot; core</span>
+  </div>
+  <div class="canvas-wrap"><canvas id="c"></canvas></div>
+  <div class="controls">
+    <button class="ctrl-btn" id="btnPrev"></button>
+    <button class="ctrl-btn" id="btnPlay"></button>
+    <button class="ctrl-btn" id="btnNext"></button>
+    <div id="frameDots"></div>
+  </div>
+  <div class="hud">
+    <div class="item"><div class="label">FRAME</div><div class="value" id="hudFrame">1 / 4</div></div>
+    <div class="item"><div class="label" id="hudPhaseLabel">PHASE</div><div class="value" id="hudPhase"></div></div>
+    <div class="item"><div class="label" id="hudDeviationLabel">DEVIATION</div><div class="value" id="hudDeviation"></div></div>
+    <div class="item"><div class="label" id="hudSafetyLabel">SAFETY</div><div class="value" id="hudSafety"></div></div>
+  </div>
+</div>
+<script>
+(function(){
+var LANG='cn';
+var I18N={
+  title:          {en:'CORRECTION & PATH RECOVERY', cn:'\u4fee\u6b63\u611f\u77e5\u4e0e\u8def\u5f84\u6062\u590d'},
+  btnPrev:        {en:'PREV',  cn:'\u4e0a\u4e00\u5e27'},
+  btnPlay:        {en:'PLAY',  cn:'\u64ad\u653e'},
+  btnPause:       {en:'PAUSE', cn:'\u6682\u505c'},
+  btnNext:        {en:'NEXT',  cn:'\u4e0b\u4e00\u5e27'},
+  guideTitle:     {en:'GUIDE', cn:'\u64cd\u4f5c\u6307\u5357'},
+  guideDesc:      {en:'Shows how correcting perception errors restores the safe path. Compare before/after side by side.',
+                   cn:'\u5c55\u793a\u4fee\u6b63\u611f\u77e5\u8bef\u5dee\u540e\u8def\u5f84\u5982\u4f55\u6062\u590d\u3002\u5de6\u53f3\u5bf9\u6bd4\u4fee\u6b63\u524d\u540e\u7684\u53d8\u5316\u3002'},
+  guideObs1:      {en:'Watch: error cells highlighted in orange', cn:'\u89c2\u5bdf\uff1a\u6a59\u8272\u9ad8\u4eae\u7684\u9519\u8bef\u5355\u5143\u683c'},
+  guideObs2:      {en:'Watch: path color change from red to green', cn:'\u89c2\u5bdf\uff1a\u8def\u5f84\u989c\u8272\u4ece\u7ea2\u8272\u53d8\u4e3a\u7eff\u8272'},
+  guideObs3:      {en:'Watch: deviation distance shrink to 0', cn:'\u89c2\u5bdf\uff1a\u504f\u79fb\u8ddd\u79bb\u7f29\u5c0f\u5230 0'},
+  f0title:        {en:'BEFORE: ERRONEOUS PERCEPTION', cn:'\u4fee\u6b63\u524d\uff1a\u9519\u8bef\u611f\u77e5'},
+  f0desc:         {en:'Two rock cells misclassified as soil. Path deviates through danger zone.',
+                   cn:'\u4e24\u4e2a\u5ca9\u77f3\u5355\u5143\u683c\u88ab\u8bef\u5206\u4e3a\u571f\u58e4\u3002\u8def\u5f84\u7a7f\u8fc7\u5371\u9669\u533a\u57df\u3002'},
+  f1title:        {en:'CORRECTION APPLIED',           cn:'\u5e94\u7528\u4fee\u6b63'},
+  f1desc:         {en:'Sensor recalibration detects the missed rocks. Labels updated.',
+                   cn:'\u4f20\u611f\u5668\u91cd\u65b0\u6821\u51c6\uff0c\u68c0\u6d4b\u5230\u6f0f\u68c0\u7684\u5ca9\u77f3\u3002\u6807\u7b7e\u5df2\u66f4\u65b0\u3002'},
+  f2title:        {en:'RISK MAP RESTORED',            cn:'\u98ce\u9669\u5730\u56fe\u6062\u590d'},
+  f2desc:         {en:'Risk scores recalculated. The false corridor is now properly blocked.',
+                   cn:'\u98ce\u9669\u5206\u6570\u91cd\u65b0\u8ba1\u7b97\u3002\u5047\u5b89\u5168\u8d70\u5eca\u88ab\u6b63\u786e\u5c01\u5835\u3002'},
+  f3title:        {en:'PATH RECOVERED',               cn:'\u8def\u5f84\u6062\u590d'},
+  f3desc:         {en:'Planner re-routes around the real danger, matching the true safe path. Deviation: 0m.',
+                   cn:'\u89c4\u5212\u5668\u91cd\u65b0\u7ed5\u884c\u771f\u5b9e\u5371\u9669\u533a\u57df\uff0c\u4e0e\u771f\u5b89\u5168\u8def\u5f84\u91cd\u5408\u3002\u504f\u79fb\uff1a0m\u3002'},
+  phaseError:     {en:'Erroneous',   cn:'\u9519\u8bef\u72b6\u6001'},
+  phaseCorrect:   {en:'Correcting',  cn:'\u4fee\u6b63\u4e2d'},
+  phaseRiskFix:   {en:'Risk Fixed',  cn:'\u98ce\u9669\u5df2\u4fee\u590d'},
+  phaseRecovered: {en:'Recovered',   cn:'\u5df2\u6062\u590d'},
+  devHigh:        {en:'47m',    cn:'47m'},
+  devMed:         {en:'47m',    cn:'47m'},
+  devLow:         {en:'12m',    cn:'12m'},
+  devZero:        {en:'0m',     cn:'0m'},
+  safetyDanger:   {en:'DANGER', cn:'\u5371\u9669'},
+  safetyWarning:  {en:'WARNING',cn:'\u8b66\u544a'},
+  safetyOk:       {en:'OK',     cn:'\u6b63\u5e38'},
+  safetySafe:     {en:'SAFE',   cn:'\u5b89\u5168'},
+  labelBefore:    {en:'BEFORE', cn:'\u4fee\u6b63\u524d'},
+  labelAfter:     {en:'AFTER',  cn:'\u4fee\u6b63\u540e'},
+  takeaway:       {en:'Correcting perception immediately restores path safety.',
+                   cn:'\u4fee\u6b63\u611f\u77e5\u5c42\u8bef\u5dee\u53ef\u4ee5\u7acb\u523b\u6062\u590d\u8def\u5f84\u5b89\u5168\u6027\u3002'},
+};
+function t(k){return (I18N[k]&&I18N[k][LANG])||(I18N[k]&&I18N[k]['en'])||k;}
+
+var canvas=document.getElementById('c');
+var ctx=canvas.getContext('2d');
+var W,H,DPR;
+var currentFrame=0;
+var totalFrames=4;
+var transitioning=false;
+var playing=false;
+var playTimer=null;
+
+function lerp(a,b,p){return a+(b-a)*p;}
+function easeInOut(x){return x<0.5?2*x*x:1-Math.pow(-2*x+2,2)/2;}
+function merge(base,over){var r={};for(var k in base)r[k]=base[k];for(var k2 in over)r[k2]=over[k2];return r;}
+
+var GRID_COLS=10,GRID_ROWS=8;
+var trueGrid=[
+  [0,0,0,1,1,2,2,1,0,0],
+  [0,0,1,1,2,2,1,1,0,0],
+  [0,0,1,2,2,1,1,0,0,0],
+  [0,1,1,2,1,1,0,0,0,1],
+  [1,1,2,2,1,0,0,0,1,1],
+  [1,2,2,1,0,0,0,1,1,0],
+  [0,1,1,0,0,0,1,1,0,0],
+  [0,0,0,0,0,1,1,0,0,0],
+];
+var errorGrid=JSON.parse(JSON.stringify(trueGrid));
+errorGrid[3][3]=0; errorGrid[4][2]=0;
+
+var terrainColors={
+  0:{base:'#8B7355',hi:'#A08B6F',lo:'#6B5840'},
+  1:{base:'#C2A645',hi:'#D4BA58',lo:'#A08B35'},
+  2:{base:'#8B3A3A',hi:'#A04848',lo:'#6B2828'},
+};
+
+function gridToRisk(grid){
+  var r=[];
+  for(var y=0;y<GRID_ROWS;y++){r[y]=[];for(var x=0;x<GRID_COLS;x++){
+    var v=grid[y][x];r[y][x]=v===0?0:v===1?2:4;
+  }}return r;
+}
+var trueRisk=gridToRisk(trueGrid);
+var errorRisk=gridToRisk(errorGrid);
+
+var truePath=[[0,7],[1,7],[2,7],[3,7],[4,6],[5,5],[6,4],[7,3],[8,2],[9,1]];
+var errorPath=[[0,7],[1,7],[2,6],[3,5],[3,4],[3,3],[4,3],[5,2],[6,1],[7,0],[8,0],[9,0]];
+
+var riskPalette=['#22c55e','#84cc16','#eab308','#f97316','#ef4444'];
+var errorCells=[[3,3],[2,4]];
+
+var hudInfo=[
+  {phase:'phaseError',    dev:'devHigh', safety:'safetyDanger'},
+  {phase:'phaseCorrect',  dev:'devMed',  safety:'safetyWarning'},
+  {phase:'phaseRiskFix',  dev:'devLow',  safety:'safetyOk'},
+  {phase:'phaseRecovered',dev:'devZero', safety:'safetySafe'},
+];
+
+function updateHUD(f){
+  document.getElementById('hudFrame').textContent=(f+1)+' / '+totalFrames;
+  var hi=hudInfo[f];
+  document.getElementById('hudPhase').textContent=t(hi.phase);
+  document.getElementById('hudDeviation').textContent=t(hi.dev);
+  document.getElementById('hudSafety').textContent=t(hi.safety);
+  var dots=document.querySelectorAll('#frameDots .dot');
+  dots.forEach(function(d,i){d.className=i===f?'dot active':'dot';});
+}
+
+/* --- drawing --- */
+function drawBg(){
+  if(!W||!H||!isFinite(W)||!isFinite(H)) return;
+  var g=ctx.createLinearGradient(0,0,0,H);
+  g.addColorStop(0,'#131313');g.addColorStop(1,'#1a0f0f');
+  ctx.fillStyle=g;ctx.fillRect(0,0,W,H);
+  ctx.strokeStyle='rgba(255,255,255,0.03)';ctx.lineWidth=1;
+  for(var x=0;x<W;x+=40){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,H);ctx.stroke();}
+  for(var y2=0;y2<H;y2+=40){ctx.beginPath();ctx.moveTo(0,y2);ctx.lineTo(W,y2);ctx.stroke();}
+}
+
+function drawTerrainGrid(ox,oy,gw,gh,grid,alpha,highlights){
+  if(!gw||!gh||!isFinite(gw)||!isFinite(gh)) return;
+  var cw=gw/GRID_COLS,ch=gh/GRID_ROWS;
+  ctx.save();ctx.globalAlpha=alpha;
+  for(var r=0;r<GRID_ROWS;r++){for(var c=0;c<GRID_COLS;c++){
+    var v=grid[r][c];var tc=terrainColors[v];
+    var x=ox+c*cw,y=oy+r*ch;
+    var g=ctx.createLinearGradient(x,y,x,y+ch);
+    g.addColorStop(0,tc.hi);g.addColorStop(1,tc.lo);
+    ctx.fillStyle=g;ctx.fillRect(x,y,cw-1,ch-1);
+    if(highlights){for(var h=0;h<highlights.length;h++){
+      if(highlights[h][0]===c&&highlights[h][1]===r){
+        ctx.strokeStyle='#ff5f1f';ctx.lineWidth=2;ctx.strokeRect(x+1,y+1,cw-3,ch-3);
+        ctx.fillStyle='rgba(255,95,31,0.2)';ctx.fillRect(x,y,cw-1,ch-1);
+      }
+    }}
+  }}
+  ctx.restore();
+}
+
+function drawRiskGrid(ox,oy,gw,gh,risk,alpha,highlights){
+  if(!gw||!gh||!isFinite(gw)||!isFinite(gh)) return;
+  var cw=gw/GRID_COLS,ch=gh/GRID_ROWS;
+  ctx.save();ctx.globalAlpha=alpha;
+  for(var r=0;r<GRID_ROWS;r++){for(var c=0;c<GRID_COLS;c++){
+    var v=risk[r][c];var col=riskPalette[v];
+    var x=ox+c*cw,y=oy+r*ch;
+    ctx.fillStyle=col;ctx.globalAlpha=alpha*0.7;ctx.fillRect(x,y,cw-1,ch-1);
+    ctx.globalAlpha=alpha;ctx.fillStyle='rgba(0,0,0,0.15)';ctx.fillRect(x,y+ch*0.7,cw-1,ch*0.3);
+    if(highlights){for(var h=0;h<highlights.length;h++){
+      if(highlights[h][0]===c&&highlights[h][1]===r){
+        ctx.strokeStyle='#10b981';ctx.lineWidth=2;ctx.strokeRect(x+1,y+1,cw-3,ch-3);
+      }
+    }}
+  }}
+  ctx.restore();
+}
+
+function drawPath(ox,oy,gw,gh,path,color,alpha,lw,dashed){
+  var cw=gw/GRID_COLS,ch=gh/GRID_ROWS;
+  ctx.save();ctx.globalAlpha=alpha;ctx.strokeStyle=color;ctx.lineWidth=lw||3;
+  if(dashed) ctx.setLineDash([6,4]); else ctx.setLineDash([]);
+  ctx.beginPath();
+  for(var i=0;i<path.length;i++){
+    var px=ox+path[i][0]*cw+cw/2,py=oy+path[i][1]*ch+ch/2;
+    if(i===0) ctx.moveTo(px,py); else ctx.lineTo(px,py);
+  }
+  ctx.stroke();ctx.shadowColor=color;ctx.shadowBlur=8;ctx.stroke();ctx.shadowBlur=0;
+  ctx.setLineDash([]);ctx.restore();
+}
+
+function drawLabelPrimitive(text,x,y,color,size,align){
+  ctx.save();ctx.fillStyle=color||'#e5e2e1';ctx.font=(size||14)+'px "Space Grotesk",sans-serif';
+  ctx.textAlign=align||'center';ctx.textBaseline='middle';ctx.fillText(text,x,y);ctx.restore();
+}
+function drawTextPrimitive(text,x,y,color,size,align,maxW){
+  ctx.save();ctx.fillStyle=color||'rgba(255,255,255,0.7)';
+  ctx.font=(size||12)+'px "Noto Sans SC","Inter",sans-serif';
+  ctx.textAlign=align||'center';ctx.textBaseline='middle';
+  if(maxW) ctx.fillText(text,x,y,maxW); else ctx.fillText(text,x,y);
+  ctx.restore();
+}
+
+function drawCheckMark(cx,cy,size,alpha){
+  ctx.save();ctx.globalAlpha=alpha;ctx.strokeStyle='#10b981';ctx.lineWidth=3;
+  ctx.shadowColor='#10b981';ctx.shadowBlur=10;
+  ctx.beginPath();
+  ctx.moveTo(cx-size*0.4,cy);ctx.lineTo(cx-size*0.1,cy+size*0.3);ctx.lineTo(cx+size*0.4,cy-size*0.3);
+  ctx.stroke();ctx.shadowBlur=0;ctx.restore();
+}
+
+/* --- frame elements --- */
+function getFrameElements(f){
+  var pad=16;
+  var halfW=(W-pad*3)/2;
+  var gridW=Math.min(halfW,320),gridH=Math.min(H*0.65,260);
+  var leftX=pad,rightX=pad*2+halfW;
+  var topY=pad+30;
+
+  switch(f){
+    case 0: /* before: erroneous */
+      return [
+        {id:'title',type:'label',text:t('f0title'),x:W/2,y:topY-10,color:'#ff5f1f',size:15,align:'center',alpha:1},
+        {id:'desc',type:'text',text:t('f0desc'),x:W/2,y:topY+10,color:'rgba(255,255,255,0.6)',size:12,align:'center',alpha:1},
+        {id:'leftLabel',type:'label',text:t('labelBefore'),x:leftX+gridW/2,y:topY+30,color:'#ff5f1f',size:12,align:'center',alpha:1},
+        {id:'leftGrid',type:'custom',x:leftX,y:topY+44,w:gridW,h:gridH,alpha:1,
+          draw:function(a){drawTerrainGrid(leftX,topY+44,gridW,gridH,errorGrid,a,errorCells);}},
+        {id:'leftPath',type:'custom',alpha:1,draw:function(a){
+          drawPath(leftX,topY+44,gridW,gridH,errorPath,'#ef4444',a,3,false);}},
+        {id:'rightLabel',type:'label',text:t('labelAfter'),x:rightX+gridW/2,y:topY+30,color:'#8a8886',size:12,align:'center',alpha:1},
+        {id:'rightGrid',type:'custom',x:rightX,y:topY+44,w:gridW,h:gridH,alpha:0.3,
+          draw:function(a){drawTerrainGrid(rightX,topY+44,gridW,gridH,errorGrid,a,null);}},
+        {id:'rightPath',type:'custom',alpha:0.3,draw:function(a){
+          drawPath(rightX,topY+44,gridW,gridH,errorPath,'#ef4444',a,2,true);}},
+        {id:'divider',type:'custom',alpha:1,draw:function(a){
+          ctx.save();ctx.globalAlpha=a;ctx.strokeStyle='rgba(138,136,134,0.3)';ctx.lineWidth=1;
+          ctx.setLineDash([4,4]);ctx.beginPath();ctx.moveTo(W/2,topY+30);ctx.lineTo(W/2,topY+44+gridH);
+          ctx.stroke();ctx.setLineDash([]);ctx.restore();}},
+      ];
+    case 1: /* correction applied */
+      return [
+        {id:'title',type:'label',text:t('f1title'),x:W/2,y:topY-10,color:'#ffb59c',size:15,align:'center',alpha:1},
+        {id:'desc',type:'text',text:t('f1desc'),x:W/2,y:topY+10,color:'rgba(255,255,255,0.6)',size:12,align:'center',alpha:1},
+        {id:'leftLabel',type:'label',text:t('labelBefore'),x:leftX+gridW/2,y:topY+30,color:'#ff5f1f',size:12,align:'center',alpha:1},
+        {id:'leftGrid',type:'custom',x:leftX,y:topY+44,w:gridW,h:gridH,alpha:0.6,
+          draw:function(a){drawTerrainGrid(leftX,topY+44,gridW,gridH,errorGrid,a,errorCells);}},
+        {id:'leftPath',type:'custom',alpha:0.4,draw:function(a){
+          drawPath(leftX,topY+44,gridW,gridH,errorPath,'#ef4444',a,2,true);}},
+        {id:'rightLabel',type:'label',text:t('labelAfter'),x:rightX+gridW/2,y:topY+30,color:'#10b981',size:12,align:'center',alpha:1},
+        {id:'rightGrid',type:'custom',x:rightX,y:topY+44,w:gridW,h:gridH,alpha:1,
+          draw:function(a){drawTerrainGrid(rightX,topY+44,gridW,gridH,trueGrid,a,errorCells);}},
+        {id:'rightCheck1',type:'custom',alpha:1,draw:function(a){
+          var cw2=gridW/GRID_COLS,ch2=gridH/GRID_ROWS;
+          drawCheckMark(rightX+3*cw2+cw2/2,topY+44+3*ch2+ch2/2,cw2*0.4,a);
+          drawCheckMark(rightX+2*cw2+cw2/2,topY+44+4*ch2+ch2/2,cw2*0.4,a);}},
+        {id:'divider',type:'custom',alpha:1,draw:function(a){
+          ctx.save();ctx.globalAlpha=a;ctx.strokeStyle='rgba(138,136,134,0.3)';ctx.lineWidth=1;
+          ctx.setLineDash([4,4]);ctx.beginPath();ctx.moveTo(W/2,topY+30);ctx.lineTo(W/2,topY+44+gridH);
+          ctx.stroke();ctx.setLineDash([]);ctx.restore();}},
+      ];
+    case 2: /* risk map restored */
+      return [
+        {id:'title',type:'label',text:t('f2title'),x:W/2,y:topY-10,color:'#10b981',size:15,align:'center',alpha:1},
+        {id:'desc',type:'text',text:t('f2desc'),x:W/2,y:topY+10,color:'rgba(255,255,255,0.6)',size:12,align:'center',alpha:1},
+        {id:'leftLabel',type:'label',text:t('labelBefore'),x:leftX+gridW/2,y:topY+30,color:'#ff5f1f',size:12,align:'center',alpha:1},
+        {id:'leftGrid',type:'custom',x:leftX,y:topY+44,w:gridW,h:gridH,alpha:1,
+          draw:function(a){drawRiskGrid(leftX,topY+44,gridW,gridH,errorRisk,a,errorCells);}},
+        {id:'rightLabel',type:'label',text:t('labelAfter'),x:rightX+gridW/2,y:topY+30,color:'#10b981',size:12,align:'center',alpha:1},
+        {id:'rightGrid',type:'custom',x:rightX,y:topY+44,w:gridW,h:gridH,alpha:1,
+          draw:function(a){drawRiskGrid(rightX,topY+44,gridW,gridH,trueRisk,a,errorCells);}},
+        {id:'divider',type:'custom',alpha:1,draw:function(a){
+          ctx.save();ctx.globalAlpha=a;ctx.strokeStyle='rgba(138,136,134,0.3)';ctx.lineWidth=1;
+          ctx.setLineDash([4,4]);ctx.beginPath();ctx.moveTo(W/2,topY+30);ctx.lineTo(W/2,topY+44+gridH);
+          ctx.stroke();ctx.setLineDash([]);ctx.restore();}},
+      ];
+    case 3: /* path recovered */
+      return [
+        {id:'title',type:'label',text:t('f3title'),x:W/2,y:topY-10,color:'#10b981',size:15,align:'center',alpha:1},
+        {id:'desc',type:'text',text:t('f3desc'),x:W/2,y:topY+10,color:'rgba(255,255,255,0.6)',size:12,align:'center',alpha:1},
+        {id:'leftLabel',type:'label',text:t('labelBefore'),x:leftX+gridW/2,y:topY+30,color:'#ff5f1f',size:12,align:'center',alpha:1},
+        {id:'leftGrid',type:'custom',x:leftX,y:topY+44,w:gridW,h:gridH,alpha:0.6,
+          draw:function(a){drawRiskGrid(leftX,topY+44,gridW,gridH,errorRisk,a*0.5,null);}},
+        {id:'leftPath',type:'custom',alpha:0.8,draw:function(a){
+          drawPath(leftX,topY+44,gridW,gridH,errorPath,'#ef4444',a,3,false);}},
+        {id:'rightLabel',type:'label',text:t('labelAfter'),x:rightX+gridW/2,y:topY+30,color:'#10b981',size:12,align:'center',alpha:1},
+        {id:'rightGrid',type:'custom',x:rightX,y:topY+44,w:gridW,h:gridH,alpha:0.6,
+          draw:function(a){drawRiskGrid(rightX,topY+44,gridW,gridH,trueRisk,a*0.5,null);}},
+        {id:'rightPath',type:'custom',alpha:1,draw:function(a){
+          drawPath(rightX,topY+44,gridW,gridH,truePath,'#22c55e',a,3,false);}},
+        {id:'divider',type:'custom',alpha:1,draw:function(a){
+          ctx.save();ctx.globalAlpha=a;ctx.strokeStyle='rgba(138,136,134,0.3)';ctx.lineWidth=1;
+          ctx.setLineDash([4,4]);ctx.beginPath();ctx.moveTo(W/2,topY+30);ctx.lineTo(W/2,topY+44+gridH);
+          ctx.stroke();ctx.setLineDash([]);ctx.restore();}},
+        {id:'takeaway',type:'text',text:t('takeaway'),x:W/2,y:topY+44+gridH+20,color:'#ffb59c',size:12,align:'center',alpha:1},
+      ];
+  }
+  return [];
+}
+
+function drawElement(el){
+  if(!el||el.alpha<=0.01) return;
+  ctx.save();ctx.globalAlpha=el.alpha;
+  switch(el.type){
+    case 'label': drawLabelPrimitive(el.text,el.x,el.y,el.color,el.size,el.align); break;
+    case 'text':  drawTextPrimitive(el.text,el.x,el.y,el.color,el.size,el.align); break;
+    case 'custom': el.draw(el.alpha); break;
+  }
+  ctx.restore();
+}
+
+function drawFrame(f){if(!W||!H||W<1||H<1)return;drawBg();var elems=getFrameElements(f);elems.forEach(function(el){drawElement(el);});}
+
+function transitionTo(newFrame){
+  if(newFrame<0) newFrame=0;
+  if(newFrame>=totalFrames) newFrame=totalFrames-1;
+  if(newFrame===currentFrame&&!transitioning){drawFrame(currentFrame);updateHUD(currentFrame);return;}
+  if(transitioning) return;
+  var oldElems=getFrameElements(currentFrame);
+  var newElems=getFrameElements(newFrame);
+  var oldMap={};oldElems.forEach(function(e){oldMap[e.id]=e;});
+  var newMap={};newElems.forEach(function(e){newMap[e.id]=e;});
+  currentFrame=newFrame;updateHUD(newFrame);transitioning=true;
+  var startTime=null,duration=500;
+  function step(ts){
+    if(!startTime) startTime=ts;
+    var raw=Math.min((ts-startTime)/duration,1);var p=easeInOut(raw);
+    drawBg();
+    oldElems.forEach(function(oe){if(!newMap[oe.id]) drawElement(merge(oe,{alpha:1-p}));});
+    newElems.forEach(function(ne){
+      var oe=oldMap[ne.id];
+      if(oe){
+        if((ne.type==='label'||ne.type==='text')&&oe.text!==ne.text){
+          drawElement(merge(oe,{alpha:1-p}));drawElement(merge(ne,{alpha:p}));
+        } else {
+          drawElement(merge(ne,{x:lerp(oe.x||0,ne.x||0,p),y:lerp(oe.y||0,ne.y||0,p),alpha:lerp(oe.alpha,ne.alpha,p)}));
+        }
+      } else {drawElement(merge(ne,{alpha:p}));}
+    });
+    if(raw<1) requestAnimationFrame(step); else transitioning=false;
+  }
+  requestAnimationFrame(step);
+}
+
+function resize(){
+  var wrap=document.querySelector('.canvas-wrap');
+  var rect=wrap.getBoundingClientRect();
+  if(rect.width<1||rect.height<1) return;
+  DPR=Math.min(window.devicePixelRatio||1,2);
+  W=rect.width;H=rect.height;
+  canvas.width=W*DPR;canvas.height=H*DPR;
+  canvas.style.width=W+'px';canvas.style.height=H+'px';
+  ctx.setTransform(DPR,0,0,DPR,0,0);
+  drawFrame(currentFrame);
+}
+
+function initControls(){
+  document.getElementById('btnPrev').addEventListener('click',function(){if(playing)stopPlay();transitionTo(currentFrame-1);});
+  document.getElementById('btnNext').addEventListener('click',function(){if(playing)stopPlay();transitionTo(currentFrame+1);});
+  document.getElementById('btnPlay').addEventListener('click',function(){if(playing)stopPlay();else startPlay();});
+  var dotsDiv=document.getElementById('frameDots');
+  for(var i=0;i<totalFrames;i++){
+    var d=document.createElement('div');d.className='dot';d.dataset.f=i;
+    d.addEventListener('click',function(){if(playing)stopPlay();transitionTo(parseInt(this.dataset.f));});
+    dotsDiv.appendChild(d);
+  }
+}
+function startPlay(){playing=true;document.getElementById('btnPlay').textContent=t('btnPause');if(currentFrame>=totalFrames-1)transitionTo(0);playTick();}
+function stopPlay(){playing=false;document.getElementById('btnPlay').textContent=t('btnPlay');if(playTimer)clearTimeout(playTimer);}
+function playTick(){if(!playing)return;playTimer=setTimeout(function(){if(!playing)return;if(currentFrame>=totalFrames-1){stopPlay();return;}transitionTo(currentFrame+1);playTick();},2500);}
+
+function refreshI18N(){
+  document.getElementById('mainTitle').textContent=t('title');
+  document.getElementById('btnPrev').textContent=t('btnPrev');
+  document.getElementById('btnPlay').textContent=playing?t('btnPause'):t('btnPlay');
+  document.getElementById('btnNext').textContent=t('btnNext');
+  document.getElementById('guideTitleText').textContent=t('guideTitle');
+  document.getElementById('guideDesc').textContent=t('guideDesc');
+  document.getElementById('guideObs1').textContent=t('guideObs1');
+  document.getElementById('guideObs2').textContent=t('guideObs2');
+  document.getElementById('guideObs3').textContent=t('guideObs3');
+  document.getElementById('hudPhaseLabel').textContent=t('phaseError').split(' ')[0]||'PHASE';
+  document.getElementById('hudDeviationLabel').textContent='DEVIATION';
+  document.getElementById('hudSafetyLabel').textContent='SAFETY';
+  updateHUD(currentFrame);
+  drawFrame(currentFrame);
+}
+
+document.getElementById('langBtn').addEventListener('click',function(){
+  LANG=LANG==='en'?'cn':'en';this.textContent=LANG.toUpperCase();refreshI18N();
+});
+document.getElementById('guideTitle').addEventListener('click',function(){
+  var gc=document.getElementById('guideContent');
+  var gt=document.getElementById('guideToggle');
+  if(gc.classList.contains('collapsed')){gc.classList.remove('collapsed');gt.textContent='[-]';}
+  else{gc.classList.add('collapsed');gt.textContent='[+]';}
+});
+
+initControls();refreshI18N();
+window.addEventListener('resize',resize);resize();
+setTimeout(resize,200);setTimeout(resize,600);
+document.fonts.ready.then(function(){resize();});
+})();
+</script>
+</body>
+</html>

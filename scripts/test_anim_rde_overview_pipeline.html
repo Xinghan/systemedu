@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>罕见病侦探引擎全景流程 | Rare Disease Detective Pipeline</title>
+<style>
+  *, *::before, *::after { margin:0; padding:0; box-sizing:border-box; }
+  html, body { width:100%; height:100%; overflow:hidden; font-family: 'Segoe UI', 'PingFang SC', sans-serif; }
+  body { background: linear-gradient(135deg, #0a0e27 0%, #1a1040 50%, #0d1a3a 100%); color:#e0e8ff; display:flex; align-items:center; justify-content:center; }
+
+  .container { width:100%; height:100%; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:20px; position:relative; }
+
+  h1 { font-size: clamp(16px, 2.5vw, 24px); font-weight:600; text-align:center; margin-bottom:8px; background: linear-gradient(90deg, #7dd3fc, #a78bfa); -webkit-background-clip:text; -webkit-text-fill-color:transparent; }
+  .subtitle { font-size: clamp(11px, 1.4vw, 14px); color:#8892b0; text-align:center; margin-bottom: clamp(16px, 3vh, 32px); }
+
+  .pipeline { display:flex; align-items:center; justify-content:center; gap: clamp(4px, 1.2vw, 16px); flex-wrap: nowrap; margin-bottom: clamp(16px, 3vh, 32px); }
+
+  .step { display:flex; flex-direction:column; align-items:center; cursor:pointer; transition: transform 0.3s, filter 0.3s; filter: brightness(0.4) grayscale(0.6); }
+  .step.active { filter: brightness(1) grayscale(0); transform: scale(1.12); }
+  .step.done { filter: brightness(0.8) grayscale(0); }
+
+  .step-icon { width: clamp(48px, 7vw, 80px); height: clamp(48px, 7vw, 80px); border-radius: 50%; display:flex; align-items:center; justify-content:center; font-size: clamp(20px, 3vw, 36px); position:relative; box-shadow: 0 0 0 3px rgba(255,255,255,0.06); transition: box-shadow 0.4s; }
+  .step.active .step-icon { box-shadow: 0 0 24px 4px var(--glow); }
+
+  .step-label { font-size: clamp(9px, 1.1vw, 12px); margin-top:6px; text-align:center; max-width: clamp(56px, 8vw, 90px); line-height:1.3; color:#a0aec0; }
+  .step.active .step-label { color:#e0e8ff; font-weight:600; }
+
+  .arrow { font-size: clamp(14px, 2vw, 22px); color:#334155; transition: color 0.3s; }
+  .arrow.lit { color:#7dd3fc; }
+
+  .detail-card { background: rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.08); border-radius:16px; padding: clamp(16px, 2.5vw, 28px); max-width: 680px; width:90%; min-height: clamp(100px, 18vh, 160px); backdrop-filter: blur(8px); transition: opacity 0.4s, transform 0.4s; }
+  .detail-card h2 { font-size: clamp(14px, 1.8vw, 18px); margin-bottom:8px; }
+  .detail-card p { font-size: clamp(12px, 1.4vw, 14px); line-height:1.7; color:#b0bec5; }
+
+  .nav-row { display:flex; gap:12px; margin-top: clamp(12px, 2vh, 20px); }
+  .nav-btn { padding: 8px 24px; border-radius:8px; border:none; font-size:14px; cursor:pointer; font-weight:600; transition: background 0.2s, transform 0.1s; }
+  .nav-btn:active { transform:scale(0.96); }
+  .btn-prev { background:rgba(255,255,255,0.08); color:#a0aec0; }
+  .btn-prev:hover { background:rgba(255,255,255,0.14); }
+  .btn-next { background: linear-gradient(135deg, #6366f1, #8b5cf6); color:#fff; }
+  .btn-next:hover { background: linear-gradient(135deg, #7c7ff7, #a78bfa); }
+  .btn-next.finish { background: linear-gradient(135deg, #10b981, #34d399); }
+
+  .lang-toggle { position:absolute; top:12px; right:16px; font-size:12px; background:rgba(255,255,255,0.08); border:1px solid rgba(255,255,255,0.12); border-radius:6px; padding:4px 10px; color:#8892b0; cursor:pointer; }
+  .lang-toggle:hover { background:rgba(255,255,255,0.14); }
+
+  .particles { position:absolute; top:0; left:0; width:100%; height:100%; pointer-events:none; overflow:hidden; z-index:0; }
+  .particle { position:absolute; width:3px; height:3px; background:#7dd3fc; border-radius:50%; opacity:0; animation: float 6s infinite; }
+  @keyframes float {
+    0% { opacity:0; transform: translateY(100vh) scale(0.5); }
+    20% { opacity:0.6; }
+    80% { opacity:0.3; }
+    100% { opacity:0; transform: translateY(-20vh) scale(1.2); }
+  }
+</style>
+</head>
+<body>
+<div class="particles" id="particles"></div>
+<div class="container" style="position:relative; z-index:1;">
+  <h1 id="mainTitle"></h1>
+  <div class="subtitle" id="mainSubtitle"></div>
+
+  <div class="pipeline" id="pipeline"></div>
+
+  <div class="detail-card" id="detailCard">
+    <h2 id="detailTitle"></h2>
+    <p id="detailText"></p>
+  </div>
+
+  <div class="nav-row">
+    <button class="nav-btn btn-prev" id="btnPrev"></button>
+    <button class="nav-btn btn-next" id="btnNext"></button>
+  </div>
+
+  <button class="lang-toggle" id="langBtn" onclick="toggleLang()">EN</button>
+</div>
+
+<script>
+const STEPS = [
+  {
+    icon: "&#128203;", color: "#38bdf8", glow: "rgba(56,189,248,0.4)",
+    zh: { label:"症状编码", title:"第1步：把自然语言症状编码成标准术语",
+      text:"医生写的'走路不稳'、'反复高烧'是自然语言，计算机看不懂。我们要用 HPO (Human Phenotype Ontology) 把每个症状翻译成全世界通用的标准编码，比如 HP:0002066 代表'步态共济失调'。这是所有后续分析的第一步。" },
+    en: { label:"Encode", title:"Step 1: Encode symptoms into standard terms",
+      text:"Doctors write 'unstable walking' or 'recurrent fever' in natural language. We use HPO (Human Phenotype Ontology) to translate each symptom into a universal code, e.g. HP:0002066 for 'Gait ataxia'. This is the foundation for all downstream analysis." }
+  },
+  {
+    icon: "&#128451;", color: "#a78bfa", glow: "rgba(167,139,250,0.4)",
+    zh: { label:"资源查询", title:"第2步：查询公开知识资源",
+      text:"有了标准编码，我们就可以去查 ClinVar（变异证据库）、Orphanet（罕见病百科）、gnomAD（人群频率库）等公开资源。这些资源就像侦探的档案库——告诉你哪个基因变异曾经和哪种病有关联，这个变异在人群中有多罕见。" },
+    en: { label:"Query", title:"Step 2: Query public knowledge resources",
+      text:"With standardized codes, we query ClinVar (variant evidence), Orphanet (rare disease encyclopedia), gnomAD (population frequency), and more. These resources are like a detective's archive -- telling you which variants have been linked to which diseases and how rare they are." }
+  },
+  {
+    icon: "&#9660;", color: "#f472b6", glow: "rgba(244,114,182,0.4)",
+    zh: { label:"候选过滤", title:"第3步：从海量候选中筛选嫌疑人",
+      text:"一个人可能有几万个基因变异，但绝大多数都是无害的'路人'。我们根据频率（太常见的排除）、功能影响（无害的排除）、家系遗传模式（不符合的排除）等规则，把候选从上万个缩小到几十个。就像侦探先排除有不在场证明的嫌疑人。" },
+    en: { label:"Filter", title:"Step 3: Filter candidates from the vast pool",
+      text:"A person may have tens of thousands of genetic variants, but most are harmless. We filter by frequency (exclude common ones), functional impact (exclude benign ones), and family inheritance patterns to narrow from thousands to dozens -- like eliminating suspects with alibis." }
+  },
+  {
+    icon: "&#129513;", color: "#fb923c", glow: "rgba(251,146,60,0.4)",
+    zh: { label:"证据融合", title:"第4步：把多种线索融合成联合排序",
+      text:"单看某一条线索可能有误导：表型匹配说'很像'，但文献里没有报道过；基因频率很罕见，但功能影响不明确。我们把表型相似度、家系先验、文献病例、知识图谱等多种证据融合在一起做联合打分。证据越多越一致，排名越靠前。" },
+    en: { label:"Fuse", title:"Step 4: Fuse multi-modal evidence into ranking",
+      text:"A single clue can be misleading. We fuse phenotype similarity, family priors, literature cases, knowledge graphs, and panel evidence into a joint score. The more consistent the evidence, the higher the candidate ranks." }
+  },
+  {
+    icon: "&#128196;", color: "#34d399", glow: "rgba(52,211,153,0.4)",
+    zh: { label:"解释生成", title:"第5步：生成证据卡和解释报告",
+      text:"光给一个排名不够——复核者需要知道'为什么是它'（正面证据卡）和'为什么不是别人'（反证链）。系统会为每个候选生成结构化的解释卡，列出支持证据、反对证据和下一步补证建议。这不是让系统下结论，而是帮人更快做判断。" },
+    en: { label:"Explain", title:"Step 5: Generate evidence cards and explanations",
+      text:"A ranking alone isn't enough. Reviewers need to know 'why this candidate' (evidence cards) and 'why not others' (counter-evidence chains). The system generates structured explanation cards with supporting evidence, opposing evidence, and next-step suggestions." }
+  },
+  {
+    icon: "&#128270;", color: "#60a5fa", glow: "rgba(96,165,250,0.4)",
+    zh: { label:"人工复核", title:"第6步：交给人类专家复核和判断",
+      text:"最终的判断权永远属于人。侦探引擎不替代专家做诊断，而是提供一个案件指挥台：把证据、候选、解释卡和复核记录放在一个界面里，让专家能快速审查、标注红旗、记录复核意见。系统是工具，人是决策者。" },
+    en: { label:"Review", title:"Step 6: Hand off to human experts for review",
+      text:"The final judgment always belongs to humans. The detective engine doesn't diagnose -- it provides a case command center where evidence, candidates, explanation cards, and review logs are organized for experts to quickly inspect, flag issues, and record decisions." }
+  }
+];
+
+const I18N = {
+  zh: { title:"罕见病侦探引擎 -- 全景流程", subtitle:"从收到病例到输出候选排序，一共六步", prev:"上一步", next:"下一步", finish:"完成" },
+  en: { title:"Rare Disease Detective Engine -- Pipeline", subtitle:"Six steps from case input to candidate ranking", prev:"Previous", next:"Next", finish:"Finish" }
+};
+
+let lang = "zh";
+let current = 0;
+
+function toggleLang() {
+  lang = lang === "zh" ? "en" : "zh";
+  document.getElementById("langBtn").textContent = lang === "zh" ? "EN" : "中文";
+  render();
+}
+
+function render() {
+  const t = I18N[lang];
+  document.getElementById("mainTitle").textContent = t.title;
+  document.getElementById("mainSubtitle").textContent = t.subtitle;
+
+  // Pipeline
+  const pipe = document.getElementById("pipeline");
+  pipe.innerHTML = "";
+  STEPS.forEach((s, i) => {
+    if (i > 0) {
+      const arrow = document.createElement("span");
+      arrow.className = "arrow" + (i <= current ? " lit" : "");
+      arrow.innerHTML = "&#10132;";
+      pipe.appendChild(arrow);
+    }
+    const step = document.createElement("div");
+    step.className = "step" + (i === current ? " active" : i < current ? " done" : "");
+    step.innerHTML = `<div class="step-icon" style="background:${s.color}22; --glow:${s.glow}">${s.icon}</div><div class="step-label">${s[lang].label}</div>`;
+    step.onclick = () => { current = i; render(); };
+    pipe.appendChild(step);
+  });
+
+  // Detail card
+  const s = STEPS[current];
+  document.getElementById("detailTitle").textContent = s[lang].title;
+  document.getElementById("detailText").textContent = s[lang].text;
+  document.getElementById("detailCard").style.borderColor = s.color + "33";
+
+  // Nav buttons
+  document.getElementById("btnPrev").textContent = t.prev;
+  document.getElementById("btnPrev").style.display = current > 0 ? "" : "none";
+  const btnNext = document.getElementById("btnNext");
+  if (current < STEPS.length - 1) {
+    btnNext.textContent = t.next;
+    btnNext.className = "nav-btn btn-next";
+    btnNext.onclick = () => { current++; render(); };
+  } else {
+    btnNext.textContent = t.finish;
+    btnNext.className = "nav-btn btn-next finish";
+    btnNext.onclick = () => {
+      try { window.parent.postMessage({ type:"step_complete" }, "*"); } catch(e) {}
+    };
+  }
+  document.getElementById("btnPrev").onclick = () => { if(current>0){current--;render();} };
+}
+
+// Particles
+(function initParticles() {
+  const container = document.getElementById("particles");
+  for (let i = 0; i < 20; i++) {
+    const p = document.createElement("div");
+    p.className = "particle";
+    p.style.left = Math.random() * 100 + "%";
+    p.style.animationDelay = Math.random() * 6 + "s";
+    p.style.animationDuration = (4 + Math.random() * 4) + "s";
+    container.appendChild(p);
+  }
+})();
+
+render();
+</script>
+</body>
+</html>

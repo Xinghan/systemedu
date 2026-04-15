@@ -1,0 +1,426 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>E-STOP Wiring Challenge</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;700&family=Inter:wght@400;500&family=Noto+Sans+SC:wght@400;700&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{width:100%;height:100vh;overflow:hidden;background:#121318;font-family:'Noto Sans SC','Inter',sans-serif;color:#e8e8ec}
+.wrapper{display:flex;flex-direction:column;height:100vh;width:100%}
+.header{padding:8px 16px;display:flex;align-items:center;justify-content:space-between;background:rgba(26,27,33,0.92);border-bottom:1px solid rgba(138,138,144,0.15);flex-shrink:0}
+.header h1{font-family:'Space Grotesk',sans-serif;font-size:15px;font-weight:700;color:#dbfcff;letter-spacing:1px}
+.header .subtitle{font-size:11px;color:#8a8a90;margin-left:8px}
+.game-area{flex:1;min-height:0;display:flex;flex-direction:row;padding:12px;gap:16px;overflow:hidden}
+.step-list{flex:1;display:flex;flex-direction:column;gap:6px;min-height:0;overflow-y:auto}
+.step-card{padding:10px 14px;background:rgba(26,27,33,0.85);backdrop-filter:blur(12px);border:1px solid rgba(138,138,144,0.15);cursor:grab;user-select:none;-webkit-user-select:none;display:flex;align-items:center;gap:10px;transition:border-color 0.2s}
+.step-card:hover{border-color:#00F0FF}
+.step-card.dragging{opacity:0.5;border-color:#ebb2ff}
+.step-card.correct{border-color:#2ff801;background:rgba(47,248,1,0.08)}
+.step-card.wrong{border-color:#ef4444;background:rgba(239,68,68,0.08)}
+.step-num{font-family:'Space Grotesk',sans-serif;font-size:14px;font-weight:700;color:#8a8a90;min-width:24px;text-align:center}
+.step-text{font-size:13px;line-height:1.4;color:#e8e8ec}
+.step-icon{font-size:16px;margin-left:auto;display:none}
+.circuit-preview{width:220px;flex-shrink:0;display:flex;flex-direction:column;align-items:center;justify-content:center;background:rgba(26,27,33,0.6);border:1px solid rgba(138,138,144,0.15);padding:12px;overflow:hidden}
+.circuit-preview canvas{width:100%;height:100%}
+.controls{display:flex;align-items:center;justify-content:center;gap:12px;padding:8px 16px;background:rgba(26,27,33,0.92);border-top:1px solid rgba(138,138,144,0.15);flex-shrink:0}
+.ctrl-btn{font-family:'Space Grotesk',sans-serif;font-size:11px;font-weight:700;padding:6px 16px;cursor:pointer;border:1px solid rgba(138,138,144,0.15);background:rgba(26,27,33,0.85);backdrop-filter:blur(12px);color:#dbfcff;letter-spacing:1px}
+.ctrl-btn:hover{border-color:#00F0FF;color:#00F0FF}
+.ctrl-btn:disabled{opacity:0.4;cursor:not-allowed}
+.score-bar{font-family:'Space Grotesk',sans-serif;font-size:12px;color:#8a8a90;flex:1;text-align:center}
+.hud{display:flex;align-items:center;justify-content:space-around;padding:6px 16px;background:rgba(0,0,0,0.55);flex-shrink:0;height:48px}
+.hud-item{text-align:center}
+.hud-label{font-family:'Space Grotesk',sans-serif;font-size:9px;color:#8a8a90;letter-spacing:1px;text-transform:uppercase}
+.hud-val{font-family:'Space Grotesk',sans-serif;font-size:13px;color:#00F0FF;font-weight:700}
+.lang-btn{position:fixed;top:8px;left:8px;z-index:100;font-family:'Space Grotesk',sans-serif;font-size:11px;font-weight:700;padding:4px 10px;cursor:pointer;border:1px solid rgba(255,255,255,0.08);background:rgba(20,20,35,0.85);backdrop-filter:blur(12px);color:#00F0FF;letter-spacing:1px}
+.guide-panel{position:fixed;top:8px;right:8px;width:240px;max-height:40vh;overflow-y:auto;background:rgba(20,20,35,0.85);backdrop-filter:blur(12px);border:1px solid rgba(138,138,144,0.15);padding:12px;z-index:100;font-family:'Noto Sans SC',sans-serif;font-size:12px;color:rgba(255,255,255,0.85)}
+.guide-panel h3{font-family:'Space Grotesk',sans-serif;font-size:13px;margin-bottom:8px;display:flex;align-items:center;justify-content:space-between;cursor:pointer;color:#dbfcff}
+.guide-panel ul{padding-left:16px;line-height:1.6}
+.guide-toggle{font-size:10px;color:#8a8a90}
+.feedback-overlay{position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.7);display:none;align-items:center;justify-content:center;z-index:200;flex-direction:column}
+.feedback-card{background:rgba(26,27,33,0.95);backdrop-filter:blur(20px);border:1px solid rgba(138,138,144,0.15);padding:32px;max-width:400px;text-align:center}
+.feedback-card h2{font-family:'Space Grotesk',sans-serif;font-size:20px;color:#2ff801;margin-bottom:12px}
+.feedback-card p{font-size:14px;line-height:1.6;margin-bottom:16px;color:#e8e8ec}
+.placeholder{height:4px;background:#00F0FF;opacity:0;transition:opacity 0.15s}
+.placeholder.active{opacity:0.6}
+</style>
+</head>
+<body>
+<button class="lang-btn" id="langBtn">CN</button>
+<div class="guide-panel" id="guidePanel">
+  <h3 id="guideTitle"></h3>
+  <div class="guide-content" id="guideContent">
+    <p id="guideDesc" style="margin-bottom:8px"></p>
+    <ul id="guideList"></ul>
+    <p id="guideTakeaway" style="margin-top:8px;color:#00F0FF;font-size:11px"></p>
+  </div>
+</div>
+<div class="feedback-overlay" id="feedbackOverlay">
+  <div class="feedback-card">
+    <h2 id="fbTitle"></h2>
+    <p id="fbDesc"></p>
+    <button class="ctrl-btn" id="fbRetry"></button>
+  </div>
+</div>
+<div class="wrapper">
+  <div class="header">
+    <div style="display:flex;align-items:baseline">
+      <h1 id="titleText"></h1>
+      <span class="subtitle" id="subtitleText"></span>
+    </div>
+    <span style="font-family:'Space Grotesk';font-size:10px;color:#8a8a90;letter-spacing:1px">P-MARS-01-M29</span>
+  </div>
+  <div class="game-area">
+    <div class="step-list" id="stepList"></div>
+    <div class="circuit-preview" id="circuitPreview">
+      <canvas id="previewCanvas"></canvas>
+    </div>
+  </div>
+  <div class="controls">
+    <span class="score-bar" id="scoreBar"></span>
+    <button class="ctrl-btn" id="btnCheck"></button>
+    <button class="ctrl-btn" id="btnReset"></button>
+  </div>
+  <div class="hud">
+    <div class="hud-item"><div class="hud-label" id="hudL1"></div><div class="hud-val" id="hudV1"></div></div>
+    <div class="hud-item"><div class="hud-label" id="hudL2"></div><div class="hud-val" id="hudV2"></div></div>
+    <div class="hud-item"><div class="hud-label" id="hudL3"></div><div class="hud-val" id="hudV3"></div></div>
+    <div class="hud-item"><div class="hud-label" id="hudL4"></div><div class="hud-val" id="hudV4"></div></div>
+  </div>
+</div>
+<script>
+(function(){
+var LANG='cn';
+var I18N={
+  title:{en:'E-STOP WIRING CHALLENGE',cn:'\u6025\u505c\u56de\u8def\u63a5\u7ebf\u6311\u6218'},
+  subtitle:{en:'TIMELINE ORDER',cn:'\u6b65\u9aa4\u6392\u5e8f'},
+  btnCheck:{en:'CHECK ORDER',cn:'\u68c0\u67e5\u987a\u5e8f'},
+  btnReset:{en:'RESET',cn:'\u91cd\u7f6e'},
+  guideTitle:{en:'GAME GUIDE',cn:'\u6e38\u620f\u6307\u5357'},
+  guideDesc:{en:'Drag the wiring steps into the correct order for building an emergency stop circuit. The correct sequence ensures safety.',cn:'\u62d6\u62fd\u63a5\u7ebf\u6b65\u9aa4\u5230\u6b63\u786e\u987a\u5e8f\uff0c\u5b8c\u6210\u6025\u505c\u56de\u8def\u7684\u642d\u5efa\u3002\u6b63\u786e\u987a\u5e8f\u786e\u4fdd\u5b89\u5168\u3002'},
+  guideStep1:{en:'Drag cards up/down to reorder',cn:'\u4e0a\u4e0b\u62d6\u62fd\u5361\u7247\u8c03\u6574\u987a\u5e8f'},
+  guideStep2:{en:'Click CHECK to verify',cn:'\u70b9\u51fb\u68c0\u67e5\u9a8c\u8bc1\u987a\u5e8f'},
+  guideStep3:{en:'Green = correct, Red = wrong position',cn:'\u7eff\u8272=\u6b63\u786e\uff0c\u7ea2\u8272=\u4f4d\u7f6e\u9519\u8bef'},
+  guideTakeaway:{en:'Wiring order matters for safety',cn:'\u63a5\u7ebf\u987a\u5e8f\u5173\u4e4e\u5b89\u5168'},
+  guideToggle:{en:'[collapse]',cn:'[\u6536\u8d77]'},
+  hudL1:{en:'ATTEMPTS',cn:'\u5c1d\u8bd5'},
+  hudL2:{en:'CORRECT',cn:'\u6b63\u786e'},
+  hudL3:{en:'TOTAL STEPS',cn:'\u603b\u6b65\u9aa4'},
+  hudL4:{en:'STATUS',cn:'\u72b6\u6001'},
+  hudPending:{en:'PENDING',cn:'\u5f85\u68c0\u67e5'},
+  hudPass:{en:'PASSED',cn:'\u901a\u8fc7'},
+  hudFail:{en:'RETRY',cn:'\u91cd\u8bd5'},
+  scoreMsg:{en:'Drag steps into correct wiring order',cn:'\u62d6\u52a8\u6b65\u9aa4\u5361\u7247\u5230\u6b63\u786e\u7684\u63a5\u7ebf\u987a\u5e8f'},
+  fbWinTitle:{en:'CIRCUIT COMPLETE!',cn:'\u56de\u8def\u5b8c\u6210\uff01'},
+  fbWinDesc:{en:'You assembled the e-stop wiring in the correct order. In a real rover, this sequence ensures that the emergency stop can cut power to all motors instantly, even before the control board boots up.',cn:'\u4f60\u6309\u6b63\u786e\u987a\u5e8f\u5b8c\u6210\u4e86\u6025\u505c\u56de\u8def\u63a5\u7ebf\u3002\u5728\u771f\u5b9e rover \u4e2d\uff0c\u8fd9\u4e2a\u987a\u5e8f\u786e\u4fdd\u6025\u505c\u5f00\u5173\u80fd\u5728\u63a7\u5236\u677f\u542f\u52a8\u524d\u5c31\u5207\u65ad\u6240\u6709\u7535\u673a\u7535\u6e90\u3002'},
+  fbFailTitle:{en:'NOT QUITE RIGHT',cn:'\u987a\u5e8f\u6709\u8bef'},
+  fbFailDesc:{en:'Some steps are in the wrong position. Red cards need to be moved. Think about what must happen BEFORE power reaches the motors.',cn:'\u90e8\u5206\u6b65\u9aa4\u4f4d\u7f6e\u9519\u8bef\u3002\u7ea2\u8272\u5361\u7247\u9700\u8981\u8c03\u6574\u3002\u60f3\u60f3\u54ea\u4e9b\u6b65\u9aa4\u5fc5\u987b\u5728\u7535\u6e90\u5230\u8fbe\u7535\u673a\u4e4b\u524d\u5b8c\u6210\u3002'},
+  fbRetry:{en:'TRY AGAIN',cn:'\u518d\u8bd5\u4e00\u6b21'},
+  fbClose:{en:'CLOSE',cn:'\u5173\u95ed'},
+  step0:{en:'Disconnect battery pack (remove main fuse)',cn:'\u65ad\u5f00\u7535\u6c60\u7ec4\uff08\u62d4\u51fa\u4e3b\u4fdd\u9669\u4e1d\uff09'},
+  step1:{en:'Mount e-stop relay on chassis bracket',cn:'\u5c06\u6025\u505c\u7ee7\u7535\u5668\u56fa\u5b9a\u5230\u5e95\u76d8\u652f\u67b6'},
+  step2:{en:'Wire battery + terminal to e-stop relay NC input',cn:'\u7535\u6c60\u6b63\u6781\u63a5\u5165\u6025\u505c\u7ee7\u7535\u5668\u5e38\u95ed\u8f93\u5165\u7aef'},
+  step3:{en:'Wire e-stop relay output to motor driver Vin',cn:'\u6025\u505c\u7ee7\u7535\u5668\u8f93\u51fa\u7aef\u63a5\u5230\u7535\u673a\u9a71\u52a8 Vin'},
+  step4:{en:'Connect motor driver outputs to left/right motors',cn:'\u7535\u673a\u9a71\u52a8\u8f93\u51fa\u63a5\u5de6/\u53f3\u7535\u673a'},
+  step5:{en:'Wire GND return from motors back to battery -',cn:'\u7535\u673a GND \u56de\u7ebf\u63a5\u56de\u7535\u6c60\u8d1f\u6781'},
+  step6:{en:'Mount e-stop button accessible on top surface',cn:'\u5c06\u6025\u505c\u6309\u94ae\u5b89\u88c5\u5728\u9876\u90e8\u53ef\u89e6\u53ca\u4f4d\u7f6e'},
+  step7:{en:'Reinstall fuse, test: press e-stop -> motors must stop',cn:'\u88c5\u56de\u4fdd\u9669\u4e1d\uff0c\u6d4b\u8bd5\uff1a\u6309\u4e0b\u6025\u505c -> \u7535\u673a\u5fc5\u987b\u505c\u8f6c'}
+};
+function t(k){return(I18N[k]&&I18N[k][LANG])||(I18N[k]&&I18N[k]['en'])||k;}
+
+var CORRECT_ORDER=[0,1,2,3,4,5,6,7];
+var currentOrder=[];
+var attempts=0;
+var solved=false;
+
+function shuffle(arr){
+  var a=arr.slice();
+  for(var i=a.length-1;i>0;i--){var j=Math.floor(Math.random()*(i+1));var tmp=a[i];a[i]=a[j];a[j]=tmp;}
+  return a;
+}
+
+function initGame(){
+  solved=false;
+  currentOrder=shuffle(CORRECT_ORDER);
+  // ensure not already correct
+  while(JSON.stringify(currentOrder)===JSON.stringify(CORRECT_ORDER)){currentOrder=shuffle(CORRECT_ORDER);}
+  renderCards();
+  updateHUD();
+  drawPreview();
+}
+
+function renderCards(){
+  var list=document.getElementById('stepList');
+  list.innerHTML='';
+  currentOrder.forEach(function(stepIdx,pos){
+    var card=document.createElement('div');
+    card.className='step-card';
+    card.setAttribute('data-step',stepIdx);
+    card.setAttribute('data-pos',pos);
+    var num=document.createElement('span');
+    num.className='step-num';num.textContent=(pos+1);
+    var txt=document.createElement('span');
+    txt.className='step-text';txt.textContent=t('step'+stepIdx);
+    card.appendChild(num);card.appendChild(txt);
+    list.appendChild(card);
+    // drag events
+    card.addEventListener('mousedown',onDragStart);
+    card.addEventListener('touchstart',onTouchStart,{passive:false});
+  });
+}
+
+// Drag & Drop
+var dragCard=null,dragIdx=-1,placeholder=null;
+var startY=0,cardH=0;
+
+function onDragStart(e){
+  if(solved)return;
+  dragCard=e.currentTarget;
+  dragIdx=parseInt(dragCard.getAttribute('data-pos'));
+  dragCard.classList.add('dragging');
+  startY=e.clientY;
+  cardH=dragCard.offsetHeight;
+  document.addEventListener('mousemove',onDragMove);
+  document.addEventListener('mouseup',onDragEnd);
+}
+
+function onTouchStart(e){
+  if(solved)return;
+  e.preventDefault();
+  dragCard=e.currentTarget;
+  dragIdx=parseInt(dragCard.getAttribute('data-pos'));
+  dragCard.classList.add('dragging');
+  startY=e.touches[0].clientY;
+  cardH=dragCard.offsetHeight;
+  document.addEventListener('touchmove',onTouchMove,{passive:false});
+  document.addEventListener('touchend',onTouchEnd);
+}
+
+function onDragMove(e){
+  if(!dragCard)return;
+  var dy=e.clientY-startY;
+  dragCard.style.transform='translateY('+dy+'px)';
+  dragCard.style.zIndex='50';
+  checkSwap(e.clientY);
+}
+
+function onTouchMove(e){
+  if(!dragCard)return;
+  e.preventDefault();
+  var dy=e.touches[0].clientY-startY;
+  dragCard.style.transform='translateY('+dy+'px)';
+  dragCard.style.zIndex='50';
+  checkSwap(e.touches[0].clientY);
+}
+
+function checkSwap(clientY){
+  var list=document.getElementById('stepList');
+  var cards=list.querySelectorAll('.step-card');
+  for(var i=0;i<cards.length;i++){
+    if(cards[i]===dragCard)continue;
+    var rect=cards[i].getBoundingClientRect();
+    var midY=rect.top+rect.height/2;
+    var myPos=parseInt(dragCard.getAttribute('data-pos'));
+    var otherPos=parseInt(cards[i].getAttribute('data-pos'));
+    if(clientY<midY&&myPos>otherPos){
+      // swap
+      var tmp=currentOrder[myPos];currentOrder[myPos]=currentOrder[otherPos];currentOrder[otherPos]=tmp;
+      dragCard.setAttribute('data-pos',otherPos);
+      cards[i].setAttribute('data-pos',myPos);
+      dragIdx=otherPos;
+      startY=clientY;
+      reorderDOM();
+      break;
+    } else if(clientY>midY&&myPos<otherPos){
+      var tmp2=currentOrder[myPos];currentOrder[myPos]=currentOrder[otherPos];currentOrder[otherPos]=tmp2;
+      dragCard.setAttribute('data-pos',otherPos);
+      cards[i].setAttribute('data-pos',myPos);
+      dragIdx=otherPos;
+      startY=clientY;
+      reorderDOM();
+      break;
+    }
+  }
+}
+
+function reorderDOM(){
+  var list=document.getElementById('stepList');
+  var cards=Array.from(list.querySelectorAll('.step-card'));
+  cards.sort(function(a,b){return parseInt(a.getAttribute('data-pos'))-parseInt(b.getAttribute('data-pos'));});
+  cards.forEach(function(c,i){
+    c.querySelector('.step-num').textContent=(i+1);
+    list.appendChild(c);
+  });
+}
+
+function onDragEnd(e){
+  if(dragCard){
+    dragCard.classList.remove('dragging');
+    dragCard.style.transform='';
+    dragCard.style.zIndex='';
+    dragCard=null;
+  }
+  document.removeEventListener('mousemove',onDragMove);
+  document.removeEventListener('mouseup',onDragEnd);
+  drawPreview();
+}
+
+function onTouchEnd(e){
+  if(dragCard){
+    dragCard.classList.remove('dragging');
+    dragCard.style.transform='';
+    dragCard.style.zIndex='';
+    dragCard=null;
+  }
+  document.removeEventListener('touchmove',onTouchMove);
+  document.removeEventListener('touchend',onTouchEnd);
+  drawPreview();
+}
+
+function checkOrder(){
+  if(solved)return;
+  attempts++;
+  var correct=0;
+  var list=document.getElementById('stepList');
+  var cards=list.querySelectorAll('.step-card');
+  cards.forEach(function(card,i){
+    var stepIdx=parseInt(card.getAttribute('data-step'));
+    if(stepIdx===CORRECT_ORDER[i]){
+      card.classList.remove('wrong');card.classList.add('correct');correct++;
+    } else {
+      card.classList.remove('correct');card.classList.add('wrong');
+    }
+  });
+  updateHUD();
+  if(correct===CORRECT_ORDER.length){
+    solved=true;
+    document.getElementById('hudV4').textContent=t('hudPass');
+    document.getElementById('hudV4').style.color='#2ff801';
+    showFeedback(true);
+  } else {
+    document.getElementById('hudV4').textContent=t('hudFail');
+    document.getElementById('hudV4').style.color='#ef4444';
+    showFeedback(false);
+  }
+  document.getElementById('hudV2').textContent=correct+'';
+}
+
+function showFeedback(win){
+  var overlay=document.getElementById('feedbackOverlay');
+  overlay.style.display='flex';
+  document.getElementById('fbTitle').textContent=win?t('fbWinTitle'):t('fbFailTitle');
+  document.getElementById('fbTitle').style.color=win?'#2ff801':'#ef4444';
+  document.getElementById('fbDesc').textContent=win?t('fbWinDesc'):t('fbFailDesc');
+  document.getElementById('fbRetry').textContent=win?t('fbClose'):t('fbRetry');
+}
+
+function resetGame(){
+  var cards=document.querySelectorAll('.step-card');
+  cards.forEach(function(c){c.classList.remove('correct','wrong');});
+  document.getElementById('feedbackOverlay').style.display='none';
+  if(solved){initGame();attempts=0;}
+  else{
+    document.getElementById('hudV4').textContent=t('hudPending');
+    document.getElementById('hudV4').style.color='#00F0FF';
+  }
+  updateHUD();
+}
+
+function updateHUD(){
+  document.getElementById('hudV1').textContent=attempts+'';
+  var correct=0;
+  currentOrder.forEach(function(s,i){if(s===CORRECT_ORDER[i])correct++;});
+  document.getElementById('hudV2').textContent=solved?CORRECT_ORDER.length+'':'-';
+  document.getElementById('hudV3').textContent=CORRECT_ORDER.length+'';
+  if(!solved){
+    document.getElementById('hudV4').textContent=t('hudPending');
+    document.getElementById('hudV4').style.color='#00F0FF';
+  }
+}
+
+/* Preview canvas */
+function drawPreview(){
+  var pc=document.getElementById('previewCanvas');
+  var pctx=pc.getContext('2d');
+  var pw=document.getElementById('circuitPreview');
+  var rect=pw.getBoundingClientRect();
+  if(rect.width<1)return;
+  var dpr=Math.min(window.devicePixelRatio||1,2);
+  pc.width=rect.width*dpr;pc.height=(rect.height-24)*dpr;
+  pc.style.width=rect.width+'px';pc.style.height=(rect.height-24)+'px';
+  pctx.setTransform(dpr,0,0,dpr,0,0);
+  var cw=rect.width,ch=rect.height-24;
+  // bg
+  var grd=pctx.createLinearGradient(0,0,0,ch);
+  grd.addColorStop(0,'#0d0e13');grd.addColorStop(1,'#121318');
+  pctx.fillStyle=grd;pctx.fillRect(0,0,cw,ch);
+  // draw simplified circuit based on current order
+  var nodeH=ch/(CORRECT_ORDER.length+1);
+  var nodeNames=['BAT-','RELAY','BAT+>NC','NC>Vin','DRV>MTR','GND','BTN','TEST'];
+  var nodeColors=['#2ff801','#00F0FF','#e53e3e','#ebb2ff','#ebb2ff','#4a5568','#ef4444','#2ff801'];
+  currentOrder.forEach(function(stepIdx,i){
+    var ny=nodeH*(i+0.5)+10;
+    var nx=cw/2;
+    // connection line
+    if(i>0){
+      pctx.strokeStyle='rgba(138,138,144,0.3)';pctx.lineWidth=1;
+      pctx.beginPath();pctx.moveTo(nx,ny-nodeH/2);pctx.lineTo(nx,ny-8);pctx.stroke();
+    }
+    // node
+    pctx.fillStyle=nodeColors[stepIdx];pctx.globalAlpha=0.8;
+    pctx.beginPath();pctx.arc(nx,ny,5,0,Math.PI*2);pctx.fill();
+    pctx.globalAlpha=1;
+    // label
+    pctx.font='9px "Space Grotesk",sans-serif';pctx.fillStyle='#8a8a90';pctx.textAlign='left';pctx.textBaseline='middle';
+    pctx.fillText(nodeNames[stepIdx],nx+10,ny);
+  });
+}
+
+function refreshI18N(){
+  document.getElementById('titleText').textContent=t('title');
+  document.getElementById('subtitleText').textContent=t('subtitle');
+  document.getElementById('btnCheck').textContent=t('btnCheck');
+  document.getElementById('btnReset').textContent=t('btnReset');
+  document.getElementById('scoreBar').textContent=t('scoreMsg');
+  document.getElementById('hudL1').textContent=t('hudL1');
+  document.getElementById('hudL2').textContent=t('hudL2');
+  document.getElementById('hudL3').textContent=t('hudL3');
+  document.getElementById('hudL4').textContent=t('hudL4');
+  document.getElementById('guideTitle').innerHTML=t('guideTitle')+' <span class="guide-toggle">'+t('guideToggle')+'</span>';
+  document.getElementById('guideDesc').textContent=t('guideDesc');
+  var list=document.getElementById('guideList');
+  list.innerHTML='<li>'+t('guideStep1')+'</li><li>'+t('guideStep2')+'</li><li>'+t('guideStep3')+'</li>';
+  document.getElementById('guideTakeaway').textContent=t('guideTakeaway');
+  // re-render cards text
+  var cards=document.querySelectorAll('.step-card');
+  cards.forEach(function(c){
+    var si=parseInt(c.getAttribute('data-step'));
+    c.querySelector('.step-text').textContent=t('step'+si);
+  });
+  updateHUD();
+}
+
+document.getElementById('btnCheck').addEventListener('click',checkOrder);
+document.getElementById('btnReset').addEventListener('click',resetGame);
+document.getElementById('fbRetry').addEventListener('click',resetGame);
+document.getElementById('langBtn').addEventListener('click',function(){
+  LANG=LANG==='en'?'cn':'en';
+  document.getElementById('langBtn').textContent=LANG.toUpperCase();
+  refreshI18N();
+});
+document.getElementById('guideTitle').addEventListener('click',function(){
+  var c=document.getElementById('guideContent');
+  c.style.display=c.style.display==='none'?'':'none';
+});
+
+window.addEventListener('resize',function(){drawPreview();});
+initGame();
+refreshI18N();
+setTimeout(function(){drawPreview();},200);
+setTimeout(function(){drawPreview();},600);
+document.fonts.ready.then(function(){drawPreview();});
+})();
+</script>
+</body>
+</html>

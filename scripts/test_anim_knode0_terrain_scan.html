@@ -1,0 +1,369 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=Inter:wght@400;500&family=Noto+Sans+SC:wght@400;700&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box;}
+html,body{width:100%;height:100vh;overflow:hidden;}
+body{background:var(--bg,#0c0e12);color:var(--text,#f6f6fc);font-family:'Inter','Noto Sans SC',sans-serif;display:flex;flex-direction:column;}
+.wrapper{display:flex;flex-direction:column;height:100vh;overflow:hidden;}
+.header{padding:12px 16px 8px;display:flex;justify-content:space-between;align-items:center;}
+.header h1{font-family:'Space Grotesk',sans-serif;font-size:clamp(14px,2vw,18px);font-weight:700;letter-spacing:-0.02em;color:var(--primary,#ffb59c);text-shadow:0 0 15px var(--glow,rgba(255,181,156,0.3));}
+.header .sub{font-size:11px;color:var(--muted,#aaabb0);letter-spacing:0.1em;text-transform:uppercase;}
+.canvas-wrap{flex:1;min-height:0;position:relative;}
+canvas{width:100%;height:100%;display:block;}
+.controls{display:flex;justify-content:center;align-items:center;gap:12px;padding:8px 16px;}
+.ctrl-btn{font-family:'Space Grotesk',sans-serif;font-size:12px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;padding:6px 18px;border:none;cursor:pointer;color:#1a0e08;background:linear-gradient(135deg,#ffb59c,#ff8a6a);transition:transform 0.1s,box-shadow 0.2s;box-shadow:0 0 12px rgba(255,181,156,0.3);}
+.ctrl-btn:hover{transform:scale(1.04);box-shadow:0 0 20px rgba(255,181,156,0.5);}
+.ctrl-btn:active{transform:scale(0.96);}
+.ctrl-btn.secondary{background:rgba(23,26,31,0.92);color:#aaabb0;box-shadow:none;backdrop-filter:blur(12px);}
+.ctrl-btn.secondary:hover{color:#ffb59c;}
+.hud{height:48px;display:flex;align-items:center;justify-content:space-around;background:rgba(0,0,0,0.55);backdrop-filter:blur(12px);padding:0 16px;}
+.hud-item{text-align:center;}
+.hud-label{font-family:'Space Grotesk',sans-serif;font-size:9px;letter-spacing:0.15em;text-transform:uppercase;color:#aaabb0;}
+.hud-val{font-family:'Space Grotesk',sans-serif;font-size:14px;font-weight:700;color:#ffb59c;}
+.lang-btn{position:fixed;top:8px;left:8px;z-index:100;font-family:'Space Grotesk',sans-serif;font-size:11px;font-weight:700;padding:4px 10px;cursor:pointer;border:none;background:rgba(20,20,35,0.85);backdrop-filter:blur(12px);color:#ffb59c;letter-spacing:1px;}
+.guide-panel{position:fixed;top:8px;right:8px;width:240px;max-height:40vh;overflow-y:auto;background:rgba(20,20,35,0.85);backdrop-filter:blur(12px);padding:12px;z-index:100;font-family:'Noto Sans SC',sans-serif;font-size:12px;color:rgba(255,255,255,0.85);line-height:1.6;}
+.guide-panel h3{font-family:'Space Grotesk',sans-serif;font-size:13px;margin-bottom:6px;color:#ffb59c;cursor:pointer;display:flex;justify-content:space-between;align-items:center;}
+.guide-panel ul{padding-left:14px;}
+.guide-panel .collapsed{display:none;}
+</style>
+</head>
+<body>
+<button class="lang-btn" id="langBtn">CN</button>
+<div class="guide-panel" id="guide">
+<h3 id="guideTitle"></h3>
+<div class="guide-content" id="guideContent"></div>
+</div>
+<div class="wrapper">
+<div class="header">
+<div><h1 id="title"></h1><div class="sub" id="subtitle"></div></div>
+<div id="frameIndicator" style="font-family:'Space Grotesk';font-size:11px;color:#aaabb0;letter-spacing:0.1em;"></div>
+</div>
+<div class="canvas-wrap"><canvas id="c"></canvas></div>
+<div class="controls">
+<button class="ctrl-btn secondary" id="btnPrev"></button>
+<button class="ctrl-btn" id="btnPlay"></button>
+<button class="ctrl-btn secondary" id="btnNext"></button>
+</div>
+<div class="hud">
+<div class="hud-item"><div class="hud-label" id="hudL1"></div><div class="hud-val" id="hudV1"></div></div>
+<div class="hud-item"><div class="hud-label" id="hudL2"></div><div class="hud-val" id="hudV2"></div></div>
+<div class="hud-item"><div class="hud-label" id="hudL3"></div><div class="hud-val" id="hudV3"></div></div>
+<div class="hud-item"><div class="hud-label" id="hudL4"></div><div class="hud-val" id="hudV4"></div></div>
+</div>
+</div>
+
+<script src="animation_runtime.js"></script>
+<script>
+var CONFIG = {
+  style: 'ares_mission',
+  totalFrames: 5,
+  i18n: {
+    title:    {en:'TERRAIN SCANNER', cn:'\u5730\u5f62\u626b\u63cf\u7cfb\u7edf'},
+    subtitle: {en:'SURFACE MATERIAL ANALYSIS', cn:'\u5730\u9762\u6750\u8d28\u5206\u6790'},
+    scan:     {en:'SCANNING', cn:'\u626b\u63cf\u4e2d'},
+    complete: {en:'SCAN COMPLETE', cn:'\u626b\u63cf\u5b8c\u6210'},
+    hardness: {en:'HARDNESS', cn:'\u786c\u5ea6'},
+    roughness:{en:'ROUGHNESS', cn:'\u7c97\u7cd9\u5ea6'},
+    flatness: {en:'FLATNESS', cn:'\u5e73\u6574\u5ea6'},
+    firmness: {en:'FIRMNESS', cn:'\u677e\u7d27\u5ea6'},
+    walkDiff: {en:'WALK DIFFICULTY', cn:'\u884c\u8d70\u96be\u5ea6'},
+    concrete: {en:'CONCRETE ROAD', cn:'\u6c34\u6ce5\u8def'},
+    sand:     {en:'SAND', cn:'\u6c99\u5730'},
+    grass:    {en:'GRASS', cn:'\u8349\u5730'},
+    gravel:   {en:'GRAVEL PATH', cn:'\u788e\u77f3\u8def'},
+    f0title:  {en:'TERRAIN SCAN SYSTEM', cn:'\u5730\u5f62\u626b\u63cf\u7cfb\u7edf'},
+    f0desc:   {en:'Like a Mars rover scanning terrain,\nanalyze surfaces using 4 dimensions', cn:'\u50cf\u706b\u661f\u8f66\u626b\u63cf\u5730\u5f62\u4e00\u6837\uff0c\n\u7528\u56db\u4e2a\u7ef4\u5ea6\u5206\u6790\u5730\u9762'},
+    dim4:     {en:'4 DIMENSIONS', cn:'\u56db\u4e2a\u7ef4\u5ea6'},
+    diffLabel:{en:'DIFFICULTY', cn:'\u96be\u5ea6'},
+    summary:  {en:'COMPARISON', cn:'\u5bf9\u6bd4\u603b\u89c8'},
+    sumDesc:  {en:'Each surface has unique properties\nthat affect walkability', cn:'\u6bcf\u79cd\u5730\u9762\u90fd\u6709\u72ec\u7279\u7684\u5c5e\u6027\uff0c\n\u5f71\u54cd\u884c\u8d70\u96be\u5ea6'},
+    hudL1:    {en:'TARGET', cn:'\u76ee\u6807'},
+    hudL2:    {en:'STATUS', cn:'\u72b6\u6001'},
+    hudL3:    {en:'DIMENSION', cn:'\u7ef4\u5ea6'},
+    hudL4:    {en:'DIFFICULTY', cn:'\u96be\u5ea6'},
+    guideTitle:{en:'GUIDE', cn:'\u64cd\u4f5c\u6307\u5357'},
+    g1:       {en:'Click NEXT to scan each surface', cn:'\u70b9\u51fb NEXT \u626b\u63cf\u6bcf\u79cd\u5730\u9762'},
+    g2:       {en:'Watch radar chart change shape', cn:'\u89c2\u5bdf\u96f7\u8fbe\u56fe\u5f62\u72b6\u53d8\u5316'},
+    g3:       {en:'Compare walk difficulty scores', cn:'\u5bf9\u6bd4\u884c\u8d70\u96be\u5ea6\u8bc4\u5206'},
+    g4:       {en:'Think: which dimension matters most?', cn:'\u601d\u8003\uff1a\u54ea\u4e2a\u7ef4\u5ea6\u5f71\u54cd\u6700\u5927\uff1f'},
+    btnPlay:  {en:'PLAY', cn:'\u64ad\u653e'},
+    btnPause: {en:'PAUSE', cn:'\u6682\u505c'},
+    btnPrev:  {en:'PREV', cn:'\u4e0a\u4e00\u5e27'},
+    btnNext:  {en:'NEXT', cn:'\u4e0b\u4e00\u5e27'},
+  },
+  hudLabels: ['hudL1','hudL2','hudL3','hudL4'],
+  hudValues: [
+    ['--',        {en:'READY',cn:'\u5c31\u7eea'},    '4',  '--'],
+    ['concrete',  'scan',                             '4',  '1/5'],
+    ['sand',      'scan',                             '4',  '4/5'],
+    ['grass',     'scan',                             '4',  '2/5'],
+    ['gravel',    'complete',                          '4',  '3/5'],
+  ],
+  guideTitle: 'guideTitle',
+  guideItems: ['g1','g2','g3','g4'],
+};
+
+// terrain data: [hardness, roughness, flatness, firmness] 0-10 scale
+var TERRAINS = [
+  null,
+  {name:'concrete', hard:9, rough:2, flat:9, firm:10, diff:1, color:'#a0a0a0'},
+  {name:'sand',     hard:2, rough:5, flat:8, firm:2,  diff:4, color:'#e8c872'},
+  {name:'grass',    hard:5, rough:3, flat:6, firm:6,  diff:2, color:'#6aad5a'},
+  {name:'gravel',   hard:8, rough:9, flat:3, firm:8,  diff:3, color:'#8a7a6a'},
+];
+
+function drawRadar(ctx, cx, cy, r, vals, color, alpha) {
+  var axes = 4;
+  var angleStep = Math.PI * 2 / axes;
+  var startAngle = -Math.PI / 2;
+  ctx.save();
+  ctx.globalAlpha = alpha;
+  // grid rings
+  for (var ring = 2; ring <= 10; ring += 2) {
+    ctx.beginPath();
+    for (var i = 0; i <= axes; i++) {
+      var a = startAngle + i * angleStep;
+      var rr = r * ring / 10;
+      var px = cx + Math.cos(a) * rr;
+      var py = cy + Math.sin(a) * rr;
+      if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+    }
+    ctx.closePath();
+    ctx.strokeStyle = 'rgba(255,255,255,0.08)';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+  }
+  // axes lines
+  for (var i = 0; i < axes; i++) {
+    var a = startAngle + i * angleStep;
+    ctx.beginPath();
+    ctx.moveTo(cx, cy);
+    ctx.lineTo(cx + Math.cos(a) * r, cy + Math.sin(a) * r);
+    ctx.strokeStyle = 'rgba(255,255,255,0.12)';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+  }
+  // data polygon
+  if (vals) {
+    ctx.beginPath();
+    for (var i = 0; i < axes; i++) {
+      var a = startAngle + i * angleStep;
+      var v = r * vals[i] / 10;
+      var px = cx + Math.cos(a) * v;
+      var py = cy + Math.sin(a) * v;
+      if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+    }
+    ctx.closePath();
+    ctx.fillStyle = color.replace(')', ',0.25)').replace('rgb', 'rgba');
+    ctx.fill();
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 2;
+    ctx.shadowColor = color;
+    ctx.shadowBlur = 12;
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+    // data points
+    for (var i = 0; i < axes; i++) {
+      var a = startAngle + i * angleStep;
+      var v = r * vals[i] / 10;
+      var px = cx + Math.cos(a) * v;
+      var py = cy + Math.sin(a) * v;
+      ctx.beginPath();
+      ctx.arc(px, py, 4, 0, Math.PI * 2);
+      ctx.fillStyle = color;
+      ctx.fill();
+    }
+  }
+  ctx.restore();
+}
+
+function drawTerrainBlock(ctx, x, y, w, h, terrain, t) {
+  // textured block representing terrain
+  var P = AnimRuntime.PAL;
+  ctx.save();
+  var grad = ctx.createLinearGradient(x, y, x, y + h);
+  grad.addColorStop(0, terrain.color);
+  grad.addColorStop(1, adjustBrightness(terrain.color, -40));
+  ctx.fillStyle = grad;
+  ctx.fillRect(x, y, w, h);
+  // texture dots
+  ctx.globalAlpha = 0.3;
+  for (var i = 0; i < 20; i++) {
+    var dx = x + Math.random() * w;
+    var dy = y + Math.random() * h;
+    var dr = 1 + Math.random() * 2;
+    ctx.beginPath();
+    ctx.arc(dx, dy, dr, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(0,0,0,0.3)';
+    ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+  // label
+  ctx.font = "bold 13px 'Space Grotesk', sans-serif";
+  ctx.fillStyle = '#fff';
+  ctx.textAlign = 'center';
+  ctx.fillText(t(terrain.name), x + w / 2, y + h + 18);
+  ctx.restore();
+}
+
+function adjustBrightness(hex, amount) {
+  var r = parseInt(hex.slice(1,3),16) + amount;
+  var g = parseInt(hex.slice(3,5),16) + amount;
+  var b = parseInt(hex.slice(5,7),16) + amount;
+  r = Math.max(0,Math.min(255,r));
+  g = Math.max(0,Math.min(255,g));
+  b = Math.max(0,Math.min(255,b));
+  return '#' + [r,g,b].map(function(c){return c.toString(16).padStart(2,'0');}).join('');
+}
+
+function getFrameElements(f, W, H) {
+  var t = AnimRuntime.t;
+  var P = AnimRuntime.PAL;
+  var cx = W / 2, cy = H / 2;
+
+  if (f === 0) {
+    return [
+      {id:'maintitle', type:'label', text:t('f0title'), x:cx, y:cy - 60, color:P.primary, size:22, align:'center', bold:true},
+      {id:'maindesc', type:'label', text:t('f0desc'), x:cx, y:cy, color:P.muted, size:14, align:'center'},
+      {id:'dim4', type:'label', text:t('dim4'), x:cx, y:cy + 50, color:P.secondary, size:12, align:'center'},
+      {id:'scanline', type:'custom', draw: function(alpha) {
+        var ctx = AnimRuntime.ctx;
+        ctx.save();
+        ctx.globalAlpha = alpha * 0.5;
+        var time = Date.now() / 1000;
+        var yy = cy + 90 + Math.sin(time * 2) * 30;
+        ctx.beginPath();
+        ctx.moveTo(W * 0.2, yy);
+        ctx.lineTo(W * 0.8, yy);
+        ctx.strokeStyle = P.primary;
+        ctx.lineWidth = 2;
+        ctx.shadowColor = P.primary;
+        ctx.shadowBlur = 20;
+        ctx.stroke();
+        ctx.restore();
+      }},
+    ];
+  }
+
+  // frames 1-4: each terrain
+  var terrain = TERRAINS[f];
+  var radarCx = cx + W * 0.15;
+  var radarCy = cy - 10;
+  var radarR = Math.min(W, H) * 0.22;
+  var labels = [t('hardness'), t('roughness'), t('flatness'), t('firmness')];
+  var vals = [terrain.hard, terrain.rough, terrain.flat, terrain.firm];
+
+  var elements = [
+    {id:'terrainName', type:'label', text:t(terrain.name), x:cx - W * 0.22, y:cy - H * 0.3, color:terrain.color, size:20, align:'center', bold:true},
+    {id:'radar', type:'custom', x: radarCx, y: radarCy, draw: function(alpha) {
+      var ctx = AnimRuntime.ctx;
+      drawRadar(ctx, radarCx, radarCy, radarR, vals, terrain.color, alpha);
+      // axis labels
+      ctx.save();
+      ctx.globalAlpha = alpha;
+      ctx.font = "bold 11px 'Space Grotesk', sans-serif";
+      ctx.fillStyle = P.text;
+      ctx.textAlign = 'center';
+      var axes = 4;
+      var angleStep = Math.PI * 2 / axes;
+      var startAngle = -Math.PI / 2;
+      var labelR = radarR + 20;
+      for (var i = 0; i < axes; i++) {
+        var a = startAngle + i * angleStep;
+        var lx = radarCx + Math.cos(a) * labelR;
+        var ly = radarCy + Math.sin(a) * labelR + 4;
+        ctx.fillText(labels[i] + ' ' + vals[i], lx, ly);
+      }
+      ctx.restore();
+    }},
+    {id:'diffBadge', type:'custom', draw: function(alpha) {
+      var ctx = AnimRuntime.ctx;
+      ctx.save();
+      ctx.globalAlpha = alpha;
+      var bx = cx - W * 0.22;
+      var by = cy - H * 0.15;
+      // difficulty bar
+      ctx.font = "bold 11px 'Space Grotesk', sans-serif";
+      ctx.fillStyle = P.muted;
+      ctx.textAlign = 'center';
+      ctx.fillText(t('walkDiff'), bx, by);
+      // draw 5 boxes
+      var boxW = 18, boxH = 18, gap = 4;
+      var startX = bx - (5 * (boxW + gap) - gap) / 2;
+      for (var i = 0; i < 5; i++) {
+        var xx = startX + i * (boxW + gap);
+        var yy = by + 8;
+        if (i < terrain.diff) {
+          var g = ctx.createLinearGradient(xx, yy, xx, yy + boxH);
+          g.addColorStop(0, P.primary);
+          g.addColorStop(1, adjustBrightness(P.primary.replace(/[^#0-9a-f]/gi,'').slice(0,7), -30));
+          ctx.fillStyle = g;
+          ctx.shadowColor = P.primary;
+          ctx.shadowBlur = 8;
+        } else {
+          ctx.fillStyle = 'rgba(255,255,255,0.08)';
+          ctx.shadowBlur = 0;
+        }
+        ctx.fillRect(xx, yy, boxW, boxH);
+        ctx.shadowBlur = 0;
+      }
+      ctx.font = "bold 14px 'Space Grotesk', sans-serif";
+      ctx.fillStyle = P.primary;
+      ctx.fillText(terrain.diff + '/5', bx, by + 50);
+      ctx.restore();
+    }},
+    {id:'terrainVisual', type:'custom', draw: function(alpha) {
+      var ctx = AnimRuntime.ctx;
+      ctx.save();
+      ctx.globalAlpha = alpha;
+      var bx = cx - W * 0.22;
+      var by = cy + H * 0.08;
+      var bw = W * 0.2;
+      var bh = H * 0.15;
+      drawTerrainBlock(ctx, bx - bw/2, by, bw, bh, terrain, t);
+      ctx.restore();
+    }},
+  ];
+
+  // frame 4: add mini comparison
+  if (f === 4) {
+    elements.push({id:'miniCompare', type:'custom', draw: function(alpha) {
+      var ctx = AnimRuntime.ctx;
+      ctx.save();
+      ctx.globalAlpha = alpha;
+      var startX = W * 0.08;
+      var by = cy + H * 0.3;
+      var miniW = W * 0.18;
+      var miniH = 8;
+      var gap = W * 0.04;
+      ctx.font = "bold 10px 'Space Grotesk', sans-serif";
+      ctx.textAlign = 'left';
+      for (var i = 1; i <= 4; i++) {
+        var ter = TERRAINS[i];
+        var xx = startX + (i-1) * (miniW + gap);
+        ctx.fillStyle = ter.color;
+        ctx.fillText(t(ter.name), xx, by - 4);
+        // mini bar
+        ctx.fillStyle = 'rgba(255,255,255,0.08)';
+        ctx.fillRect(xx, by, miniW, miniH);
+        ctx.fillStyle = ter.color;
+        ctx.fillRect(xx, by, miniW * ter.diff / 5, miniH);
+      }
+      ctx.fillStyle = P.muted;
+      ctx.textAlign = 'center';
+      ctx.fillText(t('diffLabel'), W / 2, by + 24);
+      ctx.restore();
+    }});
+  }
+
+  return elements;
+}
+
+AnimRuntime.boot();
+</script>
+</body>
+</html>

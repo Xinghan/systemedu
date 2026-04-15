@@ -1,0 +1,411 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Data Triage Game</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;700&family=Inter:wght@400;500&family=Noto+Sans+SC:wght@400;700&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{width:100%;height:100vh;overflow:hidden;background:#131313;font-family:'Space Grotesk','Noto Sans SC',sans-serif;color:#e5e2e1}
+.wrapper{display:flex;flex-direction:column;height:100vh}
+.header{padding:8px 16px;display:flex;align-items:center;justify-content:center;background:rgba(28,27,27,0.92);border-bottom:1px solid rgba(138,136,134,0.15)}
+.header h1{font-size:14px;font-weight:700;letter-spacing:1px;color:#ffb59c;text-transform:uppercase}
+.game-area{flex:1;min-height:0;display:flex;flex-direction:column;padding:8px 12px;gap:8px;overflow:hidden}
+.top-row{display:flex;gap:8px;flex:1;min-height:0}
+.sample-pool{flex:2;display:flex;flex-wrap:wrap;align-content:flex-start;gap:6px;padding:8px;background:rgba(28,27,27,0.6);border:1px solid rgba(138,136,134,0.15);overflow-y:auto}
+.pool-title{width:100%;font-size:11px;color:#8a8886;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px}
+.sample-card{width:80px;height:72px;background:rgba(28,27,27,0.85);border:1px solid rgba(138,136,134,0.15);display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:grab;user-select:none;-webkit-user-select:none;transition:border-color 0.2s,box-shadow 0.2s}
+.sample-card:hover{border-color:#ff7f50;box-shadow:0 0 8px rgba(255,127,80,0.2)}
+.sample-card.dragging{opacity:0.4}
+.sample-card .fname{font-size:8px;color:#8a8886;margin-top:4px;text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;width:70px}
+.sample-card .icon{font-size:22px;line-height:1}
+.sample-card .issue-tag{font-size:7px;padding:1px 4px;margin-top:2px;letter-spacing:0.5px;text-transform:uppercase;font-weight:700}
+.drop-zones{flex:3;display:flex;gap:8px}
+.drop-zone{flex:1;display:flex;flex-direction:column;padding:8px;background:rgba(28,27,27,0.4);border:2px dashed rgba(138,136,134,0.2);transition:border-color 0.2s,background 0.2s}
+.drop-zone.hover{border-color:#ff7f50;background:rgba(255,127,80,0.05)}
+.drop-zone .zone-title{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;text-align:center;margin-bottom:6px;padding:4px;background:rgba(0,0,0,0.3)}
+.drop-zone .zone-items{flex:1;display:flex;flex-wrap:wrap;align-content:flex-start;gap:4px;overflow-y:auto}
+.drop-zone .zone-count{font-size:10px;color:#8a8886;text-align:center;margin-top:4px}
+.bottom-bar{display:flex;justify-content:space-between;align-items:center;padding:6px 12px;background:rgba(0,0,0,0.55);min-height:42px}
+.score-display{font-size:12px;color:#00daf3;font-weight:700}
+.check-btn{font-family:'Space Grotesk',sans-serif;font-size:12px;font-weight:700;padding:6px 20px;cursor:pointer;border:1px solid rgba(255,255,255,0.08);background:linear-gradient(45deg,#ffb59c,#ff7f50);color:#131313;letter-spacing:1px;text-transform:uppercase}
+.check-btn:hover{box-shadow:0 0 12px rgba(255,127,80,0.4)}
+.check-btn:disabled{opacity:0.4;cursor:not-allowed}
+.lang-btn{position:fixed;top:8px;left:8px;z-index:100;font-family:'Space Grotesk',sans-serif;font-size:11px;font-weight:700;padding:4px 10px;cursor:pointer;border:1px solid rgba(255,255,255,0.08);background:rgba(20,20,35,0.85);backdrop-filter:blur(12px);color:#ffb59c;letter-spacing:1px}
+.guide-panel{position:fixed;top:8px;right:8px;width:220px;max-height:40vh;overflow-y:auto;background:rgba(20,20,35,0.85);backdrop-filter:blur(12px);border:1px solid rgba(255,255,255,0.08);padding:10px;z-index:100;font-family:'Noto Sans SC',sans-serif;font-size:11px;color:rgba(255,255,255,0.85)}
+.guide-panel h3{font-family:'Space Grotesk',sans-serif;font-size:12px;margin-bottom:6px;display:flex;align-items:center;justify-content:space-between;cursor:pointer;color:#ffb59c}
+.guide-panel ul{padding-left:14px;line-height:1.5}
+.feedback-overlay{position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.8);display:none;align-items:center;justify-content:center;z-index:200}
+.feedback-panel{background:rgba(28,27,27,0.95);backdrop-filter:blur(20px);border:1px solid rgba(138,136,134,0.15);padding:24px;max-width:420px;width:90%;text-align:center}
+.feedback-panel h2{font-size:18px;color:#ffb59c;margin-bottom:12px;text-transform:uppercase;letter-spacing:1px}
+.feedback-panel .score-big{font-size:36px;color:#00daf3;font-weight:700;margin:12px 0}
+.feedback-panel .detail{font-size:12px;color:#c6c6c6;line-height:1.6;text-align:left;margin:12px 0}
+.feedback-panel .retry-btn{font-family:'Space Grotesk',sans-serif;font-size:12px;font-weight:700;padding:8px 24px;cursor:pointer;border:1px solid rgba(255,255,255,0.08);background:linear-gradient(45deg,#ffb59c,#ff7f50);color:#131313;letter-spacing:1px;text-transform:uppercase;margin-top:12px}
+.correct-mark{color:#10b981}
+.wrong-mark{color:#ff5f1f}
+</style>
+</head>
+<body>
+<button class="lang-btn" id="langBtn">CN</button>
+<div class="guide-panel" id="guidePanel">
+  <h3 id="guideToggle"><span id="guideTitle"></span><span id="guideArrow">-</span></h3>
+  <div class="guide-content" id="guideContent">
+    <p id="guideGoal" style="margin-bottom:6px"></p>
+    <ul id="guideSteps"></ul>
+    <p id="guideTips" style="margin-top:6px;color:#00daf3;font-size:10px"></p>
+  </div>
+</div>
+<div class="wrapper">
+  <div class="header"><h1 id="mainTitle"></h1></div>
+  <div class="game-area">
+    <div class="top-row">
+      <div class="sample-pool" id="samplePool">
+        <div class="pool-title" id="poolTitle"></div>
+      </div>
+      <div class="drop-zones" id="dropZones"></div>
+    </div>
+  </div>
+  <div class="bottom-bar">
+    <div class="score-display" id="scoreDisplay"></div>
+    <button class="check-btn" id="checkBtn" disabled></button>
+  </div>
+</div>
+<div class="feedback-overlay" id="feedbackOverlay">
+  <div class="feedback-panel">
+    <h2 id="fbTitle"></h2>
+    <div class="score-big" id="fbScore"></div>
+    <div class="detail" id="fbDetail"></div>
+    <button class="retry-btn" id="retryBtn"></button>
+  </div>
+</div>
+<script>
+(function(){
+var LANG='cn';
+var I18N={
+  title:{en:'DATA TRIAGE',cn:'\u6570\u636e\u5206\u7c7b\u5206\u62e3'},
+  guide:{en:'GUIDE',cn:'\u64cd\u4f5c\u6307\u5357'},
+  guideGoal:{en:'Drag each sample card into the correct category zone.',cn:'\u5c06\u6bcf\u5f20\u6837\u672c\u5361\u62d6\u5165\u6b63\u786e\u7684\u5206\u7c7b\u533a\u57df\u3002'},
+  guideS1:{en:'1. Read the filename and issue tag on each card',cn:'1. \u9605\u8bfb\u6bcf\u5f20\u5361\u7247\u7684\u6587\u4ef6\u540d\u548c\u95ee\u9898\u6807\u7b7e'},
+  guideS2:{en:'2. Drag the card to the matching zone',cn:'2. \u5c06\u5361\u7247\u62d6\u5230\u5bf9\u5e94\u7684\u533a\u57df'},
+  guideS3:{en:'3. Sort all 12 cards then click CHECK',cn:'3. \u5206\u5b8c\u5168\u90e8 12 \u5f20\u5361\u7247\u540e\u70b9\u51fb\u68c0\u67e5'},
+  guideTips:{en:'Cards can be dragged back to the pool to re-sort.',cn:'\u5361\u7247\u53ef\u4ee5\u62d6\u56de\u6c60\u4e2d\u91cd\u65b0\u5206\u7c7b\u3002'},
+  poolTitle:{en:'SAMPLE POOL',cn:'\u6837\u672c\u6c60'},
+  zone_clean:{en:'TRAINABLE',cn:'\u53ef\u8bad\u7ec3'},
+  zone_missing:{en:'MISSING FILE',cn:'\u7f3a\u5931\u6587\u4ef6'},
+  zone_lowres:{en:'LOW RESOLUTION',cn:'\u4f4e\u5206\u8fa8\u7387'},
+  zone_anomaly:{en:'LABEL ANOMALY',cn:'\u6807\u7b7e\u5f02\u5e38'},
+  score:{en:'SORTED',cn:'\u5df2\u5206\u7c7b'},
+  check:{en:'CHECK',cn:'\u68c0\u67e5'},
+  fbWin:{en:'TRIAGE COMPLETE',cn:'\u5206\u62e3\u5b8c\u6210'},
+  fbRetry:{en:'RETRY',cn:'\u91cd\u65b0\u5f00\u59cb'},
+  fbCorrect:{en:'correct',cn:'\u6b63\u786e'},
+  fbWrong:{en:'wrong',cn:'\u9519\u8bef'},
+  fbSummary:{en:'You correctly classified',cn:'\u4f60\u6b63\u786e\u5206\u7c7b\u4e86'},
+  fbOf:{en:'of',cn:'/'},
+  fbSamples:{en:'samples.',cn:'\u4e2a\u6837\u672c\u3002'},
+  fbLearn:{en:'Data triage is the first step of data engineering. A clean ledger ensures reproducible experiments.',cn:'\u6570\u636e\u5206\u62e3\u662f\u6570\u636e\u5de5\u7a0b\u7684\u7b2c\u4e00\u6b65\u3002\u5e72\u51c0\u7684\u53f0\u8d26\u624d\u80fd\u4fdd\u8bc1\u53ef\u590d\u73b0\u7684\u5b9e\u9a8c\u3002'}
+};
+function t(k){return(I18N[k]&&I18N[k][LANG])||(I18N[k]&&I18N[k]['en'])||k}
+
+// Sample data
+var SAMPLES=[
+  {id:'s1',fname:'NAV_001.jpg',zone:'clean',icon_color:'#10b981',issue:'1024x1024 / soil'},
+  {id:'s2',fname:'NAV_017.jpg',zone:'missing',icon_color:'#ff5f1f',issue:'no label file'},
+  {id:'s3',fname:'NAV_042.jpg',zone:'lowres',icon_color:'#fbbf24',issue:'32x32 px'},
+  {id:'s4',fname:'NAV_088.jpg',zone:'clean',icon_color:'#10b981',issue:'1024x1024 / sand'},
+  {id:'s5',fname:'NAV_103.jpg',zone:'anomaly',icon_color:'#00daf3',issue:'label: soil+rock'},
+  {id:'s6',fname:'NAV_127.jpg',zone:'clean',icon_color:'#10b981',issue:'512x512 / bedrock'},
+  {id:'s7',fname:'NAV_155.jpg',zone:'missing',icon_color:'#ff5f1f',issue:'no mask file'},
+  {id:'s8',fname:'NAV_201.jpg',zone:'lowres',icon_color:'#fbbf24',issue:'48x48 px'},
+  {id:'s9',fname:'NAV_234.jpg',zone:'clean',icon_color:'#10b981',issue:'1024x1024 / rock'},
+  {id:'s10',fname:'NAV_267.jpg',zone:'anomaly',icon_color:'#00daf3',issue:'3 voters disagree'},
+  {id:'s11',fname:'NAV_299.jpg',zone:'clean',icon_color:'#10b981',issue:'512x512 / sand'},
+  {id:'s12',fname:'NAV_312.jpg',zone:'anomaly',icon_color:'#00daf3',issue:'label all zeros'}
+];
+
+var ZONES=['clean','missing','lowres','anomaly'];
+var ZONE_COLORS={clean:'#10b981',missing:'#ff5f1f',lowres:'#fbbf24',anomaly:'#00daf3'};
+var placements={};// sampleId -> zoneId or 'pool'
+var sorted=0;
+var dragItem=null;
+var dragGhost=null;
+var dragOffX=0,dragOffY=0;
+
+function shuffle(arr){
+  for(var i=arr.length-1;i>0;i--){
+    var j=Math.floor(Math.random()*(i+1));
+    var tmp=arr[i];arr[i]=arr[j];arr[j]=tmp;
+  }
+  return arr;
+}
+
+function buildUI(){
+  // Build drop zones
+  var dzContainer=document.getElementById('dropZones');
+  dzContainer.innerHTML='';
+  ZONES.forEach(function(z){
+    var div=document.createElement('div');
+    div.className='drop-zone';
+    div.id='zone_'+z;
+    div.innerHTML='<div class="zone-title" style="color:'+ZONE_COLORS[z]+'" id="zoneTitle_'+z+'"></div><div class="zone-items" id="zoneItems_'+z+'"></div><div class="zone-count" id="zoneCount_'+z+'">0</div>';
+    dzContainer.appendChild(div);
+  });
+
+  // Build sample cards
+  var pool=document.getElementById('samplePool');
+  pool.innerHTML='<div class="pool-title" id="poolTitle">'+t('poolTitle')+'</div>';
+  var shuffled=shuffle(SAMPLES.slice());
+  shuffled.forEach(function(s){
+    var card=createCard(s);
+    pool.appendChild(card);
+    placements[s.id]='pool';
+  });
+  sorted=0;
+  updateScore();
+  document.getElementById('checkBtn').disabled=true;
+}
+
+function createCard(s){
+  var card=document.createElement('div');
+  card.className='sample-card';
+  card.id='card_'+s.id;
+  card.setAttribute('data-sid',s.id);
+  // Mars terrain icon (simple colored square)
+  var iconDiv=document.createElement('div');
+  iconDiv.className='icon';
+  iconDiv.style.width='36px';iconDiv.style.height='24px';
+  iconDiv.style.background='linear-gradient(135deg,'+s.icon_color+','+s.icon_color+'88)';
+  iconDiv.style.border='1px solid '+s.icon_color+'44';
+  card.appendChild(iconDiv);
+  var fnameDiv=document.createElement('div');
+  fnameDiv.className='fname';fnameDiv.textContent=s.fname;
+  card.appendChild(fnameDiv);
+  var tagDiv=document.createElement('div');
+  tagDiv.className='issue-tag';
+  tagDiv.style.color=s.icon_color;
+  tagDiv.textContent=s.issue;
+  card.appendChild(tagDiv);
+
+  // Drag events (mouse)
+  card.addEventListener('mousedown',function(e){startDrag(e,s.id,card)});
+  // Drag events (touch)
+  card.addEventListener('touchstart',function(e){startDragTouch(e,s.id,card)},{passive:false});
+  return card;
+}
+
+function startDrag(e,sid,card){
+  e.preventDefault();
+  dragItem=sid;
+  card.classList.add('dragging');
+  var rect=card.getBoundingClientRect();
+  dragOffX=e.clientX-rect.left;dragOffY=e.clientY-rect.top;
+  // Create ghost
+  dragGhost=card.cloneNode(true);
+  dragGhost.style.position='fixed';
+  dragGhost.style.left=(e.clientX-dragOffX)+'px';
+  dragGhost.style.top=(e.clientY-dragOffY)+'px';
+  dragGhost.style.zIndex='300';dragGhost.style.opacity='0.8';
+  dragGhost.style.pointerEvents='none';
+  document.body.appendChild(dragGhost);
+  document.addEventListener('mousemove',onDragMove);
+  document.addEventListener('mouseup',onDragEnd);
+}
+
+function startDragTouch(e,sid,card){
+  e.preventDefault();
+  var touch=e.touches[0];
+  dragItem=sid;
+  card.classList.add('dragging');
+  var rect=card.getBoundingClientRect();
+  dragOffX=touch.clientX-rect.left;dragOffY=touch.clientY-rect.top;
+  dragGhost=card.cloneNode(true);
+  dragGhost.style.position='fixed';
+  dragGhost.style.left=(touch.clientX-dragOffX)+'px';
+  dragGhost.style.top=(touch.clientY-dragOffY)+'px';
+  dragGhost.style.zIndex='300';dragGhost.style.opacity='0.8';
+  dragGhost.style.pointerEvents='none';
+  document.body.appendChild(dragGhost);
+  document.addEventListener('touchmove',onDragMoveTouch,{passive:false});
+  document.addEventListener('touchend',onDragEndTouch);
+}
+
+function onDragMove(e){
+  if(!dragGhost)return;
+  dragGhost.style.left=(e.clientX-dragOffX)+'px';
+  dragGhost.style.top=(e.clientY-dragOffY)+'px';
+  highlightZone(e.clientX,e.clientY);
+}
+function onDragMoveTouch(e){
+  e.preventDefault();
+  if(!dragGhost)return;
+  var touch=e.touches[0];
+  dragGhost.style.left=(touch.clientX-dragOffX)+'px';
+  dragGhost.style.top=(touch.clientY-dragOffY)+'px';
+  highlightZone(touch.clientX,touch.clientY);
+}
+
+function highlightZone(cx,cy){
+  ZONES.forEach(function(z){
+    var el=document.getElementById('zone_'+z);
+    var r=el.getBoundingClientRect();
+    if(cx>=r.left&&cx<=r.right&&cy>=r.top&&cy<=r.bottom){
+      el.classList.add('hover');
+    }else{
+      el.classList.remove('hover');
+    }
+  });
+  // Also check pool
+  var pool=document.getElementById('samplePool');
+  var pr=pool.getBoundingClientRect();
+  if(cx>=pr.left&&cx<=pr.right&&cy>=pr.top&&cy<=pr.bottom){
+    pool.style.borderColor='#ff7f50';
+  }else{
+    pool.style.borderColor='rgba(138,136,134,0.15)';
+  }
+}
+
+function onDragEnd(e){
+  document.removeEventListener('mousemove',onDragMove);
+  document.removeEventListener('mouseup',onDragEnd);
+  finishDrag(e.clientX,e.clientY);
+}
+function onDragEndTouch(e){
+  document.removeEventListener('touchmove',onDragMoveTouch);
+  document.removeEventListener('touchend',onDragEndTouch);
+  var touch=e.changedTouches[0];
+  finishDrag(touch.clientX,touch.clientY);
+}
+
+function finishDrag(cx,cy){
+  if(!dragItem)return;
+  // Remove ghost
+  if(dragGhost&&dragGhost.parentNode){dragGhost.parentNode.removeChild(dragGhost)}
+  dragGhost=null;
+  // Reset dragging class
+  var card=document.getElementById('card_'+dragItem);
+  if(card)card.classList.remove('dragging');
+  // Check which zone
+  var landed=null;
+  ZONES.forEach(function(z){
+    var el=document.getElementById('zone_'+z);
+    el.classList.remove('hover');
+    var r=el.getBoundingClientRect();
+    if(cx>=r.left&&cx<=r.right&&cy>=r.top&&cy<=r.bottom){landed=z}
+  });
+  // Check pool
+  var pool=document.getElementById('samplePool');
+  pool.style.borderColor='rgba(138,136,134,0.15)';
+  var pr=pool.getBoundingClientRect();
+  var landedPool=(cx>=pr.left&&cx<=pr.right&&cy>=pr.top&&cy<=pr.bottom);
+
+  var sid=dragItem;
+  dragItem=null;
+  var oldZone=placements[sid];
+
+  if(landed){
+    // Move card to zone
+    if(oldZone!=='pool'){
+      // Remove from old zone
+      var oldItems=document.getElementById('zoneItems_'+oldZone);
+      if(oldItems&&card&&card.parentNode===oldItems){oldItems.removeChild(card)}
+    }else{
+      // Remove from pool
+      if(card&&card.parentNode===pool){pool.removeChild(card)}
+    }
+    document.getElementById('zoneItems_'+landed).appendChild(card);
+    placements[sid]=landed;
+  }else if(landedPool&&oldZone!=='pool'){
+    // Return to pool
+    var oldItems2=document.getElementById('zoneItems_'+oldZone);
+    if(oldItems2&&card&&card.parentNode===oldItems2){oldItems2.removeChild(card)}
+    pool.appendChild(card);
+    placements[sid]='pool';
+  }
+  // else: dropped outside, stays where it was
+
+  updateScore();
+  updateZoneCounts();
+}
+
+function updateScore(){
+  sorted=0;
+  SAMPLES.forEach(function(s){
+    if(placements[s.id]&&placements[s.id]!=='pool')sorted++;
+  });
+  document.getElementById('scoreDisplay').textContent=t('score')+': '+sorted+'/'+SAMPLES.length;
+  document.getElementById('checkBtn').disabled=(sorted<SAMPLES.length);
+}
+
+function updateZoneCounts(){
+  ZONES.forEach(function(z){
+    var count=0;
+    SAMPLES.forEach(function(s){if(placements[s.id]===z)count++});
+    document.getElementById('zoneCount_'+z).textContent=count;
+  });
+}
+
+function checkAnswers(){
+  var correct=0;
+  var details=[];
+  SAMPLES.forEach(function(s){
+    var placed=placements[s.id];
+    var isCorrect=(placed===s.zone);
+    if(isCorrect)correct++;
+    var mark=isCorrect?'<span class="correct-mark">[O]</span>':'<span class="wrong-mark">[X]</span>';
+    var zoneLabel=t('zone_'+s.zone);
+    var placedLabel=placed?t('zone_'+placed):'--';
+    details.push(mark+' '+s.fname+': '+placedLabel+(isCorrect?'':' -> '+zoneLabel));
+  });
+  document.getElementById('fbTitle').textContent=t('fbWin');
+  document.getElementById('fbScore').textContent=correct+'/'+SAMPLES.length;
+  document.getElementById('fbDetail').innerHTML=
+    '<p>'+t('fbSummary')+' '+correct+' '+t('fbOf')+' '+SAMPLES.length+' '+t('fbSamples')+'</p>'+
+    '<p style="margin-top:8px">'+details.join('<br>')+'</p>'+
+    '<p style="margin-top:10px;color:#00daf3">'+t('fbLearn')+'</p>';
+  document.getElementById('retryBtn').textContent=t('fbRetry');
+  document.getElementById('feedbackOverlay').style.display='flex';
+}
+
+function refreshI18N(){
+  document.getElementById('mainTitle').textContent=t('title');
+  document.getElementById('poolTitle').textContent=t('poolTitle');
+  document.getElementById('checkBtn').textContent=t('check');
+  document.getElementById('guideTitle').textContent=t('guide');
+  document.getElementById('guideGoal').textContent=t('guideGoal');
+  document.getElementById('guideSteps').innerHTML='<li>'+t('guideS1')+'</li><li>'+t('guideS2')+'</li><li>'+t('guideS3')+'</li>';
+  document.getElementById('guideTips').textContent=t('guideTips');
+  ZONES.forEach(function(z){
+    document.getElementById('zoneTitle_'+z).textContent=t('zone_'+z);
+  });
+  updateScore();
+}
+
+// Event bindings
+document.getElementById('langBtn').addEventListener('click',function(){
+  LANG=LANG==='en'?'cn':'en';
+  document.getElementById('langBtn').textContent=LANG.toUpperCase();
+  refreshI18N();
+});
+document.getElementById('guideToggle').addEventListener('click',function(){
+  var content=document.getElementById('guideContent');
+  var arrow=document.getElementById('guideArrow');
+  if(content.style.display==='none'){content.style.display='block';arrow.textContent='-'}
+  else{content.style.display='none';arrow.textContent='+'}
+});
+document.getElementById('checkBtn').addEventListener('click',function(){
+  checkAnswers();
+});
+document.getElementById('retryBtn').addEventListener('click',function(){
+  document.getElementById('feedbackOverlay').style.display='none';
+  buildUI();
+  refreshI18N();
+});
+
+// Init
+buildUI();
+refreshI18N();
+})();
+</script>
+</body>
+</html>

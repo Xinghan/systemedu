@@ -1,0 +1,452 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>System Capability Boundary</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;700&family=Inter:wght@400;500&family=Noto+Sans+SC:wght@400;700&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{width:100%;height:100vh;overflow:hidden;background:#131313;font-family:'Noto Sans SC','Inter',sans-serif;color:#e5e2e1}
+.wrapper{display:flex;flex-direction:column;height:100vh;width:100%}
+.header{padding:8px 16px;background:rgba(28,27,27,0.92);display:flex;align-items:center;justify-content:space-between;flex-shrink:0}
+.header h1{font-family:'Space Grotesk',sans-serif;font-size:15px;font-weight:700;color:#ffb59c;letter-spacing:1.5px;text-transform:uppercase}
+.header .subtitle{font-size:11px;color:#8a8886;font-family:'Space Grotesk',sans-serif;letter-spacing:1px}
+.canvas-wrap{flex:1;min-height:0;position:relative}
+canvas{display:block;width:100%;height:100%}
+.controls{display:flex;align-items:center;justify-content:center;gap:12px;padding:8px 16px;background:rgba(28,27,27,0.92);flex-shrink:0}
+.ctrl-btn{font-family:'Space Grotesk',sans-serif;font-size:11px;font-weight:700;padding:6px 16px;cursor:pointer;border:none;background:linear-gradient(135deg,#ff7f50,#ffb59c);color:#131313;letter-spacing:1px;transition:background 0.15s}
+.ctrl-btn:hover{background:linear-gradient(135deg,#ffb59c,#ff7f50)}
+.frame-ind{font-family:'Space Grotesk',sans-serif;font-size:12px;color:#8a8886;min-width:60px;text-align:center}
+.hud{display:flex;align-items:center;justify-content:space-around;padding:6px 16px;background:rgba(0,0,0,0.55);flex-shrink:0;height:48px}
+.hud-item{text-align:center}
+.hud-label{font-family:'Space Grotesk',sans-serif;font-size:9px;color:#8a8886;letter-spacing:1.5px;text-transform:uppercase}
+.hud-value{font-family:'Space Grotesk',sans-serif;font-size:13px;color:#00daf3;font-weight:700}
+.lang-btn{position:fixed;top:8px;left:8px;z-index:100;font-family:'Space Grotesk',sans-serif;font-size:11px;font-weight:700;padding:4px 10px;cursor:pointer;border:1px solid rgba(255,255,255,0.08);background:rgba(20,20,35,0.85);backdrop-filter:blur(12px);color:#ffb59c;letter-spacing:1px}
+.guide-panel{position:fixed;top:8px;right:8px;width:250px;max-height:40vh;overflow-y:auto;background:rgba(20,20,35,0.85);backdrop-filter:blur(12px);border:1px solid rgba(255,255,255,0.08);padding:12px;z-index:100;font-family:'Noto Sans SC',sans-serif;font-size:12px;color:rgba(255,255,255,0.85)}
+.guide-panel h3{font-family:'Space Grotesk',sans-serif;font-size:13px;margin-bottom:8px;display:flex;align-items:center;justify-content:space-between;cursor:pointer;color:#ffb59c}
+.guide-panel ul{padding-left:16px;line-height:1.7}
+.guide-content.collapsed{display:none}
+</style>
+</head>
+<body>
+<button class="lang-btn" id="langBtn">CN</button>
+<div class="guide-panel" id="guidePanel">
+  <h3 id="guideToggle"><span id="guideTitle"></span><span id="guideArrow">-</span></h3>
+  <div class="guide-content" id="guideContent">
+    <p id="guideDesc" style="margin-bottom:8px"></p>
+    <ul id="guidePoints"></ul>
+    <p id="guideTakeaway" style="margin-top:8px;color:#00daf3;font-size:11px"></p>
+  </div>
+</div>
+<div class="wrapper">
+  <div class="header">
+    <div>
+      <h1 id="mainTitle"></h1>
+      <div class="subtitle" id="mainSubtitle"></div>
+    </div>
+    <div class="subtitle" id="moduleTag">P-MARS-01-M45 / CAPSTONE</div>
+  </div>
+  <div class="canvas-wrap" id="canvasWrap">
+    <canvas id="c"></canvas>
+  </div>
+  <div class="controls">
+    <button class="ctrl-btn" id="btnPrev"></button>
+    <span class="frame-ind" id="frameInd"></span>
+    <button class="ctrl-btn" id="btnNext"></button>
+    <button class="ctrl-btn" id="btnPlay"></button>
+  </div>
+  <div class="hud">
+    <div class="hud-item"><div class="hud-label" id="hudL1"></div><div class="hud-value" id="hudV1">--</div></div>
+    <div class="hud-item"><div class="hud-label" id="hudL2"></div><div class="hud-value" id="hudV2">--</div></div>
+    <div class="hud-item"><div class="hud-label" id="hudL3"></div><div class="hud-value" id="hudV3">--</div></div>
+    <div class="hud-item"><div class="hud-label" id="hudL4"></div><div class="hud-value" id="hudV4">--</div></div>
+  </div>
+</div>
+<script>
+(function(){
+var LANG='cn';
+var I18N={
+  title:{en:'CAPABILITY BOUNDARY MAP',cn:'\u7cfb\u7edf\u80fd\u529b\u8fb9\u754c\u56fe'},
+  subtitle:{en:'End-to-End Pipeline Trust Analysis',cn:'\u7aef\u5230\u7aef\u7ba1\u7ebf\u4fe1\u4efb\u5206\u6790'},
+  guideTitle:{en:'OBSERVATION GUIDE',cn:'\u89c2\u5bdf\u6307\u5357'},
+  guideDesc:{en:'This animation shows how the Mars rover risk map pipeline performs under different input conditions. Watch how confidence degrades as conditions worsen.',cn:'\u672c\u52a8\u753b\u5c55\u793a\u706b\u661f\u8f66\u98ce\u9669\u5730\u56fe\u7ba1\u7ebf\u5728\u4e0d\u540c\u8f93\u5165\u6761\u4ef6\u4e0b\u7684\u8868\u73b0\u3002\u89c2\u5bdf\u7f6e\u4fe1\u5ea6\u5982\u4f55\u968f\u6761\u4ef6\u6076\u5316\u800c\u9000\u5316\u3002'},
+  guideP1:{en:'Green = trusted, Yellow = degraded, Red = untrusted',cn:'\u7eff\u8272=\u53ef\u4fe1\u4efb\u3001\u9ec4\u8272=\u9000\u5316\u3001\u7ea2\u8272=\u4e0d\u53ef\u4fe1\u4efb'},
+  guideP2:{en:'Each stage passes confidence to the next',cn:'\u6bcf\u4e2a\u9636\u6bb5\u7684\u7f6e\u4fe1\u5ea6\u4f20\u9012\u5230\u4e0b\u4e00\u9636\u6bb5'},
+  guideP3:{en:'Notice cascade failures in later frames',cn:'\u6ce8\u610f\u540e\u7eed\u5e27\u4e2d\u7684\u7ea7\u8054\u5931\u8d25'},
+  guideTakeaway:{en:'A system is only as trustworthy as its weakest link under given conditions.',cn:'\u7cfb\u7edf\u7684\u53ef\u4fe1\u5ea6\u53d6\u51b3\u4e8e\u7ed9\u5b9a\u6761\u4ef6\u4e0b\u6700\u5f31\u7684\u73af\u8282\u3002'},
+  btnPrev:{en:'PREV',cn:'\u4e0a\u4e00\u5e27'},
+  btnNext:{en:'NEXT',cn:'\u4e0b\u4e00\u5e27'},
+  btnPlay:{en:'PLAY',cn:'\u64ad\u653e'},
+  btnPause:{en:'PAUSE',cn:'\u6682\u505c'},
+  hudL1:{en:'CONDITION',cn:'\u8f93\u5165\u6761\u4ef6'},
+  hudL2:{en:'WEAKEST STAGE',cn:'\u6700\u5f31\u73af\u8282'},
+  hudL3:{en:'OVERALL TRUST',cn:'\u6574\u4f53\u4fe1\u4efb'},
+  hudL4:{en:'DEFECTS HIT',cn:'\u547d\u4e2d\u7f3a\u9677'},
+  f0_cond:{en:'IDEAL',cn:'\u7406\u60f3\u6761\u4ef6'},
+  f1_cond:{en:'LOW LIGHT',cn:'\u4f4e\u5149\u7167'},
+  f2_cond:{en:'DUST STORM',cn:'\u6c99\u5c18\u66b4'},
+  f3_cond:{en:'UNKNOWN TERRAIN',cn:'\u672a\u77e5\u5730\u5f62'},
+  f4_cond:{en:'COMBINED STRESS',cn:'\u590d\u5408\u538b\u529b'},
+  f0_weak:{en:'NONE',cn:'\u65e0'},
+  f1_weak:{en:'SEGMENTATION',cn:'\u8bed\u4e49\u5206\u5272'},
+  f2_weak:{en:'IMAGE INPUT',cn:'\u56fe\u50cf\u8f93\u5165'},
+  f3_weak:{en:'RISK MAPPING',cn:'\u98ce\u9669\u5efa\u56fe'},
+  f4_weak:{en:'FULL CASCADE',cn:'\u5168\u94fe\u7ea7\u8054'},
+  f0_trust:{en:'HIGH (95%)',cn:'\u9ad8 (95%)'},
+  f1_trust:{en:'MEDIUM (72%)',cn:'\u4e2d (72%)'},
+  f2_trust:{en:'LOW (41%)',cn:'\u4f4e (41%)'},
+  f3_trust:{en:'LOW (38%)',cn:'\u4f4e (38%)'},
+  f4_trust:{en:'CRITICAL (15%)',cn:'\u4e25\u91cd (15%)'},
+  f0_defects:{en:'0 / 6',cn:'0 / 6'},
+  f1_defects:{en:'1 / 6',cn:'1 / 6'},
+  f2_defects:{en:'2 / 6',cn:'2 / 6'},
+  f3_defects:{en:'3 / 6',cn:'3 / 6'},
+  f4_defects:{en:'5 / 6',cn:'5 / 6'},
+  stageImage:{en:'IMAGE',cn:'\u56fe\u50cf'},
+  stageSeg:{en:'SEGMENT',cn:'\u5206\u5272'},
+  stageRisk:{en:'RISK MAP',cn:'\u98ce\u9669\u56fe'},
+  stagePath:{en:'PATH',cn:'\u8def\u5f84'},
+  stageCtrl:{en:'CONTROL',cn:'\u8f66\u63a7'},
+  stageOutput:{en:'OUTPUT',cn:'\u8f93\u51fa'},
+  labelTrust:{en:'TRUST',cn:'\u4fe1\u4efb'},
+  labelDegraded:{en:'DEGRADED',cn:'\u9000\u5316'},
+  labelFail:{en:'FAIL',cn:'\u5931\u8d25'},
+  frameOf:{en:'of',cn:'/'}
+};
+function t(k){return(I18N[k]&&I18N[k][LANG])||(I18N[k]&&I18N[k]['en'])||k;}
+
+var canvas=document.getElementById('c');
+var ctx=canvas.getContext('2d');
+var wrap=document.getElementById('canvasWrap');
+var W=0,H=0,DPR=Math.min(window.devicePixelRatio||1,2);
+var currentFrame=0,totalFrames=5;
+var playing=false,playRaf=null;
+var transitioning=false;
+
+// Pipeline stages and per-frame confidence
+var stages=['stageImage','stageSeg','stageRisk','stagePath','stageCtrl','stageOutput'];
+var frameConf=[
+  [0.98,0.96,0.95,0.94,0.96,0.95],
+  [0.85,0.65,0.72,0.70,0.74,0.72],
+  [0.40,0.38,0.42,0.35,0.39,0.41],
+  [0.80,0.75,0.35,0.30,0.42,0.38],
+  [0.30,0.20,0.15,0.12,0.10,0.15]
+];
+
+function resize(){
+  var rect=wrap.getBoundingClientRect();
+  if(rect.width<1||rect.height<1)return;
+  W=rect.width;H=rect.height;
+  canvas.width=W*DPR;canvas.height=H*DPR;
+  canvas.style.width=W+'px';canvas.style.height=H+'px';
+  ctx.setTransform(DPR,0,0,DPR,0,0);
+  drawFrame(currentFrame);
+}
+
+function lerp(a,b,p){return a+(b-a)*p;}
+function easeInOut(x){return x<0.5?2*x*x:1-Math.pow(-2*x+2,2)/2;}
+function merge(base,overrides){var r={};for(var k in base)r[k]=base[k];for(var k2 in overrides)r[k2]=overrides[k2];return r;}
+
+function confColor(c){
+  if(c>=0.7)return{main:'#10b981',glow:'rgba(16,185,129,0.3)'};
+  if(c>=0.4)return{main:'#fbbf24',glow:'rgba(251,191,36,0.3)'};
+  return{main:'#ef4444',glow:'rgba(239,68,68,0.3)'};
+}
+function confLabel(c){
+  if(c>=0.7)return t('labelTrust');
+  if(c>=0.4)return t('labelDegraded');
+  return t('labelFail');
+}
+
+function getFrameElements(f){
+  var confs=frameConf[f];
+  var elems=[];
+  var stageCount=stages.length;
+  var boxW=Math.min(80,W*0.11);
+  var gap=Math.max(12,(W-stageCount*boxW)/(stageCount+1));
+  var totalWidth=stageCount*boxW+(stageCount-1)*gap;
+  var startX=(W-totalWidth)/2;
+  var cy=H*0.38;
+  var boxH=boxW*1.1;
+
+  // Title
+  elems.push({id:'title',type:'label',text:t('title'),x:W/2,y:H*0.08,color:'#ffb59c',size:Math.max(14,W*0.022),align:'center',alpha:1,font:'bold'});
+
+  // Condition label
+  var condKey='f'+f+'_cond';
+  elems.push({id:'condition',type:'label',text:t(condKey),x:W/2,y:H*0.16,color:'#00daf3',size:Math.max(12,W*0.016),align:'center',alpha:1,font:'bold'});
+
+  // Pipeline stages
+  for(var i=0;i<stageCount;i++){
+    var sx=startX+i*(boxW+gap);
+    var conf=confs[i];
+    var cc=confColor(conf);
+    elems.push({id:'box'+i,type:'custom',x:sx,y:cy-boxH/2,w:boxW,h:boxH,conf:conf,stageIdx:i,draw:function(alpha){
+      var el=this;
+      drawStageBox(el.x,el.y,el.w,el.h,el.conf,el.stageIdx,alpha);
+    },alpha:1});
+    // Stage label below box
+    elems.push({id:'slabel'+i,type:'label',text:t(stages[i]),x:sx+boxW/2,y:cy+boxH/2+16,color:'#8a8886',size:Math.max(9,W*0.01),align:'center',alpha:1,font:'bold'});
+    // Confidence percentage inside box
+    elems.push({id:'cpct'+i,type:'label',text:Math.round(conf*100)+'%',x:sx+boxW/2,y:cy+4,color:confColor(conf).main,size:Math.max(13,W*0.018),align:'center',alpha:1,font:'bold'});
+    // Confidence status
+    elems.push({id:'cstat'+i,type:'label',text:confLabel(conf),x:sx+boxW/2,y:cy+22,color:confColor(conf).main,size:Math.max(8,W*0.009),align:'center',alpha:1,font:'normal'});
+    // Arrow to next stage
+    if(i<stageCount-1){
+      var ax1=sx+boxW+4;
+      var ax2=sx+boxW+gap-4;
+      var arrowColor=confColor(Math.min(conf,confs[i+1])).main;
+      elems.push({id:'arrow'+i,type:'arrow',x1:ax1,y1:cy,x2:ax2,y2:cy,color:arrowColor,alpha:1});
+    }
+  }
+
+  // Bottom boundary line
+  var boundaryY=H*0.72;
+  elems.push({id:'boundary',type:'custom',x:startX,y:boundaryY,w:totalWidth,h:2,draw:function(alpha){
+    ctx.globalAlpha=alpha*0.6;
+    var grad=ctx.createLinearGradient(this.x,0,this.x+this.w,0);
+    grad.addColorStop(0,'rgba(255,95,31,0)');
+    grad.addColorStop(0.2,'#ff5f1f');
+    grad.addColorStop(0.8,'#ff5f1f');
+    grad.addColorStop(1,'rgba(255,95,31,0)');
+    ctx.fillStyle=grad;
+    ctx.fillRect(this.x,this.y,this.w,this.h);
+    ctx.globalAlpha=alpha;
+  },alpha:1});
+
+  // Boundary label
+  elems.push({id:'blabel',type:'label',text:t('labelTrust')+' / '+t('labelFail')+' BOUNDARY',x:W/2,y:boundaryY+18,color:'#ff5f1f',size:Math.max(9,W*0.01),align:'center',alpha:1,font:'bold'});
+
+  return elems;
+}
+
+function drawStageBox(x,y,w,h,conf,idx,alpha){
+  ctx.globalAlpha=alpha;
+  var cc=confColor(conf);
+  // Glow
+  ctx.shadowColor=cc.glow;ctx.shadowBlur=16;
+  // Box background gradient
+  var grad=ctx.createLinearGradient(x,y,x,y+h);
+  grad.addColorStop(0,'rgba(53,53,52,0.9)');
+  grad.addColorStop(1,'rgba(28,27,27,0.95)');
+  ctx.fillStyle=grad;
+  ctx.fillRect(x,y,w,h);
+  ctx.shadowBlur=0;
+  // Top bar (confidence indicator)
+  var barH=4;
+  var barGrad=ctx.createLinearGradient(x,y,x+w,y);
+  barGrad.addColorStop(0,cc.main);
+  barGrad.addColorStop(1,cc.glow);
+  ctx.fillStyle=barGrad;
+  ctx.fillRect(x,y,w*conf,barH);
+  // Ghost border
+  ctx.strokeStyle='rgba(138,136,134,0.15)';
+  ctx.lineWidth=1;
+  ctx.strokeRect(x,y,w,h);
+  ctx.globalAlpha=1;
+}
+
+function drawElement(el){
+  if(!el||el.alpha<=0.01)return;
+  ctx.save();
+  ctx.globalAlpha=el.alpha;
+  switch(el.type){
+    case 'label':
+      var fStyle=el.font==='bold'?'bold ':'';
+      ctx.font=fStyle+el.size+'px "Space Grotesk","Noto Sans SC",sans-serif';
+      ctx.fillStyle=el.color;
+      ctx.textAlign=el.align||'center';
+      ctx.textBaseline='middle';
+      ctx.fillText(el.text,el.x,el.y);
+      break;
+    case 'arrow':
+      ctx.strokeStyle=el.color;ctx.lineWidth=2;
+      ctx.beginPath();ctx.moveTo(el.x1,el.y1);ctx.lineTo(el.x2,el.y2);ctx.stroke();
+      // Arrowhead
+      var angle=Math.atan2(el.y2-el.y1,el.x2-el.x1);
+      var hs=6;
+      ctx.beginPath();
+      ctx.moveTo(el.x2,el.y2);
+      ctx.lineTo(el.x2-hs*Math.cos(angle-0.4),el.y2-hs*Math.sin(angle-0.4));
+      ctx.lineTo(el.x2-hs*Math.cos(angle+0.4),el.y2-hs*Math.sin(angle+0.4));
+      ctx.closePath();ctx.fillStyle=el.color;ctx.fill();
+      break;
+    case 'custom':
+      el.draw.call(el,el.alpha);
+      break;
+  }
+  ctx.restore();
+}
+
+function drawBg(){
+  var grad=ctx.createLinearGradient(0,0,0,H);
+  grad.addColorStop(0,'#131313');
+  grad.addColorStop(1,'#1a1a18');
+  ctx.fillStyle=grad;
+  ctx.fillRect(0,0,W,H);
+  // Subtle grid
+  ctx.strokeStyle='rgba(255,255,255,0.03)';
+  ctx.lineWidth=1;
+  var gs=40;
+  for(var gx=0;gx<W;gx+=gs){ctx.beginPath();ctx.moveTo(gx,0);ctx.lineTo(gx,H);ctx.stroke();}
+  for(var gy=0;gy<H;gy+=gs){ctx.beginPath();ctx.moveTo(0,gy);ctx.lineTo(W,gy);ctx.stroke();}
+}
+
+function drawFrame(f){
+  drawBg();
+  var elems=getFrameElements(f);
+  elems.forEach(function(el){drawElement(el);});
+}
+
+function transitionTo(newFrame){
+  if(newFrame<0)newFrame=0;
+  if(newFrame>=totalFrames)newFrame=totalFrames-1;
+  if(newFrame===currentFrame&&!transitioning){drawFrame(currentFrame);updateHUD(currentFrame);return;}
+  if(transitioning)return;
+  var oldElems=getFrameElements(currentFrame);
+  var newElems=getFrameElements(newFrame);
+  var oldMap={};oldElems.forEach(function(e){oldMap[e.id]=e;});
+  var newMap={};newElems.forEach(function(e){newMap[e.id]=e;});
+  currentFrame=newFrame;
+  updateHUD(newFrame);
+  updateFrameInd();
+  transitioning=true;
+  var startTime=null;
+  var duration=500;
+  function step(timestamp){
+    if(!startTime)startTime=timestamp;
+    var raw=Math.min((timestamp-startTime)/duration,1);
+    var p=easeInOut(raw);
+    drawBg();
+    oldElems.forEach(function(oe){
+      if(!newMap[oe.id])drawElement(merge(oe,{alpha:1-p}));
+    });
+    newElems.forEach(function(ne){
+      var oe=oldMap[ne.id];
+      if(oe){
+        var merged=merge(ne,{
+          x:lerp(oe.x||0,ne.x||0,p),
+          y:lerp(oe.y||0,ne.y||0,p),
+          w:lerp(oe.w||0,ne.w||0,p),
+          h:lerp(oe.h||0,ne.h||0,p),
+          alpha:1
+        });
+        if(ne.type==='arrow'&&oe.type==='arrow'){
+          merged.x1=lerp(oe.x1,ne.x1,p);
+          merged.y1=lerp(oe.y1,ne.y1,p);
+          merged.x2=lerp(oe.x2,ne.x2,p);
+          merged.y2=lerp(oe.y2,ne.y2,p);
+        }
+        if((ne.type==='label')&&oe.text!==ne.text){
+          drawElement(merge(oe,{alpha:1-p}));
+          drawElement(merge(ne,{alpha:p}));
+        }else{
+          drawElement(merged);
+        }
+      }else{
+        drawElement(merge(ne,{alpha:p}));
+      }
+    });
+    if(raw<1){requestAnimationFrame(step);}
+    else{transitioning=false;}
+  }
+  requestAnimationFrame(step);
+}
+
+var hudData=[
+  {l:'hudL1',v:'f0_cond', l2:'hudL2',v2:'f0_weak', l3:'hudL3',v3:'f0_trust', l4:'hudL4',v4:'f0_defects'},
+  {l:'hudL1',v:'f1_cond', l2:'hudL2',v2:'f1_weak', l3:'hudL3',v3:'f1_trust', l4:'hudL4',v4:'f1_defects'},
+  {l:'hudL1',v:'f2_cond', l2:'hudL2',v2:'f2_weak', l3:'hudL3',v3:'f2_trust', l4:'hudL4',v4:'f2_defects'},
+  {l:'hudL1',v:'f3_cond', l2:'hudL2',v2:'f3_weak', l3:'hudL3',v3:'f3_trust', l4:'hudL4',v4:'f3_defects'},
+  {l:'hudL1',v:'f4_cond', l2:'hudL2',v2:'f4_weak', l3:'hudL3',v3:'f4_trust', l4:'hudL4',v4:'f4_defects'}
+];
+
+function updateHUD(f){
+  var d=hudData[f];
+  document.getElementById('hudL1').textContent=t(d.l);
+  document.getElementById('hudV1').textContent=t(d.v);
+  document.getElementById('hudL2').textContent=t(d.l2);
+  document.getElementById('hudV2').textContent=t(d.v2);
+  document.getElementById('hudL3').textContent=t(d.l3);
+  document.getElementById('hudV3').textContent=t(d.v3);
+  document.getElementById('hudL4').textContent=t(d.l4);
+  document.getElementById('hudV4').textContent=t(d.v4);
+}
+
+function updateFrameInd(){
+  document.getElementById('frameInd').textContent=(currentFrame+1)+' '+t('frameOf')+' '+totalFrames;
+}
+
+function refreshI18N(){
+  document.getElementById('langBtn').textContent=LANG.toUpperCase();
+  document.getElementById('mainTitle').textContent=t('title');
+  document.getElementById('mainSubtitle').textContent=t('subtitle');
+  document.getElementById('guideTitle').textContent=t('guideTitle');
+  document.getElementById('guideDesc').textContent=t('guideDesc');
+  var pts=document.getElementById('guidePoints');
+  pts.innerHTML='<li>'+t('guideP1')+'</li><li>'+t('guideP2')+'</li><li>'+t('guideP3')+'</li>';
+  document.getElementById('guideTakeaway').textContent=t('guideTakeaway');
+  document.getElementById('btnPrev').textContent=t('btnPrev');
+  document.getElementById('btnNext').textContent=t('btnNext');
+  document.getElementById('btnPlay').textContent=playing?t('btnPause'):t('btnPlay');
+  updateHUD(currentFrame);
+  updateFrameInd();
+  drawFrame(currentFrame);
+}
+
+// Event bindings
+document.getElementById('langBtn').addEventListener('click',function(){
+  LANG=LANG==='en'?'cn':'en';
+  refreshI18N();
+});
+document.getElementById('guideToggle').addEventListener('click',function(){
+  var c=document.getElementById('guideContent');
+  var a=document.getElementById('guideArrow');
+  if(c.classList.contains('collapsed')){c.classList.remove('collapsed');a.textContent='-';}
+  else{c.classList.add('collapsed');a.textContent='+';}
+});
+document.getElementById('btnPrev').addEventListener('click',function(){
+  if(playing)stopPlay();
+  transitionTo(currentFrame-1);
+});
+document.getElementById('btnNext').addEventListener('click',function(){
+  if(playing)stopPlay();
+  transitionTo(currentFrame+1);
+});
+document.getElementById('btnPlay').addEventListener('click',function(){
+  if(playing){stopPlay();}
+  else{startPlay();}
+});
+
+function startPlay(){
+  playing=true;
+  document.getElementById('btnPlay').textContent=t('btnPause');
+  if(currentFrame>=totalFrames-1)currentFrame=-1;
+  function tick(){
+    if(!playing)return;
+    if(currentFrame<totalFrames-1){
+      transitionTo(currentFrame+1);
+      playRaf=setTimeout(tick,1200);
+    }else{
+      stopPlay();
+    }
+  }
+  tick();
+}
+function stopPlay(){
+  playing=false;
+  document.getElementById('btnPlay').textContent=t('btnPlay');
+  if(playRaf){clearTimeout(playRaf);playRaf=null;}
+}
+
+window.addEventListener('resize',resize);
+refreshI18N();
+resize();
+setTimeout(resize,200);
+setTimeout(resize,600);
+document.fonts.ready.then(function(){resize();});
+})();
+</script>
+</body>
+</html>

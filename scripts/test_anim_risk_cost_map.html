@@ -1,0 +1,600 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<title>风险等级与任务指标：从直觉到数字</title>
+<style>
+  :root {
+    --bg0: #0b1120;
+    --bg1: #111a2f;
+    --panel: rgba(20, 27, 48, 0.85);
+    --panel-border: rgba(110, 150, 220, 0.35);
+    --fg: #e2e8f0;
+    --fg-dim: #94a3b8;
+    --accent: #38bdf8;
+    --safe: #4ade80;
+    --warn: #facc15;
+    --danger: #f87171;
+    --risk0: #22c55e;
+    --risk1: #84cc16;
+    --risk2: #eab308;
+    --risk3: #f97316;
+    --risk4: #ef4444;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; padding: 0; width: 100%; height: 100%;
+    background: radial-gradient(ellipse at top, #162032 0%, var(--bg0) 60%);
+    color: var(--fg);
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang SC", "Helvetica Neue", Arial, sans-serif;
+    overflow: hidden;
+  }
+  .wrapper { display: flex; flex-direction: column; height: 100vh; padding: 12px 18px; }
+  .header {
+    display: flex; justify-content: space-between; align-items: center;
+    padding-bottom: 8px; border-bottom: 1px solid rgba(148, 163, 184, 0.15);
+  }
+  .title { font-size: 15px; font-weight: 600; color: #f1f5f9; letter-spacing: 0.3px; }
+  .title .sub { color: var(--fg-dim); font-weight: 400; margin-left: 6px; font-size: 13px; }
+  .lang-btn {
+    background: rgba(56, 189, 248, 0.1); border: 1px solid rgba(56, 189, 248, 0.4);
+    color: var(--accent); padding: 4px 10px; border-radius: 14px; font-size: 11px; cursor: pointer;
+  }
+  .canvas-wrap { flex: 1; position: relative; display: flex; align-items: center; justify-content: center; padding: 10px 0; }
+  canvas { width: 100%; height: 100%; display: block; }
+  .controls {
+    display: flex; justify-content: center; align-items: center; gap: 10px;
+    padding: 6px 0;
+  }
+  .ctrl-btn {
+    background: rgba(51, 65, 85, 0.7); border: 1px solid rgba(148, 163, 184, 0.25);
+    color: var(--fg); padding: 5px 14px; border-radius: 6px; font-size: 12px; cursor: pointer;
+    min-width: 64px;
+  }
+  .ctrl-btn:hover { background: rgba(56, 189, 248, 0.2); border-color: var(--accent); }
+  #frameDots { display: flex; gap: 6px; align-items: center; }
+  #frameDots .dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: rgba(148, 163, 184, 0.3); cursor: pointer;
+  }
+  #frameDots .dot.active { background: var(--accent); transform: scale(1.3); }
+  .hud {
+    display: flex; justify-content: space-around; align-items: center;
+    padding: 6px 12px; background: var(--panel);
+    border: 1px solid var(--panel-border); border-radius: 8px;
+    font-size: 11px; color: var(--fg-dim);
+  }
+  .hud .item { display: flex; flex-direction: column; align-items: center; }
+  .hud .label { font-size: 9px; text-transform: uppercase; letter-spacing: 0.5px; opacity: 0.7; }
+  .hud .value { font-size: 13px; color: var(--fg); font-weight: 500; margin-top: 2px; }
+  .guide-panel {
+    position: fixed; top: 14px; right: 14px; max-width: 220px;
+    background: var(--panel); border: 1px solid var(--panel-border);
+    border-radius: 10px; padding: 10px 12px; font-size: 11px; color: var(--fg-dim);
+    line-height: 1.5; box-shadow: 0 4px 14px rgba(0,0,0,0.4);
+  }
+  .guide-panel .gtitle { color: var(--accent); font-weight: 600; margin-bottom: 4px; font-size: 11px; }
+</style>
+</head>
+<body>
+<div class="guide-panel">
+  <div class="gtitle">操作指南</div>
+  把 terrain 翻译成数字：风险 ≠ 代价；任务成功需要成功 / 失败 / KPI 三层指标。点击 Next 逐帧展开。
+</div>
+<div class="wrapper">
+  <div class="header">
+    <div class="title">风险等级与任务指标<span class="sub">P-MARS-01-M03 · 把「危险」翻译成数字</span></div>
+    <button class="lang-btn" id="langBtn">EN</button>
+  </div>
+  <div class="canvas-wrap"><canvas id="c"></canvas></div>
+  <div class="controls">
+    <button class="ctrl-btn" id="btnPrev">上一帧</button>
+    <button class="ctrl-btn" id="btnPlay">播放</button>
+    <button class="ctrl-btn" id="btnNext">下一帧</button>
+    <div id="frameDots"></div>
+  </div>
+  <div class="hud">
+    <div class="item"><div class="label">Frame</div><div class="value" id="frameInd">1 / 4</div></div>
+    <div class="item"><div class="label">View</div><div class="value" id="hudView">Terrain Gallery</div></div>
+    <div class="item"><div class="label">Risk Axis</div><div class="value" id="hudRisk">0-4 integer</div></div>
+    <div class="item"><div class="label">Cost Axis</div><div class="value" id="hudCost">float</div></div>
+  </div>
+</div>
+<script>
+const LANG = { cur: "zh" };
+const STRINGS = {
+  zh: {
+    frames: ["地貌相册", "风险等级表", "代价地图", "任务指标"],
+    classes: ["soil 松散土壤", "bedrock 基岩", "sand 沙地", "big_rock 大岩石"],
+    headerRisk: "风险等级",
+    headerCost: "代价 cost",
+    headerPass: "允许通过",
+    yes: "是",
+    no: "否",
+    successCol: "Success 成功判定",
+    failureCol: "Failure 失败判定",
+    kpiCol: "KPI 量化指标",
+    successVal: "reach_goal + no_hazard_step",
+    failureVal: "stuck_3x 或 cost>300",
+    kpiVal: "path_efficiency / risky_step",
+    gridLegend: "栅格颜色 = 风险等级",
+    arrow: "terrain → (risk, cost)",
+    missionArrow: "日志 → 指标 → 成败",
+    hudRisk: "0-4 整数",
+    hudCost: "浮点数",
+    hudViewGallery: "Terrain Gallery",
+    hudViewTable: "Risk Table",
+    hudViewMap: "Cost Map",
+    hudViewMission: "Mission Metrics",
+  },
+  en: {
+    frames: ["Terrain Gallery", "Risk Level Table", "Cost Map", "Mission Metrics"],
+    classes: ["soil (loose)", "bedrock", "sand", "big_rock"],
+    headerRisk: "Risk Level",
+    headerCost: "Cost",
+    headerPass: "Traversable",
+    yes: "yes",
+    no: "no",
+    successCol: "Success",
+    failureCol: "Failure",
+    kpiCol: "KPI",
+    successVal: "reach_goal + no_hazard_step",
+    failureVal: "stuck_3x or cost>300",
+    kpiVal: "path_efficiency / risky_step",
+    gridLegend: "Cell color = risk level",
+    arrow: "terrain → (risk, cost)",
+    missionArrow: "log → metric → verdict",
+    hudRisk: "0-4 integer",
+    hudCost: "float",
+    hudViewGallery: "Terrain Gallery",
+    hudViewTable: "Risk Table",
+    hudViewMap: "Cost Map",
+    hudViewMission: "Mission Metrics",
+  },
+};
+const S = () => STRINGS[LANG.cur];
+
+const RISK_COLORS = ["#22c55e", "#84cc16", "#eab308", "#f97316", "#ef4444"];
+const TERRAIN_DATA = [
+  { key: "soil",     color: "#fbbf24", rock: "#d97706", risk: 1, cost: 1.0, pass: true  },
+  { key: "bedrock",  color: "#60a5fa", rock: "#1d4ed8", risk: 1, cost: 2.5, pass: true  },
+  { key: "sand",     color: "#ef4444", rock: "#7f1d1d", risk: 4, cost: 1.2, pass: false },
+  { key: "big_rock", color: "#f97316", rock: "#7c2d12", risk: 3, cost: 99,  pass: false },
+];
+
+const canvas = document.getElementById("c");
+const ctx = canvas.getContext("2d");
+let W = 0, H = 0, DPR = window.devicePixelRatio || 1;
+let currentFrame = 0;
+let playing = false;
+let playTimer = null;
+let tweenStart = 0;
+let tweenDuration = 900;
+
+function resize() {
+  const rect = canvas.parentElement.getBoundingClientRect();
+  W = rect.width; H = rect.height;
+  canvas.width = W * DPR; canvas.height = H * DPR;
+  canvas.style.width = W + "px"; canvas.style.height = H + "px";
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+}
+window.addEventListener("resize", resize);
+
+function easeOut(t) { return 1 - Math.pow(1 - t, 3); }
+function clamp01(x) { return Math.max(0, Math.min(1, x)); }
+function tweenProgress() {
+  const elapsed = performance.now() - tweenStart;
+  return clamp01(elapsed / tweenDuration);
+}
+
+function drawGrid(x, y, w, h, step) {
+  ctx.strokeStyle = "rgba(148,163,184,0.08)";
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  for (let gx = 0; gx <= w; gx += step) { ctx.moveTo(x + gx, y); ctx.lineTo(x + gx, y + h); }
+  for (let gy = 0; gy <= h; gy += step) { ctx.moveTo(x, y + gy); ctx.lineTo(x + w, y + gy); }
+  ctx.stroke();
+}
+
+function drawTerrainCard(cx, cy, size, terrain, label, appear) {
+  const s = size * appear;
+  const x = cx - s / 2;
+  const y = cy - s / 2;
+  const r = 10;
+  ctx.save();
+  ctx.globalAlpha = appear;
+  const grad = ctx.createLinearGradient(x, y, x, y + s);
+  grad.addColorStop(0, terrain.color);
+  grad.addColorStop(1, shade(terrain.color, -0.4));
+  ctx.fillStyle = grad;
+  roundRect(x, y, s, s * 0.72, r);
+  ctx.fill();
+  ctx.strokeStyle = "rgba(226,232,240,0.35)";
+  ctx.lineWidth = 1.2;
+  roundRect(x, y, s, s * 0.72, r);
+  ctx.stroke();
+  for (let i = 0; i < 5; i++) {
+    const rx = x + 12 + (i * s) / 6 + Math.sin(i + terrain.risk) * 4;
+    const ry = y + s * 0.45 + Math.cos(i * 1.3) * 6;
+    const rr = 3 + (i % 3);
+    ctx.fillStyle = terrain.rock;
+    ctx.beginPath();
+    ctx.arc(rx, ry, rr, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.fillStyle = "#f1f5f9";
+  ctx.font = "bold 13px -apple-system, sans-serif";
+  ctx.textAlign = "center";
+  ctx.fillText(label, cx, y + s * 0.88);
+  ctx.restore();
+}
+
+function roundRect(x, y, w, h, r) {
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.lineTo(x + w - r, y);
+  ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+  ctx.lineTo(x + w, y + h - r);
+  ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+  ctx.lineTo(x + r, y + h);
+  ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+  ctx.lineTo(x, y + r);
+  ctx.quadraticCurveTo(x, y, x + r, y);
+  ctx.closePath();
+}
+
+function shade(hex, amt) {
+  const c = hex.replace("#", "");
+  const r = parseInt(c.slice(0, 2), 16);
+  const g = parseInt(c.slice(2, 4), 16);
+  const b = parseInt(c.slice(4, 6), 16);
+  const f = (v) => Math.round(Math.max(0, Math.min(255, v + v * amt)));
+  return "rgb(" + f(r) + "," + f(g) + "," + f(b) + ")";
+}
+
+function drawHeaderBand(title) {
+  ctx.save();
+  ctx.fillStyle = "rgba(56, 189, 248, 0.12)";
+  ctx.fillRect(0, 0, W, 36);
+  ctx.fillStyle = "#38bdf8";
+  ctx.font = "600 14px -apple-system, sans-serif";
+  ctx.textAlign = "left";
+  ctx.fillText(title, 20, 23);
+  ctx.restore();
+}
+
+// FRAME 1: Terrain Gallery
+function drawFrame1(p) {
+  ctx.fillStyle = "#0b1120";
+  ctx.fillRect(0, 0, W, H);
+  drawGrid(0, 40, W, H - 40, 28);
+  drawHeaderBand(S().frames[0]);
+  const cardSize = Math.min(W / 4.5, H / 2.4, 180);
+  const centerY = 40 + (H - 40) / 2 - 10;
+  const startX = W / 2 - (cardSize * 2 + 30);
+  for (let i = 0; i < 4; i++) {
+    const t = TERRAIN_DATA[i];
+    const cx = startX + i * (cardSize + 20) + cardSize / 2;
+    const delay = i * 0.15;
+    const appear = easeOut(clamp01((p - delay) / (1 - delay)));
+    drawTerrainCard(cx, centerY, cardSize, t, S().classes[i], appear);
+  }
+  ctx.save();
+  ctx.fillStyle = "#94a3b8";
+  ctx.font = "12px -apple-system, sans-serif";
+  ctx.textAlign = "center";
+  const caption = LANG.cur === "zh"
+    ? "你的直觉告诉你它们不同——但规划算法读不懂直觉，只认数字。"
+    : "Your intuition says they differ — but the planner only speaks numbers.";
+  ctx.fillText(caption, W / 2, H - 16);
+  ctx.restore();
+}
+
+// FRAME 2: Risk Table
+function drawFrame2(p) {
+  ctx.fillStyle = "#0b1120";
+  ctx.fillRect(0, 0, W, H);
+  drawHeaderBand(S().frames[1]);
+  const tx = 60, ty = 70;
+  const colW = [180, 100, 100, 110];
+  const rowH = Math.min(52, (H - 130) / 5);
+  const totalW = colW.reduce((a, b) => a + b, 0);
+  ctx.save();
+  ctx.fillStyle = "rgba(56,189,248,0.15)";
+  roundRect(tx, ty, totalW, rowH, 6);
+  ctx.fill();
+  ctx.fillStyle = "#bae6fd";
+  ctx.font = "600 12px -apple-system, sans-serif";
+  ctx.textAlign = "center";
+  const headers = [S().classes[0].split(" ")[0] + " → ...", S().headerRisk, S().headerCost, S().headerPass];
+  headers[0] = LANG.cur === "zh" ? "地貌类别" : "Terrain Class";
+  let ax = tx;
+  for (let c = 0; c < 4; c++) {
+    ctx.fillText(headers[c], ax + colW[c] / 2, ty + rowH / 2 + 4);
+    ax += colW[c];
+  }
+  for (let r = 0; r < 4; r++) {
+    const rowReveal = easeOut(clamp01((p - r * 0.18) / 0.4));
+    if (rowReveal <= 0) continue;
+    const t = TERRAIN_DATA[r];
+    const ry = ty + (r + 1) * rowH;
+    ctx.globalAlpha = rowReveal;
+    ctx.fillStyle = r % 2 === 0 ? "rgba(30,41,59,0.6)" : "rgba(15,23,42,0.6)";
+    ctx.fillRect(tx, ry, totalW, rowH);
+    ctx.fillStyle = t.color;
+    ctx.fillRect(tx + 14, ry + rowH / 2 - 7, 14, 14);
+    ctx.fillStyle = "#e2e8f0";
+    ctx.font = "500 12px -apple-system, sans-serif";
+    ctx.textAlign = "left";
+    ctx.fillText(S().classes[r], tx + 36, ry + rowH / 2 + 4);
+    ctx.textAlign = "center";
+    ctx.fillStyle = RISK_COLORS[t.risk];
+    ctx.font = "bold 15px -apple-system, sans-serif";
+    ctx.fillText(String(t.risk), tx + colW[0] + colW[1] / 2, ry + rowH / 2 + 5);
+    ctx.fillStyle = "#f1f5f9";
+    ctx.font = "500 13px -apple-system, sans-serif";
+    const costStr = t.cost === 99 ? "99 ⓘ" : t.cost.toFixed(1);
+    ctx.fillText(costStr, tx + colW[0] + colW[1] + colW[2] / 2, ry + rowH / 2 + 5);
+    ctx.fillStyle = t.pass ? "#4ade80" : "#f87171";
+    ctx.font = "bold 12px -apple-system, sans-serif";
+    ctx.fillText(t.pass ? S().yes : S().no, tx + colW[0] + colW[1] + colW[2] + colW[3] / 2, ry + rowH / 2 + 5);
+  }
+  ctx.globalAlpha = 1;
+  ctx.textAlign = "center";
+  ctx.fillStyle = "#94a3b8";
+  ctx.font = "italic 12px -apple-system, sans-serif";
+  ctx.fillText(
+    LANG.cur === "zh" ? "注意：风险等级和 cost 是两个独立数字——风险做硬约束，cost 做软优化。" : "Note: risk and cost are two independent numbers — hard vs soft constraint.",
+    W / 2, H - 20
+  );
+  ctx.restore();
+}
+
+// FRAME 3: Cost Map
+function drawFrame3(p) {
+  ctx.fillStyle = "#0b1120";
+  ctx.fillRect(0, 0, W, H);
+  drawHeaderBand(S().frames[2]);
+  const mapSize = Math.min(W * 0.42, H - 140);
+  const gridN = 10;
+  const cellSize = mapSize / gridN;
+  const leftX = W * 0.08;
+  const rightX = W * 0.55;
+  const topY = 70;
+  const samplePattern = [
+    [0,0,0,1,1,1,0,0,0,0],
+    [0,0,1,1,1,1,1,0,0,0],
+    [0,1,1,2,2,2,1,1,0,0],
+    [1,1,2,2,3,3,2,1,0,0],
+    [1,2,2,3,4,4,3,2,1,0],
+    [0,1,2,3,4,4,3,2,1,0],
+    [0,1,2,2,3,3,2,1,1,0],
+    [0,0,1,1,2,2,1,1,0,0],
+    [0,0,0,1,1,1,0,0,0,0],
+    [0,0,0,0,0,0,0,0,0,0],
+  ];
+  ctx.save();
+  ctx.fillStyle = "#cbd5e1";
+  ctx.font = "600 12px -apple-system, sans-serif";
+  ctx.textAlign = "center";
+  ctx.fillText(LANG.cur === "zh" ? "原始 terrain 栅格" : "Raw terrain grid", leftX + mapSize / 2, topY - 10);
+  for (let r = 0; r < gridN; r++) {
+    for (let c = 0; c < gridN; c++) {
+      const idx = r * gridN + c;
+      const reveal = easeOut(clamp01((p - idx / 200) / 0.1));
+      if (reveal <= 0) continue;
+      const lvl = samplePattern[r][c];
+      ctx.globalAlpha = reveal * 0.85;
+      ctx.fillStyle = ["#334155","#475569","#64748b","#94a3b8","#cbd5e1"][lvl];
+      ctx.fillRect(leftX + c * cellSize, topY + r * cellSize, cellSize - 1, cellSize - 1);
+    }
+  }
+  ctx.globalAlpha = 1;
+  ctx.fillStyle = "#cbd5e1";
+  ctx.font = "600 12px -apple-system, sans-serif";
+  ctx.fillText(LANG.cur === "zh" ? "经过风险表翻译" : "After risk lookup", rightX + mapSize / 2, topY - 10);
+  const transP = clamp01((p - 0.3) / 0.7);
+  for (let r = 0; r < gridN; r++) {
+    for (let c = 0; c < gridN; c++) {
+      const lvl = samplePattern[r][c];
+      const reveal = easeOut(clamp01((transP - (r + c) / 30)));
+      if (reveal <= 0) continue;
+      ctx.globalAlpha = reveal;
+      ctx.fillStyle = RISK_COLORS[lvl];
+      ctx.fillRect(rightX + c * cellSize, topY + r * cellSize, cellSize - 1, cellSize - 1);
+      if (cellSize > 24 && reveal > 0.8) {
+        ctx.fillStyle = "rgba(0,0,0,0.6)";
+        ctx.font = "bold 11px monospace";
+        ctx.textAlign = "center";
+        ctx.fillText(String(lvl), rightX + c * cellSize + cellSize / 2, topY + r * cellSize + cellSize / 2 + 4);
+      }
+    }
+  }
+  ctx.globalAlpha = 1;
+  const arrowY = topY + mapSize / 2;
+  const arrowStart = leftX + mapSize + 10;
+  const arrowEnd = rightX - 10;
+  if (p > 0.25) {
+    ctx.strokeStyle = "#38bdf8";
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(arrowStart, arrowY);
+    ctx.lineTo(arrowEnd - 8, arrowY);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(arrowEnd, arrowY);
+    ctx.lineTo(arrowEnd - 10, arrowY - 6);
+    ctx.lineTo(arrowEnd - 10, arrowY + 6);
+    ctx.closePath();
+    ctx.fillStyle = "#38bdf8";
+    ctx.fill();
+    ctx.fillStyle = "#bae6fd";
+    ctx.font = "italic 11px -apple-system, sans-serif";
+    ctx.textAlign = "center";
+    ctx.fillText(S().arrow, (arrowStart + arrowEnd) / 2, arrowY - 8);
+  }
+  const legY = topY + mapSize + 24;
+  ctx.fillStyle = "#94a3b8";
+  ctx.font = "11px -apple-system, sans-serif";
+  ctx.textAlign = "left";
+  ctx.fillText(S().gridLegend + ":", leftX, legY);
+  for (let i = 0; i < 5; i++) {
+    const lx = leftX + 120 + i * 70;
+    ctx.fillStyle = RISK_COLORS[i];
+    ctx.fillRect(lx, legY - 10, 14, 14);
+    ctx.fillStyle = "#e2e8f0";
+    ctx.fillText("= " + i, lx + 18, legY + 2);
+  }
+  ctx.restore();
+}
+
+// FRAME 4: Mission Metrics
+function drawFrame4(p) {
+  ctx.fillStyle = "#0b1120";
+  ctx.fillRect(0, 0, W, H);
+  drawHeaderBand(S().frames[3]);
+  const cols = [
+    { title: S().successCol, color: "#4ade80", items: [
+      LANG.cur === "zh" ? "reach_goal (距离目标 < 2m)" : "reach_goal (dist < 2m)",
+      LANG.cur === "zh" ? "no_hazard_step (风险<3)" : "no_hazard_step (risk<3)"
+    ]},
+    { title: S().failureCol, color: "#f87171", items: [
+      LANG.cur === "zh" ? "stuck_3x (连续 3 帧不动)" : "stuck_3x (3 frames static)",
+      LANG.cur === "zh" ? "cost > budget(300)" : "cost > budget(300)"
+    ]},
+    { title: S().kpiCol, color: "#fbbf24", items: [
+      LANG.cur === "zh" ? "path_efficiency (实际/最短)" : "path_efficiency (actual/shortest)",
+      LANG.cur === "zh" ? "risky_step_count (risk=2 计数)" : "risky_step_count (risk=2)"
+    ]}
+  ];
+  const pad = 30;
+  const colW = (W - pad * 4) / 3;
+  const colY = 70;
+  const colH = H - 180;
+  for (let i = 0; i < 3; i++) {
+    const colP = easeOut(clamp01((p - i * 0.2) / 0.4));
+    if (colP <= 0) continue;
+    const cx = pad + i * (colW + pad);
+    ctx.save();
+    ctx.globalAlpha = colP;
+    const grad = ctx.createLinearGradient(cx, colY, cx, colY + colH);
+    grad.addColorStop(0, shade(cols[i].color, -0.75));
+    grad.addColorStop(1, shade(cols[i].color, -0.9));
+    ctx.fillStyle = grad;
+    roundRect(cx, colY, colW, colH, 14);
+    ctx.fill();
+    ctx.strokeStyle = cols[i].color;
+    ctx.lineWidth = 2;
+    roundRect(cx, colY, colW, colH, 14);
+    ctx.stroke();
+    ctx.fillStyle = cols[i].color;
+    ctx.font = "bold 14px -apple-system, sans-serif";
+    ctx.textAlign = "center";
+    ctx.fillText(cols[i].title, cx + colW / 2, colY + 28);
+    ctx.fillStyle = "#f1f5f9";
+    ctx.font = "12px -apple-system, sans-serif";
+    ctx.textAlign = "left";
+    for (let j = 0; j < cols[i].items.length; j++) {
+      const iy = colY + 64 + j * 42;
+      ctx.fillStyle = "rgba(0,0,0,0.35)";
+      roundRect(cx + 14, iy - 16, colW - 28, 30, 5);
+      ctx.fill();
+      ctx.fillStyle = cols[i].color;
+      ctx.beginPath();
+      ctx.arc(cx + 24, iy - 1, 3, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = "#e2e8f0";
+      ctx.font = "11px -apple-system, sans-serif";
+      ctx.fillText(cols[i].items[j], cx + 34, iy + 3);
+    }
+    ctx.restore();
+  }
+  ctx.save();
+  ctx.fillStyle = "#94a3b8";
+  ctx.font = "italic 12px -apple-system, sans-serif";
+  ctx.textAlign = "center";
+  const footer = LANG.cur === "zh"
+    ? "每条都必须可以从日志中一行代码查到——这就是「可追溯」。"
+    : "Every row must be resolvable from the log in one line of code — that's traceability.";
+  ctx.fillText(footer, W / 2, H - 26);
+  ctx.fillStyle = "#38bdf8";
+  ctx.font = "500 11px -apple-system, sans-serif";
+  ctx.fillText(S().missionArrow, W / 2, H - 8);
+  ctx.restore();
+}
+
+function drawCurrent() {
+  const p = tweenProgress();
+  if (currentFrame === 0) drawFrame1(p);
+  else if (currentFrame === 1) drawFrame2(p);
+  else if (currentFrame === 2) drawFrame3(p);
+  else if (currentFrame === 3) drawFrame4(p);
+  if (p < 1) requestAnimationFrame(drawCurrent);
+}
+
+function updateHUD() {
+  const frameInd = document.getElementById("frameInd");
+  const hudView = document.getElementById("hudView");
+  const hudRisk = document.getElementById("hudRisk");
+  const hudCost = document.getElementById("hudCost");
+  frameInd.textContent = (currentFrame + 1) + " / 4";
+  const viewLabels = [S().hudViewGallery, S().hudViewTable, S().hudViewMap, S().hudViewMission];
+  hudView.textContent = viewLabels[currentFrame];
+  hudRisk.textContent = S().hudRisk;
+  hudCost.textContent = S().hudCost;
+  const dots = document.querySelectorAll("#frameDots .dot");
+  dots.forEach((d, i) => d.classList.toggle("active", i === currentFrame));
+}
+
+function gotoFrame(i) {
+  currentFrame = Math.max(0, Math.min(3, i));
+  tweenStart = performance.now();
+  updateHUD();
+  drawCurrent();
+}
+
+function initDots() {
+  const container = document.getElementById("frameDots");
+  container.innerHTML = "";
+  for (let i = 0; i < 4; i++) {
+    const d = document.createElement("div");
+    d.className = "dot" + (i === 0 ? " active" : "");
+    d.addEventListener("click", () => gotoFrame(i));
+    container.appendChild(d);
+  }
+}
+
+document.getElementById("btnNext").addEventListener("click", () => {
+  gotoFrame((currentFrame + 1) % 4);
+});
+document.getElementById("btnPrev").addEventListener("click", () => {
+  gotoFrame((currentFrame - 1 + 4) % 4);
+});
+document.getElementById("btnPlay").addEventListener("click", (e) => {
+  playing = !playing;
+  e.target.textContent = playing
+    ? (LANG.cur === "zh" ? "暂停" : "Pause")
+    : (LANG.cur === "zh" ? "播放" : "Play");
+  if (playing) {
+    playTimer = setInterval(() => {
+      gotoFrame((currentFrame + 1) % 4);
+    }, 2800);
+  } else {
+    clearInterval(playTimer);
+  }
+});
+document.getElementById("langBtn").addEventListener("click", () => {
+  LANG.cur = LANG.cur === "zh" ? "en" : "zh";
+  document.getElementById("langBtn").textContent = LANG.cur === "zh" ? "EN" : "中";
+  updateHUD();
+  tweenStart = performance.now();
+  drawCurrent();
+});
+
+resize();
+initDots();
+updateHUD();
+gotoFrame(0);
+</script>
+</body>
+</html>

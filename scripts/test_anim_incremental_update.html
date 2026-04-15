@@ -1,0 +1,609 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Incremental Map Update</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;700&family=Inter:wght@400;500&family=Noto+Sans+SC:wght@400;700&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0;border-radius:0!important}
+html,body{width:100%;height:100vh;overflow:hidden;background:#131313;font-family:'Noto Sans SC','Inter',sans-serif;color:#e5e2e1}
+.wrapper{display:flex;flex-direction:column;height:100vh;width:100%}
+header{padding:8px 16px;background:rgba(28,27,27,0.92);border-bottom:1px solid rgba(138,136,134,0.15);flex-shrink:0;display:flex;align-items:center;justify-content:space-between}
+header h1{font-family:'Space Grotesk',sans-serif;font-size:16px;font-weight:700;color:#ffb59c;letter-spacing:1px}
+header .subtitle{font-size:12px;color:#8a8886}
+.canvas-wrap{flex:1;min-height:0;position:relative}
+canvas{display:block;width:100%;height:100%}
+.controls{display:flex;align-items:center;justify-content:center;gap:12px;padding:8px 16px;background:rgba(28,27,27,0.92);border-top:1px solid rgba(138,136,134,0.15);flex-shrink:0}
+.controls button{font-family:'Space Grotesk',sans-serif;font-size:12px;font-weight:700;padding:6px 16px;cursor:pointer;border:1px solid rgba(138,136,134,0.15);background:rgba(28,27,27,0.92);backdrop-filter:blur(12px);color:#ffb59c;letter-spacing:1px;transition:background 0.2s}
+.controls button:hover{background:rgba(255,181,156,0.12)}
+.frame-indicator{font-family:'Space Grotesk',sans-serif;font-size:13px;color:#c6c6c6;min-width:60px;text-align:center}
+.hud{display:flex;justify-content:space-around;padding:8px 16px;background:rgba(0,0,0,0.55);flex-shrink:0;min-height:42px;align-items:center}
+.hud-item{text-align:center}
+.hud-label{font-family:'Space Grotesk',sans-serif;font-size:10px;color:#8a8886;letter-spacing:1px;text-transform:uppercase}
+.hud-value{font-family:'Space Grotesk',sans-serif;font-size:14px;font-weight:700;color:#ffb59c}
+.lang-btn{position:fixed;top:8px;left:8px;z-index:100;font-family:'Space Grotesk',sans-serif;font-size:11px;font-weight:700;padding:4px 10px;cursor:pointer;border:1px solid rgba(255,255,255,0.08);background:rgba(20,20,35,0.85);backdrop-filter:blur(12px);color:#ffb59c;letter-spacing:1px}
+.guide-panel{position:fixed;top:8px;right:8px;width:240px;max-height:40vh;overflow-y:auto;background:rgba(20,20,35,0.85);backdrop-filter:blur(12px);border:1px solid rgba(255,255,255,0.08);padding:12px;z-index:100;font-family:'Noto Sans SC',sans-serif;font-size:12px;color:rgba(255,255,255,0.85)}
+.guide-panel h3{font-family:'Space Grotesk',sans-serif;font-size:13px;margin-bottom:8px;display:flex;align-items:center;justify-content:space-between;cursor:pointer;color:#ffb59c}
+.guide-panel ul{padding-left:16px;line-height:1.8}
+.guide-panel .guide-content{transition:max-height 0.3s;overflow:hidden}
+.guide-panel .collapsed .guide-content{max-height:0}
+</style>
+</head>
+<body>
+<button class="lang-btn" id="langBtn">CN</button>
+<div class="guide-panel" id="guidePanel">
+<h3 id="guideToggle"><span id="guideTitle"></span><span id="guideArrow">-</span></h3>
+<div class="guide-content" id="guideContent">
+<p id="guideDesc" style="margin-bottom:8px"></p>
+<ul>
+<li id="guideOb1"></li>
+<li id="guideOb2"></li>
+<li id="guideOb3"></li>
+</ul>
+<p style="margin-top:8px;font-size:11px;color:#8a8886" id="guideTakeaway"></p>
+</div>
+</div>
+<div class="wrapper">
+<header>
+<div><h1 id="headerTitle"></h1><div class="subtitle" id="headerSubtitle"></div></div>
+</header>
+<div class="canvas-wrap" id="canvasWrap">
+<canvas id="c"></canvas>
+</div>
+<div class="controls">
+<button id="btnPrev"></button>
+<button id="btnPlay"></button>
+<button id="btnNext"></button>
+<span class="frame-indicator" id="frameInd"></span>
+</div>
+<div class="hud">
+<div class="hud-item"><div class="hud-label" id="hudL1"></div><div class="hud-value" id="hudV1">--</div></div>
+<div class="hud-item"><div class="hud-label" id="hudL2"></div><div class="hud-value" id="hudV2">--</div></div>
+<div class="hud-item"><div class="hud-label" id="hudL3"></div><div class="hud-value" id="hudV3">--</div></div>
+<div class="hud-item"><div class="hud-label" id="hudL4"></div><div class="hud-value" id="hudV4">--</div></div>
+</div>
+</div>
+<script>
+(function(){
+var LANG='cn';
+var I18N={
+title:{en:'INCREMENTAL MAP UPDATE',cn:'\u589e\u91cf\u5730\u56fe\u66f4\u65b0'},
+subtitle:{en:'New observation triggers local replanning',cn:'\u65b0\u89c2\u6d4b\u89e6\u53d1\u5c40\u90e8\u91cd\u89c4\u5212'},
+btnPrev:{en:'PREV',cn:'\u4e0a\u4e00\u5e27'},
+btnPlay:{en:'PLAY',cn:'\u64ad\u653e'},
+btnPause:{en:'PAUSE',cn:'\u6682\u505c'},
+btnNext:{en:'NEXT',cn:'\u4e0b\u4e00\u5e27'},
+guideTitle:{en:'GUIDE',cn:'\u64cd\u4f5c\u6307\u5357'},
+guideDesc:{en:'Shows the complete flow of incremental map update after new observation injection.',cn:'\u5c55\u793a\u65b0\u89c2\u6d4b\u6ce8\u5165\u540e\u589e\u91cf\u5730\u56fe\u66f4\u65b0\u7684\u5b8c\u6574\u6d41\u7a0b\u3002'},
+guideOb1:{en:'Watch which cells change cost',cn:'\u6ce8\u610f\u54ea\u4e9b\u7f51\u683c\u53d1\u751f\u4e86\u4ee3\u4ef7\u53d8\u5316'},
+guideOb2:{en:'Observe how small the propagation range is',cn:'\u89c2\u5bdf\u4f20\u64ad\u6ce2\u7eb9\u8986\u76d6\u7684\u8303\u56f4\u6709\u591a\u5c0f'},
+guideOb3:{en:'Compare old vs new path',cn:'\u5bf9\u6bd4\u65b0\u65e7\u8def\u5f84\u7684\u5dee\u5f02'},
+guideTakeaway:{en:'Incremental update only processes affected areas.',cn:'\u589e\u91cf\u66f4\u65b0\u53ea\u5904\u7406\u53d7\u5f71\u54cd\u533a\u57df\uff0c\u6548\u7387\u8fdc\u9ad8\u4e8e\u5168\u56fe\u91cd\u641c\u3002'},
+hudPhase:{en:'PHASE',cn:'\u9636\u6bb5'},
+hudUpdated:{en:'UPDATED',cn:'\u5df2\u66f4\u65b0'},
+hudPathLen:{en:'PATH LEN',cn:'\u8def\u5f84\u957f'},
+hudRisk:{en:'RISK',cn:'\u98ce\u9669\u503c'},
+phase0:{en:'INITIAL MAP',cn:'\u521d\u59cb\u5730\u56fe'},
+phase1:{en:'SENSOR SCAN',cn:'\u4f20\u611f\u5668\u626b\u63cf'},
+phase2:{en:'OBS INJECTED',cn:'\u89c2\u6d4b\u6ce8\u5165'},
+phase3:{en:'PROPAGATION',cn:'\u589e\u91cf\u4f20\u64ad'},
+phase4:{en:'REPLANNED',cn:'\u91cd\u89c4\u5212\u5b8c\u6210'},
+narr0:{en:'Initial path on risk map',cn:'\u98ce\u9669\u5730\u56fe\u4e0a\u7684\u521d\u59cb\u8def\u5f84'},
+narr1:{en:'Navcam scanning ahead',cn:'Navcam \u524d\u65b9\u626b\u63cf'},
+narr2:{en:'New hazards detected',cn:'\u68c0\u6d4b\u5230\u65b0\u5371\u9669'},
+narr3:{en:'Inconsistency propagates',cn:'\u4e0d\u4e00\u81f4\u6027\u4f20\u64ad'},
+narr4:{en:'New path found',cn:'\u65b0\u8def\u5f84\u5df2\u627e\u5230'},
+labelRover:{en:'ROVER',cn:'\u706b\u661f\u8f66'},
+labelTarget:{en:'TARGET',cn:'\u76ee\u6807\u70b9'},
+labelOldPath:{en:'OLD PATH',cn:'\u65e7\u8def\u5f84'},
+labelNewPath:{en:'NEW PATH',cn:'\u65b0\u8def\u5f84'},
+labelScan:{en:'SCAN ZONE',cn:'\u626b\u63cf\u533a'},
+labelHazard:{en:'HAZARD',cn:'\u5371\u9669\u533a'}
+};
+function t(k){return (I18N[k]&&I18N[k][LANG])||(I18N[k]&&I18N[k]['en'])||k;}
+
+var canvas=document.getElementById('c');
+var ctx=canvas.getContext('2d');
+var W=0,H=0;
+var currentFrame=0;
+var totalFrames=5;
+var playing=false;
+var playTimer=null;
+var transitioning=false;
+var guideOpen=true;
+
+// Grid config
+var COLS=10,ROWS=10;
+// Risk map: 0=safe(green), 1=medium(yellow), 2=danger(red), 3=unknown(gray)
+var baseGrid=[
+[0,0,0,1,0,0,0,0,0,0],
+[0,0,1,1,0,0,0,0,0,0],
+[0,0,0,0,0,0,1,0,0,0],
+[0,0,0,0,0,3,3,0,0,0],
+[0,0,0,0,0,3,3,1,0,0],
+[0,1,0,0,0,0,0,0,0,0],
+[0,0,0,0,0,0,0,0,1,0],
+[0,0,0,1,0,0,0,0,0,0],
+[0,0,0,0,0,0,0,0,0,0],
+[0,0,0,0,0,0,0,0,0,0]
+];
+// Old path (row,col)
+var oldPath=[[9,0],[8,0],[7,0],[6,0],[5,0],[4,0],[4,1],[4,2],[4,3],[4,4],[3,4],[3,5],[2,5],[1,5],[1,6],[1,7],[0,7],[0,8],[0,9]];
+// New path (avoids new hazard cells)
+var newPath=[[9,0],[8,0],[7,0],[6,0],[5,0],[4,0],[4,1],[4,2],[3,2],[3,3],[3,4],[2,4],[2,3],[1,4],[1,5],[1,6],[1,7],[0,7],[0,8],[0,9]];
+// Rover positions per frame
+var roverPositions=[{r:9,c:0},{r:4,c:4},{r:4,c:4},{r:4,c:4},{r:4,c:4}];
+// New observation cells (change from unknown/3 to danger/2)
+var newObsCells=[{r:3,c:5},{r:3,c:6},{r:4,c:5}];
+// Propagation wave cells
+var propWaveCells=[{r:2,c:5},{r:2,c:6},{r:4,c:6},{r:4,c:4},{r:3,c:4},{r:1,c:5},{r:1,c:6}];
+
+var riskColors=['#10b981','#eab308','#ef4444','#6b7280'];
+var riskColorsDark=['#065f46','#854d0e','#991b1b','#374151'];
+
+function lerp(a,b,p){return a+(b-a)*p;}
+function easeInOut(x){return x<0.5?2*x*x:1-Math.pow(-2*x+2,2)/2;}
+function merge(base,ov){var r={};for(var k in base)r[k]=base[k];for(var k2 in ov)r[k2]=ov[k2];return r;}
+
+function getGrid(frame){
+  var g=[];
+  for(var r=0;r<ROWS;r++){g[r]=[];for(var c=0;c<COLS;c++)g[r][c]=baseGrid[r][c];}
+  if(frame>=2){
+    for(var i=0;i<newObsCells.length;i++){
+      g[newObsCells[i].r][newObsCells[i].c]=2;
+    }
+  }
+  return g;
+}
+
+function cellColor(val,isDark){return isDark?riskColorsDark[val]:riskColors[val];}
+
+function getFrameElements(f){
+  var gx=W*0.08, gy=H*0.06;
+  var gw=W*0.58, gh=H*0.78;
+  var cellW=gw/COLS, cellH=gh/ROWS;
+  var elems=[];
+  var grid=getGrid(f);
+
+  // Grid cells
+  elems.push({id:'grid',type:'custom',x:gx,y:gy,w:gw,h:gh,alpha:1,draw:function(alpha){
+    ctx.globalAlpha=alpha;
+    for(var r=0;r<ROWS;r++){
+      for(var c=0;c<COLS;c++){
+        var cx=gx+c*cellW, cy=gy+r*cellH;
+        var grad=ctx.createLinearGradient(cx,cy,cx+cellW,cy+cellH);
+        grad.addColorStop(0,cellColor(grid[r][c],false));
+        grad.addColorStop(1,cellColor(grid[r][c],true));
+        ctx.fillStyle=grad;
+        ctx.fillRect(cx+1,cy+1,cellW-2,cellH-2);
+      }
+    }
+    // Grid lines
+    ctx.strokeStyle='rgba(138,136,134,0.2)';
+    ctx.lineWidth=0.5;
+    for(var r2=0;r2<=ROWS;r2++){
+      ctx.beginPath();ctx.moveTo(gx,gy+r2*cellH);ctx.lineTo(gx+gw,gy+r2*cellH);ctx.stroke();
+    }
+    for(var c2=0;c2<=COLS;c2++){
+      ctx.beginPath();ctx.moveTo(gx+c2*cellW,gy);ctx.lineTo(gx+c2*cellW,gy+gh);ctx.stroke();
+    }
+  }});
+
+  // Scan cone (frame 1)
+  if(f===1){
+    elems.push({id:'scan',type:'custom',x:0,y:0,alpha:1,draw:function(alpha){
+      ctx.globalAlpha=alpha*0.25;
+      var rcx=gx+(4+0.5)*cellW, rcy=gy+(4+0.5)*cellH;
+      ctx.beginPath();
+      ctx.moveTo(rcx,rcy);
+      ctx.lineTo(gx+(3+0.5)*cellW-cellW*1.5,gy+(3-0.5)*cellH);
+      ctx.lineTo(gx+(4+0.5)*cellW+cellW*2,gy+(3-0.5)*cellH);
+      ctx.closePath();
+      var scanGrad=ctx.createRadialGradient(rcx,rcy,0,rcx,rcy,cellW*4);
+      scanGrad.addColorStop(0,'#00daf3');
+      scanGrad.addColorStop(1,'rgba(0,218,243,0)');
+      ctx.fillStyle=scanGrad;
+      ctx.fill();
+      ctx.globalAlpha=alpha*0.6;
+      ctx.strokeStyle='#00daf3';
+      ctx.lineWidth=1.5;
+      ctx.stroke();
+    }});
+    elems.push({id:'scanLabel',type:'label',text:t('labelScan'),x:gx+5.5*cellW,y:gy+2.2*cellH,color:'#00daf3',size:11,align:'center',alpha:1});
+  }
+
+  // Changed cells highlight (frame 2)
+  if(f===2){
+    elems.push({id:'changedCells',type:'custom',x:0,y:0,alpha:1,draw:function(alpha){
+      ctx.globalAlpha=alpha;
+      for(var i=0;i<newObsCells.length;i++){
+        var oc=newObsCells[i];
+        var cx=gx+oc.c*cellW, cy=gy+oc.r*cellH;
+        ctx.strokeStyle='#ff5f1f';
+        ctx.lineWidth=3;
+        ctx.strokeRect(cx+2,cy+2,cellW-4,cellH-4);
+        ctx.shadowColor='#ff5f1f';
+        ctx.shadowBlur=12;
+        ctx.strokeRect(cx+2,cy+2,cellW-4,cellH-4);
+        ctx.shadowBlur=0;
+      }
+    }});
+    elems.push({id:'hazardLabel',type:'label',text:t('labelHazard'),x:gx+(newObsCells[0].c+0.5)*cellW,y:gy+(newObsCells[0].r-0.6)*cellH,color:'#ff5f1f',size:11,align:'center',alpha:1});
+  }
+
+  // Propagation wave (frame 3)
+  if(f===3){
+    elems.push({id:'propWave',type:'custom',x:0,y:0,alpha:1,draw:function(alpha){
+      ctx.globalAlpha=alpha*0.5;
+      for(var i=0;i<propWaveCells.length;i++){
+        var pc=propWaveCells[i];
+        var cx=gx+(pc.c+0.5)*cellW, cy=gy+(pc.r+0.5)*cellH;
+        ctx.shadowColor='#ffb59c';
+        ctx.shadowBlur=16;
+        ctx.beginPath();
+        ctx.arc(cx,cy,cellW*0.3,0,Math.PI*2);
+        ctx.fillStyle='rgba(255,181,156,0.6)';
+        ctx.fill();
+        ctx.shadowBlur=0;
+      }
+      // Also highlight changed cells
+      for(var j=0;j<newObsCells.length;j++){
+        var oc=newObsCells[j];
+        var ocx=gx+oc.c*cellW,ocy=gy+oc.r*cellH;
+        ctx.strokeStyle='#ff5f1f';
+        ctx.lineWidth=2;
+        ctx.strokeRect(ocx+2,ocy+2,cellW-4,cellH-4);
+      }
+    }});
+  }
+
+  // Old path
+  var showOldPath=(f<=2)||(f===4);
+  if(showOldPath){
+    var pathAlpha=(f===4)?0.3:0.9;
+    var pathColor=(f===4)?'rgba(56,189,248,0.3)':'#38bdf8';
+    elems.push({id:'oldPath',type:'custom',x:0,y:0,alpha:pathAlpha,draw:function(alpha){
+      ctx.globalAlpha=alpha;
+      ctx.strokeStyle=pathColor;
+      ctx.lineWidth=3;
+      ctx.shadowColor='#38bdf8';
+      ctx.shadowBlur=8;
+      ctx.beginPath();
+      for(var i=0;i<oldPath.length;i++){
+        var px=gx+(oldPath[i][1]+0.5)*cellW;
+        var py=gy+(oldPath[i][0]+0.5)*cellH;
+        if(i===0)ctx.moveTo(px,py);else ctx.lineTo(px,py);
+      }
+      ctx.stroke();
+      ctx.shadowBlur=0;
+    }});
+  }
+
+  // New path (frame 4)
+  if(f===4){
+    elems.push({id:'newPath',type:'custom',x:0,y:0,alpha:1,draw:function(alpha){
+      ctx.globalAlpha=alpha;
+      ctx.strokeStyle='#ff7f50';
+      ctx.lineWidth=3;
+      ctx.shadowColor='#ff7f50';
+      ctx.shadowBlur=10;
+      ctx.beginPath();
+      for(var i=0;i<newPath.length;i++){
+        var px=gx+(newPath[i][1]+0.5)*cellW;
+        var py=gy+(newPath[i][0]+0.5)*cellH;
+        if(i===0)ctx.moveTo(px,py);else ctx.lineTo(px,py);
+      }
+      ctx.stroke();
+      ctx.shadowBlur=0;
+    }});
+    elems.push({id:'newPathLabel',type:'label',text:t('labelNewPath'),x:gx+3*cellW,y:gy+1.5*cellH,color:'#ff7f50',size:11,align:'center',alpha:1});
+    elems.push({id:'oldPathLabel',type:'label',text:t('labelOldPath'),x:gx+6.5*cellW,y:gy+1.8*cellH,color:'rgba(56,189,248,0.5)',size:11,align:'center',alpha:1});
+  }
+
+  // Rover
+  var rp=roverPositions[f];
+  var rx=gx+(rp.c+0.5)*cellW, ry=gy+(rp.r+0.5)*cellH;
+  elems.push({id:'rover',type:'custom',x:rx,y:ry,w:cellW*0.7,h:cellH*0.7,alpha:1,draw:function(alpha){
+    ctx.globalAlpha=alpha;
+    var sz=Math.min(cellW,cellH)*0.35;
+    ctx.shadowColor='#00daf3';
+    ctx.shadowBlur=12;
+    // Rover body
+    var rGrad=ctx.createRadialGradient(rx,ry,0,rx,ry,sz);
+    rGrad.addColorStop(0,'#00daf3');
+    rGrad.addColorStop(0.6,'#0097a7');
+    rGrad.addColorStop(1,'#004d5a');
+    ctx.fillStyle=rGrad;
+    ctx.beginPath();
+    ctx.arc(rx,ry,sz,0,Math.PI*2);
+    ctx.fill();
+    ctx.shadowBlur=0;
+    // Rover label
+    ctx.fillStyle='#131313';
+    ctx.font="bold "+Math.max(8,sz*0.6)+"px 'Space Grotesk'";
+    ctx.textAlign='center';ctx.textBaseline='middle';
+    ctx.fillText('R',rx,ry);
+  }});
+
+  // Target
+  var tx2=gx+(9+0.5)*cellW, ty2=gy+(0+0.5)*cellH;
+  elems.push({id:'target',type:'custom',x:tx2,y:ty2,w:cellW*0.6,h:cellH*0.6,alpha:1,draw:function(alpha){
+    ctx.globalAlpha=alpha;
+    var sz=Math.min(cellW,cellH)*0.3;
+    ctx.shadowColor='#10b981';
+    ctx.shadowBlur=10;
+    var tGrad=ctx.createRadialGradient(tx2,ty2,0,tx2,ty2,sz);
+    tGrad.addColorStop(0,'#10b981');
+    tGrad.addColorStop(1,'#065f46');
+    ctx.fillStyle=tGrad;
+    ctx.beginPath();
+    // Diamond shape
+    ctx.moveTo(tx2,ty2-sz);ctx.lineTo(tx2+sz,ty2);ctx.lineTo(tx2,ty2+sz);ctx.lineTo(tx2-sz,ty2);
+    ctx.closePath();ctx.fill();
+    ctx.shadowBlur=0;
+  }});
+
+  // Narration text
+  var narrKey='narr'+f;
+  elems.push({id:'narration',type:'label',text:t(narrKey),x:W*0.72,y:H*0.15,color:'#c6c6c6',size:13,align:'center',alpha:1});
+
+  // Right side info panel
+  var panelX=W*0.68, panelY=H*0.22, panelW=W*0.28, panelH=H*0.55;
+  elems.push({id:'infoPanel',type:'custom',x:panelX,y:panelY,w:panelW,h:panelH,alpha:1,draw:function(alpha){
+    ctx.globalAlpha=alpha*0.8;
+    var pGrad=ctx.createLinearGradient(panelX,panelY,panelX,panelY+panelH);
+    pGrad.addColorStop(0,'rgba(28,27,27,0.9)');
+    pGrad.addColorStop(1,'rgba(19,19,19,0.95)');
+    ctx.fillStyle=pGrad;
+    ctx.fillRect(panelX,panelY,panelW,panelH);
+    ctx.strokeStyle='rgba(138,136,134,0.15)';
+    ctx.lineWidth=1;
+    ctx.strokeRect(panelX,panelY,panelW,panelH);
+    ctx.globalAlpha=alpha;
+
+    // Legend
+    var ly=panelY+16;
+    ctx.font="bold 11px 'Space Grotesk'";
+    ctx.fillStyle='#ffb59c';
+    ctx.textAlign='left';
+    ctx.fillText('LEGEND',panelX+12,ly);ly+=20;
+
+    var legendItems=[
+      {color:'#10b981',label:LANG==='cn'?'\u5b89\u5168':'Safe'},
+      {color:'#eab308',label:LANG==='cn'?'\u4e2d\u7b49\u98ce\u9669':'Medium'},
+      {color:'#ef4444',label:LANG==='cn'?'\u5371\u9669':'Danger'},
+      {color:'#6b7280',label:LANG==='cn'?'\u672a\u77e5':'Unknown'}
+    ];
+    ctx.font="12px 'Noto Sans SC'";
+    for(var i=0;i<legendItems.length;i++){
+      ctx.fillStyle=legendItems[i].color;
+      ctx.fillRect(panelX+12,ly-8,12,12);
+      ctx.fillStyle='#c6c6c6';
+      ctx.fillText(legendItems[i].label,panelX+30,ly+2);
+      ly+=20;
+    }
+
+    ly+=10;
+    ctx.font="bold 11px 'Space Grotesk'";
+    ctx.fillStyle='#ffb59c';
+    ctx.fillText('STATUS',panelX+12,ly);ly+=18;
+    ctx.font="12px 'Noto Sans SC'";
+    ctx.fillStyle='#e5e2e1';
+
+    if(f===0){
+      ctx.fillText(LANG==='cn'?'\u5730\u56fe\u5df2\u52a0\u8f7d':'Map loaded',panelX+12,ly);ly+=16;
+      ctx.fillText(LANG==='cn'?'\u8def\u5f84\u5df2\u89c4\u5212':'Path planned',panelX+12,ly);
+    } else if(f===1){
+      ctx.fillText(LANG==='cn'?'Navcam \u626b\u63cf\u4e2d...':'Navcam scanning...',panelX+12,ly);ly+=16;
+      ctx.fillText(LANG==='cn'?'\u68c0\u6d4b\u524d\u65b9\u5730\u5f62':'Detecting terrain',panelX+12,ly);
+    } else if(f===2){
+      ctx.fillStyle='#ff5f1f';
+      ctx.fillText(LANG==='cn'?'3 \u4e2a\u7f51\u683c\u4ee3\u4ef7\u53d8\u5316':'3 cells cost changed',panelX+12,ly);ly+=16;
+      ctx.fillStyle='#e5e2e1';
+      ctx.fillText(LANG==='cn'?'\u672a\u77e5 -> \u5371\u9669':'Unknown -> Danger',panelX+12,ly);
+    } else if(f===3){
+      ctx.fillText(LANG==='cn'?'\u4f20\u64ad\u8282\u70b9: 7':'Propagated: 7 nodes',panelX+12,ly);ly+=16;
+      ctx.fillText(LANG==='cn'?'\u961f\u5217\u5904\u7406\u4e2d...':'Queue processing...',panelX+12,ly);
+    } else {
+      ctx.fillStyle='#10b981';
+      ctx.fillText(LANG==='cn'?'\u91cd\u89c4\u5212\u5b8c\u6210':'Replanning done',panelX+12,ly);ly+=16;
+      ctx.fillStyle='#e5e2e1';
+      ctx.fillText(LANG==='cn'?'\u65e7\u8def\u5f84: 18 \u6b65':'Old: 18 steps',panelX+12,ly);ly+=16;
+      ctx.fillText(LANG==='cn'?'\u65b0\u8def\u5f84: 19 \u6b65':'New: 19 steps',panelX+12,ly);ly+=16;
+      ctx.fillText(LANG==='cn'?'\u98ce\u9669\u964d\u4f4e: 62%':'Risk reduced: 62%',panelX+12,ly);
+    }
+  }});
+
+  return elems;
+}
+
+function drawBg(){
+  var bgGrad=ctx.createLinearGradient(0,0,0,H);
+  bgGrad.addColorStop(0,'#131313');
+  bgGrad.addColorStop(1,'#1a1015');
+  ctx.fillStyle=bgGrad;
+  ctx.fillRect(0,0,W,H);
+  // Subtle grid
+  ctx.strokeStyle='rgba(255,255,255,0.03)';
+  ctx.lineWidth=0.5;
+  var gs=40;
+  for(var x=0;x<W;x+=gs){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,H);ctx.stroke();}
+  for(var y=0;y<H;y+=gs){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke();}
+}
+
+function drawLabelPrimitive(text,x,y,color,size,align){
+  ctx.font="bold "+size+"px 'Space Grotesk','Noto Sans SC'";
+  ctx.fillStyle=color||'#e5e2e1';
+  ctx.textAlign=align||'center';
+  ctx.textBaseline='middle';
+  ctx.fillText(text,x,y);
+}
+
+function drawElement(el){
+  if(!el||el.alpha<=0.01)return;
+  ctx.save();
+  ctx.globalAlpha=el.alpha;
+  switch(el.type){
+    case 'label':drawLabelPrimitive(el.text,el.x,el.y,el.color,el.size,el.align);break;
+    case 'custom':if(el.draw)el.draw(el.alpha);break;
+  }
+  ctx.restore();
+}
+
+function drawFrame(f){
+  drawBg();
+  var elems=getFrameElements(f);
+  elems.forEach(function(el){drawElement(el);});
+}
+
+function transitionTo(newFrame){
+  if(newFrame<0)newFrame=0;
+  if(newFrame>=totalFrames)newFrame=totalFrames-1;
+  if(newFrame===currentFrame&&!transitioning){drawFrame(currentFrame);updateHUD(currentFrame);return;}
+  if(transitioning)return;
+
+  var oldElems=getFrameElements(currentFrame);
+  var newElems=getFrameElements(newFrame);
+  var oldMap={};oldElems.forEach(function(e){oldMap[e.id]=e;});
+  var newMap={};newElems.forEach(function(e){newMap[e.id]=e;});
+
+  currentFrame=newFrame;
+  updateHUD(newFrame);
+  transitioning=true;
+  var startTime=null;
+  var duration=500;
+
+  function step(timestamp){
+    if(!startTime)startTime=timestamp;
+    var raw=Math.min((timestamp-startTime)/duration,1);
+    var p=easeInOut(raw);
+    drawBg();
+    oldElems.forEach(function(oe){
+      if(!newMap[oe.id])drawElement(merge(oe,{alpha:1-p}));
+    });
+    newElems.forEach(function(ne){
+      var oe=oldMap[ne.id];
+      if(oe){
+        var merged=merge(ne,{
+          x:lerp(oe.x||0,ne.x||0,p),
+          y:lerp(oe.y||0,ne.y||0,p),
+          w:lerp(oe.w||0,ne.w||0,p),
+          h:lerp(oe.h||0,ne.h||0,p),
+          alpha:1
+        });
+        if((ne.type==='label')&&oe.text!==ne.text){
+          drawElement(merge(oe,{alpha:1-p}));
+          drawElement(merge(ne,{alpha:p}));
+        } else {
+          drawElement(merged);
+        }
+      } else {
+        drawElement(merge(ne,{alpha:p}));
+      }
+    });
+    if(raw<1){requestAnimationFrame(step);}else{transitioning=false;}
+  }
+  requestAnimationFrame(step);
+}
+
+function updateHUD(f){
+  var phases=[t('phase0'),t('phase1'),t('phase2'),t('phase3'),t('phase4')];
+  var updated=['0','0','3','10','10'];
+  var pathLen=['18','18','18','--','19'];
+  var risk=['34','34','34','--','13'];
+  document.getElementById('hudV1').textContent=phases[f];
+  document.getElementById('hudV2').textContent=updated[f];
+  document.getElementById('hudV3').textContent=pathLen[f];
+  document.getElementById('hudV4').textContent=risk[f];
+  document.getElementById('frameInd').textContent=(f+1)+' / '+totalFrames;
+}
+
+function refreshI18N(){
+  document.getElementById('langBtn').textContent=LANG.toUpperCase();
+  document.getElementById('headerTitle').textContent=t('title');
+  document.getElementById('headerSubtitle').textContent=t('subtitle');
+  document.getElementById('btnPrev').textContent=t('btnPrev');
+  document.getElementById('btnNext').textContent=t('btnNext');
+  document.getElementById('btnPlay').textContent=playing?t('btnPause'):t('btnPlay');
+  document.getElementById('guideTitle').textContent=t('guideTitle');
+  document.getElementById('guideDesc').textContent=t('guideDesc');
+  document.getElementById('guideOb1').textContent=t('guideOb1');
+  document.getElementById('guideOb2').textContent=t('guideOb2');
+  document.getElementById('guideOb3').textContent=t('guideOb3');
+  document.getElementById('guideTakeaway').textContent=t('guideTakeaway');
+  document.getElementById('hudL1').textContent=t('hudPhase');
+  document.getElementById('hudL2').textContent=t('hudUpdated');
+  document.getElementById('hudL3').textContent=t('hudPathLen');
+  document.getElementById('hudL4').textContent=t('hudRisk');
+  updateHUD(currentFrame);
+  drawFrame(currentFrame);
+}
+
+function resize(){
+  var wrap=document.getElementById('canvasWrap');
+  var rect=wrap.getBoundingClientRect();
+  if(rect.width<1||rect.height<1)return;
+  var dpr=Math.min(window.devicePixelRatio||1,2);
+  W=rect.width;H=rect.height;
+  canvas.width=W*dpr;canvas.height=H*dpr;
+  canvas.style.width=W+'px';canvas.style.height=H+'px';
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+  drawFrame(currentFrame);
+}
+
+function stopPlay(){
+  playing=false;
+  if(playTimer)cancelAnimationFrame(playTimer);
+  playTimer=null;
+  document.getElementById('btnPlay').textContent=t('btnPlay');
+}
+
+function startPlay(){
+  playing=true;
+  document.getElementById('btnPlay').textContent=t('btnPause');
+  if(currentFrame>=totalFrames-1)currentFrame=-1;
+  function tick(){
+    if(!playing)return;
+    if(currentFrame<totalFrames-1){
+      transitionTo(currentFrame+1);
+      playTimer=setTimeout(function(){requestAnimationFrame(tick);},2000);
+    } else {
+      stopPlay();
+    }
+  }
+  tick();
+}
+
+// Event bindings
+document.getElementById('btnPrev').addEventListener('click',function(){
+  stopPlay();
+  if(currentFrame>0)transitionTo(currentFrame-1);
+});
+document.getElementById('btnNext').addEventListener('click',function(){
+  stopPlay();
+  if(currentFrame<totalFrames-1)transitionTo(currentFrame+1);
+});
+document.getElementById('btnPlay').addEventListener('click',function(){
+  if(playing){stopPlay();}else{startPlay();}
+});
+document.getElementById('langBtn').addEventListener('click',function(){
+  LANG=LANG==='en'?'cn':'en';
+  refreshI18N();
+});
+document.getElementById('guideToggle').addEventListener('click',function(){
+  guideOpen=!guideOpen;
+  document.getElementById('guideContent').style.maxHeight=guideOpen?'500px':'0';
+  document.getElementById('guideArrow').textContent=guideOpen?'-':'+';
+});
+
+window.addEventListener('resize',resize);
+refreshI18N();
+resize();
+setTimeout(resize,200);
+setTimeout(resize,600);
+document.fonts.ready.then(function(){resize();});
+})();
+</script>
+</body>
+</html>

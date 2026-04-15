@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=Inter:wght@400;500&family=Noto+Sans+SC:wght@400;700&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box;}
+html,body{width:100%;height:100vh;overflow:hidden;}
+body{background:#0c0e12;color:#f6f6fc;font-family:'Inter','Noto Sans SC',sans-serif;display:flex;flex-direction:column;}
+.wrapper{display:flex;flex-direction:column;height:100vh;overflow:hidden;}
+.header{padding:10px 16px 6px;display:flex;justify-content:space-between;align-items:center;}
+.header h1{font-family:'Space Grotesk',sans-serif;font-size:clamp(13px,2vw,17px);font-weight:700;color:#ffb59c;text-shadow:0 0 15px rgba(255,181,156,0.3);}
+.header .sub{font-size:10px;color:#aaabb0;letter-spacing:0.1em;text-transform:uppercase;}
+.canvas-wrap{flex:1;min-height:0;position:relative;}
+canvas{width:100%;height:100%;display:block;cursor:pointer;}
+.toolbar{display:flex;justify-content:center;gap:8px;padding:8px 16px;background:rgba(0,0,0,0.55);backdrop-filter:blur(12px);}
+.tool-item{display:flex;flex-direction:column;align-items:center;padding:6px 12px;cursor:pointer;border:2px solid transparent;border-radius:6px;transition:all 0.2s;}
+.tool-item:hover{border-color:rgba(255,181,156,0.3);}
+.tool-item.active{border-color:#ffb59c;background:rgba(255,181,156,0.1);}
+.tool-label{font-family:'Space Grotesk',sans-serif;font-size:9px;color:#aaabb0;letter-spacing:0.1em;text-transform:uppercase;margin-top:3px;}
+.tool-icon{width:20px;height:20px;}
+.hud{height:40px;display:flex;align-items:center;justify-content:space-around;background:rgba(0,0,0,0.55);backdrop-filter:blur(12px);padding:0 16px;}
+.hud-item{text-align:center;}
+.hud-label{font-family:'Space Grotesk',sans-serif;font-size:9px;letter-spacing:0.15em;text-transform:uppercase;color:#aaabb0;}
+.hud-val{font-family:'Space Grotesk',sans-serif;font-size:14px;font-weight:700;color:#ffb59c;}
+.lang-btn{position:fixed;top:8px;left:8px;z-index:100;font-family:'Space Grotesk',sans-serif;font-size:11px;font-weight:700;padding:4px 10px;cursor:pointer;border:none;background:rgba(20,20,35,0.85);backdrop-filter:blur(12px);color:#ffb59c;letter-spacing:1px;}
+.reset-btn{position:fixed;bottom:90px;right:16px;z-index:100;font-family:'Space Grotesk',sans-serif;font-size:11px;font-weight:700;padding:6px 14px;cursor:pointer;border:none;background:linear-gradient(135deg,#ffb59c,#ff8a6a);color:#1a0e08;letter-spacing:0.1em;border-radius:4px;}
+</style>
+</head>
+<body>
+<button class="lang-btn" id="langBtn">CN</button>
+<button class="reset-btn" id="resetBtn">RESET</button>
+<div class="wrapper">
+<div class="header"><div><h1 id="title"></h1><div class="sub" id="subtitle"></div></div></div>
+<div class="canvas-wrap"><canvas id="c"></canvas></div>
+<div class="toolbar" id="toolbar"></div>
+<div class="hud">
+<div class="hud-item"><div class="hud-label" id="hudL1"></div><div class="hud-val" id="hudV1"></div></div>
+<div class="hud-item"><div class="hud-label" id="hudL2"></div><div class="hud-val" id="hudV2"></div></div>
+<div class="hud-item"><div class="hud-label" id="hudL3"></div><div class="hud-val" id="hudV3"></div></div>
+</div>
+</div>
+
+<script>
+(function(){
+  var canvas = document.getElementById('c');
+  var ctx = canvas.getContext('2d');
+  var dpr = window.devicePixelRatio || 1;
+  var W, H;
+  var lang = 'cn';
+
+  var PAL = {bg:'#0c0e12',primary:'#ffb59c',secondary:'#00cc88',error:'#ff4444',text:'#f6f6fc',muted:'#aaabb0'};
+
+  var i18n = {
+    title:{en:'MAP BUILDER',cn:'地图绘制'},
+    subtitle:{en:'PLACE ITEMS ON THE MAP',cn:'在地图上放置物品'},
+    placed:{en:'PLACED',cn:'已放置'},
+    correct:{en:'CORRECT',cn:'正确'},
+    remaining:{en:'REMAINING',cn:'剩余'},
+    desk:{en:'DESK',cn:'桌子'},
+    chair:{en:'CHAIR',cn:'椅子'},
+    door:{en:'DOOR',cn:'门'},
+    window_t:{en:'WINDOW',cn:'窗户'},
+    board:{en:'BOARD',cn:'黑板'},
+    eraser:{en:'ERASE',cn:'橡皮'},
+  };
+
+  function t(key){ return i18n[key] ? i18n[key][lang] : key; }
+
+  var COLS = 8; var ROWS = 6;
+  var cellSize = 0;
+  var gridX = 0; var gridY = 0;
+  var refX = 0; var refY = 0;
+
+  // Reference layout (correct positions)
+  // 0=empty, 1=desk, 2=chair, 3=door, 4=window, 5=board
+  var reference = [
+    [0,0,5,5,5,0,0,0],
+    [0,1,0,1,0,1,0,0],
+    [0,2,0,2,0,2,0,0],
+    [0,1,0,1,0,1,0,0],
+    [0,2,0,2,0,2,0,3],
+    [0,0,0,0,0,0,0,0],
+  ];
+  // Windows on left wall: row 1-3
+  var windows = [{row:1,side:'left'},{row:2,side:'left'},{row:3,side:'left'}];
+
+  var playerGrid = [];
+  var selectedTool = 1; // desk
+  var placed = 0;
+  var correct = 0;
+  var totalTargets = 0;
+
+  var tools = [
+    {id:1, key:'desk', color:PAL.primary},
+    {id:2, key:'chair', color:'#ff8a6a'},
+    {id:3, key:'door', color:PAL.secondary},
+    {id:4, key:'window_t', color:'#6699cc'},
+    {id:5, key:'board', color:'#cc88ff'},
+    {id:0, key:'eraser', color:PAL.muted},
+  ];
+
+  function init(){
+    playerGrid = [];
+    for(var r=0;r<ROWS;r++){
+      playerGrid[r] = [];
+      for(var c=0;c<COLS;c++) playerGrid[r][c] = 0;
+    }
+    placed = 0; correct = 0;
+    totalTargets = 0;
+    for(var r2=0;r2<ROWS;r2++) for(var c2=0;c2<COLS;c2++) if(reference[r2][c2] > 0) totalTargets++;
+    draw();
+  }
+
+  function buildToolbar(){
+    var tb = document.getElementById('toolbar');
+    tb.innerHTML = '';
+    tools.forEach(function(tool){
+      var div = document.createElement('div');
+      div.className = 'tool-item' + (tool.id === selectedTool ? ' active' : '');
+      div.innerHTML = '<div class="tool-icon" style="background:'+tool.color+';border-radius:3px;opacity:0.7;"></div><div class="tool-label">'+t(tool.key)+'</div>';
+      div.addEventListener('click', function(){
+        selectedTool = tool.id;
+        document.querySelectorAll('.tool-item').forEach(function(el){el.classList.remove('active');});
+        div.classList.add('active');
+      });
+      tb.appendChild(div);
+    });
+  }
+
+  function resize(){
+    var rect = canvas.parentElement.getBoundingClientRect();
+    W = rect.width; H = rect.height;
+    canvas.width = W*dpr; canvas.height = H*dpr;
+    canvas.style.width = W+'px'; canvas.style.height = H+'px';
+    ctx.setTransform(dpr,0,0,dpr,0,0);
+
+    cellSize = Math.min((W*0.4)/COLS, (H*0.8)/ROWS);
+    refX = W*0.05; refY = H*0.08;
+    gridX = W*0.55; gridY = H*0.08;
+
+    if(playerGrid.length === 0) init();
+    buildToolbar();
+    draw();
+  }
+
+  function draw(){
+    ctx.clearRect(0,0,W,H);
+    var bg = ctx.createLinearGradient(0,0,0,H);
+    bg.addColorStop(0,'#0c0e12'); bg.addColorStop(1,'#0a0c10');
+    ctx.fillStyle = bg; ctx.fillRect(0,0,W,H);
+
+    // Grid bg
+    ctx.strokeStyle = 'rgba(255,255,255,0.03)'; ctx.lineWidth = 1;
+    for(var gx=0;gx<W;gx+=30){ctx.beginPath();ctx.moveTo(gx,0);ctx.lineTo(gx,H);ctx.stroke();}
+    for(var gy=0;gy<H;gy+=30){ctx.beginPath();ctx.moveTo(0,gy);ctx.lineTo(W,gy);ctx.stroke();}
+
+    // Labels
+    ctx.font = '700 11px "Space Grotesk"'; ctx.textAlign = 'center';
+    ctx.fillStyle = PAL.muted;
+    ctx.fillText(lang==='cn'?'参考':'REFERENCE', refX+COLS*cellSize/2, refY-8);
+    ctx.fillStyle = PAL.primary;
+    ctx.fillText(lang==='cn'?'你的地图':'YOUR MAP', gridX+COLS*cellSize/2, gridY-8);
+
+    // Draw reference grid
+    drawGrid(refX, refY, reference, true);
+    // Draw player grid
+    drawGrid(gridX, gridY, playerGrid, false);
+
+    // Arrow between
+    var arrowX = refX + COLS*cellSize + 15;
+    var arrowY = refY + ROWS*cellSize/2;
+    ctx.strokeStyle = PAL.muted; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.moveTo(arrowX, arrowY); ctx.lineTo(arrowX+W*0.04, arrowY); ctx.stroke();
+    ctx.fillStyle = PAL.muted;
+    ctx.beginPath(); ctx.moveTo(arrowX+W*0.04+6,arrowY); ctx.lineTo(arrowX+W*0.04,arrowY-4); ctx.lineTo(arrowX+W*0.04,arrowY+4); ctx.closePath(); ctx.fill();
+
+    // HUD
+    document.getElementById('title').textContent = t('title');
+    document.getElementById('subtitle').textContent = t('subtitle');
+    document.getElementById('hudL1').textContent = t('placed').toUpperCase();
+    document.getElementById('hudV1').textContent = placed;
+    document.getElementById('hudL2').textContent = t('correct').toUpperCase();
+    document.getElementById('hudV2').textContent = correct;
+    var winThreshold = 5;
+    document.getElementById('hudL3').textContent = t('remaining').toUpperCase();
+    document.getElementById('hudV3').textContent = Math.max(0, winThreshold - correct);
+
+    // Win check (5 correct placements to pass)
+    if(correct >= winThreshold){
+      ctx.fillStyle = 'rgba(0,0,0,0.5)';
+      ctx.fillRect(0,0,W,H);
+      ctx.font = '700 24px "Space Grotesk"'; ctx.fillStyle = PAL.secondary; ctx.textAlign = 'center';
+      ctx.fillText(lang==='cn'?'地图完成!':'MAP COMPLETE!', W/2, H*0.45);
+      ctx.font = '500 14px "Noto Sans SC"'; ctx.fillStyle = PAL.text;
+      ctx.fillText(correct+'/'+winThreshold, W/2, H*0.55);
+    }
+  }
+
+  function drawGrid(gx, gy, grid, isRef){
+    for(var r=0;r<ROWS;r++){
+      for(var c=0;c<COLS;c++){
+        var x = gx + c*cellSize;
+        var y = gy + r*cellSize;
+        // Cell bg
+        ctx.fillStyle = (r+c)%2===0 ? 'rgba(255,255,255,0.02)' : 'rgba(255,255,255,0.04)';
+        ctx.fillRect(x, y, cellSize, cellSize);
+        ctx.strokeStyle = 'rgba(255,255,255,0.08)'; ctx.lineWidth = 0.5;
+        ctx.strokeRect(x, y, cellSize, cellSize);
+
+        var val = grid[r][c];
+        if(val > 0){
+          var tool = tools.find(function(t){return t.id===val;});
+          if(tool){
+            ctx.fillStyle = tool.color;
+            ctx.globalAlpha = isRef ? 0.4 : 0.7;
+            ctx.fillRect(x+2, y+2, cellSize-4, cellSize-4);
+            ctx.globalAlpha = 1;
+            // Icon letter
+            ctx.font = '700 '+(cellSize*0.35)+'px "Space Grotesk"';
+            ctx.fillStyle = '#fff'; ctx.textAlign = 'center';
+            var labels = {1:'D',2:'C',3:'Dr',4:'W',5:'B'};
+            ctx.fillText(labels[val]||'', x+cellSize/2, y+cellSize/2+cellSize*0.12);
+          }
+        }
+
+        // Correctness indicator for player grid
+        if(!isRef && val > 0){
+          var isCorrect = (reference[r][c] === val);
+          ctx.fillStyle = isCorrect ? PAL.secondary : PAL.error;
+          ctx.globalAlpha = 0.8;
+          ctx.beginPath(); ctx.arc(x+cellSize-6, y+6, 3, 0, Math.PI*2); ctx.fill();
+          ctx.globalAlpha = 1;
+        }
+      }
+    }
+  }
+
+  canvas.addEventListener('click', function(e){
+    var rect = canvas.getBoundingClientRect();
+    var mx = e.clientX - rect.left;
+    var my = e.clientY - rect.top;
+
+    // Check if click is in player grid
+    var col = Math.floor((mx - gridX) / cellSize);
+    var row = Math.floor((my - gridY) / cellSize);
+    if(col >= 0 && col < COLS && row >= 0 && row < ROWS){
+      var oldVal = playerGrid[row][col];
+      if(selectedTool === 0){
+        // Eraser
+        if(oldVal > 0){
+          playerGrid[row][col] = 0;
+          recalcScore();
+        }
+      } else {
+        playerGrid[row][col] = selectedTool;
+        recalcScore();
+      }
+      draw();
+    }
+  });
+
+  function recalcScore(){
+    placed = 0; correct = 0;
+    for(var r=0;r<ROWS;r++){
+      for(var c=0;c<COLS;c++){
+        if(playerGrid[r][c] > 0){
+          placed++;
+          if(playerGrid[r][c] === reference[r][c]) correct++;
+        }
+      }
+    }
+  }
+
+  document.getElementById('langBtn').addEventListener('click', function(){
+    lang = lang==='cn'?'en':'cn'; this.textContent = lang.toUpperCase();
+    buildToolbar(); draw();
+  });
+
+  document.getElementById('resetBtn').addEventListener('click', init);
+
+  window.addEventListener('resize', resize);
+  document.fonts.ready.then(function(){ resize(); });
+  setTimeout(resize, 100);
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,1099 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=Inter:wght@400;500&family=Noto+Sans+SC:wght@400;700&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box;}
+html,body{width:100%;height:100vh;overflow:hidden;}
+body{background:var(--bg,#0c0e12);color:var(--text,#f6f6fc);font-family:'Inter','Noto Sans SC',sans-serif;display:flex;flex-direction:column;}
+.wrapper{display:flex;flex-direction:column;height:100vh;overflow:hidden;}
+.header{padding:12px 16px 8px;display:flex;justify-content:space-between;align-items:center;}
+.header h1{font-family:'Space Grotesk',sans-serif;font-size:clamp(14px,2vw,18px);font-weight:700;letter-spacing:-0.02em;color:var(--primary,#50ffb0);text-shadow:0 0 15px var(--glow,rgba(80,255,176,0.3));}
+.header .sub{font-size:11px;color:var(--muted,#aaabb0);letter-spacing:0.1em;text-transform:uppercase;}
+.canvas-wrap{flex:1;min-height:0;position:relative;}
+canvas{width:100%;height:100%;display:block;}
+.controls{display:flex;justify-content:center;align-items:center;gap:12px;padding:8px 16px;}
+.ctrl-btn{font-family:'Space Grotesk',sans-serif;font-size:12px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;padding:6px 18px;border:none;cursor:pointer;color:var(--bg,#0c0e12);background:linear-gradient(135deg,var(--primary,#50ffb0),var(--primary-dim,#17df93));transition:transform 0.1s,box-shadow 0.2s;box-shadow:0 0 12px var(--glow-strong,rgba(80,255,176,0.3));}
+.ctrl-btn:hover{transform:scale(1.04);box-shadow:0 0 20px var(--glow-strong,rgba(80,255,176,0.5));}
+.ctrl-btn:active{transform:scale(0.96);}
+.ctrl-btn.secondary{background:var(--glass,rgba(23,26,31,0.92));color:var(--muted,#aaabb0);box-shadow:none;backdrop-filter:blur(12px);}
+.ctrl-btn.secondary:hover{color:var(--primary,#50ffb0);}
+.hud{height:48px;display:flex;align-items:center;justify-content:space-around;background:rgba(0,0,0,0.55);backdrop-filter:blur(12px);padding:0 16px;}
+.hud-item{text-align:center;}
+.hud-label{font-family:'Space Grotesk',sans-serif;font-size:9px;letter-spacing:0.15em;text-transform:uppercase;color:var(--muted,#aaabb0);}
+.hud-val{font-family:'Space Grotesk',sans-serif;font-size:14px;font-weight:700;color:var(--primary,#50ffb0);}
+.lang-btn{position:fixed;top:8px;left:8px;z-index:100;font-family:'Space Grotesk',sans-serif;font-size:11px;font-weight:700;padding:4px 10px;cursor:pointer;border:none;background:rgba(20,20,35,0.85);backdrop-filter:blur(12px);color:#ffb59c;letter-spacing:1px;}
+.guide-panel{position:fixed;top:8px;right:8px;width:240px;max-height:40vh;overflow-y:auto;background:var(--glass,rgba(20,20,35,0.85));backdrop-filter:blur(12px);padding:12px;z-index:100;font-family:'Noto Sans SC',sans-serif;font-size:12px;color:rgba(255,255,255,0.85);line-height:1.6;}
+.guide-panel h3{font-family:'Space Grotesk',sans-serif;font-size:13px;margin-bottom:6px;color:var(--primary,#50ffb0);cursor:pointer;display:flex;justify-content:space-between;align-items:center;}
+.guide-panel ul{padding-left:14px;}
+.guide-panel .collapsed{display:none;}
+</style>
+</head>
+<body>
+<button class="lang-btn" id="langBtn">CN</button>
+<div class="guide-panel" id="guide">
+<h3 id="guideTitle"></h3>
+<div class="guide-content" id="guideContent"></div>
+</div>
+<div class="wrapper">
+<div class="header">
+<div><h1 id="title"></h1><div class="sub" id="subtitle"></div></div>
+<div id="frameIndicator" style="font-family:'Space Grotesk';font-size:11px;color:var(--muted,#aaabb0);letter-spacing:0.1em;"></div>
+</div>
+<div class="canvas-wrap"><canvas id="c"></canvas></div>
+<div class="controls">
+<button class="ctrl-btn secondary" id="btnPrev"></button>
+<button class="ctrl-btn" id="btnPlay"></button>
+<button class="ctrl-btn secondary" id="btnNext"></button>
+</div>
+<div class="hud">
+<div class="hud-item"><div class="hud-label" id="hudL1"></div><div class="hud-val" id="hudV1"></div></div>
+<div class="hud-item"><div class="hud-label" id="hudL2"></div><div class="hud-val" id="hudV2"></div></div>
+<div class="hud-item"><div class="hud-label" id="hudL3"></div><div class="hud-val" id="hudV3"></div></div>
+<div class="hud-item"><div class="hud-label" id="hudL4"></div><div class="hud-val" id="hudV4"></div></div>
+</div>
+</div>
+
+<script src="animation_runtime.js"></script>
+
+<script>
+// ============================================================
+// FORCE VISUALIZATION -- Design v3 (No human figures)
+// M001 knode 0: Push and Pull
+//
+// Design philosophy: Avoid drawing human figures entirely.
+// Instead, use mechanical / physical objects that Canvas
+// renders beautifully: springs, pistons, balls, magnets,
+// force arrows, energy rings, particles.
+//
+// Frame 0: Title -- a ball bounces under gravity; force arrow
+//          appears on each fall, impact ring on each landing
+// Frame 1: PUSH -- a compressed spring launches a ball across
+//          a surface; spring coils animate, ball rolls, dust
+//          trail, force arrow shows push direction
+// Frame 2: PULL -- a horseshoe magnet attracts a metallic
+//          sphere; magnetic field lines animate, sphere
+//          slides toward magnet, pull arrow shows direction
+// Frame 3: FORCE SIZE -- split screen: small spring (short
+//          push, ball rolls slowly) vs big spring (long push,
+//          ball flies fast); simultaneous comparison
+// Frame 4: Summary -- key takeaways slide in with icons
+// ============================================================
+
+var aTime = 0;
+var lastTS = 0;
+var dustParts = [];
+
+var CONFIG = {
+  style: 'rocketry_control',
+  totalFrames: 5,
+  i18n: {
+    title:    {en: 'What Is Force?', cn: '\u529b\u662f\u4ec0\u4e48\uff1f'},
+    subtitle: {en: 'M001 \u00b7 Push & Pull', cn: 'M001 \u00b7 \u63a8\u4e0e\u62c9'},
+    f0big:    {en: 'FORCE', cn: '\u529b'},
+    f0sub1:   {en: 'An invisible push or pull', cn: '\u770b\u4e0d\u89c1\u7684\u63a8\u6216\u62c9'},
+    f0sub2:   {en: 'that makes things move', cn: '\u8ba9\u4e1c\u897f\u52a8\u8d77\u6765'},
+    f1title:  {en: 'PUSH', cn: '\u63a8\u529b'},
+    f1desc:   {en: 'Spring pushes ball away', cn: '\u5f39\u7c27\u628a\u7403\u63a8\u5f00'},
+    f1arrow:  {en: 'Push direction', cn: '\u63a8\u529b\u65b9\u5411'},
+    f2title:  {en: 'PULL', cn: '\u62c9\u529b'},
+    f2desc:   {en: 'Magnet pulls ball closer', cn: '\u78c1\u94c1\u628a\u7403\u62c9\u8fc7\u6765'},
+    f2arrow:  {en: 'Pull direction', cn: '\u62c9\u529b\u65b9\u5411'},
+    f3title:  {en: 'Force Size Matters!', cn: '\u529b\u7684\u5927\u5c0f\u5f88\u91cd\u8981\uff01'},
+    f3small:  {en: 'Small spring, gentle push', cn: '\u5c0f\u5f39\u7c27\uff0c\u8f7b\u8f7b\u63a8'},
+    f3big:    {en: 'Big spring, hard push!', cn: '\u5927\u5f39\u7c27\uff0c\u7528\u529b\u63a8\uff01'},
+    f3slow:   {en: 'slow...', cn: '\u6162\u6162\u7684...'},
+    f3fast:   {en: 'FAST!', cn: '\u98de\u5feb\uff01'},
+    f4title:  {en: 'Key Takeaways', cn: '\u6838\u5fc3\u8981\u70b9'},
+    f4p1:     {en: 'Force is a push or a pull', cn: '\u529b\u5c31\u662f\u63a8\u6216\u8005\u62c9'},
+    f4p2:     {en: 'Force has a direction', cn: '\u529b\u6709\u65b9\u5411'},
+    f4p3:     {en: 'Bigger force = bigger effect', cn: '\u529b\u8d8a\u5927\uff0c\u6548\u679c\u8d8a\u660e\u663e'},
+    f4p4:     {en: 'Forces are everywhere in life!', cn: '\u529b\u5728\u751f\u6d3b\u4e2d\u65e0\u5904\u4e0d\u5728\uff01'},
+    hudType:  {en: 'Type', cn: '\u7c7b\u578b'},
+    hudDir:   {en: 'Direction', cn: '\u65b9\u5411'},
+    hudMag:   {en: 'Magnitude', cn: '\u5927\u5c0f'},
+    hudScene: {en: 'Scene', cn: '\u573a\u666f'},
+    push:     {en: 'Push', cn: '\u63a8'},
+    pull:     {en: 'Pull', cn: '\u62c9'},
+    right:    {en: '\u2192', cn: '\u2192 \u5411\u53f3'},
+    left:     {en: '\u2190', cn: '\u2190 \u5411\u5de6'},
+    compare:  {en: 'Compare', cn: '\u5bf9\u6bd4'},
+    spring:   {en: 'Spring', cn: '\u5f39\u7c27'},
+    magnet:   {en: 'Magnet', cn: '\u78c1\u94c1'},
+    summary:  {en: 'Summary', cn: '\u603b\u7ed3'},
+    na:       {en: '--', cn: '--'},
+    intro:    {en: 'Intro', cn: '\u5f15\u5165'},
+    guideTitle: {en: 'Learning Guide', cn: '\u5b66\u4e60\u6307\u5357'},
+    g1: {en: 'Watch the spring push the ball', cn: '\u89c2\u5bdf\u5f39\u7c27\u5982\u4f55\u63a8\u7403'},
+    g2: {en: 'See the magnet pull the ball', cn: '\u89c2\u5bdf\u78c1\u94c1\u5982\u4f55\u62c9\u7403'},
+    g3: {en: 'Compare small vs. big force', cn: '\u5bf9\u6bd4\u5c0f\u529b\u548c\u5927\u529b\u7684\u6548\u679c'},
+    g4: {en: 'Forces are everywhere!', cn: '\u529b\u65e0\u5904\u4e0d\u5728\uff01'},
+  },
+  hudLabels: ['hudType', 'hudDir', 'hudMag', 'hudScene'],
+  hudValues: [
+    ['na', 'na', 'na', 'intro'],
+    ['push', 'right', '3 N', 'spring'],
+    ['pull', 'left', '2 N', 'magnet'],
+    ['compare', 'right', '1N / 5N', 'spring'],
+    ['na', 'na', 'na', 'summary'],
+  ],
+  guideTitle: 'guideTitle',
+  guideItems: ['g1', 'g2', 'g3', 'g4'],
+};
+
+// ================================================================
+// Dust particles
+// ================================================================
+function spawnDust(x, y, vx) {
+  dustParts.push({
+    x: x, y: y + (Math.random() - 0.5) * 5,
+    vx: vx * (0.5 + Math.random() * 0.8),
+    vy: -(5 + Math.random() * 12),
+    life: 0.4 + Math.random() * 0.4,
+    maxLife: 0.8,
+    size: 1 + Math.random() * 2,
+    alpha: 0.2 + Math.random() * 0.15,
+  });
+}
+function updateDust(dt) {
+  for (var i = dustParts.length - 1; i >= 0; i--) {
+    var p = dustParts[i];
+    p.life -= dt;
+    p.x += p.vx * dt;
+    p.y += p.vy * dt;
+    p.vy += 40 * dt;
+    p.alpha = Math.max(0, (p.life / p.maxLife) * 0.3);
+    if (p.life <= 0) dustParts.splice(i, 1);
+  }
+}
+function drawDust(ctx) {
+  for (var i = 0; i < dustParts.length; i++) {
+    var p = dustParts[i];
+    ctx.save();
+    ctx.globalAlpha = p.alpha;
+    ctx.fillStyle = '#cc8d00';
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  }
+}
+
+// ================================================================
+// Draw a coil spring. x,y = left anchor; len = current length;
+// coils = number of coils; amp = coil height; thick = wire width
+// ================================================================
+function drawSpring(ctx, x, y, len, coils, amp, thick, color) {
+  ctx.strokeStyle = color;
+  ctx.lineWidth = thick;
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  ctx.beginPath();
+  ctx.moveTo(x, y);
+  var segLen = len / (coils * 2);
+  for (var i = 0; i < coils * 2; i++) {
+    var sx = x + (i + 1) * segLen;
+    var sy = y + (i % 2 === 0 ? -amp : amp);
+    ctx.lineTo(sx, sy);
+  }
+  ctx.lineTo(x + len, y);
+  ctx.stroke();
+}
+
+// ================================================================
+// Draw a metallic ball with nice shading
+// ================================================================
+function drawBall(ctx, x, y, r, baseColor, highlightColor) {
+  ctx.save();
+  ctx.shadowColor = 'rgba(0,0,0,0.4)';
+  ctx.shadowBlur = r * 0.5;
+  ctx.shadowOffsetY = r * 0.15;
+  var grad = ctx.createRadialGradient(x - r * 0.3, y - r * 0.35, r * 0.1, x, y, r);
+  grad.addColorStop(0, highlightColor);
+  grad.addColorStop(0.5, baseColor);
+  grad.addColorStop(1, '#1a1a2a');
+  ctx.fillStyle = grad;
+  ctx.beginPath();
+  ctx.arc(x, y, r, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+  // Specular highlight
+  ctx.save();
+  ctx.globalAlpha = 0.6;
+  ctx.fillStyle = '#fff';
+  ctx.beginPath();
+  ctx.arc(x - r * 0.25, y - r * 0.3, r * 0.15, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+}
+
+// ================================================================
+// Draw a horseshoe magnet
+// ================================================================
+function drawMagnet(ctx, x, y, size, pulse) {
+  var w = size * 0.5;
+  var h = size;
+  var armW = w * 0.32;
+  var gapH = h * 0.35;
+  var glow = 0.15 + pulse * 0.12;
+
+  ctx.save();
+  ctx.translate(x, y);
+
+  // Glow aura
+  ctx.save();
+  ctx.shadowColor = 'rgba(255,80,80,' + glow + ')';
+  ctx.shadowBlur = 25;
+
+  // Top arm (red / N pole)
+  var topGrad = ctx.createLinearGradient(-w / 2, -h / 2, w / 2, -h / 2);
+  topGrad.addColorStop(0, '#cc2222');
+  topGrad.addColorStop(0.5, '#ee3333');
+  topGrad.addColorStop(1, '#cc2222');
+  ctx.fillStyle = topGrad;
+  // U-shape: top arm
+  ctx.beginPath();
+  ctx.moveTo(-w / 2, -h / 2);
+  ctx.lineTo(w / 2, -h / 2);
+  ctx.lineTo(w / 2, -h / 2 + armW);
+  ctx.lineTo(-w / 2 + armW, -h / 2 + armW);
+  // Curve down through center to bottom arm
+  ctx.lineTo(-w / 2 + armW, -gapH / 2);
+  ctx.lineTo(-w / 2, -gapH / 2);
+  ctx.closePath();
+  ctx.fill();
+
+  ctx.restore();
+
+  // Bottom arm (blue / S pole)
+  ctx.save();
+  ctx.shadowColor = 'rgba(80,80,255,' + glow + ')';
+  ctx.shadowBlur = 25;
+
+  var botGrad = ctx.createLinearGradient(-w / 2, h / 2, w / 2, h / 2);
+  botGrad.addColorStop(0, '#2244cc');
+  botGrad.addColorStop(0.5, '#3355ee');
+  botGrad.addColorStop(1, '#2244cc');
+  ctx.fillStyle = botGrad;
+  ctx.beginPath();
+  ctx.moveTo(-w / 2, h / 2);
+  ctx.lineTo(w / 2, h / 2);
+  ctx.lineTo(w / 2, h / 2 - armW);
+  ctx.lineTo(-w / 2 + armW, h / 2 - armW);
+  ctx.lineTo(-w / 2 + armW, gapH / 2);
+  ctx.lineTo(-w / 2, gapH / 2);
+  ctx.closePath();
+  ctx.fill();
+
+  ctx.restore();
+
+  // Back connector (left side connecting the two arms)
+  var backGrad = ctx.createLinearGradient(-w / 2, -h / 2, -w / 2, h / 2);
+  backGrad.addColorStop(0, '#cc2222');
+  backGrad.addColorStop(0.5, '#888');
+  backGrad.addColorStop(1, '#2244cc');
+  ctx.fillStyle = backGrad;
+  ctx.fillRect(-w / 2, -h / 2, armW, h);
+
+  // Pole labels
+  ctx.font = "bold " + (armW * 0.7) + "px 'Space Grotesk',sans-serif";
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillStyle = '#fff';
+  ctx.fillText('N', w / 2 - armW * 0.5, -h / 2 + armW * 0.5);
+  ctx.fillText('S', w / 2 - armW * 0.5, h / 2 - armW * 0.5);
+
+  ctx.restore();
+}
+
+// ================================================================
+// Draw magnetic field lines (curved lines from N to S pole)
+// ================================================================
+function drawFieldLines(ctx, magnetX, magnetY, magnetSize, time, extent) {
+  var count = 5;
+  ctx.lineCap = 'round';
+  for (var i = 0; i < count; i++) {
+    var spread = (i + 1) / count;
+    var reach = extent * spread;
+    var yOff = magnetSize * 0.3 * (1 - spread * 0.5);
+
+    // Animated dash offset
+    var dashPhase = time * 60 + i * 20;
+
+    ctx.save();
+    ctx.strokeStyle = 'rgba(255,176,0,' + (0.08 + 0.06 * (1 - spread)) + ')';
+    ctx.lineWidth = 1.5 - spread * 0.5;
+    ctx.setLineDash([4, 8]);
+    ctx.lineDashOffset = -dashPhase;
+
+    ctx.beginPath();
+    // Line curves from magnet opening rightward, arcing out then back
+    var sx = magnetX + magnetSize * 0.25;
+    var topY = magnetY - yOff;
+    var botY = magnetY + yOff;
+    // Top line going right and curving back
+    ctx.moveTo(sx, topY);
+    ctx.bezierCurveTo(
+      sx + reach * 0.6, topY - reach * 0.2,
+      sx + reach, magnetY - reach * 0.1,
+      sx + reach, magnetY
+    );
+    ctx.bezierCurveTo(
+      sx + reach, magnetY + reach * 0.1,
+      sx + reach * 0.6, botY + reach * 0.2,
+      sx, botY
+    );
+    ctx.stroke();
+    ctx.restore();
+  }
+}
+
+// ================================================================
+// Draw force arrow with glow
+// ================================================================
+function drawForceArrow(ctx, x1, y1, x2, y2, time, label) {
+  var dx = x2 - x1, dy = y2 - y1;
+  var len = Math.sqrt(dx * dx + dy * dy);
+  if (len < 1) return;
+  var nx = dx / len, ny = dy / len;
+  var pulse = 0.7 + 0.3 * Math.sin(time * 4);
+
+  ctx.save();
+  ctx.shadowColor = 'rgba(255,176,0,' + (0.25 * pulse) + ')';
+  ctx.shadowBlur = 12;
+
+  // Shaft gradient
+  var sg = ctx.createLinearGradient(x1, y1, x2, y2);
+  sg.addColorStop(0, 'rgba(255,176,0,0.25)');
+  sg.addColorStop(0.3, '#ffb000');
+  sg.addColorStop(1, '#ffb000');
+  ctx.strokeStyle = sg;
+  ctx.lineWidth = 3.5;
+  ctx.lineCap = 'round';
+  ctx.beginPath();
+  ctx.moveTo(x1, y1);
+  ctx.lineTo(x2 - nx * 10, y2 - ny * 10);
+  ctx.stroke();
+
+  // Head
+  ctx.fillStyle = '#ffb000';
+  ctx.beginPath();
+  ctx.moveTo(x2, y2);
+  ctx.lineTo(x2 - nx * 13 + ny * 7, y2 - ny * 13 - nx * 7);
+  ctx.lineTo(x2 - nx * 13 - ny * 7, y2 - ny * 13 + nx * 7);
+  ctx.closePath();
+  ctx.fill();
+
+  ctx.shadowBlur = 0;
+
+  // Label
+  if (label) {
+    ctx.font = "bold 10px 'Space Grotesk',sans-serif";
+    ctx.fillStyle = '#ffb000';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'bottom';
+    ctx.fillText(label, (x1 + x2) / 2, Math.min(y1, y2) - 8);
+  }
+  ctx.restore();
+}
+
+// ================================================================
+// Draw ground
+// ================================================================
+function drawGround(ctx, x, groundY, w, totalH, scrollOff) {
+  var gg = ctx.createLinearGradient(x, groundY, x, totalH);
+  gg.addColorStop(0, '#1a1d2d');
+  gg.addColorStop(1, '#0d111f');
+  ctx.fillStyle = gg;
+  ctx.fillRect(x, groundY, w, totalH - groundY);
+  ctx.strokeStyle = 'rgba(255,176,0,0.12)';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(x, groundY);
+  ctx.lineTo(x + w, groundY);
+  ctx.stroke();
+  // Hash marks
+  var spacing = 26;
+  var start = x - ((scrollOff || 0) % spacing);
+  ctx.strokeStyle = 'rgba(142,144,166,0.07)';
+  ctx.lineWidth = 0.5;
+  for (var hx = start; hx < x + w; hx += spacing) {
+    if (hx < x) continue;
+    ctx.beginPath();
+    ctx.moveTo(hx, groundY + 2);
+    ctx.lineTo(hx - 3, groundY + 8);
+    ctx.stroke();
+  }
+}
+
+// ================================================================
+// Draw wall bracket (spring anchor point)
+// ================================================================
+function drawWall(ctx, x, y, h) {
+  ctx.fillStyle = '#2a2d40';
+  ctx.fillRect(x - 8, y - h / 2, 8, h);
+  // Hatch lines on wall
+  ctx.strokeStyle = 'rgba(142,144,166,0.15)';
+  ctx.lineWidth = 1;
+  for (var hy = y - h / 2; hy < y + h / 2; hy += 7) {
+    ctx.beginPath();
+    ctx.moveTo(x - 8, hy);
+    ctx.lineTo(x - 1, hy + 5);
+    ctx.stroke();
+  }
+}
+
+// ================================================================
+// Frame elements (minimal - heavy rendering in drawBg)
+// ================================================================
+function getFrameElements(f, W, H) {
+  return [];
+}
+
+// ================================================================
+// drawBg -- ALL rendering here
+// ================================================================
+function drawBg(ctx, W, H) {
+  var P = AnimRuntime.PAL;
+  var t = AnimRuntime.t;
+  var cf = AnimRuntime.currentFrame;
+
+  // Background gradient
+  var bg = ctx.createLinearGradient(0, 0, 0, H);
+  bg.addColorStop(0, P.bg);
+  bg.addColorStop(1, P.bg2);
+  ctx.fillStyle = bg;
+  ctx.fillRect(0, 0, W, H);
+
+  // Faint grid
+  ctx.strokeStyle = 'rgba(255,255,255,0.015)';
+  ctx.lineWidth = 0.5;
+  var gridSize = 40;
+  for (var gx = 0; gx < W; gx += gridSize) {
+    ctx.beginPath(); ctx.moveTo(gx, 0); ctx.lineTo(gx, H); ctx.stroke();
+  }
+  for (var gy = 0; gy < H; gy += gridSize) {
+    ctx.beginPath(); ctx.moveTo(0, gy); ctx.lineTo(W, gy); ctx.stroke();
+  }
+
+  if (cf === 0) drawFrame0(ctx, W, H, P, t);
+  else if (cf === 1) drawFrame1(ctx, W, H, P, t);
+  else if (cf === 2) drawFrame2(ctx, W, H, P, t);
+  else if (cf === 3) drawFrame3(ctx, W, H, P, t);
+  else if (cf === 4) drawFrame4(ctx, W, H, P, t);
+}
+
+// ================================================================
+// Frame 0: Title -- bouncing ball with gravity arrow
+// ================================================================
+function drawFrame0(ctx, W, H, P, t) {
+  var cx = W / 2, cy = H / 2;
+  var groundY = cy + H * 0.2;
+
+  // Ground
+  drawGround(ctx, 0, groundY, W, H, 0);
+
+  // Bouncing ball
+  var period = 1.8;
+  var phase = (aTime % period) / period;
+  var bounce = 1 - 4 * (phase - 0.5) * (phase - 0.5);
+  if (bounce < 0) bounce = 0;
+  var ballR = Math.min(W, H) * 0.055;
+  var ballX = cx;
+  var ballY = groundY - bounce * H * 0.28 - ballR;
+
+  // Shadow (scales with height)
+  var shadowScale = 1 - bounce * 0.6;
+  ctx.save();
+  ctx.globalAlpha = 0.25 * shadowScale;
+  ctx.fillStyle = '#000';
+  ctx.beginPath();
+  ctx.ellipse(ballX, groundY - 1, ballR * 1.3 * shadowScale, 3 * shadowScale, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+
+  // Ball
+  drawBall(ctx, ballX, ballY, ballR, '#ffb000', '#ffe080');
+
+  // Gravity arrow (only visible when ball is in air)
+  if (bounce > 0.05) {
+    ctx.save();
+    ctx.globalAlpha = Math.min(1, bounce * 2.5);
+    drawForceArrow(ctx, ballX + ballR + 10, ballY + 2, ballX + ballR + 10, ballY + H * 0.08, aTime, '');
+    // Gravity label
+    ctx.font = "9px 'Space Grotesk',sans-serif";
+    ctx.fillStyle = P.muted;
+    ctx.textAlign = 'left';
+    ctx.fillText('gravity', ballX + ballR + 18, ballY + H * 0.04);
+    ctx.restore();
+  }
+
+  // Impact ring on landing
+  if (phase < 0.06 || phase > 0.94) {
+    var ringP = phase < 0.06 ? (0.06 - phase) / 0.06 : (phase - 0.94) / 0.06;
+    var ringR = ballR * (1 + (1 - ringP) * 2.5);
+    ctx.save();
+    ctx.globalAlpha = ringP * 0.35;
+    ctx.strokeStyle = P.primary;
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(ballX, groundY - 1, ringR, Math.PI, 2 * Math.PI);
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  // Title
+  ctx.save();
+  ctx.shadowColor = 'rgba(255,176,0,0.3)';
+  ctx.shadowBlur = 25;
+  ctx.font = "bold " + Math.min(48, W * 0.09) + "px 'Space Grotesk',sans-serif";
+  ctx.fillStyle = P.primary;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(t('f0big'), cx, cy - H * 0.26);
+  ctx.restore();
+
+  ctx.font = Math.min(14, W * 0.028) + "px 'Noto Sans SC','Inter',sans-serif";
+  ctx.fillStyle = P.muted;
+  ctx.textAlign = 'center';
+  ctx.fillText(t('f0sub1'), cx, cy - H * 0.14);
+  ctx.fillText(t('f0sub2'), cx, cy - H * 0.08);
+}
+
+// ================================================================
+// Frame 1: PUSH -- spring launches ball
+// ================================================================
+function drawFrame1(ctx, W, H, P, t) {
+  var groundY = H * 0.68;
+  drawGround(ctx, 0, groundY, W, H, aTime * 40);
+
+  // Spring cycle: compress -> release -> ball rolls -> reset
+  var cycleDur = 3.5;
+  var phase = (aTime % cycleDur) / cycleDur;
+
+  var wallX = W * 0.12;
+  var springRestLen = W * 0.18;
+  var springY = groundY - H * 0.08;
+  var ballR = Math.min(W, H) * 0.05;
+
+  // Spring animation: 0-0.3 compressed, 0.3-0.5 releasing, 0.5-1.0 ball rolling
+  var springLen, ballX;
+  var compressRatio = 0.45; // how much spring compresses
+  if (phase < 0.3) {
+    // Compressing
+    var cp = phase / 0.3;
+    var ease = cp * cp;
+    springLen = springRestLen * (1 - compressRatio * ease);
+    ballX = wallX + springLen + ballR;
+  } else if (phase < 0.5) {
+    // Releasing
+    var rp = (phase - 0.3) / 0.2;
+    var easeOut = 1 - (1 - rp) * (1 - rp);
+    springLen = springRestLen * (1 - compressRatio * (1 - easeOut));
+    ballX = wallX + springLen + ballR;
+  } else {
+    // Ball rolling freely, spring at rest
+    springLen = springRestLen;
+    var rollP = (phase - 0.5) / 0.5;
+    var rollDist = W * 0.55;
+    ballX = wallX + springRestLen + ballR + rollDist * rollP;
+    // Spawn dust
+    if (rollP < 0.7 && Math.random() < 0.3) {
+      spawnDust(ballX - ballR, groundY - 2, -12);
+    }
+  }
+
+  // Wall bracket
+  drawWall(ctx, wallX, springY, H * 0.18);
+
+  // Spring
+  var compression = 1 - springLen / springRestLen;
+  var springColor = compression > 0.2 ? '#ff6644' : '#cc8d00';
+  var coilAmp = 8 + compression * 6;
+  drawSpring(ctx, wallX, springY, springLen, 8, coilAmp, 2.5, springColor);
+
+  // Spring end plate
+  ctx.fillStyle = '#555';
+  ctx.fillRect(wallX + springLen - 2, springY - 14, 5, 28);
+
+  // Ball
+  var rollAngle = (phase > 0.5) ? (phase - 0.5) * 20 : 0;
+  // Ball shadow
+  ctx.save();
+  ctx.globalAlpha = 0.2;
+  ctx.fillStyle = '#000';
+  ctx.beginPath();
+  ctx.ellipse(ballX, groundY - 1, ballR * 1.1, 3, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+
+  drawBall(ctx, ballX, groundY - ballR, ballR, '#ffb000', '#ffe080');
+
+  // Rolling indicator (line on ball that rotates)
+  ctx.save();
+  ctx.translate(ballX, groundY - ballR);
+  ctx.rotate(rollAngle);
+  ctx.strokeStyle = 'rgba(255,255,255,0.3)';
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.moveTo(0, -ballR * 0.6);
+  ctx.lineTo(0, ballR * 0.6);
+  ctx.stroke();
+  ctx.restore();
+
+  // Force arrow (during spring release and initial roll)
+  if (phase >= 0.25 && phase < 0.65) {
+    var arrowAlpha = phase < 0.5 ? 1 : Math.max(0, 1 - (phase - 0.5) / 0.15);
+    ctx.save();
+    ctx.globalAlpha = arrowAlpha;
+    var arrowLen = W * 0.12 * (1 - compression);
+    drawForceArrow(ctx, ballX + ballR + 6, groundY - ballR, ballX + ballR + 6 + arrowLen, groundY - ballR, aTime, t('f1arrow'));
+    ctx.restore();
+  }
+
+  // Compression energy glow (when compressed)
+  if (phase < 0.3) {
+    var glowIntensity = (phase / 0.3);
+    ctx.save();
+    ctx.globalAlpha = glowIntensity * 0.15;
+    ctx.shadowColor = '#ff4400';
+    ctx.shadowBlur = 30;
+    ctx.fillStyle = '#ff4400';
+    ctx.beginPath();
+    ctx.arc(wallX + springLen / 2, springY, 20, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  }
+
+  drawDust(ctx);
+
+  // Title & description
+  ctx.save();
+  ctx.shadowColor = 'rgba(255,176,0,0.2)';
+  ctx.shadowBlur = 12;
+  ctx.font = "bold " + Math.min(28, W * 0.055) + "px 'Space Grotesk',sans-serif";
+  ctx.fillStyle = P.primary;
+  ctx.textAlign = 'left';
+  ctx.fillText(t('f1title'), W * 0.06, H * 0.1);
+  ctx.restore();
+  ctx.font = Math.min(12, W * 0.024) + "px 'Noto Sans SC','Inter',sans-serif";
+  ctx.fillStyle = P.muted;
+  ctx.textAlign = 'left';
+  ctx.fillText(t('f1desc'), W * 0.06, H * 0.16);
+}
+
+// ================================================================
+// Frame 2: PULL -- magnet attracts metallic ball
+// ================================================================
+function drawFrame2(ctx, W, H, P, t) {
+  var groundY = H * 0.68;
+  drawGround(ctx, 0, groundY, W, H, 0);
+
+  // Magnet on left side
+  var magnetX = W * 0.18;
+  var magnetY = groundY - H * 0.13;
+  var magnetSize = Math.min(W, H) * 0.17;
+
+  // Cycle: ball starts far right, slides left toward magnet, snaps, resets
+  var cycleDur = 4.0;
+  var phase = (aTime % cycleDur) / cycleDur;
+
+  var ballR = Math.min(W, H) * 0.045;
+  var startX = W * 0.82;
+  var endX = magnetX + magnetSize * 0.35 + ballR;
+  var range = startX - endX;
+  var ballX;
+
+  if (phase < 0.85) {
+    // Ball slides toward magnet with acceleration (slow start, fast end)
+    var pp = phase / 0.85;
+    var easeIn = pp * pp * pp; // cubic ease-in = accelerating
+    ballX = startX - range * easeIn;
+  } else {
+    // Snap! Ball hit magnet, brief pause
+    ballX = endX;
+  }
+
+  var ballY = groundY - ballR;
+
+  // Draw magnetic field lines (emanating from magnet rightward)
+  drawFieldLines(ctx, magnetX, magnetY, magnetSize, aTime, W * 0.55);
+
+  // Magnet
+  var magPulse = Math.sin(aTime * 3);
+  drawMagnet(ctx, magnetX, magnetY, magnetSize, magPulse);
+
+  // Ball shadow
+  ctx.save();
+  ctx.globalAlpha = 0.2;
+  ctx.fillStyle = '#000';
+  ctx.beginPath();
+  ctx.ellipse(ballX, groundY - 1, ballR * 1.1, 3, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+
+  // Metallic ball (silver tone to show it's metal)
+  drawBall(ctx, ballX, ballY, ballR, '#8899aa', '#ccddef');
+
+  // Tiny sparks around ball when near magnet
+  if (phase > 0.5 && phase < 0.9) {
+    var sparkIntensity = (phase - 0.5) / 0.4;
+    for (var si = 0; si < 3; si++) {
+      var sa = aTime * 5 + si * 2.1;
+      var sr = ballR * 1.5 + Math.sin(sa) * 4;
+      ctx.save();
+      ctx.globalAlpha = sparkIntensity * 0.3;
+      ctx.fillStyle = '#ffb000';
+      ctx.beginPath();
+      ctx.arc(ballX + Math.cos(sa) * sr, ballY + Math.sin(sa) * sr, 1.5, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }
+  }
+
+  // Snap flash when ball hits magnet
+  if (phase >= 0.84 && phase < 0.9) {
+    var flashP = (phase - 0.84) / 0.06;
+    var flashR = ballR * (1 + flashP * 3);
+    ctx.save();
+    ctx.globalAlpha = (1 - flashP) * 0.4;
+    ctx.strokeStyle = '#ffb000';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(endX, ballY, flashR, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  // Force arrow (pointing left, from ball toward magnet)
+  if (phase < 0.85) {
+    var arrowLen2 = W * 0.1 * Math.min(1, (phase / 0.85) * 2);
+    drawForceArrow(ctx, ballX - ballR - 8, ballY, ballX - ballR - 8 - arrowLen2, ballY, aTime, t('f2arrow'));
+  }
+
+  // Title & description
+  ctx.save();
+  ctx.shadowColor = 'rgba(255,176,0,0.2)';
+  ctx.shadowBlur = 12;
+  ctx.font = "bold " + Math.min(28, W * 0.055) + "px 'Space Grotesk',sans-serif";
+  ctx.fillStyle = P.primary;
+  ctx.textAlign = 'right';
+  ctx.fillText(t('f2title'), W * 0.94, H * 0.1);
+  ctx.restore();
+  ctx.font = Math.min(12, W * 0.024) + "px 'Noto Sans SC','Inter',sans-serif";
+  ctx.fillStyle = P.muted;
+  ctx.textAlign = 'right';
+  ctx.fillText(t('f2desc'), W * 0.94, H * 0.16);
+}
+
+// ================================================================
+// Frame 3: Force magnitude -- split screen comparison
+// ================================================================
+function drawFrame3(ctx, W, H, P, t) {
+  var halfW = W / 2;
+  var groundY = H * 0.7;
+
+  // Divider
+  ctx.strokeStyle = 'rgba(255,176,0,0.12)';
+  ctx.lineWidth = 1;
+  ctx.setLineDash([4, 6]);
+  ctx.beginPath();
+  ctx.moveTo(halfW, H * 0.04);
+  ctx.lineTo(halfW, H * 0.96);
+  ctx.stroke();
+  ctx.setLineDash([]);
+
+  // Title
+  ctx.save();
+  ctx.shadowColor = 'rgba(255,176,0,0.2)';
+  ctx.shadowBlur = 10;
+  ctx.font = "bold " + Math.min(18, W * 0.035) + "px 'Space Grotesk',sans-serif";
+  ctx.fillStyle = P.primary;
+  ctx.textAlign = 'center';
+  ctx.fillText(t('f3title'), W / 2, H * 0.06);
+  ctx.restore();
+
+  var ballR = Math.min(W, H) * 0.035;
+
+  // === LEFT: small spring, gentle push ===
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(0, 0, halfW, H);
+  ctx.clip();
+
+  drawGround(ctx, 0, groundY, halfW, H, aTime * 15);
+
+  var wallX1 = W * 0.04;
+  var springY1 = groundY - ballR - 2;
+  var smallRestLen = halfW * 0.22;
+
+  // Slow cycle
+  var slowCycle = 5.0;
+  var sp1 = (aTime % slowCycle) / slowCycle;
+  var sLen1, bx1;
+  if (sp1 < 0.35) {
+    var c1 = sp1 / 0.35;
+    sLen1 = smallRestLen * (1 - 0.25 * c1 * c1);
+    bx1 = wallX1 + sLen1 + ballR;
+  } else if (sp1 < 0.45) {
+    var r1 = (sp1 - 0.35) / 0.1;
+    sLen1 = smallRestLen * (1 - 0.25 * (1 - r1));
+    bx1 = wallX1 + sLen1 + ballR;
+  } else {
+    sLen1 = smallRestLen;
+    var roll1 = (sp1 - 0.45) / 0.55;
+    bx1 = wallX1 + smallRestLen + ballR + halfW * 0.35 * roll1;
+    // Slow dust
+    if (roll1 < 0.5 && Math.random() < 0.15) spawnDust(bx1 - ballR, groundY - 2, -6);
+  }
+
+  drawWall(ctx, wallX1, springY1, H * 0.12);
+  drawSpring(ctx, wallX1, springY1, sLen1, 5, 5, 2, '#888');
+  ctx.fillStyle = '#555';
+  ctx.fillRect(wallX1 + sLen1 - 1, springY1 - 8, 3, 16);
+  drawBall(ctx, bx1, groundY - ballR, ballR, '#ffb000', '#ffe080');
+
+  // Short arrow (1 N)
+  if (sp1 >= 0.35 && sp1 < 0.6) {
+    ctx.save();
+    ctx.globalAlpha = sp1 < 0.45 ? 1 : Math.max(0, 1 - (sp1 - 0.45) / 0.15);
+    drawForceArrow(ctx, bx1 + ballR + 4, groundY - ballR, bx1 + ballR + 4 + halfW * 0.06, groundY - ballR, aTime, '1 N');
+    ctx.restore();
+  }
+
+  // Labels
+  ctx.font = "bold " + Math.min(11, W * 0.022) + "px 'Space Grotesk',sans-serif";
+  ctx.fillStyle = P.muted;
+  ctx.textAlign = 'center';
+  ctx.fillText(t('f3small'), halfW * 0.5, H * 0.14);
+  ctx.font = Math.min(11, W * 0.02) + "px 'Noto Sans SC',sans-serif";
+  ctx.fillStyle = 'rgba(142,144,166,0.5)';
+  ctx.fillText(t('f3slow'), halfW * 0.5, groundY + 18);
+
+  ctx.restore(); // unclip left
+
+  // === RIGHT: big spring, hard push ===
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(halfW, 0, halfW, H);
+  ctx.clip();
+
+  drawGround(ctx, halfW, groundY, halfW, H, aTime * 90);
+
+  var wallX2 = halfW + W * 0.04;
+  var springY2 = groundY - ballR - 2;
+  var bigRestLen = halfW * 0.24;
+
+  // Fast cycle
+  var fastCycle = 2.2;
+  var sp2 = (aTime % fastCycle) / fastCycle;
+  var sLen2, bx2;
+  if (sp2 < 0.3) {
+    var c2 = sp2 / 0.3;
+    sLen2 = bigRestLen * (1 - 0.5 * c2 * c2);
+    bx2 = wallX2 + sLen2 + ballR;
+  } else if (sp2 < 0.4) {
+    var r2 = (sp2 - 0.3) / 0.1;
+    sLen2 = bigRestLen * (1 - 0.5 * (1 - r2));
+    bx2 = wallX2 + sLen2 + ballR;
+  } else {
+    sLen2 = bigRestLen;
+    var roll2 = (sp2 - 0.4) / 0.6;
+    bx2 = wallX2 + bigRestLen + ballR + halfW * 0.6 * roll2;
+    // Fast dust
+    if (roll2 < 0.6 && Math.random() < 0.4) spawnDust(bx2 - ballR, groundY - 2, -20);
+  }
+
+  drawWall(ctx, wallX2, springY2, H * 0.15);
+  var bigCompression2 = 1 - sLen2 / bigRestLen;
+  var bigColor = bigCompression2 > 0.2 ? '#ff4422' : '#cc6600';
+  drawSpring(ctx, wallX2, springY2, sLen2, 10, 9, 3, bigColor);
+  ctx.fillStyle = '#666';
+  ctx.fillRect(wallX2 + sLen2 - 2, springY2 - 12, 5, 24);
+
+  // Bigger ball
+  var ballR2 = ballR * 1.1;
+  drawBall(ctx, bx2, groundY - ballR2, ballR2, '#ffb000', '#ffe080');
+
+  // Long arrow (5 N)
+  if (sp2 >= 0.3 && sp2 < 0.55) {
+    ctx.save();
+    ctx.globalAlpha = sp2 < 0.4 ? 1 : Math.max(0, 1 - (sp2 - 0.4) / 0.15);
+    drawForceArrow(ctx, bx2 + ballR2 + 4, groundY - ballR2, bx2 + ballR2 + 4 + halfW * 0.16, groundY - ballR2, aTime, '5 N');
+    ctx.restore();
+  }
+
+  // Energy glow when compressed
+  if (sp2 < 0.3) {
+    ctx.save();
+    ctx.globalAlpha = (sp2 / 0.3) * 0.18;
+    ctx.shadowColor = '#ff2200';
+    ctx.shadowBlur = 30;
+    ctx.fillStyle = '#ff2200';
+    ctx.beginPath();
+    ctx.arc(wallX2 + sLen2 / 2, springY2, 16, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  }
+
+  // Motion blur lines
+  if (sp2 > 0.4 && sp2 < 0.7) {
+    ctx.save();
+    ctx.globalAlpha = 0.12;
+    ctx.strokeStyle = P.primary;
+    ctx.lineWidth = 1.5;
+    for (var ml = 0; ml < 6; ml++) {
+      var mlY = groundY - ballR2 * 2 + ml * (ballR2 * 2 / 5);
+      var mlOff = (aTime * 200 + ml * 25) % (halfW * 0.3);
+      ctx.beginPath();
+      ctx.moveTo(bx2 - ballR2 - 5 - mlOff, mlY + groundY - ballR2 * 0.5);
+      ctx.lineTo(bx2 - ballR2 - 5 - mlOff - 18, mlY + groundY - ballR2 * 0.5);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  // Labels
+  ctx.font = "bold " + Math.min(11, W * 0.022) + "px 'Space Grotesk',sans-serif";
+  ctx.fillStyle = P.primary;
+  ctx.textAlign = 'center';
+  ctx.fillText(t('f3big'), halfW + halfW * 0.5, H * 0.14);
+  ctx.font = "bold " + Math.min(12, W * 0.024) + "px 'Noto Sans SC',sans-serif";
+  ctx.fillStyle = P.primary;
+  ctx.textAlign = 'center';
+  ctx.fillText(t('f3fast'), halfW + halfW * 0.5, groundY + 18);
+
+  ctx.restore(); // unclip right
+
+  drawDust(ctx);
+}
+
+// ================================================================
+// Frame 4: Summary -- key takeaways
+// ================================================================
+function drawFrame4(ctx, W, H, P, t) {
+  var cx = W / 2;
+
+  // Title
+  ctx.save();
+  ctx.shadowColor = 'rgba(255,176,0,0.25)';
+  ctx.shadowBlur = 18;
+  ctx.font = "bold " + Math.min(24, W * 0.05) + "px 'Space Grotesk',sans-serif";
+  ctx.fillStyle = P.primary;
+  ctx.textAlign = 'center';
+  ctx.fillText(t('f4title'), cx, H * 0.1);
+  ctx.restore();
+
+  var points = [t('f4p1'), t('f4p2'), t('f4p3'), t('f4p4')];
+  var startY = H * 0.22;
+  var lineH = H * 0.17;
+
+  // Small illustrative icons per point (drawn as mini shapes)
+  var iconDrawers = [
+    // Point 1: spring + magnet icon (push/pull)
+    function(ctx2, ix, iy) {
+      drawSpring(ctx2, ix - 12, iy, 10, 3, 4, 1.5, '#ffb000');
+      ctx2.fillStyle = '#cc2222';
+      ctx2.fillRect(ix + 2, iy - 5, 5, 4);
+      ctx2.fillStyle = '#2244cc';
+      ctx2.fillRect(ix + 2, iy + 1, 5, 4);
+    },
+    // Point 2: arrow pointing right
+    function(ctx2, ix, iy) {
+      ctx2.strokeStyle = '#ffb000';
+      ctx2.lineWidth = 2;
+      ctx2.beginPath(); ctx2.moveTo(ix - 10, iy); ctx2.lineTo(ix + 8, iy); ctx2.stroke();
+      ctx2.fillStyle = '#ffb000';
+      ctx2.beginPath();
+      ctx2.moveTo(ix + 12, iy);
+      ctx2.lineTo(ix + 4, iy - 5);
+      ctx2.lineTo(ix + 4, iy + 5);
+      ctx2.closePath();
+      ctx2.fill();
+    },
+    // Point 3: small ball + big ball
+    function(ctx2, ix, iy) {
+      drawBall(ctx2, ix - 6, iy, 4, '#ffb000', '#ffe080');
+      drawBall(ctx2, ix + 7, iy, 7, '#ffb000', '#ffe080');
+    },
+    // Point 4: three small dots (everywhere)
+    function(ctx2, ix, iy) {
+      ctx2.fillStyle = '#ffb000';
+      ctx2.beginPath(); ctx2.arc(ix - 8, iy - 4, 2.5, 0, Math.PI * 2); ctx2.fill();
+      ctx2.beginPath(); ctx2.arc(ix + 2, iy + 3, 2.5, 0, Math.PI * 2); ctx2.fill();
+      ctx2.beginPath(); ctx2.arc(ix + 8, iy - 2, 2.5, 0, Math.PI * 2); ctx2.fill();
+    },
+  ];
+
+  for (var pi = 0; pi < points.length; pi++) {
+    var delay = pi * 0.45;
+    var progress = Math.max(0, Math.min(1, (aTime - delay) / 0.5));
+    if (progress <= 0) continue;
+
+    var ease = 1 - Math.pow(1 - progress, 3);
+    var offsetX = (1 - ease) * 50;
+    var py = startY + pi * lineH;
+
+    ctx.save();
+    ctx.globalAlpha = ease;
+
+    // Icon container
+    var iconX = cx - W * 0.3 - offsetX;
+    ctx.fillStyle = 'rgba(255,176,0,0.06)';
+    ctx.beginPath();
+    ctx.arc(iconX, py, 15, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(255,176,0,0.2)';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+
+    // Draw icon
+    iconDrawers[pi](ctx, iconX, py);
+
+    // Text
+    ctx.font = Math.min(14, W * 0.028) + "px 'Noto Sans SC','Inter',sans-serif";
+    ctx.fillStyle = P.text;
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(points[pi], iconX + 24 - offsetX * 0.5, py);
+
+    ctx.restore();
+  }
+
+  // Connecting dots
+  ctx.strokeStyle = 'rgba(255,176,0,0.05)';
+  ctx.lineWidth = 1;
+  ctx.setLineDash([2, 6]);
+  var visible = Math.min(4, Math.floor(aTime / 0.45) + 1);
+  for (var ci = 0; ci < visible - 1; ci++) {
+    ctx.beginPath();
+    ctx.moveTo(cx - W * 0.3, startY + ci * lineH + 15);
+    ctx.lineTo(cx - W * 0.3, startY + (ci + 1) * lineH - 15);
+    ctx.stroke();
+  }
+  ctx.setLineDash([]);
+}
+
+// ================================================================
+// Animation loop
+// ================================================================
+function animLoop(ts) {
+  var dt = lastTS ? (ts - lastTS) / 1000 : 0.016;
+  if (dt > 0.1) dt = 0.016;
+  lastTS = ts;
+  aTime += dt;
+  updateDust(dt);
+  AnimRuntime.drawFrame(AnimRuntime.currentFrame);
+  requestAnimationFrame(animLoop);
+}
+
+// ================================================================
+// Boot
+// ================================================================
+AnimRuntime.boot();
+requestAnimationFrame(animLoop);
+</script>
+</body>
+</html>

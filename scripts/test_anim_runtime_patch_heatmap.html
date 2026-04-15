@@ -1,0 +1,569 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=Inter:wght@400;500&family=Noto+Sans+SC:wght@400;700&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box;}
+html,body{width:100%;height:100vh;overflow:hidden;}
+body{background:var(--bg,#0c0e12);color:var(--text,#f6f6fc);font-family:'Inter','Noto Sans SC',sans-serif;display:flex;flex-direction:column;}
+.wrapper{display:flex;flex-direction:column;height:100vh;overflow:hidden;}
+.header{padding:12px 16px 8px;display:flex;justify-content:space-between;align-items:center;}
+.header h1{font-family:'Space Grotesk',sans-serif;font-size:clamp(14px,2vw,18px);font-weight:700;letter-spacing:-0.02em;color:var(--primary,#50ffb0);text-shadow:0 0 15px var(--glow,rgba(80,255,176,0.3));}
+.header .sub{font-size:11px;color:var(--muted,#aaabb0);letter-spacing:0.1em;text-transform:uppercase;}
+.canvas-wrap{flex:1;min-height:0;position:relative;}
+canvas{width:100%;height:100%;display:block;}
+.controls{display:flex;justify-content:center;align-items:center;gap:12px;padding:8px 16px;}
+.ctrl-btn{font-family:'Space Grotesk',sans-serif;font-size:12px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;padding:6px 18px;border:none;cursor:pointer;color:var(--bg,#0c0e12);background:linear-gradient(135deg,var(--primary,#50ffb0),var(--primary-dim,#17df93));transition:transform 0.1s,box-shadow 0.2s;box-shadow:0 0 12px var(--glow-strong,rgba(80,255,176,0.3));}
+.ctrl-btn:hover{transform:scale(1.04);box-shadow:0 0 20px var(--glow-strong,rgba(80,255,176,0.5));}
+.ctrl-btn:active{transform:scale(0.96);}
+.ctrl-btn.secondary{background:var(--glass,rgba(23,26,31,0.92));color:var(--muted,#aaabb0);box-shadow:none;backdrop-filter:blur(12px);}
+.ctrl-btn.secondary:hover{color:var(--primary,#50ffb0);}
+.hud{height:48px;display:flex;align-items:center;justify-content:space-around;background:rgba(0,0,0,0.55);backdrop-filter:blur(12px);padding:0 16px;}
+.hud-item{text-align:center;}
+.hud-label{font-family:'Space Grotesk',sans-serif;font-size:9px;letter-spacing:0.15em;text-transform:uppercase;color:var(--muted,#aaabb0);}
+.hud-val{font-family:'Space Grotesk',sans-serif;font-size:14px;font-weight:700;color:var(--primary,#50ffb0);}
+.lang-btn{position:fixed;top:8px;left:8px;z-index:100;font-family:'Space Grotesk',sans-serif;font-size:11px;font-weight:700;padding:4px 10px;cursor:pointer;border:none;background:rgba(20,20,35,0.85);backdrop-filter:blur(12px);color:#ffb59c;letter-spacing:1px;}
+.guide-panel{position:fixed;top:8px;right:8px;width:240px;max-height:40vh;overflow-y:auto;background:var(--glass,rgba(20,20,35,0.85));backdrop-filter:blur(12px);padding:12px;z-index:100;font-family:'Noto Sans SC',sans-serif;font-size:12px;color:rgba(255,255,255,0.85);line-height:1.6;}
+.guide-panel h3{font-family:'Space Grotesk',sans-serif;font-size:13px;margin-bottom:6px;color:var(--primary,#50ffb0);cursor:pointer;display:flex;justify-content:space-between;align-items:center;}
+.guide-panel ul{padding-left:14px;}
+.guide-panel .collapsed{display:none;}
+</style>
+</head>
+<body>
+<button class="lang-btn" id="langBtn">CN</button>
+<div class="guide-panel" id="guide">
+<h3 id="guideTitle"></h3>
+<div class="guide-content" id="guideContent"></div>
+</div>
+<div class="wrapper">
+<div class="header">
+<div><h1 id="title"></h1><div class="sub" id="subtitle"></div></div>
+<div id="frameIndicator" style="font-family:'Space Grotesk';font-size:11px;color:var(--muted,#aaabb0);letter-spacing:0.1em;"></div>
+</div>
+<div class="canvas-wrap"><canvas id="c"></canvas></div>
+<div class="controls">
+<button class="ctrl-btn secondary" id="btnPrev"></button>
+<button class="ctrl-btn" id="btnPlay"></button>
+<button class="ctrl-btn secondary" id="btnNext"></button>
+</div>
+<div class="hud">
+<div class="hud-item"><div class="hud-label" id="hudL1"></div><div class="hud-val" id="hudV1"></div></div>
+<div class="hud-item"><div class="hud-label" id="hudL2"></div><div class="hud-val" id="hudV2"></div></div>
+<div class="hud-item"><div class="hud-label" id="hudL3"></div><div class="hud-val" id="hudV3"></div></div>
+<div class="hud-item"><div class="hud-label" id="hudL4"></div><div class="hud-val" id="hudV4"></div></div>
+</div>
+</div>
+
+<script src="animation_runtime.js"></script>
+
+<script>
+// ============================================================
+// DATA: 6x4 patch grid, each patch has a risk score 0-1
+// We simulate correct patch-level predictions that cause
+// boundary artifacts when naively stitched together.
+// ============================================================
+var COLS = 6, ROWS = 4;
+
+// "Ground truth" patch risk scores
+var patchRisks = [
+  [0.1, 0.15, 0.3,  0.7,  0.85, 0.9 ],
+  [0.1, 0.2,  0.45, 0.8,  0.75, 0.85],
+  [0.2, 0.35, 0.6,  0.55, 0.4,  0.3 ],
+  [0.3, 0.4,  0.5,  0.35, 0.2,  0.15],
+];
+
+// Overlapping patches produce conflicting scores at boundaries
+// [row][col] = offset from ground truth at left/top edge
+var boundaryConflicts = [
+  [0,    0,    0.12, -0.15, 0.08, 0   ],
+  [0,    0.05, -0.1,  0.18, -0.2, 0.05],
+  [0.08, -0.05, 0.15, -0.1, 0.12, 0   ],
+  [0,    0.1,  -0.08, 0.05, 0,    0   ],
+];
+
+function riskColor(v) {
+  // green (safe) -> yellow -> red (danger)
+  if (v < 0.33) {
+    var p = v / 0.33;
+    return lerpColor([16,185,129], [251,191,36], p);
+  } else if (v < 0.66) {
+    var p = (v - 0.33) / 0.33;
+    return lerpColor([251,191,36], [239,68,68], p);
+  } else {
+    var p = (v - 0.66) / 0.34;
+    return lerpColor([239,68,68], [180,30,30], p);
+  }
+}
+function lerpColor(a, b, p) {
+  return 'rgb(' +
+    Math.round(a[0] + (b[0] - a[0]) * p) + ',' +
+    Math.round(a[1] + (b[1] - a[1]) * p) + ',' +
+    Math.round(a[2] + (b[2] - a[2]) * p) + ')';
+}
+function clamp01(v) { return Math.max(0, Math.min(1, v)); }
+
+// ============================================================
+// CONFIG
+// ============================================================
+var CONFIG = {
+  style: 'ares_mission',
+  totalFrames: 5,
+
+  i18n: {
+    title:    {en:'PATCH TO HEATMAP STITCHING', cn:'\u56fe\u5757\u62fc\u63a5\u6210\u6574\u56fe\u70ed\u529b\u56fe'},
+    subtitle: {en:'P-MARS-01-M09 / INTEGRATION', cn:'P-MARS-01-M09 / \u5c40\u90e8\u5230\u6574\u4f53'},
+    guideTitle: {en:'OBSERVATION GUIDE', cn:'\u89c2\u5bdf\u6307\u5357'},
+    g1: {en:'Frame 1: Individual patches look correct in isolation', cn:'\u7b2c1\u5e27\uff1a\u5355\u72ec\u770b\u6bcf\u4e2a\u56fe\u5757\u90fd\u662f\u6b63\u786e\u7684'},
+    g2: {en:'Frame 2: Naive stitching creates visible seams', cn:'\u7b2c2\u5e27\uff1a\u7b80\u5355\u62fc\u63a5\u4ea7\u751f\u53ef\u89c1\u63a5\u7f1d'},
+    g3: {en:'Frame 3: Overlapping regions produce conflicts', cn:'\u7b2c3\u5e27\uff1a\u91cd\u53e0\u533a\u57df\u4ea7\u751f\u51b2\u7a81'},
+    g4: {en:'Frame 4: Blending smooths boundaries', cn:'\u7b2c4\u5e27\uff1a\u6df7\u5408\u7b56\u7565\u5e73\u6ed1\u8fb9\u754c'},
+    g5: {en:'Frame 5: Final heatmap vs naive comparison', cn:'\u7b2c5\u5e27\uff1a\u6700\u7ec8\u70ed\u529b\u56fe\u4e0e\u7b80\u5355\u62fc\u63a5\u5bf9\u6bd4'},
+
+    fTitle0: {en:'ISOLATED PATCHES', cn:'\u72ec\u7acb\u56fe\u5757'},
+    fTitle1: {en:'NAIVE STITCH', cn:'\u7b80\u5355\u62fc\u63a5'},
+    fTitle2: {en:'OVERLAP CONFLICTS', cn:'\u91cd\u53e0\u51b2\u7a81'},
+    fTitle3: {en:'BLENDED MERGE', cn:'\u6df7\u5408\u5408\u5e76'},
+    fTitle4: {en:'BEFORE vs AFTER', cn:'\u62fc\u63a5\u524d vs \u62fc\u63a5\u540e'},
+
+    labelPatch:    {en:'PATCH',     cn:'\u56fe\u5757'},
+    labelSeam:     {en:'SEAM',      cn:'\u63a5\u7f1d'},
+    labelConflict: {en:'CONFLICT',  cn:'\u51b2\u7a81'},
+    labelBlend:    {en:'BLEND',     cn:'\u6df7\u5408'},
+    labelNaive:    {en:'NAIVE',     cn:'\u7b80\u5355'},
+    labelSmooth:   {en:'SMOOTH',    cn:'\u5e73\u6ed1'},
+    labelBefore:   {en:'BEFORE',    cn:'\u4fee\u590d\u524d'},
+    labelAfter:    {en:'AFTER',     cn:'\u4fee\u590d\u540e'},
+    labelRisk:     {en:'RISK',      cn:'\u98ce\u9669'},
+
+    hudL1: {en:'STAGE',      cn:'\u9636\u6bb5'},
+    hudL2: {en:'PATCHES',    cn:'\u56fe\u5757\u6570'},
+    hudL3: {en:'SEAM ERRORS',cn:'\u63a5\u7f1d\u9519\u8bef'},
+    hudL4: {en:'QUALITY',    cn:'\u8d28\u91cf'},
+
+    hud_f0: {en:'ISOLATE',  cn:'\u72ec\u7acb'},
+    hud_f1: {en:'STITCH',   cn:'\u62fc\u63a5'},
+    hud_f2: {en:'CONFLICT',  cn:'\u51b2\u7a81'},
+    hud_f3: {en:'BLEND',    cn:'\u6df7\u5408'},
+    hud_f4: {en:'COMPARE',  cn:'\u5bf9\u6bd4'},
+  },
+
+  hudLabels: ['hudL1', 'hudL2', 'hudL3', 'hudL4'],
+  hudValues: [
+    ['hud_f0', '6x4 = 24', '--',  '--'],
+    ['hud_f1', '24',        '14',  '62%'],
+    ['hud_f2', '24',        '14',  '62%'],
+    ['hud_f3', '24',        '0',   '97%'],
+    ['hud_f4', '24',        '0/14','97%'],
+  ],
+
+  guideTitle: 'guideTitle',
+  guideItems: ['g1', 'g2', 'g3', 'g4', 'g5'],
+};
+
+// ============================================================
+// CUSTOM ELEMENTS
+// ============================================================
+function customDrawElement(ctx, el) {
+  var P = AnimRuntime.PAL;
+
+  // --- heatmap grid (single map) ---
+  if (el.type === 'heatGrid') {
+    var cw = el.cellW, ch = el.cellH;
+    for (var r = 0; r < ROWS; r++) {
+      for (var c = 0; c < COLS; c++) {
+        var v = el.data[r][c];
+        var px = el.x + c * cw;
+        var py = el.y + r * ch;
+        ctx.fillStyle = riskColor(clamp01(v));
+        ctx.fillRect(px, py, cw, ch);
+      }
+    }
+    // Border
+    ctx.strokeStyle = P.outline || 'rgba(138,136,134,0.3)';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(el.x, el.y, COLS * cw, ROWS * ch);
+    return true;
+  }
+
+  // --- isolated patches with gaps ---
+  if (el.type === 'isolatedPatches') {
+    var cw = el.cellW, ch = el.cellH, gap = el.gap || 3;
+    for (var r = 0; r < ROWS; r++) {
+      for (var c = 0; c < COLS; c++) {
+        var v = patchRisks[r][c];
+        var px = el.x + c * (cw + gap);
+        var py = el.y + r * (ch + gap);
+        // Glow
+        ctx.shadowColor = riskColor(v);
+        ctx.shadowBlur = 4;
+        ctx.fillStyle = riskColor(v);
+        ctx.fillRect(px, py, cw, ch);
+        ctx.shadowBlur = 0;
+        // Patch border
+        ctx.strokeStyle = P.glass;
+        ctx.lineWidth = 0.5;
+        ctx.strokeRect(px, py, cw, ch);
+        // Score text
+        if (cw > 20) {
+          ctx.fillStyle = v > 0.55 ? 'rgba(255,255,255,0.9)' : 'rgba(0,0,0,0.7)';
+          ctx.font = Math.max(8, cw * 0.3) + "px 'Space Grotesk',sans-serif";
+          ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+          ctx.fillText(v.toFixed(1), px + cw / 2, py + ch / 2);
+        }
+      }
+    }
+    return true;
+  }
+
+  // --- seam highlight lines ---
+  if (el.type === 'seamLines') {
+    var cw = el.cellW, ch = el.cellH;
+    ctx.save();
+    ctx.setLineDash([4, 3]);
+    ctx.strokeStyle = P.error || '#ff716c';
+    ctx.lineWidth = 1.5;
+    ctx.shadowColor = P.error || '#ff716c';
+    ctx.shadowBlur = 6;
+    // Vertical seams
+    for (var c = 1; c < COLS; c++) {
+      ctx.beginPath();
+      ctx.moveTo(el.x + c * cw, el.y);
+      ctx.lineTo(el.x + c * cw, el.y + ROWS * ch);
+      ctx.stroke();
+    }
+    // Horizontal seams
+    for (var r = 1; r < ROWS; r++) {
+      ctx.beginPath();
+      ctx.moveTo(el.x, el.y + r * ch);
+      ctx.lineTo(el.x + COLS * cw, el.y + r * ch);
+      ctx.stroke();
+    }
+    ctx.restore();
+    return true;
+  }
+
+  // --- conflict markers at boundaries ---
+  if (el.type === 'conflictMarkers') {
+    var cw = el.cellW, ch = el.cellH;
+    ctx.font = "bold " + Math.max(8, cw * 0.22) + "px 'Space Grotesk',sans-serif";
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    for (var r = 0; r < ROWS; r++) {
+      for (var c = 0; c < COLS; c++) {
+        var delta = boundaryConflicts[r][c];
+        if (Math.abs(delta) > 0.05) {
+          var px = el.x + c * cw;
+          var py = el.y + r * ch;
+          // Conflict flash
+          ctx.fillStyle = 'rgba(239,68,68,0.25)';
+          ctx.fillRect(px, py, cw, ch);
+          // Delta text
+          var sign = delta > 0 ? '+' : '';
+          ctx.fillStyle = P.error || '#ff716c';
+          ctx.shadowColor = P.error; ctx.shadowBlur = 4;
+          ctx.fillText(sign + delta.toFixed(2), px + cw / 2, py + ch / 2);
+          ctx.shadowBlur = 0;
+        }
+      }
+    }
+    return true;
+  }
+
+  // --- blended heatmap with smooth interpolation ---
+  if (el.type === 'blendedGrid') {
+    var cw = el.cellW, ch = el.cellH;
+    // Sub-pixel rendering for smooth gradients: 2x resolution
+    var subRes = 2;
+    var scw = cw / subRes, sch = ch / subRes;
+    for (var r = 0; r < ROWS * subRes; r++) {
+      for (var c = 0; c < COLS * subRes; c++) {
+        var gr = r / subRes, gc = c / subRes;
+        // Bilinear interpolation from patch centers
+        var r0 = Math.min(Math.floor(gr), ROWS - 1), r1 = Math.min(r0 + 1, ROWS - 1);
+        var c0 = Math.min(Math.floor(gc), COLS - 1), c1 = Math.min(c0 + 1, COLS - 1);
+        var fr = gr - r0, fc = gc - c0;
+        var v00 = patchRisks[r0][c0], v01 = patchRisks[r0][c1];
+        var v10 = patchRisks[r1][c0], v11 = patchRisks[r1][c1];
+        var v = v00*(1-fr)*(1-fc) + v01*(1-fr)*fc + v10*fr*(1-fc) + v11*fr*fc;
+        ctx.fillStyle = riskColor(clamp01(v));
+        ctx.fillRect(el.x + c * scw, el.y + r * sch, scw + 0.5, sch + 0.5);
+      }
+    }
+    ctx.strokeStyle = P.outline || 'rgba(138,136,134,0.3)';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(el.x, el.y, COLS * cw, ROWS * ch);
+    return true;
+  }
+
+  return false;
+}
+
+// ============================================================
+// FRAME ELEMENTS
+// ============================================================
+function getFrameElements(f, W, H) {
+  var t = AnimRuntime.t;
+  var P = AnimRuntime.PAL;
+  var elems = [];
+  var cx = W / 2, cy = H / 2;
+
+  // Frame subtitle
+  elems.push({id:'fTitle', type:'label', text:t('fTitle' + f), x:cx, y:H*0.06,
+    color:P.tertiary || '#00daf3', size:Math.max(11, W*0.014), align:'center', bold:true, alpha:1});
+
+  // Common grid sizing
+  var gridW = Math.min(W * 0.38, 300);
+  var gridH = gridW * (ROWS / COLS);
+  var cellW = gridW / COLS;
+  var cellH = gridH / ROWS;
+
+  // === FRAME 0: Isolated patches with gaps ===
+  if (f === 0) {
+    var gap = Math.max(2, cellW * 0.12);
+    var totalW = COLS * cellW + (COLS - 1) * gap;
+    var totalH = ROWS * cellH + (ROWS - 1) * gap;
+    var gx = cx - totalW / 2;
+    var gy = H * 0.16;
+
+    elems.push({id:'grid', type:'isolatedPatches', x:gx, y:gy,
+      cellW:cellW, cellH:cellH, gap:gap, alpha:1});
+
+    // Label: each patch is independently correct
+    elems.push({id:'note', type:'label',
+      text:t('labelPatch') + ' 6x4 = 24',
+      x:cx, y:gy + totalH + 20, color:P.muted,
+      size:Math.max(10, W*0.012), align:'center', bold:false, alpha:1});
+
+    // Checkmarks on corners showing "each looks good"
+    var checkPositions = [[0,0],[0,5],[3,0],[3,5]];
+    for (var k = 0; k < checkPositions.length; k++) {
+      var cr = checkPositions[k][0], cc = checkPositions[k][1];
+      var px = gx + cc * (cellW + gap) + cellW;
+      var py = gy + cr * (cellH + gap);
+      elems.push({id:'check'+k, type:'label', text:'OK',
+        x:px, y:py, color:'#10b981',
+        size:Math.max(8, W*0.009), align:'center', bold:true, alpha:1});
+    }
+    return elems;
+  }
+
+  // === FRAME 1: Naive stitch -- seams visible ===
+  if (f === 1) {
+    var gx = cx - gridW / 2;
+    var gy = H * 0.16;
+
+    // Naive grid (direct placement, no blending)
+    elems.push({id:'grid', type:'heatGrid', x:gx, y:gy,
+      cellW:cellW, cellH:cellH, data:patchRisks, alpha:1});
+
+    // Seam lines
+    elems.push({id:'seams', type:'seamLines', x:gx, y:gy,
+      cellW:cellW, cellH:cellH, alpha:1});
+
+    // Annotation: seam artifacts
+    var seamY = gy + gridH + 16;
+    elems.push({id:'seamNote', type:'label',
+      text:t('labelSeam') + ' -- ' + (AnimRuntime.LANG === 'cn' ? '\u8fb9\u754c\u65ad\u88c2\u53ef\u89c1' : 'boundary breaks visible'),
+      x:cx, y:seamY, color:P.error || '#ff716c',
+      size:Math.max(10, W*0.012), align:'center', bold:true, alpha:1});
+
+    // Arrow pointing to a specific seam
+    var arrowX = gx + 3 * cellW;
+    elems.push({id:'seamArrow', type:'arrow',
+      x1:arrowX, y1:gy + gridH + 6, x2:arrowX, y2:gy + gridH - 4,
+      color:P.error || '#ff716c', lineWidth:1.5, headSize:5, alpha:1});
+
+    return elems;
+  }
+
+  // === FRAME 2: Overlap conflict zones ===
+  if (f === 2) {
+    var gx = cx - gridW / 2;
+    var gy = H * 0.14;
+
+    // Base grid
+    elems.push({id:'grid', type:'heatGrid', x:gx, y:gy,
+      cellW:cellW, cellH:cellH, data:patchRisks, alpha:1});
+
+    // Conflict markers
+    elems.push({id:'conflicts', type:'conflictMarkers', x:gx, y:gy,
+      cellW:cellW, cellH:cellH, alpha:1});
+
+    // Legend below grid
+    var legY = gy + gridH + 14;
+    elems.push({id:'legTitle', type:'label',
+      text:t('labelConflict'),
+      x:cx, y:legY, color:P.error || '#ff716c',
+      size:Math.max(11, W*0.013), align:'center', bold:true, alpha:1});
+
+    // Explanation
+    var expText = {
+      en: 'Adjacent patches disagree at shared boundaries',
+      cn: '\u76f8\u90bb\u56fe\u5757\u5728\u5171\u4eab\u8fb9\u754c\u5904\u7684\u5224\u65ad\u4e0d\u4e00\u81f4'
+    };
+    elems.push({id:'conflictExp', type:'text',
+      text:expText[AnimRuntime.LANG] || expText.en,
+      x:cx, y:legY + 18, color:P.muted,
+      size:Math.max(9, W*0.011), align:'center', alpha:1});
+
+    // Conflict count
+    var conflictCount = 0;
+    for (var r = 0; r < ROWS; r++)
+      for (var c = 0; c < COLS; c++)
+        if (Math.abs(boundaryConflicts[r][c]) > 0.05) conflictCount++;
+    elems.push({id:'conflictCount', type:'label',
+      text:conflictCount + ' ' + (AnimRuntime.LANG === 'cn' ? '\u4e2a\u51b2\u7a81\u533a\u57df' : 'conflict zones'),
+      x:cx, y:legY + 36, color:P.secondary || '#ff5f1f',
+      size:Math.max(10, W*0.012), align:'center', bold:true, alpha:1});
+
+    return elems;
+  }
+
+  // === FRAME 3: Blended/smoothed heatmap ===
+  if (f === 3) {
+    var halfW = gridW * 0.48;
+    var halfCellW = halfW / COLS;
+    var halfH = halfW * (ROWS / COLS);
+    var halfCellH = halfH / ROWS;
+    var gap = W * 0.06;
+
+    // Left: naive
+    var leftX = cx - gap/2 - halfW;
+    var mapY = H * 0.18;
+
+    elems.push({id:'naiveGrid', type:'heatGrid', x:leftX, y:mapY,
+      cellW:halfCellW, cellH:halfCellH, data:patchRisks, alpha:1});
+    elems.push({id:'naiveSeams', type:'seamLines', x:leftX, y:mapY,
+      cellW:halfCellW, cellH:halfCellH, alpha:1});
+    elems.push({id:'naiveLabel', type:'label', text:t('labelNaive'),
+      x:leftX + halfW/2, y:mapY - 12, color:P.error || '#ff716c',
+      size:Math.max(10, W*0.012), align:'center', bold:true, alpha:1});
+
+    // Center arrow
+    elems.push({id:'mergeArrow', type:'custom', x:cx, y:mapY + halfH/2,
+      size:Math.max(14, W*0.02), alpha:1,
+      draw:function(alpha) {
+        var c = AnimRuntime.ctx;
+        var P = AnimRuntime.PAL;
+        c.globalAlpha = alpha;
+        var s = this.size;
+        c.strokeStyle = P.tertiary || '#00daf3';
+        c.lineWidth = 2.5;
+        c.shadowColor = P.tertiary || '#00daf3';
+        c.shadowBlur = 10;
+        c.beginPath();
+        c.moveTo(this.x - s, this.y);
+        c.lineTo(this.x + s * 0.5, this.y);
+        c.stroke();
+        c.beginPath();
+        c.moveTo(this.x + s, this.y);
+        c.lineTo(this.x + s * 0.5, this.y - s * 0.4);
+        c.lineTo(this.x + s * 0.5, this.y + s * 0.4);
+        c.closePath();
+        c.fillStyle = P.tertiary || '#00daf3';
+        c.fill();
+        c.shadowBlur = 0;
+        c.globalAlpha = 1;
+      }});
+
+    // Right: blended
+    var rightX = cx + gap/2;
+
+    elems.push({id:'blendGrid', type:'blendedGrid', x:rightX, y:mapY,
+      cellW:halfCellW, cellH:halfCellH, alpha:1});
+    elems.push({id:'blendLabel', type:'label', text:t('labelSmooth'),
+      x:rightX + halfW/2, y:mapY - 12, color:'#10b981',
+      size:Math.max(10, W*0.012), align:'center', bold:true, alpha:1});
+
+    // Bottom: explanation
+    var botY = mapY + halfH + 16;
+    var blendExp = {
+      en: 'Bilinear interpolation smooths boundary transitions',
+      cn: '\u53cc\u7ebf\u6027\u63d2\u503c\u5e73\u6ed1\u8fb9\u754c\u8fc7\u6e21'
+    };
+    elems.push({id:'blendExp', type:'label',
+      text:blendExp[AnimRuntime.LANG] || blendExp.en,
+      x:cx, y:botY, color:P.text,
+      size:Math.max(10, W*0.012), align:'center', bold:false, alpha:1});
+
+    return elems;
+  }
+
+  // === FRAME 4: Before vs After side-by-side with metrics ===
+  if (f === 4) {
+    var halfW = gridW * 0.44;
+    var halfCellW = halfW / COLS;
+    var halfH = halfW * (ROWS / COLS);
+    var halfCellH = halfH / ROWS;
+    var gap = W * 0.08;
+
+    var mapY = H * 0.16;
+
+    // Left: BEFORE (naive with seams + conflicts)
+    var leftX = cx - gap/2 - halfW;
+
+    elems.push({id:'naiveGrid', type:'heatGrid', x:leftX, y:mapY,
+      cellW:halfCellW, cellH:halfCellH, data:patchRisks, alpha:1});
+    elems.push({id:'naiveSeams', type:'seamLines', x:leftX, y:mapY,
+      cellW:halfCellW, cellH:halfCellH, alpha:1});
+    elems.push({id:'beforeLabel', type:'label', text:t('labelBefore'),
+      x:leftX + halfW/2, y:mapY - 14, color:P.error || '#ff716c',
+      size:Math.max(11, W*0.013), align:'center', bold:true, alpha:1});
+
+    // Before metrics
+    var metY = mapY + halfH + 12;
+    elems.push({id:'bMetric1', type:'text',
+      text:(AnimRuntime.LANG === 'cn' ? '\u63a5\u7f1d\u9519\u8bef: 14' : 'Seam errors: 14'),
+      x:leftX + halfW/2, y:metY, color:P.error || '#ff716c',
+      size:Math.max(9, W*0.011), align:'center', alpha:1});
+    elems.push({id:'bMetric2', type:'text',
+      text:(AnimRuntime.LANG === 'cn' ? '\u8d28\u91cf: 62%' : 'Quality: 62%'),
+      x:leftX + halfW/2, y:metY + 16, color:P.error || '#ff716c',
+      size:Math.max(9, W*0.011), align:'center', alpha:1});
+
+    // Right: AFTER (blended smooth)
+    var rightX = cx + gap/2;
+
+    elems.push({id:'blendGrid', type:'blendedGrid', x:rightX, y:mapY,
+      cellW:halfCellW, cellH:halfCellH, alpha:1});
+    elems.push({id:'afterLabel', type:'label', text:t('labelAfter'),
+      x:rightX + halfW/2, y:mapY - 14, color:'#10b981',
+      size:Math.max(11, W*0.013), align:'center', bold:true, alpha:1});
+
+    // After metrics
+    elems.push({id:'aMetric1', type:'text',
+      text:(AnimRuntime.LANG === 'cn' ? '\u63a5\u7f1d\u9519\u8bef: 0' : 'Seam errors: 0'),
+      x:rightX + halfW/2, y:metY, color:'#10b981',
+      size:Math.max(9, W*0.011), align:'center', alpha:1});
+    elems.push({id:'aMetric2', type:'text',
+      text:(AnimRuntime.LANG === 'cn' ? '\u8d28\u91cf: 97%' : 'Quality: 97%'),
+      x:rightX + halfW/2, y:metY + 16, color:'#10b981',
+      size:Math.max(9, W*0.011), align:'center', alpha:1});
+
+    // VS divider
+    elems.push({id:'vsLabel', type:'label', text:'VS',
+      x:cx, y:mapY + halfH/2, color:P.muted,
+      size:Math.max(14, W*0.018), align:'center', bold:true, alpha:1});
+
+    // Bottom takeaway
+    var takeY = metY + 36;
+    var takeText = {
+      en: 'Correct patches != correct heatmap. Stitching strategy matters.',
+      cn: '\u6b63\u786e\u7684\u56fe\u5757 != \u6b63\u786e\u7684\u70ed\u529b\u56fe\u3002\u62fc\u63a5\u7b56\u7565\u81f3\u5173\u91cd\u8981\u3002'
+    };
+    elems.push({id:'takeaway', type:'label',
+      text:takeText[AnimRuntime.LANG] || takeText.en,
+      x:cx, y:takeY, color:P.primary,
+      size:Math.max(10, W*0.013), align:'center', bold:true, alpha:1});
+
+    return elems;
+  }
+
+  return elems;
+}
+
+AnimRuntime.boot();
+</script>
+</body>
+</html>

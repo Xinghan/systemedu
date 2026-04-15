@@ -1,0 +1,477 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>E-Stop Wiring Sim</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;700&family=Inter:wght@400;500&family=Noto+Sans+SC:wght@400;700&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0;border-radius:0!important;}
+html,body{width:100%;height:100vh;overflow:hidden;background:#131313;font-family:'Noto Sans SC','Inter',sans-serif;color:#e5e2e1;}
+.wrapper{display:flex;flex-direction:column;height:100vh;width:100%;}
+.header{padding:6px 16px;background:rgba(28,27,27,0.92);border-bottom:1px solid rgba(138,136,134,0.15);flex-shrink:0;display:flex;align-items:center;justify-content:space-between;}
+.header h1{font-family:'Space Grotesk',sans-serif;font-size:14px;font-weight:700;color:#ffb59c;letter-spacing:1px;}
+.header .sub{font-size:11px;color:#8a8886;}
+.game-area{flex:1;min-height:0;position:relative;overflow:hidden;}
+canvas{display:block;width:100%;height:100%;}
+.bottom-bar{display:flex;align-items:center;justify-content:space-between;padding:6px 16px;background:rgba(28,27,27,0.92);border-top:1px solid rgba(138,136,134,0.15);flex-shrink:0;height:48px;}
+.ctrl-btn{font-family:'Space Grotesk',sans-serif;font-size:11px;font-weight:700;padding:5px 14px;cursor:pointer;border:1px solid rgba(255,255,255,0.08);background:rgba(20,20,20,0.85);backdrop-filter:blur(12px);color:#ffb59c;letter-spacing:1px;transition:background 0.2s;}
+.ctrl-btn:hover{background:rgba(255,127,80,0.15);}
+.ctrl-btn.test-btn{color:#10b981;border-color:rgba(16,185,129,0.3);}
+.ctrl-btn.test-btn:hover{background:rgba(16,185,129,0.15);}
+.ctrl-btn:disabled{opacity:0.4;cursor:not-allowed;}
+.score-display{font-family:'Space Grotesk',sans-serif;font-size:13px;color:#ffb59c;}
+.lang-btn{position:fixed;top:8px;left:8px;z-index:100;font-family:'Space Grotesk',sans-serif;font-size:11px;font-weight:700;padding:4px 10px;cursor:pointer;border:1px solid rgba(255,255,255,0.08);background:rgba(20,20,35,0.85);backdrop-filter:blur(12px);color:#ffb59c;letter-spacing:1px;}
+.guide-panel{position:fixed;top:8px;right:8px;width:220px;max-height:38vh;overflow-y:auto;background:rgba(20,20,20,0.88);backdrop-filter:blur(12px);border:1px solid rgba(255,255,255,0.08);padding:10px;z-index:100;font-family:'Noto Sans SC',sans-serif;font-size:11px;color:rgba(255,255,255,0.85);}
+.guide-panel h3{font-family:'Space Grotesk',sans-serif;font-size:12px;margin-bottom:5px;display:flex;align-items:center;justify-content:space-between;cursor:pointer;color:#ffb59c;}
+.guide-panel ul{padding-left:14px;line-height:1.6;}
+.guide-panel .guide-content{transition:max-height 0.3s;overflow:hidden;}
+.success-overlay{position:absolute;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.7);display:none;flex-direction:column;align-items:center;justify-content:center;z-index:50;}
+.success-overlay.show{display:flex;}
+.success-box{background:rgba(20,20,20,0.95);border:1px solid rgba(16,185,129,0.3);padding:20px 30px;text-align:center;max-width:360px;}
+.success-box h2{font-family:'Space Grotesk',sans-serif;font-size:18px;color:#10b981;margin-bottom:10px;}
+.success-box p{font-size:13px;color:#e5e2e1;line-height:1.6;margin-bottom:12px;}
+</style>
+</head>
+<body>
+<button class="lang-btn" id="langBtn">CN</button>
+<div class="guide-panel" id="guidePanel">
+  <h3 id="guideToggle"><span id="guideTitle"></span><span id="guideArrow">-</span></h3>
+  <div class="guide-content" id="guideContent">
+    <p id="guideGoal" style="margin-bottom:5px;"></p>
+    <ul id="guideSteps"></ul>
+    <p id="guideTips" style="margin-top:5px;font-style:italic;color:#ffb59c;"></p>
+  </div>
+</div>
+<div class="wrapper">
+  <div class="header">
+    <div><h1 id="mainTitle"></h1><span class="sub" id="mainSub"></span></div>
+  </div>
+  <div class="game-area" id="gameArea">
+    <canvas id="c"></canvas>
+    <div class="success-overlay" id="successOverlay">
+      <div class="success-box">
+        <h2 id="successTitle"></h2>
+        <p id="successMsg"></p>
+        <button class="ctrl-btn" id="btnReplay"></button>
+      </div>
+    </div>
+  </div>
+  <div class="bottom-bar">
+    <div>
+      <button class="ctrl-btn" id="btnReset"></button>
+      <button class="ctrl-btn test-btn" id="btnTest" disabled></button>
+    </div>
+    <span class="score-display" id="scoreDisplay"></span>
+  </div>
+</div>
+<script>
+(function(){
+var LANG='cn';
+var I18N={
+  title:{en:'E-STOP CIRCUIT WIRING',cn:'急停回路接线'},
+  sub:{en:'P-MARS-01-M29 | Drag wires to terminals',cn:'P-MARS-01-M29 | 拖拽导线到端子'},
+  guide:{en:'GUIDE',cn:'操作指南'},
+  guideGoal:{en:'Complete 6 wire connections for the E-Stop circuit.',cn:'完成急停回路的 6 根导线连接。'},
+  guideS1:{en:'Drag red wire: Battery(+) to E-Stop(IN)',cn:'拖拽红色导线：电池(+)到急停(IN)'},
+  guideS2:{en:'Drag red wire: E-Stop(OUT) to L298N(VCC)',cn:'拖拽红色导线：急停(OUT)到L298N(VCC)'},
+  guideS3:{en:'Drag gray wire: L298N(OUT1) to Motor A',cn:'拖拽灰色导线：L298N(OUT1)到电机A'},
+  guideS4:{en:'Drag gray wire: L298N(OUT2) to Motor B',cn:'拖拽灰色导线：L298N(OUT2)到电机B'},
+  guideS5:{en:'Drag blue wire: Arduino(PWM) to L298N(IN1)',cn:'拖拽蓝色导线：Arduino(PWM)到L298N(IN1)'},
+  guideS6:{en:'Drag black wire: Battery(-) to GND bus',cn:'拖拽黑色导线：电池(-)到公共地线'},
+  guideTips:{en:'E-Stop must be wired in series on the positive power line.',cn:'急停按钮必须串联在正极主回路上。'},
+  btnReset:{en:'RESET',cn:'重置'},
+  btnTest:{en:'TEST CIRCUIT',cn:'测试电路'},
+  btnReplay:{en:'PLAY AGAIN',cn:'再来一次'},
+  score:{en:'Connected',cn:'已连接'},
+  successTitle:{en:'CIRCUIT COMPLETE!',cn:'电路完成!'},
+  successMsg:{en:'The E-Stop button is correctly wired in series on the positive line. When pressed, it physically disconnects power to the motor driver, stopping all motors instantly regardless of software state.',cn:'急停按钮已正确串联在正极主回路上。按下后，它会物理断开电机驱动板的供电，使所有电机立即停转，不依赖任何软件指令。'},
+  lbl_bat:{en:'BATTERY 7.4V',cn:'电池 7.4V'},
+  lbl_bat_p:{en:'(+)',cn:'(+)'},
+  lbl_bat_n:{en:'(-)',cn:'(-)'},
+  lbl_estop:{en:'E-STOP',cn:'急停'},
+  lbl_estop_in:{en:'IN',cn:'IN'},
+  lbl_estop_out:{en:'OUT',cn:'OUT'},
+  lbl_driver:{en:'L298N',cn:'L298N'},
+  lbl_vcc:{en:'VCC',cn:'VCC'},
+  lbl_out1:{en:'OUT1',cn:'OUT1'},
+  lbl_out2:{en:'OUT2',cn:'OUT2'},
+  lbl_in1:{en:'IN1',cn:'IN1'},
+  lbl_ard:{en:'ARDUINO',cn:'ARDUINO'},
+  lbl_pwm:{en:'PWM',cn:'PWM'},
+  lbl_motA:{en:'MOTOR A',cn:'电机 A'},
+  lbl_motB:{en:'MOTOR B',cn:'电机 B'},
+  lbl_gnd:{en:'GND BUS',cn:'公共地'},
+  testPass:{en:'PASS',cn:'通过'},
+  testRunning:{en:'Testing...',cn:'测试中...'},
+  currentFlow:{en:'Current flowing',cn:'电流流过'},
+  currentStop:{en:'Current stopped',cn:'电流断开'},
+};
+function t(k){return(I18N[k]&&I18N[k][LANG])||(I18N[k]&&I18N[k]['en'])||k;}
+
+var canvas=document.getElementById('c');
+var ctx=canvas.getContext('2d');
+var W=0,H=0;
+var DPR=Math.min(window.devicePixelRatio||1,2);
+
+/* ----- Terminal & Wire definitions ----- */
+var terminals=[];
+var wires=[
+  {id:0,from:'bat_p',to:'estop_in',color:'#ff5f1f',label:'PWR+',connected:false},
+  {id:1,from:'estop_out',to:'drv_vcc',color:'#ff5f1f',label:'PWR+',connected:false},
+  {id:2,from:'drv_out1',to:'motA',color:'#999',label:'OUT1',connected:false},
+  {id:3,from:'drv_out2',to:'motB',color:'#999',label:'OUT2',connected:false},
+  {id:4,from:'ard_pwm',to:'drv_in1',color:'#00daf3',label:'PWM',connected:false},
+  {id:5,from:'bat_n',to:'gnd',color:'#555',label:'GND',connected:false},
+];
+var connectedCount=0;
+var dragging=null; // {wireIdx, startTerminal, currentX, currentY}
+var testAnimating=false;
+var testPhase=0;
+var testTime=0;
+var gameWon=false;
+
+function buildTerminals(){
+  var s=Math.min(W/900,H/550);
+  if(s<0.3)s=0.3;
+  var cx=W/2,cy=H/2-10;
+  terminals=[
+    {id:'bat_p',x:cx-280*s,y:cy-20,r:10*s,label:t('lbl_bat_p'),group:'bat',color:'#ff5f1f'},
+    {id:'bat_n',x:cx-280*s,y:cy+25,r:10*s,label:t('lbl_bat_n'),group:'bat',color:'#555'},
+    {id:'estop_in',x:cx-140*s,y:cy-15,r:10*s,label:t('lbl_estop_in'),group:'estop',color:'#ff5f1f'},
+    {id:'estop_out',x:cx-60*s,y:cy-15,r:10*s,label:t('lbl_estop_out'),group:'estop',color:'#ff5f1f'},
+    {id:'drv_vcc',x:cx+40*s,y:cy-50*s,r:10*s,label:t('lbl_vcc'),group:'drv',color:'#ff5f1f'},
+    {id:'drv_in1',x:cx+40*s,y:cy-20*s,r:10*s,label:t('lbl_in1'),group:'drv',color:'#00daf3'},
+    {id:'drv_out1',x:cx+120*s,y:cy-50*s,r:10*s,label:t('lbl_out1'),group:'drv',color:'#999'},
+    {id:'drv_out2',x:cx+120*s,y:cy-20*s,r:10*s,label:t('lbl_out2'),group:'drv',color:'#999'},
+    {id:'ard_pwm',x:cx+40*s,y:cy+90*s,r:10*s,label:t('lbl_pwm'),group:'ard',color:'#00daf3'},
+    {id:'motA',x:cx+230*s,y:cy-50*s,r:10*s,label:t('lbl_motA'),group:'mot',color:'#999'},
+    {id:'motB',x:cx+230*s,y:cy-10*s,r:10*s,label:t('lbl_motB'),group:'mot',color:'#999'},
+    {id:'gnd',x:cx+230*s,y:cy+90*s,r:10*s,label:t('lbl_gnd'),group:'gnd',color:'#555'},
+  ];
+}
+
+function getTerminal(id){for(var i=0;i<terminals.length;i++){if(terminals[i].id===id)return terminals[i];}return null;}
+
+function drawScene(){
+  var s=Math.min(W/900,H/550);if(s<0.3)s=0.3;
+  var cx=W/2,cy=H/2-10;
+
+  // background
+  var g=ctx.createLinearGradient(0,0,0,H);g.addColorStop(0,'#131313');g.addColorStop(1,'#1a1515');
+  ctx.fillStyle=g;ctx.fillRect(0,0,W,H);
+  // grid
+  ctx.strokeStyle='rgba(255,255,255,0.025)';ctx.lineWidth=1;
+  for(var x=0;x<W;x+=30){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,H);ctx.stroke();}
+  for(var y=0;y<H;y+=30){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke();}
+
+  // component boxes
+  // Battery
+  drawCompBox(cx-310*s,cy-50,60*s,100,t('lbl_bat'),'#2a6e2a','#3a9a3a');
+  // E-Stop
+  drawCompBox(cx-160*s,cy-50,120*s,70,t('lbl_estop'),'#661a00','#992200');
+  // e-stop button visual
+  ctx.save();ctx.shadowColor='#ff3300';ctx.shadowBlur=8;
+  var eg=ctx.createRadialGradient(cx-100*s,cy-25,0,cx-100*s,cy-25,18*s);
+  eg.addColorStop(0,'#ff4422');eg.addColorStop(1,'#cc2200');
+  ctx.fillStyle=eg;ctx.beginPath();ctx.arc(cx-100*s,cy-25,18*s,0,Math.PI*2);ctx.fill();
+  ctx.restore();
+  // L298N Driver
+  drawCompBox(cx+20*s,cy-80*s,120*s,90*s,t('lbl_driver'),'#1a3a6e','#2a4a8e');
+  // Arduino
+  drawCompBox(cx+10*s,cy+60*s,80*s,60*s,t('lbl_ard'),'#006e6e','#008e8e');
+  // Motor A
+  drawCompBox(cx+200*s,cy-75*s,70*s,50*s,t('lbl_motA'),'#444','#666');
+  // Motor B
+  drawCompBox(cx+200*s,cy-35*s,70*s,50*s,t('lbl_motB'),'#444','#666');
+  // GND Bus
+  drawCompBox(cx+200*s,cy+70*s,70*s,40*s,t('lbl_gnd'),'#333','#555');
+
+  // draw completed wires
+  for(var i=0;i<wires.length;i++){
+    if(wires[i].connected){
+      var from=getTerminal(wires[i].from);
+      var to=getTerminal(wires[i].to);
+      if(from&&to) drawWireConn(from.x,from.y,to.x,to.y,wires[i].color,testAnimating);
+    }
+  }
+
+  // draw terminals
+  for(var j=0;j<terminals.length;j++){
+    var tm=terminals[j];
+    var isUsed=false;
+    for(var k=0;k<wires.length;k++){
+      if(wires[k].connected&&(wires[k].from===tm.id||wires[k].to===tm.id)){isUsed=true;break;}
+    }
+    drawTerminal(tm,isUsed);
+  }
+
+  // draw dragging wire
+  if(dragging){
+    var ft=getTerminal(dragging.startTerminal);
+    if(ft){
+      ctx.save();ctx.globalAlpha=0.7;
+      drawWireConn(ft.x,ft.y,dragging.currentX,dragging.currentY,wires[dragging.wireIdx].color,false);
+      ctx.restore();
+      // highlight nearest valid target
+      var target=findNearestTarget(dragging);
+      if(target){
+        ctx.save();ctx.shadowColor='#10b981';ctx.shadowBlur=15;
+        ctx.strokeStyle='#10b981';ctx.lineWidth=2;
+        ctx.beginPath();ctx.arc(target.x,target.y,target.r+4,0,Math.PI*2);ctx.stroke();
+        ctx.restore();
+      }
+    }
+  }
+
+  // test animation
+  if(testAnimating){
+    drawTestAnimation();
+  }
+}
+
+function drawCompBox(x,y,w,h,label,c1,c2){
+  var g=ctx.createLinearGradient(x,y,x,y+h);g.addColorStop(0,c2);g.addColorStop(1,c1);
+  ctx.fillStyle=g;ctx.fillRect(x,y,w,h);
+  ctx.strokeStyle='rgba(255,255,255,0.12)';ctx.lineWidth=1;ctx.strokeRect(x,y,w,h);
+  ctx.font='bold 10px "Space Grotesk",sans-serif';ctx.textAlign='center';ctx.textBaseline='top';
+  ctx.fillStyle='rgba(255,255,255,0.7)';ctx.fillText(label,x+w/2,y+h+4);
+}
+
+function drawTerminal(tm,used){
+  ctx.save();
+  if(!used){ctx.shadowColor=tm.color;ctx.shadowBlur=8;}
+  var g=ctx.createRadialGradient(tm.x,tm.y,0,tm.x,tm.y,tm.r);
+  g.addColorStop(0,used?'#10b981':'#555');g.addColorStop(1,used?'#0d9668':'#333');
+  ctx.fillStyle=g;ctx.beginPath();ctx.arc(tm.x,tm.y,tm.r,0,Math.PI*2);ctx.fill();
+  ctx.strokeStyle=used?'#10b981':tm.color;ctx.lineWidth=1.5;ctx.stroke();
+  ctx.restore();
+  // label
+  ctx.font='9px "Space Grotesk",sans-serif';ctx.textAlign='center';ctx.textBaseline='top';
+  ctx.fillStyle=tm.color;ctx.fillText(tm.label,tm.x,tm.y+tm.r+3);
+}
+
+function drawWireConn(x1,y1,x2,y2,color,glowing){
+  ctx.save();
+  if(glowing){ctx.shadowColor=color;ctx.shadowBlur=10;}
+  ctx.strokeStyle=color;ctx.lineWidth=3;
+  ctx.beginPath();ctx.moveTo(x1,y1);
+  var mx=(x1+x2)/2;
+  var my1=y1,my2=y2;
+  ctx.bezierCurveTo(mx,my1,mx,my2,x2,y2);
+  ctx.stroke();
+  ctx.restore();
+}
+
+function drawTestAnimation(){
+  if(!testAnimating)return;
+  var now=performance.now();
+  var elapsed=(now-testTime)/1000;
+
+  if(elapsed<3){
+    // current flowing animation - particles along wires
+    var phase=(elapsed%1);
+    ctx.fillStyle='rgba(255,200,100,0.8)';
+    for(var i=0;i<wires.length;i++){
+      if(!wires[i].connected)continue;
+      if(wires[i].id===5)continue; // skip GND for visual
+      var from=getTerminal(wires[i].from);
+      var to=getTerminal(wires[i].to);
+      if(!from||!to)continue;
+      var px=from.x+(to.x-from.x)*phase;
+      var py=from.y+(to.y-from.y)*phase;
+      ctx.save();ctx.shadowColor='#ffcc00';ctx.shadowBlur=8;
+      ctx.beginPath();ctx.arc(px,py,4,0,Math.PI*2);ctx.fill();
+      ctx.restore();
+    }
+    // status text
+    ctx.font='bold 14px "Space Grotesk",sans-serif';ctx.textAlign='center';
+    ctx.fillStyle='#10b981';ctx.fillText(t('currentFlow'),W/2,H-60);
+  }else if(elapsed<5){
+    // E-stop pressed - flash
+    var flash=Math.sin((elapsed-3)*10)>0;
+    if(flash){
+      ctx.save();ctx.shadowColor='#ff2200';ctx.shadowBlur=30;
+      var s=Math.min(W/900,H/550);if(s<0.3)s=0.3;
+      var eg=ctx.createRadialGradient(W/2-100*s,H/2-35,0,W/2-100*s,H/2-35,25*s);
+      eg.addColorStop(0,'#ff6644');eg.addColorStop(1,'#ff2200');
+      ctx.fillStyle=eg;ctx.beginPath();ctx.arc(W/2-100*s,H/2-35,25*s,0,Math.PI*2);ctx.fill();
+      ctx.restore();
+    }
+    ctx.font='bold 14px "Space Grotesk",sans-serif';ctx.textAlign='center';
+    ctx.fillStyle='#ff5f1f';ctx.fillText(t('currentStop'),W/2,H-60);
+  }else{
+    testAnimating=false;
+    gameWon=true;
+    showSuccess();
+  }
+}
+
+function showSuccess(){
+  document.getElementById('successOverlay').classList.add('show');
+  document.getElementById('successTitle').textContent=t('successTitle');
+  document.getElementById('successMsg').textContent=t('successMsg');
+  document.getElementById('btnReplay').textContent=t('btnReplay');
+}
+
+function findNearestTarget(drag){
+  var w=wires[drag.wireIdx];
+  var targetId=(drag.startTerminal===w.from)?w.to:w.from;
+  var tm=getTerminal(targetId);
+  if(!tm)return null;
+  var dx=drag.currentX-tm.x,dy=drag.currentY-tm.y;
+  if(Math.sqrt(dx*dx+dy*dy)<tm.r*3)return tm;
+  return null;
+}
+
+function hitTestTerminal(mx,my){
+  for(var i=0;i<terminals.length;i++){
+    var tm=terminals[i];
+    var dx=mx-tm.x,dy=my-tm.y;
+    if(dx*dx+dy*dy<=tm.r*tm.r*4)return tm;
+  }
+  return null;
+}
+
+function findWireForTerminal(terminalId){
+  for(var i=0;i<wires.length;i++){
+    if(!wires[i].connected&&(wires[i].from===terminalId||wires[i].to===terminalId)){
+      return i;
+    }
+  }
+  return-1;
+}
+
+/* ----- interaction ----- */
+function getPos(e){
+  var rect=canvas.getBoundingClientRect();
+  var clientX,clientY;
+  if(e.touches){clientX=e.touches[0].clientX;clientY=e.touches[0].clientY;}
+  else{clientX=e.clientX;clientY=e.clientY;}
+  return{x:(clientX-rect.left),y:(clientY-rect.top)};
+}
+
+function onDown(e){
+  if(gameWon||testAnimating)return;
+  var pos=getPos(e);
+  var tm=hitTestTerminal(pos.x,pos.y);
+  if(!tm)return;
+  var wIdx=findWireForTerminal(tm.id);
+  if(wIdx<0)return;
+  dragging={wireIdx:wIdx,startTerminal:tm.id,currentX:pos.x,currentY:pos.y};
+}
+function onMove(e){
+  if(!dragging)return;
+  if(e.cancelable)e.preventDefault();
+  var pos=getPos(e);
+  dragging.currentX=pos.x;dragging.currentY=pos.y;
+  render();
+}
+function onUp(e){
+  if(!dragging)return;
+  var target=findNearestTarget(dragging);
+  if(target){
+    wires[dragging.wireIdx].connected=true;
+    connectedCount++;
+    updateScore();
+    if(connectedCount>=6){document.getElementById('btnTest').disabled=false;}
+  }
+  dragging=null;
+  render();
+}
+
+canvas.addEventListener('mousedown',onDown);
+canvas.addEventListener('mousemove',onMove);
+canvas.addEventListener('mouseup',onUp);
+canvas.addEventListener('touchstart',onDown,{passive:true});
+canvas.addEventListener('touchmove',onMove,{passive:false});
+canvas.addEventListener('touchend',onUp);
+
+/* ----- buttons ----- */
+document.getElementById('btnReset').addEventListener('click',function(){
+  for(var i=0;i<wires.length;i++)wires[i].connected=false;
+  connectedCount=0;dragging=null;testAnimating=false;gameWon=false;
+  document.getElementById('btnTest').disabled=true;
+  document.getElementById('successOverlay').classList.remove('show');
+  updateScore();render();
+});
+
+document.getElementById('btnTest').addEventListener('click',function(){
+  if(connectedCount<6||testAnimating)return;
+  testAnimating=true;testTime=performance.now();testPhase=0;
+  runTestAnim();
+});
+
+document.getElementById('btnReplay').addEventListener('click',function(){
+  for(var i=0;i<wires.length;i++)wires[i].connected=false;
+  connectedCount=0;dragging=null;testAnimating=false;gameWon=false;
+  document.getElementById('btnTest').disabled=true;
+  document.getElementById('successOverlay').classList.remove('show');
+  updateScore();render();
+});
+
+function runTestAnim(){
+  if(!testAnimating)return;
+  render();
+  if(!gameWon)requestAnimationFrame(runTestAnim);
+}
+
+/* ----- render ----- */
+function render(){
+  drawScene();
+}
+
+function resize(){
+  var wrap=document.getElementById('gameArea');
+  var rect=wrap.getBoundingClientRect();
+  if(rect.width<1||rect.height<1)return;
+  W=rect.width;H=rect.height;
+  canvas.width=W*DPR;canvas.height=H*DPR;
+  canvas.style.width=W+'px';canvas.style.height=H+'px';
+  ctx.setTransform(DPR,0,0,DPR,0,0);
+  buildTerminals();render();
+}
+window.addEventListener('resize',resize);
+
+function updateScore(){
+  document.getElementById('scoreDisplay').textContent=t('score')+': '+connectedCount+'/6';
+}
+
+/* ----- i18n ----- */
+function refreshI18N(){
+  document.getElementById('mainTitle').textContent=t('title');
+  document.getElementById('mainSub').textContent=t('sub');
+  document.getElementById('guideTitle').textContent=t('guide');
+  document.getElementById('guideGoal').textContent=t('guideGoal');
+  var pts=document.getElementById('guideSteps');
+  pts.innerHTML='<li>'+t('guideS1')+'</li><li>'+t('guideS2')+'</li><li>'+t('guideS3')+'</li><li>'+t('guideS4')+'</li><li>'+t('guideS5')+'</li><li>'+t('guideS6')+'</li>';
+  document.getElementById('guideTips').textContent=t('guideTips');
+  document.getElementById('btnReset').textContent=t('btnReset');
+  document.getElementById('btnTest').textContent=t('btnTest');
+  updateScore();
+  buildTerminals();render();
+}
+
+document.getElementById('langBtn').addEventListener('click',function(){
+  LANG=LANG==='en'?'cn':'en';
+  document.getElementById('langBtn').textContent=LANG.toUpperCase();
+  refreshI18N();
+});
+
+var guideOpen=true;
+document.getElementById('guideToggle').addEventListener('click',function(){
+  guideOpen=!guideOpen;
+  document.getElementById('guideContent').style.display=guideOpen?'block':'none';
+  document.getElementById('guideArrow').textContent=guideOpen?'-':'+';
+});
+
+/* ----- init ----- */
+refreshI18N();
+resize();
+setTimeout(resize,200);
+setTimeout(resize,600);
+document.fonts.ready.then(function(){resize();});
+})();
+</script>
+</body>
+</html>

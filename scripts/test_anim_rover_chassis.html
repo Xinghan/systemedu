@@ -1,0 +1,600 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Rover Chassis Assembly</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;700&family=Inter:wght@400;500&family=Noto+Sans+SC:wght@400;700&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0;border-radius:0!important;}
+html,body{width:100%;height:100vh;overflow:hidden;background:#131313;font-family:'Noto Sans SC','Inter',sans-serif;color:#e5e2e1;}
+.wrapper{display:flex;flex-direction:column;height:100vh;width:100%;}
+.header{padding:8px 16px;background:rgba(28,27,27,0.92);border-bottom:1px solid rgba(138,136,134,0.15);flex-shrink:0;display:flex;align-items:center;justify-content:space-between;}
+.header h1{font-family:'Space Grotesk',sans-serif;font-size:16px;font-weight:700;color:#ffb59c;letter-spacing:1px;}
+.header .sub{font-size:12px;color:#8a8886;}
+.canvas-wrap{flex:1;min-height:0;position:relative;}
+canvas{display:block;width:100%;height:100%;}
+.controls{display:flex;align-items:center;justify-content:center;gap:12px;padding:6px 16px;background:rgba(28,27,27,0.92);border-top:1px solid rgba(138,136,134,0.15);flex-shrink:0;}
+.ctrl-btn{font-family:'Space Grotesk',sans-serif;font-size:11px;font-weight:700;padding:5px 14px;cursor:pointer;border:1px solid rgba(255,255,255,0.08);background:rgba(20,20,20,0.85);backdrop-filter:blur(12px);color:#ffb59c;letter-spacing:1px;transition:background 0.2s;}
+.ctrl-btn:hover{background:rgba(255,127,80,0.15);}
+.frame-ind{font-family:'Space Grotesk',sans-serif;font-size:12px;color:#8a8886;min-width:60px;text-align:center;}
+.hud{display:flex;align-items:center;justify-content:space-around;padding:6px 16px;background:rgba(0,0,0,0.55);flex-shrink:0;height:44px;}
+.hud-item{text-align:center;}
+.hud-label{font-family:'Space Grotesk',sans-serif;font-size:9px;color:#8a8886;letter-spacing:1px;text-transform:uppercase;}
+.hud-value{font-family:'Space Grotesk',sans-serif;font-size:13px;color:#ffb59c;font-weight:700;}
+.lang-btn{position:fixed;top:8px;left:8px;z-index:100;font-family:'Space Grotesk',sans-serif;font-size:11px;font-weight:700;padding:4px 10px;cursor:pointer;border:1px solid rgba(255,255,255,0.08);background:rgba(20,20,35,0.85);backdrop-filter:blur(12px);color:#ffb59c;letter-spacing:1px;}
+.guide-panel{position:fixed;top:8px;right:8px;width:240px;max-height:40vh;overflow-y:auto;background:rgba(20,20,20,0.88);backdrop-filter:blur(12px);border:1px solid rgba(255,255,255,0.08);padding:12px;z-index:100;font-family:'Noto Sans SC',sans-serif;font-size:12px;color:rgba(255,255,255,0.85);}
+.guide-panel h3{font-family:'Space Grotesk',sans-serif;font-size:13px;margin-bottom:6px;display:flex;align-items:center;justify-content:space-between;cursor:pointer;color:#ffb59c;}
+.guide-panel ul{padding-left:14px;line-height:1.7;}
+.guide-panel .guide-content{transition:max-height 0.3s;overflow:hidden;}
+</style>
+</head>
+<body>
+<button class="lang-btn" id="langBtn">CN</button>
+<div class="guide-panel" id="guidePanel">
+  <h3 id="guideToggle"><span id="guideTitle"></span><span id="guideArrow">-</span></h3>
+  <div class="guide-content" id="guideContent">
+    <p id="guideDesc" style="margin-bottom:6px;"></p>
+    <ul id="guidePoints"></ul>
+    <p id="guideTakeaway" style="margin-top:6px;font-style:italic;color:#ffb59c;"></p>
+  </div>
+</div>
+<div class="wrapper">
+  <div class="header">
+    <div><h1 id="mainTitle"></h1><span class="sub" id="mainSub"></span></div>
+  </div>
+  <div class="canvas-wrap" id="canvasWrap">
+    <canvas id="c"></canvas>
+  </div>
+  <div class="controls">
+    <button class="ctrl-btn" id="btnPrev"></button>
+    <span class="frame-ind" id="frameInd"></span>
+    <button class="ctrl-btn" id="btnNext"></button>
+    <button class="ctrl-btn" id="btnPlay"></button>
+  </div>
+  <div class="hud">
+    <div class="hud-item"><div class="hud-label" id="hudL0"></div><div class="hud-value" id="hudV0"></div></div>
+    <div class="hud-item"><div class="hud-label" id="hudL1"></div><div class="hud-value" id="hudV1"></div></div>
+    <div class="hud-item"><div class="hud-label" id="hudL2"></div><div class="hud-value" id="hudV2"></div></div>
+    <div class="hud-item"><div class="hud-label" id="hudL3"></div><div class="hud-value" id="hudV3"></div></div>
+  </div>
+</div>
+<script>
+(function(){
+var LANG='cn';
+var I18N={
+  title:{en:'ROVER CHASSIS ASSEMBLY',cn:'ROVER 底盘装配图解'},
+  sub:{en:'P-MARS-01-M29 | Assembly Process',cn:'P-MARS-01-M29 | 装配流程'},
+  guide:{en:'GUIDE',cn:'操作指南'},
+  guideDesc:{en:'Shows the step-by-step assembly from parts to a complete rover with circuit topology.',cn:'展示从零件到完整 rover 的逐步装配流程与电路拓扑。'},
+  guideP1:{en:'Motor mounting positions align with base plate holes',cn:'电机安装位置与底板孔位的对应'},
+  guideP2:{en:'E-Stop button is wired in series between battery + and driver VCC',cn:'急停按钮串联在电池正极与驱动板 VCC 之间'},
+  guideP3:{en:'PWM signals flow from controller to motor driver',cn:'PWM 信号从控制板到达驱动板'},
+  guideTakeaway:{en:'Describe the 3-layer rover structure and E-Stop circuit position.',cn:'能说出底盘三层结构和急停按钮的电路位置。'},
+  btnPrev:{en:'PREV',cn:'上一帧'},
+  btnNext:{en:'NEXT',cn:'下一帧'},
+  btnPlay:{en:'PLAY',cn:'播放'},
+  btnPause:{en:'PAUSE',cn:'暂停'},
+  hudL0:{en:'FRAME',cn:'帧'},
+  hudL1:{en:'LAYER',cn:'层级'},
+  hudL2:{en:'COMPONENTS',cn:'部件'},
+  hudL3:{en:'STATUS',cn:'状态'},
+  hudV1_0:{en:'Parts',cn:'零件'},
+  hudV1_1:{en:'Motor Layer',cn:'电机层'},
+  hudV1_2:{en:'Dual Layer',cn:'双层结构'},
+  hudV1_3:{en:'Circuit',cn:'电路'},
+  hudV1_4:{en:'Complete',cn:'完整'},
+  hudV2_0:{en:'Scattered',cn:'散落'},
+  hudV2_1:{en:'4 Motors + Tires',cn:'4电机+轮胎'},
+  hudV2_2:{en:'Battery + Standoffs',cn:'电池+铜柱'},
+  hudV2_3:{en:'Wiring Complete',cn:'接线完成'},
+  hudV2_4:{en:'All Systems',cn:'全系统'},
+  hudV3_0:{en:'PREP',cn:'准备'},
+  hudV3_1:{en:'BUILDING',cn:'组装中'},
+  hudV3_2:{en:'BUILDING',cn:'组装中'},
+  hudV3_3:{en:'WIRING',cn:'接线中'},
+  hudV3_4:{en:'READY',cn:'就绪'},
+  f0_title:{en:'PARTS LAYOUT',cn:'零件布局'},
+  f0_desc:{en:'All components before assembly',cn:'装配前的全部零件'},
+  f1_title:{en:'MOTOR INSTALLATION',cn:'电机安装'},
+  f1_desc:{en:'Mount 4 DC gear motors to base plate',cn:'将4个直流减速电机固定到底板'},
+  f2_title:{en:'DUAL-LAYER STRUCTURE',cn:'双层结构'},
+  f2_desc:{en:'Copper standoffs + battery placement',cn:'铜柱支撑+电池放置'},
+  f3_title:{en:'CIRCUIT TOPOLOGY',cn:'电路拓扑'},
+  f3_desc:{en:'Battery -> E-Stop -> L298N -> Motors ; Arduino PWM -> L298N',cn:'电池->急停->L298N->电机 ; Arduino PWM->L298N'},
+  f4_title:{en:'MOTION TEST',cn:'运动测试'},
+  f4_desc:{en:'Forward / Turn / E-Stop verification',cn:'前进 / 转向 / 急停验证'},
+  lbl_base:{en:'BASE PLATE',cn:'底板'},
+  lbl_motor:{en:'DC MOTOR',cn:'直流电机'},
+  lbl_tire:{en:'TIRE',cn:'轮胎'},
+  lbl_battery:{en:'BATTERY 7.4V',cn:'电池 7.4V'},
+  lbl_driver:{en:'L298N DRIVER',cn:'L298N 驱动板'},
+  lbl_arduino:{en:'ARDUINO',cn:'ARDUINO 控制板'},
+  lbl_estop:{en:'E-STOP',cn:'急停按钮'},
+  lbl_standoff:{en:'STANDOFFS',cn:'铜柱'},
+  lbl_wire_pwr:{en:'POWER +',cn:'电源正极'},
+  lbl_wire_gnd:{en:'GND',cn:'接地'},
+  lbl_wire_pwm:{en:'PWM SIGNAL',cn:'PWM 信号'},
+  lbl_forward:{en:'FORWARD',cn:'前进'},
+  lbl_turn:{en:'TURN',cn:'转向'},
+  lbl_stop:{en:'E-STOP!',cn:'急停!'},
+};
+function t(k){return(I18N[k]&&I18N[k][LANG])||(I18N[k]&&I18N[k]['en'])||k;}
+
+var canvas=document.getElementById('c');
+var ctx=canvas.getContext('2d');
+var W=0,H=0;
+var currentFrame=0;
+var totalFrames=5;
+var playing=false;
+var playTimer=null;
+var transitioning=false;
+var DPR=Math.min(window.devicePixelRatio||1,2);
+
+/* ----- colors ----- */
+var COL={
+  bg:'#131313',surface:'rgba(28,27,27,0.92)',
+  primary:'#ffb59c',primaryC:'#ff7f50',
+  secondary:'#c6c6c6',tertiary:'#00daf3',
+  signal:'#ff5f1f',success:'#10b981',
+  text:'#e5e2e1',muted:'#8a8886'
+};
+
+function resize(){
+  var wrap=document.getElementById('canvasWrap');
+  var rect=wrap.getBoundingClientRect();
+  if(rect.width<1||rect.height<1)return;
+  W=rect.width;H=rect.height;
+  canvas.width=W*DPR;canvas.height=H*DPR;
+  canvas.style.width=W+'px';canvas.style.height=H+'px';
+  ctx.setTransform(DPR,0,0,DPR,0,0);
+  drawFrame(currentFrame);
+}
+window.addEventListener('resize',resize);
+
+/* ----- utility ----- */
+function lerp(a,b,p){return a+(b-a)*p;}
+function easeInOut(x){return x<0.5?2*x*x:1-Math.pow(-2*x+2,2)/2;}
+function merge(base,ov){var r={};for(var k in base)r[k]=base[k];for(var k2 in ov)r[k2]=ov[k2];return r;}
+
+/* ----- draw primitives ----- */
+function drawBg(){
+  var g=ctx.createLinearGradient(0,0,0,H);
+  g.addColorStop(0,'#131313');g.addColorStop(1,'#1a1515');
+  ctx.fillStyle=g;ctx.fillRect(0,0,W,H);
+  // grid
+  ctx.strokeStyle='rgba(255,255,255,0.03)';ctx.lineWidth=1;
+  for(var x=0;x<W;x+=40){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,H);ctx.stroke();}
+  for(var y=0;y<H;y+=40){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke();}
+}
+
+function drawRoundedRect(x,y,w,h,fill,stroke){
+  ctx.fillStyle=fill;ctx.strokeStyle=stroke||'transparent';ctx.lineWidth=1;
+  ctx.fillRect(x,y,w,h);if(stroke)ctx.strokeRect(x,y,w,h);
+}
+
+function drawGlowRect(x,y,w,h,fill,glowColor,glowSize){
+  ctx.save();ctx.shadowColor=glowColor;ctx.shadowBlur=glowSize||12;
+  ctx.fillStyle=fill;ctx.fillRect(x,y,w,h);
+  ctx.restore();
+}
+
+function drawMotor(cx,cy,size,withTire){
+  // motor body
+  var g=ctx.createLinearGradient(cx-size*0.3,cy-size*0.5,cx+size*0.3,cy+size*0.5);
+  g.addColorStop(0,'#666');g.addColorStop(0.5,'#888');g.addColorStop(1,'#555');
+  ctx.fillStyle=g;ctx.fillRect(cx-size*0.3,cy-size*0.5,size*0.6,size);
+  // shaft
+  ctx.fillStyle='#999';ctx.fillRect(cx-size*0.05,cy+size*0.5,size*0.1,size*0.2);
+  if(withTire){
+    var tg=ctx.createRadialGradient(cx,cy+size*0.7,0,cx,cy+size*0.7,size*0.35);
+    tg.addColorStop(0,'#444');tg.addColorStop(0.7,'#333');tg.addColorStop(1,'#222');
+    ctx.fillStyle=tg;
+    ctx.beginPath();ctx.arc(cx,cy+size*0.7,size*0.35,0,Math.PI*2);ctx.fill();
+    ctx.strokeStyle='#555';ctx.lineWidth=1;ctx.stroke();
+  }
+}
+
+function drawBattery(x,y,w,h){
+  var g=ctx.createLinearGradient(x,y,x+w,y);
+  g.addColorStop(0,'#2a6e2a');g.addColorStop(0.5,'#3a9a3a');g.addColorStop(1,'#2a6e2a');
+  ctx.fillStyle=g;ctx.fillRect(x,y,w,h);
+  ctx.strokeStyle='#5bc85b';ctx.lineWidth=1;ctx.strokeRect(x,y,w,h);
+  // terminal
+  ctx.fillStyle='#ff5f1f';ctx.fillRect(x+w-4,y+h*0.3,8,h*0.15);
+  ctx.fillStyle='#333';ctx.fillRect(x+w-4,y+h*0.55,8,h*0.15);
+}
+
+function drawChipBoard(x,y,w,h,color,label){
+  var g=ctx.createLinearGradient(x,y,x,y+h);
+  g.addColorStop(0,color);g.addColorStop(1,shadeColor(color,-30));
+  ctx.fillStyle=g;ctx.fillRect(x,y,w,h);
+  ctx.strokeStyle='rgba(255,255,255,0.2)';ctx.lineWidth=1;ctx.strokeRect(x,y,w,h);
+  // pins
+  ctx.fillStyle='#999';
+  for(var i=0;i<4;i++){ctx.fillRect(x-3,y+h*0.2+i*(h*0.15),3,4);}
+  for(var j=0;j<4;j++){ctx.fillRect(x+w,y+h*0.2+j*(h*0.15),3,4);}
+  // label
+  ctx.fillStyle='#fff';ctx.font='bold '+(Math.max(9,w*0.12))+'px "Space Grotesk",sans-serif';
+  ctx.textAlign='center';ctx.textBaseline='middle';
+  ctx.fillText(label,x+w/2,y+h/2);
+}
+
+function shadeColor(c,pct){
+  var num=parseInt(c.replace('#',''),16);
+  var r=Math.min(255,Math.max(0,((num>>16)&0xFF)+pct));
+  var g2=Math.min(255,Math.max(0,((num>>8)&0xFF)+pct));
+  var b=Math.min(255,Math.max(0,(num&0xFF)+pct));
+  return'#'+((1<<24)+(r<<16)+(g2<<8)+b).toString(16).slice(1);
+}
+
+function drawEStop(cx,cy,r,pressed){
+  // base
+  ctx.save();
+  ctx.shadowColor=pressed?'#ff2200':'#ff5f1f';ctx.shadowBlur=pressed?20:10;
+  var g=ctx.createRadialGradient(cx-r*0.2,cy-r*0.2,0,cx,cy,r);
+  g.addColorStop(0,pressed?'#ff4422':'#ff3300');g.addColorStop(1,pressed?'#991100':'#cc2200');
+  ctx.fillStyle=g;ctx.beginPath();ctx.arc(cx,cy,r,0,Math.PI*2);ctx.fill();
+  ctx.restore();
+  ctx.strokeStyle='rgba(255,255,255,0.3)';ctx.lineWidth=1.5;
+  ctx.beginPath();ctx.arc(cx,cy,r,0,Math.PI*2);ctx.stroke();
+}
+
+function drawWire(x1,y1,x2,y2,color,glow){
+  ctx.save();
+  if(glow){ctx.shadowColor=color;ctx.shadowBlur=6;}
+  ctx.strokeStyle=color;ctx.lineWidth=2.5;
+  ctx.beginPath();ctx.moveTo(x1,y1);
+  var mx=(x1+x2)/2;
+  ctx.bezierCurveTo(mx,y1,mx,y2,x2,y2);
+  ctx.stroke();
+  ctx.restore();
+}
+
+function drawArrowLine(x1,y1,x2,y2,color){
+  ctx.strokeStyle=color;ctx.lineWidth=2;ctx.fillStyle=color;
+  ctx.beginPath();ctx.moveTo(x1,y1);ctx.lineTo(x2,y2);ctx.stroke();
+  var angle=Math.atan2(y2-y1,x2-x1);
+  var hl=8;
+  ctx.beginPath();
+  ctx.moveTo(x2,y2);
+  ctx.lineTo(x2-hl*Math.cos(angle-0.4),y2-hl*Math.sin(angle-0.4));
+  ctx.lineTo(x2-hl*Math.cos(angle+0.4),y2-hl*Math.sin(angle+0.4));
+  ctx.closePath();ctx.fill();
+}
+
+function drawBasePlate(x,y,w,h,withHoles){
+  var g=ctx.createLinearGradient(x,y,x+w,y+h);
+  g.addColorStop(0,'#2a2a2a');g.addColorStop(0.5,'#3a3a3a');g.addColorStop(1,'#2a2a2a');
+  ctx.fillStyle=g;ctx.fillRect(x,y,w,h);
+  ctx.strokeStyle='rgba(255,255,255,0.15)';ctx.lineWidth=1.5;ctx.strokeRect(x,y,w,h);
+  if(withHoles){
+    ctx.fillStyle='rgba(0,0,0,0.5)';
+    var holes=[[0.15,0.15],[0.85,0.15],[0.15,0.85],[0.85,0.85]];
+    for(var i=0;i<holes.length;i++){
+      ctx.beginPath();ctx.arc(x+w*holes[i][0],y+h*holes[i][1],4,0,Math.PI*2);ctx.fill();
+    }
+  }
+}
+
+function drawLabelTag(tx,ty,text,color){
+  ctx.font='bold 10px "Space Grotesk",sans-serif';
+  ctx.textAlign='center';ctx.textBaseline='middle';
+  var tw=ctx.measureText(text).width+10;
+  ctx.fillStyle='rgba(0,0,0,0.6)';ctx.fillRect(tx-tw/2,ty-8,tw,16);
+  ctx.fillStyle=color||COL.primary;ctx.fillText(text,tx,ty);
+}
+
+/* ----- frame element system ----- */
+function getFrameElements(f){
+  var cx=W/2, cy=H/2;
+  var scale=Math.min(W/800,H/500);
+  var elems=[];
+
+  if(f===0){
+    // Parts layout
+    elems.push({id:'title',type:'label',text:t('f0_title'),x:cx,y:30,color:COL.primary,size:16,align:'center',alpha:1});
+    elems.push({id:'desc',type:'label',text:t('f0_desc'),x:cx,y:52,color:COL.muted,size:11,align:'center',alpha:1});
+    elems.push({id:'base',type:'custom',x:cx-120*scale,y:cy-80*scale,w:240*scale,h:160*scale,alpha:1,
+      draw:function(a){ctx.globalAlpha=a;drawBasePlate(cx-120*scale,cy-80*scale,240*scale,160*scale,true);}});
+    // scattered parts
+    var parts=[
+      {px:-220,py:-60,lbl:'lbl_motor',fn:function(a){ctx.globalAlpha=a;drawMotor(cx-220*scale,cy-60*scale,30*scale,false);}},
+      {px:220,py:-60,lbl:'lbl_motor',fn:function(a){ctx.globalAlpha=a;drawMotor(cx+220*scale,cy-60*scale,30*scale,false);}},
+      {px:-220,py:60,lbl:'lbl_tire',fn:function(a){ctx.globalAlpha=a;var tg=ctx.createRadialGradient(cx-220*scale,cy+60*scale,0,cx-220*scale,cy+60*scale,18*scale);tg.addColorStop(0,'#444');tg.addColorStop(1,'#222');ctx.fillStyle=tg;ctx.beginPath();ctx.arc(cx-220*scale,cy+60*scale,18*scale,0,Math.PI*2);ctx.fill();}},
+      {px:220,py:60,lbl:'lbl_battery',fn:function(a){ctx.globalAlpha=a;drawBattery(cx+180*scale,cy+40*scale,80*scale,40*scale);}},
+      {px:0,py:140,lbl:'lbl_driver',fn:function(a){ctx.globalAlpha=a;drawChipBoard(cx-50*scale,cy+110*scale,40*scale,50*scale,'#1a3a6e','L298N');}},
+      {px:100,py:140,lbl:'lbl_arduino',fn:function(a){ctx.globalAlpha=a;drawChipBoard(cx+50*scale,cy+110*scale,40*scale,50*scale,'#006e6e','ARD');}},
+      {px:-100,py:140,lbl:'lbl_estop',fn:function(a){ctx.globalAlpha=a;drawEStop(cx-100*scale,cy+135*scale,14*scale,false);}}
+    ];
+    for(var i=0;i<parts.length;i++){
+      var p=parts[i];
+      elems.push({id:'part'+i,type:'custom',x:cx+p.px*scale,y:cy+p.py*scale,w:0,h:0,alpha:1,draw:p.fn});
+      elems.push({id:'partlbl'+i,type:'label',text:t(p.lbl),x:cx+p.px*scale,y:cy+p.py*scale+(i<3?-45*scale:70*scale),color:COL.tertiary,size:9,align:'center',alpha:1});
+    }
+  }
+  else if(f===1){
+    // Motor installation
+    elems.push({id:'title',type:'label',text:t('f1_title'),x:cx,y:30,color:COL.primary,size:16,align:'center',alpha:1});
+    elems.push({id:'desc',type:'label',text:t('f1_desc'),x:cx,y:52,color:COL.muted,size:11,align:'center',alpha:1});
+    elems.push({id:'base',type:'custom',x:cx-140*scale,y:cy-100*scale,w:280*scale,h:200*scale,alpha:1,
+      draw:function(a){ctx.globalAlpha=a;drawBasePlate(cx-140*scale,cy-100*scale,280*scale,200*scale,true);}});
+    // motors at 4 corners with tires
+    var mpos=[[cx-110*scale,cy-70*scale],[cx+110*scale,cy-70*scale],[cx-110*scale,cy+70*scale],[cx+110*scale,cy+70*scale]];
+    for(var m=0;m<4;m++){
+      (function(idx,mx,my){
+        elems.push({id:'motor'+idx,type:'custom',x:mx,y:my,w:0,h:0,alpha:1,
+          draw:function(a){ctx.globalAlpha=a;drawMotor(mx,my,28*scale,true);}});
+      })(m,mpos[m][0],mpos[m][1]);
+    }
+    // screw indicators
+    elems.push({id:'screwNote',type:'label',text:'M3 x4',x:cx+160*scale,y:cy-100*scale,color:COL.signal,size:10,align:'center',alpha:1});
+    // arrow pointing to a motor
+    elems.push({id:'screwArrow',type:'arrow',x1:cx+160*scale,y1:cx-85*scale>0?cy-85*scale:cy-85*scale,x2:cx+120*scale,y2:cy-70*scale,color:COL.signal,alpha:1});
+  }
+  else if(f===2){
+    // Dual-layer structure (side view)
+    elems.push({id:'title',type:'label',text:t('f2_title'),x:cx,y:30,color:COL.primary,size:16,align:'center',alpha:1});
+    elems.push({id:'desc',type:'label',text:t('f2_desc'),x:cx,y:52,color:COL.muted,size:11,align:'center',alpha:1});
+    // side view: lower plate
+    var bw=300*scale, bh=12*scale;
+    var topY=cy-40*scale, botY=cy+40*scale;
+    elems.push({id:'botplate',type:'custom',x:cx-bw/2,y:botY,w:bw,h:bh,alpha:1,
+      draw:function(a){ctx.globalAlpha=a;var g=ctx.createLinearGradient(cx-bw/2,botY,cx+bw/2,botY);g.addColorStop(0,'#333');g.addColorStop(0.5,'#4a4a4a');g.addColorStop(1,'#333');ctx.fillStyle=g;ctx.fillRect(cx-bw/2,botY,bw,bh);}});
+    // upper plate
+    elems.push({id:'topplate',type:'custom',x:cx-bw/2,y:topY,w:bw,h:bh,alpha:1,
+      draw:function(a){ctx.globalAlpha=a;var g=ctx.createLinearGradient(cx-bw/2,topY,cx+bw/2,topY);g.addColorStop(0,'#333');g.addColorStop(0.5,'#4a4a4a');g.addColorStop(1,'#333');ctx.fillStyle=g;ctx.fillRect(cx-bw/2,topY,bw,bh);}});
+    // standoffs
+    var sx=[cx-bw/2+30*scale,cx+bw/2-30*scale];
+    for(var s=0;s<2;s++){
+      (function(px){
+        elems.push({id:'standoff'+s,type:'custom',x:px,y:topY+bh,w:6*scale,h:botY-topY-bh,alpha:1,
+          draw:function(a){ctx.globalAlpha=a;var g=ctx.createLinearGradient(px-3*scale,0,px+3*scale,0);g.addColorStop(0,'#b8860b');g.addColorStop(0.5,'#daa520');g.addColorStop(1,'#b8860b');ctx.fillStyle=g;ctx.fillRect(px-3*scale,topY+bh,6*scale,botY-topY-bh);}});
+      })(sx[s]);
+    }
+    elems.push({id:'standlbl',type:'label',text:t('lbl_standoff'),x:sx[1]+30*scale,y:(topY+botY)/2,color:'#daa520',size:9,align:'left',alpha:1});
+    // battery between plates
+    elems.push({id:'battery',type:'custom',x:cx-40*scale,y:botY-35*scale,w:80*scale,h:25*scale,alpha:1,
+      draw:function(a){ctx.globalAlpha=a;drawBattery(cx-40*scale,botY-35*scale,80*scale,25*scale);}});
+    elems.push({id:'batlbl',type:'label',text:t('lbl_battery'),x:cx,y:botY-45*scale,color:'#5bc85b',size:9,align:'center',alpha:1});
+    // wheels at bottom
+    for(var w2=0;w2<2;w2++){
+      (function(idx){
+        var wx=cx+(idx===0?-bw/2-15*scale:bw/2+15*scale);
+        elems.push({id:'wheel'+idx,type:'custom',x:wx,y:botY+bh/2,w:0,h:0,alpha:1,
+          draw:function(a){ctx.globalAlpha=a;var tg=ctx.createRadialGradient(wx,botY+bh/2,0,wx,botY+bh/2,20*scale);tg.addColorStop(0,'#444');tg.addColorStop(1,'#222');ctx.fillStyle=tg;ctx.beginPath();ctx.arc(wx,botY+bh/2,20*scale,0,Math.PI*2);ctx.fill();ctx.strokeStyle='#555';ctx.lineWidth=1;ctx.stroke();}});
+      })(w2);
+    }
+    // Arduino on top plate
+    elems.push({id:'arduino',type:'custom',x:cx+40*scale,y:topY-40*scale,w:50*scale,h:30*scale,alpha:1,
+      draw:function(a){ctx.globalAlpha=a;drawChipBoard(cx+40*scale,topY-40*scale,50*scale,30*scale,'#006e6e','ARD');}});
+  }
+  else if(f===3){
+    // Circuit topology
+    elems.push({id:'title',type:'label',text:t('f3_title'),x:cx,y:30,color:COL.primary,size:16,align:'center',alpha:1});
+    elems.push({id:'desc',type:'label',text:t('f3_desc'),x:cx,y:52,color:COL.muted,size:11,align:'center',alpha:1});
+    // schematic layout
+    var bx=cx-200*scale, by=cy-30*scale;
+    // battery
+    elems.push({id:'bat3',type:'custom',x:bx,y:by,w:60*scale,h:35*scale,alpha:1,
+      draw:function(a){ctx.globalAlpha=a;drawBattery(bx,by,60*scale,35*scale);}});
+    elems.push({id:'batlbl3',type:'label',text:t('lbl_battery'),x:bx+30*scale,y:by-15,color:'#5bc85b',size:9,align:'center',alpha:1});
+    // estop
+    var ex2=bx+100*scale;
+    elems.push({id:'estop3',type:'custom',x:ex2,y:by+17*scale,w:0,h:0,alpha:1,
+      draw:function(a){ctx.globalAlpha=a;drawEStop(ex2,by+17*scale,16*scale,false);}});
+    elems.push({id:'estoplbl3',type:'label',text:t('lbl_estop'),x:ex2,y:by-15,color:COL.signal,size:9,align:'center',alpha:1});
+    // driver
+    var dx=bx+200*scale;
+    elems.push({id:'driver3',type:'custom',x:dx,y:by-5*scale,w:60*scale,h:45*scale,alpha:1,
+      draw:function(a){ctx.globalAlpha=a;drawChipBoard(dx,by-5*scale,60*scale,45*scale,'#1a3a6e','L298N');}});
+    elems.push({id:'driverlbl3',type:'label',text:t('lbl_driver'),x:dx+30*scale,y:by-20,color:'#4a7abf',size:9,align:'center',alpha:1});
+    // arduino
+    var ax=dx+20*scale, ay=by-90*scale;
+    elems.push({id:'ard3',type:'custom',x:ax,y:ay,w:50*scale,h:35*scale,alpha:1,
+      draw:function(a){ctx.globalAlpha=a;drawChipBoard(ax,ay,50*scale,35*scale,'#006e6e','ARD');}});
+    elems.push({id:'ardlbl3',type:'label',text:t('lbl_arduino'),x:ax+25*scale,y:ay-15,color:'#00daf3',size:9,align:'center',alpha:1});
+    // motors
+    var my1=by+80*scale;
+    elems.push({id:'mot3a',type:'custom',x:dx,y:my1,w:0,h:0,alpha:1,
+      draw:function(a){ctx.globalAlpha=a;drawMotor(dx+15*scale,my1,24*scale,true);}});
+    elems.push({id:'mot3b',type:'custom',x:dx+45*scale,y:my1,w:0,h:0,alpha:1,
+      draw:function(a){ctx.globalAlpha=a;drawMotor(dx+50*scale,my1,24*scale,true);}});
+    // wires: battery -> estop
+    elems.push({id:'wire1',type:'custom',x:0,y:0,w:0,h:0,alpha:1,
+      draw:function(a){ctx.globalAlpha=a;drawWire(bx+60*scale,by+12*scale,ex2-16*scale,by+17*scale,'#ff5f1f',true);drawLabelTag((bx+60*scale+ex2)/2,by+5*scale,t('lbl_wire_pwr'),'#ff5f1f');}});
+    // estop -> driver
+    elems.push({id:'wire2',type:'custom',x:0,y:0,w:0,h:0,alpha:1,
+      draw:function(a){ctx.globalAlpha=a;drawWire(ex2+16*scale,by+17*scale,dx,by+15*scale,'#ff5f1f',true);}});
+    // driver -> motors
+    elems.push({id:'wire3',type:'custom',x:0,y:0,w:0,h:0,alpha:1,
+      draw:function(a){ctx.globalAlpha=a;drawWire(dx+15*scale,by+40*scale,dx+15*scale,my1-15*scale,'#c6c6c6',false);drawWire(dx+50*scale,by+40*scale,dx+50*scale,my1-15*scale,'#c6c6c6',false);}});
+    // arduino -> driver (PWM)
+    elems.push({id:'wire4',type:'custom',x:0,y:0,w:0,h:0,alpha:1,
+      draw:function(a){ctx.globalAlpha=a;drawWire(ax+25*scale,ay+35*scale,dx+30*scale,by-5*scale,'#00daf3',true);drawLabelTag(ax+10*scale,ay+50*scale,t('lbl_wire_pwm'),'#00daf3');}});
+    // GND line
+    elems.push({id:'wire5',type:'custom',x:0,y:0,w:0,h:0,alpha:1,
+      draw:function(a){ctx.globalAlpha=a;ctx.setLineDash([4,4]);drawWire(bx+30*scale,by+35*scale,dx+30*scale,by+40*scale,'#666',false);ctx.setLineDash([]);drawLabelTag(bx+120*scale,by+50*scale,t('lbl_wire_gnd'),'#666');}});
+  }
+  else if(f===4){
+    // Motion test
+    elems.push({id:'title',type:'label',text:t('f4_title'),x:cx,y:30,color:COL.primary,size:16,align:'center',alpha:1});
+    elems.push({id:'desc',type:'label',text:t('f4_desc'),x:cx,y:52,color:COL.muted,size:11,align:'center',alpha:1});
+    // rover top view
+    elems.push({id:'base',type:'custom',x:cx-80*scale,y:cy-55*scale,w:160*scale,h:110*scale,alpha:1,
+      draw:function(a){
+        ctx.globalAlpha=a;drawBasePlate(cx-80*scale,cy-55*scale,160*scale,110*scale,false);
+        // wheels
+        var wh=25*scale,ww=12*scale;
+        ctx.fillStyle='#333';
+        ctx.fillRect(cx-90*scale,cy-40*scale,ww,wh);ctx.fillRect(cx+78*scale,cy-40*scale,ww,wh);
+        ctx.fillRect(cx-90*scale,cy+15*scale,ww,wh);ctx.fillRect(cx+78*scale,cy+15*scale,ww,wh);
+        // chips on board
+        drawChipBoard(cx-30*scale,cy-25*scale,25*scale,20*scale,'#1a3a6e','L298');
+        drawChipBoard(cx+10*scale,cy-25*scale,25*scale,20*scale,'#006e6e','ARD');
+        drawBattery(cx-25*scale,cy+10*scale,50*scale,20*scale);
+        drawEStop(cx+55*scale,cy-35*scale,10*scale,false);
+      }});
+    // forward arrow
+    var ay2=cy-90*scale;
+    elems.push({id:'fwd',type:'custom',x:cx,y:ay2,w:0,h:0,alpha:1,
+      draw:function(a){ctx.globalAlpha=a;drawArrowLine(cx,cy-60*scale,cx,ay2,COL.success);drawLabelTag(cx,ay2-15,t('lbl_forward'),COL.success);}});
+    // turn arrow
+    elems.push({id:'turn',type:'custom',x:cx+130*scale,y:cy,w:0,h:0,alpha:1,
+      draw:function(a){ctx.globalAlpha=a;
+        ctx.strokeStyle=COL.tertiary;ctx.lineWidth=2;
+        ctx.beginPath();ctx.arc(cx+100*scale,cy,30*scale,Math.PI*1.5,Math.PI*0.3);ctx.stroke();
+        // arrowhead
+        var ae=Math.PI*0.3;var tip={x:cx+100*scale+30*scale*Math.cos(ae),y:cy+30*scale*Math.sin(ae)};
+        ctx.fillStyle=COL.tertiary;ctx.beginPath();ctx.moveTo(tip.x,tip.y);ctx.lineTo(tip.x-8,tip.y-5);ctx.lineTo(tip.x-3,tip.y+6);ctx.closePath();ctx.fill();
+        drawLabelTag(cx+145*scale,cy-10,t('lbl_turn'),COL.tertiary);
+      }});
+    // estop highlight
+    elems.push({id:'estopHL',type:'custom',x:cx-130*scale,y:cy,w:0,h:0,alpha:1,
+      draw:function(a){ctx.globalAlpha=a;
+        drawEStop(cx-130*scale,cy,22*scale,true);
+        drawLabelTag(cx-130*scale,cy+40*scale,t('lbl_stop'),COL.signal);
+      }});
+  }
+  return elems;
+}
+
+/* ----- draw element dispatcher ----- */
+function drawElement(el){
+  if(!el||el.alpha<=0.01)return;
+  ctx.save();ctx.globalAlpha=el.alpha;
+  switch(el.type){
+    case'label':drawLabelPrimitive(el.text,el.x,el.y,el.color,el.size,el.align);break;
+    case'arrow':drawArrowPrimitive(el.x1,el.y1,el.x2,el.y2,el.color);break;
+    case'custom':el.draw(el.alpha);break;
+  }
+  ctx.restore();
+}
+function drawLabelPrimitive(text,x,y,color,size,align){
+  ctx.font='bold '+size+'px "Space Grotesk","Noto Sans SC",sans-serif';
+  ctx.textAlign=align||'center';ctx.textBaseline='middle';
+  ctx.fillStyle=color;ctx.fillText(text,x,y);
+}
+function drawArrowPrimitive(x1,y1,x2,y2,color){
+  drawArrowLine(x1,y1,x2,y2,color);
+}
+
+/* ----- transition engine ----- */
+function transitionTo(newFrame){
+  if(newFrame<0)newFrame=0;
+  if(newFrame>=totalFrames)newFrame=totalFrames-1;
+  if(newFrame===currentFrame&&!transitioning){drawFrame(currentFrame);updateHUD(currentFrame);return;}
+  if(transitioning)return;
+  var oldElems=getFrameElements(currentFrame);
+  var newElems=getFrameElements(newFrame);
+  var oldMap={};oldElems.forEach(function(e){oldMap[e.id]=e;});
+  var newMap={};newElems.forEach(function(e){newMap[e.id]=e;});
+  currentFrame=newFrame;
+  updateHUD(newFrame);
+  transitioning=true;
+  var startTime=null;var duration=500;
+  function step(timestamp){
+    if(!startTime)startTime=timestamp;
+    var raw=Math.min((timestamp-startTime)/duration,1);
+    var p=easeInOut(raw);
+    drawBg();
+    oldElems.forEach(function(oe){if(!newMap[oe.id])drawElement(merge(oe,{alpha:1-p}));});
+    newElems.forEach(function(ne){
+      var oe=oldMap[ne.id];
+      if(oe){
+        var merged=merge(ne,{x:lerp(oe.x||0,ne.x||0,p),y:lerp(oe.y||0,ne.y||0,p),w:lerp(oe.w||0,ne.w||0,p),h:lerp(oe.h||0,ne.h||0,p),alpha:1});
+        if(ne.type==='arrow'&&oe.type==='arrow'){merged.x1=lerp(oe.x1,ne.x1,p);merged.y1=lerp(oe.y1,ne.y1,p);merged.x2=lerp(oe.x2,ne.x2,p);merged.y2=lerp(oe.y2,ne.y2,p);}
+        if((ne.type==='label')&&oe.text!==ne.text){drawElement(merge(oe,{alpha:1-p}));drawElement(merge(ne,{alpha:p}));}
+        else{drawElement(merged);}
+      }else{drawElement(merge(ne,{alpha:p}));}
+    });
+    if(raw<1){requestAnimationFrame(step);}else{transitioning=false;}
+  }
+  requestAnimationFrame(step);
+}
+
+function drawFrame(f){drawBg();var elems=getFrameElements(f);elems.forEach(function(el){drawElement(el);});}
+
+/* ----- HUD ----- */
+function updateHUD(f){
+  document.getElementById('hudV0').textContent=(f+1)+'/'+totalFrames;
+  document.getElementById('hudV1').textContent=t('hudV1_'+f);
+  document.getElementById('hudV2').textContent=t('hudV2_'+f);
+  document.getElementById('hudV3').textContent=t('hudV3_'+f);
+  document.getElementById('frameInd').textContent=(f+1)+' / '+totalFrames;
+}
+
+/* ----- i18n ----- */
+function refreshI18N(){
+  document.getElementById('mainTitle').textContent=t('title');
+  document.getElementById('mainSub').textContent=t('sub');
+  document.getElementById('guideTitle').textContent=t('guide');
+  document.getElementById('guideDesc').textContent=t('guideDesc');
+  var pts=document.getElementById('guidePoints');
+  pts.innerHTML='<li>'+t('guideP1')+'</li><li>'+t('guideP2')+'</li><li>'+t('guideP3')+'</li>';
+  document.getElementById('guideTakeaway').textContent=t('guideTakeaway');
+  document.getElementById('btnPrev').textContent=t('btnPrev');
+  document.getElementById('btnNext').textContent=t('btnNext');
+  document.getElementById('btnPlay').textContent=playing?t('btnPause'):t('btnPlay');
+  document.getElementById('hudL0').textContent=t('hudL0');
+  document.getElementById('hudL1').textContent=t('hudL1');
+  document.getElementById('hudL2').textContent=t('hudL2');
+  document.getElementById('hudL3').textContent=t('hudL3');
+  updateHUD(currentFrame);
+  drawFrame(currentFrame);
+}
+
+/* ----- controls ----- */
+document.getElementById('btnPrev').addEventListener('click',function(){
+  if(playing)stopPlay();
+  transitionTo(currentFrame-1);
+});
+document.getElementById('btnNext').addEventListener('click',function(){
+  if(playing)stopPlay();
+  transitionTo(currentFrame+1);
+});
+document.getElementById('btnPlay').addEventListener('click',function(){
+  if(playing){stopPlay();}
+  else{startPlay();}
+});
+function startPlay(){
+  playing=true;
+  document.getElementById('btnPlay').textContent=t('btnPause');
+  if(currentFrame>=totalFrames-1)currentFrame=-1;
+  playNext();
+}
+function playNext(){
+  if(!playing)return;
+  if(currentFrame>=totalFrames-1){stopPlay();return;}
+  transitionTo(currentFrame+1);
+  playTimer=setTimeout(playNext,2000);
+}
+function stopPlay(){
+  playing=false;
+  document.getElementById('btnPlay').textContent=t('btnPlay');
+  if(playTimer){clearTimeout(playTimer);playTimer=null;}
+}
+
+document.getElementById('langBtn').addEventListener('click',function(){
+  LANG=LANG==='en'?'cn':'en';
+  document.getElementById('langBtn').textContent=LANG.toUpperCase();
+  refreshI18N();
+});
+
+var guideOpen=true;
+document.getElementById('guideToggle').addEventListener('click',function(){
+  guideOpen=!guideOpen;
+  document.getElementById('guideContent').style.display=guideOpen?'block':'none';
+  document.getElementById('guideArrow').textContent=guideOpen?'-':'+';
+});
+
+/* ----- init ----- */
+refreshI18N();
+resize();
+setTimeout(resize,200);
+setTimeout(resize,600);
+document.fonts.ready.then(function(){resize();});
+})();
+</script>
+</body>
+</html>

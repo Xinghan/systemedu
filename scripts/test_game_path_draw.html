@@ -1,0 +1,488 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8"/>
+<title>Draw Path vs A* Optimal</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;700&family=Inter:wght@400;500&family=Noto+Sans+SC:wght@400;700&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0;}
+html,body{width:100%;height:100vh;overflow:hidden;background:#131313;color:#e5e2e1;font-family:'Noto Sans SC','Inter',sans-serif;}
+.wrapper{display:flex;flex-direction:column;height:100vh;}
+.header{display:flex;justify-content:space-between;align-items:center;padding:6px 16px;background:rgba(28,27,27,0.92);border-bottom:1px solid rgba(138,136,134,0.15);}
+.title{font-family:'Space Grotesk',sans-serif;font-size:14px;font-weight:700;color:#ffb59c;letter-spacing:1px;text-transform:uppercase;}
+.subtitle{font-size:11px;color:#8a8886;margin-left:10px;}
+.lang-btn{position:fixed;top:8px;left:8px;z-index:100;font-family:'Space Grotesk',sans-serif;font-size:11px;font-weight:700;padding:4px 10px;cursor:pointer;border:1px solid rgba(255,255,255,0.08);background:rgba(20,20,35,0.85);backdrop-filter:blur(12px);color:#ffb59c;letter-spacing:1px;}
+.main-area{flex:1;min-height:0;display:flex;overflow:hidden;}
+.grid-container{flex:1;position:relative;display:flex;align-items:center;justify-content:center;padding:8px;}
+canvas{display:block;}
+.side-panel{width:220px;display:flex;flex-direction:column;padding:8px;gap:6px;background:rgba(28,27,27,0.92);border-left:1px solid rgba(138,136,134,0.15);overflow-y:auto;}
+.panel-title{font-family:'Space Grotesk',sans-serif;font-size:12px;color:#ffb59c;letter-spacing:1px;text-transform:uppercase;margin-bottom:4px;}
+.stat-row{display:flex;justify-content:space-between;align-items:center;padding:4px 0;font-size:12px;}
+.stat-label{color:#8a8886;font-size:11px;}
+.stat-val{font-family:'Space Grotesk',sans-serif;font-weight:700;color:#e5e2e1;}
+.stat-val.player{color:#ff7f50;}
+.stat-val.algo{color:#00daf3;}
+.btn-row{display:flex;gap:6px;margin-top:4px;}
+.action-btn{flex:1;padding:8px 6px;font-family:'Space Grotesk',sans-serif;font-size:11px;font-weight:700;letter-spacing:0.5px;cursor:pointer;border:1px solid rgba(138,136,134,0.15);background:rgba(53,53,52,0.7);color:#e5e2e1;text-transform:uppercase;}
+.action-btn:hover{background:rgba(255,181,156,0.15);border-color:#ffb59c;}
+.action-btn.submit{background:rgba(255,127,80,0.3);border-color:#ff7f50;color:#ffb59c;}
+.action-btn.submit:hover{background:rgba(255,127,80,0.5);}
+.action-btn:disabled{opacity:0.4;cursor:default;}
+.result-box{margin-top:6px;padding:8px;background:rgba(0,218,243,0.08);border:1px solid rgba(0,218,243,0.2);font-size:12px;line-height:1.5;display:none;}
+.result-box.show{display:block;}
+.hud{display:flex;justify-content:space-around;align-items:center;padding:6px 12px;background:rgba(0,0,0,0.55);height:44px;font-size:11px;color:#8a8886;}
+.hud .item{display:flex;flex-direction:column;align-items:center;}
+.hud .label{font-size:9px;text-transform:uppercase;letter-spacing:0.5px;opacity:0.7;font-family:'Space Grotesk',sans-serif;}
+.hud .value{font-size:13px;color:#e5e2e1;font-weight:500;margin-top:1px;font-family:'Space Grotesk',sans-serif;}
+.guide-panel{position:fixed;top:8px;right:230px;width:240px;max-height:38vh;overflow-y:auto;background:rgba(20,20,35,0.85);backdrop-filter:blur(12px);border:1px solid rgba(255,255,255,0.08);padding:10px;z-index:100;font-family:'Noto Sans SC',sans-serif;font-size:12px;color:rgba(255,255,255,0.85);}
+.guide-panel h3{font-family:'Space Grotesk',sans-serif;font-size:13px;margin-bottom:6px;color:#ffb59c;cursor:pointer;display:flex;justify-content:space-between;align-items:center;}
+.guide-panel ul{padding-left:14px;line-height:1.5;}
+.guide-toggle{font-size:10px;color:#8a8886;}
+</style>
+</head>
+<body>
+<button class="lang-btn" id="langBtn">CN</button>
+<div class="guide-panel" id="guidePanel">
+  <h3 id="guideToggle"><span id="guideTitle"></span><span class="guide-toggle" id="guideArrow"></span></h3>
+  <div class="guide-content" id="guideContent">
+    <p id="guideGoal"></p>
+    <ul id="guideSteps"></ul>
+    <p id="guideTips" style="margin-top:4px;color:#00daf3;"></p>
+  </div>
+</div>
+<div class="wrapper">
+  <div class="header">
+    <div><span class="title" id="headerTitle"></span><span class="subtitle">P-MARS-01-M24</span></div>
+  </div>
+  <div class="main-area">
+    <div class="grid-container" id="gridContainer"><canvas id="c"></canvas></div>
+    <div class="side-panel">
+      <div class="panel-title" id="panelTitle"></div>
+      <div class="stat-row"><span class="stat-label" id="lblYourCost"></span><span class="stat-val player" id="valYourCost">0</span></div>
+      <div class="stat-row"><span class="stat-label" id="lblYourLen"></span><span class="stat-val player" id="valYourLen">0</span></div>
+      <div class="stat-row"><span class="stat-label" id="lblAlgoCost"></span><span class="stat-val algo" id="valAlgoCost">?</span></div>
+      <div class="stat-row"><span class="stat-label" id="lblAlgoLen"></span><span class="stat-val algo" id="valAlgoLen">?</span></div>
+      <div class="btn-row">
+        <button class="action-btn" id="btnUndo"></button>
+        <button class="action-btn" id="btnReset"></button>
+      </div>
+      <button class="action-btn submit" id="btnSubmit" disabled></button>
+      <div class="result-box" id="resultBox"></div>
+      <div style="margin-top:auto;padding-top:8px;">
+        <div class="panel-title" id="legendTitle"></div>
+        <div id="legendList" style="font-size:11px;line-height:1.8;"></div>
+      </div>
+    </div>
+  </div>
+  <div class="hud">
+    <div class="item"><div class="label" id="hudL1"></div><div class="value" id="hudV1">--</div></div>
+    <div class="item"><div class="label" id="hudL2"></div><div class="value" id="hudV2">--</div></div>
+    <div class="item"><div class="label" id="hudL3"></div><div class="value" id="hudV3">--</div></div>
+  </div>
+</div>
+<script>
+(function(){
+var LANG='cn';
+var I18N={
+  title:{en:'HUMAN vs A*',cn:'\u4EBA\u8111 vs A*'},
+  panelTitle:{en:'PATH COMPARISON',cn:'\u8DEF\u5F84\u5BF9\u6BD4'},
+  yourCost:{en:'YOUR COST',cn:'\u4F60\u7684\u4EE3\u4EF7'},
+  yourLen:{en:'YOUR STEPS',cn:'\u4F60\u7684\u6B65\u6570'},
+  algoCost:{en:'A* COST',cn:'A* \u4EE3\u4EF7'},
+  algoLen:{en:'A* STEPS',cn:'A* \u6B65\u6570'},
+  btnUndo:{en:'UNDO',cn:'\u64A4\u9500'},
+  btnReset:{en:'RESET',cn:'\u91CD\u7F6E'},
+  btnSubmit:{en:'SUBMIT PATH',cn:'\u63D0\u4EA4\u8DEF\u5F84'},
+  legendTitle:{en:'LEGEND',cn:'\u56FE\u4F8B'},
+  legendFlat:{en:'Flat (1)',cn:'\u5E73\u5766 (1)'},
+  legendRock:{en:'Rock (5)',cn:'\u788E\u77F3 (5)'},
+  legendSand:{en:'Sand (20)',cn:'\u6C99\u4E18 (20)'},
+  legendSlope:{en:'Slope (10)',cn:'\u659C\u5761 (10)'},
+  legendWall:{en:'Wall (\u221E)',cn:'\u7981\u884C (\u221E)'},
+  resultWin:{en:'Amazing! You matched or beat the algorithm!',cn:'\u592A\u68D2\u4E86\uFF01\u4F60\u7684\u8DEF\u5F84\u4EE3\u4EF7\u8DDF\u7B97\u6CD5\u4E00\u6837\u4F4E\uFF01'},
+  resultClose:{en:'Close! Your path costs {diff}% more than optimal.',cn:'\u63A5\u8FD1\u4E86\uFF01\u4F60\u7684\u8DEF\u5F84\u4EE3\u4EF7\u6BD4\u6700\u4F18\u9AD8 {diff}%\u3002'},
+  resultFar:{en:'A* found a much better path ({diff}% cheaper). Notice how it detours around high-cost areas.',cn:'A* \u627E\u5230\u4E86\u66F4\u4F18\u8DEF\u5F84\uFF08\u4F4E {diff}%\uFF09\u3002\u6CE8\u610F\u5B83\u5982\u4F55\u7ED5\u5F00\u9AD8\u4EE3\u4EF7\u533A\u57DF\u3002'},
+  hudStatus:{en:'STATUS',cn:'\u72B6\u6001'},
+  hudYourCost:{en:'YOUR COST',cn:'\u4F60\u7684\u4EE3\u4EF7'},
+  hudDiff:{en:'DIFF',cn:'\u5DEE\u5F02'},
+  statusDrawing:{en:'DRAWING',cn:'\u7ED8\u5236\u4E2D'},
+  statusDone:{en:'COMPARED',cn:'\u5DF2\u5BF9\u6BD4'},
+  guideTitle:{en:'GUIDE',cn:'\u64CD\u4F5C\u6307\u5357'},
+  guideGoal:{en:'Draw the safest path you can, then compare with A*.',cn:'\u753B\u51FA\u4F60\u8BA4\u4E3A\u6700\u5B89\u5168\u7684\u8DEF\u5F84\uFF0C\u7136\u540E\u4E0E A* \u7B97\u6CD5\u5BF9\u6BD4\u3002'},
+  guideS1:{en:'Click adjacent cells to build your path from S',cn:'\u4ECE S \u5F00\u59CB\uFF0C\u70B9\u51FB\u76F8\u90BB\u683C\u5B50\u7ED8\u5236\u8DEF\u5F84'},
+  guideS2:{en:'Reach G, then click SUBMIT',cn:'\u5230\u8FBE G \u540E\u70B9\u51FB\u63D0\u4EA4'},
+  guideS3:{en:'Compare total costs of both paths',cn:'\u5BF9\u6BD4\u4E24\u6761\u8DEF\u5F84\u7684\u603B\u4EE3\u4EF7'},
+  guideTips:{en:'Darker cells = higher cost. Avoid them!',cn:'\u989C\u8272\u8D8A\u6DF1\u4EE3\u4EF7\u8D8A\u9AD8\uFF0C\u5C3D\u91CF\u7ED5\u884C\uFF01'},
+  guideArrowOpen:{en:'[hide]',cn:'[\u6536\u8D77]'},
+  guideArrowClosed:{en:'[show]',cn:'[\u5C55\u5F00]'},
+};
+function t(k){return(I18N[k]&&I18N[k][LANG])||(I18N[k]&&I18N[k]['en'])||k;}
+
+var canvas=document.getElementById('c');
+var ctx2d=canvas.getContext('2d');
+var W=0,H=0;
+var DPR=Math.min(window.devicePixelRatio||1,2);
+var guideOpen=true;
+
+// 8x8 grid
+var ROWS=8,COLS=8;
+var GRID=[
+  [0,0,1,1,0,0,0,0],
+  [0,0,1,2,2,0,0,0],
+  [0,0,0,2,2,2,0,0],
+  [0,1,0,4,2,0,0,0],
+  [0,1,0,4,0,0,3,0],
+  [0,0,0,0,0,3,3,0],
+  [0,0,0,0,3,0,0,0],
+  [0,0,0,0,0,0,0,0],
+];
+var COSTS=[1,5,20,10,Infinity];
+var TCOLORS=['#2d6a4f','#b08968','#c4762b','#7c3aed','#6b1523'];
+var START={r:7,c:0};
+var GOAL={r:0,c:7};
+
+var playerPath=[{r:START.r,c:START.c}];
+var playerCost=0;
+var submitted=false;
+var algoPath=[];
+var algoCost=0;
+
+// A* for comparison
+function heuristic(a,b){return Math.abs(a.r-b.r)+Math.abs(a.c-b.c);}
+function cellKey(r,c){return r*COLS+c;}
+
+function runAStar(){
+  var open=[];
+  var closed={};
+  var gScore={};
+  var parent={};
+  var sk=cellKey(START.r,START.c);
+  gScore[sk]=0;
+  open.push({r:START.r,c:START.c,f:heuristic(START,GOAL)});
+  var dirs=[[-1,0],[1,0],[0,-1],[0,1],[-1,-1],[-1,1],[1,-1],[1,1]];
+  while(open.length>0){
+    open.sort(function(a,b){return a.f-b.f;});
+    var cur=open.shift();
+    var ck=cellKey(cur.r,cur.c);
+    if(closed[ck]) continue;
+    closed[ck]=true;
+    if(cur.r===GOAL.r&&cur.c===GOAL.c) break;
+    for(var d=0;d<dirs.length;d++){
+      var nr=cur.r+dirs[d][0];
+      var nc=cur.c+dirs[d][1];
+      if(nr<0||nr>=ROWS||nc<0||nc>=COLS) continue;
+      var nk=cellKey(nr,nc);
+      if(closed[nk]) continue;
+      var cost=COSTS[GRID[nr][nc]];
+      if(cost===Infinity) continue;
+      var diag=(dirs[d][0]!==0&&dirs[d][1]!==0)?1.414:1;
+      var ng=gScore[ck]+cost*diag;
+      if(gScore[nk]===undefined||ng<gScore[nk]){
+        gScore[nk]=ng;
+        parent[nk]=ck;
+        open.push({r:nr,c:nc,f:ng+heuristic({r:nr,c:nc},GOAL)});
+      }
+    }
+  }
+  var path=[];
+  var pk=cellKey(GOAL.r,GOAL.c);
+  while(pk!==undefined){
+    path.unshift({r:Math.floor(pk/COLS),c:pk%COLS});
+    pk=parent[pk];
+  }
+  return {path:path,cost:gScore[cellKey(GOAL.r,GOAL.c)]};
+}
+
+var algoResult=runAStar();
+algoPath=algoResult.path;
+algoCost=algoResult.cost;
+
+function calcPlayerCost(){
+  var total=0;
+  for(var i=1;i<playerPath.length;i++){
+    var pr=playerPath[i].r,pc=playerPath[i].c;
+    var dr=Math.abs(pr-playerPath[i-1].r),dc=Math.abs(pc-playerPath[i-1].c);
+    var diag=(dr>0&&dc>0)?1.414:1;
+    total+=COSTS[GRID[pr][pc]]*diag;
+  }
+  return total;
+}
+
+function isAdjacent(a,b){
+  return Math.abs(a.r-b.r)<=1&&Math.abs(a.c-b.c)<=1&&(a.r!==b.r||a.c!==b.c);
+}
+
+function isGoalReached(){
+  var last=playerPath[playerPath.length-1];
+  return last.r===GOAL.r&&last.c===GOAL.c;
+}
+
+// --- Drawing ---
+function getLayout(){
+  var container=document.getElementById('gridContainer');
+  var rect=container.getBoundingClientRect();
+  var cw=rect.width-16;
+  var ch=rect.height-16;
+  var cellSize=Math.floor(Math.min(cw/COLS,ch/ROWS));
+  if(cellSize<30) cellSize=30;
+  var gw=cellSize*COLS;
+  var gh=cellSize*ROWS;
+  var gx=(rect.width-gw)/2;
+  var gy=(rect.height-gh)/2;
+  return {gx:gx,gy:gy,cellSize:cellSize,gw:gw,gh:gh};
+}
+
+function resize(){
+  var container=document.getElementById('gridContainer');
+  var rect=container.getBoundingClientRect();
+  if(rect.width<1||rect.height<1) return;
+  W=rect.width;H=rect.height;
+  canvas.width=W*DPR;canvas.height=H*DPR;
+  canvas.style.width=W+'px';canvas.style.height=H+'px';
+  ctx2d.setTransform(DPR,0,0,DPR,0,0);
+  draw();
+}
+
+function shadeColor(color,amt){
+  var num=parseInt(color.replace('#',''),16);
+  var r2=Math.max(0,Math.min(255,(num>>16)+amt));
+  var g2=Math.max(0,Math.min(255,((num>>8)&0xFF)+amt));
+  var b2=Math.max(0,Math.min(255,(num&0xFF)+amt));
+  return '#'+((1<<24)+(r2<<16)+(g2<<8)+b2).toString(16).slice(1);
+}
+
+function draw(){
+  // bg
+  var bg=ctx2d.createLinearGradient(0,0,0,H);
+  bg.addColorStop(0,'#131313');bg.addColorStop(1,'#1a1035');
+  ctx2d.fillStyle=bg;ctx2d.fillRect(0,0,W,H);
+  // grid
+  ctx2d.strokeStyle='rgba(255,255,255,0.03)';ctx2d.lineWidth=0.5;
+  for(var i=0;i<W;i+=20){ctx2d.beginPath();ctx2d.moveTo(i,0);ctx2d.lineTo(i,H);ctx2d.stroke();}
+  for(var j=0;j<H;j+=20){ctx2d.beginPath();ctx2d.moveTo(0,j);ctx2d.lineTo(W,j);ctx2d.stroke();}
+
+  var L=getLayout();
+  var cs=L.cellSize;
+  // cells
+  for(var r=0;r<ROWS;r++){
+    for(var c=0;c<COLS;c++){
+      var x=L.gx+c*cs;
+      var y=L.gy+r*cs;
+      var t2=GRID[r][c];
+      var col=TCOLORS[t2];
+      var g2=ctx2d.createLinearGradient(x,y,x+cs,y+cs);
+      g2.addColorStop(0,col);g2.addColorStop(1,shadeColor(col,-20));
+      ctx2d.fillStyle=g2;ctx2d.fillRect(x,y,cs,cs);
+      // cost label
+      var costVal=COSTS[t2];
+      var costStr=costVal===Infinity?'\u221E':String(costVal);
+      ctx2d.fillStyle='rgba(255,255,255,0.3)';
+      ctx2d.font='10px "Space Grotesk"';ctx2d.textAlign='center';ctx2d.textBaseline='middle';
+      ctx2d.fillText(costStr,x+cs/2,y+cs/2);
+      // outline
+      ctx2d.strokeStyle='rgba(255,255,255,0.1)';ctx2d.lineWidth=0.5;ctx2d.strokeRect(x,y,cs,cs);
+    }
+  }
+  // player path
+  if(playerPath.length>1){
+    ctx2d.beginPath();
+    ctx2d.moveTo(L.gx+playerPath[0].c*cs+cs/2,L.gy+playerPath[0].r*cs+cs/2);
+    for(var pi=1;pi<playerPath.length;pi++){
+      ctx2d.lineTo(L.gx+playerPath[pi].c*cs+cs/2,L.gy+playerPath[pi].r*cs+cs/2);
+    }
+    ctx2d.strokeStyle='#ff7f50';ctx2d.lineWidth=3;
+    ctx2d.shadowColor='#ff7f50';ctx2d.shadowBlur=8;ctx2d.stroke();ctx2d.shadowBlur=0;
+  }
+  // player path dots
+  for(var pi2=0;pi2<playerPath.length;pi2++){
+    ctx2d.beginPath();
+    ctx2d.arc(L.gx+playerPath[pi2].c*cs+cs/2,L.gy+playerPath[pi2].r*cs+cs/2,4,0,Math.PI*2);
+    ctx2d.fillStyle='#ff7f50';ctx2d.fill();
+  }
+  // algo path (after submit)
+  if(submitted&&algoPath.length>1){
+    ctx2d.beginPath();
+    ctx2d.moveTo(L.gx+algoPath[0].c*cs+cs/2,L.gy+algoPath[0].r*cs+cs/2);
+    for(var ai=1;ai<algoPath.length;ai++){
+      ctx2d.lineTo(L.gx+algoPath[ai].c*cs+cs/2,L.gy+algoPath[ai].r*cs+cs/2);
+    }
+    ctx2d.strokeStyle='#00daf3';ctx2d.lineWidth=3;
+    ctx2d.shadowColor='#00daf3';ctx2d.shadowBlur=8;ctx2d.stroke();ctx2d.shadowBlur=0;
+    for(var ai2=0;ai2<algoPath.length;ai2++){
+      ctx2d.beginPath();
+      ctx2d.arc(L.gx+algoPath[ai2].c*cs+cs/2,L.gy+algoPath[ai2].r*cs+cs/2,3,0,Math.PI*2);
+      ctx2d.fillStyle='#00daf3';ctx2d.fill();
+    }
+  }
+  // start marker
+  drawMarker(L.gx+START.c*cs+cs/2,L.gy+START.r*cs+cs/2,cs*0.3,'#10b981','S');
+  // goal marker
+  drawMarker(L.gx+GOAL.c*cs+cs/2,L.gy+GOAL.r*cs+cs/2,cs*0.3,'#ef4444','G');
+}
+
+function drawMarker(x,y,r,color,label){
+  ctx2d.beginPath();ctx2d.arc(x,y,r,0,Math.PI*2);
+  var g=ctx2d.createRadialGradient(x,y,0,x,y,r);
+  g.addColorStop(0,color);g.addColorStop(1,shadeColor(color,-30));
+  ctx2d.fillStyle=g;ctx2d.fill();
+  ctx2d.shadowColor=color;ctx2d.shadowBlur=10;ctx2d.fill();ctx2d.shadowBlur=0;
+  ctx2d.fillStyle='#fff';ctx2d.font='bold '+Math.floor(r)+'px "Space Grotesk"';
+  ctx2d.textAlign='center';ctx2d.textBaseline='middle';ctx2d.fillText(label,x,y);
+}
+
+function updateStats(){
+  playerCost=calcPlayerCost();
+  document.getElementById('valYourCost').textContent=Math.round(playerCost);
+  document.getElementById('valYourLen').textContent=playerPath.length-1;
+  document.getElementById('btnSubmit').disabled=!isGoalReached()||submitted;
+  document.getElementById('hudV1').textContent=submitted?t('statusDone'):t('statusDrawing');
+  document.getElementById('hudV2').textContent=Math.round(playerCost);
+  if(submitted){
+    var diff=playerCost>0?Math.round((playerCost-algoCost)/algoCost*100):0;
+    document.getElementById('hudV3').textContent=(diff>=0?'+':'')+diff+'%';
+  } else {
+    document.getElementById('hudV3').textContent='--';
+  }
+}
+
+function showResult(){
+  document.getElementById('valAlgoCost').textContent=Math.round(algoCost);
+  document.getElementById('valAlgoLen').textContent=algoPath.length-1;
+  var diff=Math.round((playerCost-algoCost)/algoCost*100);
+  var box=document.getElementById('resultBox');
+  var msg='';
+  if(diff<=0) msg=t('resultWin');
+  else if(diff<=20) msg=t('resultClose').replace('{diff}',diff);
+  else msg=t('resultFar').replace('{diff}',diff);
+  box.textContent=msg;
+  box.classList.add('show');
+}
+
+function refreshI18N(){
+  document.getElementById('headerTitle').textContent=t('title');
+  document.getElementById('panelTitle').textContent=t('panelTitle');
+  document.getElementById('lblYourCost').textContent=t('yourCost');
+  document.getElementById('lblYourLen').textContent=t('yourLen');
+  document.getElementById('lblAlgoCost').textContent=t('algoCost');
+  document.getElementById('lblAlgoLen').textContent=t('algoLen');
+  document.getElementById('btnUndo').textContent=t('btnUndo');
+  document.getElementById('btnReset').textContent=t('btnReset');
+  document.getElementById('btnSubmit').textContent=t('btnSubmit');
+  document.getElementById('legendTitle').textContent=t('legendTitle');
+  var ll=document.getElementById('legendList');
+  var cols=['#2d6a4f','#b08968','#c4762b','#7c3aed','#6b1523'];
+  var labs=['legendFlat','legendRock','legendSand','legendSlope','legendWall'];
+  ll.innerHTML='';
+  for(var i=0;i<5;i++){
+    ll.innerHTML+='<div style="display:flex;align-items:center;gap:6px;"><span style="display:inline-block;width:12px;height:12px;background:'+cols[i]+';"></span>'+t(labs[i])+'</div>';
+  }
+  document.getElementById('hudL1').textContent=t('hudStatus');
+  document.getElementById('hudL2').textContent=t('hudYourCost');
+  document.getElementById('hudL3').textContent=t('hudDiff');
+  document.getElementById('guideTitle').textContent=t('guideTitle');
+  document.getElementById('guideArrow').textContent=guideOpen?t('guideArrowOpen'):t('guideArrowClosed');
+  document.getElementById('guideGoal').textContent=t('guideGoal');
+  var sl=document.getElementById('guideSteps');
+  sl.innerHTML='<li>'+t('guideS1')+'</li><li>'+t('guideS2')+'</li><li>'+t('guideS3')+'</li>';
+  document.getElementById('guideTips').textContent=t('guideTips');
+  if(submitted) showResult();
+  updateStats();
+  draw();
+}
+
+// --- Events ---
+canvas.addEventListener('click',function(e){
+  if(submitted) return;
+  var rect=canvas.getBoundingClientRect();
+  var mx=(e.clientX-rect.left);
+  var my=(e.clientY-rect.top);
+  var L=getLayout();
+  var c=Math.floor((mx-L.gx)/L.cellSize);
+  var r=Math.floor((my-L.gy)/L.cellSize);
+  if(r<0||r>=ROWS||c<0||c>=COLS) return;
+  if(COSTS[GRID[r][c]]===Infinity) return;
+  var last=playerPath[playerPath.length-1];
+  if(!isAdjacent(last,{r:r,c:c})) return;
+  // check not revisiting (except goal)
+  for(var i=0;i<playerPath.length;i++){
+    if(playerPath[i].r===r&&playerPath[i].c===c) return;
+  }
+  playerPath.push({r:r,c:c});
+  updateStats();
+  draw();
+});
+
+// touch support
+canvas.addEventListener('touchstart',function(e){
+  if(submitted) return;
+  e.preventDefault();
+  var touch=e.touches[0];
+  var rect=canvas.getBoundingClientRect();
+  var mx=touch.clientX-rect.left;
+  var my=touch.clientY-rect.top;
+  var L=getLayout();
+  var c=Math.floor((mx-L.gx)/L.cellSize);
+  var r=Math.floor((my-L.gy)/L.cellSize);
+  if(r<0||r>=ROWS||c<0||c>=COLS) return;
+  if(COSTS[GRID[r][c]]===Infinity) return;
+  var last=playerPath[playerPath.length-1];
+  if(!isAdjacent(last,{r:r,c:c})) return;
+  for(var i=0;i<playerPath.length;i++){
+    if(playerPath[i].r===r&&playerPath[i].c===c) return;
+  }
+  playerPath.push({r:r,c:c});
+  updateStats();
+  draw();
+},{passive:false});
+
+document.getElementById('btnUndo').addEventListener('click',function(){
+  if(submitted) return;
+  if(playerPath.length>1){
+    playerPath.pop();
+    updateStats();
+    draw();
+  }
+});
+
+document.getElementById('btnReset').addEventListener('click',function(){
+  playerPath=[{r:START.r,c:START.c}];
+  submitted=false;
+  document.getElementById('resultBox').classList.remove('show');
+  document.getElementById('valAlgoCost').textContent='?';
+  document.getElementById('valAlgoLen').textContent='?';
+  document.getElementById('btnSubmit').disabled=false;
+  updateStats();
+  draw();
+});
+
+document.getElementById('btnSubmit').addEventListener('click',function(){
+  if(!isGoalReached()||submitted) return;
+  submitted=true;
+  document.getElementById('btnSubmit').disabled=true;
+  showResult();
+  updateStats();
+  draw();
+});
+
+document.getElementById('langBtn').addEventListener('click',function(){
+  LANG=LANG==='en'?'cn':'en';
+  document.getElementById('langBtn').textContent=LANG.toUpperCase();
+  refreshI18N();
+});
+
+document.getElementById('guideToggle').addEventListener('click',function(){
+  guideOpen=!guideOpen;
+  document.getElementById('guideContent').style.display=guideOpen?'block':'none';
+  document.getElementById('guideArrow').textContent=guideOpen?t('guideArrowOpen'):t('guideArrowClosed');
+});
+
+window.addEventListener('resize',resize);
+resize();
+refreshI18N();
+setTimeout(resize,200);
+setTimeout(resize,600);
+document.fonts.ready.then(function(){resize();});
+})();
+</script>
+</body>
+</html>
