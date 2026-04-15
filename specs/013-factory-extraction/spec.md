@@ -1,6 +1,6 @@
 # 013-factory-extraction
 
-**Status**: approved (ready for plan)
+**Status**: shipped (2026-04-15) — T1-T17 complete; T18 (shim removal) scheduled 2026-05-01
 **Owner**: xinghan
 **Created**: 2026-04-15
 
