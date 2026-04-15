@@ -2554,6 +2554,33 @@ def _save_theory_tags_vocab(project_name: str, vocab: dict) -> None:
     p.write_text(json.dumps(vocab, ensure_ascii=False, indent=2))
 
 
+# 顶级学科同义归一化：LLM 产出的常见变体 -> 规范 key
+_TOP_LEVEL_ALIASES: dict[str, str] = {
+    "computer-science": "cs",
+    "computer_science": "cs",
+    "computerscience": "cs",
+    "computing": "cs",
+    "informatics": "cs",
+    "software": "cs",
+    "mathematics": "math",
+    "maths": "math",
+    "phys": "physics",
+    "chem": "chemistry",
+    "bio": "biology",
+    "bioscience": "biology",
+    "life-science": "biology",
+    "geo": "geography",
+    "earth-science": "geography",
+    "eng": "engineering",
+    "hist": "history",
+    "philo": "philosophy",
+    "method": "methodology",
+    "methods": "methodology",
+    "linguistic": "linguistics",
+    "art": "arts",
+}
+
+
 def _canon_tag_path(raw: str) -> str:
     if not raw:
         return ""
@@ -2565,6 +2592,8 @@ def _canon_tag_path(raw: str) -> str:
         seg = seg.strip("-_")
         if seg:
             parts.append(seg)
+    if parts and parts[0] in _TOP_LEVEL_ALIASES:
+        parts[0] = _TOP_LEVEL_ALIASES[parts[0]]
     return "/".join(parts)
 
 
