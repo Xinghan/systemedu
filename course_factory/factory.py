@@ -174,7 +174,7 @@ def _inline_runtime(html: str) -> str:
     """
     if '<script src="animation_runtime.js">' not in html:
         return html
-    runtime_path = ROOT / "scripts" / "animation_runtime.js"
+    runtime_path = ROOT / "course_factory" / "runtime" / "animation_runtime.js"
     if not runtime_path.exists():
         return html
     runtime_code = runtime_path.read_text(encoding="utf-8")
