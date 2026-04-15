@@ -20,7 +20,7 @@ import string
 from datetime import datetime
 from pathlib import Path
 
-_ROOT = Path(__file__).parent.parent
+_ROOT = Path(__file__).resolve().parent.parent.parent
 sys.path.insert(0, str(_ROOT / "src"))
 sys.path.insert(0, str(_ROOT))
 
@@ -1744,7 +1744,7 @@ def build_course_content() -> dict:
 # ── 写入数据库 ──────────────────────────────────────────────────
 
 def write_everything():
-    from scripts.course_factory import (
+    from course_factory.factory import (
         _ensure_db_tables, _upsert_project, _init_progress, _write_project_files
     )
     from systemedu.storage.db import LessonContent, get_session as get_db_session

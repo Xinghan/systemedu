@@ -1,8 +1,9 @@
-"""Re-inline correct game HTML for the 4 broken mars-risk-map games.
+"""Re-inline correct animation HTML for all black-screen mars-risk-map knodes.
 
-Source files were updated to declare `window.__systemedu_resize_patch_optout=true`
-so course_factory's resize patch is skipped (these games manage their own canvas
-layout and the patch breaks them).
+Takes the correct source HTML from course_factory/tests/anim/*.html, runs it through
+course_factory's standard pipeline (_fix_nonuniform_scale + inject resize patch
++ _inline_runtime), and overwrites course_content.rendered_sections[anim_*].html
+in the DB.
 """
 from __future__ import annotations
 
@@ -11,27 +12,38 @@ import sqlite3
 import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).parent))
-from course_factory import (
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
+from course_factory.factory import (
     _fix_nonuniform_scale,
     _inline_runtime,
     inject_animation_resize_patch,
 )
 
-ROOT = Path(__file__).resolve().parent.parent
+ROOT = Path(__file__).resolve().parent.parent.parent
 DB_PATH = Path.home() / ".systemedu" / "systemedu.db"
 
+# Mapping: knode_id -> source HTML filename (under course_factory/tests/anim/)
 SOURCES: dict[int, str] = {
-    10: "test_game_knode10_pixel_artist.html",
-    11: "test_game_knode11_rgb_mixer.html",
-    12: "test_game_knode12_terrain_sorter.html",
-    14: "test_game_knode14_rover_explorer.html",
+    0:  "test_anim_knode0_terrain.html",
+    1:  "test_anim_knode1_traversability.html",
+    2:  "test_anim_knode2_mars_surface.html",
+    3:  "test_anim_knode3_what_is_map.html",
+    4:  "test_anim_knode4_coordinates.html",
+    5:  "test_anim_knode5_distance_direction.html",
+    6:  "test_anim_knode6_spa_loop.html",
+    7:  "test_anim_knode7_comm_delay.html",
+    9:  "test_anim_knode9_light_journey.html",
+    10: "test_anim_knode10_pixel_grid.html",
+    11: "test_anim_knode11_rgb_mixing.html",
+    12: "test_anim_knode12_atlas_guide.html",
+    14: "test_anim_knode14_terrain_catalog.html",
 }
 
 
 def process_html(src_html: str) -> str:
+    """Apply the same pipeline make_course_content uses before storing."""
     html = _fix_nonuniform_scale(src_html)
-    html = inject_animation_resize_patch(html)  # 会因 opt-out sentinel 自动跳过
+    html = inject_animation_resize_patch(html)
     html = _inline_runtime(html)
     return html
 
@@ -44,7 +56,7 @@ def main() -> int:
     skipped: list[tuple[int, str]] = []
 
     for knode_id, fname in SOURCES.items():
-        src = ROOT / "scripts" / fname
+        src = ROOT / "course_factory" / "tests" / "anim" / fname
         if not src.exists():
             skipped.append((knode_id, f"source missing: {src}"))
             continue
@@ -66,18 +78,18 @@ def main() -> int:
         try:
             cc = json.loads(cc_str)
         except json.JSONDecodeError as e:
-            skipped.append((knode_id, f"bad JSON: {e}"))
+            skipped.append((knode_id, f"bad course_content JSON: {e}"))
             continue
 
         rs = cc.get("rendered_sections") or {}
-        game_keys = [k for k in rs if k.startswith("game_")]
-        if not game_keys:
-            skipped.append((knode_id, "no game_ key"))
+        anim_keys = [k for k in rs if k.startswith("anim_")]
+        if not anim_keys:
+            skipped.append((knode_id, "no anim_* key in rendered_sections"))
             continue
-        if len(game_keys) > 1:
-            skipped.append((knode_id, f"multiple game_ keys: {game_keys}"))
+        if len(anim_keys) > 1:
+            skipped.append((knode_id, f"multiple anim_* keys: {anim_keys}"))
             continue
-        key = game_keys[0]
+        key = anim_keys[0]
 
         rs[key]["html"] = processed
         cc["rendered_sections"] = rs
