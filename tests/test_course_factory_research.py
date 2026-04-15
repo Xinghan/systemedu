@@ -24,7 +24,7 @@ _ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(_ROOT / "scripts"))
 sys.path.insert(0, str(_ROOT / "src"))
 
-import course_factory as cf  # noqa: E402
+import course_factory.factory as cf  # noqa: E402
 
 
 # ─── Fixtures ───────────────────────────────────────────────────────────────

@@ -1,8 +1,8 @@
 """Regression test: every animation / game HTML saved in lesson_content must render.
 
-Runs `scripts/verify/_extract_db_html.py` (Python) to dump all HTML blobs from
-`~/.systemedu/systemedu.db`, then hands the manifest to
-`scripts/verify/db_regression.mjs` (Playwright) which:
+Runs `course_factory/validate/verify/_extract_db_html.py` (Python) to dump all
+HTML blobs from `~/.systemedu/systemedu.db`, then hands the manifest to
+`course_factory/validate/verify/db_regression.mjs` (Playwright) which:
   - loads each HTML in Chromium
   - checks canvas exists, has sane size, and has non-black pixels
   - checks no JS errors fire
@@ -30,8 +30,8 @@ import pytest
 
 ROOT = Path(__file__).resolve().parent.parent
 DB_PATH = Path.home() / ".systemedu" / "systemedu.db"
-EXTRACT_PY = ROOT / "scripts" / "verify" / "_extract_db_html.py"
-VERIFY_JS = ROOT / "scripts" / "verify" / "db_regression.mjs"
+EXTRACT_PY = ROOT / "course_factory" / "validate" / "verify" / "_extract_db_html.py"
+VERIFY_JS = ROOT / "course_factory" / "validate" / "verify" / "db_regression.mjs"
 
 
 def _node_available() -> bool:
