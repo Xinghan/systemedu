@@ -1074,6 +1074,113 @@ async def api_highlights_dispatch(request: Request) -> JSONResponse:
     return JSONResponse({"error": "Method not allowed"}, status_code=405)
 
 
+async def api_project_theories(request: Request) -> JSONResponse:
+    """GET /api/projects/{name}/theories - aggregate every theory across all knodes.
+
+    Returns a flat list of theories sourced from course_content.theories of each
+    lesson_content row, enriched with knode_id / knode_title / stage_title so the
+    frontend can group / graph / filter them without re-querying.
+    """
+    err = await require_auth(request)
+    if err:
+        return err
+    name = request.path_params["name"]
+    try:
+        import json as _json
+        from systemedu.education.project_loader import load_project_context
+        from systemedu.storage.db import LessonContent, get_session as get_db_session
+
+        ctx = load_project_context(name)
+
+        # Flatten knode_id -> (title, stage_title, stage_idx, order_in_stage)
+        knode_meta: dict[int, dict] = {}
+        global_idx = 0
+        for ms_idx, ms in enumerate(ctx.tree.milestones):
+            for kn_idx, kn in enumerate(ms.knodes):
+                knode_meta[global_idx] = {
+                    "knode_id": global_idx,
+                    "knode_title": kn.title,
+                    "stage_title": ms.title,
+                    "stage_idx": ms_idx,
+                    "order_in_stage": kn_idx,
+                }
+                global_idx += 1
+
+        db = get_db_session()
+        try:
+            rows = (
+                db.query(LessonContent)
+                .filter(LessonContent.project_name == name)
+                .filter(LessonContent.course_content != "")
+                .all()
+            )
+        finally:
+            db.close()
+
+        theories_out: list[dict] = []
+        for row in rows:
+            if row.knode_id not in knode_meta:
+                continue
+            try:
+                cc = _json.loads(row.course_content or "{}")
+            except Exception:
+                continue
+            theories = cc.get("theories") or []
+            for th in theories:
+                if not isinstance(th, dict):
+                    continue
+                lb = th.get("level_bodies")
+                levels: list[dict] = []
+                if isinstance(lb, list):
+                    for b in lb:
+                        if isinstance(b, dict) and (b.get("body_markdown") or "").strip():
+                            levels.append({
+                                "level": (b.get("level") or "K1").upper(),
+                                "body_markdown": b.get("body_markdown") or "",
+                            })
+                elif isinstance(lb, dict):
+                    for k, v in lb.items():
+                        if isinstance(v, str) and v.strip():
+                            levels.append({"level": str(k).upper(), "body_markdown": v})
+                # Legacy single-body fallback
+                if not levels and (th.get("body_markdown") or "").strip():
+                    levels.append({"level": "K1", "body_markdown": th["body_markdown"]})
+                if not levels:
+                    continue
+                meta = knode_meta[row.knode_id]
+                theories_out.append({
+                    "theory_id": th.get("theory_id") or f"{row.knode_id}-{th.get('title', 'untitled')}",
+                    "title": th.get("title") or th.get("theory_id") or "",
+                    "subject": th.get("subject") or th.get("tag") or "",
+                    "levels": levels,
+                    "knode_id": meta["knode_id"],
+                    "knode_title": meta["knode_title"],
+                    "stage_title": meta["stage_title"],
+                    "stage_idx": meta["stage_idx"],
+                    "order_in_stage": meta["order_in_stage"],
+                    "animation_html": th.get("animation_html") or "",
+                    "related_paragraph": th.get("related_paragraph") or "",
+                })
+
+        # Build subject tally for convenience
+        subject_counts: dict[str, int] = {}
+        for t in theories_out:
+            s = t["subject"] or "other"
+            subject_counts[s] = subject_counts.get(s, 0) + 1
+
+        return JSONResponse({
+            "project_name": name,
+            "total": len(theories_out),
+            "subject_counts": subject_counts,
+            "theories": theories_out,
+        })
+    except FileNotFoundError:
+        return JSONResponse({"error": f"Project '{name}' not found"}, status_code=404)
+    except Exception as e:
+        logger.exception("api_project_theories failed")
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+
 async def api_resources_dispatch(request: Request) -> JSONResponse:
     """Dispatch GET/POST /api/projects/{name}/nodes/{node_id}/resources."""
     if request.method == "GET":
@@ -3207,6 +3314,7 @@ def create_app() -> Starlette:
         Route("/api/projects/{name}/enroll", api_enroll, methods=["POST"]),
         Route("/api/projects/{name}/enrollment", api_enrollment_dispatch, methods=["GET", "PATCH"]),
         Route("/api/projects/{name}/lesson-statuses", api_lesson_statuses, methods=["GET"]),
+        Route("/api/projects/{name}/theories", api_project_theories, methods=["GET"]),
         Route("/api/projects/{name}/nodes/{node_id:int}/context", api_node_context),
         Route("/api/projects/{name}/nodes/{node_id:int}/course/v2/generate", api_generate_course_v2, methods=["POST"]),
         Route("/api/projects/{name}/nodes/{node_id:int}/course/v2/stream", api_course_v2_stream, methods=["GET"]),

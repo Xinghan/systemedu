@@ -86,6 +86,8 @@ export const gateway = {
   project: (name: string) => api.get<ProjectDetail>(`/api/projects/${name}`),
   updateProject: (name: string, body: { title?: string; description?: string; category?: string; age_range?: number[]; estimated_hours?: number; tags?: string[]; knowledge_level?: string }) =>
     api.patch<{ name: string; updated: boolean }>(`/api/projects/${name}`, body),
+  projectTheories: (name: string) =>
+    api.get<import("@/lib/types/api").ProjectTheoriesResponse>(`/api/projects/${name}/theories`),
   agents: () => api.get<AgentInfo[]>("/api/agents"),
   skills: () => api.get<SkillInfo[]>("/api/skills"),
   mcpServers: () => api.get<MCPServer[]>("/api/mcp/servers"),
