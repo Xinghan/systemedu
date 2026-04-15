@@ -1,0 +1,1 @@
+../.claude/skills/course_factory/SKILL.md
