@@ -1245,7 +1245,13 @@ def save_knode(
 
     content_type 固定为 "cf"（course factory 标准）。
     若提供 assignment 则同时写入 project_assignment 字段。
+    写入前自动对 theories 的多级学科 tag 走 normalize（开放词表）。
     """
+    for th in (course_content.get("theories") or []):
+        raw_tags = th.get("tags") or []
+        if raw_tags:
+            th["tags"] = normalize_theory_tags(raw_tags, ctx.project_name)
+
     ensure_db_tables()
     upsert_lesson(
         ctx.project_name,
@@ -2528,6 +2534,106 @@ def make_exercises(items: list[dict]) -> list[dict]:
     return result
 
 
+def _theory_tags_vocab_path(project_name: str) -> Path:
+    return ROOT / "projects" / project_name / "theory_tags.json"
+
+
+def _load_theory_tags_vocab(project_name: str) -> dict:
+    p = _theory_tags_vocab_path(project_name)
+    if p.exists():
+        try:
+            return json.loads(p.read_text())
+        except Exception:
+            pass
+    return {"version": 1, "tags": []}
+
+
+def _save_theory_tags_vocab(project_name: str, vocab: dict) -> None:
+    p = _theory_tags_vocab_path(project_name)
+    p.parent.mkdir(parents=True, exist_ok=True)
+    p.write_text(json.dumps(vocab, ensure_ascii=False, indent=2))
+
+
+def _canon_tag_path(raw: str) -> str:
+    if not raw:
+        return ""
+    parts = []
+    for seg in raw.split("/"):
+        seg = seg.strip().lower()
+        seg = re.sub(r"\s+", "-", seg)
+        seg = re.sub(r"[^a-z0-9_-]", "", seg)
+        seg = seg.strip("-_")
+        if seg:
+            parts.append(seg)
+    return "/".join(parts)
+
+
+def normalize_theory_tags(raw_tags: list[str], project_name: str) -> list[str]:
+    """归一化 theory 的多级学科 tag。
+
+    匹配顺序：
+      1. 精确 path 命中（count+=1）
+      2. alias 命中（返回 canonical path，count+=1）
+      3. 去一层尾部找父路径（如 physics/mech/foo -> physics/mech）
+      4. 全新：规范化后追加入词表
+
+    返回 canonical path 列表（去重保序）。vocab 文件在变更时原地写回。
+    """
+    vocab = _load_theory_tags_vocab(project_name)
+    tags_list: list[dict] = vocab.setdefault("tags", [])
+    by_path = {t["path"]: t for t in tags_list}
+    alias_index: dict[str, str] = {}
+    for t in tags_list:
+        for a in (t.get("aliases") or []):
+            alias_index[a.lower()] = t["path"]
+
+    resolved: list[str] = []
+    seen: set[str] = set()
+    changed = False
+
+    for raw in raw_tags:
+        cand = _canon_tag_path(raw)
+        if not cand:
+            continue
+        if cand in by_path:
+            by_path[cand]["count"] = by_path[cand].get("count", 0) + 1
+            path = cand
+            changed = True
+        elif raw.lower() in alias_index:
+            path = alias_index[raw.lower()]
+            by_path[path]["count"] = by_path[path].get("count", 0) + 1
+            changed = True
+        else:
+            # 尝试父路径降级（至少保留一级）
+            parts = cand.split("/")
+            matched_parent = None
+            for depth in range(len(parts) - 1, 0, -1):
+                parent = "/".join(parts[:depth])
+                if parent in by_path:
+                    matched_parent = parent
+                    break
+            if matched_parent:
+                by_path[matched_parent]["count"] = by_path[matched_parent].get("count", 0) + 1
+                path = matched_parent
+                changed = True
+            else:
+                entry = {"path": cand, "aliases": [], "count": 1}
+                tags_list.append(entry)
+                by_path[cand] = entry
+                path = cand
+                changed = True
+
+        if path not in seen:
+            seen.add(path)
+            resolved.append(path)
+
+    if changed:
+        tags_list.sort(key=lambda x: (-x.get("count", 0), x["path"]))
+        _save_theory_tags_vocab(project_name, vocab)
+
+    return resolved
+
+
 def make_course_content(
     plan_markdown: str,
     animation_html: str | None,
@@ -2555,6 +2661,8 @@ def make_course_content(
     labxchange_results: list[dict] | None = None,
     # 基础理论标注（Step 1.5 生成的 theories 列表）
     theories: list[dict] | None = None,
+    # 项目名（用于 theory tag 归一化到 projects/<name>/theory_tags.json）
+    project_name: str | None = None,
     # 静态图片资源（互联网照片）
     # 每项 dict 接受以下字段：
     #   src (必填): 图片 URL（http/https）；调用方已经下载过则可直接传 web_path
@@ -2964,6 +3072,12 @@ def make_course_content(
                 th["level_bodies"] = [
                     {"level": k, "body_markdown": v} for k, v in lb.items()
                 ]
+        # 多级学科 tag 归一化（开放词表 + alias 复用）
+        if project_name:
+            for th in theories:
+                raw_tags = th.get("tags") or []
+                if raw_tags:
+                    th["tags"] = normalize_theory_tags(raw_tags, project_name)
         course_content["theories"] = theories
 
     # 外部资料结构化字段：合并 Tavily 搜索 + LabXchange 匹配

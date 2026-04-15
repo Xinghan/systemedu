@@ -81,20 +81,31 @@ export interface AggregatedTheory {
   theory_id: string
   title: string
   subject: string
+  tags: string[]
   levels: { level: string; body_markdown: string }[]
   knode_id: number
   knode_title: string
   stage_title: string
   stage_idx: number
   order_in_stage: number
+  sub_project_id: string | null
+  sub_project_title: string
   animation_html?: string
   related_paragraph?: string
+}
+
+export interface TheoryTagVocabEntry {
+  path: string
+  aliases: string[]
+  count: number
 }
 
 export interface ProjectTheoriesResponse {
   project_name: string
   total: number
   subject_counts: Record<string, number>
+  tag_counts: Record<string, number>
+  tag_vocab: TheoryTagVocabEntry[]
   theories: AggregatedTheory[]
 }
 

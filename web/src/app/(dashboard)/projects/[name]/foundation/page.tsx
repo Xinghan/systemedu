@@ -130,12 +130,21 @@ export default function FoundationPage() {
   const filtered = useMemo(() => {
     if (!data) return []
     let list = data.theories
-    if (selectedSubject) list = list.filter((x) => (x.subject || "other") === selectedSubject)
+    if (selectedSubject) {
+      // selectedSubject may be a tag path or a legacy subject keyword
+      list = list.filter((x) => {
+        const tagMatch = (x.tags || []).some(
+          (t) => t === selectedSubject || t.startsWith(selectedSubject + "/"),
+        )
+        return tagMatch || (x.subject || "other") === selectedSubject
+      })
+    }
     if (query.trim()) {
       const q = query.trim().toLowerCase()
       list = list.filter((x) =>
         x.title.toLowerCase().includes(q) ||
         x.knode_title.toLowerCase().includes(q) ||
+        (x.tags || []).some((t) => t.toLowerCase().includes(q)) ||
         x.levels.some((lb) => lb.body_markdown.toLowerCase().includes(q)),
       )
     }
@@ -145,7 +154,8 @@ export default function FoundationPage() {
   const bySubject = useMemo(() => {
     const m: Record<string, AggregatedTheory[]> = {}
     for (const th of filtered) {
-      const key = th.subject || "other"
+      const firstTag = (th.tags || [])[0] || ""
+      const key = firstTag.split("/")[0] || th.subject || "other"
       if (!m[key]) m[key] = []
       m[key].push(th)
     }
@@ -165,8 +175,15 @@ export default function FoundationPage() {
   if (loading) return <PageLoading />
 
   const totalTheories = data?.total ?? 0
-  const subjectCounts = data?.subject_counts ?? {}
-  const subjectKeys = Object.keys(subjectCounts).sort((a, b) => (subjectCounts[b] ?? 0) - (subjectCounts[a] ?? 0))
+  // Derive top-level tag buckets (fallback to legacy subject)
+  const topLevelCounts: Record<string, number> = {}
+  for (const th of data?.theories ?? []) {
+    const firstTag = (th.tags || [])[0] || ""
+    const key = firstTag.split("/")[0] || th.subject || "other"
+    topLevelCounts[key] = (topLevelCounts[key] ?? 0) + 1
+  }
+  const subjectKeys = Object.keys(topLevelCounts).sort((a, b) => (topLevelCounts[b] ?? 0) - (topLevelCounts[a] ?? 0))
+  const subjectCounts = topLevelCounts
 
   return (
     <div className="min-h-screen bg-background">
@@ -264,6 +281,44 @@ export default function FoundationPage() {
             ))}
           </div>
         )}
+
+        {/* Sub-tag drill-down (shown when a top-level is selected) */}
+        {selectedSubject && data && (() => {
+          const subCounts: Record<string, number> = {}
+          for (const th of data.theories) {
+            for (const tg of (th.tags || [])) {
+              if (tg === selectedSubject || tg.startsWith(selectedSubject + "/")) {
+                const rest = tg.slice(selectedSubject.length).replace(/^\//, "")
+                const next = rest.split("/")[0]
+                if (next) subCounts[next] = (subCounts[next] ?? 0) + 1
+              }
+            }
+          }
+          const subKeys = Object.keys(subCounts).sort((a, b) => subCounts[b] - subCounts[a])
+          if (subKeys.length === 0) return null
+          return (
+            <div className="flex flex-wrap items-center gap-1.5 mb-5 pl-2">
+              <span className="text-[10px] text-muted-foreground">↳</span>
+              {subKeys.map((sub) => {
+                const path = `${selectedSubject}/${sub}`
+                const active = selectedSubject === path
+                return (
+                  <button
+                    key={sub}
+                    onClick={() => setSelectedSubject(active ? selectedSubject : path)}
+                    className={`h-6 px-2.5 rounded-full text-[10px] font-medium transition-all ${
+                      active
+                        ? "bg-violet-600 text-white"
+                        : "bg-secondary/40 text-muted-foreground hover:bg-secondary"
+                    }`}
+                  >
+                    {sub} · {subCounts[sub]}
+                  </button>
+                )
+              })}
+            </div>
+          )
+        })()}
 
         {/* Tabs */}
         <div className="flex items-center gap-1 mb-5 border-b border-border/50">
