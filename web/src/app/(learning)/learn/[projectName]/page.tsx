@@ -580,6 +580,36 @@ export default function LearnPage() {
     ? progressList.find((p) => p.knode_id === activeNodeId)?.status === "passed"
     : false
 
+  // 跨越建议: 顺序下一课 available 时直接给"下一课"按钮；
+  // 若顺序下一课 locked，则列出其它 available 的 knode 供跨越。
+  type NextSuggestion =
+    | { kind: "sequential"; knode: KnodeInfo }
+    | { kind: "jump"; options: KnodeInfo[] }
+    | null
+  const nextSuggestion: NextSuggestion = useMemo(() => {
+    if (activeNodeId === null || allKnodes.length === 0) return null
+    const statusOf = (id: number) =>
+      progressList.find((p) => p.knode_id === id)?.status ?? "locked"
+    const scoped = scopedNodeIds
+    const pool = allKnodes.filter((k) => k.id !== activeNodeId && (!scoped || scoped.has(k.id)))
+    const sequential = pool.find((k) => k.id === activeNodeId + 1)
+    if (sequential) {
+      const s = statusOf(sequential.id)
+      if (s === "available" || s === "in_progress" || s === "failed" || s === "submitted") {
+        return { kind: "sequential", knode: sequential }
+      }
+    }
+    const jumpable = pool
+      .filter((k) => {
+        const s = statusOf(k.id)
+        return s === "available" || s === "in_progress" || s === "failed" || s === "submitted"
+      })
+      .sort((a, b) => a.id - b.id)
+      .slice(0, 3)
+    if (jumpable.length === 0) return null
+    return { kind: "jump", options: jumpable }
+  }, [activeNodeId, allKnodes, progressList, scopedNodeIds])
+
   // Search filtering for sidebar — uses visibleMilestones (scoped to sub-project)
   const filteredMilestones = useMemo(() => {
     if (!detail) return []
@@ -1158,6 +1188,65 @@ export default function LearnPage() {
                         {t("lesson.mark_complete")}
                       </button>
                     )}
+                  </div>
+                )}
+
+                {/* Next-up card: only when current node is completed */}
+                {isNodeCompleted && nextSuggestion?.kind === "sequential" && (
+                  <div className="rounded-xl p-4 border bg-card border-border/60">
+                    <div className="flex items-center gap-2 mb-2">
+                      <ArrowRight className="h-4 w-4 text-primary" />
+                      <span className="text-xs font-semibold font-[var(--font-manrope)] text-foreground">
+                        {t("lesson.continue_learning")}
+                      </span>
+                    </div>
+                    <p className="text-[11px] mb-3 leading-relaxed text-muted-foreground line-clamp-2">
+                      {nextSuggestion.knode.title}
+                    </p>
+                    <button
+                      className="w-full h-8 rounded-lg bg-primary text-primary-foreground text-xs font-bold transition-all hover:bg-primary/90 active:scale-95 flex items-center justify-center gap-1.5 shadow-sm"
+                      onClick={() => handleNodeClick(nextSuggestion.knode.id)}
+                    >
+                      {t("lesson.go_to_next")}
+                      <ArrowRight className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                )}
+
+                {/* Jump-ahead card: sequential next locked, but other nodes unlocked */}
+                {isNodeCompleted && nextSuggestion?.kind === "jump" && (
+                  <div className="rounded-xl p-4 border bg-amber-50 dark:bg-amber-950/30 border-amber-200 dark:border-amber-800/50">
+                    <div className="flex items-center gap-2 mb-2">
+                      <Lock className="h-4 w-4 text-amber-600 dark:text-amber-500" />
+                      <span className="text-xs font-semibold font-[var(--font-manrope)] text-amber-800 dark:text-amber-300">
+                        {t("lesson.jump_ahead_title")}
+                      </span>
+                    </div>
+                    <p className="text-[11px] mb-3 leading-relaxed text-amber-700/80 dark:text-amber-400/70">
+                      {t("lesson.jump_ahead_desc")}
+                    </p>
+                    <div className="space-y-1.5">
+                      {nextSuggestion.options.map((k) => (
+                        <button
+                          key={k.id}
+                          onClick={() => handleNodeClick(k.id)}
+                          className="w-full text-left rounded-lg bg-white dark:bg-slate-900/60 hover:bg-amber-100 dark:hover:bg-amber-900/40 border border-amber-200/60 dark:border-amber-800/40 px-2.5 py-2 transition-colors group"
+                        >
+                          <div className="flex items-start gap-2">
+                            <div className="flex-1 min-w-0">
+                              <div className="text-[11px] font-semibold text-foreground line-clamp-1">
+                                {k.title}
+                              </div>
+                              <div className="text-[10px] text-emerald-600 dark:text-emerald-400 mt-0.5 flex items-center gap-1">
+                                <CheckCircle className="h-2.5 w-2.5" />
+                                {t("lesson.jump_ahead_prereqs_met")}
+                              </div>
+                            </div>
+                            <ArrowRight className="h-3 w-3 text-muted-foreground/40 group-hover:text-amber-600 shrink-0 mt-0.5 transition-colors" />
+                          </div>
+                        </button>
+                      ))}
+                    </div>
                   </div>
                 )}
 
