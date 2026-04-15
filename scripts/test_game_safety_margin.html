@@ -1,0 +1,504 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>SAFETY MARGIN</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;700&family=Inter:wght@400;500&family=Noto+Sans+SC:wght@400;700&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{width:100%;height:100vh;overflow:hidden;background:#131313;
+  font-family:'Noto Sans SC','PingFang SC',system-ui,sans-serif;color:#e5e2e1}
+.wrapper{display:flex;flex-direction:column;height:100vh;overflow:hidden}
+
+.lang-btn{position:fixed;top:8px;left:8px;z-index:100;
+  font-family:'Space Grotesk',sans-serif;font-size:11px;font-weight:700;
+  padding:4px 10px;cursor:pointer;
+  border:1px solid rgba(255,255,255,0.08);
+  background:rgba(20,20,35,0.85);backdrop-filter:blur(12px);
+  color:#ffb59c;letter-spacing:1px}
+
+.guide-panel{position:fixed;top:8px;right:8px;width:230px;max-height:36vh;
+  overflow-y:auto;z-index:200;padding:10px 12px;
+  background:rgba(28,27,27,0.88);backdrop-filter:blur(14px);
+  border:1px solid rgba(138,136,134,0.15);font-size:12px;line-height:1.55;
+  color:rgba(229,226,225,0.85)}
+.guide-panel h3{font-family:'Space Grotesk',sans-serif;font-size:13px;font-weight:700;
+  margin-bottom:6px;display:flex;align-items:center;justify-content:space-between;cursor:pointer;
+  color:#ffb59c;text-transform:uppercase;letter-spacing:0.05em}
+.guide-panel .arrow{transition:transform .2s;font-size:10px}
+.guide-panel .arrow.collapsed{transform:rotate(-90deg)}
+.guide-panel ul{padding-left:14px;margin:4px 0}
+.guide-panel .gl{color:#8a8886;font-size:11px;text-transform:uppercase;
+  letter-spacing:0.08em;margin-top:6px;font-family:'Space Grotesk',sans-serif}
+
+.header{height:38px;min-height:38px;display:flex;align-items:center;justify-content:space-between;
+  padding:0 16px;background:rgba(28,27,27,0.92);
+  border-bottom:1px solid rgba(138,136,134,0.1)}
+.header h1{font-family:'Space Grotesk',sans-serif;font-size:13px;font-weight:700;
+  color:#ffb59c;text-transform:uppercase;letter-spacing:0.06em}
+.header .status{font-family:'Space Grotesk',sans-serif;font-size:12px;color:#8a8886}
+.header .status span{color:#00daf3}
+
+.canvas-wrap{flex:1;min-height:0;position:relative}
+.canvas-wrap canvas{display:block;width:100%;height:100%}
+
+.slider-bar{height:56px;min-height:56px;display:flex;align-items:center;justify-content:center;
+  gap:12px;padding:0 16px;background:rgba(28,27,27,0.92);
+  border-top:1px solid rgba(138,136,134,0.1)}
+.slider-label{font-family:'Space Grotesk',sans-serif;font-size:11px;font-weight:700;
+  color:#ffb59c;text-transform:uppercase;letter-spacing:0.06em;min-width:100px;text-align:right}
+.slider-val{font-family:'Space Grotesk',sans-serif;font-size:18px;font-weight:700;
+  color:#00daf3;min-width:30px;text-align:center}
+input[type=range]{
+  -webkit-appearance:none;appearance:none;width:220px;height:6px;
+  background:linear-gradient(90deg,#353534,#ff7f50);outline:none;cursor:pointer}
+input[type=range]::-webkit-slider-thumb{
+  -webkit-appearance:none;appearance:none;width:18px;height:18px;
+  background:linear-gradient(135deg,#ffb59c,#ff7f50);cursor:pointer}
+
+.hud{height:46px;min-height:46px;display:flex;align-items:center;
+  background:rgba(0,0,0,0.55);border-top:1px solid rgba(255,255,255,0.06);padding:0 16px}
+.hud-col{flex:1;text-align:center}
+.hud-label{font-family:'Space Grotesk',sans-serif;font-size:10px;
+  color:rgba(255,181,156,0.5);text-transform:uppercase;letter-spacing:0.1em}
+.hud-val{font-family:'Space Grotesk',sans-serif;font-size:13px;font-weight:700;
+  color:rgba(229,226,225,0.88)}
+
+.win-panel{position:fixed;top:0;left:0;right:0;bottom:0;z-index:500;
+  display:none;align-items:center;justify-content:center;
+  background:rgba(19,19,19,0.85);backdrop-filter:blur(16px)}
+.win-panel.show{display:flex}
+.win-content{width:420px;max-height:80vh;overflow-y:auto;padding:24px;
+  background:linear-gradient(135deg,rgba(53,53,52,0.9),rgba(28,27,27,0.95));
+  border:1px solid rgba(255,127,80,0.2)}
+.win-content h2{font-family:'Space Grotesk',sans-serif;font-size:18px;color:#ffb59c;
+  text-transform:uppercase;letter-spacing:0.06em;margin-bottom:12px}
+.win-content p{font-size:14px;line-height:1.7;margin-bottom:10px;color:#c6c6c6}
+.win-content .highlight{color:#00daf3;font-weight:700}
+.win-close{margin-top:14px;padding:8px 20px;
+  background:linear-gradient(45deg,#ffb59c,#ff7f50);color:#131313;border:none;cursor:pointer;
+  font-family:'Space Grotesk',sans-serif;font-size:13px;font-weight:700;
+  text-transform:uppercase;letter-spacing:0.06em}
+.win-close:hover{box-shadow:0 0 20px rgba(255,127,80,0.4)}
+
+.task-bar{height:32px;min-height:32px;display:flex;align-items:center;justify-content:center;gap:8px;
+  background:rgba(28,27,27,0.7);border-bottom:1px solid rgba(138,136,134,0.06);
+  font-size:12px;color:#8a8886}
+.task-bar .task-num{color:#ff7f50;font-weight:700;font-family:'Space Grotesk',sans-serif}
+.task-bar .task-text{}
+
+.check-btn{padding:6px 16px;border:1px solid rgba(255,181,156,0.2);
+  background:linear-gradient(135deg,rgba(53,53,52,0.6),rgba(28,27,27,0.8));
+  color:#e5e2e1;cursor:pointer;font-family:'Space Grotesk',sans-serif;font-size:11px;
+  font-weight:700;text-transform:uppercase;letter-spacing:0.06em}
+.check-btn:hover{background:rgba(255,127,80,0.12);box-shadow:0 0 12px rgba(255,127,80,0.15)}
+</style>
+</head>
+<body>
+<button class="lang-btn" id="langBtn">CN</button>
+
+<div class="guide-panel" id="guidePanel">
+  <h3 id="guideTitle"><span id="guideTitleText"></span><span class="arrow" id="guideArrow">&#9660;</span></h3>
+  <div class="guide-content" id="guideContent">
+    <p id="guideGoal" style="margin-bottom:6px"></p>
+    <div class="gl" id="guideStepsLabel"></div>
+    <ul id="guideStepsList"></ul>
+    <div class="gl" id="guideWinLabel"></div>
+    <p id="guideWinText" style="margin-top:2px;color:#00daf3"></p>
+    <div class="gl" id="guideTipLabel"></div>
+    <p id="guideTipText" style="margin-top:2px"></p>
+  </div>
+</div>
+
+<div class="win-panel" id="winPanel">
+  <div class="win-content">
+    <h2 id="winTitle"></h2>
+    <p id="winBody"></p>
+    <p id="winSummary"></p>
+    <button class="win-close" id="winClose"></button>
+  </div>
+</div>
+
+<div class="wrapper">
+  <div class="header">
+    <h1 id="titleText"></h1>
+    <div class="status" id="statusText"></div>
+  </div>
+  <div class="task-bar" id="taskBar">
+    <span class="task-num" id="taskNum"></span>
+    <span class="task-text" id="taskText"></span>
+  </div>
+  <div class="canvas-wrap" id="canvasWrap">
+    <canvas id="c"></canvas>
+  </div>
+  <div class="slider-bar">
+    <span class="slider-label" id="sliderLabel"></span>
+    <input type="range" id="radiusSlider" min="0" max="5" step="1" value="0"/>
+    <span class="slider-val" id="radiusVal">0</span>
+    <button class="check-btn" id="checkBtn"></button>
+  </div>
+  <div class="hud">
+    <div class="hud-col"><div class="hud-label" id="hudL1"></div><div class="hud-val" id="hudV1">--</div></div>
+    <div class="hud-col"><div class="hud-label" id="hudL2"></div><div class="hud-val" id="hudV2">--</div></div>
+    <div class="hud-col"><div class="hud-label" id="hudL3"></div><div class="hud-val" id="hudV3">--</div></div>
+    <div class="hud-col"><div class="hud-label" id="hudL4"></div><div class="hud-val" id="hudV4">--</div></div>
+  </div>
+</div>
+
+<script>
+(function(){
+var LANG='cn';
+var I18N={
+  title:       {en:'DILATION RADIUS TUNER', cn:'\u818a\u80c0\u534a\u5f84\u8c03\u8282\u5668'},
+  sliderLabel: {en:'DILATION RADIUS', cn:'\u818a\u80c0\u534a\u5f84'},
+  checkBtn:    {en:'CONFIRM', cn:'\u786e\u8ba4'},
+  guideTitle:  {en:'OPERATION GUIDE', cn:'\u64cd\u4f5c\u6307\u5357'},
+  guideGoal:   {en:'Adjust the dilation radius slider to find the optimal safety margin: path avoids obstacles with enough buffer, but does not detour too far.',
+                cn:'\u62d6\u52a8\u818a\u80c0\u534a\u5f84\u6ed1\u5757\uff0c\u627e\u5230\u6700\u4f18\u5b89\u5168\u4f59\u91cf\uff1a\u8def\u5f84\u65e2\u8981\u8fdc\u79bb\u969c\u788d\u7269\uff0c\u53c8\u4e0d\u80fd\u7ed5\u884c\u592a\u8fdc\u3002'},
+  stepsLabel:  {en:'STEPS', cn:'\u64cd\u4f5c\u6b65\u9aa4'},
+  step1:       {en:'Drag slider to set dilation radius (0-5)', cn:'\u62d6\u52a8\u6ed1\u5757\u8bbe\u7f6e\u818a\u80c0\u534a\u5f84 (0-5)'},
+  step2:       {en:'Observe how path changes in real-time', cn:'\u89c2\u5bdf\u8def\u5f84\u5982\u4f55\u5b9e\u65f6\u53d8\u5316'},
+  step3:       {en:'Click CONFIRM when you find the best radius for each task', cn:'\u627e\u5230\u6bcf\u4e2a\u4efb\u52a1\u7684\u6700\u4f73\u534a\u5f84\u540e\u70b9\u51fb\u201c\u786e\u8ba4\u201d'},
+  winLabel:    {en:'WIN CONDITION', cn:'\u901a\u5173\u6761\u4ef6'},
+  winText:     {en:'Complete 3 tasks with correct dilation radius', cn:'\u5b8c\u6210 3 \u4e2a\u4efb\u52a1\uff0c\u6bcf\u6b21\u9009\u62e9\u6b63\u786e\u7684\u818a\u80c0\u534a\u5f84'},
+  tipLabel:    {en:'TIPS', cn:'\u63d0\u793a'},
+  tipText:     {en:'R=0 means no buffer (dangerous!), too large R may block all paths.', cn:'R=0 \u8868\u793a\u65e0\u7f13\u51b2\uff08\u5371\u9669\uff01\uff09\uff0c\u8fc7\u5927\u7684 R \u53ef\u80fd\u5835\u6b7b\u6240\u6709\u8def\u5f84\u3002'},
+  hudRadius:   {en:'RADIUS', cn:'\u534a\u5f84'},
+  hudPathLen:  {en:'PATH LEN', cn:'\u8def\u5f84\u957f\u5ea6'},
+  hudMinDist:  {en:'MIN DIST', cn:'\u6700\u8fd1\u8ddd\u79bb'},
+  hudTask:     {en:'TASK', cn:'\u4efb\u52a1'},
+  task1:       {en:'Find the smallest safe radius (path > 0 distance from obstacles)',
+                cn:'\u627e\u5230\u6700\u5c0f\u5b89\u5168\u534a\u5f84\uff08\u8def\u5f84\u4e0e\u969c\u788d\u7269\u8ddd\u79bb > 0\uff09'},
+  task2:       {en:'Find the radius that balances safety and path length',
+                cn:'\u627e\u5230\u5b89\u5168\u6027\u548c\u8def\u5f84\u957f\u5ea6\u7684\u5e73\u8861\u70b9'},
+  task3:       {en:'Find the maximum safe radius before no path exists',
+                cn:'\u627e\u5230\u8def\u5f84\u6d88\u5931\u524d\u7684\u6700\u5927\u5b89\u5168\u534a\u5f84'},
+  taskOf:      {en:'TASK', cn:'\u4efb\u52a1'},
+  correct:     {en:'Correct! ', cn:'\u6b63\u786e\uff01'},
+  wrong:       {en:'Not quite. ', cn:'\u4e0d\u592a\u5bf9\u3002'},
+  reason1ok:   {en:'R=1 creates a 1-cell buffer, the minimum safe margin.',
+                cn:'R=1 \u521b\u5efa\u4e86 1 \u683c\u7f13\u51b2\uff0c\u662f\u6700\u5c0f\u5b89\u5168\u4f59\u91cf\u3002'},
+  reason1no:   {en:'R=0 has no buffer, R>=2 is more than minimum.',
+                cn:'R=0 \u65e0\u7f13\u51b2\uff0cR>=2 \u8d85\u8fc7\u4e86\u6700\u5c0f\u503c\u3002'},
+  reason2ok:   {en:'R=2 gives good buffer without excessive detour.',
+                cn:'R=2 \u63d0\u4f9b\u4e86\u826f\u597d\u7f13\u51b2\u4e14\u4e0d\u4f1a\u8fc7\u5ea6\u7ed5\u884c\u3002'},
+  reason2no:   {en:'R=2 is the best balance point for this map.',
+                cn:'\u5bf9\u4e8e\u8fd9\u5f20\u5730\u56fe\uff0cR=2 \u662f\u6700\u4f73\u5e73\u8861\u70b9\u3002'},
+  reason3ok:   {en:'R=3 is the last radius with a valid path; R=4 blocks it.',
+                cn:'R=3 \u662f\u6709\u6548\u8def\u5f84\u7684\u6700\u540e\u534a\u5f84\uff1bR=4 \u4f1a\u5835\u6b7b\u8def\u5f84\u3002'},
+  reason3no:   {en:'Try increasing radius until the path disappears.',
+                cn:'\u8bd5\u8bd5\u589e\u5927\u534a\u5f84\u76f4\u5230\u8def\u5f84\u6d88\u5931\u3002'},
+  statusProgress:{en:'Progress', cn:'\u8fdb\u5ea6'},
+  winTitle:    {en:'MISSION COMPLETE', cn:'\u4efb\u52a1\u5b8c\u6210'},
+  winBody:     {en:'You have mastered the relationship between dilation radius and path safety! Key insight: the right safety margin protects the rover without making the route impossibly long.',
+                cn:'\u4f60\u5df2\u7ecf\u638c\u63e1\u4e86\u818a\u80c0\u534a\u5f84\u4e0e\u8def\u5f84\u5b89\u5168\u7684\u5173\u7cfb\uff01\u6838\u5fc3\u7ed3\u8bba\uff1a\u5408\u9002\u7684\u5b89\u5168\u4f59\u91cf\u80fd\u4fdd\u62a4\u706b\u661f\u8f66\uff0c\u540c\u65f6\u4e0d\u4f1a\u8ba9\u8def\u7ebf\u53d8\u5f97\u65e0\u6cd5\u884c\u8d70\u3002'},
+  winSummary:  {en:'R=1: minimum safe buffer | R=2: best balance | R=3: maximum before blockage | R>=4: no path exists',
+                cn:'R=1: \u6700\u5c0f\u5b89\u5168\u7f13\u51b2 | R=2: \u6700\u4f73\u5e73\u8861 | R=3: \u5835\u6b7b\u524d\u6700\u5927\u503c | R>=4: \u65e0\u8def\u5f84'},
+  winCloseBtn: {en:'CLOSE', cn:'\u5173\u95ed'},
+  noPath:      {en:'NO PATH', cn:'\u65e0\u8def\u5f84'}
+};
+function t(key){return (I18N[key]&&I18N[key][LANG])||(I18N[key]&&I18N[key]['en'])||key;}
+
+var canvas=document.getElementById('c');
+var ctx=canvas.getContext('2d');
+var W=0,H=0;
+
+/* GRID MAP */
+var COLS=20,ROWS=16;
+var BASE_MAP=[];
+(function initMap(){
+  for(var r=0;r<ROWS;r++){BASE_MAP[r]=[];for(var c=0;c<COLS;c++)BASE_MAP[r][c]=0;}
+  var obs=[[2,3],[2,4],[3,3],[3,4],[3,5],[4,4],[4,5],
+           [7,8],[7,9],[8,8],[8,9],[8,10],[9,9],[9,10],
+           [12,5],[12,6],[13,5],[13,6],[13,7],[14,6],[14,7],
+           [5,14],[5,15],[6,14],[6,15],[7,15],
+           [10,2],[10,3],[11,2],[11,3]];
+  obs.forEach(function(p){if(p[0]<ROWS&&p[1]<COLS)BASE_MAP[p[0]][p[1]]=1;});
+  var unk=[[0,17],[0,18],[0,19],[1,17],[1,18],[1,19],[2,18],[2,19],
+           [14,0],[14,1],[15,0],[15,1],[15,2],
+           [9,13],[9,14],[10,13],[10,14],[10,15],[11,14],[11,15]];
+  unk.forEach(function(p){if(p[0]<ROWS&&p[1]<COLS)BASE_MAP[p[0]][p[1]]=2;});
+})();
+
+function dilateMap(radius){
+  var map=[];
+  for(var r=0;r<ROWS;r++){map[r]=[];for(var c=0;c<COLS;c++)map[r][c]=BASE_MAP[r][c];}
+  if(radius<=0)return map;
+  for(var r=0;r<ROWS;r++){for(var c=0;c<COLS;c++){
+    if(BASE_MAP[r][c]===1){
+      for(var dr=-radius;dr<=radius;dr++){for(var dc=-radius;dc<=radius;dc++){
+        var nr=r+dr,nc=c+dc;
+        if(nr<0||nr>=ROWS||nc<0||nc>=COLS)continue;
+        var dist=Math.sqrt(dr*dr+dc*dc);
+        if(dist<=radius&&BASE_MAP[nr][nc]===0){
+          var penalty=3+(1-dist/radius)*0.7;
+          if(map[nr][nc]<3)map[nr][nc]=penalty;
+          else map[nr][nc]=Math.max(map[nr][nc],penalty);
+        }
+      }}
+    }
+  }}
+  return map;
+}
+
+function findPath(map){
+  var sr=1,sc=0,er=ROWS-2,ec=COLS-1;
+  var open=[{r:sr,c:sc,g:0,f:0,parent:null}];
+  var closed={};
+  function key(r,c){return r*100+c;}
+  function h(r,c){return Math.abs(r-er)+Math.abs(c-ec);}
+  while(open.length>0){
+    open.sort(function(a,b){return a.f-b.f;});
+    var cur=open.shift();
+    var k=key(cur.r,cur.c);
+    if(closed[k])continue;closed[k]=cur;
+    if(cur.r===er&&cur.c===ec){
+      var path=[];var n=cur;while(n){path.unshift({r:n.r,c:n.c});n=n.parent;}return path;
+    }
+    var dirs=[[-1,0],[1,0],[0,-1],[0,1],[-1,-1],[-1,1],[1,-1],[1,1]];
+    for(var d=0;d<dirs.length;d++){
+      var nr=cur.r+dirs[d][0],nc=cur.c+dirs[d][1];
+      if(nr<0||nr>=ROWS||nc<0||nc>=COLS)continue;
+      if(closed[key(nr,nc)])continue;
+      var cv=map[nr][nc];if(cv===1)continue;
+      var moveCost=(Math.abs(dirs[d][0])+Math.abs(dirs[d][1])===2)?1.414:1;
+      var cellCost=cv===2?3:cv>=3?(cv-2)*5:1;
+      var ng=cur.g+moveCost*cellCost;
+      open.push({r:nr,c:nc,g:ng,f:ng+h(nr,nc),parent:cur});
+    }
+  }
+  return [];
+}
+
+function minDistToObs(path){
+  if(!path.length)return -1;
+  var minD=Infinity;
+  for(var i=0;i<path.length;i++){
+    for(var r=0;r<ROWS;r++){for(var c=0;c<COLS;c++){
+      if(BASE_MAP[r][c]===1){
+        var d=Math.sqrt(Math.pow(path[i].r-r,2)+Math.pow(path[i].c-c,2));
+        if(d<minD)minD=d;
+      }
+    }}
+  }
+  return minD===Infinity?-1:Math.round(minD*10)/10;
+}
+
+var pathCache={};
+function getPath(radius){
+  if(pathCache[radius])return pathCache[radius];
+  var map=dilateMap(radius);var p=findPath(map);pathCache[radius]=p;return p;
+}
+
+// tasks
+var tasks=[
+  {id:1,answer:1}, // smallest safe radius
+  {id:2,answer:2}, // balance
+  {id:3,answer:3}  // max before no path
+];
+var currentTask=0;
+var score=0;
+var completed=false;
+
+function drawScene(radius){
+  var wrap=document.getElementById('canvasWrap');
+  var rect=wrap.getBoundingClientRect();
+  if(rect.width<1||rect.height<1)return;
+  var dpr=Math.min(window.devicePixelRatio||1,2);
+  W=rect.width;H=rect.height;
+  canvas.width=W*dpr;canvas.height=H*dpr;
+  canvas.style.width=W+'px';canvas.style.height=H+'px';
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+
+  // bg
+  var bg=ctx.createLinearGradient(0,0,0,H);
+  bg.addColorStop(0,'#131313');bg.addColorStop(0.5,'#1a1515');bg.addColorStop(1,'#131313');
+  ctx.fillStyle=bg;ctx.fillRect(0,0,W,H);
+  ctx.strokeStyle='rgba(255,255,255,0.02)';ctx.lineWidth=0.5;
+  for(var x=0;x<W;x+=40){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,H);ctx.stroke();}
+  for(var y=0;y<H;y+=40){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke();}
+
+  // grid
+  var gridW=Math.min(W*0.75,H*1.1);
+  var cellSize=Math.floor(gridW/COLS);
+  gridW=cellSize*COLS;
+  var gridH=cellSize*ROWS;
+  var gx=(W-gridW)/2;
+  var gy=(H-gridH)/2;
+
+  var map=dilateMap(radius);
+  for(var r=0;r<ROWS;r++){for(var c=0;c<COLS;c++){
+    var x=gx+c*cellSize,y2=gy+r*cellSize;
+    var v=map[r][c];
+    if(v===1){
+      var g=ctx.createLinearGradient(x,y2,x+cellSize,y2+cellSize);
+      g.addColorStop(0,'#ff3b30');g.addColorStop(0.5,'#cc2200');g.addColorStop(1,'#991100');
+      ctx.fillStyle=g;
+    }else if(v===2){
+      var g=ctx.createLinearGradient(x,y2,x+cellSize,y2+cellSize);
+      g.addColorStop(0,'#6b6b6b');g.addColorStop(1,'#4a4a4a');
+      ctx.fillStyle=g;
+    }else if(v>=3){
+      var intensity=(v-2);
+      var r1=Math.min(255,Math.floor(255*intensity));
+      var g1=Math.min(140,Math.floor(140*intensity));
+      var gr=ctx.createRadialGradient(x+cellSize/2,y2+cellSize/2,0,x+cellSize/2,y2+cellSize/2,cellSize*0.7);
+      gr.addColorStop(0,'rgba('+r1+','+g1+',30,0.8)');
+      gr.addColorStop(1,'rgba('+Math.floor(r1*0.6)+','+Math.floor(g1*0.4)+',0,0.4)');
+      ctx.fillStyle=gr;
+    }else{
+      var g=ctx.createLinearGradient(x,y2,x+cellSize,y2+cellSize);
+      g.addColorStop(0,'#1a3a2a');g.addColorStop(1,'#0d2a1a');
+      ctx.fillStyle=g;
+    }
+    ctx.fillRect(x+0.5,y2+0.5,cellSize-1,cellSize-1);
+  }}
+  // grid lines
+  ctx.strokeStyle='rgba(138,136,134,0.12)';ctx.lineWidth=0.5;
+  for(var r=0;r<=ROWS;r++){ctx.beginPath();ctx.moveTo(gx,gy+r*cellSize);ctx.lineTo(gx+gridW,gy+r*cellSize);ctx.stroke();}
+  for(var c2=0;c2<=COLS;c2++){ctx.beginPath();ctx.moveTo(gx+c2*cellSize,gy);ctx.lineTo(gx+c2*cellSize,gy+gridH);ctx.stroke();}
+
+  // start/end
+  ctx.fillStyle='#10b981';
+  ctx.beginPath();ctx.arc(gx+0*cellSize+cellSize/2,gy+1*cellSize+cellSize/2,cellSize*0.3,0,Math.PI*2);ctx.fill();
+  ctx.fillStyle='#00daf3';
+  ctx.beginPath();ctx.arc(gx+(COLS-1)*cellSize+cellSize/2,gy+(ROWS-2)*cellSize+cellSize/2,cellSize*0.3,0,Math.PI*2);ctx.fill();
+
+  // path
+  var path=getPath(radius);
+  if(path.length>=2){
+    ctx.strokeStyle='#10b981';ctx.lineWidth=Math.max(2,cellSize*0.2);
+    ctx.shadowColor='#10b981';ctx.shadowBlur=10;
+    ctx.beginPath();
+    ctx.moveTo(gx+path[0].c*cellSize+cellSize/2,gy+path[0].r*cellSize+cellSize/2);
+    for(var i=1;i<path.length;i++){
+      ctx.lineTo(gx+path[i].c*cellSize+cellSize/2,gy+path[i].r*cellSize+cellSize/2);
+    }
+    ctx.stroke();ctx.shadowBlur=0;
+  }else{
+    // no path text
+    ctx.fillStyle='#ff5f1f';
+    ctx.font='bold 20px "Space Grotesk",sans-serif';
+    ctx.textAlign='center';ctx.textBaseline='middle';
+    ctx.shadowColor='#ff5f1f';ctx.shadowBlur=16;
+    ctx.fillText(t('noPath'),W/2,H/2);
+    ctx.shadowBlur=0;
+  }
+
+  // HUD update
+  document.getElementById('hudV1').textContent=radius;
+  document.getElementById('hudV2').textContent=path.length>0?path.length:t('noPath');
+  document.getElementById('hudV3').textContent=path.length>0?minDistToObs(path):'--';
+  document.getElementById('hudV4').textContent=(currentTask+1)+'/'+tasks.length;
+}
+
+function refreshI18N(){
+  document.getElementById('titleText').textContent=t('title');
+  document.getElementById('sliderLabel').textContent=t('sliderLabel');
+  document.getElementById('checkBtn').textContent=t('checkBtn');
+  document.getElementById('guideTitleText').textContent=t('guideTitle');
+  document.getElementById('guideGoal').textContent=t('guideGoal');
+  document.getElementById('guideStepsLabel').textContent=t('stepsLabel');
+  var sl=document.getElementById('guideStepsList');sl.innerHTML='';
+  ['step1','step2','step3'].forEach(function(k){
+    var li=document.createElement('li');li.textContent=t(k);sl.appendChild(li);
+  });
+  document.getElementById('guideWinLabel').textContent=t('winLabel');
+  document.getElementById('guideWinText').textContent=t('winText');
+  document.getElementById('guideTipLabel').textContent=t('tipLabel');
+  document.getElementById('guideTipText').textContent=t('tipText');
+  document.getElementById('hudL1').textContent=t('hudRadius');
+  document.getElementById('hudL2').textContent=t('hudPathLen');
+  document.getElementById('hudL3').textContent=t('hudMinDist');
+  document.getElementById('hudL4').textContent=t('hudTask');
+  document.getElementById('statusText').innerHTML=t('statusProgress')+': <span>'+score+'/'+tasks.length+'</span>';
+  document.getElementById('winTitle').textContent=t('winTitle');
+  document.getElementById('winBody').textContent=t('winBody');
+  document.getElementById('winSummary').textContent=t('winSummary');
+  document.getElementById('winClose').textContent=t('winCloseBtn');
+  updateTask();
+  var r=parseInt(document.getElementById('radiusSlider').value);
+  drawScene(r);
+}
+
+function updateTask(){
+  if(currentTask>=tasks.length){
+    document.getElementById('taskNum').textContent='';
+    document.getElementById('taskText').textContent=t('winTitle');
+    return;
+  }
+  document.getElementById('taskNum').textContent=t('taskOf')+' '+(currentTask+1)+'/'+tasks.length+':';
+  document.getElementById('taskText').textContent=t('task'+(currentTask+1));
+}
+
+// slider
+document.getElementById('radiusSlider').addEventListener('input',function(){
+  var r=parseInt(this.value);
+  document.getElementById('radiusVal').textContent=r;
+  drawScene(r);
+});
+
+// check
+document.getElementById('checkBtn').addEventListener('click',function(){
+  if(completed||currentTask>=tasks.length)return;
+  var r=parseInt(document.getElementById('radiusSlider').value);
+  var task=tasks[currentTask];
+  var isCorrect=(r===task.answer);
+  if(isCorrect){
+    score++;
+    currentTask++;
+    document.getElementById('statusText').innerHTML=t('statusProgress')+': <span>'+score+'/'+tasks.length+'</span>';
+    if(currentTask>=tasks.length){
+      completed=true;
+      document.getElementById('winPanel').classList.add('show');
+    }
+    updateTask();
+  }else{
+    // flash feedback
+    var tb=document.getElementById('taskBar');
+    var origText=document.getElementById('taskText').textContent;
+    var reasonKey='reason'+(currentTask+1)+'no';
+    document.getElementById('taskText').textContent=t('wrong')+t(reasonKey);
+    tb.style.background='rgba(255,95,31,0.15)';
+    setTimeout(function(){
+      tb.style.background='';
+      document.getElementById('taskText').textContent=origText;
+    },2500);
+  }
+});
+
+// win close
+document.getElementById('winClose').addEventListener('click',function(){
+  document.getElementById('winPanel').classList.remove('show');
+});
+
+// guide toggle
+document.getElementById('guideTitle').addEventListener('click',function(){
+  var content=document.getElementById('guideContent');
+  var arrow=document.getElementById('guideArrow');
+  if(content.style.display==='none'){content.style.display='';arrow.classList.remove('collapsed');}
+  else{content.style.display='none';arrow.classList.add('collapsed');}
+});
+
+// lang
+document.getElementById('langBtn').addEventListener('click',function(){
+  LANG=LANG==='en'?'cn':'en';
+  document.getElementById('langBtn').textContent=LANG.toUpperCase();
+  refreshI18N();
+});
+
+function resize(){
+  var r=parseInt(document.getElementById('radiusSlider').value);
+  drawScene(r);
+}
+window.addEventListener('resize',resize);
+refreshI18N();
+resize();
+setTimeout(resize,200);
+setTimeout(resize,600);
+document.fonts.ready.then(function(){resize();});
+})();
+</script>
+</body>
+</html>

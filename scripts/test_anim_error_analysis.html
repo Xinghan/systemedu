@@ -1,0 +1,752 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;700&family=Inter:wght@400;500&family=Noto+Sans+SC:wght@400;700&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0;border-radius:0}
+html,body{width:100%;height:100vh;overflow:hidden;
+  background:#131313;
+  font-family:'Space Grotesk','Inter','Noto Sans SC',sans-serif;
+  color:#e5e2e1;
+}
+.lang-btn{
+  position:fixed;top:8px;left:8px;z-index:100;
+  font-family:'Space Grotesk',sans-serif;font-size:11px;font-weight:700;
+  padding:4px 10px;cursor:pointer;
+  border:1px solid rgba(255,255,255,0.08);
+  background:rgba(20,20,35,0.85);backdrop-filter:blur(12px);
+  color:#ffb59c;letter-spacing:1px;
+}
+.guide-panel{
+  position:fixed;top:8px;right:8px;width:260px;max-height:40vh;
+  overflow-y:auto;z-index:100;
+  background:rgba(20,20,35,0.85);backdrop-filter:blur(12px);
+  border:1px solid rgba(255,255,255,0.08);padding:12px;
+  font-family:'Noto Sans SC',sans-serif;font-size:13px;
+  color:rgba(255,255,255,0.85);
+}
+.guide-panel h3{
+  font-family:'Space Grotesk',sans-serif;font-size:14px;
+  margin-bottom:8px;display:flex;align-items:center;
+  justify-content:space-between;cursor:pointer;
+  color:#ffb59c;
+}
+.guide-panel .toggle{font-size:12px;opacity:0.6;}
+.guide-panel ul{padding-left:16px;line-height:1.6;}
+.guide-panel .guide-content.collapsed{display:none;}
+.wrapper{display:flex;flex-direction:column;height:100vh;}
+.canvas-wrap{flex:1;min-height:0;position:relative;}
+.canvas-wrap canvas{display:block;width:100%;height:100%;position:absolute;top:0;left:0;}
+.controls{
+  display:flex;align-items:center;gap:8px;
+  padding:6px 12px;
+  background:rgba(28,27,27,0.92);
+  border-top:1px solid rgba(138,136,134,0.15);
+}
+.controls button{
+  font-family:'Space Grotesk',sans-serif;font-size:12px;font-weight:700;
+  padding:4px 14px;cursor:pointer;letter-spacing:1px;
+  border:1px solid rgba(138,136,134,0.15);
+  background:transparent;color:#ffb59c;
+}
+.controls button:hover{background:#353534;}
+.controls .frame-indicator{
+  font-family:'Space Grotesk',sans-serif;font-size:12px;
+  color:#8a8886;margin-left:auto;
+}
+.hud{
+  display:flex;align-items:center;justify-content:space-around;
+  height:52px;
+  background:rgba(0,0,0,0.55);
+  border-top:1px solid rgba(255,255,255,0.06);
+}
+.hud .hud-col{text-align:center;}
+.hud .hud-label{
+  font-family:'Space Grotesk',sans-serif;font-size:10px;
+  color:#8a8886;letter-spacing:1px;text-transform:uppercase;
+}
+.hud .hud-val{
+  font-family:'Space Grotesk',sans-serif;font-size:14px;font-weight:700;
+  color:#e5e2e1;
+}
+</style>
+</head>
+<body>
+<button class="lang-btn" id="langBtn">CN</button>
+<div class="guide-panel" id="guidePanel">
+  <h3 id="guideHeader"><span id="guideTitle"></span> <span class="toggle" id="guideToggle">[-]</span></h3>
+  <div class="guide-content" id="guideContent">
+    <ul id="guideList"></ul>
+  </div>
+</div>
+<div class="wrapper">
+  <div class="canvas-wrap">
+    <canvas id="c"></canvas>
+  </div>
+  <div class="controls" id="controls">
+    <button id="btnPrev"></button>
+    <button id="btnPlay"></button>
+    <button id="btnNext"></button>
+    <span class="frame-indicator" id="frameIndicator"></span>
+  </div>
+  <div class="hud" id="hud"></div>
+</div>
+<script>
+(function(){
+"use strict";
+
+/* ── palette ── */
+var P = {
+  bg:'#131313', surface:'rgba(28,27,27,0.92)', surfaceHigh:'#353534',
+  primary:'#ffb59c', primaryContainer:'#ff7f50', secondary:'#c6c6c6',
+  tertiary:'#00daf3', signal:'#ff5f1f', success:'#10b981',
+  text:'#e5e2e1', muted:'#8a8886', outline:'rgba(138,136,134,0.15)'
+};
+
+/* ── i18n ── */
+var LANG = 'cn';
+var I18N = {
+  title:        {en:'ERROR PATTERN ANALYSIS', cn:'\u9519\u8bef\u6a21\u5f0f\u5206\u6790'},
+  subtitle:     {en:'From Confusion Matrix to Action Plan', cn:'\u4ece\u6df7\u6dc6\u77e9\u9635\u5230\u884c\u52a8\u8ba1\u5212'},
+  btnPrev:      {en:'PREV', cn:'\u4e0a\u4e00\u5e27'},
+  btnPlay:      {en:'PLAY', cn:'\u64ad\u653e'},
+  btnPause:     {en:'PAUSE', cn:'\u6682\u505c'},
+  btnNext:      {en:'NEXT', cn:'\u4e0b\u4e00\u5e27'},
+  guideTitle:   {en:'GUIDE', cn:'\u64cd\u4f5c\u6307\u5357'},
+  guideItems:   {en:[
+    'Shows the complete error analysis workflow from confusion matrix to action plan',
+    'Observe: which cells in the matrix are darkest (highest confusion)',
+    'Observe: which error pattern has the most samples',
+    'Controls: PREV/NEXT to step through, PLAY for auto-play',
+    'Takeaway: describe the 4-step error analysis workflow'
+  ], cn:[
+    '\u5c55\u793a\u4ece\u6df7\u6dc6\u77e9\u9635\u5230\u884c\u52a8\u8ba1\u5212\u7684\u5b8c\u6574\u9519\u8bef\u5206\u6790\u6d41\u7a0b',
+    '\u89c2\u5bdf\uff1a\u77e9\u9635\u4e2d\u54ea\u4e9b\u683c\u5b50\u989c\u8272\u6700\u6df1\uff08\u6700\u9ad8\u6df7\u6dc6\uff09',
+    '\u89c2\u5bdf\uff1a\u54ea\u79cd\u9519\u8bef\u6a21\u5f0f\u7684\u6837\u672c\u6700\u591a',
+    '\u63a7\u5236\uff1aPREV/NEXT \u9010\u5e27\u67e5\u770b\uff0cPLAY \u81ea\u52a8\u64ad\u653e',
+    '\u6536\u83b7\uff1a\u80fd\u8bf4\u51fa\u9519\u8bef\u5206\u6790\u56db\u6b65\u6d41\u7a0b'
+  ]},
+  /* frame titles */
+  f0Title: {en:'STEP 1: CONFUSION MATRIX', cn:'\u6b65\u9aa41\uff1a\u6df7\u6dc6\u77e9\u9635'},
+  f0Desc:  {en:'Visualize overall classification performance', cn:'\u53ef\u89c6\u5316\u6574\u4f53\u5206\u7c7b\u8868\u73b0'},
+  f1Title: {en:'STEP 2: HIGH-FREQ CONFUSION PAIRS', cn:'\u6b65\u9aa42\uff1a\u9ad8\u9891\u6df7\u6dc6\u5bf9'},
+  f1Desc:  {en:'Identify the most confused class pairs', cn:'\u627e\u51fa\u6700\u5bb9\u6613\u6df7\u6dc6\u7684\u7c7b\u522b\u5bf9'},
+  f2Title: {en:'STEP 3: MISCLASSIFIED SAMPLES', cn:'\u6b65\u9aa43\uff1a\u8bef\u5206\u6837\u672c'},
+  f2Desc:  {en:'Extract and inspect individual failure cases', cn:'\u63d0\u53d6\u5e76\u68c0\u67e5\u5355\u4e2a\u5931\u8d25\u6848\u4f8b'},
+  f3Title: {en:'STEP 4: ERROR PATTERN CLASSIFICATION', cn:'\u6b65\u9aa44\uff1a\u9519\u8bef\u6a21\u5f0f\u5206\u7c7b'},
+  f3Desc:  {en:'Classify failures into 4 error patterns', cn:'\u5c06\u5931\u8d25\u6837\u672c\u5f52\u5165\u56db\u79cd\u9519\u8bef\u6a21\u5f0f'},
+  f4Title: {en:'STEP 5: PRIORITY TABLE', cn:'\u6b65\u9aa45\uff1a\u4fee\u6b63\u4f18\u5148\u7ea7\u8868'},
+  f4Desc:  {en:'Rank error patterns by impact for next iteration', cn:'\u6309\u5f71\u54cd\u7a0b\u5ea6\u6392\u5e8f\uff0c\u5236\u5b9a\u4e0b\u4e00\u8f6e\u4fee\u6b63\u8ba1\u5212'},
+  /* class labels */
+  clsSoil:    {en:'Soil', cn:'\u571f\u58e4'},
+  clsRock:    {en:'Rock', cn:'\u5ca9\u77f3'},
+  clsDune:    {en:'Dune', cn:'\u6c99\u4e18'},
+  clsUnknown: {en:'Unknown', cn:'\u672a\u77e5'},
+  /* error patterns */
+  errNoise:     {en:'Label Noise', cn:'\u6807\u7b7e\u566a\u58f0'},
+  errRes:       {en:'Low Resolution', cn:'\u5206\u8fa8\u7387\u4e0d\u8db3'},
+  errImbalance: {en:'Class Imbalance', cn:'\u7c7b\u522b\u4e0d\u5e73\u8861'},
+  errCapacity:  {en:'Model Capacity', cn:'\u6a21\u578b\u8868\u8fbe\u529b\u4e0d\u8db3'},
+  /* hud */
+  hudStep:     {en:'STEP', cn:'\u6b65\u9aa4'},
+  hudErrors:   {en:'ERRORS', cn:'\u8bef\u5206\u6570'},
+  hudTopPair:  {en:'TOP PAIR', cn:'\u9ad8\u9891\u6df7\u6dc6\u5bf9'},
+  hudPriority: {en:'PRIORITY', cn:'\u4f18\u5148\u7ea7'},
+  /* samples */
+  smpPred: {en:'Pred', cn:'\u9884\u6d4b'},
+  smpTrue: {en:'True', cn:'\u771f\u5b9e'},
+  /* priority desc */
+  priFirst:  {en:'#1 Imbalance 40%', cn:'#1 \u4e0d\u5e73\u8861 40%'},
+  priSecond: {en:'#2 Noise 25%', cn:'#2 \u566a\u58f0 25%'},
+  priThird:  {en:'#3 Resolution 20%', cn:'#3 \u5206\u8fa8\u7387 20%'},
+  priFourth: {en:'#4 Capacity 15%', cn:'#4 \u8868\u8fbe\u529b 15%'},
+};
+function t(key){ return (I18N[key] && I18N[key][LANG]) || (I18N[key] && I18N[key]['en']) || key; }
+
+/* ── canvas setup ── */
+var canvas = document.getElementById('c');
+var ctx = canvas.getContext('2d');
+var W = 800, H = 500, DPR = Math.min(window.devicePixelRatio || 1, 2);
+var totalFrames = 5, currentFrame = 0, transitioning = false;
+var playing = false, playRAF = null;
+
+/* ── confusion matrix data ── */
+var classLabels = ['clsSoil','clsRock','clsDune','clsUnknown'];
+var matrix = [
+  [180, 12, 8,  5],
+  [15, 160, 5,  10],
+  [35, 10, 45, 15],
+  [8,  6,  12, 130]
+];
+var highConfusionPairs = [
+  {r:2, c:0, val:35}, /* dune->soil */
+  {r:0, c:1, val:12}, /* soil->rock */
+  {r:2, c:3, val:15}, /* dune->unknown */
+];
+
+/* ── sample cards ── */
+var sampleCards = [
+  {pred:'clsSoil', real:'clsDune', conf:0.62, err:'errImbalance'},
+  {pred:'clsSoil', real:'clsDune', conf:0.58, err:'errImbalance'},
+  {pred:'clsRock', real:'clsSoil', conf:0.71, err:'errNoise'},
+  {pred:'clsUnknown', real:'clsDune', conf:0.45, err:'errRes'},
+  {pred:'clsSoil', real:'clsDune', conf:0.67, err:'errImbalance'},
+  {pred:'clsRock', real:'clsUnknown', conf:0.53, err:'errCapacity'},
+];
+
+/* ── error pattern stats ── */
+var patternStats = [
+  {key:'errImbalance', pct:40, color:'#a78bfa'},
+  {key:'errNoise', pct:25, color:P.primaryContainer},
+  {key:'errRes', pct:20, color:P.tertiary},
+  {key:'errCapacity', pct:15, color:P.signal},
+];
+
+/* ── utility ── */
+function lerp(a,b,p){ return a + (b - a) * p; }
+function easeInOut(x){ return x < 0.5 ? 2*x*x : 1 - Math.pow(-2*x+2,2)/2; }
+function merge(base, overrides){
+  var r = {};
+  for(var k in base) r[k] = base[k];
+  for(var k2 in overrides) r[k2] = overrides[k2];
+  return r;
+}
+
+/* ── draw primitives ── */
+function drawBg(){
+  var g = ctx.createLinearGradient(0,0,0,H);
+  g.addColorStop(0,'#131313');
+  g.addColorStop(1,'#1a1035');
+  ctx.fillStyle = g;
+  ctx.fillRect(0,0,W,H);
+  /* faint grid */
+  ctx.strokeStyle = 'rgba(255,255,255,0.03)';
+  ctx.lineWidth = 1;
+  for(var gx=0; gx<W; gx+=40){ ctx.beginPath(); ctx.moveTo(gx,0); ctx.lineTo(gx,H); ctx.stroke(); }
+  for(var gy=0; gy<H; gy+=40){ ctx.beginPath(); ctx.moveTo(0,gy); ctx.lineTo(W,gy); ctx.stroke(); }
+}
+
+function drawLabelPrimitive(text, x, y, color, size, align){
+  ctx.font = (size >= 14 ? '700 ' : '400 ') + size + 'px "Space Grotesk", sans-serif';
+  ctx.fillStyle = color || P.text;
+  ctx.textAlign = align || 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(text, x, y);
+}
+
+function drawTextPrimitive(text, x, y, color, size, align){
+  ctx.font = '400 ' + size + 'px "Noto Sans SC", "Inter", sans-serif';
+  ctx.fillStyle = color || P.text;
+  ctx.textAlign = align || 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(text, x, y);
+}
+
+function drawBox(x, y, w, h, borderColor, fillColor){
+  if(fillColor){
+    ctx.fillStyle = fillColor;
+    ctx.fillRect(x, y, w, h);
+  }
+  if(borderColor){
+    ctx.strokeStyle = borderColor;
+    ctx.lineWidth = 1;
+    ctx.strokeRect(x, y, w, h);
+  }
+}
+
+function drawMatrixCell(x, y, w, h, val, maxVal, highlight){
+  var intensity = val / maxVal;
+  var r = Math.floor(lerp(19,255,intensity));
+  var g2 = Math.floor(lerp(19,95,intensity));
+  var b = Math.floor(lerp(19,80,intensity));
+  ctx.fillStyle = 'rgb('+r+','+g2+','+b+')';
+  ctx.fillRect(x, y, w, h);
+  if(highlight){
+    ctx.strokeStyle = P.tertiary;
+    ctx.lineWidth = 2;
+    ctx.strokeRect(x-1, y-1, w+2, h+2);
+    ctx.shadowColor = P.tertiary;
+    ctx.shadowBlur = 8;
+    ctx.strokeRect(x-1, y-1, w+2, h+2);
+    ctx.shadowBlur = 0;
+  }
+  ctx.fillStyle = intensity > 0.5 ? '#fff' : P.muted;
+  ctx.font = '700 11px "Space Grotesk", sans-serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(val.toString(), x+w/2, y+h/2);
+}
+
+function drawSampleCard(x, y, w, h, sample, alpha){
+  ctx.globalAlpha = alpha;
+  var g = ctx.createLinearGradient(x, y, x, y+h);
+  g.addColorStop(0,'rgba(53,53,52,0.9)');
+  g.addColorStop(1,'rgba(28,27,27,0.9)');
+  ctx.fillStyle = g;
+  ctx.fillRect(x, y, w, h);
+  ctx.strokeStyle = P.outline;
+  ctx.lineWidth = 1;
+  ctx.strokeRect(x, y, w, h);
+  /* mini terrain icon */
+  var iconColors = {clsSoil:'#c4956a', clsRock:'#8a8886', clsDune:'#e8c170', clsUnknown:'#6b7280'};
+  ctx.fillStyle = iconColors[sample.real] || P.muted;
+  ctx.fillRect(x+4, y+4, 18, 18);
+  ctx.fillStyle = P.text;
+  ctx.font = '400 9px "Space Grotesk", sans-serif';
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'top';
+  ctx.fillText(t('smpPred')+': '+t(sample.pred), x+26, y+4);
+  ctx.fillText(t('smpTrue')+': '+t(sample.real), x+26, y+14);
+  ctx.fillStyle = P.signal;
+  ctx.fillText((sample.conf*100).toFixed(0)+'%', x+w-24, y+4);
+  ctx.globalAlpha = 1;
+}
+
+function drawBucket(x, y, w, h, patternKey, color, count, alpha){
+  ctx.globalAlpha = alpha;
+  var g = ctx.createLinearGradient(x, y, x, y+h);
+  g.addColorStop(0, color+'33');
+  g.addColorStop(1, color+'11');
+  ctx.fillStyle = g;
+  ctx.fillRect(x, y, w, h);
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 1.5;
+  ctx.strokeRect(x, y, w, h);
+  ctx.shadowColor = color;
+  ctx.shadowBlur = 6;
+  ctx.strokeRect(x, y, w, h);
+  ctx.shadowBlur = 0;
+  ctx.fillStyle = color;
+  ctx.font = '700 11px "Space Grotesk", sans-serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'top';
+  ctx.fillText(t(patternKey), x+w/2, y+4);
+  if(count !== undefined){
+    ctx.fillStyle = P.text;
+    ctx.font = '700 18px "Space Grotesk", sans-serif';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(count.toString(), x+w/2, y+h/2+6);
+  }
+  ctx.globalAlpha = 1;
+}
+
+function drawBarChart(x, y, w, h, data, alpha){
+  ctx.globalAlpha = alpha;
+  var barW = w / data.length - 8;
+  var maxPct = 50;
+  for(var i=0; i<data.length; i++){
+    var bx = x + i * (barW + 8) + 4;
+    var barH = (data[i].pct / maxPct) * (h - 30);
+    var by = y + h - 20 - barH;
+    var g = ctx.createLinearGradient(bx, by, bx, by+barH);
+    g.addColorStop(0, data[i].color);
+    g.addColorStop(1, data[i].color+'66');
+    ctx.fillStyle = g;
+    ctx.fillRect(bx, by, barW, barH);
+    ctx.shadowColor = data[i].color;
+    ctx.shadowBlur = 8;
+    ctx.fillRect(bx, by, barW, barH);
+    ctx.shadowBlur = 0;
+    ctx.fillStyle = P.text;
+    ctx.font = '700 10px "Space Grotesk", sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'bottom';
+    ctx.fillText(data[i].pct+'%', bx+barW/2, by-2);
+    ctx.fillStyle = P.muted;
+    ctx.font = '400 9px "Noto Sans SC", sans-serif';
+    ctx.textBaseline = 'top';
+    var label = t(data[i].key);
+    if(label.length > 4) label = label.substring(0,4);
+    ctx.fillText(label, bx+barW/2, y+h-18);
+  }
+  ctx.globalAlpha = 1;
+}
+
+function drawArrowPrimitive(x1, y1, x2, y2, color){
+  ctx.strokeStyle = color || P.primary;
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(x1, y1);
+  ctx.lineTo(x2, y2);
+  ctx.stroke();
+  /* arrowhead */
+  var angle = Math.atan2(y2-y1, x2-x1);
+  var headLen = 8;
+  ctx.beginPath();
+  ctx.moveTo(x2, y2);
+  ctx.lineTo(x2 - headLen*Math.cos(angle-0.4), y2 - headLen*Math.sin(angle-0.4));
+  ctx.lineTo(x2 - headLen*Math.cos(angle+0.4), y2 - headLen*Math.sin(angle+0.4));
+  ctx.closePath();
+  ctx.fillStyle = color || P.primary;
+  ctx.fill();
+}
+
+/* ── frame elements ── */
+function getFrameElements(f){
+  var cx = W/2, cy = H/2;
+  var elems = [];
+  /* title always present */
+  var titleKeys = ['f0Title','f1Title','f2Title','f3Title','f4Title'];
+  var descKeys  = ['f0Desc','f1Desc','f2Desc','f3Desc','f4Desc'];
+  elems.push({id:'title', type:'label', text:t(titleKeys[f]), x:cx, y:28, color:P.primary, size:16, align:'center', alpha:1});
+  elems.push({id:'desc', type:'text', text:t(descKeys[f]), x:cx, y:50, color:P.muted, size:12, align:'center', alpha:1});
+
+  if(f === 0){
+    /* Full confusion matrix centered */
+    var mSize = 44;
+    var mStartX = cx - 2*mSize - 20;
+    var mStartY = cy - 2*mSize + 10;
+    elems.push({id:'matrix', type:'custom', x:mStartX, y:mStartY, w:4*mSize, h:4*mSize, alpha:1,
+      draw: function(a){
+        ctx.globalAlpha = a;
+        /* row/col labels */
+        for(var i=0; i<4; i++){
+          drawLabelPrimitive(t(classLabels[i]), mStartX + i*mSize + mSize/2, mStartY - 12, P.muted, 10, 'center');
+          drawLabelPrimitive(t(classLabels[i]), mStartX - 6, mStartY + i*mSize + mSize/2, P.muted, 10, 'right');
+        }
+        var maxV = 180;
+        for(var r=0; r<4; r++){
+          for(var c=0; c<4; c++){
+            drawMatrixCell(mStartX+c*mSize, mStartY+r*mSize, mSize-2, mSize-2, matrix[r][c], maxV, false);
+          }
+        }
+        ctx.globalAlpha = 1;
+      }
+    });
+  }
+  else if(f === 1){
+    /* Matrix with highlighted confusion pairs */
+    var mSize = 40;
+    var mStartX = cx - 2*mSize - 40;
+    var mStartY = cy - 2*mSize;
+    elems.push({id:'matrix', type:'custom', x:mStartX, y:mStartY, w:4*mSize, h:4*mSize, alpha:1,
+      draw: function(a){
+        ctx.globalAlpha = a;
+        for(var i=0; i<4; i++){
+          drawLabelPrimitive(t(classLabels[i]), mStartX + i*mSize + mSize/2, mStartY - 12, P.muted, 9, 'center');
+          drawLabelPrimitive(t(classLabels[i]), mStartX - 6, mStartY + i*mSize + mSize/2, P.muted, 9, 'right');
+        }
+        var maxV = 180;
+        for(var r=0; r<4; r++){
+          for(var c=0; c<4; c++){
+            var hl = highConfusionPairs.some(function(p){ return p.r===r && p.c===c; });
+            drawMatrixCell(mStartX+c*mSize, mStartY+r*mSize, mSize-2, mSize-2, matrix[r][c], maxV, hl);
+          }
+        }
+        ctx.globalAlpha = 1;
+      }
+    });
+    /* Annotation panel on the right */
+    var panelX = cx + 60;
+    var panelY = cy - 60;
+    elems.push({id:'annotations', type:'custom', x:panelX, y:panelY, w:200, h:120, alpha:1,
+      draw: function(a){
+        ctx.globalAlpha = a;
+        drawBox(panelX, panelY, 200, 120, P.outline, 'rgba(28,27,27,0.85)');
+        for(var i=0; i<highConfusionPairs.length; i++){
+          var hp = highConfusionPairs[i];
+          var ty = panelY + 20 + i*35;
+          ctx.fillStyle = P.tertiary;
+          ctx.font = '700 11px "Space Grotesk", sans-serif';
+          ctx.textAlign = 'left';
+          ctx.textBaseline = 'middle';
+          ctx.fillText(t(classLabels[hp.r])+' -> '+t(classLabels[hp.c]), panelX+10, ty);
+          ctx.fillStyle = P.signal;
+          ctx.font = '700 14px "Space Grotesk", sans-serif';
+          ctx.fillText(hp.val.toString(), panelX+170, ty);
+        }
+        ctx.globalAlpha = 1;
+      }
+    });
+  }
+  else if(f === 2){
+    /* Misclassified sample cards */
+    var cardW = 130, cardH = 30;
+    var startX = cx - 1.5*cardW - 15;
+    var startY = cy - 50;
+    for(var i=0; i<sampleCards.length; i++){
+      var col = i % 3;
+      var row = Math.floor(i / 3);
+      (function(idx, sx, sy){
+        elems.push({id:'card'+idx, type:'custom', x:sx, y:sy, w:cardW, h:cardH, alpha:1,
+          draw: function(a){ drawSampleCard(sx, sy, cardW, cardH, sampleCards[idx], a); }
+        });
+      })(i, startX + col*(cardW+10), startY + row*(cardH+12));
+    }
+    /* count label */
+    elems.push({id:'countLabel', type:'label', text:'6 / 646', x:cx, y:startY + 2*(cardH+12) + 30, color:P.signal, size:14, align:'center', alpha:1});
+    elems.push({id:'countDesc', type:'text', text:LANG==='cn'?'\u8bef\u5206\u6837\u672c / \u603b\u6837\u672c':'misclassified / total', x:cx, y:startY + 2*(cardH+12) + 48, color:P.muted, size:10, align:'center', alpha:1});
+  }
+  else if(f === 3){
+    /* Four error pattern buckets with sample cards flowing in */
+    var bw = 100, bh = 80;
+    var totalW = 4*bw + 3*12;
+    var bx0 = cx - totalW/2;
+    var by = cy - 20;
+    var patternKeys = ['errNoise','errRes','errImbalance','errCapacity'];
+    var patternColors = [P.primaryContainer, P.tertiary, '#a78bfa', P.signal];
+    var bucketCounts = [1, 1, 3, 1];
+    for(var i=0; i<4; i++){
+      (function(idx, bx){
+        elems.push({id:'bucket'+idx, type:'custom', x:bx, y:by, w:bw, h:bh, alpha:1,
+          draw: function(a){ drawBucket(bx, by, bw, bh, patternKeys[idx], patternColors[idx], bucketCounts[idx], a); }
+        });
+      })(i, bx0 + i*(bw+12));
+    }
+    /* arrows from top */
+    elems.push({id:'flowArrow', type:'custom', x:cx, y:cy-60, w:1, h:1, alpha:1,
+      draw: function(a){
+        ctx.globalAlpha = a;
+        for(var i=0; i<4; i++){
+          var ax = bx0 + i*(bw+12) + bw/2;
+          drawArrowPrimitive(ax, by-30, ax, by, patternColors[i]);
+        }
+        ctx.globalAlpha = 1;
+      }
+    });
+  }
+  else if(f === 4){
+    /* Priority bar chart + priority list */
+    var chartX = cx - 160;
+    var chartY = cy - 50;
+    var chartW = 200, chartH = 140;
+    elems.push({id:'barChart', type:'custom', x:chartX, y:chartY, w:chartW, h:chartH, alpha:1,
+      draw: function(a){ drawBarChart(chartX, chartY, chartW, chartH, patternStats, a); }
+    });
+    /* priority list on the right */
+    var listX = cx + 60;
+    var listY = cy - 50;
+    var priKeys = ['priFirst','priSecond','priThird','priFourth'];
+    var priColors = ['#a78bfa', P.primaryContainer, P.tertiary, P.signal];
+    elems.push({id:'priList', type:'custom', x:listX, y:listY, w:180, h:140, alpha:1,
+      draw: function(a){
+        ctx.globalAlpha = a;
+        drawBox(listX, listY, 180, 140, P.outline, 'rgba(28,27,27,0.85)');
+        for(var i=0; i<4; i++){
+          var ty = listY + 20 + i*30;
+          ctx.fillStyle = priColors[i];
+          ctx.fillRect(listX+10, ty-5, 10, 10);
+          ctx.fillStyle = P.text;
+          ctx.font = '400 12px "Noto Sans SC", sans-serif';
+          ctx.textAlign = 'left';
+          ctx.textBaseline = 'middle';
+          ctx.fillText(t(priKeys[i]), listX+28, ty);
+        }
+        ctx.globalAlpha = 1;
+      }
+    });
+  }
+
+  return elems;
+}
+
+/* ── drawElement ── */
+function drawElement(el){
+  if(!el || el.alpha <= 0.01) return;
+  ctx.save();
+  ctx.globalAlpha = el.alpha;
+  switch(el.type){
+    case 'label': drawLabelPrimitive(el.text, el.x, el.y, el.color, el.size, el.align); break;
+    case 'text':  drawTextPrimitive(el.text, el.x, el.y, el.color, el.size, el.align); break;
+    case 'arrow': drawArrowPrimitive(el.x1, el.y1, el.x2, el.y2, el.color); break;
+    case 'box':   drawBox(el.x, el.y, el.w, el.h, el.borderColor, el.fillColor); break;
+    case 'custom': el.draw(el.alpha); break;
+  }
+  ctx.restore();
+}
+
+/* ── drawFrame ── */
+function drawFrame(f){
+  drawBg();
+  var elems = getFrameElements(f);
+  elems.forEach(function(el){ drawElement(el); });
+}
+
+/* ── transitionTo ── */
+function transitionTo(newFrame){
+  if(newFrame < 0) newFrame = 0;
+  if(newFrame >= totalFrames) newFrame = totalFrames - 1;
+  if(newFrame === currentFrame && !transitioning){ drawFrame(currentFrame); updateHUD(currentFrame); return; }
+  if(transitioning) return;
+
+  var oldElems = getFrameElements(currentFrame);
+  var newElems = getFrameElements(newFrame);
+  var oldMap = {}; oldElems.forEach(function(e){ oldMap[e.id] = e; });
+  var newMap = {}; newElems.forEach(function(e){ newMap[e.id] = e; });
+
+  currentFrame = newFrame;
+  updateHUD(newFrame);
+  transitioning = true;
+
+  var startTime = null;
+  var duration = 500;
+
+  function step(timestamp){
+    if(!startTime) startTime = timestamp;
+    var raw = Math.min((timestamp - startTime) / duration, 1);
+    var p = easeInOut(raw);
+
+    drawBg();
+
+    oldElems.forEach(function(oe){
+      if(!newMap[oe.id]) drawElement(merge(oe, {alpha: 1 - p}));
+    });
+
+    newElems.forEach(function(ne){
+      var oe = oldMap[ne.id];
+      if(oe){
+        var merged = merge(ne, {
+          x: lerp(oe.x||0, ne.x||0, p),
+          y: lerp(oe.y||0, ne.y||0, p),
+          w: lerp(oe.w||0, ne.w||0, p),
+          h: lerp(oe.h||0, ne.h||0, p),
+          alpha: 1
+        });
+        if(ne.type === 'arrow' && oe.type === 'arrow'){
+          merged.x1 = lerp(oe.x1, ne.x1, p);
+          merged.y1 = lerp(oe.y1, ne.y1, p);
+          merged.x2 = lerp(oe.x2, ne.x2, p);
+          merged.y2 = lerp(oe.y2, ne.y2, p);
+        }
+        if((ne.type==='label'||ne.type==='text') && oe.text !== ne.text){
+          drawElement(merge(oe, {alpha: 1 - p}));
+          drawElement(merge(ne, {alpha: p}));
+        } else {
+          drawElement(merged);
+        }
+      } else {
+        drawElement(merge(ne, {alpha: p}));
+      }
+    });
+
+    if(raw < 1){
+      requestAnimationFrame(step);
+    } else {
+      transitioning = false;
+    }
+  }
+  requestAnimationFrame(step);
+}
+
+/* ── HUD ── */
+var hudData = [
+  {step:'1/5', errors:'-', topPair:'-', priority:'-'},
+  {step:'2/5', errors:'86', topPair:'Dune->Soil', priority:'-'},
+  {step:'3/5', errors:'86', topPair:'Dune->Soil', priority:'-'},
+  {step:'4/5', errors:'86', topPair:'Dune->Soil', priority:'-'},
+  {step:'5/5', errors:'86', topPair:'Dune->Soil', priority:'#1 40%'},
+];
+function updateHUD(f){
+  var d = hudData[f];
+  var html = '';
+  html += '<div class="hud-col"><div class="hud-label">'+t('hudStep')+'</div><div class="hud-val">'+d.step+'</div></div>';
+  html += '<div class="hud-col"><div class="hud-label">'+t('hudErrors')+'</div><div class="hud-val">'+d.errors+'</div></div>';
+  html += '<div class="hud-col"><div class="hud-label">'+t('hudTopPair')+'</div><div class="hud-val">'+d.topPair+'</div></div>';
+  html += '<div class="hud-col"><div class="hud-label">'+t('hudPriority')+'</div><div class="hud-val">'+d.priority+'</div></div>';
+  document.getElementById('hud').innerHTML = html;
+}
+
+/* ── controls ── */
+function updateControlTexts(){
+  document.getElementById('btnPrev').textContent = t('btnPrev');
+  document.getElementById('btnPlay').textContent = playing ? t('btnPause') : t('btnPlay');
+  document.getElementById('btnNext').textContent = t('btnNext');
+  document.getElementById('frameIndicator').textContent = (currentFrame+1)+' / '+totalFrames;
+}
+
+document.getElementById('btnPrev').addEventListener('click', function(){
+  stopPlay();
+  transitionTo(currentFrame - 1);
+  updateControlTexts();
+});
+document.getElementById('btnNext').addEventListener('click', function(){
+  stopPlay();
+  transitionTo(currentFrame + 1);
+  updateControlTexts();
+});
+document.getElementById('btnPlay').addEventListener('click', function(){
+  if(playing){ stopPlay(); }
+  else {
+    if(currentFrame >= totalFrames - 1) currentFrame = -1;
+    playing = true;
+    autoPlay();
+  }
+  updateControlTexts();
+});
+
+function autoPlay(){
+  if(!playing) return;
+  if(currentFrame >= totalFrames - 1){ stopPlay(); updateControlTexts(); return; }
+  transitionTo(currentFrame + 1);
+  updateControlTexts();
+  playRAF = setTimeout(function(){ autoPlay(); }, 2200);
+}
+function stopPlay(){
+  playing = false;
+  if(playRAF){ clearTimeout(playRAF); playRAF = null; }
+}
+
+/* ── guide panel ── */
+function updateGuide(){
+  document.getElementById('guideTitle').textContent = t('guideTitle');
+  var items = t('guideItems');
+  var html = '';
+  if(Array.isArray(items)){
+    items.forEach(function(item){ html += '<li>'+item+'</li>'; });
+  }
+  document.getElementById('guideList').innerHTML = html;
+}
+document.getElementById('guideHeader').addEventListener('click', function(){
+  var content = document.getElementById('guideContent');
+  var toggle = document.getElementById('guideToggle');
+  if(content.classList.contains('collapsed')){
+    content.classList.remove('collapsed');
+    toggle.textContent = '[-]';
+  } else {
+    content.classList.add('collapsed');
+    toggle.textContent = '[+]';
+  }
+});
+
+/* ── i18n switch ── */
+function refreshI18N(){
+  updateGuide();
+  updateControlTexts();
+  updateHUD(currentFrame);
+  drawFrame(currentFrame);
+}
+document.getElementById('langBtn').addEventListener('click', function(){
+  LANG = LANG === 'en' ? 'cn' : 'en';
+  document.getElementById('langBtn').textContent = LANG.toUpperCase();
+  refreshI18N();
+});
+
+/* ── resize ── */
+function resize(){
+  var wrap = document.querySelector('.canvas-wrap');
+  var rect = wrap.getBoundingClientRect();
+  if(rect.width < 1 || rect.height < 1) return;
+  W = rect.width;
+  H = rect.height;
+  canvas.width = W * DPR;
+  canvas.height = H * DPR;
+  canvas.style.width = W + 'px';
+  canvas.style.height = H + 'px';
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  drawFrame(currentFrame);
+}
+window.addEventListener('resize', resize);
+
+/* ── init ── */
+refreshI18N();
+resize();
+setTimeout(resize, 200);
+setTimeout(resize, 600);
+document.fonts.ready.then(function(){ resize(); });
+
+})();
+</script>
+</body>
+</html>

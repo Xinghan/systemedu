@@ -1,0 +1,381 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Pipeline Assembly Workshop</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;700&family=Inter:wght@400;500&family=Noto+Sans+SC:wght@400;700&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{width:100%;height:100vh;overflow:hidden;background:#131313;font-family:'Noto Sans SC','Inter',sans-serif;color:#e5e2e1}
+.wrapper{display:flex;flex-direction:column;height:100vh;width:100%}
+header{padding:8px 16px;background:rgba(28,27,27,0.92);border-bottom:1px solid rgba(138,136,134,0.15);display:flex;align-items:center;justify-content:space-between;flex-shrink:0}
+header h1{font-family:'Space Grotesk',sans-serif;font-size:15px;font-weight:700;color:#ffb59c;letter-spacing:1px}
+header .sub{font-size:11px;color:#8a8886}
+.game-area{flex:1;min-height:0;display:flex;padding:12px;gap:12px;overflow:hidden}
+.module-panel{width:35%;display:flex;flex-direction:column;gap:8px;overflow-y:auto}
+.module-panel h3{font-family:'Space Grotesk',sans-serif;font-size:12px;color:#8a8886;letter-spacing:1px;margin-bottom:4px}
+.module-card{padding:10px 12px;background:rgba(28,27,27,0.92);border:1px solid rgba(138,136,134,0.15);cursor:grab;user-select:none;touch-action:none;transition:border-color 0.2s,background 0.2s}
+.module-card:hover{border-color:rgba(255,181,156,0.4)}
+.module-card.dragging{opacity:0.5;border-color:#ffb59c}
+.module-card.placed{opacity:0.3;pointer-events:none;cursor:default}
+.module-card .card-title{font-family:'Space Grotesk',sans-serif;font-size:12px;font-weight:700;color:#ffb59c;margin-bottom:4px}
+.module-card .card-desc{font-size:11px;color:#c6c6c6;line-height:1.4}
+.pipeline-panel{flex:1;display:flex;flex-direction:column;gap:8px}
+.pipeline-panel h3{font-family:'Space Grotesk',sans-serif;font-size:12px;color:#8a8886;letter-spacing:1px;margin-bottom:4px}
+.pipeline-slots{display:flex;flex-direction:column;gap:8px;flex:1}
+.pipeline-slot{flex:1;display:flex;align-items:center;gap:8px}
+.slot-label{font-family:'Space Grotesk',sans-serif;font-size:11px;color:#8a8886;width:20px;text-align:center;flex-shrink:0}
+.slot-box{flex:1;height:100%;min-height:50px;border:2px dashed rgba(138,136,134,0.3);display:flex;align-items:center;justify-content:center;transition:border-color 0.2s,background 0.2s}
+.slot-box.hover{border-color:#ffb59c;background:rgba(255,181,156,0.08)}
+.slot-box.correct{border-color:#10b981;background:rgba(16,185,129,0.1);border-style:solid}
+.slot-box.wrong{border-color:#ef4444;background:rgba(239,68,68,0.1)}
+.slot-box .slot-content{font-family:'Space Grotesk',sans-serif;font-size:12px;font-weight:700;color:#10b981}
+.slot-box .slot-placeholder{font-size:11px;color:rgba(138,136,134,0.5)}
+.trash-zone{height:50px;border:2px dashed rgba(239,68,68,0.3);display:flex;align-items:center;justify-content:center;transition:border-color 0.2s,background 0.2s;flex-shrink:0;margin-top:4px}
+.trash-zone.hover{border-color:#ef4444;background:rgba(239,68,68,0.1)}
+.trash-zone .trash-label{font-family:'Space Grotesk',sans-serif;font-size:11px;color:rgba(239,68,68,0.5)}
+.trash-zone .trash-count{font-family:'Space Grotesk',sans-serif;font-size:11px;color:#ef4444;margin-left:8px}
+.hud{display:flex;justify-content:space-around;padding:8px 16px;background:rgba(0,0,0,0.55);flex-shrink:0;height:44px;align-items:center}
+.hud-item{text-align:center}
+.hud-item .label{font-family:'Space Grotesk',sans-serif;font-size:9px;color:#8a8886;letter-spacing:1px;text-transform:uppercase}
+.hud-item .value{font-family:'Space Grotesk',sans-serif;font-size:13px;color:#ffb59c;font-weight:700}
+.lang-btn{position:fixed;top:8px;left:8px;z-index:100;font-family:'Space Grotesk',sans-serif;font-size:11px;font-weight:700;padding:4px 10px;cursor:pointer;border:1px solid rgba(255,255,255,0.08);background:rgba(20,20,35,0.85);backdrop-filter:blur(12px);color:#ffb59c;letter-spacing:1px}
+.guide-panel{position:fixed;top:8px;right:8px;width:220px;max-height:40vh;overflow-y:auto;background:rgba(20,20,35,0.85);backdrop-filter:blur(12px);border:1px solid rgba(255,255,255,0.08);padding:12px;z-index:100;font-family:'Noto Sans SC',sans-serif;font-size:12px;color:rgba(255,255,255,0.85)}
+.guide-panel h3{font-family:'Space Grotesk',sans-serif;font-size:13px;margin-bottom:8px;display:flex;align-items:center;justify-content:space-between;cursor:pointer;color:#ffb59c}
+.guide-panel ul{padding-left:16px;line-height:1.6}
+.success-overlay{position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.7);display:none;align-items:center;justify-content:center;z-index:200;flex-direction:column}
+.success-overlay.show{display:flex}
+.success-box{background:rgba(28,27,27,0.95);border:1px solid rgba(16,185,129,0.4);padding:32px;max-width:400px;text-align:center}
+.success-box h2{font-family:'Space Grotesk',sans-serif;font-size:20px;color:#10b981;margin-bottom:16px}
+.success-box p{font-size:13px;color:#c6c6c6;line-height:1.6;margin-bottom:8px}
+.success-box .summary-item{font-family:'Space Grotesk',sans-serif;font-size:11px;color:#ffb59c;margin:4px 0}
+.ghost{position:fixed;z-index:300;pointer-events:none;padding:8px 12px;background:rgba(255,181,156,0.15);border:1px solid #ffb59c;font-family:'Space Grotesk',sans-serif;font-size:11px;font-weight:700;color:#ffb59c;backdrop-filter:blur(12px)}
+</style>
+</head>
+<body>
+<button class="lang-btn" id="langBtn">CN</button>
+<div class="guide-panel" id="guidePanel">
+  <h3 id="guideToggle"><span id="guideTitle"></span> <span id="guideArrow">-</span></h3>
+  <div class="guide-content" id="guideContent">
+    <p id="guideGoal" style="margin-bottom:8px"></p>
+    <ul id="guideSteps"></ul>
+    <p id="guideTip" style="margin-top:8px;color:#ffb59c;font-size:11px"></p>
+  </div>
+</div>
+<div class="wrapper">
+  <header>
+    <div><h1 id="headerTitle"></h1><span class="sub" id="headerSub"></span></div>
+  </header>
+  <div class="game-area" id="gameArea">
+    <div class="module-panel" id="modulePanel">
+      <h3 id="modulePanelTitle"></h3>
+      <div id="moduleCards"></div>
+    </div>
+    <div class="pipeline-panel">
+      <h3 id="pipelinePanelTitle"></h3>
+      <div class="pipeline-slots" id="pipelineSlots"></div>
+      <div class="trash-zone" id="trashZone">
+        <span class="trash-label" id="trashLabel"></span>
+        <span class="trash-count" id="trashCount"></span>
+      </div>
+    </div>
+  </div>
+  <div class="hud">
+    <div class="hud-item"><div class="label" id="hudLabel0"></div><div class="value" id="hudValue0">0 / 4</div></div>
+    <div class="hud-item"><div class="label" id="hudLabel1"></div><div class="value" id="hudValue1">0 / 2</div></div>
+    <div class="hud-item"><div class="label" id="hudLabel2"></div><div class="value" id="hudValue2">0</div></div>
+    <div class="hud-item"><div class="label" id="hudLabel3"></div><div class="value" id="hudValue3">--</div></div>
+  </div>
+</div>
+<div class="success-overlay" id="successOverlay">
+  <div class="success-box">
+    <h2 id="successTitle"></h2>
+    <p id="successMsg"></p>
+    <div id="successSummary"></div>
+  </div>
+</div>
+<script>
+(function(){
+var LANG='cn';
+var I18N={
+  title:{en:'PIPELINE ASSEMBLY',cn:'\u6d41\u6c34\u7ebf\u7ec4\u88c5\u5de5\u574a'},
+  subtitle:{en:'Drag modules to correct pipeline slots',cn:'\u628a\u4ee3\u7801\u6a21\u5757\u62d6\u5230\u6b63\u786e\u7684\u6d41\u6c34\u7ebf\u4f4d\u7f6e'},
+  modulePanelTitle:{en:'MODULE WAREHOUSE',cn:'\u6a21\u5757\u4ed3\u5e93'},
+  pipelinePanelTitle:{en:'PIPELINE SLOTS',cn:'\u6d41\u6c34\u7ebf\u69fd\u4f4d'},
+  guideTitle:{en:'GUIDE',cn:'\u64cd\u4f5c\u6307\u5357'},
+  guideGoal:{en:'Drag the correct code modules to their pipeline positions.',cn:'\u628a\u6b63\u786e\u7684\u4ee3\u7801\u6a21\u5757\u62d6\u5230\u6d41\u6c34\u7ebf\u7684\u5bf9\u5e94\u4f4d\u7f6e\u3002'},
+  guideS1:{en:'Read each card description',cn:'\u9605\u8bfb\u6bcf\u5f20\u5361\u7247\u7684\u529f\u80fd\u63cf\u8ff0'},
+  guideS2:{en:'Determine which layer it belongs to',cn:'\u5224\u65ad\u5b83\u5c5e\u4e8e\u54ea\u4e00\u5c42'},
+  guideS3:{en:'Drag to the matching slot',cn:'\u62d6\u5230\u5bf9\u5e94\u69fd\u4f4d'},
+  guideS4:{en:'Drag decoys to the trash bin',cn:'\u5c06\u5e72\u6270\u9879\u62d6\u5230\u5e9f\u6599\u7bb1'},
+  guideTip:{en:'Tip: First identify which modules clearly do NOT belong.',cn:'\u63d0\u793a\uff1a\u5148\u5224\u65ad\u54ea\u4e9b\u6a21\u5757\u660e\u663e\u4e0d\u5c5e\u4e8e\u8fd9\u4e2a\u5f15\u64ce\u3002'},
+  trashLabel:{en:'TRASH BIN (decoys)',cn:'\u5e9f\u6599\u7bb1 (\u5e72\u6270\u9879)'},
+  hudL0:{en:'PLACED',cn:'\u5df2\u653e\u7f6e'},
+  hudL1:{en:'TRASHED',cn:'\u5df2\u4e22\u5f03'},
+  hudL2:{en:'ERRORS',cn:'\u9519\u8bef'},
+  hudL3:{en:'STATUS',cn:'\u72b6\u6001'},
+  statusReady:{en:'READY',cn:'\u5c31\u7eea'},
+  statusComplete:{en:'COMPLETE',cn:'\u5b8c\u6210'},
+  successTitle:{en:'ASSEMBLY COMPLETE!',cn:'\u7ec4\u88c5\u5b8c\u6210\uff01'},
+  successMsg:{en:'You correctly assembled the 4-layer pipeline engine!',cn:'\u4f60\u6b63\u786e\u7ec4\u88c5\u4e86\u56db\u5c42\u6d41\u6c34\u7ebf\u5f15\u64ce\uff01'},
+  slotPlaceholder:{en:'Drop module here',cn:'\u62d6\u653e\u6a21\u5757\u5230\u6b64\u5904'},
+  modules:[
+    {id:'perception',title:{en:'Segmentation Model',cn:'\u5206\u5272\u6a21\u578b'},desc:{en:'Runs deep learning model on raw Mars image, outputs pixel-level terrain mask (sand/rock/shadow/soil).',cn:'\u5bf9\u539f\u59cb\u706b\u661f\u56fe\u50cf\u8fd0\u884c\u6df1\u5ea6\u5b66\u4e60\u6a21\u578b\uff0c\u8f93\u51fa\u50cf\u7d20\u7ea7\u5730\u8c8c\u638c\u7801\uff08\u6c99\u5730/\u5ca9\u77f3/\u9634\u5f71/\u571f\u58e4\uff09\u3002'},slot:0},
+    {id:'risk_encoding',title:{en:'Cost Encoder',cn:'\u4ee3\u4ef7\u7f16\u7801\u5668'},desc:{en:'Converts terrain mask to numeric risk cost map (0-255) via lookup table. Each terrain class maps to a cost value.',cn:'\u901a\u8fc7\u67e5\u627e\u8868\u5c06\u5730\u8c8c\u638c\u7801\u8f6c\u6362\u4e3a\u6570\u503c\u578b\u98ce\u9669\u4ee3\u4ef7\u56fe (0-255)\u3002\u6bcf\u79cd\u5730\u8c8c\u7c7b\u522b\u6620\u5c04\u5230\u4e00\u4e2a\u4ee3\u4ef7\u503c\u3002'},slot:1},
+    {id:'path_planning',title:{en:'A*/Field D* Planner',cn:'A*/Field D* \u89c4\u5212\u5668'},desc:{en:'Searches optimal low-cost path on cost map from start to goal. Returns path coordinates or NO_SAFE_PATH status.',cn:'\u5728\u4ee3\u4ef7\u56fe\u4e0a\u641c\u7d22\u4ece\u8d77\u70b9\u5230\u76ee\u6807\u7684\u6700\u4f4e\u4ee3\u4ef7\u8def\u5f84\u3002\u8fd4\u56de\u8def\u5f84\u5750\u6807\u6216 NO_SAFE_PATH \u72b6\u6001\u3002'},slot:2},
+    {id:'output_replan',title:{en:'Output Packager & Replanner',cn:'\u8f93\u51fa\u6253\u5305\u5668\u4e0e\u91cd\u89c4\u5212\u5668'},desc:{en:'Packages risk map + path + cost into JSON result. Triggers replan when new observations arrive.',cn:'\u5c06\u98ce\u9669\u56fe + \u8def\u5f84 + \u4ee3\u4ef7\u6253\u5305\u4e3a JSON \u7ed3\u679c\u3002\u65b0\u89c2\u6d4b\u5230\u8fbe\u65f6\u89e6\u53d1\u91cd\u89c4\u5212\u3002'},slot:3},
+    {id:'decoy_color',title:{en:'Image Color Enhancer',cn:'\u56fe\u50cf\u8272\u5f69\u589e\u5f3a\u5668'},desc:{en:'Applies white balance and color saturation adjustment to Mars images for better visual quality.',cn:'\u5bf9\u706b\u661f\u56fe\u50cf\u8fdb\u884c\u767d\u5e73\u8861\u548c\u8272\u5f69\u9971\u548c\u5ea6\u8c03\u6574\uff0c\u63d0\u5347\u89c6\u89c9\u8d28\u91cf\u3002'},slot:-1},
+    {id:'decoy_compress',title:{en:'Data Compressor',cn:'\u6570\u636e\u538b\u7f29\u5668'},desc:{en:'Compresses output files using gzip for efficient network transmission. Reduces file size by 70%.',cn:'\u4f7f\u7528 gzip \u538b\u7f29\u8f93\u51fa\u6587\u4ef6\u4ee5\u4fbf\u7f51\u7edc\u4f20\u8f93\u3002\u6587\u4ef6\u5927\u5c0f\u51cf\u5c0f 70%\u3002'},slot:-1}
+  ],
+  slotLabels:[
+    {en:'L1: Perception',cn:'L1: \u611f\u77e5\u63a8\u7406'},
+    {en:'L2: Risk Encoding',cn:'L2: \u98ce\u9669\u7f16\u7801'},
+    {en:'L3: Path Planning',cn:'L3: \u8def\u5f84\u641c\u7d22'},
+    {en:'L4: Output & Replan',cn:'L4: \u8f93\u51fa/\u91cd\u89c4\u5212'}
+  ],
+  summaryL1:{en:'L1 Perception: Segmentation Model',cn:'L1 \u611f\u77e5\u63a8\u7406: \u5206\u5272\u6a21\u578b'},
+  summaryL2:{en:'L2 Risk Encoding: Cost Encoder',cn:'L2 \u98ce\u9669\u7f16\u7801: \u4ee3\u4ef7\u7f16\u7801\u5668'},
+  summaryL3:{en:'L3 Path Planning: A*/Field D* Planner',cn:'L3 \u8def\u5f84\u641c\u7d22: A*/Field D* \u89c4\u5212\u5668'},
+  summaryL4:{en:'L4 Output & Replan: Output Packager',cn:'L4 \u8f93\u51fa/\u91cd\u89c4\u5212: \u8f93\u51fa\u6253\u5305\u5668'},
+  summaryDecoy:{en:'Decoys correctly discarded!',cn:'\u5e72\u6270\u9879\u5df2\u6b63\u786e\u4e22\u5f03\uff01'}
+};
+function t(k){return(I18N[k]&&I18N[k][LANG])||(I18N[k]&&I18N[k]['en'])||k;}
+function tObj(obj){return obj[LANG]||obj['en']||'';}
+
+var state={
+  placed:[null,null,null,null],
+  trashed:[],
+  errors:0,
+  completed:false
+};
+var dragState={active:false,moduleId:null,ghost:null,startX:0,startY:0};
+
+function shuffleArray(arr){
+  for(var i=arr.length-1;i>0;i--){var j=Math.floor(Math.random()*(i+1));var tmp=arr[i];arr[i]=arr[j];arr[j]=tmp;}
+  return arr;
+}
+
+var moduleOrder=shuffleArray([0,1,2,3,4,5]);
+
+function getModuleDef(id){
+  var mods=I18N.modules;
+  for(var i=0;i<mods.length;i++){if(mods[i].id===id)return mods[i];}
+  return null;
+}
+
+function buildCards(){
+  var container=document.getElementById('moduleCards');
+  container.innerHTML='';
+  moduleOrder.forEach(function(idx){
+    var mod=I18N.modules[idx];
+    if(state.placed.indexOf(mod.id)>=0||state.trashed.indexOf(mod.id)>=0)return;
+    var card=document.createElement('div');
+    card.className='module-card';
+    card.setAttribute('data-module-id',mod.id);
+    var titleDiv=document.createElement('div');
+    titleDiv.className='card-title';
+    titleDiv.textContent=tObj(mod.title);
+    var descDiv=document.createElement('div');
+    descDiv.className='card-desc';
+    descDiv.textContent=tObj(mod.desc);
+    card.appendChild(titleDiv);
+    card.appendChild(descDiv);
+    card.addEventListener('mousedown',onDragStart);
+    card.addEventListener('touchstart',onDragStart,{passive:false});
+    container.appendChild(card);
+  });
+}
+
+function buildSlots(){
+  var container=document.getElementById('pipelineSlots');
+  container.innerHTML='';
+  for(var i=0;i<4;i++){
+    var slot=document.createElement('div');
+    slot.className='pipeline-slot';
+    var label=document.createElement('div');
+    label.className='slot-label';
+    label.textContent=(i+1)+'';
+    var box=document.createElement('div');
+    box.className='slot-box';
+    box.setAttribute('data-slot-index',i);
+    if(state.placed[i]){
+      box.classList.add('correct');
+      var content=document.createElement('div');
+      content.className='slot-content';
+      var mod=getModuleDef(state.placed[i]);
+      content.textContent=tObj(I18N.slotLabels[i])+': '+tObj(mod.title);
+      box.appendChild(content);
+    }else{
+      var ph=document.createElement('div');
+      ph.className='slot-placeholder';
+      ph.textContent=tObj(I18N.slotLabels[i])+' - '+t('slotPlaceholder');
+      box.appendChild(ph);
+    }
+    slot.appendChild(label);
+    slot.appendChild(box);
+    container.appendChild(slot);
+  }
+}
+
+function updateHUD(){
+  var placed=state.placed.filter(function(p){return p!==null;}).length;
+  var trashed=state.trashed.length;
+  document.getElementById('hudValue0').textContent=placed+' / 4';
+  document.getElementById('hudValue1').textContent=trashed+' / 2';
+  document.getElementById('hudValue2').textContent=state.errors+'';
+  document.getElementById('hudValue3').textContent=state.completed?t('statusComplete'):t('statusReady');
+  document.getElementById('trashCount').textContent='('+trashed+'/2)';
+}
+
+function checkWin(){
+  var allPlaced=state.placed.every(function(p){return p!==null;});
+  var allTrashed=state.trashed.length>=2;
+  if(allPlaced&&allTrashed){
+    state.completed=true;
+    updateHUD();
+    showSuccess();
+  }
+}
+
+function showSuccess(){
+  document.getElementById('successOverlay').classList.add('show');
+  document.getElementById('successTitle').textContent=t('successTitle');
+  document.getElementById('successMsg').textContent=t('successMsg');
+  var summary=document.getElementById('successSummary');
+  summary.innerHTML='';
+  ['summaryL1','summaryL2','summaryL3','summaryL4','summaryDecoy'].forEach(function(k){
+    var div=document.createElement('div');
+    div.className='summary-item';
+    div.textContent=t(k);
+    summary.appendChild(div);
+  });
+}
+
+function onDragStart(e){
+  if(state.completed)return;
+  e.preventDefault();
+  var card=e.currentTarget;
+  var moduleId=card.getAttribute('data-module-id');
+  var touch=e.touches?e.touches[0]:e;
+  dragState.active=true;
+  dragState.moduleId=moduleId;
+  dragState.startX=touch.clientX;
+  dragState.startY=touch.clientY;
+  card.classList.add('dragging');
+  var ghost=document.createElement('div');
+  ghost.className='ghost';
+  var mod=getModuleDef(moduleId);
+  ghost.textContent=tObj(mod.title);
+  ghost.style.left=(touch.clientX-40)+'px';
+  ghost.style.top=(touch.clientY-15)+'px';
+  document.body.appendChild(ghost);
+  dragState.ghost=ghost;
+  dragState.cardEl=card;
+}
+
+function onDragMove(e){
+  if(!dragState.active)return;
+  if(e.touches)e.preventDefault();
+  var touch=e.touches?e.touches[0]:e;
+  if(dragState.ghost){
+    dragState.ghost.style.left=(touch.clientX-40)+'px';
+    dragState.ghost.style.top=(touch.clientY-15)+'px';
+  }
+  var slots=document.querySelectorAll('.slot-box');
+  slots.forEach(function(s){s.classList.remove('hover');});
+  document.getElementById('trashZone').classList.remove('hover');
+  var target=document.elementFromPoint(touch.clientX,touch.clientY);
+  if(target){
+    var slotBox=target.closest('.slot-box');
+    if(slotBox&&!slotBox.classList.contains('correct')){slotBox.classList.add('hover');}
+    var trash=target.closest('.trash-zone');
+    if(trash){trash.classList.add('hover');}
+  }
+}
+
+function onDragEnd(e){
+  if(!dragState.active)return;
+  dragState.active=false;
+  if(dragState.ghost){document.body.removeChild(dragState.ghost);dragState.ghost=null;}
+  if(dragState.cardEl){dragState.cardEl.classList.remove('dragging');}
+  var touch=e.changedTouches?e.changedTouches[0]:e;
+  var target=document.elementFromPoint(touch.clientX,touch.clientY);
+  var slots=document.querySelectorAll('.slot-box');
+  slots.forEach(function(s){s.classList.remove('hover');});
+  document.getElementById('trashZone').classList.remove('hover');
+  if(!target)return;
+  var slotBox=target.closest('.slot-box');
+  if(slotBox&&!slotBox.classList.contains('correct')){
+    var slotIdx=parseInt(slotBox.getAttribute('data-slot-index'));
+    var mod=getModuleDef(dragState.moduleId);
+    if(mod.slot===slotIdx){
+      state.placed[slotIdx]=dragState.moduleId;
+      buildSlots();buildCards();updateHUD();checkWin();
+    }else{
+      state.errors++;
+      slotBox.classList.add('wrong');
+      setTimeout(function(){slotBox.classList.remove('wrong');},600);
+      updateHUD();
+    }
+    return;
+  }
+  var trash=target.closest('.trash-zone');
+  if(trash){
+    var mod2=getModuleDef(dragState.moduleId);
+    if(mod2.slot===-1){
+      state.trashed.push(dragState.moduleId);
+      buildCards();updateHUD();checkWin();
+    }else{
+      state.errors++;
+      trash.classList.add('wrong');
+      setTimeout(function(){trash.classList.remove('wrong');},600);
+      updateHUD();
+    }
+  }
+}
+
+document.addEventListener('mousemove',onDragMove);
+document.addEventListener('mouseup',onDragEnd);
+document.addEventListener('touchmove',onDragMove,{passive:false});
+document.addEventListener('touchend',onDragEnd);
+
+function refreshI18N(){
+  document.getElementById('headerTitle').textContent=t('title');
+  document.getElementById('headerSub').textContent=t('subtitle');
+  document.getElementById('modulePanelTitle').textContent=t('modulePanelTitle');
+  document.getElementById('pipelinePanelTitle').textContent=t('pipelinePanelTitle');
+  document.getElementById('guideTitle').textContent=t('guideTitle');
+  document.getElementById('guideGoal').textContent=t('guideGoal');
+  document.getElementById('guideTip').textContent=t('guideTip');
+  document.getElementById('trashLabel').textContent=t('trashLabel');
+  document.getElementById('hudLabel0').textContent=t('hudL0');
+  document.getElementById('hudLabel1').textContent=t('hudL1');
+  document.getElementById('hudLabel2').textContent=t('hudL2');
+  document.getElementById('hudLabel3').textContent=t('hudL3');
+  var steps=document.getElementById('guideSteps');
+  steps.innerHTML='';
+  ['guideS1','guideS2','guideS3','guideS4'].forEach(function(k){
+    var li=document.createElement('li');li.textContent=t(k);steps.appendChild(li);
+  });
+  buildCards();buildSlots();updateHUD();
+}
+
+document.getElementById('langBtn').addEventListener('click',function(){
+  LANG=LANG==='en'?'cn':'en';
+  document.getElementById('langBtn').textContent=LANG.toUpperCase();
+  refreshI18N();
+});
+
+document.getElementById('guideToggle').addEventListener('click',function(){
+  var c=document.getElementById('guideContent');
+  var a=document.getElementById('guideArrow');
+  if(c.style.display==='none'){c.style.display='block';a.textContent='-';}
+  else{c.style.display='none';a.textContent='+';}
+});
+
+refreshI18N();
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,367 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Build Your Mission Control Dashboard</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;700&family=Inter:wght@400;500&family=Noto+Sans+SC:wght@400;700&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{width:100%;height:100vh;overflow:hidden;background:#131313;font-family:'Noto Sans SC','Inter',sans-serif;color:#e5e2e1}
+.wrapper{display:flex;flex-direction:column;height:100vh;width:100%}
+.header{padding:8px 16px 4px;text-align:center;flex-shrink:0}
+.header h1{font-family:'Space Grotesk',sans-serif;font-size:15px;font-weight:700;color:#ffb59c;letter-spacing:2px;text-transform:uppercase}
+.header .subtitle{font-size:11px;color:#8a8886;margin-top:2px;font-family:'Space Grotesk',sans-serif;letter-spacing:1px}
+.game-area{display:flex;flex:1;min-height:0;gap:10px;padding:8px 12px}
+.panel-list{width:200px;flex-shrink:0;overflow-y:auto;display:flex;flex-direction:column;gap:6px}
+.panel-card{padding:8px 10px;background:rgba(28,27,27,0.92);border:1px solid rgba(138,136,134,0.15);cursor:grab;user-select:none;-webkit-user-select:none;transition:border-color 0.2s}
+.panel-card:hover{border-color:rgba(255,181,156,0.3)}
+.panel-card.dragging{opacity:0.4}
+.panel-card .card-icon{font-family:'Space Grotesk',sans-serif;font-size:10px;font-weight:700;color:#ff5f1f;text-transform:uppercase;letter-spacing:1px}
+.panel-card .card-title{font-family:'Space Grotesk',sans-serif;font-size:11px;font-weight:700;color:#ffb59c;margin-top:2px}
+.panel-card .card-desc{font-size:10px;color:#8a8886;margin-top:2px;line-height:1.4}
+.panel-card .card-level{font-family:'Space Grotesk',sans-serif;font-size:9px;color:#00daf3;margin-top:3px;text-transform:uppercase;letter-spacing:0.5px}
+.board-area{flex:1;min-width:0}
+.board-grid{display:grid;grid-template-columns:1fr 1fr 1fr;grid-template-rows:1fr 1fr;gap:6px;height:100%}
+.board-slot{background:rgba(0,0,0,0.2);border:1px dashed rgba(138,136,134,0.2);display:flex;align-items:center;justify-content:center;position:relative;transition:border-color 0.2s,background 0.2s}
+.board-slot.drag-over{border-color:rgba(255,181,156,0.5);background:rgba(255,181,156,0.04)}
+.board-slot .slot-label{font-family:'Space Grotesk',sans-serif;font-size:10px;color:#353534;text-transform:uppercase;letter-spacing:1px}
+.board-slot .placed-card{position:absolute;inset:4px;background:rgba(28,27,27,0.92);border:1px solid rgba(255,181,156,0.2);padding:8px;display:flex;flex-direction:column;justify-content:center;align-items:center;cursor:pointer}
+.board-slot .placed-card .card-title{font-family:'Space Grotesk',sans-serif;font-size:11px;font-weight:700;color:#ffb59c;text-align:center}
+.board-slot .placed-card .card-level{font-family:'Space Grotesk',sans-serif;font-size:9px;color:#00daf3;margin-top:4px;text-transform:uppercase}
+.bottom-bar{display:flex;justify-content:space-between;align-items:center;padding:8px 16px;flex-shrink:0;background:rgba(0,0,0,0.55);border-top:1px solid rgba(138,136,134,0.15)}
+.score-area{display:flex;gap:20px;align-items:center}
+.score-item{text-align:center}
+.score-label{font-family:'Space Grotesk',sans-serif;font-size:9px;color:#8a8886;letter-spacing:1px;text-transform:uppercase}
+.score-value{font-family:'Space Grotesk',sans-serif;font-size:16px;color:#ffb59c;font-weight:700}
+.btn-check{font-family:'Space Grotesk',sans-serif;font-size:11px;font-weight:700;letter-spacing:1px;padding:8px 24px;cursor:pointer;border:1px solid rgba(255,181,156,0.3);background:rgba(255,181,156,0.08);backdrop-filter:blur(12px);color:#ffb59c;text-transform:uppercase}
+.btn-check:hover{background:rgba(255,181,156,0.15)}
+.btn-reset{font-family:'Space Grotesk',sans-serif;font-size:11px;font-weight:700;letter-spacing:1px;padding:8px 16px;cursor:pointer;border:1px solid rgba(138,136,134,0.15);background:rgba(28,27,27,0.5);color:#8a8886;text-transform:uppercase;margin-right:8px}
+.lang-btn{position:fixed;top:8px;left:8px;z-index:100;font-family:'Space Grotesk',sans-serif;font-size:11px;font-weight:700;padding:4px 10px;cursor:pointer;border:1px solid rgba(255,255,255,0.08);background:rgba(20,20,35,0.85);backdrop-filter:blur(12px);color:#ffb59c;letter-spacing:1px}
+.guide-panel{position:fixed;top:8px;right:8px;width:220px;max-height:38vh;overflow-y:auto;background:rgba(20,20,35,0.85);backdrop-filter:blur(12px);border:1px solid rgba(255,255,255,0.08);padding:10px;z-index:100;font-family:'Noto Sans SC',sans-serif;font-size:11px;color:rgba(255,255,255,0.85)}
+.guide-panel h3{font-family:'Space Grotesk',sans-serif;font-size:12px;margin-bottom:4px;display:flex;align-items:center;justify-content:space-between;cursor:pointer;color:#ffb59c}
+.guide-panel ul{padding-left:14px;line-height:1.5}
+.guide-panel .guide-content{transition:max-height 0.3s}
+.guide-panel.collapsed .guide-content{max-height:0;overflow:hidden}
+.feedback-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:200;justify-content:center;align-items:center}
+.feedback-overlay.show{display:flex}
+.feedback-box{background:rgba(28,27,27,0.95);border:1px solid rgba(255,181,156,0.3);padding:24px;max-width:420px;width:90%;text-align:center}
+.feedback-box h2{font-family:'Space Grotesk',sans-serif;font-size:18px;color:#ffb59c;margin-bottom:12px}
+.feedback-box p{font-size:13px;color:#c6c6c6;line-height:1.6;margin-bottom:8px}
+.feedback-box .fb-score{font-family:'Space Grotesk',sans-serif;font-size:36px;color:#ff7f50;font-weight:700;margin:12px 0}
+.feedback-box button{font-family:'Space Grotesk',sans-serif;font-size:12px;font-weight:700;padding:8px 24px;cursor:pointer;border:1px solid rgba(255,181,156,0.3);background:rgba(255,181,156,0.1);color:#ffb59c;margin-top:12px;text-transform:uppercase;letter-spacing:1px}
+</style>
+</head>
+<body>
+<button class="lang-btn" id="langBtn">CN</button>
+<div class="guide-panel" id="guidePanel">
+<h3 id="guideToggle"><span id="guideTitle"></span><span id="guideArrow">-</span></h3>
+<div class="guide-content" id="guideContent">
+<p id="guideGoal" style="margin-bottom:6px"></p>
+<ul id="guideSteps"></ul>
+<p id="guideTip" style="margin-top:6px;color:#00daf3;font-size:10px"></p>
+</div>
+</div>
+<div class="feedback-overlay" id="feedbackOverlay">
+<div class="feedback-box">
+<h2 id="fbTitle"></h2>
+<div class="fb-score" id="fbScore"></div>
+<p id="fbDetail"></p>
+<p id="fbTip" style="color:#00daf3;font-size:12px"></p>
+<button id="fbClose"></button>
+</div>
+</div>
+<div class="wrapper">
+<div class="header">
+<h1 id="titleText"></h1>
+<div class="subtitle" id="subtitleText"></div>
+</div>
+<div class="game-area">
+<div class="panel-list" id="panelList"></div>
+<div class="board-area">
+<div class="board-grid" id="boardGrid"></div>
+</div>
+</div>
+<div class="bottom-bar">
+<div class="score-area">
+<div class="score-item"><div class="score-label" id="scorePlacedLabel"></div><div class="score-value" id="scorePlacedValue">0/6</div></div>
+<div class="score-item"><div class="score-label" id="scoreLevelLabel"></div><div class="score-value" id="scoreLevelValue">0/3</div></div>
+</div>
+<div>
+<button class="btn-reset" id="btnReset"></button>
+<button class="btn-check" id="btnCheck"></button>
+</div>
+</div>
+</div>
+<script>
+(function(){
+var LANG='cn';
+var I18N={
+  title:{en:'BUILD MISSION CONTROL',cn:'\u642d\u5efa\u4efb\u52a1\u63a7\u5236\u53f0'},
+  subtitle:{en:'Drag panels to build your dashboard',cn:'\u62d6\u62fd\u9762\u677f\u642d\u5efa\u4f60\u7684\u770b\u677f'},
+  guideTitle:{en:'GUIDE',cn:'\u64cd\u4f5c\u6307\u5357'},
+  guideGoal:{en:'Drag 6 panels from the left into the dashboard grid to build a mission control console.',cn:'\u4ece\u5de6\u4fa7\u62d6\u62fd 6 \u4e2a\u9762\u677f\u5230\u53f3\u4fa7\u7f51\u683c\u4e2d\uff0c\u642d\u5efa\u4efb\u52a1\u63a7\u5236\u53f0\u3002'},
+  guideStep1:{en:'Choose panels that cover all 3 info levels',cn:'\u9009\u62e9\u8986\u76d6\u5168\u90e8 3 \u4e2a\u4fe1\u606f\u5c42\u7ea7\u7684\u9762\u677f'},
+  guideStep2:{en:'Level 1=Status, Level 2=Trends, Level 3=Alerts',cn:'\u7b2c1\u7ea7=\u72b6\u6001\uff0c\u7b2c2\u7ea7=\u8d8b\u52bf\uff0c\u7b2c3\u7ea7=\u544a\u8b66'},
+  guideStep3:{en:'Click placed panels to return them',cn:'\u70b9\u51fb\u5df2\u653e\u7f6e\u7684\u9762\u677f\u53ef\u9000\u56de'},
+  guideTip:{en:'A complete dashboard needs all 3 levels to answer: Running? Better? Intervene?',cn:'\u5b8c\u6574\u770b\u677f\u9700\u8981 3 \u4e2a\u5c42\u7ea7\u56de\u7b54\uff1a\u5728\u8fd0\u884c\u5417\uff1f\u53d8\u597d/\u53d8\u5dee\uff1f\u8be5\u5e72\u9884\u5417\uff1f'},
+  scorePlaced:{en:'PLACED',cn:'\u5df2\u653e\u7f6e'},
+  scoreLevel:{en:'LEVELS',cn:'\u5c42\u7ea7'},
+  btnCheck:{en:'CHECK',cn:'\u68c0\u67e5'},
+  btnReset:{en:'RESET',cn:'\u91cd\u7f6e'},
+  slotLabel:{en:'DROP HERE',cn:'\u62d6\u653e\u5230\u6b64'},
+  fbTitlePerfect:{en:'PERFECT DASHBOARD!',cn:'\u5b8c\u7f8e\u770b\u677f\uff01'},
+  fbTitleGood:{en:'GOOD ATTEMPT',cn:'\u4e0d\u9519\u7684\u5c1d\u8bd5'},
+  fbTitleMissing:{en:'INCOMPLETE',cn:'\u4e0d\u5b8c\u6574'},
+  fbClose:{en:'GOT IT',cn:'\u77e5\u9053\u4e86'},
+  fbMissLevel1:{en:'Missing Level 1 (Status) panels -- you cannot tell if modules are running',cn:'\u7f3a\u5c11\u7b2c1\u7ea7\uff08\u72b6\u6001\uff09\u9762\u677f -- \u65e0\u6cd5\u5224\u65ad\u6a21\u5757\u662f\u5426\u8fd0\u884c'},
+  fbMissLevel2:{en:'Missing Level 2 (Trend) panels -- you cannot compare versions',cn:'\u7f3a\u5c11\u7b2c2\u7ea7\uff08\u8d8b\u52bf\uff09\u9762\u677f -- \u65e0\u6cd5\u5bf9\u6bd4\u7248\u672c'},
+  fbMissLevel3:{en:'Missing Level 3 (Alert) panels -- you cannot detect when to intervene',cn:'\u7f3a\u5c11\u7b2c3\u7ea7\uff08\u544a\u8b66\uff09\u9762\u677f -- \u65e0\u6cd5\u53d1\u73b0\u4f55\u65f6\u5e72\u9884'},
+  fbAllLevels:{en:'All three information levels covered!',cn:'\u4e09\u4e2a\u4fe1\u606f\u5c42\u7ea7\u5168\u90e8\u8986\u76d6\uff01'},
+  fbTipComplete:{en:'This dashboard can answer: Running? Trending? Intervene?',cn:'\u8fd9\u4e2a\u770b\u677f\u80fd\u56de\u7b54\uff1a\u8fd0\u884c\u4e2d\u5417\uff1f\u8d8b\u52bf\u5982\u4f55\uff1f\u8be5\u5e72\u9884\u5417\uff1f'}
+};
+function t(k){return(I18N[k]&&I18N[k][LANG])||(I18N[k]&&I18N[k]['en'])||k}
+
+// Panel data: 8 panels, each tagged with info level
+var PANELS=[
+  {id:'p1',level:1,icon:'L1',titleKey:'panelHealthLights',descKey:'panelHealthLightsDesc',color:'#10b981'},
+  {id:'p2',level:1,icon:'L1',titleKey:'panelTrialResult',descKey:'panelTrialResultDesc',color:'#ffb59c'},
+  {id:'p3',level:2,icon:'L2',titleKey:'panelRiskTrend',descKey:'panelRiskTrendDesc',color:'#ff5f1f'},
+  {id:'p4',level:2,icon:'L2',titleKey:'panelDelayTrend',descKey:'panelDelayTrendDesc',color:'#00daf3'},
+  {id:'p5',level:2,icon:'L2',titleKey:'panelCoverage',descKey:'panelCoverageDesc',color:'#ffb59c'},
+  {id:'p6',level:3,icon:'L3',titleKey:'panelErrorLog',descKey:'panelErrorLogDesc',color:'#ff5f1f'},
+  {id:'p7',level:3,icon:'L3',titleKey:'panelAlertRule',descKey:'panelAlertRuleDesc',color:'#ff7f50'},
+  {id:'p8',level:1,icon:'L1',titleKey:'panelVersionCompare',descKey:'panelVersionCompareDesc',color:'#00daf3'}
+];
+
+// i18n for panels
+I18N.panelHealthLights={en:'Module Health Lights',cn:'\u6a21\u5757\u5065\u5eb7\u72b6\u6001\u706f'};
+I18N.panelHealthLightsDesc={en:'Green/red lights for each module',cn:'\u6bcf\u4e2a\u6a21\u5757\u7684\u7eff/\u7ea2\u72b6\u6001\u706f'};
+I18N.panelTrialResult={en:'Latest Trial Result',cn:'\u6700\u65b0\u8bd5\u8dd1\u7ed3\u679c'};
+I18N.panelTrialResultDesc={en:'Pass/fail status of last trial run',cn:'\u6700\u8fd1\u4e00\u6b21\u8bd5\u8dd1\u7684\u901a\u8fc7/\u5931\u8d25\u72b6\u6001'};
+I18N.panelRiskTrend={en:'Risk Score Trend',cn:'\u98ce\u9669\u5206\u6570\u8d8b\u52bf'};
+I18N.panelRiskTrendDesc={en:'Risk score change over versions',cn:'\u98ce\u9669\u5206\u6570\u968f\u7248\u672c\u7684\u53d8\u5316'};
+I18N.panelDelayTrend={en:'Delay Trend',cn:'\u5ef6\u8fdf\u8d8b\u52bf'};
+I18N.panelDelayTrendDesc={en:'Module delay changes over time',cn:'\u6a21\u5757\u5ef6\u8fdf\u968f\u65f6\u95f4\u7684\u53d8\u5316'};
+I18N.panelCoverage={en:'Coverage Progress',cn:'\u8986\u76d6\u7387\u8fdb\u5ea6'};
+I18N.panelCoverageDesc={en:'Risk map coverage % over time',cn:'\u98ce\u9669\u56fe\u8986\u76d6\u7387\u968f\u65f6\u95f4\u7684\u53d8\u5316'};
+I18N.panelErrorLog={en:'ERROR Log Stream',cn:'ERROR \u65e5\u5fd7\u6d41'};
+I18N.panelErrorLogDesc={en:'Real-time ERROR/CRITICAL log entries',cn:'\u5b9e\u65f6 ERROR/CRITICAL \u65e5\u5fd7\u6761\u76ee'};
+I18N.panelAlertRule={en:'Alert Rules',cn:'\u544a\u8b66\u89c4\u5219'};
+I18N.panelAlertRuleDesc={en:'Threshold-based alert triggers',cn:'\u57fa\u4e8e\u9608\u503c\u7684\u544a\u8b66\u89e6\u53d1\u5668'};
+I18N.panelVersionCompare={en:'Version Compare',cn:'\u7248\u672c\u5bf9\u6bd4'};
+I18N.panelVersionCompareDesc={en:'Side-by-side metrics of v0.8 vs v1.0',cn:'v0.8 \u4e0e v1.0 \u6307\u6807\u5e76\u6392\u5bf9\u6bd4'};
+I18N.levelTag1={en:'LEVEL 1: STATUS',cn:'\u7b2c1\u7ea7: \u72b6\u6001'};
+I18N.levelTag2={en:'LEVEL 2: TREND',cn:'\u7b2c2\u7ea7: \u8d8b\u52bf'};
+I18N.levelTag3={en:'LEVEL 3: ALERT',cn:'\u7b2c3\u7ea7: \u544a\u8b66'};
+
+var slots=new Array(6).fill(null); // 6 board slots
+var dragPanel=null;
+
+function buildPanelList(){
+  var list=document.getElementById('panelList');
+  list.innerHTML='';
+  PANELS.forEach(function(p){
+    if(slots.indexOf(p.id)>=0) return; // already placed
+    var card=document.createElement('div');
+    card.className='panel-card';
+    card.setAttribute('data-panel-id',p.id);
+    var levelKey='levelTag'+p.level;
+    card.innerHTML='<div class="card-icon" style="color:'+p.color+'">'+p.icon+'</div>'
+      +'<div class="card-title">'+t(p.titleKey)+'</div>'
+      +'<div class="card-desc">'+t(p.descKey)+'</div>'
+      +'<div class="card-level">'+t(levelKey)+'</div>';
+    // drag events
+    card.addEventListener('mousedown',function(e){startDrag(p.id,e)});
+    card.addEventListener('touchstart',function(e){startDragTouch(p.id,e)},{passive:false});
+    list.appendChild(card)
+  })
+}
+
+function buildBoard(){
+  var grid=document.getElementById('boardGrid');
+  grid.innerHTML='';
+  for(var i=0;i<6;i++){
+    var slot=document.createElement('div');
+    slot.className='board-slot';
+    slot.setAttribute('data-slot-idx',i);
+    if(slots[i]){
+      var p=PANELS.find(function(pp){return pp.id===slots[i]});
+      var levelKey='levelTag'+p.level;
+      var placed=document.createElement('div');
+      placed.className='placed-card';
+      placed.style.borderColor='rgba('+hexToRgb(p.color)+',0.3)';
+      placed.innerHTML='<div class="card-title" style="color:'+p.color+'">'+t(p.titleKey)+'</div>'
+        +'<div class="card-level">'+t(levelKey)+'</div>';
+      placed.addEventListener('click',function(){
+        var idx=parseInt(this.parentElement.getAttribute('data-slot-idx'));
+        slots[idx]=null;
+        buildPanelList();buildBoard();updateScore()
+      });
+      slot.appendChild(placed)
+    } else {
+      var lbl=document.createElement('span');lbl.className='slot-label';lbl.textContent=t('slotLabel');
+      slot.appendChild(lbl)
+    }
+    // drop events
+    slot.addEventListener('dragover',function(e){e.preventDefault();this.classList.add('drag-over')});
+    slot.addEventListener('dragleave',function(){this.classList.remove('drag-over')});
+    slot.addEventListener('drop',function(e){
+      e.preventDefault();this.classList.remove('drag-over');
+      var idx=parseInt(this.getAttribute('data-slot-idx'));
+      if(slots[idx])return; // already occupied
+      if(dragPanel){
+        slots[idx]=dragPanel;dragPanel=null;
+        buildPanelList();buildBoard();updateScore()
+      }
+    });
+    grid.appendChild(slot)
+  }
+}
+
+// Ghost element for drag
+var ghost=null;
+function startDrag(panelId,e){
+  dragPanel=panelId;
+  var card=e.currentTarget;card.classList.add('dragging');
+  ghost=card.cloneNode(true);ghost.style.position='fixed';ghost.style.pointerEvents='none';ghost.style.zIndex='300';
+  ghost.style.width=card.offsetWidth+'px';ghost.style.opacity='0.8';
+  document.body.appendChild(ghost);
+  moveGhost(e.clientX,e.clientY);
+  function onMove(e2){moveGhost(e2.clientX,e2.clientY);checkSlotHover(e2.clientX,e2.clientY)}
+  function onUp(e2){
+    document.removeEventListener('mousemove',onMove);document.removeEventListener('mouseup',onUp);
+    card.classList.remove('dragging');
+    if(ghost){ghost.remove();ghost=null}
+    // find drop target
+    var slotIdx=findSlotAt(e2.clientX,e2.clientY);
+    if(slotIdx>=0&&!slots[slotIdx]){slots[slotIdx]=panelId;buildPanelList();buildBoard();updateScore()}
+    dragPanel=null;clearSlotHovers()
+  }
+  document.addEventListener('mousemove',onMove);document.addEventListener('mouseup',onUp)
+}
+
+function startDragTouch(panelId,e){
+  e.preventDefault();
+  dragPanel=panelId;
+  var card=e.currentTarget;card.classList.add('dragging');
+  var touch=e.touches[0];
+  ghost=card.cloneNode(true);ghost.style.position='fixed';ghost.style.pointerEvents='none';ghost.style.zIndex='300';
+  ghost.style.width=card.offsetWidth+'px';ghost.style.opacity='0.8';
+  document.body.appendChild(ghost);moveGhost(touch.clientX,touch.clientY);
+
+  function onMove(e2){e2.preventDefault();var t2=e2.touches[0];moveGhost(t2.clientX,t2.clientY);checkSlotHover(t2.clientX,t2.clientY)}
+  function onEnd(e2){
+    document.removeEventListener('touchmove',onMove);document.removeEventListener('touchend',onEnd);
+    card.classList.remove('dragging');
+    if(ghost){ghost.remove();ghost=null}
+    var ct=e2.changedTouches[0];
+    var slotIdx=findSlotAt(ct.clientX,ct.clientY);
+    if(slotIdx>=0&&!slots[slotIdx]){slots[slotIdx]=panelId;buildPanelList();buildBoard();updateScore()}
+    dragPanel=null;clearSlotHovers()
+  }
+  document.addEventListener('touchmove',onMove,{passive:false});document.addEventListener('touchend',onEnd)
+}
+
+function moveGhost(x,y){if(ghost){ghost.style.left=(x-80)+'px';ghost.style.top=(y-20)+'px'}}
+
+function findSlotAt(x,y){
+  var slotEls=document.querySelectorAll('.board-slot');
+  for(var i=0;i<slotEls.length;i++){
+    var r=slotEls[i].getBoundingClientRect();
+    if(x>=r.left&&x<=r.right&&y>=r.top&&y<=r.bottom)return i
+  }
+  return -1
+}
+function checkSlotHover(x,y){
+  var slotEls=document.querySelectorAll('.board-slot');
+  for(var i=0;i<slotEls.length;i++){
+    var r=slotEls[i].getBoundingClientRect();
+    if(x>=r.left&&x<=r.right&&y>=r.top&&y<=r.bottom)slotEls[i].classList.add('drag-over');
+    else slotEls[i].classList.remove('drag-over')
+  }
+}
+function clearSlotHovers(){document.querySelectorAll('.board-slot').forEach(function(s){s.classList.remove('drag-over')})}
+
+function hexToRgb(hex){var r=parseInt(hex.slice(1,3),16),g=parseInt(hex.slice(3,5),16),b=parseInt(hex.slice(5,7),16);return r+','+g+','+b}
+
+function updateScore(){
+  var placed=slots.filter(function(s){return s!==null}).length;
+  var levels=new Set();
+  slots.forEach(function(sid){
+    if(!sid)return;
+    var p=PANELS.find(function(pp){return pp.id===sid});
+    if(p)levels.add(p.level)
+  });
+  document.getElementById('scorePlacedValue').textContent=placed+'/6';
+  document.getElementById('scoreLevelValue').textContent=levels.size+'/3'
+}
+
+function checkResult(){
+  var placed=slots.filter(function(s){return s!==null}).length;
+  var levels=new Set();
+  slots.forEach(function(sid){
+    if(!sid)return;
+    var p=PANELS.find(function(pp){return pp.id===sid});
+    if(p)levels.add(p.level)
+  });
+  var overlay=document.getElementById('feedbackOverlay');
+  var score=Math.round((placed/6)*50+(levels.size/3)*50);
+  document.getElementById('fbScore').textContent=score+'%';
+  var missing=[];
+  if(!levels.has(1))missing.push(t('fbMissLevel1'));
+  if(!levels.has(2))missing.push(t('fbMissLevel2'));
+  if(!levels.has(3))missing.push(t('fbMissLevel3'));
+  if(missing.length===0){
+    document.getElementById('fbTitle').textContent=t('fbTitlePerfect');
+    document.getElementById('fbDetail').textContent=t('fbAllLevels');
+    document.getElementById('fbTip').textContent=t('fbTipComplete')
+  } else if(placed>=4){
+    document.getElementById('fbTitle').textContent=t('fbTitleGood');
+    document.getElementById('fbDetail').textContent=missing.join('\n');
+    document.getElementById('fbTip').textContent=''
+  } else {
+    document.getElementById('fbTitle').textContent=t('fbTitleMissing');
+    document.getElementById('fbDetail').textContent=missing.join('\n');
+    document.getElementById('fbTip').textContent=''
+  }
+  overlay.classList.add('show')
+}
+
+function resetGame(){
+  slots=new Array(6).fill(null);
+  buildPanelList();buildBoard();updateScore()
+}
+
+function refreshI18N(){
+  document.getElementById('titleText').textContent=t('title');
+  document.getElementById('subtitleText').textContent=t('subtitle');
+  document.getElementById('guideTitle').textContent=t('guideTitle');
+  document.getElementById('guideGoal').textContent=t('guideGoal');
+  var stepsList=document.getElementById('guideSteps');stepsList.innerHTML='';
+  ['guideStep1','guideStep2','guideStep3'].forEach(function(k){var li=document.createElement('li');li.textContent=t(k);stepsList.appendChild(li)});
+  document.getElementById('guideTip').textContent=t('guideTip');
+  document.getElementById('scorePlacedLabel').textContent=t('scorePlaced');
+  document.getElementById('scoreLevelLabel').textContent=t('scoreLevel');
+  document.getElementById('btnCheck').textContent=t('btnCheck');
+  document.getElementById('btnReset').textContent=t('btnReset');
+  document.getElementById('fbClose').textContent=t('fbClose');
+  buildPanelList();buildBoard();updateScore()
+}
+
+document.getElementById('langBtn').addEventListener('click',function(){
+  LANG=LANG==='en'?'cn':'en';document.getElementById('langBtn').textContent=LANG.toUpperCase();refreshI18N()
+});
+document.getElementById('btnCheck').addEventListener('click',checkResult);
+document.getElementById('btnReset').addEventListener('click',resetGame);
+document.getElementById('fbClose').addEventListener('click',function(){document.getElementById('feedbackOverlay').classList.remove('show')});
+document.getElementById('guideToggle').addEventListener('click',function(){
+  document.getElementById('guidePanel').classList.toggle('collapsed');
+  document.getElementById('guideArrow').textContent=document.getElementById('guidePanel').classList.contains('collapsed')?'+':'-'
+});
+
+refreshI18N()
+})();
+</script>
+</body>
+</html>

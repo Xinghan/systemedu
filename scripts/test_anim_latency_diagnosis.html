@@ -1,0 +1,614 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Latency &amp; Jitter Diagnosis</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;700&family=Inter:wght@400;500&family=Noto+Sans+SC:wght@400;700&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{width:100%;height:100vh;overflow:hidden;background:#131313;font-family:'Noto Sans SC','Inter',sans-serif;color:#e5e2e1}
+.wrapper{display:flex;flex-direction:column;height:100vh;width:100%}
+.header{padding:10px 16px 6px;text-align:center;flex-shrink:0}
+.header h1{font-family:'Space Grotesk',sans-serif;font-size:15px;font-weight:700;color:#ffb59c;letter-spacing:2px;text-transform:uppercase}
+.header .sub{font-size:11px;color:#8a8886;margin-top:2px}
+.canvas-wrap{flex:1;min-height:0;position:relative}
+canvas{display:block;width:100%;height:100%}
+.controls{display:flex;align-items:center;justify-content:center;gap:10px;padding:8px 0;flex-shrink:0;background:rgba(28,27,27,0.92)}
+.controls button{font-family:'Space Grotesk',sans-serif;font-size:11px;font-weight:700;padding:5px 14px;cursor:pointer;border:1px solid rgba(255,255,255,0.08);background:rgba(53,53,52,0.6);backdrop-filter:blur(12px);color:#ffb59c;letter-spacing:1px;border-radius:0}
+.controls button:hover{background:rgba(255,127,80,0.15)}
+.controls .frame-ind{font-family:'Space Grotesk',sans-serif;font-size:11px;color:#8a8886;min-width:50px;text-align:center}
+.hud{display:flex;justify-content:space-around;padding:8px 16px;background:rgba(0,0,0,0.55);flex-shrink:0}
+.hud .col{text-align:center}
+.hud .col .label{font-family:'Space Grotesk',sans-serif;font-size:9px;color:#8a8886;letter-spacing:1px;text-transform:uppercase}
+.hud .col .value{font-family:'Space Grotesk',sans-serif;font-size:13px;color:#ffb59c;font-weight:700;margin-top:2px}
+.lang-btn{position:fixed;top:8px;left:8px;z-index:100;font-family:'Space Grotesk',sans-serif;font-size:11px;font-weight:700;padding:4px 10px;cursor:pointer;border:1px solid rgba(255,255,255,0.08);background:rgba(20,20,35,0.85);backdrop-filter:blur(12px);color:#ffb59c;letter-spacing:1px;border-radius:0}
+.guide-panel{position:fixed;top:8px;right:8px;width:240px;max-height:40vh;overflow-y:auto;background:rgba(20,20,35,0.85);backdrop-filter:blur(12px);border:1px solid rgba(255,255,255,0.08);padding:12px;z-index:100;font-family:'Noto Sans SC',sans-serif;font-size:12px;color:rgba(255,255,255,0.85);border-radius:0}
+.guide-panel h3{font-family:'Space Grotesk',sans-serif;font-size:13px;margin-bottom:8px;display:flex;align-items:center;justify-content:space-between;cursor:pointer;color:#ffb59c}
+.guide-panel .guide-content ul{padding-left:16px;line-height:1.7}
+.guide-panel .guide-content p{margin-bottom:6px;line-height:1.6}
+.guide-toggle{font-size:10px;color:#8a8886}
+</style>
+</head>
+<body>
+<button class="lang-btn" id="langBtn">CN</button>
+<div class="guide-panel" id="guidePanel">
+  <h3 id="guideToggle"><span id="guideTitle"></span><span class="guide-toggle" id="guideArrow">[-]</span></h3>
+  <div class="guide-content" id="guideContent"></div>
+</div>
+<div class="wrapper">
+  <div class="header">
+    <h1 id="mainTitle"></h1>
+    <div class="sub" id="mainSub"></div>
+  </div>
+  <div class="canvas-wrap" id="canvasWrap">
+    <canvas id="c"></canvas>
+  </div>
+  <div class="controls">
+    <button id="btnPrev"></button>
+    <button id="btnPlay"></button>
+    <button id="btnNext"></button>
+    <span class="frame-ind" id="frameInd"></span>
+  </div>
+  <div class="hud">
+    <div class="col"><div class="label" id="hudL0"></div><div class="value" id="hudV0"></div></div>
+    <div class="col"><div class="label" id="hudL1"></div><div class="value" id="hudV1"></div></div>
+    <div class="col"><div class="label" id="hudL2"></div><div class="value" id="hudV2"></div></div>
+    <div class="col"><div class="label" id="hudL3"></div><div class="value" id="hudV3"></div></div>
+  </div>
+</div>
+<script>
+(function(){
+var LANG='cn';
+var I18N={
+  title:{en:'LATENCY & JITTER DIAGNOSIS',cn:'\u5ef6\u8fdf\u4e0e\u6296\u52a8\u8bca\u65ad'},
+  sub:{en:'Identifying and Solving Real-System Engineering Problems',cn:'\u8bc6\u522b\u5e76\u89e3\u51b3\u771f\u5b9e\u7cfb\u7edf\u5de5\u7a0b\u95ee\u9898'},
+  btnPrev:{en:'PREV',cn:'\u4e0a\u4e00\u5e27'},
+  btnPlay:{en:'PLAY',cn:'\u64ad\u653e'},
+  btnPause:{en:'PAUSE',cn:'\u6682\u505c'},
+  btnNext:{en:'NEXT',cn:'\u4e0b\u4e00\u5e27'},
+  guideTitle:{en:'VIEWING GUIDE',cn:'\u89c2\u770b\u6307\u5357'},
+  guideDesc:{en:'<p>This animation demonstrates common engineering problems in real rover systems and how to diagnose them through logs and telemetry.</p><ul><li>Frame 1: Perception latency -- pipeline delay visualization</li><li>Frame 2: Sensor jitter -- noisy IMU/odometry readings</li><li>Frame 3: Misclassification -- false positive hazards</li><li>Frame 4: Path deviation -- planned vs actual trajectory</li><li>Frame 5: Diagnosis dashboard -- integrated telemetry view</li></ul>',cn:'<p>\u672c\u52a8\u753b\u5c55\u793a\u771f\u5b9e\u884c\u661f\u8f66\u7cfb\u7edf\u4e2d\u5e38\u89c1\u7684\u5de5\u7a0b\u95ee\u9898\u53ca\u5176\u901a\u8fc7\u65e5\u5fd7\u548c\u9065\u6d4b\u6570\u636e\u8bca\u65ad\u7684\u65b9\u6cd5\u3002</p><ul><li>\u5e27 1\uff1a\u611f\u77e5\u5ef6\u8fdf -- \u6d41\u6c34\u7ebf\u5ef6\u8fdf\u53ef\u89c6\u5316</li><li>\u5e27 2\uff1a\u4f20\u611f\u5668\u6296\u52a8 -- \u6709\u566a\u58f0\u7684 IMU/\u91cc\u7a0b\u8ba1\u8bfb\u6570</li><li>\u5e27 3\uff1a\u8bef\u8bc6\u522b -- \u865a\u5047\u5371\u9669\u533a\u57df</li><li>\u5e27 4\uff1a\u8def\u5f84\u504f\u79fb -- \u89c4\u5212\u8def\u5f84 vs \u5b9e\u9645\u8f68\u8ff9</li><li>\u5e27 5\uff1a\u8bca\u65ad\u9762\u677f -- \u7efc\u5408\u9065\u6d4b\u89c6\u56fe</li></ul>'},
+  hudL0:{en:'ISSUE TYPE',cn:'\u95ee\u9898\u7c7b\u578b'},
+  hudL1:{en:'SEVERITY',cn:'\u4e25\u91cd\u7a0b\u5ea6'},
+  hudL2:{en:'METRIC',cn:'\u6307\u6807'},
+  hudL3:{en:'STATUS',cn:'\u72b6\u6001'},
+  // Frame HUD
+  hudV0_0:{en:'LATENCY',cn:'\u5ef6\u8fdf'},
+  hudV1_0:{en:'HIGH',cn:'\u9ad8'},
+  hudV2_0:{en:'450ms',cn:'450ms'},
+  hudV3_0:{en:'WARNING',cn:'\u8b66\u544a'},
+  hudV0_1:{en:'JITTER',cn:'\u6296\u52a8'},
+  hudV1_1:{en:'MEDIUM',cn:'\u4e2d'},
+  hudV2_1:{en:'+/-15deg',cn:'+/-15\u5ea6'},
+  hudV3_1:{en:'MONITOR',cn:'\u76d1\u63a7'},
+  hudV0_2:{en:'MISCLASS',cn:'\u8bef\u8bc6\u522b'},
+  hudV1_2:{en:'HIGH',cn:'\u9ad8'},
+  hudV2_2:{en:'12% FPR',cn:'12% \u8bef\u62a5\u7387'},
+  hudV3_2:{en:'ALERT',cn:'\u62a5\u8b66'},
+  hudV0_3:{en:'DEVIATION',cn:'\u504f\u79fb'},
+  hudV1_3:{en:'MEDIUM',cn:'\u4e2d'},
+  hudV2_3:{en:'8.5cm',cn:'8.5cm'},
+  hudV3_3:{en:'TRACKING',cn:'\u8ffd\u8e2a'},
+  hudV0_4:{en:'DASHBOARD',cn:'\u9762\u677f'},
+  hudV1_4:{en:'OVERVIEW',cn:'\u603b\u89c8'},
+  hudV2_4:{en:'4 ISSUES',cn:'4 \u95ee\u9898'},
+  hudV3_4:{en:'DIAGNOSING',cn:'\u8bca\u65ad\u4e2d'},
+  // Canvas text
+  fTitle0:{en:'Perception Pipeline Latency',cn:'\u611f\u77e5\u6d41\u6c34\u7ebf\u5ef6\u8fdf'},
+  fTitle1:{en:'IMU / Odometry Sensor Jitter',cn:'IMU / \u91cc\u7a0b\u8ba1\u4f20\u611f\u5668\u6296\u52a8'},
+  fTitle2:{en:'Terrain Misclassification',cn:'\u5730\u5f62\u8bef\u8bc6\u522b'},
+  fTitle3:{en:'Planned vs Actual Path Deviation',cn:'\u89c4\u5212\u8def\u5f84 vs \u5b9e\u9645\u8f68\u8ff9\u504f\u79fb'},
+  fTitle4:{en:'Integrated Diagnosis Dashboard',cn:'\u7efc\u5408\u8bca\u65ad\u9762\u677f'},
+  fDesc0:{en:'Camera-to-decision pipeline takes 450ms, exceeding 200ms budget',cn:'\u4ece\u76f8\u673a\u5230\u51b3\u7b56\u7684\u6d41\u6c34\u7ebf\u8017\u65f6 450ms\uff0c\u8d85\u8fc7 200ms \u9884\u7b97'},
+  fDesc1:{en:'Noisy IMU readings cause heading oscillation +/-15 degrees',cn:'IMU \u566a\u58f0\u5bfc\u81f4\u822a\u5411\u89d2\u632f\u8361 +/-15 \u5ea6'},
+  fDesc2:{en:'CNN falsely marks 12% of safe terrain as hazardous',cn:'CNN \u5c06 12% \u7684\u5b89\u5168\u5730\u5f62\u8bef\u6807\u4e3a\u5371\u9669'},
+  fDesc3:{en:'Actual trajectory deviates 8.5cm from planned path',cn:'\u5b9e\u9645\u8f68\u8ff9\u504f\u79bb\u89c4\u5212\u8def\u5f84 8.5cm'},
+  fDesc4:{en:'All issues visible in one integrated telemetry view',cn:'\u6240\u6709\u95ee\u9898\u5728\u4e00\u4e2a\u7efc\u5408\u9065\u6d4b\u89c6\u56fe\u4e2d\u53ef\u89c1'},
+  lblTime:{en:'TIME',cn:'\u65f6\u95f4'},
+  lblMs:{en:'ms',cn:'ms'},
+  lblIdeal:{en:'IDEAL',cn:'\u7406\u60f3'},
+  lblActual:{en:'ACTUAL',cn:'\u5b9e\u9645'},
+  lblPlanned:{en:'PLANNED',cn:'\u89c4\u5212'},
+  lblSafe:{en:'SAFE',cn:'\u5b89\u5168'},
+  lblHazard:{en:'HAZARD',cn:'\u5371\u9669'},
+  lblFalsePos:{en:'FALSE +',cn:'\u8bef\u62a5'},
+  lblHeading:{en:'HEADING',cn:'\u822a\u5411'},
+  lblDeg:{en:'deg',cn:'\u5ea6'},
+};
+function t(k){return(I18N[k]&&I18N[k][LANG])||(I18N[k]&&I18N[k]['en'])||k;}
+
+var canvas=document.getElementById('c');
+var ctx=canvas.getContext('2d');
+var wrap=document.getElementById('canvasWrap');
+var totalFrames=5;
+var currentFrame=0;
+var playing=false;
+var playTimer=null;
+var transitioning=false;
+var DPR=Math.min(window.devicePixelRatio||1,2);
+var W=700,H=460;
+var scale=1,offsetX=0,offsetY=0;
+
+var COL={bg:'#131313',primary:'#ffb59c',tertiary:'#00daf3',signal:'#ff5f1f',success:'#10b981',muted:'#8a8886',text:'#e5e2e1',warn:'#f59e0b'};
+
+function resize(){
+  var rect=wrap.getBoundingClientRect();
+  if(rect.width<1||rect.height<1)return;
+  canvas.width=rect.width*DPR;
+  canvas.height=rect.height*DPR;
+  canvas.style.width=rect.width+'px';
+  canvas.style.height=rect.height+'px';
+  scale=Math.min(rect.width/W,rect.height/H);
+  offsetX=(rect.width-W*scale)/2;
+  offsetY=(rect.height-H*scale)/2;
+  drawFrame(currentFrame);
+}
+
+function setTransform(){
+  ctx.setTransform(DPR*scale,0,0,DPR*scale,DPR*offsetX,DPR*offsetY);
+}
+
+function drawBg(){
+  ctx.setTransform(1,0,0,1,0,0);
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+  var g=ctx.createLinearGradient(0,0,0,canvas.height);
+  g.addColorStop(0,'#131313');
+  g.addColorStop(1,'#1a1510');
+  ctx.fillStyle=g;
+  ctx.fillRect(0,0,canvas.width,canvas.height);
+  setTransform();
+  ctx.strokeStyle='rgba(255,255,255,0.03)';
+  ctx.lineWidth=0.5;
+  for(var x=0;x<W;x+=40){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,H);ctx.stroke();}
+  for(var y=0;y<H;y+=40){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke();}
+}
+
+function lerp(a,b,p){return a+(b-a)*p;}
+function easeInOut(x){return x<0.5?2*x*x:1-Math.pow(-2*x+2,2)/2;}
+function merge(base,over){var r={};for(var k in base)r[k]=base[k];for(var k2 in over)r[k2]=over[k2];return r;}
+
+// Draw a waveform/timeline chart
+function drawWaveChart(ox,oy,cw,ch,data,color,label,alpha){
+  ctx.save();ctx.globalAlpha=alpha;
+  // Background
+  ctx.fillStyle='rgba(28,27,27,0.6)';
+  ctx.fillRect(ox,oy,cw,ch);
+  // Grid lines
+  ctx.strokeStyle='rgba(255,255,255,0.05)';
+  ctx.lineWidth=0.5;
+  for(var i=0;i<5;i++){var gy=oy+ch*i/4;ctx.beginPath();ctx.moveTo(ox,gy);ctx.lineTo(ox+cw,gy);ctx.stroke();}
+  // Data line
+  ctx.strokeStyle=color;
+  ctx.lineWidth=2;
+  ctx.shadowColor=color;
+  ctx.shadowBlur=6;
+  ctx.beginPath();
+  for(var j=0;j<data.length;j++){
+    var px=ox+j*(cw/(data.length-1));
+    var py=oy+ch*(1-data[j]);
+    if(j===0)ctx.moveTo(px,py);else ctx.lineTo(px,py);
+  }
+  ctx.stroke();
+  ctx.shadowBlur=0;
+  // Label
+  ctx.font='bold 10px "Space Grotesk",sans-serif';
+  ctx.fillStyle=color;
+  ctx.textAlign='left';
+  ctx.textBaseline='top';
+  ctx.fillText(label,ox+4,oy+4);
+  ctx.restore();
+}
+
+// Draw pipeline stages bar chart
+function drawPipelineBars(ox,oy,bw,bh,stages,alpha){
+  ctx.save();ctx.globalAlpha=alpha;
+  var totalMs=0;
+  for(var s=0;s<stages.length;s++)totalMs+=stages[s].ms;
+  var x=ox;
+  for(var i=0;i<stages.length;i++){
+    var sw=bw*(stages[i].ms/totalMs);
+    var g=ctx.createLinearGradient(x,oy,x+sw,oy);
+    g.addColorStop(0,stages[i].color+'88');
+    g.addColorStop(1,stages[i].color+'44');
+    ctx.fillStyle=g;
+    ctx.fillRect(x,oy,sw,bh);
+    ctx.strokeStyle=stages[i].color;
+    ctx.lineWidth=1;
+    ctx.strokeRect(x,oy,sw,bh);
+    ctx.font='9px "Space Grotesk",sans-serif';
+    ctx.fillStyle='#e5e2e1';
+    ctx.textAlign='center';
+    ctx.textBaseline='middle';
+    if(sw>30){
+      ctx.fillText(stages[i].label,x+sw/2,oy+bh/2-6);
+      ctx.fillText(stages[i].ms+'ms',x+sw/2,oy+bh/2+6);
+    }
+    x+=sw;
+  }
+  // Budget line
+  var budgetX=ox+bw*(200/totalMs);
+  ctx.strokeStyle=COL.success;
+  ctx.lineWidth=2;
+  ctx.setLineDash([4,4]);
+  ctx.beginPath();ctx.moveTo(budgetX,oy-8);ctx.lineTo(budgetX,oy+bh+8);ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.font='9px "Space Grotesk",sans-serif';
+  ctx.fillStyle=COL.success;
+  ctx.textAlign='center';
+  ctx.fillText('200ms '+t('lblIdeal'),budgetX,oy-14);
+  ctx.restore();
+}
+
+// Draw risk grid with false positives
+function drawRiskGrid(ox,oy,gw,gh,alpha){
+  ctx.save();ctx.globalAlpha=alpha;
+  var cols=10,rows=7;
+  var cw=gw/cols,ch2=gh/rows;
+  // Ground truth: 0=safe, 1=hazard
+  var truth=[
+    0,0,0,1,1,0,0,0,0,0,
+    0,0,1,1,0,0,0,0,0,0,
+    0,0,0,1,1,1,0,0,0,0,
+    0,0,0,0,1,0,0,0,0,0,
+    0,0,0,0,0,0,0,1,0,0,
+    0,0,0,0,0,0,0,0,0,0,
+    0,0,0,0,0,0,0,0,0,0,
+  ];
+  // Classification: 0=safe, 1=hazard, 2=false positive
+  var classify=[
+    0,0,2,1,1,0,0,0,0,0,
+    0,2,1,1,2,0,0,0,0,0,
+    0,0,0,1,1,1,2,0,0,0,
+    0,0,0,2,1,0,0,0,0,0,
+    0,0,0,0,0,0,2,1,0,0,
+    0,0,0,0,0,0,0,2,0,0,
+    0,0,0,0,0,0,0,0,0,0,
+  ];
+  var colors={0:COL.success+'44',1:COL.signal+'66',2:COL.warn+'66'};
+  var borders={0:COL.success+'33',1:COL.signal+'44',2:COL.warn+'88'};
+  for(var r=0;r<rows;r++){
+    for(var c=0;c<cols;c++){
+      var ci=r*cols+c;
+      ctx.fillStyle=colors[classify[ci]];
+      ctx.fillRect(ox+c*cw,oy+r*ch2,cw-1,ch2-1);
+      if(classify[ci]===2){
+        ctx.strokeStyle=borders[2];
+        ctx.lineWidth=2;
+        ctx.setLineDash([3,3]);
+        ctx.strokeRect(ox+c*cw,oy+r*ch2,cw-1,ch2-1);
+        ctx.setLineDash([]);
+        // X mark
+        ctx.strokeStyle=COL.warn;
+        ctx.lineWidth=1.5;
+        var mx=ox+c*cw+cw/2,my=oy+r*ch2+ch2/2,ms=Math.min(cw,ch2)*0.25;
+        ctx.beginPath();ctx.moveTo(mx-ms,my-ms);ctx.lineTo(mx+ms,my+ms);ctx.stroke();
+        ctx.beginPath();ctx.moveTo(mx+ms,my-ms);ctx.lineTo(mx-ms,my+ms);ctx.stroke();
+      }
+    }
+  }
+  // Legend
+  var ly=oy+gh+16;
+  var items=[{c:COL.success,l:t('lblSafe')},{c:COL.signal,l:t('lblHazard')},{c:COL.warn,l:t('lblFalsePos')}];
+  var lx=ox;
+  for(var li=0;li<items.length;li++){
+    ctx.fillStyle=items[li].c+'88';
+    ctx.fillRect(lx,ly,12,12);
+    ctx.font='10px "Space Grotesk",sans-serif';
+    ctx.fillStyle='#e5e2e1';
+    ctx.textAlign='left';
+    ctx.textBaseline='middle';
+    ctx.fillText(items[li].l,lx+16,ly+6);
+    lx+=80;
+  }
+  ctx.restore();
+}
+
+// Draw planned vs actual path
+function drawPathDeviation(ox,oy,pw,ph,alpha){
+  ctx.save();ctx.globalAlpha=alpha;
+  ctx.fillStyle='rgba(28,27,27,0.4)';
+  ctx.fillRect(ox,oy,pw,ph);
+  // Planned path (smooth)
+  ctx.strokeStyle=COL.tertiary;
+  ctx.lineWidth=2;
+  ctx.setLineDash([6,4]);
+  ctx.beginPath();
+  ctx.moveTo(ox+20,oy+ph-20);
+  ctx.bezierCurveTo(ox+pw*0.2,oy+ph*0.5,ox+pw*0.5,oy+ph*0.3,ox+pw-20,oy+30);
+  ctx.stroke();
+  ctx.setLineDash([]);
+  // Actual path (wobbly)
+  ctx.strokeStyle=COL.signal;
+  ctx.lineWidth=2;
+  ctx.shadowColor=COL.signal;
+  ctx.shadowBlur=6;
+  ctx.beginPath();
+  ctx.moveTo(ox+20,oy+ph-20);
+  var pts=20;
+  for(var i=1;i<=pts;i++){
+    var p=i/pts;
+    // Ideal position on bezier (approximation)
+    var ix=ox+20+p*(pw-40);
+    var iy=oy+ph-20-p*(ph-50);
+    // Add jitter
+    var jx=Math.sin(i*1.7)*8+Math.cos(i*2.3)*5;
+    var jy=Math.cos(i*1.3)*6+Math.sin(i*2.1)*4;
+    ctx.lineTo(ix+jx,iy+jy);
+  }
+  ctx.stroke();
+  ctx.shadowBlur=0;
+  // Legend
+  ctx.font='10px "Space Grotesk",sans-serif';
+  ctx.setLineDash([6,4]);
+  ctx.strokeStyle=COL.tertiary;ctx.beginPath();ctx.moveTo(ox+10,oy+ph+14);ctx.lineTo(ox+30,oy+ph+14);ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.fillStyle=COL.tertiary;ctx.textAlign='left';ctx.textBaseline='middle';
+  ctx.fillText(t('lblPlanned'),ox+36,oy+ph+14);
+  ctx.strokeStyle=COL.signal;ctx.beginPath();ctx.moveTo(ox+130,oy+ph+14);ctx.lineTo(ox+150,oy+ph+14);ctx.stroke();
+  ctx.fillStyle=COL.signal;
+  ctx.fillText(t('lblActual'),ox+156,oy+ph+14);
+  ctx.restore();
+}
+
+// Mini dashboard
+function drawDashboard(ox,oy,dw,dh,alpha){
+  ctx.save();ctx.globalAlpha=alpha;
+  ctx.fillStyle='rgba(28,27,27,0.5)';
+  ctx.fillRect(ox,oy,dw,dh);
+  // 4 quadrants
+  var hw=dw/2-4,hh=dh/2-4;
+  // Latency bar (top-left)
+  drawPipelineBarsSmall(ox+4,oy+20,hw,hh-24,'450ms',COL.signal,alpha);
+  ctx.font='bold 9px "Space Grotesk",sans-serif';
+  ctx.fillStyle=COL.signal;ctx.textAlign='left';ctx.fillText(t('hudV0_0'),ox+8,oy+14);
+  // Jitter wave (top-right)
+  var jitterData=[];for(var j=0;j<30;j++)jitterData.push(0.5+Math.sin(j*0.8)*0.15+Math.random()*0.1);
+  drawWaveChart(ox+hw+8,oy+20,hw,hh-24,jitterData,COL.warn,t('hudV0_1'),alpha);
+  // Misclass grid (bottom-left)
+  drawRiskGridSmall(ox+4,oy+hh+8,hw,hh-8,alpha);
+  ctx.font='bold 9px "Space Grotesk",sans-serif';
+  ctx.fillStyle=COL.warn;ctx.textAlign='left';ctx.fillText(t('hudV0_2'),ox+8,oy+hh+4);
+  // Path deviation (bottom-right)
+  drawPathDeviationSmall(ox+hw+8,oy+hh+8,hw,hh-8,alpha);
+  ctx.font='bold 9px "Space Grotesk",sans-serif';
+  ctx.fillStyle=COL.primary;ctx.textAlign='left';ctx.fillText(t('hudV0_3'),ox+hw+12,oy+hh+4);
+  ctx.restore();
+}
+
+function drawPipelineBarsSmall(x,y,w,h,label,color,alpha){
+  ctx.save();ctx.globalAlpha=alpha;
+  var segs=[0.15,0.35,0.3,0.2];
+  var cx=x;
+  for(var i=0;i<segs.length;i++){
+    var sw=w*segs[i];
+    ctx.fillStyle=color+(i%2===0?'66':'44');
+    ctx.fillRect(cx,y,sw,h);
+    cx+=sw;
+  }
+  ctx.restore();
+}
+
+function drawRiskGridSmall(x,y,w,h,alpha){
+  ctx.save();ctx.globalAlpha=alpha;
+  var c=6,r=4,cw2=w/c,ch3=h/r;
+  var vals=[0,0,1,0,0,0, 0,2,1,0,0,0, 0,0,2,1,0,0, 0,0,0,0,0,0];
+  var cols2={0:COL.success+'33',1:COL.signal+'55',2:COL.warn+'55'};
+  for(var ri=0;ri<r;ri++)for(var ci=0;ci<c;ci++){
+    ctx.fillStyle=cols2[vals[ri*c+ci]];
+    ctx.fillRect(x+ci*cw2,y+ri*ch3,cw2-1,ch3-1);
+  }
+  ctx.restore();
+}
+
+function drawPathDeviationSmall(x,y,w,h,alpha){
+  ctx.save();ctx.globalAlpha=alpha;
+  ctx.strokeStyle=COL.tertiary;ctx.lineWidth=1;ctx.setLineDash([3,3]);
+  ctx.beginPath();ctx.moveTo(x+5,y+h-5);ctx.lineTo(x+w-5,y+5);ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.strokeStyle=COL.signal;ctx.lineWidth=1;
+  ctx.beginPath();ctx.moveTo(x+5,y+h-5);
+  for(var i=1;i<=10;i++){
+    var p2=i/10;
+    ctx.lineTo(x+5+p2*(w-10)+Math.sin(i*1.5)*4,y+h-5-p2*(h-10)+Math.cos(i*1.8)*3);
+  }
+  ctx.stroke();
+  ctx.restore();
+}
+
+function getFrameElements(f){
+  var els=[];
+  var cx=W/2;
+  els.push({id:'fTitle',type:'label',text:t('fTitle'+f),x:cx,y:22,color:COL.primary,size:13,align:'center',alpha:1});
+  els.push({id:'fDesc',type:'label',text:t('fDesc'+f),x:cx,y:42,color:COL.muted,size:10,align:'center',alpha:1});
+
+  if(f===0){
+    // Pipeline latency bars
+    var stages=[
+      {label:'CAPTURE',ms:50,color:COL.tertiary},
+      {label:'PREPROC',ms:30,color:COL.tertiary},
+      {label:'CNN',ms:200,color:COL.signal},
+      {label:'POSTPROC',ms:70,color:COL.warn},
+      {label:'DECISION',ms:100,color:COL.primary}
+    ];
+    els.push({id:'pipeline',type:'custom',alpha:1,
+      draw:function(a){drawPipelineBars(60,100,580,80,stages,a);}});
+    // Latency waveform below
+    var latData=[];
+    for(var i=0;i<40;i++){
+      latData.push(0.3+Math.random()*0.15+(i>20&&i<30?0.3:0));
+    }
+    els.push({id:'waveform',type:'custom',alpha:1,
+      draw:function(a){drawWaveChart(60,220,580,160,latData,COL.signal,t('lblTime')+' vs '+t('lblMs'),a);}});
+    // Budget annotation
+    els.push({id:'budgetNote',type:'label',text:'200ms '+t('lblIdeal')+' | 450ms '+t('lblActual'),x:cx,y:410,color:COL.warn,size:11,align:'center',alpha:1});
+  }
+  else if(f===1){
+    // IMU jitter waveform
+    var imuData=[];
+    for(var j=0;j<60;j++){
+      imuData.push(0.5+Math.sin(j*0.3)*0.1+Math.random()*0.15-0.075);
+    }
+    els.push({id:'imuWave',type:'custom',alpha:1,
+      draw:function(a){drawWaveChart(60,80,580,140,imuData,COL.warn,t('lblHeading')+' ('+t('lblDeg')+')',a);}});
+    // Clean signal reference
+    var cleanData=[];
+    for(var k=0;k<60;k++){
+      cleanData.push(0.5+Math.sin(k*0.3)*0.1);
+    }
+    els.push({id:'cleanWave',type:'custom',alpha:1,
+      draw:function(a){drawWaveChart(60,260,580,140,cleanData,COL.success,t('lblIdeal')+' '+t('lblHeading'),a);}});
+    els.push({id:'noiseNote',type:'label',text:'+/-15'+t('lblDeg')+' jitter',x:cx,y:430,color:COL.warn,size:11,align:'center',alpha:1});
+  }
+  else if(f===2){
+    // Misclassification grid
+    els.push({id:'riskGrid',type:'custom',alpha:1,
+      draw:function(a){drawRiskGrid(100,80,500,280,a);}});
+    els.push({id:'fprNote',type:'label',text:'12% FPR (False Positive Rate)',x:cx,y:430,color:COL.warn,size:11,align:'center',alpha:1});
+  }
+  else if(f===3){
+    // Path deviation
+    els.push({id:'pathDev',type:'custom',alpha:1,
+      draw:function(a){drawPathDeviation(80,70,540,330,a);}});
+    els.push({id:'devNote',type:'label',text:'8.5cm '+t('hudV0_3'),x:cx,y:435,color:COL.primary,size:11,align:'center',alpha:1});
+  }
+  else if(f===4){
+    // Dashboard overview
+    els.push({id:'dashboard',type:'custom',alpha:1,
+      draw:function(a){drawDashboard(50,60,600,360,a);}});
+  }
+
+  return els;
+}
+
+function drawElement(el){
+  if(!el||el.alpha<=0.01)return;
+  ctx.save();ctx.globalAlpha=el.alpha;
+  if(el.type==='label'){
+    ctx.font=(el.size||12)+'px "Space Grotesk","Noto Sans SC",sans-serif';
+    ctx.fillStyle=el.color||COL.text;
+    ctx.textAlign=el.align||'center';
+    ctx.textBaseline='middle';
+    ctx.fillText(el.text,el.x,el.y);
+  }else if(el.type==='custom'){
+    el.draw.call(el,el.alpha);
+  }
+  ctx.restore();
+}
+
+function drawFrame(f){
+  drawBg();
+  var elems=getFrameElements(f);
+  elems.forEach(function(el){drawElement(el);});
+}
+
+function transitionTo(newFrame){
+  if(newFrame<0)newFrame=0;
+  if(newFrame>=totalFrames)newFrame=totalFrames-1;
+  if(newFrame===currentFrame&&!transitioning){drawFrame(currentFrame);updateHUD(currentFrame);return;}
+  if(transitioning)return;
+  var oldElems=getFrameElements(currentFrame);
+  var newElems=getFrameElements(newFrame);
+  var oldMap={};oldElems.forEach(function(e){oldMap[e.id]=e;});
+  var newMap={};newElems.forEach(function(e){newMap[e.id]=e;});
+  currentFrame=newFrame;
+  updateHUD(newFrame);
+  transitioning=true;
+  var startTime=null;
+  var duration=500;
+  function step(timestamp){
+    if(!startTime)startTime=timestamp;
+    var raw=Math.min((timestamp-startTime)/duration,1);
+    var p=easeInOut(raw);
+    drawBg();
+    oldElems.forEach(function(oe){if(!newMap[oe.id])drawElement(merge(oe,{alpha:1-p}));});
+    newElems.forEach(function(ne){
+      var oe=oldMap[ne.id];
+      if(oe){
+        if(ne.type==='label'&&oe.text!==ne.text){
+          drawElement(merge(oe,{alpha:1-p}));
+          drawElement(merge(ne,{alpha:p}));
+        }else{drawElement(merge(ne,{alpha:1}));}
+      }else{drawElement(merge(ne,{alpha:p}));}
+    });
+    if(raw<1)requestAnimationFrame(step);
+    else transitioning=false;
+  }
+  requestAnimationFrame(step);
+}
+
+function updateHUD(f){
+  document.getElementById('hudV0').textContent=t('hudV0_'+f);
+  document.getElementById('hudV1').textContent=t('hudV1_'+f);
+  document.getElementById('hudV2').textContent=t('hudV2_'+f);
+  document.getElementById('hudV3').textContent=t('hudV3_'+f);
+  document.getElementById('frameInd').textContent=(f+1)+' / '+totalFrames;
+}
+
+function refreshI18N(){
+  document.getElementById('mainTitle').textContent=t('title');
+  document.getElementById('mainSub').textContent=t('sub');
+  document.getElementById('btnPrev').textContent=t('btnPrev');
+  document.getElementById('btnPlay').textContent=playing?t('btnPause'):t('btnPlay');
+  document.getElementById('btnNext').textContent=t('btnNext');
+  document.getElementById('guideTitle').innerHTML='<span>'+t('guideTitle')+'</span><span class="guide-toggle">[-]</span>';
+  document.getElementById('guideContent').innerHTML=t('guideDesc');
+  document.getElementById('hudL0').textContent=t('hudL0');
+  document.getElementById('hudL1').textContent=t('hudL1');
+  document.getElementById('hudL2').textContent=t('hudL2');
+  document.getElementById('hudL3').textContent=t('hudL3');
+  updateHUD(currentFrame);
+  drawFrame(currentFrame);
+}
+
+document.getElementById('langBtn').addEventListener('click',function(){
+  LANG=LANG==='en'?'cn':'en';
+  document.getElementById('langBtn').textContent=LANG.toUpperCase();
+  refreshI18N();
+});
+document.getElementById('btnPrev').addEventListener('click',function(){
+  if(playing){playing=false;if(playTimer)clearTimeout(playTimer);}
+  transitionTo(currentFrame-1);
+  document.getElementById('btnPlay').textContent=t('btnPlay');
+});
+document.getElementById('btnNext').addEventListener('click',function(){
+  if(playing){playing=false;if(playTimer)clearTimeout(playTimer);}
+  transitionTo(currentFrame+1);
+  document.getElementById('btnPlay').textContent=t('btnPlay');
+});
+document.getElementById('btnPlay').addEventListener('click',function(){
+  if(playing){
+    playing=false;if(playTimer)clearTimeout(playTimer);
+    document.getElementById('btnPlay').textContent=t('btnPlay');
+    return;
+  }
+  playing=true;
+  document.getElementById('btnPlay').textContent=t('btnPause');
+  if(currentFrame>=totalFrames-1)currentFrame=-1;
+  function autoPlay(){
+    if(!playing)return;
+    var next=currentFrame+1;
+    if(next>=totalFrames){playing=false;document.getElementById('btnPlay').textContent=t('btnPlay');return;}
+    transitionTo(next);
+    playTimer=setTimeout(function(){if(playing)autoPlay();},2000);
+  }
+  autoPlay();
+});
+document.getElementById('guideToggle').addEventListener('click',function(){
+  var gc=document.getElementById('guideContent');
+  var arrow=document.getElementById('guideArrow');
+  if(gc.style.display==='none'){gc.style.display='block';arrow.textContent='[-]';}
+  else{gc.style.display='none';arrow.textContent='[+]';}
+});
+
+window.addEventListener('resize',resize);
+if(window.ResizeObserver){new ResizeObserver(resize).observe(wrap);}
+refreshI18N();
+resize();
+setTimeout(resize,200);
+setTimeout(resize,600);
+document.fonts.ready.then(function(){resize();});
+})();
+</script>
+</body>
+</html>

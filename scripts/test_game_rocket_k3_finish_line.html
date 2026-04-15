@@ -1,0 +1,573 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=Inter:wght@400;500&family=Noto+Sans+SC:wght@400;700&display=swap" rel="stylesheet">
+<title>Finish Line Judge</title>
+<style>
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box;}
+html,body{width:100%;height:100vh;overflow:hidden;}
+body{background:#05070a;color:#e2e2e9;font-family:'Inter','Noto Sans SC',sans-serif;display:flex;flex-direction:column;}
+.wrapper{display:flex;flex-direction:column;height:100vh;overflow:hidden;}
+.header{display:flex;align-items:center;justify-content:space-between;padding:10px 16px 6px;background:#070a14;}
+.header h1{font-family:'Space Grotesk',sans-serif;font-size:clamp(15px,2vw,18px);font-weight:700;color:#ffb000;letter-spacing:-0.02em;}
+.header .sub{font-size:11px;color:#8e90a6;letter-spacing:0.1em;text-transform:uppercase;}
+.stage-wrap{flex:1;min-height:0;position:relative;display:flex;flex-direction:column;gap:6px;padding:6px 10px;}
+.rule-bar{display:flex;gap:8px;align-items:center;justify-content:center;font-family:'Space Grotesk',sans-serif;font-size:11px;letter-spacing:0.1em;padding:6px 0;background:rgba(17,20,37,0.6);}
+.rule-bar .rule{padding:4px 12px;background:#171a1f;color:#8e90a6;cursor:pointer;border:1px solid transparent;transition:all .15s;}
+.rule-bar .rule.active{background:rgba(255,176,0,0.18);color:#ffb000;border-color:#ffb000;}
+.track-wrap{flex:1;min-height:0;min-width:0;position:relative;display:flex;flex-direction:column;background:linear-gradient(145deg,rgba(17,20,37,.9),rgba(3,4,8,.95));box-shadow:inset 0 0 0 1px rgba(142,144,166,0.2);overflow:hidden;}
+canvas{width:100%;height:100%;display:block;}
+.hud{height:52px;display:grid;grid-template-columns:repeat(4,1fr);align-items:center;gap:4px;background:rgba(0,0,0,0.55);padding:4px 12px;}
+.hud-item{text-align:center;}
+.hud-label{font-family:'Space Grotesk',sans-serif;font-size:9px;letter-spacing:0.15em;text-transform:uppercase;color:#8e90a6;}
+.hud-val{font-family:'Space Grotesk',sans-serif;font-size:14px;font-weight:700;color:#ffb000;}
+.controls{display:flex;gap:8px;padding:6px 12px;justify-content:center;flex-wrap:wrap;background:#070a14;}
+.ctrl-btn{font-family:'Space Grotesk',sans-serif;font-size:11px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;padding:7px 14px;border:none;cursor:pointer;color:#05070a;background:linear-gradient(135deg,#ffb000,#ff5f1f);transition:transform 0.1s;}
+.ctrl-btn:hover{transform:scale(1.04);}
+.ctrl-btn:active{transform:scale(0.96);}
+.ctrl-btn.secondary{background:#171a1f;color:#8e90a6;}
+.ctrl-btn.secondary:hover{color:#ffb000;}
+.ctrl-btn.blue{background:linear-gradient(135deg,#00daf3,#0fa3bd);color:#05070a;}
+.panel{position:absolute;background:rgba(17,20,37,0.92);backdrop-filter:blur(10px);padding:10px 14px;border:1px solid rgba(255,176,0,0.3);font-size:12px;color:#e2e2e9;z-index:8;}
+.panel.tl{top:8px;left:8px;max-width:40%;}
+.panel.br{bottom:8px;right:8px;max-width:50%;text-align:right;}
+.panel b{color:#ffb000;}
+.toast{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);background:rgba(17,20,37,0.95);color:#e2e2e9;padding:14px 22px;font-size:14px;border:2px solid #ffb000;z-index:20;display:none;text-align:center;line-height:1.5;min-width:220px;}
+.toast.show{display:block;}
+.toast .big{font-size:18px;color:#ffb000;display:block;margin-bottom:6px;font-weight:700;}
+.lang-btn{position:absolute;top:8px;right:8px;z-index:50;font-family:'Space Grotesk',sans-serif;font-size:11px;padding:4px 10px;cursor:pointer;border:none;background:rgba(17,20,37,0.85);color:#ffb59c;letter-spacing:1px;}
+.choose-bar{display:flex;gap:8px;padding:6px 12px;justify-content:center;background:rgba(17,20,37,0.7);}
+.choose-btn{font-family:'Space Grotesk',sans-serif;font-size:11px;font-weight:700;letter-spacing:0.08em;padding:8px 18px;border:2px solid;cursor:pointer;background:transparent;transition:all .15s;}
+.choose-btn.ming{color:#ffb000;border-color:#ffb000;}
+.choose-btn.hua{color:#00daf3;border-color:#00daf3;}
+.choose-btn:hover{background:rgba(255,176,0,0.15);}
+.choose-btn.hua:hover{background:rgba(0,218,243,0.15);}
+.choose-btn.disabled{opacity:0.35;cursor:not-allowed;}
+</style>
+</head>
+<body>
+<div class="wrapper">
+  <header class="header">
+    <div><h1 id="title"></h1><div class="sub" id="subtitle"></div></div>
+    <div id="roundInfo" style="font-family:'Space Grotesk';font-size:11px;color:#8e90a6;"></div>
+  </header>
+  <div class="rule-bar">
+    <div class="rule active" id="ruleA"></div>
+    <div class="rule" id="ruleB"></div>
+  </div>
+  <div class="stage-wrap">
+    <div class="track-wrap">
+      <button class="lang-btn" id="langBtn">EN</button>
+      <canvas id="c"></canvas>
+      <div class="panel tl" id="panelTL"></div>
+      <div class="panel br" id="panelBR"></div>
+      <div class="toast" id="toast"><span class="big" id="toastBig"></span><span id="toastBody"></span></div>
+    </div>
+  </div>
+  <div class="choose-bar">
+    <button class="choose-btn ming" id="pickMing"></button>
+    <button class="choose-btn hua"  id="pickHua"></button>
+  </div>
+  <div class="hud">
+    <div class="hud-item"><div class="hud-label" id="hudL1"></div><div class="hud-val" id="hudV1"></div></div>
+    <div class="hud-item"><div class="hud-label" id="hudL2"></div><div class="hud-val" id="hudV2"></div></div>
+    <div class="hud-item"><div class="hud-label" id="hudL3"></div><div class="hud-val" id="hudV3"></div></div>
+    <div class="hud-item"><div class="hud-label" id="hudL4"></div><div class="hud-val" id="hudV4"></div></div>
+  </div>
+  <div class="controls">
+    <button class="ctrl-btn" id="btnGo"></button>
+    <button class="ctrl-btn blue" id="btnNext"></button>
+    <button class="ctrl-btn secondary" id="btnReset"></button>
+  </div>
+</div>
+<script>
+'use strict';
+
+var I18N = {
+  en: {
+    title:'Finish Line Judge',
+    subtitle:'You are the timekeeper',
+    ruleA:'RULE A · same distance',
+    ruleB:'RULE B · same time',
+    roundInfo:function(n,total){return 'Round '+n+' / '+total;},
+    hudL1:'RULE',    hudL2:'DISTANCE', hudL3:'TIME',    hudL4:'SCORE',
+    panelTL_A:'<b>Rule A.</b> Both runners go the same distance. Press GO and watch the <b>stopwatch</b>. The one who finishes in <b>less time</b> is faster.',
+    panelTL_B:'<b>Rule B.</b> Both runners stop after the same time. Press GO and let the clock count down. The one who went <b>more meters</b> is faster.',
+    panelBR_idle:'Press <b>GO</b> to start this round.',
+    panelBR_running:'Running... watch them!',
+    panelBR_done:'Time is up. Who is faster? Click their name below.',
+    btnGo:'GO',
+    btnNext:'NEXT ROUND',
+    btnReset:'RESET SCORE',
+    pickMing:'Ming is faster',
+    pickHua: 'Hua is faster',
+    ming:'Ming',
+    hua: 'Hua',
+    correctTitle:'Correct!',
+    wrongTitle: 'Not quite.',
+    explainA:function(w, d, tw, tl){return w+' reached '+d+' m in '+tw+' s, the other runner used '+tl+' s. Same distance, less time means '+w+' is faster.';},
+    explainB:function(w, t, dw, dl){return 'After '+t+' s, '+w+' went '+dw+' m and the other went '+dl+' m. Same time, more distance means '+w+' is faster.';},
+    wrongHintA:function(actual){return 'Remember: with same distance, FASTER = LESS TIME. Check the stopwatches again.';},
+    wrongHintB:function(actual){return 'Remember: with same time, FASTER = MORE DISTANCE. Check the markers again.';},
+    finishTitle:'All rounds done!',
+    finishBody:function(s,t){return 'You got '+s+' / '+t+' right. Press RESET to play again.';},
+    lang:'中文',
+    stopLabel:function(t){return t.toFixed(1)+' s';},
+    distLabel:function(d){return d.toFixed(1)+' m';},
+    mingLbl:'Ming',
+    huaLbl:'Hua',
+  },
+  cn: {
+    title:'\u7ec8\u70b9\u8ba1\u65f6\u5458',
+    subtitle:'\u4f60\u6765\u5f53\u88c1\u5224',
+    ruleA:'\u89c4\u5219 A\u00b7\u540c\u8ddd\u79bb',
+    ruleB:'\u89c4\u5219 B\u00b7\u540c\u65f6\u95f4',
+    roundInfo:function(n,total){return '\u7b2c '+n+' / '+total+' \u5c40';},
+    hudL1:'\u89c4\u5219', hudL2:'\u8ddd\u79bb', hudL3:'\u65f6\u95f4', hudL4:'\u5f97\u5206',
+    panelTL_A:'<b>\u89c4\u5219 A\u3002</b>\u4e24\u4e2a\u4eba\u8dd1<b>\u540c\u6837\u7684\u8ddd\u79bb</b>\uff0c\u6309 GO \u770b\u8ba1\u65f6\u5668\u3002<b>\u7528\u65f6\u66f4\u5c11</b>\u7684\u4eba\u66f4\u5feb\u3002',
+    panelTL_B:'<b>\u89c4\u5219 B\u3002</b>\u4e24\u4e2a\u4eba\u8dd1<b>\u540c\u6837\u957f\u7684\u65f6\u95f4</b>\uff0c\u6309 GO \u7b49\u8ba1\u65f6\u5668\u5f52\u96f6\u3002<b>\u8dd1\u5f97\u66f4\u8fdc</b>\u7684\u4eba\u66f4\u5feb\u3002',
+    panelBR_idle:'\u6309 <b>GO</b> \u5f00\u59cb\u672c\u5c40\u3002',
+    panelBR_running:'\u6b63\u5728\u8dd1\uff0c\u770b\u597d\u4e86\uff01',
+    panelBR_done:'\u8ba1\u65f6\u7ed3\u675f\u3002\u8c01\u66f4\u5feb\uff1f\u70b9\u4e0b\u65b9\u7684\u540d\u5b57\u3002',
+    btnGo:'\u5f00\u59cb',
+    btnNext:'\u4e0b\u4e00\u5c40',
+    btnReset:'\u91cd\u7f6e\u5206\u6570',
+    pickMing:'\u5c0f\u660e\u66f4\u5feb',
+    pickHua: '\u5c0f\u534e\u66f4\u5feb',
+    ming:'\u5c0f\u660e',
+    hua: '\u5c0f\u534e',
+    correctTitle:'\u7b54\u5bf9\u4e86\uff01',
+    wrongTitle: '\u518d\u60f3\u60f3\u3002',
+    explainA:function(w, d, tw, tl){return w+' \u8dd1 '+d+' \u7c73\u7528\u4e86 '+tw+' \u79d2\uff0c\u53e6\u4e00\u4eba\u7528\u4e86 '+tl+' \u79d2\u3002\u540c\u6837\u8ddd\u79bb\u3001\u7528\u65f6\u66f4\u5c11\u5c31\u662f\u66f4\u5feb\u3002';},
+    explainB:function(w, t, dw, dl){return t+' \u79d2\u540e\uff0c'+w+' \u5230\u4e86 '+dw+' \u7c73\uff0c\u53e6\u4e00\u4eba\u53ea\u5230 '+dl+' \u7c73\u3002\u540c\u6837\u65f6\u95f4\u3001\u8dd1\u5f97\u66f4\u8fdc\u5c31\u662f\u66f4\u5feb\u3002';},
+    wrongHintA:function(actual){return '\u8bb0\u4f4f\uff1a\u540c\u8ddd\u79bb\u65f6\uff0c\u7528\u65f6\u66f4\u5c11\u7684\u66f4\u5feb\u3002\u518d\u770b\u4e00\u904d\u79d2\u8868\u3002';},
+    wrongHintB:function(actual){return '\u8bb0\u4f4f\uff1a\u540c\u65f6\u95f4\u65f6\uff0c\u8dd1\u5f97\u66f4\u8fdc\u7684\u66f4\u5feb\u3002\u518d\u770b\u4e00\u904d\u7ec8\u70b9\u4f4d\u7f6e\u3002';},
+    finishTitle:'\u6240\u6709\u5c40\u73a9\u5b8c\u4e86\uff01',
+    finishBody:function(s,t){return '\u4f60\u7b54\u5bf9\u4e86 '+s+' / '+t+' \u5c40\u3002\u6309\u91cd\u7f6e\u518d\u73a9\u4e00\u6b21\u3002';},
+    lang:'EN',
+    stopLabel:function(t){return t.toFixed(1)+' \u79d2';},
+    distLabel:function(d){return d.toFixed(1)+' \u7c73';},
+    mingLbl:'\u5c0f\u660e',
+    huaLbl:'\u5c0f\u534e',
+  }
+};
+
+var ROUNDS = [
+  // speed in m/s ; ruleA fixes distance (finish at same line) ; ruleB fixes time
+  { rule:'A', dist:20, mingSpeed:5.0, huaSpeed:4.0 },   // Ming faster (20/4=5 vs 20/5=4)
+  { rule:'B', time:5.0, mingSpeed:4.0, huaSpeed:5.0 },  // Hua faster  (4x5=20 vs 5x5=25)
+  { rule:'A', dist:15, mingSpeed:3.0, huaSpeed:5.0 },   // Hua faster (15/3=5 vs 15/5=3)
+  { rule:'B', time:4.0, mingSpeed:4.5, huaSpeed:3.0 },  // Ming faster
+  { rule:'A', dist:10, mingSpeed:2.5, huaSpeed:2.0 },   // Ming faster
+];
+
+var lang = 'cn';
+var cv = document.getElementById('c');
+var ctx = cv.getBoundingClientRect();
+var g = cv.getContext('2d');
+var cssW = 0, cssH = 0, DPR = Math.min(window.devicePixelRatio || 1, 2);
+var roundIdx = 0;
+var score = 0;
+var state = 'idle'; // idle | running | done | finished
+var elapsed = 0; // seconds
+var lastTs = 0;
+var mingTime = 0, huaTime = 0;  // time taken so far
+var mingDist = 0, huaDist = 0;
+var answered = false;
+var currentWinner = null; // 'Ming' or 'Hua'
+
+function resize() {
+  var rect = cv.parentElement.getBoundingClientRect();
+  cssW = rect.width;
+  cssH = rect.height;
+  if (cssW < 80) cssW = 80;
+  if (cssH < 80) cssH = 80;
+  cv.width = Math.round(cssW * DPR);
+  cv.height = Math.round(cssH * DPR);
+  cv.style.width = cssW + 'px';
+  cv.style.height = cssH + 'px';
+  g.setTransform(DPR, 0, 0, DPR, 0, 0);
+  draw();
+}
+window.addEventListener('resize', resize);
+
+function t() { return I18N[lang]; }
+
+function setText(id, text) { var el = document.getElementById(id); if (el) el.textContent = text; }
+function setHTML(id, html) { var el = document.getElementById(id); if (el) el.innerHTML = html; }
+
+function updateUI() {
+  var L = t();
+  setText('title', L.title);
+  setText('subtitle', L.subtitle);
+  setText('ruleA', L.ruleA);
+  setText('ruleB', L.ruleB);
+  setText('btnGo', L.btnGo);
+  setText('btnNext', L.btnNext);
+  setText('btnReset', L.btnReset);
+  setText('pickMing', L.pickMing);
+  setText('pickHua',  L.pickHua);
+  setText('langBtn', L.lang);
+  setText('hudL1', L.hudL1);
+  setText('hudL2', L.hudL2);
+  setText('hudL3', L.hudL3);
+  setText('hudL4', L.hudL4);
+  setText('roundInfo', L.roundInfo(Math.min(roundIdx+1, ROUNDS.length), ROUNDS.length));
+
+  var r = ROUNDS[roundIdx];
+  if (!r) {
+    setHTML('panelTL', '');
+  } else {
+    setHTML('panelTL', r.rule === 'A' ? L.panelTL_A : L.panelTL_B);
+  }
+  document.getElementById('ruleA').classList.toggle('active', r && r.rule === 'A');
+  document.getElementById('ruleB').classList.toggle('active', r && r.rule === 'B');
+
+  if (state === 'idle') setHTML('panelBR', L.panelBR_idle);
+  else if (state === 'running') setHTML('panelBR', L.panelBR_running);
+  else if (state === 'done') setHTML('panelBR', L.panelBR_done);
+
+  // HUD
+  var hudRule = r ? (r.rule === 'A' ? 'A' : 'B') : '—';
+  var hudDist = '—', hudTime = '—';
+  if (r) {
+    if (r.rule === 'A') {
+      hudDist = r.dist + ' m';
+      hudTime = L.stopLabel(Math.max(mingTime, huaTime));
+    } else {
+      hudDist = L.distLabel(Math.max(mingDist, huaDist));
+      hudTime = r.time + ' s';
+    }
+  }
+  setText('hudV1', hudRule);
+  setText('hudV2', hudDist);
+  setText('hudV3', hudTime);
+  setText('hudV4', score + ' / ' + ROUNDS.length);
+
+  var mingBtn = document.getElementById('pickMing');
+  var huaBtn  = document.getElementById('pickHua');
+  var disabled = state !== 'done' || answered;
+  mingBtn.classList.toggle('disabled', disabled);
+  huaBtn.classList.toggle('disabled',  disabled);
+}
+
+// Draw the running track, runners, stopwatches and markers
+function draw() {
+  g.clearRect(0, 0, cssW, cssH);
+
+  // background subtle grid
+  g.fillStyle = '#0a0d14';
+  g.fillRect(0, 0, cssW, cssH);
+  g.strokeStyle = 'rgba(255,176,0,0.04)';
+  g.lineWidth = 1;
+  var gs = 40;
+  for (var x = 0; x < cssW; x += gs) { g.beginPath(); g.moveTo(x, 0); g.lineTo(x, cssH); g.stroke(); }
+  for (var y = 0; y < cssH; y += gs) { g.beginPath(); g.moveTo(0, y); g.lineTo(cssW, y); g.stroke(); }
+
+  var r = ROUNDS[roundIdx];
+  if (!r) return;
+
+  var padL = 80, padR = 80;
+  var trackX1 = padL, trackX2 = cssW - padR;
+  var trackW = trackX2 - trackX1;
+  var yMing = cssH * 0.42;
+  var yHua  = cssH * 0.68;
+
+  // Distance scale: rule A -> fixed dist r.dist; rule B -> max expected distance
+  var maxDist;
+  if (r.rule === 'A') {
+    maxDist = r.dist;
+  } else {
+    // show up to max expected dist = max(ming,hua speed)*time, with small buffer
+    maxDist = Math.max(r.mingSpeed, r.huaSpeed) * r.time * 1.05;
+  }
+
+  // Tracks (horizontal lines)
+  g.strokeStyle = '#ffb000';
+  g.lineWidth = 2;
+  g.beginPath(); g.moveTo(trackX1, yMing); g.lineTo(trackX2, yMing); g.stroke();
+  g.strokeStyle = '#00daf3';
+  g.beginPath(); g.moveTo(trackX1, yHua); g.lineTo(trackX2, yHua); g.stroke();
+
+  // tick marks every meter (light)
+  g.strokeStyle = 'rgba(255,255,255,0.07)';
+  g.lineWidth = 1;
+  for (var m = 1; m <= Math.ceil(maxDist); m++) {
+    var tx = trackX1 + (m / maxDist) * trackW;
+    g.beginPath(); g.moveTo(tx, yMing - 6); g.lineTo(tx, yMing + 6); g.stroke();
+    g.beginPath(); g.moveTo(tx, yHua - 6);  g.lineTo(tx, yHua + 6);  g.stroke();
+  }
+
+  // start pillars
+  g.strokeStyle = '#ffb000';
+  g.lineWidth = 2;
+  g.beginPath(); g.moveTo(trackX1, yMing - 18); g.lineTo(trackX1, yMing + 18); g.stroke();
+  g.strokeStyle = '#00daf3';
+  g.beginPath(); g.moveTo(trackX1, yHua - 18); g.lineTo(trackX1, yHua + 18); g.stroke();
+
+  // finish line depends on rule
+  if (r.rule === 'A') {
+    // finish at x = trackX2 (both runners aim for same finish)
+    g.strokeStyle = '#ff5f1f';
+    g.setLineDash([6,4]);
+    g.lineWidth = 2;
+    g.beginPath(); g.moveTo(trackX2, yMing - 24); g.lineTo(trackX2, yHua + 24); g.stroke();
+    g.setLineDash([]);
+    g.fillStyle = '#ff5f1f';
+    g.font = "bold 11px 'Space Grotesk',sans-serif";
+    g.textAlign = 'center';
+    g.textBaseline = 'bottom';
+    g.fillText(r.dist + ' m', trackX2, yMing - 30);
+  } else {
+    // rule B: no finish, show clock count
+    // clock rendered separately below
+  }
+
+  // Ming position along track
+  var mingX, huaX;
+  if (r.rule === 'A') {
+    mingX = trackX1 + Math.min(1, (r.mingSpeed * elapsed) / r.dist) * trackW;
+    huaX  = trackX1 + Math.min(1, (r.huaSpeed  * elapsed) / r.dist) * trackW;
+  } else {
+    mingX = trackX1 + ((r.mingSpeed * Math.min(elapsed, r.time)) / maxDist) * trackW;
+    huaX  = trackX1 + ((r.huaSpeed  * Math.min(elapsed, r.time)) / maxDist) * trackW;
+  }
+
+  // Runner icons
+  drawRunner(mingX, yMing, '#ffb000', t().mingLbl);
+  drawRunner(huaX,  yHua,  '#00daf3', t().huaLbl);
+
+  // labels at start of tracks
+  g.fillStyle = '#8e90a6';
+  g.font = "10px 'Inter','Noto Sans SC',sans-serif";
+  g.textAlign = 'right';
+  g.textBaseline = 'middle';
+  g.fillText(t().mingLbl, trackX1 - 10, yMing);
+  g.fillText(t().huaLbl,  trackX1 - 10, yHua);
+
+  // stopwatches / distance readouts
+  if (r.rule === 'A') {
+    // per-runner stopwatch on the right side
+    drawWatch(trackX2 + 32, yMing, t().stopLabel(mingTime), '#ffb000');
+    drawWatch(trackX2 + 32, yHua,  t().stopLabel(huaTime),  '#00daf3');
+  } else {
+    // one big count-down clock at top center
+    var clockTxt = Math.max(0, r.time - elapsed).toFixed(1) + ' s';
+    drawBigClock(cssW / 2, cssH * 0.12, clockTxt);
+    // distance markers per runner
+    drawDistTag(mingX, yMing - 22, t().distLabel(mingDist), '#ffb000');
+    drawDistTag(huaX,  yHua + 22,  t().distLabel(huaDist),  '#00daf3');
+  }
+}
+
+function drawRunner(x, y, color, label) {
+  g.save();
+  g.fillStyle = color;
+  g.beginPath(); g.arc(x, y - 14, 6, 0, Math.PI * 2); g.fill();
+  g.fillRect(x - 5, y - 8, 10, 14);
+  g.fillRect(x - 5, y + 6, 4, 8);
+  g.fillRect(x + 1, y + 6, 4, 8);
+  g.restore();
+}
+
+function drawWatch(x, y, text, color) {
+  g.save();
+  var w = 64, h = 26;
+  g.fillStyle = 'rgba(17,20,37,0.95)';
+  g.fillRect(x - w/2, y - h/2, w, h);
+  g.strokeStyle = color;
+  g.lineWidth = 1;
+  g.strokeRect(x - w/2, y - h/2, w, h);
+  g.fillStyle = color;
+  g.font = "bold 12px 'Space Grotesk',sans-serif";
+  g.textAlign = 'center';
+  g.textBaseline = 'middle';
+  g.fillText(text, x, y + 1);
+  g.restore();
+}
+
+function drawBigClock(x, y, text) {
+  g.save();
+  var w = 140, h = 44;
+  g.fillStyle = 'rgba(17,20,37,0.95)';
+  g.fillRect(x - w/2, y - h/2, w, h);
+  g.strokeStyle = '#ffb000';
+  g.lineWidth = 2;
+  g.strokeRect(x - w/2, y - h/2, w, h);
+  g.fillStyle = '#ffb000';
+  g.font = "bold 22px 'Space Grotesk',sans-serif";
+  g.textAlign = 'center';
+  g.textBaseline = 'middle';
+  g.fillText(text, x, y + 2);
+  g.restore();
+}
+
+function drawDistTag(x, y, text, color) {
+  g.save();
+  g.fillStyle = 'rgba(17,20,37,0.92)';
+  var w = 52, h = 18;
+  g.fillRect(x - w/2, y - h/2, w, h);
+  g.strokeStyle = color;
+  g.lineWidth = 1;
+  g.strokeRect(x - w/2, y - h/2, w, h);
+  g.fillStyle = color;
+  g.font = "bold 10px 'Space Grotesk',sans-serif";
+  g.textAlign = 'center';
+  g.textBaseline = 'middle';
+  g.fillText(text, x, y);
+  g.restore();
+}
+
+function loop(ts) {
+  if (!lastTs) lastTs = ts;
+  var dt = (ts - lastTs) / 1000;
+  lastTs = ts;
+
+  if (state === 'running') {
+    elapsed += dt;
+    var r = ROUNDS[roundIdx];
+    if (r.rule === 'A') {
+      // update per-runner time if not yet finished
+      if (mingDist < r.dist) {
+        mingDist = Math.min(r.dist, r.mingSpeed * elapsed);
+        mingTime = mingDist / r.mingSpeed;
+        if (mingDist >= r.dist) mingTime = r.dist / r.mingSpeed;
+      }
+      if (huaDist < r.dist) {
+        huaDist = Math.min(r.dist, r.huaSpeed * elapsed);
+        huaTime = huaDist / r.huaSpeed;
+        if (huaDist >= r.dist) huaTime = r.dist / r.huaSpeed;
+      }
+      if (mingDist >= r.dist && huaDist >= r.dist) {
+        state = 'done';
+        updateUI();
+      }
+    } else {
+      // rule B: run until time up
+      var capped = Math.min(elapsed, r.time);
+      mingDist = r.mingSpeed * capped;
+      huaDist  = r.huaSpeed  * capped;
+      mingTime = capped;
+      huaTime  = capped;
+      if (elapsed >= r.time) {
+        state = 'done';
+        updateUI();
+      }
+    }
+    draw();
+    updateHUDLive();
+  }
+  requestAnimationFrame(loop);
+}
+
+function updateHUDLive() {
+  var r = ROUNDS[roundIdx];
+  if (!r) return;
+  var L = t();
+  if (r.rule === 'A') {
+    setText('hudV3', L.stopLabel(Math.max(mingTime, huaTime)));
+  } else {
+    setText('hudV2', L.distLabel(Math.max(mingDist, huaDist)));
+  }
+}
+
+function startRound() {
+  if (state !== 'idle') return;
+  state = 'running';
+  elapsed = 0;
+  mingTime = 0; huaTime = 0;
+  mingDist = 0; huaDist = 0;
+  lastTs = 0;
+  answered = false;
+  document.getElementById('toast').classList.remove('show');
+  updateUI();
+}
+
+function pick(who) {
+  if (state !== 'done' || answered) return;
+  answered = true;
+  var r = ROUNDS[roundIdx];
+  // correct winner
+  var winner;
+  if (r.rule === 'A') {
+    winner = r.mingSpeed > r.huaSpeed ? 'Ming' : 'Hua';
+  } else {
+    winner = r.mingSpeed > r.huaSpeed ? 'Ming' : 'Hua';
+  }
+  currentWinner = winner;
+  var correct = (who === winner);
+  if (correct) score++;
+  var L = t();
+  var big = correct ? L.correctTitle : L.wrongTitle;
+  var body;
+  var nameMing = L.ming, nameHua = L.hua;
+  var wName = winner === 'Ming' ? nameMing : nameHua;
+  if (r.rule === 'A') {
+    var tw = (r.dist / (winner === 'Ming' ? r.mingSpeed : r.huaSpeed)).toFixed(1);
+    var tl = (r.dist / (winner === 'Ming' ? r.huaSpeed  : r.mingSpeed)).toFixed(1);
+    body = L.explainA(wName, r.dist, tw, tl);
+  } else {
+    var dw = ((winner === 'Ming' ? r.mingSpeed : r.huaSpeed) * r.time).toFixed(1);
+    var dl = ((winner === 'Ming' ? r.huaSpeed  : r.mingSpeed) * r.time).toFixed(1);
+    body = L.explainB(wName, r.time, dw, dl);
+  }
+  document.getElementById('toastBig').textContent = big;
+  document.getElementById('toastBody').innerHTML = body;
+  document.getElementById('toast').classList.add('show');
+  updateUI();
+}
+
+function nextRound() {
+  if (!answered && state === 'done') return; // must answer first
+  document.getElementById('toast').classList.remove('show');
+  roundIdx++;
+  if (roundIdx >= ROUNDS.length) {
+    // finished
+    state = 'finished';
+    var L = t();
+    document.getElementById('toastBig').textContent = L.finishTitle;
+    document.getElementById('toastBody').innerHTML = L.finishBody(score, ROUNDS.length);
+    document.getElementById('toast').classList.add('show');
+    return;
+  }
+  state = 'idle';
+  elapsed = 0;
+  mingTime = 0; huaTime = 0;
+  mingDist = 0; huaDist = 0;
+  answered = false;
+  updateUI();
+  draw();
+}
+
+function reset() {
+  roundIdx = 0;
+  score = 0;
+  state = 'idle';
+  elapsed = 0;
+  mingTime = 0; huaTime = 0;
+  mingDist = 0; huaDist = 0;
+  answered = false;
+  document.getElementById('toast').classList.remove('show');
+  updateUI();
+  draw();
+}
+
+document.getElementById('btnGo').addEventListener('click', startRound);
+document.getElementById('btnNext').addEventListener('click', nextRound);
+document.getElementById('btnReset').addEventListener('click', reset);
+document.getElementById('pickMing').addEventListener('click', function(){ pick('Ming'); });
+document.getElementById('pickHua').addEventListener('click',  function(){ pick('Hua');  });
+document.getElementById('langBtn').addEventListener('click', function() {
+  lang = lang === 'cn' ? 'en' : 'cn';
+  updateUI();
+  draw();
+});
+
+resize();
+updateUI();
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>

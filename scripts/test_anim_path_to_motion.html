@@ -1,0 +1,550 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Path-to-Motion Pipeline</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;700&family=Inter:wght@400;500&family=Noto+Sans+SC:wght@400;700&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0;border-radius:0!important;}
+html,body{width:100%;height:100vh;overflow:hidden;background:#131313;font-family:'Noto Sans SC','Inter',sans-serif;color:#e5e2e1;}
+.wrapper{display:flex;flex-direction:column;height:100vh;width:100%;}
+.header{padding:6px 16px;background:rgba(28,27,27,0.92);border-bottom:1px solid rgba(138,136,134,0.15);flex-shrink:0;display:flex;align-items:center;justify-content:space-between;}
+.header h1{font-family:'Space Grotesk',sans-serif;font-size:14px;font-weight:700;color:#ffb59c;letter-spacing:1px;}
+.header .sub{font-size:11px;color:#8a8886;}
+.canvas-wrap{flex:1;min-height:0;position:relative;overflow:hidden;}
+canvas{display:block;width:100%;height:100%;}
+.controls{display:flex;align-items:center;justify-content:center;gap:10px;padding:6px 16px;background:rgba(28,27,27,0.92);border-top:1px solid rgba(138,136,134,0.15);flex-shrink:0;height:44px;}
+.ctrl-btn{font-family:'Space Grotesk',sans-serif;font-size:11px;font-weight:700;padding:5px 14px;cursor:pointer;border:1px solid rgba(255,255,255,0.08);background:rgba(20,20,20,0.85);backdrop-filter:blur(12px);color:#ffb59c;letter-spacing:1px;transition:background 0.2s;}
+.ctrl-btn:hover{background:rgba(255,127,80,0.15);}
+.hud{display:flex;align-items:center;justify-content:space-around;padding:4px 16px;background:rgba(0,0,0,0.55);flex-shrink:0;height:40px;font-family:'Space Grotesk',sans-serif;font-size:11px;color:#8a8886;}
+.hud .hud-item{text-align:center;}
+.hud .hud-val{color:#ffb59c;font-size:13px;font-weight:700;}
+.lang-btn{position:fixed;top:8px;left:8px;z-index:100;font-family:'Space Grotesk',sans-serif;font-size:11px;font-weight:700;padding:4px 10px;cursor:pointer;border:1px solid rgba(255,255,255,0.08);background:rgba(20,20,35,0.85);backdrop-filter:blur(12px);color:#ffb59c;letter-spacing:1px;}
+.guide-panel{position:fixed;top:8px;right:8px;width:240px;max-height:38vh;overflow-y:auto;background:rgba(20,20,20,0.88);backdrop-filter:blur(12px);border:1px solid rgba(255,255,255,0.08);padding:10px;z-index:100;font-family:'Noto Sans SC',sans-serif;font-size:12px;color:rgba(255,255,255,0.85);}
+.guide-panel h3{font-family:'Space Grotesk',sans-serif;font-size:12px;margin-bottom:5px;display:flex;align-items:center;justify-content:space-between;cursor:pointer;color:#ffb59c;}
+.guide-panel ul{padding-left:14px;line-height:1.6;}
+.guide-panel .guide-content{transition:max-height 0.3s;overflow:hidden;}
+</style>
+</head>
+<body>
+<button class="lang-btn" id="langBtn">CN</button>
+<div class="guide-panel" id="guidePanel">
+  <h3 id="guideToggle"><span id="guideTitle"></span><span id="guideArrow">-</span></h3>
+  <div class="guide-content" id="guideContent">
+    <p id="guideWhat" style="margin-bottom:6px;"></p>
+    <ul id="guidePoints"></ul>
+    <p id="guideTakeaway" style="margin-top:6px;font-style:italic;color:#ffb59c;"></p>
+  </div>
+</div>
+<div class="wrapper">
+  <div class="header">
+    <div><h1 id="mainTitle"></h1><span class="sub" id="mainSub"></span></div>
+  </div>
+  <div class="canvas-wrap" id="canvasWrap">
+    <canvas id="c"></canvas>
+  </div>
+  <div class="controls">
+    <button class="ctrl-btn" id="btnPrev"></button>
+    <button class="ctrl-btn" id="btnPlay"></button>
+    <button class="ctrl-btn" id="btnNext"></button>
+  </div>
+  <div class="hud">
+    <div class="hud-item"><div id="hudL1"></div><div class="hud-val" id="hudV1"></div></div>
+    <div class="hud-item"><div id="hudL2"></div><div class="hud-val" id="hudV2"></div></div>
+    <div class="hud-item"><div id="hudL3"></div><div class="hud-val" id="hudV3"></div></div>
+    <div class="hud-item"><div id="hudL4"></div><div class="hud-val" id="hudV4"></div></div>
+  </div>
+</div>
+<script>
+(function(){
+var LANG='cn';
+var I18N={
+  title:{en:'PATH-TO-MOTION PIPELINE',cn:'路径到运动指令转换流水线'},
+  sub:{en:'P-MARS-01-M35 | How waypoints become wheel commands',cn:'P-MARS-01-M35 | 路径点如何变成车轮指令'},
+  guide:{en:'GUIDE',cn:'操作指南'},
+  guideWhat:{en:'Shows how a planned path is converted into executable motion commands for the rover.',cn:'展示规划路径如何被转换为 rover 可执行的运动指令。'},
+  guideP1:{en:'Observe how waypoints are extracted from the path',cn:'观察路径点如何从规划路径中提取'},
+  guideP2:{en:'See heading and velocity computed for each segment',cn:'看每一段如何计算航向角和速度'},
+  guideP3:{en:'Watch the rover follow commands with feedback correction',cn:'观察 rover 如何跟踪指令并用反馈修正'},
+  guideP4:{en:'Notice replanning triggered by new obstacle detection',cn:'注意新障碍检测如何触发重规划'},
+  guideTakeaway:{en:'A safe path alone is useless -- the system must translate it into precise motor commands and react to changes in real time.',cn:'光有安全路径没有用 -- 系统必须把路径翻译成精确的电机指令，并在环境变化时实时响应。'},
+  prev:{en:'PREV',cn:'上一帧'},
+  play:{en:'PLAY',cn:'播放'},
+  pause:{en:'PAUSE',cn:'暂停'},
+  next:{en:'NEXT',cn:'下一帧'},
+  hudFrame:{en:'FRAME',cn:'帧'},
+  hudPhase:{en:'PHASE',cn:'阶段'},
+  hudHeading:{en:'HEADING',cn:'航向'},
+  hudSpeed:{en:'SPEED',cn:'速度'},
+  f0phase:{en:'PATH INPUT',cn:'路径输入'},
+  f1phase:{en:'WAYPOINT EXTRACT',cn:'路径点提取'},
+  f2phase:{en:'CMD COMPUTE',cn:'指令计算'},
+  f3phase:{en:'TRACKING + FB',cn:'跟踪+反馈'},
+  f4phase:{en:'REPLAN TRIGGER',cn:'重规划触发'},
+  f0desc:{en:'A* planner outputs a safe path on the risk cost map',cn:'A*规划器在风险代价图上输出一条安全路径'},
+  f1desc:{en:'Downsample path into discrete waypoints with spacing',cn:'将路径降采样为间距均匀的离散路径点'},
+  f2desc:{en:'For each segment: compute heading angle and target velocity',cn:'对每段路径：计算航向角和目标速度'},
+  f3desc:{en:'PID controller tracks waypoints, odometry provides feedback',cn:'PID 控制器跟踪路径点，里程计提供反馈'},
+  f4desc:{en:'New obstacle detected -- replanner generates updated path',cn:'检测到新障碍 -- 重规划器生成更新路径'},
+  lbl_planner:{en:'A* PLANNER',cn:'A*规划器'},
+  lbl_costmap:{en:'COST MAP',cn:'代价地图'},
+  lbl_path:{en:'SAFE PATH',cn:'安全路径'},
+  lbl_waypoints:{en:'WAYPOINTS',cn:'路径点'},
+  lbl_cmd:{en:'COMMANDS',cn:'运动指令'},
+  lbl_heading:{en:'HEADING',cn:'航向'},
+  lbl_velocity:{en:'VELOCITY',cn:'速度'},
+  lbl_pid:{en:'PID CTRL',cn:'PID控制'},
+  lbl_odom:{en:'ODOMETRY',cn:'里程计'},
+  lbl_motor:{en:'MOTORS',cn:'电机'},
+  lbl_obstacle:{en:'NEW OBS!',cn:'新障碍!'},
+  lbl_replan:{en:'REPLAN',cn:'重规划'},
+  lbl_rover:{en:'ROVER',cn:'探测车'}
+};
+function t(k){return(I18N[k]&&I18N[k][LANG])||(I18N[k]&&I18N[k]['en'])||k;}
+
+var canvas=document.getElementById('c');
+var ctx=canvas.getContext('2d');
+var wrap=document.getElementById('canvasWrap');
+var W=800,H=500,DPR=1;
+var currentFrame=0,totalFrames=5;
+var playing=false,playRAF=null,transitioning=false;
+
+function resize(){
+  var rect=wrap.getBoundingClientRect();
+  if(rect.width<1||rect.height<1)return;
+  DPR=Math.min(window.devicePixelRatio||1,2);
+  W=rect.width;H=rect.height;
+  canvas.width=W*DPR;canvas.height=H*DPR;
+  canvas.style.width=W+'px';canvas.style.height=H+'px';
+  ctx.setTransform(DPR,0,0,DPR,0,0);
+  drawFrame(currentFrame);
+}
+window.addEventListener('resize',resize);
+setTimeout(resize,200);setTimeout(resize,600);
+document.fonts.ready.then(function(){resize();});
+
+function lerp(a,b,p){return a+(b-a)*p;}
+function easeInOut(x){return x<0.5?2*x*x:1-Math.pow(-2*x+2,2)/2;}
+function merge(base,ov){var r={};for(var k in base)r[k]=base[k];for(var k2 in ov)r[k2]=ov[k2];return r;}
+
+function drawBg(){
+  var g=ctx.createLinearGradient(0,0,0,H);
+  g.addColorStop(0,'#131313');g.addColorStop(1,'#1a1510');
+  ctx.fillStyle=g;ctx.fillRect(0,0,W,H);
+  ctx.strokeStyle='rgba(255,127,80,0.04)';ctx.lineWidth=0.5;
+  for(var i=0;i<W;i+=30){ctx.beginPath();ctx.moveTo(i,0);ctx.lineTo(i,H);ctx.stroke();}
+  for(var j=0;j<H;j+=30){ctx.beginPath();ctx.moveTo(0,j);ctx.lineTo(W,j);ctx.stroke();}
+}
+
+// --- Cost map grid (background element) ---
+function drawCostMap(x,y,w,h,alpha){
+  ctx.save();ctx.globalAlpha=alpha;
+  var cols=12,rows=8;
+  var cw=w/cols,ch=h/rows;
+  var riskColors=['#1a3a1a','#1a3a1a','#2a4a1a','#3a3a10','#5a3a10','#7a2a10','#9a1a10','#ba1010'];
+  // Deterministic risk pattern
+  var pattern=[
+    [0,0,1,1,2,2,1,0,0,1,2,3],
+    [0,1,2,3,4,3,2,1,0,0,1,2],
+    [1,2,3,5,6,5,3,2,1,0,0,1],
+    [0,1,2,4,7,6,4,3,2,1,1,0],
+    [0,0,1,3,6,7,5,4,3,2,1,0],
+    [0,1,2,2,4,5,4,3,2,1,0,0],
+    [1,2,1,1,2,3,3,2,1,0,0,1],
+    [0,1,0,0,1,2,2,1,0,0,1,0]
+  ];
+  for(var r=0;r<rows;r++){
+    for(var c=0;c<cols;c++){
+      var ri=pattern[r]?pattern[r][c]||0:0;
+      ctx.fillStyle=riskColors[ri];
+      ctx.fillRect(x+c*cw,y+r*ch,cw-1,ch-1);
+    }
+  }
+  ctx.restore();
+}
+
+// --- Safe path on cost map ---
+function drawSafePath(x,y,w,h,alpha,showWP){
+  ctx.save();ctx.globalAlpha=alpha;
+  var cols=12,rows=8;
+  var cw=w/cols,ch=h/rows;
+  // Path through low-cost cells
+  var pathCells=[[0,0],[1,0],[2,0],[2,1],[3,1],[3,2],[4,2],[4,3],[5,3],[5,4],[6,4],[7,4],[8,3],[9,3],[10,2],[11,1],[11,0]];
+  ctx.strokeStyle='#ffb59c';ctx.lineWidth=2.5;ctx.shadowColor='#ff7f50';ctx.shadowBlur=8;
+  ctx.beginPath();
+  for(var i=0;i<pathCells.length;i++){
+    var px=x+pathCells[i][0]*cw+cw/2;
+    var py=y+pathCells[i][1]*ch+ch/2;
+    if(i===0)ctx.moveTo(px,py);else ctx.lineTo(px,py);
+  }
+  ctx.stroke();ctx.shadowBlur=0;
+  if(showWP){
+    // Waypoints (downsampled)
+    var wpIndices=[0,3,6,9,12,16];
+    for(var j=0;j<wpIndices.length;j++){
+      var wi=wpIndices[j];if(wi>=pathCells.length)continue;
+      var wx=x+pathCells[wi][0]*cw+cw/2;
+      var wy=y+pathCells[wi][1]*ch+ch/2;
+      ctx.beginPath();ctx.arc(wx,wy,5,0,Math.PI*2);
+      ctx.fillStyle='#00daf3';ctx.fill();
+      ctx.strokeStyle='rgba(0,218,243,0.5)';ctx.lineWidth=1;ctx.stroke();
+      // WP label
+      ctx.fillStyle='#00daf3';ctx.font='bold 9px "Space Grotesk"';ctx.textAlign='center';
+      ctx.fillText('W'+j,wx,wy-8);
+    }
+  }
+  ctx.restore();
+}
+
+// --- Rover icon ---
+function drawRover(cx,cy,size,heading,alpha){
+  ctx.save();ctx.globalAlpha=alpha;
+  ctx.translate(cx,cy);ctx.rotate(heading);
+  // Body
+  var g=ctx.createLinearGradient(-size/2,-size/3,size/2,size/3);
+  g.addColorStop(0,'#c6c6c6');g.addColorStop(0.5,'#8a8886');g.addColorStop(1,'#555');
+  ctx.fillStyle=g;
+  ctx.fillRect(-size/2,-size/3,size,size*0.66);
+  // Wheels
+  ctx.fillStyle='#353534';
+  ctx.fillRect(-size/2-3,-size/3-2,6,size*0.66+4);
+  ctx.fillRect(size/2-3,-size/3-2,6,size*0.66+4);
+  // Direction indicator
+  ctx.fillStyle='#ff5f1f';
+  ctx.beginPath();ctx.moveTo(size/2+3,0);ctx.lineTo(size/2+10,-5);ctx.lineTo(size/2+10,5);ctx.closePath();ctx.fill();
+  ctx.restore();
+}
+
+// --- Command block ---
+function drawCmdBlock(x,y,w,h,heading,vel,alpha){
+  ctx.save();ctx.globalAlpha=alpha;
+  ctx.fillStyle='rgba(28,27,27,0.9)';ctx.fillRect(x,y,w,h);
+  ctx.strokeStyle='rgba(255,181,156,0.3)';ctx.lineWidth=1;ctx.strokeRect(x,y,w,h);
+  ctx.fillStyle='#ffb59c';ctx.font='bold 10px "Space Grotesk"';ctx.textAlign='left';
+  ctx.fillText(t('lbl_heading')+': '+heading.toFixed(1)+'deg',x+8,y+16);
+  ctx.fillText(t('lbl_velocity')+': '+vel.toFixed(2)+' m/s',x+8,y+30);
+  ctx.restore();
+}
+
+// --- Arrow ---
+function drawArrowPrimitive(x1,y1,x2,y2,color,alpha){
+  ctx.save();ctx.globalAlpha=alpha||1;
+  ctx.strokeStyle=color;ctx.lineWidth=2;ctx.shadowColor=color;ctx.shadowBlur=6;
+  ctx.beginPath();ctx.moveTo(x1,y1);ctx.lineTo(x2,y2);ctx.stroke();ctx.shadowBlur=0;
+  var angle=Math.atan2(y2-y1,x2-x1);var hl=8;
+  ctx.fillStyle=color;ctx.beginPath();
+  ctx.moveTo(x2,y2);
+  ctx.lineTo(x2-hl*Math.cos(angle-0.4),y2-hl*Math.sin(angle-0.4));
+  ctx.lineTo(x2-hl*Math.cos(angle+0.4),y2-hl*Math.sin(angle+0.4));
+  ctx.closePath();ctx.fill();
+  ctx.restore();
+}
+
+// --- Label ---
+function drawLabelPrimitive(text,x,y,color,size,align,alpha){
+  ctx.save();ctx.globalAlpha=alpha||1;
+  ctx.fillStyle=color||'#ffb59c';ctx.font='bold '+(size||12)+'px "Space Grotesk"';
+  ctx.textAlign=align||'center';ctx.textBaseline='middle';
+  ctx.fillText(text,x,y);ctx.restore();
+}
+
+// --- Box ---
+function drawBoxPrimitive(x,y,w,h,borderColor,fillColor,alpha){
+  ctx.save();ctx.globalAlpha=alpha||1;
+  ctx.fillStyle=fillColor||'rgba(28,27,27,0.85)';ctx.fillRect(x,y,w,h);
+  ctx.strokeStyle=borderColor||'rgba(255,181,156,0.3)';ctx.lineWidth=1;ctx.strokeRect(x,y,w,h);
+  ctx.restore();
+}
+
+// --- PID feedback loop ---
+function drawPIDLoop(cx,cy,r,progress,alpha){
+  ctx.save();ctx.globalAlpha=alpha;
+  // Outer ring
+  ctx.strokeStyle='rgba(0,218,243,0.3)';ctx.lineWidth=2;
+  ctx.beginPath();ctx.arc(cx,cy,r,0,Math.PI*2);ctx.stroke();
+  // Progress arc
+  ctx.strokeStyle='#00daf3';ctx.lineWidth=3;ctx.shadowColor='#00daf3';ctx.shadowBlur=8;
+  ctx.beginPath();ctx.arc(cx,cy,r,-Math.PI/2,-Math.PI/2+Math.PI*2*progress);ctx.stroke();
+  ctx.shadowBlur=0;
+  // Center text
+  ctx.fillStyle='#00daf3';ctx.font='bold 10px "Space Grotesk"';ctx.textAlign='center';ctx.textBaseline='middle';
+  ctx.fillText(t('lbl_pid'),cx,cy-6);
+  ctx.fillStyle='#e5e2e1';ctx.font='9px "Noto Sans SC"';
+  ctx.fillText(Math.round(progress*100)+'%',cx,cy+8);
+  ctx.restore();
+}
+
+// --- Obstacle warning ---
+function drawObstacleWarning(x,y,size,alpha){
+  ctx.save();ctx.globalAlpha=alpha;
+  // Flashing red triangle
+  ctx.fillStyle='#ff5f1f';ctx.shadowColor='#ff5f1f';ctx.shadowBlur=15;
+  ctx.beginPath();
+  ctx.moveTo(x,y-size);
+  ctx.lineTo(x-size*0.87,y+size*0.5);
+  ctx.lineTo(x+size*0.87,y+size*0.5);
+  ctx.closePath();ctx.fill();ctx.shadowBlur=0;
+  ctx.fillStyle='#131313';ctx.font='bold '+(size*0.8)+'px "Space Grotesk"';ctx.textAlign='center';ctx.textBaseline='middle';
+  ctx.fillText('!',x,y+2);
+  ctx.restore();
+}
+
+// --- Frame element definitions ---
+function getFrameElements(f){
+  var cx=W/2,cy=H/2;
+  var mapW=Math.min(W*0.45,300),mapH=Math.min(H*0.55,220);
+  var mapX=cx-mapW/2-W*0.15,mapY=cy-mapH/2;
+
+  switch(f){
+    case 0: // Path input: show cost map + full safe path
+      return [
+        {id:'title',type:'label',text:t('f0desc'),x:cx,y:32,color:'#e5e2e1',size:13,align:'center'},
+        {id:'costmap',type:'custom',x:mapX,y:mapY,w:mapW,h:mapH,draw:function(a){drawCostMap(mapX,mapY,mapW,mapH,a);}},
+        {id:'path',type:'custom',x:mapX,y:mapY,w:mapW,h:mapH,draw:function(a){drawSafePath(mapX,mapY,mapW,mapH,a,false);}},
+        {id:'plannerBox',type:'custom',x:cx+W*0.15,y:cy-60,w:130,h:40,draw:function(a){
+          drawBoxPrimitive(cx+W*0.15,cy-60,130,40,'rgba(255,181,156,0.4)','rgba(28,27,27,0.9)',a);
+          drawLabelPrimitive(t('lbl_planner'),cx+W*0.15+65,cy-40,'#ffb59c',12,'center',a);
+        }},
+        {id:'arrow1',type:'custom',x:0,y:0,draw:function(a){drawArrowPrimitive(cx+W*0.15+65,cy-18,cx+W*0.15+65,cy+20,'#ffb59c',a);}},
+        {id:'pathLabel',type:'label',text:t('lbl_path'),x:cx+W*0.15+65,y:cy+35,color:'#10b981',size:11,align:'center'},
+        {id:'costmapLabel',type:'label',text:t('lbl_costmap'),x:mapX+mapW/2,y:mapY+mapH+16,color:'#8a8886',size:10,align:'center'}
+      ];
+    case 1: // Waypoint extraction
+      return [
+        {id:'title',type:'label',text:t('f1desc'),x:cx,y:32,color:'#e5e2e1',size:13,align:'center'},
+        {id:'costmap',type:'custom',x:mapX,y:mapY,w:mapW,h:mapH,draw:function(a){drawCostMap(mapX,mapY,mapW,mapH,a*0.5);}},
+        {id:'path',type:'custom',x:mapX,y:mapY,w:mapW,h:mapH,draw:function(a){drawSafePath(mapX,mapY,mapW,mapH,a,true);}},
+        {id:'wpLabel',type:'label',text:t('lbl_waypoints')+' (6)',x:mapX+mapW/2,y:mapY-14,color:'#00daf3',size:11,align:'center'},
+        {id:'arrow2',type:'custom',x:0,y:0,draw:function(a){drawArrowPrimitive(mapX+mapW+10,cy,cx+W*0.15,cy,'#00daf3',a);}},
+        {id:'wpListBox',type:'custom',x:cx+W*0.15,y:cy-70,w:140,h:140,draw:function(a){
+          drawBoxPrimitive(cx+W*0.15,cy-70,140,140,'rgba(0,218,243,0.3)','rgba(20,20,20,0.9)',a);
+          ctx.save();ctx.globalAlpha=a;ctx.fillStyle='#00daf3';ctx.font='bold 10px "Space Grotesk"';ctx.textAlign='left';
+          var wps=['W0: (0,0)','W1: (3,1)','W2: (4,2)','W3: (5,3)','W4: (8,3)','W5: (11,0)'];
+          for(var i=0;i<wps.length;i++){ctx.fillText(wps[i],cx+W*0.15+10,cy-50+i*20);}
+          ctx.restore();
+        }},
+        {id:'costmapLabel',type:'label',text:t('lbl_costmap'),x:mapX+mapW/2,y:mapY+mapH+16,color:'#8a8886',size:10,align:'center'}
+      ];
+    case 2: // Command computation
+      var cmdX=cx+W*0.1,cmdY=cy-80;
+      return [
+        {id:'title',type:'label',text:t('f2desc'),x:cx,y:32,color:'#e5e2e1',size:13,align:'center'},
+        {id:'wpListBox',type:'custom',x:mapX+W*0.05,y:cy-60,w:120,h:120,draw:function(a){
+          drawBoxPrimitive(mapX+W*0.05,cy-60,120,120,'rgba(0,218,243,0.3)','rgba(20,20,20,0.9)',a);
+          ctx.save();ctx.globalAlpha=a;ctx.fillStyle='#00daf3';ctx.font='9px "Space Grotesk"';ctx.textAlign='left';
+          var wps=['W0-W1','W1-W2','W2-W3','W3-W4','W4-W5'];
+          for(var i=0;i<wps.length;i++){ctx.fillText(wps[i],mapX+W*0.05+8,cy-42+i*20);}
+          ctx.restore();
+        }},
+        {id:'arrow3',type:'custom',draw:function(a){drawArrowPrimitive(mapX+W*0.05+130,cy,cmdX,cy,'#ffb59c',a);}},
+        {id:'cmdBlock',type:'custom',x:cmdX,y:cmdY,w:170,h:160,draw:function(a){
+          drawBoxPrimitive(cmdX,cmdY,170,160,'rgba(255,181,156,0.4)','rgba(28,27,27,0.92)',a);
+          ctx.save();ctx.globalAlpha=a;
+          ctx.fillStyle='#ffb59c';ctx.font='bold 11px "Space Grotesk"';ctx.textAlign='center';
+          ctx.fillText(t('lbl_cmd'),cmdX+85,cmdY+18);
+          ctx.fillStyle='#e5e2e1';ctx.font='10px "Space Grotesk"';ctx.textAlign='left';
+          var cmds=[
+            {h:18.4,v:0.15},{h:33.7,v:0.12},{h:14.0,v:0.10},{h:-26.6,v:0.14},{h:-50.2,v:0.13}
+          ];
+          for(var i=0;i<cmds.length;i++){
+            var yy=cmdY+35+i*24;
+            ctx.fillStyle='#8a8886';ctx.fillText('S'+(i)+':',cmdX+10,yy);
+            ctx.fillStyle='#ffb59c';ctx.fillText('H='+cmds[i].h.toFixed(1),cmdX+35,yy);
+            ctx.fillStyle='#10b981';ctx.fillText('V='+cmds[i].v.toFixed(2),cmdX+100,yy);
+          }
+          ctx.restore();
+        }},
+        {id:'formulaLabel',type:'label',text:'H = atan2(dy, dx)',x:cmdX+85,y:cmdY+170,color:'#8a8886',size:10,align:'center'}
+      ];
+    case 3: // Tracking + feedback
+      var roverX=cx-W*0.1,roverY=cy;
+      var pidX=cx+W*0.15,pidY=cy-20;
+      return [
+        {id:'title',type:'label',text:t('f3desc'),x:cx,y:32,color:'#e5e2e1',size:13,align:'center'},
+        {id:'rover',type:'custom',x:roverX,y:roverY,draw:function(a){drawRover(roverX,roverY,30,0.3,a);}},
+        {id:'roverLabel',type:'label',text:t('lbl_rover'),x:roverX,y:roverY+30,color:'#c6c6c6',size:10,align:'center'},
+        {id:'pidLoop',type:'custom',x:pidX,y:pidY,draw:function(a){drawPIDLoop(pidX,pidY,35,0.72,a);}},
+        {id:'arrow4',type:'custom',draw:function(a){
+          drawArrowPrimitive(roverX+25,roverY-10,pidX-38,pidY-10,'#00daf3',a);
+          drawArrowPrimitive(pidX+38,pidY+10,roverX+25,roverY+10,'#ffb59c',a);
+        }},
+        {id:'odomBox',type:'custom',x:roverX-50,y:roverY-65,w:100,h:30,draw:function(a){
+          drawBoxPrimitive(roverX-50,roverY-65,100,30,'rgba(0,218,243,0.3)','rgba(20,20,20,0.9)',a);
+          drawLabelPrimitive(t('lbl_odom'),roverX,roverY-50,'#00daf3',10,'center',a);
+        }},
+        {id:'motorBox',type:'custom',x:roverX-50,y:roverY+40,w:100,h:30,draw:function(a){
+          drawBoxPrimitive(roverX-50,roverY+40,100,30,'rgba(255,95,31,0.3)','rgba(20,20,20,0.9)',a);
+          drawLabelPrimitive(t('lbl_motor'),roverX,roverY+55,'#ff5f1f',10,'center',a);
+        }},
+        {id:'feedbackLabel',type:'label',text:'error = target - actual',x:cx,y:cy+H*0.3,color:'#8a8886',size:11,align:'center'},
+        {id:'cmdInLabel',type:'label',text:t('lbl_cmd')+' IN',x:pidX+55,y:pidY-30,color:'#ffb59c',size:9,align:'left'},
+        {id:'fbOutLabel',type:'label',text:'FB OUT',x:pidX+55,y:pidY+30,color:'#00daf3',size:9,align:'left'}
+      ];
+    case 4: // Replan trigger
+      var roverX2=cx-W*0.2,roverY2=cy+20;
+      var obsX=cx,obsY=cy-20;
+      var replanX=cx+W*0.18,replanY=cy-40;
+      return [
+        {id:'title',type:'label',text:t('f4desc'),x:cx,y:32,color:'#e5e2e1',size:13,align:'center'},
+        {id:'rover',type:'custom',x:roverX2,y:roverY2,draw:function(a){drawRover(roverX2,roverY2,30,0.3,a);}},
+        {id:'roverLabel',type:'label',text:t('lbl_rover'),x:roverX2,y:roverY2+30,color:'#c6c6c6',size:10,align:'center'},
+        {id:'obstacle',type:'custom',x:obsX,y:obsY,draw:function(a){drawObstacleWarning(obsX,obsY,18,a);}},
+        {id:'obsLabel',type:'label',text:t('lbl_obstacle'),x:obsX,y:obsY+28,color:'#ff5f1f',size:11,align:'center'},
+        {id:'arrow5',type:'custom',draw:function(a){
+          drawArrowPrimitive(obsX+25,obsY,replanX-10,replanY+20,'#ff5f1f',a);
+        }},
+        {id:'replanBox',type:'custom',x:replanX,y:replanY,w:130,h:45,draw:function(a){
+          drawBoxPrimitive(replanX,replanY,130,45,'rgba(255,95,31,0.5)','rgba(28,27,27,0.92)',a);
+          drawLabelPrimitive(t('lbl_replan'),replanX+65,replanY+22,'#ff5f1f',13,'center',a);
+        }},
+        {id:'arrow6',type:'custom',draw:function(a){
+          drawArrowPrimitive(replanX+65,replanY+50,replanX+65,replanY+80,'#10b981',a);
+        }},
+        {id:'newPathLabel',type:'label',text:t('lbl_path')+' v2',x:replanX+65,y:replanY+95,color:'#10b981',size:11,align:'center'},
+        {id:'oldPath',type:'custom',draw:function(a){
+          ctx.save();ctx.globalAlpha=a*0.4;
+          ctx.setLineDash([5,5]);ctx.strokeStyle='#8a8886';ctx.lineWidth=1.5;
+          ctx.beginPath();ctx.moveTo(roverX2+20,roverY2);ctx.lineTo(obsX-20,obsY+10);ctx.stroke();
+          ctx.setLineDash([]);ctx.restore();
+        }},
+        {id:'newPath',type:'custom',draw:function(a){
+          ctx.save();ctx.globalAlpha=a;
+          ctx.strokeStyle='#10b981';ctx.lineWidth=2;ctx.shadowColor='#10b981';ctx.shadowBlur=6;
+          ctx.beginPath();ctx.moveTo(roverX2+20,roverY2);
+          ctx.quadraticCurveTo(roverX2+60,roverY2+50,obsX+30,obsY+40);
+          ctx.lineTo(replanX+130,replanY+95);
+          ctx.stroke();ctx.shadowBlur=0;ctx.restore();
+        }}
+      ];
+  }
+  return [];
+}
+
+function drawElement(el){
+  if(!el||el.alpha<=0.01)return;
+  ctx.save();ctx.globalAlpha=el.alpha;
+  switch(el.type){
+    case 'label':drawLabelPrimitive(el.text,el.x,el.y,el.color,el.size,el.align,el.alpha);break;
+    case 'custom':if(el.draw)el.draw(el.alpha);break;
+  }
+  ctx.restore();
+}
+
+function drawFrame(f){
+  drawBg();
+  var elems=getFrameElements(f);
+  elems.forEach(function(el){el.alpha=1;drawElement(el);});
+}
+
+function transitionTo(nf){
+  if(nf<0)nf=0;if(nf>=totalFrames)nf=totalFrames-1;
+  if(nf===currentFrame&&!transitioning){drawFrame(currentFrame);updateHUD(currentFrame);return;}
+  if(transitioning)return;
+  var oldElems=getFrameElements(currentFrame);
+  var newElems=getFrameElements(nf);
+  var oldMap={};oldElems.forEach(function(e){oldMap[e.id]=e;});
+  var newMap={};newElems.forEach(function(e){newMap[e.id]=e;});
+  currentFrame=nf;updateHUD(nf);transitioning=true;
+  var startTime=null,duration=500;
+  function step(ts){
+    if(!startTime)startTime=ts;
+    var raw=Math.min((ts-startTime)/duration,1);var p=easeInOut(raw);
+    drawBg();
+    oldElems.forEach(function(oe){if(!newMap[oe.id])drawElement(merge(oe,{alpha:1-p}));});
+    newElems.forEach(function(ne){
+      var oe=oldMap[ne.id];
+      if(oe){
+        if((ne.type==='label')&&oe.text!==ne.text){
+          drawElement(merge(oe,{alpha:1-p}));drawElement(merge(ne,{alpha:p}));
+        }else{
+          var m=merge(ne,{x:lerp(oe.x||0,ne.x||0,p),y:lerp(oe.y||0,ne.y||0,p),alpha:1});
+          drawElement(m);
+        }
+      }else{drawElement(merge(ne,{alpha:p}));}
+    });
+    if(raw<1){requestAnimationFrame(step);}else{transitioning=false;}
+  }
+  requestAnimationFrame(step);
+}
+
+function updateHUD(f){
+  var phases=[t('f0phase'),t('f1phase'),t('f2phase'),t('f3phase'),t('f4phase')];
+  var headings=['--','--','18.4 deg','0.3 rad','REPLAN'];
+  var speeds=['--','--','0.15 m/s','0.12 m/s','0.00'];
+  document.getElementById('hudV1').textContent=(f+1)+'/'+totalFrames;
+  document.getElementById('hudV2').textContent=phases[f]||'--';
+  document.getElementById('hudV3').textContent=headings[f]||'--';
+  document.getElementById('hudV4').textContent=speeds[f]||'--';
+}
+
+function refreshI18N(){
+  document.getElementById('mainTitle').textContent=t('title');
+  document.getElementById('mainSub').textContent=t('sub');
+  document.getElementById('guideTitle').textContent=t('guide');
+  document.getElementById('guideWhat').textContent=t('guideWhat');
+  var pts=[t('guideP1'),t('guideP2'),t('guideP3'),t('guideP4')];
+  var ul=document.getElementById('guidePoints');ul.innerHTML='';
+  pts.forEach(function(p){var li=document.createElement('li');li.textContent=p;ul.appendChild(li);});
+  document.getElementById('guideTakeaway').textContent=t('guideTakeaway');
+  document.getElementById('btnPrev').textContent=t('prev');
+  document.getElementById('btnPlay').textContent=playing?t('pause'):t('play');
+  document.getElementById('btnNext').textContent=t('next');
+  document.getElementById('hudL1').textContent=t('hudFrame');
+  document.getElementById('hudL2').textContent=t('hudPhase');
+  document.getElementById('hudL3').textContent=t('hudHeading');
+  document.getElementById('hudL4').textContent=t('hudSpeed');
+  updateHUD(currentFrame);
+  drawFrame(currentFrame);
+}
+
+// Events
+document.getElementById('langBtn').addEventListener('click',function(){
+  LANG=LANG==='en'?'cn':'en';
+  document.getElementById('langBtn').textContent=LANG.toUpperCase();
+  refreshI18N();
+});
+
+document.getElementById('guideToggle').addEventListener('click',function(){
+  var gc=document.getElementById('guideContent');
+  var ga=document.getElementById('guideArrow');
+  if(gc.style.display==='none'){gc.style.display='';ga.textContent='-';}
+  else{gc.style.display='none';ga.textContent='+';}
+});
+
+document.getElementById('btnPrev').addEventListener('click',function(){
+  if(playing)stopPlay();
+  transitionTo(currentFrame-1);
+});
+document.getElementById('btnNext').addEventListener('click',function(){
+  if(playing)stopPlay();
+  transitionTo(currentFrame+1);
+});
+document.getElementById('btnPlay').addEventListener('click',function(){
+  if(playing){stopPlay();}else{startPlay();}
+});
+
+function startPlay(){
+  playing=true;
+  document.getElementById('btnPlay').textContent=t('pause');
+  if(currentFrame>=totalFrames-1){currentFrame=-1;}// wrap
+  playNext();
+}
+function stopPlay(){
+  playing=false;
+  document.getElementById('btnPlay').textContent=t('play');
+  if(playRAF)cancelAnimationFrame(playRAF);playRAF=null;
+}
+function playNext(){
+  if(!playing)return;
+  if(currentFrame>=totalFrames-1){stopPlay();return;}
+  transitionTo(currentFrame+1);
+  playRAF=setTimeout(function(){playNext();},1500);
+}
+
+refreshI18N();
+resize();
+})();
+</script>
+</body>
+</html>

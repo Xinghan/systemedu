@@ -1,0 +1,342 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>E2E Test Simulator</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;700&family=Inter:wght@400;500&family=Noto+Sans+SC:wght@400;700&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{width:100%;height:100vh;overflow:hidden;background:#131313;font-family:'Noto Sans SC','Inter',sans-serif;color:#e5e2e1}
+.wrapper{display:flex;flex-direction:column;height:100vh;width:100%}
+.header{padding:8px 16px 4px;text-align:center;flex-shrink:0}
+.header h1{font-family:'Space Grotesk',sans-serif;font-size:16px;font-weight:700;color:#ffb59c;letter-spacing:2px;text-transform:uppercase}
+.header .subtitle{font-size:11px;color:#8a8886;margin-top:2px;letter-spacing:1px}
+.game-area{flex:1;min-height:0;display:flex;flex-direction:column;padding:8px 16px;gap:6px;overflow:hidden}
+.pipeline-row{display:flex;gap:6px;flex-shrink:0;align-items:stretch}
+.stage-card{flex:1;background:rgba(28,27,27,0.92);border:1px solid rgba(138,136,134,0.15);padding:6px 8px;display:flex;flex-direction:column;align-items:center;gap:2px;min-width:0}
+.stage-card .stage-label{font-family:'Space Grotesk',sans-serif;font-size:9px;color:#8a8886;letter-spacing:1px;text-transform:uppercase}
+.stage-card .stage-status{font-family:'Space Grotesk',sans-serif;font-size:11px;font-weight:700;color:#10b981}
+.stage-card .stage-time{font-family:'Space Grotesk',sans-serif;font-size:10px;color:#00daf3}
+.stage-card.fault .stage-status{color:#ff5f1f}
+.stage-card.running{border-color:#00daf3}
+.stage-card.pass{border-color:#10b981}
+.stage-card.fail{border-color:#ff3333}
+.control-panel{flex-shrink:0;display:flex;gap:12px;align-items:center;padding:8px 0}
+.control-panel label{font-family:'Space Grotesk',sans-serif;font-size:10px;color:#8a8886;letter-spacing:1px;text-transform:uppercase}
+.control-panel select,.control-panel input[type=range]{background:rgba(53,53,52,0.6);border:1px solid rgba(138,136,134,0.15);color:#e5e2e1;font-family:'Space Grotesk',sans-serif;font-size:11px;padding:4px 8px}
+.control-panel input[type=range]{width:120px;accent-color:#ffb59c}
+.log-area{flex:1;min-height:0;overflow-y:auto;background:rgba(0,0,0,0.4);border:1px solid rgba(138,136,134,0.1);padding:8px;font-family:'Space Grotesk',monospace;font-size:10px;line-height:1.5}
+.log-entry{margin-bottom:2px}
+.log-entry.pass{color:#10b981}
+.log-entry.fail{color:#ff3333}
+.log-entry.warn{color:#ffb59c}
+.log-entry.info{color:#8a8886}
+.run-btn{font-family:'Space Grotesk',sans-serif;font-size:12px;font-weight:700;padding:8px 24px;cursor:pointer;border:1px solid #ffb59c;background:rgba(255,127,80,0.15);color:#ffb59c;letter-spacing:1px;text-transform:uppercase;flex-shrink:0}
+.run-btn:hover{background:rgba(255,127,80,0.3)}
+.run-btn:disabled{opacity:0.4;cursor:default}
+.result-panel{flex-shrink:0;padding:8px;background:rgba(28,27,27,0.92);border:1px solid rgba(138,136,134,0.15);display:none}
+.result-panel h3{font-family:'Space Grotesk',sans-serif;font-size:12px;color:#ffb59c;margin-bottom:4px}
+.result-row{display:flex;justify-content:space-between;font-size:11px;padding:2px 0}
+.result-row .rl{color:#8a8886}
+.result-row .rv{font-weight:700}
+.hud{display:flex;justify-content:space-around;padding:6px 16px;flex-shrink:0;background:rgba(0,0,0,0.55);height:42px;align-items:center}
+.hud-item{text-align:center}
+.hud-item .hud-label{font-family:'Space Grotesk',sans-serif;font-size:9px;color:#8a8886;letter-spacing:1px;text-transform:uppercase}
+.hud-item .hud-value{font-family:'Space Grotesk',sans-serif;font-size:13px;color:#00daf3;font-weight:700}
+.lang-btn{position:fixed;top:8px;left:8px;z-index:100;font-family:'Space Grotesk',sans-serif;font-size:11px;font-weight:700;padding:4px 10px;cursor:pointer;border:1px solid rgba(255,255,255,0.08);background:rgba(20,20,35,0.85);backdrop-filter:blur(12px);color:#ffb59c;letter-spacing:1px}
+.guide-panel{position:fixed;top:8px;right:8px;width:220px;max-height:38vh;overflow-y:auto;background:rgba(20,20,35,0.85);backdrop-filter:blur(12px);border:1px solid rgba(255,255,255,0.08);padding:10px;z-index:100;font-family:'Noto Sans SC',sans-serif;font-size:11px;color:rgba(255,255,255,0.85)}
+.guide-panel h3{font-family:'Space Grotesk',sans-serif;font-size:12px;margin-bottom:4px;display:flex;align-items:center;justify-content:space-between;cursor:pointer;color:#ffb59c}
+.guide-panel ul{padding-left:14px;line-height:1.5}
+.guide-panel .guide-content{transition:max-height 0.3s}
+.guide-panel .collapsed .guide-content{max-height:0;overflow:hidden}
+</style>
+</head>
+<body>
+<button class="lang-btn" id="langBtn">CN</button>
+<div class="guide-panel" id="guidePanel">
+  <h3 id="guideToggle"><span id="guideTitle"></span><span id="guideArrow">-</span></h3>
+  <div class="guide-content" id="guideContent">
+    <p id="guideWhat" style="margin-bottom:6px"></p>
+    <ul id="guideList"></ul>
+    <p id="guideTakeaway" style="margin-top:6px;color:#00daf3"></p>
+  </div>
+</div>
+<div class="wrapper">
+  <div class="header">
+    <h1 id="mainTitle"></h1>
+    <div class="subtitle" id="mainSubtitle"></div>
+  </div>
+  <div class="game-area">
+    <div class="pipeline-row" id="pipelineRow"></div>
+    <div class="control-panel" id="controlPanel"></div>
+    <div class="log-area" id="logArea"></div>
+    <div class="result-panel" id="resultPanel">
+      <h3 id="resultTitle"></h3>
+      <div id="resultBody"></div>
+    </div>
+    <button class="run-btn" id="runBtn"></button>
+  </div>
+  <div class="hud">
+    <div class="hud-item"><div class="hud-label" id="hudL1"></div><div class="hud-value" id="hudV1"></div></div>
+    <div class="hud-item"><div class="hud-label" id="hudL2"></div><div class="hud-value" id="hudV2"></div></div>
+    <div class="hud-item"><div class="hud-label" id="hudL3"></div><div class="hud-value" id="hudV3"></div></div>
+    <div class="hud-item"><div class="hud-label" id="hudL4"></div><div class="hud-value" id="hudV4"></div></div>
+  </div>
+</div>
+<script>
+(function(){
+var LANG='cn';
+var I18N={
+  title:{en:'E2E TEST SIMULATOR',cn:'\u7AEF\u5230\u7AEF\u6D4B\u8BD5\u6A21\u62DF\u5668'},
+  subtitle:{en:'Select scenario + parameters, run the full pipeline, observe results',cn:'\u9009\u62E9\u573A\u666F + \u53C2\u6570\uFF0C\u6267\u884C\u5168\u94FE\u8DEF\uFF0C\u89C2\u5BDF\u7ED3\u679C'},
+  guideTitle:{en:'OPERATION GUIDE',cn:'\u64CD\u4F5C\u6307\u5357'},
+  guideWhat:{en:'Simulate running end-to-end acceptance tests on the Mars rover pipeline. Choose different input images and noise levels to see how the system responds.',cn:'\u6A21\u62DF\u5728\u706B\u661F\u8F66\u7BA1\u7EBF\u4E0A\u8FD0\u884C\u7AEF\u5230\u7AEF\u9A8C\u6536\u6D4B\u8BD5\u3002\u9009\u62E9\u4E0D\u540C\u8F93\u5165\u56FE\u50CF\u548C\u566A\u58F0\u7EA7\u522B\uFF0C\u89C2\u5BDF\u7CFB\u7EDF\u54CD\u5E94\u3002'},
+  guideStep1:{en:'1. Select a test scenario (terrain type)',cn:'1. \u9009\u62E9\u6D4B\u8BD5\u573A\u666F\uFF08\u5730\u5F62\u7C7B\u578B\uFF09'},
+  guideStep2:{en:'2. Adjust noise level slider',cn:'2. \u8C03\u6574\u566A\u58F0\u7EA7\u522B\u6ED1\u5757'},
+  guideStep3:{en:'3. Click RUN to execute full pipeline test',cn:'3. \u70B9\u51FB\u8FD0\u884C\u6267\u884C\u5168\u94FE\u8DEF\u6D4B\u8BD5'},
+  guideStep4:{en:'4. Read the log, identify which stage fails',cn:'4. \u9605\u8BFB\u65E5\u5FD7\uFF0C\u8BC6\u522B\u54EA\u4E2A\u9636\u6BB5\u5931\u8D25'},
+  guideTakeaway:{en:'Goal: Run 3+ scenarios, find at least 2 cross-stage issues.',cn:'\u76EE\u6807\uFF1A\u8FD0\u884C 3+ \u573A\u666F\uFF0C\u627E\u5230\u81F3\u5C11 2 \u4E2A\u8DE8\u9636\u6BB5\u95EE\u9898\u3002'},
+  scenarioLabel:{en:'SCENARIO',cn:'\u573A\u666F'},
+  noiseLabel:{en:'NOISE LEVEL',cn:'\u566A\u58F0\u7EA7\u522B'},
+  runBtn:{en:'RUN TEST',cn:'\u8FD0\u884C\u6D4B\u8BD5'},
+  running:{en:'RUNNING...',cn:'\u8FD0\u884C\u4E2D...'},
+  scFlat:{en:'Flat Plain',cn:'\u5E73\u5766\u5E73\u539F'},
+  scRocky:{en:'Rocky Terrain',cn:'\u5CA9\u77F3\u5730\u5F62'},
+  scDune:{en:'Sand Dunes',cn:'\u6C99\u4E18\u5730\u5F62'},
+  scCrater:{en:'Crater Edge',cn:'\u649E\u51FB\u5751\u8FB9\u7F18'},
+  scMixed:{en:'Mixed Hazards',cn:'\u6DF7\u5408\u5371\u9669'},
+  stageImage:{en:'IMAGE',cn:'\u56FE\u50CF'},
+  stageSeg:{en:'SEGMENT',cn:'\u5206\u5272'},
+  stageRisk:{en:'RISK MAP',cn:'\u98CE\u9669\u56FE'},
+  stagePath:{en:'PATH',cn:'\u8DEF\u5F84'},
+  stageCtrl:{en:'CONTROL',cn:'\u8F66\u63A7'},
+  statusIdle:{en:'IDLE',cn:'\u7A7A\u95F2'},
+  statusRunning:{en:'RUN',cn:'\u8FD0\u884C'},
+  statusPass:{en:'PASS',cn:'\u901A\u8FC7'},
+  statusFail:{en:'FAIL',cn:'\u5931\u8D25'},
+  statusDegrade:{en:'DEGRADE',cn:'\u964D\u7EA7'},
+  resultTitle:{en:'TEST REPORT',cn:'\u6D4B\u8BD5\u62A5\u544A'},
+  passRate:{en:'PASS RATE',cn:'\u901A\u8FC7\u7387'},
+  totalTime:{en:'TOTAL TIME',cn:'\u603B\u8017\u65F6'},
+  bottleneck:{en:'BOTTLENECK',cn:'\u74F6\u9888'},
+  verdict:{en:'VERDICT',cn:'\u5224\u5B9A'},
+  verdictPass:{en:'SYSTEM PASS',cn:'\u7CFB\u7EDF\u901A\u8FC7'},
+  verdictFail:{en:'SYSTEM FAIL',cn:'\u7CFB\u7EDF\u5931\u8D25'},
+  verdictDegrade:{en:'DEGRADED PASS',cn:'\u964D\u7EA7\u901A\u8FC7'},
+  hudScenarios:{en:'SCENARIOS',cn:'\u573A\u666F\u6570'},
+  hudPassed:{en:'PASSED',cn:'\u901A\u8FC7'},
+  hudFailed:{en:'FAILED',cn:'\u5931\u8D25'},
+  hudIssues:{en:'ISSUES',cn:'\u95EE\u9898\u6570'}
+};
+function t(k){return(I18N[k]&&I18N[k][LANG])||(I18N[k]&&I18N[k]['en'])||k}
+
+var STAGES_DEF=['stageImage','stageSeg','stageRisk','stagePath','stageCtrl'];
+var SCENARIOS=[
+  {key:'scFlat',baseTimes:[80,280,60,35,12],failProb:[0,0.05,0.02,0.01,0.01],bottleneck:1},
+  {key:'scRocky',baseTimes:[90,350,90,50,15],failProb:[0,0.1,0.15,0.08,0.03],bottleneck:2},
+  {key:'scDune',baseTimes:[85,320,75,55,14],failProb:[0,0.08,0.1,0.12,0.05],bottleneck:3},
+  {key:'scCrater',baseTimes:[100,400,110,65,18],failProb:[0,0.15,0.2,0.15,0.08],bottleneck:1},
+  {key:'scMixed',baseTimes:[95,380,100,70,20],failProb:[0,0.2,0.25,0.2,0.1],bottleneck:2}
+];
+
+var totalRuns=0,totalPassed=0,totalFailed=0,totalIssues=0;
+var isRunning=false;
+
+function buildPipeline(){
+  var row=document.getElementById('pipelineRow');row.innerHTML='';
+  STAGES_DEF.forEach(function(sk,i){
+    var card=document.createElement('div');card.className='stage-card';card.id='stageCard'+i;
+    card.innerHTML='<div class="stage-label" id="stageL'+i+'"></div><div class="stage-status" id="stageS'+i+'"></div><div class="stage-time" id="stageT'+i+'">--</div>';
+    row.appendChild(card);
+  });
+}
+
+function buildControls(){
+  var panel=document.getElementById('controlPanel');panel.innerHTML='';
+  var lbl1=document.createElement('label');lbl1.id='scenarioLbl';
+  panel.appendChild(lbl1);
+  var sel=document.createElement('select');sel.id='scenarioSel';
+  SCENARIOS.forEach(function(sc,i){
+    var opt=document.createElement('option');opt.value=i;opt.id='scOpt'+i;
+    sel.appendChild(opt);
+  });
+  panel.appendChild(sel);
+  var lbl2=document.createElement('label');lbl2.id='noiseLbl';
+  panel.appendChild(lbl2);
+  var slider=document.createElement('input');slider.type='range';slider.id='noiseSlider';
+  slider.min='0';slider.max='100';slider.value='20';
+  panel.appendChild(slider);
+  var noiseVal=document.createElement('span');noiseVal.id='noiseVal';noiseVal.style.cssText="font-family:'Space Grotesk',sans-serif;font-size:11px;color:#00daf3;min-width:30px";
+  panel.appendChild(noiseVal);
+  slider.addEventListener('input',function(){noiseVal.textContent=slider.value+'%'});
+}
+
+function resetStages(){
+  for(var i=0;i<5;i++){
+    var card=document.getElementById('stageCard'+i);
+    card.className='stage-card';
+    document.getElementById('stageS'+i).textContent=t('statusIdle');
+    document.getElementById('stageS'+i).style.color='#8a8886';
+    document.getElementById('stageT'+i).textContent='--';
+  }
+}
+
+function addLog(text,cls){
+  var area=document.getElementById('logArea');
+  var entry=document.createElement('div');entry.className='log-entry '+(cls||'info');
+  entry.textContent=text;area.appendChild(entry);
+  area.scrollTop=area.scrollHeight;
+}
+
+function runTest(){
+  if(isRunning)return;
+  isRunning=true;
+  var btn=document.getElementById('runBtn');btn.disabled=true;btn.textContent=t('running');
+  resetStages();
+  document.getElementById('resultPanel').style.display='none';
+
+  var scIdx=parseInt(document.getElementById('scenarioSel').value);
+  var noise=parseInt(document.getElementById('noiseSlider').value)/100;
+  var sc=SCENARIOS[scIdx];
+
+  addLog('--- '+t(sc.key)+' | noise='+Math.round(noise*100)+'% ---','info');
+
+  var stageResults=[];
+  var stageIdx=0;
+
+  function runNextStage(){
+    if(stageIdx>=5){
+      finishTest(scIdx,stageResults,noise);
+      return;
+    }
+    var card=document.getElementById('stageCard'+stageIdx);
+    card.className='stage-card running';
+    document.getElementById('stageS'+stageIdx).textContent=t('statusRunning');
+    document.getElementById('stageS'+stageIdx).style.color='#00daf3';
+
+    var baseTime=sc.baseTimes[stageIdx];
+    var actualTime=Math.round(baseTime*(1+noise*1.5)+(Math.random()-0.5)*baseTime*0.3);
+    var failChance=sc.failProb[stageIdx]+noise*0.3;
+    // If previous stage failed, increase this stage's fail chance dramatically
+    if(stageIdx>0&&stageResults[stageIdx-1].status==='fail'){
+      failChance=Math.min(failChance+0.6,0.95);
+    }
+    var failed=Math.random()<failChance;
+    var degraded=!failed&&Math.random()<noise*0.2;
+    var status=failed?'fail':(degraded?'degrade':'pass');
+
+    setTimeout(function(){
+      var si=stageIdx;
+      document.getElementById('stageT'+si).textContent=actualTime+'ms';
+      if(status==='pass'){
+        card.className='stage-card pass';
+        document.getElementById('stageS'+si).textContent=t('statusPass');
+        document.getElementById('stageS'+si).style.color='#10b981';
+        addLog('['+t(STAGES_DEF[si])+'] PASS '+actualTime+'ms','pass');
+      } else if(status==='fail'){
+        card.className='stage-card fail';
+        document.getElementById('stageS'+si).textContent=t('statusFail');
+        document.getElementById('stageS'+si).style.color='#ff3333';
+        var faultTypes=['interface mismatch','data format error','latency exceeded'];
+        var ft=faultTypes[Math.floor(Math.random()*faultTypes.length)];
+        addLog('['+t(STAGES_DEF[si])+'] FAIL '+actualTime+'ms -- '+ft,'fail');
+      } else {
+        card.className='stage-card pass';
+        document.getElementById('stageS'+si).textContent=t('statusDegrade');
+        document.getElementById('stageS'+si).style.color='#ffb59c';
+        addLog('['+t(STAGES_DEF[si])+'] DEGRADE '+actualTime+'ms','warn');
+      }
+      stageResults.push({stage:si,status:status,time:actualTime});
+      stageIdx++;
+      setTimeout(runNextStage,200);
+    },300+Math.random()*200);
+  }
+  runNextStage();
+}
+
+function finishTest(scIdx,results,noise){
+  totalRuns++;
+  var allPass=results.every(function(r){return r.status==='pass'||r.status==='degrade'});
+  var anyFail=results.some(function(r){return r.status==='fail'});
+  if(!anyFail)totalPassed++;else totalFailed++;
+
+  var issues=results.filter(function(r){return r.status==='fail'});
+  totalIssues+=issues.length;
+
+  var totalTime=results.reduce(function(s,r){return s+r.time},0);
+  var bottleneckStage=results.reduce(function(max,r){return r.time>max.time?r:max},results[0]);
+
+  var verdict=anyFail?'verdictFail':(results.some(function(r){return r.status==='degrade'})?'verdictDegrade':'verdictPass');
+
+  addLog('>> '+t(verdict)+' | '+totalTime+'ms | '+t('bottleneck')+': '+t(STAGES_DEF[bottleneckStage.stage]),
+    anyFail?'fail':'pass');
+
+  var rp=document.getElementById('resultPanel');rp.style.display='block';
+  document.getElementById('resultTitle').textContent=t('resultTitle');
+  var body=document.getElementById('resultBody');body.innerHTML='';
+  [[t('passRate'),(results.filter(function(r){return r.status!=='fail'}).length)+'/5'],
+   [t('totalTime'),totalTime+'ms'],
+   [t('bottleneck'),t(STAGES_DEF[bottleneckStage.stage])+' ('+bottleneckStage.time+'ms)'],
+   [t('verdict'),t(verdict)]
+  ].forEach(function(pair){
+    var row=document.createElement('div');row.className='result-row';
+    row.innerHTML='<span class="rl">'+pair[0]+'</span><span class="rv" style="color:'+(anyFail?'#ff3333':'#10b981')+'">'+pair[1]+'</span>';
+    body.appendChild(row);
+  });
+
+  updateHUD();
+  isRunning=false;
+  var btn=document.getElementById('runBtn');btn.disabled=false;btn.textContent=t('runBtn');
+}
+
+function updateHUD(){
+  document.getElementById('hudL1').textContent=t('hudScenarios');
+  document.getElementById('hudV1').textContent=totalRuns;
+  document.getElementById('hudL2').textContent=t('hudPassed');
+  document.getElementById('hudV2').textContent=totalPassed;
+  document.getElementById('hudV2').style.color='#10b981';
+  document.getElementById('hudL3').textContent=t('hudFailed');
+  document.getElementById('hudV3').textContent=totalFailed;
+  document.getElementById('hudV3').style.color=totalFailed>0?'#ff3333':'#00daf3';
+  document.getElementById('hudL4').textContent=t('hudIssues');
+  document.getElementById('hudV4').textContent=totalIssues;
+  document.getElementById('hudV4').style.color=totalIssues>=2?'#ffb59c':'#00daf3';
+}
+
+function refreshI18N(){
+  document.getElementById('mainTitle').textContent=t('title');
+  document.getElementById('mainSubtitle').textContent=t('subtitle');
+  document.getElementById('guideTitle').textContent=t('guideTitle');
+  document.getElementById('guideWhat').textContent=t('guideWhat');
+  var list=document.getElementById('guideList');list.innerHTML='';
+  ['guideStep1','guideStep2','guideStep3','guideStep4'].forEach(function(k){
+    var li=document.createElement('li');li.textContent=t(k);list.appendChild(li);
+  });
+  document.getElementById('guideTakeaway').textContent=t('guideTakeaway');
+  for(var i=0;i<5;i++){document.getElementById('stageL'+i).textContent=t(STAGES_DEF[i])}
+  document.getElementById('scenarioLbl').textContent=t('scenarioLabel');
+  document.getElementById('noiseLbl').textContent=t('noiseLabel');
+  SCENARIOS.forEach(function(sc,i){document.getElementById('scOpt'+i).textContent=t(sc.key)});
+  document.getElementById('noiseVal').textContent=document.getElementById('noiseSlider').value+'%';
+  if(!isRunning)document.getElementById('runBtn').textContent=t('runBtn');
+  updateHUD();
+}
+
+document.getElementById('langBtn').addEventListener('click',function(){
+  LANG=LANG==='en'?'cn':'en';
+  document.getElementById('langBtn').textContent=LANG.toUpperCase();
+  refreshI18N();
+});
+document.getElementById('guideToggle').addEventListener('click',function(){
+  document.getElementById('guidePanel').classList.toggle('collapsed');
+  document.getElementById('guideArrow').textContent=document.getElementById('guidePanel').classList.contains('collapsed')?'+':'-';
+});
+
+buildPipeline();buildControls();
+document.getElementById('runBtn').addEventListener('click',runTest);
+refreshI18N();updateHUD();
+})();
+</script>
+</body>
+</html>

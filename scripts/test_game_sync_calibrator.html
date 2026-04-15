@@ -1,0 +1,439 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;700&family=Inter:wght@400;500&family=Noto+Sans+SC:wght@400;700&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0;border-radius:0}
+html,body{width:100%;height:100vh;overflow:hidden;
+  background:#131313;
+  font-family:'Space Grotesk','Inter','Noto Sans SC',sans-serif;
+  color:#e5e2e1;
+}
+.lang-btn{
+  position:fixed;top:8px;left:8px;z-index:100;
+  font-family:'Space Grotesk',sans-serif;font-size:11px;font-weight:700;
+  padding:4px 10px;cursor:pointer;
+  border:1px solid rgba(255,255,255,0.08);
+  background:rgba(20,20,35,0.85);backdrop-filter:blur(12px);
+  color:#ffb59c;letter-spacing:1px;
+}
+.guide-panel{
+  position:fixed;top:8px;right:8px;width:260px;max-height:40vh;
+  overflow-y:auto;z-index:100;
+  background:rgba(20,20,35,0.85);backdrop-filter:blur(12px);
+  border:1px solid rgba(255,255,255,0.08);padding:12px;
+  font-family:'Noto Sans SC',sans-serif;font-size:13px;
+  color:rgba(255,255,255,0.85);
+}
+.guide-panel h3{
+  font-family:'Space Grotesk',sans-serif;font-size:14px;
+  margin-bottom:8px;display:flex;align-items:center;
+  justify-content:space-between;cursor:pointer;
+  color:#ffb59c;
+}
+.guide-panel .toggle{font-size:12px;opacity:0.6;}
+.guide-panel ul{padding-left:16px;line-height:1.6;}
+.guide-panel .guide-content.collapsed{display:none;}
+.wrapper{display:flex;flex-direction:column;height:100vh;}
+.canvas-wrap{flex:1;min-height:0;position:relative;}
+.canvas-wrap canvas{display:block;width:100%;height:100%;position:absolute;top:0;left:0;}
+.game-controls{
+  display:flex;flex-direction:column;gap:6px;
+  padding:10px 16px;
+  background:rgba(28,27,27,0.92);
+  border-top:1px solid rgba(138,136,134,0.15);
+}
+.slider-row{
+  display:flex;align-items:center;gap:8px;
+}
+.slider-row label{
+  font-family:'Space Grotesk',sans-serif;font-size:11px;font-weight:700;
+  color:#e5e2e1;width:120px;text-align:right;letter-spacing:0.5px;
+}
+.slider-row input[type="range"]{
+  flex:1;height:4px;
+  -webkit-appearance:none;appearance:none;
+  background:rgba(138,136,134,0.3);outline:none;
+}
+.slider-row input[type="range"]::-webkit-slider-thumb{
+  -webkit-appearance:none;appearance:none;
+  width:14px;height:14px;background:#ffb59c;cursor:pointer;
+}
+.slider-row .val{
+  font-family:'Space Grotesk',sans-serif;font-size:12px;font-weight:700;
+  color:#ffb59c;width:60px;text-align:left;
+}
+.feedback-panel{
+  padding:8px 12px;
+  background:rgba(0,0,0,0.55);
+  border-top:1px solid rgba(255,255,255,0.06);
+  font-family:'Noto Sans SC',sans-serif;font-size:13px;
+  min-height:36px;
+  display:flex;align-items:center;justify-content:center;
+  gap:16px;
+}
+.feedback-panel .error-display{
+  font-family:'Space Grotesk',sans-serif;font-size:18px;font-weight:700;
+}
+.feedback-panel .status-text{
+  font-family:'Noto Sans SC',sans-serif;font-size:13px;
+}
+</style>
+</head>
+<body>
+<button class="lang-btn" id="langBtn">CN</button>
+<div class="guide-panel" id="guidePanel">
+  <h3 id="guideHeader"><span id="guideTitle"></span> <span class="toggle" id="guideToggle">[-]</span></h3>
+  <div class="guide-content" id="guideContent">
+    <p id="guideGoal"></p>
+    <ul id="guideSteps"></ul>
+    <p id="guideTips" style="margin-top:4px;font-style:italic;"></p>
+  </div>
+</div>
+<div class="wrapper">
+  <div class="canvas-wrap">
+    <canvas id="c"></canvas>
+  </div>
+  <div class="game-controls" id="gameControls">
+    <div class="slider-row">
+      <label id="lblCam"></label>
+      <input type="range" id="sliderCam" min="-50" max="50" value="23">
+      <span class="val" id="valCam">+23 ms</span>
+    </div>
+    <div class="slider-row">
+      <label id="lblImu"></label>
+      <input type="range" id="sliderImu" min="-50" max="50" value="-17">
+      <span class="val" id="valImu">-17 ms</span>
+    </div>
+    <div class="slider-row">
+      <label id="lblOdom"></label>
+      <input type="range" id="sliderOdom" min="-50" max="50" value="8">
+      <span class="val" id="valOdom">+8 ms</span>
+    </div>
+  </div>
+  <div class="feedback-panel" id="feedback">
+    <span class="error-display" id="errorDisplay"></span>
+    <span class="status-text" id="statusText"></span>
+  </div>
+</div>
+<script>
+(function(){
+"use strict";
+
+var P = {"bg":"#131313","surface_high":"#353534","primary":"#ffb59c","primary_container":"#ff7f50","tertiary":"#00daf3","signal":"#ff5f1f","success":"#10b981","text":"#e5e2e1","muted":"#8a8886"};
+
+var LANG = 'cn';
+var I18N = {
+  title:       {en:'Data Sync Calibrator', cn:'\u6570\u636e\u540c\u6b65\u6821\u51c6\u5668'},
+  guideTitle:  {en:'Game Guide', cn:'\u6e38\u620f\u6307\u5357'},
+  guideGoal:   {en:'Adjust three sensor time offsets to align data (avg error < 5ms)', cn:'\u8c03\u8282\u4e09\u4e2a\u4f20\u611f\u5668\u7684\u65f6\u95f4\u504f\u79fb\uff0c\u4f7f\u6570\u636e\u5bf9\u9f50\u8bef\u5dee < 5ms'},
+  guideS1:     {en:'Observe misaligned data points on three timelines', cn:'\u89c2\u5bdf\u4e09\u6761\u65f6\u95f4\u8f74\u4e0a\u7684\u6570\u636e\u70b9\u9519\u4f4d'},
+  guideS2:     {en:'Drag each offset slider to shift data points', cn:'\u62d6\u52a8\u6bcf\u4e2a\u504f\u79fb\u6ed1\u5757\u79fb\u52a8\u6570\u636e\u70b9'},
+  guideS3:     {en:'Goal: reduce average error below 5ms', cn:'\u76ee\u6807\uff1a\u5c06\u5e73\u5747\u8bef\u5dee\u964d\u5230 5ms \u4ee5\u4e0b'},
+  guideTips:   {en:'Tip: align Camera first (lowest freq), then fine-tune IMU & Odometry', cn:'\u63d0\u793a\uff1a\u5148\u5bf9\u9f50\u76f8\u673a\uff08\u9891\u7387\u6700\u4f4e\uff09\uff0c\u518d\u5fae\u8c03 IMU \u548c\u91cc\u7a0b\u8ba1'},
+  lblCam:      {en:'CAMERA OFFSET', cn:'\u76f8\u673a\u504f\u79fb'},
+  lblImu:      {en:'IMU OFFSET', cn:'IMU \u504f\u79fb'},
+  lblOdom:     {en:'ODOMETRY OFFSET', cn:'\u91cc\u7a0b\u8ba1\u504f\u79fb'},
+  avgError:    {en:'AVG ERROR', cn:'\u5e73\u5747\u8bef\u5dee'},
+  calibrating: {en:'Calibrating...', cn:'\u6821\u51c6\u4e2d...'},
+  success:     {en:'Calibration Complete! Data package ready.', cn:'\u6821\u51c6\u5b8c\u6210\uff01\u6570\u636e\u5305\u5df2\u5c31\u7eea\u3002'},
+  camLine:     {en:'Camera 30Hz', cn:'\u76f8\u673a 30Hz'},
+  imuLine:     {en:'IMU 200Hz', cn:'IMU 200Hz'},
+  odomLine:    {en:'Odometry 100Hz', cn:'\u91cc\u7a0b\u8ba1 100Hz'},
+  refLine:     {en:'REF', cn:'\u53c2\u8003'},
+  btnPrev:     {en:'PREV', cn:'\u4e0a\u4e00\u5e27'},
+  btnPlay:     {en:'PLAY', cn:'\u64ad\u653e'},
+  btnPause:    {en:'PAUSE', cn:'\u6682\u505c'},
+  btnNext:     {en:'NEXT', cn:'\u4e0b\u4e00\u5e27'},
+};
+function t(key){return(I18N[key]&&I18N[key][LANG])||(I18N[key]&&I18N[key]['en'])||key;}
+
+function refreshGuide(){
+  var gt=document.getElementById('guideTitle');if(gt)gt.textContent=t('guideTitle');
+  var gg=document.getElementById('guideGoal');if(gg)gg.textContent=t('guideGoal');
+  var gs=document.getElementById('guideSteps');
+  if(gs)gs.innerHTML='<li>'+t('guideS1')+'</li><li>'+t('guideS2')+'</li><li>'+t('guideS3')+'</li>';
+  var gti=document.getElementById('guideTips');if(gti)gti.textContent=t('guideTips');
+}
+function refreshI18N(){
+  document.getElementById('langBtn').textContent=LANG.toUpperCase();
+  document.getElementById('lblCam').textContent=t('lblCam');
+  document.getElementById('lblImu').textContent=t('lblImu');
+  document.getElementById('lblOdom').textContent=t('lblOdom');
+  refreshGuide();
+  updateFeedback();
+  drawScene();
+}
+document.getElementById('langBtn').addEventListener('click',function(){
+  LANG=LANG==='en'?'cn':'en';refreshI18N();
+});
+document.getElementById('guideHeader').addEventListener('click',function(){
+  var gc=document.getElementById('guideContent');
+  var gt=document.getElementById('guideToggle');
+  if(gc.classList.contains('collapsed')){gc.classList.remove('collapsed');gt.textContent='[-]';}
+  else{gc.classList.add('collapsed');gt.textContent='[+]';}
+});
+
+var canvas = document.getElementById("c");
+var ctx = canvas.getContext("2d");
+var W = 600, H = 350;
+var DPR = Math.min(window.devicePixelRatio||1, 2);
+function resize(){
+  var rect = canvas.getBoundingClientRect();
+  if (rect.width < 1 || rect.height < 1) return;
+  canvas.width = rect.width * DPR;
+  canvas.height = rect.height * DPR;
+  var scale = Math.min(rect.width / W, rect.height / H);
+  var offsetX = (rect.width - W*scale) / 2;
+  var offsetY = (rect.height - H*scale) / 2;
+  ctx.setTransform(DPR*scale, 0, 0, DPR*scale, DPR*offsetX, DPR*offsetY);
+}
+resize();
+window.addEventListener("resize", function(){ resize(); drawScene(); });
+if (typeof ResizeObserver !== "undefined" && canvas.parentElement) {
+  try { new ResizeObserver(function(){ resize(); drawScene(); }).observe(canvas.parentElement); } catch (e) {}
+}
+
+function drawBg(){
+  var g=ctx.createRadialGradient(W/2,H/2,0,W/2,H/2,Math.max(W,H)*0.7);
+  g.addColorStop(0,"#1c1b1b");g.addColorStop(1,P.bg);
+  ctx.fillStyle=g;ctx.fillRect(0,0,W,H);
+  ctx.strokeStyle="rgba(0,218,243,0.04)";ctx.lineWidth=1;
+  for(var x=0;x<=W;x+=20){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,H);ctx.stroke();}
+  for(var y=0;y<=H;y+=20){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke();}
+}
+
+/* ── Sensor data generation ── */
+// True offsets (what the student needs to zero out)
+var TRUE_CAM_OFFSET = 23;    // ms
+var TRUE_IMU_OFFSET = -17;   // ms
+var TRUE_ODOM_OFFSET = 8;    // ms
+
+// Ref points: 5 reference time stamps (ms) in a 200ms window
+var REF_TIMES = [40, 80, 120, 160, 200];
+// For each sensor, generate sample times based on freq
+// Camera 30Hz -> ~33.3ms interval
+// IMU 200Hz -> 5ms interval
+// Odom 100Hz -> 10ms interval
+function genSamples(freq, offset, span){
+  var interval = 1000/freq;
+  var samples = [];
+  for(var t=0; t<=span; t+=interval){
+    samples.push(t + offset);
+  }
+  return samples;
+}
+
+var TL_LEFT=70, TL_RIGHT=530, TL_WIDTH=TL_RIGHT-TL_LEFT;
+var TIME_SPAN=240; // ms
+var TL_Y_CAM=80, TL_Y_IMU=165, TL_Y_ODOM=250;
+
+function timeToX(tms){
+  return TL_LEFT + (tms/TIME_SPAN)*TL_WIDTH;
+}
+
+function drawTimeline(y, label, color, samples, alpha){
+  ctx.save();ctx.globalAlpha=alpha;
+  // Axis
+  var g=ctx.createLinearGradient(TL_LEFT,y,TL_RIGHT,y);
+  g.addColorStop(0,color+'33');g.addColorStop(0.5,color);g.addColorStop(1,color+'33');
+  ctx.strokeStyle=g;ctx.lineWidth=2;
+  ctx.beginPath();ctx.moveTo(TL_LEFT,y);ctx.lineTo(TL_RIGHT,y);ctx.stroke();
+  // Label
+  ctx.font="bold 11px 'Space Grotesk',sans-serif";
+  ctx.textAlign="right";ctx.fillStyle=color;
+  ctx.shadowColor=color;ctx.shadowBlur=6;
+  ctx.fillText(label, TL_LEFT-6, y+4);
+  ctx.shadowBlur=0;
+  // Data points
+  ctx.fillStyle=color;
+  for(var i=0;i<samples.length;i++){
+    var sx=timeToX(samples[i]);
+    if(sx<TL_LEFT-5||sx>TL_RIGHT+5)continue;
+    ctx.shadowColor=color;ctx.shadowBlur=6;
+    ctx.beginPath();ctx.arc(sx,y,3,0,Math.PI*2);ctx.fill();
+  }
+  ctx.shadowBlur=0;
+  ctx.restore();
+}
+
+function drawRefLines(alpha){
+  ctx.save();ctx.globalAlpha=alpha;
+  for(var i=0;i<REF_TIMES.length;i++){
+    var rx=timeToX(REF_TIMES[i]);
+    ctx.strokeStyle='rgba(255,181,156,0.25)';ctx.lineWidth=1;
+    ctx.setLineDash([3,3]);
+    ctx.beginPath();ctx.moveTo(rx,TL_Y_CAM-20);ctx.lineTo(rx,TL_Y_ODOM+20);ctx.stroke();
+    ctx.setLineDash([]);
+    // Small label
+    ctx.font="9px 'Space Grotesk',sans-serif";
+    ctx.textAlign="center";ctx.fillStyle='rgba(255,181,156,0.5)';
+    ctx.fillText(REF_TIMES[i]+'ms', rx, TL_Y_CAM-24);
+  }
+  // REF label
+  ctx.font="9px 'Space Grotesk',sans-serif";
+  ctx.textAlign="left";ctx.fillStyle=P.muted;
+  ctx.fillText(t('refLine'), TL_RIGHT+4, TL_Y_CAM-24);
+  ctx.restore();
+}
+
+function calcAvgError(camOff, imuOff, odomOff){
+  // For each ref time, find nearest sample from each sensor
+  // The "correct" offset to apply is the negative of TRUE offset
+  // Residual offset = TRUE_OFFSET + applied_offset (slider value is negation)
+  // When slider = 0, residual = TRUE_OFFSET
+  // When slider = -TRUE_OFFSET, residual = 0
+  var residualCam = TRUE_CAM_OFFSET - camOff;
+  var residualImu = TRUE_IMU_OFFSET - imuOff;
+  var residualOdom = TRUE_ODOM_OFFSET - odomOff;
+  // Average absolute residual
+  return (Math.abs(residualCam) + Math.abs(residualImu) + Math.abs(residualOdom)) / 3;
+}
+
+function drawErrorIndicator(avgErr, alpha){
+  ctx.save();ctx.globalAlpha=alpha;
+  var ix=W-80, iy=30;
+  // Background
+  ctx.fillStyle='rgba(20,20,35,0.85)';
+  ctx.fillRect(ix-40,iy-14,80,48);
+  ctx.strokeStyle=avgErr<5?P.success+'66':P.signal+'66';
+  ctx.lineWidth=1;
+  ctx.strokeRect(ix-40,iy-14,80,48);
+  // Label
+  ctx.font="9px 'Space Grotesk',sans-serif";
+  ctx.textAlign="center";ctx.fillStyle=P.muted;
+  ctx.fillText(t('avgError'),ix,iy);
+  // Value
+  ctx.font="bold 16px 'Space Grotesk',sans-serif";
+  ctx.fillStyle=avgErr<5?P.success:avgErr<15?P.primary:P.signal;
+  ctx.shadowColor=ctx.fillStyle;ctx.shadowBlur=8;
+  ctx.fillText(avgErr.toFixed(1)+' ms',ix,iy+22);
+  ctx.shadowBlur=0;
+  ctx.restore();
+}
+
+// Highlight nearest sample alignment at each ref time
+function drawAlignmentIndicators(camSamples, imuSamples, odomSamples, alpha){
+  ctx.save();ctx.globalAlpha=alpha*0.5;
+  for(var r=0;r<REF_TIMES.length;r++){
+    var rt=REF_TIMES[r];
+    var rx=timeToX(rt);
+    // Find nearest for each
+    var allSensors=[
+      {samples:camSamples,y:TL_Y_CAM,color:'#00daf3'},
+      {samples:imuSamples,y:TL_Y_IMU,color:'#ff7f50'},
+      {samples:odomSamples,y:TL_Y_ODOM,color:'#10b981'}
+    ];
+    for(var s=0;s<allSensors.length;s++){
+      var nearest=null,minDist=Infinity;
+      for(var j=0;j<allSensors[s].samples.length;j++){
+        var d=Math.abs(allSensors[s].samples[j]-rt);
+        if(d<minDist){minDist=d;nearest=allSensors[s].samples[j];}
+      }
+      if(nearest!==null&&minDist<15){
+        var nx=timeToX(nearest);
+        // Draw line from nearest to ref
+        if(Math.abs(nx-rx)>1){
+          ctx.strokeStyle=allSensors[s].color;ctx.lineWidth=1;
+          ctx.beginPath();ctx.moveTo(nx,allSensors[s].y);ctx.lineTo(rx,allSensors[s].y);ctx.stroke();
+          // Error amount
+          ctx.font="8px 'Space Grotesk',sans-serif";
+          ctx.textAlign="center";
+          ctx.fillStyle=minDist<5?P.success:P.signal;
+          ctx.fillText(minDist.toFixed(1),  (nx+rx)/2, allSensors[s].y-8);
+        }
+      }
+    }
+  }
+  ctx.restore();
+}
+
+var camOff, imuOff, odomOff;
+var calibrated = false;
+
+function readSliders(){
+  camOff = parseInt(document.getElementById('sliderCam').value);
+  imuOff = parseInt(document.getElementById('sliderImu').value);
+  odomOff = parseInt(document.getElementById('sliderOdom').value);
+  document.getElementById('valCam').textContent=(camOff>=0?'+':'')+camOff+' ms';
+  document.getElementById('valImu').textContent=(imuOff>=0?'+':'')+imuOff+' ms';
+  document.getElementById('valOdom').textContent=(odomOff>=0?'+':'')+odomOff+' ms';
+}
+
+function updateFeedback(){
+  readSliders();
+  var avgErr = calcAvgError(camOff, imuOff, odomOff);
+  var ed=document.getElementById('errorDisplay');
+  var st=document.getElementById('statusText');
+  if(avgErr<5 && !calibrated){
+    calibrated=true;
+    ed.style.color=P.success;
+    ed.textContent=avgErr.toFixed(1)+' ms';
+    st.style.color=P.success;
+    st.textContent=t('success');
+  }else if(avgErr>=5){
+    calibrated=false;
+    ed.style.color=avgErr<15?P.primary:P.signal;
+    ed.textContent=avgErr.toFixed(1)+' ms';
+    st.style.color=P.muted;
+    st.textContent=t('calibrating');
+  }else{
+    ed.style.color=P.success;
+    ed.textContent=avgErr.toFixed(1)+' ms';
+    st.style.color=P.success;
+    st.textContent=t('success');
+  }
+}
+
+function drawScene(){
+  readSliders();
+  var avgErr = calcAvgError(camOff, imuOff, odomOff);
+
+  // Generate samples with applied offset
+  var camSamples = genSamples(30, TRUE_CAM_OFFSET - camOff, TIME_SPAN);
+  var imuSamples = genSamples(200, TRUE_IMU_OFFSET - imuOff, TIME_SPAN);
+  var odomSamples = genSamples(100, TRUE_ODOM_OFFSET - odomOff, TIME_SPAN);
+
+  drawBg();
+
+  // Title
+  ctx.font="bold 16px 'Space Grotesk','Inter',sans-serif";
+  ctx.textAlign="center";ctx.fillStyle=P.text;
+  ctx.shadowColor=P.primary;ctx.shadowBlur=8;
+  ctx.fillText(t('title'),W/2,28);
+  ctx.shadowBlur=0;
+
+  drawRefLines(1);
+  drawTimeline(TL_Y_CAM, t('camLine'), '#00daf3', camSamples, 1);
+  drawTimeline(TL_Y_IMU, t('imuLine'), '#ff7f50', imuSamples, 1);
+  drawTimeline(TL_Y_ODOM, t('odomLine'), '#10b981', odomSamples, 1);
+  drawAlignmentIndicators(camSamples, imuSamples, odomSamples, 1);
+  drawErrorIndicator(avgErr, 1);
+
+  // Success overlay
+  if(avgErr<5){
+    ctx.fillStyle='rgba(16,185,129,0.08)';
+    ctx.fillRect(0,0,W,H);
+  }
+}
+
+// Slider events
+document.getElementById('sliderCam').addEventListener('input',function(){updateFeedback();drawScene();});
+document.getElementById('sliderImu').addEventListener('input',function(){updateFeedback();drawScene();});
+document.getElementById('sliderOdom').addEventListener('input',function(){updateFeedback();drawScene();});
+
+/* ── init ── */
+refreshGuide();
+readSliders();
+updateFeedback();
+drawScene();
+setTimeout(function(){resize();drawScene();},200);
+setTimeout(function(){resize();drawScene();},600);
+document.fonts.ready.then(function(){resize();drawScene();});
+
+})();
+</script>
+</body>
+</html>

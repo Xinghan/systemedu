@@ -1,0 +1,549 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=Inter:wght@400;500&family=Noto+Sans+SC:wght@400;700&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box;}
+html,body{width:100%;height:100vh;overflow:hidden;}
+body{background:#05070a;color:#e2e2e9;font-family:'Inter','Noto Sans SC',sans-serif;display:flex;flex-direction:column;}
+.wrapper{display:flex;flex-direction:column;height:100vh;overflow:hidden;}
+.header{padding:12px 16px 8px;display:flex;justify-content:space-between;align-items:center;}
+.header h1{font-family:'Space Grotesk',sans-serif;font-size:clamp(14px,2vw,18px);font-weight:700;letter-spacing:-0.02em;color:#ffb000;text-shadow:0 0 15px rgba(255,176,0,0.3);}
+.header .sub{font-size:11px;color:#8e90a6;letter-spacing:0.1em;text-transform:uppercase;}
+.canvas-wrap{flex:1;min-height:0;position:relative;}
+canvas{width:100%;height:100%;display:block;}
+.controls{display:flex;justify-content:center;align-items:center;gap:12px;padding:8px 16px;}
+.ctrl-btn{font-family:'Space Grotesk',sans-serif;font-size:12px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;padding:6px 18px;border:none;cursor:pointer;color:#05070a;background:linear-gradient(135deg,#ffb000,#ff5f1f);transition:transform 0.1s,box-shadow 0.2s;box-shadow:0 0 12px rgba(255,176,0,0.3);}
+.ctrl-btn:hover{transform:scale(1.04);box-shadow:0 0 20px rgba(255,176,0,0.5);}
+.ctrl-btn:active{transform:scale(0.96);}
+.ctrl-btn.secondary{background:rgba(17,20,37,0.92);color:#8e90a6;box-shadow:none;backdrop-filter:blur(12px);}
+.ctrl-btn.secondary:hover{color:#ffb000;}
+.hud{height:48px;display:flex;align-items:center;justify-content:space-around;background:rgba(0,0,0,0.55);backdrop-filter:blur(12px);padding:0 16px;}
+.hud-item{text-align:center;}
+.hud-label{font-family:'Space Grotesk',sans-serif;font-size:9px;letter-spacing:0.15em;text-transform:uppercase;color:#8e90a6;}
+.hud-val{font-family:'Space Grotesk',sans-serif;font-size:14px;font-weight:700;color:#ffb000;}
+.lang-btn{position:fixed;top:8px;left:8px;z-index:100;font-family:'Space Grotesk',sans-serif;font-size:11px;font-weight:700;padding:4px 10px;cursor:pointer;border:none;background:rgba(20,20,35,0.85);backdrop-filter:blur(12px);color:#ffb59c;letter-spacing:1px;}
+.guide-panel{position:fixed;top:8px;right:8px;width:240px;max-height:40vh;overflow-y:auto;background:rgba(20,20,35,0.85);backdrop-filter:blur(12px);padding:12px;z-index:100;font-family:'Noto Sans SC',sans-serif;font-size:12px;color:rgba(255,255,255,0.85);line-height:1.6;}
+.guide-panel h3{font-family:'Space Grotesk',sans-serif;font-size:13px;margin-bottom:6px;color:#ffb000;cursor:pointer;display:flex;justify-content:space-between;align-items:center;}
+.guide-panel ul{padding-left:14px;}
+.guide-panel .collapsed{display:none;}
+</style>
+</head>
+<body>
+<button class="lang-btn" id="langBtn">CN</button>
+<div class="guide-panel" id="guide">
+<h3 id="guideTitle"></h3>
+<div class="guide-content" id="guideContent"></div>
+</div>
+<div class="wrapper">
+<div class="header">
+<div><h1 id="title"></h1><div class="sub" id="subtitle"></div></div>
+<div id="frameIndicator" style="font-family:'Space Grotesk';font-size:11px;color:#8e90a6;letter-spacing:0.1em;"></div>
+</div>
+<div class="canvas-wrap"><canvas id="c"></canvas></div>
+<div class="controls">
+<button class="ctrl-btn secondary" id="btnPrev"></button>
+<button class="ctrl-btn" id="btnPlay"></button>
+<button class="ctrl-btn secondary" id="btnNext"></button>
+</div>
+<div class="hud">
+<div class="hud-item"><div class="hud-label" id="hudL1"></div><div class="hud-val" id="hudV1"></div></div>
+<div class="hud-item"><div class="hud-label" id="hudL2"></div><div class="hud-val" id="hudV2"></div></div>
+<div class="hud-item"><div class="hud-label" id="hudL3"></div><div class="hud-val" id="hudV3"></div></div>
+<div class="hud-item"><div class="hud-label" id="hudL4"></div><div class="hud-val" id="hudV4"></div></div>
+</div>
+</div>
+
+<script src="animation_runtime.js"></script>
+<script>
+
+// S0 八大主题（用于纸片标签 + 最终手册目录）
+var THEMES_CN = ['推拉', '轻重', '下落', '快慢', '方向', '部件', '气球', '故事'];
+var THEMES_EN = ['Push', 'Weight', 'Fall', 'Speed', 'Path', 'Parts', 'Balloon', 'Story'];
+
+// 纸片颜色（区分 8 份旧作业）
+var PAPER_COLORS = [
+  '#fff2d1', '#ffe1b3', '#ffd1a3', '#ffc2b0',
+  '#f8d9ff', '#d9ecff', '#d1f5e6', '#fff8cc'
+];
+
+var CONFIG = {
+  style: 'rocketry_control',
+  totalFrames: 4,
+
+  i18n: {
+    title:    {en:'FROM SCATTERED TO BOOK', cn:'\u4ece\u6563\u4e71\u5230\u6210\u518c'},
+    subtitle: {en:'Your S0 handbook, in four steps', cn:'\u56db\u6b65\u505a\u51fa\u4f60\u7684 S0 \u624b\u518c'},
+
+    f0_title: {en:'Step 1: Gather the 8 scraps', cn:'\u6b65\u9aa41\uff1a\u627e\u9f508\u4efd\u65e7\u4f5c\u4e1a'},
+    f0_lead:  {en:'Push, weight, fall, speed, path, parts, balloon, story — 8 scraps on the table.', cn:'\u63a8\u62c9\u3001\u8f7b\u91cd\u3001\u4e0b\u843d\u3001\u5feb\u6162\u3001\u65b9\u5411\u3001\u90e8\u4ef6\u3001\u6c14\u7403\u3001\u6545\u4e8b\u2014\u2014 8 \u5f20\u7eb8\u6563\u653e\u5728\u684c\u4e0a\u3002'},
+    f0_note:  {en:'They were scattered. Now look at them together.', cn:'\u4ee5\u524d\u5b83\u4eec\u4e71\u653e\u5404\u5904\uff0c\u73b0\u5728\u653e\u5728\u4e00\u8d77\u770b\u3002'},
+
+    f1_title: {en:'Step 2: Sort them by theme', cn:'\u6b65\u9aa42\uff1a\u6309\u4e3b\u9898\u6392\u5e8f'},
+    f1_lead:  {en:'Line them up chapter by chapter. Each scrap knows which page it belongs to.', cn:'\u4e00\u9875\u63a5\u4e00\u9875\u6392\u597d\u987a\u5e8f\u3002\u6bcf\u4e00\u5f20\u7eb8\u90fd\u77e5\u9053\u81ea\u5df1\u662f\u7b2c\u51e0\u7ae0\u3002'},
+    f1_note:  {en:'Order: from body intuition to full rocket launch.', cn:'\u7ae0\u8282\u987a\u5e8f\uff1a\u4ece\u8eab\u4f53\u76f4\u89c9\u5230\u5b8c\u6574\u7684\u706b\u7bad\u53d1\u5c04\u3002'},
+
+    f2_title: {en:'Step 3: Bind them into a book', cn:'\u6b65\u9aa43\uff1a\u88c5\u8ba2\u6210\u518c'},
+    f2_lead:  {en:'A string, three holes, a knot. Eight scraps become a book.', cn:'\u4e00\u6839\u7ebf\u3001\u4e09\u4e2a\u5b54\u3001\u4e00\u4e2a\u7ed3\u30028 \u5f20\u7eb8\u53d8\u6210\u4e00\u672c\u4e66\u3002'},
+    f2_note:  {en:'Integration itself is the achievement.', cn:'\u6574\u5408\u2014\u2014\u5c31\u662f\u6210\u679c\u672c\u8eab\u3002'},
+
+    f3_title: {en:'Step 4: Cover page ready', cn:'\u6b65\u9aa44\uff1a\u5c01\u9762\u5b8c\u6210'},
+    f3_lead:  {en:'Your handbook: open it, add the guess page, share it with the world.', cn:'\u4f60\u7684\u624b\u518c\uff1a\u6253\u5f00\u5b83\u3001\u8865\u4e0a\u731c\u60f3\u9875\u3001\u62ff\u5b83\u53bb\u5206\u4eab\u3002'},
+    f3_note:  {en:'This is the first artifact on your rocket-engineer journey.', cn:'\u8fd9\u662f\u4f60\u6210\u4e3a\u706b\u7bad\u5de5\u7a0b\u5e08\u7684\u7b2c\u4e00\u4efd\u4f5c\u54c1\u3002'},
+    f3_book:  {en:'FORCE &amp; MOTION\nHandbook', cn:'\u529b\u4e0e\u8fd0\u52a8\n\u89c2\u5bdf\u624b\u518c'},
+    f3_author:{en:'by  YOU',  cn:'\u4f5c\u8005\uff1a\u4f60'},
+    f3_date:  {en:'Stage S0 · complete', cn:'S0 \u9636\u6bb5 \u00b7 \u5b8c\u6210'},
+
+    // Paper tags (reused across frames)
+    p0: {en:'Push',    cn:'\u63a8\u62c9'},
+    p1: {en:'Weight',  cn:'\u8f7b\u91cd'},
+    p2: {en:'Fall',    cn:'\u4e0b\u843d'},
+    p3: {en:'Speed',   cn:'\u5feb\u6162'},
+    p4: {en:'Path',    cn:'\u65b9\u5411'},
+    p5: {en:'Parts',   cn:'\u90e8\u4ef6'},
+    p6: {en:'Balloon', cn:'\u6c14\u7403'},
+    p7: {en:'Story',   cn:'\u6545\u4e8b'},
+
+    hudL1: {en:'STEP',    cn:'\u6b65\u9aa4'},
+    hudL2: {en:'ACTION',  cn:'\u52a8\u4f5c'},
+    hudL3: {en:'SCRAPS',  cn:'\u7eb8\u7247'},
+    hudL4: {en:'RESULT',  cn:'\u7ed3\u679c'},
+
+    guideTitle: {en:'How to make yours', cn:'\u600e\u4e48\u505a\u4f60\u7684\u624b\u518c'},
+    g1: {en:'Find all 8 old scraps from S0 lessons', cn:'\u627e\u9f50 S0 \u516b\u8282\u8bfe\u7684\u65e7\u4f5c\u4e1a'},
+    g2: {en:'Sort them in order, fill in what is missing', cn:'\u6392\u597d\u987a\u5e8f\uff0c\u8865\u4e0a\u7f3a\u5931\u7684\u5185\u5bb9'},
+    g3: {en:'Bind, write the guess page, show it off', cn:'\u88c5\u8ba2\u3001\u5199\u731c\u60f3\u9875\u3001\u5c55\u793a\u7ed9\u522b\u4eba\u770b'},
+  },
+
+  hudLabels: ['hudL1', 'hudL2', 'hudL3', 'hudL4'],
+  hudValues: [
+    ['1/4', 'gather',  '8 loose', 'on table'],
+    ['2/4', 'sort',    '8 lined', 'in order'],
+    ['3/4', 'bind',    '8 bound', 'a book'],
+    ['4/4', 'finish',  '8 + 1',   'cover done'],
+  ],
+
+  guideTitle: 'guideTitle',
+  guideItems: ['g1', 'g2', 'g3'],
+};
+
+// ─── Custom drawables ──────────────────────────────────────────
+
+// A single paper scrap with fold corner + ruled lines + color fill + theme label
+function drawPaper(ctx, x, y, w, h, rot, color, label, drawLabel) {
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.rotate(rot || 0);
+  // shadow
+  ctx.fillStyle = 'rgba(0,0,0,0.35)';
+  ctx.fillRect(-w/2 + 2, -h/2 + 3, w, h);
+  // paper body
+  ctx.fillStyle = color;
+  ctx.fillRect(-w/2, -h/2, w, h);
+  // fold corner
+  ctx.fillStyle = 'rgba(0,0,0,0.15)';
+  ctx.beginPath();
+  ctx.moveTo(w/2 - 10, -h/2);
+  ctx.lineTo(w/2, -h/2);
+  ctx.lineTo(w/2, -h/2 + 10);
+  ctx.closePath();
+  ctx.fill();
+  // ruled lines
+  ctx.strokeStyle = 'rgba(60,60,80,0.35)';
+  ctx.lineWidth = 0.8;
+  for (var i = 1; i <= 3; i++) {
+    var ly = -h/2 + i * (h / 4);
+    ctx.beginPath();
+    ctx.moveTo(-w/2 + 6, ly);
+    ctx.lineTo(w/2 - 6, ly);
+    ctx.stroke();
+  }
+  // theme label
+  if (drawLabel && label) {
+    ctx.fillStyle = '#2a1a00';
+    ctx.font = "bold 11px 'Noto Sans SC',sans-serif";
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(label, 0, -h/2 + 12);
+  }
+  ctx.restore();
+}
+
+// A small doodle that hints at the theme content (top-left corner)
+function drawDoodle(ctx, x, y, kind) {
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.strokeStyle = '#5a4a30';
+  ctx.fillStyle = '#5a4a30';
+  ctx.lineWidth = 1.2;
+  if (kind === 0) { // push: arrow
+    ctx.beginPath(); ctx.moveTo(-6, 0); ctx.lineTo(6, 0); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(6, 0); ctx.lineTo(3, -3); ctx.moveTo(6, 0); ctx.lineTo(3, 3); ctx.stroke();
+  } else if (kind === 1) { // weight: seesaw
+    ctx.beginPath(); ctx.moveTo(-7, 2); ctx.lineTo(7, -2); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(0, 4); ctx.lineTo(-3, 8); ctx.lineTo(3, 8); ctx.closePath(); ctx.fill();
+  } else if (kind === 2) { // fall: dot + dashes
+    ctx.fillRect(-1, -6, 2, 2);
+    ctx.setLineDash([2, 2]);
+    ctx.beginPath(); ctx.moveTo(0, -3); ctx.lineTo(0, 7); ctx.stroke();
+    ctx.setLineDash([]);
+  } else if (kind === 3) { // speed: two arrows different length
+    ctx.beginPath(); ctx.moveTo(-7, -3); ctx.lineTo(7, -3); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(-7, 3); ctx.lineTo(2, 3); ctx.stroke();
+  } else if (kind === 4) { // path: zigzag
+    ctx.beginPath(); ctx.moveTo(-7, 4); ctx.lineTo(-2, -4); ctx.lineTo(3, 3); ctx.lineTo(7, -2); ctx.stroke();
+  } else if (kind === 5) { // parts: rocket silhouette
+    ctx.beginPath();
+    ctx.moveTo(0, -7); ctx.lineTo(3, -2); ctx.lineTo(3, 5); ctx.lineTo(-3, 5); ctx.lineTo(-3, -2);
+    ctx.closePath(); ctx.fill();
+  } else if (kind === 6) { // balloon: oval
+    ctx.beginPath(); ctx.ellipse(0, -2, 5, 6, 0, 0, Math.PI*2); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(0, 4); ctx.lineTo(0, 8); ctx.stroke();
+  } else if (kind === 7) { // story: book
+    ctx.strokeRect(-6, -4, 12, 8);
+    ctx.beginPath(); ctx.moveTo(0, -4); ctx.lineTo(0, 4); ctx.stroke();
+  }
+  ctx.restore();
+}
+
+// Bound book: stack of paper + ribbon + cover
+function drawBook(ctx, x, y, w, h, coverText, author, date, lang) {
+  ctx.save();
+  ctx.translate(x, y);
+  // back pages (stack)
+  for (var i = 6; i >= 1; i--) {
+    ctx.fillStyle = 'rgba(0,0,0,0.2)';
+    ctx.fillRect(-w/2 + i, -h/2 + i, w, h);
+  }
+  // cover
+  var grd = ctx.createLinearGradient(-w/2, -h/2, w/2, h/2);
+  grd.addColorStop(0, '#1a1330');
+  grd.addColorStop(1, '#3a1a08');
+  ctx.fillStyle = grd;
+  ctx.fillRect(-w/2, -h/2, w, h);
+  // border
+  ctx.strokeStyle = '#ffb000';
+  ctx.lineWidth = 2;
+  ctx.strokeRect(-w/2 + 4, -h/2 + 4, w - 8, h - 8);
+  // small rocket icon
+  ctx.save();
+  ctx.translate(0, -h/2 + 44);
+  ctx.fillStyle = '#ffb000';
+  ctx.beginPath();
+  ctx.moveTo(0, -18);
+  ctx.lineTo(8, -2);
+  ctx.lineTo(8, 14);
+  ctx.lineTo(-8, 14);
+  ctx.lineTo(-8, -2);
+  ctx.closePath();
+  ctx.fill();
+  // fins
+  ctx.beginPath();
+  ctx.moveTo(-8, 6); ctx.lineTo(-14, 14); ctx.lineTo(-8, 14); ctx.closePath();
+  ctx.moveTo(8, 6); ctx.lineTo(14, 14); ctx.lineTo(8, 14); ctx.closePath();
+  ctx.fill();
+  // window
+  ctx.fillStyle = '#05070a';
+  ctx.beginPath(); ctx.arc(0, 2, 3, 0, Math.PI*2); ctx.fill();
+  // exhaust
+  ctx.fillStyle = '#ff5f1f';
+  ctx.beginPath();
+  ctx.moveTo(-5, 14); ctx.lineTo(0, 22); ctx.lineTo(5, 14); ctx.closePath();
+  ctx.fill();
+  ctx.restore();
+  // title (two lines, Chinese rendered larger)
+  ctx.fillStyle = '#ffe8b0';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  var lines = (coverText || '').split('\n');
+  var isCn = (lang === 'cn');
+  var titleSize = isCn ? 22 : 17;
+  ctx.font = "bold " + titleSize + "px 'Noto Sans SC','Space Grotesk',sans-serif";
+  for (var li = 0; li < lines.length; li++) {
+    ctx.fillText(lines[li], 0, 16 + li * (titleSize + 4));
+  }
+  // author
+  ctx.fillStyle = '#ffb000';
+  ctx.font = "bold 11px 'Noto Sans SC','Space Grotesk',sans-serif";
+  ctx.fillText(author || '', 0, h/2 - 28);
+  // date
+  ctx.fillStyle = '#8e90a6';
+  ctx.font = "10px 'Noto Sans SC','Space Grotesk',sans-serif";
+  ctx.fillText(date || '', 0, h/2 - 14);
+  // binding holes on left
+  ctx.fillStyle = '#05070a';
+  for (var h1 = 0; h1 < 3; h1++) {
+    ctx.beginPath();
+    ctx.arc(-w/2 + 10, -h/2 + 30 + h1 * (h - 60) / 2, 2.5, 0, Math.PI*2);
+    ctx.fill();
+  }
+  ctx.restore();
+}
+
+function customDrawElement(ctx, el) {
+  if (el.type === 'paperScrap') {
+    drawPaper(ctx, el.x, el.y, el.w || 46, el.h || 60, el.rot || 0, el.color || '#fff', el.label, el.showLabel !== false);
+    if (el.doodleKind !== undefined) {
+      // doodle at paper center-lower
+      var cx = el.x + Math.cos((el.rot || 0)) * 0 - Math.sin(el.rot || 0) * 8;
+      var cy = el.y + Math.sin((el.rot || 0)) * 0 + Math.cos(el.rot || 0) * 8;
+      drawDoodle(ctx, cx, cy, el.doodleKind);
+    }
+    return true;
+  }
+  if (el.type === 'bookClosed') {
+    drawBook(ctx, el.x, el.y, el.w || 150, el.h || 200, el.coverText, el.author, el.date, el.lang);
+    return true;
+  }
+  if (el.type === 'tableSurface') {
+    // wooden table stripe at bottom
+    ctx.save();
+    var grd = ctx.createLinearGradient(0, el.y, 0, el.y + el.h);
+    grd.addColorStop(0, '#201810');
+    grd.addColorStop(1, '#0a0604');
+    ctx.fillStyle = grd;
+    ctx.fillRect(0, el.y, el.W, el.h);
+    // wood grain lines
+    ctx.strokeStyle = 'rgba(90,70,40,0.25)';
+    ctx.lineWidth = 0.6;
+    for (var g = 0; g < 5; g++) {
+      ctx.beginPath();
+      ctx.moveTo(0, el.y + 10 + g * 12);
+      ctx.lineTo(el.W, el.y + 10 + g * 12 + (g % 2 ? 2 : -2));
+      ctx.stroke();
+    }
+    ctx.restore();
+    return true;
+  }
+  if (el.type === 'bindingString') {
+    // golden string threading through 8 stacked papers
+    ctx.save();
+    ctx.strokeStyle = '#ffb000';
+    ctx.lineWidth = 2;
+    ctx.shadowColor = 'rgba(255,176,0,0.55)';
+    ctx.shadowBlur = 8;
+    ctx.beginPath();
+    ctx.moveTo(el.x1, el.y1);
+    // decorative knot-like curve
+    ctx.bezierCurveTo(el.x1 - 20, el.y1 + 20, el.x1 - 20, el.y2 - 20, el.x2, el.y2);
+    ctx.stroke();
+    // knot bow
+    ctx.shadowBlur = 0;
+    ctx.fillStyle = '#ffb000';
+    ctx.beginPath(); ctx.arc(el.x1, el.y1, 3, 0, Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.arc(el.x2, el.y2, 3, 0, Math.PI*2); ctx.fill();
+    ctx.restore();
+    return true;
+  }
+  if (el.type === 'sparkle') {
+    ctx.save();
+    ctx.fillStyle = el.color || '#ffb000';
+    ctx.shadowColor = el.color || '#ffb000';
+    ctx.shadowBlur = 10;
+    ctx.beginPath();
+    // 4-point star
+    var s = el.size || 6;
+    ctx.moveTo(el.x, el.y - s);
+    ctx.lineTo(el.x + s * 0.3, el.y - s * 0.3);
+    ctx.lineTo(el.x + s, el.y);
+    ctx.lineTo(el.x + s * 0.3, el.y + s * 0.3);
+    ctx.lineTo(el.x, el.y + s);
+    ctx.lineTo(el.x - s * 0.3, el.y + s * 0.3);
+    ctx.lineTo(el.x - s, el.y);
+    ctx.lineTo(el.x - s * 0.3, el.y - s * 0.3);
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
+    return true;
+  }
+  return false;
+}
+
+// ─── Deterministic pseudo-random for scatter positions ─────────
+function prng(seed) {
+  var s = seed;
+  return function() {
+    s = (s * 9301 + 49297) % 233280;
+    return s / 233280;
+  };
+}
+
+function getFrameElements(f, W, H) {
+  var t = AnimRuntime.t;
+  var P = AnimRuntime.PAL;
+  var cx = W / 2;
+  var els = [];
+
+  // Table surface on all frames
+  els.push({id:'tbl', type:'tableSurface', y:330, h:70, W:W});
+
+  // Read current lang from DOM to decide which label/title strings to use
+  var lang = (document.documentElement.getAttribute('data-lang') === 'en') ? 'en' : 'cn';
+  var themeLabels = (lang === 'en') ? THEMES_EN : THEMES_CN;
+
+  if (f === 0) {
+    // Scattered papers — pseudo-random pose
+    els.push({id:'t', type:'label', text:t('f0_title'), x:cx, y:50, color:P.primary, size:20, align:'center'});
+    els.push({id:'l', type:'label', text:t('f0_lead'),  x:cx, y:80, color:P.text, size:12, align:'center'});
+
+    var rng = prng(42);
+    // Scatter positions within body area (y 120-300, x 80 .. W-80)
+    for (var i = 0; i < 8; i++) {
+      var px = 90 + rng() * (W - 180);
+      var py = 150 + rng() * 140;
+      var rot = (rng() - 0.5) * 0.9; // +-~25 deg
+      els.push({
+        id: 'p' + i,
+        type: 'paperScrap',
+        x: px, y: py,
+        w: 56, h: 72,
+        rot: rot,
+        color: PAPER_COLORS[i],
+        label: themeLabels[i],
+        doodleKind: i,
+      });
+    }
+
+    els.push({id:'n', type:'label', text:t('f0_note'), x:cx, y:320, color:P.secondary, size:11, align:'center'});
+    return els;
+  }
+
+  if (f === 1) {
+    // Sorted — two rows of 4, rotation=0
+    els.push({id:'t', type:'label', text:t('f1_title'), x:cx, y:50, color:P.primary, size:20, align:'center'});
+    els.push({id:'l', type:'label', text:t('f1_lead'),  x:cx, y:80, color:P.text, size:12, align:'center'});
+
+    var cardW = 62, cardH = 78;
+    var totalW = cardW * 4 + 3 * 18; // 4 cards per row, 18px gap
+    var startX = cx - totalW / 2 + cardW / 2;
+    // row 1: themes 0-3 at y=150
+    // row 2: themes 4-7 at y=245
+    for (var j = 0; j < 8; j++) {
+      var row = Math.floor(j / 4);
+      var col = j % 4;
+      var px2 = startX + col * (cardW + 18);
+      var py2 = 150 + row * 95;
+      els.push({
+        id: 'p' + j,
+        type: 'paperScrap',
+        x: px2, y: py2,
+        w: cardW, h: cardH,
+        rot: 0,
+        color: PAPER_COLORS[j],
+        label: themeLabels[j],
+        doodleKind: j,
+      });
+      // chapter number above each card
+      els.push({
+        id: 'cn' + j,
+        type: 'label',
+        text: String(j + 1),
+        x: px2, y: py2 - cardH / 2 - 10,
+        color: P.tertiary, size: 11, align: 'center',
+      });
+    }
+    els.push({id:'n', type:'label', text:t('f1_note'), x:cx, y:320, color:P.secondary, size:11, align:'center'});
+    return els;
+  }
+
+  if (f === 2) {
+    // Binding — all papers stacked, string being threaded
+    els.push({id:'t', type:'label', text:t('f2_title'), x:cx, y:50, color:P.primary, size:20, align:'center'});
+    els.push({id:'l', type:'label', text:t('f2_lead'),  x:cx, y:80, color:P.text, size:12, align:'center'});
+
+    // Draw stacked papers centered (each paper offset slightly to show stack)
+    var stackX = cx, stackY = 215;
+    var stkW = 140, stkH = 180;
+    // back pages (subtle stack)
+    for (var k = 7; k >= 1; k--) {
+      els.push({
+        id: 'stk' + k,
+        type: 'paperScrap',
+        x: stackX + (k - 4) * 1.5,
+        y: stackY + (k - 4) * 1.5,
+        w: stkW, h: stkH,
+        rot: 0,
+        color: PAPER_COLORS[k],
+        label: themeLabels[k],
+        showLabel: false,
+      });
+    }
+    // top page with label
+    els.push({
+      id: 'stkTop',
+      type: 'paperScrap',
+      x: stackX, y: stackY,
+      w: stkW, h: stkH,
+      rot: 0,
+      color: PAPER_COLORS[0],
+      label: themeLabels[0] + '  (1/8)',
+      showLabel: true,
+    });
+    // binding string (from top-left area of stack to bottom-left)
+    els.push({
+      id: 'str',
+      type: 'bindingString',
+      x1: stackX - stkW/2 + 14, y1: stackY - stkH/2 + 22,
+      x2: stackX - stkW/2 + 14, y2: stackY + stkH/2 - 22,
+    });
+    // binding hole dots (decorative)
+    for (var hh = 0; hh < 3; hh++) {
+      els.push({
+        id: 'hd' + hh,
+        type: 'sparkle',
+        x: stackX - stkW/2 + 14,
+        y: stackY - stkH/2 + 30 + hh * 55,
+        color: '#ffb000',
+        size: 3,
+      });
+    }
+    els.push({id:'n', type:'label', text:t('f2_note'), x:cx, y:320, color:P.secondary, size:11, align:'center'});
+    return els;
+  }
+
+  if (f === 3) {
+    // Final cover
+    els.push({id:'t', type:'label', text:t('f3_title'), x:cx, y:50, color:P.primary, size:20, align:'center'});
+    els.push({id:'l', type:'label', text:t('f3_lead'),  x:cx, y:80, color:P.text, size:12, align:'center'});
+
+    // the book, centered
+    els.push({
+      id: 'book',
+      type: 'bookClosed',
+      x: cx, y: 215,
+      w: 170, h: 210,
+      coverText: t('f3_book'),
+      author: t('f3_author'),
+      date: t('f3_date'),
+      lang: lang,
+    });
+
+    // sparkles around
+    var sparkPositions = [
+      [cx - 120, 140], [cx + 120, 150], [cx - 140, 240],
+      [cx + 140, 260], [cx - 100, 310], [cx + 100, 320],
+    ];
+    for (var sp = 0; sp < sparkPositions.length; sp++) {
+      els.push({
+        id: 'sp' + sp,
+        type: 'sparkle',
+        x: sparkPositions[sp][0],
+        y: sparkPositions[sp][1],
+        color: '#ffb000',
+        size: 6,
+      });
+    }
+
+    els.push({id:'n', type:'label', text:t('f3_note'), x:cx, y:330, color:P.secondary, size:11, align:'center'});
+    return els;
+  }
+
+  return [];
+}
+
+AnimRuntime.boot();
+</script>
+</body>
+</html>

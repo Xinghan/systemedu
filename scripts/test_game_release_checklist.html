@@ -1,0 +1,327 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Release Checklist Inspector</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;700&family=Inter:wght@400;500&family=Noto+Sans+SC:wght@400;700&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0;border-radius:0!important}
+html,body{width:100%;height:100vh;overflow:hidden;background:#131313;font-family:'Noto Sans SC','Inter',sans-serif;color:#e5e2e1}
+.wrapper{display:flex;flex-direction:column;height:100vh;width:100%}
+.header{padding:8px 16px 4px;text-align:center;flex-shrink:0}
+.header h1{font-family:'Space Grotesk',sans-serif;font-size:16px;font-weight:700;color:#ffb59c;letter-spacing:2px;text-transform:uppercase}
+.header .sub{font-size:11px;color:#8a8886;margin-top:2px}
+.game-area{flex:1;min-height:0;display:flex;gap:8px;padding:8px 12px;overflow:hidden}
+.source-col{flex:1;display:flex;flex-direction:column;gap:4px;overflow-y:auto}
+.source-col h3{font-family:'Space Grotesk',sans-serif;font-size:11px;color:#8a8886;letter-spacing:1px;text-transform:uppercase;margin-bottom:4px;text-align:center;flex-shrink:0}
+.target-cols{flex:2;display:flex;gap:8px}
+.target-zone{flex:1;display:flex;flex-direction:column;background:rgba(28,27,27,0.92);border:1px solid rgba(255,255,255,0.06);padding:6px;min-height:0;overflow-y:auto}
+.target-zone h3{font-family:'Space Grotesk',sans-serif;font-size:10px;letter-spacing:1px;text-transform:uppercase;text-align:center;margin-bottom:6px;flex-shrink:0}
+.target-zone.data-zone h3{color:#00daf3}
+.target-zone.test-zone h3{color:#10b981}
+.target-zone.release-zone h3{color:#ffb59c}
+.asset-card{padding:8px 10px;margin-bottom:4px;cursor:grab;font-size:11px;line-height:1.4;border:1px solid rgba(255,255,255,0.08);background:rgba(28,27,27,0.7);backdrop-filter:blur(8px);user-select:none;-webkit-user-select:none;transition:opacity 0.2s}
+.asset-card:active{cursor:grabbing}
+.asset-card .card-icon{font-family:'Space Grotesk',sans-serif;font-size:9px;color:#8a8886;letter-spacing:1px;text-transform:uppercase;margin-bottom:2px}
+.asset-card .card-title{font-family:'Noto Sans SC',sans-serif;font-size:11px;color:#e5e2e1}
+.asset-card.correct{border-color:rgba(16,185,129,0.5);background:rgba(16,185,129,0.1)}
+.asset-card.wrong{border-color:rgba(255,95,31,0.5);background:rgba(255,95,31,0.1)}
+.asset-card.dragging{opacity:0.4}
+.drop-placeholder{height:40px;border:1px dashed rgba(255,255,255,0.15);margin-bottom:4px;background:rgba(255,255,255,0.02)}
+.feedback{display:flex;align-items:center;justify-content:center;gap:16px;padding:8px 16px;flex-shrink:0;background:rgba(0,0,0,0.55)}
+.feedback .score{font-family:'Space Grotesk',sans-serif;font-size:14px;color:#ffb59c;font-weight:700}
+.feedback .msg{font-size:12px;color:#8a8886}
+.feedback button{font-family:'Space Grotesk',sans-serif;font-size:11px;font-weight:700;padding:6px 18px;cursor:pointer;border:1px solid rgba(255,255,255,0.08);background:rgba(20,20,20,0.85);backdrop-filter:blur(12px);color:#ffb59c;letter-spacing:1px;text-transform:uppercase;display:none}
+.feedback button:hover{background:rgba(255,127,80,0.15)}
+.lang-btn{position:fixed;top:8px;left:8px;z-index:100;font-family:'Space Grotesk',sans-serif;font-size:11px;font-weight:700;padding:4px 10px;cursor:pointer;border:1px solid rgba(255,255,255,0.08);background:rgba(20,20,35,0.85);backdrop-filter:blur(12px);color:#ffb59c;letter-spacing:1px}
+.guide-panel{position:fixed;top:8px;right:8px;width:220px;max-height:36vh;overflow-y:auto;background:rgba(20,20,35,0.85);backdrop-filter:blur(12px);border:1px solid rgba(255,255,255,0.08);padding:10px;z-index:100;font-family:'Noto Sans SC',sans-serif;font-size:11px;color:rgba(255,255,255,0.85)}
+.guide-panel h3{font-family:'Space Grotesk',sans-serif;font-size:12px;margin-bottom:6px;display:flex;align-items:center;justify-content:space-between;cursor:pointer;color:#ffb59c}
+.guide-panel ul{padding-left:14px;line-height:1.6}
+.guide-content.collapsed{display:none}
+.complete-panel{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);width:340px;background:rgba(20,20,35,0.95);backdrop-filter:blur(16px);border:1px solid rgba(255,127,80,0.3);padding:24px;z-index:200;text-align:center;display:none}
+.complete-panel h2{font-family:'Space Grotesk',sans-serif;font-size:18px;color:#ffb59c;margin-bottom:12px}
+.complete-panel p{font-size:13px;color:#e5e2e1;line-height:1.6;margin-bottom:8px}
+.complete-panel .final-score{font-family:'Space Grotesk',sans-serif;font-size:28px;color:#10b981;font-weight:700;margin:12px 0}
+</style>
+</head>
+<body>
+<button class="lang-btn" id="langBtn">CN</button>
+<div class="guide-panel" id="guidePanel">
+  <h3 id="guideToggle"><span id="guideTitle"></span><span id="guideArrow">-</span></h3>
+  <div class="guide-content" id="guideContent">
+    <p id="guideDesc" style="margin-bottom:6px"></p>
+    <ul id="guideList"></ul>
+  </div>
+</div>
+<div class="complete-panel" id="completePanel">
+  <h2 id="completeTitle"></h2>
+  <div class="final-score" id="finalScore"></div>
+  <p id="completeSummary"></p>
+</div>
+<div class="wrapper">
+  <div class="header">
+    <h1 id="titleText"></h1>
+    <div class="sub" id="subtitleText"></div>
+  </div>
+  <div class="game-area" id="gameArea">
+    <div class="source-col" id="sourceCol">
+      <h3 id="sourceTitle"></h3>
+    </div>
+    <div class="target-cols">
+      <div class="target-zone data-zone" id="zoneData"><h3 id="zoneDataTitle"></h3></div>
+      <div class="target-zone test-zone" id="zoneTest"><h3 id="zoneTestTitle"></h3></div>
+      <div class="target-zone release-zone" id="zoneRelease"><h3 id="zoneReleaseTitle"></h3></div>
+    </div>
+  </div>
+  <div class="feedback">
+    <span class="score" id="scoreText"></span>
+    <span class="msg" id="msgText"></span>
+    <button id="btnCheck"></button>
+    <button id="btnReset"></button>
+  </div>
+</div>
+<script>
+(function(){
+var LANG='cn';
+var I18N={
+  title:{en:'RELEASE CHECKLIST INSPECTOR',cn:'\u53d1\u5e03\u6e05\u5355\u68c0\u67e5\u5668'},
+  subtitle:{en:'Sort all assets into the correct release package category',cn:'\u5c06\u6240\u6709\u8d44\u4ea7\u5206\u7c7b\u5230\u6b63\u786e\u7684\u53d1\u5e03\u5305\u7c7b\u522b\u4e2d'},
+  sourceTitle:{en:'ASSETS TO SORT',cn:'\u5f85\u5206\u7c7b\u8d44\u4ea7'},
+  zoneData:{en:'DATA & MODEL',cn:'\u6570\u636e\u4e0e\u6a21\u578b'},
+  zoneTest:{en:'TEST & VALIDATION',cn:'\u6d4b\u8bd5\u4e0e\u9a8c\u8bc1'},
+  zoneRelease:{en:'VERSION & DELIVERY',cn:'\u7248\u672c\u4e0e\u4ea4\u4ed8'},
+  score:{en:'SCORE',cn:'\u5f97\u5206'},
+  btnCheck:{en:'CHECK',cn:'\u68c0\u67e5'},
+  btnReset:{en:'RESET',cn:'\u91cd\u7f6e'},
+  msgDrag:{en:'Drag each asset card to the correct zone',cn:'\u5c06\u6bcf\u5f20\u8d44\u4ea7\u5361\u62d6\u5230\u6b63\u786e\u7684\u533a\u57df'},
+  msgRemaining:{en:' items remaining',cn:' \u9879\u5f85\u5206\u7c7b'},
+  msgPerfect:{en:'Perfect! All assets correctly sorted!',cn:'\u5b8c\u7f8e\uff01\u6240\u6709\u8d44\u4ea7\u5df2\u6b63\u786e\u5206\u7c7b\uff01'},
+  msgGood:{en:'Good job! Some corrections needed.',cn:'\u4e0d\u9519\uff01\u90e8\u5206\u9700\u8981\u4fee\u6b63\u3002'},
+  msgTryAgain:{en:'Review the categories and try again.',cn:'\u590d\u4e60\u5206\u7c7b\u6807\u51c6\u518d\u8bd5\u3002'},
+  completeTitle:{en:'CHECKLIST COMPLETE',cn:'\u6e05\u5355\u68c0\u67e5\u5b8c\u6210'},
+  completeSummary:{en:'You have correctly assembled the release package. The system is ready for version 1.0 delivery.',cn:'\u4f60\u5df2\u6b63\u786e\u7ec4\u88c5\u53d1\u5e03\u5305\u3002\u7cfb\u7edf\u5df2\u51c6\u5907\u597d\u8fdb\u884c 1.0 \u7248\u672c\u4ea4\u4ed8\u3002'},
+  guideTitle:{en:'GAME GUIDE',cn:'\u6e38\u620f\u6307\u5357'},
+  guideDesc:{en:'Sort 12 system assets into 3 categories to assemble a complete release package.',cn:'\u5c06 12 \u4e2a\u7cfb\u7edf\u8d44\u4ea7\u5206\u5165 3 \u4e2a\u7c7b\u522b\uff0c\u7ec4\u88c5\u5b8c\u6574\u53d1\u5e03\u5305\u3002'},
+  guideStep1:{en:'Drag cards from left to the target zones',cn:'\u4ece\u5de6\u4fa7\u62d6\u62fd\u5361\u7247\u5230\u76ee\u6807\u533a\u57df'},
+  guideStep2:{en:'Click CHECK to verify your sorting',cn:'\u70b9\u51fb\u68c0\u67e5\u6309\u94ae\u9a8c\u8bc1\u5206\u7c7b'},
+  guideStep3:{en:'Green = correct, Orange = wrong placement',cn:'\u7eff\u8272 = \u6b63\u786e\uff0c\u6a59\u8272 = \u653e\u7f6e\u9519\u8bef'}
+};
+function t(k){return(I18N[k]&&I18N[k][LANG])||(I18N[k]&&I18N[k]['en'])||k;}
+
+// Asset definitions: {id, icon, titleKey, correctZone}
+var ASSETS=[
+  {id:'a1',icon:'IMG',titleEn:'Raw Mars Images (Navcam)',titleCn:'\u539f\u59cb\u706b\u661f\u56fe\u50cf (Navcam)',zone:'data'},
+  {id:'a2',icon:'DEM',titleEn:'Terrain Elevation Model',titleCn:'\u5730\u5f62\u9ad8\u7a0b\u6a21\u578b',zone:'data'},
+  {id:'a3',icon:'LBL',titleEn:'AI4Mars Label Dataset',titleCn:'AI4Mars \u6807\u6ce8\u6570\u636e\u96c6',zone:'data'},
+  {id:'a4',icon:'CLF',titleEn:'Risk Classifier Model',titleCn:'\u98ce\u9669\u5206\u7c7b\u5668\u6a21\u578b',zone:'data'},
+  {id:'a5',icon:'REG',titleEn:'Regression Test Suite',titleCn:'\u56de\u5f52\u6d4b\u8bd5\u5957\u4ef6',zone:'test'},
+  {id:'a6',icon:'SIM',titleEn:'Rover Simulation Logs',titleCn:'\u706b\u661f\u8f66\u4eff\u771f\u65e5\u5fd7',zone:'test'},
+  {id:'a7',icon:'RPT',titleEn:'Test Coverage Report',titleCn:'\u6d4b\u8bd5\u8986\u76d6\u7387\u62a5\u544a',zone:'test'},
+  {id:'a8',icon:'LOG',titleEn:'Failure Case Backlog',titleCn:'\u5931\u8d25\u6848\u4f8b\u56de\u6d41\u8bb0\u5f55',zone:'test'},
+  {id:'a9',icon:'TAG',titleEn:'Version Tag (v1.0)',titleCn:'\u7248\u672c\u6807\u7b7e (v1.0)',zone:'release'},
+  {id:'a10',icon:'CHG',titleEn:'Changelog Document',titleCn:'\u53d8\u66f4\u65e5\u5fd7\u6587\u6863',zone:'release'},
+  {id:'a11',icon:'VID',titleEn:'Demo Video Package',titleCn:'\u6f14\u793a\u89c6\u9891\u5305',zone:'release'},
+  {id:'a12',icon:'MAP',titleEn:'Iteration Roadmap',titleCn:'\u8fed\u4ee3\u8def\u7ebf\u56fe',zone:'release'}
+];
+
+var shuffled=[];
+var placed={};// assetId -> zoneId
+var checked=false;
+var score=0;
+
+function shuffle(arr){
+  var a=arr.slice();
+  for(var i=a.length-1;i>0;i--){var j=Math.floor(Math.random()*(i+1));var tmp=a[i];a[i]=a[j];a[j]=tmp;}
+  return a;
+}
+
+function createCard(asset){
+  var card=document.createElement('div');
+  card.className='asset-card';
+  card.dataset.id=asset.id;
+  card.innerHTML='<div class="card-icon">'+asset.icon+'</div><div class="card-title">'+
+    (LANG==='cn'?asset.titleCn:asset.titleEn)+'</div>';
+  card.draggable=true;
+  card.addEventListener('dragstart',function(e){
+    e.dataTransfer.setData('text/plain',asset.id);
+    card.classList.add('dragging');
+  });
+  card.addEventListener('dragend',function(){card.classList.remove('dragging');});
+  // Touch support
+  var touchStartX,touchStartY,ghostEl;
+  card.addEventListener('touchstart',function(e){
+    var touch=e.touches[0];
+    touchStartX=touch.clientX;touchStartY=touch.clientY;
+    card.dataset.touchId=asset.id;
+    ghostEl=card.cloneNode(true);
+    ghostEl.style.position='fixed';ghostEl.style.zIndex='500';
+    ghostEl.style.width=card.offsetWidth+'px';ghostEl.style.opacity='0.85';
+    ghostEl.style.pointerEvents='none';
+    document.body.appendChild(ghostEl);
+    ghostEl.style.left=(touchStartX-card.offsetWidth/2)+'px';
+    ghostEl.style.top=(touchStartY-20)+'px';
+    card.classList.add('dragging');
+  },{passive:true});
+  card.addEventListener('touchmove',function(e){
+    e.preventDefault();
+    var touch=e.touches[0];
+    if(ghostEl){
+      ghostEl.style.left=(touch.clientX-card.offsetWidth/2)+'px';
+      ghostEl.style.top=(touch.clientY-20)+'px';
+    }
+  });
+  card.addEventListener('touchend',function(e){
+    card.classList.remove('dragging');
+    if(ghostEl){ghostEl.remove();ghostEl=null;}
+    var touch=e.changedTouches[0];
+    var targetEl=document.elementFromPoint(touch.clientX,touch.clientY);
+    if(targetEl){
+      var zone=targetEl.closest('.target-zone');
+      if(zone){
+        dropAsset(asset.id,zone);
+      }
+    }
+  });
+  return card;
+}
+
+function dropAsset(assetId,zoneEl){
+  var asset=ASSETS.find(function(a){return a.id===assetId;});
+  if(!asset)return;
+  // Remove from source or previous zone
+  var existing=document.querySelector('.asset-card[data-id="'+assetId+'"]');
+  if(existing)existing.remove();
+  // Add to zone
+  var card=createCard(asset);
+  zoneEl.appendChild(card);
+  var zoneId=zoneEl.id.replace('zone','').toLowerCase();
+  if(zoneId==='data')placed[assetId]='data';
+  else if(zoneId==='test')placed[assetId]='test';
+  else if(zoneId==='release')placed[assetId]='release';
+  updateStatus();
+}
+
+function setupDragDrop(zoneEl){
+  zoneEl.addEventListener('dragover',function(e){e.preventDefault();e.dataTransfer.dropEffect='move';});
+  zoneEl.addEventListener('drop',function(e){
+    e.preventDefault();
+    var assetId=e.dataTransfer.getData('text/plain');
+    dropAsset(assetId,zoneEl);
+  });
+}
+
+function updateStatus(){
+  var remaining=0;
+  var sourceCards=document.getElementById('sourceCol').querySelectorAll('.asset-card');
+  remaining=sourceCards.length;
+  var msg=remaining>0?(remaining+t('msgRemaining')):t('msgDrag');
+  document.getElementById('msgText').textContent=msg;
+  document.getElementById('scoreText').textContent=t('score')+': --';
+  if(remaining===0){
+    document.getElementById('btnCheck').style.display='inline-block';
+  }
+}
+
+function checkAnswers(){
+  if(checked)return;
+  checked=true;
+  score=0;
+  ASSETS.forEach(function(asset){
+    var card=document.querySelector('.asset-card[data-id="'+asset.id+'"]');
+    if(!card)return;
+    var pZone=placed[asset.id];
+    if(pZone===asset.zone){
+      card.classList.add('correct');score++;
+    }else{
+      card.classList.add('wrong');
+    }
+  });
+  document.getElementById('scoreText').textContent=t('score')+': '+score+'/12';
+  if(score===12){
+    document.getElementById('msgText').textContent=t('msgPerfect');
+    showComplete();
+  }else if(score>=8){
+    document.getElementById('msgText').textContent=t('msgGood');
+    document.getElementById('btnReset').style.display='inline-block';
+  }else{
+    document.getElementById('msgText').textContent=t('msgTryAgain');
+    document.getElementById('btnReset').style.display='inline-block';
+  }
+}
+
+function showComplete(){
+  var panel=document.getElementById('completePanel');
+  panel.style.display='block';
+  document.getElementById('completeTitle').textContent=t('completeTitle');
+  document.getElementById('finalScore').textContent='12 / 12';
+  document.getElementById('completeSummary').textContent=t('completeSummary');
+}
+
+function resetGame(){
+  checked=false;score=0;placed={};
+  document.getElementById('btnCheck').style.display='none';
+  document.getElementById('btnReset').style.display='none';
+  document.getElementById('completePanel').style.display='none';
+  initGame();
+}
+
+function initGame(){
+  var source=document.getElementById('sourceCol');
+  // Clear except title
+  var title=source.querySelector('h3');
+  source.innerHTML='';source.appendChild(title);
+  // Clear zones
+  ['zoneData','zoneTest','zoneRelease'].forEach(function(zid){
+    var z=document.getElementById(zid);
+    var zt=z.querySelector('h3');
+    z.innerHTML='';z.appendChild(zt);
+  });
+  shuffled=shuffle(ASSETS);
+  shuffled.forEach(function(asset){
+    source.appendChild(createCard(asset));
+  });
+  updateStatus();
+}
+
+function refreshI18N(){
+  document.getElementById('titleText').textContent=t('title');
+  document.getElementById('subtitleText').textContent=t('subtitle');
+  document.getElementById('sourceTitle').textContent=t('sourceTitle');
+  document.getElementById('zoneDataTitle').textContent=t('zoneData');
+  document.getElementById('zoneTestTitle').textContent=t('zoneTest');
+  document.getElementById('zoneReleaseTitle').textContent=t('zoneRelease');
+  document.getElementById('btnCheck').textContent=t('btnCheck');
+  document.getElementById('btnReset').textContent=t('btnReset');
+  document.getElementById('guideTitle').innerHTML='<span>'+t('guideTitle')+'</span><span id="guideArrow">-</span>';
+  document.getElementById('guideDesc').textContent=t('guideDesc');
+  document.getElementById('guideList').innerHTML='<li>'+t('guideStep1')+'</li><li>'+t('guideStep2')+'</li><li>'+t('guideStep3')+'</li>';
+  // Re-render cards with correct language
+  if(!checked)resetGame();
+  else updateStatus();
+}
+
+// Setup drag zones
+setupDragDrop(document.getElementById('zoneData'));
+setupDragDrop(document.getElementById('zoneTest'));
+setupDragDrop(document.getElementById('zoneRelease'));
+// Also allow dragging back to source
+setupDragDrop(document.getElementById('sourceCol'));
+
+document.getElementById('btnCheck').addEventListener('click',checkAnswers);
+document.getElementById('btnReset').addEventListener('click',resetGame);
+document.getElementById('langBtn').addEventListener('click',function(){
+  LANG=LANG==='en'?'cn':'en';document.getElementById('langBtn').textContent=LANG.toUpperCase();
+  refreshI18N();
+});
+document.getElementById('guideToggle').addEventListener('click',function(){
+  var c=document.getElementById('guideContent');c.classList.toggle('collapsed');
+  document.getElementById('guideArrow').textContent=c.classList.contains('collapsed')?'+':'-';
+});
+
+refreshI18N();
+initGame();
+})();
+</script>
+</body>
+</html>

@@ -1,6 +1,6 @@
 """Re-inline correct animation HTML for all black-screen mars-risk-map knodes.
 
-Takes the correct source HTML from scripts/_test_anim_*.html, runs it through
+Takes the correct source HTML from scripts/test_anim_*.html, runs it through
 course_factory's standard pipeline (_fix_nonuniform_scale + inject resize patch
 + _inline_runtime), and overwrites course_content.rendered_sections[anim_*].html
 in the DB.
@@ -24,19 +24,19 @@ DB_PATH = Path.home() / ".systemedu" / "systemedu.db"
 
 # Mapping: knode_id -> source HTML filename (under scripts/)
 SOURCES: dict[int, str] = {
-    0:  "_test_anim_knode0_terrain.html",
-    1:  "_test_anim_knode1_traversability.html",
-    2:  "_test_anim_knode2_mars_surface.html",
-    3:  "_test_anim_knode3_what_is_map.html",
-    4:  "_test_anim_knode4_coordinates.html",
-    5:  "_test_anim_knode5_distance_direction.html",
-    6:  "_test_anim_knode6_spa_loop.html",
-    7:  "_test_anim_knode7_comm_delay.html",
-    9:  "_test_anim_knode9_light_journey.html",
-    10: "_test_anim_knode10_pixel_grid.html",
-    11: "_test_anim_knode11_rgb_mixing.html",
-    12: "_test_anim_knode12_atlas_guide.html",
-    14: "_test_anim_knode14_terrain_catalog.html",
+    0:  "test_anim_knode0_terrain.html",
+    1:  "test_anim_knode1_traversability.html",
+    2:  "test_anim_knode2_mars_surface.html",
+    3:  "test_anim_knode3_what_is_map.html",
+    4:  "test_anim_knode4_coordinates.html",
+    5:  "test_anim_knode5_distance_direction.html",
+    6:  "test_anim_knode6_spa_loop.html",
+    7:  "test_anim_knode7_comm_delay.html",
+    9:  "test_anim_knode9_light_journey.html",
+    10: "test_anim_knode10_pixel_grid.html",
+    11: "test_anim_knode11_rgb_mixing.html",
+    12: "test_anim_knode12_atlas_guide.html",
+    14: "test_anim_knode14_terrain_catalog.html",
 }
 
 

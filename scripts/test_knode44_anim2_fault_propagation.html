@@ -1,0 +1,423 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Fault Propagation Chain</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;700&family=Inter:wght@400;500&family=Noto+Sans+SC:wght@400;700&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{width:100%;height:100vh;overflow:hidden;background:#131313;font-family:'Noto Sans SC','Inter',sans-serif;color:#e5e2e1}
+.wrapper{display:flex;flex-direction:column;height:100vh;width:100%}
+.header{padding:10px 16px 6px;text-align:center;flex-shrink:0}
+.header h1{font-family:'Space Grotesk',sans-serif;font-size:18px;font-weight:700;color:#ffb59c;letter-spacing:2px;text-transform:uppercase}
+.header .subtitle{font-size:12px;color:#8a8886;margin-top:2px;letter-spacing:1px}
+.canvas-wrap{flex:1;min-height:0;position:relative}
+canvas{display:block;width:100%;height:100%}
+.controls{display:flex;align-items:center;justify-content:center;gap:12px;padding:8px 16px;flex-shrink:0;background:rgba(28,27,27,0.92)}
+.controls button{font-family:'Space Grotesk',sans-serif;font-size:11px;font-weight:700;padding:6px 18px;cursor:pointer;border:1px solid rgba(138,136,134,0.15);background:rgba(53,53,52,0.4);backdrop-filter:blur(12px);color:#ffb59c;letter-spacing:1px;text-transform:uppercase}
+.controls button:hover{background:rgba(255,127,80,0.15)}
+.controls .frame-info{font-family:'Space Grotesk',sans-serif;font-size:12px;color:#8a8886;min-width:60px;text-align:center}
+.hud{display:flex;justify-content:space-around;padding:8px 16px;flex-shrink:0;background:rgba(0,0,0,0.55);height:48px;align-items:center}
+.hud-item{text-align:center}
+.hud-item .hud-label{font-family:'Space Grotesk',sans-serif;font-size:9px;color:#8a8886;letter-spacing:1px;text-transform:uppercase}
+.hud-item .hud-value{font-family:'Space Grotesk',sans-serif;font-size:14px;color:#00daf3;font-weight:700}
+.lang-btn{position:fixed;top:8px;left:8px;z-index:100;font-family:'Space Grotesk',sans-serif;font-size:11px;font-weight:700;padding:4px 10px;cursor:pointer;border:1px solid rgba(255,255,255,0.08);background:rgba(20,20,35,0.85);backdrop-filter:blur(12px);color:#ffb59c;letter-spacing:1px}
+.guide-panel{position:fixed;top:8px;right:8px;width:240px;max-height:40vh;overflow-y:auto;background:rgba(20,20,35,0.85);backdrop-filter:blur(12px);border:1px solid rgba(255,255,255,0.08);padding:12px;z-index:100;font-family:'Noto Sans SC',sans-serif;font-size:12px;color:rgba(255,255,255,0.85)}
+.guide-panel h3{font-family:'Space Grotesk',sans-serif;font-size:13px;margin-bottom:6px;display:flex;align-items:center;justify-content:space-between;cursor:pointer;color:#ffb59c}
+.guide-panel ul{padding-left:16px;line-height:1.6}
+.guide-panel .guide-content{transition:max-height 0.3s}
+.guide-panel .collapsed .guide-content{max-height:0;overflow:hidden}
+</style>
+</head>
+<body>
+<button class="lang-btn" id="langBtn">CN</button>
+<div class="guide-panel" id="guidePanel">
+  <h3 id="guideToggle"><span id="guideTitle"></span><span id="guideArrow">-</span></h3>
+  <div class="guide-content" id="guideContent">
+    <p id="guideWhat" style="margin-bottom:8px"></p>
+    <ul id="guideList"></ul>
+    <p id="guideTakeaway" style="margin-top:8px;color:#00daf3"></p>
+  </div>
+</div>
+<div class="wrapper">
+  <div class="header">
+    <h1 id="mainTitle"></h1>
+    <div class="subtitle" id="mainSubtitle"></div>
+  </div>
+  <div class="canvas-wrap" id="canvasWrap">
+    <canvas id="c"></canvas>
+  </div>
+  <div class="controls">
+    <button id="btnPrev"></button>
+    <button id="btnPlay"></button>
+    <button id="btnNext"></button>
+    <span class="frame-info" id="frameInfo"></span>
+  </div>
+  <div class="hud">
+    <div class="hud-item"><div class="hud-label" id="hudL1"></div><div class="hud-value" id="hudV1"></div></div>
+    <div class="hud-item"><div class="hud-label" id="hudL2"></div><div class="hud-value" id="hudV2"></div></div>
+    <div class="hud-item"><div class="hud-label" id="hudL3"></div><div class="hud-value" id="hudV3"></div></div>
+    <div class="hud-item"><div class="hud-label" id="hudL4"></div><div class="hud-value" id="hudV4"></div></div>
+  </div>
+</div>
+<script>
+(function(){
+var LANG='cn';
+var I18N={
+  title:{en:'FAULT PROPAGATION CHAIN',cn:'\u6545\u969C\u4F20\u64AD\u94FE'},
+  subtitle:{en:'How a single interface mismatch cascades through the pipeline',cn:'\u4E00\u4E2A\u63A5\u53E3\u4E0D\u5339\u914D\u5982\u4F55\u5728\u7BA1\u7EBF\u4E2D\u7EA7\u8054\u4F20\u64AD'},
+  btnPrev:{en:'PREV',cn:'\u4E0A\u4E00\u5E27'},
+  btnPlay:{en:'PLAY',cn:'\u64AD\u653E'},
+  btnPause:{en:'PAUSE',cn:'\u6682\u505C'},
+  btnNext:{en:'NEXT',cn:'\u4E0B\u4E00\u5E27'},
+  guideTitle:{en:'VIEWING GUIDE',cn:'\u89C2\u770B\u6307\u5357'},
+  guideWhat:{en:'Demonstrates how a segmentation output format error propagates downstream, corrupting risk map, path, and control.',cn:'\u6F14\u793A\u5206\u5272\u8F93\u51FA\u683C\u5F0F\u9519\u8BEF\u5982\u4F55\u5411\u4E0B\u6E38\u4F20\u64AD\uFF0C\u7834\u574F\u98CE\u9669\u56FE\u3001\u8DEF\u5F84\u548C\u63A7\u5236\u3002'},
+  guideObs1:{en:'Frame 1: Normal pipeline, all green',cn:'\u7B2C1\u5E27\uFF1A\u6B63\u5E38\u7BA1\u7EBF\uFF0C\u5168\u7EFF'},
+  guideObs2:{en:'Frame 2-3: Fault injected at segmentation boundary, watch red spread',cn:'\u7B2C2-3\u5E27\uFF1A\u6545\u969C\u6CE8\u5165\u5206\u5272\u8FB9\u754C\uFF0C\u89C2\u5BDF\u7EA2\u8272\u6269\u6563'},
+  guideObs3:{en:'Frame 4-5: Downstream amplification -- small error -> wrong commands',cn:'\u7B2C4-5\u5E27\uFF1A\u4E0B\u6E38\u653E\u5927 -- \u5C0F\u9519\u8BEF -> \u9519\u8BEF\u6307\u4EE4'},
+  guideTakeaway:{en:'Takeaway: Interface mismatch is the #1 cross-stage failure mode in E2E systems.',cn:'\u6838\u5FC3\u7ED3\u8BBA\uFF1A\u63A5\u53E3\u4E0D\u5339\u914D\u662F\u7AEF\u5230\u7AEF\u7CFB\u7EDF\u4E2D\u6700\u5E38\u89C1\u7684\u8DE8\u9636\u6BB5\u6545\u969C\u7C7B\u578B\u3002'},
+  hudFaultType:{en:'FAULT TYPE',cn:'\u6545\u969C\u7C7B\u578B'},
+  hudOrigin:{en:'ORIGIN',cn:'\u8D77\u6E90'},
+  hudAffected:{en:'AFFECTED',cn:'\u5F71\u54CD'},
+  hudSeverity:{en:'SEVERITY',cn:'\u4E25\u91CD\u5EA6'},
+  stageImg:{en:'IMAGE',cn:'\u56FE\u50CF'},
+  stageSeg:{en:'SEGMENTATION',cn:'\u5206\u5272'},
+  stageRisk:{en:'RISK MAP',cn:'\u98CE\u9669\u56FE'},
+  stagePath:{en:'PATH',cn:'\u8DEF\u5F84'},
+  stageCtrl:{en:'CONTROL',cn:'\u8F66\u63A7'},
+  f0Title:{en:'NORMAL PIPELINE: ALL GREEN',cn:'\u6B63\u5E38\u7BA1\u7EBF\uFF1A\u5168\u7EFF'},
+  f0Desc:{en:'Every stage passes data correctly -- system works as expected',cn:'\u6BCF\u4E2A\u9636\u6BB5\u6B63\u786E\u4F20\u9012\u6570\u636E -- \u7CFB\u7EDF\u6309\u9884\u671F\u5DE5\u4F5C'},
+  f1Title:{en:'FAULT INJECTED: FORMAT MISMATCH',cn:'\u6CE8\u5165\u6545\u969C\uFF1A\u683C\u5F0F\u4E0D\u5339\u914D'},
+  f1Desc:{en:'Segmentation outputs float32 but risk map expects uint8 labels',cn:'\u5206\u5272\u8F93\u51FA float32 \u4F46\u98CE\u9669\u56FE\u671F\u671B uint8 \u6807\u7B7E'},
+  f2Title:{en:'RISK MAP CORRUPTED',cn:'\u98CE\u9669\u56FE\u88AB\u7834\u574F'},
+  f2Desc:{en:'Truncation creates wrong cost values -- safe zones marked dangerous',cn:'\u622A\u65AD\u4EA7\u751F\u9519\u8BEF\u4EE3\u4EF7 -- \u5B89\u5168\u533A\u88AB\u6807\u8BB0\u4E3A\u5371\u9669'},
+  f3Title:{en:'PATH DETOURS INTO HAZARD',cn:'\u8DEF\u5F84\u7ED5\u884C\u8FDB\u5165\u5371\u9669\u533A'},
+  f3Desc:{en:'Planner avoids "safe" zones (actually safe), enters real hazards',cn:'\u89C4\u5212\u5668\u907F\u5F00\u201C\u5B89\u5168\u201D\u533A\uFF08\u5B9E\u9645\u5B89\u5168\uFF09\uFF0C\u8FDB\u5165\u771F\u6B63\u5371\u9669\u533A'},
+  f4Title:{en:'CONTROL: EMERGENCY STOP',cn:'\u63A7\u5236\uFF1A\u7D27\u6025\u505C\u8F66'},
+  f4Desc:{en:'Safety monitor triggers E-stop -- mission aborted due to upstream format bug',cn:'\u5B89\u5168\u76D1\u63A7\u89E6\u53D1\u7D27\u6025\u505C\u8F66 -- \u4EFB\u52A1\u56E0\u4E0A\u6E38\u683C\u5F0F bug \u4E2D\u6B62'},
+  normal:{en:'NORMAL',cn:'\u6B63\u5E38'},
+  fmtMismatch:{en:'FORMAT MISMATCH',cn:'\u683C\u5F0F\u4E0D\u5339\u914D'},
+  segStage:{en:'SEG -> RISK',cn:'\u5206\u5272 -> \u98CE\u9669'},
+  noneAffected:{en:'NONE',cn:'\u65E0'},
+  riskAffected:{en:'RISK+PATH+CTRL',cn:'\u98CE\u9669+\u8DEF\u5F84+\u63A7\u5236'},
+  pathAffected:{en:'PATH+CTRL',cn:'\u8DEF\u5F84+\u63A7\u5236'},
+  ctrlAffected:{en:'CTRL',cn:'\u63A7\u5236'},
+  allAffected:{en:'ALL DOWNSTREAM',cn:'\u6240\u6709\u4E0B\u6E38'},
+  sevNone:{en:'NONE',cn:'\u65E0'},
+  sevLow:{en:'LOW',cn:'\u4F4E'},
+  sevMed:{en:'MEDIUM',cn:'\u4E2D'},
+  sevHigh:{en:'HIGH',cn:'\u9AD8'},
+  sevCritical:{en:'CRITICAL',cn:'\u4E25\u91CD'}
+};
+function t(k){return(I18N[k]&&I18N[k][LANG])||(I18N[k]&&I18N[k]['en'])||k}
+
+var canvas=document.getElementById('c');
+var ctx=canvas.getContext('2d');
+var wrap=document.getElementById('canvasWrap');
+var W=800,H=500;
+var dpr=Math.min(window.devicePixelRatio||1,2);
+var currentFrame=0;
+var totalFrames=5;
+var playing=false;
+var playTimer=null;
+var transitioning=false;
+
+var STAGES=[
+  {key:'stageImg',normalColor:'#10b981',faultColor:'#10b981'},
+  {key:'stageSeg',normalColor:'#10b981',faultColor:'#ff5f1f'},
+  {key:'stageRisk',normalColor:'#10b981',faultColor:'#ff3333'},
+  {key:'stagePath',normalColor:'#10b981',faultColor:'#ff3333'},
+  {key:'stageCtrl',normalColor:'#10b981',faultColor:'#ff3333'}
+];
+
+var HUD_DATA=[
+  [{l:'hudFaultType',v:'normal'},{l:'hudOrigin',v:'noneAffected'},{l:'hudAffected',v:'noneAffected'},{l:'hudSeverity',v:'sevNone'}],
+  [{l:'hudFaultType',v:'fmtMismatch'},{l:'hudOrigin',v:'segStage'},{l:'hudAffected',v:'riskAffected'},{l:'hudSeverity',v:'sevMed'}],
+  [{l:'hudFaultType',v:'fmtMismatch'},{l:'hudOrigin',v:'segStage'},{l:'hudAffected',v:'pathAffected'},{l:'hudSeverity',v:'sevHigh'}],
+  [{l:'hudFaultType',v:'fmtMismatch'},{l:'hudOrigin',v:'segStage'},{l:'hudAffected',v:'allAffected'},{l:'hudSeverity',v:'sevHigh'}],
+  [{l:'hudFaultType',v:'fmtMismatch'},{l:'hudOrigin',v:'segStage'},{l:'hudAffected',v:'allAffected'},{l:'hudSeverity',v:'sevCritical'}]
+];
+
+function resize(){
+  var rect=wrap.getBoundingClientRect();
+  if(rect.width<1||rect.height<1)return;
+  W=rect.width;H=rect.height;
+  canvas.width=W*dpr;canvas.height=H*dpr;
+  canvas.style.width=W+'px';canvas.style.height=H+'px';
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+  drawFrame(currentFrame);
+}
+window.addEventListener('resize',resize);
+
+function drawBg(){
+  var g=ctx.createLinearGradient(0,0,0,H);
+  g.addColorStop(0,'#131313');g.addColorStop(1,'#1a0f0f');
+  ctx.fillStyle=g;ctx.fillRect(0,0,W,H);
+  ctx.strokeStyle='rgba(255,255,255,0.03)';ctx.lineWidth=1;
+  for(var i=0;i<W;i+=40){ctx.beginPath();ctx.moveTo(i,0);ctx.lineTo(i,H);ctx.stroke();}
+  for(var j=0;j<H;j+=40){ctx.beginPath();ctx.moveTo(0,j);ctx.lineTo(W,j);ctx.stroke();}
+}
+
+function drawStageNode(cx,cy,radius,color,label,isFault,alpha){
+  ctx.save();ctx.globalAlpha=alpha;
+  if(isFault){
+    ctx.shadowColor='#ff3333';ctx.shadowBlur=20;
+  } else {
+    ctx.shadowColor=color;ctx.shadowBlur=12;
+  }
+  var g=ctx.createRadialGradient(cx,cy,radius*0.2,cx,cy,radius);
+  g.addColorStop(0,color+'cc');g.addColorStop(1,color+'33');
+  ctx.fillStyle=g;ctx.beginPath();ctx.arc(cx,cy,radius,0,Math.PI*2);ctx.fill();
+  ctx.strokeStyle=color;ctx.lineWidth=isFault?3:1.5;
+  ctx.beginPath();ctx.arc(cx,cy,radius,0,Math.PI*2);ctx.stroke();
+  ctx.shadowBlur=0;
+  ctx.fillStyle='#fff';ctx.font="bold 10px 'Space Grotesk',sans-serif";ctx.textAlign='center';
+  ctx.fillText(label,cx,cy+4);
+  ctx.restore();
+}
+
+function drawArrowLine(x1,y1,x2,y2,color,dashed,alpha){
+  ctx.save();ctx.globalAlpha=alpha;
+  ctx.strokeStyle=color;ctx.lineWidth=2;
+  if(dashed)ctx.setLineDash([6,4]);
+  ctx.shadowColor=color;ctx.shadowBlur=6;
+  ctx.beginPath();ctx.moveTo(x1,y1);ctx.lineTo(x2,y2);ctx.stroke();
+  ctx.setLineDash([]);
+  var angle=Math.atan2(y2-y1,x2-x1);
+  ctx.fillStyle=color;ctx.beginPath();
+  ctx.moveTo(x2,y2);
+  ctx.lineTo(x2-8*Math.cos(angle-0.3),y2-8*Math.sin(angle-0.3));
+  ctx.lineTo(x2-8*Math.cos(angle+0.3),y2-8*Math.sin(angle+0.3));
+  ctx.closePath();ctx.fill();
+  ctx.shadowBlur=0;ctx.restore();
+}
+
+function drawFaultBurst(cx,cy,radius,alpha){
+  ctx.save();ctx.globalAlpha=alpha;
+  ctx.shadowColor='#ff3333';ctx.shadowBlur=25;
+  for(var i=0;i<8;i++){
+    var angle=i*Math.PI/4;
+    var len=radius*1.5;
+    ctx.strokeStyle='#ff5f1f';ctx.lineWidth=2;
+    ctx.beginPath();
+    ctx.moveTo(cx+radius*0.6*Math.cos(angle),cy+radius*0.6*Math.sin(angle));
+    ctx.lineTo(cx+len*Math.cos(angle),cy+len*Math.sin(angle));
+    ctx.stroke();
+  }
+  ctx.shadowBlur=0;ctx.restore();
+}
+
+function lerp(a,b,p){return a+(b-a)*p}
+function easeInOut(x){return x<0.5?2*x*x:1-Math.pow(-2*x+2,2)/2}
+function merge(base,over){var r={};for(var k in base)r[k]=base[k];for(var k2 in over)r[k2]=over[k2];return r}
+
+function getFrameElements(f){
+  var elems=[];
+  var nodeY=H*0.42;
+  var nodeR=Math.min(W*0.05,28);
+  var gap=W/6;
+  var faultAt=f>=1;
+
+  // Five stage nodes
+  for(var i=0;i<5;i++){
+    var nx=gap*(i+1);
+    var isFault=faultAt&&i>=1;
+    var color=isFault?STAGES[i].faultColor:STAGES[i].normalColor;
+    // Determine if this stage is "reached" by the fault propagation
+    var reached=f===0||(i===0)||(f>=1&&i<=f);
+    elems.push({id:'node'+i,type:'custom',x:nx,y:nodeY,w:nodeR*2,h:nodeR*2,
+      draw:function(nxi,ci,fi,ri){return function(alpha){
+        drawStageNode(nxi,nodeY,ri,ci,t(STAGES[fi].key),fi>=1&&faultAt&&ri,alpha);
+      }}(nx,color,i,reached&&isFault),alpha:1});
+  }
+
+  // Arrows between stages
+  for(var j=0;j<4;j++){
+    var ax1=gap*(j+1)+nodeR;
+    var ax2=gap*(j+2)-nodeR;
+    var connected=(f===0)||(j<f);
+    var arrowColor=connected?(faultAt&&j>=1?'#ff5f1f':'#10b981'):'#353534';
+    elems.push({id:'link'+j,type:'custom',x:ax1,y:nodeY,w:ax2-ax1,h:1,
+      draw:function(a1,a2,ac,dsh){return function(alpha){
+        drawArrowLine(a1,nodeY,a2,nodeY,ac,dsh,alpha);
+      }}(ax1,ax2,arrowColor,faultAt&&j>=1),alpha:1});
+  }
+
+  // Fault burst marker at injection point
+  if(f>=1){
+    var burstX=gap*2;
+    elems.push({id:'burst',type:'custom',x:burstX,y:nodeY,w:nodeR*3,h:nodeR*3,
+      draw:function(bx){return function(alpha){
+        drawFaultBurst(bx,nodeY,nodeR,alpha);
+      }}(burstX),alpha:1});
+  }
+
+  // Fault propagation wave (red pulse line below pipeline)
+  if(f>=2){
+    var waveY=nodeY+nodeR+25;
+    var waveStart=gap*2;
+    var waveEnd=gap*(Math.min(f+1,5));
+    elems.push({id:'wave',type:'custom',x:waveStart,y:waveY,w:waveEnd-waveStart,h:8,
+      draw:function(ws,we,wy){return function(alpha){
+        ctx.save();ctx.globalAlpha=alpha;
+        var g=ctx.createLinearGradient(ws,wy,we,wy);
+        g.addColorStop(0,'#ff5f1f');g.addColorStop(0.5,'#ff3333');g.addColorStop(1,'#ff333300');
+        ctx.fillStyle=g;ctx.fillRect(ws,wy,we-ws,4);
+        ctx.restore();
+      }}(waveStart,waveEnd,waveY),alpha:1});
+
+    ctx.font="9px 'Space Grotesk',sans-serif";
+    elems.push({id:'waveLabel',type:'label',text:f>=2?'PROPAGATION':'',x:(waveStart+waveEnd)/2,y:waveY+14,color:'#ff5f1f',size:9,align:'center',alpha:1});
+  }
+
+  // Title + description
+  elems.push({id:'frameTitle',type:'label',text:t('f'+f+'Title'),x:W/2,y:H*0.1,color:f===0?'#10b981':'#ff5f1f',size:16,align:'center',alpha:1});
+  elems.push({id:'frameDesc',type:'label',text:t('f'+f+'Desc'),x:W/2,y:H*0.17,color:'#8a8886',size:12,align:'center',alpha:1});
+
+  // Severity meter bar at bottom of canvas
+  var sevLevels=[0,0.3,0.5,0.75,1.0];
+  var sevColors=['#10b981','#ffb59c','#ff5f1f','#ff3333','#ff1111'];
+  var meterX=W*0.15;var meterW=W*0.7;var meterY=H*0.78;var meterH=12;
+  elems.push({id:'sevMeter',type:'custom',x:meterX,y:meterY,w:meterW,h:meterH,
+    draw:function(mx,my,mw,mh,sv,sc){return function(alpha){
+      ctx.save();ctx.globalAlpha=alpha;
+      ctx.fillStyle='rgba(255,255,255,0.05)';ctx.fillRect(mx,my,mw,mh);
+      var g=ctx.createLinearGradient(mx,my,mx+mw*sv,my);
+      g.addColorStop(0,sc+'88');g.addColorStop(1,sc);
+      ctx.fillStyle=g;ctx.fillRect(mx,my,mw*sv,mh);
+      ctx.fillStyle='#e5e2e1';ctx.font="9px 'Space Grotesk',sans-serif";ctx.textAlign='left';
+      ctx.fillText('SEVERITY',mx,my-4);
+      ctx.restore();
+    }}(meterX,meterY,meterW,meterH,sevLevels[f],sevColors[f]),alpha:1});
+
+  return elems;
+}
+
+function drawLabelPrimitive(text,x,y,color,size,align){
+  ctx.fillStyle=color||'#e5e2e1';
+  ctx.font='bold '+size+'px "Space Grotesk",sans-serif';
+  ctx.textAlign=align||'center';
+  ctx.fillText(text,x,y);
+}
+
+function drawElement(el){
+  if(!el||el.alpha<=0.01)return;
+  ctx.save();ctx.globalAlpha=el.alpha;
+  switch(el.type){
+    case 'label':drawLabelPrimitive(el.text,el.x,el.y,el.color,el.size,el.align);break;
+    case 'custom':el.draw(el.alpha);break;
+  }
+  ctx.restore();
+}
+
+function drawFrame(f){
+  drawBg();
+  var elems=getFrameElements(f);
+  elems.forEach(function(el){drawElement(el)});
+}
+
+function transitionTo(newFrame){
+  if(newFrame<0)newFrame=0;
+  if(newFrame>=totalFrames)newFrame=totalFrames-1;
+  if(newFrame===currentFrame&&!transitioning){drawFrame(currentFrame);updateHUD(currentFrame);return}
+  if(transitioning)return;
+  var oldElems=getFrameElements(currentFrame);
+  var newElems=getFrameElements(newFrame);
+  var oldMap={};oldElems.forEach(function(e){oldMap[e.id]=e});
+  var newMap={};newElems.forEach(function(e){newMap[e.id]=e});
+  currentFrame=newFrame;updateHUD(newFrame);transitioning=true;
+  var startTime=null;var duration=500;
+  function step(timestamp){
+    if(!startTime)startTime=timestamp;
+    var raw=Math.min((timestamp-startTime)/duration,1);
+    var p=easeInOut(raw);
+    drawBg();
+    oldElems.forEach(function(oe){if(!newMap[oe.id])drawElement(merge(oe,{alpha:1-p}))});
+    newElems.forEach(function(ne){
+      var oe=oldMap[ne.id];
+      if(oe){
+        var merged=merge(ne,{x:lerp(oe.x||0,ne.x||0,p),y:lerp(oe.y||0,ne.y||0,p),w:lerp(oe.w||0,ne.w||0,p),h:lerp(oe.h||0,ne.h||0,p),alpha:1});
+        if((ne.type==='label')&&oe.text!==ne.text){drawElement(merge(oe,{alpha:1-p}));drawElement(merge(ne,{alpha:p}))}else{drawElement(merged)}
+      } else {drawElement(merge(ne,{alpha:p}))}
+    });
+    if(raw<1){requestAnimationFrame(step)}else{transitioning=false}
+  }
+  requestAnimationFrame(step);
+}
+
+function updateHUD(f){
+  var d=HUD_DATA[f];
+  document.getElementById('hudL1').textContent=t(d[0].l);
+  document.getElementById('hudV1').textContent=t(d[0].v);
+  document.getElementById('hudV1').style.color=f===0?'#10b981':'#ff5f1f';
+  document.getElementById('hudL2').textContent=t(d[1].l);
+  document.getElementById('hudV2').textContent=t(d[1].v);
+  document.getElementById('hudL3').textContent=t(d[2].l);
+  document.getElementById('hudV3').textContent=t(d[2].v);
+  document.getElementById('hudL4').textContent=t(d[3].l);
+  document.getElementById('hudV4').textContent=t(d[3].v);
+  document.getElementById('hudV4').style.color=f>=4?'#ff3333':(f>=2?'#ff5f1f':'#00daf3');
+  document.getElementById('frameInfo').textContent=(f+1)+' / '+totalFrames;
+}
+
+function refreshI18N(){
+  document.getElementById('mainTitle').textContent=t('title');
+  document.getElementById('mainSubtitle').textContent=t('subtitle');
+  document.getElementById('btnPrev').textContent=t('btnPrev');
+  document.getElementById('btnPlay').textContent=playing?t('btnPause'):t('btnPlay');
+  document.getElementById('btnNext').textContent=t('btnNext');
+  document.getElementById('guideTitle').textContent=t('guideTitle');
+  document.getElementById('guideWhat').textContent=t('guideWhat');
+  var list=document.getElementById('guideList');list.innerHTML='';
+  ['guideObs1','guideObs2','guideObs3'].forEach(function(k){
+    var li=document.createElement('li');li.textContent=t(k);list.appendChild(li);
+  });
+  document.getElementById('guideTakeaway').textContent=t('guideTakeaway');
+  updateHUD(currentFrame);drawFrame(currentFrame);
+}
+
+document.getElementById('langBtn').addEventListener('click',function(){
+  LANG=LANG==='en'?'cn':'en';
+  document.getElementById('langBtn').textContent=LANG.toUpperCase();
+  refreshI18N();
+});
+document.getElementById('guideToggle').addEventListener('click',function(){
+  document.getElementById('guidePanel').classList.toggle('collapsed');
+  document.getElementById('guideArrow').textContent=document.getElementById('guidePanel').classList.contains('collapsed')?'+':'-';
+});
+document.getElementById('btnPrev').addEventListener('click',function(){
+  if(playing){playing=false;if(playTimer)clearTimeout(playTimer);}
+  document.getElementById('btnPlay').textContent=t('btnPlay');
+  transitionTo(currentFrame-1);
+});
+document.getElementById('btnNext').addEventListener('click',function(){
+  if(playing){playing=false;if(playTimer)clearTimeout(playTimer);}
+  document.getElementById('btnPlay').textContent=t('btnPlay');
+  transitionTo(currentFrame+1);
+});
+document.getElementById('btnPlay').addEventListener('click',function(){
+  if(playing){
+    playing=false;if(playTimer)clearTimeout(playTimer);
+    document.getElementById('btnPlay').textContent=t('btnPlay');
+  } else {
+    playing=true;document.getElementById('btnPlay').textContent=t('btnPause');
+    if(currentFrame>=totalFrames-1)currentFrame=-1;
+    function autoPlay(){
+      if(!playing)return;
+      if(currentFrame<totalFrames-1){
+        transitionTo(currentFrame+1);
+        playTimer=setTimeout(function(){requestAnimationFrame(autoPlay)},2000);
+      } else {playing=false;document.getElementById('btnPlay').textContent=t('btnPlay');}
+    }
+    autoPlay();
+  }
+});
+
+refreshI18N();resize();
+setTimeout(resize,200);setTimeout(resize,600);
+document.fonts.ready.then(function(){resize()});
+})();
+</script>
+</body>
+</html>

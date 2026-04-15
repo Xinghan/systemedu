@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&family=Inter:wght@400;500;600&family=Manrope:wght@500;600;700&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box;}
+html,body{width:100%;height:100vh;overflow:hidden;background:#f8f5ff;color:#19227d;font-family:'Inter',sans-serif;}
+.wrapper{display:flex;flex-direction:column;height:100vh;overflow:hidden;}
+.canvas-wrap{flex:1;min-height:0;position:relative;}
+canvas{width:100%;height:100%;display:block;}
+.controls{display:flex;justify-content:center;align-items:center;gap:16px;padding:10px 20px;background:#f1efff;}
+.ctrl-btn{font-family:'Manrope',sans-serif;font-size:12px;font-weight:700;padding:8px 20px;border:none;cursor:pointer;border-radius:8px;transition:all 0.3s;}
+.ctrl-btn.primary{background:linear-gradient(135deg,#6a1cf6,#ac8eff);color:#fff;box-shadow:0 4px 12px rgba(106,28,246,0.25);}
+.ctrl-btn.primary:hover{transform:scale(1.04);}
+.ctrl-btn.ghost{background:#e6e6ff;color:#4953ac;}
+.ctrl-btn.ghost:hover{background:#d9daff;color:#6a1cf6;}
+.hud{display:flex;align-items:center;justify-content:space-around;padding:8px 20px;background:#f1efff;}
+.hud-item{text-align:center;}
+.hud-label{font-family:'Manrope',sans-serif;font-size:9px;letter-spacing:0.12em;text-transform:uppercase;color:#4953ac;}
+.hud-val{font-family:'Plus Jakarta Sans',sans-serif;font-size:14px;font-weight:700;color:#6a1cf6;}
+.frame-ind{position:absolute;top:6px;left:16px;font-family:'Manrope',sans-serif;font-size:11px;color:#9ea6ff;letter-spacing:0.1em;}
+</style>
+</head>
+<body>
+<div class="wrapper">
+<div class="canvas-wrap">
+  <canvas id="c"></canvas>
+  <div class="frame-ind" id="fi"></div>
+</div>
+<div class="controls">
+  <button class="ctrl-btn ghost" id="btnPrev">上一帧</button>
+  <button class="ctrl-btn primary" id="btnPlay">播放</button>
+  <button class="ctrl-btn ghost" id="btnNext">下一帧</button>
+</div>
+<div class="hud">
+  <div class="hud-item"><div class="hud-label">坐标系</div><div class="hud-val" id="h1">--</div></div>
+  <div class="hud-item"><div class="hud-label">点的位置</div><div class="hud-val" id="h2">--</div></div>
+  <div class="hud-item"><div class="hud-label">维度</div><div class="hud-val" id="h3">--</div></div>
+</div>
+</div>
+
+<script>
+(function(){
+  var canvas = document.getElementById('c');
+  var ctx = canvas.getContext('2d');
+  var dpr = window.devicePixelRatio || 1;
+  var W, H;
+  var currentFrame = 0;
+  var totalFrames = 3;
+  var playing = false;
+  var playTimer = null;
+
+  var frames = [
+    {title:'一维: 数轴', coord:'x = 3', dim:'1D'},
+    {title:'二维: 平面坐标', coord:'(3, 2)', dim:'2D'},
+    {title:'网格坐标: 地图定位', coord:'C3', dim:'Grid'},
+  ];
+
+  function resize(){
+    var rect = canvas.parentElement.getBoundingClientRect();
+    W = rect.width; H = rect.height;
+    canvas.width = W*dpr; canvas.height = H*dpr;
+    canvas.style.width = W+'px'; canvas.style.height = H+'px';
+    ctx.setTransform(dpr,0,0,dpr,0,0);
+    draw();
+  }
+
+  function draw(){
+    var f = frames[currentFrame];
+    ctx.clearRect(0,0,W,H);
+
+    var bg = ctx.createLinearGradient(0,0,0,H);
+    bg.addColorStop(0,'#f8f5ff'); bg.addColorStop(1,'#f1efff');
+    ctx.fillStyle = bg; ctx.fillRect(0,0,W,H);
+
+    // Grid bg
+    ctx.strokeStyle = 'rgba(158,166,255,0.12)'; ctx.lineWidth = 1;
+    for(var gx=0;gx<W;gx+=30){ctx.beginPath();ctx.moveTo(gx,0);ctx.lineTo(gx,H);ctx.stroke();}
+    for(var gy=0;gy<H;gy+=30){ctx.beginPath();ctx.moveTo(0,gy);ctx.lineTo(W,gy);ctx.stroke();}
+
+    // Title
+    ctx.font = '800 clamp(16px,2.5vw,22px) "Plus Jakarta Sans"';
+    ctx.fillStyle = '#19227d'; ctx.textAlign = 'center';
+    ctx.fillText(f.title, W/2, H*0.1);
+
+    if(currentFrame === 0) draw1D();
+    else if(currentFrame === 1) draw2D();
+    else drawGrid();
+
+    // Formula panel
+    var fxW = W*0.26; var fxH = H*0.2;
+    var fxX = W*0.7; var fxY = H*0.08;
+    ctx.fillStyle = 'rgba(255,255,255,0.6)';
+    roundRect(ctx, fxX, fxY, fxW, fxH, 8); ctx.fill();
+    ctx.font = '700 9px "Manrope"'; ctx.fillStyle = '#6a1cf6'; ctx.textAlign = 'left';
+    ctx.fillText('COORDINATE SYSTEM', fxX+12, fxY+18);
+    ctx.font = 'italic 16px "Times New Roman", serif';
+    ctx.fillStyle = '#19227d'; ctx.textAlign = 'center';
+    if(currentFrame === 0) ctx.fillText('P(x)', fxX+fxW/2, fxY+fxH*0.55);
+    else if(currentFrame === 1) ctx.fillText('P(x, y)', fxX+fxW/2, fxY+fxH*0.55);
+    else ctx.fillText('P(col, row)', fxX+fxW/2, fxY+fxH*0.55);
+    ctx.font = '700 12px "Plus Jakarta Sans"'; ctx.fillStyle = '#b41340';
+    ctx.fillText(f.coord, fxX+fxW/2, fxY+fxH*0.85);
+
+    document.getElementById('h1').textContent = f.dim;
+    document.getElementById('h2').textContent = f.coord;
+    document.getElementById('h3').textContent = f.dim;
+    document.getElementById('fi').textContent = (currentFrame+1)+' / '+totalFrames;
+  }
+
+  function draw1D(){
+    var y = H*0.45;
+    var x0 = W*0.1; var x1 = W*0.8;
+    // Number line
+    ctx.strokeStyle = '#6a1cf6'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(x0, y); ctx.lineTo(x1, y); ctx.stroke();
+    // Arrow
+    ctx.fillStyle = '#6a1cf6';
+    ctx.beginPath(); ctx.moveTo(x1,y); ctx.lineTo(x1-8,y-5); ctx.lineTo(x1-8,y+5); ctx.closePath(); ctx.fill();
+
+    var step = (x1 - x0) / 7;
+    for(var i=0;i<=6;i++){
+      var px = x0 + step * i;
+      ctx.strokeStyle = '#9ea6ff'; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(px, y-6); ctx.lineTo(px, y+6); ctx.stroke();
+      ctx.font = '600 12px "Plus Jakarta Sans"'; ctx.fillStyle = '#4953ac'; ctx.textAlign = 'center';
+      ctx.fillText(i, px, y+22);
+    }
+
+    // Point at x=3
+    var pointX = x0 + step * 3;
+    ctx.fillStyle = '#b41340';
+    ctx.beginPath(); ctx.arc(pointX, y, 8, 0, Math.PI*2); ctx.fill();
+    ctx.fillStyle = '#fff'; ctx.font = '700 9px "Plus Jakarta Sans"'; ctx.textAlign = 'center';
+    ctx.fillText('P', pointX, y+3);
+
+    // Label
+    ctx.font = '600 13px "Inter"'; ctx.fillStyle = '#b41340'; ctx.textAlign = 'center';
+    ctx.fillText('x = 3', pointX, y-18);
+
+    // Explanation
+    ctx.font = '500 12px "Inter"'; ctx.fillStyle = '#4953ac'; ctx.textAlign = 'center';
+    ctx.fillText('一条线上，一个数字就能定位', W/2, H*0.7);
+  }
+
+  function draw2D(){
+    var ox = W*0.2; var oy = H*0.65;
+    var axLen = W*0.5;
+    var ayLen = H*0.4;
+    var step = axLen / 5;
+
+    // X axis
+    ctx.strokeStyle = '#6a1cf6'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(ox, oy); ctx.lineTo(ox+axLen, oy); ctx.stroke();
+    ctx.fillStyle = '#6a1cf6';
+    ctx.beginPath(); ctx.moveTo(ox+axLen,oy); ctx.lineTo(ox+axLen-8,oy-5); ctx.lineTo(ox+axLen-8,oy+5); ctx.closePath(); ctx.fill();
+    ctx.font = '700 13px "Plus Jakarta Sans"'; ctx.fillStyle = '#6a1cf6'; ctx.textAlign = 'center';
+    ctx.fillText('x', ox+axLen+12, oy+5);
+
+    // Y axis
+    ctx.beginPath(); ctx.moveTo(ox, oy); ctx.lineTo(ox, oy-ayLen); ctx.stroke();
+    ctx.fillStyle = '#6a1cf6';
+    ctx.beginPath(); ctx.moveTo(ox,oy-ayLen); ctx.lineTo(ox-5,oy-ayLen+8); ctx.lineTo(ox+5,oy-ayLen+8); ctx.closePath(); ctx.fill();
+    ctx.fillText('y', ox-5, oy-ayLen-8);
+
+    // Grid lines
+    ctx.strokeStyle = 'rgba(158,166,255,0.2)'; ctx.lineWidth = 0.5;
+    for(var i=1;i<=5;i++){
+      ctx.beginPath(); ctx.moveTo(ox+step*i, oy); ctx.lineTo(ox+step*i, oy-ayLen); ctx.stroke();
+      ctx.font = '500 10px "Plus Jakarta Sans"'; ctx.fillStyle = '#9ea6ff'; ctx.textAlign = 'center';
+      ctx.fillText(i, ox+step*i, oy+14);
+    }
+    var ystep = ayLen / 4;
+    for(var j=1;j<=4;j++){
+      ctx.beginPath(); ctx.moveTo(ox, oy-ystep*j); ctx.lineTo(ox+axLen, oy-ystep*j); ctx.stroke();
+      ctx.fillText(j, ox-12, oy-ystep*j+4);
+    }
+
+    // Point (3,2)
+    var px = ox + step*3;
+    var py = oy - ystep*2;
+
+    // Dashed projection lines
+    ctx.strokeStyle = '#b41340'; ctx.lineWidth = 1; ctx.setLineDash([4,3]);
+    ctx.beginPath(); ctx.moveTo(px, oy); ctx.lineTo(px, py); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(ox, py); ctx.lineTo(px, py); ctx.stroke();
+    ctx.setLineDash([]);
+
+    ctx.fillStyle = '#b41340';
+    ctx.beginPath(); ctx.arc(px, py, 8, 0, Math.PI*2); ctx.fill();
+    ctx.fillStyle = '#fff'; ctx.font = '700 9px "Plus Jakarta Sans"'; ctx.textAlign = 'center';
+    ctx.fillText('P', px, py+3);
+
+    ctx.font = '600 13px "Inter"'; ctx.fillStyle = '#b41340';
+    ctx.fillText('(3, 2)', px+20, py-10);
+
+    ctx.font = '500 12px "Inter"'; ctx.fillStyle = '#4953ac'; ctx.textAlign = 'center';
+    ctx.fillText('一个平面上，两个数字才能定位', W/2, H*0.82);
+  }
+
+  function drawGrid(){
+    var cols = 6; var rows = 5;
+    var cellS = Math.min((W*0.6)/cols, (H*0.5)/rows);
+    var gx0 = W*0.15; var gy0 = H*0.2;
+
+    // Column headers
+    var colLabels = ['A','B','C','D','E','F'];
+    ctx.font = '700 12px "Plus Jakarta Sans"'; ctx.fillStyle = '#6a1cf6'; ctx.textAlign = 'center';
+    for(var c=0;c<cols;c++){
+      ctx.fillText(colLabels[c], gx0+c*cellS+cellS/2, gy0-6);
+    }
+    // Row headers
+    for(var r=0;r<rows;r++){
+      ctx.fillText(r+1, gx0-14, gy0+r*cellS+cellS/2+4);
+    }
+
+    // Grid
+    ctx.strokeStyle = 'rgba(158,166,255,0.3)'; ctx.lineWidth = 1;
+    for(var c2=0;c2<=cols;c2++){
+      ctx.beginPath(); ctx.moveTo(gx0+c2*cellS, gy0); ctx.lineTo(gx0+c2*cellS, gy0+rows*cellS); ctx.stroke();
+    }
+    for(var r2=0;r2<=rows;r2++){
+      ctx.beginPath(); ctx.moveTo(gx0, gy0+r2*cellS); ctx.lineTo(gx0+cols*cellS, gy0+r2*cellS); ctx.stroke();
+    }
+
+    // Highlight C3
+    var hc = 2; var hr = 2;
+    ctx.fillStyle = 'rgba(106,28,246,0.12)';
+    ctx.fillRect(gx0+hc*cellS, gy0+hr*cellS, cellS, cellS);
+    ctx.strokeStyle = '#6a1cf6'; ctx.lineWidth = 2;
+    ctx.strokeRect(gx0+hc*cellS, gy0+hr*cellS, cellS, cellS);
+
+    // Point
+    ctx.fillStyle = '#b41340';
+    ctx.beginPath(); ctx.arc(gx0+hc*cellS+cellS/2, gy0+hr*cellS+cellS/2, 8, 0, Math.PI*2); ctx.fill();
+    ctx.fillStyle = '#fff'; ctx.font = '700 9px "Plus Jakarta Sans"'; ctx.textAlign = 'center';
+    ctx.fillText('P', gx0+hc*cellS+cellS/2, gy0+hr*cellS+cellS/2+3);
+
+    // Label
+    ctx.font = '600 14px "Inter"'; ctx.fillStyle = '#b41340';
+    ctx.fillText('C3', gx0+hc*cellS+cellS/2+cellS, gy0+hr*cellS+cellS/2);
+
+    // Mars connection
+    ctx.font = '500 12px "Inter"'; ctx.fillStyle = '#4953ac'; ctx.textAlign = 'center';
+    ctx.fillText('火星地图也用网格坐标定位每个区域', W/2, gy0+rows*cellS+30);
+    ctx.fillText('列 = 横向位置，行 = 纵向位置', W/2, gy0+rows*cellS+50);
+  }
+
+  function roundRect(c,x,y,w,h,r){
+    c.beginPath();
+    c.moveTo(x+r,y);c.lineTo(x+w-r,y);c.quadraticCurveTo(x+w,y,x+w,y+r);
+    c.lineTo(x+w,y+h-r);c.quadraticCurveTo(x+w,y+h,x+w-r,y+h);
+    c.lineTo(x+r,y+h);c.quadraticCurveTo(x,y+h,x,y+h-r);
+    c.lineTo(x,y+r);c.quadraticCurveTo(x,y,x+r,y);
+    c.closePath();
+  }
+
+  function goTo(n){ currentFrame = Math.max(0, Math.min(totalFrames-1, n)); draw(); }
+
+  document.getElementById('btnPrev').addEventListener('click', function(){ if(playing) stopPlay(); goTo(currentFrame-1); });
+  document.getElementById('btnNext').addEventListener('click', function(){ if(playing) stopPlay(); goTo(currentFrame+1); });
+  document.getElementById('btnPlay').addEventListener('click', function(){
+    if(playing){ stopPlay(); return; }
+    playing = true; document.getElementById('btnPlay').textContent = '暂停';
+    playTimer = setInterval(function(){ if(currentFrame >= totalFrames-1){ stopPlay(); return; } goTo(currentFrame+1); }, 2500);
+  });
+  function stopPlay(){ playing = false; clearInterval(playTimer); document.getElementById('btnPlay').textContent = '播放'; }
+
+  window.addEventListener('resize', resize);
+  document.fonts.ready.then(function(){ resize(); });
+  setTimeout(resize, 100);
+})();
+</script>
+</body>
+</html>

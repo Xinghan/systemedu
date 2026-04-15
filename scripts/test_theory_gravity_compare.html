@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&family=Inter:wght@400;500;600&family=Manrope:wght@500;600;700&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box;}
+html,body{width:100%;height:100vh;overflow:hidden;background:#f8f5ff;color:#19227d;font-family:'Inter',sans-serif;}
+.wrapper{display:flex;flex-direction:column;height:100vh;overflow:hidden;}
+.canvas-wrap{flex:1;min-height:0;position:relative;}
+canvas{width:100%;height:100%;display:block;}
+.controls{display:flex;justify-content:center;align-items:center;gap:16px;padding:10px 20px;background:#f1efff;}
+.ctrl-btn{
+  font-family:'Manrope',sans-serif;font-size:12px;font-weight:700;
+  padding:8px 20px;border:none;cursor:pointer;border-radius:8px;
+  transition:all 0.3s cubic-bezier(0.2,0.8,0.2,1);
+}
+.ctrl-btn.primary{
+  background:linear-gradient(135deg,#6a1cf6,#ac8eff);color:#fff;
+  box-shadow:0 4px 12px rgba(106,28,246,0.25);
+}
+.ctrl-btn.primary:hover{transform:scale(1.04);box-shadow:0 6px 16px rgba(106,28,246,0.35);}
+.ctrl-btn.primary:active{transform:scale(0.96);}
+.ctrl-btn.ghost{background:#e6e6ff;color:#4953ac;}
+.ctrl-btn.ghost:hover{background:#d9daff;color:#6a1cf6;}
+.hud{
+  display:flex;align-items:center;justify-content:space-around;
+  padding:8px 20px;background:#f1efff;
+}
+.hud-item{text-align:center;}
+.hud-label{font-family:'Manrope',sans-serif;font-size:9px;letter-spacing:0.12em;text-transform:uppercase;color:#4953ac;}
+.hud-val{font-family:'Plus Jakarta Sans',sans-serif;font-size:14px;font-weight:700;color:#6a1cf6;}
+.frame-ind{
+  position:absolute;top:6px;left:16px;
+  font-family:'Manrope',sans-serif;font-size:11px;color:#9ea6ff;letter-spacing:0.1em;
+}
+</style>
+</head>
+<body>
+<div class="wrapper">
+<div class="canvas-wrap">
+  <canvas id="c"></canvas>
+  <div class="frame-ind" id="fi"></div>
+</div>
+<div class="controls">
+  <button class="ctrl-btn ghost" id="btnPrev">上一帧</button>
+  <button class="ctrl-btn primary" id="btnPlay">播放</button>
+  <button class="ctrl-btn ghost" id="btnNext">下一帧</button>
+</div>
+<div class="hud">
+  <div class="hud-item"><div class="hud-label">星球</div><div class="hud-val" id="h1">--</div></div>
+  <div class="hud-item"><div class="hud-label">重力加速度</div><div class="hud-val" id="h2">--</div></div>
+  <div class="hud-item"><div class="hud-label">物体重量</div><div class="hud-val" id="h3">--</div></div>
+  <div class="hud-item"><div class="hud-label">落地时间</div><div class="hud-val" id="h4">--</div></div>
+</div>
+</div>
+
+<script>
+(function(){
+  var canvas = document.getElementById('c');
+  var ctx = canvas.getContext('2d');
+  var dpr = window.devicePixelRatio || 1;
+  var W, H;
+
+  var currentFrame = 0;
+  var totalFrames = 3;
+  var playing = false;
+  var playTimer = null;
+
+  var frames = [
+    {planet:'地球', g:9.8, weight:'10 kg', fallTime:'1.43 s', color:'#4a9adf', groundColor:'rgba(100,160,100,0.3)', ballDrop:0.85},
+    {planet:'火星', g:3.7, weight:'3.8 kg', fallTime:'2.33 s', color:'#c85a3a', groundColor:'rgba(180,120,80,0.3)', ballDrop:0.55},
+    {planet:'对比', g:0, weight:'--', fallTime:'--', color:'#6a1cf6', groundColor:'transparent', ballDrop:0},
+  ];
+
+  function resize(){
+    var rect = canvas.parentElement.getBoundingClientRect();
+    W = rect.width; H = rect.height;
+    canvas.width = W*dpr; canvas.height = H*dpr;
+    canvas.style.width = W+'px'; canvas.style.height = H+'px';
+    ctx.setTransform(dpr,0,0,dpr,0,0);
+    draw();
+  }
+
+  function draw(){
+    var f = frames[currentFrame];
+    ctx.clearRect(0,0,W,H);
+
+    // Background
+    var bg = ctx.createLinearGradient(0,0,0,H);
+    bg.addColorStop(0,'#f8f5ff');
+    bg.addColorStop(1,'#f1efff');
+    ctx.fillStyle = bg;
+    ctx.fillRect(0,0,W,H);
+
+    // Grid
+    ctx.strokeStyle = 'rgba(158,166,255,0.12)';
+    ctx.lineWidth = 1;
+    for(var gx=0;gx<W;gx+=30){ctx.beginPath();ctx.moveTo(gx,0);ctx.lineTo(gx,H);ctx.stroke();}
+    for(var gy=0;gy<H;gy+=30){ctx.beginPath();ctx.moveTo(0,gy);ctx.lineTo(W,gy);ctx.stroke();}
+
+    // Title
+    ctx.font = '800 clamp(16px,2.5vw,22px) "Plus Jakarta Sans"';
+    ctx.fillStyle = '#19227d';
+    ctx.textAlign = 'center';
+    ctx.fillText(f.planet, W/2, H*0.1);
+
+    if(currentFrame < 2){
+      drawDropScene(f, W*0.5);
+    } else {
+      drawComparison();
+    }
+
+    // Formula panel
+    var fxW = W*0.26; var fxH = H*0.25;
+    var fxX = W*0.68; var fxY = H*0.14;
+    ctx.fillStyle = 'rgba(255,255,255,0.6)';
+    roundRect(ctx, fxX, fxY, fxW, fxH, 8);
+    ctx.fill();
+    ctx.font = '700 9px "Manrope"';
+    ctx.fillStyle = '#6a1cf6';
+    ctx.textAlign = 'left';
+    ctx.fillText('GRAVITATIONAL FORCE', fxX+12, fxY+18);
+    ctx.font = 'italic 18px "Times New Roman", serif';
+    ctx.fillStyle = '#19227d';
+    ctx.textAlign = 'center';
+    ctx.fillText('W = m \u00B7 g', fxX+fxW/2, fxY+fxH*0.5);
+    if(currentFrame < 2){
+      ctx.font = '700 12px "Plus Jakarta Sans"';
+      ctx.fillStyle = '#b41340';
+      ctx.fillText('g = '+f.g+' m/s\u00B2', fxX+fxW/2, fxY+fxH*0.75);
+    }
+
+    // HUD
+    document.getElementById('h1').textContent = f.planet;
+    document.getElementById('h2').textContent = f.g > 0 ? f.g+' m/s\u00B2' : '--';
+    document.getElementById('h3').textContent = f.weight;
+    document.getElementById('h4').textContent = f.fallTime;
+    document.getElementById('fi').textContent = (currentFrame+1)+' / '+totalFrames;
+  }
+
+  function drawDropScene(f, cx){
+    var groundY = H*0.75;
+
+    // Ground
+    ctx.fillStyle = f.groundColor;
+    ctx.fillRect(0, groundY, W, H-groundY);
+    ctx.strokeStyle = '#9ea6ff';
+    ctx.lineWidth = 2;
+    ctx.setLineDash([6,4]);
+    ctx.beginPath();ctx.moveTo(0,groundY);ctx.lineTo(W,groundY);ctx.stroke();
+    ctx.setLineDash([]);
+
+    // Drop height line
+    var startY = H*0.18;
+    var ballY = startY + (groundY - startY) * f.ballDrop;
+    ctx.setLineDash([3,3]);
+    ctx.strokeStyle = '#9ea6ff';
+    ctx.lineWidth = 1;
+    ctx.beginPath();ctx.moveTo(cx-40, startY);ctx.lineTo(cx-40, groundY);ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.font = '500 10px "Manrope"';
+    ctx.fillStyle = '#4953ac';
+    ctx.textAlign = 'right';
+    ctx.fillText('10 m', cx-45, (startY+groundY)/2);
+
+    // Ball
+    ctx.fillStyle = f.color;
+    ctx.beginPath();
+    ctx.arc(cx, ballY, 18, 0, Math.PI*2);
+    ctx.fill();
+    ctx.fillStyle = 'rgba(255,255,255,0.25)';
+    ctx.beginPath();
+    ctx.arc(cx-5, ballY-6, 6, 0, Math.PI*2);
+    ctx.fill();
+
+    // Shadow
+    ctx.fillStyle = 'rgba(106,28,246,0.08)';
+    ctx.beginPath();
+    ctx.ellipse(cx, groundY+3, 22, 4, 0, 0, Math.PI*2);
+    ctx.fill();
+
+    // Gravity arrow
+    drawArrow(cx+30, ballY, cx+30, ballY+40, '#b41340', 2.5);
+    ctx.font = '600 11px "Manrope"';
+    ctx.fillStyle = '#b41340';
+    ctx.textAlign = 'left';
+    ctx.fillText('g = '+f.g, cx+38, ballY+25);
+
+    // Planet icon
+    ctx.fillStyle = f.color;
+    ctx.globalAlpha = 0.15;
+    ctx.beginPath();
+    ctx.arc(W*0.15, H*0.45, 50, 0, Math.PI*2);
+    ctx.fill();
+    ctx.globalAlpha = 1;
+    ctx.font = '700 14px "Plus Jakarta Sans"';
+    ctx.fillStyle = f.color;
+    ctx.textAlign = 'center';
+    ctx.fillText(f.planet, W*0.15, H*0.48);
+  }
+
+  function drawComparison(){
+    var barY = H*0.25;
+    var barH = 20;
+    var maxW = W*0.5;
+
+    // Earth bar
+    ctx.font = '600 12px "Noto Sans SC","Inter"';
+    ctx.fillStyle = '#19227d';
+    ctx.textAlign = 'right';
+    ctx.fillText('地球', W*0.2, barY+14);
+    ctx.fillStyle = '#4a9adf';
+    roundRect(ctx, W*0.22, barY, maxW * (9.8/10), barH, 4);
+    ctx.fill();
+    ctx.fillStyle = '#19227d';
+    ctx.textAlign = 'left';
+    ctx.font = '700 11px "Plus Jakarta Sans"';
+    ctx.fillText('9.8 m/s\u00B2', W*0.22 + maxW*(9.8/10)+8, barY+14);
+
+    // Mars bar
+    var barY2 = barY + 50;
+    ctx.font = '600 12px "Noto Sans SC","Inter"';
+    ctx.fillStyle = '#19227d';
+    ctx.textAlign = 'right';
+    ctx.fillText('火星', W*0.2, barY2+14);
+    ctx.fillStyle = '#c85a3a';
+    roundRect(ctx, W*0.22, barY2, maxW * (3.7/10), barH, 4);
+    ctx.fill();
+    ctx.fillStyle = '#19227d';
+    ctx.textAlign = 'left';
+    ctx.font = '700 11px "Plus Jakarta Sans"';
+    ctx.fillText('3.7 m/s\u00B2', W*0.22 + maxW*(3.7/10)+8, barY2+14);
+
+    // Ratio
+    ctx.font = '700 16px "Plus Jakarta Sans"';
+    ctx.fillStyle = '#6a1cf6';
+    ctx.textAlign = 'center';
+    ctx.fillText('火星重力 = 地球的 38%', W*0.5, barY2+80);
+
+    // Implication text
+    ctx.font = '500 13px "Inter"';
+    ctx.fillStyle = '#4953ac';
+    ctx.fillText('同样10kg的物体:', W*0.5, barY2+120);
+
+    ctx.font = '600 12px "Inter"';
+    ctx.fillStyle = '#4a9adf';
+    ctx.fillText('地球上重 98 N', W*0.35, barY2+145);
+    ctx.fillStyle = '#c85a3a';
+    ctx.fillText('火星上重 37 N', W*0.65, barY2+145);
+
+    // Impact on rovers
+    ctx.font = '500 11px "Inter"';
+    ctx.fillStyle = '#4953ac';
+    ctx.fillText('低重力 → 轮胎抓地力更弱 → 火星车更容易打滑', W*0.5, barY2+185);
+  }
+
+  function drawArrow(x1,y1,x2,y2,color,lw){
+    var dx=x2-x1,dy=y2-y1;
+    var len=Math.sqrt(dx*dx+dy*dy);
+    if(len<2)return;
+    var ux=dx/len,uy=dy/len;
+    ctx.strokeStyle=color;ctx.lineWidth=lw;
+    ctx.beginPath();ctx.moveTo(x1,y1);ctx.lineTo(x2,y2);ctx.stroke();
+    var hs=7;
+    ctx.fillStyle=color;
+    ctx.beginPath();
+    ctx.moveTo(x2,y2);
+    ctx.lineTo(x2-ux*hs-uy*hs*0.5, y2-uy*hs+ux*hs*0.5);
+    ctx.lineTo(x2-ux*hs+uy*hs*0.5, y2-uy*hs-ux*hs*0.5);
+    ctx.closePath();ctx.fill();
+  }
+
+  function roundRect(c,x,y,w,h,r){
+    c.beginPath();
+    c.moveTo(x+r,y);c.lineTo(x+w-r,y);c.quadraticCurveTo(x+w,y,x+w,y+r);
+    c.lineTo(x+w,y+h-r);c.quadraticCurveTo(x+w,y+h,x+w-r,y+h);
+    c.lineTo(x+r,y+h);c.quadraticCurveTo(x,y+h,x,y+h-r);
+    c.lineTo(x,y+r);c.quadraticCurveTo(x,y,x+r,y);
+    c.closePath();
+  }
+
+  function goTo(n){
+    currentFrame = Math.max(0, Math.min(totalFrames-1, n));
+    draw();
+  }
+
+  document.getElementById('btnPrev').addEventListener('click', function(){
+    if(playing) stopPlay();
+    goTo(currentFrame-1);
+  });
+  document.getElementById('btnNext').addEventListener('click', function(){
+    if(playing) stopPlay();
+    goTo(currentFrame+1);
+  });
+  document.getElementById('btnPlay').addEventListener('click', function(){
+    if(playing){ stopPlay(); return; }
+    playing = true;
+    document.getElementById('btnPlay').textContent = '暂停';
+    playTimer = setInterval(function(){
+      if(currentFrame >= totalFrames-1){ stopPlay(); return; }
+      goTo(currentFrame+1);
+    }, 2500);
+  });
+
+  function stopPlay(){
+    playing = false;
+    clearInterval(playTimer);
+    document.getElementById('btnPlay').textContent = '播放';
+  }
+
+  window.addEventListener('resize', resize);
+  document.fonts.ready.then(function(){ resize(); });
+  setTimeout(resize, 100);
+})();
+</script>
+</body>
+</html>

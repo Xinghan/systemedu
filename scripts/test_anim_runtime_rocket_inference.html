@@ -1,0 +1,630 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=Inter:wght@400;500&family=Noto+Sans+SC:wght@400;700&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box;}
+html,body{width:100%;height:100vh;overflow:hidden;}
+body{background:var(--bg,#0c0e12);color:var(--text,#f6f6fc);font-family:'Inter','Noto Sans SC',sans-serif;display:flex;flex-direction:column;}
+.wrapper{display:flex;flex-direction:column;height:100vh;overflow:hidden;}
+.header{padding:12px 16px 8px;display:flex;justify-content:space-between;align-items:center;}
+.header h1{font-family:'Space Grotesk',sans-serif;font-size:clamp(14px,2vw,18px);font-weight:700;letter-spacing:-0.02em;color:var(--primary,#50ffb0);text-shadow:0 0 15px var(--glow,rgba(80,255,176,0.3));}
+.header .sub{font-size:11px;color:var(--muted,#aaabb0);letter-spacing:0.1em;text-transform:uppercase;}
+.canvas-wrap{flex:1;min-height:0;position:relative;}
+canvas{width:100%;height:100%;display:block;}
+.controls{display:flex;justify-content:center;align-items:center;gap:12px;padding:8px 16px;}
+.ctrl-btn{font-family:'Space Grotesk',sans-serif;font-size:12px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;padding:6px 18px;border:none;cursor:pointer;color:var(--bg,#0c0e12);background:linear-gradient(135deg,var(--primary,#50ffb0),var(--primary-dim,#17df93));transition:transform 0.1s,box-shadow 0.2s;box-shadow:0 0 12px var(--glow-strong,rgba(80,255,176,0.3));}
+.ctrl-btn:hover{transform:scale(1.04);box-shadow:0 0 20px var(--glow-strong,rgba(80,255,176,0.5));}
+.ctrl-btn:active{transform:scale(0.96);}
+.ctrl-btn.secondary{background:var(--glass,rgba(23,26,31,0.92));color:var(--muted,#aaabb0);box-shadow:none;backdrop-filter:blur(12px);}
+.ctrl-btn.secondary:hover{color:var(--primary,#50ffb0);}
+.hud{height:48px;display:flex;align-items:center;justify-content:space-around;background:rgba(0,0,0,0.55);backdrop-filter:blur(12px);padding:0 16px;}
+.hud-item{text-align:center;}
+.hud-label{font-family:'Space Grotesk',sans-serif;font-size:9px;letter-spacing:0.15em;text-transform:uppercase;color:var(--muted,#aaabb0);}
+.hud-val{font-family:'Space Grotesk',sans-serif;font-size:14px;font-weight:700;color:var(--primary,#50ffb0);}
+.lang-btn{position:fixed;top:8px;left:8px;z-index:100;font-family:'Space Grotesk',sans-serif;font-size:11px;font-weight:700;padding:4px 10px;cursor:pointer;border:none;background:rgba(20,20,35,0.85);backdrop-filter:blur(12px);color:#ffb59c;letter-spacing:1px;}
+.guide-panel{position:fixed;top:8px;right:8px;width:240px;max-height:40vh;overflow-y:auto;background:var(--glass,rgba(20,20,35,0.85));backdrop-filter:blur(12px);padding:12px;z-index:100;font-family:'Noto Sans SC',sans-serif;font-size:12px;color:rgba(255,255,255,0.85);line-height:1.6;}
+.guide-panel h3{font-family:'Space Grotesk',sans-serif;font-size:13px;margin-bottom:6px;color:var(--primary,#50ffb0);cursor:pointer;display:flex;justify-content:space-between;align-items:center;}
+.guide-panel ul{padding-left:14px;}
+.guide-panel .collapsed{display:none;}
+</style>
+</head>
+<body>
+<button class="lang-btn" id="langBtn">CN</button>
+<div class="guide-panel" id="guide">
+<h3 id="guideTitle"></h3>
+<div class="guide-content" id="guideContent"></div>
+</div>
+<div class="wrapper">
+<div class="header">
+<div><h1 id="title"></h1><div class="sub" id="subtitle"></div></div>
+<div id="frameIndicator" style="font-family:'Space Grotesk';font-size:11px;color:var(--muted,#aaabb0);letter-spacing:0.1em;"></div>
+</div>
+<div class="canvas-wrap"><canvas id="c"></canvas></div>
+<div class="controls">
+<button class="ctrl-btn secondary" id="btnPrev"></button>
+<button class="ctrl-btn" id="btnPlay"></button>
+<button class="ctrl-btn secondary" id="btnNext"></button>
+</div>
+<div class="hud">
+<div class="hud-item"><div class="hud-label" id="hudL1"></div><div class="hud-val" id="hudV1"></div></div>
+<div class="hud-item"><div class="hud-label" id="hudL2"></div><div class="hud-val" id="hudV2"></div></div>
+<div class="hud-item"><div class="hud-label" id="hudL3"></div><div class="hud-val" id="hudV3"></div></div>
+<div class="hud-item"><div class="hud-label" id="hudL4"></div><div class="hud-val" id="hudV4"></div></div>
+</div>
+</div>
+
+<script src="animation_runtime.js"></script>
+
+<script>
+// ============================================================
+// ROCKET-INFERENCE ANALOGY
+//
+// Thrust    <->  Model compute (params / FLOPs)
+// Velocity  <->  Inference capability
+// Orbit     <->  Task complexity ceiling
+//
+// Frame 0: Intro -- the analogy explained
+// Frame 1: Small rocket launches -- reaches LEO only
+// Frame 2: Big rocket launches   -- reaches deep space
+// Frame 3: Side-by-side comparison with AI mapping
+// Frame 4: The trade-off chart (cost vs reach)
+// ============================================================
+
+// Physics constants for animation
+var G = 9.8;          // m/s^2 (visual, not real scale)
+var V1 = 7.9;         // first cosmic velocity km/s
+var V2 = 11.2;        // second cosmic velocity km/s
+
+// Rocket specs
+var SMALL = {name:'smallRocket', thrust:0.6, color:'#67e8f9', size:0.7, orbit:'LEO', vMax:7.9,
+             aiName:'smallModel', aiParams:'7B', aiTask:'taskSmall'};
+var BIG   = {name:'bigRocket',   thrust:1.0, color:'#ffb000', size:1.0, orbit:'DEEP', vMax:14.5,
+             aiName:'bigModel',   aiParams:'70B+', aiTask:'taskBig'};
+
+// Particle system for exhaust
+var particles = [];
+function spawnExhaust(x, y, color, count, spread) {
+  for (var i = 0; i < count; i++) {
+    particles.push({
+      x: x + (Math.random()-0.5)*spread,
+      y: y,
+      vx: (Math.random()-0.5)*1.5,
+      vy: Math.random()*3 + 1,
+      life: 1,
+      decay: 0.02 + Math.random()*0.02,
+      color: color,
+      r: 1.5 + Math.random()*2,
+    });
+  }
+}
+function updateParticles() {
+  for (var i = particles.length-1; i >= 0; i--) {
+    var p = particles[i];
+    p.x += p.vx; p.y += p.vy;
+    p.life -= p.decay;
+    p.r *= 0.98;
+    if (p.life <= 0) particles.splice(i, 1);
+  }
+}
+function drawParticles(ctx) {
+  for (var i = 0; i < particles.length; i++) {
+    var p = particles[i];
+    ctx.globalAlpha = p.life * 0.6;
+    ctx.fillStyle = p.color;
+    ctx.shadowColor = p.color;
+    ctx.shadowBlur = 4;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, p.r, 0, Math.PI*2);
+    ctx.fill();
+  }
+  ctx.shadowBlur = 0;
+  ctx.globalAlpha = 1;
+}
+
+// Rocket drawing helper
+function drawRocket(ctx, x, y, scale, color, P) {
+  var s = scale * 18;
+  ctx.save();
+  ctx.translate(x, y);
+  // Body
+  var bodyGrad = ctx.createLinearGradient(-s*0.4, -s*2, s*0.4, -s*2);
+  bodyGrad.addColorStop(0, P.surface);
+  bodyGrad.addColorStop(0.5, color);
+  bodyGrad.addColorStop(1, P.surface);
+  ctx.fillStyle = bodyGrad;
+  ctx.beginPath();
+  ctx.moveTo(0, -s*2.8);         // nose
+  ctx.quadraticCurveTo(s*0.5, -s*2, s*0.45, -s*0.5);  // right body
+  ctx.lineTo(s*0.7, s*0.3);      // right fin
+  ctx.lineTo(s*0.2, 0);
+  ctx.lineTo(-s*0.2, 0);
+  ctx.lineTo(-s*0.7, s*0.3);     // left fin
+  ctx.lineTo(-s*0.45, -s*0.5);
+  ctx.quadraticCurveTo(-s*0.5, -s*2, 0, -s*2.8);
+  ctx.closePath();
+  ctx.fill();
+  // Window
+  ctx.fillStyle = '#d6d9f3';
+  ctx.shadowColor = '#d6d9f3'; ctx.shadowBlur = 4;
+  ctx.beginPath();
+  ctx.arc(0, -s*1.6, s*0.18, 0, Math.PI*2);
+  ctx.fill();
+  ctx.shadowBlur = 0;
+  // Nozzle glow
+  ctx.fillStyle = color;
+  ctx.shadowColor = color; ctx.shadowBlur = 8;
+  ctx.beginPath();
+  ctx.arc(0, s*0.1, s*0.25, 0, Math.PI);
+  ctx.fill();
+  ctx.shadowBlur = 0;
+  ctx.restore();
+}
+
+// Orbit arc drawing
+function drawOrbit(ctx, cx, cy, rx, ry, color, dash) {
+  ctx.save();
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 1;
+  ctx.shadowColor = color; ctx.shadowBlur = 6;
+  if (dash) ctx.setLineDash(dash);
+  ctx.beginPath();
+  ctx.ellipse(cx, cy, rx, ry, 0, 0, Math.PI*2);
+  ctx.stroke();
+  ctx.restore();
+}
+
+// Earth drawing
+function drawEarth(ctx, cx, cy, r) {
+  // Atmosphere glow
+  var atm = ctx.createRadialGradient(cx, cy, r*0.8, cx, cy, r*1.4);
+  atm.addColorStop(0, 'rgba(34,211,238,0.15)');
+  atm.addColorStop(1, 'rgba(34,211,238,0)');
+  ctx.fillStyle = atm;
+  ctx.beginPath(); ctx.arc(cx, cy, r*1.4, 0, Math.PI*2); ctx.fill();
+  // Body
+  var eg = ctx.createRadialGradient(cx-r*0.2, cy-r*0.2, r*0.1, cx, cy, r);
+  eg.addColorStop(0, '#22d3ee');
+  eg.addColorStop(0.5, '#0891b2');
+  eg.addColorStop(1, '#155e75');
+  ctx.fillStyle = eg;
+  ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI*2); ctx.fill();
+  // Continents (abstract patches)
+  ctx.fillStyle = 'rgba(74,222,128,0.35)';
+  ctx.beginPath(); ctx.ellipse(cx-r*0.2, cy-r*0.1, r*0.3, r*0.2, 0.3, 0, Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.ellipse(cx+r*0.3, cy+r*0.2, r*0.2, r*0.15, -0.2, 0, Math.PI*2); ctx.fill();
+}
+
+// Stars background
+var stars = [];
+for (var i = 0; i < 60; i++) {
+  stars.push({x:Math.random(), y:Math.random(), r:0.3+Math.random()*1.2, a:0.3+Math.random()*0.7});
+}
+
+// Continuous animation state
+var animTime = 0;
+var animRaf = null;
+var lastLaunchFrame = -1;
+
+function drawBg(ctx, W, H) {
+  var P = AnimRuntime.PAL;
+  var g = ctx.createLinearGradient(0, 0, 0, H);
+  g.addColorStop(0, '#05070a');
+  g.addColorStop(0.6, '#0d111f');
+  g.addColorStop(1, '#111425');
+  ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+  // Stars
+  for (var i = 0; i < stars.length; i++) {
+    var s = stars[i];
+    var twinkle = 0.6 + 0.4 * Math.sin(animTime * 0.003 + i * 1.7);
+    ctx.globalAlpha = s.a * twinkle;
+    ctx.fillStyle = '#d6d9f3';
+    ctx.beginPath(); ctx.arc(s.x*W, s.y*H, s.r, 0, Math.PI*2); ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+}
+
+var CONFIG = {
+  style: 'rocketry_control',
+  totalFrames: 5,
+
+  i18n: {
+    title:    {en:'ROCKET THRUST & INFERENCE', cn:'\u706b\u7bad\u63a8\u529b\u4e0e\u63a8\u7406\u80fd\u529b'},
+    subtitle: {en:'THRUST = COMPUTE, ORBIT = TASK CEILING', cn:'\u63a8\u529b = \u7b97\u529b\uff0c\u8f68\u9053 = \u4efb\u52a1\u4e0a\u9650'},
+    guideTitle: {en:'OBSERVATION GUIDE', cn:'\u89c2\u5bdf\u6307\u5357'},
+    g1: {en:'Thrust determines the orbit a rocket can reach', cn:'\u63a8\u529b\u51b3\u5b9a\u706b\u7bad\u80fd\u8fbe\u5230\u7684\u8f68\u9053'},
+    g2: {en:'Small rocket = LEO (satellite), Big rocket = deep space', cn:'\u5c0f\u706b\u7bad = \u8fd1\u5730\u8f68\u9053(\u536b\u661f)\uff0c\u5927\u706b\u7bad = \u6df1\u7a7a'},
+    g3: {en:'AI models: more params = higher inference ceiling', cn:'AI\u6a21\u578b\uff1a\u53c2\u6570\u8d8a\u591a = \u63a8\u7406\u80fd\u529b\u4e0a\u9650\u8d8a\u9ad8'},
+    g4: {en:'But bigger rockets cost more fuel (compute cost)', cn:'\u4f46\u5927\u706b\u7bad\u66f4\u8017\u71c3\u6599(\u7b97\u529b\u6210\u672c)'},
+
+    fTitle0: {en:'THE ANALOGY', cn:'\u7c7b\u6bd4'},
+    fTitle1: {en:'SMALL ROCKET LAUNCH', cn:'\u5c0f\u706b\u7bad\u53d1\u5c04'},
+    fTitle2: {en:'HEAVY ROCKET LAUNCH', cn:'\u5927\u706b\u7bad\u53d1\u5c04'},
+    fTitle3: {en:'ROCKET <-> AI MAPPING', cn:'\u706b\u7bad <-> AI \u6620\u5c04'},
+    fTitle4: {en:'COST vs REACH', cn:'\u6210\u672c vs \u80fd\u529b'},
+
+    smallRocket: {en:'LIGHT ROCKET', cn:'\u8f7b\u578b\u706b\u7bad'},
+    bigRocket:   {en:'HEAVY ROCKET', cn:'\u91cd\u578b\u706b\u7bad'},
+    smallModel:  {en:'SMALL MODEL (7B)', cn:'\u5c0f\u6a21\u578b (7B)'},
+    bigModel:    {en:'LARGE MODEL (70B+)', cn:'\u5927\u6a21\u578b (70B+)'},
+
+    leo:  {en:'LEO (Low Earth Orbit)', cn:'LEO (\u8fd1\u5730\u8f68\u9053)'},
+    deep: {en:'DEEP SPACE',            cn:'\u6df1\u7a7a'},
+
+    taskSmall: {en:'Classification, Extraction, Summarization', cn:'\u5206\u7c7b\u3001\u62bd\u53d6\u3001\u6458\u8981'},
+    taskBig:   {en:'Reasoning, Planning, Code Generation', cn:'\u63a8\u7406\u3001\u89c4\u5212\u3001\u4ee3\u7801\u751f\u6210'},
+
+    thrustLabel: {en:'THRUST', cn:'\u63a8\u529b'},
+    velLabel:    {en:'VELOCITY', cn:'\u901f\u5ea6'},
+    v1Label:     {en:'1st Cosmic Vel (7.9 km/s)', cn:'\u7b2c\u4e00\u5b87\u5b99\u901f\u5ea6 (7.9 km/s)'},
+    v2Label:     {en:'2nd Cosmic Vel (11.2 km/s)', cn:'\u7b2c\u4e8c\u5b87\u5b99\u901f\u5ea6 (11.2 km/s)'},
+    costLabel:   {en:'COST', cn:'\u6210\u672c'},
+    reachLabel:  {en:'REACH', cn:'\u80fd\u529b\u8303\u56f4'},
+    satellite:   {en:'SATELLITE', cn:'\u536b\u661f'},
+    exploration: {en:'EXPLORATION', cn:'\u63a2\u7d22'},
+
+    rocketSide:  {en:'ROCKET', cn:'\u706b\u7bad'},
+    aiSide:      {en:'AI MODEL', cn:'AI\u6a21\u578b'},
+    mapThrust:   {en:'Thrust -> Compute (FLOPs)', cn:'\u63a8\u529b -> \u7b97\u529b (FLOPs)'},
+    mapVel:      {en:'Velocity -> Inference speed', cn:'\u901f\u5ea6 -> \u63a8\u7406\u901f\u5ea6'},
+    mapOrbit:    {en:'Orbit -> Task complexity ceiling', cn:'\u8f68\u9053 -> \u4efb\u52a1\u590d\u6742\u5ea6\u4e0a\u9650'},
+    mapFuel:     {en:'Fuel -> GPU cost', cn:'\u71c3\u6599 -> GPU\u6210\u672c'},
+
+    hudL1: {en:'SCENARIO', cn:'\u573a\u666f'},
+    hudL2: {en:'THRUST',   cn:'\u63a8\u529b'},
+    hudL3: {en:'V-MAX',    cn:'\u6700\u5927\u901f\u5ea6'},
+    hudL4: {en:'ORBIT',    cn:'\u8f68\u9053'},
+
+    hud_f0: {en:'ANALOGY',     cn:'\u7c7b\u6bd4'},
+    hud_f1: {en:'LIGHT',       cn:'\u8f7b\u578b'},
+    hud_f2: {en:'HEAVY',       cn:'\u91cd\u578b'},
+    hud_f3: {en:'COMPARE',     cn:'\u5bf9\u6bd4'},
+    hud_f4: {en:'TRADE-OFF',   cn:'\u6743\u8861'},
+  },
+
+  hudLabels: ['hudL1', 'hudL2', 'hudL3', 'hudL4'],
+  hudValues: [
+    ['hud_f0', '--',     '--',         '--'],
+    ['hud_f1', '120 kN', '7.9 km/s',   'LEO'],
+    ['hud_f2', '3400 kN','11.2+ km/s', 'DEEP'],
+    ['hud_f3', '--',     '--',         '--'],
+    ['hud_f4', '--',     '--',         '--'],
+  ],
+
+  guideTitle: 'guideTitle',
+  guideItems: ['g1', 'g2', 'g3', 'g4'],
+};
+
+// ============================================================
+// CONTINUOUS ANIMATION LOOP (for exhaust particles on launch frames)
+// ============================================================
+function startAnimLoop() {
+  if (animRaf) return;
+  function tick() {
+    animTime++;
+    var cf = AnimRuntime.currentFrame;
+    if (cf === 1 || cf === 2) {
+      updateParticles();
+      // Spawn exhaust
+      var W = AnimRuntime.W, H = AnimRuntime.H;
+      if (cf === 1) {
+        spawnExhaust(W*0.5, H*0.55 + 18*0.7, '#67e8f9', 2, 6);
+      } else {
+        spawnExhaust(W*0.5, H*0.48 + 18, '#ffb000', 3, 8);
+      }
+      // Redraw
+      var bgFn = drawBg;
+      var ctx = AnimRuntime.ctx;
+      bgFn(ctx, AnimRuntime.realW, AnimRuntime.realH);
+      AnimRuntime.applyContentScale();
+      var elems = getFrameElements(cf, W, H);
+      elems.forEach(function(el) { AnimRuntime.drawElement(el); });
+      drawParticles(ctx);
+      AnimRuntime.restoreContentScale();
+    }
+    animRaf = requestAnimationFrame(tick);
+  }
+  tick();
+}
+
+function onReady() {
+  startAnimLoop();
+}
+
+// ============================================================
+// FRAME ELEMENTS
+// ============================================================
+function getFrameElements(f, W, H) {
+  var t = AnimRuntime.t;
+  var P = AnimRuntime.PAL;
+  var elems = [];
+  var cx = W / 2, cy = H / 2;
+
+  elems.push({id:'fTitle', type:'label', text:t('fTitle'+f), x:cx, y:H*0.06,
+    color:P.tertiary || '#d6d9f3', size:Math.max(11,W*0.013), align:'center', bold:true, alpha:1});
+
+  // === FRAME 0: The analogy intro ===
+  if (f === 0) {
+    // Earth in center-bottom
+    var earthR = Math.min(W,H) * 0.12;
+    var earthCx = cx, earthCy = H * 0.78;
+    elems.push({id:'earth', type:'custom', x:earthCx, y:earthCy, r:earthR, alpha:1,
+      draw:function(a){ var c=AnimRuntime.ctx; c.globalAlpha=a; drawEarth(c,this.x,this.y,this.r); c.globalAlpha=1; }});
+
+    // LEO orbit
+    elems.push({id:'leoOrbit', type:'custom', x:earthCx, y:earthCy, alpha:1,
+      draw:function(a){ var c=AnimRuntime.ctx; c.globalAlpha=a*0.5;
+        drawOrbit(c,this.x,this.y,earthR*2.2,earthR*0.8,'#67e8f9',[4,4]); c.globalAlpha=1; }});
+    elems.push({id:'leoLabel', type:'label', text:t('leo'), x:earthCx+earthR*2.4, y:earthCy-earthR*0.3,
+      color:'#67e8f9', size:Math.max(9,W*0.01), align:'left', bold:false, alpha:1});
+
+    // Deep space arrow going up
+    elems.push({id:'deepArrow', type:'arrow', x1:cx, y1:H*0.35, x2:cx, y2:H*0.12,
+      color:P.primary, lineWidth:1.5, headSize:7, alpha:1});
+    elems.push({id:'deepLabel', type:'label', text:t('deep'), x:cx, y:H*0.10,
+      color:P.primary, size:Math.max(10,W*0.012), align:'center', bold:true, alpha:1});
+
+    // Left: small rocket
+    drawRocketElement(elems, 'sRocket', cx - W*0.22, H*0.48, SMALL, P);
+    elems.push({id:'sName', type:'label', text:t('smallRocket'), x:cx-W*0.22, y:H*0.62,
+      color:'#67e8f9', size:Math.max(10,W*0.012), align:'center', bold:true, alpha:1});
+
+    // Right: big rocket
+    drawRocketElement(elems, 'bRocket', cx + W*0.22, H*0.42, BIG, P);
+    elems.push({id:'bName', type:'label', text:t('bigRocket'), x:cx+W*0.22, y:H*0.62,
+      color:P.primary, size:Math.max(10,W*0.012), align:'center', bold:true, alpha:1});
+
+    // Analogy text
+    var anaText = {
+      en:'Thrust determines how far you can go',
+      cn:'\u63a8\u529b\u51b3\u5b9a\u4f60\u80fd\u98de\u591a\u8fdc'
+    };
+    elems.push({id:'anaText', type:'label', text:anaText[AnimRuntime.LANG]||anaText.en,
+      x:cx, y:H*0.37, color:P.text, size:Math.max(12,W*0.015), align:'center', bold:true, alpha:1});
+
+    return elems;
+  }
+
+  // === FRAME 1: Small rocket -- reaches LEO ===
+  if (f === 1) {
+    var earthR = Math.min(W,H) * 0.13;
+    var earthCy = H * 0.82;
+    elems.push({id:'earth', type:'custom', x:cx, y:earthCy, r:earthR, alpha:1,
+      draw:function(a){ var c=AnimRuntime.ctx; c.globalAlpha=a; drawEarth(c,this.x,this.y,this.r); c.globalAlpha=1; }});
+
+    // LEO orbit
+    elems.push({id:'leoOrbit', type:'custom', x:cx, y:earthCy, alpha:1,
+      draw:function(a){ var c=AnimRuntime.ctx; c.globalAlpha=a*0.6;
+        drawOrbit(c,this.x,this.y,earthR*2.5,earthR*1.0,'#67e8f9',[4,3]); c.globalAlpha=1; }});
+    elems.push({id:'leoLabel', type:'label', text:t('leo'), x:cx+earthR*2.7, y:earthCy-earthR*0.6,
+      color:'#67e8f9', size:Math.max(9,W*0.01), align:'left', bold:true, alpha:1});
+
+    // V1 velocity line
+    elems.push({id:'v1Line', type:'line', x1:W*0.08, y1:H*0.38, x2:W*0.92, y2:H*0.38,
+      color:'rgba(103,232,249,0.3)', lineWidth:1, dash:[6,4], alpha:1});
+    elems.push({id:'v1Label', type:'label', text:t('v1Label'), x:W*0.08, y:H*0.35,
+      color:'#67e8f9', size:Math.max(8,W*0.009), align:'left', bold:false, alpha:1});
+
+    // Small rocket at orbit height
+    drawRocketElement(elems, 'sRocket', cx, H*0.45, SMALL, P);
+
+    // Satellite icon near orbit
+    elems.push({id:'satIcon', type:'custom', x:cx+earthR*1.8, y:earthCy-earthR*0.7, alpha:1,
+      draw:function(a){
+        var c=AnimRuntime.ctx; c.globalAlpha=a;
+        c.fillStyle='#67e8f9'; c.shadowColor='#67e8f9'; c.shadowBlur=6;
+        c.fillRect(this.x-4, this.y-2, 8, 4);
+        c.fillRect(this.x-10, this.y-1, 6, 2);
+        c.fillRect(this.x+4, this.y-1, 6, 2);
+        c.shadowBlur=0; c.globalAlpha=1;
+      }});
+    elems.push({id:'satLabel', type:'label', text:t('satellite'), x:cx+earthR*1.8, y:earthCy-earthR*0.7-12,
+      color:'#67e8f9', size:Math.max(8,W*0.009), align:'center', bold:true, alpha:1});
+
+    // Thrust info
+    elems.push({id:'thrustInfo', type:'label', text:t('thrustLabel')+': 120 kN', x:cx, y:H*0.16,
+      color:P.muted, size:Math.max(10,W*0.012), align:'center', bold:false, alpha:1});
+    elems.push({id:'velInfo', type:'label', text:'v = 7.9 km/s', x:cx, y:H*0.22,
+      color:'#67e8f9', size:Math.max(13,W*0.016), align:'center', bold:true, alpha:1});
+
+    return elems;
+  }
+
+  // === FRAME 2: Big rocket -- reaches deep space ===
+  if (f === 2) {
+    var earthR = Math.min(W,H) * 0.10;
+    var earthCy = H * 0.88;
+    elems.push({id:'earth', type:'custom', x:cx, y:earthCy, r:earthR, alpha:1,
+      draw:function(a){ var c=AnimRuntime.ctx; c.globalAlpha=a; drawEarth(c,this.x,this.y,this.r); c.globalAlpha=1; }});
+
+    // LEO orbit (passed through)
+    elems.push({id:'leoOrbit', type:'custom', x:cx, y:earthCy, alpha:1,
+      draw:function(a){ var c=AnimRuntime.ctx; c.globalAlpha=a*0.25;
+        drawOrbit(c,this.x,this.y,earthR*2.2,earthR*0.8,'#67e8f9',[3,3]); c.globalAlpha=1; }});
+
+    // V1 line (already passed)
+    elems.push({id:'v1Line', type:'line', x1:W*0.08, y1:H*0.58, x2:W*0.92, y2:H*0.58,
+      color:'rgba(103,232,249,0.15)', lineWidth:1, dash:[4,4], alpha:1});
+
+    // V2 line
+    elems.push({id:'v2Line', type:'line', x1:W*0.08, y1:H*0.30, x2:W*0.92, y2:H*0.30,
+      color:'rgba(255,176,0,0.3)', lineWidth:1, dash:[6,4], alpha:1});
+    elems.push({id:'v2Label', type:'label', text:t('v2Label'), x:W*0.08, y:H*0.27,
+      color:P.primary, size:Math.max(8,W*0.009), align:'left', bold:false, alpha:1});
+
+    // Big rocket above V2
+    drawRocketElement(elems, 'bRocket', cx, H*0.38, BIG, P);
+
+    // Deep space trail
+    elems.push({id:'trail', type:'arrow', x1:cx, y1:H*0.25, x2:cx, y2:H*0.10,
+      color:P.primary, lineWidth:2, headSize:8, alpha:1});
+    elems.push({id:'deepLabel', type:'label', text:t('deep'), x:cx, y:H*0.07,
+      color:P.primary, size:Math.max(12,W*0.014), align:'center', bold:true, alpha:1});
+
+    // Thrust info
+    elems.push({id:'thrustInfo', type:'label', text:t('thrustLabel')+': 3,400 kN', x:cx, y:H*0.16,
+      color:P.muted, size:Math.max(10,W*0.012), align:'center', bold:false, alpha:1});
+    elems.push({id:'velInfo', type:'label', text:'v = 11.2+ km/s', x:cx, y:H*0.22,
+      color:P.primary, size:Math.max(13,W*0.016), align:'center', bold:true, alpha:1});
+
+    // Exploration label
+    elems.push({id:'expLabel', type:'label', text:t('exploration'), x:cx+W*0.15, y:H*0.10,
+      color:P.secondary || '#ffb08e', size:Math.max(9,W*0.01), align:'left', bold:true, alpha:1});
+
+    return elems;
+  }
+
+  // === FRAME 3: Side-by-side mapping ===
+  if (f === 3) {
+    var colW = W * 0.32;
+    var leftX = W*0.10, rightX = W*0.58;
+    var rowY = H*0.15, rowH = Math.min(40, H*0.11);
+    var labelSize = Math.max(10,W*0.012);
+
+    // Column headers
+    elems.push({id:'colRocket', type:'label', text:t('rocketSide'), x:leftX+colW/2, y:rowY,
+      color:P.primary, size:Math.max(12,W*0.014), align:'center', bold:true, alpha:1});
+    elems.push({id:'colAI', type:'label', text:t('aiSide'), x:rightX+colW/2, y:rowY,
+      color:P.tertiary||'#d6d9f3', size:Math.max(12,W*0.014), align:'center', bold:true, alpha:1});
+
+    // Divider
+    elems.push({id:'divider', type:'line', x1:cx, y1:rowY+12, x2:cx, y2:rowY+rowH*5,
+      color:'rgba(138,136,134,0.2)', lineWidth:1, alpha:1});
+
+    // Mapping rows
+    var mappings = ['mapThrust', 'mapVel', 'mapOrbit', 'mapFuel'];
+    var leftIcons  = ['\u2191 Force', '\u2192 Speed', '\u25cb Orbit', '\u25bd Fuel'];
+    var rightIcons = ['\u2191 FLOPs', '\u2192 tok/s', '\u25cb Tasks', '\u25bd $/query'];
+    var rowColors  = [P.primary, P.secondary||'#ffb08e', '#67e8f9', P.error||'#ff716c'];
+
+    for (var i = 0; i < 4; i++) {
+      var ry = rowY + (i+1)*rowH + 8;
+      // Left side
+      elems.push({id:'rLeft'+i, type:'label', text:leftIcons[i],
+        x:leftX+colW*0.3, y:ry, color:rowColors[i], size:labelSize, align:'center', bold:false, alpha:1});
+      // Arrow
+      elems.push({id:'mapArr'+i, type:'arrow', x1:leftX+colW*0.6, y1:ry, x2:rightX+colW*0.15, y2:ry,
+        color:rowColors[i], lineWidth:1, headSize:5, alpha:1});
+      // Right side
+      elems.push({id:'rRight'+i, type:'label', text:rightIcons[i],
+        x:rightX+colW*0.5, y:ry, color:rowColors[i], size:labelSize, align:'center', bold:false, alpha:1});
+      // Mapping text below
+      elems.push({id:'mapText'+i, type:'text', text:t(mappings[i]),
+        x:cx, y:ry+14, color:P.muted, size:Math.max(8,W*0.009), align:'center', alpha:1});
+    }
+
+    // Bottom summary boxes
+    var boxY = rowY + 5*rowH + 30;
+    var boxW = W*0.35, boxH = Math.min(48, H*0.12);
+
+    // Small
+    elems.push({id:'sBox', type:'box', x:W*0.06, y:boxY, w:boxW, h:boxH,
+      fill:'rgba(103,232,249,0.08)', stroke:'#67e8f9', lineWidth:1, alpha:1});
+    elems.push({id:'sBoxTitle', type:'label', text:t('smallRocket')+' = '+t('smallModel'),
+      x:W*0.06+boxW/2, y:boxY+boxH*0.35, color:'#67e8f9', size:Math.max(9,W*0.011), align:'center', bold:true, alpha:1});
+    elems.push({id:'sBoxTask', type:'text', text:t('taskSmall'),
+      x:W*0.06+boxW/2, y:boxY+boxH*0.7, color:P.muted, size:Math.max(8,W*0.009), align:'center', alpha:1});
+
+    // Big
+    elems.push({id:'bBox', type:'box', x:W*0.58, y:boxY, w:boxW, h:boxH,
+      fill:'rgba(255,176,0,0.08)', stroke:P.primary, lineWidth:1, alpha:1});
+    elems.push({id:'bBoxTitle', type:'label', text:t('bigRocket')+' = '+t('bigModel'),
+      x:W*0.58+boxW/2, y:boxY+boxH*0.35, color:P.primary, size:Math.max(9,W*0.011), align:'center', bold:true, alpha:1});
+    elems.push({id:'bBoxTask', type:'text', text:t('taskBig'),
+      x:W*0.58+boxW/2, y:boxY+boxH*0.7, color:P.muted, size:Math.max(8,W*0.009), align:'center', alpha:1});
+
+    return elems;
+  }
+
+  // === FRAME 4: Cost vs Reach trade-off chart ===
+  if (f === 4) {
+    // Axes
+    var axisL = W*0.12, axisR = W*0.88;
+    var axisT = H*0.18, axisB = H*0.72;
+    var axisW = axisR - axisL, axisH = axisB - axisT;
+
+    // Y axis (cost)
+    elems.push({id:'yAxis', type:'arrow', x1:axisL, y1:axisB, x2:axisL, y2:axisT-10,
+      color:P.muted, lineWidth:1.5, headSize:6, alpha:1});
+    elems.push({id:'yLabel', type:'label', text:t('costLabel'),
+      x:axisL-8, y:axisT-18, color:P.muted, size:Math.max(9,W*0.01), align:'right', bold:true, alpha:1});
+
+    // X axis (reach / capability)
+    elems.push({id:'xAxis', type:'arrow', x1:axisL, y1:axisB, x2:axisR+10, y2:axisB,
+      color:P.muted, lineWidth:1.5, headSize:6, alpha:1});
+    elems.push({id:'xLabel', type:'label', text:t('reachLabel'),
+      x:axisR+8, y:axisB+14, color:P.muted, size:Math.max(9,W*0.01), align:'left', bold:true, alpha:1});
+
+    // Exponential curve (cost grows faster than reach)
+    elems.push({id:'curve', type:'custom', alpha:1,
+      draw:function(a){
+        var c = AnimRuntime.ctx;
+        c.globalAlpha = a;
+        c.strokeStyle = P.primary;
+        c.lineWidth = 2.5;
+        c.shadowColor = P.primary; c.shadowBlur = 8;
+        c.beginPath();
+        for (var i = 0; i <= 50; i++) {
+          var px = i / 50;
+          var py = Math.pow(px, 2.2); // exponential cost curve
+          var sx = axisL + px * axisW;
+          var sy = axisB - py * axisH;
+          if (i === 0) c.moveTo(sx, sy); else c.lineTo(sx, sy);
+        }
+        c.stroke();
+        c.shadowBlur = 0;
+        c.globalAlpha = 1;
+      }});
+
+    // Small rocket dot on curve
+    var sPx = 0.35, sPy = Math.pow(sPx, 2.2);
+    var sDotX = axisL + sPx * axisW, sDotY = axisB - sPy * axisH;
+    elems.push({id:'sDot', type:'circle', x:sDotX, y:sDotY, r:6,
+      fill:'#67e8f9', glow:'#67e8f9', glowSize:10, alpha:1});
+    elems.push({id:'sDotLabel', type:'label', text:t('smallRocket'),
+      x:sDotX+12, y:sDotY-14, color:'#67e8f9', size:Math.max(9,W*0.01), align:'left', bold:true, alpha:1});
+    elems.push({id:'sDotAI', type:'text', text:'7B - '+t('taskSmall'),
+      x:sDotX+12, y:sDotY+2, color:P.muted, size:Math.max(8,W*0.009), align:'left', alpha:1});
+
+    // Big rocket dot on curve
+    var bPx = 0.82, bPy = Math.pow(bPx, 2.2);
+    var bDotX = axisL + bPx * axisW, bDotY = axisB - bPy * axisH;
+    elems.push({id:'bDot', type:'circle', x:bDotX, y:bDotY, r:6,
+      fill:P.primary, glow:P.primary, glowSize:10, alpha:1});
+    elems.push({id:'bDotLabel', type:'label', text:t('bigRocket'),
+      x:bDotX-12, y:bDotY-14, color:P.primary, size:Math.max(9,W*0.01), align:'right', bold:true, alpha:1});
+    elems.push({id:'bDotAI', type:'text', text:'70B+ - '+t('taskBig'),
+      x:bDotX-12, y:bDotY+2, color:P.muted, size:Math.max(8,W*0.009), align:'right', alpha:1});
+
+    // Takeaway
+    var takeText = {
+      en:'Bigger model = deeper reach, but cost grows exponentially',
+      cn:'\u6a21\u578b\u8d8a\u5927 = \u80fd\u529b\u8d8a\u6df1\uff0c\u4f46\u6210\u672c\u6307\u6570\u589e\u957f'
+    };
+    elems.push({id:'takeaway', type:'label', text:takeText[AnimRuntime.LANG]||takeText.en,
+      x:cx, y:H*0.82, color:P.text, size:Math.max(10,W*0.013), align:'center', bold:true, alpha:1});
+
+    return elems;
+  }
+
+  return elems;
+}
+
+// Helper: add a rocket element
+function drawRocketElement(elems, id, x, y, spec, P) {
+  elems.push({id:id, type:'custom', x:x, y:y, alpha:1,
+    scale:spec.size, rocketColor:spec.color,
+    draw:function(a){
+      var c = AnimRuntime.ctx;
+      c.globalAlpha = a;
+      drawRocket(c, this.x, this.y, this.scale, this.rocketColor, AnimRuntime.PAL);
+      c.globalAlpha = 1;
+    }});
+}
+
+AnimRuntime.boot();
+</script>
+</body>
+</html>

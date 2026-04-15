@@ -1,0 +1,491 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>From Raw Logs to Structured Telemetry</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;700&family=Inter:wght@400;500&family=Noto+Sans+SC:wght@400;700&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{width:100%;height:100vh;overflow:hidden;background:#131313;font-family:'Noto Sans SC','Inter',sans-serif;color:#e5e2e1}
+.wrapper{display:flex;flex-direction:column;height:100vh;width:100%}
+.header{padding:10px 16px 6px;text-align:center;flex-shrink:0}
+.header h1{font-family:'Space Grotesk',sans-serif;font-size:16px;font-weight:700;color:#ffb59c;letter-spacing:2px;text-transform:uppercase}
+.header .subtitle{font-size:12px;color:#8a8886;margin-top:2px;font-family:'Space Grotesk',sans-serif;letter-spacing:1px}
+.canvas-wrap{flex:1;min-height:0;position:relative}
+.canvas-wrap canvas{display:block;width:100%;height:100%}
+.controls{display:flex;justify-content:center;align-items:center;gap:12px;padding:8px 0;flex-shrink:0;background:rgba(28,27,27,0.92);border-top:1px solid rgba(138,136,134,0.15)}
+.controls button{font-family:'Space Grotesk',sans-serif;font-size:11px;font-weight:700;letter-spacing:1px;padding:6px 18px;cursor:pointer;border:1px solid rgba(255,255,255,0.08);background:rgba(20,20,35,0.85);backdrop-filter:blur(12px);color:#ffb59c;text-transform:uppercase}
+.controls button:hover{background:rgba(255,181,156,0.12)}
+.controls .frame-info{font-family:'Space Grotesk',sans-serif;font-size:12px;color:#8a8886;min-width:60px;text-align:center}
+.hud{display:flex;justify-content:space-around;align-items:center;height:48px;background:rgba(0,0,0,0.55);flex-shrink:0;border-top:1px solid rgba(138,136,134,0.15)}
+.hud .hud-item{text-align:center}
+.hud .hud-label{font-family:'Space Grotesk',sans-serif;font-size:9px;color:#8a8886;letter-spacing:1px;text-transform:uppercase}
+.hud .hud-value{font-family:'Space Grotesk',sans-serif;font-size:14px;color:#ffb59c;font-weight:700}
+.lang-btn{position:fixed;top:8px;left:8px;z-index:100;font-family:'Space Grotesk',sans-serif;font-size:11px;font-weight:700;padding:4px 10px;cursor:pointer;border:1px solid rgba(255,255,255,0.08);background:rgba(20,20,35,0.85);backdrop-filter:blur(12px);color:#ffb59c;letter-spacing:1px}
+.guide-panel{position:fixed;top:8px;right:8px;width:240px;max-height:40vh;overflow-y:auto;background:rgba(20,20,35,0.85);backdrop-filter:blur(12px);border:1px solid rgba(255,255,255,0.08);padding:12px;z-index:100;font-family:'Noto Sans SC',sans-serif;font-size:12px;color:rgba(255,255,255,0.85)}
+.guide-panel h3{font-family:'Space Grotesk',sans-serif;font-size:13px;margin-bottom:6px;display:flex;align-items:center;justify-content:space-between;cursor:pointer;color:#ffb59c}
+.guide-panel ul{padding-left:16px;line-height:1.6}
+.guide-panel .guide-content{transition:max-height 0.3s}
+.guide-panel.collapsed .guide-content{max-height:0;overflow:hidden}
+</style>
+</head>
+<body>
+<button class="lang-btn" id="langBtn">CN</button>
+<div class="guide-panel" id="guidePanel">
+<h3 id="guideToggle"><span id="guideTitle"></span><span id="guideArrow">-</span></h3>
+<div class="guide-content" id="guideContent">
+<p id="guideDesc" style="margin-bottom:8px"></p>
+<ul id="guideList"></ul>
+<p id="guideTakeaway" style="margin-top:8px;color:#ffb59c;font-size:11px"></p>
+</div>
+</div>
+<div class="wrapper">
+<div class="header">
+<h1 id="titleText"></h1>
+<div class="subtitle" id="subtitleText"></div>
+</div>
+<div class="canvas-wrap" id="canvasWrap">
+<canvas id="c"></canvas>
+</div>
+<div class="controls">
+<button id="btnPrev"></button>
+<button id="btnPlay"></button>
+<button id="btnNext"></button>
+<span class="frame-info" id="frameInfo"></span>
+</div>
+<div class="hud">
+<div class="hud-item"><div class="hud-label" id="hudLabel0"></div><div class="hud-value" id="hudValue0"></div></div>
+<div class="hud-item"><div class="hud-label" id="hudLabel1"></div><div class="hud-value" id="hudValue1"></div></div>
+<div class="hud-item"><div class="hud-label" id="hudLabel2"></div><div class="hud-value" id="hudValue2"></div></div>
+<div class="hud-item"><div class="hud-label" id="hudLabel3"></div><div class="hud-value" id="hudValue3"></div></div>
+</div>
+</div>
+<script>
+(function(){
+var LANG='cn';
+var I18N={
+  title:{en:'FROM LOGS TO TELEMETRY',cn:'\u4ece\u65e5\u5fd7\u6d41\u6c34\u5230\u7ed3\u6784\u5316\u9065\u6d4b'},
+  subtitle:{en:'Structured Logging for Mission Control',cn:'\u4efb\u52a1\u63a7\u5236\u4e2d\u5fc3\u7684\u7ed3\u6784\u5316\u65e5\u5fd7'},
+  btnPrev:{en:'PREV',cn:'\u4e0a\u4e00\u5e27'},
+  btnPlay:{en:'PLAY',cn:'\u64ad\u653e'},
+  btnPause:{en:'PAUSE',cn:'\u6682\u505c'},
+  btnNext:{en:'NEXT',cn:'\u4e0b\u4e00\u5e27'},
+  guideTitle:{en:'GUIDE',cn:'\u64cd\u4f5c\u6307\u5357'},
+  guideDesc:{en:'This animation shows how raw print logs transform into structured telemetry data for mission control.',cn:'\u672c\u52a8\u753b\u5c55\u793a\u539f\u59cb print \u65e5\u5fd7\u5982\u4f55\u53d8\u6210\u4efb\u52a1\u63a7\u5236\u4e2d\u5fc3\u53ef\u7528\u7684\u7ed3\u6784\u5316\u9065\u6d4b\u6570\u636e\u3002'},
+  guideObs1:{en:'Watch how chaotic text becomes organized fields',cn:'\u89c2\u5bdf\u6742\u4e71\u6587\u672c\u5982\u4f55\u53d8\u6210\u6709\u5e8f\u5b57\u6bb5'},
+  guideObs2:{en:'Notice the 6 key fields: timestamp, module, level, metric, value, message',cn:'\u6ce8\u610f 6 \u4e2a\u5173\u952e\u5b57\u6bb5\uff1a\u65f6\u95f4\u6233\u3001\u6a21\u5757\u3001\u7ea7\u522b\u3001\u6307\u6807\u540d\u3001\u6307\u6807\u503c\u3001\u6d88\u606f'},
+  guideObs3:{en:'See how structured data flows into a telemetry dashboard',cn:'\u770b\u7ed3\u6784\u5316\u6570\u636e\u5982\u4f55\u6c47\u5165\u9065\u6d4b\u770b\u677f'},
+  guideTakeaway:{en:'Structured logs enable querying, alerting, and dashboard visualization.',cn:'\u7ed3\u6784\u5316\u65e5\u5fd7\u8ba9\u67e5\u8be2\u3001\u544a\u8b66\u548c\u770b\u677f\u53ef\u89c6\u5316\u6210\u4e3a\u53ef\u80fd\u3002'},
+  frame0Title:{en:'RAW LOG OUTPUT',cn:'\u539f\u59cb\u65e5\u5fd7\u8f93\u51fa'},
+  frame1Title:{en:'FIELD EXTRACTION',cn:'\u5b57\u6bb5\u62bd\u53d6'},
+  frame2Title:{en:'STRUCTURED TABLE',cn:'\u7ed3\u6784\u5316\u8868\u683c'},
+  frame3Title:{en:'TELEMETRY STREAM',cn:'\u9065\u6d4b\u6570\u636e\u6d41'},
+  frame0Desc:{en:'Unorganized print statements scattered across modules',cn:'\u5404\u6a21\u5757\u6563\u843d\u7684 print \u8bed\u53e5\u6df7\u4e71\u8f93\u51fa'},
+  frame1Desc:{en:'Identifying timestamp, module, level, metric fields',cn:'\u8bc6\u522b\u65f6\u95f4\u6233\u3001\u6a21\u5757\u3001\u7ea7\u522b\u3001\u6307\u6807\u7b49\u5b57\u6bb5'},
+  frame2Desc:{en:'Logs organized into queryable structured records',cn:'\u65e5\u5fd7\u6574\u7406\u4e3a\u53ef\u67e5\u8be2\u7684\u7ed3\u6784\u5316\u8bb0\u5f55'},
+  frame3Desc:{en:'Flowing into mission control telemetry dashboard',cn:'\u6c47\u5165\u4efb\u52a1\u63a7\u5236\u53f0\u9065\u6d4b\u770b\u677f'},
+  hudPhase:{en:'PHASE',cn:'\u9636\u6bb5'},
+  hudFields:{en:'FIELDS',cn:'\u5b57\u6bb5'},
+  hudCoverage:{en:'COVERAGE',cn:'\u8986\u76d6\u7387'},
+  hudFormat:{en:'FORMAT',cn:'\u683c\u5f0f'},
+  phase0:{en:'RAW',cn:'\u539f\u59cb'},
+  phase1:{en:'EXTRACT',cn:'\u62bd\u53d6'},
+  phase2:{en:'TABLE',cn:'\u8868\u683c'},
+  phase3:{en:'STREAM',cn:'\u6d41\u5f0f'},
+  raw0:{en:'print("path ok")',cn:'print("\u8def\u5f84 ok")'},
+  raw1:{en:'print("risk=0.7")',cn:'print("\u98ce\u9669=0.7")'},
+  raw2:{en:'print("delay 230ms")',cn:'print("\u5ef6\u8fdf 230ms")'},
+  raw3:{en:'print("ERROR conn")',cn:'print("ERROR \u8fde\u63a5")'},
+  raw4:{en:'print("trial #5 pass")',cn:'print("\u8bd5\u8dd1#5 \u901a\u8fc7")'},
+  raw5:{en:'print("speed 0.3m/s")',cn:'print("\u901f\u5ea6 0.3m/s")'},
+  raw6:{en:'print("map updated")',cn:'print("\u5730\u56fe\u5df2\u66f4\u65b0")'},
+  raw7:{en:'print("battery 78%")',cn:'print("\u7535\u91cf 78%")'},
+  fieldTimestamp:{en:'TIMESTAMP',cn:'\u65f6\u95f4\u6233'},
+  fieldModule:{en:'MODULE',cn:'\u6a21\u5757'},
+  fieldLevel:{en:'LEVEL',cn:'\u7ea7\u522b'},
+  fieldMetric:{en:'METRIC',cn:'\u6307\u6807\u540d'},
+  fieldValue:{en:'VALUE',cn:'\u6307\u6807\u503c'},
+  fieldMessage:{en:'MESSAGE',cn:'\u6d88\u606f'}
+};
+function t(k){return(I18N[k]&&I18N[k][LANG])||(I18N[k]&&I18N[k]['en'])||k}
+
+var canvas,ctx,W,H,dpr;
+var currentFrame=0,totalFrames=4;
+var transitioning=false,playing=false,playRaf=null;
+
+function lerp(a,b,p){return a+(b-a)*p}
+function easeInOut(x){return x<0.5?2*x*x:1-Math.pow(-2*x+2,2)/2}
+function merge(base,ov){var r={};for(var k in base)r[k]=base[k];for(var k2 in ov)r[k2]=ov[k2];return r}
+
+function resize(){
+  var wrap=document.getElementById('canvasWrap');
+  var rect=wrap.getBoundingClientRect();
+  if(rect.width<1||rect.height<1)return;
+  canvas=document.getElementById('c');
+  dpr=Math.min(window.devicePixelRatio||1,2);
+  W=rect.width;H=rect.height;
+  canvas.width=W*dpr;canvas.height=H*dpr;
+  canvas.style.width=W+'px';canvas.style.height=H+'px';
+  ctx=canvas.getContext('2d');
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+  drawFrame(currentFrame);
+}
+
+function drawBg(){
+  var grd=ctx.createLinearGradient(0,0,0,H);
+  grd.addColorStop(0,'#131313');grd.addColorStop(1,'#1a1510');
+  ctx.fillStyle=grd;ctx.fillRect(0,0,W,H);
+  // grid
+  ctx.strokeStyle='rgba(255,181,156,0.03)';ctx.lineWidth=1;
+  for(var x=0;x<W;x+=20){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,H);ctx.stroke()}
+  for(var y=0;y<H;y+=20){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke()}
+  // scanlines
+  ctx.fillStyle='rgba(255,95,31,0.015)';
+  for(var sy=0;sy<H;sy+=4){ctx.fillRect(0,sy,W,2)}
+}
+
+function drawRoundRect(x,y,w,h,fill,border){
+  ctx.fillStyle=fill;ctx.fillRect(x,y,w,h);
+  if(border){ctx.strokeStyle=border;ctx.lineWidth=1;ctx.strokeRect(x,y,w,h)}
+}
+
+function drawGlowText(text,x,y,color,size,align,glow){
+  ctx.font=(size<14?'500':'700')+' '+size+'px "Space Grotesk",sans-serif';
+  ctx.textAlign=align||'left';ctx.textBaseline='middle';
+  if(glow){ctx.shadowColor=color;ctx.shadowBlur=glow}
+  ctx.fillStyle=color;ctx.fillText(text,x,y);
+  ctx.shadowBlur=0
+}
+
+// --- Frame Elements ---
+function getFrameElements(f){
+  var cx=W/2,cy=H/2;
+  var elems=[];
+  var titleKeys=['frame0Title','frame1Title','frame2Title','frame3Title'];
+  var descKeys=['frame0Desc','frame1Desc','frame2Desc','frame3Desc'];
+  // shared: step title
+  elems.push({id:'stepTitle',type:'label',text:t(titleKeys[f]),x:cx,y:32,color:'#ffb59c',size:14,align:'center',alpha:1});
+  elems.push({id:'stepDesc',type:'label',text:t(descKeys[f]),x:cx,y:52,color:'#8a8886',size:11,align:'center',alpha:1});
+
+  if(f===0){
+    // Raw logs scattered
+    var logs=[t('raw0'),t('raw1'),t('raw2'),t('raw3'),t('raw4'),t('raw5'),t('raw6'),t('raw7')];
+    var positions=[
+      {x:cx*0.3,y:cy*0.55},{x:cx*1.2,y:cy*0.45},{x:cx*0.5,y:cy*0.85},
+      {x:cx*1.5,y:cy*0.7},{x:cx*0.7,y:cy*1.15},{x:cx*1.3,y:cy*1.05},
+      {x:cx*0.4,y:cy*1.4},{x:cx*1.4,y:cy*1.35}
+    ];
+    for(var i=0;i<logs.length;i++){
+      var angle=(Math.sin(i*1.7)*8);
+      elems.push({id:'log'+i,type:'custom',x:positions[i].x,y:positions[i].y,w:140,h:24,alpha:1,
+        text:logs[i],angle:angle,
+        draw:function(al){
+          var self=this;
+          ctx.save();ctx.globalAlpha=al;
+          ctx.translate(self.x,self.y);ctx.rotate(self.angle*Math.PI/180);
+          drawRoundRect(-70,-12,140,24,'rgba(255,95,31,0.08)','rgba(255,95,31,0.25)');
+          ctx.font='500 11px "Space Grotesk",monospace';ctx.fillStyle='#ff7f50';ctx.textAlign='center';ctx.textBaseline='middle';
+          ctx.fillText(self.text,0,0);
+          ctx.restore()
+        }
+      })
+    }
+    // chaos arrows
+    elems.push({id:'chaos',type:'custom',alpha:1,draw:function(al){
+      ctx.save();ctx.globalAlpha=al*0.3;ctx.strokeStyle='#ff5f1f';ctx.lineWidth=1;ctx.setLineDash([4,4]);
+      for(var i=0;i<6;i++){
+        ctx.beginPath();ctx.moveTo(Math.random()*W,Math.random()*H);ctx.lineTo(Math.random()*W,Math.random()*H);ctx.stroke()
+      }
+      ctx.setLineDash([]);ctx.restore()
+    }})
+  }
+
+  if(f===1){
+    // field extraction: logs on left, fields highlighted on right
+    var rawLines=[
+      '2026-04-07 14:23:01 [path_planner] INFO risk_score=0.7 "path ok"',
+      '2026-04-07 14:23:02 [speed_ctrl] WARN delay_ms=230 "delay high"',
+      '2026-04-07 14:23:03 [trial_runner] ERROR conn_status=fail "conn lost"',
+      '2026-04-07 14:23:04 [risk_map] INFO coverage=0.85 "map updated"'
+    ];
+    var fieldNames=[t('fieldTimestamp'),t('fieldModule'),t('fieldLevel'),t('fieldMetric'),t('fieldValue'),t('fieldMessage')];
+    var fieldColors=['#00daf3','#10b981','#ff5f1f','#ffb59c','#ff7f50','#c6c6c6'];
+    var logStartY=cy*0.5;
+    for(var i=0;i<rawLines.length;i++){
+      elems.push({id:'rawline'+i,type:'custom',x:W*0.06,y:logStartY+i*36,alpha:1,text:rawLines[i],
+        draw:function(al){
+          ctx.save();ctx.globalAlpha=al;
+          ctx.font='400 10px "Space Grotesk",monospace';ctx.fillStyle='#8a8886';ctx.textAlign='left';ctx.textBaseline='middle';
+          ctx.fillText(this.text,this.x,this.y);
+          ctx.restore()
+        }
+      })
+    }
+    // field labels on right
+    var fx=W*0.65,fy=cy*0.4;
+    for(var i=0;i<fieldNames.length;i++){
+      elems.push({id:'field'+i,type:'custom',x:fx,y:fy+i*32,alpha:1,fname:fieldNames[i],fcolor:fieldColors[i],
+        draw:function(al){
+          ctx.save();ctx.globalAlpha=al;
+          drawRoundRect(this.x,this.y-12,W*0.28,24,'rgba('+hexToRgb(this.fcolor)+',0.08)','rgba('+hexToRgb(this.fcolor)+',0.3)');
+          ctx.font='700 11px "Space Grotesk",sans-serif';ctx.fillStyle=this.fcolor;ctx.textAlign='center';ctx.textBaseline='middle';
+          ctx.fillText(this.fname,this.x+W*0.14,this.y);
+          ctx.restore()
+        }
+      })
+    }
+    // arrows from logs to fields
+    elems.push({id:'extractArrows',type:'custom',alpha:1,draw:function(al){
+      ctx.save();ctx.globalAlpha=al*0.4;ctx.strokeStyle='#ffb59c';ctx.lineWidth=1;
+      var sx=W*0.55,ex=W*0.65;
+      for(var i=0;i<4;i++){
+        for(var j=0;j<3;j++){
+          ctx.beginPath();ctx.moveTo(sx,logStartY+i*36);ctx.lineTo(ex,fy+((i+j)%6)*32);ctx.stroke()
+        }
+      }
+      ctx.restore()
+    }})
+  }
+
+  if(f===2){
+    // structured table
+    var headers=[t('fieldTimestamp'),t('fieldModule'),t('fieldLevel'),t('fieldMetric'),t('fieldValue'),t('fieldMessage')];
+    var headerColors=['#00daf3','#10b981','#ff5f1f','#ffb59c','#ff7f50','#c6c6c6'];
+    var rows=[
+      ['14:23:01','path_planner','INFO','risk_score','0.70','"path ok"'],
+      ['14:23:02','speed_ctrl','WARN','delay_ms','230','"delay high"'],
+      ['14:23:03','trial_runner','ERROR','conn','fail','"conn lost"'],
+      ['14:23:04','risk_map','INFO','coverage','0.85','"map updated"']
+    ];
+    var tblX=W*0.04,tblY=cy*0.5,colW=W*0.152,rowH=30;
+    // header row
+    for(var c=0;c<headers.length;c++){
+      elems.push({id:'th'+c,type:'custom',x:tblX+c*colW,y:tblY,alpha:1,hdr:headers[c],hcolor:headerColors[c],colW:colW,
+        draw:function(al){
+          ctx.save();ctx.globalAlpha=al;
+          drawRoundRect(this.x,this.y-14,this.colW-2,28,'rgba('+hexToRgb(this.hcolor)+',0.12)','rgba('+hexToRgb(this.hcolor)+',0.3)');
+          ctx.font='700 9px "Space Grotesk",sans-serif';ctx.fillStyle=this.hcolor;ctx.textAlign='center';ctx.textBaseline='middle';
+          ctx.fillText(this.hdr,this.x+this.colW/2,this.y);
+          ctx.restore()
+        }
+      })
+    }
+    // data rows
+    for(var r=0;r<rows.length;r++){
+      for(var c=0;c<rows[r].length;c++){
+        (function(r2,c2){
+          var lvl=rows[r2][2];
+          var rowBg=lvl==='ERROR'?'rgba(255,95,31,0.06)':lvl==='WARN'?'rgba(255,181,156,0.04)':'rgba(255,255,255,0.02)';
+          elems.push({id:'td'+r2+'_'+c2,type:'custom',x:tblX+c2*colW,y:tblY+(r2+1)*rowH,alpha:1,val:rows[r2][c2],rowBg:rowBg,colW:colW,
+            draw:function(al){
+              ctx.save();ctx.globalAlpha=al;
+              drawRoundRect(this.x,this.y-14,this.colW-2,28,this.rowBg,null);
+              ctx.font='400 9px "Space Grotesk",monospace';ctx.fillStyle='#c6c6c6';ctx.textAlign='center';ctx.textBaseline='middle';
+              ctx.fillText(this.val,this.x+this.colW/2,this.y);
+              ctx.restore()
+            }
+          })
+        })(r,c)
+      }
+    }
+  }
+
+  if(f===3){
+    // telemetry stream flowing into dashboard
+    // dashboard outline
+    elems.push({id:'dashboard',type:'custom',x:cx,y:cy,alpha:1,draw:function(al){
+      ctx.save();ctx.globalAlpha=al;
+      var dw=W*0.7,dh=H*0.55;
+      var dx=cx-dw/2,dy=cy-dh/2+10;
+      // outer frame
+      drawRoundRect(dx,dy,dw,dh,'rgba(28,27,27,0.6)','rgba(255,181,156,0.2)');
+      // title bar
+      drawRoundRect(dx,dy,dw,28,'rgba(255,181,156,0.08)','rgba(255,181,156,0.15)');
+      ctx.font='700 11px "Space Grotesk",sans-serif';ctx.fillStyle='#ffb59c';ctx.textAlign='center';ctx.textBaseline='middle';
+      ctx.fillText('MISSION CONTROL TELEMETRY',cx,dy+14);
+      // 4 panels
+      var pw=(dw-30)/2,ph=(dh-50)/2;
+      var panels=[
+        {label:'RISK MAP',color:'#ff5f1f',val:'0.70'},
+        {label:'PATH STATUS',color:'#10b981',val:'OK'},
+        {label:'DELAY',color:'#00daf3',val:'230ms'},
+        {label:'COVERAGE',color:'#ffb59c',val:'85%'}
+      ];
+      for(var i=0;i<4;i++){
+        var px=dx+10+(i%2)*(pw+10);
+        var py=dy+38+(Math.floor(i/2))*(ph+10);
+        drawRoundRect(px,py,pw,ph,'rgba(0,0,0,0.3)','rgba('+hexToRgb(panels[i].color)+',0.2)');
+        ctx.font='700 9px "Space Grotesk",sans-serif';ctx.fillStyle=panels[i].color;ctx.textAlign='center';ctx.textBaseline='middle';
+        ctx.fillText(panels[i].label,px+pw/2,py+16);
+        ctx.font='700 22px "Space Grotesk",sans-serif';
+        ctx.shadowColor=panels[i].color;ctx.shadowBlur=12;
+        ctx.fillText(panels[i].val,px+pw/2,py+ph/2+6);
+        ctx.shadowBlur=0
+      }
+      ctx.restore()
+    }});
+    // data stream particles flowing down into dashboard
+    elems.push({id:'particles',type:'custom',alpha:1,draw:function(al){
+      ctx.save();ctx.globalAlpha=al*0.6;
+      var now=Date.now()/1000;
+      for(var i=0;i<12;i++){
+        var px=cx-W*0.3+i*(W*0.6/11);
+        var py=((now*40+i*37)%80)+cy*0.15;
+        var sz=3+Math.sin(i)*1.5;
+        ctx.fillStyle=i%3===0?'#ff5f1f':i%3===1?'#00daf3':'#ffb59c';
+        ctx.shadowColor=ctx.fillStyle;ctx.shadowBlur=8;
+        ctx.fillRect(px-sz/2,py-sz/2,sz,sz);
+        // trail
+        ctx.globalAlpha=al*0.15;
+        ctx.fillRect(px-1,py+sz/2,2,20);
+        ctx.globalAlpha=al*0.6
+      }
+      ctx.shadowBlur=0;ctx.restore()
+    }})
+  }
+
+  return elems
+}
+
+function hexToRgb(hex){
+  var r=parseInt(hex.slice(1,3),16),g=parseInt(hex.slice(3,5),16),b=parseInt(hex.slice(5,7),16);
+  return r+','+g+','+b
+}
+
+function drawElement(el){
+  if(!el||el.alpha<=0.01)return;
+  ctx.save();ctx.globalAlpha=el.alpha;
+  if(el.type==='label'){
+    drawGlowText(el.text,el.x,el.y,el.color,el.size,el.align,el.size>12?8:0)
+  } else if(el.type==='custom'){
+    el.draw.call(el,el.alpha)
+  }
+  ctx.restore()
+}
+
+function drawFrame(f){
+  if(!ctx)return;
+  drawBg();
+  var elems=getFrameElements(f);
+  elems.forEach(function(el){drawElement(el)})
+}
+
+function transitionTo(newFrame){
+  if(newFrame<0)newFrame=0;
+  if(newFrame>=totalFrames)newFrame=totalFrames-1;
+  if(newFrame===currentFrame&&!transitioning){drawFrame(currentFrame);updateHUD(currentFrame);return}
+  if(transitioning)return;
+  var oldElems=getFrameElements(currentFrame);
+  var newElems=getFrameElements(newFrame);
+  var oldMap={};oldElems.forEach(function(e){oldMap[e.id]=e});
+  var newMap={};newElems.forEach(function(e){newMap[e.id]=e});
+  currentFrame=newFrame;updateHUD(newFrame);
+  transitioning=true;
+  var startTime=null,duration=500;
+  function step(ts){
+    if(!startTime)startTime=ts;
+    var raw=Math.min((ts-startTime)/duration,1);
+    var p=easeInOut(raw);
+    drawBg();
+    oldElems.forEach(function(oe){if(!newMap[oe.id])drawElement(merge(oe,{alpha:1-p}))});
+    newElems.forEach(function(ne){
+      var oe=oldMap[ne.id];
+      if(oe){
+        var m=merge(ne,{x:lerp(oe.x||0,ne.x||0,p),y:lerp(oe.y||0,ne.y||0,p),w:lerp(oe.w||0,ne.w||0,p),h:lerp(oe.h||0,ne.h||0,p),alpha:1});
+        if((ne.type==='label')&&oe.text!==ne.text){drawElement(merge(oe,{alpha:1-p}));drawElement(merge(ne,{alpha:p}))}
+        else{drawElement(m)}
+      } else {drawElement(merge(ne,{alpha:p}))}
+    });
+    if(raw<1)requestAnimationFrame(step);
+    else transitioning=false
+  }
+  requestAnimationFrame(step)
+}
+
+var hudData=[
+  [{l:'hudPhase',v:'phase0'},{l:'hudFields',v:function(){return '0'}},{l:'hudCoverage',v:function(){return '0%'}},{l:'hudFormat',v:function(){return 'print()'}}],
+  [{l:'hudPhase',v:'phase1'},{l:'hudFields',v:function(){return '6'}},{l:'hudCoverage',v:function(){return '50%'}},{l:'hudFormat',v:function(){return 'EXTRACT'}}],
+  [{l:'hudPhase',v:'phase2'},{l:'hudFields',v:function(){return '6'}},{l:'hudCoverage',v:function(){return '100%'}},{l:'hudFormat',v:function(){return 'TABLE'}}],
+  [{l:'hudPhase',v:'phase3'},{l:'hudFields',v:function(){return '6'}},{l:'hudCoverage',v:function(){return '100%'}},{l:'hudFormat',v:function(){return 'STREAM'}}]
+];
+
+function updateHUD(f){
+  var d=hudData[f];
+  for(var i=0;i<4;i++){
+    document.getElementById('hudLabel'+i).textContent=t(d[i].l);
+    var v=d[i].v;
+    document.getElementById('hudValue'+i).textContent=(typeof v==='function')?v():t(v)
+  }
+  document.getElementById('frameInfo').textContent=(f+1)+' / '+totalFrames
+}
+
+function refreshI18N(){
+  document.getElementById('titleText').textContent=t('title');
+  document.getElementById('subtitleText').textContent=t('subtitle');
+  document.getElementById('btnPrev').textContent=t('btnPrev');
+  document.getElementById('btnPlay').textContent=playing?t('btnPause'):t('btnPlay');
+  document.getElementById('btnNext').textContent=t('btnNext');
+  document.getElementById('guideTitle').textContent=t('guideTitle');
+  document.getElementById('guideDesc').textContent=t('guideDesc');
+  var list=document.getElementById('guideList');
+  list.innerHTML='';
+  ['guideObs1','guideObs2','guideObs3'].forEach(function(k){
+    var li=document.createElement('li');li.textContent=t(k);list.appendChild(li)
+  });
+  document.getElementById('guideTakeaway').textContent=t('guideTakeaway');
+  updateHUD(currentFrame);
+  drawFrame(currentFrame)
+}
+
+document.getElementById('langBtn').addEventListener('click',function(){
+  LANG=LANG==='en'?'cn':'en';
+  document.getElementById('langBtn').textContent=LANG.toUpperCase();
+  refreshI18N()
+});
+
+document.getElementById('btnPrev').addEventListener('click',function(){
+  if(playing)stopPlay();
+  transitionTo(currentFrame-1)
+});
+document.getElementById('btnNext').addEventListener('click',function(){
+  if(playing)stopPlay();
+  transitionTo(currentFrame+1)
+});
+document.getElementById('btnPlay').addEventListener('click',function(){
+  if(playing){stopPlay()}
+  else{startPlay()}
+});
+
+function startPlay(){
+  playing=true;
+  document.getElementById('btnPlay').textContent=t('btnPause');
+  if(currentFrame>=totalFrames-1)currentFrame=-1;
+  function advance(){
+    if(!playing)return;
+    if(currentFrame>=totalFrames-1){stopPlay();return}
+    transitionTo(currentFrame+1);
+    playRaf=setTimeout(advance,1200)
+  }
+  advance()
+}
+function stopPlay(){
+  playing=false;
+  document.getElementById('btnPlay').textContent=t('btnPlay');
+  if(playRaf){clearTimeout(playRaf);playRaf=null}
+}
+
+document.getElementById('guideToggle').addEventListener('click',function(){
+  document.getElementById('guidePanel').classList.toggle('collapsed');
+  document.getElementById('guideArrow').textContent=document.getElementById('guidePanel').classList.contains('collapsed')?'+':'-'
+});
+
+window.addEventListener('resize',resize);
+refreshI18N();
+resize();
+setTimeout(resize,200);setTimeout(resize,600);
+document.fonts.ready.then(function(){resize()})
+})();
+</script>
+</body>
+</html>

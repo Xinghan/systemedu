@@ -1,0 +1,396 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=Inter:wght@400;500&family=Noto+Sans+SC:wght@400;700&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box;}
+html,body{width:100%;height:100vh;overflow:hidden;}
+body{background:linear-gradient(180deg,#0c0e14 0%,#1a1520 50%,#0c0e14 100%);color:#f6f6fc;font-family:'Inter','Noto Sans SC',sans-serif;display:flex;flex-direction:column;}
+.wrapper{display:flex;flex-direction:column;height:100vh;overflow:hidden;}
+.header{padding:10px 16px 6px;display:flex;justify-content:space-between;align-items:center;}
+.header h1{font-family:'Space Grotesk',sans-serif;font-size:clamp(13px,2vw,17px);font-weight:700;color:#ffb59c;text-shadow:0 0 15px rgba(255,181,156,0.3);}
+.header .sub{font-size:10px;color:#aaabb0;letter-spacing:0.1em;text-transform:uppercase;}
+.game-body{flex:1;min-height:0;display:flex;padding:4px 12px;gap:12px;overflow:hidden;}
+.scene-panel{flex:1;position:relative;display:flex;flex-direction:column;}
+.scene-canvas-wrap{flex:1;min-height:0;position:relative;}
+.scene-canvas-wrap canvas{width:100%;height:100%;display:block;cursor:crosshair;}
+.tool-bar{display:flex;gap:6px;padding:6px 0;justify-content:center;align-items:center;}
+.tool-btn{font-family:'Space Grotesk',sans-serif;font-size:11px;font-weight:700;padding:5px 14px;border:none;cursor:pointer;letter-spacing:0.08em;transition:transform 0.1s;}
+.tool-btn:hover{transform:scale(1.05);}
+.tool-btn.active{box-shadow:0 0 12px var(--tc);}
+.tool-safe{background:rgba(74,222,128,0.2);color:#4ade80;border:1px solid rgba(74,222,128,0.4);--tc:rgba(74,222,128,0.4);}
+.tool-caution{background:rgba(251,191,36,0.2);color:#fbbf24;border:1px solid rgba(251,191,36,0.4);--tc:rgba(251,191,36,0.4);}
+.tool-nogo{background:rgba(248,113,113,0.2);color:#f87171;border:1px solid rgba(248,113,113,0.4);--tc:rgba(248,113,113,0.4);}
+.tool-eraser{background:rgba(170,171,176,0.15);color:#aaabb0;border:1px solid rgba(170,171,176,0.3);--tc:rgba(170,171,176,0.3);}
+.side-panel{width:200px;display:flex;flex-direction:column;gap:8px;}
+.info-card{background:rgba(255,255,255,0.03);padding:10px;font-size:12px;}
+.info-card h4{font-family:'Space Grotesk',sans-serif;font-size:11px;color:#ffb59c;margin-bottom:6px;letter-spacing:0.1em;text-transform:uppercase;}
+.info-card p{color:#aaabb0;line-height:1.5;font-size:11px;}
+.nav-row{display:flex;gap:6px;}
+.nav-btn{flex:1;font-family:'Space Grotesk',sans-serif;font-size:11px;font-weight:700;padding:6px;border:none;cursor:pointer;color:#1a0e08;background:linear-gradient(135deg,#ffb59c,#ff8a6a);transition:transform 0.1s;}
+.nav-btn:hover{transform:scale(1.03);}
+.nav-btn.sec{background:rgba(23,26,31,0.92);color:#aaabb0;}
+.nav-btn.sec:hover{color:#ffb59c;}
+.nav-btn:disabled{opacity:0.4;cursor:default;transform:none;}
+.score-display{text-align:center;padding:8px;background:rgba(255,181,156,0.08);}
+.score-display .score-val{font-family:'Space Grotesk',sans-serif;font-size:24px;font-weight:700;color:#ffb59c;}
+.score-display .score-label{font-size:10px;color:#aaabb0;text-transform:uppercase;letter-spacing:0.1em;}
+.hud{height:44px;display:flex;align-items:center;justify-content:space-around;background:rgba(0,0,0,0.55);backdrop-filter:blur(12px);padding:0 16px;}
+.hud-item{text-align:center;}
+.hud-label{font-family:'Space Grotesk',sans-serif;font-size:9px;letter-spacing:0.15em;text-transform:uppercase;color:#aaabb0;}
+.hud-val{font-family:'Space Grotesk',sans-serif;font-size:13px;font-weight:700;color:#ffb59c;}
+.lang-btn{position:fixed;top:8px;left:8px;z-index:100;font-family:'Space Grotesk',sans-serif;font-size:11px;font-weight:700;padding:4px 10px;cursor:pointer;border:none;background:rgba(20,20,35,0.85);backdrop-filter:blur(12px);color:#ffb59c;letter-spacing:1px;}
+.guide-panel{position:fixed;top:8px;right:220px;width:220px;max-height:35vh;overflow-y:auto;background:rgba(20,20,35,0.85);backdrop-filter:blur(12px);padding:10px;z-index:100;font-family:'Noto Sans SC',sans-serif;font-size:11px;color:rgba(255,255,255,0.85);line-height:1.5;}
+.guide-panel h3{font-family:'Space Grotesk',sans-serif;font-size:12px;margin-bottom:4px;color:#ffb59c;cursor:pointer;display:flex;justify-content:space-between;align-items:center;}
+.guide-panel ul{padding-left:12px;}
+</style>
+</head>
+<body>
+<button class="lang-btn" id="langBtn">CN</button>
+<div class="guide-panel" id="guide">
+<h3 id="guideToggle"></h3>
+<div class="guide-content" id="guideContent"></div>
+</div>
+<div class="wrapper">
+<div class="header">
+<div><h1 id="title"></h1><div class="sub" id="subtitle"></div></div>
+<div id="sceneIndicator" style="font-family:'Space Grotesk';font-size:11px;color:#aaabb0;"></div>
+</div>
+<div class="game-body">
+<div class="scene-panel">
+  <div class="scene-canvas-wrap"><canvas id="gc"></canvas></div>
+  <div class="tool-bar">
+    <button class="tool-btn tool-safe active" id="toolSafe" data-tool="safe"></button>
+    <button class="tool-btn tool-caution" id="toolCaution" data-tool="caution"></button>
+    <button class="tool-btn tool-nogo" id="toolNogo" data-tool="nogo"></button>
+    <button class="tool-btn tool-eraser" id="toolEraser" data-tool="eraser"></button>
+  </div>
+</div>
+<div class="side-panel">
+  <div class="info-card">
+    <h4 id="sceneTitle"></h4>
+    <p id="sceneDesc"></p>
+  </div>
+  <div class="score-display" id="scorePanel" style="display:none;">
+    <div class="score-label" id="scoreLabel"></div>
+    <div class="score-val" id="scoreVal"></div>
+  </div>
+  <div class="nav-row">
+    <button class="nav-btn sec" id="btnCheck"></button>
+    <button class="nav-btn sec" id="btnClear"></button>
+  </div>
+  <div class="nav-row">
+    <button class="nav-btn sec" id="btnPrevScene" disabled></button>
+    <button class="nav-btn" id="btnNextScene"></button>
+  </div>
+</div>
+</div>
+<div class="hud">
+<div class="hud-item"><div class="hud-label" id="hudL1"></div><div class="hud-val" id="hudV1"></div></div>
+<div class="hud-item"><div class="hud-label" id="hudL2"></div><div class="hud-val" id="hudV2"></div></div>
+<div class="hud-item"><div class="hud-label" id="hudL3"></div><div class="hud-val" id="hudV3"></div></div>
+<div class="hud-item"><div class="hud-label" id="hudL4"></div><div class="hud-val" id="hudV4"></div></div>
+</div>
+</div>
+
+<script>
+(function(){
+var LANG = 'cn';
+var I18N = {
+  title:     {en:'ZONE PAINTER', cn:'\u533a\u57df\u6807\u6ce8\u5668'},
+  subtitle:  {en:'MARK TRAVERSABILITY ZONES', cn:'\u6807\u8bb0\u901a\u884c\u6027\u533a\u57df'},
+  safe:      {en:'SAFE', cn:'\u5b89\u5168'},
+  caution:   {en:'CAUTION', cn:'\u8c28\u614e'},
+  nogo:      {en:'NO-GO', cn:'\u7981\u884c'},
+  eraser:    {en:'ERASE', cn:'\u64e6\u9664'},
+  check:     {en:'CHECK', cn:'\u68c0\u67e5'},
+  clear:     {en:'CLEAR', cn:'\u6e05\u9664'},
+  prev:      {en:'PREV', cn:'\u4e0a\u4e00\u573a'},
+  next:      {en:'NEXT', cn:'\u4e0b\u4e00\u573a'},
+  score:     {en:'ACCURACY', cn:'\u51c6\u786e\u7387'},
+  scene:     {en:'SCENE', cn:'\u573a\u666f'},
+  painted:   {en:'PAINTED', cn:'\u5df2\u6d82'},
+  accuracy:  {en:'ACCURACY', cn:'\u51c6\u786e\u7387'},
+  total:     {en:'TOTAL', cn:'\u603b\u5206'},
+  guideTitle:{en:'HOW TO PLAY', cn:'\u64cd\u4f5c\u6307\u5357'},
+  g1:        {en:'Select a tool (Safe/Caution/No-Go)', cn:'\u9009\u62e9\u5de5\u5177\uff08\u5b89\u5168/\u8c28\u614e/\u7981\u884c\uff09'},
+  g2:        {en:'Paint zones on the scene', cn:'\u5728\u573a\u666f\u4e0a\u6d82\u8272\u6807\u8bb0\u533a\u57df'},
+  g3:        {en:'Click CHECK to see your score', cn:'\u70b9\u51fb\u68c0\u67e5\u67e5\u770b\u5f97\u5206'},
+  g4:        {en:'Navigate through 4 scenes', cn:'\u5b8c\u6210\u5168\u90e84\u4e2a\u573a\u666f'},
+  // scenes
+  s0name:    {en:'PARK SCENE', cn:'\u516c\u56ed\u573a\u666f'},
+  s0desc:    {en:'A park with paths, grass, a pond and a slope. Mark where you can walk safely.', cn:'\u4e00\u4e2a\u6709\u5c0f\u8def\u3001\u8349\u5730\u3001\u6c60\u5858\u548c\u5761\u9053\u7684\u516c\u56ed\u3002\u6807\u8bb0\u54ea\u91cc\u53ef\u4ee5\u5b89\u5168\u884c\u8d70\u3002'},
+  s1name:    {en:'MOUNTAIN TRAIL', cn:'\u5c71\u8def\u573a\u666f'},
+  s1desc:    {en:'A mountain path with stone steps, a cliff edge, and loose rocks.', cn:'\u4e00\u6761\u5c71\u8def\uff0c\u6709\u77f3\u9636\u3001\u60ac\u5d16\u8fb9\u7f18\u548c\u677e\u6563\u788e\u77f3\u3002'},
+  s2name:    {en:'CITY STREET', cn:'\u57ce\u5e02\u8857\u9053'},
+  s2desc:    {en:'A street with sidewalk, crosswalk, road, and construction area.', cn:'\u4e00\u6761\u8857\u9053\uff0c\u6709\u4eba\u884c\u9053\u3001\u659c\u9053\u3001\u8f66\u9053\u548c\u65bd\u5de5\u533a\u3002'},
+  s3name:    {en:'RIVERBANK', cn:'\u6cb3\u8fb9\u573a\u666f'},
+  s3desc:    {en:'A riverbank with dry ground, wet rocks, sand, and flowing water.', cn:'\u6cb3\u8fb9\uff0c\u6709\u5e72\u71e5\u5730\u9762\u3001\u6e7f\u6ed1\u77f3\u5934\u3001\u6c99\u5730\u548c\u6d41\u6c34\u3002'},
+};
+function t(key){return (I18N[key]&&I18N[key][LANG])||(I18N[key]&&I18N[key]['en'])||key;}
+
+// 4 scenes, each with a grid of correct answers
+var GRID = 12; // 12x12 grid
+var SCENES = [
+  {nameKey:'s0name',descKey:'s0desc',bgTop:'#2a4a2a',bgBot:'#1a2a1a',
+   answer: buildGrid([
+     {x:1,y:7,w:4,h:2,level:'safe'},     // path
+     {x:4,y:3,w:4,h:5,level:'safe'},      // grass
+     {x:8,y:5,w:3,h:3,level:'nogo'},      // pond
+     {x:1,y:2,w:3,h:3,level:'caution'},   // slope
+   ])},
+  {nameKey:'s1name',descKey:'s1desc',bgTop:'#3a3a4a',bgBot:'#1a1a2a',
+   answer: buildGrid([
+     {x:1,y:6,w:3,h:2,level:'caution'},   // stone steps
+     {x:3,y:4,w:5,h:3,level:'safe'},      // trail
+     {x:8,y:2,w:3,h:6,level:'nogo'},      // cliff
+     {x:0,y:1,w:3,h:3,level:'nogo'},      // loose scree
+   ])},
+  {nameKey:'s2name',descKey:'s2desc',bgTop:'#3a3a4a',bgBot:'#1a1a2a',
+   answer: buildGrid([
+     {x:0,y:7,w:5,h:2,level:'safe'},      // sidewalk
+     {x:5,y:6,w:3,h:3,level:'caution'},   // crosswalk
+     {x:2,y:3,w:6,h:3,level:'nogo'},      // road
+     {x:8,y:3,w:4,h:5,level:'nogo'},      // construction
+   ])},
+  {nameKey:'s3name',descKey:'s3desc',bgTop:'#1a3040',bgBot:'#0a1a2a',
+   answer: buildGrid([
+     {x:0,y:7,w:4,h:3,level:'safe'},      // dry bank
+     {x:4,y:6,w:3,h:2,level:'caution'},   // wet rocks
+     {x:7,y:2,w:5,h:7,level:'nogo'},      // river
+     {x:1,y:4,w:3,h:2,level:'caution'},   // sandy bank
+   ])},
+];
+
+function buildGrid(zones){
+  var grid = [];
+  for(var y=0;y<GRID;y++){
+    grid[y]=[];
+    for(var x=0;x<GRID;x++) grid[y][x]='none';
+  }
+  zones.forEach(function(z){
+    for(var dy=0;dy<z.h;dy++){
+      for(var dx=0;dx<z.w;dx++){
+        var gy=z.y+dy, gx=z.x+dx;
+        if(gy<GRID&&gx<GRID) grid[gy][gx]=z.level;
+      }
+    }
+  });
+  return grid;
+}
+
+var currentScene = 0;
+var currentTool = 'safe';
+var playerGrids = SCENES.map(function(){
+  var g=[];for(var y=0;y<GRID;y++){g[y]=[];for(var x=0;x<GRID;x++)g[y][x]='none';}return g;
+});
+var painting = false;
+
+var canvas, ctx, cellW, cellH;
+
+function initCanvas(){
+  canvas = document.getElementById('gc');
+  var wrap = canvas.parentElement;
+  var rect = wrap.getBoundingClientRect();
+  if(rect.width<1||rect.height<1) return;
+  var dpr = Math.min(window.devicePixelRatio||1,2);
+  canvas.width = rect.width * dpr;
+  canvas.height = rect.height * dpr;
+  ctx = canvas.getContext('2d');
+  ctx.scale(dpr, dpr);
+  cellW = rect.width / GRID;
+  cellH = rect.height / GRID;
+  drawScene();
+}
+
+var COLORS = {
+  safe:   {fill:'rgba(74,222,128,0.35)', stroke:'rgba(74,222,128,0.6)'},
+  caution:{fill:'rgba(251,191,36,0.35)', stroke:'rgba(251,191,36,0.6)'},
+  nogo:   {fill:'rgba(248,113,113,0.35)',stroke:'rgba(248,113,113,0.6)'},
+  none:   {fill:'transparent',           stroke:'transparent'},
+  correct:{fill:'rgba(74,222,128,0.15)', stroke:'rgba(74,222,128,0.3)'},
+  wrong:  {fill:'rgba(248,113,113,0.15)',stroke:'rgba(248,113,113,0.3)'},
+};
+
+function drawScene(){
+  if(!ctx) return;
+  var rect = canvas.parentElement.getBoundingClientRect();
+  var w = rect.width, h = rect.height;
+  // background
+  var grad = ctx.createLinearGradient(0,0,0,h);
+  var sc = SCENES[currentScene];
+  grad.addColorStop(0, sc.bgTop);
+  grad.addColorStop(1, sc.bgBot);
+  ctx.fillStyle = grad;
+  ctx.fillRect(0,0,w,h);
+  // grid lines
+  ctx.strokeStyle = 'rgba(255,255,255,0.06)';
+  ctx.lineWidth = 1;
+  for(var i=0;i<=GRID;i++){
+    ctx.beginPath();ctx.moveTo(i*cellW,0);ctx.lineTo(i*cellW,h);ctx.stroke();
+    ctx.beginPath();ctx.moveTo(0,i*cellH);ctx.lineTo(w,i*cellH);ctx.stroke();
+  }
+  // player painted cells
+  var pg = playerGrids[currentScene];
+  for(var y=0;y<GRID;y++){
+    for(var x=0;x<GRID;x++){
+      if(pg[y][x]!=='none'){
+        var c = COLORS[pg[y][x]];
+        ctx.fillStyle = c.fill;
+        ctx.fillRect(x*cellW+1, y*cellH+1, cellW-2, cellH-2);
+      }
+    }
+  }
+}
+
+function paintCell(mx, my){
+  var x = Math.floor(mx / cellW);
+  var y = Math.floor(my / cellH);
+  if(x<0||x>=GRID||y<0||y>=GRID) return;
+  playerGrids[currentScene][y][x] = currentTool === 'eraser' ? 'none' : currentTool;
+  drawScene();
+  updateHUD();
+}
+
+function getMousePos(e){
+  var rect = canvas.getBoundingClientRect();
+  return {x: e.clientX - rect.left, y: e.clientY - rect.top};
+}
+
+canvas = document.getElementById('gc');
+canvas.addEventListener('mousedown', function(e){painting=true;var p=getMousePos(e);paintCell(p.x,p.y);});
+canvas.addEventListener('mousemove', function(e){if(painting){var p=getMousePos(e);paintCell(p.x,p.y);}});
+canvas.addEventListener('mouseup', function(){painting=false;});
+canvas.addEventListener('mouseleave', function(){painting=false;});
+canvas.addEventListener('touchstart', function(e){e.preventDefault();painting=true;var r=canvas.getBoundingClientRect();var touch=e.touches[0];paintCell(touch.clientX-r.left,touch.clientY-r.top);},{passive:false});
+canvas.addEventListener('touchmove', function(e){e.preventDefault();if(painting){var r=canvas.getBoundingClientRect();var touch=e.touches[0];paintCell(touch.clientX-r.left,touch.clientY-r.top);}},{passive:false});
+canvas.addEventListener('touchend', function(){painting=false;});
+
+// tool buttons
+document.querySelectorAll('.tool-btn').forEach(function(btn){
+  btn.addEventListener('click', function(){
+    currentTool = this.getAttribute('data-tool');
+    document.querySelectorAll('.tool-btn').forEach(function(b){b.classList.remove('active');});
+    this.classList.add('active');
+  });
+});
+
+function checkScore(){
+  var pg = playerGrids[currentScene];
+  var answer = SCENES[currentScene].answer;
+  var total = 0, correct = 0;
+  for(var y=0;y<GRID;y++){
+    for(var x=0;x<GRID;x++){
+      if(answer[y][x]!=='none'){
+        total++;
+        if(pg[y][x]===answer[y][x]) correct++;
+      }
+    }
+  }
+  var pct = total > 0 ? Math.round(correct/total*100) : 0;
+  document.getElementById('scorePanel').style.display = '';
+  document.getElementById('scoreVal').textContent = pct + '%';
+  // show answer overlay briefly
+  for(var y=0;y<GRID;y++){
+    for(var x=0;x<GRID;x++){
+      if(answer[y][x]!=='none' && pg[y][x]!==answer[y][x]){
+        // briefly flash correct answer
+        ctx.fillStyle = COLORS[answer[y][x]].stroke;
+        ctx.globalAlpha = 0.3;
+        ctx.fillRect(x*cellW+1, y*cellH+1, cellW-2, cellH-2);
+        ctx.globalAlpha = 1;
+      }
+    }
+  }
+  document.getElementById('hudV3').textContent = pct + '%';
+}
+
+function clearPaint(){
+  playerGrids[currentScene] = [];
+  for(var y=0;y<GRID;y++){playerGrids[currentScene][y]=[];for(var x=0;x<GRID;x++)playerGrids[currentScene][y][x]='none';}
+  document.getElementById('scorePanel').style.display = 'none';
+  drawScene();
+  updateHUD();
+}
+
+function switchScene(idx){
+  if(idx<0||idx>=SCENES.length) return;
+  currentScene = idx;
+  document.getElementById('btnPrevScene').disabled = idx === 0;
+  document.getElementById('btnNextScene').disabled = idx === SCENES.length - 1;
+  document.getElementById('scorePanel').style.display = 'none';
+  refreshSceneInfo();
+  drawScene();
+  updateHUD();
+}
+
+function refreshSceneInfo(){
+  var sc = SCENES[currentScene];
+  document.getElementById('sceneTitle').textContent = t(sc.nameKey);
+  document.getElementById('sceneDesc').textContent = t(sc.descKey);
+  document.getElementById('sceneIndicator').textContent = (currentScene+1) + '/' + SCENES.length;
+}
+
+function updateHUD(){
+  var pg = playerGrids[currentScene];
+  var painted = 0;
+  for(var y=0;y<GRID;y++) for(var x=0;x<GRID;x++) if(pg[y][x]!=='none') painted++;
+  document.getElementById('hudV1').textContent = (currentScene+1)+'/'+SCENES.length;
+  document.getElementById('hudV2').textContent = painted + '/' + (GRID*GRID);
+}
+
+function refreshI18N(){
+  document.getElementById('title').textContent = t('title');
+  document.getElementById('subtitle').textContent = t('subtitle');
+  document.getElementById('toolSafe').textContent = t('safe');
+  document.getElementById('toolCaution').textContent = t('caution');
+  document.getElementById('toolNogo').textContent = t('nogo');
+  document.getElementById('toolEraser').textContent = t('eraser');
+  document.getElementById('btnCheck').textContent = t('check');
+  document.getElementById('btnClear').textContent = t('clear');
+  document.getElementById('btnPrevScene').textContent = t('prev');
+  document.getElementById('btnNextScene').textContent = t('next');
+  document.getElementById('scoreLabel').textContent = t('score');
+  document.getElementById('hudL1').textContent = t('scene');
+  document.getElementById('hudL2').textContent = t('painted');
+  document.getElementById('hudL3').textContent = t('accuracy');
+  document.getElementById('hudL4').textContent = t('total');
+  document.getElementById('hudV3').textContent = '--';
+  document.getElementById('hudV4').textContent = SCENES.length;
+  document.getElementById('guideToggle').innerHTML = t('guideTitle') + ' <span style="font-size:10px;">[-]</span>';
+  var guideHTML = '<ul>';
+  ['g1','g2','g3','g4'].forEach(function(k){guideHTML+='<li>'+t(k)+'</li>';});
+  guideHTML += '</ul>';
+  document.getElementById('guideContent').innerHTML = guideHTML;
+  refreshSceneInfo();
+  updateHUD();
+}
+
+document.getElementById('langBtn').addEventListener('click', function(){
+  LANG = LANG==='en'?'cn':'en';
+  this.textContent = LANG.toUpperCase();
+  refreshI18N();
+});
+document.getElementById('guideToggle').addEventListener('click', function(){
+  var c=document.getElementById('guideContent');
+  var show = c.style.display==='none';
+  c.style.display=show?'':'none';
+  this.innerHTML=t('guideTitle')+' <span style="font-size:10px;">'+(show?'[-]':'[+]')+'</span>';
+});
+document.getElementById('btnCheck').addEventListener('click', checkScore);
+document.getElementById('btnClear').addEventListener('click', clearPaint);
+document.getElementById('btnPrevScene').addEventListener('click', function(){switchScene(currentScene-1);});
+document.getElementById('btnNextScene').addEventListener('click', function(){switchScene(currentScene+1);});
+
+refreshI18N();
+switchScene(0);
+setTimeout(initCanvas, 100);
+setTimeout(initCanvas, 500);
+window.addEventListener('resize', initCanvas);
+document.fonts.ready.then(initCanvas);
+})();
+</script>
+</body>
+</html>

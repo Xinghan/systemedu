@@ -1,0 +1,420 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Fault Triage</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;700&family=Inter:wght@400;500&family=Noto+Sans+SC:wght@400;700&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0;}
+html,body{width:100%;height:100vh;overflow:hidden;background:#131313;font-family:'Noto Sans SC','Inter',sans-serif;color:#e5e2e1;}
+.wrapper{display:flex;flex-direction:column;height:100vh;width:100%;}
+.header{padding:8px 16px;background:rgba(28,27,27,0.92);display:flex;align-items:center;justify-content:space-between;flex-shrink:0;}
+.header h1{font-family:'Space Grotesk',sans-serif;font-size:15px;font-weight:700;color:#ffb59c;letter-spacing:1px;text-transform:uppercase;}
+.header .score-display{font-family:'Space Grotesk',sans-serif;font-size:13px;color:#00daf3;}
+.game-area{flex:1;min-height:0;display:flex;flex-direction:column;padding:8px;gap:8px;overflow:hidden;}
+.cards-row{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;align-items:flex-start;min-height:60px;padding:6px;background:rgba(53,53,52,0.3);flex-shrink:0;}
+.targets-row{flex:1;display:flex;gap:8px;justify-content:center;align-items:stretch;min-height:0;}
+.card{padding:8px 12px;font-size:12px;font-family:'Noto Sans SC',sans-serif;background:rgba(53,53,52,0.6);border:1px solid rgba(255,255,255,0.08);cursor:grab;user-select:none;-webkit-user-select:none;transition:transform 0.15s,box-shadow 0.15s;max-width:200px;text-align:center;border-radius:0;line-height:1.4;}
+.card:hover{transform:translateY(-2px);}
+.card.dragging{opacity:0.5;cursor:grabbing;}
+.target-zone{flex:1;display:flex;flex-direction:column;align-items:center;min-width:0;padding:8px;border:1px solid rgba(255,255,255,0.06);background:rgba(28,27,27,0.6);transition:background 0.2s;border-radius:0;}
+.target-zone.highlight{background:rgba(255,127,80,0.15);}
+.target-zone .zone-title{font-family:'Space Grotesk',sans-serif;font-size:12px;font-weight:700;letter-spacing:1px;text-transform:uppercase;margin-bottom:6px;text-align:center;}
+.target-zone .zone-items{flex:1;display:flex;flex-direction:column;gap:4px;width:100%;overflow-y:auto;align-items:center;}
+.target-zone .zone-items .card{cursor:pointer;font-size:11px;width:90%;max-width:none;}
+.feedback-bar{padding:8px 16px;background:rgba(28,27,27,0.92);display:flex;align-items:center;justify-content:space-between;flex-shrink:0;}
+.fb-msg{font-size:13px;color:#c6c6c6;}
+.fb-btn{font-family:'Space Grotesk',sans-serif;font-size:11px;font-weight:700;padding:6px 16px;cursor:pointer;border:1px solid rgba(255,255,255,0.08);background:rgba(53,53,52,0.4);backdrop-filter:blur(12px);color:#ffb59c;letter-spacing:1px;text-transform:uppercase;border-radius:0;}
+.fb-btn:hover{background:rgba(255,127,80,0.2);}
+.hud{display:flex;align-items:center;justify-content:space-around;padding:6px 16px;background:rgba(0,0,0,0.55);height:42px;flex-shrink:0;}
+.hud-item{text-align:center;}
+.hud-label{font-family:'Space Grotesk',sans-serif;font-size:9px;color:#8a8886;letter-spacing:1px;text-transform:uppercase;}
+.hud-value{font-family:'Space Grotesk',sans-serif;font-size:13px;color:#00daf3;font-weight:700;}
+.lang-btn{position:fixed;top:8px;left:8px;z-index:100;font-family:'Space Grotesk',sans-serif;font-size:11px;font-weight:700;padding:4px 10px;cursor:pointer;border:1px solid rgba(255,255,255,0.08);background:rgba(20,20,35,0.85);backdrop-filter:blur(12px);color:#ffb59c;letter-spacing:1px;border-radius:0;}
+.guide-panel{position:fixed;top:8px;right:8px;width:240px;max-height:36vh;overflow-y:auto;background:rgba(20,20,35,0.85);backdrop-filter:blur(12px);border:1px solid rgba(255,255,255,0.08);padding:10px;z-index:100;font-family:'Noto Sans SC',sans-serif;font-size:12px;color:rgba(255,255,255,0.85);border-radius:0;}
+.guide-panel h3{font-family:'Space Grotesk',sans-serif;font-size:13px;margin-bottom:6px;display:flex;align-items:center;justify-content:space-between;cursor:pointer;color:#ffb59c;}
+.guide-panel ul{padding-left:14px;line-height:1.5;}
+.guide-panel .guide-content{transition:max-height 0.3s;overflow:hidden;}
+.result-overlay{display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.8);z-index:200;justify-content:center;align-items:center;}
+.result-overlay.show{display:flex;}
+.result-card{background:rgba(28,27,27,0.95);border:1px solid rgba(255,127,80,0.3);padding:24px;max-width:400px;width:90%;text-align:center;}
+.result-card h2{font-family:'Space Grotesk',sans-serif;color:#ffb59c;font-size:18px;margin-bottom:12px;}
+.result-card p{font-size:13px;line-height:1.6;margin-bottom:8px;}
+.result-card .score-big{font-family:'Space Grotesk',sans-serif;font-size:36px;color:#00daf3;font-weight:700;}
+</style>
+</head>
+<body>
+<button class="lang-btn" id="langBtn">CN</button>
+<div class="guide-panel" id="guidePanel">
+  <h3 id="guideToggle"><span id="guideTitle"></span><span id="guideArrow">-</span></h3>
+  <div class="guide-content" id="guideContent">
+    <p id="guideGoal" style="margin-bottom:6px;"></p>
+    <ul id="guideSteps"></ul>
+    <p id="guideTips" style="margin-top:6px;font-style:italic;color:#8a8886;"></p>
+  </div>
+</div>
+<div class="wrapper">
+  <div class="header">
+    <h1 id="titleText"></h1>
+    <span class="score-display" id="scoreDisplay"></span>
+  </div>
+  <div class="game-area">
+    <div class="cards-row" id="cardsRow"></div>
+    <div class="targets-row" id="targetsRow"></div>
+  </div>
+  <div class="feedback-bar">
+    <span class="fb-msg" id="fbMsg"></span>
+    <button class="fb-btn" id="checkBtn"></button>
+  </div>
+  <div class="hud">
+    <div class="hud-item"><div class="hud-label" id="hudL0"></div><div class="hud-value" id="hudV0"></div></div>
+    <div class="hud-item"><div class="hud-label" id="hudL1"></div><div class="hud-value" id="hudV1"></div></div>
+    <div class="hud-item"><div class="hud-label" id="hudL2"></div><div class="hud-value" id="hudV2"></div></div>
+    <div class="hud-item"><div class="hud-label" id="hudL3"></div><div class="hud-value" id="hudV3"></div></div>
+  </div>
+</div>
+<div class="result-overlay" id="resultOverlay">
+  <div class="result-card">
+    <h2 id="resultTitle"></h2>
+    <div class="score-big" id="resultScore"></div>
+    <p id="resultMsg"></p>
+    <button class="fb-btn" id="retryBtn" style="margin-top:12px;"></button>
+  </div>
+</div>
+<script>
+(function(){
+var LANG='cn';
+var I18N={
+  title:{en:'FAULT TRIAGE',cn:'\u6545\u969c\u5f52\u56e0\u62c6\u89e3'},
+  guide:{en:'GUIDE',cn:'\u64cd\u4f5c\u6307\u5357'},
+  guideGoal:{en:'Drag each failure case card into the correct upstream layer (data / model / cost map / interface).',cn:'\u5c06\u6bcf\u5f20\u5931\u8d25\u6848\u4f8b\u5361\u7247\u62d6\u62fd\u5230\u6b63\u786e\u7684\u4e0a\u6e38\u5c42\uff08\u6570\u636e / \u6a21\u578b / \u4ee3\u4ef7\u5730\u56fe / \u63a5\u53e3\uff09\u3002'},
+  guideStep1:{en:'Read the failure description on each card',cn:'\u8bfb\u53d6\u6bcf\u5f20\u5361\u7247\u4e0a\u7684\u5931\u8d25\u63cf\u8ff0'},
+  guideStep2:{en:'Drag it to the layer that should fix it',cn:'\u62d6\u62fd\u5230\u5e94\u8be5\u4fee\u590d\u5b83\u7684\u5c42'},
+  guideStep3:{en:'Click CHECK when all cards are placed',cn:'\u653e\u7f6e\u5b8c\u6240\u6709\u5361\u7247\u540e\u70b9\u51fb\u68c0\u67e5'},
+  guideTips:{en:'Click a placed card to return it to the top row.',cn:'\u70b9\u51fb\u5df2\u653e\u7f6e\u7684\u5361\u7247\u53ef\u9000\u56de\u9876\u90e8\u3002'},
+  check:{en:'CHECK',cn:'\u68c0\u67e5'},
+  retry:{en:'RETRY',cn:'\u91cd\u8bd5'},
+  score:{en:'SCORE',cn:'\u5f97\u5206'},
+  placed:{en:'PLACED',cn:'\u5df2\u653e'},
+  total:{en:'TOTAL',cn:'\u603b\u6570'},
+  accuracy:{en:'ACCURACY',cn:'\u51c6\u786e\u7387'},
+  status:{en:'STATUS',cn:'\u72b6\u6001'},
+  inProgress:{en:'IN PROGRESS',cn:'\u8fdb\u884c\u4e2d'},
+  complete:{en:'COMPLETE',cn:'\u5b8c\u6210'},
+  placeAll:{en:'Place all cards first',cn:'\u8bf7\u5148\u653e\u7f6e\u6240\u6709\u5361\u7247'},
+  resultGood:{en:'MISSION SUCCESS',cn:'\u4efb\u52a1\u6210\u529f'},
+  resultOk:{en:'ACCEPTABLE',cn:'\u57fa\u672c\u5408\u683c'},
+  resultBad:{en:'NEEDS REVIEW',cn:'\u9700\u8981\u590d\u67e5'},
+  resultMsgGood:{en:'Excellent fault triage! You correctly identified which upstream layer each failure belongs to.',cn:'\u6545\u969c\u5f52\u56e0\u51c6\u786e\uff01\u4f60\u6b63\u786e\u8bc6\u522b\u4e86\u6bcf\u4e2a\u5931\u8d25\u5c5e\u4e8e\u54ea\u4e2a\u4e0a\u6e38\u5c42\u3002'},
+  resultMsgOk:{en:'Some misplacements. Review the highlighted cards and think about which stage truly needs the fix.',cn:'\u90e8\u5206\u5f52\u56e0\u4e0d\u51c6\u786e\u3002\u56de\u987e\u9ad8\u4eae\u5361\u7247\uff0c\u601d\u8003\u54ea\u4e2a\u9636\u6bb5\u771f\u6b63\u9700\u8981\u4fee\u590d\u3002'},
+  resultMsgBad:{en:'Many misplacements. Re-read the failure descriptions and trace each to its root cause layer.',cn:'\u8f83\u591a\u5f52\u56e0\u9519\u8bef\u3002\u91cd\u8bfb\u5931\u8d25\u63cf\u8ff0\uff0c\u8ffd\u6eaf\u6bcf\u4e2a\u5931\u8d25\u7684\u6839\u56e0\u5c42\u3002'},
+  zoneData:{en:'DATA',cn:'\u6570\u636e'},
+  zoneModel:{en:'MODEL',cn:'\u6a21\u578b'},
+  zoneCost:{en:'COST MAP',cn:'\u4ee3\u4ef7\u5730\u56fe'},
+  zoneInterface:{en:'INTERFACE',cn:'\u63a5\u53e3'},
+  // 8 failure case cards
+  c0:{en:'Rover gets stuck on dunes never seen in training images',cn:'\u706b\u661f\u8f66\u9677\u5165\u8bad\u7ec3\u56fe\u50cf\u4e2d\u4ece\u672a\u51fa\u73b0\u8fc7\u7684\u6c99\u4e18'},
+  c1:{en:'Classifier labels dark rock shadow as safe terrain',cn:'\u5206\u7c7b\u5668\u5c06\u6697\u5ca9\u77f3\u9634\u5f71\u6807\u8bb0\u4e3a\u5b89\u5168\u5730\u5f62'},
+  c2:{en:'Path planner routes through narrow gap that is actually too tight',cn:'\u8def\u5f84\u89c4\u5212\u5668\u7a7f\u8fc7\u5b9e\u9645\u8fc7\u7a84\u7684\u7f1d\u9699'},
+  c3:{en:'GPS reading drifts 5m from actual position after reboot',cn:'GPS \u91cd\u542f\u540e\u8bfb\u6570\u504f\u79fb\u5b9e\u9645\u4f4d\u7f6e 5m'},
+  c4:{en:'Model predicts sand as rock because training only had basalt samples',cn:'\u6a21\u578b\u5c06\u6c99\u5730\u9884\u6d4b\u4e3a\u5ca9\u77f3\uff0c\u56e0\u4e3a\u8bad\u7ec3\u53ea\u6709\u7384\u6b66\u5ca9\u6837\u672c'},
+  c5:{en:'Cost inflation radius is 0.5m but rover width is 1.2m',cn:'\u4ee3\u4ef7\u81a8\u80c0\u534a\u5f84 0.5m \u4f46\u706b\u661f\u8f66\u5bbd 1.2m'},
+  c6:{en:'Terrain map has no labels for ice patches at polar regions',cn:'\u5730\u5f62\u56fe\u7f3a\u5c11\u6781\u5730\u51b0\u5c42\u7684\u6807\u6ce8'},
+  c7:{en:'Wheel odometry reports 10m but IMU shows only 7m traveled',cn:'\u8f6e\u5b50\u91cc\u7a0b\u8ba1\u62a5\u544a 10m \u4f46 IMU \u663e\u793a\u4ec5\u8d70\u4e86 7m'},
+  // Correct zone for each card (index into zones: 0=data,1=model,2=cost,3=interface)
+};
+function t(k){return(I18N[k]&&I18N[k][LANG])||(I18N[k]&&I18N[k]['en'])||k;}
+
+var CARDS=[
+  {id:'c0',correct:0,color:'#ff7f50'},  // data
+  {id:'c1',correct:1,color:'#00daf3'},  // model
+  {id:'c2',correct:2,color:'#ffb59c'},  // cost
+  {id:'c3',correct:3,color:'#10b981'},  // interface
+  {id:'c4',correct:1,color:'#00daf3'},  // model (training data bias -> model)
+  {id:'c5',correct:2,color:'#ffb59c'},  // cost
+  {id:'c6',correct:0,color:'#ff7f50'},  // data
+  {id:'c7',correct:3,color:'#10b981'}   // interface
+];
+
+var ZONES=['zoneData','zoneModel','zoneCost','zoneInterface'];
+var ZONE_COLORS=['#ff7f50','#00daf3','#ffb59c','#10b981'];
+
+var placed={};// cardId -> zoneIndex
+var score=0;
+var checked=false;
+
+function shuffle(arr){
+  var a=arr.slice();
+  for(var i=a.length-1;i>0;i--){var j=Math.floor(Math.random()*(i+1));var tmp=a[i];a[i]=a[j];a[j]=tmp;}
+  return a;
+}
+
+var shuffledCards=shuffle(CARDS);
+
+function buildUI(){
+  var cardsRow=document.getElementById('cardsRow');
+  var targetsRow=document.getElementById('targetsRow');
+  cardsRow.innerHTML='';
+  targetsRow.innerHTML='';
+  placed={};
+  checked=false;
+  score=0;
+
+  // Build target zones
+  for(var z=0;z<4;z++){
+    var zone=document.createElement('div');
+    zone.className='target-zone';
+    zone.dataset.zone=z;
+    var title=document.createElement('div');
+    title.className='zone-title';
+    title.style.color=ZONE_COLORS[z];
+    title.textContent=t(ZONES[z]);
+    title.dataset.i18n=ZONES[z];
+    zone.appendChild(title);
+    var items=document.createElement('div');
+    items.className='zone-items';
+    items.dataset.zone=z;
+    zone.appendChild(items);
+    targetsRow.appendChild(zone);
+    // Drop events
+    (function(zoneIdx,zoneEl){
+      zoneEl.addEventListener('dragover',function(e){e.preventDefault();zoneEl.classList.add('highlight');});
+      zoneEl.addEventListener('dragleave',function(){zoneEl.classList.remove('highlight');});
+      zoneEl.addEventListener('drop',function(e){
+        e.preventDefault();zoneEl.classList.remove('highlight');
+        var cardId=e.dataTransfer.getData('text/plain');
+        if(cardId&&!checked)placeCard(cardId,zoneIdx);
+      });
+      // Touch drop
+      zoneEl.addEventListener('touchmove',function(e){e.preventDefault();},{passive:false});
+    })(z,zone);
+  }
+
+  // Build cards
+  shuffledCards.forEach(function(c){
+    createCardEl(c.id,cardsRow,true);
+  });
+
+  updateHUD();
+  document.getElementById('fbMsg').textContent='';
+}
+
+function createCardEl(cardId,container,draggable){
+  var card=document.createElement('div');
+  card.className='card';
+  card.dataset.cardId=cardId;
+  card.textContent=t(cardId);
+  card.dataset.i18n=cardId;
+  var ci=CARDS.find(function(c){return c.id===cardId;});
+  card.style.borderLeftColor=ci?ci.color:'#ffb59c';
+  card.style.borderLeftWidth='3px';
+
+  if(draggable){
+    card.draggable=true;
+    card.addEventListener('dragstart',function(e){
+      e.dataTransfer.setData('text/plain',cardId);
+      card.classList.add('dragging');
+    });
+    card.addEventListener('dragend',function(){card.classList.remove('dragging');});
+    // Touch drag
+    var touchClone=null;
+    card.addEventListener('touchstart',function(e){
+      if(checked)return;
+      var touch=e.touches[0];
+      touchClone=card.cloneNode(true);
+      touchClone.style.position='fixed';
+      touchClone.style.left=(touch.clientX-50)+'px';
+      touchClone.style.top=(touch.clientY-20)+'px';
+      touchClone.style.width='120px';
+      touchClone.style.opacity='0.8';
+      touchClone.style.pointerEvents='none';
+      touchClone.style.zIndex='300';
+      document.body.appendChild(touchClone);
+      card.classList.add('dragging');
+    },{passive:true});
+    card.addEventListener('touchmove',function(e){
+      e.preventDefault();
+      if(!touchClone)return;
+      var touch=e.touches[0];
+      touchClone.style.left=(touch.clientX-50)+'px';
+      touchClone.style.top=(touch.clientY-20)+'px';
+      // Highlight zone under touch
+      var zones=document.querySelectorAll('.target-zone');
+      zones.forEach(function(z){z.classList.remove('highlight');});
+      var el=document.elementFromPoint(touch.clientX,touch.clientY);
+      if(el){
+        var zoneEl=el.closest('.target-zone');
+        if(zoneEl)zoneEl.classList.add('highlight');
+      }
+    },{passive:false});
+    card.addEventListener('touchend',function(e){
+      card.classList.remove('dragging');
+      if(touchClone){document.body.removeChild(touchClone);touchClone=null;}
+      if(checked)return;
+      var touch=e.changedTouches[0];
+      var el=document.elementFromPoint(touch.clientX,touch.clientY);
+      if(el){
+        var zoneEl=el.closest('.target-zone');
+        if(zoneEl){
+          var zi=parseInt(zoneEl.dataset.zone);
+          placeCard(cardId,zi);
+        }
+      }
+      document.querySelectorAll('.target-zone').forEach(function(z){z.classList.remove('highlight');});
+    });
+  }else{
+    // Placed card - click to return
+    card.addEventListener('click',function(){
+      if(checked)return;
+      returnCard(cardId);
+    });
+  }
+
+  container.appendChild(card);
+  return card;
+}
+
+function placeCard(cardId,zoneIdx){
+  // Remove from previous location
+  var existingCard=document.querySelector('.cards-row .card[data-card-id="'+cardId+'"]');
+  if(existingCard)existingCard.remove();
+  // Remove from any zone
+  document.querySelectorAll('.zone-items .card[data-card-id="'+cardId+'"]').forEach(function(el){el.remove();});
+  // Add to zone
+  var zoneItems=document.querySelectorAll('.zone-items')[zoneIdx];
+  createCardEl(cardId,zoneItems,false);
+  placed[cardId]=zoneIdx;
+  updateHUD();
+}
+
+function returnCard(cardId){
+  // Remove from zone
+  document.querySelectorAll('.zone-items .card[data-card-id="'+cardId+'"]').forEach(function(el){el.remove();});
+  delete placed[cardId];
+  // Add back to cards row
+  createCardEl(cardId,document.getElementById('cardsRow'),true);
+  updateHUD();
+}
+
+function checkAnswers(){
+  var placedCount=Object.keys(placed).length;
+  if(placedCount<CARDS.length){
+    document.getElementById('fbMsg').textContent=t('placeAll');
+    return;
+  }
+  checked=true;
+  score=0;
+  // Highlight correct/incorrect
+  CARDS.forEach(function(c){
+    var cardEls=document.querySelectorAll('.card[data-card-id="'+c.id+'"]');
+    cardEls.forEach(function(el){
+      if(placed[c.id]===c.correct){
+        el.style.background='rgba(16,185,129,0.2)';
+        el.style.borderColor='#10b981';
+        score++;
+      }else{
+        el.style.background='rgba(255,95,31,0.2)';
+        el.style.borderColor='#ff5f1f';
+      }
+    });
+  });
+  updateHUD();
+  // Show result overlay
+  setTimeout(showResult,800);
+}
+
+function showResult(){
+  var pct=Math.round(score/CARDS.length*100);
+  var overlay=document.getElementById('resultOverlay');
+  overlay.classList.add('show');
+  document.getElementById('resultScore').textContent=score+'/'+CARDS.length;
+  if(pct>=88){
+    document.getElementById('resultTitle').textContent=t('resultGood');
+    document.getElementById('resultMsg').textContent=t('resultMsgGood');
+  }else if(pct>=63){
+    document.getElementById('resultTitle').textContent=t('resultOk');
+    document.getElementById('resultMsg').textContent=t('resultMsgOk');
+  }else{
+    document.getElementById('resultTitle').textContent=t('resultBad');
+    document.getElementById('resultMsg').textContent=t('resultMsgBad');
+  }
+}
+
+function retry(){
+  document.getElementById('resultOverlay').classList.remove('show');
+  shuffledCards=shuffle(CARDS);
+  buildUI();
+}
+
+function updateHUD(){
+  var placedCount=Object.keys(placed).length;
+  document.getElementById('hudL0').textContent=t('placed');
+  document.getElementById('hudV0').textContent=placedCount+'/'+CARDS.length;
+  document.getElementById('hudL1').textContent=t('score');
+  document.getElementById('hudV1').textContent=checked?score+'/'+CARDS.length:'--';
+  document.getElementById('hudL2').textContent=t('accuracy');
+  document.getElementById('hudV2').textContent=checked?Math.round(score/CARDS.length*100)+'%':'--';
+  document.getElementById('hudL3').textContent=t('status');
+  document.getElementById('hudV3').textContent=checked?t('complete'):t('inProgress');
+  document.getElementById('scoreDisplay').textContent=t('score')+': '+(checked?score+'/'+CARDS.length:'--');
+}
+
+function refreshI18N(){
+  document.getElementById('titleText').textContent=t('title');
+  document.getElementById('guideTitle').textContent=t('guide');
+  document.getElementById('guideGoal').textContent=t('guideGoal');
+  var steps=document.getElementById('guideSteps');
+  steps.innerHTML='';
+  ['guideStep1','guideStep2','guideStep3'].forEach(function(k){
+    var li=document.createElement('li');li.textContent=t(k);steps.appendChild(li);
+  });
+  document.getElementById('guideTips').textContent=t('guideTips');
+  document.getElementById('checkBtn').textContent=t('check');
+  document.getElementById('retryBtn').textContent=t('retry');
+  // Update zone titles
+  document.querySelectorAll('.zone-title').forEach(function(el){
+    if(el.dataset.i18n)el.textContent=t(el.dataset.i18n);
+  });
+  // Update card texts
+  document.querySelectorAll('.card').forEach(function(el){
+    if(el.dataset.i18n)el.textContent=t(el.dataset.i18n);
+  });
+  // Update result
+  if(checked){
+    var pct=Math.round(score/CARDS.length*100);
+    if(pct>=88)document.getElementById('resultTitle').textContent=t('resultGood');
+    else if(pct>=63)document.getElementById('resultTitle').textContent=t('resultOk');
+    else document.getElementById('resultTitle').textContent=t('resultBad');
+    if(pct>=88)document.getElementById('resultMsg').textContent=t('resultMsgGood');
+    else if(pct>=63)document.getElementById('resultMsg').textContent=t('resultMsgOk');
+    else document.getElementById('resultMsg').textContent=t('resultMsgBad');
+  }
+  updateHUD();
+}
+
+// Events
+document.getElementById('langBtn').addEventListener('click',function(){
+  LANG=LANG==='en'?'cn':'en';
+  document.getElementById('langBtn').textContent=LANG.toUpperCase();
+  refreshI18N();
+});
+document.getElementById('checkBtn').addEventListener('click',function(){
+  if(!checked)checkAnswers();
+});
+document.getElementById('retryBtn').addEventListener('click',function(){retry();});
+document.getElementById('guideToggle').addEventListener('click',function(){
+  var content=document.getElementById('guideContent');
+  var arrow=document.getElementById('guideArrow');
+  if(content.style.maxHeight==='0px'){content.style.maxHeight='300px';arrow.textContent='-';}
+  else{content.style.maxHeight='0px';arrow.textContent='+';}
+});
+
+// Init
+buildUI();
+refreshI18N();
+
+})();
+</script>
+</body>
+</html>

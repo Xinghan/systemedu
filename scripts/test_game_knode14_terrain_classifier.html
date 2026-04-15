@@ -1,0 +1,622 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mars Terrain Classifier - AI4Mars</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=Inter:wght@400;500&family=Noto+Sans+SC:wght@400;700&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box;}
+html,body{width:100%;height:100vh;overflow:hidden;background:#0c0e12;color:#f6f6fc;font-family:'Inter','Noto Sans SC',sans-serif;}
+.wrapper{display:flex;flex-direction:column;height:100vh;overflow:hidden;}
+.header{display:flex;justify-content:space-between;align-items:center;padding:10px 16px 6px;flex-shrink:0;}
+.header-left h1{font-family:'Space Grotesk',sans-serif;font-size:clamp(13px,2vw,17px);font-weight:700;color:#50ffb0;text-shadow:0 0 12px rgba(80,255,176,0.3);letter-spacing:-0.02em;}
+.header-left .sub{font-size:10px;color:#aaabb0;letter-spacing:0.1em;text-transform:uppercase;}
+.header-right{display:flex;gap:8px;align-items:center;}
+.lang-btn{font-family:'Space Grotesk',sans-serif;font-size:11px;font-weight:700;padding:4px 10px;cursor:pointer;border:none;background:rgba(20,20,35,0.85);backdrop-filter:blur(12px);color:#50ffb0;letter-spacing:1px;}
+.lang-btn:hover{color:#fff;}
+.game-area{flex:1;min-height:0;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:8px 16px;gap:8px;overflow:hidden;}
+.round-bar{display:flex;align-items:center;justify-content:center;gap:16px;flex-shrink:0;}
+.round-text{font-family:'Space Grotesk',sans-serif;font-size:13px;font-weight:700;color:#aaabb0;letter-spacing:0.05em;}
+.score-text{font-family:'Space Grotesk',sans-serif;font-size:13px;font-weight:700;color:#50ffb0;}
+.canvas-wrap{flex:1;min-height:0;display:flex;align-items:center;justify-content:center;width:100%;}
+.canvas-wrap canvas{border:2px solid rgba(80,255,176,0.2);background:#0f0a14;}
+.choices{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;flex-shrink:0;}
+.choice-btn{font-family:'Space Grotesk',sans-serif;font-size:13px;font-weight:700;letter-spacing:0.05em;padding:10px 18px;border:2px solid rgba(80,255,176,0.3);background:rgba(20,20,35,0.9);color:#aaabb0;cursor:pointer;transition:all 0.2s;}
+.choice-btn:hover{border-color:#50ffb0;color:#50ffb0;box-shadow:0 0 12px rgba(80,255,176,0.2);}
+.choice-btn.correct{border-color:#50ffb0;background:rgba(80,255,176,0.15);color:#50ffb0;animation:pulse 0.5s;}
+.choice-btn.wrong{border-color:#ff6b4a;background:rgba(255,107,74,0.1);color:#ff6b4a;}
+.choice-btn:disabled{cursor:default;opacity:0.6;}
+.feedback{font-family:'Noto Sans SC',sans-serif;font-size:12px;min-height:36px;text-align:center;max-width:420px;line-height:1.5;color:#aaabb0;flex-shrink:0;}
+.feedback.ok{color:#50ffb0;}
+.feedback.err{color:#ff6b4a;}
+.next-btn{font-family:'Space Grotesk',sans-serif;font-size:12px;font-weight:700;letter-spacing:0.1em;padding:8px 24px;border:none;cursor:pointer;color:#0c0e12;background:linear-gradient(135deg,#50ffb0,#17df93);box-shadow:0 0 12px rgba(80,255,176,0.3);display:none;flex-shrink:0;}
+.next-btn:hover{transform:scale(1.04);}
+.result-overlay{display:none;position:absolute;top:0;left:0;width:100%;height:100%;background:rgba(12,14,18,0.92);backdrop-filter:blur(8px);z-index:50;flex-direction:column;align-items:center;justify-content:center;gap:12px;padding:20px;}
+.result-overlay.visible{display:flex;}
+.result-overlay h2{font-family:'Space Grotesk',sans-serif;font-size:22px;font-weight:700;color:#50ffb0;text-shadow:0 0 20px rgba(80,255,176,0.4);}
+.result-overlay .score-big{font-family:'Space Grotesk',sans-serif;font-size:40px;font-weight:700;color:#f6f6fc;}
+.result-overlay .accuracy{font-family:'Space Grotesk',sans-serif;font-size:16px;color:#aaabb0;}
+.result-overlay .breakdown{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin:8px 0;}
+.breakdown-item{font-family:'Space Grotesk',sans-serif;font-size:11px;padding:4px 10px;border:1px solid rgba(80,255,176,0.2);background:rgba(20,20,35,0.8);color:#aaabb0;}
+.breakdown-item .bk-label{color:#50ffb0;font-weight:700;}
+.restart-btn{font-family:'Space Grotesk',sans-serif;font-size:12px;font-weight:700;padding:10px 28px;border:none;cursor:pointer;color:#0c0e12;background:linear-gradient(135deg,#50ffb0,#17df93);box-shadow:0 0 12px rgba(80,255,176,0.3);margin-top:8px;}
+.restart-btn:hover{transform:scale(1.04);}
+@keyframes pulse{0%{transform:scale(1)}50%{transform:scale(1.05)}100%{transform:scale(1)}}
+</style>
+</head>
+<body>
+<div class="wrapper">
+  <div class="header">
+    <div class="header-left">
+      <h1 id="title"></h1>
+      <div class="sub" id="subtitle"></div>
+    </div>
+    <div class="header-right">
+      <button class="lang-btn" id="langBtn">CN</button>
+    </div>
+  </div>
+
+  <div class="game-area" id="gameArea">
+    <div class="round-bar">
+      <span class="round-text" id="roundText"></span>
+      <span class="score-text" id="scoreText"></span>
+    </div>
+    <div class="canvas-wrap" id="canvasWrap">
+      <canvas id="terrainCanvas"></canvas>
+    </div>
+    <div class="choices" id="choices"></div>
+    <div class="feedback" id="feedback"></div>
+    <button class="next-btn" id="nextBtn"></button>
+  </div>
+
+  <div class="result-overlay" id="resultOverlay">
+    <h2 id="resultTitle"></h2>
+    <div class="score-big" id="resultScore"></div>
+    <div class="accuracy" id="resultAccuracy"></div>
+    <div class="breakdown" id="breakdown"></div>
+    <div id="resultMsg" style="font-family:'Noto Sans SC',sans-serif;font-size:13px;color:#aaabb0;max-width:320px;text-align:center;line-height:1.5;"></div>
+    <button class="restart-btn" id="restartBtn"></button>
+  </div>
+</div>
+
+<script>
+(function(){
+'use strict';
+
+var lang = 'cn';
+function t(key) { return (I18N[key] && I18N[key][lang]) || key; }
+
+var I18N = {
+  title:       {en:'TERRAIN CLASSIFIER', cn:'\u706b\u661f\u5730\u5f62\u56fe\u9274'},
+  subtitle:    {en:'AI4MARS FOUR TERRAIN TYPES', cn:'AI4Mars\u56db\u7c7b\u5730\u5f62\u8bad\u7ec3'},
+  round:       {en:'Round {0}/8', cn:'\u7b2c {0}/8 \u9898'},
+  score:       {en:'Score: {0}', cn:'\u5f97\u5206: {0}'},
+  next:        {en:'NEXT', cn:'\u4e0b\u4e00\u9898'},
+  soil:        {en:'Soil', cn:'\u571f\u58e4'},
+  bedrock:     {en:'Bedrock', cn:'\u57fa\u5ca9'},
+  bigrock:     {en:'Big Rock', cn:'\u5927\u77f3\u5757'},
+  sand:        {en:'Sand', cn:'\u6c99\u5730'},
+  correctMsg:  {en:'Correct! ', cn:'\u6b63\u786e! '},
+  wrongMsg:    {en:'Wrong -- the answer is {0}. ', cn:'\u9519\u8bef -- \u7b54\u6848\u662f{0}\u3002'},
+  resultTitle: {en:'Mission Complete', cn:'\u4efb\u52a1\u5b8c\u6210'},
+  resultAcc:   {en:'Accuracy: {0}%', cn:'\u6b63\u786e\u7387: {0}%'},
+  perfect:     {en:'Perfect score! You mastered all four terrain types.', cn:'\u6ee1\u5206! \u4f60\u5df2\u7ecf\u638c\u63e1\u4e86\u5168\u90e8\u56db\u79cd\u5730\u5f62\u7c7b\u578b\u3002'},
+  good:        {en:'Good work! Review the ones you missed and try again.', cn:'\u4e0d\u9519! \u590d\u4e60\u4e00\u4e0b\u9519\u8bef\u7684\u9898\u76ee\u518d\u6765\u4e00\u6b21\u3002'},
+  retry:       {en:'Keep practicing! Pay attention to each terrain feature.', cn:'\u7ee7\u7eed\u52a0\u6cb9! \u6ce8\u610f\u6bcf\u79cd\u5730\u5f62\u7684\u7279\u5f81\u3002'},
+  restart:     {en:'RESTART', cn:'\u91cd\u65b0\u5f00\u59cb'},
+  hintSoil:    {en:'Soil: fine brownish grains scattered evenly across a flat surface.', cn:'\u571f\u58e4: \u7ec6\u5c0f\u7684\u68d5\u8272\u9897\u7c92\u5747\u5300\u5206\u5e03\u5728\u5e73\u5766\u8868\u9762\u4e0a\u3002'},
+  hintBedrock: {en:'Bedrock: gray horizontal layers with hard, sharp edges.', cn:'\u57fa\u5ca9: \u7070\u8272\u6c34\u5e73\u5c42\u7406\uff0c\u8fb9\u7f18\u786c\u6717\u6e05\u6670\u3002'},
+  hintBigrock: {en:'Big Rock: dark angular shapes casting shadows on lighter ground.', cn:'\u5927\u77f3\u5757: \u6df1\u8272\u68f1\u89d2\u5f62\u72b6\uff0c\u5728\u8f83\u6d45\u5730\u9762\u4e0a\u6295\u5c04\u9634\u5f71\u3002'},
+  hintSand:    {en:'Sand: wavy ripple patterns in reddish-tan color formed by wind.', cn:'\u6c99\u5730: \u7ea2\u68d5\u8272\u6ce2\u6d6a\u5f62\u6ce2\u7eb9\uff0c\u7531\u98ce\u529b\u5851\u9020\u3002'},
+  typeSoil:    {en:'Soil', cn:'\u571f\u58e4'},
+  typeBedrock: {en:'Bedrock', cn:'\u57fa\u5ca9'},
+  typeBigrock: {en:'Big Rock', cn:'\u5927\u77f3\u5757'},
+  typeSand:    {en:'Sand', cn:'\u6c99\u5730'},
+};
+
+var TERRAIN_TYPES = ['soil','bedrock','bigrock','sand'];
+var TOTAL_ROUNDS = 8;
+
+// Build round list: each type appears exactly 2 times, shuffled
+var rounds = [];
+var scoreCount = 0;
+var currentRound = 0;
+var answered = false;
+var typeCorrect = {soil:0, bedrock:0, bigrock:0, sand:0};
+var typeTotal  = {soil:0, bedrock:0, bigrock:0, sand:0};
+// Per-round seed for deterministic terrain variation
+var roundSeeds = [];
+
+function shuffle(arr) {
+  for (var i = arr.length - 1; i > 0; i--) {
+    var j = Math.floor(Math.random() * (i + 1));
+    var tmp = arr[i]; arr[i] = arr[j]; arr[j] = tmp;
+  }
+  return arr;
+}
+
+function seededRandom(seed) {
+  // Simple LCG PRNG
+  var s = seed;
+  return function() {
+    s = (s * 1103515245 + 12345) & 0x7fffffff;
+    return s / 0x7fffffff;
+  };
+}
+
+function buildRounds() {
+  rounds = [];
+  for (var i = 0; i < TERRAIN_TYPES.length; i++) {
+    rounds.push(TERRAIN_TYPES[i]);
+    rounds.push(TERRAIN_TYPES[i]);
+  }
+  shuffle(rounds);
+  roundSeeds = [];
+  for (var i = 0; i < rounds.length; i++) {
+    roundSeeds.push(Math.floor(Math.random() * 100000));
+  }
+}
+
+// ----- Canvas drawing -----
+
+var canvas = document.getElementById('terrainCanvas');
+var ctx = canvas.getContext('2d');
+
+function sizeCanvas() {
+  var wrap = document.getElementById('canvasWrap');
+  var rect = wrap.getBoundingClientRect();
+  var availW = rect.width - 16;
+  var availH = rect.height - 8;
+  var sz = Math.min(availW, availH);
+  sz = Math.max(sz, 60);
+  var dpr = Math.min(window.devicePixelRatio || 1, 2);
+  canvas.width = Math.floor(sz * dpr);
+  canvas.height = Math.floor(sz * dpr);
+  canvas.style.width = Math.floor(sz) + 'px';
+  canvas.style.height = Math.floor(sz) + 'px';
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  return Math.floor(sz);
+}
+
+function drawTerrain(type, seed) {
+  var sz = sizeCanvas();
+  var rng = seededRandom(seed);
+
+  // Dark reddish-brown Mars sky
+  var skyGrad = ctx.createLinearGradient(0, 0, 0, sz);
+  skyGrad.addColorStop(0, '#1a0c08');
+  skyGrad.addColorStop(0.3, '#1e1010');
+  skyGrad.addColorStop(1, '#251410');
+  ctx.fillStyle = skyGrad;
+  ctx.fillRect(0, 0, sz, sz);
+
+  // Faint stars in upper portion
+  for (var i = 0; i < 12; i++) {
+    var sx = rng() * sz;
+    var sy = rng() * sz * 0.25;
+    ctx.fillStyle = 'rgba(255,255,240,' + (0.08 + rng() * 0.12) + ')';
+    ctx.beginPath();
+    ctx.arc(sx, sy, 0.8, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  switch(type) {
+    case 'soil': drawSoil(sz, rng); break;
+    case 'bedrock': drawBedrock(sz, rng); break;
+    case 'bigrock': drawBigrock(sz, rng); break;
+    case 'sand': drawSand(sz, rng); break;
+  }
+}
+
+function drawSoil(sz, rng) {
+  var groundY = sz * 0.38;
+  // Flat surface fill
+  var grd = ctx.createLinearGradient(0, groundY, 0, sz);
+  grd.addColorStop(0, '#8B6A4B');
+  grd.addColorStop(0.4, '#7A5C3D');
+  grd.addColorStop(1, '#5C4030');
+  ctx.fillStyle = grd;
+  ctx.fillRect(0, groundY, sz, sz - groundY);
+
+  // Flat surface line
+  ctx.strokeStyle = '#A0805A';
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.moveTo(0, groundY);
+  ctx.lineTo(sz, groundY);
+  ctx.stroke();
+
+  // Fine brownish dots scattered uniformly
+  for (var i = 0; i < 300; i++) {
+    var dx = rng() * sz;
+    var dy = groundY + 4 + rng() * (sz - groundY - 8);
+    var dr = 0.8 + rng() * 1.5;
+    var shade = 0.5 + rng() * 0.4;
+    var r = Math.floor(140 + rng() * 40);
+    var g = Math.floor(100 + rng() * 30);
+    var b = Math.floor(60 + rng() * 20);
+    ctx.fillStyle = 'rgba(' + r + ',' + g + ',' + b + ',' + shade + ')';
+    ctx.beginPath();
+    ctx.arc(dx, dy, dr, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  // A few slightly larger grains for texture
+  for (var i = 0; i < 30; i++) {
+    var dx = rng() * sz;
+    var dy = groundY + 8 + rng() * (sz - groundY - 16);
+    ctx.fillStyle = 'rgba(120,85,50,' + (0.3 + rng() * 0.3) + ')';
+    ctx.beginPath();
+    ctx.arc(dx, dy, 1.5 + rng() * 1, 0, Math.PI * 2);
+    ctx.fill();
+  }
+}
+
+function drawBedrock(sz, rng) {
+  var groundY = sz * 0.32;
+
+  // Base rock fill
+  var grd = ctx.createLinearGradient(0, groundY, 0, sz);
+  grd.addColorStop(0, '#6B6B70');
+  grd.addColorStop(0.5, '#555558');
+  grd.addColorStop(1, '#404045');
+  ctx.fillStyle = grd;
+  ctx.fillRect(0, groundY, sz, sz - groundY);
+
+  // Horizontal layer striations
+  var numLayers = 8 + Math.floor(rng() * 5);
+  for (var i = 0; i < numLayers; i++) {
+    var ly = groundY + (sz - groundY) * (i / numLayers) + rng() * 6;
+    var thickness = 1 + rng() * 2.5;
+    var shade = Math.floor(55 + rng() * 40);
+    ctx.strokeStyle = 'rgba(' + shade + ',' + shade + ',' + (shade + 5) + ',' + (0.5 + rng() * 0.4) + ')';
+    ctx.lineWidth = thickness;
+    ctx.beginPath();
+    ctx.moveTo(0, ly);
+    // Slightly jagged lines for realism
+    for (var x = 0; x < sz; x += 8 + rng() * 12) {
+      ctx.lineTo(x, ly + (rng() - 0.5) * 3);
+    }
+    ctx.lineTo(sz, ly + (rng() - 0.5) * 2);
+    ctx.stroke();
+  }
+
+  // Hard edges -- cracks/fractures
+  ctx.strokeStyle = 'rgba(30,30,35,0.6)';
+  ctx.lineWidth = 1.5;
+  for (var i = 0; i < 4; i++) {
+    var cx = sz * 0.15 + rng() * sz * 0.7;
+    var cy1 = groundY + rng() * (sz - groundY) * 0.3;
+    var cy2 = cy1 + 20 + rng() * (sz - groundY) * 0.5;
+    ctx.beginPath();
+    ctx.moveTo(cx, cy1);
+    ctx.lineTo(cx + (rng() - 0.5) * 15, (cy1 + cy2) / 2);
+    ctx.lineTo(cx + (rng() - 0.5) * 10, cy2);
+    ctx.stroke();
+  }
+
+  // Top edge - sharp boundary
+  ctx.strokeStyle = '#888890';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(0, groundY);
+  for (var x = 0; x < sz; x += 5) {
+    ctx.lineTo(x, groundY + (rng() > 0.8 ? (rng() - 0.5) * 4 : 0));
+  }
+  ctx.lineTo(sz, groundY);
+  ctx.stroke();
+}
+
+function drawBigrock(sz, rng) {
+  var groundY = sz * 0.55;
+
+  // Lighter ground surface
+  var grd = ctx.createLinearGradient(0, groundY, 0, sz);
+  grd.addColorStop(0, '#A08060');
+  grd.addColorStop(1, '#806040');
+  ctx.fillStyle = grd;
+  ctx.fillRect(0, groundY, sz, sz - groundY);
+
+  // Subtle ground texture
+  for (var i = 0; i < 80; i++) {
+    var gx = rng() * sz;
+    var gy = groundY + rng() * (sz - groundY);
+    ctx.fillStyle = 'rgba(130,100,70,' + (0.2 + rng() * 0.2) + ')';
+    ctx.beginPath();
+    ctx.arc(gx, gy, 0.8 + rng(), 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  // 2-3 dark angular rock shapes with drop shadows
+  var numRocks = 2 + Math.floor(rng() * 2);
+  for (var i = 0; i < numRocks; i++) {
+    var rcx = sz * 0.2 + rng() * sz * 0.6;
+    var rcy = groundY - sz * 0.05 - rng() * sz * 0.12;
+    var rw = sz * 0.12 + rng() * sz * 0.1;
+    var rh = sz * 0.1 + rng() * sz * 0.08;
+
+    // Build angular polygon (5-7 vertices)
+    var verts = [];
+    var nv = 5 + Math.floor(rng() * 3);
+    for (var v = 0; v < nv; v++) {
+      var angle = (v / nv) * Math.PI * 2 - Math.PI / 2;
+      var rad = (v % 2 === 0 ? 1 : 0.7 + rng() * 0.3);
+      verts.push({
+        x: rcx + Math.cos(angle) * rw * rad,
+        y: rcy + Math.sin(angle) * rh * rad
+      });
+    }
+
+    // Drop shadow
+    ctx.save();
+    ctx.translate(4, 6);
+    ctx.beginPath();
+    ctx.moveTo(verts[0].x, verts[0].y);
+    for (var v = 1; v < verts.length; v++) {
+      ctx.lineTo(verts[v].x, verts[v].y);
+    }
+    ctx.closePath();
+    ctx.fillStyle = 'rgba(0,0,0,0.35)';
+    ctx.fill();
+    ctx.restore();
+
+    // Rock body
+    ctx.beginPath();
+    ctx.moveTo(verts[0].x, verts[0].y);
+    for (var v = 1; v < verts.length; v++) {
+      ctx.lineTo(verts[v].x, verts[v].y);
+    }
+    ctx.closePath();
+    var rGrd = ctx.createLinearGradient(rcx - rw, rcy - rh, rcx + rw, rcy + rh);
+    rGrd.addColorStop(0, '#3A3530');
+    rGrd.addColorStop(0.5, '#2A2520');
+    rGrd.addColorStop(1, '#1A1510');
+    ctx.fillStyle = rGrd;
+    ctx.fill();
+    ctx.strokeStyle = '#4A4540';
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+
+    // Surface detail lines on rock
+    ctx.strokeStyle = 'rgba(70,65,55,0.5)';
+    ctx.lineWidth = 0.8;
+    for (var d = 0; d < 2; d++) {
+      var dx1 = rcx - rw * 0.5 + rng() * rw;
+      var dy1 = rcy - rh * 0.3 + rng() * rh * 0.6;
+      ctx.beginPath();
+      ctx.moveTo(dx1, dy1);
+      ctx.lineTo(dx1 + rng() * rw * 0.4, dy1 + rng() * rh * 0.3);
+      ctx.stroke();
+    }
+  }
+
+  // Ground horizon line
+  ctx.strokeStyle = '#B09070';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(0, groundY);
+  ctx.lineTo(sz, groundY);
+  ctx.stroke();
+}
+
+function drawSand(sz, rng) {
+  var groundY = sz * 0.35;
+
+  // Base sandy gradient
+  var grd = ctx.createLinearGradient(0, groundY, 0, sz);
+  grd.addColorStop(0, '#C4946A');
+  grd.addColorStop(0.3, '#B8865C');
+  grd.addColorStop(1, '#A07048');
+  ctx.fillStyle = grd;
+  ctx.fillRect(0, groundY, sz, sz - groundY);
+
+  // Wavy sine-wave ripple pattern
+  var numRipples = 12 + Math.floor(rng() * 6);
+  var rippleSpacing = (sz - groundY) / numRipples;
+  var phase = rng() * Math.PI * 2;
+  var ampBase = 3 + rng() * 4;
+
+  for (var i = 0; i < numRipples; i++) {
+    var ry = groundY + i * rippleSpacing + rippleSpacing * 0.5;
+    var amp = ampBase + rng() * 2 - 1;
+    var freq = 0.02 + rng() * 0.015;
+    var phaseShift = phase + i * 0.4;
+
+    // Shadow line
+    ctx.strokeStyle = 'rgba(100,60,30,' + (0.25 + rng() * 0.15) + ')';
+    ctx.lineWidth = 1.2;
+    ctx.beginPath();
+    ctx.moveTo(0, ry + 1.5);
+    for (var x = 0; x <= sz; x += 2) {
+      var y = ry + 1.5 + Math.sin(x * freq + phaseShift) * amp;
+      ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+
+    // Highlight line
+    ctx.strokeStyle = 'rgba(210,175,130,' + (0.3 + rng() * 0.2) + ')';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(0, ry);
+    for (var x = 0; x <= sz; x += 2) {
+      var y = ry + Math.sin(x * freq + phaseShift) * amp;
+      ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+  }
+
+  // Wind-blown dust particles
+  ctx.fillStyle = 'rgba(200,170,120,0.25)';
+  for (var i = 0; i < 15; i++) {
+    var px = rng() * sz;
+    var py = groundY - 8 + rng() * 20;
+    ctx.beginPath();
+    ctx.arc(px, py, 0.6 + rng() * 1, 0, Math.PI * 2);
+    ctx.fill();
+  }
+}
+
+// ----- Game logic -----
+
+function init() {
+  buildRounds();
+  scoreCount = 0;
+  currentRound = 0;
+  answered = false;
+  typeCorrect = {soil:0, bedrock:0, bigrock:0, sand:0};
+  typeTotal  = {soil:0, bedrock:0, bigrock:0, sand:0};
+
+  document.getElementById('resultOverlay').classList.remove('visible');
+  document.getElementById('gameArea').style.visibility = 'visible';
+  updateUI();
+  renderRound();
+}
+
+function updateUI() {
+  document.getElementById('title').textContent = t('title');
+  document.getElementById('subtitle').textContent = t('subtitle');
+  document.getElementById('roundText').textContent = t('round').replace('{0}', currentRound + 1);
+  document.getElementById('scoreText').textContent = t('score').replace('{0}', scoreCount);
+  document.getElementById('nextBtn').textContent = t('next');
+}
+
+function renderRound() {
+  answered = false;
+  document.getElementById('feedback').textContent = '';
+  document.getElementById('feedback').className = 'feedback';
+  document.getElementById('nextBtn').style.display = 'none';
+
+  // Draw terrain
+  drawTerrain(rounds[currentRound], roundSeeds[currentRound]);
+
+  // Build choice buttons
+  var choicesDiv = document.getElementById('choices');
+  choicesDiv.innerHTML = '';
+  TERRAIN_TYPES.forEach(function(type) {
+    var btn = document.createElement('button');
+    btn.className = 'choice-btn';
+    btn.textContent = t(type);
+    btn.dataset.type = type;
+    btn.addEventListener('click', function() { checkAnswer(type); });
+    choicesDiv.appendChild(btn);
+  });
+
+  updateUI();
+}
+
+function checkAnswer(chosen) {
+  if (answered) return;
+  answered = true;
+
+  var correctType = rounds[currentRound];
+  typeTotal[correctType]++;
+
+  var btns = document.querySelectorAll('.choice-btn');
+  btns.forEach(function(btn) {
+    btn.disabled = true;
+    if (btn.dataset.type === correctType) btn.classList.add('correct');
+    if (btn.dataset.type === chosen && chosen !== correctType) btn.classList.add('wrong');
+  });
+
+  var fb = document.getElementById('feedback');
+  var hintKey = 'hint' + correctType.charAt(0).toUpperCase() + correctType.slice(1);
+
+  if (chosen === correctType) {
+    scoreCount++;
+    typeCorrect[correctType]++;
+    fb.textContent = t('correctMsg') + t(hintKey);
+    fb.className = 'feedback ok';
+  } else {
+    var typeLabel = t('type' + correctType.charAt(0).toUpperCase() + correctType.slice(1));
+    fb.textContent = t('wrongMsg').replace('{0}', typeLabel) + t(hintKey);
+    fb.className = 'feedback err';
+  }
+
+  updateUI();
+
+  if (currentRound < TOTAL_ROUNDS - 1) {
+    document.getElementById('nextBtn').style.display = 'inline-block';
+  } else {
+    setTimeout(showResults, 1200);
+  }
+}
+
+function showResults() {
+  document.getElementById('gameArea').style.visibility = 'hidden';
+  var overlay = document.getElementById('resultOverlay');
+  overlay.classList.add('visible');
+
+  document.getElementById('resultTitle').textContent = t('resultTitle');
+  document.getElementById('resultScore').textContent = scoreCount + ' / ' + TOTAL_ROUNDS;
+  var pct = Math.round(scoreCount / TOTAL_ROUNDS * 100);
+  document.getElementById('resultAccuracy').textContent = t('resultAcc').replace('{0}', pct);
+
+  // Per-type breakdown
+  var bkDiv = document.getElementById('breakdown');
+  bkDiv.innerHTML = '';
+  TERRAIN_TYPES.forEach(function(type) {
+    var item = document.createElement('div');
+    item.className = 'breakdown-item';
+    var label = t('type' + type.charAt(0).toUpperCase() + type.slice(1));
+    item.innerHTML = '<span class="bk-label">' + label + '</span> ' + typeCorrect[type] + '/' + typeTotal[type];
+    bkDiv.appendChild(item);
+  });
+
+  var msg = scoreCount === TOTAL_ROUNDS ? t('perfect') : scoreCount >= 5 ? t('good') : t('retry');
+  document.getElementById('resultMsg').textContent = msg;
+  document.getElementById('restartBtn').textContent = t('restart');
+}
+
+// Event listeners
+document.getElementById('nextBtn').addEventListener('click', function() {
+  currentRound++;
+  renderRound();
+});
+
+document.getElementById('restartBtn').addEventListener('click', init);
+
+document.getElementById('langBtn').addEventListener('click', function() {
+  lang = lang === 'cn' ? 'en' : 'cn';
+  this.textContent = lang.toUpperCase();
+  updateUI();
+
+  // Update choice button labels
+  var btns = document.querySelectorAll('.choice-btn');
+  btns.forEach(function(btn) {
+    btn.textContent = t(btn.dataset.type);
+  });
+
+  // Update feedback text if visible
+  var fb = document.getElementById('feedback');
+  if (answered && currentRound < TOTAL_ROUNDS) {
+    var correctType = rounds[currentRound];
+    var hintKey = 'hint' + correctType.charAt(0).toUpperCase() + correctType.slice(1);
+    if (fb.classList.contains('ok')) {
+      fb.textContent = t('correctMsg') + t(hintKey);
+    } else if (fb.classList.contains('err')) {
+      var typeLabel = t('type' + correctType.charAt(0).toUpperCase() + correctType.slice(1));
+      fb.textContent = t('wrongMsg').replace('{0}', typeLabel) + t(hintKey);
+    }
+  }
+
+  // Update result overlay if visible
+  if (document.getElementById('resultOverlay').classList.contains('visible')) {
+    showResults();
+  }
+});
+
+// Resize handling
+window.addEventListener('resize', function() {
+  if (currentRound < TOTAL_ROUNDS && !document.getElementById('resultOverlay').classList.contains('visible')) {
+    drawTerrain(rounds[currentRound], roundSeeds[currentRound]);
+  }
+});
+
+// Boot
+init();
+
+})();
+</script>
+</body>
+</html>

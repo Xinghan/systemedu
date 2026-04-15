@@ -1,0 +1,646 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8"/>
+<title>Pixel to Map Coordinate Transform</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;700&family=Inter:wght@400;500&family=Noto+Sans+SC:wght@400;700&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{width:100%;height:100vh;overflow:hidden;background:#131313;color:#e5e2e1;font-family:'Noto Sans SC','Inter',sans-serif}
+.wrapper{display:flex;flex-direction:column;height:100vh}
+.header{display:flex;justify-content:space-between;align-items:center;padding:10px 18px 8px;background:rgba(28,27,27,0.92);border-bottom:1px solid rgba(138,136,134,0.15)}
+.title{font-family:'Space Grotesk',sans-serif;font-size:14px;font-weight:700;color:#ffb59c;letter-spacing:0.5px}
+.title .sub{color:#8a8886;font-weight:400;margin-left:8px;font-size:12px}
+.lang-btn{position:fixed;top:8px;left:8px;z-index:100;font-family:'Space Grotesk',sans-serif;font-size:11px;font-weight:700;padding:4px 10px;cursor:pointer;border:1px solid rgba(255,255,255,0.08);background:rgba(20,20,35,0.85);backdrop-filter:blur(12px);color:#ffb59c;letter-spacing:1px}
+.canvas-wrap{flex:1;min-height:0;position:relative;display:flex;align-items:center;justify-content:center}
+canvas{width:100%;height:100%;display:block}
+.controls{display:flex;justify-content:center;align-items:center;gap:10px;padding:6px 0;background:rgba(28,27,27,0.92)}
+.ctrl-btn{background:rgba(53,53,52,0.7);border:1px solid rgba(138,136,134,0.25);color:#e5e2e1;padding:5px 14px;font-size:12px;cursor:pointer;font-family:'Space Grotesk',sans-serif;letter-spacing:0.5px}
+.ctrl-btn:hover{background:rgba(255,181,156,0.15);border-color:#ffb59c}
+#frameDots{display:flex;gap:6px;align-items:center}
+#frameDots .dot{width:8px;height:8px;background:rgba(138,136,134,0.3);cursor:pointer}
+#frameDots .dot.active{background:#ffb59c;transform:scale(1.3)}
+.hud{display:flex;justify-content:space-around;align-items:center;padding:6px 12px;background:rgba(0,0,0,0.55);font-size:11px;color:#8a8886;min-height:52px}
+.hud .item{display:flex;flex-direction:column;align-items:center}
+.hud .label{font-size:9px;text-transform:uppercase;letter-spacing:0.5px;opacity:0.7;font-family:'Space Grotesk',sans-serif}
+.hud .value{font-size:13px;color:#e5e2e1;font-weight:500;margin-top:2px}
+.guide-panel{position:fixed;top:8px;right:8px;width:260px;max-height:40vh;overflow-y:auto;background:rgba(20,20,35,0.85);backdrop-filter:blur(12px);border:1px solid rgba(255,255,255,0.08);padding:12px;z-index:100;font-family:'Noto Sans SC',sans-serif;font-size:13px;color:rgba(255,255,255,0.85)}
+.guide-panel h3{font-family:'Space Grotesk',sans-serif;font-size:14px;margin-bottom:8px;display:flex;align-items:center;justify-content:space-between;cursor:pointer;color:#ffb59c}
+.guide-panel .guide-content{}
+.guide-panel ul{padding-left:16px;line-height:1.6}
+.guide-panel .toggle-arrow{font-size:12px;transition:transform 0.2s}
+.guide-panel.collapsed .guide-content{display:none}
+.guide-panel.collapsed .toggle-arrow{transform:rotate(-90deg)}
+</style>
+</head>
+<body>
+<button class="lang-btn" id="langBtn">CN</button>
+<div class="guide-panel" id="guidePanel">
+  <h3 id="guideToggle"><span id="guideTitle"></span><span class="toggle-arrow">v</span></h3>
+  <div class="guide-content">
+    <p id="guideDesc"></p>
+    <ul id="guidePoints"></ul>
+    <p id="guideTakeaway" style="margin-top:8px;color:#ffb59c;font-size:12px"></p>
+  </div>
+</div>
+<div class="wrapper">
+  <div class="header">
+    <div class="title" id="headerTitle"></div>
+  </div>
+  <div class="canvas-wrap"><canvas id="c"></canvas></div>
+  <div class="controls">
+    <button class="ctrl-btn" id="btnPrev"></button>
+    <button class="ctrl-btn" id="btnPlay"></button>
+    <button class="ctrl-btn" id="btnNext"></button>
+    <div id="frameDots"></div>
+  </div>
+  <div class="hud">
+    <div class="item"><div class="label" id="hudLabel0"></div><div class="value" id="hudVal0"></div></div>
+    <div class="item"><div class="label" id="hudLabel1"></div><div class="value" id="hudVal1"></div></div>
+    <div class="item"><div class="label" id="hudLabel2"></div><div class="value" id="hudVal2"></div></div>
+    <div class="item"><div class="label" id="hudLabel3"></div><div class="value" id="hudVal3"></div></div>
+  </div>
+</div>
+<script>
+(function(){
+var LANG='cn';
+var I18N={
+  title:{en:'PIXEL TO MAP COORDINATE',cn:'\u50CF\u7D20\u5230\u5730\u56FE\u5750\u6807\u53D8\u6362'},
+  subtitle:{en:'P-MARS-01-M23 \u00b7 skill',cn:'P-MARS-01-M23 \u00b7 skill'},
+  btnPrev:{en:'PREV',cn:'\u4E0A\u4E00\u5E27'},
+  btnPlay:{en:'PLAY',cn:'\u64AD\u653E'},
+  btnPause:{en:'PAUSE',cn:'\u6682\u505C'},
+  btnNext:{en:'NEXT',cn:'\u4E0B\u4E00\u5E27'},
+  guideTitle:{en:'OBSERVATION GUIDE',cn:'\u89C2\u770B\u6307\u5357'},
+  guideDesc:{en:'This animation shows how raw image pixels are transformed into a navigable grid map with coordinates that pathfinding algorithms can use.',
+             cn:'\u672C\u52A8\u753B\u5C55\u793A\u539F\u59CB\u56FE\u50CF\u50CF\u7D20\u5982\u4F55\u88AB\u53D8\u6362\u4E3A\u8DEF\u5F84\u641C\u7D22\u7B97\u6CD5\u53EF\u7528\u7684\u7F51\u683C\u5730\u56FE\u5750\u6807\u3002'},
+  guideP1:{en:'Observe how pixels become grid cells',cn:'\u89C2\u5BDF\u50CF\u7D20\u5982\u4F55\u53D8\u6210\u7F51\u683C\u5355\u5143'},
+  guideP2:{en:'Note the coordinate axis labels (row, col)',cn:'\u6CE8\u610F\u5750\u6807\u8F74\u6807\u7B7E (row, col)'},
+  guideP3:{en:'See how start/end points map between systems',cn:'\u770B\u8D77\u7EC8\u70B9\u5982\u4F55\u5728\u4E24\u5957\u5750\u6807\u7CFB\u95F4\u6620\u5C04'},
+  guideTakeaway:{en:'Takeaway: pixel (x,y) maps to grid (row,col) via cell_size division',cn:'\u6536\u83B7\uFF1A\u50CF\u7D20 (x,y) \u901A\u8FC7\u9664\u4EE5\u5355\u5143\u683C\u5C3A\u5BF8\u6620\u5C04\u5230\u7F51\u683C (row,col)'},
+  hudFrame:{en:'FRAME',cn:'\u5E27'},
+  hudView:{en:'VIEW',cn:'\u89C6\u56FE'},
+  hudCoord:{en:'COORD SYS',cn:'\u5750\u6807\u7CFB'},
+  hudGrid:{en:'GRID',cn:'\u7F51\u683C'},
+  f0_view:{en:'Raw Risk Image',cn:'\u539F\u59CB\u98CE\u9669\u56FE'},
+  f1_view:{en:'Grid Overlay',cn:'\u7F51\u683C\u53E0\u52A0'},
+  f2_view:{en:'Discretized Map',cn:'\u79BB\u6563\u5316\u5730\u56FE'},
+  f3_view:{en:'Coord Mapping',cn:'\u5750\u6807\u6620\u5C04'},
+  f4_view:{en:'Start/End Points',cn:'\u8D77\u7EC8\u70B9\u8BBE\u7F6E'},
+  f0_coord:{en:'pixel (x,y)',cn:'\u50CF\u7D20 (x,y)'},
+  f1_coord:{en:'pixel + grid',cn:'\u50CF\u7D20 + \u7F51\u683C'},
+  f2_coord:{en:'grid (row,col)',cn:'\u7F51\u683C (row,col)'},
+  f3_coord:{en:'dual mapping',cn:'\u53CC\u5411\u6620\u5C04'},
+  f4_coord:{en:'map coords',cn:'\u5730\u56FE\u5750\u6807'},
+  f0_grid:{en:'none',cn:'\u65E0'},
+  f1_grid:{en:'8x8 overlay',cn:'8x8 \u53E0\u52A0'},
+  f2_grid:{en:'8x8 discrete',cn:'8x8 \u79BB\u6563'},
+  f3_grid:{en:'8x8 indexed',cn:'8x8 \u7D22\u5F15'},
+  f4_grid:{en:'8x8 nav-ready',cn:'8x8 \u5BFC\u822A\u5C31\u7EEA'},
+  f0_title:{en:'Step 1: Raw Risk Image',cn:'\u6B65\u9AA4 1\uFF1A\u539F\u59CB\u98CE\u9669\u56FE\u50CF'},
+  f1_title:{en:'Step 2: Overlay Grid',cn:'\u6B65\u9AA4 2\uFF1A\u53E0\u52A0\u7F51\u683C'},
+  f2_title:{en:'Step 3: Discretize',cn:'\u6B65\u9AA4 3\uFF1A\u79BB\u6563\u5316'},
+  f3_title:{en:'Step 4: Coordinate Map',cn:'\u6B65\u9AA4 4\uFF1A\u5750\u6807\u6620\u5C04'},
+  f4_title:{en:'Step 5: Navigation Ready',cn:'\u6B65\u9AA4 5\uFF1A\u5BFC\u822A\u5C31\u7EEA'},
+  f0_desc:{en:'A risk-classified image: each pixel has a risk value (0=safe, 4=danger). But pixels are just a flat array -- pathfinding needs structured coordinates.',
+           cn:'\u4E00\u5F20\u98CE\u9669\u5206\u7C7B\u56FE\u50CF\uFF1A\u6BCF\u4E2A\u50CF\u7D20\u6709\u98CE\u9669\u503C (0=\u5B89\u5168, 4=\u5371\u9669)\u3002\u4F46\u50CF\u7D20\u53EA\u662F\u4E00\u5806\u6570\u5B57\u2014\u2014\u8DEF\u5F84\u641C\u7D22\u9700\u8981\u7ED3\u6784\u5316\u5750\u6807\u3002'},
+  f1_desc:{en:'Divide the image into equal-sized cells. Each cell covers cell_size x cell_size pixels. The grid creates addressable locations.',
+           cn:'\u5C06\u56FE\u50CF\u5206\u5272\u6210\u7B49\u5927\u5C0F\u7684\u5355\u5143\u683C\u3002\u6BCF\u4E2A\u5355\u5143\u683C\u8986\u76D6 cell_size x cell_size \u50CF\u7D20\u3002\u7F51\u683C\u521B\u5EFA\u4E86\u53EF\u5BFB\u5740\u7684\u4F4D\u7F6E\u3002'},
+  f2_desc:{en:'Each cell gets ONE risk value (majority vote of its pixels). Now we have an 8x8 grid map with integer risk levels.',
+           cn:'\u6BCF\u4E2A\u5355\u5143\u683C\u53D6\u4E00\u4E2A\u98CE\u9669\u503C\uFF08\u5185\u90E8\u50CF\u7D20\u7684\u591A\u6570\u6295\u7968\uFF09\u3002\u73B0\u5728\u6211\u4EEC\u6709\u4E86 8x8 \u7684\u6574\u6570\u98CE\u9669\u7F51\u683C\u5730\u56FE\u3002'},
+  f3_desc:{en:'Pixel (px,py) maps to grid (row,col) via: row = py / cell_h, col = px / cell_w. This is the coordinate bridge.',
+           cn:'\u50CF\u7D20 (px,py) \u6620\u5C04\u5230\u7F51\u683C (row,col)\uFF1Arow = py / cell_h, col = px / cell_w\u3002\u8FD9\u5C31\u662F\u5750\u6807\u6865\u6881\u3002'},
+  f4_desc:{en:'Set start (green) and goal (red) in pixel space, convert to grid coords. The pathfinding algorithm works on grid (row,col).',
+           cn:'\u5728\u50CF\u7D20\u7A7A\u95F4\u8BBE\u7F6E\u8D77\u70B9(\u7EFF)\u548C\u7EC8\u70B9(\u7EA2)\uFF0C\u8F6C\u6362\u4E3A\u7F51\u683C\u5750\u6807\u3002\u8DEF\u5F84\u7B97\u6CD5\u5728\u7F91\u683C (row,col) \u4E0A\u5DE5\u4F5C\u3002'},
+  pixelLabel:{en:'pixel',cn:'\u50CF\u7D20'},
+  gridLabel:{en:'grid',cn:'\u7F51\u683C'},
+  startLabel:{en:'START',cn:'\u8D77\u70B9'},
+  goalLabel:{en:'GOAL',cn:'\u7EC8\u70B9'},
+  riskSafe:{en:'safe',cn:'\u5B89\u5168'},
+  riskLow:{en:'low',cn:'\u4F4E\u98CE\u9669'},
+  riskMed:{en:'medium',cn:'\u4E2D\u98CE\u9669'},
+  riskHigh:{en:'high',cn:'\u9AD8\u98CE\u9669'},
+  riskDanger:{en:'danger',cn:'\u5371\u9669'},
+  formulaLabel:{en:'Formula',cn:'\u516C\u5F0F'},
+  cellSizeLabel:{en:'cell_size',cn:'\u5355\u5143\u683C\u5C3A\u5BF8'}
+};
+function t(key){return(I18N[key]&&I18N[key][LANG])||key}
+
+var canvas=document.getElementById('c');
+var ctx=canvas.getContext('2d');
+var W=0,H=0;
+var DPR=Math.min(window.devicePixelRatio||1,2);
+var currentFrame=0;
+var totalFrames=5;
+var transitioning=false;
+var playing=false;
+var playTimer=null;
+
+// risk map data 8x8
+var RISK_MAP=[
+  [0,0,1,1,2,3,4,4],
+  [0,0,0,1,2,2,3,4],
+  [0,1,0,0,1,2,3,3],
+  [1,1,0,0,1,1,2,3],
+  [2,1,1,0,0,1,2,2],
+  [3,2,1,0,0,0,1,2],
+  [3,2,1,1,0,0,0,1],
+  [4,3,2,1,1,0,0,0]
+];
+var RISK_COLORS=['#22c55e','#84cc16','#eab308','#f97316','#ef4444'];
+var RISK_COLORS_DIM=['rgba(34,197,94,0.3)','rgba(132,204,22,0.3)','rgba(234,179,8,0.3)','rgba(249,115,22,0.3)','rgba(239,68,68,0.3)'];
+
+var START_PIXEL={px:30,py:20};
+var GOAL_PIXEL={px:220,py:230};
+var IMG_SIZE=256;
+
+function pixelToGrid(px,py,cellW,cellH){
+  return {row:Math.floor(py/cellH),col:Math.floor(px/cellW)};
+}
+
+// --- drawing primitives ---
+function drawBg(){
+  var g=ctx.createLinearGradient(0,0,0,H);
+  g.addColorStop(0,'#131313');
+  g.addColorStop(1,'#1a1a1a');
+  ctx.fillStyle=g;
+  ctx.fillRect(0,0,W,H);
+  // subtle grid
+  ctx.strokeStyle='rgba(255,255,255,0.03)';
+  ctx.lineWidth=1;
+  for(var i=0;i<W;i+=40){ctx.beginPath();ctx.moveTo(i,0);ctx.lineTo(i,H);ctx.stroke()}
+  for(var j=0;j<H;j+=40){ctx.beginPath();ctx.moveTo(0,j);ctx.lineTo(W,j);ctx.stroke()}
+}
+
+function drawLabelPrimitive(text,x,y,color,size,align){
+  ctx.font=(size||14)+'px "Space Grotesk",sans-serif';
+  ctx.textAlign=align||'center';
+  ctx.textBaseline='middle';
+  ctx.fillStyle=color||'#e5e2e1';
+  ctx.fillText(text,x,y);
+}
+
+function drawTextPrimitive(text,x,y,color,size,align){
+  ctx.font=(size||12)+'px "Noto Sans SC","Inter",sans-serif';
+  ctx.textAlign=align||'center';
+  ctx.textBaseline='middle';
+  ctx.fillStyle=color||'#8a8886';
+  // word wrap
+  var maxW=W*0.65;
+  var words=text.split('');
+  var line='';
+  var lines=[];
+  for(var i=0;i<words.length;i++){
+    var test=line+words[i];
+    if(ctx.measureText(test).width>maxW&&line.length>0){
+      lines.push(line);
+      line=words[i];
+    }else{
+      line=test;
+    }
+  }
+  if(line)lines.push(line);
+  var lh=(size||12)*1.4;
+  var startY=y-((lines.length-1)*lh)/2;
+  for(var j=0;j<lines.length;j++){
+    ctx.fillText(lines[j],x,startY+j*lh);
+  }
+}
+
+function drawArrowPrimitive(x1,y1,x2,y2,color){
+  ctx.strokeStyle=color||'#ffb59c';
+  ctx.lineWidth=2;
+  ctx.beginPath();
+  ctx.moveTo(x1,y1);
+  ctx.lineTo(x2,y2);
+  ctx.stroke();
+  // arrowhead
+  var angle=Math.atan2(y2-y1,x2-x1);
+  var headLen=8;
+  ctx.beginPath();
+  ctx.moveTo(x2,y2);
+  ctx.lineTo(x2-headLen*Math.cos(angle-0.4),y2-headLen*Math.sin(angle-0.4));
+  ctx.lineTo(x2-headLen*Math.cos(angle+0.4),y2-headLen*Math.sin(angle+0.4));
+  ctx.closePath();
+  ctx.fillStyle=color||'#ffb59c';
+  ctx.fill();
+}
+
+function drawBox(x,y,w,h,borderColor,fillColor){
+  if(fillColor){ctx.fillStyle=fillColor;ctx.fillRect(x,y,w,h)}
+  if(borderColor){ctx.strokeStyle=borderColor;ctx.lineWidth=1;ctx.strokeRect(x,y,w,h)}
+}
+
+// --- risk image rendering ---
+function drawRiskImage(ox,oy,size,showGrid,showLabels,showStart,showGoal,dimmed){
+  var cellW=size/8;
+  var cellH=size/8;
+  for(var r=0;r<8;r++){
+    for(var c=0;c<8;c++){
+      var risk=RISK_MAP[r][c];
+      ctx.fillStyle=dimmed?RISK_COLORS_DIM[risk]:RISK_COLORS[risk];
+      ctx.fillRect(ox+c*cellW,oy+r*cellH,cellW,cellH);
+    }
+  }
+  // border
+  ctx.strokeStyle='rgba(255,181,156,0.4)';
+  ctx.lineWidth=1.5;
+  ctx.strokeRect(ox,oy,size,size);
+
+  if(showGrid){
+    ctx.strokeStyle='rgba(255,255,255,0.35)';
+    ctx.lineWidth=0.8;
+    for(var i=1;i<8;i++){
+      ctx.beginPath();ctx.moveTo(ox+i*cellW,oy);ctx.lineTo(ox+i*cellW,oy+size);ctx.stroke();
+      ctx.beginPath();ctx.moveTo(ox,oy+i*cellH);ctx.lineTo(ox+size,oy+i*cellH);ctx.stroke();
+    }
+  }
+  if(showLabels){
+    ctx.font='9px "Space Grotesk",sans-serif';
+    ctx.fillStyle='rgba(255,255,255,0.5)';
+    ctx.textAlign='center';ctx.textBaseline='middle';
+    for(var r2=0;r2<8;r2++){
+      for(var c2=0;c2<8;c2++){
+        ctx.fillText(RISK_MAP[r2][c2],ox+c2*cellW+cellW/2,oy+r2*cellH+cellH/2);
+      }
+    }
+  }
+  if(showStart){
+    var sg=pixelToGrid(START_PIXEL.px,START_PIXEL.py,IMG_SIZE/8,IMG_SIZE/8);
+    var sx=ox+sg.col*cellW+cellW/2;
+    var sy=oy+sg.row*cellH+cellH/2;
+    ctx.beginPath();ctx.arc(sx,sy,cellW*0.35,0,Math.PI*2);
+    ctx.fillStyle='rgba(16,185,129,0.8)';ctx.fill();
+    ctx.strokeStyle='#10b981';ctx.lineWidth=2;ctx.stroke();
+    ctx.fillStyle='#fff';ctx.font='bold 10px "Space Grotesk"';ctx.textAlign='center';ctx.textBaseline='middle';
+    ctx.fillText('S',sx,sy);
+  }
+  if(showGoal){
+    var gg=pixelToGrid(GOAL_PIXEL.px,GOAL_PIXEL.py,IMG_SIZE/8,IMG_SIZE/8);
+    var gx=ox+gg.col*cellW+cellW/2;
+    var gy=oy+gg.row*cellH+cellH/2;
+    ctx.beginPath();ctx.arc(gx,gy,cellW*0.35,0,Math.PI*2);
+    ctx.fillStyle='rgba(239,68,68,0.8)';ctx.fill();
+    ctx.strokeStyle='#ef4444';ctx.lineWidth=2;ctx.stroke();
+    ctx.fillStyle='#fff';ctx.font='bold 10px "Space Grotesk"';ctx.textAlign='center';ctx.textBaseline='middle';
+    ctx.fillText('G',gx,gy);
+  }
+  // axis labels
+  if(showGrid||showLabels){
+    ctx.font='9px "Space Grotesk",sans-serif';
+    ctx.fillStyle='#8a8886';ctx.textAlign='center';ctx.textBaseline='top';
+    for(var ci=0;ci<8;ci++){
+      ctx.fillText(ci,ox+ci*cellW+cellW/2,oy+size+3);
+    }
+    ctx.textAlign='right';ctx.textBaseline='middle';
+    for(var ri=0;ri<8;ri++){
+      ctx.fillText(ri,ox-4,oy+ri*cellH+cellH/2);
+    }
+    // axis names
+    ctx.font='10px "Space Grotesk",sans-serif';
+    ctx.fillStyle='#ffb59c';
+    ctx.textAlign='center';ctx.textBaseline='top';
+    ctx.fillText('col',ox+size/2,oy+size+14);
+    ctx.save();
+    ctx.translate(ox-18,oy+size/2);
+    ctx.rotate(-Math.PI/2);
+    ctx.textBaseline='middle';ctx.textAlign='center';
+    ctx.fillText('row',0,0);
+    ctx.restore();
+  }
+}
+
+// --- shared element transition system ---
+function lerp(a,b,p){return a+(b-a)*p}
+function easeInOut(x){return x<0.5?2*x*x:1-Math.pow(-2*x+2,2)/2}
+function merge(base,overrides){var r={};for(var k in base)r[k]=base[k];for(var k2 in overrides)r[k2]=overrides[k2];return r}
+
+function getFrameElements(f){
+  var cx=W/2, cy=H/2;
+  var mapSize=Math.min(W,H)*0.52;
+  var mapX=cx-mapSize/2;
+  var mapY=cy-mapSize/2-10;
+  var elems=[];
+
+  // title (shared)
+  elems.push({id:'title',type:'label',text:t('f'+f+'_title'),x:cx,y:mapY-30,color:'#ffb59c',size:16,align:'center',alpha:1});
+
+  // description (shared)
+  elems.push({id:'desc',type:'text',text:t('f'+f+'_desc'),x:cx,y:mapY+mapSize+45,color:'#c6c6c6',size:11,align:'center',alpha:1});
+
+  switch(f){
+    case 0:
+      // raw risk image, no grid
+      elems.push({id:'riskmap',type:'custom',x:mapX,y:mapY,w:mapSize,h:mapSize,alpha:1,draw:function(alpha){
+        ctx.save();ctx.globalAlpha=alpha;
+        drawRiskImage(mapX,mapY,mapSize,false,false,false,false,false);
+        ctx.restore();
+      }});
+      // pixel coordinate indicator
+      elems.push({id:'pixlabel',type:'label',text:'(px, py)',x:mapX+mapSize+30,y:mapY+20,color:'#8a8886',size:11,align:'left',alpha:1});
+      break;
+    case 1:
+      // grid overlay
+      elems.push({id:'riskmap',type:'custom',x:mapX,y:mapY,w:mapSize,h:mapSize,alpha:1,draw:function(alpha){
+        ctx.save();ctx.globalAlpha=alpha;
+        drawRiskImage(mapX,mapY,mapSize,true,false,false,false,false);
+        ctx.restore();
+      }});
+      // cell size annotation
+      var csY=mapY+mapSize/8;
+      elems.push({id:'csarrow',type:'arrow',x1:mapX+mapSize+8,y1:mapY,x2:mapX+mapSize+8,y2:csY,color:'#00daf3',alpha:1});
+      elems.push({id:'cslabel',type:'label',text:t('cellSizeLabel'),x:mapX+mapSize+28,y:mapY+mapSize/16,color:'#00daf3',size:10,align:'left',alpha:1});
+      break;
+    case 2:
+      // discretized with labels
+      elems.push({id:'riskmap',type:'custom',x:mapX,y:mapY,w:mapSize,h:mapSize,alpha:1,draw:function(alpha){
+        ctx.save();ctx.globalAlpha=alpha;
+        drawRiskImage(mapX,mapY,mapSize,true,true,false,false,false);
+        ctx.restore();
+      }});
+      // risk legend
+      var lgY=mapY+mapSize+70;
+      for(var ri=0;ri<5;ri++){
+        var lgX=cx-120+ri*55;
+        elems.push({id:'lg'+ri,type:'custom',x:lgX,y:lgY,w:12,h:12,alpha:1,draw:(function(rix,lgx,lgy){
+          return function(alpha){
+            ctx.save();ctx.globalAlpha=alpha;
+            ctx.fillStyle=RISK_COLORS[rix];
+            ctx.fillRect(lgx,lgy,12,12);
+            ctx.font='9px "Space Grotesk",sans-serif';
+            ctx.fillStyle='#8a8886';ctx.textAlign='left';ctx.textBaseline='middle';
+            ctx.fillText(rix+' '+t(['riskSafe','riskLow','riskMed','riskHigh','riskDanger'][rix]),lgx+16,lgy+6);
+            ctx.restore();
+          };
+        })(ri,lgX,lgY)});
+      }
+      break;
+    case 3:
+      // coordinate mapping
+      elems.push({id:'riskmap',type:'custom',x:mapX,y:mapY,w:mapSize,h:mapSize,alpha:1,draw:function(alpha){
+        ctx.save();ctx.globalAlpha=alpha;
+        drawRiskImage(mapX,mapY,mapSize,true,true,false,false,true);
+        ctx.restore();
+      }});
+      // formula box
+      var fBoxW=260,fBoxH=50;
+      var fBoxX=cx-fBoxW/2,fBoxY=mapY+mapSize+65;
+      elems.push({id:'formula',type:'custom',x:fBoxX,y:fBoxY,w:fBoxW,h:fBoxH,alpha:1,draw:function(alpha){
+        ctx.save();ctx.globalAlpha=alpha;
+        // glass box
+        ctx.fillStyle='rgba(28,27,27,0.85)';
+        ctx.fillRect(fBoxX,fBoxY,fBoxW,fBoxH);
+        ctx.strokeStyle='rgba(255,181,156,0.3)';ctx.lineWidth=1;
+        ctx.strokeRect(fBoxX,fBoxY,fBoxW,fBoxH);
+        // formula text
+        ctx.font='bold 11px "Space Grotesk",sans-serif';
+        ctx.fillStyle='#ffb59c';ctx.textAlign='center';ctx.textBaseline='middle';
+        ctx.fillText(t('formulaLabel'),fBoxX+fBoxW/2,fBoxY+12);
+        ctx.font='13px "Space Grotesk",monospace';
+        ctx.fillStyle='#00daf3';
+        ctx.fillText('row = floor(py / cell_h)',fBoxX+fBoxW/2,fBoxY+28);
+        ctx.fillText('col = floor(px / cell_w)',fBoxX+fBoxW/2,fBoxY+42);
+        ctx.restore();
+      }});
+      // mapping arrow example
+      var exPx=80,exPy=100;
+      var exG=pixelToGrid(exPx,exPy,32,32);
+      var cellW2=mapSize/8;
+      var dotX=mapX+exPx/IMG_SIZE*mapSize;
+      var dotY=mapY+exPy/IMG_SIZE*mapSize;
+      elems.push({id:'exdot',type:'custom',x:dotX,y:dotY,w:8,h:8,alpha:1,draw:function(alpha){
+        ctx.save();ctx.globalAlpha=alpha;
+        ctx.beginPath();ctx.arc(dotX,dotY,5,0,Math.PI*2);
+        ctx.fillStyle='rgba(0,218,243,0.7)';ctx.fill();
+        ctx.strokeStyle='#00daf3';ctx.lineWidth=1.5;ctx.stroke();
+        // label
+        ctx.font='10px "Space Grotesk",sans-serif';
+        ctx.fillStyle='#00daf3';ctx.textAlign='left';ctx.textBaseline='bottom';
+        ctx.fillText(t('pixelLabel')+'('+exPx+','+exPy+')  \u2192  '+t('gridLabel')+'('+exG.row+','+exG.col+')',dotX+10,dotY-4);
+        ctx.restore();
+      }});
+      break;
+    case 4:
+      // start/end points
+      elems.push({id:'riskmap',type:'custom',x:mapX,y:mapY,w:mapSize,h:mapSize,alpha:1,draw:function(alpha){
+        ctx.save();ctx.globalAlpha=alpha;
+        drawRiskImage(mapX,mapY,mapSize,true,true,true,true,false);
+        ctx.restore();
+      }});
+      // start/goal info boxes
+      var sg2=pixelToGrid(START_PIXEL.px,START_PIXEL.py,32,32);
+      var gg2=pixelToGrid(GOAL_PIXEL.px,GOAL_PIXEL.py,32,32);
+      var infoY=mapY+mapSize+65;
+      elems.push({id:'startInfo',type:'custom',x:cx-140,y:infoY,w:120,h:40,alpha:1,draw:function(alpha){
+        ctx.save();ctx.globalAlpha=alpha;
+        ctx.fillStyle='rgba(16,185,129,0.15)';ctx.fillRect(cx-140,infoY,120,40);
+        ctx.strokeStyle='rgba(16,185,129,0.5)';ctx.lineWidth=1;ctx.strokeRect(cx-140,infoY,120,40);
+        ctx.font='bold 10px "Space Grotesk"';ctx.fillStyle='#10b981';ctx.textAlign='center';ctx.textBaseline='middle';
+        ctx.fillText(t('startLabel'),cx-80,infoY+12);
+        ctx.font='9px "Space Grotesk"';ctx.fillStyle='#c6c6c6';
+        ctx.fillText(t('pixelLabel')+'('+START_PIXEL.px+','+START_PIXEL.py+')',cx-80,infoY+24);
+        ctx.fillText(t('gridLabel')+'('+sg2.row+','+sg2.col+')',cx-80,infoY+35);
+        ctx.restore();
+      }});
+      elems.push({id:'goalInfo',type:'custom',x:cx+20,y:infoY,w:120,h:40,alpha:1,draw:function(alpha){
+        ctx.save();ctx.globalAlpha=alpha;
+        ctx.fillStyle='rgba(239,68,68,0.15)';ctx.fillRect(cx+20,infoY,120,40);
+        ctx.strokeStyle='rgba(239,68,68,0.5)';ctx.lineWidth=1;ctx.strokeRect(cx+20,infoY,120,40);
+        ctx.font='bold 10px "Space Grotesk"';ctx.fillStyle='#ef4444';ctx.textAlign='center';ctx.textBaseline='middle';
+        ctx.fillText(t('goalLabel'),cx+80,infoY+12);
+        ctx.font='9px "Space Grotesk"';ctx.fillStyle='#c6c6c6';
+        ctx.fillText(t('pixelLabel')+'('+GOAL_PIXEL.px+','+GOAL_PIXEL.py+')',cx+80,infoY+24);
+        ctx.fillText(t('gridLabel')+'('+gg2.row+','+gg2.col+')',cx+80,infoY+35);
+        ctx.restore();
+      }});
+      break;
+  }
+  return elems;
+}
+
+function drawElement(el){
+  if(!el||el.alpha<=0.01)return;
+  ctx.save();
+  ctx.globalAlpha=el.alpha;
+  switch(el.type){
+    case'label':drawLabelPrimitive(el.text,el.x,el.y,el.color,el.size,el.align);break;
+    case'text':drawTextPrimitive(el.text,el.x,el.y,el.color,el.size,el.align);break;
+    case'arrow':drawArrowPrimitive(el.x1,el.y1,el.x2,el.y2,el.color);break;
+    case'box':drawBox(el.x,el.y,el.w,el.h,el.borderColor,el.fillColor);break;
+    case'custom':if(el.draw)el.draw(el.alpha);break;
+  }
+  ctx.restore();
+}
+
+function drawFrame(f){
+  drawBg();
+  var elems=getFrameElements(f);
+  elems.forEach(function(el){drawElement(el)});
+}
+
+function transitionTo(newFrame){
+  if(newFrame<0)newFrame=0;
+  if(newFrame>=totalFrames)newFrame=totalFrames-1;
+  if(newFrame===currentFrame&&!transitioning){drawFrame(currentFrame);updateHUD(currentFrame);return}
+  if(transitioning)return;
+  var oldElems=getFrameElements(currentFrame);
+  var newElems=getFrameElements(newFrame);
+  var oldMap={};oldElems.forEach(function(e){oldMap[e.id]=e});
+  var newMap={};newElems.forEach(function(e){newMap[e.id]=e});
+  currentFrame=newFrame;
+  updateHUD(newFrame);
+  updateDots();
+  transitioning=true;
+  var startTime=null;
+  var duration=500;
+  function step(timestamp){
+    if(!startTime)startTime=timestamp;
+    var raw=Math.min((timestamp-startTime)/duration,1);
+    var p=easeInOut(raw);
+    drawBg();
+    oldElems.forEach(function(oe){
+      if(!newMap[oe.id])drawElement(merge(oe,{alpha:1-p}));
+    });
+    newElems.forEach(function(ne){
+      var oe=oldMap[ne.id];
+      if(oe){
+        var merged=merge(ne,{
+          x:lerp(oe.x||0,ne.x||0,p),
+          y:lerp(oe.y||0,ne.y||0,p),
+          w:lerp(oe.w||0,ne.w||0,p),
+          h:lerp(oe.h||0,ne.h||0,p),
+          alpha:1
+        });
+        if(ne.type==='arrow'&&oe.type==='arrow'){
+          merged.x1=lerp(oe.x1,ne.x1,p);
+          merged.y1=lerp(oe.y1,ne.y1,p);
+          merged.x2=lerp(oe.x2,ne.x2,p);
+          merged.y2=lerp(oe.y2,ne.y2,p);
+        }
+        if((ne.type==='label'||ne.type==='text')&&oe.text!==ne.text){
+          drawElement(merge(oe,{alpha:1-p}));
+          drawElement(merge(ne,{alpha:p}));
+        }else{
+          drawElement(merged);
+        }
+      }else{
+        drawElement(merge(ne,{alpha:p}));
+      }
+    });
+    if(raw<1){requestAnimationFrame(step)}else{transitioning=false}
+  }
+  requestAnimationFrame(step);
+}
+
+function updateHUD(f){
+  document.getElementById('hudVal0').textContent=(f+1)+' / '+totalFrames;
+  document.getElementById('hudVal1').textContent=t('f'+f+'_view');
+  document.getElementById('hudVal2').textContent=t('f'+f+'_coord');
+  document.getElementById('hudVal3').textContent=t('f'+f+'_grid');
+}
+
+function updateDots(){
+  var dots=document.querySelectorAll('#frameDots .dot');
+  dots.forEach(function(d,i){
+    if(i===currentFrame)d.classList.add('active');
+    else d.classList.remove('active');
+  });
+}
+
+function buildDots(){
+  var container=document.getElementById('frameDots');
+  container.innerHTML='';
+  for(var i=0;i<totalFrames;i++){
+    var d=document.createElement('div');
+    d.className='dot'+(i===0?' active':'');
+    d.setAttribute('data-f',i);
+    d.addEventListener('click',function(){
+      var fi=parseInt(this.getAttribute('data-f'));
+      transitionTo(fi);
+    });
+    container.appendChild(d);
+  }
+}
+
+function refreshI18N(){
+  document.getElementById('headerTitle').innerHTML=t('title')+'<span class="sub">'+t('subtitle')+'</span>';
+  document.getElementById('btnPrev').textContent=t('btnPrev');
+  document.getElementById('btnNext').textContent=t('btnNext');
+  document.getElementById('btnPlay').textContent=playing?t('btnPause'):t('btnPlay');
+  document.getElementById('hudLabel0').textContent=t('hudFrame');
+  document.getElementById('hudLabel1').textContent=t('hudView');
+  document.getElementById('hudLabel2').textContent=t('hudCoord');
+  document.getElementById('hudLabel3').textContent=t('hudGrid');
+  document.getElementById('guideTitle').textContent=t('guideTitle');
+  document.getElementById('guideDesc').textContent=t('guideDesc');
+  var pts=document.getElementById('guidePoints');
+  pts.innerHTML='<li>'+t('guideP1')+'</li><li>'+t('guideP2')+'</li><li>'+t('guideP3')+'</li>';
+  document.getElementById('guideTakeaway').textContent=t('guideTakeaway');
+  updateHUD(currentFrame);
+  drawFrame(currentFrame);
+}
+
+function resize(){
+  var wrap=document.querySelector('.canvas-wrap');
+  var rect=wrap.getBoundingClientRect();
+  if(rect.width<1||rect.height<1)return;
+  W=rect.width;H=rect.height;
+  canvas.width=W*DPR;canvas.height=H*DPR;
+  canvas.style.width=W+'px';canvas.style.height=H+'px';
+  ctx.setTransform(DPR,0,0,DPR,0,0);
+  drawFrame(currentFrame);
+}
+
+// events
+document.getElementById('btnPrev').addEventListener('click',function(){
+  if(playing)stopPlay();
+  transitionTo(currentFrame-1);
+});
+document.getElementById('btnNext').addEventListener('click',function(){
+  if(playing)stopPlay();
+  transitionTo(currentFrame+1);
+});
+document.getElementById('btnPlay').addEventListener('click',function(){
+  if(playing){stopPlay()}else{startPlay()}
+});
+document.getElementById('langBtn').addEventListener('click',function(){
+  LANG=LANG==='en'?'cn':'en';
+  document.getElementById('langBtn').textContent=LANG.toUpperCase();
+  refreshI18N();
+});
+document.getElementById('guideToggle').addEventListener('click',function(){
+  document.getElementById('guidePanel').classList.toggle('collapsed');
+});
+window.addEventListener('resize',resize);
+
+function startPlay(){
+  playing=true;
+  document.getElementById('btnPlay').textContent=t('btnPause');
+  if(currentFrame>=totalFrames-1){
+    currentFrame=-1; // will become 0
+  }
+  function tick(){
+    if(!playing)return;
+    if(currentFrame>=totalFrames-1){stopPlay();return}
+    transitionTo(currentFrame+1);
+    playTimer=setTimeout(tick,1800);
+  }
+  tick();
+}
+function stopPlay(){
+  playing=false;
+  document.getElementById('btnPlay').textContent=t('btnPlay');
+  if(playTimer){clearTimeout(playTimer);playTimer=null}
+}
+
+// init
+buildDots();
+refreshI18N();
+resize();
+setTimeout(resize,200);
+setTimeout(resize,600);
+document.fonts.ready.then(function(){resize()});
+})();
+</script>
+</body>
+</html>

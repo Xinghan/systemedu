@@ -1,0 +1,396 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Label Conflict Triage</title>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=Space+Grotesk:wght@400;700&family=Noto+Sans+SC:wght@400;700&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{width:100%;height:100vh;overflow:hidden;background:#131313;
+  font-family:'Noto Sans SC','PingFang SC',system-ui,sans-serif;color:#e5e2e1}
+
+.wrapper{display:flex;flex-direction:column;height:100vh;overflow:hidden}
+
+.guide-panel{position:fixed;top:8px;right:8px;width:240px;max-height:38vh;
+  overflow-y:auto;z-index:200;padding:10px 12px;
+  background:rgba(20,20,35,0.92);backdrop-filter:blur(14px);
+  border:1px solid rgba(255,191,156,0.22);font-size:12px;line-height:1.55;
+  color:rgba(229,226,225,0.88)}
+.guide-panel h3{font-family:'Space Grotesk',sans-serif;font-size:13px;font-weight:700;
+  margin-bottom:6px;display:flex;align-items:center;justify-content:space-between;cursor:pointer;
+  color:#ffb59c;text-transform:uppercase;letter-spacing:0.05em}
+.guide-panel h3 .arrow{transition:transform .2s;font-size:10px}
+.guide-panel h3 .arrow.collapsed{transform:rotate(-90deg)}
+.guide-panel ul{padding-left:14px;margin:4px 0}
+.guide-panel .gl{color:#8a8886;font-size:11px;text-transform:uppercase;
+  letter-spacing:0.08em;margin-top:6px;font-family:'Space Grotesk',sans-serif}
+
+.header{height:40px;min-height:40px;display:flex;align-items:center;justify-content:space-between;
+  padding:0 14px;background:rgba(19,19,19,0.95);border-bottom:1px solid rgba(138,136,134,0.15)}
+.header h1{font-family:'Space Grotesk',sans-serif;font-size:13px;font-weight:700;
+  color:#ffb59c;text-transform:uppercase;letter-spacing:0.08em}
+.header .lang{padding:3px 8px;border:1px solid rgba(255,191,156,0.35);background:transparent;
+  color:#ffb59c;cursor:pointer;font-family:'Space Grotesk',sans-serif;font-size:11px;
+  font-weight:700;letter-spacing:0.05em}
+
+/* game area */
+.game-area{flex:1;min-height:0;display:flex;flex-direction:column;padding:8px 12px;gap:8px;overflow:hidden}
+
+/* samples row */
+.samples-row{display:flex;gap:6px;flex-wrap:nowrap;overflow-x:auto;min-height:90px;align-items:center;
+  padding:4px 8px;background:rgba(28,27,27,0.6);border:1px solid rgba(138,136,134,0.12)}
+.sample-card{min-width:110px;max-width:130px;padding:6px 8px;cursor:grab;user-select:none;
+  background:rgba(28,27,27,0.95);border:1px solid rgba(138,136,134,0.2);transition:all .15s;
+  font-family:'Space Grotesk',sans-serif;font-size:11px}
+.sample-card:hover{border-color:#ffb59c;box-shadow:0 0 12px rgba(255,127,80,0.2)}
+.sample-card .sc-id{color:#ffb59c;font-weight:700;font-size:10px;letter-spacing:0.08em;text-transform:uppercase}
+.sample-card .sc-labels{display:flex;gap:2px;margin:4px 0;flex-wrap:wrap}
+.sample-card .sc-label{padding:1px 4px;font-size:9px;font-weight:700;letter-spacing:0.05em}
+.sample-card .sc-agree{color:#8a8886;font-size:10px;font-family:'JetBrains Mono',monospace}
+.sample-card .sc-viz{height:6px;margin-top:3px;display:flex;gap:1px}
+.sample-card .sc-viz span{flex:1;display:block}
+
+/* buckets row */
+.buckets-row{flex:1;display:flex;gap:8px;min-height:0}
+.bucket{flex:1;display:flex;flex-direction:column;border:2px dashed rgba(138,136,134,0.25);
+  padding:6px;transition:all .2s;min-height:80px}
+.bucket.highlight{border-color:#ffb59c;box-shadow:0 0 16px rgba(255,127,80,0.2)}
+.bucket-header{font-family:'Space Grotesk',sans-serif;font-size:12px;font-weight:700;
+  text-transform:uppercase;letter-spacing:0.08em;padding:4px 8px;margin-bottom:4px;text-align:center}
+.bucket-desc{font-size:10px;color:#8a8886;text-align:center;margin-bottom:4px;font-family:'Noto Sans SC',sans-serif}
+.bucket-items{flex:1;display:flex;flex-direction:column;gap:3px;overflow-y:auto;min-height:30px}
+.bucket-items .sample-card{min-width:auto;max-width:none;cursor:pointer}
+
+/* feedback */
+.feedback-bar{height:48px;min-height:48px;display:flex;align-items:center;justify-content:space-between;
+  padding:0 14px;background:rgba(0,0,0,0.6);border-top:1px solid rgba(255,255,255,0.06)}
+.fb-score{font-family:'JetBrains Mono','Space Grotesk',monospace;font-size:14px;font-weight:700;color:#ffb59c}
+.fb-msg{font-size:12px;color:#8a8886}
+.fb-btn{padding:5px 14px;border:1px solid rgba(16,185,129,0.5);background:rgba(16,185,129,0.15);
+  color:#10b981;cursor:pointer;font-family:'Space Grotesk',sans-serif;font-size:12px;
+  font-weight:700;letter-spacing:0.05em;display:none}
+.fb-btn:hover{background:rgba(16,185,129,0.3)}
+
+/* completion overlay */
+.completion{position:fixed;top:0;left:0;width:100%;height:100%;z-index:300;
+  display:none;align-items:center;justify-content:center;
+  background:rgba(19,19,19,0.9);backdrop-filter:blur(8px)}
+.completion-box{padding:24px 32px;background:rgba(28,27,27,0.98);
+  border:1px solid rgba(255,191,156,0.3);max-width:400px;text-align:center}
+.completion-box h2{font-family:'Space Grotesk',sans-serif;color:#ffb59c;font-size:18px;margin-bottom:8px}
+.completion-box p{font-size:13px;color:#e5e2e1;line-height:1.6;margin:6px 0}
+.completion-box .score-big{font-family:'JetBrains Mono',monospace;font-size:32px;font-weight:700;color:#10b981;margin:12px 0}
+</style>
+</head>
+<body>
+
+<div class="guide-panel" id="guidePanel">
+  <h3 id="guideToggle"><span id="guideTitleEl">GAME GUIDE</span> <span class="arrow" id="guideArrow">&#9660;</span></h3>
+  <div id="guideContent">
+    <div class="gl" id="glGoal">GOAL</div>
+    <p id="guideGoal">6 individual conflict samples need to be classified into Keep / Downweight / Discard buckets based on inter-annotator agreement level.</p>
+    <div class="gl" style="margin-top:6px" id="glSteps">STEPS</div>
+    <ul>
+      <li id="step1">Look at the annotator agreement score and label distribution</li>
+      <li id="step2">Drag sample cards into the appropriate governance bucket</li>
+      <li id="step3">Click CHECK to see your score</li>
+    </ul>
+    <div class="gl" style="margin-top:6px" id="glWin">WIN CONDITION</div>
+    <p id="guideWin">Score >= 5/6 to pass the triage challenge.</p>
+  </div>
+</div>
+
+<div class="wrapper">
+  <div class="header">
+    <h1 id="titleEl">LABEL CONFLICT TRIAGE</h1>
+    <button class="lang" id="langBtn">CN</button>
+  </div>
+
+  <div class="game-area" id="gameArea">
+    <div class="samples-row" id="samplesRow"></div>
+    <div class="buckets-row" id="bucketsRow">
+      <div class="bucket" id="bucketKeep" data-bucket="keep">
+        <div class="bucket-header" style="color:#10b981;border-bottom:2px solid #10b981" id="bh0">KEEP</div>
+        <div class="bucket-desc" id="bd0">Agreement >= 80%: train normally</div>
+        <div class="bucket-items" data-bucket="keep"></div>
+      </div>
+      <div class="bucket" id="bucketDownweight" data-bucket="downweight">
+        <div class="bucket-header" style="color:#f59e0b;border-bottom:2px solid #f59e0b" id="bh1">DOWNWEIGHT</div>
+        <div class="bucket-desc" id="bd1">Agreement 50-79%: reduce training weight</div>
+        <div class="bucket-items" data-bucket="downweight"></div>
+      </div>
+      <div class="bucket" id="bucketDiscard" data-bucket="discard">
+        <div class="bucket-header" style="color:#ff5f1f;border-bottom:2px solid #ff5f1f" id="bh2">DISCARD</div>
+        <div class="bucket-desc" id="bd2">Agreement < 50%: remove from training set</div>
+        <div class="bucket-items" data-bucket="discard"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="feedback-bar" id="feedbackBar">
+    <span class="fb-score" id="fbScore">0 / 6</span>
+    <span class="fb-msg" id="fbMsg">Drag samples into buckets, then check</span>
+    <button class="fb-btn" id="fbCheck">CHECK</button>
+  </div>
+</div>
+
+<div class="completion" id="completion">
+  <div class="completion-box">
+    <h2 id="compTitle">TRIAGE COMPLETE</h2>
+    <div class="score-big" id="compScore">6 / 6</div>
+    <p id="compMsg">You correctly classified conflict samples based on inter-annotator agreement. Low-consistency regions need governance to prevent noise from polluting model training.</p>
+  </div>
+</div>
+
+<script>
+(function(){
+"use strict";
+
+/* ── i18n ── */
+var LANG='cn';
+var I18N={
+  title:{en:'LABEL CONFLICT TRIAGE',cn:'LABEL CONFLICT TRIAGE'},
+  guideTitleEl:{en:'GAME GUIDE',cn:'GAME GUIDE'},
+  glGoal:{en:'GOAL',cn:'GOAL'},
+  guideGoal:{en:'6 conflict samples need classifying into Keep / Downweight / Discard based on agreement.',cn:'6 个冲突样本需要根据标注一致性分到 保留 / 降权 / 丢弃 三个桶中。'},
+  glSteps:{en:'STEPS',cn:'STEPS'},
+  step1:{en:'Check annotator agreement score and label distribution',cn:'查看标注者一致性得分和标签分布'},
+  step2:{en:'Drag sample cards into the appropriate governance bucket',cn:'拖拽样本卡片到合适的治理桶中'},
+  step3:{en:'Click CHECK to see your score',cn:'点击 CHECK 查看得分'},
+  glWin:{en:'WIN CONDITION',cn:'WIN CONDITION'},
+  guideWin:{en:'Score >= 5/6 to pass.',cn:'得分 >= 5/6 即通过。'},
+  bh0:{en:'KEEP',cn:'KEEP'},
+  bd0:{en:'Agreement >= 80%: train normally',cn:'一致性 >= 80%: 正常训练'},
+  bh1:{en:'DOWNWEIGHT',cn:'DOWNWEIGHT'},
+  bd1:{en:'Agreement 50-79%: reduce training weight',cn:'一致性 50-79%: 降低训练权重'},
+  bh2:{en:'DISCARD',cn:'DISCARD'},
+  bd2:{en:'Agreement < 50%: remove from training set',cn:'一致性 < 50%: 从训练集移除'},
+  fbMsg0:{en:'Drag samples into buckets, then check',cn:'拖拽样本到桶中，然后点 CHECK'},
+  fbCheck:{en:'CHECK',cn:'CHECK'},
+  compTitle:{en:'TRIAGE COMPLETE',cn:'TRIAGE COMPLETE'},
+  compMsg:{en:'You correctly classified conflict samples. Low-consistency regions need governance to keep noise from polluting model training.',cn:'你正确分类了冲突样本。低一致性区域需要治理以防止噪声污染模型训练。'},
+  compMsgPartial:{en:'Some samples were mis-classified. Review the agreement scores and try to match them with the correct governance action.',cn:'部分样本分类有误。请复查一致性得分，将其匹配到正确的治理操作。'},
+};
+function t(k){return(I18N[k]&&I18N[k][LANG])||(I18N[k]&&I18N[k]['en'])||k;}
+
+function refreshI18N(){
+  document.getElementById('langBtn').textContent=LANG.toUpperCase();
+  document.getElementById('titleEl').textContent=t('title');
+  document.getElementById('guideTitleEl').textContent=t('guideTitleEl');
+  document.getElementById('glGoal').textContent=t('glGoal');
+  document.getElementById('guideGoal').textContent=t('guideGoal');
+  document.getElementById('glSteps').textContent=t('glSteps');
+  document.getElementById('step1').textContent=t('step1');
+  document.getElementById('step2').textContent=t('step2');
+  document.getElementById('step3').textContent=t('step3');
+  document.getElementById('glWin').textContent=t('glWin');
+  document.getElementById('guideWin').textContent=t('guideWin');
+  document.getElementById('bh0').textContent=t('bh0');
+  document.getElementById('bd0').textContent=t('bd0');
+  document.getElementById('bh1').textContent=t('bh1');
+  document.getElementById('bd1').textContent=t('bd1');
+  document.getElementById('bh2').textContent=t('bh2');
+  document.getElementById('bd2').textContent=t('bd2');
+  document.getElementById('fbCheck').textContent=t('fbCheck');
+  if(!checked)document.getElementById('fbMsg').textContent=t('fbMsg0');
+}
+
+document.getElementById('langBtn').addEventListener('click',function(){
+  LANG=LANG==='en'?'cn':'en';refreshI18N();
+});
+
+/* ── guide toggle ── */
+document.getElementById('guideToggle').addEventListener('click',function(){
+  var gc=document.getElementById('guideContent');
+  var arrow=document.getElementById('guideArrow');
+  if(gc.style.display==='none'){gc.style.display='';arrow.classList.remove('collapsed');}
+  else{gc.style.display='none';arrow.classList.add('collapsed');}
+});
+
+/* ── sample data ── */
+var labelColors={soil:'#10b981',bedrock:'#3b82f6',sand:'#f59e0b',bigrock:'#ef4444'};
+
+var samples=[
+  {id:'SOL-1284-A',agree:92,labels:[{t:'soil',p:92},{t:'bedrock',p:8}],correct:'keep',
+   desc:'Clear soil patch, high consensus'},
+  {id:'SOL-1284-B',agree:85,labels:[{t:'bedrock',p:85},{t:'soil',p:15}],correct:'keep',
+   desc:'Bedrock surface, minor disagreement'},
+  {id:'SOL-1520-C',agree:68,labels:[{t:'sand',p:68},{t:'soil',p:22},{t:'bedrock',p:10}],correct:'downweight',
+   desc:'Boundary zone, moderate conflict'},
+  {id:'SOL-1520-D',agree:55,labels:[{t:'bigrock',p:55},{t:'bedrock',p:30},{t:'sand',p:15}],correct:'downweight',
+   desc:'Rocky outcrop, ambiguous edges'},
+  {id:'SOL-2100-E',agree:35,labels:[{t:'sand',p:35},{t:'soil',p:30},{t:'bedrock',p:25},{t:'bigrock',p:10}],correct:'discard',
+   desc:'Heavily disputed region, no consensus'},
+  {id:'SOL-2100-F',agree:42,labels:[{t:'bigrock',p:42},{t:'sand',p:38},{t:'soil',p:20}],correct:'discard',
+   desc:'Transition zone, near-random labels'},
+];
+
+/* shuffle */
+function shuffle(a){for(var i=a.length-1;i>0;i--){var j=Math.floor(Math.random()*(i+1));var tmp=a[i];a[i]=a[j];a[j]=tmp;}return a;}
+shuffle(samples);
+
+/* ── build sample cards ── */
+var samplesRow=document.getElementById('samplesRow');
+var checked=false;
+
+function buildCard(sample){
+  var card=document.createElement('div');
+  card.className='sample-card';
+  card.dataset.sid=sample.id;
+  card.draggable=true;
+
+  var idEl=document.createElement('div');idEl.className='sc-id';idEl.textContent=sample.id;
+  card.appendChild(idEl);
+
+  var labelsEl=document.createElement('div');labelsEl.className='sc-labels';
+  sample.labels.forEach(function(l){
+    var span=document.createElement('span');span.className='sc-label';
+    span.style.background=labelColors[l.t]||'#666';span.style.color='#000';
+    span.textContent=l.t.toUpperCase()+' '+l.p+'%';
+    labelsEl.appendChild(span);
+  });
+  card.appendChild(labelsEl);
+
+  var agreeEl=document.createElement('div');agreeEl.className='sc-agree';
+  agreeEl.textContent='AGR: '+sample.agree+'%';
+  card.appendChild(agreeEl);
+
+  /* mini viz bar */
+  var viz=document.createElement('div');viz.className='sc-viz';
+  sample.labels.forEach(function(l){
+    var sp=document.createElement('span');
+    sp.style.background=labelColors[l.t]||'#666';
+    sp.style.flex=l.p;
+    viz.appendChild(sp);
+  });
+  card.appendChild(viz);
+
+  /* drag events */
+  card.addEventListener('dragstart',function(e){
+    e.dataTransfer.setData('text/plain',sample.id);
+    card.style.opacity='0.4';
+  });
+  card.addEventListener('dragend',function(){card.style.opacity='1';});
+
+  /* touch drag */
+  var ghost=null;
+  card.addEventListener('touchstart',function(e){
+    var touch=e.touches[0];
+    ghost=card.cloneNode(true);
+    ghost.style.position='fixed';ghost.style.zIndex='500';ghost.style.opacity='0.8';
+    ghost.style.pointerEvents='none';ghost.style.width=card.offsetWidth+'px';
+    ghost.style.left=(touch.clientX-50)+'px';ghost.style.top=(touch.clientY-30)+'px';
+    document.body.appendChild(ghost);
+    card.dataset.dragging='1';
+  },{passive:true});
+  card.addEventListener('touchmove',function(e){
+    e.preventDefault();
+    if(!ghost)return;
+    var touch=e.touches[0];
+    ghost.style.left=(touch.clientX-50)+'px';ghost.style.top=(touch.clientY-30)+'px';
+    /* highlight buckets */
+    document.querySelectorAll('.bucket').forEach(function(b){
+      var r=b.getBoundingClientRect();
+      b.classList.toggle('highlight',
+        touch.clientX>=r.left&&touch.clientX<=r.right&&touch.clientY>=r.top&&touch.clientY<=r.bottom);
+    });
+  },{passive:false});
+  card.addEventListener('touchend',function(e){
+    if(ghost){ghost.remove();ghost=null;}
+    card.dataset.dragging='0';
+    var touch=e.changedTouches[0];
+    document.querySelectorAll('.bucket').forEach(function(b){
+      b.classList.remove('highlight');
+      var r=b.getBoundingClientRect();
+      if(touch.clientX>=r.left&&touch.clientX<=r.right&&touch.clientY>=r.top&&touch.clientY<=r.bottom){
+        var items=b.querySelector('.bucket-items');
+        if(items&&card.parentNode!==items){
+          card.parentNode.removeChild(card);
+          items.appendChild(card);
+          updateCheckBtn();
+        }
+      }
+    });
+  });
+
+  /* double click to return to source row */
+  card.addEventListener('dblclick',function(){
+    if(card.parentNode!==samplesRow){
+      card.parentNode.removeChild(card);
+      samplesRow.appendChild(card);
+      updateCheckBtn();
+    }
+  });
+
+  return card;
+}
+
+samples.forEach(function(s){samplesRow.appendChild(buildCard(s));});
+
+/* ── bucket drop zones ── */
+document.querySelectorAll('.bucket').forEach(function(bucket){
+  bucket.addEventListener('dragover',function(e){e.preventDefault();bucket.classList.add('highlight');});
+  bucket.addEventListener('dragleave',function(){bucket.classList.remove('highlight');});
+  bucket.addEventListener('drop',function(e){
+    e.preventDefault();bucket.classList.remove('highlight');
+    var sid=e.dataTransfer.getData('text/plain');
+    var card=document.querySelector('.sample-card[data-sid="'+sid+'"]');
+    if(card){
+      var items=bucket.querySelector('.bucket-items');
+      if(card.parentNode!==items){
+        card.parentNode.removeChild(card);
+        items.appendChild(card);
+        updateCheckBtn();
+      }
+    }
+  });
+});
+
+/* ── check button logic ── */
+var fbCheck=document.getElementById('fbCheck');
+function updateCheckBtn(){
+  var inBuckets=document.querySelectorAll('.bucket-items .sample-card').length;
+  fbCheck.style.display=inBuckets===samples.length?'block':'none';
+}
+
+fbCheck.addEventListener('click',function(){
+  if(checked)return;
+  checked=true;
+  var score=0;
+  samples.forEach(function(s){
+    var card=document.querySelector('.sample-card[data-sid="'+s.id+'"]');
+    if(!card)return;
+    var parent=card.closest('.bucket');
+    if(!parent)return;
+    var bucket=parent.dataset.bucket;
+    if(bucket===s.correct){
+      score++;
+      card.style.borderColor='#10b981';card.style.boxShadow='0 0 10px rgba(16,185,129,0.3)';
+    }else{
+      card.style.borderColor='#ef4444';card.style.boxShadow='0 0 10px rgba(239,68,68,0.3)';
+    }
+  });
+  document.getElementById('fbScore').textContent=score+' / '+samples.length;
+  document.getElementById('fbMsg').textContent=score>=5?t('compMsg'):t('compMsgPartial');
+
+  if(score>=5){
+    setTimeout(function(){
+      var comp=document.getElementById('completion');
+      comp.style.display='flex';
+      document.getElementById('compTitle').textContent=t('compTitle');
+      document.getElementById('compScore').textContent=score+' / '+samples.length;
+      document.getElementById('compMsg').textContent=t('compMsg');
+      /* postMessage for parent iframe */
+      try{window.parent.postMessage({type:'step_complete',score:score},'*');}catch(e){}
+    },800);
+  }
+});
+
+/* ── init ── */
+refreshI18N();
+
+})();
+</script>
+</body>
+</html>

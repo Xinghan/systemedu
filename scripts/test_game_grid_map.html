@@ -1,0 +1,494 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8"/>
+<title>Grid Map Coordinate Challenge</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;700&family=Inter:wght@400;500&family=Noto+Sans+SC:wght@400;700&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{width:100%;height:100vh;overflow:hidden;background:#131313;color:#e5e2e1;font-family:'Noto Sans SC','Inter',sans-serif}
+.wrapper{display:flex;flex-direction:column;height:100vh}
+.header{display:flex;justify-content:space-between;align-items:center;padding:8px 16px;background:rgba(28,27,27,0.92);border-bottom:1px solid rgba(138,136,134,0.15)}
+.title{font-family:'Space Grotesk',sans-serif;font-size:14px;font-weight:700;color:#ffb59c;letter-spacing:0.5px}
+.title .sub{color:#8a8886;font-weight:400;margin-left:8px;font-size:12px}
+.lang-btn{position:fixed;top:8px;left:8px;z-index:100;font-family:'Space Grotesk',sans-serif;font-size:11px;font-weight:700;padding:4px 10px;cursor:pointer;border:1px solid rgba(255,255,255,0.08);background:rgba(20,20,35,0.85);backdrop-filter:blur(12px);color:#ffb59c;letter-spacing:1px}
+.game-body{flex:1;min-height:0;display:flex;flex-direction:row;align-items:stretch;padding:8px 12px;gap:12px}
+.map-panel{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;position:relative}
+.map-panel canvas{display:block;cursor:crosshair}
+.side-panel{width:240px;display:flex;flex-direction:column;gap:8px;overflow-y:auto}
+.panel-box{background:rgba(28,27,27,0.85);backdrop-filter:blur(12px);border:1px solid rgba(255,255,255,0.08);padding:10px 12px;font-size:12px}
+.panel-box h4{font-family:'Space Grotesk',sans-serif;font-size:12px;font-weight:700;color:#ffb59c;margin-bottom:6px;letter-spacing:0.5px}
+.panel-box .row{display:flex;justify-content:space-between;align-items:center;padding:3px 0;border-bottom:1px solid rgba(255,255,255,0.04)}
+.panel-box .lbl{color:#8a8886;font-size:11px}
+.panel-box .val{color:#e5e2e1;font-family:'Space Grotesk',monospace;font-size:12px}
+.panel-box .val.green{color:#10b981}
+.panel-box .val.red{color:#ef4444}
+.panel-box .val.cyan{color:#00daf3}
+.task-box{background:rgba(0,218,243,0.06);border:1px solid rgba(0,218,243,0.2);padding:10px 12px}
+.task-box h4{color:#00daf3}
+.task-box p{font-size:11px;line-height:1.6;color:#c6c6c6}
+.score-box{background:rgba(16,185,129,0.06);border:1px solid rgba(16,185,129,0.2);padding:10px 12px}
+.score-box h4{color:#10b981}
+.btn{display:inline-block;padding:6px 16px;font-family:'Space Grotesk',sans-serif;font-size:12px;font-weight:700;cursor:pointer;border:1px solid rgba(255,181,156,0.3);background:rgba(255,181,156,0.1);color:#ffb59c;letter-spacing:0.5px;margin-top:8px}
+.btn:hover{background:rgba(255,181,156,0.2);border-color:#ffb59c}
+.btn.reset{border-color:rgba(138,136,134,0.3);background:rgba(138,136,134,0.1);color:#8a8886}
+.btn.reset:hover{background:rgba(138,136,134,0.2)}
+.controls-bar{display:flex;justify-content:center;align-items:center;gap:12px;padding:6px;background:rgba(28,27,27,0.92)}
+.hud{display:flex;justify-content:space-around;align-items:center;padding:6px 12px;background:rgba(0,0,0,0.55);font-size:11px;color:#8a8886;min-height:44px}
+.hud .item{display:flex;flex-direction:column;align-items:center}
+.hud .label{font-size:9px;text-transform:uppercase;letter-spacing:0.5px;opacity:0.7;font-family:'Space Grotesk',sans-serif}
+.hud .value{font-size:13px;color:#e5e2e1;font-weight:500;margin-top:2px}
+.guide-panel{position:fixed;top:8px;right:8px;width:260px;max-height:40vh;overflow-y:auto;background:rgba(20,20,35,0.85);backdrop-filter:blur(12px);border:1px solid rgba(255,255,255,0.08);padding:12px;z-index:100;font-family:'Noto Sans SC',sans-serif;font-size:13px;color:rgba(255,255,255,0.85)}
+.guide-panel h3{font-family:'Space Grotesk',sans-serif;font-size:14px;margin-bottom:8px;display:flex;align-items:center;justify-content:space-between;cursor:pointer;color:#ffb59c}
+.guide-panel .guide-content{}
+.guide-panel ul{padding-left:16px;line-height:1.6}
+.guide-panel .toggle-arrow{font-size:12px;transition:transform 0.2s}
+.guide-panel.collapsed .guide-content{display:none}
+.guide-panel.collapsed .toggle-arrow{transform:rotate(-90deg)}
+.feedback{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:rgba(20,20,35,0.95);backdrop-filter:blur(20px);border:1px solid rgba(255,181,156,0.3);padding:30px 40px;z-index:200;text-align:center;display:none;max-width:400px}
+.feedback h2{font-family:'Space Grotesk',sans-serif;font-size:18px;color:#ffb59c;margin-bottom:12px}
+.feedback p{font-size:13px;line-height:1.6;color:#c6c6c6;margin-bottom:8px}
+.feedback .score-big{font-family:'Space Grotesk',sans-serif;font-size:36px;color:#10b981;font-weight:700;margin:12px 0}
+.overlay{position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.6);z-index:199;display:none}
+</style>
+</head>
+<body>
+<button class="lang-btn" id="langBtn">CN</button>
+<div class="guide-panel" id="guidePanel">
+  <h3 id="guideToggle"><span id="guideTitle"></span><span class="toggle-arrow">v</span></h3>
+  <div class="guide-content">
+    <p id="guideGoal"></p>
+    <ul id="guideSteps"></ul>
+    <p id="guideTips" style="margin-top:8px;color:#ffb59c;font-size:12px"></p>
+  </div>
+</div>
+<div class="overlay" id="overlay"></div>
+<div class="feedback" id="feedback">
+  <h2 id="fbTitle"></h2>
+  <div class="score-big" id="fbScore"></div>
+  <p id="fbMsg"></p>
+  <button class="btn" id="fbClose"></button>
+</div>
+<div class="wrapper">
+  <div class="header">
+    <div class="title" id="headerTitle"></div>
+  </div>
+  <div class="game-body">
+    <div class="map-panel">
+      <canvas id="c"></canvas>
+    </div>
+    <div class="side-panel">
+      <div class="panel-box task-box">
+        <h4 id="taskTitle"></h4>
+        <p id="taskDesc"></p>
+      </div>
+      <div class="panel-box" id="clickInfoPanel">
+        <h4 id="clickInfoTitle"></h4>
+        <div class="row"><span class="lbl" id="lbl_px"></span><span class="val cyan" id="val_px">--</span></div>
+        <div class="row"><span class="lbl" id="lbl_grid"></span><span class="val" id="val_grid">--</span></div>
+        <div class="row"><span class="lbl" id="lbl_risk"></span><span class="val" id="val_risk">--</span></div>
+        <div class="row"><span class="lbl" id="lbl_type"></span><span class="val" id="val_type">--</span></div>
+      </div>
+      <div class="panel-box" id="pointsPanel">
+        <h4 id="pointsTitle"></h4>
+        <div id="pointsList"></div>
+      </div>
+      <div class="panel-box score-box">
+        <h4 id="scoreTitle"></h4>
+        <div class="row"><span class="lbl" id="lbl_placed"></span><span class="val" id="val_placed">0 / 0</span></div>
+        <div class="row"><span class="lbl" id="lbl_correct"></span><span class="val green" id="val_correct">0</span></div>
+        <div class="row"><span class="lbl" id="lbl_attempts"></span><span class="val" id="val_attempts">0</span></div>
+      </div>
+      <div style="display:flex;gap:8px;justify-content:center">
+        <button class="btn" id="btnCheck"></button>
+        <button class="btn reset" id="btnReset"></button>
+      </div>
+    </div>
+  </div>
+  <div class="hud">
+    <div class="item"><div class="label" id="hudLabel0"></div><div class="value" id="hudVal0"></div></div>
+    <div class="item"><div class="label" id="hudLabel1"></div><div class="value" id="hudVal1"></div></div>
+    <div class="item"><div class="label" id="hudLabel2"></div><div class="value" id="hudVal2"></div></div>
+    <div class="item"><div class="label" id="hudLabel3"></div><div class="value" id="hudVal3"></div></div>
+  </div>
+</div>
+<script>
+(function(){
+var LANG='cn';
+var I18N={
+  title:{en:'GRID MAP COORDINATE CHALLENGE',cn:'\u7F51\u683C\u5730\u56FE\u5750\u6807\u6311\u6218'},
+  subtitle:{en:'P-MARS-01-M23 \u00b7 skill',cn:'P-MARS-01-M23 \u00b7 skill'},
+  guideTitle:{en:'GAME GUIDE',cn:'\u6E38\u620F\u6307\u5357'},
+  guideGoal:{en:'Goal: Click on the grid map to place start points and goal points at the correct grid coordinates.',
+             cn:'\u76EE\u6807\uFF1A\u5728\u7F51\u683C\u5730\u56FE\u4E0A\u70B9\u51FB\uFF0C\u5C06\u8D77\u70B9\u548C\u7EC8\u70B9\u653E\u7F6E\u5728\u6B63\u786E\u7684\u7F51\u683C\u5750\u6807\u5904\u3002'},
+  guideS1:{en:'Step 1: Read the task -- note the target grid (row,col)',cn:'\u7B2C1\u6B65\uFF1A\u8BFB\u4EFB\u52A1\u2014\u2014\u6CE8\u610F\u76EE\u6807\u7F51\u683C (row,col)'},
+  guideS2:{en:'Step 2: Click the correct cell on the map',cn:'\u7B2C2\u6B65\uFF1A\u5728\u5730\u56FE\u4E0A\u70B9\u51FB\u6B63\u786E\u7684\u5355\u5143\u683C'},
+  guideS3:{en:'Step 3: Check your coordinate conversion',cn:'\u7B2C3\u6B65\uFF1A\u68C0\u67E5\u4F60\u7684\u5750\u6807\u8F6C\u6362'},
+  guideTips:{en:'Tips: row increases downward, col increases rightward',cn:'\u63D0\u793A\uFF1Arow \u5411\u4E0B\u589E\u5927\uFF0Ccol \u5411\u53F3\u589E\u5927'},
+  taskTitle:{en:'CURRENT TASK',cn:'\u5F53\u524D\u4EFB\u52A1'},
+  clickInfoTitle:{en:'CLICK INFO',cn:'\u70B9\u51FB\u4FE1\u606F'},
+  lbl_px:{en:'Pixel (x,y)',cn:'\u50CF\u7D20 (x,y)'},
+  lbl_grid:{en:'Grid (row,col)',cn:'\u7F51\u683C (row,col)'},
+  lbl_risk:{en:'Risk Level',cn:'\u98CE\u9669\u7B49\u7EA7'},
+  lbl_type:{en:'Point Type',cn:'\u70B9\u7C7B\u578B'},
+  pointsTitle:{en:'PLACED POINTS',cn:'\u5DF2\u653E\u7F6E\u70B9'},
+  scoreTitle:{en:'SCORE',cn:'\u5F97\u5206'},
+  lbl_placed:{en:'Placed',cn:'\u5DF2\u653E\u7F6E'},
+  lbl_correct:{en:'Correct',cn:'\u6B63\u786E'},
+  lbl_attempts:{en:'Attempts',cn:'\u5C1D\u8BD5\u6B21\u6570'},
+  btnCheck:{en:'CHECK',cn:'\u68C0\u67E5'},
+  btnReset:{en:'RESET',cn:'\u91CD\u7F6E'},
+  hudMode:{en:'MODE',cn:'\u6A21\u5F0F'},
+  hudGridSize:{en:'GRID',cn:'\u7F51\u683C'},
+  hudCellPx:{en:'CELL SIZE',cn:'\u5355\u5143\u683C'},
+  hudRound:{en:'ROUND',cn:'\u8F6E\u6B21'},
+  placeStart:{en:'Place START at grid',cn:'\u5C06\u8D77\u70B9\u653E\u5728\u7F51\u683C'},
+  placeGoal:{en:'Place GOAL at grid',cn:'\u5C06\u7EC8\u70B9\u653E\u5728\u7F51\u683C'},
+  start:{en:'START',cn:'\u8D77\u70B9'},
+  goal:{en:'GOAL',cn:'\u7EC8\u70B9'},
+  correct:{en:'Correct!',cn:'\u6B63\u786E\uFF01'},
+  wrong:{en:'Wrong cell. Try again!',cn:'\u9519\u8BEF\u7684\u5355\u5143\u683C\u3002\u518D\u8BD5\u4E00\u6B21\uFF01'},
+  fbTitle:{en:'CHALLENGE COMPLETE',cn:'\u6311\u6218\u5B8C\u6210'},
+  fbMsg:{en:'You successfully mapped all start/goal coordinates to the grid!',cn:'\u4F60\u6210\u529F\u5C06\u6240\u6709\u8D77\u7EC8\u70B9\u5750\u6807\u6620\u5C04\u5230\u4E86\u7F51\u683C\uFF01'},
+  fbClose:{en:'CLOSE',cn:'\u5173\u95ED'},
+  riskNames:{en:['safe','low','medium','high','danger'],cn:['\u5B89\u5168','\u4F4E\u98CE\u9669','\u4E2D\u98CE\u9669','\u9AD8\u98CE\u9669','\u5371\u9669']},
+  noPoints:{en:'No points placed yet',cn:'\u5C1A\u672A\u653E\u7F6E\u70B9'},
+  allPlaced:{en:'All points placed! Click CHECK.',cn:'\u6240\u6709\u70B9\u5DF2\u653E\u7F6E\uFF01\u70B9\u51FB\u68C0\u67E5\u3002'}
+};
+function t(key){return(I18N[key]&&I18N[key][LANG])||key}
+
+var canvas=document.getElementById('c');
+var ctx2d=canvas.getContext('2d');
+var DPR=Math.min(window.devicePixelRatio||1,2);
+var W=0,H=0;
+var GRID_ROWS=8,GRID_COLS=8;
+var cellW=0,cellH=0;
+var mapX=0,mapY=0,mapSize=0;
+
+var RISK_MAP=[
+  [0,0,1,1,2,3,4,4],
+  [0,0,0,1,2,2,3,4],
+  [0,1,0,0,1,2,3,3],
+  [1,1,0,0,1,1,2,3],
+  [2,1,1,0,0,1,2,2],
+  [3,2,1,0,0,0,1,2],
+  [3,2,1,1,0,0,0,1],
+  [4,3,2,1,1,0,0,0]
+];
+var RISK_COLORS=['#22c55e','#84cc16','#eab308','#f97316','#ef4444'];
+
+// challenge rounds
+var CHALLENGES=[
+  {type:'start',row:0,col:0},
+  {type:'goal',row:7,col:7},
+  {type:'start',row:2,col:3},
+  {type:'goal',row:5,col:4},
+  {type:'start',row:1,col:6},
+  {type:'goal',row:6,col:1}
+];
+var currentChallenge=0;
+var placedPoints=[];
+var correctCount=0;
+var attemptCount=0;
+var lastClick=null;
+var feedbackMsg='';
+var feedbackColor='';
+
+function resize(){
+  var panel=document.querySelector('.map-panel');
+  var rect=panel.getBoundingClientRect();
+  if(rect.width<1||rect.height<1)return;
+  W=rect.width-16;H=rect.height-16;
+  mapSize=Math.min(W,H)*0.88;
+  mapX=(W-mapSize)/2;
+  mapY=(H-mapSize)/2;
+  cellW=mapSize/GRID_COLS;
+  cellH=mapSize/GRID_ROWS;
+  canvas.width=W*DPR;canvas.height=H*DPR;
+  canvas.style.width=W+'px';canvas.style.height=H+'px';
+  ctx2d.setTransform(DPR,0,0,DPR,0,0);
+  drawMap();
+}
+
+function drawMap(){
+  // bg
+  var g=ctx2d.createLinearGradient(0,0,0,H);
+  g.addColorStop(0,'#131313');g.addColorStop(1,'#1a1a1a');
+  ctx2d.fillStyle=g;ctx2d.fillRect(0,0,W,H);
+  // subtle grid bg
+  ctx2d.strokeStyle='rgba(255,255,255,0.03)';ctx2d.lineWidth=1;
+  for(var i=0;i<W;i+=40){ctx2d.beginPath();ctx2d.moveTo(i,0);ctx2d.lineTo(i,H);ctx2d.stroke()}
+  for(var j=0;j<H;j+=40){ctx2d.beginPath();ctx2d.moveTo(0,j);ctx2d.lineTo(W,j);ctx2d.stroke()}
+
+  // risk cells
+  for(var r=0;r<GRID_ROWS;r++){
+    for(var c=0;c<GRID_COLS;c++){
+      var risk=RISK_MAP[r][c];
+      ctx2d.fillStyle=RISK_COLORS[risk];
+      ctx2d.globalAlpha=0.7;
+      ctx2d.fillRect(mapX+c*cellW,mapY+r*cellH,cellW,cellH);
+      ctx2d.globalAlpha=1;
+      // risk number
+      ctx2d.font='bold 11px "Space Grotesk",sans-serif';
+      ctx2d.fillStyle='rgba(255,255,255,0.5)';
+      ctx2d.textAlign='center';ctx2d.textBaseline='middle';
+      ctx2d.fillText(risk,mapX+c*cellW+cellW/2,mapY+r*cellH+cellH/2);
+    }
+  }
+  // grid lines
+  ctx2d.strokeStyle='rgba(255,255,255,0.25)';ctx2d.lineWidth=0.8;
+  for(var i2=0;i2<=GRID_COLS;i2++){
+    ctx2d.beginPath();ctx2d.moveTo(mapX+i2*cellW,mapY);ctx2d.lineTo(mapX+i2*cellW,mapY+mapSize);ctx2d.stroke();
+  }
+  for(var j2=0;j2<=GRID_ROWS;j2++){
+    ctx2d.beginPath();ctx2d.moveTo(mapX,mapY+j2*cellH);ctx2d.lineTo(mapX+mapSize,mapY+j2*cellH);ctx2d.stroke();
+  }
+  // border
+  ctx2d.strokeStyle='rgba(255,181,156,0.5)';ctx2d.lineWidth=1.5;
+  ctx2d.strokeRect(mapX,mapY,mapSize,mapSize);
+
+  // axis labels
+  ctx2d.font='10px "Space Grotesk",sans-serif';
+  ctx2d.fillStyle='#8a8886';ctx2d.textAlign='center';ctx2d.textBaseline='top';
+  for(var ci=0;ci<GRID_COLS;ci++){
+    ctx2d.fillText(ci,mapX+ci*cellW+cellW/2,mapY+mapSize+4);
+  }
+  ctx2d.textAlign='right';ctx2d.textBaseline='middle';
+  for(var ri=0;ri<GRID_ROWS;ri++){
+    ctx2d.fillText(ri,mapX-5,mapY+ri*cellH+cellH/2);
+  }
+  // axis names
+  ctx2d.font='11px "Space Grotesk",sans-serif';ctx2d.fillStyle='#ffb59c';
+  ctx2d.textAlign='center';ctx2d.textBaseline='top';
+  ctx2d.fillText('col',mapX+mapSize/2,mapY+mapSize+16);
+  ctx2d.save();
+  ctx2d.translate(mapX-20,mapY+mapSize/2);
+  ctx2d.rotate(-Math.PI/2);
+  ctx2d.textBaseline='middle';ctx2d.textAlign='center';
+  ctx2d.fillText('row',0,0);
+  ctx2d.restore();
+
+  // placed points
+  for(var pi=0;pi<placedPoints.length;pi++){
+    var pp=placedPoints[pi];
+    var px2=mapX+pp.col*cellW+cellW/2;
+    var py2=mapY+pp.row*cellH+cellH/2;
+    var isStart=pp.type==='start';
+    ctx2d.beginPath();ctx2d.arc(px2,py2,cellW*0.3,0,Math.PI*2);
+    ctx2d.fillStyle=isStart?'rgba(16,185,129,0.8)':'rgba(239,68,68,0.8)';ctx2d.fill();
+    ctx2d.strokeStyle=isStart?'#10b981':'#ef4444';ctx2d.lineWidth=2;ctx2d.stroke();
+    // glow
+    ctx2d.shadowColor=isStart?'#10b981':'#ef4444';ctx2d.shadowBlur=12;
+    ctx2d.beginPath();ctx2d.arc(px2,py2,cellW*0.15,0,Math.PI*2);
+    ctx2d.fillStyle=isStart?'#10b981':'#ef4444';ctx2d.fill();
+    ctx2d.shadowBlur=0;
+    // label
+    ctx2d.font='bold 9px "Space Grotesk"';ctx2d.fillStyle='#fff';ctx2d.textAlign='center';ctx2d.textBaseline='middle';
+    ctx2d.fillText(isStart?'S':'G',px2,py2);
+  }
+
+  // highlight target cell (current challenge)
+  if(currentChallenge<CHALLENGES.length){
+    var ch=CHALLENGES[currentChallenge];
+    var hx=mapX+ch.col*cellW;
+    var hy=mapY+ch.row*cellH;
+    // pulsing outline
+    var pulse=0.5+0.5*Math.sin(Date.now()/300);
+    ctx2d.strokeStyle=ch.type==='start'?
+      'rgba(16,185,129,'+(0.3+pulse*0.4)+')':
+      'rgba(239,68,68,'+(0.3+pulse*0.4)+')';
+    ctx2d.lineWidth=2;
+    ctx2d.strokeRect(hx+2,hy+2,cellW-4,cellH-4);
+  }
+
+  // feedback message
+  if(feedbackMsg){
+    ctx2d.font='bold 13px "Noto Sans SC",sans-serif';
+    ctx2d.fillStyle=feedbackColor;
+    ctx2d.textAlign='center';ctx2d.textBaseline='bottom';
+    ctx2d.fillText(feedbackMsg,W/2,mapY-8);
+  }
+}
+
+// animation loop for pulsing
+var animId=null;
+function animate(){
+  drawMap();
+  animId=requestAnimationFrame(animate);
+}
+
+function handleClick(e){
+  if(currentChallenge>=CHALLENGES.length)return;
+  var rect=canvas.getBoundingClientRect();
+  var mx=(e.clientX-rect.left)*(W/rect.width);
+  var my=(e.clientY-rect.top)*(H/rect.height);
+  // check if inside map
+  if(mx<mapX||mx>mapX+mapSize||my<mapY||my>mapY+mapSize)return;
+  var col=Math.floor((mx-mapX)/cellW);
+  var row=Math.floor((my-mapY)/cellH);
+  if(col<0)col=0;if(col>=GRID_COLS)col=GRID_COLS-1;
+  if(row<0)row=0;if(row>=GRID_ROWS)row=GRID_ROWS-1;
+
+  var ch=CHALLENGES[currentChallenge];
+  attemptCount++;
+
+  // update click info
+  var pixelX=Math.round(col*cellW+cellW/2);
+  var pixelY=Math.round(row*cellH+cellH/2);
+  document.getElementById('val_px').textContent='('+pixelX+', '+pixelY+')';
+  document.getElementById('val_grid').textContent='('+row+', '+col+')';
+  var riskLevel=RISK_MAP[row][col];
+  var riskNames=I18N['riskNames'][LANG];
+  document.getElementById('val_risk').textContent=riskLevel+' ('+riskNames[riskLevel]+')';
+  document.getElementById('val_type').textContent=ch.type==='start'?t('start'):t('goal');
+
+  if(row===ch.row&&col===ch.col){
+    // correct
+    correctCount++;
+    placedPoints.push({row:row,col:col,type:ch.type});
+    feedbackMsg=t('correct');
+    feedbackColor='#10b981';
+    currentChallenge++;
+    updateTask();
+    updateScore();
+    updatePointsList();
+    if(currentChallenge>=CHALLENGES.length){
+      setTimeout(showComplete,600);
+    }
+  }else{
+    feedbackMsg=t('wrong');
+    feedbackColor='#ef4444';
+  }
+  setTimeout(function(){feedbackMsg=''},2000);
+}
+
+function updateTask(){
+  var desc='';
+  if(currentChallenge<CHALLENGES.length){
+    var ch=CHALLENGES[currentChallenge];
+    desc=(ch.type==='start'?t('placeStart'):t('placeGoal'))+' ('+ch.row+', '+ch.col+')';
+  }else{
+    desc=t('allPlaced');
+  }
+  document.getElementById('taskDesc').textContent=desc;
+}
+
+function updateScore(){
+  document.getElementById('val_placed').textContent=placedPoints.length+' / '+CHALLENGES.length;
+  document.getElementById('val_correct').textContent=correctCount;
+  document.getElementById('val_attempts').textContent=attemptCount;
+}
+
+function updatePointsList(){
+  var list=document.getElementById('pointsList');
+  if(placedPoints.length===0){
+    list.innerHTML='<div style="color:#8a8886;font-size:11px">'+t('noPoints')+'</div>';
+    return;
+  }
+  var html='';
+  for(var i=0;i<placedPoints.length;i++){
+    var pp=placedPoints[i];
+    var col2=pp.type==='start'?'green':'red';
+    html+='<div class="row"><span class="lbl">'+(pp.type==='start'?t('start'):t('goal'))+'</span><span class="val '+col2+'">('+pp.row+', '+pp.col+')</span></div>';
+  }
+  list.innerHTML=html;
+}
+
+function showComplete(){
+  var pct=Math.round((correctCount/attemptCount)*100);
+  document.getElementById('fbTitle').textContent=t('fbTitle');
+  document.getElementById('fbScore').textContent=pct+'%';
+  document.getElementById('fbMsg').textContent=t('fbMsg');
+  document.getElementById('fbClose').textContent=t('fbClose');
+  document.getElementById('feedback').style.display='block';
+  document.getElementById('overlay').style.display='block';
+}
+
+function resetGame(){
+  currentChallenge=0;
+  placedPoints=[];
+  correctCount=0;
+  attemptCount=0;
+  feedbackMsg='';
+  lastClick=null;
+  document.getElementById('val_px').textContent='--';
+  document.getElementById('val_grid').textContent='--';
+  document.getElementById('val_risk').textContent='--';
+  document.getElementById('val_type').textContent='--';
+  updateTask();
+  updateScore();
+  updatePointsList();
+}
+
+function refreshI18N(){
+  document.getElementById('headerTitle').innerHTML=t('title')+'<span class="sub">'+t('subtitle')+'</span>';
+  document.getElementById('guideTitle').textContent=t('guideTitle');
+  document.getElementById('guideGoal').textContent=t('guideGoal');
+  document.getElementById('guideSteps').innerHTML='<li>'+t('guideS1')+'</li><li>'+t('guideS2')+'</li><li>'+t('guideS3')+'</li>';
+  document.getElementById('guideTips').textContent=t('guideTips');
+  document.getElementById('taskTitle').textContent=t('taskTitle');
+  document.getElementById('clickInfoTitle').textContent=t('clickInfoTitle');
+  document.getElementById('lbl_px').textContent=t('lbl_px');
+  document.getElementById('lbl_grid').textContent=t('lbl_grid');
+  document.getElementById('lbl_risk').textContent=t('lbl_risk');
+  document.getElementById('lbl_type').textContent=t('lbl_type');
+  document.getElementById('pointsTitle').textContent=t('pointsTitle');
+  document.getElementById('scoreTitle').textContent=t('scoreTitle');
+  document.getElementById('lbl_placed').textContent=t('lbl_placed');
+  document.getElementById('lbl_correct').textContent=t('lbl_correct');
+  document.getElementById('lbl_attempts').textContent=t('lbl_attempts');
+  document.getElementById('btnCheck').textContent=t('btnCheck');
+  document.getElementById('btnReset').textContent=t('btnReset');
+  document.getElementById('hudLabel0').textContent=t('hudMode');
+  document.getElementById('hudLabel1').textContent=t('hudGridSize');
+  document.getElementById('hudLabel2').textContent=t('hudCellPx');
+  document.getElementById('hudLabel3').textContent=t('hudRound');
+  document.getElementById('hudVal0').textContent=t('start')+'/'+t('goal');
+  document.getElementById('hudVal1').textContent=GRID_ROWS+'x'+GRID_COLS;
+  document.getElementById('hudVal2').textContent=Math.round(cellW)+'px';
+  document.getElementById('hudVal3').textContent=(currentChallenge+1)+'/'+CHALLENGES.length;
+  updateTask();
+  updatePointsList();
+}
+
+// event bindings
+canvas.addEventListener('click',handleClick);
+canvas.addEventListener('touchend',function(e){
+  e.preventDefault();
+  var touch=e.changedTouches[0];
+  handleClick({clientX:touch.clientX,clientY:touch.clientY});
+});
+document.getElementById('btnCheck').addEventListener('click',function(){
+  if(currentChallenge>=CHALLENGES.length){
+    showComplete();
+  }
+});
+document.getElementById('btnReset').addEventListener('click',function(){
+  resetGame();
+});
+document.getElementById('fbClose').addEventListener('click',function(){
+  document.getElementById('feedback').style.display='none';
+  document.getElementById('overlay').style.display='none';
+});
+document.getElementById('langBtn').addEventListener('click',function(){
+  LANG=LANG==='en'?'cn':'en';
+  document.getElementById('langBtn').textContent=LANG.toUpperCase();
+  refreshI18N();
+});
+document.getElementById('guideToggle').addEventListener('click',function(){
+  document.getElementById('guidePanel').classList.toggle('collapsed');
+});
+window.addEventListener('resize',resize);
+
+// init
+refreshI18N();
+updatePointsList();
+resize();
+animate();
+setTimeout(resize,200);
+setTimeout(resize,600);
+document.fonts.ready.then(function(){resize()});
+})();
+</script>
+</body>
+</html>

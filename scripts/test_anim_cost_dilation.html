@@ -1,0 +1,580 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>COST DILATION</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;700&family=Inter:wght@400;500&family=Noto+Sans+SC:wght@400;700&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{width:100%;height:100vh;overflow:hidden;background:#131313;
+  font-family:'Noto Sans SC','PingFang SC',system-ui,sans-serif;color:#e5e2e1}
+
+.wrapper{display:flex;flex-direction:column;height:100vh;overflow:hidden}
+
+.lang-btn{position:fixed;top:8px;left:8px;z-index:100;
+  font-family:'Space Grotesk',sans-serif;font-size:11px;font-weight:700;
+  padding:4px 10px;cursor:pointer;
+  border:1px solid rgba(255,255,255,0.08);
+  background:rgba(20,20,35,0.85);backdrop-filter:blur(12px);
+  color:#ffb59c;letter-spacing:1px}
+
+.guide-panel{position:fixed;top:8px;right:8px;width:240px;max-height:38vh;
+  overflow-y:auto;z-index:200;padding:10px 12px;
+  background:rgba(28,27,27,0.88);backdrop-filter:blur(14px);
+  border:1px solid rgba(138,136,134,0.15);font-size:12px;line-height:1.55;
+  color:rgba(229,226,225,0.85)}
+.guide-panel h3{font-family:'Space Grotesk',sans-serif;font-size:13px;font-weight:700;
+  margin-bottom:6px;display:flex;align-items:center;justify-content:space-between;cursor:pointer;
+  color:#ffb59c;text-transform:uppercase;letter-spacing:0.05em}
+.guide-panel .arrow{transition:transform .2s;font-size:10px}
+.guide-panel .arrow.collapsed{transform:rotate(-90deg)}
+.guide-panel ul{padding-left:14px;margin:4px 0}
+.guide-panel .gl{color:#8a8886;font-size:11px;text-transform:uppercase;
+  letter-spacing:0.08em;margin-top:6px;font-family:'Space Grotesk',sans-serif}
+
+.header{height:38px;min-height:38px;display:flex;align-items:center;justify-content:space-between;
+  padding:0 16px;background:rgba(28,27,27,0.92);
+  border-bottom:1px solid rgba(138,136,134,0.1)}
+.header h1{font-family:'Space Grotesk',sans-serif;font-size:13px;font-weight:700;
+  color:#ffb59c;text-transform:uppercase;letter-spacing:0.06em}
+.header .frame-info{font-family:'Space Grotesk',sans-serif;font-size:12px;color:#8a8886}
+.header .frame-info span{color:#00daf3}
+
+.canvas-wrap{flex:1;min-height:0;position:relative}
+.canvas-wrap canvas{display:block;width:100%;height:100%}
+
+.controls{height:42px;min-height:42px;display:flex;align-items:center;justify-content:center;gap:10px;
+  background:rgba(28,27,27,0.92);border-top:1px solid rgba(138,136,134,0.1)}
+.ctrl-btn{padding:6px 16px;border:1px solid rgba(255,181,156,0.2);
+  background:linear-gradient(135deg,rgba(53,53,52,0.6),rgba(28,27,27,0.8));
+  color:#e5e2e1;cursor:pointer;font-family:'Space Grotesk',sans-serif;font-size:11px;
+  font-weight:700;text-transform:uppercase;letter-spacing:0.06em}
+.ctrl-btn:hover{background:rgba(255,127,80,0.12);box-shadow:0 0 12px rgba(255,127,80,0.15)}
+
+.hud{height:46px;min-height:46px;display:flex;align-items:center;
+  background:rgba(0,0,0,0.55);border-top:1px solid rgba(255,255,255,0.06);padding:0 16px}
+.hud-col{flex:1;text-align:center}
+.hud-label{font-family:'Space Grotesk',sans-serif;font-size:10px;
+  color:rgba(255,181,156,0.5);text-transform:uppercase;letter-spacing:0.1em}
+.hud-val{font-family:'Space Grotesk',sans-serif;font-size:13px;font-weight:700;
+  color:rgba(229,226,225,0.88)}
+</style>
+</head>
+<body>
+<button class="lang-btn" id="langBtn">CN</button>
+
+<div class="guide-panel" id="guidePanel">
+  <h3 id="guideTitle"><span id="guideTitleText"></span><span class="arrow" id="guideArrow">&#9660;</span></h3>
+  <div class="guide-content" id="guideContent">
+    <p id="guideWhat" style="margin-bottom:6px"></p>
+    <div class="gl" id="guideObsLabel"></div>
+    <ul id="guideObsList"></ul>
+    <div class="gl" id="guideCtrlLabel"></div>
+    <p id="guideCtrlText" style="margin-top:2px"></p>
+    <div class="gl" id="guideTakeLabel"></div>
+    <p id="guideTakeText" style="margin-top:2px;color:#00daf3"></p>
+  </div>
+</div>
+
+<div class="wrapper">
+  <div class="header">
+    <h1 id="titleText"></h1>
+    <div class="frame-info" id="frameInfo"></div>
+  </div>
+  <div class="canvas-wrap" id="canvasWrap">
+    <canvas id="c"></canvas>
+  </div>
+  <div class="controls">
+    <button class="ctrl-btn" id="btnPrev"></button>
+    <button class="ctrl-btn" id="btnPlay"></button>
+    <button class="ctrl-btn" id="btnNext"></button>
+  </div>
+  <div class="hud">
+    <div class="hud-col"><div class="hud-label" id="hudL1"></div><div class="hud-val" id="hudV1">--</div></div>
+    <div class="hud-col"><div class="hud-label" id="hudL2"></div><div class="hud-val" id="hudV2">--</div></div>
+    <div class="hud-col"><div class="hud-label" id="hudL3"></div><div class="hud-val" id="hudV3">--</div></div>
+    <div class="hud-col"><div class="hud-label" id="hudL4"></div><div class="hud-val" id="hudV4">--</div></div>
+  </div>
+</div>
+
+<script>
+(function(){
+var LANG = 'cn';
+var I18N = {
+  title:       {en:'COST DILATION PROCESS', cn:'\u4ee3\u4ef7\u818a\u80c0\u8fc7\u7a0b'},
+  frameOf:     {en:'FRAME', cn:'\u5e27'},
+  prev:        {en:'PREV', cn:'\u4e0a\u4e00\u5e27'},
+  play:        {en:'PLAY', cn:'\u64ad\u653e'},
+  pause:       {en:'PAUSE', cn:'\u6682\u505c'},
+  next:        {en:'NEXT', cn:'\u4e0b\u4e00\u5e27'},
+  guideTitle:  {en:'VIEWING GUIDE', cn:'\u89c2\u770b\u6307\u5357'},
+  guideWhat:   {en:'Shows how obstacle dilation expands danger zones outward, creating a safety buffer that prevents paths from hugging cliff edges.',
+                cn:'\u5c55\u793a\u969c\u788d\u7269\u818a\u80c0\u5982\u4f55\u5c06\u5371\u9669\u533a\u5411\u5916\u6269\u5c55\uff0c\u5efa\u7acb\u5b89\u5168\u7f13\u51b2\u533a\uff0c\u963b\u6b62\u8def\u5f84\u8d34\u7740\u60ac\u5d16\u8fb9\u7f18\u884c\u8d70\u3002'},
+  obsLabel:    {en:'OBSERVE', cn:'\u89c2\u5bdf\u91cd\u70b9'},
+  obs1:        {en:'Red cells = original obstacle; orange halos = dilated penalty zone',
+                cn:'\u7ea2\u8272\u683c\u5b50 = \u539f\u59cb\u969c\u788d\u7269\uff1b\u6a59\u8272\u5149\u6655 = \u818a\u80c0\u60e9\u7f5a\u533a'},
+  obs2:        {en:'Watch how the safe corridor narrows as dilation radius grows',
+                cn:'\u89c2\u5bdf\u818a\u80c0\u534a\u5f84\u589e\u5927\u65f6\u5b89\u5168\u901a\u9053\u5982\u4f55\u53d8\u7a84'},
+  obs3:        {en:'Gray cells = unknown terrain with extra penalty',
+                cn:'\u7070\u8272\u683c\u5b50 = \u672a\u77e5\u5730\u5f62\uff0c\u5e26\u989d\u5916\u60e9\u7f5a'},
+  obs4:        {en:'Green path avoids all dilated zones',
+                cn:'\u7eff\u8272\u8def\u5f84\u4f1a\u907f\u5f00\u6240\u6709\u818a\u80c0\u533a\u57df'},
+  ctrlLabel:   {en:'CONTROLS', cn:'\u64cd\u4f5c\u8bf4\u660e'},
+  ctrlText:    {en:'Use PREV/NEXT to step through frames, PLAY for auto playback.',
+                cn:'\u4f7f\u7528\u201c\u4e0a\u4e00\u5e27/\u4e0b\u4e00\u5e27\u201d\u9010\u5e27\u67e5\u770b\uff0c\u6216\u70b9\u51fb\u201c\u64ad\u653e\u201d\u81ea\u52a8\u64ad\u653e\u3002'},
+  takeLabel:   {en:'TAKEAWAY', cn:'\u6838\u5fc3\u7ed3\u8bba'},
+  takeText:    {en:'Dilation turns a single danger cell into a safety buffer zone; paths that look safe at the edge are actually one-slip-away from disaster.',
+                cn:'\u818a\u80c0\u628a\u4e00\u4e2a\u5371\u9669\u683c\u5b50\u53d8\u6210\u4e00\u7247\u5b89\u5168\u7f13\u51b2\u533a\uff1b\u770b\u8d77\u6765\u5b89\u5168\u7684\u8fb9\u7f18\u683c\u5b50\uff0c\u5176\u5b9e\u53ea\u5dee\u4e00\u6b65\u5c31\u4f1a\u51fa\u4e8b\u3002'},
+  hudDilation: {en:'DILATION R', cn:'\u818a\u80c0\u534a\u5f84'},
+  hudSafe:     {en:'SAFE CELLS', cn:'\u5b89\u5168\u683c\u6570'},
+  hudUnknown:  {en:'UNKNOWN', cn:'\u672a\u77e5\u533a'},
+  hudPhase:    {en:'PHASE', cn:'\u9636\u6bb5'},
+  phase0:      {en:'RAW TERRAIN', cn:'\u539f\u59cb\u5730\u5f62'},
+  phase1:      {en:'DILATION R=1', cn:'\u818a\u80c0 R=1'},
+  phase2:      {en:'DILATION R=2', cn:'\u818a\u80c0 R=2'},
+  phase3:      {en:'DILATION R=3', cn:'\u818a\u80c0 R=3'},
+  phase4:      {en:'SAFE PATH', cn:'\u5b89\u5168\u8def\u5f84'},
+  narr0:       {en:'Original risk map: red = obstacle, gray = unknown, green = safe',
+                cn:'\u539f\u59cb\u98ce\u9669\u5730\u56fe\uff1a\u7ea2\u8272 = \u969c\u788d\u7269\uff0c\u7070\u8272 = \u672a\u77e5\uff0c\u7eff\u8272 = \u5b89\u5168'},
+  narr1:       {en:'Dilation radius=1: each obstacle expands 1 cell outward',
+                cn:'\u818a\u80c0\u534a\u5f84=1\uff1a\u6bcf\u4e2a\u969c\u788d\u7269\u5411\u5916\u6269\u5c55 1 \u683c'},
+  narr2:       {en:'Dilation radius=2: buffer zone doubles, corridor narrows',
+                cn:'\u818a\u80c0\u534a\u5f84=2\uff1a\u7f13\u51b2\u533a\u52a0\u500d\uff0c\u901a\u9053\u53d8\u7a84'},
+  narr3:       {en:'Dilation radius=3: maximum safety but path options shrink',
+                cn:'\u818a\u80c0\u534a\u5f84=3\uff1a\u6700\u5927\u5b89\u5168\u4f46\u8def\u5f84\u9009\u62e9\u7f29\u5c0f'},
+  narr4:       {en:'Path planner finds the safest route avoiding all dilated zones',
+                cn:'\u8def\u5f84\u89c4\u5212\u5668\u627e\u5230\u907f\u5f00\u6240\u6709\u818a\u80c0\u533a\u7684\u6700\u5b89\u5168\u8def\u7ebf'}
+};
+function t(key){ return (I18N[key] && I18N[key][LANG]) || (I18N[key] && I18N[key]['en']) || key; }
+
+var totalFrames = 5;
+var currentFrame = 0;
+var playing = false;
+var playRAF = null;
+var playTimer = null;
+var transitioning = false;
+
+var canvas = document.getElementById('c');
+var ctx = canvas.getContext('2d');
+var W = 0, H = 0;
+
+/* === GRID MAP === */
+var COLS = 20, ROWS = 16;
+// 0=safe, 1=obstacle, 2=unknown
+var BASE_MAP = [];
+(function initMap(){
+  for(var r=0;r<ROWS;r++){
+    BASE_MAP[r]=[];
+    for(var c=0;c<COLS;c++) BASE_MAP[r][c]=0;
+  }
+  // obstacles (rocks, craters)
+  var obs=[[2,3],[2,4],[3,3],[3,4],[3,5],[4,4],[4,5],
+           [7,8],[7,9],[8,8],[8,9],[8,10],[9,9],[9,10],
+           [12,5],[12,6],[13,5],[13,6],[13,7],[14,6],[14,7],
+           [5,14],[5,15],[6,14],[6,15],[7,15],
+           [10,2],[10,3],[11,2],[11,3]];
+  obs.forEach(function(p){if(p[0]<ROWS&&p[1]<COLS) BASE_MAP[p[0]][p[1]]=1;});
+  // unknown zones
+  var unk=[[0,17],[0,18],[0,19],[1,17],[1,18],[1,19],[2,18],[2,19],
+           [14,0],[14,1],[15,0],[15,1],[15,2],
+           [9,13],[9,14],[10,13],[10,14],[10,15],[11,14],[11,15]];
+  unk.forEach(function(p){if(p[0]<ROWS&&p[1]<COLS) BASE_MAP[p[0]][p[1]]=2;});
+})();
+
+function dilateMap(radius){
+  var map=[];
+  for(var r=0;r<ROWS;r++){
+    map[r]=[];
+    for(var c=0;c<COLS;c++) map[r][c]=BASE_MAP[r][c];
+  }
+  if(radius<=0) return map;
+  // dilate cost: cells near obstacles get penalty values 0.3-0.9
+  for(var r=0;r<ROWS;r++){
+    for(var c=0;c<COLS;c++){
+      if(BASE_MAP[r][c]===1){
+        for(var dr=-radius;dr<=radius;dr++){
+          for(var dc=-radius;dc<=radius;dc++){
+            var nr=r+dr,nc=c+dc;
+            if(nr<0||nr>=ROWS||nc<0||nc>=COLS) continue;
+            var dist=Math.sqrt(dr*dr+dc*dc);
+            if(dist<=radius && BASE_MAP[nr][nc]===0){
+              var penalty = 3 + (1 - dist/radius)*0.7; // 3.x = dilated
+              if(map[nr][nc]<3) map[nr][nc]=penalty;
+              else map[nr][nc]=Math.max(map[nr][nc],penalty);
+            }
+          }
+        }
+      }
+    }
+  }
+  return map;
+}
+
+// Simple A* path on the dilated map
+function findPath(map){
+  var sr=1,sc=0,er=ROWS-2,ec=COLS-1;
+  var open=[{r:sr,c:sc,g:0,f:0,parent:null}];
+  var closed={};
+  function key(r,c){return r*100+c;}
+  function heuristic(r,c){return Math.abs(r-er)+Math.abs(c-ec);}
+  while(open.length>0){
+    open.sort(function(a,b){return a.f-b.f;});
+    var cur=open.shift();
+    var k=key(cur.r,cur.c);
+    if(closed[k]) continue;
+    closed[k]=cur;
+    if(cur.r===er&&cur.c===ec){
+      var path=[];
+      var n=cur;
+      while(n){path.unshift({r:n.r,c:n.c});n=n.parent;}
+      return path;
+    }
+    var dirs=[[-1,0],[1,0],[0,-1],[0,1],[-1,-1],[-1,1],[1,-1],[1,1]];
+    for(var d=0;d<dirs.length;d++){
+      var nr=cur.r+dirs[d][0],nc=cur.c+dirs[d][1];
+      if(nr<0||nr>=ROWS||nc<0||nc>=COLS) continue;
+      if(closed[key(nr,nc)]) continue;
+      var cv=map[nr][nc];
+      if(cv===1) continue; // impassable
+      var moveCost = (Math.abs(dirs[d][0])+Math.abs(dirs[d][1])===2)?1.414:1;
+      var cellCost = cv===2?3:cv>=3?(cv-2)*5:1; // unknown=high cost, dilated=proportional
+      var ng=cur.g+moveCost*cellCost;
+      open.push({r:nr,c:nc,g:ng,f:ng+heuristic(nr,nc),parent:cur});
+    }
+  }
+  return []; // no path
+}
+
+var pathCache={};
+function getPath(radius){
+  if(pathCache[radius]) return pathCache[radius];
+  var map=dilateMap(radius);
+  var p=findPath(map);
+  pathCache[radius]=p;
+  return p;
+}
+
+/* === SHARED ELEMENT ANIMATION === */
+function lerp(a,b,p){return a+(b-a)*p;}
+function easeInOut(x){return x<0.5?2*x*x:1-Math.pow(-2*x+2,2)/2;}
+function merge(base,overrides){
+  var r={};for(var k in base)r[k]=base[k];for(var k2 in overrides)r[k2]=overrides[k2];return r;
+}
+
+function getFrameElements(f){
+  var cx=W/2, cy=H/2;
+  var gridW=Math.min(W*0.7, H*1.1);
+  var cellSize=Math.floor(gridW/COLS);
+  gridW=cellSize*COLS;
+  var gridH=cellSize*ROWS;
+  var gx=(W-gridW)/2;
+  var gy=(H-gridH)/2 - 10;
+
+  var radius = f<=0?0:Math.min(f,3);
+  var showPath = f>=4;
+  var map = dilateMap(radius);
+
+  var elems=[
+    {id:'grid', type:'custom', x:gx, y:gy, w:gridW, h:gridH, alpha:1,
+     draw:function(alpha){
+       ctx.save();
+       ctx.globalAlpha=alpha;
+       // draw cells
+       for(var r=0;r<ROWS;r++){
+         for(var c=0;c<COLS;c++){
+           var x=gx+c*cellSize, y2=gy+r*cellSize;
+           var v=map[r][c];
+           if(v===1){
+             // obstacle: deep red gradient
+             var g=ctx.createLinearGradient(x,y2,x+cellSize,y2+cellSize);
+             g.addColorStop(0,'#ff3b30');g.addColorStop(0.5,'#cc2200');g.addColorStop(1,'#991100');
+             ctx.fillStyle=g;
+           } else if(v===2){
+             // unknown: gray
+             var g=ctx.createLinearGradient(x,y2,x+cellSize,y2+cellSize);
+             g.addColorStop(0,'#6b6b6b');g.addColorStop(1,'#4a4a4a');
+             ctx.fillStyle=g;
+           } else if(v>=3){
+             // dilated: orange gradient proportional to penalty
+             var intensity=(v-2);
+             var r1=Math.min(255,Math.floor(255*intensity));
+             var g1=Math.min(140,Math.floor(140*intensity));
+             var b1=Math.min(40,Math.floor(40*intensity*0.3));
+             var gr=ctx.createRadialGradient(x+cellSize/2,y2+cellSize/2,0,x+cellSize/2,y2+cellSize/2,cellSize*0.7);
+             gr.addColorStop(0,'rgba('+r1+','+g1+','+b1+',0.8)');
+             gr.addColorStop(1,'rgba('+Math.floor(r1*0.6)+','+Math.floor(g1*0.4)+',0,0.4)');
+             ctx.fillStyle=gr;
+           } else {
+             // safe: dark green
+             var g=ctx.createLinearGradient(x,y2,x+cellSize,y2+cellSize);
+             g.addColorStop(0,'#1a3a2a');g.addColorStop(1,'#0d2a1a');
+             ctx.fillStyle=g;
+           }
+           ctx.fillRect(x+0.5,y2+0.5,cellSize-1,cellSize-1);
+         }
+       }
+       // grid lines
+       ctx.strokeStyle='rgba(138,136,134,0.12)';
+       ctx.lineWidth=0.5;
+       for(var r=0;r<=ROWS;r++){
+         ctx.beginPath();ctx.moveTo(gx,gy+r*cellSize);ctx.lineTo(gx+gridW,gy+r*cellSize);ctx.stroke();
+       }
+       for(var c2=0;c2<=COLS;c2++){
+         ctx.beginPath();ctx.moveTo(gx+c2*cellSize,gy);ctx.lineTo(gx+c2*cellSize,gy+gridH);ctx.stroke();
+       }
+       // start/end markers
+       ctx.fillStyle='#10b981';
+       ctx.beginPath();ctx.arc(gx+0*cellSize+cellSize/2,gy+1*cellSize+cellSize/2,cellSize*0.3,0,Math.PI*2);ctx.fill();
+       ctx.fillStyle='#00daf3';
+       ctx.beginPath();ctx.arc(gx+(COLS-1)*cellSize+cellSize/2,gy+(ROWS-2)*cellSize+cellSize/2,cellSize*0.3,0,Math.PI*2);ctx.fill();
+       ctx.restore();
+     }
+    },
+    {id:'narr', type:'label', text:t('narr'+f), x:cx, y:gy+gridH+20, color:'#c6c6c6', size:13, align:'center', alpha:1}
+  ];
+
+  // Path overlay
+  if(showPath){
+    var path = getPath(radius);
+    elems.push({id:'path', type:'custom', x:gx, y:gy, w:gridW, h:gridH, alpha:1,
+      draw:function(alpha){
+        if(path.length<2) return;
+        ctx.save();
+        ctx.globalAlpha=alpha;
+        ctx.strokeStyle='#10b981';
+        ctx.lineWidth=Math.max(2,cellSize*0.2);
+        ctx.shadowColor='#10b981';ctx.shadowBlur=12;
+        ctx.beginPath();
+        ctx.moveTo(gx+path[0].c*cellSize+cellSize/2, gy+path[0].r*cellSize+cellSize/2);
+        for(var i=1;i<path.length;i++){
+          ctx.lineTo(gx+path[i].c*cellSize+cellSize/2, gy+path[i].r*cellSize+cellSize/2);
+        }
+        ctx.stroke();
+        ctx.shadowBlur=0;
+        // draw path dots
+        ctx.fillStyle='rgba(16,185,129,0.7)';
+        for(var i=0;i<path.length;i++){
+          ctx.beginPath();
+          ctx.arc(gx+path[i].c*cellSize+cellSize/2, gy+path[i].r*cellSize+cellSize/2, cellSize*0.15, 0, Math.PI*2);
+          ctx.fill();
+        }
+        ctx.restore();
+      }
+    });
+  }
+
+  // Legend
+  var ly = gy + gridH + 42;
+  elems.push({id:'legend', type:'custom', x:gx, y:ly, w:gridW, h:20, alpha:1,
+    draw:function(alpha){
+      ctx.save();ctx.globalAlpha=alpha;
+      var items=[
+        {color:'#cc2200', label:t('narr0').indexOf('obstacle')>=0?'Obstacle':'\u969c\u788d\u7269'},
+        {color:'#6b6b6b', label:LANG==='en'?'Unknown':'\u672a\u77e5'},
+        {color:'#e08840', label:LANG==='en'?'Dilated':'\u818a\u80c0\u533a'},
+        {color:'#1a3a2a', label:LANG==='en'?'Safe':'\u5b89\u5168'},
+        {color:'#10b981', label:LANG==='en'?'Path':'\u8def\u5f84'}
+      ];
+      var spacing=gridW/items.length;
+      for(var i=0;i<items.length;i++){
+        var ix=gx+i*spacing+10;
+        ctx.fillStyle=items[i].color;
+        ctx.fillRect(ix,ly,10,10);
+        ctx.fillStyle='#8a8886';
+        ctx.font='11px "Space Grotesk",sans-serif';
+        ctx.textBaseline='middle';
+        ctx.fillText(items[i].label,ix+14,ly+5);
+      }
+      ctx.restore();
+    }
+  });
+
+  return elems;
+}
+
+function drawElement(el){
+  if(!el||el.alpha<=0.01) return;
+  ctx.save();ctx.globalAlpha=el.alpha;
+  switch(el.type){
+    case 'label':
+      ctx.font=el.size+'px "Noto Sans SC","PingFang SC",sans-serif';
+      ctx.fillStyle=el.color||'#e5e2e1';
+      ctx.textAlign=el.align||'center';
+      ctx.textBaseline='top';
+      ctx.fillText(el.text,el.x,el.y);
+      break;
+    case 'custom':
+      el.draw(el.alpha);
+      break;
+  }
+  ctx.restore();
+}
+
+function drawBg(){
+  var g=ctx.createLinearGradient(0,0,0,H);
+  g.addColorStop(0,'#131313');g.addColorStop(0.5,'#1a1515');g.addColorStop(1,'#131313');
+  ctx.fillStyle=g;ctx.fillRect(0,0,W,H);
+  // subtle grid
+  ctx.strokeStyle='rgba(255,255,255,0.02)';ctx.lineWidth=0.5;
+  for(var x=0;x<W;x+=40){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,H);ctx.stroke();}
+  for(var y=0;y<H;y+=40){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke();}
+}
+
+function drawFrame(f){
+  drawBg();
+  var elems=getFrameElements(f);
+  elems.forEach(function(el){drawElement(el);});
+}
+
+function transitionTo(newFrame){
+  if(newFrame<0) newFrame=0;
+  if(newFrame>=totalFrames) newFrame=totalFrames-1;
+  if(newFrame===currentFrame&&!transitioning){drawFrame(currentFrame);updateHUD(currentFrame);return;}
+  if(transitioning) return;
+
+  var oldElems=getFrameElements(currentFrame);
+  var newElems=getFrameElements(newFrame);
+  var oldMap={};oldElems.forEach(function(e){oldMap[e.id]=e;});
+  var newMap={};newElems.forEach(function(e){newMap[e.id]=e;});
+
+  currentFrame=newFrame;
+  updateHUD(newFrame);
+  transitioning=true;
+
+  var startTime=null;var duration=500;
+  function step(timestamp){
+    if(!startTime) startTime=timestamp;
+    var raw=Math.min((timestamp-startTime)/duration,1);
+    var p=easeInOut(raw);
+    drawBg();
+    oldElems.forEach(function(oe){if(!newMap[oe.id]) drawElement(merge(oe,{alpha:1-p}));});
+    newElems.forEach(function(ne){
+      var oe=oldMap[ne.id];
+      if(oe){
+        if((ne.type==='label')&&oe.text!==ne.text){
+          drawElement(merge(oe,{alpha:1-p}));
+          drawElement(merge(ne,{alpha:p}));
+        } else {
+          drawElement(merge(ne,{alpha:1}));
+        }
+      } else {
+        drawElement(merge(ne,{alpha:p}));
+      }
+    });
+    if(raw<1){requestAnimationFrame(step);}else{transitioning=false;}
+  }
+  requestAnimationFrame(step);
+}
+
+function updateHUD(f){
+  var radius=f<=0?0:Math.min(f,3);
+  var map=dilateMap(radius);
+  var safeCells=0,unknownCells=0;
+  for(var r=0;r<ROWS;r++){for(var c=0;c<COLS;c++){
+    if(map[r][c]===0)safeCells++;
+    if(map[r][c]===2)unknownCells++;
+  }}
+  var phases=['phase0','phase1','phase2','phase3','phase4'];
+  document.getElementById('hudV1').textContent=radius;
+  document.getElementById('hudV2').textContent=safeCells;
+  document.getElementById('hudV3').textContent=unknownCells;
+  document.getElementById('hudV4').textContent=t(phases[f]);
+  document.getElementById('frameInfo').innerHTML=t('frameOf')+' <span>'+(f+1)+' / '+totalFrames+'</span>';
+}
+
+function refreshI18N(){
+  document.getElementById('titleText').textContent=t('title');
+  document.getElementById('btnPrev').textContent=t('prev');
+  document.getElementById('btnPlay').textContent=playing?t('pause'):t('play');
+  document.getElementById('btnNext').textContent=t('next');
+  document.getElementById('guideTitleText').textContent=t('guideTitle');
+  document.getElementById('guideWhat').textContent=t('guideWhat');
+  document.getElementById('guideObsLabel').textContent=t('obsLabel');
+  var obsList=document.getElementById('guideObsList');
+  obsList.innerHTML='';
+  ['obs1','obs2','obs3','obs4'].forEach(function(k){
+    var li=document.createElement('li');li.textContent=t(k);obsList.appendChild(li);
+  });
+  document.getElementById('guideCtrlLabel').textContent=t('ctrlLabel');
+  document.getElementById('guideCtrlText').textContent=t('ctrlText');
+  document.getElementById('guideTakeLabel').textContent=t('takeLabel');
+  document.getElementById('guideTakeText').textContent=t('takeText');
+  document.getElementById('hudL1').textContent=t('hudDilation');
+  document.getElementById('hudL2').textContent=t('hudSafe');
+  document.getElementById('hudL3').textContent=t('hudUnknown');
+  document.getElementById('hudL4').textContent=t('hudPhase');
+  updateHUD(currentFrame);
+  drawFrame(currentFrame);
+}
+
+function resize(){
+  var wrap=document.getElementById('canvasWrap');
+  var rect=wrap.getBoundingClientRect();
+  if(rect.width<1||rect.height<1) return;
+  var dpr=Math.min(window.devicePixelRatio||1,2);
+  W=rect.width;H=rect.height;
+  canvas.width=W*dpr;canvas.height=H*dpr;
+  canvas.style.width=W+'px';canvas.style.height=H+'px';
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+  drawFrame(currentFrame);
+}
+
+// controls
+document.getElementById('btnPrev').addEventListener('click',function(){
+  if(playing) stopPlay();
+  transitionTo(currentFrame-1);
+});
+document.getElementById('btnNext').addEventListener('click',function(){
+  if(playing) stopPlay();
+  transitionTo(currentFrame+1);
+});
+document.getElementById('btnPlay').addEventListener('click',function(){
+  if(playing){stopPlay();}
+  else{startPlay();}
+});
+
+function startPlay(){
+  playing=true;
+  document.getElementById('btnPlay').textContent=t('pause');
+  if(currentFrame>=totalFrames-1) currentFrame=-1;
+  advancePlay();
+}
+function stopPlay(){
+  playing=false;
+  document.getElementById('btnPlay').textContent=t('play');
+  if(playTimer){clearTimeout(playTimer);playTimer=null;}
+}
+function advancePlay(){
+  if(!playing) return;
+  if(currentFrame>=totalFrames-1){stopPlay();return;}
+  transitionTo(currentFrame+1);
+  playTimer=setTimeout(advancePlay,1800);
+}
+
+// guide toggle
+document.getElementById('guideTitle').addEventListener('click',function(){
+  var content=document.getElementById('guideContent');
+  var arrow=document.getElementById('guideArrow');
+  if(content.style.display==='none'){content.style.display='';arrow.classList.remove('collapsed');}
+  else{content.style.display='none';arrow.classList.add('collapsed');}
+});
+
+// lang
+document.getElementById('langBtn').addEventListener('click',function(){
+  LANG=LANG==='en'?'cn':'en';
+  document.getElementById('langBtn').textContent=LANG.toUpperCase();
+  refreshI18N();
+});
+
+// init
+window.addEventListener('resize',resize);
+refreshI18N();
+resize();
+setTimeout(resize,200);
+setTimeout(resize,600);
+document.fonts.ready.then(function(){resize();});
+})();
+</script>
+</body>
+</html>

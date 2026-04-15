@@ -1,0 +1,443 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8"/>
+<title>Cost Weight Tuner</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;700&family=Inter:wght@400;500&family=Noto+Sans+SC:wght@400;700&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0;}
+html,body{width:100%;height:100vh;overflow:hidden;background:#131313;color:#e5e2e1;font-family:'Noto Sans SC','Inter',sans-serif;}
+.wrapper{display:flex;flex-direction:column;height:100vh;}
+.header{display:flex;justify-content:space-between;align-items:center;padding:6px 16px;background:rgba(28,27,27,0.92);border-bottom:1px solid rgba(138,136,134,0.15);}
+.title{font-family:'Space Grotesk',sans-serif;font-size:14px;font-weight:700;color:#ffb59c;letter-spacing:1px;text-transform:uppercase;}
+.subtitle{font-size:11px;color:#8a8886;margin-left:10px;}
+.lang-btn{position:fixed;top:8px;left:8px;z-index:100;font-family:'Space Grotesk',sans-serif;font-size:11px;font-weight:700;padding:4px 10px;cursor:pointer;border:1px solid rgba(255,255,255,0.08);background:rgba(20,20,35,0.85);backdrop-filter:blur(12px);color:#ffb59c;letter-spacing:1px;}
+.main-area{flex:1;min-height:0;display:flex;overflow:hidden;}
+.grid-container{flex:1;position:relative;display:flex;align-items:center;justify-content:center;padding:8px;}
+canvas{display:block;}
+.side-panel{width:240px;display:flex;flex-direction:column;padding:10px;gap:6px;background:rgba(28,27,27,0.92);border-left:1px solid rgba(138,136,134,0.15);overflow-y:auto;}
+.panel-title{font-family:'Space Grotesk',sans-serif;font-size:12px;color:#ffb59c;letter-spacing:1px;text-transform:uppercase;margin-bottom:4px;}
+.slider-group{margin-bottom:8px;}
+.slider-label{display:flex;justify-content:space-between;font-size:11px;color:#8a8886;margin-bottom:3px;}
+.slider-label .val{font-family:'Space Grotesk',sans-serif;font-weight:700;color:#e5e2e1;}
+input[type=range]{width:100%;height:4px;-webkit-appearance:none;appearance:none;background:linear-gradient(90deg,#353534,#ff7f50);outline:none;cursor:pointer;}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:14px;height:14px;background:#ffb59c;border:2px solid #131313;cursor:pointer;}
+.challenge-box{padding:8px;background:rgba(0,218,243,0.06);border:1px solid rgba(0,218,243,0.15);margin-top:4px;}
+.challenge-title{font-family:'Space Grotesk',sans-serif;font-size:11px;color:#00daf3;letter-spacing:0.5px;text-transform:uppercase;margin-bottom:4px;}
+.challenge-desc{font-size:11px;color:#c6c6c6;line-height:1.4;margin-bottom:4px;}
+.challenge-status{font-size:11px;font-family:'Space Grotesk',sans-serif;font-weight:700;}
+.challenge-status.pass{color:#10b981;}
+.challenge-status.fail{color:#8a8886;}
+.stat-row{display:flex;justify-content:space-between;align-items:center;padding:3px 0;font-size:12px;}
+.stat-label{color:#8a8886;font-size:11px;}
+.stat-val{font-family:'Space Grotesk',sans-serif;font-weight:700;color:#00daf3;}
+.hud{display:flex;justify-content:space-around;align-items:center;padding:6px 12px;background:rgba(0,0,0,0.55);height:44px;font-size:11px;color:#8a8886;}
+.hud .item{display:flex;flex-direction:column;align-items:center;}
+.hud .label{font-size:9px;text-transform:uppercase;letter-spacing:0.5px;opacity:0.7;font-family:'Space Grotesk',sans-serif;}
+.hud .value{font-size:13px;color:#e5e2e1;font-weight:500;margin-top:1px;font-family:'Space Grotesk',sans-serif;}
+.guide-panel{position:fixed;top:8px;right:252px;width:220px;max-height:36vh;overflow-y:auto;background:rgba(20,20,35,0.85);backdrop-filter:blur(12px);border:1px solid rgba(255,255,255,0.08);padding:10px;z-index:100;font-family:'Noto Sans SC',sans-serif;font-size:12px;color:rgba(255,255,255,0.85);}
+.guide-panel h3{font-family:'Space Grotesk',sans-serif;font-size:13px;margin-bottom:6px;color:#ffb59c;cursor:pointer;display:flex;justify-content:space-between;align-items:center;}
+.guide-panel ul{padding-left:14px;line-height:1.5;}
+.guide-toggle{font-size:10px;color:#8a8886;}
+.victory-overlay{position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.7);display:none;align-items:center;justify-content:center;z-index:200;}
+.victory-overlay.show{display:flex;}
+.victory-box{background:rgba(20,20,35,0.95);backdrop-filter:blur(16px);border:1px solid rgba(0,218,243,0.3);padding:24px 32px;max-width:400px;text-align:center;}
+.victory-title{font-family:'Space Grotesk',sans-serif;font-size:18px;color:#00daf3;font-weight:700;margin-bottom:8px;text-transform:uppercase;letter-spacing:2px;}
+.victory-text{font-size:13px;color:#c6c6c6;line-height:1.6;margin-bottom:12px;}
+.victory-btn{padding:8px 20px;font-family:'Space Grotesk',sans-serif;font-size:12px;font-weight:700;cursor:pointer;border:1px solid #00daf3;background:rgba(0,218,243,0.15);color:#00daf3;text-transform:uppercase;letter-spacing:1px;}
+.victory-btn:hover{background:rgba(0,218,243,0.3);}
+</style>
+</head>
+<body>
+<button class="lang-btn" id="langBtn">CN</button>
+<div class="guide-panel" id="guidePanel">
+  <h3 id="guideToggle"><span id="guideTitle"></span><span class="guide-toggle" id="guideArrow"></span></h3>
+  <div class="guide-content" id="guideContent">
+    <p id="guideGoal"></p>
+    <ul id="guideSteps"></ul>
+    <p id="guideTips" style="margin-top:4px;color:#00daf3;"></p>
+  </div>
+</div>
+<div class="victory-overlay" id="victoryOverlay">
+  <div class="victory-box">
+    <div class="victory-title" id="victoryTitle"></div>
+    <div class="victory-text" id="victoryText"></div>
+    <button class="victory-btn" id="victoryBtn"></button>
+  </div>
+</div>
+<div class="wrapper">
+  <div class="header">
+    <div><span class="title" id="headerTitle"></span><span class="subtitle">P-MARS-01-M24</span></div>
+  </div>
+  <div class="main-area">
+    <div class="grid-container" id="gridContainer"><canvas id="c"></canvas></div>
+    <div class="side-panel">
+      <div class="panel-title" id="sliderTitle"></div>
+      <div class="slider-group">
+        <div class="slider-label"><span id="lblRock"></span><span class="val" id="valRock">5</span></div>
+        <input type="range" id="sliderRock" min="1" max="50" value="5">
+      </div>
+      <div class="slider-group">
+        <div class="slider-label"><span id="lblSand"></span><span class="val" id="valSand">20</span></div>
+        <input type="range" id="sliderSand" min="1" max="50" value="20">
+      </div>
+      <div class="slider-group">
+        <div class="slider-label"><span id="lblSlope"></span><span class="val" id="valSlope">10</span></div>
+        <input type="range" id="sliderSlope" min="1" max="50" value="10">
+      </div>
+      <div style="border-top:1px solid rgba(138,136,134,0.15);padding-top:6px;margin-top:2px;">
+        <div class="stat-row"><span class="stat-label" id="lblPathCost"></span><span class="stat-val" id="valPathCost">--</span></div>
+        <div class="stat-row"><span class="stat-label" id="lblPathLen"></span><span class="stat-val" id="valPathLen">--</span></div>
+      </div>
+      <div style="margin-top:8px;">
+        <div class="panel-title" id="challengeTitle"></div>
+        <div class="challenge-box" id="ch1Box">
+          <div class="challenge-title" id="ch1Title"></div>
+          <div class="challenge-desc" id="ch1Desc"></div>
+          <div class="challenge-status fail" id="ch1Status"></div>
+        </div>
+        <div class="challenge-box" id="ch2Box" style="margin-top:4px;">
+          <div class="challenge-title" id="ch2Title"></div>
+          <div class="challenge-desc" id="ch2Desc"></div>
+          <div class="challenge-status fail" id="ch2Status"></div>
+        </div>
+        <div class="challenge-box" id="ch3Box" style="margin-top:4px;">
+          <div class="challenge-title" id="ch3Title"></div>
+          <div class="challenge-desc" id="ch3Desc"></div>
+          <div class="challenge-status fail" id="ch3Status"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="hud">
+    <div class="item"><div class="label" id="hudL1"></div><div class="value" id="hudV1">--</div></div>
+    <div class="item"><div class="label" id="hudL2"></div><div class="value" id="hudV2">--</div></div>
+    <div class="item"><div class="label" id="hudL3"></div><div class="value" id="hudV3">0 / 3</div></div>
+  </div>
+</div>
+<script>
+(function(){
+var LANG='cn';
+var I18N={
+  title:{en:'COST TUNER',cn:'\u4EE3\u4EF7\u8C03\u8282\u5668'},
+  sliderTitle:{en:'COST WEIGHTS',cn:'\u4EE3\u4EF7\u6743\u91CD'},
+  lblRock:{en:'ROCK COST',cn:'\u788E\u77F3\u5761\u4EE3\u4EF7'},
+  lblSand:{en:'SAND COST',cn:'\u6C99\u4E18\u4EE3\u4EF7'},
+  lblSlope:{en:'SLOPE COST',cn:'\u659C\u5761\u4EE3\u4EF7'},
+  lblPathCost:{en:'PATH COST',cn:'\u8DEF\u5F84\u4EE3\u4EF7'},
+  lblPathLen:{en:'PATH STEPS',cn:'\u8DEF\u5F84\u6B65\u6570'},
+  challengeTitle:{en:'CHALLENGES',cn:'\u6311\u6218\u4EFB\u52A1'},
+  ch1Title:{en:'TASK 1: MINIMUM COST',cn:'\u4EFB\u52A1 1: \u6700\u4F4E\u4EE3\u4EF7'},
+  ch1Desc:{en:'Find settings where path cost < 25',cn:'\u627E\u5230\u8DEF\u5F84\u4EE3\u4EF7 < 25 \u7684\u8BBE\u7F6E'},
+  ch2Title:{en:'TASK 2: SHORTEST PATH',cn:'\u4EFB\u52A1 2: \u6700\u77ED\u8DEF\u5F84'},
+  ch2Desc:{en:'Find settings where path has \u2264 10 steps',cn:'\u627E\u5230\u8DEF\u5F84\u6B65\u6570 \u2264 10 \u7684\u8BBE\u7F6E'},
+  ch3Title:{en:'TASK 3: MAX DETOUR',cn:'\u4EFB\u52A1 3: \u6700\u5927\u7ED5\u884C'},
+  ch3Desc:{en:'Find settings where path has \u2265 16 steps',cn:'\u627E\u5230\u8DEF\u5F84\u6B65\u6570 \u2265 16 \u7684\u8BBE\u7F6E'},
+  chPass:{en:'PASSED',cn:'\u5DF2\u5B8C\u6210'},
+  chFail:{en:'PENDING',cn:'\u672A\u5B8C\u6210'},
+  hudPathCost:{en:'COST',cn:'\u4EE3\u4EF7'},
+  hudPathLen:{en:'STEPS',cn:'\u6B65\u6570'},
+  hudProgress:{en:'PROGRESS',cn:'\u8FDB\u5EA6'},
+  guideTitle:{en:'GUIDE',cn:'\u64CD\u4F5C\u6307\u5357'},
+  guideGoal:{en:'Adjust cost weights to complete 3 path challenges.',cn:'\u8C03\u8282\u4EE3\u4EF7\u6743\u91CD\uFF0C\u5B8C\u6210 3 \u4E2A\u8DEF\u5F84\u6311\u6218\u4EFB\u52A1\u3002'},
+  guideS1:{en:'Observe the default path',cn:'\u89C2\u5BDF\u9ED8\u8BA4\u8DEF\u5F84'},
+  guideS2:{en:'Drag sliders to change costs',cn:'\u62D6\u52A8\u6ED1\u5757\u6539\u53D8\u4EE3\u4EF7'},
+  guideS3:{en:'Watch the path update in real time',cn:'\u89C2\u5BDF\u8DEF\u5F84\u5B9E\u65F6\u53D8\u5316'},
+  guideS4:{en:'Complete all 3 challenges',cn:'\u5B8C\u6210\u5168\u90E8 3 \u4E2A\u6311\u6218'},
+  guideTips:{en:'Try extreme values to see dramatic route changes!',cn:'\u8BD5\u8BD5\u6781\u7AEF\u503C\uFF0C\u89C2\u5BDF\u8DEF\u5F84\u5982\u4F55\u5267\u70C8\u53D8\u5316\uFF01'},
+  guideArrowOpen:{en:'[hide]',cn:'[\u6536\u8D77]'},
+  guideArrowClosed:{en:'[show]',cn:'[\u5C55\u5F00]'},
+  victoryTitle:{en:'ALL CHALLENGES COMPLETE!',cn:'\u5168\u90E8\u6311\u6218\u5B8C\u6210\uFF01'},
+  victoryText:{en:'You now understand how cost weights control path shape. The same map produces completely different paths depending on how you value safety vs efficiency.',cn:'\u4F60\u5DF2\u7ECF\u7406\u89E3\u4E86\u4EE3\u4EF7\u6743\u91CD\u5982\u4F55\u63A7\u5236\u8DEF\u5F84\u5F62\u6001\u3002\u540C\u4E00\u5F20\u5730\u56FE\uFF0C\u4EC5\u4EC5\u6539\u53D8\u4EE3\u4EF7\u8BBE\u7F6E\u5C31\u4F1A\u751F\u6210\u5B8C\u5168\u4E0D\u540C\u7684\u8DEF\u5F84\u3002'},
+  victoryBtn:{en:'CLOSE',cn:'\u5173\u95ED'},
+  legendFlat:{en:'Flat (1)',cn:'\u5E73\u5766 (1)'},
+};
+function t(k){return(I18N[k]&&I18N[k][LANG])||(I18N[k]&&I18N[k]['en'])||k;}
+
+var canvas=document.getElementById('c');
+var ctx2d=canvas.getContext('2d');
+var W=0,H=0;
+var DPR=Math.min(window.devicePixelRatio||1,2);
+var guideOpen=true;
+
+// 8x8 grid
+var ROWS=8,COLS=8;
+// 0=flat, 1=rock, 2=sand, 3=slope, 4=wall
+var GRID=[
+  [0,0,1,1,0,0,0,0],
+  [0,0,1,2,2,0,0,0],
+  [0,0,0,2,2,2,0,0],
+  [0,1,0,4,2,0,0,0],
+  [0,1,0,4,0,0,3,0],
+  [0,0,0,0,0,3,3,0],
+  [0,0,0,0,3,0,0,0],
+  [0,0,0,0,0,0,0,0],
+];
+var TCOLORS_BASE=['#2d6a4f','#b08968','#c4762b','#7c3aed','#6b1523'];
+var START={r:7,c:0};
+var GOAL={r:0,c:7};
+
+var rockCost=5,sandCost=20,slopeCost=10;
+var currentPath=[];
+var currentCost=0;
+var ch1Done=false,ch2Done=false,ch3Done=false;
+var allDone=false;
+
+function getCosts(){return [1,rockCost,sandCost,slopeCost,Infinity];}
+
+function cellKey(r,c){return r*COLS+c;}
+function heuristic(a,b){return Math.abs(a.r-b.r)+Math.abs(a.c-b.c);}
+
+function runAStar(costs){
+  var open=[];
+  var closed={};
+  var gScore={};
+  var parent={};
+  var sk=cellKey(START.r,START.c);
+  gScore[sk]=0;
+  open.push({r:START.r,c:START.c,f:heuristic(START,GOAL)});
+  var dirs=[[-1,0],[1,0],[0,-1],[0,1],[-1,-1],[-1,1],[1,-1],[1,1]];
+  while(open.length>0){
+    open.sort(function(a,b){return a.f-b.f;});
+    var cur=open.shift();
+    var ck=cellKey(cur.r,cur.c);
+    if(closed[ck]) continue;
+    closed[ck]=true;
+    if(cur.r===GOAL.r&&cur.c===GOAL.c) break;
+    for(var d=0;d<dirs.length;d++){
+      var nr=cur.r+dirs[d][0];
+      var nc=cur.c+dirs[d][1];
+      if(nr<0||nr>=ROWS||nc<0||nc>=COLS) continue;
+      var nk=cellKey(nr,nc);
+      if(closed[nk]) continue;
+      var cost=costs[GRID[nr][nc]];
+      if(cost===Infinity) continue;
+      var diag=(dirs[d][0]!==0&&dirs[d][1]!==0)?1.414:1;
+      var ng=gScore[ck]+cost*diag;
+      if(gScore[nk]===undefined||ng<gScore[nk]){
+        gScore[nk]=ng;
+        parent[nk]=ck;
+        open.push({r:nr,c:nc,f:ng+heuristic({r:nr,c:nc},GOAL)});
+      }
+    }
+  }
+  var path=[];
+  var pk=cellKey(GOAL.r,GOAL.c);
+  while(pk!==undefined){
+    path.unshift({r:Math.floor(pk/COLS),c:pk%COLS});
+    pk=parent[pk];
+  }
+  return {path:path,cost:gScore[cellKey(GOAL.r,GOAL.c)]||0};
+}
+
+function recalc(){
+  var costs=getCosts();
+  var result=runAStar(costs);
+  currentPath=result.path;
+  currentCost=result.cost;
+  checkChallenges();
+  updateUI();
+  draw();
+}
+
+function checkChallenges(){
+  if(currentCost<25) ch1Done=true;
+  if(currentPath.length-1<=10) ch2Done=true;
+  if(currentPath.length-1>=16) ch3Done=true;
+  if(ch1Done&&ch2Done&&ch3Done&&!allDone){
+    allDone=true;
+    setTimeout(function(){
+      document.getElementById('victoryOverlay').classList.add('show');
+    },300);
+  }
+}
+
+function updateUI(){
+  document.getElementById('valPathCost').textContent=Math.round(currentCost);
+  document.getElementById('valPathLen').textContent=currentPath.length>0?currentPath.length-1:'--';
+  document.getElementById('hudV1').textContent=Math.round(currentCost);
+  document.getElementById('hudV2').textContent=currentPath.length>0?currentPath.length-1:'--';
+  var done=(ch1Done?1:0)+(ch2Done?1:0)+(ch3Done?1:0);
+  document.getElementById('hudV3').textContent=done+' / 3';
+  document.getElementById('ch1Status').textContent=ch1Done?t('chPass'):t('chFail');
+  document.getElementById('ch1Status').className='challenge-status '+(ch1Done?'pass':'fail');
+  document.getElementById('ch2Status').textContent=ch2Done?t('chPass'):t('chFail');
+  document.getElementById('ch2Status').className='challenge-status '+(ch2Done?'pass':'fail');
+  document.getElementById('ch3Status').textContent=ch3Done?t('chPass'):t('chFail');
+  document.getElementById('ch3Status').className='challenge-status '+(ch3Done?'pass':'fail');
+}
+
+// --- Drawing ---
+function getLayout(){
+  var container=document.getElementById('gridContainer');
+  var rect=container.getBoundingClientRect();
+  var cw=rect.width-16;
+  var ch=rect.height-16;
+  var cellSize=Math.floor(Math.min(cw/COLS,ch/ROWS));
+  if(cellSize<30) cellSize=30;
+  var gw=cellSize*COLS;
+  var gh=cellSize*ROWS;
+  var gx=(rect.width-gw)/2;
+  var gy=(rect.height-gh)/2;
+  return {gx:gx,gy:gy,cellSize:cellSize,gw:gw,gh:gh};
+}
+
+function shadeColor(color,amt){
+  var num=parseInt(color.replace('#',''),16);
+  var r2=Math.max(0,Math.min(255,(num>>16)+amt));
+  var g2=Math.max(0,Math.min(255,((num>>8)&0xFF)+amt));
+  var b2=Math.max(0,Math.min(255,(num&0xFF)+amt));
+  return '#'+((1<<24)+(r2<<16)+(g2<<8)+b2).toString(16).slice(1);
+}
+
+function resize(){
+  var container=document.getElementById('gridContainer');
+  var rect=container.getBoundingClientRect();
+  if(rect.width<1||rect.height<1) return;
+  W=rect.width;H=rect.height;
+  canvas.width=W*DPR;canvas.height=H*DPR;
+  canvas.style.width=W+'px';canvas.style.height=H+'px';
+  ctx2d.setTransform(DPR,0,0,DPR,0,0);
+  draw();
+}
+
+function draw(){
+  // bg
+  var bg=ctx2d.createLinearGradient(0,0,0,H);
+  bg.addColorStop(0,'#131313');bg.addColorStop(1,'#1a1035');
+  ctx2d.fillStyle=bg;ctx2d.fillRect(0,0,W,H);
+  // faint grid
+  ctx2d.strokeStyle='rgba(255,255,255,0.03)';ctx2d.lineWidth=0.5;
+  for(var i=0;i<W;i+=20){ctx2d.beginPath();ctx2d.moveTo(i,0);ctx2d.lineTo(i,H);ctx2d.stroke();}
+  for(var j=0;j<H;j+=20){ctx2d.beginPath();ctx2d.moveTo(0,j);ctx2d.lineTo(W,j);ctx2d.stroke();}
+
+  var L=getLayout();
+  var cs=L.cellSize;
+  var costs=getCosts();
+  // cells
+  for(var r=0;r<ROWS;r++){
+    for(var c=0;c<COLS;c++){
+      var x=L.gx+c*cs;
+      var y=L.gy+r*cs;
+      var t2=GRID[r][c];
+      var col=TCOLORS_BASE[t2];
+      var g2=ctx2d.createLinearGradient(x,y,x+cs,y+cs);
+      g2.addColorStop(0,col);g2.addColorStop(1,shadeColor(col,-20));
+      ctx2d.fillStyle=g2;ctx2d.fillRect(x,y,cs,cs);
+      // cost label
+      var costVal=costs[t2];
+      var costStr=costVal===Infinity?'\u221E':String(costVal);
+      ctx2d.fillStyle='rgba(255,255,255,0.35)';
+      ctx2d.font='bold 11px "Space Grotesk"';ctx2d.textAlign='center';ctx2d.textBaseline='middle';
+      ctx2d.fillText(costStr,x+cs/2,y+cs/2);
+      // outline
+      ctx2d.strokeStyle='rgba(255,255,255,0.1)';ctx2d.lineWidth=0.5;ctx2d.strokeRect(x,y,cs,cs);
+    }
+  }
+  // path
+  if(currentPath.length>1){
+    ctx2d.beginPath();
+    ctx2d.moveTo(L.gx+currentPath[0].c*cs+cs/2,L.gy+currentPath[0].r*cs+cs/2);
+    for(var pi=1;pi<currentPath.length;pi++){
+      ctx2d.lineTo(L.gx+currentPath[pi].c*cs+cs/2,L.gy+currentPath[pi].r*cs+cs/2);
+    }
+    ctx2d.strokeStyle='#00daf3';ctx2d.lineWidth=3;
+    ctx2d.shadowColor='#00daf3';ctx2d.shadowBlur=12;ctx2d.stroke();ctx2d.shadowBlur=0;
+    for(var pi2=0;pi2<currentPath.length;pi2++){
+      ctx2d.beginPath();
+      ctx2d.arc(L.gx+currentPath[pi2].c*cs+cs/2,L.gy+currentPath[pi2].r*cs+cs/2,3,0,Math.PI*2);
+      ctx2d.fillStyle='#00daf3';ctx2d.fill();
+    }
+  }
+  // markers
+  drawMarker(L.gx+START.c*cs+cs/2,L.gy+START.r*cs+cs/2,cs*0.3,'#10b981','S');
+  drawMarker(L.gx+GOAL.c*cs+cs/2,L.gy+GOAL.r*cs+cs/2,cs*0.3,'#ef4444','G');
+}
+
+function drawMarker(x,y,r,color,label){
+  ctx2d.beginPath();ctx2d.arc(x,y,r,0,Math.PI*2);
+  var g=ctx2d.createRadialGradient(x,y,0,x,y,r);
+  g.addColorStop(0,color);g.addColorStop(1,shadeColor(color,-30));
+  ctx2d.fillStyle=g;ctx2d.fill();
+  ctx2d.shadowColor=color;ctx2d.shadowBlur=10;ctx2d.fill();ctx2d.shadowBlur=0;
+  ctx2d.fillStyle='#fff';ctx2d.font='bold '+Math.floor(r)+'px "Space Grotesk"';
+  ctx2d.textAlign='center';ctx2d.textBaseline='middle';ctx2d.fillText(label,x,y);
+}
+
+function refreshI18N(){
+  document.getElementById('headerTitle').textContent=t('title');
+  document.getElementById('sliderTitle').textContent=t('sliderTitle');
+  document.getElementById('lblRock').textContent=t('lblRock');
+  document.getElementById('lblSand').textContent=t('lblSand');
+  document.getElementById('lblSlope').textContent=t('lblSlope');
+  document.getElementById('lblPathCost').textContent=t('lblPathCost');
+  document.getElementById('lblPathLen').textContent=t('lblPathLen');
+  document.getElementById('challengeTitle').textContent=t('challengeTitle');
+  document.getElementById('ch1Title').textContent=t('ch1Title');
+  document.getElementById('ch1Desc').textContent=t('ch1Desc');
+  document.getElementById('ch2Title').textContent=t('ch2Title');
+  document.getElementById('ch2Desc').textContent=t('ch2Desc');
+  document.getElementById('ch3Title').textContent=t('ch3Title');
+  document.getElementById('ch3Desc').textContent=t('ch3Desc');
+  document.getElementById('hudL1').textContent=t('hudPathCost');
+  document.getElementById('hudL2').textContent=t('hudPathLen');
+  document.getElementById('hudL3').textContent=t('hudProgress');
+  document.getElementById('guideTitle').textContent=t('guideTitle');
+  document.getElementById('guideArrow').textContent=guideOpen?t('guideArrowOpen'):t('guideArrowClosed');
+  document.getElementById('guideGoal').textContent=t('guideGoal');
+  var sl=document.getElementById('guideSteps');
+  sl.innerHTML='<li>'+t('guideS1')+'</li><li>'+t('guideS2')+'</li><li>'+t('guideS3')+'</li><li>'+t('guideS4')+'</li>';
+  document.getElementById('guideTips').textContent=t('guideTips');
+  document.getElementById('victoryTitle').textContent=t('victoryTitle');
+  document.getElementById('victoryText').textContent=t('victoryText');
+  document.getElementById('victoryBtn').textContent=t('victoryBtn');
+  updateUI();
+  draw();
+}
+
+// --- Events ---
+document.getElementById('sliderRock').addEventListener('input',function(){
+  rockCost=parseInt(this.value);
+  document.getElementById('valRock').textContent=rockCost;
+  recalc();
+});
+document.getElementById('sliderSand').addEventListener('input',function(){
+  sandCost=parseInt(this.value);
+  document.getElementById('valSand').textContent=sandCost;
+  recalc();
+});
+document.getElementById('sliderSlope').addEventListener('input',function(){
+  slopeCost=parseInt(this.value);
+  document.getElementById('valSlope').textContent=slopeCost;
+  recalc();
+});
+
+document.getElementById('langBtn').addEventListener('click',function(){
+  LANG=LANG==='en'?'cn':'en';
+  document.getElementById('langBtn').textContent=LANG.toUpperCase();
+  refreshI18N();
+});
+
+document.getElementById('guideToggle').addEventListener('click',function(){
+  guideOpen=!guideOpen;
+  document.getElementById('guideContent').style.display=guideOpen?'block':'none';
+  document.getElementById('guideArrow').textContent=guideOpen?t('guideArrowOpen'):t('guideArrowClosed');
+});
+
+document.getElementById('victoryBtn').addEventListener('click',function(){
+  document.getElementById('victoryOverlay').classList.remove('show');
+});
+
+window.addEventListener('resize',resize);
+
+// init
+recalc();
+resize();
+refreshI18N();
+setTimeout(resize,200);
+setTimeout(resize,600);
+document.fonts.ready.then(function(){resize();});
+})();
+</script>
+</body>
+</html>

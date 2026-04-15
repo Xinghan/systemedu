@@ -1,0 +1,522 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=Inter:wght@400;500&family=Noto+Sans+SC:wght@400;700&display=swap" rel="stylesheet">
+<title>Path Drawer</title>
+<style>
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box;}
+html,body{width:100%;height:100vh;overflow:hidden;}
+body{background:#05070a;color:#e2e2e9;font-family:'Inter','Noto Sans SC',sans-serif;display:flex;flex-direction:column;}
+.wrapper{display:flex;flex-direction:column;height:100vh;overflow:hidden;}
+.header{display:flex;align-items:center;justify-content:space-between;padding:10px 16px 6px;background:#070a14;}
+.header h1{font-family:'Space Grotesk',sans-serif;font-size:clamp(15px,2vw,18px);font-weight:700;color:#ffb000;letter-spacing:-0.02em;}
+.header .sub{font-size:11px;color:#8e90a6;letter-spacing:0.1em;text-transform:uppercase;}
+.stage-wrap{flex:1;min-height:0;position:relative;display:flex;flex-direction:column;gap:6px;padding:6px 10px;}
+.challenge-bar{display:flex;gap:8px;align-items:center;justify-content:center;font-family:'Space Grotesk',sans-serif;font-size:11px;letter-spacing:0.1em;padding:6px 0;background:rgba(17,20,37,0.6);flex-wrap:wrap;}
+.challenge-bar .chip{padding:4px 12px;background:#171a1f;color:#8e90a6;cursor:pointer;border:1px solid transparent;transition:all .15s;}
+.challenge-bar .chip.active{background:rgba(255,176,0,0.18);color:#ffb000;border-color:#ffb000;}
+.canvas-col{flex:1;min-height:0;min-width:0;display:flex;flex-direction:column;position:relative;background:linear-gradient(145deg,rgba(17,20,37,.9),rgba(3,4,8,.95));box-shadow:inset 0 0 0 1px rgba(142,144,166,0.2);overflow:hidden;}
+canvas{width:100%;height:100%;display:block;touch-action:none;cursor:crosshair;}
+.hud{height:52px;display:grid;grid-template-columns:repeat(4,1fr);align-items:center;gap:4px;background:rgba(0,0,0,0.55);padding:4px 12px;}
+.hud-item{text-align:center;}
+.hud-label{font-family:'Space Grotesk',sans-serif;font-size:9px;letter-spacing:0.15em;text-transform:uppercase;color:#8e90a6;}
+.hud-val{font-family:'Space Grotesk',sans-serif;font-size:14px;font-weight:700;color:#ffb000;}
+.controls{display:flex;gap:8px;padding:6px 12px;justify-content:center;flex-wrap:wrap;background:#070a14;}
+.ctrl-btn{font-family:'Space Grotesk',sans-serif;font-size:11px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;padding:7px 14px;border:none;cursor:pointer;color:#05070a;background:linear-gradient(135deg,#ffb000,#ff5f1f);transition:transform 0.1s;}
+.ctrl-btn:hover{transform:scale(1.04);}
+.ctrl-btn:active{transform:scale(0.96);}
+.ctrl-btn.secondary{background:#171a1f;color:#8e90a6;}
+.ctrl-btn.secondary:hover{color:#ffb000;}
+.ctrl-btn.blue{background:linear-gradient(135deg,#00daf3,#0fa3bd);color:#05070a;}
+.panel{position:absolute;background:rgba(17,20,37,0.92);backdrop-filter:blur(10px);padding:10px 14px;border:1px solid rgba(255,176,0,0.3);font-size:12px;color:#e2e2e9;z-index:8;pointer-events:none;}
+.panel.tl{top:8px;left:8px;max-width:55%;line-height:1.6;}
+.panel.br{bottom:8px;right:8px;max-width:40%;text-align:right;line-height:1.6;}
+.panel b{color:#ffb000;}
+.toast{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);background:rgba(17,20,37,0.95);color:#e2e2e9;padding:14px 22px;font-size:13px;border:2px solid #ffb000;z-index:20;display:none;text-align:center;line-height:1.6;min-width:240px;max-width:88%;}
+.toast.show{display:block;}
+.toast .big{font-size:17px;color:#ffb000;display:block;margin-bottom:6px;font-weight:700;}
+.toast .pass{color:#50ffb0;}
+.toast .fail{color:#ff716c;}
+.lang-btn{position:absolute;top:8px;right:8px;z-index:50;font-family:'Space Grotesk',sans-serif;font-size:11px;padding:4px 10px;cursor:pointer;border:none;background:rgba(17,20,37,0.85);color:#ffb59c;letter-spacing:1px;}
+</style>
+</head>
+<body>
+<div class="wrapper">
+  <header class="header">
+    <div><h1 id="title"></h1><div class="sub" id="subtitle"></div></div>
+    <div id="roundInfo" style="font-family:'Space Grotesk';font-size:11px;color:#8e90a6;"></div>
+  </header>
+  <div class="challenge-bar">
+    <span id="challengePrompt" style="color:#e2e2e9;font-size:12px;letter-spacing:normal;margin-right:6px;"></span>
+    <div class="chip active" id="chip1"></div>
+    <div class="chip" id="chip2"></div>
+    <div class="chip" id="chip3"></div>
+  </div>
+  <div class="stage-wrap">
+    <div class="canvas-col">
+      <button class="lang-btn" id="langBtn">EN</button>
+      <canvas id="c"></canvas>
+      <div class="panel tl" id="panelTL"></div>
+      <div class="panel br" id="panelBR"></div>
+      <div class="toast" id="toast"><span class="big" id="toastBig"></span><span id="toastBody"></span></div>
+    </div>
+  </div>
+  <div class="hud">
+    <div class="hud-item"><div class="hud-label" id="hudL1"></div><div class="hud-val" id="hudV1"></div></div>
+    <div class="hud-item"><div class="hud-label" id="hudL2"></div><div class="hud-val" id="hudV2"></div></div>
+    <div class="hud-item"><div class="hud-label" id="hudL3"></div><div class="hud-val" id="hudV3"></div></div>
+    <div class="hud-item"><div class="hud-label" id="hudL4"></div><div class="hud-val" id="hudV4"></div></div>
+  </div>
+  <div class="controls">
+    <button class="ctrl-btn" id="btnCheck"></button>
+    <button class="ctrl-btn blue" id="btnNext"></button>
+    <button class="ctrl-btn secondary" id="btnClear"></button>
+  </div>
+</div>
+<script>
+'use strict';
+
+var I18N = {
+  en: {
+    title:'Path Drawer',
+    subtitle:'Draw from A to B -- match the target shape',
+    chip1:'STRAIGHT',
+    chip2:'ARC',
+    chip3:'LOOP',
+    challengePrompt:'Target shape:',
+    hudL1:'SHAPE',
+    hudL2:'LEN',
+    hudL3:'A\u2192B',
+    hudL4:'ARROW',
+    btnCheck:'CHECK',
+    btnNext:'NEXT',
+    btnClear:'CLEAR',
+    panelTL:'<b>Draw</b> from A to B with your finger or mouse.<br>You must (1) start at A, (2) end at B, (3) match the target <b>shape</b>.',
+    panelBR:'Score updates as you draw.',
+    roundInfo:'ROUND 1 / 3',
+    passMsg:'PASS',
+    failMsg:'TRY AGAIN',
+    pass_straight:'Great -- that is a straight line!',
+    pass_arc:'Great -- that is an arc!',
+    pass_loop:'Great -- that is a loop!',
+    fail_notStartA:'Your line does not start at A.',
+    fail_notEndB:'Your line does not end at B.',
+    fail_shape:'Shape does not match. Try again.',
+    startHint:'Start',
+    endHint:'End',
+    allDoneTitle:'ALL DONE!',
+    allDoneBody:'You matched all three path shapes. Now try drawing your own paths on paper!',
+  },
+  cn: {
+    title:'\u8def\u5f84\u7ed8\u56fe\u5458',
+    subtitle:'\u4ece A \u753b\u5230 B\uff0c\u5339\u914d\u76ee\u6807\u5f62\u72b6',
+    chip1:'\u76f4\u7ebf',
+    chip2:'\u5f27\u7ebf',
+    chip3:'\u7ed5\u5708',
+    challengePrompt:'\u76ee\u6807\u5f62\u72b6\uff1a',
+    hudL1:'\u5f62\u72b6',
+    hudL2:'\u957f\u5ea6',
+    hudL3:'A\u2192B',
+    hudL4:'\u7bad\u5934',
+    btnCheck:'\u68c0\u67e5',
+    btnNext:'\u4e0b\u4e00\u5173',
+    btnClear:'\u91cd\u753b',
+    panelTL:'\u7528\u624b\u6216\u9f20\u6807\u4ece <b>A</b> \u753b\u5230 <b>B</b>\u3002<br>\u8981\u8fc7\u5173\u5fc5\u987b\uff1a<br>\uff081\uff09\u4ece A \u5f00\u59cb<br>\uff082\uff09\u5728 B \u7ed3\u675f<br>\uff083\uff09\u5339\u914d\u76ee\u6807\u5f62\u72b6',
+    panelBR:'\u753b\u7684\u65f6\u5019\u5b9e\u65f6\u8bc4\u5206\u3002',
+    roundInfo:'\u7b2c 1 \u5173 / \u5171 3 \u5173',
+    passMsg:'\u901a\u5173',
+    failMsg:'\u518d\u8bd5\u4e00\u6b21',
+    pass_straight:'\u68d2\uff0c\u8fd9\u662f\u4e00\u6761\u76f4\u7ebf\uff01',
+    pass_arc:'\u68d2\uff0c\u8fd9\u662f\u4e00\u6761\u5f27\u7ebf\uff01',
+    pass_loop:'\u68d2\uff0c\u8fd9\u662f\u4e00\u4e2a\u95ed\u73af\uff01',
+    fail_notStartA:'\u4f60\u7684\u7ebf\u6ca1\u6709\u4ece A \u5f00\u59cb\u3002',
+    fail_notEndB:'\u4f60\u7684\u7ebf\u6ca1\u6709\u5728 B \u7ed3\u675f\u3002',
+    fail_shape:'\u5f62\u72b6\u4e0d\u5339\u914d\uff0c\u518d\u8bd5\u4e00\u6b21\u3002',
+    startHint:'\u8d77\u70b9',
+    endHint:'\u7ec8\u70b9',
+    allDoneTitle:'\u5168\u90e8\u901a\u5173\uff01',
+    allDoneBody:'\u4f60\u5b8c\u6210\u4e86\u4e09\u79cd\u8def\u5f84\u5f62\u72b6\uff01\u73b0\u5728\u62ff\u7eb8\u7b14\u6765\u753b\u4f60\u81ea\u5df1\u7684\u5404\u79cd\u8def\u5f84\u5427\uff01',
+  }
+};
+
+var LANG = 'cn';
+function t(k){ return (I18N[LANG] && I18N[LANG][k]) || (I18N.en && I18N.en[k]) || k; }
+
+function applyI18n(){
+  document.getElementById('title').textContent = t('title');
+  document.getElementById('subtitle').textContent = t('subtitle');
+  document.getElementById('chip1').textContent = t('chip1');
+  document.getElementById('chip2').textContent = t('chip2');
+  document.getElementById('chip3').textContent = t('chip3');
+  document.getElementById('challengePrompt').textContent = t('challengePrompt');
+  document.getElementById('hudL1').textContent = t('hudL1');
+  document.getElementById('hudL2').textContent = t('hudL2');
+  document.getElementById('hudL3').textContent = t('hudL3');
+  document.getElementById('hudL4').textContent = t('hudL4');
+  document.getElementById('btnCheck').textContent = t('btnCheck');
+  document.getElementById('btnNext').textContent = t('btnNext');
+  document.getElementById('btnClear').textContent = t('btnClear');
+  document.getElementById('panelTL').innerHTML = t('panelTL');
+  document.getElementById('panelBR').textContent = t('panelBR');
+  document.getElementById('langBtn').textContent = (LANG === 'cn' ? 'EN' : 'CN');
+  updateRoundInfo();
+}
+
+var cv = document.getElementById('c');
+var ctx = cv.getContext('2d');
+var DPR = Math.min(window.devicePixelRatio || 1, 2);
+var W = 0, H = 0;
+
+function resize(){
+  var rect = cv.getBoundingClientRect();
+  W = Math.max(300, Math.round(rect.width));
+  H = Math.max(200, Math.round(rect.height));
+  cv.width = W * DPR;
+  cv.height = H * DPR;
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  ensureAB();
+  draw();
+}
+window.addEventListener('resize', resize);
+
+// --- Game state ---
+var TARGETS = ['straight', 'arc', 'loop'];
+var round = 0; // 0..2
+var current = TARGETS[0];
+var Ax=0, Ay=0, Bx=0, By=0; // A and B points
+var userPts = []; // drawn points {x,y}
+var drawing = false;
+var checkedResult = null; // {pass:bool, shape:'straight'|'arc'|'loop'|'other', reason:'...'}
+
+function ensureAB(){
+  if (current === 'loop') {
+    // A and B are effectively the same point (bottom of the loop).
+    // Show them as very close to signal "goes around and returns to start".
+    Ax = Math.round(W * 0.50 - 18);
+    Bx = Math.round(W * 0.50 + 18);
+    Ay = Math.round(H * 0.75);
+    By = Math.round(H * 0.75);
+  } else {
+    // A is left center, B is right center
+    Ax = Math.round(W * 0.20);
+    Ay = Math.round(H * 0.55);
+    Bx = Math.round(W * 0.80);
+    By = Math.round(H * 0.55);
+  }
+}
+
+function draw(){
+  // bg
+  ctx.fillStyle = '#0a0e14';
+  ctx.fillRect(0,0,W,H);
+  // grid
+  ctx.strokeStyle = 'rgba(142,144,166,0.08)';
+  ctx.lineWidth = 1;
+  var gs = 24;
+  for (var x=0; x<W; x+=gs){ ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,H); ctx.stroke(); }
+  for (var y=0; y<H; y+=gs){ ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(W,y); ctx.stroke(); }
+
+  // target hint (dashed faded shape)
+  ctx.save();
+  ctx.strokeStyle = 'rgba(255,176,0,0.22)';
+  ctx.lineWidth = 2;
+  ctx.setLineDash([6,6]);
+  ctx.beginPath();
+  if (current === 'straight'){
+    ctx.moveTo(Ax, Ay); ctx.lineTo(Bx, By);
+  } else if (current === 'arc'){
+    var mx = (Ax+Bx)/2, my = Ay - Math.min(H*0.28, (Bx-Ax)*0.35);
+    ctx.moveTo(Ax, Ay);
+    ctx.quadraticCurveTo(mx, my, Bx, By);
+  } else if (current === 'loop'){
+    var loopW = W * 0.28; // loop horizontal radius
+    var loopH = H * 0.20; // loop vertical radius
+    var cxC = (Ax+Bx)/2;
+    var cyC = Ay - loopH; // bottom of ellipse sits at A/B level
+    ctx.ellipse(cxC, cyC, loopW, loopH, 0, 0, Math.PI*2);
+  }
+  ctx.stroke();
+  ctx.restore();
+
+  // user drawing (solid cyan)
+  if (userPts.length > 1){
+    ctx.save();
+    ctx.strokeStyle = checkedResult && checkedResult.pass ? '#50ffb0' :
+                      checkedResult && !checkedResult.pass ? '#ff716c' : '#00d4ee';
+    ctx.lineWidth = 3.5;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    ctx.beginPath();
+    ctx.moveTo(userPts[0].x, userPts[0].y);
+    for (var i=1; i<userPts.length; i++) ctx.lineTo(userPts[i].x, userPts[i].y);
+    ctx.stroke();
+    ctx.restore();
+
+    // direction arrow at ~75% along the path
+    var idx = Math.floor(userPts.length * 0.80);
+    if (idx > 1 && idx < userPts.length){
+      var p1 = userPts[Math.max(0, idx-3)];
+      var p2 = userPts[idx];
+      drawArrow(p1.x, p1.y, p2.x, p2.y, '#ffb000');
+    }
+  }
+
+  // A and B markers (drawn on top)
+  drawMarker(Ax, Ay, t('startHint'), '#ffb000');
+  drawMarker(Bx, By, t('endHint'),   '#ffb000');
+}
+
+function drawMarker(x, y, label, color){
+  ctx.save();
+  ctx.fillStyle = color;
+  ctx.strokeStyle = '#fff';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.arc(x, y, 10, 0, Math.PI*2);
+  ctx.fill();
+  ctx.stroke();
+  // inner black dot
+  ctx.fillStyle = '#05070a';
+  ctx.beginPath();
+  ctx.arc(x, y, 4, 0, Math.PI*2);
+  ctx.fill();
+  // label
+  ctx.fillStyle = color;
+  ctx.font = '700 13px "Noto Sans SC","Space Grotesk",sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillText(label, x, y + 30);
+  ctx.restore();
+}
+
+function drawArrow(x1, y1, x2, y2, color){
+  ctx.save();
+  ctx.strokeStyle = color;
+  ctx.fillStyle = color;
+  ctx.lineWidth = 3;
+  var dx = x2 - x1, dy = y2 - y1;
+  var len = Math.sqrt(dx*dx + dy*dy) || 1;
+  var ux = dx/len, uy = dy/len;
+  // Move the arrow head by a small offset away from user's finger position
+  var hx = x2, hy = y2;
+  ctx.beginPath();
+  ctx.moveTo(hx, hy);
+  ctx.lineTo(hx - 12*ux + 6*uy, hy - 12*uy - 6*ux);
+  ctx.lineTo(hx - 12*ux - 6*uy, hy - 12*uy + 6*ux);
+  ctx.closePath();
+  ctx.fill();
+  ctx.restore();
+}
+
+// --- pointer events for drawing ---
+function ptFromEvt(e){
+  var r = cv.getBoundingClientRect();
+  var clientX, clientY;
+  if (e.touches && e.touches[0]){ clientX = e.touches[0].clientX; clientY = e.touches[0].clientY; }
+  else { clientX = e.clientX; clientY = e.clientY; }
+  return { x: clientX - r.left, y: clientY - r.top };
+}
+
+cv.addEventListener('pointerdown', function(e){
+  e.preventDefault();
+  drawing = true;
+  checkedResult = null;
+  userPts = [];
+  var p = ptFromEvt(e);
+  userPts.push(p);
+  updateHud();
+  draw();
+});
+cv.addEventListener('pointermove', function(e){
+  if (!drawing) return;
+  e.preventDefault();
+  var p = ptFromEvt(e);
+  // throttle: only add if moved >= 3px
+  var last = userPts[userPts.length-1];
+  if (!last || Math.hypot(p.x-last.x, p.y-last.y) >= 3){
+    userPts.push(p);
+    updateHud();
+    draw();
+  }
+});
+function endDraw(e){
+  if (drawing){
+    drawing = false;
+    updateHud();
+  }
+}
+cv.addEventListener('pointerup', endDraw);
+cv.addEventListener('pointercancel', endDraw);
+cv.addEventListener('pointerleave', endDraw);
+
+// --- shape analysis ---
+function pathLen(pts){
+  var s=0; for (var i=1; i<pts.length; i++){ s += Math.hypot(pts[i].x-pts[i-1].x, pts[i].y-pts[i-1].y);} return s;
+}
+function straightDist(){ return Math.hypot(Bx-Ax, By-Ay); }
+
+function classifyShape(pts){
+  if (pts.length < 5) return 'other';
+  var first = pts[0], last = pts[pts.length-1];
+  var chord = Math.hypot(last.x-first.x, last.y-first.y);
+  var total = pathLen(pts);
+
+  // LOOP: user's endpoint is close to user's own startpoint (chord tiny vs path length)
+  if (chord < 40 && total > 120) return 'loop';
+
+  // For straight vs arc: compare path length to chord.
+  // Straight: total/chord ~ 1.0 - 1.06
+  // Arc: total/chord ~ 1.08 - 1.50
+  // Loop won't reach here because of chord check above
+  if (chord < 20) return 'other';
+  var ratio = total / chord;
+
+  // Also check max perpendicular deviation from chord
+  var maxDev = 0;
+  var dx = last.x - first.x, dy = last.y - first.y;
+  var dlen = Math.sqrt(dx*dx + dy*dy) || 1;
+  var nx = -dy/dlen, ny = dx/dlen;
+  for (var i=0; i<pts.length; i++){
+    var rx = pts[i].x - first.x, ry = pts[i].y - first.y;
+    var proj = rx*nx + ry*ny;
+    var ad = Math.abs(proj);
+    if (ad > maxDev) maxDev = ad;
+  }
+  var devRatio = maxDev / chord; // fraction of chord
+
+  if (ratio < 1.08 && devRatio < 0.08) return 'straight';
+  if (ratio < 1.60 && devRatio < 0.60 && devRatio > 0.08) return 'arc';
+  return 'other';
+}
+
+function hudShapeLabel(s){
+  if (s === 'straight') return t('chip1');
+  if (s === 'arc') return t('chip2');
+  if (s === 'loop') return t('chip3');
+  return '---';
+}
+
+function updateHud(){
+  var total = pathLen(userPts);
+  document.getElementById('hudV2').textContent = total ? Math.round(total) + ' px' : '--';
+  var first = userPts[0], last = userPts[userPts.length-1];
+  if (first){
+    var dA = Math.hypot(first.x-Ax, first.y-Ay);
+    var dB = last ? Math.hypot(last.x-Bx, last.y-By) : 999;
+    var okA = dA < 28;
+    var okB = dB < 28;
+    var flag = (okA && okB) ? (LANG==='cn'?'对':'OK') : (LANG==='cn'?'缺':'MISS');
+    document.getElementById('hudV3').textContent = flag;
+  } else {
+    document.getElementById('hudV3').textContent = '--';
+  }
+  if (userPts.length > 4){
+    var sh = classifyShape(userPts);
+    document.getElementById('hudV1').textContent = hudShapeLabel(sh);
+    document.getElementById('hudV4').textContent = userPts.length > 6 ? 'YES' : '...';
+  } else {
+    document.getElementById('hudV1').textContent = '--';
+    document.getElementById('hudV4').textContent = '--';
+  }
+}
+
+// --- check button ---
+function runCheck(){
+  if (userPts.length < 5) { return; }
+  var first = userPts[0], last = userPts[userPts.length-1];
+  var dA = Math.hypot(first.x-Ax, first.y-Ay);
+  var dB = Math.hypot(last.x-Bx, last.y-By);
+  var pass = false, reason = '', shape = classifyShape(userPts);
+  if (dA > 34){
+    reason = t('fail_notStartA');
+  } else if (current === 'loop' ? false : dB > 34){
+    reason = t('fail_notEndB');
+  } else if (shape !== current){
+    reason = t('fail_shape');
+  } else {
+    pass = true;
+    reason = t('pass_' + current);
+  }
+  checkedResult = { pass: pass, shape: shape, reason: reason };
+  draw();
+  showToast(pass, reason);
+}
+
+function showToast(pass, body){
+  var el = document.getElementById('toast');
+  var big = document.getElementById('toastBig');
+  var bd = document.getElementById('toastBody');
+  big.textContent = pass ? t('passMsg') : t('failMsg');
+  big.className = 'big ' + (pass ? 'pass' : 'fail');
+  bd.textContent = body;
+  el.className = 'toast show';
+  setTimeout(function(){ el.className = 'toast'; }, 1900);
+}
+
+function updateRoundInfo(){
+  var txt = LANG === 'cn'
+    ? ('\u7b2c ' + (round+1) + ' \u5173 / \u5171 3 \u5173')
+    : ('ROUND ' + (round+1) + ' / 3');
+  document.getElementById('roundInfo').textContent = txt;
+  // chip active state
+  ['chip1','chip2','chip3'].forEach(function(id,i){
+    var el = document.getElementById(id);
+    el.classList.toggle('active', i === round);
+  });
+}
+
+function loadRound(idx){
+  round = idx % 3;
+  current = TARGETS[round];
+  userPts = [];
+  checkedResult = null;
+  ensureAB();
+  updateHud();
+  updateRoundInfo();
+  draw();
+}
+
+document.getElementById('btnCheck').addEventListener('click', runCheck);
+document.getElementById('btnClear').addEventListener('click', function(){
+  userPts = [];
+  checkedResult = null;
+  updateHud();
+  draw();
+});
+document.getElementById('btnNext').addEventListener('click', function(){
+  if (round === 2){
+    // all done
+    showToastBig(t('allDoneTitle'), t('allDoneBody'), 3400);
+    setTimeout(function(){ loadRound(0); }, 3400);
+  } else {
+    loadRound(round + 1);
+  }
+});
+
+function showToastBig(big, body, dur){
+  var el = document.getElementById('toast');
+  document.getElementById('toastBig').textContent = big;
+  document.getElementById('toastBig').className = 'big pass';
+  document.getElementById('toastBody').textContent = body;
+  el.className = 'toast show';
+  setTimeout(function(){ el.className = 'toast'; }, dur||2000);
+}
+
+// chip click jumps to that round
+['chip1','chip2','chip3'].forEach(function(id, i){
+  document.getElementById(id).addEventListener('click', function(){ loadRound(i); });
+});
+
+document.getElementById('langBtn').addEventListener('click', function(){
+  LANG = (LANG === 'cn' ? 'en' : 'cn');
+  applyI18n();
+  draw();
+});
+
+applyI18n();
+resize();
+loadRound(0);
+</script>
+</body>
+</html>

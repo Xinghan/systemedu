@@ -1,0 +1,370 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Pipeline Integration Order</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;700&family=Inter:wght@400;500&family=Noto+Sans+SC:wght@400;700&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{width:100%;height:100vh;overflow:hidden;background:#131313;font-family:'Noto Sans SC','Inter',sans-serif;color:#e5e2e1}
+.wrapper{display:flex;flex-direction:column;height:100vh}
+.header{padding:6px 16px;display:flex;align-items:center;justify-content:space-between;background:rgba(28,27,27,0.92);border-bottom:1px solid rgba(138,136,134,0.15);flex-shrink:0}
+.header h1{font-family:'Space Grotesk',sans-serif;font-size:14px;font-weight:700;color:#ffb59c;letter-spacing:1px;text-transform:uppercase}
+.header .sub{font-size:10px;color:#8a8886;font-family:'Space Grotesk',sans-serif}
+.game-area{flex:1;min-height:0;display:flex;flex-direction:column;padding:12px 16px;gap:8px;overflow:hidden}
+.instruction{font-size:12px;color:#c6c6c6;text-align:center;flex-shrink:0}
+.step-list{flex:1;display:flex;flex-direction:column;gap:6px;overflow-y:auto;min-height:0}
+.step-card{display:flex;align-items:center;gap:10px;padding:10px 14px;background:rgba(53,53,52,0.4);backdrop-filter:blur(12px);border:1px solid rgba(138,136,134,0.15);cursor:grab;user-select:none;-webkit-user-select:none;transition:border-color 0.2s,background 0.2s}
+.step-card:active{cursor:grabbing}
+.step-card.dragging{opacity:0.5;border-color:#ff7f50}
+.step-card.over{border-color:#00daf3;background:rgba(0,218,243,0.08)}
+.step-card.correct{border-color:#10b981;background:rgba(16,185,129,0.08)}
+.step-card.wrong{border-color:#ff5f1f;background:rgba(255,95,31,0.08)}
+.step-num{font-family:'Space Grotesk',sans-serif;font-size:18px;font-weight:700;color:#ffb59c;min-width:28px;text-align:center}
+.step-content{flex:1}
+.step-title{font-family:'Space Grotesk',sans-serif;font-size:12px;font-weight:700;color:#e5e2e1;letter-spacing:0.5px;text-transform:uppercase}
+.step-desc{font-size:11px;color:#8a8886;margin-top:2px}
+.step-handle{font-size:16px;color:#8a8886;cursor:grab;padding:0 4px}
+.controls-bar{display:flex;justify-content:center;gap:10px;padding:6px 0;flex-shrink:0}
+.controls-bar button{font-family:'Space Grotesk',sans-serif;font-size:11px;font-weight:700;padding:6px 18px;cursor:pointer;border:1px solid rgba(138,136,134,0.15);background:rgba(53,53,52,0.4);backdrop-filter:blur(12px);color:#ffb59c;letter-spacing:1px;text-transform:uppercase;border-radius:0}
+.controls-bar button:hover{background:rgba(255,181,156,0.15)}
+.controls-bar button:disabled{opacity:0.4;cursor:default}
+.feedback{text-align:center;padding:6px;flex-shrink:0}
+.feedback-text{font-family:'Space Grotesk',sans-serif;font-size:13px;font-weight:700}
+.score-bar{display:flex;justify-content:center;gap:20px;padding:4px;flex-shrink:0}
+.score-item{font-family:'Space Grotesk',sans-serif;font-size:11px;color:#8a8886}
+.score-item span{color:#00daf3;font-weight:700}
+.hud{display:flex;justify-content:space-around;padding:6px 16px;background:rgba(0,0,0,0.55);flex-shrink:0}
+.hud-item{text-align:center}
+.hud-label{font-family:'Space Grotesk',sans-serif;font-size:8px;color:#8a8886;letter-spacing:0.5px;text-transform:uppercase}
+.hud-value{font-family:'Space Grotesk',sans-serif;font-size:13px;color:#00daf3;font-weight:700}
+.lang-btn{position:fixed;top:8px;left:8px;z-index:100;font-family:'Space Grotesk',sans-serif;font-size:11px;font-weight:700;padding:4px 10px;cursor:pointer;border:1px solid rgba(255,255,255,0.08);background:rgba(20,20,35,0.85);backdrop-filter:blur(12px);color:#ffb59c;letter-spacing:1px;border-radius:0}
+.guide-panel{position:fixed;top:8px;right:8px;width:220px;max-height:36vh;overflow-y:auto;background:rgba(20,20,35,0.85);backdrop-filter:blur(12px);border:1px solid rgba(255,255,255,0.08);padding:10px;z-index:100;font-family:'Noto Sans SC',sans-serif;font-size:11px;color:rgba(255,255,255,0.85);border-radius:0}
+.guide-panel h3{font-family:'Space Grotesk',sans-serif;font-size:12px;margin-bottom:4px;display:flex;align-items:center;justify-content:space-between;cursor:pointer;color:#ffb59c}
+.guide-panel ul{padding-left:14px;line-height:1.5}
+.guide-toggle{font-size:10px;color:#8a8886}
+.success-overlay{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.75);display:none;align-items:center;justify-content:center;z-index:200}
+.success-card{background:rgba(28,27,27,0.95);border:2px solid #10b981;padding:24px;max-width:400px;text-align:center}
+.success-card h2{font-family:'Space Grotesk',sans-serif;color:#10b981;font-size:18px;margin-bottom:8px}
+.success-card p{color:#c6c6c6;font-size:13px;line-height:1.6;margin-bottom:12px}
+.success-card button{font-family:'Space Grotesk',sans-serif;font-size:12px;padding:6px 18px;background:rgba(16,185,129,0.2);border:1px solid #10b981;color:#10b981;cursor:pointer;border-radius:0}
+</style>
+</head>
+<body>
+<button class="lang-btn" id="langBtn">CN</button>
+<div class="guide-panel" id="guidePanel">
+<h3 id="guideTitle"><span id="guideTitleText"></span><span class="guide-toggle" id="guideToggle">[-]</span></h3>
+<div class="guide-content" id="guideContent">
+<p id="guideGoal" style="margin-bottom:6px;color:#c6c6c6"></p>
+<ul id="guideSteps"></ul>
+<p id="guideTips" style="margin-top:6px;color:#00daf3;font-size:10px"></p>
+</div>
+</div>
+
+<div class="wrapper">
+<div class="header">
+<div><h1 id="mainTitle"></h1><div class="sub" id="mainSub"></div></div>
+<div style="text-align:right"><div class="sub">P-MARS-01-M34</div></div>
+</div>
+<div class="game-area">
+<div class="instruction" id="instrText"></div>
+<div class="step-list" id="stepList"></div>
+<div class="score-bar">
+<div class="score-item" id="scoreAttempts"></div>
+<div class="score-item" id="scoreCorrect"></div>
+</div>
+<div class="feedback" id="feedbackArea">
+<div class="feedback-text" id="feedbackText"></div>
+</div>
+<div class="controls-bar">
+<button id="btnCheck"></button>
+<button id="btnShuffle"></button>
+</div>
+</div>
+<div class="hud">
+<div class="hud-item"><div class="hud-label" id="hudL1"></div><div class="hud-value" id="hudV1">--</div></div>
+<div class="hud-item"><div class="hud-label" id="hudL2"></div><div class="hud-value" id="hudV2">--</div></div>
+<div class="hud-item"><div class="hud-label" id="hudL3"></div><div class="hud-value" id="hudV3">--</div></div>
+<div class="hud-item"><div class="hud-label" id="hudL4"></div><div class="hud-value" id="hudV4">--</div></div>
+</div>
+</div>
+
+<div class="success-overlay" id="successOverlay">
+<div class="success-card">
+<h2 id="successTitle"></h2>
+<p id="successBody"></p>
+<button id="successBtn"></button>
+</div>
+</div>
+
+<script>
+(function(){
+var LANG='cn';
+var I18N={
+title:{en:'PIPELINE INTEGRATION ORDER',cn:'\u611F\u77E5\u94FE\u8DEF\u96C6\u6210\u6B65\u9AA4\u6392\u5E8F'},
+sub:{en:'Drag steps into correct deployment order',cn:'\u62D6\u62FD\u6B65\u9AA4\u5230\u6B63\u786E\u7684\u90E8\u7F72\u987A\u5E8F'},
+instr:{en:'Drag the 8 steps into the correct order for deploying perception on a rover.',cn:'\u5C06 8 \u4E2A\u6B65\u9AA4\u62D6\u5230\u6B63\u786E\u987A\u5E8F\uFF0C\u5B8C\u6210\u8F66\u8F7D\u611F\u77E5\u90E8\u7F72\u3002'},
+btnCheck:{en:'CHECK ORDER',cn:'\u68C0\u67E5\u987A\u5E8F'},
+btnShuffle:{en:'SHUFFLE',cn:'\u91CD\u65B0\u6253\u4E71'},
+hudL1:{en:'STEPS',cn:'\u6B65\u9AA4'},
+hudL2:{en:'ATTEMPTS',cn:'\u5C1D\u8BD5'},
+hudL3:{en:'CORRECT',cn:'\u6B63\u786E'},
+hudL4:{en:'STATUS',cn:'\u72B6\u6001'},
+guideTitle:{en:'PLAY GUIDE',cn:'\u64CD\u4F5C\u6307\u5357'},
+guideGoal:{en:'Goal: Arrange all 8 steps in the correct pipeline deployment order.',cn:'\u76EE\u6807\uFF1A\u5C06 8 \u4E2A\u6B65\u9AA4\u6309\u6B63\u786E\u7684\u94FE\u8DEF\u90E8\u7F72\u987A\u5E8F\u6392\u5217\u3002'},
+guideStep1:{en:'1. Read each step carefully',cn:'1. \u4ED4\u7EC6\u9605\u8BFB\u6BCF\u4E2A\u6B65\u9AA4'},
+guideStep2:{en:'2. Drag to reorder (think: what depends on what?)',cn:'2. \u62D6\u62FD\u91CD\u65B0\u6392\u5E8F\uFF08\u601D\u8003\uFF1A\u4EC0\u4E48\u4F9D\u8D56\u4EC0\u4E48\uFF1F\uFF09'},
+guideStep3:{en:'3. Click CHECK to verify your order',cn:'3. \u70B9\u51FB\u68C0\u67E5\u9A8C\u8BC1\u4F60\u7684\u987A\u5E8F'},
+guideTips:{en:'Tip: Think about data flow - camera to model to output.',cn:'\u63D0\u793A\uFF1A\u601D\u8003\u6570\u636E\u6D41\u5411 -- \u4ECE\u76F8\u673A\u5230\u6A21\u578B\u5230\u8F93\u51FA\u3002'},
+successTitle:{en:'PIPELINE DEPLOYED',cn:'\u94FE\u8DEF\u90E8\u7F72\u5B8C\u6210'},
+successBody:{en:'You correctly ordered the perception pipeline integration steps! Understanding the deployment sequence is crucial for building a reliable rover perception system.',cn:'\u4F60\u6B63\u786E\u6392\u5217\u4E86\u611F\u77E5\u94FE\u8DEF\u96C6\u6210\u6B65\u9AA4\uFF01\u7406\u89E3\u90E8\u7F72\u987A\u5E8F\u5BF9\u4E8E\u6784\u5EFA\u53EF\u9760\u7684\u8F66\u8F7D\u611F\u77E5\u7CFB\u7EDF\u81F3\u5173\u91CD\u8981\u3002'},
+successBtn:{en:'PLAY AGAIN',cn:'\u518D\u73A9\u4E00\u6B21'},
+allCorrect:{en:'ALL CORRECT! Pipeline is ready.',cn:'\u5168\u90E8\u6B63\u786E\uFF01\u94FE\u8DEF\u5DF2\u5C31\u7EEA\u3002'},
+someWrong:{en:' steps are in wrong position.',cn:' \u4E2A\u6B65\u9AA4\u4F4D\u7F6E\u9519\u8BEF\u3002'},
+inProgress:{en:'IN PROGRESS',cn:'\u8FDB\u884C\u4E2D'},
+complete:{en:'COMPLETE',cn:'\u5B8C\u6210'},
+attempts:{en:'ATTEMPTS: ',cn:'\u5C1D\u8BD5: '},
+correct:{en:'CORRECT: ',cn:'\u6B63\u786E: '}
+};
+function t(k){return(I18N[k]&&I18N[k][LANG])||(I18N[k]&&I18N[k]['en'])||k}
+
+// Steps in correct order (index = correct position)
+var STEPS=[
+{id:0,title:{en:'CAMERA HARDWARE CHECK',cn:'\u76F8\u673A\u786C\u4EF6\u68C0\u67E5'},desc:{en:'Verify camera connection, driver, and basic capture test',cn:'\u786E\u8BA4\u76F8\u673A\u8FDE\u63A5\u3001\u9A71\u52A8\u548C\u57FA\u672C\u91C7\u96C6\u6D4B\u8BD5'}},
+{id:1,title:{en:'CAPTURE PIPELINE SETUP',cn:'\u91C7\u96C6\u6D41\u6C34\u7EBF\u642D\u5EFA'},desc:{en:'Configure resolution, FPS, color format (BGR/RGB)',cn:'\u914D\u7F6E\u5206\u8FA8\u7387\u3001\u5E27\u7387\u3001\u989C\u8272\u683C\u5F0F (BGR/RGB)'}},
+{id:2,title:{en:'PREPROCESSING MODULE',cn:'\u9884\u5904\u7406\u6A21\u5757'},desc:{en:'Implement resize, normalize, crop to model input spec',cn:'\u5B9E\u73B0\u7F29\u653E\u3001\u5F52\u4E00\u5316\u3001\u88C1\u526A\u5230\u6A21\u578B\u8F93\u5165\u89C4\u683C'}},
+{id:3,title:{en:'MODEL LOADING & WARMUP',cn:'\u6A21\u578B\u52A0\u8F7D\u4E0E\u9884\u70ED'},desc:{en:'Load trained weights, run dummy inference to warm up GPU cache',cn:'\u52A0\u8F7D\u8BAD\u7EC3\u6743\u91CD\uFF0C\u8FD0\u884C\u865A\u62DF\u63A8\u7406\u9884\u70ED GPU \u7F13\u5B58'}},
+{id:4,title:{en:'INFERENCE INTEGRATION',cn:'\u63A8\u7406\u96C6\u6210'},desc:{en:'Connect preprocessed frames to model, measure latency per frame',cn:'\u5C06\u9884\u5904\u7406\u540E\u7684\u5E27\u63A5\u5165\u6A21\u578B\uFF0C\u6D4B\u91CF\u6BCF\u5E27\u5EF6\u8FDF'}},
+{id:5,title:{en:'POSTPROCESSING & RISK MAP',cn:'\u540E\u5904\u7406\u4E0E\u98CE\u9669\u56FE'},desc:{en:'Convert model output to traversability risk map with color coding',cn:'\u5C06\u6A21\u578B\u8F93\u51FA\u8F6C\u5316\u4E3A\u5E26\u989C\u8272\u7F16\u7801\u7684\u53EF\u901A\u884C\u6027\u98CE\u9669\u56FE'}},
+{id:6,title:{en:'OVERLAY & VISUALIZATION',cn:'\u53E0\u52A0\u4E0E\u53EF\u89C6\u5316'},desc:{en:'Overlay risk map on camera view, add HUD telemetry display',cn:'\u5C06\u98CE\u9669\u56FE\u53E0\u52A0\u5230\u76F8\u673A\u89C6\u56FE\uFF0C\u6DFB\u52A0 HUD \u9065\u6D4B\u663E\u793A'}},
+{id:7,title:{en:'END-TO-END LOGGING',cn:'\u7AEF\u5230\u7AEF\u65E5\u5FD7\u8BB0\u5F55'},desc:{en:'Record timestamped frames + risk maps for later analysis',cn:'\u8BB0\u5F55\u5E26\u65F6\u95F4\u6233\u7684\u5E27 + \u98CE\u9669\u56FE\u4EE5\u4F9B\u540E\u7EED\u5206\u6790'}}
+];
+
+var currentOrder=[];
+var attempts=0;
+var correctCount=0;
+var dragSrcIdx=null;
+var solved=false;
+
+function shuffle(arr){
+var a=arr.slice();
+for(var i=a.length-1;i>0;i--){
+var j=Math.floor(Math.random()*(i+1));
+var tmp=a[i];a[i]=a[j];a[j]=tmp;
+}
+return a;
+}
+
+function initGame(){
+currentOrder=shuffle(STEPS.map(function(s){return s.id}));
+attempts=0;correctCount=0;solved=false;
+document.getElementById('successOverlay').style.display='none';
+renderSteps();
+updateScore();
+document.getElementById('feedbackText').textContent='';
+document.getElementById('btnCheck').disabled=false;
+}
+
+function renderSteps(){
+var list=document.getElementById('stepList');
+list.innerHTML='';
+currentOrder.forEach(function(stepId,idx){
+var step=STEPS[stepId];
+var card=document.createElement('div');
+card.className='step-card';
+card.setAttribute('data-idx',idx);
+card.setAttribute('draggable','true');
+
+var numEl=document.createElement('div');
+numEl.className='step-num';numEl.textContent=(idx+1);
+
+var content=document.createElement('div');
+content.className='step-content';
+var titleEl=document.createElement('div');
+titleEl.className='step-title';titleEl.textContent=LANG==='cn'?step.title.cn:step.title.en;
+var descEl=document.createElement('div');
+descEl.className='step-desc';descEl.textContent=LANG==='cn'?step.desc.cn:step.desc.en;
+content.appendChild(titleEl);content.appendChild(descEl);
+
+var handle=document.createElement('div');
+handle.className='step-handle';handle.textContent='\u2261';
+
+card.appendChild(numEl);card.appendChild(content);card.appendChild(handle);
+list.appendChild(card);
+
+// Drag events
+card.addEventListener('dragstart',function(e){
+dragSrcIdx=idx;
+card.classList.add('dragging');
+e.dataTransfer.effectAllowed='move';
+e.dataTransfer.setData('text/plain',idx.toString());
+});
+card.addEventListener('dragend',function(){
+card.classList.remove('dragging');
+dragSrcIdx=null;
+var cards=list.querySelectorAll('.step-card');
+cards.forEach(function(c){c.classList.remove('over')});
+});
+card.addEventListener('dragover',function(e){
+e.preventDefault();e.dataTransfer.dropEffect='move';
+card.classList.add('over');
+});
+card.addEventListener('dragleave',function(){
+card.classList.remove('over');
+});
+card.addEventListener('drop',function(e){
+e.preventDefault();
+card.classList.remove('over');
+var fromIdx=parseInt(e.dataTransfer.getData('text/plain'));
+var toIdx=idx;
+if(fromIdx!==toIdx){
+var item=currentOrder.splice(fromIdx,1)[0];
+currentOrder.splice(toIdx,0,item);
+renderSteps();
+clearFeedback();
+}
+});
+
+// Touch drag support
+var touchStartY=0,touchClone=null,touchIdx=idx;
+card.addEventListener('touchstart',function(e){
+touchStartY=e.touches[0].clientY;
+touchIdx=parseInt(card.getAttribute('data-idx'));
+dragSrcIdx=touchIdx;
+card.classList.add('dragging');
+},{passive:true});
+card.addEventListener('touchmove',function(e){
+e.preventDefault();
+var touch=e.touches[0];
+var allCards=list.querySelectorAll('.step-card');
+allCards.forEach(function(c){c.classList.remove('over')});
+var target=document.elementFromPoint(touch.clientX,touch.clientY);
+if(target){
+var tc=target.closest('.step-card');
+if(tc&&tc!==card)tc.classList.add('over');
+}
+});
+card.addEventListener('touchend',function(e){
+card.classList.remove('dragging');
+var touch=e.changedTouches[0];
+var allCards=list.querySelectorAll('.step-card');
+allCards.forEach(function(c){c.classList.remove('over')});
+var target=document.elementFromPoint(touch.clientX,touch.clientY);
+if(target){
+var tc=target.closest('.step-card');
+if(tc&&tc!==card){
+var toIdx2=parseInt(tc.getAttribute('data-idx'));
+var item2=currentOrder.splice(dragSrcIdx,1)[0];
+currentOrder.splice(toIdx2,0,item2);
+renderSteps();
+clearFeedback();
+}
+}
+dragSrcIdx=null;
+});
+});
+}
+
+function clearFeedback(){
+var cards=document.getElementById('stepList').querySelectorAll('.step-card');
+cards.forEach(function(c){c.classList.remove('correct','wrong')});
+document.getElementById('feedbackText').textContent='';
+}
+
+function checkOrder(){
+if(solved)return;
+attempts++;
+var cards=document.getElementById('stepList').querySelectorAll('.step-card');
+var wrongCount=0;
+currentOrder.forEach(function(stepId,idx){
+var card=cards[idx];
+if(stepId===idx){
+card.classList.remove('wrong');card.classList.add('correct');
+}else{
+card.classList.remove('correct');card.classList.add('wrong');
+wrongCount++;
+}
+});
+correctCount=8-wrongCount;
+updateScore();
+
+var fb=document.getElementById('feedbackText');
+if(wrongCount===0){
+fb.textContent=t('allCorrect');fb.style.color='#10b981';
+solved=true;
+document.getElementById('btnCheck').disabled=true;
+setTimeout(function(){
+document.getElementById('successOverlay').style.display='flex';
+},800);
+}else{
+fb.textContent=wrongCount+(LANG==='cn'?t('someWrong'):t('someWrong'));
+fb.style.color='#ff5f1f';
+}
+}
+
+function updateScore(){
+document.getElementById('scoreAttempts').innerHTML=t('attempts')+'<span>'+attempts+'</span>';
+document.getElementById('scoreCorrect').innerHTML=t('correct')+'<span>'+correctCount+'/8</span>';
+document.getElementById('hudV1').textContent='8';
+document.getElementById('hudV2').textContent=attempts.toString();
+document.getElementById('hudV3').textContent=correctCount+'/8';
+document.getElementById('hudV4').textContent=solved?t('complete'):t('inProgress');
+document.getElementById('hudV4').style.color=solved?'#10b981':'#00daf3';
+}
+
+function refreshI18N(){
+document.getElementById('mainTitle').textContent=t('title');
+document.getElementById('mainSub').textContent=t('sub');
+document.getElementById('instrText').textContent=t('instr');
+document.getElementById('btnCheck').textContent=t('btnCheck');
+document.getElementById('btnShuffle').textContent=t('btnShuffle');
+document.getElementById('hudL1').textContent=t('hudL1');
+document.getElementById('hudL2').textContent=t('hudL2');
+document.getElementById('hudL3').textContent=t('hudL3');
+document.getElementById('hudL4').textContent=t('hudL4');
+document.getElementById('guideTitleText').textContent=t('guideTitle');
+document.getElementById('guideGoal').textContent=t('guideGoal');
+var steps=[t('guideStep1'),t('guideStep2'),t('guideStep3')];
+var ul=document.getElementById('guideSteps');ul.innerHTML='';
+steps.forEach(function(s){var li=document.createElement('li');li.textContent=s;ul.appendChild(li)});
+document.getElementById('guideTips').textContent=t('guideTips');
+document.getElementById('successTitle').textContent=t('successTitle');
+document.getElementById('successBody').textContent=t('successBody');
+document.getElementById('successBtn').textContent=t('successBtn');
+renderSteps();
+updateScore();
+}
+
+// Event bindings
+document.getElementById('langBtn').addEventListener('click',function(){
+LANG=LANG==='en'?'cn':'en';
+document.getElementById('langBtn').textContent=LANG.toUpperCase();
+refreshI18N();
+});
+
+document.getElementById('btnCheck').addEventListener('click',function(){
+checkOrder();
+});
+
+document.getElementById('btnShuffle').addEventListener('click',function(){
+initGame();
+});
+
+document.getElementById('successBtn').addEventListener('click',function(){
+initGame();
+});
+
+var guideOpen=true;
+document.getElementById('guideTitle').addEventListener('click',function(){
+guideOpen=!guideOpen;
+document.getElementById('guideContent').style.display=guideOpen?'block':'none';
+document.getElementById('guideToggle').textContent=guideOpen?'[-]':'[+]';
+});
+
+refreshI18N();
+initGame();
+})();
+</script>
+</body>
+</html>

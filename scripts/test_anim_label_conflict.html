@@ -1,0 +1,615 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Multi-Annotator Disagreement Heatmap</title>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=Space+Grotesk:wght@400;700&family=Noto+Sans+SC:wght@400;700&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{width:100%;height:100vh;overflow:hidden;background:#131313;
+  font-family:'Noto Sans SC','PingFang SC',system-ui,sans-serif;color:#e5e2e1}
+
+.wrapper{display:flex;flex-direction:column;height:100vh;overflow:hidden}
+
+.guide-panel{position:fixed;top:8px;right:8px;width:246px;max-height:40vh;
+  overflow-y:auto;z-index:200;padding:10px 12px;
+  background:rgba(20,20,35,0.92);backdrop-filter:blur(14px);
+  border:1px solid rgba(255,191,156,0.22);font-size:12px;line-height:1.55;
+  color:rgba(229,226,225,0.88)}
+.guide-panel h3{font-family:'Space Grotesk',sans-serif;font-size:13px;font-weight:700;
+  margin-bottom:6px;display:flex;align-items:center;justify-content:space-between;cursor:pointer;
+  color:#ffb59c;text-transform:uppercase;letter-spacing:0.05em}
+.guide-panel h3 .arrow{transition:transform .2s;font-size:10px}
+.guide-panel h3 .arrow.collapsed{transform:rotate(-90deg)}
+.guide-panel ul{padding-left:14px;margin:4px 0}
+.guide-panel .gl{color:#8a8886;font-size:11px;text-transform:uppercase;
+  letter-spacing:0.08em;margin-top:6px;font-family:'Space Grotesk',sans-serif}
+
+.header{height:42px;min-height:42px;display:flex;align-items:center;justify-content:space-between;
+  padding:0 16px;background:rgba(19,19,19,0.95);border-bottom:1px solid rgba(138,136,134,0.15)}
+.header h1{font-family:'Space Grotesk',sans-serif;font-size:14px;font-weight:700;
+  color:#ffb59c;text-transform:uppercase;letter-spacing:0.08em}
+.header .lang{padding:4px 10px;border:1px solid rgba(255,191,156,0.35);background:transparent;
+  color:#ffb59c;cursor:pointer;font-family:'Space Grotesk',sans-serif;font-size:11px;
+  font-weight:700;letter-spacing:0.05em}
+.header .lang:hover{background:rgba(255,191,156,0.15)}
+
+.canvas-wrap{flex:1;min-height:0;position:relative;overflow:hidden;background:#131313}
+.canvas-wrap canvas{position:absolute;top:0;left:0;width:100%;height:100%}
+
+.controls{height:46px;min-height:46px;display:flex;align-items:center;justify-content:center;gap:12px;
+  background:rgba(19,19,19,0.95);border-top:1px solid rgba(138,136,134,0.15);
+  border-bottom:1px solid rgba(138,136,134,0.15)}
+.ctrl-btn{padding:6px 16px;border:1px solid rgba(255,191,156,0.35);background:transparent;
+  color:#ffb59c;cursor:pointer;font-family:'Space Grotesk',sans-serif;font-size:12px;
+  font-weight:700;text-transform:uppercase;letter-spacing:0.06em;transition:all .15s}
+.ctrl-btn:hover{background:rgba(255,191,156,0.18);box-shadow:0 0 18px rgba(255,127,80,0.25)}
+.ctrl-btn.active{background:linear-gradient(45deg,rgba(255,191,156,0.3),rgba(255,127,80,0.2))}
+.frame-dots{display:flex;gap:6px;align-items:center;margin:0 12px}
+.frame-dot{width:10px;height:10px;border:1px solid rgba(255,191,156,0.35);cursor:pointer;
+  transition:all .2s}
+.frame-dot.active{background:#ffb59c;border-color:#ffb59c;box-shadow:0 0 12px rgba(255,127,80,0.6)}
+.frame-dot:hover{border-color:#ffb59c}
+
+.hud{height:54px;min-height:54px;display:flex;align-items:center;
+  background:rgba(0,0,0,0.6);border-top:1px solid rgba(255,255,255,0.06);padding:0 16px}
+.hud-col{flex:1;text-align:center}
+.hud-label{font-family:'Space Grotesk',sans-serif;font-size:10px;
+  color:rgba(138,136,134,0.8);text-transform:uppercase;letter-spacing:0.1em}
+.hud-val{font-family:'JetBrains Mono','Space Grotesk',monospace;font-size:13px;font-weight:700;
+  color:rgba(229,226,225,0.9);margin-top:2px}
+</style>
+</head>
+<body>
+
+<div class="guide-panel" id="guidePanel">
+  <h3 id="guideToggle"><span id="guideTitleEl">OBSERVER GUIDE</span> <span class="arrow" id="guideArrow">&#9660;</span></h3>
+  <div id="guideContent">
+    <div class="gl" id="glShow">WHAT IT SHOWS</div>
+    <p id="guideWhat">10 名标注者对同一张火星地貌图像给出不同标签，分歧热力图揭示低一致性区域。</p>
+    <div class="gl" style="margin-top:6px" id="glObs">OBSERVE</div>
+    <ul>
+      <li id="obs1">红色高亮区域 = 标注者意见严重分歧</li>
+      <li id="obs2">绿色区域 = 高度一致</li>
+      <li id="obs3">边界处分歧最大 -- 模糊地带是噪声来源</li>
+    </ul>
+    <div class="gl" style="margin-top:6px" id="glCtrl">CONTROLS</div>
+    <p id="guideCtrl">PLAY 自动演示，PREV / NEXT 逐帧查看</p>
+    <div class="gl" style="margin-top:6px" id="glTake">TAKEAWAY</div>
+    <p style="color:#ffb59c" id="guideTake">低一致性区域需要特殊治理 -- 忽略它们会让模型学到错误模式</p>
+  </div>
+</div>
+
+<div class="wrapper">
+  <div class="header">
+    <h1 id="titleEl">MULTI-ANNOTATOR DISAGREEMENT</h1>
+    <button class="lang" id="langBtn">CN</button>
+  </div>
+
+  <div class="canvas-wrap">
+    <canvas id="c"></canvas>
+  </div>
+
+  <div class="controls">
+    <button class="ctrl-btn" id="btnPrev">PREV</button>
+    <div class="frame-dots" id="frameDots"></div>
+    <button class="ctrl-btn" id="btnPlay">PLAY</button>
+    <button class="ctrl-btn" id="btnNext">NEXT</button>
+  </div>
+
+  <div class="hud" id="hud">
+    <div class="hud-col"><div class="hud-label" id="hudL1">ANNOTATORS</div><div class="hud-val" id="hudV1">10</div></div>
+    <div class="hud-col"><div class="hud-label" id="hudL2">AGREEMENT</div><div class="hud-val" id="hudV2">--</div></div>
+    <div class="hud-col"><div class="hud-label" id="hudL3">CONFLICT ZONES</div><div class="hud-val" id="hudV3">--</div></div>
+    <div class="hud-col"><div class="hud-label" id="hudL4">ACTION</div><div class="hud-val" id="hudV4">--</div></div>
+  </div>
+</div>
+
+<script>
+(function(){
+"use strict";
+
+/* ── i18n ── */
+var LANG='cn';
+var I18N={
+  title:{en:'MULTI-ANNOTATOR DISAGREEMENT',cn:'MULTI-ANNOTATOR DISAGREEMENT'},
+  guideTitle:{en:'OBSERVER GUIDE',cn:'OBSERVER GUIDE'},
+  glShow:{en:'WHAT IT SHOWS',cn:'WHAT IT SHOWS'},
+  guideWhat:{en:'10 annotators label the same Mars terrain image differently; disagreement heatmap reveals low-consistency zones.',cn:'10 名标注者对同一张火星地貌图像给出不同标签，分歧热力图揭示低一致性区域。'},
+  glObs:{en:'OBSERVE',cn:'OBSERVE'},
+  obs1:{en:'Red zones = severe annotator disagreement',cn:'红色高亮区域 = 标注者意见严重分歧'},
+  obs2:{en:'Green zones = high agreement',cn:'绿色区域 = 高度一致'},
+  obs3:{en:'Boundary zones show most conflict -- ambiguity is noise source',cn:'边界处分歧最大 -- 模糊地带是噪声来源'},
+  glCtrl:{en:'CONTROLS',cn:'CONTROLS'},
+  guideCtrl:{en:'PLAY for auto demo, PREV / NEXT for step-by-step',cn:'PLAY 自动演示，PREV / NEXT 逐帧查看'},
+  glTake:{en:'TAKEAWAY',cn:'TAKEAWAY'},
+  guideTake:{en:'Low-consistency zones need governance -- ignoring them lets model learn wrong patterns',cn:'低一致性区域需要特殊治理 -- 忽略它们会让模型学到错误模式'},
+  btnPrev:{en:'PREV',cn:'PREV'},
+  btnPlay:{en:'PLAY',cn:'PLAY'},
+  btnPause:{en:'PAUSE',cn:'PAUSE'},
+  btnNext:{en:'NEXT',cn:'NEXT'},
+  hudL1:{en:'ANNOTATORS',cn:'ANNOTATORS'},
+  hudL2:{en:'AGREEMENT',cn:'AGREEMENT'},
+  hudL3:{en:'CONFLICT ZONES',cn:'CONFLICT ZONES'},
+  hudL4:{en:'ACTION',cn:'ACTION'},
+  f0title:{en:'RAW MARS IMAGE',cn:'RAW MARS IMAGE'},
+  f0sub:{en:'A Curiosity Navcam frame -- what humans see',cn:'Curiosity Navcam -- 原始图像'},
+  f1title:{en:'10 ANNOTATOR OVERLAYS',cn:'10 ANNOTATOR OVERLAYS'},
+  f1sub:{en:'Each color = one annotator\'s label map',cn:'每种颜色 = 一个标注者的标签图'},
+  f2title:{en:'DISAGREEMENT HEATMAP',cn:'DISAGREEMENT HEATMAP'},
+  f2sub:{en:'Red = low agreement, Green = consensus',cn:'红色 = 低一致性, 绿色 = 共识'},
+  f3title:{en:'CONFLICT ZONES EXTRACTED',cn:'CONFLICT ZONES EXTRACTED'},
+  f3sub:{en:'Low-consistency regions isolated for governance',cn:'低一致性区域被提取进治理清单'},
+  f4title:{en:'GOVERNANCE STRATEGY',cn:'GOVERNANCE STRATEGY'},
+  f4sub:{en:'Keep / Downweight / Discard decisions',cn:'保留 / 降权 / 丢弃 决策'},
+  keep:{en:'KEEP',cn:'KEEP'},
+  downweight:{en:'DOWNWEIGHT',cn:'DOWNWEIGHT'},
+  discard:{en:'DISCARD',cn:'DISCARD'},
+  hudAct0:{en:'Observe',cn:'Observe'},
+  hudAct1:{en:'Compare',cn:'Compare'},
+  hudAct2:{en:'Analyze',cn:'Analyze'},
+  hudAct3:{en:'Extract',cn:'Extract'},
+  hudAct4:{en:'Govern',cn:'Govern'},
+  soil:{en:'Soil',cn:'Soil'},
+  bedrock:{en:'Bedrock',cn:'Bedrock'},
+  sand:{en:'Sand',cn:'Sand'},
+  bigrock:{en:'BigRock',cn:'BigRock'},
+};
+function t(k){return(I18N[k]&&I18N[k][LANG])||(I18N[k]&&I18N[k]['en'])||k;}
+
+function refreshI18N(){
+  document.getElementById('langBtn').textContent=LANG.toUpperCase();
+  document.getElementById('titleEl').textContent=t('title');
+  document.getElementById('guideTitleEl').textContent=t('guideTitle');
+  document.getElementById('glShow').textContent=t('glShow');
+  document.getElementById('guideWhat').textContent=t('guideWhat');
+  document.getElementById('glObs').textContent=t('glObs');
+  document.getElementById('obs1').textContent=t('obs1');
+  document.getElementById('obs2').textContent=t('obs2');
+  document.getElementById('obs3').textContent=t('obs3');
+  document.getElementById('glCtrl').textContent=t('glCtrl');
+  document.getElementById('guideCtrl').textContent=t('guideCtrl');
+  document.getElementById('glTake').textContent=t('glTake');
+  document.getElementById('guideTake').textContent=t('guideTake');
+  document.getElementById('hudL1').textContent=t('hudL1');
+  document.getElementById('hudL2').textContent=t('hudL2');
+  document.getElementById('hudL3').textContent=t('hudL3');
+  document.getElementById('hudL4').textContent=t('hudL4');
+  updateHUD(currentFrame);
+  if(typeof drawCurrent==='function')drawCurrent();
+}
+document.getElementById('langBtn').addEventListener('click',function(){
+  LANG=LANG==='en'?'cn':'en';refreshI18N();
+});
+
+/* ── guide toggle ── */
+document.getElementById('guideToggle').addEventListener('click',function(){
+  var gc=document.getElementById('guideContent');
+  var arrow=document.getElementById('guideArrow');
+  if(gc.style.display==='none'){gc.style.display='';arrow.classList.remove('collapsed');}
+  else{gc.style.display='none';arrow.classList.add('collapsed');}
+});
+
+/* ── canvas setup ── */
+var canvas=document.getElementById('c');
+var ctx=canvas.getContext('2d');
+var W=700,H=440;
+var DPR=Math.min(window.devicePixelRatio||1,2);
+function resize(){
+  var rect=canvas.getBoundingClientRect();
+  if(rect.width<1||rect.height<1)return;
+  canvas.width=rect.width*DPR;
+  canvas.height=rect.height*DPR;
+  var scale=Math.min(rect.width/W,rect.height/H);
+  var drawW=W*scale,drawH=H*scale;
+  var offsetX=(rect.width-drawW)/2,offsetY=(rect.height-drawH)/2;
+  ctx.setTransform(DPR*scale,0,0,DPR*scale,DPR*offsetX,DPR*offsetY);
+}
+resize();
+window.addEventListener('resize',function(){resize();if(typeof drawCurrent==='function')drawCurrent();});
+if(typeof ResizeObserver!=='undefined'&&canvas.parentElement){
+  try{new ResizeObserver(function(){resize();if(typeof drawCurrent==='function')drawCurrent();}).observe(canvas.parentElement);}catch(e){}
+}
+
+/* ── colors ── */
+var P={bg:'#131313',surface:'#1c1b1b',primary:'#ffb59c',tertiary:'#00daf3',
+  text:'#e5e2e1',muted:'#8a8886',signal:'#ff5f1f',success:'#10b981',
+  outline:'rgba(138,136,134,0.15)'};
+
+/* ── helpers ── */
+function lerp(a,b,p){return a+(b-a)*p;}
+function easeInOut(x){return x<0.5?2*x*x:1-Math.pow(-2*x+2,2)/2;}
+function merge(base,ov){var r={};for(var k in base)r[k]=base[k];for(var k2 in ov)r[k2]=ov[k2];return r;}
+function hex2rgb(h){h=h.replace('#','');return[parseInt(h.substr(0,2),16),parseInt(h.substr(2,2),16),parseInt(h.substr(4,2),16)];}
+
+/* ── Procedural Mars terrain ── */
+function pseudoRand(x,y){return((Math.sin(x*12.9898+y*78.233)*43758.5453)%1+1)%1;}
+
+function drawMarsTerrainBlock(x,y,w,h,seed){
+  /* rocky mars surface procedural */
+  ctx.save();
+  ctx.beginPath();ctx.rect(x,y,w,h);ctx.clip();
+  var g=ctx.createRadialGradient(x+w*0.4,y+h*0.3,w*0.1,x+w*0.5,y+h*0.5,w*0.7);
+  g.addColorStop(0,'#c4956a');g.addColorStop(0.4,'#9b7044');g.addColorStop(1,'#6b4a2e');
+  ctx.fillStyle=g;ctx.fillRect(x,y,w,h);
+  /* terrain features */
+  var cols=['#b8845a','#8b6040','#a0784e','#7a5535','#d4a876'];
+  for(var i=0;i<40;i++){
+    var rx=x+pseudoRand(i+seed,0)*w;
+    var ry=y+pseudoRand(i+seed,1)*h;
+    var rr=2+pseudoRand(i+seed,2)*12;
+    ctx.beginPath();ctx.arc(rx,ry,rr,0,Math.PI*2);
+    ctx.fillStyle=cols[i%cols.length];ctx.globalAlpha=0.3+pseudoRand(i+seed,3)*0.4;
+    ctx.fill();
+  }
+  ctx.globalAlpha=1;
+  /* rocks */
+  for(var j=0;j<8;j++){
+    var bx=x+pseudoRand(j+seed+50,0)*w*0.8+w*0.1;
+    var by=y+pseudoRand(j+seed+50,1)*h*0.7+h*0.15;
+    var bw=6+pseudoRand(j+seed+50,2)*18;
+    var bh=4+pseudoRand(j+seed+50,3)*10;
+    var rg=ctx.createLinearGradient(bx,by,bx+bw,by+bh);
+    rg.addColorStop(0,'#5a3e28');rg.addColorStop(1,'#3d2a1a');
+    ctx.fillStyle=rg;
+    ctx.beginPath();
+    ctx.ellipse(bx+bw/2,by+bh/2,bw/2,bh/2,0,0,Math.PI*2);
+    ctx.fill();
+  }
+  ctx.restore();
+}
+
+/* ── Frame definitions ── */
+var totalFrames=5;
+var currentFrame=0;
+
+/* terrain region definitions for annotations */
+var regions=[
+  {x:0,y:0,w:0.35,h:0.5,label:'soil',agree:0.9},
+  {x:0.35,y:0,w:0.35,h:0.4,label:'bedrock',agree:0.85},
+  {x:0.7,y:0,w:0.3,h:0.5,label:'sand',agree:0.7},
+  {x:0,y:0.5,w:0.4,h:0.5,label:'sand',agree:0.55},
+  {x:0.4,y:0.4,w:0.3,h:0.6,label:'bigrock',agree:0.4},
+  {x:0.7,y:0.5,w:0.3,h:0.5,label:'soil',agree:0.6},
+  {x:0.25,y:0.35,w:0.2,h:0.2,label:'sand',agree:0.3},/* high conflict zone */
+];
+
+var labelColors={soil:'#10b981',bedrock:'#3b82f6',sand:'#f59e0b',bigrock:'#ef4444'};
+var annotatorColors=['#ff6b6b','#ffa64d','#ffd93d','#6bcb77','#4d96ff','#9b59b6','#e91e8a','#00daf3','#ff914d','#a8e6cf'];
+
+var hudData=[
+  {l1:'10',l2:'--',l3:'--',l4:'hudAct0'},
+  {l1:'10',l2:'--',l3:'--',l4:'hudAct1'},
+  {l1:'10',l2:'62%',l3:'3',l4:'hudAct2'},
+  {l1:'10',l2:'62%',l3:'3',l4:'hudAct3'},
+  {l1:'10',l2:'62%',l3:'3',l4:'hudAct4'},
+];
+
+function drawBg(){
+  var g=ctx.createRadialGradient(W/2,H/2,0,W/2,H/2,Math.max(W,H)*0.7);
+  g.addColorStop(0,'#1c1b1b');g.addColorStop(1,P.bg);
+  ctx.fillStyle=g;ctx.fillRect(0,0,W,H);
+  ctx.strokeStyle='rgba(0,218,243,0.04)';ctx.lineWidth=1;
+  for(var x=0;x<=W;x+=20){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,H);ctx.stroke();}
+  for(var y=0;y<=H;y+=20){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke();}
+}
+
+/* Image area */
+var IX=60,IY=50,IW=280,IH=200;
+
+function getFrameElements(f){
+  var els=[];
+  var cx=W/2,imgCX=IX+IW/2,imgCY=IY+IH/2;
+
+  if(f===0){
+    /* Frame 0: Raw Mars image */
+    els.push({id:'title',type:'label',text:function(){return t('f0title');},x:cx,y:22,color:P.primary,size:15,align:'center',bold:true,glow:8,glowColor:P.primary,alpha:1});
+    els.push({id:'subtitle',type:'text',text:function(){return t('f0sub');},x:cx,y:H-20,color:P.muted,size:11,align:'center',alpha:1});
+    els.push({id:'terrain',type:'custom',x:IX,y:IY,w:IW,h:IH,alpha:1,draw:function(a){
+      ctx.globalAlpha=a;drawMarsTerrainBlock(120,60,460,310,42);ctx.globalAlpha=1;
+    }});
+    /* Border glow */
+    els.push({id:'border',type:'box',x:120,y:60,w:460,h:310,borderColor:'rgba(255,191,156,0.3)',glow:6,glowColor:'rgba(255,127,80,0.2)',alpha:1});
+  }
+  else if(f===1){
+    /* Frame 1: 10 annotator overlays */
+    els.push({id:'title',type:'label',text:function(){return t('f1title');},x:cx,y:22,color:P.primary,size:15,align:'center',bold:true,glow:8,glowColor:P.primary,alpha:1});
+    els.push({id:'subtitle',type:'text',text:function(){return t('f1sub');},x:cx,y:H-20,color:P.muted,size:11,align:'center',alpha:1});
+    els.push({id:'terrain',type:'custom',x:120,y:60,w:460,h:310,alpha:1,draw:function(a){
+      ctx.globalAlpha=a*0.5;drawMarsTerrainBlock(120,60,460,310,42);ctx.globalAlpha=1;
+      /* draw annotator overlays */
+      for(var i=0;i<10;i++){
+        ctx.globalAlpha=a*0.15;
+        for(var r=0;r<regions.length;r++){
+          var reg=regions[r];
+          var rx=120+reg.x*460+pseudoRand(i,r*3)*8-4;
+          var ry=60+reg.y*310+pseudoRand(i,r*3+1)*8-4;
+          var rw=reg.w*460+pseudoRand(i,r*3+2)*10-5;
+          var rh=reg.h*310+pseudoRand(i+1,r)*8-4;
+          ctx.fillStyle=annotatorColors[i];
+          ctx.fillRect(rx,ry,rw,rh);
+        }
+      }
+      ctx.globalAlpha=1;
+    }});
+    els.push({id:'border',type:'box',x:120,y:60,w:460,h:310,borderColor:'rgba(255,191,156,0.3)',glow:6,glowColor:'rgba(255,127,80,0.2)',alpha:1});
+    /* annotator legend */
+    for(var ai=0;ai<10;ai++){
+      els.push({id:'ann'+ai,type:'custom',x:600,y:70+ai*28,alpha:1,draw:(function(idx){return function(a){
+        ctx.globalAlpha=a;
+        ctx.fillStyle=annotatorColors[idx];
+        ctx.fillRect(598,70+idx*28,12,12);
+        ctx.font="11px 'Space Grotesk',sans-serif";ctx.textAlign='left';
+        ctx.fillStyle=P.text;ctx.fillText('A'+(idx+1),616,80+idx*28);
+        ctx.globalAlpha=1;
+      };})(ai)});
+    }
+  }
+  else if(f===2){
+    /* Frame 2: Disagreement heatmap */
+    els.push({id:'title',type:'label',text:function(){return t('f2title');},x:cx,y:22,color:P.primary,size:15,align:'center',bold:true,glow:8,glowColor:P.primary,alpha:1});
+    els.push({id:'subtitle',type:'text',text:function(){return t('f2sub');},x:cx,y:H-20,color:P.muted,size:11,align:'center',alpha:1});
+    els.push({id:'terrain',type:'custom',x:120,y:60,w:460,h:310,alpha:1,draw:function(a){
+      ctx.globalAlpha=a*0.3;drawMarsTerrainBlock(120,60,460,310,42);ctx.globalAlpha=1;
+      /* heatmap overlay */
+      for(var r=0;r<regions.length;r++){
+        var reg=regions[r];
+        var rx=120+reg.x*460,ry=60+reg.y*310;
+        var rw=reg.w*460,rh=reg.h*310;
+        var disagree=1-reg.agree;
+        var rr=Math.floor(255*disagree);
+        var gg=Math.floor(255*reg.agree);
+        ctx.globalAlpha=a*0.45;
+        ctx.fillStyle='rgb('+rr+','+gg+',50)';
+        ctx.fillRect(rx,ry,rw,rh);
+        /* glow on high conflict */
+        if(disagree>0.5){
+          ctx.shadowColor='rgba(255,80,50,0.5)';ctx.shadowBlur=15;
+          ctx.fillRect(rx,ry,rw,rh);ctx.shadowBlur=0;
+        }
+      }
+      ctx.globalAlpha=1;
+    }});
+    els.push({id:'border',type:'box',x:120,y:60,w:460,h:310,borderColor:'rgba(255,191,156,0.3)',glow:6,glowColor:'rgba(255,127,80,0.2)',alpha:1});
+    /* color legend */
+    els.push({id:'legend',type:'custom',x:600,y:80,alpha:1,draw:function(a){
+      ctx.globalAlpha=a;
+      var grd=ctx.createLinearGradient(600,80,600,240);
+      grd.addColorStop(0,'rgb(255,0,50)');grd.addColorStop(0.5,'rgb(200,200,50)');grd.addColorStop(1,'rgb(0,255,50)');
+      ctx.fillStyle=grd;ctx.fillRect(600,80,16,160);
+      ctx.strokeStyle=P.outline;ctx.strokeRect(600,80,16,160);
+      ctx.font="10px 'Space Grotesk',sans-serif";ctx.fillStyle=P.text;ctx.textAlign='left';
+      ctx.fillText('HIGH',622,90);ctx.fillText('CONFLICT',622,100);
+      ctx.fillText('LOW',622,235);ctx.fillText('CONFLICT',622,245);
+      ctx.globalAlpha=1;
+    }});
+  }
+  else if(f===3){
+    /* Frame 3: Conflict zones extracted */
+    els.push({id:'title',type:'label',text:function(){return t('f3title');},x:cx,y:22,color:P.primary,size:15,align:'center',bold:true,glow:8,glowColor:P.primary,alpha:1});
+    els.push({id:'subtitle',type:'text',text:function(){return t('f3sub');},x:cx,y:H-20,color:P.muted,size:11,align:'center',alpha:1});
+    els.push({id:'terrain',type:'custom',x:120,y:60,w:460,h:310,alpha:1,draw:function(a){
+      ctx.globalAlpha=a*0.25;drawMarsTerrainBlock(120,60,460,310,42);ctx.globalAlpha=1;
+      /* only show conflict zones (agree < 0.6) with pulsing border */
+      var pulse=0.7+0.3*Math.sin(Date.now()*0.003);
+      for(var r=0;r<regions.length;r++){
+        var reg=regions[r];
+        if(reg.agree>=0.6)continue;
+        var rx=120+reg.x*460,ry=60+reg.y*310;
+        var rw=reg.w*460,rh=reg.h*310;
+        ctx.globalAlpha=a*0.3;
+        ctx.fillStyle='rgba(255,95,31,0.25)';ctx.fillRect(rx,ry,rw,rh);
+        ctx.globalAlpha=a*pulse;
+        ctx.strokeStyle=P.signal;ctx.lineWidth=2;
+        ctx.setLineDash([6,4]);ctx.strokeRect(rx+1,ry+1,rw-2,rh-2);ctx.setLineDash([]);
+        /* label */
+        ctx.globalAlpha=a;
+        ctx.font="bold 11px 'Space Grotesk',sans-serif";
+        ctx.fillStyle=P.signal;ctx.textAlign='center';
+        ctx.fillText((reg.agree*100).toFixed(0)+'%',rx+rw/2,ry+rh/2+4);
+      }
+      ctx.globalAlpha=1;
+    }});
+    els.push({id:'border',type:'box',x:120,y:60,w:460,h:310,borderColor:'rgba(255,95,31,0.4)',glow:8,glowColor:'rgba(255,95,31,0.2)',alpha:1});
+    /* extracted list */
+    els.push({id:'list',type:'custom',x:600,y:80,alpha:1,draw:function(a){
+      ctx.globalAlpha=a;
+      ctx.font="bold 12px 'Space Grotesk',sans-serif";ctx.fillStyle=P.primary;ctx.textAlign='left';
+      ctx.fillText('CONFLICT LIST',598,80);
+      var conflicts=regions.filter(function(r){return r.agree<0.6;});
+      conflicts.forEach(function(c,i){
+        var yy=100+i*32;
+        ctx.fillStyle='rgba(255,95,31,0.15)';ctx.fillRect(596,yy-2,90,24);
+        ctx.strokeStyle='rgba(255,95,31,0.4)';ctx.lineWidth=1;ctx.strokeRect(596,yy-2,90,24);
+        ctx.font="11px 'JetBrains Mono',monospace";ctx.fillStyle=P.signal;
+        ctx.fillText(c.label,602,yy+12);
+        ctx.fillStyle=P.muted;ctx.fillText((c.agree*100).toFixed(0)+'%',650,yy+12);
+      });
+      ctx.globalAlpha=1;
+    }});
+  }
+  else if(f===4){
+    /* Frame 4: Governance strategy */
+    els.push({id:'title',type:'label',text:function(){return t('f4title');},x:cx,y:22,color:P.primary,size:15,align:'center',bold:true,glow:8,glowColor:P.primary,alpha:1});
+    els.push({id:'subtitle',type:'text',text:function(){return t('f4sub');},x:cx,y:H-20,color:P.muted,size:11,align:'center',alpha:1});
+    /* three strategy buckets */
+    var buckets=[
+      {label:'keep',color:P.success,desc:'>=80%',x:90,w:170},
+      {label:'downweight',color:'#f59e0b',desc:'50-80%',x:270,w:170},
+      {label:'discard',color:P.signal,desc:'<50%',x:450,w:170},
+    ];
+    buckets.forEach(function(b,i){
+      els.push({id:'bucket'+i,type:'custom',x:b.x,y:70,w:b.w,alpha:1,draw:function(a){
+        ctx.globalAlpha=a;
+        /* bucket box */
+        var bg=ctx.createLinearGradient(b.x,70,b.x,330);
+        bg.addColorStop(0,'rgba(28,27,27,0.95)');bg.addColorStop(1,'rgba(19,19,19,0.98)');
+        ctx.fillStyle=bg;ctx.fillRect(b.x,70,b.w,260);
+        ctx.strokeStyle=b.color;ctx.lineWidth=2;
+        ctx.strokeRect(b.x,70,b.w,260);
+        /* top accent */
+        ctx.fillStyle=b.color;ctx.fillRect(b.x,70,b.w,3);
+        /* header */
+        ctx.shadowColor=b.color;ctx.shadowBlur=8;
+        ctx.font="bold 13px 'Space Grotesk',sans-serif";ctx.textAlign='center';
+        ctx.fillStyle=b.color;ctx.fillText(t(b.label),b.x+b.w/2,95);
+        ctx.shadowBlur=0;
+        ctx.font="11px 'Space Grotesk',sans-serif";ctx.fillStyle=P.muted;
+        ctx.fillText(b.desc,b.x+b.w/2,112);
+        /* items */
+        var items=regions.filter(function(r){
+          if(i===0)return r.agree>=0.8;
+          if(i===1)return r.agree>=0.5&&r.agree<0.8;
+          return r.agree<0.5;
+        });
+        items.forEach(function(it,j){
+          var iy=130+j*40;
+          ctx.fillStyle='rgba(255,255,255,0.04)';ctx.fillRect(b.x+8,iy,b.w-16,32);
+          ctx.strokeStyle='rgba(255,255,255,0.08)';ctx.strokeRect(b.x+8,iy,b.w-16,32);
+          ctx.font="11px 'JetBrains Mono',monospace";ctx.textAlign='left';
+          ctx.fillStyle=labelColors[it.label]||P.text;ctx.fillText(t(it.label),b.x+14,iy+14);
+          ctx.fillStyle=P.muted;ctx.fillText((it.agree*100).toFixed(0)+'%',b.x+14,iy+27);
+          /* action icon */
+          ctx.font="10px 'Space Grotesk',sans-serif";ctx.textAlign='right';
+          ctx.fillStyle=b.color;
+          var acts=['TRAIN','WEIGHT x0.5','DROP'];
+          ctx.fillText(acts[i],b.x+b.w-14,iy+20);
+        });
+        ctx.globalAlpha=1;
+      }});
+    });
+  }
+  return els;
+}
+
+/* ── drawElement ── */
+function drawElement(el){
+  if(!el||el.alpha<=0.01)return;
+  ctx.save();ctx.globalAlpha=el.alpha;
+  switch(el.type){
+    case 'label':
+      ctx.font=(el.bold?'bold ':'')+(el.size||14)+"px 'Space Grotesk','Inter',sans-serif";
+      ctx.textAlign=el.align||'left';ctx.textBaseline=el.baseline||'top';
+      if(el.glow){ctx.shadowColor=el.glowColor||P.primary;ctx.shadowBlur=el.glow;}
+      ctx.fillStyle=el.color||P.text;
+      ctx.fillText(typeof el.text==='function'?el.text():el.text,el.x,el.y);
+      ctx.shadowBlur=0;break;
+    case 'text':
+      ctx.font=(el.size||13)+"px 'Noto Sans SC','Inter',sans-serif";
+      ctx.textAlign=el.align||'left';ctx.textBaseline=el.baseline||'top';
+      ctx.fillStyle=el.color||P.text;
+      var lines=(typeof el.text==='function'?el.text():el.text).split('\n');
+      var lh=el.lineHeight||(el.size||13)*1.5;
+      lines.forEach(function(ln,i){ctx.fillText(ln,el.x,el.y+i*lh);});break;
+    case 'box':
+      if(el.fill){ctx.fillStyle=el.fill;ctx.fillRect(el.x,el.y,el.w,el.h);}
+      if(el.borderColor){
+        if(el.glow){ctx.shadowColor=el.glowColor||el.borderColor;ctx.shadowBlur=el.glow;}
+        ctx.strokeStyle=el.borderColor;ctx.lineWidth=el.borderWidth||1;
+        ctx.strokeRect(el.x,el.y,el.w,el.h);ctx.shadowBlur=0;
+      }break;
+    case 'custom':if(el.draw)el.draw(el.alpha);break;
+  }
+  ctx.restore();
+}
+
+/* ── transition engine ── */
+var transitioning=false;
+function transitionTo(nf){
+  if(nf<0)nf=0;if(nf>=totalFrames)nf=totalFrames-1;
+  if(nf===currentFrame&&!transitioning){drawFrame(currentFrame);updateHUD(currentFrame);return;}
+  if(transitioning)return;
+  var oldElems=getFrameElements(currentFrame);
+  var newElems=getFrameElements(nf);
+  var oldMap={};oldElems.forEach(function(e){oldMap[e.id]=e;});
+  var newMap={};newElems.forEach(function(e){newMap[e.id]=e;});
+  currentFrame=nf;updateHUD(nf);updateDots();transitioning=true;
+  var startTime=null,duration=500;
+  function step(ts){
+    if(!startTime)startTime=ts;
+    var raw=Math.min((ts-startTime)/duration,1);var p=easeInOut(raw);
+    drawBg();
+    oldElems.forEach(function(oe){if(!newMap[oe.id])drawElement(merge(oe,{alpha:1-p}));});
+    newElems.forEach(function(ne){
+      var oe=oldMap[ne.id];
+      if(oe){
+        var m2=merge(ne,{x:lerp(oe.x||0,ne.x||0,p),y:lerp(oe.y||0,ne.y||0,p),
+          w:lerp(oe.w||0,ne.w||0,p),h:lerp(oe.h||0,ne.h||0,p),alpha:1});
+        if((ne.type==='label'||ne.type==='text')&&(typeof oe.text==='function'?oe.text():oe.text)!==(typeof ne.text==='function'?ne.text():ne.text)){
+          drawElement(merge(oe,{alpha:1-p}));drawElement(merge(ne,{alpha:p}));
+        }else{drawElement(m2);}
+      }else{drawElement(merge(ne,{alpha:p}));}
+    });
+    if(raw<1){requestAnimationFrame(step);}else{transitioning=false;}
+  }
+  requestAnimationFrame(step);
+}
+
+function drawFrame(f){drawBg();var elems=getFrameElements(f);elems.forEach(function(el){drawElement(el);});}
+function drawCurrent(){drawFrame(currentFrame);}
+
+/* ── HUD ── */
+function updateHUD(f){
+  var d=hudData[f]||hudData[0];
+  document.getElementById('hudV1').textContent=d.l1;
+  document.getElementById('hudV2').textContent=d.l2;
+  document.getElementById('hudV3').textContent=d.l3;
+  document.getElementById('hudV4').textContent=t(d.l4);
+  updateControlsText();
+}
+
+/* ── controls ── */
+var playing=false,playTimer=null;
+function updateControlsText(){
+  document.getElementById('btnPlay').textContent=playing?t('btnPause'):t('btnPlay');
+  document.getElementById('btnPrev').textContent=t('btnPrev');
+  document.getElementById('btnNext').textContent=t('btnNext');
+}
+
+/* frame dots */
+var dotsEl=document.getElementById('frameDots');
+for(var di=0;di<totalFrames;di++){
+  var dot=document.createElement('div');dot.className='frame-dot';dot.dataset.f=di;
+  if(di===0)dot.classList.add('active');
+  dotsEl.appendChild(dot);
+  dot.addEventListener('click',(function(idx){return function(){
+    if(playing){playing=false;clearInterval(playTimer);}
+    transitionTo(idx);
+  };})(di));
+}
+function updateDots(){
+  var dots=dotsEl.querySelectorAll('.frame-dot');
+  dots.forEach(function(d,i){d.classList.toggle('active',i===currentFrame);});
+}
+
+document.getElementById('btnPrev').addEventListener('click',function(){
+  if(playing){playing=false;clearInterval(playTimer);}transitionTo(currentFrame-1);
+});
+document.getElementById('btnNext').addEventListener('click',function(){
+  if(playing){playing=false;clearInterval(playTimer);}transitionTo(currentFrame+1);
+});
+document.getElementById('btnPlay').addEventListener('click',function(){
+  playing=!playing;
+  if(playing){
+    if(currentFrame>=totalFrames-1)transitionTo(0);
+    playTimer=setInterval(function(){
+      if(currentFrame>=totalFrames-1){playing=false;clearInterval(playTimer);updateControlsText();return;}
+      transitionTo(currentFrame+1);
+    },3000);
+  }else{clearInterval(playTimer);}
+  updateControlsText();
+});
+
+/* ── init ── */
+refreshI18N();
+updateHUD(0);
+drawCurrent();
+setTimeout(function(){resize();drawCurrent();},200);
+setTimeout(function(){resize();drawCurrent();},600);
+if(document.fonts&&document.fonts.ready){document.fonts.ready.then(function(){resize();drawCurrent();});}
+
+})();
+</script>
+</body>
+</html>

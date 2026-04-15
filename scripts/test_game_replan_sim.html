@@ -1,0 +1,481 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Replan Simulator</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;700&family=Inter:wght@400;500&family=Noto+Sans+SC:wght@400;700&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0;border-radius:0!important;}
+html,body{width:100%;height:100vh;overflow:hidden;background:#131313;font-family:'Noto Sans SC','Inter',sans-serif;color:#e5e2e1;}
+.wrapper{display:flex;flex-direction:column;height:100vh;width:100%;}
+.header{padding:5px 16px;background:rgba(28,27,27,0.92);border-bottom:1px solid rgba(138,136,134,0.15);flex-shrink:0;display:flex;align-items:center;justify-content:space-between;}
+.header h1{font-family:'Space Grotesk',sans-serif;font-size:13px;font-weight:700;color:#ffb59c;letter-spacing:1px;}
+.header .sub{font-size:10px;color:#8a8886;}
+.main-area{flex:1;min-height:0;display:flex;position:relative;}
+.canvas-col{flex:1;min-width:0;position:relative;overflow:hidden;}
+canvas{display:block;width:100%;height:100%;}
+.side-panel{width:200px;flex-shrink:0;background:rgba(28,27,27,0.92);border-left:1px solid rgba(138,136,134,0.15);display:flex;flex-direction:column;padding:8px;overflow-y:auto;font-size:11px;}
+.side-panel h2{font-family:'Space Grotesk',sans-serif;font-size:11px;color:#ffb59c;margin-bottom:6px;letter-spacing:1px;}
+.ctrl-btn{font-family:'Space Grotesk',sans-serif;font-size:10px;font-weight:700;padding:5px 12px;cursor:pointer;border:1px solid rgba(255,255,255,0.08);background:rgba(20,20,20,0.85);backdrop-filter:blur(12px);color:#ffb59c;letter-spacing:1px;transition:background 0.2s;width:100%;margin-bottom:5px;}
+.ctrl-btn:hover{background:rgba(255,127,80,0.15);}
+.ctrl-btn.go{color:#10b981;border-color:rgba(16,185,129,0.3);}
+.ctrl-btn.warn{color:#ff5f1f;border-color:rgba(255,95,31,0.3);}
+.ctrl-btn:disabled{opacity:0.35;cursor:not-allowed;}
+.log-box{flex:1;min-height:0;overflow-y:auto;background:rgba(10,10,10,0.6);border:1px solid rgba(138,136,134,0.1);padding:4px;font-family:'Space Grotesk',monospace;font-size:9px;line-height:1.4;color:#8a8886;margin-top:6px;}
+.log-box .log-replan{color:#ff5f1f;}
+.log-box .log-success{color:#10b981;}
+.log-box .log-cmd{color:#ffb59c;}
+.bottom-bar{display:flex;align-items:center;justify-content:space-around;padding:4px 16px;background:rgba(0,0,0,0.55);flex-shrink:0;height:36px;font-family:'Space Grotesk',sans-serif;font-size:10px;color:#8a8886;}
+.bottom-bar .hud-val{color:#ffb59c;font-weight:700;}
+.lang-btn{position:fixed;top:8px;left:8px;z-index:100;font-family:'Space Grotesk',sans-serif;font-size:11px;font-weight:700;padding:4px 10px;cursor:pointer;border:1px solid rgba(255,255,255,0.08);background:rgba(20,20,35,0.85);backdrop-filter:blur(12px);color:#ffb59c;letter-spacing:1px;}
+.guide-panel{position:fixed;top:8px;right:210px;width:210px;max-height:36vh;overflow-y:auto;background:rgba(20,20,20,0.88);backdrop-filter:blur(12px);border:1px solid rgba(255,255,255,0.08);padding:8px;z-index:100;font-family:'Noto Sans SC',sans-serif;font-size:11px;color:rgba(255,255,255,0.85);}
+.guide-panel h3{font-family:'Space Grotesk',sans-serif;font-size:11px;margin-bottom:4px;display:flex;align-items:center;justify-content:space-between;cursor:pointer;color:#ffb59c;}
+.guide-panel ul{padding-left:12px;line-height:1.5;}
+.guide-panel .guide-content{transition:max-height 0.3s;overflow:hidden;}
+.success-overlay{position:absolute;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.7);display:none;flex-direction:column;align-items:center;justify-content:center;z-index:50;}
+.success-overlay.show{display:flex;}
+.success-box{background:rgba(20,20,20,0.95);border:1px solid rgba(16,185,129,0.3);padding:18px 24px;text-align:center;max-width:320px;}
+.success-box h2{font-family:'Space Grotesk',sans-serif;font-size:15px;color:#10b981;margin-bottom:6px;}
+.success-box p{font-size:11px;color:#e5e2e1;line-height:1.6;margin-bottom:8px;}
+</style>
+</head>
+<body>
+<button class="lang-btn" id="langBtn">CN</button>
+<div class="guide-panel" id="guidePanel">
+  <h3 id="guideToggle"><span id="guideTitle"></span><span id="guideArrow">-</span></h3>
+  <div class="guide-content" id="guideContent">
+    <p id="guideGoal" style="margin-bottom:4px;"></p>
+    <ul id="guideSteps"></ul>
+    <p id="guideTips" style="margin-top:4px;font-style:italic;color:#ffb59c;"></p>
+  </div>
+</div>
+<div class="wrapper">
+  <div class="header">
+    <div><h1 id="mainTitle"></h1><span class="sub" id="mainSub"></span></div>
+  </div>
+  <div class="main-area">
+    <div class="canvas-col" id="canvasCol">
+      <canvas id="c"></canvas>
+      <div class="success-overlay" id="successOverlay">
+        <div class="success-box">
+          <h2 id="successTitle"></h2>
+          <p id="successMsg"></p>
+          <button class="ctrl-btn" id="btnReplay"></button>
+        </div>
+      </div>
+    </div>
+    <div class="side-panel" id="sidePanel">
+      <h2 id="panelTitle"></h2>
+      <button class="ctrl-btn go" id="btnStart"></button>
+      <button class="ctrl-btn warn" id="btnInjectObs" disabled></button>
+      <button class="ctrl-btn" id="btnReset"></button>
+      <hr style="border-color:rgba(138,136,134,0.15);margin:6px 0;">
+      <div style="margin-bottom:4px;"><span id="lblReplans" style="color:#8a8886;"></span> <span id="valReplans" style="color:#ff5f1f;font-weight:700;">0</span></div>
+      <div style="margin-bottom:4px;"><span id="lblWP" style="color:#8a8886;"></span> <span id="valWP" style="color:#10b981;font-weight:700;">0/6</span></div>
+      <div style="margin-bottom:4px;"><span id="lblStatus" style="color:#8a8886;"></span> <span id="valStatus" style="color:#ffb59c;font-weight:700;">IDLE</span></div>
+      <h2 id="logTitle" style="margin-top:6px;"></h2>
+      <div class="log-box" id="logBox"></div>
+    </div>
+  </div>
+  <div class="bottom-bar">
+    <div><span id="hudL1"></span> <span class="hud-val" id="hudV1">0.0s</span></div>
+    <div><span id="hudL2"></span> <span class="hud-val" id="hudV2">IDLE</span></div>
+    <div><span id="hudL3"></span> <span class="hud-val" id="hudV3">0</span></div>
+  </div>
+</div>
+<script>
+(function(){
+var LANG='cn';
+var I18N={
+  title:{en:'REPLAN SIMULATOR',cn:'动态重规划仿真器'},
+  sub:{en:'P-MARS-01-M35 | Inject obstacles, trigger replanning',cn:'P-MARS-01-M35 | 注入障碍，触发重规划'},
+  guide:{en:'GUIDE',cn:'操作指南'},
+  guideGoal:{en:'Start rover driving, then inject obstacles on its path to trigger replanning.',cn:'启动 rover 行驶，然后在路径上注入障碍触发重规划。'},
+  guideS1:{en:'Click START to begin -- rover follows the blue planned path',cn:'点击 START 启动 -- rover 沿蓝色规划路径行驶'},
+  guideS2:{en:'Click INJECT OBS to place a new obstacle ahead of the rover',cn:'点击 INJECT OBS 在 rover 前方放置新障碍'},
+  guideS3:{en:'Watch the system detect the obstacle and compute a new path',cn:'观察系统检测到障碍并计算新路径'},
+  guideS4:{en:'Inject at least 2 obstacles and guide the rover to the goal',cn:'至少注入 2 次障碍，引导 rover 到达终点'},
+  guideTips:{en:'Successfully navigate with 2+ replans to complete the mission.',cn:'成功完成 2 次以上重规划并到达终点即为通关。'},
+  panelTitle:{en:'CONTROLS',cn:'控制面板'},
+  btnStart:{en:'START',cn:'启动'},
+  btnInjectObs:{en:'INJECT OBSTACLE',cn:'注入障碍'},
+  btnReset:{en:'RESET',cn:'重置'},
+  btnReplay:{en:'TRY AGAIN',cn:'再试一次'},
+  lblReplans:{en:'REPLANS:',cn:'重规划次数:'},
+  lblWP:{en:'WAYPOINTS:',cn:'路径点:'},
+  lblStatus:{en:'STATUS:',cn:'状态:'},
+  logTitle:{en:'EVENT LOG',cn:'事件日志'},
+  statusIdle:{en:'IDLE',cn:'待机'},
+  statusDriving:{en:'DRIVING',cn:'行驶中'},
+  statusReplanning:{en:'REPLANNING',cn:'重规划中'},
+  statusArrived:{en:'ARRIVED',cn:'已到达'},
+  statusCrash:{en:'COLLISION',cn:'碰撞'},
+  successTitle:{en:'MISSION COMPLETE!',cn:'任务完成!'},
+  successMsg:{en:'The rover successfully navigated to the goal despite dynamic obstacles. Real-time replanning is essential -- without it, the rover would crash into newly discovered obstacles even with a perfect initial path.',cn:'rover 在动态障碍下成功到达终点。实时重规划是必不可少的 -- 没有它，即使初始路径完美，rover 也会撞上新发现的障碍物。'},
+  logStart:{en:'[START] Rover begins following planned path',cn:'[启动] Rover 开始沿规划路径行驶'},
+  logObs:{en:'[OBS] New obstacle detected at',cn:'[障碍] 在以下位置检测到新障碍'},
+  logReplan:{en:'[REPLAN] Computing new path...',cn:'[重规划] 正在计算新路径...'},
+  logReplanDone:{en:'[REPLAN] New path generated, resuming',cn:'[重规划] 新路径已生成，继续行驶'},
+  logWP:{en:'[WP] Reached waypoint',cn:'[路径点] 到达路径点'},
+  logGoal:{en:'[GOAL] Destination reached!',cn:'[终点] 到达目的地!'},
+  logCrash:{en:'[CRASH] Rover hit an obstacle!',cn:'[碰撞] Rover 撞上了障碍物!'},
+  hudTime:{en:'SIM TIME',cn:'仿真时间'},
+  hudStatus:{en:'STATUS',cn:'状态'},
+  hudReplans:{en:'REPLANS',cn:'重规划'}
+};
+function t(k){return(I18N[k]&&I18N[k][LANG])||(I18N[k]&&I18N[k]['en'])||k;}
+
+var canvas=document.getElementById('c');
+var ctx=canvas.getContext('2d');
+var wrap=document.getElementById('canvasCol');
+var W=600,H=400,DPR=1;
+
+// Grid-based map (20x14)
+var COLS=20,ROWS=14;
+var obstacles=[];// [{col,row}]
+var goalCell={col:18,row:2};
+var startCell={col:1,row:12};
+
+// Simple A* on grid
+function heuristic(a,b){return Math.abs(a.col-b.col)+Math.abs(a.row-b.row);}
+function cellKey(c){return c.col+','+c.row;}
+function isBlocked(col,row){
+  if(col<0||col>=COLS||row<0||row>=ROWS)return true;
+  for(var i=0;i<obstacles.length;i++){
+    if(obstacles[i].col===col&&obstacles[i].row===row)return true;
+  }
+  return false;
+}
+function findPath(start,goal){
+  var open=[{col:start.col,row:start.row,g:0,f:heuristic(start,goal),parent:null}];
+  var closed={};
+  while(open.length>0){
+    open.sort(function(a,b){return a.f-b.f;});
+    var cur=open.shift();
+    var key=cellKey(cur);
+    if(closed[key])continue;
+    closed[key]=cur;
+    if(cur.col===goal.col&&cur.row===goal.row){
+      var path=[];var n=cur;
+      while(n){path.unshift({col:n.col,row:n.row});n=n.parent;}
+      return path;
+    }
+    var dirs=[[1,0],[-1,0],[0,1],[0,-1],[1,1],[1,-1],[-1,1],[-1,-1]];
+    for(var d=0;d<dirs.length;d++){
+      var nc=cur.col+dirs[d][0],nr=cur.row+dirs[d][1];
+      if(isBlocked(nc,nr))continue;
+      var nk=nc+','+nr;if(closed[nk])continue;
+      var g2=cur.g+(dirs[d][0]!==0&&dirs[d][1]!==0?1.41:1);
+      open.push({col:nc,row:nr,g:g2,f:g2+heuristic({col:nc,row:nr},goal),parent:cur});
+    }
+  }
+  return null;
+}
+
+var sim={
+  running:false,path:null,pathIdx:0,
+  x:0,y:0,heading:0,
+  time:0,replans:0,wpReached:0,
+  status:'idle',trail:[],finished:false
+};
+var simRAF=null;
+
+function cellToScreen(col,row){
+  var cw=W/COLS,ch=H/ROWS;
+  return{x:col*cw+cw/2,y:row*ch+ch/2};
+}
+
+function resize(){
+  var rect=wrap.getBoundingClientRect();
+  if(rect.width<1||rect.height<1)return;
+  DPR=Math.min(window.devicePixelRatio||1,2);
+  W=rect.width;H=rect.height;
+  canvas.width=W*DPR;canvas.height=H*DPR;
+  canvas.style.width=W+'px';canvas.style.height=H+'px';
+  ctx.setTransform(DPR,0,0,DPR,0,0);
+  drawScene();
+}
+window.addEventListener('resize',resize);
+setTimeout(resize,200);setTimeout(resize,600);
+document.fonts.ready.then(function(){resize();});
+
+function drawBg(){
+  var g=ctx.createLinearGradient(0,0,0,H);
+  g.addColorStop(0,'#131313');g.addColorStop(1,'#1a1510');
+  ctx.fillStyle=g;ctx.fillRect(0,0,W,H);
+  // Grid lines
+  var cw=W/COLS,ch=H/ROWS;
+  ctx.strokeStyle='rgba(255,127,80,0.06)';ctx.lineWidth=0.5;
+  for(var c=0;c<=COLS;c++){ctx.beginPath();ctx.moveTo(c*cw,0);ctx.lineTo(c*cw,H);ctx.stroke();}
+  for(var r=0;r<=ROWS;r++){ctx.beginPath();ctx.moveTo(0,r*ch);ctx.lineTo(W,r*ch);ctx.stroke();}
+}
+
+function drawGrid(){
+  var cw=W/COLS,ch=H/ROWS;
+  // Start
+  var ss=cellToScreen(startCell.col,startCell.row);
+  ctx.fillStyle='rgba(0,218,243,0.15)';ctx.fillRect(ss.x-cw/2,ss.y-ch/2,cw,ch);
+  ctx.fillStyle='#00daf3';ctx.font='bold 9px "Space Grotesk"';ctx.textAlign='center';ctx.textBaseline='middle';
+  ctx.fillText('S',ss.x,ss.y);
+  // Goal
+  var gs=cellToScreen(goalCell.col,goalCell.row);
+  ctx.fillStyle='rgba(16,185,129,0.15)';ctx.fillRect(gs.x-cw/2,gs.y-ch/2,cw,ch);
+  ctx.fillStyle='#10b981';ctx.fillText('G',gs.x,gs.y);
+  // Obstacles
+  for(var i=0;i<obstacles.length;i++){
+    var os=cellToScreen(obstacles[i].col,obstacles[i].row);
+    var og=ctx.createRadialGradient(os.x,os.y,2,os.x,os.y,cw*0.5);
+    og.addColorStop(0,'#ff5f1f');og.addColorStop(1,'rgba(255,95,31,0.2)');
+    ctx.fillStyle=og;ctx.fillRect(os.x-cw/2+1,os.y-ch/2+1,cw-2,ch-2);
+    ctx.fillStyle='#131313';ctx.font='bold 10px "Space Grotesk"';
+    ctx.fillText('X',os.x,os.y);
+  }
+}
+
+function drawPath(path,color,dashed){
+  if(!path||path.length<2)return;
+  ctx.save();
+  ctx.strokeStyle=color;ctx.lineWidth=2;ctx.shadowColor=color;ctx.shadowBlur=5;
+  if(dashed)ctx.setLineDash([4,3]);
+  ctx.beginPath();
+  for(var i=0;i<path.length;i++){
+    var s=cellToScreen(path[i].col,path[i].row);
+    if(i===0)ctx.moveTo(s.x,s.y);else ctx.lineTo(s.x,s.y);
+  }
+  ctx.stroke();ctx.setLineDash([]);ctx.shadowBlur=0;ctx.restore();
+}
+
+function drawTrail(){
+  if(sim.trail.length<2)return;
+  ctx.save();ctx.strokeStyle='rgba(255,181,156,0.4)';ctx.lineWidth=1.5;
+  ctx.beginPath();
+  for(var i=0;i<sim.trail.length;i++){
+    if(i===0)ctx.moveTo(sim.trail[i].x,sim.trail[i].y);
+    else ctx.lineTo(sim.trail[i].x,sim.trail[i].y);
+  }
+  ctx.stroke();ctx.restore();
+}
+
+function drawRover(sx,sy,heading){
+  ctx.save();ctx.translate(sx,sy);ctx.rotate(heading);
+  var sz=8;
+  var g=ctx.createLinearGradient(-sz,-sz/2,sz,sz/2);
+  g.addColorStop(0,'#c6c6c6');g.addColorStop(0.5,'#8a8886');g.addColorStop(1,'#555');
+  ctx.fillStyle=g;ctx.fillRect(-sz,-sz/2,sz*2,sz);
+  ctx.fillStyle='#ff5f1f';ctx.beginPath();
+  ctx.moveTo(sz+2,0);ctx.lineTo(sz+6,-3);ctx.lineTo(sz+6,3);ctx.closePath();ctx.fill();
+  ctx.restore();
+}
+
+function drawScene(){
+  drawBg();drawGrid();
+  // Draw old paths as dashed gray
+  drawPath(sim.path,'#00daf3',false);
+  drawTrail();
+  // Rover
+  if(sim.running||sim.trail.length>0){
+    drawRover(sim.x,sim.y,sim.heading);
+  }else{
+    var sp=cellToScreen(startCell.col,startCell.row);
+    drawRover(sp.x,sp.y,0);
+  }
+}
+
+function addLog(msg,cls){
+  var box=document.getElementById('logBox');
+  var div=document.createElement('div');
+  div.textContent=msg;
+  if(cls)div.className=cls;
+  box.appendChild(div);
+  box.scrollTop=box.scrollHeight;
+}
+
+function startSim(){
+  if(sim.running)return;
+  obstacles=[];
+  sim.path=findPath(startCell,goalCell);
+  if(!sim.path){addLog('No path found!','log-replan');return;}
+  sim.pathIdx=1;
+  var sp=cellToScreen(startCell.col,startCell.row);
+  sim.x=sp.x;sim.y=sp.y;sim.heading=0;
+  sim.time=0;sim.replans=0;sim.wpReached=0;
+  sim.status='driving';sim.trail=[{x:sp.x,y:sp.y}];sim.finished=false;
+  sim.running=true;
+  document.getElementById('btnInjectObs').disabled=false;
+  document.getElementById('logBox').innerHTML='';
+  addLog(t('logStart'),'log-cmd');
+  updateStatus();
+
+  var lastT=null;
+  function loop(ts){
+    if(!sim.running)return;
+    if(!lastT)lastT=ts;
+    var dt=Math.min((ts-lastT)/1000,0.05);lastT=ts;
+    simStep(dt);
+    drawScene();
+    if(sim.finished){sim.running=false;updateStatus();return;}
+    simRAF=requestAnimationFrame(loop);
+  }
+  simRAF=requestAnimationFrame(loop);
+}
+
+function simStep(dt){
+  sim.time+=dt;
+  if(sim.pathIdx>=sim.path.length){
+    sim.finished=true;sim.status='arrived';
+    addLog(t('logGoal'),'log-success');
+    if(sim.replans>=2){showSuccess();}
+    return;
+  }
+  var target=cellToScreen(sim.path[sim.pathIdx].col,sim.path[sim.pathIdx].row);
+  var dx=target.x-sim.x,dy=target.y-sim.y;
+  var dist=Math.sqrt(dx*dx+dy*dy);
+  var speed=80;// px/s
+
+  if(dist<4){
+    sim.wpReached++;
+    sim.pathIdx++;
+    addLog(t('logWP')+' #'+sim.wpReached,'log-cmd');
+    return;
+  }
+
+  // Check collision with obstacles
+  var cw=W/COLS;
+  for(var i=0;i<obstacles.length;i++){
+    var os=cellToScreen(obstacles[i].col,obstacles[i].row);
+    var od=Math.sqrt((sim.x-os.x)*(sim.x-os.x)+(sim.y-os.y)*(sim.y-os.y));
+    if(od<cw*0.4){
+      sim.finished=true;sim.status='crash';
+      addLog(t('logCrash'),'log-replan');
+      return;
+    }
+  }
+
+  sim.heading=Math.atan2(dy,dx);
+  sim.x+=Math.cos(sim.heading)*speed*dt;
+  sim.y+=Math.sin(sim.heading)*speed*dt;
+  sim.trail.push({x:sim.x,y:sim.y});
+
+  document.getElementById('hudV1').textContent=sim.time.toFixed(1)+'s';
+}
+
+function injectObstacle(){
+  if(!sim.running||sim.finished)return;
+  // Place obstacle a few cells ahead on current path
+  var aheadIdx=Math.min(sim.pathIdx+2,sim.path.length-2);
+  if(aheadIdx<1)return;
+  var obsCell=sim.path[aheadIdx];
+  // Don't place on start or goal
+  if((obsCell.col===startCell.col&&obsCell.row===startCell.row)||
+     (obsCell.col===goalCell.col&&obsCell.row===goalCell.row))return;
+  // Don't duplicate
+  for(var i=0;i<obstacles.length;i++){
+    if(obstacles[i].col===obsCell.col&&obstacles[i].row===obsCell.row)return;
+  }
+  obstacles.push({col:obsCell.col,row:obsCell.row});
+  addLog(t('logObs')+' ('+obsCell.col+','+obsCell.row+')','log-replan');
+
+  // Trigger replanning
+  sim.status='replanning';
+  addLog(t('logReplan'),'log-replan');
+  updateStatus();
+
+  // Find current cell
+  var cw=W/COLS,ch=H/ROWS;
+  var curCol=Math.round((sim.x-cw/2)/cw);
+  var curRow=Math.round((sim.y-ch/2)/ch);
+  curCol=Math.max(0,Math.min(COLS-1,curCol));
+  curRow=Math.max(0,Math.min(ROWS-1,curRow));
+
+  var newPath=findPath({col:curCol,row:curRow},goalCell);
+  if(newPath){
+    sim.path=newPath;
+    sim.pathIdx=1;
+    sim.replans++;
+    sim.status='driving';
+    addLog(t('logReplanDone'),'log-success');
+  }else{
+    addLog('No alternative path!','log-replan');
+    sim.status='driving';
+  }
+  updateStatus();
+}
+
+function updateStatus(){
+  var statusMap={idle:t('statusIdle'),driving:t('statusDriving'),replanning:t('statusReplanning'),arrived:t('statusArrived'),crash:t('statusCrash')};
+  document.getElementById('valStatus').textContent=statusMap[sim.status]||sim.status;
+  document.getElementById('valStatus').style.color=sim.status==='arrived'?'#10b981':(sim.status==='crash'?'#ff5f1f':'#ffb59c');
+  document.getElementById('valReplans').textContent=sim.replans;
+  document.getElementById('valWP').textContent=sim.wpReached+'/'+(sim.path?sim.path.length-1:6);
+  document.getElementById('hudV2').textContent=statusMap[sim.status]||sim.status;
+  document.getElementById('hudV3').textContent=sim.replans;
+}
+
+function resetSim(){
+  sim.running=false;sim.finished=false;
+  if(simRAF)cancelAnimationFrame(simRAF);
+  obstacles=[];
+  sim.path=null;sim.trail=[];sim.status='idle';sim.replans=0;sim.wpReached=0;sim.time=0;
+  document.getElementById('btnInjectObs').disabled=true;
+  document.getElementById('logBox').innerHTML='';
+  document.getElementById('successOverlay').classList.remove('show');
+  document.getElementById('hudV1').textContent='0.0s';
+  updateStatus();drawScene();
+}
+
+function showSuccess(){
+  document.getElementById('successOverlay').classList.add('show');
+  document.getElementById('successTitle').textContent=t('successTitle');
+  document.getElementById('successMsg').textContent=t('successMsg');
+  document.getElementById('btnReplay').textContent=t('btnReplay');
+}
+
+// Events
+document.getElementById('btnStart').addEventListener('click',function(){startSim();});
+document.getElementById('btnInjectObs').addEventListener('click',function(){injectObstacle();});
+document.getElementById('btnReset').addEventListener('click',function(){resetSim();});
+document.getElementById('btnReplay').addEventListener('click',function(){resetSim();});
+
+document.getElementById('langBtn').addEventListener('click',function(){
+  LANG=LANG==='en'?'cn':'en';
+  document.getElementById('langBtn').textContent=LANG.toUpperCase();
+  refreshI18N();
+});
+
+document.getElementById('guideToggle').addEventListener('click',function(){
+  var gc=document.getElementById('guideContent');
+  var ga=document.getElementById('guideArrow');
+  if(gc.style.display==='none'){gc.style.display='';ga.textContent='-';}
+  else{gc.style.display='none';ga.textContent='+';}
+});
+
+function refreshI18N(){
+  document.getElementById('mainTitle').textContent=t('title');
+  document.getElementById('mainSub').textContent=t('sub');
+  document.getElementById('guideTitle').textContent=t('guide');
+  document.getElementById('guideGoal').textContent=t('guideGoal');
+  var steps=[t('guideS1'),t('guideS2'),t('guideS3'),t('guideS4')];
+  var ul=document.getElementById('guideSteps');ul.innerHTML='';
+  steps.forEach(function(s){var li=document.createElement('li');li.textContent=s;ul.appendChild(li);});
+  document.getElementById('guideTips').textContent=t('guideTips');
+  document.getElementById('panelTitle').textContent=t('panelTitle');
+  document.getElementById('btnStart').textContent=t('btnStart');
+  document.getElementById('btnInjectObs').textContent=t('btnInjectObs');
+  document.getElementById('btnReset').textContent=t('btnReset');
+  document.getElementById('lblReplans').textContent=t('lblReplans');
+  document.getElementById('lblWP').textContent=t('lblWP');
+  document.getElementById('lblStatus').textContent=t('lblStatus');
+  document.getElementById('logTitle').textContent=t('logTitle');
+  document.getElementById('hudL1').textContent=t('hudTime');
+  document.getElementById('hudL2').textContent=t('hudStatus');
+  document.getElementById('hudL3').textContent=t('hudReplans');
+  updateStatus();drawScene();
+}
+
+refreshI18N();
+resize();
+})();
+</script>
+</body>
+</html>

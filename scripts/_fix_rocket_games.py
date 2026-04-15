@@ -17,7 +17,7 @@ ROOT = Path(__file__).resolve().parent.parent
 DB_PATH = Path.home() / ".systemedu" / "systemedu.db"
 
 SOURCES: dict[int, str] = {
-    5: "_test_game_rocket_k5_rocket_builder.html",
+    5: "test_game_rocket_k5_rocket_builder.html",
 }
 
 

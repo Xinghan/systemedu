@@ -1,0 +1,458 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=Inter:wght@400;500&family=Noto+Sans+SC:wght@400;700&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box;}
+html,body{width:100%;height:100vh;overflow:hidden;}
+body{background:var(--bg,#0c0e12);color:var(--text,#f6f6fc);font-family:'Inter','Noto Sans SC',sans-serif;display:flex;flex-direction:column;}
+.wrapper{display:flex;flex-direction:column;height:100vh;overflow:hidden;}
+.header{padding:12px 16px 8px;display:flex;justify-content:space-between;align-items:center;}
+.header h1{font-family:'Space Grotesk',sans-serif;font-size:clamp(14px,2vw,18px);font-weight:700;letter-spacing:-0.02em;color:var(--primary,#50ffb0);text-shadow:0 0 15px var(--glow,rgba(80,255,176,0.3));}
+.header .sub{font-size:11px;color:var(--muted,#aaabb0);letter-spacing:0.1em;text-transform:uppercase;}
+.canvas-wrap{flex:1;min-height:0;position:relative;}
+canvas{width:100%;height:100%;display:block;}
+.controls{display:flex;justify-content:center;align-items:center;gap:12px;padding:8px 16px;}
+.ctrl-btn{font-family:'Space Grotesk',sans-serif;font-size:12px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;padding:6px 18px;border:none;cursor:pointer;color:var(--bg,#0c0e12);background:linear-gradient(135deg,var(--primary,#50ffb0),var(--primary-dim,#17df93));transition:transform 0.1s,box-shadow 0.2s;box-shadow:0 0 12px var(--glow-strong,rgba(80,255,176,0.3));}
+.ctrl-btn:hover{transform:scale(1.04);box-shadow:0 0 20px var(--glow-strong,rgba(80,255,176,0.5));}
+.ctrl-btn:active{transform:scale(0.96);}
+.ctrl-btn.secondary{background:var(--glass,rgba(23,26,31,0.92));color:var(--muted,#aaabb0);box-shadow:none;backdrop-filter:blur(12px);}
+.ctrl-btn.secondary:hover{color:var(--primary,#50ffb0);}
+.hud{height:48px;display:flex;align-items:center;justify-content:space-around;background:rgba(0,0,0,0.55);backdrop-filter:blur(12px);padding:0 16px;}
+.hud-item{text-align:center;}
+.hud-label{font-family:'Space Grotesk',sans-serif;font-size:9px;letter-spacing:0.15em;text-transform:uppercase;color:var(--muted,#aaabb0);}
+.hud-val{font-family:'Space Grotesk',sans-serif;font-size:14px;font-weight:700;color:var(--primary,#50ffb0);}
+.lang-btn{position:fixed;top:8px;left:8px;z-index:100;font-family:'Space Grotesk',sans-serif;font-size:11px;font-weight:700;padding:4px 10px;cursor:pointer;border:none;background:rgba(20,20,35,0.85);backdrop-filter:blur(12px);color:#ffb59c;letter-spacing:1px;}
+.guide-panel{position:fixed;top:8px;right:8px;width:240px;max-height:40vh;overflow-y:auto;background:var(--glass,rgba(20,20,35,0.85));backdrop-filter:blur(12px);padding:12px;z-index:100;font-family:'Noto Sans SC',sans-serif;font-size:12px;color:rgba(255,255,255,0.85);line-height:1.6;}
+.guide-panel h3{font-family:'Space Grotesk',sans-serif;font-size:13px;margin-bottom:6px;color:var(--primary,#50ffb0);cursor:pointer;display:flex;justify-content:space-between;align-items:center;}
+.guide-panel ul{padding-left:14px;}
+.guide-panel .collapsed{display:none;}
+</style>
+</head>
+<body>
+<button class="lang-btn" id="langBtn">CN</button>
+<div class="guide-panel" id="guide">
+<h3 id="guideTitle"></h3>
+<div class="guide-content" id="guideContent"></div>
+</div>
+<div class="wrapper">
+<div class="header">
+<div><h1 id="title"></h1><div class="sub" id="subtitle"></div></div>
+<div id="frameIndicator" style="font-family:'Space Grotesk';font-size:11px;color:var(--muted,#aaabb0);letter-spacing:0.1em;"></div>
+</div>
+<div class="canvas-wrap"><canvas id="c"></canvas></div>
+<div class="controls">
+<button class="ctrl-btn secondary" id="btnPrev"></button>
+<button class="ctrl-btn" id="btnPlay"></button>
+<button class="ctrl-btn secondary" id="btnNext"></button>
+</div>
+<div class="hud">
+<div class="hud-item"><div class="hud-label" id="hudL1"></div><div class="hud-val" id="hudV1"></div></div>
+<div class="hud-item"><div class="hud-label" id="hudL2"></div><div class="hud-val" id="hudV2"></div></div>
+<div class="hud-item"><div class="hud-label" id="hudL3"></div><div class="hud-val" id="hudV3"></div></div>
+<div class="hud-item"><div class="hud-label" id="hudL4"></div><div class="hud-val" id="hudV4"></div></div>
+</div>
+</div>
+
+<script src="animation_runtime.js"></script>
+
+<script>
+var CONFIG = {
+  style: 'ares_mission',
+  totalFrames: 5,
+
+  i18n: {
+    title:    {en:'PIXEL: BUILDING BLOCKS OF IMAGES', cn:'\u50cf\u7d20\uff1a\u56fe\u7247\u7684\u79ef\u6728'},
+    subtitle: {en:'FROM SQUARES TO PICTURES', cn:'\u4ece\u5c0f\u65b9\u5757\u5230\u56fe\u7247'},
+
+    hud_stage:    {en:'STAGE',    cn:'\u9636\u6bb5'},
+    hud_concept:  {en:'CONCEPT',  cn:'\u6982\u5ff5'},
+    hud_keyword:  {en:'KEYWORD',  cn:'\u5173\u952e\u8bcd'},
+    hud_progress: {en:'PROGRESS', cn:'\u8fdb\u5ea6'},
+
+    hv_overview:  {en:'Overview',       cn:'\u603b\u89c8'},
+    hv_zoom:      {en:'Zoom In',        cn:'\u653e\u5927\u770b'},
+    hv_coord:     {en:'Coordinates',    cn:'\u5750\u6807\u7cfb'},
+    hv_calc:      {en:'Calculation',    cn:'\u50cf\u7d20\u8ba1\u7b97'},
+    hv_map:       {en:'Map Analogy',    cn:'\u5730\u56fe\u7c7b\u6bd4'},
+
+    hv_pixel:     {en:'Pixel',          cn:'\u50cf\u7d20'},
+    hv_grid:      {en:'Grid',           cn:'\u7f51\u683c'},
+    hv_xy:        {en:'(x,y)',          cn:'(x,y)\u5750\u6807'},
+    hv_wxh:       {en:'W x H',         cn:'\u5bbd\u00d7\u9ad8'},
+    hv_coords:    {en:'Coordinates',    cn:'\u5750\u6807'},
+
+    f0_title: {en:'WHAT IS A PIXEL?', cn:'\u4ec0\u4e48\u662f\u50cf\u7d20\uff1f'},
+    f0_desc:  {en:'Every digital image is made of tiny colored squares called pixels.',
+               cn:'\u6bcf\u5f20\u6570\u5b57\u56fe\u7247\u90fd\u7531\u5fae\u5c0f\u7684\u5f69\u8272\u65b9\u5757\u7ec4\u6210\uff0c\u53eb\u505a\u50cf\u7d20\u3002'},
+    f0_normal:{en:'Normal view', cn:'\u6b63\u5e38\u89c6\u56fe'},
+    f0_zoomed:{en:'Zoomed 8x', cn:'\u653e\u5927 8 \u500d'},
+
+    f1_title: {en:'ZOOM INTO PIXELS', cn:'\u653e\u5927\u770b\u50cf\u7d20'},
+    f1_desc:  {en:'When you zoom in enough, you see the individual squares.',
+               cn:'\u653e\u5927\u5230\u8db3\u591f\u5927\uff0c\u4f60\u5c31\u80fd\u770b\u5230\u6bcf\u4e00\u4e2a\u5c0f\u65b9\u5757\u3002'},
+    f1_each:  {en:'Each square = 1 pixel', cn:'\u6bcf\u4e2a\u65b9\u5757 = 1 \u4e2a\u50cf\u7d20'},
+
+    f2_title: {en:'PIXEL COORDINATES', cn:'\u50cf\u7d20\u5750\u6807'},
+    f2_desc:  {en:'Every pixel has an address: (column, row), starting from (0,0) at top-left.',
+               cn:'\u6bcf\u4e2a\u50cf\u7d20\u90fd\u6709\u5730\u5740\uff1a(\u5217, \u884c)\uff0c\u4ece\u5de6\u4e0a\u89d2 (0,0) \u5f00\u59cb\u3002'},
+    f2_origin:{en:'Origin (0,0)', cn:'\u539f\u70b9 (0,0)'},
+    f2_col:   {en:'Column (x)', cn:'\u5217 (x)'},
+    f2_row:   {en:'Row (y)', cn:'\u884c (y)'},
+    f2_example:{en:'This pixel is at', cn:'\u8fd9\u4e2a\u50cf\u7d20\u5728'},
+
+    f3_title: {en:'COUNTING PIXELS', cn:'\u8ba1\u7b97\u50cf\u7d20\u6570'},
+    f3_desc:  {en:'Total pixels = Width x Height. A 1000x1000 image has 1,000,000 pixels!',
+               cn:'\u603b\u50cf\u7d20\u6570 = \u5bbd \u00d7 \u9ad8\u3002\u4e00\u5f20 1000\u00d71000 \u7684\u56fe\u7247\u6709 100 \u4e07\u50cf\u7d20!'},
+    f3_formula:{en:'Total = W x H', cn:'\u603b\u6570 = \u5bbd \u00d7 \u9ad8'},
+
+    f4_title: {en:'PIXELS = MAP GRID', cn:'\u50cf\u7d20 = \u5730\u56fe\u7f51\u683c'},
+    f4_desc:  {en:'Pixel coordinates work just like map grid references.',
+               cn:'\u50cf\u7d20\u5750\u6807\u548c\u5730\u56fe\u7f51\u683c\u5750\u6807\u7684\u5de5\u4f5c\u65b9\u5f0f\u5b8c\u5168\u4e00\u6837\u3002'},
+    f4_pixel_side:{en:'Pixel Grid', cn:'\u50cf\u7d20\u7f51\u683c'},
+    f4_map_side:  {en:'Map Grid', cn:'\u5730\u56fe\u7f51\u683c'},
+    f4_same:  {en:'Same idea: (column, row) = position', cn:'\u76f8\u540c\u539f\u7406\uff1a(\u5217, \u884c) = \u4f4d\u7f6e'},
+
+    guideTitle: {en:'VIEWING GUIDE', cn:'\u89c2\u770b\u6307\u5357'},
+    g1: {en:'See how zooming reveals individual pixels', cn:'\u89c2\u5bdf\u653e\u5927\u540e\u5982\u4f55\u770b\u5230\u5355\u4e2a\u50cf\u7d20'},
+    g2: {en:'Each pixel has a coordinate (x,y)', cn:'\u6bcf\u4e2a\u50cf\u7d20\u90fd\u6709\u5750\u6807 (x,y)'},
+    g3: {en:'Total pixels = width x height', cn:'\u603b\u50cf\u7d20 = \u5bbd \u00d7 \u9ad8'},
+    g4: {en:'Pixel grid works like a map grid', cn:'\u50cf\u7d20\u7f51\u683c\u548c\u5730\u56fe\u7f51\u683c\u4e00\u6837'},
+  },
+
+  hudLabels: ['hud_stage', 'hud_concept', 'hud_keyword', 'hud_progress'],
+  hudValues: [
+    ['hv_overview',  'hv_pixel',  'hv_pixel',  '1/5'],
+    ['hv_zoom',      'hv_grid',   'hv_grid',   '2/5'],
+    ['hv_coord',     'hv_xy',     'hv_coords', '3/5'],
+    ['hv_calc',      'hv_wxh',    'hv_wxh',    '4/5'],
+    ['hv_map',       'hv_coords', 'hv_coords', '5/5'],
+  ],
+
+  guideTitle: 'guideTitle',
+  guideItems: ['g1', 'g2', 'g3', 'g4'],
+};
+
+function cbox(id, cx, cy, w, h, fill, stroke) {
+  return {id:id, type:'box', x:cx-w/2, y:cy-h/2, w:w, h:h, fill:fill, stroke:stroke};
+}
+
+// Mars rock colors for pixel art demo
+var MARS_COLORS = ['#1a1410','#6b3a1f','#8B4513','#A0522D','#D2691E','#808080','#B0B0B0','#C4451A'];
+// 8x8 mini mars scene
+var MARS_8x8 = [
+  [0,0,0,0,0,0,0,0],
+  [0,0,5,5,5,5,0,0],
+  [0,5,6,6,6,6,5,0],
+  [1,1,5,5,5,5,1,1],
+  [2,1,2,1,2,1,2,1],
+  [3,2,3,4,3,2,3,2],
+  [4,3,7,4,7,3,4,3],
+  [4,4,7,7,7,7,4,4],
+];
+
+function getFrameElements(f, W, H) {
+  var t = AnimRuntime.t;
+  var P = AnimRuntime.PAL;
+  var cx = W/2, cy = H/2;
+  var els = [];
+
+  // ---- Frame 0: What is a pixel ----
+  if (f === 0) {
+    els.push({id:'f0t', type:'label', text:t('f0_title'), x:cx, y:42, color:P.primary, size:18, align:'center', glow:P.glowStrong});
+    els.push({id:'f0d', type:'text', text:t('f0_desc'), x:cx, y:68, color:P.muted, size:11, align:'center'});
+
+    // Left: "normal" view - small solid image
+    var imgX = cx - 130, imgY = cy + 10, imgSz = 100;
+    els.push({id:'f0img', type:'custom', draw: function(ctx) {
+      var cellSz = imgSz / 8;
+      for (var r = 0; r < 8; r++) {
+        for (var c = 0; c < 8; c++) {
+          ctx.fillStyle = MARS_COLORS[MARS_8x8[r][c]];
+          ctx.fillRect(imgX - imgSz/2 + c*cellSz, imgY - imgSz/2 + r*cellSz, cellSz, cellSz);
+        }
+      }
+      ctx.strokeStyle = P.outline;
+      ctx.lineWidth = 1;
+      ctx.strokeRect(imgX - imgSz/2, imgY - imgSz/2, imgSz, imgSz);
+    }});
+    els.push({id:'f0nl', type:'text', text:t('f0_normal'), x:imgX, y:imgY+imgSz/2+16, color:P.muted, size:10, align:'center'});
+
+    // Right: zoomed view with grid lines
+    var zoomX = cx + 130, zoomSz = 160;
+    els.push({id:'f0zoom', type:'custom', draw: function(ctx) {
+      var cellSz = zoomSz / 8;
+      for (var r = 0; r < 8; r++) {
+        for (var c = 0; c < 8; c++) {
+          ctx.fillStyle = MARS_COLORS[MARS_8x8[r][c]];
+          ctx.fillRect(zoomX - zoomSz/2 + c*cellSz, imgY - zoomSz/2 + r*cellSz, cellSz, cellSz);
+          ctx.strokeStyle = 'rgba(255,255,255,0.2)';
+          ctx.lineWidth = 0.5;
+          ctx.strokeRect(zoomX - zoomSz/2 + c*cellSz, imgY - zoomSz/2 + r*cellSz, cellSz, cellSz);
+        }
+      }
+      ctx.strokeStyle = P.primary;
+      ctx.lineWidth = 1.5;
+      ctx.strokeRect(zoomX - zoomSz/2, imgY - zoomSz/2, zoomSz, zoomSz);
+    }});
+    els.push({id:'f0zl', type:'text', text:t('f0_zoomed'), x:zoomX, y:imgY+zoomSz/2+16, color:P.primary, size:10, align:'center'});
+
+    // Arrow from left to right
+    els.push({id:'f0arr', type:'arrow', x1:imgX+imgSz/2+10, y1:cy+10, x2:zoomX-zoomSz/2-10, y2:cy+10,
+      color:P.muted, lineWidth:2, headSize:8});
+  }
+
+  // ---- Frame 1: Zoom in to see individual pixels ----
+  if (f === 1) {
+    els.push({id:'f1t', type:'label', text:t('f1_title'), x:cx, y:42, color:P.primary, size:17, align:'center', glow:P.glowStrong});
+    els.push({id:'f1d', type:'text', text:t('f1_desc'), x:cx, y:66, color:P.muted, size:11, align:'center'});
+
+    // Large 8x8 grid filling most of canvas
+    var gridSz = Math.min(W * 0.55, H * 0.55);
+    var cellSz = gridSz / 8;
+    var gx = cx, gy = cy + 15;
+
+    els.push({id:'f1grid', type:'custom', draw: function(ctx) {
+      for (var r = 0; r < 8; r++) {
+        for (var c = 0; c < 8; c++) {
+          var x = gx - gridSz/2 + c*cellSz;
+          var y = gy - gridSz/2 + r*cellSz;
+          ctx.fillStyle = MARS_COLORS[MARS_8x8[r][c]];
+          ctx.fillRect(x, y, cellSz, cellSz);
+          ctx.strokeStyle = 'rgba(255,255,255,0.25)';
+          ctx.lineWidth = 1;
+          ctx.strokeRect(x, y, cellSz, cellSz);
+        }
+      }
+    }});
+
+    // Highlight one pixel
+    var hlR = 2, hlC = 3;
+    els.push({id:'f1hl', type:'box',
+      x: gx - gridSz/2 + hlC*cellSz, y: gy - gridSz/2 + hlR*cellSz,
+      w: cellSz, h: cellSz, fill: null, stroke: P.primary, lineWidth: 3});
+
+    // Label
+    els.push({id:'f1each', type:'label', text:t('f1_each'),
+      x: gx + gridSz/2 + 20, y: gy - gridSz/2 + hlR*cellSz + cellSz/2,
+      color:P.primary, size:12, align:'left'});
+
+    // Arrow from highlight to label
+    els.push({id:'f1hla', type:'line',
+      x1: gx - gridSz/2 + (hlC+1)*cellSz + 2, y1: gy - gridSz/2 + hlR*cellSz + cellSz/2,
+      x2: gx + gridSz/2 + 16, y2: gy - gridSz/2 + hlR*cellSz + cellSz/2,
+      color: P.primary, lineWidth: 1, dash: [4,4]});
+  }
+
+  // ---- Frame 2: Pixel coordinates ----
+  if (f === 2) {
+    els.push({id:'f2t', type:'label', text:t('f2_title'), x:cx, y:42, color:P.primary, size:17, align:'center', glow:P.glowStrong});
+    els.push({id:'f2d', type:'text', text:t('f2_desc'), x:cx, y:66, color:P.muted, size:11, align:'center'});
+
+    var gridSz = Math.min(W * 0.45, H * 0.5);
+    var cellSz = gridSz / 8;
+    var gx = cx, gy = cy + 20;
+
+    // Grid with coordinates
+    els.push({id:'f2grid', type:'custom', draw: function(ctx) {
+      for (var r = 0; r < 8; r++) {
+        for (var c = 0; c < 8; c++) {
+          var x = gx - gridSz/2 + c*cellSz;
+          var y = gy - gridSz/2 + r*cellSz;
+          ctx.fillStyle = MARS_COLORS[MARS_8x8[r][c]];
+          ctx.globalAlpha = 0.5;
+          ctx.fillRect(x, y, cellSz, cellSz);
+          ctx.globalAlpha = 1;
+          ctx.strokeStyle = 'rgba(255,255,255,0.2)';
+          ctx.lineWidth = 0.5;
+          ctx.strokeRect(x, y, cellSz, cellSz);
+        }
+      }
+      // Column numbers (x) along top
+      ctx.fillStyle = P.tertiary;
+      ctx.font = "bold 10px 'Space Grotesk',sans-serif";
+      ctx.textAlign = 'center';
+      for (var c = 0; c < 8; c++) {
+        ctx.fillText(c.toString(), gx - gridSz/2 + c*cellSz + cellSz/2, gy - gridSz/2 - 8);
+      }
+      // Row numbers (y) along left
+      for (var r = 0; r < 8; r++) {
+        ctx.fillText(r.toString(), gx - gridSz/2 - 12, gy - gridSz/2 + r*cellSz + cellSz/2 + 3);
+      }
+    }});
+
+    // Origin label
+    els.push({id:'f2origin', type:'text', text:t('f2_origin'),
+      x: gx - gridSz/2 - 8, y: gy - gridSz/2 - 18, color:P.primaryDim, size:9, align:'center'});
+
+    // Column axis label
+    els.push({id:'f2col', type:'label', text:t('f2_col'),
+      x: gx, y: gy - gridSz/2 - 26, color:P.tertiary, size:11, align:'center'});
+
+    // Row axis label
+    els.push({id:'f2row', type:'label', text:t('f2_row'),
+      x: gx - gridSz/2 - 30, y: gy, color:P.tertiary, size:11, align:'center'});
+
+    // Highlight pixel (3,5) with coordinate callout
+    var hlC = 3, hlR = 5;
+    els.push({id:'f2hl', type:'box',
+      x: gx - gridSz/2 + hlC*cellSz, y: gy - gridSz/2 + hlR*cellSz,
+      w: cellSz, h: cellSz, fill: null, stroke: P.primary, lineWidth: 3});
+
+    els.push({id:'f2ex', type:'label',
+      text: t('f2_example') + ' (3, 5)',
+      x: gx + gridSz/2 + 16, y: gy - gridSz/2 + hlR*cellSz + cellSz/2,
+      color:P.primary, size:12, align:'left'});
+  }
+
+  // ---- Frame 3: Counting pixels (W x H) ----
+  if (f === 3) {
+    els.push({id:'f3t', type:'label', text:t('f3_title'), x:cx, y:42, color:P.primary, size:17, align:'center', glow:P.glowStrong});
+    els.push({id:'f3d', type:'text', text:t('f3_desc'), x:cx, y:66, color:P.muted, size:11, align:'center'});
+
+    // Three examples side by side
+    var examples = [
+      {w:4, h:4, label:'4x4', total:'16'},
+      {w:8, h:8, label:'8x8', total:'64'},
+      {w:16, h:16, label:'16x16', total:'256'},
+    ];
+
+    var exGap = W * 0.28;
+    var startX = cx - exGap;
+
+    for (var i = 0; i < 3; i++) {
+      var ex = examples[i];
+      var exX = startX + i * exGap;
+      var exSz = Math.min(80, W*0.12);
+      var cSz = exSz / ex.w;
+
+      (function(ex, exX, exSz, cSz) {
+        els.push({id:'f3g'+i, type:'custom', draw: function(ctx) {
+          for (var r = 0; r < ex.h; r++) {
+            for (var c = 0; c < ex.w; c++) {
+              var seed = (r * 7 + c * 13) * 100;
+              var x2 = Math.sin(seed * 9301 + 49297) * 233280;
+              var idx = Math.floor((x2 - Math.floor(x2)) * MARS_COLORS.length);
+              ctx.fillStyle = MARS_COLORS[idx];
+              ctx.globalAlpha = 0.6;
+              ctx.fillRect(exX - exSz/2 + c*cSz, cy + 10 - exSz/2 + r*cSz, cSz, cSz);
+              ctx.globalAlpha = 1;
+            }
+          }
+          ctx.strokeStyle = P.outline;
+          ctx.lineWidth = 1;
+          ctx.strokeRect(exX - exSz/2, cy + 10 - exSz/2, exSz, exSz);
+        }});
+      })(ex, exX, exSz, cSz);
+
+      els.push({id:'f3l'+i, type:'label', text:ex.label, x:exX, y:cy+10+exSz/2+16, color:P.primaryDim, size:13, align:'center'});
+      els.push({id:'f3t'+i, type:'text', text:'= ' + ex.total + ' px', x:exX, y:cy+10+exSz/2+32, color:P.muted, size:11, align:'center'});
+    }
+
+    // Formula at bottom
+    els.push({id:'f3form', type:'label', text:t('f3_formula'), x:cx, y:cy+10+exSz/2+58, color:P.primary, size:15, align:'center', glow:P.glowStrong});
+
+    // Big example
+    els.push({id:'f3big', type:'text', text:'1000 x 1000 = 1,000,000 px (100\u4e07\u50cf\u7d20)',
+      x:cx, y:cy+10+exSz/2+80, color:P.secondary, size:12, align:'center'});
+  }
+
+  // ---- Frame 4: Pixel grid = Map grid ----
+  if (f === 4) {
+    els.push({id:'f4t', type:'label', text:t('f4_title'), x:cx, y:42, color:P.primary, size:17, align:'center', glow:P.glowStrong});
+    els.push({id:'f4d', type:'text', text:t('f4_desc'), x:cx, y:66, color:P.muted, size:11, align:'center'});
+
+    var halfW = W * 0.22;
+    var gridSz = Math.min(halfW, H * 0.4);
+    var cellSz = gridSz / 6;
+
+    // Left: pixel grid
+    var lx = cx - halfW - 20, ly = cy + 15;
+    els.push({id:'f4pl', type:'label', text:t('f4_pixel_side'), x:lx, y:ly-gridSz/2-16, color:P.tertiary, size:11, align:'center'});
+    els.push({id:'f4pgrid', type:'custom', draw: function(ctx) {
+      for (var r = 0; r < 6; r++) {
+        for (var c = 0; c < 6; c++) {
+          var seed = (r * 7 + c * 11) * 50;
+          var x2 = Math.sin(seed * 9301 + 49297) * 233280;
+          var idx = Math.floor((x2 - Math.floor(x2)) * MARS_COLORS.length);
+          ctx.fillStyle = MARS_COLORS[idx];
+          ctx.globalAlpha = 0.5;
+          ctx.fillRect(lx - gridSz/2 + c*cellSz, ly - gridSz/2 + r*cellSz, cellSz, cellSz);
+          ctx.globalAlpha = 1;
+          ctx.strokeStyle = 'rgba(255,255,255,0.15)';
+          ctx.lineWidth = 0.5;
+          ctx.strokeRect(lx - gridSz/2 + c*cellSz, ly - gridSz/2 + r*cellSz, cellSz, cellSz);
+        }
+      }
+      // Axis numbers
+      ctx.fillStyle = P.muted;
+      ctx.font = "9px 'Space Grotesk',sans-serif";
+      ctx.textAlign = 'center';
+      for (var c = 0; c < 6; c++) ctx.fillText(c.toString(), lx - gridSz/2 + c*cellSz + cellSz/2, ly - gridSz/2 - 5);
+      ctx.textAlign = 'right';
+      for (var r = 0; r < 6; r++) ctx.fillText(r.toString(), lx - gridSz/2 - 4, ly - gridSz/2 + r*cellSz + cellSz/2 + 3);
+    }});
+
+    // Right: map grid
+    var rx = cx + halfW + 20, ry = ly;
+    els.push({id:'f4ml', type:'label', text:t('f4_map_side'), x:rx, y:ry-gridSz/2-16, color:P.secondary, size:11, align:'center'});
+    els.push({id:'f4mgrid', type:'custom', draw: function(ctx) {
+      // Map grid with terrain colors
+      var terrainColors = ['#5a7a3a','#6b8a4e','#7a9a5e','#8aaa6e','#9aba7e','#aaca8e'];
+      for (var r = 0; r < 6; r++) {
+        for (var c = 0; c < 6; c++) {
+          ctx.fillStyle = terrainColors[(r+c) % terrainColors.length];
+          ctx.globalAlpha = 0.5;
+          ctx.fillRect(rx - gridSz/2 + c*cellSz, ry - gridSz/2 + r*cellSz, cellSz, cellSz);
+          ctx.globalAlpha = 1;
+          ctx.strokeStyle = 'rgba(255,255,255,0.15)';
+          ctx.lineWidth = 0.5;
+          ctx.strokeRect(rx - gridSz/2 + c*cellSz, ry - gridSz/2 + r*cellSz, cellSz, cellSz);
+        }
+      }
+      // Grid labels: A-F columns, 1-6 rows
+      ctx.fillStyle = P.muted;
+      ctx.font = "9px 'Space Grotesk',sans-serif";
+      ctx.textAlign = 'center';
+      var cols = ['A','B','C','D','E','F'];
+      for (var c = 0; c < 6; c++) ctx.fillText(cols[c], rx - gridSz/2 + c*cellSz + cellSz/2, ry - gridSz/2 - 5);
+      ctx.textAlign = 'right';
+      for (var r = 0; r < 6; r++) ctx.fillText((r+1).toString(), rx - gridSz/2 - 4, ry - gridSz/2 + r*cellSz + cellSz/2 + 3);
+    }});
+
+    // Highlight same position on both
+    var hlC = 2, hlR = 3;
+    els.push({id:'f4phl', type:'box', x:lx-gridSz/2+hlC*cellSz, y:ly-gridSz/2+hlR*cellSz, w:cellSz, h:cellSz, fill:null, stroke:P.primary, lineWidth:2});
+    els.push({id:'f4mhl', type:'box', x:rx-gridSz/2+hlC*cellSz, y:ry-gridSz/2+hlR*cellSz, w:cellSz, h:cellSz, fill:null, stroke:P.secondary, lineWidth:2});
+
+    // Labels under highlights
+    els.push({id:'f4plbl', type:'text', text:'(2, 3)', x:lx-gridSz/2+hlC*cellSz+cellSz/2, y:ly+gridSz/2+14, color:P.primary, size:11, align:'center'});
+    els.push({id:'f4mlbl', type:'text', text:'C4', x:rx-gridSz/2+hlC*cellSz+cellSz/2, y:ry+gridSz/2+14, color:P.secondary, size:11, align:'center'});
+
+    // = sign between
+    els.push({id:'f4eq', type:'label', text:'=', x:cx, y:cy+15, color:P.text, size:24, align:'center'});
+
+    // Bottom conclusion
+    els.push({id:'f4same', type:'label', text:t('f4_same'), x:cx, y:ly+gridSz/2+40, color:P.primary, size:13, align:'center'});
+  }
+
+  return els;
+}
+
+function drawBg(ctx, W, H) {
+  var P = AnimRuntime.PAL;
+  var g = ctx.createLinearGradient(0, 0, 0, H);
+  g.addColorStop(0, P.bg); g.addColorStop(1, P.bg2);
+  ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+  ctx.strokeStyle = 'rgba(255,255,255,0.025)';
+  ctx.lineWidth = 0.5;
+  for (var x = 0; x < W; x += 40) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke(); }
+  for (var y = 0; y < H; y += 40) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke(); }
+}
+
+AnimRuntime.boot();
+</script>
+</body>
+</html>

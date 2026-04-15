@@ -1,0 +1,788 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>AI4Mars 数据集解剖</title>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=Space+Grotesk:wght@400;700&family=Noto+Sans+SC:wght@400;700&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{width:100%;height:100vh;overflow:hidden;background:#0a0a12;
+  font-family:'Noto Sans SC','PingFang SC',system-ui,sans-serif;color:#e5e7eb}
+
+.wrapper{display:flex;flex-direction:column;height:100vh;overflow:hidden}
+
+/* guide panel */
+.guide-panel{position:fixed;top:8px;right:8px;width:246px;max-height:40vh;
+  overflow-y:auto;z-index:200;padding:10px 12px;
+  background:rgba(17,18,32,0.92);backdrop-filter:blur(14px);
+  border:1px solid rgba(129,140,248,0.22);font-size:12px;line-height:1.55;
+  color:rgba(229,231,235,0.88)}
+.guide-panel h3{font-family:'Space Grotesk',sans-serif;font-size:13px;font-weight:700;
+  margin-bottom:6px;display:flex;align-items:center;justify-content:space-between;cursor:pointer;
+  color:#818cf8;text-transform:uppercase;letter-spacing:0.05em}
+.guide-panel h3 .arrow{transition:transform .2s;font-size:10px}
+.guide-panel h3 .arrow.collapsed{transform:rotate(-90deg)}
+.guide-panel ul{padding-left:14px;margin:4px 0}
+.guide-panel .gl{color:#a5a7c8;font-size:11px;text-transform:uppercase;
+  letter-spacing:0.08em;margin-top:6px;font-family:'Space Grotesk',sans-serif}
+
+/* header */
+.header{height:42px;min-height:42px;display:flex;align-items:center;justify-content:space-between;
+  padding:0 16px;background:rgba(17,18,32,0.95);border-bottom:1px solid rgba(129,140,248,0.15)}
+.header h1{font-family:'Space Grotesk',sans-serif;font-size:14px;font-weight:700;
+  color:#a5b4fc;text-transform:uppercase;letter-spacing:0.08em}
+.header .lang{padding:4px 10px;border:1px solid rgba(129,140,248,0.35);background:transparent;
+  color:#a5b4fc;cursor:pointer;font-family:'Space Grotesk',sans-serif;font-size:11px;
+  font-weight:700;letter-spacing:0.05em}
+.header .lang:hover{background:rgba(129,140,248,0.15)}
+
+/* canvas container */
+.canvas-wrap{flex:1;min-height:0;position:relative;overflow:hidden;background:#0a0a12}
+.canvas-wrap canvas{position:absolute;top:0;left:0;width:100%;height:100%}
+
+/* controls */
+.controls{height:46px;min-height:46px;display:flex;align-items:center;justify-content:center;gap:12px;
+  background:rgba(17,18,32,0.95);border-top:1px solid rgba(129,140,248,0.15);
+  border-bottom:1px solid rgba(129,140,248,0.15)}
+.ctrl-btn{padding:6px 16px;border:1px solid rgba(129,140,248,0.35);background:transparent;
+  color:#a5b4fc;cursor:pointer;font-family:'Space Grotesk',sans-serif;font-size:12px;
+  font-weight:700;text-transform:uppercase;letter-spacing:0.06em;transition:all .15s}
+.ctrl-btn:hover{background:rgba(129,140,248,0.18);box-shadow:0 0 18px rgba(129,140,248,0.25)}
+.ctrl-btn.active{background:linear-gradient(45deg,rgba(129,140,248,0.3),rgba(167,139,250,0.2))}
+.frame-dots{display:flex;gap:6px;align-items:center;margin:0 12px}
+.frame-dot{width:10px;height:10px;border:1px solid rgba(129,140,248,0.35);cursor:pointer;
+  transition:all .2s;border-radius:50%}
+.frame-dot.active{background:#818cf8;border-color:#818cf8;box-shadow:0 0 12px rgba(129,140,248,0.6)}
+.frame-dot:hover{border-color:#a5b4fc}
+
+/* HUD */
+.hud{height:54px;min-height:54px;display:flex;align-items:center;
+  background:rgba(0,0,0,0.6);border-top:1px solid rgba(255,255,255,0.06);padding:0 16px}
+.hud-col{flex:1;text-align:center}
+.hud-label{font-family:'Space Grotesk',sans-serif;font-size:10px;
+  color:rgba(165,180,252,0.6);text-transform:uppercase;letter-spacing:0.1em}
+.hud-val{font-family:'JetBrains Mono','Space Grotesk',monospace;font-size:13px;font-weight:700;
+  color:rgba(229,231,235,0.9);margin-top:2px}
+</style>
+</head>
+<body>
+
+<div class="guide-panel" id="guidePanel">
+  <h3 id="guideToggle">OBSERVER GUIDE <span class="arrow" id="guideArrow">&#9660;</span></h3>
+  <div id="guideContent">
+    <div class="gl">WHAT IT SHOWS</div>
+    <p>AI4Mars 数据集的四个层次：目录结构 → 文件元数据 → 像素一一对应 → terrain 标签语义</p>
+    <div class="gl" style="margin-top:6px">OBSERVE</div>
+    <ul>
+      <li>原图与标签文件名除扩展名外完全相同</li>
+      <li>标签像素值 0/1/2/3 直接指向 rover 决策</li>
+      <li>soil / bedrock 可通行，sand / big_rock 必须避开</li>
+    </ul>
+    <div class="gl" style="margin-top:6px">CONTROLS</div>
+    <p>PLAY 自动演示，PREV / NEXT 逐帧检查</p>
+    <div class="gl" style="margin-top:6px">TAKEAWAY</div>
+    <p style="color:#a5b4fc">标签不是装饰，每个像素都是一个驾驶决策</p>
+  </div>
+</div>
+
+<div class="wrapper">
+  <div class="header">
+    <h1>AI4MARS DATASET -- ANATOMY</h1>
+    <button class="lang" id="langBtn">中 / EN</button>
+  </div>
+
+  <div class="canvas-wrap">
+    <canvas id="c"></canvas>
+  </div>
+
+  <div class="controls">
+    <button class="ctrl-btn" id="btnPrev">PREV</button>
+    <button class="ctrl-btn active" id="btnPlay">PLAY</button>
+    <button class="ctrl-btn" id="btnNext">NEXT</button>
+    <div class="frame-dots" id="frameDots"></div>
+  </div>
+
+  <div class="hud">
+    <div class="hud-col"><div class="hud-label">FRAME</div><div class="hud-val" id="frameInd">1/4</div></div>
+    <div class="hud-col"><div class="hud-label">STAGE</div><div class="hud-val" id="hudStage">DIRECTORY</div></div>
+    <div class="hud-col"><div class="hud-label">FILES</div><div class="hud-val" id="hudFiles">35,000+</div></div>
+    <div class="hud-col"><div class="hud-label">CLASSES</div><div class="hud-val" id="hudClasses">4</div></div>
+  </div>
+</div>
+
+<script>
+(function(){
+"use strict";
+
+/* ── canvas setup ── */
+var canvas = document.getElementById("c");
+var ctx = canvas.getContext("2d");
+var W = 900, H = 540;
+var DPR = Math.min(window.devicePixelRatio || 1, 2);
+
+function resize(){
+  var rect = canvas.parentElement.getBoundingClientRect();
+  if(rect.width < 1 || rect.height < 1) return;
+  canvas.width = rect.width * DPR;
+  canvas.height = rect.height * DPR;
+  ctx.setTransform(1,0,0,1,0,0);
+  ctx.scale(canvas.width / W, canvas.height / H);
+  render();
+}
+
+/* ── palette ── */
+var PRIMARY   = "#818cf8";
+var SECONDARY = "#a78bfa";
+var ACCENT    = "#22d3ee";
+var TEXT      = "#e5e7eb";
+var MUTED     = "#6b7280";
+/* terrain class colors */
+var CLASS_COLORS = {
+  soil:     "#fbbf24",  // 松散土壤 黄
+  bedrock:  "#60a5fa",  // 基岩 蓝
+  sand:     "#ef4444",  // 沙地（危险）红
+  big_rock: "#f97316"   // 大岩石（危险）橙
+};
+var CLASS_LABELS = {
+  soil:     {zh:"松散土壤", en:"soil",     decision_zh:"可通行", decision_en:"drive"},
+  bedrock:  {zh:"基岩",     en:"bedrock",  decision_zh:"可通行", decision_en:"drive"},
+  sand:     {zh:"沙地",     en:"sand",     decision_zh:"避开",   decision_en:"avoid"},
+  big_rock: {zh:"大岩石",   en:"big rock", decision_zh:"绕开",   decision_en:"detour"}
+};
+
+/* ── frame data ── */
+var FRAMES = [
+  {stage:"DIRECTORY",    zh:"目录结构",     en:"directory"},
+  {stage:"FILE META",    zh:"文件元数据",   en:"file metadata"},
+  {stage:"PIXEL MAP",    zh:"像素一一对应", en:"pixel mapping"},
+  {stage:"CLASS SEMANTICS", zh:"标签语义",  en:"class semantics"}
+];
+
+var cur = 0;
+var t = 0;
+var playing = false;
+var rafId = null;
+var lang = "zh";
+
+/* ── 目录树数据 ── */
+var TREE = [
+  {depth:0, name:"ai4mars-dataset-merged-0.1/", kind:"root"},
+  {depth:1, name:"msl/",                         kind:"dir", note_zh:"Curiosity 子集", note_en:"Curiosity subset"},
+  {depth:2, name:"images/",                      kind:"dir"},
+  {depth:3, name:"edr/",                         kind:"dir", note_zh:"Navcam 原图", note_en:"raw Navcam"},
+  {depth:4, name:"NLB_450000000EDR_F0X.JPG",     kind:"file_img"},
+  {depth:4, name:"NLB_450000001EDR_F0X.JPG",     kind:"file_img"},
+  {depth:4, name:"...",                          kind:"file_img"},
+  {depth:2, name:"labels/",                      kind:"dir"},
+  {depth:3, name:"train/",                       kind:"dir", note_zh:"训练标签", note_en:"train labels"},
+  {depth:4, name:"NLB_450000000EDR_F0X.png",     kind:"file_lbl"},
+  {depth:3, name:"test/masked-gt/",              kind:"dir", note_zh:"测试集多人合并标签", note_en:"multi-annot test"},
+  {depth:4, name:"NLB_460000000EDR_F0X_merged.png", kind:"file_lbl"}
+];
+
+/* ── HUD / dots ── */
+var dotsEl = document.getElementById("frameDots");
+for(var i = 0; i < FRAMES.length; i++){
+  var dot = document.createElement("div");
+  dot.className = "frame-dot" + (i === 0 ? " active" : "");
+  dot.dataset.idx = i;
+  dotsEl.appendChild(dot);
+}
+dotsEl.addEventListener("click", function(e){
+  var d = e.target.closest(".frame-dot");
+  if(!d) return;
+  goTo(parseInt(d.dataset.idx, 10));
+});
+
+function syncUI(){
+  var f = FRAMES[cur];
+  document.getElementById("frameInd").textContent = (cur+1)+"/"+FRAMES.length;
+  document.getElementById("hudStage").textContent = f.stage;
+  dotsEl.querySelectorAll(".frame-dot").forEach(function(d,i){
+    d.classList.toggle("active", i===cur);
+  });
+  document.getElementById("btnPlay").textContent = playing ? "PAUSE" : "PLAY";
+}
+
+function goTo(idx){
+  cur = Math.max(0, Math.min(FRAMES.length-1, idx));
+  t = 0;
+  syncUI();
+  render();
+}
+
+/* ── controls ── */
+document.getElementById("btnPrev").addEventListener("click", function(){ if(cur>0) goTo(cur-1); });
+document.getElementById("btnNext").addEventListener("click", function(){
+  if(cur<FRAMES.length-1) goTo(cur+1);
+  else { cur=0; t=0; syncUI(); render(); }
+});
+document.getElementById("btnPlay").addEventListener("click", function(){
+  if(playing) stopAnim(); else startAnim();
+});
+document.getElementById("langBtn").addEventListener("click", function(){
+  lang = (lang === "zh") ? "en" : "zh";
+  syncUI();
+  render();
+});
+document.getElementById("guideToggle").addEventListener("click", function(){
+  var c = document.getElementById("guideContent");
+  var a = document.getElementById("guideArrow");
+  var hidden = c.style.display === "none";
+  c.style.display = hidden ? "block" : "none";
+  a.classList.toggle("collapsed", !hidden);
+});
+
+function startAnim(){
+  playing = true;
+  if(cur >= FRAMES.length - 1){ cur = 0; t = 0; }
+  syncUI();
+  var last = performance.now();
+  function tick(now){
+    var dt = (now - last) / 1000;
+    last = now;
+    t += dt * 0.3;
+    if(t >= 1){
+      t = 0;
+      cur++;
+      if(cur >= FRAMES.length){ cur = FRAMES.length - 1; t = 0; stopAnim(); render(); return; }
+      syncUI();
+    }
+    render();
+    if(playing) rafId = requestAnimationFrame(tick);
+  }
+  rafId = requestAnimationFrame(tick);
+}
+function stopAnim(){
+  playing = false;
+  if(rafId){ cancelAnimationFrame(rafId); rafId = null; }
+  syncUI();
+}
+
+/* ── utils ── */
+function roundRect(x,y,w,h,r){
+  ctx.beginPath();
+  ctx.moveTo(x+r,y);ctx.lineTo(x+w-r,y);ctx.quadraticCurveTo(x+w,y,x+w,y+r);
+  ctx.lineTo(x+w,y+h-r);ctx.quadraticCurveTo(x+w,y+h,x+w-r,y+h);
+  ctx.lineTo(x+r,y+h);ctx.quadraticCurveTo(x,y+h,x,y+h-r);
+  ctx.lineTo(x,y+r);ctx.quadraticCurveTo(x,y,x+r,y);
+  ctx.closePath();
+}
+
+function drawBg(){
+  var g = ctx.createLinearGradient(0,0,0,H);
+  g.addColorStop(0,"#0a0a12");
+  g.addColorStop(1,"#151528");
+  ctx.fillStyle = g;
+  ctx.fillRect(0,0,W,H);
+  /* 网格 */
+  ctx.strokeStyle = "rgba(129,140,248,0.04)";
+  ctx.lineWidth = 1;
+  for(var x=0;x<=W;x+=45){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,H);ctx.stroke();}
+  for(var y=0;y<=H;y+=45){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke();}
+}
+
+function drawTitle(){
+  var f = FRAMES[cur];
+  ctx.save();
+  ctx.fillStyle = "rgba(10,10,18,0.85)";
+  roundRect(W/2-220,18,440,52,8);
+  ctx.fill();
+  ctx.strokeStyle = "rgba(129,140,248,0.4)";
+  ctx.lineWidth = 1.5;
+  ctx.stroke();
+  ctx.fillStyle = "#a5b4fc";
+  ctx.font = "bold 13px 'Space Grotesk',sans-serif";
+  ctx.textAlign = "center";
+  ctx.fillText("STAGE " + (cur+1) + " / " + FRAMES.length, W/2, 38);
+  ctx.fillStyle = "#e5e7eb";
+  ctx.font = "bold 18px 'Noto Sans SC',system-ui";
+  ctx.fillText((lang==="zh" ? f.zh : f.en).toUpperCase(), W/2, 62);
+  ctx.restore();
+}
+
+/* ── Frame 0: 目录树 ── */
+function drawFrame0(alpha){
+  if(alpha<=0) return;
+  ctx.save();
+  ctx.globalAlpha = alpha;
+  var x0 = 110;
+  var y0 = 110;
+  var lh = 26;
+  /* 背景面板 */
+  ctx.fillStyle = "rgba(15,18,35,0.8)";
+  roundRect(x0-20, y0-20, 700, TREE.length*lh+40, 8);
+  ctx.fill();
+  ctx.strokeStyle = "rgba(129,140,248,0.25)";
+  ctx.stroke();
+
+  ctx.textAlign = "left";
+  TREE.forEach(function(node, i){
+    var y = y0 + i*lh;
+    var x = x0 + node.depth * 22;
+    /* 层级缩进引导线 */
+    ctx.strokeStyle = "rgba(129,140,248,0.12)";
+    ctx.lineWidth = 1;
+    if(node.depth > 0){
+      for(var d=0; d<node.depth; d++){
+        ctx.beginPath();
+        ctx.moveTo(x0 + d*22 + 8, y0-10);
+        ctx.lineTo(x0 + d*22 + 8, y+6);
+        ctx.stroke();
+      }
+      ctx.beginPath();
+      ctx.moveTo(x0 + (node.depth-1)*22 + 8, y);
+      ctx.lineTo(x, y);
+      ctx.stroke();
+    }
+
+    /* 图标 */
+    var iconColor = "#818cf8";
+    var iconChar = "■";
+    if(node.kind === "file_img"){ iconColor = "#22d3ee"; iconChar = "▦"; }
+    else if(node.kind === "file_lbl"){ iconColor = "#fbbf24"; iconChar = "⬡"; }
+    else if(node.kind === "dir"){ iconColor = "#a78bfa"; iconChar = "▢"; }
+    else if(node.kind === "root"){ iconColor = "#34d399"; iconChar = "◆"; }
+
+    ctx.fillStyle = iconColor;
+    ctx.font = "bold 13px 'JetBrains Mono',monospace";
+    ctx.fillText(iconChar, x, y+4);
+
+    /* 名字 */
+    ctx.fillStyle = node.kind === "file_img" ? "#22d3ee"
+                  : node.kind === "file_lbl" ? "#fbbf24"
+                  : "#e5e7eb";
+    ctx.font = "13px 'JetBrains Mono',monospace";
+    ctx.fillText(node.name, x+18, y+4);
+
+    /* 注释 */
+    if(node.note_zh){
+      ctx.fillStyle = "rgba(165,180,252,0.55)";
+      ctx.font = "11px 'Noto Sans SC',system-ui";
+      ctx.fillText("// " + (lang==="zh" ? node.note_zh : node.note_en), x+260, y+4);
+    }
+  });
+  ctx.restore();
+}
+
+/* ── Frame 1: 文件元数据解析 ── */
+function drawFrame1(alpha){
+  if(alpha<=0) return;
+  ctx.save();
+  ctx.globalAlpha = alpha;
+
+  /* 文件名拆解 */
+  var fname = "NLB_450000001EDR_F0X.JPG";
+  var parts = [
+    {txt:"NLB",     color:"#a78bfa", label_zh:"相机",    label_en:"camera"},
+    {txt:"_",       color:"#6b7280"},
+    {txt:"45000000", color:"#22d3ee", label_zh:"Sol 时间", label_en:"sol time"},
+    {txt:"1",       color:"#22d3ee"},
+    {txt:"EDR",     color:"#818cf8", label_zh:"原始数据", label_en:"raw data"},
+    {txt:"_",       color:"#6b7280"},
+    {txt:"F0X",     color:"#fbbf24", label_zh:"滤镜位", label_en:"filter"},
+    {txt:".JPG",    color:"#34d399", label_zh:"图像格式", label_en:"format"}
+  ];
+
+  /* 背景 */
+  ctx.fillStyle = "rgba(15,18,35,0.85)";
+  roundRect(90, 110, 720, 180, 10);
+  ctx.fill();
+  ctx.strokeStyle = "rgba(129,140,248,0.3)";
+  ctx.lineWidth = 1.5;
+  ctx.stroke();
+
+  /* 标题 */
+  ctx.fillStyle = "#a5b4fc";
+  ctx.font = "bold 12px 'Space Grotesk',sans-serif";
+  ctx.textAlign = "left";
+  ctx.fillText((lang==="zh" ? "文件名解析 · FILENAME BREAKDOWN" : "FILENAME BREAKDOWN"), 110, 138);
+
+  /* 文件名主串 */
+  ctx.font = "bold 24px 'JetBrains Mono',monospace";
+  var startX = 130;
+  var textY = 180;
+  var curX = startX;
+  var positions = [];
+  parts.forEach(function(p){
+    var w = ctx.measureText(p.txt).width;
+    positions.push({x:curX, w:w, p:p});
+    ctx.fillStyle = p.color;
+    ctx.fillText(p.txt, curX, textY);
+    curX += w;
+  });
+
+  /* 下方连线与标签 */
+  var labelY = 225;
+  positions.forEach(function(pos, i){
+    if(!pos.p.label_zh) return;
+    var cx = pos.x + pos.w/2;
+    ctx.strokeStyle = pos.p.color;
+    ctx.lineWidth = 1.2;
+    ctx.beginPath();
+    ctx.moveTo(cx, textY+8);
+    ctx.lineTo(cx, labelY-14);
+    ctx.stroke();
+    /* 小圆点 */
+    ctx.fillStyle = pos.p.color;
+    ctx.beginPath();
+    ctx.arc(cx, labelY-14, 2.5, 0, Math.PI*2);
+    ctx.fill();
+    /* 标签 */
+    ctx.font = "bold 11px 'Noto Sans SC',system-ui";
+    ctx.textAlign = "center";
+    ctx.fillText((lang==="zh" ? pos.p.label_zh : pos.p.label_en), cx, labelY+2);
+  });
+
+  /* 右下方 meta 面板 */
+  ctx.fillStyle = "rgba(15,18,35,0.85)";
+  roundRect(90, 310, 720, 170, 10);
+  ctx.fill();
+  ctx.strokeStyle = "rgba(34,211,238,0.3)";
+  ctx.stroke();
+
+  ctx.fillStyle = "#22d3ee";
+  ctx.font = "bold 12px 'Space Grotesk',sans-serif";
+  ctx.textAlign = "left";
+  ctx.fillText((lang==="zh" ? "关键元数据 · KEY METADATA" : "KEY METADATA"), 110, 338);
+
+  var metaRows = [
+    {k:"resolution",        v:"1024 × 1024 (grayscale)"},
+    {k:"camera",            v:"Navcam Left (NLB)"},
+    {k:"annotation range",  v:"30 m  /  100 m"},
+    {k:"label classes",     v:"4  (soil / bedrock / sand / big_rock)"},
+    {k:"train / test split",v:"by Sol date"}
+  ];
+  ctx.font = "12px 'JetBrains Mono',monospace";
+  metaRows.forEach(function(r, i){
+    var y = 362 + i*22;
+    ctx.fillStyle = "rgba(165,180,252,0.7)";
+    ctx.fillText(r.k.padEnd(22), 120, y);
+    ctx.fillStyle = "#e5e7eb";
+    ctx.fillText("= " + r.v, 300, y);
+  });
+
+  ctx.restore();
+}
+
+/* ── Frame 2: 图像像素 vs 标签像素一一对应 ── */
+function drawFrame2(alpha){
+  if(alpha<=0) return;
+  ctx.save();
+  ctx.globalAlpha = alpha;
+
+  /* 左：原图 */
+  var imgX = 130, imgY = 130, imgS = 260;
+  drawFakeMarsImage(imgX, imgY, imgS);
+  /* 标题 */
+  ctx.fillStyle = "#22d3ee";
+  ctx.font = "bold 13px 'Space Grotesk',sans-serif";
+  ctx.textAlign = "center";
+  ctx.fillText("RAW IMAGE", imgX + imgS/2, imgY - 15);
+  ctx.fillStyle = "rgba(165,180,252,0.7)";
+  ctx.font = "11px 'JetBrains Mono',monospace";
+  ctx.fillText("NLB_450000000EDR_F0X.JPG", imgX + imgS/2, imgY + imgS + 20);
+
+  /* 右：标签 */
+  var lblX = 520, lblY = 130, lblS = 260;
+  drawFakeLabelImage(lblX, lblY, lblS);
+  ctx.fillStyle = "#fbbf24";
+  ctx.font = "bold 13px 'Space Grotesk',sans-serif";
+  ctx.textAlign = "center";
+  ctx.fillText("LABEL MASK", lblX + lblS/2, lblY - 15);
+  ctx.fillStyle = "rgba(165,180,252,0.7)";
+  ctx.font = "11px 'JetBrains Mono',monospace";
+  ctx.fillText("NLB_450000000EDR_F0X.png", lblX + lblS/2, lblY + lblS + 20);
+
+  /* 中间箭头 + 文字 */
+  var arrowY = imgY + imgS/2;
+  ctx.strokeStyle = "#818cf8";
+  ctx.lineWidth = 2.5;
+  ctx.beginPath();
+  ctx.moveTo(imgX + imgS + 15, arrowY);
+  ctx.lineTo(lblX - 15, arrowY);
+  ctx.stroke();
+  /* 箭头头 */
+  ctx.fillStyle = "#818cf8";
+  ctx.beginPath();
+  ctx.moveTo(lblX - 15, arrowY);
+  ctx.lineTo(lblX - 25, arrowY - 6);
+  ctx.lineTo(lblX - 25, arrowY + 6);
+  ctx.closePath();
+  ctx.fill();
+
+  /* 中间标签 */
+  ctx.fillStyle = "rgba(10,10,18,0.9)";
+  var midX = imgX + imgS + 15 + (lblX - imgX - imgS - 30)/2;
+  roundRect(midX - 50, arrowY - 20, 100, 40, 6);
+  ctx.fill();
+  ctx.strokeStyle = "#818cf8";
+  ctx.lineWidth = 1.2;
+  ctx.stroke();
+  ctx.fillStyle = "#a5b4fc";
+  ctx.font = "bold 11px 'Space Grotesk',sans-serif";
+  ctx.textAlign = "center";
+  ctx.fillText("1 : 1", midX, arrowY - 4);
+  ctx.font = "10px 'Noto Sans SC',system-ui";
+  ctx.fillStyle = "#e5e7eb";
+  ctx.fillText((lang==="zh" ? "同名 · 同尺寸" : "same name · same size"), midX, arrowY + 11);
+
+  /* 底部注释 */
+  ctx.fillStyle = "rgba(15,18,35,0.85)";
+  roundRect(90, 430, 720, 70, 8);
+  ctx.fill();
+  ctx.strokeStyle = "rgba(129,140,248,0.3)";
+  ctx.stroke();
+  ctx.fillStyle = "#a5b4fc";
+  ctx.font = "bold 11px 'Space Grotesk',sans-serif";
+  ctx.textAlign = "left";
+  ctx.fillText((lang==="zh" ? "关键规律 · KEY INVARIANT" : "KEY INVARIANT"), 110, 452);
+  ctx.fillStyle = "#e5e7eb";
+  ctx.font = "12px 'Noto Sans SC',system-ui";
+  var line1 = (lang==="zh")
+    ? "图像与标签除扩展名外完全同名：.JPG ↔ .png"
+    : "image and label share the same name except extension: .JPG ↔ .png";
+  var line2 = (lang==="zh")
+    ? "标签是单通道 PNG，像素值 0/1/2/3 = soil/bedrock/sand/big_rock，255 = 未标注"
+    : "label is single-channel PNG, pixel value 0/1/2/3 = soil/bedrock/sand/big_rock, 255 = unlabeled";
+  ctx.fillText(line1, 110, 472);
+  ctx.fillText(line2, 110, 490);
+
+  ctx.restore();
+}
+
+function drawFakeMarsImage(x, y, s){
+  /* 边框 */
+  ctx.fillStyle = "#0a0a12";
+  ctx.fillRect(x-2, y-2, s+4, s+4);
+  ctx.strokeStyle = "rgba(34,211,238,0.6)";
+  ctx.lineWidth = 2;
+  ctx.strokeRect(x-2, y-2, s+4, s+4);
+
+  /* 火星地面渐变 */
+  var g = ctx.createLinearGradient(x, y, x, y+s);
+  g.addColorStop(0, "#7a3515");
+  g.addColorStop(0.5, "#a04820");
+  g.addColorStop(1, "#5a2010");
+  ctx.fillStyle = g;
+  ctx.fillRect(x, y, s, s);
+
+  /* 沙地区（bright patch） */
+  ctx.fillStyle = "rgba(240,180,130,0.55)";
+  ctx.beginPath();
+  ctx.ellipse(x+s*0.35, y+s*0.55, s*0.18, s*0.08, 0, 0, Math.PI*2);
+  ctx.fill();
+  ctx.beginPath();
+  ctx.ellipse(x+s*0.7, y+s*0.72, s*0.15, s*0.07, 0, 0, Math.PI*2);
+  ctx.fill();
+
+  /* 基岩区（规则斜纹） */
+  ctx.save();
+  ctx.fillStyle = "rgba(120,60,40,0.5)";
+  ctx.fillRect(x+s*0.05, y+s*0.75, s*0.35, s*0.2);
+  ctx.restore();
+
+  /* 大岩石 */
+  [[0.2,0.3,9],[0.55,0.4,14],[0.8,0.25,7],[0.45,0.6,11],[0.15,0.85,8]].forEach(function(r){
+    var rx = x + s*r[0], ry = y + s*r[1], rr = r[2];
+    var rg = ctx.createRadialGradient(rx-rr*0.3, ry-rr*0.3, 1, rx, ry, rr);
+    rg.addColorStop(0, "#6a3020");
+    rg.addColorStop(1, "#1a0804");
+    ctx.fillStyle = rg;
+    ctx.beginPath();
+    ctx.arc(rx, ry, rr, 0, Math.PI*2);
+    ctx.fill();
+  });
+
+  /* 网格覆盖 */
+  ctx.strokeStyle = "rgba(34,211,238,0.1)";
+  ctx.lineWidth = 0.5;
+  for(var i=1; i<8; i++){
+    ctx.beginPath(); ctx.moveTo(x+i*s/8, y); ctx.lineTo(x+i*s/8, y+s); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(x, y+i*s/8); ctx.lineTo(x+s, y+i*s/8); ctx.stroke();
+  }
+}
+
+function drawFakeLabelImage(x, y, s){
+  /* 边框 */
+  ctx.fillStyle = "#0a0a12";
+  ctx.fillRect(x-2, y-2, s+4, s+4);
+  ctx.strokeStyle = "rgba(251,191,36,0.6)";
+  ctx.lineWidth = 2;
+  ctx.strokeRect(x-2, y-2, s+4, s+4);
+
+  /* 背景 soil（黄） */
+  ctx.fillStyle = CLASS_COLORS.soil;
+  ctx.fillRect(x, y, s, s);
+
+  /* bedrock（蓝） */
+  ctx.fillStyle = CLASS_COLORS.bedrock;
+  ctx.fillRect(x+s*0.05, y+s*0.75, s*0.35, s*0.2);
+  ctx.fillRect(x+s*0.6, y+s*0.8, s*0.3, s*0.15);
+
+  /* sand（红，对应原图沙地） */
+  ctx.fillStyle = CLASS_COLORS.sand;
+  ctx.beginPath();
+  ctx.ellipse(x+s*0.35, y+s*0.55, s*0.2, s*0.09, 0, 0, Math.PI*2);
+  ctx.fill();
+  ctx.beginPath();
+  ctx.ellipse(x+s*0.7, y+s*0.72, s*0.17, s*0.08, 0, 0, Math.PI*2);
+  ctx.fill();
+
+  /* big_rock（橙，对应原图大岩石） */
+  ctx.fillStyle = CLASS_COLORS.big_rock;
+  [[0.2,0.3,10],[0.55,0.4,15],[0.8,0.25,8],[0.45,0.6,12],[0.15,0.85,9]].forEach(function(r){
+    ctx.beginPath();
+    ctx.arc(x+s*r[0], y+s*r[1], r[2], 0, Math.PI*2);
+    ctx.fill();
+  });
+
+  /* 未标注区域（深灰 255） */
+  ctx.fillStyle = "rgba(40,40,50,0.85)";
+  ctx.fillRect(x, y, s, s*0.15);  // 顶部天空
+
+  /* 网格 */
+  ctx.strokeStyle = "rgba(0,0,0,0.15)";
+  ctx.lineWidth = 0.5;
+  for(var i=1; i<8; i++){
+    ctx.beginPath(); ctx.moveTo(x+i*s/8, y); ctx.lineTo(x+i*s/8, y+s); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(x, y+i*s/8); ctx.lineTo(x+s, y+i*s/8); ctx.stroke();
+  }
+}
+
+/* ── Frame 3: 四类 terrain 标签语义 ── */
+function drawFrame3(alpha){
+  if(alpha<=0) return;
+  ctx.save();
+  ctx.globalAlpha = alpha;
+
+  var classes = ["soil", "bedrock", "sand", "big_rock"];
+  var startX = 90;
+  var startY = 115;
+  var cardW = 180;
+  var cardH = 340;
+  var gap = 15;
+
+  classes.forEach(function(cls, i){
+    var x = startX + i*(cardW + gap);
+    var y = startY;
+    var color = CLASS_COLORS[cls];
+    var label = CLASS_LABELS[cls];
+    var is_hazard = (cls === "sand" || cls === "big_rock");
+
+    /* 卡片背景 */
+    ctx.fillStyle = "rgba(15,18,35,0.85)";
+    roundRect(x, y, cardW, cardH, 10);
+    ctx.fill();
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 2;
+    ctx.stroke();
+
+    /* 顶部色块 */
+    ctx.fillStyle = color;
+    roundRect(x, y, cardW, 70, 10);
+    ctx.fill();
+    /* 只有上半圆角：补底边 */
+    ctx.fillRect(x, y+35, cardW, 35);
+
+    /* 类别编号 */
+    ctx.fillStyle = "rgba(10,10,18,0.85)";
+    ctx.font = "bold 42px 'Space Grotesk',sans-serif";
+    ctx.textAlign = "center";
+    ctx.fillText(String(i), x + cardW/2, y + 54);
+
+    /* 类别英文 */
+    ctx.fillStyle = "#e5e7eb";
+    ctx.font = "bold 16px 'JetBrains Mono',monospace";
+    ctx.fillText(label.en, x + cardW/2, y + 100);
+
+    /* 类别中文 / 英文 */
+    ctx.fillStyle = color;
+    ctx.font = "bold 18px 'Noto Sans SC',system-ui";
+    ctx.fillText((lang==="zh" ? label.zh : label.en), x + cardW/2, y + 130);
+
+    /* 决策 */
+    ctx.fillStyle = is_hazard ? "#ef4444" : "#34d399";
+    ctx.font = "bold 13px 'Space Grotesk',sans-serif";
+    var decisionText = is_hazard
+      ? "⚠ " + (lang==="zh" ? label.decision_zh : label.decision_en).toUpperCase()
+      : "✓ " + (lang==="zh" ? label.decision_zh : label.decision_en).toUpperCase();
+    /* 使用替代字符避免 emoji */
+    var decIcon = is_hazard ? "[!]" : "[✓]";
+    decisionText = decIcon + " " + (lang==="zh" ? label.decision_zh : label.decision_en).toUpperCase();
+    /* 决策胶囊 */
+    var dw = ctx.measureText(decisionText).width + 20;
+    ctx.fillStyle = is_hazard ? "rgba(239,68,68,0.15)" : "rgba(52,211,153,0.15)";
+    roundRect(x + cardW/2 - dw/2, y + 150, dw, 26, 13);
+    ctx.fill();
+    ctx.strokeStyle = is_hazard ? "#ef4444" : "#34d399";
+    ctx.lineWidth = 1.2;
+    ctx.stroke();
+    ctx.fillStyle = is_hazard ? "#ef4444" : "#34d399";
+    ctx.fillText(decisionText, x + cardW/2, y + 167);
+
+    /* 像素值 */
+    ctx.fillStyle = "rgba(165,180,252,0.6)";
+    ctx.font = "10px 'Space Grotesk',sans-serif";
+    ctx.fillText((lang==="zh" ? "像素值 · PIXEL VALUE" : "PIXEL VALUE"), x + cardW/2, y + 200);
+    ctx.fillStyle = "#a5b4fc";
+    ctx.font = "bold 36px 'JetBrains Mono',monospace";
+    ctx.fillText(String(i), x + cardW/2, y + 240);
+
+    /* 描述文本 */
+    var descMap = {
+      soil:     {zh:"松散细粒土壤\n一般情况车可通行", en:"loose fine soil\nusually traversable"},
+      bedrock:  {zh:"暴露基岩\n抓地力最好", en:"exposed bedrock\nbest traction"},
+      sand:     {zh:"松沙陷车区\n必须绕开", en:"soft sand trap\nmust be avoided"},
+      big_rock: {zh:"车轮级大石\n可能损坏车轮", en:"wheel-size rocks\nmay damage wheels"}
+    };
+    ctx.fillStyle = "rgba(229,231,235,0.75)";
+    ctx.font = "11px 'Noto Sans SC',system-ui";
+    var desc = lang==="zh" ? descMap[cls].zh : descMap[cls].en;
+    var lines = desc.split("\n");
+    lines.forEach(function(line, j){
+      ctx.fillText(line, x + cardW/2, y + 280 + j*16);
+    });
+  });
+
+  /* 底部总结 */
+  ctx.fillStyle = "rgba(15,18,35,0.85)";
+  roundRect(90, 470, 720, 40, 6);
+  ctx.fill();
+  ctx.strokeStyle = "rgba(129,140,248,0.3)";
+  ctx.stroke();
+  ctx.fillStyle = "#a5b4fc";
+  ctx.font = "bold 12px 'Noto Sans SC',system-ui";
+  ctx.textAlign = "center";
+  var summary = (lang==="zh")
+    ? "每一个像素值都不是颜色，而是一条驾驶决策"
+    : "every pixel value is not a color but a driving decision";
+  ctx.fillText(summary, W/2, 494);
+
+  ctx.restore();
+}
+
+function render(){
+  drawBg();
+
+  var alpha = Math.min(1, 0.4 + t*1.2);
+  if(cur === 0) drawFrame0(alpha);
+  else if(cur === 1) drawFrame1(alpha);
+  else if(cur === 2) drawFrame2(alpha);
+  else drawFrame3(alpha);
+
+  drawTitle();
+}
+
+/* ── init ── */
+window.addEventListener("resize", resize);
+resize();
+syncUI();
+render();
+setTimeout(function(){ startAnim(); }, 500);
+
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,491 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Engine Batch Test Bench</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;700&family=Inter:wght@400;500&family=Noto+Sans+SC:wght@400;700&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{width:100%;height:100vh;overflow:hidden;background:#131313;font-family:'Noto Sans SC','Inter',sans-serif;color:#e5e2e1}
+.wrapper{display:flex;flex-direction:column;height:100vh;width:100%}
+header{padding:6px 16px;background:rgba(28,27,27,0.92);border-bottom:1px solid rgba(138,136,134,0.15);display:flex;align-items:center;justify-content:space-between;flex-shrink:0}
+header h1{font-family:'Space Grotesk',sans-serif;font-size:14px;font-weight:700;color:#ffb59c;letter-spacing:1px}
+header .sub{font-size:10px;color:#8a8886}
+.game-area{flex:1;min-height:0;display:flex;overflow:hidden}
+.terrain-panel{width:22%;display:flex;flex-direction:column;padding:8px;gap:6px;border-right:1px solid rgba(138,136,134,0.15);overflow-y:auto}
+.terrain-panel h3{font-family:'Space Grotesk',sans-serif;font-size:10px;color:#8a8886;letter-spacing:1px;flex-shrink:0}
+.terrain-btn{padding:8px;background:rgba(28,27,27,0.7);border:1px solid rgba(138,136,134,0.15);cursor:pointer;text-align:left;transition:all 0.2s}
+.terrain-btn:hover{border-color:rgba(255,181,156,0.4)}
+.terrain-btn.active{border-color:#ffb59c;background:rgba(255,181,156,0.1)}
+.terrain-btn.pass{border-color:#10b981;background:rgba(16,185,129,0.08)}
+.terrain-btn.fail{border-color:#ef4444;background:rgba(239,68,68,0.08)}
+.terrain-btn .t-name{font-family:'Space Grotesk',sans-serif;font-size:11px;font-weight:700;color:#ffb59c}
+.terrain-btn .t-status{font-size:9px;color:#8a8886;margin-top:2px}
+.center-panel{flex:1;display:flex;flex-direction:column;min-width:0}
+.viz-area{flex:1;min-height:0;display:flex;gap:4px;padding:8px}
+.viz-half{flex:1;display:flex;flex-direction:column;min-width:0}
+.viz-half h4{font-family:'Space Grotesk',sans-serif;font-size:10px;color:#8a8886;letter-spacing:1px;margin-bottom:4px;flex-shrink:0}
+.viz-canvas-wrap{flex:1;min-height:0;position:relative}
+.viz-canvas-wrap canvas{display:block;width:100%;height:100%}
+.check-panel{padding:8px;border-top:1px solid rgba(138,136,134,0.15);flex-shrink:0}
+.check-grid{display:grid;grid-template-columns:1fr 1fr;gap:4px}
+.check-item{display:flex;align-items:center;gap:6px;padding:4px 8px;background:rgba(28,27,27,0.6);cursor:pointer;transition:all 0.2s}
+.check-item:hover{background:rgba(255,181,156,0.08)}
+.check-item.checked{background:rgba(16,185,129,0.1)}
+.check-item .chk{width:14px;height:14px;border:1px solid rgba(138,136,134,0.4);display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:10px;color:#10b981;font-weight:700}
+.check-item.checked .chk{border-color:#10b981}
+.check-item .chk-text{font-size:10px;color:#c6c6c6}
+.verdict-row{display:flex;gap:8px;margin-top:6px;justify-content:center}
+.verdict-btn{font-family:'Space Grotesk',sans-serif;font-size:11px;font-weight:700;padding:6px 20px;cursor:pointer;border:1px solid rgba(138,136,134,0.15);background:rgba(28,27,27,0.92);letter-spacing:1px;transition:all 0.2s}
+.verdict-btn.pass-btn{color:#10b981;border-color:rgba(16,185,129,0.3)}
+.verdict-btn.pass-btn:hover{background:rgba(16,185,129,0.15)}
+.verdict-btn.fail-btn{color:#ef4444;border-color:rgba(239,68,68,0.3)}
+.verdict-btn.fail-btn:hover{background:rgba(239,68,68,0.15)}
+.verdict-btn:disabled{opacity:0.3;cursor:default}
+.report-panel{width:22%;display:flex;flex-direction:column;padding:8px;gap:6px;border-left:1px solid rgba(138,136,134,0.15);overflow-y:auto}
+.report-panel h3{font-family:'Space Grotesk',sans-serif;font-size:10px;color:#8a8886;letter-spacing:1px;flex-shrink:0}
+.report-entry{padding:6px 8px;background:rgba(28,27,27,0.6);font-size:10px;color:#c6c6c6;line-height:1.4}
+.report-entry .re-name{font-family:'Space Grotesk',sans-serif;font-weight:700;color:#ffb59c}
+.report-entry.re-pass .re-verdict{color:#10b981}
+.report-entry.re-fail .re-verdict{color:#ef4444}
+.report-entry.re-wrong .re-verdict{color:#ff5f1f}
+.hud{display:flex;justify-content:space-around;padding:6px 16px;background:rgba(0,0,0,0.55);flex-shrink:0;height:40px;align-items:center}
+.hud-item{text-align:center}
+.hud-item .label{font-family:'Space Grotesk',sans-serif;font-size:9px;color:#8a8886;letter-spacing:1px}
+.hud-item .value{font-family:'Space Grotesk',sans-serif;font-size:12px;color:#ffb59c;font-weight:700}
+.lang-btn{position:fixed;top:8px;left:8px;z-index:100;font-family:'Space Grotesk',sans-serif;font-size:11px;font-weight:700;padding:4px 10px;cursor:pointer;border:1px solid rgba(255,255,255,0.08);background:rgba(20,20,35,0.85);backdrop-filter:blur(12px);color:#ffb59c;letter-spacing:1px}
+.guide-panel{position:fixed;top:36px;left:8px;width:200px;max-height:35vh;overflow-y:auto;background:rgba(20,20,35,0.85);backdrop-filter:blur(12px);border:1px solid rgba(255,255,255,0.08);padding:10px;z-index:100;font-family:'Noto Sans SC',sans-serif;font-size:11px;color:rgba(255,255,255,0.85)}
+.guide-panel h3{font-family:'Space Grotesk',sans-serif;font-size:12px;margin-bottom:6px;display:flex;align-items:center;justify-content:space-between;cursor:pointer;color:#ffb59c}
+.guide-panel ul{padding-left:14px;line-height:1.5}
+.success-overlay{position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.7);display:none;align-items:center;justify-content:center;z-index:200;flex-direction:column}
+.success-overlay.show{display:flex}
+.success-box{background:rgba(28,27,27,0.95);border:1px solid rgba(16,185,129,0.4);padding:28px;max-width:380px;text-align:center}
+.success-box h2{font-family:'Space Grotesk',sans-serif;font-size:18px;color:#10b981;margin-bottom:12px}
+.success-box p{font-size:12px;color:#c6c6c6;line-height:1.6;margin-bottom:6px}
+.success-box .score{font-family:'Space Grotesk',sans-serif;font-size:24px;color:#ffb59c;margin:12px 0}
+.waiting-msg{font-family:'Space Grotesk',sans-serif;font-size:12px;color:#8a8886;text-align:center;padding:40px}
+</style>
+</head>
+<body>
+<button class="lang-btn" id="langBtn">CN</button>
+<div class="guide-panel" id="guidePanel">
+  <h3 id="guideToggle"><span id="guideTitle"></span> <span id="guideArrow">-</span></h3>
+  <div class="guide-content" id="guideContent">
+    <p id="guideGoal" style="margin-bottom:6px"></p>
+    <ul id="guideSteps"></ul>
+    <p id="guideTip" style="margin-top:6px;color:#ffb59c;font-size:10px"></p>
+  </div>
+</div>
+<div class="wrapper">
+  <header>
+    <div><h1 id="headerTitle"></h1><span class="sub" id="headerSub"></span></div>
+  </header>
+  <div class="game-area">
+    <div class="terrain-panel">
+      <h3 id="terrainTitle"></h3>
+      <div id="terrainBtns"></div>
+    </div>
+    <div class="center-panel">
+      <div class="viz-area">
+        <div class="viz-half">
+          <h4 id="vizRiskTitle"></h4>
+          <div class="viz-canvas-wrap" id="riskWrap"><canvas id="riskCanvas"></canvas></div>
+        </div>
+        <div class="viz-half">
+          <h4 id="vizPathTitle"></h4>
+          <div class="viz-canvas-wrap" id="pathWrap"><canvas id="pathCanvas"></canvas></div>
+        </div>
+      </div>
+      <div class="check-panel" id="checkPanel">
+        <div class="check-grid" id="checkGrid"></div>
+        <div class="verdict-row">
+          <button class="verdict-btn pass-btn" id="btnPass" disabled>PASS</button>
+          <button class="verdict-btn fail-btn" id="btnFail" disabled>FAIL</button>
+        </div>
+      </div>
+    </div>
+    <div class="report-panel">
+      <h3 id="reportTitle"></h3>
+      <div id="reportEntries"></div>
+    </div>
+  </div>
+  <div class="hud">
+    <div class="hud-item"><div class="label" id="hudLabel0"></div><div class="value" id="hudValue0">0 / 5</div></div>
+    <div class="hud-item"><div class="label" id="hudLabel1"></div><div class="value" id="hudValue1">0</div></div>
+    <div class="hud-item"><div class="label" id="hudLabel2"></div><div class="value" id="hudValue2">0</div></div>
+    <div class="hud-item"><div class="label" id="hudLabel3"></div><div class="value" id="hudValue3">--</div></div>
+  </div>
+</div>
+<div class="success-overlay" id="successOverlay">
+  <div class="success-box">
+    <h2 id="successTitle"></h2>
+    <p id="successMsg"></p>
+    <div class="score" id="successScore"></div>
+    <p id="successDetail"></p>
+  </div>
+</div>
+<script>
+(function(){
+var LANG='cn';
+var I18N={
+  title:{en:'BATCH TEST BENCH',cn:'\u5f15\u64ce\u6279\u91cf\u6d4b\u8bd5\u53f0'},
+  subtitle:{en:'Test engine on 5 terrain samples, find the anomaly',cn:'\u5728 5 \u79cd\u5730\u5f62\u6837\u4f8b\u4e0a\u6d4b\u8bd5\u5f15\u64ce\uff0c\u627e\u51fa\u5f02\u5e38'},
+  terrainTitle:{en:'TERRAIN SAMPLES',cn:'\u5730\u5f62\u6837\u4f8b'},
+  vizRiskTitle:{en:'RISK MAP OUTPUT',cn:'\u98ce\u9669\u56fe\u8f93\u51fa'},
+  vizPathTitle:{en:'PATH OUTPUT',cn:'\u8def\u5f84\u8f93\u51fa'},
+  reportTitle:{en:'TEST REPORT',cn:'\u6d4b\u8bd5\u62a5\u544a'},
+  guideTitle:{en:'GUIDE',cn:'\u6307\u5357'},
+  guideGoal:{en:'Test 5 terrain samples and judge correctness.',cn:'\u6d4b\u8bd5 5 \u4e2a\u5730\u5f62\u6837\u4f8b\u5e76\u5224\u65ad\u6b63\u786e\u6027\u3002'},
+  guideS1:{en:'Click a terrain sample to run engine',cn:'\u70b9\u51fb\u5730\u5f62\u6837\u4f8b\u8fd0\u884c\u5f15\u64ce'},
+  guideS2:{en:'Observe risk map and path output',cn:'\u89c2\u5bdf\u98ce\u9669\u56fe\u548c\u8def\u5f84\u8f93\u51fa'},
+  guideS3:{en:'Check inspection items',cn:'\u52fe\u9009\u68c0\u67e5\u9879'},
+  guideS4:{en:'Judge PASS or FAIL',cn:'\u5224\u5b9a PASS \u6216 FAIL'},
+  guideTip:{en:'One sample has a bug -- path goes through high risk!',cn:'\u6709\u4e00\u4e2a\u6837\u4f8b\u6709 bug -- \u8def\u5f84\u7a7f\u8fc7\u4e86\u9ad8\u98ce\u9669\u533a\uff01'},
+  hudL0:{en:'TESTED',cn:'\u5df2\u6d4b\u8bd5'},
+  hudL1:{en:'CORRECT',cn:'\u6b63\u786e'},
+  hudL2:{en:'WRONG',cn:'\u9519\u8bef'},
+  hudL3:{en:'STATUS',cn:'\u72b6\u6001'},
+  statusReady:{en:'IN PROGRESS',cn:'\u8fdb\u884c\u4e2d'},
+  statusDone:{en:'COMPLETE',cn:'\u5b8c\u6210'},
+  waitMsg:{en:'Select a terrain sample to begin',cn:'\u9009\u62e9\u4e00\u4e2a\u5730\u5f62\u6837\u4f8b\u5f00\u59cb\u6d4b\u8bd5'},
+  chk0:{en:'Cost distribution reasonable',cn:'\u4ee3\u4ef7\u5206\u5e03\u5408\u7406'},
+  chk1:{en:'Path avoids high-risk zones',cn:'\u8def\u5f84\u7ed5\u5f00\u9ad8\u98ce\u9669\u533a'},
+  chk2:{en:'Deterministic (same input = same output)',cn:'\u786e\u5b9a\u6027 (\u540c\u8f93\u5165=\u540c\u8f93\u51fa)'},
+  chk3:{en:'Resolution consistent',cn:'\u5206\u8fa8\u7387\u4e00\u81f4'},
+  successTitle:{en:'TEST COMPLETE!',cn:'\u6d4b\u8bd5\u5b8c\u6210\uff01'},
+  successMsg:{en:'You completed all 5 terrain tests.',cn:'\u4f60\u5b8c\u6210\u4e86\u5168\u90e8 5 \u4e2a\u5730\u5f62\u6d4b\u8bd5\u3002'},
+  successDetail:{en:'Correct judgments out of 5 samples.',cn:'\u5728 5 \u4e2a\u6837\u4f8b\u4e2d\u7684\u6b63\u786e\u5224\u65ad\u6570\u3002'},
+  passLabel:{en:'PASS',cn:'PASS'},
+  failLabel:{en:'FAIL',cn:'FAIL'},
+  verdictCorrect:{en:'Correct!',cn:'\u5224\u65ad\u6b63\u786e\uff01'},
+  verdictWrong:{en:'Wrong judgment!',cn:'\u5224\u65ad\u9519\u8bef\uff01'},
+  terrains:[
+    {name:{en:'Flat Sand',cn:'\u5e73\u5766\u6c99\u5730'},desc:{en:'Low risk, open terrain',cn:'\u4f4e\u98ce\u9669\uff0c\u5f00\u9614\u5730\u5f62'},isBug:false},
+    {name:{en:'Dense Rocks',cn:'\u5ca9\u77f3\u5bc6\u5e03'},desc:{en:'High risk, scattered boulders',cn:'\u9ad8\u98ce\u9669\uff0c\u6563\u5e03\u5de8\u77f3'},isBug:false},
+    {name:{en:'Mixed Terrain',cn:'\u6df7\u5408\u5730\u5f62'},desc:{en:'Mixed sand and rocks',cn:'\u6c99\u5730\u4e0e\u5ca9\u77f3\u6df7\u5408'},isBug:false},
+    {name:{en:'Shadow Zone',cn:'\u9634\u5f71\u533a\u57df'},desc:{en:'Uncertain visibility area',cn:'\u80fd\u89c1\u5ea6\u4e0d\u786e\u5b9a\u533a\u57df'},isBug:true},
+    {name:{en:'Steep Slope',cn:'\u6781\u7aef\u659c\u5761'},desc:{en:'Severe inclination, very high risk',cn:'\u4e25\u91cd\u503e\u659c\uff0c\u6781\u9ad8\u98ce\u9669'},isBug:false}
+  ]
+};
+function t(k){return(I18N[k]&&I18N[k][LANG])||(I18N[k]&&I18N[k]['en'])||k;}
+function tObj(obj){return obj[LANG]||obj['en']||'';}
+
+var terrainData=I18N.terrains;
+var state={
+  tested:[false,false,false,false,false],
+  verdicts:[null,null,null,null,null],
+  correct:0,wrong:0,
+  currentTerrain:-1,
+  checks:[false,false,false,false],
+  completed:false
+};
+
+var riskCanvas=document.getElementById('riskCanvas');
+var pathCanvas=document.getElementById('pathCanvas');
+var rCtx=riskCanvas.getContext('2d');
+var pCtx=pathCanvas.getContext('2d');
+var RW=0,RH=0,PW=0,PH=0;
+
+function resizeCanvases(){
+  var rw=document.getElementById('riskWrap');
+  var pw=document.getElementById('pathWrap');
+  var rr=rw.getBoundingClientRect();
+  var pr=pw.getBoundingClientRect();
+  if(rr.width<1||rr.height<1)return;
+  var dpr=Math.min(window.devicePixelRatio||1,2);
+  RW=rr.width;RH=rr.height;
+  riskCanvas.width=RW*dpr;riskCanvas.height=RH*dpr;
+  riskCanvas.style.width=RW+'px';riskCanvas.style.height=RH+'px';
+  rCtx.setTransform(dpr,0,0,dpr,0,0);
+  PW=pr.width;PH=pr.height;
+  pathCanvas.width=PW*dpr;pathCanvas.height=PH*dpr;
+  pathCanvas.style.width=PW+'px';pathCanvas.style.height=PH+'px';
+  pCtx.setTransform(dpr,0,0,dpr,0,0);
+  drawCurrentTerrain();
+}
+
+function drawRiskMap(ctx2,w,h,terrainIdx){
+  var g=ctx2.createLinearGradient(0,0,0,h);
+  g.addColorStop(0,'#131313');g.addColorStop(1,'#1a1035');
+  ctx2.fillStyle=g;ctx2.fillRect(0,0,w,h);
+  if(terrainIdx<0){
+    ctx2.font="12px 'Space Grotesk',sans-serif";ctx2.fillStyle='#8a8886';
+    ctx2.textAlign='center';ctx2.textBaseline='middle';
+    ctx2.fillText(t('waitMsg'),w/2,h/2);
+    return;
+  }
+  var cellW=w/20;var cellH=h/20;
+  var riskData=generateRiskGrid(terrainIdx);
+  for(var r=0;r<20;r++){
+    for(var c=0;c<20;c++){
+      var v=riskData[r][c];
+      var red=Math.floor(v*2.55);
+      var green=Math.floor((100-v)*2.55);
+      ctx2.fillStyle='rgb('+red+','+green+',40)';
+      ctx2.fillRect(c*cellW,r*cellH,cellW-1,cellH-1);
+    }
+  }
+  ctx2.font="bold 10px 'Space Grotesk',sans-serif";
+  ctx2.fillStyle='#ffb59c';ctx2.textAlign='left';
+  ctx2.fillText(tObj(terrainData[terrainIdx].name),4,14);
+}
+
+function drawPathMap(ctx2,w,h,terrainIdx){
+  var g=ctx2.createLinearGradient(0,0,0,h);
+  g.addColorStop(0,'#131313');g.addColorStop(1,'#1a1035');
+  ctx2.fillStyle=g;ctx2.fillRect(0,0,w,h);
+  if(terrainIdx<0){
+    ctx2.font="12px 'Space Grotesk',sans-serif";ctx2.fillStyle='#8a8886';
+    ctx2.textAlign='center';ctx2.textBaseline='middle';
+    ctx2.fillText('--',w/2,h/2);
+    return;
+  }
+  var cellW=w/20;var cellH=h/20;
+  var riskData=generateRiskGrid(terrainIdx);
+  for(var r=0;r<20;r++){
+    for(var c=0;c<20;c++){
+      var v=riskData[r][c];
+      var red=Math.floor(v*2.55);
+      var green=Math.floor((100-v)*2.55);
+      ctx2.fillStyle='rgba('+red+','+green+',40,0.3)';
+      ctx2.fillRect(c*cellW,r*cellH,cellW-1,cellH-1);
+    }
+  }
+  var pathPts=generatePath(terrainIdx,w,h);
+  ctx2.strokeStyle='#00daf3';ctx2.lineWidth=3;
+  ctx2.shadowColor='#00daf3';ctx2.shadowBlur=10;
+  ctx2.beginPath();
+  ctx2.moveTo(pathPts[0][0],pathPts[0][1]);
+  for(var i=1;i<pathPts.length;i++){
+    ctx2.lineTo(pathPts[i][0],pathPts[i][1]);
+  }
+  ctx2.stroke();
+  ctx2.shadowBlur=0;
+  ctx2.fillStyle='#10b981';ctx2.beginPath();
+  ctx2.arc(pathPts[0][0],pathPts[0][1],5,0,Math.PI*2);ctx2.fill();
+  ctx2.fillStyle='#ef4444';ctx2.beginPath();
+  ctx2.arc(pathPts[pathPts.length-1][0],pathPts[pathPts.length-1][1],5,0,Math.PI*2);ctx2.fill();
+  ctx2.font="9px 'Space Grotesk',sans-serif";
+  ctx2.fillStyle='#10b981';ctx2.textAlign='left';ctx2.fillText('START',pathPts[0][0]+8,pathPts[0][1]+3);
+  ctx2.fillStyle='#ef4444';ctx2.textAlign='right';ctx2.fillText('GOAL',pathPts[pathPts.length-1][0]-8,pathPts[pathPts.length-1][1]+3);
+}
+
+function generateRiskGrid(idx){
+  var grid=[];
+  var seed=idx*137+42;
+  function pseudoRand(){seed=(seed*1103515245+12345)&0x7fffffff;return(seed%1000)/1000;}
+  for(var r=0;r<20;r++){
+    grid[r]=[];
+    for(var c=0;c<20;c++){
+      var base=0;
+      if(idx===0){base=10+pseudoRand()*20;}
+      else if(idx===1){base=50+pseudoRand()*50;if(c>12&&r>12)base=20+pseudoRand()*15;}
+      else if(idx===2){base=(r<10)?15+pseudoRand()*20:55+pseudoRand()*35;}
+      else if(idx===3){
+        base=30+pseudoRand()*30;
+        if(r>=6&&r<=14&&c>=4&&c<=16)base=70+pseudoRand()*25;
+      }
+      else if(idx===4){base=60+pseudoRand()*40;if(c<5)base=20+pseudoRand()*15;}
+      grid[r][c]=Math.min(100,Math.max(0,Math.floor(base)));
+    }
+  }
+  return grid;
+}
+
+function generatePath(idx,w,h){
+  var pts=[];
+  var startX=w*0.05;var startY=h*0.9;
+  var endX=w*0.95;var endY=h*0.1;
+  if(idx===0){
+    pts=[[startX,startY],[w*0.25,h*0.7],[w*0.5,h*0.5],[w*0.75,h*0.3],[endX,endY]];
+  }else if(idx===1){
+    pts=[[startX,startY],[w*0.1,h*0.6],[w*0.15,h*0.4],[w*0.3,h*0.3],[w*0.5,h*0.25],[w*0.7,h*0.65],[w*0.85,h*0.7],[endX,endY]];
+  }else if(idx===2){
+    pts=[[startX,startY],[w*0.2,h*0.7],[w*0.35,h*0.45],[w*0.4,h*0.35],[w*0.6,h*0.3],[w*0.8,h*0.2],[endX,endY]];
+  }else if(idx===3){
+    pts=[[startX,startY],[w*0.15,h*0.65],[w*0.3,h*0.55],[w*0.45,h*0.5],[w*0.55,h*0.45],[w*0.7,h*0.4],[w*0.85,h*0.25],[endX,endY]];
+  }else if(idx===4){
+    pts=[[startX,startY],[w*0.08,h*0.7],[w*0.1,h*0.5],[w*0.12,h*0.3],[w*0.2,h*0.2],[w*0.4,h*0.15],[endX,endY]];
+  }
+  return pts;
+}
+
+function drawCurrentTerrain(){
+  drawRiskMap(rCtx,RW,RH,state.currentTerrain);
+  drawPathMap(pCtx,PW,PH,state.currentTerrain);
+}
+
+function buildTerrainBtns(){
+  var container=document.getElementById('terrainBtns');
+  container.innerHTML='';
+  terrainData.forEach(function(td,i){
+    var btn=document.createElement('div');
+    btn.className='terrain-btn';
+    if(state.currentTerrain===i)btn.classList.add('active');
+    if(state.verdicts[i]==='pass')btn.classList.add('pass');
+    if(state.verdicts[i]==='fail')btn.classList.add('fail');
+    var name=document.createElement('div');
+    name.className='t-name';
+    name.textContent=(i+1)+'. '+tObj(td.name);
+    var status=document.createElement('div');
+    status.className='t-status';
+    if(state.verdicts[i]!==null){
+      status.textContent=state.verdicts[i].toUpperCase();
+    }else{
+      status.textContent=tObj(td.desc);
+    }
+    btn.appendChild(name);
+    btn.appendChild(status);
+    btn.addEventListener('click',function(){selectTerrain(i);});
+    container.appendChild(btn);
+  });
+}
+
+function buildCheckGrid(){
+  var container=document.getElementById('checkGrid');
+  container.innerHTML='';
+  if(state.currentTerrain<0||state.tested[state.currentTerrain])return;
+  for(var i=0;i<4;i++){
+    var item=document.createElement('div');
+    item.className='check-item';
+    if(state.checks[i])item.classList.add('checked');
+    item.setAttribute('data-check-idx',i);
+    var chk=document.createElement('div');
+    chk.className='chk';
+    chk.textContent=state.checks[i]?'V':'';
+    var txt=document.createElement('div');
+    txt.className='chk-text';
+    txt.textContent=t('chk'+i);
+    item.appendChild(chk);
+    item.appendChild(txt);
+    item.addEventListener('click',function(ci){return function(){
+      if(state.currentTerrain<0||state.tested[state.currentTerrain])return;
+      state.checks[ci]=!state.checks[ci];
+      buildCheckGrid();
+    };}(i));
+    container.appendChild(item);
+  }
+}
+
+function selectTerrain(idx){
+  if(state.completed)return;
+  if(state.tested[idx])return;
+  state.currentTerrain=idx;
+  state.checks=[false,false,false,false];
+  document.getElementById('btnPass').disabled=false;
+  document.getElementById('btnFail').disabled=false;
+  buildTerrainBtns();
+  buildCheckGrid();
+  drawCurrentTerrain();
+}
+
+function submitVerdict(verdict){
+  if(state.currentTerrain<0||state.tested[state.currentTerrain])return;
+  var idx=state.currentTerrain;
+  var td=terrainData[idx];
+  var expectedVerdict=td.isBug?'fail':'pass';
+  var isCorrect=(verdict===expectedVerdict);
+  state.tested[idx]=true;
+  state.verdicts[idx]=verdict;
+  if(isCorrect){state.correct++;}else{state.wrong++;}
+  addReportEntry(idx,verdict,isCorrect);
+  document.getElementById('btnPass').disabled=true;
+  document.getElementById('btnFail').disabled=true;
+  updateHUD();
+  buildTerrainBtns();
+  buildCheckGrid();
+  var allTested=state.tested.every(function(t2){return t2;});
+  if(allTested){
+    state.completed=true;
+    updateHUD();
+    showSuccess();
+  }
+}
+
+function addReportEntry(idx,verdict,isCorrect){
+  var container=document.getElementById('reportEntries');
+  var entry=document.createElement('div');
+  entry.className='report-entry';
+  if(isCorrect){entry.classList.add(verdict==='pass'?'re-pass':'re-fail');}
+  else{entry.classList.add('re-wrong');}
+  var name=document.createElement('div');
+  name.className='re-name';
+  name.textContent=tObj(terrainData[idx].name);
+  var verd=document.createElement('div');
+  verd.className='re-verdict';
+  verd.textContent=verdict.toUpperCase()+' - '+(isCorrect?t('verdictCorrect'):t('verdictWrong'));
+  entry.appendChild(name);
+  entry.appendChild(verd);
+  container.appendChild(entry);
+}
+
+function updateHUD(){
+  var tested=state.tested.filter(function(t2){return t2;}).length;
+  document.getElementById('hudValue0').textContent=tested+' / 5';
+  document.getElementById('hudValue1').textContent=state.correct+'';
+  document.getElementById('hudValue2').textContent=state.wrong+'';
+  document.getElementById('hudValue3').textContent=state.completed?t('statusDone'):t('statusReady');
+}
+
+function showSuccess(){
+  document.getElementById('successOverlay').classList.add('show');
+  document.getElementById('successTitle').textContent=t('successTitle');
+  document.getElementById('successMsg').textContent=t('successMsg');
+  document.getElementById('successScore').textContent=state.correct+' / 5';
+  document.getElementById('successDetail').textContent=t('successDetail');
+}
+
+function refreshI18N(){
+  document.getElementById('headerTitle').textContent=t('title');
+  document.getElementById('headerSub').textContent=t('subtitle');
+  document.getElementById('terrainTitle').textContent=t('terrainTitle');
+  document.getElementById('vizRiskTitle').textContent=t('vizRiskTitle');
+  document.getElementById('vizPathTitle').textContent=t('vizPathTitle');
+  document.getElementById('reportTitle').textContent=t('reportTitle');
+  document.getElementById('guideTitle').textContent=t('guideTitle');
+  document.getElementById('guideGoal').textContent=t('guideGoal');
+  document.getElementById('guideTip').textContent=t('guideTip');
+  document.getElementById('hudLabel0').textContent=t('hudL0');
+  document.getElementById('hudLabel1').textContent=t('hudL1');
+  document.getElementById('hudLabel2').textContent=t('hudL2');
+  document.getElementById('hudLabel3').textContent=t('hudL3');
+  document.getElementById('btnPass').textContent=t('passLabel');
+  document.getElementById('btnFail').textContent=t('failLabel');
+  var steps=document.getElementById('guideSteps');
+  steps.innerHTML='';
+  ['guideS1','guideS2','guideS3','guideS4'].forEach(function(k){
+    var li=document.createElement('li');li.textContent=t(k);steps.appendChild(li);
+  });
+  buildTerrainBtns();
+  buildCheckGrid();
+  updateHUD();
+  drawCurrentTerrain();
+}
+
+document.getElementById('langBtn').addEventListener('click',function(){
+  LANG=LANG==='en'?'cn':'en';
+  document.getElementById('langBtn').textContent=LANG.toUpperCase();
+  refreshI18N();
+});
+
+document.getElementById('guideToggle').addEventListener('click',function(){
+  var c=document.getElementById('guideContent');
+  var a=document.getElementById('guideArrow');
+  if(c.style.display==='none'){c.style.display='block';a.textContent='-';}
+  else{c.style.display='none';a.textContent='+';}
+});
+
+document.getElementById('btnPass').addEventListener('click',function(){submitVerdict('pass');});
+document.getElementById('btnFail').addEventListener('click',function(){submitVerdict('fail');});
+
+window.addEventListener('resize',resizeCanvases);
+refreshI18N();
+resizeCanvases();
+setTimeout(resizeCanvases,200);
+setTimeout(resizeCanvases,600);
+document.fonts.ready.then(function(){resizeCanvases();});
+})();
+</script>
+</body>
+</html>

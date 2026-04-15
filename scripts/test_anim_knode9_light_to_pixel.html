@@ -1,0 +1,515 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=Inter:wght@400;500&family=Noto+Sans+SC:wght@400;700&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box;}
+html,body{width:100%;height:100vh;overflow:hidden;}
+body{background:var(--bg,#0c0e12);color:var(--text,#f6f6fc);font-family:'Inter','Noto Sans SC',sans-serif;display:flex;flex-direction:column;}
+.wrapper{display:flex;flex-direction:column;height:100vh;overflow:hidden;}
+.header{padding:12px 16px 8px;display:flex;justify-content:space-between;align-items:center;}
+.header h1{font-family:'Space Grotesk',sans-serif;font-size:clamp(14px,2vw,18px);font-weight:700;letter-spacing:-0.02em;color:var(--primary,#50ffb0);text-shadow:0 0 15px var(--glow,rgba(80,255,176,0.3));}
+.header .sub{font-size:11px;color:var(--muted,#aaabb0);letter-spacing:0.1em;text-transform:uppercase;}
+.canvas-wrap{flex:1;min-height:0;position:relative;}
+canvas{width:100%;height:100%;display:block;}
+.controls{display:flex;justify-content:center;align-items:center;gap:12px;padding:8px 16px;}
+.ctrl-btn{font-family:'Space Grotesk',sans-serif;font-size:12px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;padding:6px 18px;border:none;cursor:pointer;color:var(--bg,#0c0e12);background:linear-gradient(135deg,var(--primary,#50ffb0),var(--primary-dim,#17df93));transition:transform 0.1s,box-shadow 0.2s;box-shadow:0 0 12px var(--glow-strong,rgba(80,255,176,0.3));}
+.ctrl-btn:hover{transform:scale(1.04);box-shadow:0 0 20px var(--glow-strong,rgba(80,255,176,0.5));}
+.ctrl-btn:active{transform:scale(0.96);}
+.ctrl-btn.secondary{background:var(--glass,rgba(23,26,31,0.92));color:var(--muted,#aaabb0);box-shadow:none;backdrop-filter:blur(12px);}
+.ctrl-btn.secondary:hover{color:var(--primary,#50ffb0);}
+.hud{height:48px;display:flex;align-items:center;justify-content:space-around;background:rgba(0,0,0,0.55);backdrop-filter:blur(12px);padding:0 16px;}
+.hud-item{text-align:center;}
+.hud-label{font-family:'Space Grotesk',sans-serif;font-size:9px;letter-spacing:0.15em;text-transform:uppercase;color:var(--muted,#aaabb0);}
+.hud-val{font-family:'Space Grotesk',sans-serif;font-size:14px;font-weight:700;color:var(--primary,#50ffb0);}
+.lang-btn{position:fixed;top:8px;left:8px;z-index:100;font-family:'Space Grotesk',sans-serif;font-size:11px;font-weight:700;padding:4px 10px;cursor:pointer;border:none;background:rgba(20,20,35,0.85);backdrop-filter:blur(12px);color:#ffb59c;letter-spacing:1px;}
+.guide-panel{position:fixed;top:8px;right:8px;width:240px;max-height:40vh;overflow-y:auto;background:var(--glass,rgba(20,20,35,0.85));backdrop-filter:blur(12px);padding:12px;z-index:100;font-family:'Noto Sans SC',sans-serif;font-size:12px;color:rgba(255,255,255,0.85);line-height:1.6;}
+.guide-panel h3{font-family:'Space Grotesk',sans-serif;font-size:13px;margin-bottom:6px;color:var(--primary,#50ffb0);cursor:pointer;display:flex;justify-content:space-between;align-items:center;}
+.guide-panel ul{padding-left:14px;}
+.guide-panel .collapsed{display:none;}
+</style>
+</head>
+<body>
+<button class="lang-btn" id="langBtn">CN</button>
+<div class="guide-panel" id="guide">
+<h3 id="guideTitle"></h3>
+<div class="guide-content" id="guideContent"></div>
+</div>
+<div class="wrapper">
+<div class="header">
+<div><h1 id="title"></h1><div class="sub" id="subtitle"></div></div>
+<div id="frameIndicator" style="font-family:'Space Grotesk';font-size:11px;color:var(--muted,#aaabb0);letter-spacing:0.1em;"></div>
+</div>
+<div class="canvas-wrap"><canvas id="c"></canvas></div>
+<div class="controls">
+<button class="ctrl-btn secondary" id="btnPrev"></button>
+<button class="ctrl-btn" id="btnPlay"></button>
+<button class="ctrl-btn secondary" id="btnNext"></button>
+</div>
+<div class="hud">
+<div class="hud-item"><div class="hud-label" id="hudL1"></div><div class="hud-val" id="hudV1"></div></div>
+<div class="hud-item"><div class="hud-label" id="hudL2"></div><div class="hud-val" id="hudV2"></div></div>
+<div class="hud-item"><div class="hud-label" id="hudL3"></div><div class="hud-val" id="hudV3"></div></div>
+<div class="hud-item"><div class="hud-label" id="hudL4"></div><div class="hud-val" id="hudV4"></div></div>
+</div>
+</div>
+
+<script src="animation_runtime.js"></script>
+
+<script>
+// ============================================================
+// CONFIG
+// ============================================================
+
+var CONFIG = {
+  style: 'ares_mission',
+  totalFrames: 5,
+
+  i18n: {
+    title:    {en:'LIGHT TO PIXEL', cn:'\u5149\u7ebf\u5230\u50cf\u7d20'},
+    subtitle: {en:'HOW A CAMERA CAPTURES AN IMAGE', cn:'\u76f8\u673a\u5982\u4f55\u6355\u6349\u56fe\u50cf'},
+
+    // HUD labels
+    hud_stage:    {en:'STAGE',    cn:'\u9636\u6bb5'},
+    hud_concept:  {en:'CONCEPT',  cn:'\u6982\u5ff5'},
+    hud_keyword:  {en:'KEYWORD',  cn:'\u5173\u952e\u8bcd'},
+    hud_progress: {en:'PROGRESS', cn:'\u8fdb\u5ea6'},
+
+    // HUD values per frame
+    hv_overview:    {en:'Overview',       cn:'\u603b\u89c8'},
+    hv_lens:        {en:'Lens Focus',     cn:'\u955c\u5934\u805a\u7126'},
+    hv_sensor:      {en:'Sensor Grid',    cn:'\u4f20\u611f\u5668\u7f51\u683c'},
+    hv_digital:     {en:'Light to Number',cn:'\u5149\u53d8\u6570\u5b57'},
+    hv_resolution:  {en:'Resolution',     cn:'\u5206\u8fa8\u7387\u5bf9\u6bd4'},
+
+    hv_imaging:     {en:'Imaging Chain',  cn:'\u6210\u50cf\u94fe\u8def'},
+    hv_refraction:  {en:'Refraction',     cn:'\u6298\u5c04'},
+    hv_pixel:       {en:'Pixel',          cn:'\u50cf\u7d20'},
+    hv_adc:         {en:'ADC',            cn:'\u6a21\u6570\u8f6c\u6362'},
+    hv_clarity:     {en:'Clarity',        cn:'\u6e05\u6670\u5ea6'},
+
+    // Frame titles
+    f0_title: {en:'THE IMAGING CHAIN', cn:'\u6210\u50cf\u94fe\u8def\u603b\u89c8'},
+    f0_desc:  {en:'Light reflects off objects, passes through the lens, and becomes pixels on the sensor.',
+               cn:'\u5149\u7ebf\u4ece\u7269\u4f53\u53cd\u5c04\uff0c\u7a7f\u8fc7\u955c\u5934\uff0c\u5728\u4f20\u611f\u5668\u4e0a\u53d8\u6210\u50cf\u7d20\u3002'},
+
+    f1_title: {en:'HOW THE LENS WORKS', cn:'\u955c\u5934\u5982\u4f55\u5de5\u4f5c'},
+    f1_desc:  {en:'A convex lens bends light rays to converge at the focal point.',
+               cn:'\u51f8\u900f\u955c\u628a\u5149\u7ebf\u5f2f\u6298\uff0c\u6c47\u805a\u5230\u7126\u70b9\u4e0a\u3002'},
+    f1_object:{en:'Object', cn:'\u7269\u4f53'},
+    f1_lens:  {en:'Convex Lens', cn:'\u51f8\u900f\u955c'},
+    f1_focus: {en:'Focal Point', cn:'\u7126\u70b9'},
+    f1_image: {en:'Inverted Image', cn:'\u5012\u7acb\u7684\u50cf'},
+
+    f2_title: {en:'THE PIXEL GRID', cn:'\u50cf\u7d20\u7f51\u683c'},
+    f2_desc:  {en:'The sensor surface is covered with millions of tiny light-sensitive units.',
+               cn:'\u4f20\u611f\u5668\u8868\u9762\u5e03\u6ee1\u4e86\u6570\u767e\u4e07\u4e2a\u5fae\u5c0f\u7684\u611f\u5149\u5355\u5143\u3002'},
+    f2_sensor:{en:'Image Sensor (CMOS)', cn:'\u56fe\u50cf\u4f20\u611f\u5668 (CMOS)'},
+    f2_pixel: {en:'Each cell = 1 pixel', cn:'\u6bcf\u4e2a\u683c\u5b50 = 1\u4e2a\u50cf\u7d20'},
+    f2_bayer: {en:'Bayer Filter: R G G B', cn:'\u62dc\u8033\u6ee4\u955c: \u7ea2 \u7eff \u7eff \u84dd'},
+
+    f3_title: {en:'LIGHT BECOMES NUMBERS', cn:'\u5149\u53d8\u6210\u6570\u5b57'},
+    f3_desc:  {en:'Each pixel converts light intensity into a number (0-255) for Red, Green, and Blue.',
+               cn:'\u6bcf\u4e2a\u50cf\u7d20\u628a\u5149\u7684\u5f3a\u5ea6\u8f6c\u6362\u6210\u6570\u5b57(0-255)\uff0c\u5206\u7ea2\u3001\u7eff\u3001\u84dd\u4e09\u901a\u9053\u3002'},
+    f3_photon:{en:'Photon', cn:'\u5149\u5b50'},
+    f3_charge:{en:'Electric Charge', cn:'\u7535\u8377'},
+    f3_adc:   {en:'ADC', cn:'\u6a21\u6570\u8f6c\u6362'},
+    f3_number:{en:'Digital Value', cn:'\u6570\u5b57\u503c'},
+    f3_r:     {en:'R:', cn:'R:'},
+    f3_g:     {en:'G:', cn:'G:'},
+    f3_b:     {en:'B:', cn:'B:'},
+
+    f4_title: {en:'RESOLUTION COMPARISON', cn:'\u5206\u8fa8\u7387\u5bf9\u6bd4'},
+    f4_desc:  {en:'More pixels = more detail. The same scene at 4x4, 16x16, and 64x64 pixels.',
+               cn:'\u50cf\u7d20\u8d8a\u591a\uff0c\u7ec6\u8282\u8d8a\u4e30\u5bcc\u3002\u540c\u4e00\u573a\u666f\u7528 4x4\u30018x8\u300132x32 \u50cf\u7d20\u5c55\u793a\u3002'},
+    f4_low:   {en:'4x4 px', cn:'4x4 \u50cf\u7d20'},
+    f4_mid:   {en:'8x8 px', cn:'8x8 \u50cf\u7d20'},
+    f4_high:  {en:'32x32 px', cn:'32x32 \u50cf\u7d20'},
+    f4_verdict:{en:'More pixels = sharper image', cn:'\u50cf\u7d20\u8d8a\u591a = \u56fe\u50cf\u8d8a\u6e05\u6670'},
+
+    // Guide
+    guideTitle: {en:'VIEWING GUIDE', cn:'\u89c2\u770b\u6307\u5357'},
+    g1: {en:'Watch how light travels from object to lens to sensor', cn:'\u89c2\u5bdf\u5149\u7ebf\u4ece\u7269\u4f53\u5230\u955c\u5934\u5230\u4f20\u611f\u5668\u7684\u65c5\u7a0b'},
+    g2: {en:'Notice how the lens bends light to form an inverted image', cn:'\u6ce8\u610f\u955c\u5934\u5982\u4f55\u5f2f\u6298\u5149\u7ebf\u5f62\u6210\u5012\u7acb\u7684\u50cf'},
+    g3: {en:'See how pixel count affects image clarity', cn:'\u89c2\u5bdf\u50cf\u7d20\u6570\u91cf\u5982\u4f55\u5f71\u54cd\u56fe\u50cf\u6e05\u6670\u5ea6'},
+    g4: {en:'Each pixel records Red, Green, Blue values as numbers', cn:'\u6bcf\u4e2a\u50cf\u7d20\u8bb0\u5f55\u7ea2\u7eff\u84dd\u4e09\u8272\u6570\u503c'},
+  },
+
+  hudLabels: ['hud_stage', 'hud_concept', 'hud_keyword', 'hud_progress'],
+  hudValues: [
+    ['hv_overview',   'hv_imaging',    'hv_imaging',  '1/5'],
+    ['hv_lens',       'hv_refraction', 'hv_refraction','2/5'],
+    ['hv_sensor',     'hv_pixel',      'hv_pixel',    '3/5'],
+    ['hv_digital',    'hv_adc',        'hv_adc',      '4/5'],
+    ['hv_resolution', 'hv_clarity',    'hv_clarity',  '5/5'],
+  ],
+
+  guideTitle: 'guideTitle',
+  guideItems: ['g1', 'g2', 'g3', 'g4'],
+};
+
+// ============================================================
+// Helper: centered box
+// ============================================================
+function cbox(id, cx, cy, w, h, fill, stroke) {
+  return {id:id, type:'box', x:cx-w/2, y:cy-h/2, w:w, h:h, fill:fill, stroke:stroke};
+}
+
+// ============================================================
+// FRAME ELEMENTS
+// ============================================================
+
+function getFrameElements(f, W, H) {
+  var t = AnimRuntime.t;
+  var P = AnimRuntime.PAL;
+  var cx = W/2, cy = H/2;
+  var els = [];
+
+  // ---- Frame 0: Overview chain ----
+  if (f === 0) {
+    els.push({id:'f0t', type:'label', text:t('f0_title'), x:cx, y:45, color:P.primary, size:18, align:'center', glow:P.glowStrong});
+    els.push({id:'f0d', type:'text', text:t('f0_desc'), x:cx, y:72, color:P.muted, size:11, align:'center'});
+
+    // Chain: Object -> Lens -> Sensor -> Pixel -> Data
+    var chainY = cy + 10;
+    var boxW = 100, boxH = 50;
+    var startX = cx - 260;
+    var gap = 140;
+
+    var labels = [
+      {en:'Object',cn:'\u7269\u4f53'},
+      {en:'Lens',cn:'\u955c\u5934'},
+      {en:'Sensor',cn:'\u4f20\u611f\u5668'},
+      {en:'Pixels',cn:'\u50cf\u7d20'},
+    ];
+    var colors = [P.secondary, P.primary, P.tertiary, P.primaryDim];
+
+    for (var i = 0; i < 4; i++) {
+      var bx = startX + i * gap;
+      els.push(cbox('f0b'+i, bx, chainY, boxW, boxH, null, colors[i]));
+      els.push({id:'f0l'+i, type:'label', text:t('f0_title') === '\u6210\u50cf\u94fe\u8def\u603b\u89c8' ? labels[i].cn : labels[i].en,
+        x:bx, y:chainY, color:colors[i], size:14, align:'center'});
+      if (i < 3) {
+        els.push({id:'f0a'+i, type:'arrow', x1:bx+boxW/2+4, y1:chainY, x2:bx+gap-boxW/2-4, y2:chainY,
+          color:P.muted, lineWidth:2, headSize:8});
+      }
+    }
+
+    // Light rays illustration above
+    els.push({id:'f0ray', type:'custom', draw: function(ctx) {
+      ctx.strokeStyle = P.secondary;
+      ctx.lineWidth = 1;
+      ctx.setLineDash([4,4]);
+      var sy = chainY - boxH/2 - 20;
+      for (var r = 0; r < 3; r++) {
+        ctx.beginPath();
+        ctx.moveTo(startX - 30, sy - 15 + r*15);
+        ctx.lineTo(startX + gap - 20, sy + 5);
+        ctx.stroke();
+      }
+      ctx.setLineDash([]);
+    }});
+
+    // Bottom note
+    els.push({id:'f0note', type:'text', text:t('f0_title') === '\u6210\u50cf\u94fe\u8def\u603b\u89c8'
+      ? '\u6240\u6709\u6570\u5b57\u76f8\u673a\u90fd\u9075\u5faa\u8fd9\u4e2a\u94fe\u8def\uff1a\u5149\u7ebf \u2192 \u955c\u5934 \u2192 \u4f20\u611f\u5668 \u2192 \u50cf\u7d20\u6570\u636e'
+      : 'All digital cameras follow this chain: Light \u2192 Lens \u2192 Sensor \u2192 Pixel Data',
+      x:cx, y:cy+80, color:P.muted, size:11, align:'center'});
+  }
+
+  // ---- Frame 1: Lens focusing ----
+  if (f === 1) {
+    els.push({id:'f1t', type:'label', text:t('f1_title'), x:cx, y:40, color:P.primary, size:17, align:'center', glow:P.glowStrong});
+    els.push({id:'f1d', type:'text', text:t('f1_desc'), x:cx, y:64, color:P.muted, size:11, align:'center'});
+
+    var lensX = cx;
+    var lensTop = cy - 70;
+    var lensBot = cy + 70;
+    var objX = cx - 200;
+    var imgX = cx + 180;
+
+    // Object (tree shape)
+    els.push({id:'f1obj_trunk', type:'box', x:objX-3, y:cy-20, w:6, h:40, fill:'#6b8a4e'});
+    els.push({id:'f1obj_top', type:'circle', x:objX, y:cy-30, r:18, fill:'#4a7a2e'});
+    els.push({id:'f1obj_lbl', type:'text', text:t('f1_object'), x:objX, y:cy+35, color:P.secondary, size:10, align:'center'});
+
+    // Lens (two arcs)
+    els.push({id:'f1lens', type:'custom', draw: function(ctx) {
+      ctx.strokeStyle = P.primary;
+      ctx.lineWidth = 3;
+      // Left arc
+      ctx.beginPath();
+      ctx.ellipse(lensX-5, cy, 8, 70, 0, -Math.PI/2, Math.PI/2);
+      ctx.stroke();
+      // Right arc
+      ctx.beginPath();
+      ctx.ellipse(lensX+5, cy, 8, 70, 0, -Math.PI/2, Math.PI/2);
+      ctx.stroke();
+    }});
+    els.push({id:'f1lens_lbl', type:'label', text:t('f1_lens'), x:lensX, y:cy+85, color:P.primary, size:11, align:'center'});
+
+    // Light rays from object through lens to image
+    els.push({id:'f1rays', type:'custom', draw: function(ctx) {
+      ctx.lineWidth = 1.5;
+      var rays = [
+        {sy:cy-30, ey:cy+30},
+        {sy:cy-10, ey:cy+10},
+        {sy:cy+10, ey:cy-10},
+      ];
+      for (var r = 0; r < rays.length; r++) {
+        // Object to lens
+        ctx.strokeStyle = P.secondary;
+        ctx.globalAlpha = 0.7;
+        ctx.beginPath();
+        ctx.moveTo(objX+18, rays[r].sy);
+        ctx.lineTo(lensX-10, cy + (rays[r].sy - cy)*0.3);
+        ctx.stroke();
+        // Lens to image (converging)
+        ctx.strokeStyle = P.tertiary;
+        ctx.beginPath();
+        ctx.moveTo(lensX+10, cy + (rays[r].sy - cy)*0.3);
+        ctx.lineTo(imgX, rays[r].ey);
+        ctx.stroke();
+        ctx.globalAlpha = 1;
+      }
+    }});
+
+    // Focal point
+    els.push({id:'f1fp', type:'circle', x:cx+90, y:cy, r:4, fill:P.primaryDim, glow:P.primary, glowSize:15});
+    els.push({id:'f1fp_lbl', type:'text', text:t('f1_focus'), x:cx+90, y:cy+18, color:P.primaryDim, size:9, align:'center'});
+
+    // Inverted image (upside-down tree)
+    els.push({id:'f1img_trunk', type:'box', x:imgX-2, y:cy-15, w:4, h:30, fill:'rgba(74,122,46,0.5)'});
+    els.push({id:'f1img_top', type:'circle', x:imgX, y:cy+18, r:12, fill:'rgba(74,122,46,0.4)'});
+    els.push({id:'f1img_lbl', type:'text', text:t('f1_image'), x:imgX, y:cy-30, color:P.tertiary, size:10, align:'center'});
+
+    // Optical axis
+    els.push({id:'f1axis', type:'line', x1:objX-30, y1:cy, x2:imgX+40, y2:cy, color:'rgba(255,255,255,0.1)', lineWidth:1, dash:[6,6]});
+  }
+
+  // ---- Frame 2: Pixel grid on sensor ----
+  if (f === 2) {
+    els.push({id:'f2t', type:'label', text:t('f2_title'), x:cx, y:40, color:P.primary, size:17, align:'center', glow:P.glowStrong});
+    els.push({id:'f2d', type:'text', text:t('f2_desc'), x:cx, y:64, color:P.muted, size:11, align:'center'});
+
+    // Sensor chip outline
+    var sensorW = 220, sensorH = 170;
+    var sensorX = cx, sensorY = cy + 10;
+    els.push(cbox('f2chip', sensorX, sensorY, sensorW+20, sensorH+20, 'rgba(0,218,243,0.05)', P.tertiary));
+    els.push({id:'f2chip_lbl', type:'label', text:t('f2_sensor'), x:sensorX, y:sensorY-sensorH/2-22, color:P.tertiary, size:12, align:'center'});
+
+    // Pixel grid (8x6 grid)
+    var gridCols = 8, gridRows = 6;
+    var cellSize = Math.min((sensorW-10)/gridCols, (sensorH-10)/gridRows);
+    var gridW = gridCols * cellSize;
+    var gridH = gridRows * cellSize;
+    var gridLeft = sensorX - gridW/2;
+    var gridTop = sensorY - gridH/2;
+
+    // Bayer pattern colors
+    var bayerColors = [
+      ['#ff4444','#44cc44','#44cc44','#4444ff','#ff4444','#44cc44','#44cc44','#4444ff'],
+      ['#44cc44','#4444ff','#ff4444','#44cc44','#44cc44','#4444ff','#ff4444','#44cc44'],
+      ['#ff4444','#44cc44','#44cc44','#4444ff','#ff4444','#44cc44','#44cc44','#4444ff'],
+      ['#44cc44','#4444ff','#ff4444','#44cc44','#44cc44','#4444ff','#ff4444','#44cc44'],
+      ['#ff4444','#44cc44','#44cc44','#4444ff','#ff4444','#44cc44','#44cc44','#4444ff'],
+      ['#44cc44','#4444ff','#ff4444','#44cc44','#44cc44','#4444ff','#ff4444','#44cc44'],
+    ];
+
+    els.push({id:'f2grid', type:'custom', draw: function(ctx) {
+      for (var r = 0; r < gridRows; r++) {
+        for (var c = 0; c < gridCols; c++) {
+          var x = gridLeft + c * cellSize;
+          var y = gridTop + r * cellSize;
+          var col = bayerColors[r][c];
+          ctx.fillStyle = col;
+          ctx.globalAlpha = 0.25;
+          ctx.fillRect(x+1, y+1, cellSize-2, cellSize-2);
+          ctx.globalAlpha = 0.6;
+          ctx.strokeStyle = col;
+          ctx.lineWidth = 0.5;
+          ctx.strokeRect(x+1, y+1, cellSize-2, cellSize-2);
+          ctx.globalAlpha = 1;
+        }
+      }
+    }});
+
+    // Label for pixel
+    els.push({id:'f2px_lbl', type:'text', text:t('f2_pixel'), x:sensorX, y:sensorY+sensorH/2+18, color:P.muted, size:10, align:'center'});
+
+    // Bayer filter note
+    els.push({id:'f2bayer', type:'text', text:t('f2_bayer'), x:sensorX, y:sensorY+sensorH/2+35, color:P.primaryDim, size:10, align:'center'});
+
+    // Zoom callout: magnify one pixel
+    var zoomX = cx + 170, zoomY = cy - 30;
+    els.push({id:'f2zoom_line', type:'line', x1:gridLeft+1.5*cellSize, y1:gridTop+0.5*cellSize, x2:zoomX-25, y2:zoomY, color:P.muted, lineWidth:1, dash:[3,3]});
+    els.push(cbox('f2zoom', zoomX, zoomY, 50, 50, 'rgba(68,204,68,0.15)', '#44cc44'));
+    els.push({id:'f2zoom_lbl', type:'text', text:'1 px', x:zoomX, y:zoomY, color:'#44cc44', size:11, align:'center'});
+  }
+
+  // ---- Frame 3: Light to numbers (RGB) ----
+  if (f === 3) {
+    els.push({id:'f3t', type:'label', text:t('f3_title'), x:cx, y:40, color:P.primary, size:17, align:'center', glow:P.glowStrong});
+    els.push({id:'f3d', type:'text', text:t('f3_desc'), x:cx, y:64, color:P.muted, size:11, align:'center'});
+
+    // Pipeline: Photon -> Charge -> ADC -> Number
+    var pipeY = cy - 10;
+    var pipeStartX = cx - 240;
+    var pipeGap = 130;
+    var pipeBoxW = 90, pipeBoxH = 44;
+
+    var pipeItems = [
+      {label:'f3_photon', color:'#ffdd44', icon:'\u2600'},
+      {label:'f3_charge', color:'#ff7744', icon:'\u26a1'},
+      {label:'f3_adc',    color:P.tertiary, icon:'\u2248'},
+      {label:'f3_number', color:P.primary,  icon:'#'},
+    ];
+
+    for (var i = 0; i < 4; i++) {
+      var px = pipeStartX + i * pipeGap;
+      els.push(cbox('f3b'+i, px, pipeY, pipeBoxW, pipeBoxH, null, pipeItems[i].color));
+      els.push({id:'f3icon'+i, type:'label', text:pipeItems[i].icon, x:px, y:pipeY-5, color:pipeItems[i].color, size:16, align:'center'});
+      els.push({id:'f3pl'+i, type:'text', text:t(pipeItems[i].label), x:px, y:pipeY+14, color:pipeItems[i].color, size:10, align:'center'});
+      if (i < 3) {
+        els.push({id:'f3pa'+i, type:'arrow', x1:px+pipeBoxW/2+4, y1:pipeY, x2:px+pipeGap-pipeBoxW/2-4, y2:pipeY,
+          color:P.muted, lineWidth:2, headSize:7});
+      }
+    }
+
+    // RGB example values
+    var rgbY = cy + 70;
+    var sampleColor = {r:197, g:87, b:42}; // mars-like orange-brown
+    els.push({id:'f3swatch', type:'custom', draw: function(ctx) {
+      ctx.fillStyle = 'rgb('+sampleColor.r+','+sampleColor.g+','+sampleColor.b+')';
+      ctx.fillRect(cx-70, rgbY-18, 36, 36);
+      ctx.strokeStyle = P.muted;
+      ctx.lineWidth = 1;
+      ctx.strokeRect(cx-70, rgbY-18, 36, 36);
+    }});
+
+    els.push({id:'f3r', type:'label', text:t('f3_r')+' '+sampleColor.r, x:cx+10, y:rgbY-10, color:'#ff4444', size:14, align:'left'});
+    els.push({id:'f3g', type:'label', text:t('f3_g')+' '+sampleColor.g, x:cx+10, y:rgbY+6, color:'#44cc44', size:14, align:'left'});
+    els.push({id:'f3b', type:'label', text:t('f3_b')+' '+sampleColor.b, x:cx+10, y:rgbY+22, color:'#4488ff', size:14, align:'left'});
+
+    // Note: Mars soil color
+    els.push({id:'f3note', type:'text',
+      text: AnimRuntime.t('f3_title') === '\u5149\u53d8\u6210\u6570\u5b57'
+        ? '\u706b\u661f\u571f\u58e4\u7684\u989c\u8272 \u2192 \u7ea2\u591a\u7eff\u5c11\u84dd\u66f4\u5c11'
+        : 'Mars soil color \u2192 High red, low green, very low blue',
+      x:cx, y:rgbY+48, color:P.muted, size:10, align:'center'});
+  }
+
+  // ---- Frame 4: Resolution comparison ----
+  if (f === 4) {
+    els.push({id:'f4t', type:'label', text:t('f4_title'), x:cx, y:40, color:P.primary, size:17, align:'center', glow:P.glowStrong});
+    els.push({id:'f4d', type:'text', text:t('f4_desc'), x:cx, y:64, color:P.muted, size:11, align:'center'});
+
+    // Three side-by-side pixel grids showing mars rock at different resolutions
+    var gridSize = 100;
+    var positions = [
+      {x:cx-180, res:4, label:'f4_low'},
+      {x:cx,     res:8, label:'f4_mid'},
+      {x:cx+180, res:32, label:'f4_high'},
+    ];
+
+    // Mars rock color palette (browns/oranges/grays)
+    var marsColors = ['#8B4513','#A0522D','#D2691E','#CD853F','#BC8F8F','#696969','#808080','#A9A9A9','#C4A87C','#B87333'];
+
+    // Seeded random for consistent colors
+    function seededRand(seed) {
+      var x = Math.sin(seed * 9301 + 49297) * 233280;
+      return x - Math.floor(x);
+    }
+
+    els.push({id:'f4grids', type:'custom', draw: function(ctx) {
+      for (var p = 0; p < positions.length; p++) {
+        var pos = positions[p];
+        var cellSz = gridSize / pos.res;
+        var left = pos.x - gridSize/2;
+        var top = cy - 10;
+
+        // Border
+        ctx.strokeStyle = P.outline;
+        ctx.lineWidth = 1;
+        ctx.strokeRect(left-1, top-1, gridSize+2, gridSize+2);
+
+        // Draw cells
+        for (var r = 0; r < pos.res; r++) {
+          for (var c = 0; c < pos.res; c++) {
+            // Map to a "mars rock" pattern
+            var normR = r / pos.res;
+            var normC = c / pos.res;
+            var seed = (normR * 7 + normC * 13 + p * 0.1) * 100;
+            var idx = Math.floor(seededRand(seed) * marsColors.length);
+            ctx.fillStyle = marsColors[idx];
+
+            // Add slight brightness variation based on position (simulate rock shape)
+            var dist = Math.sqrt(Math.pow(normR-0.4,2) + Math.pow(normC-0.5,2));
+            ctx.globalAlpha = dist < 0.3 ? 0.9 : 0.6;
+            ctx.fillRect(left + c*cellSz, top + r*cellSz, cellSz, cellSz);
+            ctx.globalAlpha = 1;
+          }
+        }
+      }
+    }});
+
+    // Labels under each grid
+    for (var p = 0; p < positions.length; p++) {
+      els.push({id:'f4lb'+p, type:'label', text:t(positions[p].label),
+        x:positions[p].x, y:cy+gridSize/2+25, color:P.primaryDim, size:12, align:'center'});
+    }
+
+    // Arrow showing improvement
+    els.push({id:'f4arrow', type:'arrow', x1:cx-120, y1:cy+gridSize/2+45, x2:cx+120, y2:cy+gridSize/2+45,
+      color:P.primary, lineWidth:2, headSize:8});
+    els.push({id:'f4verdict', type:'label', text:t('f4_verdict'),
+      x:cx, y:cy+gridSize/2+62, color:P.primary, size:13, align:'center'});
+  }
+
+  return els;
+}
+
+// ============================================================
+// CUSTOM BACKGROUND
+// ============================================================
+
+function drawBg(ctx, W, H) {
+  var P = AnimRuntime.PAL;
+  var g = ctx.createLinearGradient(0, 0, 0, H);
+  g.addColorStop(0, P.bg);
+  g.addColorStop(1, P.bg2);
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, W, H);
+
+  // Subtle grid
+  ctx.strokeStyle = 'rgba(255,255,255,0.025)';
+  ctx.lineWidth = 0.5;
+  for (var x = 0; x < W; x += 40) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke(); }
+  for (var y = 0; y < H; y += 40) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke(); }
+
+  // Frame-specific decorations
+  var f = AnimRuntime.currentFrame !== undefined ? AnimRuntime.currentFrame : 0;
+
+  if (f === 1) {
+    // Subtle light rays from left
+    ctx.strokeStyle = 'rgba(255,221,68,0.04)';
+    ctx.lineWidth = 1;
+    for (var i = 0; i < 5; i++) {
+      ctx.beginPath();
+      ctx.moveTo(0, H*0.2 + i*H*0.15);
+      ctx.lineTo(W*0.4, H*0.5);
+      ctx.stroke();
+    }
+  }
+}
+
+// ============================================================
+// BOOT
+// ============================================================
+
+AnimRuntime.boot();
+</script>
+</body>
+</html>

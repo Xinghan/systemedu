@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=Inter:wght@400;500&family=Noto+Sans+SC:wght@400;700&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box;}
+html,body{width:100%;height:100vh;overflow:hidden;}
+body{background:var(--bg,#0c0e12);color:var(--text,#f6f6fc);font-family:'Inter','Noto Sans SC',sans-serif;display:flex;flex-direction:column;}
+.wrapper{display:flex;flex-direction:column;height:100vh;overflow:hidden;}
+.header{padding:12px 16px 8px;display:flex;justify-content:space-between;align-items:center;}
+.header h1{font-family:'Space Grotesk',sans-serif;font-size:clamp(14px,2vw,18px);font-weight:700;letter-spacing:-0.02em;color:var(--primary,#ffb59c);text-shadow:0 0 15px var(--glow,rgba(255,181,156,0.3));}
+.header .sub{font-size:11px;color:var(--muted,#aaabb0);letter-spacing:0.1em;text-transform:uppercase;}
+.canvas-wrap{flex:1;min-height:0;position:relative;}
+canvas{width:100%;height:100%;display:block;}
+.controls{display:flex;justify-content:center;align-items:center;gap:12px;padding:8px 16px;}
+.ctrl-btn{font-family:'Space Grotesk',sans-serif;font-size:12px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;padding:6px 18px;border:none;cursor:pointer;color:#1a0e08;background:linear-gradient(135deg,#ffb59c,#ff8a6a);transition:transform 0.1s,box-shadow 0.2s;box-shadow:0 0 12px rgba(255,181,156,0.3);}
+.ctrl-btn:hover{transform:scale(1.04);}
+.ctrl-btn:active{transform:scale(0.96);}
+.ctrl-btn.secondary{background:rgba(23,26,31,0.92);color:#aaabb0;box-shadow:none;backdrop-filter:blur(12px);}
+.ctrl-btn.secondary:hover{color:#ffb59c;}
+.hud{height:48px;display:flex;align-items:center;justify-content:space-around;background:rgba(0,0,0,0.55);backdrop-filter:blur(12px);padding:0 16px;}
+.hud-item{text-align:center;}
+.hud-label{font-family:'Space Grotesk',sans-serif;font-size:9px;letter-spacing:0.15em;text-transform:uppercase;color:#aaabb0;}
+.hud-val{font-family:'Space Grotesk',sans-serif;font-size:14px;font-weight:700;color:#ffb59c;}
+.lang-btn{position:fixed;top:8px;left:8px;z-index:100;font-family:'Space Grotesk',sans-serif;font-size:11px;font-weight:700;padding:4px 10px;cursor:pointer;border:none;background:rgba(20,20,35,0.85);backdrop-filter:blur(12px);color:#ffb59c;letter-spacing:1px;}
+.guide-panel{position:fixed;top:8px;right:8px;width:240px;max-height:40vh;overflow-y:auto;background:rgba(20,20,35,0.85);backdrop-filter:blur(12px);padding:12px;z-index:100;font-family:'Noto Sans SC',sans-serif;font-size:12px;color:rgba(255,255,255,0.85);line-height:1.6;}
+.guide-panel h3{font-family:'Space Grotesk',sans-serif;font-size:13px;margin-bottom:6px;color:#ffb59c;cursor:pointer;display:flex;justify-content:space-between;align-items:center;}
+.guide-panel ul{padding-left:14px;}
+.guide-panel .collapsed{display:none;}
+</style>
+</head>
+<body>
+<button class="lang-btn" id="langBtn">CN</button>
+<div class="guide-panel" id="guide"><h3 id="guideTitle"></h3><div class="guide-content" id="guideContent"></div></div>
+<div class="wrapper">
+<div class="header"><div><h1 id="title"></h1><div class="sub" id="subtitle"></div></div><div id="frameIndicator" style="font-family:'Space Grotesk';font-size:11px;color:#aaabb0;letter-spacing:0.1em;"></div></div>
+<div class="canvas-wrap"><canvas id="c"></canvas></div>
+<div class="controls">
+<button class="ctrl-btn secondary" id="btnPrev"></button>
+<button class="ctrl-btn" id="btnPlay"></button>
+<button class="ctrl-btn secondary" id="btnNext"></button>
+</div>
+<div class="hud">
+<div class="hud-item"><div class="hud-label" id="hudL1"></div><div class="hud-val" id="hudV1"></div></div>
+<div class="hud-item"><div class="hud-label" id="hudL2"></div><div class="hud-val" id="hudV2"></div></div>
+<div class="hud-item"><div class="hud-label" id="hudL3"></div><div class="hud-val" id="hudV3"></div></div>
+<div class="hud-item"><div class="hud-label" id="hudL4"></div><div class="hud-val" id="hudV4"></div></div>
+</div>
+</div>
+<script src="animation_runtime.js"></script>
+<script>
+var CONFIG = {
+  style: 'ares_mission',
+  totalFrames: 4,
+  i18n: {
+    title:    {en:'COORDINATE SYSTEMS', cn:'坐标系统'},
+    subtitle: {en:'DESCRIBE POSITIONS WITH NUMBERS', cn:'用数字描述位置'},
+
+    f0_title: {en:'WHERE ARE YOU?', cn:'你在哪里？'},
+    f0_desc:  {en:'"The left one" / "Third from the right" — vague!', cn:'"左边那个" / "右边第三个" —— 太模糊了！'},
+    f1_title: {en:'ADD COORDINATES', cn:'加上坐标'},
+    f1_desc:  {en:'Row numbers + column letters = precise position', cn:'行号 + 列号 = 精确位置'},
+    f2_title: {en:'POWER OF COORDINATES', cn:'坐标的威力'},
+    f2_desc:  {en:'Every marker has a unique address', cn:'每个标记都有唯一地址'},
+    f3_title: {en:'MARS GRID MAP', cn:'火星网格地图'},
+    f3_desc:  {en:'Locate danger zones on Mars with coordinates', cn:'用坐标定位火星上的危险区域'},
+
+    hudL1k:{en:'COORD SYSTEM',cn:'坐标系'}, hudL2k:{en:'MARKERS',cn:'标记数'}, hudL3k:{en:'PRECISION',cn:'精确度'}, hudL4k:{en:'STEP',cn:'步骤'},
+    none:{en:'NONE',cn:'无'}, grid:{en:'GRID',cn:'网格'}, full:{en:'FULL',cn:'完整'}, mars:{en:'MARS',cn:'火星'},
+    m1:{en:'1',cn:'1'}, m5:{en:'5',cn:'5'},
+    low:{en:'LOW',cn:'低'}, high:{en:'HIGH',cn:'高'}, max:{en:'MAX',cn:'最高'},
+    s1:{en:'1/4',cn:'1/4'}, s2:{en:'2/4',cn:'2/4'}, s3:{en:'3/4',cn:'3/4'}, s4:{en:'4/4',cn:'4/4'},
+
+    guideTitle:{en:'OBSERVE',cn:'观察要点'},
+    g1:{en:'Notice how vague descriptions fail to pinpoint a location',cn:'注意模糊描述无法精确定位'},
+    g2:{en:'Row+Column labels turn the grid into a coordinate system',cn:'行号+列号把网格变成坐标系'},
+    g3:{en:'Mars missions use coordinate grids to map hazards',cn:'火星任务用坐标网格标记危险区域'},
+  },
+  hudLabels: ['hudL1k','hudL2k','hudL3k','hudL4k'],
+  hudValues: [
+    ['none','m1','low','s1'],
+    ['grid','m1','high','s2'],
+    ['full','m5','max','s3'],
+    ['mars','m5','max','s4'],
+  ],
+  guideTitle:'guideTitle',
+  guideItems:['g1','g2','g3'],
+};
+
+function drawBg(ctx, W, H) {
+  var PAL = AnimRuntime.PAL;
+  var grd = ctx.createLinearGradient(0,0,0,H);
+  grd.addColorStop(0, PAL.bg);
+  grd.addColorStop(1, PAL.bg2 || '#0a0c10');
+  ctx.fillStyle = grd;
+  ctx.fillRect(0,0,W,H);
+}
+
+/* -- helper: draw a grid ------------------------------------------------- */
+function drawGrid(ctx, ox, oy, cellW, cellH, rows, cols, PAL, showLabels, labelAlpha) {
+  var a = typeof labelAlpha === 'number' ? labelAlpha : 1;
+  ctx.strokeStyle = 'rgba(255,255,255,0.12)';
+  ctx.lineWidth = 1;
+  for (var r = 0; r <= rows; r++) {
+    ctx.beginPath(); ctx.moveTo(ox, oy + r*cellH); ctx.lineTo(ox + cols*cellW, oy + r*cellH); ctx.stroke();
+  }
+  for (var c = 0; c <= cols; c++) {
+    ctx.beginPath(); ctx.moveTo(ox + c*cellW, oy); ctx.lineTo(ox + c*cellW, oy + rows*cellH); ctx.stroke();
+  }
+  if (showLabels) {
+    ctx.font = '700 ' + Math.max(10, cellW*0.32) + 'px "Space Grotesk"';
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    var colLetters = 'ABCDEFGH';
+    for (var c = 0; c < cols; c++) {
+      ctx.fillStyle = 'rgba(255,181,156,' + (0.7*a) + ')';
+      ctx.fillText(colLetters[c], ox + c*cellW + cellW/2, oy - cellH*0.35);
+    }
+    for (var r = 0; r < rows; r++) {
+      ctx.fillStyle = 'rgba(255,181,156,' + (0.7*a) + ')';
+      ctx.fillText(''+(r+1), ox - cellW*0.45, oy + r*cellH + cellH/2);
+    }
+  }
+}
+
+/* -- helper: draw a marker (circle with glow) ---------------------------- */
+function drawMarker(ctx, cx, cy, radius, color, label) {
+  ctx.save();
+  ctx.shadowColor = color; ctx.shadowBlur = 12;
+  ctx.fillStyle = color;
+  ctx.beginPath(); ctx.arc(cx, cy, radius, 0, Math.PI*2); ctx.fill();
+  ctx.shadowBlur = 0;
+  if (label) {
+    ctx.font = '700 ' + Math.max(9, radius*0.9) + 'px "Space Grotesk"';
+    ctx.fillStyle = '#0c0e12'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText(label, cx, cy + 1);
+  }
+  ctx.restore();
+}
+
+function getFrameElements(f, W, H) {
+  var PAL = AnimRuntime.PAL;
+  var t = AnimRuntime.t;
+  var els = [];
+  var titles = ['f0_title','f1_title','f2_title','f3_title'];
+  var descs  = ['f0_desc','f1_desc','f2_desc','f3_desc'];
+
+  /* Title + description */
+  els.push({id:'title_text', type:'custom', x:W*0.5, y:H*0.09, w:1, h:1, draw:function(ctx,el){
+    ctx.font = '700 '+Math.max(15,W*0.026)+'px "Space Grotesk"';
+    ctx.fillStyle = PAL.text; ctx.textAlign = 'center';
+    ctx.fillText(t(titles[f]), el.x, el.y);
+    ctx.font = '400 '+Math.max(10,W*0.015)+'px "Noto Sans SC"';
+    ctx.fillStyle = PAL.muted;
+    ctx.fillText(t(descs[f]), el.x, el.y + 22);
+  }});
+
+  var ROWS = 6, COLS = 6;
+  var cellSize = Math.min((W*0.6)/COLS, (H*0.55)/ROWS);
+  var gridW = COLS*cellSize, gridH = ROWS*cellSize;
+  var ox = (W - gridW)/2;
+  var oy = H*0.22;
+
+  /* ===== Frame 0: bare grid, single marker, vague arrows =============== */
+  if (f === 0) {
+    els.push({id:'grid0', type:'custom', x:0, y:0, w:W, h:H, draw:function(ctx){
+      drawGrid(ctx, ox, oy, cellSize, cellSize, ROWS, COLS, PAL, false, 0);
+
+      /* marker at approx center (row3, col3) */
+      var mx = ox + 2*cellSize + cellSize/2;
+      var my = oy + 2*cellSize + cellSize/2;
+      drawMarker(ctx, mx, my, cellSize*0.28, PAL.primary, '?');
+
+      /* vague description bubbles */
+      var bubs = AnimRuntime.lang==='en'
+        ? ['"the left one?"','"third from right?"','"somewhere in the middle?"']
+        : ['"左边那个？"','"右边第三个？"','"大概在中间？"'];
+      ctx.font = '400 '+Math.max(10, cellSize*0.28)+'px "Noto Sans SC"';
+      ctx.textAlign = 'center';
+      var positions = [{x:ox-cellSize*0.2, y:oy+gridH+cellSize*0.7},
+                       {x:W/2, y:oy+gridH+cellSize*1.2},
+                       {x:ox+gridW+cellSize*0.2, y:oy+gridH+cellSize*0.7}];
+      for (var i=0;i<bubs.length;i++){
+        ctx.fillStyle='rgba(255,255,255,0.06)';
+        var tw=ctx.measureText(bubs[i]).width+16;
+        ctx.beginPath();
+        var bx=positions[i].x, by=positions[i].y;
+        ctx.roundRect(bx-tw/2, by-14, tw, 24, 6);
+        ctx.fill();
+        ctx.fillStyle='rgba(255,68,68,0.85)';
+        ctx.fillText(bubs[i], bx, by+3);
+      }
+    }});
+  }
+
+  /* ===== Frame 1: labeled grid, marker at C3 =========================== */
+  if (f === 1) {
+    els.push({id:'grid1', type:'custom', x:0, y:0, w:W, h:H, draw:function(ctx){
+      drawGrid(ctx, ox, oy, cellSize, cellSize, ROWS, COLS, PAL, true, 1);
+
+      var mx = ox + 2*cellSize + cellSize/2; // col C
+      var my = oy + 2*cellSize + cellSize/2; // row 3
+      drawMarker(ctx, mx, my, cellSize*0.28, PAL.secondary || '#00cc88', '');
+
+      /* coordinate label */
+      ctx.font = '700 '+Math.max(13, cellSize*0.38)+'px "Space Grotesk"';
+      ctx.fillStyle = PAL.secondary || '#00cc88';
+      ctx.textAlign = 'center';
+      ctx.fillText('C3', mx, my + cellSize*0.6);
+
+      /* arrow lines pointing to row and col labels */
+      ctx.setLineDash([4,3]);
+      ctx.strokeStyle = 'rgba(0,204,136,0.4)';
+      ctx.lineWidth = 1.5;
+      /* horizontal to col label */
+      ctx.beginPath(); ctx.moveTo(mx, oy - cellSize*0.05); ctx.lineTo(mx, oy - cellSize*0.3); ctx.stroke();
+      /* vertical to row label */
+      ctx.beginPath(); ctx.moveTo(ox - cellSize*0.1, my); ctx.lineTo(ox - cellSize*0.35, my); ctx.stroke();
+      ctx.setLineDash([]);
+
+      /* explanation */
+      var msg = AnimRuntime.lang==='en' ? 'Column C + Row 3 = C3' : '列C + 行3 = C3';
+      ctx.font = '500 '+Math.max(11, cellSize*0.3)+'px "Noto Sans SC"';
+      ctx.fillStyle = PAL.text; ctx.textAlign = 'center';
+      ctx.fillText(msg, W/2, oy + gridH + cellSize*0.8);
+    }});
+  }
+
+  /* ===== Frame 2: multiple markers ====================================== */
+  if (f === 2) {
+    var markers = [
+      {r:0, c:1, label:'B1', color:'#00cc88'},
+      {r:2, c:4, label:'E3', color:'#ffb59c'},
+      {r:4, c:0, label:'A5', color:'#6ea8fe'},
+      {r:1, c:5, label:'F2', color:'#ffd56b'},
+      {r:5, c:3, label:'D6', color:'#c084fc'},
+    ];
+    els.push({id:'grid2', type:'custom', x:0, y:0, w:W, h:H, draw:function(ctx){
+      drawGrid(ctx, ox, oy, cellSize, cellSize, ROWS, COLS, PAL, true, 1);
+      for (var i=0;i<markers.length;i++){
+        var m = markers[i];
+        var mx = ox + m.c*cellSize + cellSize/2;
+        var my = oy + m.r*cellSize + cellSize/2;
+        drawMarker(ctx, mx, my, cellSize*0.25, m.color, '');
+        ctx.font = '700 '+Math.max(9, cellSize*0.26)+'px "Space Grotesk"';
+        ctx.fillStyle = m.color; ctx.textAlign = 'center';
+        ctx.fillText(m.label, mx, my + cellSize*0.45);
+      }
+      var msg = AnimRuntime.lang==='en'
+        ? '5 markers, 5 unique addresses -- no ambiguity!'
+        : '5个标记，5个唯一地址 -- 毫无歧义！';
+      ctx.font = '500 '+Math.max(11, cellSize*0.28)+'px "Noto Sans SC"';
+      ctx.fillStyle = PAL.text; ctx.textAlign = 'center';
+      ctx.fillText(msg, W/2, oy + gridH + cellSize*0.8);
+    }});
+  }
+
+  /* ===== Frame 3: Mars surface grid ===================================== */
+  if (f === 3) {
+    var dangers = [
+      {r:1, c:2, type:'rock'},
+      {r:3, c:4, type:'crater'},
+      {r:0, c:5, type:'rock'},
+      {r:4, c:1, type:'crater'},
+      {r:5, c:3, type:'rock'},
+    ];
+    els.push({id:'grid3', type:'custom', x:0, y:0, w:W, h:H, draw:function(ctx){
+      /* Mars-tinted background for grid area */
+      ctx.fillStyle = 'rgba(180,100,60,0.08)';
+      ctx.fillRect(ox-2, oy-2, gridW+4, gridH+4);
+
+      drawGrid(ctx, ox, oy, cellSize, cellSize, ROWS, COLS, PAL, true, 1);
+
+      /* Draw danger zones */
+      for (var i=0;i<dangers.length;i++){
+        var d = dangers[i];
+        var dx = ox + d.c*cellSize + cellSize/2;
+        var dy = oy + d.r*cellSize + cellSize/2;
+        var isRock = d.type === 'rock';
+
+        /* cell highlight */
+        ctx.fillStyle = isRock ? 'rgba(255,68,68,0.15)' : 'rgba(255,170,0,0.15)';
+        ctx.fillRect(ox + d.c*cellSize+1, oy + d.r*cellSize+1, cellSize-2, cellSize-2);
+
+        /* icon */
+        if (isRock) {
+          /* triangle for rock */
+          ctx.fillStyle = 'rgba(255,68,68,0.8)';
+          ctx.beginPath();
+          ctx.moveTo(dx, dy - cellSize*0.2);
+          ctx.lineTo(dx - cellSize*0.15, dy + cellSize*0.15);
+          ctx.lineTo(dx + cellSize*0.15, dy + cellSize*0.15);
+          ctx.closePath(); ctx.fill();
+        } else {
+          /* circle for crater */
+          ctx.strokeStyle = 'rgba(255,170,0,0.8)';
+          ctx.lineWidth = 2;
+          ctx.beginPath(); ctx.arc(dx, dy, cellSize*0.2, 0, Math.PI*2); ctx.stroke();
+          ctx.beginPath(); ctx.arc(dx, dy, cellSize*0.08, 0, Math.PI*2); ctx.stroke();
+        }
+
+        /* coordinate label */
+        var colLetters = 'ABCDEF';
+        var lbl = colLetters[d.c] + (d.r+1);
+        ctx.font = '600 '+Math.max(8, cellSize*0.22)+'px "Space Grotesk"';
+        ctx.fillStyle = isRock ? 'rgba(255,68,68,0.9)' : 'rgba(255,170,0,0.9)';
+        ctx.textAlign = 'center';
+        ctx.fillText(lbl, dx, dy + cellSize*0.38);
+      }
+
+      /* legend */
+      var ly = oy + gridH + cellSize*0.6;
+      ctx.font = '500 '+Math.max(10, cellSize*0.25)+'px "Noto Sans SC"';
+      ctx.textAlign = 'center';
+      ctx.fillStyle = 'rgba(255,68,68,0.9)';
+      var rockLabel = AnimRuntime.lang==='en' ? 'Rock hazard' : '岩石危险';
+      ctx.fillText('^ ' + rockLabel, W*0.35, ly);
+      ctx.fillStyle = 'rgba(255,170,0,0.9)';
+      var craterLabel = AnimRuntime.lang==='en' ? 'Crater' : '陨石坑';
+      ctx.fillText('o ' + craterLabel, W*0.65, ly);
+
+      var msg = AnimRuntime.lang==='en'
+        ? 'Mars rover uses coordinates to avoid hazards!'
+        : '火星探测车用坐标避开危险区域！';
+      ctx.font = '500 '+Math.max(11, cellSize*0.28)+'px "Noto Sans SC"';
+      ctx.fillStyle = PAL.text;
+      ctx.fillText(msg, W/2, ly + cellSize*0.55);
+    }});
+  }
+
+  return els;
+}
+
+AnimRuntime.boot();
+</script>
+</body>
+</html>

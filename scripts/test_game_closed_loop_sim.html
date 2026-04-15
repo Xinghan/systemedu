@@ -1,0 +1,525 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Closed-Loop Integration Simulator</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;700&family=Inter:wght@400;500&family=Noto+Sans+SC:wght@400;700&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{width:100%;height:100vh;overflow:hidden;background:#131313;font-family:'Noto Sans SC','Inter',sans-serif;color:#e5e2e1}
+.wrapper{display:flex;flex-direction:column;height:100vh;width:100%}
+.header{padding:8px 16px 4px;text-align:center;flex-shrink:0}
+.header h1{font-family:'Space Grotesk',sans-serif;font-size:14px;font-weight:700;color:#ffb59c;letter-spacing:2px;text-transform:uppercase}
+.header .sub{font-size:10px;color:#8a8886;margin-top:2px}
+.main-area{display:flex;flex:1;min-height:0;gap:0}
+.sim-panel{flex:1;min-width:0;position:relative}
+canvas{display:block;width:100%;height:100%}
+.ctrl-panel{width:220px;flex-shrink:0;padding:12px;background:rgba(28,27,27,0.92);display:flex;flex-direction:column;gap:10px;overflow-y:auto}
+.ctrl-group{background:rgba(53,53,52,0.3);padding:10px;border:1px solid rgba(255,255,255,0.05)}
+.ctrl-group .ctrl-label{font-family:'Space Grotesk',sans-serif;font-size:10px;color:#8a8886;letter-spacing:1px;text-transform:uppercase;margin-bottom:4px}
+.ctrl-group .ctrl-val{font-family:'Space Grotesk',sans-serif;font-size:13px;color:#ffb59c;font-weight:700;float:right}
+.ctrl-group input[type="range"]{width:100%;margin-top:4px;accent-color:#ff7f50;background:transparent}
+.btn-row{display:flex;gap:8px;flex-shrink:0;padding:6px 12px;background:rgba(28,27,27,0.92)}
+.btn-row button{flex:1;font-family:'Space Grotesk',sans-serif;font-size:11px;font-weight:700;padding:6px;cursor:pointer;border:1px solid rgba(255,255,255,0.08);background:rgba(53,53,52,0.6);backdrop-filter:blur(12px);color:#ffb59c;letter-spacing:1px;border-radius:0}
+.btn-row button:hover{background:rgba(255,127,80,0.15)}
+.btn-row button.active{background:rgba(255,127,80,0.3);border-color:#ff7f50}
+.hud{display:flex;justify-content:space-around;padding:6px 16px;background:rgba(0,0,0,0.55);flex-shrink:0}
+.hud .col{text-align:center}
+.hud .col .label{font-family:'Space Grotesk',sans-serif;font-size:8px;color:#8a8886;letter-spacing:1px;text-transform:uppercase}
+.hud .col .value{font-family:'Space Grotesk',sans-serif;font-size:12px;color:#ffb59c;font-weight:700;margin-top:1px}
+.lang-btn{position:fixed;top:8px;left:8px;z-index:100;font-family:'Space Grotesk',sans-serif;font-size:11px;font-weight:700;padding:4px 10px;cursor:pointer;border:1px solid rgba(255,255,255,0.08);background:rgba(20,20,35,0.85);backdrop-filter:blur(12px);color:#ffb59c;letter-spacing:1px;border-radius:0}
+.guide-panel{position:fixed;top:8px;right:232px;width:220px;max-height:40vh;overflow-y:auto;background:rgba(20,20,35,0.85);backdrop-filter:blur(12px);border:1px solid rgba(255,255,255,0.08);padding:10px;z-index:100;font-family:'Noto Sans SC',sans-serif;font-size:11px;color:rgba(255,255,255,0.85);border-radius:0}
+.guide-panel h3{font-family:'Space Grotesk',sans-serif;font-size:12px;margin-bottom:6px;display:flex;align-items:center;justify-content:space-between;cursor:pointer;color:#ffb59c}
+.guide-panel .guide-content ul{padding-left:14px;line-height:1.6}
+.guide-panel .guide-content p{margin-bottom:4px;line-height:1.5}
+.guide-toggle{font-size:10px;color:#8a8886}
+.result-overlay{display:none;position:absolute;top:0;left:0;right:0;bottom:0;background:rgba(19,19,19,0.92);z-index:50;display:none;flex-direction:column;align-items:center;justify-content:center;padding:20px}
+.result-overlay h2{font-family:'Space Grotesk',sans-serif;font-size:18px;color:#ffb59c;margin-bottom:12px}
+.result-overlay .score-text{font-size:14px;color:#e5e2e1;margin-bottom:8px;text-align:center;line-height:1.6}
+.result-overlay button{font-family:'Space Grotesk',sans-serif;font-size:12px;font-weight:700;padding:8px 24px;cursor:pointer;border:1px solid rgba(255,255,255,0.08);background:rgba(255,127,80,0.2);color:#ffb59c;letter-spacing:1px;border-radius:0;margin-top:12px}
+</style>
+</head>
+<body>
+<button class="lang-btn" id="langBtn">CN</button>
+<div class="guide-panel" id="guidePanel">
+  <h3 id="guideToggle"><span id="guideTitle"></span><span class="guide-toggle" id="guideArrow">[-]</span></h3>
+  <div class="guide-content" id="guideContent"></div>
+</div>
+<div class="wrapper">
+  <div class="header">
+    <h1 id="mainTitle"></h1>
+    <div class="sub" id="mainSub"></div>
+  </div>
+  <div class="main-area">
+    <div class="sim-panel" id="simPanel">
+      <canvas id="c"></canvas>
+      <div class="result-overlay" id="resultOverlay">
+        <h2 id="resultTitle"></h2>
+        <div class="score-text" id="resultText"></div>
+        <button id="btnRetry"></button>
+      </div>
+    </div>
+    <div class="ctrl-panel" id="ctrlPanel">
+      <div class="ctrl-group">
+        <div class="ctrl-label" id="sliderL0"></div><span class="ctrl-val" id="sliderV0">200ms</span>
+        <input type="range" id="slider0" min="50" max="500" value="200" step="10">
+      </div>
+      <div class="ctrl-group">
+        <div class="ctrl-label" id="sliderL1"></div><span class="ctrl-val" id="sliderV1">5Hz</span>
+        <input type="range" id="slider1" min="1" max="20" value="5" step="1">
+      </div>
+      <div class="ctrl-group">
+        <div class="ctrl-label" id="sliderL2"></div><span class="ctrl-val" id="sliderV2">80%</span>
+        <input type="range" id="slider2" min="20" max="100" value="80" step="5">
+      </div>
+      <div class="ctrl-group">
+        <div class="ctrl-label" id="sliderL3"></div><span class="ctrl-val" id="sliderV3">5%</span>
+        <input type="range" id="slider3" min="0" max="30" value="5" step="1">
+      </div>
+    </div>
+  </div>
+  <div class="btn-row">
+    <button id="btnStart"></button>
+    <button id="btnReset"></button>
+  </div>
+  <div class="hud">
+    <div class="col"><div class="label" id="hudL0"></div><div class="value" id="hudV0">--</div></div>
+    <div class="col"><div class="label" id="hudL1"></div><div class="value" id="hudV1">--</div></div>
+    <div class="col"><div class="label" id="hudL2"></div><div class="value" id="hudV2">--</div></div>
+    <div class="col"><div class="label" id="hudL3"></div><div class="value" id="hudV3">--</div></div>
+  </div>
+</div>
+<script>
+(function(){
+var LANG='cn';
+var I18N={
+  title:{en:'CLOSED-LOOP INTEGRATION SIMULATOR',cn:'\u95ed\u73af\u7cfb\u7edf\u8054\u8c03\u6a21\u62df\u5668'},
+  sub:{en:'Tune parameters to safely navigate the rover through the terrain',cn:'\u8c03\u8282\u53c2\u6570\uff0c\u5b89\u5168\u5f15\u5bfc\u884c\u661f\u8f66\u901a\u8fc7\u5730\u5f62'},
+  sliderL0:{en:'PERCEPTION LATENCY',cn:'\u611f\u77e5\u5ef6\u8fdf'},
+  sliderL1:{en:'PLANNING FREQUENCY',cn:'\u89c4\u5212\u9891\u7387'},
+  sliderL2:{en:'CHASSIS RESPONSE',cn:'\u5e95\u76d8\u54cd\u5e94'},
+  sliderL3:{en:'SENSOR NOISE',cn:'\u4f20\u611f\u5668\u566a\u58f0'},
+  btnStart:{en:'START MISSION',cn:'\u5f00\u59cb\u4efb\u52a1'},
+  btnReset:{en:'RESET',cn:'\u91cd\u7f6e'},
+  btnRetry:{en:'RETRY',cn:'\u91cd\u8bd5'},
+  guideTitle:{en:'OPERATION GUIDE',cn:'\u64cd\u4f5c\u6307\u5357'},
+  guideDesc:{en:'<p>Adjust 4 system parameters and observe how the rover navigates through a hazardous terrain field.</p><ul><li>Perception Latency: Lower = faster reaction</li><li>Planning Frequency: Higher = smoother path</li><li>Chassis Response: Higher = quicker turns</li><li>Sensor Noise: Lower = more accurate</li></ul><p>Goal: Reach the target zone without hitting hazards.</p>',cn:'<p>\u8c03\u8282 4 \u4e2a\u7cfb\u7edf\u53c2\u6570\uff0c\u89c2\u5bdf\u884c\u661f\u8f66\u5982\u4f55\u5728\u5371\u9669\u5730\u5f62\u4e2d\u5bfc\u822a\u3002</p><ul><li>\u611f\u77e5\u5ef6\u8fdf\uff1a\u8d8a\u4f4e = \u53cd\u5e94\u8d8a\u5feb</li><li>\u89c4\u5212\u9891\u7387\uff1a\u8d8a\u9ad8 = \u8def\u5f84\u8d8a\u5e73\u6ed1</li><li>\u5e95\u76d8\u54cd\u5e94\uff1a\u8d8a\u9ad8 = \u8f6c\u5411\u8d8a\u5feb</li><li>\u4f20\u611f\u5668\u566a\u58f0\uff1a\u8d8a\u4f4e = \u8d8a\u7cbe\u786e</li></ul><p>\u76ee\u6807\uff1a\u5230\u8fbe\u7ec8\u70b9\u533a\u57df\uff0c\u4e0d\u78b0\u649e\u5371\u9669\u7269\u3002</p>'},
+  hudL0:{en:'DISTANCE',cn:'\u8ddd\u79bb'},
+  hudL1:{en:'COLLISIONS',cn:'\u78b0\u649e'},
+  hudL2:{en:'TIME',cn:'\u65f6\u95f4'},
+  hudL3:{en:'SCORE',cn:'\u5f97\u5206'},
+  resultWin:{en:'MISSION COMPLETE',cn:'\u4efb\u52a1\u5b8c\u6210'},
+  resultFail:{en:'MISSION FAILED',cn:'\u4efb\u52a1\u5931\u8d25'},
+  resultScore:{en:'Score',cn:'\u5f97\u5206'},
+  resultCollisions:{en:'Collisions',cn:'\u78b0\u649e\u6b21\u6570'},
+  resultTime:{en:'Time',cn:'\u7528\u65f6'},
+  resultTip:{en:'Tip: Reduce latency and noise, increase planning frequency for better results.',cn:'\u63d0\u793a\uff1a\u964d\u4f4e\u5ef6\u8fdf\u548c\u566a\u58f0\uff0c\u63d0\u9ad8\u89c4\u5212\u9891\u7387\u53ef\u83b7\u5f97\u66f4\u597d\u7ed3\u679c\u3002'},
+  running:{en:'RUNNING',cn:'\u8fd0\u884c\u4e2d'},
+  ready:{en:'READY',cn:'\u5c31\u7eea'},
+  target:{en:'TARGET',cn:'\u7ec8\u70b9'},
+  start:{en:'START',cn:'\u8d77\u70b9'},
+  hazard:{en:'HAZARD',cn:'\u5371\u9669'},
+  rover:{en:'ROVER',cn:'\u884c\u661f\u8f66'},
+};
+function t(k){return(I18N[k]&&I18N[k][LANG])||(I18N[k]&&I18N[k]['en'])||k;}
+
+var canvas=document.getElementById('c');
+var ctx=canvas.getContext('2d');
+var simPanel=document.getElementById('simPanel');
+var DPR=Math.min(window.devicePixelRatio||1,2);
+var GW=600,GH=440; // game world logical size
+var scale=1,offX=0,offY=0;
+
+// Simulation state
+var simRunning=false;
+var simDone=false;
+var roverX=50,roverY=GH-50;
+var targetX=GW-60,targetY=50;
+var roverAngle=0;
+var roverSpeed=1.2;
+var trail=[];
+var collisions=0;
+var simTime=0;
+var simScore=0;
+var animId=null;
+var lastTime=0;
+
+// Parameters
+var percLatency=200; // ms
+var planFreq=5; // Hz
+var chassisResp=80; // %
+var sensorNoise=5; // %
+
+// Hazards (obstacles)
+var hazards=[
+  {x:150,y:340,r:30},
+  {x:250,y:280,r:25},
+  {x:180,y:200,r:20},
+  {x:350,y:320,r:35},
+  {x:300,y:150,r:28},
+  {x:420,y:250,r:22},
+  {x:450,y:120,r:30},
+  {x:380,y:60,r:18},
+  {x:500,y:180,r:25},
+  {x:200,y:100,r:22},
+];
+
+// Path planning (simplified A*)
+var plannedPath=[];
+var pathIdx=0;
+var planTimer=0;
+
+function computePath(){
+  // Simple waypoint generation avoiding hazards
+  var pts=[];
+  pts.push({x:roverX,y:roverY});
+  // Generate intermediate points
+  var steps=12;
+  for(var i=1;i<=steps;i++){
+    var p=i/steps;
+    var bx=roverX+(targetX-roverX)*p;
+    var by=roverY+(targetY-roverY)*p;
+    // Add noise based on sensor noise param
+    var noise=sensorNoise/100;
+    bx+=((Math.random()-0.5)*60*noise);
+    by+=((Math.random()-0.5)*60*noise);
+    // Push away from hazards
+    for(var h=0;h<hazards.length;h++){
+      var hz=hazards[h];
+      var dx=bx-hz.x,dy=by-hz.y;
+      var dist=Math.sqrt(dx*dx+dy*dy);
+      if(dist<hz.r+40){
+        var push=(hz.r+40-dist)/(hz.r+40);
+        bx+=dx/dist*push*50;
+        by+=dy/dist*push*50;
+      }
+    }
+    bx=Math.max(20,Math.min(GW-20,bx));
+    by=Math.max(20,Math.min(GH-20,by));
+    pts.push({x:bx,y:by});
+  }
+  pts.push({x:targetX,y:targetY});
+  plannedPath=pts;
+  pathIdx=1;
+}
+
+function resize(){
+  var rect=simPanel.getBoundingClientRect();
+  if(rect.width<1||rect.height<1)return;
+  canvas.width=rect.width*DPR;
+  canvas.height=rect.height*DPR;
+  canvas.style.width=rect.width+'px';
+  canvas.style.height=rect.height+'px';
+  scale=Math.min(rect.width/GW,rect.height/GH);
+  offX=(rect.width-GW*scale)/2;
+  offY=(rect.height-GH*scale)/2;
+  drawScene();
+}
+
+function setTx(){ctx.setTransform(DPR*scale,0,0,DPR*scale,DPR*offX,DPR*offY);}
+
+function drawScene(){
+  ctx.setTransform(1,0,0,1,0,0);
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+  var g=ctx.createLinearGradient(0,0,0,canvas.height);
+  g.addColorStop(0,'#131313');g.addColorStop(1,'#1a1510');
+  ctx.fillStyle=g;ctx.fillRect(0,0,canvas.width,canvas.height);
+  setTx();
+  // Grid
+  ctx.strokeStyle='rgba(255,255,255,0.03)';ctx.lineWidth=0.5;
+  for(var x=0;x<GW;x+=40){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,GH);ctx.stroke();}
+  for(var y=0;y<GH;y+=40){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(GW,y);ctx.stroke();}
+
+  // Mars terrain background
+  var tg=ctx.createRadialGradient(GW/2,GH/2,50,GW/2,GH/2,GW/2);
+  tg.addColorStop(0,'rgba(74,53,32,0.15)');tg.addColorStop(1,'rgba(61,42,21,0.05)');
+  ctx.fillStyle=tg;ctx.fillRect(0,0,GW,GH);
+
+  // Target zone
+  ctx.fillStyle='rgba(16,185,129,0.15)';
+  ctx.fillRect(targetX-30,targetY-30,60,60);
+  ctx.strokeStyle='#10b981';ctx.lineWidth=2;ctx.setLineDash([4,4]);
+  ctx.strokeRect(targetX-30,targetY-30,60,60);
+  ctx.setLineDash([]);
+  ctx.font='bold 10px "Space Grotesk",sans-serif';
+  ctx.fillStyle='#10b981';ctx.textAlign='center';ctx.textBaseline='bottom';
+  ctx.fillText(t('target'),targetX,targetY-32);
+
+  // Start zone
+  ctx.fillStyle='rgba(0,218,243,0.1)';
+  ctx.fillRect(20,GH-80,60,60);
+  ctx.strokeStyle='#00daf3';ctx.lineWidth=1;ctx.setLineDash([4,4]);
+  ctx.strokeRect(20,GH-80,60,60);
+  ctx.setLineDash([]);
+  ctx.fillStyle='#00daf3';ctx.textAlign='center';
+  ctx.fillText(t('start'),50,GH-82);
+
+  // Hazards
+  for(var i=0;i<hazards.length;i++){
+    var hz=hazards[i];
+    var hg=ctx.createRadialGradient(hz.x,hz.y,2,hz.x,hz.y,hz.r);
+    hg.addColorStop(0,'rgba(255,95,31,0.4)');hg.addColorStop(0.7,'rgba(255,95,31,0.15)');hg.addColorStop(1,'rgba(255,95,31,0.02)');
+    ctx.fillStyle=hg;
+    ctx.beginPath();ctx.arc(hz.x,hz.y,hz.r,0,Math.PI*2);ctx.fill();
+    ctx.strokeStyle='rgba(255,95,31,0.5)';ctx.lineWidth=1.5;
+    ctx.beginPath();ctx.arc(hz.x,hz.y,hz.r,0,Math.PI*2);ctx.stroke();
+    // Rock
+    ctx.fillStyle='#5a4030';
+    ctx.beginPath();ctx.arc(hz.x,hz.y,hz.r*0.4,0,Math.PI*2);ctx.fill();
+  }
+
+  // Planned path
+  if(plannedPath.length>1){
+    ctx.strokeStyle='rgba(0,218,243,0.3)';ctx.lineWidth=1;ctx.setLineDash([4,4]);
+    ctx.beginPath();
+    ctx.moveTo(plannedPath[0].x,plannedPath[0].y);
+    for(var pi=1;pi<plannedPath.length;pi++){
+      ctx.lineTo(plannedPath[pi].x,plannedPath[pi].y);
+    }
+    ctx.stroke();ctx.setLineDash([]);
+  }
+
+  // Trail
+  if(trail.length>1){
+    ctx.strokeStyle='#ffb59c';ctx.lineWidth=2;ctx.shadowColor='#ffb59c';ctx.shadowBlur=6;
+    ctx.beginPath();
+    ctx.moveTo(trail[0].x,trail[0].y);
+    for(var ti=1;ti<trail.length;ti++){
+      ctx.lineTo(trail[ti].x,trail[ti].y);
+    }
+    ctx.stroke();ctx.shadowBlur=0;
+  }
+
+  // Rover
+  drawRover(roverX,roverY,roverAngle);
+}
+
+function drawRover(rx,ry,angle){
+  ctx.save();
+  ctx.translate(rx,ry);
+  ctx.rotate(angle);
+  // Body
+  var bg=ctx.createLinearGradient(-12,-8,12,8);
+  bg.addColorStop(0,'#8a8886');bg.addColorStop(0.5,'#c6c6c6');bg.addColorStop(1,'#8a8886');
+  ctx.fillStyle=bg;
+  ctx.fillRect(-12,-8,24,16);
+  // Wheels
+  ctx.fillStyle='#353534';
+  ctx.fillRect(-14,6,6,4);ctx.fillRect(8,6,6,4);
+  ctx.fillRect(-14,-10,6,4);ctx.fillRect(8,-10,6,4);
+  // Camera
+  ctx.fillStyle='#00daf3';ctx.shadowColor='#00daf3';ctx.shadowBlur=4;
+  ctx.fillRect(10,-3,6,6);
+  ctx.shadowBlur=0;
+  ctx.restore();
+  // Label
+  ctx.font='9px "Space Grotesk",sans-serif';
+  ctx.fillStyle='#ffb59c';ctx.textAlign='center';ctx.textBaseline='top';
+  ctx.fillText(t('rover'),rx,ry+14);
+}
+
+function simStep(dt){
+  if(!simRunning||simDone)return;
+  simTime+=dt;
+  planTimer+=dt;
+
+  // Re-plan at planFreq
+  var planInterval=1000/planFreq;
+  // Simulate latency: only re-plan after latency has elapsed
+  if(planTimer>planInterval+percLatency){
+    computePath();
+    planTimer=0;
+  }
+
+  // Follow path
+  if(plannedPath.length>0&&pathIdx<plannedPath.length){
+    var tp=plannedPath[pathIdx];
+    var dx=tp.x-roverX,dy=tp.y-roverY;
+    var dist=Math.sqrt(dx*dx+dy*dy);
+
+    // Target angle
+    var targetAngle=Math.atan2(dy,dx);
+    // Chassis response factor
+    var respFactor=chassisResp/100;
+    var angleDiff=targetAngle-roverAngle;
+    while(angleDiff>Math.PI)angleDiff-=2*Math.PI;
+    while(angleDiff<-Math.PI)angleDiff+=2*Math.PI;
+    roverAngle+=angleDiff*respFactor*0.1;
+
+    // Add sensor noise to movement
+    var noiseFactor=sensorNoise/100;
+    var moveX=Math.cos(roverAngle)*roverSpeed+((Math.random()-0.5)*noiseFactor*2);
+    var moveY=Math.sin(roverAngle)*roverSpeed+((Math.random()-0.5)*noiseFactor*2);
+    roverX+=moveX;
+    roverY+=moveY;
+
+    // Clamp
+    roverX=Math.max(10,Math.min(GW-10,roverX));
+    roverY=Math.max(10,Math.min(GH-10,roverY));
+
+    trail.push({x:roverX,y:roverY});
+    if(trail.length>500)trail.shift();
+
+    if(dist<15)pathIdx++;
+
+    // Check hazard collisions
+    for(var i=0;i<hazards.length;i++){
+      var hz=hazards[i];
+      var hd=Math.sqrt((roverX-hz.x)*(roverX-hz.x)+(roverY-hz.y)*(roverY-hz.y));
+      if(hd<hz.r+8){
+        collisions++;
+        // Push out
+        var pushD=hz.r+12-hd;
+        roverX+=(roverX-hz.x)/hd*pushD;
+        roverY+=(roverY-hz.y)/hd*pushD;
+      }
+    }
+
+    // Check win
+    var tdx=roverX-targetX,tdy=roverY-targetY;
+    if(Math.sqrt(tdx*tdx+tdy*tdy)<30){
+      simRunning=false;
+      simDone=true;
+      simScore=Math.max(0,100-collisions*15-Math.floor(simTime/1000)*2);
+      showResult(true);
+    }
+
+    // Timeout fail
+    if(simTime>60000){
+      simRunning=false;
+      simDone=true;
+      simScore=0;
+      showResult(false);
+    }
+  }
+
+  // Update HUD
+  var distToTarget=Math.sqrt((roverX-targetX)*(roverX-targetX)+(roverY-targetY)*(roverY-targetY));
+  document.getElementById('hudV0').textContent=Math.round(distToTarget)+'px';
+  document.getElementById('hudV1').textContent=collisions+'';
+  document.getElementById('hudV2').textContent=(simTime/1000).toFixed(1)+'s';
+  document.getElementById('hudV3').textContent=simDone?simScore+'':t('running');
+}
+
+function showResult(win){
+  var ov=document.getElementById('resultOverlay');
+  ov.style.display='flex';
+  document.getElementById('resultTitle').textContent=win?t('resultWin'):t('resultFail');
+  document.getElementById('resultText').innerHTML=
+    t('resultScore')+': <strong>'+simScore+'</strong><br>'+
+    t('resultCollisions')+': <strong>'+collisions+'</strong><br>'+
+    t('resultTime')+': <strong>'+(simTime/1000).toFixed(1)+'s</strong><br><br>'+
+    t('resultTip');
+}
+
+function resetSim(){
+  simRunning=false;simDone=false;
+  roverX=50;roverY=GH-50;roverAngle=-Math.PI/4;
+  trail=[];collisions=0;simTime=0;simScore=0;
+  plannedPath=[];pathIdx=0;planTimer=0;
+  document.getElementById('resultOverlay').style.display='none';
+  document.getElementById('hudV0').textContent='--';
+  document.getElementById('hudV1').textContent='--';
+  document.getElementById('hudV2').textContent='--';
+  document.getElementById('hudV3').textContent=t('ready');
+  drawScene();
+}
+
+function gameLoop(timestamp){
+  if(!lastTime)lastTime=timestamp;
+  var dt=timestamp-lastTime;
+  lastTime=timestamp;
+  if(dt>100)dt=100; // cap
+  simStep(dt);
+  drawScene();
+  animId=requestAnimationFrame(gameLoop);
+}
+
+// Slider updates
+document.getElementById('slider0').addEventListener('input',function(){
+  percLatency=parseInt(this.value);
+  document.getElementById('sliderV0').textContent=percLatency+'ms';
+});
+document.getElementById('slider1').addEventListener('input',function(){
+  planFreq=parseInt(this.value);
+  document.getElementById('sliderV1').textContent=planFreq+'Hz';
+});
+document.getElementById('slider2').addEventListener('input',function(){
+  chassisResp=parseInt(this.value);
+  document.getElementById('sliderV2').textContent=chassisResp+'%';
+});
+document.getElementById('slider3').addEventListener('input',function(){
+  sensorNoise=parseInt(this.value);
+  document.getElementById('sliderV3').textContent=sensorNoise+'%';
+});
+
+// Buttons
+document.getElementById('btnStart').addEventListener('click',function(){
+  if(simDone)resetSim();
+  if(!simRunning){
+    simRunning=true;
+    computePath();
+    lastTime=0;
+    if(animId)cancelAnimationFrame(animId);
+    animId=requestAnimationFrame(gameLoop);
+    document.getElementById('hudV3').textContent=t('running');
+  }
+});
+document.getElementById('btnReset').addEventListener('click',function(){
+  if(animId)cancelAnimationFrame(animId);
+  resetSim();
+});
+document.getElementById('btnRetry').addEventListener('click',function(){
+  if(animId)cancelAnimationFrame(animId);
+  resetSim();
+});
+
+// Guide toggle
+document.getElementById('guideToggle').addEventListener('click',function(){
+  var gc=document.getElementById('guideContent');
+  var ar=document.getElementById('guideArrow');
+  if(gc.style.display==='none'){gc.style.display='block';ar.textContent='[-]';}
+  else{gc.style.display='none';ar.textContent='[+]';}
+});
+
+// Language
+document.getElementById('langBtn').addEventListener('click',function(){
+  LANG=LANG==='en'?'cn':'en';
+  document.getElementById('langBtn').textContent=LANG.toUpperCase();
+  refreshI18N();
+});
+
+function refreshI18N(){
+  document.getElementById('mainTitle').textContent=t('title');
+  document.getElementById('mainSub').textContent=t('sub');
+  document.getElementById('sliderL0').textContent=t('sliderL0');
+  document.getElementById('sliderL1').textContent=t('sliderL1');
+  document.getElementById('sliderL2').textContent=t('sliderL2');
+  document.getElementById('sliderL3').textContent=t('sliderL3');
+  document.getElementById('btnStart').textContent=t('btnStart');
+  document.getElementById('btnReset').textContent=t('btnReset');
+  document.getElementById('btnRetry').textContent=t('btnRetry');
+  document.getElementById('guideTitle').innerHTML='<span>'+t('guideTitle')+'</span><span class="guide-toggle">[-]</span>';
+  document.getElementById('guideContent').innerHTML=t('guideDesc');
+  document.getElementById('hudL0').textContent=t('hudL0');
+  document.getElementById('hudL1').textContent=t('hudL1');
+  document.getElementById('hudL2').textContent=t('hudL2');
+  document.getElementById('hudL3').textContent=t('hudL3');
+  if(!simRunning&&!simDone)document.getElementById('hudV3').textContent=t('ready');
+  drawScene();
+}
+
+// Init
+window.addEventListener('resize',resize);
+if(window.ResizeObserver){new ResizeObserver(resize).observe(simPanel);}
+refreshI18N();
+resetSim();
+resize();
+setTimeout(resize,200);
+setTimeout(resize,600);
+document.fonts.ready.then(function(){resize();});
+})();
+</script>
+</body>
+</html>

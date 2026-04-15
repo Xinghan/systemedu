@@ -1,0 +1,331 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Safety Margin Calculator</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;700&family=Inter:wght@400;500&family=Noto+Sans+SC:wght@400;700&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0;}
+html,body{width:100%;height:100vh;overflow:hidden;background:#131313;font-family:'Inter','Noto Sans SC',sans-serif;color:#e0e0e0;}
+.wrapper{display:flex;flex-direction:column;width:100%;height:100vh;}
+.top-bar{display:flex;justify-content:space-between;align-items:center;padding:6px 16px;background:rgba(20,20,20,0.9);border-bottom:1px solid rgba(255,95,31,0.15);flex-shrink:0;}
+.top-bar h1{font-family:'Space Grotesk',sans-serif;font-size:14px;font-weight:700;color:#ffb59c;letter-spacing:1px;}
+.game-area{display:flex;flex:1;overflow:hidden;}
+.panel-left{width:220px;flex-shrink:0;padding:12px;background:rgba(20,20,20,0.6);border-right:1px solid rgba(255,95,31,0.1);overflow-y:auto;display:flex;flex-direction:column;gap:16px;}
+.panel-right{flex:1;display:flex;flex-direction:column;}
+canvas{flex:1;display:block;width:100%;}
+.slider-group{display:flex;flex-direction:column;gap:3px;}
+.slider-group label{font-size:10px;color:rgba(255,181,156,0.7);font-family:'Space Grotesk',sans-serif;letter-spacing:0.5px;}
+.slider-group .val{font-size:13px;color:#ffb59c;font-weight:700;font-family:'Space Grotesk',sans-serif;}
+.slider-group input[type=range]{width:100%;accent-color:#ff5f1f;height:4px;}
+.result-panel{padding:8px 16px;background:rgba(0,0,0,0.55);flex-shrink:0;display:flex;justify-content:space-around;align-items:center;height:52px;}
+.result-panel .col{text-align:center;}
+.result-panel .col .label{font-size:9px;color:rgba(255,181,156,0.5);letter-spacing:1px;font-family:'Space Grotesk',sans-serif;}
+.result-panel .col .value{font-size:14px;font-weight:700;font-family:'Space Grotesk',sans-serif;}
+.lang-btn{position:fixed;top:8px;left:8px;z-index:100;font-family:'Space Grotesk',sans-serif;font-size:11px;font-weight:700;padding:4px 10px;cursor:pointer;border:1px solid rgba(255,255,255,0.08);background:rgba(20,20,35,0.85);backdrop-filter:blur(12px);color:#ffb59c;letter-spacing:1px;}
+.guide-panel{position:fixed;top:40px;right:8px;z-index:50;background:rgba(20,20,35,0.85);backdrop-filter:blur(12px);border:1px solid rgba(255,95,31,0.15);padding:10px;max-width:200px;font-size:11px;color:rgba(255,181,156,0.7);line-height:1.5;}
+.guide-panel h3{font-size:11px;color:#ffb59c;margin-bottom:4px;font-family:'Space Grotesk',sans-serif;}
+</style>
+</head>
+<body>
+<button class="lang-btn" id="langBtn">CN</button>
+<div class="guide-panel" id="guidePanel">
+<h3 id="guideTitle"></h3>
+<p id="guideText"></p>
+</div>
+<div class="wrapper">
+<div class="top-bar">
+<h1 id="titleText"></h1>
+<div id="verdictText" style="font-family:'Space Grotesk';font-size:12px;font-weight:700;"></div>
+</div>
+<div class="game-area">
+<div class="panel-left">
+<div class="slider-group">
+<label id="lbl_speed"></label>
+<input type="range" id="sl_speed" min="5" max="100" step="5" value="30"/>
+<div class="val" id="val_speed"></div>
+</div>
+<div class="slider-group">
+<label id="lbl_latency"></label>
+<input type="range" id="sl_latency" min="10" max="800" step="10" value="500"/>
+<div class="val" id="val_latency"></div>
+</div>
+<div class="slider-group">
+<label id="lbl_detect"></label>
+<input type="range" id="sl_detect" min="10" max="200" step="10" value="50"/>
+<div class="val" id="val_detect"></div>
+</div>
+<div style="margin-top:auto;padding:8px 0;border-top:1px solid rgba(255,95,31,0.1);">
+<div style="font-size:9px;color:rgba(255,181,156,0.4);font-family:'Space Grotesk';letter-spacing:0.5px;" id="formulaLabel"></div>
+<div style="font-size:11px;color:rgba(255,181,156,0.6);font-family:'Space Grotesk';" id="formulaText"></div>
+</div>
+</div>
+<div class="panel-right">
+<canvas id="c"></canvas>
+</div>
+</div>
+<div class="result-panel">
+<div class="col"><div class="label" id="resLabel0"></div><div class="value" id="resVal0">--</div></div>
+<div class="col"><div class="label" id="resLabel1"></div><div class="value" id="resVal1">--</div></div>
+<div class="col"><div class="label" id="resLabel2"></div><div class="value" id="resVal2">--</div></div>
+<div class="col"><div class="label" id="resLabel3"></div><div class="value" id="resVal3">--</div></div>
+</div>
+</div>
+<script>
+var LANG='cn';
+var I18N={
+title:{en:'SAFETY MARGIN CALCULATOR',cn:'\u5b89\u5168\u4f59\u91cf\u8ba1\u7b97\u5668'},
+guideTitle:{en:'How to Play',cn:'\u64cd\u4f5c\u6307\u5357'},
+guideText:{en:'Adjust rover speed, inference latency, and detection range. Watch the real-time simulation: can the rover stop before hitting the obstacle?',cn:'\u8c03\u8282\u8f66\u901f\u3001\u63a8\u7406\u5ef6\u8fdf\u548c\u68c0\u6d4b\u8ddd\u79bb\u3002\u89c2\u5bdf\u5b9e\u65f6\u6a21\u62df\uff1arover\u80fd\u5728\u649e\u5230\u969c\u788d\u7269\u524d\u505c\u4e0b\u5417\uff1f'},
+lbl_speed:{en:'ROVER SPEED (cm/s)',cn:'\u8f66\u901f (cm/s)'},
+lbl_latency:{en:'INFERENCE LATENCY (ms)',cn:'\u63a8\u7406\u5ef6\u8fdf (ms)'},
+lbl_detect:{en:'DETECTION RANGE (cm)',cn:'\u68c0\u6d4b\u8ddd\u79bb (cm)'},
+formulaLabel:{en:'FORMULA',cn:'\u516c\u5f0f'},
+formulaText:{en:'margin = detect_range - speed x total_delay',cn:'\u4f59\u91cf = \u68c0\u6d4b\u8ddd\u79bb - \u8f66\u901f x \u603b\u5ef6\u8fdf'},
+resLabel0:{en:'BLIND ZONE',cn:'\u76f2\u533a'},
+resLabel1:{en:'MARGIN',cn:'\u4f59\u91cf'},
+resLabel2:{en:'REACTION',cn:'\u53cd\u5e94\u65f6\u95f4'},
+resLabel3:{en:'VERDICT',cn:'\u5224\u5b9a'},
+safe:{en:'SAFE',cn:'\u5b89\u5168'},
+warning:{en:'MARGINAL',cn:'\u52c9\u5f3a'},
+danger:{en:'COLLISION!',cn:'\u78b0\u649e!'},
+scenarioTitle:{en:'SCENARIO SIMULATION',cn:'\u573a\u666f\u6a21\u62df'},
+obstacleLabel:{en:'Obstacle',cn:'\u969c\u788d\u7269'},
+roverLabel:{en:'Rover',cn:'\u884c\u661f\u8f66'},
+blindLabel:{en:'Blind Zone',cn:'\u76f2\u533a'},
+marginLabel:{en:'Safety Margin',cn:'\u5b89\u5168\u4f59\u91cf'},
+detectLabel:{en:'Detection Range',cn:'\u68c0\u6d4b\u8303\u56f4'}
+};
+function t(k){return(I18N[k]&&I18N[k][LANG])||(I18N[k]&&I18N[k]['en'])||k;}
+
+var canvas=document.getElementById('c');
+var ctx=canvas.getContext('2d');
+var DPR=Math.min(window.devicePixelRatio||1,2);
+var W=520,H=400;
+
+// Additional system delays: 50ms for pre/post processing
+var SYSTEM_DELAY=50;
+
+function computeSafety(){
+var speed=parseInt(document.getElementById('sl_speed').value); // cm/s
+var latency=parseInt(document.getElementById('sl_latency').value); // ms
+var detectRange=parseInt(document.getElementById('sl_detect').value); // cm
+var totalDelay=(latency+SYSTEM_DELAY)/1000; // seconds
+var blindZone=speed*totalDelay; // cm
+var margin=detectRange-blindZone; // cm
+return {speed:speed,latency:latency,detectRange:detectRange,totalDelay:totalDelay,blindZone:blindZone,margin:margin};
+}
+
+function updateDisplay(){
+var s=computeSafety();
+document.getElementById('val_speed').textContent=s.speed+' cm/s ('+(s.speed/100).toFixed(2)+' m/s)';
+document.getElementById('val_latency').textContent=s.latency+' ms';
+document.getElementById('val_detect').textContent=s.detectRange+' cm';
+document.getElementById('resVal0').textContent=s.blindZone.toFixed(1)+' cm';
+document.getElementById('resVal1').textContent=s.margin.toFixed(1)+' cm';
+document.getElementById('resVal2').textContent=(s.totalDelay*1000).toFixed(0)+' ms';
+var verdict,color;
+if(s.margin>10){verdict=t('safe');color='#34d399';}
+else if(s.margin>0){verdict=t('warning');color='#fbbf24';}
+else{verdict=t('danger');color='#ef4444';}
+document.getElementById('resVal3').textContent=verdict;
+document.getElementById('resVal3').style.color=color;
+document.getElementById('resVal0').style.color=s.blindZone>s.detectRange?'#ef4444':'#ffb59c';
+document.getElementById('resVal1').style.color=s.margin>10?'#34d399':s.margin>0?'#fbbf24':'#ef4444';
+document.getElementById('verdictText').textContent=verdict;
+document.getElementById('verdictText').style.color=color;
+drawCurrent();
+}
+
+function refreshI18N(){
+document.getElementById('titleText').textContent=t('title');
+document.getElementById('guideTitle').textContent=t('guideTitle');
+document.getElementById('guideText').textContent=t('guideText');
+document.getElementById('lbl_speed').textContent=t('lbl_speed');
+document.getElementById('lbl_latency').textContent=t('lbl_latency');
+document.getElementById('lbl_detect').textContent=t('lbl_detect');
+document.getElementById('formulaLabel').textContent=t('formulaLabel');
+document.getElementById('formulaText').textContent=t('formulaText');
+document.getElementById('resLabel0').textContent=t('resLabel0');
+document.getElementById('resLabel1').textContent=t('resLabel1');
+document.getElementById('resLabel2').textContent=t('resLabel2');
+document.getElementById('resLabel3').textContent=t('resLabel3');
+document.getElementById('langBtn').textContent=LANG==='cn'?'CN':'EN';
+updateDisplay();
+}
+
+function resize(){
+var rect=canvas.getBoundingClientRect();
+canvas.width=Math.round(rect.width*DPR);
+canvas.height=Math.round(rect.height*DPR);
+drawCurrent();
+}
+
+function drawBg(){
+var g=ctx.createLinearGradient(0,0,0,H);
+g.addColorStop(0,'#131313');g.addColorStop(1,'#1a1510');
+ctx.fillStyle=g;ctx.fillRect(0,0,W,H);
+ctx.strokeStyle='rgba(255,255,255,0.03)';ctx.lineWidth=1;
+for(var x=0;x<W;x+=40){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,H);ctx.stroke();}
+for(var y=0;y<H;y+=40){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke();}
+}
+
+function drawCurrent(){
+var rect=canvas.getBoundingClientRect();
+var scale=Math.min(rect.width/W,rect.height/H);
+var offsetX=(rect.width-W*scale)/2;
+var offsetY=(rect.height-H*scale)/2;
+ctx.setTransform(DPR*scale,0,0,DPR*scale,DPR*offsetX,DPR*offsetY);
+drawBg();
+drawScene();
+ctx.setTransform(1,0,0,1,0,0);
+}
+window.drawCurrent=drawCurrent;
+
+function drawScene(){
+ctx.save();
+var s=computeSafety();
+// Title
+ctx.fillStyle='rgba(255,181,156,0.7)';ctx.font='bold 12px "Space Grotesk"';
+ctx.textAlign='center';ctx.fillText(t('scenarioTitle'),W/2,25);
+// Top-down view
+var viewY=50;var viewH=160;
+var groundG=ctx.createLinearGradient(0,viewY,0,viewY+viewH);
+groundG.addColorStop(0,'#2a1f15');groundG.addColorStop(1,'#1a1510');
+ctx.fillStyle=groundG;ctx.fillRect(30,viewY,W-60,viewH);
+ctx.strokeStyle='rgba(255,95,31,0.1)';ctx.lineWidth=1;
+ctx.strokeRect(30,viewY,W-60,viewH);
+// Scale: 1 pixel per cm, max 200cm shown
+var maxCm=200;
+var pxPerCm=(W-100)/maxCm;
+var roverX=60;
+var roverY=viewY+viewH/2;
+// Rover (top-down)
+var rg=ctx.createLinearGradient(roverX,roverY-12,roverX+25,roverY+12);
+rg.addColorStop(0,'#666');rg.addColorStop(0.5,'#999');rg.addColorStop(1,'#666');
+ctx.fillStyle=rg;ctx.fillRect(roverX,roverY-12,25,24);
+// Wheels
+ctx.fillStyle='#444';
+ctx.fillRect(roverX-3,roverY-14,6,4);ctx.fillRect(roverX-3,roverY+10,6,4);
+ctx.fillRect(roverX+22,roverY-14,6,4);ctx.fillRect(roverX+22,roverY+10,6,4);
+// Camera cone
+ctx.fillStyle='rgba(255,181,156,0.06)';
+ctx.beginPath();ctx.moveTo(roverX+25,roverY);
+ctx.lineTo(roverX+25+s.detectRange*pxPerCm,roverY-30);
+ctx.lineTo(roverX+25+s.detectRange*pxPerCm,roverY+30);
+ctx.closePath();ctx.fill();
+ctx.strokeStyle='rgba(255,181,156,0.15)';ctx.lineWidth=1;
+ctx.beginPath();ctx.moveTo(roverX+25,roverY);
+ctx.lineTo(roverX+25+s.detectRange*pxPerCm,roverY-30);
+ctx.moveTo(roverX+25,roverY);
+ctx.lineTo(roverX+25+s.detectRange*pxPerCm,roverY+30);
+ctx.stroke();
+// Detection range label
+ctx.fillStyle='rgba(255,181,156,0.4)';ctx.font='9px "Space Grotesk"';ctx.textAlign='center';
+ctx.fillText(t('detectLabel')+': '+s.detectRange+'cm',roverX+25+s.detectRange*pxPerCm/2,roverY-35);
+// Blind zone
+if(s.blindZone>0){
+var bzW=Math.min(s.blindZone*pxPerCm,W-100);
+var bzColor=s.margin>10?'rgba(251,191,36,0.1)':s.margin>0?'rgba(251,191,36,0.2)':'rgba(239,68,68,0.25)';
+var bzBorder=s.margin>10?'rgba(251,191,36,0.3)':s.margin>0?'rgba(251,191,36,0.5)':'rgba(239,68,68,0.6)';
+ctx.fillStyle=bzColor;ctx.fillRect(roverX+25,roverY-20,bzW,40);
+ctx.strokeStyle=bzBorder;ctx.setLineDash([3,3]);ctx.lineWidth=1;
+ctx.strokeRect(roverX+25,roverY-20,bzW,40);
+ctx.setLineDash([]);
+ctx.fillStyle=bzBorder;ctx.font='8px "Space Grotesk"';ctx.textAlign='center';
+ctx.fillText(t('blindLabel')+': '+s.blindZone.toFixed(1)+'cm',roverX+25+bzW/2,roverY+28);
+}
+// Safety margin zone
+if(s.margin>0){
+var mStart=roverX+25+s.blindZone*pxPerCm;
+var mW=s.margin*pxPerCm;
+ctx.fillStyle='rgba(52,211,153,0.1)';ctx.fillRect(mStart,roverY-18,mW,36);
+ctx.strokeStyle='rgba(52,211,153,0.3)';ctx.setLineDash([3,3]);ctx.lineWidth=1;
+ctx.strokeRect(mStart,roverY-18,mW,36);
+ctx.setLineDash([]);
+ctx.fillStyle='rgba(52,211,153,0.6)';ctx.font='8px "Space Grotesk"';ctx.textAlign='center';
+ctx.fillText(t('marginLabel')+': '+s.margin.toFixed(1)+'cm',mStart+mW/2,roverY+33);
+}
+// Obstacle
+var obsX=roverX+25+s.detectRange*pxPerCm;
+ctx.fillStyle=s.margin<=0?'#ef4444':'#fb923c';
+ctx.shadowColor=s.margin<=0?'#ef4444':'#fb923c';ctx.shadowBlur=8;
+ctx.beginPath();ctx.moveTo(obsX,roverY-15);ctx.lineTo(obsX+12,roverY);ctx.lineTo(obsX,roverY+15);ctx.lineTo(obsX-12,roverY);ctx.closePath();ctx.fill();
+ctx.shadowBlur=0;
+ctx.fillStyle=s.margin<=0?'#ef4444':'#fb923c';ctx.font='9px "Space Grotesk"';ctx.textAlign='center';
+ctx.fillText(t('obstacleLabel'),obsX,roverY-20);
+// Labels
+ctx.fillStyle='rgba(255,181,156,0.5)';ctx.font='9px "Space Grotesk"';ctx.textAlign='left';
+ctx.fillText(t('roverLabel'),roverX,roverY+24);
+// Timeline diagram below
+var tlY=viewY+viewH+25;
+ctx.fillStyle='rgba(255,181,156,0.6)';ctx.font='bold 11px "Space Grotesk"';ctx.textAlign='center';
+var tlTitle=LANG==='cn'?'\u65f6\u95f4\u7ebf\u5206\u6790':'Timeline Analysis';
+ctx.fillText(tlTitle,W/2,tlY);
+tlY+=15;
+var tlMaxMs=Math.max(s.latency+SYSTEM_DELAY+200,800);
+var tlW=W-100;var tlX=50;
+var pxPerMs=tlW/tlMaxMs;
+// Timeline base
+ctx.strokeStyle='rgba(255,181,156,0.2)';ctx.lineWidth=1;
+ctx.beginPath();ctx.moveTo(tlX,tlY+20);ctx.lineTo(tlX+tlW,tlY+20);ctx.stroke();
+// Tick marks
+for(var ms=0;ms<=tlMaxMs;ms+=100){
+var tx=tlX+ms*pxPerMs;
+ctx.strokeStyle='rgba(255,181,156,0.1)';ctx.beginPath();ctx.moveTo(tx,tlY+15);ctx.lineTo(tx,tlY+25);ctx.stroke();
+ctx.fillStyle='rgba(255,181,156,0.3)';ctx.font='8px "Space Grotesk"';ctx.textAlign='center';
+ctx.fillText(ms+'ms',tx,tlY+35);
+}
+// Inference block
+var infW=s.latency*pxPerMs;
+var ig=ctx.createLinearGradient(tlX,tlY,tlX+infW,tlY);
+ig.addColorStop(0,'#ff5f1f33');ig.addColorStop(1,'#ff5f1f');
+ctx.fillStyle=ig;ctx.fillRect(tlX,tlY+5,infW,12);
+ctx.fillStyle='rgba(255,95,31,0.8)';ctx.font='8px "Space Grotesk"';ctx.textAlign='center';
+var infLabel=LANG==='cn'?'\u63a8\u7406 '+s.latency+'ms':'Inference '+s.latency+'ms';
+if(infW>60)ctx.fillText(infLabel,tlX+infW/2,tlY+14);
+// System delay block
+var sysX=tlX+infW;
+var sysW=SYSTEM_DELAY*pxPerMs;
+ctx.fillStyle='rgba(56,189,248,0.3)';ctx.fillRect(sysX,tlY+5,sysW,12);
+// Total reaction time marker
+var totalX=tlX+(s.latency+SYSTEM_DELAY)*pxPerMs;
+ctx.strokeStyle='#ef4444';ctx.lineWidth=2;ctx.shadowColor='#ef4444';ctx.shadowBlur=6;
+ctx.beginPath();ctx.moveTo(totalX,tlY);ctx.lineTo(totalX,tlY+28);ctx.stroke();
+ctx.shadowBlur=0;
+ctx.fillStyle='#ef4444';ctx.font='bold 9px "Space Grotesk"';ctx.textAlign='center';
+var totalLabel=LANG==='cn'?'\u53cd\u5e94: '+(s.latency+SYSTEM_DELAY)+'ms':'React: '+(s.latency+SYSTEM_DELAY)+'ms';
+ctx.fillText(totalLabel,totalX,tlY+45);
+// Distance traveled during delay
+var distCm=s.blindZone;
+ctx.fillStyle='rgba(255,181,156,0.5)';ctx.font='10px "Space Grotesk"';ctx.textAlign='left';
+var distText=LANG==='cn'?'\u5ef6\u8fdf\u671f\u95f4\u79fb\u52a8: '+distCm.toFixed(1)+' cm':'Distance during delay: '+distCm.toFixed(1)+' cm';
+ctx.fillText(distText,tlX,tlY+65);
+// Verdict message
+var verdictY=tlY+90;
+var verdictColor=s.margin>10?'#34d399':s.margin>0?'#fbbf24':'#ef4444';
+ctx.fillStyle=verdictColor;ctx.font='bold 14px "Space Grotesk"';ctx.textAlign='center';
+ctx.shadowColor=verdictColor;ctx.shadowBlur=10;
+var verdictMsg;
+if(s.margin>10){verdictMsg=LANG==='cn'?'\u5b89\u5168! \u4f59\u91cf '+s.margin.toFixed(1)+' cm':'SAFE! Margin '+s.margin.toFixed(1)+' cm';}
+else if(s.margin>0){verdictMsg=LANG==='cn'?'\u52c9\u5f3a\u901a\u8fc7! \u4f59\u91cf\u4ec5 '+s.margin.toFixed(1)+' cm':'MARGINAL! Only '+s.margin.toFixed(1)+' cm margin';}
+else{verdictMsg=LANG==='cn'?'\u78b0\u649e! \u7f3a\u53e3 '+Math.abs(s.margin).toFixed(1)+' cm':'COLLISION! Short by '+Math.abs(s.margin).toFixed(1)+' cm';}
+ctx.fillText(verdictMsg,W/2,verdictY);
+ctx.shadowBlur=0;
+ctx.restore();
+}
+
+document.getElementById('sl_speed').addEventListener('input',updateDisplay);
+document.getElementById('sl_latency').addEventListener('input',updateDisplay);
+document.getElementById('sl_detect').addEventListener('input',updateDisplay);
+document.getElementById('langBtn').addEventListener('click',function(){LANG=LANG==='cn'?'en':'cn';refreshI18N();});
+
+window.addEventListener('resize',resize);
+new ResizeObserver(function(){resize();}).observe(canvas.parentElement||canvas);
+refreshI18N();
+document.fonts.ready.then(function(){resize();});
+setTimeout(function(){resize();},200);
+</script>
+</body>
+</html>

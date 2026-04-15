@@ -1,0 +1,701 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Overfitting Curves Visualized</title>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=Space+Grotesk:wght@400;700&family=Noto+Sans+SC:wght@400;700&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{width:100%;height:100vh;overflow:hidden;background:#131313;
+  font-family:'Noto Sans SC','PingFang SC',system-ui,sans-serif;color:#e5e2e1}
+
+.wrapper{display:flex;flex-direction:column;height:100vh;overflow:hidden}
+
+.guide-panel{position:fixed;top:8px;right:8px;width:250px;max-height:40vh;
+  overflow-y:auto;z-index:200;padding:10px 12px;
+  background:rgba(28,27,27,0.92);backdrop-filter:blur(14px);
+  border:1px solid rgba(255,127,80,0.22);font-size:12px;line-height:1.55;
+  color:rgba(229,226,225,0.88)}
+.guide-panel h3{font-family:'Space Grotesk',sans-serif;font-size:13px;font-weight:700;
+  margin-bottom:6px;display:flex;align-items:center;justify-content:space-between;cursor:pointer;
+  color:#ffb59c;text-transform:uppercase;letter-spacing:0.05em}
+.guide-panel h3 .arrow{transition:transform .2s;font-size:10px}
+.guide-panel h3 .arrow.collapsed{transform:rotate(-90deg)}
+.guide-panel ul{padding-left:14px;margin:4px 0}
+.guide-panel .gl{color:#8a8886;font-size:11px;text-transform:uppercase;
+  letter-spacing:0.08em;margin-top:6px;font-family:'Space Grotesk',sans-serif}
+
+.header{height:42px;min-height:42px;display:flex;align-items:center;justify-content:space-between;
+  padding:0 16px;background:rgba(28,27,27,0.95);border-bottom:1px solid rgba(255,127,80,0.15)}
+.header h1{font-family:'Space Grotesk',sans-serif;font-size:14px;font-weight:700;
+  color:#ffb59c;text-transform:uppercase;letter-spacing:0.08em}
+
+.lang-btn{position:fixed;top:8px;left:8px;z-index:100;
+  font-family:'Space Grotesk',sans-serif;font-size:11px;font-weight:700;
+  padding:4px 10px;cursor:pointer;
+  border:1px solid rgba(255,255,255,0.08);
+  background:rgba(20,20,35,0.85);backdrop-filter:blur(12px);
+  color:#ffb59c;letter-spacing:1px}
+
+.canvas-wrap{flex:1;min-height:0;position:relative;overflow:hidden;background:#131313}
+.canvas-wrap canvas{position:absolute;top:0;left:0;width:100%;height:100%}
+
+.controls{height:46px;min-height:46px;display:flex;align-items:center;justify-content:center;gap:12px;
+  background:rgba(28,27,27,0.95);border-top:1px solid rgba(255,127,80,0.15);
+  border-bottom:1px solid rgba(255,127,80,0.15)}
+.ctrl-btn{padding:6px 16px;border:1px solid rgba(255,127,80,0.35);background:transparent;
+  color:#ffb59c;cursor:pointer;font-family:'Space Grotesk',sans-serif;font-size:12px;
+  font-weight:700;text-transform:uppercase;letter-spacing:0.06em;transition:all .15s}
+.ctrl-btn:hover{background:rgba(255,127,80,0.18);box-shadow:0 0 18px rgba(255,127,80,0.25)}
+.ctrl-btn.active{background:linear-gradient(45deg,rgba(255,127,80,0.3),rgba(255,181,156,0.2))}
+.frame-dots{display:flex;gap:6px;align-items:center;margin:0 12px}
+.frame-dot{width:10px;height:10px;border:1px solid rgba(255,127,80,0.35);cursor:pointer;
+  transition:all .2s;border-radius:50%}
+.frame-dot.active{background:#ff7f50;border-color:#ff7f50;box-shadow:0 0 12px rgba(255,127,80,0.6)}
+.frame-dot:hover{border-color:#ffb59c}
+
+.hud{height:54px;min-height:54px;display:flex;align-items:center;
+  background:rgba(0,0,0,0.6);border-top:1px solid rgba(255,255,255,0.06);padding:0 16px}
+.hud-col{flex:1;text-align:center}
+.hud-label{font-family:'Space Grotesk',sans-serif;font-size:10px;
+  color:rgba(255,181,156,0.6);text-transform:uppercase;letter-spacing:0.1em}
+.hud-val{font-family:'JetBrains Mono','Space Grotesk',monospace;font-size:13px;font-weight:700;
+  color:rgba(229,226,225,0.9);margin-top:2px}
+</style>
+</head>
+<body>
+
+<button class="lang-btn" id="langBtn">CN</button>
+
+<div class="guide-panel" id="guidePanel">
+  <h3 id="guideToggle"><span id="guideTitle">OBSERVER GUIDE</span> <span class="arrow" id="guideArrow">&#9660;</span></h3>
+  <div id="guideContent">
+    <div class="gl" id="glShow">WHAT IT SHOWS</div>
+    <p id="guideShow"></p>
+    <div class="gl" style="margin-top:6px" id="glObserve">OBSERVE</div>
+    <ul id="guideObserve"></ul>
+    <div class="gl" style="margin-top:6px" id="glControls">CONTROLS</div>
+    <p id="guideControls"></p>
+    <div class="gl" style="margin-top:6px" id="glTakeaway">TAKEAWAY</div>
+    <p style="color:#ffb59c" id="guideTakeaway"></p>
+  </div>
+</div>
+
+<div class="wrapper">
+  <div class="header">
+    <h1 id="mainTitle">OVERFITTING CURVES</h1>
+  </div>
+
+  <div class="canvas-wrap" id="canvasWrap">
+    <canvas id="c"></canvas>
+  </div>
+
+  <div class="controls">
+    <button class="ctrl-btn" id="btnPrev">PREV</button>
+    <button class="ctrl-btn active" id="btnPlay">PLAY</button>
+    <button class="ctrl-btn" id="btnNext">NEXT</button>
+    <div class="frame-dots" id="frameDots"></div>
+  </div>
+
+  <div class="hud">
+    <div class="hud-col"><div class="hud-label" id="hudLblFrame">FRAME</div><div class="hud-val" id="frameInd">1/5</div></div>
+    <div class="hud-col"><div class="hud-label" id="hudLblStage">STAGE</div><div class="hud-val" id="hudStage">--</div></div>
+    <div class="hud-col"><div class="hud-label" id="hudLblGap">GAP</div><div class="hud-val" id="hudGap">--</div></div>
+    <div class="hud-col"><div class="hud-label" id="hudLblBestVal">BEST VAL LOSS</div><div class="hud-val" id="hudBestVal">--</div></div>
+  </div>
+</div>
+
+<script>
+(function(){
+
+var LANG = 'cn';
+var I18N = {
+  title:       {en:'OVERFITTING CURVES', cn:'\u8FC7\u62DF\u5408\u66F2\u7EBF\u53EF\u89C6\u5316'},
+  guideTitle:  {en:'OBSERVER GUIDE', cn:'\u89C2\u5BDF\u6307\u5357'},
+  glShow:      {en:'WHAT IT SHOWS', cn:'\u5C55\u793A\u5185\u5BB9'},
+  guideShow:   {en:'Shows how train/val curves diverge during overfitting, and how augmentation + regularization bring them back together.',
+                cn:'\u5C55\u793A\u8BAD\u7EC3/\u9A8C\u8BC1\u66F2\u7EBF\u5728\u8FC7\u62DF\u5408\u65F6\u5982\u4F55\u5206\u53C9\uFF0C\u4EE5\u53CA\u589E\u5F3A+\u6B63\u5219\u5316\u5982\u4F55\u8BA9\u5B83\u4EEC\u91CD\u65B0\u6536\u655B\u3002'},
+  glObserve:   {en:'OBSERVE', cn:'\u89C2\u5BDF\u8981\u70B9'},
+  obs1:        {en:'When two curves start to diverge', cn:'\u4E24\u6761\u66F2\u7EBF\u4ECE\u4F55\u65F6\u5F00\u59CB\u5206\u53C9'},
+  obs2:        {en:'How augmentation narrows the gap', cn:'\u589E\u5F3A\u5982\u4F55\u7F29\u5C0F\u5206\u53C9\u5E45\u5EA6'},
+  obs3:        {en:'Compare final Gap values', cn:'\u5BF9\u6BD4\u4E24\u7EC4\u5B9E\u9A8C\u7684\u6700\u7EC8Gap\u503C'},
+  glControls:  {en:'CONTROLS', cn:'\u64CD\u4F5C\u65B9\u5F0F'},
+  guideCtrl:   {en:'Use PREV/NEXT to step through frames, or PLAY for auto-advance.', cn:'\u4F7F\u7528 PREV/NEXT \u9010\u5E27\u67E5\u770B\uFF0C\u6216\u70B9\u51FB PLAY \u81EA\u52A8\u64AD\u653E\u3002'},
+  glTakeaway:  {en:'TAKEAWAY', cn:'\u6838\u5FC3\u7ED3\u8BBA'},
+  guideTake:   {en:'Overfitting = curve divergence. Augmentation + regularization = convergence.', cn:'\u8FC7\u62DF\u5408=\u66F2\u7EBF\u5206\u53C9\u3002\u589E\u5F3A+\u6B63\u5219\u5316=\u66F2\u7EBF\u6536\u655B\u3002'},
+  btnPrev:     {en:'PREV', cn:'\u4E0A\u4E00\u5E27'},
+  btnPlay:     {en:'PLAY', cn:'\u64AD\u653E'},
+  btnPause:    {en:'PAUSE', cn:'\u6682\u505C'},
+  btnNext:     {en:'NEXT', cn:'\u4E0B\u4E00\u5E27'},
+  hudFrame:    {en:'FRAME', cn:'\u5E27'},
+  hudStage:    {en:'STAGE', cn:'\u9636\u6BB5'},
+  hudGap:      {en:'GAP', cn:'\u5DEE\u8DDD'},
+  hudBestVal:  {en:'BEST VAL LOSS', cn:'\u6700\u4F4E\u9A8C\u8BC1\u635F\u5931'},
+  stage0:      {en:'SETUP', cn:'\u51C6\u5907'},
+  stage1:      {en:'NORMAL TRAINING', cn:'\u6B63\u5E38\u8BAD\u7EC3'},
+  stage2:      {en:'OVERFITTING', cn:'\u8FC7\u62DF\u5408'},
+  stage3:      {en:'INTERVENTION', cn:'\u5E72\u9884\u63AA\u65BD'},
+  stage4:      {en:'COMPARISON', cn:'\u7ED3\u679C\u5BF9\u6BD4'},
+  axisEpoch:   {en:'Epoch', cn:'Epoch'},
+  axisLoss:    {en:'Loss', cn:'Loss'},
+  trainLoss:   {en:'Train Loss', cn:'\u8BAD\u7EC3\u635F\u5931'},
+  valLoss:     {en:'Val Loss', cn:'\u9A8C\u8BC1\u635F\u5931'},
+  trainLossAug:{en:'Train (Aug+Reg)', cn:'\u8BAD\u7EC3(\u589E\u5F3A+\u6B63\u5219)'},
+  valLossAug:  {en:'Val (Aug+Reg)', cn:'\u9A8C\u8BC1(\u589E\u5F3A+\u6B63\u5219)'},
+  overfitPoint:{en:'OVERFITTING STARTS', cn:'\u8FC7\u62DF\u5408\u5F00\u59CB'},
+  narr0:       {en:'Training is about to begin...', cn:'\u8BAD\u7EC3\u5373\u5C06\u5F00\u59CB...'},
+  narr1:       {en:'Both curves drop together, Gap is small.', cn:'\u4E24\u6761\u66F2\u7EBF\u540C\u6B65\u4E0B\u964D\uFF0CGap\u5F88\u5C0F\u3002'},
+  narr2:       {en:'Divergence! Val loss rises while train loss keeps dropping.', cn:'\u5206\u53C9\uFF01\u9A8C\u8BC1\u635F\u5931\u4E0A\u5347\uFF0C\u8BAD\u7EC3\u635F\u5931\u7EE7\u7EED\u4E0B\u964D\u3002'},
+  narr3:       {en:'With augmentation + regularization, curves converge again.', cn:'\u52A0\u5165\u589E\u5F3A+\u6B63\u5219\u5316\u540E\uFF0C\u66F2\u7EBF\u91CD\u65B0\u6536\u655B\u3002'},
+  narr4:       {en:'Final comparison: regularized model has much smaller Gap.', cn:'\u6700\u7EC8\u5BF9\u6BD4\uFF1A\u6B63\u5219\u5316\u6A21\u578B\u7684Gap\u663E\u8457\u7F29\u5C0F\u3002'},
+  noAug:       {en:'No Augmentation', cn:'\u65E0\u589E\u5F3A'},
+  withAug:     {en:'Aug + Regularization', cn:'\u589E\u5F3A+\u6B63\u5219\u5316'},
+  gap:         {en:'Gap', cn:'Gap'},
+  bestVal:     {en:'Best Val', cn:'\u6700\u4F4E\u9A8C\u8BC1'},
+  result:      {en:'RESULT', cn:'\u7ED3\u679C'}
+};
+
+function t(key){ return (I18N[key] && I18N[key][LANG]) || (I18N[key] && I18N[key]['en']) || key; }
+
+var canvas = document.getElementById('c');
+var ctx = canvas.getContext('2d');
+var wrap = document.getElementById('canvasWrap');
+var W = 0, H = 0;
+var DPR = Math.min(window.devicePixelRatio || 1, 2);
+
+var totalFrames = 5;
+var currentFrame = 0;
+var playing = false;
+var playTimer = null;
+var transitioning = false;
+
+/* --- Curve data generation --- */
+var TOTAL_EPOCHS = 30;
+function genTrainLoss(epochs){
+  var pts = [];
+  for(var i=0;i<=epochs;i++){
+    var v = 1.2 * Math.exp(-0.12*i) + 0.02 + 0.015*Math.sin(i*0.7);
+    pts.push(Math.max(v, 0.03));
+  }
+  return pts;
+}
+function genValLoss(epochs){
+  var pts = [];
+  for(var i=0;i<=epochs;i++){
+    var base = 1.2 * Math.exp(-0.08*i) + 0.15;
+    if(i > 10) base += 0.025 * (i - 10);
+    base += 0.02*Math.sin(i*0.9+1);
+    pts.push(Math.max(base, 0.15));
+  }
+  return pts;
+}
+function genTrainLossAug(epochs){
+  var pts = [];
+  for(var i=0;i<=epochs;i++){
+    var v = 1.1 * Math.exp(-0.09*i) + 0.12 + 0.01*Math.sin(i*0.6);
+    pts.push(Math.max(v, 0.12));
+  }
+  return pts;
+}
+function genValLossAug(epochs){
+  var pts = [];
+  for(var i=0;i<=epochs;i++){
+    var v = 1.15 * Math.exp(-0.085*i) + 0.13 + 0.015*Math.sin(i*0.8+0.5);
+    pts.push(Math.max(v, 0.14));
+  }
+  return pts;
+}
+
+var trainLoss = genTrainLoss(TOTAL_EPOCHS);
+var valLoss = genValLoss(TOTAL_EPOCHS);
+var trainLossAug = genTrainLossAug(TOTAL_EPOCHS);
+var valLossAug = genValLossAug(TOTAL_EPOCHS);
+
+/* --- Utils --- */
+function lerp(a,b,p){ return a+(b-a)*p; }
+function easeInOut(x){ return x<0.5 ? 2*x*x : 1-Math.pow(-2*x+2,2)/2; }
+function merge(base, overrides){
+  var r={};for(var k in base) r[k]=base[k];for(var k2 in overrides) r[k2]=overrides[k2];return r;
+}
+
+/* --- Chart helpers --- */
+function chartArea(){
+  var left = W*0.12, right = W*0.88, top = H*0.12, bottom = H*0.78;
+  return {left:left, right:right, top:top, bottom:bottom, w:right-left, h:bottom-top};
+}
+
+function epochToX(epoch, ca){
+  return ca.left + (epoch/TOTAL_EPOCHS)*ca.w;
+}
+function lossToY(loss, ca){
+  var maxLoss = 1.4, minLoss = 0;
+  return ca.top + ((maxLoss - loss)/(maxLoss - minLoss))*ca.h;
+}
+
+function drawBg(){
+  var g = ctx.createLinearGradient(0,0,0,H);
+  g.addColorStop(0,'#131313');
+  g.addColorStop(1,'#1a1015');
+  ctx.fillStyle = g;
+  ctx.fillRect(0,0,W,H);
+
+  ctx.strokeStyle = 'rgba(255,255,255,0.03)';
+  ctx.lineWidth = 1;
+  var step = Math.max(40, W/20);
+  for(var x=0;x<W;x+=step){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,H);ctx.stroke();}
+  for(var y=0;y<H;y+=step){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke();}
+}
+
+function drawAxes(ca, alpha){
+  ctx.save();
+  ctx.globalAlpha = alpha;
+  ctx.strokeStyle = 'rgba(255,181,156,0.4)';
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.moveTo(ca.left, ca.top);
+  ctx.lineTo(ca.left, ca.bottom);
+  ctx.lineTo(ca.right, ca.bottom);
+  ctx.stroke();
+
+  ctx.fillStyle = '#8a8886';
+  ctx.font = '11px "Space Grotesk", sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillText(t('axisEpoch'), ca.left + ca.w/2, ca.bottom + 28);
+  ctx.save();
+  ctx.translate(ca.left - 32, ca.top + ca.h/2);
+  ctx.rotate(-Math.PI/2);
+  ctx.fillText(t('axisLoss'), 0, 0);
+  ctx.restore();
+
+  for(var e=0;e<=TOTAL_EPOCHS;e+=5){
+    var x = epochToX(e, ca);
+    ctx.fillStyle = '#8a8886';
+    ctx.font = '10px "JetBrains Mono", monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText(e.toString(), x, ca.bottom + 14);
+    ctx.strokeStyle = 'rgba(255,255,255,0.04)';
+    ctx.lineWidth = 0.5;
+    ctx.beginPath();ctx.moveTo(x,ca.top);ctx.lineTo(x,ca.bottom);ctx.stroke();
+  }
+  for(var l=0;l<=1.4;l+=0.2){
+    var y = lossToY(l, ca);
+    ctx.fillStyle = '#8a8886';
+    ctx.font = '10px "JetBrains Mono", monospace';
+    ctx.textAlign = 'right';
+    ctx.fillText(l.toFixed(1), ca.left - 8, y + 4);
+    ctx.strokeStyle = 'rgba(255,255,255,0.04)';
+    ctx.lineWidth = 0.5;
+    ctx.beginPath();ctx.moveTo(ca.left,y);ctx.lineTo(ca.right,y);ctx.stroke();
+  }
+  ctx.restore();
+}
+
+function drawCurve(data, maxEpoch, ca, color, lineWidth, dashed, alpha, glowColor){
+  if(maxEpoch < 1) return;
+  ctx.save();
+  ctx.globalAlpha = alpha;
+  if(glowColor){
+    ctx.shadowColor = glowColor;
+    ctx.shadowBlur = 12;
+  }
+  ctx.strokeStyle = color;
+  ctx.lineWidth = lineWidth;
+  if(dashed) ctx.setLineDash([6,4]);
+  ctx.beginPath();
+  var end = Math.min(maxEpoch, data.length-1);
+  for(var i=0;i<=end;i++){
+    var x = epochToX(i, ca);
+    var y = lossToY(data[i], ca);
+    if(i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
+  }
+  ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.shadowBlur = 0;
+  ctx.restore();
+}
+
+function drawLegend(items, ca, alpha){
+  ctx.save();
+  ctx.globalAlpha = alpha;
+  var startX = ca.left + 10;
+  var startY = ca.top + 16;
+  items.forEach(function(item, i){
+    var y = startY + i*20;
+    ctx.strokeStyle = item.color;
+    ctx.lineWidth = 2.5;
+    if(item.dashed) ctx.setLineDash([6,4]);
+    ctx.beginPath();ctx.moveTo(startX, y);ctx.lineTo(startX+28, y);ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = '#e5e2e1';
+    ctx.font = '11px "Noto Sans SC", sans-serif';
+    ctx.textAlign = 'left';
+    ctx.fillText(item.label, startX+34, y+4);
+  });
+  ctx.restore();
+}
+
+function drawMarker(epoch, loss, ca, label, alpha){
+  ctx.save();
+  ctx.globalAlpha = alpha;
+  var x = epochToX(epoch, ca);
+  var y = lossToY(loss, ca);
+  ctx.strokeStyle = '#ff5f1f';
+  ctx.lineWidth = 1.5;
+  ctx.setLineDash([4,3]);
+  ctx.beginPath();ctx.moveTo(x,ca.top);ctx.lineTo(x,ca.bottom);ctx.stroke();
+  ctx.setLineDash([]);
+
+  ctx.beginPath();
+  ctx.arc(x, y, 5, 0, Math.PI*2);
+  ctx.fillStyle = '#ff5f1f';
+  ctx.fill();
+  ctx.shadowColor = '#ff5f1f';
+  ctx.shadowBlur = 10;
+  ctx.fill();
+  ctx.shadowBlur = 0;
+
+  ctx.fillStyle = '#ff5f1f';
+  ctx.font = 'bold 11px "Space Grotesk", sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillText(label, x, ca.top - 8);
+  ctx.restore();
+}
+
+function drawNarration(text, alpha){
+  ctx.save();
+  ctx.globalAlpha = alpha;
+  ctx.fillStyle = 'rgba(0,0,0,0.55)';
+  var nh = 32;
+  ctx.fillRect(0, H*0.82, W, nh);
+  ctx.fillStyle = '#ffb59c';
+  ctx.font = '13px "Noto Sans SC", sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillText(text, W/2, H*0.82 + 21);
+  ctx.restore();
+}
+
+function drawComparisonPanel(ca, alpha){
+  ctx.save();
+  ctx.globalAlpha = alpha;
+  var pw = ca.w * 0.35;
+  var ph = ca.h * 0.35;
+  var px = ca.left + ca.w*0.55;
+  var py = ca.top + ca.h*0.08;
+
+  ctx.fillStyle = 'rgba(28,27,27,0.9)';
+  ctx.fillRect(px, py, pw, ph);
+  ctx.strokeStyle = 'rgba(255,127,80,0.3)';
+  ctx.lineWidth = 1;
+  ctx.strokeRect(px, py, pw, ph);
+
+  ctx.fillStyle = '#ffb59c';
+  ctx.font = 'bold 12px "Space Grotesk", sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillText(t('result'), px+pw/2, py+18);
+
+  ctx.font = '11px "Noto Sans SC", sans-serif';
+  ctx.textAlign = 'left';
+  var col1 = px + 10;
+  var col2 = px + pw*0.55;
+  var row1 = py + 38;
+
+  ctx.fillStyle = '#8a8886';
+  ctx.fillText('', col1, row1);
+  ctx.fillText(t('noAug'), col1+5, row1);
+  ctx.fillText(t('withAug'), col2, row1);
+
+  ctx.fillStyle = '#e5e2e1';
+  var gap1 = (trainLoss[TOTAL_EPOCHS] !== undefined ? (valLoss[TOTAL_EPOCHS] - trainLoss[TOTAL_EPOCHS]).toFixed(3) : '--');
+  var gap2 = (trainLossAug[TOTAL_EPOCHS] !== undefined ? (valLossAug[TOTAL_EPOCHS] - trainLossAug[TOTAL_EPOCHS]).toFixed(3) : '--');
+  var bv1 = Math.min.apply(null, valLoss).toFixed(3);
+  var bv2 = Math.min.apply(null, valLossAug).toFixed(3);
+
+  ctx.fillStyle = '#8a8886';
+  ctx.fillText(t('gap')+':', col1, row1+20);
+  ctx.fillStyle = '#ff5f1f';
+  ctx.fillText(gap1, col1+5+35, row1+20);
+  ctx.fillStyle = '#10b981';
+  ctx.fillText(gap2, col2+35, row1+20);
+
+  ctx.fillStyle = '#8a8886';
+  ctx.fillText(t('bestVal')+':', col1, row1+40);
+  ctx.fillStyle = '#ff5f1f';
+  ctx.fillText(bv1, col1+5+55, row1+40);
+  ctx.fillStyle = '#10b981';
+  ctx.fillText(bv2, col2+55, row1+40);
+
+  ctx.restore();
+}
+
+/* --- Frame Elements (shared element transition) --- */
+function getFrameElements(f){
+  var ca = chartArea();
+  var elems = [];
+
+  elems.push({id:'axes', type:'custom', alpha:1, draw:function(a){ drawAxes(ca, a); }});
+
+  if(f === 0){
+    elems.push({id:'narr', type:'custom', alpha:1, draw:function(a){ drawNarration(t('narr0'), a); }});
+  }
+
+  if(f >= 1){
+    var maxEpoch1 = (f === 1) ? 10 : TOTAL_EPOCHS;
+    elems.push({id:'trainCurve', type:'custom', alpha:1, draw:function(a){
+      drawCurve(trainLoss, maxEpoch1, ca, '#ff7f50', 2.5, false, a, 'rgba(255,127,80,0.5)');
+    }});
+    elems.push({id:'valCurve', type:'custom', alpha:1, draw:function(a){
+      drawCurve(valLoss, maxEpoch1, ca, '#00daf3', 2.5, false, a, 'rgba(0,218,243,0.5)');
+    }});
+    elems.push({id:'legend1', type:'custom', alpha:1, draw:function(a){
+      var items = [{color:'#ff7f50', label:t('trainLoss'), dashed:false},
+                   {color:'#00daf3', label:t('valLoss'), dashed:false}];
+      if(f >= 3) {
+        items.push({color:'#ff7f50', label:t('trainLossAug'), dashed:true});
+        items.push({color:'#00daf3', label:t('valLossAug'), dashed:true});
+      }
+      drawLegend(items, ca, a);
+    }});
+  }
+
+  if(f === 1){
+    elems.push({id:'narr', type:'custom', alpha:1, draw:function(a){ drawNarration(t('narr1'), a); }});
+  }
+
+  if(f >= 2){
+    elems.push({id:'overfitMarker', type:'custom', alpha:1, draw:function(a){
+      drawMarker(10, valLoss[10], ca, t('overfitPoint'), a);
+    }});
+  }
+
+  if(f === 2){
+    elems.push({id:'narr', type:'custom', alpha:1, draw:function(a){ drawNarration(t('narr2'), a); }});
+  }
+
+  if(f >= 3){
+    elems.push({id:'trainCurveAug', type:'custom', alpha:1, draw:function(a){
+      drawCurve(trainLossAug, TOTAL_EPOCHS, ca, '#ff7f50', 2, true, a*0.8, 'rgba(255,127,80,0.3)');
+    }});
+    elems.push({id:'valCurveAug', type:'custom', alpha:1, draw:function(a){
+      drawCurve(valLossAug, TOTAL_EPOCHS, ca, '#00daf3', 2, true, a*0.8, 'rgba(0,218,243,0.3)');
+    }});
+  }
+
+  if(f === 3){
+    elems.push({id:'narr', type:'custom', alpha:1, draw:function(a){ drawNarration(t('narr3'), a); }});
+  }
+
+  if(f === 4){
+    elems.push({id:'comparison', type:'custom', alpha:1, draw:function(a){
+      drawComparisonPanel(ca, a);
+    }});
+    elems.push({id:'narr', type:'custom', alpha:1, draw:function(a){ drawNarration(t('narr4'), a); }});
+  }
+
+  return elems;
+}
+
+function drawElement(el){
+  if(!el || el.alpha <= 0.01) return;
+  ctx.save();
+  ctx.globalAlpha = el.alpha;
+  if(el.type === 'custom' && el.draw){
+    el.draw(el.alpha);
+  }
+  ctx.restore();
+}
+
+function drawFrame(f){
+  drawBg();
+  var elems = getFrameElements(f);
+  elems.forEach(function(el){ drawElement(el); });
+}
+
+function transitionTo(newFrame){
+  if(newFrame < 0) newFrame = 0;
+  if(newFrame >= totalFrames) newFrame = totalFrames - 1;
+  if(newFrame === currentFrame && !transitioning){ drawFrame(currentFrame); updateHUD(currentFrame); return; }
+  if(transitioning) return;
+
+  var oldElems = getFrameElements(currentFrame);
+  var newElems = getFrameElements(newFrame);
+  var oldMap = {}; oldElems.forEach(function(e){ oldMap[e.id] = e; });
+  var newMap = {}; newElems.forEach(function(e){ newMap[e.id] = e; });
+
+  currentFrame = newFrame;
+  updateHUD(newFrame);
+  updateDots();
+  transitioning = true;
+
+  var startTime = null;
+  var duration = 500;
+
+  function step(timestamp){
+    if(!startTime) startTime = timestamp;
+    var raw = Math.min((timestamp - startTime)/duration, 1);
+    var p = easeInOut(raw);
+
+    drawBg();
+
+    oldElems.forEach(function(oe){
+      if(!newMap[oe.id]) drawElement(merge(oe, {alpha: 1-p}));
+    });
+
+    newElems.forEach(function(ne){
+      var oe = oldMap[ne.id];
+      if(oe){
+        drawElement(merge(ne, {alpha: 1}));
+      } else {
+        drawElement(merge(ne, {alpha: p}));
+      }
+    });
+
+    if(raw < 1){
+      requestAnimationFrame(step);
+    } else {
+      transitioning = false;
+    }
+  }
+  requestAnimationFrame(step);
+}
+
+/* --- HUD --- */
+var stageNames = ['stage0','stage1','stage2','stage3','stage4'];
+var gapValues = ['--', '0.05', '0.38', '0.02', '0.38 vs 0.02'];
+var bestValValues = ['--', '0.42', '0.42', '0.14', '0.42 vs 0.14'];
+
+function updateHUD(f){
+  document.getElementById('frameInd').textContent = (f+1)+'/'+totalFrames;
+  document.getElementById('hudStage').textContent = t(stageNames[f]);
+  document.getElementById('hudGap').textContent = gapValues[f];
+  document.getElementById('hudBestVal').textContent = bestValValues[f];
+}
+
+/* --- Frame dots --- */
+function buildDots(){
+  var container = document.getElementById('frameDots');
+  container.innerHTML = '';
+  for(var i=0;i<totalFrames;i++){
+    var dot = document.createElement('div');
+    dot.className = 'frame-dot' + (i===currentFrame ? ' active' : '');
+    dot.setAttribute('data-f', i);
+    container.appendChild(dot);
+    (function(idx){
+      dot.addEventListener('click', function(){ transitionTo(idx); });
+    })(i);
+  }
+}
+function updateDots(){
+  var dots = document.querySelectorAll('.frame-dot');
+  dots.forEach(function(d,i){ d.className = 'frame-dot' + (i===currentFrame ? ' active' : ''); });
+}
+
+/* --- Controls --- */
+document.getElementById('btnPrev').addEventListener('click', function(){
+  if(playing) stopPlay();
+  transitionTo(currentFrame - 1);
+});
+document.getElementById('btnNext').addEventListener('click', function(){
+  if(playing) stopPlay();
+  transitionTo(currentFrame + 1);
+});
+document.getElementById('btnPlay').addEventListener('click', function(){
+  if(playing){
+    stopPlay();
+  } else {
+    startPlay();
+  }
+});
+
+function startPlay(){
+  playing = true;
+  document.getElementById('btnPlay').textContent = t('btnPause');
+  if(currentFrame >= totalFrames - 1) currentFrame = -1;
+  playNext();
+}
+function stopPlay(){
+  playing = false;
+  document.getElementById('btnPlay').textContent = t('btnPlay');
+  if(playTimer){ clearTimeout(playTimer); playTimer = null; }
+}
+function playNext(){
+  if(!playing) return;
+  if(currentFrame >= totalFrames - 1){
+    stopPlay();
+    return;
+  }
+  transitionTo(currentFrame + 1);
+  playTimer = setTimeout(playNext, 2200);
+}
+
+/* --- Guide panel toggle --- */
+var guideOpen = true;
+document.getElementById('guideToggle').addEventListener('click', function(){
+  guideOpen = !guideOpen;
+  document.getElementById('guideContent').style.display = guideOpen ? 'block' : 'none';
+  document.getElementById('guideArrow').className = 'arrow' + (guideOpen ? '' : ' collapsed');
+});
+
+/* --- i18n refresh --- */
+function refreshI18N(){
+  document.getElementById('mainTitle').textContent = t('title');
+  document.getElementById('guideTitle').textContent = t('guideTitle');
+  document.getElementById('glShow').textContent = t('glShow');
+  document.getElementById('guideShow').textContent = t('guideShow');
+  document.getElementById('glObserve').textContent = t('glObserve');
+  var obsUl = document.getElementById('guideObserve');
+  obsUl.innerHTML = '';
+  ['obs1','obs2','obs3'].forEach(function(k){
+    var li = document.createElement('li');
+    li.textContent = t(k);
+    obsUl.appendChild(li);
+  });
+  document.getElementById('glControls').textContent = t('glControls');
+  document.getElementById('guideControls').textContent = t('guideCtrl');
+  document.getElementById('glTakeaway').textContent = t('glTakeaway');
+  document.getElementById('guideTakeaway').textContent = t('guideTake');
+  document.getElementById('btnPrev').textContent = t('btnPrev');
+  document.getElementById('btnPlay').textContent = playing ? t('btnPause') : t('btnPlay');
+  document.getElementById('btnNext').textContent = t('btnNext');
+  document.getElementById('hudLblFrame').textContent = t('hudFrame');
+  document.getElementById('hudLblStage').textContent = t('hudStage');
+  document.getElementById('hudLblGap').textContent = t('hudGap');
+  document.getElementById('hudLblBestVal').textContent = t('hudBestVal');
+  updateHUD(currentFrame);
+  drawFrame(currentFrame);
+}
+
+document.getElementById('langBtn').addEventListener('click', function(){
+  LANG = LANG === 'en' ? 'cn' : 'en';
+  document.getElementById('langBtn').textContent = LANG.toUpperCase();
+  refreshI18N();
+});
+
+/* --- Resize --- */
+function resize(){
+  var rect = wrap.getBoundingClientRect();
+  if(rect.width < 1 || rect.height < 1) return;
+  W = rect.width;
+  H = rect.height;
+  canvas.width = W * DPR;
+  canvas.height = H * DPR;
+  canvas.style.width = W + 'px';
+  canvas.style.height = H + 'px';
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  drawFrame(currentFrame);
+}
+
+window.addEventListener('resize', resize);
+
+/* --- Init --- */
+buildDots();
+refreshI18N();
+resize();
+setTimeout(resize, 200);
+setTimeout(resize, 600);
+document.fonts.ready.then(function(){ resize(); });
+
+})();
+</script>
+</body>
+</html>
