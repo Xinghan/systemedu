@@ -194,6 +194,22 @@ function IconStudentWorks() {
   )
 }
 
+function IconFoundation() {
+  return (
+    <div className="relative w-14 h-14 rounded-2xl bg-gradient-to-br from-violet-500/10 to-purple-500/10 flex items-center justify-center">
+      <div className="absolute inset-0 bg-violet-400/8 rounded-2xl blur-xl" />
+      <div className="relative w-12 h-12 rounded-xl bg-white/60 backdrop-blur-sm border border-white/50 shadow-[0_8px_32px_rgba(139,92,246,0.1)] flex items-center justify-center">
+        <svg viewBox="0 0 24 24" fill="none" stroke="#7c3aed" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="w-6 h-6">
+          <path d="M4 19.5A2.5 2.5 0 016.5 17H20" />
+          <path d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z" />
+          <line x1="8" y1="7" x2="16" y2="7" strokeWidth="1.8" stroke="#7c3aed" />
+          <line x1="8" y1="11" x2="14" y2="11" strokeWidth="1.8" stroke="#7c3aed" />
+        </svg>
+      </div>
+    </div>
+  )
+}
+
 function IconAICourse() {
   return (
     <div className="relative w-14 h-14 rounded-2xl bg-gradient-to-br from-amber-400/10 to-orange-400/10 flex items-center justify-center">
@@ -1249,6 +1265,12 @@ const [editCoverFile, setEditCoverFile] = useState<File | null>(null)
                 title={t("project.knowledge_tree")}
                 description={t("project.knowledge_tree_desc")}
                 onClick={() => router.push(`/projects/${params.name}/tree`)}
+              />
+              <ResourceCard
+                icon={<IconFoundation />}
+                title={t("project.foundation")}
+                description={t("project.foundation_desc")}
+                onClick={() => router.push(`/projects/${params.name}/foundation`)}
               />
               <ResourceCard
                 icon={<IconNotesGradient />}
