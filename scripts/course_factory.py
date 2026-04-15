@@ -1333,6 +1333,80 @@ def preflight_v41(knode: dict, course_content: dict) -> list[str]:
             f"plan_markdown 未出现 core_question: '{core_question[:40]}...'"
         )
 
+    # 约束 4: 基础理论 level_bodies 必须存在且按等级使用对应的表达方式/公式深度
+    # 不以字数衡量难度，而是检查：
+    #  - K1 禁止出现公式符号（= 号、字母变量、希腊字母、上下标、数学环境），必须用类比描述
+    #  - K4/K5 要求体现其等级应有的数学工具（K4: 三角函数/向量/受力分析；K5: 微积分/矩阵/极限等），
+    #    否则说明该等级写成了低等级水平，没有真正升级
+    #  - 所有等级都不能是"一句话定义"——至少 2 个自然段或 1 段 + 具体例子
+    import re as _re_theory
+    K1_FORBIDDEN = [
+        (_re_theory.compile(r"\$[^$]+\$"), "LaTeX 公式 ($...$)"),
+        (_re_theory.compile(r"[α-ωΑ-Ω]"), "希腊字母"),
+        (_re_theory.compile(r"\\(sin|cos|tan|int|frac|sqrt|sum|mu|theta|alpha)"), "数学命令 (\\sin/\\int/\\frac 等)"),
+        (_re_theory.compile(r"\b[a-zA-Z]\s*=\s*[a-zA-Z0-9]"), "代数等式 (如 F=ma)"),
+    ]
+    K4_REQUIRED_ANY = [
+        _re_theory.compile(r"\\?sin|\\?cos|\\?tan"),          # 三角函数
+        _re_theory.compile(r"向量|分解|受力|合力|力矩|动量|动能"),  # 力学术语
+        _re_theory.compile(r"斜边|对边|邻边|角度|弧度"),        # 几何术语
+        _re_theory.compile(r"概率|期望|方差|分布|均值"),        # 概率统计
+        _re_theory.compile(r"指数|对数|\\log|\\ln|\\exp"),      # 指对数
+    ]
+    K5_REQUIRED_ANY = [
+        _re_theory.compile(r"\\?int|∫|d[xyz]|\\frac\{d"),       # 积分/微分
+        _re_theory.compile(r"微分|积分|导数|极限|微商"),
+        _re_theory.compile(r"矩阵|特征值|线性|张量|算子"),
+        _re_theory.compile(r"分布|期望.*方差|协方差|似然"),
+    ]
+    theories = course_content.get("theories") or []
+    for th in theories:
+        t_title = th.get("title") or th.get("theory_id") or "<untitled>"
+        lb = th.get("level_bodies") or []
+        # normalize dict form
+        if isinstance(lb, dict):
+            lb = [{"level": k, "body_markdown": v} for k, v in lb.items()]
+        if not lb:
+            errors.append(f"theory '{t_title}' 缺少 level_bodies")
+            continue
+        has_k1 = False
+        for b in lb:
+            level = (b.get("level") or "K1").upper()
+            body = (b.get("body_markdown") or "").strip()
+            if level == "K1":
+                has_k1 = True
+            if not body:
+                errors.append(f"theory '{t_title}' {level} body_markdown 为空")
+                continue
+            # 一句话定义检测：正文段数 < 2 且 不含"例"/"比如"/"想象"/"假设" 等具体化线索
+            paragraphs = [p for p in body.split("\n\n") if p.strip()]
+            if len(paragraphs) < 2 and not _re_theory.search(r"例如|比如|想象|假设|举个|例子", body):
+                errors.append(
+                    f"theory '{t_title}' {level} 像一句话定义（段落数 {len(paragraphs)}，无具体例子）— "
+                    f"必须是完整学习材料，至少 2 段或含具体例子/类比"
+                )
+            if level == "K1":
+                for pat, name in K1_FORBIDDEN:
+                    if pat.search(body):
+                        errors.append(
+                            f"theory '{t_title}' K1 出现了{name}，K1 必须零公式零字母符号，用生活类比"
+                        )
+                        break
+            elif level == "K4":
+                if not any(p.search(body) for p in K4_REQUIRED_ANY):
+                    errors.append(
+                        f"theory '{t_title}' K4 未体现高中数学深度（三角函数/向量/受力分析/概率统计/指对数 至少一项）— "
+                        f"不然与 K2/K3 无区别"
+                    )
+            elif level == "K5":
+                if not any(p.search(body) for p in K5_REQUIRED_ANY):
+                    errors.append(
+                        f"theory '{t_title}' K5 未体现大学数学深度（微积分/线性代数/概率论 至少一项）— "
+                        f"不然与 K3/K4 无区别"
+                    )
+        if not has_k1:
+            errors.append(f"theory '{t_title}' 缺少 K1 版本（K1 必选）")
+
     return errors
 
 
