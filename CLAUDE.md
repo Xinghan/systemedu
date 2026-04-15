@@ -37,10 +37,8 @@ SystemEdu 是一款**本地优先的 AI Agent Sandbox 平台**，教育为核心
 ### Web UI (`/web/`, optional)
 - Next.js 16 + TypeScript (reused from legacy frontend)
 
-### Legacy (being migrated)
-- `/backend/` — Django backend (agents migrated to `src/systemedu/agents/`)
-- `/adminsite/` — Admin service (will become hub-server)
-- `/frontend/` — Next.js frontend (will become `web/`)
+### Legacy (removed)
+旧的 `backend/` `frontend/` `adminsite/` `adminsite-fe/` 已于 2026-04-15 删除，历史版本在 git 中可追溯。Gateway API 走 `src/systemedu/gateway/`，前端走 `web/`。
 
 ## Project Structure
 
@@ -96,11 +94,9 @@ systemedu/
 │       ├── project.yaml
 │       └── knowledge_tree.json
 ├── tests/                      # pytest test suite
-├── scripts/                    # Utility scripts (restart.sh, etc.)
-├── backend/                    # Legacy Django backend
-├── frontend/                   # Legacy Next.js frontend
-├── adminsite/                  # Legacy admin service
-└── prd/                        # Product Requirements Documents
+├── scripts/                    # Utility scripts (restart.sh, course_factory.py, etc.)
+├── specs/                      # Per-feature spec/plan/tasks (speckit)
+└── docs/                       # Long-lived docs (prd.md, todolist, archive/)
 ```
 
 ## Common Commands
