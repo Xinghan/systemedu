@@ -1,4 +1,4 @@
-"""Tests for scripts/course_factory.py v4.1 alignment helpers.
+"""Tests for course_factory.factory v4.1 alignment helpers.
 
 覆盖：
 - load_knode_context: 从 knowledge_tree.json 读取 knode 上下文
@@ -15,12 +15,12 @@ from pathlib import Path
 
 import pytest
 
-# scripts/ 不在 package 中，需要手动加 sys.path
+# course_factory/ 位于项目根下，保持 sys.path 指向根即可
 _ROOT = Path(__file__).resolve().parent.parent
 if str(_ROOT) not in sys.path:
     sys.path.insert(0, str(_ROOT))
 
-from scripts.course_factory import (  # noqa: E402
+from course_factory import (  # noqa: E402
     ANIMATION_RESIZE_PATCH_MARKER,
     fix_nonuniform_scale_in_html,
     inject_animation_resize_patch,
@@ -553,7 +553,7 @@ class TestLoadKnodeContext:
         )
 
         # monkeypatch course_factory.ROOT 指向 tmp_path
-        import scripts.course_factory as cf
+        import course_factory.factory as cf
         monkeypatch.setattr(cf, "ROOT", tmp_path)
 
         # 读取第 2 个 knode（global idx=1，属于 MS1/S1）
@@ -576,13 +576,13 @@ class TestLoadKnodeContext:
         (project_dir / "knowledge_tree.json").write_text(
             json.dumps(tree, ensure_ascii=False), encoding="utf-8"
         )
-        import scripts.course_factory as cf
+        import course_factory.factory as cf
         monkeypatch.setattr(cf, "ROOT", tmp_path)
         with pytest.raises(ValueError, match="out of range"):
             cf.load_knode_context("mini", 99)
 
     def test_missing_project_raises(self, tmp_path, monkeypatch):
-        import scripts.course_factory as cf
+        import course_factory.factory as cf
         monkeypatch.setattr(cf, "ROOT", tmp_path)
         with pytest.raises(FileNotFoundError):
             cf.load_knode_context("nonexistent", 0)
@@ -594,7 +594,7 @@ class TestLoadKnodeContext:
         (project_dir / "knowledge_tree.json").write_text(
             json.dumps(tree, ensure_ascii=False), encoding="utf-8"
         )
-        import scripts.course_factory as cf
+        import course_factory.factory as cf
         monkeypatch.setattr(cf, "ROOT", tmp_path)
         ctx = cf.load_knode_context("nosub", 0)
         assert ctx["sub_project"] is None

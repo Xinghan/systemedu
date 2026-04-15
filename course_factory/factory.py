@@ -3,9 +3,9 @@
 SystemEdu Course Factory — Claude Code 离线课程生成流水线
 
 用法：
-    python scripts/course_factory.py "你的项目idea"
-    python scripts/course_factory.py "牛顿三定律" --name newton-laws --age 12-15
-    python scripts/course_factory.py "光合作用" --name photosynthesis --category biology
+    python -m course_factory "你的项目idea"
+    python -m course_factory "牛顿三定律" --name newton-laws --age 12-15
+    python -m course_factory "光合作用" --name photosynthesis --category biology
 
 流程：
     1. Claude 根据 idea 设计完整知识树（科学严谨）
@@ -1469,7 +1469,7 @@ def _load_labxchange_index() -> list[dict]:
         return _labxchange_cache
     if not _LABXCHANGE_INDEX_PATH.exists():
         console.print("[yellow]LabXchange 索引文件不存在，跳过。"
-                       "运行 python scripts/crawl_labxchange_pathways.py 爬取。[/yellow]")
+                       "运行 python course_factory/data/crawl_labxchange_pathways.py 爬取。[/yellow]")
         _labxchange_cache = []
         return _labxchange_cache
     data = json.loads(_LABXCHANGE_INDEX_PATH.read_text("utf-8"))
