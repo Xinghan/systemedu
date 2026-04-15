@@ -1,8 +1,9 @@
 /**
  * html_validate_test.mjs -- Auto-discovery Playwright test suite.
  *
- * Automatically discovers scripts/test_anim_*.html and scripts/test_game_*.html,
- * generating a common test suite for each file:
+ * Automatically discovers course_factory/tests/anim/*.html and
+ * course_factory/tests/game/*.html, generating a common test suite for
+ * each file:
  *   - No JS errors on load + interaction
  *   - Canvas/SVG renders non-black content
  *   - No vertical scrollbar
@@ -15,7 +16,7 @@
  * Game files additionally test:
  *   - Interactive elements exist and are visible
  *
- * Run:  npx playwright test --config=scripts/playwright.config.mjs
+ * Run:  npx playwright test --config=course_factory/validate/playwright.config.mjs
  */
 import { test, expect } from '@playwright/test';
 import { fileURLToPath } from 'url';
@@ -23,11 +24,17 @@ import { readdirSync } from 'fs';
 import path from 'path';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const TESTS_DIR = path.resolve(__dirname, '..', 'tests');
+const ANIM_DIR = path.join(TESTS_DIR, 'anim');
+const GAME_DIR = path.join(TESTS_DIR, 'game');
 
-// Discover test HTML files
-const allFiles = readdirSync(__dirname);
-const animFiles = allFiles.filter(f => f.startsWith('test_anim_') && f.endsWith('.html'));
-const gameFiles = allFiles.filter(f => f.startsWith('test_game_') && f.endsWith('.html'));
+// Discover test HTML files from course_factory/tests/{anim,game}/
+const safeList = (dir) => {
+  try { return readdirSync(dir).filter(f => f.endsWith('.html')); }
+  catch { return []; }
+};
+const animFiles = safeList(ANIM_DIR).map(f => ({ name: f, dir: ANIM_DIR }));
+const gameFiles = safeList(GAME_DIR).map(f => ({ name: f, dir: GAME_DIR }));
 
 // ---- Shared test generators ----
 
@@ -260,14 +267,14 @@ function gameTests(fileName, fileUrl) {
 
 // ---- Generate test suites ----
 
-for (const f of animFiles) {
-  test.describe(`Animation: ${f}`, () => {
-    animationTests(f, 'file://' + path.resolve(__dirname, f));
+for (const { name, dir } of animFiles) {
+  test.describe(`Animation: ${name}`, () => {
+    animationTests(name, 'file://' + path.join(dir, name));
   });
 }
 
-for (const f of gameFiles) {
-  test.describe(`Game: ${f}`, () => {
-    gameTests(f, 'file://' + path.resolve(__dirname, f));
+for (const { name, dir } of gameFiles) {
+  test.describe(`Game: ${name}`, () => {
+    gameTests(name, 'file://' + path.join(dir, name));
   });
 }
