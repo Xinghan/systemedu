@@ -1092,10 +1092,21 @@ async def api_project_theories(request: Request) -> JSONResponse:
 
         ctx = load_project_context(name)
 
-        # Flatten knode_id -> (title, stage_title, stage_idx, order_in_stage)
+        # Build milestone_idx -> sub_project map (first match wins)
+        ms_to_sub: dict[int, dict] = {}
+        sub_projects = getattr(ctx.tree, "sub_projects", None) or []
+        for sp in sub_projects:
+            sp_id = getattr(sp, "id", None)
+            sp_title = getattr(sp, "title", "") or ""
+            for ms_i in (getattr(sp, "milestone_indices", None) or []):
+                if ms_i not in ms_to_sub:
+                    ms_to_sub[ms_i] = {"sub_project_id": sp_id, "sub_project_title": sp_title}
+
+        # Flatten knode_id -> (title, stage_title, stage_idx, order_in_stage, sub_project)
         knode_meta: dict[int, dict] = {}
         global_idx = 0
         for ms_idx, ms in enumerate(ctx.tree.milestones):
+            sp_meta = ms_to_sub.get(ms_idx) or {"sub_project_id": None, "sub_project_title": ""}
             for kn_idx, kn in enumerate(ms.knodes):
                 knode_meta[global_idx] = {
                     "knode_id": global_idx,
@@ -1103,6 +1114,8 @@ async def api_project_theories(request: Request) -> JSONResponse:
                     "stage_title": ms.title,
                     "stage_idx": ms_idx,
                     "order_in_stage": kn_idx,
+                    "sub_project_id": sp_meta["sub_project_id"],
+                    "sub_project_title": sp_meta["sub_project_title"],
                 }
                 global_idx += 1
 
@@ -1148,30 +1161,52 @@ async def api_project_theories(request: Request) -> JSONResponse:
                 if not levels:
                     continue
                 meta = knode_meta[row.knode_id]
+                raw_tags = th.get("tags") or []
+                tags = [t for t in raw_tags if isinstance(t, str) and t.strip()]
                 theories_out.append({
                     "theory_id": th.get("theory_id") or f"{row.knode_id}-{th.get('title', 'untitled')}",
                     "title": th.get("title") or th.get("theory_id") or "",
                     "subject": th.get("subject") or th.get("tag") or "",
+                    "tags": tags,
                     "levels": levels,
                     "knode_id": meta["knode_id"],
                     "knode_title": meta["knode_title"],
                     "stage_title": meta["stage_title"],
                     "stage_idx": meta["stage_idx"],
                     "order_in_stage": meta["order_in_stage"],
+                    "sub_project_id": meta["sub_project_id"],
+                    "sub_project_title": meta["sub_project_title"],
                     "animation_html": th.get("animation_html") or "",
                     "related_paragraph": th.get("related_paragraph") or "",
                 })
 
-        # Build subject tally for convenience
+        # Build subject tally (legacy single subject) and tag tally (multi)
         subject_counts: dict[str, int] = {}
+        tag_counts: dict[str, int] = {}
         for t in theories_out:
             s = t["subject"] or "other"
             subject_counts[s] = subject_counts.get(s, 0) + 1
+            for tg in t["tags"]:
+                tag_counts[tg] = tag_counts.get(tg, 0) + 1
+
+        # Load project's open vocab (for UI facet listing — even zero-count tags)
+        from systemedu.education.project_loader import find_project_dir
+        tag_vocab: list[dict] = []
+        try:
+            proj_dir = find_project_dir(name)
+            vocab_path = Path(proj_dir) / "theory_tags.json"
+            if vocab_path.exists():
+                vocab = _json.loads(vocab_path.read_text())
+                tag_vocab = vocab.get("tags") or []
+        except Exception:
+            tag_vocab = []
 
         return JSONResponse({
             "project_name": name,
             "total": len(theories_out),
             "subject_counts": subject_counts,
+            "tag_counts": tag_counts,
+            "tag_vocab": tag_vocab,
             "theories": theories_out,
         })
     except FileNotFoundError:

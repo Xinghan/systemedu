@@ -21,7 +21,23 @@ interface Node {
 interface Edge {
   a: string
   b: string
-  kind: "knode" | "subject"
+  kind: "subproject" | "tag"
+  weight: number
+}
+
+function tagSharedDepth(a: string[], b: string[]): number {
+  let best = 0
+  for (const ta of a) {
+    for (const tb of b) {
+      if (ta === tb) return ta.split("/").length
+      const pa = ta.split("/")
+      const pb = tb.split("/")
+      let d = 0
+      while (d < pa.length && d < pb.length && pa[d] === pb[d]) d++
+      if (d > best) best = d
+    }
+  }
+  return best
 }
 
 const W = 880
@@ -36,28 +52,45 @@ export function FoundationGraph({ theories, subjectColors, onNodeClick }: Founda
   const nodesRef = useRef<Node[]>([])
   const edges = useMemo<Edge[]>(() => {
     const list: Edge[] = []
-    const byKnode: Record<number, string[]> = {}
-    const bySubject: Record<string, string[]> = {}
+    const idOf = (th: AggregatedTheory) => `${th.theory_id}-${th.knode_id}`
+
+    // 1) Sub-project co-occurrence: full mesh for small groups, hub+chain for large
+    const bySub: Record<string, { id: string; th: AggregatedTheory }[]> = {}
     for (const th of theories) {
-      const id = `${th.theory_id}-${th.knode_id}`
-      if (!byKnode[th.knode_id]) byKnode[th.knode_id] = []
-      byKnode[th.knode_id].push(id)
-      const s = th.subject || "other"
-      if (!bySubject[s]) bySubject[s] = []
-      bySubject[s].push(id)
+      const k = th.sub_project_id || `stage-${th.stage_idx}`
+      if (!bySub[k]) bySub[k] = []
+      bySub[k].push({ id: idOf(th), th })
     }
-    // Co-occurrence within knode — full pairs
-    for (const ids of Object.values(byKnode)) {
-      for (let i = 0; i < ids.length; i++) {
-        for (let j = i + 1; j < ids.length; j++) {
-          list.push({ a: ids[i], b: ids[j], kind: "knode" })
+    for (const group of Object.values(bySub)) {
+      if (group.length <= 6) {
+        for (let i = 0; i < group.length; i++) {
+          for (let j = i + 1; j < group.length; j++) {
+            list.push({ a: group[i].id, b: group[j].id, kind: "subproject", weight: 1 })
+          }
+        }
+      } else {
+        // Chain + spoke (first as hub) to avoid dense clumping
+        const hub = group[0]
+        for (let i = 1; i < group.length; i++) {
+          list.push({ a: hub.id, b: group[i].id, kind: "subproject", weight: 1 })
+          if (i > 1) {
+            list.push({ a: group[i - 1].id, b: group[i].id, kind: "subproject", weight: 1 })
+          }
         }
       }
     }
-    // Subject edges — chain to avoid n^2 explosion (each node linked to next same-subject)
-    for (const ids of Object.values(bySubject)) {
-      for (let i = 1; i < ids.length; i++) {
-        list.push({ a: ids[i - 1], b: ids[i], kind: "subject" })
+
+    // 2) Tag intersection across sub_projects (don't duplicate same-sub edges)
+    const sameSubSet = new Set<string>()
+    for (const e of list) sameSubSet.add(e.a < e.b ? `${e.a}|${e.b}` : `${e.b}|${e.a}`)
+    const items = theories.map((th) => ({ id: idOf(th), th }))
+    for (let i = 0; i < items.length; i++) {
+      for (let j = i + 1; j < items.length; j++) {
+        const a = items[i], b = items[j]
+        const key = a.id < b.id ? `${a.id}|${b.id}` : `${b.id}|${a.id}`
+        if (sameSubSet.has(key)) continue
+        const depth = tagSharedDepth(a.th.tags || [], b.th.tags || [])
+        if (depth >= 2) list.push({ a: a.id, b: b.id, kind: "tag", weight: depth })
       }
     }
     return list
@@ -119,8 +152,8 @@ export function FoundationGraph({ theories, subjectColors, onNodeClick }: Founda
         if (!a || !b) continue
         const dx = b.x - a.x, dy = b.y - a.y
         const d = Math.sqrt(dx * dx + dy * dy) || 0.01
-        const target = e.kind === "knode" ? 70 : 130
-        const k = e.kind === "knode" ? 0.035 : 0.012
+        const target = e.kind === "subproject" ? 90 : 150
+        const k = e.kind === "subproject" ? 0.025 : 0.008 * e.weight
         const f = (d - target) * k
         const fx = (dx / d) * f
         const fy = (dy / d) * f
@@ -164,20 +197,25 @@ export function FoundationGraph({ theories, subjectColors, onNodeClick }: Founda
           const b = nodes.find((n) => n.id === e.b)
           if (!a || !b) return null
           const isHighlight = hovered === e.a || hovered === e.b
+          const isSub = e.kind === "subproject"
+          const baseOpacity = isSub ? 0.5 : 0.15 + 0.15 * Math.min(e.weight, 3)
+          const baseWidth = isSub ? 1.4 : 0.6 + 0.3 * Math.min(e.weight, 3)
           return (
             <line
               key={i}
               x1={a.x} y1={a.y} x2={b.x} y2={b.y}
-              stroke={e.kind === "knode" ? "#a78bfa" : "#cbd5e1"}
-              strokeOpacity={isHighlight ? 0.9 : (e.kind === "knode" ? 0.5 : 0.25)}
-              strokeWidth={isHighlight ? 1.8 : (e.kind === "knode" ? 1.3 : 0.8)}
-              strokeDasharray={e.kind === "subject" ? "3 3" : undefined}
+              stroke={isSub ? "#a78bfa" : "#94a3b8"}
+              strokeOpacity={isHighlight ? 0.9 : baseOpacity}
+              strokeWidth={isHighlight ? baseWidth + 0.6 : baseWidth}
+              strokeDasharray={isSub ? undefined : "3 3"}
             />
           )
         })}
         {nodes.map((n) => {
-          const s = n.theory.subject || "other"
-          const color = subjectColors[s] || "#6b7280"
+          // Prefer tag top-level; fallback to legacy subject
+          const firstTag = (n.theory.tags || [])[0] || ""
+          const topLevel = firstTag.split("/")[0] || n.theory.subject || "other"
+          const color = subjectColors[topLevel] || subjectColors[n.theory.subject || "other"] || "#6b7280"
           const isHovered = hovered === n.id
           const r = isHovered ? 11 : 8
           return (
@@ -194,14 +232,17 @@ export function FoundationGraph({ theories, subjectColors, onNodeClick }: Founda
               {isHovered && (
                 <g>
                   <rect
-                    x={-86} y={r + 4} width={172} height={38} rx={6}
+                    x={-110} y={r + 4} width={220} height={52} rx={6}
                     fill="#ffffff" stroke={color} strokeOpacity={0.35}
                   />
                   <text x={0} y={r + 18} textAnchor="middle" fontSize="11" fontWeight="700" fill="#111827">
-                    {n.theory.title.slice(0, 18)}
+                    {n.theory.title.slice(0, 22)}
                   </text>
-                  <text x={0} y={r + 32} textAnchor="middle" fontSize="9" fill="#6b7280">
-                    {n.theory.knode_title.slice(0, 22)}
+                  <text x={0} y={r + 31} textAnchor="middle" fontSize="9" fill="#6b7280">
+                    {(n.theory.sub_project_title || n.theory.knode_title).slice(0, 28)}
+                  </text>
+                  <text x={0} y={r + 45} textAnchor="middle" fontSize="8" fill="#9ca3af">
+                    {(n.theory.tags || []).slice(0, 2).join(" · ").slice(0, 40)}
                   </text>
                 </g>
               )}
@@ -212,11 +253,11 @@ export function FoundationGraph({ theories, subjectColors, onNodeClick }: Founda
       <div className="px-4 py-2 border-t border-border/50 flex items-center gap-4 text-[10px] text-muted-foreground">
         <div className="flex items-center gap-1.5">
           <span className="w-6 h-[2px] rounded" style={{ background: "#a78bfa" }} />
-          <span>同节点共现</span>
+          <span>同子项目</span>
         </div>
         <div className="flex items-center gap-1.5">
-          <span className="w-6 h-[2px] rounded" style={{ background: "#cbd5e1", borderTop: "1px dashed" }} />
-          <span>同学科</span>
+          <span className="w-6 h-[2px] rounded" style={{ background: "#94a3b8", borderTop: "1px dashed" }} />
+          <span>同 tag（粗细 = 共享层级深度）</span>
         </div>
         <span className="ml-auto">{nodes.length} 个理论 · {edges.length} 条连边</span>
       </div>
