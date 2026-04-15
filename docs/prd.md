@@ -262,7 +262,7 @@
 - [x] **前端/DB/progress 无改动**: API 层通过适配器输出 milestones 格式，前端无感知
 
 #### 3p: Course Factory 手册 ✅
-`scripts/COURSE_FACTORY.md` -- 1490+ 行的完整内容创作手册，由 Claude Code 按手册执行。
+`.claude/skills/course_factory/SKILL.md`（即 `course_factory/SKILL.md` symlink）-- 2200+ 行的完整内容创作手册，由 Claude Code 作为 skill 自动加载并按手册执行。
 
 - [x] **Step 0.5 - 联网研究**: `should_research_knode()` 判断 + `research_knode()` Tavily 搜索 (web + YouTube)
 - [x] **Step 1 - plan_markdown**: 800-1500 字学习计划，core_question 驱动，对齐 acceptance_standard / hands_on_components
