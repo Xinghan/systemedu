@@ -1,0 +1,1429 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mars Rover Terrain Explorer</title>
+<script>window.__systemedu_resize_patch_optout=true;</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=Inter:wght@400;500&family=Noto+Sans+SC:wght@400;700&display=swap" rel="stylesheet">
+<style>
+*, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+html, body {
+  width: 100%; height: 100vh; overflow: hidden;
+  background: #0c0e12; color: #e0e0e0;
+  font-family: 'Noto Sans SC', 'Inter', sans-serif;
+}
+#root {
+  width: 100%; height: 100vh;
+  display: flex; flex-direction: column;
+  overflow: hidden;
+}
+
+/* -- Header Bar -- */
+.header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 6px 16px; background: #13161c;
+  border-bottom: 1px solid #1e2230; flex-shrink: 0;
+  min-height: 42px;
+}
+.header-title {
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 16px; font-weight: 700; color: #50ffb0;
+  white-space: nowrap;
+}
+.header-btns { display: flex; gap: 8px; }
+.btn {
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 12px; font-weight: 500;
+  padding: 5px 14px; border: 1px solid #50ffb066;
+  background: transparent; color: #50ffb0; border-radius: 4px;
+  cursor: pointer; transition: background 0.2s, color 0.2s;
+  white-space: nowrap;
+}
+.btn:hover { background: #50ffb0; color: #0c0e12; }
+.btn.active { background: #50ffb022; }
+
+/* -- Main Layout -- */
+.main-area {
+  flex: 1; display: flex; overflow: hidden;
+  min-height: 0;
+}
+
+/* -- Left Panel: HUD + Legend -- */
+.left-panel {
+  width: 220px; min-width: 180px; flex-shrink: 0;
+  display: flex; flex-direction: column;
+  background: #10131a; border-right: 1px solid #1e2230;
+  padding: 12px; gap: 10px; overflow-y: auto;
+}
+.hud-section { display: flex; flex-direction: column; gap: 8px; }
+.hud-label {
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 11px; color: #8890a0; text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.hud-value {
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 20px; font-weight: 700; color: #50ffb0;
+}
+.hud-value.warning { color: #ff6b6b; }
+
+/* Energy bar */
+.energy-bar-outer {
+  width: 100%; height: 18px; background: #1a1e28;
+  border-radius: 9px; overflow: hidden; position: relative;
+  border: 1px solid #2a2e38;
+}
+.energy-bar-inner {
+  height: 100%; background: linear-gradient(90deg, #50ffb0, #30cc88);
+  border-radius: 9px; transition: width 0.4s ease;
+}
+.energy-bar-inner.low {
+  background: linear-gradient(90deg, #ff6b6b, #cc3030);
+}
+.energy-bar-inner.mid {
+  background: linear-gradient(90deg, #ffaa50, #cc8830);
+}
+.energy-bar-text {
+  position: absolute; top: 0; left: 0; right: 0; bottom: 0;
+  display: flex; align-items: center; justify-content: center;
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 11px; font-weight: 700; color: #fff;
+  text-shadow: 0 0 4px rgba(0,0,0,0.8);
+}
+
+.divider {
+  height: 1px; background: #1e2230; margin: 4px 0;
+}
+
+/* Legend */
+.legend-title {
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 12px; font-weight: 700; color: #c0c8d8;
+  margin-bottom: 6px;
+}
+.legend-item {
+  display: flex; align-items: center; gap: 8px;
+  margin-bottom: 8px;
+}
+.legend-swatch {
+  width: 28px; height: 28px; border-radius: 4px;
+  border: 1px solid #2a2e38; flex-shrink: 0;
+}
+.legend-info { display: flex; flex-direction: column; }
+.legend-name {
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 12px; font-weight: 500; color: #e0e0e0;
+}
+.legend-desc {
+  font-size: 10px; color: #6a7080; line-height: 1.3;
+}
+
+/* -- Canvas Area -- */
+.canvas-area {
+  flex: 1; display: flex; align-items: center; justify-content: center;
+  position: relative; overflow: hidden;
+  min-width: 0;
+}
+#gameCanvas {
+  display: block;
+}
+
+/* -- Tooltip -- */
+.tooltip {
+  position: fixed; pointer-events: none;
+  background: #1a1e28ee; border: 1px solid #50ffb066;
+  border-radius: 6px; padding: 8px 12px;
+  font-size: 12px; z-index: 100;
+  display: none; max-width: 200px;
+  backdrop-filter: blur(8px);
+}
+.tooltip-terrain {
+  font-family: 'Space Grotesk', sans-serif;
+  font-weight: 700; font-size: 13px; color: #50ffb0;
+  margin-bottom: 3px;
+}
+.tooltip-cost { color: #b0b8c8; font-size: 11px; }
+.tooltip-warn { color: #ff6b6b; font-size: 11px; margin-top: 2px; }
+
+/* -- Overlay (win/lose) -- */
+.overlay {
+  position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(12, 14, 18, 0.92);
+  display: none; align-items: center; justify-content: center;
+  z-index: 200; backdrop-filter: blur(4px);
+}
+.overlay.show { display: flex; }
+.overlay-box {
+  background: #13161c; border: 1px solid #50ffb044;
+  border-radius: 12px; padding: 28px 36px;
+  max-width: 420px; width: 90%;
+  text-align: center;
+}
+.overlay-title {
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 24px; font-weight: 700;
+  margin-bottom: 12px;
+}
+.overlay-title.win { color: #50ffb0; }
+.overlay-title.lose { color: #ff6b6b; }
+.overlay-body {
+  font-size: 13px; color: #a0a8b8; line-height: 1.6;
+  margin-bottom: 18px; text-align: left;
+}
+.overlay-stat {
+  display: flex; justify-content: space-between;
+  padding: 3px 0; border-bottom: 1px solid #1e2230;
+}
+.overlay-stat-label { color: #8890a0; }
+.overlay-stat-value { color: #e0e0e0; font-weight: 500; }
+.overlay-btn {
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 14px; font-weight: 700;
+  padding: 10px 28px; border: none;
+  background: #50ffb0; color: #0c0e12; border-radius: 6px;
+  cursor: pointer; margin-top: 8px; transition: opacity 0.2s;
+}
+.overlay-btn:hover { opacity: 0.85; }
+
+/* -- Hover info bar (bottom of canvas) -- */
+.hover-bar {
+  position: absolute; bottom: 8px; left: 50%;
+  transform: translateX(-50%);
+  background: #13161cdd; border: 1px solid #1e2230;
+  border-radius: 6px; padding: 4px 14px;
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 12px; color: #8890a0;
+  white-space: nowrap; pointer-events: none;
+  backdrop-filter: blur(6px);
+  display: none;
+}
+
+/* -- Message toast -- */
+.toast {
+  position: fixed; top: 60px; left: 50%; transform: translateX(-50%);
+  background: #1a1e28ee; border: 1px solid #ff6b6b66;
+  border-radius: 6px; padding: 8px 18px;
+  font-size: 13px; color: #ff6b6b; z-index: 150;
+  opacity: 0; transition: opacity 0.3s;
+  pointer-events: none; text-align: center;
+  backdrop-filter: blur(6px);
+}
+.toast.show { opacity: 1; }
+.toast.info { border-color: #50ffb066; color: #50ffb0; }
+
+/* -- Responsive -- */
+@media (max-width: 700px) {
+  .left-panel { width: 160px; min-width: 140px; padding: 8px; }
+  .hud-value { font-size: 16px; }
+  .header-title { font-size: 13px; }
+}
+@media (max-width: 520px) {
+  .main-area { flex-direction: column; }
+  .left-panel {
+    width: 100%; flex-direction: row; flex-wrap: wrap;
+    border-right: none; border-bottom: 1px solid #1e2230;
+    max-height: 120px; overflow-y: auto;
+  }
+  .hud-section { flex: 1; min-width: 100px; }
+  .legend-section { display: none; }
+}
+</style>
+</head>
+<body>
+<div id="root">
+  <div class="header">
+    <div class="header-title" id="headerTitle"></div>
+    <div class="header-btns">
+      <button class="btn" id="btnNewMap">NEW MAP</button>
+      <button class="btn" id="btnLang">EN</button>
+    </div>
+  </div>
+  <div class="main-area">
+    <div class="left-panel">
+      <div class="hud-section">
+        <div class="hud-label" id="labelEnergy">ENERGY</div>
+        <div class="energy-bar-outer">
+          <div class="energy-bar-inner" id="energyBarInner"></div>
+          <div class="energy-bar-text" id="energyBarText"></div>
+        </div>
+        <div class="hud-label" id="labelSteps">STEPS</div>
+        <div class="hud-value" id="hudSteps">0</div>
+        <div class="hud-label" id="labelTerrain">CURRENT TERRAIN</div>
+        <div class="hud-value" id="hudTerrain" style="font-size:15px;">--</div>
+        <div class="hud-label" id="labelDist">DISTANCE TO TARGET</div>
+        <div class="hud-value" id="hudDist">--</div>
+      </div>
+      <div class="divider"></div>
+      <div class="legend-section" id="legendSection">
+        <div class="legend-title" id="legendTitle">TERRAIN LEGEND</div>
+        <div id="legendItems"></div>
+      </div>
+    </div>
+    <div class="canvas-area" id="canvasArea">
+      <canvas id="gameCanvas"></canvas>
+      <div class="hover-bar" id="hoverBar"></div>
+    </div>
+  </div>
+</div>
+
+<div class="tooltip" id="tooltip">
+  <div class="tooltip-terrain" id="tooltipTerrain"></div>
+  <div class="tooltip-cost" id="tooltipCost"></div>
+  <div class="tooltip-warn" id="tooltipWarn"></div>
+</div>
+
+<div class="overlay" id="overlay">
+  <div class="overlay-box">
+    <div class="overlay-title" id="overlayTitle"></div>
+    <div class="overlay-body" id="overlayBody"></div>
+    <button class="overlay-btn" id="overlayBtn"></button>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ===== i18n =====
+const LANG = {
+  cn: {
+    title: "火星车地形探测模拟器",
+    energy: "电量", steps: "步数",
+    terrain: "当前地形", dist: "距目标距离",
+    legend: "地形图例",
+    newMap: "新地图", langBtn: "EN",
+    soil: "土壤 Soil",
+    soilDesc: "细粒均匀，浅棕色调，最安全的路面",
+    bedrock: "基岩 Bedrock",
+    bedrockDesc: "层状岩石露头，灰褐色，安全但行驶缓慢",
+    bigrock: "大石块 Big Rock",
+    bigrockDesc: "散布大石头，深灰色，不可通行",
+    sand: "沙地 Sand",
+    sandDesc: "波纹纹理，橙黄色，有陷入风险",
+    costSoil: "消耗 1 电量，100% 安全",
+    costBedrock: "消耗 2 电量，安全但缓慢",
+    costSand: "消耗 2 电量，30% 概率陷入(+3 额外)",
+    costBigrock: "不可通行!",
+    warnSand: "有陷入风险!",
+    warnBigrock: "大石块无法通行!",
+    stuckMsg: "火星车陷入沙地! 额外消耗 3 电量挣脱!",
+    blockedMsg: "大石块阻挡，无法通过!",
+    notAdjacentMsg: "只能移动到相邻的格子!",
+    noEnergyMsg: "电量不足，无法移动!",
+    winTitle: "任务完成!",
+    loseTitle: "电量耗尽!",
+    winBody: "火星车成功到达采样目标点!",
+    loseBody: "火星车电量耗尽，任务失败...",
+    statSteps: "行走步数", statEnergy: "剩余电量",
+    statSoil: "经过土壤格数", statBedrock: "经过基岩格数",
+    statSand: "经过沙地格数", statStuck: "陷入沙地次数",
+    statEfficiency: "路径效率",
+    playAgain: "新地图",
+    hoverInfo: "{terrain} | 预估消耗: {cost} 电量",
+    hoverImpassable: "{terrain} | 不可通行",
+    start: "起点", target: "目标",
+  },
+  en: {
+    title: "Mars Rover -- Terrain Explorer",
+    energy: "ENERGY", steps: "STEPS",
+    terrain: "CURRENT TERRAIN", dist: "DISTANCE TO TARGET",
+    legend: "TERRAIN LEGEND",
+    newMap: "NEW MAP", langBtn: "CN",
+    soil: "Soil",
+    soilDesc: "Fine-grained, uniform, light brown -- safest surface",
+    bedrock: "Bedrock",
+    bedrockDesc: "Layered rock outcrop, gray-brown -- slow but safe",
+    bigrock: "Big Rock",
+    bigrockDesc: "Scattered boulders, dark gray -- impassable",
+    sand: "Sand",
+    sandDesc: "Ripple texture, orange-yellow -- risk of sinking",
+    costSoil: "Costs 1 energy, 100% safe",
+    costBedrock: "Costs 2 energy, safe but slow",
+    costSand: "Costs 2 energy, 30% chance of sinking (+3 extra)",
+    costBigrock: "Impassable!",
+    warnSand: "Sinking risk!",
+    warnBigrock: "Cannot traverse boulders!",
+    stuckMsg: "Rover stuck in sand! Extra 3 energy consumed to escape!",
+    blockedMsg: "Big rocks block the path, cannot pass!",
+    notAdjacentMsg: "Can only move to adjacent cells!",
+    noEnergyMsg: "Not enough energy to move!",
+    winTitle: "Mission Complete!",
+    loseTitle: "Energy Depleted!",
+    winBody: "The rover successfully reached the sampling point!",
+    loseBody: "The rover ran out of energy, mission failed...",
+    statSteps: "Steps Taken", statEnergy: "Energy Remaining",
+    statSoil: "Soil Cells Passed", statBedrock: "Bedrock Cells Passed",
+    statSand: "Sand Cells Passed", statStuck: "Times Stuck",
+    statEfficiency: "Path Efficiency",
+    playAgain: "NEW MAP",
+    hoverInfo: "{terrain} | Est. cost: {cost} energy",
+    hoverImpassable: "{terrain} | Impassable",
+    start: "START", target: "TARGET",
+  }
+};
+let lang = "cn";
+function t(key) { return LANG[lang][key] || key; }
+
+// ===== Terrain Definitions =====
+const TERRAIN = {
+  soil:    { id: "soil",    color: "#b89a6a", passable: true,  cost: 1, stuckChance: 0 },
+  bedrock: { id: "bedrock", color: "#8a7d6e", passable: true,  cost: 2, stuckChance: 0 },
+  bigrock: { id: "bigrock", color: "#4a4a50", passable: false, cost: Infinity, stuckChance: 0 },
+  sand:    { id: "sand",    color: "#d4a844", passable: true,  cost: 2, stuckChance: 0.3 },
+};
+
+const COLS = 8, ROWS = 6;
+const MAX_ENERGY = 20;
+
+// ===== Game State =====
+let grid = [];        // grid[r][c] = terrain id
+let roverR = 0, roverC = 0;
+let startR = 0, startC = 0;  // remember initial spawn for BFS efficiency calc
+let targetR = 0, targetC = 0;
+let energy = MAX_ENERGY;
+let steps = 0;
+let gameOver = false;
+let path = [];        // [{r,c}]
+let stats = { soil: 0, bedrock: 0, sand: 0, stuckCount: 0 };
+let roverAnimX = 0, roverAnimY = 0;  // pixel positions for animation
+let roverTargetX = 0, roverTargetY = 0;
+let isAnimating = false;
+let shakeTimer = 0;
+let shakeIntensity = 0;
+let targetPulse = 0;  // for target blinking
+
+// Canvas metrics
+let canvas, ctx;
+let cellW = 0, cellH = 0;
+let gridOffX = 0, gridOffY = 0;
+let hoveredR = -1, hoveredC = -1;
+
+// ===== Seeded Random =====
+function rand() { return Math.random(); }
+function randInt(min, max) { return Math.floor(rand() * (max - min + 1)) + min; }
+
+// ===== Map Generation =====
+function generateMap() {
+  // Fill grid with weighted random terrain
+  grid = [];
+  for (let r = 0; r < ROWS; r++) {
+    grid[r] = [];
+    for (let c = 0; c < COLS; c++) {
+      const v = rand();
+      if (v < 0.35) grid[r][c] = "soil";
+      else if (v < 0.55) grid[r][c] = "bedrock";
+      else if (v < 0.75) grid[r][c] = "bigrock";
+      else grid[r][c] = "sand";
+    }
+  }
+
+  // Place start & target
+  roverR = randInt(0, 1); roverC = randInt(0, 1);
+  targetR = randInt(ROWS - 2, ROWS - 1); targetC = randInt(COLS - 2, COLS - 1);
+
+  // Ensure start and target areas are soil
+  grid[roverR][roverC] = "soil";
+  grid[targetR][targetC] = "soil";
+  // Neighbors of start
+  for (let dr = -1; dr <= 1; dr++) for (let dc = -1; dc <= 1; dc++) {
+    const nr = roverR + dr, nc = roverC + dc;
+    if (nr >= 0 && nr < ROWS && nc >= 0 && nc < COLS) {
+      if (grid[nr][nc] === "bigrock") grid[nr][nc] = "soil";
+    }
+  }
+  // Neighbors of target
+  for (let dr = -1; dr <= 1; dr++) for (let dc = -1; dc <= 1; dc++) {
+    const nr = targetR + dr, nc = targetC + dc;
+    if (nr >= 0 && nr < ROWS && nc >= 0 && nc < COLS) {
+      if (grid[nr][nc] === "bigrock") grid[nr][nc] = "soil";
+    }
+  }
+
+  // Ensure a passable path exists using BFS
+  if (!hasPath()) {
+    carvePath();
+  }
+}
+
+function hasPath() {
+  const visited = Array.from({length: ROWS}, () => Array(COLS).fill(false));
+  const queue = [[roverR, roverC]];
+  visited[roverR][roverC] = true;
+  const dirs = [[0,1],[0,-1],[1,0],[-1,0]];
+  while (queue.length > 0) {
+    const [r, c] = queue.shift();
+    if (r === targetR && c === targetC) return true;
+    for (const [dr, dc] of dirs) {
+      const nr = r + dr, nc = c + dc;
+      if (nr >= 0 && nr < ROWS && nc >= 0 && nc < COLS && !visited[nr][nc]) {
+        if (TERRAIN[grid[nr][nc]].passable) {
+          visited[nr][nc] = true;
+          queue.push([nr, nc]);
+        }
+      }
+    }
+  }
+  return false;
+}
+
+function carvePath() {
+  // Simple: carve a direct-ish path replacing bigrock with soil/bedrock
+  let r = roverR, c = roverC;
+  while (r !== targetR || c !== targetC) {
+    if (grid[r][c] === "bigrock") {
+      grid[r][c] = rand() < 0.6 ? "soil" : "bedrock";
+    }
+    if (r < targetR) r++;
+    else if (r > targetR) r--;
+    else if (c < targetC) c++;
+    else if (c > targetC) c--;
+  }
+  // Verify, if still no path (unlikely), force more
+  if (!hasPath()) {
+    let cr = roverR, cc = roverC;
+    while (cr !== targetR || cc !== targetC) {
+      grid[cr][cc] = "soil";
+      if (cc < targetC) cc++;
+      else if (cr < targetR) cr++;
+      else if (cc > targetC) cc--;
+      else cr--;
+    }
+  }
+}
+
+// BFS shortest path (for efficiency calc)
+function bfsShortestCost() {
+  // Dijkstra from original start using base terrain cost only (no stuck probability)
+  // This gives the theoretical minimum energy if player never gets stuck
+  const dist = Array.from({length: ROWS}, () => Array(COLS).fill(Infinity));
+  dist[startR][startC] = 0;
+  const pq = [{r: startR, c: startC, cost: 0}];
+  const dirs = [[0,1],[0,-1],[1,0],[-1,0]];
+  while (pq.length > 0) {
+    pq.sort((a, b) => a.cost - b.cost);
+    const {r, c, cost} = pq.shift();
+    if (cost > dist[r][c]) continue;
+    if (r === targetR && c === targetC) return cost;
+    for (const [dr, dc] of dirs) {
+      const nr = r + dr, nc = c + dc;
+      if (nr >= 0 && nr < ROWS && nc >= 0 && nc < COLS) {
+        const ter = TERRAIN[grid[nr][nc]];
+        if (ter.passable) {
+          const newCost = cost + ter.cost;
+          if (newCost < dist[nr][nc]) {
+            dist[nr][nc] = newCost;
+            pq.push({r: nr, c: nc, cost: newCost});
+          }
+        }
+      }
+    }
+  }
+  return Infinity;
+}
+
+// ===== Drawing =====
+function calcMetrics() {
+  const area = document.getElementById("canvasArea");
+  const W = area.clientWidth;
+  const H = area.clientHeight;
+  canvas.width = W;
+  canvas.height = H;
+
+  // Fit grid with padding
+  const padX = 40, padY = 50;
+  const availW = W - padX * 2;
+  const availH = H - padY * 2;
+  cellW = Math.floor(Math.min(availW / COLS, availH / ROWS));
+  cellH = cellW;
+  // Clamp
+  if (cellW < 30) { cellW = 30; cellH = 30; }
+  if (cellW > 90) { cellW = 90; cellH = 90; }
+
+  const gridW = cellW * COLS;
+  const gridH = cellH * ROWS;
+  gridOffX = Math.floor((W - gridW) / 2);
+  gridOffY = Math.floor((H - gridH) / 2);
+}
+
+// Terrain texture drawing
+function drawTerrainCell(r, c, x, y, w, h) {
+  const terrain = grid[r][c];
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(x + 1, y + 1, w - 2, h - 2);
+  ctx.clip();
+
+  if (terrain === "soil") {
+    drawSoilTexture(x, y, w, h);
+  } else if (terrain === "bedrock") {
+    drawBedrockTexture(x, y, w, h);
+  } else if (terrain === "bigrock") {
+    drawBigRockTexture(x, y, w, h);
+  } else if (terrain === "sand") {
+    drawSandTexture(x, y, w, h);
+  }
+
+  ctx.restore();
+}
+
+function drawSoilTexture(x, y, w, h) {
+  // Light brown base with scattered small dots
+  ctx.fillStyle = "#b89a6a";
+  ctx.fillRect(x, y, w, h);
+  // Gradient overlay for depth
+  const grad = ctx.createRadialGradient(x + w * 0.3, y + h * 0.3, w * 0.1, x + w/2, y + h/2, w * 0.8);
+  grad.addColorStop(0, "rgba(200,170,120,0.3)");
+  grad.addColorStop(1, "rgba(140,110,70,0.3)");
+  ctx.fillStyle = grad;
+  ctx.fillRect(x, y, w, h);
+  // Fine grain dots
+  const seed = (x * 7 + y * 13) | 0;
+  for (let i = 0; i < 30; i++) {
+    const px = x + ((seed + i * 37) % w);
+    const py = y + ((seed + i * 53) % h);
+    const size = 1 + ((seed + i * 17) % 2);
+    const bright = 0.3 + ((seed + i * 23) % 40) / 100;
+    ctx.fillStyle = `rgba(80,60,30,${bright})`;
+    ctx.beginPath();
+    ctx.arc(px, py, size, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  // A few lighter specks
+  for (let i = 0; i < 12; i++) {
+    const px = x + ((seed + i * 41 + 11) % w);
+    const py = y + ((seed + i * 59 + 7) % h);
+    ctx.fillStyle = "rgba(220,200,160,0.35)";
+    ctx.beginPath();
+    ctx.arc(px, py, 1, 0, Math.PI * 2);
+    ctx.fill();
+  }
+}
+
+function drawBedrockTexture(x, y, w, h) {
+  // Gray-brown base with horizontal layered lines
+  ctx.fillStyle = "#7a6d5e";
+  ctx.fillRect(x, y, w, h);
+  // Subtle gradient
+  const grad = ctx.createLinearGradient(x, y, x, y + h);
+  grad.addColorStop(0, "rgba(120,105,85,0.4)");
+  grad.addColorStop(0.5, "rgba(90,80,65,0.2)");
+  grad.addColorStop(1, "rgba(110,95,75,0.4)");
+  ctx.fillStyle = grad;
+  ctx.fillRect(x, y, w, h);
+  // Horizontal strata lines
+  const seed = (x * 11 + y * 17) | 0;
+  ctx.strokeStyle = "rgba(50,40,30,0.4)";
+  ctx.lineWidth = 1;
+  for (let i = 0; i < 5; i++) {
+    const ly = y + 5 + ((seed + i * 29) % (h - 10));
+    const offset = ((seed + i * 13) % 8) - 4;
+    ctx.beginPath();
+    ctx.moveTo(x + 2, ly);
+    ctx.lineTo(x + w * 0.3 + offset, ly + 1);
+    ctx.lineTo(x + w * 0.6 - offset, ly - 1);
+    ctx.lineTo(x + w - 2, ly + offset * 0.5);
+    ctx.stroke();
+  }
+  // Lighter strata
+  ctx.strokeStyle = "rgba(160,140,110,0.3)";
+  for (let i = 0; i < 3; i++) {
+    const ly = y + 8 + ((seed + i * 43 + 5) % (h - 16));
+    ctx.beginPath();
+    ctx.moveTo(x + 3, ly);
+    ctx.lineTo(x + w - 3, ly + ((seed + i) % 3) - 1);
+    ctx.stroke();
+  }
+  // Tiny cracks
+  ctx.strokeStyle = "rgba(40,30,20,0.25)";
+  ctx.lineWidth = 0.5;
+  for (let i = 0; i < 4; i++) {
+    const cx = x + ((seed + i * 31) % (w - 10)) + 5;
+    const cy = y + ((seed + i * 47) % (h - 10)) + 5;
+    ctx.beginPath();
+    ctx.moveTo(cx, cy);
+    ctx.lineTo(cx + ((seed + i) % 7) - 3, cy + ((seed + i * 3) % 9) - 4);
+    ctx.stroke();
+  }
+}
+
+function drawBigRockTexture(x, y, w, h) {
+  // Dark gray base
+  ctx.fillStyle = "#3a3a42";
+  ctx.fillRect(x, y, w, h);
+  // Darker overlay
+  const grad = ctx.createRadialGradient(x + w * 0.4, y + h * 0.4, w * 0.15, x + w/2, y + h/2, w * 0.7);
+  grad.addColorStop(0, "rgba(60,58,65,0.3)");
+  grad.addColorStop(1, "rgba(30,30,35,0.4)");
+  ctx.fillStyle = grad;
+  ctx.fillRect(x, y, w, h);
+  // Irregular boulder shapes
+  const seed = (x * 19 + y * 23) | 0;
+  for (let i = 0; i < 3; i++) {
+    const bx = x + 6 + ((seed + i * 37) % (w - 20));
+    const by = y + 6 + ((seed + i * 41) % (h - 20));
+    const bw = 10 + ((seed + i * 17) % (w * 0.35));
+    const bh = 8 + ((seed + i * 29) % (h * 0.3));
+    ctx.fillStyle = `rgba(${55 + (seed + i) % 20}, ${52 + (seed + i * 3) % 15}, ${58 + (seed + i * 7) % 15}, 0.8)`;
+    ctx.beginPath();
+    // Irregular polygon
+    const pts = 5 + (seed + i) % 3;
+    for (let j = 0; j < pts; j++) {
+      const angle = (j / pts) * Math.PI * 2;
+      const rx = bw/2 * (0.6 + ((seed + i * 7 + j * 11) % 40) / 100);
+      const ry = bh/2 * (0.6 + ((seed + i * 13 + j * 7) % 40) / 100);
+      const px = bx + bw/2 + Math.cos(angle) * rx;
+      const py = by + bh/2 + Math.sin(angle) * ry;
+      if (j === 0) ctx.moveTo(px, py);
+      else ctx.lineTo(px, py);
+    }
+    ctx.closePath();
+    ctx.fill();
+    // Highlight edge
+    ctx.strokeStyle = "rgba(80,78,85,0.5)";
+    ctx.lineWidth = 1;
+    ctx.stroke();
+  }
+  // Shadow texture
+  for (let i = 0; i < 8; i++) {
+    const sx = x + ((seed + i * 53) % w);
+    const sy = y + ((seed + i * 67) % h);
+    ctx.fillStyle = "rgba(20,20,25,0.3)";
+    ctx.beginPath();
+    ctx.arc(sx, sy, 1.5, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  // Danger cross-hatch subtle
+  ctx.strokeStyle = "rgba(100,40,40,0.15)";
+  ctx.lineWidth = 0.5;
+  for (let i = 0; i < 3; i++) {
+    const lx = x + ((seed + i * 19) % (w - 6)) + 3;
+    ctx.beginPath();
+    ctx.moveTo(lx, y + 2);
+    ctx.lineTo(lx + 4, y + h - 2);
+    ctx.stroke();
+  }
+}
+
+function drawSandTexture(x, y, w, h) {
+  // Orange-yellow base
+  ctx.fillStyle = "#d4a844";
+  ctx.fillRect(x, y, w, h);
+  // Warm gradient
+  const grad = ctx.createLinearGradient(x, y, x + w, y + h);
+  grad.addColorStop(0, "rgba(230,180,80,0.3)");
+  grad.addColorStop(0.5, "rgba(200,150,50,0.15)");
+  grad.addColorStop(1, "rgba(220,170,70,0.3)");
+  ctx.fillStyle = grad;
+  ctx.fillRect(x, y, w, h);
+  // Wave/ripple lines (sand dunes)
+  const seed = (x * 29 + y * 31) | 0;
+  ctx.strokeStyle = "rgba(180,130,40,0.5)";
+  ctx.lineWidth = 1.2;
+  for (let i = 0; i < 6; i++) {
+    const baseY = y + 4 + (i * (h - 8) / 5);
+    const offset = ((seed + i * 11) % 6) - 3;
+    ctx.beginPath();
+    ctx.moveTo(x + 2, baseY + offset);
+    for (let px = 0; px <= w; px += 4) {
+      const wave = Math.sin((px + seed + i * 20) * 0.12) * 3;
+      ctx.lineTo(x + px, baseY + wave + offset);
+    }
+    ctx.stroke();
+  }
+  // Lighter ripple highlights
+  ctx.strokeStyle = "rgba(240,210,130,0.35)";
+  ctx.lineWidth = 0.8;
+  for (let i = 0; i < 4; i++) {
+    const baseY = y + 6 + ((seed + i * 37 + 3) % (h - 12));
+    ctx.beginPath();
+    for (let px = 0; px <= w; px += 5) {
+      const wave = Math.sin((px + seed + i * 30) * 0.15) * 2;
+      if (px === 0) ctx.moveTo(x + px, baseY + wave);
+      else ctx.lineTo(x + px, baseY + wave);
+    }
+    ctx.stroke();
+  }
+  // Sparse grain specks
+  for (let i = 0; i < 10; i++) {
+    const px = x + ((seed + i * 43) % w);
+    const py = y + ((seed + i * 61) % h);
+    ctx.fillStyle = "rgba(160,110,30,0.3)";
+    ctx.beginPath();
+    ctx.arc(px, py, 0.8, 0, Math.PI * 2);
+    ctx.fill();
+  }
+}
+
+function drawGrid() {
+  // Grid border lines
+  ctx.strokeStyle = "#1e2230";
+  ctx.lineWidth = 1;
+  for (let r = 0; r < ROWS; r++) {
+    for (let c = 0; c < COLS; c++) {
+      const x = gridOffX + c * cellW;
+      const y = gridOffY + r * cellH;
+      drawTerrainCell(r, c, x, y, cellW, cellH);
+      ctx.strokeRect(x + 0.5, y + 0.5, cellW - 1, cellH - 1);
+    }
+  }
+}
+
+function drawHover() {
+  if (hoveredR < 0 || hoveredC < 0) return;
+  if (gameOver) return;
+  const x = gridOffX + hoveredC * cellW;
+  const y = gridOffY + hoveredR * cellH;
+  // Check if adjacent to rover
+  const isAdj = isAdjacent(hoveredR, hoveredC);
+  const ter = TERRAIN[grid[hoveredR][hoveredC]];
+
+  if (isAdj && ter.passable) {
+    ctx.strokeStyle = "#50ffb0";
+    ctx.lineWidth = 2.5;
+    ctx.strokeRect(x + 1, y + 1, cellW - 2, cellH - 2);
+    // Semi-transparent overlay
+    ctx.fillStyle = "rgba(80, 255, 176, 0.1)";
+    ctx.fillRect(x + 1, y + 1, cellW - 2, cellH - 2);
+  } else if (isAdj && !ter.passable) {
+    ctx.strokeStyle = "#ff6b6b";
+    ctx.lineWidth = 2.5;
+    ctx.strokeRect(x + 1, y + 1, cellW - 2, cellH - 2);
+    ctx.fillStyle = "rgba(255, 107, 107, 0.1)";
+    ctx.fillRect(x + 1, y + 1, cellW - 2, cellH - 2);
+  } else {
+    ctx.strokeStyle = "rgba(255,255,255,0.2)";
+    ctx.lineWidth = 1.5;
+    ctx.strokeRect(x + 1, y + 1, cellW - 2, cellH - 2);
+  }
+}
+
+function drawPath() {
+  if (path.length < 2) return;
+  ctx.save();
+  ctx.strokeStyle = "rgba(80, 255, 176, 0.25)";
+  ctx.lineWidth = 2;
+  ctx.setLineDash([4, 4]);
+  ctx.beginPath();
+  for (let i = 0; i < path.length; i++) {
+    const px = gridOffX + path[i].c * cellW + cellW / 2;
+    const py = gridOffY + path[i].r * cellH + cellH / 2;
+    if (i === 0) ctx.moveTo(px, py);
+    else ctx.lineTo(px, py);
+  }
+  ctx.stroke();
+  ctx.restore();
+
+  // Draw step numbers on visited cells
+  ctx.font = `${Math.max(9, cellW * 0.15)}px 'Space Grotesk', sans-serif`;
+  ctx.textAlign = "left";
+  ctx.textBaseline = "top";
+  for (let i = 1; i < path.length; i++) {
+    const px = gridOffX + path[i].c * cellW + 3;
+    const py = gridOffY + path[i].r * cellH + 3;
+    ctx.fillStyle = "rgba(80, 255, 176, 0.4)";
+    ctx.fillText(String(i), px, py);
+  }
+}
+
+function drawTarget() {
+  const x = gridOffX + targetC * cellW + cellW / 2;
+  const y = gridOffY + targetR * cellH + cellH / 2;
+  const pulse = 0.6 + 0.4 * Math.sin(targetPulse * 0.06);
+  const r = cellW * 0.3;
+
+  // Wide outer glow (fills much of the cell)
+  const glowR = cellW * 0.44;
+  ctx.beginPath();
+  ctx.arc(x, y, glowR, 0, Math.PI * 2);
+  const gGrad = ctx.createRadialGradient(x, y, r * 0.3, x, y, glowR);
+  gGrad.addColorStop(0, `rgba(255, 60, 60, ${0.25 * pulse})`);
+  gGrad.addColorStop(1, `rgba(255, 60, 60, 0)`);
+  ctx.fillStyle = gGrad;
+  ctx.fill();
+
+  // Rotating dashed ring
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.rotate(targetPulse * 0.012);
+  ctx.beginPath();
+  ctx.arc(0, 0, r + 4, 0, Math.PI * 2);
+  ctx.strokeStyle = `rgba(255, 120, 120, ${0.4 * pulse})`;
+  ctx.lineWidth = 1.5;
+  ctx.setLineDash([6, 4]);
+  ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.restore();
+
+  // Crosshair lines (longer, bolder)
+  ctx.strokeStyle = `rgba(255, 100, 100, ${0.7 * pulse})`;
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(x - r - 6, y); ctx.lineTo(x - r * 0.35, y);
+  ctx.moveTo(x + r * 0.35, y); ctx.lineTo(x + r + 6, y);
+  ctx.moveTo(x, y - r - 6); ctx.lineTo(x, y - r * 0.35);
+  ctx.moveTo(x, y + r * 0.35); ctx.lineTo(x, y + r + 6);
+  ctx.stroke();
+
+  // Outer target circle
+  ctx.beginPath();
+  ctx.arc(x, y, r, 0, Math.PI * 2);
+  ctx.strokeStyle = `rgba(255, 70, 70, ${pulse})`;
+  ctx.lineWidth = 2.5;
+  ctx.stroke();
+
+  // Inner circle
+  ctx.beginPath();
+  ctx.arc(x, y, r * 0.5, 0, Math.PI * 2);
+  ctx.strokeStyle = `rgba(255, 80, 80, ${0.8 * pulse})`;
+  ctx.lineWidth = 1.5;
+  ctx.stroke();
+
+  // Center dot
+  ctx.beginPath();
+  ctx.arc(x, y, 4, 0, Math.PI * 2);
+  ctx.fillStyle = `rgba(255, 70, 70, ${pulse})`;
+  ctx.fill();
+
+  // Label above
+  ctx.font = `bold ${Math.max(10, cellW * 0.16)}px 'Space Grotesk', sans-serif`;
+  ctx.textAlign = "center";
+  ctx.textBaseline = "bottom";
+  ctx.fillStyle = `rgba(255, 100, 100, ${0.9 * pulse})`;
+  ctx.fillText(t("target"), x, y - r - 8);
+}
+
+function drawRover() {
+  let rx = roverAnimX;
+  let ry = roverAnimY;
+
+  // Apply shake
+  if (shakeTimer > 0) {
+    rx += (Math.random() - 0.5) * shakeIntensity;
+    ry += (Math.random() - 0.5) * shakeIntensity;
+  }
+
+  const s = cellW * 0.35;
+
+  // Glow under rover
+  ctx.beginPath();
+  ctx.arc(rx, ry, s + 4, 0, Math.PI * 2);
+  ctx.fillStyle = "rgba(80, 255, 176, 0.12)";
+  ctx.fill();
+
+  // Rover body (simplified top-down view)
+  ctx.save();
+  ctx.translate(rx, ry);
+
+  // Chassis
+  const bw = s * 1.2, bh = s * 1.6;
+  ctx.fillStyle = "#2a8060";
+  ctx.strokeStyle = "#50ffb0";
+  ctx.lineWidth = 1.5;
+  roundRect(ctx, -bw/2, -bh/2, bw, bh, 4);
+  ctx.fill();
+  ctx.stroke();
+
+  // Wheels (4 corners)
+  ctx.fillStyle = "#1a4a38";
+  const ww = bw * 0.25, wh = bh * 0.22;
+  // Top-left
+  roundRect(ctx, -bw/2 - ww/2, -bh/2 + 2, ww, wh, 2); ctx.fill();
+  // Top-right
+  roundRect(ctx, bw/2 - ww/2, -bh/2 + 2, ww, wh, 2); ctx.fill();
+  // Bottom-left
+  roundRect(ctx, -bw/2 - ww/2, bh/2 - wh - 2, ww, wh, 2); ctx.fill();
+  // Bottom-right
+  roundRect(ctx, bw/2 - ww/2, bh/2 - wh - 2, ww, wh, 2); ctx.fill();
+
+  // Solar panel lines on body
+  ctx.strokeStyle = "rgba(80, 255, 176, 0.4)";
+  ctx.lineWidth = 0.8;
+  for (let i = -2; i <= 2; i++) {
+    ctx.beginPath();
+    ctx.moveTo(-bw/2 + 3, i * (bh * 0.12));
+    ctx.lineTo(bw/2 - 3, i * (bh * 0.12));
+    ctx.stroke();
+  }
+
+  // Camera/antenna dot
+  ctx.beginPath();
+  ctx.arc(0, -bh/2 + 5, 2.5, 0, Math.PI * 2);
+  ctx.fillStyle = "#50ffb0";
+  ctx.fill();
+
+  ctx.restore();
+}
+
+function roundRect(ctx, x, y, w, h, r) {
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.lineTo(x + w - r, y);
+  ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+  ctx.lineTo(x + w, y + h - r);
+  ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+  ctx.lineTo(x + r, y + h);
+  ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+  ctx.lineTo(x, y + r);
+  ctx.quadraticCurveTo(x, y, x + r, y);
+  ctx.closePath();
+}
+
+function drawStartLabel() {
+  if (path.length > 0) return; // Don't show after first move
+  const x = gridOffX + roverC * cellW + cellW / 2;
+  const y = gridOffY + roverR * cellH - 8;
+  ctx.font = `bold ${Math.max(9, cellW * 0.14)}px 'Space Grotesk', sans-serif`;
+  ctx.textAlign = "center";
+  ctx.textBaseline = "bottom";
+  ctx.fillStyle = "rgba(80, 255, 176, 0.7)";
+  ctx.fillText(t("start"), x, y);
+}
+
+function drawGridCoords() {
+  ctx.font = `${Math.max(9, cellW * 0.14)}px 'Space Grotesk', sans-serif`;
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillStyle = "rgba(136, 144, 160, 0.5)";
+  // Column letters
+  for (let c = 0; c < COLS; c++) {
+    const x = gridOffX + c * cellW + cellW / 2;
+    ctx.fillText(String.fromCharCode(65 + c), x, gridOffY - 10);
+  }
+  // Row numbers
+  ctx.textAlign = "right";
+  for (let r = 0; r < ROWS; r++) {
+    const y = gridOffY + r * cellH + cellH / 2;
+    ctx.fillText(String(r + 1), gridOffX - 8, y);
+  }
+}
+
+function render() {
+  calcMetrics();
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  drawGrid();
+  drawPath();
+  drawHover();
+  drawTarget();
+  drawRover();
+  drawStartLabel();
+  drawGridCoords();
+}
+
+// ===== Animation Loop =====
+function tick() {
+  targetPulse++;
+
+  // Rover animation interpolation
+  if (isAnimating) {
+    const dx = roverTargetX - roverAnimX;
+    const dy = roverTargetY - roverAnimY;
+    const speed = 0.15;
+    roverAnimX += dx * speed;
+    roverAnimY += dy * speed;
+    if (Math.abs(dx) < 0.5 && Math.abs(dy) < 0.5) {
+      roverAnimX = roverTargetX;
+      roverAnimY = roverTargetY;
+      isAnimating = false;
+    }
+  }
+
+  // Shake decay
+  if (shakeTimer > 0) {
+    shakeTimer--;
+    shakeIntensity *= 0.92;
+  }
+
+  render();
+  requestAnimationFrame(tick);
+}
+
+// ===== Game Logic =====
+function isAdjacent(r, c) {
+  return (Math.abs(r - roverR) + Math.abs(c - roverC)) === 1;
+}
+
+function manhattan(r1, c1, r2, c2) {
+  return Math.abs(r1 - r2) + Math.abs(c1 - c2);
+}
+
+function moveRover(r, c) {
+  if (gameOver || isAnimating) return;
+  if (!isAdjacent(r, c)) {
+    showToast(t("notAdjacentMsg"));
+    return;
+  }
+
+  const ter = TERRAIN[grid[r][c]];
+
+  if (!ter.passable) {
+    showToast(t("blockedMsg"));
+    triggerShake(6, 8);
+    return;
+  }
+
+  let cost = ter.cost;
+  let stuck = false;
+
+  // Check energy
+  if (energy < cost) {
+    showToast(t("noEnergyMsg"));
+    return;
+  }
+
+  // Move
+  roverR = r;
+  roverC = c;
+  energy -= cost;
+  steps++;
+  path.push({r, c});
+
+  // Update stats
+  if (ter.id === "soil") stats.soil++;
+  else if (ter.id === "bedrock") stats.bedrock++;
+  else if (ter.id === "sand") stats.sand++;
+
+  // Animate
+  roverTargetX = gridOffX + c * cellW + cellW / 2;
+  roverTargetY = gridOffY + r * cellH + cellH / 2;
+  isAnimating = true;
+
+  // Sand stuck check
+  if (ter.id === "sand" && Math.random() < ter.stuckChance) {
+    stuck = true;
+    stats.stuckCount++;
+    energy -= 3;
+    showToast(t("stuckMsg"));
+    triggerShake(15, 12);
+  }
+
+  // Clamp energy
+  if (energy < 0) energy = 0;
+
+  updateHUD();
+
+  // Check win/lose
+  if (roverR === targetR && roverC === targetC) {
+    setTimeout(() => showWin(), 400);
+  } else if (energy <= 0) {
+    setTimeout(() => showLose(), 400);
+  }
+}
+
+function triggerShake(duration, intensity) {
+  shakeTimer = duration;
+  shakeIntensity = intensity;
+}
+
+// ===== HUD =====
+function updateHUD() {
+  const pct = (energy / MAX_ENERGY) * 100;
+  const bar = document.getElementById("energyBarInner");
+  bar.style.width = pct + "%";
+  bar.className = "energy-bar-inner" + (pct <= 25 ? " low" : pct <= 50 ? " mid" : "");
+  document.getElementById("energyBarText").textContent = energy + " / " + MAX_ENERGY;
+
+  document.getElementById("hudSteps").textContent = steps;
+
+  const terrainId = grid[roverR][roverC];
+  document.getElementById("hudTerrain").textContent = t(terrainId);
+  document.getElementById("hudTerrain").style.color =
+    terrainId === "sand" ? "#d4a844" :
+    terrainId === "bedrock" ? "#a09080" :
+    terrainId === "bigrock" ? "#ff6b6b" : "#50ffb0";
+
+  const dist = manhattan(roverR, roverC, targetR, targetC);
+  const distEl = document.getElementById("hudDist");
+  distEl.textContent = dist === 0 ? "--" : dist;
+  distEl.className = "hud-value" + (energy <= 5 ? " warning" : "");
+}
+
+function updateLabels() {
+  document.getElementById("headerTitle").textContent = t("title");
+  document.getElementById("btnNewMap").textContent = t("newMap");
+  document.getElementById("btnLang").textContent = t("langBtn");
+  document.getElementById("labelEnergy").textContent = t("energy");
+  document.getElementById("labelSteps").textContent = t("steps");
+  document.getElementById("labelTerrain").textContent = t("terrain");
+  document.getElementById("labelDist").textContent = t("dist");
+  document.getElementById("legendTitle").textContent = t("legend");
+
+  // Rebuild legend
+  const items = document.getElementById("legendItems");
+  items.innerHTML = "";
+  const terrains = ["soil", "bedrock", "bigrock", "sand"];
+  for (const tid of terrains) {
+    const item = document.createElement("div");
+    item.className = "legend-item";
+
+    const swatch = document.createElement("canvas");
+    swatch.className = "legend-swatch";
+    swatch.width = 28; swatch.height = 28;
+    const sctx = swatch.getContext("2d");
+    // Draw mini texture
+    drawLegendSwatch(sctx, tid, 28, 28);
+
+    const info = document.createElement("div");
+    info.className = "legend-info";
+    const name = document.createElement("div");
+    name.className = "legend-name";
+    name.textContent = t(tid);
+    const desc = document.createElement("div");
+    desc.className = "legend-desc";
+    desc.textContent = t(tid + "Desc");
+    info.appendChild(name);
+    info.appendChild(desc);
+
+    item.appendChild(swatch);
+    item.appendChild(info);
+    items.appendChild(item);
+  }
+
+  updateHUD();
+}
+
+function drawLegendSwatch(sctx, tid, w, h) {
+  // Small version of terrain texture
+  const origCtx = ctx;
+  ctx = sctx;
+  if (tid === "soil") drawSoilTexture(0, 0, w, h);
+  else if (tid === "bedrock") drawBedrockTexture(0, 0, w, h);
+  else if (tid === "bigrock") drawBigRockTexture(0, 0, w, h);
+  else if (tid === "sand") drawSandTexture(0, 0, w, h);
+  ctx = origCtx;
+}
+
+// ===== Toast =====
+let toastTimeout = null;
+function showToast(msg, isInfo) {
+  const el = document.getElementById("toast");
+  el.textContent = msg;
+  el.className = "toast show" + (isInfo ? " info" : "");
+  clearTimeout(toastTimeout);
+  toastTimeout = setTimeout(() => { el.className = "toast"; }, 2500);
+}
+
+// ===== Overlays =====
+function showWin() {
+  gameOver = true;
+  const optCost = bfsShortestCost();
+  const actualCost = MAX_ENERGY - energy;
+  const rawEff = optCost < Infinity && actualCost > 0 ? (optCost / actualCost) * 100 : 0;
+  const efficiency = optCost < Infinity ? Math.min(100, Math.round(rawEff)) : "??";
+
+  const overlay = document.getElementById("overlay");
+  document.getElementById("overlayTitle").textContent = t("winTitle");
+  document.getElementById("overlayTitle").className = "overlay-title win";
+
+  let body = `<p style="margin-bottom:12px;color:#50ffb0;">${t("winBody")}</p>`;
+  body += statLine(t("statSteps"), steps);
+  body += statLine(t("statEnergy"), energy + " / " + MAX_ENERGY);
+  body += statLine(t("statSoil"), stats.soil);
+  body += statLine(t("statBedrock"), stats.bedrock);
+  body += statLine(t("statSand"), stats.sand);
+  body += statLine(t("statStuck"), stats.stuckCount);
+  body += statLine(t("statEfficiency"), efficiency + "%");
+
+  document.getElementById("overlayBody").innerHTML = body;
+  document.getElementById("overlayBtn").textContent = t("playAgain");
+  overlay.className = "overlay show";
+}
+
+function showLose() {
+  gameOver = true;
+  const overlay = document.getElementById("overlay");
+  document.getElementById("overlayTitle").textContent = t("loseTitle");
+  document.getElementById("overlayTitle").className = "overlay-title lose";
+
+  let body = `<p style="margin-bottom:12px;color:#ff6b6b;">${t("loseBody")}</p>`;
+  body += statLine(t("statSteps"), steps);
+  body += statLine(t("statEnergy"), "0 / " + MAX_ENERGY);
+  body += statLine(t("statSoil"), stats.soil);
+  body += statLine(t("statBedrock"), stats.bedrock);
+  body += statLine(t("statSand"), stats.sand);
+  body += statLine(t("statStuck"), stats.stuckCount);
+
+  // Show optimal cost hint
+  const optCost = bfsShortestCost();
+  if (optCost < Infinity) {
+    body += statLine(lang === "cn" ? "最优路径预估消耗" : "Optimal Path Expected Cost",
+                     optCost.toFixed(1));
+  }
+
+  document.getElementById("overlayBody").innerHTML = body;
+  document.getElementById("overlayBtn").textContent = t("playAgain");
+  overlay.className = "overlay show";
+}
+
+function statLine(label, value) {
+  return `<div class="overlay-stat"><span class="overlay-stat-label">${label}</span><span class="overlay-stat-value">${value}</span></div>`;
+}
+
+function hideOverlay() {
+  document.getElementById("overlay").className = "overlay";
+}
+
+// ===== Mouse Events =====
+function getCellFromMouse(e) {
+  const rect = canvas.getBoundingClientRect();
+  const mx = e.clientX - rect.left;
+  const my = e.clientY - rect.top;
+  const c = Math.floor((mx - gridOffX) / cellW);
+  const r = Math.floor((my - gridOffY) / cellH);
+  if (r >= 0 && r < ROWS && c >= 0 && c < COLS) return {r, c};
+  return null;
+}
+
+function handleMouseMove(e) {
+  const cell = getCellFromMouse(e);
+  const tooltip = document.getElementById("tooltip");
+  const hoverBar = document.getElementById("hoverBar");
+
+  if (!cell || gameOver) {
+    hoveredR = -1; hoveredC = -1;
+    tooltip.style.display = "none";
+    hoverBar.style.display = "none";
+    canvas.style.cursor = "default";
+    return;
+  }
+
+  hoveredR = cell.r;
+  hoveredC = cell.c;
+  const ter = TERRAIN[grid[cell.r][cell.c]];
+  const terrainName = t(grid[cell.r][cell.c]);
+  const adj = isAdjacent(cell.r, cell.c);
+
+  // Tooltip
+  document.getElementById("tooltipTerrain").textContent = terrainName;
+
+  if (ter.passable) {
+    let costText = "";
+    if (ter.id === "soil") costText = t("costSoil");
+    else if (ter.id === "bedrock") costText = t("costBedrock");
+    else if (ter.id === "sand") costText = t("costSand");
+    document.getElementById("tooltipCost").textContent = costText;
+    document.getElementById("tooltipWarn").textContent =
+      ter.id === "sand" ? t("warnSand") : "";
+  } else {
+    document.getElementById("tooltipCost").textContent = t("costBigrock");
+    document.getElementById("tooltipWarn").textContent = t("warnBigrock");
+  }
+
+  tooltip.style.display = "block";
+  // Position tooltip
+  let tx = e.clientX + 16;
+  let ty = e.clientY - 10;
+  if (tx + 200 > window.innerWidth) tx = e.clientX - 210;
+  if (ty + 80 > window.innerHeight) ty = e.clientY - 80;
+  tooltip.style.left = tx + "px";
+  tooltip.style.top = ty + "px";
+
+  // Hover bar
+  if (ter.passable) {
+    hoverBar.textContent = t("hoverInfo")
+      .replace("{terrain}", terrainName)
+      .replace("{cost}", ter.cost);
+  } else {
+    hoverBar.textContent = t("hoverImpassable").replace("{terrain}", terrainName);
+  }
+  hoverBar.style.display = "block";
+
+  // Cursor
+  if (adj && ter.passable) canvas.style.cursor = "pointer";
+  else if (adj && !ter.passable) canvas.style.cursor = "not-allowed";
+  else canvas.style.cursor = "default";
+}
+
+function handleClick(e) {
+  const cell = getCellFromMouse(e);
+  if (!cell || gameOver) return;
+  moveRover(cell.r, cell.c);
+}
+
+// ===== Keyboard Support =====
+function handleKeyDown(e) {
+  if (gameOver || isAnimating) return;
+  let nr = roverR, nc = roverC;
+  if (e.key === "ArrowUp" || e.key === "w" || e.key === "W") nr--;
+  else if (e.key === "ArrowDown" || e.key === "s" || e.key === "S") nr++;
+  else if (e.key === "ArrowLeft" || e.key === "a" || e.key === "A") nc--;
+  else if (e.key === "ArrowRight" || e.key === "d" || e.key === "D") nc++;
+  else return;
+  e.preventDefault();
+  if (nr >= 0 && nr < ROWS && nc >= 0 && nc < COLS) {
+    moveRover(nr, nc);
+  }
+}
+
+// ===== Init / Reset =====
+function initGame() {
+  generateMap();
+  startR = roverR; startC = roverC;
+  energy = MAX_ENERGY;
+  steps = 0;
+  gameOver = false;
+  path = [{r: roverR, c: roverC}];
+  stats = { soil: 0, bedrock: 0, sand: 0, stuckCount: 0 };
+  hoveredR = -1; hoveredC = -1;
+  shakeTimer = 0; shakeIntensity = 0;
+
+  calcMetrics();
+  roverAnimX = gridOffX + roverC * cellW + cellW / 2;
+  roverAnimY = gridOffY + roverR * cellH + cellH / 2;
+  roverTargetX = roverAnimX;
+  roverTargetY = roverAnimY;
+  isAnimating = false;
+
+  hideOverlay();
+  updateLabels();
+}
+
+// ===== Touch Support =====
+function handleTouchStart(e) {
+  if (e.touches.length !== 1) return;
+  const touch = e.touches[0];
+  const cell = getCellFromMouse(touch);
+  if (!cell || gameOver) return;
+  e.preventDefault();
+  moveRover(cell.r, cell.c);
+}
+
+// ===== Boot =====
+window.addEventListener("DOMContentLoaded", () => {
+  canvas = document.getElementById("gameCanvas");
+  ctx = canvas.getContext("2d");
+
+  initGame();
+  tick();
+
+  canvas.addEventListener("mousemove", handleMouseMove);
+  canvas.addEventListener("click", handleClick);
+  canvas.addEventListener("touchstart", handleTouchStart, {passive: false});
+  canvas.addEventListener("mouseleave", () => {
+    hoveredR = -1; hoveredC = -1;
+    document.getElementById("tooltip").style.display = "none";
+    document.getElementById("hoverBar").style.display = "none";
+    canvas.style.cursor = "default";
+  });
+
+  document.addEventListener("keydown", handleKeyDown);
+
+  document.getElementById("btnNewMap").addEventListener("click", initGame);
+  document.getElementById("overlayBtn").addEventListener("click", initGame);
+
+  document.getElementById("btnLang").addEventListener("click", () => {
+    lang = lang === "cn" ? "en" : "cn";
+    updateLabels();
+  });
+
+  window.addEventListener("resize", () => {
+    calcMetrics();
+    roverAnimX = gridOffX + roverC * cellW + cellW / 2;
+    roverAnimY = gridOffY + roverR * cellH + cellH / 2;
+    roverTargetX = roverAnimX;
+    roverTargetY = roverAnimY;
+  });
+});
+</script>
+</body>
+</html>

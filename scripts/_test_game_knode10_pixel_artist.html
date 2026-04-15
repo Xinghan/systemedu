@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pixel Artist</title>
+<script>window.__systemedu_resize_patch_optout=true;</script>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=Inter:wght@400;500&family=Noto+Sans+SC:wght@400;700&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box;}
+html,body{width:100%;height:100vh;overflow:hidden;background:#131313;color:#e5e2e1;font-family:'Inter','Noto Sans SC',sans-serif;}
+.wrapper{display:flex;flex-direction:column;height:100vh;overflow:hidden;}
+.header{display:flex;justify-content:space-between;align-items:center;padding:10px 16px 6px;flex-shrink:0;}
+.header-left h1{font-family:'Space Grotesk',sans-serif;font-size:clamp(13px,2vw,17px);font-weight:700;color:#ffb59c;text-shadow:0 0 12px rgba(255,127,80,0.3);letter-spacing:-0.02em;}
+.header-left .sub{font-size:10px;color:#dec0b6;letter-spacing:0.1em;text-transform:uppercase;}
+.header-right{display:flex;gap:8px;align-items:center;}
+.hdr-btn{font-family:'Space Grotesk',sans-serif;font-size:11px;font-weight:700;padding:4px 12px;border:none;cursor:pointer;background:rgba(32,31,31,0.85);backdrop-filter:blur(12px);color:#dec0b6;letter-spacing:0.08em;text-transform:uppercase;}
+.hdr-btn:hover{color:#ffb59c;}
+.main{flex:1;min-height:0;display:flex;gap:16px;align-items:center;justify-content:center;padding:6px 16px;overflow:hidden;}
+.canvas-col{display:flex;flex-direction:column;align-items:center;gap:6px;}
+.grid-label{font-family:'Space Grotesk',sans-serif;font-size:11px;color:#dec0b6;text-align:center;letter-spacing:0.08em;text-transform:uppercase;}
+canvas{border:1px solid #454747;cursor:crosshair;display:block;image-rendering:pixelated;}
+.tools{display:flex;flex-direction:column;align-items:center;gap:10px;flex-shrink:0;}
+.palette-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:3px;}
+.color-swatch{width:22px;height:22px;border:2px solid transparent;cursor:pointer;transition:transform 0.1s;}
+.color-swatch.active{border-color:#ffb59c;transform:scale(1.15);}
+.color-swatch:hover{transform:scale(1.1);}
+.coord-display{font-family:'Space Grotesk',sans-serif;font-size:12px;color:#ffb59c;text-align:center;min-height:18px;}
+.tool-btns{display:flex;gap:6px;}
+.tool-btn{font-family:'Space Grotesk',sans-serif;font-size:10px;font-weight:700;padding:4px 10px;border:1px solid #454747;background:none;color:#dec0b6;cursor:pointer;letter-spacing:0.05em;text-transform:uppercase;}
+.tool-btn:hover{border-color:#ffb59c;color:#ffb59c;}
+.tool-btn.active{border-color:#ffb59c;color:#ffb59c;background:rgba(255,127,80,0.1);}
+.pixel-count{font-family:'Space Grotesk',sans-serif;font-size:11px;color:#dec0b6;text-align:center;}
+.pixel-count span{color:#ffb59c;font-weight:700;}
+.hud{height:44px;display:flex;align-items:center;justify-content:space-around;background:rgba(0,0,0,0.55);backdrop-filter:blur(12px);padding:0 16px;flex-shrink:0;}
+.hud-item{text-align:center;}
+.hud-label{font-family:'Space Grotesk',sans-serif;font-size:9px;letter-spacing:0.15em;text-transform:uppercase;color:#dec0b6;}
+.hud-val{font-family:'Space Grotesk',sans-serif;font-size:13px;font-weight:700;color:#ffb59c;}
+</style>
+</head>
+<body>
+<div class="wrapper">
+  <div class="header">
+    <div class="header-left">
+      <h1 id="gameTitle"></h1>
+      <div class="sub" id="gameSub"></div>
+    </div>
+    <div class="header-right">
+      <button class="hdr-btn" id="undoBtn">UNDO</button>
+      <button class="hdr-btn" id="clearBtn">CLEAR</button>
+      <button class="hdr-btn" id="langBtn">CN</button>
+    </div>
+  </div>
+
+  <div class="main">
+    <div class="canvas-col">
+      <div class="grid-label" id="canvasLabel"></div>
+      <canvas id="artCanvas"></canvas>
+      <div class="pixel-count" id="pixelInfo"></div>
+    </div>
+    <div class="tools">
+      <div class="coord-display" id="coordDisplay">--</div>
+      <div class="palette-grid" id="palette"></div>
+      <div class="tool-btns">
+        <button class="tool-btn active" id="penBtn" data-tool="pen">PEN</button>
+        <button class="tool-btn" id="eraserBtn" data-tool="eraser">ERASER</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="hud">
+    <div class="hud-item"><div class="hud-label" id="hudL1"></div><div class="hud-val" id="hudV1"></div></div>
+    <div class="hud-item"><div class="hud-label" id="hudL2"></div><div class="hud-val" id="hudV2"></div></div>
+    <div class="hud-item"><div class="hud-label" id="hudL3"></div><div class="hud-val" id="hudV3"></div></div>
+    <div class="hud-item"><div class="hud-label" id="hudL4"></div><div class="hud-val" id="hudV4"></div></div>
+  </div>
+</div>
+
+<script>
+(function() {
+  'use strict';
+
+  var LANG = 'cn';
+  var I18N = {
+    title:      {en:'PIXEL ARTIST', cn:'\u50cf\u7d20\u753b\u5bb6'},
+    subtitle:   {en:'CREATE YOUR 16x16 MARS PIXEL ART', cn:'\u521b\u4f5c\u4f60\u7684 16x16 \u706b\u661f\u50cf\u7d20\u753b'},
+    canvas:     {en:'16 x 16 CANVAS', cn:'16 x 16 \u753b\u5e03'},
+    undo:       {en:'UNDO', cn:'\u64a4\u9500'},
+    clear:      {en:'CLEAR', cn:'\u6e05\u9664'},
+    pen:        {en:'PEN', cn:'\u753b\u7b14'},
+    eraser:     {en:'ERASER', cn:'\u6a61\u76ae\u64e6'},
+    painted:    {en:'Painted:', cn:'\u5df2\u753b:'},
+    total:      {en:'Total:', cn:'\u603b\u6570:'},
+    coord:      {en:'Coord:', cn:'\u5750\u6807:'},
+    hudGrid:    {en:'GRID', cn:'\u7f51\u683c'},
+    hudPainted: {en:'PAINTED', cn:'\u5df2\u753b'},
+    hudTotal:   {en:'TOTAL PX', cn:'\u603b\u50cf\u7d20'},
+    hudCoord:   {en:'HOVER', cn:'\u60ac\u505c'},
+  };
+  function t(key) { return (I18N[key] && I18N[key][LANG]) || key; }
+
+  var RES = 16;
+  var PALETTE = [
+    '#0c0e12', '#1a1410', '#2a1f15', '#3d2b1a',
+    '#6b3a1f', '#8B4513', '#A0522D', '#D2691E',
+    '#C4451A', '#ff7f50', '#ffb59c', '#ffd4c4',
+    '#454747', '#808080', '#B0B0B0', '#e0e0e0',
+  ];
+
+  var grid = [];
+  var history = [];
+  var selectedColor = 5;
+  var currentTool = 'pen';
+  var painted = 0;
+  var CANVAS_SIZE = 320;
+
+  var canvas = document.getElementById('artCanvas');
+  var ctx = canvas.getContext('2d');
+
+  function initGrid() {
+    grid = [];
+    history = [];
+    painted = 0;
+    for (var r = 0; r < RES; r++) {
+      grid[r] = [];
+      for (var c = 0; c < RES; c++) grid[r][c] = -1;
+    }
+  }
+
+  function resizeCanvas() {
+    var main = document.querySelector('.main');
+    var rect = main.getBoundingClientRect();
+    // Use 80% of the shorter dimension of .main as canvas size
+    // Tools panel is ~120px wide, subtract that plus gaps
+    var availH = rect.height - 40;
+    var availW = rect.width - 180;
+    var sz = Math.min(availW, availH);
+    sz = Math.max(sz, 120);
+    CANVAS_SIZE = Math.floor(sz);
+    var dpr = Math.min(window.devicePixelRatio || 1, 2);
+    canvas.width = CANVAS_SIZE * dpr;
+    canvas.height = CANVAS_SIZE * dpr;
+    canvas.style.width = CANVAS_SIZE + 'px';
+    canvas.style.height = CANVAS_SIZE + 'px';
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    drawGrid();
+  }
+
+  function drawGrid() {
+    var cellSz = CANVAS_SIZE / RES;
+    ctx.clearRect(0, 0, CANVAS_SIZE, CANVAS_SIZE);
+    painted = 0;
+    for (var r = 0; r < RES; r++) {
+      for (var c = 0; c < RES; c++) {
+        var x = c * cellSz, y = r * cellSz;
+        if (grid[r][c] >= 0) {
+          ctx.fillStyle = PALETTE[grid[r][c]];
+          ctx.fillRect(x, y, cellSz, cellSz);
+          painted++;
+        } else {
+          // Checkerboard empty pattern
+          var dark = (r + c) % 2 === 0;
+          ctx.fillStyle = dark ? 'rgba(255,255,255,0.03)' : 'rgba(255,255,255,0.06)';
+          ctx.fillRect(x, y, cellSz, cellSz);
+        }
+        ctx.strokeStyle = 'rgba(255,255,255,0.1)';
+        ctx.lineWidth = 0.5;
+        ctx.strokeRect(x, y, cellSz, cellSz);
+      }
+    }
+    updateInfo();
+  }
+
+  function updateInfo() {
+    var total = RES * RES;
+    document.getElementById('pixelInfo').innerHTML =
+      t('painted') + ' <span>' + painted + '</span> / ' + t('total') + ' <span>' + total + '</span>';
+    document.getElementById('hudV1').textContent = RES + 'x' + RES;
+    document.getElementById('hudV2').textContent = painted.toString();
+    document.getElementById('hudV3').textContent = total.toString();
+  }
+
+  function getCellFromEvent(e) {
+    var rect = canvas.getBoundingClientRect();
+    var x = (e.clientX - rect.left) / rect.width * CANVAS_SIZE;
+    var y = (e.clientY - rect.top) / rect.height * CANVAS_SIZE;
+    var cellSz = CANVAS_SIZE / RES;
+    var col = Math.max(0, Math.min(Math.floor(x / cellSz), RES - 1));
+    var row = Math.max(0, Math.min(Math.floor(y / cellSz), RES - 1));
+    return {r: row, c: col};
+  }
+
+  function applyTool(r, c) {
+    if (r < 0 || r >= RES || c < 0 || c >= RES) return;
+    var old = grid[r][c];
+    var newVal = currentTool === 'eraser' ? -1 : selectedColor;
+    if (old === newVal) return;
+    history.push({r:r, c:c, old:old});
+    grid[r][c] = newVal;
+    drawGrid();
+  }
+
+  var isPainting = false;
+  canvas.addEventListener('mousedown', function(e) {
+    isPainting = true;
+    var cell = getCellFromEvent(e);
+    applyTool(cell.r, cell.c);
+  });
+  canvas.addEventListener('mousemove', function(e) {
+    var cell = getCellFromEvent(e);
+    document.getElementById('coordDisplay').textContent = t('coord') + ' (' + cell.c + ', ' + cell.r + ')';
+    document.getElementById('hudV4').textContent = '(' + cell.c + ',' + cell.r + ')';
+    if (isPainting) applyTool(cell.r, cell.c);
+  });
+  document.addEventListener('mouseup', function() { isPainting = false; });
+  canvas.addEventListener('mouseleave', function() {
+    document.getElementById('coordDisplay').textContent = '--';
+    document.getElementById('hudV4').textContent = '--';
+  });
+
+  canvas.addEventListener('touchstart', function(e) {
+    e.preventDefault(); isPainting = true;
+    var cell = getCellFromEvent(e.touches[0]);
+    applyTool(cell.r, cell.c);
+  }, {passive:false});
+  canvas.addEventListener('touchmove', function(e) {
+    e.preventDefault();
+    var cell = getCellFromEvent(e.touches[0]);
+    document.getElementById('coordDisplay').textContent = t('coord') + ' (' + cell.c + ', ' + cell.r + ')';
+    if (isPainting) applyTool(cell.r, cell.c);
+  }, {passive:false});
+  canvas.addEventListener('touchend', function() { isPainting = false; });
+
+  document.getElementById('undoBtn').addEventListener('click', function() {
+    if (!history.length) return;
+    var last = history.pop();
+    grid[last.r][last.c] = last.old;
+    drawGrid();
+  });
+  document.getElementById('clearBtn').addEventListener('click', function() { initGrid(); drawGrid(); });
+
+  // Tool buttons
+  document.querySelectorAll('.tool-btn').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      currentTool = btn.dataset.tool;
+      document.querySelectorAll('.tool-btn').forEach(function(b) { b.classList.remove('active'); });
+      btn.classList.add('active');
+    });
+  });
+
+  // Language
+  document.getElementById('langBtn').addEventListener('click', function() {
+    LANG = LANG === 'cn' ? 'en' : 'cn';
+    this.textContent = LANG === 'cn' ? 'CN' : 'EN';
+    applyI18n();
+  });
+
+  // Palette
+  function buildPalette() {
+    var container = document.getElementById('palette');
+    container.innerHTML = '';
+    for (var i = 0; i < PALETTE.length; i++) {
+      var sw = document.createElement('div');
+      sw.className = 'color-swatch' + (i === selectedColor ? ' active' : '');
+      sw.style.background = PALETTE[i];
+      sw.dataset.idx = i;
+      sw.addEventListener('click', function() {
+        selectedColor = parseInt(this.dataset.idx);
+        currentTool = 'pen';
+        document.querySelectorAll('.tool-btn').forEach(function(b) { b.classList.toggle('active', b.dataset.tool === 'pen'); });
+        document.querySelectorAll('.color-swatch').forEach(function(s) { s.classList.remove('active'); });
+        this.classList.add('active');
+      });
+      container.appendChild(sw);
+    }
+  }
+
+  function applyI18n() {
+    document.getElementById('gameTitle').textContent = t('title');
+    document.getElementById('gameSub').textContent = t('subtitle');
+    document.getElementById('canvasLabel').textContent = t('canvas');
+    document.getElementById('undoBtn').textContent = t('undo');
+    document.getElementById('clearBtn').textContent = t('clear');
+    document.getElementById('penBtn').textContent = t('pen');
+    document.getElementById('eraserBtn').textContent = t('eraser');
+    document.getElementById('hudL1').textContent = t('hudGrid');
+    document.getElementById('hudL2').textContent = t('hudPainted');
+    document.getElementById('hudL3').textContent = t('hudTotal');
+    document.getElementById('hudL4').textContent = t('hudCoord');
+    updateInfo();
+  }
+
+  // Init
+  buildPalette();
+  initGrid();
+  applyI18n();
+  requestAnimationFrame(function() { resizeCanvas(); });
+  window.addEventListener('resize', function() { resizeCanvas(); });
+})();
+</script>
+</body>
+</html>

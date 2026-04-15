@@ -1,0 +1,353 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mars Terrain Sorter</title>
+<script>window.__systemedu_resize_patch_optout=true;</script>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=Inter:wght@400;500&family=Noto+Sans+SC:wght@400;700&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box;}
+html,body{width:100%;height:100vh;overflow:hidden;background:#131313;color:#e5e2e1;font-family:'Inter','Noto Sans SC',sans-serif;}
+.wrapper{display:flex;flex-direction:column;height:100vh;overflow:hidden;}
+.header{display:flex;justify-content:space-between;align-items:center;padding:10px 16px 6px;flex-shrink:0;}
+.header-left h1{font-family:'Space Grotesk',sans-serif;font-size:clamp(13px,2vw,17px);font-weight:700;color:#ffb59c;text-shadow:0 0 12px rgba(255,127,80,0.3);letter-spacing:-0.02em;}
+.header-left .sub{font-size:10px;color:#dec0b6;letter-spacing:0.1em;text-transform:uppercase;}
+.header-right{display:flex;gap:8px;align-items:center;}
+.hdr-btn{font-family:'Space Grotesk',sans-serif;font-size:11px;font-weight:700;padding:4px 12px;border:none;cursor:pointer;background:rgba(32,31,31,0.85);backdrop-filter:blur(12px);color:#dec0b6;letter-spacing:0.08em;text-transform:uppercase;}
+.hdr-btn:hover{color:#ffb59c;}
+.main{flex:1;min-height:0;display:flex;flex-direction:column;gap:8px;padding:6px 16px;overflow:hidden;}
+.prompt-bar{display:flex;align-items:center;justify-content:center;gap:12px;flex-shrink:0;}
+.prompt-text{font-family:'Space Grotesk',sans-serif;font-size:13px;font-weight:700;color:#ffb59c;}
+.card-area{flex:1;min-height:0;display:flex;align-items:center;justify-content:center;}
+.card-inner{position:relative;}
+.terrain-card{display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:pointer;border:2px solid #454747;background:rgba(32,31,31,0.6);transition:border-color 0.2s,transform 0.15s;}
+.terrain-card:hover{border-color:#ffb59c;transform:scale(1.02);}
+.terrain-card canvas{display:block;image-rendering:pixelated;}
+.terrain-card .card-name{font-family:'Space Grotesk',sans-serif;font-size:11px;color:#dec0b6;padding:4px 0;text-align:center;letter-spacing:0.05em;}
+.categories{display:flex;gap:8px;justify-content:center;flex-shrink:0;flex-wrap:wrap;}
+.cat-btn{font-family:'Space Grotesk',sans-serif;font-size:11px;font-weight:700;padding:6px 14px;border:2px solid #454747;background:none;color:#dec0b6;cursor:pointer;letter-spacing:0.06em;text-transform:uppercase;transition:all 0.2s;}
+.cat-btn:hover{border-color:#ffb59c;color:#ffb59c;}
+.cat-btn.correct{border-color:#44cc44;color:#44cc44;background:rgba(68,204,68,0.1);}
+.cat-btn.wrong{border-color:#ff4444;color:#ff4444;background:rgba(255,68,68,0.1);}
+.feedback{font-family:'Space Grotesk',sans-serif;font-size:12px;font-weight:700;text-align:center;min-height:20px;color:#ffb59c;flex-shrink:0;}
+.hud{height:44px;display:flex;align-items:center;justify-content:space-around;background:rgba(0,0,0,0.55);backdrop-filter:blur(12px);padding:0 16px;flex-shrink:0;}
+.hud-item{text-align:center;}
+.hud-label{font-family:'Space Grotesk',sans-serif;font-size:9px;letter-spacing:0.15em;text-transform:uppercase;color:#dec0b6;}
+.hud-val{font-family:'Space Grotesk',sans-serif;font-size:13px;font-weight:700;color:#ffb59c;}
+</style>
+</head>
+<body>
+<div class="wrapper">
+  <div class="header">
+    <div class="header-left">
+      <h1 id="gameTitle"></h1>
+      <div class="sub" id="gameSub"></div>
+    </div>
+    <div class="header-right">
+      <button class="hdr-btn" id="langBtn">CN</button>
+    </div>
+  </div>
+
+  <div class="main">
+    <div class="prompt-bar">
+      <div class="prompt-text" id="promptText"></div>
+    </div>
+    <div class="card-area">
+      <div class="card-inner" id="cardInner">
+        <div class="terrain-card" id="terrainCard">
+          <canvas id="terrainCanvas"></canvas>
+          <div class="card-name" id="cardName"></div>
+        </div>
+      </div>
+    </div>
+    <div class="categories" id="categories"></div>
+    <div class="feedback" id="feedback"></div>
+  </div>
+
+  <div class="hud">
+    <div class="hud-item"><div class="hud-label" id="hudL1"></div><div class="hud-val" id="hudV1"></div></div>
+    <div class="hud-item"><div class="hud-label" id="hudL2"></div><div class="hud-val" id="hudV2"></div></div>
+    <div class="hud-item"><div class="hud-label" id="hudL3"></div><div class="hud-val" id="hudV3"></div></div>
+    <div class="hud-item"><div class="hud-label" id="hudL4"></div><div class="hud-val" id="hudV4"></div></div>
+  </div>
+</div>
+
+<script>
+(function() {
+  'use strict';
+
+  var LANG = 'cn';
+  var I18N = {
+    title:      {en:'MARS TERRAIN SORTER', cn:'\u706b\u661f\u5730\u5f62\u5206\u7c7b\u5668'},
+    subtitle:   {en:'CLASSIFY EACH TERRAIN CORRECTLY', cn:'\u6b63\u786e\u5206\u7c7b\u6bcf\u79cd\u5730\u5f62'},
+    prompt:     {en:'What terrain type is this?', cn:'\u8fd9\u662f\u4ec0\u4e48\u5730\u5f62\uff1f'},
+    correct:    {en:'Correct!', cn:'\u6b63\u786e!'},
+    wrong:      {en:'Wrong! It is: ', cn:'\u9519\u8bef! \u5b83\u662f: '},
+    complete:   {en:'All terrains classified!', cn:'\u6240\u6709\u5730\u5f62\u5206\u7c7b\u5b8c\u6210!'},
+    score:      {en:'Score: ', cn:'\u5f97\u5206: '},
+    hudRound:   {en:'TERRAIN', cn:'\u5730\u5f62'},
+    hudCorrect: {en:'CORRECT', cn:'\u6b63\u786e'},
+    hudWrong:   {en:'WRONG', cn:'\u9519\u8bef'},
+    hudScore:   {en:'SCORE', cn:'\u5f97\u5206'},
+    crater:     {en:'Crater', cn:'\u649e\u51fb\u5751'},
+    canyon:     {en:'Canyon', cn:'\u5ce1\u8c37'},
+    dune:       {en:'Sand Dune', cn:'\u6c99\u4e18'},
+    volcano:    {en:'Volcano', cn:'\u706b\u5c71'},
+    plain:      {en:'Plain', cn:'\u5e73\u539f'},
+    rockfield:  {en:'Rock Field', cn:'\u5ca9\u77f3\u5730'},
+    difficulty: {en:'Difficulty: ', cn:'\u901a\u884c\u96be\u5ea6: '},
+    easy:       {en:'EASY', cn:'\u5bb9\u6613'},
+    medium:     {en:'MEDIUM', cn:'\u4e2d\u7b49'},
+    hard:       {en:'HARD', cn:'\u56f0\u96be'},
+  };
+  function t(key) { return (I18N[key] && I18N[key][LANG]) || key; }
+
+  // Terrain definitions with procedural generation params
+  var TERRAINS = [
+    {id:'crater',    name:'crater',    diff:'medium', colors:['#3d2b1a','#6b3a1f','#8B4513'], pattern:'circles'},
+    {id:'canyon',    name:'canyon',     diff:'hard',   colors:['#D2691E','#8B4513','#1a0f08'], pattern:'lines'},
+    {id:'dune',      name:'dune',      diff:'easy',   colors:['#DEB887','#D2B48C','#C4A87C'], pattern:'waves'},
+    {id:'volcano',   name:'volcano',   diff:'hard',   colors:['#A0522D','#8B0000','#4a0e0e'], pattern:'cone'},
+    {id:'plain',     name:'plain',     diff:'easy',   colors:['#BC8F8F','#A0937E','#8B8378'], pattern:'flat'},
+    {id:'rockfield', name:'rockfield', diff:'medium', colors:['#696969','#808080','#555555'], pattern:'rocks'},
+    // Duplicates with variations for more rounds
+    {id:'crater2',   name:'crater',    diff:'medium', colors:['#4a3220','#7a4525','#9B5523'], pattern:'circles'},
+    {id:'canyon2',   name:'canyon',     diff:'hard',   colors:['#C8621A','#7B3510','#120a04'], pattern:'lines'},
+    {id:'dune2',     name:'dune',      diff:'easy',   colors:['#E8C897','#D8BA90','#CAA878'], pattern:'waves'},
+    {id:'volcano2',  name:'volcano',   diff:'hard',   colors:['#B06030','#9B1010','#5a1515'], pattern:'cone'},
+    {id:'plain2',    name:'plain',     diff:'easy',   colors:['#C89F9F','#B0A38E','#9B9388'], pattern:'flat'},
+    {id:'rockfield2',name:'rockfield', diff:'medium', colors:['#797979','#909090','#656565'], pattern:'rocks'},
+  ];
+
+  var CATEGORIES = ['crater','canyon','dune','volcano','plain','rockfield'];
+  var order = [];
+  var current = 0;
+  var correctCount = 0;
+  var wrongCount = 0;
+  var CARD_SIZE = 140;
+
+  var canvas = document.getElementById('terrainCanvas');
+  var ctx = canvas.getContext('2d');
+
+  function shuffle(arr) {
+    for (var i = arr.length - 1; i > 0; i--) {
+      var j = Math.floor(Math.random() * (i + 1));
+      var tmp = arr[i]; arr[i] = arr[j]; arr[j] = tmp;
+    }
+    return arr;
+  }
+
+  function resizeCard() {
+    var area = document.querySelector('.card-area');
+    var rect = area.getBoundingClientRect();
+    var sz = Math.min(rect.width * 0.6, rect.height * 0.75);
+    sz = Math.max(sz, 80);
+    CARD_SIZE = Math.floor(sz);
+    var dpr = Math.min(window.devicePixelRatio || 1, 2);
+    canvas.width = CARD_SIZE * dpr;
+    canvas.height = CARD_SIZE * dpr;
+    canvas.style.width = CARD_SIZE + 'px';
+    canvas.style.height = CARD_SIZE + 'px';
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    drawTerrain();
+  }
+
+  function drawTerrain() {
+    if (current >= order.length) return;
+    var terr = TERRAINS[order[current]];
+    var S = CARD_SIZE;
+
+    // Background gradient
+    var bg = ctx.createLinearGradient(0, 0, S, S);
+    bg.addColorStop(0, terr.colors[0]);
+    bg.addColorStop(0.5, terr.colors[1]);
+    bg.addColorStop(1, terr.colors[2] || terr.colors[0]);
+    ctx.fillStyle = bg;
+    ctx.fillRect(0, 0, S, S);
+
+    // Pattern overlay
+    ctx.globalAlpha = 0.5;
+    var seed = order[current] * 7 + 13;
+    switch (terr.pattern) {
+      case 'circles':
+        // Crater rings
+        for (var i = 0; i < 3; i++) {
+          var cx2 = S * 0.3 + (seed + i * 37) % Math.floor(S * 0.4);
+          var cy2 = S * 0.3 + (seed + i * 53) % Math.floor(S * 0.4);
+          var r = S * 0.12 + (seed + i * 23) % Math.floor(S * 0.08);
+          ctx.strokeStyle = 'rgba(0,0,0,0.6)';
+          ctx.lineWidth = 2;
+          ctx.beginPath(); ctx.arc(cx2, cy2, r, 0, Math.PI * 2); ctx.stroke();
+          ctx.fillStyle = 'rgba(0,0,0,0.3)';
+          ctx.fill();
+        }
+        break;
+      case 'lines':
+        // Canyon grooves
+        for (var i = 0; i < 6; i++) {
+          var y1 = (seed + i * 41) % S;
+          ctx.strokeStyle = 'rgba(0,0,0,0.5)';
+          ctx.lineWidth = 3 + i % 3;
+          ctx.beginPath();
+          ctx.moveTo(0, y1);
+          ctx.bezierCurveTo(S * 0.3, y1 + 10, S * 0.7, y1 - 10, S, y1 + 5);
+          ctx.stroke();
+        }
+        break;
+      case 'waves':
+        // Sand ripples
+        for (var i = 0; i < 10; i++) {
+          var yw = S * 0.1 + i * S * 0.09;
+          ctx.strokeStyle = 'rgba(200,180,140,0.4)';
+          ctx.lineWidth = 1.5;
+          ctx.beginPath();
+          ctx.moveTo(0, yw);
+          for (var x = 0; x < S; x += 10) {
+            ctx.lineTo(x, yw + Math.sin(x * 0.08 + i) * 4);
+          }
+          ctx.stroke();
+        }
+        break;
+      case 'cone':
+        // Volcano shape
+        ctx.fillStyle = 'rgba(139,0,0,0.4)';
+        ctx.beginPath();
+        ctx.moveTo(S * 0.2, S);
+        ctx.lineTo(S * 0.5, S * 0.2);
+        ctx.lineTo(S * 0.8, S);
+        ctx.fill();
+        // Crater top
+        ctx.fillStyle = 'rgba(0,0,0,0.4)';
+        ctx.beginPath(); ctx.ellipse(S * 0.5, S * 0.22, S * 0.1, S * 0.04, 0, 0, Math.PI * 2); ctx.fill();
+        break;
+      case 'flat':
+        // Subtle texture
+        ctx.fillStyle = 'rgba(255,255,255,0.08)';
+        for (var i = 0; i < 20; i++) {
+          var fx = (seed * 3 + i * 47) % S;
+          var fy = (seed * 7 + i * 31) % S;
+          ctx.fillRect(fx, fy, 3, 1);
+        }
+        break;
+      case 'rocks':
+        // Scattered rocks
+        for (var i = 0; i < 12; i++) {
+          var rx = (seed + i * 43) % S;
+          var ry = (seed + i * 67) % S;
+          var rr = 3 + (seed + i * 11) % 8;
+          ctx.fillStyle = 'rgba(80,80,80,0.6)';
+          ctx.beginPath(); ctx.arc(rx, ry, rr, 0, Math.PI * 2); ctx.fill();
+          ctx.strokeStyle = 'rgba(40,40,40,0.5)';
+          ctx.lineWidth = 1;
+          ctx.stroke();
+        }
+        break;
+    }
+    ctx.globalAlpha = 1;
+  }
+
+  function buildCategories() {
+    var container = document.getElementById('categories');
+    container.innerHTML = '';
+    for (var i = 0; i < CATEGORIES.length; i++) {
+      var btn = document.createElement('button');
+      btn.className = 'cat-btn';
+      btn.dataset.cat = CATEGORIES[i];
+      btn.textContent = t(CATEGORIES[i]);
+      btn.addEventListener('click', function() {
+        if (current >= order.length) return;
+        var terr = TERRAINS[order[current]];
+        var chosen = this.dataset.cat;
+        var correct = terr.name;
+
+        // Remove previous highlights
+        document.querySelectorAll('.cat-btn').forEach(function(b) { b.classList.remove('correct','wrong'); });
+
+        if (chosen === correct) {
+          this.classList.add('correct');
+          correctCount++;
+          document.getElementById('feedback').textContent = t('correct') + ' ' + t('difficulty') + t(terr.diff);
+          document.getElementById('feedback').style.color = '#44cc44';
+        } else {
+          this.classList.add('wrong');
+          wrongCount++;
+          // Highlight correct one
+          document.querySelectorAll('.cat-btn').forEach(function(b) {
+            if (b.dataset.cat === correct) b.classList.add('correct');
+          });
+          document.getElementById('feedback').textContent = t('wrong') + t(correct);
+          document.getElementById('feedback').style.color = '#ff4444';
+        }
+
+        updateHud();
+
+        setTimeout(function() {
+          current++;
+          if (current < order.length) {
+            document.querySelectorAll('.cat-btn').forEach(function(b) { b.classList.remove('correct','wrong'); });
+            document.getElementById('feedback').textContent = '';
+            document.getElementById('feedback').style.color = '#ffb59c';
+            showCurrent();
+          } else {
+            document.getElementById('feedback').textContent = t('complete') + ' ' + t('score') + correctCount + '/' + order.length;
+            document.getElementById('feedback').style.color = '#ffb59c';
+            document.getElementById('cardName').textContent = '';
+          }
+        }, 1200);
+      });
+      container.appendChild(btn);
+    }
+  }
+
+  function showCurrent() {
+    if (current >= order.length) return;
+    var terr = TERRAINS[order[current]];
+    document.getElementById('cardName').textContent = '# ' + (current + 1) + ' / ' + order.length;
+    drawTerrain();
+    updateHud();
+  }
+
+  function updateHud() {
+    document.getElementById('hudV1').textContent = (current + 1) + ' / ' + order.length;
+    document.getElementById('hudV2').textContent = correctCount.toString();
+    document.getElementById('hudV3').textContent = wrongCount.toString();
+    var pct = order.length > 0 ? Math.round(correctCount / Math.max(current, 1) * 100) : 0;
+    document.getElementById('hudV4').textContent = pct + '%';
+  }
+
+  function applyI18n() {
+    document.getElementById('gameTitle').textContent = t('title');
+    document.getElementById('gameSub').textContent = t('subtitle');
+    document.getElementById('promptText').textContent = t('prompt');
+    document.getElementById('hudL1').textContent = t('hudRound');
+    document.getElementById('hudL2').textContent = t('hudCorrect');
+    document.getElementById('hudL3').textContent = t('hudWrong');
+    document.getElementById('hudL4').textContent = t('hudScore');
+    buildCategories();
+    if (current < order.length) showCurrent();
+  }
+
+  function init() {
+    order = [];
+    for (var i = 0; i < TERRAINS.length; i++) order.push(i);
+    shuffle(order);
+    current = 0;
+    correctCount = 0;
+    wrongCount = 0;
+  }
+
+  document.getElementById('langBtn').addEventListener('click', function() {
+    LANG = LANG === 'cn' ? 'en' : 'cn';
+    this.textContent = LANG === 'cn' ? 'CN' : 'EN';
+    applyI18n();
+  });
+
+  init();
+  applyI18n();
+  requestAnimationFrame(function() { resizeCard(); });
+  window.addEventListener('resize', function() { resizeCard(); });
+})();
+</script>
+</body>
+</html>
