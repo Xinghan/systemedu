@@ -282,16 +282,25 @@ def load_project_context(
         progress = initialize_progress(tree)
         save_progress(user_id, name, progress)
     elif len(progress) < node_count:
-        # Tree grew (new knodes added) — backfill missing progress records
+        # Tree grew (new knodes added) — backfill missing records, respecting
+        # prerequisites: a new knode is AVAILABLE only if all its prereqs are
+        # already passed, otherwise LOCKED.
         existing_ids = {p.knode_id for p in progress}
+        status_map = {p.knode_id: p.status for p in progress}
+        flat_nodes: list = []
+        for ms in tree.milestones:
+            flat_nodes.extend(ms.knodes)
         for idx in range(node_count):
-            if idx not in existing_ids:
-                progress.append(
-                    UserNodeProgress(
-                        knode_id=idx,
-                        status=NodeStatus.AVAILABLE,
-                    )
-                )
+            if idx in existing_ids:
+                continue
+            node = flat_nodes[idx] if idx < len(flat_nodes) else None
+            prereqs = list(getattr(node, "prerequisite_indices", []) or [])
+            unlocked = bool(prereqs) and all(
+                status_map.get(pi) == NodeStatus.PASSED for pi in prereqs
+            )
+            new_status = NodeStatus.AVAILABLE if unlocked else NodeStatus.LOCKED
+            progress.append(UserNodeProgress(knode_id=idx, status=new_status))
+            status_map[idx] = new_status
         progress.sort(key=lambda p: p.knode_id)
         save_progress(user_id, name, progress)
 
