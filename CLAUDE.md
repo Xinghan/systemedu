@@ -181,20 +181,21 @@ Internet -> nginx:80 -> /api/*  -> uvicorn:18820 (Python gateway)
 - Always include `Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>`
 - Never force push or amend unless explicitly asked
 
-### PRD Workflow
-- `prd/prd.md` is the master PRD — always keep it updated
-- **每次完成新功能后，必须同步更新对应的 PRD 文件**（与代码提交同等重要）
-- PRD 目录结构：
-  - `prd/prd.md` — 总纲，Phase 进度、架构、API 总览
-  - `prd/frontend/` — Next.js Web UI 页面级 PRD
-  - `prd/backend/` — Gateway API + 核心服务（已从 Django 迁移到 Starlette + Pydantic）
-  - `prd/adminsite/` — Hub 管理后台（Phase 4，暂冻结）
-- **Ask for user approval before creating any new PRD file**
-- Never create separate change-description files; always update existing PRD files
-- PRD 更新检查清单：
-  1. `prd/prd.md` Phase checklist 打勾
-  2. Gateway API Endpoints 表格补全
-  3. 对应模块 PRD 文件更新功能描述
+### Spec Workflow (speckit + superpower)
+- 文档分工：
+  - `docs/prd.md` — 总纲：产品愿景、架构、路线图、API 总览（全局视图）
+  - `specs/NNN-<slug>/` — 单个特性的 spec/plan/tasks 三件套
+  - `docs/todolist.md` — Feature backlog（回顾建议沉淀处）
+- **新特性开发必须按 spec → plan → tasks → 实现 顺序**，细则见 `specs/README.md`：
+  1. 用户描述需求 → Claude 生成 `spec.md`（WHAT + WHY），用户确认
+  2. Claude 生成 `plan.md`（方案、影响面、验收），用户批准
+  3. Claude 生成 `tasks.md`（可执行清单），按序实现并勾选进度
+  4. 特性上线后在 spec.md 顶部加 `Status: shipped (YYYY-MM-DD)`
+- **简单 bugfix 可豁免三件套**，但 commit message 必须讲清楚根因 + 影响面
+- 每次完成新特性后同步更新：
+  1. `docs/prd.md` Phase checklist + API 表格
+  2. 对应 `specs/NNN-.../spec.md` 的 Status 与验收结果
+- **创建新 spec 目录前确认顺序号**（`ls specs/ | sort | tail -1` + 1），不要跳号
 
 ### Code Standards
 - Python: PEP 8, type hints, async where appropriate
@@ -215,9 +216,10 @@ Internet -> nginx:80 -> /api/*  -> uvicorn:18820 (Python gateway)
 
 **第 5-6 步（回顾与建议）是强制步骤，不可跳过。**
 
-### Feature Backlog (`todolist.md`)
-- 项目根目录的 `todolist.md` 是功能待办追踪文件
+### Feature Backlog (`docs/todolist.md`)
+- `docs/todolist.md` 是功能待办追踪文件
 - 每轮回顾建议中，用户确认保留的条目追加到此文件
+- 待办升级为特性时，在 `specs/` 建三件套，从 todolist 中移除
 
 ### Testing (Mandatory)
 - **每个新功能都必须附带测试，未写测试不允许提交**
