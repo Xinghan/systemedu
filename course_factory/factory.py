@@ -1929,10 +1929,10 @@ def merge_resources_into_plan(
 #  - image:   互联网照片（NASA, Wikimedia CC0/CC-BY 等），下载到本地
 #  - diagram: Claude 自己写的 HTML/SVG 示意图，本地文件
 #
-# 图片存储策略：`scripts/course_images/<knode_hash>/<filename>`，
+# 图片存储策略：`course_factory/images/<knode_hash>/<filename>`，
 # 由 gateway 的 `/api/course-images` 静态挂载对外服务。
 
-COURSE_IMAGES_DIR = ROOT / "scripts" / "course_images"
+COURSE_IMAGES_DIR = ROOT / "course_factory" / "images"
 
 
 def download_course_image(
@@ -1943,7 +1943,7 @@ def download_course_image(
     timeout: float = 30.0,
 ) -> dict:
     """
-    从互联网下载图片到 `scripts/course_images/<knode_key>/<filename>`。
+    从互联网下载图片到 `course_factory/images/<knode_key>/<filename>`。
 
     参数：
         src_url: 图片 URL（必须是 http/https）
@@ -1953,7 +1953,7 @@ def download_course_image(
 
     返回：
         {
-            "local_path": "scripts/course_images/<key>/<file>",
+            "local_path": "course_factory/images/<key>/<file>",
             "web_path":   "/api/course-images/<key>/<file>",
             "size_bytes": int,
             "content_type": str,

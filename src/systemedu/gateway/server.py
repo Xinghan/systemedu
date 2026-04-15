@@ -3396,10 +3396,10 @@ def create_app() -> Starlette:
     media_dir.mkdir(parents=True, exist_ok=True)
     routes.append(Mount("/api/media", StaticFiles(directory=str(media_dir)), name="media"))
 
-    # Mount static course images directory (populated by scripts/course_factory.py
+    # Mount static course images directory (populated by course_factory.factory
     # when downloading CC-BY/CC0 images referenced in knode content)
     from pathlib import Path as _Path
-    course_images_dir = _Path(__file__).parent.parent.parent.parent / "scripts" / "course_images"
+    course_images_dir = _Path(__file__).parent.parent.parent.parent / "course_factory" / "images"
     course_images_dir.mkdir(parents=True, exist_ok=True)
     routes.append(
         Mount(
