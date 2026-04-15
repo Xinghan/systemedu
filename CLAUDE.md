@@ -94,10 +94,17 @@ systemedu/
 │       ├── project.yaml
 │       └── knowledge_tree.json
 ├── tests/                      # pytest test suite
-├── scripts/                    # Utility scripts (restart.sh, course_factory.py, etc.)
+├── scripts/                    # Ops-only (restart.sh, deploy.sh, server-ssh.sh, ...)
+├── course_factory/             # Course Factory component (factory.py, runtime,
+│                               #   validate, tests, fixtures, images;
+│                               #   SKILL.md is symlink to .claude/skills/...)
 ├── specs/                      # Per-feature spec/plan/tasks (speckit)
-└── docs/                       # Long-lived docs (prd.md, todolist, archive/)
+├── docs/                       # Long-lived docs (prd.md, todolist, archive/)
+├── .claude/skills/             # Claude Code skills (speckit-*, course_factory)
+└── .specify/                   # spec-kit templates, scripts, constitution
 ```
+
+Course Factory 流程（Claude Code 作为 skill 调用）：见 `.claude/skills/course_factory/SKILL.md`。Python API 通过 `from course_factory import ...` 调用。
 
 ## Common Commands
 
