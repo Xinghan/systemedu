@@ -1,4 +1,4 @@
-// Usage: node scripts/verify/animation.mjs <html-path> [--frames N] [--out <dir>]
+// Usage: node course_factory/validate/verify/animation.mjs <html-path> [--frames N] [--out <dir>]
 // Launches Playwright, loads the HTML file, screenshots each frame by clicking the "next frame" button.
 // Output: <out>/anim_f<N>.png for N = 0..frames-1.
 // Exit non-zero if no canvas content renders or errors in page.
@@ -7,7 +7,7 @@ import path from 'path';
 
 const args = process.argv.slice(2);
 if (!args.length) {
-  console.error('usage: node scripts/verify/animation.mjs <html-path> [--frames N] [--out DIR]');
+  console.error('usage: node course_factory/validate/verify/animation.mjs <html-path> [--frames N] [--out DIR]');
   process.exit(1);
 }
 const htmlPath = path.resolve(args[0]);
