@@ -105,7 +105,7 @@
 
 **验收**:临时 DB 表结构符合 design;既有数据不丢;单测全绿
 
-### T1.4 Checkpoint SqliteSaver 封装 [ ] parallel:yes
+### T1.4 Checkpoint SqliteSaver 封装 [x] parallel:yes
 
 **依赖**:T1.1, T1.2
 **改动**:
