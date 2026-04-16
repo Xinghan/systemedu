@@ -72,7 +72,7 @@
 - 现有 `pytest tests/ -q` 未因依赖改动出现 regression
 - `deepagents` 的最终移除记为 T5.5 的子步骤(`pip show deepagents` → not installed 的断言移到 T5.5)
 
-### T1.2 新增 TutorConfig Pydantic 模型 + 配置字段 [ ] parallel:yes
+### T1.2 新增 TutorConfig Pydantic 模型 + 配置字段 [x] parallel:yes
 
 **依赖**:T1.1
 **改动**:

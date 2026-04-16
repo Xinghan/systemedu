@@ -6,6 +6,7 @@ Loads config from ~/.systemedu/config.yaml with environment variable expansion.
 import os
 import re
 from pathlib import Path
+from typing import Literal
 
 import yaml
 from pydantic import BaseModel, Field
@@ -131,6 +132,41 @@ class AgentConfig(BaseModel):
     backend: str = "auto"  # "auto" | "langgraph" | "deepagents"
 
 
+class TutorConfig(BaseModel):
+    """Tutor 记忆与教学策略系统配置(spec 014)。
+
+    checkpoint_backend 控制 LangGraph checkpoint 存储后端:
+    - sqlite:本地开发/单机生产,WAL 模式共享 aiosqlite 连接池
+    - postgres:spec 016 扩容时启用(当前骨架为 NotImplementedError)
+    """
+
+    checkpoint_backend: Literal["sqlite", "postgres"] = "sqlite"
+    checkpoint_sqlite_path: str = str(SYSTEMEDU_HOME / "tutor_checkpoints.db")
+    postgres_url: str | None = None
+
+    skill_search_paths: list[str] = Field(
+        default_factory=lambda: [
+            "projects/{project}/skills/",
+            "src/systemedu/tutor/skills/",
+        ]
+    )
+
+    mem0_enabled: bool = False
+    mem0_provider: str = "qdrant"
+
+    fact_extraction_interval_seconds: int = 30
+    fact_extraction_fallback_hours: int = 2
+    fact_extraction_batch_size: int = 5
+    fact_extraction_max_retries: int = 3
+
+    router_llm_provider: str | None = None
+    router_llm_model: str | None = None
+    skill_llm_provider: str | None = None
+    skill_llm_model: str | None = None
+    fact_extractor_llm_provider: str | None = None
+    fact_extractor_llm_model: str | None = None
+
+
 class SearchConfig(BaseModel):
     """Search configuration (Tavily)."""
 
@@ -150,6 +186,7 @@ class SystemEduConfig(BaseModel):
     hub: HubConfig = Field(default_factory=HubConfig)
     memory: MemoryConfig = Field(default_factory=MemoryConfig)
     agent: AgentConfig = Field(default_factory=AgentConfig)
+    tutor: TutorConfig = Field(default_factory=TutorConfig)
     tts: TTSConfig = Field(default_factory=TTSConfig)
     search: SearchConfig = Field(default_factory=SearchConfig)
 
@@ -188,6 +225,17 @@ def _default_config_dict() -> dict:
         "hub": {"url": "https://hub.systemedu.com"},
         "memory": {"enabled": True, "backend": "mem0"},
         "agent": {"backend": "auto"},
+        "tutor": {
+            "checkpoint_backend": "sqlite",
+            "checkpoint_sqlite_path": str(SYSTEMEDU_HOME / "tutor_checkpoints.db"),
+            "skill_search_paths": [
+                "projects/{project}/skills/",
+                "src/systemedu/tutor/skills/",
+            ],
+            "mem0_enabled": False,
+            "fact_extraction_interval_seconds": 30,
+            "fact_extraction_fallback_hours": 2,
+        },
     }
 
 
