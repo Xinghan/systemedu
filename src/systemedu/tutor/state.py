@@ -70,5 +70,9 @@ class TutorState(TypedDict, total=False):
     confirm_required: dict[str, Any] | None
     stream_events: list[Any]
 
+    # === 内部标志 ===
+    # safety_gate 命中敏感模式时置 True,_after_safety 据此短路到 output_stream
+    _safety_triggered: bool
+
 
 __all__ = ["TutorState", "MemorySnapshot", "SkillDecision"]
