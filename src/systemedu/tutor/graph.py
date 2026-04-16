@@ -16,9 +16,10 @@ from __future__ import annotations
 
 from langgraph.graph import END, START, StateGraph
 
+from systemedu.tutor.memory import MemoryInjector
 from systemedu.tutor.nodes import (
     confirm_handler_node,
-    memory_inject_node,
+    make_memory_inject_node,
     output_stream_node,
     safety_gate_node,
     skill_router_node,
@@ -33,12 +34,19 @@ def _after_safety(state: TutorState) -> str:
     return "memory_inject"
 
 
-def build_tutor_graph(*, checkpointer=None):
-    """Compile the Phase-1 tutor skeleton.
+def build_tutor_graph(
+    *,
+    checkpointer=None,
+    memory_injector: MemoryInjector | None = None,
+):
+    """Compile the tutor graph.
 
     Args:
         checkpointer: LangGraph checkpointer (e.g. AsyncSqliteSaver).
             Optional — if omitted, the graph compiles without persistence.
+        memory_injector: `MemoryInjector` instance used by the
+            `memory_inject` node. If `None`, the node returns an empty
+            snapshot (Phase 1 smoke-test behaviour).
 
     Returns:
         A compiled LangGraph app ready for `ainvoke` / `astream_events`.
@@ -47,7 +55,7 @@ def build_tutor_graph(*, checkpointer=None):
 
     g.add_node("confirm_handler", confirm_handler_node)
     g.add_node("safety_gate", safety_gate_node)
-    g.add_node("memory_inject", memory_inject_node)
+    g.add_node("memory_inject", make_memory_inject_node(memory_injector))
     g.add_node("skill_router", skill_router_node)
     g.add_node("output_stream", output_stream_node)
 
