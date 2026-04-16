@@ -297,7 +297,7 @@
 
 **验收**:覆盖率 ≥ 90%
 
-### T3.3 skill_router 节点 + prompt + knode 切换重置 [ ] parallel:no
+### T3.3 skill_router 节点 + prompt + knode 切换重置 [x] parallel:no
 
 **依赖**:T3.2
 **改动**:
