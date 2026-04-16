@@ -1,0 +1,361 @@
+"""5-layer memory injector (spec 014 T2.2).
+
+`MemoryInjector.inject(...)` concurrently recalls five memory layers
+and returns a `MemorySnapshot`. Layers are gated by `context_scope`:
+
+- `project`: L1 + L2 + L3 + L4(project-filtered) + L5
+- `global`:  L1 + L4(cross-project); L2 / L3 / L5 return ""
+
+All layers share an `asyncio.gather(return_exceptions=True)` call —
+one flaky layer (e.g. Mem0 timeout) never blocks the others. The
+factory pattern `db_session_factory()` gives each layer its own DB
+session so the gather is safe to run against a single SQLAlchemy
+engine.
+"""
+
+from __future__ import annotations
+
+import asyncio
+import logging
+from dataclasses import dataclass, field
+from datetime import datetime
+from typing import Any, Callable, Literal, Protocol
+
+from sqlalchemy.orm import Session
+
+from systemedu.storage.db import (
+    Enrollment,
+    ProgressRecord,
+    StudentFact,
+)
+from systemedu.tutor.state import MemorySnapshot
+
+log = logging.getLogger(__name__)
+
+ContextScope = Literal["project", "global"]
+
+
+class _Mem0Client(Protocol):
+    """Duck-typed Mem0 client used by L4.
+
+    T2.6 replaces this with the real client. For now we only rely on
+    an async `search(query, user_id, filters)` returning a list of
+    {"memory": str, ...} dicts.
+    """
+
+    async def search(
+        self,
+        query: str,
+        *,
+        user_id: str,
+        filters: dict[str, Any] | None = None,
+        limit: int = 3,
+    ) -> list[dict[str, Any]]: ...
+
+
+@dataclass
+class MemoryInjector:
+    """Recalls 5 memory layers in parallel, gated by context_scope."""
+
+    db_session_factory: Callable[[], Session]
+    mem0_client: _Mem0Client | None = None
+    l4_top_k: int = 3
+
+    async def inject(
+        self,
+        *,
+        user_id: str,
+        project_name: str | None,
+        knode_id: str | None,
+        last_user_msg: str,
+        active_skill_state: dict[str, Any] | None = None,
+        context_scope: ContextScope = "project",
+    ) -> MemorySnapshot:
+        """Recall all applicable layers concurrently.
+
+        Layers deactivated by the scope return "" without touching I/O,
+        so they add zero latency.
+        """
+        if context_scope == "project" and not project_name:
+            log.warning(
+                "MemoryInjector: context_scope=project without project_name; "
+                "treating as global to avoid leaking global L4 into a 'project' snapshot",
+            )
+            context_scope = "global"
+
+        tasks = [
+            self._l1_profile(user_id),
+            self._l2_project_ctx(user_id, project_name, context_scope),
+            self._l3_knode_state(user_id, project_name, context_scope),
+            self._l4_semantic_recall(
+                user_id, last_user_msg, project_name, context_scope,
+            ),
+            self._l5_skill_ctx(active_skill_state, context_scope),
+        ]
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+
+        def _safe(r: Any, label: str) -> Any:
+            if isinstance(r, Exception):
+                log.warning("memory layer %s raised: %s", label, r)
+                return [] if label == "l4" else ""
+            return r
+
+        l1 = _safe(results[0], "l1")
+        l2 = _safe(results[1], "l2")
+        l3 = _safe(results[2], "l3")
+        l4 = _safe(results[3], "l4")
+        l5 = _safe(results[4], "l5")
+
+        return MemorySnapshot(
+            l1_profile=l1,
+            l2_project_ctx=l2,
+            l3_knode_state=l3,
+            l4_semantic_recall=l4 if isinstance(l4, list) else [],
+            l5_skill_ctx=l5,
+            injected_at=datetime.utcnow(),
+        )
+
+    # ------------------------------------------------------------------
+    # Layer implementations
+    # ------------------------------------------------------------------
+    async def _l1_profile(self, user_id: str) -> str:
+        """L1 aggregates stable interests + goals across all projects."""
+
+        def _query() -> str:
+            with _session(self.db_session_factory) as db:
+                facts = (
+                    db.query(StudentFact)
+                    .filter(
+                        StudentFact.user_id == user_id,
+                        StudentFact.category.in_(["interest", "goal"]),
+                        StudentFact.valid_to.is_(None),
+                    )
+                    .order_by(StudentFact.confidence.desc())
+                    .limit(10)
+                    .all()
+                )
+                if not facts:
+                    return ""
+                lines = [
+                    f"- [{f.category}] {f.content}"
+                    for f in facts
+                ]
+                return "\n".join(lines)
+
+        return await asyncio.to_thread(_query)
+
+    async def _l2_project_ctx(
+        self,
+        user_id: str,
+        project_name: str | None,
+        scope: ContextScope,
+    ) -> str:
+        if scope != "project" or not project_name:
+            return ""
+
+        def _query() -> str:
+            with _session(self.db_session_factory) as db:
+                enrollment = (
+                    db.query(Enrollment)
+                    .filter(
+                        Enrollment.user_id == user_id,
+                        Enrollment.project_name == project_name,
+                    )
+                    .one_or_none()
+                )
+                if enrollment is None:
+                    return ""
+                parts = [
+                    f"- 项目: {project_name}",
+                    f"- 状态: {enrollment.status}",
+                    f"- 已通过节点: {enrollment.nodes_passed}/{enrollment.total_nodes}",
+                ]
+                if enrollment.last_activity_at:
+                    parts.append(f"- 最近活动: {enrollment.last_activity_at:%Y-%m-%d}")
+                return "\n".join(parts)
+
+        return await asyncio.to_thread(_query)
+
+    async def _l3_knode_state(
+        self,
+        user_id: str,
+        project_name: str | None,
+        scope: ContextScope,
+    ) -> str:
+        """L3 returns all current facts for the project (scope=project).
+
+        Per context-matrix §4: within a project, memory is fully open
+        across every knode — we do NOT filter by knode_id.
+        """
+        if scope != "project" or not project_name:
+            return ""
+
+        def _query() -> str:
+            with _session(self.db_session_factory) as db:
+                facts = (
+                    db.query(StudentFact)
+                    .filter(
+                        StudentFact.user_id == user_id,
+                        StudentFact.project_name == project_name,
+                        StudentFact.category.in_(
+                            ["knowledge", "struggle", "context"]
+                        ),
+                        StudentFact.valid_to.is_(None),
+                        StudentFact.confidence >= 0.5,
+                    )
+                    .order_by(
+                        StudentFact.knode_id.asc(),
+                        StudentFact.confidence.desc(),
+                    )
+                    .limit(20)
+                    .all()
+                )
+                progress = (
+                    db.query(ProgressRecord)
+                    .filter(
+                        ProgressRecord.user_id == user_id,
+                        ProgressRecord.project_name == project_name,
+                    )
+                    .all()
+                )
+                if not facts and not progress:
+                    return ""
+                lines: list[str] = []
+                for f in facts:
+                    knode_tag = f"k{f.knode_id}" if f.knode_id else "无节点"
+                    extra = ""
+                    if f.fact_metadata:
+                        if "mastery_level" in f.fact_metadata:
+                            extra = f" ({f.fact_metadata['mastery_level']})"
+                        elif "struggle_type" in f.fact_metadata:
+                            extra = f" ({f.fact_metadata['struggle_type']})"
+                    lines.append(f"- [{f.category}@{knode_tag}]{extra} {f.content}")
+                if progress:
+                    passed = [p for p in progress if p.status == "passed"]
+                    if passed:
+                        lines.append(
+                            f"- 已通过 {len(passed)} 个节点: "
+                            + ", ".join(f"k{p.knode_id}" for p in passed[:8])
+                        )
+                return "\n".join(lines)
+
+        return await asyncio.to_thread(_query)
+
+    async def _l4_semantic_recall(
+        self,
+        user_id: str,
+        query: str,
+        project_name: str | None,
+        scope: ContextScope,
+    ) -> list[str]:
+        """L4 hits Mem0 — per-scope filter per context-matrix §4.
+
+        Returns list[str] of raw memory snippets; formatter lives in §6.4
+        rendering code so the tutor can decide bullet style.
+        """
+        if self.mem0_client is None or not query.strip():
+            return []
+
+        filters: dict[str, Any] | None = None
+        if scope == "project" and project_name:
+            filters = {"project_name": project_name}
+
+        results = await self.mem0_client.search(
+            query=query,
+            user_id=user_id,
+            filters=filters,
+            limit=self.l4_top_k,
+        )
+        snippets: list[str] = []
+        for r in results:
+            snippet = r.get("memory") or r.get("text") or ""
+            if snippet:
+                snippets.append(snippet)
+        return snippets
+
+    async def _l5_skill_ctx(
+        self,
+        active_skill_state: dict[str, Any] | None,
+        scope: ContextScope,
+    ) -> str:
+        if scope != "project" or not active_skill_state:
+            return ""
+        # The skill subgraph owns the final formatter (T3.x summarize_state).
+        # For Phase 2 we render a minimal summary from known fields.
+        name = active_skill_state.get("skill_name", "unknown")
+        turn = active_skill_state.get("turn_count", 0)
+        notes = active_skill_state.get("summary")
+        lines = [f"- 当前策略: {name} (turn {turn})"]
+        if notes:
+            lines.append(f"- 进展: {notes}")
+        return "\n".join(lines)
+
+
+# ---------------------------------------------------------------------------
+# Rendering (design §6.4)
+# ---------------------------------------------------------------------------
+MEMORY_TEMPLATE = """## L1 学生画像（稳定）
+{l1_profile}
+
+## L2 项目上下文
+{l2_project_ctx}
+
+## L3 当前 knode 状态
+{l3_knode_state}
+
+## L4 相关历史对话（语义召回 top {l4_top_k}）
+{l4_semantic_recall_bullets}
+
+## L5 当前教学策略进度
+{l5_skill_ctx}"""
+
+
+def render_memory(snapshot: MemorySnapshot, *, l4_top_k: int = 3) -> str:
+    """Render a MemorySnapshot as the system-prompt block per §6.4.
+
+    Empty layers still render their heading but with `(空)` body so the
+    tutor LLM gets a consistent structure; drop completely if you want
+    tighter prompts.
+    """
+    l4 = snapshot.get("l4_semantic_recall") or []
+    bullets = "\n".join(f"- {s}" for s in l4) if l4 else "(空)"
+    return MEMORY_TEMPLATE.format(
+        l1_profile=snapshot.get("l1_profile") or "(空)",
+        l2_project_ctx=snapshot.get("l2_project_ctx") or "(空)",
+        l3_knode_state=snapshot.get("l3_knode_state") or "(空)",
+        l4_semantic_recall_bullets=bullets,
+        l5_skill_ctx=snapshot.get("l5_skill_ctx") or "(空)",
+        l4_top_k=l4_top_k,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+class _session:
+    """Tiny context manager wrapping the session_factory callable.
+
+    Factories may return either a Session directly (usage:
+    ``with factory() as s``) or something that needs closing; either
+    way we just close it.
+    """
+
+    def __init__(self, factory: Callable[[], Session]):
+        self.factory = factory
+        self.s: Session | None = None
+
+    def __enter__(self) -> Session:
+        self.s = self.factory()
+        return self.s
+
+    def __exit__(self, *exc) -> None:
+        if self.s is not None:
+            self.s.close()
+
+
+__all__ = [
+    "MemoryInjector",
+    "ContextScope",
+    "MEMORY_TEMPLATE",
+    "render_memory",
+]
