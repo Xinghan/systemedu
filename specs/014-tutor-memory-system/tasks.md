@@ -149,7 +149,7 @@
 
 ## Phase 2:记忆层(1 周)
 
-### T2.1 StudentFact SQLAlchemy model + DAO [ ] parallel:no
+### T2.1 StudentFact SQLAlchemy model + DAO [x] parallel:no
 
 **依赖**:T1.3
 **改动**:
