@@ -3,11 +3,14 @@
 from datetime import datetime
 
 from sqlalchemy import (
+    Boolean,
     Column,
     DateTime,
     Float,
     ForeignKey,
+    Index,
     Integer,
+    JSON,
     String,
     Text,
     UniqueConstraint,
@@ -30,6 +33,11 @@ class ChatSession(Base):
     id = Column(String(36), primary_key=True)
     agent_name = Column(String(100), default="default")
     project_name = Column(String(200), nullable=True)
+    # spec 014: tutor 记忆系统字段
+    user_id = Column(String(100), nullable=True, index=True)
+    knode_id = Column(String(100), nullable=True)
+    active_skill = Column(String(50), nullable=True)
+    skill_turn_count = Column(Integer, default=0)
     created_at = Column(DateTime, default=datetime.now)
     updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now)
 
@@ -368,6 +376,93 @@ class EarnedBadge(Base):
     earned_at = Column(DateTime, default=datetime.now)
 
 
+class StudentFact(Base):
+    """Structured student fact with supersede chain (spec 014)."""
+
+    __tablename__ = "student_facts"
+    __table_args__ = (
+        Index("ix_sf_user_current", "user_id", "valid_to"),
+        Index("ix_sf_user_knode_category", "user_id", "knode_id", "category"),
+        Index("ix_sf_project_current", "project_name", "valid_to"),
+    )
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+
+    user_id = Column(String(100), nullable=False, index=True)
+    project_name = Column(String(200), nullable=True, index=True)
+    knode_id = Column(String(100), nullable=True, index=True)
+
+    category = Column(String(30), nullable=False)
+    # interest / knowledge / struggle / goal / context
+    content = Column(Text, nullable=False)
+    confidence = Column(Float, default=0.7)
+
+    fact_metadata = Column(JSON, default=dict)
+
+    valid_from = Column(DateTime, default=datetime.utcnow, nullable=False)
+    valid_to = Column(DateTime, nullable=True, index=True)
+    superseded_by = Column(Integer, ForeignKey("student_facts.id"), nullable=True)
+
+    source_session_id = Column(String(36), nullable=True)
+    extracted_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+
+class PendingFactExtraction(Base):
+    """Queue of sessions awaiting fact extraction (spec 014)."""
+
+    __tablename__ = "pending_fact_extraction"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    session_id = Column(String(36), nullable=False, unique=True)
+    user_id = Column(String(100), nullable=False)
+    first_unextracted_msg_id = Column(Integer, nullable=True)
+    last_message_at = Column(DateTime, nullable=False)
+
+    status = Column(String(20), default="pending")
+    # pending / processing / done / failed
+    retry_count = Column(Integer, default=0)
+    error_msg = Column(Text, nullable=True)
+
+    enqueued_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    started_at = Column(DateTime, nullable=True)
+    completed_at = Column(DateTime, nullable=True)
+
+
+class ToolCallLog(Base):
+    """Audit log for tool invocations (spec 014 §8.2)."""
+
+    __tablename__ = "tool_call_log"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(String(100), index=True)
+    session_id = Column(String(36), index=True)
+    active_skill = Column(String(50), nullable=True)
+    tool_name = Column(String(50), nullable=False)
+    args_json = Column(JSON, default=dict)
+    result_json = Column(JSON, default=dict)
+    approved = Column(Boolean, nullable=True)
+    called_at = Column(DateTime, default=datetime.utcnow)
+    latency_ms = Column(Integer, nullable=True)
+    error = Column(Text, nullable=True)
+
+
+class Escalation(Base):
+    """Human-intervention markers (spec 014 §8.4)."""
+
+    __tablename__ = "escalations"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(String(100), index=True)
+    session_id = Column(String(36))
+    reason = Column(Text, nullable=False)
+    severity = Column(String(10), default="warn")  # info/warn/urgent
+    status = Column(String(20), default="open")    # open/handled/closed
+    handled_by = Column(String(100), nullable=True)
+    handled_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+
 _engine = None
 _session_factory = None
 
@@ -395,6 +490,11 @@ def _migrate_schema(engine):
         ("lesson_content", "course_content", "TEXT DEFAULT ''"),
         ("projects", "cover_image_url", "TEXT DEFAULT ''"),
         ("career_path_progress", "total_xp", "INTEGER DEFAULT 0"),
+        # spec 014: tutor 记忆系统 sessions 扩展列
+        ("sessions", "user_id", "VARCHAR(100)"),
+        ("sessions", "knode_id", "VARCHAR(100)"),
+        ("sessions", "active_skill", "VARCHAR(50)"),
+        ("sessions", "skill_turn_count", "INTEGER DEFAULT 0"),
     ]
 
     with engine.connect() as conn:
