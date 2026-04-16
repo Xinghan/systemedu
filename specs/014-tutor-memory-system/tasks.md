@@ -56,16 +56,21 @@
 
 ## Phase 1:基础设施(1 周)
 
-### T1.1 添加 langgraph 依赖,删除 deepagents [ ] parallel:no
+### T1.1 添加 langgraph 依赖(deepagents 暂留) [x] parallel:no
 
 **依赖**:无
 **改动**:
-- `pyproject.toml`:添加 `langgraph>=0.2.0` / `langgraph-checkpoint-sqlite` / `aiosqlite>=0.19.0`;删除 `deepagents>=0.4.11`
+- `pyproject.toml`:添加 `langgraph>=0.2.0` / `langgraph-checkpoint-sqlite>=2.0` / `aiosqlite>=0.19.0`
+- `pyproject.toml` `[tool.pytest.ini_options]` 增加 `e2e` marker
+- **`deepagents>=0.4.11` 本 task 保留**:现有 `core/agent_backend.py` / `gateway/server.py` / `agents/builtin/*` / `cli/main.py` 等仍在引用,直到 T5.5 才能移除
 - `pip install -e .` 在本地验证
 
 **测试**:`python -c "import langgraph; from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver; print('ok')"` 不报错
 
-**验收**:CI 通过;`pip show deepagents` 返回 not installed
+**验收**:
+- 上述 import 烟测通过
+- 现有 `pytest tests/ -q` 未因依赖改动出现 regression
+- `deepagents` 的最终移除记为 T5.5 的子步骤(`pip show deepagents` → not installed 的断言移到 T5.5)
 
 ### T1.2 新增 TutorConfig Pydantic 模型 + 配置字段 [ ] parallel:yes
 
@@ -528,13 +533,17 @@
 1. `grep -r "from systemedu.core.runtime" src/ tests/`(确认引用清零)
 2. `grep -r "from systemedu.agents.builtin" src/ tests/`(同上)
 3. `grep -r "BaseAgent" src/ tests/`(同上)
-4. 删除 `src/systemedu/core/runtime.py` / `agents/builtin/*.py` / `agents/base.py` / `agents/manager.py` / 相关测试
-5. 修 `src/systemedu/core/__init__.py` 去除 `AgentRuntime` 导出
-6. **`src/systemedu/skills/builtin/` 逐文件 grep 引用,属旧 runtime 的删、属 course_factory 的留**
+4. `grep -r "deepagents" src/ tests/`(同上,含 `core/agent_backend.py` / `core/config.py` / `gateway/server.py` / `agents/builtin/lab_coder.py` / `agents/builtin/lab_reviewer.py` / `cli/main.py` / `tests/test_runtime.py` / `tests/test_builtin_agents_deepagents.py`)
+5. 删除 `src/systemedu/core/runtime.py` / `core/agent_backend.py` / `agents/builtin/*.py` / `agents/base.py` / `agents/manager.py` / 相关测试
+6. 修 `src/systemedu/core/__init__.py` 去除 `AgentRuntime` 导出
+7. **`src/systemedu/skills/builtin/` 逐文件 grep 引用,属旧 runtime 的删、属 course_factory 的留**
+8. **`pyproject.toml` 删除 `deepagents>=0.4.11` 依赖**(T1.1 延迟到此步)
+9. `pip uninstall deepagents -y`(本地 venv 验证)+ `pip install -e .` 重装
 
 **测试**:
 - `pytest tests/ -q` 全绿
 - `pip install -e .` 成功
+- `pip show deepagents` 返回 not installed
 - 启动服务 + 基础对话烟测
 
 **验收**:`git log --oneline` 有一个独立 commit `refactor(tutor): T5.5 retire deepagents runtime`
