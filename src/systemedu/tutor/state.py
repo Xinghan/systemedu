@@ -64,6 +64,8 @@ class TutorState(TypedDict, total=False):
     skill_turn_count: int
     skill_state: dict[str, Any]
     skill_decision: SkillDecision
+    # 最近一次 skill_router 观察到的 knode_id，用于检测 knode 切换并重置 active_skill
+    last_routed_knode_id: str | None
 
     # === 输出轴 ===
     pending_tool_calls: list[Any]
