@@ -185,7 +185,7 @@
 
 **验收**:覆盖 2 种 context_scope × Mem0 开关共 4 种组合
 
-### T2.3 FactExtractor + supersede 判定 [ ] parallel:yes(与 T2.4 同步)
+### T2.3 FactExtractor + supersede 判定 [x] parallel:yes(与 T2.4 同步)
 
 **依赖**:T2.1
 **改动**:
