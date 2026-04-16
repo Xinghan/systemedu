@@ -269,7 +269,7 @@
 
 ## Phase 3:Skill 系统(2 周)
 
-### T3.1 SkillBase ABC + SkillConfig Pydantic [ ] parallel:no
+### T3.1 SkillBase ABC + SkillConfig Pydantic [x] parallel:no
 
 **依赖**:T1.5
 **改动**:
