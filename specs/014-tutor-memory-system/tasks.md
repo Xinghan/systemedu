@@ -344,7 +344,7 @@
 - max_turns=3,tools: `complete_node` / `search_student_facts`
 - 测试:完成任务后元认知引导;学生总结正确时建议 complete_node(需 confirm)
 
-### T3.10 主图接入 skill 子图 [ ] parallel:no
+### T3.10 主图接入 skill 子图 [x] parallel:no
 
 **依赖**:T3.3 + T3.4-T3.9
 **改动**:

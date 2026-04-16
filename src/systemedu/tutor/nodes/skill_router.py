@@ -232,7 +232,15 @@ def make_skill_router_node(
             # LLM still gets asked, but we overwrite 'continue' with 'switch'.
             decision = await _ask_llm(llm, state, skills, active_skill, turn_count, max_turns)
             if decision.get("action") == "continue":
-                target = decision.get("target_skill") or "direct-instruction"
+                # continue is not allowed past max_turns. Pick a different
+                # skill; if LLM suggested the same skill it was on, fall
+                # back to direct-instruction as the safe default.
+                suggested = decision.get("target_skill")
+                target = (
+                    suggested
+                    if suggested and suggested != active_skill
+                    else "direct-instruction"
+                )
                 decision = SkillDecision(
                     action="switch",
                     target_skill=target,
