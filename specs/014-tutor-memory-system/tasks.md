@@ -120,7 +120,7 @@
 
 **验收**:覆盖率 100%;`pg_saver` 调用即抛 NotImplementedError
 
-### T1.5 TutorState + 辅助 TypedDict 定义 [ ] parallel:yes
+### T1.5 TutorState + 辅助 TypedDict 定义 [x] parallel:yes
 
 **依赖**:T1.1
 **改动**:
