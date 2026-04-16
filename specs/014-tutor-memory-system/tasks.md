@@ -164,7 +164,7 @@
 
 **验收**:覆盖率 100%;supersede 链可双向遍历
 
-### T2.2 MemoryInjector 5 层并发(按 context_scope 激活) [ ] parallel:no
+### T2.2 MemoryInjector 5 层并发(按 context_scope 激活) [x] parallel:no
 
 **依赖**:T2.1
 **改动**:
