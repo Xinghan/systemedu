@@ -232,7 +232,7 @@
 
 **验收**:模拟 10 个并发 session,1 分钟内全部处理完成
 
-### T2.6 Mem0 L4 集成(按 project 过滤) [ ] parallel:yes
+### T2.6 Mem0 L4 集成(按 project 过滤) [x] parallel:yes
 
 **依赖**:T2.2
 **改动**:

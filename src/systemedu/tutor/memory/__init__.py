@@ -2,6 +2,7 @@
 
 from .fact_extractor import ExtractionStats, FactExtractor
 from .layers import MEMORY_TEMPLATE, ContextScope, MemoryInjector, render_memory
+from .mem0_adapter import Mem0AsyncAdapter
 from .pending_extraction import PendingFactExtractionDAO
 from .student_fact import StudentFactDAO
 
@@ -14,4 +15,5 @@ __all__ = [
     "ContextScope",
     "MEMORY_TEMPLATE",
     "render_memory",
+    "Mem0AsyncAdapter",
 ]
