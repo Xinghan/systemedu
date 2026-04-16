@@ -108,7 +108,11 @@ class TestSafetyShortCircuit:
 
         from systemedu.tutor import graph as graph_module
         importlib.reload(graph_module)
-
-        graph = graph_module.build_tutor_graph()
-        result = await graph.ainvoke({"user_id": "dan"})
-        assert result["_safety_triggered"] is True
+        try:
+            graph = graph_module.build_tutor_graph()
+            result = await graph.ainvoke({"user_id": "dan"})
+            assert result["_safety_triggered"] is True
+        finally:
+            # Restore the graph module so later tests see the real safety_gate.
+            monkeypatch.undo()
+            importlib.reload(graph_module)

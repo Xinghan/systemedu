@@ -251,7 +251,7 @@
 
 **验收**:Mem0 disabled 时 L4 不影响主流程;2-context 切换时 L4 过滤条件正确
 
-### T2.7 memory_inject 节点接入主图 [ ] parallel:no
+### T2.7 memory_inject 节点接入主图 [x] parallel:no
 
 **依赖**:T2.2, T1.6
 **改动**:
