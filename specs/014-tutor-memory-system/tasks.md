@@ -320,27 +320,27 @@
 
 每个 skill 遵循同一模板:SKILL.md + skill.py + 单测。详见 design §7.4-§7.5。
 
-#### T3.4 socratic-questioning [ ] parallel:yes
+#### T3.4 socratic-questioning [x] parallel:yes
 - max_turns=5,tools: `search_student_facts` / `get_knode_content` / `get_knode_prerequisites`
 - 测试覆盖:5 种问题模板(回忆/类比/反例/假设/归纳)正确调用;连续 2 轮卡壳调整难度;到 max_turns 设置 escalation_hint;学生说"直接告诉我"触发 early exit
 
-#### T3.5 direct-instruction [ ] parallel:yes
+#### T3.5 direct-instruction [x] parallel:yes
 - max_turns=3,tools: `get_knode_content` / `get_practice_exercises` / `complete_node`
 - 测试:事实查询直接回答;讲解后推送练习题
 
-#### T3.6 scaffolding [ ] parallel:yes
+#### T3.6 scaffolding [x] parallel:yes
 - max_turns=4,tools: `get_knode_prerequisites` / `get_knode_content` / `search_student_facts`
 - 测试:前置未过时拉取前置 knode 内容;前置已过继续当前
 
-#### T3.7 error-diagnosis [ ] parallel:yes
+#### T3.7 error-diagnosis [x] parallel:yes
 - max_turns=2,tools: `grade_submission` / `search_student_facts` / `get_practice_exercises`
 - 测试:分类 concept/calc/strategy;concept 错因转 scaffolding
 
-#### T3.8 pbl-driving-question [ ] parallel:yes
+#### T3.8 pbl-driving-question [x] parallel:yes
 - max_turns=2,tools: `search_student_facts` / `get_knode_content`
 - 测试:新 knode 首轮抛驱动性问题;引用学生兴趣(L1 interest)
 
-#### T3.9 reflection-prompt [ ] parallel:yes
+#### T3.9 reflection-prompt [x] parallel:yes
 - max_turns=3,tools: `complete_node` / `search_student_facts`
 - 测试:完成任务后元认知引导;学生总结正确时建议 complete_node(需 confirm)
 
