@@ -77,10 +77,17 @@ def get_memory():
 def retrieve_memories(
     user_id: str,
     query: str,
+    *,
     project_id: str | None = None,
     limit: int = 5,
 ) -> list[str]:
-    """Search relevant memories for a user."""
+    """Search relevant memories for a user.
+
+    Per spec 014 (2-context model, context-matrix §4) we no longer
+    filter by knode_id — within a project, memory is fully open across
+    all knodes, and across projects (scope=global) we return
+    unfiltered results.
+    """
     config = get_config()
     if not config.memory.enabled:
         return []
@@ -102,10 +109,16 @@ def retrieve_memories(
 def store_conversation(
     user_id: str,
     messages: list[dict],
+    *,
     project_id: str | None = None,
     knode_id: str | None = None,
 ) -> dict | None:
-    """Store a conversation in Mem0."""
+    """Store a conversation in Mem0.
+
+    `knode_id` is still written into metadata for audit / later
+    analysis even though the 2-context retrieval path no longer
+    filters by it.
+    """
     config = get_config()
     if not config.memory.enabled:
         return None
