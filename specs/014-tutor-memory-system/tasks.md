@@ -83,23 +83,27 @@
 
 **验收**:pytest 全绿
 
-### T1.3 新增 4 张表的 Alembic 迁移 [ ] parallel:no
+### T1.3 新增 4 张表 model + 扩展 chat_sessions(轻量自迁移) [x] parallel:no
 
-**依赖**:T0.2(schema 决策)
+> 本项目不使用 Alembic,沿用现有 `src/systemedu/storage/db.py` 的 SQLAlchemy `Base.metadata.create_all()` + `_migrate_schema()` ALTER TABLE 模式(spec 014 不引入新工具链,符合 YAGNI)。
+
+**依赖**:T0.2(schema 决策,方案 A:直接在 `sessions` 表加字段)
 **改动**:
-- `alembic/versions/NNNN_tutor_memory_tables.py`:
-  - `student_facts`(见 design §6.1,含 3 个联合索引)
-  - `pending_fact_extraction`(见 design §6.2,session_id 唯一)
-  - `tool_call_log`(见 design §8.2)
-  - `escalations`(见 design §8.4)
-- 若 T0.2 选方案 A:`alembic/versions/NNNN_extend_chat_sessions.py` 加 `user_id`/`knode_id`/`active_skill`/`skill_turn_count` 字段
+- `src/systemedu/storage/db.py` 新增 4 个 Model:
+  - `StudentFact`(见 design §6.1,含联合索引 `ix_sf_user_knode_category` / `ix_sf_user_project` / `ix_sf_valid_to`)
+  - `PendingFactExtraction`(见 design §6.2,`session_id` unique)
+  - `ToolCallLog`(见 design §8.2)
+  - `Escalation`(见 design §8.4)
+- 扩展 `ChatSession` 增加 `user_id` / `knode_id` / `active_skill` / `skill_turn_count` 字段(全部 nullable / 默认值,保证现有行可直接读出)
+- 在 `_migrate_schema()` 追加 `ALTER TABLE sessions ADD COLUMN ...` 4 条向后兼容(老部署首次启动自动补列)
 
-**测试**:
-- `alembic upgrade head` 在临时 DB 成功
-- `alembic downgrade -1` 可回滚
-- 索引存在:`SELECT name FROM sqlite_master WHERE type='index' AND name LIKE 'ix_sf_%'`
+**测试**:`tests/test_tutor_schema.py`
+- 4 张新表在 `create_all` 后存在(`sa.inspect(engine).has_table(...)`)
+- 3 个联合索引存在于 sqlite_master
+- 对一个预先只有旧字段的 `sessions` 表运行 `_migrate_schema()`,4 个新列被补齐,旧行数据不丢
+- `StudentFact` 能 insert / query by `(user_id, project_name, category)`
 
-**验收**:临时 DB 表结构符合 design;既有数据不丢
+**验收**:临时 DB 表结构符合 design;既有数据不丢;单测全绿
 
 ### T1.4 Checkpoint SqliteSaver 封装 [ ] parallel:yes
 
