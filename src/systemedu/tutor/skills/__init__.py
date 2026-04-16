@@ -5,5 +5,6 @@ LangGraph subgraph to the main tutor router. See design §7.1-§7.2.
 """
 
 from .base import SkillBase, SkillConfig
+from .loader import SkillLoader, SkillLoadError
 
-__all__ = ["SkillBase", "SkillConfig"]
+__all__ = ["SkillBase", "SkillConfig", "SkillLoader", "SkillLoadError"]
