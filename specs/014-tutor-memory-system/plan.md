@@ -13,6 +13,7 @@
 
 - **主图**:5 节点线性流水(`confirm_handler → safety_gate → memory_inject → skill_router → <skill subgraph> → output_stream`)
 - **记忆层**:`StudentFact` 时间表 + `PendingFactExtraction` 队列 + Mem0 向量召回 + 5 层结构化并行注入
+- **2-context 模型**:payload 字段 `context_scope ∈ {"project", "global"}`。`project` 全层激活(项目所有 knode 事实开放,单 thread 跨 knode);`global` 只开 L1 + L4(跨项目召回)。
 - **Skill 系统**:SKILL.md 格式 + 每 skill 一个子 StateGraph,6 个 skill 一次建成
 - **安全**:工具白名单 / 写操作二次确认 / ContextVar 作用域隔离 / ToolCallLog 审计 / safety_gate 敏感词预筛
 - **异步**:进程内 asyncio worker 批量抽取事实,session-end 触发 + 2 小时兜底
@@ -254,8 +255,19 @@ src/systemedu/mcp/ — 未来工具来源扩展
 ### 1. 状态与数据流
 见 design doc §5。TutorState 是主图唯一共享状态,每个 skill 子图有独立 `SkillState`(TypedDict),只通过主图 `skill_state` 字段传递序列化快照。
 
-### 2. 记忆 5 层(并发注入)
-见 design doc §6。`MemoryInjector.inject()` 用 `asyncio.gather(return_exceptions=True)` 并行 5 层,总延迟 = max(单层),单层失败返回空串不阻塞。
+### 2. 记忆 5 层(并发注入)+ 2-context 激活规则
+见 design doc §6 + `context-matrix.md` §3-§5。`MemoryInjector.inject(..., context_scope)` 用 `asyncio.gather(return_exceptions=True)` 并行 5 层,总延迟 = max(单层),单层失败返回空串不阻塞。
+
+**2-context 模型**(2026-04-16 决定,取代最初的 4-scope 设计):
+
+| context_scope | 适用场景 | L1 | L2 | L3 | L4 | L5 | thread_id |
+|--------------|--------|----|----|----|----|----|-----------|
+| `project` | 用户在具体项目内(任意 knode / 学习页 / 浮层 / 练习页) | ✓ | ✓ | ✓(项目内所有 knode 事实开放) | ✓(按 project 过滤) | ✓ | `{user_id}:{project}:project-main`(单 thread 跨 knode) |
+| `global` | 用户在项目外(主导航 chatbot / 未登录 / 项目列表页) | ✓ | ✗ | ✗ | ✓(不过滤 project) | ✗ | `{user_id}:global` |
+
+- **L3 不再按 knode_id 过滤**:项目内所有 knode 的 StudentFact 一次拉齐(防"切 knode 时学生被遗忘")
+- **skill_state 在 knode 切换时重置**:同一 project thread 内,`skill_router` 节点入口检测 `state.current_knode_id` 与前一次 checkpoint 的 knode_id 不同,就清空 `active_skill` + `skill_turn_count`(messages 保留)。依据:防跨 knode AI 混淆。
+- **global scope 前端 TODO**:banner 提示"未进入任何项目" + 项目快捷入口 → 由 **spec 015** 前端改造承接(本 spec 只做后端契约)
 
 ### 3. Supersede 链
 - 新事实入库时查 `(user_id, knode_id, category)` 当前事实(`valid_to IS NULL`)
@@ -314,7 +326,7 @@ Phase 顺序基于依赖关系,每个 Phase 内部任务可部分并行。
 | **P3** | Skill 系统 | SkillBase / Loader / skill_router + 6 个 skill | 2 周 |
 | **P4** | 工具 + 安全 | 10 工具 / confirm_handler / safety_gate / 审计 | 0.5 周 |
 | **P5** | Gateway 整合 + 老 runtime 退役 | `/api/chat` 切换 / 辅助端点 / 删除老代码 | 0.5 周 |
-| **P6** | E2E + 上线 | 5 个真实 LLM 场景 / 性能基线 / 部署 runbook | 0.5 周 |
+| **P6** | E2E + 上线 | 9 个真实 LLM 场景(5 基础 + 4 上下文边界) / 性能基线 / 部署 runbook | 0.5 周 |
 
 里程碑对应:P1+P2 达成 M1(记忆可用) / +P3 达成 M2(skill 全上) / +P4+P5 达成 M3(前后端可联调) / +P6 达成 M4(可上线)。
 
@@ -336,7 +348,7 @@ Phase 顺序基于依赖关系,每个 Phase 内部任务可部分并行。
 1. **Schema & migrations**(~1s):Alembic 正向 / 回滚
 2. **Unit tests**(~3s):节点 / skill / 工具独立,mock LLM 或 `FakeListLLM`
 3. **Integration tests**(~30s):主图全链路,7 场景
-4. **E2E real LLM**(~5min,`pytest -m e2e`):5 个真实 qwen-plus 场景
+4. **E2E real LLM**(~5min,`pytest -m e2e`):9 个真实 qwen-plus 场景(基础 5 + 2-context 边界 4)
 
 ### E2E 必过场景
 | # | 场景 | 关键断言 |
