@@ -281,7 +281,7 @@
 
 **验收**:后续 6 个 skill 均继承 SkillBase,API 冻结
 
-### T3.2 SkillLoader + SKILL.md 解析 [ ] parallel:no
+### T3.2 SkillLoader + SKILL.md 解析 [x] parallel:no
 
 **依赖**:T3.1
 **改动**:
