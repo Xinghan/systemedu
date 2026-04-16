@@ -30,8 +30,9 @@
 **产物**:
 - `specs/014-tutor-memory-system/context-matrix.md`,内容包括:
   - 每个入口(学习页 / 浮层 / 独立聊天 / 练习页)的 URL/组件路径、透传字段、当前 session 隔离粒度
-  - 每个入口对应的新 tutor graph 期望(L1-L5 哪些层激活 / 哪些必须清空)
-  - gateway payload 必须新增/补全的字段清单(如 `knode_id` / `user_id` / `exercise_id` / `page_context`)
+  - **简化 2-context 模型**(2026-04-16 决定):`context_scope="project"`(有具体项目,全部记忆开放跨 knode) vs `context_scope="global"`(无项目,仅 L1 + L4)
+  - 每个入口对应的 tutor graph 期望(L1-L5 哪些层激活 / 哪些必须清空)
+  - gateway payload 必须新增/补全的字段清单(如 `knode_id` / `user_id` / `exercise_id` / `context_scope`)
 
 **测试**:无(文档任务)
 
@@ -154,25 +155,26 @@
 
 **验收**:覆盖率 100%;supersede 链可双向遍历
 
-### T2.2 MemoryInjector 5 层并发 [ ] parallel:no
+### T2.2 MemoryInjector 5 层并发(按 context_scope 激活) [ ] parallel:no
 
 **依赖**:T2.1
 **改动**:
 - `src/systemedu/tutor/memory/layers.py`:
-  - `MemoryInjector.inject(...)` 用 `asyncio.gather(return_exceptions=True)`
+  - `MemoryInjector.inject(..., context_scope: Literal["project", "global"])` 用 `asyncio.gather(return_exceptions=True)`
   - 5 个私有方法 `_l1_profile` / `_l2_project_ctx` / `_l3_knode_state` / `_l4_semantic_recall` / `_l5_skill_ctx`
-  - **L3 必须按 `(user_id, project_name, knode_id)` 过滤**(对齐 T0.1 矩阵)
-  - **L4 必须支持按 `(user_id, project_name)` 过滤**(Mem0 调用)
-  - 接受 `knode_id=None` / `project_name=None` 的兼容入参(对应浮层 / 独立聊天场景)
+  - **激活规则**(对齐 context-matrix.md §4):
+    - `context_scope="project"`:L1 / L2 / L3 / L4(按 project 过滤)/ L5 **全部激活**(项目内所有 knode 事实全开)
+    - `context_scope="global"`:**仅 L1 + L4**(L4 不加 project 过滤,跨项目召回);L2 / L3 / L5 返回空串
+  - L3 按 `(user_id, project_name)` 过滤(不再限 knode_id,因为"项目所有记忆都开放")
+  - L4 按 `(user_id, project_name)` 过滤(scope=project)或 `(user_id)` 过滤(scope=global)
 
 **测试**:`tests/tutor/memory/test_layers.py`
-- 全部 5 层成功:MemorySnapshot 5 字段非空
-- L4 抛异常:其他 4 层仍返回,L4 为空串
-- `knode_id=None` 时 L3 返回空串
-- `project_name=None` 且 `knode_id=None` 时只激活 L1 + L4
+- `context_scope=project`:5 层全部非空,L3 包含项目内多个 knode 的事实
+- `context_scope=global`:仅 L1 / L4 有内容,L2 / L3 / L5 为空串
+- L4 抛异常:其他层仍返回,L4 为空串
 - 并发延迟:mock 5 个 sleep(100ms),总延迟 < 150ms(证明 gather 而非串行)
 
-**验收**:覆盖 4 种入参组合(有 knode / 只有 project / 都无 / 有 project 但 Mem0 关闭)
+**验收**:覆盖 2 种 context_scope × Mem0 开关共 4 种组合
 
 ### T2.3 FactExtractor + supersede 判定 [ ] parallel:yes(与 T2.4 同步)
 
@@ -221,21 +223,24 @@
 
 **验收**:模拟 10 个并发 session,1 分钟内全部处理完成
 
-### T2.6 Mem0 L4 集成(含 knode_id/project 隔离) [ ] parallel:yes
+### T2.6 Mem0 L4 集成(按 project 过滤) [ ] parallel:yes
 
 **依赖**:T2.2
 **改动**:
-- `src/systemedu/memory/client.py` 扩展:`retrieve_memories(user_id, query, *, project_id=None, knode_id=None, limit=5)`
-- `store_conversation(user_id, messages, *, project_id=None, knode_id=None)` 已有 knode_id,确认元数据正确
-- `src/systemedu/tutor/memory/layers.py` 的 `_l4_semantic_recall` 透传 knode_id
+- `src/systemedu/memory/client.py` 扩展:`retrieve_memories(user_id, query, *, project_id=None, limit=5)`
+  - 2-context 简化后 **不需要 knode_id 过滤**(项目内所有 knode 记忆开放)
+  - `store_conversation(user_id, messages, *, project_id=None, knode_id=None)` 保留 knode_id metadata(方便后期溯源/分析,但查询不做 knode 过滤)
+- `src/systemedu/tutor/memory/layers.py` 的 `_l4_semantic_recall`:
+  - `context_scope=project`:按 `project_id` 过滤
+  - `context_scope=global`:不过滤(跨项目召回)
 
 **测试**:`tests/tutor/memory/test_mem0_integration.py`
-- store 两条分别带 knode_A / knode_B 的对话
-- retrieve with `knode_id=A`:只返 A 的片段
-- retrieve with `knode_id=None`:返两条(无过滤)
+- store 两条分别带 project_A / project_B 的对话
+- retrieve with `project_id=A`:只返 A 的片段
+- retrieve with `project_id=None`(global scope):返两条(无过滤)
 - Mem0 关闭(`mem0_enabled=False`):直接返 []
 
-**验收**:Mem0 disabled 时 L4 不影响主流程
+**验收**:Mem0 disabled 时 L4 不影响主流程;2-context 切换时 L4 过滤条件正确
 
 ### T2.7 memory_inject 节点接入主图 [ ] parallel:no
 
@@ -245,9 +250,9 @@
 - `graph.py` 替换 no-op
 
 **测试**:`tests/tutor/test_memory_inject_node.py`
-- state 包含 user_id/project_name/knode_id 时,memory 5 层正确填充
-- state 缺 knode_id 时,L3 为空串,其他 4 层正常
-- state 缺 project_name 时,L2/L3 都为空串
+- `context_scope=project` + project_name 非空:L1-L5 全部填充(L3 含项目所有 knode 事实)
+- `context_scope=global`:只有 L1 / L4 有内容,L2 / L3 / L5 为空串
+- project_name 非空但 context_scope=global(异常兜底):按 global 执行
 
 **验收**:单轮 invoke 后 `state.memory.injected_at` 是最近时间
 
@@ -283,21 +288,24 @@
 
 **验收**:覆盖率 ≥ 90%
 
-### T3.3 skill_router 节点 + prompt [ ] parallel:no
+### T3.3 skill_router 节点 + prompt + knode 切换重置 [ ] parallel:no
 
 **依赖**:T3.2
 **改动**:
 - `src/systemedu/tutor/nodes/skill_router.py`:
+  - **入口先检查 knode 切换**:对比 `state.current_knode_id` vs 前一次 checkpoint 的 knode_id,不同则清空 `active_skill` + `skill_turn_count`(保留 messages)
   - LLM(qwen-turbo)输入 skill_catalog + active_skill + turn_count + 最近 3 消息 + L3 knode_state
   - 输出 `SkillDecision`
   - `active_skill` 超 max_turns 强制 switch(LLM 决策被 override)
+- 依据:2-context 项目内单 thread 跨 knode,但教学策略需要跟随学生正在学的 knode 重新决策(见 context-matrix.md §5)
 
 **测试**:`tests/tutor/nodes/test_skill_router.py`(FakeListLLM)
 - LLM 返 continue / switch / exit 都能正确解析
 - 非法 JSON 走兜底(switch 到 direct-instruction)
 - turn_count >= max_turns 时强制 switch
+- **knode 切换**:前一轮 knode=m1 / active_skill=socratic / turn_count=3,当前轮 knode=m2,router 入口观察到 `active_skill=None` + `turn_count=0`,走正常决策路径
 
-**验收**:覆盖 5 种决策路径
+**验收**:覆盖 6 种决策路径(含 knode 切换重置)
 
 ### T3.4-T3.9 六个 skill(可部分并行)
 
@@ -448,23 +456,30 @@
 
 ## Phase 5:Gateway + 老 runtime 退役(0.5 周)
 
-### T5.1 扩展 gateway payload 接受完整上下文 [ ] parallel:no
+### T5.1 扩展 gateway payload 接受 context_scope [ ] parallel:no
 
 **依赖**:T0.1 矩阵
 **改动**:
 - `src/systemedu/gateway/server.py`:
-  - `POST /api/chat` 和 `WS /api/chat/stream` payload 增加可选字段:`knode_id` / `exercise_id` / `page_context`
+  - `POST /api/chat` 和 `WS /api/chat/stream` payload 增加可选字段:
+    - `context_scope`:`"project"` | `"global"`(2-context 简化后的唯一切分)
+    - `knode_id`:仅供"当前正看哪个 knode"的 skill 决策参考,**不用于 memory 过滤**(项目内所有 knode 事实开放)
+    - `exercise_id`:练习页带,用于工具调用溯源
   - `user_id` 从认证会话强制注入(**不信任前端 payload**)
-  - payload 校验:若 `agent=tutor` 且来自学习页(`page_context=learn`),要求 `project_name` + `knode_id` 非空;若来自浮层(`page_context=floating`),不要求 knode_id
-- 前端 `web/src/lib/hooks/use-websocket-chat.ts` 和 `web/src/components/chat/chat-panel.tsx` 同步补充 `page_context` 字段(学习页="learn"/ 浮层="floating"/ 独立="standalone"/ 练习="exercise")
+  - payload 校验:`context_scope` 必填;`context_scope=project` 时 `project_name` 必填;`context_scope=global` 时 `project_name` / `knode_id` 必须为 null(冲突则返 400 提示用户)
+- 前端 `web/src/lib/hooks/use-websocket-chat.ts` 和 `web/src/components/chat/chat-panel.tsx`:
+  - 根据当前路由推断 `context_scope`:在 `/projects/<name>/...` 任意路径 → `"project"`;否则 → `"global"`
+  - 浮层进入 knode 页时 `knode_id` 跟随当前 knode,但 `context_scope` 仍是 `project`
+  - **spec 015 TODO**:global scope 时前端 banner("未进入任何项目")+ 项目快捷入口(本 spec 只做后端契约,前端 UI 由 015 实现)
 
 **测试**:`tests/gateway/test_chat_payload.py`
-- tutor + learn 缺 knode_id:400
-- tutor + floating:通过,knode_id=null
+- `context_scope=project` + 缺 project_name:400
+- `context_scope=global` + 带 project_name:400(冲突)
+- `context_scope=project` + project_name + knode_id=null:通过(项目内但未进 knode 页)
 - 前端伪造 user_id:被覆盖为认证会话的 user_id
-- 前端侧:`tests/web/test_use_websocket_chat.ts`(jest)验证 payload 构造
+- 前端侧:`tests/web/test_use_websocket_chat.ts`(jest)验证 2 种 context_scope 推断逻辑
 
-**验收**:4 种 page_context 均能正确路由到对应记忆层激活模式
+**验收**:2 种 context_scope 正确路由到对应的记忆层激活模式(见 T2.2)
 
 ### T5.2 `/api/chat` 切换到 tutor_graph [ ] parallel:no
 
@@ -472,7 +487,10 @@
 **改动**:
 - `server.py` 的 `/api/chat` 和 `/api/chat/stream` 内部从 `AgentRuntime.stream()` 改为 `tutor_graph.astream_events(...)`
 - SSE 事件类型转换(见 design §9.2)
-- `config={"configurable": {"thread_id": session_id, "user_id": ..., "project_name": ..., "knode_id": ..., "page_context": ...}}`
+- **thread_id 构造**(对齐 context-matrix.md §5):
+  - `context_scope=project`:`thread_id = f"{user_id}:{project_name}:project-main"`(单一 thread 跨 knode)
+  - `context_scope=global`:`thread_id = f"{user_id}:global"`(单一 thread)
+- `config={"configurable": {"thread_id": <per above>, "user_id": ..., "project_name": ..., "knode_id": ..., "context_scope": ...}}`
 
 **测试**:`tests/gateway/test_chat_endpoint.py`
 - 端到端 SSE 流:start / token / done 事件序列正确
@@ -540,47 +558,52 @@
 
 **验收**:每个场景至少 3 次运行全绿(LLM 不稳定性 <10%)
 
-### T6.2 E2E 真实 LLM 场景 6-9(上下文边界) [ ] parallel:no
+### T6.2 E2E 真实 LLM 场景 6-9(2-context 边界) [ ] parallel:no
 
 **依赖**:T6.1
-**目标**:专门覆盖现有 chatbot 结合场景下的记忆边界
+**目标**:专门覆盖 2-context 简化模型下现有 chatbot 结合场景的记忆边界
 
-#### 场景 6:切 knode 不切 session(学习页内)
-- 同一 session_id,从 project=mars / knode=m1 切到 project=mars / knode=m2
+#### 场景 6:项目内切 knode(单 thread 跨 knode)
+- `context_scope=project`,project=mars,在同一个 thread 内先学 knode=m1 3 轮,再切到 knode=m2
 - 前 3 轮在 m1 产生事实(如 "学生在 m1 的坡度概念上卡住")
 - 切到 m2 后第 1 轮:
-  - memory_inject 的 L3 必须是 m2 的卡点(或空,若无 m2 历史事实)
-  - **绝对不含 m1 的卡点文字**
+  - **memory_inject 的 L3 同时包含 m1 和 m2 的事实**(2-context 简化:项目内所有 knode 记忆开放)
   - L2(project 级)保留
-  - L4 Mem0 召回用 m2 的 knode_id 过滤
-- 断言:新一轮 state.memory.l3 内容 grep 不到 m1 的事实关键词
-
-#### 场景 7:knode 学习页 → 全局浮层(切 page_context)
-- Session A:学习页 project=mars / knode=m3,3 轮产生 skill_state(active_skill=socratic, turn_count=2)
-- Session B(浮层新开):project=null / knode=null / page_context=floating
+  - L4 Mem0 按 `project_id=mars` 过滤(不再限 knode_id)
+  - **skill_router 入口检测到 knode 切换,重置 `active_skill` + `skill_turn_count=0`**(messages 不清)
 - 断言:
-  - Session B 新 session_id,与 A 不共享 checkpoint
-  - Session B 的 memory.l3 为空
-  - Session B 的 active_skill 从 router 重新决策(不继承 A 的 socratic)
-  - Session B 的 L1(学生兴趣/画像)与 A 共享
-  - Session B 的 L4 用 project=null 查询,拿到跨项目的历史
+  - `state.memory.l3` 包含 m1 + m2 两个 knode 的关键词
+  - 切换轮之后 `state.active_skill` 先是 None,router 重新决策
+  - messages 历史完整保留(user 能看到前 3 轮 m1 的对话)
 
-#### 场景 8:tutor / teacher / student 多 agent 隔离
-- 浮层同一 project 下分别调 agent=tutor 和 agent=teacher
-- 在 tutor session 内产生 StudentFact(struggle,knode=m4)
-- teacher session 调 `search_student_facts`:能拿到(因为 teacher 的白名单如果包含)
-- **关键**:teacher 不得消费 tutor 的 `skill_state` / `active_skill`(两个 agent 独立 checkpoint thread)
-- 断言:tutor session_id ≠ teacher session_id;tutor 的 `active_skill=socratic` 不出现在 teacher 的 state
+#### 场景 7:项目 chatbot → 全局 chatbot(切 context_scope)
+- Thread A:`context_scope=project`,project=mars / knode=m3,3 轮产生 skill_state(active_skill=socratic, turn_count=2)
+- Thread B(用户切到全局 chatbot,如主导航的"问 AI"):`context_scope=global` / project=null / knode=null
+- 断言:
+  - Thread B 新 thread_id(`user_id:global`),与 A 不共享 checkpoint
+  - Thread B 的 `memory.l2 / l3 / l5` 均为空串(global scope 不激活)
+  - Thread B 的 `active_skill` 从 router 重新决策(不继承 A 的 socratic)
+  - Thread B 的 L1(学生兴趣/画像)与 A 共享
+  - Thread B 的 L4 不过滤 project,拿到跨项目的历史召回
+  - **前端侧 TODO(spec 015)**:UI 应显示"当前无项目上下文"banner + 项目快捷入口(本 E2E 只断言后端行为)
+
+#### 场景 8:tutor / teacher / student 多 agent 隔离(同一 project scope 内)
+- 浮层同一 project 下分别调 agent=tutor 和 agent=teacher,`context_scope=project`
+- 在 tutor thread 内产生 StudentFact(struggle,knode=m4)
+- teacher thread 调 `search_student_facts`:能拿到(因为 project 内记忆开放,且 teacher 白名单包含该工具)
+- **关键**:teacher 不得消费 tutor 的 `active_skill` / `skill_turn_count`(两个 agent 独立 checkpoint thread:`:tutor:` vs `:teacher:` 后缀)
+- 断言:tutor thread_id ≠ teacher thread_id;tutor 的 `active_skill=socratic` 不出现在 teacher 的 state
 
 > 注:本 spec 只实现 tutor graph,teacher/student graph 仍是旧路径或 pass-through。场景 8 的目的是保证引入 tutor graph 不会污染其它 agent。
 
-#### 场景 9:练习页带 exercise_id 调 chatbot
-- `page_context=exercise`,payload 含 `exercise_id`
+#### 场景 9:练习页带 exercise_id 调 chatbot(仍在 project scope)
+- `context_scope=project`,payload 含 `exercise_id`
 - chatbot 内调用 `grade_submission` + `search_student_facts`
 - 断言:
-  - tool_call_log 记录 exercise_id 作为上下文
+  - tool_call_log 记录 `exercise_id` 作为上下文
   - StudentFact 入库时 metadata 含 exercise_id 溯源
   - L3 包含 "当前练习 X 上的尝试" 文字
+  - 与场景 6 共用同一 `user_id:project:project-main` thread_id(练习页不单独开 thread)
 
 **验收**:4 个场景真实 LLM 各跑 3 次,成功率 100%(硬要求,关系到产品正确性)
 
