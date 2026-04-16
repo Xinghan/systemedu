@@ -202,7 +202,7 @@
 
 **验收**:覆盖率 ≥ 90%
 
-### T2.4 PendingFactExtraction model + DAO [ ] parallel:yes
+### T2.4 PendingFactExtraction model + DAO [x] parallel:yes
 
 **依赖**:T1.3
 **改动**:
