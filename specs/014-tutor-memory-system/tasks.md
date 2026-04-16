@@ -215,7 +215,7 @@
 
 **验收**:并发 enqueue 同一 session_id 不重复
 
-### T2.5 FactExtractionWorker asyncio loop [ ] parallel:no
+### T2.5 FactExtractionWorker asyncio loop [x] parallel:no
 
 **依赖**:T2.3, T2.4
 **改动**:
