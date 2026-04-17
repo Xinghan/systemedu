@@ -556,7 +556,7 @@
 
 ## Phase 6:E2E + 上线(0.5 周)
 
-### T6.1 E2E 真实 LLM 场景 1-5(基础) [ ] parallel:no
+### T6.1 E2E 真实 LLM 场景 1-5(基础) [x] parallel:no
 
 **依赖**:所有 Phase 1-5
 **改动**:
