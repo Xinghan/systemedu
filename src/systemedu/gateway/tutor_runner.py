@@ -23,6 +23,7 @@ log = logging.getLogger(__name__)
 
 _graph = None
 _checkpointer = None
+_checkpointer_cm = None  # must keep the context-manager alive to prevent GC
 
 
 def _skills_root() -> Path:
@@ -32,7 +33,7 @@ def _skills_root() -> Path:
 
 async def _get_graph():
     """Build or return the cached tutor graph."""
-    global _graph, _checkpointer
+    global _graph, _checkpointer, _checkpointer_cm
 
     if _graph is not None:
         return _graph
@@ -58,8 +59,12 @@ async def _get_graph():
     loader.scan()
     log.info("tutor_runner: loaded %d skills", len(loader.list_all()))
 
-    # Checkpointer (stays open for the process lifetime)
-    _checkpointer = await get_checkpointer(tutor_cfg).__aenter__()
+    # Checkpointer (stays open for the process lifetime).
+    # We must hold a reference to the context-manager object itself;
+    # otherwise GC will finalize the generator and close the underlying
+    # aiosqlite connection.
+    _checkpointer_cm = get_checkpointer(tutor_cfg)
+    _checkpointer = await _checkpointer_cm.__aenter__()
 
     _graph = build_tutor_graph(
         loader=loader,
@@ -71,9 +76,10 @@ async def _get_graph():
 
 async def shutdown():
     """Close the checkpointer on gateway shutdown."""
-    global _checkpointer
-    if _checkpointer is not None:
-        await _checkpointer.__aexit__(None, None, None)
+    global _checkpointer, _checkpointer_cm
+    if _checkpointer_cm is not None:
+        await _checkpointer_cm.__aexit__(None, None, None)
+        _checkpointer_cm = None
         _checkpointer = None
 
 

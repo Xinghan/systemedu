@@ -9,6 +9,34 @@ from systemedu.storage.db import LessonContent
 from systemedu.tutor.tools.decorator import require_tool_context, tutor_tool
 
 
+def _collect_exercises(cc: dict) -> list[dict]:
+    """Extract all exercises from course_content dict.
+
+    Exercises live in ``rendered_sections[id].exercises`` (course_factory
+    output).  Legacy content may also have a top-level ``exercises`` list.
+    This helper collects from both locations, de-duplicating by question text.
+    """
+    all_ex: list[dict] = []
+    seen_questions: set[str] = set()
+
+    def _add(raw: list):
+        for ex in raw:
+            q = ex.get("question", "")
+            if q and q not in seen_questions:
+                seen_questions.add(q)
+                all_ex.append(ex)
+
+    # Primary: rendered_sections (course_factory output)
+    for sec in (cc.get("rendered_sections") or {}).values():
+        if sec.get("mode") == "exercise":
+            _add(sec.get("exercises") or [])
+
+    # Fallback: top-level exercises (legacy)
+    _add(cc.get("exercises") or [])
+
+    return all_ex
+
+
 @tutor_tool(access="read", scope="project", description="获取练习题(自动剔除正确答案)")
 async def get_practice_exercises(project_name: str, knode_id: str) -> dict[str, Any]:
     ctx = require_tool_context()
@@ -28,12 +56,10 @@ async def get_practice_exercises(project_name: str, knode_id: str) -> dict[str, 
             return {"found": False, "exercises": []}
 
         exercises: list[dict] = []
-        # course_content JSON has exercises embedded
         if row.course_content:
             try:
                 cc = json.loads(row.course_content)
-                raw = cc.get("exercises") or []
-                for ex in raw:
+                for ex in _collect_exercises(cc):
                     safe = dict(ex)
                     safe.pop("correct", None)
                     safe.pop("answer", None)
@@ -85,13 +111,13 @@ async def grade_submission(
         if row.course_content:
             try:
                 cc = json.loads(row.course_content)
-                for ex in cc.get("exercises") or []:
+                for ex in _collect_exercises(cc):
                     if ex.get("exercise_id") == exercise_id:
                         correct_answer = ex.get("correct")
                         break
             except (json.JSONDecodeError, TypeError):
                 pass
-        if not correct_answer and row.quiz_data:
+        if correct_answer is None and row.quiz_data:
             try:
                 for ex in json.loads(row.quiz_data):
                     if ex.get("exercise_id") == exercise_id:
