@@ -240,20 +240,48 @@ async def api_session_detail(request: Request) -> JSONResponse:
 async def api_chat(request: Request) -> JSONResponse:
     """POST /api/chat - Send a message (synchronous response).
 
-    Supports optional project/agent context:
-      {"message": "...", "session_id": "...", "project": "train-ai-model", "agent": "tutor"}
+    Routes through the tutor LangGraph when available (spec 014),
+    falling back to the legacy AgentRuntime otherwise.
     """
-    body = await request.json()
-    message = body.get("message", "").strip()
-    session_id = body.get("session_id")
-    user_id = body.get("user_id", "default")
-    project_name = body.get("project")
-    agent_name = body.get("agent")
+    from systemedu.gateway.chat_payload import ChatPayload
 
+    body = await request.json()
+    try:
+        payload = ChatPayload(**body)
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=400)
+
+    message = payload.message.strip()
     if not message:
         return JSONResponse({"error": "message is required"}, status_code=400)
 
-    # If project/agent specified and no existing session, create a contextual runtime
+    # user_id: override with authenticated session (gateway is authority)
+    user_id = body.get("user_id", "default")
+
+    # --- Tutor graph path (spec 014) ---
+    try:
+        from systemedu.gateway import tutor_runner
+
+        result = await tutor_runner.invoke(payload, user_id)
+        resp: dict = {
+            "response": result["response"],
+            "thread_id": payload.thread_id(user_id),
+        }
+        if result.get("active_skill"):
+            resp["active_skill"] = result["active_skill"]
+        if result.get("confirm_required"):
+            resp["confirm_required"] = result["confirm_required"]
+        if result.get("_safety_triggered"):
+            resp["_safety_triggered"] = True
+        return JSONResponse(resp)
+    except Exception:
+        logger.debug("tutor_runner unavailable, falling back to legacy runtime", exc_info=True)
+
+    # --- Legacy runtime fallback ---
+    session_id = payload.session_id
+    project_name = payload.project_name
+    agent_name = payload.agent
+
     runtime = _get_runtime()
     if project_name and not session_id:
         try:
@@ -284,33 +312,60 @@ async def api_chat(request: Request) -> JSONResponse:
 async def ws_chat_stream(websocket: WebSocket) -> None:
     """WS /api/chat/stream - Streaming chat via WebSocket.
 
-    Client sends: {"message": "...", "session_id": "...", "project": "...", "agent": "..."}
-    Server sends: {"type": "chunk", "content": "..."} for each chunk
-                  {"type": "done", "session_id": "..."} when complete
-                  {"type": "error", "message": "..."} on error
+    Routes through the tutor LangGraph when available (spec 014),
+    falling back to the legacy AgentRuntime otherwise.
     """
     await websocket.accept()
 
-    # Cache per-project runtimes for this WebSocket connection
+    # Cache per-project runtimes for this WebSocket connection (legacy path)
     project_runtimes: dict[str, object] = {}
+
+    from systemedu.gateway.chat_payload import ChatPayload
 
     try:
         while True:
             data = await websocket.receive_json()
-            message = data.get("message", "").strip()
-            session_id = data.get("session_id")
-            project_name = data.get("project")
-            agent_name = data.get("agent")
-            user_id = data.get("user_id", "default")
-            node_id = data.get("node_id")  # Active learning node (optional)
-            active_tab = data.get("active_tab")  # Current lesson tab (concept/examples/etc.)
-            page_index = data.get("page_index")  # Current page index within tab
 
+            # Validate payload
+            try:
+                payload = ChatPayload(**data)
+            except Exception as e:
+                await websocket.send_json({"type": "error", "message": str(e)})
+                continue
+
+            message = payload.message.strip()
             if not message:
                 await websocket.send_json({"type": "error", "message": "message is required"})
                 continue
 
-            # Choose runtime: project-specific or global
+            user_id = data.get("user_id", "default")
+
+            # --- Tutor graph path (spec 014) ---
+            used_tutor = False
+            try:
+                from systemedu.gateway import tutor_runner
+
+                async for event in tutor_runner.stream(payload, user_id):
+                    await websocket.send_json(event)
+                await websocket.send_json({
+                    "type": "done",
+                    "thread_id": payload.thread_id(user_id),
+                })
+                used_tutor = True
+            except Exception:
+                logger.debug("tutor_runner stream unavailable, falling back", exc_info=True)
+
+            if used_tutor:
+                continue
+
+            # --- Legacy runtime fallback ---
+            session_id = payload.session_id
+            project_name = payload.project_name
+            agent_name = payload.agent
+            node_id = payload.node_id
+            active_tab = payload.active_tab
+            page_index = payload.page_index
+
             runtime = _get_runtime()
             if project_name:
                 cache_key = f"{project_name}:{agent_name or 'default'}"
@@ -2261,6 +2316,14 @@ async def _on_startup():
 
     _runtime = AgentRuntime(mcp_manager=mcp_manager)
 
+    # Pre-warm the tutor graph (non-fatal — lazy init works too)
+    try:
+        from systemedu.gateway import tutor_runner
+        await tutor_runner._get_graph()
+        logger.info("Tutor graph pre-warmed on startup")
+    except Exception:
+        logger.debug("Tutor graph pre-warm skipped (will lazy-init on first request)", exc_info=True)
+
     # Scan career paths directory and auto-enroll existing enrollments
     try:
         from systemedu.education.career_path import auto_enroll_for_project, scan_paths
@@ -3424,10 +3487,19 @@ def create_app() -> Starlette:
         Middleware(_AuthMiddleware),
     ]
 
+    async def _on_shutdown():
+        """Close tutor graph checkpointer on gateway shutdown."""
+        try:
+            from systemedu.gateway import tutor_runner
+            await tutor_runner.shutdown()
+        except Exception:
+            pass
+
     app = Starlette(
         routes=routes,
         middleware=middleware,
         on_startup=[_on_startup],
+        on_shutdown=[_on_shutdown],
     )
     return app
 
