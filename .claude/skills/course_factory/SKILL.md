@@ -1289,6 +1289,7 @@ Game 的交互方式不设固定模板，可以自由设计适合教学内容的
 16. 必须包含 i18n 双语支持（EN/CN），默认中文，左上角放语言切换按钮
 17. 所有用户可见文本必须通过 I18N 对象 + t(key) 函数查表，禁止硬编码中文或英文字符串
 18. Animation 帧切换必须使用共享元素过渡（getFrameElements + lerp + easeInOut，500ms）
+19. 禁止使用与 window 全局同名的顶层变量。常见坑位：`history`（浏览器导航 API，只有 pushState 没有 push，用 `var history = []` 做数组会导致 `history.push is not a function`）、`location`、`name`、`status`、`origin`、`parent`、`top`、`self`、`length`、`event`、`closed`、`opener`、`frames`、`outerWidth/Height`。游戏中的数组/状态变量用更具体的名字：`flights`/`rounds`/`trials`/`runs` 替代 `history`，`coord`/`pos` 替代 `location`，`playerName`/`itemName` 替代 `name`，`gameState`/`runStatus` 替代 `status`
 ```
 
 ### 物理常识约束（必须遵守）

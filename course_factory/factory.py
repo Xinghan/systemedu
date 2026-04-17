@@ -2226,13 +2226,20 @@ ANIMATION_RESIZE_PATCH_JS = r"""
       // canvas 防撑大
       '.systemedu-canvas-host{position:relative!important;min-width:0!important;min-height:0!important;overflow:hidden!important;}' +
       '.systemedu-canvas-host > canvas{position:absolute!important;top:0!important;left:0!important;width:100%!important;height:100%!important;}' +
-      // 浮动指南面板折叠态（默认折叠为一个小按钮，避免遮挡）
+      // lang-btn 移到左下角，避免遮挡标题；背景完全透明只留细边框
+      '.lang-btn{top:auto!important;bottom:8px!important;left:8px!important;right:auto!important;' +
+      'background:transparent!important;backdrop-filter:none!important;-webkit-backdrop-filter:none!important;' +
+      'border:1px solid rgba(255,181,156,0.45)!important;box-shadow:none!important;opacity:0.75!important;z-index:50!important;}' +
+      '.lang-btn:hover{opacity:1!important;background:rgba(20,20,35,0.7)!important;}' +
+      // 浮动指南面板折叠态（默认折叠为一个小按钮，避免遮挡）；背景透明只留圆圈
       '.guide-panel.systemedu-guide-collapsed{max-width:28px!important;max-height:28px!important;min-width:28px!important;min-height:28px!important;' +
       'padding:0!important;overflow:hidden!important;cursor:pointer!important;display:flex!important;align-items:center!important;justify-content:center!important;' +
-      'border-radius:50%!important;}' +
+      'border-radius:50%!important;background:transparent!important;backdrop-filter:none!important;-webkit-backdrop-filter:none!important;' +
+      'border:1px solid rgba(56,189,248,0.55)!important;box-shadow:none!important;opacity:0.75!important;}' +
+      '.guide-panel.systemedu-guide-collapsed:hover{opacity:1!important;background:rgba(20,20,35,0.7)!important;}' +
       '.guide-panel.systemedu-guide-collapsed > *{display:none!important;}' +
       '.guide-panel.systemedu-guide-collapsed::before{content:"?";color:#38bdf8;font-weight:700;font-size:14px;}' +
-      // 小视口时强制 guide-panel 宽度收紧
+      // 小视口时强制 guide-panel 宽度收紧（展开态仍保留毛玻璃背景以便阅读）
       '.guide-panel{max-width:min(220px,35vw)!important;z-index:50!important;}';
     document.head.appendChild(style);
     container.classList.add('systemedu-canvas-host');
