@@ -66,10 +66,17 @@ async def _get_graph():
     _checkpointer_cm = get_checkpointer(tutor_cfg)
     _checkpointer = await _checkpointer_cm.__aenter__()
 
+    # Memory injector — wires the 5-layer context into the graph
+    from systemedu.storage.db import get_session as get_db_session
+    from systemedu.tutor.memory import MemoryInjector
+
+    injector = MemoryInjector(db_session_factory=get_db_session)
+
     _graph = build_tutor_graph(
         loader=loader,
         llm=llm,
         checkpointer=_checkpointer,
+        memory_injector=injector,
     )
     return _graph
 
