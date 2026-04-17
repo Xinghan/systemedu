@@ -31,73 +31,17 @@ from systemedu.gateway.auth import (  # noqa: E402
 # Track server start time for uptime calculation
 _start_time: float = 0.0
 
-# Shared runtime instance (created on startup)
-_runtime = None
-_session_manager = None
+# Shared state
 _fact_worker = None
-
-
-def _get_runtime():
-    global _runtime
-    if _runtime is None:
-        from systemedu.core.runtime import AgentRuntime
-
-        _runtime = AgentRuntime()
-    return _runtime
+_session_manager = None
 
 
 def _get_session_manager():
-    return _get_runtime().session_manager
-
-
-def _create_project_runtime(project_name: str, agent_name: str | None = None, user_id: str = "default"):
-    """Create an AgentRuntime with full project context: skills, MCP, backend selection."""
-    from systemedu.core.runtime import AgentRuntime
-    from systemedu.education.project_loader import load_project_context
-
-    ctx = load_project_context(project_name, user_id=user_id)
-
-    # Extract project-level agent config
-    agent_key = agent_name or "tutor"
-    agent_config = ctx.project.agents.get(agent_key)
-
-    # Collect skill names from project config
-    skill_names = [agent_key]  # Always include the agent name as a skill
-    if agent_config and agent_config.skills:
-        skill_names.extend(agent_config.skills)
-
-    # Determine LLM provider from project config
-    provider = None
-    if agent_config and agent_config.llm:
-        provider = agent_config.llm
-
-    # Determine backend from project config agent type
-    backend = None
-    if agent_config:
-        # agent type "builtin:tutor" → use default; "deepagent:xxx" → use deepagents
-        if agent_config.type.startswith("deepagent"):
-            backend = "deepagents"
-
-    # Load project-level MCP servers
-    mcp_manager = None
-    if ctx.project.mcp:
-        try:
-            from systemedu.mcp.manager import MCPManager
-
-            mcp_manager = MCPManager()
-            # Note: MCP servers are started asynchronously; they will be lazy-loaded
-            # when tools are first accessed via _setup_mcp_tools in the runtime.
-            logger.info(f"Project MCP servers configured: {list(ctx.project.mcp.keys())}")
-        except Exception as e:
-            logger.warning(f"Failed to init project MCP manager: {e}")
-
-    return AgentRuntime(
-        provider=provider,
-        skill_names=skill_names,
-        mcp_manager=mcp_manager,
-        project_context=ctx,
-        backend=backend,
-    )
+    global _session_manager
+    if _session_manager is None:
+        from systemedu.core.session import SessionManager
+        _session_manager = SessionManager()
+    return _session_manager
 
 
 def _format_uptime(seconds: float) -> str:
@@ -239,12 +183,9 @@ async def api_session_detail(request: Request) -> JSONResponse:
 
 
 async def api_chat(request: Request) -> JSONResponse:
-    """POST /api/chat - Send a message (synchronous response).
-
-    Routes through the tutor LangGraph when available (spec 014),
-    falling back to the legacy AgentRuntime otherwise.
-    """
+    """POST /api/chat - Send a message through the tutor LangGraph (spec 014)."""
     from systemedu.gateway.chat_payload import ChatPayload
+    from systemedu.gateway import tutor_runner
 
     body = await request.json()
     try:
@@ -259,69 +200,26 @@ async def api_chat(request: Request) -> JSONResponse:
     # user_id: override with authenticated session (gateway is authority)
     user_id = body.get("user_id", "default")
 
-    # --- Tutor graph path (spec 014) ---
-    try:
-        from systemedu.gateway import tutor_runner
-
-        result = await tutor_runner.invoke(payload, user_id)
-        resp: dict = {
-            "response": result["response"],
-            "thread_id": payload.thread_id(user_id),
-        }
-        if result.get("active_skill"):
-            resp["active_skill"] = result["active_skill"]
-        if result.get("confirm_required"):
-            resp["confirm_required"] = result["confirm_required"]
-        if result.get("_safety_triggered"):
-            resp["_safety_triggered"] = True
-        return JSONResponse(resp)
-    except Exception:
-        logger.debug("tutor_runner unavailable, falling back to legacy runtime", exc_info=True)
-
-    # --- Legacy runtime fallback ---
-    session_id = payload.session_id
-    project_name = payload.project_name
-    agent_name = payload.agent
-
-    runtime = _get_runtime()
-    if project_name and not session_id:
-        try:
-            runtime = _create_project_runtime(project_name, agent_name, user_id)
-        except Exception as e:
-            logger.warning(f"Failed to load project context: {e}")
-
-    session = None
-    if session_id:
-        session = _get_session_manager().get_session(session_id)
-
-    if session is None:
-        session = _get_session_manager().create_session(
-            agent_name=agent_name,
-            project_name=project_name,
-        )
-
-    response = await runtime.process_message(message, session, user_id=user_id)
-
-    return JSONResponse(
-        {
-            "session_id": session.id,
-            "response": response,
-        }
-    )
+    result = await tutor_runner.invoke(payload, user_id)
+    resp: dict = {
+        "response": result["response"],
+        "thread_id": payload.thread_id(user_id),
+    }
+    if result.get("active_skill"):
+        resp["active_skill"] = result["active_skill"]
+    if result.get("confirm_required"):
+        resp["confirm_required"] = result["confirm_required"]
+    if result.get("_safety_triggered"):
+        resp["_safety_triggered"] = True
+    return JSONResponse(resp)
 
 
 async def ws_chat_stream(websocket: WebSocket) -> None:
-    """WS /api/chat/stream - Streaming chat via WebSocket.
-
-    Routes through the tutor LangGraph when available (spec 014),
-    falling back to the legacy AgentRuntime otherwise.
-    """
+    """WS /api/chat/stream - Streaming chat through tutor LangGraph (spec 014)."""
     await websocket.accept()
 
-    # Cache per-project runtimes for this WebSocket connection (legacy path)
-    project_runtimes: dict[str, object] = {}
-
     from systemedu.gateway.chat_payload import ChatPayload
+    from systemedu.gateway import tutor_runner
 
     try:
         while True:
@@ -341,58 +239,13 @@ async def ws_chat_stream(websocket: WebSocket) -> None:
 
             user_id = data.get("user_id", "default")
 
-            # --- Tutor graph path (spec 014) ---
-            used_tutor = False
             try:
-                from systemedu.gateway import tutor_runner
-
                 async for event in tutor_runner.stream(payload, user_id):
                     await websocket.send_json(event)
                 await websocket.send_json({
                     "type": "done",
                     "thread_id": payload.thread_id(user_id),
                 })
-                used_tutor = True
-            except Exception:
-                logger.debug("tutor_runner stream unavailable, falling back", exc_info=True)
-
-            if used_tutor:
-                continue
-
-            # --- Legacy runtime fallback ---
-            session_id = payload.session_id
-            project_name = payload.project_name
-            agent_name = payload.agent
-            node_id = payload.node_id
-            active_tab = payload.active_tab
-            page_index = payload.page_index
-
-            runtime = _get_runtime()
-            if project_name:
-                cache_key = f"{project_name}:{agent_name or 'default'}"
-                if cache_key not in project_runtimes:
-                    try:
-                        project_runtimes[cache_key] = _create_project_runtime(
-                            project_name, agent_name, user_id
-                        )
-                    except Exception as e:
-                        logger.warning(f"Failed to create project runtime: {e}")
-                if cache_key in project_runtimes:
-                    runtime = project_runtimes[cache_key]
-
-            session = None
-            if session_id:
-                session = _get_session_manager().get_session(session_id)
-            if session is None:
-                session = _get_session_manager().create_session(
-                    agent_name=agent_name,
-                    project_name=project_name,
-                )
-
-            try:
-                async for event in runtime.stream_message(message, session, user_id=user_id, node_id=node_id, active_tab=active_tab, page_index=page_index):
-                    await websocket.send_json(event)
-                await websocket.send_json({"type": "done", "session_id": session.id})
             except Exception as e:
                 logger.exception("Error in streaming chat")
                 await websocket.send_json({"type": "error", "message": str(e)})
@@ -2293,30 +2146,7 @@ async def dashboard(request: Request) -> HTMLResponse:
 
 
 async def _on_startup():
-    """Initialize runtime and auto-connect configured MCP servers on startup."""
-    global _runtime
-    from systemedu.core.config import get_config
-    from systemedu.core.runtime import AgentRuntime
-
-    config = get_config()
-    mcp_manager = None
-
-    if config.mcp.servers:
-        try:
-            from systemedu.mcp.manager import MCPManager
-
-            mcp_manager = MCPManager()
-            for name, srv_config in config.mcp.servers.items():
-                try:
-                    await mcp_manager.start_server(name, srv_config)
-                    logger.info(f"MCP server '{name}' auto-connected")
-                except Exception as e:
-                    logger.warning(f"MCP server '{name}' auto-connect failed: {e}")
-        except Exception as e:
-            logger.warning(f"MCP manager init failed: {e}")
-
-    _runtime = AgentRuntime(mcp_manager=mcp_manager)
-
+    """Initialize tutor graph and background workers on startup."""
     # Pre-warm the tutor graph (non-fatal — lazy init works too)
     try:
         from systemedu.gateway import tutor_runner

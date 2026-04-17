@@ -59,7 +59,7 @@ def config_env(tmp_path, monkeypatch):
 @pytest.fixture
 def client(config_env):
     from systemedu.gateway import server
-    server._runtime = None  # Reset cached runtime
+    server._session_manager = None  # Reset cached session manager
     app = create_app()
     c = TestClient(app)
     token = c.post("/api/auth/login", json={"username": "root", "password": "123systemedu"}).json()["token"]
@@ -941,22 +941,23 @@ class TestGatewayEnrollment:
 
 class TestGatewayChatUserId:
     def test_chat_with_user_id(self, config_env):
-        """POST /api/chat with user_id should pass it to process_message."""
-        mock_agent = MagicMock()
-        mock_agent.ainvoke = AsyncMock(return_value={
-            "messages": [AIMessage(content="hello user")]
-        })
-
-        with (
-            patch("systemedu.core.agent_backend.get_llm", return_value=MagicMock()),
-            patch("systemedu.core.agent_backend.create_deep_agent", return_value=mock_agent),
+        """POST /api/chat with user_id should pass it to tutor_runner."""
+        with patch(
+            "systemedu.gateway.tutor_runner.invoke",
+            new_callable=AsyncMock,
+            return_value={
+                "response": "hello user",
+                "active_skill": None,
+                "confirm_required": None,
+                "_safety_triggered": False,
+            },
         ):
             app = create_app()
             client = _auth_client(app)
 
             resp = client.post(
                 "/api/chat",
-                json={"message": "hi", "user_id": "user42"},
+                json={"message": "hi", "user_id": "user42", "project_name": "mars"},
             )
             assert resp.status_code == 200
             data = resp.json()
@@ -964,21 +965,22 @@ class TestGatewayChatUserId:
 
     def test_chat_default_user_id(self, config_env):
         """POST /api/chat without user_id should default to 'default'."""
-        mock_agent = MagicMock()
-        mock_agent.ainvoke = AsyncMock(return_value={
-            "messages": [AIMessage(content="ok")]
-        })
-
-        with (
-            patch("systemedu.core.agent_backend.get_llm", return_value=MagicMock()),
-            patch("systemedu.core.agent_backend.create_deep_agent", return_value=mock_agent),
+        with patch(
+            "systemedu.gateway.tutor_runner.invoke",
+            new_callable=AsyncMock,
+            return_value={
+                "response": "ok",
+                "active_skill": None,
+                "confirm_required": None,
+                "_safety_triggered": False,
+            },
         ):
             app = create_app()
             client = _auth_client(app)
 
             resp = client.post(
                 "/api/chat",
-                json={"message": "test"},
+                json={"message": "test", "project_name": "mars"},
             )
             assert resp.status_code == 200
             assert resp.json()["response"] == "ok"
@@ -1396,7 +1398,7 @@ class TestCareerPathAPI:
         scan_paths(tmp_path / "paths")
 
         from systemedu.gateway import server
-        server._runtime = None
+        server._session_manager = None
         app = create_app()
         c = TestClient(app)
         token = c.post("/api/auth/login", json={"username": "root", "password": "123systemedu"}).json()["token"]

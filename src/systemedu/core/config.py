@@ -129,7 +129,7 @@ class TTSConfig(BaseModel):
 class AgentConfig(BaseModel):
     """Agent runtime configuration."""
 
-    backend: str = "auto"  # "auto" | "langgraph" | "deepagents"
+    backend: str = "langgraph"  # legacy field, always langgraph now
 
 
 class TutorConfig(BaseModel):

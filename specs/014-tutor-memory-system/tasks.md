@@ -530,7 +530,7 @@
 - 启动后 worker 运行
 - 关闭时 graceful 结束(单 tick 完成再退出)
 
-### T5.5 删除老 runtime [ ] parallel:no
+### T5.5 删除老 runtime [x] parallel:no
 
 **依赖**:T5.2, T5.3, T5.4(确保无人再依赖)
 **步骤**:
