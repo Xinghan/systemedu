@@ -25,6 +25,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog"
 import { gateway } from "@/lib/api"
+import { LearningStatsCard } from "@/components/learning/learning-stats-card"
 import type { KnowledgeLevel, LessonStatus, MilestoneInfo, ProjectBrief, ProjectDetail, SubProjectInfo } from "@/lib/types/api"
 import { KNOWLEDGE_LEVEL_LABELS } from "@/lib/types/api"
 import { useT } from "@/lib/hooks/use-t"
@@ -1249,6 +1250,11 @@ const [editCoverFile, setEditCoverFile] = useState<File | null>(null)
           {/* Career Path */}
           {enrollment && (
             <CareerPathCard projectName={params.name} t={t} />
+          )}
+
+          {/* Learning Stats */}
+          {enrollment && (
+            <LearningStatsCard projectName={params.name} />
           )}
 
           {/* Project Resources */}
