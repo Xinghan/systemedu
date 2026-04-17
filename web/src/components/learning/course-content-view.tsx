@@ -448,10 +448,34 @@ function stripDuplicateTitle(markdown: string, title: string): string {
 // ---------------------------------------------------------------------------
 // TheoryQuiz — collapsible self-test exercises inside a theory modal
 // ---------------------------------------------------------------------------
-function TheoryQuiz({ exercises }: { exercises: NonNullable<TheoryEntry["exercises"]> }) {
-  const [expanded, setExpanded] = useState(false)
-  const [selected, setSelected] = useState<(number | null)[]>(() => exercises.map(() => null))
-  const [submitted, setSubmitted] = useState<boolean[]>(() => exercises.map(() => false))
+function TheoryQuiz({ theoryId, exercises }: { theoryId: string; exercises: NonNullable<TheoryEntry["exercises"]> }) {
+  const storageKey = `theory_quiz_${theoryId}`
+
+  // Load saved answers from localStorage on mount
+  const [selected, setSelected] = useState<(number | null)[]>(() => {
+    if (typeof window === "undefined") return exercises.map(() => null)
+    try {
+      const saved = localStorage.getItem(storageKey)
+      if (saved) {
+        const parsed = JSON.parse(saved) as (number | null)[]
+        if (Array.isArray(parsed) && parsed.length === exercises.length) return parsed
+      }
+    } catch { /* ignore */ }
+    return exercises.map(() => null)
+  })
+  const [submitted, setSubmitted] = useState<boolean[]>(() => {
+    if (typeof window === "undefined") return exercises.map(() => false)
+    try {
+      const saved = localStorage.getItem(storageKey)
+      if (saved) {
+        const parsed = JSON.parse(saved) as (number | null)[]
+        if (Array.isArray(parsed) && parsed.length === exercises.length)
+          return parsed.map((v) => v !== null)
+      }
+    } catch { /* ignore */ }
+    return exercises.map(() => false)
+  })
+  const [expanded, setExpanded] = useState(() => submitted.some(Boolean))
 
   const handleSelect = (qi: number, oi: number) => {
     if (submitted[qi]) return
@@ -461,6 +485,9 @@ function TheoryQuiz({ exercises }: { exercises: NonNullable<TheoryEntry["exercis
   const handleSubmit = (qi: number) => {
     if (selected[qi] === null) return
     setSubmitted((prev) => { const n = [...prev]; n[qi] = true; return n })
+    // Persist to localStorage
+    const nextSelected = [...selected]
+    try { localStorage.setItem(storageKey, JSON.stringify(nextSelected)) } catch { /* ignore */ }
   }
 
   return (
@@ -644,7 +671,7 @@ function TheoryBlock({ theory }: { theory: TheoryEntry }) {
                         </p>
                       </div>
                     </div>
-                    {theory.exercises && theory.exercises.length > 0 && <TheoryQuiz exercises={theory.exercises} />}
+                    {theory.exercises && theory.exercises.length > 0 && <TheoryQuiz theoryId={theory.theory_id} exercises={theory.exercises} />}
                   </div>
                 </div>
               ) : (
@@ -665,7 +692,7 @@ function TheoryBlock({ theory }: { theory: TheoryEntry }) {
                       </p>
                     </div>
                   </div>
-                  {theory.exercises && theory.exercises.length > 0 && <TheoryQuiz exercises={theory.exercises} />}
+                  {theory.exercises && theory.exercises.length > 0 && <TheoryQuiz theoryId={theory.theory_id} exercises={theory.exercises} />}
                 </div>
               )}
             </div>
