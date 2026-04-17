@@ -571,7 +571,7 @@
 
 **验收**:每个场景至少 3 次运行全绿(LLM 不稳定性 <10%)
 
-### T6.2 E2E 真实 LLM 场景 6-9(2-context 边界) [ ] parallel:no
+### T6.2 E2E 真实 LLM 场景 6-9(2-context 边界) [x] parallel:no
 
 **依赖**:T6.1
 **目标**:专门覆盖 2-context 简化模型下现有 chatbot 结合场景的记忆边界
