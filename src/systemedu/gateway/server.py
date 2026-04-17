@@ -3390,6 +3390,159 @@ async def api_all_badges(request: Request) -> JSONResponse:
     return JSONResponse(badges)
 
 
+# --- Tutor Endpoints (spec 014 T5.3) ---
+
+
+async def api_tutor_session_end(request: Request) -> JSONResponse:
+    """POST /api/tutor/session/end - Signal session ended, enqueue fact extraction."""
+    from systemedu.storage.db import get_session as get_db_session
+    from systemedu.tutor.memory.pending_extraction import PendingFactExtractionDAO
+
+    body = await request.json()
+    session_id = body.get("session_id")
+    user_id = body.get("user_id", "default")
+
+    if not session_id:
+        return JSONResponse({"error": "session_id is required"}, status_code=400)
+
+    db = get_db_session()
+    try:
+        dao = PendingFactExtractionDAO(db)
+        row = dao.enqueue(
+            session_id=session_id,
+            user_id=user_id,
+            last_message_at=datetime.utcnow(),
+        )
+        return JSONResponse({
+            "status": "enqueued",
+            "session_id": row.session_id,
+        })
+    finally:
+        db.close()
+
+
+async def api_tutor_facts(request: Request) -> JSONResponse:
+    """GET /api/tutor/facts - List student facts for a user."""
+    from systemedu.storage.db import get_session as get_db_session
+    from systemedu.tutor.memory.student_fact import StudentFactDAO
+
+    user_id = request.query_params.get("user_id", "default")
+    project_name = request.query_params.get("project_name")
+    category = request.query_params.get("category")
+
+    db = get_db_session()
+    try:
+        dao = StudentFactDAO(db)
+        facts = dao.list_by_user(
+            user_id,
+            project_name=project_name,
+            category=category,
+        )
+        return JSONResponse([
+            {
+                "id": f.id,
+                "user_id": f.user_id,
+                "project_name": f.project_name,
+                "knode_id": f.knode_id,
+                "category": f.category,
+                "content": f.content,
+                "confidence": f.confidence,
+                "valid_from": f.valid_from.isoformat() if f.valid_from else None,
+                "valid_to": f.valid_to.isoformat() if f.valid_to else None,
+            }
+            for f in facts
+        ])
+    finally:
+        db.close()
+
+
+async def api_tutor_session_history(request: Request) -> JSONResponse:
+    """GET /api/tutor/session/{id}/history - Tool call log for a session."""
+    from systemedu.storage.db import get_session as get_db_session
+    from systemedu.tutor.audit.tool_call_log import ToolCallLogDAO
+
+    session_id = request.path_params["id"]
+
+    db = get_db_session()
+    try:
+        dao = ToolCallLogDAO(db)
+        rows = dao.list_by_session(session_id)
+        return JSONResponse([
+            {
+                "id": r.id,
+                "tool_name": r.tool_name,
+                "args": r.args_json,
+                "result": r.result_json,
+                "approved": r.approved,
+                "called_at": r.called_at.isoformat() if r.called_at else None,
+                "latency_ms": r.latency_ms,
+                "error": r.error,
+            }
+            for r in rows
+        ])
+    finally:
+        db.close()
+
+
+async def api_tutor_session_delete(request: Request) -> JSONResponse:
+    """DELETE /api/tutor/session/{id} - Delete a tutor session's checkpoint."""
+    session_id = request.path_params["id"]
+
+    try:
+        from systemedu.gateway import tutor_runner
+
+        graph = await tutor_runner._get_graph()
+        if hasattr(graph, "checkpointer") and graph.checkpointer is not None:
+            cp = graph.checkpointer
+            config = {"configurable": {"thread_id": session_id}}
+            # LangGraph checkpointers support aget_tuple; we can write an empty
+            # state to effectively "clear" it.  A proper delete API doesn't
+            # exist in the LangGraph checkpoint interface, so we put an empty
+            # checkpoint to mark it as cleared.
+            try:
+                existing = await cp.aget_tuple(config)
+                if existing is not None:
+                    await cp.aput(
+                        config,
+                        {"messages": [], "user_id": "", "project_name": ""},
+                        {"source": "delete", "step": -1, "writes": {}},
+                        {},
+                    )
+            except Exception:
+                logger.debug("Checkpoint clear failed for %s", session_id, exc_info=True)
+    except Exception:
+        logger.debug("tutor_runner unavailable for session delete", exc_info=True)
+
+    return JSONResponse({"status": "deleted", "session_id": session_id})
+
+
+async def api_tutor_escalations(request: Request) -> JSONResponse:
+    """GET /api/tutor/escalations - List open escalations (admin)."""
+    from systemedu.storage.db import get_session as get_db_session
+    from systemedu.tutor.audit.escalation import EscalationDAO
+
+    user_id = request.query_params.get("user_id")
+
+    db = get_db_session()
+    try:
+        dao = EscalationDAO(db)
+        rows = dao.list_open(user_id=user_id)
+        return JSONResponse([
+            {
+                "id": r.id,
+                "user_id": r.user_id,
+                "session_id": r.session_id,
+                "reason": r.reason,
+                "severity": r.severity,
+                "status": r.status,
+                "created_at": r.created_at.isoformat() if r.created_at else None,
+            }
+            for r in rows
+        ])
+    finally:
+        db.close()
+
+
 def create_app() -> Starlette:
     """Create the Starlette ASGI application."""
     global _start_time
@@ -3446,6 +3599,11 @@ def create_app() -> Starlette:
         Route("/api/career-paths/{name}/avatar/{stage:int}", api_career_path_avatar_svg, methods=["GET"]),
         Route("/api/badges", api_all_badges, methods=["GET"]),
 
+        Route("/api/tutor/session/end", api_tutor_session_end, methods=["POST"]),
+        Route("/api/tutor/facts", api_tutor_facts, methods=["GET"]),
+        Route("/api/tutor/session/{id}/history", api_tutor_session_history, methods=["GET"]),
+        Route("/api/tutor/session/{id}", api_tutor_session_delete, methods=["DELETE"]),
+        Route("/api/tutor/escalations", api_tutor_escalations, methods=["GET"]),
         Route("/api/agents", api_agents),
         Route("/api/skills", api_skills),
         Route("/api/mcp/servers", api_mcp_dispatch, methods=["GET", "POST"]),
