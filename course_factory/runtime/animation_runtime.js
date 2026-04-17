@@ -1,17 +1,20 @@
 /**
  * Animation Runtime -- shared skeleton for all course factory animations.
  *
- * Usage: the LLM provides a CONFIG object and content functions,
- * then calls AnimRuntime.boot() to start.
+ * Layout: sidebar (200px left column) contains lang-btn, title, subtitle,
+ * frame indicator, and guide panel. The canvas occupies the remaining right
+ * area with ZERO overlapping elements. All coordinates passed to
+ * getFrameElements and customDrawElement are the full canvas virtual
+ * dimensions -- no safe-area offsets needed.
  *
  * Required globals before boot():
  *   - CONFIG: { title, subtitle, totalFrames, hudLabels, hudValues, guideItems, style }
  *   - getFrameElements(f, W, H): returns element array for frame f
- *   - drawBg(ctx, W, H): draws background (optional, default dark gradient + grid)
  *
  * Optional globals:
- *   - onReady(): called after boot, for additional setup
- *   - customDrawElement(ctx, el): return true if handled, false to fall through to default
+ *   - drawBg(ctx, W, H): draws background (default: dark gradient + grid)
+ *   - customDrawElement(ctx, el, W, H): return true if handled
+ *   - onReady(): called after boot
  */
 
 var AnimRuntime = (function () {
@@ -25,45 +28,15 @@ var AnimRuntime = (function () {
   var LANG = 'cn';
   var I18N = {};
 
-  // Reference coordinate system -- all animation content is authored
-  // against this virtual canvas size. The runtime auto-scales to fit.
+  // Reference coordinate system -- content is authored against this.
+  // The runtime scales to fit the actual canvas while preserving aspect.
   var REF_W = 700, REF_H = 400;
 
-  // --- Safe area ---
-  // The guide-panel and lang-btn overlay the canvas with position:fixed.
-  // We measure their actual pixel sizes and subtract from the content
-  // coordinate space, so getFrameElements() receives W/H that only
-  // cover the unobstructed region. The content transform auto-offsets
-  // so (0,0) maps to the safe area's top-left corner.
-  var _safeInset = { top: 0, right: 0, bottom: 0, left: 0 }; // in real px
+  // Virtual dimensions passed to getFrameElements / customDrawElement.
+  // Computed by _contentTransform() on each resize.
+  var _vw = REF_W, _vh = REF_H;
 
-  function _measureSafeArea() {
-    var guide = document.getElementById('guide');
-    var lang  = document.getElementById('langBtn');
-    var right = 0, left = 0;
-    var cvRect = cv.getBoundingClientRect();
-    if (guide) {
-      var gs = guide.getBoundingClientRect();
-      // guide-panel is position:fixed; measure how much it overlaps canvas horizontally
-      if (gs.right > cvRect.left && gs.left < cvRect.right) {
-        right = Math.max(0, cvRect.right - gs.left + 8); // 8px extra margin
-      }
-    }
-    if (lang) {
-      var ls = lang.getBoundingClientRect();
-      if (ls.left < cvRect.right && ls.right > cvRect.left) {
-        left = Math.max(0, ls.right - cvRect.left + 4);
-      }
-    }
-    _safeInset.right = right;
-    _safeInset.left = left;
-    // Vertical: DOM header/controls/hud are outside canvas-wrap in flex layout.
-    // Add a fixed top padding so content y=0 has breathing room below the
-    // DOM header area. This is a percentage of canvas height.
-    _safeInset.top = Math.round(H * 0.04);
-  }
-
-  // --- Palette presets (from animation_game_design/ DESIGN.md + code.html) ---
+  // --- Palette presets ---
   var PALETTES = {
     helix_lab: {
       bg: '#0c0e12', bg2: '#111318', surface: '#171a1f',
@@ -74,7 +47,7 @@ var AnimRuntime = (function () {
       error: '#ff716c', outline: '#74757a',
       glow: 'rgba(80,255,176,0.1)', glowStrong: 'rgba(80,255,176,0.3)',
       glass: 'rgba(23,26,31,0.6)', glassBlur: 20,
-      radius: '0px', // helix_lab uses organic curves but 0px for panels
+      radius: '0px',
     },
     aether_clinic: {
       bg: '#111318', bg2: '#1a1c20', surface: '#1e2024',
@@ -177,35 +150,20 @@ var AnimRuntime = (function () {
     },
   };
 
-  var PAL = PALETTES.helix_lab; // default, overridden by CONFIG.style
+  var PAL = PALETTES.helix_lab;
 
   // --- Math helpers ---
   function lerp(a, b, p) { return a + (b - a) * p; }
   function easeInOut(x) { return x < 0.5 ? 2 * x * x : 1 - Math.pow(-2 * x + 2, 2) / 2; }
 
   /**
-   * interpolate -- Remotion 风格的多段帧插值函数。
-   *
-   * 用法:
-   *   interpolate(frame, [0, 30, 60], [0, 1, 0])
-   *   // frame=0 → 0, frame=15 → 0.5, frame=30 → 1, frame=45 → 0.5, frame=60 → 0
-   *
-   *   interpolate(frame, [0, 30], [100, 400], { easing: easeInOut })
-   *
-   * @param {number} value     当前值（通常是帧号或时间）
-   * @param {number[]} input   输入区间端点（必须递增，至少 2 个）
-   * @param {number[]} output  输出区间端点（与 input 等长）
-   * @param {object} [opts]    可选配置
-   * @param {function} [opts.easing]  缓动函数 (0→1) → (0→1)，默认线性
-   * @param {string} [opts.extrapolate]  "clamp"(默认) | "extend"
-   * @returns {number}
+   * interpolate -- Remotion-style multi-segment frame interpolation.
    */
   function interpolate(value, input, output, opts) {
     var n = input.length;
     var easing = (opts && opts.easing) || null;
     var clamp = !(opts && opts.extrapolate === 'extend');
 
-    // 边界处理
     if (value <= input[0]) {
       if (clamp) return output[0];
       var p0 = (value - input[0]) / (input[1] - input[0]);
@@ -217,7 +175,6 @@ var AnimRuntime = (function () {
       return lerp(output[n - 2], output[n - 1], easing ? easing(pn) : pn);
     }
 
-    // 找到所在区间
     for (var i = 1; i < n; i++) {
       if (value <= input[i]) {
         var p = (value - input[i - 1]) / (input[i] - input[i - 1]);
@@ -233,8 +190,6 @@ var AnimRuntime = (function () {
   function t(key) { return (I18N[key] && I18N[key][LANG]) || (I18N[key] && I18N[key]['en']) || key; }
 
   function _buildI18N(cfg) {
-    // Merge CONFIG.i18n into I18N
-    // Built-in keys (always available)
     I18N = {
       btnPlay:  { en: 'PLAY',  cn: '\u64ad\u653e' },
       btnPause: { en: 'PAUSE', cn: '\u6682\u505c' },
@@ -252,7 +207,6 @@ var AnimRuntime = (function () {
     var g = c.createLinearGradient(0, 0, 0, h);
     g.addColorStop(0, PAL.bg); g.addColorStop(1, PAL.bg2);
     c.fillStyle = g; c.fillRect(0, 0, w, h);
-    // subtle grid
     c.strokeStyle = 'rgba(255,255,255,0.03)'; c.lineWidth = 0.5;
     for (var x = 0; x < w; x += 40) { c.beginPath(); c.moveTo(x, 0); c.lineTo(x, h); c.stroke(); }
     for (var y = 0; y < h; y += 40) { c.beginPath(); c.moveTo(0, y); c.lineTo(w, y); c.stroke(); }
@@ -264,8 +218,8 @@ var AnimRuntime = (function () {
     ctx.save();
     ctx.globalAlpha = el.alpha;
 
-    // Allow user override
-    if (typeof customDrawElement === 'function' && customDrawElement(ctx, el)) {
+    // Allow user override -- pass virtual W/H (same as getFrameElements receives)
+    if (typeof customDrawElement === 'function' && customDrawElement(ctx, el, _vw, _vh)) {
       ctx.restore();
       return;
     }
@@ -344,32 +298,19 @@ var AnimRuntime = (function () {
   }
 
   // --- Content scaling ---
-  // Scale factor is determined by height (fit REF_H into H).
-  // The virtual width adapts to fill the actual canvas width,
-  // so content scripts always get the full horizontal span.
-  //
-  // Safe area: the coordinate space passed to getFrameElements is
-  // automatically shrunk to exclude areas obstructed by guide-panel
-  // and lang-btn overlays. The transform offsets the origin so
-  // content (0,0) maps to the safe area top-left corner.
-  var _vw = REF_W, _vh = REF_H;
-
+  // Scale based on canvas height to fit REF_H. Virtual width adapts
+  // to fill the actual canvas width so content uses the full area.
+  // No safe-area offsets -- nothing overlaps the canvas.
   function _contentTransform() {
-    var safeW = W - _safeInset.left - _safeInset.right;
-    var safeH = H - _safeInset.top;
-    if (safeW < 200) safeW = W;
-    if (safeH < 100) safeH = H;
-    // Scale factor based on safe height
-    var s = safeH / REF_H;
+    var s = H / REF_H;
     _vh = REF_H;
-    _vw = safeW / s;
+    _vw = W / s;
     if (_vw < REF_W) _vw = REF_W;
-    return { s: s, ox: _safeInset.left, oy: _safeInset.top, vw: _vw, vh: _vh };
+    return { s: s, ox: 0, oy: 0, vw: _vw, vh: _vh };
   }
 
   function _applyContentScale(ct) {
     ctx.save();
-    ctx.translate(ct.ox, ct.oy);
     ctx.scale(ct.s, ct.s);
   }
 
@@ -413,16 +354,13 @@ var AnimRuntime = (function () {
       var ct = _contentTransform();
       _applyContentScale(ct);
 
-      // Old-only elements: fade out
       oldElems.forEach(function (oe) {
         if (!newMap[oe.id]) drawElement(merge(oe, { alpha: 1 - p }));
       });
 
-      // New elements
       newElems.forEach(function (ne) {
         var oe = oldMap[ne.id];
         if (oe) {
-          // Shared element: lerp position/size
           var merged = merge(ne, {
             x: lerp(oe.x || 0, ne.x || 0, p),
             y: lerp(oe.y || 0, ne.y || 0, p),
@@ -431,17 +369,14 @@ var AnimRuntime = (function () {
             r: lerp(oe.r || 0, ne.r || 0, p),
             alpha: 1
           });
-          // Arrow endpoints
           if (ne.type === 'arrow' && oe.type === 'arrow') {
             merged.x1 = lerp(oe.x1, ne.x1, p); merged.y1 = lerp(oe.y1, ne.y1, p);
             merged.x2 = lerp(oe.x2, ne.x2, p); merged.y2 = lerp(oe.y2, ne.y2, p);
           }
-          // Line endpoints
           if (ne.type === 'line' && oe.type === 'line') {
             merged.x1 = lerp(oe.x1, ne.x1, p); merged.y1 = lerp(oe.y1, ne.y1, p);
             merged.x2 = lerp(oe.x2, ne.x2, p); merged.y2 = lerp(oe.y2, ne.y2, p);
           }
-          // Text cross-fade
           if ((ne.type === 'label' || ne.type === 'text') && oe.text !== ne.text) {
             drawElement(merge(oe, { alpha: 1 - p }));
             drawElement(merge(ne, { alpha: p }));
@@ -449,7 +384,6 @@ var AnimRuntime = (function () {
             drawElement(merged);
           }
         } else {
-          // New-only element: fade in
           drawElement(merge(ne, { alpha: p }));
         }
       });
@@ -480,30 +414,20 @@ var AnimRuntime = (function () {
     if (fi) fi.textContent = (f + 1) + ' / ' + totalFrames;
   }
 
-  // --- Guide panel ---
+  // --- Guide panel (sidebar layout -- always visible, no collapse) ---
   function _buildGuide() {
     var cfg = window.CONFIG || {};
     var guideTitle = document.getElementById('guideTitle');
     var guideContent = document.getElementById('guideContent');
-    if (!guideTitle || !guideContent) return;
+    if (!guideContent) return;
 
-    guideTitle.textContent = t(cfg.guideTitle || 'guideDefault');
+    if (guideTitle) guideTitle.textContent = t(cfg.guideTitle || 'guideDefault');
+
     var items = cfg.guideItems || [];
     var html = '<ul>';
     items.forEach(function (key) { html += '<li>' + t(key) + '</li>'; });
     html += '</ul>';
     guideContent.innerHTML = html;
-
-    // Re-measure safe area after guide content is filled
-    if (cv) _measureSafeArea();
-
-    // Collapse toggle
-    guideTitle.addEventListener('click', function () {
-      guideContent.classList.toggle('collapsed');
-      // Re-measure and redraw after collapse/expand changes overlay size
-      _measureSafeArea();
-      drawFrame(currentFrame);
-    });
   }
 
   // --- refreshI18N ---
@@ -520,7 +444,8 @@ var AnimRuntime = (function () {
     if (btnNext) btnNext.textContent = t('btnNext');
     if (btnPlay) btnPlay.textContent = playing ? t('btnPause') : t('btnPlay');
 
-    document.getElementById('langBtn').textContent = LANG.toUpperCase();
+    var langBtn = document.getElementById('langBtn');
+    if (langBtn) langBtn.textContent = LANG.toUpperCase();
 
     _buildGuide();
     _updateHUD(currentFrame);
@@ -536,7 +461,6 @@ var AnimRuntime = (function () {
     cv.width = W * DPR; cv.height = H * DPR;
     cv.style.width = W + 'px'; cv.style.height = H + 'px';
     ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
-    _measureSafeArea();
     drawFrame(currentFrame);
   }
 
@@ -574,7 +498,7 @@ var AnimRuntime = (function () {
       PAL = PALETTES[cfg.style];
     }
 
-    // Inject CSS custom properties from palette
+    // Inject CSS custom properties
     var root = document.documentElement;
     root.style.setProperty('--bg', PAL.bg);
     root.style.setProperty('--bg2', PAL.bg2);
@@ -593,7 +517,6 @@ var AnimRuntime = (function () {
     root.style.setProperty('--glass-blur', PAL.glassBlur + 'px');
     root.style.setProperty('--radius', PAL.radius);
 
-    // Build i18n table
     _buildI18N(cfg);
 
     // Canvas init
@@ -606,12 +529,16 @@ var AnimRuntime = (function () {
     setTimeout(_resize, 600);
     document.fonts.ready.then(function () { _resize(); });
 
-    // Controls
-    document.getElementById('langBtn').addEventListener('click', function () {
-      LANG = LANG === 'en' ? 'cn' : 'en';
-      refreshI18N();
-    });
+    // Lang toggle
+    var langBtn = document.getElementById('langBtn');
+    if (langBtn) {
+      langBtn.addEventListener('click', function () {
+        LANG = LANG === 'en' ? 'cn' : 'en';
+        refreshI18N();
+      });
+    }
 
+    // Controls
     var btnPrev = document.getElementById('btnPrev');
     var btnNext = document.getElementById('btnNext');
     var btnPlay = document.getElementById('btnPlay');
@@ -639,7 +566,6 @@ var AnimRuntime = (function () {
   // --- Public API ---
   return {
     boot: boot,
-    // Expose for content scripts
     t: t,
     lerp: lerp,
     interpolate: interpolate,
@@ -657,11 +583,11 @@ var AnimRuntime = (function () {
     get totalFrames() { return totalFrames; },
     get LANG() { return LANG; },
     get _lang() { return LANG; },
+    get lang() { return LANG; },
     get REF_W() { return REF_W; },
     get REF_H() { return REF_H; },
     get realW() { return W; },
     get realH() { return H; },
-    get safeInset() { return _safeInset; },
     applyContentScale: function () { var ct = _contentTransform(); _applyContentScale(ct); },
     restoreContentScale: function () { ctx.restore(); },
   };
