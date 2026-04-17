@@ -245,13 +245,41 @@ async def ws_chat_stream(websocket: WebSocket) -> None:
             )
 
             try:
+                collected_chunks: list[str] = []
                 async for event in tutor_runner.stream(payload, user_id):
                     await websocket.send_json(event)
+                    if event.get("type") == "chunk" and event.get("content"):
+                        collected_chunks.append(event["content"])
+
+                session_id = payload.session_id or payload.thread_id(user_id)
                 await websocket.send_json({
                     "type": "done",
-                    "session_id": payload.session_id or payload.thread_id(user_id),
+                    "session_id": session_id,
                     "thread_id": payload.thread_id(user_id),
                 })
+
+                # Persist to SessionManager so /api/sessions/full returns
+                # tutor chat history on page reload.
+                try:
+                    sm = _get_session_manager()
+                    sess = sm.get_session(session_id)
+                    if sess is None:
+                        sess = sm.create_session(
+                            agent_name="tutor",
+                            project_name=payload.project_name,
+                        )
+                        # Re-register under the frontend's session_id
+                        sm._sessions.pop(sess.id, None)
+                        sess.id = session_id
+                        sm._sessions[session_id] = sess
+                        sm._persist_session(sess)
+                    sess.add_message("user", message)
+                    ai_text = "".join(collected_chunks)
+                    if ai_text:
+                        sess.add_message("assistant", ai_text)
+                except Exception:
+                    logger.debug("Failed to persist chat to SessionManager", exc_info=True)
+
             except Exception as e:
                 logger.exception("Error in streaming chat")
                 await websocket.send_json({"type": "error", "message": str(e)})
