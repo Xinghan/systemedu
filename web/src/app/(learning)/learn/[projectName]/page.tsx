@@ -392,10 +392,14 @@ export default function LearnPage() {
   const sessionStartRef = useRef<number>(Date.now())
   const cleanupRef = useRef<(() => void) | null>(null)
 
-  // Sync activeLessonTab from outline section for CourseContentView mode.
-  // Maps the current visible section title to a tab key so ChatPanel
-  // knows which context the student is viewing.
+  // Sync activeLessonTab: assignment view overrides outline-based inference.
+  // When assignmentOpen=true, tab is always "project_assignment".
+  // Otherwise, derive from the current visible outline section title.
   useEffect(() => {
+    if (assignmentOpen) {
+      setActiveLessonTab("project_assignment")
+      return
+    }
     if (!activeOutlineId || outline.length === 0) return
     const section = outline.find((s) => s.id === activeOutlineId)
     if (!section) return
@@ -405,7 +409,7 @@ export default function LearnPage() {
     else if (/作业|项目|assignment|capstone/i.test(title)) tab = "project_assignment"
     else if (/实验|lab/i.test(title)) tab = "interactive_lab"
     setActiveLessonTab(tab)
-  }, [activeOutlineId, outline])
+  }, [activeOutlineId, outline, assignmentOpen])
 
   // Measure outline dot positions — distribute dots by each heading's real
   // vertical offset within the scrollable content container. Re-measures on
