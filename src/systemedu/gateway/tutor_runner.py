@@ -160,8 +160,19 @@ async def stream(
         if kind == "on_chain_end" and event.get("name") == "LangGraph":
             final_state = event.get("data", {}).get("output", {})
 
-        # Token streaming from LLM calls inside skill subgraphs
+        # Token streaming from LLM calls inside skill subgraphs.
+        # Filter out tokens from skill_router (its LLM call produces
+        # JSON decisions, not student-facing text).
         if kind == "on_chat_model_stream":
+            # LangGraph v2: tags include node path, metadata has langgraph_node
+            tags = event.get("tags") or []
+            meta = event.get("metadata") or {}
+            node = meta.get("langgraph_node") or ""
+            if (
+                any("skill_router" in t for t in tags)
+                or node == "skill_router"
+            ):
+                continue
             chunk = event.get("data", {}).get("chunk")
             if chunk and hasattr(chunk, "content") and chunk.content:
                 yield {"type": "chunk", "content": chunk.content}

@@ -43,6 +43,7 @@ def render_memory_block(memory: dict[str, Any] | None) -> str:
         ("l1_profile", "学生画像"),
         ("l2_project_ctx", "项目进度"),
         ("l3_knode_state", "当前卡点"),
+        ("l3_knode_content", "当前课程内容"),
         ("l5_skill_ctx", "上一个策略"),
     ):
         val = memory.get(key)

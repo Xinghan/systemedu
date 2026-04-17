@@ -25,6 +25,7 @@ from sqlalchemy.orm import Session
 
 from systemedu.storage.db import (
     Enrollment,
+    LessonContent,
     ProgressRecord,
     StudentFact,
 )
@@ -87,6 +88,7 @@ class MemoryInjector:
             self._l1_profile(user_id),
             self._l2_project_ctx(user_id, project_name, context_scope),
             self._l3_knode_state(user_id, project_name, context_scope),
+            self._l3_knode_content(project_name, knode_id, context_scope),
             self._l4_semantic_recall(
                 user_id, last_user_msg, project_name, context_scope,
             ),
@@ -103,13 +105,15 @@ class MemoryInjector:
         l1 = _safe(results[0], "l1")
         l2 = _safe(results[1], "l2")
         l3 = _safe(results[2], "l3")
-        l4 = _safe(results[3], "l4")
-        l5 = _safe(results[4], "l5")
+        l3_content = _safe(results[3], "l3_content")
+        l4 = _safe(results[4], "l4")
+        l5 = _safe(results[5], "l5")
 
         return MemorySnapshot(
             l1_profile=l1,
             l2_project_ctx=l2,
             l3_knode_state=l3,
+            l3_knode_content=l3_content,
             l4_semantic_recall=l4 if isinstance(l4, list) else [],
             l5_skill_ctx=l5,
             injected_at=datetime.utcnow(),
@@ -241,6 +245,92 @@ class MemoryInjector:
 
         return await asyncio.to_thread(_query)
 
+    async def _l3_knode_content(
+        self,
+        project_name: str | None,
+        knode_id: str | None,
+        scope: ContextScope,
+    ) -> str:
+        """Load current knode's course content (plan + exercises).
+
+        This gives the skill LLM actual knowledge of what the student is
+        studying, so it can answer in-context instead of hallucinating.
+        """
+        if scope != "project" or not project_name or not knode_id:
+            return ""
+
+        def _query() -> str:
+            import json as _json
+
+            with _session(self.db_session_factory) as db:
+                try:
+                    kid = int(knode_id)
+                except (ValueError, TypeError):
+                    return ""
+                row = (
+                    db.query(LessonContent)
+                    .filter(
+                        LessonContent.project_name == project_name,
+                        LessonContent.knode_id == kid,
+                    )
+                    .one_or_none()
+                )
+                if row is None:
+                    return ""
+
+                parts: list[str] = []
+
+                # Extract plan_markdown from course_content JSON
+                if row.course_content:
+                    try:
+                        cc = _json.loads(row.course_content)
+                        plan = cc.get("plan_markdown") or ""
+                        if plan:
+                            # Truncate to ~1500 chars to avoid blowing up context
+                            if len(plan) > 1500:
+                                plan = plan[:1500] + "\n...(truncated)"
+                            parts.append(f"## 课程内容\n{plan}")
+
+                        # Extract exercises
+                        exercises: list[dict] = []
+                        for sec in (cc.get("rendered_sections") or {}).values():
+                            if sec.get("mode") == "exercise":
+                                for ex in sec.get("exercises") or []:
+                                    exercises.append(ex)
+                        # Also check top-level exercises (legacy)
+                        for ex in cc.get("exercises") or []:
+                            exercises.append(ex)
+
+                        if exercises:
+                            ex_lines = []
+                            for ex in exercises[:10]:
+                                q = ex.get("question", "")
+                                eid = ex.get("exercise_id", "")
+                                etype = ex.get("type", "")
+                                opts = ex.get("options")
+                                line = f"- [{eid}] ({etype}) {q}"
+                                if opts and isinstance(opts, list):
+                                    line += " | " + " / ".join(
+                                        str(o) for o in opts
+                                    )
+                                ex_lines.append(line)
+                            parts.append(
+                                "## 练习题\n" + "\n".join(ex_lines)
+                            )
+                    except (_json.JSONDecodeError, TypeError):
+                        pass
+
+                # Fallback: legacy concept field
+                if not parts and row.concept:
+                    text = row.concept
+                    if len(text) > 1500:
+                        text = text[:1500] + "\n...(truncated)"
+                    parts.append(f"## 课程内容\n{text}")
+
+                return "\n\n".join(parts)
+
+        return await asyncio.to_thread(_query)
+
     async def _l4_semantic_recall(
         self,
         user_id: str,
@@ -303,6 +393,9 @@ MEMORY_TEMPLATE = """## L1 学生画像（稳定）
 ## L3 当前 knode 状态
 {l3_knode_state}
 
+## L3 当前课程内容
+{l3_knode_content}
+
 ## L4 相关历史对话（语义召回 top {l4_top_k}）
 {l4_semantic_recall_bullets}
 
@@ -323,6 +416,7 @@ def render_memory(snapshot: MemorySnapshot, *, l4_top_k: int = 3) -> str:
         l1_profile=snapshot.get("l1_profile") or "(空)",
         l2_project_ctx=snapshot.get("l2_project_ctx") or "(空)",
         l3_knode_state=snapshot.get("l3_knode_state") or "(空)",
+        l3_knode_content=snapshot.get("l3_knode_content") or "(空)",
         l4_semantic_recall_bullets=bullets,
         l5_skill_ctx=snapshot.get("l5_skill_ctx") or "(空)",
         l4_top_k=l4_top_k,
