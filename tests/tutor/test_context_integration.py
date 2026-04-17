@@ -144,6 +144,69 @@ class TestSkillMemoryBlock:
 # ---------------------------------------------------------------------------
 # 3. Router decision does not appear in skill messages
 # ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# 3a. memory_inject_node passes active_tab to injector
+# ---------------------------------------------------------------------------
+class TestMemoryInjectPassesActiveTab:
+    @pytest.mark.asyncio
+    async def test_forwards_active_tab_to_injector(self):
+        """memory_inject_node passes state.active_tab to injector.inject()."""
+        from systemedu.tutor.nodes import make_memory_inject_node
+
+        @dataclass
+        class RecordingInjector:
+            calls: list[dict] = None  # type: ignore
+
+            def __post_init__(self):
+                self.calls = []
+
+            async def inject(self, **kwargs):
+                self.calls.append(kwargs)
+                return MemorySnapshot(
+                    l1_profile="", l2_project_ctx="", l3_knode_state="",
+                    l3_knode_content="", l4_semantic_recall=[], l5_skill_ctx="",
+                )
+
+        fake = RecordingInjector()
+        node = make_memory_inject_node(fake)
+        await node(TutorState(
+            user_id="u1", project_name="P1", knode_id="k5",
+            active_tab="practice",
+            messages=[HumanMessage(content="练习题我不会")],
+        ))
+        assert fake.calls[0]["active_tab"] == "practice"
+
+    @pytest.mark.asyncio
+    async def test_no_active_tab_passes_none(self):
+        """Without active_tab in state, None is passed."""
+        from systemedu.tutor.nodes import make_memory_inject_node
+
+        @dataclass
+        class RecordingInjector:
+            calls: list[dict] = None  # type: ignore
+
+            def __post_init__(self):
+                self.calls = []
+
+            async def inject(self, **kwargs):
+                self.calls.append(kwargs)
+                return MemorySnapshot(
+                    l1_profile="", l2_project_ctx="", l3_knode_state="",
+                    l3_knode_content="", l4_semantic_recall=[], l5_skill_ctx="",
+                )
+
+        fake = RecordingInjector()
+        node = make_memory_inject_node(fake)
+        await node(TutorState(
+            user_id="u1", project_name="P1",
+            messages=[HumanMessage(content="hi")],
+        ))
+        assert fake.calls[0]["active_tab"] is None
+
+
+# ---------------------------------------------------------------------------
+# 4. Router decision does not appear in skill messages
+# ---------------------------------------------------------------------------
 class TestSkillDecisionNotInMessages:
     @pytest.mark.asyncio
     async def test_router_returns_decision_not_message(self):

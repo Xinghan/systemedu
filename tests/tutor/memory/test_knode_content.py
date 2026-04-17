@@ -54,6 +54,7 @@ def _seed_lesson(
     knode_id: int = 5,
     course_content: str | None = None,
     concept: str = "",
+    project_assignment: str = "",
 ):
     db = session_factory()
     try:
@@ -63,6 +64,7 @@ def _seed_lesson(
             status="ready",
             course_content=course_content or "",
             concept=concept,
+            project_assignment=project_assignment,
         ))
         db.commit()
     finally:
@@ -247,3 +249,177 @@ class TestRenderIncludesKnodeContent:
         out = render_memory_block(memory)
         # Empty l3_knode_content should not produce a section
         assert "当前课程内容" not in out
+
+
+# ---------------------------------------------------------------------------
+# Tab-aware content injection
+# ---------------------------------------------------------------------------
+_FULL_PLAN = "# 火箭推力原理\n\n## 引入\n火箭通过喷射高温气体产生推力，这就是牛顿第三定律的应用。"
+_FULL_EXERCISES = {
+    "ex_section": {
+        "mode": "exercise",
+        "exercises": [
+            {
+                "exercise_id": "ex1",
+                "question": "火箭推力来自什么原理？",
+                "type": "choice",
+                "correct": 1,
+                "options": ["万有引力", "牛顿第三定律", "伯努利原理", "浮力原理"],
+            },
+            {
+                "exercise_id": "ex2",
+                "question": "推力方向与喷射方向的关系是？",
+                "type": "short_answer",
+                "correct": "相反",
+            },
+        ],
+    },
+}
+_FULL_ASSIGNMENT = "## 一、选择题（3题）\n\n**1. 推力的本质是？**\nA. 万有引力\nB. 反作用力\nC. 摩擦力\nD. 弹力\n\n**答案：B**"
+
+
+def _seed_full_lesson(session_factory):
+    """Seed a lesson with plan + exercises + assignment for tab tests."""
+    _seed_lesson(
+        session_factory,
+        course_content=_make_course_content(
+            plan_markdown=_FULL_PLAN,
+            rendered_sections=_FULL_EXERCISES,
+        ),
+        project_assignment=_FULL_ASSIGNMENT,
+    )
+
+
+class TestTabAwareContent:
+    """Different active_tab values inject different content priorities."""
+
+    @pytest.mark.asyncio
+    async def test_concept_tab_plan_primary(self, session_factory):
+        """concept tab: plan is shown in full, exercises are summary."""
+        _seed_full_lesson(session_factory)
+        inj = MemoryInjector(session_factory)
+        snap = await inj.inject(
+            user_id="u1", project_name="rocket-design", knode_id="5",
+            last_user_msg="这个概念我不懂",
+            context_scope="project", active_tab="concept",
+        )
+        content = snap["l3_knode_content"]
+        assert "课文页面" in content
+        assert "牛顿第三定律的应用" in content  # full plan
+        assert "火箭推力来自什么原理" in content  # exercises present
+        # Plan should NOT be truncated (it's short enough)
+        assert "摘要" not in content
+
+    @pytest.mark.asyncio
+    async def test_practice_tab_exercises_primary(self, session_factory):
+        """practice tab: exercises are shown in full (with options), plan is summary."""
+        _seed_full_lesson(session_factory)
+        inj = MemoryInjector(session_factory)
+        snap = await inj.inject(
+            user_id="u1", project_name="rocket-design", knode_id="5",
+            last_user_msg="练习题我不会",
+            context_scope="project", active_tab="practice",
+        )
+        content = snap["l3_knode_content"]
+        assert "练习题页面" in content
+        assert "练习题（完整）" in content
+        assert "火箭推力来自什么原理" in content
+        # Options should be detailed with A/B/C/D
+        assert "牛顿第三定律" in content
+        assert "万有引力" in content
+        # Plan should be shortened
+        assert "课程内容（摘要）" in content
+
+    @pytest.mark.asyncio
+    async def test_assignment_tab_assignment_primary(self, session_factory):
+        """project_assignment tab: assignment is shown in full, plan is summary."""
+        _seed_full_lesson(session_factory)
+        inj = MemoryInjector(session_factory)
+        snap = await inj.inject(
+            user_id="u1", project_name="rocket-design", knode_id="5",
+            last_user_msg="作业怎么做",
+            context_scope="project", active_tab="project_assignment",
+        )
+        content = snap["l3_knode_content"]
+        assert "作业页面" in content
+        assert "作业要求（完整）" in content
+        assert "推力的本质是" in content  # assignment content
+        assert "反作用力" in content
+        # Plan should be shortened
+        assert "课程内容（摘要）" in content
+
+    @pytest.mark.asyncio
+    async def test_default_tab_same_as_concept(self, session_factory):
+        """No active_tab (None) behaves like concept tab."""
+        _seed_full_lesson(session_factory)
+        inj = MemoryInjector(session_factory)
+        snap = await inj.inject(
+            user_id="u1", project_name="rocket-design", knode_id="5",
+            last_user_msg="q",
+            context_scope="project", active_tab=None,
+        )
+        content = snap["l3_knode_content"]
+        assert "课文页面" in content
+        # Plan in full
+        assert "牛顿第三定律的应用" in content
+
+    @pytest.mark.asyncio
+    async def test_practice_tab_no_exercises_still_has_plan(self, session_factory):
+        """practice tab with no exercises falls back to plan content."""
+        _seed_lesson(
+            session_factory,
+            course_content=_make_course_content("# 纯理论节点\n\n只有概念，没有练习题。"),
+        )
+        inj = MemoryInjector(session_factory)
+        snap = await inj.inject(
+            user_id="u1", project_name="rocket-design", knode_id="5",
+            last_user_msg="q",
+            context_scope="project", active_tab="practice",
+        )
+        content = snap["l3_knode_content"]
+        assert "纯理论节点" in content
+
+    @pytest.mark.asyncio
+    async def test_assignment_tab_no_assignment_falls_back(self, session_factory):
+        """assignment tab with no assignment text still shows plan."""
+        _seed_lesson(
+            session_factory,
+            course_content=_make_course_content("# 有课文无作业"),
+            project_assignment="",
+        )
+        inj = MemoryInjector(session_factory)
+        snap = await inj.inject(
+            user_id="u1", project_name="rocket-design", knode_id="5",
+            last_user_msg="q",
+            context_scope="project", active_tab="project_assignment",
+        )
+        content = snap["l3_knode_content"]
+        assert "有课文无作业" in content
+
+    @pytest.mark.asyncio
+    async def test_practice_tab_correct_answer_included(self, session_factory):
+        """practice tab includes correct answer markers for exercises."""
+        _seed_full_lesson(session_factory)
+        inj = MemoryInjector(session_factory)
+        snap = await inj.inject(
+            user_id="u1", project_name="rocket-design", knode_id="5",
+            last_user_msg="q",
+            context_scope="project", active_tab="practice",
+        )
+        content = snap["l3_knode_content"]
+        # detailed mode should mark correct answer
+        assert "correct" in content
+
+    @pytest.mark.asyncio
+    async def test_concept_tab_no_correct_markers(self, session_factory):
+        """concept tab does NOT include correct answer markers."""
+        _seed_full_lesson(session_factory)
+        inj = MemoryInjector(session_factory)
+        snap = await inj.inject(
+            user_id="u1", project_name="rocket-design", knode_id="5",
+            last_user_msg="q",
+            context_scope="project", active_tab="concept",
+        )
+        content = snap["l3_knode_content"]
+        # summary mode should not mark correct answers
+        assert "correct" not in content
