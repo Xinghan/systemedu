@@ -465,7 +465,7 @@
 
 ## Phase 5:Gateway + 老 runtime 退役(0.5 周)
 
-### T5.1 扩展 gateway payload 接受 context_scope [ ] parallel:no
+### T5.1 扩展 gateway payload 接受 context_scope [x] parallel:no
 
 **依赖**:T0.1 矩阵
 **改动**:
@@ -490,7 +490,7 @@
 
 **验收**:2 种 context_scope 正确路由到对应的记忆层激活模式(见 T2.2)
 
-### T5.2 `/api/chat` 切换到 tutor_graph [ ] parallel:no
+### T5.2 `/api/chat` 切换到 tutor_graph [x] parallel:no
 
 **依赖**:T3.10, T5.1
 **改动**:
