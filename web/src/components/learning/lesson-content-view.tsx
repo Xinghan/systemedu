@@ -30,6 +30,7 @@ interface LessonContentViewProps {
   onNavigate: (direction: "prev" | "next") => void
   onNavigateToNode: (nodeId: number) => void
   onPageChange?: (tab: string, pageIndex: number, pageContent: string) => void
+  onTabChange?: (tabKey: string) => void
   hasPrev: boolean
   hasNext: boolean
   prevNodeTitle: string | null
@@ -53,6 +54,7 @@ export function LessonContentView({
   onNavigate,
   onNavigateToNode,
   onPageChange,
+  onTabChange,
   hasPrev,
   hasNext,
   prevNodeTitle,
@@ -189,7 +191,10 @@ export function LessonContentView({
             {allTabs.map((tab, index) => (
               <button
                 key={tab.key}
-                onClick={() => setActiveTab(index)}
+                onClick={() => {
+                  setActiveTab(index)
+                  onTabChange?.(allTabs[index].key)
+                }}
                 className={`px-3 py-2.5 text-xs font-medium transition-colors relative font-[var(--font-manrope)] ${
                   activeTab === index
                     ? "text-foreground"
