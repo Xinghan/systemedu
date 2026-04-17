@@ -258,6 +258,41 @@ class TestGetPracticeExercises:
             assert "correct" not in ex
             assert "answer" not in ex
 
+    async def test_rendered_sections_format(self, ctx, db_factory):
+        """Exercises in rendered_sections (course_factory output) are found."""
+        db = db_factory()
+        cc = {
+            "plan_markdown": "# Lesson",
+            "ideas": [{"idea_id": "ex_abc", "mode": "exercise"}],
+            "rendered_sections": {
+                "ex_abc": {
+                    "mode": "exercise",
+                    "status": "ready",
+                    "exercises": [
+                        {"exercise_id": "ex1", "question": "Q1?",
+                         "type": "choice", "correct": 0,
+                         "options": ["A", "B", "C", "D"]},
+                        {"exercise_id": "ex2", "question": "Q2?",
+                         "type": "short_answer", "sample_answer": "ans"},
+                    ],
+                },
+            },
+        }
+        db.add(LessonContent(
+            project_name="mars", knode_id=50, status="ready",
+            course_content=json.dumps(cc),
+        ))
+        db.commit()
+        db.close()
+        with push_tool_context(ctx):
+            out = await get_practice_exercises.ainvoke(
+                {"project_name": "mars", "knode_id": "50"}
+            )
+        assert out["found"] is True
+        assert len(out["exercises"]) == 2
+        for ex in out["exercises"]:
+            assert "correct" not in ex
+
     async def test_not_found(self, ctx):
         with push_tool_context(ctx):
             out = await get_practice_exercises.ainvoke(
@@ -293,6 +328,38 @@ class TestGradeSubmission:
             })
         assert out["is_correct"] is False
         assert out["correct_answer"] == "B"
+
+    async def test_grade_rendered_sections_format(self, ctx, db_factory):
+        """grade_submission finds exercises inside rendered_sections."""
+        db = db_factory()
+        cc = {
+            "plan_markdown": "# L",
+            "rendered_sections": {
+                "ex_rs": {
+                    "mode": "exercise",
+                    "exercises": [
+                        {"exercise_id": "rs1", "question": "Q?",
+                         "type": "choice", "correct": 1,
+                         "options": ["A", "B", "C", "D"]},
+                    ],
+                },
+            },
+        }
+        db.add(LessonContent(
+            project_name="mars", knode_id=51, status="ready",
+            course_content=json.dumps(cc),
+        ))
+        db.commit()
+        db.close()
+        with push_tool_context(ctx):
+            out = await grade_submission.ainvoke({
+                "project_name": "mars",
+                "knode_id": "51",
+                "exercise_id": "rs1",
+                "student_answer": "1",
+            })
+        assert out["graded"] is True
+        assert out["is_correct"] is True
 
     async def test_exercise_not_found(self, ctx, db_factory):
         _seed_lesson(db_factory)
