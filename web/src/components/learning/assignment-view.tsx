@@ -1,16 +1,17 @@
 "use client"
 
-import { useState, useMemo, useCallback, type ReactNode } from "react"
+import { useState, useMemo, useCallback, useRef } from "react"
 import ReactMarkdown from "react-markdown"
 import remarkGfm from "remark-gfm"
 import type { Components } from "react-markdown"
 import {
   Wrench, CheckCircle2, ListChecks, MessageSquareText,
   ChevronDown, ChevronUp, Target, ClipboardCheck, PenLine,
-  AlertTriangle, Lightbulb, Award, XCircle,
+  AlertTriangle, Lightbulb, Award, XCircle, Send, RotateCcw,
 } from "lucide-react"
 
-import type { KnodeInfo, NodeProgress } from "@/lib/types/api"
+import type { KnodeInfo, NodeProgress, ExerciseAttemptPayload } from "@/lib/types/api"
+import { gateway } from "@/lib/api"
 import { CapstoneSubmissionPanel } from "./capstone-submission-panel"
 
 interface AssignmentViewProps {
@@ -33,11 +34,18 @@ interface ParsedChoice {
   explanation?: string
 }
 
+interface ParsedQa {
+  number: string
+  question: string
+  referenceAnswer: string   // markdown of the reference answer (bullet list etc.)
+}
+
 interface ParsedBlock {
-  type: "heading" | "choices" | "markdown"
+  type: "heading" | "choices" | "qa_questions" | "markdown"
   heading?: string
   headingKind?: "choice" | "qa" | "hands_on" | "other"
   choices?: ParsedChoice[]
+  qaQuestions?: ParsedQa[]
   markdown?: string
 }
 
@@ -105,6 +113,43 @@ function parseAssignment(raw: string): ParsedBlock[] {
           blocks.push({ type: "choices", choices })
         }
       }
+      // Parse QA section: **N. question** followed by **参考答案要点：** + bullet list
+      if (kind === "qa") {
+        const qaQuestions: ParsedQa[] = []
+        while (i < lines.length && !/^## /.test(lines[i])) {
+          const qMatch = lines[i].match(/^\*\*(\d+)\.\s*(.+?)\*\*\s*$/)
+          if (qMatch) {
+            const qa: ParsedQa = { number: qMatch[1], question: qMatch[2], referenceAnswer: "" }
+            i++
+            // Skip blank lines
+            while (i < lines.length && lines[i].trim() === "") i++
+            // Collect reference answer block (starts with **参考答案要点：** then bullet list)
+            const refLines: string[] = []
+            let inRef = false
+            if (i < lines.length && /^\*\*参考答案要点[：:]/.test(lines[i])) {
+              // Skip the header line itself
+              i++
+              inRef = true
+            }
+            if (inRef) {
+              while (i < lines.length && !/^## /.test(lines[i]) && !/^\*\*\d+\./.test(lines[i])) {
+                if (lines[i].trim() === "---") { i++; break }
+                refLines.push(lines[i])
+                i++
+              }
+            }
+            qa.referenceAnswer = refLines.join("\n").trim()
+            // Skip trailing blank/separator lines
+            while (i < lines.length && (lines[i]?.trim() === "" || lines[i]?.trim() === "---")) i++
+            qaQuestions.push(qa)
+          } else {
+            i++
+          }
+        }
+        if (qaQuestions.length > 0) {
+          blocks.push({ type: "qa_questions", qaQuestions })
+        }
+      }
       continue
     }
 
@@ -124,15 +169,60 @@ function parseAssignment(raw: string): ParsedBlock[] {
 // Interactive choice question component
 // ---------------------------------------------------------------------------
 
-function ChoiceQuestion({ q }: { q: ParsedChoice }) {
+function buildChoiceErrorAnalysis(q: ParsedChoice, wrongLetter: string): string {
+  const wrongOpt = q.options.find(o => o.letter === wrongLetter)
+  const correctOpt = q.options.find(o => o.letter === q.answer)
+  if (!wrongOpt || !correctOpt) return ""
+  return `你选了 ${wrongLetter}（${wrongOpt.content}），但正确答案是 ${q.answer}（${correctOpt.content}）。`
+}
+
+function ChoiceQuestion({ q, projectName, knodeId }: {
+  q: ParsedChoice
+  projectName?: string
+  knodeId?: number
+}) {
   const [selected, setSelected] = useState<string | null>(null)
   const [submitted, setSubmitted] = useState(false)
-
-  const handleSubmit = useCallback(() => {
-    if (selected) setSubmitted(true)
-  }, [selected])
+  const [attemptSeq, setAttemptSeq] = useState(1)
+  const [errorAnalysis, setErrorAnalysis] = useState<string | null>(null)
+  const shownAt = useRef(Date.now())
 
   const isCorrect = submitted && selected === q.answer
+  const canRetry = submitted && !isCorrect
+
+  const submitToApi = useCallback((answer: string, seq: number, correct: boolean, analysis: string | null) => {
+    if (!projectName || knodeId == null) return
+    const attempt: ExerciseAttemptPayload = {
+      knode_id: knodeId,
+      quiz_type: "assignment",
+      exercise_id: `assignment_choice_${q.number}`,
+      question: q.question,
+      user_answer: answer,
+      correct_answer: q.answer,
+      is_correct: correct,
+      attempt_seq: seq,
+      time_spent_ms: Date.now() - shownAt.current,
+      error_analysis: analysis,
+    }
+    gateway.submitExerciseAttempts(projectName, [attempt]).catch(() => {})
+  }, [projectName, knodeId, q])
+
+  const handleSubmit = useCallback(() => {
+    if (!selected) return
+    setSubmitted(true)
+    const correct = selected === q.answer
+    const analysis = correct ? null : buildChoiceErrorAnalysis(q, selected)
+    setErrorAnalysis(analysis)
+    submitToApi(selected, attemptSeq, correct, analysis)
+  }, [selected, q, attemptSeq, submitToApi])
+
+  const handleRetry = useCallback(() => {
+    setSubmitted(false)
+    setSelected(null)
+    setErrorAnalysis(null)
+    setAttemptSeq(s => s + 1)
+    shownAt.current = Date.now()
+  }, [])
 
   return (
     <div className="mt-4 mb-2 pt-3 border-t border-gray-100 dark:border-gray-800 first:border-t-0 first:pt-0">
@@ -208,15 +298,30 @@ function ChoiceQuestion({ q }: { q: ParsedChoice }) {
             提交答案
           </button>
         ) : (
-          <div className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium ${
-            isCorrect
-              ? "bg-green-50 dark:bg-green-950/30 text-green-700 dark:text-green-300"
-              : "bg-red-50 dark:bg-red-950/30 text-red-700 dark:text-red-300"
-          }`}>
-            {isCorrect ? (
-              <><CheckCircle2 className="h-3.5 w-3.5" /> 回答正确</>
-            ) : (
-              <><XCircle className="h-3.5 w-3.5" /> 回答错误，正确答案是 {q.answer}</>
+          <div className="space-y-2">
+            <div className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium ${
+              isCorrect
+                ? "bg-green-50 dark:bg-green-950/30 text-green-700 dark:text-green-300"
+                : "bg-red-50 dark:bg-red-950/30 text-red-700 dark:text-red-300"
+            }`}>
+              {isCorrect ? (
+                <><CheckCircle2 className="h-3.5 w-3.5" /> 回答正确</>
+              ) : (
+                <><XCircle className="h-3.5 w-3.5" /> 回答错误，正确答案是 {q.answer}</>
+              )}
+            </div>
+            {errorAnalysis && (
+              <div className="px-3 py-2 rounded-lg bg-amber-50 dark:bg-amber-950/20 border border-amber-200/60 dark:border-amber-800/40 text-xs text-amber-800 dark:text-amber-300 leading-relaxed">
+                {errorAnalysis}
+              </div>
+            )}
+            {canRetry && (
+              <button
+                onClick={handleRetry}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-950/30 transition-colors"
+              >
+                <RotateCcw className="h-3 w-3" /> 再试一次
+              </button>
             )}
           </div>
         )}
@@ -279,24 +384,215 @@ function SectionHeading({ text }: { text: string }) {
   )
 }
 
-function CollapsibleAnswer({ children, label }: { children: ReactNode; label?: string }) {
-  const [open, setOpen] = useState(false)
-  const showLabel = label ?? "参考答案"
+// ---------------------------------------------------------------------------
+// QA question component — textarea for student answer + gated reference answer
+// ---------------------------------------------------------------------------
+
+interface QaEvalResult {
+  score: number
+  maxScore: number
+  isCorrect: boolean
+  feedback: string
+  errorAnalysis: string
+}
+
+function ScoreRing({ score, maxScore }: { score: number; maxScore: number }) {
+  const pct = Math.round((score / maxScore) * 100)
+  const r = 20, stroke = 4, c = 2 * Math.PI * r
+  const offset = c - (c * pct) / 100
+  const color = pct >= 80 ? "text-emerald-500" : pct >= 60 ? "text-blue-500" : pct >= 40 ? "text-amber-500" : "text-red-400"
   return (
-    <span className="block mt-2">
-      <button
-        onClick={() => setOpen(!open)}
-        className="flex items-center gap-1.5 text-xs text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 transition-colors"
-      >
-        {open ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
-        {open ? `收起${showLabel}` : `查看${showLabel}`}
-      </button>
-      {open && (
-        <span className="block mt-2 px-3 py-2 rounded-md bg-blue-50/60 dark:bg-blue-950/30 border border-blue-100 dark:border-blue-900 text-sm text-blue-900 dark:text-blue-200">
-          {children}
+    <div className="relative inline-flex items-center justify-center w-14 h-14 shrink-0">
+      <svg className="w-14 h-14 -rotate-90" viewBox="0 0 48 48">
+        <circle cx="24" cy="24" r={r} fill="none" stroke="currentColor" strokeWidth={stroke} className="text-secondary" />
+        <circle cx="24" cy="24" r={r} fill="none" stroke="currentColor" strokeWidth={stroke}
+          className={color} strokeDasharray={c} strokeDashoffset={offset}
+          strokeLinecap="round" style={{ transition: "stroke-dashoffset 0.8s ease" }} />
+      </svg>
+      <span className={`absolute text-sm font-bold ${color}`}>{score}</span>
+    </div>
+  )
+}
+
+function QaQuestion({ qa, projectName, knodeId }: {
+  qa: ParsedQa
+  projectName?: string
+  knodeId?: number
+}) {
+  const [answer, setAnswer] = useState("")
+  const [grading, setGrading] = useState(false)
+  const [evalResult, setEvalResult] = useState<QaEvalResult | null>(null)
+  const [attemptSeq, setAttemptSeq] = useState(1)
+  const [showRef, setShowRef] = useState(false)
+  const shownAt = useRef(Date.now())
+
+  const handleSubmit = useCallback(async () => {
+    if (!answer.trim()) return
+    setGrading(true)
+    setEvalResult(null)
+
+    if (projectName && knodeId != null) {
+      try {
+        const resp = await gateway.evaluateQa(projectName, {
+          knode_id: knodeId,
+          exercise_id: `assignment_qa_${qa.number}`,
+          question: qa.question,
+          user_answer: answer.trim(),
+          reference_answer: qa.referenceAnswer,
+          attempt_seq: attemptSeq,
+          time_spent_ms: Date.now() - shownAt.current,
+        })
+        setEvalResult({
+          score: resp.score,
+          maxScore: resp.max_score,
+          isCorrect: resp.is_correct,
+          feedback: resp.feedback,
+          errorAnalysis: resp.error_analysis,
+        })
+      } catch {
+        setEvalResult({
+          score: 0, maxScore: 10, isCorrect: false,
+          feedback: "AI 评价服务暂时不可用，请稍后重试。",
+          errorAnalysis: "",
+        })
+      }
+    }
+    setGrading(false)
+  }, [answer, projectName, knodeId, qa, attemptSeq])
+
+  const handleRetry = useCallback(() => {
+    setEvalResult(null)
+    setAnswer("")
+    setAttemptSeq(s => s + 1)
+    shownAt.current = Date.now()
+  }, [])
+
+  const submitted = evalResult !== null
+
+  return (
+    <div className="mt-4 mb-2 pt-3 border-t border-gray-100 dark:border-gray-800 first:border-t-0 first:pt-0">
+      {/* Question */}
+      <div className="flex items-start gap-2.5 mb-3">
+        <span className="flex items-center justify-center w-6 h-6 rounded-full bg-violet-200 dark:bg-violet-700 text-violet-700 dark:text-violet-300 text-xs font-bold shrink-0 mt-0.5">
+          {qa.number}
         </span>
-      )}
-    </span>
+        <span className="text-sm font-semibold leading-relaxed">{qa.question}</span>
+      </div>
+
+      {/* Answer area */}
+      <div className="ml-8 space-y-3">
+        {!submitted && !grading ? (
+          <>
+            <textarea
+              value={answer}
+              onChange={e => setAnswer(e.target.value)}
+              placeholder="在这里写下你的答案..."
+              rows={4}
+              className="w-full px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900/50 text-sm leading-relaxed placeholder:text-muted-foreground/50 focus:outline-none focus:ring-2 focus:ring-blue-400/50 focus:border-blue-400 resize-y"
+            />
+            <button
+              disabled={!answer.trim()}
+              onClick={handleSubmit}
+              className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-lg bg-blue-600 text-white text-xs font-medium hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+            >
+              <Send className="h-3 w-3" /> 提交答案
+            </button>
+          </>
+        ) : grading ? (
+          <div className="flex items-center gap-3 py-6 justify-center">
+            <div className="w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+            <span className="text-sm text-muted-foreground">AI 正在批改你的答案...</span>
+          </div>
+        ) : evalResult && (
+          <>
+            {/* Student answer */}
+            <div className="px-3 py-2 rounded-lg bg-secondary/30 border border-border/40">
+              <p className="text-[11px] text-muted-foreground font-medium mb-1">我的回答</p>
+              <p className="text-sm text-foreground/80 leading-relaxed whitespace-pre-wrap">{answer}</p>
+            </div>
+
+            {/* AI evaluation card */}
+            <div className={`rounded-lg border overflow-hidden ${
+              evalResult.isCorrect
+                ? "border-emerald-200/60 dark:border-emerald-800/40"
+                : "border-amber-200/60 dark:border-amber-800/40"
+            }`}>
+              {/* Score header */}
+              <div className={`flex items-center gap-4 px-4 py-3 ${
+                evalResult.isCorrect
+                  ? "bg-emerald-50/60 dark:bg-emerald-950/20"
+                  : "bg-amber-50/60 dark:bg-amber-950/20"
+              }`}>
+                <ScoreRing score={evalResult.score} maxScore={evalResult.maxScore} />
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2 mb-1">
+                    {evalResult.isCorrect ? (
+                      <span className="inline-flex items-center gap-1 text-xs font-medium text-emerald-700 dark:text-emerald-300">
+                        <CheckCircle2 className="h-3.5 w-3.5" /> 通过
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1 text-xs font-medium text-amber-700 dark:text-amber-300">
+                        <AlertTriangle className="h-3.5 w-3.5" /> 需要改进
+                      </span>
+                    )}
+                    <span className="text-[10px] text-muted-foreground">
+                      {evalResult.score}/{evalResult.maxScore} 分
+                    </span>
+                  </div>
+                  <p className="text-sm text-foreground/80 leading-relaxed">{evalResult.feedback}</p>
+                </div>
+              </div>
+
+              {/* Error analysis */}
+              {evalResult.errorAnalysis && (
+                <div className="px-4 py-2.5 border-t border-amber-200/40 dark:border-amber-800/30 bg-amber-50/30 dark:bg-amber-950/10">
+                  <p className="text-[11px] font-medium text-amber-700 dark:text-amber-400 mb-0.5">不足之处</p>
+                  <p className="text-xs text-amber-800 dark:text-amber-300 leading-relaxed">{evalResult.errorAnalysis}</p>
+                </div>
+              )}
+            </div>
+
+            {/* Retry button (if not correct) */}
+            {!evalResult.isCorrect && (
+              <button
+                onClick={handleRetry}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-950/30 transition-colors"
+              >
+                <RotateCcw className="h-3 w-3" /> 修改后重新提交
+              </button>
+            )}
+
+            {/* Reference answer toggle — only available after AI grading */}
+            {qa.referenceAnswer && (
+              <div>
+                <button
+                  onClick={() => setShowRef(!showRef)}
+                  className="flex items-center gap-1.5 text-xs text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 transition-colors"
+                >
+                  {showRef ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+                  {showRef ? "收起参考答案" : "查看参考答案"}
+                </button>
+                {showRef && (
+                  <div className="mt-2 px-3 py-2 rounded-lg bg-blue-50/60 dark:bg-blue-950/30 border border-blue-100 dark:border-blue-900">
+                    <ReactMarkdown
+                      remarkPlugins={[remarkGfm]}
+                      components={{
+                        p: ({ children }) => <p className="text-sm text-blue-900 dark:text-blue-200 leading-relaxed my-1">{children}</p>,
+                        ul: ({ children }) => <ul className="ml-4 space-y-0.5 list-disc text-sm text-blue-900 dark:text-blue-200">{children}</ul>,
+                        li: ({ children }) => <li className="leading-relaxed text-sm">{children}</li>,
+                        strong: ({ children }) => <strong className="font-semibold">{children}</strong>,
+                      }}
+                    >
+                      {qa.referenceAnswer}
+                    </ReactMarkdown>
+                  </div>
+                )}
+              </div>
+            )}
+          </>
+        )}
+      </div>
+    </div>
   )
 }
 
@@ -305,10 +601,6 @@ function useNormalComponents(): Components {
     h2: ({ children }) => <SectionHeading text={String(children ?? "")} />,
     p: ({ children }) => {
       const text = String(children ?? "")
-      if (/^(?:\*\*)?参考答案要点[：:]/.test(text)) {
-        const answerText = text.replace(/^(?:\*\*)?参考答案要点[：:]\s*(?:\*\*)?/, "")
-        return <CollapsibleAnswer>{answerText}</CollapsibleAnswer>
-      }
       if (text.includes("[HANDS_ON]")) {
         const parts = text.split("[HANDS_ON]")
         return (
@@ -329,25 +621,7 @@ function useNormalComponents(): Components {
       }
       return <p className="my-2 leading-relaxed text-sm">{children}</p>
     },
-    strong: ({ children }) => {
-      const text = String(children ?? "")
-      const questionMatch = text.match(/^(\d+)\.\s+(.+)/)
-      if (questionMatch) {
-        return (
-          <span className="inline-flex items-start gap-2.5 w-full mt-4 mb-2 pt-3 border-t border-gray-100 dark:border-gray-800 first:border-t-0 first:pt-0">
-            <span className="flex items-center justify-center w-6 h-6 rounded-full bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 text-xs font-bold shrink-0 mt-0.5">
-              {questionMatch[1]}
-            </span>
-            <span className="text-sm font-semibold leading-relaxed">{questionMatch[2]}</span>
-          </span>
-        )
-      }
-      if (/^参考答案要点[：:]/.test(text)) {
-        const answerText = text.replace(/^参考答案要点[：:]\s*/, "")
-        return <CollapsibleAnswer>{answerText}</CollapsibleAnswer>
-      }
-      return <strong>{children}</strong>
-    },
+    strong: ({ children }) => <strong>{children}</strong>,
     ul: ({ children }) => (
       <ul className="my-2 ml-4 space-y-1 list-disc text-sm">{children}</ul>
     ),
@@ -677,7 +951,16 @@ export function AssignmentView({
             return (
               <div key={i}>
                 {block.choices.map((q, qi) => (
-                  <ChoiceQuestion key={qi} q={q} />
+                  <ChoiceQuestion key={qi} q={q} projectName={projectName} knodeId={knode?.id} />
+                ))}
+              </div>
+            )
+          }
+          if (block.type === "qa_questions" && block.qaQuestions) {
+            return (
+              <div key={i}>
+                {block.qaQuestions.map((qa, qi) => (
+                  <QaQuestion key={qi} qa={qa} projectName={projectName} knodeId={knode?.id} />
                 ))}
               </div>
             )

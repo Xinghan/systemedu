@@ -766,3 +766,23 @@ export interface ExerciseStatsResponse {
     overall_accuracy: number
   }>
 }
+
+export interface QaEvaluationRequest {
+  user_id?: string
+  knode_id: number
+  exercise_id: string
+  question: string
+  user_answer: string
+  reference_answer: string
+  attempt_seq: number
+  time_spent_ms?: number | null
+}
+
+export interface QaEvaluationResponse {
+  score: number
+  max_score: number
+  is_correct: boolean
+  feedback: string
+  error_analysis: string
+  attempt_id: number | null
+}
