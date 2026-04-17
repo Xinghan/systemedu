@@ -1,13 +1,13 @@
 "use client"
 
-import { useState, useMemo, type ReactNode } from "react"
+import { useState, useMemo, useCallback, type ReactNode } from "react"
 import ReactMarkdown from "react-markdown"
 import remarkGfm from "remark-gfm"
 import type { Components } from "react-markdown"
 import {
   Wrench, CheckCircle2, ListChecks, MessageSquareText,
   ChevronDown, ChevronUp, Target, ClipboardCheck, PenLine,
-  AlertTriangle, Lightbulb, Award,
+  AlertTriangle, Lightbulb, Award, XCircle,
 } from "lucide-react"
 
 import type { KnodeInfo, NodeProgress } from "@/lib/types/api"
@@ -22,33 +22,212 @@ interface AssignmentViewProps {
 }
 
 // ---------------------------------------------------------------------------
-// Normal assignment preprocessing & components
+// Choice question parser — extracts interactive questions from markdown
 // ---------------------------------------------------------------------------
 
-function preprocessContent(raw: string): string {
-  let text = raw
-  text = text.replace(
-    /^([^\n]*?)([A-D])\.\s+(.+?)\s+([A-D])\.\s+(.+?)\s+([A-D])\.\s+(.+?)\s+([A-D])\.\s+(.+?)$/gm,
-    (_match, prefix, a1, t1, a2, t2, a3, t3, a4, t4) => {
-      const lines = [
-        prefix.trim() ? prefix.trim() : null,
-        `${a1}. ${t1.trim()}`,
-        `${a2}. ${t2.trim()}`,
-        `${a3}. ${t3.trim()}`,
-        `${a4}. ${t4.trim()}`,
-      ].filter(Boolean)
-      return lines.join("\n")
-    }
-  )
-  text = text.replace(
-    /^(\s*)([A-D])\.\s+(.+?)\s{2,}([A-D])\.\s+(.+?)$/gm,
-    (_match, indent, a1, t1, a2, t2) =>
-      `${indent}${a1}. ${t1.trim()}\n${indent}${a2}. ${t2.trim()}`
-  )
-  text = text.replace(/\n(?!\n)((?:\*\*)?答案[：:].+)/g, "\n\n$1")
-  text = text.replace(/\n(?!\n)((?:\*\*)?参考答案要点[：:].+)/g, "\n\n$1")
-  return text
+interface ParsedChoice {
+  number: string
+  question: string
+  options: { letter: string; content: string }[]
+  answer: string          // "A" | "B" | "C" | "D"
+  explanation?: string
 }
+
+interface ParsedBlock {
+  type: "heading" | "choices" | "markdown"
+  heading?: string
+  headingKind?: "choice" | "qa" | "hands_on" | "other"
+  choices?: ParsedChoice[]
+  markdown?: string
+}
+
+function parseAssignment(raw: string): ParsedBlock[] {
+  const blocks: ParsedBlock[] = []
+  const lines = raw.split("\n")
+  let i = 0
+
+  while (i < lines.length) {
+    const line = lines[i]
+
+    // h2 heading
+    if (/^## /.test(line)) {
+      const text = line.replace(/^## /, "").trim()
+      let kind: ParsedBlock["headingKind"] = "other"
+      if (/选择题/.test(text)) kind = "choice"
+      else if (/问答题/.test(text)) kind = "qa"
+      else if (/动手/.test(text)) kind = "hands_on"
+      blocks.push({ type: "heading", heading: text, headingKind: kind })
+      i++
+
+      // If this is a choice section, parse all questions in it
+      if (kind === "choice") {
+        const choices: ParsedChoice[] = []
+        while (i < lines.length && !/^## /.test(lines[i])) {
+          // Look for question: **N. question text**
+          const qMatch = lines[i].match(/^\*\*(\d+)\.\s*(.+?)\*\*\s*$/)
+          if (qMatch) {
+            const q: ParsedChoice = {
+              number: qMatch[1],
+              question: qMatch[2],
+              options: [],
+              answer: "",
+            }
+            i++
+            // Collect options
+            while (i < lines.length) {
+              const optMatch = lines[i].match(/^([A-D])\.\s+(.+)/)
+              if (optMatch) {
+                q.options.push({ letter: optMatch[1], content: optMatch[2].trim() })
+                i++
+              } else {
+                break
+              }
+            }
+            // Skip blank lines
+            while (i < lines.length && lines[i].trim() === "") i++
+            // Look for answer line: **答案：X** or 答案：X
+            if (i < lines.length) {
+              const ansLine = lines[i].replace(/^\*\*/g, "").replace(/\*\*$/g, "")
+              const ansMatch = ansLine.match(/^答案[：:]([A-D])/)
+              if (ansMatch) {
+                q.answer = ansMatch[1]
+                i++
+              }
+            }
+            // Skip separator ---
+            while (i < lines.length && (lines[i].trim() === "" || lines[i].trim() === "---")) i++
+            choices.push(q)
+          } else {
+            i++
+          }
+        }
+        if (choices.length > 0) {
+          blocks.push({ type: "choices", choices })
+        }
+      }
+      continue
+    }
+
+    // Accumulate non-heading lines as markdown
+    const mdStart = i
+    while (i < lines.length && !/^## /.test(lines[i])) i++
+    const md = lines.slice(mdStart, i).join("\n").trim()
+    if (md) {
+      blocks.push({ type: "markdown", markdown: md })
+    }
+  }
+
+  return blocks
+}
+
+// ---------------------------------------------------------------------------
+// Interactive choice question component
+// ---------------------------------------------------------------------------
+
+function ChoiceQuestion({ q }: { q: ParsedChoice }) {
+  const [selected, setSelected] = useState<string | null>(null)
+  const [submitted, setSubmitted] = useState(false)
+
+  const handleSubmit = useCallback(() => {
+    if (selected) setSubmitted(true)
+  }, [selected])
+
+  const isCorrect = submitted && selected === q.answer
+
+  return (
+    <div className="mt-4 mb-2 pt-3 border-t border-gray-100 dark:border-gray-800 first:border-t-0 first:pt-0">
+      {/* Question */}
+      <div className="flex items-start gap-2.5 mb-3">
+        <span className="flex items-center justify-center w-6 h-6 rounded-full bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 text-xs font-bold shrink-0 mt-0.5">
+          {q.number}
+        </span>
+        <span className="text-sm font-semibold leading-relaxed">{q.question}</span>
+      </div>
+
+      {/* Options */}
+      <div className="space-y-2 ml-8">
+        {q.options.map((opt) => {
+          let borderClass = "border-gray-200 dark:border-gray-700"
+          let bgClass = "bg-white dark:bg-gray-900/50"
+          let ringClass = ""
+
+          if (submitted) {
+            if (opt.letter === q.answer) {
+              borderClass = "border-green-400 dark:border-green-600"
+              bgClass = "bg-green-50 dark:bg-green-950/30"
+            } else if (opt.letter === selected) {
+              borderClass = "border-red-400 dark:border-red-600"
+              bgClass = "bg-red-50 dark:bg-red-950/30"
+            }
+          } else if (opt.letter === selected) {
+            borderClass = "border-blue-400 dark:border-blue-500"
+            bgClass = "bg-blue-50 dark:bg-blue-950/30"
+            ringClass = "ring-1 ring-blue-300 dark:ring-blue-600"
+          }
+
+          return (
+            <button
+              key={opt.letter}
+              disabled={submitted}
+              onClick={() => setSelected(opt.letter)}
+              className={`flex items-start gap-2.5 px-3 py-2 rounded-lg border ${borderClass} ${bgClass} ${ringClass} w-full text-left transition-colors ${
+                submitted ? "cursor-default" : "hover:border-blue-300 dark:hover:border-blue-700 cursor-pointer"
+              }`}
+            >
+              <span className={`flex items-center justify-center w-6 h-6 rounded-full text-xs font-bold shrink-0 mt-0.5 ${
+                submitted && opt.letter === q.answer
+                  ? "bg-green-200 dark:bg-green-800 text-green-800 dark:text-green-200"
+                  : submitted && opt.letter === selected
+                  ? "bg-red-200 dark:bg-red-800 text-red-800 dark:text-red-200"
+                  : opt.letter === selected
+                  ? "bg-blue-200 dark:bg-blue-800 text-blue-800 dark:text-blue-200"
+                  : "bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300"
+              }`}>
+                {opt.letter}
+              </span>
+              <span className="text-sm leading-relaxed">{opt.content}</span>
+              {submitted && opt.letter === q.answer && (
+                <CheckCircle2 className="h-4 w-4 text-green-600 dark:text-green-400 shrink-0 mt-0.5 ml-auto" />
+              )}
+              {submitted && opt.letter === selected && opt.letter !== q.answer && (
+                <XCircle className="h-4 w-4 text-red-500 dark:text-red-400 shrink-0 mt-0.5 ml-auto" />
+              )}
+            </button>
+          )
+        })}
+      </div>
+
+      {/* Submit / Result */}
+      <div className="ml-8 mt-3">
+        {!submitted ? (
+          <button
+            disabled={!selected}
+            onClick={handleSubmit}
+            className="px-4 py-1.5 rounded-lg bg-blue-600 text-white text-xs font-medium hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+          >
+            提交答案
+          </button>
+        ) : (
+          <div className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium ${
+            isCorrect
+              ? "bg-green-50 dark:bg-green-950/30 text-green-700 dark:text-green-300"
+              : "bg-red-50 dark:bg-red-950/30 text-red-700 dark:text-red-300"
+          }`}>
+            {isCorrect ? (
+              <><CheckCircle2 className="h-3.5 w-3.5" /> 回答正确</>
+            ) : (
+              <><XCircle className="h-3.5 w-3.5" /> 回答错误，正确答案是 {q.answer}</>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Normal assignment preprocessing & components
+// ---------------------------------------------------------------------------
 
 function getSectionType(text: string): "choice" | "qa" | "hands_on" | "other" {
   if (/选择题/.test(text)) return "choice"
@@ -88,6 +267,18 @@ const sectionConfig = {
   },
 }
 
+function SectionHeading({ text }: { text: string }) {
+  const type = getSectionType(text)
+  const config = sectionConfig[type]
+  const Icon = config.icon
+  return (
+    <div className={`flex items-center gap-2.5 px-4 py-3 rounded-lg border ${config.bg} ${config.border} mt-6 mb-4 first:mt-0`}>
+      <Icon className={`h-5 w-5 ${config.iconColor} shrink-0`} />
+      <h2 className={`text-base font-semibold ${config.text} m-0`}>{text}</h2>
+    </div>
+  )
+}
+
 function CollapsibleAnswer({ children, label }: { children: ReactNode; label?: string }) {
   const [open, setOpen] = useState(false)
   const showLabel = label ?? "参考答案"
@@ -109,56 +300,15 @@ function CollapsibleAnswer({ children, label }: { children: ReactNode; label?: s
   )
 }
 
-function parseOptionLine(text: string): { letter: string; content: string } | null {
-  const m = text.match(/^([A-D])\.\s+(.+)/)
-  if (m) return { letter: m[1], content: m[2] }
-  return null
-}
-
-function OptionCard({ letter, content }: { letter: string; content: string }) {
-  return (
-    <div className="flex items-start gap-2.5 px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900/50 hover:border-blue-300 dark:hover:border-blue-700 transition-colors">
-      <span className="flex items-center justify-center w-6 h-6 rounded-full bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 text-xs font-bold shrink-0 mt-0.5">
-        {letter}
-      </span>
-      <span className="text-sm leading-relaxed">{content}</span>
-    </div>
-  )
-}
-
 function useNormalComponents(): Components {
   return useMemo<Components>(() => ({
-    h2: ({ children }) => {
-      const text = String(children ?? "")
-      const type = getSectionType(text)
-      const config = sectionConfig[type]
-      const Icon = config.icon
-      return (
-        <div className={`flex items-center gap-2.5 px-4 py-3 rounded-lg border ${config.bg} ${config.border} mt-6 mb-4 first:mt-0`}>
-          <Icon className={`h-5 w-5 ${config.iconColor} shrink-0`} />
-          <h2 className={`text-base font-semibold ${config.text} m-0`}>{children}</h2>
-        </div>
-      )
-    },
+    h2: ({ children }) => <SectionHeading text={String(children ?? "")} />,
     p: ({ children }) => {
       const text = String(children ?? "")
-      const answerMatch = text.match(/^(?:\*\*)?答案[：:](.+?)(?:\*\*)?$/)
-      if (answerMatch) {
-        return (
-          <CollapsibleAnswer label="答案">
-            <span className="inline-flex items-center gap-1.5">
-              <CheckCircle2 className="h-3.5 w-3.5 text-green-600 dark:text-green-400" />
-              答案：{answerMatch[1].trim()}
-            </span>
-          </CollapsibleAnswer>
-        )
-      }
       if (/^(?:\*\*)?参考答案要点[：:]/.test(text)) {
         const answerText = text.replace(/^(?:\*\*)?参考答案要点[：:]\s*(?:\*\*)?/, "")
         return <CollapsibleAnswer>{answerText}</CollapsibleAnswer>
       }
-      const option = parseOptionLine(text)
-      if (option) return <OptionCard letter={option.letter} content={option.content} />
       if (text.includes("[HANDS_ON]")) {
         const parts = text.split("[HANDS_ON]")
         return (
@@ -190,17 +340,6 @@ function useNormalComponents(): Components {
             </span>
             <span className="text-sm font-semibold leading-relaxed">{questionMatch[2]}</span>
           </span>
-        )
-      }
-      const answerMatch = text.match(/^答案[：:](.+)/)
-      if (answerMatch) {
-        return (
-          <CollapsibleAnswer label="答案">
-            <span className="inline-flex items-center gap-1.5">
-              <CheckCircle2 className="h-3.5 w-3.5 text-green-600 dark:text-green-400" />
-              答案：{answerMatch[1].trim()}
-            </span>
-          </CollapsibleAnswer>
         )
       }
       if (/^参考答案要点[：:]/.test(text)) {
@@ -512,6 +651,11 @@ export function AssignmentView({
   const isCapstone = knode?.module_role === "capstone"
   const hasContent = content && content.trim()
 
+  const blocks = useMemo(
+    () => (hasContent && !isCapstone ? parseAssignment(content) : []),
+    [content, hasContent, isCapstone],
+  )
+
   if (!hasContent && !isCapstone) {
     return (
       <div className="flex items-center justify-center h-32 text-muted-foreground text-sm">
@@ -520,18 +664,33 @@ export function AssignmentView({
     )
   }
 
-  const processed = hasContent ? preprocessContent(content) : ""
-
   return (
     <div className="max-w-none space-y-1">
-      {processed && (
-        isCapstone ? (
-          <CapstoneAssignmentView content={processed} />
-        ) : (
-          <ReactMarkdown components={normalComponents}>
-            {processed}
-          </ReactMarkdown>
-        )
+      {isCapstone ? (
+        hasContent && <CapstoneAssignmentView content={content} />
+      ) : (
+        blocks.map((block, i) => {
+          if (block.type === "heading") {
+            return <SectionHeading key={i} text={block.heading ?? ""} />
+          }
+          if (block.type === "choices" && block.choices) {
+            return (
+              <div key={i}>
+                {block.choices.map((q, qi) => (
+                  <ChoiceQuestion key={qi} q={q} />
+                ))}
+              </div>
+            )
+          }
+          if (block.type === "markdown" && block.markdown) {
+            return (
+              <ReactMarkdown key={i} components={normalComponents} remarkPlugins={[remarkGfm]}>
+                {block.markdown}
+              </ReactMarkdown>
+            )
+          }
+          return null
+        })
       )}
       {isCapstone && knode && projectName && (
         <CapstoneSubmissionPanel
