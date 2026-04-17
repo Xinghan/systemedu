@@ -244,6 +244,7 @@ async def ws_chat_stream(websocket: WebSocket) -> None:
                     await websocket.send_json(event)
                 await websocket.send_json({
                     "type": "done",
+                    "session_id": payload.session_id or payload.thread_id(user_id),
                     "thread_id": payload.thread_id(user_id),
                 })
             except Exception as e:
