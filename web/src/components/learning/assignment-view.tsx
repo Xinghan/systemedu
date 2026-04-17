@@ -91,7 +91,7 @@ const sectionConfig = {
 function CollapsibleAnswer({ children }: { children: ReactNode }) {
   const [open, setOpen] = useState(false)
   return (
-    <div className="mt-2">
+    <span className="block mt-2">
       <button
         onClick={() => setOpen(!open)}
         className="flex items-center gap-1.5 text-xs text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 transition-colors"
@@ -100,11 +100,11 @@ function CollapsibleAnswer({ children }: { children: ReactNode }) {
         {open ? "收起参考答案" : "展开参考答案"}
       </button>
       {open && (
-        <div className="mt-2 px-3 py-2 rounded-md bg-blue-50/60 dark:bg-blue-950/30 border border-blue-100 dark:border-blue-900 text-sm text-blue-900 dark:text-blue-200">
+        <span className="block mt-2 px-3 py-2 rounded-md bg-blue-50/60 dark:bg-blue-950/30 border border-blue-100 dark:border-blue-900 text-sm text-blue-900 dark:text-blue-200">
           {children}
-        </div>
+        </span>
       )}
-    </div>
+    </span>
   )
 }
 
@@ -183,12 +183,12 @@ function useNormalComponents(): Components {
       const questionMatch = text.match(/^(\d+)\.\s+(.+)/)
       if (questionMatch) {
         return (
-          <div className="flex items-start gap-2.5 mt-4 mb-2 pt-3 border-t border-gray-100 dark:border-gray-800 first:border-t-0 first:pt-0">
+          <span className="inline-flex items-start gap-2.5 w-full mt-4 mb-2 pt-3 border-t border-gray-100 dark:border-gray-800 first:border-t-0 first:pt-0">
             <span className="flex items-center justify-center w-6 h-6 rounded-full bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 text-xs font-bold shrink-0 mt-0.5">
               {questionMatch[1]}
             </span>
             <span className="text-sm font-semibold leading-relaxed">{questionMatch[2]}</span>
-          </div>
+          </span>
         )
       }
       const answerMatch = text.match(/^答案[：:](.+)/)
