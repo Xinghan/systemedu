@@ -360,7 +360,7 @@
 
 ## Phase 4:工具 + 安全(0.5 周)
 
-### T4.1 工具装饰器 + ContextVar 注入 [ ] parallel:no
+### T4.1 工具装饰器 + ContextVar 注入 [x] parallel:no
 
 **依赖**:T1.5
 **改动**:
@@ -377,7 +377,7 @@
 
 **验收**:所有工具均用此装饰器
 
-### T4.2 ToolRegistry + 白名单过滤 [ ] parallel:yes
+### T4.2 ToolRegistry + 白名单过滤 [x] parallel:yes
 
 **依赖**:T4.1
 **改动**:
@@ -388,25 +388,25 @@
 - 白名单外工具不在返回列表
 - 空白名单返回空列表(禁止所有工具)
 
-### T4.3 10 个工具实现 [ ] parallel:yes(每个独立)
+### T4.3 10 个工具实现 [x] parallel:yes(每个独立)
 
 **依赖**:T4.1, T2.1
 每个工具单独一个 task:
-- **T4.3a** `get_progress` [ ]
-- **T4.3b** `complete_node`(confirm=True) [ ]
-- **T4.3c** `get_knode_prerequisites` [ ]
-- **T4.3d** `get_knode_content` [ ]
-- **T4.3e** `search_student_facts` [ ]
-- **T4.3f** `search_memory`(Mem0 客户端) [ ]
-- **T4.3g** `get_practice_exercises`(剔除 `correct` 字段) [ ]
-- **T4.3h** `grade_submission` [ ]
-- **T4.3i** `escalate_to_human` [ ]
+- **T4.3a** `get_progress` [x]
+- **T4.3b** `complete_node`(confirm=True) [x]
+- **T4.3c** `get_knode_prerequisites` [x]
+- **T4.3d** `get_knode_content` [x]
+- **T4.3e** `search_student_facts` [x]
+- **T4.3f** `search_memory`(Mem0 客户端) [x]
+- **T4.3g** `get_practice_exercises`(剔除 `correct` 字段) [x]
+- **T4.3h** `grade_submission` [x]
+- **T4.3i** `escalate_to_human` [x]
 
 每个测试覆盖:正常返回 / scope 违规 / 参数校验失败 / write 工具的 confirm 流程
 
 **验收**:`tests/tutor/tools/test_*.py` 全绿;审计日志写入
 
-### T4.4 ToolCallLog model + 写入钩子 [ ] parallel:no
+### T4.4 ToolCallLog model + 写入钩子 [x] parallel:no
 
 **依赖**:T1.3, T4.1
 **改动**:
@@ -420,7 +420,7 @@
 
 **验收**:100% 调用记录
 
-### T4.5 confirm_handler 节点 [ ] parallel:yes
+### T4.5 confirm_handler 节点 [x] parallel:yes
 
 **依赖**:T4.3b (至少一个 confirm 工具)
 **改动**:
@@ -435,7 +435,7 @@
 
 **验收**:进度写入必经 confirm 流程
 
-### T4.6 safety_gate 节点 [ ] parallel:yes
+### T4.6 safety_gate 节点 [x] parallel:yes
 
 **依赖**:T1.3
 **改动**:
@@ -451,7 +451,7 @@
 
 **验收**:E2E 场景 5 的前置
 
-### T4.7 Escalation model + DAO [ ] parallel:yes
+### T4.7 Escalation model + DAO [x] parallel:yes
 
 **依赖**:T1.3
 **改动**:
