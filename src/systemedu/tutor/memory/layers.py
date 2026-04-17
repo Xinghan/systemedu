@@ -25,6 +25,7 @@ from sqlalchemy.orm import Session
 
 from systemedu.storage.db import (
     Enrollment,
+    ExerciseAttempt,
     LessonContent,
     ProgressRecord,
     StudentFact,
@@ -90,6 +91,7 @@ class MemoryInjector:
             self._l2_project_ctx(user_id, project_name, context_scope),
             self._l3_knode_state(user_id, project_name, context_scope),
             self._l3_knode_content(project_name, knode_id, context_scope, active_tab),
+            self._l3_exercise_history(user_id, project_name, knode_id, context_scope),
             self._l4_semantic_recall(
                 user_id, last_user_msg, project_name, context_scope,
             ),
@@ -107,8 +109,13 @@ class MemoryInjector:
         l2 = _safe(results[1], "l2")
         l3 = _safe(results[2], "l3")
         l3_content = _safe(results[3], "l3_content")
-        l4 = _safe(results[4], "l4")
-        l5 = _safe(results[5], "l5")
+        l3_exercises = _safe(results[4], "l3_exercises")
+        l4 = _safe(results[5], "l4")
+        l5 = _safe(results[6], "l5")
+
+        # Merge exercise history into knode content
+        if l3_exercises:
+            l3_content = (l3_content + "\n\n" + l3_exercises) if l3_content else l3_exercises
 
         return MemorySnapshot(
             l1_profile=l1,
@@ -359,6 +366,73 @@ class MemoryInjector:
                         return ""
 
                 return "\n\n".join(parts)
+
+        return await asyncio.to_thread(_query)
+
+    async def _l3_exercise_history(
+        self,
+        user_id: str,
+        project_name: str | None,
+        knode_id: str | None,
+        scope: ContextScope,
+    ) -> str:
+        """Load student's exercise attempt history for this knode.
+
+        Produces a concise summary: accuracy, weak spots, recent wrong answers.
+        This lets the tutor know exactly what the student struggles with.
+        """
+        if scope != "project" or not project_name or not knode_id:
+            return ""
+
+        def _query() -> str:
+            with _session(self.db_session_factory) as db:
+                try:
+                    kid = int(knode_id)
+                except (ValueError, TypeError):
+                    return ""
+                rows = (
+                    db.query(ExerciseAttempt)
+                    .filter(
+                        ExerciseAttempt.user_id == user_id,
+                        ExerciseAttempt.project_name == project_name,
+                        ExerciseAttempt.knode_id == kid,
+                    )
+                    .order_by(ExerciseAttempt.created_at.desc())
+                    .limit(50)
+                    .all()
+                )
+                if not rows:
+                    return ""
+
+                total = len(rows)
+                correct = sum(1 for r in rows if r.is_correct)
+                first_tries = [r for r in rows if r.attempt_seq == 1]
+                first_correct = sum(1 for r in first_tries if r.is_correct)
+                times = [r.time_spent_ms for r in rows if r.time_spent_ms]
+                avg_time = round(sum(times) / max(len(times), 1) / 1000, 1) if times else 0
+
+                parts = [
+                    f"## 学生做题记录（knode {kid}）",
+                    f"- 总答题 {total} 次，正确 {correct} 次（正确率 {round(correct/total*100)}%）",
+                    f"- 首次作答正确率 {round(first_correct/max(len(first_tries),1)*100)}%",
+                ]
+                if avg_time:
+                    parts.append(f"- 平均用时 {avg_time} 秒")
+
+                # list wrong answers with error analysis
+                wrong = [r for r in rows if not r.is_correct and r.attempt_seq == 1]
+                if wrong:
+                    parts.append("- 答错的题目:")
+                    for w in wrong[:5]:
+                        line = f"  - [{w.quiz_type}] {w.question[:60]}"
+                        if w.error_analysis:
+                            line += f" | 分析: {w.error_analysis[:80]}"
+                        parts.append(line)
+                    retried = [r for r in rows if r.attempt_seq > 1 and r.is_correct]
+                    if retried:
+                        parts.append(f"- 其中 {len(retried)} 题重试后答对")
+
+                return "\n".join(parts)
 
         return await asyncio.to_thread(_query)
 

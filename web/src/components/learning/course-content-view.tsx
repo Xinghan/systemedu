@@ -91,6 +91,9 @@ interface AudioCtxValue {
 // ---------------------------------------------------------------------------
 const KnowledgeLevelContext = createContext<import("@/lib/types/api").KnowledgeLevel>("K1")
 
+// Course identity context — lets nested TheoryQuiz submit attempts with project/knode info
+const CourseIdentityContext = createContext<{ projectName: string; knodeId: number }>({ projectName: "", knodeId: 0 })
+
 const AudioPlayContext = createContext<AudioCtxValue>({
   playing: null,
   play: () => {},
@@ -447,47 +450,106 @@ function stripDuplicateTitle(markdown: string, title: string): string {
 
 // ---------------------------------------------------------------------------
 // TheoryQuiz — collapsible self-test exercises inside a theory modal
+// Features: wrong-answer analysis, retry, timing, backend persistence
 // ---------------------------------------------------------------------------
+
+/** Per-question local state. */
+interface QuizItemState {
+  selected: number | null
+  submitted: boolean
+  isCorrect: boolean
+  attemptSeq: number
+  /** ms timestamp when the question was first displayed */
+  shownAt: number
+}
+
+function buildErrorAnalysis(ex: NonNullable<TheoryEntry["exercises"]>[number], wrongIdx: number): string {
+  const wrongOpt = ex.options[wrongIdx]
+  const correctOpt = ex.options[ex.correct]
+  let analysis = `你选择了 "${wrongOpt}"，这个选项不正确。`
+  if (ex.explanation) {
+    analysis += ` ${ex.explanation}`
+  }
+  analysis += ` 正确答案是 "${correctOpt}"。`
+  return analysis
+}
+
 function TheoryQuiz({ theoryId, exercises }: { theoryId: string; exercises: NonNullable<TheoryEntry["exercises"]> }) {
+  const { projectName, knodeId } = useContext(CourseIdentityContext)
   const storageKey = `theory_quiz_${theoryId}`
 
-  // Load saved answers from localStorage on mount
-  const [selected, setSelected] = useState<(number | null)[]>(() => {
-    if (typeof window === "undefined") return exercises.map(() => null)
-    try {
-      const saved = localStorage.getItem(storageKey)
-      if (saved) {
-        const parsed = JSON.parse(saved) as (number | null)[]
-        if (Array.isArray(parsed) && parsed.length === exercises.length) return parsed
-      }
-    } catch { /* ignore */ }
-    return exercises.map(() => null)
+  // Load saved state from localStorage
+  const [items, setItems] = useState<QuizItemState[]>(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const saved = localStorage.getItem(storageKey)
+        if (saved) {
+          const parsed = JSON.parse(saved) as QuizItemState[]
+          if (Array.isArray(parsed) && parsed.length === exercises.length) return parsed
+        }
+      } catch { /* ignore */ }
+    }
+    return exercises.map(() => ({
+      selected: null, submitted: false, isCorrect: false, attemptSeq: 1, shownAt: Date.now(),
+    }))
   })
-  const [submitted, setSubmitted] = useState<boolean[]>(() => {
-    if (typeof window === "undefined") return exercises.map(() => false)
-    try {
-      const saved = localStorage.getItem(storageKey)
-      if (saved) {
-        const parsed = JSON.parse(saved) as (number | null)[]
-        if (Array.isArray(parsed) && parsed.length === exercises.length)
-          return parsed.map((v) => v !== null)
-      }
-    } catch { /* ignore */ }
-    return exercises.map(() => false)
-  })
-  const [expanded, setExpanded] = useState(() => submitted.some(Boolean))
+  const [expanded, setExpanded] = useState(() => items.some((it) => it.submitted))
+
+  const persist = (next: QuizItemState[]) => {
+    try { localStorage.setItem(storageKey, JSON.stringify(next)) } catch { /* ignore */ }
+  }
+
+  const submitToBackend = (qi: number, state: QuizItemState, ex: NonNullable<TheoryEntry["exercises"]>[number]) => {
+    if (!projectName) return
+    const timeMs = Date.now() - state.shownAt
+    const errorAnalysis = state.isCorrect ? null : buildErrorAnalysis(ex, state.selected!)
+    gateway.submitExerciseAttempts(projectName, [{
+      knode_id: knodeId,
+      quiz_type: "theory",
+      exercise_id: `${theoryId}_q${qi}`,
+      question: ex.question,
+      user_answer: String(state.selected),
+      correct_answer: String(ex.correct),
+      is_correct: state.isCorrect,
+      attempt_seq: state.attemptSeq,
+      time_spent_ms: timeMs,
+      error_analysis: errorAnalysis,
+      explanation: ex.explanation || null,
+    }]).catch(() => { /* silent — localStorage is the fallback */ })
+  }
 
   const handleSelect = (qi: number, oi: number) => {
-    if (submitted[qi]) return
-    setSelected((prev) => { const n = [...prev]; n[qi] = oi; return n })
+    if (items[qi].submitted) return
+    setItems((prev) => {
+      const next = [...prev]
+      next[qi] = { ...next[qi], selected: oi }
+      return next
+    })
   }
 
   const handleSubmit = (qi: number) => {
-    if (selected[qi] === null) return
-    setSubmitted((prev) => { const n = [...prev]; n[qi] = true; return n })
-    // Persist to localStorage
-    const nextSelected = [...selected]
-    try { localStorage.setItem(storageKey, JSON.stringify(nextSelected)) } catch { /* ignore */ }
+    const item = items[qi]
+    if (item.selected === null) return
+    const correct = item.selected === exercises[qi].correct
+    const nextItem: QuizItemState = { ...item, submitted: true, isCorrect: correct }
+    const next = [...items]
+    next[qi] = nextItem
+    setItems(next)
+    persist(next)
+    submitToBackend(qi, nextItem, exercises[qi])
+  }
+
+  const handleRetry = (qi: number) => {
+    const next = [...items]
+    next[qi] = {
+      selected: null,
+      submitted: false,
+      isCorrect: false,
+      attemptSeq: items[qi].attemptSeq + 1,
+      shownAt: Date.now(),
+    }
+    setItems(next)
+    persist(next)
   }
 
   return (
@@ -505,20 +567,26 @@ function TheoryQuiz({ theoryId, exercises }: { theoryId: string; exercises: NonN
       {expanded && (
         <div className="mt-4 space-y-5">
           {exercises.map((ex, qi) => {
-            const isSubmitted = submitted[qi]
-            const isCorrect = isSubmitted && selected[qi] === ex.correct
+            const item = items[qi]
             return (
               <div key={qi} className="rounded-lg bg-accent/30 p-4">
-                <p className="text-sm font-medium text-foreground mb-3">
-                  {qi + 1}. {ex.question}
-                </p>
+                <div className="flex items-center justify-between mb-3">
+                  <p className="text-sm font-medium text-foreground">
+                    {qi + 1}. {ex.question}
+                  </p>
+                  {item.attemptSeq > 1 && (
+                    <span className="text-[10px] text-muted-foreground ml-2 whitespace-nowrap">
+                      第 {item.attemptSeq} 次
+                    </span>
+                  )}
+                </div>
                 <div className="space-y-2">
                   {ex.options.map((opt, oi) => {
-                    const isSelected = selected[qi] === oi
+                    const isSelected = item.selected === oi
                     const isAnswer = ex.correct === oi
                     let ringClass = "border-border/60"
                     let bgClass = ""
-                    if (isSubmitted) {
+                    if (item.submitted) {
                       if (isAnswer) {
                         ringClass = "border-emerald-500"
                         bgClass = "bg-emerald-50 dark:bg-emerald-500/10"
@@ -534,32 +602,53 @@ function TheoryQuiz({ theoryId, exercises }: { theoryId: string; exercises: NonN
                       <button
                         key={oi}
                         type="button"
-                        disabled={isSubmitted}
+                        disabled={item.submitted}
                         onClick={() => handleSelect(qi, oi)}
-                        className={`w-full text-left px-4 py-2.5 rounded-md border text-sm transition-all duration-200 ${ringClass} ${bgClass} ${isSubmitted ? "cursor-default" : "hover:border-primary/50 cursor-pointer"}`}
+                        className={`w-full text-left px-4 py-2.5 rounded-md border text-sm transition-all duration-200 ${ringClass} ${bgClass} ${item.submitted ? "cursor-default" : "hover:border-primary/50 cursor-pointer"}`}
                       >
                         <span className="font-medium mr-2 text-muted-foreground">{String.fromCharCode(65 + oi)}.</span>
                         <span className="text-foreground">{opt}</span>
-                        {isSubmitted && isAnswer && <CheckCircle className="inline ml-2 h-3.5 w-3.5 text-emerald-500" />}
-                        {isSubmitted && isSelected && !isAnswer && <XCircle className="inline ml-2 h-3.5 w-3.5 text-red-400" />}
+                        {item.submitted && isAnswer && <CheckCircle className="inline ml-2 h-3.5 w-3.5 text-emerald-500" />}
+                        {item.submitted && isSelected && !isAnswer && <XCircle className="inline ml-2 h-3.5 w-3.5 text-red-400" />}
                       </button>
                     )
                   })}
                 </div>
-                {!isSubmitted && (
+
+                {/* Submit button (pre-answer) */}
+                {!item.submitted && (
                   <button
                     type="button"
-                    disabled={selected[qi] === null}
+                    disabled={item.selected === null}
                     onClick={() => handleSubmit(qi)}
                     className="mt-3 px-4 py-1.5 rounded-md text-xs font-semibold bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
                   >
                     提交
                   </button>
                 )}
-                {isSubmitted && ex.explanation && (
-                  <p className="mt-3 text-xs text-muted-foreground leading-relaxed">
-                    {isCorrect ? "" : ""} {ex.explanation}
-                  </p>
+
+                {/* Post-answer feedback */}
+                {item.submitted && (
+                  <div className="mt-3 space-y-2">
+                    {item.isCorrect ? (
+                      <p className="text-xs text-emerald-600 dark:text-emerald-400 leading-relaxed">
+                        回答正确!{ex.explanation ? ` ${ex.explanation}` : ""}
+                      </p>
+                    ) : (
+                      <>
+                        <p className="text-xs text-red-500 dark:text-red-400 leading-relaxed">
+                          {buildErrorAnalysis(ex, item.selected!)}
+                        </p>
+                        <button
+                          type="button"
+                          onClick={() => handleRetry(qi)}
+                          className="px-3 py-1 rounded-md text-xs font-semibold border border-primary/40 text-primary hover:bg-primary/10 transition-colors"
+                        >
+                          再试一次
+                        </button>
+                      </>
+                    )}
+                  </div>
                 )}
               </div>
             )
@@ -2440,6 +2529,7 @@ export function CourseContentView({
   }
 
   return (
+    <CourseIdentityContext.Provider value={{ projectName, knodeId: nodeId }}>
     <KnowledgeLevelContext.Provider value={knowledgeLevel}>
     <AudioProvider>
       <div className="flex flex-col h-full">
@@ -2516,6 +2606,7 @@ export function CourseContentView({
       </div>
     </AudioProvider>
     </KnowledgeLevelContext.Provider>
+    </CourseIdentityContext.Provider>
   )
 }
 
