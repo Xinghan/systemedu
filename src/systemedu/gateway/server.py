@@ -3130,6 +3130,116 @@ async def api_get_exercise_stats(request: Request) -> JSONResponse:
         db.close()
 
 
+async def api_evaluate_qa(request: Request) -> JSONResponse:
+    """POST /api/projects/{name}/evaluate-qa - AI-grade a QA (open-ended) answer.
+
+    Body: { user_id, knode_id, exercise_id, question, user_answer,
+            reference_answer, attempt_seq, time_spent_ms }
+    Returns: { score, max_score, is_correct, feedback, error_analysis, attempt_id }
+    Also persists the result as an ExerciseAttempt row.
+    """
+    from systemedu.storage.db import ExerciseAttempt, get_session as get_db_session
+
+    name = request.path_params["name"]
+    try:
+        body = await request.json()
+    except Exception:
+        return JSONResponse({"error": "Invalid JSON"}, status_code=400)
+
+    user_id = body.get("user_id", "default")
+    knode_id = body.get("knode_id", 0)
+    exercise_id = body.get("exercise_id", "")
+    question = body.get("question", "")
+    user_answer = body.get("user_answer", "")
+    reference_answer = body.get("reference_answer", "")
+    attempt_seq = body.get("attempt_seq", 1)
+    time_spent_ms = body.get("time_spent_ms")
+
+    if not user_answer.strip():
+        return JSONResponse({"error": "user_answer is empty"}, status_code=400)
+
+    max_score = 10
+    score = 0
+    feedback = ""
+    error_analysis = ""
+
+    try:
+        from systemedu.core.llm_client import get_llm
+        from langchain_core.messages import HumanMessage
+
+        grading_llm = get_llm(streaming=False)
+        grading_prompt = (
+            f"你是一位耐心且严格的阅卷老师，正在批改一道面向青少年学生的开放性问答题。\n\n"
+            f"题目：{question}\n"
+            f"参考答案要点：\n{reference_answer}\n\n"
+            f"学生回答：{user_answer}\n"
+            f"满分：{max_score}分\n\n"
+            f"请严格按以下 JSON 格式输出（不要包含 markdown 代码块标记）：\n"
+            f'{{"score": <0到{max_score}的整数>, "feedback": "对学生的鼓励性评语，指出优点和不足，50-100字", '
+            f'"error_analysis": "如果扣分了，具体说明哪些要点没覆盖或理解有误，30-80字；满分则留空字符串"}}\n\n'
+            f"评分标准：\n"
+            f"- 核心概念是否正确（40%）\n"
+            f"- 参考答案要点覆盖完整度（30%）\n"
+            f"- 表述是否清晰有逻辑（20%）\n"
+            f"- 有自己的思考或举例加分（10%）\n"
+        )
+        resp = grading_llm.invoke([HumanMessage(content=grading_prompt)])
+        grade_text = resp.content.strip()
+        if grade_text.startswith("```"):
+            lines = grade_text.split("\n")
+            grade_text = "\n".join(lines[1:-1] if lines[-1].strip() == "```" else lines[1:])
+            grade_text = grade_text.strip()
+        grade_result = json.loads(grade_text)
+        score = min(max(int(grade_result.get("score", 0)), 0), max_score)
+        feedback = grade_result.get("feedback", "")
+        error_analysis = grade_result.get("error_analysis", "")
+    except Exception as e:
+        logger.exception("LLM QA grading failed")
+        score = 0
+        feedback = f"AI 批改出错，请稍后重试。({str(e)[:60]})"
+        error_analysis = ""
+
+    is_correct = score >= max_score * 0.6
+
+    # Persist to exercise_attempts
+    db = get_db_session()
+    attempt_id = None
+    try:
+        row = ExerciseAttempt(
+            user_id=user_id,
+            project_name=name,
+            knode_id=knode_id,
+            quiz_type="assignment",
+            exercise_id=exercise_id,
+            question=question,
+            user_answer=user_answer,
+            correct_answer=reference_answer,
+            is_correct=is_correct,
+            attempt_seq=attempt_seq,
+            time_spent_ms=time_spent_ms,
+            error_analysis=error_analysis,
+            explanation=feedback,
+        )
+        db.add(row)
+        db.commit()
+        db.refresh(row)
+        attempt_id = row.id
+    except Exception as e:
+        db.rollback()
+        logger.exception("Failed to save QA evaluation to DB")
+    finally:
+        db.close()
+
+    return JSONResponse({
+        "score": score,
+        "max_score": max_score,
+        "is_correct": is_correct,
+        "feedback": feedback,
+        "error_analysis": error_analysis,
+        "attempt_id": attempt_id,
+    })
+
+
 async def api_search_resources(request: Request) -> JSONResponse:
     """POST /api/projects/{name}/nodes/{node_id}/resources/search - Trigger resource search via SearchAgent."""
     import threading
@@ -3669,6 +3779,7 @@ def create_app() -> Starlette:
         Route("/api/projects/{name}/exercise-attempts", api_submit_exercise_attempts, methods=["POST"]),
         Route("/api/projects/{name}/exercise-attempts", api_get_exercise_attempts, methods=["GET"]),
         Route("/api/projects/{name}/exercise-stats", api_get_exercise_stats, methods=["GET"]),
+        Route("/api/projects/{name}/evaluate-qa", api_evaluate_qa, methods=["POST"]),
         Route("/api/projects/{name}/nodes/{node_id:int}/highlights/{highlight_id:int}", api_delete_highlight, methods=["DELETE"]),
         Route("/api/projects/{name}/nodes/{node_id:int}/resources/search", api_search_resources, methods=["POST"]),
         Route("/api/projects/{name}/nodes/{node_id:int}/resources", api_resources_dispatch, methods=["GET", "POST"]),

@@ -251,6 +251,11 @@ export const gateway = {
       `/api/projects/${encodeURIComponent(projectName)}/exercise-stats?${p.toString()}`,
     )
   },
+  evaluateQa: (projectName: string, req: import("@/lib/types/api").QaEvaluationRequest) =>
+    api.post<import("@/lib/types/api").QaEvaluationResponse>(
+      `/api/projects/${encodeURIComponent(projectName)}/evaluate-qa`,
+      { ...req, user_id: req.user_id ?? "default" },
+    ),
 }
 
 // Career path types
