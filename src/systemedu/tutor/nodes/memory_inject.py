@@ -74,6 +74,7 @@ def make_memory_inject_node(
             last_user_msg=_last_user_message(state),
             active_skill_state=state.get("skill_state") or None,
             context_scope=_resolve_scope(state),
+            active_tab=state.get("active_tab"),
         )
         return {"memory": snapshot}
 

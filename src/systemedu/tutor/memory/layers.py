@@ -71,6 +71,7 @@ class MemoryInjector:
         last_user_msg: str,
         active_skill_state: dict[str, Any] | None = None,
         context_scope: ContextScope = "project",
+        active_tab: str | None = None,
     ) -> MemorySnapshot:
         """Recall all applicable layers concurrently.
 
@@ -88,7 +89,7 @@ class MemoryInjector:
             self._l1_profile(user_id),
             self._l2_project_ctx(user_id, project_name, context_scope),
             self._l3_knode_state(user_id, project_name, context_scope),
-            self._l3_knode_content(project_name, knode_id, context_scope),
+            self._l3_knode_content(project_name, knode_id, context_scope, active_tab),
             self._l4_semantic_recall(
                 user_id, last_user_msg, project_name, context_scope,
             ),
@@ -250,14 +251,22 @@ class MemoryInjector:
         project_name: str | None,
         knode_id: str | None,
         scope: ContextScope,
+        active_tab: str | None = None,
     ) -> str:
-        """Load current knode's course content (plan + exercises).
+        """Load current knode's course content, prioritized by active_tab.
+
+        Different tabs foreground different content:
+        - concept (default): plan_markdown full + exercises summary
+        - practice:          exercises full (with options) + plan_markdown summary
+        - project_assignment: assignment text full + plan_markdown summary
 
         This gives the skill LLM actual knowledge of what the student is
         studying, so it can answer in-context instead of hallucinating.
         """
         if scope != "project" or not project_name or not knode_id:
             return ""
+
+        tab = active_tab or "concept"
 
         def _query() -> str:
             import json as _json
@@ -279,53 +288,75 @@ class MemoryInjector:
                     return ""
 
                 parts: list[str] = []
+                plan = ""
+                exercises: list[dict] = []
 
-                # Extract plan_markdown from course_content JSON
+                # Parse course_content JSON
                 if row.course_content:
                     try:
                         cc = _json.loads(row.course_content)
                         plan = cc.get("plan_markdown") or ""
-                        if plan:
-                            # Truncate to ~1500 chars to avoid blowing up context
-                            if len(plan) > 1500:
-                                plan = plan[:1500] + "\n...(truncated)"
-                            parts.append(f"## 课程内容\n{plan}")
-
-                        # Extract exercises
-                        exercises: list[dict] = []
                         for sec in (cc.get("rendered_sections") or {}).values():
                             if sec.get("mode") == "exercise":
                                 for ex in sec.get("exercises") or []:
                                     exercises.append(ex)
-                        # Also check top-level exercises (legacy)
                         for ex in cc.get("exercises") or []:
                             exercises.append(ex)
-
-                        if exercises:
-                            ex_lines = []
-                            for ex in exercises[:10]:
-                                q = ex.get("question", "")
-                                eid = ex.get("exercise_id", "")
-                                etype = ex.get("type", "")
-                                opts = ex.get("options")
-                                line = f"- [{eid}] ({etype}) {q}"
-                                if opts and isinstance(opts, list):
-                                    line += " | " + " / ".join(
-                                        str(o) for o in opts
-                                    )
-                                ex_lines.append(line)
-                            parts.append(
-                                "## 练习题\n" + "\n".join(ex_lines)
-                            )
                     except (_json.JSONDecodeError, TypeError):
                         pass
 
+                # --- Tab-specific content assembly ---
+
+                if tab == "practice":
+                    # Exercises are primary; plan is secondary context
+                    parts.append("(学生当前正在查看: 练习题页面)")
+                    if exercises:
+                        parts.append(
+                            "## 练习题（完整）\n"
+                            + _format_exercises(exercises, detailed=True)
+                        )
+                    if plan:
+                        short = plan[:600] + "\n..." if len(plan) > 600 else plan
+                        parts.append(f"## 课程内容（摘要）\n{short}")
+
+                elif tab == "project_assignment":
+                    # Assignment is primary; plan is secondary
+                    parts.append("(学生当前正在查看: 作业页面)")
+                    assignment = row.project_assignment or ""
+                    if assignment:
+                        if len(assignment) > 2000:
+                            assignment = assignment[:2000] + "\n...(truncated)"
+                        parts.append(f"## 作业要求（完整）\n{assignment}")
+                    if plan:
+                        short = plan[:600] + "\n..." if len(plan) > 600 else plan
+                        parts.append(f"## 课程内容（摘要）\n{short}")
+
+                else:
+                    # concept / default: plan is primary, exercises secondary
+                    parts.append("(学生当前正在查看: 课文页面)")
+                    if plan:
+                        if len(plan) > 1500:
+                            plan = plan[:1500] + "\n...(truncated)"
+                        parts.append(f"## 课程内容\n{plan}")
+                    if exercises:
+                        parts.append(
+                            "## 练习题\n"
+                            + _format_exercises(exercises, detailed=False)
+                        )
+
                 # Fallback: legacy concept field
-                if not parts and row.concept:
-                    text = row.concept
-                    if len(text) > 1500:
-                        text = text[:1500] + "\n...(truncated)"
-                    parts.append(f"## 课程内容\n{text}")
+                has_real_content = any(
+                    not p.startswith("(") for p in parts
+                )
+                if not has_real_content:
+                    if row.concept:
+                        text = row.concept
+                        if len(text) > 1500:
+                            text = text[:1500] + "\n...(truncated)"
+                        parts.append(f"## 课程内容\n{text}")
+                    else:
+                        # No valid content at all (bad JSON, empty fields)
+                        return ""
 
                 return "\n\n".join(parts)
 
@@ -379,6 +410,43 @@ class MemoryInjector:
         if notes:
             lines.append(f"- 进展: {notes}")
         return "\n".join(lines)
+
+
+# ---------------------------------------------------------------------------
+# Exercise formatting helper
+# ---------------------------------------------------------------------------
+def _format_exercises(exercises: list[dict], *, detailed: bool) -> str:
+    """Format exercises for LLM context.
+
+    detailed=True:  full question + all options (for practice tab)
+    detailed=False: question summary only (for concept tab)
+    """
+    lines: list[str] = []
+    for ex in exercises[:10]:
+        q = ex.get("question", "")
+        eid = ex.get("exercise_id", "")
+        etype = ex.get("type", "")
+        opts = ex.get("options")
+        correct = ex.get("correct")
+
+        if detailed:
+            line = f"- [{eid}] ({etype}) {q}"
+            if opts and isinstance(opts, list):
+                for j, opt in enumerate(opts):
+                    marker = " <-- correct" if correct is not None and j == correct else ""
+                    line += f"\n    {chr(65 + j)}. {opt}{marker}"
+                # If correct is a string letter (legacy)
+                if isinstance(correct, str) and not marker:
+                    line += f"\n  正确答案: {correct}"
+            elif correct is not None:
+                line += f" [答案: {correct}]"
+        else:
+            line = f"- [{eid}] ({etype}) {q}"
+            if opts and isinstance(opts, list):
+                line += " | " + " / ".join(str(o) for o in opts)
+
+        lines.append(line)
+    return "\n".join(lines)
 
 
 # ---------------------------------------------------------------------------
