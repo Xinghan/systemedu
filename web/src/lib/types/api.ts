@@ -559,6 +559,15 @@ export interface TheoryLevelBody {
   body_markdown: string
 }
 
+export interface TheoryExercise {
+  question: string
+  type: "choice" | "true_false"
+  options: string[]
+  /** Index of the correct option (0-based). */
+  correct: number
+  explanation?: string
+}
+
 export interface TheoryEntry {
   theory_id: string
   title: string
@@ -569,6 +578,8 @@ export interface TheoryEntry {
   animation_html?: string
   /** Level-specific bodies. Front-end picks the one matching project level. */
   level_bodies?: TheoryLevelBody[]
+  /** Optional self-test exercises shown in a collapsible section. */
+  exercises?: TheoryExercise[]
 }
 
 export interface ExternalResourceItem {
