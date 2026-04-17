@@ -34,6 +34,7 @@ _start_time: float = 0.0
 # Shared runtime instance (created on startup)
 _runtime = None
 _session_manager = None
+_fact_worker = None
 
 
 def _get_runtime():
@@ -2324,6 +2325,22 @@ async def _on_startup():
     except Exception:
         logger.debug("Tutor graph pre-warm skipped (will lazy-init on first request)", exc_info=True)
 
+    # Start FactExtractionWorker (non-fatal)
+    global _fact_worker
+    try:
+        from systemedu.storage.db import get_session as _get_db
+        from systemedu.tutor.memory import FactExtractor
+        from systemedu.tutor.worker import FactExtractionWorker
+
+        _fact_worker = FactExtractionWorker(
+            db_session_factory=_get_db,
+            extractor_factory=lambda db: FactExtractor(db=db, llm=None),
+        )
+        await _fact_worker.start()
+        logger.info("FactExtractionWorker started")
+    except Exception:
+        logger.debug("FactExtractionWorker start failed (non-fatal)", exc_info=True)
+
     # Scan career paths directory and auto-enroll existing enrollments
     try:
         from systemedu.education.career_path import auto_enroll_for_project, scan_paths
@@ -3646,7 +3663,15 @@ def create_app() -> Starlette:
     ]
 
     async def _on_shutdown():
-        """Close tutor graph checkpointer on gateway shutdown."""
+        """Close tutor graph checkpointer and stop worker on gateway shutdown."""
+        global _fact_worker
+        if _fact_worker is not None:
+            try:
+                await _fact_worker.stop()
+                logger.info("FactExtractionWorker stopped")
+            except Exception:
+                pass
+            _fact_worker = None
         try:
             from systemedu.gateway import tutor_runner
             await tutor_runner.shutdown()
