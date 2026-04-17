@@ -88,8 +88,9 @@ const sectionConfig = {
   },
 }
 
-function CollapsibleAnswer({ children }: { children: ReactNode }) {
+function CollapsibleAnswer({ children, label }: { children: ReactNode; label?: string }) {
   const [open, setOpen] = useState(false)
+  const showLabel = label ?? "参考答案"
   return (
     <span className="block mt-2">
       <button
@@ -97,7 +98,7 @@ function CollapsibleAnswer({ children }: { children: ReactNode }) {
         className="flex items-center gap-1.5 text-xs text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 transition-colors"
       >
         {open ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
-        {open ? "收起参考答案" : "展开参考答案"}
+        {open ? `收起${showLabel}` : `查看${showLabel}`}
       </button>
       {open && (
         <span className="block mt-2 px-3 py-2 rounded-md bg-blue-50/60 dark:bg-blue-950/30 border border-blue-100 dark:border-blue-900 text-sm text-blue-900 dark:text-blue-200">
@@ -144,12 +145,12 @@ function useNormalComponents(): Components {
       const answerMatch = text.match(/^(?:\*\*)?答案[：:](.+?)(?:\*\*)?$/)
       if (answerMatch) {
         return (
-          <div className="flex items-center gap-2 my-2">
-            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300 text-xs font-medium">
-              <CheckCircle2 className="h-3.5 w-3.5" />
+          <CollapsibleAnswer label="答案">
+            <span className="inline-flex items-center gap-1.5">
+              <CheckCircle2 className="h-3.5 w-3.5 text-green-600 dark:text-green-400" />
               答案：{answerMatch[1].trim()}
             </span>
-          </div>
+          </CollapsibleAnswer>
         )
       }
       if (/^(?:\*\*)?参考答案要点[：:]/.test(text)) {
@@ -194,10 +195,12 @@ function useNormalComponents(): Components {
       const answerMatch = text.match(/^答案[：:](.+)/)
       if (answerMatch) {
         return (
-          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300 text-xs font-medium">
-            <CheckCircle2 className="h-3.5 w-3.5" />
-            答案：{answerMatch[1].trim()}
-          </span>
+          <CollapsibleAnswer label="答案">
+            <span className="inline-flex items-center gap-1.5">
+              <CheckCircle2 className="h-3.5 w-3.5 text-green-600 dark:text-green-400" />
+              答案：{answerMatch[1].trim()}
+            </span>
+          </CollapsibleAnswer>
         )
       }
       if (/^参考答案要点[：:]/.test(text)) {
