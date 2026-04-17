@@ -520,7 +520,7 @@
 
 **测试**:`tests/gateway/test_tutor_endpoints.py` 每个端点基本覆盖
 
-### T5.4 FactExtractionWorker 生命周期接入 gateway [ ] parallel:yes
+### T5.4 FactExtractionWorker 生命周期接入 gateway [x] parallel:yes
 
 **依赖**:T2.5
 **改动**:
