@@ -447,6 +447,53 @@ class ToolCallLog(Base):
     error = Column(Text, nullable=True)
 
 
+class ExerciseAttempt(Base):
+    """Unified record of every exercise attempt across all quiz types.
+
+    Captures the full detail of each answer: what the student chose,
+    whether it was correct, how long they took, retry sequence, and
+    server-generated error analysis text.  Designed to feed tutor
+    agent context (L3 knode content) with per-student misconception data.
+    """
+
+    __tablename__ = "exercise_attempts"
+    __table_args__ = (
+        Index("ix_ea_user_project", "user_id", "project_name"),
+        Index("ix_ea_user_knode", "user_id", "project_name", "knode_id"),
+    )
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+
+    user_id = Column(String(100), nullable=False, index=True)
+    project_name = Column(String(200), nullable=False)
+    knode_id = Column(Integer, nullable=False)
+
+    # theory | practice | assignment — which quiz surface
+    quiz_type = Column(String(30), nullable=False)
+    # e.g. "theory_phys_weight" or "exercise_0"
+    exercise_id = Column(String(200), nullable=False)
+    # original question text (denormalised for historical tracing)
+    question = Column(Text, nullable=False, default="")
+
+    # what the student picked (option index for choice, text for short_answer)
+    user_answer = Column(Text, nullable=False, default="")
+    # the correct answer (option index or text)
+    correct_answer = Column(Text, nullable=False, default="")
+    is_correct = Column(Boolean, nullable=False, default=False)
+
+    # 1-based: first try = 1, retry after wrong = 2, …
+    attempt_seq = Column(Integer, nullable=False, default=1)
+    # milliseconds from question render to answer submit
+    time_spent_ms = Column(Integer, nullable=True)
+
+    # server-generated explanation of why the wrong option is wrong
+    error_analysis = Column(Text, nullable=True)
+    # the pre-authored explanation (from exercise data)
+    explanation = Column(Text, nullable=True)
+
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+
 class Escalation(Base):
     """Human-intervention markers (spec 014 §8.4)."""
 

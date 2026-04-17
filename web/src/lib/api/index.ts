@@ -227,6 +227,30 @@ export const gateway = {
     api.get<CareerPathDetail>(`/api/career-paths/${encodeURIComponent(name)}?user_id=${userId}`),
   allBadges: (userId = "default") =>
     api.get<EarnedBadgeInfo[]>(`/api/badges?user_id=${userId}`),
+  // Exercise attempts (unified tracking for theory/practice/assignment)
+  submitExerciseAttempts: (projectName: string, attempts: import("@/lib/types/api").ExerciseAttemptPayload[], userId = "default") =>
+    api.post<{ saved: number; ids: number[] }>(
+      `/api/projects/${encodeURIComponent(projectName)}/exercise-attempts`,
+      { user_id: userId, attempts },
+    ),
+  getExerciseAttempts: (projectName: string, opts?: { userId?: string; knodeId?: number; quizType?: string; limit?: number }) => {
+    const p = new URLSearchParams()
+    p.set("user_id", opts?.userId ?? "default")
+    if (opts?.knodeId != null) p.set("knode_id", String(opts.knodeId))
+    if (opts?.quizType) p.set("quiz_type", opts.quizType)
+    if (opts?.limit) p.set("limit", String(opts.limit))
+    return api.get<{ attempts: import("@/lib/types/api").ExerciseAttemptRecord[] }>(
+      `/api/projects/${encodeURIComponent(projectName)}/exercise-attempts?${p.toString()}`,
+    )
+  },
+  getExerciseStats: (projectName: string, opts?: { userId?: string; knodeId?: number }) => {
+    const p = new URLSearchParams()
+    p.set("user_id", opts?.userId ?? "default")
+    if (opts?.knodeId != null) p.set("knode_id", String(opts.knodeId))
+    return api.get<import("@/lib/types/api").ExerciseStatsResponse>(
+      `/api/projects/${encodeURIComponent(projectName)}/exercise-stats?${p.toString()}`,
+    )
+  },
 }
 
 // Career path types

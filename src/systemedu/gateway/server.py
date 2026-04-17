@@ -2925,6 +2925,211 @@ async def api_capstone_status(request: Request) -> JSONResponse:
         db.close()
 
 
+async def api_submit_exercise_attempts(request: Request) -> JSONResponse:
+    """POST /api/projects/{name}/exercise-attempts - Batch record exercise attempts.
+
+    Body: { user_id, attempts: [{knode_id, quiz_type, exercise_id, question,
+            user_answer, correct_answer, is_correct, attempt_seq,
+            time_spent_ms, error_analysis, explanation}] }
+    """
+    from systemedu.storage.db import ExerciseAttempt, get_session as get_db_session
+
+    name = request.path_params["name"]
+    try:
+        body = await request.json()
+    except Exception:
+        return JSONResponse({"error": "Invalid JSON"}, status_code=400)
+
+    user_id = body.get("user_id", "default")
+    attempts = body.get("attempts", [])
+    if not attempts:
+        return JSONResponse({"error": "No attempts provided"}, status_code=400)
+
+    db = get_db_session()
+    try:
+        saved_ids = []
+        for a in attempts:
+            row = ExerciseAttempt(
+                user_id=user_id,
+                project_name=name,
+                knode_id=a.get("knode_id", 0),
+                quiz_type=a.get("quiz_type", ""),
+                exercise_id=a.get("exercise_id", ""),
+                question=a.get("question", ""),
+                user_answer=str(a.get("user_answer", "")),
+                correct_answer=str(a.get("correct_answer", "")),
+                is_correct=bool(a.get("is_correct", False)),
+                attempt_seq=a.get("attempt_seq", 1),
+                time_spent_ms=a.get("time_spent_ms"),
+                error_analysis=a.get("error_analysis"),
+                explanation=a.get("explanation"),
+            )
+            db.add(row)
+            db.flush()
+            saved_ids.append(row.id)
+        db.commit()
+        return JSONResponse({"saved": len(saved_ids), "ids": saved_ids})
+    except Exception as e:
+        db.rollback()
+        return JSONResponse({"error": str(e)}, status_code=500)
+    finally:
+        db.close()
+
+
+async def api_get_exercise_attempts(request: Request) -> JSONResponse:
+    """GET /api/projects/{name}/exercise-attempts - Query exercise history.
+
+    Query params: user_id, knode_id (optional), quiz_type (optional), limit (default 200).
+    """
+    from systemedu.storage.db import ExerciseAttempt, get_session as get_db_session
+
+    name = request.path_params["name"]
+    user_id = request.query_params.get("user_id", "default")
+    knode_id = request.query_params.get("knode_id")
+    quiz_type = request.query_params.get("quiz_type")
+    limit = int(request.query_params.get("limit", "200"))
+
+    db = get_db_session()
+    try:
+        q = (
+            db.query(ExerciseAttempt)
+            .filter_by(user_id=user_id, project_name=name)
+        )
+        if knode_id:
+            q = q.filter(ExerciseAttempt.knode_id == int(knode_id))
+        if quiz_type:
+            q = q.filter(ExerciseAttempt.quiz_type == quiz_type)
+        rows = q.order_by(ExerciseAttempt.created_at.desc()).limit(limit).all()
+
+        return JSONResponse({"attempts": [
+            {
+                "id": r.id,
+                "knode_id": r.knode_id,
+                "quiz_type": r.quiz_type,
+                "exercise_id": r.exercise_id,
+                "question": r.question,
+                "user_answer": r.user_answer,
+                "correct_answer": r.correct_answer,
+                "is_correct": r.is_correct,
+                "attempt_seq": r.attempt_seq,
+                "time_spent_ms": r.time_spent_ms,
+                "error_analysis": r.error_analysis,
+                "explanation": r.explanation,
+                "created_at": r.created_at.isoformat() if r.created_at else None,
+            }
+            for r in rows
+        ]})
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
+    finally:
+        db.close()
+
+
+async def api_get_exercise_stats(request: Request) -> JSONResponse:
+    """GET /api/projects/{name}/exercise-stats - Aggregated exercise metrics for tutor agent.
+
+    Query params: user_id, knode_id (optional).
+    Returns per-exercise and per-knode accuracy, avg time, retry rate, weak spots.
+    """
+    from sqlalchemy import func
+
+    from systemedu.storage.db import ExerciseAttempt, get_session as get_db_session
+
+    name = request.path_params["name"]
+    user_id = request.query_params.get("user_id", "default")
+    knode_id = request.query_params.get("knode_id")
+
+    db = get_db_session()
+    try:
+        base = db.query(ExerciseAttempt).filter_by(
+            user_id=user_id, project_name=name,
+        )
+        if knode_id:
+            base = base.filter(ExerciseAttempt.knode_id == int(knode_id))
+
+        rows = base.all()
+        if not rows:
+            return JSONResponse({
+                "total_attempts": 0,
+                "first_try_accuracy": 0,
+                "overall_accuracy": 0,
+                "avg_time_ms": 0,
+                "retry_rate": 0,
+                "weak_exercises": [],
+                "per_knode": {},
+                "per_quiz_type": {},
+            })
+
+        # --- compute aggregated metrics ---
+        total = len(rows)
+        correct_count = sum(1 for r in rows if r.is_correct)
+        first_tries = [r for r in rows if r.attempt_seq == 1]
+        first_correct = sum(1 for r in first_tries if r.is_correct)
+        retries = [r for r in rows if r.attempt_seq > 1]
+        times = [r.time_spent_ms for r in rows if r.time_spent_ms is not None]
+
+        # per-exercise: group by (knode_id, exercise_id)
+        from collections import defaultdict
+        ex_groups: dict[tuple, list] = defaultdict(list)
+        knode_groups: dict[int, list] = defaultdict(list)
+        quiz_type_groups: dict[str, list] = defaultdict(list)
+
+        for r in rows:
+            ex_groups[(r.knode_id, r.exercise_id)].append(r)
+            knode_groups[r.knode_id].append(r)
+            quiz_type_groups[r.quiz_type].append(r)
+
+        # weak exercises: first-try wrong
+        weak = []
+        for (kid, eid), group in ex_groups.items():
+            first = [g for g in group if g.attempt_seq == 1]
+            if first and not first[0].is_correct:
+                weak.append({
+                    "knode_id": kid,
+                    "exercise_id": eid,
+                    "question": first[0].question,
+                    "total_attempts": len(group),
+                    "eventually_correct": any(g.is_correct for g in group),
+                    "error_analysis": first[0].error_analysis or first[0].explanation or "",
+                })
+
+        # per-knode stats
+        per_knode = {}
+        for kid, group in knode_groups.items():
+            ft = [g for g in group if g.attempt_seq == 1]
+            per_knode[str(kid)] = {
+                "total_attempts": len(group),
+                "first_try_accuracy": round(sum(1 for g in ft if g.is_correct) / max(len(ft), 1), 2),
+                "overall_accuracy": round(sum(1 for g in group if g.is_correct) / len(group), 2),
+                "retry_count": sum(1 for g in group if g.attempt_seq > 1),
+            }
+
+        # per quiz_type stats
+        per_qt = {}
+        for qt, group in quiz_type_groups.items():
+            ft = [g for g in group if g.attempt_seq == 1]
+            per_qt[qt] = {
+                "total_attempts": len(group),
+                "first_try_accuracy": round(sum(1 for g in ft if g.is_correct) / max(len(ft), 1), 2),
+                "overall_accuracy": round(sum(1 for g in group if g.is_correct) / len(group), 2),
+            }
+
+        return JSONResponse({
+            "total_attempts": total,
+            "first_try_accuracy": round(first_correct / max(len(first_tries), 1), 2),
+            "overall_accuracy": round(correct_count / total, 2),
+            "avg_time_ms": round(sum(times) / max(len(times), 1)) if times else 0,
+            "retry_rate": round(len(retries) / total, 2),
+            "weak_exercises": weak,
+            "per_knode": per_knode,
+            "per_quiz_type": per_qt,
+        })
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
+    finally:
+        db.close()
+
+
 async def api_search_resources(request: Request) -> JSONResponse:
     """POST /api/projects/{name}/nodes/{node_id}/resources/search - Trigger resource search via SearchAgent."""
     import threading
@@ -3460,6 +3665,10 @@ def create_app() -> Starlette:
         Route("/api/projects/{name}/nodes/{node_id:int}/capstone/submit", api_submit_capstone, methods=["POST"]),
         Route("/api/projects/{name}/nodes/{node_id:int}/capstone/submissions", api_capstone_submissions, methods=["GET"]),
         Route("/api/projects/{name}/nodes/{node_id:int}/capstone/status", api_capstone_status, methods=["GET"]),
+        # Exercise attempts (unified tracking for theory/practice/assignment)
+        Route("/api/projects/{name}/exercise-attempts", api_submit_exercise_attempts, methods=["POST"]),
+        Route("/api/projects/{name}/exercise-attempts", api_get_exercise_attempts, methods=["GET"]),
+        Route("/api/projects/{name}/exercise-stats", api_get_exercise_stats, methods=["GET"]),
         Route("/api/projects/{name}/nodes/{node_id:int}/highlights/{highlight_id:int}", api_delete_highlight, methods=["DELETE"]),
         Route("/api/projects/{name}/nodes/{node_id:int}/resources/search", api_search_resources, methods=["POST"]),
         Route("/api/projects/{name}/nodes/{node_id:int}/resources", api_resources_dispatch, methods=["GET", "POST"]),

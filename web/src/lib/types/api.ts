@@ -707,3 +707,62 @@ export interface CourseData {
   manifest: CourseManifest | Record<string, never>
   steps: CourseStep[]
 }
+
+// --- Exercise attempt tracking (unified for theory/practice/assignment) ---
+
+export interface ExerciseAttemptRecord {
+  id: number
+  knode_id: number
+  quiz_type: "theory" | "practice" | "assignment"
+  exercise_id: string
+  question: string
+  user_answer: string
+  correct_answer: string
+  is_correct: boolean
+  attempt_seq: number
+  time_spent_ms: number | null
+  error_analysis: string | null
+  explanation: string | null
+  created_at: string | null
+}
+
+export interface ExerciseAttemptPayload {
+  knode_id: number
+  quiz_type: "theory" | "practice" | "assignment"
+  exercise_id: string
+  question: string
+  user_answer: string
+  correct_answer: string
+  is_correct: boolean
+  attempt_seq: number
+  time_spent_ms?: number | null
+  error_analysis?: string | null
+  explanation?: string | null
+}
+
+export interface ExerciseStatsResponse {
+  total_attempts: number
+  first_try_accuracy: number
+  overall_accuracy: number
+  avg_time_ms: number
+  retry_rate: number
+  weak_exercises: {
+    knode_id: number
+    exercise_id: string
+    question: string
+    total_attempts: number
+    eventually_correct: boolean
+    error_analysis: string
+  }[]
+  per_knode: Record<string, {
+    total_attempts: number
+    first_try_accuracy: number
+    overall_accuracy: number
+    retry_count: number
+  }>
+  per_quiz_type: Record<string, {
+    total_attempts: number
+    first_try_accuracy: number
+    overall_accuracy: number
+  }>
+}
