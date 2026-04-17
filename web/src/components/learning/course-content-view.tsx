@@ -445,6 +445,104 @@ function stripDuplicateTitle(markdown: string, title: string): string {
   return markdown
 }
 
+// ---------------------------------------------------------------------------
+// TheoryQuiz — collapsible self-test exercises inside a theory modal
+// ---------------------------------------------------------------------------
+function TheoryQuiz({ exercises }: { exercises: NonNullable<TheoryEntry["exercises"]> }) {
+  const [expanded, setExpanded] = useState(false)
+  const [selected, setSelected] = useState<(number | null)[]>(() => exercises.map(() => null))
+  const [submitted, setSubmitted] = useState<boolean[]>(() => exercises.map(() => false))
+
+  const handleSelect = (qi: number, oi: number) => {
+    if (submitted[qi]) return
+    setSelected((prev) => { const n = [...prev]; n[qi] = oi; return n })
+  }
+
+  const handleSubmit = (qi: number) => {
+    if (selected[qi] === null) return
+    setSubmitted((prev) => { const n = [...prev]; n[qi] = true; return n })
+  }
+
+  return (
+    <div className="mt-6 border-t border-foreground/5 pt-4">
+      <button
+        type="button"
+        onClick={() => setExpanded((v) => !v)}
+        className="flex items-center gap-2 text-sm font-semibold text-muted-foreground hover:text-foreground transition-colors"
+      >
+        {expanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+        <ClipboardList className="h-4 w-4" />
+        <span>自测一下 ({exercises.length} 题)</span>
+      </button>
+
+      {expanded && (
+        <div className="mt-4 space-y-5">
+          {exercises.map((ex, qi) => {
+            const isSubmitted = submitted[qi]
+            const isCorrect = isSubmitted && selected[qi] === ex.correct
+            return (
+              <div key={qi} className="rounded-lg bg-accent/30 p-4">
+                <p className="text-sm font-medium text-foreground mb-3">
+                  {qi + 1}. {ex.question}
+                </p>
+                <div className="space-y-2">
+                  {ex.options.map((opt, oi) => {
+                    const isSelected = selected[qi] === oi
+                    const isAnswer = ex.correct === oi
+                    let ringClass = "border-border/60"
+                    let bgClass = ""
+                    if (isSubmitted) {
+                      if (isAnswer) {
+                        ringClass = "border-emerald-500"
+                        bgClass = "bg-emerald-50 dark:bg-emerald-500/10"
+                      } else if (isSelected && !isAnswer) {
+                        ringClass = "border-red-400"
+                        bgClass = "bg-red-50 dark:bg-red-500/10"
+                      }
+                    } else if (isSelected) {
+                      ringClass = "border-primary"
+                      bgClass = "bg-primary/5"
+                    }
+                    return (
+                      <button
+                        key={oi}
+                        type="button"
+                        disabled={isSubmitted}
+                        onClick={() => handleSelect(qi, oi)}
+                        className={`w-full text-left px-4 py-2.5 rounded-md border text-sm transition-all duration-200 ${ringClass} ${bgClass} ${isSubmitted ? "cursor-default" : "hover:border-primary/50 cursor-pointer"}`}
+                      >
+                        <span className="font-medium mr-2 text-muted-foreground">{String.fromCharCode(65 + oi)}.</span>
+                        <span className="text-foreground">{opt}</span>
+                        {isSubmitted && isAnswer && <CheckCircle className="inline ml-2 h-3.5 w-3.5 text-emerald-500" />}
+                        {isSubmitted && isSelected && !isAnswer && <XCircle className="inline ml-2 h-3.5 w-3.5 text-red-400" />}
+                      </button>
+                    )
+                  })}
+                </div>
+                {!isSubmitted && (
+                  <button
+                    type="button"
+                    disabled={selected[qi] === null}
+                    onClick={() => handleSubmit(qi)}
+                    className="mt-3 px-4 py-1.5 rounded-md text-xs font-semibold bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                  >
+                    提交
+                  </button>
+                )}
+                {isSubmitted && ex.explanation && (
+                  <p className="mt-3 text-xs text-muted-foreground leading-relaxed">
+                    {isCorrect ? "" : ""} {ex.explanation}
+                  </p>
+                )}
+              </div>
+            )
+          })}
+        </div>
+      )}
+    </div>
+  )
+}
+
 function TheoryBlock({ theory }: { theory: TheoryEntry }) {
   const [open, setOpen] = useState(false)
   const label = SUBJECT_LABELS[theory.subject] || SUBJECT_LABELS.other
@@ -546,6 +644,7 @@ function TheoryBlock({ theory }: { theory: TheoryEntry }) {
                         </p>
                       </div>
                     </div>
+                    {theory.exercises && theory.exercises.length > 0 && <TheoryQuiz exercises={theory.exercises} />}
                   </div>
                 </div>
               ) : (
@@ -566,6 +665,7 @@ function TheoryBlock({ theory }: { theory: TheoryEntry }) {
                       </p>
                     </div>
                   </div>
+                  {theory.exercises && theory.exercises.length > 0 && <TheoryQuiz exercises={theory.exercises} />}
                 </div>
               )}
             </div>
