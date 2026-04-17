@@ -30,6 +30,7 @@ class MemorySnapshot(TypedDict, total=False):
     l1_profile: str           # 学生画像（稳定）
     l2_project_ctx: str       # 项目上下文（进度）
     l3_knode_state: str       # 当前 knode 卡点 / 尝试
+    l3_knode_content: str     # 当前 knode 课程内容摘要（plan + exercises）
     l4_semantic_recall: list[str]  # Mem0 top-3 片段
     l5_skill_ctx: str         # active skill 子图 state 摘要
     injected_at: datetime

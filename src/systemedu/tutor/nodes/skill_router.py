@@ -55,6 +55,9 @@ ROUTER_PROMPT = """你是教学策略调度器。
 # 学生当前卡点（L3 记忆）
 {knode_state}
 
+# 当前课程内容
+{knode_content}
+
 # 决策规则
 1. active_skill 未超 max_turns → continue
 2. 话题切换 / skill 目标达成 → switch
@@ -276,6 +279,7 @@ async def _ask_llm(
         max_turns=max_turns or 0,
         recent_messages=_recent_messages(state.get("messages") or []),
         knode_state=memory.get("l3_knode_state") or "(empty)",
+        knode_content=memory.get("l3_knode_content") or "(empty)",
     )
     try:
         raw = await _call_llm(llm, prompt)
