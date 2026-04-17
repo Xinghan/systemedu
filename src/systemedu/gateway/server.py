@@ -238,6 +238,11 @@ async def ws_chat_stream(websocket: WebSocket) -> None:
                 continue
 
             user_id = data.get("user_id", "default")
+            logger.info(
+                "ws_chat: user=%s project=%s knode=%s active_tab=%s msg=%s",
+                user_id, payload.project_name, payload.knode_id,
+                payload.active_tab, message[:50],
+            )
 
             try:
                 async for event in tutor_runner.stream(payload, user_id):
