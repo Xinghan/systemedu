@@ -1295,14 +1295,8 @@ export default function LearnPage() {
         )}
       </div>
 
-      {/* AI Tutor side panel (right slide-in) */}
-      {/* Backdrop */}
-      {tutorOpen && (
-        <div
-          className="fixed inset-0 z-40 bg-black/10 backdrop-blur-[2px]"
-          onClick={() => setTutorOpen(false)}
-        />
-      )}
+      {/* AI Tutor side panel (right slide-in) — no backdrop overlay
+           so the student can read the course content while chatting */}
       <div
         className={`fixed top-0 right-0 h-full z-50 flex flex-col transition-transform duration-500 ease-[cubic-bezier(0.2,0.8,0.2,1)] ${
           tutorOpen ? "translate-x-0" : "translate-x-full"
