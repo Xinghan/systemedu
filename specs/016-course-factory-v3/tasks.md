@@ -4,11 +4,11 @@
 
 ## 阶段 A — 基础设施
 
-- [ ] A1 切换 Kimi 配置：`~/.systemedu/config.yaml` + `core/config.py:_default_config_dict()` 把 default→kimi，base_url=`https://api.moonshot.cn/v1`，model=`kimi-k2.6`，key 写入。本地用 `python -c "from systemedu.core.llm_client import get_llm; print(get_llm().invoke('hi').content)"` 探活，404 则改 model 名重试
-- [ ] A2 新建模块骨架 `src/systemedu/course_factory_v3/` 全部空文件（`__init__.py`、`pipeline.py`、`progress.py`、`kimi_client.py`、`theme_loader.py`、`revise.py`、`steps/`、`gates/`、`prompts/`），每个 step/gate 一个 `async def run(...)` 占位
-- [ ] A3 写 `theme_loader.py`：用正则解析 `theme_style/themes.js` → 26 条 dict，写测试 `tests/test_cf_v3_theme_loader.py` 断言 26 条 + 关键字段齐
-- [ ] A4 写 `kimi_client.py`：薄封装 `core.llm_client.get_llm`，加 429 退避（最多 3 次）+ 失败转储到 `~/.systemedu/logs/kimi_failures/`
-- [ ] A5 写 `progress.py` + `pipeline.py` 主循环骨架（每步 emit step_start/step_done，全部步骤 mock 返回固定值），用单元测试跑通 SSE 流
+- [x] A1 切换 Kimi 配置：`~/.systemedu/config.yaml` + `core/config.py:_default_config_dict()` 把 default→kimi，base_url=`https://api.moonshot.cn/v1`，model=`kimi-k2.6`，key 写入。本地用 `python -c "from systemedu.core.llm_client import get_llm; print(get_llm().invoke('hi').content)"` 探活，404 则改 model 名重试
+- [x] A2 新建模块骨架 `src/systemedu/course_factory_v3/` 全部空文件（`__init__.py`、`pipeline.py`、`progress.py`、`kimi_client.py`、`theme_loader.py`、`revise.py`、`steps/`、`gates/`、`prompts/`），每个 step/gate 一个 `async def run(...)` 占位
+- [x] A3 写 `theme_loader.py`：用正则解析 `theme_style/themes.js` → 26 条 dict，写测试 `tests/test_cf_v3_theme_loader.py` 断言 26 条 + 关键字段齐
+- [x] A4 写 `kimi_client.py`：薄封装 `core.llm_client.get_llm`，加 429 退避（最多 3 次）+ 失败转储到 `~/.systemedu/logs/kimi_failures/`
+- [x] A5 写 `progress.py` + `pipeline.py` 主循环骨架（每步 emit step_start/step_done，全部步骤 mock 返回固定值），用单元测试跑通 SSE 流
 
 ## 阶段 B — 12 步骨架（用 LLM，但暂不接闸门）
 
@@ -16,35 +16,35 @@
 - [x] B2 `s05_research.py`：调 `factory.research_knode`，web_query / youtube_query 由 LLM 从 knode.core_question 抽取（一个 mini prompt），失败一次后 skip
 - [x] B3 `s07_labxchange.py`：调 `factory.search_labxchange_for_knode(knode, top_k=3)`
 - [x] B4 `s10_plan.py` + `prompts/plan.md`：用 v4.1 全字段 + Module 引用块 + core_question 占位 + 末尾"## 推荐互动资源"。生成后做 4 项硬规自检（长度/core_question/hands_on/末段），失败由 revise 重生
-- [ ] B5 `s15_theory.py` + `prompts/theory_pick.md` + `prompts/theory_body.md`：先选 2-5 个 theory_id，再并行为每个生成 K1+项目等级的 level_bodies 和 1-3 道 exercises。`[[THEORY:xxx]]` 占位符插回 plan_markdown
-- [ ] B6 `s20_ideation.py` + `prompts/ideation_8class_debate.md`：强制 8 类（theory/anim/game/kit/image/diagram/youtube/labxchange）逐条 keep/reject + 理由，输出 ideas 列表（含 hands_on_ref / acceptance_ref 原文）
-- [ ] B7 `s25_divergence.py` + `prompts/divergence_3pattern.md`：每个 anim/game 给 3 个跨 Pattern 候选 + pitch + why cool + 选 1 拒 2 的理由
-- [ ] B8 `s26_creativity_gate.py` + `prompts/creativity_4q.md`：4 问 Subtract/Replay/Surprise/Aha，全过才放行，否则回 s25 ≤ 2 次
-- [ ] B9 `s30_detail.py` + `prompts/detail_{anim,game,exercise,...}.md`：并行为每 idea 写 detail_plan，hands_on_ref / acceptance_ref 透传
-- [ ] B10 `s40_debate.py` + `prompts/debate_decide.md`：每 idea approve/reject/revise（Pattern X 的 game 必须改写或 reject）
-- [ ] B11 `s50_implement_anim.py` + `prompts/implement_anim.md`：注入 theme_style 当前 theme 的 5 色 palette + mascot + props + skeleton 模板路径 + animation_runtime API。LLM 输出完整 HTML
-- [ ] B12 `s50_implement_game.py` + `prompts/implement_game.md`：注入 theme + Game 标准布局模板（sidebar / game-main） + Pattern 库 + 长度无上限提示
-- [ ] B13 `s50_implement_exercise.py`：从 detail_plan.exercises 调 `factory.make_exercises`
-- [ ] B14 `s50_implement_image.py`：调 `factory.download_course_image`
-- [ ] B15 `s50_implement_diagram.py` + `prompts/implement_diagram.md`：HTML/SVG 静态示意图
-- [ ] B16 `s50_implement_kit.py` + `prompts/implement_kit.md`：套件元器件 / 步骤 / 价格 / 安全
-- [ ] B17 `s50_implement_story.py`：直接 LLM 生 paragraphs
-- [ ] B18 `s60_assemble.py`：调 `factory.make_course_content(knode=..., research=..., labxchange_results=..., theories=..., images=..., diagrams=..., hands_on_kits=..., animation_html=..., game_html=..., exercises=...)` 一次性组装+preflight；用 `factory.upsert_lesson` 写入
-- [ ] B19 `s65_assignment.py`：调 `factory.generate_assignment` + `factory.upsert_assignment`
-- [ ] B20 `s66_audio.py`：调 `factory.generate_audio_scripts`
+- [x] B5 `s15_theory.py` + `prompts/theory_pick.md` + `prompts/theory_body.md`：先选 2-5 个 theory_id，再并行为每个生成 K1+项目等级的 level_bodies 和 1-3 道 exercises。`[[THEORY:xxx]]` 占位符插回 plan_markdown
+- [x] B6 `s20_ideation.py` + `prompts/ideation_8class_debate.md`：强制 8 类（theory/anim/game/kit/image/diagram/youtube/labxchange）逐条 keep/reject + 理由，输出 ideas 列表（含 hands_on_ref / acceptance_ref 原文）
+- [x] B7 `s25_divergence.py` + `prompts/divergence_3pattern.md`：每个 anim/game 给 3 个跨 Pattern 候选 + pitch + why cool + 选 1 拒 2 的理由
+- [x] B8 `s26_creativity_gate.py` + `prompts/creativity_4q.md`：4 问 Subtract/Replay/Surprise/Aha，全过才放行，否则回 s25 ≤ 2 次
+- [x] B9 `s30_detail.py` + `prompts/detail_{anim,game,exercise,...}.md`：并行为每 idea 写 detail_plan，hands_on_ref / acceptance_ref 透传
+- [x] B10 `s40_debate.py` + `prompts/debate_decide.md`：每 idea approve/reject/revise（Pattern X 的 game 必须改写或 reject）
+- [x] B11 `s50_implement_anim.py` + `prompts/implement_anim.md`：注入 theme_style 当前 theme 的 5 色 palette + mascot + props + skeleton 模板路径 + animation_runtime API。LLM 输出完整 HTML
+- [x] B12 `s50_implement_game.py` + `prompts/implement_game.md`：注入 theme + Game 标准布局模板（sidebar / game-main） + Pattern 库 + 长度无上限提示
+- [x] B13 `s50_implement_exercise.py`：从 detail_plan.exercises 调 `factory.make_exercises`
+- [x] B14 `s50_implement_image.py`：调 `factory.download_course_image`
+- [x] B15 `s50_implement_diagram.py` + `prompts/implement_diagram.md`：HTML/SVG 静态示意图
+- [x] B16 `s50_implement_kit.py` + `prompts/implement_kit.md`：套件元器件 / 步骤 / 价格 / 安全
+- [x] B17 `s50_implement_story.py`：直接 LLM 生 paragraphs
+- [x] B18 `s60_assemble.py`：调 `factory.make_course_content(knode=..., research=..., labxchange_results=..., theories=..., images=..., diagrams=..., hands_on_kits=..., animation_html=..., game_html=..., exercises=...)` 一次性组装+preflight；用 `factory.upsert_lesson` 写入
+- [x] B19 `s65_assignment.py`：调 `factory.generate_assignment` + `factory.upsert_assignment`
+- [x] B20 `s66_audio.py`：调 `factory.generate_audio_scripts`
 - [ ] B21 用 `rocket-design` knode 0 端到端跑一次（无闸门），DB 中能看到 v3 写入的 cf 记录，前端 `/learn/rocket-design?node=0` 能渲染
 
 ## 阶段 C — 闸门 + revise
 
-- [ ] C1 `gates/base.py`：`@dataclass GateResult(verdict:Literal["pass","fail"], issues:list[str], attempt:int)`，`Gate(ABC).run(context, html, idea) -> GateResult`
-- [ ] C2 `g_a_code_review.py`：纯正则检测 onclick属性 / setInterval / calc(100vh-N) / window 同名变量 / `Math.min(...,<480)` / position:fixed for lang-btn
-- [ ] C3 `g_b_browser_verify.py`：`asyncio.create_subprocess_exec("node", "course_factory/validate/verify/animation.mjs", html_path, "--out", tmp)`，捕 exit code + stdout JSON
-- [ ] C4 `g_c_science.py` + `prompts/gate_science.md`：科学一致性 LLM agent
-- [ ] C5 `g_d_theory_grader.py` + `prompts/gate_theory_grader.md`：每 theory 一次调用，跨 level 评判
-- [ ] C6 `g_e_game_aesthetic.py` + `prompts/gate_game_aesthetic.md`：游戏性 + 美观 + Pattern 真实性
-- [ ] C7 `g_f_text_overlap.py` + `prompts/gate_text_overlap.md`：用 5.5b 截图 + LLM agent 看图判断重叠
-- [ ] C8 `revise.py`：`async def revise(step_name, original, gate_issues, ctx) -> new_artifact`，按 step 加载对应 `revise_*.md` prompt
-- [ ] C9 pipeline 接入闸门链：anim 跑 a→b→c→f；game 跑 a→b→c→e→f；theory 跑 d；任一 fail → revise → 再跑（按表中 N），仍 fail → idea status=failed continue
+- [x] C1 `gates/base.py`：`@dataclass GateResult(verdict:Literal["pass","fail"], issues:list[str], attempt:int)`，`Gate(ABC).run(context, html, idea) -> GateResult`
+- [x] C2 `g_a_code_review.py`：纯正则检测 onclick属性 / setInterval / calc(100vh-N) / window 同名变量 / `Math.min(...,<480)` / position:fixed for lang-btn
+- [x] C3 `g_b_browser_verify.py`：`asyncio.create_subprocess_exec("node", "course_factory/validate/verify/animation.mjs", html_path, "--out", tmp)`，捕 exit code + stdout JSON
+- [x] C4 `g_c_science.py` + `prompts/gate_science.md`：科学一致性 LLM agent
+- [x] C5 `g_d_theory_grader.py` + `prompts/gate_theory_grader.md`：每 theory 一次调用，跨 level 评判
+- [x] C6 `g_e_game_aesthetic.py` + `prompts/gate_game_aesthetic.md`：游戏性 + 美观 + Pattern 真实性
+- [x] C7 `g_f_text_overlap.py` + `prompts/gate_text_overlap.md`：用 5.5b 截图 + LLM agent 看图判断重叠
+- [x] C8 `revise.py`：`async def revise(step_name, original, gate_issues, ctx) -> new_artifact`，按 step 加载对应 `revise_*.md` prompt
+- [x] C9 pipeline 接入闸门链：anim 跑 a→b→c→f；game 跑 a→b→c→e→f；theory 跑 d；任一 fail → revise → 再跑（按表中 N），仍 fail → idea status=failed continue
 - [ ] C10 单元测试 `tests/test_cf_v3_gates.py` + `tests/test_cf_v3_revise.py`
 
 ## 阶段 D — 网关 + 前端切换

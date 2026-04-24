@@ -10,7 +10,7 @@ import logging
 import re
 from pathlib import Path
 
-from ..kimi_client import ainvoke, kimi
+from ..kimi_client import ainvoke, llm_for
 from ..progress import EV_AGENT_LOG, Emitter
 
 logger = logging.getLogger(__name__)
@@ -76,7 +76,7 @@ async def _generate_plan(ctx: dict, is_capstone: bool, *, em: Emitter) -> str:
         "output": "(pending)",
     })
 
-    llm = kimi(streaming=False)
+    llm = llm_for("fast", streaming=False)
     plan = await ainvoke(llm, [{"role": "user", "content": prompt}], label="plan_gen")
     plan = _strip_codeblock(plan)
 
@@ -107,7 +107,7 @@ async def _revise_plan(ctx: dict, original: str, issues: list[str], *, em: Emitt
         acceptance_artifacts_short=artifacts_short or "(无)",
     )
 
-    llm = kimi(streaming=False)
+    llm = llm_for("fast", streaming=False)
     revised = await ainvoke(llm, [{"role": "user", "content": formatted}], label="plan_revise")
     return _strip_codeblock(revised)
 

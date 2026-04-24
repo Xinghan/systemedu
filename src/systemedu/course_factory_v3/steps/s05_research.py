@@ -12,7 +12,7 @@ import logging
 import re
 from pathlib import Path
 
-from ..kimi_client import ainvoke, kimi
+from ..kimi_client import ainvoke, llm_for
 from ..progress import Emitter, EV_AGENT_LOG, EV_ERROR, STEP_RESEARCH
 
 logger = logging.getLogger(__name__)
@@ -110,7 +110,7 @@ async def _extract_queries(ctx: dict) -> tuple[str, str]:
         sub_project_problem=(sub_project.get("core_problem", "") or "")[:200],
     )
 
-    llm = kimi(streaming=False)
+    llm = llm_for("fast", streaming=False)
     response = await ainvoke(
         llm,
         [{"role": "user", "content": prompt}],
