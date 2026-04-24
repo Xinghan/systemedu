@@ -197,15 +197,18 @@ def _default_config_dict() -> dict:
         "llm": {
             "default": "kimi",
             "providers": {
+                "kimi": {
+                    "base_url": "https://api.moonshot.cn/v1",
+                    "api_key": "${MOONSHOT_API_KEY}",
+                    "model": "kimi-k2.6",
+                    # kimi-k2.6 强制 temperature=1, 其它值会被拒
+                    "temperature": 1.0,
+                    "max_tokens": 32768,
+                },
                 "qwen": {
                     "base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1",
                     "api_key": "${DASHSCOPE_API_KEY}",
                     "model": "qwen3-max",
-                },
-                "kimi": {
-                    "base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1",
-                    "api_key": "${DASHSCOPE_API_KEY}",
-                    "model": "kimi-k2.5",
                 },
             },
         },
