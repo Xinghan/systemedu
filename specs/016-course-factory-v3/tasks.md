@@ -14,7 +14,7 @@
 
 - [x] B1 `s00_boot.py`：调 `factory.load_knode_context(project, idx)`，emit boot event，返回 `BootContext{knode, milestone, sub_project, project, knowledge_level, category}`
 - [x] B2 `s05_research.py`：调 `factory.research_knode`，web_query / youtube_query 由 LLM 从 knode.core_question 抽取（一个 mini prompt），失败一次后 skip
-- [ ] B3 `s07_labxchange.py`：调 `factory.search_labxchange_for_knode(knode, top_k=3)`
+- [x] B3 `s07_labxchange.py`：调 `factory.search_labxchange_for_knode(knode, top_k=3)`
 - [ ] B4 `s10_plan.py` + `prompts/plan.md`：用 v4.1 全字段 + Module 引用块 + core_question 占位 + 末尾"## 推荐互动资源"。生成后做 4 项硬规自检（长度/core_question/hands_on/末段），失败由 revise 重生
 - [ ] B5 `s15_theory.py` + `prompts/theory_pick.md` + `prompts/theory_body.md`：先选 2-5 个 theory_id，再并行为每个生成 K1+项目等级的 level_bodies 和 1-3 道 exercises。`[[THEORY:xxx]]` 占位符插回 plan_markdown
 - [ ] B6 `s20_ideation.py` + `prompts/ideation_8class_debate.md`：强制 8 类（theory/anim/game/kit/image/diagram/youtube/labxchange）逐条 keep/reject + 理由，输出 ideas 列表（含 hands_on_ref / acceptance_ref 原文）
