@@ -4,7 +4,7 @@ import { createContext, useContext, useEffect, useRef, useState } from "react"
 import { createPortal } from "react-dom"
 import {
   X, CheckCircle2, Loader2, BookOpen, Zap, Gamepad2, BookMarked,
-  Terminal, ChevronDown, ChevronRight, Circle, Play, Square,
+  Terminal, ChevronDown, ChevronRight, Circle, Play, Pause, Square,
   ClipboardList, CheckCircle, XCircle, Lightbulb, Sparkles, Clock,
   Atom, Image as ImageIcon, Package, AlertTriangle,
 } from "lucide-react"
@@ -14,6 +14,7 @@ import remarkMath from "remark-math"
 import rehypeKatex from "rehype-katex"
 import "katex/dist/katex.min.css"
 import { gateway } from "@/lib/api"
+import { getCourseFactoryVariant } from "@/data/course-factory-variants"
 import type {
   CourseContent,
   CourseContentData,
@@ -81,8 +82,11 @@ interface CourseContentViewProps {
 // Audio Context — ensures only one section plays at a time
 // ---------------------------------------------------------------------------
 interface AudioCtxValue {
-  playing: string | null
-  play: (sectionId: string, url: string) => void
+  activeSectionId: string | null
+  isPlaying: boolean
+  currentTime: number
+  duration: number
+  toggle: (sectionId: string, url: string) => void
   stop: () => void
 }
 
@@ -95,36 +99,97 @@ const KnowledgeLevelContext = createContext<import("@/lib/types/api").KnowledgeL
 const CourseIdentityContext = createContext<{ projectName: string; knodeId: number }>({ projectName: "", knodeId: 0 })
 
 const AudioPlayContext = createContext<AudioCtxValue>({
-  playing: null,
-  play: () => {},
+  activeSectionId: null,
+  isPlaying: false,
+  currentTime: 0,
+  duration: 0,
+  toggle: () => {},
   stop: () => {},
 })
 
 function AudioProvider({ children }: { children: React.ReactNode }) {
-  const [playing, setPlaying] = useState<string | null>(null)
+  const [activeSectionId, setActiveSectionId] = useState<string | null>(null)
+  const [isPlaying, setIsPlaying] = useState(false)
+  const [currentTime, setCurrentTime] = useState(0)
+  const [duration, setDuration] = useState(0)
   const audioRef = useRef<HTMLAudioElement | null>(null)
+
+  const clearAudio = (audio: HTMLAudioElement | null) => {
+    if (!audio) return
+    audio.onloadedmetadata = null
+    audio.ontimeupdate = null
+    audio.onplay = null
+    audio.onpause = null
+    audio.onended = null
+    audio.onerror = null
+    audio.pause()
+    audio.src = ""
+  }
 
   const stop = () => {
     if (audioRef.current) {
-      audioRef.current.pause()
-      audioRef.current.src = ""
+      clearAudio(audioRef.current)
       audioRef.current = null
     }
-    setPlaying(null)
+    setActiveSectionId(null)
+    setIsPlaying(false)
+    setCurrentTime(0)
+    setDuration(0)
   }
 
-  const play = (sectionId: string, url: string) => {
+  useEffect(() => () => {
+    if (audioRef.current) {
+      clearAudio(audioRef.current)
+      audioRef.current = null
+    }
+  }, [])
+
+  const toggle = (sectionId: string, url: string) => {
+    if (audioRef.current && activeSectionId === sectionId) {
+      if (audioRef.current.paused || audioRef.current.ended) {
+        audioRef.current.play().catch((e) => console.error("[audio] resume failed:", e))
+      } else {
+        audioRef.current.pause()
+      }
+      return
+    }
+
     stop()
     const gatewayBase = process.env.NEXT_PUBLIC_GATEWAY_URL || "http://localhost:18820"
     const audio = new Audio(`${gatewayBase}/api/media/${url}`)
+    audio.preload = "metadata"
     audioRef.current = audio
+
+    audio.onloadedmetadata = () => {
+      setDuration(Number.isFinite(audio.duration) ? audio.duration : 0)
+    }
+    audio.ontimeupdate = () => {
+      setCurrentTime(audio.currentTime)
+    }
+    audio.onplay = () => {
+      setIsPlaying(true)
+    }
+    audio.onpause = () => {
+      setIsPlaying(false)
+    }
+    audio.onended = () => {
+      setIsPlaying(false)
+      setCurrentTime(Number.isFinite(audio.duration) ? audio.duration : audio.currentTime)
+    }
+    audio.onerror = () => {
+      console.error("[audio] playback failed")
+      stop()
+    }
+
+    setActiveSectionId(sectionId)
+    setIsPlaying(false)
+    setCurrentTime(0)
+    setDuration(0)
     audio.play().catch((e) => console.error("[audio] play failed:", e))
-    audio.onended = () => setPlaying(null)
-    setPlaying(sectionId)
   }
 
   return (
-    <AudioPlayContext.Provider value={{ playing, play, stop }}>
+    <AudioPlayContext.Provider value={{ activeSectionId, isPlaying, currentTime, duration, toggle, stop }}>
       {children}
     </AudioPlayContext.Provider>
   )
@@ -796,37 +861,57 @@ function TheoryBlock({ theory }: { theory: TheoryEntry }) {
 // ---------------------------------------------------------------------------
 // SectionAudioButton — circular hover button in right gutter
 // ---------------------------------------------------------------------------
+function formatAudioTime(seconds: number): string {
+  if (!Number.isFinite(seconds) || seconds < 0) return "--:--"
+  const totalSeconds = Math.max(0, Math.floor(seconds))
+  const minutes = Math.floor(totalSeconds / 60)
+  const remainSeconds = totalSeconds % 60
+  return `${minutes}:${String(remainSeconds).padStart(2, "0")}`
+}
+
 function SectionAudioButton({ sectionId, audioUrl }: { sectionId: string; audioUrl: string }) {
-  const { playing, play, stop } = useContext(AudioPlayContext)
-  const isPlaying = playing === sectionId
+  const { activeSectionId, isPlaying, currentTime, duration, toggle } = useContext(AudioPlayContext)
+  const isActive = activeSectionId === sectionId
+  const progress = isActive && duration > 0
+    ? Math.min(100, (currentTime / duration) * 100)
+    : 0
 
   if (!audioUrl) return null
 
   return (
-    <button
-      onClick={() => isPlaying ? stop() : play(sectionId, audioUrl)}
-      title={isPlaying ? "停止播放" : "播放讲解音频"}
-      className={[
-        "w-12 h-12 rounded-full flex items-center justify-center transition-all duration-200 shadow-sm border",
-        isPlaying
-          ? "bg-primary text-white border-primary/40 scale-110"
-          : "bg-white border-outline-variant/20 text-primary hover:bg-primary-container/20",
-      ].join(" ")}
-    >
-      {isPlaying ? (
-        <div className="flex gap-0.5 items-end h-4">
-          {[0, 1, 2, 3].map((i) => (
-            <div
-              key={i}
-              className="w-0.5 bg-white rounded-full animate-pulse"
-              style={{ height: `${[10, 14, 8, 12][i]}px`, animationDelay: `${i * 0.12}s` }}
-            />
-          ))}
+    <div className="w-full flex items-center gap-3 py-1.5">
+      <button
+        onClick={() => toggle(sectionId, audioUrl)}
+        title={isPlaying && isActive ? "暂停讲解音频" : "播放讲解音频"}
+        aria-label={isPlaying && isActive ? "暂停讲解音频" : "播放讲解音频"}
+        className={[
+          "w-7 h-7 shrink-0 rounded-full flex items-center justify-center transition-all duration-200",
+          isActive
+            ? "bg-primary text-white shadow-[0_8px_18px_-10px_rgba(124,58,237,0.7)]"
+            : "bg-surface-container-low text-primary hover:bg-primary-container/30",
+        ].join(" ")}
+      >
+        {isPlaying && isActive ? (
+          <Pause className="h-3.5 w-3.5 fill-current" />
+        ) : (
+          <Play className="h-3.5 w-3.5 fill-current ml-0.5" />
+        )}
+      </button>
+      <div className="min-w-0 flex-1 flex items-center gap-2">
+        <div className="flex-1 h-px bg-outline-variant/20 overflow-hidden">
+          <div
+            className={[
+              "h-full transition-[width] duration-200",
+              isActive ? "bg-primary" : "bg-primary/45",
+            ].join(" ")}
+            style={{ width: `${progress}%` }}
+          />
         </div>
-      ) : (
-        <Play className="h-4 w-4 fill-current ml-0.5" />
-      )}
-    </button>
+        <span className="shrink-0 text-[10px] leading-none tabular-nums text-on-surface/38">
+          {isActive ? `${formatAudioTime(currentTime)} / ${formatAudioTime(duration)}` : "--:--"}
+        </span>
+      </div>
+    </div>
   )
 }
 
@@ -1594,58 +1679,68 @@ function SectionBlock({
   // Check if there is any real text content (for audio button)
   const textParts = parts.filter((p) => !p.match(/^\[\[(?:IDEA|THEORY):[^\]]+\]\]$/))
   const hasText = textParts.some((p) => p.replace(/^##\s+.+\n?/, "").trim())
+  const hasAudio = !!section.audio_url
 
   // Render parts in order: text, idea blocks, and theory blocks interleaved
-  let headingRendered = false
+  const headingRendered = false
 
   return (
     <div className="space-y-6">
-      <div className="group relative flex gap-8 items-start">
-        <div className="flex-1 space-y-6 min-w-0">
-          {section.heading && !headingRendered && (
-            <h2 className="text-2xl font-bold text-on-surface tracking-tight">{section.heading}</h2>
-          )}
-          {parts.map((part, idx) => {
-            // Idea placeholder -> render idea block inline
-            const ideaMatch = part.match(/^\[\[IDEA:([^\]]+)\]\]$/)
-            if (ideaMatch) {
-              const ideaId = ideaMatch[1]
-              const idea = ideaMap.get(ideaId)
-              if (!idea) return null
-              const rendered = renderedSections[ideaId] ?? null
-              return (
-                <div key={idx} id={`idea-${ideaId}`} className="scroll-mt-20">
-                  <IdeaBlock idea={idea} section={rendered} />
-                </div>
-              )
-            }
-            // Theory placeholder -> render collapsible theory block
-            const theoryMatch = part.match(/^\[\[THEORY:([^\]]+)\]\]$/)
-            if (theoryMatch) {
-              const theoryId = theoryMatch[1]
-              const theory = theoryMap?.get(theoryId)
-              if (!theory) return null
-              return (
-                <div key={idx} id={`theory-${theoryId}`} className="scroll-mt-20">
-                  <TheoryBlock theory={theory} />
-                </div>
-              )
-            }
-            // Text content -> render markdown
-            const stripped = part.replace(/^##\s+.+\n?/, "")
-            if (!stripped.trim()) return null
-            return <MarkdownBlock key={idx} content={stripped} />
-          })}
-        </div>
-        {/* Right gutter — visible on hover */}
-        {hasText && (
-          <div className="w-16 flex flex-col gap-3 opacity-40 group-hover:opacity-100 transition-opacity duration-300 sticky top-24 shrink-0 pt-1">
-            <SectionAudioButton
-              sectionId={section.section_id}
-              audioUrl={section.audio_url}
-            />
-          </div>
+      <div className="space-y-6 min-w-0">
+        {section.heading && !headingRendered && (() => {
+          const HEADING_IDS: Record<string, string> = {
+            "推荐视频": "section-youtube",
+            "推荐互动资源": "section-labxchange",
+            "延伸阅读": "section-web",
+          }
+          const aliasId = Object.entries(HEADING_IDS).find(([k]) => section.heading.includes(k))?.[1]
+          return (
+            <h2
+              id={slugifyHeading(section.heading)}
+              className="text-2xl font-bold text-on-surface tracking-tight scroll-mt-20"
+            >
+              {aliasId && <span id={aliasId} className="block h-0 -mt-20 pt-20" aria-hidden="true" />}
+              {section.heading}
+            </h2>
+          )
+        })()}
+        {hasText && hasAudio && (
+          <SectionAudioButton
+            sectionId={section.section_id}
+            audioUrl={section.audio_url}
+          />
         )}
+        {parts.map((part, idx) => {
+          // Idea placeholder -> render idea block inline
+          const ideaMatch = part.match(/^\[\[IDEA:([^\]]+)\]\]$/)
+          if (ideaMatch) {
+            const ideaId = ideaMatch[1]
+            const idea = ideaMap.get(ideaId)
+            if (!idea) return null
+            const rendered = renderedSections[ideaId] ?? null
+            return (
+              <div key={idx} id={`idea-${ideaId}`} className="scroll-mt-20">
+                <IdeaBlock idea={idea} section={rendered} />
+              </div>
+            )
+          }
+          // Theory placeholder -> render collapsible theory block
+          const theoryMatch = part.match(/^\[\[THEORY:([^\]]+)\]\]$/)
+          if (theoryMatch) {
+            const theoryId = theoryMatch[1]
+            const theory = theoryMap?.get(theoryId)
+            if (!theory) return null
+            return (
+              <div key={idx} id={`theory-${theoryId}`} className="scroll-mt-20">
+                <TheoryBlock theory={theory} />
+              </div>
+            )
+          }
+          // Text content -> render markdown
+          const stripped = part.replace(/^##\s+.+\n?/, "")
+          if (!stripped.trim()) return null
+          return <MarkdownBlock key={idx} content={stripped} />
+        })}
       </div>
     </div>
   )
@@ -2208,6 +2303,10 @@ export function CourseContentView({
   onOutline,
 }: CourseContentViewProps) {
   const [courseData, setCourseData] = useState<CourseContentData | null>(null)
+  const [contentVariant, setContentVariant] = useState<"default" | "course_factory">("default")
+  // v3 (kimi-k2.6) 版本切换 — toggle 显示哪个版本的 course_content
+  const [versionMode, setVersionMode] = useState<"v2" | "v3">("v2")
+  const [v3Available, setV3Available] = useState(false)
   const [generating, setGenerating] = useState(false)
   const [notGenerated, setNotGenerated] = useState(false) // true when no content exists yet
   const [checking, setChecking] = useState(true)          // initial check in progress
@@ -2219,7 +2318,18 @@ export function CourseContentView({
   const abortRef = useRef(false)
   const loadIdRef = useRef(0)
 
-  const content = courseData?.course_content as CourseContent | undefined
+  const backendContent = courseData?.course_content as CourseContent | undefined
+  const courseFactoryVariant = getCourseFactoryVariant(projectName, nodeId)
+  const hasCourseFactoryVariant = Boolean(courseFactoryVariant)
+  const showingCourseFactory =
+    contentVariant === "course_factory" && Boolean(courseFactoryVariant)
+  const content = showingCourseFactory
+    ? courseFactoryVariant?.courseContent
+    : backendContent
+
+  useEffect(() => {
+    setContentVariant("default")
+  }, [projectName, nodeId])
 
   // Compute rich-media stats and report to parent whenever content changes.
   useEffect(() => {
@@ -2437,7 +2547,12 @@ export function CourseContentView({
     setGenerating(false)
     setStopped(false)
 
-    gateway.getCourseV2(projectName, nodeId).then((data) => {
+    const fetcher =
+      versionMode === "v3"
+        ? gateway.getCourseV3(projectName, nodeId)
+        : gateway.getCourseV2(projectName, nodeId)
+
+    fetcher.then((data) => {
       if (data.status === "ready" && data.course_content && Object.keys(data.course_content).length > 0) {
         setCourseData(data)
         setChecking(false)
@@ -2455,13 +2570,45 @@ export function CourseContentView({
     })
 
     return () => { abortRef.current = true }
-  }, [projectName, nodeId]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [projectName, nodeId, versionMode]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // 静默探测 v3 是否有内容(不阻塞主流程,仅用于显示 toggle 按钮)
+  useEffect(() => {
+    let cancelled = false
+    gateway.getCourseV3(projectName, nodeId)
+      .then((data) => {
+        if (cancelled) return
+        const hasContent =
+          data.status === "ready" &&
+          data.course_content &&
+          Object.keys(data.course_content).length > 0
+        setV3Available(Boolean(hasContent))
+      })
+      .catch(() => {
+        if (!cancelled) setV3Available(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [projectName, nodeId])
 
   // Loading / checking state
-  if (checking) {
+  if (checking && !content) {
     return (
       <div className="flex flex-col h-full">
-        <Header knode={knode} onClose={onClose} />
+        <Header
+          knode={knode}
+          onClose={onClose}
+          hasCourseFactoryVariant={hasCourseFactoryVariant}
+          versionMode={versionMode}
+          v3Available={v3Available}
+          onSwitchVersion={(m) => setVersionMode(m)}
+          showingCourseFactory={showingCourseFactory}
+          courseFactoryLabel={courseFactoryVariant?.label}
+          onToggleCourseFactory={() => {
+            setContentVariant((prev) => prev === "course_factory" ? "default" : "course_factory")
+          }}
+        />
         <div className="flex-1 flex flex-col items-center justify-center gap-3 text-muted-foreground">
           <Loader2 className="h-6 w-6 animate-spin text-primary/50" />
           <p className="text-xs">正在检查课程内容...</p>
@@ -2470,10 +2617,22 @@ export function CourseContentView({
     )
   }
 
-  if (error) {
+  if (error && !content) {
     return (
       <div className="flex flex-col h-full">
-        <Header knode={knode} onClose={onClose} />
+        <Header
+          knode={knode}
+          onClose={onClose}
+          hasCourseFactoryVariant={hasCourseFactoryVariant}
+          versionMode={versionMode}
+          v3Available={v3Available}
+          onSwitchVersion={(m) => setVersionMode(m)}
+          showingCourseFactory={showingCourseFactory}
+          courseFactoryLabel={courseFactoryVariant?.label}
+          onToggleCourseFactory={() => {
+            setContentVariant((prev) => prev === "course_factory" ? "default" : "course_factory")
+          }}
+        />
         <div className="flex-1 flex flex-col items-center justify-center gap-3 text-muted-foreground">
           <p className="text-sm">{error}</p>
           <button onClick={() => load(true)} className="text-xs text-primary hover:underline">重试</button>
@@ -2483,10 +2642,22 @@ export function CourseContentView({
   }
 
   // Not yet generated — show prompt to generate
-  if (notGenerated && !generating) {
+  if (notGenerated && !generating && !content) {
     return (
       <div className="flex flex-col h-full">
-        <Header knode={knode} onClose={onClose} />
+        <Header
+          knode={knode}
+          onClose={onClose}
+          hasCourseFactoryVariant={hasCourseFactoryVariant}
+          versionMode={versionMode}
+          v3Available={v3Available}
+          onSwitchVersion={(m) => setVersionMode(m)}
+          showingCourseFactory={showingCourseFactory}
+          courseFactoryLabel={courseFactoryVariant?.label}
+          onToggleCourseFactory={() => {
+            setContentVariant((prev) => prev === "course_factory" ? "default" : "course_factory")
+          }}
+        />
         <div className="flex-1 flex items-center justify-center">
           <div className="max-w-md text-center space-y-6 px-6">
             <div className="w-16 h-16 rounded-2xl bg-primary/10 border border-primary/20 flex items-center justify-center mx-auto">
@@ -2533,10 +2704,22 @@ export function CourseContentView({
     <KnowledgeLevelContext.Provider value={knowledgeLevel}>
     <AudioProvider>
       <div className="flex flex-col h-full">
-        <Header knode={knode} onClose={onClose} />
+        <Header
+          knode={knode}
+          onClose={onClose}
+          hasCourseFactoryVariant={hasCourseFactoryVariant}
+          versionMode={versionMode}
+          v3Available={v3Available}
+          onSwitchVersion={(m) => setVersionMode(m)}
+          showingCourseFactory={showingCourseFactory}
+          courseFactoryLabel={courseFactoryVariant?.label}
+          onToggleCourseFactory={() => {
+            setContentVariant((prev) => prev === "course_factory" ? "default" : "course_factory")
+          }}
+        />
 
         <div className="flex-1 min-h-0 overflow-y-auto">
-          {generating && (
+          {generating && !showingCourseFactory && (
             <div className="max-w-4xl mx-auto px-6 py-5 w-full">
               <GeneratingProgress
                 stage={stage}
@@ -2547,7 +2730,7 @@ export function CourseContentView({
             </div>
           )}
 
-          {stopped && !generating && (
+          {stopped && !generating && !showingCourseFactory && (
             <div className="flex flex-col items-center justify-center gap-4 px-6 py-16 text-center">
               <div className="w-14 h-14 rounded-full bg-amber-50 border border-amber-200 flex items-center justify-center">
                 <Square className="h-6 w-6 text-amber-500" />
@@ -2574,7 +2757,7 @@ export function CourseContentView({
             </div>
           )}
 
-          {!generating && content && (
+          {content && (!generating || showingCourseFactory) && (
             <div className="max-w-4xl mx-auto px-8 py-12 space-y-16">
               <EditorialHeader knode={knode} />
 
@@ -2590,17 +2773,41 @@ export function CourseContentView({
           )}
         </div>
 
-        {!generating && content && (
+        {content && (!generating || showingCourseFactory) && (
           <div className="px-6 py-4 border-t border-border/50 shrink-0 flex items-center justify-end gap-3">
-            <p className="text-xs text-muted-foreground mr-auto">
-              学完后，点击右侧面板的「标记完成」继续下一节
-            </p>
-            <button
-              onClick={() => load(true)}
-              className="flex items-center gap-1.5 px-4 h-9 rounded-xl border border-border text-xs text-muted-foreground hover:text-foreground hover:border-foreground/40 transition-colors"
-            >
-              重新生成
-            </button>
+            {showingCourseFactory ? (
+              <>
+                <p className="text-xs text-muted-foreground mr-auto">
+                  当前显示的是 course_factory 候选课程版本，原节点数据没有被覆盖。
+                </p>
+                <button
+                  onClick={() => setContentVariant("default")}
+                  className="flex items-center gap-1.5 px-4 h-9 rounded-xl border border-border text-xs text-muted-foreground hover:text-foreground hover:border-foreground/40 transition-colors"
+                >
+                  查看当前课程
+                </button>
+              </>
+            ) : (
+              <>
+                <p className="text-xs text-muted-foreground mr-auto">
+                  学完后，点击右侧面板的「标记完成」继续下一节
+                </p>
+                {hasCourseFactoryVariant && (
+                  <button
+                    onClick={() => setContentVariant("course_factory")}
+                    className="flex items-center gap-1.5 px-4 h-9 rounded-xl border border-emerald-200 bg-emerald-50 text-xs text-emerald-700 hover:bg-emerald-100 transition-colors"
+                  >
+                    切换到新课程内容
+                  </button>
+                )}
+                <button
+                  onClick={() => load(true)}
+                  className="flex items-center gap-1.5 px-4 h-9 rounded-xl border border-border text-xs text-muted-foreground hover:text-foreground hover:border-foreground/40 transition-colors"
+                >
+                  重新生成
+                </button>
+              </>
+            )}
           </div>
         )}
       </div>
@@ -2610,16 +2817,88 @@ export function CourseContentView({
   )
 }
 
-function Header({ knode, onClose }: { knode: KnodeInfo | null; onClose: () => void }) {
+function Header({
+  knode,
+  onClose,
+  hasCourseFactoryVariant,
+  showingCourseFactory,
+  courseFactoryLabel,
+  onToggleCourseFactory,
+  versionMode = "v2",
+  v3Available = false,
+  onSwitchVersion,
+}: {
+  knode: KnodeInfo | null
+  onClose: () => void
+  hasCourseFactoryVariant: boolean
+  showingCourseFactory: boolean
+  courseFactoryLabel?: string
+  onToggleCourseFactory: () => void
+  versionMode?: "v2" | "v3"
+  v3Available?: boolean
+  onSwitchVersion?: (m: "v2" | "v3") => void
+}) {
   return (
     <div className="flex items-center justify-between px-6 py-4 border-b border-border/50 shrink-0">
       <div className="flex items-center gap-2 min-w-0">
         <BookOpen className="h-4 w-4 text-primary shrink-0" />
         <h2 className="text-sm font-semibold text-foreground truncate">{knode?.title}</h2>
+        {showingCourseFactory && (
+          <span className="px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 text-[11px] font-semibold shrink-0">
+            {courseFactoryLabel ?? "新课程内容"}
+          </span>
+        )}
+        {versionMode === "v3" && (
+          <span className="px-2 py-0.5 rounded-full bg-purple-50 text-purple-700 text-[11px] font-semibold shrink-0">
+            v3 · kimi-k2.6
+          </span>
+        )}
       </div>
-      <button onClick={onClose} className="ml-3 p-1 rounded-lg hover:bg-secondary transition-colors shrink-0">
-        <X className="h-4 w-4 text-muted-foreground" />
-      </button>
+      <div className="flex items-center gap-2 shrink-0">
+        {/* v2 / v3 版本切换 toggle (仅当 v3 已生成时显示) */}
+        {v3Available && onSwitchVersion && (
+          <div className="inline-flex h-8 rounded-lg border border-border/60 bg-secondary/40 p-0.5">
+            <button
+              onClick={() => onSwitchVersion("v2")}
+              className={[
+                "px-3 rounded-md text-xs font-medium transition-colors",
+                versionMode === "v2"
+                  ? "bg-background text-foreground shadow-sm"
+                  : "text-muted-foreground hover:text-foreground",
+              ].join(" ")}
+            >
+              v2
+            </button>
+            <button
+              onClick={() => onSwitchVersion("v3")}
+              className={[
+                "px-3 rounded-md text-xs font-medium transition-colors",
+                versionMode === "v3"
+                  ? "bg-purple-100 text-purple-700 shadow-sm"
+                  : "text-muted-foreground hover:text-purple-700",
+              ].join(" ")}
+            >
+              v3
+            </button>
+          </div>
+        )}
+        {hasCourseFactoryVariant && (
+          <button
+            onClick={onToggleCourseFactory}
+            className={[
+              "px-3 h-8 rounded-lg text-xs font-medium transition-colors",
+              showingCourseFactory
+                ? "bg-secondary text-foreground hover:bg-secondary/80"
+                : "bg-emerald-50 text-emerald-700 hover:bg-emerald-100",
+            ].join(" ")}
+          >
+            {showingCourseFactory ? "查看当前课程" : "新课程内容"}
+          </button>
+        )}
+        <button onClick={onClose} className="ml-1 p-1 rounded-lg hover:bg-secondary transition-colors">
+          <X className="h-4 w-4 text-muted-foreground" />
+        </button>
+      </div>
     </div>
   )
 }

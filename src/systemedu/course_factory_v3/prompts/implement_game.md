@@ -1,83 +1,121 @@
-# Step 5 — 实现 Game HTML
+# Step 5 — 实现 Game HTML (fogsight 视觉 + 真实教学交互)
 
-你是一位**高级前端开发者 + 教育游戏设计师**。
+请你生成一个**非常精美的可交互教学游戏**, 让学生通过操纵动态系统理解下面 detail_plan 描述的知识点。
 
-## 任务
+页面**极为精美, 好看, 有设计感**, 同时是一个**真正可玩的 sandbox**——
+学生通过滑块/按钮/拖拽**实时调节参数**, 看到仿真结果立刻反馈, 建立"参数 → 结果"的因果直觉。
 
-把下面 detail_plan 实现为**完整、可独立运行的 game HTML**。
+使用**和谐好看, 广泛采用的深色配色方案** + **丰富的视觉元素**。
 
-**长度无上限,复杂度由教学目标决定**。如果游戏需要 2000 行,就写 2000 行。**浅薄比冗长更糟**。
+**html + css + js + svg, 全部放进一个 html 里**。
 
-## detail_plan
+---
+
+## 知识点 detail_plan
 
 ```json
 {detail_plan_json}
 ```
 
-## 节点上下文
+## 节点对齐 (必须呼应)
 
-- core_question: {core_question}
-- hands_on_ref: {hands_on_ref}
-- acceptance_ref: {acceptance_ref}
-- chosen pattern: {chosen_pattern}
+- **core_question**: {core_question}
+- **hands_on_ref**: {hands_on_ref}
+- **acceptance_ref**: {acceptance_ref}
+- **chosen pattern**: {chosen_pattern}
+- **学科主题色 (id={style_key})**: 优先使用对应学科 oklch palette。
 
-## theme_style 视觉规范 (id={style_key})
+## 推荐技术栈 (强烈建议直接采用)
 
-{theme_block}
+1. **Tailwind CSS via CDN**: `<script src="https://cdn.tailwindcss.com"></script>`
+2. **Google Fonts**: `Inter` (正文) + `JetBrains Mono` (HUD 数字) + `Noto Sans SC` (中文)
+3. **inline SVG** 绘制场景主体 (火箭/分子/电路等), 用 `<linearGradient>` + `<path>` 渐变曲线
+4. **CSS @keyframes + transitions** 驱动平滑动画, 不要 Canvas lerp
+5. **<canvas> + Particle 类** (rAF 循环) 实现尾焰/粒子等动态效果
+6. **`<input type="range">` 滑块**, 自定义样式带 oklch glow
+7. **HUD 玻璃态**: `backdrop-filter: blur(10px); background: rgba(30, 41, 59, 0.7);`
+8. **真实物理参数**: 数值要真实 (Saturn V F-1 推力 ~7000 kN, 比冲 ~263s)
 
-## Game 标准布局 (必须用,违反 = 5.5a fail)
+## 教学骨架 (硬规则, 与 fogsight 不同)
 
-直接复制下面 skeleton,改 CONFIG / I18N / drawCanvas / 交互逻辑:
+整体布局 = **左侧 200px sidebar (含真实交互控件) + 右侧主舞台**:
 
 ```html
-{skeleton_html}
+<div class="flex h-screen">
+  <!-- 左侧 sidebar: 含 lang-btn / 标题 / 操作说明 / 控件 (滑块/按钮) -->
+  <div class="w-[200px] shrink-0 bg-slate-950/80 border-r border-slate-800 p-3 flex flex-col gap-3 text-slate-300 overflow-y-auto">
+    <button id="langBtn" class="self-start text-[10px] px-2 py-1 border border-slate-700 hover:border-cyan-400">CN</button>
+    <h1 class="text-[12px] font-bold text-cyan-400 mt-1 uppercase tracking-wider" id="gameTitle"></h1>
+    <div class="text-[9px] uppercase tracking-widest text-cyan-400 mt-2">操作指南</div>
+    <div class="text-[11px] text-slate-400 leading-relaxed" id="guideContent"></div>
+
+    <!-- 控件区: 每个 simulation_param 一个滑块 -->
+    <div class="text-[9px] uppercase tracking-widest text-cyan-400 mt-2">参数控制</div>
+    <div class="flex flex-col gap-2" id="controlsContainer">
+      <!-- 由 JS 根据 detail_plan.simulation_params 动态生成 -->
+    </div>
+
+    <!-- 主操作按钮 -->
+    <button id="actionBtn" class="mt-2 px-3 py-2 bg-gradient-to-r from-cyan-500 to-blue-600 text-slate-950 font-bold text-xs uppercase tracking-wider hover:shadow-cyan-500/50 hover:shadow-lg transition">发射 / Launch</button>
+    <button id="resetBtn" class="px-3 py-1.5 border border-slate-700 hover:border-cyan-400 text-slate-400 text-[10px] uppercase">重置</button>
+  </div>
+
+  <!-- 右侧主舞台: SVG 场景 + HUD + 状态显示 (fogsight 风格自由发挥) -->
+  <div class="flex-1 relative overflow-hidden bg-slate-900">
+    <!-- 你的 SVG 场景 / canvas / HUD / 字幕 -->
+  </div>
+</div>
 ```
 
-布局核心:
-- `.game-wrap` flex-direction:row,横向布局
-- 左侧 `.game-sidebar` (200px) 含 lang-btn / 标题 / guide / 操作控件 (滑块/按钮)
-- 右侧 `.game-main` (flex:1) 含 hud / canvas / 状态栏
-- **禁止** lang-btn 用 position:fixed/absolute 浮在 canvas 上方
-- **禁止** guide 浮在 canvas 上方
+**硬规则**:
+- lang-btn 必须在左侧 sidebar (不允许 `position: fixed/absolute` 浮在主舞台)
+- **每个 detail_plan.simulation_params 项必须对应一个 sidebar 中的 `<input type="range">`** (含 label + 当前值显示)
+- 主舞台 100vh 不滚动
+- 滑块拖动必须**实时**更新视觉 (拖动时 oninput 立即重绘, 不是松开才更新)
 
-## Game Pattern 落地 (chosen_pattern={chosen_pattern})
+## Pattern {chosen_pattern} 落地
 
-按 detail_plan 中 game_mechanic 描述实现真正的"操纵动态系统":
-- Pattern 1 Sandbox: 滑块/输入控件 → 实时仿真引擎 (rAF) → 视觉反馈
-- Pattern 2 Build & Test: 零件 palette → 拖拽拼装区 → Run 按钮 → 仿真执行
-- Pattern 3 Causal Chain: 多变量面板 → 实验日志 → "我猜规则是 X" 提交
-- Pattern 4 Resource Management: 资源条 + 行动菜单 + 目标列表 + 回合推进
-- Pattern 5 Detective: 线索面板 + 假设列表 + 提交诊断按钮
-- Pattern 6 Live Tuning: 实时画面 + 控制按钮/滑块 + 瞬时反馈
-- Pattern 7 Strategy Map: 地图 + 节点选择 + 累计代价 + 提交方案
-- Pattern 8 Visual Programming: 积木库 + 拼装区 + 运行按钮 + 角色执行
-- Pattern 9 Experimental Design: 问题陈述 + 变量面板 + 对照设置 + 执行 + 统计结果
-- Pattern 10 Role-Play: 情境文本 + 多选项决策 + 状态条 + 后续分支
+按 detail_plan 的 game_mechanic 描述实现真正的"操纵动态系统":
+- Pattern 1 Sandbox: 滑块 → 实时仿真引擎 (rAF) → 视觉反馈
+- Pattern 2 Build & Test: 零件库 → 拼装区 → Run → 仿真执行
+- Pattern 6 Live Tuning: 实时画面 + 控制按钮 + 瞬时反馈
+- 其它 Pattern 见 SKILL.md §1006-1095
 
-**禁止** 退化为"输入数字 + 确认"的填空题 / 选择题变装。
-**禁止** "玩家不知道答案就无法开始游戏"(那是 exercise)。
+**禁止退化为**:
+- 输入数字 + 确认 (那是 exercise)
+- 选项点击 (那是选择题)
+- "玩家不知道答案就无法开始" (那是 exercise 变装)
 
-## 硬性约束 (与 implement_anim 共享)
+## i18n 双语
 
-1. 单文件自包含,body overflow:hidden / height:100vh
-2. 0px 圆角 / 渐变 / ambient glow / 玻璃态
-3. **禁止 onclick 属性,必须 addEventListener**
-4. **禁止 setInterval,必须 requestAnimationFrame**
-5. **禁止 calc(100vh-Npx)**
-6. **禁止 canvas 硬编码上限** (`Math.min(...,480)` 等)
-   - 正确: `sz = Math.min(availW, availH); sz = Math.max(sz, 80);`
-   - 在 `resizeCanvas()` 中读 `getBoundingClientRect()` 重算
-7. **必须 i18n 双语**: 所有可见文本通过 `t(key)`,默认 LANG='cn'
-8. **必须实现 refreshI18N()**: 更新所有 DOM 文本 + 重绘 canvas + 重渲染动态列表
-9. **禁止 window 同名变量**: history / location / name / status / origin / parent / top / self / length / event 等
-10. canvas 直接父容器必须 `display:flex; flex-direction:column` (skeleton `.game-body` 已设)
-11. 拖拽必须同时绑 mouse + touch (touchmove 调 preventDefault)
-12. 通关后展示学习总结面板
+```js
+var LANG = 'cn';
+var I18N = {
+  // ... 所有 sidebar / HUD / 状态文本
+};
+function t(key) { return (I18N[key] && I18N[key][LANG]) || (I18N[key] && I18N[key]['en']) || key; }
+function refreshI18N() {
+  // 必须实现: 更新所有 DOM 文本 + 重渲染动态生成的列表 + 重绘 canvas
+}
+document.getElementById('langBtn').addEventListener('click', function() {
+  LANG = LANG === 'cn' ? 'en' : 'cn';
+  this.textContent = LANG.toUpperCase();
+  refreshI18N();
+});
+```
 
-## 物理常识
+## 硬性约束
 
-- 重力向下 / 比例合理 / 方向正确 (与 implement_anim 同)
+1. 单文件自包含
+2. body `overflow: hidden`, 一屏内
+3. **禁止 `onclick` 属性**, 必须 `addEventListener`
+4. 动画循环必须 `requestAnimationFrame` (但 setInterval 用于"每 200ms 更新数字"是允许的)
+5. **禁止 window 同名变量**: history/location/name/status/event/length/parent/top/self
+6. 物理常识: 重力向下, 火焰向上, 比例合理
+7. **数值真实性**: 涉及具体物理量时用真实工程参数
+8. 通关后展示**学习总结面板** (中英双语, 写明 takeaway)
+9. **代码长度无上限**, 浅薄比冗长更糟糕
 
 ## 输出
 
-直接输出**完整 HTML 字符串**,不要前言/后记/```代码块标记```/解释。
+直接输出**完整 HTML 字符串**, 不要前言/后记/代码块标记/解释。

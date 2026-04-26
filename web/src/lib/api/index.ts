@@ -104,6 +104,8 @@ export const gateway = {
     ),
   getCourseV2: (projectName: string, nodeId: number) =>
     api.get<CourseContentData>(`/api/projects/${projectName}/nodes/${nodeId}/course/v2`),
+  getCourseV3: (projectName: string, nodeId: number) =>
+    api.get<CourseContentData>(`/api/projects/${projectName}/nodes/${nodeId}/course/v3`),
   getCourseV2Assignment: (projectName: string, nodeId: number) =>
     api.get<CourseAssignmentData>(`/api/projects/${projectName}/nodes/${nodeId}/course/v2/assignment`),
   cancelCourseV2: (projectName: string, nodeId: number) =>

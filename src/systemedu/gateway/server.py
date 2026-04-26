@@ -1642,6 +1642,43 @@ async def api_get_course_v2(request: Request) -> JSONResponse:
         db.close()
 
 
+async def api_get_course_v3(request: Request) -> JSONResponse:
+    """GET /api/projects/{name}/nodes/{node_id}/course/v3 — 读取 v3 (kimi-k2.6) 版本课程内容。
+
+    与 v2 完全独立, 数据存在 lesson_content_v3 表。前端可加 toggle 切换 v2/v3 对比。
+    """
+    name = request.path_params["name"]
+    node_id = int(request.path_params["node_id"])
+
+    from systemedu.storage.db import LessonContentV3, get_session as get_db_session
+    import json as _json
+
+    db = get_db_session()
+    try:
+        lesson = (
+            db.query(LessonContentV3)
+            .filter_by(project_name=name, knode_id=node_id)
+            .first()
+        )
+        if lesson is None:
+            return JSONResponse({
+                "project_name": name, "knode_id": node_id,
+                "status": "pending", "course_content": {},
+            })
+        cc = {}
+        if lesson.course_content:
+            try:
+                cc = _json.loads(lesson.course_content)
+            except Exception:
+                pass
+        return JSONResponse({
+            "project_name": name, "knode_id": node_id,
+            "status": lesson.status, "course_content": cc,
+        })
+    finally:
+        db.close()
+
+
 async def api_get_course_v2_assignment(request: Request) -> JSONResponse:
     """GET /api/projects/{name}/nodes/{node_id}/course/v2/assignment - Get generated assignment."""
     name = request.path_params["name"]
@@ -3768,6 +3805,7 @@ def create_app() -> Starlette:
         Route("/api/projects/{name}/nodes/{node_id:int}/course/v2/cancel", api_course_v2_cancel, methods=["POST"]),
         Route("/api/projects/{name}/nodes/{node_id:int}/course/v2/assignment", api_get_course_v2_assignment, methods=["GET"]),
         Route("/api/projects/{name}/nodes/{node_id:int}/course/v2", api_get_course_v2, methods=["GET"]),
+        Route("/api/projects/{name}/nodes/{node_id:int}/course/v3", api_get_course_v3, methods=["GET"]),
         Route("/api/projects/{name}/nodes/{node_id:int}/progress", api_update_progress, methods=["PATCH"]),
         Route("/api/projects/{name}/nodes/{node_id:int}/highlights", api_highlights_dispatch, methods=["GET", "POST"]),
         Route("/api/projects/{name}/nodes/{node_id:int}/practice/submit", api_submit_practice, methods=["POST"]),
