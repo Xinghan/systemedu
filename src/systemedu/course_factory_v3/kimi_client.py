@@ -102,6 +102,32 @@ def _is_retryable(exc: Exception) -> bool:
     ])
 
 
+_PROXY_ENV_KEYS = (
+    "http_proxy", "https_proxy",
+    "HTTP_PROXY", "HTTPS_PROXY",
+    "all_proxy", "ALL_PROXY",
+)
+
+
+def _patched_thread_invoke(llm, messages):
+    """在子线程内**临时**清掉 proxy env, 让 OpenAI SDK 不被本机 proxy 拦截。
+
+    虽然 core.llm_client 已用 httpx.Client(trust_env=False), 但 OpenAI SDK
+    在某些路径仍会读 env, 这里强行覆盖兜底。
+    注意 os.environ 是进程级共享的, 这里 push/pop 保护避免污染其它代码。
+    """
+    import os
+    saved = {k: os.environ.get(k) for k in _PROXY_ENV_KEYS}
+    for k in _PROXY_ENV_KEYS:
+        os.environ.pop(k, None)
+    try:
+        return llm.invoke(messages)
+    finally:
+        for k, v in saved.items():
+            if v is not None:
+                os.environ[k] = v
+
+
 async def ainvoke(
     llm: ChatOpenAI,
     messages: list,
@@ -112,7 +138,7 @@ async def ainvoke(
     last_exc: Exception | None = None
     for attempt in range(1, max_retries + 1):
         try:
-            resp = await asyncio.to_thread(llm.invoke, messages)
+            resp = await asyncio.to_thread(_patched_thread_invoke, llm, messages)
             content = resp.content if hasattr(resp, "content") else str(resp)
             return content
         except Exception as exc:
@@ -143,7 +169,7 @@ def invoke(
     last_exc: Exception | None = None
     for attempt in range(1, max_retries + 1):
         try:
-            resp = llm.invoke(messages)
+            resp = _patched_thread_invoke(llm, messages)
             return resp.content if hasattr(resp, "content") else str(resp)
         except Exception as exc:
             last_exc = exc

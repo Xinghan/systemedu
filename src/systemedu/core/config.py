@@ -198,11 +198,11 @@ def _default_config_dict() -> dict:
             "default": "kimi",
             "providers": {
                 "kimi": {
-                    "base_url": "https://api.moonshot.cn/v1",
-                    "api_key": "${MOONSHOT_API_KEY}",
-                    "model": "kimi-k2.6",
-                    # kimi-k2.6 强制 temperature=1, 其它值会被拒
-                    "temperature": 1.0,
+                    # 路由 key 历史命名为 kimi,实际可换任何 OpenAI 兼容模型担当 creative 档
+                    "base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1",
+                    "api_key": "${DASHSCOPE_API_KEY}",
+                    "model": "qwen3.6-plus",
+                    "temperature": 0.8,
                     "max_tokens": 32768,
                 },
                 "qwen": {

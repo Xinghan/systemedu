@@ -259,6 +259,26 @@ class LessonContent(Base):
     course_content = Column(Text, default="")    # CourseContent JSON (new pipeline)
 
 
+class LessonContentV3(Base):
+    """v3 课程内容(course_factory_v3 流水线产出)。
+
+    与 LessonContent 完全独立, 不动 v2 schema。前端可加 toggle 切换 v2 / v3。
+    """
+
+    __tablename__ = "lesson_content_v3"
+    __table_args__ = (
+        UniqueConstraint("project_name", "knode_id", name="uq_lesson_content_v3"),
+    )
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    project_name = Column(String(200), nullable=False)
+    knode_id = Column(Integer, nullable=False)
+    status = Column(String(20), nullable=False, default="pending")
+    course_content = Column(Text, default="")    # 完整 CourseContent JSON
+    project_assignment = Column(Text, default="")
+    generated_at = Column(DateTime, nullable=True)
+
+
 class NodeResource(Base):
     """Search result resource for a knowledge node."""
 

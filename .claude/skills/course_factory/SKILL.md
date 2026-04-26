@@ -10,6 +10,84 @@ description: Generate rich-media course content (animation, game, theory, exerci
 
 ---
 
+## 启动协议 (Boot Protocol) — 必读必答
+
+**收到生成任务后，第一个回复必须严格按下面格式输出"开工声明"。在没有输出开工声明之前，禁止做任何文件读写、Bash、Agent 调用或代码编写动作。**
+
+```
+=== course_factory 开工声明 ===
+项目: <project_name>
+节点: knode_global_idx=<N>
+节点角色: <foundation / core / deepening / synthesis / capstone>
+用户覆盖（user override）: <列出所有 user-explicit 跳过项，例如 "skip 0.5, skip 0.7"；无则写 none>
+
+我承诺按 12 步顺序执行，不跳步、不合并、不省略验证：
+[ ] Step 0    加载 knode 上下文（load_knode_context）
+[ ] Step 0.5  Tavily 外部研究（除非 user override）
+[ ] Step 0.7  LabXchange 匹配（除非 user override）
+[ ] Step 1    plan_markdown（800-1500 字，围绕 core_question）
+[ ] Step 1.5  theories（≥ 2 个，含 K1 + 项目 knowledge_level，每个 1-3 道选择题）
+[ ] Step 2    8 类富媒体逐条 debate（theory/anim/game/kit/image/diagram/youtube/labxchange）
+[ ] Step 2.5  Ideation Divergence（每个 anim/game 给 3 个跨 Pattern 候选）
+[ ] Step 2.6  Creativity Gate（Subtract / Replay / Surprise / Aha 四问）
+[ ] Step 3    Ideas 详细描述（user_guide / persuasion / hands_on_ref / acceptance_ref）
+[ ] Step 4    Debate 决策（保留/拒绝，每条 reject 写理由）
+[ ] Step 5    实现 HTML / exercises JSON
+[ ] Step 5.5  五道闸门（5.5a code review / 5.5b browser verify / 5.5c 科学一致性 Agent / 5.5d theory 等级 Agent / 5.5e 游戏性美观 Agent / 5.5f 文字重叠）
+[ ] Step 6    make_course_content + preflight_v41 + upsert_lesson
+[ ] Step 6.5  generate_assignment + upsert_assignment
+[ ] Step 6.6  generate_audio_scripts
+=== 开工 ===
+```
+
+**每完成一步，必须用一句话宣布"Step X 完成 → 产物：xxx"再进入下一步。** 跳过任意一步=直接报错回到开工声明重来。Step 5.5 任何子项不通过=禁止进入 Step 6。
+
+## 永远不可跳的 5 条铁律（违反 = 重做）
+
+1. **顺序铁律**：0 → 0.5 → 0.7 → 1 → 1.5 → 2 → 2.5 → 2.6 → 3 → 4 → 5 → 5.5 → 6 → 6.5 → 6.6。除非用户在开工声明里显式 override（如 "skip 0.5"），否则不允许省略任何一步。
+2. **5.5 闸门铁律**：browser verify（5.5b）和 preflight（6 之前自动跑）都通过才允许 `upsert_lesson`。任一失败必须修复重跑，不允许"先入库再说"。
+3. **acceptance_ref / hands_on_ref 必须原文匹配 knode 字段**（含末尾句号）。preflight 会拦下，宁可花 30 秒抄准，不要事后补救。
+4. **不要预合并 Tavily**：plan_markdown 里只写 `## 推荐互动资源`（LabXchange）。`## 推荐视频` 和 `## 延伸阅读` 由 `make_course_content(research=...)` 自动追加。手写就是重复。
+5. **8 类富媒体逐条 debate**：theory / animation / game / hands_on_kit / image / diagram / youtube / labxchange。即便最终只保留 anim+game+exercise，也必须为剩下 5 类各写一句"为什么不要"。
+
+## 必备 Python API 速查（直接用，不要猜签名）
+
+```python
+from course_factory.factory import (
+    load_knode_context,           # ctx = load_knode_context(project_name, knode_global_idx=N)
+    research_knode,               # research = research_knode(knode, milestone, sub_project, web_query=..., youtube_query=...)
+    search_labxchange_for_knode,  # lx = search_labxchange_for_knode(knode, top_k=3)
+    make_exercises,               # exercises = make_exercises([{question, options, correct, explanation, ref}, ...])
+    make_course_content,          # course_content = make_course_content(plan_markdown=..., animation_html=..., game_html=..., exercises=..., theories=..., knode=knode, research=research, labxchange_results=lx, *_hands_on_ref=..., *_acceptance_ref=...)
+    preflight_v41,                # errors = preflight_v41(knode, course_content)  # 返回 [] 表示通过
+    ensure_db_tables,             # 写入前调一次
+    upsert_lesson,                # upsert_lesson(project_name, knode_id, content_type="cf", course_content=...)
+    generate_assignment,          # assignment_md = generate_assignment(knode, milestone, plan_markdown=...)
+    upsert_assignment,            # upsert_assignment(project_name, knode_id, assignment_md)
+    generate_audio_scripts,       # sections = generate_audio_scripts(project_name, knode_id, knode, milestone)
+)
+```
+
+**用户 override 处理**：如果用户说"不要 Tavily / 不要 LabXchange"，必须 monkeypatch 兜底：
+```python
+import course_factory.factory as _cf
+_cf.search_labxchange_for_knode = lambda *a, **kw: []  # 禁用 labxchange 自动兜底
+# research 调用直接传 research=None
+```
+
+## 验证脚本速查
+
+```bash
+# Animation: standalone + iframe 双模式必须 exit 0
+node course_factory/validate/verify/animation.mjs <html_path> --out /tmp/verify_anim
+# Game: standalone + iframe + 关卡推进
+node course_factory/validate/verify/game.mjs <html_path> --out /tmp/verify_game
+# Learn page（整页内容回归）
+node course_factory/validate/verify/learn_page.mjs <url> --out /tmp/verify_lp
+```
+
+---
+
 ## 强制执行清单 (Execution Checklist)
 
 **每次生成任何 knode 课程前，必须按此清单逐项对齐。不允许跳步，不允许凭记忆省略。**
@@ -1320,6 +1398,8 @@ Game 的交互方式不设固定模板，可以自由设计适合教学内容的
 
 **重要：animation 和 game 的 HTML 代码长度没有上限。** 不要因为"代码太长"而简化设计。如果一个 animation 需要 800 行来充分表达概念，就写 800 行。如果一个 game 需要 2000 行来实现丰富的交互，就写 2000 行。唯一的标准是：概念是否表达清楚、交互是否有吸引力。浅薄比冗长更糟糕。
 
+**实现阶段禁止隐形自我收敛。** 不要给自己预设“差不多写到几百行就该停”或“先做一个最小能跑版本就结束”的心理上限。复杂度由教学目标和可玩性决定：如果还不能支撑核心认知动作（策略权衡、反馈循环、可重复试错），就继续完善；如果已经能稳定支撑这些动作，就可以收敛。
+
 ### 通用 HTML 硬性约束（animation 和 game 共用）
 
 ```
@@ -1452,116 +1532,169 @@ canvas{width:100%;height:100%;display:block;}
 ### Animation 设计原则
 
 1. **一个 animation = 一个概念**。多帧用来展开同一概念的不同面/阶段（递进关系），不要把多个独立概念塞进同一个动画。如果一个节点有 3 个核心概念需要可视化，就创建 3 个 animation ideas。
-2. **必须使用 skeleton + runtime**。不要手写独立 HTML。skeleton 提供 Play/Pause 按钮、Prev/Next 导航、语言切换、HUD、resize 等标准功能。
-3. **代码长度不设上限**。复杂概念可以需要丰富的 canvas 绘制逻辑、多层动画、详细的数据面板。
+2. **动画必须是单一场景里的连续动作演示，不是 PPT 幻灯片**。整个动画是一段**正在播放的视频**：主体对象（火箭/分子/电路）一直在屏幕中央，变化来自 CSS transition 或 rAF 循环；禁止做成 4-5 张互不连续的信息卡、表格页、概念页或文字板。
+3. **先问"为什么必须动起来？"** 如果内容只是分类、对比表、流程图、结构分层或静态决策树，应使用 `diagram`，不要硬做 animation。只有当学生需要看到"位置怎么移动、材料怎么变形、力如何传递、温度如何扩散、错误如何逐步导致失败"时，才保留 animation。
+4. **每个图形必须在画面中自解释**。火箭、尾翼、胶层、热源、载荷、裂纹、测量仪等关键元素必须通过形状、颜色、短标签、箭头或图例说明含义；学生不应依赖长段文字猜测图形代表什么。画面文字只做短标签和读数，不能承担主要教学内容。
+5. **scenes 时间轴**：用 JS 数组定义多个 phase（intro / wait / explain / action / final），每个有 `id` / `action` / `duration` / `next`，用 `setTimeout` 串行推进。整个动画 20-40 秒走完一个完整故事，**字幕/HUD/视觉同步切换**。
+6. **数值真实性**：涉及具体物理量（kg/s, m/s, N, K）时用真实工程参数（例：Saturn V F-1 引擎质量流量 ~270 kg/s, 排气速度 ~2500 m/s, 推力 ~7000 kN）。**禁止编造数据**。
+7. **代码长度不设上限**。复杂概念需要丰富的 SVG 绘制 + 多层动画 + 粒子系统。浅薄比冗长更糟糕。**fogsight 风格演示约 500-800 行**。
 
-### Animation Runtime（sidebar 布局）
+### Animation 实现规范（fogsight 风格 + 教学骨架）
 
-**所有新 animation 必须使用 `animation_runtime.js` 共享运行时。** 禁止手写独立 animation HTML。
+**核心改变（v3 起）**：放弃旧的 `animation_runtime.js` + `getFrameElements()` Canvas 2D 方案，改用 **SVG + CSS @keyframes + Tailwind** 这套 fogsight 风格的 web 原生动画栈。**画面更精致、更平滑、更接近商业级 demo**。
 
-运行时提供：i18n 双语切换、Canvas DPR 缩放、帧间共享元素过渡动画、HUD 数据栏、观看指南面板、播放/暂停控制。
+但**必须保留教学骨架**（这是和 fogsight 不同的地方）：
+- 左侧 200px sidebar 含 lang-btn / 标题 / 观看指南
+- 右侧主舞台自由发挥
+- i18n 双语必须
 
-内容脚本只需提供：
-1. `CONFIG` 对象（style、totalFrames、i18n、hudLabels/hudValues、guideItems）
-2. `getFrameElements(f, W, H)` 函数（返回当前帧的元素数组）
-3. 可选：`drawBg(ctx, W, H)`、`customDrawElement(ctx, el, W, H)`
+#### 推荐技术栈
 
-**布局架构（sidebar -- 无重叠）**：
+1. **Tailwind CSS via CDN**: `<script src="https://cdn.tailwindcss.com"></script>`
+   - 直接用 `text-cyan-400 font-bold tracking-widest` 等 utility class
+2. **Google Fonts**: `Inter` (正文) + `JetBrains Mono` (HUD 数字) + `Noto Sans SC` (中文)
+3. **inline SVG** 绘制主体物体，用 `<linearGradient>` + `<path>` 自由曲线
+4. **CSS @keyframes** 驱动连续动画（`shake` / `float` / `pulse-glow` / `blink`）
+5. **CSS `transition: transform Xs cubic-bezier(...)`** 实现物体平滑运动，**不要 Canvas lerp**
+6. **`<canvas> + Particle 类`** 实现尾焰/粒子（rAF 循环 + life/decay/vx/vy）
+7. **scenes 时间轴**：JS 数组 + `runScene()` 用 `setTimeout` 串行推进
+8. **`<defs>` + `<marker>`** 实现 SVG 箭头（带文字标注）
+9. **HUD 玻璃态**：`backdrop-filter: blur(10px); background: rgba(30, 41, 59, 0.7); border: 1px solid rgba(148, 163, 184, 0.2);`
+10. **双语字幕 box**：浮在底部，中文大字 + 英文小字斜体，fade transition
 
-sidebar 布局的核心设计：**lang-btn 和 guide-panel 在左侧 200px 固定栏中，与 canvas 完全隔离**。
+#### 标准布局骨架
 
+```html
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&family=JetBrains+Mono:wght@400;700&family=Noto+Sans+SC:wght@400;700&display=swap" rel="stylesheet">
+  <style>
+    body { font-family: 'Inter', sans-serif; background: #0f172a; color: #e2e8f0; overflow: hidden; }
+    .mono { font-family: 'JetBrains Mono', monospace; }
+    @keyframes shake { /* ... */ }
+    @keyframes float { /* ... */ }
+    .formula-box { backdrop-filter: blur(10px); background: rgba(30, 41, 59, 0.7); border: 1px solid rgba(148, 163, 184, 0.2); }
+  </style>
+</head>
+<body>
+<div class="flex h-screen">
+  <!-- 左侧 sidebar 200px (教学骨架, 必须有) -->
+  <div class="w-[200px] shrink-0 bg-slate-950/80 border-r border-slate-800 p-3 flex flex-col gap-2 text-slate-300">
+    <button id="langBtn" class="self-start text-[10px] px-2 py-1 border border-slate-700 hover:border-cyan-400">CN</button>
+    <h1 class="text-[12px] font-bold text-cyan-400 mt-2 uppercase tracking-wider" id="title"></h1>
+    <div class="text-[9px] uppercase tracking-widest text-cyan-400 mt-2">观看指南</div>
+    <div class="text-[11px] text-slate-400 leading-relaxed" id="guideContent"></div>
+  </div>
+
+  <!-- 右侧主舞台: SVG / canvas / HUD / 字幕 (fogsight 风格自由发挥) -->
+  <div class="flex-1 relative overflow-hidden bg-slate-900">
+    <!-- 星空 -->
+    <div id="stars" class="absolute inset-0 z-0 opacity-50"></div>
+    <!-- 粒子 canvas -->
+    <canvas id="particleCanvas" class="absolute inset-0 z-10 pointer-events-none"></canvas>
+    <!-- 主体 SVG (火箭/分子/电路 ...) -->
+    <div class="relative z-20 w-full h-full flex justify-center items-center">
+      <svg id="mainSvg" viewBox="0 0 200 400" class="w-64 h-96 overflow-visible">
+        <defs>
+          <linearGradient id="rocketGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+            <stop offset="0%" style="stop-color:#cbd5e1"/>
+            <stop offset="50%" style="stop-color:#f8fafc"/>
+            <stop offset="100%" style="stop-color:#94a3b8"/>
+          </linearGradient>
+          <!-- 箭头 marker -->
+          <marker id="arrowheadBlue" markerWidth="10" markerHeight="7" refX="0" refY="3.5" orient="auto">
+            <polygon points="0 0, 10 3.5, 0 7" fill="#38bdf8"/>
+          </marker>
+        </defs>
+        <g id="rocketGroup">
+          <!-- 自由 path / circle / rect -->
+        </g>
+      </svg>
+    </div>
+    <!-- HUD 玻璃态面板 -->
+    <div id="hud" class="absolute top-8 right-8 w-80 formula-box rounded-xl p-6 z-30 opacity-0 transition-all duration-500">
+      <h2 class="text-sm uppercase tracking-widest text-slate-400 mb-4">Telemetry Data</h2>
+      <div class="text-2xl font-bold mono text-white" id="formulaDisplay">F = ?</div>
+      <!-- 数据网格 ... -->
+    </div>
+    <!-- 双语字幕 box -->
+    <div class="absolute bottom-12 left-0 w-full flex justify-center z-40 pointer-events-none">
+      <div class="bg-slate-900/90 backdrop-blur-md border border-slate-700 px-8 py-6 rounded-2xl max-w-4xl text-center transition-all duration-500" id="subtitleBox">
+        <p class="text-xl md:text-2xl font-medium text-white mb-2" id="subCn">系统初始化...</p>
+        <p class="text-sm md:text-base text-slate-400 italic" id="subEn">System initialization...</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// scenes 时间轴
+const scenes = [
+  { id: 'intro', action: () => { setSubtitle('欢迎...', 'Welcome...'); }, duration: 3000, next: 'wait' },
+  { id: 'wait',  action: () => { rocketGroup.classList.add('shake-element'); }, duration: 2000, next: 'ignite' },
+  { id: 'ignite', action: () => { /* 点火, HUD 显示 ṁ=270 kg/s */ }, duration: 3000, next: 'lift' },
+  // ...
+];
+let idx = 0;
+function runScene() {
+  if (idx >= scenes.length) return;
+  scenes[idx].action();
+  if (scenes[idx].next) setTimeout(() => { idx++; runScene(); }, scenes[idx].duration);
+}
+
+// i18n
+var LANG = 'cn', I18N = { /* ... */ };
+function t(key) { return (I18N[key] && I18N[key][LANG]) || key; }
+document.getElementById('langBtn').addEventListener('click', function() {
+  LANG = LANG === 'cn' ? 'en' : 'cn';
+  this.textContent = LANG.toUpperCase();
+  refreshI18N();
+});
+
+// init
+function init() {
+  // 创建 100 颗星星
+  const stars = document.getElementById('stars');
+  for (let i = 0; i < 100; i++) {
+    const s = document.createElement('div');
+    s.className = 'absolute bg-white rounded-full opacity-80';
+    s.style.cssText = `width:${Math.random()*3}px;height:${Math.random()*3}px;top:${Math.random()*100}%;left:${Math.random()*100}%;`;
+    stars.appendChild(s);
+  }
+  loop();  // 启动粒子 rAF
+  setTimeout(runScene, 1000);
+}
+init();
+</script>
+</body>
+</html>
 ```
-.wrapper (flex-direction:row, 100vh)
-  .sidebar (200px)      -- [CN] 标题 副标题 [1/6] 观看指南内容
-  .anim-main (flex:1)
-    .canvas-wrap         -- canvas 占满剩余空间 (flex:1)
-    .controls            -- [上一帧] [播放] [下一帧]
-    .hud                 -- 4 列数据面板
-```
 
-**没有任何元素使用 `position:fixed` 或 `position:absolute` 浮在 canvas 上方。** canvas 拥有 `.anim-main` 的全部可用空间，`getFrameElements(f, W, H)` 收到的 W/H 就是完整画布虚拟尺寸（H 固定 400，W 按宽高比自适应，最小 700）。坐标原点 (0,0) 就是画布左上角，无任何安全区域偏移。
+#### 完整参考实现
 
-这意味着：
-- 内容作者可以自由使用全部 W x H 空间
-- 不需要考虑 guide-panel 或 lang-btn 遮挡（它们在左侧栏）
-- DPR 缩放由 runtime 自动处理，内容代码只需用逻辑坐标
-- `customDrawElement(ctx, el, W, H)` 的 W/H 与 `getFrameElements` 收到的完全一致
+`/tmp/v3_fogsight_anim.html` 是用这套方案生成的完整火箭推力动画演示（22791 字符 / 539 行），可直接打开浏览器查看效果。其核心特征：
 
-`drawBg(ctx, W, H)` 例外——它收到的是整个 canvas 的实际逻辑像素尺寸（非虚拟坐标），用于绘制全屏背景。
-
-**HTML 结构**：使用 `course_factory/runtime/animation_skeleton.html` 作为模板，复制全部 HTML 结构，`<script src="animation_runtime.js">` 后接内容脚本。skeleton 的 body 结构为 `.wrapper > .sidebar + .anim-main`。
-
-**CONFIG 格式**：
-
-```javascript
-var CONFIG = {
-  style: 'ares_mission',   // 10 个主题之一，见下方
-  totalFrames: 5,
-  i18n: {
-    title:    {en: 'TITLE', cn: '标题'},
-    subtitle: {en: 'SUBTITLE', cn: '副标题'},
-    // ... 所有 UI 文案
-  },
-  hudLabels: ['hudL1', 'hudL2', 'hudL3', 'hudL4'],  // i18n key
-  hudValues: [
-    ['val_key_or_literal', ...],  // 每帧 4 个值（i18n key 或直接字符串）
-  ],
-  guideTitle: 'guideTitle',       // i18n key
-  guideItems: ['g1', 'g2', 'g3'], // i18n keys
-};
-```
-
-所有元素必须有 `id`（用于帧间共享元素过渡），相同 id 的元素会自动 lerp 位置/尺寸。元素类型和绘制方式参考 `animation_game_design/` 目录下对应 style_key 的 `code.html` 实现。
-
-**公开 API**：
-
-| 函数 | 说明 |
+| 元素 | 实现 |
 |------|------|
-| `AnimRuntime.lerp(a, b, p)` | 线性插值：`a + (b-a) * p` |
-| `AnimRuntime.interpolate(value, inputRange, outputRange, opts?)` | 多段帧插值（Remotion 风格），支持自动 clamp 和 easing |
-| `AnimRuntime.easeInOut(x)` | 缓入缓出曲线 |
-| `AnimRuntime.t(key)` | i18n 翻译 |
-| `AnimRuntime.merge(base, override)` | 浅合并对象 |
+| 火箭主体 | inline SVG `<path>` + linearGradient |
+| 启动抖动 | `@keyframes shake` 11 步 transform |
+| 升空运动 | `transform: translate + scale; transition: transform 10s linear;` |
+| 尾焰 | Canvas + Particle 类 (life/decay/color) |
+| 推力箭头 | SVG `<line>` + `<marker>` 箭头 |
+| HUD 玻璃态 | `backdrop-filter: blur(10px) + rgba(30,41,59,0.7)` |
+| 速度仪表 | `<div>` 进度条 `transition: width 100ms` |
+| 双语字幕 | `<p>` fade in/out + setTimeout 切换 |
+| 星空 | 100 个 `<div>` + Tailwind `animate-pulse` |
+| 时序 | `scenes[]` 数组 + setTimeout 串行 |
 
-**`interpolate` 用法**：
+#### 学科主题色（参考 theme_style/themes.js 的 26 个 oklch palette）
 
-```javascript
-// 淡入淡出（0-30帧淡入，30-60帧淡出）
-var opacity = AnimRuntime.interpolate(frame, [0, 30, 60], [0, 1, 0]);
+按学科 id 选主题色（见 `theme_style/themes.js`）：cs / bio / space / mech / ai / math / med / chem / phys / env / robo / elec / astro / geo / ocean / meteo / paleo / quant / nuke / neuro / mat / micro / zoo / bot / arch / agri。
 
-// 位移 + 缓动
-var x = AnimRuntime.interpolate(frame, [0, 60], [100, 500], { easing: AnimRuntime.easeInOut });
-
-// 超出范围自动 clamp（默认）；传 extrapolate:'extend' 可线性延伸
-var y = AnimRuntime.interpolate(frame, [10, 50], [0, 400], { extrapolate: 'extend' });
-```
-
-**公共 API**（通过 `AnimRuntime` 访问）：
-- `AnimRuntime.t(key)` -- i18n 翻译
-- `AnimRuntime.PAL` -- 当前 palette 对象（`.primary`, `.muted`, `.bg` 等）
-- `AnimRuntime.W` / `AnimRuntime.H` -- 虚拟坐标尺寸（H=400，W 按宽高比自适应），即完整画布的虚拟尺寸
-- `AnimRuntime.ctx` -- Canvas 2D context
-- `AnimRuntime.lerp(a, b, p)` / `AnimRuntime.easeInOut(x)` / `AnimRuntime.merge(base, ov)`
-- `AnimRuntime.boot()` -- 启动（在内容脚本末尾调用）
-
-**10 个视觉主题**（`CONFIG.style`）：
-
-| style key | 适用场景 | 主色 |
-|-----------|---------|------|
-| `helix_lab` | 生物/遗传/实验室 | `#50ffb0` 荧光绿 |
-| `aether_clinic` | 医疗/诊断 | `#98cbff` 柔蓝 |
-| `ares_mission` | 火星/航天/探测 | `#ffb59c` 暖橙 |
-| `celestial_observatory` | 天文/星空 | `#c9bfff` 薰衣紫 |
-| `neural_circuit` | AI/神经网络 | `#dbfcff` 冰蓝 |
-| `subatomic_matrix` | 量子/粒子物理 | `#ff7cf5` 霓虹粉 |
-| `rocketry_control` | 火箭/飞控 | `#ffb000` 琥珀 |
-| `aqua_flow` | 海洋/水文 | `#22d3ee` 青蓝 |
-| `ember_forge` | 冶金/热力学 | `#f59e0b` 炉火橙 |
-| `flora_pulse` | 植物/生态 | `#4ade80` 叶绿 |
-
-每个 palette 包含：bg, bg2, surface, primary, primaryDim, secondary, secondaryDim, tertiary, tertiaryDim, text, muted, error, outline, glow, glowStrong, glass, glassBlur, radius。runtime 启动时自动将 palette 注入 CSS custom properties。
-
-**参考示例**：`course_factory/tests/anim/test_anim_runtime_demo.html`（capability boundary 动画的 runtime 版本）
+每个主题有 5 色 oklch palette，使用 `oklch(0.72 0.17 295)` 这种语法。配合 Tailwind 暗色基底（`bg-slate-900` / `text-slate-300`）即可。
 
 ---
 

@@ -1,13 +1,13 @@
-"""Step 5 — Animation HTML 生成 (单 idea)。
+"""Step 5 — Animation HTML 生成 (fogsight 风格 + 教学骨架)。
 
-接收 detail_plan + theme + skeleton, 调 Kimi 生成完整 HTML。
+不再注入 skeleton + 19 条约束, 而是用精简 prompt + Tailwind/SVG/CSS 自由发挥,
+但保留 sidebar 教学骨架 + i18n + acceptance_ref 对齐 (与 fogsight 不同)。
 """
 
 from __future__ import annotations
 
 import json
 import logging
-import re
 from pathlib import Path
 
 from ..kimi_client import ainvoke, kimi
@@ -17,7 +17,6 @@ from ..progress import EV_AGENT_LOG, Emitter
 logger = logging.getLogger(__name__)
 
 PROMPTS_DIR = Path(__file__).parent.parent / "prompts"
-SKELETON = Path(__file__).resolve().parents[4] / "course_factory" / "runtime" / "animation_skeleton.html"
 
 
 async def implement(idea: dict, ctx: dict, *, em: Emitter) -> str | None:
@@ -26,22 +25,21 @@ async def implement(idea: dict, ctx: dict, *, em: Emitter) -> str | None:
     style_key = idea.get("style_key") or detail_plan.get("style_key") or ctx.get("category") or "space"
     theme = pick_theme(style_key)
 
-    skeleton_html = SKELETON.read_text(encoding="utf-8")
-
-    prompt = (PROMPTS_DIR / "implement_anim.md").read_text(encoding="utf-8").format(
-        detail_plan_json=json.dumps(detail_plan, ensure_ascii=False, indent=2),
-        core_question=ctx["knode"].get("core_question", ""),
-        hands_on_ref=idea.get("hands_on_ref", ""),
-        acceptance_ref=idea.get("acceptance_ref", ""),
-        style_key=theme.id,
-        theme_block=theme.as_prompt_block(),
-        skeleton_html=skeleton_html,
+    template = (PROMPTS_DIR / "implement_anim.md").read_text(encoding="utf-8")
+    # 用直接替换避免 JS/CSS object literal 中的 `{` 误触发 .format() KeyError
+    prompt = (
+        template
+        .replace("{detail_plan_json}", json.dumps(detail_plan, ensure_ascii=False, indent=2))
+        .replace("{core_question}", ctx["knode"].get("core_question", ""))
+        .replace("{hands_on_ref}", idea.get("hands_on_ref", ""))
+        .replace("{acceptance_ref}", idea.get("acceptance_ref", ""))
+        .replace("{style_key}", theme.id)
     )
 
     em.emit(EV_AGENT_LOG, {
         "agent": "ImplementAnim", "phase": "input",
         "input": f"idea={idea.get('idea_id')}, theme={theme.id}, prompt_len={len(prompt)}",
-        "output": "(generating HTML...)",
+        "output": "(generating HTML, fogsight style with sidebar)...",
     })
 
     llm = kimi(streaming=False, max_tokens=32768)

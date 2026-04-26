@@ -1,4 +1,8 @@
-"""Step 5 — Game HTML 生成 (单 idea)。"""
+"""Step 5 — Game HTML 生成 (fogsight 视觉 + 真实教学交互)。
+
+不再注入 skeleton, 而是用精简 prompt + Tailwind/SVG/CSS,
+但保留 sidebar + 真实交互控件 + i18n + Pattern 对齐 (与 fogsight 不同, 我们不是被动播放)。
+"""
 
 from __future__ import annotations
 
@@ -11,9 +15,7 @@ from ..theme_loader import pick_theme
 from ..progress import EV_AGENT_LOG, Emitter
 
 logger = logging.getLogger(__name__)
-
 PROMPTS_DIR = Path(__file__).parent.parent / "prompts"
-SKELETON = Path(__file__).resolve().parents[4] / "course_factory" / "runtime" / "game_skeleton.html"
 
 
 async def implement(idea: dict, ctx: dict, *, em: Emitter) -> str | None:
@@ -22,22 +24,21 @@ async def implement(idea: dict, ctx: dict, *, em: Emitter) -> str | None:
     theme = pick_theme(style_key)
     chosen_pattern = (idea.get("divergence") or {}).get("chosen_pattern") or detail_plan.get("game_mechanic", "Pattern 1: Sandbox")
 
-    skeleton_html = SKELETON.read_text(encoding="utf-8")
-    prompt = (PROMPTS_DIR / "implement_game.md").read_text(encoding="utf-8").format(
-        detail_plan_json=json.dumps(detail_plan, ensure_ascii=False, indent=2),
-        core_question=ctx["knode"].get("core_question", ""),
-        hands_on_ref=idea.get("hands_on_ref", ""),
-        acceptance_ref=idea.get("acceptance_ref", ""),
-        chosen_pattern=chosen_pattern,
-        style_key=theme.id,
-        theme_block=theme.as_prompt_block(),
-        skeleton_html=skeleton_html,
+    template = (PROMPTS_DIR / "implement_game.md").read_text(encoding="utf-8")
+    prompt = (
+        template
+        .replace("{detail_plan_json}", json.dumps(detail_plan, ensure_ascii=False, indent=2))
+        .replace("{core_question}", ctx["knode"].get("core_question", ""))
+        .replace("{hands_on_ref}", idea.get("hands_on_ref", ""))
+        .replace("{acceptance_ref}", idea.get("acceptance_ref", ""))
+        .replace("{chosen_pattern}", chosen_pattern)
+        .replace("{style_key}", theme.id)
     )
 
     em.emit(EV_AGENT_LOG, {
         "agent": "ImplementGame", "phase": "input",
         "input": f"idea={idea.get('idea_id')}, theme={theme.id}, pattern={chosen_pattern}",
-        "output": "(generating HTML...)",
+        "output": "(generating HTML, fogsight style with sidebar+controls)...",
     })
 
     llm = kimi(streaming=False, max_tokens=32768)
