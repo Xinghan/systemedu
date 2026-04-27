@@ -1,7 +1,8 @@
-"""Step 5 — Game HTML 生成 (fogsight 视觉 + 真实教学交互)。
+"""Step 5 — Game HTML 生成 (fogsight 风格 + streaming + 真实交互)。
 
-不再注入 skeleton, 而是用精简 prompt + Tailwind/SVG/CSS,
-但保留 sidebar + 真实交互控件 + i18n + Pattern 对齐 (与 fogsight 不同, 我们不是被动播放)。
+streaming 是核心: kimi-k2.6 reasoning 模型在非 streaming 时长输出会被
+OpenAI SDK 默认 timeout 杀掉。用 astream_html 直接消费 chunk,
+httpx 1800s timeout 兜底。
 """
 
 from __future__ import annotations
@@ -10,7 +11,7 @@ import json
 import logging
 from pathlib import Path
 
-from ..kimi_client import ainvoke, kimi
+from ..kimi_client import astream_html
 from ..theme_loader import pick_theme
 from ..progress import EV_AGENT_LOG, Emitter
 
@@ -22,7 +23,10 @@ async def implement(idea: dict, ctx: dict, *, em: Emitter) -> str | None:
     detail_plan = idea.get("detail_plan") or {}
     style_key = idea.get("style_key") or detail_plan.get("style_key") or ctx.get("category") or "space"
     theme = pick_theme(style_key)
-    chosen_pattern = (idea.get("divergence") or {}).get("chosen_pattern") or detail_plan.get("game_mechanic", "Pattern 1: Sandbox")
+    chosen_pattern = (
+        (idea.get("divergence") or {}).get("chosen_pattern")
+        or detail_plan.get("game_mechanic", "Pattern 1: Sandbox")
+    )
 
     template = (PROMPTS_DIR / "implement_game.md").read_text(encoding="utf-8")
     prompt = (
@@ -33,29 +37,39 @@ async def implement(idea: dict, ctx: dict, *, em: Emitter) -> str | None:
         .replace("{acceptance_ref}", idea.get("acceptance_ref", ""))
         .replace("{chosen_pattern}", chosen_pattern)
         .replace("{style_key}", theme.id)
+        .replace("{theme_block}", theme.as_prompt_block())
     )
 
     em.emit(EV_AGENT_LOG, {
         "agent": "ImplementGame", "phase": "input",
         "input": f"idea={idea.get('idea_id')}, theme={theme.id}, pattern={chosen_pattern}",
-        "output": "(generating HTML, fogsight style with sidebar+controls)...",
+        "output": "(streaming HTML, fogsight style)...",
     })
 
-    llm = kimi(streaming=False, max_tokens=32768)
+    def _emit_progress(elapsed_s, n_chunks, total_len, last_60):
+        em.emit(EV_AGENT_LOG, {
+            "agent": "ImplementGame", "phase": f"streaming-{int(elapsed_s)}s",
+            "input": f"chunks={n_chunks}",
+            "output": f"len={total_len}, tail: {last_60[:60]!r}",
+        })
+
     try:
-        html = await ainvoke(
-            llm, [{"role": "user", "content": prompt}],
+        html = await astream_html(
+            role="creative",
+            messages=[{"role": "user", "content": prompt}],
+            max_tokens=32768,
+            timeout_s=1800.0,
             label=f"impl_game[{idea.get('idea_id')}]",
+            progress_cb=_emit_progress,
         )
     except Exception as exc:
-        logger.exception(f"[s50_game] LLM failed for {idea.get('idea_id')}")
+        logger.exception(f"[s50_game] streaming failed for {idea.get('idea_id')}")
         em.emit(EV_AGENT_LOG, {
             "agent": "ImplementGame", "phase": "fail",
             "input": "", "output": f"ERROR: {exc}",
         })
         return None
 
-    html = _strip_codeblock(html)
     if not html.strip().startswith("<!DOCTYPE") and "<html" not in html[:200].lower():
         logger.warning(f"[s50_game] LLM did not return HTML: {html[:200]}")
         return None
@@ -65,15 +79,3 @@ async def implement(idea: dict, ctx: dict, *, em: Emitter) -> str | None:
         "input": "", "output": f"HTML length={len(html)} chars",
     })
     return html
-
-
-def _strip_codeblock(text: str) -> str:
-    text = text.strip()
-    if text.startswith("```"):
-        lines = text.split("\n")
-        if lines[0].startswith("```"):
-            lines = lines[1:]
-        if lines and lines[-1].strip() == "```":
-            lines = lines[:-1]
-        text = "\n".join(lines).strip()
-    return text
