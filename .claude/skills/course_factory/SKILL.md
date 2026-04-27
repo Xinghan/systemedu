@@ -1500,143 +1500,45 @@ Game 的交互方式不设固定模板，可以自由设计适合教学内容的
 6. **数值真实性**：涉及具体物理量（kg/s, m/s, N, K）时用真实工程参数（例：Saturn V F-1 引擎质量流量 ~270 kg/s, 排气速度 ~2500 m/s, 推力 ~7000 kN）。**禁止编造数据**。
 7. **代码长度不设上限**。复杂概念需要丰富的 SVG 绘制 + 多层动画 + 粒子系统。浅薄比冗长更糟糕。**fogsight 风格演示约 500-800 行**。
 
-### Animation 实现规范（fogsight 风格 + 教学骨架）
+### Animation 实现规范（fogsight 风格, v3 锁定）
 
-**核心改变（v3 起）**：放弃旧的 `animation_runtime.js` + `getFrameElements()` Canvas 2D 方案，改用 **SVG + CSS @keyframes + Tailwind** 这套 fogsight 风格的 web 原生动画栈。**画面更精致、更平滑、更接近商业级 demo**。
+**核心改变（v3 起）**：放弃旧的 `animation_runtime.js` + `getFrameElements()` Canvas 2D 方案 + 强制 200px sidebar 模板, 改用 **fogsight 精简哲学** + **scenes 时间轴**——只锁定视觉主题色 + 5 条硬底线, 布局/技术栈完全自由发挥。**实测对比 6 模型**: kimi-k2.6 + 9 行精简 prompt 跑出 22791 字符 / 539 行 HTML, 视觉最佳, 用户决策为基准。
 
-但**必须保留教学骨架**（这是和 fogsight 不同的地方）：
-- 左侧 200px sidebar 含 lang-btn / 标题 / 观看指南
-- 右侧主舞台自由发挥
-- i18n 双语必须
+#### 推荐技术栈（同 game, 复用降低不一致）
 
-#### 推荐技术栈
+1. **Tailwind CSS via CDN**: `<script src="https://cdn.tailwindcss.com"></script>` — utility class 自由布局
+2. **Google Fonts**: `Inter` + `JetBrains Mono` + `Noto Sans SC`
+3. **inline SVG** 绘制主体, `<linearGradient>` + `<path>` 自由曲线, `<defs>` + `<marker>` 箭头
+4. **CSS @keyframes** 驱动连续动画 (`shake` / `float` / `pulse-glow` / `blink`)
+5. **CSS `transition: transform Xs cubic-bezier(...)`** 实现物体平滑运动 (替代 Canvas lerp)
+6. **`<canvas> + Particle 类`** 实现尾焰 / 粒子 (rAF 循环 + life/decay)
+7. **HUD 玻璃态**: `backdrop-filter: blur(10px); background: rgba(30, 41, 59, 0.7);`
+8. **theme_style palette CSS 变量**: `:root { --ORBIT: oklch(...); ... }` 主体颜色全部 `var(--XX)`
 
-1. **Tailwind CSS via CDN**: `<script src="https://cdn.tailwindcss.com"></script>`
-   - 直接用 `text-cyan-400 font-bold tracking-widest` 等 utility class
-2. **Google Fonts**: `Inter` (正文) + `JetBrains Mono` (HUD 数字) + `Noto Sans SC` (中文)
-3. **inline SVG** 绘制主体物体，用 `<linearGradient>` + `<path>` 自由曲线
-4. **CSS @keyframes** 驱动连续动画（`shake` / `float` / `pulse-glow` / `blink`）
-5. **CSS `transition: transform Xs cubic-bezier(...)`** 实现物体平滑运动，**不要 Canvas lerp**
-6. **`<canvas> + Particle 类`** 实现尾焰/粒子（rAF 循环 + life/decay/vx/vy）
-7. **scenes 时间轴**：JS 数组 + `runScene()` 用 `setTimeout` 串行推进
-8. **`<defs>` + `<marker>`** 实现 SVG 箭头（带文字标注）
-9. **HUD 玻璃态**：`backdrop-filter: blur(10px); background: rgba(30, 41, 59, 0.7); border: 1px solid rgba(148, 163, 184, 0.2);`
-10. **双语字幕 box**：浮在底部，中文大字 + 英文小字斜体，fade transition
+#### 5 条硬底线（违反 = 闸门 fail）
 
-#### 标准布局骨架
+1. **像视频一样自动播放**: scenes 时间轴 (JS 数组 + setTimeout 串行推进 phase),
+   每个 phase 字幕 / HUD / 视觉同步切换; **不要按帧导航 / 不要互动按钮**
+2. **真物理参数**: 涉及具体数值时用真实工程数值
+   (例: Saturn V F-1 引擎质量流量 ~270 kg/s, 排气速度 ~2500 m/s)
+3. **视觉与物理坐标分离** (与 game 同):
+   - 物理量(米/秒/牛/度等) ≠ 像素, 视觉是物理量的"投影"
+   - 当模拟值超出可视范围 → 镜头跟随 / 比例尺自适应 / 显示当前可视范围标尺
+   - 屏幕数字读数 与 视觉位置 永远保持一致
+4. **中英文双语字幕** 从头覆盖整个动画过程
+5. **单文件 HTML**: `<!DOCTYPE html>` 到 `</html>`, 一屏内布局不滚动
 
-```html
-<!DOCTYPE html>
-<html lang="zh-CN">
-<head>
-  <meta charset="UTF-8">
-  <script src="https://cdn.tailwindcss.com"></script>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&family=JetBrains+Mono:wght@400;700&family=Noto+Sans+SC:wght@400;700&display=swap" rel="stylesheet">
-  <style>
-    body { font-family: 'Inter', sans-serif; background: #0f172a; color: #e2e8f0; overflow: hidden; }
-    .mono { font-family: 'JetBrains Mono', monospace; }
-    @keyframes shake { /* ... */ }
-    @keyframes float { /* ... */ }
-    .formula-box { backdrop-filter: blur(10px); background: rgba(30, 41, 59, 0.7); border: 1px solid rgba(148, 163, 184, 0.2); }
-  </style>
-</head>
-<body>
-<div class="flex h-screen">
-  <!-- 左侧 sidebar 200px (教学骨架, 必须有) -->
-  <div class="w-[200px] shrink-0 bg-slate-950/80 border-r border-slate-800 p-3 flex flex-col gap-2 text-slate-300">
-    <button id="langBtn" class="self-start text-[10px] px-2 py-1 border border-slate-700 hover:border-cyan-400">CN</button>
-    <h1 class="text-[12px] font-bold text-cyan-400 mt-2 uppercase tracking-wider" id="title"></h1>
-    <div class="text-[9px] uppercase tracking-widest text-cyan-400 mt-2">观看指南</div>
-    <div class="text-[11px] text-slate-400 leading-relaxed" id="guideContent"></div>
-  </div>
+#### 布局推荐 (非强制)
 
-  <!-- 右侧主舞台: SVG / canvas / HUD / 字幕 (fogsight 风格自由发挥) -->
-  <div class="flex-1 relative overflow-hidden bg-slate-900">
-    <!-- 星空 -->
-    <div id="stars" class="absolute inset-0 z-0 opacity-50"></div>
-    <!-- 粒子 canvas -->
-    <canvas id="particleCanvas" class="absolute inset-0 z-10 pointer-events-none"></canvas>
-    <!-- 主体 SVG (火箭/分子/电路 ...) -->
-    <div class="relative z-20 w-full h-full flex justify-center items-center">
-      <svg id="mainSvg" viewBox="0 0 200 400" class="w-64 h-96 overflow-visible">
-        <defs>
-          <linearGradient id="rocketGradient" x1="0%" y1="0%" x2="100%" y2="0%">
-            <stop offset="0%" style="stop-color:#cbd5e1"/>
-            <stop offset="50%" style="stop-color:#f8fafc"/>
-            <stop offset="100%" style="stop-color:#94a3b8"/>
-          </linearGradient>
-          <!-- 箭头 marker -->
-          <marker id="arrowheadBlue" markerWidth="10" markerHeight="7" refX="0" refY="3.5" orient="auto">
-            <polygon points="0 0, 10 3.5, 0 7" fill="#38bdf8"/>
-          </marker>
-        </defs>
-        <g id="rocketGroup">
-          <!-- 自由 path / circle / rect -->
-        </g>
-      </svg>
-    </div>
-    <!-- HUD 玻璃态面板 -->
-    <div id="hud" class="absolute top-8 right-8 w-80 formula-box rounded-xl p-6 z-30 opacity-0 transition-all duration-500">
-      <h2 class="text-sm uppercase tracking-widest text-slate-400 mb-4">Telemetry Data</h2>
-      <div class="text-2xl font-bold mono text-white" id="formulaDisplay">F = ?</div>
-      <!-- 数据网格 ... -->
-    </div>
-    <!-- 双语字幕 box -->
-    <div class="absolute bottom-12 left-0 w-full flex justify-center z-40 pointer-events-none">
-      <div class="bg-slate-900/90 backdrop-blur-md border border-slate-700 px-8 py-6 rounded-2xl max-w-4xl text-center transition-all duration-500" id="subtitleBox">
-        <p class="text-xl md:text-2xl font-medium text-white mb-2" id="subCn">系统初始化...</p>
-        <p class="text-sm md:text-base text-slate-400 italic" id="subEn">System initialization...</p>
-      </div>
-    </div>
-  </div>
-</div>
+- 主舞台占满, 浮动 HUD + 双语字幕 box (anim 不互动, **无须 sidebar**)
+- 字幕浮动在底部, 中文大字 + 英文小字斜体, fade transition
+- HUD 玻璃态浮在顶部一角
 
-<script>
-// scenes 时间轴
-const scenes = [
-  { id: 'intro', action: () => { setSubtitle('欢迎...', 'Welcome...'); }, duration: 3000, next: 'wait' },
-  { id: 'wait',  action: () => { rocketGroup.classList.add('shake-element'); }, duration: 2000, next: 'ignite' },
-  { id: 'ignite', action: () => { /* 点火, HUD 显示 ṁ=270 kg/s */ }, duration: 3000, next: 'lift' },
-  // ...
-];
-let idx = 0;
-function runScene() {
-  if (idx >= scenes.length) return;
-  scenes[idx].action();
-  if (scenes[idx].next) setTimeout(() => { idx++; runScene(); }, scenes[idx].duration);
-}
-
-// i18n
-var LANG = 'cn', I18N = { /* ... */ };
-function t(key) { return (I18N[key] && I18N[key][LANG]) || key; }
-document.getElementById('langBtn').addEventListener('click', function() {
-  LANG = LANG === 'cn' ? 'en' : 'cn';
-  this.textContent = LANG.toUpperCase();
-  refreshI18N();
-});
-
-// init
-function init() {
-  // 创建 100 颗星星
-  const stars = document.getElementById('stars');
-  for (let i = 0; i < 100; i++) {
-    const s = document.createElement('div');
-    s.className = 'absolute bg-white rounded-full opacity-80';
-    s.style.cssText = `width:${Math.random()*3}px;height:${Math.random()*3}px;top:${Math.random()*100}%;left:${Math.random()*100}%;`;
-    stars.appendChild(s);
-  }
-  loop();  // 启动粒子 rAF
-  setTimeout(runScene, 1000);
-}
-init();
-</script>
-</body>
-</html>
-```
+但**布局不强制**: 全屏沉浸 / 多区分屏 / 任意视觉创意都可以, 只要不违反 5 条硬底线。
 
 #### 完整参考实现
 
-`/tmp/v3_fogsight_anim.html` 是用这套方案生成的完整火箭推力动画演示（22791 字符 / 539 行），可直接打开浏览器查看效果。其核心特征：
+`/tmp/v3_fogsight_anim.html` 是用这套方案生成的完整火箭推力动画演示 (22791 字符 / 539 行), 可直接打开浏览器查看效果。其核心特征：
 
 | 元素 | 实现 |
 |------|------|
@@ -1651,11 +1553,9 @@ init();
 | 星空 | 100 个 `<div>` + Tailwind `animate-pulse` |
 | 时序 | `scenes[]` 数组 + setTimeout 串行 |
 
-#### 学科主题色（参考 theme_style/themes.js 的 26 个 oklch palette）
+#### 学科主题色 (同 game, 参考 theme_style/themes.js 的 26 个 oklch palette)
 
-按学科 id 选主题色（见 `theme_style/themes.js`）：cs / bio / space / mech / ai / math / med / chem / phys / env / robo / elec / astro / geo / ocean / meteo / paleo / quant / nuke / neuro / mat / micro / zoo / bot / arch / agri。
-
-每个主题有 5 色 oklch palette，使用 `oklch(0.72 0.17 295)` 这种语法。配合 Tailwind 暗色基底（`bg-slate-900` / `text-slate-300`）即可。
+按学科 id 选主题色 (见 `theme_style/themes.js`)：cs / bio / space / mech / ai / math / med / chem / phys / env / robo / elec / astro / geo / ocean / meteo / paleo / quant / nuke / neuro / mat / micro / zoo / bot / arch / agri。每个主题 5 色 oklch palette, 使用 `oklch(0.72 0.17 295)` 语法, 配合 Tailwind 暗色基底 (`bg-slate-900`)。
 
 ---
 
