@@ -1,12 +1,12 @@
 """快速跑 v3 anim+game 生成 (绕过 ideation/debate)。
 
-用途: 直接验证 qwen3.6-plus 的 game/anim HTML 实现能力, 不被前面 9 个 step 的耗时拖累。
+用途: 直接验证 kimi-k2.6 的 game/anim HTML 实现能力, 不被前面 9 个 step 的耗时拖累。
 
 流程:
 1. 加载 rocket-design knode 27 (推力是什么) 上下文
 2. 手动构造 anim + game 的 detail_plan (跳过 step 0-4)
 3. 跑 5.5a 静态闸门 (无 LLM, 快速验证 HTML 合规)
-4. 调 s50_implement_anim + s50_implement_game (qwen3.6-plus 上场)
+4. 调 s50_implement_anim + s50_implement_game (kimi-k2.6 上场)
 5. 静态闸门再跑一次 (revise loop 不接, 失败就直接报)
 6. 写到 lesson_content_v3 表 (与 v2 完全独立)
 
@@ -168,13 +168,13 @@ async def main(knode_id: int = 27) -> None:
         },
     }
 
-    # ---- Step 5: 实现 anim + game (qwen3.6-plus 上场) ----
-    log("=== Step 5 implement anim (qwen3.6-plus) ===")
+    # ---- Step 5: 实现 anim + game (kimi-k2.6 上场) ----
+    log("=== Step 5 implement anim (kimi-k2.6) ===")
     t0 = time.time()
     anim_html = await s50_implement_anim.implement(anim_idea, ctx, em=em)
     log(f"  anim 完成, 耗时 {time.time()-t0:.1f}s, html 长度={len(anim_html or '')}")
 
-    log("=== Step 5 implement game (qwen3.6-plus) ===")
+    log("=== Step 5 implement game (kimi-k2.6) ===")
     t0 = time.time()
     game_html = await s50_implement_game.implement(game_idea, ctx, em=em)
     log(f"  game 完成, 耗时 {time.time()-t0:.1f}s, html 长度={len(game_html or '')}")
@@ -203,7 +203,7 @@ async def main(knode_id: int = 27) -> None:
     course_content = {
         "plan_markdown": (
             f"> Module: {knode.get('module_id', '')} · {knode.get('module_role', '')}\n\n"
-            f"## 学习目标\n\n这是 v3 (qwen3.6-plus) 的快速演示版课程, 仅含 animation + game。\n\n"
+            f"## 学习目标\n\n这是 v3 (kimi-k2.6) 的快速演示版课程, 仅含 animation + game。\n\n"
             f"## 核心概念: {knode.get('title', '')}\n\n{knode.get('summary', '')[:300]}\n\n"
             f"[[IDEA:{anim_id}]]\n\n"
             f"## 互动游戏\n\n[[IDEA:{game_id}]]\n"
@@ -217,13 +217,13 @@ async def main(knode_id: int = 27) -> None:
                 "mode": "animation", "status": "ready" if anim_html else "failed",
                 "html": anim_html or "",
                 "story_paragraphs": None, "exercises": None,
-                "generation_backend": "qwen3.6-plus", "user_guide": "",
+                "generation_backend": "kimi-k2.6", "user_guide": "",
             },
             game_id: {
                 "mode": "game", "status": "ready" if game_html else "failed",
                 "html": game_html or "",
                 "story_paragraphs": None, "exercises": None,
-                "generation_backend": "qwen3.6-plus", "user_guide": "",
+                "generation_backend": "kimi-k2.6", "user_guide": "",
             },
         },
         "theories": [],
@@ -233,7 +233,7 @@ async def main(knode_id: int = 27) -> None:
             "version": "v3-quick",
             "generated_at": datetime.now().isoformat(),
             "generator": "scripts/v3_quick_anim_game.py",
-            "model": "qwen3.6-plus",
+            "model": "kimi-k2.6",
         },
     }
 
