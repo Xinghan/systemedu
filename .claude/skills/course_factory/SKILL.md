@@ -1428,85 +1428,46 @@ Game 的交互方式不设固定模板，可以自由设计适合教学内容的
 19. 禁止使用与 window 全局同名的顶层变量。常见坑位：`history`（浏览器导航 API，只有 pushState 没有 push，用 `var history = []` 做数组会导致 `history.push is not a function`）、`location`、`name`、`status`、`origin`、`parent`、`top`、`self`、`length`、`event`、`closed`、`opener`、`frames`、`outerWidth/Height`。游戏中的数组/状态变量用更具体的名字：`flights`/`rounds`/`trials`/`runs` 替代 `history`，`coord`/`pos` 替代 `location`，`playerName`/`itemName` 替代 `name`，`gameState`/`runStatus` 替代 `status`
 ```
 
-### Game 标准布局模板（必须遵守）
+### Game 实现规范（fogsight 风格 + 真交互, v3 锁定）
 
-Animation 有 skeleton + runtime 自动处理布局，但 **game 没有共享 runtime**，需要自己实现。为避免 lang-btn / guide 与游戏画布重叠，所有 game 采用**左侧栏 + 右侧游戏区**的分离式布局：
+**核心改变（v3 起）**：放弃旧的"必须 200px 左侧栏 + canvas 主区"强制布局, 改用 **fogsight 精简哲学**——只锁定视觉主题色 + 4 条硬底线, 布局/控件/交互形式完全由实现者自由发挥。**实测 (knode 27 推力对比)**: 自由 prompt + theme palette 锁定能让 LLM 写出更精美、更符合知识点特性的 game。
 
-```
-+--------------------+---------------------------------------------+
-| .game-sidebar      | .game-main                                  |
-| (200px fixed)      |  .game-header (title + round info)           |
-|                    |  .game-body   (canvas, flex:1)               |
-| [CN] lang-btn      |  .control-panel (buttons)                    |
-| TITLE              |  .hud-bar (data display)                     |
-| guide text...      |                                              |
-+--------------------+---------------------------------------------+
-```
+#### 推荐技术栈（同 anim, 复用降低不一致）
 
-```html
-<body>
-<div class="game-wrap">
-  <!-- 左侧栏：lang-btn + 标题 + 操作说明（完全独立，不与游戏区重叠） -->
-  <div class="game-sidebar">
-    <button class="sidebar-lang" id="langBtn">CN</button>
-    <div class="sidebar-title" id="sidebarTitle"></div>
-    <div class="sidebar-guide" id="guideContent"></div>
-  </div>
-  <!-- 右侧游戏区 -->
-  <div class="game-main">
-    <div class="game-header">
-      <h1 id="gameTitle"></h1>
-      <div class="info" id="roundInfo"></div>
-    </div>
-    <div class="game-body">
-      <canvas id="c"></canvas>
-    </div>
-    <div class="control-panel">
-      <button class="ctrl-btn" id="btnAction"></button>
-      <button class="ctrl-btn secondary" id="btnReset"></button>
-    </div>
-    <div class="hud-bar">...</div>
-  </div>
-</div>
-</body>
-```
+1. **Tailwind CSS via CDN**: `<script src="https://cdn.tailwindcss.com"></script>` — utility class 自由布局
+2. **Google Fonts**: `Inter` + `JetBrains Mono` + `Noto Sans SC`
+3. **inline SVG** 绘制场景主体, 用 `<linearGradient>` + `<path>` 自由曲线
+4. **CSS @keyframes** 驱动状态变化 (`shake` / `pulse-glow` / `float`)
+5. **`<canvas> + Particle 类`** 实现尾焰 / 粒子 (rAF 循环 + life/decay)
+6. **HUD 玻璃态**: `backdrop-filter: blur(10px); background: rgba(30, 41, 59, 0.7);`
+7. **theme_style palette CSS 变量**: `:root { --ORBIT: oklch(...); ... }` 主体颜色全部 `var(--XX)`
 
-**对应 CSS 必须包含：**
+#### 4 条硬底线（违反 = 闸门 fail）
 
-```css
-.game-wrap{display:flex;flex-direction:row;height:100vh;overflow:hidden;}
-.game-sidebar{width:200px;min-width:200px;max-width:200px;display:flex;flex-direction:column;
-  gap:8px;padding:10px;background:rgba(0,0,0,0.5);
-  border-right:1px solid rgba(80,255,176,0.15);overflow-y:auto;}
-.sidebar-lang{align-self:flex-start;flex-shrink:0;/* 样式同深色主题 */}
-.sidebar-title{font-size:11px;font-weight:700;color:#50ffb0;text-transform:uppercase;}
-.sidebar-guide{font-size:12px;color:#aaabb0;line-height:1.6;}
-.game-main{flex:1;display:flex;flex-direction:column;min-width:0;}
-.game-header{padding:8px 16px;display:flex;justify-content:space-between;align-items:center;background:rgba(0,0,0,0.4);}
-.game-body{flex:1;display:flex;flex-direction:column;min-height:0;}
-canvas{width:100%;height:100%;display:block;}
-```
+1. **真交互**: 滑块/拖拽/键盘/鼠标实时操纵, 不能退化为"输入数字+确认"或"选项点击"(那叫 exercise)
+2. **真物理参数**: 涉及具体数值时用真实工程数值
+3. **视觉与物理坐标分离**:
+   - 物理量(米/秒/牛/度等) ≠ 像素, 视觉是物理量的"投影"
+   - 当模拟值超出可视范围 → 镜头跟随 / 比例尺自适应 / 显示当前可视范围标尺(如"1 格=100m")
+   - 屏幕数字读数 与 视觉位置 永远保持一致 (不能数字说 200m 但物体已出屏)
+4. **中英文双语都能玩** (切换按钮 / 同时显示 / 段落对照, 实现自由)
 
-**Sidebar JS 初始化（必须包含）：**
+#### 布局推荐 (非强制)
 
-```javascript
-// Sidebar init
-(function(){
-  var gc=document.getElementById('guideContent');
-  var st=document.getElementById('sidebarTitle');
-  function _updateSidebar(){if(gc)gc.textContent=t('guide');if(st)st.textContent=t('title');}
-  _updateSidebar();
-  document.getElementById('langBtn').addEventListener('click',function(){setTimeout(_updateSidebar,10);});
-})();
-```
+- 横向: 左侧 200px 控制栏 + 右侧主舞台 (`flex h-screen`)
+- 控制栏含: 标题 / 操作说明 / 滑块 / 按钮 / lang-btn
+- 主舞台含: 场景 / HUD / 比例尺 / 状态显示 自由发挥
+- 玻璃态浮动元素: backdrop-blur + rgba
 
-**硬规则：**
-- 布局是 `flex-direction:row`：左侧 `.game-sidebar`（200px）+ 右侧 `.game-main`（flex:1）
-- lang-btn 和操作说明在 `.game-sidebar` 中，**与游戏画布完全隔离**
-- **禁止 `position:fixed` / `position:absolute`** 将 lang-btn 或说明浮在游戏区上方
-- `.game-body` 用 `flex:1` 占满 `.game-main` 剩余空间
-- I18N 中**必须包含 `guide` key**（操作说明文本），sidebar JS 自动填充
-- 交互方式、玩法、关卡设计不受模板限制，**只有布局骨架是固定的**
+但**布局不强制**: 全屏沉浸 / 分屏对比 / 3D 场景 / 顶部控制栏 都可以, 只要不违反 4 条硬底线。
+
+#### 完整参考实现
+
+`/tmp/v3_game_k27_kimi26_simplified.html`(45 行 prompt + kimi-k2.6 streaming) 是用这套方案生成的火箭推力 sandbox 演示 (47760 字符 / 1273 行), 含动态比例尺(scaleMetersPerPx 19 处) + 玻璃态 HUD + 6 个 input range 滑块 + 73 处 Tailwind utility + 80 处 var(--XX) palette 引用。
+
+#### 学科主题色（同 anim, 参考 theme_style/themes.js 的 26 个 oklch palette）
+
+按学科 id 选主题色（见 `theme_style/themes.js`）：cs / bio / space / mech / ai / math / med / chem / phys / env / robo / elec / astro / geo / ocean / meteo / paleo / quant / nuke / neuro / mat / micro / zoo / bot / arch / agri。每个主题 5 色 oklch palette, 配合 Tailwind 暗色基底 (`bg-slate-900`)。
 
 ### 物理常识约束（必须遵守）
 
