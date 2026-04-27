@@ -70,6 +70,116 @@ def kimi(*, streaming: bool = False, max_tokens: int | None = None) -> ChatOpenA
     return llm_for("creative", streaming=streaming, max_tokens=max_tokens)
 
 
+# ---------------------------------------------------------------------------
+# Streaming long HTML output (anim / game)
+# ---------------------------------------------------------------------------
+# 直接用 OpenAI SDK 而不是 LangChain, 因为 reasoning 模型(kimi-k2.6) 在
+# 长输出 + 非 streaming 时会触发 OpenAI SDK 默认 timeout, 必超时。
+# 解决方案: streaming + httpx 1800s timeout + AsyncOpenAI 直接消费 chunk。
+
+_PROXY_ENV_KEYS_STREAM = (
+    "http_proxy", "https_proxy",
+    "HTTP_PROXY", "HTTPS_PROXY",
+    "all_proxy", "ALL_PROXY",
+)
+
+
+async def astream_html(
+    *,
+    role: Role = "creative",
+    messages: list[dict],
+    max_tokens: int = 32768,
+    timeout_s: float = 1800.0,
+    label: str = "stream",
+    progress_cb=None,
+) -> str:
+    """流式生成长 HTML, 返回完整文本(不含 markdown ```code 包裹)。
+
+    progress_cb(elapsed_s, n_chunks, total_len, last_60_chars) 可选,
+    每收到一个 chunk 调一次, 用于实时显示进度。
+
+    自动剥离前后 ```...``` 代码块标记。
+    """
+    import os
+    import httpx
+    from openai import AsyncOpenAI
+    from systemedu.core.config import get_config
+
+    cfg = get_config()
+    provider_name = ROLE_TO_PROVIDER.get(role, "kimi")
+    prov = cfg.llm.providers[provider_name]
+
+    # push/pop proxy env (避免本机 proxy 拦截 Moonshot)
+    saved_env = {k: os.environ.get(k) for k in _PROXY_ENV_KEYS_STREAM}
+    for k in _PROXY_ENV_KEYS_STREAM:
+        os.environ.pop(k, None)
+
+    try:
+        no_proxy_async = httpx.AsyncClient(trust_env=False, timeout=httpx.Timeout(timeout_s))
+        client = AsyncOpenAI(
+            api_key=prov.api_key,
+            base_url=prov.base_url,
+            http_client=no_proxy_async,
+            timeout=timeout_s,
+        )
+
+        full: list[str] = []
+        n_chunks = 0
+        t0 = time.time()
+        last_cb_t = t0
+
+        try:
+            stream = await client.chat.completions.create(
+                model=prov.model,
+                messages=messages,
+                stream=True,
+                temperature=prov.temperature,
+                max_tokens=max_tokens,
+            )
+            async for chunk in stream:
+                if not chunk.choices:
+                    continue
+                token = getattr(chunk.choices[0].delta, "content", None) or ""
+                if token:
+                    full.append(token)
+                    n_chunks += 1
+                    if progress_cb:
+                        now = time.time()
+                        if now - last_cb_t > 5.0:
+                            last_cb_t = now
+                            total = "".join(full)
+                            try:
+                                progress_cb(now - t0, n_chunks, len(total), total[-60:])
+                            except Exception:
+                                pass
+        except Exception as exc:
+            dump_path = _dump_failure(messages, exc, 1, label=label)
+            logger.exception(
+                f"[{label}] streaming failed, dumped to {dump_path}"
+            )
+            raise
+
+        elapsed = time.time() - t0
+        html = "".join(full)
+        logger.info(f"[{label}] streaming done in {elapsed:.1f}s, {n_chunks} chunks, {len(html)} chars")
+
+        # strip ```...```
+        s = html.strip()
+        if s.startswith("```"):
+            lines = s.split("\n")
+            if lines[0].startswith("```"):
+                lines = lines[1:]
+            if lines and lines[-1].strip() == "```":
+                lines = lines[:-1]
+            s = "\n".join(lines).strip()
+        return s
+    finally:
+        # 恢复 env
+        for k, v in saved_env.items():
+            if v is not None:
+                os.environ[k] = v
+
+
 def _dump_failure(messages: list, error: Exception, attempt: int, label: str = "") -> Path:
     FAILURE_DUMP_DIR.mkdir(parents=True, exist_ok=True)
     ts = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
