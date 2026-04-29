@@ -90,6 +90,7 @@ async def astream_html(
     messages: list[dict],
     max_tokens: int = 32768,
     timeout_s: float = 1800.0,
+    idle_timeout_s: float = 300.0,
     label: str = "stream",
     progress_cb=None,
 ) -> str:
@@ -98,8 +99,14 @@ async def astream_html(
     progress_cb(elapsed_s, n_chunks, total_len, last_60_chars) 可选,
     每收到一个 chunk 调一次, 用于实时显示进度。
 
+    超时保护:
+    - timeout_s: 整体超时(httpx)
+    - idle_timeout_s: **chunk 之间最大无 token 间隔**, 超过抛 TimeoutError;
+      kimi-k2.6 偶发流式静默挂起(httpx 整体 timeout 不触发), 这是兜底救活。
+
     自动剥离前后 ```...``` 代码块标记。
     """
+    import asyncio
     import os
     import httpx
     from openai import AsyncOpenAI
@@ -114,7 +121,7 @@ async def astream_html(
     for k in _PROXY_ENV_KEYS_STREAM:
         os.environ.pop(k, None)
 
-    try:
+    async def _attempt_once() -> str:
         no_proxy_async = httpx.AsyncClient(trust_env=False, timeout=httpx.Timeout(timeout_s))
         client = AsyncOpenAI(
             api_key=prov.api_key,
@@ -128,42 +135,77 @@ async def astream_html(
         t0 = time.time()
         last_cb_t = t0
 
-        try:
-            stream = await client.chat.completions.create(
-                model=prov.model,
-                messages=messages,
-                stream=True,
-                temperature=prov.temperature,
-                max_tokens=max_tokens,
-            )
-            async for chunk in stream:
-                if not chunk.choices:
-                    continue
-                token = getattr(chunk.choices[0].delta, "content", None) or ""
-                if token:
-                    full.append(token)
-                    n_chunks += 1
-                    if progress_cb:
-                        now = time.time()
-                        if now - last_cb_t > 5.0:
-                            last_cb_t = now
-                            total = "".join(full)
-                            try:
-                                progress_cb(now - t0, n_chunks, len(total), total[-60:])
-                            except Exception:
-                                pass
-        except Exception as exc:
-            dump_path = _dump_failure(messages, exc, 1, label=label)
-            logger.exception(
-                f"[{label}] streaming failed, dumped to {dump_path}"
-            )
-            raise
+        stream = await client.chat.completions.create(
+            model=prov.model,
+            messages=messages,
+            stream=True,
+            temperature=prov.temperature,
+            max_tokens=max_tokens,
+        )
+        stream_iter = stream.__aiter__()
+        while True:
+            try:
+                chunk = await asyncio.wait_for(stream_iter.__anext__(), timeout=idle_timeout_s)
+            except StopAsyncIteration:
+                break
+            except asyncio.TimeoutError:
+                elapsed = time.time() - t0
+                raise TimeoutError(
+                    f"streaming idle timeout: no token for {idle_timeout_s}s "
+                    f"(elapsed total {elapsed:.0f}s, got {n_chunks} chunks, {len(''.join(full))} chars)"
+                )
+            if not chunk.choices:
+                continue
+            token = getattr(chunk.choices[0].delta, "content", None) or ""
+            if token:
+                full.append(token)
+                n_chunks += 1
+                if progress_cb:
+                    now = time.time()
+                    if now - last_cb_t > 5.0:
+                        last_cb_t = now
+                        total = "".join(full)
+                        try:
+                            progress_cb(now - t0, n_chunks, len(total), total[-60:])
+                        except Exception:
+                            pass
 
         elapsed = time.time() - t0
-        html = "".join(full)
-        logger.info(f"[{label}] streaming done in {elapsed:.1f}s, {n_chunks} chunks, {len(html)} chars")
+        result = "".join(full)
+        logger.info(f"[{label}] streaming done in {elapsed:.1f}s, {n_chunks} chunks, {len(result)} chars")
+        return result
 
-        # strip ```...```
+    # 429 retry with exponential backoff (GLM-5.1 等有速率限制的 provider)
+    max_429_retries = 5
+    backoff = 10.0
+    last_exc = None
+    try:
+        for attempt in range(1, max_429_retries + 1):
+            try:
+                html = await _attempt_once()
+                break
+            except Exception as exc:
+                msg = str(exc)
+                is_rate_limit = "429" in msg or "rate" in msg.lower() or "1302" in msg
+                if is_rate_limit and attempt < max_429_retries:
+                    logger.warning(f"[{label}] 429/rate-limit on attempt {attempt}, sleeping {backoff:.0f}s before retry")
+                    if progress_cb:
+                        try:
+                            progress_cb(0, 0, 0, f"429 retry attempt {attempt}, sleeping {backoff:.0f}s")
+                        except Exception:
+                            pass
+                    await asyncio.sleep(backoff)
+                    backoff = min(backoff * 2, 120.0)  # cap at 2 minutes
+                    last_exc = exc
+                    continue
+                # 非 429 或 retry 用尽
+                dump_path = _dump_failure(messages, exc, attempt, label=label)
+                logger.exception(f"[{label}] streaming failed, dumped to {dump_path}")
+                raise
+        else:
+            raise last_exc or RuntimeError(f"[{label}] retry exhausted")
+
+        # strip ```...``` markdown wrappers
         s = html.strip()
         if s.startswith("```"):
             lines = s.split("\n")

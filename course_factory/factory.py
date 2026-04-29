@@ -158,33 +158,24 @@ def upsert_project(name: str, title: str, description: str, category: str,
         db.close()
 
 
-_IFRAME_LAYOUT_PATCH = """<style>
-/* iframe 嵌入补丁: 防止 fixed 元素和 header 重叠 */
-.lang-btn{top:auto!important;bottom:100px!important;left:8px!important;}
-.guide-panel{top:40px!important;right:8px!important;max-width:200px!important;max-height:30vh!important;font-size:11px!important;}
-</style>"""
-
-
 def _inline_runtime(html: str) -> str:
     """将 animation_runtime.js 的 <script src> 引用替换为内联代码。
 
     iframe srcdoc 嵌入时无法加载相对路径的外部脚本，
     所以必须把 runtime 代码直接内联到 HTML 中。
-    同时注入布局补丁防止 fixed 元素在 iframe 中重叠。
+    支持任意路径引用（如 src="animation_runtime.js" 或
+    src="../../../course_factory/runtime/animation_runtime.js"）。
     """
-    if '<script src="animation_runtime.js">' not in html:
+    import re
+    pattern = r'<script\s+src="[^"]*animation_runtime\.js"\s*>\s*</script>'
+    if not re.search(pattern, html):
         return html
     runtime_path = ROOT / "course_factory" / "runtime" / "animation_runtime.js"
     if not runtime_path.exists():
         return html
     runtime_code = runtime_path.read_text(encoding="utf-8")
-    result = html.replace(
-        '<script src="animation_runtime.js"></script>',
-        f"<script>\n{runtime_code}\n</script>",
-    )
-    # 注入 iframe 布局补丁 (在 </head> 前)
-    if "</head>" in result:
-        result = result.replace("</head>", f"{_IFRAME_LAYOUT_PATCH}\n</head>")
+    replacement = f"<script>\n{runtime_code}\n</script>"
+    result = re.sub(pattern, lambda _: replacement, html)
     return result
 
 
@@ -275,17 +266,17 @@ def generate_assignment(knode: dict, milestone: dict, plan_markdown: str = "") -
     返回 Markdown 文本，用于写入 LessonContent.project_assignment。
     需要 LLM 调用，使用配置中的默认 provider。
     """
+    import requests as _requests
     from systemedu.core.config import get_config
-    from langchain_openai import ChatOpenAI
 
     cfg = get_config()
-    provider = cfg.llm.providers[cfg.llm.default]
-    llm = ChatOpenAI(
-        base_url=provider.base_url,
-        api_key=provider.api_key,
-        model=provider.model,
-        temperature=0.7,
-    )
+    # assignment 用 fast provider (qwen) — 文本任务不需要 creative
+    provider = cfg.llm.providers.get("qwen") or cfg.llm.providers[cfg.llm.default]
+    _api_url = provider.base_url.rstrip("/") + "/chat/completions"
+    _headers = {
+        "Authorization": f"Bearer {provider.api_key}",
+        "Content-Type": "application/json",
+    }
 
     module_role = knode.get("module_role", "")
     node_title = knode.get("name") or knode.get("title", "")
@@ -323,13 +314,23 @@ def generate_assignment(knode: dict, milestone: dict, plan_markdown: str = "") -
         {"role": "system", "content": "你是专业的教育内容设计师，擅长为中小学生设计循序渐进的练习题和考核方案。"},
         {"role": "user", "content": prompt},
     ]
-    response = llm.invoke(messages)
-    text = response.content if hasattr(response, "content") else str(response)
+    # 用 provider 自带 temperature, 避免硬编码 0.7 撞 kimi-k2.x 强制 temperature=1
+    _temp = getattr(provider, "temperature", None)
+    if _temp is None:
+        _temp = 0.7
+    resp = _requests.post(
+        _api_url, headers=_headers,
+        json={"model": provider.model, "temperature": _temp, "messages": messages},
+        timeout=180,
+        proxies={"http": None, "https": None},
+    )
+    resp.raise_for_status()
+    text = resp.json()["choices"][0]["message"]["content"]
     return text.strip()
 
 
 def upsert_assignment(project_name: str, knode_id: int, assignment: str) -> None:
-    """仅更新 LessonContent.project_assignment 字段。"""
+    """仅更新 LessonContent.project_assignment 字段 (v2/cf 表)。"""
     from systemedu.storage.db import LessonContent, get_session
     db = get_session()
     try:
@@ -341,6 +342,33 @@ def upsert_assignment(project_name: str, knode_id: int, assignment: str) -> None
             db.commit()
         else:
             print(f"[WARN] knode {knode_id} 没有 LessonContent 记录，跳过")
+    finally:
+        db.close()
+
+
+def upsert_assignment_v3(project_name: str, knode_id: int, assignment: str,
+                          *, version_label: str | None = None) -> None:
+    """更新 LessonContentV3.project_assignment 字段。
+
+    若 version_label 给出, 只更新该版本; 否则更新 active 版本(没有 active 则更新最新)。
+    """
+    from systemedu.storage.db import LessonContentV3, get_session
+    db = get_session()
+    try:
+        q = db.query(LessonContentV3).filter_by(
+            project_name=project_name, knode_id=knode_id,
+        )
+        if version_label:
+            lesson = q.filter_by(version_label=version_label).first()
+        else:
+            lesson = q.filter_by(is_active=True).first()
+            if lesson is None:
+                lesson = q.order_by(LessonContentV3.generated_at.desc().nullslast()).first()
+        if lesson:
+            lesson.project_assignment = assignment
+            db.commit()
+        else:
+            print(f"[WARN] knode {knode_id} 没有 LessonContentV3 记录，跳过")
     finally:
         db.close()
 
@@ -412,14 +440,22 @@ def generate_audio_scripts(project_name: str, knode_id: int,
         sections = _split_by_headings(plan_md)
 
         # Step 2: LLM 生成 audio_script
+        # NOTE: Use requests (urllib3) instead of langchain/httpx because
+        # httpx has SSL incompatibility with DashScope on this machine.
+        import requests as _requests
         cfg = get_config()
-        provider = cfg.llm.providers[cfg.llm.default]
-        llm = ChatOpenAI(
-            base_url=provider.base_url,
-            api_key=provider.api_key,
-            model=provider.model,
-            temperature=0.7,
-        )
+        # audio scripts 用 fast provider (qwen) — 文本任务不需要 creative
+        provider = cfg.llm.providers.get("qwen") or cfg.llm.providers[cfg.llm.default]
+        _api_url = provider.base_url.rstrip("/") + "/chat/completions"
+        _api_key = provider.api_key
+        _model = provider.model
+        _audio_temp = getattr(provider, "temperature", None)
+        if _audio_temp is None:
+            _audio_temp = 0.7
+        _headers = {
+            "Authorization": f"Bearer {_api_key}",
+            "Content-Type": "application/json",
+        }
 
         node_title = knode.get("name") or knode.get("title", "")
         age_range = "6-18"
@@ -439,8 +475,15 @@ def generate_audio_scripts(project_name: str, knode_id: int,
                 age_range=age_range,
             )
             try:
-                response = llm.invoke([{"role": "user", "content": prompt}])
-                text = response.content if hasattr(response, "content") else str(response)
+                resp = _requests.post(
+                    _api_url, headers=_headers,
+                    json={"model": _model, "temperature": _audio_temp,
+                          "messages": [{"role": "user", "content": prompt}]},
+                    timeout=180,
+                    proxies={"http": None, "https": None},
+                )
+                resp.raise_for_status()
+                text = resp.json()["choices"][0]["message"]["content"]
                 sec["audio_script"] = text.strip()
             except Exception as e:
                 print(f"  [ERR] section '{sec['heading']}': {e}")
@@ -451,6 +494,117 @@ def generate_audio_scripts(project_name: str, knode_id: int,
         db.commit()
 
         return sections
+    finally:
+        db.close()
+
+
+def upsert_lesson_v3(project_name: str, knode_id: int, course_content: dict, *,
+                      version_label: str,
+                      set_active: bool = True,
+                      project_assignment: str = "") -> None:
+    """写入 LessonContentV3 表（v3 pipeline 多版本 upsert）。
+
+    每个 (project_name, knode_id) 可保留多个版本（version_label 区分）。
+    set_active=True 时, 会把同节点所有其他版本 is_active 设 False, 本版本设 True,
+    前端默认读 active 版本。同 (project, knode, version_label) 重复写入时覆盖。
+    """
+    if not version_label or not version_label.strip():
+        raise ValueError("version_label 不能为空")
+    version_label = version_label.strip()
+
+    rendered = course_content.get("rendered_sections", {})
+    for section_id, section in rendered.items():
+        html = section.get("html")
+        if html and "animation_runtime.js" in html:
+            section["html"] = _inline_runtime(html)
+
+    from systemedu.storage.db import LessonContentV3, get_session
+    db = get_session()
+    try:
+        lesson = db.query(LessonContentV3).filter_by(
+            project_name=project_name, knode_id=knode_id, version_label=version_label,
+        ).first()
+        content_json = json.dumps(course_content, ensure_ascii=False)
+        if lesson:
+            lesson.status = "ready"
+            lesson.course_content = content_json
+            lesson.generated_at = datetime.now()
+            if project_assignment:
+                lesson.project_assignment = project_assignment
+        else:
+            lesson = LessonContentV3(
+                project_name=project_name,
+                knode_id=knode_id,
+                version_label=version_label,
+                is_active=False,
+                status="ready",
+                course_content=content_json,
+                generated_at=datetime.now(),
+                project_assignment=project_assignment,
+            )
+            db.add(lesson)
+            db.flush()  # 拿 id, 否则下面 set_active 改不到本行
+
+        if set_active:
+            # 把同节点其它版本的 is_active 全清成 False, 本版本设 True
+            db.query(LessonContentV3).filter(
+                LessonContentV3.project_name == project_name,
+                LessonContentV3.knode_id == knode_id,
+                LessonContentV3.id != lesson.id,
+            ).update({LessonContentV3.is_active: False}, synchronize_session=False)
+            lesson.is_active = True
+
+        db.commit()
+    finally:
+        db.close()
+
+    ext = course_content.get("external_resources")
+    if ext:
+        _sync_external_resources_to_db(project_name, knode_id, ext)
+
+
+def set_active_v3_version(project_name: str, knode_id: int, version_label: str) -> bool:
+    """切换 active 版本。返回 True 成功, False 没找到对应版本。"""
+    from systemedu.storage.db import LessonContentV3, get_session
+    db = get_session()
+    try:
+        target = db.query(LessonContentV3).filter_by(
+            project_name=project_name, knode_id=knode_id, version_label=version_label,
+        ).first()
+        if not target:
+            return False
+        db.query(LessonContentV3).filter(
+            LessonContentV3.project_name == project_name,
+            LessonContentV3.knode_id == knode_id,
+            LessonContentV3.id != target.id,
+        ).update({LessonContentV3.is_active: False}, synchronize_session=False)
+        target.is_active = True
+        db.commit()
+        return True
+    finally:
+        db.close()
+
+
+def list_v3_versions(project_name: str, knode_id: int) -> list[dict]:
+    """返回 (project, knode) 下所有版本的元数据 (用于前端下拉)。"""
+    from systemedu.storage.db import LessonContentV3, get_session
+    db = get_session()
+    try:
+        rows = (
+            db.query(LessonContentV3)
+            .filter_by(project_name=project_name, knode_id=knode_id)
+            .order_by(LessonContentV3.generated_at.desc())
+            .all()
+        )
+        return [
+            {
+                "version_label": r.version_label,
+                "is_active": bool(r.is_active),
+                "status": r.status,
+                "generated_at": r.generated_at.isoformat() if r.generated_at else None,
+            }
+            for r in rows
+        ]
     finally:
         db.close()
 
@@ -2224,7 +2378,7 @@ ANIMATION_RESIZE_PATCH_JS = r"""
     style.setAttribute('data-systemedu-resize-patch', '1');
     style.textContent =
       // canvas 防撑大
-      '.systemedu-canvas-host{position:relative!important;min-width:0!important;min-height:0!important;overflow:hidden!important;}' +
+      '.systemedu-canvas-host{position:relative!important;width:100%!important;min-width:0!important;min-height:0!important;overflow:hidden!important;}' +
       '.systemedu-canvas-host > canvas{position:absolute!important;top:0!important;left:0!important;width:100%!important;height:100%!important;}' +
       // lang-btn 移到左下角，避免遮挡标题；背景完全透明只留细边框
       '.lang-btn{top:auto!important;bottom:8px!important;left:8px!important;right:auto!important;' +
@@ -2477,6 +2631,11 @@ def inject_animation_resize_patch(html: str) -> str:
 
     # Opt-out: game/animation 作者显式声明不需要 patch。
     if "__systemedu_resize_patch_optout" in html:
+        return html
+
+    # 自动 opt-out: fogsight 风格 sidebar 布局 (含 .sidebar / .game-sidebar class) 不需要 patch
+    # patch 是为老 canvas 全屏布局设计的, 在 sidebar 布局下会破坏 flex 结构导致主舞台空白。
+    if re.search(r'class\s*=\s*["\'][^"\']*\b(?:sidebar|game-sidebar)\b', html):
         return html
 
     # 若旧 patch 存在，先剥离它，再用最新版本重新注入。

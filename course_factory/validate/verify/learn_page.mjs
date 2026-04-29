@@ -67,6 +67,44 @@ if (theoryPills.length) {
   }
 }
 
+// Helper: check if canvas inside an iframe has actual rendered content (non-blank)
+async function checkIframeCanvas(page, label) {
+  const ifs = await page.$$('iframe');
+  if (ifs.length === 0) return { found: false, hasContent: false, reason: 'no iframe' };
+  const iframe = ifs[ifs.length - 1]; // last iframe is the modal one
+  let frame;
+  try {
+    frame = await iframe.contentFrame();
+  } catch { return { found: true, hasContent: false, reason: 'cannot access iframe contentFrame' }; }
+  if (!frame) return { found: true, hasContent: false, reason: 'iframe contentFrame is null' };
+  await frame.waitForTimeout(1500); // let canvas render
+  const result = await frame.evaluate(() => {
+    const c = document.querySelector('canvas');
+    if (!c) return { hasCanvas: false, w: 0, h: 0, nonBg: 0 };
+    const ctx = c.getContext('2d');
+    if (!ctx) return { hasCanvas: true, w: c.width, h: c.height, nonBg: 0 };
+    // Sample pixels to check if canvas has real content
+    const w = c.width, h = c.height;
+    if (w === 0 || h === 0) return { hasCanvas: true, w, h, nonBg: 0 };
+    const samples = 200;
+    const colors = new Set();
+    for (let i = 0; i < samples; i++) {
+      const sx = Math.floor(Math.random() * w);
+      const sy = Math.floor(Math.random() * h);
+      const px = ctx.getImageData(sx, sy, 1, 1).data;
+      colors.add(`${px[0]},${px[1]},${px[2]}`);
+    }
+    return { hasCanvas: true, w, h, uniqueColors: colors.size };
+  }).catch(() => ({ hasCanvas: false, w: 0, h: 0, uniqueColors: 0 }));
+  const hasContent = result.hasCanvas && result.uniqueColors >= 3;
+  if (!hasContent) {
+    console.log(`  ${label} canvas check FAIL:`, result);
+  } else {
+    console.log(`  ${label} canvas check OK: ${result.uniqueColors} unique colors, ${result.w}x${result.h}`);
+  }
+  return { found: true, hasContent, ...result };
+}
+
 // Open animation (scroll to it first)
 await scrollMain(1200);
 await page.waitForTimeout(600);
@@ -78,9 +116,10 @@ try {
   if (box) {
     await page.mouse.click(box.x + 100, box.y + 20);
     await page.waitForTimeout(2000);
-    const ifs = await page.$$('iframe');
-    animOk = ifs.length > 0;
+    const animCheck = await checkIframeCanvas(page, 'anim');
+    animOk = animCheck.found && animCheck.hasContent;
     await page.screenshot({ path: `${outDir}/learn_anim.png` });
+    if (!animOk) errors.push(`anim canvas blank or missing (uniqueColors=${animCheck.uniqueColors || 0})`);
     await page.keyboard.press('Escape');
     await page.waitForTimeout(600);
   }
@@ -97,9 +136,10 @@ try {
   if (box) {
     await page.mouse.click(box.x + 100, box.y + 20);
     await page.waitForTimeout(2000);
-    const ifs = await page.$$('iframe');
-    gameOk = ifs.length > 0;
+    const gameCheck = await checkIframeCanvas(page, 'game');
+    gameOk = gameCheck.found && gameCheck.hasContent;
     await page.screenshot({ path: `${outDir}/learn_game.png` });
+    if (!gameOk) errors.push(`game canvas blank or missing (uniqueColors=${gameCheck.uniqueColors || 0})`);
   }
 } catch (e) { console.log('game card not found:', e.message); }
 

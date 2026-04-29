@@ -22,7 +22,7 @@ async def run(ctx: dict, *, em: Emitter) -> dict:
     from course_factory.factory import (
         ensure_db_tables,
         make_course_content,
-        upsert_lesson,
+        upsert_lesson_v3,
     )
 
     knode = ctx["knode"]
@@ -136,19 +136,22 @@ async def run(ctx: dict, *, em: Emitter) -> dict:
         ),
     })
 
-    # 写库
+    # 写库 — v3 走独立 lesson_content_v3 表 (per-version, 与 v2/cf 完全隔离)
+    version_label = ctx["version_label"]
+    set_active = ctx.get("set_active", True)
     await asyncio.to_thread(
-        upsert_lesson,
+        upsert_lesson_v3,
         ctx["project_name"],
         ctx["knode_id"],
-        "cf",
         course_content,
+        version_label=version_label,
+        set_active=set_active,
     )
 
     em.emit(EV_AGENT_LOG, {
         "agent": "Assemble", "phase": "upserted",
         "input": "",
-        "output": f"LessonContent({ctx['project_name']}, {ctx['knode_id']}) status=ready",
+        "output": f"LessonContentV3({ctx['project_name']}, {ctx['knode_id']}, {version_label!r}) status=ready active={set_active}",
     })
 
     return course_content

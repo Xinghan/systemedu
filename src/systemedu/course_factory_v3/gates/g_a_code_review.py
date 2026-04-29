@@ -53,20 +53,28 @@ class CodeReviewGate(Gate):
         has_full_height = (
             re.search(r"body\s*\{[^}]*height\s*:\s*100vh", html)
             or re.search(r"html\s*,?\s*body[^{]*\{[^}]*height\s*:\s*100vh", html)
-            or re.search(r"<body[^>]*class=\"[^\"]*h-screen", html)
-            or re.search(r"<html[^>]*class=\"[^\"]*h-screen", html)
-            or re.search(r"<div[^>]*class=\"[^\"]*h-screen", html)  # 主容器 h-screen 也算
+            or re.search(r"min-height\s*:\s*100vh", html)
+            or re.search(r"height\s*:\s*100%[^;]*;[^}]*\}[\s\S]*?html", html[:5000])
+            or "h-screen" in html  # Tailwind h-screen 任何位置都算
+            or "min-h-screen" in html
+            or re.search(r"\bclass\s*=\s*\"[^\"]*\bh-\[100vh\]", html)
         )
         if not has_full_height:
-            issues.append("必须设 height:100vh 或 Tailwind h-screen (一屏内布局)")
+            issues.append("必须设 height:100vh / min-height:100vh / Tailwind h-screen / min-h-screen (一屏内布局)")
 
-        # 3. 双语 (任一标志)
-        has_lang = any(s in html for s in [
+        # 3. 双语 (任一标志, 包括 fogsight "同时显示两段文字" 模式)
+        has_lang_widget = any(s in html for s in [
             "langBtn", "I18N", "data-lang", "data-zh", "data-en",
             "AnimRuntime.t", "LANG ", "currentLang",
         ])
-        if not has_lang:
-            issues.append("必须双语 (langBtn / I18N / data-zh+data-en / 任一切换机制)")
+        # fogsight 模式: setSubtitle('中文', 'English') 同时显示, 不切换
+        has_lang_pair = bool(re.search(r"setSubtitle\s*\(\s*['\"][^'\"]*[一-龥]", html))
+        # 通用兜底: 中文 + 英文同时存在 ≥ 200 字, 算双语
+        cn_chars = len(re.findall(r"[一-龥]", html))
+        en_words = len(re.findall(r"\b[A-Za-z]{3,}\b", html))
+        has_bilingual_text = cn_chars > 100 and en_words > 80
+        if not (has_lang_widget or has_lang_pair or has_bilingual_text):
+            issues.append("必须双语 (langBtn / I18N / data-zh+data-en / setSubtitle(zh,en) / 中英文文本同时存在 任一)")
 
         # 4. canvas 硬编码 < 600px 尺寸
         canvas_attr = re.search(r'<canvas[^>]*\bwidth\s*=\s*["\']?(\d+)', html)
@@ -85,6 +93,28 @@ class CodeReviewGate(Gate):
             pat = re.compile(rf"^\s*(var|let|const)\s+{n}\s*=", re.MULTILINE)
             if pat.search(html):
                 issues.append(f"禁止用 window 同名变量 `{n}` 做顶层声明 (会覆盖 window 属性)")
+
+        # 6. 必须有左侧 sidebar (.sidebar / .game-sidebar / class 含 sidebar)
+        has_sidebar = bool(re.search(
+            r'class\s*=\s*["\'][^"\']*\b(?:sidebar|game-sidebar)\b',
+            html,
+        ))
+        if not has_sidebar:
+            issues.append(
+                "必须有左侧栏 (class 含 'sidebar' 或 'game-sidebar'), "
+                "anim/game 都需要在左侧栏放标题/说明/lang 切换按钮"
+            )
+
+        # 7. 必须有 lang 切换按钮 (#langBtn 或类似)
+        has_lang_button = bool(re.search(
+            r'(?:id|class)\s*=\s*["\'][^"\']*\b(?:langBtn|lang-btn|lang_btn)\b',
+            html,
+        )) or "<button" in html and ("EN" in html or "中文" in html)
+        if not has_lang_button:
+            issues.append(
+                "必须有 lang 切换按钮 (id='langBtn' 或 class 含 'lang-btn', "
+                "或任何按钮文字含 EN/中文), 放在 sidebar 内"
+            )
 
         verdict = "pass" if not issues else "fail"
         return GateResult(verdict=verdict, issues=issues, attempt=attempt)

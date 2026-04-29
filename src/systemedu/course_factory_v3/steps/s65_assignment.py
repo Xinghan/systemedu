@@ -37,7 +37,7 @@ def _no_proxy_env():
 
 async def run(ctx: dict, *, em: Emitter) -> str:
     """生成 assignment Markdown 并写库。返回 assignment 文本(失败返空字符串,不抛)。"""
-    from course_factory.factory import generate_assignment, upsert_assignment
+    from course_factory.factory import generate_assignment, upsert_assignment_v3
 
     knode = ctx["knode"]
     milestone = ctx.get("milestone") or {}
@@ -71,10 +71,11 @@ async def run(ctx: dict, *, em: Emitter) -> str:
 
     try:
         await asyncio.to_thread(
-            upsert_assignment,
+            upsert_assignment_v3,
             ctx["project_name"],
             ctx["knode_id"],
             assignment,
+            version_label=ctx.get("version_label"),
         )
     except Exception as exc:
         logger.warning(f"[s65] upsert_assignment failed: {exc}")

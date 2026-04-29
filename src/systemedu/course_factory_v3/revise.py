@@ -15,7 +15,7 @@ import logging
 from pathlib import Path
 
 from .kimi_client import ainvoke, kimi
-from .progress import Emitter, EV_REVISE_START
+from .progress import Emitter, EV_REVISE_START, EV_AGENT_LOG
 
 logger = logging.getLogger(__name__)
 
@@ -73,11 +73,25 @@ async def revise_html(
 输出:
 """
 
-    llm = kimi(streaming=False)
-    revised = await ainvoke(
-        llm,
-        [{"role": "user", "content": revise_prompt}],
+    # 用 streaming 而非 ainvoke — kimi-k2.6 reasoning 模型非流式必超时
+    from .kimi_client import astream_html
+
+    def _emit_progress(elapsed_s, n_chunks, total_len, last_60):
+        em.emit(EV_AGENT_LOG, {
+            "agent": f"Revise{mode.capitalize()}",
+            "phase": f"streaming-{int(elapsed_s)}s",
+            "input": f"chunks={n_chunks}",
+            "output": f"len={total_len}, tail: {last_60[:60]!r}",
+        })
+
+    revised = await astream_html(
+        role="creative",
+        messages=[{"role": "user", "content": revise_prompt}],
+        max_tokens=32768,
+        timeout_s=1800.0,
+        idle_timeout_s=300.0,
         label=f"revise_{mode}_attempt{attempt}",
+        progress_cb=_emit_progress,
     )
     return _strip_codeblock(revised)
 

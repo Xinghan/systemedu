@@ -34,7 +34,7 @@
 | 类型 | 何时 keep |
 |------|----------|
 | theory | Step 1.5 已生成,这里只确认是否有 theory 标注 |
-| animation | 动态过程 / 物理变化 / 算法步骤 / 时序流程 |
+| animation | **独立科学概念的过程展示**: 一个能脱离本项目场景独立成立的物理/化学/生物/数学/工程规律, 通过过程演示讲透"是什么/为什么/怎么发生"。例: "力让物体改变运动方向"/"反作用力让气球前冲"/"重力让物体下落得越来越快"。**禁止**: 仅做"项目某步骤的可视化"或"静态结构图的动起来" |
 | game | 互动操作 / 参数调节 / 因果探索 / 分类排序 |
 | hands_on_kit | 节点涉及实体元器件(传感器/电机/面包板) |
 | image | 需要看到"真实样子"(NASA/USGS/Wikimedia CC-BY/CC0) |
@@ -79,7 +79,10 @@
 1. 至少一个 idea (exercise 或 game) 必须覆盖 hands_on_components 中的一项动作
 2. exercise 题目可追溯到 acceptance_standard 或 hands_on_components
 3. game 的 game_concept 必须映射到 acceptance_artifacts 或 hands_on 动作
-4. game/animation 的 topic 禁止使用项目外题材(例如 mars-risk-map 不能出现"牛顿第二定律")
+4. **game** 的 topic 必须紧扣项目场景 (例如 mars-risk-map 不能出现纯抽象"牛顿第二定律")
+5. **animation** 的 topic 反过来: 必须是**独立科学概念名**, 不要被项目题材绑死。
+   例如 rocket-design 的"力是什么感觉"节点, anim 的 topic 应该是"力让物体改变运动状态"或"推与拉的方向", 而不是"火箭里的力"。
+   anim 教概念本身, 项目场景只是举例。
 
 ### 数量决策
 

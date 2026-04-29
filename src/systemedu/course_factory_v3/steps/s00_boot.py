@@ -26,6 +26,12 @@ async def run(
     # 项目级元数据(category / knowledge_level)从 project.yaml 读
     project_meta = _load_project_meta(project_name)
 
+    # 节点级 knowledge_level: 按 module_role 推导, 不直接用 project.yaml 的最终等级。
+    # 项目最终 K5 ≠ 启蒙节点应该按 K5 写; foundation 节点必须 K1, capstone 才用 project 最终等级。
+    module_role = knode.get("module_role", "")
+    project_max_level = project_meta.get("knowledge_level", "K3")
+    node_knowledge_level = _infer_node_level(module_role, project_max_level)
+
     ctx = {
         "project_name": project_name,
         "knode_id": knode_id,
@@ -33,9 +39,10 @@ async def run(
         "knode": knode,
         "milestone": milestone,
         "sub_project": sub_project,
-        "module_role": knode.get("module_role", ""),
+        "module_role": module_role,
         "category": project_meta.get("category", ""),
-        "knowledge_level": project_meta.get("knowledge_level", "K3"),
+        "knowledge_level": node_knowledge_level,
+        "project_max_knowledge_level": project_max_level,
         "age_range": project_meta.get("age_range", [10, 15]),
         "overrides": overrides,
     }
@@ -70,6 +77,35 @@ async def run(
         ],
     })
     return ctx
+
+
+def _infer_node_level(module_role: str, project_max_level: str) -> str:
+    """按 module_role 推导节点级 knowledge_level。
+
+    foundation → K1 (启蒙)
+    core       → K2 (基础概念巩固)
+    deepening  → K3 (深化)
+    synthesis  → K4 (整合)
+    capstone   → 项目最终等级 (通常 K5)
+
+    若 module_role 未知, 退回 K3 中性默认。
+    若推导值 > project_max_level, clamp 到 project_max_level。
+    """
+    role = (module_role or "").lower()
+    role_map = {
+        "foundation": "K1",
+        "core":       "K2",
+        "deepening":  "K3",
+        "synthesis":  "K4",
+        "capstone":   project_max_level or "K5",
+    }
+    inferred = role_map.get(role, "K3")
+    # clamp: 若项目最高 K2 但 role 推到 K3, 不让超过项目天花板
+    def _level_num(lv: str) -> int:
+        return int(lv[1:]) if lv and lv.startswith("K") and lv[1:].isdigit() else 3
+    if _level_num(inferred) > _level_num(project_max_level):
+        return project_max_level
+    return inferred
 
 
 def _load_project_meta(project_name: str) -> dict:

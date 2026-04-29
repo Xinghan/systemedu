@@ -71,7 +71,20 @@ async def implement(idea: dict, ctx: dict, *, em: Emitter) -> str | None:
         return None
 
     if not html.strip().startswith("<!DOCTYPE") and "<html" not in html[:200].lower():
-        logger.warning(f"[s50_game] LLM did not return HTML: {html[:200]}")
+        from datetime import datetime
+        dump_path = Path(f"/tmp/game_invalid_{idea.get('idea_id', 'unknown')}_{datetime.now().strftime('%H%M%S')}.txt")
+        try:
+            dump_path.write_text(
+                f"=== prompt (last 2000 chars) ===\n{prompt[-2000:]}\n\n=== response (full, len={len(html)}) ===\n{html}",
+                encoding="utf-8"
+            )
+        except Exception:
+            pass
+        logger.warning(f"[s50_game] LLM did not return HTML (len={len(html)}), dumped to {dump_path}")
+        em.emit(EV_AGENT_LOG, {
+            "agent": "ImplementGame", "phase": "invalid",
+            "input": "", "output": f"got len={len(html)}, dumped to {dump_path}, head: {html[:200]!r}",
+        })
         return None
 
     em.emit(EV_AGENT_LOG, {

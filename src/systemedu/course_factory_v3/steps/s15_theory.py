@@ -161,10 +161,14 @@ async def _write_theory_body(pick: dict, ctx: dict, *, em: Emitter) -> dict | No
         logger.warning(f"[s15] theory body for {pick['theory_id']}: missing body or level_bodies")
         return None
 
-    # 确保 K1 在 level_bodies 中
+    # 等级过滤兜底: 即使 LLM 违规生成 > 节点等级, 也强制裁剪掉
+    target_level = ctx.get("knowledge_level", "K3")
+    level_bodies = _clamp_levels(level_bodies, target_level)
+
+    # 确保 K1 在 level_bodies 中 (clamp 后再验证)
     levels = [lb.get("level") for lb in level_bodies if isinstance(lb, dict)]
     if "K1" not in levels:
-        logger.warning(f"[s15] theory {pick['theory_id']} missing K1 level_body")
+        logger.warning(f"[s15] theory {pick['theory_id']} missing K1 level_body after clamp")
         return None
 
     # 标准化输出
@@ -178,6 +182,30 @@ async def _write_theory_body(pick: dict, ctx: dict, *, em: Emitter) -> dict | No
         "level_bodies": level_bodies,
         "exercises": _validate_exercises(exercises),
     }
+
+
+def _clamp_levels(level_bodies: list, target_level: str) -> list:
+    """裁剪 level_bodies 只保留 ≤ target_level 的等级。
+
+    LLM 违规生成 K5 但节点是 K1 时, 强制丢掉超出等级。
+    K1 永远保留。
+    """
+    def _level_num(lv) -> int:
+        if not isinstance(lv, str) or not lv.startswith("K") or not lv[1:].isdigit():
+            return 99
+        return int(lv[1:])
+
+    target_n = _level_num(target_level)
+    out = []
+    for lb in level_bodies:
+        if not isinstance(lb, dict):
+            continue
+        n = _level_num(lb.get("level"))
+        if n <= target_n:
+            out.append(lb)
+        else:
+            logger.warning(f"[s15] dropped over-level body {lb.get('level')} > {target_level}")
+    return out
 
 
 def _validate_exercises(raw: list) -> list[dict]:

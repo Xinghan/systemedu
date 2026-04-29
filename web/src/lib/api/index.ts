@@ -7,6 +7,7 @@ import type {
   ConfigResponse,
   CourseAssignmentData,
   CourseContentData,
+  CourseV3VersionsData,
   CreateProjectResponse,
   EnrollmentInfo,
   HighlightInfo,
@@ -104,8 +105,17 @@ export const gateway = {
     ),
   getCourseV2: (projectName: string, nodeId: number) =>
     api.get<CourseContentData>(`/api/projects/${projectName}/nodes/${nodeId}/course/v2`),
-  getCourseV3: (projectName: string, nodeId: number) =>
-    api.get<CourseContentData>(`/api/projects/${projectName}/nodes/${nodeId}/course/v3`),
+  getCourseV3: (projectName: string, nodeId: number, versionLabel?: string) => {
+    const qs = versionLabel ? `?version=${encodeURIComponent(versionLabel)}` : ""
+    return api.get<CourseContentData>(`/api/projects/${projectName}/nodes/${nodeId}/course/v3${qs}`)
+  },
+  listCourseV3Versions: (projectName: string, nodeId: number) =>
+    api.get<CourseV3VersionsData>(`/api/projects/${projectName}/nodes/${nodeId}/course/v3/versions`),
+  setCourseV3ActiveVersion: (projectName: string, nodeId: number, versionLabel: string) =>
+    api.post<{ ok: boolean; active_version: string }>(
+      `/api/projects/${projectName}/nodes/${nodeId}/course/v3/active`,
+      { version_label: versionLabel }
+    ),
   getCourseV2Assignment: (projectName: string, nodeId: number) =>
     api.get<CourseAssignmentData>(`/api/projects/${projectName}/nodes/${nodeId}/course/v2/assignment`),
   cancelCourseV2: (projectName: string, nodeId: number) =>

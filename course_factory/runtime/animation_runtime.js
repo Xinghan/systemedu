@@ -1,18 +1,21 @@
 /**
  * Animation Runtime -- shared skeleton for all course factory animations.
  *
- * Layout: sidebar (200px left column) contains lang-btn, title, subtitle,
- * frame indicator, and guide panel. The canvas occupies the remaining right
- * area with ZERO overlapping elements. All coordinates passed to
- * getFrameElements and customDrawElement are the full canvas virtual
- * dimensions -- no safe-area offsets needed.
+ * Layout: sidebar (200px left column) contains lang-btn, style-mode
+ * switcher, title, subtitle, frame indicator, and guide panel. The canvas
+ * occupies the remaining right area with ZERO overlapping elements.
+ *
+ * Visual Modes: three built-in visual modes switchable via sidebar buttons:
+ *   - 'light'     Technical Blueprint -- light bg, dark linework, CAD grid
+ *   - 'dark'      Dark Editorial -- near-black, single-hue accent, minimal
+ *   - 'cyberpunk' Sci-Fi Hologram -- deep blue, glow, scanlines, brackets
  *
  * Required globals before boot():
  *   - CONFIG: { title, subtitle, totalFrames, hudLabels, hudValues, guideItems, style }
  *   - getFrameElements(f, W, H): returns element array for frame f
  *
  * Optional globals:
- *   - drawBg(ctx, W, H): draws background (default: dark gradient + grid)
+ *   - drawBg(ctx, W, H, mode): draws background (mode = 'light'|'dark'|'cyberpunk')
  *   - customDrawElement(ctx, el, W, H): return true if handled
  *   - onReady(): called after boot
  */
@@ -28,6 +31,83 @@ var AnimRuntime = (function () {
   var LANG = 'cn';
   var I18N = {};
 
+  // --- Sprite cache ---
+  // Sprites are SVGs embedded as hidden <svg id="sprite-{name}"> in the HTML.
+  // On first use, we rasterize to an offscreen canvas and cache the Image.
+  var _spriteCache = {};
+
+  // --- Visual Mode ---
+  // Three visual modes inspired by physics-vivid design system.
+  // Each mode provides colors for canvas drawing and sidebar CSS.
+  var VISUAL_MODE = 'cyberpunk'; // default
+  var VISUAL_MODES = {
+    light: {
+      label: 'LIGHT',
+      // Canvas drawing colors
+      canvasBg1: '#fafaf5', canvasBg2: '#f0f0ea',
+      canvasGrid: 'rgba(15,23,42,0.04)', canvasGridWidth: 0.5,
+      canvasText: '#0f172a', canvasTextDim: '#475569', canvasTextMute: '#94a3b8',
+      canvasStroke: '#0f172a', canvasStrokeDim: 'rgba(15,23,42,0.3)',
+      canvasAccent: null, // uses PAL.primary
+      canvasGlow: false,
+      canvasCornerBrackets: false,
+      canvasScanlines: false,
+      // Inner border (CAD style)
+      canvasInnerBorder: true, canvasInnerBorderColor: 'rgba(15,23,42,0.2)',
+      // Sidebar CSS
+      sidebarBg: 'rgba(250,250,245,0.96)', sidebarBorder: '#d4d4c8',
+      sidebarText: '#0f172a', sidebarTextDim: '#475569', sidebarTextMute: '#94a3b8',
+      sidebarAccent: null, // uses PAL.primary
+      sidebarBtnBg: 'transparent', sidebarBtnBorder: null,
+      // HUD
+      hudBg: 'rgba(250,250,245,0.92)', hudBorder: '#d4d4c8',
+      hudLabel: '#64748b', hudValue: '#0f172a',
+      // Controls
+      ctrlBg: '#0f172a', ctrlColor: '#fafaf5',
+    },
+    dark: {
+      label: 'DARK',
+      canvasBg1: '#0a0a0a', canvasBg2: '#111111',
+      canvasGrid: 'rgba(255,255,255,0.03)', canvasGridWidth: 0.5,
+      canvasText: '#e5e5e5', canvasTextDim: '#a3a3a3', canvasTextMute: '#525252',
+      canvasStroke: '#e5e5e5', canvasStrokeDim: 'rgba(255,255,255,0.2)',
+      canvasAccent: null,
+      canvasGlow: false,
+      canvasCornerBrackets: false,
+      canvasScanlines: false,
+      canvasInnerBorder: false,
+      // Top accent line (dark editorial signature)
+      canvasTopLine: true,
+      sidebarBg: 'rgba(10,10,10,0.96)', sidebarBorder: '#1f1f1f',
+      sidebarText: '#fafafa', sidebarTextDim: '#737373', sidebarTextMute: '#525252',
+      sidebarAccent: null,
+      sidebarBtnBg: 'transparent', sidebarBtnBorder: '#262626',
+      hudBg: 'rgba(10,10,10,0.9)', hudBorder: '#1f1f1f',
+      hudLabel: '#525252', hudValue: null,
+      ctrlBg: null, ctrlColor: null,
+    },
+    cyberpunk: {
+      label: 'CYBER',
+      canvasBg1: '#05060f', canvasBg2: '#0d0e1a',
+      canvasGrid: null, canvasGridWidth: 0.5, // uses accent at low opacity
+      canvasText: '#e2e8f0', canvasTextDim: '#cbd5e1', canvasTextMute: '#64748b',
+      canvasStroke: '#e2e8f0', canvasStrokeDim: 'rgba(255,255,255,0.12)',
+      canvasAccent: null,
+      canvasGlow: true,
+      canvasCornerBrackets: true,
+      canvasScanlines: true,
+      canvasInnerBorder: false,
+      canvasTopLine: false,
+      sidebarBg: 'rgba(5,6,15,0.92)', sidebarBorder: null, // uses accent at 0.2
+      sidebarText: null, sidebarTextDim: null, sidebarTextMute: null,
+      sidebarAccent: null,
+      sidebarBtnBg: 'transparent', sidebarBtnBorder: null,
+      hudBg: 'rgba(5,6,15,0.9)', hudBorder: null,
+      hudLabel: null, hudValue: null,
+      ctrlBg: null, ctrlColor: '#05060f',
+    },
+  };
+
   // Reference coordinate system -- content is authored against this.
   // The runtime scales to fit the actual canvas while preserving aspect.
   var REF_W = 700, REF_H = 400;
@@ -37,120 +117,174 @@ var AnimRuntime = (function () {
   var _vw = REF_W, _vh = REF_H;
 
   // --- Palette presets ---
-  var PALETTES = {
-    helix_lab: {
-      bg: '#0c0e12', bg2: '#111318', surface: '#171a1f',
-      primary: '#50ffb0', primaryDim: '#17df93',
-      secondary: '#acf900', secondaryDim: '#466800',
-      tertiary: '#85ecff', tertiaryDim: '#00d4ee',
-      text: '#f6f6fc', muted: '#aaabb0',
-      error: '#ff716c', outline: '#74757a',
-      glow: 'rgba(80,255,176,0.1)', glowStrong: 'rgba(80,255,176,0.3)',
-      glass: 'rgba(23,26,31,0.6)', glassBlur: 20,
-      radius: '0px',
-    },
-    aether_clinic: {
-      bg: '#111318', bg2: '#1a1c20', surface: '#1e2024',
-      primary: '#98cbff', primaryDim: '#00a3ff',
-      secondary: '#b9f1ff', secondaryDim: '#00e0ff',
-      tertiary: '#c6c6c7', tertiaryDim: '#9c9d9d',
-      text: '#e2e2e8', muted: '#bec7d4',
-      error: '#ffb4ab', outline: '#88919d',
-      glow: 'rgba(152,203,255,0.08)', glowStrong: 'rgba(0,163,255,0.15)',
-      glass: 'rgba(51,53,57,0.4)', glassBlur: 12,
-      radius: '0px',
-    },
-    ares_mission: {
-      bg: '#131313', bg2: '#1c1b1b', surface: '#201f1f',
-      primary: '#ffb59c', primaryDim: '#ff7f50',
-      secondary: '#c6c6c6', secondaryDim: '#454747',
-      tertiary: '#00daf3', tertiaryDim: '#00b4c9',
-      text: '#e5e2e1', muted: '#dec0b6',
-      error: '#ffb4ab', outline: '#a68b82',
-      glow: 'rgba(255,181,156,0.05)', glowStrong: 'rgba(255,127,80,0.15)',
-      glass: 'rgba(32,31,31,0.4)', glassBlur: 12,
-      radius: '0px',
-    },
-    celestial_observatory: {
-      bg: '#111220', bg2: '#191a29', surface: '#1e1e2d',
-      primary: '#c9bfff', primaryDim: '#8771ff',
-      secondary: '#ffdb3c', secondaryDim: '#e9c400',
-      tertiary: '#c5c6cc', tertiaryDim: '#1c1f24',
-      text: '#e2e0f5', muted: '#c8c5cf',
-      error: '#ffb4ab', outline: '#918f99',
-      glow: 'rgba(30,0,110,0.2)', glowStrong: 'rgba(201,191,255,0.2)',
-      glass: 'rgba(51,51,67,0.4)', glassBlur: 20,
-      radius: '4px',
-    },
-    neural_circuit: {
-      bg: '#121318', bg2: '#1a1b21', surface: '#1e1f25',
-      primary: '#dbfcff', primaryDim: '#00dbe9',
-      secondary: '#d7ffc5', secondaryDim: '#2ae500',
-      tertiary: '#f8d8ff', tertiaryDim: '#ebb2ff',
-      text: '#e3e1e9', muted: '#b9cacb',
-      error: '#ffb4ab', outline: '#849495',
-      glow: 'rgba(0,219,233,0.08)', glowStrong: 'rgba(0,240,255,0.15)',
-      glass: 'rgba(30,31,37,0.4)', glassBlur: 16,
-      radius: '0px',
-    },
-    subatomic_matrix: {
-      bg: '#0c0e17', bg2: '#11131d', surface: '#171924',
-      primary: '#ff7cf5', primaryDim: '#ff1cfe',
-      secondary: '#00fbfb', secondaryDim: '#00ecec',
-      tertiary: '#ac89ff', tertiaryDim: '#7000ff',
-      text: '#f0f0fd', muted: '#aaaab7',
-      error: '#ff6e84', outline: '#737580',
-      glow: 'rgba(0,251,251,0.05)', glowStrong: 'rgba(255,124,245,0.15)',
-      glass: 'rgba(34,37,50,0.6)', glassBlur: 12,
-      radius: '0px',
-    },
-    rocketry_control: {
-      bg: '#05070a', bg2: '#0d111f', surface: '#111425',
-      primary: '#ffb000', primaryDim: '#cc8d00',
-      secondary: '#ffb08e', secondaryDim: '#ff5f1f',
-      tertiary: '#d6d9f3', tertiaryDim: '#bfc2e0',
-      text: '#e2e2e9', muted: '#8e90a6',
-      error: '#ffb4ab', outline: '#8e90a6',
-      glow: 'rgba(255,176,0,0.1)', glowStrong: 'rgba(255,176,0,0.2)',
-      glass: 'rgba(17,20,37,0.6)', glassBlur: 12,
-      radius: '4px',
-    },
-    aqua_flow: {
-      bg: '#040a0f', bg2: '#081420', surface: '#0c1a2a',
-      primary: '#22d3ee', primaryDim: '#06b6d4',
-      secondary: '#67e8f9', secondaryDim: '#0891b2',
-      tertiary: '#a5f3fc', tertiaryDim: '#155e75',
-      text: '#f0fdff', muted: '#80a8b8',
-      error: '#ffb4ab', outline: '#6b8090',
-      glow: 'rgba(34,211,238,0.1)', glowStrong: 'rgba(34,211,238,0.3)',
-      glass: 'rgba(8,20,32,0.6)', glassBlur: 16,
-      radius: '0px',
-    },
-    ember_forge: {
-      bg: '#0f0804', bg2: '#1a0c06', surface: '#241408',
-      primary: '#f59e0b', primaryDim: '#d97706',
-      secondary: '#fcd34d', secondaryDim: '#b45309',
-      tertiary: '#fef3c7', tertiaryDim: '#92400e',
-      text: '#fffbf0', muted: '#b0a080',
-      error: '#ff6e6e', outline: '#8a7560',
-      glow: 'rgba(245,158,11,0.1)', glowStrong: 'rgba(245,158,11,0.3)',
-      glass: 'rgba(26,12,6,0.6)', glassBlur: 12,
-      radius: '0px',
-    },
-    flora_pulse: {
-      bg: '#060e08', bg2: '#0c1a0f', surface: '#122618',
-      primary: '#4ade80', primaryDim: '#22c55e',
-      secondary: '#86efac', secondaryDim: '#16a34a',
-      tertiary: '#bbf7d0', tertiaryDim: '#166534',
-      text: '#f0fff4', muted: '#80b090',
-      error: '#ff6e6e', outline: '#5a8068',
-      glow: 'rgba(74,222,128,0.1)', glowStrong: 'rgba(74,222,128,0.3)',
-      glass: 'rgba(12,26,15,0.6)', glassBlur: 16,
-      radius: '0px',
-    },
+  // 12 subject themes — aligned with theme_style/themes.js
+  // All share deep-space-indigo base (oklch 0.14-0.28, hue 265)
+  // Per-subject accent via oklch signature hue
+  var _BASE = {
+    bg: 'oklch(0.14 0.035 265)', bg2: 'oklch(0.18 0.04 265)', surface: 'oklch(0.22 0.045 265)',
+    text: 'oklch(0.96 0.01 265)', muted: 'oklch(0.55 0.03 265)',
+    error: 'oklch(0.70 0.18 25)', outline: 'oklch(0.55 0.03 265)',
+    glass: 'oklch(0.18 0.04 265 / 0.7)', glassBlur: 12,
+    radius: '14px',
   };
+  function _theme(primary, primaryDim, secondary, secondaryDim, tertiary, tertiaryDim, glow, glowStrong) {
+    return Object.assign({}, _BASE, {
+      primary: primary, primaryDim: primaryDim,
+      secondary: secondary, secondaryDim: secondaryDim,
+      tertiary: tertiary, tertiaryDim: tertiaryDim,
+      glow: glow, glowStrong: glowStrong,
+    });
+  }
+  var PALETTES = {
+    cs: _theme(
+      'oklch(0.75 0.17 200)', 'oklch(0.55 0.16 200)',
+      'oklch(0.92 0.08 190)', 'oklch(0.35 0.10 210)',
+      'oklch(0.85 0.14 85)', 'oklch(0.65 0.12 85)',
+      'oklch(0.75 0.17 200 / 0.1)', 'oklch(0.75 0.17 200 / 0.25)'),
+    bio: _theme(
+      'oklch(0.75 0.17 155)', 'oklch(0.55 0.16 155)',
+      'oklch(0.92 0.08 150)', 'oklch(0.35 0.10 160)',
+      'oklch(0.85 0.14 85)', 'oklch(0.65 0.12 85)',
+      'oklch(0.75 0.17 155 / 0.1)', 'oklch(0.75 0.17 155 / 0.25)'),
+    space: _theme(
+      'oklch(0.72 0.17 295)', 'oklch(0.52 0.16 295)',
+      'oklch(0.92 0.08 295)', 'oklch(0.35 0.10 290)',
+      'oklch(0.85 0.14 85)', 'oklch(0.65 0.12 85)',
+      'oklch(0.72 0.17 295 / 0.1)', 'oklch(0.72 0.17 295 / 0.25)'),
+    mech: _theme(
+      'oklch(0.75 0.17 55)', 'oklch(0.55 0.16 50)',
+      'oklch(0.92 0.08 60)', 'oklch(0.35 0.10 60)',
+      'oklch(0.85 0.14 85)', 'oklch(0.65 0.12 85)',
+      'oklch(0.75 0.17 55 / 0.1)', 'oklch(0.75 0.17 55 / 0.25)'),
+    ai: _theme(
+      'oklch(0.72 0.17 335)', 'oklch(0.52 0.16 335)',
+      'oklch(0.92 0.08 335)', 'oklch(0.35 0.10 330)',
+      'oklch(0.85 0.14 85)', 'oklch(0.65 0.12 85)',
+      'oklch(0.72 0.17 335 / 0.1)', 'oklch(0.72 0.17 335 / 0.25)'),
+    math: _theme(
+      'oklch(0.72 0.17 245)', 'oklch(0.52 0.16 245)',
+      'oklch(0.92 0.08 240)', 'oklch(0.35 0.10 245)',
+      'oklch(0.85 0.14 85)', 'oklch(0.65 0.12 85)',
+      'oklch(0.72 0.17 245 / 0.1)', 'oklch(0.72 0.17 245 / 0.25)'),
+    med: _theme(
+      'oklch(0.75 0.16 15)', 'oklch(0.55 0.15 15)',
+      'oklch(0.92 0.08 15)', 'oklch(0.35 0.10 15)',
+      'oklch(0.85 0.14 85)', 'oklch(0.65 0.12 85)',
+      'oklch(0.75 0.16 15 / 0.1)', 'oklch(0.75 0.16 15 / 0.25)'),
+    chem: _theme(
+      'oklch(0.82 0.17 125)', 'oklch(0.62 0.16 125)',
+      'oklch(0.95 0.08 120)', 'oklch(0.35 0.10 130)',
+      'oklch(0.85 0.14 85)', 'oklch(0.65 0.12 85)',
+      'oklch(0.82 0.17 125 / 0.1)', 'oklch(0.82 0.17 125 / 0.25)'),
+    phys: _theme(
+      'oklch(0.78 0.13 215)', 'oklch(0.55 0.13 215)',
+      'oklch(0.92 0.08 215)', 'oklch(0.35 0.10 215)',
+      'oklch(0.85 0.14 85)', 'oklch(0.65 0.12 85)',
+      'oklch(0.78 0.13 215 / 0.1)', 'oklch(0.78 0.13 215 / 0.25)'),
+    env: _theme(
+      'oklch(0.72 0.15 140)', 'oklch(0.52 0.13 140)',
+      'oklch(0.92 0.08 140)', 'oklch(0.35 0.10 140)',
+      'oklch(0.85 0.14 85)', 'oklch(0.65 0.12 85)',
+      'oklch(0.72 0.15 140 / 0.1)', 'oklch(0.72 0.15 140 / 0.25)'),
+    robo: _theme(
+      'oklch(0.82 0.15 95)', 'oklch(0.55 0.14 95)',
+      'oklch(0.95 0.08 95)', 'oklch(0.35 0.10 95)',
+      'oklch(0.85 0.14 85)', 'oklch(0.65 0.12 85)',
+      'oklch(0.82 0.15 95 / 0.1)', 'oklch(0.82 0.15 95 / 0.25)'),
+    elec: _theme(
+      'oklch(0.72 0.17 275)', 'oklch(0.52 0.16 275)',
+      'oklch(0.92 0.08 275)', 'oklch(0.35 0.10 275)',
+      'oklch(0.85 0.14 85)', 'oklch(0.65 0.12 85)',
+      'oklch(0.72 0.17 275 / 0.1)', 'oklch(0.72 0.17 275 / 0.25)'),
+    // Expansion set — 14 more sciences
+    astro: _theme(
+      'oklch(0.78 0.13 260)', 'oklch(0.52 0.14 260)',
+      'oklch(0.92 0.08 260)', 'oklch(0.30 0.08 260)',
+      'oklch(0.85 0.14 85)', 'oklch(0.65 0.12 85)',
+      'oklch(0.78 0.13 260 / 0.1)', 'oklch(0.78 0.13 260 / 0.25)'),
+    geo: _theme(
+      'oklch(0.72 0.15 40)', 'oklch(0.55 0.14 40)',
+      'oklch(0.90 0.08 50)', 'oklch(0.32 0.10 40)',
+      'oklch(0.85 0.14 85)', 'oklch(0.65 0.12 85)',
+      'oklch(0.72 0.15 40 / 0.1)', 'oklch(0.72 0.15 40 / 0.25)'),
+    ocean: _theme(
+      'oklch(0.72 0.15 230)', 'oklch(0.45 0.13 230)',
+      'oklch(0.92 0.08 220)', 'oklch(0.22 0.08 250)',
+      'oklch(0.85 0.14 85)', 'oklch(0.65 0.12 85)',
+      'oklch(0.72 0.15 230 / 0.1)', 'oklch(0.72 0.15 230 / 0.25)'),
+    meteo: _theme(
+      'oklch(0.82 0.10 245)', 'oklch(0.62 0.13 245)',
+      'oklch(0.95 0.05 245)', 'oklch(0.38 0.10 245)',
+      'oklch(0.85 0.14 85)', 'oklch(0.65 0.12 85)',
+      'oklch(0.82 0.10 245 / 0.1)', 'oklch(0.82 0.10 245 / 0.25)'),
+    paleo: _theme(
+      'oklch(0.72 0.13 70)', 'oklch(0.55 0.12 70)',
+      'oklch(0.92 0.06 75)', 'oklch(0.32 0.08 70)',
+      'oklch(0.85 0.14 85)', 'oklch(0.65 0.12 85)',
+      'oklch(0.72 0.13 70 / 0.1)', 'oklch(0.72 0.13 70 / 0.25)'),
+    quant: _theme(
+      'oklch(0.72 0.17 310)', 'oklch(0.52 0.16 310)',
+      'oklch(0.92 0.08 310)', 'oklch(0.30 0.10 310)',
+      'oklch(0.85 0.14 85)', 'oklch(0.65 0.12 85)',
+      'oklch(0.72 0.17 310 / 0.1)', 'oklch(0.72 0.17 310 / 0.25)'),
+    nuke: _theme(
+      'oklch(0.82 0.17 135)', 'oklch(0.62 0.16 135)',
+      'oklch(0.95 0.08 130)', 'oklch(0.32 0.10 135)',
+      'oklch(0.85 0.14 85)', 'oklch(0.65 0.12 85)',
+      'oklch(0.82 0.17 135 / 0.1)', 'oklch(0.82 0.17 135 / 0.25)'),
+    neuro: _theme(
+      'oklch(0.75 0.17 25)', 'oklch(0.55 0.15 25)',
+      'oklch(0.92 0.08 25)', 'oklch(0.32 0.10 25)',
+      'oklch(0.85 0.14 85)', 'oklch(0.65 0.12 85)',
+      'oklch(0.75 0.17 25 / 0.1)', 'oklch(0.75 0.17 25 / 0.25)'),
+    mat: _theme(
+      'oklch(0.78 0.12 190)', 'oklch(0.55 0.12 190)',
+      'oklch(0.92 0.06 190)', 'oklch(0.32 0.08 190)',
+      'oklch(0.85 0.14 85)', 'oklch(0.65 0.12 85)',
+      'oklch(0.78 0.12 190 / 0.1)', 'oklch(0.78 0.12 190 / 0.25)'),
+    micro: _theme(
+      'oklch(0.82 0.17 110)', 'oklch(0.62 0.16 110)',
+      'oklch(0.95 0.08 110)', 'oklch(0.32 0.10 120)',
+      'oklch(0.85 0.14 85)', 'oklch(0.65 0.12 85)',
+      'oklch(0.82 0.17 110 / 0.1)', 'oklch(0.82 0.17 110 / 0.25)'),
+    zoo: _theme(
+      'oklch(0.75 0.15 75)', 'oklch(0.55 0.13 75)',
+      'oklch(0.92 0.08 80)', 'oklch(0.32 0.08 75)',
+      'oklch(0.85 0.14 85)', 'oklch(0.65 0.12 85)',
+      'oklch(0.75 0.15 75 / 0.1)', 'oklch(0.75 0.15 75 / 0.25)'),
+    bot: _theme(
+      'oklch(0.78 0.15 120)', 'oklch(0.55 0.13 120)',
+      'oklch(0.92 0.08 120)', 'oklch(0.32 0.08 120)',
+      'oklch(0.85 0.14 85)', 'oklch(0.65 0.12 85)',
+      'oklch(0.78 0.15 120 / 0.1)', 'oklch(0.78 0.15 120 / 0.25)'),
+    arch: _theme(
+      'oklch(0.75 0.13 55)', 'oklch(0.55 0.12 55)',
+      'oklch(0.92 0.06 60)', 'oklch(0.32 0.08 55)',
+      'oklch(0.85 0.14 85)', 'oklch(0.65 0.12 85)',
+      'oklch(0.75 0.13 55 / 0.1)', 'oklch(0.75 0.13 55 / 0.25)'),
+    agri: _theme(
+      'oklch(0.82 0.14 100)', 'oklch(0.62 0.13 100)',
+      'oklch(0.92 0.08 100)', 'oklch(0.32 0.08 100)',
+      'oklch(0.85 0.14 85)', 'oklch(0.65 0.12 85)',
+      'oklch(0.82 0.14 100 / 0.1)', 'oklch(0.82 0.14 100 / 0.25)'),
+    // Legacy aliases for backward compatibility with existing content
+    helix_lab: null, aether_clinic: null, ares_mission: null,
+    celestial_observatory: null, neural_circuit: null, subatomic_matrix: null,
+    rocketry_control: null, aqua_flow: null, ember_forge: null, flora_pulse: null,
+  };
+  // Map legacy keys to new theme keys
+  PALETTES.helix_lab = PALETTES.bio;
+  PALETTES.aether_clinic = PALETTES.med;
+  PALETTES.ares_mission = PALETTES.space;
+  PALETTES.celestial_observatory = PALETTES.phys;
+  PALETTES.neural_circuit = PALETTES.ai;
+  PALETTES.subatomic_matrix = PALETTES.math;
+  PALETTES.rocketry_control = PALETTES.space;
+  PALETTES.aqua_flow = PALETTES.env;
+  PALETTES.ember_forge = PALETTES.mech;
+  PALETTES.flora_pulse = PALETTES.bio;
 
-  var PAL = PALETTES.helix_lab;
+  var PAL = PALETTES.cs;
 
   // --- Math helpers ---
   function lerp(a, b, p) { return a + (b - a) * p; }
@@ -202,14 +336,144 @@ var AnimRuntime = (function () {
     }
   }
 
-  // --- Default background ---
+  // --- Visual Mode helpers ---
+  function _modeColors() {
+    var m = VISUAL_MODES[VISUAL_MODE] || VISUAL_MODES.cyberpunk;
+    return {
+      bg1:   m.canvasBg1,
+      bg2:   m.canvasBg2,
+      grid:  m.canvasGrid,
+      gridW: m.canvasGridWidth || 0.5,
+      text:  m.canvasText  || PAL.text,
+      dim:   m.canvasTextDim || PAL.muted,
+      mute:  m.canvasTextMute || PAL.muted,
+      stroke:    m.canvasStroke || PAL.text,
+      strokeDim: m.canvasStrokeDim || PAL.muted,
+      accent:    m.canvasAccent || PAL.primary,
+      glow:          !!m.canvasGlow,
+      cornerBrackets:!!m.canvasCornerBrackets,
+      scanlines:     !!m.canvasScanlines,
+      innerBorder:   !!m.canvasInnerBorder,
+      innerBorderColor: m.canvasInnerBorderColor || 'rgba(0,0,0,0.15)',
+      topLine:       !!m.canvasTopLine,
+    };
+  }
+
+  // Apply visual mode to sidebar / HUD / controls via CSS custom properties
+  function _applyVisualMode(mode) {
+    VISUAL_MODE = mode;
+    var m = VISUAL_MODES[mode] || VISUAL_MODES.cyberpunk;
+    var root = document.documentElement;
+
+    // Sidebar
+    root.style.setProperty('--sb-bg',     m.sidebarBg || 'rgba(5,6,15,0.92)');
+    root.style.setProperty('--sb-border', m.sidebarBorder || (m.canvasAccent || PAL.primary));
+    root.style.setProperty('--sb-text',   m.sidebarText || PAL.text);
+    root.style.setProperty('--sb-dim',    m.sidebarTextDim || PAL.muted);
+    root.style.setProperty('--sb-mute',   m.sidebarTextMute || PAL.muted);
+    root.style.setProperty('--sb-accent', m.sidebarAccent || PAL.primary);
+    root.style.setProperty('--sb-btn-bg', m.sidebarBtnBg || 'transparent');
+    root.style.setProperty('--sb-btn-bd', m.sidebarBtnBorder || 'transparent');
+
+    // HUD
+    root.style.setProperty('--hud-bg',    m.hudBg || 'rgba(5,6,15,0.9)');
+    root.style.setProperty('--hud-border',m.hudBorder || 'transparent');
+    root.style.setProperty('--hud-label', m.hudLabel || PAL.muted);
+    root.style.setProperty('--hud-value', m.hudValue || PAL.text);
+
+    // Controls
+    root.style.setProperty('--ctrl-bg',   m.ctrlBg || PAL.primary);
+    root.style.setProperty('--ctrl-color',m.ctrlColor || PAL.bg);
+
+    // Update switcher button active states
+    var btns = document.querySelectorAll('.vm-btn');
+    btns.forEach(function(b) {
+      b.classList.toggle('vm-active', b.dataset.mode === mode);
+    });
+
+    // Redraw canvas with new mode
+    drawFrame(currentFrame);
+  }
+
+  // Build style-mode switcher in sidebar
+  function _buildStyleSwitcher() {
+    var container = document.getElementById('styleSwitcher');
+    if (!container) return;
+    container.innerHTML = '';
+    var modes = ['light', 'dark', 'cyberpunk'];
+    modes.forEach(function(mKey) {
+      var m = VISUAL_MODES[mKey];
+      var btn = document.createElement('button');
+      btn.className = 'vm-btn' + (mKey === VISUAL_MODE ? ' vm-active' : '');
+      btn.dataset.mode = mKey;
+      btn.textContent = m.label;
+      btn.addEventListener('click', function() { _applyVisualMode(mKey); });
+      container.appendChild(btn);
+    });
+  }
+
+  // --- Default background (mode-aware) ---
   function _defaultDrawBg(c, w, h) {
+    var mc = _modeColors();
+
+    // Background gradient
     var g = c.createLinearGradient(0, 0, 0, h);
-    g.addColorStop(0, PAL.bg); g.addColorStop(1, PAL.bg2);
+    g.addColorStop(0, mc.bg1); g.addColorStop(1, mc.bg2);
     c.fillStyle = g; c.fillRect(0, 0, w, h);
-    c.strokeStyle = 'rgba(255,255,255,0.03)'; c.lineWidth = 0.5;
-    for (var x = 0; x < w; x += 40) { c.beginPath(); c.moveTo(x, 0); c.lineTo(x, h); c.stroke(); }
-    for (var y = 0; y < h; y += 40) { c.beginPath(); c.moveTo(0, y); c.lineTo(w, y); c.stroke(); }
+
+    // Grid
+    var gridColor = mc.grid || (mc.accent ? mc.accent.replace(/[\d.]+\)$/, '0.06)') : 'rgba(255,255,255,0.04)');
+    c.strokeStyle = gridColor; c.lineWidth = mc.gridW;
+    var step = VISUAL_MODE === 'light' ? 24 : 64;
+    for (var x = 0; x < w; x += step) { c.beginPath(); c.moveTo(x, 0); c.lineTo(x, h); c.stroke(); }
+    for (var y = 0; y < h; y += step) { c.beginPath(); c.moveTo(0, y); c.lineTo(w, y); c.stroke(); }
+
+    // Inner border (light / technical blueprint)
+    if (mc.innerBorder) {
+      c.strokeStyle = mc.innerBorderColor; c.lineWidth = 0.5;
+      c.strokeRect(6, 6, w - 12, h - 12);
+    }
+
+    // Top accent line (dark editorial)
+    if (mc.topLine) {
+      var tg = c.createLinearGradient(w * 0.15, 0, w * 0.85, 0);
+      tg.addColorStop(0, 'transparent');
+      tg.addColorStop(0.4, mc.accent); tg.addColorStop(0.6, mc.accent);
+      tg.addColorStop(1, 'transparent');
+      c.strokeStyle = tg; c.lineWidth = 1;
+      c.beginPath(); c.moveTo(0, 0.5); c.lineTo(w, 0.5); c.stroke();
+    }
+
+    // Scanlines (cyberpunk)
+    if (mc.scanlines) {
+      c.strokeStyle = 'rgba(255,255,255,0.025)'; c.lineWidth = 1;
+      for (var sy = 0; sy < h; sy += 3) {
+        c.beginPath(); c.moveTo(0, sy); c.lineTo(w, sy); c.stroke();
+      }
+    }
+
+    // Corner brackets (cyberpunk)
+    if (mc.cornerBrackets) {
+      var bLen = Math.min(w, h) * 0.06;
+      c.strokeStyle = mc.accent; c.lineWidth = 1.5; c.globalAlpha = 0.5;
+      // top-left
+      c.beginPath(); c.moveTo(8, 8 + bLen); c.lineTo(8, 8); c.lineTo(8 + bLen, 8); c.stroke();
+      // top-right
+      c.beginPath(); c.moveTo(w - 8 - bLen, 8); c.lineTo(w - 8, 8); c.lineTo(w - 8, 8 + bLen); c.stroke();
+      // bottom-left
+      c.beginPath(); c.moveTo(8, h - 8 - bLen); c.lineTo(8, h - 8); c.lineTo(8 + bLen, h - 8); c.stroke();
+      // bottom-right
+      c.beginPath(); c.moveTo(w - 8 - bLen, h - 8); c.lineTo(w - 8, h - 8); c.lineTo(w - 8, h - 8 + bLen); c.stroke();
+      c.globalAlpha = 1;
+    }
+
+    // Radial glow (cyberpunk)
+    if (mc.glow) {
+      var rg = c.createRadialGradient(w * 0.5, h * 0.3, 0, w * 0.5, h * 0.3, w * 0.6);
+      rg.addColorStop(0, PAL.glow || 'rgba(100,100,255,0.06)');
+      rg.addColorStop(1, 'transparent');
+      c.fillStyle = rg; c.fillRect(0, 0, w, h);
+    }
   }
 
   // --- Element drawing ---
@@ -226,7 +490,7 @@ var AnimRuntime = (function () {
 
     switch (el.type) {
       case 'label':
-        ctx.fillStyle = el.color || PAL.text;
+        ctx.fillStyle = el.color || _modeColors().text;
         var isBold = el.bold !== undefined ? el.bold : (el.size >= 14);
         ctx.font = (isBold ? 'bold ' : '') + (el.size || 12) + "px " +
           (isBold ? "'Space Grotesk','Inter','Noto Sans SC'" : "'Inter','Noto Sans SC'") + ",sans-serif";
@@ -237,7 +501,7 @@ var AnimRuntime = (function () {
         break;
 
       case 'text':
-        ctx.fillStyle = el.color || PAL.muted;
+        ctx.fillStyle = el.color || _modeColors().dim;
         ctx.font = (el.size || 11) + "px 'Inter','Noto Sans SC',sans-serif";
         ctx.textAlign = el.align || 'left';
         ctx.textBaseline = el.baseline || 'middle';
@@ -275,6 +539,10 @@ var AnimRuntime = (function () {
         if (el.glow) { ctx.shadowColor = el.glow; ctx.shadowBlur = 8; ctx.fillRect(el.x, el.y, el.w, el.h); ctx.shadowBlur = 0; }
         break;
 
+      case 'sprite':
+        _drawSprite(el);
+        break;
+
       case 'custom':
         if (typeof el.draw === 'function') el.draw(ctx, el);
         break;
@@ -297,6 +565,44 @@ var AnimRuntime = (function () {
     ctx.fill();
   }
 
+  // --- Sprite drawing ---
+  // Usage: {type:'sprite', name:'bicycle', x:100, y:200, w:80, h:50}
+  // The sprite SVG must be embedded in the HTML as:
+  //   <svg id="sprite-bicycle" style="display:none" viewBox="0 0 ...">...</svg>
+  // Optional: flipX (boolean), opacity (0-1), rotate (degrees)
+  function _drawSprite(el) {
+    var name = el.name;
+    if (!name) return;
+    var img = _spriteCache[name];
+    if (!img) {
+      // Try to find and rasterize the SVG element
+      var svgEl = document.getElementById('sprite-' + name);
+      if (!svgEl) return;
+      var svgStr = new XMLSerializer().serializeToString(svgEl);
+      var blob = new Blob([svgStr], {type: 'image/svg+xml;charset=utf-8'});
+      var url = URL.createObjectURL(blob);
+      img = new Image();
+      img._loaded = false;
+      img.onload = function () { img._loaded = true; drawFrame(currentFrame); URL.revokeObjectURL(url); };
+      img.src = url;
+      _spriteCache[name] = img;
+      return; // will render on next frame when image is loaded
+    }
+    if (!img._loaded) return;
+    var w = el.w || img.naturalWidth;
+    var h = el.h || img.naturalHeight;
+    // Maintain aspect ratio if only w or h is specified
+    if (el.w && !el.h) h = (img.naturalHeight / img.naturalWidth) * w;
+    if (el.h && !el.w) w = (img.naturalWidth / img.naturalHeight) * h;
+    ctx.save();
+    if (el.opacity !== undefined) ctx.globalAlpha = el.opacity;
+    ctx.translate(el.x, el.y);
+    if (el.rotate) ctx.rotate(el.rotate * Math.PI / 180);
+    if (el.flipX) ctx.scale(-1, 1);
+    ctx.drawImage(img, -w / 2, -h / 2, w, h);
+    ctx.restore();
+  }
+
   // --- Content scaling ---
   // Scale based on canvas height to fit REF_H. Virtual width adapts
   // to fill the actual canvas width so content uses the full area.
@@ -317,7 +623,7 @@ var AnimRuntime = (function () {
   // --- Frame rendering ---
   function drawFrame(f) {
     var bgFn = (typeof drawBg === 'function') ? drawBg : _defaultDrawBg;
-    bgFn(ctx, W, H);
+    bgFn(ctx, W, H, VISUAL_MODE);
     var ct = _contentTransform();
     _applyContentScale(ct);
     var elems = getFrameElements(f, ct.vw, ct.vh);
@@ -350,7 +656,7 @@ var AnimRuntime = (function () {
       var raw = Math.min((ts - startTime) / duration, 1);
       var p = easeInOut(raw);
 
-      bgFn(ctx, W, H);
+      bgFn(ctx, W, H, VISUAL_MODE);
       var ct = _contentTransform();
       _applyContentScale(ct);
 
@@ -498,8 +804,9 @@ var AnimRuntime = (function () {
       PAL = PALETTES[cfg.style];
     }
 
-    // Inject CSS custom properties
+    // Inject CSS custom properties (palette + theme_style shared tokens)
     var root = document.documentElement;
+    // Palette-specific
     root.style.setProperty('--bg', PAL.bg);
     root.style.setProperty('--bg2', PAL.bg2);
     root.style.setProperty('--surface', PAL.surface);
@@ -516,12 +823,47 @@ var AnimRuntime = (function () {
     root.style.setProperty('--glass', PAL.glass);
     root.style.setProperty('--glass-blur', PAL.glassBlur + 'px');
     root.style.setProperty('--radius', PAL.radius);
+    // theme_style shared tokens
+    root.style.setProperty('--bg-0', 'oklch(0.14 0.035 265)');
+    root.style.setProperty('--bg-1', 'oklch(0.18 0.04 265)');
+    root.style.setProperty('--bg-2', 'oklch(0.22 0.045 265)');
+    root.style.setProperty('--bg-3', 'oklch(0.28 0.05 265)');
+    root.style.setProperty('--line', 'oklch(0.35 0.05 265 / 0.35)');
+    root.style.setProperty('--fg', 'oklch(0.96 0.01 265)');
+    root.style.setProperty('--fg-dim', 'oklch(0.75 0.02 265)');
+    root.style.setProperty('--fg-mute', 'oklch(0.55 0.03 265)');
+    root.style.setProperty('--gold', 'oklch(0.85 0.14 85)');
 
     _buildI18N(cfg);
 
-    // Canvas init
+    // Canvas init (must be before _applyVisualMode which calls drawFrame)
     cv = document.getElementById('c');
     ctx = cv.getContext('2d');
+
+    // Visual mode: default to cyberpunk, allow CONFIG override
+    if (cfg.visualMode && VISUAL_MODES[cfg.visualMode]) {
+      VISUAL_MODE = cfg.visualMode;
+    }
+
+    // Build style switcher UI and apply initial mode CSS vars (no draw yet)
+    _buildStyleSwitcher();
+    // Set CSS vars without redrawing (canvas size not yet set)
+    var _m = VISUAL_MODES[VISUAL_MODE] || VISUAL_MODES.cyberpunk;
+    var _r = document.documentElement;
+    _r.style.setProperty('--sb-bg',     _m.sidebarBg || 'rgba(5,6,15,0.92)');
+    _r.style.setProperty('--sb-border', _m.sidebarBorder || (_m.canvasAccent || PAL.primary));
+    _r.style.setProperty('--sb-text',   _m.sidebarText || PAL.text);
+    _r.style.setProperty('--sb-dim',    _m.sidebarTextDim || PAL.muted);
+    _r.style.setProperty('--sb-mute',   _m.sidebarTextMute || PAL.muted);
+    _r.style.setProperty('--sb-accent', _m.sidebarAccent || PAL.primary);
+    _r.style.setProperty('--sb-btn-bg', _m.sidebarBtnBg || 'transparent');
+    _r.style.setProperty('--sb-btn-bd', _m.sidebarBtnBorder || 'transparent');
+    _r.style.setProperty('--hud-bg',    _m.hudBg || 'rgba(5,6,15,0.9)');
+    _r.style.setProperty('--hud-border',_m.hudBorder || 'transparent');
+    _r.style.setProperty('--hud-label', _m.hudLabel || PAL.muted);
+    _r.style.setProperty('--hud-value', _m.hudValue || PAL.text);
+    _r.style.setProperty('--ctrl-bg',   _m.ctrlBg || PAL.primary);
+    _r.style.setProperty('--ctrl-color',_m.ctrlColor || PAL.bg);
 
     // Events
     window.addEventListener('resize', _resize);
@@ -584,6 +926,9 @@ var AnimRuntime = (function () {
     get LANG() { return LANG; },
     get _lang() { return LANG; },
     get lang() { return LANG; },
+    get mode() { return VISUAL_MODE; },
+    get modeColors() { return _modeColors(); },
+    setMode: function(m) { if (VISUAL_MODES[m]) _applyVisualMode(m); },
     get REF_W() { return REF_W; },
     get REF_H() { return REF_H; },
     get realW() { return W; },

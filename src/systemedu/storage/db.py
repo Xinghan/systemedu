@@ -260,19 +260,25 @@ class LessonContent(Base):
 
 
 class LessonContentV3(Base):
-    """v3 课程内容(course_factory_v3 流水线产出)。
+    """v3 课程内容(course_factory_v3 流水线产出, 多版本支持)。
 
-    与 LessonContent 完全独立, 不动 v2 schema。前端可加 toggle 切换 v2 / v3。
+    每个 (project_name, knode_id) 可保留多个版本(version_label 区分),
+    每节点有且仅有一个 is_active=True 的版本作为前端默认显示。
     """
 
     __tablename__ = "lesson_content_v3"
     __table_args__ = (
-        UniqueConstraint("project_name", "knode_id", name="uq_lesson_content_v3"),
+        UniqueConstraint(
+            "project_name", "knode_id", "version_label",
+            name="uq_lesson_content_v3_versioned",
+        ),
     )
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     project_name = Column(String(200), nullable=False)
     knode_id = Column(Integer, nullable=False)
+    version_label = Column(String(120), nullable=False, default="default")
+    is_active = Column(Boolean, nullable=False, default=False)
     status = Column(String(20), nullable=False, default="pending")
     course_content = Column(Text, default="")    # 完整 CourseContent JSON
     project_assignment = Column(Text, default="")
