@@ -2768,7 +2768,17 @@ export function CourseContentView({
         {/* 老师讲课场景: 全屏 LizardScene 替代正常课程内容 */}
         {sceneMode === "teacher" ? (
           <div className="flex-1 min-h-0">
-            <TeacherSceneView knode={knode} />
+            <TeacherSceneView
+              knode={knode}
+              projectName={projectName}
+              nodeId={nodeId}
+              versionLabel={
+                v3SelectedVersion ||
+                v3Versions.find((v) => v.is_active)?.version_label ||
+                null
+              }
+              courseContent={content as CourseContent | undefined ?? null}
+            />
           </div>
         ) : (
         <>
