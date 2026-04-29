@@ -632,6 +632,38 @@ export interface CourseV3VersionsData {
   versions: CourseV3Version[]
 }
 
+// ─── Slides (老师讲课模式) ─────────────────────────────────────────────
+
+export type SlideKind =
+  | "intro"
+  | "bullet"
+  | "theory"
+  | "animation"
+  | "game"
+  | "image"
+  | "diagram"
+  | "videos"
+  | "labxchange"
+  | "outro"
+
+export interface SlideEntry {
+  slide_index: number
+  slide_id: string
+  kind: SlideKind
+  title: string
+  body_markdown: string
+  audio_script: string
+  payload: Record<string, unknown>
+  generated_at: string | null
+}
+
+export interface CourseV3SlidesData {
+  project_name: string
+  knode_id: number
+  version_label: string | null
+  slides: SlideEntry[]
+}
+
 export interface CourseAssignmentData {
   status: "pending" | "generating" | "ready" | "failed"
   assignment: string
