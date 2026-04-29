@@ -609,6 +609,92 @@ def list_v3_versions(project_name: str, knode_id: int) -> list[dict]:
         db.close()
 
 
+# ---------------------------------------------------------------------------
+# Slides (lesson_slide_v3) — 老师讲课模式 slide 数据 CRUD
+# ---------------------------------------------------------------------------
+
+def list_slides_v3(project_name: str, knode_id: int, version_label: str) -> list[dict]:
+    """返回 (project, knode, version_label) 下所有 slides 按 slide_index 升序。"""
+    from systemedu.storage.db import LessonSlideV3, get_session
+    db = get_session()
+    try:
+        rows = (
+            db.query(LessonSlideV3)
+            .filter_by(project_name=project_name, knode_id=knode_id, version_label=version_label)
+            .order_by(LessonSlideV3.slide_index.asc())
+            .all()
+        )
+        return [
+            {
+                "slide_index": r.slide_index,
+                "slide_id": r.slide_id,
+                "kind": r.kind,
+                "title": r.title or "",
+                "body_markdown": r.body_markdown or "",
+                "audio_script": r.audio_script or "",
+                "payload": json.loads(r.payload) if r.payload else {},
+                "generated_at": r.generated_at.isoformat() if r.generated_at else None,
+            }
+            for r in rows
+        ]
+    finally:
+        db.close()
+
+
+def replace_slides_v3(project_name: str, knode_id: int, version_label: str,
+                       slides: list[dict]) -> int:
+    """先删除该 version 下所有旧 slides, 再批量插入新的。返回插入条数。
+
+    每个 slide dict 必须含: slide_id, kind, 可选含 title/body_markdown/audio_script/payload。
+    slide_index 自动按列表顺序赋 0..N-1。
+    """
+    from systemedu.storage.db import LessonSlideV3, get_session
+    db = get_session()
+    try:
+        # 删旧
+        db.query(LessonSlideV3).filter_by(
+            project_name=project_name, knode_id=knode_id, version_label=version_label,
+        ).delete(synchronize_session=False)
+        # 插新
+        now = datetime.now()
+        for i, s in enumerate(slides):
+            payload = s.get("payload") or {}
+            payload_json = json.dumps(payload, ensure_ascii=False) if payload else ""
+            db.add(LessonSlideV3(
+                project_name=project_name,
+                knode_id=knode_id,
+                version_label=version_label,
+                slide_index=i,
+                slide_id=str(s.get("slide_id") or f"slide_{i}"),
+                kind=str(s.get("kind") or "bullet"),
+                title=str(s.get("title") or ""),
+                body_markdown=str(s.get("body_markdown") or ""),
+                audio_script=str(s.get("audio_script") or ""),
+                payload=payload_json,
+                generated_at=now,
+            ))
+        db.commit()
+        return len(slides)
+    finally:
+        db.close()
+
+
+def delete_slides_v3(project_name: str, knode_id: int, version_label: str) -> int:
+    """删除指定 version 的所有 slides。返回删除条数。"""
+    from systemedu.storage.db import LessonSlideV3, get_session
+    db = get_session()
+    try:
+        n = (
+            db.query(LessonSlideV3)
+            .filter_by(project_name=project_name, knode_id=knode_id, version_label=version_label)
+            .delete(synchronize_session=False)
+        )
+        db.commit()
+        return n
+    finally:
+        db.close()
+
+
 def upsert_lesson(project_name: str, knode_id: int, content_type: str,
                    course_content: dict, *,
                    project_assignment: str = "") -> None:

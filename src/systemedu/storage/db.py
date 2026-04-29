@@ -285,6 +285,35 @@ class LessonContentV3(Base):
     generated_at = Column(DateTime, nullable=True)
 
 
+class LessonSlideV3(Base):
+    """v3 老师讲课 slides — 每个 knode 一组 slides, 绑定具体 version_label。
+
+    可选: 某个 version_label 可以没有 slides (尚未生成或不需要 slide 场景)。
+    Slide 顺序 = slide_index 0-based。每个 slide 含 audio_script (老师讲这页的话)。
+    """
+
+    __tablename__ = "lesson_slide_v3"
+    __table_args__ = (
+        UniqueConstraint(
+            "project_name", "knode_id", "version_label", "slide_index",
+            name="uq_lesson_slide_v3",
+        ),
+    )
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    project_name = Column(String(200), nullable=False)
+    knode_id = Column(Integer, nullable=False)
+    version_label = Column(String(120), nullable=False)
+    slide_index = Column(Integer, nullable=False)        # 0-based 顺序
+    slide_id = Column(String(120), nullable=False)       # e.g. "intro" / "anim_xxx"
+    kind = Column(String(40), nullable=False)            # intro/bullet/animation/game/image/diagram/videos/labxchange/theory/outro
+    title = Column(Text, default="")
+    body_markdown = Column(Text, default="")
+    audio_script = Column(Text, default="")
+    payload = Column(Text, default="")                   # JSON: 各 kind 特定数据 (idea_id / image_url / videos[] / labxchange[] / ...)
+    generated_at = Column(DateTime, nullable=True)
+
+
 class NodeResource(Base):
     """Search result resource for a knowledge node."""
 
