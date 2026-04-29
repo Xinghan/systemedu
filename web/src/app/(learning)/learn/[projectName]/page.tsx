@@ -44,6 +44,7 @@ import {
 import { PageLoading } from "@/components/ui/page-loading"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { ChatPanel } from "@/components/chat/chat-panel"
+import { LizardChatHeader } from "@/components/learning/lizard-chat-header"
 import { NotePanel } from "@/components/learning/note-panel"
 import { CourseContentView } from "@/components/learning/course-content-view"
 import { AssignmentView } from "@/components/learning/assignment-view"
@@ -1331,6 +1332,9 @@ export default function LearnPage() {
               </button>
             </div>
           </div>
+
+          {/* 蜥蜴老师 (auto-speaks AI replies) — 顶部固定高度 */}
+          {tutorOpen && <LizardChatHeader height={260} />}
 
           {/* Chat via ChatPanel — fills remaining space */}
           <div className="flex-1 min-h-0">
