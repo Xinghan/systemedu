@@ -39,8 +39,10 @@ export interface LizardSceneProps {
   slide?: ReactNode
   /** Custom background image url; defaults to bundled lizard background. */
   backgroundUrl?: string
-  /** Custom body image url; defaults to bundled lizard body. */
+  /** Custom body image url (full lizard, static base layer). */
   bodyUrl?: string
+  /** Custom head image url (head/hat overlay, animated layer). */
+  headUrl?: string
   /** className for outer container. */
   className?: string
 }
@@ -50,6 +52,7 @@ export function LizardScene({
   slide = null,
   backgroundUrl = "/dighuman/figure/background.png",
   bodyUrl = "/dighuman/figure/body.png",
+  headUrl = "/dighuman/figure/head.png",
   className = "",
 }: LizardSceneProps) {
   const weights = useDighumanAvatarStore((s) => s.blendshapeWeights)
@@ -70,23 +73,20 @@ export function LizardScene({
     return () => cancelAnimationFrame(raf)
   }, [])
 
-  // Avoid hydration mismatch: use stable transform values until client mounts.
-  // Speaking pulse uses an "always-on" base when isSpeaking is true so the lizard
-  // bobs along with speech even when the viseme is SIL between words; mouthIntensity
-  // adds extra emphasis on louder syllables.
+  // Head-only animation (mirrors ~/Dev/systemdighuman commit 7e86cf7):
+  // body stays static; only head.png layer rotates/bobs around the neck.
+  // Speaking adds a base pulse so head keeps nodding even between visemes.
   const t = mounted ? (performance.now() / 1000) * Math.PI * 2 : 0
-  const breath = mounted ? Math.sin(t * 0.25) * 4 : 0
-  const sway = mounted ? Math.sin(t * 0.15) * 0.5 : 0
-  // Base pulse during speech (~30% intensity) + viseme-driven extra (up to 70% more)
+  const idleSway = mounted ? Math.sin(t * 0.15) * 1.2 : 0 // ±1.2°, ~6.7s
+  const idleBob = mounted ? Math.sin(t * 0.25) * 2 : 0 // 2 px, ~4s
+  // Base pulse during speech keeps motion even when viseme is SIL between words.
   const speechBase = isSpeaking && mounted ? 0.3 : 0
   const visemeBoost = mounted ? intensity * 0.7 : 0
-  const pulseAmount = (speechBase + visemeBoost) * (0.5 + 0.5 * Math.sin(t * 6))
-  const nod = pulseAmount * 4 // up to 4° head dip
-  const bounce = -pulseAmount * 18 // up to 18 px upward
-  const pulseScale = 1 + pulseAmount * 0.04 // up to 4% scale
-  const totalY = breath + bounce
-  const totalRot = sway - nod
-  const filterBrightness = 1 + pulseAmount * 0.06
+  const speakPulse = (speechBase + visemeBoost) * (0.5 + 0.5 * Math.sin(t * 6))
+  const speakNod = speakPulse * 2.5 // up to 2.5° downward head dip
+  const speakBob = -speakPulse * 6 // up to 6 px upward when emphatic
+  const headRot = idleSway - speakNod
+  const headY = idleBob + speakBob
   void tick
 
   return (
@@ -110,20 +110,32 @@ export function LizardScene({
       {/* Projector screen (slide slot) — left half */}
       <ProjectorScreen>{slide}</ProjectorScreen>
 
-      {/* Lizard body (right bottom) */}
+      {/* Lizard (right bottom) — body static, head animated overlay */}
       <div className="absolute right-[2%] bottom-0 w-[34%] max-w-[480px] z-10">
-        <img
-          src={bodyUrl}
-          alt="lizard teacher"
-          className="w-full h-auto drop-shadow-2xl select-none pointer-events-none"
-          draggable={false}
-          style={{
-            transform: `translateY(${totalY}px) rotate(${totalRot}deg) scale(${pulseScale})`,
-            transformOrigin: "50% 80%",
-            filter: `brightness(${filterBrightness})`,
-            willChange: "transform",
-          }}
-        />
+        <div className="relative w-full">
+          {/* Static body — full image, never moves. */}
+          <img
+            src={bodyUrl}
+            alt="lizard teacher"
+            className="w-full h-auto drop-shadow-2xl select-none pointer-events-none"
+            draggable={false}
+          />
+          {/* Animated head overlay — same canvas size, only head pixels opaque. */}
+          <img
+            src={headUrl}
+            alt=""
+            aria-hidden
+            className="absolute inset-0 w-full h-auto pointer-events-none select-none"
+            draggable={false}
+            style={{
+              transform: `translateY(${headY}px) rotate(${headRot}deg)`,
+              // Pivot at neck base (~50% horizontally, ~46% vertically since head
+              // crop ends at y=760 in a 1536-tall image).
+              transformOrigin: "50% 46%",
+              willChange: "transform",
+            }}
+          />
+        </div>
       </div>
 
       {/* Subtitle */}
