@@ -15,6 +15,7 @@ import rehypeKatex from "rehype-katex"
 import "katex/dist/katex.min.css"
 import { gateway } from "@/lib/api"
 import { getCourseFactoryVariant } from "@/data/course-factory-variants"
+import { TeacherSceneView } from "@/components/learning/teacher-scene-view"
 import type {
   CourseContent,
   CourseContentData,
@@ -2311,6 +2312,8 @@ export function CourseContentView({
   // v3 多版本: 当前选中的 version_label (null = 让后端返回 active 版本)
   const [v3SelectedVersion, setV3SelectedVersion] = useState<string | null>(null)
   const [v3Versions, setV3Versions] = useState<CourseV3Version[]>([])
+  // 场景切换: course (现有课程内容视图) ↔ teacher (蜥蜴老师 + slide 占位)
+  const [sceneMode, setSceneMode] = useState<"course" | "teacher">("course")
   const [generating, setGenerating] = useState(false)
   const [notGenerated, setNotGenerated] = useState(false) // true when no content exists yet
   const [checking, setChecking] = useState(true)          // initial check in progress
@@ -2627,6 +2630,8 @@ export function CourseContentView({
           v3SelectedVersion={v3SelectedVersion}
           onSelectV3Version={setV3SelectedVersion}
           onSetActiveV3Version={handleSetActiveV3Version}
+          sceneMode={sceneMode}
+          onSwitchScene={setSceneMode}
           showingCourseFactory={showingCourseFactory}
           courseFactoryLabel={courseFactoryVariant?.label}
           onToggleCourseFactory={() => {
@@ -2655,6 +2660,8 @@ export function CourseContentView({
           v3SelectedVersion={v3SelectedVersion}
           onSelectV3Version={setV3SelectedVersion}
           onSetActiveV3Version={handleSetActiveV3Version}
+          sceneMode={sceneMode}
+          onSwitchScene={setSceneMode}
           showingCourseFactory={showingCourseFactory}
           courseFactoryLabel={courseFactoryVariant?.label}
           onToggleCourseFactory={() => {
@@ -2684,6 +2691,8 @@ export function CourseContentView({
           v3SelectedVersion={v3SelectedVersion}
           onSelectV3Version={setV3SelectedVersion}
           onSetActiveV3Version={handleSetActiveV3Version}
+          sceneMode={sceneMode}
+          onSwitchScene={setSceneMode}
           showingCourseFactory={showingCourseFactory}
           courseFactoryLabel={courseFactoryVariant?.label}
           onToggleCourseFactory={() => {
@@ -2752,8 +2761,17 @@ export function CourseContentView({
           onToggleCourseFactory={() => {
             setContentVariant((prev) => prev === "course_factory" ? "default" : "course_factory")
           }}
+          sceneMode={sceneMode}
+          onSwitchScene={setSceneMode}
         />
 
+        {/* 老师讲课场景: 全屏 LizardScene 替代正常课程内容 */}
+        {sceneMode === "teacher" ? (
+          <div className="flex-1 min-h-0">
+            <TeacherSceneView knode={knode} />
+          </div>
+        ) : (
+        <>
         <div className="flex-1 min-h-0 overflow-y-auto">
           {generating && !showingCourseFactory && (
             <div className="max-w-4xl mx-auto px-6 py-5 w-full">
@@ -2846,6 +2864,8 @@ export function CourseContentView({
             )}
           </div>
         )}
+        </>
+        )}
       </div>
     </AudioProvider>
     </KnowledgeLevelContext.Provider>
@@ -2867,6 +2887,8 @@ function Header({
   v3SelectedVersion = null,
   onSelectV3Version,
   onSetActiveV3Version,
+  sceneMode = "course",
+  onSwitchScene,
 }: {
   knode: KnodeInfo | null
   onClose: () => void
@@ -2881,6 +2903,8 @@ function Header({
   v3SelectedVersion?: string | null
   onSelectV3Version?: (label: string | null) => void
   onSetActiveV3Version?: (label: string) => void
+  sceneMode?: "course" | "teacher"
+  onSwitchScene?: (m: "course" | "teacher") => void
 }) {
   // v3 模式当前显示的版本: 优先用 selected, 否则用 active
   const activeVersion = v3Versions.find((v) => v.is_active)?.version_label || null
@@ -2904,6 +2928,37 @@ function Header({
         )}
       </div>
       <div className="flex items-center gap-2 shrink-0">
+        {/* 场景切换: 课程内容 ↔ 老师讲课 (蜥蜴 + 幻灯片) */}
+        {onSwitchScene && (
+          <div className="inline-flex h-8 rounded-lg border border-border/60 bg-secondary/40 p-0.5 mr-1">
+            <button
+              type="button"
+              onClick={() => onSwitchScene("course")}
+              className={[
+                "px-3 rounded-md text-xs font-medium transition-colors",
+                sceneMode === "course"
+                  ? "bg-background text-foreground shadow-sm"
+                  : "text-muted-foreground hover:text-foreground",
+              ].join(" ")}
+              title="查看课程内容 (动画/游戏/练习/diagram)"
+            >
+              课程内容
+            </button>
+            <button
+              type="button"
+              onClick={() => onSwitchScene("teacher")}
+              className={[
+                "px-3 rounded-md text-xs font-medium transition-colors",
+                sceneMode === "teacher"
+                  ? "bg-amber-100 text-amber-800 shadow-sm"
+                  : "text-muted-foreground hover:text-amber-700",
+              ].join(" ")}
+              title="切换到蜥蜴老师讲课场景"
+            >
+              老师讲课
+            </button>
+          </div>
+        )}
         {/* v2 / v3 版本切换 toggle (仅当 v3 已生成时显示) */}
         {v3Available && onSwitchVersion && (
           <div className="inline-flex h-8 rounded-lg border border-border/60 bg-secondary/40 p-0.5">
