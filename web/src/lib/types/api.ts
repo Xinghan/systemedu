@@ -613,6 +613,23 @@ export interface CourseContentData {
   knode_id?: number
   status: "pending" | "generating" | "ready" | "failed"
   course_content: CourseContent | Record<string, never>
+  // v3 多版本字段 (v2 endpoint 不返回这些)
+  version_label?: string | null
+  is_active?: boolean
+  generated_at?: string | null
+}
+
+export interface CourseV3Version {
+  version_label: string
+  is_active: boolean
+  status: "pending" | "generating" | "ready" | "failed"
+  generated_at: string | null
+}
+
+export interface CourseV3VersionsData {
+  project_name: string
+  knode_id: number
+  versions: CourseV3Version[]
 }
 
 export interface CourseAssignmentData {

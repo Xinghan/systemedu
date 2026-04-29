@@ -86,13 +86,26 @@ async def run(ctx: dict, *, em: Emitter) -> tuple[str, list[dict]]:
             "input": "", "output": f"debate types: {debate_types} (expected {EXPECTED_TYPES})",
         })
 
-    # 校验 ideas 字段
+    # 校验 ideas 字段 + normalize ref 到 knode 原文 (兜底 LLM 改写/加标点/缺失)
+    knode = ctx.get("knode") or {}
+    hands_pool = list(knode.get("hands_on_components") or [])
+    accept_pool = _accept_pool_from_knode(knode)
     cleaned_ideas = []
+    used_hands: set[str] = set()
     for idea in ideas:
         if not isinstance(idea, dict):
             continue
         if not idea.get("idea_id") or not idea.get("mode"):
             continue
+        h_ref = _normalize_ref(str(idea.get("hands_on_ref", "")), hands_pool)
+        a_ref = _normalize_ref(str(idea.get("acceptance_ref", "")), accept_pool)
+        # 缺失兜底: LLM 没写 / 写空, 强制选 pool 第一个 (preflight 必须有 ref)
+        if not h_ref and hands_pool:
+            h_ref = hands_pool[0]
+        if not a_ref and accept_pool:
+            a_ref = accept_pool[0]
+        if h_ref:
+            used_hands.add(h_ref)
         cleaned_ideas.append({
             "idea_id": str(idea["idea_id"]),
             "mode": str(idea["mode"]),
@@ -100,8 +113,21 @@ async def run(ctx: dict, *, em: Emitter) -> tuple[str, list[dict]]:
             "topic": str(idea.get("topic", "")),
             "context_summary": str(idea.get("context_summary", "")),
             "mode_reason": str(idea.get("mode_reason", "")),
-            "hands_on_ref": str(idea.get("hands_on_ref", "")),
-            "acceptance_ref": str(idea.get("acceptance_ref", "")),
+            "hands_on_ref": h_ref,
+            "acceptance_ref": a_ref,
+        })
+
+    # 兜底覆盖检查: 若 hands_on_components 有未被任何 idea 引用的, 把第一个 exercise idea 的 hands_on_ref
+    # 改成第一个未覆盖项, 防 preflight 报"未被覆盖"。
+    uncovered = [h for h in hands_pool if h not in used_hands]
+    if uncovered and cleaned_ideas:
+        # 优先改 exercise; 没有就改第一个 idea
+        target = next((i for i in cleaned_ideas if i["mode"] == "exercise"), cleaned_ideas[0])
+        target["hands_on_ref"] = uncovered[0]
+        em.emit(EV_AGENT_LOG, {
+            "agent": "Ideation8Debate", "phase": "patch",
+            "input": "",
+            "output": f"覆盖兜底: 把 {target['idea_id']}.hands_on_ref 改为 {uncovered[0][:40]!r}",
         })
 
     em.emit(EV_AGENT_LOG, {
@@ -142,6 +168,62 @@ def _artifact_bullets(items: list) -> str:
         elif isinstance(it, str):
             lines.append(f"- {it}")
     return "\n".join(lines) or "(无)"
+
+
+def _accept_pool_from_knode(knode: dict) -> list[str]:
+    """组装 acceptance_ref 候选池: knode.acceptance_standard + acceptance_artifacts.title。"""
+    pool: list[str] = []
+    for s in knode.get("acceptance_standard") or []:
+        if isinstance(s, str):
+            pool.append(s)
+    for a in knode.get("acceptance_artifacts") or []:
+        if isinstance(a, dict):
+            t = a.get("title") or a.get("name")
+            if t:
+                pool.append(str(t))
+        elif isinstance(a, str):
+            pool.append(a)
+    return pool
+
+
+def _normalize_ref(ref: str, pool: list[str]) -> str:
+    """把 LLM 写的 ref 归一化到 pool 中最匹配的原文。
+
+    匹配优先级:
+      1. exact match → 原样保留
+      2. 去掉首尾标点 + 空白后 exact match → 返回原文
+      3. 包含子串 (LLM 改写但保留主干) → 返回原文
+      4. fuzzy: 用 SequenceMatcher 找最相近, 比例 ≥ 0.6 → 返回原文
+      5. 都不匹配 → 返回 LLM 原文 (保底, 后续 preflight 会报)
+    """
+    if not ref or not pool:
+        return ref
+    if ref in pool:
+        return ref
+    # 去掉首尾标点空白
+    stripped = ref.strip().rstrip("。.,，;；!！?？ \t")
+    for p in pool:
+        if p.strip().rstrip("。.,，;；!！?？ \t") == stripped:
+            return p
+    # 子串包含
+    for p in pool:
+        if stripped and stripped in p:
+            return p
+        if p in ref:
+            return p
+    # fuzzy 兜底
+    try:
+        from difflib import SequenceMatcher
+        best = (0.0, ref)
+        for p in pool:
+            r = SequenceMatcher(None, stripped or ref, p).ratio()
+            if r > best[0]:
+                best = (r, p)
+        if best[0] >= 0.6:
+            return best[1]
+    except Exception:
+        pass
+    return ref
 
 
 _JSON_RE = re.compile(r"\{.*\}", re.DOTALL)

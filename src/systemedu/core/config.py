@@ -198,17 +198,18 @@ def _default_config_dict() -> dict:
             "default": "kimi",
             "providers": {
                 "kimi": {
-                    # creative 档默认: kimi-k2.6 @ Moonshot (fogsight 风格 anim/game 视觉最佳)
-                    "base_url": "https://api.moonshot.cn/v1",
-                    "api_key": "${MOONSHOT_API_KEY}",
-                    "model": "kimi-k2.6",
+                    # creative 档默认 (provider 名保留 "kimi" 减少代码改动): GLM-5.1 @ 智谱 BigModel
+                    # 切换原因 (2026-04-28): kimi-k2.6 reasoning 太慢, anim/game 单次 5-8 分钟
+                    "base_url": "https://open.bigmodel.cn/api/paas/v4",
+                    "api_key": "${ZHIPU_API_KEY}",
+                    "model": "glm-5.1",
                     "temperature": 1.0,
-                    "max_tokens": 32768,
+                    "max_tokens": 65536,
                 },
                 "qwen": {
                     "base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1",
                     "api_key": "${DASHSCOPE_API_KEY}",
-                    "model": "qwen3-max",
+                    "model": "qwen3.6-plus",
                 },
             },
         },

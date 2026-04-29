@@ -1643,26 +1643,34 @@ async def api_get_course_v2(request: Request) -> JSONResponse:
 
 
 async def api_get_course_v3(request: Request) -> JSONResponse:
-    """GET /api/projects/{name}/nodes/{node_id}/course/v3 — 读取 v3 (kimi-k2.6) 版本课程内容。
+    """GET /api/projects/{name}/nodes/{node_id}/course/v3[?version=<label>]
+    读取 v3 (kimi-k2.6) 版本课程内容, 支持多版本。
 
-    与 v2 完全独立, 数据存在 lesson_content_v3 表。前端可加 toggle 切换 v2/v3 对比。
+    无 version 参数 → 返回当前 active 版本 (前端默认行为)。
+    带 version 参数 → 返回指定版本内容。
     """
     name = request.path_params["name"]
     node_id = int(request.path_params["node_id"])
+    version_label = request.query_params.get("version")
 
     from systemedu.storage.db import LessonContentV3, get_session as get_db_session
     import json as _json
 
     db = get_db_session()
     try:
-        lesson = (
-            db.query(LessonContentV3)
-            .filter_by(project_name=name, knode_id=node_id)
-            .first()
-        )
+        q = db.query(LessonContentV3).filter_by(project_name=name, knode_id=node_id)
+        if version_label:
+            lesson = q.filter_by(version_label=version_label).first()
+        else:
+            # 默认: 当前 active 版本; 没有 active 时退回最近一条 (兼容 generating/failed 单版本)
+            lesson = q.filter_by(is_active=True).first()
+            if lesson is None:
+                lesson = q.order_by(LessonContentV3.generated_at.desc().nullslast()).first()
+
         if lesson is None:
             return JSONResponse({
                 "project_name": name, "knode_id": node_id,
+                "version_label": None, "is_active": False,
                 "status": "pending", "course_content": {},
             })
         cc = {}
@@ -1673,10 +1681,55 @@ async def api_get_course_v3(request: Request) -> JSONResponse:
                 pass
         return JSONResponse({
             "project_name": name, "knode_id": node_id,
-            "status": lesson.status, "course_content": cc,
+            "version_label": lesson.version_label,
+            "is_active": bool(lesson.is_active),
+            "status": lesson.status,
+            "generated_at": lesson.generated_at.isoformat() if lesson.generated_at else None,
+            "course_content": cc,
         })
     finally:
         db.close()
+
+
+async def api_list_course_v3_versions(request: Request) -> JSONResponse:
+    """GET /api/projects/{name}/nodes/{node_id}/course/v3/versions — 列出所有版本元数据。
+
+    返回 [{version_label, is_active, status, generated_at}], 按生成时间倒序。
+    """
+    name = request.path_params["name"]
+    node_id = int(request.path_params["node_id"])
+
+    from course_factory.factory import list_v3_versions
+    versions = list_v3_versions(name, node_id)
+    return JSONResponse({
+        "project_name": name, "knode_id": node_id,
+        "versions": versions,
+    })
+
+
+async def api_set_course_v3_active(request: Request) -> JSONResponse:
+    """POST /api/projects/{name}/nodes/{node_id}/course/v3/active
+    body: {"version_label": "<label>"}
+    切换指定版本为 active (前端默认显示版本)。
+    """
+    name = request.path_params["name"]
+    node_id = int(request.path_params["node_id"])
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    version_label = (body or {}).get("version_label")
+    if not version_label:
+        return JSONResponse({"error": "version_label required"}, status_code=400)
+
+    from course_factory.factory import set_active_v3_version
+    ok = set_active_v3_version(name, node_id, version_label)
+    if not ok:
+        return JSONResponse(
+            {"error": f"version {version_label!r} not found for {name}/{node_id}"},
+            status_code=404,
+        )
+    return JSONResponse({"ok": True, "active_version": version_label})
 
 
 async def api_get_course_v2_assignment(request: Request) -> JSONResponse:
@@ -3805,6 +3858,8 @@ def create_app() -> Starlette:
         Route("/api/projects/{name}/nodes/{node_id:int}/course/v2/cancel", api_course_v2_cancel, methods=["POST"]),
         Route("/api/projects/{name}/nodes/{node_id:int}/course/v2/assignment", api_get_course_v2_assignment, methods=["GET"]),
         Route("/api/projects/{name}/nodes/{node_id:int}/course/v2", api_get_course_v2, methods=["GET"]),
+        Route("/api/projects/{name}/nodes/{node_id:int}/course/v3/versions", api_list_course_v3_versions, methods=["GET"]),
+        Route("/api/projects/{name}/nodes/{node_id:int}/course/v3/active", api_set_course_v3_active, methods=["POST"]),
         Route("/api/projects/{name}/nodes/{node_id:int}/course/v3", api_get_course_v3, methods=["GET"]),
         Route("/api/projects/{name}/nodes/{node_id:int}/progress", api_update_progress, methods=["PATCH"]),
         Route("/api/projects/{name}/nodes/{node_id:int}/highlights", api_highlights_dispatch, methods=["GET", "POST"]),

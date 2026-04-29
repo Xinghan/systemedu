@@ -1428,46 +1428,123 @@ Game 的交互方式不设固定模板，可以自由设计适合教学内容的
 19. 禁止使用与 window 全局同名的顶层变量。常见坑位：`history`（浏览器导航 API，只有 pushState 没有 push，用 `var history = []` 做数组会导致 `history.push is not a function`）、`location`、`name`、`status`、`origin`、`parent`、`top`、`self`、`length`、`event`、`closed`、`opener`、`frames`、`outerWidth/Height`。游戏中的数组/状态变量用更具体的名字：`flights`/`rounds`/`trials`/`runs` 替代 `history`，`coord`/`pos` 替代 `location`，`playerName`/`itemName` 替代 `name`，`gameState`/`runStatus` 替代 `status`
 ```
 
-### Game 实现规范（fogsight 风格 + 真交互, v3 锁定）
+### Game 实现规范（fogsight 风格 + 强制 sidebar 板式 + 真交互, v3 锁定 2026-04-28）
 
-**核心改变（v3 起）**：放弃旧的"必须 200px 左侧栏 + canvas 主区"强制布局, 改用 **fogsight 精简哲学**——只锁定视觉主题色 + 4 条硬底线, 布局/控件/交互形式完全由实现者自由发挥。**实测 (knode 27 推力对比)**: 自由 prompt + theme palette 锁定能让 LLM 写出更精美、更符合知识点特性的 game。
+**核心哲学**: fogsight 风格 (单文件 HTML / theme palette 锁定 / 自由视觉) **+ 强制左侧 game-sidebar 板式 + 真物理交互**。
 
-#### 推荐技术栈（同 anim, 复用降低不一致）
+**演化路径**:
+- v3 早期: 完全自由布局 — 实测 LLM 经常省略说明面板, 学生不知道怎么玩
+- v3 当前 (2026-04-28): 强制 `.game-sidebar` 200px 含 (标题/目标/操作说明/控件/lang) + 主舞台占剩余, HUD 浮动
 
-1. **Tailwind CSS via CDN**: `<script src="https://cdn.tailwindcss.com"></script>` — utility class 自由布局
+#### 推荐技术栈（同 anim）
+
+1. **Tailwind CSS via CDN**: `<script src="https://cdn.tailwindcss.com"></script>`
 2. **Google Fonts**: `Inter` + `JetBrains Mono` + `Noto Sans SC`
-3. **inline SVG** 绘制场景主体, 用 `<linearGradient>` + `<path>` 自由曲线
-4. **CSS @keyframes** 驱动状态变化 (`shake` / `pulse-glow` / `float`)
-5. **`<canvas> + Particle 类`** 实现尾焰 / 粒子 (rAF 循环 + life/decay)
-6. **HUD 玻璃态**: `backdrop-filter: blur(10px); background: rgba(30, 41, 59, 0.7);`
-7. **theme_style palette CSS 变量**: `:root { --ORBIT: oklch(...); ... }` 主体颜色全部 `var(--XX)`
+3. **inline SVG** 场景 / **`<canvas>`** 实时仿真 / **`Particle 类`** 粒子
+4. **CSS @keyframes** 驱动状态变化
+5. **HUD 玻璃态**: `backdrop-filter: blur(10px); background: rgba(...,0.5);`
+6. **theme_style palette CSS 变量**: `:root { --XX: oklch(...); ... }`
 
-#### 4 条硬底线（违反 = 闸门 fail）
+#### 7 条硬底线（违反 = 5.5 闸门 fail）
 
-1. **真交互**: 滑块/拖拽/键盘/鼠标实时操纵, 不能退化为"输入数字+确认"或"选项点击"(那叫 exercise)
+1. **真交互**: 滑块/拖拽/键盘/鼠标实时操纵, **不能**退化为"输入数字+确认"或"选项点击"(那叫 exercise)
+   - sidebar 内必须含至少 1 个 `<input type="range">` 滑块
+   - 滑块 `input` 事件必须实时更新 HUD 数值和主舞台仿真
+
 2. **真物理参数**: 涉及具体数值时用真实工程数值
+
 3. **视觉与物理坐标分离**:
-   - 物理量(米/秒/牛/度等) ≠ 像素, 视觉是物理量的"投影"
-   - 当模拟值超出可视范围 → 镜头跟随 / 比例尺自适应 / 显示当前可视范围标尺(如"1 格=100m")
-   - 屏幕数字读数 与 视觉位置 永远保持一致 (不能数字说 200m 但物体已出屏)
-4. **中英文双语都能玩** (切换按钮 / 同时显示 / 段落对照, 实现自由)
+   - 物理量(米/秒/牛/度) ≠ 像素, 视觉是物理量的"投影"
+   - 模拟值超出可视范围 → 镜头跟随 / 比例尺自适应 / 显示当前范围标尺
+   - 屏幕数字读数与视觉位置永远保持一致
+   - 严格遵守 detail_plan 的 `directional_rules` (推力向右物体不能向左动)
 
-#### 布局推荐 (非强制)
+4. **中英文双语都能玩** (`#langBtn` 切换 / 同时显示 / 段落对照)
 
-- 横向: 左侧 200px 控制栏 + 右侧主舞台 (`flex h-screen`)
-- 控制栏含: 标题 / 操作说明 / 滑块 / 按钮 / lang-btn
-- 主舞台含: 场景 / HUD / 比例尺 / 状态显示 自由发挥
-- 玻璃态浮动元素: backdrop-blur + rgba
+5. **单文件 HTML**: `<!DOCTYPE html>` 到 `</html>`, 一屏内布局不滚动
 
-但**布局不强制**: 全屏沉浸 / 分屏对比 / 3D 场景 / 顶部控制栏 都可以, 只要不违反 4 条硬底线。
+6. **JS 顶层禁用 window 同名变量**:
+   - **禁止** `var/let/const` 顶层声明: `history, location, name, status, origin, parent, top, self, length, event, closed, opener, frames`
+   - 改名: `playerName / gameStatus / appOrigin / gameTop / histArr`
+
+7. **严格按 detail_plan 的 `layout_zones` 分区**: 控件/主舞台/HUD/字幕各自独立不重叠
+
+#### 强制布局板式 — 直接照下面骨架写
+
+```html
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>...</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC&family=Inter&family=JetBrains+Mono&display=swap" rel="stylesheet">
+  <style>
+    :root { /* theme palette CSS 变量 */ }
+    body { margin:0; padding:0; overflow:hidden; height:100vh;
+           background:var(--BG); font-family:'Noto Sans SC', sans-serif; }
+  </style>
+</head>
+<body class="h-screen overflow-hidden flex">
+  <!-- 必须的左侧控制栏 .game-sidebar 200px 固定宽 -->
+  <aside class="game-sidebar w-[200px] h-screen flex-shrink-0 flex flex-col gap-4 p-4 border-r border-white/10">
+    <h1 class="text-base font-bold">标题 / Title</h1>
+    <p class="text-xs opacity-80">目标 50-100 字: 你要做什么...</p>
+    <ul class="text-xs space-y-1 opacity-90">
+      <li>· 操作 1: 拖动滑块...</li>
+      <li>· 操作 2: 观察 HUD...</li>
+      <li>· 操作 3: 寻找平衡点...</li>
+    </ul>
+    <div class="flex flex-col gap-2 mt-2">
+      <label class="text-xs">力大小 F = <span id="lblF">5</span> N</label>
+      <input id="sliderF" type="range" min="0" max="10" value="5" step="0.1" class="w-full">
+      <label class="text-xs mt-2">质量 m = <span id="lblM">0.5</span> kg</label>
+      <input id="sliderM" type="range" min="0.1" max="2" value="0.5" step="0.05" class="w-full">
+    </div>
+    <button id="langBtn" class="mt-auto px-2 py-1 text-xs border border-white/20 rounded">中 / EN</button>
+  </aside>
+
+  <!-- 主舞台 (剩余宽度) -->
+  <main class="flex-1 h-screen relative overflow-hidden">
+    <canvas id="stage" class="absolute inset-0 w-full h-full"></canvas>
+    <!-- 右上 HUD 玻璃面板 -->
+    <div class="absolute top-4 right-4 backdrop-blur-md bg-white/5 border border-white/10 rounded p-3 text-xs font-mono">
+      <div>F = <span id="hF">5.0</span> N</div>
+      <div>a = <span id="hA">10.0</span> m/s²</div>
+      <div>v = <span id="hV">0.0</span> m/s</div>
+    </div>
+  </main>
+  <script>
+    /* 滑块监听 → 物理仿真 → HUD 实时更新 → langBtn 切换 */
+  </script>
+</body>
+</html>
+```
+
+**铁律**:
+- `<body>` 必须 `overflow:hidden` + `height:100vh` + Tailwind `h-screen overflow-hidden` (双保险)
+- `.game-sidebar` 200px 固定, `<main>` flex-1
+- sidebar 内必须含: `#langBtn` + ≥ 1 个 `<input type="range">` 滑块 + 文字说明
+- 滑块 `input` 事件实时驱动主舞台仿真 + HUD 更新
+
+#### 5.5b Playwright 验证标准
+
+**新版 5.5b** (`course_factory/validate/verify/game.mjs`, 2026-04-28 fogsight 兼容版):
+- 检查页面非空白
+- **必须有真交互控件** (button/input/slider/draggable 任一 ≥ 1)
+- **必须响应交互** (拨滑块 / 点按钮后页面 ≥ 2% 像素变化)
+- standalone + iframe 双通道全过
+
+**不再检查** (旧版假阳性): canvas 必须存在 / level 推进 / 旧 `.game-sidebar` 严格选择器
 
 #### 完整参考实现
 
-`/tmp/v3_game_k27_kimi26_simplified.html`(45 行 prompt + kimi-k2.6 streaming) 是用这套方案生成的火箭推力 sandbox 演示 (47760 字符 / 1273 行), 含动态比例尺(scaleMetersPerPx 19 处) + 玻璃态 HUD + 6 个 input range 滑块 + 73 处 Tailwind utility + 80 处 var(--XX) palette 引用。
+`/tmp/v3_game_k27_kimi26_simplified.html`(45 行 prompt + kimi-k2.6 streaming) 是早期 fogsight 自由风格的火箭推力 sandbox 演示 (47760 字符), 含动态比例尺 + 玻璃态 HUD + 6 个 input range 滑块。当前 v3 在它基础上**额外强制 sidebar 板式**。
 
-#### 学科主题色（同 anim, 参考 theme_style/themes.js 的 26 个 oklch palette）
+#### 学科主题色（同 anim）
 
-按学科 id 选主题色（见 `theme_style/themes.js`）：cs / bio / space / mech / ai / math / med / chem / phys / env / robo / elec / astro / geo / ocean / meteo / paleo / quant / nuke / neuro / mat / micro / zoo / bot / arch / agri。每个主题 5 色 oklch palette, 配合 Tailwind 暗色基底 (`bg-slate-900`)。
+按学科 id 选主题色（见 `theme_style/themes.js`）：cs / bio / space / mech / ai / math / med / chem / phys / env / robo / elec / astro / geo / ocean / meteo / paleo / quant / nuke / neuro / mat / micro / zoo / bot / arch / agri。
 
 ### 物理常识约束（必须遵守）
 
@@ -1500,62 +1577,128 @@ Game 的交互方式不设固定模板，可以自由设计适合教学内容的
 6. **数值真实性**：涉及具体物理量（kg/s, m/s, N, K）时用真实工程参数（例：Saturn V F-1 引擎质量流量 ~270 kg/s, 排气速度 ~2500 m/s, 推力 ~7000 kN）。**禁止编造数据**。
 7. **代码长度不设上限**。复杂概念需要丰富的 SVG 绘制 + 多层动画 + 粒子系统。浅薄比冗长更糟糕。**fogsight 风格演示约 500-800 行**。
 
-### Animation 实现规范（fogsight 风格, v3 锁定）
+### Animation 实现规范（fogsight 风格 + 强制 sidebar 板式, v3 锁定 2026-04-28）
 
-**核心改变（v3 起）**：放弃旧的 `animation_runtime.js` + `getFrameElements()` Canvas 2D 方案 + 强制 200px sidebar 模板, 改用 **fogsight 精简哲学** + **scenes 时间轴**——只锁定视觉主题色 + 5 条硬底线, 布局/技术栈完全自由发挥。**实测对比 6 模型**: kimi-k2.6 + 9 行精简 prompt 跑出 22791 字符 / 539 行 HTML, 视觉最佳, 用户决策为基准。
+**核心哲学**: fogsight 风格 (单文件 HTML / scenes 时间轴 / 自动播放 / 真物理参数) **+ 强制左侧 sidebar 板式**。
 
-#### 推荐技术栈（同 game, 复用降低不一致）
+**演化路径**:
+- v3 早期 (~2026-04-27): 完全 fogsight 自由风格, 无 sidebar 强制 — 实测 LLM 经常退化为"互动模拟器"或不写说明面板
+- v3 当前 (2026-04-28): fogsight 自由风格 **+ 强制 sidebar (200px 标题/说明/lang 按钮) + HUD 浮动 + 双语字幕** — 学生需要在主舞台演示外能看到上下文 (概念名称 / 关键事实 / 切换语言), 只靠主舞台动画无法承担解释任务
 
-1. **Tailwind CSS via CDN**: `<script src="https://cdn.tailwindcss.com"></script>` — utility class 自由布局
-2. **Google Fonts**: `Inter` + `JetBrains Mono` + `Noto Sans SC`
-3. **inline SVG** 绘制主体, `<linearGradient>` + `<path>` 自由曲线, `<defs>` + `<marker>` 箭头
-4. **CSS @keyframes** 驱动连续动画 (`shake` / `float` / `pulse-glow` / `blink`)
-5. **CSS `transition: transform Xs cubic-bezier(...)`** 实现物体平滑运动 (替代 Canvas lerp)
-6. **`<canvas> + Particle 类`** 实现尾焰 / 粒子 (rAF 循环 + life/decay)
-7. **HUD 玻璃态**: `backdrop-filter: blur(10px); background: rgba(30, 41, 59, 0.7);`
-8. **theme_style palette CSS 变量**: `:root { --ORBIT: oklch(...); ... }` 主体颜色全部 `var(--XX)`
+#### 推荐技术栈
 
-#### 5 条硬底线（违反 = 闸门 fail）
+1. **Tailwind CSS via CDN**: `<script src="https://cdn.tailwindcss.com"></script>`
+2. **Google Fonts**: `Inter` + `JetBrains Mono` + `Noto Sans SC` (CDN)
+3. **inline SVG** 绘制场景主体 (`<path>` / `<linearGradient>` / `<marker>`)
+4. **`<canvas>`** 实时仿真 (rAF 循环 + 物理积分 + 粒子)
+5. **CSS @keyframes / transition** 驱动 UI 变化
+6. **HUD 玻璃态**: `backdrop-filter: blur(10px); background: rgba(...,0.5);`
+7. **theme_style palette CSS 变量**: `:root { --BG, --PHOTON, --WAVE, ... }` 主体颜色全部 `var(--XX)`
 
-1. **像视频一样自动播放**: scenes 时间轴 (JS 数组 + setTimeout 串行推进 phase),
-   每个 phase 字幕 / HUD / 视觉同步切换; **不要按帧导航 / 不要互动按钮**
-2. **真物理参数**: 涉及具体数值时用真实工程数值
-   (例: Saturn V F-1 引擎质量流量 ~270 kg/s, 排气速度 ~2500 m/s)
-3. **视觉与物理坐标分离** (与 game 同):
-   - 物理量(米/秒/牛/度等) ≠ 像素, 视觉是物理量的"投影"
-   - 当模拟值超出可视范围 → 镜头跟随 / 比例尺自适应 / 显示当前可视范围标尺
-   - 屏幕数字读数 与 视觉位置 永远保持一致
-4. **中英文双语字幕** 从头覆盖整个动画过程
-5. **单文件 HTML**: `<!DOCTYPE html>` 到 `</html>`, 一屏内布局不滚动
+#### 7 条硬底线（违反 = 5.5 闸门 fail）
 
-#### 布局推荐 (非强制)
+1. **本质要求 — 演示一条独立科学规律的过程**:
+   - detail_plan_json 的 `scientific_concept` + `process_to_show` 必须作为 anim 主线
+   - 不是项目步骤的可视化, 是科学规律本身在眼前发生
+   - 严格遵守 detail_plan 的 `directional_rules` (推力向右物体不能向左动)
+   - 严格按 detail_plan 的 `layout_zones` 分区, 不互相挤压
 
-- 主舞台占满, 浮动 HUD + 双语字幕 box (anim 不互动, **无须 sidebar**)
-- 字幕浮动在底部, 中文大字 + 英文小字斜体, fade transition
-- HUD 玻璃态浮在顶部一角
+2. **自动播放主流程, 唯一允许的交互是 sidebar 内 langBtn**:
+   - 页面 load 立即开始, 视觉立刻有变化, 不等任何点击
+   - **禁止**主舞台元素挂 click listener / 滑块 / 数字输入框 / "点击开始"
+   - **禁止**初始化物理量为 0 等待用户操作 (要 `force = 5.0` 直接开演)
+   - 用 scenes 时间轴 (JS 数组 + setTimeout / requestAnimationFrame), 整个动画 30-90 秒末尾循环或停在 takeaway
 
-但**布局不强制**: 全屏沉浸 / 多区分屏 / 任意视觉创意都可以, 只要不违反 5 条硬底线。
+3. **真物理参数**: 涉及具体数值时用真实工程数值, 起始就给具体数
 
-#### 完整参考实现
+4. **视觉与物理坐标分离**:
+   - 物理量(米/秒/牛/度) ≠ 像素, 视觉是物理量的"投影"
+   - 模拟值超出可视范围 → 镜头跟随 / 比例尺自适应 / 显示当前范围标尺
+   - 屏幕数字读数 与 视觉位置永远保持一致 (不能数字 200m 但物体已出屏)
 
-`/tmp/v3_fogsight_anim.html` 是用这套方案生成的完整火箭推力动画演示 (22791 字符 / 539 行), 可直接打开浏览器查看效果。其核心特征：
+5. **中英文双语字幕** 从头覆盖整个动画过程
 
-| 元素 | 实现 |
-|------|------|
-| 火箭主体 | inline SVG `<path>` + linearGradient |
-| 启动抖动 | `@keyframes shake` 11 步 transform |
-| 升空运动 | `transform: translate + scale; transition: transform 10s linear;` |
-| 尾焰 | Canvas + Particle 类 (life/decay/color) |
-| 推力箭头 | SVG `<line>` + `<marker>` 箭头 |
-| HUD 玻璃态 | `backdrop-filter: blur(10px) + rgba(30,41,59,0.7)` |
-| 速度仪表 | `<div>` 进度条 `transition: width 100ms` |
-| 双语字幕 | `<p>` fade in/out + setTimeout 切换 |
-| 星空 | 100 个 `<div>` + Tailwind `animate-pulse` |
-| 时序 | `scenes[]` 数组 + setTimeout 串行 |
+6. **单文件 HTML**: `<!DOCTYPE html>` 到 `</html>`, 一屏内布局不滚动
 
-#### 学科主题色 (同 game, 参考 theme_style/themes.js 的 26 个 oklch palette)
+7. **JS 顶层禁用 window 同名变量** (会覆盖全局对象导致页面挂):
+   - **禁止** `var/let/const` 顶层声明: `history, location, name, status, origin, parent, top, self, length, event, closed, opener, frames`
+   - 改名: `histArr / appOrigin / animTop / sceneName / gameStatus`
 
-按学科 id 选主题色 (见 `theme_style/themes.js`)：cs / bio / space / mech / ai / math / med / chem / phys / env / robo / elec / astro / geo / ocean / meteo / paleo / quant / nuke / neuro / mat / micro / zoo / bot / arch / agri。每个主题 5 色 oklch palette, 使用 `oklch(0.72 0.17 295)` 语法, 配合 Tailwind 暗色基底 (`bg-slate-900`)。
+#### 强制布局板式 — 直接照下面骨架写
+
+```html
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>...</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC&family=Inter&family=JetBrains+Mono&display=swap" rel="stylesheet">
+  <style>
+    :root { /* theme palette CSS 变量 */ }
+    body { margin:0; padding:0; overflow:hidden; height:100vh;
+           background:var(--BG); font-family:'Noto Sans SC', sans-serif; }
+  </style>
+</head>
+<body class="h-screen overflow-hidden flex">
+  <!-- 必须的左侧栏 .sidebar 200px 固定宽 -->
+  <aside class="sidebar w-[200px] h-screen flex-shrink-0 flex flex-col gap-4 p-4 border-r border-white/10">
+    <h1 class="text-base font-bold">标题 / Title</h1>
+    <div class="text-xs opacity-80">
+      <p class="mb-1">概念简介中文 50-100 字...</p>
+      <p class="italic opacity-70">English summary...</p>
+    </div>
+    <ul class="text-xs space-y-1">
+      <li>· 观察提示 1</li>
+      <li>· 观察提示 2</li>
+    </ul>
+    <button id="langBtn" class="mt-auto px-2 py-1 text-xs border border-white/20 rounded">中 / EN</button>
+  </aside>
+
+  <!-- 主舞台 (剩余宽度) -->
+  <main class="flex-1 h-screen relative overflow-hidden">
+    <canvas id="stage" class="absolute inset-0 w-full h-full"></canvas>
+    <!-- 右上 HUD 玻璃面板 -->
+    <div class="absolute top-4 right-4 backdrop-blur-md bg-white/5 border border-white/10 rounded p-3 text-xs font-mono">
+      <div>F = <span id="hF">5.0</span> N</div>
+      <div>v = <span id="hV">0.0</span> m/s</div>
+    </div>
+    <!-- 底部双语字幕 -->
+    <div class="absolute bottom-6 left-1/2 -translate-x-1/2 text-center">
+      <div class="text-2xl font-bold" id="subZh">中文字幕</div>
+      <div class="text-sm italic opacity-70" id="subEn">English subtitle</div>
+    </div>
+  </main>
+  <script>
+    /* scenes 时间轴, 自动播放, langBtn 切换字幕 */
+  </script>
+</body>
+</html>
+```
+
+**铁律**:
+- `<body>` 必须含 `overflow:hidden` + `height:100vh` (CSS) **和** `class="h-screen overflow-hidden"` (Tailwind 双重保险)
+- `.sidebar` 200px 固定 (Tailwind `w-[200px]` 或 inline `width:200px`)
+- `<main>` flex-1 占剩余宽度
+- `#langBtn` 必须有, 在 sidebar 内
+- 主舞台是 `<canvas>` 或 `<svg>` 都行, 但容器 `absolute inset-0`
+
+#### 5.5b Playwright 验证标准
+
+**新版 5.5b** (`course_factory/validate/verify/animation.mjs`, 2026-04-28 fogsight 兼容版):
+- 检查页面非空白 (text ≥ 30 chars, visible elements ≥ 5)
+- 检查动画在播 (t=1.5s 与 t=8s 截图差异 ≥ 2%)
+- 检查 ≤ 2 个 `<button>` (允许 lang/reset, 多了说明退化为游戏)
+- 禁 `<input>` / `<select>` (anim 不能有滑块/数字输入)
+- 检查 HUD 数字不全 0 (全 0 = 物理仿真未启动)
+- standalone + iframe 双通道全过
+
+**不再检查** (旧版假阳性): NEXT 按钮 / canvas 必须存在 / 按帧导航
+
+#### 学科主题色 (同 game)
+
+按学科 id 选主题色 (见 `theme_style/themes.js`)：cs / bio / space / mech / ai / math / med / chem / phys / env / robo / elec / astro / geo / ocean / meteo / paleo / quant / nuke / neuro / mat / micro / zoo / bot / arch / agri。每个主题 5 色 oklch palette, 使用 `oklch(0.72 0.17 295)` 语法, 配合 Tailwind 暗色基底。
 
 ---
 

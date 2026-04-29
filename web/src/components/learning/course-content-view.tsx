@@ -20,6 +20,7 @@ import type {
   CourseContentData,
   CourseIdeaSummary,
   CourseSection,
+  CourseV3Version,
   InlineExercise,
   KnodeInfo,
   RenderedSection,
@@ -2307,6 +2308,9 @@ export function CourseContentView({
   // v3 (kimi-k2.6) 版本切换 — toggle 显示哪个版本的 course_content
   const [versionMode, setVersionMode] = useState<"v2" | "v3">("v2")
   const [v3Available, setV3Available] = useState(false)
+  // v3 多版本: 当前选中的 version_label (null = 让后端返回 active 版本)
+  const [v3SelectedVersion, setV3SelectedVersion] = useState<string | null>(null)
+  const [v3Versions, setV3Versions] = useState<CourseV3Version[]>([])
   const [generating, setGenerating] = useState(false)
   const [notGenerated, setNotGenerated] = useState(false) // true when no content exists yet
   const [checking, setChecking] = useState(true)          // initial check in progress
@@ -2549,7 +2553,7 @@ export function CourseContentView({
 
     const fetcher =
       versionMode === "v3"
-        ? gateway.getCourseV3(projectName, nodeId)
+        ? gateway.getCourseV3(projectName, nodeId, v3SelectedVersion ?? undefined)
         : gateway.getCourseV2(projectName, nodeId)
 
     fetcher.then((data) => {
@@ -2570,27 +2574,43 @@ export function CourseContentView({
     })
 
     return () => { abortRef.current = true }
-  }, [projectName, nodeId, versionMode]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [projectName, nodeId, versionMode, v3SelectedVersion]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // 静默探测 v3 是否有内容(不阻塞主流程,仅用于显示 toggle 按钮)
+  // 静默探测 v3 版本列表 (决定是否显示 toggle 按钮 + 填充下拉框)
   useEffect(() => {
     let cancelled = false
-    gateway.getCourseV3(projectName, nodeId)
+    setV3SelectedVersion(null)  // 切节点时回到 active 版本
+    gateway.listCourseV3Versions(projectName, nodeId)
       .then((data) => {
         if (cancelled) return
-        const hasContent =
-          data.status === "ready" &&
-          data.course_content &&
-          Object.keys(data.course_content).length > 0
-        setV3Available(Boolean(hasContent))
+        // 只要有任何版本(包括 generating/failed)就显示 toggle, 让用户能切换看
+        const versions = data.versions || []
+        setV3Versions(versions)
+        setV3Available(versions.length > 0)
       })
       .catch(() => {
-        if (!cancelled) setV3Available(false)
+        if (!cancelled) {
+          setV3Versions([])
+          setV3Available(false)
+        }
       })
     return () => {
       cancelled = true
     }
   }, [projectName, nodeId])
+
+  // 切换 active 版本(写到后端, 然后刷新)
+  const handleSetActiveV3Version = async (label: string) => {
+    try {
+      await gateway.setCourseV3ActiveVersion(projectName, nodeId, label)
+      // 刷新版本列表 + 切到该版本显示
+      const fresh = await gateway.listCourseV3Versions(projectName, nodeId)
+      setV3Versions(fresh.versions || [])
+      setV3SelectedVersion(label)
+    } catch (e) {
+      console.error("[v3] set active failed", e)
+    }
+  }
 
   // Loading / checking state
   if (checking && !content) {
@@ -2603,6 +2623,10 @@ export function CourseContentView({
           versionMode={versionMode}
           v3Available={v3Available}
           onSwitchVersion={(m) => setVersionMode(m)}
+          v3Versions={v3Versions}
+          v3SelectedVersion={v3SelectedVersion}
+          onSelectV3Version={setV3SelectedVersion}
+          onSetActiveV3Version={handleSetActiveV3Version}
           showingCourseFactory={showingCourseFactory}
           courseFactoryLabel={courseFactoryVariant?.label}
           onToggleCourseFactory={() => {
@@ -2627,6 +2651,10 @@ export function CourseContentView({
           versionMode={versionMode}
           v3Available={v3Available}
           onSwitchVersion={(m) => setVersionMode(m)}
+          v3Versions={v3Versions}
+          v3SelectedVersion={v3SelectedVersion}
+          onSelectV3Version={setV3SelectedVersion}
+          onSetActiveV3Version={handleSetActiveV3Version}
           showingCourseFactory={showingCourseFactory}
           courseFactoryLabel={courseFactoryVariant?.label}
           onToggleCourseFactory={() => {
@@ -2652,6 +2680,10 @@ export function CourseContentView({
           versionMode={versionMode}
           v3Available={v3Available}
           onSwitchVersion={(m) => setVersionMode(m)}
+          v3Versions={v3Versions}
+          v3SelectedVersion={v3SelectedVersion}
+          onSelectV3Version={setV3SelectedVersion}
+          onSetActiveV3Version={handleSetActiveV3Version}
           showingCourseFactory={showingCourseFactory}
           courseFactoryLabel={courseFactoryVariant?.label}
           onToggleCourseFactory={() => {
@@ -2711,6 +2743,10 @@ export function CourseContentView({
           versionMode={versionMode}
           v3Available={v3Available}
           onSwitchVersion={(m) => setVersionMode(m)}
+          v3Versions={v3Versions}
+          v3SelectedVersion={v3SelectedVersion}
+          onSelectV3Version={setV3SelectedVersion}
+          onSetActiveV3Version={handleSetActiveV3Version}
           showingCourseFactory={showingCourseFactory}
           courseFactoryLabel={courseFactoryVariant?.label}
           onToggleCourseFactory={() => {
@@ -2827,6 +2863,10 @@ function Header({
   versionMode = "v2",
   v3Available = false,
   onSwitchVersion,
+  v3Versions = [],
+  v3SelectedVersion = null,
+  onSelectV3Version,
+  onSetActiveV3Version,
 }: {
   knode: KnodeInfo | null
   onClose: () => void
@@ -2837,7 +2877,16 @@ function Header({
   versionMode?: "v2" | "v3"
   v3Available?: boolean
   onSwitchVersion?: (m: "v2" | "v3") => void
+  v3Versions?: CourseV3Version[]
+  v3SelectedVersion?: string | null
+  onSelectV3Version?: (label: string | null) => void
+  onSetActiveV3Version?: (label: string) => void
 }) {
+  // v3 模式当前显示的版本: 优先用 selected, 否则用 active
+  const activeVersion = v3Versions.find((v) => v.is_active)?.version_label || null
+  const currentLabel = v3SelectedVersion || activeVersion
+  const isCurrentActive = currentLabel === activeVersion
+  const showVersionDropdown = versionMode === "v3" && v3Versions.length > 0
   return (
     <div className="flex items-center justify-between px-6 py-4 border-b border-border/50 shrink-0">
       <div className="flex items-center gap-2 min-w-0">
@@ -2880,6 +2929,31 @@ function Header({
             >
               v3
             </button>
+          </div>
+        )}
+        {showVersionDropdown && (
+          <div className="inline-flex items-center gap-1.5">
+            <select
+              value={currentLabel || ""}
+              onChange={(e) => onSelectV3Version?.(e.target.value || null)}
+              className="h-8 px-2 text-xs rounded-lg border border-purple-200 bg-purple-50 text-purple-800 hover:bg-purple-100 focus:outline-none focus:ring-2 focus:ring-purple-300 max-w-[180px]"
+              title="切换 v3 课程版本"
+            >
+              {v3Versions.map((v) => (
+                <option key={v.version_label} value={v.version_label}>
+                  {v.version_label}{v.is_active ? " ★" : ""}{v.status !== "ready" ? ` (${v.status})` : ""}
+                </option>
+              ))}
+            </select>
+            {currentLabel && !isCurrentActive && onSetActiveV3Version && (
+              <button
+                onClick={() => onSetActiveV3Version(currentLabel)}
+                className="h-8 px-2 text-xs rounded-lg border border-purple-200 bg-white text-purple-700 hover:bg-purple-50"
+                title="将该版本设为默认显示"
+              >
+                设为默认
+              </button>
+            )}
           </div>
         )}
         {hasCourseFactoryVariant && (

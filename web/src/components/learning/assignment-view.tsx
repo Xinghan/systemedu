@@ -596,31 +596,21 @@ function QaQuestion({ qa, projectName, knodeId }: {
   )
 }
 
+function childrenToText(children: React.ReactNode): string {
+  if (children == null) return ""
+  if (typeof children === "string") return children
+  if (typeof children === "number") return String(children)
+  if (Array.isArray(children)) return children.map(childrenToText).join("")
+  if (typeof children === "object" && "props" in children) {
+    return childrenToText((children as React.ReactElement<{ children?: React.ReactNode }>).props.children)
+  }
+  return ""
+}
+
 function useNormalComponents(): Components {
   return useMemo<Components>(() => ({
-    h2: ({ children }) => <SectionHeading text={String(children ?? "")} />,
-    p: ({ children }) => {
-      const text = String(children ?? "")
-      if (text.includes("[HANDS_ON]")) {
-        const parts = text.split("[HANDS_ON]")
-        return (
-          <p className="my-2 leading-relaxed text-sm">
-            {parts.map((part, i) => (
-              <span key={i}>
-                {i > 0 && (
-                  <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-amber-100 dark:bg-amber-900/30 text-amber-800 dark:text-amber-300 text-xs font-medium mx-1">
-                    <Wrench className="h-3 w-3" />
-                    动手操作
-                  </span>
-                )}
-                {part}
-              </span>
-            ))}
-          </p>
-        )
-      }
-      return <p className="my-2 leading-relaxed text-sm">{children}</p>
-    },
+    h2: ({ children }) => <SectionHeading text={childrenToText(children)} />,
+    p: ({ children }) => <p className="my-2 leading-relaxed text-sm">{children}</p>,
     strong: ({ children }) => <strong>{children}</strong>,
     ul: ({ children }) => (
       <ul className="my-2 ml-4 space-y-1 list-disc text-sm">{children}</ul>
@@ -968,7 +958,7 @@ export function AssignmentView({
           if (block.type === "markdown" && block.markdown) {
             return (
               <ReactMarkdown key={i} components={normalComponents} remarkPlugins={[remarkGfm]}>
-                {block.markdown}
+                {block.markdown.replace(/\[HANDS_ON\]\s*/g, "")}
               </ReactMarkdown>
             )
           }

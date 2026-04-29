@@ -18,7 +18,7 @@ from . import s25_divergence
 logger = logging.getLogger(__name__)
 
 PROMPTS_DIR = Path(__file__).parent.parent / "prompts"
-MAX_DIVERGENCE_RETRIES = 2
+MAX_DIVERGENCE_RETRIES = 1  # 1 次 retry 已经足够; 反复重做几乎不改变 LLM 判定且每轮 ~80s
 
 
 async def run(ctx: dict, *, em: Emitter) -> list[dict]:

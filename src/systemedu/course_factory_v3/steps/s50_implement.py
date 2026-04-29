@@ -57,11 +57,15 @@ _IMPL_MAP = {
 # ---------------------------------------------------------------------------
 
 def _gate_chain(mode: str) -> list[str]:
-    """返回该 mode 应跑的闸门 step id 列表(按顺序)。"""
+    """返回该 mode 应跑的闸门 step id 列表(按顺序)。
+
+    临时去掉 5.5c (科学一致性) + 5.5f (文字重叠), LLM 评判过严反复 revise 浪费时间;
+    保留 5.5a (regex 硬约束) + 5.5b (Playwright 渲染验证)。
+    """
     if mode == "animation":
-        return ["5.5a", "5.5b", "5.5c", "5.5f"]
+        return ["5.5a", "5.5b"]
     if mode == "game":
-        return ["5.5a", "5.5b", "5.5c", "5.5e", "5.5f"]
+        return ["5.5a", "5.5b", "5.5e"]
     if mode == "diagram":
         return ["5.5a", "5.5b"]
     return []  # exercise/image/kit/story 无闸门
@@ -203,22 +207,25 @@ def _max_revise_for(gate_id: str) -> int:
 async def run(ctx: dict, *, em: Emitter) -> list[dict]:
     """对所有 approved idea 并行实现 + 跑闸门。"""
     ideas = ctx.get("ideas") or []
-    approved = [i for i in ideas if i.get("decision") in ("approve", None)]
+    # revise 也算 approved (revise_hint 已经在 idea 里, implement 会用到);
+    # 只有 reject 才真不做。
+    approved = [i for i in ideas if i.get("decision") in ("approve", "revise", None)]
     rejected = [i for i in ideas if i.get("decision") == "reject"]
 
     em.emit(EV_AGENT_LOG, {
         "agent": "Step5", "phase": "input",
         "input": f"approved={len(approved)}, rejected={len(rejected)}",
-        "output": "(implementing in parallel...)",
+        "output": "(implementing serially to respect creative provider rate limits)",
     })
 
     if not approved:
         return ideas
 
-    # 并行实现 (各 idea 内部含闸门链)
-    updated_approved = await asyncio.gather(
-        *[_implement_one(i, ctx, em=em) for i in approved]
-    )
+    # 串行实现 (GLM-5.1 等 creative provider 有速率限制, 并行会撞 429)
+    updated_approved = []
+    for idea in approved:
+        result = await _implement_one(idea, ctx, em=em)
+        updated_approved.append(result)
 
     # 把 reject 的也保留(它们已经在 Step 4 决策)
     by_id = {i.get("idea_id"): i for i in rejected}

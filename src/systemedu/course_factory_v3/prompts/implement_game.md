@@ -1,121 +1,104 @@
-# Step 5 — 实现 Game HTML (fogsight 视觉 + 真实教学交互)
+# 教学游戏
 
-请你生成一个**非常精美的可交互教学游戏**, 让学生通过操纵动态系统理解下面 detail_plan 描述的知识点。
+设计一个**精美、可玩、富有创意**的教学游戏, 让学生亲手操纵动态系统理解知识点。
+**完全的视觉与交互自由**——不要被任何模板拘束。
 
-页面**极为精美, 好看, 有设计感**, 同时是一个**真正可玩的 sandbox**——
-学生通过滑块/按钮/拖拽**实时调节参数**, 看到仿真结果立刻反馈, 建立"参数 → 结果"的因果直觉。
-
-使用**和谐好看, 广泛采用的深色配色方案** + **丰富的视觉元素**。
-
-**html + css + js + svg, 全部放进一个 html 里**。
-
----
-
-## 知识点 detail_plan
+## 知识点
 
 ```json
 {detail_plan_json}
 ```
 
-## 节点对齐 (必须呼应)
+- 核心问题: {core_question}
+- 学生该做的真实动作: {hands_on_ref}
+- 必须验收的产物: {acceptance_ref}
 
-- **core_question**: {core_question}
-- **hands_on_ref**: {hands_on_ref}
-- **acceptance_ref**: {acceptance_ref}
-- **chosen pattern**: {chosen_pattern}
-- **学科主题色 (id={style_key})**: 优先使用对应学科 oklch palette。
+## 视觉规范 (锁定 + 自由结合)
 
-## 推荐技术栈 (强烈建议直接采用)
+{theme_block}
 
-1. **Tailwind CSS via CDN**: `<script src="https://cdn.tailwindcss.com"></script>`
-2. **Google Fonts**: `Inter` (正文) + `JetBrains Mono` (HUD 数字) + `Noto Sans SC` (中文)
-3. **inline SVG** 绘制场景主体 (火箭/分子/电路等), 用 `<linearGradient>` + `<path>` 渐变曲线
-4. **CSS @keyframes + transitions** 驱动平滑动画, 不要 Canvas lerp
-5. **<canvas> + Particle 类** (rAF 循环) 实现尾焰/粒子等动态效果
-6. **`<input type="range">` 滑块**, 自定义样式带 oklch glow
-7. **HUD 玻璃态**: `backdrop-filter: blur(10px); background: rgba(30, 41, 59, 0.7);`
-8. **真实物理参数**: 数值要真实 (Saturn V F-1 推力 ~7000 kN, 比冲 ~263s)
+- **颜色锁定**: 主体颜色全部用 CSS 变量 `var(--ORBIT)` 等 palette 名 (palette 已注入到 `:root`)
+- **字体**: Inter / JetBrains Mono / Noto Sans SC (Google Fonts CDN)
+- **玻璃态**: 浮动元素用 `backdrop-filter: blur(10px) + rgba` 半透明
 
-## 教学骨架 (硬规则, 与 fogsight 不同)
-
-整体布局 = **左侧 200px sidebar (含真实交互控件) + 右侧主舞台**:
+## 布局规范 (强制) — 直接照下面骨架写, 不要乱改
 
 ```html
-<div class="flex h-screen">
-  <!-- 左侧 sidebar: 含 lang-btn / 标题 / 操作说明 / 控件 (滑块/按钮) -->
-  <div class="w-[200px] shrink-0 bg-slate-950/80 border-r border-slate-800 p-3 flex flex-col gap-3 text-slate-300 overflow-y-auto">
-    <button id="langBtn" class="self-start text-[10px] px-2 py-1 border border-slate-700 hover:border-cyan-400">CN</button>
-    <h1 class="text-[12px] font-bold text-cyan-400 mt-1 uppercase tracking-wider" id="gameTitle"></h1>
-    <div class="text-[9px] uppercase tracking-widest text-cyan-400 mt-2">操作指南</div>
-    <div class="text-[11px] text-slate-400 leading-relaxed" id="guideContent"></div>
-
-    <!-- 控件区: 每个 simulation_param 一个滑块 -->
-    <div class="text-[9px] uppercase tracking-widest text-cyan-400 mt-2">参数控制</div>
-    <div class="flex flex-col gap-2" id="controlsContainer">
-      <!-- 由 JS 根据 detail_plan.simulation_params 动态生成 -->
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>...</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC&family=Inter&family=JetBrains+Mono&display=swap" rel="stylesheet">
+  <style>
+    :root {{ /* 这里注入 theme palette CSS 变量 */ }}
+    body {{ margin:0; padding:0; overflow:hidden; height:100vh; background:var(--BG); font-family:'Noto Sans SC', sans-serif; }}
+  </style>
+</head>
+<body class="h-screen overflow-hidden flex">
+  <!-- 必须的左侧控制栏 (.game-sidebar 200px 固定宽) -->
+  <aside class="game-sidebar w-[200px] h-screen flex-shrink-0 flex flex-col gap-4 p-4 border-r border-white/10">
+    <h1 class="text-base font-bold">标题 / Title</h1>
+    <p class="text-xs opacity-80">目标 50-100 字: 你要做什么...</p>
+    <ul class="text-xs space-y-1 opacity-90">
+      <li>· 操作 1: 拖动滑块...</li>
+      <li>· 操作 2: 观察 HUD...</li>
+      <li>· 操作 3: 寻找平衡点...</li>
+    </ul>
+    <div class="flex flex-col gap-2 mt-2">
+      <label class="text-xs">力大小 F = <span id="lblF">5</span> N</label>
+      <input id="sliderF" type="range" min="0" max="10" value="5" step="0.1" class="w-full">
+      <label class="text-xs mt-2">质量 m = <span id="lblM">0.5</span> kg</label>
+      <input id="sliderM" type="range" min="0.1" max="2" value="0.5" step="0.05" class="w-full">
     </div>
+    <button id="langBtn" class="mt-auto px-2 py-1 text-xs border border-white/20 rounded">中 / EN</button>
+  </aside>
 
-    <!-- 主操作按钮 -->
-    <button id="actionBtn" class="mt-2 px-3 py-2 bg-gradient-to-r from-cyan-500 to-blue-600 text-slate-950 font-bold text-xs uppercase tracking-wider hover:shadow-cyan-500/50 hover:shadow-lg transition">发射 / Launch</button>
-    <button id="resetBtn" class="px-3 py-1.5 border border-slate-700 hover:border-cyan-400 text-slate-400 text-[10px] uppercase">重置</button>
-  </div>
+  <!-- 主舞台 (剩余宽度) -->
+  <main class="flex-1 h-screen relative overflow-hidden">
+    <canvas id="stage" class="absolute inset-0 w-full h-full"></canvas>
+    <!-- 右上 HUD 玻璃面板 -->
+    <div class="absolute top-4 right-4 backdrop-blur-md bg-white/5 border border-white/10 rounded p-3 text-xs font-mono">
+      <div>F = <span id="hF">5.0</span> N</div>
+      <div>a = <span id="hA">10.0</span> m/s²</div>
+      <div>v = <span id="hV">0.0</span> m/s</div>
+    </div>
+  </main>
 
-  <!-- 右侧主舞台: SVG 场景 + HUD + 状态显示 (fogsight 风格自由发挥) -->
-  <div class="flex-1 relative overflow-hidden bg-slate-900">
-    <!-- 你的 SVG 场景 / canvas / HUD / 字幕 -->
-  </div>
-</div>
+  <script>
+    /* 滑块监听 → 物理仿真 → HUD 实时更新 → langBtn 切换 */
+  </script>
+</body>
+</html>
 ```
 
-**硬规则**:
-- lang-btn 必须在左侧 sidebar (不允许 `position: fixed/absolute` 浮在主舞台)
-- **每个 detail_plan.simulation_params 项必须对应一个 sidebar 中的 `<input type="range">`** (含 label + 当前值显示)
-- 主舞台 100vh 不滚动
-- 滑块拖动必须**实时**更新视觉 (拖动时 oninput 立即重绘, 不是松开才更新)
+**铁律**:
+- `<body>` 必须含 `overflow:hidden` + `height:100vh` (CSS) **和** `class="h-screen overflow-hidden"` (Tailwind 双重保险)
+- `.game-sidebar` 200px 固定, `<main>` flex-1
+- sidebar 内必须含: `#langBtn` + 至少 1 个 `<input type="range">` 滑块 + 文字说明
+- 滑块的 `input` 事件必须实时更新 HUD 数值和主舞台仿真
 
-## Pattern {chosen_pattern} 落地
+## 6 条硬底线
 
-按 detail_plan 的 game_mechanic 描述实现真正的"操纵动态系统":
-- Pattern 1 Sandbox: 滑块 → 实时仿真引擎 (rAF) → 视觉反馈
-- Pattern 2 Build & Test: 零件库 → 拼装区 → Run → 仿真执行
-- Pattern 6 Live Tuning: 实时画面 + 控制按钮 + 瞬时反馈
-- 其它 Pattern 见 SKILL.md §1006-1095
+1. **真交互**: 滑块/拖拽/键盘/鼠标实时操纵, 不能退化为"输入数字+确认"或"选项点击"
+2. **真物理参数**: 涉及具体数值时用真实工程数值
+3. **视觉与物理坐标分离**:
+   - 物理量(米/秒/牛/度等) ≠ 像素, 视觉是物理量的"投影"
+   - 当模拟值超出可视范围 → 镜头跟随 / 比例尺自适应 / 显示当前可视范围标尺(如"1 格=100m"或网格线带刻度)
+   - 屏幕数字读数 与 视觉位置 永远保持一致 (不能数字说 200m 但物体已出屏)
+   - **严格遵守 detail_plan 的 `directional_rules`** — 力的方向与物体响应方向必须一致, 禁止"向左施力物体向右动"
+   - **严格按 detail_plan 的 `layout_zones` 划分屏幕** — 控制面板/主舞台/HUD/字幕各自独立不重叠
+4. **中英文双语都能玩** (切换按钮 / 同时显示 / 段落对照, 实现自由)
+5. **单文件 HTML**: `<!DOCTYPE html>` 到 `</html>`, 一屏内布局不滚动
+6. **JS 顶层禁用 window 同名变量** (会覆盖全局对象导致页面挂掉):
+   - **禁止** `var/let/const` 在顶层声明这些名字: `history`, `location`, `name`, `status`,
+     `origin`, `parent`, `top`, `self`, `length`, `event`, `closed`, `opener`, `frames`,
+     `outerWidth`, `outerHeight`
+   - 这些是 window 已有属性, 顶层重新声明会破坏全局
+   - 改名: 用 `appOrigin` / `gameTop` / `playerName` / `gameStatus` / `histArr` 等明确语义
 
-**禁止退化为**:
-- 输入数字 + 确认 (那是 exercise)
-- 选项点击 (那是选择题)
-- "玩家不知道答案就无法开始" (那是 exercise 变装)
+剩下完全自由 — 3D / 物理引擎 / 任意 CDN 库都行。**浅薄比冗长糟**, 代码长度无上限。
 
-## i18n 双语
-
-```js
-var LANG = 'cn';
-var I18N = {
-  // ... 所有 sidebar / HUD / 状态文本
-};
-function t(key) { return (I18N[key] && I18N[key][LANG]) || (I18N[key] && I18N[key]['en']) || key; }
-function refreshI18N() {
-  // 必须实现: 更新所有 DOM 文本 + 重渲染动态生成的列表 + 重绘 canvas
-}
-document.getElementById('langBtn').addEventListener('click', function() {
-  LANG = LANG === 'cn' ? 'en' : 'cn';
-  this.textContent = LANG.toUpperCase();
-  refreshI18N();
-});
-```
-
-## 硬性约束
-
-1. 单文件自包含
-2. body `overflow: hidden`, 一屏内
-3. **禁止 `onclick` 属性**, 必须 `addEventListener`
-4. 动画循环必须 `requestAnimationFrame` (但 setInterval 用于"每 200ms 更新数字"是允许的)
-5. **禁止 window 同名变量**: history/location/name/status/event/length/parent/top/self
-6. 物理常识: 重力向下, 火焰向上, 比例合理
-7. **数值真实性**: 涉及具体物理量时用真实工程参数
-8. 通关后展示**学习总结面板** (中英双语, 写明 takeaway)
-9. **代码长度无上限**, 浅薄比冗长更糟糕
-
-## 输出
-
-直接输出**完整 HTML 字符串**, 不要前言/后记/代码块标记/解释。
+直接输出完整 HTML, 不要任何解释/前言/代码块标记。
