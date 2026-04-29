@@ -1732,6 +1732,109 @@ async def api_set_course_v3_active(request: Request) -> JSONResponse:
     return JSONResponse({"ok": True, "active_version": version_label})
 
 
+# ----------------------------------------------------------------------
+# Slides endpoints — 老师讲课模式 slide 数据
+# ----------------------------------------------------------------------
+
+async def api_list_course_v3_slides(request: Request) -> JSONResponse:
+    """GET /api/projects/{name}/nodes/{node_id}/course/v3/slides[?version=<label>]
+    返回 slides 列表 (按 slide_index 升序)。
+
+    无 version → 用当前 active 版本; version 不存在 slides → 返回空数组。
+    """
+    name = request.path_params["name"]
+    node_id = int(request.path_params["node_id"])
+    version_label = request.query_params.get("version")
+
+    if not version_label:
+        # 取 active version
+        from systemedu.storage.db import LessonContentV3, get_session as get_db_session
+        db = get_db_session()
+        try:
+            row = (
+                db.query(LessonContentV3)
+                .filter_by(project_name=name, knode_id=node_id, is_active=True)
+                .first()
+            )
+            if row:
+                version_label = row.version_label
+        finally:
+            db.close()
+
+    if not version_label:
+        return JSONResponse({
+            "project_name": name, "knode_id": node_id,
+            "version_label": None, "slides": [],
+        })
+
+    from course_factory.factory import list_slides_v3
+    slides = list_slides_v3(name, node_id, version_label)
+    return JSONResponse({
+        "project_name": name, "knode_id": node_id,
+        "version_label": version_label, "slides": slides,
+    })
+
+
+async def api_regenerate_course_v3_slides(request: Request) -> JSONResponse:
+    """POST /api/projects/{name}/nodes/{node_id}/course/v3/slides/regenerate
+    body: {"version_label": "<label>"}  (可选; 缺失则用 active)
+    用 LLM 为该 version 重新生成全套 slides 并替换 DB 旧记录。
+    """
+    name = request.path_params["name"]
+    node_id = int(request.path_params["node_id"])
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    version_label = (body or {}).get("version_label")
+
+    # 取 course_content + version_label
+    import json as _json
+    from systemedu.storage.db import LessonContentV3, get_session as get_db_session
+    db = get_db_session()
+    try:
+        q = db.query(LessonContentV3).filter_by(project_name=name, knode_id=node_id)
+        row = q.filter_by(version_label=version_label).first() if version_label else q.filter_by(is_active=True).first()
+        if not row:
+            return JSONResponse(
+                {"error": "no matching course content"},
+                status_code=404,
+            )
+        version_label = row.version_label
+        course_content = _json.loads(row.course_content) if row.course_content else {}
+    finally:
+        db.close()
+
+    # 拿 knode 上下文
+    try:
+        from course_factory.factory import load_knode_context
+        ctx = load_knode_context(name, node_id)
+        knode = ctx["knode"]
+    except Exception as exc:
+        return JSONResponse({"error": f"load_knode_context failed: {exc}"}, status_code=500)
+
+    # 调 generate_slides
+    from systemedu.course_factory_v3.steps.s67_slides import generate_slides
+    try:
+        slides = await generate_slides(
+            project_name=name,
+            knode_id=node_id,
+            version_label=version_label,
+            knode=knode,
+            course_content=course_content,
+        )
+    except Exception as exc:
+        logger.exception(f"[slides] regenerate failed for {name}/{node_id}")
+        return JSONResponse({"error": str(exc)}, status_code=500)
+
+    return JSONResponse({
+        "project_name": name, "knode_id": node_id,
+        "version_label": version_label,
+        "count": len(slides),
+        "slides": slides,
+    })
+
+
 async def api_get_course_v2_assignment(request: Request) -> JSONResponse:
     """GET /api/projects/{name}/nodes/{node_id}/course/v2/assignment - Get generated assignment."""
     name = request.path_params["name"]
@@ -3860,6 +3963,8 @@ def create_app() -> Starlette:
         Route("/api/projects/{name}/nodes/{node_id:int}/course/v2", api_get_course_v2, methods=["GET"]),
         Route("/api/projects/{name}/nodes/{node_id:int}/course/v3/versions", api_list_course_v3_versions, methods=["GET"]),
         Route("/api/projects/{name}/nodes/{node_id:int}/course/v3/active", api_set_course_v3_active, methods=["POST"]),
+        Route("/api/projects/{name}/nodes/{node_id:int}/course/v3/slides", api_list_course_v3_slides, methods=["GET"]),
+        Route("/api/projects/{name}/nodes/{node_id:int}/course/v3/slides/regenerate", api_regenerate_course_v3_slides, methods=["POST"]),
         Route("/api/projects/{name}/nodes/{node_id:int}/course/v3", api_get_course_v3, methods=["GET"]),
         Route("/api/projects/{name}/nodes/{node_id:int}/progress", api_update_progress, methods=["PATCH"]),
         Route("/api/projects/{name}/nodes/{node_id:int}/highlights", api_highlights_dispatch, methods=["GET", "POST"]),
