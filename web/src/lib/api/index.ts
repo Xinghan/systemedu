@@ -7,6 +7,7 @@ import type {
   ConfigResponse,
   CourseAssignmentData,
   CourseContentData,
+  CourseV3SlidesData,
   CourseV3VersionsData,
   CreateProjectResponse,
   EnrollmentInfo,
@@ -115,6 +116,15 @@ export const gateway = {
     api.post<{ ok: boolean; active_version: string }>(
       `/api/projects/${projectName}/nodes/${nodeId}/course/v3/active`,
       { version_label: versionLabel }
+    ),
+  getCourseV3Slides: (projectName: string, nodeId: number, versionLabel?: string) => {
+    const qs = versionLabel ? `?version=${encodeURIComponent(versionLabel)}` : ""
+    return api.get<CourseV3SlidesData>(`/api/projects/${projectName}/nodes/${nodeId}/course/v3/slides${qs}`)
+  },
+  regenerateCourseV3Slides: (projectName: string, nodeId: number, versionLabel?: string) =>
+    api.post<{ count: number; version_label: string }>(
+      `/api/projects/${projectName}/nodes/${nodeId}/course/v3/slides/regenerate`,
+      versionLabel ? { version_label: versionLabel } : {}
     ),
   getCourseV2Assignment: (projectName: string, nodeId: number) =>
     api.get<CourseAssignmentData>(`/api/projects/${projectName}/nodes/${nodeId}/course/v2/assignment`),
