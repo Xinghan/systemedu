@@ -71,16 +71,22 @@ export function LizardScene({
   }, [])
 
   // Avoid hydration mismatch: use stable transform values until client mounts.
+  // Speaking pulse uses an "always-on" base when isSpeaking is true so the lizard
+  // bobs along with speech even when the viseme is SIL between words; mouthIntensity
+  // adds extra emphasis on louder syllables.
   const t = mounted ? (performance.now() / 1000) * Math.PI * 2 : 0
   const breath = mounted ? Math.sin(t * 0.25) * 4 : 0
   const sway = mounted ? Math.sin(t * 0.15) * 0.5 : 0
-  const speakPulse = mounted ? intensity * (0.5 + 0.5 * Math.sin(t * 6)) : 0
-  const nod = speakPulse * 1.5
-  const bounce = -speakPulse * 6
-  const pulseScale = 1 + speakPulse * 0.015
+  // Base pulse during speech (~30% intensity) + viseme-driven extra (up to 70% more)
+  const speechBase = isSpeaking && mounted ? 0.3 : 0
+  const visemeBoost = mounted ? intensity * 0.7 : 0
+  const pulseAmount = (speechBase + visemeBoost) * (0.5 + 0.5 * Math.sin(t * 6))
+  const nod = pulseAmount * 4 // up to 4° head dip
+  const bounce = -pulseAmount * 18 // up to 18 px upward
+  const pulseScale = 1 + pulseAmount * 0.04 // up to 4% scale
   const totalY = breath + bounce
   const totalRot = sway - nod
-  const filterBrightness = 1 + speakPulse * 0.04
+  const filterBrightness = 1 + pulseAmount * 0.06
   void tick
 
   return (
