@@ -123,15 +123,17 @@ export function TeacherSceneView({
   }, [slides, current, speak, stop])
 
   const handleTogglePlayback = useCallback(() => {
-    setAutoplay((v) => {
-      const next = !v
-      if (!next) {
-        stop().catch(() => {})
-        startedSpeakingRef.current = false
-      }
-      return next
-    })
-  }, [stop])
+    // 注意: stop() 内部会 setSpeaking(null), 这个 zustand store 被 LizardScene
+    // 订阅; 如果在 setState updater 内同步调 stop(), React 18 会报
+    // "Cannot update a component while rendering"。所以先确定下个状态 (纯函数)
+    // 再在外面跑副作用。
+    const next = !autoplay
+    setAutoplay(next)
+    if (!next) {
+      startedSpeakingRef.current = false
+      stop().catch(() => {})
+    }
+  }, [autoplay, stop])
 
   const handleRegenerate = useCallback(async () => {
     if (!versionLabel) {
