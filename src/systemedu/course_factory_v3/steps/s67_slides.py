@@ -110,6 +110,20 @@ async def generate_slides(
     # 后处理: 补充实际媒体引用 (videos/labxchange/images) 用真实 URL
     slides = _enrich_payloads(slides, ideas, rendered, ext)
 
+    # 服务端预渲染 anim/game/diagram 缩略图 (Playwright 截首帧 → PNG)
+    em.emit(EV_AGENT_LOG, {
+        "agent": "SlideGen", "phase": "thumbs",
+        "input": "", "output": f"rendering thumbnails for media slides...",
+    })
+    try:
+        from ._slide_thumbs import render_thumbnails_for_slides
+        slides = await render_thumbnails_for_slides(
+            project_name=project_name, knode_id=knode_id,
+            slides=slides, rendered_sections=rendered,
+        )
+    except Exception as exc:
+        logger.warning(f"[s67] thumbnail render failed (non-fatal): {exc}")
+
     # 写库
     n = replace_slides_v3(project_name, knode_id, version_label, slides)
     em.emit(EV_AGENT_LOG, {
