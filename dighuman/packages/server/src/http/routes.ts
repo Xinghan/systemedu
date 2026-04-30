@@ -85,32 +85,48 @@ async function handleSpeak(
   res.writeHead(202, { ...CORS_HEADERS, "content-type": "application/json" });
   res.end(JSON.stringify({ utterance_id: utteranceId }));
 
-  const tts = await deps.tts.synthesize({ text, lang, voiceId: voice_id });
-
-  let track: VisemeFrame[];
+  // 已 end response, 之后任何错误必须本地处理 — 不能让其冒泡到顶层 catch
+  // (那里会再 writeHead → ERR_HTTP_HEADERS_SENT 导致进程崩).
   try {
-    const tempPath = await writeTemp(tts.audioBytes, tts.codec);
-    const alignRes = await deps.align({ audioPath: tempPath, text, lang });
-    if (alignRes.wordSegments.length === 0) {
-      track = envelopeAlign(tts.audioBytes, tts.codec, tts.durationMs);
-    } else {
-      track = wordsToVisemeTrack(alignRes.wordSegments, tts.durationMs, lang);
-    }
-  } catch {
-    track = envelopeAlign(tts.audioBytes, tts.codec, tts.durationMs);
-  }
+    const tts = await deps.tts.synthesize({ text, lang, voiceId: voice_id });
 
-  const send = (f: ServerFrame) => session.send(JSON.stringify(f));
-  send({ type: "speech_start", utterance_id: utteranceId, duration_ms: tts.durationMs, lang });
-  send({
-    type: "audio_header",
-    utterance_id: utteranceId,
-    codec: tts.codec,
-    byte_length: tts.audioBytes.length,
-  });
-  session.send(tts.audioBytes);
-  send({ type: "viseme_track", utterance_id: utteranceId, frames: track });
-  send({ type: "speech_end", utterance_id: utteranceId });
+    let track: VisemeFrame[];
+    try {
+      const tempPath = await writeTemp(tts.audioBytes, tts.codec);
+      const alignRes = await deps.align({ audioPath: tempPath, text, lang });
+      if (alignRes.wordSegments.length === 0) {
+        track = envelopeAlign(tts.audioBytes, tts.codec, tts.durationMs);
+      } else {
+        track = wordsToVisemeTrack(alignRes.wordSegments, tts.durationMs, lang);
+      }
+    } catch {
+      track = envelopeAlign(tts.audioBytes, tts.codec, tts.durationMs);
+    }
+
+    const send = (f: ServerFrame) => session.send(JSON.stringify(f));
+    send({ type: "speech_start", utterance_id: utteranceId, duration_ms: tts.durationMs, lang });
+    send({
+      type: "audio_header",
+      utterance_id: utteranceId,
+      codec: tts.codec,
+      byte_length: tts.audioBytes.length,
+    });
+    session.send(tts.audioBytes);
+    send({ type: "viseme_track", utterance_id: utteranceId, frames: track });
+    send({ type: "speech_end", utterance_id: utteranceId });
+  } catch (err) {
+    console.error("[speak]", utteranceId, "failed:", err);
+    try {
+      session.send(
+        JSON.stringify({
+          type: "error",
+          utterance_id: utteranceId,
+          code: "tts_failed",
+          message: (err as Error).message,
+        }),
+      );
+    } catch { /* ws gone */ }
+  }
 }
 
 async function handleStop(
