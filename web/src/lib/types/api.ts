@@ -646,6 +646,39 @@ export type SlideKind =
   | "labxchange"
   | "outro"
 
+// Per-kind payload shape returned by LLM (slide_gen.md schema). All fields
+// optional because LLM may skip some; renderer falls back to body_markdown.
+export interface SlideConceptCard {
+  title: string
+  body: string
+  icon_svg?: string
+}
+export interface SlidePayload {
+  // intro / outro
+  hero_title?: string
+  hero_subtitle?: string
+  inline_svg?: string
+  key_takeaway?: string
+  // bullet
+  concept_cards?: SlideConceptCard[]
+  // theory
+  theory_id?: string
+  formula?: string
+  layman_analogy?: string
+  bullets?: string[]
+  // animation / game / diagram
+  idea_id?: string
+  diagram_html_id?: string
+  short_desc?: string
+  call_to_action?: string
+  thumbnail_url?: string
+  // image / videos / labxchange
+  intro_text?: string
+  images?: { src: string; caption?: string; source_url?: string }[]
+  videos?: { title: string; url: string; thumbnail?: string }[]
+  labxchange?: { title: string; url: string; description?: string }[]
+}
+
 export interface SlideEntry {
   slide_index: number
   slide_id: string
@@ -653,7 +686,7 @@ export interface SlideEntry {
   title: string
   body_markdown: string
   audio_script: string
-  payload: Record<string, unknown>
+  payload: SlidePayload
   generated_at: string | null
 }
 
