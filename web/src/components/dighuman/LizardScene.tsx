@@ -138,11 +138,11 @@ export function LizardScene({
         </div>
       </div>
 
-      {/* Subtitle */}
+      {/* Subtitle — 沙金 + 半透深棕 chip, 与沙漠暖色调一致 */}
       {showSubtitle && subtitle && (
-        <div className="absolute left-1/2 -translate-x-1/2 bottom-4 max-w-[60%] z-20">
-          <div className="bg-black/70 backdrop-blur-sm rounded-md px-4 py-2 text-center">
-            <p className="text-white text-sm md:text-base leading-relaxed">{subtitle}</p>
+        <div className="absolute left-1/2 -translate-x-1/2 bottom-4 max-w-[70%] z-20">
+          <div className="bg-stone-950/75 backdrop-blur-md rounded-lg px-5 py-2.5 text-center ring-1 ring-amber-200/20 shadow-lg">
+            <p className="text-amber-50 text-sm md:text-base leading-relaxed font-medium">{subtitle}</p>
           </div>
         </div>
       )}
@@ -157,14 +157,14 @@ function ProjectorScreen({ children }: { children?: ReactNode }) {
       className="absolute"
       style={{ left: "5%", top: "12%", width: "55%", height: "68%" }}
     >
-      {/* Tripod legs (sketched lines) */}
-      <div className="absolute left-1/2 -translate-x-1/2 bottom-[-48px] w-[2px] h-12 bg-slate-800/70" />
-      <div className="absolute left-1/2 bottom-[-58px] w-[80px] h-[2px] bg-slate-800/70 -translate-x-1/2 rotate-[8deg]" />
-      <div className="absolute left-1/2 bottom-[-58px] w-[80px] h-[2px] bg-slate-800/70 -translate-x-1/2 -rotate-[8deg]" />
+      {/* Tripod legs — 暖深棕调与沙漠融合 */}
+      <div className="absolute left-1/2 -translate-x-1/2 bottom-[-48px] w-[2px] h-12 bg-stone-800/80" />
+      <div className="absolute left-1/2 bottom-[-58px] w-[80px] h-[2px] bg-stone-800/80 -translate-x-1/2 rotate-[8deg]" />
+      <div className="absolute left-1/2 bottom-[-58px] w-[80px] h-[2px] bg-stone-800/80 -translate-x-1/2 -rotate-[8deg]" />
 
-      {/* Frame */}
-      <div className="absolute inset-0 rounded-md bg-slate-900 p-2 shadow-2xl">
-        <div className="w-full h-full rounded bg-indigo-500/95 overflow-hidden flex items-center justify-center">
+      {/* Frame — 木色 + 沙金边, 投影屏内部由 SlideContent 自带暖白纸张感 bg */}
+      <div className="absolute inset-0 rounded-lg bg-gradient-to-br from-stone-800 to-stone-900 p-1.5 shadow-2xl ring-1 ring-amber-700/30">
+        <div className="w-full h-full rounded-md overflow-hidden bg-stone-50 flex items-center justify-center">
           {children ?? <SlidePlaceholder />}
         </div>
       </div>
@@ -174,10 +174,12 @@ function ProjectorScreen({ children }: { children?: ReactNode }) {
 
 function SlidePlaceholder() {
   return (
-    <div className="text-white/60 text-center px-6 text-sm">
-      <div className="text-[10px] uppercase tracking-widest mb-2 opacity-70">Slide area</div>
-      <div className="text-white/80 text-base">幻灯片将显示在这里 / Slides will appear here</div>
-      <div className="text-[10px] mt-2 opacity-50">(slide functionality coming soon)</div>
+    <div className="text-stone-500 text-center px-6 text-sm">
+      <div className="text-[10px] uppercase tracking-widest mb-2 text-amber-700/70 font-semibold">
+        SLIDE AREA
+      </div>
+      <div className="text-stone-700 text-base">幻灯片将显示在这里</div>
+      <div className="text-[10px] mt-2 opacity-60 italic">slides will appear here</div>
     </div>
   )
 }

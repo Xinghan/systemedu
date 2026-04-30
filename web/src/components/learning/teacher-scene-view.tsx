@@ -1,6 +1,9 @@
 // "老师讲课" mode: 全屏 LizardScene + slides 系统 (按页讲解 + 自动翻页).
 // slide 内容显示在 LizardScene 的投影屏 slot 内, 蜥蜴说当前 slide 的 audio_script.
 // 当一页说完 (isSpeaking 由 true → false), 自动翻下一页继续讲. 提供手动控制.
+//
+// UI 风格: 用 systemedu 主站 shadcn <Button> 组件 + 暖色 (sand/amber) 配色,
+// 与红沙漠场景调性一致, 不用蓝紫硬撞。
 "use client"
 
 import { useCallback, useEffect, useRef, useState } from "react"
@@ -10,7 +13,10 @@ import { useDighumanPlaybackStore } from "@/components/dighuman/store"
 import { gateway } from "@/lib/api"
 import type { CourseContent, KnodeInfo, SlideEntry } from "@/lib/types/api"
 import { SlideContent } from "@/components/learning/slide-content"
-import { ChevronLeft, ChevronRight, Play, Pause, RotateCw, Loader2 } from "lucide-react"
+import { Button } from "@/components/ui/button"
+import {
+  ChevronLeft, ChevronRight, Play, Pause, RotateCw, Square, Volume2, Loader2,
+} from "lucide-react"
 
 export interface TeacherSceneViewProps {
   knode: KnodeInfo | null
@@ -39,11 +45,8 @@ export function TeacherSceneView({
   const [error, setError] = useState<string | null>(null)
   const [current, setCurrent] = useState(0)
   const [autoplay, setAutoplay] = useState(true)
-  // Track wether we've finished speaking the *current* page so the auto-advance
-  // effect doesn't fire before the lizard ever starts.
   const startedSpeakingRef = useRef(false)
 
-  // Fetch slides
   const reloadSlides = useCallback(async () => {
     setError(null)
     setLoadingSlides(true)
@@ -62,7 +65,7 @@ export function TeacherSceneView({
     reloadSlides()
   }, [reloadSlides])
 
-  // Speak the current slide whenever it changes (and connection is ready + autoplay).
+  // 当前页变化 + 已连接 + autoplay → 让蜥蜴讲
   useEffect(() => {
     if (!connected) return
     if (!autoplay) return
@@ -78,7 +81,7 @@ export function TeacherSceneView({
     })
   }, [current, connected, autoplay, slides, speak])
 
-  // Track speak state; once it goes from speaking → idle, advance to next slide.
+  // 监听 speaking 完成: true → false 后自动翻下一页
   useEffect(() => {
     if (isSpeaking) {
       startedSpeakingRef.current = true
@@ -88,11 +91,15 @@ export function TeacherSceneView({
     if (!autoplay) return
     if (slides.length === 0) return
     if (current >= slides.length - 1) return
-    // Small pause before advancing so the previous audio settles + the user
-    // sees the page's last frame for a moment.
     const t = setTimeout(() => setCurrent((i) => Math.min(i + 1, slides.length - 1)), 700)
     return () => clearTimeout(t)
   }, [isSpeaking, autoplay, slides.length, current])
+
+  const goToSlide = useCallback((target: number) => {
+    stop().catch(() => {})
+    startedSpeakingRef.current = false
+    setCurrent(target)
+  }, [stop])
 
   const handleManualSpeak = useCallback(() => {
     if (slides.length === 0) return
@@ -100,10 +107,22 @@ export function TeacherSceneView({
     if (!slide) return
     const text = (slide.audio_script || slide.body_markdown || "").trim()
     if (text) {
+      stop().catch(() => {})
       startedSpeakingRef.current = false
       speak(text, "zh").catch((e) => setError((e as Error).message))
     }
-  }, [slides, current, speak])
+  }, [slides, current, speak, stop])
+
+  const handleTogglePlayback = useCallback(() => {
+    setAutoplay((v) => {
+      const next = !v
+      if (!next) {
+        stop().catch(() => {})
+        startedSpeakingRef.current = false
+      }
+      return next
+    })
+  }, [stop])
 
   const handleRegenerate = useCallback(async () => {
     if (!versionLabel) {
@@ -129,38 +148,52 @@ export function TeacherSceneView({
     | undefined) ?? undefined
 
   return (
-    <div className="flex flex-col h-full bg-slate-950 text-white">
-      {/* Status strip */}
-      <div className="flex items-center gap-3 px-6 py-2 text-xs text-white/60 border-b border-white/5 shrink-0">
+    <div className="flex flex-col h-full bg-stone-100 text-stone-900">
+      {/* Status strip — 暖灰 + amber 强调 */}
+      <div className="flex items-center gap-3 px-6 py-2.5 text-xs border-b border-stone-200 bg-white/80 backdrop-blur shrink-0">
         <span
-          className={`w-2 h-2 rounded-full ${connected ? "bg-emerald-400" : "bg-amber-400 animate-pulse"}`}
+          className={`w-1.5 h-1.5 rounded-full ${connected ? "bg-emerald-500" : "bg-amber-500 animate-pulse"}`}
         />
-        <span>{connected ? "蜥蜴老师已就位" : "正在连接 dighuman..."}</span>
+        <span className="text-stone-700 font-medium">
+          {connected ? "蜥蜴老师已就位" : "正在连接..."}
+        </span>
         {slides.length > 0 && (
-          <span className="ml-2 opacity-70">
-            第 {current + 1} / {slides.length} 页 · {slide?.kind ?? ""}
+          <span className="ml-2 text-stone-500">
+            第 <strong className="text-stone-900">{current + 1}</strong> / {slides.length} 页
+            <span className="ml-1.5 text-amber-700 uppercase tracking-wider text-[10px] font-semibold">
+              {slide?.kind ?? ""}
+            </span>
           </span>
         )}
-        <button
-          type="button"
+        <Button
+          variant="ghost"
+          size="xs"
           onClick={handleRegenerate}
           disabled={regenerating || !versionLabel}
-          className="ml-auto inline-flex items-center gap-1 text-[10px] px-2 py-1 rounded border border-white/15 hover:bg-white/10 disabled:opacity-40"
+          className="ml-auto text-stone-600 hover:text-amber-800"
           title="用 LLM 重新生成 slides (整组覆盖)"
         >
-          {regenerating ? <Loader2 className="h-3 w-3 animate-spin" /> : <RotateCw className="h-3 w-3" />}
+          {regenerating ? (
+            <Loader2 className="size-3.5 animate-spin" />
+          ) : (
+            <RotateCw className="size-3.5" />
+          )}
           重生 slides
-        </button>
+        </Button>
       </div>
 
-      {/* Main scene */}
+      {/* Main scene — 蜥蜴 + 投影屏 */}
       <div className="relative flex-1 min-h-0">
         <LizardScene
           slide={
             loadingSlides ? (
               <SlideLoading />
             ) : slides.length === 0 ? (
-              <NoSlides versionLabel={versionLabel} onRegenerate={handleRegenerate} regenerating={regenerating} />
+              <NoSlides
+                versionLabel={versionLabel}
+                onRegenerate={handleRegenerate}
+                regenerating={regenerating}
+              />
             ) : slide ? (
               <SlideContent slide={slide} renderedSections={renderedSections} />
             ) : null
@@ -168,86 +201,69 @@ export function TeacherSceneView({
         />
       </div>
 
-      {/* Playback controls */}
+      {/* Playback controls — shadcn Button + 暖白 chrome */}
       {slides.length > 0 && (
-        <div className="border-t border-white/5 bg-slate-900/60 px-6 py-3 flex items-center gap-2 shrink-0">
-          <button
-            type="button"
-            onClick={() => {
-              stop().catch(() => {})
-              startedSpeakingRef.current = false
-              setCurrent((i) => Math.max(0, i - 1))
-            }}
+        <div className="border-t border-stone-200 bg-white/85 backdrop-blur px-6 py-3 flex items-center gap-2 shrink-0">
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            onClick={() => goToSlide(Math.max(0, current - 1))}
             disabled={current === 0}
-            className="p-2 rounded hover:bg-white/10 disabled:opacity-30"
             title="上一页"
           >
-            <ChevronLeft className="h-4 w-4" />
-          </button>
+            <ChevronLeft className="size-4" />
+          </Button>
 
-          <button
-            type="button"
-            onClick={() => {
-              setAutoplay((v) => {
-                const next = !v
-                if (!next) {
-                  // 切到暂停: 立刻停掉音频 + scheduler + speaking 状态
-                  stop().catch(() => {})
-                  startedSpeakingRef.current = false
-                }
-                return next
-              })
-            }}
-            className="flex items-center gap-1 px-3 py-1.5 rounded bg-emerald-700 hover:bg-emerald-600 text-xs font-medium"
-            title={autoplay ? "暂停 (停止讲话, 不再自动翻页)" : "继续自动播放当前页"}
+          <Button
+            variant={autoplay ? "default" : "outline"}
+            size="sm"
+            onClick={handleTogglePlayback}
+            title={autoplay ? "暂停 (停止讲话, 不再自动翻页)" : "继续自动播放"}
+            className={autoplay ? "" : "text-stone-700"}
           >
-            {autoplay ? <Pause className="h-3.5 w-3.5" /> : <Play className="h-3.5 w-3.5" />}
+            {autoplay ? <Pause className="size-3.5" /> : <Play className="size-3.5" />}
             {autoplay ? "自动播放中" : "已暂停"}
-          </button>
+          </Button>
 
-          <button
-            type="button"
+          <Button
+            variant="ghost"
+            size="sm"
             onClick={handleManualSpeak}
             disabled={!connected || slides.length === 0}
-            className="px-3 py-1.5 rounded bg-slate-700 hover:bg-slate-600 text-xs font-medium disabled:opacity-40"
             title="重新讲当前页"
+            className="text-stone-700"
           >
+            <Volume2 className="size-3.5" />
             重讲此页
-          </button>
+          </Button>
 
-          <button
-            type="button"
+          <Button
+            variant="ghost"
+            size="icon-sm"
             onClick={() => stop()}
-            className="px-3 py-1.5 rounded bg-slate-800 hover:bg-slate-700 text-xs font-medium"
+            title="停止讲话"
+            className="text-stone-700"
           >
-            停止
-          </button>
+            <Square className="size-3.5" />
+          </Button>
 
-          <div className="ml-auto flex items-center gap-1.5">
-            <SlideDots count={slides.length} current={current} onJump={(i) => {
-              stop().catch(() => {})
-              startedSpeakingRef.current = false
-              setCurrent(i)
-            }} />
-            <button
-              type="button"
-              onClick={() => {
-                stop().catch(() => {})
-                startedSpeakingRef.current = false
-                setCurrent((i) => Math.min(slides.length - 1, i + 1))
-              }}
+          <div className="ml-auto flex items-center gap-2">
+            <SlideDots count={slides.length} current={current} onJump={goToSlide} />
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              onClick={() => goToSlide(Math.min(slides.length - 1, current + 1))}
               disabled={current >= slides.length - 1}
-              className="p-2 rounded hover:bg-white/10 disabled:opacity-30"
               title="下一页"
             >
-              <ChevronRight className="h-4 w-4" />
-            </button>
+              <ChevronRight className="size-4" />
+            </Button>
           </div>
         </div>
       )}
 
       {error && (
-        <div className="border-t border-red-900/50 bg-red-950/60 px-6 py-2 text-xs text-red-200 shrink-0">
+        <div className="border-t border-red-200 bg-red-50 px-6 py-2 text-xs text-red-700 shrink-0">
           {error}
         </div>
       )}
@@ -257,9 +273,9 @@ export function TeacherSceneView({
 
 function SlideLoading() {
   return (
-    <div className="text-white/60 text-center">
-      <Loader2 className="h-5 w-5 animate-spin mx-auto mb-2" />
-      <div className="text-xs">加载 slides...</div>
+    <div className="text-stone-500 text-center">
+      <Loader2 className="size-6 animate-spin mx-auto mb-2 text-amber-600" />
+      <div className="text-xs uppercase tracking-wider">加载 slides...</div>
     </div>
   )
 }
@@ -274,22 +290,22 @@ function NoSlides({
   regenerating: boolean
 }) {
   return (
-    <div className="text-white/80 text-center px-8">
-      <div className="text-base font-medium mb-1">本节课暂无幻灯片</div>
-      <div className="text-xs opacity-60 mb-3">
-        {versionLabel
-          ? `版本 ${versionLabel} 还没有 slides, 点下方生成`
-          : "请先生成 v3 课程版本"}
+    <div className="text-center px-8 py-10 max-w-md">
+      <div className="text-base font-semibold text-stone-800 mb-1.5">本节课暂无幻灯片</div>
+      <div className="text-xs text-stone-600 mb-4">
+        {versionLabel ? (
+          <>
+            版本 <code className="px-1 py-0.5 rounded bg-stone-100 text-amber-800 text-[11px]">{versionLabel}</code> 还没有 slides
+          </>
+        ) : (
+          "请先生成 v3 课程版本"
+        )}
       </div>
       {versionLabel && (
-        <button
-          type="button"
-          onClick={onRegenerate}
-          disabled={regenerating}
-          className="px-3 py-1.5 rounded bg-emerald-600 hover:bg-emerald-500 text-xs font-medium disabled:opacity-50"
-        >
-          {regenerating ? "生成中..." : "立即生成"}
-        </button>
+        <Button onClick={onRegenerate} disabled={regenerating} size="sm">
+          {regenerating ? <Loader2 className="size-3.5 animate-spin" /> : <Play className="size-3.5" />}
+          {regenerating ? "生成中..." : "立即生成 slides"}
+        </Button>
       )}
     </div>
   )
@@ -312,10 +328,13 @@ function SlideDots({
           type="button"
           onClick={() => onJump(i)}
           className={[
-            "w-1.5 h-1.5 rounded-full transition-all",
-            i === current ? "bg-emerald-400 w-3" : "bg-white/30 hover:bg-white/60",
+            "h-1.5 rounded-full transition-all",
+            i === current
+              ? "bg-amber-500 w-4"
+              : "bg-stone-300 hover:bg-stone-500 w-1.5",
           ].join(" ")}
           title={`跳到第 ${i + 1} 页`}
+          aria-label={`Slide ${i + 1}`}
         />
       ))}
     </div>
