@@ -85,7 +85,9 @@ async def generate_slides(
         "output": f"prompt_len={len(prompt)}",
     })
 
-    llm = llm_for("fast", streaming=False, max_tokens=8192)
+    # max_tokens 大点: rich payload (inline_svg / concept_cards / bullets) 比纯
+    # bullet 长很多. 一节课 11 slides, 每 slide payload 含 SVG 时可能 800-1500 tok.
+    llm = llm_for("fast", streaming=False, max_tokens=16384)
     try:
         resp = await ainvoke(llm, [{"role": "user", "content": prompt}],
                              label=f"slide_gen[{project_name}/{knode_id}/{version_label}]")
