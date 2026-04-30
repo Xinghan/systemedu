@@ -47,13 +47,22 @@ export function TeacherSceneView({
   const [autoplay, setAutoplay] = useState(true)
   const startedSpeakingRef = useRef(false)
 
+  // 自取 v3 course_content (rendered_sections 在 v3 才有, 父组件 versionMode=v2
+  // 时拿不到; 直接 fetch v3 不依赖 versionMode 状态).
+  const [v3Content, setV3Content] = useState<CourseContent | null>(null)
+
   const reloadSlides = useCallback(async () => {
     setError(null)
     setLoadingSlides(true)
     try {
-      const data = await gateway.getCourseV3Slides(projectName, nodeId, versionLabel ?? undefined)
-      setSlides(data.slides ?? [])
+      const [slidesData, courseData] = await Promise.all([
+        gateway.getCourseV3Slides(projectName, nodeId, versionLabel ?? undefined),
+        gateway.getCourseV3(projectName, nodeId, versionLabel ?? undefined).catch(() => null),
+      ])
+      setSlides(slidesData.slides ?? [])
       setCurrent(0)
+      const cc = courseData?.course_content as CourseContent | undefined
+      if (cc) setV3Content(cc)
     } catch (e) {
       setError((e as Error).message)
     } finally {
@@ -143,7 +152,8 @@ export function TeacherSceneView({
   }, [projectName, nodeId, versionLabel, stop, reloadSlides])
 
   const slide = slides[current] ?? null
-  const renderedSections = (courseContent?.rendered_sections as
+  // 优先用自取的 v3 content, fallback 到父组件传入的 (向后兼容)
+  const renderedSections = ((v3Content ?? courseContent)?.rendered_sections as
     | Record<string, { html?: string | null }>
     | undefined) ?? undefined
 
