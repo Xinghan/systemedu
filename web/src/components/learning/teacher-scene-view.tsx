@@ -174,6 +174,7 @@ export function TeacherSceneView({
           <button
             type="button"
             onClick={() => {
+              stop().catch(() => {})
               startedSpeakingRef.current = false
               setCurrent((i) => Math.max(0, i - 1))
             }}
@@ -186,9 +187,19 @@ export function TeacherSceneView({
 
           <button
             type="button"
-            onClick={() => setAutoplay((v) => !v)}
+            onClick={() => {
+              setAutoplay((v) => {
+                const next = !v
+                if (!next) {
+                  // 切到暂停: 立刻停掉音频 + scheduler + speaking 状态
+                  stop().catch(() => {})
+                  startedSpeakingRef.current = false
+                }
+                return next
+              })
+            }}
             className="flex items-center gap-1 px-3 py-1.5 rounded bg-emerald-700 hover:bg-emerald-600 text-xs font-medium"
-            title={autoplay ? "暂停自动播放" : "继续自动播放"}
+            title={autoplay ? "暂停 (停止讲话, 不再自动翻页)" : "继续自动播放当前页"}
           >
             {autoplay ? <Pause className="h-3.5 w-3.5" /> : <Play className="h-3.5 w-3.5" />}
             {autoplay ? "自动播放中" : "已暂停"}
@@ -214,12 +225,14 @@ export function TeacherSceneView({
 
           <div className="ml-auto flex items-center gap-1.5">
             <SlideDots count={slides.length} current={current} onJump={(i) => {
+              stop().catch(() => {})
               startedSpeakingRef.current = false
               setCurrent(i)
             }} />
             <button
               type="button"
               onClick={() => {
+                stop().catch(() => {})
                 startedSpeakingRef.current = false
                 setCurrent((i) => Math.min(slides.length - 1, i + 1))
               }}

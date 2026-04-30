@@ -26,6 +26,8 @@ export function useDighumanSession(): UseDighumanResult {
   const wsRef = useRef<DighumanWsClient | null>(null)
   const audioCtxRef = useRef<AudioContext | null>(null)
   const schedulerRef = useRef<PlaybackScheduler | null>(null)
+  const currentSourceRef = useRef<AudioBufferSourceNode | null>(null)
+  const stopTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const setBlend = useDighumanAvatarStore((s) => s.setBlendshapeWeight)
   const setSpeaking = useDighumanPlaybackStore((s) => s.setSpeaking)
   const setVisemeTrack = useDighumanPlaybackStore((s) => s.setVisemeTrack)
@@ -50,7 +52,20 @@ export function useDighumanSession(): UseDighumanResult {
 
     let pendingTrack: VisemeFrame[] = []
     let pendingDurationMs = 0
-    let stopTimer: ReturnType<typeof setTimeout> | null = null
+
+    const cleanupCurrentPlayback = () => {
+      if (stopTimerRef.current) {
+        clearTimeout(stopTimerRef.current)
+        stopTimerRef.current = null
+      }
+      if (currentSourceRef.current) {
+        try { currentSourceRef.current.stop() } catch { /* already stopped */ }
+        try { currentSourceRef.current.disconnect() } catch {}
+        currentSourceRef.current = null
+      }
+      sched.stop()
+      setSpeaking(null)
+    }
 
     ws.on("speech_start", (f) => {
       setSpeaking(f.utterance_id)
@@ -67,9 +82,7 @@ export function useDighumanSession(): UseDighumanResult {
       // Server queues speech_end immediately; audio start triggers scheduler.
     })
     ws.on("speech_interrupt", () => {
-      setSpeaking(null)
-      if (stopTimer) clearTimeout(stopTimer)
-      sched.stop()
+      cleanupCurrentPlayback()
     })
     ws.on("error", (f) => console.warn("[dighuman] error", f.code, f.message))
 
@@ -77,16 +90,27 @@ export function useDighumanSession(): UseDighumanResult {
       const trackStartMs = performance.now()
       sched.setTrack(pendingTrack, trackStartMs)
       const durationMs = pendingDurationMs || 3000
-      if (stopTimer) clearTimeout(stopTimer)
-      stopTimer = setTimeout(() => {
+      // 新音频前先停掉旧的 (防上一段没说完用户切了页)
+      if (currentSourceRef.current) {
+        try { currentSourceRef.current.stop() } catch {}
+        try { currentSourceRef.current.disconnect() } catch {}
+        currentSourceRef.current = null
+      }
+      if (stopTimerRef.current) clearTimeout(stopTimerRef.current)
+      stopTimerRef.current = setTimeout(() => {
         sched.stop()
         setSpeaking(null)
+        currentSourceRef.current = null
       }, durationMs + 200)
       try {
         const decoded = await audioCtx.decodeAudioData(buf.slice(0))
         const src = audioCtx.createBufferSource()
         src.buffer = decoded
         src.connect(audioCtx.destination)
+        src.onended = () => {
+          if (currentSourceRef.current === src) currentSourceRef.current = null
+        }
+        currentSourceRef.current = src
         src.start()
       } catch (err) {
         console.warn("[dighuman] audio decode failed:", err)
@@ -107,8 +131,16 @@ export function useDighumanSession(): UseDighumanResult {
       cancelAnimationFrame(raf)
       ws.close()
       sched.stop()
+      if (currentSourceRef.current) {
+        try { currentSourceRef.current.stop() } catch {}
+        try { currentSourceRef.current.disconnect() } catch {}
+        currentSourceRef.current = null
+      }
       audioCtx.close().catch(() => {})
-      if (stopTimer) clearTimeout(stopTimer)
+      if (stopTimerRef.current) {
+        clearTimeout(stopTimerRef.current)
+        stopTimerRef.current = null
+      }
     }
   }, [setBlend, setSpeaking, setVisemeTrack])
 
@@ -126,12 +158,25 @@ export function useDighumanSession(): UseDighumanResult {
   }, [])
 
   const stop = useCallback(async () => {
+    // 立即停掉浏览器侧正在播放的音频 + scheduler + 状态, 不等服务端往返。
+    if (stopTimerRef.current) {
+      clearTimeout(stopTimerRef.current)
+      stopTimerRef.current = null
+    }
+    if (currentSourceRef.current) {
+      try { currentSourceRef.current.stop() } catch { /* already stopped */ }
+      try { currentSourceRef.current.disconnect() } catch {}
+      currentSourceRef.current = null
+    }
+    schedulerRef.current?.stop()
+    useDighumanPlaybackStore.getState().setSpeaking(null)
     if (!sessionIdRef.current) return
+    // 顺便通知服务端中断该 utterance (释放服务端资源/防 viseme_track 后续帧)
     await fetch(`${SERVER_ORIGIN}/api/stop`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ session_id: sessionIdRef.current }),
-    })
+    }).catch(() => {})
   }, [])
 
   return { connected, speak, stop }
