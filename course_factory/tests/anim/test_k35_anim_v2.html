@@ -1,0 +1,892 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=Inter:wght@400;500&family=Noto+Sans+SC:wght@400;700&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box;}
+html,body{width:100%;height:100vh;overflow:hidden;}
+body{background:var(--bg,#0c0e12);color:var(--text,#f6f6fc);font-family:'Inter','Noto Sans SC',sans-serif;}
+/* ── Outer: sidebar + main ── */
+.wrapper{display:flex;flex-direction:row;height:100vh;overflow:hidden;}
+.sidebar{width:200px;min-width:200px;max-width:200px;display:flex;flex-direction:column;gap:6px;padding:10px;background:rgba(0,0,0,0.5);border-right:1px solid rgba(80,255,176,0.15);overflow-y:auto;}
+.lang-btn{align-self:flex-start;flex-shrink:0;font-family:'Space Grotesk',sans-serif;font-size:10px;font-weight:700;padding:3px 8px;cursor:pointer;border:1px solid rgba(255,181,156,0.25);background:transparent;color:#ffb59c;letter-spacing:1px;}
+.lang-btn:hover{border-color:#ffb59c;background:rgba(255,181,156,0.1);}
+.sidebar h1{font-family:'Space Grotesk',sans-serif;font-size:13px;font-weight:700;color:var(--primary,#50ffb0);margin-top:4px;line-height:1.3;}
+.sidebar .sub{font-size:10px;color:var(--muted,#aaabb0);letter-spacing:0.06em;text-transform:uppercase;}
+.sidebar .frame-ind{font-family:'Space Grotesk',sans-serif;font-size:10px;color:var(--muted,#aaabb0);letter-spacing:0.1em;margin-top:4px;}
+.sidebar .guide-label{font-family:'Space Grotesk',sans-serif;font-size:9px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:var(--primary,#50ffb0);margin-top:8px;}
+.sidebar .guide-content{font-family:'Noto Sans SC',sans-serif;font-size:11px;color:rgba(255,255,255,0.85);line-height:1.5;}
+.sidebar .guide-content ul{padding-left:16px;margin:0;}
+.sidebar .guide-content li{margin-bottom:1px;}
+/* ── Main area: canvas + controls + hud ── */
+.anim-main{flex:1;display:flex;flex-direction:column;min-width:0;}
+.canvas-wrap{flex:1;min-height:0;position:relative;}
+canvas{width:100%;height:100%;display:block;}
+/* ── Controls + HUD ── */
+.controls{display:flex;justify-content:center;align-items:center;gap:12px;padding:6px 16px;}
+.ctrl-btn{font-family:'Space Grotesk',sans-serif;font-size:11px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;padding:5px 16px;border:none;cursor:pointer;color:var(--bg,#0c0e12);background:linear-gradient(135deg,var(--primary,#50ffb0),var(--primary-dim,#17df93));transition:transform 0.1s,box-shadow 0.2s;box-shadow:0 0 10px var(--glow-strong,rgba(80,255,176,0.3));}
+.ctrl-btn:hover{transform:scale(1.04);}
+.ctrl-btn:active{transform:scale(0.96);}
+.ctrl-btn.secondary{background:var(--glass,rgba(23,26,31,0.92));color:var(--muted,#aaabb0);box-shadow:none;backdrop-filter:blur(12px);}
+.ctrl-btn.secondary:hover{color:var(--primary,#50ffb0);}
+.hud{height:40px;display:flex;align-items:center;justify-content:space-around;background:rgba(0,0,0,0.55);backdrop-filter:blur(12px);padding:0 16px;}
+.hud-item{text-align:center;}
+.hud-label{font-family:'Space Grotesk',sans-serif;font-size:8px;letter-spacing:0.15em;text-transform:uppercase;color:var(--muted,#aaabb0);}
+.hud-val{font-family:'Space Grotesk',sans-serif;font-size:13px;font-weight:700;color:var(--primary,#50ffb0);}
+</style>
+</head>
+<body>
+<div class="wrapper">
+<!-- Sidebar: lang-btn, title, guide (completely separate from canvas) -->
+<div class="sidebar">
+<button class="lang-btn" id="langBtn">CN</button>
+<h1 id="title"></h1>
+<div class="sub" id="subtitle"></div>
+<div class="frame-ind" id="frameIndicator"></div>
+<div class="guide-label" id="guideTitle"></div>
+<div class="guide-content" id="guideContent"></div>
+</div>
+<!-- Main: canvas fills all space, nothing overlaps -->
+<div class="anim-main">
+<div class="canvas-wrap"><canvas id="c"></canvas></div>
+<div class="controls">
+<button class="ctrl-btn secondary" id="btnPrev"></button>
+<button class="ctrl-btn" id="btnPlay"></button>
+<button class="ctrl-btn secondary" id="btnNext"></button>
+</div>
+<div class="hud">
+<div class="hud-item"><div class="hud-label" id="hudL1"></div><div class="hud-val" id="hudV1"></div></div>
+<div class="hud-item"><div class="hud-label" id="hudL2"></div><div class="hud-val" id="hudV2"></div></div>
+<div class="hud-item"><div class="hud-label" id="hudL3"></div><div class="hud-val" id="hudV3"></div></div>
+<div class="hud-item"><div class="hud-label" id="hudL4"></div><div class="hud-val" id="hudV4"></div></div>
+</div>
+</div>
+</div>
+
+<!-- Runtime (shared skeleton) -->
+<script src="animation_runtime.js"></script>
+
+<!-- Content -->
+<script>
+// ============================================================
+// K35: Drag Formula Engineering Intuition
+// 5 frames:
+//   F0 - Title "DRAG FORMULA" with formula display and rocket
+//   F1 - V-squared: explosive drag growth 10 vs 50 m/s
+//   F2 - Density rho: sea level vs 10km altitude
+//   F3 - Cd shapes: flat plate / sphere / cylinder / bullet / streamlined
+//   F4 - Area A: fat vs slim rocket cross-section
+// ============================================================
+
+var CONFIG = {
+  style: 'ares_mission',
+  totalFrames: 5,
+
+  i18n: {
+    title:      {en:'DRAG FORMULA', cn:'\u7a7a\u6c14\u963b\u529b\u516c\u5f0f'},
+    subtitle:   {en:'Engineering Intuition for F_D', cn:'\u5de5\u7a0b\u76f4\u89c9\u7248'},
+
+    // F0 title
+    f0formula:  {en:'F_D = 0.5 \u00d7 \u03c1 \u00d7 v\u00b2 \u00d7 C_D \u00d7 A', cn:'F_D = 0.5 \u00d7 \u03c1 \u00d7 v\u00b2 \u00d7 C_D \u00d7 A'},
+    f0core:     {en:'Speed goes from 10 to 50 m/s\u2014\nhow many times does drag increase?', cn:'\u706b\u7bad\u901f\u5ea6\u4ece10 m/s\u589e\u52a0\u523050 m/s\uff0c\n\u7a7a\u6c14\u963b\u529b\u53d8\u6210\u51e0\u500d\uff1f'},
+    f0fd:       {en:'F_D', cn:'F_D'},
+    f0rho:      {en:'\u03c1 (density)', cn:'\u03c1 (\u5bc6\u5ea6)'},
+    f0vsq:      {en:'v\u00b2 (speed\u00b2)', cn:'v\u00b2 (\u901f\u5ea6\u00b2)'},
+    f0cd:       {en:'C_D (drag coeff)', cn:'C_D (\u963b\u529b\u7cfb\u6570)'},
+    f0area:     {en:'A (area)', cn:'A (\u9762\u79ef)'},
+
+    // F1 v-squared
+    f1title:    {en:'v\u00b2 : EXPLOSIVE GROWTH', cn:'v\u00b2 : \u7206\u70b8\u5f0f\u589e\u957f'},
+    f1slow:     {en:'10 m/s', cn:'10 m/s'},
+    f1fast:     {en:'50 m/s', cn:'50 m/s'},
+    f1answer:   {en:'25\u00d7 more drag!', cn:'\u963b\u529b\u53d8\u4e3a 25 \u500d\uff01'},
+    f1bar10:    {en:'10 m/s', cn:'10 m/s'},
+    f1bar20:    {en:'20', cn:'20'},
+    f1bar30:    {en:'30', cn:'30'},
+    f1bar40:    {en:'40', cn:'40'},
+    f1bar50:    {en:'50', cn:'50'},
+    f1explain:  {en:'50\u00b2 / 10\u00b2 = 2500 / 100 = 25', cn:'50\u00b2 / 10\u00b2 = 2500 / 100 = 25'},
+    f1dragLabel:{en:'Drag Force', cn:'\u963b\u529b'},
+
+    // F2 density
+    f2title:    {en:'DENSITY \u03c1 : ALTITUDE EFFECT', cn:'\u5bc6\u5ea6 \u03c1 : \u9ad8\u5ea6\u6548\u5e94'},
+    f2sea:      {en:'SEA LEVEL', cn:'\u6d77\u5e73\u9762'},
+    f2alt:      {en:'10 km ALTITUDE', cn:'10 km \u9ad8\u7a7a'},
+    f2rhoSea:   {en:'\u03c1 = 1.225 kg/m\u00b3', cn:'\u03c1 = 1.225 kg/m\u00b3'},
+    f2rhoAlt:   {en:'\u03c1 = 0.41 kg/m\u00b3', cn:'\u03c1 = 0.41 kg/m\u00b3'},
+    f2result:   {en:'Drag drops to 1/3!', cn:'\u963b\u529b\u964d\u4e3a\u539f\u67651/3\uff01'},
+    f2connect:  {en:'(connects to K34: air density)', cn:'(\u8854\u63a5 K34: \u7a7a\u6c14\u5bc6\u5ea6)'},
+    f2denseLbl: {en:'Dense air', cn:'\u7a20\u5bc6\u7a7a\u6c14'},
+    f2thinLbl:  {en:'Thin air', cn:'\u7a00\u8584\u7a7a\u6c14'},
+
+    // F3 Cd shapes
+    f3title:    {en:'C_D : SHAPE MATTERS', cn:'C_D : \u5f62\u72b6\u51b3\u5b9a\u963b\u529b'},
+    f3flat:     {en:'Flat Plate', cn:'\u5e73\u677f'},
+    f3sphere:   {en:'Sphere', cn:'\u7403\u4f53'},
+    f3cylinder: {en:'Cylinder', cn:'\u5706\u67f1'},
+    f3bullet:   {en:'Bullet', cn:'\u5b50\u5f39\u5934'},
+    f3stream:   {en:'Streamlined', cn:'\u6d41\u7ebf\u4f53'},
+    f3cdFlat:   {en:'C_D = 1.28', cn:'C_D = 1.28'},
+    f3cdSphere: {en:'C_D = 0.47', cn:'C_D = 0.47'},
+    f3cdCyl:    {en:'C_D = 0.82', cn:'C_D = 0.82'},
+    f3cdBullet: {en:'C_D = 0.30', cn:'C_D = 0.30'},
+    f3cdStream: {en:'C_D = 0.15', cn:'C_D = 0.15'},
+    f3insight:  {en:'Better shape = less drag', cn:'\u66f4\u597d\u7684\u5f62\u72b6 = \u66f4\u5c0f\u7684\u963b\u529b'},
+
+    // F4 area
+    f4title:    {en:'AREA A : CROSS-SECTION', cn:'\u9762\u79ef A : \u622a\u9762\u79ef'},
+    f4fat:      {en:'FAT ROCKET', cn:'\u80d6\u706b\u7bad'},
+    f4slim:     {en:'SLIM ROCKET', cn:'\u7626\u706b\u7bad'},
+    f4fatA:     {en:'A = \u03c0\u00d7(6cm)\u00b2', cn:'A = \u03c0\u00d7(6cm)\u00b2'},
+    f4slimA:    {en:'A = \u03c0\u00d7(3cm)\u00b2', cn:'A = \u03c0\u00d7(3cm)\u00b2'},
+    f4fatVal:   {en:'\u2248 113 cm\u00b2', cn:'\u2248 113 cm\u00b2'},
+    f4slimVal:  {en:'\u2248 28 cm\u00b2', cn:'\u2248 28 cm\u00b2'},
+    f4ratio:    {en:'4\u00d7 more drag!', cn:'\u963b\u529b\u5dee 4 \u500d\uff01'},
+    f4insight:  {en:'Minimize cross-section area', cn:'\u5c3d\u91cf\u51cf\u5c0f\u622a\u9762\u79ef'},
+    f4sameCd:   {en:'Same speed, same C_D', cn:'\u76f8\u540c\u901f\u5ea6\u3001\u76f8\u540c C_D'},
+
+    // Guide
+    guideTitle: {en:'OBSERVATION GUIDE', cn:'\u89c2\u5bdf\u6307\u5357'},
+    g1:         {en:'v\u00b2 means doubling speed = 4\u00d7 the drag', cn:'v\u00b2 \u610f\u5473\u7740\u901f\u5ea6\u7ffb\u500d\u3001\u963b\u529b\u53d84\u500d'},
+    g2:         {en:'High altitude: thin air, less drag', cn:'\u9ad8\u7a7a\u7a7a\u6c14\u7a00\u8584\uff0c\u963b\u529b\u66f4\u5c0f'},
+    g3:         {en:'Streamlined shapes and slim bodies reduce drag', cn:'\u6d41\u7ebf\u578b + \u7ec6\u957f\u4f53 = \u963b\u529b\u6700\u5c0f'},
+
+    // HUD
+    hudTopic:   {en:'TOPIC', cn:'\u4e3b\u9898'},
+    hudKey:     {en:'KEY FACTOR', cn:'\u5173\u952e\u53d8\u91cf'},
+    hudEffect:  {en:'EFFECT', cn:'\u6548\u679c'},
+    hudFormula: {en:'FORMULA', cn:'\u516c\u5f0f'},
+
+    hudTopicF0: {en:'Overview', cn:'\u603b\u89c8'},
+    hudTopicF1: {en:'v\u00b2', cn:'v\u00b2'},
+    hudTopicF2: {en:'\u03c1', cn:'\u03c1'},
+    hudTopicF3: {en:'C_D', cn:'C_D'},
+    hudTopicF4: {en:'A', cn:'A'},
+
+    hudKeyF0:   {en:'All 4', cn:'\u5168\u90e84\u4e2a'},
+    hudKeyF1:   {en:'Speed\u00b2', cn:'\u901f\u5ea6\u00b2'},
+    hudKeyF2:   {en:'Density', cn:'\u5bc6\u5ea6'},
+    hudKeyF3:   {en:'Shape', cn:'\u5f62\u72b6'},
+    hudKeyF4:   {en:'Area', cn:'\u622a\u9762\u79ef'},
+
+    hudEffF0:   {en:'--', cn:'--'},
+    hudEffF1:   {en:'25\u00d7', cn:'25\u500d'},
+    hudEffF2:   {en:'1/3\u00d7', cn:'1/3'},
+    hudEffF3:   {en:'8.5\u00d7 range', cn:'8.5\u500d\u8303\u56f4'},
+    hudEffF4:   {en:'4\u00d7', cn:'4\u500d'},
+  },
+
+  hudLabels: ['hudTopic', 'hudKey', 'hudEffect', 'hudFormula'],
+  hudValues: [
+    ['hudTopicF0', 'hudKeyF0', 'hudEffF0', 'F_D=\u00bd\u03c1v\u00b2C_DA'],
+    ['hudTopicF1', 'hudKeyF1', 'hudEffF1', '50\u00b2/10\u00b2=25'],
+    ['hudTopicF2', 'hudKeyF2', 'hudEffF2', '0.41/1.225'],
+    ['hudTopicF3', 'hudKeyF3', 'hudEffF3', '0.15~1.28'],
+    ['hudTopicF4', 'hudKeyF4', 'hudEffF4', '\u03c0r\u00b2'],
+  ],
+
+  guideTitle: 'guideTitle',
+  guideItems: ['g1', 'g2', 'g3'],
+};
+
+// ============================================================
+// Animation state
+// ============================================================
+var _time = 0;
+var _idleTimer = null;
+var _prevFrameK35 = -1;
+var _frameCheckTimer = null;
+var animState = {progress: 0, frameTracked: -1};
+var animTimer = null;
+
+// Seeded RNG for deterministic particles
+var _rngSeed = 35;
+function seededRand() {
+  _rngSeed = (_rngSeed * 1103515245 + 12345) & 0x7fffffff;
+  return (_rngSeed & 0xffff) / 0xffff;
+}
+function resetSeed(s) { _rngSeed = s; }
+
+// Pre-generate particle arrays for streamlines
+var streamParticles = [];
+(function() {
+  resetSeed(777);
+  for (var i = 0; i < 60; i++) {
+    streamParticles.push({
+      xOff: seededRand() * 200 - 100,
+      yOff: seededRand() * 120 - 60,
+      speed: 0.3 + seededRand() * 0.7,
+      phase: seededRand() * Math.PI * 2,
+      size: 1 + seededRand() * 2
+    });
+  }
+})();
+
+// Pre-generate molecule positions for density frame
+var moleculesSeaLevel = [];
+var moleculesAltitude = [];
+(function() {
+  resetSeed(888);
+  for (var i = 0; i < 80; i++) {
+    moleculesSeaLevel.push({
+      x: seededRand() * 180,
+      y: seededRand() * 160,
+      r: 1.5 + seededRand() * 1.5,
+      vx: (seededRand() - 0.5) * 0.8,
+      vy: (seededRand() - 0.5) * 0.8
+    });
+  }
+  resetSeed(999);
+  for (var i = 0; i < 25; i++) {
+    moleculesAltitude.push({
+      x: seededRand() * 180,
+      y: seededRand() * 160,
+      r: 1.2 + seededRand() * 1.0,
+      vx: (seededRand() - 0.5) * 0.5,
+      vy: (seededRand() - 0.5) * 0.5
+    });
+  }
+})();
+
+function startAnim(targetFrame) {
+  if (animTimer) { cancelAnimationFrame(animTimer); animTimer = null; }
+  animState = {progress: 0, frameTracked: targetFrame};
+  var lastTime = 0;
+  function tick(ts) {
+    if (animState.frameTracked !== AnimRuntime.currentFrame) return;
+    if (!lastTime) lastTime = ts;
+    var delta = (ts - lastTime) / 1000;
+    lastTime = ts;
+    animState.progress += delta * 0.5;
+    if (animState.progress > 1.0) animState.progress = 1.0;
+    AnimRuntime.drawFrame(AnimRuntime.currentFrame);
+    if (animState.progress < 1.0) {
+      animTimer = requestAnimationFrame(tick);
+    }
+  }
+  animTimer = requestAnimationFrame(tick);
+}
+
+function startIdleTick() {
+  if (_idleTimer) return;
+  var lastTs = 0;
+  function loop(ts) {
+    if (!lastTs) lastTs = ts;
+    _time += (ts - lastTs) / 1000;
+    lastTs = ts;
+    AnimRuntime.drawFrame(AnimRuntime.currentFrame);
+    _idleTimer = requestAnimationFrame(loop);
+  }
+  _idleTimer = requestAnimationFrame(loop);
+}
+
+function frameCheck() {
+  var cf = AnimRuntime.currentFrame;
+  if (cf !== _prevFrameK35) {
+    _prevFrameK35 = cf;
+    startAnim(cf);
+  }
+  _frameCheckTimer = requestAnimationFrame(frameCheck);
+}
+_frameCheckTimer = requestAnimationFrame(frameCheck);
+startIdleTick();
+
+// ============================================================
+// Audio (muted by default)
+// ============================================================
+var soundMuted = true;
+var audioCtx = null;
+
+function playWhoosh() {
+  if (soundMuted) return;
+  if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  var buf = audioCtx.createBuffer(1, audioCtx.sampleRate * 0.3, audioCtx.sampleRate);
+  var data = buf.getChannelData(0);
+  for (var i = 0; i < data.length; i++) {
+    data[i] = (Math.random() * 2 - 1) * Math.exp(-i / (data.length * 0.2)) * 0.08;
+  }
+  var src = audioCtx.createBufferSource();
+  src.buffer = buf;
+  src.connect(audioCtx.destination);
+  src.start();
+}
+
+// ============================================================
+// Drawing helpers
+// ============================================================
+
+// Draw a simplified rocket shape
+// cx,cy = nose tip, rocketH = total height, rocketW = body width
+function drawRocket(ctx2, cx, cy, rocketH, rocketW, P, showFlame) {
+  var bodyH = rocketH * 0.65;
+  var noseH = rocketH * 0.25;
+  var finH = rocketH * 0.15;
+  var bodyTop = cy + noseH;
+  var bodyBot = bodyTop + bodyH;
+
+  // Nose cone
+  ctx2.beginPath();
+  ctx2.moveTo(cx, cy);
+  ctx2.quadraticCurveTo(cx + rocketW * 0.6, bodyTop - noseH * 0.2, cx + rocketW / 2, bodyTop);
+  ctx2.lineTo(cx - rocketW / 2, bodyTop);
+  ctx2.quadraticCurveTo(cx - rocketW * 0.6, bodyTop - noseH * 0.2, cx, cy);
+  ctx2.closePath();
+  ctx2.fillStyle = P.primary;
+  ctx2.fill();
+
+  // Body
+  var bGrad = ctx2.createLinearGradient(cx - rocketW / 2, bodyTop, cx + rocketW / 2, bodyTop);
+  bGrad.addColorStop(0, '#555');
+  bGrad.addColorStop(0.3, '#888');
+  bGrad.addColorStop(0.7, '#888');
+  bGrad.addColorStop(1, '#555');
+  ctx2.fillStyle = bGrad;
+  ctx2.fillRect(cx - rocketW / 2, bodyTop, rocketW, bodyH);
+
+  // Fins
+  ctx2.fillStyle = P.primaryDim;
+  // Left fin
+  ctx2.beginPath();
+  ctx2.moveTo(cx - rocketW / 2, bodyBot - finH);
+  ctx2.lineTo(cx - rocketW / 2 - rocketW * 0.4, bodyBot + 2);
+  ctx2.lineTo(cx - rocketW / 2, bodyBot + 2);
+  ctx2.closePath();
+  ctx2.fill();
+  // Right fin
+  ctx2.beginPath();
+  ctx2.moveTo(cx + rocketW / 2, bodyBot - finH);
+  ctx2.lineTo(cx + rocketW / 2 + rocketW * 0.4, bodyBot + 2);
+  ctx2.lineTo(cx + rocketW / 2, bodyBot + 2);
+  ctx2.closePath();
+  ctx2.fill();
+
+  // Flame
+  if (showFlame) {
+    var flameH = 15 + Math.sin(_time * 8) * 5;
+    var flameGrad = ctx2.createLinearGradient(cx, bodyBot, cx, bodyBot + flameH);
+    flameGrad.addColorStop(0, 'rgba(255,200,50,0.9)');
+    flameGrad.addColorStop(0.5, 'rgba(255,100,20,0.6)');
+    flameGrad.addColorStop(1, 'rgba(255,50,10,0)');
+    ctx2.fillStyle = flameGrad;
+    ctx2.beginPath();
+    ctx2.moveTo(cx - rocketW * 0.3, bodyBot);
+    ctx2.quadraticCurveTo(cx, bodyBot + flameH, cx + rocketW * 0.3, bodyBot);
+    ctx2.closePath();
+    ctx2.fill();
+  }
+}
+
+// Draw flowing streamlines around a rocket area
+function drawStreamlines(ctx2, cx, cy, count, spread, speed, color, alpha) {
+  ctx2.save();
+  ctx2.globalAlpha = alpha;
+  for (var i = 0; i < Math.min(count, streamParticles.length); i++) {
+    var sp = streamParticles[i];
+    var px = cx + sp.xOff * (spread / 100);
+    var rawY = ((_time * speed * sp.speed + sp.phase) % 3.0) / 3.0;
+    var py = cy - 80 + rawY * 160;
+    ctx2.fillStyle = color;
+    ctx2.globalAlpha = alpha * (1 - Math.abs(rawY - 0.5) * 1.5);
+    ctx2.beginPath();
+    ctx2.arc(px, py, sp.size, 0, Math.PI * 2);
+    ctx2.fill();
+  }
+  ctx2.restore();
+}
+
+// Draw a drag arrow (horizontal)
+function drawDragArrow(ctx2, x1, y1, x2, color, thickness, glowColor) {
+  ctx2.save();
+  if (glowColor) {
+    ctx2.shadowColor = glowColor;
+    ctx2.shadowBlur = 12;
+  }
+  ctx2.strokeStyle = color;
+  ctx2.lineWidth = thickness;
+  ctx2.beginPath();
+  ctx2.moveTo(x1, y1);
+  ctx2.lineTo(x2, y1);
+  ctx2.stroke();
+  // arrowhead
+  var dir = x2 > x1 ? 1 : -1;
+  var hs = thickness * 2.5;
+  ctx2.fillStyle = color;
+  ctx2.beginPath();
+  ctx2.moveTo(x2, y1);
+  ctx2.lineTo(x2 - dir * hs, y1 - hs * 0.6);
+  ctx2.lineTo(x2 - dir * hs, y1 + hs * 0.6);
+  ctx2.closePath();
+  ctx2.fill();
+  ctx2.restore();
+}
+
+// Draw bar chart for v-squared
+function drawBarChart(ctx2, x, y, barW, maxH, values, maxVal, colors, labels, P) {
+  var gap = 6;
+  var totalW = values.length * (barW + gap) - gap;
+  var startX = x - totalW / 2;
+
+  for (var i = 0; i < values.length; i++) {
+    var bx = startX + i * (barW + gap);
+    var bh = (values[i] / maxVal) * maxH;
+    var targetH = bh * Math.min(animState.progress * 2, 1.0);
+
+    // Bar glow
+    ctx2.save();
+    ctx2.shadowColor = colors[i];
+    ctx2.shadowBlur = 6;
+    var barGrad = ctx2.createLinearGradient(bx, y - targetH, bx, y);
+    barGrad.addColorStop(0, colors[i]);
+    barGrad.addColorStop(1, colors[i] + '88');
+    ctx2.fillStyle = barGrad;
+    ctx2.fillRect(bx, y - targetH, barW, targetH);
+    ctx2.restore();
+
+    // Value on top
+    ctx2.fillStyle = P.text;
+    ctx2.font = "bold 8px 'Space Grotesk',sans-serif";
+    ctx2.textAlign = 'center';
+    ctx2.fillText(values[i], bx + barW / 2, y - targetH - 5);
+
+    // Label below
+    ctx2.fillStyle = P.muted;
+    ctx2.font = "9px 'Inter','Noto Sans SC',sans-serif";
+    ctx2.fillText(labels[i], bx + barW / 2, y + 12);
+  }
+}
+
+// Draw airflow shape outline
+function drawAeroShape(ctx2, cx, cy, shapeType, scaleW, scaleH, P) {
+  ctx2.save();
+  ctx2.strokeStyle = P.text;
+  ctx2.lineWidth = 1.5;
+  ctx2.fillStyle = P.glass;
+
+  switch(shapeType) {
+    case 'flat':
+      ctx2.fillRect(cx - 2, cy - scaleH, 4, scaleH * 2);
+      ctx2.strokeRect(cx - 2, cy - scaleH, 4, scaleH * 2);
+      break;
+    case 'sphere':
+      ctx2.beginPath();
+      ctx2.arc(cx, cy, scaleW * 0.5, 0, Math.PI * 2);
+      ctx2.fill(); ctx2.stroke();
+      break;
+    case 'cylinder':
+      ctx2.fillRect(cx - scaleW * 0.35, cy - scaleH * 0.5, scaleW * 0.7, scaleH);
+      ctx2.strokeRect(cx - scaleW * 0.35, cy - scaleH * 0.5, scaleW * 0.7, scaleH);
+      break;
+    case 'bullet':
+      ctx2.beginPath();
+      ctx2.moveTo(cx - scaleW * 0.5, cy);
+      ctx2.quadraticCurveTo(cx - scaleW * 0.5, cy - scaleH * 0.5, cx, cy - scaleH * 0.6);
+      ctx2.quadraticCurveTo(cx + scaleW * 0.5, cy - scaleH * 0.5, cx + scaleW * 0.5, cy);
+      ctx2.lineTo(cx + scaleW * 0.35, cy + scaleH * 0.4);
+      ctx2.lineTo(cx - scaleW * 0.35, cy + scaleH * 0.4);
+      ctx2.closePath();
+      ctx2.fill(); ctx2.stroke();
+      break;
+    case 'streamlined':
+      ctx2.beginPath();
+      ctx2.moveTo(cx, cy - scaleH * 0.7);
+      ctx2.bezierCurveTo(cx + scaleW * 0.35, cy - scaleH * 0.5,
+                          cx + scaleW * 0.25, cy + scaleH * 0.5,
+                          cx, cy + scaleH * 0.7);
+      ctx2.bezierCurveTo(cx - scaleW * 0.25, cy + scaleH * 0.5,
+                          cx - scaleW * 0.35, cy - scaleH * 0.5,
+                          cx, cy - scaleH * 0.7);
+      ctx2.fill(); ctx2.stroke();
+      break;
+  }
+
+  // Draw airflow lines around shape
+  ctx2.strokeStyle = P.tertiary;
+  ctx2.lineWidth = 0.8;
+  ctx2.globalAlpha = 0.5 + Math.sin(_time * 2) * 0.15;
+  var flowCount = shapeType === 'flat' ? 5 : (shapeType === 'streamlined' ? 3 : 4);
+  for (var i = 0; i < flowCount; i++) {
+    var yOff = (i - (flowCount - 1) / 2) * (scaleH * 0.4);
+    var deflection = shapeType === 'flat' ? scaleW * 0.8 : (shapeType === 'streamlined' ? scaleW * 0.15 : scaleW * 0.4);
+    ctx2.beginPath();
+    ctx2.moveTo(cx - scaleW * 1.2, cy + yOff);
+    ctx2.quadraticCurveTo(cx, cy + yOff + (yOff > 0 ? deflection : -deflection),
+                          cx + scaleW * 1.2, cy + yOff);
+    ctx2.stroke();
+  }
+
+  ctx2.restore();
+}
+
+// Draw animated molecules
+function drawMolecules(ctx2, molecules, ox, oy, boxW, boxH, color, alpha) {
+  ctx2.save();
+  ctx2.globalAlpha = alpha;
+  for (var i = 0; i < molecules.length; i++) {
+    var m = molecules[i];
+    var mx = ox + ((m.x + m.vx * _time * 30) % boxW + boxW) % boxW;
+    var my = oy + ((m.y + m.vy * _time * 30) % boxH + boxH) % boxH;
+    ctx2.fillStyle = color;
+    ctx2.beginPath();
+    ctx2.arc(mx, my, m.r, 0, Math.PI * 2);
+    ctx2.fill();
+  }
+  ctx2.restore();
+}
+
+// Draw cross-section circle with radius line
+function drawCrossSection(ctx2, cx, cy, radius, color, label, P) {
+  ctx2.save();
+  // Filled circle
+  ctx2.fillStyle = color + '33';
+  ctx2.beginPath();
+  ctx2.arc(cx, cy, radius, 0, Math.PI * 2);
+  ctx2.fill();
+  // Outline
+  ctx2.strokeStyle = color;
+  ctx2.lineWidth = 1.5;
+  ctx2.stroke();
+  // Radius line
+  ctx2.setLineDash([3, 3]);
+  ctx2.beginPath();
+  ctx2.moveTo(cx, cy);
+  ctx2.lineTo(cx + radius, cy);
+  ctx2.stroke();
+  ctx2.setLineDash([]);
+  // "r" label
+  ctx2.fillStyle = color;
+  ctx2.font = "bold 9px 'Space Grotesk',sans-serif";
+  ctx2.textAlign = 'center';
+  ctx2.fillText(label, cx + radius / 2, cy - 5);
+  ctx2.restore();
+}
+
+// ============================================================
+// customDrawElement -- handles all custom rendering
+// ============================================================
+function customDrawElement(ctx2, el, W, H) {
+  var P = AnimRuntime.PAL;
+
+  if (el.type === 'rocketWithStream') {
+    drawRocket(ctx2, el.x, el.y, el.rocketH, el.rocketW, P, el.showFlame);
+    drawStreamlines(ctx2, el.x, el.y + el.rocketH * 0.3, el.streamCount, el.spread || 60, el.streamSpeed || 1, el.streamColor || P.tertiary, el.streamAlpha || 0.4);
+    return true;
+  }
+
+  if (el.type === 'dragArrowCustom') {
+    var prog = Math.min(animState.progress * 1.5, 1.0);
+    var len = el.length * prog;
+    drawDragArrow(ctx2, el.x, el.y, el.x - len, el.color, el.thickness, el.glowColor);
+    return true;
+  }
+
+  if (el.type === 'barChart') {
+    drawBarChart(ctx2, el.x, el.y, el.barW, el.maxH, el.values, el.maxVal, el.colors, el.labels, P);
+    return true;
+  }
+
+  if (el.type === 'aeroShape') {
+    drawAeroShape(ctx2, el.x, el.y, el.shape, el.scaleW, el.scaleH, P);
+    return true;
+  }
+
+  if (el.type === 'moleculeBox') {
+    // Box outline
+    ctx2.save();
+    ctx2.strokeStyle = el.borderColor || P.outline;
+    ctx2.lineWidth = 1;
+    ctx2.setLineDash([4, 4]);
+    ctx2.strokeRect(el.x, el.y, el.bw, el.bh);
+    ctx2.setLineDash([]);
+    ctx2.restore();
+    drawMolecules(ctx2, el.molecules, el.x, el.y, el.bw, el.bh, el.dotColor, el.dotAlpha || 0.7);
+    return true;
+  }
+
+  if (el.type === 'crossSection') {
+    drawCrossSection(ctx2, el.x, el.y, el.radius, el.color, el.label, P);
+    return true;
+  }
+
+  if (el.type === 'formulaHighlight') {
+    // Draw formula with each variable colored differently
+    var parts = el.parts; // [{text, color}]
+    ctx2.save();
+    ctx2.font = "bold " + (el.size || 16) + "px 'Space Grotesk','Inter',sans-serif";
+    ctx2.textAlign = 'center';
+    ctx2.textBaseline = 'middle';
+    // Measure total width
+    var totalW = 0;
+    for (var i = 0; i < parts.length; i++) {
+      totalW += ctx2.measureText(parts[i].text).width;
+    }
+    var startX = el.x - totalW / 2;
+    // Glow pass
+    for (var i = 0; i < parts.length; i++) {
+      var pw = ctx2.measureText(parts[i].text).width;
+      ctx2.shadowColor = parts[i].color;
+      ctx2.shadowBlur = 8 + Math.sin(_time * 2 + i) * 3;
+      ctx2.fillStyle = parts[i].color;
+      ctx2.textAlign = 'left';
+      ctx2.fillText(parts[i].text, startX, el.y);
+      startX += pw;
+    }
+    ctx2.restore();
+    return true;
+  }
+
+  if (el.type === 'rocketSideView') {
+    drawRocket(ctx2, el.x, el.y, el.rocketH, el.rocketW, P, el.showFlame);
+    return true;
+  }
+
+  if (el.type === 'pulseCircle') {
+    var pulse = 1 + Math.sin(_time * 3) * 0.08;
+    ctx2.save();
+    ctx2.beginPath();
+    ctx2.arc(el.x, el.y, el.r * pulse, 0, Math.PI * 2);
+    ctx2.strokeStyle = el.color;
+    ctx2.lineWidth = 2;
+    ctx2.shadowColor = el.color;
+    ctx2.shadowBlur = 15;
+    ctx2.stroke();
+    ctx2.restore();
+    return true;
+  }
+
+  return false;
+}
+
+// ============================================================
+// getFrameElements
+// ============================================================
+function getFrameElements(f, W, H) {
+  var t = AnimRuntime.t;
+  var P = AnimRuntime.PAL;
+  var cx = W / 2, cy = H / 2;
+
+  // ── F0: TITLE FRAME ──
+  if (f === 0) {
+    var formulaParts = [
+      {text: 'F', color: P.primary},
+      {text: '_D', color: P.primary},
+      {text: ' = 0.5 \u00d7 ', color: P.muted},
+      {text: '\u03c1', color: '#85ecff'},
+      {text: ' \u00d7 ', color: P.muted},
+      {text: 'v\u00b2', color: '#ff7f50'},
+      {text: ' \u00d7 ', color: P.muted},
+      {text: 'C_D', color: '#acf900'},
+      {text: ' \u00d7 ', color: P.muted},
+      {text: 'A', color: '#f5c842'},
+    ];
+
+    var elems = [
+      {id:'f0title', type:'label', text:t('title'), x:cx, y:40, color:P.primary, size:22, align:'center', glow:P.glowStrong},
+      {id:'f0formula', type:'formulaHighlight', x:cx, y:90, size:18, parts:formulaParts, alpha:1},
+      {id:'f0rocket', type:'rocketWithStream', x:cx, y:cy + 40, rocketH:100, rocketW:22, showFlame:true, streamCount:20, spread:50, streamSpeed:1.5, streamColor:P.tertiary, streamAlpha:0.3, alpha:1},
+      {id:'f0core', type:'text', text:t('f0core'), x:cx, y:H - 50, color:P.secondary, size:12, align:'center'},
+    ];
+
+    // Variable legend below formula
+    var legendY = 120;
+    var legendItems = [
+      {key:'f0rho', color:'#85ecff', xOff:-200},
+      {key:'f0vsq', color:'#ff7f50', xOff:-70},
+      {key:'f0cd', color:'#acf900', xOff:70},
+      {key:'f0area', color:'#f5c842', xOff:200},
+    ];
+    for (var i = 0; i < legendItems.length; i++) {
+      var li = legendItems[i];
+      elems.push({id:'f0leg'+i, type:'circle', x:cx+li.xOff-30, y:legendY, r:4, fill:li.color, glow:li.color, glowSize:6, alpha:1});
+      elems.push({id:'f0legt'+i, type:'text', text:t(li.key), x:cx+li.xOff-20, y:legendY, color:li.color, size:9, align:'left'});
+    }
+
+    // Parallax-style subtle floating particles
+    elems.push({id:'f0pulse1', type:'pulseCircle', x:cx-220, y:cy-20, r:30, color:P.glow, alpha:0.4});
+    elems.push({id:'f0pulse2', type:'pulseCircle', x:cx+220, y:cy+30, r:25, color:'rgba(255,127,80,0.15)', alpha:0.4});
+
+    return elems;
+  }
+
+  // ── F1: V-SQUARED ──
+  if (f === 1) {
+    var leftX = cx - 180;
+    var rightX = cx + 100;
+
+    var elems = [
+      {id:'f1title', type:'label', text:t('f1title'), x:cx, y:28, color:'#ff7f50', size:16, align:'center', glow:'rgba(255,127,80,0.4)'},
+    ];
+
+    // Slow rocket (10 m/s) -- left side
+    elems.push({id:'f1slowRocket', type:'rocketWithStream', x:leftX, y:100, rocketH:70, rocketW:16, showFlame:true, streamCount:6, spread:30, streamSpeed:0.5, streamColor:P.tertiary, streamAlpha:0.2, alpha:1});
+    elems.push({id:'f1slowLabel', type:'label', text:t('f1slow'), x:leftX, y:80, color:P.text, size:11, align:'center'});
+    // Small drag arrow
+    elems.push({id:'f1slowDrag', type:'dragArrowCustom', x:leftX+30, y:135, length:25, color:P.error, thickness:2, glowColor:'rgba(255,113,108,0.3)', alpha:1});
+
+    // Fast rocket (50 m/s) -- left side, below
+    elems.push({id:'f1fastRocket', type:'rocketWithStream', x:leftX, y:230, rocketH:70, rocketW:16, showFlame:true, streamCount:40, spread:80, streamSpeed:3, streamColor:'#ff9966', streamAlpha:0.5, alpha:1});
+    elems.push({id:'f1fastLabel', type:'label', text:t('f1fast'), x:leftX, y:210, color:P.text, size:11, align:'center'});
+    // HUGE drag arrow
+    elems.push({id:'f1fastDrag', type:'dragArrowCustom', x:leftX+30, y:265, length:150, color:P.error, thickness:5, glowColor:'rgba(255,113,108,0.5)', alpha:1});
+
+    // Bar chart -- right side
+    var barValues = [100, 400, 900, 1600, 2500];
+    var barColors = ['#00daf3', '#22bbdd', '#4499bb', '#ff9944', '#ff5522'];
+    var barLabels = [t('f1bar10'), t('f1bar20'), t('f1bar30'), t('f1bar40'), t('f1bar50')];
+    elems.push({id:'f1chart', type:'barChart', x:rightX+70, y:H-55, barW:22, maxH:200, values:barValues, maxVal:2500, colors:barColors, labels:barLabels, alpha:1});
+    elems.push({id:'f1dragLbl', type:'label', text:t('f1dragLabel'), x:rightX+70, y:55, color:P.muted, size:9, align:'center'});
+
+    // Answer highlight
+    var ansAlpha = Math.min(Math.max((animState.progress - 0.5) * 2, 0), 1);
+    elems.push({id:'f1answer', type:'label', text:t('f1answer'), x:cx, y:H-25, color:'#ff5522', size:14, align:'center', glow:'rgba(255,85,34,0.5)', alpha:ansAlpha});
+    elems.push({id:'f1explain', type:'text', text:t('f1explain'), x:cx, y:H-10, color:P.muted, size:9, align:'center', alpha:ansAlpha});
+
+    return elems;
+  }
+
+  // ── F2: DENSITY ──
+  if (f === 2) {
+    var leftX = cx - 160;
+    var rightX = cx + 160;
+
+    var elems = [
+      {id:'f2title', type:'label', text:t('f2title'), x:cx, y:28, color:'#85ecff', size:16, align:'center', glow:'rgba(133,236,255,0.4)'},
+    ];
+
+    // Sea level box (left)
+    var boxW = 180, boxH = 160;
+    var seaBoxX = leftX - boxW/2, seaBoxY = 70;
+    elems.push({id:'f2seaBox', type:'moleculeBox', x:seaBoxX, y:seaBoxY, bw:boxW, bh:boxH, molecules:moleculesSeaLevel, dotColor:'#85ecff', dotAlpha:0.6, borderColor:P.tertiary, alpha:1});
+    elems.push({id:'f2seaTitle', type:'label', text:t('f2sea'), x:leftX, y:55, color:P.text, size:11, align:'center'});
+    elems.push({id:'f2rhoSea', type:'text', text:t('f2rhoSea'), x:leftX, y:seaBoxY+boxH+15, color:'#85ecff', size:10, align:'center'});
+    elems.push({id:'f2denseLbl', type:'text', text:t('f2denseLbl'), x:leftX, y:seaBoxY+boxH+30, color:P.muted, size:9, align:'center'});
+
+    // Rocket inside sea-level box
+    elems.push({id:'f2seaRocket', type:'rocketSideView', x:leftX, y:seaBoxY+40, rocketH:55, rocketW:14, showFlame:true, alpha:1});
+    // Big drag arrow at sea level
+    elems.push({id:'f2seaDrag', type:'dragArrowCustom', x:leftX+25, y:seaBoxY+65, length:60, color:P.error, thickness:4, glowColor:'rgba(255,113,108,0.4)', alpha:1});
+
+    // Altitude box (right)
+    var altBoxX = rightX - boxW/2, altBoxY = 70;
+    elems.push({id:'f2altBox', type:'moleculeBox', x:altBoxX, y:altBoxY, bw:boxW, bh:boxH, molecules:moleculesAltitude, dotColor:'#85ecff', dotAlpha:0.4, borderColor:P.outline, alpha:1});
+    elems.push({id:'f2altTitle', type:'label', text:t('f2alt'), x:rightX, y:55, color:P.text, size:11, align:'center'});
+    elems.push({id:'f2rhoAlt', type:'text', text:t('f2rhoAlt'), x:rightX, y:altBoxY+boxH+15, color:'#85ecff', size:10, align:'center'});
+    elems.push({id:'f2thinLbl', type:'text', text:t('f2thinLbl'), x:rightX, y:altBoxY+boxH+30, color:P.muted, size:9, align:'center'});
+
+    // Rocket inside altitude box
+    elems.push({id:'f2altRocket', type:'rocketSideView', x:rightX, y:altBoxY+40, rocketH:55, rocketW:14, showFlame:true, alpha:1});
+    // Small drag arrow at altitude
+    elems.push({id:'f2altDrag', type:'dragArrowCustom', x:rightX+25, y:altBoxY+65, length:20, color:P.error, thickness:2, glowColor:'rgba(255,113,108,0.2)', alpha:1});
+
+    // Result line
+    var resAlpha = Math.min(Math.max((animState.progress - 0.4) * 2.5, 0), 1);
+    elems.push({id:'f2result', type:'label', text:t('f2result'), x:cx, y:H-40, color:'#85ecff', size:14, align:'center', glow:'rgba(133,236,255,0.5)', alpha:resAlpha});
+    elems.push({id:'f2connect', type:'text', text:t('f2connect'), x:cx, y:H-22, color:P.muted, size:9, align:'center', alpha:resAlpha * 0.7});
+
+    // Arrow between boxes
+    elems.push({id:'f2vs', type:'label', text:'vs', x:cx, y:seaBoxY+boxH/2, color:P.muted, size:14, align:'center', alpha:0.6});
+
+    return elems;
+  }
+
+  // ── F3: C_D SHAPES ──
+  if (f === 3) {
+    var elems = [
+      {id:'f3title', type:'label', text:t('f3title'), x:cx, y:28, color:'#acf900', size:16, align:'center', glow:'rgba(172,249,0,0.4)'},
+    ];
+
+    var shapes = [
+      {type:'flat', name:'f3flat', cd:'f3cdFlat', cdVal:1.28},
+      {type:'sphere', name:'f3sphere', cd:'f3cdSphere', cdVal:0.47},
+      {type:'cylinder', name:'f3cylinder', cd:'f3cdCyl', cdVal:0.82},
+      {type:'bullet', name:'f3bullet', cd:'f3cdBullet', cdVal:0.30},
+      {type:'streamlined', name:'f3stream', cd:'f3cdStream', cdVal:0.15},
+    ];
+
+    var spacing = (W - 80) / shapes.length;
+    var shapeY = cy - 10;
+
+    for (var i = 0; i < shapes.length; i++) {
+      var sx = 40 + spacing * i + spacing / 2;
+      var s = shapes[i];
+      var revealProg = Math.min(Math.max((animState.progress - i * 0.12) * 3, 0), 1);
+
+      // Shape drawing
+      elems.push({id:'f3shape'+i, type:'aeroShape', x:sx, y:shapeY, shape:s.type, scaleW:35, scaleH:35, alpha:revealProg});
+
+      // Shape name
+      elems.push({id:'f3name'+i, type:'text', text:t(s.name), x:sx, y:shapeY-50, color:P.text, size:9, align:'center', alpha:revealProg});
+
+      // C_D value -- color gradient from red (high) to green (low)
+      var cdColor = s.cdVal > 0.8 ? P.error : (s.cdVal > 0.4 ? P.secondary : '#acf900');
+      elems.push({id:'f3cd'+i, type:'label', text:t(s.cd), x:sx, y:shapeY+55, color:cdColor, size:10, align:'center', glow:cdColor + '44', alpha:revealProg});
+
+      // Drag bar below C_D
+      var dragBarH = s.cdVal / 1.28 * 50;
+      elems.push({id:'f3bar'+i, type:'gradient_box', x:sx-8, y:H-60, w:16, h:-dragBarH*revealProg, color1:cdColor, color2:cdColor+'66', glow:cdColor+'33', alpha:revealProg});
+    }
+
+    // Insight
+    var insAlpha = Math.min(Math.max((animState.progress - 0.6) * 2.5, 0), 1);
+    elems.push({id:'f3insight', type:'label', text:t('f3insight'), x:cx, y:H-20, color:'#acf900', size:12, align:'center', glow:'rgba(172,249,0,0.3)', alpha:insAlpha});
+
+    // Arrow showing "better" direction
+    elems.push({id:'f3arrow', type:'arrow', x1:80, y1:H-70, x2:W-80, y2:H-70, color:P.muted, lineWidth:0.8, headSize:5, alpha:insAlpha*0.5});
+
+    return elems;
+  }
+
+  // ── F4: AREA A ──
+  if (f === 4) {
+    var leftX = cx - 150;
+    var rightX = cx + 150;
+
+    var elems = [
+      {id:'f4title', type:'label', text:t('f4title'), x:cx, y:28, color:'#f5c842', size:16, align:'center', glow:'rgba(245,200,66,0.4)'},
+      {id:'f4sameCd', type:'text', text:t('f4sameCd'), x:cx, y:50, color:P.muted, size:9, align:'center'},
+    ];
+
+    // Fat rocket (left)
+    elems.push({id:'f4fatRocket', type:'rocketSideView', x:leftX, y:100, rocketH:100, rocketW:36, showFlame:true, alpha:1});
+    elems.push({id:'f4fatLabel', type:'label', text:t('f4fat'), x:leftX, y:75, color:P.text, size:11, align:'center'});
+    // Fat drag arrow
+    elems.push({id:'f4fatDrag', type:'dragArrowCustom', x:leftX+40, y:150, length:100, color:P.error, thickness:5, glowColor:'rgba(255,113,108,0.5)', alpha:1});
+
+    // Cross section view of fat rocket
+    elems.push({id:'f4fatCS', type:'crossSection', x:leftX, y:270, radius:35, color:'#f5c842', label:'r=6cm', alpha:1});
+    elems.push({id:'f4fatA', type:'text', text:t('f4fatA'), x:leftX, y:315, color:'#f5c842', size:9, align:'center'});
+    elems.push({id:'f4fatVal', type:'text', text:t('f4fatVal'), x:leftX, y:330, color:P.muted, size:9, align:'center'});
+
+    // Slim rocket (right)
+    elems.push({id:'f4slimRocket', type:'rocketSideView', x:rightX, y:100, rocketH:100, rocketW:18, showFlame:true, alpha:1});
+    elems.push({id:'f4slimLabel', type:'label', text:t('f4slim'), x:rightX, y:75, color:P.text, size:11, align:'center'});
+    // Slim drag arrow
+    elems.push({id:'f4slimDrag', type:'dragArrowCustom', x:rightX+25, y:150, length:25, color:P.error, thickness:2, glowColor:'rgba(255,113,108,0.2)', alpha:1});
+
+    // Cross section view of slim rocket
+    elems.push({id:'f4slimCS', type:'crossSection', x:rightX, y:270, radius:18, color:'#f5c842', label:'r=3cm', alpha:1});
+    elems.push({id:'f4slimA', type:'text', text:t('f4slimA'), x:rightX, y:300, color:'#f5c842', size:9, align:'center'});
+    elems.push({id:'f4slimVal', type:'text', text:t('f4slimVal'), x:rightX, y:315, color:P.muted, size:9, align:'center'});
+
+    // VS in middle
+    elems.push({id:'f4vs', type:'label', text:'vs', x:cx, y:150, color:P.muted, size:14, align:'center', alpha:0.6});
+
+    // Result
+    var resAlpha = Math.min(Math.max((animState.progress - 0.4) * 2.5, 0), 1);
+    elems.push({id:'f4ratio', type:'label', text:t('f4ratio'), x:cx, y:H-40, color:'#f5c842', size:14, align:'center', glow:'rgba(245,200,66,0.5)', alpha:resAlpha});
+    elems.push({id:'f4insight', type:'text', text:t('f4insight'), x:cx, y:H-22, color:P.muted, size:10, align:'center', alpha:resAlpha});
+
+    return elems;
+  }
+
+  return [];
+}
+
+// ============================================================
+// BOOT
+// ============================================================
+AnimRuntime.boot();
+</script>
+</body>
+</html>

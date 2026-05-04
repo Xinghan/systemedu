@@ -1,0 +1,911 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=Inter:wght@400;500&family=Noto+Sans+SC:wght@400;700&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box;}
+html,body{width:100%;height:100vh;overflow:hidden;}
+body{background:var(--bg,#0c0e12);color:var(--text,#f6f6fc);font-family:'Inter','Noto Sans SC',sans-serif;}
+/* -- Outer: sidebar + main -- */
+.wrapper{display:flex;flex-direction:row;height:100vh;overflow:hidden;}
+.sidebar{width:200px;min-width:200px;max-width:200px;display:flex;flex-direction:column;gap:6px;padding:10px;background:rgba(0,0,0,0.5);border-right:1px solid rgba(80,255,176,0.15);overflow-y:auto;}
+.lang-btn{align-self:flex-start;flex-shrink:0;font-family:'Space Grotesk',sans-serif;font-size:10px;font-weight:700;padding:3px 8px;cursor:pointer;border:1px solid rgba(255,181,156,0.25);background:transparent;color:#ffb59c;letter-spacing:1px;}
+.lang-btn:hover{border-color:#ffb59c;background:rgba(255,181,156,0.1);}
+.sidebar h1{font-family:'Space Grotesk',sans-serif;font-size:13px;font-weight:700;color:var(--primary,#50ffb0);margin-top:4px;line-height:1.3;}
+.sidebar .sub{font-size:10px;color:var(--muted,#aaabb0);letter-spacing:0.06em;text-transform:uppercase;}
+.sidebar .frame-ind{font-family:'Space Grotesk',sans-serif;font-size:10px;color:var(--muted,#aaabb0);letter-spacing:0.1em;margin-top:4px;}
+.sidebar .guide-label{font-family:'Space Grotesk',sans-serif;font-size:9px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:var(--primary,#50ffb0);margin-top:8px;}
+.sidebar .guide-content{font-family:'Noto Sans SC',sans-serif;font-size:11px;color:rgba(255,255,255,0.85);line-height:1.5;}
+.sidebar .guide-content ul{padding-left:16px;margin:0;}
+.sidebar .guide-content li{margin-bottom:1px;}
+/* -- Main area: canvas + controls + hud -- */
+.anim-main{flex:1;display:flex;flex-direction:column;min-width:0;}
+.canvas-wrap{flex:1;min-height:0;position:relative;}
+canvas{width:100%;height:100%;display:block;}
+/* -- Controls + HUD -- */
+.controls{display:flex;justify-content:center;align-items:center;gap:12px;padding:6px 16px;}
+.ctrl-btn{font-family:'Space Grotesk',sans-serif;font-size:11px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;padding:5px 16px;border:none;cursor:pointer;color:var(--bg,#0c0e12);background:linear-gradient(135deg,var(--primary,#50ffb0),var(--primary-dim,#17df93));transition:transform 0.1s,box-shadow 0.2s;box-shadow:0 0 10px var(--glow-strong,rgba(80,255,176,0.3));}
+.ctrl-btn:hover{transform:scale(1.04);}
+.ctrl-btn:active{transform:scale(0.96);}
+.ctrl-btn.secondary{background:var(--glass,rgba(23,26,31,0.92));color:var(--muted,#aaabb0);box-shadow:none;backdrop-filter:blur(12px);}
+.ctrl-btn.secondary:hover{color:var(--primary,#50ffb0);}
+.hud{height:40px;display:flex;align-items:center;justify-content:space-around;background:rgba(0,0,0,0.55);backdrop-filter:blur(12px);padding:0 16px;}
+.hud-item{text-align:center;}
+.hud-label{font-family:'Space Grotesk',sans-serif;font-size:8px;letter-spacing:0.15em;text-transform:uppercase;color:var(--muted,#aaabb0);}
+.hud-val{font-family:'Space Grotesk',sans-serif;font-size:13px;font-weight:700;color:var(--primary,#50ffb0);}
+</style>
+</head>
+<body>
+<div class="wrapper">
+<!-- Sidebar: lang-btn, title, guide (completely separate from canvas) -->
+<div class="sidebar">
+<button class="lang-btn" id="langBtn">CN</button>
+<h1 id="title"></h1>
+<div class="sub" id="subtitle"></div>
+<div class="frame-ind" id="frameIndicator"></div>
+<div class="guide-label" id="guideTitle"></div>
+<div class="guide-content" id="guideContent"></div>
+</div>
+<!-- Main: canvas fills all space, nothing overlaps -->
+<div class="anim-main">
+<div class="canvas-wrap"><canvas id="c"></canvas></div>
+<div class="controls">
+<button class="ctrl-btn secondary" id="btnPrev"></button>
+<button class="ctrl-btn" id="btnPlay"></button>
+<button class="ctrl-btn secondary" id="btnNext"></button>
+</div>
+<div class="hud">
+<div class="hud-item"><div class="hud-label" id="hudL1"></div><div class="hud-val" id="hudV1"></div></div>
+<div class="hud-item"><div class="hud-label" id="hudL2"></div><div class="hud-val" id="hudV2"></div></div>
+<div class="hud-item"><div class="hud-label" id="hudL3"></div><div class="hud-val" id="hudV3"></div></div>
+<div class="hud-item"><div class="hud-label" id="hudL4"></div><div class="hud-val" id="hudV4"></div></div>
+</div>
+</div>
+</div>
+
+<!-- Runtime (shared skeleton) -->
+<script src="animation_runtime.js"></script>
+
+<!-- Content script -->
+<script>
+// ============================================================
+// K34: Air Has Weight -- Introduction to Fluids
+// Core question: Why does a crumpled paper fall faster than a flat sheet?
+// 5 frames: Title, Balloon Experiment, Vacuum Bag, Paper Drop, Density Scale
+// ============================================================
+
+// --- Continuous animation state ---
+var _aTime = 0;
+var _aFrame = -1;
+var _rafId = null;
+var _molecules = [];
+var _soundMuted = true;
+
+// Generate air molecule particles
+function _genMolecules(count, xMin, xMax, yMin, yMax) {
+  var arr = [];
+  for (var i = 0; i < count; i++) {
+    arr.push({
+      x: xMin + Math.random() * (xMax - xMin),
+      y: yMin + Math.random() * (yMax - yMin),
+      vx: (Math.random() - 0.5) * 30,
+      vy: (Math.random() - 0.5) * 20,
+      r: 1 + Math.random() * 1.8,
+      alpha: 0.2 + Math.random() * 0.4
+    });
+  }
+  return arr;
+}
+
+function _tickMols(mols, dt, xMin, xMax, yMin, yMax) {
+  for (var i = 0; i < mols.length; i++) {
+    var m = mols[i];
+    m.x += m.vx * dt;
+    m.y += m.vy * dt;
+    if (m.x < xMin) { m.x = xMin; m.vx = Math.abs(m.vx); }
+    if (m.x > xMax) { m.x = xMax; m.vx = -Math.abs(m.vx); }
+    if (m.y < yMin) { m.y = yMin; m.vy = Math.abs(m.vy); }
+    if (m.y > yMax) { m.y = yMax; m.vy = -Math.abs(m.vy); }
+  }
+}
+
+// Paper drop animation state
+var _dropTime = 0;
+var _dropStarted = false;
+var _sheetY = 0;
+var _sheetAngle = 0;
+var _ballY = 0;
+
+// Balloon scale animation state
+var _scaleAngle = 0;
+
+// Vacuum bag animation state
+var _vacProgress = 0;
+
+// Rocket altitude state (frame 4)
+var _rocketAlt = 0;
+
+// ============================================================
+// CONFIG
+// ============================================================
+
+var CONFIG = {
+  style: 'ares_mission',
+  totalFrames: 5,
+
+  i18n: {
+    title:      {en:'AIR HAS WEIGHT',              cn:'\u7a7a\u6c14\u662f\u6709\u91cd\u91cf\u7684'},
+    subtitle:   {en:'INTRODUCTION TO FLUIDS',       cn:'\u6d41\u4f53\u521d\u8bc6'},
+    coreQ:      {en:'Why does crumpled paper fall faster than a flat sheet?',
+                 cn:'\u4e3a\u4ec0\u4e48\u7eb8\u56e2\u6bd4\u7eb8\u7247\u4e0b\u843d\u5f97\u5feb\uff1f'},
+    density:    {en:'\u03c1 \u2248 1.2 kg/m\u00b3 at ground level',
+                 cn:'\u5730\u9762\u5bc6\u5ea6 \u03c1 \u2248 1.2 kg/m\u00b3'},
+    f0mol:      {en:'Air molecules are invisible but real',
+                 cn:'\u7a7a\u6c14\u5206\u5b50\u770b\u4e0d\u89c1\u4f46\u771f\u5b9e\u5b58\u5728'},
+    f1title:    {en:'BALLOON EXPERIMENT',           cn:'\u6c14\u7403\u79f0\u91cd\u5b9e\u9a8c'},
+    f1inflated: {en:'INFLATED',                     cn:'\u5145\u6c14'},
+    f1deflated: {en:'DEFLATED',                     cn:'\u653e\u6c14'},
+    f1vol:      {en:'Volume \u2248 5 L',            cn:'\u4f53\u79ef \u2248 5 L'},
+    f1mass:     {en:'Air mass \u2248 6 g',          cn:'\u7a7a\u6c14\u8d28\u91cf \u2248 6 g'},
+    f1explain:  {en:'The inflated balloon is heavier because the air inside has mass!',
+                 cn:'\u5145\u6c14\u7684\u6c14\u7403\u66f4\u91cd\uff0c\u56e0\u4e3a\u91cc\u9762\u7684\u7a7a\u6c14\u6709\u8d28\u91cf\uff01'},
+    f1tips:     {en:'Difference = weight of air inside', cn:'\u5dee\u503c = \u5185\u90e8\u7a7a\u6c14\u7684\u91cd\u91cf'},
+    f2title:    {en:'VACUUM BAG',                   cn:'\u771f\u7a7a\u538b\u7f29\u888b'},
+    f2before:   {en:'BEFORE: air inside',           cn:'\u62bd\u6c14\u524d\uff1a\u6709\u7a7a\u6c14'},
+    f2after:    {en:'AFTER: air removed',           cn:'\u62bd\u6c14\u540e\uff1a\u7a7a\u6c14\u88ab\u62bd\u8d70'},
+    f2press:    {en:'ATMOSPHERIC PRESSURE',         cn:'\u5927\u6c14\u538b'},
+    f2explain:  {en:'When air is removed, atmospheric pressure pushes the bag inward from all sides',
+                 cn:'\u62bd\u8d70\u7a7a\u6c14\u540e\uff0c\u5927\u6c14\u538b\u4ece\u56db\u9762\u516b\u65b9\u628a\u888b\u5b50\u538b\u7f29'},
+    f3title:    {en:'PAPER DROP TEST',              cn:'\u7eb8\u7247\u4e0b\u843d\u5b9e\u9a8c'},
+    f3sheet:    {en:'FLAT SHEET',                   cn:'\u5e73\u5f20\u7eb8\u7247'},
+    f3ball:     {en:'CRUMPLED BALL',                cn:'\u63c9\u6210\u7eb8\u56e2'},
+    f3same:     {en:'Same mass, same height',       cn:'\u540c\u6837\u8d28\u91cf\uff0c\u540c\u6837\u9ad8\u5ea6'},
+    f3drag:     {en:'AIR RESISTANCE',               cn:'\u7a7a\u6c14\u963b\u529b'},
+    f3big:      {en:'Large surface = Big drag',     cn:'\u5927\u9762\u79ef = \u5927\u963b\u529b'},
+    f3small:    {en:'Small surface = Small drag',   cn:'\u5c0f\u9762\u79ef = \u5c0f\u963b\u529b'},
+    f3result:   {en:'Paper ball lands first! Air resistance is the key.',
+                 cn:'\u7eb8\u56e2\u5148\u843d\u5730\uff01\u7a7a\u6c14\u963b\u529b\u662f\u5173\u952e\u3002'},
+    f4title:    {en:'AIR DENSITY vs ALTITUDE',      cn:'\u7a7a\u6c14\u5bc6\u5ea6\u968f\u9ad8\u5ea6\u53d8\u5316'},
+    f4sea:      {en:'Sea level: 1.225 kg/m\u00b3',  cn:'\u6d77\u5e73\u9762: 1.225 kg/m\u00b3'},
+    f4five:     {en:'5 km: 0.74 kg/m\u00b3',        cn:'5 km: 0.74 kg/m\u00b3'},
+    f4ten:      {en:'10 km: 0.41 kg/m\u00b3',       cn:'10 km: 0.41 kg/m\u00b3'},
+    f4thirty:   {en:'30 km: 0.02 kg/m\u00b3',       cn:'30 km: 0.02 kg/m\u00b3'},
+    f4insight:  {en:'Air resistance decreases as the rocket goes higher',
+                 cn:'\u706b\u7bad\u8d8a\u9ad8\uff0c\u7a7a\u6c14\u963b\u529b\u8d8a\u5c0f'},
+    guideTitle: {en:'OBSERVATION GUIDE',            cn:'\u89c2\u5bdf\u6307\u5357'},
+    g1:         {en:'Watch the balance scale tip when the inflated balloon is placed',
+                 cn:'\u89c2\u5bdf\u653e\u4e0a\u5145\u6c14\u6c14\u7403\u65f6\u5929\u5e73\u7684\u503e\u659c'},
+    g2:         {en:'Notice how atmospheric pressure crushes the vacuum bag',
+                 cn:'\u6ce8\u610f\u5927\u6c14\u538b\u5982\u4f55\u538b\u7f29\u771f\u7a7a\u888b'},
+    g3:         {en:'Compare flat paper vs crumpled paper falling speed',
+                 cn:'\u5bf9\u6bd4\u5e73\u5f20\u7eb8\u548c\u7eb8\u56e2\u7684\u4e0b\u843d\u901f\u5ea6'},
+    g4:         {en:'Air density drops rapidly with altitude -- key for rockets',
+                 cn:'\u7a7a\u6c14\u5bc6\u5ea6\u968f\u9ad8\u5ea6\u9a64\u964d -- \u706b\u7bad\u7684\u5173\u952e'},
+    hudTopic:   {en:'TOPIC',       cn:'\u4e3b\u9898'},
+    hudDensity: {en:'DENSITY',     cn:'\u5bc6\u5ea6'},
+    hudForce:   {en:'KEY FORCE',   cn:'\u5173\u952e\u529b'},
+    hudInsight: {en:'INSIGHT',     cn:'\u542f\u793a'},
+    hvTitle:    {en:'Overview',      cn:'\u603b\u89c8'},
+    hvBalloon:  {en:'Balloon',       cn:'\u6c14\u7403\u79f0\u91cd'},
+    hvVacuum:   {en:'Vacuum bag',    cn:'\u771f\u7a7a\u888b'},
+    hvDrop:     {en:'Paper drop',    cn:'\u7eb8\u7247\u4e0b\u843d'},
+    hvScale:    {en:'Altitude',      cn:'\u9ad8\u5ea6\u5c42'},
+    hvRho:      {en:'1.2 kg/m\u00b3',cn:'1.2 kg/m\u00b3'},
+    hvGravity:  {en:'Gravity',       cn:'\u91cd\u529b'},
+    hvPressure: {en:'Atm. pressure', cn:'\u5927\u6c14\u538b'},
+    hvDrag:     {en:'Air drag',      cn:'\u7a7a\u6c14\u963b\u529b'},
+    hvVariable: {en:'Varies',        cn:'\u53d8\u5316'},
+    hvAirMass:  {en:'Air has mass',  cn:'\u7a7a\u6c14\u6709\u8d28\u91cf'},
+    hvPushes:   {en:'Air pushes',    cn:'\u7a7a\u6c14\u65bd\u538b'},
+    hvSurface:  {en:'Surface area',  cn:'\u9762\u79ef\u51b3\u5b9a'},
+    hvThinner:  {en:'Gets thinner',  cn:'\u8d8a\u6765\u8d8a\u7a00\u8584'},
+  },
+
+  hudLabels: ['hudTopic', 'hudDensity', 'hudForce', 'hudInsight'],
+  hudValues: [
+    ['hvTitle',   'hvRho',     '--',         '--'],
+    ['hvBalloon', 'hvRho',     'hvGravity',  'hvAirMass'],
+    ['hvVacuum',  'hvRho',     'hvPressure', 'hvPushes'],
+    ['hvDrop',    'hvRho',     'hvDrag',     'hvSurface'],
+    ['hvScale',   'hvVariable','hvDrag',     'hvThinner'],
+  ],
+
+  guideTitle: 'guideTitle',
+  guideItems: ['g1', 'g2', 'g3', 'g4'],
+};
+
+// ============================================================
+// Continuous animation loop (particles, scale tilt, drop, etc.)
+// Started after AnimRuntime.boot() to ensure ctx is ready.
+// ============================================================
+var _animLoopStarted = false;
+function _startAnimLoop() {
+  if (_animLoopStarted) return;
+  _animLoopStarted = true;
+  function animLoop() {
+    _aTime += 0.016;
+    if (typeof AnimRuntime !== 'undefined' && AnimRuntime.currentFrame !== undefined) {
+      var cf = AnimRuntime.currentFrame;
+      if (cf !== _aFrame) {
+        _aFrame = cf;
+        _aTime = 0;
+        _dropTime = 0;
+        _dropStarted = false;
+        _sheetY = 0;
+        _sheetAngle = 0;
+        _ballY = 0;
+        _scaleAngle = 0;
+        _vacProgress = 0;
+        _rocketAlt = 0;
+        if (cf === 0) {
+          _molecules = _genMolecules(60, 0, 700, 0, 400);
+        }
+      }
+      if (cf === 0) {
+        _tickMols(_molecules, 0.016, 0, 700, 0, 400);
+      }
+      if (cf === 1) {
+        _scaleAngle = Math.min(_aTime * 3, 1) * 6;
+      }
+      if (cf === 2) {
+        _vacProgress = Math.min(_aTime * 0.8, 1);
+      }
+      if (cf === 3) {
+        _dropTime = Math.min(_aTime, 3.0);
+        if (_aTime > 0.3) _dropStarted = true;
+        if (_dropStarted) {
+          var dt = _dropTime - 0.3;
+          if (dt < 0) dt = 0;
+          _ballY = Math.min(1, 0.5 * 2.2 * dt * dt);
+          _sheetY = Math.min(1, 0.5 * 0.35 * dt * dt);
+          _sheetAngle = dt * 120;
+        }
+      }
+      if (cf === 4) {
+        _rocketAlt = Math.min(_aTime * 0.25, 1);
+      }
+      AnimRuntime.drawFrame(cf);
+    }
+    _rafId = requestAnimationFrame(animLoop);
+  }
+  requestAnimationFrame(animLoop);
+}
+
+// ============================================================
+// FRAME ELEMENTS
+// ============================================================
+
+function getFrameElements(f, W, H) {
+  var t = AnimRuntime.t;
+  var P = AnimRuntime.PAL;
+  var cx = W / 2;
+  var cy = H / 2;
+
+  if (f === 0) {
+    // TITLE frame
+    return [
+      {id:'f0_t', type:'label', text:t('title'), x:cx, y:80, color:P.primary, size:22, align:'center', glow:P.glowStrong},
+      {id:'f0_q', type:'text', text:t('coreQ'), x:cx, y:120, color:P.secondary, size:13, align:'center'},
+      {id:'f0_d', type:'label', text:t('density'), x:cx, y:155, color:P.tertiary, size:14, align:'center'},
+      {id:'f0_m', type:'text', text:t('f0mol'), x:cx, y:185, color:P.muted, size:11, align:'center'},
+      // Scale outline (placeholder for shared element)
+      {id:'scale_base', type:'line', x1:cx-80, y1:280, x2:cx+80, y2:280, color:P.outline, lineWidth:2},
+      {id:'scale_piv', type:'circle', x:cx, y:280, r:4, fill:P.primary, glow:P.glowStrong, glowSize:8},
+      // Custom draw for molecules + balance scale illustration
+      {id:'f0_custom', type:'custom', draw:function(ctx) {
+        // Air molecules floating
+        ctx.globalAlpha = 0.4;
+        for (var i = 0; i < _molecules.length; i++) {
+          var mol = _molecules[i];
+          ctx.beginPath();
+          ctx.arc(mol.x, mol.y, mol.r, 0, Math.PI * 2);
+          ctx.fillStyle = P.tertiary;
+          ctx.globalAlpha = mol.alpha * 0.4;
+          ctx.fill();
+        }
+        ctx.globalAlpha = 1;
+        // Balance scale illustration
+        var scx = cx;
+        var scy = 280;
+        // Stand
+        ctx.strokeStyle = P.outline;
+        ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.moveTo(scx, scy); ctx.lineTo(scx, scy + 50); ctx.stroke();
+        // Base
+        ctx.fillStyle = P.surface;
+        ctx.fillRect(scx - 30, scy + 48, 60, 6);
+        // Beam
+        ctx.strokeStyle = P.primary;
+        ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.moveTo(scx - 70, scy); ctx.lineTo(scx + 70, scy); ctx.stroke();
+        // Inflated balloon left
+        var lx = scx - 55, ly = scy - 25;
+        ctx.fillStyle = 'rgba(255,127,80,0.5)';
+        ctx.beginPath(); ctx.ellipse(lx, ly, 18, 22, 0, 0, Math.PI * 2); ctx.fill();
+        ctx.strokeStyle = P.primaryDim;
+        ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.ellipse(lx, ly, 18, 22, 0, 0, Math.PI * 2); ctx.stroke();
+        // String
+        ctx.strokeStyle = P.muted;
+        ctx.beginPath(); ctx.moveTo(lx, ly + 22); ctx.lineTo(lx, scy); ctx.stroke();
+        // Deflated balloon right
+        var rx = scx + 55, ry = scy - 12;
+        ctx.fillStyle = 'rgba(255,127,80,0.3)';
+        ctx.beginPath(); ctx.ellipse(rx, ry, 8, 5, 0, 0, Math.PI * 2); ctx.fill();
+        ctx.strokeStyle = P.primaryDim;
+        ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.ellipse(rx, ry, 8, 5, 0, 0, Math.PI * 2); ctx.stroke();
+        ctx.strokeStyle = P.muted;
+        ctx.beginPath(); ctx.moveTo(rx, ry + 5); ctx.lineTo(rx, scy); ctx.stroke();
+        // Labels
+        ctx.font = "bold 10px 'Space Grotesk',sans-serif";
+        ctx.textAlign = 'center';
+        ctx.fillStyle = P.primary;
+        ctx.fillText(t('f1inflated'), lx, ly - 30);
+        ctx.fillStyle = P.muted;
+        ctx.fillText(t('f1deflated'), rx, ry - 14);
+      }},
+    ];
+  }
+
+  if (f === 1) {
+    // BALLOON EXPERIMENT
+    return [
+      {id:'f1_t', type:'label', text:t('f1title'), x:cx, y:30, color:P.primary, size:16, align:'center', glow:P.glowStrong},
+      {id:'f1_custom', type:'custom', draw:function(ctx) {
+        var scx = cx;
+        var scy = 180;
+
+        // Stand
+        ctx.strokeStyle = P.outline;
+        ctx.lineWidth = 3;
+        ctx.beginPath(); ctx.moveTo(scx, scy); ctx.lineTo(scx, scy + 80); ctx.stroke();
+        // Base triangle
+        ctx.fillStyle = P.surface;
+        ctx.beginPath();
+        ctx.moveTo(scx - 40, scy + 80);
+        ctx.lineTo(scx + 40, scy + 80);
+        ctx.lineTo(scx, scy + 60);
+        ctx.closePath();
+        ctx.fill();
+        ctx.strokeStyle = P.outline;
+        ctx.lineWidth = 1;
+        ctx.stroke();
+
+        // Pivot
+        ctx.fillStyle = P.primary;
+        ctx.beginPath(); ctx.arc(scx, scy, 5, 0, Math.PI * 2); ctx.fill();
+        ctx.shadowColor = P.glowStrong;
+        ctx.shadowBlur = 10;
+        ctx.fill();
+        ctx.shadowBlur = 0;
+
+        // Beam -- tilts as _scaleAngle increases
+        var angle = _scaleAngle * Math.PI / 180;
+        var beamLen = 130;
+        var lx = scx - Math.cos(angle) * beamLen;
+        var ly = scy - Math.sin(angle) * beamLen * 0.15;
+        var rx = scx + Math.cos(angle) * beamLen;
+        var ry = scy + Math.sin(angle) * beamLen * 0.15;
+
+        ctx.strokeStyle = P.secondary;
+        ctx.lineWidth = 3;
+        ctx.beginPath(); ctx.moveTo(lx, ly); ctx.lineTo(rx, ry); ctx.stroke();
+
+        // Pans (suspended from beam ends)
+        var panW = 50, panH = 8;
+        // Left pan (heavier -- inflated balloon)
+        ctx.fillStyle = 'rgba(255,181,156,0.2)';
+        ctx.fillRect(lx - panW/2, ly + 15, panW, panH);
+        ctx.strokeStyle = P.primaryDim;
+        ctx.lineWidth = 1;
+        ctx.strokeRect(lx - panW/2, ly + 15, panW, panH);
+        // Strings
+        ctx.strokeStyle = P.muted;
+        ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(lx - panW/2, ly + 15); ctx.lineTo(lx, ly); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(lx + panW/2, ly + 15); ctx.lineTo(lx, ly); ctx.stroke();
+
+        // Right pan (lighter -- deflated)
+        ctx.fillStyle = 'rgba(255,181,156,0.15)';
+        ctx.fillRect(rx - panW/2, ry + 15, panW, panH);
+        ctx.strokeStyle = P.primaryDim;
+        ctx.lineWidth = 1;
+        ctx.strokeRect(rx - panW/2, ry + 15, panW, panH);
+        ctx.strokeStyle = P.muted;
+        ctx.beginPath(); ctx.moveTo(rx - panW/2, ry + 15); ctx.lineTo(rx, ry); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(rx + panW/2, ry + 15); ctx.lineTo(rx, ry); ctx.stroke();
+
+        // Inflated balloon on left pan
+        var bx = lx, by = ly - 10;
+        ctx.fillStyle = 'rgba(255,127,80,0.55)';
+        ctx.beginPath(); ctx.ellipse(bx, by, 25, 32, 0, 0, Math.PI * 2); ctx.fill();
+        ctx.strokeStyle = 'rgba(255,127,80,0.8)';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath(); ctx.ellipse(bx, by, 25, 32, 0, 0, Math.PI * 2); ctx.stroke();
+        // Highlight on balloon
+        ctx.fillStyle = 'rgba(255,200,180,0.25)';
+        ctx.beginPath(); ctx.ellipse(bx - 8, by - 10, 6, 10, -0.3, 0, Math.PI * 2); ctx.fill();
+        // Tie
+        ctx.fillStyle = P.primaryDim;
+        ctx.beginPath();
+        ctx.moveTo(bx - 3, by + 32); ctx.lineTo(bx + 3, by + 32); ctx.lineTo(bx, by + 38); ctx.closePath();
+        ctx.fill();
+        // Air molecules inside balloon
+        ctx.fillStyle = P.tertiary;
+        for (var i = 0; i < 12; i++) {
+          var mx = bx + Math.sin(i * 1.7 + _aTime * 2) * 14;
+          var my = by + Math.cos(i * 2.1 + _aTime * 1.5) * 18;
+          ctx.globalAlpha = 0.5;
+          ctx.beginPath(); ctx.arc(mx, my, 1.5, 0, Math.PI * 2); ctx.fill();
+        }
+        ctx.globalAlpha = 1;
+
+        // Deflated balloon on right pan
+        var dx = rx, dy = ry + 8;
+        ctx.fillStyle = 'rgba(255,127,80,0.3)';
+        ctx.beginPath(); ctx.ellipse(dx, dy, 10, 6, 0, 0, Math.PI * 2); ctx.fill();
+        ctx.strokeStyle = 'rgba(255,127,80,0.5)';
+        ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.ellipse(dx, dy, 10, 6, 0, 0, Math.PI * 2); ctx.stroke();
+
+        // Labels
+        ctx.font = "bold 12px 'Space Grotesk','Noto Sans SC',sans-serif";
+        ctx.textAlign = 'center';
+        ctx.fillStyle = P.primary;
+        ctx.fillText(t('f1inflated'), lx, ly - 52);
+        ctx.fillStyle = P.muted;
+        ctx.fillText(t('f1deflated'), rx, ry - 12);
+
+        // Calculation box
+        var boxy = scy + 100;
+        ctx.fillStyle = P.glass;
+        ctx.fillRect(cx - 120, boxy, 240, 55);
+        ctx.strokeStyle = 'rgba(255,181,156,0.15)';
+        ctx.lineWidth = 1;
+        ctx.strokeRect(cx - 120, boxy, 240, 55);
+
+        ctx.font = "12px 'Inter','Noto Sans SC',sans-serif";
+        ctx.textAlign = 'center';
+        ctx.fillStyle = P.tertiary;
+        ctx.fillText(t('f1vol'), cx, boxy + 18);
+        ctx.fillStyle = P.primary;
+        ctx.font = "bold 13px 'Space Grotesk','Noto Sans SC',sans-serif";
+        ctx.fillText(t('f1mass'), cx, boxy + 38);
+
+        // Explanation
+        ctx.font = "11px 'Noto Sans SC',sans-serif";
+        ctx.fillStyle = P.text;
+        ctx.fillText(t('f1explain'), cx, boxy + 68);
+      }},
+    ];
+  }
+
+  if (f === 2) {
+    // VACUUM BAG
+    return [
+      {id:'f2_t', type:'label', text:t('f2title'), x:cx, y:30, color:P.primary, size:16, align:'center', glow:P.glowStrong},
+      {id:'f2_custom', type:'custom', draw:function(ctx) {
+        var bagCx = cx;
+        var bagCy = cy + 10;
+        var prog = _vacProgress;
+
+        // --- Before bag (left) ---
+        var lx = bagCx - 140;
+        var bw = 100, bh = 120;
+
+        // Bag body
+        ctx.fillStyle = 'rgba(180,200,220,0.15)';
+        ctx.fillRect(lx - bw/2, bagCy - bh/2, bw, bh);
+        ctx.strokeStyle = 'rgba(180,200,220,0.4)';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(lx - bw/2, bagCy - bh/2, bw, bh);
+
+        // Clothes inside (before -- puffy)
+        ctx.fillStyle = 'rgba(200,150,100,0.4)';
+        ctx.fillRect(lx - 35, bagCy - 40, 70, 80);
+        ctx.fillStyle = 'rgba(100,150,200,0.3)';
+        ctx.fillRect(lx - 30, bagCy - 35, 25, 70);
+        ctx.fillStyle = 'rgba(150,100,180,0.3)';
+        ctx.fillRect(lx + 5, bagCy - 35, 25, 70);
+
+        // Air dots inside before bag
+        ctx.fillStyle = P.tertiary;
+        for (var i = 0; i < 15; i++) {
+          var ax = lx - 30 + (i * 17) % 60;
+          var ay = bagCy - 30 + (i * 23) % 60;
+          ctx.globalAlpha = 0.4;
+          ctx.beginPath(); ctx.arc(ax, ay, 1.5, 0, Math.PI * 2); ctx.fill();
+        }
+        ctx.globalAlpha = 1;
+
+        // Label
+        ctx.font = "bold 11px 'Space Grotesk','Noto Sans SC',sans-serif";
+        ctx.textAlign = 'center';
+        ctx.fillStyle = P.muted;
+        ctx.fillText(t('f2before'), lx, bagCy - bh/2 - 12);
+
+        // --- After bag (right) -- shrinks with progress ---
+        var rx = bagCx + 140;
+        var shrink = prog * 0.45;
+        var aw = bw * (1 - shrink);
+        var ah = bh * (1 - shrink * 0.6);
+
+        // Bag body (compressed)
+        ctx.fillStyle = 'rgba(180,200,220,0.2)';
+        ctx.fillRect(rx - aw/2, bagCy - ah/2, aw, ah);
+        ctx.strokeStyle = 'rgba(180,200,220,0.5)';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(rx - aw/2, bagCy - ah/2, aw, ah);
+
+        // Compressed clothes
+        var cw = 70 * (1 - shrink * 0.7);
+        var ch = 80 * (1 - shrink * 0.5);
+        ctx.fillStyle = 'rgba(200,150,100,0.4)';
+        ctx.fillRect(rx - cw/2, bagCy - ch/2, cw, ch);
+        ctx.fillStyle = 'rgba(100,150,200,0.3)';
+        ctx.fillRect(rx - cw/2 + 5, bagCy - ch/2 + 5, cw * 0.35, ch - 10);
+        ctx.fillStyle = 'rgba(150,100,180,0.3)';
+        ctx.fillRect(rx + 2, bagCy - ch/2 + 5, cw * 0.35, ch - 10);
+
+        // Pressure arrows pushing in from all sides
+        if (prog > 0.2) {
+          var arrowAlpha = Math.min(1, (prog - 0.2) * 2);
+          ctx.globalAlpha = arrowAlpha;
+          var arrColor = P.tertiary;
+          var arrLen = 25 + prog * 15;
+          // Top arrow
+          _drawPressArrow(ctx, rx, bagCy - ah/2 - arrLen, rx, bagCy - ah/2 - 3, arrColor);
+          // Bottom arrow
+          _drawPressArrow(ctx, rx, bagCy + ah/2 + arrLen, rx, bagCy + ah/2 + 3, arrColor);
+          // Left arrow
+          _drawPressArrow(ctx, rx - aw/2 - arrLen, bagCy, rx - aw/2 - 3, bagCy, arrColor);
+          // Right arrow
+          _drawPressArrow(ctx, rx + aw/2 + arrLen, bagCy, rx + aw/2 + 3, bagCy, arrColor);
+          // Diagonal arrows
+          var da = arrLen * 0.7;
+          _drawPressArrow(ctx, rx - aw/2 - da, bagCy - ah/2 - da, rx - aw/2 - 2, bagCy - ah/2 - 2, arrColor);
+          _drawPressArrow(ctx, rx + aw/2 + da, bagCy - ah/2 - da, rx + aw/2 + 2, bagCy - ah/2 - 2, arrColor);
+          _drawPressArrow(ctx, rx - aw/2 - da, bagCy + ah/2 + da, rx - aw/2 - 2, bagCy + ah/2 + 2, arrColor);
+          _drawPressArrow(ctx, rx + aw/2 + da, bagCy + ah/2 + da, rx + aw/2 + 2, bagCy + ah/2 + 2, arrColor);
+
+          // Pressure label
+          ctx.globalAlpha = arrowAlpha;
+          ctx.font = "bold 10px 'Space Grotesk','Noto Sans SC',sans-serif";
+          ctx.textAlign = 'center';
+          ctx.fillStyle = P.tertiary;
+          ctx.fillText(t('f2press'), rx, bagCy - ah/2 - arrLen - 12);
+        }
+        ctx.globalAlpha = 1;
+
+        // After label
+        ctx.font = "bold 11px 'Space Grotesk','Noto Sans SC',sans-serif";
+        ctx.textAlign = 'center';
+        ctx.fillStyle = P.muted;
+        ctx.fillText(t('f2after'), rx, bagCy - bh/2 - 12);
+
+        // Arrow between before and after
+        ctx.strokeStyle = P.primary;
+        ctx.lineWidth = 2;
+        ctx.setLineDash([4, 3]);
+        ctx.beginPath();
+        ctx.moveTo(lx + bw/2 + 10, bagCy);
+        ctx.lineTo(rx - aw/2 - 15, bagCy);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        // Arrowhead
+        ctx.fillStyle = P.primary;
+        ctx.beginPath();
+        ctx.moveTo(rx - aw/2 - 10, bagCy);
+        ctx.lineTo(rx - aw/2 - 20, bagCy - 5);
+        ctx.lineTo(rx - aw/2 - 20, bagCy + 5);
+        ctx.closePath();
+        ctx.fill();
+
+        // Explanation
+        ctx.font = "11px 'Noto Sans SC',sans-serif";
+        ctx.textAlign = 'center';
+        ctx.fillStyle = P.text;
+        var expY = bagCy + bh/2 + 35;
+        ctx.fillText(t('f2explain'), cx, expY);
+      }},
+    ];
+  }
+
+  if (f === 3) {
+    // PAPER DROP
+    return [
+      {id:'f3_t', type:'label', text:t('f3title'), x:cx, y:30, color:P.primary, size:16, align:'center', glow:P.glowStrong},
+      {id:'f3_s', type:'text', text:t('f3same'), x:cx, y:52, color:P.muted, size:10, align:'center'},
+      {id:'f3_custom', type:'custom', draw:function(ctx) {
+        // Two columns: left = flat sheet, right = crumpled ball
+        var colW = W * 0.3;
+        var leftCx = cx - colW * 0.7;
+        var rightCx = cx + colW * 0.7;
+        var dropTop = 80;
+        var dropBot = H - 80;
+        var dropH = dropBot - dropTop;
+
+        // Height markers
+        ctx.strokeStyle = 'rgba(255,255,255,0.08)';
+        ctx.lineWidth = 1;
+        ctx.setLineDash([2, 4]);
+        ctx.beginPath(); ctx.moveTo(cx - colW * 1.2, dropTop); ctx.lineTo(cx + colW * 1.2, dropTop); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(cx - colW * 1.2, dropBot); ctx.lineTo(cx + colW * 1.2, dropBot); ctx.stroke();
+        ctx.setLineDash([]);
+
+        // Ground
+        ctx.fillStyle = 'rgba(255,181,156,0.1)';
+        ctx.fillRect(cx - colW * 1.2, dropBot, colW * 2.4, 3);
+
+        // Column labels at top
+        ctx.font = "bold 11px 'Space Grotesk','Noto Sans SC',sans-serif";
+        ctx.textAlign = 'center';
+        ctx.fillStyle = P.muted;
+        ctx.fillText(t('f3sheet'), leftCx, dropTop - 8);
+        ctx.fillText(t('f3ball'), rightCx, dropTop - 8);
+
+        // Flat sheet -- tumbles slowly
+        var sheetYpos = dropTop + _sheetY * dropH;
+        ctx.save();
+        ctx.translate(leftCx, sheetYpos);
+        ctx.rotate(_sheetAngle * Math.PI / 180);
+        ctx.fillStyle = 'rgba(230,220,200,0.7)';
+        ctx.fillRect(-22, -2, 44, 4);
+        ctx.strokeStyle = 'rgba(230,220,200,0.9)';
+        ctx.lineWidth = 1;
+        ctx.strokeRect(-22, -2, 44, 4);
+        ctx.restore();
+
+        // Air resistance arrows on sheet (big)
+        if (_dropStarted && _sheetY < 0.95) {
+          var arrowSize = 15 + (1 - _sheetY) * 15;
+          ctx.globalAlpha = 0.7;
+          _drawPressArrow(ctx, leftCx, sheetYpos - arrowSize - 10, leftCx, sheetYpos - 6, P.tertiary);
+          _drawPressArrow(ctx, leftCx - 15, sheetYpos - arrowSize - 5, leftCx - 10, sheetYpos - 4, P.tertiary);
+          _drawPressArrow(ctx, leftCx + 15, sheetYpos - arrowSize - 5, leftCx + 10, sheetYpos - 4, P.tertiary);
+          ctx.globalAlpha = 1;
+          // Drag label
+          ctx.font = "bold 9px 'Space Grotesk','Noto Sans SC',sans-serif";
+          ctx.textAlign = 'center';
+          ctx.fillStyle = P.tertiary;
+          ctx.fillText(t('f3big'), leftCx, sheetYpos - arrowSize - 18);
+        }
+
+        // Crumpled ball -- falls fast
+        var ballYpos = dropTop + _ballY * dropH;
+        ctx.fillStyle = 'rgba(210,200,180,0.8)';
+        ctx.beginPath(); ctx.arc(rightCx, ballYpos, 8, 0, Math.PI * 2); ctx.fill();
+        ctx.strokeStyle = 'rgba(210,200,180,0.9)';
+        ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.arc(rightCx, ballYpos, 8, 0, Math.PI * 2); ctx.stroke();
+        // Crumple texture lines
+        ctx.strokeStyle = 'rgba(180,170,150,0.5)';
+        ctx.lineWidth = 0.5;
+        ctx.beginPath(); ctx.moveTo(rightCx - 4, ballYpos - 3); ctx.lineTo(rightCx + 3, ballYpos + 2); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(rightCx + 2, ballYpos - 5); ctx.lineTo(rightCx - 3, ballYpos + 4); ctx.stroke();
+
+        // Small drag arrows on ball
+        if (_dropStarted && _ballY < 0.95) {
+          var sArrow = 6 + (1 - _ballY) * 4;
+          ctx.globalAlpha = 0.5;
+          _drawPressArrow(ctx, rightCx, ballYpos - sArrow - 12, rightCx, ballYpos - 10, P.tertiary);
+          ctx.globalAlpha = 1;
+          ctx.font = "bold 9px 'Space Grotesk','Noto Sans SC',sans-serif";
+          ctx.textAlign = 'center';
+          ctx.fillStyle = P.tertiary;
+          ctx.fillText(t('f3small'), rightCx, ballYpos - sArrow - 20);
+        }
+
+        // Gravity arrows (downward on both)
+        if (_dropStarted) {
+          ctx.globalAlpha = 0.4;
+          _drawPressArrow(ctx, leftCx, sheetYpos + 8, leftCx, sheetYpos + 25, P.primaryDim);
+          _drawPressArrow(ctx, rightCx, ballYpos + 12, rightCx, ballYpos + 29, P.primaryDim);
+          ctx.globalAlpha = 1;
+        }
+
+        // Timer / result
+        if (_ballY >= 0.95) {
+          ctx.font = "bold 12px 'Space Grotesk','Noto Sans SC',sans-serif";
+          ctx.textAlign = 'center';
+          ctx.fillStyle = P.primary;
+          ctx.fillText(t('f3result'), cx, dropBot + 30);
+        }
+      }},
+    ];
+  }
+
+  if (f === 4) {
+    // DENSITY SCALE
+    return [
+      {id:'f4_t', type:'label', text:t('f4title'), x:cx, y:30, color:P.primary, size:16, align:'center', glow:P.glowStrong},
+      {id:'f4_custom', type:'custom', draw:function(ctx) {
+        // Vertical atmosphere column
+        var colX = cx - 60;
+        var colW = 120;
+        var colTop = 60;
+        var colBot = H - 50;
+        var colH = colBot - colTop;
+
+        // Gradient atmosphere background (dense at bottom, thin at top)
+        var atmGrad = ctx.createLinearGradient(colX, colTop, colX, colBot);
+        atmGrad.addColorStop(0, 'rgba(0,218,243,0.02)');
+        atmGrad.addColorStop(0.3, 'rgba(0,218,243,0.06)');
+        atmGrad.addColorStop(0.7, 'rgba(0,218,243,0.15)');
+        atmGrad.addColorStop(1, 'rgba(0,218,243,0.3)');
+        ctx.fillStyle = atmGrad;
+        ctx.fillRect(colX, colTop, colW, colH);
+
+        // Border
+        ctx.strokeStyle = 'rgba(0,218,243,0.25)';
+        ctx.lineWidth = 1;
+        ctx.strokeRect(colX, colTop, colW, colH);
+
+        // Air density dots (denser at bottom)
+        var layers = [
+          {y:0.9, count:25, alpha:0.5},  // sea level
+          {y:0.65, count:15, alpha:0.35}, // 5 km
+          {y:0.4, count:8, alpha:0.25},   // 10 km
+          {y:0.1, count:2, alpha:0.15},   // 30 km
+        ];
+        ctx.fillStyle = P.tertiary;
+        for (var li = 0; li < layers.length; li++) {
+          var layer = layers[li];
+          var layerY = colTop + colH * (1 - layer.y);
+          ctx.globalAlpha = layer.alpha;
+          for (var di = 0; di < layer.count; di++) {
+            var dx = colX + 8 + (di * 31 + li * 17) % (colW - 16);
+            var dy = layerY - 15 + (di * 19) % 30;
+            ctx.beginPath(); ctx.arc(dx, dy, 1.5, 0, Math.PI * 2); ctx.fill();
+          }
+        }
+        ctx.globalAlpha = 1;
+
+        // Altitude labels on the right side
+        var altitudes = [
+          {label: t('f4sea'), y: 0.95, color: P.primary},
+          {label: t('f4five'), y: 0.70, color: P.secondary},
+          {label: t('f4ten'), y: 0.45, color: P.muted},
+          {label: t('f4thirty'), y: 0.10, color: 'rgba(255,255,255,0.5)'},
+        ];
+
+        ctx.textAlign = 'left';
+        for (var ai = 0; ai < altitudes.length; ai++) {
+          var alt = altitudes[ai];
+          var ay = colTop + colH * (1 - alt.y);
+          // Dashed line from column to label
+          ctx.strokeStyle = 'rgba(255,255,255,0.12)';
+          ctx.lineWidth = 1;
+          ctx.setLineDash([2, 3]);
+          ctx.beginPath(); ctx.moveTo(colX + colW, ay); ctx.lineTo(colX + colW + 20, ay); ctx.stroke();
+          ctx.setLineDash([]);
+          // Label
+          ctx.font = "11px 'Space Grotesk','Noto Sans SC',sans-serif";
+          ctx.fillStyle = alt.color;
+          ctx.fillText(alt.label, colX + colW + 25, ay + 4);
+        }
+
+        // Rocket ascending
+        var rocketY = colBot - _rocketAlt * colH * 0.85;
+        var rocketX = colX - 35;
+
+        // Rocket body
+        ctx.fillStyle = P.secondary;
+        ctx.beginPath();
+        ctx.moveTo(rocketX, rocketY - 18);      // nose
+        ctx.lineTo(rocketX - 7, rocketY + 8);   // left
+        ctx.lineTo(rocketX + 7, rocketY + 8);   // right
+        ctx.closePath();
+        ctx.fill();
+        // Body rectangle
+        ctx.fillStyle = P.secondaryDim;
+        ctx.fillRect(rocketX - 5, rocketY + 8, 10, 14);
+        // Fins
+        ctx.fillStyle = P.primaryDim;
+        ctx.beginPath();
+        ctx.moveTo(rocketX - 5, rocketY + 22);
+        ctx.lineTo(rocketX - 10, rocketY + 28);
+        ctx.lineTo(rocketX - 5, rocketY + 18);
+        ctx.closePath();
+        ctx.fill();
+        ctx.beginPath();
+        ctx.moveTo(rocketX + 5, rocketY + 22);
+        ctx.lineTo(rocketX + 10, rocketY + 28);
+        ctx.lineTo(rocketX + 5, rocketY + 18);
+        ctx.closePath();
+        ctx.fill();
+
+        // Exhaust flame
+        if (_rocketAlt < 0.95) {
+          var flameLen = 10 + Math.sin(_aTime * 15) * 5;
+          var fGrad = ctx.createLinearGradient(rocketX, rocketY + 22, rocketX, rocketY + 22 + flameLen);
+          fGrad.addColorStop(0, P.primaryDim);
+          fGrad.addColorStop(0.5, 'rgba(255,127,80,0.6)');
+          fGrad.addColorStop(1, 'rgba(255,127,80,0)');
+          ctx.fillStyle = fGrad;
+          ctx.beginPath();
+          ctx.moveTo(rocketX - 4, rocketY + 22);
+          ctx.lineTo(rocketX, rocketY + 22 + flameLen);
+          ctx.lineTo(rocketX + 4, rocketY + 22);
+          ctx.closePath();
+          ctx.fill();
+        }
+
+        // Air resistance arrows on rocket (get smaller as it goes up)
+        var dragSize = 12 * (1 - _rocketAlt * 0.85);
+        if (dragSize > 2 && _rocketAlt > 0.02) {
+          ctx.globalAlpha = 0.6 * (1 - _rocketAlt * 0.7);
+          _drawPressArrow(ctx, rocketX, rocketY - 18 - dragSize - 5, rocketX, rocketY - 18, P.tertiary);
+          _drawPressArrow(ctx, rocketX - 15, rocketY, rocketX - 8, rocketY, P.tertiary);
+          _drawPressArrow(ctx, rocketX + 15, rocketY, rocketX + 8, rocketY, P.tertiary);
+          ctx.globalAlpha = 1;
+        }
+
+        // Ground
+        ctx.fillStyle = 'rgba(255,181,156,0.15)';
+        ctx.fillRect(colX - 80, colBot, colW + 160, 3);
+
+        // Key insight
+        ctx.font = "bold 12px 'Space Grotesk','Noto Sans SC',sans-serif";
+        ctx.textAlign = 'center';
+        ctx.fillStyle = P.primary;
+        ctx.fillText(t('f4insight'), cx, colBot + 25);
+      }},
+    ];
+  }
+
+  return [];
+}
+
+// ============================================================
+// Helper: draw pressure/force arrow
+// ============================================================
+function _drawPressArrow(ctx, x1, y1, x2, y2, color) {
+  var angle = Math.atan2(y2 - y1, x2 - x1);
+  var len = Math.sqrt((x2 - x1) * (x2 - x1) + (y2 - y1) * (y2 - y1));
+  if (len < 2) return;
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 1.5;
+  ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+  var hs = Math.min(6, len * 0.4);
+  ctx.fillStyle = color;
+  ctx.beginPath();
+  ctx.moveTo(x2, y2);
+  ctx.lineTo(x2 - hs * Math.cos(angle - 0.4), y2 - hs * Math.sin(angle - 0.4));
+  ctx.lineTo(x2 - hs * Math.cos(angle + 0.4), y2 - hs * Math.sin(angle + 0.4));
+  ctx.closePath();
+  ctx.fill();
+}
+
+// ============================================================
+// Custom background: dark gradient with subtle particles
+// ============================================================
+function drawBg(ctx, W, H) {
+  if (!ctx) return;
+  var grad = ctx.createLinearGradient(0, 0, 0, H);
+  grad.addColorStop(0, '#0a0808');
+  grad.addColorStop(1, '#1a1414');
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, W, H);
+  // Subtle grid
+  ctx.strokeStyle = 'rgba(255,181,156,0.03)';
+  ctx.lineWidth = 0.5;
+  for (var x = 0; x < W; x += 40) {
+    ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke();
+  }
+  for (var y = 0; y < H; y += 40) {
+    ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke();
+  }
+}
+
+// ============================================================
+// BOOT
+// ============================================================
+AnimRuntime.boot();
+_startAnimLoop();
+</script>
+</body>
+</html>

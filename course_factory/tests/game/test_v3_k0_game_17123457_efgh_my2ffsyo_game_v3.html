@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>推拉力探秘 | Force Lab</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=Noto+Sans+SC:wght@300;400;700;900&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+<style>
+:root{--BRASS:#C49B3C;--FORGE:#8B6914;--IRON:#4A4A5A;--EMBER:#E8D0A0;--SPARK:#E8C840;--BG1:#151525;--BG2:#1E1E38;--RED:#E85050;--BLUE:#5080E8;--GREEN:#50E880}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Noto Sans SC',sans-serif;background:linear-gradient(135deg,var(--BG1),var(--BG2));color:var(--EMBER);overflow:hidden;height:100vh;user-select:none}
+.fm{font-family:'JetBrains Mono',monospace}
+.glass{background:rgba(21,21,37,0.88);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);border:1px solid rgba(196,155,60,0.15)}
+canvas{display:block;width:100%;height:100%}
+input[type=range]{-webkit-appearance:none;width:100%;height:4px;background:var(--IRON);outline:none;border-radius:2px}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:16px;height:16px;background:var(--SPARK);cursor:pointer;border:2px solid var(--BRASS);border-radius:2px}
+input[type=range]::-moz-range-thumb{width:16px;height:16px;background:var(--SPARK);cursor:pointer;border:2px solid var(--BRASS);border-radius:2px}
+.sb{transition:all .15s;cursor:pointer}.sb:hover{background:rgba(196,155,60,0.15)}.sb.on{background:rgba(232,200,64,0.18);border-color:var(--SPARK)!important}
+.mb{transition:all .15s;cursor:pointer}.mb:hover{opacity:.85}.mb.on{background:rgba(232,200,64,0.2)!important;border-color:var(--SPARK)!important;color:var(--SPARK)!important}
+.ab{transition:all .15s;cursor:pointer}.ab:hover{background:rgba(196,155,60,0.2)}
+@keyframes pulse{0%,100%{opacity:.5}50%{opacity:1}}
+@keyframes fadeOut{0%{opacity:1}100%{opacity:0;pointer-events:none}}
+.hint-pulse{animation:pulse 2s infinite}
+.lbl{font-size:10px;letter-spacing:0.08em;text-transform:uppercase;color:var(--FORGE)}
+</style>
+</head>
+<body>
+<div class="flex h-screen">
+<aside class="w-56 flex flex-col p-3 gap-2 z-20 glass overflow-y-auto" style="min-width:210px;border-right:1px solid rgba(196,155,60,0.2)">
+  <div class="text-center mb-1">
+    <div class="fm text-[10px] tracking-[0.2em] uppercase" style="color:var(--FORGE)">Gear Foundry</div>
+    <h1 class="text-lg font-black leading-tight" style="color:var(--SPARK)"><span data-zh="推拉力探秘" data-en="Force Lab">推拉力探秘</span></h1>
+    <div class="fm text-[10px] mt-0.5" style="color:var(--BRASS)">F = m · a</div>
+  </div>
+  <div>
+    <div class="fm lbl mb-1"><span data-zh="选择场景" data-en="SCENE">选择场景</span></div>
+    <div class="flex flex-col gap-1" id="scene-list">
+      <button class="sb glass text-left px-2 py-1.5 text-xs rounded on" data-idx="0"><span data-zh="水平推箱" data-en="Push Box">水平推箱</span></button>
+      <button class="sb glass text-left px-2 py-1.5 text-xs rounded" data-idx="1"><span data-zh="拉力挑战" data-en="Pull Cart">拉力挑战</span></button>
+      <button class="sb glass text-left px-2 py-1.5 text-xs rounded" data-idx="2"><span data-zh="斜面攀爬" data-en="Ramp Climb">斜面攀爬</span></button>
+    </div>
+  </div>
+  <div>
+    <div class="flex justify-between items-center"><span class="fm lbl"><span data-zh="质量" data-en="MASS">质量</span></span><span class="fm text-xs" style="color:var(--SPARK)" id="mass-val">5.0 kg</span></div>
+    <input type="range" id="sl-mass" min="0.5" max="10" step="0.5" value="5">
+  </div>
+  <div>
+    <div class="flex justify-between items-center"><span class="fm lbl"><span data-zh="摩擦系数" data-en="FRICTION">摩擦系数</span></span><span class="fm text-xs" style="color:var(--SPARK)" id="mu-val">0.30</span></div>
+    <input type="range" id="sl-mu" min="0.05" max="0.8" step="0.05" value="0.3">
+  </div>
+  <div>
+    <div class="flex justify-between items-center"><span class="fm lbl"><span data-zh="坡度" data-en="INCLINE">坡度</span></span><span class="fm text-xs" style="color:var(--SPARK)" id="inc-val">0°</span></div>
+    <input type="range" id="sl-inc" min="0" max="45" step="1" value="0">
+  </div>
+  <div>
+    <div class="flex justify-between items-center"><span class="fm lbl"><span data-zh="施力大小" data-en="FORCE">施力大小</span></span><span class="fm text-xs" style="color:var(--SPARK)" id="f-val">50 N</span></div>
+    <input type="range" id="sl-force" min="5" max="200" step="5" value="50">
+  </div>
+  <div>
+    <div class="fm lbl mb-1"><span data-zh="力的方向" data-en="DIRECTION">力的方向</span></div>
+    <div class="flex gap-1" id="dir-btns">
+      <button class="mb glass px-3 py-1 text-xs rounded on" data-dir="1" style="border:1px solid rgba(196,155,60,0.3)"><i class="fas fa-arrow-right mr-1"></i><span data-zh="推" data-en="Push">推</span></button>
+      <button class="mb glass px-3 py-1 text-xs rounded" data-dir="-1" style="border:1px solid rgba(196,155,60,0.3)"><i class="fas fa-arrow-left mr-1"></i><span data-zh="拉" data-en="Pull">拉</span></button>
+    </div>
+  </div>
+  <button id="btn-apply" class="ab glass px-3 py-2 text-sm rounded font-bold" style="color:var(--SPARK);border:1px solid var(--BRASS)">
+    <i class="fas fa-hand-pointer mr-1"></i><span data-zh="按住施力 (空格)" data-en="Hold to Apply (Space)">按住施力 (空格)</span>
+  </button>
+  <button id="btn-reset" class="ab glass px-3 py-1.5 text-xs rounded" style="color:var(--EMBER);border:1px solid rgba(196,155,60,0.3)">
+    <i class="fas fa-undo mr-1"></i><span data-zh="重置" data-en="Reset">重置</span>
+  </button>
+  <div class="flex-1"></div>
+  <button id="btn-lang" class="ab glass px-3 py-1 text-xs rounded" style="color:var(--BRASS);border:1px solid rgba(196,155,60,0.2)">
+    <i class="fas fa-globe mr-1"></i><span data-zh="EN" data-en="中文">EN</span>
+  </button>
+</aside>
+<main class="flex-1 relative" id="canvas-wrap">
+  <canvas id="sim-canvas"></canvas>
+  <div id="hint" class="absolute top-4 left-1/2 -translate-x-1/2 fm text-sm px-4 py-2 rounded hint-pulse" style="color:var(--SPARK);background:rgba(21,21,37,0.9);border:1px solid var(--BRASS);white-space:nowrap">
+    <span data-zh="拖拽物体或按住空格施力" data-en="Drag the object or hold Space to apply force">拖拽物体或按住空格施力</span>
+  </div>
+</main>
+</div>
+<script>
+(function(){
+var G={sceneIdx:0,mass:5,mu:0.3,incline:0,applyF:50,forceDir:1,objV:0,objX:0,applying:false,dragging:false,dragSX:0,dragSY:0,dragCX:0,dragCY:0,lang:'zh',hintShown:true,lastTime:0,curFApplied:0};
+var PX_M=55,GRAVITY=9.8,MU_K_RATIO=0.7,OBJ_W=64,OBJ_H=50;
+var scenes=[{zh:'水平推箱',en:'Push Box',inc:0},{zh:'拉力挑战',en:'Pull Cart',inc:0},{zh:'斜面攀爬',en:'Ramp Climb',inc:25}];
+var particles=[];
+var canvas=document.getElementById('sim-canvas');
+var ctx=canvas.getContext('2d');
+
+function resize(){var p=canvas.parentElement;if(!p)return;canvas.width=p.clientWidth;canvas.height=p.clientHeight}
+function resetObj(){G.objX=0;G.objV=0;G.applying=false;G.dragging=false;G.curFApplied=0;particles=[]}
+function groundY(){return canvas.height*0.72}
+
+function spawnParticles(x,y,n){for(var i=0;i<n;i++){particles.push({x:x+((Math.random()-0.5)*20),y:y,vx:(Math.random()-0.5)*3,vy:-Math.random()*2.5-0.5,life:1,decay:0.015+Math.random()*0.025,size:1.5+Math.random()*2.5})}}
+function updateParticles(){for(var i=particles.length-1;i>=0;i--){var p=particles[i];p.x+=p.vx;p.y+=p.vy;p.vy+=0.04;p.life-=p.decay;if(p.life<=0)particles.splice(i,1)}}
+function drawParticles(){for(var i=0;i<particles.length;i++){var p=particles[i];ctx.globalAlpha=p.life*0.7;ctx.fillStyle='#E8C840';ctx.beginPath();ctx.arc(p.x,p.y,p.size,0,Math.PI*2);ctx.fill()}ctx.globalAlpha=1}
+
+function getObjScreenPos(){
+  var gY=groundY(),alpha=G.incline*Math.PI/180,originX=canvas.width*0.35;
+  if(G.incline>0){return{x:originX+G.objX*PX_M*Math.cos(alpha),y:gY-G.objX*PX_M*Math.sin(alpha)}}
+  return{x:originX+G.objX*PX_M,y:gY}
+}
+
+function stepPhysics(dt){
+  var alpha=G.incline*Math.PI/180,mass=G.mass,mu_s=G.mu,mu_k=mu_s*MU_K_RATIO;
+  var fApplied=0;
+  if(G.dragging){
+    var dx=G.dragCX-G.dragSX,dy=G.dragSY-G.dragCY;
+    fApplied=(dx*Math.cos(alpha)+dy*Math.sin(alpha))*1.5;
+  }else if(G.applying){fApplied=G.applyF*G.forceDir}
+  G.curFApplied=fApplied;
+  var fGrav=-mass*GRAVITY*Math.sin(alpha);
+  var fNormal=Math.max(0.01,mass*GRAVITY*Math.cos(alpha));
+  var netNoFric=fApplied+fGrav;
+  var fFric=0;
+  if(Math.abs(G.objV)<0.05){
+    if(Math.abs(netNoFric)<=mu_s*fNormal){fFric=-netNoFric;G.objV=0}
+    else{fFric=(netNoFric>0?-1:1)*mu_k*fNormal}
+  }else{fFric=(G.objV>0?-1:1)*mu_k*fNormal}
+  var fNet=fApplied+fGrav+fFric;
+  var accel=fNet/mass;
+  G.objV+=accel*dt;
+  if(Math.abs(G.objV)<0.03&&Math.abs(fNet)<mu_s*fNormal*0.5){G.objV=0}
+  G.objX+=G.objV*dt;
+  if(G.objX<-4){G.objX=-4;if(G.objV<0)G.objV=0}
+  if(G.objX>7){G.objX=7;if(G.objV>0)G.objV=0}
+  if(Math.abs(G.objV)>0.3){var oP=getObjScreenPos();spawnParticles(oP.x,oP.y,Math.abs(G.objV)>1.5?2:1)}
+  updateParticles();
+}
+
+function drawArrow(x1,y1,x2,y2,color,lw,hl){
+  lw=lw||2;hl=hl||10;
+  var dx=x2-x1,dy=y2-y1,len=Math.sqrt(dx*dx+dy*dy);
+  if(len<3)return;
+  var ang=Math.atan2(dy,dx);
+  ctx.save();ctx.strokeStyle=color;ctx.fillStyle=color;ctx.lineWidth=lw;ctx.lineCap='round';
+  ctx.beginPath();ctx.moveTo(x1,y1);ctx.lineTo(x2,y2);ctx.stroke();
+  ctx.beginPath();ctx.moveTo(x2,y2);
+  ctx.lineTo(x2-hl*Math.cos(ang-0.4),y2-hl*Math.sin(ang-0.4));
+  ctx.lineTo(x2-hl*0.35*Math.cos(ang),y2-hl*0.35*Math.sin(ang));
+  ctx.lineTo(x2-hl*Math.cos(ang+0.4),y2-hl*Math.sin(ang+0.4));
+  ctx.closePath();ctx.fill();ctx.restore();
+}
+
+function roundRect(c,x,y,w,h,r){
+  r=Math.max(0,r);c.beginPath();c.moveTo(x+r,y);c.lineTo(x+w-r,y);c.quadraticCurveTo(x+w,y,x+w,y+r);
+  c.lineTo(x+w,y+h-r);c.quadraticCurveTo(x+w,y+h,x+w-r,y+h);c.lineTo(x+r,y+h);
+  c.quadraticCurveTo(x,y+h,x,y+h-r);c.lineTo(x,y+r);c.quadraticCurveTo(x,y,x+r,y);c.closePath();
+}
+
+function drawGear(cx,cy,r,teeth,col){
+  ctx.save();ctx.strokeStyle=col;ctx.lineWidth=1.5;
+  var step=Math.PI*2/teeth;
+  ctx.beginPath();
+  for(var i=0;i<teeth;i++){var a=i*step;
+    ctx.lineTo(cx+Math.cos(a)*r,cy+Math.sin(a)*r);
+    ctx.lineTo(cx+Math.cos(a+step*0.3)*(r+5),cy+Math.sin(a+step*0.3)*(r+5));
+    ctx.lineTo(cx+Math.cos(a+step*0.7)*(r+5),cy+Math.sin(a+step*0.7)*(r+5));
+    ctx.lineTo(cx+Math.cos(a+step)*r,cy+Math.sin(a+step)*r);
+  }
+  ctx.closePath();ctx.stroke();
+  ctx.beginPath();ctx.arc(cx,cy,r*0.28,0,Math.PI*2);ctx.stroke();
+  ctx.restore();
+}
+
+function drawCharacter(cx,cy,fDir,alpha,pushing){
+  ctx.save();
+  ctx.translate(cx,cy);
+  var surfX=Math.cos(alpha),surfY=-Math.sin(alpha);
+  var normX=-Math.sin(alpha),normY=-Math.cos(alpha);
+  var bx=-fDir*28*surfX,by=-fDir*28*surfY;
+  var hx=bx+normX*42,hy=by+normY*42;
+  ctx.strokeStyle='rgba(232,200,64,0.55)';ctx.lineWidth=2.5;ctx.lineCap='round';ctx.lineJoin='round';
+  ctx.beginPath();ctx.arc(hx-normX*8,hy-normY*8,7,0,Math.PI*2);ctx.stroke();
+  ctx.beginPath();ctx.moveTo(hx-normX*8,hy-normY*8);ctx.lineTo(bx,by);ctx.stroke();
+  var footOff=8;
+  ctx.beginPath();ctx.moveTo(bx,by);ctx.lineTo(bx+fDir*surfX*footOff+normX*3,by+fDir*surfY*footOff+normY*3);ctx.stroke();
+  ctx.beginPath();ctx.moveTo(bx,by);ctx.lineTo(bx-fDir*surfX*footOff+normX*3,by-fDir*surfY*footOff+normY*3);ctx.stroke();
+  var armBaseX=hx-normX*4,armBaseY=hy-normY*4;
+  var armEndX=cx+fDir*surfX*10,armEndY=cy+fDir*surfY*10;
+  ctx.beginPath();ctx.moveTo(armBaseX,armBaseY);ctx.lineTo(armEndX,armEndY);ctx.stroke();
+  ctx.beginPath();ctx.moveTo(armBaseX-normX*2+surfX*3,armBaseY-normY*2+surfY*3);ctx.lineTo(armEndX,armEndY);ctx.stroke();
+  ctx.restore();
+}
+
+function drawFrame(){
+  var W=canvas.width,H=canvas.height;
+  if(W<10||H<10)return;
+  var gY=groundY(),alpha=G.incline*Math.PI/180,sc=scenes[G.sceneIdx];
+  var bg=ctx.createLinearGradient(0,0,0,H);
+  bg.addColorStop(0,'#1a1a2e');bg.addColorStop(1,'#0f0f1e');
+  ctx.fillStyle=bg;ctx.fillRect(0,0,W,H);
+  ctx.strokeStyle='rgba(196,155,60,0.04)';ctx.lineWidth=1;
+  for(var gx2=0;gx2<W;gx2+=50){ctx.beginPath();ctx.moveTo(gx2,0);ctx.lineTo(gx2,H);ctx.stroke()}
+  for(var gy2=0;gy2<H;gy2+=50){ctx.beginPath();ctx.moveTo(0,gy2);ctx.lineTo(W,gy2);ctx.stroke()}
+  drawGear(W*0.87,H*0.22,28,8,'rgba(196,155,60,0.07)');
+  drawGear(W*0.92,H*0.28,18,6,'rgba(196,155,60,0.05)');
+  drawGear(W*0.12,H*0.18,22,7,'rgba(196,155,60,0.06)');
+
+  if(G.incline>0){
+    var baseX=W*0.1,rampH=gY-H*0.12;
+    var topX=baseX+rampH/Math.tan(alpha);topX=Math.min(topX,W*0.92);
+    var topY=gY-rampH;
+    ctx.fillStyle='rgba(74,74,90,0.35)';ctx.beginPath();ctx.moveTo(baseX,gY);ctx.lineTo(topX,topY);ctx.lineTo(topX,gY);ctx.closePath();ctx.fill();
+    ctx.strokeStyle='rgba(196,155,60,0.5)';ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(baseX,gY);ctx.lineTo(topX,topY);ctx.stroke();
+    ctx.strokeStyle='rgba(196,155,60,0.2)';ctx.lineWidth=1;
+    var hStep=30;for(var hd=0;hd<rampH;hd+=hStep){var hhx=baseX+hd/Math.tan(alpha),hhy=gY-hd;ctx.beginPath();ctx.moveTo(hhx,hhy);ctx.lineTo(hhx-8,hhy+8);ctx.stroke()}
+    ctx.strokeStyle='rgba(196,155,60,0.2)';ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(0,gY);ctx.lineTo(W,gY);ctx.stroke();
+  }else{
+    var gFill=ctx.createLinearGradient(0,gY,0,H);gFill.addColorStop(0,'rgba(74,74,90,0.25)');gFill.addColorStop(1,'rgba(74,74,90,0.08)');
+    ctx.fillStyle=gFill;ctx.fillRect(0,gY,W,H-gY);
+    ctx.strokeStyle='rgba(196,155,60,0.5)';ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(0,gY);ctx.lineTo(W,gY);ctx.stroke();
+    ctx.strokeStyle='rgba(196,155,60,0.12)';ctx.lineWidth=1;for(var sx=0;sx<W;sx+=25){ctx.beginPath();ctx.moveTo(sx,gY);ctx.lineTo(sx-5,gY+7);ctx.stroke()}
+  }
+
+  var oP=getObjScreenPos();
+  var bcx=oP.x-OBJ_H/2*Math.sin(alpha),bcy=oP.y-OBJ_H/2*Math.cos(alpha);
+
+  ctx.save();ctx.translate(bcx,bcy);if(G.incline>0)ctx.rotate(-alpha);
+  ctx.fillStyle='rgba(0,0,0,0.2)';roundRect(ctx,-OBJ_W/2+4,-OBJ_H/2+4,OBJ_W,OBJ_H,4);ctx.fill();
+  var bGrad=ctx.createLinearGradient(-OBJ_W/2,-OBJ_H/2,-OBJ_W/2,OBJ_H/2);
+  bGrad.addColorStop(0,'#9B8365');bGrad.addColorStop(1,'#5C4A32');ctx.fillStyle=bGrad;
+  roundRect(ctx,-OBJ_W/2,-OBJ_H/2,OBJ_W,OBJ_H,4);ctx.fill();
+  ctx.strokeStyle='rgba(196,155,60,0.6)';ctx.lineWidth=2;roundRect(ctx,-OBJ_W/2,-OBJ_H/2,OBJ_W,OBJ_H,4);ctx.stroke();
+  ctx.strokeStyle='rgba(196,155,60,0.25)';ctx.lineWidth=1;
+  ctx.beginPath();ctx.moveTo(-OBJ_W/2,-OBJ_H/2);ctx.lineTo(OBJ_W/2,OBJ_H/2);ctx.stroke();
+  ctx.beginPath();ctx.moveTo(OBJ_W/2,-OBJ_H/2);ctx.lineTo(-OBJ_W/2,OBJ_H/2);ctx.stroke();
+  ctx.strokeStyle='rgba(196,155,60,0.4)';ctx.lineWidth=2;
+  ctx.beginPath();ctx.moveTo(-OBJ_W/2,-OBJ_H/2+11);ctx.lineTo(OBJ_W/2,-OBJ_H/2+11);ctx.stroke();
+  ctx.beginPath();ctx.moveTo(-OBJ_W/2,OBJ_H/2-11);ctx.lineTo

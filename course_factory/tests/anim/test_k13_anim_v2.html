@@ -1,0 +1,763 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=Inter:wght@400;500&family=Noto+Sans+SC:wght@400;700&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box;}
+html,body{width:100%;height:100vh;overflow:hidden;}
+body{background:var(--bg,#0c0e12);color:var(--text,#f6f6fc);font-family:'Inter','Noto Sans SC',sans-serif;}
+/* -- Outer: sidebar + main -- */
+.wrapper{display:flex;flex-direction:row;height:100vh;overflow:hidden;}
+.sidebar{width:200px;min-width:200px;max-width:200px;display:flex;flex-direction:column;gap:6px;padding:10px;background:rgba(0,0,0,0.5);border-right:1px solid rgba(80,255,176,0.15);overflow-y:auto;}
+.lang-btn{align-self:flex-start;flex-shrink:0;font-family:'Space Grotesk',sans-serif;font-size:10px;font-weight:700;padding:3px 8px;cursor:pointer;border:1px solid rgba(255,181,156,0.25);background:transparent;color:#ffb59c;letter-spacing:1px;}
+.lang-btn:hover{border-color:#ffb59c;background:rgba(255,181,156,0.1);}
+.sidebar h1{font-family:'Space Grotesk',sans-serif;font-size:13px;font-weight:700;color:var(--primary,#50ffb0);margin-top:4px;line-height:1.3;}
+.sidebar .sub{font-size:10px;color:var(--muted,#aaabb0);letter-spacing:0.06em;text-transform:uppercase;}
+.sidebar .frame-ind{font-family:'Space Grotesk',sans-serif;font-size:10px;color:var(--muted,#aaabb0);letter-spacing:0.1em;margin-top:4px;}
+.sidebar .guide-label{font-family:'Space Grotesk',sans-serif;font-size:9px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:var(--primary,#50ffb0);margin-top:8px;}
+.sidebar .guide-content{font-family:'Noto Sans SC',sans-serif;font-size:11px;color:rgba(255,255,255,0.85);line-height:1.5;}
+.sidebar .guide-content ul{padding-left:16px;margin:0;}
+.sidebar .guide-content li{margin-bottom:1px;}
+/* -- Main area: canvas + controls + hud -- */
+.anim-main{flex:1;display:flex;flex-direction:column;min-width:0;}
+.canvas-wrap{flex:1;min-height:0;position:relative;}
+canvas{width:100%;height:100%;display:block;}
+/* -- Controls + HUD -- */
+.controls{display:flex;justify-content:center;align-items:center;gap:12px;padding:6px 16px;}
+.ctrl-btn{font-family:'Space Grotesk',sans-serif;font-size:11px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;padding:5px 16px;border:none;cursor:pointer;color:var(--bg,#0c0e12);background:linear-gradient(135deg,var(--primary,#50ffb0),var(--primary-dim,#17df93));transition:transform 0.1s,box-shadow 0.2s;box-shadow:0 0 10px var(--glow-strong,rgba(80,255,176,0.3));}
+.ctrl-btn:hover{transform:scale(1.04);}
+.ctrl-btn:active{transform:scale(0.96);}
+.ctrl-btn.secondary{background:var(--glass,rgba(23,26,31,0.92));color:var(--muted,#aaabb0);box-shadow:none;backdrop-filter:blur(12px);}
+.ctrl-btn.secondary:hover{color:var(--primary,#50ffb0);}
+.hud{height:40px;display:flex;align-items:center;justify-content:space-around;background:rgba(0,0,0,0.55);backdrop-filter:blur(12px);padding:0 16px;}
+.hud-item{text-align:center;}
+.hud-label{font-family:'Space Grotesk',sans-serif;font-size:8px;letter-spacing:0.15em;text-transform:uppercase;color:var(--muted,#aaabb0);}
+.hud-val{font-family:'Space Grotesk',sans-serif;font-size:13px;font-weight:700;color:var(--primary,#50ffb0);}
+</style>
+</head>
+<body>
+<div class="wrapper">
+<!-- Sidebar: lang-btn, title, guide (completely separate from canvas) -->
+<div class="sidebar">
+<button class="lang-btn" id="langBtn">CN</button>
+<h1 id="title"></h1>
+<div class="sub" id="subtitle"></div>
+<div class="frame-ind" id="frameIndicator"></div>
+<div class="guide-label" id="guideTitle"></div>
+<div class="guide-content" id="guideContent"></div>
+</div>
+<!-- Main: canvas fills all space, nothing overlaps -->
+<div class="anim-main">
+<div class="canvas-wrap"><canvas id="c"></canvas></div>
+<div class="controls">
+<button class="ctrl-btn secondary" id="btnPrev"></button>
+<button class="ctrl-btn" id="btnPlay"></button>
+<button class="ctrl-btn secondary" id="btnNext"></button>
+</div>
+<div class="hud">
+<div class="hud-item"><div class="hud-label" id="hudL1"></div><div class="hud-val" id="hudV1"></div></div>
+<div class="hud-item"><div class="hud-label" id="hudL2"></div><div class="hud-val" id="hudV2"></div></div>
+<div class="hud-item"><div class="hud-label" id="hudL3"></div><div class="hud-val" id="hudV3"></div></div>
+<div class="hud-item"><div class="hud-label" id="hudL4"></div><div class="hud-val" id="hudV4"></div></div>
+</div>
+</div>
+</div>
+
+<!-- Runtime (shared skeleton) -->
+<script src="../../../course_factory/runtime/animation_runtime.js"></script>
+
+<!-- Content script -->
+<script>
+// ============================================================
+// Knode 13 v2: Feather & Coin -- Does Air Drag You Down?
+// Frame 0: Title -- feather and coin falling through sky
+// Frame 1: Comparative fall -- coin fast, feather slow, force arrows
+// Frame 2: Paper experiment -- flat paper vs crumpled ball
+// Frame 3: Area vs speed summary -- relationship diagram
+// ============================================================
+
+var CONFIG = {
+  style: 'helix_lab',
+  totalFrames: 4,
+
+  i18n: {
+    title:       {en:'FEATHER & COIN',                cn:'\u7fbd\u6bdb\u548c\u786c\u5e01'},
+    subtitle:    {en:'DOES AIR DRAG YOU DOWN?',        cn:'\u7a7a\u6c14\u4f1a\u62d6\u4f4f\u4f60\u5417'},
+    f0question:  {en:'Why does a feather fall slower than a coin?', cn:'\u4e3a\u4ec0\u4e48\u7fbd\u6bdb\u4e0b\u843d\u6bd4\u786c\u5e01\u6162\uff1f'},
+    f0sub:       {en:'They both fall down, yet so different...', cn:'\u660e\u660e\u90fd\u662f\u5f80\u4e0b\u6389\u554a......'},
+    f1title:     {en:'COMPARATIVE FALL',               cn:'\u5bf9\u6bd4\u4e0b\u843d'},
+    f1coin:      {en:'COIN',                           cn:'\u786c\u5e01'},
+    f1feather:   {en:'FEATHER',                        cn:'\u7fbd\u6bdb'},
+    f1gravity:   {en:'Gravity',                        cn:'\u91cd\u529b'},
+    f1drag:      {en:'Air drag',                       cn:'\u7a7a\u6c14\u963b\u529b'},
+    f1smallDrag: {en:'Small drag',                     cn:'\u963b\u529b\u5c0f'},
+    f1bigDrag:   {en:'Large drag',                     cn:'\u963b\u529b\u5927'},
+    f1smallArea: {en:'Small area',                     cn:'\u9762\u79ef\u5c0f'},
+    f1bigArea:   {en:'Large area',                     cn:'\u9762\u79ef\u5927'},
+    f1fast:      {en:'Falls fast!',                    cn:'\u843d\u5f97\u5feb\uff01'},
+    f1slow:      {en:'Falls slow...',                  cn:'\u843d\u5f97\u6162......'},
+    f2title:     {en:'PAPER EXPERIMENT',               cn:'\u7eb8\u7684\u5b9e\u9a8c'},
+    f2flat:      {en:'Flat paper',                     cn:'\u6446\u5f00\u7684\u7eb8'},
+    f2ball:      {en:'Crumpled ball',                  cn:'\u63c9\u6210\u7403\u7684\u7eb8'},
+    f2same:      {en:'Same paper, same weight!',       cn:'\u540c\u4e00\u5f20\u7eb8\uff0c\u540c\u6837\u91cd\uff01'},
+    f2bigA:      {en:'Large area -> slow',             cn:'\u5927\u9762\u79ef -> \u6162'},
+    f2smallA:    {en:'Small area -> fast',             cn:'\u5c0f\u9762\u79ef -> \u5feb'},
+    f3title:     {en:'THE RULE',                       cn:'\u89c4\u5f8b\u603b\u7ed3'},
+    f3rule:      {en:'Bigger area = More drag = Slower fall', cn:'\u9762\u79ef\u8d8a\u5927 = \u963b\u529b\u8d8a\u5927 = \u4e0b\u843d\u8d8a\u6162'},
+    f3small:     {en:'Small',                          cn:'\u5c0f'},
+    f3medium:    {en:'Medium',                         cn:'\u4e2d'},
+    f3large:     {en:'Large',                          cn:'\u5927'},
+    f3fast:      {en:'Fast',                           cn:'\u5feb'},
+    f3med:       {en:'Medium',                         cn:'\u4e2d'},
+    f3slow:      {en:'Slow',                           cn:'\u6162'},
+    f3areaLabel: {en:'AREA',                           cn:'\u9762\u79ef'},
+    f3speedLabel:{en:'FALL SPEED',                     cn:'\u4e0b\u843d\u901f\u5ea6'},
+    f3dragLabel: {en:'AIR DRAG',                       cn:'\u7a7a\u6c14\u963b\u529b'},
+    guideTitle:  {en:'OBSERVATION GUIDE',              cn:'\u89c2\u5bdf\u6307\u5357'},
+    g1:          {en:'Watch the force arrows: gravity pulls down, air pushes up', cn:'\u89c2\u5bdf\u529b\u7684\u7bad\u5934\uff1a\u91cd\u529b\u5411\u4e0b\uff0c\u7a7a\u6c14\u963b\u529b\u5411\u4e0a'},
+    g2:          {en:'Same paper, different shapes -- which falls faster?', cn:'\u540c\u4e00\u5f20\u7eb8\uff0c\u4e0d\u540c\u5f62\u72b6 -- \u54ea\u4e2a\u843d\u5f97\u5feb\uff1f'},
+    g3:          {en:'Look at the pattern: area controls how much air can push back', cn:'\u89c2\u5bdf\u89c4\u5f8b\uff1a\u9762\u79ef\u51b3\u5b9a\u4e86\u7a7a\u6c14\u80fd\u63a8\u591a\u5927\u7684\u529b'},
+    hudTopic:    {en:'TOPIC',    cn:'\u4e3b\u9898'},
+    hudArea:     {en:'AREA',     cn:'\u9762\u79ef'},
+    hudDrag:     {en:'DRAG',     cn:'\u963b\u529b'},
+    hudSpeed:    {en:'SPEED',    cn:'\u901f\u5ea6'},
+    hvTitle:     {en:'Title',           cn:'\u6807\u9898'},
+    hvCompare:   {en:'Coin vs Feather', cn:'\u786c\u5e01 vs \u7fbd\u6bdb'},
+    hvPaper:     {en:'Paper test',      cn:'\u7eb8\u7684\u5b9e\u9a8c'},
+    hvRule:      {en:'Summary',         cn:'\u89c4\u5f8b\u603b\u7ed3'},
+    hvSmall:     {en:'Small',    cn:'\u5c0f'},
+    hvBig:       {en:'Big',      cn:'\u5927'},
+    hvLow:       {en:'Low',      cn:'\u5c0f'},
+    hvHigh:      {en:'High',     cn:'\u5927'},
+    hvFast:      {en:'Fast',     cn:'\u5feb'},
+    hvSlow:      {en:'Slow',     cn:'\u6162'},
+    hvVaries:    {en:'Varies',   cn:'\u4e0d\u540c'},
+  },
+
+  hudLabels: ['hudTopic', 'hudArea', 'hudDrag', 'hudSpeed'],
+  hudValues: [
+    ['hvTitle',   '--',      '--',     '--'],
+    ['hvCompare', 'hvVaries','hvVaries','hvVaries'],
+    ['hvPaper',   'hvVaries','hvVaries','hvVaries'],
+    ['hvRule',    '--',      '--',     '--'],
+  ],
+
+  guideTitle: 'guideTitle',
+  guideItems: ['g1', 'g2', 'g3'],
+};
+
+// ============================================================
+// Animation state -- continuous animation loop for particles
+// ============================================================
+var _animTime = 0;
+var _animFrame = -1;
+var _rafId = null;
+
+// Falling objects state
+var _coinY = 0, _featherY = 0;
+var _flatPaperY = 0, _ballPaperY = 0;
+var _simStarted = false;
+
+// Continuous redraw loop (started after boot via onReady)
+function _startAnimLoop() {
+  (function animLoop() {
+    _animTime += 0.016;
+    if (typeof AnimRuntime !== 'undefined' && AnimRuntime.currentFrame !== undefined) {
+      var cf = AnimRuntime.currentFrame;
+      if (cf !== _animFrame) {
+        _animFrame = cf;
+        _animTime = 0;
+        _coinY = 0; _featherY = 0;
+        _flatPaperY = 0; _ballPaperY = 0;
+        _simStarted = false;
+      }
+      if (cf >= 0 && cf <= 3) {
+        AnimRuntime.drawFrame(cf);
+      }
+    }
+    _rafId = requestAnimationFrame(animLoop);
+  })();
+}
+
+// ============================================================
+// FRAME ELEMENTS
+// ============================================================
+function getFrameElements(f, W, H) {
+  var t = AnimRuntime.t;
+  var P = AnimRuntime.PAL;
+  var cx = W / 2, cy = H / 2;
+
+  if (f === 0) {
+    return [
+      {id:'bg0', type:'sky_bg', frame:0},
+      {id:'titleMain', type:'label', text:t('title'), x:cx, y:cy - 90, color:P.primary, size:22, align:'center', glow:P.glowStrong},
+      {id:'subtitleMain', type:'label', text:t('subtitle'), x:cx, y:cy - 62, color:P.muted, size:13, align:'center'},
+      {id:'questionLine', type:'label', text:t('f0question'), x:cx, y:cy + 10, color:'#ffffff', size:15, align:'center'},
+      {id:'subLine', type:'label', text:t('f0sub'), x:cx, y:cy + 38, color:P.secondary, size:12, align:'center'},
+      {id:'titleScene', type:'title_falling_scene'},
+    ];
+  }
+
+  if (f === 1) {
+    return [
+      {id:'bg1', type:'sky_bg', frame:1},
+      {id:'f1head', type:'label', text:t('f1title'), x:cx, y:22, color:P.primary, size:16, align:'center', glow:P.glowStrong},
+      {id:'compareScene', type:'compare_fall_scene'},
+    ];
+  }
+
+  if (f === 2) {
+    return [
+      {id:'bg2', type:'sky_bg', frame:2},
+      {id:'f2head', type:'label', text:t('f2title'), x:cx, y:22, color:P.primary, size:16, align:'center', glow:P.glowStrong},
+      {id:'paperScene', type:'paper_experiment_scene'},
+      {id:'f2same', type:'label', text:t('f2same'), x:cx, y:H - 18, color:P.secondary, size:11, align:'center'},
+    ];
+  }
+
+  if (f === 3) {
+    return [
+      {id:'bg3', type:'sky_bg', frame:3},
+      {id:'f3head', type:'label', text:t('f3title'), x:cx, y:22, color:P.primary, size:16, align:'center', glow:P.glowStrong},
+      {id:'ruleScene', type:'rule_summary_scene'},
+    ];
+  }
+
+  return [];
+}
+
+// ============================================================
+// HELPER: draw arrow (from x1,y1 to x2,y2)
+// ============================================================
+function _drawArrow(ctx, x1, y1, x2, y2, color, lineW, headSize) {
+  var dx = x2 - x1, dy = y2 - y1;
+  var len = Math.sqrt(dx * dx + dy * dy);
+  if (len < 1) return;
+  var ux = dx / len, uy = dy / len;
+  var px = -uy, py = ux;
+  ctx.strokeStyle = color;
+  ctx.lineWidth = lineW || 2;
+  ctx.beginPath();
+  ctx.moveTo(x1, y1);
+  ctx.lineTo(x2, y2);
+  ctx.stroke();
+  var hs = headSize || 6;
+  ctx.fillStyle = color;
+  ctx.beginPath();
+  ctx.moveTo(x2, y2);
+  ctx.lineTo(x2 - ux * hs + px * hs * 0.5, y2 - uy * hs + py * hs * 0.5);
+  ctx.lineTo(x2 - ux * hs - px * hs * 0.5, y2 - uy * hs - py * hs * 0.5);
+  ctx.closePath();
+  ctx.fill();
+}
+
+// ============================================================
+// HELPER: draw coin
+// ============================================================
+function _drawCoin(ctx, cx, cy, r, P) {
+  // Outer ring
+  var coinGrad = ctx.createRadialGradient(cx - 2, cy - 2, r * 0.1, cx, cy, r);
+  coinGrad.addColorStop(0, '#ffd700');
+  coinGrad.addColorStop(0.6, '#daa520');
+  coinGrad.addColorStop(1, '#b8860b');
+  ctx.fillStyle = coinGrad;
+  ctx.beginPath();
+  ctx.arc(cx, cy, r, 0, Math.PI * 2);
+  ctx.fill();
+  // Edge highlight
+  ctx.strokeStyle = 'rgba(255,255,200,0.5)';
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.arc(cx, cy, r, 0, Math.PI * 2);
+  ctx.stroke();
+  // Inner ring
+  ctx.strokeStyle = 'rgba(255,255,200,0.3)';
+  ctx.lineWidth = 0.8;
+  ctx.beginPath();
+  ctx.arc(cx, cy, r * 0.7, 0, Math.PI * 2);
+  ctx.stroke();
+}
+
+// ============================================================
+// HELPER: draw feather
+// ============================================================
+function _drawFeather(ctx, cx, cy, scale, angle, P) {
+  ctx.save();
+  ctx.translate(cx, cy);
+  ctx.rotate(angle);
+  ctx.scale(scale, scale);
+  // Shaft
+  ctx.strokeStyle = 'rgba(255,255,255,0.7)';
+  ctx.lineWidth = 1.2;
+  ctx.beginPath();
+  ctx.moveTo(-30, 0);
+  ctx.lineTo(30, 0);
+  ctx.stroke();
+  // Barbs (left side -- upper)
+  var barbColor = 'rgba(200,220,255,0.5)';
+  ctx.fillStyle = barbColor;
+  ctx.beginPath();
+  ctx.moveTo(-25, 0);
+  ctx.quadraticCurveTo(-10, -15, 5, -12);
+  ctx.quadraticCurveTo(15, -10, 25, -5);
+  ctx.lineTo(28, 0);
+  ctx.closePath();
+  ctx.fill();
+  // Barbs (right side -- lower)
+  ctx.fillStyle = 'rgba(180,200,240,0.4)';
+  ctx.beginPath();
+  ctx.moveTo(-25, 0);
+  ctx.quadraticCurveTo(-10, 12, 5, 10);
+  ctx.quadraticCurveTo(15, 8, 25, 4);
+  ctx.lineTo(28, 0);
+  ctx.closePath();
+  ctx.fill();
+  // Slight glow
+  ctx.shadowColor = 'rgba(200,220,255,0.3)';
+  ctx.shadowBlur = 6;
+  ctx.strokeStyle = 'rgba(200,220,255,0.3)';
+  ctx.lineWidth = 0.5;
+  ctx.beginPath();
+  ctx.moveTo(-25, 0);
+  ctx.quadraticCurveTo(-10, -15, 5, -12);
+  ctx.quadraticCurveTo(15, -10, 28, 0);
+  ctx.quadraticCurveTo(15, 8, 5, 10);
+  ctx.quadraticCurveTo(-10, 12, -25, 0);
+  ctx.closePath();
+  ctx.stroke();
+  ctx.shadowBlur = 0;
+  ctx.restore();
+}
+
+// ============================================================
+// HELPER: draw flat paper (rectangle, slight wave)
+// ============================================================
+function _drawFlatPaper(ctx, cx, cy, w, h, angle, P) {
+  ctx.save();
+  ctx.translate(cx, cy);
+  ctx.rotate(angle);
+  // Paper body with slight wave
+  ctx.fillStyle = 'rgba(255,255,240,0.7)';
+  ctx.strokeStyle = 'rgba(255,255,255,0.5)';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(-w/2, -h/2);
+  ctx.quadraticCurveTo(0, -h/2 - 3, w/2, -h/2);
+  ctx.lineTo(w/2, h/2);
+  ctx.quadraticCurveTo(0, h/2 + 3, -w/2, h/2);
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+  // Lines on paper
+  ctx.strokeStyle = 'rgba(180,180,200,0.3)';
+  ctx.lineWidth = 0.5;
+  for (var i = -h/2 + 5; i < h/2; i += 5) {
+    ctx.beginPath();
+    ctx.moveTo(-w/2 + 4, i);
+    ctx.lineTo(w/2 - 4, i);
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
+// ============================================================
+// HELPER: draw crumpled paper ball
+// ============================================================
+function _drawPaperBall(ctx, cx, cy, r, P) {
+  var ballGrad = ctx.createRadialGradient(cx - 2, cy - 2, r * 0.1, cx, cy, r);
+  ballGrad.addColorStop(0, 'rgba(255,255,240,0.8)');
+  ballGrad.addColorStop(0.7, 'rgba(220,220,210,0.6)');
+  ballGrad.addColorStop(1, 'rgba(180,180,170,0.4)');
+  ctx.fillStyle = ballGrad;
+  // Slightly irregular circle
+  ctx.beginPath();
+  for (var a = 0; a < Math.PI * 2; a += 0.3) {
+    var rr = r + Math.sin(a * 5) * r * 0.12 + Math.cos(a * 3) * r * 0.08;
+    var px = cx + Math.cos(a) * rr;
+    var py = cy + Math.sin(a) * rr;
+    if (a === 0) ctx.moveTo(px, py);
+    else ctx.lineTo(px, py);
+  }
+  ctx.closePath();
+  ctx.fill();
+  // Crinkle lines
+  ctx.strokeStyle = 'rgba(150,150,140,0.4)';
+  ctx.lineWidth = 0.6;
+  for (var ci = 0; ci < 5; ci++) {
+    var ca = ci * 1.3 + 0.5;
+    ctx.beginPath();
+    ctx.moveTo(cx + Math.cos(ca) * r * 0.3, cy + Math.sin(ca) * r * 0.3);
+    ctx.lineTo(cx + Math.cos(ca + 0.8) * r * 0.8, cy + Math.sin(ca + 0.6) * r * 0.7);
+    ctx.stroke();
+  }
+}
+
+// ============================================================
+// HELPER: draw air particles floating upward (drag visualization)
+// ============================================================
+function _drawAirParticles(ctx, cx, cy, width, height, count, tm, color) {
+  ctx.fillStyle = color || 'rgba(100,200,255,0.35)';
+  for (var i = 0; i < count; i++) {
+    var phase = i * 2.5 + tm * 1.2;
+    var px = cx - width/2 + (i / count) * width + Math.sin(phase * 0.7) * 8;
+    var py = cy + height/2 - ((phase * 30) % height);
+    var pr = 1.2 + Math.sin(i * 1.7) * 0.5;
+    ctx.beginPath();
+    ctx.arc(px, py, pr, 0, Math.PI * 2);
+    ctx.fill();
+  }
+}
+
+// ============================================================
+// CUSTOM DRAW ELEMENT
+// ============================================================
+function customDrawElement(ctx, el, W, H) {
+  var t = AnimRuntime.t;
+  var P = AnimRuntime.PAL;
+  var cx = W / 2, cy = H / 2;
+  var tm = _animTime;
+
+  // ----- Sky gradient background per frame -----
+  if (el.type === 'sky_bg') {
+    var grad = ctx.createLinearGradient(0, 0, 0, H);
+    if (el.frame === 0) {
+      grad.addColorStop(0, '#060a14');
+      grad.addColorStop(0.4, '#0c1220');
+      grad.addColorStop(0.8, '#121a30');
+      grad.addColorStop(1, '#1a2240');
+    } else if (el.frame === 1) {
+      grad.addColorStop(0, '#080c18');
+      grad.addColorStop(0.5, '#101828');
+      grad.addColorStop(1, '#182038');
+    } else if (el.frame === 2) {
+      grad.addColorStop(0, '#060a12');
+      grad.addColorStop(0.5, '#0e1422');
+      grad.addColorStop(1, '#161e30');
+    } else {
+      grad.addColorStop(0, '#0a0e18');
+      grad.addColorStop(0.5, '#121828');
+      grad.addColorStop(1, '#1a2238');
+    }
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, W, H);
+    // Stars
+    ctx.fillStyle = 'rgba(255,255,255,0.15)';
+    for (var si = 0; si < 35; si++) {
+      var sx = (si * 137.5 + 50) % W;
+      var sy = (si * 97.3 + 20) % (H * 0.5);
+      var sr = 0.5 + (si % 3) * 0.3;
+      ctx.beginPath(); ctx.arc(sx, sy, sr, 0, Math.PI * 2); ctx.fill();
+    }
+    // Faint grid
+    ctx.strokeStyle = 'rgba(80,255,176,0.03)';
+    ctx.lineWidth = 0.5;
+    for (var gx = 0; gx < W; gx += 50) { ctx.beginPath(); ctx.moveTo(gx,0); ctx.lineTo(gx,H); ctx.stroke(); }
+    for (var gy = 0; gy < H; gy += 50) { ctx.beginPath(); ctx.moveTo(0,gy); ctx.lineTo(W,gy); ctx.stroke(); }
+    return true;
+  }
+
+  // ----- Frame 0: Title scene -- feather and coin falling -----
+  if (el.type === 'title_falling_scene') {
+    // Coin falling fast (left)
+    var coinX = cx - 100;
+    var coinBaseY = cy + 70;
+    var coinOff = Math.sin(tm * 2.5) * 15 + tm * 8;
+    var coinDrawY = coinBaseY + (coinOff % 60) - 30;
+    _drawCoin(ctx, coinX, coinDrawY, 14, P);
+
+    // Feather floating slowly (right)
+    var featherX = cx + 100;
+    var featherBaseY = cy + 60;
+    var featherOff = Math.sin(tm * 0.8) * 20;
+    var featherAngle = Math.sin(tm * 1.2) * 0.3;
+    _drawFeather(ctx, featherX, featherBaseY + featherOff, 1.0, featherAngle, P);
+
+    // Faint trailing particles
+    ctx.fillStyle = 'rgba(200,220,255,0.15)';
+    for (var ti = 0; ti < 6; ti++) {
+      var tpx = featherX + Math.sin(tm + ti * 1.3) * 15;
+      var tpy = featherBaseY + featherOff - 10 - ti * 8 + Math.cos(tm * 0.5 + ti) * 3;
+      ctx.beginPath(); ctx.arc(tpx, tpy, 1.0, 0, Math.PI * 2); ctx.fill();
+    }
+    return true;
+  }
+
+  // ----- Frame 1: Compare fall scene -----
+  if (el.type === 'compare_fall_scene') {
+    var leftX = cx * 0.45;
+    var rightX = cx * 1.55;
+    var topLine = 55;
+    var bottomLine = H - 45;
+    var trackH = bottomLine - topLine;
+
+    // Animated fall positions
+    var fallDur = 3.0; // seconds for full fall cycle
+    var tCycle = tm % (fallDur + 1.0); // +1s pause at bottom
+    var coinProg = Math.min(1.0, tCycle / 1.0); // coin takes 1s
+    var featherProg = Math.min(1.0, tCycle / fallDur); // feather takes 3s
+    coinProg = coinProg * coinProg; // accelerating
+    featherProg = 1 - Math.pow(1 - featherProg, 1.5); // eased
+
+    var coinFallY = topLine + trackH * coinProg;
+    var featherFallY = topLine + trackH * featherProg;
+
+    // Track lines (dashed)
+    ctx.strokeStyle = 'rgba(255,255,255,0.08)';
+    ctx.lineWidth = 1;
+    ctx.setLineDash([4, 6]);
+    ctx.beginPath(); ctx.moveTo(leftX, topLine); ctx.lineTo(leftX, bottomLine); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(rightX, topLine); ctx.lineTo(rightX, bottomLine); ctx.stroke();
+    ctx.setLineDash([]);
+
+    // Ground line
+    ctx.strokeStyle = P.primary;
+    ctx.lineWidth = 1.5;
+    ctx.globalAlpha = 0.4;
+    ctx.beginPath(); ctx.moveTo(leftX - 50, bottomLine); ctx.lineTo(leftX + 50, bottomLine); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(rightX - 50, bottomLine); ctx.lineTo(rightX + 50, bottomLine); ctx.stroke();
+    ctx.globalAlpha = 1.0;
+
+    // Draw coin
+    _drawCoin(ctx, leftX, coinFallY, 16, P);
+
+    // Draw feather (with gentle wobble)
+    var fAngle = Math.sin(tm * 2.0) * 0.25;
+    _drawFeather(ctx, rightX, featherFallY, 1.2, fAngle, P);
+
+    // Force arrows on coin -- gravity (down, big) + drag (up, small)
+    var arrowPad = 24;
+    // Gravity arrows
+    _drawArrow(ctx, leftX, coinFallY + arrowPad, leftX, coinFallY + arrowPad + 40, P.error, 2.5, 7);
+    _drawArrow(ctx, rightX, featherFallY + arrowPad, rightX, featherFallY + arrowPad + 30, P.error, 2.5, 7);
+
+    // Drag arrows (upward) -- coin small, feather big
+    _drawArrow(ctx, leftX, coinFallY - arrowPad, leftX, coinFallY - arrowPad - 12, 'rgba(100,200,255,0.8)', 1.5, 5);
+    _drawArrow(ctx, rightX, featherFallY - arrowPad, rightX, featherFallY - arrowPad - 45, 'rgba(100,200,255,0.9)', 3, 8);
+
+    // Air particles around feather (lots -- big drag area)
+    _drawAirParticles(ctx, rightX, featherFallY - 30, 60, 50, 12, tm, 'rgba(100,200,255,0.3)');
+    // Few particles around coin
+    _drawAirParticles(ctx, leftX, coinFallY - 15, 20, 20, 4, tm, 'rgba(100,200,255,0.15)');
+
+    // Labels
+    ctx.font = "bold 12px 'Space Grotesk','Noto Sans SC',sans-serif";
+    ctx.textAlign = 'center';
+    // Coin label
+    ctx.fillStyle = '#ffd700';
+    ctx.fillText(t('f1coin'), leftX, topLine - 8);
+    // Feather label
+    ctx.fillStyle = 'rgba(200,220,255,0.9)';
+    ctx.fillText(t('f1feather'), rightX, topLine - 8);
+
+    // Gravity label
+    ctx.font = "10px 'Noto Sans SC','Inter',sans-serif";
+    ctx.fillStyle = P.error;
+    ctx.textAlign = 'left';
+    ctx.fillText(t('f1gravity'), leftX + 10, coinFallY + arrowPad + 25);
+
+    // Drag labels
+    ctx.fillStyle = 'rgba(100,200,255,0.9)';
+    ctx.textAlign = 'right';
+    ctx.fillText(t('f1smallDrag'), leftX - 10, coinFallY - arrowPad - 4);
+    ctx.textAlign = 'left';
+    ctx.fillText(t('f1bigDrag'), rightX + 14, featherFallY - arrowPad - 20);
+
+    // Area annotations
+    ctx.font = "9px 'Noto Sans SC','Inter',sans-serif";
+    ctx.fillStyle = P.muted;
+    ctx.textAlign = 'center';
+    ctx.fillText(t('f1smallArea'), leftX, bottomLine + 14);
+    ctx.fillText(t('f1bigArea'), rightX, bottomLine + 14);
+
+    // Speed annotation at bottom
+    ctx.font = "bold 11px 'Space Grotesk','Noto Sans SC',sans-serif";
+    ctx.fillStyle = P.primary;
+    ctx.fillText(t('f1fast'), leftX, bottomLine + 28);
+    ctx.fillStyle = P.secondary;
+    ctx.fillText(t('f1slow'), rightX, bottomLine + 28);
+
+    return true;
+  }
+
+  // ----- Frame 2: Paper experiment scene -----
+  if (el.type === 'paper_experiment_scene') {
+    var pLeftX = cx * 0.45;
+    var pRightX = cx * 1.55;
+    var pTop = 55;
+    var pBottom = H - 55;
+    var pTrackH = pBottom - pTop;
+
+    // Animated fall
+    var pDur = 3.5;
+    var pCycle = tm % (pDur + 1.0);
+    var flatProg = Math.min(1.0, pCycle / pDur);
+    var ballProg = Math.min(1.0, pCycle / 1.2);
+    flatProg = 1 - Math.pow(1 - flatProg, 1.3);
+    ballProg = ballProg * ballProg;
+
+    var flatY = pTop + pTrackH * flatProg;
+    var ballY = pTop + pTrackH * ballProg;
+
+    // Track lines
+    ctx.strokeStyle = 'rgba(255,255,255,0.08)';
+    ctx.lineWidth = 1;
+    ctx.setLineDash([4, 6]);
+    ctx.beginPath(); ctx.moveTo(pLeftX, pTop); ctx.lineTo(pLeftX, pBottom); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(pRightX, pTop); ctx.lineTo(pRightX, pBottom); ctx.stroke();
+    ctx.setLineDash([]);
+
+    // Ground
+    ctx.strokeStyle = P.primary;
+    ctx.lineWidth = 1.5;
+    ctx.globalAlpha = 0.4;
+    ctx.beginPath(); ctx.moveTo(pLeftX - 50, pBottom); ctx.lineTo(pLeftX + 50, pBottom); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(pRightX - 50, pBottom); ctx.lineTo(pRightX + 50, pBottom); ctx.stroke();
+    ctx.globalAlpha = 1.0;
+
+    // Draw flat paper (wobbling)
+    var flatAngle = Math.sin(tm * 1.8) * 0.15;
+    _drawFlatPaper(ctx, pLeftX, flatY, 50, 30, flatAngle, P);
+
+    // Draw crumpled ball
+    _drawPaperBall(ctx, pRightX, ballY, 12, P);
+
+    // Air particles (lots for flat, few for ball)
+    _drawAirParticles(ctx, pLeftX, flatY - 20, 55, 40, 14, tm, 'rgba(100,200,255,0.3)');
+    _drawAirParticles(ctx, pRightX, ballY - 10, 18, 18, 4, tm, 'rgba(100,200,255,0.12)');
+
+    // Drag arrows
+    _drawArrow(ctx, pLeftX, flatY - 22, pLeftX, flatY - 22 - 38, 'rgba(100,200,255,0.9)', 2.5, 7);
+    _drawArrow(ctx, pRightX, ballY - 16, pRightX, ballY - 16 - 14, 'rgba(100,200,255,0.6)', 1.5, 5);
+
+    // Labels
+    ctx.font = "bold 12px 'Space Grotesk','Noto Sans SC',sans-serif";
+    ctx.textAlign = 'center';
+    ctx.fillStyle = 'rgba(255,255,240,0.9)';
+    ctx.fillText(t('f2flat'), pLeftX, pTop - 8);
+    ctx.fillText(t('f2ball'), pRightX, pTop - 8);
+
+    // Area -> speed annotations
+    ctx.font = "10px 'Noto Sans SC','Inter',sans-serif";
+    ctx.fillStyle = P.secondary;
+    ctx.fillText(t('f2bigA'), pLeftX, pBottom + 16);
+    ctx.fillStyle = P.primary;
+    ctx.fillText(t('f2smallA'), pRightX, pBottom + 16);
+
+    // "=" sign between them to show same weight
+    ctx.font = "bold 16px 'Space Grotesk',sans-serif";
+    ctx.fillStyle = 'rgba(255,255,255,0.4)';
+    ctx.textAlign = 'center';
+    ctx.fillText('=', cx, pTop - 8);
+    ctx.font = "9px 'Noto Sans SC',sans-serif";
+    ctx.fillStyle = P.muted;
+    ctx.fillText(t('f2same'), cx, pTop + 6);
+
+    return true;
+  }
+
+  // ----- Frame 3: Rule summary scene -----
+  if (el.type === 'rule_summary_scene') {
+    // Rule text at top
+    ctx.font = "bold 13px 'Noto Sans SC','Inter',sans-serif";
+    ctx.fillStyle = P.primary;
+    ctx.textAlign = 'center';
+    ctx.fillText(t('f3rule'), cx, 52);
+
+    // Draw 3 objects: small (coin), medium (ball), large (flat paper/parachute)
+    var objY = cy - 20;
+    var objSpacing = W * 0.28;
+    var objStartX = cx - objSpacing;
+
+    var objects = [
+      {label: t('f3small'), speedLabel: t('f3fast'), dragLabel: t('f3small'), r:10, type:'small'},
+      {label: t('f3medium'), speedLabel: t('f3med'), dragLabel: t('f3medium'), r:18, type:'medium'},
+      {label: t('f3large'), speedLabel: t('f3slow'), dragLabel: t('f3large'), r:28, type:'large'},
+    ];
+
+    for (var oi = 0; oi < objects.length; oi++) {
+      var obj = objects[oi];
+      var ox = objStartX + oi * objSpacing;
+
+      // Object silhouette (increasing size)
+      var objAlpha = 0.6 + oi * 0.1;
+      var objColor = oi === 0 ? '#ffd700' : (oi === 1 ? 'rgba(220,220,210,0.8)' : 'rgba(200,220,255,0.7)');
+
+      if (oi === 0) {
+        // Small -- coin-like circle
+        _drawCoin(ctx, ox, objY, obj.r, P);
+      } else if (oi === 1) {
+        // Medium -- crumpled ball
+        _drawPaperBall(ctx, ox, objY, obj.r, P);
+      } else {
+        // Large -- flat paper shape
+        _drawFlatPaper(ctx, ox, objY, obj.r * 2.2, obj.r * 1.2, Math.sin(tm * 0.5) * 0.05, P);
+      }
+
+      // Area label above
+      ctx.font = "bold 10px 'Space Grotesk','Noto Sans SC',sans-serif";
+      ctx.textAlign = 'center';
+      ctx.fillStyle = P.muted;
+      ctx.fillText(t('f3areaLabel') + ': ' + obj.label, ox, objY - obj.r - 18);
+
+      // Area indicator (bracket-like size marker)
+      var bracketW = obj.r * 1.8;
+      ctx.strokeStyle = 'rgba(255,255,255,0.2)';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(ox - bracketW, objY - obj.r - 8);
+      ctx.lineTo(ox + bracketW, objY - obj.r - 8);
+      ctx.stroke();
+
+      // Drag arrow upward (proportional to area)
+      var dragLen = 15 + oi * 20;
+      _drawArrow(ctx, ox, objY + obj.r + 10, ox, objY + obj.r + 10 + dragLen, 'rgba(100,200,255,0.7)', 1.5 + oi * 0.5, 5 + oi);
+      // Drag label
+      ctx.font = "9px 'Noto Sans SC',sans-serif";
+      ctx.fillStyle = 'rgba(100,200,255,0.8)';
+      ctx.fillText(t('f3dragLabel') + ': ' + obj.dragLabel, ox, objY + obj.r + 14 + dragLen + 10);
+
+      // Speed arrow downward (inversely proportional)
+      var speedLen = 45 - oi * 15;
+      var speedStartY = objY + obj.r + 14 + dragLen + 22;
+      _drawArrow(ctx, ox, speedStartY, ox, speedStartY + speedLen, P.primary, 2 - oi * 0.3, 6 - oi);
+      // Speed label
+      ctx.font = "bold 10px 'Space Grotesk','Noto Sans SC',sans-serif";
+      ctx.fillStyle = P.primary;
+      ctx.fillText(obj.speedLabel, ox, speedStartY + speedLen + 14);
+    }
+
+    // Axis labels
+    ctx.font = "bold 9px 'Space Grotesk','Noto Sans SC',sans-serif";
+    ctx.fillStyle = P.muted;
+    ctx.textAlign = 'left';
+    ctx.fillText(t('f3areaLabel') + ' -->', objStartX - 30, objY - 55);
+    ctx.textAlign = 'right';
+    ctx.fillText(t('f3speedLabel') + ' -->', objStartX + objSpacing * 2 + 50, H - 25);
+
+    // Connecting trend line (dotted) across objects
+    ctx.strokeStyle = 'rgba(80,255,176,0.15)';
+    ctx.lineWidth = 1;
+    ctx.setLineDash([3, 5]);
+    ctx.beginPath();
+    ctx.moveTo(objStartX, objY);
+    ctx.lineTo(objStartX + objSpacing, objY);
+    ctx.lineTo(objStartX + objSpacing * 2, objY);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    return true;
+  }
+
+  return false;
+}
+
+function onReady() {
+  _startAnimLoop();
+}
+
+AnimRuntime.boot();
+</script>
+</body>
+</html>

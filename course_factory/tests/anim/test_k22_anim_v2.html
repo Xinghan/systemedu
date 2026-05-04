@@ -1,0 +1,1240 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=Inter:wght@400;500&family=Noto+Sans+SC:wght@400;700&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box;}
+html,body{width:100%;height:100vh;overflow:hidden;}
+body{background:var(--bg,#0c0e12);color:var(--text,#f6f6fc);font-family:'Inter','Noto Sans SC',sans-serif;}
+/* ── Outer: sidebar + main ── */
+.wrapper{display:flex;flex-direction:row;height:100vh;overflow:hidden;}
+.sidebar{width:200px;min-width:200px;max-width:200px;display:flex;flex-direction:column;gap:6px;padding:10px;background:rgba(0,0,0,0.5);border-right:1px solid rgba(80,255,176,0.15);overflow-y:auto;}
+.lang-btn{align-self:flex-start;flex-shrink:0;font-family:'Space Grotesk',sans-serif;font-size:10px;font-weight:700;padding:3px 8px;cursor:pointer;border:1px solid rgba(255,181,156,0.25);background:transparent;color:#ffb59c;letter-spacing:1px;}
+.lang-btn:hover{border-color:#ffb59c;background:rgba(255,181,156,0.1);}
+.sidebar h1{font-family:'Space Grotesk',sans-serif;font-size:13px;font-weight:700;color:var(--primary,#50ffb0);margin-top:4px;line-height:1.3;}
+.sidebar .sub{font-size:10px;color:var(--muted,#aaabb0);letter-spacing:0.06em;text-transform:uppercase;}
+.sidebar .frame-ind{font-family:'Space Grotesk',sans-serif;font-size:10px;color:var(--muted,#aaabb0);letter-spacing:0.1em;margin-top:4px;}
+.sidebar .guide-label{font-family:'Space Grotesk',sans-serif;font-size:9px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:var(--primary,#50ffb0);margin-top:8px;}
+.sidebar .guide-content{font-family:'Noto Sans SC',sans-serif;font-size:11px;color:rgba(255,255,255,0.85);line-height:1.5;}
+.sidebar .guide-content ul{padding-left:16px;margin:0;}
+.sidebar .guide-content li{margin-bottom:1px;}
+/* ── Main area: canvas + controls + hud ── */
+.anim-main{flex:1;display:flex;flex-direction:column;min-width:0;}
+.canvas-wrap{flex:1;min-height:0;position:relative;}
+canvas{width:100%;height:100%;display:block;}
+/* ── Controls + HUD ── */
+.controls{display:flex;justify-content:center;align-items:center;gap:12px;padding:6px 16px;}
+.ctrl-btn{font-family:'Space Grotesk',sans-serif;font-size:11px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;padding:5px 16px;border:none;cursor:pointer;color:var(--bg,#0c0e12);background:linear-gradient(135deg,var(--primary,#50ffb0),var(--primary-dim,#17df93));transition:transform 0.1s,box-shadow 0.2s;box-shadow:0 0 10px var(--glow-strong,rgba(80,255,176,0.3));}
+.ctrl-btn:hover{transform:scale(1.04);}
+.ctrl-btn:active{transform:scale(0.96);}
+.ctrl-btn.secondary{background:var(--glass,rgba(23,26,31,0.92));color:var(--muted,#aaabb0);box-shadow:none;backdrop-filter:blur(12px);}
+.ctrl-btn.secondary:hover{color:var(--primary,#50ffb0);}
+.hud{height:40px;display:flex;align-items:center;justify-content:space-around;background:rgba(0,0,0,0.55);backdrop-filter:blur(12px);padding:0 16px;}
+.hud-item{text-align:center;}
+.hud-label{font-family:'Space Grotesk',sans-serif;font-size:8px;letter-spacing:0.15em;text-transform:uppercase;color:var(--muted,#aaabb0);}
+.hud-val{font-family:'Space Grotesk',sans-serif;font-size:13px;font-weight:700;color:var(--primary,#50ffb0);}
+</style>
+</head>
+<body>
+<div class="wrapper">
+<!-- Sidebar: lang-btn, title, guide (completely separate from canvas) -->
+<div class="sidebar">
+<button class="lang-btn" id="langBtn">CN</button>
+<h1 id="title"></h1>
+<div class="sub" id="subtitle"></div>
+<div class="frame-ind" id="frameIndicator"></div>
+<div class="guide-label" id="guideTitle"></div>
+<div class="guide-content" id="guideContent"></div>
+</div>
+<!-- Main: canvas fills all space, nothing overlaps -->
+<div class="anim-main">
+<div class="canvas-wrap"><canvas id="c"></canvas></div>
+<div class="controls">
+<button class="ctrl-btn secondary" id="btnPrev"></button>
+<button class="ctrl-btn" id="btnPlay"></button>
+<button class="ctrl-btn secondary" id="btnNext"></button>
+</div>
+<div class="hud">
+<div class="hud-item"><div class="hud-label" id="hudL1"></div><div class="hud-val" id="hudV1"></div></div>
+<div class="hud-item"><div class="hud-label" id="hudL2"></div><div class="hud-val" id="hudV2"></div></div>
+<div class="hud-item"><div class="hud-label" id="hudL3"></div><div class="hud-val" id="hudV3"></div></div>
+<div class="hud-item"><div class="hud-label" id="hudL4"></div><div class="hud-val" id="hudV4"></div></div>
+</div>
+</div>
+</div>
+
+<!-- Runtime (shared skeleton) -->
+<script src="animation_runtime.js"></script>
+
+<!-- Content -->
+<script>
+// ============================================================
+// K22: Free Fall -- The Secret of Gravitational Acceleration
+// Concept: All objects fall at g ~ 9.8 m/s^2 in vacuum
+// 5 frames:
+//   F0 - Title: elephant + mouse at same height, core question, g label
+//   F1 - Galileo thought experiment: bowling ball (7kg) + tennis ball (0.06kg) synced drop
+//   F2 - Velocity accumulation: ball drop with growing velocity arrows + bar chart
+//   F3 - Moon vs Earth: side-by-side drop comparison (g=9.8 vs g=1.6)
+//   F4 - Rocket context: T vs mg force diagram, animated launch
+// ============================================================
+
+var CONFIG = {
+  style: 'ares_mission',
+  totalFrames: 5,
+
+  i18n: {
+    title:      {en:'FREE FALL', cn:'\u81ea\u7531\u843d\u4f53'},
+    subtitle:   {en:'The Secret of Gravitational Acceleration', cn:'\u91cd\u529b\u52a0\u901f\u5ea6\u7684\u79d8\u5bc6'},
+    // F0
+    f0q:        {en:'If you drop an elephant and a mouse from\nthe same height (no air), do they land together?',
+                 cn:'\u5982\u679c\u628a\u5927\u8c61\u548c\u8001\u9f20\u4ece\u540c\u6837\u9ad8\u5ea6\u4e22\u4e0b\u6765\n\uff08\u5ffd\u7565\u7a7a\u6c14\uff09\uff0c\u5b83\u4eec\u4f1a\u540c\u65f6\u843d\u5730\u5417\uff1f'},
+    f0g:        {en:'g = 9.8 m/s\u00b2', cn:'g = 9.8 m/s\u00b2'},
+    f0elephant: {en:'Elephant', cn:'\u5927\u8c61'},
+    f0mouse:    {en:'Mouse', cn:'\u8001\u9f20'},
+    // F1
+    f1title:    {en:"GALILEO'S EXPERIMENT", cn:'\u4f3d\u5229\u7565\u7684\u601d\u60f3\u5b9e\u9a8c'},
+    f1bowling:  {en:'Bowling Ball 7 kg', cn:'\u4fdd\u9f84\u7403 7 kg'},
+    f1tennis:   {en:'Tennis Ball 0.06 kg', cn:'\u7f51\u7403 0.06 kg'},
+    f1result:   {en:'Both fall together! Mass does not matter in vacuum.', cn:'\u5b83\u4eec\u540c\u65f6\u4e0b\u843d\uff01\u771f\u7a7a\u4e2d\u8d28\u91cf\u65e0\u5173\u3002'},
+    f1speed:    {en:'Speed increasing', cn:'\u901f\u5ea6\u4e0d\u65ad\u589e\u52a0'},
+    f1tower:    {en:'TOWER', cn:'\u5854'},
+    // F2
+    f2title:    {en:'VELOCITY ACCUMULATION', cn:'\u901f\u5ea6\u7d2f\u79ef'},
+    f2eq:       {en:'v = g \u00d7 t', cn:'v = g \u00d7 t'},
+    f2note:     {en:'+9.8 m/s every second', cn:'\u6bcf\u79d2 +9.8 m/s'},
+    f2vel:      {en:'Velocity', cn:'\u901f\u5ea6'},
+    f2time:     {en:'Time (s)', cn:'\u65f6\u95f4 (s)'},
+    f2dist:     {en:'Distance', cn:'\u8ddd\u79bb'},
+    // F3
+    f3title:    {en:'EARTH vs MOON', cn:'\u5730\u7403 vs \u6708\u7403'},
+    f3earth:    {en:'EARTH', cn:'\u5730\u7403'},
+    f3moon:     {en:'MOON', cn:'\u6708\u7403'},
+    f3earthG:   {en:'g = 9.8 m/s\u00b2', cn:'g = 9.8 m/s\u00b2'},
+    f3moonG:    {en:'g = 1.6 m/s\u00b2', cn:'g = 1.6 m/s\u00b2'},
+    f3result:   {en:'Moon ball takes ~2.5x longer to reach ground', cn:'\u6708\u7403\u4e0a\u7684\u7403\u9700\u8981\u7ea6 2.5 \u500d\u65f6\u95f4\u843d\u5730'},
+    f3fast:     {en:'FAST', cn:'\u5feb'},
+    f3slow:     {en:'GRACEFUL', cn:'\u4f18\u96c5'},
+    // F4
+    f4title:    {en:'WHY g MATTERS: ROCKET LAUNCH', cn:'\u4e3a\u4ec0\u4e48 g \u5f88\u91cd\u8981\uff1a\u706b\u7bad\u53d1\u5c04'},
+    f4thrust:   {en:'Thrust T', cn:'\u63a8\u529b T'},
+    f4gravity:  {en:'Weight mg', cn:'\u91cd\u529b mg'},
+    f4cond:     {en:'When T > mg:', cn:'\u5f53 T > mg:'},
+    f4accel:    {en:'a = (T \u2212 mg) / m', cn:'a = (T \u2212 mg) / m'},
+    f4liftoff:  {en:'LIFTOFF!', cn:'\u53d1\u5c04\uff01'},
+    f4pad:      {en:'LAUNCH PAD', cn:'\u53d1\u5c04\u53f0'},
+    // Guide
+    guideTitle: {en:'OBSERVATION GUIDE', cn:'\u89c2\u5bdf\u6307\u5357'},
+    g1:         {en:'In vacuum, all objects fall at the same rate', cn:'\u771f\u7a7a\u4e2d\uff0c\u6240\u6709\u7269\u4f53\u4ee5\u76f8\u540c\u901f\u7387\u4e0b\u843d'},
+    g2:         {en:'Velocity grows linearly: v = g \u00d7 t', cn:'\u901f\u5ea6\u7ebf\u6027\u589e\u957f\uff1av = g \u00d7 t'},
+    g3:         {en:'Moon g is only 1/6 of Earth g', cn:'\u6708\u7403 g \u53ea\u6709\u5730\u7403\u7684 1/6'},
+    g4:         {en:'Rocket thrust must exceed mg to lift off', cn:'\u706b\u7bad\u63a8\u529b\u5fc5\u987b\u8d85\u8fc7 mg \u624d\u80fd\u8d77\u98de'},
+    // HUD
+    hudScene:   {en:'SCENE', cn:'\u573a\u666f'},
+    hudGrav:    {en:'g (m/s\u00b2)', cn:'g (m/s\u00b2)'},
+    hudVel:     {en:'VELOCITY', cn:'\u901f\u5ea6'},
+    hudInfo:    {en:'INFO', cn:'\u4fe1\u606f'},
+    scF0:       {en:'TITLE', cn:'\u6807\u9898'},
+    scF1:       {en:'GALILEO', cn:'\u4f3d\u5229\u7565'},
+    scF2:       {en:'V-ACCUM', cn:'\u901f\u5ea6\u7d2f\u79ef'},
+    scF3:       {en:'EARTH/MOON', cn:'\u5730\u7403/\u6708\u7403'},
+    scF4:       {en:'ROCKET', cn:'\u706b\u7bad'},
+  },
+
+  hudLabels: ['hudScene', 'hudGrav', 'hudVel', 'hudInfo'],
+  hudValues: [
+    ['scF0', '9.8', '--', 'f0g'],
+    ['scF1', '9.8', '0\u219229.4', 'f1speed'],
+    ['scF2', '9.8', '0\u219239.2', 'f2eq'],
+    ['scF3', '9.8 / 1.6', '--', 'f3result'],
+    ['scF4', '9.8', '--', 'f4accel'],
+  ],
+
+  guideTitle: 'guideTitle',
+  guideItems: ['g1', 'g2', 'g3', 'g4'],
+};
+
+// ============================================================
+// Animation state
+// ============================================================
+var anim = {time: 0, frame: -1, done: false, particles: [], shakeX: 0, shakeY: 0};
+var animTimer = null;
+var soundMuted = true;
+
+function startAnim(frame) {
+  if (animTimer) { clearInterval(animTimer); animTimer = null; }
+  anim = {time: 0, frame: frame, done: false, particles: [], shakeX: 0, shakeY: 0};
+  animTimer = setInterval(function () {
+    if (anim.done && anim.time > 5) return;
+    anim.time += 0.03;
+    // Decay screen shake
+    anim.shakeX *= 0.85;
+    anim.shakeY *= 0.85;
+    // Update particles
+    for (var i = anim.particles.length - 1; i >= 0; i--) {
+      var p = anim.particles[i];
+      p.x += p.vx;
+      p.y += p.vy;
+      p.vy += 0.15;
+      p.life -= 0.03;
+      if (p.life <= 0) anim.particles.splice(i, 1);
+    }
+    AnimRuntime.drawFrame(AnimRuntime.currentFrame);
+  }, 30);
+}
+
+function spawnImpactParticles(x, y, count, color) {
+  for (var i = 0; i < count; i++) {
+    var angle = Math.random() * Math.PI * 2;
+    var speed = 1 + Math.random() * 3;
+    anim.particles.push({
+      x: x, y: y,
+      vx: Math.cos(angle) * speed,
+      vy: Math.sin(angle) * speed - 2,
+      life: 0.5 + Math.random() * 0.5,
+      color: color,
+      r: 1 + Math.random() * 2
+    });
+  }
+}
+
+function triggerShake(intensity) {
+  anim.shakeX = (Math.random() - 0.5) * intensity;
+  anim.shakeY = (Math.random() - 0.5) * intensity;
+}
+
+// Track frame changes
+var _prevFrame = -1;
+setInterval(function () {
+  var cf = AnimRuntime.currentFrame;
+  if (cf !== _prevFrame) {
+    _prevFrame = cf;
+    if (cf >= 1 && cf <= 4) startAnim(cf);
+    else { if (animTimer) clearInterval(animTimer); animTimer = null; }
+  }
+}, 80);
+
+// ============================================================
+// Parallax star field (seeded pseudo-random)
+// ============================================================
+var _stars = [];
+(function () {
+  var seed = 314159;
+  function rng() { seed = (seed * 1103515245 + 12345) & 0x7fffffff; return (seed % 10000) / 10000; }
+  for (var i = 0; i < 120; i++) {
+    _stars.push({
+      x: rng(), y: rng(),
+      r: 0.3 + rng() * 1.2,
+      brightness: 0.15 + rng() * 0.6,
+      twinkleSpeed: 0.5 + rng() * 2,
+      layer: rng() < 0.3 ? 0 : (rng() < 0.6 ? 1 : 2)
+    });
+  }
+})();
+
+function drawStarField(ctx, W, H, timeOffset) {
+  var t = (timeOffset || 0) * 0.5;
+  for (var i = 0; i < _stars.length; i++) {
+    var s = _stars[i];
+    var parallax = 1 + s.layer * 0.3;
+    var sx = ((s.x * W + t * parallax * 2) % W + W) % W;
+    var sy = s.y * H;
+    var twinkle = 0.5 + 0.5 * Math.sin(t * s.twinkleSpeed + i);
+    var alpha = s.brightness * twinkle;
+    ctx.fillStyle = 'rgba(255,255,255,' + alpha + ')';
+    ctx.beginPath();
+    ctx.arc(sx, sy, s.r, 0, Math.PI * 2);
+    ctx.fill();
+  }
+}
+
+// ============================================================
+// Custom backgrounds per frame
+// ============================================================
+function drawBg(ctx, W, H) {
+  var f = AnimRuntime.currentFrame;
+  // Apply screen shake
+  if (Math.abs(anim.shakeX) > 0.1 || Math.abs(anim.shakeY) > 0.1) {
+    ctx.translate(anim.shakeX, anim.shakeY);
+  }
+
+  if (f === 0) {
+    // Dark space with stars
+    var g0 = ctx.createLinearGradient(0, 0, 0, H);
+    g0.addColorStop(0, '#0a0a14'); g0.addColorStop(1, '#131318');
+    ctx.fillStyle = g0; ctx.fillRect(0, 0, W, H);
+    drawStarField(ctx, W, H, anim.time || 0);
+  } else if (f === 1) {
+    // Tower scene -- dusk sky
+    var g1 = ctx.createLinearGradient(0, 0, 0, H);
+    g1.addColorStop(0, '#0c0814'); g1.addColorStop(0.4, '#1a1228');
+    g1.addColorStop(1, '#2a1818');
+    ctx.fillStyle = g1; ctx.fillRect(0, 0, W, H);
+    drawStarField(ctx, W, H, anim.time || 0);
+  } else if (f === 2) {
+    // Deep space lab
+    var g2 = ctx.createLinearGradient(0, 0, 0, H);
+    g2.addColorStop(0, '#080a12'); g2.addColorStop(1, '#101418');
+    ctx.fillStyle = g2; ctx.fillRect(0, 0, W, H);
+    // Subtle grid
+    ctx.strokeStyle = 'rgba(255,181,156,0.03)'; ctx.lineWidth = 0.5;
+    for (var gx = 0; gx < W; gx += 40) { ctx.beginPath(); ctx.moveTo(gx, 0); ctx.lineTo(gx, H); ctx.stroke(); }
+    for (var gy = 0; gy < H; gy += 40) { ctx.beginPath(); ctx.moveTo(0, gy); ctx.lineTo(W, gy); ctx.stroke(); }
+  } else if (f === 3) {
+    // Split: left = Earth blue sky, right = Moon dark
+    var halfW = W / 2;
+    // Earth side
+    var ge = ctx.createLinearGradient(0, 0, 0, H);
+    ge.addColorStop(0, '#0a1a3a'); ge.addColorStop(0.7, '#1a3a6a'); ge.addColorStop(1, '#2a4a3a');
+    ctx.fillStyle = ge; ctx.fillRect(0, 0, halfW, H);
+    // Earth ground
+    ctx.fillStyle = '#2a4a3a'; ctx.fillRect(0, H * 0.82, halfW, H * 0.18);
+    // Moon side
+    var gm = ctx.createLinearGradient(halfW, 0, halfW, H);
+    gm.addColorStop(0, '#050508'); gm.addColorStop(0.7, '#0a0a12'); gm.addColorStop(1, '#3a3a40');
+    ctx.fillStyle = gm; ctx.fillRect(halfW, 0, halfW, H);
+    drawStarField(ctx, halfW, H * 0.75, anim.time || 0);
+    // Moon ground
+    ctx.fillStyle = '#4a4a50'; ctx.fillRect(halfW, H * 0.82, halfW, H * 0.18);
+    // Craters on moon
+    ctx.strokeStyle = 'rgba(100,100,110,0.5)'; ctx.lineWidth = 1;
+    var crX = [halfW + halfW * 0.2, halfW + halfW * 0.5, halfW + halfW * 0.8];
+    var crR = [10, 14, 8];
+    for (var ci = 0; ci < crX.length; ci++) {
+      ctx.beginPath(); ctx.arc(crX[ci], H * 0.88, crR[ci], 0, Math.PI * 2); ctx.stroke();
+      ctx.fillStyle = 'rgba(60,60,68,0.3)'; ctx.fill();
+    }
+    // Divider
+    ctx.strokeStyle = 'rgba(255,181,156,0.2)'; ctx.lineWidth = 1;
+    ctx.setLineDash([4, 4]);
+    ctx.beginPath(); ctx.moveTo(halfW, 0); ctx.lineTo(halfW, H); ctx.stroke();
+    ctx.setLineDash([]);
+  } else if (f === 4) {
+    // Launch pad scene -- night
+    var g4 = ctx.createLinearGradient(0, 0, 0, H);
+    g4.addColorStop(0, '#060610'); g4.addColorStop(0.6, '#0a0a18');
+    g4.addColorStop(1, '#1a1a20');
+    ctx.fillStyle = g4; ctx.fillRect(0, 0, W, H);
+    drawStarField(ctx, W, H, anim.time || 0);
+    // Ground
+    ctx.fillStyle = '#1a1a20'; ctx.fillRect(0, H * 0.85, W, H * 0.15);
+    ctx.strokeStyle = 'rgba(255,181,156,0.15)'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(0, H * 0.85); ctx.lineTo(W, H * 0.85); ctx.stroke();
+  } else {
+    // Fallback
+    var gd = ctx.createLinearGradient(0, 0, 0, H);
+    gd.addColorStop(0, '#131313'); gd.addColorStop(1, '#1c1b1b');
+    ctx.fillStyle = gd; ctx.fillRect(0, 0, W, H);
+  }
+}
+
+// ============================================================
+// Drawing helpers
+// ============================================================
+
+function drawElephant(ctx, x, y, s) {
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.scale(s, s);
+  ctx.fillStyle = '#888898';
+  // Body
+  ctx.beginPath(); ctx.ellipse(0, 0, 25, 18, 0, 0, Math.PI * 2); ctx.fill();
+  // Head
+  ctx.beginPath(); ctx.ellipse(28, -8, 12, 10, 0.2, 0, Math.PI * 2); ctx.fill();
+  // Trunk
+  ctx.strokeStyle = '#888898'; ctx.lineWidth = 4; ctx.lineCap = 'round';
+  ctx.beginPath(); ctx.moveTo(38, -2); ctx.quadraticCurveTo(48, 5, 44, 15); ctx.stroke();
+  // Legs
+  ctx.fillStyle = '#888898';
+  ctx.fillRect(-18, 14, 6, 14); ctx.fillRect(-8, 14, 6, 14);
+  ctx.fillRect(8, 14, 6, 14); ctx.fillRect(18, 14, 6, 14);
+  // Ear
+  ctx.beginPath(); ctx.ellipse(22, -12, 8, 10, -0.3, 0, Math.PI * 2);
+  ctx.fillStyle = '#777788'; ctx.fill();
+  // Tail
+  ctx.strokeStyle = '#888898'; ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.moveTo(-25, -2); ctx.quadraticCurveTo(-34, -8, -32, 2); ctx.stroke();
+  ctx.restore();
+}
+
+function drawMouse(ctx, x, y, s) {
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.scale(s, s);
+  ctx.fillStyle = '#aaaabc';
+  // Body
+  ctx.beginPath(); ctx.ellipse(0, 0, 8, 5, 0, 0, Math.PI * 2); ctx.fill();
+  // Head
+  ctx.beginPath(); ctx.ellipse(9, -1, 5, 4, 0, 0, Math.PI * 2); ctx.fill();
+  // Ears
+  ctx.beginPath(); ctx.arc(7, -5, 3, 0, Math.PI * 2); ctx.fill();
+  ctx.beginPath(); ctx.arc(11, -5, 3, 0, Math.PI * 2); ctx.fill();
+  // Tail
+  ctx.strokeStyle = '#aaaabc'; ctx.lineWidth = 1.5; ctx.lineCap = 'round';
+  ctx.beginPath(); ctx.moveTo(-8, 0); ctx.quadraticCurveTo(-16, -6, -18, 2); ctx.stroke();
+  ctx.restore();
+}
+
+function drawBowlingBall(ctx, x, y, r) {
+  var grad = ctx.createRadialGradient(x - r * 0.3, y - r * 0.3, r * 0.1, x, y, r);
+  grad.addColorStop(0, '#5a4a6a'); grad.addColorStop(0.7, '#2a1a3a'); grad.addColorStop(1, '#0a0515');
+  ctx.fillStyle = grad;
+  ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
+  ctx.strokeStyle = 'rgba(255,255,255,0.12)'; ctx.lineWidth = 1; ctx.stroke();
+  // Finger holes
+  ctx.fillStyle = 'rgba(30,20,40,0.9)';
+  var hr = r * 0.14;
+  ctx.beginPath(); ctx.arc(x - r * 0.22, y - r * 0.18, hr, 0, Math.PI * 2); ctx.fill();
+  ctx.beginPath(); ctx.arc(x + r * 0.22, y - r * 0.18, hr, 0, Math.PI * 2); ctx.fill();
+  ctx.beginPath(); ctx.arc(x, y + r * 0.15, hr, 0, Math.PI * 2); ctx.fill();
+}
+
+function drawTennisBall(ctx, x, y, r) {
+  var grad = ctx.createRadialGradient(x - r * 0.2, y - r * 0.2, r * 0.1, x, y, r);
+  grad.addColorStop(0, '#d4ff40'); grad.addColorStop(0.6, '#a0cc10'); grad.addColorStop(1, '#708800');
+  ctx.fillStyle = grad;
+  ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
+  // Seam curve
+  ctx.strokeStyle = 'rgba(255,255,255,0.35)'; ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.arc(x, y, r * 0.7, -0.8, 0.8);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.arc(x, y, r * 0.7, Math.PI - 0.8, Math.PI + 0.8);
+  ctx.stroke();
+}
+
+function drawBall(ctx, x, y, r, color) {
+  var grad = ctx.createRadialGradient(x - r * 0.25, y - r * 0.25, r * 0.1, x, y, r);
+  var c = color || '#ff7f50';
+  grad.addColorStop(0, lightenColor(c, 40));
+  grad.addColorStop(0.7, c);
+  grad.addColorStop(1, darkenColor(c, 40));
+  ctx.fillStyle = grad;
+  ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
+}
+
+function lightenColor(hex, amt) {
+  var r = parseInt(hex.slice(1,3),16), g = parseInt(hex.slice(3,5),16), b = parseInt(hex.slice(5,7),16);
+  r = Math.min(255, r + amt); g = Math.min(255, g + amt); b = Math.min(255, b + amt);
+  return '#' + ((1<<24)+(r<<16)+(g<<8)+b).toString(16).slice(1);
+}
+function darkenColor(hex, amt) {
+  var r = parseInt(hex.slice(1,3),16), g = parseInt(hex.slice(3,5),16), b = parseInt(hex.slice(5,7),16);
+  r = Math.max(0, r - amt); g = Math.max(0, g - amt); b = Math.max(0, b - amt);
+  return '#' + ((1<<24)+(r<<16)+(g<<8)+b).toString(16).slice(1);
+}
+
+function drawTower(ctx, x, baseY, towerH, towerW) {
+  // Stone tower silhouette
+  ctx.fillStyle = '#2a2228';
+  ctx.fillRect(x - towerW / 2, baseY - towerH, towerW, towerH);
+  // Crenellations
+  var crenW = towerW / 5;
+  for (var i = 0; i < 5; i += 2) {
+    ctx.fillRect(x - towerW / 2 + i * crenW, baseY - towerH - 8, crenW, 8);
+  }
+  // Window arches
+  ctx.fillStyle = '#1a1218';
+  for (var j = 0; j < 3; j++) {
+    var wy = baseY - towerH + 25 + j * 40;
+    if (wy > baseY - 15) break;
+    ctx.beginPath();
+    ctx.arc(x, wy, 5, Math.PI, 0);
+    ctx.fillRect(x - 5, wy, 10, 8);
+    ctx.fill();
+  }
+  // Slight gradient overlay
+  var tg = ctx.createLinearGradient(x - towerW/2, baseY - towerH, x + towerW/2, baseY);
+  tg.addColorStop(0, 'rgba(255,255,255,0.03)');
+  tg.addColorStop(1, 'rgba(0,0,0,0.1)');
+  ctx.fillStyle = tg;
+  ctx.fillRect(x - towerW / 2, baseY - towerH, towerW, towerH);
+}
+
+function drawRocket(ctx, x, y, scale) {
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.scale(scale, scale);
+  // Body
+  var grad = ctx.createLinearGradient(-12, -50, 12, 50);
+  grad.addColorStop(0, '#e8e8f0'); grad.addColorStop(0.5, '#c0c0d0');
+  grad.addColorStop(1, '#a0a0b0');
+  ctx.fillStyle = grad;
+  ctx.beginPath();
+  ctx.moveTo(0, -50);
+  ctx.quadraticCurveTo(14, -30, 14, 10);
+  ctx.lineTo(14, 40);
+  ctx.lineTo(-14, 40);
+  ctx.lineTo(-14, 10);
+  ctx.quadraticCurveTo(-14, -30, 0, -50);
+  ctx.fill();
+  // Window
+  ctx.fillStyle = '#3a6aaa';
+  ctx.beginPath(); ctx.arc(0, -15, 6, 0, Math.PI * 2); ctx.fill();
+  ctx.strokeStyle = '#8a8a9a'; ctx.lineWidth = 1; ctx.stroke();
+  // Fins
+  ctx.fillStyle = '#ff5533';
+  ctx.beginPath();
+  ctx.moveTo(-14, 30); ctx.lineTo(-24, 45); ctx.lineTo(-14, 40); ctx.fill();
+  ctx.beginPath();
+  ctx.moveTo(14, 30); ctx.lineTo(24, 45); ctx.lineTo(14, 40); ctx.fill();
+  // Nose stripe
+  ctx.fillStyle = '#ff5533';
+  ctx.fillRect(-14, -5, 28, 4);
+  ctx.restore();
+}
+
+function drawExhaustFlame(ctx, x, y, scale, intensity) {
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.scale(scale, scale);
+  var flicker = 0.8 + Math.random() * 0.4;
+  var h = 30 + intensity * 40 * flicker;
+  // Outer flame (orange)
+  var gOuter = ctx.createLinearGradient(0, 0, 0, h);
+  gOuter.addColorStop(0, 'rgba(255,100,20,0.9)');
+  gOuter.addColorStop(0.5, 'rgba(255,180,50,0.5)');
+  gOuter.addColorStop(1, 'rgba(255,200,100,0)');
+  ctx.fillStyle = gOuter;
+  ctx.beginPath();
+  ctx.moveTo(-10, 0);
+  ctx.quadraticCurveTo(-6 + Math.random() * 3, h * 0.5, 0, h);
+  ctx.quadraticCurveTo(6 - Math.random() * 3, h * 0.5, 10, 0);
+  ctx.fill();
+  // Inner flame (white-yellow)
+  var gInner = ctx.createLinearGradient(0, 0, 0, h * 0.6);
+  gInner.addColorStop(0, 'rgba(255,255,240,0.95)');
+  gInner.addColorStop(1, 'rgba(255,200,80,0)');
+  ctx.fillStyle = gInner;
+  ctx.beginPath();
+  ctx.moveTo(-5, 0);
+  ctx.quadraticCurveTo(-3, h * 0.3, 0, h * 0.6);
+  ctx.quadraticCurveTo(3, h * 0.3, 5, 0);
+  ctx.fill();
+  // Glow
+  ctx.shadowColor = 'rgba(255,140,40,0.4)';
+  ctx.shadowBlur = 20 * intensity;
+  ctx.fillStyle = 'rgba(255,160,60,0.15)';
+  ctx.beginPath(); ctx.arc(0, h * 0.2, 15, 0, Math.PI * 2); ctx.fill();
+  ctx.shadowBlur = 0;
+  ctx.restore();
+}
+
+function drawForceArrow(ctx, x1, y1, x2, y2, color, label, lineW, headSize) {
+  var lw = lineW || 2.5;
+  var hs = headSize || 10;
+  var angle = Math.atan2(y2 - y1, x2 - x1);
+  // Glow
+  ctx.shadowColor = color;
+  ctx.shadowBlur = 6;
+  ctx.strokeStyle = color; ctx.lineWidth = lw;
+  ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+  ctx.fillStyle = color; ctx.beginPath();
+  ctx.moveTo(x2, y2);
+  ctx.lineTo(x2 - hs * Math.cos(angle - 0.4), y2 - hs * Math.sin(angle - 0.4));
+  ctx.lineTo(x2 - hs * Math.cos(angle + 0.4), y2 - hs * Math.sin(angle + 0.4));
+  ctx.fill();
+  ctx.shadowBlur = 0;
+  // Label
+  if (label) {
+    ctx.font = "bold 10px 'Space Grotesk','Noto Sans SC',sans-serif";
+    ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+    ctx.fillStyle = color;
+    var mx = (x1 + x2) / 2;
+    var my = (y1 + y2) / 2;
+    ctx.fillText(label, mx + 8, my);
+  }
+}
+
+function drawParticles(ctx) {
+  for (var i = 0; i < anim.particles.length; i++) {
+    var p = anim.particles[i];
+    ctx.globalAlpha = p.life;
+    ctx.fillStyle = p.color;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+}
+
+// ============================================================
+// Easing for gravity physics: y = 0.5 * g * t^2
+// ============================================================
+function gravityEase(t) { return t * t; }
+
+// Idle hover effect
+function idleHover(baseY, amplitude, speed) {
+  return baseY + Math.sin(anim.time * speed) * amplitude;
+}
+
+// ============================================================
+// getFrameElements + customDrawElement
+// ============================================================
+
+function getFrameElements(f, W, H) {
+  return [{id:'scene_' + f, type:'custom_scene', frame:f}];
+}
+
+function customDrawElement(ctx, el, W, H) {
+  if (el.type !== 'custom_scene') return false;
+
+  var f = el.frame;
+  var t = AnimRuntime.t;
+  var P = AnimRuntime.PAL;
+  var cx = W / 2, cy = H / 2;
+
+  if (f === 0) drawF0(ctx, W, H, t, P, cx, cy);
+  else if (f === 1) drawF1(ctx, W, H, t, P, cx, cy);
+  else if (f === 2) drawF2(ctx, W, H, t, P, cx, cy);
+  else if (f === 3) drawF3(ctx, W, H, t, P, cx, cy);
+  else if (f === 4) drawF4(ctx, W, H, t, P, cx, cy);
+
+  // Draw particles on top
+  drawParticles(ctx);
+
+  return true;
+}
+
+// ============================================================
+// F0: Title -- elephant + mouse, question, g label
+// ============================================================
+function drawF0(ctx, W, H, t, P, cx, cy) {
+  // Title with glow
+  ctx.fillStyle = P.primary;
+  ctx.font = "bold 30px 'Space Grotesk','Noto Sans SC',sans-serif";
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.shadowColor = P.glowStrong; ctx.shadowBlur = 18;
+  ctx.fillText(t('title'), cx, cy - 110);
+  ctx.shadowBlur = 0;
+
+  // Subtitle
+  ctx.fillStyle = P.muted;
+  ctx.font = "13px 'Inter','Noto Sans SC',sans-serif";
+  ctx.fillText(t('subtitle'), cx, cy - 80);
+
+  // Height line (dashed)
+  var lineY = cy - 10;
+  ctx.strokeStyle = 'rgba(255,181,156,0.25)'; ctx.lineWidth = 1;
+  ctx.setLineDash([5, 5]);
+  ctx.beginPath(); ctx.moveTo(cx - 160, lineY + 35); ctx.lineTo(cx + 160, lineY + 35); ctx.stroke();
+  ctx.setLineDash([]);
+
+  // Elephant (left) with idle hover
+  var elephantY = idleHover(lineY, 3, 1.2);
+  drawElephant(ctx, cx - 80, elephantY, 1.2);
+  ctx.fillStyle = P.muted; ctx.font = "9px 'Noto Sans SC','Inter',sans-serif";
+  ctx.textAlign = 'center';
+  ctx.fillText(t('f0elephant'), cx - 80, lineY - 30);
+
+  // Mouse (right) with idle hover (slightly offset phase)
+  var mouseY = idleHover(lineY + 14, 2, 1.5);
+  drawMouse(ctx, cx + 80, mouseY, 1.8);
+  ctx.fillStyle = P.muted; ctx.font = "9px 'Noto Sans SC','Inter',sans-serif";
+  ctx.fillText(t('f0mouse'), cx + 80, lineY - 18);
+
+  // Big question mark between them
+  ctx.fillStyle = P.primary;
+  ctx.font = "bold 44px 'Space Grotesk',sans-serif";
+  ctx.textAlign = 'center';
+  ctx.shadowColor = P.glowStrong; ctx.shadowBlur = 22;
+  var qY = idleHover(lineY + 5, 4, 0.8);
+  ctx.fillText('?', cx, qY);
+  ctx.shadowBlur = 0;
+
+  // g = 9.8 m/s^2 label in a glass box
+  var gBoxW = 130, gBoxH = 24, gBoxX = cx - gBoxW / 2, gBoxY = lineY + 50;
+  ctx.fillStyle = 'rgba(255,181,156,0.08)';
+  ctx.fillRect(gBoxX, gBoxY, gBoxW, gBoxH);
+  ctx.strokeStyle = 'rgba(255,181,156,0.3)'; ctx.lineWidth = 1;
+  ctx.strokeRect(gBoxX, gBoxY, gBoxW, gBoxH);
+  ctx.fillStyle = P.primary;
+  ctx.font = "bold 12px 'Space Grotesk',sans-serif";
+  ctx.fillText(t('f0g'), cx, gBoxY + gBoxH / 2);
+
+  // Core question text
+  ctx.fillStyle = 'rgba(255,255,255,0.9)';
+  ctx.font = "11px 'Noto Sans SC','Inter',sans-serif";
+  ctx.textAlign = 'center';
+  var qLines = t('f0q').split('\n');
+  for (var i = 0; i < qLines.length; i++) {
+    ctx.fillText(qLines[i], cx, cy + 90 + i * 18);
+  }
+}
+
+// ============================================================
+// F1: Galileo's experiment -- bowling ball + tennis ball synced drop
+// ============================================================
+function drawF1(ctx, W, H, t, P, cx, cy) {
+  // Title
+  ctx.fillStyle = P.primary;
+  ctx.font = "bold 15px 'Space Grotesk','Noto Sans SC',sans-serif";
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillText(t('f1title'), cx, 20);
+
+  // Tower on the right side
+  var towerX = cx + 140;
+  var groundY = H - 45;
+  var towerH = groundY - 50;
+  drawTower(ctx, towerX, groundY, towerH, 35);
+
+  // Ground
+  ctx.strokeStyle = 'rgba(255,181,156,0.3)'; ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(cx - 160, groundY); ctx.lineTo(cx + 160, groundY); ctx.stroke();
+
+  // Tower label
+  ctx.fillStyle = P.muted; ctx.font = "8px 'Space Grotesk',sans-serif";
+  ctx.textAlign = 'center';
+  ctx.fillText(t('f1tower'), towerX, groundY + 12);
+
+  // Drop zone: objects fall from top of tower
+  var dropTop = 55;
+  var dropH = groundY - dropTop;
+  var ballX = cx - 20;
+  var tennisX = cx + 30;
+
+  // Animation progress
+  var fallDur = 3.0;
+  var progress = anim.frame === 1 ? Math.min(anim.time / fallDur, 1) : 0;
+  var eased = gravityEase(progress);
+
+  var bowlingY = dropTop + eased * dropH;
+  var tennisY = dropTop + eased * dropH; // Same! Synced!
+
+  // Impact detection
+  var landed = progress >= 0.98;
+  if (landed && !anim.done) {
+    anim.done = true;
+    spawnImpactParticles(ballX, groundY, 12, 'rgba(100,80,140,0.8)');
+    spawnImpactParticles(tennisX, groundY, 10, 'rgba(200,240,60,0.7)');
+    triggerShake(5);
+  }
+
+  // Position trails (dots showing past positions)
+  var trailSteps = 8;
+  var trailCount = Math.floor(progress * trailSteps);
+  for (var ti = 0; ti < trailCount; ti++) {
+    var tp = (ti + 1) / trailSteps;
+    var ty = dropTop + gravityEase(tp) * dropH;
+    var alpha = 0.08 + 0.2 * (ti / trailSteps);
+    ctx.fillStyle = 'rgba(90,70,120,' + alpha + ')';
+    ctx.beginPath(); ctx.arc(ballX, ty, 3, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = 'rgba(170,210,30,' + alpha + ')';
+    ctx.beginPath(); ctx.arc(tennisX, ty, 2, 0, Math.PI * 2); ctx.fill();
+  }
+
+  // Draw objects
+  drawBowlingBall(ctx, ballX, Math.min(bowlingY, groundY - 16), 16);
+  drawTennisBall(ctx, tennisX, Math.min(tennisY, groundY - 8), 8);
+
+  // Labels above start position
+  ctx.font = "9px 'Noto Sans SC','Inter',sans-serif";
+  ctx.textAlign = 'center';
+  ctx.fillStyle = '#8888aa';
+  ctx.fillText(t('f1bowling'), ballX, dropTop - 12);
+  ctx.fillStyle = '#b0cc40';
+  ctx.fillText(t('f1tennis'), tennisX, dropTop - 12);
+
+  // Sync indicator line between objects during fall
+  if (progress > 0.05 && progress < 0.97) {
+    ctx.strokeStyle = P.primary; ctx.lineWidth = 1;
+    ctx.setLineDash([2, 2]);
+    ctx.beginPath();
+    ctx.moveTo(ballX + 18, bowlingY);
+    ctx.lineTo(tennisX - 10, tennisY);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = P.primary;
+    ctx.font = "bold 9px 'Space Grotesk',sans-serif";
+    ctx.fillText('=', (ballX + tennisX) / 2, bowlingY - 5);
+  }
+
+  // Speed labels during fall
+  if (progress > 0.15 && progress < 0.97) {
+    var currentV = (progress * fallDur * 9.8).toFixed(1);
+    ctx.fillStyle = P.tertiary;
+    ctx.font = "bold 10px 'Space Grotesk',sans-serif";
+    ctx.textAlign = 'left';
+    ctx.fillText('v=' + currentV + ' m/s', tennisX + 18, tennisY);
+    ctx.fillText(t('f1speed'), tennisX + 18, tennisY + 14);
+  }
+
+  // Result text after landing
+  if (landed) {
+    ctx.fillStyle = P.primary;
+    ctx.font = "bold 13px 'Space Grotesk','Noto Sans SC',sans-serif";
+    ctx.textAlign = 'center';
+    ctx.shadowColor = P.glowStrong; ctx.shadowBlur = 12;
+    ctx.fillText(t('f1result'), cx, groundY + 25);
+    ctx.shadowBlur = 0;
+  }
+}
+
+// ============================================================
+// F2: Velocity accumulation -- ball drop + velocity arrows + bar chart
+// ============================================================
+function drawF2(ctx, W, H, t, P, cx, cy) {
+  // Title
+  ctx.fillStyle = P.primary;
+  ctx.font = "bold 15px 'Space Grotesk','Noto Sans SC',sans-serif";
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillText(t('f2title'), cx, 20);
+
+  // Layout: left half = falling ball with velocity arrows, right half = bar chart
+  var leftCx = cx * 0.55;
+  var rightCx = cx * 1.45;
+
+  // --- Left side: dropping ball ---
+  var dropTop = 50;
+  var dropBottom = H - 50;
+  var dropH = dropBottom - dropTop;
+
+  // Time markers at t = 0, 1, 2, 3, 4 seconds
+  var maxT = 4;
+  var velocities = [0, 9.8, 19.6, 29.4, 39.2];
+  var distances = [0, 4.9, 19.6, 44.1, 78.4]; // 0.5*g*t^2
+  var maxDist = distances[maxT];
+
+  // Animation progress (5 seconds to show all 4 time ticks)
+  var totalDur = 5.0;
+  var progress = anim.frame === 2 ? Math.min(anim.time / totalDur, 1) : 0;
+  var currentTimeSec = progress * maxT;
+  var currentV = 9.8 * currentTimeSec;
+  var currentDist = 0.5 * 9.8 * currentTimeSec * currentTimeSec;
+
+  // Ball position
+  var ballX = leftCx;
+  var ballNormY = Math.min(currentDist / maxDist, 1);
+  var ballY = dropTop + ballNormY * dropH;
+
+  // Drop reference line
+  ctx.strokeStyle = 'rgba(255,181,156,0.15)'; ctx.lineWidth = 1;
+  ctx.setLineDash([3, 3]);
+  ctx.beginPath(); ctx.moveTo(ballX, dropTop); ctx.lineTo(ballX, dropBottom); ctx.stroke();
+  ctx.setLineDash([]);
+
+  // Ground
+  ctx.strokeStyle = 'rgba(255,181,156,0.3)'; ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(ballX - 60, dropBottom); ctx.lineTo(ballX + 60, dropBottom); ctx.stroke();
+
+  // Velocity arrows at each passed second
+  var passedSeconds = Math.floor(currentTimeSec);
+  for (var sec = 0; sec <= Math.min(passedSeconds, maxT); sec++) {
+    var arrowDist = distances[sec];
+    var arrowY = dropTop + (arrowDist / maxDist) * dropH;
+    var arrowLen = velocities[sec] * 1.2; // Scale for visual
+    if (arrowLen > 2) {
+      // Arrow pointing down from the position
+      drawForceArrow(ctx, ballX + 20, arrowY, ballX + 20, arrowY + Math.min(arrowLen, 60),
+        'rgba(255,181,156,0.6)', null, 1.5, 6);
+    }
+    // Time label
+    ctx.fillStyle = P.muted; ctx.font = "9px 'Space Grotesk',sans-serif";
+    ctx.textAlign = 'left';
+    ctx.fillText('t=' + sec + 's', ballX + 28, arrowY + 3);
+    ctx.fillStyle = P.tertiary; ctx.font = "bold 9px 'Space Grotesk',sans-serif";
+    ctx.fillText('v=' + velocities[sec] + '', ballX + 28, arrowY + 15);
+  }
+
+  // Draw ball with glow
+  ctx.shadowColor = P.glowStrong; ctx.shadowBlur = 8;
+  drawBall(ctx, ballX, Math.min(ballY, dropBottom - 10), 10, '#ff7f50');
+  ctx.shadowBlur = 0;
+
+  // Impact
+  if (ballNormY >= 0.98 && !anim.done) {
+    anim.done = true;
+    spawnImpactParticles(ballX, dropBottom, 14, 'rgba(255,127,80,0.7)');
+    triggerShake(4);
+  }
+
+  // Real-time HUD on the left side
+  ctx.fillStyle = P.primary;
+  ctx.font = "bold 10px 'Space Grotesk',sans-serif";
+  ctx.textAlign = 'right';
+  ctx.fillText('v = ' + currentV.toFixed(1) + ' m/s', ballX - 18, ballY);
+  ctx.fillStyle = P.muted; ctx.font = "9px 'Inter',sans-serif";
+  ctx.fillText('d = ' + currentDist.toFixed(1) + ' m', ballX - 18, ballY + 14);
+
+  // --- Right side: Bar chart of velocity ---
+  var chartLeft = rightCx - 80;
+  var chartBottom = H - 55;
+  var chartTop = 55;
+  var chartH = chartBottom - chartTop;
+  var chartW = 160;
+  var barW = 22;
+  var barGap = 10;
+  var maxVel = 39.2;
+
+  // Axes
+  ctx.strokeStyle = P.muted; ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(chartLeft, chartTop); ctx.lineTo(chartLeft, chartBottom); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(chartLeft, chartBottom); ctx.lineTo(chartLeft + chartW, chartBottom); ctx.stroke();
+
+  // Axis labels
+  ctx.fillStyle = P.muted; ctx.font = "9px 'Noto Sans SC','Inter',sans-serif";
+  ctx.textAlign = 'center';
+  ctx.fillText(t('f2time'), chartLeft + chartW / 2, chartBottom + 18);
+  ctx.save();
+  ctx.translate(chartLeft - 14, chartTop + chartH / 2);
+  ctx.rotate(-Math.PI / 2);
+  ctx.fillText(t('f2vel') + ' (m/s)', 0, 0);
+  ctx.restore();
+
+  // Equation
+  ctx.fillStyle = P.primary;
+  ctx.font = "bold 12px 'Space Grotesk',sans-serif";
+  ctx.textAlign = 'center';
+  ctx.fillText(t('f2eq'), chartLeft + chartW / 2, chartTop - 12);
+  ctx.fillStyle = P.muted; ctx.font = "10px 'Noto Sans SC','Inter',sans-serif";
+  ctx.fillText(t('f2note'), chartLeft + chartW / 2, chartTop - 0);
+
+  // Bars
+  for (var bi = 0; bi <= maxT; bi++) {
+    var barX = chartLeft + 15 + bi * (barW + barGap);
+    var barH = (velocities[bi] / maxVel) * (chartH - 10);
+    var barAlpha = bi <= passedSeconds ? 1.0 : 0.15;
+    // Bar with gradient
+    if (barH > 1) {
+      var barGrad = ctx.createLinearGradient(barX, chartBottom - barH, barX, chartBottom);
+      barGrad.addColorStop(0, bi <= passedSeconds ? P.primary : 'rgba(255,181,156,0.2)');
+      barGrad.addColorStop(1, bi <= passedSeconds ? P.primaryDim : 'rgba(255,181,156,0.05)');
+      ctx.globalAlpha = barAlpha;
+      ctx.fillStyle = barGrad;
+      ctx.fillRect(barX, chartBottom - barH, barW, barH);
+      // Glow on active bars
+      if (bi <= passedSeconds && bi === passedSeconds) {
+        ctx.shadowColor = P.glowStrong; ctx.shadowBlur = 8;
+        ctx.fillRect(barX, chartBottom - barH, barW, barH);
+        ctx.shadowBlur = 0;
+      }
+      ctx.globalAlpha = 1;
+    }
+    // Time label below
+    ctx.fillStyle = P.muted; ctx.font = "9px 'Space Grotesk',sans-serif";
+    ctx.textAlign = 'center';
+    ctx.fillText(bi + 's', barX + barW / 2, chartBottom + 10);
+    // Velocity value on top
+    if (bi <= passedSeconds) {
+      ctx.fillStyle = P.primary; ctx.font = "bold 8px 'Space Grotesk',sans-serif";
+      ctx.fillText(velocities[bi].toFixed(1), barX + barW / 2, chartBottom - barH - 5);
+    }
+  }
+
+  // Linear trend line
+  if (passedSeconds >= 1) {
+    ctx.strokeStyle = P.tertiary; ctx.lineWidth = 1;
+    ctx.setLineDash([3, 3]);
+    ctx.beginPath();
+    var lx0 = chartLeft + 15 + barW / 2;
+    var ly0 = chartBottom;
+    var lx1 = chartLeft + 15 + maxT * (barW + barGap) + barW / 2;
+    var ly1 = chartBottom - (chartH - 10);
+    ctx.moveTo(lx0, ly0); ctx.lineTo(lx1, ly1);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = P.tertiary; ctx.font = "8px 'Inter',sans-serif";
+    ctx.textAlign = 'left';
+    ctx.fillText('linear', lx1 + 4, ly1 + 4);
+  }
+}
+
+// ============================================================
+// F3: Moon vs Earth -- side-by-side drop
+// ============================================================
+function drawF3(ctx, W, H, t, P, cx, cy) {
+  // Title
+  ctx.fillStyle = P.primary;
+  ctx.font = "bold 15px 'Space Grotesk','Noto Sans SC',sans-serif";
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillText(t('f3title'), cx, 18);
+
+  var halfW = W / 2;
+  var dropTop = 45;
+  var groundY = H * 0.82;
+  var dropH = groundY - dropTop;
+
+  // g values
+  var gEarth = 9.8;
+  var gMoon = 1.6;
+
+  // Both balls fall from same height. Time to hit ground:
+  // h = 0.5*g*t^2 => t = sqrt(2h/g)
+  // We normalize so Earth ball takes earthDur seconds visually
+  var earthDur = 2.5;
+  var moonDur = earthDur * Math.sqrt(gEarth / gMoon); // ~2.5 * 2.47 = ~6.2s
+
+  var progress = anim.frame === 3 ? anim.time : 0;
+
+  // Earth ball progress
+  var earthP = Math.min(progress / earthDur, 1);
+  var earthEased = gravityEase(earthP);
+  var earthBallY = dropTop + earthEased * dropH;
+  var earthLanded = earthP >= 0.99;
+
+  // Moon ball progress
+  var moonP = Math.min(progress / moonDur, 1);
+  var moonEased = gravityEase(moonP);
+  var moonBallY = dropTop + moonEased * dropH;
+  var moonLanded = moonP >= 0.99;
+
+  // Earth side
+  var earthCx = halfW * 0.5;
+  ctx.fillStyle = '#88ccaa';
+  ctx.font = "bold 12px 'Space Grotesk','Noto Sans SC',sans-serif";
+  ctx.textAlign = 'center';
+  ctx.fillText(t('f3earth'), earthCx, dropTop - 18);
+  ctx.fillStyle = P.muted; ctx.font = "9px 'Space Grotesk',sans-serif";
+  ctx.fillText(t('f3earthG'), earthCx, dropTop - 6);
+
+  // Drop line
+  ctx.strokeStyle = 'rgba(255,255,255,0.1)'; ctx.lineWidth = 1;
+  ctx.setLineDash([3, 3]);
+  ctx.beginPath(); ctx.moveTo(earthCx, dropTop + 15); ctx.lineTo(earthCx, groundY); ctx.stroke();
+  ctx.setLineDash([]);
+
+  // Earth ball
+  var earthBallDrawY = Math.min(earthBallY, groundY - 12);
+  drawBall(ctx, earthCx, earthBallDrawY, 12, '#4488cc');
+
+  // Speed label (offset to the right to avoid overlap with ball)
+  if (earthP > 0.05 && !earthLanded) {
+    var earthV = (earthP * earthDur * gEarth).toFixed(1);
+    ctx.fillStyle = '#88ccff'; ctx.font = "bold 9px 'Space Grotesk',sans-serif";
+    ctx.textAlign = 'left';
+    ctx.fillText('v=' + earthV, earthCx + 18, earthBallDrawY - 2);
+  }
+
+  // Earth "FAST" label
+  if (earthP > 0.3) {
+    ctx.fillStyle = P.primary;
+    ctx.font = "bold 10px 'Space Grotesk','Noto Sans SC',sans-serif";
+    ctx.textAlign = 'center';
+    ctx.fillText(t('f3fast'), earthCx, groundY + 14);
+  }
+
+  // Earth impact
+  if (earthLanded && !anim._earthImpact) {
+    anim._earthImpact = true;
+    spawnImpactParticles(earthCx, groundY, 10, 'rgba(68,136,204,0.7)');
+    triggerShake(4);
+  }
+
+  // Moon side
+  var moonCx = halfW + halfW * 0.5;
+  ctx.fillStyle = '#ccccdd';
+  ctx.font = "bold 12px 'Space Grotesk','Noto Sans SC',sans-serif";
+  ctx.textAlign = 'center';
+  ctx.fillText(t('f3moon'), moonCx, dropTop - 18);
+  ctx.fillStyle = P.muted; ctx.font = "9px 'Space Grotesk',sans-serif";
+  ctx.fillText(t('f3moonG'), moonCx, dropTop - 6);
+
+  // Drop line
+  ctx.strokeStyle = 'rgba(255,255,255,0.1)'; ctx.lineWidth = 1;
+  ctx.setLineDash([3, 3]);
+  ctx.beginPath(); ctx.moveTo(moonCx, dropTop + 15); ctx.lineTo(moonCx, groundY); ctx.stroke();
+  ctx.setLineDash([]);
+
+  // Moon ball
+  var moonBallDrawY = Math.min(moonBallY, groundY - 12);
+  drawBall(ctx, moonCx, moonBallDrawY, 12, '#aaaacc');
+
+  // Speed label (offset to the right)
+  if (moonP > 0.05 && !moonLanded) {
+    var moonV = (moonP * moonDur * gMoon).toFixed(1);
+    ctx.fillStyle = '#ccccee'; ctx.font = "bold 9px 'Space Grotesk',sans-serif";
+    ctx.textAlign = 'left';
+    ctx.fillText('v=' + moonV, moonCx + 18, moonBallDrawY - 2);
+  }
+
+  // Moon "GRACEFUL" label
+  if (moonP > 0.3) {
+    ctx.fillStyle = P.tertiary;
+    ctx.font = "bold 10px 'Space Grotesk','Noto Sans SC',sans-serif";
+    ctx.textAlign = 'center';
+    ctx.fillText(t('f3slow'), moonCx, groundY + 14);
+  }
+
+  // Moon impact
+  if (moonLanded && !anim._moonImpact) {
+    anim._moonImpact = true;
+    spawnImpactParticles(moonCx, groundY, 8, 'rgba(170,170,204,0.6)');
+    triggerShake(2);
+  }
+
+  // Result text (after Earth lands)
+  if (earthLanded) {
+    ctx.fillStyle = P.primary;
+    ctx.font = "bold 11px 'Space Grotesk','Noto Sans SC',sans-serif";
+    ctx.textAlign = 'center';
+    ctx.shadowColor = P.glowStrong; ctx.shadowBlur = 10;
+    ctx.fillText(t('f3result'), cx, H - 22);
+    ctx.shadowBlur = 0;
+  }
+
+  // Time elapsed indicator
+  ctx.fillStyle = P.muted; ctx.font = "9px 'Space Grotesk',sans-serif";
+  ctx.textAlign = 'center';
+  if (!earthLanded) {
+    ctx.fillText('t = ' + progress.toFixed(1) + ' s', earthCx, groundY + 28);
+  } else {
+    ctx.fillText('t = ' + earthDur.toFixed(1) + ' s', earthCx, groundY + 28);
+  }
+  if (!moonLanded) {
+    ctx.fillText('t = ' + progress.toFixed(1) + ' s', moonCx, groundY + 28);
+  } else {
+    ctx.fillText('t = ' + moonDur.toFixed(1) + ' s', moonCx, groundY + 28);
+  }
+}
+
+// ============================================================
+// F4: Rocket context -- T vs mg, animated launch
+// ============================================================
+function drawF4(ctx, W, H, t, P, cx, cy) {
+  // Title
+  ctx.fillStyle = P.primary;
+  ctx.font = "bold 15px 'Space Grotesk','Noto Sans SC',sans-serif";
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillText(t('f4title'), cx, 18);
+
+  var groundY = H * 0.85;
+  var padX = cx;
+
+  // Launch pad
+  ctx.fillStyle = '#333340';
+  ctx.fillRect(padX - 30, groundY - 3, 60, 6);
+  ctx.fillStyle = P.muted; ctx.font = "8px 'Space Grotesk','Noto Sans SC',sans-serif";
+  ctx.textAlign = 'center';
+  ctx.fillText(t('f4pad'), padX, groundY + 14);
+
+  // Support towers
+  ctx.fillStyle = '#2a2a35';
+  ctx.fillRect(padX - 35, groundY - 60, 4, 60);
+  ctx.fillRect(padX + 31, groundY - 60, 4, 60);
+  // Cross beams
+  ctx.strokeStyle = '#2a2a35'; ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.moveTo(padX - 33, groundY - 40); ctx.lineTo(padX - 20, groundY - 40); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(padX + 20, groundY - 40); ctx.lineTo(padX + 33, groundY - 40); ctx.stroke();
+
+  // Animation phases:
+  // 0-2s: rocket on pad, force arrows appear (T < mg, then T grows)
+  // 2-3s: T > mg, rocket begins to lift
+  // 3-6s: rocket ascends with exhaust
+  var totalDur = 6.0;
+  var progress = anim.frame === 4 ? Math.min(anim.time / totalDur, 1) : 0;
+  var timeSec = progress * totalDur;
+
+  var rocketScale = 0.9;
+  var rocketBaseY = groundY - 5; // Bottom of rocket at pad
+  var rocketY = rocketBaseY - 40 * rocketScale; // Center of rocket
+
+  var launched = timeSec > 2.0;
+  var liftProgress = launched ? Math.min((timeSec - 2.0) / 4.0, 1) : 0;
+  // Quadratic lift (accelerating upward)
+  var liftDist = liftProgress * liftProgress * (H * 0.7);
+  rocketY = rocketBaseY - 40 * rocketScale - liftDist;
+
+  // Draw exhaust flame when launched
+  if (launched && rocketY > -60) {
+    var flameIntensity = 0.5 + liftProgress * 0.5;
+    drawExhaustFlame(ctx, padX, rocketY + 40 * rocketScale, rocketScale, flameIntensity);
+    // Exhaust particles
+    if (Math.random() < 0.4) {
+      spawnImpactParticles(padX + (Math.random() - 0.5) * 10,
+        rocketY + 40 * rocketScale + 20,
+        2, 'rgba(255,160,60,0.5)');
+    }
+  }
+
+  // Thrust buildup before launch
+  var thrustFactor = timeSec < 2.0 ? timeSec / 2.0 : 1.0;
+  // Show pre-launch flame buildup
+  if (timeSec > 0.8 && timeSec <= 2.0) {
+    var preFlame = (timeSec - 0.8) / 1.2;
+    drawExhaustFlame(ctx, padX, rocketBaseY, rocketScale * 0.5, preFlame * 0.4);
+  }
+
+  // Draw rocket
+  if (rocketY > -80) {
+    drawRocket(ctx, padX, rocketY, rocketScale);
+  }
+
+  // Force arrows (show on pad phase)
+  if (timeSec < 3.5) {
+    var arrowBaseY = rocketY;
+
+    // Weight arrow (mg, pointing down) -- always full
+    var mgLen = 50;
+    drawForceArrow(ctx, padX - 25, arrowBaseY, padX - 25, arrowBaseY + mgLen,
+      '#ff6666', t('f4gravity'), 2.5, 10);
+
+    // Thrust arrow (pointing up) -- grows with thrustFactor
+    var thrustLen = mgLen * thrustFactor * 1.6; // At max, T = 1.6 * mg
+    if (thrustLen > 5) {
+      drawForceArrow(ctx, padX + 25, arrowBaseY, padX + 25, arrowBaseY - thrustLen,
+        '#66ff88', t('f4thrust'), 2.5, 10);
+    }
+
+    // T vs mg comparison text
+    if (timeSec > 1.0) {
+      ctx.fillStyle = '#ffffff';
+      ctx.font = "bold 11px 'Space Grotesk','Noto Sans SC',sans-serif";
+      ctx.textAlign = 'center';
+      if (thrustFactor < 0.9) {
+        ctx.fillText('T < mg', padX, arrowBaseY - thrustLen - 20);
+      } else {
+        ctx.fillStyle = P.primary;
+        ctx.fillText(t('f4cond'), padX, arrowBaseY - thrustLen - 30);
+        ctx.fillText(t('f4accel'), padX, arrowBaseY - thrustLen - 15);
+      }
+    }
+  }
+
+  // LIFTOFF label
+  if (launched && rocketY > -60) {
+    var liftAlpha = Math.min(liftProgress * 3, 1);
+    ctx.globalAlpha = liftAlpha;
+    ctx.fillStyle = P.primary;
+    ctx.font = "bold 18px 'Space Grotesk','Noto Sans SC',sans-serif";
+    ctx.textAlign = 'center';
+    ctx.shadowColor = P.glowStrong; ctx.shadowBlur = 16;
+    ctx.fillText(t('f4liftoff'), cx, H * 0.25);
+    ctx.shadowBlur = 0;
+    ctx.globalAlpha = 1;
+  }
+
+  // Info panel (glass box) on the right with formulas
+  var infoX = cx + 130;
+  var infoY = 50;
+  var infoW = 150;
+  var infoH = 90;
+  ctx.fillStyle = 'rgba(0,0,0,0.4)';
+  ctx.fillRect(infoX, infoY, infoW, infoH);
+  ctx.strokeStyle = 'rgba(255,181,156,0.2)'; ctx.lineWidth = 1;
+  ctx.strokeRect(infoX, infoY, infoW, infoH);
+
+  ctx.fillStyle = P.primary;
+  ctx.font = "bold 10px 'Space Grotesk',sans-serif";
+  ctx.textAlign = 'left';
+  ctx.fillText('PHYSICS', infoX + 8, infoY + 14);
+
+  ctx.fillStyle = P.text; ctx.font = "10px 'Inter',sans-serif";
+  ctx.fillText('F_net = T - mg', infoX + 8, infoY + 32);
+  ctx.fillText('a = (T - mg) / m', infoX + 8, infoY + 48);
+
+  ctx.fillStyle = P.muted; ctx.font = "9px 'Noto Sans SC','Inter',sans-serif";
+  ctx.fillText(t('f4cond'), infoX + 8, infoY + 66);
+  ctx.fillText(t('f4accel'), infoX + 8, infoY + 80);
+}
+
+// ============================================================
+// BOOT
+// ============================================================
+
+AnimRuntime.boot();
+</script>
+</body>
+</html>

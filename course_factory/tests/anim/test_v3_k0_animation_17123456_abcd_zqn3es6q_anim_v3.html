@@ -1,0 +1,700 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>力与运动状态改变 — 力之观测台</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700;900&family=JetBrains+Mono:wght@400;600;700&family=Noto+Sans+SC:wght@300;400;600;700;900&display=swap" rel="stylesheet">
+<style>
+:root{--FIELD:oklch(.78 .13 215);--WAVE:oklch(.55 .13 215);--MASS:oklch(.35 .10 215);--PHOTON:oklch(.92 .08 215);--CONSTANT:oklch(.85 .14 85);--BG-D:oklch(.14 .035 265);--BG-L:oklch(.18 .04 265)}
+*{margin:0;padding:0;box-sizing:border-box}
+body{overflow:hidden;background:var(--BG-D);font-family:'Noto Sans SC','Inter',sans-serif;color:#fff}
+canvas#mc{position:absolute;top:0;left:0}
+.glass{background:rgba(14,18,42,.72);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border:1px solid rgba(120,160,255,.12)}
+.mono{font-family:'JetBrains Mono',monospace}
+.btn-action{background:rgba(14,18,42,.8);border:1px solid rgba(120,160,255,.2);color:var(--PHOTON);padding:8px 20px;cursor:pointer;font-family:'Noto Sans SC','Inter',sans-serif;font-size:13px;letter-spacing:.08em;transition:all .3s ease}
+.btn-action:hover{background:rgba(30,40,80,.9);border-color:rgba(120,160,255,.4)}
+.btn-action:active{transform:scale(.97)}
+.btn-primary{border-color:var(--CONSTANT);color:var(--CONSTANT)}
+@keyframes glow-pulse{0%,100%{filter:drop-shadow(0 0 4px oklch(.85 .14 85/.3))}50%{filter:drop-shadow(0 0 14px oklch(.85 .14 85/.6))}}
+.glow-anim{animation:glow-pulse 2.5s ease-in-out infinite}
+</style>
+</head>
+<body class="w-screen h-screen relative overflow-hidden">
+<canvas id="mc"></canvas>
+
+<!-- HUD: 实时物理量 / Real-time Physics -->
+<div id="hp" class="glass absolute top-5 right-5 px-5 py-4 opacity-0 transition-all duration-700" style="min-width:200px">
+  <div class="text-[10px] tracking-[.2em] uppercase mb-2" style="color:var(--FIELD)">实时物理量 <span class="opacity-50">Physics</span></div>
+  <div class="space-y-1 mono text-sm">
+    <div class="flex justify-between gap-4"><span style="color:var(--PHOTON)">m</span><span id="h-m">0.50 kg</span></div>
+    <div class="flex justify-between gap-4"><span style="color:var(--CONSTANT)">F<sub>push</sub></span><span id="h-fp" style="color:var(--CONSTANT)">0.00 N</span></div>
+    <div class="flex justify-between gap-4"><span style="color:var(--WAVE)">f</span><span id="h-ff" style="color:var(--WAVE)">0.00 N</span></div>
+    <div class="h-px my-1" style="background:rgba(120,160,255,.12)"></div>
+    <div class="flex justify-between gap-4"><span style="color:var(--CONSTANT)">F<sub>net</sub></span><span id="h-fn" style="color:var(--CONSTANT)">0.00 N</span></div>
+    <div class="flex justify-between gap-4"><span style="color:var(--FIELD)">a</span><span id="h-a">0.00 m/s²</span></div>
+    <div class="flex justify-between gap-4"><span style="color:var(--PHOTON)">v</span><span id="h-v">0.00 m/s</span></div>
+    <div class="flex justify-between gap-4"><span style="color:var(--WAVE)">x</span><span id="h-x">0.00 m</span></div>
+  </div>
+</div>
+
+<!-- HUD: v-t 图 / v-t Graph -->
+<div id="hg" class="glass absolute top-5 left-5 p-4 opacity-0 transition-all duration-700">
+  <div class="text-[10px] tracking-[.2em] uppercase mb-2" style="color:var(--FIELD)">v — t 图 <span class="opacity-50">Graph</span></div>
+  <canvas id="gc" style="display:block"></canvas>
+</div>
+
+<!-- HUD: 公式 / Formula -->
+<div id="hf" class="glass absolute left-1/2 -translate-x-1/2 bottom-20 px-6 py-3 opacity-0 transition-all duration-700 text-center">
+  <div class="mono text-lg" style="color:var(--CONSTANT)">F<sub>net</sub> = ma</div>
+  <div class="text-[11px] mt-1 opacity-60">力是改变运动状态的原因 / Force changes motion state</div>
+</div>
+
+<!-- 模式导航 / Mode Nav -->
+<div id="nav" class="glass absolute bottom-5 left-1/2 -translate-x-1/2 px-3 py-2 flex gap-2 opacity-0 transition-all duration-700">
+  <button class="btn-action btn-primary glow-anim" id="btn-intro">序章</button>
+  <button class="btn-action" id="btn-cart">推车实验</button>
+  <button class="btn-action" id="btn-rubber">橡皮筋</button>
+  <button class="btn-action" id="btn-summary">总结</button>
+  <button class="btn-action" id="btn-reset" style="display:none;border-color:var(--WAVE);color:var(--WAVE)">重置</button>
+</div>
+
+<!-- 开场 / Intro Overlay -->
+<div id="intro-overlay" class="absolute inset-0 flex flex-col items-center justify-center z-10 transition-opacity duration-1000">
+  <div class="text-center px-8">
+    <div class="text-[11px] tracking-[.3em] uppercase mb-4 opacity-50">Force &amp; Motion</div>
+    <h1 class="text-5xl font-black mb-3 leading-tight" style="color:var(--FIELD)">力与运动状态改变</h1>
+    <p class="text-lg opacity-70 max-w-lg mx-auto mb-8 leading-relaxed">力不是维持运动的原因，而是改变物体运动状态的原因。<br><span class="opacity-50 text-sm">Force doesn't sustain motion — it changes it.</span></p>
+    <button class="btn-action btn-primary glow-anim text-base px-8 py-3" id="btn-start">开始探索 <span class="opacity-50">Explore</span></button>
+  </div>
+</div>
+
+<!-- 施力提示 / Push Hint -->
+<div id="push-hint" class="absolute left-1/2 -translate-x-1/2 text-center opacity-0 transition-all duration-500 pointer-events-none" style="bottom:90px">
+  <div class="text-sm opacity-70">按住鼠标/触屏向小车施力</div>
+  <div class="text-[10px] opacity-40 mt-1">Hold click/touch to apply force</div>
+</div>
+
+<script>
+/* ========== 初始化 / Init ========== */
+const mc = document.getElementById('mc');
+const cx = mc.getContext('2d');
+const gc = document.getElementById('gc');
+const gx = gc.getContext('2d');
+const hp = document.getElementById('hp');
+const hg = document.getElementById('hg');
+const hf = document.getElementById('hf');
+const navEl = document.getElementById('nav');
+const introOverlay = document.getElementById('intro-overlay');
+const pushHint = document.getElementById('push-hint');
+const btnReset = document.getElementById('btn-reset');
+
+/* 颜色常量 */
+const CLR = {
+  BD:'oklch(.14 .035 265)', BL:'oklch(.18 .04 265)',
+  F:'oklch(.78 .13 215)', W:'oklch(.55 .13 215)',
+  M:'oklch(.35 .10 215)', Ph:'oklch(.92 .08 215)',
+  C:'oklch(.85 .14 85)', Fr:'oklch(.65 .18 25)',
+};
+
+/* 物理常数 */
+const GRAV = 9.8;
+const MU = 0.15;
+const PX_M = 80;
+const PUSH_FORCE = 2.5;
+
+/* 全局状态 */
+const S = {
+  mode:'intro', t:0, fade:0,
+  mass:0.5, v:0, x:0, Fpush:0, a:0,
+  pushing:false, pushDir:1, vp:0,
+  vtData:[], vtStart:0,
+  pts:[], rips:[], echos:[],
+  stars:[],
+  rubberY:0, rubberRestY:0, rubberDrag:false, rubberStretch:0,
+  mx:0, my:0, mdown:false,
+  hintTimer:0,
+};
+
+/* 初始化星星 */
+for(let i=0;i<80;i++){
+  S.stars.push({x:Math.random(),y:Math.random(),s:0.5+Math.random()*1.2,sp:1.5+Math.random()*2,tw:Math.random()*6.28});
+}
+
+/* ========== 尺寸管理 / Resize ========== */
+let gW=260, gH=140;
+
+function resize(){
+  const W=innerWidth, H=innerHeight;
+  mc.width=W; mc.height=H;
+  gW=Math.max(220,Math.min(420,Math.floor(W*0.2)));
+  gH=Math.floor(gW*0.54);
+  gc.width=gW; gc.height=gH;
+  gc.style.width=gW+'px'; gc.style.height=gH+'px';
+}
+resize();
+addEventListener('resize',resize);
+
+/* ========== 模式切换 / Mode Switch ========== */
+function setMode(m){
+  S.fade=1;
+  setTimeout(()=>{
+    S.mode=m;
+    if(m==='cart'){
+      S.v=0;S.x=0;S.Fpush=0;S.a=0;S.pushing=false;S.vp=0;
+      S.vtData=[];S.vtStart=S.t;S.hintTimer=0;
+      hp.style.opacity='1';hg.style.opacity='1';hf.style.opacity='1';pushHint.style.opacity='1';
+      btnReset.style.display='';
+    }else if(m==='rubber'){
+      S.rubberY=0;S.rubberStretch=0;S.rubberDrag=false;
+      hp.style.opacity='0';hg.style.opacity='0';hf.style.opacity='1';pushHint.style.opacity='0';
+      btnReset.style.display='none';
+    }else if(m==='summary'){
+      hp.style.opacity='0';hg.style.opacity='0';hf.style.opacity='0';pushHint.style.opacity='0';
+      btnReset.style.display='none';
+    }else{
+      hp.style.opacity='0';hg.style.opacity='0';hf.style.opacity='0';pushHint.style.opacity='0';
+      btnReset.style.display='none';
+    }
+    navEl.style.opacity='1';
+  },300);
+}
+
+/* ========== 事件绑定 / Events ========== */
+document.getElementById('btn-start').addEventListener('click',()=>{
+  introOverlay.style.opacity='0';
+  introOverlay.style.pointerEvents='none';
+  setMode('cart');
+});
+document.getElementById('btn-intro').addEventListener('click',()=>{
+  introOverlay.style.opacity='1';introOverlay.style.pointerEvents='auto';
+  S.mode='intro';navEl.style.opacity='0';S.fade=0;
+  hp.style.opacity='0';hg.style.opacity='0';hf.style.opacity='0';pushHint.style.opacity='0';
+  btnReset.style.display='none';
+});
+document.getElementById('btn-cart').addEventListener('click',()=>setMode('cart'));
+document.getElementById('btn-rubber').addEventListener('click',()=>setMode('rubber'));
+document.getElementById('btn-summary').addEventListener('click',()=>setMode('summary'));
+btnReset.addEventListener('click',()=>{if(S.mode==='cart')setMode('cart');});
+
+/* 鼠标/触控交互 */
+function getXY(e){
+  const r=mc.getBoundingClientRect();
+  const cx2=e.clientX||(e.touches&&e.touches[0]?e.touches[0].clientX:0);
+  const cy2=e.clientY||(e.touches&&e.touches[0]?e.touches[0].clientY:0);
+  return{x:cx2-r.left, y:cy2-r.top};
+}
+
+function onDown(e){
+  S.mdown=true;
+  const p=getXY(e);S.mx=p.x;S.my=p.y;
+  if(S.mode==='cart'){
+    S.pushing=true;
+    /* 点击屏幕左半→向右推，右半→向左推 */
+    S.pushDir=p.x<innerWidth*0.5?1:-1;
+    S.hintTimer=999;
+  }else if(S.mode==='rubber'){
+    const midX=innerWidth*0.5;
+    const bandY=innerHeight*0.45+S.rubberStretch;
+    if(Math.abs(p.x-midX)<80&&Math.abs(p.y-bandY)<80) S.rubberDrag=true;
+  }
+}
+function onMove(e){
+  const p=getXY(e);S.mx=p.x;S.my=p.y;
+  if(S.mode==='rubber'&&S.rubberDrag){
+    const targetY=p.y-innerHeight*0.45;
+    S.rubberY=Math.max(-120,Math.min(120,targetY));
+    S.rubberStretch=S.rubberY;
+  }
+  if(S.mode==='cart'&&S.mdown){
+    S.pushDir=S.mx<innerWidth*0.5?1:-1;
+  }
+}
+function onUp(){S.mdown=false;S.pushing=false;S.Fpush=0;S.rubberDrag=false;}
+
+mc.addEventListener('mousedown',onDown);
+mc.addEventListener('mousemove',onMove);
+mc.addEventListener('mouseup',onUp);
+mc.addEventListener('mouseleave',onUp);
+mc.addEventListener('touchstart',e=>{e.preventDefault();onDown(e);},{passive:false});
+mc.addEventListener('touchmove',e=>{e.preventDefault();onMove(e);},{passive:false});
+mc.addEventListener('touchend',onUp);
+
+/* ========== 物理更新 / Physics ========== */
+function updatePhysics(dt){
+  if(S.mode!=='cart')return;
+  const fK=MU*S.mass*GRAV;
+
+  if(S.pushing){S.Fpush=PUSH_FORCE*S.pushDir;}
+  else{S.Fpush=0;}
+
+  let Fnet=S.Fpush;
+  if(Math.abs(S.v)>0.01){
+    Fnet-=Math.sign(S.v)*fK;
+  }else if(Math.abs(S.Fpush)<=fK){
+    Fnet=0;S.v=0;
+  }else{
+    Fnet=S.Fpush-Math.sign(S.Fpush)*fK;
+  }
+
+  S.a=Fnet/S.mass;
+  S.v+=S.a*dt;
+
+  if(!S.pushing&&Math.abs(S.v)<0.05&&Math.abs(S.a)<0.1){S.v=0;S.a=0;}
+
+  S.x+=S.v*dt;
+  S.x=Math.max(-5,Math.min(25,S.x));
+
+  /* 视口跟随 */
+  const W=innerWidth;
+  const sx=S.x*PX_M-S.vp+W*0.35;
+  if(sx>W*0.65)S.vp+=(sx-W*0.65)*0.1;
+  if(sx<W*0.2)S.vp+=(sx-W*0.2)*0.1;
+
+  /* v-t 数据 */
+  const el=S.t-S.vtStart;
+  if(S.vtData.length===0||el-S.vtData[S.vtData.length-1].t>0.05){
+    S.vtData.push({t:el,v:S.v});
+    if(S.vtData.length>400)S.vtData.shift();
+  }
+
+  /* 推车粒子 */
+  if(S.pushing&&Math.random()<0.35){
+    const cx2=S.x*PX_M-S.vp+W*0.35;
+    const sy=innerHeight*0.65-5;
+    S.pts.push({x:cx2+(Math.random()-.5)*30,y:sy,vx:-S.pushDir*(20+Math.random()*30),vy:-Math.random()*40-10,life:1,dec:.04+Math.random()*.03,sz:1+Math.random()*1.5,c:CLR.C});
+  }
+
+  /* 运动涟漪 */
+  if(Math.abs(S.v)>0.5&&Math.random()<0.12){
+    addRip(S.x*PX_M-S.vp+W*0.35,innerHeight*0.65);
+  }
+
+  /* 提示淡出 */
+  if(S.pushing)S.hintTimer+=dt;
+  if(S.hintTimer>2)pushHint.style.opacity='0';
+}
+
+/* ========== 粒子/涟漪 ========== */
+function updateParticles(dt){
+  for(let i=S.pts.length-1;i>=0;i--){const p=S.pts[i];p.x+=p.vx*dt;p.y+=p.vy*dt;p.vy+=40*dt;p.life-=p.dec;if(p.life<=0)S.pts.splice(i,1);}
+  for(let i=S.rips.length-1;i>=0;i--){const r=S.rips[i];r.r+=80*dt;r.o-=.5*dt;if(r.o<=0)S.rips.splice(i,1);}
+  for(let i=S.echos.length-1;i>=0;i--){const e=S.echos[i];e.r+=40*dt;e.o-=.4*dt;if(e.o<=0)S.echos.splice(i,1);}
+}
+function addRip(x,y){S.rips.push({x,y,r:0,o:.6});}
+function addEcho(){S.echos.push({r:12,o:.7});}
+
+/* ========== HUD 更新 ========== */
+function updateHUD(){
+  if(S.mode!=='cart')return;
+  const fK=MU*S.mass*GRAV;
+  const fricActive=Math.abs(S.v)>0.01||(S.pushing&&Math.abs(S.Fpush)>fK);
+  const fricDisp=fricActive?fK:0;
+  const fricDir=fricActive?(Math.abs(S.v)>0.01?Math.sign(S.v):Math.sign(S.Fpush)):0;
+  const FnetDisp=S.Fpush-(fricActive?fricDir*fK:0);
+  document.getElementById('h-m').textContent=S.mass.toFixed(2)+' kg';
+  document.getElementById('h-fp').textContent=S.Fpush.toFixed(2)+' N';
+  document.getElementById('h-ff').textContent=fricDisp.toFixed(2)+' N';
+  document.getElementById('h-fn').textContent=FnetDisp.toFixed(2)+' N';
+  document.getElementById('h-a').textContent=S.a.toFixed(2)+' m/s²';
+  document.getElementById('h-v').textContent=S.v.toFixed(2)+' m/s';
+  document.getElementById('h-x').textContent=S.x.toFixed(2)+' m';
+}
+
+/* ========== v-t 图渲染 ========== */
+function renderGraph(){
+  if(S.mode!=='cart')return;
+  gx.clearRect(0,0,gW,gH);
+  gx.fillStyle='rgba(14,18,42,.5)';gx.fillRect(0,0,gW,gH);
+  const pad=32,pw=gW-pad-8,ph=gH-pad-8;
+
+  /* 坐标轴 */
+  gx.strokeStyle='rgba(120,160,255,.3)';gx.lineWidth=1;
+  gx.beginPath();gx.moveTo(pad,4);gx.lineTo(pad,gH-pad+4);gx.lineTo(gW-4,gH-pad+4);gx.stroke();
+  gx.fillStyle='oklch(.92 .08 215 / .6)';gx.font='9px JetBrains Mono';
+  gx.fillText('v (m/s)',pad-2,12);gx.fillText('t (s)',gW-28,gH-pad+14);
+
+  if(S.vtData.length<2)return;
+  const tMin=S.vtData[0].t, tMax=S.vtData[S.vtData.length-1].t, tR=Math.max(tMax-tMin,1);
+  let vAbsMax=0.5;
+  for(let i=0;i<S.vtData.length;i++){const av=Math.abs(S.vtData[i].v);if(av>vAbsMax)vAbsMax=av;}
+  vAbsMax*=1.2;
+
+  /* 零线 */
+  const zeroY=4+ph/2;
+  gx.strokeStyle='rgba(120,160,255,.15)';gx.beginPath();gx.moveTo(pad,zeroY);gx.lineTo(gW-4,zeroY);gx.stroke();
+  gx.fillStyle='oklch(.55 .13 215 / .4)';gx.font='8px JetBrains Mono';
+  gx.fillText('0',pad-12,zeroY+3);
+
+  /* 刻度 */
+  const vStep=vAbsMax>3?2:1;
+  for(let vv=-Math.floor(vAbsMax/vStep)*vStep;vv<=vAbsMax;vv+=vStep){
+    if(vv===0)continue;
+    const yy=4+ph/2-(vv/vAbsMax)*(ph/2);
+    if(yy>4&&yy<gH-pad+4){
+      gx.fillStyle='oklch(.55 .13 215 / .25)';gx.font='7px JetBrains Mono';
+      gx.fillText(vv.toFixed(0),pad-18,yy+3);
+    }
+  }
+
+  /* 数据线 — 渐变 */
+  gx.strokeStyle=CLR.C;gx.lineWidth=2;gx.beginPath();
+  S.vtData.forEach((d,i)=>{
+    const px=pad+((d.t-tMin)/tR)*pw;
+    const py=4+ph/2-(d.v/vAbsMax)*(ph/2);
+    if(i===0)gx.moveTo(px,py);else gx.lineTo(px,py);
+  });
+  gx.stroke();
+
+  /* 当前点 */
+  const last=S.vtData[S.vtData.length-1];
+  const lpx=pad+((last.t-tMin)/tR)*pw;
+  const lpy=4+ph/2-(last.v/vAbsMax)*(ph/2);
+  gx.fillStyle=CLR.C;gx.beginPath();gx.arc(lpx,lpy,4,0,6.28);gx.fill();
+  gx.fillStyle='#fff';gx.beginPath();gx.arc(lpx,lpy,1.5,0,6.28);gx.fill();
+}
+
+/* ========== 渲染 / Render ========== */
+function render(){
+  const W=innerWidth, H=innerHeight;
+  cx.clearRect(0,0,W,H);
+
+  /* 背景 */
+  const bg=cx.createLinearGradient(0,0,0,H);
+  bg.addColorStop(0,CLR.BD);bg.addColorStop(1,CLR.BL);
+  cx.fillStyle=bg;cx.fillRect(0,0,W,H);
+
+  /* 星星 */
+  S.stars.forEach(s=>{
+    const a=.2+.35*Math.sin(S.t*s.sp+s.tw);
+    cx.fillStyle=`oklch(.92 .08 215 / ${a})`;
+    cx.beginPath();cx.arc(s.x*W,s.y*H,s.s,0,6.28);cx.fill();
+  });
+
+  /* 场力线 */
+  drawFieldLines(W,H);
+
+  /* 模式场景 */
+  if(S.mode==='cart')drawCartScene(W,H);
+  else if(S.mode==='rubber')drawRubberScene(W,H);
+  else if(S.mode==='summary')drawSummary(W,H);
+
+  /* Echo 吉祥物 */
+  drawEcho(W,H);
+
+  /* 淡入遮罩 */
+  if(S.fade>0){cx.fillStyle=`oklch(.14 .035 265 / ${S.fade})`;cx.fillRect(0,0,W,H);}
+
+  /* 暗角 */
+  const vig=cx.createRadialGradient(W/2,H/2,W*.25,W/2,H/2,W*.75);
+  vig.addColorStop(0,'rgba(0,0,0,0)');vig.addColorStop(1,'rgba(0,0,0,.35)');
+  cx.fillStyle=vig;cx.fillRect(0,0,W,H);
+}
+
+function drawFieldLines(W,H){
+  const t=S.t;cx.lineWidth=1;
+  for(let i=0;i<12;i++){
+    const y=H*.12+i*H*.055;
+    cx.strokeStyle=`oklch(.55 .13 215 / ${.06+.03*Math.sin(t*.5+i)})`;
+    cx.beginPath();
+    for(let x=0;x<W;x+=4){
+      const dy=3*Math.sin(x*.008+t*.8+i*.7);
+      if(x===0)cx.moveTo(x,y+dy);else cx.lineTo(x,y+dy);
+    }
+    cx.stroke();
+  }
+}
+
+function drawCartScene(W,H){
+  const groundY=H*0.65;
+  const cartW=70, cartH=40;
+  const cartX=S.x*PX_M-S.vp+W*0.35;
+  const cartY=groundY-cartH;
+
+  /* 地面 */
+  cx.strokeStyle='oklch(.55 .13 215 / .3)';cx.lineWidth=2;
+  cx.beginPath();cx.moveTo(0,groundY);cx.lineTo(W,groundY);cx.stroke();
+
+  /* 地面刻度 */
+  cx.fillStyle='oklch(.55 .13 215 / .2)';cx.font='10px JetBrains Mono';cx.textAlign='center';
+  for(let m=-3;m<28;m++){
+    const sx=m*PX_M-S.vp+W*0.35;
+    if(sx>-20&&sx<W+20){
+      cx.beginPath();cx.moveTo(sx,groundY);cx.lineTo(sx,groundY+8);cx.stroke();
+      cx.fillText(m+'m',sx,groundY+20);
+    }
+  }
+  cx.textAlign='left';
+
+  /* 涟漪 */
+  S.rips.forEach(r=>{cx.strokeStyle=`oklch(.55 .13 215 / ${r.o})`;cx.lineWidth=1;cx.beginPath();cx.arc(r.x,r.y,r.r,0,6.28);cx.stroke();});
+
+  /* 小车阴影 */
+  cx.fillStyle='rgba(0,0,0,.2)';cx.fillRect(cartX-3,groundY-2,cartW+6,6);
+
+  /* 小车主体 */
+  const cg=cx.createLinearGradient(cartX,cartY,cartX,cartY+cartH);
+  cg.addColorStop(0,'oklch(.45 .12 215)');cg.addColorStop(1,'oklch(.30 .10 215)');
+  cx.fillStyle=cg;cx.fillRect(cartX,cartY,cartW,cartH);
+  cx.strokeStyle='oklch(.78 .13 215 / .5)';cx.lineWidth=1.5;cx.strokeRect(cartX,cartY,cartW,cartH);
+
+  /* 车轮 */
+  const wheelR=8;
+  [cartX+15,cartX+cartW-15].forEach(wx=>{
+    const wy=groundY;
+    cx.fillStyle='oklch(.25 .05 265)';cx.beginPath();cx.arc(wx,wy-2,wheelR,0,6.28);cx.fill();
+    cx.strokeStyle='oklch(.55 .10 215 / .6)';cx.lineWidth=1;cx.stroke();
+    const angle=S.x*5;
+    for(let s=0;s<4;s++){const a=angle+s*Math.PI/2;cx.beginPath();cx.moveTo(wx,wy-2);cx.lineTo(wx+Math.cos(a)*wheelR*.7,wy-2+Math.sin(a)*wheelR*.7);cx.stroke();}
+  });
+
+  /* 质量标签 */
+  cx.fillStyle=CLR.Ph;cx.font='11px JetBrains Mono';cx.textAlign='center';
+  cx.fillText('m='+S.mass.toFixed(1)+'kg',cartX+cartW/2,cartY+cartH/2+4);cx.textAlign='left';
+
+  /* 推力箭头 */
+  if(Math.abs(S.Fpush)>0.01){
+    const aLen=Math.abs(S.Fpush)*28;
+    const aY=cartY+cartH/2;
+    const sX=S.Fpush>0?cartX-5:cartX+cartW+5;
+    const dir=Math.sign(S.Fpush);
+    cx.strokeStyle=CLR.C;cx.fillStyle=CLR.C;cx.lineWidth=3;
+    cx.beginPath();cx.moveTo(sX,aY);cx.lineTo(sX+dir*aLen,aY);cx.stroke();
+    cx.beginPath();cx.moveTo(sX+dir*aLen,aY);cx.lineTo(sX+dir*(aLen-9),aY-6);cx.lineTo(sX+dir*(aLen-9),aY+6);cx.closePath();cx.fill();
+    cx.font='12px JetBrains Mono';cx.textAlign='center';
+    cx.fillText('F='+Math.abs(S.Fpush).toFixed(1)+'N',sX+dir*aLen/2,aY-12);cx.textAlign='left';
+  }
+
+  /* 摩擦力箭头 */
+  const fK=MU*S.mass*GRAV;
+  if(Math.abs(S.v)>0.01||(S.pushing&&Math.abs(S.Fpush)>fK)){
+    const fDir=-Math.sign(S.v||S.Fpush);
+    const fLen=fK*28;
+    const fY=groundY-10;
+    const fSX=cartX+cartW/2;
+    cx.strokeStyle=CLR.W;cx.fillStyle=CLR.W;cx.lineWidth=2;
+    cx.beginPath();cx.moveTo(fSX,fY);cx.lineTo(fSX+fDir*fLen,fY);cx.stroke();
+    cx.beginPath();cx.moveTo(fSX+fDir*fLen,fY);cx.lineTo(fSX+fDir*(fLen-7),fY-4);cx.lineTo(fSX+fDir*(fLen-7),fY+4);cx.closePath();cx.fill();
+    cx.font='10px JetBrains Mono';cx.textAlign='center';
+    cx.fillText('f='+fK.toFixed(2)+'N',fSX+fDir*fLen/2,fY-8);cx.textAlign='left';
+  }
+
+  /* 合力箭头 */
+  if(Math.abs(S.a)>0.08){
+    const netF=S.mass*S.a;
+    const nLen=Math.abs(netF)*28;
+    const nY=cartY-18;
+    const nDir=Math.sign(netF);
+    const nSX=cartX+cartW/2;
+    cx.strokeStyle=CLR.F;cx.fillStyle=CLR.F;cx.lineWidth=2.5;
+    cx.setLineDash([4,3]);cx.beginPath();cx.moveTo(nSX,nY);cx.lineTo(nSX+nDir*nLen,nY);cx.stroke();cx.setLineDash([]);
+    cx.beginPath();cx.moveTo(nSX+nDir*nLen,nY);cx.lineTo(nSX+nDir*(nLen-8),nY-5);cx.lineTo(nSX+nDir*(nLen-8),nY+5);cx.closePath();cx.fill();
+    cx.font='11px JetBrains Mono';cx.textAlign='center';
+    cx.fillText('F_net='+Math.abs(netF).toFixed(2)+'N',nSX+nDir*nLen/2,nY-8);cx.textAlign='left';
+  }
+
+  /* 粒子 */
+  S.pts.forEach(p=>{cx.globalAlpha=Math.max(0,p.life);cx.fillStyle=p.c;cx.beginPath();cx.arc(p.x,p.y,p.sz,0,6.28);cx.fill();});
+  cx.globalAlpha=1;
+
+  /* 速度标注 */
+  if(Math.abs(S.v)>0.1){
+    cx.fillStyle=CLR.Ph;cx.font='13px JetBrains Mono';cx.textAlign='center';
+    cx.fillText('v = '+S.v.toFixed(2)+' m/s',cartX+cartW/2,cartY-40);cx.textAlign='left';
+  }
+
+  /* 加速度标注 */
+  if(Math.abs(S.a)>0.08){
+    cx.fillStyle='oklch(.78 .13 215 / .7)';cx.font='11px JetBrains Mono';cx.textAlign='center';
+    cx.fillText('a = '+S.a.toFixed(2)+' m/s²',cartX+cartW/2,cartY-55);cx.textAlign='left';
+  }
+
+  /* 场景标题 */
+  cx.fillStyle='oklch(.92 .08 215 / .4)';cx.font='12px Noto Sans SC';cx.textAlign='center';
+  cx.fillText('推车实验 — 牛顿第二定律',W/2,H*0.1);
+  cx.font='10px Inter';cx.fillText('Cart Experiment — Newton\'s Second Law',W/2,H*0.1+18);
+  cx.textAlign='left';
+}
+
+function drawRubberScene(W,H){
+  const midX=W*0.5;
+  const topY=H*0.22;
+  const restBottom=H*0.45;
+  const stretchY=restBottom+S.rubberStretch;
+  const kSpring=0.5;
+
+  /* 固定支架 */
+  cx.fillStyle='oklch(.45 .10 215)';
+  cx.fillRect(midX-40,topY-12,80,14);
+  cx.strokeStyle='oklch(.55 .13 215 / .5)';cx.lineWidth=1;cx.strokeRect(midX-40,topY-12,80,14);
+
+  /* 固定点 */
+  cx.fillStyle=CLR.W;cx.beginPath();cx.arc(midX,topY,6,0,6.28);cx.fill();
+
+  /* 橡皮筋 — 多段弹簧效果 */
+  const segments=14;
+  const segH=(stretchY-topY)/segments;
+  const amp=Math.max(2,12-Math.abs(S.rubberStretch)*0.06);
+  cx.strokeStyle=CLR.C;cx.lineWidth=3;cx.beginPath();cx.moveTo(midX,topY);
+  for(let i=1;i<=segments;i++){
+    const sy=topY+segH*i;
+    const sx=midX+((i%2===0)?-1:1)*amp;
+    if(i===segments)cx.lineTo(midX,sy);
+    else cx.lineTo(sx,sy);
+  }
+  cx.stroke();
+
+  /* 静止位置线 */
+  cx.strokeStyle='oklch(.55 .13 215 / .3)';cx.lineWidth=1;cx.setLineDash([5,5]);
+  cx.beginPath();cx.moveTo(midX-50,restBottom);cx.lineTo(midX+50,restBottom);cx.stroke();cx.setLineDash([]);
+  cx.fillStyle='oklch(.55 .13 215 / .4)';cx.font='10px JetBrains Mono';cx.fillText('rest',midX+55,restBottom+3);
+
+  /* 拉伸点 */
+  cx.fillStyle=CLR.Ph;cx.beginPath();cx.arc(midX,stretchY,14,0,6.28);cx.fill();
+  cx.strokeStyle='oklch(.78 .13 215 / .5)';cx.lineWidth=1.5;cx.stroke();
+  cx.fillStyle=CLR.BD;cx.font='10px JetBrains Mono';cx.textAlign='center';
+  cx.fillText('drag',midX,stretchY+4);cx.textAlign='left';
+
+  /* 弹力箭头 */
+  if(Math.abs(S.rubberStretch)>5){
+    const force=-kSpring*S.rubberStretch;
+    const aLen=Math.abs(force)*35;
+    const aDir=Math.sign(force);
+    cx.strokeStyle=CLR.Fr;cx.fillStyle=CLR.Fr;cx.lineWidth=3;
+    cx.beginPath();cx.moveTo(midX,stretchY);cx.lineTo(midX,stretchY+aDir*aLen);cx.stroke();
+    cx.beginPath();cx.moveTo(midX,stretchY+aDir*aLen);cx.lineTo(midX-5,stretchY+aDir*(aLen-9));cx.lineTo(midX+5,stretchY+aDir*(aLen-9));cx.closePath();cx.fill();
+    cx.font='12px JetBrains Mono';cx.textAlign='left';
+    cx.fillText('F = '+Math.abs(force).toFixed(1)+' N',midX+25,stretchY+aDir*aLen/2);
+  }
+
+  /* 伸长量标注 */
+  if(Math.abs(S.rubberStretch)>3){
+    const disp=Math.abs(S.rubberStretch)/PX_M;
+    cx.fillStyle='oklch(.92 .08 215 / .6)';cx.font='11px JetBrains Mono';cx.textAlign='left';
+    cx.fillText('Δx = '+disp.toFixed(2)+' m',midX+30,(restBottom+stretchY)/2);
+  }
+
+  /* 形变说明 */
+  if(Math.abs(S.rubberStretch)>8){
+    cx.fillStyle=CLR.C;cx.font='700 16px Noto Sans SC';cx.textAlign='center';
+    cx.fillText('力使物体发生形变',midX,H*0.72);
+    cx.fillStyle='oklch(.85 .14 85 / .5)';cx.font='300 12px Inter';
+    cx.fillText('Force causes deformation',midX,H*0.72+20);cx.textAlign='left';
+  }
+
+  /* 场景标题 */
+  cx.fillStyle='oklch(.92 .08 215 / .4)';cx.font='12px Noto Sans SC';cx.textAlign='center';
+  cx.fillText('橡皮筋实验 — 力与形变',W/2,H*0.08);
+  cx.font='10px Inter';cx.fillText('Rubber Band — Force & Deformation',W/2,H*0.08+18);cx.textAlign='left';
+
+  /* 操作提示 */
+  if(!S.rubberDrag&&Math.abs(S.rubberStretch)<3){
+    cx.fillStyle='oklch(.92 .08 215 / .35)';cx.font='13px Noto Sans SC';cx.textAlign='center';
+    cx.fillText('拖拽圆点拉伸橡皮筋',midX,H*0.78);
+    cx.font='11px Inter';cx.fillText('Drag the dot to stretch',midX,H*0.78+18);cx.textAlign='left';
+  }
+}
+
+function drawSummary(W,H){
+  cx.fillStyle='oklch(.92 .08 215 / .9)';cx.font='900 36px Noto Sans SC';cx.textAlign='center';
+  cx.fillText('核心结论',W/2,H*0.16);
+  cx.font='300 16px Inter';cx.fillStyle='oklch(.92 .08 215 / .4)';
+  cx.fillText('Core Conclusion',W/2,H*0.16+28);
+
+  const pts=[
+    {zh:'力是改变物体运动状态的原因',en:'Force is the cause of changing motion state'},
+    {zh:'合外力不为零 → 物体产生加速度',en:'Net force ≠ 0 → Object accelerates'},
+    {zh:'合外力为零 → 速度不变（静止或匀速）',en:'Net force = 0 → Constant velocity or rest'},
+    {zh:'力不是维持运动的原因',en:'Force does not sustain motion'},
+  ];
+
+  pts.forEach((p,i)=>{
+    const y=H*0.3+i*65;
+    cx.fillStyle=CLR.C;cx.beginPath();cx.arc(W/2-200,y,14,0,6.28);cx.fill();
+    cx.fillStyle=CLR.BD;cx.font='700 13px JetBrains Mono';cx.textAlign='center';
+    cx.fillText(String(i+1),W/2-200,y+5);
+    cx.fillStyle=CLR.Ph;cx.font='600 18px Noto Sans SC';cx.textAlign='left';
+    cx.fillText(p.zh,W/2-175,y+5);
+    cx.fillStyle='oklch(.92 .08 215 / .4)';cx.font='300 12px Inter';
+    cx.fillText(p.en,W/2-175,y+24);
+  });
+
+  /* 公式高亮 */
+  cx.fillStyle='rgba(14,18,42,.6)';
+  const fBoxY=H*0.72-20;
+  cx.fillRect(W/2-120,fBoxY,240,60);
+  cx.strokeStyle='oklch(.85 .14 85 / .4)';cx.lineWidth=1;cx.strokeRect(W/2-120,fBoxY,240,60);
+  cx.fillStyle=CLR.C;cx.font='700 30px JetBrains Mono';cx.textAlign='center';
+  cx.fillText('F = ma',W/2,fBoxY+28);
+  cx.fillStyle='oklch(.85 .14 85 / .5)';cx.font='300 12px Inter';
+  cx.fillText("Newton's Second Law",W/2,fBoxY+48);
+  cx.textAlign='left';
+
+  /* 底部提示 */
+  cx.fillStyle='oklch(.92 .08 215 / .3)';cx.font='12px Noto Sans SC';cx.textAlign='center';
+  cx.fillText('回到「推车实验」亲手验证这些结论',W/2,H*0.9);
+  cx.font='10px Inter';cx.fillText('Go back to Cart Experiment to verify',W/2,H*0.9+16);
+  cx.textAlign='left';
+}
+
+function drawEcho(W,H){
+  const ex=50, ey=H-60;
+  const bounce=Math.sin(S.t*2)*3;
+
+  /* 身体 */
+  cx.fillStyle='oklch(.78 .13 215 / .8)';cx.beginPath();cx.arc(ex,ey+bounce,15,0,6.28);cx.fill();
+
+  /* 眼睛 */
+  cx.fillStyle=CLR.BD;
+  cx.beginPath();cx.arc(ex-5,ey-3+bounce,3,0,6.28);cx.fill();
+  cx.beginPath();cx.arc(ex+5,ey-3+bounce,3,0,6.28);cx.fill();
+
+  /* 高光 */
+  cx.fillStyle='#fff';
+  cx.beginPath();cx.arc(ex-4,ey-4+bounce,1.2,0,6.28);cx.fill();
+  cx.beginPath();cx.arc(ex+6,ey-4+bounce,1.2,0,6.28);cx.fill();
+
+  /* 嘴巴 */
+  cx.strokeStyle=CLR.BD;cx.lineWidth=1.5;
+  cx.beginPath();cx.arc(ex,ey+2+bounce,4,0.1*Math.PI,0.9*Math.PI);cx.stroke();
+
+  /* 涟漪 */
+  S.echos.forEach(e=>{cx.strokeStyle=`oklch(.78 .13 215 / ${e.o})`;cx.lineWidth=1;cx.beginPath();cx.arc(ex,ey+bounce,e.r,0,6.28);cx.stroke();});
+
+  cx.fillStyle='oklch(.78 .13 215 / .4)';cx.font='9px JetBrains Mono';cx.textAlign='center';
+  cx.fillText('Echo',ex,ey+25+bounce);cx.textAlign='left';
+}
+
+/* ========== 主循环 / Main Loop ========== */
+let lastT=0, echoTimer=0;
+
+function loop(ts){
+  const dt=Math.min((ts-lastT)/1000,0.05);
+  lastT=ts;S.t+=dt;
+
+  if(S.fade>0)S.fade=Math.max(0,S.fade-dt*2.5);
+
+  updatePhysics(dt);
+  updateParticles(dt);
+
+  /* 橡皮筋回弹 */
+  if(S.mode==='rubber'&&!S.rubberDrag){
+    S.rubberStretch*=0.9;S.rubberY*=0.9;
+    if(Math.abs(S.rubberStretch)<0.5){S.rubberStretch=0;S.rubberY=0;}
+  }
+
+  /* Echo 涟漪定时 */
+  echoTimer+=dt;if(echoTimer>3.5){echoTimer=0;addEcho();}
+
+  render();
+  renderGraph();
+  updateHUD();
+
+  requestAnimationFrame(loop);
+}
+
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>

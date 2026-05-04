@@ -1,0 +1,774 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=Inter:wght@400;500&family=Noto+Sans+SC:wght@400;700&display=swap" rel="stylesheet">
+<title>Trajectory Sandbox</title>
+<style>
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box;}
+html,body{width:100%;height:100vh;overflow:hidden;}
+body{background:#050710;color:#e2e2e9;font-family:'Inter','Noto Sans SC',sans-serif;display:flex;flex-direction:column;}
+.wrapper{display:flex;flex-direction:column;height:100vh;overflow:hidden;}
+.header{display:flex;align-items:center;justify-content:space-between;padding:8px 14px 4px;background:rgba(7,10,20,0.9);border-bottom:1px solid rgba(255,176,0,0.15);}
+.header h1{font-family:'Space Grotesk',sans-serif;font-size:clamp(14px,2vw,17px);font-weight:700;color:#ffb000;letter-spacing:-0.02em;}
+.header .sub{font-size:10px;color:#8e90a6;letter-spacing:0.08em;text-transform:uppercase;}
+.header .right{display:flex;align-items:center;gap:14px;}
+.header .stat{font-family:'Space Grotesk',sans-serif;font-size:10px;color:#8e90a6;letter-spacing:0.06em;}
+.header .stat b{display:block;font-size:15px;color:#ffb000;font-weight:700;}
+.lang-btn{position:fixed;top:8px;left:8px;z-index:100;font-family:'Space Grotesk',sans-serif;font-size:10px;padding:4px 10px;cursor:pointer;border:1px solid rgba(255,255,255,0.08);background:transparent;backdrop-filter:blur(12px);color:#ffb59c;letter-spacing:1px;}
+.lang-btn:hover{border-color:#ffb000;color:#ffb000;}
+.stage-wrap{flex:1;min-height:0;display:flex;gap:6px;padding:6px;}
+.panel-box{background:rgba(17,20,37,0.85);border:1px solid rgba(142,144,166,0.15);display:flex;flex-direction:column;overflow:hidden;}
+.panel-box .panel-title{font-family:'Space Grotesk',sans-serif;font-size:9px;letter-spacing:0.14em;color:#ffb000;padding:6px 10px 4px;text-transform:uppercase;border-bottom:1px solid rgba(255,176,0,0.18);}
+.panel-box .panel-body{flex:1;min-height:0;display:flex;flex-direction:column;padding:8px 10px;gap:6px;}
+.left-panel{width:200px;flex-shrink:0;}
+.center-panel{flex:1;min-width:0;display:flex;flex-direction:column;}
+.center-panel .panel-body{padding:0;position:relative;display:flex;flex-direction:column;flex:1;min-height:0;}
+#flightCanvas{flex:1;min-height:0;width:100%;display:block;}
+.right-panel{width:220px;flex-shrink:0;}
+.control-group{display:flex;flex-direction:column;gap:4px;}
+.ctrl-label{display:flex;justify-content:space-between;font-family:'Space Grotesk';font-size:9px;letter-spacing:0.12em;text-transform:uppercase;color:#8e90a6;}
+.ctrl-label .val{color:#ffb000;font-weight:700;font-size:11px;}
+.ctrl-slider{width:100%;height:6px;-webkit-appearance:none;appearance:none;background:rgba(255,255,255,0.07);outline:none;cursor:pointer;}
+.ctrl-slider::-webkit-slider-thumb{-webkit-appearance:none;width:14px;height:14px;background:linear-gradient(135deg,#ffb000,#ff5f1f);border:none;cursor:pointer;}
+.ctrl-slider::-moz-range-thumb{width:14px;height:14px;background:linear-gradient(135deg,#ffb000,#ff5f1f);border:none;cursor:pointer;}
+.power-indicator{display:flex;gap:2px;margin-top:2px;}
+.power-bar{flex:1;height:8px;background:rgba(255,255,255,0.06);transition:background .15s;}
+.power-bar.active{background:linear-gradient(90deg,#50ffb0,#ffb000);}
+.power-bar.high{background:linear-gradient(90deg,#ffb000,#ff5f1f);}
+.launch-btn{font-family:'Space Grotesk',sans-serif;font-size:12px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;padding:12px 14px;border:none;cursor:pointer;color:#050710;background:linear-gradient(135deg,#ffb000,#ff5f1f);transition:transform 0.1s, opacity 0.15s;margin-top:8px;}
+.launch-btn:hover:not(:disabled){transform:scale(1.02);}
+.launch-btn:disabled{opacity:0.4;cursor:not-allowed;}
+.reset-btn{font-family:'Space Grotesk',sans-serif;font-size:9px;padding:5px 9px;background:transparent;border:1px solid rgba(142,144,166,0.3);color:#8e90a6;cursor:pointer;letter-spacing:0.08em;text-transform:uppercase;margin-top:6px;}
+.reset-btn:hover{color:#ff716c;border-color:#ff716c;}
+.hud-mini{display:grid;grid-template-columns:1fr 1fr;gap:4px;margin-top:4px;}
+.hud-chip{background:rgba(7,10,20,0.75);padding:4px 6px;border:1px solid rgba(142,144,166,0.15);}
+.hud-chip .hl{font-family:'Space Grotesk';font-size:8px;letter-spacing:0.12em;text-transform:uppercase;color:#8e90a6;}
+.hud-chip .hv{font-family:'Space Grotesk';font-size:13px;color:#ffb000;font-weight:700;margin-top:1px;}
+.target-list{display:flex;flex-direction:column;gap:3px;}
+.target-item{display:flex;align-items:center;gap:6px;padding:3px 6px;background:rgba(7,10,20,0.5);border:1px solid rgba(142,144,166,0.1);}
+.target-item.hit{border-color:rgba(80,255,176,0.4);background:rgba(80,255,176,0.05);}
+.target-dot{width:8px;height:8px;flex-shrink:0;}
+.target-dot.hit{background:#50ffb0;}
+.target-dot.miss{background:rgba(142,144,166,0.3);}
+.target-info{font-family:'Space Grotesk';font-size:10px;color:#e2e2e9;letter-spacing:0.04em;}
+.target-info .dist{color:#ffb000;font-weight:700;}
+.target-info .status{font-size:8px;color:#8e90a6;display:block;}
+.target-info .status.ok{color:#50ffb0;}
+.data-table{width:100%;border-collapse:collapse;font-size:9px;font-family:'Space Grotesk',sans-serif;margin-top:4px;}
+.data-table th{background:rgba(255,176,0,0.12);color:#ffb000;padding:4px 2px;font-size:8px;letter-spacing:0.06em;text-transform:uppercase;text-align:center;font-weight:700;border-bottom:1px solid rgba(255,176,0,0.3);}
+.data-table td{padding:3px 2px;border-bottom:1px solid rgba(142,144,166,0.08);text-align:center;color:#e2e2e9;font-size:9px;}
+.data-table tr.new td{animation:flashNew 0.8s ease-out;}
+@keyframes flashNew{0%{background:rgba(255,176,0,0.3);}100%{background:transparent;}}
+.guide-panel{position:absolute;top:8px;right:8px;background:rgba(17,20,37,0.94);backdrop-filter:blur(8px);border:1px solid rgba(255,176,0,0.3);z-index:10;font-size:10px;color:#e2e2e9;max-width:200px;}
+.guide-panel .guide-head{font-family:'Space Grotesk';font-size:9px;letter-spacing:0.14em;text-transform:uppercase;color:#ffb000;padding:5px 10px;display:flex;justify-content:space-between;align-items:center;cursor:pointer;user-select:none;}
+.guide-panel .guide-head .tri{display:inline-block;transition:transform .2s;}
+.guide-panel.collapsed .guide-head .tri{transform:rotate(-90deg);}
+.guide-panel ul{list-style:none;padding:6px 10px 8px;line-height:1.6;display:block;}
+.guide-panel.collapsed ul{display:none;}
+.guide-panel li{font-size:10px;color:#e2e2e9;padding:1px 0;}
+.guide-panel li b{color:#ffb000;}
+.overlay{position:absolute;top:0;left:0;right:0;bottom:0;background:rgba(3,4,8,0.95);z-index:30;display:none;flex-direction:column;align-items:center;justify-content:center;padding:20px;}
+.overlay.show{display:flex;}
+.overlay .overlay-title{font-family:'Space Grotesk',sans-serif;font-size:18px;color:#ffb000;letter-spacing:0.06em;margin-bottom:8px;font-weight:700;text-align:center;}
+.overlay .overlay-sub{font-size:11px;color:#8e90a6;letter-spacing:0.1em;text-transform:uppercase;margin-bottom:14px;}
+.overlay .chart-box{background:rgba(17,20,37,0.9);border:1px solid rgba(255,176,0,0.3);padding:12px;width:min(90%,480px);}
+.overlay .caption{font-size:12px;color:#e2e2e9;line-height:1.7;margin-top:12px;max-width:480px;text-align:center;}
+.overlay .caption b{color:#ffb000;}
+.overlay .done-btn{margin-top:16px;font-family:'Space Grotesk',sans-serif;font-size:11px;font-weight:700;letter-spacing:0.14em;text-transform:uppercase;padding:10px 24px;border:none;cursor:pointer;color:#050710;background:linear-gradient(135deg,#50ffb0,#00daf3);transition:transform 0.1s;}
+.overlay .done-btn:hover{transform:scale(1.04);}
+.toast{position:absolute;top:14px;left:50%;transform:translateX(-50%);background:rgba(17,20,37,0.95);border:1px solid #ffb000;padding:8px 16px;font-size:11px;color:#ffb000;letter-spacing:0.05em;z-index:25;display:none;font-family:'Space Grotesk';}
+.toast.show{display:block;animation:toastIn 0.3s ease-out;}
+@keyframes toastIn{from{opacity:0;transform:translate(-50%,-10px);}to{opacity:1;transform:translate(-50%,0);}}
+@media (max-width:860px){.left-panel{width:170px;}.right-panel{width:180px;}}
+</style>
+</head>
+<body>
+<button class="lang-btn" id="langBtn">CN</button>
+<div class="wrapper">
+<div class="header">
+<div>
+  <h1 id="titleEl"></h1>
+  <div class="sub" id="subtitleEl"></div>
+</div>
+<div class="right">
+  <div class="stat"><span id="shotLabel"></span><b id="shotVal">0</b></div>
+  <div class="stat"><span id="hitLabel"></span><b id="hitVal">0/5</b></div>
+</div>
+</div>
+<div class="stage-wrap">
+<!-- Left: Controls -->
+<div class="left-panel panel-box">
+  <div class="panel-title" id="ctrlTitle"></div>
+  <div class="panel-body">
+    <div class="control-group">
+      <div class="ctrl-label"><span id="angleLabel"></span><span class="val" id="angleVal">45&deg;</span></div>
+      <input type="range" class="ctrl-slider" id="angleSlider" min="10" max="80" value="45" step="1">
+    </div>
+    <div class="control-group">
+      <div class="ctrl-label"><span id="powerLabel"></span><span class="val" id="powerVal">50%</span></div>
+      <input type="range" class="ctrl-slider" id="powerSlider" min="10" max="100" value="50" step="1">
+      <div class="power-indicator" id="powerBars"></div>
+    </div>
+    <button class="launch-btn" id="launchBtn"></button>
+    <button class="reset-btn" id="resetBtn"></button>
+    <div class="hud-mini">
+      <div class="hud-chip"><div class="hl" id="lastDistLabel"></div><div class="hv" id="lastDistVal">--</div></div>
+      <div class="hud-chip"><div class="hl" id="lastHeightLabel"></div><div class="hv" id="lastHeightVal">--</div></div>
+      <div class="hud-chip"><div class="hl" id="bestDistLabel"></div><div class="hv" id="bestDistVal">--</div></div>
+      <div class="hud-chip"><div class="hl" id="bestAngleLabel"></div><div class="hv" id="bestAngleVal">--</div></div>
+    </div>
+  </div>
+</div>
+
+<!-- Center: Canvas -->
+<div class="center-panel panel-box">
+  <div class="panel-body">
+    <canvas id="flightCanvas"></canvas>
+    <div class="guide-panel" id="guidePanel">
+      <div class="guide-head" id="guideHead"><span id="guideLabel"></span><span class="tri">&#9660;</span></div>
+      <ul id="guideList"></ul>
+    </div>
+    <div class="toast" id="toast"></div>
+    <div class="overlay" id="overlay">
+      <div class="overlay-title" id="overlayTitle"></div>
+      <div class="overlay-sub" id="overlaySub"></div>
+      <div class="chart-box"><canvas id="chartCanvas" height="160"></canvas></div>
+      <div class="caption" id="overlayCaption"></div>
+      <button class="done-btn" id="doneBtn"></button>
+    </div>
+  </div>
+</div>
+
+<!-- Right: Targets + History -->
+<div class="right-panel panel-box">
+  <div class="panel-title" id="targetsTitle"></div>
+  <div class="panel-body" style="overflow-y:auto;">
+    <div class="target-list" id="targetList"></div>
+    <div style="margin-top:8px;">
+      <div class="panel-title" id="historyTitle" style="padding:4px 0;border:none;"></div>
+      <div style="max-height:200px;overflow-y:auto;">
+        <table class="data-table" id="historyTable">
+          <thead><tr><th>#</th><th id="thAngle"></th><th id="thPower"></th><th id="thDist"></th><th id="thResult"></th></tr></thead>
+          <tbody id="historyBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+</div>
+</div>
+
+<script>
+// ============================================================
+// I18N
+// ============================================================
+var LANG = 'cn';
+var I18N = {
+  title:       {en:'TRAJECTORY SANDBOX', cn:'\u5f39\u9053\u53d1\u5c04\u573a'},
+  subtitle:    {en:'ADJUST ANGLE & POWER, HIT ALL TARGETS', cn:'\u8c03\u8282\u89d2\u5ea6\u548c\u529b\u5ea6\uff0c\u547d\u4e2d\u6240\u6709\u76ee\u6807'},
+  ctrlTitle:   {en:'LAUNCH CONTROL', cn:'\u53d1\u5c04\u63a7\u5236'},
+  angleLabel:  {en:'ANGLE', cn:'\u89d2\u5ea6'},
+  powerLabel:  {en:'POWER', cn:'\u529b\u5ea6'},
+  launchBtn:   {en:'LAUNCH', cn:'\u53d1\u5c04'},
+  resetBtn:    {en:'RESET ALL', cn:'\u91cd\u7f6e'},
+  shots:       {en:'SHOTS', cn:'\u53d1\u5c04\u6b21\u6570'},
+  hits:        {en:'HITS', cn:'\u547d\u4e2d'},
+  lastDist:    {en:'LAST RANGE', cn:'\u4e0a\u6b21\u5c04\u7a0b'},
+  lastHeight:  {en:'LAST HEIGHT', cn:'\u4e0a\u6b21\u9ad8\u5ea6'},
+  bestDist:    {en:'BEST RANGE', cn:'\u6700\u8fdc\u5c04\u7a0b'},
+  bestAngle:   {en:'BEST ANGLE', cn:'\u6700\u4f73\u89d2\u5ea6'},
+  targetsTitle:{en:'TARGETS', cn:'\u76ee\u6807\u533a'},
+  historyTitle:{en:'FLIGHT LOG', cn:'\u53d1\u5c04\u8bb0\u5f55'},
+  thAngle:     {en:'ANGLE', cn:'\u89d2\u5ea6'},
+  thPower:     {en:'PWR', cn:'\u529b\u5ea6'},
+  thDist:      {en:'DIST', cn:'\u8ddd\u79bb'},
+  thResult:    {en:'RESULT', cn:'\u7ed3\u679c'},
+  targetAt:    {en:'Target at', cn:'\u76ee\u6807\u5728'},
+  waiting:     {en:'Waiting', cn:'\u7b49\u5f85\u4e2d'},
+  hitText:     {en:'HIT!', cn:'\u547d\u4e2d!'},
+  missText:    {en:'MISS', cn:'\u672a\u4e2d'},
+  guideLabel:  {en:'HOW TO PLAY', cn:'\u73a9\u6cd5\u6307\u5357'},
+  g1:          {en:'Drag the ANGLE slider (10\u00b0-80\u00b0)', cn:'\u62d6\u52a8\u89d2\u5ea6\u6ed1\u5757(10\u00b0-80\u00b0)'},
+  g2:          {en:'Drag the POWER slider (weak-strong)', cn:'\u62d6\u52a8\u529b\u5ea6\u6ed1\u5757(\u5f31-\u5f3a)'},
+  g3:          {en:'Press LAUNCH to fire the ball', cn:'\u70b9\u51fb\u53d1\u5c04\u6309\u94ae'},
+  g4:          {en:'Hit all 5 targets to win!', cn:'\u547d\u4e2d\u51685\u4e2a\u76ee\u6807\u5373\u83b7\u80dc!'},
+  g5:          {en:'Gray trails show your past shots', cn:'\u7070\u8272\u8f68\u8ff9\u662f\u4f60\u7684\u5386\u53f2\u53d1\u5c04'},
+  overlayTitle:{en:'ALL TARGETS HIT!', cn:'\u5168\u90e8\u547d\u4e2d!'},
+  overlaySub:  {en:'MISSION COMPLETE', cn:'\u4efb\u52a1\u5b8c\u6210'},
+  overlayCaption:{en:'You discovered that around <b>45\u00b0</b> gives the maximum range! The ball always flies in a <b>curved arc</b>, never a straight line.',
+                  cn:'\u4f60\u53d1\u73b0\u4e86\u5927\u7ea6<b>45\u00b0</b>\u65f6\u5c04\u7a0b\u6700\u8fdc\uff01\u7403\u6c38\u8fdc\u8d70\u7684\u662f<b>\u5f2f\u66f2\u7684\u5f27\u7ebf</b>\uff0c\u4e0d\u662f\u76f4\u7ebf\u3002'},
+  doneBtn:     {en:'UNDERSTOOD', cn:'\u6211\u660e\u767d\u4e86'},
+  toastHit:    {en:'TARGET HIT!', cn:'\u547d\u4e2d\u76ee\u6807!'},
+  toastMiss:   {en:'Missed \u2014 try adjusting the angle', cn:'\u672a\u547d\u4e2d\u2014\u2014\u8bd5\u8bd5\u8c03\u6574\u89d2\u5ea6'},
+  chartTitle:  {en:'YOUR SHOT MAP', cn:'\u4f60\u7684\u53d1\u5c04\u5730\u56fe'},
+};
+function t(key) { return (I18N[key] && I18N[key][LANG]) || (I18N[key] && I18N[key]['en']) || key; }
+
+// ============================================================
+// STATE
+// ============================================================
+var TARGETS = [
+  {dist: 3, tolerance: 1.2, hit: false, color: '#ff4444'},
+  {dist: 7, tolerance: 1.5, hit: false, color: '#ff9900'},
+  {dist: 12, tolerance: 1.8, hit: false, color: '#ffdd00'},
+  {dist: 17, tolerance: 2.0, hit: false, color: '#44dd88'},
+  {dist: 22, tolerance: 2.2, hit: false, color: '#4488ff'},
+];
+var flights = [];
+var animating = false;
+var animBall = null;
+var bestRange = 0;
+var bestAngle = 0;
+
+// Physics constants
+var G = 9.8;
+var V_MAX = 18; // max initial velocity m/s
+
+// Canvas
+var cv, ctx;
+var canvasW = 800, canvasH = 400;
+
+// ============================================================
+// INIT
+// ============================================================
+function init() {
+  cv = document.getElementById('flightCanvas');
+  ctx = cv.getContext('2d');
+  resizeCanvas();
+  window.addEventListener('resize', function(){ resizeCanvas(); drawScene(); });
+  updateUI();
+  drawScene();
+
+  // Event bindings
+  document.getElementById('angleSlider').addEventListener('input', onAngleChange);
+  document.getElementById('powerSlider').addEventListener('input', onPowerChange);
+  document.getElementById('launchBtn').addEventListener('click', onLaunch);
+  document.getElementById('resetBtn').addEventListener('click', onReset);
+  document.getElementById('guideHead').addEventListener('click', toggleGuide);
+  document.getElementById('doneBtn').addEventListener('click', function(){ document.getElementById('overlay').classList.remove('show'); });
+  document.getElementById('langBtn').addEventListener('click', toggleLang);
+
+  renderTargets();
+  renderGuide();
+  buildPowerBars();
+}
+
+function resizeCanvas() {
+  var parent = cv.parentElement;
+  var rect = parent.getBoundingClientRect();
+  var availW = rect.width;
+  var availH = rect.height;
+  var dpr = Math.min(window.devicePixelRatio || 1, 2);
+  canvasW = Math.floor(availW);
+  canvasH = Math.floor(availH);
+  cv.width = canvasW * dpr;
+  cv.height = canvasH * dpr;
+  cv.style.width = canvasW + 'px';
+  cv.style.height = canvasH + 'px';
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+}
+
+// ============================================================
+// COORDINATE MAPPING
+// ============================================================
+// World: x in meters (0-28), y in meters (0-12)
+var WORLD_X_MAX = 28;
+var WORLD_Y_MAX = 12;
+
+function worldToCanvas(wx, wy) {
+  var margin = 40;
+  var drawW = canvasW - margin * 2;
+  var drawH = canvasH - margin * 1.5;
+  var groundY = canvasH - margin;
+  return {
+    x: margin + (wx / WORLD_X_MAX) * drawW,
+    y: groundY - (wy / WORLD_Y_MAX) * drawH,
+  };
+}
+
+// ============================================================
+// DRAWING
+// ============================================================
+function drawScene() {
+  // Background
+  var grad = ctx.createLinearGradient(0, 0, 0, canvasH);
+  grad.addColorStop(0, '#050710');
+  grad.addColorStop(0.6, '#0a0f1a');
+  grad.addColorStop(1, '#111825');
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, canvasW, canvasH);
+
+  // Grid
+  ctx.strokeStyle = 'rgba(255,176,0,0.04)';
+  ctx.lineWidth = 1;
+  for (var gx = 0; gx <= canvasW; gx += 50) {
+    ctx.beginPath(); ctx.moveTo(gx, 0); ctx.lineTo(gx, canvasH); ctx.stroke();
+  }
+  for (var gy = 0; gy <= canvasH; gy += 50) {
+    ctx.beginPath(); ctx.moveTo(0, gy); ctx.lineTo(canvasW, gy); ctx.stroke();
+  }
+
+  // Ground
+  var gnd = worldToCanvas(0, 0);
+  ctx.strokeStyle = 'rgba(142,144,166,0.4)';
+  ctx.lineWidth = 1.5;
+  ctx.setLineDash([4, 4]);
+  ctx.beginPath();
+  ctx.moveTo(gnd.x, gnd.y);
+  ctx.lineTo(worldToCanvas(WORLD_X_MAX, 0).x, gnd.y);
+  ctx.stroke();
+  ctx.setLineDash([]);
+
+  // Distance markers
+  ctx.font = '9px "Space Grotesk"';
+  ctx.fillStyle = 'rgba(142,144,166,0.5)';
+  ctx.textAlign = 'center';
+  for (var dm = 5; dm <= 25; dm += 5) {
+    var mp = worldToCanvas(dm, 0);
+    ctx.fillText(dm + 'm', mp.x, mp.y + 14);
+    ctx.strokeStyle = 'rgba(142,144,166,0.1)';
+    ctx.beginPath(); ctx.moveTo(mp.x, mp.y); ctx.lineTo(mp.x, mp.y - 4); ctx.stroke();
+  }
+
+  // Targets
+  for (var ti = 0; ti < TARGETS.length; ti++) {
+    var tgt = TARGETS[ti];
+    var tp = worldToCanvas(tgt.dist, 0);
+    var tw = (tgt.tolerance / WORLD_X_MAX) * (canvasW - 80);
+
+    ctx.fillStyle = tgt.hit ? 'rgba(80,255,176,0.08)' : 'rgba(255,176,0,0.06)';
+    ctx.fillRect(tp.x - tw/2, tp.y - 30, tw, 30);
+    ctx.strokeStyle = tgt.hit ? 'rgba(80,255,176,0.5)' : 'rgba(255,176,0,0.25)';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(tp.x - tw/2, tp.y - 30, tw, 30);
+
+    // Target flag
+    ctx.fillStyle = tgt.hit ? '#50ffb0' : tgt.color;
+    ctx.beginPath();
+    ctx.moveTo(tp.x, tp.y);
+    ctx.lineTo(tp.x, tp.y - 30);
+    ctx.stroke();
+    ctx.fillRect(tp.x, tp.y - 30, 12, 8);
+
+    if (tgt.hit) {
+      ctx.font = '8px "Space Grotesk"';
+      ctx.fillStyle = '#50ffb0';
+      ctx.textAlign = 'center';
+      ctx.fillText('\u2713', tp.x + 6, tp.y - 23);
+    }
+  }
+
+  // Launch point
+  var lp = worldToCanvas(0, 0);
+  ctx.fillStyle = '#ffb000';
+  ctx.beginPath();
+  ctx.arc(lp.x, lp.y, 5, 0, Math.PI * 2);
+  ctx.fill();
+  // Glow
+  ctx.shadowColor = 'rgba(255,176,0,0.4)';
+  ctx.shadowBlur = 10;
+  ctx.beginPath();
+  ctx.arc(lp.x, lp.y, 3, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.shadowBlur = 0;
+
+  // Angle indicator line
+  var angle = parseInt(document.getElementById('angleSlider').value);
+  var rad = angle * Math.PI / 180;
+  var lineLen = 40;
+  ctx.strokeStyle = 'rgba(255,176,0,0.5)';
+  ctx.lineWidth = 1.5;
+  ctx.setLineDash([3, 3]);
+  ctx.beginPath();
+  ctx.moveTo(lp.x, lp.y);
+  ctx.lineTo(lp.x + Math.cos(rad) * lineLen, lp.y - Math.sin(rad) * lineLen);
+  ctx.stroke();
+  ctx.setLineDash([]);
+
+  ctx.font = '10px "Space Grotesk"';
+  ctx.fillStyle = '#ffb000';
+  ctx.textAlign = 'left';
+  ctx.fillText(angle + '\u00b0', lp.x + Math.cos(rad) * lineLen + 6, lp.y - Math.sin(rad) * lineLen);
+
+  // Historical trails (semi-transparent)
+  for (var fi = 0; fi < flights.length; fi++) {
+    var fl = flights[fi];
+    if (fl.pts && fl.pts.length > 1) {
+      ctx.strokeStyle = fl.hitTarget ? 'rgba(80,255,176,0.2)' : 'rgba(142,144,166,0.15)';
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      var p0 = worldToCanvas(fl.pts[0].x, fl.pts[0].y);
+      ctx.moveTo(p0.x, p0.y);
+      for (var pi = 1; pi < fl.pts.length; pi++) {
+        var pp = worldToCanvas(fl.pts[pi].x, fl.pts[pi].y);
+        ctx.lineTo(pp.x, pp.y);
+      }
+      ctx.stroke();
+    }
+  }
+
+  // Animated ball
+  if (animBall) {
+    var bp = worldToCanvas(animBall.x, animBall.y);
+    // Trail
+    if (animBall.trail.length > 1) {
+      ctx.strokeStyle = animBall.hitTarget ? '#50ffb0' : '#ffb000';
+      ctx.lineWidth = 2.5;
+      ctx.beginPath();
+      var tp0 = worldToCanvas(animBall.trail[0].x, animBall.trail[0].y);
+      ctx.moveTo(tp0.x, tp0.y);
+      for (var ti2 = 1; ti2 < animBall.trail.length; ti2++) {
+        var tp2 = worldToCanvas(animBall.trail[ti2].x, animBall.trail[ti2].y);
+        ctx.lineTo(tp2.x, tp2.y);
+      }
+      ctx.stroke();
+    }
+    // Ball
+    ctx.fillStyle = '#ffb000';
+    ctx.shadowColor = 'rgba(255,176,0,0.5)';
+    ctx.shadowBlur = 12;
+    ctx.beginPath();
+    ctx.arc(bp.x, bp.y, 5, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.shadowBlur = 0;
+  }
+}
+
+// ============================================================
+// LAUNCH PHYSICS
+// ============================================================
+function computeTrajectory(angleDeg, powerPct) {
+  var v0 = (powerPct / 100) * V_MAX;
+  var rad = angleDeg * Math.PI / 180;
+  var vx = v0 * Math.cos(rad);
+  var vy = v0 * Math.sin(rad);
+  var dt = 0.02;
+  var pts = [];
+  var px = 0, py = 0;
+  var maxH = 0;
+  while (py >= 0 || pts.length === 0) {
+    pts.push({x: px, y: py});
+    if (py > maxH) maxH = py;
+    px += vx * dt;
+    vy -= G * dt;
+    py += vy * dt;
+    if (py < 0 && pts.length > 2) { py = 0; pts.push({x: px, y: 0}); break; }
+    if (pts.length > 2000) break;
+  }
+  var range = pts[pts.length - 1].x;
+  return {pts: pts, range: range, maxHeight: maxH};
+}
+
+function onLaunch() {
+  if (animating) return;
+  var angle = parseInt(document.getElementById('angleSlider').value);
+  var power = parseInt(document.getElementById('powerSlider').value);
+  var traj = computeTrajectory(angle, power);
+
+  // Check which target was hit
+  var hitIdx = -1;
+  for (var ti = 0; ti < TARGETS.length; ti++) {
+    if (!TARGETS[ti].hit && Math.abs(traj.range - TARGETS[ti].dist) <= TARGETS[ti].tolerance) {
+      hitIdx = ti;
+      break;
+    }
+  }
+
+  var flight = {
+    angle: angle,
+    power: power,
+    range: traj.range,
+    maxHeight: traj.maxHeight,
+    pts: traj.pts,
+    hitTarget: hitIdx >= 0,
+    hitIdx: hitIdx,
+  };
+
+  // Animate
+  animating = true;
+  document.getElementById('launchBtn').disabled = true;
+  var stepIdx = 0;
+  var trail = [];
+
+  animBall = {x: 0, y: 0, trail: [], hitTarget: false};
+
+  function animStep() {
+    if (stepIdx >= traj.pts.length) {
+      // Animation done
+      animating = false;
+      animBall = null;
+      flights.push(flight);
+
+      if (hitIdx >= 0) {
+        TARGETS[hitIdx].hit = true;
+        showToast(t('toastHit'), '#50ffb0');
+      } else {
+        showToast(t('toastMiss'), '#ffb000');
+      }
+
+      // Update stats
+      if (traj.range > bestRange) {
+        bestRange = traj.range;
+        bestAngle = angle;
+      }
+
+      updateUI();
+      updateHistory(flight);
+      renderTargets();
+      drawScene();
+      document.getElementById('launchBtn').disabled = false;
+
+      // Check win
+      if (TARGETS.every(function(tg){ return tg.hit; })) {
+        setTimeout(showWinOverlay, 600);
+      }
+      return;
+    }
+
+    var pt = traj.pts[stepIdx];
+    animBall.x = pt.x;
+    animBall.y = pt.y;
+    animBall.trail.push({x: pt.x, y: pt.y});
+    animBall.hitTarget = hitIdx >= 0;
+    stepIdx += 3; // skip frames for speed
+    drawScene();
+    requestAnimationFrame(animStep);
+  }
+  requestAnimationFrame(animStep);
+}
+
+// ============================================================
+// UI UPDATES
+// ============================================================
+function updateUI() {
+  document.getElementById('titleEl').textContent = t('title');
+  document.getElementById('subtitleEl').textContent = t('subtitle');
+  document.getElementById('ctrlTitle').textContent = t('ctrlTitle');
+  document.getElementById('angleLabel').textContent = t('angleLabel');
+  document.getElementById('powerLabel').textContent = t('powerLabel');
+  document.getElementById('launchBtn').textContent = t('launchBtn');
+  document.getElementById('resetBtn').textContent = t('resetBtn');
+  document.getElementById('shotLabel').textContent = t('shots');
+  document.getElementById('hitLabel').textContent = t('hits');
+  document.getElementById('lastDistLabel').textContent = t('lastDist');
+  document.getElementById('lastHeightLabel').textContent = t('lastHeight');
+  document.getElementById('bestDistLabel').textContent = t('bestDist');
+  document.getElementById('bestAngleLabel').textContent = t('bestAngle');
+  document.getElementById('targetsTitle').textContent = t('targetsTitle');
+  document.getElementById('historyTitle').textContent = t('historyTitle');
+  document.getElementById('thAngle').textContent = t('thAngle');
+  document.getElementById('thPower').textContent = t('thPower');
+  document.getElementById('thDist').textContent = t('thDist');
+  document.getElementById('thResult').textContent = t('thResult');
+  document.getElementById('guideLabel').textContent = t('guideLabel');
+
+  document.getElementById('shotVal').textContent = flights.length;
+  var hitCount = TARGETS.filter(function(tg){ return tg.hit; }).length;
+  document.getElementById('hitVal').textContent = hitCount + '/5';
+
+  if (flights.length > 0) {
+    var last = flights[flights.length - 1];
+    document.getElementById('lastDistVal').textContent = last.range.toFixed(1) + 'm';
+    document.getElementById('lastHeightVal').textContent = last.maxHeight.toFixed(1) + 'm';
+  }
+  document.getElementById('bestDistVal').textContent = bestRange > 0 ? bestRange.toFixed(1) + 'm' : '--';
+  document.getElementById('bestAngleVal').textContent = bestAngle > 0 ? bestAngle + '\u00b0' : '--';
+}
+
+function onAngleChange() {
+  var val = document.getElementById('angleSlider').value;
+  document.getElementById('angleVal').textContent = val + '\u00b0';
+  drawScene();
+}
+
+function onPowerChange() {
+  var val = parseInt(document.getElementById('powerSlider').value);
+  document.getElementById('powerVal').textContent = val + '%';
+  updatePowerBars(val);
+}
+
+function buildPowerBars() {
+  var container = document.getElementById('powerBars');
+  container.innerHTML = '';
+  for (var i = 0; i < 10; i++) {
+    var bar = document.createElement('div');
+    bar.className = 'power-bar';
+    bar.setAttribute('data-idx', i);
+    container.appendChild(bar);
+  }
+  updatePowerBars(50);
+}
+
+function updatePowerBars(val) {
+  var bars = document.querySelectorAll('.power-bar');
+  var filled = Math.ceil(val / 10);
+  for (var i = 0; i < bars.length; i++) {
+    if (i < filled) {
+      bars[i].className = 'power-bar ' + (i >= 7 ? 'high' : 'active');
+    } else {
+      bars[i].className = 'power-bar';
+    }
+  }
+}
+
+function renderTargets() {
+  var container = document.getElementById('targetList');
+  container.innerHTML = '';
+  for (var i = 0; i < TARGETS.length; i++) {
+    var tgt = TARGETS[i];
+    var div = document.createElement('div');
+    div.className = 'target-item' + (tgt.hit ? ' hit' : '');
+    div.innerHTML = '<div class="target-dot ' + (tgt.hit ? 'hit' : 'miss') + '" style="background:' + (tgt.hit ? '#50ffb0' : tgt.color) + '"></div>' +
+      '<div class="target-info"><span class="dist">' + tgt.dist + 'm</span> ' + t('targetAt') +
+      '<span class="status ' + (tgt.hit ? 'ok' : '') + '">' + (tgt.hit ? t('hitText') : t('waiting')) + '</span></div>';
+    container.appendChild(div);
+  }
+}
+
+function renderGuide() {
+  var list = document.getElementById('guideList');
+  list.innerHTML = '';
+  var items = ['g1', 'g2', 'g3', 'g4', 'g5'];
+  for (var i = 0; i < items.length; i++) {
+    var li = document.createElement('li');
+    li.textContent = t(items[i]);
+    list.appendChild(li);
+  }
+}
+
+function toggleGuide() {
+  document.getElementById('guidePanel').classList.toggle('collapsed');
+}
+
+function updateHistory(flight) {
+  var tbody = document.getElementById('historyBody');
+  var tr = document.createElement('tr');
+  tr.className = 'new';
+  tr.innerHTML = '<td>' + flights.length + '</td>' +
+    '<td>' + flight.angle + '\u00b0</td>' +
+    '<td>' + flight.power + '%</td>' +
+    '<td>' + flight.range.toFixed(1) + 'm</td>' +
+    '<td style="color:' + (flight.hitTarget ? '#50ffb0' : '#8e90a6') + '">' + (flight.hitTarget ? t('hitText') : t('missText')) + '</td>';
+  tbody.insertBefore(tr, tbody.firstChild);
+}
+
+function showToast(msg, color) {
+  var toast = document.getElementById('toast');
+  toast.textContent = msg;
+  toast.style.borderColor = color || '#ffb000';
+  toast.style.color = color || '#ffb000';
+  toast.className = 'toast show';
+  setTimeout(function(){ toast.className = 'toast'; }, 2000);
+}
+
+function showWinOverlay() {
+  var ov = document.getElementById('overlay');
+  ov.classList.add('show');
+  document.getElementById('overlayTitle').textContent = t('overlayTitle');
+  document.getElementById('overlaySub').textContent = t('overlaySub');
+  document.getElementById('overlayCaption').innerHTML = t('overlayCaption');
+  document.getElementById('doneBtn').textContent = t('doneBtn');
+
+  // Draw summary chart
+  drawSummaryChart();
+}
+
+function drawSummaryChart() {
+  var cc = document.getElementById('chartCanvas');
+  var cctx = cc.getContext('2d');
+  var cw = cc.parentElement.offsetWidth - 24;
+  cc.width = cw * 2;
+  cc.height = 160 * 2;
+  cc.style.width = cw + 'px';
+  cc.style.height = '160px';
+  cctx.setTransform(2, 0, 0, 2, 0, 0);
+
+  // Background
+  cctx.fillStyle = 'rgba(7,10,20,0.8)';
+  cctx.fillRect(0, 0, cw, 160);
+
+  // Title
+  cctx.font = '10px "Space Grotesk"';
+  cctx.fillStyle = '#ffb000';
+  cctx.textAlign = 'center';
+  cctx.fillText(t('chartTitle'), cw/2, 14);
+
+  // Plot angle vs range
+  var margin = {top: 28, right: 20, bottom: 24, left: 35};
+  var plotW = cw - margin.left - margin.right;
+  var plotH = 160 - margin.top - margin.bottom;
+
+  // Axes
+  cctx.strokeStyle = 'rgba(142,144,166,0.3)';
+  cctx.lineWidth = 1;
+  cctx.beginPath();
+  cctx.moveTo(margin.left, margin.top);
+  cctx.lineTo(margin.left, margin.top + plotH);
+  cctx.lineTo(margin.left + plotW, margin.top + plotH);
+  cctx.stroke();
+
+  // Labels
+  cctx.font = '8px "Space Grotesk"';
+  cctx.fillStyle = '#8e90a6';
+  cctx.textAlign = 'center';
+  for (var ax = 10; ax <= 80; ax += 10) {
+    var px = margin.left + ((ax - 10) / 70) * plotW;
+    cctx.fillText(ax + '\u00b0', px, margin.top + plotH + 14);
+  }
+  cctx.textAlign = 'right';
+  var maxR = Math.max(bestRange, 25);
+  for (var ry = 0; ry <= maxR; ry += 5) {
+    var py = margin.top + plotH - (ry / maxR) * plotH;
+    cctx.fillText(ry + 'm', margin.left - 4, py + 3);
+    cctx.strokeStyle = 'rgba(142,144,166,0.1)';
+    cctx.beginPath(); cctx.moveTo(margin.left, py); cctx.lineTo(margin.left + plotW, py); cctx.stroke();
+  }
+
+  // Plot dots
+  for (var fi = 0; fi < flights.length; fi++) {
+    var fl = flights[fi];
+    var dx = margin.left + ((fl.angle - 10) / 70) * plotW;
+    var dy = margin.top + plotH - (fl.range / maxR) * plotH;
+    cctx.fillStyle = fl.hitTarget ? '#50ffb0' : 'rgba(255,176,0,0.6)';
+    cctx.beginPath();
+    cctx.arc(dx, dy, 3, 0, Math.PI * 2);
+    cctx.fill();
+  }
+}
+
+function onReset() {
+  flights = [];
+  animBall = null;
+  animating = false;
+  bestRange = 0;
+  bestAngle = 0;
+  for (var i = 0; i < TARGETS.length; i++) TARGETS[i].hit = false;
+  document.getElementById('historyBody').innerHTML = '';
+  document.getElementById('lastDistVal').textContent = '--';
+  document.getElementById('lastHeightVal').textContent = '--';
+  document.getElementById('overlay').classList.remove('show');
+  document.getElementById('launchBtn').disabled = false;
+  updateUI();
+  renderTargets();
+  drawScene();
+}
+
+function toggleLang() {
+  LANG = LANG === 'cn' ? 'en' : 'cn';
+  document.getElementById('langBtn').textContent = LANG === 'cn' ? 'CN' : 'EN';
+  updateUI();
+  renderTargets();
+  renderGuide();
+  drawScene();
+}
+
+// ============================================================
+// BOOT
+// ============================================================
+document.fonts.ready.then(function(){ init(); });
+setTimeout(function(){ if (!cv) init(); }, 300);
+</script>
+</body>
+</html>

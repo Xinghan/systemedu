@@ -1,0 +1,1126 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=Inter:wght@400;500&family=Noto+Sans+SC:wght@400;700&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box;}
+html,body{width:100%;height:100vh;overflow:hidden;}
+body{background:var(--bg,#0c0e12);color:var(--text,#f6f6fc);font-family:'Inter','Noto Sans SC',sans-serif;}
+/* -- Outer: sidebar + main -- */
+.wrapper{display:flex;flex-direction:row;height:100vh;overflow:hidden;}
+.sidebar{width:200px;min-width:200px;max-width:200px;display:flex;flex-direction:column;gap:6px;padding:10px;background:rgba(0,0,0,0.5);border-right:1px solid rgba(80,255,176,0.15);overflow-y:auto;}
+.lang-btn{align-self:flex-start;flex-shrink:0;font-family:'Space Grotesk',sans-serif;font-size:10px;font-weight:700;padding:3px 8px;cursor:pointer;border:1px solid rgba(255,181,156,0.25);background:transparent;color:#ffb59c;letter-spacing:1px;}
+.lang-btn:hover{border-color:#ffb59c;background:rgba(255,181,156,0.1);}
+.sidebar h1{font-family:'Space Grotesk',sans-serif;font-size:13px;font-weight:700;color:var(--primary,#50ffb0);margin-top:4px;line-height:1.3;}
+.sidebar .sub{font-size:10px;color:var(--muted,#aaabb0);letter-spacing:0.06em;text-transform:uppercase;}
+.sidebar .frame-ind{font-family:'Space Grotesk',sans-serif;font-size:10px;color:var(--muted,#aaabb0);letter-spacing:0.1em;margin-top:4px;}
+.sidebar .guide-label{font-family:'Space Grotesk',sans-serif;font-size:9px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:var(--primary,#50ffb0);margin-top:8px;}
+.sidebar .guide-content{font-family:'Noto Sans SC',sans-serif;font-size:11px;color:rgba(255,255,255,0.85);line-height:1.5;}
+.sidebar .guide-content ul{padding-left:16px;margin:0;}
+.sidebar .guide-content li{margin-bottom:1px;}
+/* -- Main area: canvas + controls + hud -- */
+.anim-main{flex:1;display:flex;flex-direction:column;min-width:0;}
+.canvas-wrap{flex:1;min-height:0;position:relative;}
+canvas{width:100%;height:100%;display:block;}
+/* -- Controls + HUD -- */
+.controls{display:flex;justify-content:center;align-items:center;gap:12px;padding:6px 16px;}
+.ctrl-btn{font-family:'Space Grotesk',sans-serif;font-size:11px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;padding:5px 16px;border:none;cursor:pointer;color:var(--bg,#0c0e12);background:linear-gradient(135deg,var(--primary,#50ffb0),var(--primary-dim,#17df93));transition:transform 0.1s,box-shadow 0.2s;box-shadow:0 0 10px var(--glow-strong,rgba(80,255,176,0.3));}
+.ctrl-btn:hover{transform:scale(1.04);}
+.ctrl-btn:active{transform:scale(0.96);}
+.ctrl-btn.secondary{background:var(--glass,rgba(23,26,31,0.92));color:var(--muted,#aaabb0);box-shadow:none;backdrop-filter:blur(12px);}
+.ctrl-btn.secondary:hover{color:var(--primary,#50ffb0);}
+.hud{height:40px;display:flex;align-items:center;justify-content:space-around;background:rgba(0,0,0,0.55);backdrop-filter:blur(12px);padding:0 16px;}
+.hud-item{text-align:center;}
+.hud-label{font-family:'Space Grotesk',sans-serif;font-size:8px;letter-spacing:0.15em;text-transform:uppercase;color:var(--muted,#aaabb0);}
+.hud-val{font-family:'Space Grotesk',sans-serif;font-size:13px;font-weight:700;color:var(--primary,#50ffb0);}
+</style>
+</head>
+<body>
+<div class="wrapper">
+<!-- Sidebar: lang-btn, title, guide (completely separate from canvas) -->
+<div class="sidebar">
+<button class="lang-btn" id="langBtn">CN</button>
+<h1 id="title"></h1>
+<div class="sub" id="subtitle"></div>
+<div class="frame-ind" id="frameIndicator"></div>
+<div class="guide-label" id="guideTitle"></div>
+<div class="guide-content" id="guideContent"></div>
+</div>
+<!-- Main: canvas fills all space, nothing overlaps -->
+<div class="anim-main">
+<div class="canvas-wrap"><canvas id="c"></canvas></div>
+<div class="controls">
+<button class="ctrl-btn secondary" id="btnPrev"></button>
+<button class="ctrl-btn" id="btnPlay"></button>
+<button class="ctrl-btn secondary" id="btnNext"></button>
+</div>
+<div class="hud">
+<div class="hud-item"><div class="hud-label" id="hudL1"></div><div class="hud-val" id="hudV1"></div></div>
+<div class="hud-item"><div class="hud-label" id="hudL2"></div><div class="hud-val" id="hudV2"></div></div>
+<div class="hud-item"><div class="hud-label" id="hudL3"></div><div class="hud-val" id="hudV3"></div></div>
+<div class="hud-item"><div class="hud-label" id="hudL4"></div><div class="hud-val" id="hudV4"></div></div>
+</div>
+</div>
+</div>
+
+<!-- Runtime (shared skeleton) -->
+<script src="animation_runtime.js"></script>
+
+<!-- Content script -->
+<script>
+// ============================================================
+// Knode 17 v2: Newton's First Law -- Things Don't Move By Themselves
+// Concept: Inertia -- objects tend to keep their current state of motion
+// Core question: Why doesn't stuff fly off when you yank the tablecloth?
+//
+// F0: Title -- tablecloth-pull silhouette + core question
+// F1: Static equilibrium -- cup on table, force diagram balanced
+// F2: Tablecloth trick -- animated pull, cup stays, wobble
+// F3: Hockey puck -- ice (no friction) vs rough surface
+// F4: Space -- rocket drifts with engine off
+// ============================================================
+
+var CONFIG = {
+  style: 'ares_mission',
+  totalFrames: 5,
+
+  i18n: {
+    title:       {en:"NEWTON'S FIRST LAW",            cn:'\u725b\u987f\u7b2c\u4e00\u5b9a\u5f8b'},
+    subtitle:    {en:'THINGS DON\'T MOVE BY THEMSELVES', cn:'\u4e1c\u897f\u4e0d\u4f1a\u81ea\u5df1\u52a8\u8d77\u6765'},
+    f0question:  {en:'Why doesn\'t stuff fly off when you yank the tablecloth?', cn:'\u4e3a\u4ec0\u4e48\u4f60\u7a81\u7136\u62bd\u684c\u5e03\u7684\u65f6\u5019\uff0c\u4e0a\u9762\u7684\u4e1c\u897f\u4e0d\u4f1a\u8ddf\u7740\u98de\u8d70\uff1f'},
+    f0sub:       {en:'Inertia -- the tendency to stay as you are', cn:'\u60ef\u6027 -- \u7269\u4f53\u503e\u5411\u4e8e\u4fdd\u6301\u539f\u6765\u7684\u8fd0\u52a8\u72b6\u6001'},
+    f1title:     {en:'STATIC EQUILIBRIUM',             cn:'\u9759\u6b62\u5e73\u8861'},
+    f1gravity:   {en:'Gravity',                        cn:'\u91cd\u529b'},
+    f1normal:    {en:'Normal force',                   cn:'\u652f\u6301\u529b'},
+    f1balanced:  {en:'Balanced! Net force = 0',        cn:'\u5e73\u8861\uff01\u5408\u529b = 0'},
+    f1rule:      {en:'No net force, stationary objects stay still', cn:'\u6ca1\u6709\u5916\u529b\uff0c\u9759\u6b62\u7684\u7269\u4f53\u4fdd\u6301\u9759\u6b62'},
+    f1cup:       {en:'CUP',                            cn:'\u676f\u5b50'},
+    f2title:     {en:'TABLECLOTH TRICK',               cn:'\u684c\u5e03\u9b54\u672f'},
+    f2pull:      {en:'PULL!',                          cn:'\u62bd\uff01'},
+    f2friction:  {en:'Friction too brief to move cup', cn:'\u6469\u64e6\u529b\u65f6\u95f4\u592a\u77ed\uff0c\u6765\u4e0d\u53ca\u63a8\u52a8\u676f\u5b50'},
+    f2inertia:   {en:'Cup\'s inertia keeps it in place', cn:'\u676f\u5b50\u7684\u60ef\u6027\u8ba9\u5b83\u7559\u5728\u539f\u5730'},
+    f2speed:     {en:'Speed lines',                    cn:'\u901f\u5ea6\u7ebf'},
+    f2wobble:    {en:'Slight wobble',                  cn:'\u8f7b\u5fae\u6643\u52a8'},
+    f3title:     {en:'MOVING OBJECT KEEPS MOVING',     cn:'\u8fd0\u52a8\u7684\u7269\u4f53\u4fdd\u6301\u8fd0\u52a8'},
+    f3ice:       {en:'On ice (nearly no friction)',     cn:'\u5728\u51b0\u9762\u4e0a\uff08\u51e0\u4e4e\u65e0\u6469\u64e6\uff09'},
+    f3rough:     {en:'On rough surface (friction)',     cn:'\u5728\u7c97\u7cd9\u8868\u9762\uff08\u6709\u6469\u64e6\uff09'},
+    f3forever:   {en:'Keeps going!',                   cn:'\u4e00\u76f4\u6ed1\u4e0b\u53bb\uff01'},
+    f3stops:     {en:'Slows and stops',                cn:'\u51cf\u901f\u5e76\u505c\u4e0b'},
+    f3friction:  {en:'Friction',                       cn:'\u6469\u64e6\u529b'},
+    f3puck:      {en:'PUCK',                           cn:'\u51b0\u7403'},
+    f4title:     {en:'SPACE APPLICATION',              cn:'\u592a\u7a7a\u5e94\u7528'},
+    f4engineOff: {en:'ENGINE OFF',                     cn:'\u53d1\u52a8\u673a\u5173\u95ed'},
+    f4noDrag:    {en:'No drag, no friction',           cn:'\u65e0\u963b\u529b\uff0c\u65e0\u6469\u64e6'},
+    f4drift:     {en:'Constant velocity forever',      cn:'\u6c38\u8fdc\u5300\u901f\u524d\u8fdb'},
+    f4insight:   {en:'Turn off the engine in space -- the rocket won\'t stop!', cn:'\u592a\u7a7a\u4e2d\u5173\u6389\u53d1\u52a8\u673a\u706b\u7bad\u4e0d\u4f1a\u505c\u4e0b\u6765'},
+    guideTitle:  {en:'OBSERVATION GUIDE',              cn:'\u89c2\u5bdf\u6307\u5357'},
+    g1:          {en:'Watch the force arrows: when they balance, nothing changes', cn:'\u89c2\u5bdf\u529b\u7684\u7bad\u5934\uff1a\u5e73\u8861\u65f6\u4ec0\u4e48\u90fd\u4e0d\u4f1a\u53d8'},
+    g2:          {en:'The tablecloth trick works because of inertia', cn:'\u684c\u5e03\u9b54\u672f\u80fd\u6210\u529f\u662f\u56e0\u4e3a\u60ef\u6027'},
+    g3:          {en:'In space with no friction, moving objects never stop', cn:'\u5728\u6ca1\u6709\u6469\u64e6\u7684\u592a\u7a7a\u4e2d\uff0c\u8fd0\u52a8\u7684\u7269\u4f53\u6c38\u4e0d\u505c\u6b62'},
+    hudScene:    {en:'SCENE',    cn:'\u573a\u666f'},
+    hudForce:    {en:'NET FORCE',cn:'\u5408\u529b'},
+    hudState:    {en:'STATE',    cn:'\u72b6\u6001'},
+    hudInertia:  {en:'INERTIA',  cn:'\u60ef\u6027'},
+    hvTitle:     {en:'Title',         cn:'\u6807\u9898'},
+    hvTable:     {en:'Table',         cn:'\u684c\u9762'},
+    hvTrick:     {en:'Trick',         cn:'\u9b54\u672f'},
+    hvIce:       {en:'Ice rink',      cn:'\u51b0\u573a'},
+    hvSpace:     {en:'Space',         cn:'\u592a\u7a7a'},
+    hvZero:      {en:'0',             cn:'0'},
+    hvBrief:     {en:'Brief',         cn:'\u77ed\u6682'},
+    hvNone:      {en:'None',          cn:'\u65e0'},
+    hvStill:     {en:'Still',         cn:'\u9759\u6b62'},
+    hvStays:     {en:'Stays',         cn:'\u7559\u4e0b'},
+    hvGlides:    {en:'Glides',        cn:'\u6ed1\u884c'},
+    hvDrifts:    {en:'Drifts',        cn:'\u6f02\u79fb'},
+    hvDemo:      {en:'Demo',          cn:'\u6f14\u793a'},
+    hvKey:       {en:'Key',           cn:'\u5173\u952e'},
+    hvHigh:      {en:'High',          cn:'\u9ad8'},
+    hvMax:       {en:'Max',           cn:'\u6700\u5927'},
+  },
+
+  hudLabels: ['hudScene', 'hudForce', 'hudState', 'hudInertia'],
+  hudValues: [
+    ['hvTitle',  '--',     '--',      'hvDemo'],
+    ['hvTable',  'hvZero', 'hvStill', 'hvKey'],
+    ['hvTrick',  'hvBrief','hvStays', 'hvHigh'],
+    ['hvIce',    'hvNone', 'hvGlides','hvHigh'],
+    ['hvSpace',  'hvNone', 'hvDrifts','hvMax'],
+  ],
+
+  guideTitle: 'guideTitle',
+  guideItems: ['g1', 'g2', 'g3'],
+};
+
+// ============================================================
+// Animation state
+// ============================================================
+var _animTime = 0;
+var _animFrame = -1;
+var _rafId = null;
+
+// F2 tablecloth trick state
+var _clothPulled = false;
+var _clothX = 0;
+var _cupWobble = 0;
+var _pullTime = 0;
+var _shakeX = 0;
+var _shakeY = 0;
+var _shakeDecay = 0;
+var _burstParticles = [];
+
+// F3 puck state
+var _puckIceX = 0;
+var _puckRoughX = 0;
+var _puckRoughV = 0;
+
+// F4 rocket state
+var _rocketX = 0;
+
+// Web Audio for sound (muted by default)
+var soundMuted = true;
+var _audioCtx = null;
+
+function _getAudioCtx() {
+  if (!_audioCtx) {
+    try { _audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch(e) {}
+  }
+  return _audioCtx;
+}
+
+function _playBeep(freq, dur) {
+  if (soundMuted) return;
+  var ac = _getAudioCtx();
+  if (!ac) return;
+  var osc = ac.createOscillator();
+  var gain = ac.createGain();
+  osc.connect(gain);
+  gain.connect(ac.destination);
+  osc.frequency.value = freq;
+  gain.gain.setValueAtTime(0.08, ac.currentTime);
+  gain.gain.exponentialRampToValueAtTime(0.001, ac.currentTime + dur);
+  osc.start(ac.currentTime);
+  osc.stop(ac.currentTime + dur);
+}
+
+// Easing functions
+function _easeOutCubic(x) { return 1 - Math.pow(1 - x, 3); }
+function _easeInOutQuad(x) { return x < 0.5 ? 2 * x * x : 1 - Math.pow(-2 * x + 2, 2) / 2; }
+
+// Particle burst system
+function _spawnBurst(cx, cy, count, color) {
+  for (var i = 0; i < count; i++) {
+    var angle = (Math.PI * 2 / count) * i + (Math.random() - 0.5) * 0.5;
+    var speed = 40 + Math.random() * 80;
+    _burstParticles.push({
+      x: cx, y: cy,
+      vx: Math.cos(angle) * speed,
+      vy: Math.sin(angle) * speed,
+      life: 1.0,
+      decay: 1.5 + Math.random() * 0.8,
+      radius: 1.5 + Math.random() * 2,
+      color: color
+    });
+  }
+}
+
+function _updateAndDrawParticles(ctx, dt) {
+  var alive = [];
+  for (var i = 0; i < _burstParticles.length; i++) {
+    var p = _burstParticles[i];
+    p.life -= p.decay * dt;
+    if (p.life <= 0) continue;
+    p.x += p.vx * dt;
+    p.y += p.vy * dt;
+    p.vy += 40 * dt;
+    ctx.globalAlpha = p.life * 0.8;
+    ctx.fillStyle = p.color;
+    ctx.shadowColor = p.color;
+    ctx.shadowBlur = 4;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, p.radius * p.life, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.shadowBlur = 0;
+    alive.push(p);
+  }
+  ctx.globalAlpha = 1;
+  _burstParticles = alive;
+}
+
+// Screen shake
+function _triggerShake(intensity) {
+  _shakeDecay = 1.0;
+  _shakeX = (Math.random() - 0.5) * intensity;
+  _shakeY = (Math.random() - 0.5) * intensity;
+}
+
+function _updateShake(dt) {
+  if (_shakeDecay > 0) {
+    _shakeDecay -= dt * 5;
+    if (_shakeDecay < 0) _shakeDecay = 0;
+    _shakeX = (Math.random() - 0.5) * 5 * _shakeDecay;
+    _shakeY = (Math.random() - 0.5) * 5 * _shakeDecay;
+  } else {
+    _shakeX = 0;
+    _shakeY = 0;
+  }
+}
+
+// Continuous animation loop
+function _startAnimLoop() {
+  var lastTs = null;
+  (function animLoop(ts) {
+    var dt = 0.016;
+    if (lastTs !== null) {
+      dt = Math.min((ts - lastTs) / 1000, 0.05);
+    }
+    lastTs = ts;
+    _animTime += dt;
+
+    if (typeof AnimRuntime !== 'undefined' && AnimRuntime.currentFrame !== undefined) {
+      var cf = AnimRuntime.currentFrame;
+      if (cf !== _animFrame) {
+        _animFrame = cf;
+        _animTime = 0;
+        _clothPulled = false;
+        _clothX = 0;
+        _cupWobble = 0;
+        _pullTime = 0;
+        _shakeDecay = 0;
+        _burstParticles = [];
+        _puckIceX = 0;
+        _puckRoughX = 0;
+        _puckRoughV = 120;
+        _rocketX = 0;
+      }
+
+      // Update F2 cloth animation
+      if (cf === 2) {
+        _pullTime += dt;
+        if (_pullTime > 1.5 && !_clothPulled) {
+          _clothPulled = true;
+          _triggerShake(5);
+          _playBeep(220, 0.15);
+        }
+        if (_clothPulled) {
+          _clothX = Math.min(_clothX + dt * 500, 400);
+          _cupWobble = Math.sin(_animTime * 12) * 3 * Math.max(0, 1 - (_animTime - 1.5) * 2);
+        }
+      }
+
+      // Update F3 puck positions
+      if (cf === 3) {
+        _puckIceX += dt * 60;
+        if (_puckRoughV > 0) {
+          _puckRoughV -= dt * 50;
+          if (_puckRoughV < 0) _puckRoughV = 0;
+        }
+        _puckRoughX += _puckRoughV * dt;
+        // Loop ice puck
+        if (_puckIceX > 500) _puckIceX = -40;
+      }
+
+      // Update F4 rocket
+      if (cf === 4) {
+        _rocketX += dt * 30;
+      }
+
+      _updateShake(dt);
+      AnimRuntime.drawFrame(cf);
+    }
+    _rafId = requestAnimationFrame(animLoop);
+  })(performance.now());
+}
+
+// ============================================================
+// 2-layer parallax background
+// ============================================================
+function drawBg(ctx, W, H) {
+  // Layer 1: deep gradient
+  var g1 = ctx.createLinearGradient(0, 0, W * 0.3, H);
+  g1.addColorStop(0, '#0a0808');
+  g1.addColorStop(0.5, '#131010');
+  g1.addColorStop(1, '#1a1515');
+  ctx.fillStyle = g1;
+  ctx.fillRect(0, 0, W, H);
+
+  // Layer 2: subtle moving nebula (parallax)
+  var nebOffset = _animTime * 3;
+  ctx.fillStyle = 'rgba(255,127,80,0.012)';
+  for (var ni = 0; ni < 5; ni++) {
+    var nx = ((ni * 197 + nebOffset * 0.5) % (W + 200)) - 100;
+    var ny = (ni * 143 + 50) % H;
+    var nr = 80 + ni * 20;
+    var ng = ctx.createRadialGradient(nx, ny, 0, nx, ny, nr);
+    ng.addColorStop(0, 'rgba(255,127,80,0.04)');
+    ng.addColorStop(1, 'rgba(255,127,80,0)');
+    ctx.fillStyle = ng;
+    ctx.fillRect(nx - nr, ny - nr, nr * 2, nr * 2);
+  }
+
+  // Foreground star field (parallax layer 2, faster)
+  var starOffset = _animTime * 8;
+  ctx.fillStyle = 'rgba(255,255,255,0.12)';
+  for (var si = 0; si < 40; si++) {
+    var sx = ((si * 137.5 + 30 + starOffset * (0.2 + (si % 3) * 0.1)) % (W + 40)) - 20;
+    var sy = (si * 97.3 + 15) % H;
+    var sr = 0.4 + (si % 4) * 0.25;
+    var twinkle = 0.5 + 0.5 * Math.sin(_animTime * 2 + si * 1.7);
+    ctx.globalAlpha = twinkle * 0.3;
+    ctx.beginPath();
+    ctx.arc(sx, sy, sr, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+
+  // Grid overlay
+  ctx.strokeStyle = 'rgba(255,181,156,0.02)';
+  ctx.lineWidth = 0.5;
+  for (var gx = 0; gx < W; gx += 50) { ctx.beginPath(); ctx.moveTo(gx, 0); ctx.lineTo(gx, H); ctx.stroke(); }
+  for (var gy = 0; gy < H; gy += 50) { ctx.beginPath(); ctx.moveTo(0, gy); ctx.lineTo(W, gy); ctx.stroke(); }
+
+  // Apply screen shake offset
+  if (_shakeDecay > 0) {
+    ctx.translate(_shakeX, _shakeY);
+  }
+}
+
+// ============================================================
+// HELPER: draw arrow with glow
+// ============================================================
+function _drawArrowGlow(ctx, x1, y1, x2, y2, color, lineW, headSize) {
+  var dx = x2 - x1, dy = y2 - y1;
+  var len = Math.sqrt(dx * dx + dy * dy);
+  if (len < 1) return;
+  var ux = dx / len, uy = dy / len;
+  var px = -uy, py = ux;
+  ctx.shadowColor = color;
+  ctx.shadowBlur = 6;
+  ctx.strokeStyle = color;
+  ctx.lineWidth = lineW || 2;
+  ctx.beginPath();
+  ctx.moveTo(x1, y1);
+  ctx.lineTo(x2, y2);
+  ctx.stroke();
+  var hs = headSize || 6;
+  ctx.fillStyle = color;
+  ctx.beginPath();
+  ctx.moveTo(x2, y2);
+  ctx.lineTo(x2 - ux * hs + px * hs * 0.5, y2 - uy * hs + py * hs * 0.5);
+  ctx.lineTo(x2 - ux * hs - px * hs * 0.5, y2 - uy * hs - py * hs * 0.5);
+  ctx.closePath();
+  ctx.fill();
+  ctx.shadowBlur = 0;
+}
+
+// ============================================================
+// HELPER: draw cup
+// ============================================================
+function _drawCup(ctx, cx, cy, w, h, P, wobbleX) {
+  var wx = wobbleX || 0;
+  ctx.save();
+  ctx.translate(cx + wx, cy);
+
+  // Idle breathe
+  var breathe = 1 + Math.sin(_animTime * Math.PI) * 0.015;
+  ctx.scale(breathe, breathe);
+
+  // Cup body (trapezoid, gradient fill)
+  var topW = w * 0.75;
+  var botW = w;
+  var cupGrad = ctx.createLinearGradient(-botW / 2, -h, botW / 2, 0);
+  cupGrad.addColorStop(0, 'rgba(220,230,255,0.8)');
+  cupGrad.addColorStop(0.5, 'rgba(180,200,230,0.6)');
+  cupGrad.addColorStop(1, 'rgba(140,160,200,0.4)');
+  ctx.fillStyle = cupGrad;
+  ctx.beginPath();
+  ctx.moveTo(-topW / 2, -h);
+  ctx.lineTo(topW / 2, -h);
+  ctx.lineTo(botW / 2, 0);
+  ctx.lineTo(-botW / 2, 0);
+  ctx.closePath();
+  ctx.fill();
+
+  // Cup outline
+  ctx.strokeStyle = 'rgba(200,220,255,0.5)';
+  ctx.lineWidth = 1.2;
+  ctx.stroke();
+
+  // Handle
+  ctx.strokeStyle = 'rgba(200,220,255,0.4)';
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.arc(botW / 2 + 6, -h * 0.45, 8, -Math.PI * 0.4, Math.PI * 0.4);
+  ctx.stroke();
+
+  // Liquid surface
+  ctx.fillStyle = 'rgba(139,69,19,0.5)';
+  ctx.beginPath();
+  ctx.ellipse(0, -h * 0.75, topW * 0.42, 4, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Rim highlight
+  ctx.strokeStyle = 'rgba(255,255,255,0.3)';
+  ctx.lineWidth = 0.8;
+  ctx.beginPath();
+  ctx.ellipse(0, -h, topW * 0.5, 3, 0, 0, Math.PI * 2);
+  ctx.stroke();
+
+  // Ambient glow
+  ctx.shadowColor = P.primary;
+  ctx.shadowBlur = 8;
+  ctx.strokeStyle = 'rgba(255,181,156,0.1)';
+  ctx.lineWidth = 0.3;
+  ctx.stroke();
+  ctx.shadowBlur = 0;
+
+  ctx.restore();
+}
+
+// ============================================================
+// HELPER: draw table
+// ============================================================
+function _drawTable(ctx, x, y, w, h, P) {
+  // Table top gradient
+  var tableGrad = ctx.createLinearGradient(x, y, x, y + h);
+  tableGrad.addColorStop(0, 'rgba(120,80,50,0.7)');
+  tableGrad.addColorStop(1, 'rgba(80,50,30,0.5)');
+  ctx.fillStyle = tableGrad;
+  ctx.fillRect(x, y, w, h);
+
+  // Table edge highlight
+  ctx.strokeStyle = 'rgba(180,130,80,0.4)';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(x, y);
+  ctx.lineTo(x + w, y);
+  ctx.stroke();
+
+  // Table legs
+  ctx.fillStyle = 'rgba(80,50,30,0.6)';
+  ctx.fillRect(x + 20, y + h, 8, 60);
+  ctx.fillRect(x + w - 28, y + h, 8, 60);
+}
+
+// ============================================================
+// HELPER: draw tablecloth
+// ============================================================
+function _drawCloth(ctx, x, y, w, h, pullOffset, P) {
+  var cGrad = ctx.createLinearGradient(x + pullOffset, y, x + pullOffset + w, y);
+  cGrad.addColorStop(0, 'rgba(200,40,40,0.7)');
+  cGrad.addColorStop(0.5, 'rgba(180,30,30,0.6)');
+  cGrad.addColorStop(1, 'rgba(160,20,20,0.5)');
+  ctx.fillStyle = cGrad;
+
+  // Cloth with slight drape
+  ctx.beginPath();
+  ctx.moveTo(x + pullOffset, y);
+  ctx.lineTo(x + pullOffset + w, y);
+  ctx.lineTo(x + pullOffset + w, y + h);
+  ctx.quadraticCurveTo(x + pullOffset + w * 0.5, y + h + 8, x + pullOffset, y + h);
+  ctx.closePath();
+  ctx.fill();
+
+  // Stripe pattern
+  ctx.strokeStyle = 'rgba(255,255,255,0.12)';
+  ctx.lineWidth = 0.8;
+  for (var si = 0; si < w; si += 18) {
+    ctx.beginPath();
+    ctx.moveTo(x + pullOffset + si, y);
+    ctx.lineTo(x + pullOffset + si, y + h);
+    ctx.stroke();
+  }
+}
+
+// ============================================================
+// HELPER: draw hockey puck
+// ============================================================
+function _drawPuck(ctx, cx, cy, P) {
+  // Puck body
+  var puckGrad = ctx.createRadialGradient(cx - 2, cy - 2, 1, cx, cy, 12);
+  puckGrad.addColorStop(0, '#333333');
+  puckGrad.addColorStop(0.6, '#1a1a1a');
+  puckGrad.addColorStop(1, '#0a0a0a');
+  ctx.fillStyle = puckGrad;
+  ctx.beginPath();
+  ctx.ellipse(cx, cy, 14, 7, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Edge highlight
+  ctx.strokeStyle = 'rgba(255,255,255,0.25)';
+  ctx.lineWidth = 0.8;
+  ctx.beginPath();
+  ctx.ellipse(cx, cy, 14, 7, 0, 0, Math.PI * 2);
+  ctx.stroke();
+
+  // Top surface shine
+  ctx.fillStyle = 'rgba(255,255,255,0.08)';
+  ctx.beginPath();
+  ctx.ellipse(cx - 3, cy - 2, 6, 3, -0.2, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Ambient glow
+  ctx.shadowColor = P.primary;
+  ctx.shadowBlur = 6;
+  ctx.fillStyle = 'rgba(255,181,156,0.02)';
+  ctx.beginPath();
+  ctx.ellipse(cx, cy, 16, 9, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.shadowBlur = 0;
+}
+
+// ============================================================
+// HELPER: draw ice particles
+// ============================================================
+function _drawIceTrail(ctx, px, py, count) {
+  ctx.fillStyle = 'rgba(200,230,255,0.35)';
+  for (var i = 0; i < count; i++) {
+    var tx = px - 10 - i * 6 + Math.sin(_animTime * 3 + i * 2) * 3;
+    var ty = py + (Math.random() - 0.5) * 6;
+    var tr = 0.8 + Math.random() * 1;
+    ctx.globalAlpha = 0.3 - i * 0.03;
+    ctx.beginPath();
+    ctx.arc(tx, ty, tr, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+}
+
+// ============================================================
+// HELPER: draw rocket
+// ============================================================
+function _drawRocket(ctx, cx, cy, P) {
+  ctx.save();
+  ctx.translate(cx, cy);
+
+  // Idle breathe
+  var breathe = 1 + Math.sin(_animTime * Math.PI) * 0.01;
+  ctx.scale(breathe, breathe);
+
+  // Rocket body
+  var bodyGrad = ctx.createLinearGradient(-8, -30, 8, 30);
+  bodyGrad.addColorStop(0, 'rgba(200,210,220,0.9)');
+  bodyGrad.addColorStop(0.5, 'rgba(160,170,180,0.8)');
+  bodyGrad.addColorStop(1, 'rgba(120,130,140,0.7)');
+  ctx.fillStyle = bodyGrad;
+  ctx.beginPath();
+  ctx.moveTo(0, -30);
+  ctx.quadraticCurveTo(10, -15, 10, 10);
+  ctx.lineTo(10, 25);
+  ctx.lineTo(-10, 25);
+  ctx.lineTo(-10, 10);
+  ctx.quadraticCurveTo(-10, -15, 0, -30);
+  ctx.closePath();
+  ctx.fill();
+
+  // Nose cone
+  ctx.fillStyle = P.primary;
+  ctx.beginPath();
+  ctx.moveTo(0, -30);
+  ctx.quadraticCurveTo(5, -22, 5, -15);
+  ctx.lineTo(-5, -15);
+  ctx.quadraticCurveTo(-5, -22, 0, -30);
+  ctx.closePath();
+  ctx.fill();
+
+  // Fins
+  ctx.fillStyle = P.primaryDim;
+  // Left fin
+  ctx.beginPath();
+  ctx.moveTo(-10, 18);
+  ctx.lineTo(-18, 30);
+  ctx.lineTo(-10, 25);
+  ctx.closePath();
+  ctx.fill();
+  // Right fin
+  ctx.beginPath();
+  ctx.moveTo(10, 18);
+  ctx.lineTo(18, 30);
+  ctx.lineTo(10, 25);
+  ctx.closePath();
+  ctx.fill();
+
+  // Window
+  ctx.fillStyle = 'rgba(100,200,255,0.5)';
+  ctx.strokeStyle = 'rgba(200,230,255,0.6)';
+  ctx.lineWidth = 0.8;
+  ctx.beginPath();
+  ctx.arc(0, -5, 4, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.stroke();
+
+  // Engine off indicator -- small X at nozzle
+  ctx.strokeStyle = P.error;
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.moveTo(-4, 28);
+  ctx.lineTo(4, 35);
+  ctx.moveTo(4, 28);
+  ctx.lineTo(-4, 35);
+  ctx.stroke();
+
+  // Ambient glow
+  ctx.shadowColor = P.primary;
+  ctx.shadowBlur = 10;
+  ctx.fillStyle = 'rgba(255,181,156,0.01)';
+  ctx.beginPath();
+  ctx.arc(0, 0, 35, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.shadowBlur = 0;
+
+  ctx.restore();
+}
+
+// ============================================================
+// HELPER: draw speed lines
+// ============================================================
+function _drawSpeedLines(ctx, x, y, w, count, color) {
+  ctx.strokeStyle = color || 'rgba(255,181,156,0.4)';
+  ctx.lineWidth = 1.5;
+  for (var i = 0; i < count; i++) {
+    var lx = x + Math.random() * 20;
+    var ly = y - 10 + i * (20 / count);
+    var ll = 15 + Math.random() * w;
+    ctx.globalAlpha = 0.2 + Math.random() * 0.4;
+    ctx.beginPath();
+    ctx.moveTo(lx, ly);
+    ctx.lineTo(lx + ll, ly);
+    ctx.stroke();
+  }
+  ctx.globalAlpha = 1;
+}
+
+// ============================================================
+// HELPER: draw streaking stars (for space)
+// ============================================================
+function _drawStreakingStars(ctx, W, H) {
+  var speed = 100;
+  ctx.strokeStyle = 'rgba(255,255,255,0.4)';
+  ctx.lineWidth = 0.8;
+  for (var i = 0; i < 30; i++) {
+    var sy = (i * 67.3 + 20) % H;
+    var baseX = (i * 137.5 + _animTime * speed * (0.5 + (i % 4) * 0.3)) % (W + 100) - 50;
+    var streakLen = 8 + (i % 5) * 4;
+    ctx.globalAlpha = 0.15 + (i % 3) * 0.1;
+    ctx.beginPath();
+    ctx.moveTo(baseX, sy);
+    ctx.lineTo(baseX - streakLen, sy);
+    ctx.stroke();
+  }
+  ctx.globalAlpha = 1;
+}
+
+// ============================================================
+// FRAME ELEMENTS
+// ============================================================
+function getFrameElements(f, W, H) {
+  var t = AnimRuntime.t;
+  var P = AnimRuntime.PAL;
+  var cx = W / 2, cy = H / 2;
+
+  if (f === 0) {
+    return [
+      {id:'f0scene', type:'title_scene'},
+      {id:'titleMain', type:'label', text:t('title'), x:cx, y:cy - 80, color:P.primary, size:22, align:'center', glow:P.glowStrong},
+      {id:'subtitleMain', type:'label', text:t('subtitle'), x:cx, y:cy - 54, color:P.muted, size:13, align:'center'},
+      {id:'questionLine', type:'label', text:t('f0question'), x:cx, y:cy + 40, color:'#ffffff', size:14, align:'center'},
+      {id:'f0sub', type:'label', text:t('f0sub'), x:cx, y:cy + 64, color:P.secondary, size:11, align:'center'},
+    ];
+  }
+
+  if (f === 1) {
+    return [
+      {id:'f1scene', type:'static_eq_scene'},
+      {id:'f1head', type:'label', text:t('f1title'), x:cx, y:24, color:P.primary, size:16, align:'center', glow:P.glowStrong},
+      {id:'f1ruleText', type:'label', text:t('f1rule'), x:cx, y:H - 22, color:P.secondary, size:11, align:'center'},
+    ];
+  }
+
+  if (f === 2) {
+    return [
+      {id:'f2scene', type:'tablecloth_scene'},
+      {id:'f2head', type:'label', text:t('f2title'), x:cx, y:24, color:P.primary, size:16, align:'center', glow:P.glowStrong},
+    ];
+  }
+
+  if (f === 3) {
+    return [
+      {id:'f3scene', type:'puck_scene'},
+      {id:'f3head', type:'label', text:t('f3title'), x:cx, y:24, color:P.primary, size:16, align:'center', glow:P.glowStrong},
+    ];
+  }
+
+  if (f === 4) {
+    return [
+      {id:'f4scene', type:'space_scene'},
+      {id:'f4head', type:'label', text:t('f4title'), x:cx, y:24, color:P.primary, size:16, align:'center', glow:P.glowStrong},
+      {id:'f4insightText', type:'label', text:t('f4insight'), x:cx, y:H - 22, color:P.tertiary, size:12, align:'center'},
+    ];
+  }
+
+  return [];
+}
+
+// ============================================================
+// CUSTOM DRAW ELEMENT
+// ============================================================
+function customDrawElement(ctx, el, W, H) {
+  var t = AnimRuntime.t;
+  var P = AnimRuntime.PAL;
+  var cx = W / 2, cy = H / 2;
+  var tm = _animTime;
+
+  // ---- F0: Title scene silhouette ----
+  if (el.type === 'title_scene') {
+    // Table silhouette
+    ctx.fillStyle = 'rgba(255,181,156,0.08)';
+    ctx.fillRect(cx - 100, cy + 10, 200, 12);
+    // Cup silhouette on table
+    ctx.fillStyle = 'rgba(255,181,156,0.12)';
+    ctx.beginPath();
+    ctx.moveTo(cx - 15, cy + 10);
+    ctx.lineTo(cx - 10, cy - 15);
+    ctx.lineTo(cx + 10, cy - 15);
+    ctx.lineTo(cx + 15, cy + 10);
+    ctx.closePath();
+    ctx.fill();
+    // Cloth edge hint
+    var clothWave = Math.sin(tm * 2) * 5;
+    ctx.strokeStyle = 'rgba(200,40,40,0.3)';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(cx - 100, cy + 14);
+    ctx.quadraticCurveTo(cx - 60, cy + 14 + clothWave, cx + 100, cy + 14);
+    ctx.stroke();
+    // Hand silhouette pulling cloth
+    var handX = cx + 120 + Math.sin(tm * 1.5) * 10;
+    ctx.fillStyle = 'rgba(255,181,156,0.1)';
+    ctx.beginPath();
+    ctx.arc(handX, cy + 14, 10, 0, Math.PI * 2);
+    ctx.fill();
+    // Glow on cup
+    ctx.shadowColor = P.primary;
+    ctx.shadowBlur = 12;
+    ctx.fillStyle = 'rgba(255,181,156,0.02)';
+    ctx.beginPath();
+    ctx.arc(cx, cy - 5, 25, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.shadowBlur = 0;
+    return true;
+  }
+
+  // ---- F1: Static equilibrium scene ----
+  if (el.type === 'static_eq_scene') {
+    var tableY = cy + 40;
+    var tableW = 260;
+    var tableH = 14;
+    var tableX = cx - tableW / 2;
+
+    // Draw table
+    _drawTable(ctx, tableX, tableY, tableW, tableH, P);
+
+    // Draw cup on table
+    var cupW = 36;
+    var cupH = 44;
+    _drawCup(ctx, cx, tableY, cupW, cupH, P, 0);
+
+    // Cup label
+    ctx.font = "bold 10px 'Space Grotesk','Noto Sans SC',sans-serif";
+    ctx.textAlign = 'center';
+    ctx.fillStyle = P.muted;
+    ctx.fillText(t('f1cup'), cx, tableY - cupH - 12);
+
+    // Force arrows
+    // Gravity (down)
+    var arrowStartY = tableY + 20;
+    _drawArrowGlow(ctx, cx, arrowStartY, cx, arrowStartY + 50, P.error, 2.5, 8);
+    ctx.font = "11px 'Noto Sans SC','Inter',sans-serif";
+    ctx.fillStyle = P.error;
+    ctx.textAlign = 'left';
+    ctx.fillText(t('f1gravity'), cx + 10, arrowStartY + 30);
+
+    // Normal force (up)
+    var normalStartY = tableY - cupH - 16;
+    _drawArrowGlow(ctx, cx, normalStartY, cx, normalStartY - 50, P.tertiary, 2.5, 8);
+    ctx.fillStyle = P.tertiary;
+    ctx.textAlign = 'left';
+    ctx.fillText(t('f1normal'), cx + 10, normalStartY - 30);
+
+    // Balanced indicator (= sign between arrows)
+    var eqY = cy - 10;
+    ctx.font = "bold 14px 'Space Grotesk',sans-serif";
+    ctx.textAlign = 'center';
+    ctx.fillStyle = P.primary;
+    ctx.shadowColor = P.glowStrong;
+    ctx.shadowBlur = 8;
+    ctx.fillText(t('f1balanced'), cx, tableY + tableH + 85);
+    ctx.shadowBlur = 0;
+
+    // Equal sign glow box
+    var pulseAlpha = 0.3 + 0.2 * Math.sin(tm * 3);
+    ctx.strokeStyle = 'rgba(255,181,156,' + pulseAlpha + ')';
+    ctx.lineWidth = 1;
+    var boxW = 180;
+    ctx.beginPath();
+    ctx.moveTo(cx - boxW / 2, tableY + tableH + 72);
+    ctx.lineTo(cx + boxW / 2, tableY + tableH + 72);
+    ctx.lineTo(cx + boxW / 2, tableY + tableH + 96);
+    ctx.lineTo(cx - boxW / 2, tableY + tableH + 96);
+    ctx.closePath();
+    ctx.stroke();
+
+    return true;
+  }
+
+  // ---- F2: Tablecloth trick scene ----
+  if (el.type === 'tablecloth_scene') {
+    var tblY = cy + 30;
+    var tblW = 280;
+    var tblH = 14;
+    var tblX = cx - tblW / 2;
+
+    // Draw table
+    _drawTable(ctx, tblX, tblY, tblW, tblH, P);
+
+    // Draw cloth (with pull offset)
+    var clothW = tblW + 40;
+    var clothH = 6;
+    var clothStartX = tblX - 20;
+    _drawCloth(ctx, clothStartX, tblY - 2, clothW, clothH, _clothX, P);
+
+    // Draw cup (stays in place, wobbles after pull)
+    var wobble = _clothPulled ? _cupWobble : 0;
+    _drawCup(ctx, cx, tblY, 36, 44, P, wobble);
+
+    // Labels based on state
+    if (!_clothPulled) {
+      // Before pull
+      ctx.font = "bold 12px 'Space Grotesk','Noto Sans SC',sans-serif";
+      ctx.textAlign = 'center';
+      ctx.fillStyle = P.error;
+
+      // Countdown / anticipation
+      var pulse = Math.sin(tm * 4) * 0.3 + 0.7;
+      ctx.globalAlpha = pulse;
+      ctx.fillText(t('f2pull'), cx + tblW / 2 + 40, tblY + 2);
+      ctx.globalAlpha = 1;
+
+      // Hand indicator
+      ctx.fillStyle = 'rgba(255,181,156,0.2)';
+      var handPulse = Math.sin(tm * 3) * 5;
+      ctx.beginPath();
+      ctx.arc(cx + tblW / 2 + 30 + handPulse, tblY, 8, 0, Math.PI * 2);
+      ctx.fill();
+    } else {
+      // After pull -- speed lines on cloth
+      if (_clothX < 350) {
+        _drawSpeedLines(ctx, cx + _clothX * 0.3, tblY - 10, 30, 8, 'rgba(200,40,40,0.4)');
+      }
+
+      // Friction annotation
+      ctx.font = "10px 'Noto Sans SC','Inter',sans-serif";
+      ctx.textAlign = 'center';
+      ctx.fillStyle = P.secondary;
+      ctx.fillText(t('f2friction'), cx, tblY + tblH + 30);
+
+      // Inertia annotation
+      ctx.fillStyle = P.primary;
+      ctx.font = "bold 11px 'Noto Sans SC','Inter',sans-serif";
+      ctx.fillText(t('f2inertia'), cx, tblY - 60);
+
+      // Wobble annotation
+      if (Math.abs(wobble) > 0.5) {
+        ctx.font = "9px 'Noto Sans SC','Inter',sans-serif";
+        ctx.fillStyle = P.muted;
+        ctx.fillText(t('f2wobble'), cx + 35, tblY - 30);
+      }
+    }
+
+    // Burst particles on pull
+    if (_clothPulled && _burstParticles.length === 0 && _clothX < 50) {
+      _spawnBurst(cx + tblW / 2, tblY, 12, P.primary);
+      _playBeep(440, 0.1);
+    }
+    _updateAndDrawParticles(ctx, 0.016);
+
+    return true;
+  }
+
+  // ---- F3: Hockey puck scene ----
+  if (el.type === 'puck_scene') {
+    var trackY1 = cy - 40;
+    var trackY2 = cy + 80;
+    var trackLeft = 60;
+    var trackRight = W - 60;
+    var trackW = trackRight - trackLeft;
+
+    // Ice surface (top track)
+    var iceGrad = ctx.createLinearGradient(trackLeft, trackY1 - 20, trackRight, trackY1 + 20);
+    iceGrad.addColorStop(0, 'rgba(180,220,255,0.08)');
+    iceGrad.addColorStop(0.5, 'rgba(200,240,255,0.12)');
+    iceGrad.addColorStop(1, 'rgba(180,220,255,0.06)');
+    ctx.fillStyle = iceGrad;
+    ctx.fillRect(trackLeft, trackY1 - 2, trackW, 22);
+
+    // Ice surface line
+    ctx.strokeStyle = 'rgba(200,230,255,0.3)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(trackLeft, trackY1 + 20);
+    ctx.lineTo(trackRight, trackY1 + 20);
+    ctx.stroke();
+
+    // Ice label
+    ctx.font = "10px 'Noto Sans SC','Inter',sans-serif";
+    ctx.textAlign = 'left';
+    ctx.fillStyle = P.tertiary;
+    ctx.fillText(t('f3ice'), trackLeft, trackY1 - 12);
+
+    // Ice puck (keeps going)
+    var icePuckX = trackLeft + 30 + (_puckIceX % (trackW - 60));
+    _drawPuck(ctx, icePuckX, trackY1 + 8, P);
+    _drawIceTrail(ctx, icePuckX, trackY1 + 8, 8);
+
+    // Arrow showing continuous motion
+    ctx.strokeStyle = P.primary;
+    ctx.lineWidth = 1;
+    ctx.setLineDash([4, 4]);
+    ctx.beginPath();
+    ctx.moveTo(icePuckX + 20, trackY1 + 8);
+    ctx.lineTo(trackRight - 10, trackY1 + 8);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // "Keeps going" label
+    ctx.font = "bold 10px 'Space Grotesk','Noto Sans SC',sans-serif";
+    ctx.textAlign = 'right';
+    ctx.fillStyle = P.primary;
+    ctx.fillText(t('f3forever'), trackRight - 5, trackY1 - 2);
+
+    // Rough surface (bottom track)
+    var roughGrad = ctx.createLinearGradient(trackLeft, trackY2 - 10, trackRight, trackY2 + 10);
+    roughGrad.addColorStop(0, 'rgba(160,120,80,0.1)');
+    roughGrad.addColorStop(0.5, 'rgba(140,100,60,0.15)');
+    roughGrad.addColorStop(1, 'rgba(120,80,40,0.08)');
+    ctx.fillStyle = roughGrad;
+    ctx.fillRect(trackLeft, trackY2 - 2, trackW, 22);
+
+    // Rough texture dots
+    ctx.fillStyle = 'rgba(160,120,80,0.15)';
+    for (var ri = 0; ri < 40; ri++) {
+      var rx = trackLeft + (ri * 17.3) % trackW;
+      var ry = trackY2 + (ri * 7.1) % 18;
+      ctx.beginPath();
+      ctx.arc(rx, ry, 1, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    // Rough surface line
+    ctx.strokeStyle = 'rgba(160,120,80,0.3)';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(trackLeft, trackY2 + 20);
+    ctx.lineTo(trackRight, trackY2 + 20);
+    ctx.stroke();
+
+    // Rough label
+    ctx.font = "10px 'Noto Sans SC','Inter',sans-serif";
+    ctx.textAlign = 'left';
+    ctx.fillStyle = P.muted;
+    ctx.fillText(t('f3rough'), trackLeft, trackY2 - 12);
+
+    // Rough puck (slows and stops)
+    var roughPuckX = trackLeft + 30 + _puckRoughX;
+    if (roughPuckX > trackRight - 30) roughPuckX = trackRight - 30;
+    _drawPuck(ctx, roughPuckX, trackY2 + 8, P);
+
+    // Friction arrow (opposing motion)
+    if (_puckRoughV > 5) {
+      _drawArrowGlow(ctx, roughPuckX - 18, trackY2 + 8, roughPuckX - 40, trackY2 + 8, P.error, 1.8, 6);
+      ctx.font = "9px 'Noto Sans SC','Inter',sans-serif";
+      ctx.textAlign = 'right';
+      ctx.fillStyle = P.error;
+      ctx.fillText(t('f3friction'), roughPuckX - 44, trackY2 + 4);
+    }
+
+    // "Slows and stops" label
+    ctx.font = "bold 10px 'Space Grotesk','Noto Sans SC',sans-serif";
+    ctx.textAlign = 'right';
+    ctx.fillStyle = P.error;
+    ctx.fillText(t('f3stops'), trackRight - 5, trackY2 - 2);
+
+    // Puck label in center
+    ctx.font = "bold 12px 'Space Grotesk','Noto Sans SC',sans-serif";
+    ctx.textAlign = 'center';
+    ctx.fillStyle = P.muted;
+    ctx.fillText(t('f3puck'), trackLeft + 10, cy + 18);
+
+    return true;
+  }
+
+  // ---- F4: Space scene ----
+  if (el.type === 'space_scene') {
+    // Streaking stars background
+    _drawStreakingStars(ctx, W, H);
+
+    // Rocket in center, drifting right
+    var rocketBaseX = cx - 60 + _rocketX;
+    if (rocketBaseX > W + 40) rocketBaseX = -40;
+    _drawRocket(ctx, rocketBaseX, cy, P);
+
+    // ENGINE OFF label near rocket
+    ctx.font = "bold 10px 'Space Grotesk','Noto Sans SC',sans-serif";
+    ctx.textAlign = 'center';
+    ctx.fillStyle = P.error;
+    ctx.shadowColor = P.error;
+    ctx.shadowBlur = 6;
+    ctx.fillText(t('f4engineOff'), rocketBaseX, cy + 50);
+    ctx.shadowBlur = 0;
+
+    // Velocity vector arrow
+    _drawArrowGlow(ctx, rocketBaseX + 25, cy, rocketBaseX + 65, cy, P.primary, 2, 7);
+
+    // "No drag, no friction" annotation
+    ctx.font = "10px 'Noto Sans SC','Inter',sans-serif";
+    ctx.textAlign = 'left';
+    ctx.fillStyle = P.muted;
+    ctx.fillText(t('f4noDrag'), 40, 55);
+
+    // "Constant velocity forever" annotation
+    ctx.font = "bold 11px 'Space Grotesk','Noto Sans SC',sans-serif";
+    ctx.textAlign = 'left';
+    ctx.fillStyle = P.primary;
+    ctx.shadowColor = P.glowStrong;
+    ctx.shadowBlur = 6;
+    ctx.fillText(t('f4drift'), 40, 75);
+    ctx.shadowBlur = 0;
+
+    // Dotted trajectory line behind rocket
+    ctx.strokeStyle = 'rgba(255,181,156,0.15)';
+    ctx.lineWidth = 1;
+    ctx.setLineDash([6, 8]);
+    ctx.beginPath();
+    ctx.moveTo(20, cy);
+    ctx.lineTo(rocketBaseX - 30, cy);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    return true;
+  }
+
+  return false;
+}
+
+// ============================================================
+// BOOT
+// ============================================================
+function onReady() {
+  _startAnimLoop();
+}
+
+AnimRuntime.boot();
+</script>
+</body>
+</html>

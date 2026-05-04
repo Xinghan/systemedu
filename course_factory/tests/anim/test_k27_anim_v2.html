@@ -1,0 +1,1066 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=Inter:wght@400;500&family=Noto+Sans+SC:wght@400;700&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box;}
+html,body{width:100%;height:100vh;overflow:hidden;}
+body{background:var(--bg,#0c0e12);color:var(--text,#f6f6fc);font-family:'Inter','Noto Sans SC',sans-serif;}
+/* ── Outer: sidebar + main ── */
+.wrapper{display:flex;flex-direction:row;height:100vh;overflow:hidden;}
+.sidebar{width:200px;min-width:200px;max-width:200px;display:flex;flex-direction:column;gap:6px;padding:10px;background:rgba(0,0,0,0.5);border-right:1px solid rgba(80,255,176,0.15);overflow-y:auto;}
+.lang-btn{align-self:flex-start;flex-shrink:0;font-family:'Space Grotesk',sans-serif;font-size:10px;font-weight:700;padding:3px 8px;cursor:pointer;border:1px solid rgba(255,181,156,0.25);background:transparent;color:#ffb59c;letter-spacing:1px;}
+.lang-btn:hover{border-color:#ffb59c;background:rgba(255,181,156,0.1);}
+.sidebar h1{font-family:'Space Grotesk',sans-serif;font-size:13px;font-weight:700;color:var(--primary,#50ffb0);margin-top:4px;line-height:1.3;}
+.sidebar .sub{font-size:10px;color:var(--muted,#aaabb0);letter-spacing:0.06em;text-transform:uppercase;}
+.sidebar .frame-ind{font-family:'Space Grotesk',sans-serif;font-size:10px;color:var(--muted,#aaabb0);letter-spacing:0.1em;margin-top:4px;}
+.sidebar .guide-label{font-family:'Space Grotesk',sans-serif;font-size:9px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:var(--primary,#50ffb0);margin-top:8px;}
+.sidebar .guide-content{font-family:'Noto Sans SC',sans-serif;font-size:11px;color:rgba(255,255,255,0.85);line-height:1.5;}
+.sidebar .guide-content ul{padding-left:16px;margin:0;}
+.sidebar .guide-content li{margin-bottom:1px;}
+/* ── Main area: canvas + controls + hud ── */
+.anim-main{flex:1;display:flex;flex-direction:column;min-width:0;}
+.canvas-wrap{flex:1;min-height:0;position:relative;}
+canvas{width:100%;height:100%;display:block;}
+/* ── Controls + HUD ── */
+.controls{display:flex;justify-content:center;align-items:center;gap:12px;padding:6px 16px;}
+.ctrl-btn{font-family:'Space Grotesk',sans-serif;font-size:11px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;padding:5px 16px;border:none;cursor:pointer;color:var(--bg,#0c0e12);background:linear-gradient(135deg,var(--primary,#50ffb0),var(--primary-dim,#17df93));transition:transform 0.1s,box-shadow 0.2s;box-shadow:0 0 10px var(--glow-strong,rgba(80,255,176,0.3));}
+.ctrl-btn:hover{transform:scale(1.04);}
+.ctrl-btn:active{transform:scale(0.96);}
+.ctrl-btn.secondary{background:var(--glass,rgba(23,26,31,0.92));color:var(--muted,#aaabb0);box-shadow:none;backdrop-filter:blur(12px);}
+.ctrl-btn.secondary:hover{color:var(--primary,#50ffb0);}
+.hud{height:40px;display:flex;align-items:center;justify-content:space-around;background:rgba(0,0,0,0.55);backdrop-filter:blur(12px);padding:0 16px;}
+.hud-item{text-align:center;}
+.hud-label{font-family:'Space Grotesk',sans-serif;font-size:8px;letter-spacing:0.15em;text-transform:uppercase;color:var(--muted,#aaabb0);}
+.hud-val{font-family:'Space Grotesk',sans-serif;font-size:13px;font-weight:700;color:var(--primary,#50ffb0);}
+</style>
+</head>
+<body>
+<div class="wrapper">
+<!-- Sidebar: lang-btn, title, guide (completely separate from canvas) -->
+<div class="sidebar">
+<button class="lang-btn" id="langBtn">CN</button>
+<h1 id="title"></h1>
+<div class="sub" id="subtitle"></div>
+<div class="frame-ind" id="frameIndicator"></div>
+<div class="guide-label" id="guideTitle"></div>
+<div class="guide-content" id="guideContent"></div>
+</div>
+<!-- Main: canvas fills all space, nothing overlaps -->
+<div class="anim-main">
+<div class="canvas-wrap"><canvas id="c"></canvas></div>
+<div class="controls">
+<button class="ctrl-btn secondary" id="btnPrev"></button>
+<button class="ctrl-btn" id="btnPlay"></button>
+<button class="ctrl-btn secondary" id="btnNext"></button>
+</div>
+<div class="hud">
+<div class="hud-item"><div class="hud-label" id="hudL1"></div><div class="hud-val" id="hudV1"></div></div>
+<div class="hud-item"><div class="hud-label" id="hudL2"></div><div class="hud-val" id="hudV2"></div></div>
+<div class="hud-item"><div class="hud-label" id="hudL3"></div><div class="hud-val" id="hudV3"></div></div>
+<div class="hud-item"><div class="hud-label" id="hudL4"></div><div class="hud-val" id="hudV4"></div></div>
+</div>
+</div>
+</div>
+
+<!-- Runtime (shared skeleton) -->
+<script src="animation_runtime.js"></script>
+
+<!-- Content -->
+<script>
+// ============================================================
+// K27: Thrust -- Force magnitude and duration
+// Concept: Thrust is the reaction force produced by an engine;
+//          thrust curves describe how thrust varies over time.
+// Core Q:  Can a 5N-average engine lift your rocket?
+// 5 frames:
+//   F0 - Title: nozzle flame icon, T=5N, core question
+//   F1 - What is thrust: exhaust particles down, thrust arrow up,
+//        3-bar log-scale comparison (1N / 10N / 2MN)
+//   F2 - Thrust curve anatomy: C6 curve animated L-to-R,
+//        peak(14.1N), avg dashed(5.8N), burn bracket(1.9s)
+//   F3 - Four engine comparison: Progressive/Neutral/Regressive/
+//        Short-Burst overlaid, legend with stats
+//   F4 - Thrust to acceleration: 200g vs 400g split-screen,
+//        F=ma force diagrams, "lighter = bigger acceleration"
+// ============================================================
+
+var CONFIG = {
+  style: 'ares_mission',
+  totalFrames: 5,
+
+  i18n: {
+    title:       {en:'THRUST', cn:'\u63a8\u529b'},
+    subtitle:    {en:'Force Magnitude & Duration', cn:'\u529b\u7684\u5927\u5c0f\u4e0e\u6301\u7eed\u65f6\u95f4'},
+    f0question:  {en:'How much thrust does it take\nto launch a rocket?', cn:'\u4e00\u4e2a\u5e73\u5747\u63a8\u529b 5N \u7684\u53d1\u52a8\u673a\n\u80fd\u63a8\u8d77\u591a\u91cd\u7684\u706b\u7bad\uff1f'},
+    f0label5n:   {en:'T = 5 N', cn:'T = 5 N'},
+    f1title:     {en:'WHAT IS THRUST?', cn:'\u4ec0\u4e48\u662f\u63a8\u529b\uff1f'},
+    f1desc:      {en:'Exhaust shoots down (action),\nrocket pushes up (reaction)\n-- Newton\'s 3rd Law', cn:'\u5e9f\u6c14\u5411\u4e0b\u55b7\u5c04\uff08\u4f5c\u7528\u529b\uff09\uff0c\n\u706b\u7bad\u5411\u4e0a\u63a8\u8fdb\uff08\u53cd\u4f5c\u7528\u529b\uff09\n\u2014\u2014 \u725b\u987f\u7b2c\u4e09\u5b9a\u5f8b'},
+    f1thrust:    {en:'Thrust (T)', cn:'\u63a8\u529b (T)'},
+    f1exhaust:   {en:'Exhaust', cn:'\u5e9f\u6c14'},
+    f1finger:    {en:'Finger push', cn:'\u624b\u6307\u63a8\u529b'},
+    f1model:     {en:'Model rocket', cn:'\u6a21\u578b\u706b\u7bad'},
+    f1raptor:    {en:'SpaceX Raptor', cn:'SpaceX Raptor'},
+    f1fingerN:   {en:'~1 N', cn:'~1 N'},
+    f1modelN:    {en:'~10 N', cn:'~10 N'},
+    f1raptorN:   {en:'~2 MN', cn:'~2 MN'},
+    f1logScale:  {en:'(log scale)', cn:'(\u5bf9\u6570\u5c3a\u5ea6)'},
+    f2title:     {en:'THRUST CURVE ANATOMY', cn:'\u63a8\u529b\u66f2\u7ebf\u89e3\u6790'},
+    f2xAxis:     {en:'Time (s)', cn:'\u65f6\u95f4 (s)'},
+    f2yAxis:     {en:'Thrust (N)', cn:'\u63a8\u529b (N)'},
+    f2peak:      {en:'Peak Thrust', cn:'\u5cf0\u503c\u63a8\u529b'},
+    f2avg:       {en:'Average Thrust', cn:'\u5e73\u5747\u63a8\u529b'},
+    f2burn:      {en:'Burn Time', cn:'\u71c3\u70e7\u65f6\u95f4'},
+    f2c6:        {en:'C6 Engine', cn:'C6 \u53d1\u52a8\u673a'},
+    f2shapes:    {en:'Curve shape: Peak + Decay', cn:'\u66f2\u7ebf\u5f62\u72b6: \u5cf0\u503c + \u8870\u51cf'},
+    f3title:     {en:'FOUR ENGINE TYPES', cn:'\u56db\u79cd\u53d1\u52a8\u673a\u7c7b\u578b'},
+    f3xAxis:     {en:'Time (s)', cn:'\u65f6\u95f4 (s)'},
+    f3yAxis:     {en:'Thrust (N)', cn:'\u63a8\u529b (N)'},
+    f3progA:     {en:'A: Progressive', cn:'A: \u6e10\u589e\u578b'},
+    f3neutralB:  {en:'B: Neutral', cn:'B: \u5e73\u7a33\u578b'},
+    f3regressC:  {en:'C: Regressive', cn:'C: \u6e10\u51cf\u578b'},
+    f3burstD:    {en:'D: Short Burst', cn:'D: \u77ed\u4fc3\u578b'},
+    f3tavg:      {en:'T_avg', cn:'T_avg'},
+    f3tmax:      {en:'T_max', cn:'T_max'},
+    f3burnTime:  {en:'Burn', cn:'\u71c3\u65f6'},
+    f4title:     {en:'THRUST TO ACCELERATION', cn:'\u63a8\u529b\u4e0e\u52a0\u901f\u5ea6'},
+    f4lightLabel:{en:'200 g rocket', cn:'200 g \u706b\u7bad'},
+    f4heavyLabel:{en:'400 g rocket', cn:'400 g \u706b\u7bad'},
+    f4engine:    {en:'Same engine: T = 10 N', cn:'\u76f8\u540c\u53d1\u52a8\u673a: T = 10 N'},
+    f4thrustUp:  {en:'T = 10 N', cn:'T = 10 N'},
+    f4weightL:   {en:'W = 1.96 N', cn:'W = 1.96 N'},
+    f4weightH:   {en:'W = 3.92 N', cn:'W = 3.92 N'},
+    f4calcL:     {en:'a = (10 - 1.96) / 0.2', cn:'a = (10 - 1.96) / 0.2'},
+    f4calcH:     {en:'a = (10 - 3.92) / 0.4', cn:'a = (10 - 3.92) / 0.4'},
+    f4resultL:   {en:'= 40.2 m/s\u00b2', cn:'= 40.2 m/s\u00b2'},
+    f4resultH:   {en:'= 15.2 m/s\u00b2', cn:'= 15.2 m/s\u00b2'},
+    f4insight:   {en:'Lighter rocket = Bigger acceleration!', cn:'\u8f7b\u706b\u7bad = \u66f4\u5927\u52a0\u901f\u5ea6\uff01'},
+    f4formula:   {en:'a = (T - W) / m', cn:'a = (T - W) / m'},
+    guideTitle:  {en:'OBSERVATION GUIDE', cn:'\u89c2\u5bdf\u6307\u5357'},
+    g1:          {en:'Thrust = reaction force of exhaust gas', cn:'\u63a8\u529b = \u5e9f\u6c14\u7684\u53cd\u4f5c\u7528\u529b'},
+    g2:          {en:'Thrust curve shows force over burn time', cn:'\u63a8\u529b\u66f2\u7ebf\u663e\u793a\u71c3\u70e7\u8fc7\u7a0b\u4e2d\u529b\u7684\u53d8\u5316'},
+    g3:          {en:'Different engines have different profiles', cn:'\u4e0d\u540c\u53d1\u52a8\u673a\u6709\u4e0d\u540c\u7684\u63a8\u529b\u7279\u6027'},
+    g4:          {en:'a = (T - W) / m: lighter = faster', cn:'a = (T - W) / m: \u8d8a\u8f7b\u8d8a\u5feb'},
+    hudEngine:   {en:'ENGINE', cn:'\u53d1\u52a8\u673a'},
+    hudThrust:   {en:'THRUST(N)', cn:'\u63a8\u529b(N)'},
+    hudAccel:    {en:'ACCEL(m/s\u00b2)', cn:'\u52a0\u901f\u5ea6(m/s\u00b2)'},
+    hudBurn:     {en:'BURN(s)', cn:'\u71c3\u65f6(s)'},
+  },
+
+  hudLabels: ['hudEngine', 'hudThrust', 'hudAccel', 'hudBurn'],
+  hudValues: [
+    ['--',      '5 N',    '--',    '--'],
+    ['--',      '1~2M',   '--',    '--'],
+    ['C6',      '14.1',   '--',    '1.9'],
+    ['A/B/C/D', '--',     '--',    '0.5~2'],
+    ['C6',      '10',     '40/15', '1.9'],
+  ],
+
+  guideTitle: 'guideTitle',
+  guideItems: ['g1', 'g2', 'g3', 'g4'],
+};
+
+// ============================================================
+// Persistent animation state
+// ============================================================
+var soundMuted = true;
+var _animTick = 0;
+var _shakeAmount = 0;
+var _shakeDecay = 0.92;
+
+// Curve-drawing progressive state (frames 2 & 3)
+var curveState = {progress: 0, frame: -1, phase: 0};
+var curveTimer = null;
+
+function startCurveAnim(frame) {
+  if (curveTimer) { clearInterval(curveTimer); curveTimer = null; }
+  curveState = {progress: 0, frame: frame, phase: 0};
+  curveTimer = setInterval(function () {
+    curveState.progress += 0.014;
+    if (curveState.progress > 1.0) {
+      curveState.progress = 1.0;
+      if (curveState.phase < 2) {
+        curveState.phase++;
+        curveState.progress = 0;
+      }
+    }
+    AnimRuntime.drawFrame(AnimRuntime.currentFrame);
+  }, 28);
+}
+
+// Parallax star field (generated once)
+var _stars = [];
+(function () {
+  var seed = 42;
+  for (var i = 0; i < 80; i++) {
+    seed = (seed * 1103515245 + 12345) & 0x7fffffff;
+    var sx = (seed % 1000) / 1000;
+    seed = (seed * 1103515245 + 12345) & 0x7fffffff;
+    var sy = (seed % 1000) / 1000;
+    seed = (seed * 1103515245 + 12345) & 0x7fffffff;
+    var sz = 0.3 + (seed % 70) / 100;
+    seed = (seed * 1103515245 + 12345) & 0x7fffffff;
+    var sr = 0.4 + (seed % 15) / 10;
+    _stars.push({x: sx, y: sy, z: sz, r: sr});
+  }
+})();
+
+// Continuous exhaust particle pool (reusable across frames)
+var _exhaustPool = [];
+var _exhaustPoolSize = 60;
+(function () {
+  var seed = 137;
+  for (var i = 0; i < _exhaustPoolSize; i++) {
+    seed = (seed * 1103515245 + 12345) & 0x7fffffff;
+    var phase = (seed % 1000) / 1000 * Math.PI * 2;
+    seed = (seed * 1103515245 + 12345) & 0x7fffffff;
+    var speed = 0.5 + (seed % 100) / 100;
+    seed = (seed * 1103515245 + 12345) & 0x7fffffff;
+    var drift = ((seed % 200) - 100) / 100;
+    seed = (seed * 1103515245 + 12345) & 0x7fffffff;
+    var size = 1 + (seed % 30) / 10;
+    _exhaustPool.push({phase: phase, speed: speed, drift: drift, size: size});
+  }
+})();
+
+// Frame-change detection for ignition shake + curve anim
+var _prevFrame27 = -1;
+setInterval(function () {
+  _animTick++;
+  _shakeAmount *= _shakeDecay;
+  var cf = AnimRuntime.currentFrame;
+  if (cf !== _prevFrame27) {
+    _prevFrame27 = cf;
+    // Screen shake on engine ignition (frames 0,1 have active engines)
+    if (cf === 0 || cf === 1) _shakeAmount = 2.5;
+    if (cf === 2 || cf === 3) startCurveAnim(cf);
+    else { if (curveTimer) { clearInterval(curveTimer); curveTimer = null; } }
+  }
+  // Continuous redraw for particle animation on frames 0,1,4
+  if (cf === 0 || cf === 1 || cf === 4) {
+    AnimRuntime.drawFrame(cf);
+  }
+}, 45);
+
+// ============================================================
+// Drawing helpers
+// ============================================================
+
+function drawParallaxStars(ctx, W, H, tick) {
+  for (var i = 0; i < _stars.length; i++) {
+    var s = _stars[i];
+    var twinkle = 0.4 + 0.6 * Math.abs(Math.sin(tick * 0.03 * s.z + s.x * 10));
+    ctx.globalAlpha = twinkle * s.z;
+    ctx.fillStyle = '#ffffff';
+    ctx.beginPath();
+    ctx.arc(s.x * W, s.y * H, s.r * s.z, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+}
+
+function drawRocketBody(ctx, x, y, scale) {
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.scale(scale, scale);
+  // Nose cone
+  ctx.fillStyle = '#e0e0e8';
+  ctx.beginPath();
+  ctx.moveTo(0, -35);
+  ctx.lineTo(-8, -15);
+  ctx.lineTo(8, -15);
+  ctx.closePath();
+  ctx.fill();
+  // Body tube
+  ctx.fillStyle = '#c0c0cc';
+  ctx.fillRect(-8, -15, 16, 30);
+  // Fins
+  ctx.fillStyle = '#ff7f50';
+  ctx.beginPath();
+  ctx.moveTo(-8, 12); ctx.lineTo(-16, 20); ctx.lineTo(-8, 15); ctx.closePath(); ctx.fill();
+  ctx.beginPath();
+  ctx.moveTo(8, 12); ctx.lineTo(16, 20); ctx.lineTo(8, 15); ctx.closePath(); ctx.fill();
+  // Nozzle
+  ctx.fillStyle = '#555560';
+  ctx.beginPath();
+  ctx.moveTo(-5, 15); ctx.lineTo(-7, 22); ctx.lineTo(7, 22); ctx.lineTo(5, 15); ctx.closePath();
+  ctx.fill();
+  ctx.restore();
+}
+
+function drawContinuousExhaust(ctx, x, y, count, spread, time) {
+  var colors = ['#ff6030', '#ff8040', '#ffaa30', '#ffcc60', '#ffe080'];
+  for (var i = 0; i < count && i < _exhaustPoolSize; i++) {
+    var p = _exhaustPool[i];
+    // Continuous stream: particles cycle through their lifetime
+    var life = ((time * p.speed + p.phase) % 1.0);
+    var px = x + p.drift * spread * life;
+    var py = y + life * 50;
+    var alpha = (1 - life) * 0.6;
+    if (alpha < 0.02) continue;
+    ctx.globalAlpha = alpha;
+    ctx.fillStyle = colors[i % colors.length];
+    ctx.beginPath();
+    ctx.arc(px, py, p.size * (1 - life * 0.5), 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+}
+
+function drawFlameJet(ctx, x, y, height, width, time) {
+  // Idle flicker modulation
+  var flicker = 0.9 + 0.1 * Math.sin(time * 12);
+  var fh = height * flicker;
+  var fw = width * (0.95 + 0.05 * Math.sin(time * 8 + 1.3));
+  // Inner bright core
+  var innerG = ctx.createLinearGradient(x, y, x, y + fh);
+  innerG.addColorStop(0, 'rgba(255,255,200,0.9)');
+  innerG.addColorStop(0.3, 'rgba(255,180,60,0.8)');
+  innerG.addColorStop(0.7, 'rgba(255,100,30,0.5)');
+  innerG.addColorStop(1, 'rgba(255,60,20,0.0)');
+  ctx.fillStyle = innerG;
+  ctx.beginPath();
+  ctx.moveTo(x - fw * 0.3, y);
+  ctx.quadraticCurveTo(x - fw * 0.5, y + fh * 0.5, x, y + fh);
+  ctx.quadraticCurveTo(x + fw * 0.5, y + fh * 0.5, x + fw * 0.3, y);
+  ctx.closePath();
+  ctx.fill();
+  // Outer glow
+  var outerG = ctx.createLinearGradient(x, y, x, y + fh * 1.2);
+  outerG.addColorStop(0, 'rgba(255,140,50,0.25)');
+  outerG.addColorStop(1, 'rgba(255,60,20,0.0)');
+  ctx.fillStyle = outerG;
+  ctx.beginPath();
+  ctx.moveTo(x - fw * 0.6, y);
+  ctx.quadraticCurveTo(x - fw * 0.7, y + fh * 0.6, x, y + fh * 1.2);
+  ctx.quadraticCurveTo(x + fw * 0.7, y + fh * 0.6, x + fw * 0.6, y);
+  ctx.closePath();
+  ctx.fill();
+}
+
+function drawForceArrow(ctx, x, y1, y2, color, label, labelSide, glowColor) {
+  var dir = y2 < y1 ? -1 : 1;
+  ctx.strokeStyle = color;
+  ctx.fillStyle = color;
+  ctx.lineWidth = 2.5;
+  // Glow on thrust arrows
+  if (glowColor) {
+    ctx.shadowColor = glowColor;
+    ctx.shadowBlur = 10;
+  }
+  // Shaft
+  ctx.beginPath(); ctx.moveTo(x, y1); ctx.lineTo(x, y2); ctx.stroke();
+  // Arrowhead
+  ctx.beginPath();
+  ctx.moveTo(x, y2);
+  ctx.lineTo(x - 6, y2 - dir * 12);
+  ctx.lineTo(x + 6, y2 - dir * 12);
+  ctx.closePath();
+  ctx.fill();
+  ctx.shadowBlur = 0;
+  // Label
+  if (label) {
+    ctx.font = "bold 10px 'Space Grotesk','Noto Sans SC',sans-serif";
+    ctx.textAlign = labelSide === 'left' ? 'right' : 'left';
+    ctx.textBaseline = 'middle';
+    var lx = labelSide === 'left' ? x - 10 : x + 10;
+    ctx.fillText(label, lx, (y1 + y2) / 2);
+  }
+}
+
+function drawNozzleIcon(ctx, x, y, scale) {
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.scale(scale, scale);
+  // Bell nozzle shape
+  ctx.fillStyle = '#707080';
+  ctx.beginPath();
+  ctx.moveTo(-12, -20); ctx.lineTo(-8, -20); ctx.lineTo(-8, 0);
+  ctx.quadraticCurveTo(-8, 10, -18, 22);
+  ctx.lineTo(-22, 22);
+  ctx.quadraticCurveTo(-12, 10, -12, 0);
+  ctx.closePath();
+  ctx.fill();
+  ctx.beginPath();
+  ctx.moveTo(12, -20); ctx.lineTo(8, -20); ctx.lineTo(8, 0);
+  ctx.quadraticCurveTo(8, 10, 18, 22);
+  ctx.lineTo(22, 22);
+  ctx.quadraticCurveTo(12, 10, 12, 0);
+  ctx.closePath();
+  ctx.fill();
+  // Combustion chamber
+  ctx.fillStyle = '#888898';
+  ctx.fillRect(-12, -30, 24, 12);
+  ctx.strokeStyle = 'rgba(255,255,255,0.2)'; ctx.lineWidth = 0.5;
+  ctx.strokeRect(-12, -30, 24, 12);
+  ctx.restore();
+}
+
+// ============================================================
+// Custom background: dark gradient + subtle grid + parallax stars + shake
+// ============================================================
+function drawBg(ctx, W, H) {
+  // Screen shake offset
+  var sx = 0, sy = 0;
+  if (_shakeAmount > 0.1) {
+    sx = (Math.random() - 0.5) * _shakeAmount * 2;
+    sy = (Math.random() - 0.5) * _shakeAmount * 2;
+    ctx.save();
+    ctx.translate(sx, sy);
+  }
+  // Dark gradient
+  var g = ctx.createLinearGradient(0, 0, 0, H);
+  g.addColorStop(0, '#131313'); g.addColorStop(1, '#1c1b1b');
+  ctx.fillStyle = g; ctx.fillRect(-5, -5, W + 10, H + 10);
+  // Grid
+  ctx.strokeStyle = 'rgba(255,181,156,0.035)'; ctx.lineWidth = 0.5;
+  for (var gx = 0; gx < W; gx += 40) { ctx.beginPath(); ctx.moveTo(gx, 0); ctx.lineTo(gx, H); ctx.stroke(); }
+  for (var gy = 0; gy < H; gy += 40) { ctx.beginPath(); ctx.moveTo(0, gy); ctx.lineTo(W, gy); ctx.stroke(); }
+  // Parallax stars
+  drawParallaxStars(ctx, W, H, _animTick);
+  if (_shakeAmount > 0.1) ctx.restore();
+}
+
+// ============================================================
+// getFrameElements + customDrawElement
+// ============================================================
+
+function getFrameElements(f, W, H) {
+  return [{id:'scene_' + f, type:'custom_scene', frame:f}];
+}
+
+function customDrawElement(ctx, el, W, H) {
+  if (el.type !== 'custom_scene') return false;
+  var f = el.frame;
+  var t = AnimRuntime.t;
+  var P = AnimRuntime.PAL;
+  var cx = W / 2, cy = H / 2;
+  var now = Date.now() / 1000;
+
+  if (f === 0) drawTitleFrame(ctx, W, H, t, P, cx, cy, now);
+  else if (f === 1) drawThrustIntroFrame(ctx, W, H, t, P, cx, cy, now);
+  else if (f === 2) drawCurveAnatomyFrame(ctx, W, H, t, P, cx, cy);
+  else if (f === 3) drawFourEnginesFrame(ctx, W, H, t, P, cx, cy);
+  else if (f === 4) drawAccelerationFrame(ctx, W, H, t, P, cx, cy, now);
+  return true;
+}
+
+// ── F0: Title ──
+function drawTitleFrame(ctx, W, H, t, P, cx, cy, now) {
+  // Nozzle icon with glow
+  ctx.shadowColor = 'rgba(255,127,80,0.3)'; ctx.shadowBlur = 18;
+  drawNozzleIcon(ctx, cx, cy - 45, 1.6);
+  ctx.shadowBlur = 0;
+
+  // Flame with idle flicker + continuous exhaust stream
+  var nozzleBottom = cy - 45 + 1.6 * 22;
+  drawFlameJet(ctx, cx, nozzleBottom, 65, 32, now);
+  drawContinuousExhaust(ctx, cx, nozzleBottom + 30, 35, 22, now);
+
+  // Thrust arrow pointing up with glow
+  drawForceArrow(ctx, cx + 55, cy - 5, cy - 100, P.primary, '', 'right', P.glowStrong);
+  ctx.fillStyle = P.primary;
+  ctx.font = "bold 14px 'Space Grotesk',sans-serif";
+  ctx.textAlign = 'left';
+  ctx.shadowColor = P.glowStrong; ctx.shadowBlur = 8;
+  ctx.fillText('T', cx + 63, cy - 55);
+  ctx.shadowBlur = 0;
+
+  // Title with glow
+  ctx.fillStyle = P.primary;
+  ctx.font = "bold 34px 'Space Grotesk','Noto Sans SC',sans-serif";
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.shadowColor = P.glowStrong; ctx.shadowBlur = 24;
+  ctx.fillText(t('title'), cx, cy - 135);
+  ctx.shadowBlur = 0;
+
+  // Subtitle
+  ctx.fillStyle = P.muted;
+  ctx.font = "13px 'Inter','Noto Sans SC',sans-serif";
+  ctx.fillText(t('subtitle'), cx, cy - 108);
+
+  // T=5N label box with glow border
+  ctx.strokeStyle = P.primary; ctx.lineWidth = 1.5;
+  ctx.shadowColor = P.glowStrong; ctx.shadowBlur = 6;
+  ctx.strokeRect(cx - 85, cy + 50, 70, 26);
+  ctx.shadowBlur = 0;
+  ctx.fillStyle = P.primary;
+  ctx.font = "bold 15px 'Space Grotesk',sans-serif";
+  ctx.textAlign = 'center';
+  ctx.fillText(t('f0label5n'), cx - 50, cy + 66);
+
+  // Tiny scale reference bars
+  ctx.fillStyle = 'rgba(255,181,156,0.2)';
+  ctx.fillRect(cx + 5, cy + 52, 16, 8);
+  ctx.fillStyle = 'rgba(255,181,156,0.35)';
+  ctx.fillRect(cx + 5, cy + 64, 80, 8);
+  ctx.fillStyle = P.muted;
+  ctx.font = "9px 'Space Grotesk',sans-serif";
+  ctx.textAlign = 'left';
+  ctx.fillText('1 N', cx + 24, cy + 59);
+  ctx.fillText('5 N', cx + 88, cy + 71);
+
+  // Core question
+  ctx.fillStyle = '#ffffff';
+  ctx.font = "12px 'Noto Sans SC','Inter',sans-serif";
+  ctx.textAlign = 'center';
+  var lines = t('f0question').split('\n');
+  for (var i = 0; i < lines.length; i++) {
+    ctx.fillText(lines[i], cx, cy + 100 + i * 18);
+  }
+}
+
+// ── F1: What is thrust ──
+function drawThrustIntroFrame(ctx, W, H, t, P, cx, cy, now) {
+  // Title
+  ctx.fillStyle = P.primary;
+  ctx.font = "bold 16px 'Space Grotesk','Noto Sans SC',sans-serif";
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillText(t('f1title'), cx, 22);
+
+  // Left side: Rocket with continuous exhaust stream
+  var rocketX = cx - 130;
+  var rocketY = cy - 20;
+  drawRocketBody(ctx, rocketX, rocketY, 1.5);
+
+  // Continuous exhaust particles going down
+  var nozzleY = rocketY + 1.5 * 22 + 5;
+  drawFlameJet(ctx, rocketX, nozzleY, 35, 16, now);
+  drawContinuousExhaust(ctx, rocketX, nozzleY + 15, 40, 18, now);
+
+  // Thrust arrow up with glow
+  drawForceArrow(ctx, rocketX - 32, rocketY + 10, rocketY - 80, P.primary, t('f1thrust'), 'left', P.glowStrong);
+
+  // Exhaust arrow down
+  drawForceArrow(ctx, rocketX + 32, rocketY + 10, rocketY + 75, '#ff6030', t('f1exhaust'), 'right', null);
+
+  // Action/Reaction labels
+  ctx.fillStyle = '#ff6030';
+  ctx.font = "bold 9px 'Space Grotesk',sans-serif";
+  ctx.textAlign = 'center';
+  ctx.fillText('ACTION', rocketX + 32, rocketY + 85);
+  ctx.fillStyle = P.primary;
+  ctx.fillText('REACTION', rocketX - 32, rocketY - 88);
+
+  // Description
+  ctx.fillStyle = '#ffffff';
+  ctx.font = "11px 'Noto Sans SC','Inter',sans-serif";
+  ctx.textAlign = 'center';
+  var descLines = t('f1desc').split('\n');
+  for (var di = 0; di < descLines.length; di++) {
+    ctx.fillText(descLines[di], rocketX, cy + 105 + di * 16);
+  }
+
+  // Right side: Log-scale magnitude comparison bars
+  var barX = cx + 50;
+  var barTop = 55;
+  var barH = H - 125;
+
+  ctx.fillStyle = P.muted;
+  ctx.font = "bold 10px 'Space Grotesk',sans-serif";
+  ctx.textAlign = 'center';
+  ctx.fillText(t('f1logScale'), barX + 70, barTop - 5);
+
+  // Log scale: 1N -> log10=0, 10N -> 1, 2e6N -> 6.3
+  var maxLog = 6.8;
+  var entries = [
+    {label: 'f1finger',  nLabel: 'f1fingerN',  logVal: 0.01, color: '#6688aa'},
+    {label: 'f1model',   nLabel: 'f1modelN',   logVal: 1,    color: P.primary},
+    {label: 'f1raptor',  nLabel: 'f1raptorN',  logVal: 6.3,  color: '#ff5533'},
+  ];
+
+  var barWidth = 28;
+  var gap = 55;
+  var startX = barX + 10;
+
+  for (var ei = 0; ei < entries.length; ei++) {
+    var entry = entries[ei];
+    var bx = startX + ei * gap;
+    var bHeight = Math.max((entry.logVal / maxLog) * barH, 10);
+    var by = barTop + barH - bHeight;
+
+    // Bar fill with gradient
+    var barG = ctx.createLinearGradient(bx, by, bx, by + bHeight);
+    barG.addColorStop(0, entry.color);
+    barG.addColorStop(1, entry.color + '66');
+    ctx.fillStyle = barG;
+    ctx.globalAlpha = 0.75;
+    ctx.fillRect(bx, by, barWidth, bHeight);
+    ctx.globalAlpha = 1;
+
+    // Bar border glow
+    ctx.strokeStyle = entry.color; ctx.lineWidth = 1;
+    ctx.shadowColor = entry.color; ctx.shadowBlur = 4;
+    ctx.strokeRect(bx, by, barWidth, bHeight);
+    ctx.shadowBlur = 0;
+
+    // Value on top
+    ctx.fillStyle = entry.color;
+    ctx.font = "bold 11px 'Space Grotesk',sans-serif";
+    ctx.textAlign = 'center';
+    ctx.fillText(t(entry.nLabel), bx + barWidth / 2, by - 10);
+
+    // Name at bottom
+    ctx.fillStyle = P.muted;
+    ctx.font = "9px 'Noto Sans SC','Inter',sans-serif";
+    ctx.fillText(t(entry.label), bx + barWidth / 2, barTop + barH + 14);
+  }
+
+  // Baseline
+  ctx.strokeStyle = 'rgba(255,255,255,0.12)'; ctx.lineWidth = 0.5;
+  ctx.beginPath(); ctx.moveTo(startX - 8, barTop + barH); ctx.lineTo(startX + 3 * gap, barTop + barH); ctx.stroke();
+}
+
+// ── F2: Thrust curve anatomy ──
+function drawCurveAnatomyFrame(ctx, W, H, t, P, cx, cy) {
+  // Title
+  ctx.fillStyle = P.primary;
+  ctx.font = "bold 16px 'Space Grotesk','Noto Sans SC',sans-serif";
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillText(t('f2title'), cx, 22);
+
+  // Engine label
+  ctx.fillStyle = P.tertiary;
+  ctx.font = "bold 10px 'Space Grotesk','Noto Sans SC',sans-serif";
+  ctx.fillText(t('f2c6'), cx, 40);
+
+  // Graph area
+  var gLeft = cx - 165;
+  var gRight = cx + 165;
+  var gTop = 56;
+  var gBottom = H - 65;
+  var gW = gRight - gLeft;
+  var gH = gBottom - gTop;
+  var maxTime = 2.2;
+  var maxThrust = 16;
+
+  // Axes
+  ctx.strokeStyle = P.text; ctx.lineWidth = 1.5;
+  ctx.beginPath(); ctx.moveTo(gLeft, gTop - 5); ctx.lineTo(gLeft, gBottom); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(gLeft, gBottom); ctx.lineTo(gRight + 5, gBottom); ctx.stroke();
+  // Arrowheads
+  ctx.fillStyle = P.text;
+  ctx.beginPath(); ctx.moveTo(gLeft, gTop - 5); ctx.lineTo(gLeft - 4, gTop + 5); ctx.lineTo(gLeft + 4, gTop + 5); ctx.fill();
+  ctx.beginPath(); ctx.moveTo(gRight + 5, gBottom); ctx.lineTo(gRight - 5, gBottom - 4); ctx.lineTo(gRight - 5, gBottom + 4); ctx.fill();
+
+  // Axis labels
+  ctx.fillStyle = P.muted;
+  ctx.font = "10px 'Noto Sans SC','Inter',sans-serif";
+  ctx.textAlign = 'center';
+  ctx.fillText(t('f2xAxis'), gLeft + gW / 2, gBottom + 18);
+  ctx.save();
+  ctx.translate(gLeft - 30, gTop + gH / 2);
+  ctx.rotate(-Math.PI / 2);
+  ctx.fillText(t('f2yAxis'), 0, 0);
+  ctx.restore();
+
+  // Grid lines + tick labels
+  ctx.strokeStyle = 'rgba(255,255,255,0.06)'; ctx.lineWidth = 0.5;
+  var thrustTicks = [5, 10, 15];
+  for (var vi = 0; vi < thrustTicks.length; vi++) {
+    var vy = gBottom - (thrustTicks[vi] / maxThrust) * gH;
+    ctx.beginPath(); ctx.moveTo(gLeft, vy); ctx.lineTo(gRight, vy); ctx.stroke();
+    ctx.fillStyle = P.muted; ctx.font = "9px 'Space Grotesk',sans-serif"; ctx.textAlign = 'right';
+    ctx.fillText(thrustTicks[vi].toString(), gLeft - 5, vy + 3);
+  }
+  ctx.fillStyle = P.muted; ctx.font = "9px 'Space Grotesk',sans-serif"; ctx.textAlign = 'right';
+  ctx.fillText('0', gLeft - 5, gBottom + 3);
+
+  var timeTicks = [0.5, 1.0, 1.5, 2.0];
+  for (var ti = 0; ti < timeTicks.length; ti++) {
+    var tx = gLeft + (timeTicks[ti] / maxTime) * gW;
+    ctx.strokeStyle = 'rgba(255,255,255,0.06)';
+    ctx.beginPath(); ctx.moveTo(tx, gTop); ctx.lineTo(tx, gBottom); ctx.stroke();
+    ctx.fillStyle = P.muted; ctx.font = "9px 'Space Grotesk',sans-serif"; ctx.textAlign = 'center';
+    ctx.fillText(timeTicks[ti].toFixed(1), tx, gBottom + 10);
+  }
+
+  // C6 thrust curve function
+  var curveFn = function(tVal) {
+    if (tVal < 0) return 0;
+    if (tVal > 1.9) return 0;
+    if (tVal < 0.3) return 14.1 * Math.pow(tVal / 0.3, 2);
+    var decay = Math.exp(-(tVal - 0.3) * 1.8);
+    return 4 + 10.1 * decay;
+  };
+
+  // Animate curve drawing left-to-right
+  var prog = curveState.frame === 2 ? curveState.progress : 1;
+  var drawingPhase = curveState.frame === 2 ? curveState.phase : 2;
+
+  // Draw curve
+  ctx.strokeStyle = P.primary; ctx.lineWidth = 2.5;
+  ctx.shadowColor = P.glowStrong; ctx.shadowBlur = 8;
+  ctx.beginPath();
+  var drawSteps = (drawingPhase === 0) ? Math.floor(100 * prog) : 100;
+  if (drawSteps < 1) drawSteps = 1;
+  for (var si = 0; si <= drawSteps; si++) {
+    var tFrac = si / 100;
+    var tVal = tFrac * maxTime;
+    var thrustVal = curveFn(tVal);
+    var px = gLeft + tFrac * gW;
+    var py = gBottom - (thrustVal / maxThrust) * gH;
+    if (si === 0) ctx.moveTo(px, py);
+    else ctx.lineTo(px, py);
+  }
+  ctx.stroke();
+  ctx.shadowBlur = 0;
+
+  // Area fill under curve (subtle)
+  if (drawingPhase >= 1 || curveState.frame !== 2) {
+    var areaAlpha = (drawingPhase === 1 && curveState.frame === 2) ? Math.min(prog, 1) * 0.12 : 0.12;
+    ctx.globalAlpha = areaAlpha;
+    ctx.fillStyle = P.primary;
+    ctx.beginPath();
+    ctx.moveTo(gLeft, gBottom);
+    for (var ai = 0; ai <= 100; ai++) {
+      var aFrac = ai / 100;
+      var aT = aFrac * maxTime;
+      var aV = curveFn(aT);
+      ctx.lineTo(gLeft + aFrac * gW, gBottom - (aV / maxThrust) * gH);
+    }
+    ctx.lineTo(gRight, gBottom);
+    ctx.closePath();
+    ctx.fill();
+    ctx.globalAlpha = 1;
+  }
+
+  // Annotations (appear after curve drawn)
+  var showAnn = (curveState.frame === 2 && drawingPhase >= 1) || curveState.frame !== 2;
+  if (showAnn) {
+    var annAlpha = (curveState.frame === 2 && drawingPhase === 1) ? Math.min(prog, 1) : 1;
+    ctx.globalAlpha = annAlpha;
+
+    // Peak thrust dot + label
+    var peakX = gLeft + (0.3 / maxTime) * gW;
+    var peakY = gBottom - (14.1 / maxThrust) * gH;
+    ctx.fillStyle = '#ff5533';
+    ctx.shadowColor = '#ff5533'; ctx.shadowBlur = 6;
+    ctx.beginPath(); ctx.arc(peakX, peakY, 4, 0, Math.PI * 2); ctx.fill();
+    ctx.shadowBlur = 0;
+    ctx.font = "bold 10px 'Space Grotesk','Noto Sans SC',sans-serif";
+    ctx.textAlign = 'left';
+    ctx.fillText(t('f2peak') + ' = 14.1 N', peakX + 10, peakY - 6);
+
+    // Average thrust dashed line
+    var avgThrust = 5.8;
+    var avgY = gBottom - (avgThrust / maxThrust) * gH;
+    ctx.strokeStyle = '#ffcc40'; ctx.lineWidth = 1;
+    ctx.setLineDash([6, 4]);
+    ctx.beginPath(); ctx.moveTo(gLeft, avgY); ctx.lineTo(gLeft + (1.9 / maxTime) * gW, avgY); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = '#ffcc40';
+    ctx.font = "bold 10px 'Space Grotesk','Noto Sans SC',sans-serif";
+    ctx.textAlign = 'right';
+    ctx.fillText(t('f2avg') + ' = 5.8 N', gLeft + (1.9 / maxTime) * gW + 60, avgY - 6);
+
+    // Burn time bracket
+    var burnStartX = gLeft;
+    var burnEndX = gLeft + (1.9 / maxTime) * gW;
+    var bracketY = gBottom + 28;
+    ctx.strokeStyle = P.tertiary; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.moveTo(burnStartX, bracketY); ctx.lineTo(burnEndX, bracketY); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(burnStartX, bracketY - 4); ctx.lineTo(burnStartX, bracketY + 4); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(burnEndX, bracketY - 4); ctx.lineTo(burnEndX, bracketY + 4); ctx.stroke();
+    ctx.fillStyle = P.tertiary;
+    ctx.font = "bold 10px 'Space Grotesk','Noto Sans SC',sans-serif";
+    ctx.textAlign = 'center';
+    ctx.fillText(t('f2burn') + ' = 1.9 s', (burnStartX + burnEndX) / 2, bracketY + 15);
+
+    // Curve shape type label
+    ctx.fillStyle = P.muted;
+    ctx.font = "9px 'Noto Sans SC','Inter',sans-serif";
+    ctx.textAlign = 'right';
+    ctx.fillText(t('f2shapes'), gRight, gTop - 2);
+
+    ctx.globalAlpha = 1;
+  }
+}
+
+// ── F3: Four engine comparison ──
+function drawFourEnginesFrame(ctx, W, H, t, P, cx, cy) {
+  // Title
+  ctx.fillStyle = P.primary;
+  ctx.font = "bold 16px 'Space Grotesk','Noto Sans SC',sans-serif";
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillText(t('f3title'), cx, 22);
+
+  // Graph area (leave room for legend on right)
+  var gLeft = cx - 165;
+  var gRight = cx + 95;
+  var gTop = 50;
+  var gBottom = H - 70;
+  var gW = gRight - gLeft;
+  var gH = gBottom - gTop;
+  var maxTime = 2.5;
+  var maxThrust = 17;
+
+  // Axes
+  ctx.strokeStyle = P.text; ctx.lineWidth = 1.5;
+  ctx.beginPath(); ctx.moveTo(gLeft, gTop - 5); ctx.lineTo(gLeft, gBottom); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(gLeft, gBottom); ctx.lineTo(gRight + 5, gBottom); ctx.stroke();
+  ctx.fillStyle = P.text;
+  ctx.beginPath(); ctx.moveTo(gLeft, gTop - 5); ctx.lineTo(gLeft - 4, gTop + 5); ctx.lineTo(gLeft + 4, gTop + 5); ctx.fill();
+  ctx.beginPath(); ctx.moveTo(gRight + 5, gBottom); ctx.lineTo(gRight - 5, gBottom - 4); ctx.lineTo(gRight - 5, gBottom + 4); ctx.fill();
+
+  // Axis labels
+  ctx.fillStyle = P.muted; ctx.font = "10px 'Noto Sans SC','Inter',sans-serif"; ctx.textAlign = 'center';
+  ctx.fillText(t('f3xAxis'), gLeft + gW / 2, gBottom + 18);
+  ctx.save();
+  ctx.translate(gLeft - 28, gTop + gH / 2);
+  ctx.rotate(-Math.PI / 2);
+  ctx.fillText(t('f3yAxis'), 0, 0);
+  ctx.restore();
+
+  // Grid
+  ctx.strokeStyle = 'rgba(255,255,255,0.06)'; ctx.lineWidth = 0.5;
+  var thrGrid = [5, 10, 15];
+  for (var gi = 0; gi < thrGrid.length; gi++) {
+    var gy = gBottom - (thrGrid[gi] / maxThrust) * gH;
+    ctx.beginPath(); ctx.moveTo(gLeft, gy); ctx.lineTo(gRight, gy); ctx.stroke();
+    ctx.fillStyle = P.muted; ctx.font = "9px 'Space Grotesk',sans-serif"; ctx.textAlign = 'right';
+    ctx.fillText(thrGrid[gi].toString(), gLeft - 5, gy + 3);
+  }
+  ctx.fillStyle = P.muted; ctx.font = "9px 'Space Grotesk',sans-serif"; ctx.textAlign = 'right';
+  ctx.fillText('0', gLeft - 5, gBottom + 3);
+  var timeGrid = [0.5, 1.0, 1.5, 2.0];
+  for (var tti = 0; tti < timeGrid.length; tti++) {
+    var ttx = gLeft + (timeGrid[tti] / maxTime) * gW;
+    ctx.strokeStyle = 'rgba(255,255,255,0.06)';
+    ctx.beginPath(); ctx.moveTo(ttx, gTop); ctx.lineTo(ttx, gBottom); ctx.stroke();
+    ctx.fillStyle = P.muted; ctx.font = "9px 'Space Grotesk',sans-serif"; ctx.textAlign = 'center';
+    ctx.fillText(timeGrid[tti].toFixed(1), ttx, gBottom + 10);
+  }
+
+  // Four curve functions
+  // A: Progressive (ramps up then decays)
+  var curveA = function(tv) {
+    if (tv < 0 || tv > 2.0) return 0;
+    if (tv < 1.2) return 10 * Math.pow(tv / 1.2, 1.5);
+    return 10 * Math.exp(-(tv - 1.2) * 2.5);
+  };
+  // B: Neutral (flat plateau)
+  var curveB = function(tv) {
+    if (tv < 0 || tv > 1.8) return 0;
+    if (tv < 0.1) return 8 * (tv / 0.1);
+    if (tv > 1.7) return 8 * ((1.8 - tv) / 0.1);
+    return 8;
+  };
+  // C: Regressive (starts high, exponential decay)
+  var curveC = function(tv) {
+    if (tv < 0 || tv > 2.0) return 0;
+    if (tv < 0.1) return 14 * (tv / 0.1);
+    return 14 * Math.exp(-tv * 1.2);
+  };
+  // D: Short burst (high peak, very short burn)
+  var curveD = function(tv) {
+    if (tv < 0 || tv > 0.5) return 0;
+    if (tv < 0.08) return 15 * (tv / 0.08);
+    if (tv > 0.42) return 15 * ((0.5 - tv) / 0.08);
+    return 15;
+  };
+
+  var curves = [
+    {fn: curveA, color: P.primary,  dur: 2.0, label: 'f3progA'},
+    {fn: curveB, color: P.tertiary, dur: 1.8, label: 'f3neutralB'},
+    {fn: curveC, color: '#ffcc40',  dur: 2.0, label: 'f3regressC'},
+    {fn: curveD, color: '#ff5577',  dur: 0.5, label: 'f3burstD'},
+  ];
+
+  // Sequential animated drawing
+  var prog = curveState.frame === 3 ? curveState.progress : 1;
+  var phase3 = curveState.frame === 3 ? curveState.phase : 2;
+
+  // In phase 0: draw curves one by one; phase 1+: all visible
+  for (var ci = 0; ci < curves.length; ci++) {
+    var curve = curves[ci];
+    var curveProg = 1;
+    if (phase3 === 0) {
+      // Sequential: each curve gets 25% of progress
+      var segStart = ci * 0.25;
+      var segEnd = (ci + 1) * 0.25;
+      if (prog < segStart) continue;
+      curveProg = Math.min((prog - segStart) / 0.25, 1);
+    }
+
+    ctx.strokeStyle = curve.color; ctx.lineWidth = 2;
+    ctx.globalAlpha = 0.85;
+    ctx.shadowColor = curve.color; ctx.shadowBlur = 3;
+    ctx.beginPath();
+    var steps = Math.floor(100 * curveProg);
+    if (steps < 1) steps = 1;
+    for (var si = 0; si <= steps; si++) {
+      var tFrac = si / 100;
+      var tVal = tFrac * maxTime;
+      var thrustVal = curve.fn(tVal);
+      var px = gLeft + tFrac * gW;
+      var py = gBottom - (thrustVal / maxThrust) * gH;
+      if (si === 0) ctx.moveTo(px, py);
+      else ctx.lineTo(px, py);
+    }
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+    ctx.globalAlpha = 1;
+  }
+
+  // Legend (right side)
+  var legendX = gRight + 18;
+  var legendY = gTop + 8;
+  var legendItems = [
+    {key: 'f3progA',    color: P.primary,  tavg: '5.2',  tmax: '10',  burn: '2.0s'},
+    {key: 'f3neutralB', color: P.tertiary, tavg: '8.0',  tmax: '8',   burn: '1.8s'},
+    {key: 'f3regressC', color: '#ffcc40',  tavg: '4.1',  tmax: '14',  burn: '2.0s'},
+    {key: 'f3burstD',   color: '#ff5577',  tavg: '13.5', tmax: '15',  burn: '0.5s'},
+  ];
+
+  // Legend header
+  ctx.fillStyle = P.muted;
+  ctx.font = "bold 8px 'Space Grotesk',sans-serif";
+  ctx.textAlign = 'left';
+  ctx.fillText(t('f3tavg') + '  ' + t('f3tmax') + '  ' + t('f3burnTime'), legendX + 14, legendY - 2);
+
+  for (var li = 0; li < legendItems.length; li++) {
+    var item = legendItems[li];
+    var ly = legendY + 14 + li * 24;
+    // Color swatch with glow
+    ctx.fillStyle = item.color;
+    ctx.shadowColor = item.color; ctx.shadowBlur = 4;
+    ctx.fillRect(legendX, ly - 4, 10, 10);
+    ctx.shadowBlur = 0;
+    // Name
+    ctx.fillStyle = '#ffffff';
+    ctx.font = "bold 9px 'Space Grotesk','Noto Sans SC',sans-serif";
+    ctx.textAlign = 'left';
+    ctx.fillText(t(item.key), legendX + 14, ly + 4);
+    // Stats row
+    ctx.fillStyle = P.muted;
+    ctx.font = "8px 'Space Grotesk',sans-serif";
+    ctx.fillText(item.tavg + '   ' + item.tmax + '   ' + item.burn, legendX + 14, ly + 16);
+  }
+}
+
+// ── F4: Thrust to acceleration ──
+function drawAccelerationFrame(ctx, W, H, t, P, cx, cy, now) {
+  // Title
+  ctx.fillStyle = P.primary;
+  ctx.font = "bold 16px 'Space Grotesk','Noto Sans SC',sans-serif";
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillText(t('f4title'), cx, 22);
+
+  // Engine label
+  ctx.fillStyle = P.tertiary;
+  ctx.font = "bold 11px 'Space Grotesk','Noto Sans SC',sans-serif";
+  ctx.textAlign = 'center';
+  ctx.fillText(t('f4engine'), cx, 42);
+
+  // Split screen layout
+  var leftCx = cx * 0.5 + 20;
+  var rightCx = cx * 1.5 - 20;
+
+  // Divider
+  ctx.strokeStyle = 'rgba(255,255,255,0.1)'; ctx.lineWidth = 1;
+  ctx.setLineDash([4, 4]);
+  ctx.beginPath(); ctx.moveTo(cx, 52); ctx.lineTo(cx, H - 95); ctx.stroke();
+  ctx.setLineDash([]);
+
+  // ── Left: 200g (light) rocket ──
+  var rocketYL = cy - 15;
+  drawRocketBody(ctx, leftCx, rocketYL, 1.0);
+  // Small exhaust
+  drawFlameJet(ctx, leftCx, rocketYL + 22 + 2, 20, 10, now);
+
+  ctx.fillStyle = '#ffffff';
+  ctx.font = "bold 11px 'Space Grotesk','Noto Sans SC',sans-serif";
+  ctx.textAlign = 'center';
+  ctx.fillText(t('f4lightLabel'), leftCx, rocketYL + 48);
+
+  // Force arrows -- thrust up (glowing), weight down
+  drawForceArrow(ctx, leftCx - 24, rocketYL + 5, rocketYL - 70, P.primary, t('f4thrustUp'), 'left', P.glowStrong);
+  drawForceArrow(ctx, leftCx + 24, rocketYL + 5, rocketYL + 28, '#6688aa', t('f4weightL'), 'right', null);
+
+  // Calculation
+  ctx.fillStyle = P.muted;
+  ctx.font = "10px 'Space Grotesk','Noto Sans SC',sans-serif";
+  ctx.textAlign = 'center';
+  ctx.fillText(t('f4calcL'), leftCx, cy + 72);
+  ctx.fillStyle = P.primary;
+  ctx.font = "bold 15px 'Space Grotesk',sans-serif";
+  ctx.shadowColor = P.glowStrong; ctx.shadowBlur = 10;
+  ctx.fillText(t('f4resultL'), leftCx, cy + 92);
+  ctx.shadowBlur = 0;
+
+  // ── Right: 400g (heavy) rocket ──
+  var rocketYR = cy - 15;
+  drawRocketBody(ctx, rightCx, rocketYR, 1.3);
+  drawFlameJet(ctx, rightCx, rocketYR + 1.3 * 22 + 2, 22, 12, now);
+
+  ctx.fillStyle = '#ffffff';
+  ctx.font = "bold 11px 'Space Grotesk','Noto Sans SC',sans-serif";
+  ctx.textAlign = 'center';
+  ctx.fillText(t('f4heavyLabel'), rightCx, rocketYR + 55);
+
+  // Force arrows -- same thrust, bigger weight
+  drawForceArrow(ctx, rightCx - 26, rocketYR + 5, rocketYR - 70, P.primary, t('f4thrustUp'), 'left', P.glowStrong);
+  drawForceArrow(ctx, rightCx + 26, rocketYR + 5, rocketYR + 38, '#6688aa', t('f4weightH'), 'right', null);
+
+  // Calculation
+  ctx.fillStyle = P.muted;
+  ctx.font = "10px 'Space Grotesk','Noto Sans SC',sans-serif";
+  ctx.textAlign = 'center';
+  ctx.fillText(t('f4calcH'), rightCx, cy + 72);
+  ctx.fillStyle = P.tertiary;
+  ctx.font = "bold 15px 'Space Grotesk',sans-serif";
+  ctx.fillText(t('f4resultH'), rightCx, cy + 92);
+
+  // Key insight with glow
+  ctx.fillStyle = P.primary;
+  ctx.font = "bold 14px 'Space Grotesk','Noto Sans SC',sans-serif";
+  ctx.textAlign = 'center';
+  ctx.shadowColor = P.glowStrong; ctx.shadowBlur = 14;
+  ctx.fillText(t('f4insight'), cx, H - 68);
+  ctx.shadowBlur = 0;
+
+  // Formula bar at bottom
+  var formulaY = H - 42;
+  // Background box
+  ctx.fillStyle = 'rgba(255,181,156,0.07)';
+  ctx.fillRect(cx - 125, formulaY - 13, 250, 26);
+  ctx.strokeStyle = 'rgba(255,181,156,0.18)'; ctx.lineWidth = 1;
+  ctx.strokeRect(cx - 125, formulaY - 13, 250, 26);
+
+  // Colored formula: a = (T - W) / m
+  ctx.font = "bold 14px 'Space Grotesk',sans-serif";
+  ctx.textAlign = 'center';
+  // "a" in primary
+  ctx.fillStyle = P.primary;
+  ctx.fillText('a', cx - 65, formulaY + 1);
+  // " = (" in text
+  ctx.fillStyle = P.text;
+  ctx.fillText('= (', cx - 40, formulaY + 1);
+  // "T" in primary
+  ctx.fillStyle = P.primary;
+  ctx.fillText('T', cx - 16, formulaY + 1);
+  // " - " in text
+  ctx.fillStyle = P.text;
+  ctx.fillText('-', cx + 2, formulaY + 1);
+  // "W" in blue
+  ctx.fillStyle = '#6688aa';
+  ctx.fillText('W', cx + 20, formulaY + 1);
+  // ") / " in text
+  ctx.fillStyle = P.text;
+  ctx.fillText(') /', cx + 42, formulaY + 1);
+  // "m" in tertiary
+  ctx.fillStyle = P.tertiary;
+  ctx.fillText('m', cx + 65, formulaY + 1);
+}
+
+// ============================================================
+// BOOT
+// ============================================================
+
+AnimRuntime.boot();
+</script>
+</body>
+</html>

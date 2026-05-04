@@ -1,0 +1,886 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=Inter:wght@400;500&family=Noto+Sans+SC:wght@400;700&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box;}
+html,body{width:100%;height:100vh;overflow:hidden;}
+body{background:var(--bg,#0c0e12);color:var(--text,#f6f6fc);font-family:'Inter','Noto Sans SC',sans-serif;}
+/* ── Outer: sidebar + main ── */
+.wrapper{display:flex;flex-direction:row;height:100vh;overflow:hidden;}
+.sidebar{width:200px;min-width:200px;max-width:200px;display:flex;flex-direction:column;gap:6px;padding:10px;background:rgba(0,0,0,0.5);border-right:1px solid rgba(80,255,176,0.15);overflow-y:auto;}
+.lang-btn{align-self:flex-start;flex-shrink:0;font-family:'Space Grotesk',sans-serif;font-size:10px;font-weight:700;padding:3px 8px;cursor:pointer;border:1px solid rgba(255,181,156,0.25);background:transparent;color:#ffb59c;letter-spacing:1px;}
+.lang-btn:hover{border-color:#ffb59c;background:rgba(255,181,156,0.1);}
+.sidebar h1{font-family:'Space Grotesk',sans-serif;font-size:13px;font-weight:700;color:var(--primary,#50ffb0);margin-top:4px;line-height:1.3;}
+.sidebar .sub{font-size:10px;color:var(--muted,#aaabb0);letter-spacing:0.06em;text-transform:uppercase;}
+.sidebar .frame-ind{font-family:'Space Grotesk',sans-serif;font-size:10px;color:var(--muted,#aaabb0);letter-spacing:0.1em;margin-top:4px;}
+.sidebar .guide-label{font-family:'Space Grotesk',sans-serif;font-size:9px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:var(--primary,#50ffb0);margin-top:8px;}
+.sidebar .guide-content{font-family:'Noto Sans SC',sans-serif;font-size:11px;color:rgba(255,255,255,0.85);line-height:1.5;}
+.sidebar .guide-content ul{padding-left:16px;margin:0;}
+.sidebar .guide-content li{margin-bottom:1px;}
+/* ── Main area: canvas + controls + hud ── */
+.anim-main{flex:1;display:flex;flex-direction:column;min-width:0;}
+.canvas-wrap{flex:1;min-height:0;position:relative;}
+canvas{width:100%;height:100%;display:block;}
+/* ── Controls + HUD ── */
+.controls{display:flex;justify-content:center;align-items:center;gap:12px;padding:6px 16px;}
+.ctrl-btn{font-family:'Space Grotesk',sans-serif;font-size:11px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;padding:5px 16px;border:none;cursor:pointer;color:var(--bg,#0c0e12);background:linear-gradient(135deg,var(--primary,#50ffb0),var(--primary-dim,#17df93));transition:transform 0.1s,box-shadow 0.2s;box-shadow:0 0 10px var(--glow-strong,rgba(80,255,176,0.3));}
+.ctrl-btn:hover{transform:scale(1.04);}
+.ctrl-btn:active{transform:scale(0.96);}
+.ctrl-btn.secondary{background:var(--glass,rgba(23,26,31,0.92));color:var(--muted,#aaabb0);box-shadow:none;backdrop-filter:blur(12px);}
+.ctrl-btn.secondary:hover{color:var(--primary,#50ffb0);}
+.hud{height:40px;display:flex;align-items:center;justify-content:space-around;background:rgba(0,0,0,0.55);backdrop-filter:blur(12px);padding:0 16px;}
+.hud-item{text-align:center;}
+.hud-label{font-family:'Space Grotesk',sans-serif;font-size:8px;letter-spacing:0.15em;text-transform:uppercase;color:var(--muted,#aaabb0);}
+.hud-val{font-family:'Space Grotesk',sans-serif;font-size:13px;font-weight:700;color:var(--primary,#50ffb0);}
+</style>
+</head>
+<body>
+<div class="wrapper">
+<!-- Sidebar: lang-btn, title, guide (completely separate from canvas) -->
+<div class="sidebar">
+<button class="lang-btn" id="langBtn">CN</button>
+<h1 id="title"></h1>
+<div class="sub" id="subtitle"></div>
+<div class="frame-ind" id="frameIndicator"></div>
+<div class="guide-label" id="guideTitle"></div>
+<div class="guide-content" id="guideContent"></div>
+</div>
+<!-- Main: canvas fills all space, nothing overlaps -->
+<div class="anim-main">
+<div class="canvas-wrap"><canvas id="c"></canvas></div>
+<div class="controls">
+<button class="ctrl-btn secondary" id="btnPrev"></button>
+<button class="ctrl-btn" id="btnPlay"></button>
+<button class="ctrl-btn secondary" id="btnNext"></button>
+</div>
+<div class="hud">
+<div class="hud-item"><div class="hud-label" id="hudL1"></div><div class="hud-val" id="hudV1"></div></div>
+<div class="hud-item"><div class="hud-label" id="hudL2"></div><div class="hud-val" id="hudV2"></div></div>
+<div class="hud-item"><div class="hud-label" id="hudL3"></div><div class="hud-val" id="hudV3"></div></div>
+<div class="hud-item"><div class="hud-label" id="hudL4"></div><div class="hud-val" id="hudV4"></div></div>
+</div>
+</div>
+</div>
+
+<!-- Runtime (shared skeleton) -->
+<script src="animation_runtime.js"></script>
+
+<!-- Content -->
+<script>
+// ============================================================
+// K25: S2 Capstone -- The Physics of Rocket Flight
+// Concept: All physics laws consolidated in one flight story
+// Core Q: How would you explain rocket flight to a friend
+//         who never studied physics?
+//
+// F0: Title -- book opening, core question
+// F1: Launch pad -- balanced forces -> ignition
+// F2: Powered ascent -- N2, mass decrease, N3 exhaust
+// F3: Coast & apex -- inertia, momentum, v=0
+// F4: Descent & landing -- parachute, drag, 7-concept summary
+//
+// Style: ares_mission.  var only.  Skeleton + runtime.
+// ============================================================
+
+var aTime = 0;
+var lastTS = 0;
+var soundMuted = true;
+
+// -- Particle pools --
+var exhaustPool = [];
+var ignitionPool = [];
+var chutePool = [];
+var starField = [];
+
+// -- Per-frame anim state --
+var breathePhase = 0;
+var shakeAmt = 0;
+var engineGlow = 0;
+
+// -- Initialise star field --
+(function () {
+  var i;
+  for (i = 0; i < 90; i++) {
+    starField.push({
+      x: Math.random(),
+      y: Math.random(),
+      r: 0.3 + Math.random() * 1.2,
+      tw: Math.random() * Math.PI * 2,
+      sp: 0.2 + Math.random() * 0.8
+    });
+  }
+})();
+
+// ============================================================
+// CONFIG
+// ============================================================
+
+var CONFIG = {
+  style: 'ares_mission',
+  totalFrames: 5,
+
+  i18n: {
+    title:    {en: 'THE PHYSICS OF ROCKET FLIGHT', cn: '\u706b\u7bad\u98de\u884c\u7684\u7269\u7406\u6545\u4e8b'},
+    subtitle: {en: 'A Complete Story', cn: '\u4e00\u4e2a\u5b8c\u6574\u7684\u6545\u4e8b'},
+
+    // F0 title
+    f0core:   {en: 'If you had to explain to a friend\nwho never studied physics\nwhy a rocket flies --\nhow would you tell the story?',
+               cn: '\u5982\u679c\u4f60\u8981\u7ed9\u4e00\u4e2a\n\u8fd8\u6ca1\u5b66\u8fc7\u7269\u7406\u7684\u670b\u53cb\n\u8bb2\u706b\u7bad\u4e3a\u4ec0\u4e48\u4f1a\u98de\n\u4f60\u4f1a\u600e\u4e48\u8bb2\uff1f'},
+    f0open:   {en: 'Open the book...', cn: '\u7ffb\u5f00\u8fd9\u672c\u4e66...'},
+
+    // F1 launch pad
+    f1ch:     {en: 'Chapter 1: On the Launch Pad', cn: '\u7b2c\u4e00\u7ae0\uff1a\u5728\u53d1\u5c04\u53f0\u4e0a'},
+    f1n1:     {en: "Newton's 1st Law:\nNo net force -- rocket stays still",
+               cn: '\u725b\u987f\u7b2c\u4e00\u5b9a\u5f8b\uff1a\n\u5408\u529b\u4e3a\u96f6\uff0c\u706b\u7bad\u9759\u6b62'},
+    f1wt:     {en: 'Weight', cn: '\u91cd\u529b'},
+    f1nm:     {en: 'Normal', cn: '\u652f\u6301\u529b'},
+    f1th:     {en: 'Thrust', cn: '\u63a8\u529b'},
+    f1ign:    {en: 'IGNITION! Thrust > Weight', cn: '\u70b9\u706b\uff01\u63a8\u529b > \u91cd\u529b'},
+    f1fbd:    {en: 'FBD', cn: '\u53d7\u529b\u56fe'},
+
+    // F2 powered ascent
+    f2ch:     {en: 'Chapter 2: Powered Ascent', cn: '\u7b2c\u4e8c\u7ae0\uff1a\u52a8\u529b\u4e0a\u5347'},
+    f2n2:     {en: 'a = (T - mg) / m', cn: 'a = (T - mg) / m'},
+    f2n2law:  {en: "Newton's 2nd Law", cn: '\u725b\u987f\u7b2c\u4e8c\u5b9a\u5f8b'},
+    f2mass:   {en: 'Fuel burns -- mass decreases\nacceleration increases!',
+               cn: '\u71c3\u6599\u71c3\u70e7 -- \u8d28\u91cf\u51cf\u5c0f\n\u52a0\u901f\u5ea6\u589e\u5927\uff01'},
+    f2n3:     {en: "Newton's 3rd: Action = Reaction", cn: '\u725b\u987f\u7b2c\u4e09\u5b9a\u5f8b\uff1a\u4f5c\u7528\u529b = \u53cd\u4f5c\u7528\u529b'},
+    f2exh:    {en: 'Exhaust down', cn: '\u5e9f\u6c14\u5411\u4e0b'},
+    f2up:     {en: 'Rocket up!', cn: '\u706b\u7bad\u5411\u4e0a\uff01'},
+
+    // F3 coast & apex
+    f3ch:     {en: 'Chapter 3: Coast to the Top', cn: '\u7b2c\u4e09\u7ae0\uff1a\u6ed1\u884c\u81f3\u9876\u70b9'},
+    f3off:    {en: 'Engine off -- only gravity pulls down',
+               cn: '\u53d1\u52a8\u673a\u5173\u95ed -- \u53ea\u6709\u91cd\u529b\u5411\u4e0b\u62c9'},
+    f3mom:    {en: 'Momentum carries it higher...', cn: '\u52a8\u91cf\u7ee7\u7eed\u5411\u4e0a\u643a\u5e26...'},
+    f3apex:   {en: 'Apex: v = 0 for one instant', cn: '\u6700\u9ad8\u70b9\uff1a\u901f\u5ea6\u77ac\u95f4\u4e3a\u96f6'},
+    f3traj:   {en: 'Parabolic trajectory', cn: '\u629b\u7269\u7ebf\u8f68\u8ff9'},
+
+    // F4 descent & landing
+    f4ch:     {en: 'Chapter 4: Coming Home', cn: '\u7b2c\u56db\u7ae0\uff1a\u5b89\u5168\u8fd4\u822a'},
+    f4chute:  {en: 'Parachute deploys!\nDrag opposes weight',
+               cn: '\u964d\u843d\u4f1e\u6253\u5f00\uff01\n\u963b\u529b\u5bf9\u6297\u91cd\u529b'},
+    f4term:   {en: 'Terminal velocity --\nforces balance again',
+               cn: '\u7ec8\u7aef\u901f\u5ea6 --\n\u529b\u518d\u6b21\u5e73\u8861'},
+    f4sum:    {en: '7 Physics Concepts in One Flight', cn: '\u4e00\u6b21\u98de\u884c\uff0c\u4e03\u4e2a\u7269\u7406\u6982\u5ff5'},
+    f4n1:     {en: 'N1', cn: 'N1'},
+    f4n2:     {en: 'N2', cn: 'N2'},
+    f4n3:     {en: 'N3', cn: 'N3'},
+    f4mom:    {en: 'Momentum', cn: '\u52a8\u91cf'},
+    f4free:   {en: 'Free Fall', cn: '\u81ea\u7531\u843d\u4f53'},
+    f4proj:   {en: 'Projectile', cn: '\u629b\u4f53'},
+    f4fbd:    {en: 'FBD', cn: '\u53d7\u529b\u56fe'},
+    f4drag:   {en: 'Drag', cn: '\u963b\u529b'},
+
+    // Guide
+    guideTitle: {en: 'LEARNING GUIDE', cn: '\u5b66\u4e60\u6307\u5357'},
+    g1: {en: 'Each chapter = one flight phase', cn: '\u6bcf\u7ae0 = \u4e00\u4e2a\u98de\u884c\u9636\u6bb5'},
+    g2: {en: 'Watch the force arrows change', cn: '\u89c2\u5bdf\u529b\u7684\u7bad\u5934\u53d8\u5316'},
+    g3: {en: 'Physics tells the complete story', cn: '\u7269\u7406\u8bb2\u8ff0\u5b8c\u6574\u6545\u4e8b'},
+    g4: {en: 'FBD = Free Body Diagram', cn: 'FBD = \u53d7\u529b\u5206\u6790\u56fe'},
+
+    // HUD labels
+    hudPhase:  {en: 'PHASE', cn: '\u9636\u6bb5'},
+    hudForces: {en: 'FORCES', cn: '\u53d7\u529b'},
+    hudLaw:    {en: 'LAW', cn: '\u5b9a\u5f8b'},
+    hudVel:    {en: 'VELOCITY', cn: '\u901f\u5ea6'},
+
+    // HUD values (i18n keys)
+    hvTitle:  {en: 'Title', cn: '\u5c01\u9762'},
+    hvPad:    {en: 'Pad', cn: '\u53d1\u5c04\u53f0'},
+    hvAscent: {en: 'Ascent', cn: '\u4e0a\u5347'},
+    hvCoast:  {en: 'Coast', cn: '\u6ed1\u884c'},
+    hvDesc:   {en: 'Descent', cn: '\u4e0b\u964d'},
+    hvWN:     {en: 'W=N', cn: 'W=N'},
+    hvTgtW:   {en: 'T>W', cn: 'T>W'},
+    hvTW:     {en: 'T+W', cn: 'T+W'},
+    hvWonly:  {en: 'W only', cn: '\u4ec5\u91cd\u529b'},
+    hvWD:     {en: 'W+D', cn: 'W+D'},
+    hvN1:     {en: 'N1', cn: 'N1'},
+    hvN123:   {en: 'N1+N2+N3', cn: 'N1+N2+N3'},
+    hvN1M:    {en: 'N1+Mom', cn: 'N1+\u52a8\u91cf'},
+    hvAll:    {en: 'All 7', cn: '\u5168\u90e87'},
+    hvZero:   {en: 'v=0', cn: 'v=0'},
+    hvInc:    {en: 'v++', cn: 'v++'},
+    hvDec:    {en: 'v--', cn: 'v--'},
+    hvTerm:   {en: 'v-term', cn: 'v-\u7ec8\u7aef'},
+    hvDash:   {en: '--', cn: '--'},
+  },
+
+  hudLabels: ['hudPhase', 'hudForces', 'hudLaw', 'hudVel'],
+  hudValues: [
+    ['hvTitle',  'hvDash',  'hvDash', 'hvDash'],
+    ['hvPad',    'hvTgtW',  'hvN1',   'hvZero'],
+    ['hvAscent', 'hvTW',    'hvN123', 'hvInc'],
+    ['hvCoast',  'hvWonly', 'hvN1M',  'hvDec'],
+    ['hvDesc',   'hvWD',    'hvAll',  'hvTerm'],
+  ],
+
+  guideTitle: 'guideTitle',
+  guideItems: ['g1', 'g2', 'g3', 'g4'],
+};
+
+// ============================================================
+// ANIMATION LOOP
+// ============================================================
+
+(function animLoop(ts) {
+  if (lastTS === 0) lastTS = ts;
+  var dt = Math.min((ts - lastTS) / 1000, 0.05);
+  lastTS = ts;
+  aTime += dt;
+  breathePhase += dt * 1.8;
+  if (shakeAmt > 0) shakeAmt *= 0.92;
+  engineGlow = 0.6 + 0.4 * Math.sin(aTime * 8);
+
+  // Update particles
+  var i, p;
+  for (i = exhaustPool.length - 1; i >= 0; i--) {
+    p = exhaustPool[i]; p.x += p.vx * dt; p.y += p.vy * dt;
+    p.life -= dt; p.vy += 30 * dt;
+    if (p.life <= 0) exhaustPool.splice(i, 1);
+  }
+  for (i = ignitionPool.length - 1; i >= 0; i--) {
+    p = ignitionPool[i]; p.x += p.vx * dt; p.y += p.vy * dt;
+    p.life -= dt; p.vy += 60 * dt;
+    if (p.life <= 0) ignitionPool.splice(i, 1);
+  }
+  for (i = chutePool.length - 1; i >= 0; i--) {
+    p = chutePool[i]; p.x += p.vx * dt; p.y += p.vy * dt;
+    p.life -= dt;
+    if (p.life <= 0) chutePool.splice(i, 1);
+  }
+
+  // Spawn particles per frame
+  var cf = AnimRuntime.currentFrame;
+  if (cf === 1 && aTime % 0.08 < dt) {
+    for (i = 0; i < 3; i++) {
+      ignitionPool.push({x:0, y:0, vx:(Math.random()-0.5)*120,
+        vy:20+Math.random()*60, life:0.4+Math.random()*0.5, maxLife:0.9,
+        r:1+Math.random()*2.5, color:Math.random()>0.5?'#ff7f50':'#ffb59c'});
+    }
+  }
+  if (cf === 2 && aTime % 0.05 < dt) {
+    for (i = 0; i < 4; i++) {
+      exhaustPool.push({x:0, y:0, vx:(Math.random()-0.5)*40,
+        vy:30+Math.random()*80, life:0.5+Math.random()*0.6, maxLife:1.1,
+        r:1.2+Math.random()*2, color:Math.random()>0.4?'#ff7f50':'#ffdb3c'});
+    }
+  }
+  if (cf === 4 && aTime % 0.1 < dt) {
+    for (i = 0; i < 2; i++) {
+      chutePool.push({x:0, y:0, vx:(Math.random()-0.5)*30,
+        vy:-10-Math.random()*20, life:0.8+Math.random()*0.6, maxLife:1.4,
+        r:1+Math.random()*1.5, color:Math.random()>0.5?'#00daf3':'#ffb59c'});
+    }
+  }
+
+  requestAnimationFrame(animLoop);
+})(performance.now());
+
+// ============================================================
+// CUSTOM BACKGROUND -- parallax sky-to-space gradient
+// ============================================================
+
+function drawBg(c, W, H) {
+  var cf = AnimRuntime.currentFrame;
+  var skyRatio = [0, 0, 0.3, 0.7, 0.4][cf] || 0;
+
+  var g = c.createLinearGradient(0, 0, 0, H);
+  var tR = Math.floor(5 + skyRatio * 2);
+  var tG = Math.floor(7 + skyRatio * 3);
+  var tB = Math.floor(20 + skyRatio * 30);
+  var bR = Math.floor(19 + (1 - skyRatio) * 10);
+  var bG = Math.floor(19 + (1 - skyRatio) * 5);
+  var bB = Math.floor(19 + (1 - skyRatio) * 2);
+  g.addColorStop(0, 'rgb(' + tR + ',' + tG + ',' + tB + ')');
+  g.addColorStop(1, 'rgb(' + bR + ',' + bG + ',' + bB + ')');
+  c.fillStyle = g;
+  c.fillRect(0, 0, W, H);
+
+  // Parallax stars
+  var starAlpha = [0.25, 0.3, 0.5, 0.9, 0.6][cf] || 0.3;
+  var offY = cf * 18;
+  var si;
+  for (si = 0; si < starField.length; si++) {
+    var s = starField[si];
+    var sx = s.x * W;
+    var sy = (s.y * H + offY) % H;
+    var tw = 0.4 + 0.6 * Math.abs(Math.sin(aTime * s.sp + s.tw));
+    c.globalAlpha = starAlpha * tw;
+    c.fillStyle = '#ffffff';
+    c.beginPath();
+    c.arc(sx, sy, s.r, 0, Math.PI * 2);
+    c.fill();
+  }
+  c.globalAlpha = 1;
+
+  // Subtle grid
+  c.strokeStyle = 'rgba(255,255,255,0.02)';
+  c.lineWidth = 0.5;
+  var gx, gy;
+  for (gx = 0; gx < W; gx += 50) { c.beginPath(); c.moveTo(gx, 0); c.lineTo(gx, H); c.stroke(); }
+  for (gy = 0; gy < H; gy += 50) { c.beginPath(); c.moveTo(0, gy); c.lineTo(W, gy); c.stroke(); }
+}
+
+// ============================================================
+// CUSTOM DRAW ELEMENT
+// ============================================================
+
+function customDrawElement(c, el, W, H) {
+  var P = AnimRuntime.PAL;
+
+  // ---- Rocket body ----
+  if (el.type === 'rocket') {
+    c.save();
+    c.translate(el.x, el.y);
+    if (shakeAmt > 0.5) {
+      c.translate((Math.random() - 0.5) * shakeAmt, (Math.random() - 0.5) * shakeAmt);
+    }
+    if (el.breathe) {
+      c.translate(0, Math.sin(breathePhase) * 1.5);
+    }
+    var rw = el.rw || 16;
+    var rh = el.rh || 50;
+
+    // Engine glow halo
+    if (el.engineOn) {
+      var glowG = c.createRadialGradient(0, rh / 2 + 8, 2, 0, rh / 2 + 8, rw * 2.2);
+      glowG.addColorStop(0, 'rgba(255,127,80,' + (0.4 * engineGlow) + ')');
+      glowG.addColorStop(1, 'rgba(255,127,80,0)');
+      c.fillStyle = glowG;
+      c.beginPath(); c.arc(0, rh / 2 + 8, rw * 2.2, 0, Math.PI * 2); c.fill();
+    }
+
+    // Body hull
+    c.fillStyle = P.text;
+    c.beginPath();
+    c.moveTo(-rw / 2, rh / 2);
+    c.lineTo(-rw / 2, -rh / 3);
+    c.lineTo(0, -rh / 2);
+    c.lineTo(rw / 2, -rh / 3);
+    c.lineTo(rw / 2, rh / 2);
+    c.closePath(); c.fill();
+
+    // Nose cone
+    c.fillStyle = P.primary;
+    c.beginPath();
+    c.moveTo(-rw / 2, -rh / 3);
+    c.lineTo(0, -rh / 2);
+    c.lineTo(rw / 2, -rh / 3);
+    c.closePath(); c.fill();
+
+    // Fins
+    c.fillStyle = P.primaryDim;
+    c.beginPath(); c.moveTo(-rw/2, rh/2); c.lineTo(-rw/2-6, rh/2+5); c.lineTo(-rw/2, rh/4); c.closePath(); c.fill();
+    c.beginPath(); c.moveTo(rw/2, rh/2); c.lineTo(rw/2+6, rh/2+5); c.lineTo(rw/2, rh/4); c.closePath(); c.fill();
+
+    // Viewport
+    c.fillStyle = '#00daf3'; c.globalAlpha = 0.7;
+    c.beginPath(); c.arc(0, -rh / 8, 3, 0, Math.PI * 2); c.fill();
+    c.globalAlpha = 1;
+
+    // Flame
+    if (el.engineOn) {
+      var fLen = (el.flameLen || 20) * (1 + Math.sin(aTime * 20) * 0.2);
+      var fg = c.createLinearGradient(0, rh / 2, 0, rh / 2 + fLen);
+      fg.addColorStop(0, '#ffffff');
+      fg.addColorStop(0.2, '#ffb59c');
+      fg.addColorStop(0.5, '#ff7f50');
+      fg.addColorStop(1, 'rgba(255,127,80,0)');
+      c.fillStyle = fg;
+      c.beginPath();
+      c.moveTo(-rw / 3, rh / 2);
+      c.lineTo(0, rh / 2 + fLen);
+      c.lineTo(rw / 3, rh / 2);
+      c.closePath(); c.fill();
+    }
+    c.restore();
+    return true;
+  }
+
+  // ---- Force arrow with glow ----
+  if (el.type === 'forceArrow') {
+    c.save();
+    c.shadowColor = el.color || P.primary;
+    c.shadowBlur = 8;
+    c.strokeStyle = el.color || P.primary;
+    c.lineWidth = el.lineWidth || 2.5;
+    c.beginPath(); c.moveTo(el.x1, el.y1); c.lineTo(el.x2, el.y2); c.stroke();
+    var angle = Math.atan2(el.y2 - el.y1, el.x2 - el.x1);
+    var hs = el.headSize || 8;
+    c.fillStyle = el.color || P.primary;
+    c.beginPath();
+    c.moveTo(el.x2, el.y2);
+    c.lineTo(el.x2 - hs * Math.cos(angle - 0.4), el.y2 - hs * Math.sin(angle - 0.4));
+    c.lineTo(el.x2 - hs * Math.cos(angle + 0.4), el.y2 - hs * Math.sin(angle + 0.4));
+    c.closePath(); c.fill();
+    c.shadowBlur = 0;
+    if (el.label) {
+      c.font = "bold 9px 'Space Grotesk','Noto Sans SC',sans-serif";
+      c.fillStyle = el.color || P.primary;
+      c.textAlign = el.labelAlign || 'left';
+      c.textBaseline = 'middle';
+      var lx = (el.x1 + el.x2) / 2 + (el.labelOffX || 0);
+      var ly = (el.y1 + el.y2) / 2 + (el.labelOffY || 0);
+      c.fillText(el.label, lx, ly);
+    }
+    c.restore();
+    return true;
+  }
+
+  // ---- Particles ----
+  if (el.type === 'particles') {
+    var pool = el.pool === 'exhaust' ? exhaustPool
+             : el.pool === 'ignition' ? ignitionPool
+             : el.pool === 'chute' ? chutePool : null;
+    if (!pool) return true;
+    c.save();
+    var pi;
+    for (pi = 0; pi < pool.length; pi++) {
+      var pp = pool[pi];
+      var pAlpha = Math.max(0, pp.life / pp.maxLife);
+      c.globalAlpha = pAlpha * (el.alpha || 1);
+      c.fillStyle = pp.color;
+      c.beginPath();
+      c.arc(el.ox + pp.x, el.oy + pp.y, pp.r * pAlpha, 0, Math.PI * 2);
+      c.fill();
+    }
+    c.restore();
+    return true;
+  }
+
+  // ---- Launch pad ----
+  if (el.type === 'launchPad') {
+    c.save();
+    c.fillStyle = P.secondary;
+    c.fillRect(el.x - el.pw / 2, el.y, el.pw, el.ph);
+    c.strokeStyle = P.secondaryDim;
+    c.lineWidth = 2;
+    c.beginPath(); c.moveTo(el.x - el.pw/2+5, el.y+el.ph); c.lineTo(el.x - el.pw/2-5, el.y+el.ph+12); c.stroke();
+    c.beginPath(); c.moveTo(el.x + el.pw/2-5, el.y+el.ph); c.lineTo(el.x + el.pw/2+5, el.y+el.ph+12); c.stroke();
+    c.strokeStyle = P.muted; c.lineWidth = 1; c.setLineDash([4,4]);
+    c.beginPath(); c.moveTo(el.x-100, el.y+el.ph+12); c.lineTo(el.x+100, el.y+el.ph+12); c.stroke();
+    c.setLineDash([]);
+    c.restore();
+    return true;
+  }
+
+  // ---- Book (title frame) ----
+  if (el.type === 'book') {
+    c.save();
+    c.translate(el.x, el.y);
+    var bw = el.bw || 80;
+    var bh = el.bh || 60;
+    var openAmt = el.openAmount || 0;
+
+    // Spine
+    c.fillStyle = P.primaryDim;
+    c.fillRect(-2, -bh / 2, 4, bh);
+    // Left cover
+    c.fillStyle = P.surface; c.strokeStyle = P.primary; c.lineWidth = 1.5;
+    c.beginPath(); c.rect(-bw / 2, -bh / 2, bw / 2 - 2, bh); c.fill(); c.stroke();
+    // Right cover (opening)
+    c.save();
+    var scX = 1 - openAmt * 0.8;
+    c.transform(scX, 0, 0, 1, 2, 0);
+    c.fillStyle = P.surface; c.strokeStyle = P.primary;
+    c.beginPath(); c.rect(0, -bh / 2, bw / 2 - 2, bh); c.fill(); c.stroke();
+    if (openAmt > 0.3) {
+      var pg;
+      for (pg = 0; pg < 5; pg++) {
+        var pAlpha2 = Math.max(0, Math.min(1, (openAmt - 0.3 - pg * 0.1) * 3));
+        if (pAlpha2 <= 0) continue;
+        c.globalAlpha = pAlpha2 * 0.3;
+        c.fillStyle = P.text;
+        c.fillRect(4 + pg * 3, -bh / 2 + 4, bw / 2 - 12 - pg * 2, bh - 8);
+      }
+      c.globalAlpha = 1;
+    }
+    c.restore();
+    c.restore();
+    return true;
+  }
+
+  // ---- Parachute ----
+  if (el.type === 'parachute') {
+    c.save();
+    c.translate(el.x, el.y);
+    var cpw = el.pw || 40;
+    var cph = el.ph || 25;
+    var dep = el.deploy || 1;
+    // Canopy
+    c.fillStyle = 'rgba(0,218,243,' + (0.3 * dep) + ')';
+    c.strokeStyle = P.tertiary; c.lineWidth = 1.5;
+    c.beginPath();
+    c.moveTo(-cpw / 2 * dep, 0);
+    c.quadraticCurveTo(0, -cph * dep, cpw / 2 * dep, 0);
+    c.stroke(); c.fill();
+    // Lines
+    c.strokeStyle = P.muted; c.lineWidth = 0.8;
+    var li;
+    for (li = 0; li < 4; li++) {
+      var lnx = -cpw / 2 * dep + (cpw * dep / 3) * li;
+      c.beginPath(); c.moveTo(lnx, -cph * dep * 0.2); c.lineTo(0, cph * 0.8); c.stroke();
+    }
+    c.restore();
+    return true;
+  }
+
+  // ---- Flight path arc with concept labels ----
+  if (el.type === 'flightPath') {
+    c.save();
+    c.strokeStyle = P.primaryDim; c.lineWidth = 2; c.setLineDash([6,4]);
+    c.beginPath();
+    var fi;
+    for (fi = 0; fi <= 40; fi++) {
+      var ft = fi / 40;
+      var fpx = el.x1 + (el.x2 - el.x1) * ft;
+      var fpy = el.y1 - el.arcH * 4 * ft * (1 - ft);
+      if (fi === 0) c.moveTo(fpx, fpy); else c.lineTo(fpx, fpy);
+    }
+    c.stroke(); c.setLineDash([]);
+    // Labels
+    if (el.labels) {
+      var lb;
+      for (lb = 0; lb < el.labels.length; lb++) {
+        var lbl = el.labels[lb];
+        var lt = lbl.t;
+        var lx = el.x1 + (el.x2 - el.x1) * lt;
+        var ly = el.y1 - el.arcH * 4 * lt * (1 - lt);
+        c.fillStyle = lbl.color || P.primary;
+        c.shadowColor = lbl.color || P.primary; c.shadowBlur = 6;
+        c.beginPath(); c.arc(lx, ly, 3, 0, Math.PI * 2); c.fill();
+        c.shadowBlur = 0;
+        c.font = "bold 8px 'Space Grotesk','Noto Sans SC',sans-serif";
+        c.textAlign = 'center';
+        c.textBaseline = lbl.above ? 'bottom' : 'top';
+        c.fillText(lbl.text, lx, ly + (lbl.above ? -7 : 7));
+      }
+    }
+    c.restore();
+    return true;
+  }
+
+  // ---- FBD dashed box ----
+  if (el.type === 'fbdBox') {
+    c.save();
+    c.strokeStyle = P.muted; c.lineWidth = 1; c.setLineDash([3,3]); c.globalAlpha = 0.5;
+    c.strokeRect(el.x - el.bw / 2, el.y - el.bh / 2, el.bw, el.bh);
+    c.setLineDash([]);
+    if (el.label) {
+      c.font = "bold 7px 'Space Grotesk',sans-serif";
+      c.fillStyle = P.muted; c.textAlign = 'left';
+      c.fillText(el.label, el.x + el.bw / 2 + 4, el.y - el.bh / 2 + 6);
+    }
+    c.globalAlpha = 1;
+    c.restore();
+    return true;
+  }
+
+  // ---- Equation box with glow border ----
+  if (el.type === 'eqBox') {
+    c.save();
+    c.fillStyle = P.glass;
+    c.fillRect(el.x - el.bw / 2, el.y - el.bh / 2, el.bw, el.bh);
+    c.strokeStyle = P.primary; c.lineWidth = 1;
+    c.shadowColor = P.primary; c.shadowBlur = 6;
+    c.strokeRect(el.x - el.bw / 2, el.y - el.bh / 2, el.bw, el.bh);
+    c.shadowBlur = 0;
+    c.font = "bold 10px 'Space Grotesk','Noto Sans SC',sans-serif";
+    c.fillStyle = P.primary; c.textAlign = 'center'; c.textBaseline = 'middle';
+    c.fillText(el.text, el.x, el.y);
+    c.restore();
+    return true;
+  }
+
+  // ---- Multi-line text helper ----
+  if (el.type === 'mtext') {
+    c.save();
+    c.font = (el.bold ? 'bold ' : '') + (el.size || 10) + "px 'Inter','Noto Sans SC',sans-serif";
+    c.fillStyle = el.color || P.text;
+    c.textAlign = el.align || 'center';
+    c.textBaseline = 'top';
+    var lines = (el.text || '').split('\n');
+    var lineH = (el.size || 10) * 1.5;
+    var ml;
+    for (ml = 0; ml < lines.length; ml++) {
+      c.fillText(lines[ml], el.x, el.y + ml * lineH);
+    }
+    c.restore();
+    return true;
+  }
+
+  return false;
+}
+
+// ============================================================
+// FRAME ELEMENTS
+// ============================================================
+
+function getFrameElements(f, W, H) {
+  var t = AnimRuntime.t;
+  var P = AnimRuntime.PAL;
+  var cx = W / 2, cy = H / 2;
+
+  // ================================================================
+  // F0: Title -- book opening, core question
+  // ================================================================
+  if (f === 0) {
+    var bookOpen = Math.min(1, aTime * 0.5);
+    var qAlpha = Math.min(1, Math.max(0, (aTime - 0.8) * 0.8));
+
+    return [
+      {id:'f0title', type:'label', text:t('title'), x:cx, y:cy - 90,
+       color:P.primary, size:20, align:'center', glow:P.glowStrong, bold:true, alpha:1},
+      {id:'f0sub', type:'label', text:t('subtitle'), x:cx, y:cy - 65,
+       color:P.muted, size:11, align:'center', alpha:1},
+      {id:'f0book', type:'book', x:cx, y:cy + 5, bw:100, bh:70,
+       openAmount:bookOpen, alpha:1},
+      {id:'f0q', type:'mtext', text:t('f0core'), x:cx, y:cy + 55,
+       color:P.text, size:10, align:'center', alpha:qAlpha},
+      {id:'f0hint', type:'label', text:t('f0open'), x:cx, y:cy + 120,
+       color:P.primaryDim, size:9, align:'center',
+       alpha: 0.3 + 0.4 * Math.sin(aTime * 2)},
+    ];
+  }
+
+  // ================================================================
+  // F1: Launch pad -- balanced -> ignition
+  // ================================================================
+  if (f === 1) {
+    var rCX = cx - 80;
+    var padY = cy + 65;
+    var rBaseY = padY - 30;
+
+    // Ignition after short delay
+    var ignited = aTime > 1.2 ? 1 : 0;
+    var liftProg = ignited ? Math.min(1, (aTime - 1.2) * 0.35) : 0;
+    var rY = rBaseY - liftProg * 45;
+
+    if (ignited && shakeAmt < 3.5) shakeAmt = 3.5;
+
+    var fbdX = cx + 80;
+    var fbdY = cy - 5;
+
+    var els = [
+      {id:'f1ch', type:'label', text:t('f1ch'), x:cx, y:28,
+       color:P.primary, size:14, align:'center', glow:P.glowStrong, alpha:1},
+      {id:'f1pad', type:'launchPad', x:rCX, y:padY, pw:50, ph:6, alpha:1},
+      {id:'f1rocket', type:'rocket', x:rCX, y:rY,
+       rw:16, rh:50, engineOn:ignited, flameLen:20,
+       breathe:!ignited, alpha:1},
+      {id:'f1ign', type:'particles', pool:'ignition',
+       ox:rCX, oy:rY + 25, alpha:ignited},
+      {id:'f1fbd', type:'fbdBox', x:fbdX, y:fbdY, bw:70, bh:100,
+       label:t('f1fbd'), alpha:1},
+    ];
+
+    if (!ignited) {
+      // Balanced: Weight + Normal
+      els.push({id:'f1wt', type:'forceArrow', x1:fbdX, y1:fbdY,
+                x2:fbdX, y2:fbdY + 35, color:'#ff716c',
+                label:t('f1wt'), labelOffX:18, headSize:7, lineWidth:2.5, alpha:1});
+      els.push({id:'f1nm', type:'forceArrow', x1:fbdX, y1:fbdY,
+                x2:fbdX, y2:fbdY - 35, color:'#85ecff',
+                label:t('f1nm'), labelOffX:20, headSize:7, lineWidth:2.5, alpha:1});
+      els.push({id:'f1law', type:'mtext', text:t('f1n1'), x:fbdX - 35, y:fbdY + 58,
+                color:P.text, size:9, align:'left', alpha:1});
+    } else {
+      // Thrust > Weight, Normal gone
+      els.push({id:'f1wt', type:'forceArrow', x1:fbdX, y1:fbdY,
+                x2:fbdX, y2:fbdY + 30, color:'#ff716c',
+                label:t('f1wt'), labelOffX:18, headSize:7, lineWidth:2.5, alpha:1});
+      els.push({id:'f1th', type:'forceArrow', x1:fbdX, y1:fbdY,
+                x2:fbdX, y2:fbdY - 48, color:P.primary,
+                label:t('f1th'), labelOffX:20, headSize:9, lineWidth:3, alpha:1});
+      els.push({id:'f1law', type:'label', text:t('f1ign'), x:fbdX, y:fbdY + 62,
+                color:P.primary, size:10, align:'center', bold:true, glow:P.glowStrong, alpha:1});
+    }
+
+    return els;
+  }
+
+  // ================================================================
+  // F2: Powered ascent -- N2, mass decrease, N3
+  // ================================================================
+  if (f === 2) {
+    var aRX = cx - 100;
+    var aRY = cy - 30 - Math.sin(aTime * 0.8) * 12;
+    var fbdX2 = cx + 70;
+    var fbdY2 = cy - 25;
+    var massFrac = Math.max(0.55, 1 - aTime * 0.04);
+
+    var els2 = [
+      {id:'f2ch', type:'label', text:t('f2ch'), x:cx, y:25,
+       color:P.primary, size:14, align:'center', glow:P.glowStrong, alpha:1},
+      {id:'f2rocket', type:'rocket', x:aRX, y:aRY,
+       rw:16, rh:50, engineOn:true, flameLen:30, alpha:1},
+      {id:'f2exhp', type:'particles', pool:'exhaust',
+       ox:aRX, oy:aRY + 25, alpha:1},
+      // N3 action/reaction arrows on the rocket itself
+      {id:'f2act', type:'forceArrow', x1:aRX, y1:aRY + 32,
+       x2:aRX, y2:aRY + 68, color:'#ff7f50',
+       label:t('f2exh'), labelOffX:22, headSize:7, lineWidth:2, alpha:1},
+      {id:'f2react', type:'forceArrow', x1:aRX, y1:aRY - 12,
+       x2:aRX, y2:aRY - 48, color:P.tertiary,
+       label:t('f2up'), labelOffX:20, headSize:7, lineWidth:2, alpha:1},
+      // FBD
+      {id:'f2fbd', type:'fbdBox', x:fbdX2, y:fbdY2, bw:60, bh:90,
+       label:t('f1fbd'), alpha:1},
+      {id:'f2wt', type:'forceArrow', x1:fbdX2, y1:fbdY2,
+       x2:fbdX2, y2:fbdY2 + 25, color:'#ff716c',
+       label:t('f1wt'), labelOffX:16, headSize:6, lineWidth:2, alpha:1},
+      {id:'f2th', type:'forceArrow', x1:fbdX2, y1:fbdY2,
+       x2:fbdX2, y2:fbdY2 - 42, color:P.primary,
+       label:t('f1th'), labelOffX:18, headSize:8, lineWidth:3, alpha:1},
+      // N2 equation
+      {id:'f2eq', type:'eqBox', x:cx + 70, y:cy + 45, bw:160, bh:22,
+       text:t('f2n2law') + ':  ' + t('f2n2'), alpha:1},
+      // N3 text
+      {id:'f2n3t', type:'text', text:t('f2n3'), x:cx + 70, y:cy + 68,
+       color:P.tertiary, size:9, align:'center', alpha:1},
+      // Mass info
+      {id:'f2mass', type:'mtext', text:t('f2mass'), x:cx + 70, y:cy + 82,
+       color:P.muted, size:8, align:'center', alpha:1},
+      // Mass bar
+      {id:'f2mbar', type:'gradient_box', x:cx + 20, y:cy + 108,
+       w:100 * massFrac, h:5, color1:P.primary, color2:P.primaryDim,
+       glow:P.glowStrong, alpha:0.8},
+      {id:'f2mlab', type:'text', text:'m: ' + Math.round(massFrac * 100) + '%',
+       x:cx + 125, y:cy + 111, color:P.muted, size:8, align:'left', alpha:0.7},
+    ];
+
+    return els2;
+  }
+
+  // ================================================================
+  // F3: Coast & apex -- engine off, momentum, v=0
+  // ================================================================
+  if (f === 3) {
+    var arcPhase = (Math.sin(aTime * 0.4) + 1) / 2;
+    var arcStartX = cx - 120;
+    var arcEndX = cx + 120;
+    var arcBaseY = cy + 60;
+    var arcHeight = 130;
+    var arcX = arcStartX + (arcEndX - arcStartX) * arcPhase;
+    var arcY = arcBaseY - arcHeight * 4 * arcPhase * (1 - arcPhase);
+    var atApex = Math.abs(arcPhase - 0.5) < 0.06;
+
+    // Velocity vector -- tangent to parabola
+    var vMag = Math.abs(arcPhase - 0.5) * 50;
+    var vDir = arcPhase < 0.5 ? -1 : 1;
+
+    var els3 = [
+      {id:'f3ch', type:'label', text:t('f3ch'), x:cx, y:25,
+       color:P.primary, size:14, align:'center', glow:P.glowStrong, alpha:1},
+      // Trajectory arc
+      {id:'f3path', type:'flightPath', x1:arcStartX, y1:arcBaseY,
+       x2:arcEndX, y2:arcBaseY, arcH:arcHeight, labels:[], alpha:0.5},
+      // Rocket following arc (engine off)
+      {id:'f3rocket', type:'rocket', x:arcX, y:arcY,
+       rw:14, rh:44, engineOn:false, breathe:false, alpha:1},
+      // Only gravity arrow
+      {id:'f3wt', type:'forceArrow', x1:arcX, y1:arcY + 12,
+       x2:arcX, y2:arcY + 42, color:'#ff716c',
+       label:t('f1wt'), labelOffX:16, headSize:6, lineWidth:2, alpha:1},
+      // Explanations
+      {id:'f3off', type:'mtext', text:t('f3off'), x:cx, y:arcBaseY + 20,
+       color:P.text, size:9, align:'center', alpha:1},
+      {id:'f3mom', type:'text', text:t('f3mom'), x:cx, y:arcBaseY + 48,
+       color:P.tertiary, size:9, align:'center', alpha:1},
+      {id:'f3traj', type:'text', text:t('f3traj'), x:arcEndX + 8, y:arcBaseY - 40,
+       color:P.muted, size:8, align:'left', alpha:0.7},
+    ];
+
+    if (atApex) {
+      els3.push({id:'f3apex', type:'label', text:t('f3apex'), x:arcX, y:arcY - 40,
+                 color:P.primary, size:11, align:'center', glow:P.glowStrong, alpha:1});
+      els3.push({id:'f3ring', type:'circle', x:arcX, y:arcY,
+                 r:22 + Math.sin(aTime * 4) * 3, stroke:P.primary,
+                 lineWidth:1, glow:P.glowStrong, alpha:0.5});
+    }
+
+    return els3;
+  }
+
+  // ================================================================
+  // F4: Descent & landing -- parachute, drag, 7-concept summary
+  // ================================================================
+  if (f === 4) {
+    var descPhase = (aTime * 0.25) % 1;
+    var descY = cy - 70 + descPhase * 110;
+    var chuteOn = descPhase > 0.2;
+    var chuteDep = chuteOn ? Math.min(1, (descPhase - 0.2) * 4) : 0;
+    var dRX = cx - 130;
+
+    // Right side summary path
+    var spCX = cx + 70;
+    var spBaseY = cy + 55;
+
+    var els4 = [
+      {id:'f4ch', type:'label', text:t('f4ch'), x:cx - 50, y:25,
+       color:P.primary, size:14, align:'center', glow:P.glowStrong, alpha:1},
+      // Rocket descending
+      {id:'f4rocket', type:'rocket', x:dRX, y:descY,
+       rw:14, rh:44, engineOn:false, breathe:false, alpha:1},
+      // Parachute
+      {id:'f4chute', type:'parachute', x:dRX, y:descY - 38,
+       pw:50, ph:30, deploy:chuteDep, alpha:chuteDep},
+      // Chute particles
+      {id:'f4cp', type:'particles', pool:'chute',
+       ox:dRX, oy:descY - 50, alpha:chuteDep * 0.8},
+      // Weight arrow
+      {id:'f4wt', type:'forceArrow', x1:dRX, y1:descY + 12,
+       x2:dRX, y2:descY + 40, color:'#ff716c',
+       label:t('f1wt'), labelOffX:16, headSize:6, lineWidth:2, alpha:1},
+      // Ground line
+      {id:'f4gnd', type:'line', x1:dRX - 50, y1:cy + 75,
+       x2:dRX + 50, y2:cy + 75, color:P.secondaryDim,
+       lineWidth:1, dash:[4,4], alpha:0.5},
+      // Chute text
+      {id:'f4t1', type:'mtext', text:t('f4chute'), x:dRX - 45, y:cy + 85,
+       color:P.text, size:8, align:'left', alpha:1},
+    ];
+
+    // Drag arrow when chute deployed
+    if (chuteOn) {
+      els4.push({id:'f4drag', type:'forceArrow', x1:dRX, y1:descY - 8,
+                 x2:dRX, y2:descY - 35 * chuteDep, color:P.tertiary,
+                 label:t('f4drag'), labelOffX:16, headSize:6, lineWidth:2, alpha:chuteDep});
+      els4.push({id:'f4t2', type:'mtext', text:t('f4term'), x:dRX - 45, y:cy + 108,
+                 color:P.tertiary, size:8, align:'left', alpha:chuteDep});
+    }
+
+    // Summary flight path with 7 concept labels
+    els4.push({id:'f4sum', type:'label', text:t('f4sum'), x:spCX, y:28,
+               color:P.secondary, size:10, align:'center', alpha:0.9});
+    els4.push({id:'f4path', type:'flightPath',
+               x1:spCX - 90, y1:spBaseY, x2:spCX + 90, y2:spBaseY,
+               arcH:100, labels:[
+                 {t:0.00, text:t('f4n1'),   color:P.primary, above:false},
+                 {t:0.12, text:t('f4fbd'),  color:P.muted,   above:true},
+                 {t:0.25, text:t('f4n2'),   color:'#ff7f50',  above:false},
+                 {t:0.38, text:t('f4n3'),   color:P.tertiary, above:true},
+                 {t:0.50, text:t('f4mom'),  color:'#ffdb3c',  above:true},
+                 {t:0.65, text:t('f4free'), color:'#ff716c',  above:false},
+                 {t:0.82, text:t('f4proj'), color:'#85ecff',  above:true},
+               ], alpha:1});
+
+    return els4;
+  }
+
+  return [];
+}
+
+// ============================================================
+// BOOT
+// ============================================================
+
+AnimRuntime.boot();
+</script>
+</body>
+</html>

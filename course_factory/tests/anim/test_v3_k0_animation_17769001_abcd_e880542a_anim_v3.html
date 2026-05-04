@@ -1,0 +1,722 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>力之观测台 — 牛顿第二定律</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700;900&family=JetBrains+Mono:wght@400;600&family=Noto+Sans+SC:wght@300;400;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --FIELD:oklch(0.78 0.13 215);--WAVE:oklch(0.55 0.13 215);--MASS:oklch(0.35 0.10 215);
+  --PHOTON:oklch(0.92 0.08 215);--CONSTANT:oklch(0.85 0.14 85);
+  --BG-DEEP:oklch(0.14 0.035 265);--BG-MID:oklch(0.18 0.04 265);
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{
+  width:100%;height:100vh;min-height:100vh;
+  overflow:hidden;
+  font-family:'Noto Sans SC','Inter',sans-serif;
+  background:var(--BG-DEEP);color:var(--PHOTON);
+}
+.sidebar{
+  position:fixed;left:0;top:0;width:200px;
+  height:100vh;min-height:100vh;
+  background:oklch(0.14 0.04 265/0.82);
+  backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);
+  border-right:1px solid oklch(0.35 0.08 215/0.25);
+  padding:22px 14px;display:flex;flex-direction:column;gap:14px;z-index:10;
+}
+.sidebar .sec-label{
+  font-size:10px;font-weight:600;text-transform:uppercase;
+  color:var(--CONSTANT);letter-spacing:2px;margin-bottom:4px;
+  font-family:'JetBrains Mono',monospace;
+}
+.sidebar h1{
+  font-family:'Inter',sans-serif;font-size:17px;font-weight:700;
+  line-height:1.35;color:var(--PHOTON);
+}
+.sidebar .concept{font-size:12px;line-height:1.75;color:var(--FIELD)}
+.sidebar .concept-en{font-size:9.5px;font-style:italic;color:var(--WAVE);margin-top:3px;line-height:1.5}
+.sidebar .tips{display:flex;flex-direction:column;gap:6px}
+.sidebar .tip{font-size:11px;line-height:1.6;color:var(--FIELD);padding-left:13px;position:relative}
+.sidebar .tip::before{content:'▸';position:absolute;left:0;color:var(--CONSTANT);font-size:10px}
+#langBtn{
+  margin-top:auto;padding:9px 0;
+  background:oklch(0.30 0.10 215/0.5);border:1px solid var(--WAVE);
+  color:var(--PHOTON);font-family:'JetBrains Mono',monospace;font-size:11px;
+  cursor:pointer;transition:all .2s;letter-spacing:1.5px;text-align:center;
+  border-radius:4px;
+}
+#langBtn:hover{background:var(--WAVE);color:var(--PHOTON)}
+#langBtn:focus-visible{outline:2px solid var(--CONSTANT);outline-offset:2px}
+.main-stage{
+  position:fixed;left:200px;top:0;right:0;bottom:0;
+  height:100vh;min-height:100vh;
+  overflow:hidden;
+}
+#physCanvas{display:block;width:100%;height:100%}
+.hud{
+  position:absolute;top:14px;right:14px;width:155px;
+  padding:10px 12px;
+  background:oklch(0.14 0.035 265/0.72);
+  backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);
+  border:1px solid oklch(0.35 0.08 215/0.3);
+  border-radius:6px;
+  z-index:5;font-family:'JetBrains Mono',monospace;font-size:12px;
+}
+.hud-row{display:flex;justify-content:space-between;align-items:baseline;padding:2.5px 0}
+.hud-label{color:var(--WAVE);font-size:10px;font-weight:600}
+.hud-val{color:var(--CONSTANT);font-weight:600;font-size:13px}
+.hud-unit{color:var(--WAVE);font-size:9px;margin-left:2px}
+.stage-title{
+  position:absolute;top:22px;left:22px;
+  font-family:'Inter',sans-serif;font-size:22px;font-weight:300;
+  color:var(--PHOTON);opacity:.5;letter-spacing:3px;z-index:5;
+  pointer-events:none;
+}
+.sub-bar{
+  position:absolute;bottom:0;left:0;right:0;
+  padding:18px 24px 14px;
+  background:linear-gradient(to top,oklch(0.12 0.03 265/0.88),transparent);
+  text-align:center;z-index:5;
+  opacity:0;transition:opacity .4s;
+}
+.sub-zh{font-size:16px;font-weight:600;color:var(--PHOTON);line-height:1.6}
+.sub-en{font-size:11px;color:var(--WAVE);margin-top:4px;line-height:1.4;font-style:italic}
+.progress-bar{
+  position:absolute;bottom:0;left:0;height:3px;
+  background:var(--CONSTANT);z-index:6;transition:width .1s linear;
+  border-radius:0 2px 2px 0;
+}
+.scene-dots{
+  position:absolute;bottom:56px;left:50%;transform:translateX(-50%);
+  display:flex;gap:8px;z-index:5;
+}
+.scene-dot{
+  width:8px;height:8px;border-radius:50%;
+  background:oklch(0.35 0.08 215/0.5);
+  transition:all .3s;cursor:default;
+}
+.scene-dot.active{
+  background:var(--CONSTANT);
+  box-shadow:0 0 8px oklch(0.85 0.14 85/0.5);
+  transform:scale(1.3);
+}
+@media(prefers-reduced-motion:reduce){
+  *{animation:none!important;transition-duration:0s!important}
+}
+@media(max-width:640px){
+  .sidebar{width:140px;padding:14px 10px}
+  .main-stage{left:140px}
+  .sidebar h1{font-size:14px}
+  .sidebar .concept{font-size:10px}
+}
+</style>
+</head>
+<body>
+<aside class="sidebar" role="complementary">
+  <div>
+    <div class="sec-label" data-i18n-zh="概念" data-i18n-en="CONCEPT">概念</div>
+    <h1 data-i18n-zh="力之观测台" data-i18n-en="Force Observatory">力之观测台</h1>
+  </div>
+  <div>
+    <div class="sec-label" data-i18n-zh="核心" data-i18n-en="CORE">核心</div>
+    <div class="concept" data-i18n-zh="力是物体间的相互作用。合外力不为零时，物体会获得加速度，改变原有运动状态。质量越大，改变越难。" data-i18n-en="Force is interaction between objects. When net force ≠ 0, the object gains acceleration, changing its motion state. Larger mass → harder to change.">力是物体间的相互作用。合外力不为零时，物体会获得加速度，改变原有运动状态。质量越大，改变越难。</div>
+    <div class="concept-en" data-i18n-zh="牛顿第二定律 F = ma" data-i18n-en="Newton's Second Law: F = ma">牛顿第二定律 F = ma</div>
+  </div>
+  <div>
+    <div class="sec-label" data-i18n-zh="事实" data-i18n-en="FACTS">事实</div>
+    <div class="tips">
+      <div class="tip" data-i18n-zh="1 N 力使 1 kg 物体产生 1 m/s² 加速度" data-i18n-en="1 N force → 1 kg object → 1 m/s² acceleration">1 N 力使 1 kg 物体产生 1 m/s² 加速度</div>
+      <div class="tip" data-i18n-zh="重力加速度 g ≈ 9.8 m/s²" data-i18n-en="Gravitational acceleration g ≈ 9.8 m/s²">重力加速度 g ≈ 9.8 m/s²</div>
+      <div class="tip" data-i18n-zh="静摩擦系数 μ 通常在 0.3 ~ 0.6" data-i18n-en="Static friction coefficient μ typically 0.3 ~ 0.6">静摩擦系数 μ 通常在 0.3 ~ 0.6</div>
+    </div>
+  </div>
+  <button id="langBtn" aria-label="Toggle language">EN / 中</button>
+</aside>
+
+<main class="main-stage" role="main">
+  <canvas id="physCanvas" aria-label="Physics simulation canvas"></canvas>
+  <div class="hud" role="status" aria-live="polite">
+    <div class="hud-row"><span class="hud-label">F</span><span><span class="hud-val" id="hudF">0.0</span><span class="hud-unit">N</span></span></div>
+    <div class="hud-row"><span class="hud-label">m</span><span><span class="hud-val" id="hudM">2.0</span><span class="hud-unit">kg</span></span></div>
+    <div class="hud-row"><span class="hud-label">a</span><span><span class="hud-val" id="hudA">0.0</span><span class="hud-unit">m/s²</span></span></div>
+    <div class="hud-row"><span class="hud-label">v</span><span><span class="hud-val" id="hudV">0.0</span><span class="hud-unit">m/s</span></span></div>
+  </div>
+  <div class="stage-title" aria-hidden="true">F = ma</div>
+  <div id="subBar" class="sub-bar" role="status">
+    <div class="sub-zh" id="subZh"></div>
+    <div class="sub-en" id="subEn"></div>
+  </div>
+  <div class="progress-bar" id="progBar"></div>
+  <div class="scene-dots" id="sceneDots" aria-hidden="true"></div>
+</main>
+
+<script>
+/* ===== 国际化 ===== */
+let curLang = 'zh';
+const langBtn = document.getElementById('langBtn');
+langBtn.addEventListener('click', function(){
+  curLang = curLang === 'zh' ? 'en' : 'zh';
+  applyI18n();
+  updateSubtitleText();
+});
+function applyI18n(){
+  var els = document.querySelectorAll('[data-i18n-zh]');
+  for(var i = 0; i < els.length; i++){
+    els[i].textContent = els[i].getAttribute('data-i18n-' + curLang);
+  }
+}
+
+/* ===== 画布设置 ===== */
+var canvas = document.getElementById('physCanvas');
+var ctx = canvas.getContext('2d');
+var W = 0, H = 0;
+var DPR = Math.min(window.devicePixelRatio || 1, 2);
+
+function resizeCanvas(){
+  var rect = canvas.parentElement.getBoundingClientRect();
+  W = rect.width; H = rect.height;
+  canvas.width = W * DPR;
+  canvas.height = H * DPR;
+  canvas.style.width = W + 'px';
+  canvas.style.height = H + 'px';
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+}
+window.addEventListener('resize', resizeCanvas);
+
+/* ===== 物理状态 ===== */
+var posX = 0, posY = 0;
+var velX = 0, velY = 0;
+var forceX = 0, forceY = 0;
+var mass = 2;
+var fricCoeff = 0.3;
+
+/* ===== 相机 ===== */
+var camX = 0, camY = 0;
+var CAM_SMOOTH = 0.04;
+var SCALE = 42; // pixels per meter
+
+/* ===== 场景定义 ===== */
+var SCENES = [
+  { start:0, dur:4000, mass:2, fx:0, fy:0, fric:0.3,
+    zh:'物体静止，无外力作用', en:'Object at rest — no external force', takeaway:false },
+  { start:4000, dur:5500, mass:2, fx:4, fy:0, fric:0.18,
+    zh:'施加小推力 F = 4 N → 加速度缓慢增大', en:'Small force F = 4N → acceleration grows slowly', takeaway:false },
+  { start:9500, dur:5500, mass:2, fx:12, fy:0, fric:0.18,
+    zh:'增大推力 F = 12 N → 加速度显著增大', en:'Larger force F = 12N → acceleration increases significantly', takeaway:false },
+  { start:15000, dur:5500, mass:2, fx:0, fy:0, fric:0.35,
+    zh:'撤去推力 → 摩擦力使物体减速直至静止', en:'Force removed → friction decelerates to rest', takeaway:false },
+  { start:20500, dur:5500, mass:5, fx:10, fy:0, fric:0.12,
+    zh:'质量增大至 5 kg → 同样力下加速度更小', en:'Mass increased to 5kg → smaller acceleration under same force', takeaway:false },
+  { start:26000, dur:5500, mass:2, fx:6, fy:-4, fric:0.12,
+    zh:'侧向力施加 → 运动方向偏转', en:'Lateral force applied → trajectory deflects', takeaway:false },
+  { start:31500, dur:6000, mass:0, fx:0, fy:0, fric:0,
+    zh:'力不是维持运动的原因，而是改变运动状态的原因', en:'Force does not maintain motion — it changes motion state', takeaway:true }
+];
+var TOTAL_DUR = 37500;
+
+var sceneIdx = 0;
+var sceneLocal = 0;
+var animElapsed = 0;
+var lastTs = 0;
+var subFadeAlpha = 0;
+
+/* ===== 场景点指示器 ===== */
+(function buildDots(){
+  var container = document.getElementById('sceneDots');
+  for(var i = 0; i < SCENES.length; i++){
+    var d = document.createElement('div');
+    d.className = 'scene-dot';
+    d.setAttribute('data-idx', i);
+    container.appendChild(d);
+  }
+})();
+
+function updateDots(){
+  var dots = document.querySelectorAll('.scene-dot');
+  for(var i = 0; i < dots.length; i++){
+    if(i === sceneIdx){
+      dots[i].classList.add('active');
+    } else {
+      dots[i].classList.remove('active');
+    }
+  }
+}
+
+/* ===== 粒子系统 ===== */
+var burstParticles = [];
+var ambientParticles = [];
+var trailPoints = [];
+
+function initAmbient(){
+  ambientParticles = [];
+  for(var i = 0; i < 55; i++){
+    ambientParticles.push({
+      x: Math.random() * 2000 - 500,
+      y: Math.random() * 1200 - 200,
+      r: Math.random() * 1.5 + 0.5,
+      speed: Math.random() * 0.3 + 0.1,
+      phase: Math.random() * Math.PI * 2,
+      alpha: Math.random() * 0.25 + 0.08
+    });
+  }
+}
+
+function spawnBurst(wx, wy, count){
+  count = count || 25;
+  for(var i = 0; i < count; i++){
+    var ang = Math.random() * Math.PI * 2;
+    var spd = Math.random() * 3 + 1;
+    burstParticles.push({
+      x: wx, y: wy,
+      vx: Math.cos(ang) * spd,
+      vy: Math.sin(ang) * spd,
+      life: 1,
+      decay: Math.random() * 0.02 + 0.012,
+      r: Math.random() * 3 + 1.5,
+      isGold: Math.random() > 0.5
+    });
+  }
+}
+
+/* ===== 物理步进 ===== */
+function resetPhysics(sc){
+  posX = 0; posY = 0;
+  velX = 0; velY = 0;
+  forceX = sc.fx; forceY = sc.fy;
+  mass = sc.mass; fricCoeff = sc.fric;
+  camX = 0; camY = 0;
+  trailPoints = [];
+}
+
+function physicsStep(dt){
+  if(mass <= 0) return;
+  /* 粘性阻力模型：F_drag = -drag * v */
+  var drag = fricCoeff * mass * 2.5;
+  var netFx = forceX - drag * velX;
+  var netFy = forceY - drag * velY;
+  var ax = netFx / mass;
+  var ay = netFy / mass;
+  velX += ax * dt;
+  velY += ay * dt;
+  /* 微小速度归零 */
+  if(Math.abs(velX) < 0.005 && forceX === 0) velX = 0;
+  if(Math.abs(velY) < 0.005 && forceY === 0) velY = 0;
+  posX += velX * dt;
+  posY += velY * dt;
+  /* 轨迹记录 */
+  trailPoints.push({x: posX, y: posY, t: animElapsed});
+  if(trailPoints.length > 350) trailPoints.shift();
+}
+
+/* ===== 相机 ===== */
+function updateCamera(){
+  camX += (posX - camX) * CAM_SMOOTH;
+  camY += (posY - camY) * CAM_SMOOTH;
+}
+
+/* ===== 坐标变换（世界→屏幕） ===== */
+function w2s(wx, wy){
+  return {
+    x: W / 2 + (wx - camX) * SCALE,
+    y: H / 2 + 30 - (wy - camY) * SCALE
+  };
+}
+
+/* ===== 绘制函数 ===== */
+
+function drawBackground(){
+  var grad = ctx.createRadialGradient(W/2, H/2, 0, W/2, H/2, Math.max(W, H) * 0.72);
+  grad.addColorStop(0, '#1a2040');
+  grad.addColorStop(1, '#0c0e1c');
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, W, H);
+}
+
+function drawGrid(){
+  var spacing = SCALE;
+  ctx.strokeStyle = 'rgba(60,80,130,0.1)';
+  ctx.lineWidth = 0.5;
+  var offsetX = ((W/2) - camX * SCALE) % spacing;
+  if(offsetX < 0) offsetX += spacing;
+  for(var x = offsetX; x < W; x += spacing){
+    ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke();
+  }
+  var offsetY = ((H/2 + 30) + camY * SCALE) % spacing;
+  if(offsetY < 0) offsetY += spacing;
+  for(var y = offsetY; y < H; y += spacing){
+    ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke();
+  }
+}
+
+function drawGroundLine(){
+  var gp = w2s(0, -0.6);
+  var gy = gp.y;
+  ctx.strokeStyle = 'rgba(80,110,170,0.3)';
+  ctx.lineWidth = 1.5;
+  ctx.beginPath(); ctx.moveTo(0, gy); ctx.lineTo(W, gy); ctx.stroke();
+  /* 斜线纹理 */
+  ctx.strokeStyle = 'rgba(60,80,130,0.15)';
+  ctx.lineWidth = 0.7;
+  for(var x = -20; x < W + 20; x += 14){
+    ctx.beginPath(); ctx.moveTo(x, gy); ctx.lineTo(x - 8, gy + 10); ctx.stroke();
+  }
+}
+
+function drawAmbient(){
+  var t = animElapsed / 1000;
+  for(var i = 0; i < ambientParticles.length; i++){
+    var p = ambientParticles[i];
+    var sx = p.x - camX * SCALE * 0.25 + Math.sin(t * p.speed + p.phase) * 18;
+    var sy = p.y + camY * SCALE * 0.25 + Math.cos(t * p.speed * 0.7 + p.phase) * 12;
+    if(sx < -30 || sx > W + 30 || sy < -30 || sy > H + 30) continue;
+    ctx.beginPath();
+    ctx.arc(sx, sy, Math.max(0.3, p.r), 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(130,160,210,' + p.alpha.toFixed(3) + ')';
+    ctx.fill();
+  }
+}
+
+function drawTrail(){
+  if(trailPoints.length < 2) return;
+  var now = animElapsed;
+  for(var i = 1; i < trailPoints.length; i++){
+    var p0 = w2s(trailPoints[i-1].x, trailPoints[i-1].y);
+    var p1 = w2s(trailPoints[i].x, trailPoints[i].y);
+    var age = (now - trailPoints[i].t) / 3500;
+    var alpha = Math.max(0, 0.55 - age * 0.55);
+    if(alpha <= 0) continue;
+    ctx.strokeStyle = 'rgba(74,106,158,' + alpha.toFixed(3) + ')';
+    ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(p0.x, p0.y); ctx.lineTo(p1.x, p1.y); ctx.stroke();
+  }
+}
+
+/* 圆角矩形辅助 */
+function rrect(c, x, y, w, h, r){
+  r = Math.max(0, Math.min(r, w/2, h/2));
+  c.moveTo(x + r, y);
+  c.lineTo(x + w - r, y);
+  c.arcTo(x + w, y, x + w, y + r, r);
+  c.lineTo(x + w, y + h - r);
+  c.arcTo(x + w, y + h, x + w - r, y + h, r);
+  c.lineTo(x + r, y + h);
+  c.arcTo(x, y + h, x, y + h - r, r);
+  c.lineTo(x, y + r);
+  c.arcTo(x, y, x + r, y, r);
+  c.closePath();
+}
+
+function drawCart(){
+  var s = w2s(posX, posY);
+  var cw = 52, ch = 32;
+  /* 发光 */
+  ctx.save();
+  ctx.shadowColor = 'rgba(74,106,158,0.45)';
+  ctx.shadowBlur = 22;
+  ctx.fillStyle = '#2a3d5c';
+  ctx.beginPath(); rrect(ctx, s.x - cw/2, s.y - ch/2, cw, ch, 7); ctx.fill();
+  ctx.restore();
+  /* 边框 */
+  ctx.strokeStyle = 'rgba(74,106,158,0.7)';
+  ctx.lineWidth = 1.5;
+  ctx.beginPath(); rrect(ctx, s.x - cw/2, s.y - ch/2, cw, ch, 7); ctx.stroke();
+  /* 内部高光 */
+  var igr = ctx.createLinearGradient(s.x - cw/2, s.y - ch/2, s.x - cw/2, s.y + ch/2);
+  igr.addColorStop(0, 'rgba(130,160,210,0.12)');
+  igr.addColorStop(1, 'rgba(130,160,210,0)');
+  ctx.fillStyle = igr;
+  ctx.beginPath(); rrect(ctx, s.x - cw/2, s.y - ch/2, cw, ch, 7); ctx.fill();
+  /* 轮子 */
+  ctx.fillStyle = '#1a2840';
+  ctx.strokeStyle = 'rgba(74,106,158,0.5)';
+  ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.arc(s.x - 15, s.y + ch/2 + 3, 5, 0, Math.PI*2); ctx.fill(); ctx.stroke();
+  ctx.beginPath(); ctx.arc(s.x + 15, s.y + ch/2 + 3, 5, 0, Math.PI*2); ctx.fill(); ctx.stroke();
+  /* 质量标注 */
+  if(mass > 0){
+    ctx.fillStyle = '#c8d8ef';
+    ctx.font = '600 11px "JetBrains Mono"';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(mass + 'kg', s.x, s.y);
+  }
+}
+
+/* 箭头绘制 */
+function drawArrow(fx, fy, tx, ty, color, label){
+  var dx = tx - fx, dy = ty - fy;
+  var len = Math.sqrt(dx*dx + dy*dy);
+  if(len < 4) return;
+  var ang = Math.atan2(dy, dx);
+  var headLen = Math.min(13, len * 0.3);
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 2.5;
+  ctx.lineCap = 'round';
+  ctx.beginPath(); ctx.moveTo(fx, fy); ctx.lineTo(tx, ty); ctx.stroke();
+  ctx.fillStyle = color;
+  ctx.beginPath();
+  ctx.moveTo(tx, ty);
+  ctx.lineTo(tx - headLen * Math.cos(ang - 0.38), ty - headLen * Math.sin(ang - 0.38));
+  ctx.lineTo(tx - headLen * Math.cos(ang + 0.38), ty - headLen * Math.sin(ang + 0.38));
+  ctx.closePath(); ctx.fill();
+  if(label){
+    ctx.font = '700 12px "JetBrains Mono"';
+    ctx.fillStyle = color;
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'bottom';
+    ctx.fillText(label, tx + 7, ty - 5);
+  }
+}
+
+function drawForceVectors(){
+  if(mass <= 0) return;
+  var s = w2s(posX, posY);
+  var vScale = 7;
+  var fScale = 7;
+  /* 合力矢量 */
+  var fMag = Math.sqrt(forceX*forceX + forceY*forceY);
+  if(fMag > 0.01){
+    var fEnd = w2s(posX + forceX * 0.15, posY + forceY * 0.15);
+    drawArrow(s.x, s.y, fEnd.x, fEnd.y, '#d46030', 'F');
+  }
+  /* 速度矢量 */
+  var vMag = Math.sqrt(velX*velX + velY*velY);
+  if(vMag > 0.08){
+    var vEnd = w2s(posX + velX * 0.12, posY + velY * 0.12);
+    drawArrow(s.x, s.y, vEnd.x, vEnd.y, '#40b080', 'v');
+  }
+  /* 摩擦力矢量（仅在有速度且无外力时显示） */
+  if(vMag > 0.1 && fMag < 0.01 && fricCoeff > 0){
+    var drag = fricCoeff * mass * 2.5;
+    var dfx = -drag * velX;
+    var dfy = -drag * velY;
+    var dEnd = w2s(posX + dfx * 0.04, posY + dfy * 0.04);
+    drawArrow(s.x, s.y, dEnd.x, dEnd.y, 'rgba(180,140,80,0.7)', 'f');
+  }
+}
+
+function drawBurst(){
+  for(var i = burstParticles.length - 1; i >= 0; i--){
+    var p = burstParticles[i];
+    p.x += p.vx * 0.6;
+    p.y += p.vy * 0.6;
+    p.vx *= 0.965;
+    p.vy *= 0.965;
+    p.life -= p.decay;
+    if(p.life <= 0){ burstParticles.splice(i, 1); continue; }
+    var sp = w2s(p.x, p.y);
+    ctx.beginPath();
+    ctx.arc(sp.x, sp.y, Math.max(0.3, p.r * p.life), 0, Math.PI * 2);
+    if(p.isGold){
+      ctx.fillStyle = 'rgba(232,201,96,' + (p.life * 0.7).toFixed(3) + ')';
+    } else {
+      ctx.fillStyle = 'rgba(212,96,48,' + (p.life * 0.7).toFixed(3) + ')';
+    }
+    ctx.fill();
+  }
+}
+
+function drawScaleBar(){
+  var barLen = SCALE; // 1 meter
+  var x = 22, y = H - 28;
+  ctx.strokeStyle = 'rgba(100,130,180,0.4)';
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.moveTo(x, y); ctx.lineTo(x + barLen, y);
+  ctx.moveTo(x, y - 4); ctx.lineTo(x, y + 4);
+  ctx.moveTo(x + barLen, y - 4); ctx.lineTo(x + barLen, y + 4);
+  ctx.stroke();
+  ctx.fillStyle = 'rgba(100,130,180,0.4)';
+  ctx.font = '10px "JetBrains Mono"';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'bottom';
+  ctx.fillText('1 m', x + barLen/2, y - 7);
+}
+
+/* Takeaway 画面 */
+function drawTakeaway(){
+  var t = sceneLocal / 1000;
+  var pulse = 0.96 + Math.sin(t * 2.2) * 0.04;
+  ctx.save();
+  ctx.translate(W/2, H/2 - 30);
+  ctx.scale(pulse, pulse);
+  ctx.font = '900 68px "Inter"';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.shadowColor = 'rgba(232,201,96,0.35)';
+  ctx.shadowBlur = 35;
+  ctx.fillStyle = 'rgba(232,201,96,0.9)';
+  ctx.fillText('F = ma', 0, 0);
+  ctx.shadowBlur = 0;
+  ctx.restore();
+  /* 说明文字 */
+  var sc = SCENES[sceneIdx];
+  var subText = curLang === 'zh' ? sc.zh : sc.en;
+  ctx.font = '400 15px "Noto Sans SC","Inter"';
+  ctx.textAlign = 'center';
+  ctx.fillStyle = 'rgba(143,168,204,0.7)';
+  ctx.fillText(subText, W/2, H/2 + 45);
+  /* 装饰轨道粒子 */
+  for(var i = 0; i < 6; i++){
+    var angle = t * 0.45 + i * Math.PI * 2 / 6;
+    var radius = 115 + Math.sin(t * 1.2 + i) * 18;
+    var px = W/2 + Math.cos(angle) * radius;
+    var py = H/2 - 30 + Math.sin(angle) * radius * 0.55;
+    ctx.beginPath();
+    ctx.arc(px, py, 3.5, 0, Math.PI * 2);
+    ctx.fillStyle = i % 2 === 0 ? 'rgba(212,96,48,0.55)' : 'rgba(232,201,96,0.55)';
+    ctx.fill();
+  }
+}
+
+/* Echo 效果 */
+var echoAlpha = 0;
+function triggerEcho(){ echoAlpha = 0.22; }
+function drawEcho(){
+  if(echoAlpha > 0){
+    ctx.fillStyle = 'rgba(232,201,96,' + echoAlpha.toFixed(3) + ')';
+    ctx.fillRect(0, 0, W, H);
+    echoAlpha -= 0.006;
+    if(echoAlpha < 0) echoAlpha = 0;
+  }
+}
+
+/* ===== 字幕 ===== */
+function updateSubtitleText(){
+  var sc = SCENES[sceneIdx];
+  if(!sc) return;
+  document.getElementById('subZh').textContent = sc.zh;
+  document.getElementById('subEn').textContent = sc.en;
+  subFadeAlpha = 0;
+  document.getElementById('subBar').style.opacity = 0;
+}
+
+function animateSubtitleFade(){
+  if(subFadeAlpha < 1){
+    subFadeAlpha = Math.min(1, subFadeAlpha + 0.032);
+    document.getElementById('subBar').style.opacity = subFadeAlpha;
+  }
+}
+
+/* ===== HUD ===== */
+function updateHUD(){
+  var fMag = Math.sqrt(forceX*forceX + forceY*forceY);
+  var vMag = Math.sqrt(velX*velX + velY*velY);
+  var aMag = mass > 0 ? fMag / mass : 0;
+  document.getElementById('hudF').textContent = fMag.toFixed(1);
+  document.getElementById('hudM').textContent = mass > 0 ? mass.toFixed(1) : '—';
+  document.getElementById('hudA').textContent = aMag.toFixed(1);
+  document.getElementById('hudV').textContent = vMag.toFixed(1);
+  var sc = SCENES[sceneIdx];
+  if(sc){
+    var prog = Math.min(1, sceneLocal / sc.dur);
+    document.getElementById('progBar').style.width = (prog * 100) + '%';
+  }
+  updateDots();
+}
+
+/* ===== 场景切换 ===== */
+var prevMoving = false;
+var pendingBurst = false;
+var pendingBurstAt = 0;
+
+function detectSceneChange(elapsed){
+  var loopElapsed = elapsed % TOTAL_DUR;
+  var newIdx = 0;
+  for(var i = SCENES.length - 1; i >= 0; i--){
+    if(loopElapsed >= SCENES[i].start){
+      newIdx = i;
+      break;
+    }
+  }
+  if(newIdx !== sceneIdx){
+    sceneIdx = newIdx;
+    sceneLocal = 0;
+    resetPhysics(SCENES[sceneIdx]);
+    updateSubtitleText();
+    triggerEcho();
+    if(sceneIdx >= 1 && sceneIdx <= 5){
+      pendingBurst = true;
+      pendingBurstAt = elapsed + 220;
+    }
+  }
+  sceneLocal = loopElapsed - SCENES[sceneIdx].start;
+  /* 检测静止→运动突破 */
+  var moving = Math.sqrt(velX*velX + velY*velY) > 0.15;
+  if(moving && !prevMoving && sceneIdx >= 1 && sceneIdx <= 5){
+    spawnBurst(posX, posY, 18);
+  }
+  prevMoving = moving;
+  /* 延迟爆发 */
+  if(pendingBurst && elapsed >= pendingBurstAt){
+    spawnBurst(posX, posY, 22);
+    triggerEcho();
+    pendingBurst = false;
+  }
+}
+
+/* ===== 主循环 ===== */
+var animStart = 0;
+var PHYS_DT = 1 / 60;
+var accum = 0;
+
+function mainLoop(ts){
+  if(!animStart) animStart = ts;
+  var frameDt = Math.min((ts - lastTs) / 1000, 0.08);
+  lastTs = ts;
+  animElapsed = ts - animStart;
+
+  detectSceneChange(animElapsed);
+
+  accum += frameDt;
+  var steps = 0;
+  while(accum >= PHYS_DT && steps < 4){
+    physicsStep(PHYS_DT);
+    accum -= PHYS_DT;
+    steps++;
+  }
+
+  updateCamera();
+
+  drawBackground();
+  drawAmbient();
+  drawGrid();
+  drawGroundLine();
+  drawTrail();
+
+  var sc = SCENES[sceneIdx];
+  if(!sc || !sc.takeaway){
+    drawCart();
+    drawForceVectors();
+  } else {
+    drawTakeaway();
+  }
+
+  drawBurst();
+  drawScaleBar();
+  drawEcho();
+
+  animateSubtitleFade();
+  updateHUD();
+
+  requestAnimationFrame(mainLoop);
+}
+
+/* ===== 启动 ===== */
+function boot(){
+  resizeCanvas();
+  initAmbient();
+  lastTs = performance.now();
+  sceneIdx = 0;
+  resetPhysics(SCENES[0]);
+  updateSubtitleText();
+  requestAnimationFrame(mainLoop);
+}
+
+document.addEventListener('DOMContentLoaded', boot);
+</script>
+</body>
+</html>

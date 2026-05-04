@@ -1,0 +1,1909 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=Noto+Sans+SC:wght@400;700&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box;}
+html,body{width:100%;height:100vh;overflow:hidden;background:#0c0e14;color:#f6f6fc;font-family:'Noto Sans SC','Inter',sans-serif;}
+.game-wrap{display:flex;flex-direction:row;height:100vh;overflow:hidden;}
+.game-sidebar{width:200px;min-width:200px;max-width:200px;display:flex;flex-direction:column;gap:8px;padding:10px;background:rgba(0,0,0,0.5);border-right:1px solid rgba(80,255,176,0.15);overflow-y:auto;}
+.sidebar-btns{display:flex;gap:6px;align-self:flex-start;}
+.sidebar-lang,.sidebar-sound{flex-shrink:0;font-family:'Space Grotesk',sans-serif;font-size:11px;font-weight:700;padding:4px 10px;cursor:pointer;border:1px solid rgba(255,181,156,0.3);background:transparent;color:#ffb59c;letter-spacing:1px;}
+.sidebar-lang:hover,.sidebar-sound:hover{border-color:#ffb59c;background:rgba(255,181,156,0.1);}
+.sidebar-title{font-family:'Space Grotesk',sans-serif;font-size:11px;font-weight:700;color:#50ffb0;letter-spacing:0.08em;text-transform:uppercase;margin-top:4px;}
+.sidebar-guide{font-size:12px;color:#aaabb0;line-height:1.6;}
+.game-main{flex:1;display:flex;flex-direction:column;min-width:0;}
+.game-header{padding:8px 16px;display:flex;justify-content:space-between;align-items:center;background:rgba(0,0,0,0.4);}
+.game-header h1{font-family:'Space Grotesk',sans-serif;font-size:clamp(13px,2vw,17px);font-weight:700;color:#50ffb0;}
+.game-header .info{font-family:'Space Grotesk',sans-serif;font-size:12px;color:#aaabb0;}
+.game-body{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;position:relative;overflow:hidden;}
+.game-body canvas{display:block;}
+.control-panel{padding:8px 16px;display:flex;gap:12px;align-items:center;justify-content:center;background:rgba(0,0,0,0.3);flex-wrap:wrap;}
+.hud-bar{display:flex;justify-content:space-around;padding:6px 16px;background:rgba(0,0,0,0.55);backdrop-filter:blur(12px);}
+.hud-item{text-align:center;}
+.hud-label{font-family:'Space Grotesk',sans-serif;font-size:8px;letter-spacing:0.15em;text-transform:uppercase;color:#aaabb0;}
+.hud-val{font-family:'Space Grotesk',sans-serif;font-size:13px;font-weight:700;color:#50ffb0;}
+.btn{font-family:'Space Grotesk',sans-serif;font-size:12px;font-weight:700;padding:6px 18px;border:none;cursor:pointer;color:#0c0e14;background:linear-gradient(135deg,#50ffb0,#17df93);letter-spacing:0.08em;transition:transform 0.1s;}
+.btn:hover{transform:scale(1.04);}
+.btn:disabled{opacity:0.4;cursor:not-allowed;transform:none;}
+.btn-secondary{background:rgba(23,26,31,0.92);color:#aaabb0;backdrop-filter:blur(12px);border:none;font-family:'Space Grotesk',sans-serif;font-size:12px;font-weight:700;padding:6px 18px;cursor:pointer;letter-spacing:0.08em;transition:transform 0.1s;}
+.btn-secondary:hover{color:#50ffb0;}
+.result-panel{display:none;position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);background:rgba(12,14,20,0.95);border:1px solid rgba(80,255,176,0.3);padding:20px 28px;text-align:center;z-index:20;min-width:280px;}
+.result-panel h2{font-family:'Space Grotesk',sans-serif;font-size:18px;color:#50ffb0;margin-bottom:8px;}
+.result-panel p{font-size:13px;color:#aaabb0;margin:4px 0;}
+.result-panel .verdict{font-size:15px;color:#ffb59c;font-weight:700;margin-top:10px;}
+.result-panel .insight{font-size:12px;color:#666;margin-top:8px;font-style:italic;}
+</style>
+</head>
+<body>
+<div class="game-wrap">
+  <div class="game-sidebar">
+    <div class="sidebar-btns">
+      <button class="sidebar-lang" id="langBtn">CN</button>
+      <button class="sidebar-sound" id="soundBtn">MUTE</button>
+    </div>
+    <div class="sidebar-title" id="sidebarTitle"></div>
+    <div class="sidebar-guide" id="guideContent"></div>
+  </div>
+  <div class="game-main">
+    <div class="game-header">
+      <h1 id="gameTitle"></h1>
+      <div class="info" id="roundInfo"></div>
+    </div>
+    <div class="game-body" id="gameBody">
+      <canvas id="cv"></canvas>
+      <div class="result-panel" id="resultPanel">
+        <h2 id="rpTitle"></h2>
+        <p id="rpLine1"></p>
+        <p id="rpLine2"></p>
+        <p id="rpLine3"></p>
+        <div class="verdict" id="rpVerdict"></div>
+        <div class="insight" id="rpInsight"></div>
+      </div>
+    </div>
+    <div class="control-panel" id="controlPanel">
+      <button class="btn" id="btnAction"></button>
+      <button class="btn-secondary" id="btnReset"></button>
+    </div>
+    <div class="hud-bar">
+      <div class="hud-item"><div class="hud-label" id="hudL1"></div><div class="hud-val" id="hudV1">--</div></div>
+      <div class="hud-item"><div class="hud-label" id="hudL2"></div><div class="hud-val" id="hudV2">--</div></div>
+      <div class="hud-item"><div class="hud-label" id="hudL3"></div><div class="hud-val" id="hudV3">--</div></div>
+      <div class="hud-item"><div class="hud-label" id="hudL4"></div><div class="hud-val" id="hudV4">--</div></div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ============================================================
+// K25 Game v2: Physics Concept Map -- Capstone
+//
+// S2 capstone: connect physics concepts to rocket flight phases.
+// 4 levels:
+//   1. Match the Law (MC: which Newton law for each flight phase)
+//   2. Build the Timeline (drag 8 events into chronological order)
+//   3. Force Diagram Challenge (construct FBD per flight phase)
+//   4. Tell the Story (drag connections between concepts & events)
+//
+// Canvas 2D rendering. Sidebar standard layout. Dark theme.
+// ============================================================
+
+// --- I18N ---
+var I18N = {
+  title:        {en:'PHYSICS CONCEPT MAP', cn:'\u7269\u7406\u6982\u5ff5\u5730\u56fe'},
+  sideTitle:    {en:'GUIDE', cn:'\u64cd\u4f5c\u6307\u5357'},
+  guide1:       {en:'A rocket flight phase is shown.\nSelect which Newton\'s law\napplies to each scenario.\n6 questions total.\nEach correct answer lights up\na node on the concept map.', cn:'\u663e\u793a\u4e00\u4e2a\u706b\u7bad\u98de\u884c\u9636\u6bb5\u3002\n\u9009\u62e9\u54ea\u4e2a\u725b\u987f\u5b9a\u5f8b\u9002\u7528\u3002\n\u5171\u0036\u9898\u3002\n\u6bcf\u7b54\u5bf9\u4e00\u9898\uff0c\n\u6982\u5ff5\u5730\u56fe\u4e0a\u4eae\u8d77\u4e00\u4e2a\u8282\u70b9\u3002'},
+  guide2:       {en:'8 flight event cards appear.\nDrag them into the correct\nchronological order on the\ntimeline bar.\nScored by order accuracy.', cn:'8\u5f20\u98de\u884c\u4e8b\u4ef6\u5361\u7247\u51fa\u73b0\u3002\n\u628a\u5b83\u4eec\u62d6\u5230\u65f6\u95f4\u7ebf\u4e0a\n\u6309\u6b63\u786e\u65f6\u95f4\u987a\u5e8f\u6392\u5217\u3002\n\u6309\u987a\u5e8f\u51c6\u786e\u5ea6\u8bc4\u5206\u3002'},
+  guide3:       {en:'For each flight phase,\nconstruct the free body diagram.\nSelect forces and their\ndirections. 4 phases.\nThe concept map grows\nconnections as you succeed.', cn:'\u4e3a\u6bcf\u4e2a\u98de\u884c\u9636\u6bb5\n\u6784\u5efa\u53d7\u529b\u56fe\u3002\n\u9009\u62e9\u529b\u53ca\u5176\u65b9\u5411\u3002\n\u5171\u0034\u4e2a\u9636\u6bb5\u3002\n\u6bcf\u6210\u529f\u4e00\u4e2a\uff0c\n\u6982\u5ff5\u5730\u56fe\u751f\u957f\u65b0\u8fde\u63a5\u3002'},
+  guide4:       {en:'The complete concept map\nis shown with missing links.\nDrag connection lines between\nconcept nodes and flight events\nto reveal the full physics story.', cn:'\u5b8c\u6574\u6982\u5ff5\u5730\u56fe\u5df2\u663e\u793a\uff0c\n\u4f46\u7f3a\u5c11\u8fde\u63a5\u3002\n\u5728\u6982\u5ff5\u8282\u70b9\u548c\u98de\u884c\u4e8b\u4ef6\u4e4b\u95f4\n\u62d6\u62fd\u8fde\u7ebf\uff0c\n\u63ed\u793a\u5b8c\u6574\u7684\u7269\u7406\u6545\u4e8b\u3002'},
+  // Level names
+  lvl1Name:     {en:'Match the Law', cn:'\u5339\u914d\u5b9a\u5f8b'},
+  lvl2Name:     {en:'Build the Timeline', cn:'\u6784\u5efa\u65f6\u95f4\u7ebf'},
+  lvl3Name:     {en:'Force Diagram Challenge', cn:'\u53d7\u529b\u56fe\u6311\u6218'},
+  lvl4Name:     {en:'Tell the Story', cn:'\u8bb2\u8ff0\u6545\u4e8b'},
+  // Newton laws
+  newton1:      {en:'Newton\'s 1st Law', cn:'\u725b\u987f\u7b2c\u4e00\u5b9a\u5f8b'},
+  newton2:      {en:'Newton\'s 2nd Law', cn:'\u725b\u987f\u7b2c\u4e8c\u5b9a\u5f8b'},
+  newton3:      {en:'Newton\'s 3rd Law', cn:'\u725b\u987f\u7b2c\u4e09\u5b9a\u5f8b'},
+  // Flight phases
+  phOnPad:      {en:'On the pad', cn:'\u5728\u53d1\u5c04\u53f0\u4e0a'},
+  phLaunching:  {en:'Launching', cn:'\u53d1\u5c04\u4e2d'},
+  phCoasting:   {en:'Coasting upward', cn:'\u60ef\u6027\u4e0a\u5347'},
+  phFalling:    {en:'Falling back', cn:'\u4e0b\u843d\u8fd4\u56de'},
+  phPowered:    {en:'Powered ascent', cn:'\u52a8\u529b\u4e0a\u5347'},
+  phApex:       {en:'At apex', cn:'\u5728\u6700\u9ad8\u70b9'},
+  // Flight events for timeline
+  evIgnition:   {en:'Ignition', cn:'\u70b9\u706b'},
+  evLiftoff:    {en:'Liftoff', cn:'\u79bb\u5730'},
+  evMaxThrust:  {en:'Max thrust', cn:'\u6700\u5927\u63a8\u529b'},
+  evCutoff:     {en:'Engine cutoff', cn:'\u53d1\u52a8\u673a\u5173\u95ed'},
+  evCoasting:   {en:'Coasting', cn:'\u60ef\u6027\u6ed1\u884c'},
+  evApex:       {en:'Apex', cn:'\u6700\u9ad8\u70b9'},
+  evDescent:    {en:'Descent', cn:'\u4e0b\u964d'},
+  evLanding:    {en:'Landing', cn:'\u7740\u9646'},
+  // Forces
+  thrust:       {en:'Thrust', cn:'\u63a8\u529b'},
+  weight:       {en:'Weight', cn:'\u91cd\u529b'},
+  drag:         {en:'Drag', cn:'\u963b\u529b'},
+  normal:       {en:'Normal', cn:'\u652f\u6301\u529b'},
+  dirUp:        {en:'Up', cn:'\u5411\u4e0a'},
+  dirDown:      {en:'Down', cn:'\u5411\u4e0b'},
+  // Concept map concepts (for L4)
+  cNewton1:     {en:'Newton 1 (Inertia)', cn:'\u725b\u4e00 (\u60ef\u6027)'},
+  cNewton2:     {en:'Newton 2 (F=ma)', cn:'\u725b\u4e8c (F=ma)'},
+  cNewton3:     {en:'Newton 3 (Reaction)', cn:'\u725b\u4e09 (\u53cd\u4f5c\u7528\u529b)'},
+  cMomentum:    {en:'Momentum', cn:'\u52a8\u91cf'},
+  cFreeFall:    {en:'Free Fall', cn:'\u81ea\u7531\u843d\u4f53'},
+  cWeightMass:  {en:'Weight vs Mass', cn:'\u91cd\u91cf\u4e0e\u8d28\u91cf'},
+  // General
+  score:        {en:'SCORE', cn:'\u5f97\u5206'},
+  level:        {en:'LEVEL', cn:'\u5173\u5361'},
+  mapPct:       {en:'MAP', cn:'\u5730\u56fe'},
+  progress:     {en:'PROGRESS', cn:'\u8fdb\u5ea6'},
+  correct:      {en:'Correct!', cn:'\u6b63\u786e\uff01'},
+  wrong:        {en:'Wrong!', cn:'\u9519\u8bef\uff01'},
+  nextQ:        {en:'NEXT', cn:'\u4e0b\u4e00\u9898'},
+  nextLevel:    {en:'NEXT LEVEL', cn:'\u4e0b\u4e00\u5173'},
+  reset:        {en:'RESTART', cn:'\u91cd\u65b0\u5f00\u59cb'},
+  submit:       {en:'SUBMIT', cn:'\u63d0\u4ea4'},
+  complete:     {en:'CONCEPT MAP COMPLETE!', cn:'\u6982\u5ff5\u5730\u56fe\u5b8c\u6210\uff01'},
+  totalScore:   {en:'Total Score', cn:'\u603b\u5206'},
+  levelDone:    {en:'Level Complete!', cn:'\u672c\u5173\u5b8c\u6210\uff01'},
+  levelScore:   {en:'Level Score', cn:'\u672c\u5173\u5f97\u5206'},
+  // Explanations
+  expL1:        {en:'Newton\'s laws govern every phase of rocket flight!', cn:'\u725b\u987f\u5b9a\u5f8b\u652f\u914d\u706b\u7bad\u98de\u884c\u7684\u6bcf\u4e2a\u9636\u6bb5\uff01'},
+  expL2:        {en:'From ignition to landing -- a precise sequence of events!', cn:'\u4ece\u70b9\u706b\u5230\u7740\u9646\u2014\u2014\u7cbe\u786e\u7684\u4e8b\u4ef6\u5e8f\u5217\uff01'},
+  expL3:        {en:'Forces change at every phase. Understanding FBDs is key!', cn:'\u6bcf\u4e2a\u9636\u6bb5\u529b\u90fd\u4e0d\u540c\u3002\u7406\u89e3\u53d7\u529b\u56fe\u662f\u5173\u952e\uff01'},
+  expL4:        {en:'All concepts interconnected -- that is the complete physics story!', cn:'\u6240\u6709\u6982\u5ff5\u4e92\u76f8\u8fde\u63a5\u2014\u2014\u8fd9\u5c31\u662f\u5b8c\u6574\u7684\u7269\u7406\u6545\u4e8b\uff01'},
+  expAll:       {en:'You have mapped the complete physics of rocket flight! Every concept, every force, every phase -- all connected!', cn:'\u4f60\u5df2\u7ecf\u7ed8\u5236\u51fa\u706b\u7bad\u98de\u884c\u7684\u5b8c\u6574\u7269\u7406\u5730\u56fe\uff01\u6bcf\u4e2a\u6982\u5ff5\u3001\u6bcf\u4e2a\u529b\u3001\u6bcf\u4e2a\u9636\u6bb5\u2014\u2014\u5168\u90e8\u8d2f\u901a\uff01'},
+  // L1 scenario descriptions
+  s1desc:       {en:'Rocket sitting on launch pad.\nAll forces balanced. Nothing moves.', cn:'\u706b\u7bad\u9759\u5750\u5728\u53d1\u5c04\u53f0\u4e0a\u3002\n\u6240\u6709\u529b\u5e73\u8861\uff0c\u4e0d\u52a8\u3002'},
+  s2desc:       {en:'Engines fire! Thrust overcomes weight.\nRocket accelerates upward.', cn:'\u53d1\u52a8\u673a\u70b9\u706b\uff01\u63a8\u529b\u514b\u670d\u91cd\u529b\u3002\n\u706b\u7bad\u5411\u4e0a\u52a0\u901f\u3002'},
+  s3desc:       {en:'Engine off, rocket still rises.\nOnly gravity and drag act.', cn:'\u53d1\u52a8\u673a\u5173\u95ed\uff0c\u706b\u7bad\u4ecd\u5728\u4e0a\u5347\u3002\n\u53ea\u6709\u91cd\u529b\u548c\u963b\u529b\u4f5c\u7528\u3002'},
+  s4desc:       {en:'Rocket pushes exhaust down,\nexhaust pushes rocket up.\nEqual and opposite forces.', cn:'\u706b\u7bad\u5411\u4e0b\u55b7\u5c04\u5bfc\u6c14\uff0c\n\u5bfc\u6c14\u5411\u4e0a\u63a8\u52a8\u706b\u7bad\u3002\n\u7b49\u5927\u53cd\u5411\u7684\u529b\u3002'},
+  s5desc:       {en:'At apex, velocity = 0.\nRocket is momentarily at rest\nbefore falling back.', cn:'\u5728\u6700\u9ad8\u70b9\uff0c\u901f\u5ea6=0\u3002\n\u706b\u7bad\u77ac\u95f4\u9759\u6b62\uff0c\n\u7136\u540e\u5f00\u59cb\u4e0b\u843d\u3002'},
+  s6desc:       {en:'Falling with only gravity.\nAccelerates at g = 9.8 m/s^2.\nF = ma in action.', cn:'\u53ea\u53d7\u91cd\u529b\u4e0b\u843d\u3002\n\u4ee5 g=9.8 m/s^2 \u52a0\u901f\u3002\nF=ma \u7684\u4f53\u73b0\u3002'},
+  // L3 FBD explanations
+  fbdOnPad:     {en:'On pad: Weight down + Normal up, balanced.', cn:'\u53d1\u5c04\u53f0\uff1a\u91cd\u529b\u5411\u4e0b + \u652f\u6301\u529b\u5411\u4e0a\uff0c\u5e73\u8861\u3002'},
+  fbdLaunch:    {en:'Launch: Thrust up (large) + Weight down. Net force up!', cn:'\u53d1\u5c04\uff1a\u63a8\u529b\u5411\u4e0a(\u5927) + \u91cd\u529b\u5411\u4e0b\u3002\u5408\u529b\u5411\u4e0a\uff01'},
+  fbdCoast:     {en:'Coasting: Weight down + Drag down. No thrust!', cn:'\u60ef\u6027\u4e0a\u5347\uff1a\u91cd\u529b\u5411\u4e0b + \u963b\u529b\u5411\u4e0b\u3002\u65e0\u63a8\u529b\uff01'},
+  fbdFall:      {en:'Falling: Weight down + Drag up. Net force down.', cn:'\u4e0b\u843d\uff1a\u91cd\u529b\u5411\u4e0b + \u963b\u529b\u5411\u4e0a\u3002\u5408\u529b\u5411\u4e0b\u3002'},
+};
+
+var lang = 'cn';
+function t(key) { return I18N[key] ? (I18N[key][lang] || I18N[key].en) : key; }
+
+// --- DOM refs ---
+var $ = function(id) { return document.getElementById(id); };
+var langBtn = $('langBtn');
+var soundBtn = $('soundBtn');
+var sidebarTitle = $('sidebarTitle');
+var guideContent = $('guideContent');
+var gameTitle = $('gameTitle');
+var roundInfo = $('roundInfo');
+var gameBody = $('gameBody');
+var canvas = $('cv');
+var ctx = canvas.getContext('2d');
+var controlPanel = $('controlPanel');
+var btnAction = $('btnAction');
+var btnReset = $('btnReset');
+var resultPanel = $('resultPanel');
+
+// --- Audio (Web Audio API synth, default muted) ---
+var audioCtx = null;
+var soundMuted = true;
+function getAudio() {
+  if (!audioCtx) {
+    try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch(e) {}
+  }
+  return audioCtx;
+}
+function playTone(freq, dur, type, vol) {
+  if (soundMuted) return;
+  var ac = getAudio();
+  if (!ac) return;
+  try {
+    var osc = ac.createOscillator();
+    var gain = ac.createGain();
+    osc.type = type || 'sine';
+    osc.frequency.value = freq;
+    gain.gain.value = vol || 0.15;
+    gain.gain.exponentialRampToValueAtTime(0.001, ac.currentTime + dur);
+    osc.connect(gain); gain.connect(ac.destination);
+    osc.start(ac.currentTime); osc.stop(ac.currentTime + dur);
+  } catch(e) {}
+}
+function sndCorrect() { playTone(523,0.1,'sine',0.1); setTimeout(function(){playTone(659,0.1,'sine',0.08);},60); setTimeout(function(){playTone(784,0.15,'sine',0.08);},120); }
+function sndWrong() { playTone(200,0.3,'sawtooth',0.08); playTone(150,0.4,'sawtooth',0.06); }
+function sndComplete() { playTone(523,0.15,'triangle',0.12); setTimeout(function(){playTone(659,0.12,'triangle',0.1);},100); setTimeout(function(){playTone(784,0.12,'triangle',0.1);},200); setTimeout(function(){playTone(1047,0.25,'triangle',0.12);},300); }
+function sndClick() { playTone(660,0.06,'sine',0.06); }
+function sndDrop() { playTone(330,0.1,'triangle',0.1); }
+function sndConnect() { playTone(440,0.12,'sine',0.1); setTimeout(function(){playTone(554,0.12,'sine',0.08);},80); setTimeout(function(){playTone(659,0.15,'sine',0.08);},160); }
+
+// --- Sound / Lang buttons ---
+soundBtn.onclick = function() {
+  soundMuted = !soundMuted;
+  soundBtn.textContent = soundMuted ? 'MUTE' : 'SND';
+  if (!soundMuted) getAudio();
+};
+langBtn.onclick = function() {
+  lang = lang === 'cn' ? 'en' : 'cn';
+  langBtn.textContent = lang === 'cn' ? 'CN' : 'EN';
+  refreshUI();
+};
+
+// --- Canvas sizing ---
+var W = 100, H = 100;
+function resizeCanvas() {
+  var parent = gameBody;
+  var availW = parent.clientWidth;
+  var availH = parent.clientHeight;
+  var dpr = window.devicePixelRatio || 1;
+  W = availW;
+  H = availH;
+  canvas.style.width = W + 'px';
+  canvas.style.height = H + 'px';
+  canvas.width = Math.round(W * dpr);
+  canvas.height = Math.round(H * dpr);
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+}
+window.addEventListener('resize', function() { resizeCanvas(); });
+
+// --- Utility ---
+function lerp(a, b, tt) { return a + (b - a) * tt; }
+function clamp(v, mn, mx) { return Math.max(mn, Math.min(mx, v)); }
+function shuffle(arr) {
+  var a = arr.slice();
+  for (var i = a.length - 1; i > 0; i--) {
+    var j = Math.floor(Math.random() * (i + 1));
+    var tmp = a[i]; a[i] = a[j]; a[j] = tmp;
+  }
+  return a;
+}
+function easeOutCubic(tt) { return 1 - Math.pow(1 - tt, 3); }
+function easeOutBounce(tt) {
+  if (tt < 1/2.75) return 7.5625*tt*tt;
+  if (tt < 2/2.75) { tt -= 1.5/2.75; return 7.5625*tt*tt + 0.75; }
+  if (tt < 2.5/2.75) { tt -= 2.25/2.75; return 7.5625*tt*tt + 0.9375; }
+  tt -= 2.625/2.75; return 7.5625*tt*tt + 0.984375;
+}
+
+// ============================================================
+// PARTICLES
+// ============================================================
+var particles = [];
+function spawnParticles(x, y, color, count) {
+  for (var i = 0; i < count; i++) {
+    var angle = Math.random() * Math.PI * 2;
+    var speed = 1 + Math.random() * 3;
+    particles.push({
+      x: x, y: y,
+      vx: Math.cos(angle) * speed,
+      vy: Math.sin(angle) * speed,
+      life: 1,
+      decay: 0.015 + Math.random() * 0.02,
+      color: color,
+      r: 1.5 + Math.random() * 2.5,
+    });
+  }
+}
+function updateParticles() {
+  for (var i = particles.length - 1; i >= 0; i--) {
+    var p = particles[i];
+    p.x += p.vx;
+    p.y += p.vy;
+    p.vy += 0.04;
+    p.life -= p.decay;
+    if (p.life <= 0) particles.splice(i, 1);
+  }
+}
+function drawParticles() {
+  for (var i = 0; i < particles.length; i++) {
+    var p = particles[i];
+    ctx.globalAlpha = p.life;
+    ctx.fillStyle = p.color;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, p.r * p.life, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+}
+
+// ============================================================
+// SCREEN SHAKE
+// ============================================================
+var shakeX = 0, shakeY = 0, shakeMag = 0, shakeDecay = 0.9;
+function triggerShake(mag) { shakeMag = mag; }
+function updateShake() {
+  if (shakeMag > 0.5) {
+    shakeX = (Math.random() - 0.5) * shakeMag * 2;
+    shakeY = (Math.random() - 0.5) * shakeMag * 2;
+    shakeMag *= shakeDecay;
+  } else {
+    shakeX = 0; shakeY = 0; shakeMag = 0;
+  }
+}
+
+// ============================================================
+// GLOBAL MAP STATE
+// ============================================================
+// The concept map persists across levels. Nodes light up as the student progresses.
+var mapNodes = [];       // {id, label, x, y, lit, litT, pulsePhase}
+var mapEdges = [];       // {from, to, lit, litT}
+var mapPct = 0;          // 0-100 percent complete
+
+function initMapNodes() {
+  mapNodes = [
+    {id:'n1', labelKey:'cNewton1', lit:false, litT:0, pulsePhase:Math.random()*6.28},
+    {id:'n2', labelKey:'cNewton2', lit:false, litT:0, pulsePhase:Math.random()*6.28},
+    {id:'n3', labelKey:'cNewton3', lit:false, litT:0, pulsePhase:Math.random()*6.28},
+    {id:'mom', labelKey:'cMomentum', lit:false, litT:0, pulsePhase:Math.random()*6.28},
+    {id:'ff', labelKey:'cFreeFall', lit:false, litT:0, pulsePhase:Math.random()*6.28},
+    {id:'wm', labelKey:'cWeightMass', lit:false, litT:0, pulsePhase:Math.random()*6.28},
+    {id:'onpad', labelKey:'phOnPad', lit:false, litT:0, pulsePhase:Math.random()*6.28},
+    {id:'launch', labelKey:'phLaunching', lit:false, litT:0, pulsePhase:Math.random()*6.28},
+    {id:'coast', labelKey:'phCoasting', lit:false, litT:0, pulsePhase:Math.random()*6.28},
+    {id:'fall', labelKey:'phFalling', lit:false, litT:0, pulsePhase:Math.random()*6.28},
+  ];
+  mapEdges = [
+    {from:'n1', to:'onpad', lit:false, litT:0},
+    {from:'n2', to:'launch', lit:false, litT:0},
+    {from:'n3', to:'launch', lit:false, litT:0},
+    {from:'n1', to:'coast', lit:false, litT:0},
+    {from:'ff', to:'fall', lit:false, litT:0},
+    {from:'n2', to:'fall', lit:false, litT:0},
+    {from:'wm', to:'onpad', lit:false, litT:0},
+    {from:'mom', to:'launch', lit:false, litT:0},
+    {from:'ff', to:'coast', lit:false, litT:0},
+    {from:'n1', to:'fall', lit:false, litT:0},
+  ];
+}
+
+function layoutMapNodes(cx, cy, radius) {
+  // Concepts in upper arc, phases in lower arc
+  var conceptIds = ['n1','n2','n3','mom','ff','wm'];
+  var phaseIds = ['onpad','launch','coast','fall'];
+  for (var i = 0; i < conceptIds.length; i++) {
+    var angle = Math.PI + (i / (conceptIds.length - 1)) * Math.PI;
+    var nd = findMapNode(conceptIds[i]);
+    if (nd) { nd.x = cx + Math.cos(angle) * radius; nd.y = cy + Math.sin(angle) * radius * 0.7; }
+  }
+  for (var i = 0; i < phaseIds.length; i++) {
+    var angle = (i / (phaseIds.length - 1)) * Math.PI;
+    var nd = findMapNode(phaseIds[i]);
+    if (nd) { nd.x = cx + Math.cos(angle) * radius * 0.85; nd.y = cy + Math.sin(angle) * radius * 0.55; }
+  }
+}
+
+function findMapNode(id) {
+  for (var i = 0; i < mapNodes.length; i++) { if (mapNodes[i].id === id) return mapNodes[i]; }
+  return null;
+}
+function findMapEdge(from, to) {
+  for (var i = 0; i < mapEdges.length; i++) {
+    if ((mapEdges[i].from === from && mapEdges[i].to === to) || (mapEdges[i].from === to && mapEdges[i].to === from)) return mapEdges[i];
+  }
+  return null;
+}
+function lightNode(id) {
+  var nd = findMapNode(id);
+  if (nd && !nd.lit) { nd.lit = true; nd.litT = 0; }
+}
+function lightEdge(from, to) {
+  var e = findMapEdge(from, to);
+  if (e && !e.lit) { e.lit = true; e.litT = 0; }
+}
+function calcMapPct() {
+  var total = mapNodes.length + mapEdges.length;
+  var lit = 0;
+  for (var i = 0; i < mapNodes.length; i++) { if (mapNodes[i].lit) lit++; }
+  for (var i = 0; i < mapEdges.length; i++) { if (mapEdges[i].lit) lit++; }
+  mapPct = Math.round((lit / total) * 100);
+}
+
+// Draw mini concept map (top-right corner) for L1-L3, full for L4
+function drawMiniMap(ox, oy, scale) {
+  ctx.save();
+  ctx.translate(ox, oy);
+  ctx.scale(scale, scale);
+  var cx = 0, cy = 0;
+  // Draw edges
+  for (var i = 0; i < mapEdges.length; i++) {
+    var e = mapEdges[i];
+    var nf = findMapNode(e.from);
+    var nt = findMapNode(e.to);
+    if (!nf || !nt) continue;
+    ctx.beginPath();
+    ctx.moveTo(nf.x, nf.y);
+    ctx.lineTo(nt.x, nt.y);
+    if (e.lit) {
+      e.litT = Math.min(e.litT + 0.02, 1);
+      var alpha = easeOutCubic(e.litT);
+      ctx.strokeStyle = 'rgba(80,255,176,' + (0.3 + 0.5 * alpha) + ')';
+      ctx.lineWidth = 2;
+      // Glow
+      ctx.shadowColor = '#50ffb0';
+      ctx.shadowBlur = 8 * alpha;
+    } else {
+      ctx.strokeStyle = 'rgba(100,100,120,0.2)';
+      ctx.lineWidth = 1;
+      ctx.shadowBlur = 0;
+    }
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+  }
+  // Draw nodes
+  var now = Date.now() / 1000;
+  for (var i = 0; i < mapNodes.length; i++) {
+    var nd = mapNodes[i];
+    var r = 18;
+    if (nd.lit) {
+      nd.litT = Math.min(nd.litT + 0.02, 1);
+      var alpha = easeOutCubic(nd.litT);
+      // Glow on connected nodes
+      ctx.shadowColor = '#50ffb0';
+      ctx.shadowBlur = 12 * alpha;
+      ctx.fillStyle = 'rgba(80,255,176,' + (0.15 + 0.35 * alpha) + ')';
+      ctx.beginPath();
+      ctx.arc(nd.x, nd.y, r, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = 'rgba(80,255,176,' + (0.5 + 0.5 * alpha) + ')';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+      ctx.shadowBlur = 0;
+      // Label
+      ctx.fillStyle = '#50ffb0';
+      ctx.font = '700 9px "Space Grotesk", sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(t(nd.labelKey).substring(0, 8), nd.x, nd.y);
+    } else {
+      // Idle pulse on unconnected nodes
+      var pulse = 0.5 + 0.15 * Math.sin(now * 2 + nd.pulsePhase);
+      ctx.fillStyle = 'rgba(60,62,70,' + pulse + ')';
+      ctx.beginPath();
+      ctx.arc(nd.x, nd.y, r + 1 * Math.sin(now * 1.5 + nd.pulsePhase), 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = 'rgba(100,100,120,0.3)';
+      ctx.lineWidth = 1;
+      ctx.stroke();
+      // Dim label
+      ctx.fillStyle = 'rgba(170,171,176,' + pulse + ')';
+      ctx.font = '9px "Space Grotesk", sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(t(nd.labelKey).substring(0, 8), nd.x, nd.y);
+    }
+  }
+  ctx.restore();
+}
+
+// ============================================================
+// GAME STATE
+// ============================================================
+var TOTAL_LEVELS = 4;
+var gs = {
+  level: 1,
+  totalScore: 0,
+  levelScore: 0,
+  phase: 'play', // play, feedback, levelDone, allDone
+  // Level 1
+  l1scenarios: [],
+  l1idx: 0,
+  l1selected: -1,
+  l1answered: false,
+  l1correct: false,
+  // Level 2
+  l2cards: [],
+  l2dragging: -1,
+  l2dragOffY: 0,
+  l2submitted: false,
+  l2score: 0,
+  // Level 3
+  l3phases: [],
+  l3phaseIdx: 0,
+  l3selectedForces: [],  // [{type, dir}]
+  l3answered: false,
+  l3correct: false,
+  // Level 4
+  l4draggingFrom: -1,
+  l4draggingMx: 0,
+  l4draggingMy: 0,
+  l4connections: [],     // [{from, to, correct}]
+  l4expectedConnections: [],
+  l4submitted: false,
+  // Animation
+  feedbackTimer: 0,
+};
+
+// ============================================================
+// LEVEL 1: Match the Law
+// ============================================================
+var L1_SCENARIOS = [
+  {phaseKey:'phOnPad', descKey:'s1desc', ans:0, lawKey:'newton1',
+   nodeLight:'onpad', edgeLight:['n1','onpad'],
+   explain:{en:'Object at rest stays at rest (Newton 1). Forces balanced on the pad.', cn:'\u9759\u6b62\u7684\u7269\u4f53\u4fdd\u6301\u9759\u6b62(\u725b\u987f\u7b2c\u4e00\u5b9a\u5f8b)\u3002\u53d1\u5c04\u53f0\u4e0a\u529b\u5e73\u8861\u3002'}},
+  {phaseKey:'phLaunching', descKey:'s2desc', ans:1, lawKey:'newton2',
+   nodeLight:'launch', edgeLight:['n2','launch'],
+   explain:{en:'F=ma: thrust exceeds weight, net force up causes acceleration.', cn:'F=ma: \u63a8\u529b\u8d85\u8fc7\u91cd\u529b\uff0c\u5408\u529b\u5411\u4e0a\u4ea7\u751f\u52a0\u901f\u5ea6\u3002'}},
+  {phaseKey:'phCoasting', descKey:'s3desc', ans:0, lawKey:'newton1',
+   nodeLight:'coast', edgeLight:['n1','coast'],
+   explain:{en:'Inertia keeps rocket moving up even without thrust (Newton 1).', cn:'\u60ef\u6027\u8ba9\u706b\u7bad\u5728\u65e0\u63a8\u529b\u65f6\u7ee7\u7eed\u4e0a\u5347(\u725b\u987f\u7b2c\u4e00\u5b9a\u5f8b)\u3002'}},
+  {phaseKey:'phPowered', descKey:'s4desc', ans:2, lawKey:'newton3',
+   nodeLight:'n3', edgeLight:['n3','launch'],
+   explain:{en:'Action-reaction: rocket pushes exhaust down, exhaust pushes rocket up.', cn:'\u4f5c\u7528\u53cd\u4f5c\u7528\uff1a\u706b\u7bad\u5411\u4e0b\u55b7\u5c04\uff0c\u5bfc\u6c14\u5411\u4e0a\u63a8\u52a8\u706b\u7bad\u3002'}},
+  {phaseKey:'phApex', descKey:'s5desc', ans:0, lawKey:'newton1',
+   nodeLight:'ff', edgeLight:['ff','coast'],
+   explain:{en:'At apex, momentary rest before gravity takes over. Inertia concept.', cn:'\u6700\u9ad8\u70b9\u77ac\u95f4\u9759\u6b62\uff0c\u7136\u540e\u91cd\u529b\u63a5\u7ba1\u3002\u60ef\u6027\u6982\u5ff5\u3002'}},
+  {phaseKey:'phFalling', descKey:'s6desc', ans:1, lawKey:'newton2',
+   nodeLight:'fall', edgeLight:['n2','fall'],
+   explain:{en:'F=ma: gravity is the net force, a = g = 9.8 m/s^2 downward.', cn:'F=ma: \u91cd\u529b\u662f\u5408\u529b\uff0ca=g=9.8m/s^2 \u5411\u4e0b\u3002'}},
+];
+
+function initLevel1() {
+  gs.phase = 'play';
+  gs.levelScore = 0;
+  gs.l1scenarios = L1_SCENARIOS.slice();
+  gs.l1idx = 0;
+  gs.l1selected = -1;
+  gs.l1answered = false;
+  gs.l1correct = false;
+  gs.feedbackTimer = 0;
+}
+
+function drawLevel1() {
+  var sc = gs.l1scenarios[gs.l1idx];
+  if (!sc) return;
+
+  // Left half: flight phase illustration
+  var boxW = W * 0.45;
+  var boxH = H * 0.55;
+  var boxX = 20;
+  var boxY = 20;
+
+  // Phase illustration box
+  ctx.fillStyle = 'rgba(20,22,30,0.8)';
+  drawRoundedRect(boxX, boxY, boxW, boxH, 8);
+  ctx.fill();
+  ctx.strokeStyle = 'rgba(80,255,176,0.2)';
+  ctx.lineWidth = 1;
+  ctx.stroke();
+
+  // Draw rocket phase scene
+  drawRocketScene(boxX, boxY, boxW, boxH, gs.l1idx);
+
+  // Phase name
+  ctx.fillStyle = '#50ffb0';
+  ctx.font = '700 15px "Space Grotesk", sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillText(t(sc.phaseKey), boxX + boxW / 2, boxY + boxH + 25);
+
+  // Description
+  ctx.fillStyle = '#aaabb0';
+  ctx.font = '12px "Noto Sans SC", sans-serif';
+  ctx.textAlign = 'center';
+  var descLines = t(sc.descKey).split('\n');
+  for (var i = 0; i < descLines.length; i++) {
+    ctx.fillText(descLines[i], boxX + boxW / 2, boxY + boxH + 45 + i * 18);
+  }
+
+  // Right half: 3 choices
+  var choiceX = boxX + boxW + 40;
+  var choiceW = W - choiceX - 30;
+  var choiceH = 52;
+  var gap = 16;
+  var startY = boxY + 30;
+  var laws = ['newton1','newton2','newton3'];
+  for (var i = 0; i < 3; i++) {
+    var cy = startY + i * (choiceH + gap);
+    var hovered = gs.l1selected === i && !gs.l1answered;
+    var isCorrect = gs.l1answered && i === sc.ans;
+    var isWrong = gs.l1answered && gs.l1selected === i && i !== sc.ans;
+
+    if (isCorrect) {
+      ctx.fillStyle = 'rgba(80,255,176,0.2)';
+      ctx.strokeStyle = '#50ffb0';
+    } else if (isWrong) {
+      ctx.fillStyle = 'rgba(255,80,80,0.2)';
+      ctx.strokeStyle = '#ff5050';
+    } else if (hovered) {
+      ctx.fillStyle = 'rgba(80,255,176,0.08)';
+      ctx.strokeStyle = 'rgba(80,255,176,0.5)';
+    } else {
+      ctx.fillStyle = 'rgba(30,32,40,0.6)';
+      ctx.strokeStyle = 'rgba(100,100,120,0.3)';
+    }
+    drawRoundedRect(choiceX, cy, choiceW, choiceH, 6);
+    ctx.fill();
+    ctx.lineWidth = isCorrect || isWrong ? 2 : 1;
+    ctx.stroke();
+
+    ctx.fillStyle = isCorrect ? '#50ffb0' : isWrong ? '#ff5050' : '#f6f6fc';
+    ctx.font = '700 14px "Space Grotesk", sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(t(laws[i]), choiceX + choiceW / 2, cy + choiceH / 2);
+  }
+
+  // Feedback explanation
+  if (gs.l1answered) {
+    var expY = startY + 3 * (choiceH + gap) + 10;
+    ctx.fillStyle = gs.l1correct ? '#50ffb0' : '#ffb59c';
+    ctx.font = '12px "Noto Sans SC", sans-serif';
+    ctx.textAlign = 'left';
+    var expText = sc.explain[lang] || sc.explain.en;
+    ctx.fillText(expText, choiceX, expY);
+  }
+
+  // Question counter
+  ctx.fillStyle = '#aaabb0';
+  ctx.font = '11px "Space Grotesk", sans-serif';
+  ctx.textAlign = 'right';
+  ctx.fillText((gs.l1idx + 1) + ' / ' + gs.l1scenarios.length, W - 20, H - 10);
+
+  // Mini map (top right of the phase box area)
+  layoutMapNodes(0, 0, 100);
+  drawMiniMap(W - 130, boxY + boxH + 20, 0.7);
+}
+
+function drawRocketScene(bx, by, bw, bh, sceneIdx) {
+  var cx = bx + bw / 2;
+  var cy = by + bh / 2;
+  var rW = 18, rH = 50;
+  var now = Date.now() / 1000;
+
+  // Background stars (parallax subtle)
+  ctx.fillStyle = 'rgba(255,255,255,0.3)';
+  for (var i = 0; i < 15; i++) {
+    var sx = bx + 10 + ((i * 67 + now * (3 + i % 3)) % (bw - 20));
+    var sy = by + 10 + ((i * 43 + now * (1 + i % 2)) % (bh - 20));
+    ctx.beginPath();
+    ctx.arc(sx, sy, 0.8 + (i % 3) * 0.4, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  // Ground for on-pad
+  if (sceneIdx === 0) {
+    ctx.fillStyle = 'rgba(60,65,80,0.8)';
+    ctx.fillRect(bx, by + bh - 30, bw, 30);
+    ctx.fillStyle = '#444a5a';
+    ctx.fillRect(cx - 25, by + bh - 32, 50, 4);
+    // Rocket sitting on pad
+    drawRocketBody(cx, by + bh - 55, rW, rH, false, 0);
+  } else if (sceneIdx === 1 || sceneIdx === 3) {
+    // Launching / Powered ascent - rocket with flame
+    var yOff = 8 * Math.sin(now * 3);
+    drawRocketBody(cx, cy + yOff, rW, rH, true, now);
+    // Ground receding
+    ctx.fillStyle = 'rgba(60,65,80,0.4)';
+    ctx.fillRect(bx, by + bh - 15, bw, 15);
+  } else if (sceneIdx === 2) {
+    // Coasting - no flame, moving up
+    var yOff = -15 + 5 * Math.sin(now * 1.5);
+    drawRocketBody(cx, cy + yOff, rW, rH, false, 0);
+    // Small trail dots
+    ctx.fillStyle = 'rgba(100,100,120,0.3)';
+    for (var i = 0; i < 5; i++) {
+      ctx.beginPath();
+      ctx.arc(cx + (Math.random() - 0.5) * 8, cy + yOff + rH/2 + 10 + i * 12, 2, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  } else if (sceneIdx === 4) {
+    // Apex - rocket at top, v=0 indicator
+    drawRocketBody(cx, by + 50, rW, rH, false, 0);
+    ctx.fillStyle = '#ffb59c';
+    ctx.font = '700 11px "Space Grotesk", sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('v = 0', cx, by + 50 + rH / 2 + 20);
+    // Dashed line at peak
+    ctx.strokeStyle = 'rgba(255,181,156,0.4)';
+    ctx.lineWidth = 1;
+    ctx.setLineDash([4, 4]);
+    ctx.beginPath();
+    ctx.moveTo(bx + 20, by + 45);
+    ctx.lineTo(bx + bw - 20, by + 45);
+    ctx.stroke();
+    ctx.setLineDash([]);
+  } else if (sceneIdx === 5) {
+    // Falling back - rocket nose down
+    var yOff = 10 * Math.sin(now * 2);
+    ctx.save();
+    ctx.translate(cx, cy + yOff);
+    ctx.rotate(Math.PI);
+    drawRocketBody(0, -rH/2, rW, rH, false, 0);
+    ctx.restore();
+    // Down arrow
+    ctx.strokeStyle = 'rgba(255,100,100,0.6)';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(cx + 30, cy - 20);
+    ctx.lineTo(cx + 30, cy + 20);
+    ctx.lineTo(cx + 25, cy + 12);
+    ctx.moveTo(cx + 30, cy + 20);
+    ctx.lineTo(cx + 35, cy + 12);
+    ctx.stroke();
+  }
+}
+
+function drawRocketBody(cx, cy, rW, rH, flame, now) {
+  // Body
+  ctx.fillStyle = '#d0d4e0';
+  ctx.beginPath();
+  ctx.moveTo(cx, cy - rH / 2);
+  ctx.lineTo(cx + rW / 2, cy - rH / 4);
+  ctx.lineTo(cx + rW / 2, cy + rH / 2 - 8);
+  ctx.lineTo(cx - rW / 2, cy + rH / 2 - 8);
+  ctx.lineTo(cx - rW / 2, cy - rH / 4);
+  ctx.closePath();
+  ctx.fill();
+  // Nose cone
+  ctx.fillStyle = '#ff6644';
+  ctx.beginPath();
+  ctx.moveTo(cx, cy - rH / 2 - 10);
+  ctx.lineTo(cx + rW / 2, cy - rH / 2 + 2);
+  ctx.lineTo(cx - rW / 2, cy - rH / 2 + 2);
+  ctx.closePath();
+  ctx.fill();
+  // Fins
+  ctx.fillStyle = '#4466aa';
+  ctx.beginPath();
+  ctx.moveTo(cx - rW / 2, cy + rH / 2 - 8);
+  ctx.lineTo(cx - rW / 2 - 8, cy + rH / 2 + 4);
+  ctx.lineTo(cx - rW / 2, cy + rH / 4);
+  ctx.closePath();
+  ctx.fill();
+  ctx.beginPath();
+  ctx.moveTo(cx + rW / 2, cy + rH / 2 - 8);
+  ctx.lineTo(cx + rW / 2 + 8, cy + rH / 2 + 4);
+  ctx.lineTo(cx + rW / 2, cy + rH / 4);
+  ctx.closePath();
+  ctx.fill();
+  // Window
+  ctx.fillStyle = '#88ccff';
+  ctx.beginPath();
+  ctx.arc(cx, cy - rH / 8, 4, 0, Math.PI * 2);
+  ctx.fill();
+  // Flame
+  if (flame && now > 0) {
+    var flLen = 15 + 8 * Math.sin(now * 12);
+    var grad = ctx.createLinearGradient(cx, cy + rH / 2 - 8, cx, cy + rH / 2 - 8 + flLen);
+    grad.addColorStop(0, '#ffcc44');
+    grad.addColorStop(0.5, '#ff6622');
+    grad.addColorStop(1, 'rgba(255,40,0,0)');
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    ctx.moveTo(cx - rW / 3, cy + rH / 2 - 8);
+    ctx.lineTo(cx + rW / 3, cy + rH / 2 - 8);
+    ctx.lineTo(cx + (Math.random() - 0.5) * 4, cy + rH / 2 - 8 + flLen);
+    ctx.closePath();
+    ctx.fill();
+  }
+}
+
+// ============================================================
+// LEVEL 2: Build the Timeline
+// ============================================================
+var L2_EVENTS = [
+  {key:'evIgnition', order:0},
+  {key:'evLiftoff', order:1},
+  {key:'evMaxThrust', order:2},
+  {key:'evCutoff', order:3},
+  {key:'evCoasting', order:4},
+  {key:'evApex', order:5},
+  {key:'evDescent', order:6},
+  {key:'evLanding', order:7},
+];
+
+function initLevel2() {
+  gs.phase = 'play';
+  gs.levelScore = 0;
+  gs.l2submitted = false;
+  gs.l2score = 0;
+  gs.l2dragging = -1;
+
+  var shuffled = shuffle(L2_EVENTS.slice());
+  gs.l2cards = [];
+  for (var i = 0; i < shuffled.length; i++) {
+    gs.l2cards.push({
+      key: shuffled[i].key,
+      correctOrder: shuffled[i].order,
+      slotIdx: i,
+      animY: 0,
+      animTargetY: 0,
+      animVel: 0,
+    });
+  }
+}
+
+function drawLevel2() {
+  var slotCount = gs.l2cards.length;
+  var barX = 40;
+  var barW = W - 80;
+  var barY = H * 0.15;
+  var barH = 20;
+
+  // Timeline bar
+  ctx.fillStyle = 'rgba(40,42,55,0.8)';
+  drawRoundedRect(barX, barY, barW, barH, 4);
+  ctx.fill();
+  ctx.strokeStyle = 'rgba(80,255,176,0.3)';
+  ctx.lineWidth = 1;
+  ctx.stroke();
+
+  // Timeline arrow
+  ctx.fillStyle = '#50ffb0';
+  ctx.beginPath();
+  ctx.moveTo(barX + barW + 5, barY + barH / 2);
+  ctx.lineTo(barX + barW - 5, barY + barH / 2 - 6);
+  ctx.lineTo(barX + barW - 5, barY + barH / 2 + 6);
+  ctx.closePath();
+  ctx.fill();
+
+  // Slot markers
+  var slotW = barW / slotCount;
+  for (var i = 0; i < slotCount; i++) {
+    var sx = barX + i * slotW + slotW / 2;
+    ctx.fillStyle = 'rgba(80,255,176,0.4)';
+    ctx.beginPath();
+    ctx.arc(sx, barY + barH / 2, 3, 0, Math.PI * 2);
+    ctx.fill();
+    // Slot number
+    ctx.fillStyle = '#666';
+    ctx.font = '9px "Space Grotesk", sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('' + (i + 1), sx, barY + barH + 14);
+  }
+
+  // Cards
+  var cardH = 46;
+  var cardGap = 8;
+  var cardsStartY = barY + barH + 30;
+
+  for (var i = 0; i < gs.l2cards.length; i++) {
+    var card = gs.l2cards[i];
+    var slotX = barX + card.slotIdx * slotW + slotW / 2;
+    var cardW = slotW - 10;
+    var cardX = slotX - cardW / 2;
+    var cardY = cardsStartY;
+
+    // Easing animation for card position
+    card.animY = lerp(card.animY, cardY, 0.15);
+
+    var isDragging = gs.l2dragging === i;
+
+    if (gs.l2submitted) {
+      var isCorrectPos = card.slotIdx === card.correctOrder;
+      ctx.fillStyle = isCorrectPos ? 'rgba(80,255,176,0.15)' : 'rgba(255,80,80,0.15)';
+      ctx.strokeStyle = isCorrectPos ? '#50ffb0' : '#ff5050';
+    } else if (isDragging) {
+      ctx.fillStyle = 'rgba(80,255,176,0.15)';
+      ctx.strokeStyle = '#50ffb0';
+    } else {
+      ctx.fillStyle = 'rgba(30,32,42,0.8)';
+      ctx.strokeStyle = 'rgba(100,100,120,0.3)';
+    }
+
+    ctx.lineWidth = isDragging ? 2 : 1;
+    drawRoundedRect(cardX, card.animY, cardW, cardH, 5);
+    ctx.fill();
+    ctx.stroke();
+
+    // Connection line from card to timeline slot
+    ctx.strokeStyle = isDragging ? 'rgba(80,255,176,0.5)' : 'rgba(100,100,120,0.15)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(slotX, barY + barH);
+    ctx.lineTo(slotX, card.animY);
+    ctx.stroke();
+
+    // Card text
+    ctx.fillStyle = isDragging ? '#50ffb0' : '#f6f6fc';
+    ctx.font = '700 11px "Noto Sans SC", sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    var cardText = t(card.key);
+    ctx.fillText(cardText, slotX, card.animY + cardH / 2);
+
+    // If submitted, show correct order number
+    if (gs.l2submitted) {
+      ctx.fillStyle = card.slotIdx === card.correctOrder ? '#50ffb0' : '#ff5050';
+      ctx.font = '700 9px "Space Grotesk", sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText('#' + (card.correctOrder + 1), slotX, card.animY + cardH - 6);
+    }
+  }
+
+  // Score display for submitted
+  if (gs.l2submitted) {
+    ctx.fillStyle = '#aaabb0';
+    ctx.font = '13px "Noto Sans SC", sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText(t('levelScore') + ': ' + gs.l2score + ' / 800', W / 2, cardsStartY + cardH + 30);
+  }
+
+  // Mini map
+  layoutMapNodes(0, 0, 100);
+  drawMiniMap(W - 130, cardsStartY + cardH + 15, 0.55);
+}
+
+// ============================================================
+// LEVEL 3: Force Diagram Challenge
+// ============================================================
+var L3_PHASES = [
+  {
+    nameKey:'phOnPad', explainKey:'fbdOnPad',
+    expected:[{type:'weight', dir:'down'},{type:'normal', dir:'up'}],
+    forbidden:[],
+    nodeLights:['onpad','wm'], edgeLights:[['wm','onpad']],
+  },
+  {
+    nameKey:'phLaunching', explainKey:'fbdLaunch',
+    expected:[{type:'thrust', dir:'up'},{type:'weight', dir:'down'}],
+    forbidden:[],
+    nodeLights:['launch','n2'], edgeLights:[['n2','launch']],
+  },
+  {
+    nameKey:'phCoasting', explainKey:'fbdCoast',
+    expected:[{type:'weight', dir:'down'},{type:'drag', dir:'down'}],
+    forbidden:['thrust'],
+    nodeLights:['coast','ff'], edgeLights:[['ff','coast']],
+  },
+  {
+    nameKey:'phFalling', explainKey:'fbdFall',
+    expected:[{type:'weight', dir:'down'},{type:'drag', dir:'up'}],
+    forbidden:[],
+    nodeLights:['fall','n1'], edgeLights:[['n1','fall']],
+  },
+];
+
+var FORCE_OPTIONS = [
+  {type:'thrust', labelKey:'thrust', color:'#ff6644'},
+  {type:'weight', labelKey:'weight', color:'#66aaff'},
+  {type:'drag',   labelKey:'drag',   color:'#ffcc44'},
+  {type:'normal', labelKey:'normal', color:'#44ffaa'},
+];
+
+function initLevel3() {
+  gs.phase = 'play';
+  gs.levelScore = 0;
+  gs.l3phases = L3_PHASES.slice();
+  gs.l3phaseIdx = 0;
+  gs.l3selectedForces = [];
+  gs.l3answered = false;
+  gs.l3correct = false;
+  gs.feedbackTimer = 0;
+}
+
+function drawLevel3() {
+  var ph = gs.l3phases[gs.l3phaseIdx];
+  if (!ph) return;
+
+  // Left: rocket scene for this phase
+  var boxW = W * 0.35;
+  var boxH = H * 0.5;
+  var boxX = 20;
+  var boxY = 15;
+
+  ctx.fillStyle = 'rgba(20,22,30,0.8)';
+  drawRoundedRect(boxX, boxY, boxW, boxH, 8);
+  ctx.fill();
+  ctx.strokeStyle = 'rgba(80,255,176,0.2)';
+  ctx.lineWidth = 1;
+  ctx.stroke();
+
+  // Draw corresponding scene
+  var sceneMap = [0, 1, 2, 5]; // onPad, launching, coasting, falling
+  drawRocketScene(boxX, boxY, boxW, boxH, sceneMap[gs.l3phaseIdx]);
+
+  ctx.fillStyle = '#50ffb0';
+  ctx.font = '700 14px "Space Grotesk", sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillText(t(ph.nameKey), boxX + boxW / 2, boxY + boxH + 22);
+
+  // Right: FBD construction area
+  var fbdX = boxX + boxW + 30;
+  var fbdW = W - fbdX - 20;
+  var fbdY = boxY;
+  var fbdH = boxH;
+
+  // FBD box
+  ctx.fillStyle = 'rgba(25,27,35,0.6)';
+  drawRoundedRect(fbdX, fbdY, fbdW, fbdH, 8);
+  ctx.fill();
+  ctx.strokeStyle = 'rgba(100,100,120,0.2)';
+  ctx.lineWidth = 1;
+  ctx.stroke();
+
+  // Object in center of FBD
+  var objCx = fbdX + fbdW / 2;
+  var objCy = fbdY + fbdH / 2;
+  ctx.fillStyle = 'rgba(100,105,120,0.4)';
+  ctx.beginPath();
+  ctx.arc(objCx, objCy, 22, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = 'rgba(200,200,210,0.5)';
+  ctx.lineWidth = 1.5;
+  ctx.stroke();
+
+  // Draw placed forces as arrows
+  for (var i = 0; i < gs.l3selectedForces.length; i++) {
+    var f = gs.l3selectedForces[i];
+    var fo = null;
+    for (var j = 0; j < FORCE_OPTIONS.length; j++) {
+      if (FORCE_OPTIONS[j].type === f.type) fo = FORCE_OPTIONS[j];
+    }
+    if (!fo) continue;
+    var arrowLen = 50;
+    var ax = objCx, ay = objCy;
+    var ex, ey;
+    if (f.dir === 'up') { ex = ax; ey = ay - arrowLen; }
+    else { ex = ax; ey = ay + arrowLen; }
+
+    ctx.strokeStyle = fo.color;
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(ax, ay);
+    ctx.lineTo(ex, ey);
+    ctx.stroke();
+    // Arrowhead
+    var headLen = 10;
+    var angle = Math.atan2(ey - ay, ex - ax);
+    ctx.fillStyle = fo.color;
+    ctx.beginPath();
+    ctx.moveTo(ex, ey);
+    ctx.lineTo(ex - headLen * Math.cos(angle - 0.4), ey - headLen * Math.sin(angle - 0.4));
+    ctx.lineTo(ex - headLen * Math.cos(angle + 0.4), ey - headLen * Math.sin(angle + 0.4));
+    ctx.closePath();
+    ctx.fill();
+
+    // Label
+    ctx.fillStyle = fo.color;
+    ctx.font = '700 10px "Space Grotesk", sans-serif';
+    ctx.textAlign = 'center';
+    var lx = ex + (f.dir === 'up' ? 0 : 0);
+    var ly = f.dir === 'up' ? ey - 10 : ey + 14;
+    ctx.fillText(t(fo.labelKey), lx, ly);
+  }
+
+  // Force selection buttons below FBD
+  var btnArea = boxY + boxH + 35;
+  var btnW = 90;
+  var btnH = 30;
+  var dirs = ['up','down'];
+  var dirKeys = ['dirUp','dirDown'];
+  var bx = fbdX;
+  for (var i = 0; i < FORCE_OPTIONS.length; i++) {
+    for (var d = 0; d < 2; d++) {
+      var x = bx + (i * 2 + d) * (btnW + 4);
+      var y = btnArea;
+      if (x + btnW > W - 10) { x = bx + (i * 2 + d - 4) * (btnW + 4); y = btnArea + btnH + 6; }
+
+      var isSelected = false;
+      for (var k = 0; k < gs.l3selectedForces.length; k++) {
+        if (gs.l3selectedForces[k].type === FORCE_OPTIONS[i].type && gs.l3selectedForces[k].dir === dirs[d]) isSelected = true;
+      }
+
+      ctx.fillStyle = isSelected ? 'rgba(80,255,176,0.15)' : 'rgba(30,32,42,0.6)';
+      ctx.strokeStyle = isSelected ? '#50ffb0' : 'rgba(100,100,120,0.3)';
+      ctx.lineWidth = isSelected ? 2 : 1;
+      drawRoundedRect(x, y, btnW, btnH, 4);
+      ctx.fill();
+      ctx.stroke();
+
+      ctx.fillStyle = isSelected ? '#50ffb0' : '#aaabb0';
+      ctx.font = '700 10px "Noto Sans SC", sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(t(FORCE_OPTIONS[i].labelKey) + ' ' + t(dirKeys[d]), x + btnW / 2, y + btnH / 2);
+    }
+  }
+
+  // Feedback
+  if (gs.l3answered) {
+    var fy = Math.max(btnArea + btnH * 2 + 18, boxY + boxH + 80);
+    ctx.fillStyle = gs.l3correct ? '#50ffb0' : '#ffb59c';
+    ctx.font = '12px "Noto Sans SC", sans-serif';
+    ctx.textAlign = 'left';
+    ctx.fillText(t(ph.explainKey), 20, fy);
+  }
+
+  // Phase counter
+  ctx.fillStyle = '#aaabb0';
+  ctx.font = '11px "Space Grotesk", sans-serif';
+  ctx.textAlign = 'right';
+  ctx.fillText((gs.l3phaseIdx + 1) + ' / ' + gs.l3phases.length, W - 20, H - 10);
+
+  // Mini map
+  layoutMapNodes(0, 0, 100);
+  drawMiniMap(W - 130, 15, 0.55);
+}
+
+// ============================================================
+// LEVEL 4: Tell the Story
+// ============================================================
+// Full concept map with missing connections to fill in.
+var L4_CONNECTIONS = [
+  {from:'n1', to:'onpad', explain:{en:'Inertia: rocket at rest stays at rest.', cn:'\u60ef\u6027\uff1a\u9759\u6b62\u7684\u706b\u7bad\u4fdd\u6301\u9759\u6b62\u3002'}},
+  {from:'n2', to:'launch', explain:{en:'F=ma: net force up causes acceleration.', cn:'F=ma: \u5408\u529b\u5411\u4e0a\u4ea7\u751f\u52a0\u901f\u5ea6\u3002'}},
+  {from:'n3', to:'launch', explain:{en:'Action-reaction: exhaust pushes rocket.', cn:'\u4f5c\u7528\u53cd\u4f5c\u7528\uff1a\u5bfc\u6c14\u63a8\u52a8\u706b\u7bad\u3002'}},
+  {from:'ff', to:'coast', explain:{en:'Free fall: only gravity after engine off.', cn:'\u81ea\u7531\u843d\u4f53\uff1a\u53d1\u52a8\u673a\u5173\u540e\u53ea\u6709\u91cd\u529b\u3002'}},
+  {from:'ff', to:'fall', explain:{en:'Free fall: gravity accelerates descent.', cn:'\u81ea\u7531\u843d\u4f53\uff1a\u91cd\u529b\u52a0\u901f\u4e0b\u964d\u3002'}},
+  {from:'n2', to:'fall', explain:{en:'F=ma: gravity is net force, a = g.', cn:'F=ma: \u91cd\u529b\u662f\u5408\u529b\uff0ca=g\u3002'}},
+  {from:'wm', to:'onpad', explain:{en:'Weight = mg: gravity on the pad.', cn:'\u91cd\u91cf=mg: \u53d1\u5c04\u53f0\u4e0a\u7684\u91cd\u529b\u3002'}},
+  {from:'mom', to:'launch', explain:{en:'Momentum: exhaust carries momentum away.', cn:'\u52a8\u91cf\uff1a\u5bfc\u6c14\u5e26\u8d70\u52a8\u91cf\u3002'}},
+  {from:'n1', to:'coast', explain:{en:'Inertia: rocket keeps moving without thrust.', cn:'\u60ef\u6027\uff1a\u706b\u7bad\u65e0\u63a8\u529b\u4ecd\u7ee7\u7eed\u8fd0\u52a8\u3002'}},
+  {from:'n1', to:'fall', explain:{en:'Inertia: object in motion stays in motion.', cn:'\u60ef\u6027\uff1a\u8fd0\u52a8\u7684\u7269\u4f53\u4fdd\u6301\u8fd0\u52a8\u3002'}},
+];
+
+function initLevel4() {
+  gs.phase = 'play';
+  gs.levelScore = 0;
+  gs.l4draggingFrom = -1;
+  gs.l4connections = [];
+  gs.l4submitted = false;
+
+  // Show all nodes on the full map, reset their positions for big display
+  // All edges start unlit for this level; student must reconnect them
+  gs.l4expectedConnections = L4_CONNECTIONS.slice();
+
+  // Light all nodes for full display
+  for (var i = 0; i < mapNodes.length; i++) {
+    mapNodes[i].lit = true;
+    mapNodes[i].litT = 1;
+  }
+  // Unlight edges - student must reconnect
+  for (var i = 0; i < mapEdges.length; i++) {
+    mapEdges[i].lit = false;
+    mapEdges[i].litT = 0;
+  }
+}
+
+function drawLevel4() {
+  // Full-size concept map
+  layoutMapNodes(W / 2, H * 0.38, Math.min(W, H) * 0.32);
+
+  // Draw edges (unlit ones as dashed)
+  for (var i = 0; i < mapEdges.length; i++) {
+    var e = mapEdges[i];
+    var nf = findMapNode(e.from);
+    var nt = findMapNode(e.to);
+    if (!nf || !nt) continue;
+    ctx.beginPath();
+    if (e.lit) {
+      e.litT = Math.min(e.litT + 0.03, 1);
+      ctx.strokeStyle = 'rgba(80,255,176,' + (0.4 + 0.6 * easeOutCubic(e.litT)) + ')';
+      ctx.lineWidth = 2.5;
+      ctx.shadowColor = '#50ffb0';
+      ctx.shadowBlur = 10 * easeOutCubic(e.litT);
+    } else {
+      ctx.strokeStyle = 'rgba(100,100,120,0.15)';
+      ctx.lineWidth = 1;
+      ctx.setLineDash([4, 6]);
+      ctx.shadowBlur = 0;
+    }
+    ctx.moveTo(nf.x, nf.y);
+    ctx.lineTo(nt.x, nt.y);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.shadowBlur = 0;
+  }
+
+  // Draw nodes (larger)
+  var now = Date.now() / 1000;
+  var nodeR = 30;
+  for (var i = 0; i < mapNodes.length; i++) {
+    var nd = mapNodes[i];
+    var isHover = i === gs.l4draggingFrom;
+
+    // Glow on connected nodes
+    var litEdgeCount = 0;
+    for (var j = 0; j < mapEdges.length; j++) {
+      if (mapEdges[j].lit && (mapEdges[j].from === nd.id || mapEdges[j].to === nd.id)) litEdgeCount++;
+    }
+    var glowIntensity = Math.min(litEdgeCount * 0.2, 1);
+
+    if (glowIntensity > 0) {
+      ctx.shadowColor = '#50ffb0';
+      ctx.shadowBlur = 15 * glowIntensity;
+    }
+
+    ctx.fillStyle = isHover ? 'rgba(80,255,176,0.3)' : 'rgba(80,255,176,' + (0.1 + 0.15 * glowIntensity) + ')';
+    ctx.beginPath();
+    ctx.arc(nd.x, nd.y, nodeR, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = isHover ? '#50ffb0' : 'rgba(80,255,176,' + (0.4 + 0.4 * glowIntensity) + ')';
+    ctx.lineWidth = isHover ? 2.5 : 1.5;
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+
+    // Label
+    ctx.fillStyle = '#f6f6fc';
+    ctx.font = '700 10px "Noto Sans SC", sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    var label = t(nd.labelKey);
+    if (label.length > 10) label = label.substring(0, 10);
+    ctx.fillText(label, nd.x, nd.y);
+  }
+
+  // Draw in-progress drag line
+  if (gs.l4draggingFrom >= 0) {
+    var fromNd = mapNodes[gs.l4draggingFrom];
+    ctx.strokeStyle = 'rgba(80,255,176,0.6)';
+    ctx.lineWidth = 2;
+    ctx.setLineDash([4, 4]);
+    ctx.beginPath();
+    ctx.moveTo(fromNd.x, fromNd.y);
+    ctx.lineTo(gs.l4draggingMx, gs.l4draggingMy);
+    ctx.stroke();
+    ctx.setLineDash([]);
+  }
+
+  // Player-made connections feedback
+  for (var i = 0; i < gs.l4connections.length; i++) {
+    var c = gs.l4connections[i];
+    if (!c.showExplain) continue;
+    var nf = findMapNode(c.from);
+    var nt = findMapNode(c.to);
+    if (!nf || !nt) continue;
+    var mx = (nf.x + nt.x) / 2;
+    var my = (nf.y + nt.y) / 2;
+    ctx.fillStyle = c.correct ? 'rgba(80,255,176,0.8)' : 'rgba(255,80,80,0.8)';
+    ctx.font = '10px "Noto Sans SC", sans-serif';
+    ctx.textAlign = 'center';
+    var explainText = c.correct ? (c.explain || '') : t('wrong');
+    ctx.fillText(explainText, mx, my - 12);
+  }
+
+  // Map completion percentage
+  calcMapPct();
+  ctx.fillStyle = '#aaabb0';
+  ctx.font = '11px "Space Grotesk", sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillText(t('mapPct') + ': ' + mapPct + '%', W / 2, H - 10);
+
+  // Connection counter
+  var connectedEdges = 0;
+  for (var i = 0; i < mapEdges.length; i++) { if (mapEdges[i].lit) connectedEdges++; }
+  ctx.fillStyle = '#50ffb0';
+  ctx.font = '700 12px "Space Grotesk", sans-serif';
+  ctx.textAlign = 'right';
+  ctx.fillText(connectedEdges + ' / ' + mapEdges.length, W - 20, 25);
+}
+
+// ============================================================
+// DRAWING HELPERS
+// ============================================================
+function drawRoundedRect(x, y, w, h, r) {
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.lineTo(x + w - r, y);
+  ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+  ctx.lineTo(x + w, y + h - r);
+  ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+  ctx.lineTo(x + r, y + h);
+  ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+  ctx.lineTo(x, y + r);
+  ctx.quadraticCurveTo(x, y, x + r, y);
+  ctx.closePath();
+}
+
+// ============================================================
+// INIT LEVELS
+// ============================================================
+function initLevel(n) {
+  gs.level = n;
+  gs.feedbackTimer = 0;
+  particles = [];
+  if (n === 1) initLevel1();
+  else if (n === 2) initLevel2();
+  else if (n === 3) initLevel3();
+  else if (n === 4) initLevel4();
+  refreshUI();
+}
+
+// ============================================================
+// DRAW DISPATCH
+// ============================================================
+function draw() {
+  ctx.clearRect(0, 0, W, H);
+
+  // Parallax background
+  var now = Date.now() / 1000;
+  ctx.fillStyle = '#0c0e14';
+  ctx.fillRect(0, 0, W, H);
+  // Stars with slow parallax drift
+  ctx.fillStyle = 'rgba(255,255,255,0.15)';
+  for (var i = 0; i < 30; i++) {
+    var sx = ((i * 97 + now * (0.5 + (i % 5) * 0.3)) % W);
+    var sy = ((i * 53 + now * (0.2 + (i % 3) * 0.1)) % H);
+    ctx.beginPath();
+    ctx.arc(sx, sy, 0.5 + (i % 4) * 0.3, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  ctx.save();
+  ctx.translate(shakeX, shakeY);
+
+  if (gs.phase === 'allDone') {
+    drawAllDone();
+  } else if (gs.level === 1) {
+    drawLevel1();
+  } else if (gs.level === 2) {
+    drawLevel2();
+  } else if (gs.level === 3) {
+    drawLevel3();
+  } else if (gs.level === 4) {
+    drawLevel4();
+  }
+
+  ctx.restore();
+
+  drawParticles();
+  updateParticles();
+  updateShake();
+
+  requestAnimationFrame(draw);
+}
+
+function drawAllDone() {
+  // Full concept map centered
+  layoutMapNodes(W / 2, H * 0.4, Math.min(W, H) * 0.3);
+
+  // All edges lit
+  for (var i = 0; i < mapEdges.length; i++) {
+    var e = mapEdges[i];
+    var nf = findMapNode(e.from);
+    var nt = findMapNode(e.to);
+    if (!nf || !nt) continue;
+    e.litT = Math.min(e.litT + 0.01, 1);
+    ctx.strokeStyle = 'rgba(80,255,176,' + (0.5 + 0.5 * easeOutCubic(e.litT)) + ')';
+    ctx.lineWidth = 2;
+    ctx.shadowColor = '#50ffb0';
+    ctx.shadowBlur = 8;
+    ctx.beginPath();
+    ctx.moveTo(nf.x, nf.y);
+    ctx.lineTo(nt.x, nt.y);
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+  }
+
+  // All nodes lit
+  for (var i = 0; i < mapNodes.length; i++) {
+    var nd = mapNodes[i];
+    ctx.fillStyle = 'rgba(80,255,176,0.25)';
+    ctx.beginPath();
+    ctx.arc(nd.x, nd.y, 24, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = '#50ffb0';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    ctx.fillStyle = '#50ffb0';
+    ctx.font = '700 9px "Noto Sans SC", sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(t(nd.labelKey).substring(0, 8), nd.x, nd.y);
+  }
+}
+
+// ============================================================
+// INPUT HANDLING
+// ============================================================
+var mouseX = 0, mouseY = 0;
+
+canvas.addEventListener('mousemove', function(e) {
+  var rect = canvas.getBoundingClientRect();
+  mouseX = e.clientX - rect.left;
+  mouseY = e.clientY - rect.top;
+
+  if (gs.level === 1 && gs.phase === 'play' && !gs.l1answered) {
+    // Highlight hovered choice
+    var sc = gs.l1scenarios[gs.l1idx];
+    if (!sc) return;
+    var boxW = W * 0.45;
+    var choiceX = 20 + boxW + 40;
+    var choiceW = W - choiceX - 30;
+    var choiceH = 52;
+    var gap = 16;
+    var startY = 50;
+    gs.l1selected = -1;
+    for (var i = 0; i < 3; i++) {
+      var cy = startY + i * (choiceH + gap);
+      if (mouseX >= choiceX && mouseX <= choiceX + choiceW && mouseY >= cy && mouseY <= cy + choiceH) {
+        gs.l1selected = i;
+      }
+    }
+  }
+
+  if (gs.level === 2 && gs.phase === 'play' && !gs.l2submitted && gs.l2dragging >= 0) {
+    // Drag card to new slot
+    var barX = 40;
+    var barW = W - 80;
+    var slotCount = gs.l2cards.length;
+    var slotW = barW / slotCount;
+    var newSlot = Math.round((mouseX - barX) / slotW - 0.5);
+    newSlot = clamp(newSlot, 0, slotCount - 1);
+    if (newSlot !== gs.l2cards[gs.l2dragging].slotIdx) {
+      // Swap with the card in that slot
+      var oldSlot = gs.l2cards[gs.l2dragging].slotIdx;
+      for (var i = 0; i < gs.l2cards.length; i++) {
+        if (i !== gs.l2dragging && gs.l2cards[i].slotIdx === newSlot) {
+          gs.l2cards[i].slotIdx = oldSlot;
+          break;
+        }
+      }
+      gs.l2cards[gs.l2dragging].slotIdx = newSlot;
+      sndDrop();
+    }
+  }
+
+  if (gs.level === 4 && gs.phase === 'play' && gs.l4draggingFrom >= 0) {
+    gs.l4draggingMx = mouseX;
+    gs.l4draggingMy = mouseY;
+  }
+});
+
+canvas.addEventListener('mousedown', function(e) {
+  var rect = canvas.getBoundingClientRect();
+  var mx = e.clientX - rect.left;
+  var my = e.clientY - rect.top;
+
+  if (gs.level === 1 && gs.phase === 'play') {
+    handleL1Click(mx, my);
+  } else if (gs.level === 2 && gs.phase === 'play' && !gs.l2submitted) {
+    handleL2MouseDown(mx, my);
+  } else if (gs.level === 3 && gs.phase === 'play' && !gs.l3answered) {
+    handleL3Click(mx, my);
+  } else if (gs.level === 4 && gs.phase === 'play' && !gs.l4submitted) {
+    handleL4MouseDown(mx, my);
+  }
+});
+
+canvas.addEventListener('mouseup', function(e) {
+  if (gs.level === 2 && gs.l2dragging >= 0) {
+    gs.l2dragging = -1;
+  }
+  if (gs.level === 4 && gs.l4draggingFrom >= 0) {
+    handleL4MouseUp(e);
+  }
+});
+
+// --- Level 1 click ---
+function handleL1Click(mx, my) {
+  if (gs.l1answered) return;
+  var sc = gs.l1scenarios[gs.l1idx];
+  if (!sc) return;
+  var boxW = W * 0.45;
+  var choiceX = 20 + boxW + 40;
+  var choiceW = W - choiceX - 30;
+  var choiceH = 52;
+  var gap = 16;
+  var startY = 50;
+  for (var i = 0; i < 3; i++) {
+    var cy = startY + i * (choiceH + gap);
+    if (mx >= choiceX && mx <= choiceX + choiceW && my >= cy && my <= cy + choiceH) {
+      gs.l1selected = i;
+      gs.l1answered = true;
+      gs.l1correct = (i === sc.ans);
+      if (gs.l1correct) {
+        gs.levelScore += 100;
+        sndCorrect();
+        // Light up concept map
+        lightNode(sc.nodeLight);
+        if (sc.edgeLight) lightEdge(sc.edgeLight[0], sc.edgeLight[1]);
+        spawnParticles(mx, my, '#50ffb0', 15);
+      } else {
+        sndWrong();
+        triggerShake(6);
+      }
+      sndClick();
+      break;
+    }
+  }
+}
+
+// --- Level 2 mouse ---
+function handleL2MouseDown(mx, my) {
+  var barX = 40;
+  var barW = W - 80;
+  var barY = H * 0.15;
+  var barH = 20;
+  var slotCount = gs.l2cards.length;
+  var slotW = barW / slotCount;
+  var cardH = 46;
+  var cardsStartY = barY + barH + 30;
+
+  for (var i = 0; i < gs.l2cards.length; i++) {
+    var card = gs.l2cards[i];
+    var slotX = barX + card.slotIdx * slotW + slotW / 2;
+    var cardW = slotW - 10;
+    var cardX = slotX - cardW / 2;
+    if (mx >= cardX && mx <= cardX + cardW && my >= cardsStartY && my <= cardsStartY + cardH) {
+      gs.l2dragging = i;
+      sndClick();
+      break;
+    }
+  }
+}
+
+// --- Level 3 click ---
+function handleL3Click(mx, my) {
+  var ph = gs.l3phases[gs.l3phaseIdx];
+  if (!ph) return;
+  var boxW = W * 0.35;
+  var boxH = H * 0.5;
+  var fbdX = 20 + boxW + 30;
+  var btnArea = 15 + boxH + 35;
+  var btnW = 90;
+  var btnH = 30;
+  var bx = fbdX;
+  var dirs = ['up','down'];
+
+  for (var i = 0; i < FORCE_OPTIONS.length; i++) {
+    for (var d = 0; d < 2; d++) {
+      var x = bx + (i * 2 + d) * (btnW + 4);
+      var y = btnArea;
+      if (x + btnW > W - 10) { x = bx + (i * 2 + d - 4) * (btnW + 4); y = btnArea + btnH + 6; }
+
+      if (mx >= x && mx <= x + btnW && my >= y && my <= y + btnH) {
+        var type = FORCE_OPTIONS[i].type;
+        var dir = dirs[d];
+        // Toggle
+        var found = -1;
+        for (var k = 0; k < gs.l3selectedForces.length; k++) {
+          if (gs.l3selectedForces[k].type === type && gs.l3selectedForces[k].dir === dir) { found = k; break; }
+        }
+        if (found >= 0) {
+          gs.l3selectedForces.splice(found, 1);
+        } else {
+          // Remove same type different dir
+          for (var k = gs.l3selectedForces.length - 1; k >= 0; k--) {
+            if (gs.l3selectedForces[k].type === type) gs.l3selectedForces.splice(k, 1);
+          }
+          gs.l3selectedForces.push({type: type, dir: dir});
+        }
+        sndClick();
+        return;
+      }
+    }
+  }
+}
+
+// --- Level 4 mouse ---
+function handleL4MouseDown(mx, my) {
+  layoutMapNodes(W / 2, H * 0.38, Math.min(W, H) * 0.32);
+  var nodeR = 30;
+  for (var i = 0; i < mapNodes.length; i++) {
+    var nd = mapNodes[i];
+    var dx = mx - nd.x;
+    var dy = my - nd.y;
+    if (dx * dx + dy * dy < nodeR * nodeR) {
+      gs.l4draggingFrom = i;
+      gs.l4draggingMx = mx;
+      gs.l4draggingMy = my;
+      sndClick();
+      break;
+    }
+  }
+}
+
+function handleL4MouseUp(e) {
+  if (gs.l4draggingFrom < 0) return;
+  var rect = canvas.getBoundingClientRect();
+  var mx = e.clientX - rect.left;
+  var my = e.clientY - rect.top;
+
+  layoutMapNodes(W / 2, H * 0.38, Math.min(W, H) * 0.32);
+  var nodeR = 30;
+  var fromNd = mapNodes[gs.l4draggingFrom];
+  var toIdx = -1;
+  for (var i = 0; i < mapNodes.length; i++) {
+    if (i === gs.l4draggingFrom) continue;
+    var nd = mapNodes[i];
+    var dx = mx - nd.x;
+    var dy = my - nd.y;
+    if (dx * dx + dy * dy < nodeR * nodeR) {
+      toIdx = i;
+      break;
+    }
+  }
+
+  if (toIdx >= 0) {
+    var fromId = fromNd.id;
+    var toId = mapNodes[toIdx].id;
+
+    // Check if already connected
+    var alreadyDone = false;
+    for (var i = 0; i < gs.l4connections.length; i++) {
+      var c = gs.l4connections[i];
+      if ((c.from === fromId && c.to === toId) || (c.from === toId && c.to === fromId)) {
+        alreadyDone = true;
+        break;
+      }
+    }
+
+    if (!alreadyDone) {
+      // Check if this is a valid expected connection
+      var isCorrect = false;
+      var explainText = '';
+      for (var i = 0; i < gs.l4expectedConnections.length; i++) {
+        var ec = gs.l4expectedConnections[i];
+        if ((ec.from === fromId && ec.to === toId) || (ec.from === toId && ec.to === fromId)) {
+          isCorrect = true;
+          explainText = ec.explain[lang] || ec.explain.en;
+          break;
+        }
+      }
+
+      gs.l4connections.push({
+        from: fromId, to: toId, correct: isCorrect,
+        explain: explainText, showExplain: true,
+      });
+
+      // Clear explain after a delay
+      var connIdx = gs.l4connections.length - 1;
+      setTimeout(function() {
+        if (gs.l4connections[connIdx]) gs.l4connections[connIdx].showExplain = false;
+      }, 2500);
+
+      if (isCorrect) {
+        sndConnect();
+        lightEdge(fromId, toId);
+        gs.levelScore += 80;
+        spawnParticles((fromNd.x + mapNodes[toIdx].x) / 2, (fromNd.y + mapNodes[toIdx].y) / 2, '#50ffb0', 12);
+
+        // Check if all edges are now lit
+        var allLit = true;
+        for (var i = 0; i < mapEdges.length; i++) {
+          if (!mapEdges[i].lit) { allLit = false; break; }
+        }
+        if (allLit) {
+          gs.phase = 'levelDone';
+          showResult(t('levelDone'), t('levelScore') + ': ' + gs.levelScore, t('expL4'), '', t('expL4'));
+          sndComplete();
+        }
+      } else {
+        sndWrong();
+        triggerShake(5);
+      }
+    }
+  }
+
+  gs.l4draggingFrom = -1;
+}
+
+// ============================================================
+// ACTION BUTTON
+// ============================================================
+btnAction.onclick = function() {
+  if (gs.phase === 'levelDone') {
+    resultPanel.style.display = 'none';
+    gs.totalScore += gs.levelScore;
+    if (gs.level < TOTAL_LEVELS) {
+      initLevel(gs.level + 1);
+    } else {
+      gs.phase = 'allDone';
+      // Light everything
+      for (var i = 0; i < mapNodes.length; i++) { mapNodes[i].lit = true; }
+      for (var i = 0; i < mapEdges.length; i++) { mapEdges[i].lit = true; mapEdges[i].litT = 0; }
+      calcMapPct();
+      showResult(t('complete'), t('totalScore') + ': ' + gs.totalScore, t('expAll'), '', '');
+      sndComplete();
+      // Big particle burst
+      for (var i = 0; i < 5; i++) {
+        spawnParticles(W * 0.2 + Math.random() * W * 0.6, H * 0.3 + Math.random() * H * 0.4, '#50ffb0', 20);
+        spawnParticles(W * 0.2 + Math.random() * W * 0.6, H * 0.3 + Math.random() * H * 0.4, '#ffb59c', 15);
+      }
+    }
+    refreshUI();
+    return;
+  }
+
+  if (gs.phase === 'allDone') {
+    resultPanel.style.display = 'none';
+    initMapNodes();
+    initLevel(1);
+    gs.totalScore = 0;
+    return;
+  }
+
+  // Level-specific actions
+  if (gs.level === 1) {
+    if (gs.l1answered) {
+      // Next question
+      gs.l1idx++;
+      gs.l1answered = false;
+      gs.l1selected = -1;
+      gs.l1correct = false;
+      if (gs.l1idx >= gs.l1scenarios.length) {
+        gs.phase = 'levelDone';
+        showResult(t('levelDone'), t('levelScore') + ': ' + gs.levelScore, t('expL1'), '', t('expL1'));
+        sndComplete();
+      }
+      refreshUI();
+    }
+  } else if (gs.level === 2) {
+    // Submit timeline order
+    if (!gs.l2submitted) {
+      gs.l2submitted = true;
+      // Score: 100 per correct position
+      var correct = 0;
+      for (var i = 0; i < gs.l2cards.length; i++) {
+        if (gs.l2cards[i].slotIdx === gs.l2cards[i].correctOrder) correct++;
+      }
+      gs.l2score = correct * 100;
+      gs.levelScore = gs.l2score;
+
+      // Light map nodes based on score
+      if (correct >= 2) { lightNode('onpad'); lightNode('launch'); }
+      if (correct >= 4) { lightNode('coast'); lightEdge('n1','onpad'); }
+      if (correct >= 6) { lightNode('fall'); lightEdge('mom','launch'); }
+      if (correct >= 7) { lightNode('mom'); lightEdge('ff','fall'); }
+      if (correct === 8) { lightNode('wm'); }
+
+      if (correct >= 6) {
+        sndComplete();
+        for (var i = 0; i < 3; i++) spawnParticles(W/2, H/3, '#50ffb0', 10);
+      } else {
+        sndWrong();
+      }
+      refreshUI();
+    } else {
+      // After viewing results, mark as level done
+      gs.phase = 'levelDone';
+      showResult(t('levelDone'), t('levelScore') + ': ' + gs.levelScore, t('expL2'), '', t('expL2'));
+    }
+  } else if (gs.level === 3) {
+    if (gs.l3answered) {
+      // Next phase
+      gs.l3phaseIdx++;
+      gs.l3selectedForces = [];
+      gs.l3answered = false;
+      gs.l3correct = false;
+      if (gs.l3phaseIdx >= gs.l3phases.length) {
+        gs.phase = 'levelDone';
+        showResult(t('levelDone'), t('levelScore') + ': ' + gs.levelScore, t('expL3'), '', t('expL3'));
+        sndComplete();
+      }
+      refreshUI();
+    } else {
+      // Check FBD
+      var ph = gs.l3phases[gs.l3phaseIdx];
+      if (!ph) return;
+      var correct = checkFBD(ph);
+      gs.l3answered = true;
+      gs.l3correct = correct;
+      if (correct) {
+        gs.levelScore += 150;
+        sndCorrect();
+        for (var i = 0; i < ph.nodeLights.length; i++) lightNode(ph.nodeLights[i]);
+        for (var i = 0; i < ph.edgeLights.length; i++) lightEdge(ph.edgeLights[i][0], ph.edgeLights[i][1]);
+        spawnParticles(W / 2, H / 2, '#50ffb0', 15);
+      } else {
+        sndWrong();
+        triggerShake(6);
+      }
+      refreshUI();
+    }
+  }
+};
+
+function checkFBD(ph) {
+  // Check that selected forces match expected exactly
+  if (gs.l3selectedForces.length !== ph.expected.length) return false;
+
+  // Check forbidden
+  for (var i = 0; i < gs.l3selectedForces.length; i++) {
+    for (var j = 0; j < ph.forbidden.length; j++) {
+      if (gs.l3selectedForces[i].type === ph.forbidden[j]) return false;
+    }
+  }
+
+  // Check each expected force is present
+  var matched = 0;
+  for (var i = 0; i < ph.expected.length; i++) {
+    var exp = ph.expected[i];
+    for (var j = 0; j < gs.l3selectedForces.length; j++) {
+      if (gs.l3selectedForces[j].type === exp.type && gs.l3selectedForces[j].dir === exp.dir) {
+        matched++;
+        break;
+      }
+    }
+  }
+  return matched === ph.expected.length;
+}
+
+// ============================================================
+// RESET
+// ============================================================
+btnReset.onclick = function() {
+  resultPanel.style.display = 'none';
+  gs.totalScore = 0;
+  initMapNodes();
+  initLevel(1);
+};
+
+// ============================================================
+// RESULT PANEL
+// ============================================================
+function showResult(title, line1, line2, verdict, insight) {
+  $('rpTitle').textContent = title;
+  $('rpLine1').textContent = line1;
+  $('rpLine2').textContent = line2;
+  $('rpLine3').textContent = '';
+  $('rpVerdict').textContent = verdict;
+  $('rpInsight').textContent = insight;
+  resultPanel.style.display = 'block';
+}
+
+// ============================================================
+// UI REFRESH
+// ============================================================
+function refreshUI() {
+  gameTitle.textContent = t('title');
+  sidebarTitle.textContent = t('sideTitle');
+
+  var guideKeys = ['guide1','guide2','guide3','guide4'];
+  guideContent.textContent = t(guideKeys[gs.level - 1] || 'guide1');
+
+  var lvlNames = ['lvl1Name','lvl2Name','lvl3Name','lvl4Name'];
+  roundInfo.textContent = t('level') + ' ' + gs.level + '/4: ' + t(lvlNames[gs.level - 1] || 'lvl1Name');
+
+  // HUD
+  $('hudL1').textContent = t('level');
+  $('hudV1').textContent = gs.level + '/' + TOTAL_LEVELS;
+  $('hudL2').textContent = t('score');
+  $('hudV2').textContent = '' + gs.totalScore;
+  $('hudL3').textContent = t('mapPct');
+  calcMapPct();
+  $('hudV3').textContent = mapPct + '%';
+  $('hudL4').textContent = t('progress');
+
+  // Progress
+  if (gs.level === 1) {
+    $('hudV4').textContent = (gs.l1idx + 1) + '/' + gs.l1scenarios.length;
+  } else if (gs.level === 2) {
+    $('hudV4').textContent = gs.l2submitted ? t('correct') : '--';
+  } else if (gs.level === 3) {
+    $('hudV4').textContent = (gs.l3phaseIdx + 1) + '/' + gs.l3phases.length;
+  } else if (gs.level === 4) {
+    var litCount = 0;
+    for (var i = 0; i < mapEdges.length; i++) { if (mapEdges[i].lit) litCount++; }
+    $('hudV4').textContent = litCount + '/' + mapEdges.length;
+  }
+
+  // Action button text
+  if (gs.phase === 'levelDone') {
+    btnAction.textContent = gs.level < TOTAL_LEVELS ? t('nextLevel') : t('complete');
+  } else if (gs.phase === 'allDone') {
+    btnAction.textContent = t('reset');
+  } else if (gs.level === 1) {
+    btnAction.textContent = gs.l1answered ? t('nextQ') : '--';
+    btnAction.disabled = !gs.l1answered;
+  } else if (gs.level === 2) {
+    btnAction.textContent = gs.l2submitted ? t('nextLevel') : t('submit');
+    btnAction.disabled = false;
+  } else if (gs.level === 3) {
+    btnAction.textContent = gs.l3answered ? t('nextQ') : t('submit');
+    btnAction.disabled = false;
+  } else if (gs.level === 4) {
+    btnAction.textContent = '--';
+    btnAction.disabled = true;
+  }
+
+  btnReset.textContent = t('reset');
+}
+
+// ============================================================
+// BOOT
+// ============================================================
+initMapNodes();
+resizeCanvas();
+initLevel(1);
+refreshUI();
+draw();
+</script>
+</body>
+</html>

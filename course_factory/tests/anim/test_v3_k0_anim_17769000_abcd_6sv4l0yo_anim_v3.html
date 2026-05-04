@@ -1,0 +1,473 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>力之观测台 — 力改变运动状态</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@200;400;700;900&family=JetBrains+Mono:wght@400;700&family=Noto+Sans+SC:wght@300;400;700;900&display=swap" rel="stylesheet">
+<style>
+:root{--FIELD:oklch(0.78 0.13 215);--WAVE:oklch(0.55 0.13 215);--MASS:oklch(0.35 0.10 215);--PHOTON:oklch(0.92 0.08 215);--CONSTANT:oklch(0.85 0.14 85);--bg-deep:oklch(0.14 0.035 265);--bg-mid:oklch(0.18 0.04 265)}
+*{margin:0;padding:0;box-sizing:border-box}
+body{width:100vw;height:100vh;overflow:hidden;background:var(--bg-deep);font-family:'Noto Sans SC','Inter',sans-serif}
+canvas{position:absolute;top:0;left:0;width:100%;height:100%}
+.gp{backdrop-filter:blur(12px);background:rgba(8,10,28,0.65);border:1px solid rgba(120,160,220,0.15)}
+#subBox{position:fixed;bottom:36px;left:50%;transform:translateX(-50%);text-align:center;z-index:20;transition:opacity .7s ease;pointer-events:none}
+#subZh{font-size:1.25rem;font-weight:700;color:var(--PHOTON);line-height:1.7;text-shadow:0 0 18px rgba(100,150,220,0.25)}
+#subEn{font-size:.8rem;font-style:italic;color:oklch(0.6 0.07 215);font-family:'Inter',sans-serif;margin-top:2px}
+#hud{position:fixed;top:18px;right:18px;z-index:20;padding:14px 18px;min-width:200px;font-family:'JetBrains Mono',monospace;transition:opacity .6s ease}
+.hl{color:oklch(0.5 0.07 215);font-size:.65rem;text-transform:uppercase;letter-spacing:.12em;margin-top:6px}
+.hl:first-child{margin-top:0}
+.hv{font-size:.95rem;font-weight:700}
+.hv-f{color:var(--CONSTANT)}.hv-a{color:var(--FIELD)}.hv-v{color:var(--WAVE)}.hv-m{color:oklch(0.5 0.1 215)}
+#eqPanel{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);text-align:center;z-index:25;padding:28px 48px;transition:opacity .8s ease;pointer-events:none}
+#eqText{font-family:'JetBrains Mono',monospace;font-size:1.8rem;font-weight:700;color:var(--CONSTANT);text-shadow:0 0 28px oklch(0.85 0.14 85/0.35)}
+#eqSub{font-size:.85rem;color:var(--FIELD);margin-top:8px;font-family:'JetBrains Mono',monospace}
+#titleCard{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);text-align:center;z-index:30;transition:opacity 1.2s ease;pointer-events:none}
+.tmain{font-size:2.8rem;font-weight:900;color:var(--PHOTON);letter-spacing:-.02em;line-height:1.2}
+.tsub{font-size:1rem;font-weight:200;color:var(--FIELD);font-family:'Inter',sans-serif;margin-top:6px}
+.tquest{font-size:.95rem;color:var(--CONSTANT);margin-top:20px;font-weight:700}
+#takePanel{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);text-align:center;z-index:30;padding:36px 52px;max-width:660px;transition:opacity 1s ease;pointer-events:none}
+.tkmain{font-size:1.65rem;font-weight:900;color:var(--CONSTANT);line-height:1.6;text-shadow:0 0 36px oklch(0.85 0.14 85/0.25)}
+.tksub{font-size:.9rem;color:var(--FIELD);margin-top:14px;font-weight:400;line-height:1.5}
+.tkprompt{font-size:1.1rem;color:var(--PHOTON);margin-top:22px;font-weight:700;animation:pg 2.2s ease-in-out infinite}
+@keyframes pg{0%,100%{opacity:.65}50%{opacity:1}}
+#legend{position:fixed;bottom:95px;left:18px;z-index:20;padding:10px 14px;font-size:.7rem;transition:opacity .6s ease;font-family:'JetBrains Mono',monospace}
+.li{display:flex;align-items:center;gap:7px;margin:3px 0}
+.ld{width:9px;height:9px}
+#compPanel{position:fixed;top:18px;left:18px;z-index:20;padding:14px 18px;font-family:'JetBrains Mono',monospace;transition:opacity .6s ease;min-width:240px}
+.cp-title{color:var(--CONSTANT);font-size:.7rem;text-transform:uppercase;letter-spacing:.12em;margin-bottom:6px}
+.cp-row{display:flex;justify-content:space-between;gap:10px;margin:4px 0;font-size:.8rem}
+.cp-l{color:oklch(0.5 0.07 215)}.cp-v1{color:var(--PHOTON)}.cp-v5{color:oklch(0.55 0.1 215)}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+
+<div id="titleCard" style="opacity:1">
+<div class="tmain">力改变运动状态</div>
+<div class="tsub">Force Changes the State of Motion</div>
+<div class="tquest">力是什么？你怎么知道有力在作用？</div>
+</div>
+
+<div id="hud" class="gp" style="opacity:0">
+<div class="hl">Force 合外力</div><div class="hv hv-f" id="hF">F = 0 N</div>
+<div class="hl">Acceleration 加速度</div><div class="hv hv-a" id="hA">a = 0 m/s²</div>
+<div class="hl">Velocity 速度</div><div class="hv hv-v" id="hV">v = 0 m/s</div>
+<div class="hl">Mass 质量</div><div class="hv hv-m" id="hM">m = 1 kg</div>
+</div>
+
+<div id="eqPanel" class="gp" style="opacity:0">
+<div id="eqText"></div>
+<div id="eqSub"></div>
+</div>
+
+<div id="takePanel" class="gp" style="opacity:0">
+<div class="tkmain">力不是维持运动的原因<br>而是改变物体运动状态的原因</div>
+<div class="tksub">Force is not what sustains motion,<br>but what changes it.</div>
+<div class="tkprompt">用你自己的话解释：力是什么？</div>
+</div>
+
+<div id="legend" class="gp" style="opacity:0">
+<div class="li"><div class="ld" style="background:var(--CONSTANT)"></div><span style="color:var(--CONSTANT)">Force 力</span></div>
+<div class="li"><div class="ld" style="background:var(--FIELD)"></div><span style="color:var(--FIELD)">Accel 加速度</span></div>
+<div class="li"><div class="ld" style="background:var(--WAVE)"></div><span style="color:var(--WAVE)">Velocity 速度</span></div>
+</div>
+
+<div id="compPanel" class="gp" style="opacity:0">
+<div class="cp-title">Comparison 对比</div>
+<div id="compContent"></div>
+</div>
+
+<div id="subBox" style="opacity:0">
+<div id="subZh"></div>
+<div id="subEn"></div>
+</div>
+
+<script>
+/* ===== CANVAS SETUP ===== */
+const cv=document.getElementById('c'),cx=cv.getContext('2d');
+let W,H;const dpr=window.devicePixelRatio||1;
+function resize(){W=window.innerWidth;H=window.innerHeight;cv.width=W*dpr;cv.height=H*dpr;cv.style.width=W+'px';cv.style.height=H+'px';cx.setTransform(dpr,0,0,dpr,0,0)}
+window.addEventListener('resize',resize);resize();
+
+/* ===== PALETTE ===== */
+const C={
+  FIELD:'oklch(0.78 0.13 215)',WAVE:'oklch(0.55 0.13 215)',MASS:'oklch(0.35 0.10 215)',
+  PHOTON:'oklch(0.92 0.08 215)',GOLD:'oklch(0.85 0.14 85)',
+  MASS_TOP:'oklch(0.48 0.10 215)',MASS_SIDE:'oklch(0.25 0.08 215)',
+  GRID:'oklch(0.28 0.05 265)',FIELD_LINE:'oklch(0.22 0.05 265)',
+  STAR:'oklch(0.7 0.04 250)'
+};
+
+/* ===== STARS ===== */
+const stars=[];for(let i=0;i<180;i++)stars.push({x:Math.random()*5000-2500,y:Math.random()*5000-2500,r:Math.random()*1.2+.3,ph:Math.random()*6.28});
+
+/* ===== CAMERA ===== */
+let cam={x:0,y:0,z:55,tx:0,ty:0,tz:55};
+function w2s(wx,wy){return{x:W/2+(wx-cam.x)*cam.z,y:H/2-(wy-cam.y)*cam.z}}
+function s2w(sx,sy){return{x:(sx-W/2)/cam.z+cam.x,y:-(sy-H/2)/cam.z+cam.y}}
+function updateCam(dt){cam.x+=(cam.tx-cam.x)*Math.min(1,3*dt);cam.y+=(cam.ty-cam.y)*Math.min(1,3*dt);cam.z+=(cam.tz-cam.z)*Math.min(1,2*dt)}
+
+/* ===== PHYSICS OBJECT ===== */
+class Obj{
+  constructor(m,x,y,vx=0,vy=0){this.m=m;this.x=x;this.y=y;this.vx=vx;this.vy=vy;this.fx=0;this.fy=0;this.trail=[]}
+  get ax(){return this.fx/this.m}get ay(){return this.fy/this.m}
+  get spd(){return Math.sqrt(this.vx*this.vx+this.vy*this.vy)}
+  get acc(){return Math.sqrt(this.ax*this.ax+this.ay*this.ay)}
+  step(dt){this.vx+=this.ax*dt;this.vy+=this.ay*dt;this.x+=this.vx*dt;this.y+=this.vy*dt;
+    if(this.trail.length===0||Math.abs(this.x-this.trail[this.trail.length-1].x)>.1||Math.abs(this.y-this.trail[this.trail.length-1].y)>.1)
+      this.trail.push({x:this.x,y:this.y,t:performance.now()});
+    if(this.trail.length>300)this.trail.shift()}
+}
+
+let objs=[];let physT=0;let tScale=1;
+
+/* ===== EFFECTS ===== */
+let flashA=0;function flash(){flashA=.45}
+let ripples=[];
+function addRipple(wx,wy){ripples.push({x:wx,y:wy,r:0,a:.7})}
+let echoPing=0;let echoRipples=[];
+function pingEcho(){echoPing=1;echoRipples.push({r:0,a:.6})}
+
+/* ===== ECHO MASCOT ===== */
+function drawEcho(t){
+  const ex=52,ey=52,vib=echoPing>0?Math.sin(t*50)*3*echoPing:0;
+  cx.save();cx.translate(ex,ey);
+  // halo
+  cx.strokeStyle=C.FIELD;cx.lineWidth=1;cx.globalAlpha=.2+.08*Math.sin(t*2);
+  cx.beginPath();cx.arc(0,0,22,0,Math.PI*2);cx.stroke();
+  cx.globalAlpha=.8;cx.strokeStyle=C.PHOTON;cx.lineWidth=2;
+  // prongs
+  cx.beginPath();cx.moveTo(-5,-18+vib);cx.lineTo(-5,4);cx.stroke();
+  cx.beginPath();cx.moveTo(5,-18-vib);cx.lineTo(5,4);cx.stroke();
+  // base
+  cx.beginPath();cx.moveTo(-5,4);cx.quadraticCurveTo(0,11,5,4);cx.stroke();
+  // handle
+  cx.beginPath();cx.moveTo(0,11);cx.lineTo(0,22);cx.stroke();
+  // ripples
+  for(let r of echoRipples){cx.globalAlpha=r.a;cx.strokeStyle=C.FIELD;cx.lineWidth=1;cx.beginPath();cx.arc(0,0,r.r,0,Math.PI*2);cx.stroke()}
+  cx.restore();
+  if(echoPing>0)echoPing*=.97;
+}
+
+/* ===== TIMELINE ===== */
+const TL=[
+  {id:'intro',s:0,e:4},{id:'rest',s:4,e:9},{id:'push',s:9,e:22},
+  {id:'twoMasses',s:22,e:36},{id:'direction',s:36,e:49},
+  {id:'noForce',s:49,e:59},{id:'takeaway',s:59,e:75}
+];
+let prevPhase='';
+
+/* ===== SUBTITLES ===== */
+const SUBS={
+  intro:[{t:0,d:4,zh:'力是什么？你怎么知道有力在作用？',en:'What is force? How do you know force is acting?'}],
+  rest:[{t:0,d:2.5,zh:'光滑冰面上，1 kg 木箱静止不动',en:'On frictionless ice, a 1 kg crate sits at rest'},{t:2.5,d:2.5,zh:'没有力 → 没有加速度 → 速度为零',en:'No force → no acceleration → zero velocity'}],
+  push:[{t:0,d:3,zh:'施加 5 N 推力！',en:'Apply a 5 N push!'},{t:3,d:3.5,zh:'合外力方向 = 加速度方向',en:'Net force direction = acceleration direction'},{t:6.5,d:3.5,zh:'速度持续增大：Δv = a × Δt',en:'Speed keeps increasing: Δv = a × Δt'},{t:10,d:3,zh:'1 N 的力使 1 kg 物体产生 1 m/s² 加速度',en:'1 N force gives 1 kg object 1 m/s² acceleration'}],
+  twoMasses:[{t:0,d:3,zh:'相同 5 N 推力，不同质量',en:'Same 5 N push, different masses'},{t:3,d:4,zh:'1 kg: a = 5 m/s²  vs  5 kg: a = 1 m/s²',en:'1 kg: a = 5 m/s²  vs  5 kg: a = 1 m/s²'},{t:7,d:4,zh:'质量越大，同样力产生的加速度越小',en:'Greater mass → smaller acceleration from same force'},{t:11,d:3,zh:'a = F / m',en:'a = F / m'}],
+  direction:[{t:0,d:3,zh:'木箱正在向右匀速运动',en:'The crate moves right at constant speed'},{t:3,d:3.5,zh:'施加向上的力！速度方向开始偏转',en:'Apply upward force! Velocity direction turns'},{t:6.5,d:4,zh:'力不仅能改变速度大小，还能改变速度方向',en:'Force changes not just speed, but also direction'},{t:10.5,d:2.5,zh:'速度矢量随时间偏转',en:'Velocity vector rotates over time'}],
+  noForce:[{t:0,d:3,zh:'撤去外力！',en:'Remove the external force!'},{t:3,d:3,zh:'F = 0 → a = 0 → 速度不变',en:'F = 0 → a = 0 → velocity unchanged'},{t:6,d:4,zh:'物体保持当前运动状态：匀速直线运动',en:'Object maintains current state: uniform linear motion'}],
+  takeaway:[{t:0,d:5,zh:'力不是维持运动的原因，而是改变物体运动状态的原因',en:'Force is not what sustains motion, but what changes it'},{t:5,d:4,zh:'看到物体速度大小或方向变化 → 一定有力在作用',en:'See velocity change → force must be acting'},{t:9,d:7,zh:'用你自己的话解释：力是什么？',en:'Explain in your own words: What is force?'}]
+};
+function getSub(id,et){const l=SUBS[id]||[];for(const s of l)if(et>=s.t&&et<s.t+s.d)return{zh:s.zh,en:s.en};return null}
+
+/* ===== EQUATION EVENTS ===== */
+const EQ_EVENTS=[
+  {t:11,d:3,txt:'F = m · a',sub:'5 N = 1 kg × 5 m/s²'},
+  {t:15,d:3,txt:'Δv = a × Δt',sub:null},
+  {t:25,d:3,txt:'a = F / m',sub:'5/1 = 5 m/s²   5/5 = 1 m/s²'},
+  {t:41,d:3,txt:'F ⊥ v → 方向偏转',sub:'Force perpendicular to velocity → direction changes'},
+  {t:52,d:3,txt:'F = 0 → a = 0',sub:'Δv = 0 · Δt = 0'}
+];
+
+/* ===== DRAWING HELPERS ===== */
+function drawArrow(wx,wy,dx,dy,color,lw,label,sc){
+  const fr=w2s(wx,wy),to=w2s(wx+dx*sc,wy+dy*sc);
+  const len=Math.sqrt((to.x-fr.x)**2+(to.y-fr.y)**2);
+  if(len<3)return;
+  const ang=Math.atan2(to.y-fr.y,to.x-fr.x);
+  const hl=Math.min(14,len*.3);
+  cx.save();cx.strokeStyle=color;cx.fillStyle=color;cx.lineWidth=lw;
+  cx.shadowColor=color;cx.shadowBlur=10;cx.lineCap='round';cx.lineJoin='round';
+  cx.beginPath();cx.moveTo(fr.x,fr.y);
+  cx.lineTo(to.x-hl*.6*Math.cos(ang),to.y-hl*.6*Math.sin(ang));cx.stroke();
+  cx.beginPath();cx.moveTo(to.x,to.y);
+  cx.lineTo(to.x-hl*Math.cos(ang-.38),to.y-hl*Math.sin(ang-.38));
+  cx.lineTo(to.x-hl*Math.cos(ang+.38),to.y-hl*Math.sin(ang+.38));
+  cx.closePath();cx.fill();
+  if(label){cx.shadowBlur=0;cx.font='bold 13px JetBrains Mono';cx.textAlign='center';
+    const nx=-Math.sin(ang)*16,ny=Math.cos(ang)*16;
+    cx.fillText(label,(fr.x+to.x)/2+nx,(fr.y+to.y)/2+ny)}
+  cx.restore();
+}
+
+function drawCrate(obj,label,highlight){
+  const s=w2s(obj.x,obj.y);
+  const sz=.55*cam.z;const dp=Math.max(4,sz*.15);
+  // shadow
+  cx.fillStyle='rgba(0,0,0,0.25)';cx.fillRect(s.x-sz/2+3,s.y-sz/2+3,sz,sz);
+  // front
+  cx.fillStyle=highlight?C.MASS_TOP:C.MASS;cx.fillRect(s.x-sz/2,s.y-sz/2,sz,sz);
+  // top
+  cx.fillStyle=C.MASS_TOP;cx.beginPath();
+  cx.moveTo(s.x-sz/2,s.y-sz/2);cx.lineTo(s.x-sz/2+dp,s.y-sz/2-dp);
+  cx.lineTo(s.x+sz/2+dp,s.y-sz/2-dp);cx.lineTo(s.x+sz/2,s.y-sz/2);cx.closePath();cx.fill();
+  // side
+  cx.fillStyle=C.MASS_SIDE;cx.beginPath();
+  cx.moveTo(s.x+sz/2,s.y-sz/2);cx.lineTo(s.x+sz/2+dp,s.y-sz/2-dp);
+  cx.lineTo(s.x+sz/2+dp,s.y+sz/2-dp);cx.lineTo(s.x+sz/2,s.y+sz/2);cx.closePath();cx.fill();
+  // border
+  cx.strokeStyle='oklch(0.55 0.08 215)';cx.lineWidth=1;cx.strokeRect(s.x-sz/2,s.y-sz/2,sz,sz);
+  // label
+  cx.fillStyle=C.PHOTON;cx.font=`bold ${Math.max(10,sz*.22)}px JetBrains Mono`;
+  cx.textAlign='center';cx.textBaseline='middle';
+  cx.fillText(label||`${obj.m} kg`,s.x,s.y);
+}
+
+function drawTrail(obj){
+  if(obj.trail.length<2)return;
+  cx.save();cx.lineWidth=2;cx.lineCap='round';
+  for(let i=1;i<obj.trail.length;i++){
+    const a=Math.max(0,.4*(i/obj.trail.length));
+    cx.strokeStyle=`oklch(0.55 0.13 215 / ${a})`;
+    const p1=w2s(obj.trail[i-1].x,obj.trail[i-1].y);
+    const p2=w2s(obj.trail[i].x,obj.trail[i].y);
+    cx.beginPath();cx.moveTo(p1.x,p1.y);cx.lineTo(p2.x,p2.y);cx.stroke();
+  }
+  cx.restore();
+}
+
+/* ===== RENDER ===== */
+function render(t){
+  cx.clearRect(0,0,W,H);
+  // bg gradient
+  const bg=cx.createRadialGradient(W/2,H/2,0,W/2,H/2,Math.max(W,H)*.7);
+  bg.addColorStop(0,'oklch(0.18 0.04 265)');bg.addColorStop(1,'oklch(0.12 0.03 265)');
+  cx.fillStyle=bg;cx.fillRect(0,0,W,H);
+
+  // field lines
+  cx.save();cx.strokeStyle=C.FIELD_LINE;cx.lineWidth=.5;cx.globalAlpha=.12;
+  for(let i=0;i<W;i+=90){
+    cx.beginPath();
+    for(let y=0;y<H;y+=5){
+      const wave=Math.sin(y*.008+t*.25+i*.005)*6;
+      if(y===0)cx.moveTo(i+wave,y);else cx.lineTo(i+wave,y);
+    }
+    cx.stroke();
+  }
+  cx.restore();
+
+  // stars
+  cx.save();
+  for(const s of stars){
+    const sp=w2s(s.x,s.y);
+    if(sp.x<-50||sp.x>W+50||sp.y<-50||sp.y>H+50)continue;
+    const tw=.5+.5*Math.sin(t*1.5+s.ph);
+    cx.globalAlpha=tw*.6;cx.fillStyle=C.STAR;
+    cx.beginPath();cx.arc(sp.x,sp.y,s.r,0,Math.PI*2);cx.fill();
+  }
+  cx.restore();
+
+  // grid
+  cx.save();cx.strokeStyle=C.GRID;cx.lineWidth=.5;cx.globalAlpha=.2;
+  const gSize=1;const tl=s2w(0,H),br=s2w(W,0);
+  const x0=Math.floor(tl.x/gSize)*gSize,x1=Math.ceil(br.x/gSize)*gSize;
+  const y0=Math.floor(tl.y/gSize)*gSize,y1=Math.ceil(br.y/gSize)*gSize;
+  for(let x=x0;x<=x1;x+=gSize){const a=w2s(x,y0),b=w2s(x,y1);cx.beginPath();cx.moveTo(a.x,a.y);cx.lineTo(b.x,b.y);cx.stroke()}
+  for(let y=y0;y<=y1;y+=gSize){const a=w2s(x0,y),b=w2s(x1,y);cx.beginPath();cx.moveTo(a.x,a.y);cx.lineTo(b.x,b.y);cx.stroke()}
+  cx.restore();
+
+  // ice surface glow
+  cx.save();cx.globalAlpha=.06;
+  const iceG=cx.createRadialGradient(W/2,H/2,0,W/2,H/2,Math.max(W,H)*.4);
+  iceG.addColorStop(0,'oklch(0.5 0.1 215)');iceG.addColorStop(1,'oklch(0.2 0.04 265)');
+  cx.fillStyle=iceG;cx.fillRect(0,0,W,H);cx.restore();
+
+  // ripples
+  for(const r of ripples){
+    const sp=w2s(r.x,r.y);
+    cx.save();cx.strokeStyle=C.GOLD;cx.lineWidth=1.5;cx.globalAlpha=r.a;
+    cx.beginPath();cx.arc(sp.x,sp.y,r.r*cam.z,0,Math.PI*2);cx.stroke();cx.restore();
+  }
+
+  // objects
+  for(const o of objs){
+    drawTrail(o);
+    drawCrate(o);
+    // vectors
+    const fMag=Math.sqrt(o.fx*o.fx+o.fy*o.fy);
+    const aMag=o.acc;const vMag=o.spd;
+    if(fMag>.01)drawArrow(o.x,o.y,o.fx,o.fy,C.GOLD,3,'F',.12);
+    if(aMag>.01)drawArrow(o.x,o.y,o.ax,o.ay,C.FIELD,2.5,'a',.12);
+    if(vMag>.05)drawArrow(o.x,o.y,o.vx,o.vy,C.WAVE,2,'v',.14);
+  }
+
+  // scale bar
+  cx.save();cx.strokeStyle='oklch(0.5 0.06 215)';cx.fillStyle='oklch(0.5 0.06 215)';
+  cx.lineWidth=2;const bLen=5*cam.z;const bx=28,by=H-28;
+  cx.beginPath();cx.moveTo(bx,by);cx.lineTo(bx+bLen,by);cx.stroke();
+  cx.beginPath();cx.moveTo(bx,by-4);cx.lineTo(bx,by+4);cx.stroke();
+  cx.beginPath();cx.moveTo(bx+bLen,by-4);cx.lineTo(bx+bLen,by+4);cx.stroke();
+  cx.font='10px JetBrains Mono';cx.textAlign='center';cx.fillText('5 m',bx+bLen/2,by+16);
+  cx.restore();
+
+  // flash
+  if(flashA>.005){cx.fillStyle=`rgba(180,200,255,${flashA})`;cx.fillRect(0,0,W,H)}
+
+  // vignette
+  const vig=cx.createRadialGradient(W/2,H/2,Math.min(W,H)*.3,W/2,H/2,Math.max(W,H)*.75);
+  vig.addColorStop(0,'rgba(0,0,0,0)');vig.addColorStop(1,'rgba(0,0,0,0.45)');
+  cx.fillStyle=vig;cx.fillRect(0,0,W,H);
+
+  // echo
+  drawEcho(t);
+}
+
+/* ===== DOM REFS ===== */
+const $=id=>document.getElementById(id);
+const hudEl=$('hud'),hF=$('hF'),hA=$('hA'),hV=$('hV'),hM=$('hM');
+const subBox=$('subBox'),subZh=$('subZh'),subEn=$('subEn');
+const eqPanel=$('eqPanel'),eqText=$('eqText'),eqSub=$('eqSub');
+const titleCard=$('titleCard'),takePanel=$('takePanel');
+const legendEl=$('legend'),compPanel=$('compPanel'),compContent=$('compContent');
+
+/* ===== MAIN LOOP ===== */
+let startT=null,lastT=null;
+let dirObj=null; // persistent object for direction→noForce
+
+function mainLoop(ts){
+  if(!startT)startT=ts;if(!lastT)lastT=ts;
+  const elapsed=(ts-startT)/1000;
+  const dt=Math.min((ts-lastT)/1000,.04);
+  lastT=ts;
+
+  // determine phase
+  let phase=TL[TL.length-1];
+  for(const p of TL)if(elapsed>=p.s&&elapsed<p.e){phase=p;break}
+  const pe=elapsed-phase.s; // phase elapsed
+  const pid=phase.id;
+
+  // phase transition
+  if(pid!==prevPhase){
+    if(prevPhase==='')pingEcho();
+    if(pid==='rest'){
+      objs=[new Obj(1,0,0)];tScale=.35;physT=0;
+      cam.tx=0;cam.ty=0;cam.tz=55;
+      titleCard.style.opacity='0';hudEl.style.opacity='1';legendEl.style.opacity='1';
+      pingEcho();
+    }
+    if(pid==='push'){
+      objs=[new Obj(1,0,0)];objs[0].fx=5;tScale=.3;physT=0;
+      cam.tx=0;cam.ty=0;cam.tz=55;
+      flash();pingEcho();addRipple(0,0);
+      compPanel.style.opacity='0';
+    }
+    if(pid==='twoMasses'){
+      objs=[new Obj(1,-3,1.5),new Obj(5,-3,-1.5)];
+      objs[0].fx=5;objs[1].fx=5;tScale=.22;physT=0;
+      cam.tx=4;cam.ty=0;cam.tz=35;
+      flash();pingEcho();addRipple(-3,1.5);addRipple(-3,-1.5);
+      hudEl.style.opacity='0';compPanel.style.opacity='1';
+    }
+    if(pid==='direction'){
+      dirObj=new Obj(2,-4,0,4,0);
+      objs=[dirObj];tScale=.28;physT=0;
+      cam.tx=2;cam.ty=0;cam.tz=45;
+      flash();pingEcho();
+      compPanel.style.opacity='0';hudEl.style.opacity='1';
+    }
+    if(pid==='noForce'){
+      if(dirObj){dirObj.fx=0;dirObj.fy=0}
+      tScale=.28;
+      flash();pingEcho();addRipple(dirObj?dirObj.x:0,dirObj?dirObj.y:0);
+    }
+    if(pid==='takeaway'){
+      objs=[];flash();pingEcho();
+      hudEl.style.opacity='0';legendEl.style.opacity='0';
+      setTimeout(()=>{takePanel.style.opacity='1'},600);
+    }
+    prevPhase=pid;
+  }
+
+  // physics update
+  if(pid!=='intro'&&pid!=='takeaway'){
+    const pdt=dt*tScale;
+    physT+=pdt;
+    for(const o of objs)o.step(pdt);
+
+    // direction phase: apply force after 3s phase elapsed
+    if(pid==='direction'&&pe>3&&dirObj){
+      dirObj.fy=6; // upward force
+      if(pe<3.1)addRipple(dirObj.x,dirObj.y);
+    }
+
+    // camera follow
+    if(objs.length===1){
+      cam.tx=objs[0].x+objs[0].vx*.4;cam.ty=objs[0].y+objs[0].vy*.4;
+    }else if(objs.length===2){
+      const cx_=(objs[0].x+objs[1].x)/2;
+      const cy_=(objs[0].y+objs[1].y)/2;
+      cam.tx=cx_;cam.ty=cy_;
+      const spread=Math.abs(objs[0].x-objs[1].x)+6;
+      cam.tz=Math.max(20,Math.min(55,W/spread*.6));
+    }
+  }
+  updateCam(dt);
+
+  // effects update
+  if(flashA>.005)flashA*=.92;
+  for(let i=ripples.length-1;i>=0;i--){ripples[i].r+=dt*4;ripples[i].a-=dt*.5;if(ripples[i].a<=0)ripples.splice(i,1)}
+  for(let i=echoRipples.length-1;i>=0;i--){echoRipples[i].r+=dt*40;echoRipples[i].a-=dt*.4;if(echoRipples[i].a<=0)echoRipples.splice(i,1)}
+
+  // render
+  render(elapsed);
+
+  // subtitle
+  const sub=getSub(pid,pe);
+  if(sub){subBox.style.opacity='1';subZh.textContent=sub.zh;subEn.textContent=sub.en}
+  else{subBox.style.opacity='0'}
+
+  // HUD
+  if(pid==='rest'||pid==='push'||pid==='direction'||pid==='noForce'){
+    const o=objs[0];
+    if(o){
+      const fMag=Math.sqrt(o.fx*o.fx+o.fy*o.fy);
+      const aMag=o.acc;const vMag=o.spd;
+      const fAng=fMag>.01?` ∠${Math.round(Math.atan2(o.fy,o.fx)*180/Math.PI)}°`:'';
+      const aAng=aMag>.01?` ∠${Math.round(Math.atan2(o.ay,o.ax)*180/Math.PI)}°`:'';
+      const vAng=vMag>.05?` ∠${Math.round(Math.atan2(o.vy,o.vx)*180/Math.PI)}°`:'';
+      hF.textContent=`F = ${fMag.toFixed(1)} N${fAng}`;
+      hA.textContent=`a = ${aMag.toFixed(2)} m/s²${aAng}`;
+      hV.textContent=`v = ${vMag.toFixed(2)} m/s${vAng}`;
+      hM.textContent=`m = ${o.m} kg`;
+    }
+  }
+
+  // comparison panel
+  if(pid==='twoMasses'&&objs.length===2){
+    const o1=objs[0],o2=objs[1];
+    compContent.innerHTML=`
+      <div class="cp-row"><span class="cp-l">m</span><span class="cp-v1">${o1.m} kg</span><span class="cp-v5">${o2.m} kg</span></div>
+      <div class="cp-row"><span class="cp-l">F</span><span class="cp-v1">${Math.sqrt(o1.fx**2+o1.fy**2).toFixed(0)} N</span><span class="cp-v5">${Math.sqrt(o2.fx**2+o2.fy**2).toFixed(0)} N</span></div>
+      <div class="cp-row"><span class="cp-l">a</span><span class="cp-v1">${o1.acc.toFixed(2)} m/s²</span><span class="cp-v5">${o2.acc.toFixed(2)} m/s²</span></div>
+      <div class="cp-row"><span class="cp-l">v</span><span class="cp-v1">${o1.spd.toFixed(2)} m/s</span><span class="cp-v5">${o2.spd.toFixed(2)} m/s</span></div>
+      <div class="cp-row"><span class="cp-l">x</span><span class="cp-v1">${o1.x.toFixed(1)} m</span><span class="cp-v5">${o2.x.toFixed(1)} m</span></div>`;
+  }
+
+  // equation events
+  let eqVisible=false;
+  for(const eq of EQ_EVENTS){
+    if(elapsed>=eq.t&&elapsed<eq.t+eq.d){
+      eqPanel.style.opacity='1';eqText.textContent=eq.txt;
+      eqSub.textContent=eq.sub||'';eqVisible=true;break;
+    }
+  }
+  if(!eqVisible)eqPanel.style.opacity='0';
+
+  requestAnimationFrame(mainLoop);
+}
+
+requestAnimationFrame(mainLoop);
+</script>
+</body>
+</html>

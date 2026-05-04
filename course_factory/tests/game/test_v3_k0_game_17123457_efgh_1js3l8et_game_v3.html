@@ -1,0 +1,651 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>推拉力探秘 | Force Lab</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=Noto+Sans+SC:wght@300;400;700;900&display=swap" rel="stylesheet">
+<style>
+:root{--BRASS:#C49B3C;--FORGE:#8B6914;--IRON:#4A4A5A;--EMBER:#E8D0A0;--SPARK:#E8C840;--BG1:#151525;--BG2:#1E1E38}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Noto Sans SC',sans-serif;background:linear-gradient(135deg,var(--BG1),var(--BG2));color:var(--EMBER);overflow:hidden;height:100vh;user-select:none}
+.fm{font-family:'JetBrains Mono',monospace}
+.glass{background:rgba(21,21,37,0.88);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);border:1px solid rgba(196,155,60,0.15)}
+canvas{display:block}
+input[type=range]{-webkit-appearance:none;width:100%;height:4px;background:var(--IRON);outline:none;border-radius:2px}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:16px;height:16px;background:var(--SPARK);cursor:pointer;border:2px solid var(--BRASS);border-radius:2px}
+.sb{transition:all .15s;cursor:pointer}.sb:hover{background:rgba(196,155,60,0.15)}.sb.on{background:rgba(232,200,64,0.18);border-color:var(--SPARK)!important}
+.mb{transition:all .15s;cursor:pointer}.mb:hover{opacity:.85}.mb.on{background:rgba(232,200,64,0.2)!important;border-color:var(--SPARK)!important;color:var(--SPARK)!important}
+.ab{transition:all .15s;cursor:pointer}.ab:hover{background:rgba(196,155,60,0.2)}
+@keyframes pulse{0%,100%{opacity:.5}50%{opacity:1}}
+@keyframes fadeOut{0%{opacity:1}100%{opacity:0;pointer-events:none}}
+</style>
+</head>
+<body>
+<div class="flex h-screen">
+<aside id="sidebar" class="w-56 flex flex-col p-3 gap-2 z-20 glass overflow-y-auto" style="min-width:210px;border-right:1px solid rgba(196,155,60,0.2)">
+  <div class="text-center mb-1">
+    <div class="fm text-[10px] tracking-[0.2em] uppercase" style="color:var(--FORGE)">Gear Foundry</div>
+    <h1 class="text-lg font-black leading-tight" style="color:var(--SPARK)"><span data-zh="推拉力探秘" data-en="Force Lab">推拉力探秘</span></h1>
+    <div class="fm text-[10px] mt-0.5" style="color:var(--BRASS)">F = m · a</div>
+  </div>
+  <div>
+    <div class="fm text-[10px] mb-1 uppercase tracking-wider" style="color:var(--FORGE)"><span data-zh="选择场景" data-en="SCENE">选择场景</span></div>
+    <div class="flex flex-col gap-1" id="scene-list">
+      <button class="sb glass text-left px-2 py-1.5 text-xs rounded on" data-idx="0"><span data-zh="水平推箱" data-en="Push Box">水平推箱</span></button>
+      <button class="sb glass text-left px-2 py-1.5 text-xs rounded" data-idx="1"><span data-zh="拉力挑战" data-en="Pull Cart">拉力挑战</span></button>
+      <button class="sb glass text-left px-2 py-1.5 text-xs rounded" data-idx="2"><span data-zh="斜面攀爬" data-en="Ramp Climb">斜面攀爬</span></button>
+      <button class="sb glass text-left px-2 py-1.5 text-xs rounded" data-idx="3"><span data-zh="摩擦对比" data-en="Friction Test">摩擦对比</span></button>
+    </div>
+  </div>
+  <div>
+    <div class="fm text-[10px] mb-1 uppercase tracking-wider" style="color:var(--FORGE)"><span data-zh="物体质量" data-en="MASS">物体质量</span></div>
+    <input type="range" id="mass-slider" min="1" max="20" value="5" step="0.5">
+    <div class="fm text-[11px] text-center mt-0.5" style="color:var(--SPARK)" id="mass-val">5.0 kg</div>
+  </div>
+  <div>
+    <div class="fm text-[10px] mb-1 uppercase tracking-wider" style="color:var(--FORGE)"><span data-zh="摩擦系数" data-en="FRICTION">摩擦系数</span></div>
+    <input type="range" id="friction-slider" min="0" max="80" value="30" step="1">
+    <div class="fm text-[11px] text-center mt-0.5" style="color:var(--SPARK)" id="friction-val">0.30</div>
+  </div>
+  <div>
+    <div class="fm text-[10px] mb-1 uppercase tracking-wider" style="color:var(--FORGE)"><span data-zh="施力模式" data-en="MODE">施力模式</span></div>
+    <div class="flex gap-1">
+      <button class="mb glass flex-1 px-2 py-1 text-[11px] rounded on" id="btn-push"><span data-zh="推力" data-en="Push">推力</span></button>
+      <button class="mb glass flex-1 px-2 py-1 text-[11px] rounded" id="btn-pull"><span data-zh="拉力" data-en="Pull">拉力</span></button>
+    </div>
+  </div>
+  <div>
+    <div class="fm text-[10px] mb-1 uppercase tracking-wider" style="color:var(--FORGE)"><span data-zh="施力角度" data-en="ANGLE">施力角度</span></div>
+    <input type="range" id="angle-slider" min="-60" max="60" value="0" step="1">
+    <div class="fm text-[11px] text-center mt-0.5" style="color:var(--SPARK)" id="angle-val">0°</div>
+  </div>
+  <div>
+    <div class="fm text-[10px] mb-1 uppercase tracking-wider" style="color:var(--FORGE)"><span data-zh="施力大小" data-en="FORCE">施力大小</span></div>
+    <input type="range" id="force-slider" min="0" max="200" value="50" step="1">
+    <div class="fm text-[11px] text-center mt-0.5" style="color:var(--SPARK)" id="force-val">50 N</div>
+  </div>
+  <div class="flex gap-1 mt-1">
+    <button class="ab glass flex-1 px-2 py-1.5 text-xs rounded font-bold" style="color:var(--SPARK)" id="btn-apply"><span data-zh="按住施力" data-en="HOLD APPLY">按住施力</span></button>
+    <button class="ab glass flex-1 px-2 py-1.5 text-xs rounded" style="color:var(--EMBER)" id="btn-reset"><span data-zh="重置" data-en="RESET">重置</span></button>
+  </div>
+  <div class="glass rounded p-2 mt-1">
+    <div class="fm text-[10px] uppercase tracking-wider mb-1" style="color:var(--FORGE)"><span data-zh="实时数据" data-en="DATA">实时数据</span></div>
+    <div class="fm text-[11px] leading-relaxed" id="data-display" style="color:var(--EMBER)">
+      <div>a = 0.00 m/s²</div><div>v = 0.00 m/s</div><div>x = 0.00 m</div>
+    </div>
+  </div>
+  <div class="mt-auto pt-2 flex gap-1">
+    <button class="ab glass flex-1 px-2 py-1 text-[11px] rounded fm" style="color:var(--BRASS)" id="btn-lang">EN / 中</button>
+  </div>
+</aside>
+<main class="flex-1 relative">
+  <canvas id="cvs"></canvas>
+  <div id="hint" class="absolute bottom-4 left-1/2 -translate-x-1/2 glass rounded px-4 py-2 text-xs fm" style="color:var(--BRASS);animation:pulse 2s infinite">
+    <span data-zh="在物体上按住拖拽施力 | 侧栏调节参数" data-en="Drag on the object to apply force | Adjust params in sidebar">在物体上按住拖拽施力 | 侧栏调节参数</span>
+  </div>
+</main>
+</div>
+<script>
+(function(){
+'use strict';
+
+var BRASS='#C49B3C',FORGE='#8B6914',IRON='#4A4A5A',EMBER='#E8D0A0',SPARK='#E8C840';
+var GRAVITY=9.8,PX_M=80,EPS=0.0001;
+
+var canvas=document.getElementById('cvs');
+var ctx=canvas.getContext('2d');
+
+var G={
+  lang:'zh',sceneIdx:0,mass:5,mu:0.3,mode:'push',angle:0,forceMag:50,applying:false,
+  objX:0,objVx:0,accel:0,velocity:0,displacement:0,netForce:0,normalForce:0,frictionForce:0,
+  dragging:false,dragSX:0,dragSY:0,dragCX:0,dragCY:0,dragFX:0,dragFY:0,
+  particles:[],trail:[],lastTime:0,gearAng:0,hintShown:true,bgDots:[]
+};
+
+var scenes=[
+  {name:{zh:'水平推箱',en:'Push Box'},desc:{zh:'在水平面上推箱子，体验推力与摩擦的较量',en:'Push a box on flat ground, force vs friction'},type:'box',incline:0,surface:'normal'},
+  {name:{zh:'拉力挑战',en:'Pull Cart'},desc:{zh:'用绳子拉小车，注意力的角度影响',en:'Pull a cart with rope, notice how angle matters'},type:'cart',incline:0,surface:'normal'},
+  {name:{zh:'斜面攀爬',en:'Ramp Climb'},desc:{zh:'在斜面上推动物体，重力分量是额外挑战',en:'Push up a ramp, gravity component is extra challenge'},type:'box',incline:25,surface:'normal'},
+  {name:{zh:'摩擦对比',en:'Friction Test'},desc:{zh:'比较不同表面摩擦力对运动的影响',en:'Compare how different surface frictions affect motion'},type:'ball',incline:0,surface:'ice'}
+];
+
+function clamp(v,lo,hi){return Math.max(lo,Math.min(hi,v))}
+function hexRgba(h,a){var r=parseInt(h.slice(1,3),16),g=parseInt(h.slice(3,5),16),b=parseInt(h.slice(5,7),16);return'rgba('+r+','+g+','+b+','+a+')'}
+function rRect(x,y,w,h,r){ctx.beginPath();ctx.moveTo(x+r,y);ctx.lineTo(x+w-r,y);ctx.quadraticCurveTo(x+w,y,x+w,y+r);ctx.lineTo(x+w,y+h-r);ctx.quadraticCurveTo(x+w,y+h,x+w-r,y+h);ctx.lineTo(x+r,y+h);ctx.quadraticCurveTo(x,y+h,x,y+h-r);ctx.lineTo(x,y+r);ctx.quadraticCurveTo(x,y,x+r,y);ctx.closePath()}
+
+function resize(){
+  var r=canvas.parentElement.getBoundingClientRect();
+  canvas.width=r.width;canvas.height=r.height;
+  initBgDots();
+}
+
+function initBgDots(){
+  G.bgDots=[];
+  for(var i=0;i<40;i++){
+    G.bgDots.push({x:Math.random()*canvas.width,y:Math.random()*canvas.height,s:0.5+Math.random()*1.5,sp:0.1+Math.random()*0.3,a:Math.random()});
+  }
+}
+
+function groundY(){return canvas.height*0.72}
+function objW(){var s=scenes[G.sceneIdx];return s.type==='ball'?36:s.type==='cart'?60:50}
+function objH(){var s=scenes[G.sceneIdx];return s.type==='ball'?36:s.type==='cart'?35:45}
+
+function resetObj(){
+  G.objX=0;G.objVx=0;G.accel=0;G.velocity=0;G.displacement=0;
+  G.netForce=0;G.normalForce=0;G.frictionForce=0;
+  G.particles=[];G.trail=[];G.applying=false;G.dragging=false;
+}
+
+function stepPhysics(dt){
+  var sc=scenes[G.sceneIdx],m=G.mass,mu=G.mu,F=G.forceMag,theta=G.angle*Math.PI/180;
+  var alpha=sc.incline*Math.PI/180;
+  var Fx=0,Fy=0;
+
+  if(G.dragging){
+    Fx=G.dragFX;Fy=G.dragFY;
+    F=Math.sqrt(Fx*Fx+Fy*Fy);
+  }else if(G.applying){
+    var isPush=(G.mode==='push');
+    var sign=isPush?1:1;
+    Fx=sign*F*Math.cos(theta);
+    Fy=-F*Math.sin(theta);
+  }
+
+  var W=m*GRAVITY;
+
+  if(alpha>EPS){
+    var Fpar=Fx*Math.cos(alpha)-Fy*Math.sin(alpha);
+    var Fperp=Fx*Math.sin(alpha)+Fy*Math.cos(alpha);
+    var gPar=W*Math.sin(alpha);
+    var gNorm=W*Math.cos(alpha);
+    var N=Math.max(0,gNorm-Fperp);
+    var fMax=mu*N;
+    var net=Fpar-gPar;
+    var moving=Math.abs(G.objVx)>EPS;
+    var fric=0;
+
+    if(!moving&&Math.abs(net)<=fMax){
+      G.objVx=0;G.accel=0;G.frictionForce=-net;G.netForce=0;
+    }else{
+      if(moving){fric=-Math.sign(G.objVx)*fMax}
+      else{fric=-Math.sign(net)*fMax}
+      var a2=(net+fric)/m;
+      G.objVx+=a2*dt;
+      if(Math.abs(G.objVx)<0.02&&!G.applying&&!G.dragging){G.objVx=0}
+      G.accel=a2;G.frictionForce=fric;G.netForce=net+fric;
+    }
+    G.objX+=G.objVx*dt;
+    G.normalForce=N;
+  }else{
+    var N2=Math.max(0,W+Fy);
+    var fMax2=mu*N2;
+    var net2=Fx;
+    var moving2=Math.abs(G.objVx)>EPS;
+    var fric2=0;
+
+    if(!moving2&&Math.abs(net2)<=fMax2){
+      G.objVx=0;G.accel=0;G.frictionForce=-net2;G.netForce=0;
+    }else{
+      if(moving2){fric2=-Math.sign(G.objVx)*fMax2}
+      else{fric2=-Math.sign(net2)*fMax2}
+      var a3=(net2+fric2)/m;
+      G.objVx+=a3*dt;
+      if(Math.abs(G.objVx)<0.02&&!G.applying&&!G.dragging){G.objVx=0}
+      G.accel=a3;G.frictionForce=fric2;G.netForce=net2+fric2;
+    }
+    G.objX+=G.objVx*dt;
+    G.normalForce=N2;
+  }
+
+  G.velocity=G.objVx;G.displacement=G.objX;
+
+  var maxD=(canvas.width/PX_M)*0.45;
+  if(G.objX>maxD){G.objX=maxD;G.objVx=0}
+  if(G.objX<-maxD){G.objX=-maxD;G.objVx=0}
+
+  if((G.applying||G.dragging)&&F>5){spawnSpark()}
+  if(Math.abs(G.objVx)>0.5){spawnDust()}
+
+  for(var i=G.particles.length-1;i>=0;i--){
+    G.particles[i].age+=dt;
+    if(G.particles[i].age>=G.particles[i].life)G.particles.splice(i,1);
+  }
+
+  if(Math.abs(G.objVx)>0.1){G.trail.push({x:G.objX,t:1})}
+  for(var j=G.trail.length-1;j>=0;j--){G.trail[j].t-=dt*0.6;if(G.trail[j].t<=0)G.trail.splice(j,1)}
+
+  for(var k=0;k<G.bgDots.length;k++){
+    var d=G.bgDots[k];
+    d.y-=d.sp;d.a=0.15+0.1*Math.sin(d.y*0.02);
+    if(d.y<-5){d.y=canvas.height+5;d.x=Math.random()*canvas.width}
+  }
+}
+
+function spawnSpark(){
+  var gY2=groundY(),oW2=objW(),oH2=objH();
+  var sc2=scenes[G.sceneIdx],alpha2=sc2.incline*Math.PI/180;
+  var cx2=canvas.width*0.45+G.objX*PX_M*Math.cos(alpha2);
+  var cy2=gY2-G.objX*PX_M*Math.sin(alpha2)-oH2/2;
+  var cols=[SPARK,BRASS,'#FF6B35','#FFD700'];
+  for(var i=0;i<2;i++){
+    G.particles.push({x:cx2+(Math.random()-0.5)*oW2,y:cy2+(Math.random()-0.5)*oH2*0.5,
+      vx:(Math.random()-0.5)*80,vy:-Math.random()*100-30,
+      age:0,life:0.4+Math.random()*0.5,sz:1.5+Math.random()*3,c:cols[Math.floor(Math.random()*cols.length)]});
+  }
+}
+
+function spawnDust(){
+  var gY3=groundY();
+  var sc3=scenes[G.sceneIdx],alpha3=sc3.incline*Math.PI/180;
+  var cx3=canvas.width*0.45+G.objX*PX_M*Math.cos(alpha3);
+  var cy3=gY3-G.objX*PX_M*Math.sin(alpha3);
+  var dir=G.objVx>0?-1:1;
+  G.particles.push({x:cx3+dir*objW()*0.5,y:cy3-2,
+    vx:dir*(15+Math.random()*25),vy:-Math.random()*25-5,
+    age:0,life:0.3+Math.random()*0.3,sz:1.5+Math.random()*2,c:'#8B7355'});
+}
+
+function drawFrame(){
+  var W=canvas.width,H=canvas.height;
+  if(W<10||H<10)return;
+  var sc=scenes[G.sceneIdx],gY2=groundY(),alpha=sc.incline*Math.PI/180;
+  var oPx=canvas.width*0.45+G.objX*PX_M;
+
+  ctx.clearRect(0,0,W,H);
+
+  var bg=ctx.createRadialGradient(W*0.5,H*0.35,0,W*0.5,H*0.35,W*0.75);
+  bg.addColorStop(0,'#1E1E38');bg.addColorStop(1,'#151525');
+  ctx.fillStyle=bg;ctx.fillRect(0,0,W,H);
+
+  for(var di=0;di<G.bgDots.length;di++){
+    var dd=G.bgDots[di];
+    ctx.fillStyle=hexRgba(BRASS,dd.a*0.3);
+    ctx.beginPath();ctx.arc(dd.x,dd.y,dd.s,0,Math.PI*2);ctx.fill();
+  }
+
+  ctx.strokeStyle='rgba(196,155,60,0.03)';ctx.lineWidth=1;
+  for(var gx=0;gx<W;gx+=50){ctx.beginPath();ctx.moveTo(gx,0);ctx.lineTo(gx,H);ctx.stroke()}
+  for(var gy=0;gy<H;gy+=50){ctx.beginPath();ctx.moveTo(0,gy);ctx.lineTo(W,gy);ctx.stroke()}
+
+  drawGround(W,H,gY2,sc,alpha);
+  drawRuler(W,H,gY2,alpha);
+  drawTrail(W,H,gY2,alpha);
+  drawObject(W,H,gY2,sc,oPx,alpha);
+  drawForceArrows(W,H,gY2,sc,oPx,alpha);
+  if(G.dragging)drawDragLine();
+  drawParticles();
+  drawFBD(W,H);
+
+  ctx.font='700 16px "Noto Sans SC"';ctx.fillStyle=hexRgba(SPARK,0.55);ctx.textAlign='center';
+  ctx.fillText(sc.name[G.lang],W*0.45,28);
+  ctx.font='12px "Noto Sans SC"';ctx.fillStyle=hexRgba(EMBER,0.35);
+  ctx.fillText(sc.desc[G.lang],W*0.45,46);
+
+  G.gearAng+=0.3;
+  drawGear(W-50,50,24,8,G.gearAng);
+  drawGear(50,H-50,18,6,-G.gearAng*0.7);
+
+  updateData();
+}
+
+function drawGround(W,H,gY2,sc,alpha){
+  if(alpha>EPS){
+    var rSx=W*0.08,rEx=W*0.92,rW=rEx-rSx;
+    var rTy=gY2-rW*Math.tan(alpha);
+    ctx.beginPath();ctx.moveTo(rSx,gY2);ctx.lineTo(rEx,rTy);ctx.lineTo(rEx,gY2);ctx.closePath();
+    var rg=ctx.createLinearGradient(0,rTy,0,gY2);
+    rg.addColorStop(0,'#3A3530');rg.addColorStop(1,'#2A2520');
+    ctx.fillStyle=rg;ctx.fill();ctx.strokeStyle='#5A5040';ctx.lineWidth=2;ctx.stroke();
+    ctx.save();ctx.beginPath();ctx.moveTo(rSx,gY2);ctx.lineTo(rEx,rTy);ctx.lineTo(rEx,gY2);ctx.closePath();ctx.clip();
+    for(var i=0;i<30;i++){
+      var lx=rSx+i*(rW/29);
+      ctx.beginPath();ctx.moveTo(lx,gY2);ctx.lineTo(lx+12,gY2-12);
+      ctx.strokeStyle='rgba(90,80,64,0.15)';ctx.lineWidth=1;ctx.stroke();
+    }
+    ctx.restore();
+    ctx.fillStyle='#2A2520';ctx.fillRect(0,gY2,W,H-gY2);
+    ctx.beginPath();ctx.moveTo(0,gY2);ctx.lineTo(W,gY2);ctx.strokeStyle='#5A5040';ctx.lineWidth=2;ctx.stroke();
+  }else{
+    var isIce=(sc.surface==='ice');
+    var gg=ctx.createLinearGradient(0,gY2,0,H);
+    if(isIce){gg.addColorStop(0,'#3A4A5A');gg.addColorStop(0.15,'#2A3A4A');gg.addColorStop(1,'#1A2A3A')}
+    else{gg.addColorStop(0,'#3A3530');gg.addColorStop(0.15,'#2A2520');gg.addColorStop(1,'#1A1A15')}
+    ctx.fillStyle=gg;ctx.fillRect(0,gY2,W,H-gY2);
+    ctx.beginPath();ctx.moveTo(0,gY2);ctx.lineTo(W,gY2);
+    ctx.strokeStyle=isIce?'#5A6A7A':'#5A5040';ctx.lineWidth=2;ctx.stroke();
+    if(isIce){
+      for(var j=0;j<10;j++){
+        var lx2=W*(0.05+j*0.1);
+        ctx.beginPath();ctx.moveTo(lx2,gY2+4);ctx.lineTo(lx2+35,gY2+4);
+        ctx.strokeStyle='rgba(140,180,220,0.12)';ctx.lineWidth=1;ctx.stroke();
+      }
+    }else{
+      for(var k=0;k<40;k++){
+        var dx2=(k*97+33)%W,dy2=gY2+5+(k*31)%25;
+        ctx.fillStyle='rgba(90,80,64,0.25)';ctx.fillRect(dx2,dy2,2,1);
+      }
+    }
+  }
+}
+
+function drawRuler(W,H,gY2,alpha){
+  var baseY=gY2-4,cX=W*0.45;
+  ctx.font='9px "JetBrains Mono"';ctx.fillStyle=hexRgba(EMBER,0.3);ctx.textAlign='center';
+  for(var m=-5;m<=5;m++){
+    var px=cX+m*PX_M;
+    if(px<20||px>W-20)continue;
+    ctx.beginPath();ctx.moveTo(px,baseY);ctx.lineTo(px,baseY-(m===0?10:5));
+    ctx.strokeStyle=hexRgba(EMBER,0.2);ctx.lineWidth=1;ctx.stroke();
+    if(m%2===0)ctx.fillText(m+'m',px,baseY-13);
+  }
+}
+
+function drawTrail(W,H,gY2,alpha){
+  var cX=W*0.45;
+  for(var i=0;i<G.trail.length;i++){
+    var t=G.trail[i],px=cX+t.x*PX_M*Math.cos(alpha),py=gY2-t.x*PX_M*Math.sin(alpha);
+    ctx.fillStyle=hexRgba(SPARK,t.t*0.25);
+    ctx.beginPath();ctx.arc(px,py-2,2,0,Math.PI*2);ctx.fill();
+  }
+}
+
+function drawObject(W,H,gY2,sc,oPx,alpha){
+  var ow=objW(),oh=objH();
+  ctx.save();
+  if(alpha>EPS){
+    var sx=oPx,sy=gY2-G.objX*PX_M*Math.sin(alpha);
+    ctx.translate(sx,sy);ctx.rotate(-alpha);
+    if(sc.type==='ball')drawBall(0,-oh/2,ow/2);
+    else if(sc.type==='cart')drawCart(0,-oh,ow,oh);
+    else drawBox(-ow/2,-oh,ow,oh);
+  }else{
+    if(sc.type==='ball')drawBall(oPx,gY2-ow/2,ow/2);
+    else if(sc.type==='cart')drawCart(oPx,gY2-oh,ow,oh);
+    else drawBox(oPx-ow/2,gY2-oh,ow,oh);
+  }
+  ctx.restore();
+}
+
+function drawBox(x,y,w,h){
+  ctx.fillStyle='rgba(0,0,0,0.25)';ctx.fillRect(x+3,y+3,w,h);
+  var bg=ctx.createLinearGradient(x,y,x,y+h);
+  bg.addColorStop(0,'#8B6914');bg.addColorStop(0.5,'#6B4914');bg.addColorStop(1,'#4B2914');
+  ctx.fillStyle=bg;ctx.fillRect(x,y,w,h);
+  ctx.strokeStyle=BRASS;ctx.lineWidth=2;ctx.strokeRect(x,y,w,h);
+  ctx.strokeStyle=hexRgba(SPARK,0.3);ctx.lineWidth=1;
+  ctx.beginPath();ctx.moveTo(x+w*0.3,y);ctx.lineTo(x+w*0.3,y+h);ctx.moveTo(x+w*0.7,y);ctx.lineTo(x+w*0.7,y+h);
+  ctx.moveTo(x,y+h*0.5);ctx.lineTo(x+w,y+h*0.5);ctx.stroke();
+  ctx.font='700 10px "JetBrains Mono"';ctx.fillStyle=hexRgba(EMBER,0.8);ctx.textAlign='center';
+  ctx.fillText(G.mass.toFixed(1)+'kg',x+w/2,y+h/2+4);
+}
+
+function drawCart(cx,topY,w,h){
+  var bg=ctx.createLinearGradient(cx-w/2,topY,cx-w/2,topY+h-10);
+  bg.addColorStop(0,'#5A6A7A');bg.addColorStop(1,'#3A4A5A');
+  ctx.fillStyle=bg;rRect(cx-w/2,topY,w,h-10,3);ctx.fill();
+  ctx.strokeStyle='#7A8A9A';ctx.lineWidth=1.5;rRect(cx-w/2,topY,w,h-10,3);ctx.stroke();
+  var wy=topY+h-7;
+  ctx.fillStyle='#2A2A2A';ctx.beginPath();ctx.arc(cx-w*0.3,wy,7,0,Math.PI*2);ctx.fill();
+  ctx.beginPath();ctx.arc(cx+w*0.3,wy,7,0,Math.PI*2);ctx.fill();
+  ctx.fillStyle=IRON;ctx.beginPath();ctx.arc(cx-w*0.3,wy,3,0,Math.PI*2);ctx.fill();
+  ctx.beginPath();ctx.arc(cx+w*0.3,wy,3,0,Math.PI*2);ctx.fill();
+  ctx.fillStyle=BRASS;ctx.beginPath();ctx.arc(cx+w/2+2,topY+(h-10)/2,4,0,Math.PI*2);ctx.fill();
+  if(G.mode==='pull'&&(G.applying||G.dragging)){
+    ctx.strokeStyle='#8B7355';ctx.lineWidth=2;ctx.setLineDash([4,3]);
+    ctx.beginPath();ctx.moveTo(cx+w/2+2,topY+(h-10)/2);ctx.lineTo(cx+w/2+40,topY+(h-10)/2-10);ctx.stroke();
+    ctx.setLineDash([]);
+  }
+  ctx.font='700 10px "JetBrains Mono"';ctx.fillStyle=hexRgba(EMBER,0.8);ctx.textAlign='center';
+  ctx.fillText(G.mass.toFixed(1)+'kg',cx,topY+(h-10)/2+4);
+}
+
+function drawBall(cx,cy,r){
+  ctx.fillStyle='rgba(0,0,0,0.15)';ctx.beginPath();ctx.ellipse(cx+2,cy+r+2,r*0.7,3,0,0,Math.PI*2);ctx.fill();
+  var bg=ctx.createRadialGradient(cx-r*0.3,cy-r*0.3,0,cx,cy,r);
+  bg.addColorStop(0,'#E8C840');bg.addColorStop(0.7,'#C49B3C');bg.addColorStop(1,'#8B6914');
+  ctx.fillStyle=bg;ctx.beginPath();ctx.arc(cx,cy,r,0,Math.PI*2);ctx.fill();
+  ctx.strokeStyle=BRASS;ctx.lineWidth=1.5;ctx.beginPath();ctx.arc(cx,cy,r,0,Math.PI*2);ctx.stroke();
+  ctx.fillStyle='rgba(255,255,255,0.25)';ctx.beginPath();ctx.arc(cx-r*0.25,cy-r*0.25,r*0.18,0,Math.PI*2);ctx.fill();
+}
+
+function drawForceArrows(W,H,gY2,sc,oPx,alpha){
+  if(!G.applying&&!G.dragging)return;
+  var F=G.forceMag,theta=G.angle*Math.PI/180;
+  var aScale=1.5,oCY=gY2-G.objX*PX_M*Math.sin(alpha)-objH()/2;
+
+  if(G.dragging){
+    var dx=G.dragCX-G.dragSX,dy=G.dragCY-G.dragSY;
+    var dist=Math.sqrt(dx*dx+dy*dy);
+    if(dist>5){
+      var fSc=Math.min(dist*0.5,150),ang=Math.atan2(dy,dx);
+      var ex=oPx+Math.cos(ang)*fSc,ey=oCY+Math.sin(ang)*fSc;
+      drawArrow(oPx,oCY,ex,ey,'#FF6B35',3);
+      ctx.font='700 11px "JetBrains Mono"';ctx.fillStyle='#FF6B35';ctx.textAlign='center';
+      ctx.fillText((fSc/1.5).toFixed(0)+'N',(oPx+ex)/2,(oCY+ey)/2-10);
+    }
+  }else{
+    var isPush=(G.mode==='push'),sign=isPush?-1:1;
+    var sX=oPx+sign*(objW()/2+5);
+    var Fpx=F*Math.cos(theta)*aScale,Fpy=-F*Math.sin(theta)*aScale;
+    var col=isPush?'#FF6B35':'#35B5FF';
+    if(isPush){drawArrow(sX-Fpx,oCY-Fpy,sX,oCY,col,3)}
+    else{drawArrow(sX,oCY,sX+Fpx,oCY+Fpy,col,3)}
+    ctx.font='700 11px "JetBrains Mono"';ctx.fillStyle=col;ctx.textAlign='center';
+    var lx=isPush?sX-Fpx/2:sX+Fpx/2,ly=isPush?oCY-Fpy/2-10:oCY+Fpy/2-10;
+    ctx.fillText(F.toFixed(0)+'N',lx,ly);
+  }
+
+  if(Math.abs(G.frictionForce)>0.1){
+    var fLen=Math.min(Math.abs(G.frictionForce)*aScale,100);
+    var fDir=-Math.sign(G.frictionForce);
+    var baseFY=gY2-G.objX*PX_M*Math.sin(alpha)-3;
+    drawArrow(oPx,baseFY,oPx+fDir*fLen,baseFY,'#FF4444',2);
+    ctx.font='10px "JetBrains Mono"';ctx.fillStyle='#FF4444';ctx.textAlign='center';
+    ctx.fillText('f='+Math.abs(G.frictionForce).toFixed(1)+'N',oPx+fDir*fLen/2,baseFY-8);
+  }
+}
+
+function drawArrow(x1,y1,x2,y2,col,w){
+  var dx=x2-x1,dy=y2-y1,len=Math.sqrt(dx*dx+dy*dy);
+  if(len<3)return;
+  ctx.strokeStyle=col;ctx.fillStyle=col;ctx.lineWidth=w;ctx.lineCap='round';
+  ctx.beginPath();ctx.moveTo(x1,y1);ctx.lineTo(x2,y2);ctx.stroke();
+  var hl=Math.min(12,len*0.3),a=Math.atan2(dy,dx);
+  ctx.beginPath();ctx.moveTo(x2,y2);
+  ctx.lineTo(x2-hl*Math.cos(a-0.4),y2-hl*Math.sin(a-0.4));
+  ctx.lineTo(x2-hl*Math.cos(a+0.4),y2-hl*Math.sin(a+0.4));
+  ctx.closePath();ctx.fill();
+}
+
+function drawDragLine(){
+  ctx.setLineDash([5,5]);ctx.strokeStyle=hexRgba(SPARK,0.4);ctx.lineWidth=1;
+  ctx.beginPath();ctx.moveTo(G.dragSX,G.dragSY);ctx.lineTo(G.dragCX,G.dragCY);ctx.stroke();
+  ctx.setLineDash([]);
+}
+
+function drawParticles(){
+  for(var i=0;i<G.particles.length;i++){
+    var p=G.particles[i],a=1-p.age/p.life;
+    if(a>0){
+      var px=p.x+p.vx*p.age,py=p.y+p.vy*p.age+180*p.age*p.age;
+      ctx.fillStyle=hexRgba(p.c,a);ctx.beginPath();
+      ctx.arc(px,py,Math.max(EPS,p.sz*a),0,Math.PI*2);ctx.fill();
+    }
+  }
+}
+
+function drawFBD(W,H){
+  var fbW=145,fbH=125,fbX=W-fbW-15,fbY=60;
+  ctx.fillStyle='rgba(21,21,37,0.88)';ctx.strokeStyle=hexRgba(BRASS,0.3);ctx.lineWidth=1;
+  rRect(fbX,fbY,fbW,fbH,6);ctx.fill();rRect(fbX,fbY,fbW,fbH,6);ctx.stroke();
+  ctx.font='700 9px "JetBrains Mono"';ctx.fillStyle=hexRgba(FORGE,0.8);ctx.textAlign='left';
+  ctx.fillText(G.lang==='zh'?'自由体图':'FBD',fbX+8,fbY+14);
+  var cx=fbX+fbW/2,cy=fbY+fbH/2+8;
+  ctx.fillStyle=hexRgba(BRASS,0.35);ctx.fillRect(cx-10,cy-10,20,20);
+  ctx.strokeStyle=BRASS;ctx.lineWidth=1;ctx.strokeRect(cx-10,cy-10,20,20);
+  var aL=28,m=G.mass,F=G.forceMag;
+  drawArrow(cx,cy+10,cx,cy+10+aL,'#FF4444',1.5);
+  ctx.font='9px "JetBrains Mono"';ctx.fillStyle='#FF4444';ctx.textAlign='left';ctx.fillText('W',cx+5,cy+10+aL-2);
+  var nL=aL*clamp(G.normalForce/(m*GRAVITY),0.1,1.2);
+  drawArrow(cx,cy-10,cx,cy-10-nL,'#44FF44',1.5);
+  ctx.fillStyle='#44FF44';ctx.fillText('N',cx+5,cy-10-nL+4);
+  if(G.applying||G.dragging){
+    var isPush=(G.mode==='push'),fc=isPush?'#FF6B35':'#35B5FF';
+    var fA=G.dragging?Math.atan2(G.dragCY-G.dragSY,G.dragCX-G.dragSX):-G.angle*Math.PI/180;
+    var fL=aL*clamp(F/120,0.1,1);
+    if(G.dragging){var dd=Math.sqrt(Math.pow(G.dragCX-G.dragSX,2)+Math.pow(G.dragCY-G.dragSY,2));fL=aL*clamp(dd/120,0.1,1)}
+    var fsx=isPush?cx-10:cx+10;
+    drawArrow(fsx,cy,fsx+Math.cos(fA)*fL,cy+Math.sin(fA)*fL,fc,1.5);
+    ctx.fillStyle=fc;ctx.fillText('F',fsx+Math.cos(fA)*fL+5,cy+Math.sin(fA)*fL);
+  }
+  if(Math.abs(G.frictionForce)>0.1){
+    var fD=-Math.sign(G.frictionForce);
+    var fL2=aL*clamp(Math.abs(G.frictionForce)/(m*GRAVITY),0.1,1);
+    drawArrow(cx+fD*10,cy+3,cx+fD*(10+fL2),cy+3,'#FFAA00',1.5);
+    ctx.fillStyle='#FFAA00';ctx.fillText('f',cx+fD*(10+fL2)+(fD>0?5:-10),cy);
+  }
+}
+
+function drawGear(cx,cy,r,teeth,ang){
+  ctx.save();ctx.translate(cx,cy);ctx.rotate(ang*Math.PI/180);
+  ctx.beginPath();
+  var step=Math.PI*2/teeth;
+  for(var i=0;i<teeth;i++){
+    var a1=i*step,a2=a1+step*0.3,a3=a1+step*0.5,a4=a1+step*0.8;
+    ctx.lineTo(Math.cos(a1)*r,Math.sin(a1)*r);
+    ctx.lineTo(Math.cos(a2)*(r+5),Math.sin(a2)*(r+5));
+    ctx.lineTo(Math.cos(a3)*(r+5),Math.sin(a3)*(r+5));
+    ctx.lineTo(Math.cos(a4)*r,Math.sin(a4)*r);
+  }
+  ctx.closePath();ctx.strokeStyle=hexRgba(BRASS,0.2);ctx.lineWidth=1.5;ctx.stroke();
+  ctx.beginPath();ctx.arc(0,0,r*0.3,0,Math.PI*2);ctx.strokeStyle=hexRgba(BRASS,0.12);ctx.stroke();
+  ctx.restore();
+}
+
+function updateData(){
+  var el=document.getElementById('data-display');
+  if(!el)return;
+  var l=G.lang;
+  el.innerHTML='<div>'+(l==='zh'?'加速度':'a')+' = '+G.accel.toFixed(2)+' m/s²</div>'+
+    '<div>'+(l==='zh'?'速度':'v')+' = '+G.velocity.toFixed(2)+' m/s</div>'+
+    '<div>'+(l==='zh'?'位移':'x')+' = '+G.displacement.toFixed(2)+' m</div>'+
+    '<div>'+(l==='zh'?'合力':'F_net')+' = '+G.netForce.toFixed(1)+' N</div>'+
+    '<div>'+(l==='zh'?'摩擦力':'f')+' = '+G.frictionForce.toFixed(1)+' N</div>';
+}
+
+function setupInput(){
+  canvas.addEventListener('mousedown',onDown);
+  canvas.addEventListener('mousemove',onMove);
+  canvas.addEventListener('mouseup',onUp);
+  canvas.addEventListener('mouseleave',onUp);
+  canvas.addEventListener('touchstart',function(e){e.preventDefault();var t=e.touches[0];onDown({clientX:t.clientX,clientY:t.clientY})},{passive:false});
+  canvas.addEventListener('touchmove',function(e){e.preventDefault();var t=e.touches[0];onMove({clientX:t.clientX,clientY:t.clientY})},{passive:false});
+  canvas.addEventListener('touchend',function(e){e.preventDefault();onUp()},{passive:false});
+
+  var sBtns=document.querySelectorAll('#scene-list button');
+  sBtns.forEach(function(btn){
+    btn.addEventListener('click',function(){
+      G.sceneIdx=parseInt(this.getAttribute('data-idx'));
+      resetObj();
+      sBtns.forEach(function(b){b.classList.remove('on')});
+      this.classList.add('on');
+    });
+  });
+
+  document.getElementById('mass-slider').addEventListener('input',function(){
+    G.mass=parseFloat(this.value);document.getElementById('mass-val').textContent=G.mass.toFixed(1)+' kg';
+  });
+  document.getElementById('friction-slider').addEventListener('input',function(){
+    G.mu=parseFloat(this.value)/100;document.getElementById('friction-val').textContent=G.mu.toFixed(2);
+  });
+  document.getElementById('btn-push').addEventListener('click',function(){
+    G.mode='push';this.classList.add('on');document.getElementById('btn-pull').classList.remove('on');
+  });
+  document.getElementById('btn-pull').addEventListener('click',function(){
+    G.mode='pull';this.classList.add('on');document.getElementById('btn-push').classList.remove('on');
+  });
+  document.getElementById('angle-slider').addEventListener('input',function(){
+    G.angle=parseFloat(this.value);document.getElementById('angle-val').textContent=G.angle+'°';
+  });
+  document.getElementById('force-slider').addEventListener('input',function(){
+    G.forceMag=parseFloat(this.value);document.getElementById('force-val').textContent=G.forceMag+' N';
+  });
+
+  var applyBtn=document.getElementById('btn-apply');
+  applyBtn.addEventListener('mousedown',function(){G.applying=true;hideHint()});
+  applyBtn.addEventListener('mouseup',function(){G.applying=false});
+  applyBtn.addEventListener('mouseleave',function(){G.applying=false});
+  applyBtn.addEventListener('touchstart',function(e){e.preventDefault();G.applying=true;hideHint()},{passive:false});
+  applyBtn.addEventListener('touchend',function(e){e.preventDefault();G.applying=false},{passive:false});
+
+  document.getElementById('btn-reset').addEventListener('click',function(){resetObj()});
+  document.getElementById('btn-lang').addEventListener('click',function(){G.lang=(G.lang==='zh')?'en':'zh';updateI18n()});
+
+  document.addEventListener('keydown',function(e){
+    if(e.code==='Space'){e.preventDefault();G.applying=true;hideHint()}
+  });
+  document.addEventListener('keyup',function(e){
+    if(e.code==='Space'){G.applying=false}
+  });
+
+  window.addEventListener('resize',resize);
+}
+
+function onDown(e){
+  var rect=canvas.getBoundingClientRect(),mx=e.clientX-rect.left,my=e.clientY-rect.top;
+  var gY2=groundY(),sc=scenes[G.sceneIdx],alpha=sc.incline*Math.PI/180;
+  var oPx=canvas.width*0.45+G.objX*PX_M;
+  var oCy=gY2-G.objX*PX_M*Math.sin(alpha)-objH()/2;
+  var dist=Math.sqrt((mx-oPx)*(mx-oPx)+(my-oCy)*(my-oCy));
+  if(dist<70){
+    G.dragging=true;G.dragSX=mx;G.dragSY=my;G.dragCX=mx;G.dragCY=my;G.dragFX=0;G.dragFY=0;
+    hideHint();
+  }
+}
+
+function onMove(e){
+  if(!G.dragging)return;
+  var rect=canvas.getBoundingClientRect();
+  G.dragCX=e.clientX-rect.left;G.dragCY=e.clientY-rect.top;
+  var dx=G.dragCX-G.dragSX,dy=G.dragCY-G.dragSY;
+  G.dragFX=dx*0.8;G.dragFY=dy*0.8;
+}
+
+function onUp(){G.dragging=false;G.dragFX=0;G.dragFY=0}
+
+function hideHint(){
+  if(G.hintShown){
+    G.hintShown=false;
+    var h=document.getElementById('hint');
+    if(h){h.style.animation='fadeOut 0.5s forwards';setTimeout(function(){if(h.parentNode)h.parentNode.removeChild(h)},600)}
+  }
+}
+
+function updateI18n(){
+  var l=G.lang;
+  document.querySelectorAll('[data-zh]').forEach(function(el){
+    var zh=el.getAttribute('data-zh'),en=el.getAttribute('data-en');
+    if(zh&&en)el.textContent=(l==='zh')?zh:en;
+  });
+}
+
+function loop(t){
+  if(!G.lastTime)G.lastTime=t;
+  var dt=(t-G.lastTime)/1000;G.lastTime=t;
+  dt=Math.min(dt,0.05);
+  stepPhysics(dt);drawFrame();
+  requestAnimationFrame(loop);
+}
+
+function init(){
+  resize();resetObj();setupInput();updateI18n();
+  requestAnimationFrame(loop);
+}
+
+init();
+})();
+</script>
+</body>
+</html>

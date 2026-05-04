@@ -1,0 +1,985 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pixi.js/7.3.2/pixi.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=Noto+Sans+SC:wght@400;700&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box;}
+html,body{width:100%;height:100vh;overflow:hidden;background:#0c0e14;color:#f6f6fc;font-family:'Noto Sans SC','Inter',sans-serif;}
+.game-wrap{display:flex;flex-direction:row;height:100vh;overflow:hidden;}
+.game-sidebar{width:200px;min-width:200px;max-width:200px;display:flex;flex-direction:column;gap:8px;padding:10px;background:rgba(0,0,0,0.5);border-right:1px solid rgba(80,255,176,0.15);overflow-y:auto;}
+.sidebar-lang{align-self:flex-start;flex-shrink:0;font-family:'Space Grotesk',sans-serif;font-size:11px;font-weight:700;padding:4px 10px;cursor:pointer;border:1px solid rgba(255,181,156,0.3);background:transparent;color:#ffb59c;letter-spacing:1px;}
+.sidebar-lang:hover{border-color:#ffb59c;background:rgba(255,181,156,0.1);}
+.sidebar-btns{display:flex;gap:6px;align-self:flex-start;}
+.sidebar-sound{flex-shrink:0;font-family:'Space Grotesk',sans-serif;font-size:11px;font-weight:700;padding:4px 10px;cursor:pointer;border:1px solid rgba(255,181,156,0.3);background:transparent;color:#ffb59c;letter-spacing:1px;}
+.sidebar-sound:hover{border-color:#ffb59c;background:rgba(255,181,156,0.1);}
+.sidebar-title{font-family:'Space Grotesk',sans-serif;font-size:11px;font-weight:700;color:#50ffb0;letter-spacing:0.08em;text-transform:uppercase;margin-top:4px;}
+.sidebar-guide{font-size:12px;color:#aaabb0;line-height:1.6;}
+.game-main{flex:1;display:flex;flex-direction:column;min-width:0;}
+.game-header{padding:8px 16px;display:flex;justify-content:space-between;align-items:center;background:rgba(0,0,0,0.4);}
+.game-header h1{font-family:'Space Grotesk',sans-serif;font-size:clamp(13px,2vw,17px);font-weight:700;color:#50ffb0;}
+.game-header .info{font-family:'Space Grotesk',sans-serif;font-size:12px;color:#aaabb0;}
+.game-body{flex:1;display:flex;flex-direction:column;min-height:0;}
+.game-body canvas{width:100%!important;height:100%!important;display:block;}
+.control-panel{display:flex;justify-content:center;align-items:center;gap:12px;padding:8px 16px;background:rgba(0,0,0,0.4);flex-wrap:wrap;}
+.slider-group{display:flex;flex-direction:column;align-items:center;gap:2px;}
+.slider-label{font-family:'Space Grotesk',sans-serif;font-size:10px;color:#aaabb0;letter-spacing:0.08em;text-transform:uppercase;}
+.slider-val{font-family:'Space Grotesk',sans-serif;font-size:13px;font-weight:700;color:#50ffb0;}
+.ctrl-slider{width:140px;accent-color:#50ffb0;cursor:pointer;}
+.ctrl-btn{font-family:'Space Grotesk',sans-serif;font-size:12px;font-weight:700;padding:6px 16px;border:none;cursor:pointer;color:#0c0e12;background:linear-gradient(135deg,#50ffb0,#17df93);box-shadow:0 0 10px rgba(80,255,176,0.3);transition:transform 0.1s;}
+.ctrl-btn:hover{transform:scale(1.04);}
+.ctrl-btn:active{transform:scale(0.96);}
+.ctrl-btn:disabled{opacity:0.4;cursor:default;transform:none;}
+.ctrl-btn.secondary{background:rgba(30,30,45,0.9);color:#aaabb0;box-shadow:none;}
+.ctrl-btn.secondary:hover{color:#50ffb0;}
+.hud-bar{height:44px;display:flex;align-items:center;justify-content:space-around;background:rgba(0,0,0,0.55);padding:0 16px;}
+.hud-item{text-align:center;}
+.hud-label{font-family:'Space Grotesk',sans-serif;font-size:9px;letter-spacing:0.12em;color:#aaabb0;text-transform:uppercase;}
+.hud-val{font-family:'Space Grotesk',sans-serif;font-size:14px;font-weight:700;color:#50ffb0;transition:transform 0.15s;}
+</style>
+</head>
+<body>
+<div class="game-wrap">
+  <div class="game-sidebar">
+    <div class="sidebar-btns">
+      <button class="sidebar-lang" id="langBtn">CN</button>
+      <button class="sidebar-sound" id="soundBtn">MUTE</button>
+    </div>
+    <div class="sidebar-title" id="sidebarTitle"></div>
+    <div class="sidebar-guide" id="guideContent"></div>
+  </div>
+  <div class="game-main">
+    <div class="game-header">
+      <h1 id="gameTitle"></h1>
+      <div class="info" id="roundInfo"></div>
+    </div>
+    <div class="game-body" id="gameBody"></div>
+    <div class="control-panel" id="controlPanel">
+      <div class="slider-group">
+        <div class="slider-label" id="canopyLabel">CANOPY</div>
+        <input type="range" class="ctrl-slider" id="canopySlider" min="1" max="10" step="0.5" value="5">
+        <div class="slider-val" id="canopyVal">5.0m</div>
+      </div>
+      <div class="slider-group">
+        <div class="slider-label" id="lineLabel">LINES</div>
+        <input type="range" class="ctrl-slider" id="lineSlider" min="1" max="8" step="0.5" value="4">
+        <div class="slider-val" id="lineVal">4.0m</div>
+      </div>
+      <button class="ctrl-btn" id="btnLaunch"></button>
+      <button class="ctrl-btn secondary" id="btnReset"></button>
+    </div>
+    <div class="hud-bar">
+      <div class="hud-item"><div class="hud-label" id="hudL1"></div><div class="hud-val" id="hudV1">--</div></div>
+      <div class="hud-item"><div class="hud-label" id="hudL2"></div><div class="hud-val" id="hudV2">--</div></div>
+      <div class="hud-item"><div class="hud-label" id="hudL3"></div><div class="hud-val" id="hudV3">--</div></div>
+      <div class="hud-item"><div class="hud-label" id="hudL4"></div><div class="hud-val" id="hudV4">--</div></div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ============================================================
+// Knode 14 Game v2: Parachute Designer (PixiJS v7 Neon Synthwave)
+//
+// Design a parachute (canopy diameter + line length) to safely
+// land a capsule. Real drag physics, 5 levels, particles,
+// parallax starfield, screen shake, Web Audio synth sounds.
+// Rendering via PixiJS v7 (PIXI.Graphics, PIXI.Text, ticker).
+// ============================================================
+
+// --- I18N ---
+var I18N = {
+  title:       {en:'PARACHUTE DESIGNER', cn:'\u964d\u843d\u4f1e\u8bbe\u8ba1\u5e08'},
+  guide:       {en:'Design a parachute to safely land the capsule. Adjust canopy diameter and line length, then launch! Landing speed must be under 8 m/s. Smaller canopy = more points if you still land safely.', cn:'\u8bbe\u8ba1\u964d\u843d\u4f1e\u8ba9\u8fd4\u56de\u8231\u5b89\u5168\u7740\u9646\u3002\u8c03\u6574\u4f1e\u9762\u76f4\u5f84\u548c\u7ef3\u957f\uff0c\u7136\u540e\u53d1\u5c04\uff01\u7740\u9646\u901f\u5ea6\u5fc5\u987b\u4f4e\u4e8e 8 m/s\u3002\u4f1e\u8d8a\u5c0f\u5206\u8d8a\u9ad8\u2014\u2014\u4f46\u5fc5\u987b\u5b89\u5168\u7740\u9646\u3002'},
+  launch:      {en:'LAUNCH', cn:'\u53d1\u5c04'},
+  reset:       {en:'RESTART', cn:'\u91cd\u65b0\u5f00\u59cb'},
+  level:       {en:'Level', cn:'\u5173\u5361'},
+  altitude:    {en:'ALTITUDE', cn:'\u6d77\u62d4'},
+  velocity:    {en:'SPEED', cn:'\u901f\u5ea6'},
+  landSpeed:   {en:'LAND SPD', cn:'\u7740\u9646\u901f\u5ea6'},
+  score:       {en:'SCORE', cn:'\u5f97\u5206'},
+  canopy:      {en:'CANOPY', cn:'\u4f1e\u9762'},
+  lines:       {en:'LINES', cn:'\u7ef3\u957f'},
+  mass:        {en:'MASS', cn:'\u8d28\u91cf'},
+  wind:        {en:'Wind', cn:'\u98ce\u901f'},
+  safe:        {en:'SAFE LANDING!', cn:'\u5b89\u5168\u7740\u9646\uff01'},
+  perfect:     {en:'PERFECT!', cn:'\u5b8c\u7f8e\uff01'},
+  crash:       {en:'CRASH! Too fast!', cn:'\u574f\u4e86\uff01\u901f\u5ea6\u592a\u5feb\uff01'},
+  rough:       {en:'Rough landing!', cn:'\u7740\u9646\u8f83\u786c\uff01'},
+  clickStart:  {en:'Click to Start', cn:'\u70b9\u51fb\u5f00\u59cb'},
+  gameName1:   {en:'PARACHUTE', cn:'\u964d\u843d\u4f1e'},
+  gameName2:   {en:'DESIGNER', cn:'\u8bbe\u8ba1\u5e08'},
+  complete:    {en:'ALL LEVELS COMPLETE!', cn:'\u5168\u90e8\u901a\u5173\uff01'},
+  totalScore:  {en:'Total Score', cn:'\u603b\u5206'},
+  insight:     {en:'Canopy area controls terminal velocity. Bigger canopy = more drag = slower descent!', cn:'\u4f1e\u9762\u9762\u79ef\u51b3\u5b9a\u7ec8\u7aef\u901f\u5ea6\u3002\u4f1e\u8d8a\u5927 = \u963b\u529b\u8d8a\u5927 = \u4e0b\u964d\u8d8a\u6162\uff01'},
+};
+
+var lang = 'cn';
+function t(key) { return I18N[key] ? (I18N[key][lang] || I18N[key].en) : key; }
+
+// --- Audio (Web Audio API synth, default muted) ---
+var audioCtx = null;
+var soundMuted = true;
+function getAudio() {
+  if (!audioCtx) {
+    try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch(e) {}
+  }
+  return audioCtx;
+}
+function playTone(freq, dur, type, vol) {
+  if (soundMuted) return;
+  var ac = getAudio();
+  if (!ac) return;
+  try {
+    var osc = ac.createOscillator();
+    var gain = ac.createGain();
+    osc.type = type || 'sine';
+    osc.frequency.value = freq;
+    gain.gain.value = vol || 0.15;
+    gain.gain.exponentialRampToValueAtTime(0.001, ac.currentTime + dur);
+    osc.connect(gain); gain.connect(ac.destination);
+    osc.start(ac.currentTime); osc.stop(ac.currentTime + dur);
+  } catch(e) {}
+}
+function sndDeploy() { playTone(880,0.15,'sine',0.12); setTimeout(function(){playTone(1100,0.2,'sine',0.1);},80); }
+function sndLand() { playTone(523,0.2,'triangle',0.15); setTimeout(function(){playTone(659,0.15,'triangle',0.12);},100); setTimeout(function(){playTone(784,0.25,'triangle',0.1);},200); }
+function sndCrash() { playTone(120,0.4,'sawtooth',0.2); playTone(80,0.5,'square',0.1); }
+function sndClick() { playTone(660,0.08,'sine',0.08); }
+
+// --- Easing ---
+function easeOutCubic(x) { return 1 - Math.pow(1-x, 3); }
+
+// --- Levels ---
+var LEVELS = [
+  {mass:50,  startAlt:500,  windSpeed:0},
+  {mass:80,  startAlt:700,  windSpeed:0},
+  {mass:120, startAlt:900,  windSpeed:0},
+  {mass:160, startAlt:1000, windSpeed:2},
+  {mass:200, startAlt:1200, windSpeed:4},
+];
+
+// --- Physics ---
+var G = 9.81, RHO = 1.225, CD_CHUTE = 1.3, CD_BODY = 0.4;
+var BODY_AREA = 0.8, SAFE_SPEED = 8.0, CRASH_SPEED = 14.0, SIM_DT = 1/60;
+
+// --- Stars (parallax) ---
+var stars = [];
+function initStars(sw, sh) {
+  stars = [];
+  for (var i = 0; i < 120; i++) {
+    stars.push({
+      x: Math.random() * sw,
+      y: Math.random() * sh * 0.85,
+      baseY: 0,
+      sz: 0.4 + Math.random() * 1.6,
+      layer: i < 80 ? 0 : 1,
+      phase: Math.random() * Math.PI * 2,
+      speed: 0.5 + Math.random() * 2,
+      alpha: 0.3 + Math.random() * 0.5,
+    });
+    stars[i].baseY = stars[i].y;
+  }
+}
+
+// --- Game state ---
+var gs = {
+  phase: 'title',    // title, design, falling, result, complete
+  level: 0,
+  canopyDiam: 5.0,
+  lineLen: 4.0,
+  altitude: 500,
+  velY: 0, velX: 0, posX: 0,
+  chuteDeployed: false,
+  chuteOpenProg: 0,
+  scores: [],
+  totalScore: 0,
+  resultMsg: '', resultScore: 0, landingSpeed: 0,
+  shakeTime: 0, shakeIntensity: 0,
+  bobPhase: 0,
+  particles: [],
+  trail: [],
+  trailTimer: 0,
+  time: 0,
+};
+
+// --- PixiJS setup ---
+var cw = 100, ch = 100;
+var app = new PIXI.Application({
+  backgroundAlpha: 0,
+  antialias: true,
+  resolution: Math.min(window.devicePixelRatio || 1, 2),
+  autoDensity: true,
+});
+
+var gameBody = document.getElementById('gameBody');
+gameBody.appendChild(app.view);
+
+// Layers (containers)
+var skyLayer = new PIXI.Container();
+var starsLayer = new PIXI.Container();
+var scaleLayer = new PIXI.Container();
+var groundLayer = new PIXI.Container();
+var windLayer = new PIXI.Container();
+var trailLayer = new PIXI.Container();
+var capsuleLayer = new PIXI.Container();
+var particleLayer = new PIXI.Container();
+var overlayLayer = new PIXI.Container();
+app.stage.addChild(skyLayer, starsLayer, scaleLayer, groundLayer, windLayer, trailLayer, capsuleLayer, particleLayer, overlayLayer);
+
+// Reusable graphics objects
+var skyGfx = new PIXI.Graphics();
+skyLayer.addChild(skyGfx);
+
+var starsGfx = new PIXI.Graphics();
+starsLayer.addChild(starsGfx);
+
+var groundGfx = new PIXI.Graphics();
+groundLayer.addChild(groundGfx);
+
+var scaleGfx = new PIXI.Graphics();
+scaleLayer.addChild(scaleGfx);
+
+var windGfx = new PIXI.Graphics();
+windLayer.addChild(windGfx);
+
+var windText = new PIXI.Text('', {
+  fontFamily: "'Space Grotesk', sans-serif",
+  fontSize: 9,
+  fill: 0xff00ff,
+  align: 'center',
+});
+windText.anchor.set(0.5, 0);
+windLayer.addChild(windText);
+
+var trailGfx = new PIXI.Graphics();
+trailLayer.addChild(trailGfx);
+
+var capsuleGfx = new PIXI.Graphics();
+capsuleLayer.addChild(capsuleGfx);
+
+var particleGfx = new PIXI.Graphics();
+particleLayer.addChild(particleGfx);
+
+// Overlay texts
+var titleText1 = new PIXI.Text('', {
+  fontFamily: "'Space Grotesk', sans-serif",
+  fontSize: 36,
+  fontWeight: 'bold',
+  fill: 0x50ffb0,
+  align: 'center',
+});
+titleText1.anchor.set(0.5, 0.5);
+overlayLayer.addChild(titleText1);
+
+var titleText2 = new PIXI.Text('', {
+  fontFamily: "'Space Grotesk', sans-serif",
+  fontSize: 36,
+  fontWeight: 'bold',
+  fill: 0x50ffb0,
+  align: 'center',
+});
+titleText2.anchor.set(0.5, 0.5);
+overlayLayer.addChild(titleText2);
+
+var clickStartText = new PIXI.Text('', {
+  fontFamily: "'Noto Sans SC', sans-serif",
+  fontSize: 16,
+  fill: 0xaaabb0,
+  align: 'center',
+});
+clickStartText.anchor.set(0.5, 0.5);
+overlayLayer.addChild(clickStartText);
+
+var titleGlowGfx = new PIXI.Graphics();
+overlayLayer.addChildAt(titleGlowGfx, 0);
+
+var resultMsgText = new PIXI.Text('', {
+  fontFamily: "'Space Grotesk', 'Noto Sans SC', sans-serif",
+  fontSize: 22,
+  fontWeight: 'bold',
+  fill: 0x50ffb0,
+  align: 'center',
+});
+resultMsgText.anchor.set(0.5, 0.5);
+overlayLayer.addChild(resultMsgText);
+
+var resultScoreText = new PIXI.Text('', {
+  fontFamily: "'Space Grotesk', sans-serif",
+  fontSize: 18,
+  fill: 0xffffff,
+  align: 'center',
+});
+resultScoreText.anchor.set(0.5, 0.5);
+overlayLayer.addChild(resultScoreText);
+
+var resultSpeedText = new PIXI.Text('', {
+  fontFamily: "'Space Grotesk', 'Noto Sans SC', sans-serif",
+  fontSize: 13,
+  fill: 0xaaabb0,
+  align: 'center',
+});
+resultSpeedText.anchor.set(0.5, 0.5);
+overlayLayer.addChild(resultSpeedText);
+
+var completeTitle = new PIXI.Text('', {
+  fontFamily: "'Space Grotesk', 'Noto Sans SC', sans-serif",
+  fontSize: 24,
+  fontWeight: 'bold',
+  fill: 0x50ffb0,
+  align: 'center',
+});
+completeTitle.anchor.set(0.5, 0.5);
+overlayLayer.addChild(completeTitle);
+
+var completeTotalText = new PIXI.Text('', {
+  fontFamily: "'Space Grotesk', 'Noto Sans SC', sans-serif",
+  fontSize: 20,
+  fill: 0xffb59c,
+  align: 'center',
+});
+completeTotalText.anchor.set(0.5, 0.5);
+overlayLayer.addChild(completeTotalText);
+
+var completeInsightText = new PIXI.Text('', {
+  fontFamily: "'Noto Sans SC', sans-serif",
+  fontSize: 13,
+  fill: 0xaaabb0,
+  align: 'center',
+  wordWrap: true,
+  wordWrapWidth: 400,
+});
+completeInsightText.anchor.set(0.5, 0.5);
+overlayLayer.addChild(completeInsightText);
+
+// Altitude scale texts
+var scaleTexts = [];
+function ensureScaleTexts(count) {
+  while (scaleTexts.length < count) {
+    var st = new PIXI.Text('', {
+      fontFamily: "'Space Grotesk', sans-serif",
+      fontSize: 10,
+      fill: 0xffffff,
+      alpha: 0.2,
+    });
+    st.anchor.set(1, 0.5);
+    scaleLayer.addChild(st);
+    scaleTexts.push(st);
+  }
+}
+
+// --- Resize ---
+function resize() {
+  var rect = gameBody.getBoundingClientRect();
+  cw = rect.width; ch = rect.height;
+  if (cw < 1 || ch < 1) return;
+  app.renderer.resize(cw, ch);
+  initStars(cw, ch);
+}
+
+var ro = new ResizeObserver(function() { resize(); });
+ro.observe(gameBody);
+resize();
+
+// --- Coordinate mapping ---
+function groundY() { return ch * 0.88; }
+function topY() { return ch * 0.05; }
+function maxAlt() { return LEVELS[gs.level] ? LEVELS[gs.level].startAlt : 500; }
+function altToY(alt) { return groundY() - (alt / maxAlt()) * (groundY() - topY()); }
+function posToX(px) { return cw * 0.5 + px * 0.3; }
+
+// --- Drawing: Sky + Stars ---
+function drawSky() {
+  skyGfx.clear();
+  // Gradient sky via multiple bands
+  var bands = [
+    {y0: 0, y1: ch*0.25, c: 0x050710},
+    {y0: ch*0.25, y1: ch*0.5, c: 0x0a0f1e},
+    {y0: ch*0.5, y1: ch*0.85, c: 0x101a20},
+    {y0: ch*0.85, y1: ch, c: 0x1a2a20},
+  ];
+  for (var i = 0; i < bands.length; i++) {
+    var b = bands[i];
+    skyGfx.beginFill(b.c, 1);
+    skyGfx.drawRect(0, b.y0, cw, b.y1 - b.y0);
+    skyGfx.endFill();
+  }
+
+  // Stars with parallax + twinkle
+  starsGfx.clear();
+  var altFrac = gs.altitude / maxAlt();
+  for (var j = 0; j < stars.length; j++) {
+    var s = stars[j];
+    s.phase += s.speed * 0.02;
+    var a = s.alpha * (0.5 + Math.sin(s.phase) * 0.5);
+    var parallax = s.layer === 0 ? 0.02 : 0.05;
+    var sy = s.baseY + altFrac * parallax * ch;
+    starsGfx.beginFill(0xffffff, a);
+    starsGfx.drawCircle(s.x, sy, s.sz);
+    starsGfx.endFill();
+  }
+}
+
+// --- Drawing: Ground + Pad ---
+function drawGround() {
+  groundGfx.clear();
+  var gy = groundY();
+
+  // Ground fill
+  groundGfx.beginFill(0x1a2a1a, 1);
+  groundGfx.drawRect(0, gy, cw, ch - gy);
+  groundGfx.endFill();
+
+  // Ground line
+  groundGfx.lineStyle(2, 0x50ffb0, 0.6);
+  groundGfx.moveTo(0, gy);
+  groundGfx.lineTo(cw, gy);
+
+  // Landing pad
+  var padW = 60, padX = cw/2 - padW/2;
+  groundGfx.lineStyle(0);
+  groundGfx.beginFill(0x50ffb0, 0.15);
+  groundGfx.drawRect(padX, gy, padW, 6);
+  groundGfx.endFill();
+
+  groundGfx.lineStyle(1, 0x50ffb0, 0.4);
+  groundGfx.moveTo(padX, gy+3);
+  groundGfx.lineTo(padX+padW, gy+3);
+
+  // Target cross
+  groundGfx.lineStyle(1, 0x50ffb0, 0.25);
+  groundGfx.moveTo(cw/2, gy+1);
+  groundGfx.lineTo(cw/2, gy+5);
+  groundGfx.moveTo(cw/2-8, gy+3);
+  groundGfx.lineTo(cw/2+8, gy+3);
+}
+
+// --- Drawing: Altitude scale ---
+function drawAltScale() {
+  scaleGfx.clear();
+  var ma = maxAlt();
+  var numLines = Math.floor(ma / 200) + 1;
+  ensureScaleTexts(numLines);
+
+  // Hide all first
+  for (var k = 0; k < scaleTexts.length; k++) scaleTexts[k].visible = false;
+
+  scaleGfx.lineStyle(1, 0xffffff, 0.06);
+  var idx = 0;
+  for (var a = 0; a <= ma; a += 200) {
+    var sy = altToY(a);
+    scaleGfx.moveTo(0, sy);
+    scaleGfx.lineTo(cw, sy);
+
+    if (idx < scaleTexts.length) {
+      scaleTexts[idx].text = a + 'm';
+      scaleTexts[idx].x = 42;
+      scaleTexts[idx].y = sy;
+      scaleTexts[idx].visible = true;
+      scaleTexts[idx].alpha = 0.2;
+    }
+    idx++;
+  }
+}
+
+// --- Drawing: Wind arrow ---
+function drawWind() {
+  windGfx.clear();
+  windText.visible = false;
+  var lv = LEVELS[gs.level];
+  if (!lv || lv.windSpeed <= 0 || gs.phase === 'title') return;
+  var wx = cw - 60, wy = 30, arrowLen = lv.windSpeed * 6;
+
+  windGfx.lineStyle(2, 0xff00ff, 0.6);
+  windGfx.moveTo(wx-arrowLen/2, wy);
+  windGfx.lineTo(wx+arrowLen/2, wy);
+  windGfx.moveTo(wx+arrowLen/2, wy);
+  windGfx.lineTo(wx+arrowLen/2-6, wy-4);
+  windGfx.moveTo(wx+arrowLen/2, wy);
+  windGfx.lineTo(wx+arrowLen/2-6, wy+4);
+
+  windText.text = t('wind') + ' ' + lv.windSpeed + ' m/s';
+  windText.x = wx;
+  windText.y = wy + 6;
+  windText.visible = true;
+}
+
+// --- Drawing: Trail ---
+function drawTrail() {
+  trailGfx.clear();
+  for (var i = 0; i < gs.trail.length; i++) {
+    var d = gs.trail[i];
+    var a = Math.max(0, 1 - d.age / 5000);
+    if (a <= 0) continue;
+    trailGfx.beginFill(0x00ffff, a * 0.3);
+    trailGfx.drawCircle(d.x, d.y, 1.5);
+    trailGfx.endFill();
+  }
+}
+
+// --- Drawing: Capsule + Chute ---
+function drawCapsule() {
+  capsuleGfx.clear();
+  if (gs.phase === 'title') return;
+
+  var sy = altToY(gs.altitude);
+  var sx = posToX(gs.posX);
+
+  // Idle bob
+  if (gs.phase === 'design') sy += Math.sin(gs.bobPhase) * 3;
+
+  // Screen shake
+  var shX = 0, shY = 0;
+  if (gs.shakeTime > 0) {
+    var inten = gs.shakeIntensity * (gs.shakeTime / 200);
+    shX = (Math.random() - 0.5) * inten * 2;
+    shY = (Math.random() - 0.5) * inten * 2;
+  }
+  sx += shX; sy += shY;
+
+  // Chute
+  if (gs.chuteDeployed && gs.chuteOpenProg > 0) {
+    var prog = easeOutCubic(Math.min(gs.chuteOpenProg, 1));
+    var canopyR = (gs.canopyDiam / 2) * 6 * prog;
+    var lineH = gs.lineLen * 5 * prog;
+    var chuteTopY = sy - lineH;
+
+    // Suspension lines
+    capsuleGfx.lineStyle(1, 0xffffff, 0.35 * prog);
+    for (var i = 0; i < 6; i++) {
+      var lx = sx - canopyR + (i / 5) * canopyR * 2;
+      capsuleGfx.moveTo(sx, sy);
+      capsuleGfx.lineTo(lx, chuteTopY);
+    }
+
+    // Canopy dome (half arc)
+    capsuleGfx.lineStyle(0);
+    capsuleGfx.beginFill(0x50ffb0, 0.4 * prog);
+    capsuleGfx.arc(sx, chuteTopY, canopyR, Math.PI, 0);
+    capsuleGfx.endFill();
+
+    // Canopy edge glow
+    capsuleGfx.lineStyle(2, 0x50ffb0, 0.7 * prog);
+    capsuleGfx.arc(sx, chuteTopY, canopyR, Math.PI, 0);
+
+    // Inner glow
+    capsuleGfx.lineStyle(0);
+    capsuleGfx.beginFill(0x50ffb0, 0.08 * prog);
+    capsuleGfx.drawCircle(sx, chuteTopY, canopyR * 0.7);
+    capsuleGfx.endFill();
+
+    // Panel lines on canopy
+    capsuleGfx.lineStyle(0.5, 0x50ffb0, 0.2 * prog);
+    for (var p = 1; p < 4; p++) {
+      var angle = Math.PI + (p / 4) * Math.PI;
+      var px = sx + Math.cos(angle) * canopyR;
+      var py = chuteTopY + Math.sin(angle) * canopyR;
+      capsuleGfx.moveTo(sx, chuteTopY - canopyR * 0.1);
+      capsuleGfx.lineTo(px, py);
+    }
+  }
+
+  // Capsule glow
+  capsuleGfx.lineStyle(0);
+  capsuleGfx.beginFill(0x00ffff, 0.08);
+  capsuleGfx.drawCircle(sx, sy + 8, 22);
+  capsuleGfx.endFill();
+
+  // Capsule body (trapezoid)
+  capsuleGfx.beginFill(0x00ffff, 0.9);
+  capsuleGfx.moveTo(sx - 10, sy);
+  capsuleGfx.lineTo(sx + 10, sy);
+  capsuleGfx.lineTo(sx + 7, sy + 16);
+  capsuleGfx.lineTo(sx - 7, sy + 16);
+  capsuleGfx.closePath();
+  capsuleGfx.endFill();
+
+  // Outline
+  capsuleGfx.lineStyle(1, 0x00ffff, 0.6);
+  capsuleGfx.moveTo(sx - 10, sy);
+  capsuleGfx.lineTo(sx + 10, sy);
+  capsuleGfx.lineTo(sx + 7, sy + 16);
+  capsuleGfx.lineTo(sx - 7, sy + 16);
+  capsuleGfx.closePath();
+
+  // Heat shield
+  capsuleGfx.lineStyle(2, 0xff6644, 0.6);
+  capsuleGfx.moveTo(sx-8, sy+16);
+  capsuleGfx.lineTo(sx+8, sy+16);
+
+  // Window
+  capsuleGfx.lineStyle(0);
+  capsuleGfx.beginFill(0x88ffff, 0.5);
+  capsuleGfx.drawCircle(sx, sy+5, 3);
+  capsuleGfx.endFill();
+}
+
+// --- Drawing: Particles ---
+function drawParticles() {
+  particleGfx.clear();
+  for (var i = 0; i < gs.particles.length; i++) {
+    var p = gs.particles[i];
+    var a = p.life / p.maxLife;
+    if (a <= 0) continue;
+    var col = PIXI.utils.string2hex(p.color);
+    particleGfx.beginFill(col, a);
+    particleGfx.drawCircle(p.x, p.y, p.size * a);
+    particleGfx.endFill();
+  }
+}
+
+// --- Spawn particles ---
+function spawnDeploy() {
+  var sy = altToY(gs.altitude), sx = posToX(gs.posX);
+  for (var i = 0; i < 20; i++) {
+    var a = Math.random() * Math.PI * 2;
+    var sp = 1 + Math.random() * 3;
+    gs.particles.push({
+      x: sx, y: sy - 10,
+      vx: Math.cos(a) * sp, vy: Math.sin(a) * sp - 1,
+      life: 500, maxLife: 500,
+      size: 1 + Math.random() * 2,
+      color: Math.random() > 0.5 ? '#50ffb0' : '#00ffff',
+    });
+  }
+}
+
+function spawnLand(isCrash) {
+  var sx = posToX(gs.posX), gy = groundY();
+  var count = isCrash ? 30 : 15;
+  var col = isCrash ? '#ff00ff' : '#50ffb0';
+  for (var i = 0; i < count; i++) {
+    var a = -Math.PI*0.1 - Math.random()*Math.PI*0.8;
+    var sp = 1 + Math.random() * (isCrash ? 5 : 2.5);
+    gs.particles.push({
+      x: sx + (Math.random()-0.5)*20, y: gy,
+      vx: Math.cos(a)*sp*(Math.random()>0.5?1:-1), vy: Math.sin(a)*sp-1,
+      life: 600, maxLife: 600,
+      size: 1 + Math.random() * (isCrash ? 3 : 2),
+      color: col,
+    });
+  }
+}
+
+// --- Drawing: Title screen ---
+function drawTitle() {
+  titleGlowGfx.clear();
+  titleText1.visible = false;
+  titleText2.visible = false;
+  clickStartText.visible = false;
+  if (gs.phase !== 'title') return;
+
+  var cx = cw/2, cy = ch/2;
+
+  // Glow behind title
+  titleGlowGfx.beginFill(0x50ffb0, 0.03);
+  titleGlowGfx.drawCircle(cx, cy-10, 100);
+  titleGlowGfx.endFill();
+
+  titleText1.text = t('gameName1');
+  titleText1.x = cx;
+  titleText1.y = cy - 22;
+  titleText1.visible = true;
+
+  titleText2.text = t('gameName2');
+  titleText2.x = cx;
+  titleText2.y = cy + 22;
+  titleText2.visible = true;
+
+  // "Click to start" blinking
+  var blink = 0.4 + Math.sin(gs.time * 3) * 0.3;
+  clickStartText.text = t('clickStart');
+  clickStartText.x = cx;
+  clickStartText.y = cy + 70;
+  clickStartText.alpha = blink;
+  clickStartText.visible = true;
+}
+
+// --- Drawing: Result overlay ---
+function drawResult() {
+  resultMsgText.visible = false;
+  resultScoreText.visible = false;
+  resultSpeedText.visible = false;
+  completeTitle.visible = false;
+  completeTotalText.visible = false;
+  completeInsightText.visible = false;
+
+  if (gs.phase !== 'result' && gs.phase !== 'complete') return;
+  var cx = cw/2;
+
+  if (gs.phase === 'result') {
+    var isGood = gs.resultScore >= 40;
+    resultMsgText.style.fill = isGood ? 0x50ffb0 : 0xff4444;
+    resultMsgText.text = gs.resultMsg;
+    resultMsgText.x = cx;
+    resultMsgText.y = ch * 0.3;
+    resultMsgText.visible = true;
+
+    resultScoreText.text = '+' + gs.resultScore;
+    resultScoreText.x = cx;
+    resultScoreText.y = ch * 0.37;
+    resultScoreText.visible = true;
+
+    resultSpeedText.text = t('landSpeed') + ': ' + gs.landingSpeed.toFixed(1) + ' m/s';
+    resultSpeedText.x = cx;
+    resultSpeedText.y = ch * 0.43;
+    resultSpeedText.visible = true;
+  }
+
+  if (gs.phase === 'complete') {
+    completeTitle.text = t('complete');
+    completeTitle.x = cx;
+    completeTitle.y = ch * 0.3;
+    completeTitle.visible = true;
+
+    completeTotalText.text = t('totalScore') + ': ' + gs.totalScore;
+    completeTotalText.x = cx;
+    completeTotalText.y = ch * 0.38;
+    completeTotalText.visible = true;
+
+    completeInsightText.text = t('insight');
+    completeInsightText.x = cx;
+    completeInsightText.y = ch * 0.48;
+    completeInsightText.visible = true;
+  }
+}
+
+// --- Physics ---
+function physicsStep() {
+  if (gs.phase !== 'falling') return;
+  var lv = LEVELS[gs.level];
+  var mass = lv.mass;
+  var canopyArea = Math.PI * Math.pow(gs.canopyDiam/2, 2);
+
+  var dragArea, dragCd;
+  if (gs.chuteDeployed) {
+    var ratio = gs.lineLen / gs.canopyDiam;
+    var cdMul = 1.0;
+    if (ratio < 0.5) cdMul = 0.5 + ratio;
+    else if (ratio > 1.5) cdMul = 1.0 - (ratio-1.5)*0.15;
+    cdMul = Math.max(0.4, Math.min(1.0, cdMul));
+    dragArea = canopyArea * gs.chuteOpenProg;
+    dragCd = CD_CHUTE * cdMul;
+    gs.chuteOpenProg = Math.min(gs.chuteOpenProg + SIM_DT * 1.5, 1.0);
+  } else {
+    dragArea = BODY_AREA;
+    dragCd = CD_BODY;
+  }
+
+  var dragF = 0.5 * RHO * dragCd * dragArea * gs.velY * Math.abs(gs.velY);
+  var accelY = G - dragF / mass;
+  gs.velY += accelY * SIM_DT;
+  if (gs.velY < 0) gs.velY = 0;
+  gs.altitude -= gs.velY * SIM_DT;
+
+  // Wind
+  if (lv.windSpeed > 0 && gs.chuteDeployed) {
+    var wf = 0.5 * RHO * 0.3 * canopyArea * gs.chuteOpenProg * lv.windSpeed * lv.windSpeed;
+    gs.velX += (wf / mass) * SIM_DT;
+  }
+  gs.posX += gs.velX * SIM_DT;
+
+  if (gs.altitude <= 0) {
+    gs.altitude = 0;
+    gs.landingSpeed = gs.velY;
+    gs.phase = 'result';
+    endLevel();
+  }
+}
+
+// --- Level lifecycle ---
+function startLevel() {
+  var lv = LEVELS[gs.level];
+  gs.altitude = lv.startAlt;
+  gs.velY = 0; gs.velX = 0; gs.posX = 0;
+  gs.chuteDeployed = false; gs.chuteOpenProg = 0;
+  gs.phase = 'design';
+  gs.resultMsg = ''; gs.resultScore = 0; gs.landingSpeed = 0;
+  gs.shakeTime = 0; gs.particles = [];
+  gs.trail = []; gs.trailTimer = 0;
+
+  document.getElementById('btnLaunch').disabled = false;
+  document.getElementById('canopySlider').disabled = false;
+  document.getElementById('lineSlider').disabled = false;
+  updateUI(); updateHUD();
+}
+
+function launchCapsule() {
+  if (gs.phase !== 'design') return;
+  sndClick();
+  gs.canopyDiam = parseFloat(document.getElementById('canopySlider').value);
+  gs.lineLen = parseFloat(document.getElementById('lineSlider').value);
+  gs.phase = 'falling';
+  gs.chuteDeployed = true; gs.chuteOpenProg = 0;
+  document.getElementById('btnLaunch').disabled = true;
+  document.getElementById('canopySlider').disabled = true;
+  document.getElementById('lineSlider').disabled = true;
+  sndDeploy(); spawnDeploy();
+}
+
+function endLevel() {
+  var speed = gs.landingSpeed;
+  var canopyArea = Math.PI * Math.pow(gs.canopyDiam/2, 2);
+  var maxArea = Math.PI * 25;
+  var effBonus = Math.round((1 - canopyArea/maxArea) * 30);
+  var score = 0, msg = '';
+
+  if (speed <= SAFE_SPEED) {
+    score = Math.round(70 - (speed/SAFE_SPEED)*25) + effBonus;
+    msg = speed <= 4 ? t('perfect') : t('safe');
+    sndLand(); spawnLand(false);
+  } else if (speed <= CRASH_SPEED) {
+    score = Math.max(5, Math.round(30 - (speed-SAFE_SPEED)/(CRASH_SPEED-SAFE_SPEED)*25));
+    msg = t('rough');
+    sndCrash(); gs.shakeTime = 200; gs.shakeIntensity = 3; spawnLand(false);
+  } else {
+    score = 0; msg = t('crash');
+    sndCrash(); gs.shakeTime = 200; gs.shakeIntensity = 6; spawnLand(true);
+  }
+
+  gs.resultMsg = msg; gs.resultScore = score;
+  gs.scores.push(score); gs.totalScore += score;
+  pulseHudScore();
+
+  if (gs.level < LEVELS.length - 1) {
+    setTimeout(function(){ gs.level++; startLevel(); }, 3000);
+  } else {
+    setTimeout(function(){ gs.phase = 'complete'; }, 2500);
+  }
+}
+
+function resetGame() {
+  gs.level = 0; gs.scores = []; gs.totalScore = 0;
+  gs.particles = []; gs.trail = [];
+  startLevel();
+}
+
+// --- HUD + UI ---
+function updateHUD() {
+  document.getElementById('hudV1').textContent = Math.round(gs.altitude) + 'm';
+  document.getElementById('hudV2').textContent = gs.velY.toFixed(1) + ' m/s';
+  var lv = LEVELS[gs.level];
+  document.getElementById('hudV3').textContent = lv ? lv.mass + 'kg' : '--';
+  document.getElementById('hudV4').textContent = gs.totalScore > 0 ? '' + gs.totalScore : '--';
+}
+
+function pulseHudScore() {
+  var el = document.getElementById('hudV4');
+  el.style.transform = 'scale(1.5)'; el.style.color = '#ffb59c';
+  setTimeout(function(){ el.style.transform='scale(1)'; el.style.color='#50ffb0'; }, 200);
+}
+
+function updateUI() {
+  document.getElementById('gameTitle').textContent = t('title');
+  document.getElementById('roundInfo').textContent = t('level')+' '+(gs.level+1)+'/'+LEVELS.length;
+  document.getElementById('btnLaunch').textContent = t('launch');
+  document.getElementById('btnReset').textContent = t('reset');
+  document.getElementById('hudL1').textContent = t('altitude');
+  document.getElementById('hudL2').textContent = t('velocity');
+  document.getElementById('hudL3').textContent = t('mass');
+  document.getElementById('hudL4').textContent = t('score');
+  document.getElementById('canopyLabel').textContent = t('canopy');
+  document.getElementById('lineLabel').textContent = t('lines');
+  document.getElementById('sidebarTitle').textContent = t('title');
+  document.getElementById('guideContent').textContent = t('guide');
+  updateSliderDisplay();
+}
+
+function updateSliderDisplay() {
+  document.getElementById('canopyVal').textContent = parseFloat(document.getElementById('canopySlider').value).toFixed(1) + 'm';
+  document.getElementById('lineVal').textContent = parseFloat(document.getElementById('lineSlider').value).toFixed(1) + 'm';
+}
+
+// --- Main loop via PIXI ticker ---
+var lastTime = 0;
+app.ticker.add(function(delta) {
+  var now = performance.now();
+  var dt = lastTime ? Math.min(now - lastTime, 50) : 16;
+  lastTime = now;
+  gs.time += dt / 1000;
+
+  // Bob
+  if (gs.phase === 'design') gs.bobPhase += 0.03;
+
+  // Physics (3 sub-steps)
+  if (gs.phase === 'falling') {
+    for (var s = 0; s < 3; s++) {
+      physicsStep();
+      if (gs.phase !== 'falling') break;
+    }
+    // Trail
+    gs.trailTimer += dt;
+    if (gs.trailTimer > 80) {
+      gs.trailTimer = 0;
+      gs.trail.push({ x: posToX(gs.posX), y: altToY(gs.altitude), age: 0 });
+      while (gs.trail.length > 80) gs.trail.shift();
+    }
+  }
+
+  // Shake decay
+  if (gs.shakeTime > 0) { gs.shakeTime -= dt; if (gs.shakeTime < 0) gs.shakeTime = 0; }
+
+  // Trail age
+  for (var i = 0; i < gs.trail.length; i++) gs.trail[i].age += dt;
+
+  // Particles update
+  var alive = [];
+  for (var j = 0; j < gs.particles.length; j++) {
+    var p = gs.particles[j];
+    p.life -= dt;
+    if (p.life <= 0) continue;
+    p.x += p.vx; p.y += p.vy; p.vy += 0.05;
+    alive.push(p);
+  }
+  gs.particles = alive;
+
+  // Draw all layers
+  drawSky();
+  drawGround();
+  drawAltScale();
+  drawWind();
+  drawTrail();
+  drawCapsule();
+  drawParticles();
+  drawTitle();
+  drawResult();
+  updateHUD();
+});
+
+// --- Events ---
+document.getElementById('btnLaunch').addEventListener('click', launchCapsule);
+document.getElementById('btnReset').addEventListener('click', function(){ sndClick(); resetGame(); });
+document.getElementById('canopySlider').addEventListener('input', updateSliderDisplay);
+document.getElementById('lineSlider').addEventListener('input', updateSliderDisplay);
+document.getElementById('langBtn').addEventListener('click', function(){
+  lang = lang==='cn'?'en':'cn';
+  this.textContent = lang==='cn'?'CN':'EN';
+  updateUI();
+});
+document.getElementById('soundBtn').addEventListener('click', function(){
+  soundMuted = !soundMuted;
+  this.textContent = soundMuted ? 'MUTE' : 'SND';
+});
+document.getElementById('gameBody').addEventListener('click', function(e){
+  if (gs.phase === 'title') { sndClick(); gs.phase='design'; startLevel(); updateUI(); }
+});
+
+// --- Init ---
+updateUI(); updateSliderDisplay();
+
+// Title: disable controls
+document.getElementById('controlPanel').style.opacity = '0.3';
+document.getElementById('btnLaunch').disabled = true;
+document.getElementById('canopySlider').disabled = true;
+document.getElementById('lineSlider').disabled = true;
+
+var controlWatcher = setInterval(function(){
+  if (gs.phase !== 'title') {
+    document.getElementById('controlPanel').style.opacity = '1';
+    clearInterval(controlWatcher);
+  }
+}, 100);
+</script>
+</body>
+</html>

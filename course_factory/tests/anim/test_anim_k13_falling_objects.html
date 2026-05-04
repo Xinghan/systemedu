@@ -1,0 +1,469 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=Inter:wght@400;500&family=Noto+Sans+SC:wght@400;700&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box;}
+html,body{width:100%;height:100vh;overflow:hidden;}
+body{background:var(--bg,#0c0e12);color:var(--text,#f6f6fc);font-family:'Inter','Noto Sans SC',sans-serif;display:flex;flex-direction:column;}
+.wrapper{display:flex;flex-direction:column;height:100vh;overflow:hidden;}
+/* ── Top bar: lang-btn + title + guide toggle + frame indicator ── */
+.top-bar{display:flex;align-items:center;gap:8px;padding:6px 12px 4px;min-height:36px;}
+.lang-btn{font-family:'Space Grotesk',sans-serif;font-size:10px;font-weight:700;padding:3px 8px;cursor:pointer;border:1px solid rgba(255,181,156,0.25);background:transparent;color:#ffb59c;letter-spacing:1px;flex-shrink:0;}
+.top-bar .titles{flex:1;min-width:0;overflow:hidden;}
+.top-bar h1{font-family:'Space Grotesk',sans-serif;font-size:clamp(12px,1.8vw,16px);font-weight:700;letter-spacing:-0.02em;color:var(--primary,#50ffb0);text-shadow:0 0 12px var(--glow,rgba(80,255,176,0.3));white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.top-bar .sub{font-size:10px;color:var(--muted,#aaabb0);letter-spacing:0.08em;text-transform:uppercase;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.top-bar .frame-ind{font-family:'Space Grotesk',sans-serif;font-size:10px;color:var(--muted,#aaabb0);letter-spacing:0.1em;flex-shrink:0;white-space:nowrap;}
+/* ── Guide panel: collapsible, in document flow ── */
+.guide-bar{background:rgba(0,0,0,0.3);overflow:hidden;transition:max-height 0.25s ease;}
+.guide-bar.collapsed{max-height:0!important;padding:0 12px!important;}
+.guide-bar-inner{padding:4px 12px 6px;font-family:'Noto Sans SC',sans-serif;font-size:11px;color:rgba(255,255,255,0.85);line-height:1.5;}
+.guide-bar-inner ul{padding-left:16px;margin:0;}
+.guide-bar-inner li{margin-bottom:1px;}
+.guide-toggle{font-family:'Space Grotesk',sans-serif;font-size:9px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;padding:3px 8px;cursor:pointer;border:1px solid rgba(255,181,156,0.2);background:transparent;color:var(--primary,#50ffb0);flex-shrink:0;}
+.guide-toggle .arrow{display:inline-block;transition:transform 0.2s;font-size:8px;margin-left:3px;}
+.guide-bar.collapsed+.top-bar .guide-toggle .arrow,
+.guide-toggle.collapsed .arrow{transform:rotate(-90deg);}
+/* ── Canvas area ── */
+.canvas-wrap{flex:1;min-height:0;position:relative;}
+canvas{width:100%;height:100%;display:block;}
+/* ── Controls + HUD ── */
+.controls{display:flex;justify-content:center;align-items:center;gap:12px;padding:6px 16px;}
+.ctrl-btn{font-family:'Space Grotesk',sans-serif;font-size:11px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;padding:5px 16px;border:none;cursor:pointer;color:var(--bg,#0c0e12);background:linear-gradient(135deg,var(--primary,#50ffb0),var(--primary-dim,#17df93));transition:transform 0.1s,box-shadow 0.2s;box-shadow:0 0 10px var(--glow-strong,rgba(80,255,176,0.3));}
+.ctrl-btn:hover{transform:scale(1.04);}
+.ctrl-btn:active{transform:scale(0.96);}
+.ctrl-btn.secondary{background:var(--glass,rgba(23,26,31,0.92));color:var(--muted,#aaabb0);box-shadow:none;backdrop-filter:blur(12px);}
+.ctrl-btn.secondary:hover{color:var(--primary,#50ffb0);}
+.hud{height:40px;display:flex;align-items:center;justify-content:space-around;background:rgba(0,0,0,0.55);backdrop-filter:blur(12px);padding:0 16px;}
+.hud-item{text-align:center;}
+.hud-label{font-family:'Space Grotesk',sans-serif;font-size:8px;letter-spacing:0.15em;text-transform:uppercase;color:var(--muted,#aaabb0);}
+.hud-val{font-family:'Space Grotesk',sans-serif;font-size:13px;font-weight:700;color:var(--primary,#50ffb0);}
+</style>
+</head>
+<body>
+<div class="wrapper">
+<!-- Top bar: lang button, title, guide toggle, frame indicator -->
+<div class="top-bar">
+<button class="lang-btn" id="langBtn">CN</button>
+<div class="titles"><h1 id="title"></h1><div class="sub" id="subtitle"></div></div>
+<button class="guide-toggle" id="guideToggle"><span id="guideTitle"></span><span class="arrow">&#9660;</span></button>
+<div class="frame-ind" id="frameIndicator"></div>
+</div>
+<!-- Guide panel: document flow, collapsible -->
+<div class="guide-bar" id="guide">
+<div class="guide-bar-inner" id="guideContent"></div>
+</div>
+<!-- Canvas: fills remaining space, nothing overlaps it -->
+<div class="canvas-wrap"><canvas id="c"></canvas></div>
+<div class="controls">
+<button class="ctrl-btn secondary" id="btnPrev"></button>
+<button class="ctrl-btn" id="btnPlay"></button>
+<button class="ctrl-btn secondary" id="btnNext"></button>
+</div>
+<div class="hud">
+<div class="hud-item"><div class="hud-label" id="hudL1"></div><div class="hud-val" id="hudV1"></div></div>
+<div class="hud-item"><div class="hud-label" id="hudL2"></div><div class="hud-val" id="hudV2"></div></div>
+<div class="hud-item"><div class="hud-label" id="hudL3"></div><div class="hud-val" id="hudV3"></div></div>
+<div class="hud-item"><div class="hud-label" id="hudL4"></div><div class="hud-val" id="hudV4"></div></div>
+</div>
+</div>
+
+<script src="../../../course_factory/runtime/animation_runtime.js"></script>
+
+<script>
+// ============================================================
+// Knode 13: Air vs Vacuum Drop - Dual Tube Comparison
+// 5 object pairs fall in AIR (left tube) vs VACUUM (right tube)
+// ============================================================
+
+// Physics model:
+// In vacuum: all objects fall at same rate, y = 0.5*g*t^2
+// In air: terminal velocity depends on mass/area ratio
+// v_terminal = sqrt(2*m*g / (rho*Cd*A))
+// For animation: we use normalized drag coefficients for visual clarity
+
+var OBJECTS = [
+  {
+    nameEn: 'Feather', nameCn: '\u7fbd\u6bdb',
+    color: '#ffffff', size: 12, shape: 'feather',
+    dragFactor: 0.12  // falls very slowly in air
+  },
+  {
+    nameEn: 'Coin', nameCn: '\u786c\u5e01',
+    color: '#f0c040', size: 8, shape: 'circle',
+    dragFactor: 0.85  // falls fast in air
+  },
+  {
+    nameEn: 'Paper (flat)', nameCn: '\u7eb8(\u6446\u5f00)',
+    color: '#e8e0d0', size: 14, shape: 'rect',
+    dragFactor: 0.15  // falls slowly in air
+  },
+  {
+    nameEn: 'Paper (ball)', nameCn: '\u7eb8(\u63c9\u56e2)',
+    color: '#d8d0c0', size: 7, shape: 'circle',
+    dragFactor: 0.70  // falls faster as ball
+  },
+  {
+    nameEn: 'Stone', nameCn: '\u77f3\u5934',
+    color: '#888888', size: 9, shape: 'circle',
+    dragFactor: 0.92  // falls very fast in air
+  }
+];
+
+// Pairs for each frame: [objectA_idx, objectB_idx]
+var PAIRS = [
+  [0, 1],  // feather vs coin
+  [2, 3],  // paper flat vs paper ball
+  [0, 4],  // feather vs stone
+  [1, 4],  // coin vs stone (both heavy, similar)
+  [2, 4],  // paper flat vs stone
+];
+
+var PAIR_FOCUS = [
+  {en: 'Light+Large vs Heavy+Small', cn: '\u8f7b+\u5927 vs \u91cd+\u5c0f'},
+  {en: 'Same weight, different shape!', cn: '\u540c\u91cd\u91cf\uff0c\u4e0d\u540c\u5f62\u72b6\uff01'},
+  {en: 'Extreme contrast', cn: '\u6781\u7aef\u5bf9\u6bd4'},
+  {en: 'Both heavy - similar speed', cn: '\u90fd\u5f88\u91cd\u2014\u901f\u5ea6\u76f8\u8fd1'},
+  {en: 'Flat shape = huge drag', cn: '\u6241\u5e73\u5f62\u72b6=\u5de8\u5927\u963b\u529b'},
+];
+
+var CONFIG = {
+  style: 'ares_mission',
+  totalFrames: 6,  // 0=title, 1-5=pairs
+
+  i18n: {
+    title:    {en:'AIR vs VACUUM DROP', cn:'\u7a7a\u6c14 vs \u771f\u7a7a \u4e0b\u843d\u5bf9\u6bd4'},
+    subtitle: {en:'Why does a feather fall slower than a coin?', cn:'\u4e3a\u4ec0\u4e48\u7fbd\u6bdb\u6bd4\u786c\u5e01\u843d\u5f97\u6162\uff1f'},
+    air:      {en:'WITH AIR', cn:'\u6709\u7a7a\u6c14'},
+    vacuum:   {en:'VACUUM', cn:'\u771f\u7a7a'},
+    introL1:  {en:'Two transparent tubes', cn:'\u4e24\u6839\u900f\u660e\u7ba1'},
+    introL2:  {en:'Left: normal air  Right: vacuum', cn:'\u5de6\u8fb9\uff1a\u6b63\u5e38\u7a7a\u6c14  \u53f3\u8fb9\uff1a\u771f\u7a7a'},
+    introL3:  {en:'Same objects, same height, same release', cn:'\u540c\u6837\u7684\u7269\u4f53\uff0c\u540c\u6837\u7684\u9ad8\u5ea6\uff0c\u540c\u65f6\u677e\u624b'},
+    introL4:  {en:'Watch who lands first!', cn:'\u770b\u8c01\u5148\u843d\u5730\uff01'},
+    guideTitle: {en:'Observation Guide', cn:'\u89c2\u5bdf\u6307\u5357'},
+    g1:       {en:'Left tube has air resistance', cn:'\u5de6\u7ba1\u6709\u7a7a\u6c14\u963b\u529b'},
+    g2:       {en:'Right tube is vacuum - no air!', cn:'\u53f3\u7ba1\u662f\u771f\u7a7a\u2014\u6ca1\u6709\u7a7a\u6c14\uff01'},
+    g3:       {en:'In vacuum, everything falls at the same speed', cn:'\u771f\u7a7a\u4e2d\uff0c\u6240\u6709\u4e1c\u897f\u4ee5\u76f8\u540c\u901f\u5ea6\u4e0b\u843d'},
+    g4:       {en:'Air drags light/flat objects more', cn:'\u7a7a\u6c14\u66f4\u4f1a\u62d6\u4f4f\u8f7b\u7684/\u6241\u7684\u7269\u4f53'},
+    hudObjA:  {en:'OBJECT A', cn:'\u7269\u4f53 A'},
+    hudObjB:  {en:'OBJECT B', cn:'\u7269\u4f53 B'},
+    hudFocus: {en:'FOCUS', cn:'\u5bf9\u6bd4\u7126\u70b9'},
+    hudResult:{en:'RESULT', cn:'\u7ed3\u679c'},
+  },
+
+  hudLabels: ['hudObjA', 'hudObjB', 'hudFocus', 'hudResult'],
+  hudValues: [
+    ['--', '--', '--', '--'],
+    // pairs 1-5 filled dynamically
+    ['--', '--', '--', '--'],
+    ['--', '--', '--', '--'],
+    ['--', '--', '--', '--'],
+    ['--', '--', '--', '--'],
+    ['--', '--', '--', '--'],
+  ],
+
+  guideTitle: 'guideTitle',
+  guideItems: ['g1', 'g2', 'g3', 'g4'],
+};
+
+// Pre-fill HUD values with object names
+(function() {
+  var lang = 'cn';
+  for (var i = 0; i < PAIRS.length; i++) {
+    var a = OBJECTS[PAIRS[i][0]];
+    var b = OBJECTS[PAIRS[i][1]];
+    CONFIG.hudValues[i + 1] = [
+      a.nameCn + '/' + a.nameEn,
+      b.nameCn + '/' + b.nameEn,
+      PAIR_FOCUS[i].cn,
+      '--'
+    ];
+  }
+})();
+
+// Animation state for falling objects
+var animState = null;
+var animTimer = null;
+
+function startFallAnimation(frameIdx) {
+  if (animTimer) { clearInterval(animTimer); animTimer = null; }
+  if (frameIdx < 1 || frameIdx > 5) { animState = null; return; }
+  var pairIdx = frameIdx - 1;
+  var pair = PAIRS[pairIdx];
+  animState = {
+    pairIdx: pairIdx,
+    time: 0,
+    // Positions 0..1 (0=top, 1=bottom)
+    airPosA: 0, airPosB: 0,
+    vacPosA: 0, vacPosB: 0,
+    objA: OBJECTS[pair[0]],
+    objB: OBJECTS[pair[1]],
+    done: false,
+  };
+  animTimer = setInterval(function() {
+    if (!animState || animState.done) return;
+    animState.time += 0.02;
+    var t = animState.time;
+    var g = 1.8; // normalized gravity for visual speed
+
+    // Vacuum: same speed for all
+    var vacPos = Math.min(1, 0.5 * g * t * t);
+    animState.vacPosA = vacPos;
+    animState.vacPosB = vacPos;
+
+    // Air: drag factor affects terminal velocity
+    var airA = Math.min(1, 0.5 * g * animState.objA.dragFactor * t * t);
+    var airB = Math.min(1, 0.5 * g * animState.objB.dragFactor * t * t);
+    animState.airPosA = airA;
+    animState.airPosB = airB;
+
+    // Check done
+    if (vacPos >= 1 && airA >= 1 && airB >= 1) {
+      animState.done = true;
+    }
+
+    // Request redraw
+    if (typeof AnimRuntime !== 'undefined' && AnimRuntime.requestRedraw) {
+      AnimRuntime.requestRedraw();
+    }
+  }, 20);
+}
+
+// Hook into frame changes
+var _origBoot = AnimRuntime.boot;
+
+function drawBg(ctx, W, H) {
+  // Dark gradient background
+  var grad = ctx.createLinearGradient(0, 0, 0, H);
+  grad.addColorStop(0, '#0a0c14');
+  grad.addColorStop(1, '#141828');
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, W, H);
+
+  // Subtle grid
+  ctx.strokeStyle = 'rgba(80,255,176,0.04)';
+  ctx.lineWidth = 1;
+  var step = 40;
+  for (var x = 0; x < W; x += step) {
+    ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke();
+  }
+  for (var y = 0; y < H; y += step) {
+    ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke();
+  }
+}
+
+function drawObject(ctx, obj, x, y, scale) {
+  var sz = obj.size * (scale || 1);
+  ctx.fillStyle = obj.color;
+  ctx.strokeStyle = 'rgba(255,255,255,0.3)';
+  ctx.lineWidth = 1;
+
+  if (obj.shape === 'feather') {
+    // Draw a stylized feather
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.beginPath();
+    ctx.ellipse(0, 0, sz * 0.4, sz, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+    // Center line
+    ctx.strokeStyle = 'rgba(200,200,200,0.5)';
+    ctx.beginPath();
+    ctx.moveTo(0, -sz); ctx.lineTo(0, sz);
+    ctx.stroke();
+    ctx.restore();
+  } else if (obj.shape === 'rect') {
+    // Flat paper
+    ctx.fillRect(x - sz, y - sz * 0.3, sz * 2, sz * 0.6);
+    ctx.strokeRect(x - sz, y - sz * 0.3, sz * 2, sz * 0.6);
+  } else {
+    // Circle (coin, stone, paper ball)
+    ctx.beginPath();
+    ctx.arc(x, y, sz, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+  }
+}
+
+function getFrameElements(f, W, H) {
+  var t = AnimRuntime.t;
+  var P = AnimRuntime.PAL;
+  var cx = W / 2;
+
+  if (f === 0) {
+    // Title frame
+    return [
+      {id:'t1', type:'label', text:t('title'), x:cx, y:120, color:P.primary, size:22, align:'center', font:'Space Grotesk'},
+      {id:'t2', type:'label', text:t('subtitle'), x:cx, y:155, color:P.muted, size:13, align:'center'},
+      {id:'t3', type:'label', text:t('introL1'), x:cx, y:210, color:'#ffffff', size:14, align:'center'},
+      {id:'t4', type:'label', text:t('introL2'), x:cx, y:235, color:'#ffffff', size:14, align:'center'},
+      {id:'t5', type:'label', text:t('introL3'), x:cx, y:260, color:'#ffffff', size:14, align:'center'},
+      {id:'t6', type:'label', text:t('introL4'), x:cx, y:295, color:P.accent || '#ffb59c', size:16, align:'center', font:'Space Grotesk'},
+    ];
+  }
+
+  // Start animation for this frame
+  if (!animState || animState.pairIdx !== f - 1) {
+    startFallAnimation(f);
+  }
+
+  // Draw tubes and falling objects via custom rendering
+  return [{id:'_custom_pair_' + f, type:'custom_pair', frame:f}];
+}
+
+function customDrawElement(ctx, el, W, H) {
+  if (el.type !== 'custom_pair') return false;
+
+  var f = el.frame;
+  var pairIdx = f - 1;
+  var pair = PAIRS[pairIdx];
+  var objA = OBJECTS[pair[0]];
+  var objB = OBJECTS[pair[1]];
+
+  var t_fn = AnimRuntime.t;
+  var P = AnimRuntime.PAL;
+
+  // Tube dimensions
+  var tubeW = Math.min(W * 0.18, 120);
+  var tubeH = H * 0.65;
+  var tubeTop = H * 0.12;
+  var gap = W * 0.12;
+  var leftX = W * 0.5 - gap - tubeW;
+  var rightX = W * 0.5 + gap;
+
+  // Draw tubes
+  function drawTube(x, label, isVacuum) {
+    // Glass tube effect
+    var tGrad = ctx.createLinearGradient(x, tubeTop, x + tubeW, tubeTop);
+    tGrad.addColorStop(0, isVacuum ? 'rgba(60,80,200,0.12)' : 'rgba(100,150,255,0.08)');
+    tGrad.addColorStop(0.5, isVacuum ? 'rgba(60,80,200,0.06)' : 'rgba(100,150,255,0.03)');
+    tGrad.addColorStop(1, isVacuum ? 'rgba(60,80,200,0.12)' : 'rgba(100,150,255,0.08)');
+    ctx.fillStyle = tGrad;
+    ctx.fillRect(x, tubeTop, tubeW, tubeH);
+
+    // Tube border
+    ctx.strokeStyle = isVacuum ? 'rgba(100,120,255,0.4)' : 'rgba(100,200,255,0.3)';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(x, tubeTop, tubeW, tubeH);
+
+    // Air particles in left tube
+    if (!isVacuum) {
+      ctx.fillStyle = 'rgba(150,200,255,0.15)';
+      var seed = f * 100;
+      for (var i = 0; i < 30; i++) {
+        var px = x + 5 + ((seed + i * 37) % (tubeW - 10));
+        var py = tubeTop + 5 + ((seed + i * 53) % (tubeH - 10));
+        ctx.beginPath();
+        ctx.arc(px, py, 1.5, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+
+    // Label
+    ctx.fillStyle = isVacuum ? '#6688ff' : '#88ccff';
+    ctx.font = "bold 13px 'Space Grotesk', sans-serif";
+    ctx.textAlign = 'center';
+    ctx.fillText(label, x + tubeW / 2, tubeTop - 8);
+
+    // Ground line
+    ctx.strokeStyle = 'rgba(255,255,255,0.3)';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(x, tubeTop + tubeH);
+    ctx.lineTo(x + tubeW, tubeTop + tubeH);
+    ctx.stroke();
+  }
+
+  drawTube(leftX, t_fn('air'), false);
+  drawTube(rightX, t_fn('vacuum'), true);
+
+  // Draw falling objects
+  if (animState && animState.pairIdx === pairIdx) {
+    var margin = 20;
+    var fallRange = tubeH - margin * 2;
+    var tubeCxL = leftX + tubeW / 2;
+    var tubeCxR = rightX + tubeW / 2;
+    var offsetA = -tubeW * 0.18;
+    var offsetB = tubeW * 0.18;
+
+    // Air tube: different speeds
+    var airYA = tubeTop + margin + animState.airPosA * fallRange;
+    var airYB = tubeTop + margin + animState.airPosB * fallRange;
+    drawObject(ctx, objA, tubeCxL + offsetA, airYA, 1.2);
+    drawObject(ctx, objB, tubeCxL + offsetB, airYB, 1.2);
+
+    // Vacuum tube: same speed
+    var vacYA = tubeTop + margin + animState.vacPosA * fallRange;
+    var vacYB = tubeTop + margin + animState.vacPosB * fallRange;
+    drawObject(ctx, objA, tubeCxR + offsetA, vacYA, 1.2);
+    drawObject(ctx, objB, tubeCxR + offsetB, vacYB, 1.2);
+
+    // Object name labels
+    ctx.font = "11px 'Noto Sans SC', sans-serif";
+    ctx.textAlign = 'center';
+    ctx.fillStyle = objA.color;
+    ctx.fillText(AnimRuntime.lang === 'en' ? objA.nameEn : objA.nameCn, tubeCxL + offsetA, tubeTop - 22);
+    ctx.fillStyle = objB.color;
+    ctx.fillText(AnimRuntime.lang === 'en' ? objB.nameEn : objB.nameCn, tubeCxL + offsetB, tubeTop - 22);
+
+    // Vacuum side labels
+    ctx.fillStyle = objA.color;
+    ctx.fillText(AnimRuntime.lang === 'en' ? objA.nameEn : objA.nameCn, tubeCxR + offsetA, tubeTop - 22);
+    ctx.fillStyle = objB.color;
+    ctx.fillText(AnimRuntime.lang === 'en' ? objB.nameEn : objB.nameCn, tubeCxR + offsetB, tubeTop - 22);
+  }
+
+  // Focus text at bottom
+  var focus = PAIR_FOCUS[pairIdx];
+  ctx.fillStyle = P.accent || '#ffb59c';
+  ctx.font = "bold 14px 'Space Grotesk', 'Noto Sans SC', sans-serif";
+  ctx.textAlign = 'center';
+  ctx.fillText(AnimRuntime.lang === 'en' ? focus.en : focus.cn, W / 2, tubeTop + tubeH + 35);
+
+  // Result text when done
+  if (animState && animState.done) {
+    var resultEn, resultCn;
+    if (Math.abs(objA.dragFactor - objB.dragFactor) < 0.15) {
+      resultEn = 'In air: similar speed! In vacuum: identical!';
+      resultCn = '\u7a7a\u6c14\u4e2d\uff1a\u901f\u5ea6\u63a5\u8fd1\uff01\u771f\u7a7a\u4e2d\uff1a\u5b8c\u5168\u76f8\u540c\uff01';
+    } else {
+      var fasterName = objA.dragFactor > objB.dragFactor ?
+        (AnimRuntime.lang === 'en' ? objA.nameEn : objA.nameCn) :
+        (AnimRuntime.lang === 'en' ? objB.nameEn : objB.nameCn);
+      resultEn = fasterName + ' lands first in air. In vacuum: same time!';
+      resultCn = fasterName + '\u5728\u7a7a\u6c14\u4e2d\u5148\u843d\u5730\u3002\u771f\u7a7a\u4e2d\uff1a\u540c\u65f6\uff01';
+    }
+    ctx.fillStyle = '#50ffb0';
+    ctx.font = "bold 13px 'Noto Sans SC', 'Space Grotesk', sans-serif";
+    ctx.fillText(AnimRuntime.lang === 'en' ? resultEn : resultCn, W / 2, tubeTop + tubeH + 58);
+  }
+
+  return true;
+}
+
+AnimRuntime.boot();
+
+// Hook frame changes to restart animation
+var _origGoTo = AnimRuntime.goToFrame;
+if (_origGoTo) {
+  AnimRuntime.goToFrame = function(f) {
+    _origGoTo.call(AnimRuntime, f);
+    startFallAnimation(f);
+  };
+} else {
+  // Fallback: observe frame changes via MutationObserver on frameIndicator
+  var _lastFrame = 0;
+  setInterval(function() {
+    if (typeof AnimRuntime !== 'undefined' && AnimRuntime.currentFrame !== undefined) {
+      if (AnimRuntime.currentFrame !== _lastFrame) {
+        _lastFrame = AnimRuntime.currentFrame;
+        startFallAnimation(_lastFrame);
+      }
+    }
+  }, 100);
+}
+</script>
+</body>
+</html>

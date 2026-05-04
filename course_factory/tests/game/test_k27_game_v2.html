@@ -1,0 +1,2178 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=Noto+Sans+SC:wght@400;700&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box;}
+html,body{width:100%;height:100vh;overflow:hidden;background:#0c0e14;color:#f6f6fc;font-family:'Noto Sans SC','Inter',sans-serif;}
+.game-wrap{display:flex;flex-direction:row;height:100vh;overflow:hidden;}
+.game-sidebar{width:200px;min-width:200px;max-width:200px;display:flex;flex-direction:column;gap:8px;padding:10px;background:rgba(0,0,0,0.5);border-right:1px solid rgba(80,255,176,0.15);overflow-y:auto;}
+.sidebar-btns{display:flex;gap:6px;align-self:flex-start;}
+.sidebar-lang,.sidebar-sound{flex-shrink:0;font-family:'Space Grotesk',sans-serif;font-size:11px;font-weight:700;padding:4px 10px;cursor:pointer;border:1px solid rgba(255,181,156,0.3);background:transparent;color:#ffb59c;letter-spacing:1px;transition:border-color 0.2s ease-out,background 0.2s ease-out;}
+.sidebar-lang:hover,.sidebar-sound:hover{border-color:#ffb59c;background:rgba(255,181,156,0.1);}
+.sidebar-title{font-family:'Space Grotesk',sans-serif;font-size:11px;font-weight:700;color:#50ffb0;letter-spacing:0.08em;text-transform:uppercase;margin-top:4px;}
+.sidebar-guide{font-size:12px;color:#aaabb0;line-height:1.6;}
+.game-main{flex:1;display:flex;flex-direction:column;min-width:0;}
+.game-header{padding:8px 16px;display:flex;justify-content:space-between;align-items:center;background:rgba(0,0,0,0.4);}
+.game-header h1{font-family:'Space Grotesk',sans-serif;font-size:clamp(13px,2vw,17px);font-weight:700;color:#50ffb0;}
+.game-header .info{font-family:'Space Grotesk',sans-serif;font-size:12px;color:#aaabb0;}
+.game-body{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;position:relative;overflow:hidden;}
+.game-body canvas{display:block;}
+.control-panel{padding:8px 16px;display:flex;gap:12px;align-items:center;justify-content:center;background:rgba(0,0,0,0.3);flex-wrap:wrap;}
+.hud-bar{display:flex;justify-content:space-around;padding:6px 16px;background:rgba(0,0,0,0.55);backdrop-filter:blur(12px);}
+.hud-item{text-align:center;}
+.hud-label{font-family:'Space Grotesk',sans-serif;font-size:8px;letter-spacing:0.15em;text-transform:uppercase;color:#aaabb0;}
+.hud-val{font-family:'Space Grotesk',sans-serif;font-size:13px;font-weight:700;color:#50ffb0;transition:color 0.3s ease-out;}
+.btn{font-family:'Space Grotesk',sans-serif;font-size:12px;font-weight:700;padding:6px 18px;border:none;cursor:pointer;color:#0c0e14;background:linear-gradient(135deg,#50ffb0,#17df93);letter-spacing:0.08em;transition:transform 0.15s ease-out,box-shadow 0.15s ease-out;}
+.btn:hover{transform:scale(1.04);box-shadow:0 0 12px rgba(80,255,176,0.3);}
+.btn:disabled{opacity:0.4;cursor:not-allowed;transform:none;box-shadow:none;}
+.btn-secondary{background:rgba(23,26,31,0.92);color:#aaabb0;backdrop-filter:blur(12px);border:none;font-family:'Space Grotesk',sans-serif;font-size:12px;font-weight:700;padding:6px 18px;cursor:pointer;letter-spacing:0.08em;transition:transform 0.15s ease-out,color 0.2s ease-out;}
+.btn-secondary:hover{color:#50ffb0;transform:scale(1.02);}
+.slider-wrap{display:flex;align-items:center;gap:6px;}
+.slider-wrap label{font-family:'Space Grotesk',sans-serif;font-size:11px;color:#aaabb0;white-space:nowrap;}
+.slider-wrap input[type=range]{width:120px;accent-color:#50ffb0;}
+.slider-val{font-family:'Space Grotesk',sans-serif;font-size:12px;color:#50ffb0;font-weight:700;min-width:40px;text-align:center;}
+.predict-wrap{display:flex;align-items:center;gap:6px;}
+.predict-wrap label{font-family:'Space Grotesk',sans-serif;font-size:11px;color:#aaabb0;white-space:nowrap;}
+.predict-wrap input[type=number]{width:60px;background:rgba(80,255,176,0.08);border:1px solid rgba(80,255,176,0.3);color:#f6f6fc;font-family:'Space Grotesk',sans-serif;font-size:12px;padding:3px 6px;text-align:center;transition:border-color 0.2s ease-out;}
+.predict-wrap input[type=number]:focus{outline:none;border-color:#50ffb0;}
+.result-panel{display:none;position:absolute;top:50%;left:50%;transform:translate(-50%,-50%) scale(0.9);background:rgba(12,14,20,0.95);border:1px solid rgba(80,255,176,0.3);padding:20px 28px;text-align:center;z-index:20;min-width:280px;opacity:0;transition:transform 0.35s cubic-bezier(0.34,1.56,0.64,1),opacity 0.25s ease-out;}
+.result-panel.show{display:block;transform:translate(-50%,-50%) scale(1);opacity:1;}
+.result-panel h2{font-family:'Space Grotesk',sans-serif;font-size:18px;color:#50ffb0;margin-bottom:8px;}
+.result-panel p{font-size:13px;color:#aaabb0;margin:4px 0;}
+.result-panel .verdict{font-size:15px;color:#ffb59c;font-weight:700;margin-top:10px;}
+.result-panel .insight{font-size:12px;color:#666;margin-top:8px;font-style:italic;}
+</style>
+</head>
+<body>
+<div class="game-wrap">
+  <div class="game-sidebar">
+    <div class="sidebar-btns">
+      <button class="sidebar-lang" id="langBtn">CN</button>
+      <button class="sidebar-sound" id="soundBtn">MUTE</button>
+    </div>
+    <div class="sidebar-title" id="sidebarTitle"></div>
+    <div class="sidebar-guide" id="guideContent"></div>
+  </div>
+  <div class="game-main">
+    <div class="game-header">
+      <h1 id="gameTitle"></h1>
+      <div class="info" id="roundInfo"></div>
+    </div>
+    <div class="game-body" id="gameBody">
+      <canvas id="cv"></canvas>
+      <div class="result-panel" id="resultPanel">
+        <h2 id="rpTitle"></h2>
+        <p id="rpLine1"></p>
+        <p id="rpLine2"></p>
+        <p id="rpLine3"></p>
+        <div class="verdict" id="rpVerdict"></div>
+        <div class="insight" id="rpInsight"></div>
+      </div>
+    </div>
+    <div class="control-panel" id="controlPanel">
+      <div class="slider-wrap" id="sliderWrap">
+        <label id="sliderLabel"></label>
+        <input type="range" id="mainSlider" min="0" max="100" value="50">
+        <span class="slider-val" id="sliderVal">50</span>
+      </div>
+      <div class="predict-wrap" id="predictWrap" style="display:none;">
+        <label id="predictLabel"></label>
+        <input type="number" id="predictInput" min="0" max="9999" value="0" step="0.1">
+      </div>
+      <button class="btn" id="btnAction"></button>
+      <button class="btn-secondary" id="btnReset"></button>
+    </div>
+    <div class="hud-bar">
+      <div class="hud-item"><div class="hud-label" id="hudL1"></div><div class="hud-val" id="hudV1">--</div></div>
+      <div class="hud-item"><div class="hud-label" id="hudL2"></div><div class="hud-val" id="hudV2">--</div></div>
+      <div class="hud-item"><div class="hud-label" id="hudL3"></div><div class="hud-val" id="hudV3">--</div></div>
+      <div class="hud-item"><div class="hud-label" id="hudL4"></div><div class="hud-val" id="hudV4">--</div></div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ============================================================
+// K27 Game v2: Thrust Laboratory
+// 5-level sandbox simulation exploring thrust, from reading engine
+// specs to designing custom engines.
+// Canvas 2D rendering. Sidebar standard layout. Dark theme.
+// ============================================================
+
+// --- I18N ---
+var I18N = {
+  title:        {en:'THRUST LABORATORY', cn:'\u63a8\u529b\u5b9e\u9a8c\u5ba4'},
+  sideTitle:    {en:'GUIDE', cn:'\u64cd\u4f5c\u6307\u5357'},
+  guide1:       {en:'Read the engine spec card.\nAnswer 3 questions about this engine.\nPick the correct answer from the choices.', cn:'\u9605\u8bfb\u53d1\u52a8\u673a\u53c2\u6570\u5361\u3002\n\u56de\u7b543\u4e2a\u5173\u4e8e\u8be5\u53d1\u52a8\u673a\u7684\u95ee\u9898\u3002\n\u4ece\u9009\u9879\u4e2d\u9009\u51fa\u6b63\u786e\u7b54\u6848\u3002'},
+  guide2:       {en:'Read the thrust curve graph.\nClick to mark key points:\npeak thrust, average line, burn endpoints.\nAccuracy matters!', cn:'\u9605\u8bfb\u63a8\u529b\u66f2\u7ebf\u56fe\u3002\n\u70b9\u51fb\u6807\u8bb0\u5173\u952e\u70b9\uff1a\n\u5cf0\u503c\u63a8\u529b\u3001\u5e73\u5747\u63a8\u529b\u7ebf\u3001\u71c3\u70e7\u7ec8\u70b9\u3002\n\u7cbe\u5ea6\u5f88\u91cd\u8981\uff01'},
+  guide3:       {en:'Calculate step by step:\n1. Weight W = mg\n2. Net force F = T - W\n3. Acceleration a = F/m\nType each answer.', cn:'\u9010\u6b65\u8ba1\u7b97\uff1a\n1. \u91cd\u529b W = mg\n2. \u5408\u529b F = T - W\n3. \u52a0\u901f\u5ea6 a = F/m\n\u8f93\u5165\u6bcf\u6b65\u7b54\u6848\u3002'},
+  guide4:       {en:'Match an engine to the mission.\nRead the mission requirements.\nCompare engine specs.\nSelect the best engine + reason.', cn:'\u4e3a\u4efb\u52a1\u5339\u914d\u53d1\u52a8\u673a\u3002\n\u9605\u8bfb\u4efb\u52a1\u9700\u6c42\u3002\n\u5bf9\u6bd4\u53d1\u52a8\u673a\u53c2\u6570\u3002\n\u9009\u62e9\u6700\u4f73\u53d1\u52a8\u673a\u5e76\u8bf4\u660e\u7406\u7531\u3002'},
+  guide5:       {en:'Design a custom engine!\nAdjust: peak thrust, burn time, curve shape.\nMeet the target acceleration.\n3 challenges to solve.', cn:'\u8bbe\u8ba1\u81ea\u5b9a\u4e49\u53d1\u52a8\u673a\uff01\n\u8c03\u6574\uff1a\u5cf0\u503c\u63a8\u529b\u3001\u71c3\u70e7\u65f6\u95f4\u3001\u66f2\u7ebf\u5f62\u72b6\u3002\n\u8fbe\u5230\u76ee\u6807\u52a0\u901f\u5ea6\u3002\n3\u4e2a\u8bbe\u8ba1\u6311\u6218\u3002'},
+  answer:       {en:'ANSWER', cn:'\u56de\u7b54'},
+  mark:         {en:'MARK', cn:'\u6807\u8bb0'},
+  submit:       {en:'SUBMIT', cn:'\u63d0\u4ea4'},
+  selectEng:    {en:'SELECT', cn:'\u9009\u62e9'},
+  test:         {en:'TEST', cn:'\u6d4b\u8bd5'},
+  reset:        {en:'RESTART', cn:'\u91cd\u65b0\u5f00\u59cb'},
+  next:         {en:'NEXT', cn:'\u4e0b\u4e00\u9898'},
+  nextLevel:    {en:'NEXT LEVEL', cn:'\u4e0b\u4e00\u5173'},
+  level:        {en:'LEVEL', cn:'\u5173\u5361'},
+  score:        {en:'SCORE', cn:'\u5f97\u5206'},
+  correct:      {en:'Correct!', cn:'\u6b63\u786e\uff01'},
+  wrong:        {en:'Incorrect', cn:'\u9519\u8bef'},
+  close:        {en:'Close!', cn:'\u63a5\u8fd1\uff01'},
+  great:        {en:'Great!', cn:'\u5f88\u597d\uff01'},
+  perfect:      {en:'Perfect!', cn:'\u5b8c\u7f8e\uff01'},
+  complete:     {en:'ALL LEVELS COMPLETE!', cn:'\u5168\u90e8\u5173\u5361\u5b8c\u6210\uff01'},
+  totalScore:   {en:'Total Score', cn:'\u603b\u5206'},
+  levelDone:    {en:'Level Complete!', cn:'\u672c\u5173\u5b8c\u6210\uff01'},
+  levelScore:   {en:'Level Score', cn:'\u672c\u5173\u5f97\u5206'},
+  thrust:       {en:'THRUST', cn:'\u63a8\u529b'},
+  avgThrust:    {en:'T_avg', cn:'\u5e73\u5747\u63a8\u529b'},
+  peakThrust:   {en:'T_max', cn:'\u5cf0\u503c\u63a8\u529b'},
+  burnTime:     {en:'Burn Time', cn:'\u71c3\u70e7\u65f6\u95f4'},
+  totalImpulse: {en:'Total Impulse', cn:'\u603b\u51b2\u91cf'},
+  propMass:     {en:'Propellant', cn:'\u63a8\u8fdb\u5242'},
+  rocketMass:   {en:'Rocket Mass', cn:'\u706b\u7bad\u8d28\u91cf'},
+  accel:        {en:'ACCEL', cn:'\u52a0\u901f\u5ea6'},
+  netForce:     {en:'NET FORCE', cn:'\u5408\u529b'},
+  weight:       {en:'WEIGHT', cn:'\u91cd\u529b'},
+  altitude:     {en:'ALTITUDE', cn:'\u9ad8\u5ea6'},
+  engineName:   {en:'Engine', cn:'\u53d1\u52a8\u673a'},
+  specSheet:    {en:'ENGINE SPEC SHEET', cn:'\u53d1\u52a8\u673a\u53c2\u6570\u8868'},
+  question:     {en:'Question', cn:'\u95ee\u9898'},
+  curveReader:  {en:'THRUST CURVE READER', cn:'\u63a8\u529b\u66f2\u7ebf\u8bfb\u56fe'},
+  accelCalc:    {en:'ACCELERATION CALCULATOR', cn:'\u52a0\u901f\u5ea6\u8ba1\u7b97\u5668'},
+  engineMatch:  {en:'ENGINE MATCH', cn:'\u53d1\u52a8\u673a\u5339\u914d'},
+  engineDesign: {en:'CUSTOM ENGINE DESIGNER', cn:'\u81ea\u5b9a\u4e49\u53d1\u52a8\u673a\u8bbe\u8ba1'},
+  massSlider:   {en:'Mass(g)', cn:'\u8d28\u91cf(g)'},
+  peakSlider:   {en:'Peak(N)', cn:'\u5cf0\u503c(N)'},
+  burnSlider:   {en:'Burn(s)', cn:'\u71c3\u65f6(s)'},
+  curveShape:   {en:'Shape', cn:'\u66f2\u7ebf\u5f62\u72b6'},
+  progressive:  {en:'Progressive', cn:'\u6e10\u8fdb\u578b'},
+  neutral:      {en:'Neutral', cn:'\u6052\u5b9a\u578b'},
+  regressive:   {en:'Regressive', cn:'\u6e10\u5f31\u578b'},
+  clickPeak:    {en:'Click on PEAK thrust', cn:'\u70b9\u51fb\u5cf0\u503c\u63a8\u529b\u70b9'},
+  clickAvg:     {en:'Click on AVERAGE thrust line', cn:'\u70b9\u51fb\u5e73\u5747\u63a8\u529b\u7ebf'},
+  clickEnd:     {en:'Click on BURN END point', cn:'\u70b9\u51fb\u71c3\u70e7\u7ec8\u70b9'},
+  stepWeight:   {en:'Step 1: W = mg = ?', cn:'\u7b2c1\u6b65\uff1aW = mg = ?'},
+  stepNetF:     {en:'Step 2: F = T - W = ?', cn:'\u7b2c2\u6b65\uff1aF = T - W = ?'},
+  stepAccel:    {en:'Step 3: a = F/m = ?', cn:'\u7b2c3\u6b65\uff1aa = F/m = ?'},
+  mission:      {en:'MISSION', cn:'\u4efb\u52a1'},
+  whyBest:      {en:'Why is this the best choice?', cn:'\u4e3a\u4ec0\u4e48\u8fd9\u662f\u6700\u4f73\u9009\u62e9\uff1f'},
+  simulating:   {en:'Simulating launch...', cn:'\u6a21\u62df\u53d1\u5c04\u4e2d...'},
+  targetAccel:  {en:'Target a', cn:'\u76ee\u6807\u52a0\u901f\u5ea6'},
+  yourAccel:    {en:'Your a', cn:'\u4f60\u7684\u52a0\u901f\u5ea6'},
+  insight1:     {en:'Engine specs tell you thrust, burn time, and total impulse -- the three keys to predicting flight!', cn:'\u53d1\u52a8\u673a\u53c2\u6570\u8868\u544a\u8bc9\u4f60\u63a8\u529b\u3001\u71c3\u70e7\u65f6\u95f4\u548c\u603b\u51b2\u91cf\u2014\u2014\u9884\u6d4b\u98de\u884c\u7684\u4e09\u4e2a\u5173\u952e\uff01'},
+  insight2:     {en:'A thrust curve shows how force changes over time -- area under curve = total impulse!', cn:'\u63a8\u529b\u66f2\u7ebf\u5c55\u793a\u529b\u968f\u65f6\u95f4\u53d8\u5316\u2014\u2014\u66f2\u7ebf\u4e0b\u9762\u79ef = \u603b\u51b2\u91cf\uff01'},
+  insight3:     {en:'a = (T - mg) / m -- acceleration depends on BOTH thrust AND rocket mass!', cn:'a = (T - mg) / m\u2014\u2014\u52a0\u901f\u5ea6\u53d6\u51b3\u4e8e\u63a8\u529b\u548c\u706b\u7bad\u8d28\u91cf\uff01'},
+  insight4:     {en:'Choosing an engine is about matching thrust to mission needs -- not just picking the biggest!', cn:'\u9009\u53d1\u52a8\u673a\u8981\u5339\u914d\u4efb\u52a1\u9700\u6c42\u2014\u2014\u4e0d\u662f\u53ea\u9009\u6700\u5927\u7684\uff01'},
+  insight5:     {en:'Engine designers balance peak thrust, burn time, and curve shape to achieve mission goals!', cn:'\u53d1\u52a8\u673a\u8bbe\u8ba1\u5e08\u8981\u5e73\u8861\u5cf0\u503c\u63a8\u529b\u3001\u71c3\u70e7\u65f6\u95f4\u548c\u66f2\u7ebf\u5f62\u72b6\u6765\u5b8c\u6210\u4efb\u52a1\uff01'},
+  scenarioOf:   {en:'{n}/{t}', cn:'{n}/{t}'},
+  launchResult: {en:'LAUNCH RESULT', cn:'\u53d1\u5c04\u7ed3\u679c'},
+};
+
+var lang = 'cn';
+function t(key) { return I18N[key] ? (I18N[key][lang] || I18N[key].en) : key; }
+function tf(key, vars) {
+  var s = t(key);
+  if (vars) { for (var k in vars) { s = s.replace('{'+k+'}', vars[k]); } }
+  return s;
+}
+
+// --- DOM refs ---
+var $ = function(id) { return document.getElementById(id); };
+var langBtn = $('langBtn');
+var soundBtn = $('soundBtn');
+var sidebarTitle = $('sidebarTitle');
+var guideContent = $('guideContent');
+var gameTitle = $('gameTitle');
+var roundInfo = $('roundInfo');
+var gameBody = $('gameBody');
+var canvas = $('cv');
+var ctx = canvas.getContext('2d');
+var controlPanel = $('controlPanel');
+var sliderWrap = $('sliderWrap');
+var mainSlider = $('mainSlider');
+var sliderLabel = $('sliderLabel');
+var sliderValEl = $('sliderVal');
+var predictWrap = $('predictWrap');
+var predictLabel = $('predictLabel');
+var predictInput = $('predictInput');
+var btnAction = $('btnAction');
+var btnReset = $('btnReset');
+var resultPanel = $('resultPanel');
+
+// ============================================================
+// AUDIO (Web Audio API synth, default muted)
+// ============================================================
+var audioCtx = null;
+var soundMuted = true;
+function getAudio() {
+  if (!audioCtx) {
+    try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch(e) {}
+  }
+  return audioCtx;
+}
+function playTone(freq, dur, type, vol) {
+  if (soundMuted) return;
+  var ac = getAudio();
+  if (!ac) return;
+  try {
+    var osc = ac.createOscillator();
+    var gain = ac.createGain();
+    osc.type = type || 'sine';
+    osc.frequency.value = freq;
+    gain.gain.value = vol || 0.15;
+    gain.gain.exponentialRampToValueAtTime(0.001, ac.currentTime + dur);
+    osc.connect(gain); gain.connect(ac.destination);
+    osc.start(ac.currentTime); osc.stop(ac.currentTime + dur);
+  } catch(e) {}
+}
+function sndCorrect() { playTone(523, 0.1, 'sine', 0.1); setTimeout(function(){playTone(659, 0.1, 'sine', 0.08);}, 60); setTimeout(function(){playTone(784, 0.15, 'sine', 0.08);}, 120); }
+function sndWrong() { playTone(200, 0.3, 'sawtooth', 0.08); playTone(150, 0.4, 'sawtooth', 0.06); }
+function sndComplete() { playTone(523, 0.15, 'triangle', 0.12); setTimeout(function(){playTone(659, 0.12, 'triangle', 0.1);}, 100); setTimeout(function(){playTone(784, 0.12, 'triangle', 0.1);}, 200); setTimeout(function(){playTone(1047, 0.25, 'triangle', 0.12);}, 300); }
+function sndClick() { playTone(660, 0.06, 'sine', 0.06); }
+function sndLaunch() { playTone(80, 0.6, 'sawtooth', 0.1); setTimeout(function(){playTone(120, 0.5, 'sawtooth', 0.08);}, 100); }
+
+// --- Sound / Lang buttons ---
+soundBtn.onclick = function() {
+  soundMuted = !soundMuted;
+  soundBtn.textContent = soundMuted ? 'MUTE' : 'SND';
+  if (!soundMuted) getAudio();
+};
+langBtn.onclick = function() {
+  lang = lang === 'cn' ? 'en' : 'cn';
+  langBtn.textContent = lang === 'cn' ? 'CN' : 'EN';
+  refreshUI();
+};
+
+// --- Canvas sizing ---
+var W = 100, H = 100;
+function resizeCanvas() {
+  var parent = gameBody;
+  var availW = parent.clientWidth;
+  var availH = parent.clientHeight;
+  var dpr = window.devicePixelRatio || 1;
+  W = availW;
+  H = availH;
+  canvas.style.width = W + 'px';
+  canvas.style.height = H + 'px';
+  canvas.width = Math.round(W * dpr);
+  canvas.height = Math.round(H * dpr);
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+}
+window.addEventListener('resize', function() { resizeCanvas(); });
+
+// --- Math helpers ---
+function clamp(v, mn, mx) { return Math.max(mn, Math.min(mx, v)); }
+function lerp(a, b, tt) { return a + (b - a) * tt; }
+function easeOutCubic(tt) { return 1 - Math.pow(1 - tt, 3); }
+function easeOutBack(tt) { var c1 = 1.70158; var c3 = c1 + 1; return 1 + c3 * Math.pow(tt - 1, 3) + c1 * Math.pow(tt - 1, 2); }
+function easeInOutQuad(tt) { return tt < 0.5 ? 2 * tt * tt : 1 - Math.pow(-2 * tt + 2, 2) / 2; }
+
+// ============================================================
+// PARTICLE SYSTEM
+// ============================================================
+var particles = [];
+function spawnParticles(x, y, count, color, spread, life, vMul) {
+  spread = spread || 60;
+  life = life || 1.0;
+  vMul = vMul || 1;
+  for (var i = 0; i < count; i++) {
+    var angle = Math.random() * Math.PI * 2;
+    var speed = (20 + Math.random() * spread) * vMul;
+    particles.push({
+      x: x, y: y,
+      vx: Math.cos(angle) * speed,
+      vy: Math.sin(angle) * speed,
+      life: life + Math.random() * 0.3,
+      maxLife: life + 0.3,
+      size: 2 + Math.random() * 3,
+      color: color || '#50ffb0'
+    });
+  }
+}
+function spawnCorrectParticles(x, y) {
+  spawnParticles(x, y, 18, '#50ffb0', 80, 0.8, 1.2);
+  spawnParticles(x, y, 8, '#ffb59c', 40, 0.6, 0.8);
+}
+function spawnLaunchParticles(x, y) {
+  for (var i = 0; i < 6; i++) {
+    particles.push({
+      x: x + (Math.random() - 0.5) * 12,
+      y: y,
+      vx: (Math.random() - 0.5) * 30,
+      vy: 40 + Math.random() * 60,
+      life: 0.4 + Math.random() * 0.3,
+      maxLife: 0.7,
+      size: 3 + Math.random() * 4,
+      color: Math.random() > 0.4 ? '#ff8844' : '#ffcc44'
+    });
+  }
+}
+function updateParticles(dt) {
+  for (var i = particles.length - 1; i >= 0; i--) {
+    var p = particles[i];
+    p.x += p.vx * dt;
+    p.y += p.vy * dt;
+    p.vy += 60 * dt;
+    p.life -= dt;
+    if (p.life <= 0) { particles.splice(i, 1); }
+  }
+}
+function drawParticles() {
+  for (var i = 0; i < particles.length; i++) {
+    var p = particles[i];
+    var alpha = clamp(p.life / p.maxLife, 0, 1);
+    ctx.globalAlpha = alpha * 0.8;
+    ctx.fillStyle = p.color;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, p.size * alpha, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+}
+
+// ============================================================
+// SCREEN SHAKE
+// ============================================================
+var shakeAmount = 0;
+var shakeDuration = 0;
+var shakeT = 0;
+function triggerShake(amt, dur) {
+  shakeAmount = amt || 4;
+  shakeDuration = dur || 0.3;
+  shakeT = 0;
+}
+function getShakeOffset(dt) {
+  if (shakeDuration <= 0) return {x: 0, y: 0};
+  shakeT += dt;
+  if (shakeT >= shakeDuration) { shakeDuration = 0; return {x: 0, y: 0}; }
+  var decay = 1 - shakeT / shakeDuration;
+  return {
+    x: (Math.random() - 0.5) * 2 * shakeAmount * decay,
+    y: (Math.random() - 0.5) * 2 * shakeAmount * decay
+  };
+}
+
+// ============================================================
+// PARALLAX STARS
+// ============================================================
+var stars = [];
+function initStars() {
+  stars = [];
+  for (var i = 0; i < 80; i++) {
+    stars.push({
+      x: Math.random() * 2000,
+      y: Math.random() * 1000,
+      size: 0.5 + Math.random() * 1.5,
+      brightness: 0.2 + Math.random() * 0.6,
+      speed: 0.3 + Math.random() * 0.7,
+      twinklePhase: Math.random() * Math.PI * 2,
+      twinkleSpeed: 1 + Math.random() * 2
+    });
+  }
+}
+initStars();
+
+function drawStars(timeS, parallaxOffset) {
+  parallaxOffset = parallaxOffset || 0;
+  for (var i = 0; i < stars.length; i++) {
+    var s = stars[i];
+    var sx = ((s.x - parallaxOffset * s.speed) % W + W) % W;
+    var sy = s.y % H;
+    var twinkle = 0.5 + 0.5 * Math.sin(timeS * s.twinkleSpeed + s.twinklePhase);
+    var alpha = s.brightness * twinkle;
+    ctx.globalAlpha = alpha;
+    ctx.fillStyle = '#f6f6fc';
+    ctx.beginPath();
+    ctx.arc(sx, sy, s.size, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+}
+
+// ============================================================
+// LEVEL TRANSITION
+// ============================================================
+var levelTransition = {active: false, t: 0, duration: 0.6, from: 0, to: 0};
+function startLevelTransition(from, to) {
+  levelTransition.active = true;
+  levelTransition.t = 0;
+  levelTransition.from = from;
+  levelTransition.to = to;
+}
+function drawLevelTransition() {
+  if (!levelTransition.active) return false;
+  var frac = clamp(levelTransition.t / levelTransition.duration, 0, 1);
+  var easedFrac = easeInOutQuad(frac);
+  if (frac < 0.5) {
+    ctx.globalAlpha = easedFrac * 2;
+    ctx.fillStyle = '#0c0e14';
+    ctx.fillRect(0, 0, W, H);
+  } else {
+    ctx.globalAlpha = 1 - (easedFrac - 0.5) * 2;
+    ctx.fillStyle = '#0c0e14';
+    ctx.fillRect(0, 0, W, H);
+  }
+  ctx.globalAlpha = 1;
+  if (frac >= 1) {
+    levelTransition.active = false;
+    return false;
+  }
+  return true;
+}
+
+// ============================================================
+// ENGINE DATABASE (real Estes / Aerotech / Klima / Quest data)
+// ============================================================
+var ENGINES = [
+  {nameEn:'Estes A8-3',   nameCn:'Estes A8-3',   tAvg:1.98, tMax:5.2,  burnTime:0.7,  impulse:1.39,  propMass:3.12},
+  {nameEn:'Estes B6-4',   nameCn:'Estes B6-4',   tAvg:4.28, tMax:12.2, burnTime:0.85, impulse:3.64,  propMass:5.6},
+  {nameEn:'Estes C6-5',   nameCn:'Estes C6-5',   tAvg:4.74, tMax:14.1, burnTime:1.85, impulse:8.78,  propMass:12.5},
+  {nameEn:'Estes D12-3',  nameCn:'Estes D12-3',  tAvg:11.83,tMax:29.7, burnTime:1.6,  impulse:18.93, propMass:21.1},
+  {nameEn:'Aerotech E16', nameCn:'Aerotech E16', tAvg:16.0, tMax:28.0, burnTime:1.92, impulse:30.7,  propMass:24.0},
+  {nameEn:'Aerotech F32', nameCn:'Aerotech F32', tAvg:32.0, tMax:48.0, burnTime:1.4,  impulse:44.8,  propMass:30.0},
+  {nameEn:'Klima B2-3',   nameCn:'Klima B2-3',   tAvg:2.17, tMax:5.0,  burnTime:1.55, impulse:3.37,  propMass:6.0},
+  {nameEn:'Quest A6-4',   nameCn:'Quest A6-4',   tAvg:2.0,  tMax:6.0,  burnTime:0.65, impulse:1.3,   propMass:3.5},
+];
+
+// ============================================================
+// GAME STATE
+// ============================================================
+var PHASE_READY = 0, PHASE_INPUT = 1, PHASE_FEEDBACK = 2, PHASE_ANIM = 3;
+var PHASE_LEVEL_DONE = 4, PHASE_ALL_DONE = 5;
+
+var gs = {
+  level: 1,
+  scenario: 0,
+  phase: PHASE_READY,
+  score: 0,
+  levelScore: 0,
+  feedback: '',
+  feedbackT: 0,
+  time: 0,
+  // Level 1
+  l1_engine: null,
+  l1_questionIdx: 0,
+  l1_questions: [],
+  l1_selected: -1,
+  l1_choices: [],
+  l1_engines: [],
+  // Level 2
+  l2_curveType: 0,
+  l2_clickMode: 0,
+  l2_clicks: [],
+  l2_targetPts: [],
+  l2_curveEngine: null,
+  l2_curves: [],
+  // Level 3
+  l3_engine: null,
+  l3_rocketMassG: 200,
+  l3_step: 0,
+  l3_answers: [0,0,0],
+  l3_combos: [],
+  // Level 4
+  l4_missionIdx: 0,
+  l4_engines: [],
+  l4_selectedEngine: -1,
+  l4_selectedReason: -1,
+  l4_reasonOrder: [],
+  l4_missionPhase: 0,
+  l4_simT: 0,
+  l4_simAlt: 0,
+  l4_simVel: 0,
+  l4_missions: [],
+  // Level 5
+  l5_peakThrust: 10,
+  l5_burnTime: 1.5,
+  l5_curveType: 1,
+  l5_rocketMassG: 200,
+  l5_targetAccel: 0,
+  l5_challenges: [],
+  // Idle engine glow
+  engineGlowPhase: 0,
+  // HUD juice animation targets
+  hudScoreTarget: 0,
+  hudScoreDisplay: 0,
+};
+
+// ============================================================
+// LEVEL DATA GENERATION
+// ============================================================
+var G = 9.81;
+
+function shuffleArray(arr) {
+  var i, j, tmp;
+  for (i = arr.length - 1; i > 0; i--) {
+    j = Math.floor(Math.random() * (i + 1));
+    tmp = arr[i]; arr[i] = arr[j]; arr[j] = tmp;
+  }
+  return arr;
+}
+
+function engineName(eng) {
+  return lang === 'cn' ? eng.nameCn : eng.nameEn;
+}
+
+// Level 1: generate questions per engine
+function genL1Questions(eng) {
+  var qs = [];
+  var tAvgStr = eng.tAvg.toFixed(2);
+  var tMaxStr = eng.tMax.toFixed(1);
+  var burnStr = eng.burnTime.toFixed(2);
+  // Q1: average thrust
+  var c1 = [tAvgStr + ' N'];
+  while (c1.length < 4) {
+    var fake = (eng.tAvg * (0.5 + Math.random())).toFixed(2) + ' N';
+    if (c1.indexOf(fake) < 0) c1.push(fake);
+  }
+  shuffleArray(c1);
+  qs.push({
+    qEn: 'What is the average thrust?', qCn: '\u5e73\u5747\u63a8\u529b\u662f\u591a\u5c11\uff1f',
+    choices: c1, correct: c1.indexOf(tAvgStr + ' N')
+  });
+  // Q2: burn time
+  var c2 = [burnStr + ' s'];
+  while (c2.length < 4) {
+    var fake2 = (eng.burnTime * (0.4 + Math.random() * 1.2)).toFixed(2) + ' s';
+    if (c2.indexOf(fake2) < 0) c2.push(fake2);
+  }
+  shuffleArray(c2);
+  qs.push({
+    qEn: 'How long does it burn?', qCn: '\u71c3\u70e7\u65f6\u95f4\u6709\u591a\u957f\uff1f',
+    choices: c2, correct: c2.indexOf(burnStr + ' s')
+  });
+  // Q3: peak thrust
+  var c3 = [tMaxStr + ' N'];
+  while (c3.length < 4) {
+    var fake3 = (eng.tMax * (0.5 + Math.random())).toFixed(1) + ' N';
+    if (c3.indexOf(fake3) < 0) c3.push(fake3);
+  }
+  shuffleArray(c3);
+  qs.push({
+    qEn: 'What is the peak thrust?', qCn: '\u5cf0\u503c\u63a8\u529b\u662f\u591a\u5c11\uff1f',
+    choices: c3, correct: c3.indexOf(tMaxStr + ' N')
+  });
+  return qs;
+}
+
+// Level 2: thrust curve shapes
+function genThrustCurve(eng, curveType) {
+  var pts = [];
+  var n = 40;
+  var dt = eng.burnTime / n;
+  var i;
+  for (i = 0; i <= n; i++) {
+    var frac = i / n;
+    var thr;
+    if (curveType === 0) {
+      thr = eng.tAvg * 0.3 + (eng.tMax - eng.tAvg * 0.3) * Math.pow(frac, 1.8);
+      if (frac > 0.85) thr *= (1 - frac) / 0.15;
+    } else if (curveType === 1) {
+      if (frac < 0.08) thr = eng.tMax * frac / 0.08;
+      else if (frac < 0.15) thr = eng.tMax - (eng.tMax - eng.tAvg) * (frac - 0.08) / 0.07;
+      else if (frac < 0.9) thr = eng.tAvg * (1 + 0.05 * Math.sin(frac * 8));
+      else thr = eng.tAvg * (1 - frac) / 0.1;
+    } else {
+      thr = eng.tMax * Math.exp(-2.5 * frac) + eng.tAvg * 0.2;
+      if (frac > 0.9) thr *= (1 - frac) / 0.1;
+    }
+    thr = Math.max(0, thr);
+    pts.push({time: i * dt, thrust: thr});
+  }
+  return pts;
+}
+
+// Level 4: missions
+function genMissions() {
+  return [
+    {
+      descEn:'Reach 50m with a 300g rocket', descCn:'\u7528300g\u706b\u7bad\u8fbe\u523050m\u9ad8\u5ea6',
+      rocketMassG: 300, targetAlt: 50, correctIdx: 2,
+      reasonEn:'Enough impulse for altitude without excess mass',
+      reasonCn:'\u8db3\u591f\u51b2\u91cf\u8fbe\u5230\u9ad8\u5ea6\u4e14\u4e0d\u4f1a\u8d85\u91cd',
+      distractorsEn:['Highest thrust is always best','Longest burn time is always best','Least propellant means lightest'],
+      distractorsCn:['\u63a8\u529b\u6700\u5927\u6240\u4ee5\u6700\u597d','\u71c3\u70e7\u65f6\u95f4\u6700\u957f\u6240\u4ee5\u6700\u597d','\u63a8\u8fdb\u5242\u6700\u5c11\u6240\u4ee5\u6700\u8f7b'],
+      enginePool: [0, 1, 2, 3]
+    },
+    {
+      descEn:'Reach 80m with a 200g rocket', descCn:'\u7528200g\u706b\u7bad\u8fbe\u523080m\u9ad8\u5ea6',
+      rocketMassG: 200, targetAlt: 80, correctIdx: 2,
+      reasonEn:'High thrust-to-weight ratio for fast climb',
+      reasonCn:'\u9ad8\u63a8\u91cd\u6bd4\u5b9e\u73b0\u5feb\u901f\u722c\u5347',
+      distractorsEn:['Most expensive engine is the best','Smallest engine fits any rocket','Average thrust does not matter'],
+      distractorsCn:['\u6700\u8d35\u7684\u53d1\u52a8\u673a\u6700\u597d','\u6700\u5c0f\u7684\u53d1\u52a8\u673a\u9002\u5408\u4efb\u4f55\u706b\u7bad','\u5e73\u5747\u63a8\u529b\u65e0\u6240\u8c13'],
+      enginePool: [0, 1, 3, 4]
+    },
+    {
+      descEn:'Reach 30m with a 150g rocket, gently', descCn:'\u7528150g\u706b\u7bad\u5e73\u7a33\u8fbe\u523030m',
+      rocketMassG: 150, targetAlt: 30, correctIdx: 1,
+      reasonEn:'Low thrust for gentle acceleration, sufficient impulse',
+      reasonCn:'\u4f4e\u63a8\u529b\u786e\u4fdd\u5e73\u7a33\u52a0\u901f\uff0c\u51b2\u91cf\u8db3\u591f',
+      distractorsEn:['Always pick highest total impulse','Peak thrust decides everything','Propellant mass is irrelevant'],
+      distractorsCn:['\u603b\u662f\u9009\u603b\u51b2\u91cf\u6700\u5927\u7684','\u5cf0\u503c\u63a8\u529b\u51b3\u5b9a\u4e00\u5207','\u63a8\u8fdb\u5242\u8d28\u91cf\u65e0\u5173\u7d27\u8981'],
+      enginePool: [7, 0, 1, 6]
+    }
+  ];
+}
+
+// Level 5: design challenges
+function genDesignChallenges() {
+  return [
+    {rocketMassG: 200, targetAccel: 15, descEn:'200g rocket, target a=15 m/s2', descCn:'200g\u706b\u7bad\uff0c\u76ee\u6807\u52a0\u901f\u5ea6=15 m/s\u00b2'},
+    {rocketMassG: 350, targetAccel: 20, descEn:'350g rocket, target a=20 m/s2', descCn:'350g\u706b\u7bad\uff0c\u76ee\u6807\u52a0\u901f\u5ea6=20 m/s\u00b2'},
+    {rocketMassG: 500, targetAccel: 10, descEn:'500g rocket, target a=10 m/s2', descCn:'500g\u706b\u7bad\uff0c\u76ee\u6807\u52a0\u901f\u5ea6=10 m/s\u00b2'},
+  ];
+}
+
+// ============================================================
+// LEVEL INIT
+// ============================================================
+function initLevel() {
+  gs.scenario = 0;
+  gs.levelScore = 0;
+  gs.phase = PHASE_READY;
+  gs.feedback = '';
+  gs.feedbackT = 0;
+  hideResultPanel();
+
+  if (gs.level === 1) {
+    gs.l1_engines = shuffleArray(ENGINES.slice()).slice(0, 4);
+    initL1Scenario();
+  } else if (gs.level === 2) {
+    gs.l2_curves = [
+      {engine: ENGINES[2], type: 1},
+      {engine: ENGINES[3], type: 0},
+      {engine: ENGINES[4], type: 2},
+    ];
+    initL2Scenario();
+  } else if (gs.level === 3) {
+    gs.l3_combos = [
+      {engine: ENGINES[1], massG: 150},
+      {engine: ENGINES[2], massG: 250},
+      {engine: ENGINES[3], massG: 400},
+      {engine: ENGINES[0], massG: 100},
+    ];
+    initL3Scenario();
+  } else if (gs.level === 4) {
+    gs.l4_missions = genMissions();
+    initL4Scenario();
+  } else if (gs.level === 5) {
+    gs.l5_challenges = genDesignChallenges();
+    initL5Scenario();
+  }
+  setupControls();
+  refreshUI();
+}
+
+function initL1Scenario() {
+  gs.l1_engine = gs.l1_engines[gs.scenario];
+  gs.l1_questions = genL1Questions(gs.l1_engine);
+  gs.l1_questionIdx = 0;
+  gs.l1_selected = -1;
+  gs.phase = PHASE_INPUT;
+}
+
+function initL2Scenario() {
+  var cd = gs.l2_curves[gs.scenario];
+  gs.l2_curveEngine = cd.engine;
+  gs.l2_curveType = cd.type;
+  gs.l2_clickMode = 0;
+  gs.l2_clicks = [];
+  var curvePts = genThrustCurve(cd.engine, cd.type);
+  var peakIdx = 0;
+  var i;
+  for (i = 1; i < curvePts.length; i++) {
+    if (curvePts[i].thrust > curvePts[peakIdx].thrust) peakIdx = i;
+  }
+  gs.l2_targetPts = [
+    {time: curvePts[peakIdx].time, thrust: curvePts[peakIdx].thrust},
+    {time: cd.engine.burnTime * 0.5, thrust: cd.engine.tAvg},
+    {time: cd.engine.burnTime, thrust: 0},
+  ];
+  gs.phase = PHASE_INPUT;
+}
+
+function initL3Scenario() {
+  var combo = gs.l3_combos[gs.scenario];
+  gs.l3_engine = combo.engine;
+  gs.l3_rocketMassG = combo.massG;
+  gs.l3_step = 0;
+  gs.l3_answers = [0, 0, 0];
+  gs.phase = PHASE_INPUT;
+}
+
+function initL4Scenario() {
+  var msn = gs.l4_missions[gs.scenario];
+  gs.l4_engines = [];
+  var i;
+  for (i = 0; i < msn.enginePool.length; i++) {
+    gs.l4_engines.push(ENGINES[msn.enginePool[i]]);
+  }
+  gs.l4_selectedEngine = -1;
+  gs.l4_selectedReason = -1;
+  gs.l4_missionPhase = 0;
+  gs.l4_simT = 0;
+  gs.l4_simAlt = 0;
+  gs.l4_simVel = 0;
+  // Build shuffled reason options: correct + 3 distractors
+  var correctReason = lang === 'cn' ? msn.reasonCn : msn.reasonEn;
+  var distractors = lang === 'cn' ? msn.distractorsCn.slice() : msn.distractorsEn.slice();
+  var allReasons = [{text: correctReason, correct: true}];
+  for (i = 0; i < distractors.length; i++) {
+    allReasons.push({text: distractors[i], correct: false});
+  }
+  shuffleArray(allReasons);
+  gs.l4_reasonOrder = allReasons;
+  gs.phase = PHASE_INPUT;
+}
+
+function initL5Scenario() {
+  var ch = gs.l5_challenges[gs.scenario];
+  gs.l5_rocketMassG = ch.rocketMassG;
+  gs.l5_targetAccel = ch.targetAccel;
+  gs.l5_peakThrust = 10;
+  gs.l5_burnTime = 1.5;
+  gs.l5_curveType = 1;
+  gs.phase = PHASE_INPUT;
+}
+
+// ============================================================
+// RESULT PANEL HELPERS
+// ============================================================
+function showResultPanel() {
+  resultPanel.style.display = 'block';
+  // Force reflow then add class for transition
+  void resultPanel.offsetWidth;
+  resultPanel.classList.add('show');
+}
+function hideResultPanel() {
+  resultPanel.classList.remove('show');
+  resultPanel.style.display = 'none';
+}
+
+// ============================================================
+// CONTROLS SETUP
+// ============================================================
+function setupControls() {
+  sliderWrap.style.display = 'none';
+  predictWrap.style.display = 'none';
+
+  if (gs.level === 1) {
+    btnAction.textContent = t('answer');
+    btnAction.disabled = true;
+  } else if (gs.level === 2) {
+    btnAction.textContent = t('mark');
+    btnAction.disabled = true;
+  } else if (gs.level === 3) {
+    predictWrap.style.display = 'flex';
+    predictLabel.textContent = t('stepWeight');
+    predictInput.value = '';
+    btnAction.textContent = t('submit');
+    btnAction.disabled = false;
+  } else if (gs.level === 4) {
+    btnAction.textContent = t('selectEng');
+    btnAction.disabled = true;
+  } else if (gs.level === 5) {
+    sliderWrap.style.display = 'flex';
+    sliderLabel.textContent = t('peakSlider');
+    mainSlider.min = 1;
+    mainSlider.max = 50;
+    mainSlider.value = gs.l5_peakThrust;
+    sliderValEl.textContent = gs.l5_peakThrust;
+    btnAction.textContent = t('test');
+    btnAction.disabled = false;
+  }
+  btnReset.textContent = t('reset');
+}
+
+// ============================================================
+// UI REFRESH
+// ============================================================
+function refreshUI() {
+  sidebarTitle.textContent = t('sideTitle');
+  var guideKey = 'guide' + gs.level;
+  guideContent.textContent = t(guideKey);
+
+  var levelNames = ['specSheet','curveReader','accelCalc','engineMatch','engineDesign'];
+  gameTitle.textContent = t('title') + ' - ' + t(levelNames[gs.level - 1]);
+
+  var maxScenarios = [4, 3, 4, 3, 3];
+  roundInfo.textContent = t('level') + ' ' + gs.level + ' | ' + tf('scenarioOf', {n: gs.scenario + 1, t: maxScenarios[gs.level - 1]});
+
+  $('hudL1').textContent = t('level');
+  $('hudV1').textContent = gs.level + '/5';
+  $('hudL2').textContent = t('score');
+  $('hudV2').textContent = Math.round(gs.hudScoreDisplay);
+  $('hudL3').textContent = t('levelScore');
+  $('hudV3').textContent = gs.levelScore;
+  $('hudL4').textContent = t('thrust');
+  if (gs.level === 1 && gs.l1_engine) {
+    $('hudV4').textContent = gs.l1_engine.tAvg.toFixed(1) + 'N';
+  } else if (gs.level === 3 && gs.l3_engine) {
+    $('hudV4').textContent = gs.l3_engine.tAvg.toFixed(1) + 'N';
+  } else {
+    $('hudV4').textContent = '--';
+  }
+
+  if (gs.level === 3) {
+    var stepKeys = ['stepWeight', 'stepNetF', 'stepAccel'];
+    predictLabel.textContent = gs.l3_step < 3 ? t(stepKeys[gs.l3_step]) : '';
+  }
+  if (gs.level === 5) {
+    sliderLabel.textContent = t('peakSlider');
+    sliderValEl.textContent = mainSlider.value;
+  }
+
+  // Refresh reason text for L4 when language changes
+  if (gs.level === 4 && gs.l4_missions.length > 0) {
+    var msn = gs.l4_missions[gs.scenario];
+    var correctReason = lang === 'cn' ? msn.reasonCn : msn.reasonEn;
+    var distractors = lang === 'cn' ? msn.distractorsCn.slice() : msn.distractorsEn.slice();
+    // Rebuild order preserving shuffle positions
+    for (var ri = 0; ri < gs.l4_reasonOrder.length; ri++) {
+      if (gs.l4_reasonOrder[ri].correct) {
+        gs.l4_reasonOrder[ri].text = correctReason;
+      } else {
+        var dIdx = 0;
+        for (var rj = 0; rj < gs.l4_reasonOrder.length; rj++) {
+          if (rj === ri) continue;
+          if (!gs.l4_reasonOrder[rj].correct) {
+            if (rj < ri) dIdx++;
+          }
+        }
+        // Just pick from distractors sequentially for non-correct items
+        var nonCorrectIdx = 0;
+        for (var rk = 0; rk < ri; rk++) {
+          if (!gs.l4_reasonOrder[rk].correct) nonCorrectIdx++;
+        }
+        if (nonCorrectIdx < distractors.length) {
+          gs.l4_reasonOrder[ri].text = distractors[nonCorrectIdx];
+        }
+      }
+    }
+  }
+
+  setupControls();
+}
+
+// ============================================================
+// CANVAS CLICK HANDLING
+// ============================================================
+var canvasClickZones = [];
+
+canvas.addEventListener('click', function(e) {
+  if (gs.phase !== PHASE_INPUT) return;
+  var rect = canvas.getBoundingClientRect();
+  var mx = e.clientX - rect.left;
+  var my = e.clientY - rect.top;
+
+  if (gs.level === 1) {
+    var i;
+    for (i = 0; i < canvasClickZones.length; i++) {
+      var z = canvasClickZones[i];
+      if (mx >= z.x && mx <= z.x + z.w && my >= z.y && my <= z.y + z.h) {
+        gs.l1_selected = z.idx;
+        btnAction.disabled = false;
+        sndClick();
+        break;
+      }
+    }
+  } else if (gs.level === 2) {
+    sndClick();
+    handleL2Click(mx, my);
+  } else if (gs.level === 4 && gs.l4_missionPhase === 0) {
+    var j;
+    for (j = 0; j < canvasClickZones.length; j++) {
+      var zz = canvasClickZones[j];
+      if (mx >= zz.x && mx <= zz.x + zz.w && my >= zz.y && my <= zz.y + zz.h) {
+        gs.l4_selectedEngine = zz.idx;
+        btnAction.disabled = false;
+        sndClick();
+        break;
+      }
+    }
+  } else if (gs.level === 4 && gs.l4_missionPhase === 1) {
+    var k;
+    for (k = 0; k < canvasClickZones.length; k++) {
+      var zzz = canvasClickZones[k];
+      if (mx >= zzz.x && mx <= zzz.x + zzz.w && my >= zzz.y && my <= zzz.y + zzz.h) {
+        gs.l4_selectedReason = zzz.idx;
+        btnAction.disabled = false;
+        sndClick();
+        break;
+      }
+    }
+  } else if (gs.level === 5) {
+    var m;
+    for (m = 0; m < canvasClickZones.length; m++) {
+      var zl5 = canvasClickZones[m];
+      if (mx >= zl5.x && mx <= zl5.x + zl5.w && my >= zl5.y && my <= zl5.y + zl5.h) {
+        if (zl5.idx < 3) {
+          gs.l5_curveType = zl5.idx;
+          sndClick();
+        } else if (zl5.idx === 100) {
+          var frac = (mx - zl5.x) / zl5.w;
+          gs.l5_burnTime = Math.round((0.3 + frac * 2.7) * 10) / 10;
+          gs.l5_burnTime = clamp(gs.l5_burnTime, 0.3, 3.0);
+          sndClick();
+        }
+        break;
+      }
+    }
+  }
+});
+
+// ============================================================
+// SLIDER HANDLING (Level 5)
+// ============================================================
+mainSlider.addEventListener('input', function() {
+  if (gs.level === 5) {
+    gs.l5_peakThrust = parseFloat(mainSlider.value);
+    sliderValEl.textContent = gs.l5_peakThrust;
+  }
+});
+
+// ============================================================
+// ACTION BUTTON
+// ============================================================
+btnAction.onclick = function() {
+  if (gs.phase === PHASE_LEVEL_DONE) {
+    var prevLevel = gs.level;
+    gs.level++;
+    if (gs.level > 5) {
+      gs.phase = PHASE_ALL_DONE;
+      sndComplete();
+      spawnParticles(W / 2, H / 2, 40, '#50ffb0', 120, 1.5, 1.5);
+      spawnParticles(W / 2, H / 2, 20, '#ffb59c', 80, 1.2, 1.0);
+      refreshUI();
+      return;
+    }
+    startLevelTransition(prevLevel, gs.level);
+    initLevel();
+    return;
+  }
+  if (gs.phase === PHASE_FEEDBACK) {
+    advanceScenario();
+    return;
+  }
+  if (gs.phase !== PHASE_INPUT) return;
+
+  if (gs.level === 1) handleL1Answer();
+  else if (gs.level === 3) handleL3Submit();
+  else if (gs.level === 4) handleL4Action();
+  else if (gs.level === 5) handleL5Test();
+};
+
+btnReset.onclick = function() {
+  gs.level = 1;
+  gs.score = 0;
+  gs.levelScore = 0;
+  gs.hudScoreDisplay = 0;
+  gs.hudScoreTarget = 0;
+  initLevel();
+};
+
+// ============================================================
+// LEVEL 1: SPEC SHEET Q&A
+// ============================================================
+function handleL1Answer() {
+  var q = gs.l1_questions[gs.l1_questionIdx];
+  if (gs.l1_selected === q.correct) {
+    gs.score += 10;
+    gs.levelScore += 10;
+    gs.hudScoreTarget = gs.score;
+    gs.feedback = t('correct');
+    sndCorrect();
+    spawnCorrectParticles(W * 0.7, H * 0.4);
+  } else {
+    gs.feedback = t('wrong');
+    sndWrong();
+    triggerShake(5, 0.3);
+  }
+  gs.feedbackT = 1.2;
+  gs.l1_questionIdx++;
+  gs.l1_selected = -1;
+  btnAction.disabled = true;
+
+  if (gs.l1_questionIdx >= 3) {
+    gs.phase = PHASE_FEEDBACK;
+    btnAction.textContent = t('next');
+    btnAction.disabled = false;
+  }
+}
+
+// ============================================================
+// LEVEL 2: THRUST CURVE CLICK
+// ============================================================
+var l2GraphRect = {x: 0, y: 0, w: 0, h: 0};
+var l2TimeRange = [0, 2];
+var l2ThrustRange = [0, 20];
+
+function handleL2Click(mx, my) {
+  if (gs.l2_clickMode >= 3) return;
+  var gr = l2GraphRect;
+  var gx = l2TimeRange[0] + (mx - gr.x) / gr.w * (l2TimeRange[1] - l2TimeRange[0]);
+  var gy = l2ThrustRange[1] - (my - gr.y) / gr.h * (l2ThrustRange[1] - l2ThrustRange[0]);
+
+  gs.l2_clicks.push({px: mx, py: my, gx: gx, gy: gy});
+
+  var target = gs.l2_targetPts[gs.l2_clickMode];
+  var timeTol = gs.l2_curveEngine.burnTime * 0.12;
+  var thrTol = gs.l2_curveEngine.tMax * 0.15;
+  var dTime = Math.abs(gx - target.time);
+  var dThr = Math.abs(gy - target.thrust);
+  var acc = 0;
+  if (dTime < timeTol && dThr < thrTol) {
+    acc = 10;
+    gs.feedback = t('perfect');
+    sndCorrect();
+    spawnCorrectParticles(mx, my);
+  } else if (dTime < timeTol * 2 && dThr < thrTol * 2) {
+    acc = 6;
+    gs.feedback = t('close');
+    sndClick();
+  } else {
+    acc = 2;
+    gs.feedback = t('wrong');
+    sndWrong();
+    triggerShake(3, 0.2);
+  }
+  gs.score += acc;
+  gs.levelScore += acc;
+  gs.hudScoreTarget = gs.score;
+  gs.feedbackT = 1.0;
+
+  gs.l2_clickMode++;
+  if (gs.l2_clickMode >= 3) {
+    gs.phase = PHASE_FEEDBACK;
+    btnAction.textContent = t('next');
+    btnAction.disabled = false;
+  }
+}
+
+// ============================================================
+// LEVEL 3: ACCELERATION CALCULATOR
+// ============================================================
+function handleL3Submit() {
+  var inputVal = parseFloat(predictInput.value) || 0;
+  var massKg = gs.l3_rocketMassG / 1000;
+  var correctVals = [
+    massKg * G,
+    gs.l3_engine.tAvg - massKg * G,
+    (gs.l3_engine.tAvg - massKg * G) / massKg
+  ];
+  var correct = correctVals[gs.l3_step];
+  var tolerance = Math.abs(correct) * 0.08 + 0.05;
+
+  if (Math.abs(inputVal - correct) <= tolerance) {
+    gs.score += 10;
+    gs.levelScore += 10;
+    gs.hudScoreTarget = gs.score;
+    gs.feedback = t('correct') + ' (' + correct.toFixed(2) + ')';
+    sndCorrect();
+    spawnCorrectParticles(W * 0.7, H * 0.3);
+  } else {
+    gs.feedback = t('wrong') + ' (' + correct.toFixed(2) + ')';
+    sndWrong();
+    triggerShake(5, 0.3);
+  }
+  gs.feedbackT = 1.5;
+  gs.l3_answers[gs.l3_step] = correct;
+  gs.l3_step++;
+  predictInput.value = '';
+
+  if (gs.l3_step >= 3) {
+    gs.phase = PHASE_FEEDBACK;
+    btnAction.textContent = t('next');
+    btnAction.disabled = false;
+    predictWrap.style.display = 'none';
+  } else {
+    var stepKeys = ['stepWeight', 'stepNetF', 'stepAccel'];
+    predictLabel.textContent = t(stepKeys[gs.l3_step]);
+  }
+}
+
+// ============================================================
+// LEVEL 4: ENGINE MATCH
+// ============================================================
+function handleL4Action() {
+  var msn = gs.l4_missions[gs.scenario];
+  if (gs.l4_missionPhase === 0) {
+    gs.l4_missionPhase = 1;
+    gs.l4_selectedReason = -1;
+    btnAction.disabled = true;
+    btnAction.textContent = t('answer');
+    // Rebuild reason order for current language
+    var correctReason = lang === 'cn' ? msn.reasonCn : msn.reasonEn;
+    var distractors = lang === 'cn' ? msn.distractorsCn.slice() : msn.distractorsEn.slice();
+    var allReasons = [{text: correctReason, correct: true}];
+    for (var ri = 0; ri < distractors.length; ri++) {
+      allReasons.push({text: distractors[ri], correct: false});
+    }
+    shuffleArray(allReasons);
+    gs.l4_reasonOrder = allReasons;
+  } else if (gs.l4_missionPhase === 1) {
+    var engineCorrect = gs.l4_selectedEngine === msn.correctIdx;
+    var reasonCorrect = gs.l4_reasonOrder[gs.l4_selectedReason] && gs.l4_reasonOrder[gs.l4_selectedReason].correct;
+    if (engineCorrect && reasonCorrect) {
+      gs.score += 15;
+      gs.levelScore += 15;
+      gs.hudScoreTarget = gs.score;
+      gs.feedback = t('perfect');
+      sndCorrect();
+      spawnCorrectParticles(W / 2, H / 2);
+    } else if (engineCorrect) {
+      gs.score += 8;
+      gs.levelScore += 8;
+      gs.hudScoreTarget = gs.score;
+      gs.feedback = t('close');
+      sndClick();
+    } else {
+      gs.feedback = t('wrong');
+      sndWrong();
+      triggerShake(5, 0.35);
+    }
+    gs.feedbackT = 1.5;
+    gs.l4_missionPhase = 2;
+    gs.l4_simT = 0;
+    gs.l4_simAlt = 0;
+    gs.l4_simVel = 0;
+    gs.phase = PHASE_ANIM;
+    btnAction.disabled = true;
+    sndLaunch();
+  }
+}
+
+// ============================================================
+// LEVEL 5: CUSTOM ENGINE DESIGNER
+// ============================================================
+function handleL5Test() {
+  var ch = gs.l5_challenges[gs.scenario];
+  var massKg = ch.rocketMassG / 1000;
+  var avgT;
+  if (gs.l5_curveType === 0) avgT = gs.l5_peakThrust * 0.65;
+  else if (gs.l5_curveType === 1) avgT = gs.l5_peakThrust * 0.85;
+  else avgT = gs.l5_peakThrust * 0.72;
+
+  var weightN = massKg * G;
+  var netF = avgT - weightN;
+  var accel = netF / massKg;
+
+  var diff = Math.abs(accel - ch.targetAccel);
+  var tolerance = ch.targetAccel * 0.15;
+  var pts = 0;
+  if (diff <= tolerance) {
+    pts = 20;
+    gs.feedback = t('perfect') + ' a=' + accel.toFixed(1) + ' m/s\u00b2';
+    sndCorrect();
+    spawnCorrectParticles(W * 0.7, H * 0.4);
+  } else if (diff <= tolerance * 2) {
+    pts = 12;
+    gs.feedback = t('close') + ' a=' + accel.toFixed(1) + ' m/s\u00b2';
+    sndClick();
+  } else {
+    pts = 4;
+    gs.feedback = t('wrong') + ' a=' + accel.toFixed(1) + ' m/s\u00b2';
+    sndWrong();
+    triggerShake(4, 0.3);
+  }
+  gs.score += pts;
+  gs.levelScore += pts;
+  gs.hudScoreTarget = gs.score;
+  gs.feedbackT = 2.0;
+  gs.phase = PHASE_FEEDBACK;
+  btnAction.textContent = t('next');
+  btnAction.disabled = false;
+}
+
+// ============================================================
+// ADVANCE SCENARIO
+// ============================================================
+function advanceScenario() {
+  var maxScenarios = [4, 3, 4, 3, 3];
+  gs.scenario++;
+  hideResultPanel();
+
+  if (gs.scenario >= maxScenarios[gs.level - 1]) {
+    gs.phase = PHASE_LEVEL_DONE;
+    showLevelDone();
+    return;
+  }
+
+  if (gs.level === 1) initL1Scenario();
+  else if (gs.level === 2) initL2Scenario();
+  else if (gs.level === 3) initL3Scenario();
+  else if (gs.level === 4) initL4Scenario();
+  else if (gs.level === 5) initL5Scenario();
+
+  setupControls();
+  refreshUI();
+}
+
+function showLevelDone() {
+  showResultPanel();
+  $('rpTitle').textContent = t('levelDone');
+  $('rpLine1').textContent = t('levelScore') + ': ' + gs.levelScore;
+  $('rpLine2').textContent = t('totalScore') + ': ' + gs.score;
+  $('rpLine3').textContent = '';
+  var insightKey = 'insight' + gs.level;
+  $('rpVerdict').textContent = '';
+  $('rpInsight').textContent = t(insightKey);
+  btnAction.textContent = t('nextLevel');
+  btnAction.disabled = false;
+  sndComplete();
+  spawnParticles(W / 2, H / 2, 25, '#50ffb0', 100, 1.2, 1.3);
+}
+
+// ============================================================
+// DRAWING HELPERS
+// ============================================================
+function drawRoundedRect(x, y, w, h, r) {
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.lineTo(x + w - r, y);
+  ctx.arcTo(x + w, y, x + w, y + r, r);
+  ctx.lineTo(x + w, y + h - r);
+  ctx.arcTo(x + w, y + h, x + w - r, y + h, r);
+  ctx.lineTo(x + r, y + h);
+  ctx.arcTo(x, y + h, x, y + h - r, r);
+  ctx.lineTo(x, y + r);
+  ctx.arcTo(x, y, x + r, y, r);
+  ctx.closePath();
+}
+
+function drawCard(x, y, w, h, borderColor) {
+  ctx.save();
+  drawRoundedRect(x, y, w, h, 6);
+  ctx.fillStyle = 'rgba(20,24,36,0.9)';
+  ctx.fill();
+  ctx.strokeStyle = borderColor || 'rgba(80,255,176,0.3)';
+  ctx.lineWidth = 1.5;
+  ctx.stroke();
+  ctx.restore();
+}
+
+// Ambient glow on active/highlighted elements
+function drawGlow(x, y, w, h, color, intensity) {
+  ctx.save();
+  var cx = x + w / 2;
+  var cy = y + h / 2;
+  var gr = ctx.createRadialGradient(cx, cy, Math.min(w, h) * 0.3, cx, cy, Math.max(w, h) * 0.8);
+  gr.addColorStop(0, color.replace(')', ',' + (intensity * 0.15) + ')').replace('rgb', 'rgba'));
+  gr.addColorStop(1, 'rgba(0,0,0,0)');
+  ctx.fillStyle = gr;
+  ctx.fillRect(x - w * 0.3, y - h * 0.3, w * 1.6, h * 1.6);
+  ctx.restore();
+}
+
+function drawSpecCard(eng, x, y, w, h, highlight) {
+  if (highlight) {
+    var glowIntensity = 0.5 + 0.3 * Math.sin(gs.time * 3);
+    drawGlow(x, y, w, h, 'rgb(80,255,176)', glowIntensity);
+  }
+  drawCard(x, y, w, h, highlight ? '#50ffb0' : 'rgba(80,255,176,0.2)');
+
+  ctx.save();
+  ctx.font = '700 14px "Space Grotesk", sans-serif';
+  ctx.fillStyle = '#50ffb0';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'top';
+  ctx.fillText(engineName(eng), x + w / 2, y + 10);
+
+  ctx.font = '400 11px "Noto Sans SC", sans-serif';
+  ctx.textAlign = 'left';
+  ctx.fillStyle = '#aaabb0';
+  var rows = [
+    [t('avgThrust'), eng.tAvg.toFixed(2) + ' N'],
+    [t('peakThrust'), eng.tMax.toFixed(1) + ' N'],
+    [t('burnTime'), eng.burnTime.toFixed(2) + ' s'],
+    [t('totalImpulse'), eng.impulse.toFixed(2) + ' Ns'],
+    [t('propMass'), eng.propMass.toFixed(1) + ' g'],
+  ];
+  var ry = y + 32;
+  var i;
+  for (i = 0; i < rows.length; i++) {
+    ctx.fillStyle = '#888';
+    ctx.fillText(rows[i][0], x + 10, ry);
+    ctx.fillStyle = '#f6f6fc';
+    ctx.textAlign = 'right';
+    ctx.fillText(rows[i][1], x + w - 10, ry);
+    ctx.textAlign = 'left';
+    ry += 18;
+  }
+  ctx.restore();
+}
+
+// Idle engine glow effect
+function drawIdleEngineGlow(cx, cy, radius) {
+  var pulse = 0.4 + 0.3 * Math.sin(gs.engineGlowPhase);
+  var grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, radius);
+  grad.addColorStop(0, 'rgba(80,255,176,' + (pulse * 0.3) + ')');
+  grad.addColorStop(0.5, 'rgba(80,255,176,' + (pulse * 0.1) + ')');
+  grad.addColorStop(1, 'rgba(80,255,176,0)');
+  ctx.fillStyle = grad;
+  ctx.beginPath();
+  ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+  ctx.fill();
+}
+
+// ============================================================
+// DRAW LEVEL 1: SPEC SHEET
+// ============================================================
+function drawLevel1() {
+  if (!gs.l1_engine) return;
+  canvasClickZones = [];
+
+  // Idle engine glow behind spec card
+  var cardW = Math.min(260, W * 0.4);
+  var cardH = 170;
+  var cardX = W * 0.05;
+  var cardY = (H - cardH) / 2 - 20;
+  drawIdleEngineGlow(cardX + cardW / 2, cardY + cardH / 2, 100);
+  drawSpecCard(gs.l1_engine, cardX, cardY, cardW, cardH, false);
+
+  // Title
+  ctx.font = '700 11px "Space Grotesk", sans-serif';
+  ctx.fillStyle = '#50ffb0';
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'top';
+  ctx.fillText(t('specSheet'), cardX, cardY - 18);
+
+  // Draw question on right side
+  if (gs.l1_questionIdx < 3) {
+    var q = gs.l1_questions[gs.l1_questionIdx];
+    var qx = W * 0.5;
+    var qy = H * 0.12;
+    ctx.font = '700 14px "Noto Sans SC", sans-serif';
+    ctx.fillStyle = '#f6f6fc';
+    ctx.textAlign = 'left';
+    ctx.fillText(t('question') + ' ' + (gs.l1_questionIdx + 1) + '/3', qx, qy);
+
+    ctx.font = '400 13px "Noto Sans SC", sans-serif';
+    ctx.fillStyle = '#ffb59c';
+    ctx.fillText(lang === 'cn' ? q.qCn : q.qEn, qx, qy + 24);
+
+    // choices
+    var choiceW = Math.min(200, W * 0.4);
+    var choiceH = 34;
+    var cy = qy + 56;
+    var i;
+    for (i = 0; i < q.choices.length; i++) {
+      var isSelected = gs.l1_selected === i;
+      if (isSelected) {
+        drawGlow(qx, cy, choiceW, choiceH, 'rgb(80,255,176)', 0.6);
+      }
+      drawCard(qx, cy, choiceW, choiceH, isSelected ? '#50ffb0' : 'rgba(80,255,176,0.15)');
+      ctx.font = '500 12px "Space Grotesk", sans-serif';
+      ctx.fillStyle = isSelected ? '#50ffb0' : '#aaabb0';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(q.choices[i], qx + choiceW / 2, cy + choiceH / 2);
+      canvasClickZones.push({x: qx, y: cy, w: choiceW, h: choiceH, idx: i});
+      cy += choiceH + 8;
+    }
+  }
+}
+
+// ============================================================
+// DRAW LEVEL 2: THRUST CURVE
+// ============================================================
+function drawLevel2() {
+  if (!gs.l2_curveEngine) return;
+  canvasClickZones = [];
+
+  var eng = gs.l2_curveEngine;
+  var curvePts = genThrustCurve(eng, gs.l2_curveType);
+
+  // Graph area
+  var margin = {left: 60, right: 30, top: 40, bottom: 50};
+  var gx = margin.left;
+  var gy = margin.top;
+  var gw = W - margin.left - margin.right;
+  var gh = H - margin.top - margin.bottom;
+  l2GraphRect = {x: gx, y: gy, w: gw, h: gh};
+  l2TimeRange = [0, eng.burnTime * 1.15];
+  l2ThrustRange = [0, eng.tMax * 1.25];
+
+  // Axes
+  ctx.strokeStyle = 'rgba(80,255,176,0.3)';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(gx, gy); ctx.lineTo(gx, gy + gh); ctx.lineTo(gx + gw, gy + gh);
+  ctx.stroke();
+
+  // Axis labels
+  ctx.font = '600 10px "Space Grotesk", sans-serif';
+  ctx.fillStyle = '#aaabb0';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'top';
+  ctx.fillText('Time (s)', gx + gw / 2, gy + gh + 20);
+  ctx.save();
+  ctx.translate(15, gy + gh / 2);
+  ctx.rotate(-Math.PI / 2);
+  ctx.fillText('Thrust (N)', 0, 0);
+  ctx.restore();
+
+  // Grid lines
+  var nTicksX = 5;
+  var nTicksY = 5;
+  var ix, iy;
+  ctx.font = '400 9px "Space Grotesk", sans-serif';
+  ctx.textBaseline = 'middle';
+  for (ix = 0; ix <= nTicksX; ix++) {
+    var tx = gx + (ix / nTicksX) * gw;
+    var tv = (l2TimeRange[0] + (ix / nTicksX) * (l2TimeRange[1] - l2TimeRange[0])).toFixed(1);
+    ctx.fillStyle = '#666';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'top';
+    ctx.fillText(tv, tx, gy + gh + 4);
+    if (ix > 0) {
+      ctx.strokeStyle = 'rgba(80,255,176,0.06)';
+      ctx.beginPath(); ctx.moveTo(tx, gy); ctx.lineTo(tx, gy + gh); ctx.stroke();
+    }
+  }
+  for (iy = 0; iy <= nTicksY; iy++) {
+    var ty = gy + gh - (iy / nTicksY) * gh;
+    var thrV = (l2ThrustRange[0] + (iy / nTicksY) * (l2ThrustRange[1] - l2ThrustRange[0])).toFixed(1);
+    ctx.fillStyle = '#666';
+    ctx.textAlign = 'right';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(thrV, gx - 6, ty);
+    if (iy > 0) {
+      ctx.strokeStyle = 'rgba(80,255,176,0.06)';
+      ctx.beginPath(); ctx.moveTo(gx, ty); ctx.lineTo(gx + gw, ty); ctx.stroke();
+    }
+  }
+
+  // Draw curve with glow
+  ctx.save();
+  ctx.shadowColor = '#ffb59c';
+  ctx.shadowBlur = 8;
+  ctx.strokeStyle = '#ffb59c';
+  ctx.lineWidth = 2.5;
+  ctx.beginPath();
+  var pi;
+  for (pi = 0; pi < curvePts.length; pi++) {
+    var px = gx + (curvePts[pi].time / l2TimeRange[1]) * gw;
+    var py = gy + gh - (curvePts[pi].thrust / l2ThrustRange[1]) * gh;
+    if (pi === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+  }
+  ctx.stroke();
+  ctx.restore();
+
+  // Fill under curve
+  ctx.fillStyle = 'rgba(255,181,156,0.08)';
+  ctx.lineTo(gx + gw, gy + gh);
+  ctx.lineTo(gx, gy + gh);
+  ctx.closePath();
+  ctx.fill();
+
+  // Title
+  ctx.font = '700 12px "Space Grotesk", sans-serif';
+  ctx.fillStyle = '#50ffb0';
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'top';
+  ctx.fillText(t('curveReader') + ' - ' + engineName(eng), gx, 10);
+
+  // Curve type label
+  var curveLabels = ['progressive', 'neutral', 'regressive'];
+  ctx.font = '500 10px "Noto Sans SC", sans-serif';
+  ctx.fillStyle = '#666';
+  ctx.fillText('(' + t(curveLabels[gs.l2_curveType]) + ')', gx + ctx.measureText(t('curveReader') + ' - ' + engineName(eng)).width + 8, 11);
+
+  // Click mode instructions
+  var modeLabels = ['clickPeak', 'clickAvg', 'clickEnd'];
+  if (gs.l2_clickMode < 3) {
+    ctx.font = '600 12px "Noto Sans SC", sans-serif';
+    ctx.fillStyle = '#ffb59c';
+    ctx.textAlign = 'right';
+    var pulse = 0.6 + 0.4 * Math.sin(gs.time * 4);
+    ctx.globalAlpha = pulse;
+    ctx.fillText(t(modeLabels[gs.l2_clickMode]), gx + gw, 12);
+    ctx.globalAlpha = 1;
+  }
+
+  // Draw user clicks
+  var ci;
+  var clickColors = ['#ff5050', '#50ffb0', '#5090ff'];
+  var clickLabels = ['Peak', 'Avg', 'End'];
+  for (ci = 0; ci < gs.l2_clicks.length; ci++) {
+    var cl = gs.l2_clicks[ci];
+    // Glow ring
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(cl.px, cl.py, 10, 0, Math.PI * 2);
+    ctx.strokeStyle = clickColors[ci];
+    ctx.globalAlpha = 0.3;
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    ctx.restore();
+    // Dot
+    ctx.beginPath();
+    ctx.arc(cl.px, cl.py, 5, 0, Math.PI * 2);
+    ctx.fillStyle = clickColors[ci];
+    ctx.fill();
+    ctx.font = '600 9px "Space Grotesk", sans-serif';
+    ctx.fillStyle = clickColors[ci];
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'bottom';
+    ctx.fillText(clickLabels[ci], cl.px, cl.py - 10);
+  }
+}
+
+// ============================================================
+// DRAW LEVEL 3: ACCELERATION CALCULATOR
+// ============================================================
+function drawLevel3() {
+  if (!gs.l3_engine) return;
+  canvasClickZones = [];
+
+  var eng = gs.l3_engine;
+  var massKg = gs.l3_rocketMassG / 1000;
+
+  // Draw spec card on left
+  var cardW = Math.min(220, W * 0.35);
+  var cardH = 150;
+  var cardX = W * 0.05;
+  var cardY = H * 0.15;
+  drawIdleEngineGlow(cardX + cardW / 2, cardY + cardH / 2, 80);
+  drawSpecCard(eng, cardX, cardY, cardW, cardH, false);
+
+  // Rocket mass info
+  ctx.font = '700 12px "Space Grotesk", sans-serif';
+  ctx.fillStyle = '#ffb59c';
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'top';
+  ctx.fillText(t('rocketMass') + ': ' + gs.l3_rocketMassG + 'g (' + massKg.toFixed(3) + 'kg)', cardX, cardY + cardH + 14);
+
+  // Calculation steps display
+  var sx = W * 0.5;
+  var sy = H * 0.12;
+  var stepH = H * 0.22;
+  ctx.font = '700 14px "Space Grotesk", sans-serif';
+  ctx.fillStyle = '#50ffb0';
+  ctx.textAlign = 'left';
+  ctx.fillText(t('accelCalc'), sx, sy);
+
+  var correctW = massKg * G;
+  var correctF = eng.tAvg - correctW;
+  var correctA = correctF / massKg;
+
+  // Step boxes
+  var stepLabels = [
+    'W = mg = ' + massKg.toFixed(3) + ' x ' + G.toFixed(2),
+    'F = T - W = ' + eng.tAvg.toFixed(2) + ' - W',
+    'a = F / m = F / ' + massKg.toFixed(3)
+  ];
+  var stepResults = [correctW, correctF, correctA];
+  var i;
+  for (i = 0; i < 3; i++) {
+    var bx = sx;
+    var by = sy + 30 + i * stepH;
+    var bw = W * 0.42;
+    var bh = stepH - 10;
+    var isActive = gs.l3_step === i;
+    var isDone = gs.l3_step > i;
+
+    if (isActive) {
+      drawGlow(bx, by, bw, bh, 'rgb(255,181,156)', 0.5 + 0.3 * Math.sin(gs.time * 3));
+    }
+    drawCard(bx, by, bw, bh, isActive ? '#ffb59c' : isDone ? '#50ffb0' : 'rgba(80,255,176,0.1)');
+
+    ctx.font = '600 11px "Noto Sans SC", sans-serif';
+    ctx.fillStyle = isActive ? '#ffb59c' : '#888';
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'top';
+    ctx.fillText(stepLabels[i], bx + 10, by + 8);
+
+    if (isDone) {
+      ctx.font = '700 16px "Space Grotesk", sans-serif';
+      ctx.fillStyle = '#50ffb0';
+      ctx.fillText('= ' + stepResults[i].toFixed(2) + (i === 0 ? ' N' : i === 1 ? ' N' : ' m/s\u00b2'), bx + 10, by + 30);
+    } else if (isActive) {
+      ctx.font = '700 14px "Space Grotesk", sans-serif';
+      ctx.fillStyle = '#ffb59c';
+      ctx.fillText('= ?', bx + 10, by + 30);
+    }
+  }
+
+  // Draw rocket diagram
+  var rocketX = W * 0.28;
+  var rocketY = H * 0.5;
+  var rocketH = Math.min(100, H * 0.25);
+  drawRocket(rocketX, rocketY, rocketH, eng.tAvg, massKg, false);
+}
+
+function drawRocket(cx, cy, rh, thrustN, massKg, burning) {
+  ctx.save();
+  // Idle glow
+  drawIdleEngineGlow(cx, cy + rh * 0.2, 30);
+
+  // Body
+  var bw = 20;
+  ctx.fillStyle = '#3a4060';
+  ctx.fillRect(cx - bw / 2, cy - rh / 2, bw, rh * 0.7);
+  // Nose cone
+  ctx.fillStyle = '#50ffb0';
+  ctx.beginPath();
+  ctx.moveTo(cx, cy - rh / 2 - 15);
+  ctx.lineTo(cx - bw / 2, cy - rh / 2);
+  ctx.lineTo(cx + bw / 2, cy - rh / 2);
+  ctx.closePath();
+  ctx.fill();
+  // Fins
+  ctx.fillStyle = '#ffb59c';
+  ctx.beginPath();
+  ctx.moveTo(cx - bw / 2, cy + rh * 0.2);
+  ctx.lineTo(cx - bw / 2 - 10, cy + rh * 0.3);
+  ctx.lineTo(cx - bw / 2, cy + rh * 0.05);
+  ctx.closePath();
+  ctx.fill();
+  ctx.beginPath();
+  ctx.moveTo(cx + bw / 2, cy + rh * 0.2);
+  ctx.lineTo(cx + bw / 2 + 10, cy + rh * 0.3);
+  ctx.lineTo(cx + bw / 2, cy + rh * 0.05);
+  ctx.closePath();
+  ctx.fill();
+
+  // Force arrows
+  var arrowLen = Math.min(50, thrustN * 3);
+  ctx.strokeStyle = '#50ffb0';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(cx, cy + rh * 0.2);
+  ctx.lineTo(cx, cy + rh * 0.2 + arrowLen);
+  ctx.stroke();
+  // Arrow head
+  ctx.beginPath();
+  ctx.moveTo(cx - 4, cy + rh * 0.2 + arrowLen - 6);
+  ctx.lineTo(cx, cy + rh * 0.2 + arrowLen);
+  ctx.lineTo(cx + 4, cy + rh * 0.2 + arrowLen - 6);
+  ctx.stroke();
+  ctx.fillStyle = '#50ffb0';
+  ctx.font = '600 9px "Space Grotesk", sans-serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'top';
+  ctx.fillText('T=' + thrustN.toFixed(1) + 'N', cx, cy + rh * 0.2 + arrowLen + 4);
+
+  // Weight down
+  var wt = massKg * G;
+  var wtLen = Math.min(40, wt * 3);
+  ctx.strokeStyle = '#ff5050';
+  ctx.beginPath();
+  ctx.moveTo(cx, cy - rh / 2 - 15);
+  ctx.lineTo(cx, cy - rh / 2 - 15 - wtLen);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(cx - 4, cy - rh / 2 - 15 - wtLen + 6);
+  ctx.lineTo(cx, cy - rh / 2 - 15 - wtLen);
+  ctx.lineTo(cx + 4, cy - rh / 2 - 15 - wtLen + 6);
+  ctx.stroke();
+  ctx.fillStyle = '#ff5050';
+  ctx.textBaseline = 'bottom';
+  ctx.fillText('W=' + wt.toFixed(1) + 'N', cx, cy - rh / 2 - 15 - wtLen - 2);
+
+  // Burning flame
+  if (burning) {
+    var flameLen = 15 + Math.random() * 12;
+    var flameW = 8 + Math.random() * 4;
+    ctx.save();
+    ctx.globalAlpha = 0.8;
+    // Outer flame
+    var fgrad = ctx.createLinearGradient(cx, cy + rh * 0.2, cx, cy + rh * 0.2 + flameLen);
+    fgrad.addColorStop(0, '#ffcc44');
+    fgrad.addColorStop(0.5, '#ff8844');
+    fgrad.addColorStop(1, 'rgba(255,60,20,0)');
+    ctx.fillStyle = fgrad;
+    ctx.beginPath();
+    ctx.moveTo(cx - flameW, cy + rh * 0.2);
+    ctx.lineTo(cx + flameW, cy + rh * 0.2);
+    ctx.lineTo(cx + (Math.random() - 0.5) * 4, cy + rh * 0.2 + flameLen);
+    ctx.closePath();
+    ctx.fill();
+    // Inner bright core
+    ctx.globalAlpha = 0.9;
+    ctx.fillStyle = '#fff8e0';
+    ctx.beginPath();
+    ctx.moveTo(cx - 3, cy + rh * 0.2);
+    ctx.lineTo(cx + 3, cy + rh * 0.2);
+    ctx.lineTo(cx, cy + rh * 0.2 + flameLen * 0.4);
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
+  }
+
+  ctx.restore();
+}
+
+// ============================================================
+// DRAW LEVEL 4: ENGINE MATCH
+// ============================================================
+function drawLevel4() {
+  canvasClickZones = [];
+  var msn = gs.l4_missions[gs.scenario];
+
+  if (gs.l4_missionPhase === 2) {
+    drawL4Simulation(msn);
+    return;
+  }
+
+  // Mission card at top
+  var mw = W * 0.9;
+  var mx = (W - mw) / 2;
+  var my = 10;
+  var mh = 40;
+  drawGlow(mx, my, mw, mh, 'rgb(255,181,156)', 0.4);
+  drawCard(mx, my, mw, mh, '#ffb59c');
+  ctx.font = '700 13px "Noto Sans SC", sans-serif';
+  ctx.fillStyle = '#ffb59c';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(t('mission') + ': ' + (lang === 'cn' ? msn.descCn : msn.descEn), W / 2, my + mh / 2);
+
+  if (gs.l4_missionPhase === 0) {
+    // Show 4 engine cards
+    var cardW = Math.min(150, (W - 60) / 4);
+    var cardH = Math.min(160, H * 0.65);
+    var gap = 10;
+    var totalW = cardW * 4 + gap * 3;
+    var startX = (W - totalW) / 2;
+    var startY = my + mh + 15;
+    var i;
+    for (i = 0; i < 4; i++) {
+      var ex = startX + i * (cardW + gap);
+      var isSelected = gs.l4_selectedEngine === i;
+      drawSpecCard(gs.l4_engines[i], ex, startY, cardW, cardH, isSelected);
+      canvasClickZones.push({x: ex, y: startY, w: cardW, h: cardH, idx: i});
+    }
+  } else if (gs.l4_missionPhase === 1) {
+    // Show reason choices
+    var selEng = gs.l4_engines[gs.l4_selectedEngine];
+    var scw = Math.min(200, W * 0.35);
+    var sch = 140;
+    drawSpecCard(selEng, 20, my + mh + 15, scw, sch, true);
+
+    ctx.font = '700 12px "Noto Sans SC", sans-serif';
+    ctx.fillStyle = '#ffb59c';
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'top';
+    ctx.fillText(t('whyBest'), scw + 40, my + mh + 20);
+
+    // Shuffled reason options
+    var ri;
+    var rcw = Math.min(300, W * 0.5);
+    var rch = 30;
+    var ry = my + mh + 45;
+    for (ri = 0; ri < gs.l4_reasonOrder.length; ri++) {
+      var rx = scw + 40;
+      var isRSel = gs.l4_selectedReason === ri;
+      if (isRSel) {
+        drawGlow(rx, ry, rcw, rch, 'rgb(80,255,176)', 0.5);
+      }
+      drawCard(rx, ry, rcw, rch, isRSel ? '#50ffb0' : 'rgba(80,255,176,0.12)');
+      ctx.font = '400 11px "Noto Sans SC", sans-serif';
+      ctx.fillStyle = isRSel ? '#50ffb0' : '#aaabb0';
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(String.fromCharCode(65 + ri) + '. ' + gs.l4_reasonOrder[ri].text, rx + 10, ry + rch / 2);
+      canvasClickZones.push({x: rx, y: ry, w: rcw, h: rch, idx: ri});
+      ry += rch + 6;
+    }
+  }
+}
+
+function drawL4Simulation(msn) {
+  var eng = gs.l4_engines[gs.l4_selectedEngine];
+  var massKg = msn.rocketMassG / 1000;
+
+  // ground
+  var groundY = H * 0.85;
+  ctx.fillStyle = '#1a1e2a';
+  ctx.fillRect(0, groundY, W, H - groundY);
+  ctx.strokeStyle = 'rgba(80,255,176,0.2)';
+  ctx.beginPath(); ctx.moveTo(0, groundY); ctx.lineTo(W, groundY); ctx.stroke();
+
+  // altitude scale
+  var maxAlt = msn.targetAlt * 1.5;
+  var altScale = (groundY - 40) / maxAlt;
+
+  // target line
+  var targetY = groundY - msn.targetAlt * altScale;
+  ctx.strokeStyle = 'rgba(255,181,156,0.4)';
+  ctx.setLineDash([5, 5]);
+  ctx.beginPath(); ctx.moveTo(0, targetY); ctx.lineTo(W, targetY); ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.font = '600 10px "Space Grotesk", sans-serif';
+  ctx.fillStyle = '#ffb59c';
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'bottom';
+  ctx.fillText(msn.targetAlt + 'm', 10, targetY - 2);
+
+  // rocket position
+  var rocketDrawY = groundY - gs.l4_simAlt * altScale;
+  rocketDrawY = Math.max(40, rocketDrawY);
+  var isBurning = gs.l4_simT < eng.burnTime;
+  drawRocket(W / 2, rocketDrawY, 50, eng.tAvg, massKg, isBurning);
+
+  // Launch particles
+  if (isBurning && gs.phase === PHASE_ANIM) {
+    spawnLaunchParticles(W / 2, rocketDrawY + 25);
+  }
+
+  // HUD
+  ctx.font = '600 12px "Space Grotesk", sans-serif';
+  ctx.fillStyle = '#50ffb0';
+  ctx.textAlign = 'right';
+  ctx.textBaseline = 'top';
+  ctx.fillText(t('altitude') + ': ' + gs.l4_simAlt.toFixed(1) + 'm', W - 20, 10);
+  ctx.fillText('v: ' + gs.l4_simVel.toFixed(1) + ' m/s', W - 20, 28);
+  ctx.fillText('t: ' + gs.l4_simT.toFixed(1) + 's', W - 20, 46);
+}
+
+// ============================================================
+// DRAW LEVEL 5: CUSTOM ENGINE DESIGNER
+// ============================================================
+function drawLevel5() {
+  canvasClickZones = [];
+  var ch = gs.l5_challenges[gs.scenario];
+  var massKg = ch.rocketMassG / 1000;
+
+  // Challenge info
+  ctx.font = '700 13px "Noto Sans SC", sans-serif';
+  ctx.fillStyle = '#ffb59c';
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'top';
+  ctx.fillText(lang === 'cn' ? ch.descCn : ch.descEn, 20, 12);
+
+  // Thrust curve preview (left half)
+  var margin = {left: 50, right: 20, top: 45, bottom: 40};
+  var gx = margin.left;
+  var gy = margin.top;
+  var gw = W * 0.5 - margin.left - margin.right;
+  var gh = H - margin.top - margin.bottom;
+
+  // Axes
+  ctx.strokeStyle = 'rgba(80,255,176,0.3)';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(gx, gy); ctx.lineTo(gx, gy + gh); ctx.lineTo(gx + gw, gy + gh);
+  ctx.stroke();
+
+  ctx.font = '600 9px "Space Grotesk", sans-serif';
+  ctx.fillStyle = '#aaabb0';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'top';
+  ctx.fillText('Time (s)', gx + gw / 2, gy + gh + 14);
+  ctx.save();
+  ctx.translate(12, gy + gh / 2);
+  ctx.rotate(-Math.PI / 2);
+  ctx.fillText('Thrust (N)', 0, 0);
+  ctx.restore();
+
+  // Generate curve
+  var fakeEng = {tAvg: gs.l5_peakThrust * 0.85, tMax: gs.l5_peakThrust, burnTime: gs.l5_burnTime, impulse: 0, propMass: 0};
+  if (gs.l5_curveType === 0) fakeEng.tAvg = gs.l5_peakThrust * 0.65;
+  else if (gs.l5_curveType === 2) fakeEng.tAvg = gs.l5_peakThrust * 0.72;
+  var curvePts = genThrustCurve(fakeEng, gs.l5_curveType);
+
+  var tRange = gs.l5_burnTime * 1.15;
+  var thrRange = gs.l5_peakThrust * 1.3;
+
+  // Draw curve with glow
+  ctx.save();
+  ctx.shadowColor = '#ffb59c';
+  ctx.shadowBlur = 6;
+  ctx.strokeStyle = '#ffb59c';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  var pi;
+  for (pi = 0; pi < curvePts.length; pi++) {
+    var px = gx + (curvePts[pi].time / tRange) * gw;
+    var py = gy + gh - (curvePts[pi].thrust / thrRange) * gh;
+    if (pi === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+  }
+  ctx.stroke();
+  ctx.restore();
+
+  // Fill under
+  ctx.fillStyle = 'rgba(255,181,156,0.06)';
+  ctx.lineTo(gx + gw, gy + gh);
+  ctx.lineTo(gx, gy + gh);
+  ctx.closePath();
+  ctx.fill();
+
+  // Right panel: live calculations
+  var rx = W * 0.55;
+  var ry = gy;
+  var rw = W * 0.42;
+
+  ctx.font = '700 11px "Space Grotesk", sans-serif';
+  ctx.fillStyle = '#50ffb0';
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'top';
+  ctx.fillText(t('engineDesign'), rx, ry);
+
+  var avgT = fakeEng.tAvg;
+  var weightN = massKg * G;
+  var netF = avgT - weightN;
+  var accel = netF / massKg;
+  var impulse = avgT * gs.l5_burnTime;
+  var estAlt = 0;
+  if (accel > 0) {
+    var burnVel = accel * gs.l5_burnTime;
+    estAlt = 0.5 * accel * gs.l5_burnTime * gs.l5_burnTime + burnVel * burnVel / (2 * G);
+  }
+
+  var rows = [
+    [t('peakThrust'), gs.l5_peakThrust.toFixed(1) + ' N'],
+    [t('avgThrust'), avgT.toFixed(2) + ' N'],
+    [t('burnTime'), gs.l5_burnTime.toFixed(1) + ' s'],
+    [t('totalImpulse'), impulse.toFixed(2) + ' Ns'],
+    [t('rocketMass'), ch.rocketMassG + 'g'],
+    [t('weight'), weightN.toFixed(2) + ' N'],
+    [t('netForce'), netF.toFixed(2) + ' N'],
+    [t('accel'), accel.toFixed(2) + ' m/s\u00b2'],
+    [t('altitude') + ' (est)', estAlt.toFixed(1) + ' m'],
+  ];
+
+  var rry = ry + 22;
+  var i;
+  for (i = 0; i < rows.length; i++) {
+    ctx.font = '400 11px "Noto Sans SC", sans-serif';
+    ctx.fillStyle = '#888';
+    ctx.textAlign = 'left';
+    ctx.fillText(rows[i][0], rx, rry);
+    // Highlight acceleration row with color feedback
+    if (i === 7) {
+      var accelDiff = Math.abs(accel - ch.targetAccel);
+      var accelTol = ch.targetAccel * 0.15;
+      ctx.fillStyle = accelDiff <= accelTol ? '#50ffb0' : accelDiff <= accelTol * 2 ? '#ffcc44' : '#ffb59c';
+    } else {
+      ctx.fillStyle = '#f6f6fc';
+    }
+    ctx.textAlign = 'right';
+    ctx.fillText(rows[i][1], rx + rw, rry);
+    ctx.textAlign = 'left';
+    rry += 20;
+  }
+
+  // Target display
+  rry += 10;
+  var closeness = Math.abs(accel - ch.targetAccel) <= ch.targetAccel * 0.15;
+  drawGlow(rx, rry, rw, 36, closeness ? 'rgb(80,255,176)' : 'rgb(255,181,156)', 0.4);
+  drawCard(rx, rry, rw, 36, closeness ? '#50ffb0' : '#ffb59c');
+  ctx.font = '700 12px "Space Grotesk", sans-serif';
+  ctx.fillStyle = closeness ? '#50ffb0' : '#ffb59c';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(t('targetAccel') + ': ' + ch.targetAccel + ' m/s\u00b2 | ' + t('yourAccel') + ': ' + accel.toFixed(1) + ' m/s\u00b2', rx + rw / 2, rry + 18);
+
+  // Curve shape buttons
+  var shapeY = rry + 50;
+  ctx.font = '600 10px "Noto Sans SC", sans-serif';
+  ctx.fillStyle = '#aaabb0';
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'top';
+  ctx.fillText(t('curveShape') + ':', rx, shapeY);
+
+  var shapeNames = ['progressive', 'neutral', 'regressive'];
+  var si;
+  for (si = 0; si < 3; si++) {
+    var sbx = rx + 60 + si * 80;
+    var isCurrent = gs.l5_curveType === si;
+    if (isCurrent) drawGlow(sbx, shapeY - 2, 70, 20, 'rgb(80,255,176)', 0.4);
+    drawCard(sbx, shapeY - 2, 70, 20, isCurrent ? '#50ffb0' : 'rgba(80,255,176,0.1)');
+    ctx.font = '500 9px "Noto Sans SC", sans-serif';
+    ctx.fillStyle = isCurrent ? '#50ffb0' : '#888';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(t(shapeNames[si]), sbx + 35, shapeY + 8);
+    canvasClickZones.push({x: sbx, y: shapeY - 2, w: 70, h: 20, idx: si});
+  }
+
+  // Burn time slider display
+  var btY = shapeY + 30;
+  ctx.font = '600 10px "Noto Sans SC", sans-serif';
+  ctx.fillStyle = '#aaabb0';
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'top';
+  ctx.fillText(t('burnSlider') + ': ' + gs.l5_burnTime.toFixed(1) + 's', rx, btY);
+
+  var barX = rx + 100;
+  var barW = rw - 110;
+  var barH = 8;
+  ctx.fillStyle = 'rgba(80,255,176,0.1)';
+  ctx.fillRect(barX, btY + 2, barW, barH);
+  var fillFrac = (gs.l5_burnTime - 0.3) / (3.0 - 0.3);
+  ctx.fillStyle = '#50ffb0';
+  ctx.fillRect(barX, btY + 2, barW * fillFrac, barH);
+  // Thumb indicator
+  ctx.fillStyle = '#50ffb0';
+  ctx.beginPath();
+  ctx.arc(barX + barW * fillFrac, btY + 2 + barH / 2, 5, 0, Math.PI * 2);
+  ctx.fill();
+  canvasClickZones.push({x: barX, y: btY - 2, w: barW, h: barH + 6, idx: 100});
+}
+
+// ============================================================
+// FEEDBACK OVERLAY
+// ============================================================
+function drawFeedback() {
+  if (gs.feedbackT <= 0 || !gs.feedback) return;
+  var alpha = Math.min(1, gs.feedbackT);
+  // Ease the feedback in
+  var scale = easeOutBack(Math.min(1, (1.5 - gs.feedbackT) * 3));
+  ctx.save();
+  ctx.globalAlpha = alpha;
+  ctx.font = '700 20px "Noto Sans SC", sans-serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  var tw = ctx.measureText(gs.feedback).width;
+  var fbX = W / 2;
+  var fbY = H * 0.45;
+  ctx.translate(fbX, fbY);
+  ctx.scale(scale, scale);
+  // background pill
+  drawRoundedRect(-tw / 2 - 16, -16, tw + 32, 36, 8);
+  ctx.fillStyle = 'rgba(12,14,20,0.85)';
+  ctx.fill();
+  // text
+  var isWrong = gs.feedback.indexOf(t('wrong')) >= 0;
+  ctx.fillStyle = isWrong ? '#ff5050' : '#50ffb0';
+  ctx.fillText(gs.feedback, 0, 0);
+  ctx.restore();
+}
+
+// ============================================================
+// MAIN LOOP
+// ============================================================
+var lastTime = 0;
+var globalTime = 0;
+
+function mainLoop(ts) {
+  var dt = lastTime ? (ts - lastTime) / 1000 : 0.016;
+  dt = Math.min(dt, 0.1);
+  lastTime = ts;
+  globalTime += dt;
+  gs.time = globalTime;
+  gs.engineGlowPhase += dt * 2.5;
+
+  // Update feedback timer
+  if (gs.feedbackT > 0) gs.feedbackT -= dt;
+
+  // Animate HUD score
+  if (gs.hudScoreDisplay !== gs.hudScoreTarget) {
+    gs.hudScoreDisplay = lerp(gs.hudScoreDisplay, gs.hudScoreTarget, Math.min(1, dt * 8));
+    if (Math.abs(gs.hudScoreDisplay - gs.hudScoreTarget) < 0.5) gs.hudScoreDisplay = gs.hudScoreTarget;
+    $('hudV2').textContent = Math.round(gs.hudScoreDisplay);
+    // Pulse color on score change
+    $('hudV2').style.color = '#ffb59c';
+    setTimeout(function() { $('hudV2').style.color = '#50ffb0'; }, 300);
+  }
+
+  // Update particles
+  updateParticles(dt);
+
+  // Get shake offset
+  var shake = getShakeOffset(dt);
+
+  // Level transition update
+  if (levelTransition.active) {
+    levelTransition.t += dt;
+  }
+
+  // Level 4 simulation update
+  if (gs.level === 4 && gs.phase === PHASE_ANIM && gs.l4_missionPhase === 2) {
+    var msn = gs.l4_missions[gs.scenario];
+    var eng = gs.l4_engines[gs.l4_selectedEngine];
+    var massKg = msn.rocketMassG / 1000;
+    gs.l4_simT += dt;
+
+    var thrustNow = gs.l4_simT <= eng.burnTime ? eng.tAvg : 0;
+    var weightN = massKg * G;
+    var netF = thrustNow - weightN;
+    var accel = netF / massKg;
+    gs.l4_simVel += accel * dt;
+    gs.l4_simAlt += gs.l4_simVel * dt;
+
+    if (gs.l4_simAlt < 0) gs.l4_simAlt = 0;
+    if ((gs.l4_simT > eng.burnTime + 2 && gs.l4_simVel <= 0) || gs.l4_simT > 8) {
+      gs.phase = PHASE_FEEDBACK;
+      btnAction.textContent = t('next');
+      btnAction.disabled = false;
+      showResultPanel();
+      $('rpTitle').textContent = t('launchResult');
+      $('rpLine1').textContent = t('altitude') + ': ' + gs.l4_simAlt.toFixed(1) + 'm';
+      $('rpLine2').textContent = (lang === 'cn' ? '\u76ee\u6807' : 'Target') + ': ' + msn.targetAlt + 'm';
+      $('rpLine3').textContent = '';
+      var simDiff = Math.abs(gs.l4_simAlt - msn.targetAlt);
+      if (simDiff < msn.targetAlt * 0.3) {
+        $('rpVerdict').textContent = t('great');
+        spawnCorrectParticles(W / 2, H / 2);
+      } else {
+        $('rpVerdict').textContent = gs.l4_simAlt >= msn.targetAlt ? t('correct') : t('wrong');
+      }
+      $('rpInsight').textContent = '';
+    }
+  }
+
+  // --- DRAW ---
+  ctx.save();
+  ctx.translate(shake.x, shake.y);
+
+  // Background
+  ctx.fillStyle = '#0c0e14';
+  ctx.fillRect(-10, -10, W + 20, H + 20);
+
+  // Parallax stars
+  drawStars(globalTime, gs.level * 100);
+
+  // Level-specific drawing
+  if (gs.level === 1) drawLevel1();
+  else if (gs.level === 2) drawLevel2();
+  else if (gs.level === 3) drawLevel3();
+  else if (gs.level === 4) drawLevel4();
+  else if (gs.level === 5) drawLevel5();
+
+  drawFeedback();
+  drawParticles();
+
+  // All-done overlay
+  if (gs.phase === PHASE_ALL_DONE) {
+    ctx.fillStyle = 'rgba(12,14,20,0.8)';
+    ctx.fillRect(0, 0, W, H);
+    ctx.font = '700 24px "Space Grotesk", sans-serif';
+    ctx.fillStyle = '#50ffb0';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(t('complete'), W / 2, H * 0.4);
+    ctx.font = '700 18px "Space Grotesk", sans-serif';
+    ctx.fillStyle = '#ffb59c';
+    ctx.fillText(t('totalScore') + ': ' + gs.score, W / 2, H * 0.55);
+    ctx.font = '600 13px "Noto Sans SC", sans-serif';
+    ctx.fillStyle = '#aaabb0';
+    ctx.fillText(t('insight3'), W / 2, H * 0.68);
+  }
+
+  ctx.restore();
+
+  // Level transition overlay (drawn outside shake transform)
+  drawLevelTransition();
+
+  requestAnimationFrame(mainLoop);
+}
+
+// --- Kick off ---
+resizeCanvas();
+initLevel();
+refreshUI();
+requestAnimationFrame(mainLoop);
+</script>
+</body>
+</html>

@@ -1,0 +1,1174 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=Inter:wght@400;500&family=Noto+Sans+SC:wght@400;700&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box;}
+html,body{width:100%;height:100vh;overflow:hidden;}
+body{background:var(--bg,#0c0e12);color:var(--text,#f6f6fc);font-family:'Inter','Noto Sans SC',sans-serif;}
+/* ── Outer: sidebar + main ── */
+.wrapper{display:flex;flex-direction:row;height:100vh;overflow:hidden;}
+.sidebar{width:200px;min-width:200px;max-width:200px;display:flex;flex-direction:column;gap:6px;padding:10px;background:rgba(0,0,0,0.5);border-right:1px solid rgba(80,255,176,0.15);overflow-y:auto;}
+.lang-btn{align-self:flex-start;flex-shrink:0;font-family:'Space Grotesk',sans-serif;font-size:10px;font-weight:700;padding:3px 8px;cursor:pointer;border:1px solid rgba(255,181,156,0.25);background:transparent;color:#ffb59c;letter-spacing:1px;}
+.lang-btn:hover{border-color:#ffb59c;background:rgba(255,181,156,0.1);}
+.sidebar h1{font-family:'Space Grotesk',sans-serif;font-size:13px;font-weight:700;color:var(--primary,#50ffb0);margin-top:4px;line-height:1.3;}
+.sidebar .sub{font-size:10px;color:var(--muted,#aaabb0);letter-spacing:0.06em;text-transform:uppercase;}
+.sidebar .frame-ind{font-family:'Space Grotesk',sans-serif;font-size:10px;color:var(--muted,#aaabb0);letter-spacing:0.1em;margin-top:4px;}
+.sidebar .guide-label{font-family:'Space Grotesk',sans-serif;font-size:9px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:var(--primary,#50ffb0);margin-top:8px;}
+.sidebar .guide-content{font-family:'Noto Sans SC',sans-serif;font-size:11px;color:rgba(255,255,255,0.85);line-height:1.5;}
+.sidebar .guide-content ul{padding-left:16px;margin:0;}
+.sidebar .guide-content li{margin-bottom:1px;}
+/* ── Main area: canvas + controls + hud ── */
+.anim-main{flex:1;display:flex;flex-direction:column;min-width:0;}
+.canvas-wrap{flex:1;min-height:0;position:relative;}
+canvas{width:100%;height:100%;display:block;}
+/* ── Controls + HUD ── */
+.controls{display:flex;justify-content:center;align-items:center;gap:12px;padding:6px 16px;}
+.ctrl-btn{font-family:'Space Grotesk',sans-serif;font-size:11px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;padding:5px 16px;border:none;cursor:pointer;color:var(--bg,#0c0e12);background:linear-gradient(135deg,var(--primary,#50ffb0),var(--primary-dim,#17df93));transition:transform 0.1s,box-shadow 0.2s;box-shadow:0 0 10px var(--glow-strong,rgba(80,255,176,0.3));}
+.ctrl-btn:hover{transform:scale(1.04);}
+.ctrl-btn:active{transform:scale(0.96);}
+.ctrl-btn.secondary{background:var(--glass,rgba(23,26,31,0.92));color:var(--muted,#aaabb0);box-shadow:none;backdrop-filter:blur(12px);}
+.ctrl-btn.secondary:hover{color:var(--primary,#50ffb0);}
+.hud{height:40px;display:flex;align-items:center;justify-content:space-around;background:rgba(0,0,0,0.55);backdrop-filter:blur(12px);padding:0 16px;}
+.hud-item{text-align:center;}
+.hud-label{font-family:'Space Grotesk',sans-serif;font-size:8px;letter-spacing:0.15em;text-transform:uppercase;color:var(--muted,#aaabb0);}
+.hud-val{font-family:'Space Grotesk',sans-serif;font-size:13px;font-weight:700;color:var(--primary,#50ffb0);}
+</style>
+</head>
+<body>
+<div class="wrapper">
+<!-- Sidebar: lang-btn, title, guide (completely separate from canvas) -->
+<div class="sidebar">
+<button class="lang-btn" id="langBtn">CN</button>
+<h1 id="title"></h1>
+<div class="sub" id="subtitle"></div>
+<div class="frame-ind" id="frameIndicator"></div>
+<div class="guide-label" id="guideTitle"></div>
+<div class="guide-content" id="guideContent"></div>
+</div>
+<!-- Main: canvas fills all space, nothing overlaps -->
+<div class="anim-main">
+<div class="canvas-wrap"><canvas id="c"></canvas></div>
+<div class="controls">
+<button class="ctrl-btn secondary" id="btnPrev"></button>
+<button class="ctrl-btn" id="btnPlay"></button>
+<button class="ctrl-btn secondary" id="btnNext"></button>
+</div>
+<div class="hud">
+<div class="hud-item"><div class="hud-label" id="hudL1"></div><div class="hud-val" id="hudV1"></div></div>
+<div class="hud-item"><div class="hud-label" id="hudL2"></div><div class="hud-val" id="hudV2"></div></div>
+<div class="hud-item"><div class="hud-label" id="hudL3"></div><div class="hud-val" id="hudV3"></div></div>
+<div class="hud-item"><div class="hud-label" id="hudL4"></div><div class="hud-val" id="hudV4"></div></div>
+</div>
+</div>
+</div>
+
+<!-- Runtime (shared skeleton) -->
+<script src="animation_runtime.js"></script>
+
+<!-- Content -->
+<script>
+// ============================================================
+// K24: Free Body Diagrams -- Drawing forces clearly
+// Concept: FBD is the fundamental tool for analysing mechanics.
+// Core Q: How to draw ALL forces on one object in a single diagram?
+//
+// 5 frames:
+//   F0 - Title "FREE BODY DIAGRAMS" with box + force arrows, core question
+//   F1 - Step-by-step: book on table -> dot -> identify forces -> draw arrows
+//   F2 - Balanced vs Unbalanced: static book vs pushed book
+//   F3 - Rocket on pad: balanced, then engine ON -> launch
+//   F4 - Rocket in flight: 3 phases side by side
+// ============================================================
+
+var CONFIG = {
+  style: 'ares_mission',
+  totalFrames: 5,
+
+  i18n: {
+    title:       {en:'FREE BODY DIAGRAMS', cn:'\u529b\u7684\u793a\u610f\u56fe'},
+    subtitle:    {en:'Drawing Forces Clearly', cn:'\u628a\u529b\u753b\u51fa\u6765'},
+    f0question:  {en:'How do you draw ALL forces\non one object in a single diagram?', cn:'\u5982\u4f55\u7528\u4e00\u5f20\u56fe\u628a\u4e00\u4e2a\u7269\u4f53\n\u53d7\u5230\u7684\u6240\u6709\u529b\u90fd\u753b\u6e05\u695a\uff1f'},
+    f0fbd:       {en:'Free Body Diagram', cn:'\u53d7\u529b\u5206\u6790\u56fe'},
+    f1title:     {en:'BUILDING A FREE BODY DIAGRAM', cn:'\u7ed8\u5236\u53d7\u529b\u5206\u6790\u56fe'},
+    f1step1:     {en:'Step 1: Isolate', cn:'\u7b2c1\u6b65: \u9694\u79bb\u7269\u4f53'},
+    f1step2:     {en:'Step 2: Identify', cn:'\u7b2c2\u6b65: \u8bc6\u522b\u529b'},
+    f1step3:     {en:'Step 3: Draw', cn:'\u7b2c3\u6b65: \u753b\u7bad\u5934'},
+    f1book:      {en:'Book', cn:'\u4e66'},
+    f1table:     {en:'Table', cn:'\u684c\u5b50'},
+    f1gravity:   {en:'W (Weight)', cn:'W (\u91cd\u529b)'},
+    f1normal:    {en:'N (Normal)', cn:'N (\u652f\u6301\u529b)'},
+    f1replace:   {en:'Replace with dot', cn:'\u7528\u8d28\u70b9\u66ff\u4ee3'},
+    f2title:     {en:'BALANCED vs UNBALANCED', cn:'\u5e73\u8861 vs \u975e\u5e73\u8861'},
+    f2balanced:  {en:'BALANCED', cn:'\u5e73\u8861'},
+    f2unbalanced:{en:'UNBALANCED', cn:'\u975e\u5e73\u8861'},
+    f2static:    {en:'Book at rest', cn:'\u4e66\u9759\u6b62'},
+    f2pushed:    {en:'Book pushed right', cn:'\u4e66\u88ab\u5411\u53f3\u63a8'},
+    f2netZero:   {en:'Net Force = 0', cn:'\u5408\u529b = 0'},
+    f2netRight:  {en:'Net Force', cn:'\u5408\u529b'},
+    f2wLabel:    {en:'W', cn:'W'},
+    f2nLabel:    {en:'N', cn:'N'},
+    f2fLabel:    {en:'F (Push)', cn:'F (\u63a8\u529b)'},
+    f2frLabel:   {en:'f (Friction)', cn:'f (\u6469\u64e6\u529b)'},
+    f2accel:     {en:'Accelerates!', cn:'\u52a0\u901f\uff01'},
+    f2noMotion:  {en:'No motion', cn:'\u4e0d\u52a8'},
+    f3title:     {en:'ROCKET ON PAD', cn:'\u706b\u7bad\u5728\u53d1\u5c04\u53f0\u4e0a'},
+    f3padStatic: {en:'Engine OFF', cn:'\u53d1\u52a8\u673a\u5173\u95ed'},
+    f3padLaunch: {en:'Engine ON', cn:'\u53d1\u52a8\u673a\u5f00\u542f'},
+    f3weight:    {en:'W (Weight)', cn:'W (\u91cd\u529b)'},
+    f3normalPad: {en:'N (Normal)', cn:'N (\u652f\u6301\u529b)'},
+    f3thrust:    {en:'T (Thrust)', cn:'T (\u63a8\u529b)'},
+    f3netUp:     {en:'Net Force UP', cn:'\u5408\u529b\u5411\u4e0a'},
+    f3balanced2: {en:'W = N (Balanced)', cn:'W = N (\u5e73\u8861)'},
+    f3liftoff:   {en:'T > W  -->  LIFTOFF!', cn:'T > W  -->  \u8d77\u98de\uff01'},
+    f3launch:    {en:'LAUNCH!', cn:'\u53d1\u5c04\uff01'},
+    f4title:     {en:'ROCKET IN FLIGHT', cn:'\u706b\u7bad\u98de\u884c\u4e2d'},
+    f4phase1:    {en:'Engine ON\nAscending', cn:'\u53d1\u52a8\u673a\u5f00\u542f\n\u4e0a\u5347'},
+    f4phase2:    {en:'Engine OFF\nCoasting Up', cn:'\u53d1\u52a8\u673a\u5173\u95ed\n\u51cf\u901f\u4e0a\u5347'},
+    f4phase3:    {en:'Engine OFF\nFalling', cn:'\u53d1\u52a8\u673a\u5173\u95ed\n\u4e0b\u964d'},
+    f4netUp:     {en:'Net: UP', cn:'\u5408\u529b: \u5411\u4e0a'},
+    f4netDown1:  {en:'Net: DOWN\n(decelerating)', cn:'\u5408\u529b: \u5411\u4e0b\n(\u51cf\u901f)'},
+    f4netDown2:  {en:'Net: DOWN\n(accelerating)', cn:'\u5408\u529b: \u5411\u4e0b\n(\u52a0\u901f)'},
+    f4thrustLbl: {en:'T', cn:'T'},
+    f4weightLbl: {en:'W', cn:'W'},
+    f4motionUp:  {en:'v', cn:'v'},
+    f4motionDn:  {en:'v', cn:'v'},
+    guideTitle:  {en:'OBSERVATION GUIDE', cn:'\u89c2\u5bdf\u6307\u5357'},
+    g1:          {en:'Replace object with a point/dot', cn:'\u7528\u8d28\u70b9\u4ee3\u66ff\u7269\u4f53'},
+    g2:          {en:'Draw ALL forces as arrows from the dot', cn:'\u4ece\u8d28\u70b9\u51fa\u53d1\u753b\u6240\u6709\u529b\u7684\u7bad\u5934'},
+    g3:          {en:'Arrow length = force magnitude', cn:'\u7bad\u5934\u957f\u5ea6 = \u529b\u7684\u5927\u5c0f'},
+    g4:          {en:'Balanced: net force = 0, no acceleration', cn:'\u5e73\u8861: \u5408\u529b=0, \u4e0d\u52a0\u901f'},
+    hudScene:    {en:'SCENE', cn:'\u573a\u666f'},
+    hudForces:   {en:'FORCES', cn:'\u529b\u7684\u6570\u91cf'},
+    hudBalance:  {en:'BALANCE', cn:'\u5e73\u8861'},
+    hudResult:   {en:'RESULT', cn:'\u7ed3\u679c'},
+  },
+
+  hudLabels: ['hudScene', 'hudForces', 'hudBalance', 'hudResult'],
+  hudValues: [
+    ['FBD',      '--',   '--',        '--'],
+    ['Book',     '2',    'W = N',     '\u9759\u6b62'],
+    ['2 Cases',  '2 ~ 4','Yes / No', '\u5bf9\u6bd4'],
+    ['Rocket',   '2 ~ 3','ON / OFF', '\u8d77\u98de'],
+    ['3 Phases', '1 ~ 2','Varying',  '\u53d8\u5316'],
+  ],
+
+  guideTitle: 'guideTitle',
+  guideItems: ['g1', 'g2', 'g3', 'g4'],
+};
+
+// ============================================================
+// Animation state
+// ============================================================
+var animState = {progress: 0, frameTracked: -1};
+var animTimer = null;
+var soundMuted = true;
+
+function startAnim(targetFrame) {
+  if (animTimer) { cancelAnimationFrame(animTimer); animTimer = null; }
+  animState = {progress: 0, frameTracked: targetFrame};
+  var lastTime = 0;
+  function tick(ts) {
+    if (animState.frameTracked !== AnimRuntime.currentFrame) return;
+    if (!lastTime) lastTime = ts;
+    var delta = (ts - lastTime) / 1000;
+    lastTime = ts;
+    animState.progress += delta * 0.4;
+    if (animState.progress > 1.0) animState.progress = 1.0;
+    AnimRuntime.drawFrame(AnimRuntime.currentFrame);
+    if (animState.progress < 1.0) {
+      animTimer = requestAnimationFrame(tick);
+    }
+  }
+  animTimer = requestAnimationFrame(tick);
+}
+
+var _prevFrame24 = -1;
+var _frameCheckTimer24 = null;
+function frameCheck24() {
+  var cf = AnimRuntime.currentFrame;
+  if (cf !== _prevFrame24) {
+    _prevFrame24 = cf;
+    if (cf >= 1 && cf <= 4) {
+      startAnim(cf);
+    } else {
+      if (animTimer) { cancelAnimationFrame(animTimer); animTimer = null; }
+    }
+  }
+  _frameCheckTimer24 = requestAnimationFrame(frameCheck24);
+}
+_frameCheckTimer24 = requestAnimationFrame(frameCheck24);
+
+// ============================================================
+// Idle pulse timestamp
+// ============================================================
+var _idleStartTime = performance.now();
+
+// ============================================================
+// Easing helpers
+// ============================================================
+function easeOutBack(x) {
+  var c1 = 1.70158;
+  var c3 = c1 + 1;
+  return 1 + c3 * Math.pow(x - 1, 3) + c1 * Math.pow(x - 1, 2);
+}
+function easeOutElastic(x) {
+  if (x === 0 || x === 1) return x;
+  return Math.pow(2, -10 * x) * Math.sin((x * 10 - 0.75) * (2 * Math.PI / 3)) + 1;
+}
+function easeOutCubic(x) { return 1 - Math.pow(1 - x, 3); }
+
+// ============================================================
+// Drawing helpers
+// ============================================================
+
+// Force arrow with easing, glow, idle pulse
+function drawForceArrow(ctx2, x1, y1, x2, y2, color, lw, headSize, glowColor, pulsePhase) {
+  var pulse = 1.0;
+  if (pulsePhase !== undefined) {
+    var elapsed = (performance.now() - _idleStartTime) / 1000;
+    pulse = 1.0 + 0.04 * Math.sin(elapsed * 2.5 + pulsePhase);
+  }
+  var mx = (x1 + x2) / 2, my = (y1 + y2) / 2;
+  var px2 = mx + (x2 - mx) * pulse;
+  var py2 = my + (y2 - my) * pulse;
+  var px1 = mx + (x1 - mx) * pulse;
+  var py1 = my + (y1 - my) * pulse;
+  var angle = Math.atan2(py2 - py1, px2 - px1);
+
+  if (glowColor) {
+    ctx2.save();
+    ctx2.shadowColor = glowColor;
+    ctx2.shadowBlur = 10;
+    ctx2.strokeStyle = color;
+    ctx2.lineWidth = lw + 1;
+    ctx2.beginPath();
+    ctx2.moveTo(px1, py1);
+    ctx2.lineTo(px2, py2);
+    ctx2.stroke();
+    ctx2.restore();
+  }
+  ctx2.strokeStyle = color;
+  ctx2.lineWidth = lw;
+  ctx2.lineCap = 'round';
+  ctx2.beginPath();
+  ctx2.moveTo(px1, py1);
+  ctx2.lineTo(px2, py2);
+  ctx2.stroke();
+  ctx2.fillStyle = color;
+  ctx2.beginPath();
+  ctx2.moveTo(px2, py2);
+  ctx2.lineTo(px2 - headSize * Math.cos(angle - 0.45), py2 - headSize * Math.sin(angle - 0.45));
+  ctx2.lineTo(px2 - headSize * Math.cos(angle + 0.45), py2 - headSize * Math.sin(angle + 0.45));
+  ctx2.closePath();
+  ctx2.fill();
+}
+
+// Realistic book
+function drawBook(ctx2, x, y, bw, bh, color, P) {
+  var g = ctx2.createLinearGradient(x, y, x, y + bh);
+  g.addColorStop(0, color);
+  g.addColorStop(1, 'rgba(180,80,40,0.5)');
+  ctx2.fillStyle = g;
+  ctx2.fillRect(x, y, bw, bh);
+  ctx2.strokeStyle = P.outline;
+  ctx2.lineWidth = 1.5;
+  ctx2.strokeRect(x, y, bw, bh);
+  ctx2.strokeStyle = 'rgba(255,255,255,0.15)';
+  ctx2.lineWidth = 0.8;
+  ctx2.beginPath();
+  ctx2.moveTo(x + 4, y);
+  ctx2.lineTo(x + 4, y + bh);
+  ctx2.stroke();
+  ctx2.fillStyle = 'rgba(240,230,210,0.2)';
+  ctx2.fillRect(x + bw - 3, y + 2, 3, bh - 4);
+}
+
+// Table surface
+function drawTable(ctx2, x, y, tw, th, P) {
+  var g = ctx2.createLinearGradient(x, y, x, y + th);
+  g.addColorStop(0, 'rgba(100,70,40,0.6)');
+  g.addColorStop(1, 'rgba(60,40,20,0.4)');
+  ctx2.fillStyle = g;
+  ctx2.fillRect(x, y, tw, th);
+  ctx2.strokeStyle = P.outline;
+  ctx2.lineWidth = 1;
+  ctx2.strokeRect(x, y, tw, th);
+  ctx2.strokeStyle = 'rgba(255,255,255,0.04)';
+  ctx2.lineWidth = 0.5;
+  for (var gi = 0; gi < 5; gi++) {
+    var gy = y + 4 + gi * (th / 5);
+    ctx2.beginPath();
+    ctx2.moveTo(x, gy);
+    ctx2.lineTo(x + tw, gy);
+    ctx2.stroke();
+  }
+}
+
+// Rocket shape
+function drawRocket(ctx2, rcx, rcy, scale, P, engineOn) {
+  ctx2.save();
+  ctx2.translate(rcx, rcy);
+  ctx2.scale(scale, scale);
+  // Nose
+  ctx2.beginPath();
+  ctx2.moveTo(0, -40);
+  ctx2.lineTo(-10, -20);
+  ctx2.lineTo(10, -20);
+  ctx2.closePath();
+  ctx2.fillStyle = P.text;
+  ctx2.fill();
+  ctx2.strokeStyle = P.outline;
+  ctx2.lineWidth = 1;
+  ctx2.stroke();
+  // Body
+  ctx2.fillStyle = P.surface;
+  ctx2.fillRect(-10, -20, 20, 35);
+  ctx2.strokeStyle = P.outline;
+  ctx2.strokeRect(-10, -20, 20, 35);
+  // Fins
+  ctx2.beginPath();
+  ctx2.moveTo(-10, 15);
+  ctx2.lineTo(-18, 22);
+  ctx2.lineTo(-10, 10);
+  ctx2.closePath();
+  ctx2.fillStyle = P.primaryDim;
+  ctx2.fill();
+  ctx2.beginPath();
+  ctx2.moveTo(10, 15);
+  ctx2.lineTo(18, 22);
+  ctx2.lineTo(10, 10);
+  ctx2.closePath();
+  ctx2.fillStyle = P.primaryDim;
+  ctx2.fill();
+  // Nozzle
+  ctx2.fillStyle = P.outline;
+  ctx2.fillRect(-6, 15, 12, 6);
+  // Flame
+  if (engineOn) {
+    var elapsed = (performance.now() - _idleStartTime) / 1000;
+    var flicker = 0.8 + 0.2 * Math.sin(elapsed * 15);
+    ctx2.globalAlpha = flicker;
+    var fg = ctx2.createLinearGradient(0, 21, 0, 50);
+    fg.addColorStop(0, '#ff7f50');
+    fg.addColorStop(0.5, '#ffcc00');
+    fg.addColorStop(1, 'rgba(255,100,0,0)');
+    ctx2.fillStyle = fg;
+    ctx2.beginPath();
+    ctx2.moveTo(-8, 21);
+    ctx2.quadraticCurveTo(-4, 38, 0, 50);
+    ctx2.quadraticCurveTo(4, 38, 8, 21);
+    ctx2.closePath();
+    ctx2.fill();
+    ctx2.globalAlpha = 1;
+  }
+  ctx2.restore();
+}
+
+// Dot (point mass)
+function drawDot(ctx2, x, y, r, color, glowColor) {
+  if (glowColor) {
+    ctx2.save();
+    ctx2.shadowColor = glowColor;
+    ctx2.shadowBlur = 14;
+    ctx2.fillStyle = color;
+    ctx2.beginPath();
+    ctx2.arc(x, y, r, 0, Math.PI * 2);
+    ctx2.fill();
+    ctx2.restore();
+  }
+  ctx2.fillStyle = color;
+  ctx2.beginPath();
+  ctx2.arc(x, y, r, 0, Math.PI * 2);
+  ctx2.fill();
+}
+
+// Particles burst
+function drawParticles(ctx2, pcx, pcy, count, spread, progress, color) {
+  var rng = 123;
+  for (var i = 0; i < count; i++) {
+    rng = (rng * 1103515245 + 12345) & 0x7fffffff;
+    var angle = (rng % 360) * Math.PI / 180;
+    rng = (rng * 1103515245 + 12345) & 0x7fffffff;
+    var dist = spread * progress * (0.5 + (rng % 50) / 100);
+    var px = pcx + Math.cos(angle) * dist;
+    var py = pcy + Math.sin(angle) * dist;
+    var alpha = Math.max(0, 1 - progress);
+    ctx2.globalAlpha = alpha * 0.7;
+    rng = (rng * 1103515245 + 12345) & 0x7fffffff;
+    var pr = 1 + (rng % 3);
+    ctx2.fillStyle = color;
+    ctx2.beginPath();
+    ctx2.arc(px, py, pr, 0, Math.PI * 2);
+    ctx2.fill();
+  }
+  ctx2.globalAlpha = 1;
+}
+
+// Screen shake
+function getShake(intensity, progress) {
+  if (progress <= 0 || intensity <= 0) return {dx: 0, dy: 0};
+  var elapsed = (performance.now() - _idleStartTime) / 1000;
+  var decay = Math.max(0, 1 - progress);
+  return {
+    dx: Math.sin(elapsed * 40) * intensity * decay,
+    dy: Math.cos(elapsed * 55) * intensity * decay * 0.7
+  };
+}
+
+// Starfield parallax
+function drawStarfield(ctx2, sw, sh, count, parallaxOffset) {
+  var rng = 999;
+  for (var i = 0; i < count; i++) {
+    rng = (rng * 1103515245 + 12345) & 0x7fffffff;
+    var sx = rng % Math.floor(sw);
+    rng = (rng * 1103515245 + 12345) & 0x7fffffff;
+    var sy = (rng % Math.floor(sh)) + parallaxOffset * (0.2 + (i % 3) * 0.15);
+    sy = ((sy % sh) + sh) % sh;
+    rng = (rng * 1103515245 + 12345) & 0x7fffffff;
+    var sr = 0.3 + (rng % 15) / 10;
+    var elapsed = (performance.now() - _idleStartTime) / 1000;
+    var twinkle = 0.3 + 0.7 * Math.abs(Math.sin(elapsed * 0.5 + i * 0.7));
+    ctx2.globalAlpha = twinkle * 0.6;
+    ctx2.fillStyle = '#ffffff';
+    ctx2.beginPath();
+    ctx2.arc(sx, sy, sr, 0, Math.PI * 2);
+    ctx2.fill();
+  }
+  ctx2.globalAlpha = 1;
+}
+
+// Net force arrow (dashed + glow)
+function drawNetForceArrow(ctx2, x1, y1, x2, y2, color, lw, headSize) {
+  var angle = Math.atan2(y2 - y1, x2 - x1);
+  ctx2.save();
+  ctx2.shadowColor = color;
+  ctx2.shadowBlur = 16;
+  ctx2.strokeStyle = color;
+  ctx2.lineWidth = lw + 2;
+  ctx2.setLineDash([6, 4]);
+  ctx2.beginPath();
+  ctx2.moveTo(x1, y1);
+  ctx2.lineTo(x2, y2);
+  ctx2.stroke();
+  ctx2.setLineDash([]);
+  ctx2.restore();
+  ctx2.strokeStyle = color;
+  ctx2.lineWidth = lw;
+  ctx2.setLineDash([6, 4]);
+  ctx2.beginPath();
+  ctx2.moveTo(x1, y1);
+  ctx2.lineTo(x2, y2);
+  ctx2.stroke();
+  ctx2.setLineDash([]);
+  ctx2.fillStyle = color;
+  ctx2.beginPath();
+  ctx2.moveTo(x2, y2);
+  ctx2.lineTo(x2 - headSize * Math.cos(angle - 0.45), y2 - headSize * Math.sin(angle - 0.45));
+  ctx2.lineTo(x2 - headSize * Math.cos(angle + 0.45), y2 - headSize * Math.sin(angle + 0.45));
+  ctx2.closePath();
+  ctx2.fill();
+}
+
+// Multiline text
+function drawMultiline(ctx2, text, x, y, lineH, font, color, align) {
+  var lines = text.split('\n');
+  ctx2.font = font;
+  ctx2.textAlign = align || 'center';
+  ctx2.textBaseline = 'middle';
+  ctx2.fillStyle = color;
+  for (var i = 0; i < lines.length; i++) {
+    ctx2.fillText(lines[i], x, y + i * lineH);
+  }
+}
+
+// Exhaust trail
+function drawExhaustTrail(ctx2, ecx, startY, count, progress, color) {
+  var rng = 77;
+  for (var i = 0; i < count; i++) {
+    rng = (rng * 1103515245 + 12345) & 0x7fffffff;
+    var px = ecx + (rng % 24 - 12);
+    rng = (rng * 1103515245 + 12345) & 0x7fffffff;
+    var py = startY + (rng % 80) * progress;
+    rng = (rng * 1103515245 + 12345) & 0x7fffffff;
+    var pr = 1 + (rng % 3);
+    var alpha = Math.max(0, 1 - (py - startY) / 100);
+    ctx2.globalAlpha = alpha * 0.5;
+    ctx2.fillStyle = color;
+    ctx2.beginPath();
+    ctx2.arc(px, py, pr, 0, Math.PI * 2);
+    ctx2.fill();
+  }
+  ctx2.globalAlpha = 1;
+}
+
+// ============================================================
+// getFrameElements
+// ============================================================
+function getFrameElements(f, W, H) {
+  var t = AnimRuntime.t;
+  var P = AnimRuntime.PAL;
+  var cx = W / 2, cy = H / 2;
+
+  // ── F0: Title Frame ──
+  if (f === 0) {
+    return [
+      {id:'f0bg', type:'custom', x:0, y:0, alpha:1, draw: function(ctx2) {
+        var bx = cx, by = cy - 10;
+        var bsize = 28;
+        var elapsed = (performance.now() - _idleStartTime) / 1000;
+        var pulse = 1.0 + 0.03 * Math.sin(elapsed * 2);
+
+        // Glow behind box
+        ctx2.save();
+        ctx2.shadowColor = P.glowStrong;
+        ctx2.shadowBlur = 20;
+        ctx2.strokeStyle = P.primary;
+        ctx2.lineWidth = 2;
+        ctx2.strokeRect(bx - bsize * pulse, by - bsize * pulse, bsize * 2 * pulse, bsize * 2 * pulse);
+        ctx2.restore();
+
+        // Box
+        ctx2.fillStyle = P.glass;
+        ctx2.fillRect(bx - bsize, by - bsize, bsize * 2, bsize * 2);
+        ctx2.strokeStyle = P.primary;
+        ctx2.lineWidth = 1.5;
+        ctx2.strokeRect(bx - bsize, by - bsize, bsize * 2, bsize * 2);
+
+        // Force arrows radiating from box
+        var arrows = [
+          {dx:0, dy:-1, len:55, c:P.primary,   label:'N'},
+          {dx:0, dy:1,  len:55, c:P.error,     label:'W'},
+          {dx:1, dy:0,  len:45, c:P.tertiary,  label:'F'},
+          {dx:-1,dy:0,  len:35, c:P.secondary, label:'f'},
+          {dx:0.7,dy:-0.7,len:30,c:'rgba(255,255,255,0.25)',label:''},
+        ];
+        for (var ai = 0; ai < arrows.length; ai++) {
+          var a = arrows[ai];
+          var ax1 = bx + a.dx * (bsize + 4);
+          var ay1 = by + a.dy * (bsize + 4);
+          var ax2 = bx + a.dx * (bsize + 4 + a.len * pulse);
+          var ay2 = by + a.dy * (bsize + 4 + a.len * pulse);
+          drawForceArrow(ctx2, ax1, ay1, ax2, ay2, a.c, 2, 8, a.c, ai * 1.2);
+          if (a.label) {
+            ctx2.font = "bold 10px 'Space Grotesk',sans-serif";
+            ctx2.textAlign = 'center';
+            ctx2.textBaseline = 'middle';
+            ctx2.fillStyle = a.c;
+            ctx2.fillText(a.label, ax2 + a.dx * 14, ay2 + a.dy * 14);
+          }
+        }
+      }},
+      {id:'f0titleEN', type:'label', text:'FREE BODY DIAGRAMS', x:cx, y:40, color:P.primary, size:22, align:'center', glow:P.glowStrong},
+      {id:'f0titleCN', type:'label', text:t('title'), x:cx, y:62, color:P.primaryDim, size:13, align:'center'},
+      {id:'f0question', type:'custom', x:0, y:0, alpha:1, draw: function(ctx2) {
+        var lines = t('f0question').split('\n');
+        ctx2.font = "13px 'Inter','Noto Sans SC',sans-serif";
+        ctx2.textAlign = 'center';
+        ctx2.fillStyle = P.text;
+        for (var i = 0; i < lines.length; i++) {
+          ctx2.fillText(lines[i], cx, cy + 70 + i * 20);
+        }
+      }},
+      {id:'f0divider', type:'line', x1:cx - 130, y1:cy + 120, x2:cx + 130, y2:cy + 120, color:P.outline, lineWidth:0.5, dash:[4,4]},
+      {id:'f0fbd', type:'text', text:t('f0fbd'), x:cx, y:cy + 140, color:P.primaryDim, size:10, align:'center'},
+    ];
+  }
+
+  // ── F1: Step-by-step FBD construction ──
+  if (f === 1) {
+    var prog = animState.frameTracked === 1 ? animState.progress : 1;
+    var step1 = Math.min(1, prog * 3);
+    var step2 = Math.max(0, Math.min(1, (prog - 0.33) * 3));
+    var step3 = Math.max(0, Math.min(1, (prog - 0.66) * 3));
+
+    var bookW = 60, bookH = 16;
+    var arrowLen = 60;
+    var s1A = easeOutCubic(step1);
+    var s2A = easeOutCubic(step2);
+    var s3A = easeOutCubic(step3);
+
+    var elems = [];
+    elems.push({id:'f1title', type:'label', text:t('f1title'), x:cx, y:25, color:P.primary, size:14, align:'center', glow:P.glowStrong});
+
+    // Step labels across the top
+    var stepLabelY = 50;
+    elems.push({id:'f1s1label', type:'custom', x:0, y:0, alpha:1, draw: function(ctx2) {
+      ctx2.globalAlpha = s1A;
+      ctx2.font = "bold 10px 'Space Grotesk','Noto Sans SC',sans-serif";
+      ctx2.fillStyle = step1 >= 1 && step2 < 0.5 ? P.primary : P.muted;
+      ctx2.textAlign = 'center';
+      ctx2.fillText(t('f1step1'), cx - 200, stepLabelY);
+      ctx2.globalAlpha = 1;
+    }});
+    elems.push({id:'f1s2label', type:'custom', x:0, y:0, alpha:1, draw: function(ctx2) {
+      ctx2.globalAlpha = s2A;
+      ctx2.font = "bold 10px 'Space Grotesk','Noto Sans SC',sans-serif";
+      ctx2.fillStyle = step2 >= 1 && step3 < 0.5 ? P.primary : P.muted;
+      ctx2.textAlign = 'center';
+      ctx2.fillText(t('f1step2'), cx, stepLabelY);
+      ctx2.globalAlpha = 1;
+    }});
+    elems.push({id:'f1s3label', type:'custom', x:0, y:0, alpha:1, draw: function(ctx2) {
+      ctx2.globalAlpha = s3A;
+      ctx2.font = "bold 10px 'Space Grotesk','Noto Sans SC',sans-serif";
+      ctx2.fillStyle = step3 > 0.5 ? P.primary : P.muted;
+      ctx2.textAlign = 'center';
+      ctx2.fillText(t('f1step3'), cx + 200, stepLabelY);
+      ctx2.globalAlpha = 1;
+    }});
+
+    // LEFT panel: realistic book on table
+    var leftCx = cx - 200;
+    var leftTableY = cy + 55;
+    var leftBookX = leftCx - bookW / 2;
+    var leftBookY = leftTableY - bookH;
+    elems.push({id:'f1scene', type:'custom', x:0, y:0, alpha:1, draw: function(ctx2) {
+      ctx2.globalAlpha = s1A;
+      drawTable(ctx2, leftCx - 80, leftTableY, 160, 12, P);
+      drawBook(ctx2, leftBookX, leftBookY, bookW, bookH, '#a0522d', P);
+      ctx2.font = "9px 'Inter','Noto Sans SC',sans-serif";
+      ctx2.fillStyle = P.muted;
+      ctx2.textAlign = 'center';
+      ctx2.fillText(t('f1book'), leftCx, leftBookY - 8);
+      ctx2.fillText(t('f1table'), leftCx, leftTableY + 22);
+      ctx2.globalAlpha = 1;
+    }});
+
+    // CENTER panel: dot replaces book
+    var midCx = cx;
+    var midDotY = cy + 47;
+    elems.push({id:'f1dot', type:'custom', x:0, y:0, alpha:1, draw: function(ctx2) {
+      if (s2A <= 0.01) return;
+      ctx2.globalAlpha = s2A;
+      ctx2.font = "9px 'Inter','Noto Sans SC',sans-serif";
+      ctx2.fillStyle = P.muted;
+      ctx2.textAlign = 'center';
+      ctx2.fillText(t('f1replace'), midCx, cy - 10);
+      var dotScale = easeOutBack(Math.min(1, s2A));
+      drawDot(ctx2, midCx, midDotY, 6 * dotScale, P.primary, P.glowStrong);
+      ctx2.font = "10px 'Space Grotesk','Noto Sans SC',sans-serif";
+      ctx2.fillStyle = P.error;
+      ctx2.textAlign = 'center';
+      ctx2.fillText(t('f1gravity'), midCx, midDotY + arrowLen * s2A + 20);
+      ctx2.fillStyle = P.tertiary;
+      ctx2.fillText(t('f1normal'), midCx, midDotY - arrowLen * s2A - 16);
+      ctx2.globalAlpha = 1;
+    }});
+
+    // RIGHT panel: full FBD with arrows
+    var rightCx = cx + 200;
+    var rightDotY = cy + 47;
+    elems.push({id:'f1fbd', type:'custom', x:0, y:0, alpha:1, draw: function(ctx2) {
+      if (s3A <= 0.01) return;
+      ctx2.globalAlpha = s3A;
+      var sc = easeOutBack(Math.min(1, s3A));
+      drawDot(ctx2, rightCx, rightDotY, 6 * sc, P.primary, P.glowStrong);
+      // Weight down
+      var wLen = arrowLen * easeOutElastic(Math.min(1, s3A * 1.5));
+      drawForceArrow(ctx2, rightCx, rightDotY + 6, rightCx, rightDotY + 6 + wLen, P.error, 2.5, 9, P.error, 0);
+      ctx2.font = "bold 11px 'Space Grotesk','Noto Sans SC',sans-serif";
+      ctx2.fillStyle = P.error;
+      ctx2.textAlign = 'center';
+      ctx2.fillText(t('f1gravity'), rightCx, rightDotY + 6 + wLen + 16);
+      // Normal up
+      var nLen = arrowLen * easeOutElastic(Math.min(1, s3A * 1.5));
+      drawForceArrow(ctx2, rightCx, rightDotY - 6, rightCx, rightDotY - 6 - nLen, P.tertiary, 2.5, 9, P.tertiary, 1.5);
+      ctx2.fillStyle = P.tertiary;
+      ctx2.fillText(t('f1normal'), rightCx, rightDotY - 6 - nLen - 14);
+      // Balanced label
+      if (s3A > 0.8) {
+        ctx2.globalAlpha = (s3A - 0.8) * 5;
+        ctx2.font = "bold 12px 'Space Grotesk',sans-serif";
+        ctx2.fillStyle = P.primary;
+        ctx2.textAlign = 'left';
+        ctx2.fillText('W = N', rightCx + 30, rightDotY);
+      }
+      ctx2.globalAlpha = 1;
+    }});
+
+    // Connecting dashed arrows
+    elems.push({id:'f1arrows', type:'custom', x:0, y:0, alpha:1, draw: function(ctx2) {
+      if (s2A > 0.1) {
+        ctx2.globalAlpha = s2A * 0.5;
+        ctx2.strokeStyle = P.outline;
+        ctx2.lineWidth = 1;
+        ctx2.setLineDash([4, 3]);
+        ctx2.beginPath();
+        ctx2.moveTo(leftCx + 80, cy + 30);
+        ctx2.lineTo(midCx - 40, cy + 30);
+        ctx2.stroke();
+        ctx2.fillStyle = P.outline;
+        ctx2.beginPath();
+        ctx2.moveTo(midCx - 40, cy + 30);
+        ctx2.lineTo(midCx - 47, cy + 27);
+        ctx2.lineTo(midCx - 47, cy + 33);
+        ctx2.closePath();
+        ctx2.fill();
+        ctx2.setLineDash([]);
+        ctx2.globalAlpha = 1;
+      }
+      if (s3A > 0.1) {
+        ctx2.globalAlpha = s3A * 0.5;
+        ctx2.strokeStyle = P.outline;
+        ctx2.lineWidth = 1;
+        ctx2.setLineDash([4, 3]);
+        ctx2.beginPath();
+        ctx2.moveTo(midCx + 40, cy + 30);
+        ctx2.lineTo(rightCx - 80, cy + 30);
+        ctx2.stroke();
+        ctx2.fillStyle = P.outline;
+        ctx2.beginPath();
+        ctx2.moveTo(rightCx - 80, cy + 30);
+        ctx2.lineTo(rightCx - 87, cy + 27);
+        ctx2.lineTo(rightCx - 87, cy + 33);
+        ctx2.closePath();
+        ctx2.fill();
+        ctx2.setLineDash([]);
+        ctx2.globalAlpha = 1;
+      }
+    }});
+
+    return elems;
+  }
+
+  // ── F2: Balanced vs Unbalanced ──
+  if (f === 2) {
+    var prog2 = animState.frameTracked === 2 ? animState.progress : 1;
+    var elems2 = [];
+    var leftCx2 = cx - 160;
+    var rightCx2 = cx + 160;
+    var arrowLen2 = 55;
+
+    elems2.push({id:'f2title', type:'label', text:t('f2title'), x:cx, y:25, color:P.primary, size:14, align:'center', glow:P.glowStrong});
+    elems2.push({id:'f2divider', type:'line', x1:cx, y1:55, x2:cx, y2:H - 20, color:P.outline, lineWidth:0.5, dash:[4,4]});
+
+    // LEFT: Balanced
+    var leftProg = easeOutCubic(Math.min(1, prog2 * 2));
+    elems2.push({id:'f2leftTitle', type:'label', text:t('f2balanced'), x:leftCx2, y:52, color:P.primary, size:12, align:'center'});
+    elems2.push({id:'f2leftScene', type:'text', text:t('f2static'), x:leftCx2, y:70, color:P.muted, size:9, align:'center'});
+
+    elems2.push({id:'f2leftFBD', type:'custom', x:0, y:0, alpha:1, draw: function(ctx2) {
+      ctx2.globalAlpha = leftProg;
+      var smallBookW = 44, smallBookH = 12;
+      var tableTopY = cy + 50;
+      drawTable(ctx2, leftCx2 - 60, tableTopY, 120, 8, P);
+      drawBook(ctx2, leftCx2 - smallBookW / 2, tableTopY - smallBookH, smallBookW, smallBookH, '#a0522d', P);
+      drawDot(ctx2, leftCx2, tableTopY - smallBookH / 2, 5, P.primary, P.glowStrong);
+      var dotCenter = tableTopY - smallBookH / 2;
+      // Weight down
+      var wLen = arrowLen2 * easeOutElastic(leftProg);
+      drawForceArrow(ctx2, leftCx2, dotCenter + 5, leftCx2, dotCenter + 5 + wLen, P.error, 2, 8, P.error, 0);
+      ctx2.font = "bold 10px 'Space Grotesk',sans-serif";
+      ctx2.fillStyle = P.error;
+      ctx2.textAlign = 'center';
+      ctx2.fillText(t('f2wLabel'), leftCx2 + 16, dotCenter + 5 + wLen / 2);
+      // Normal up (same length)
+      drawForceArrow(ctx2, leftCx2, dotCenter - 5, leftCx2, dotCenter - 5 - wLen, P.tertiary, 2, 8, P.tertiary, 1.5);
+      ctx2.fillStyle = P.tertiary;
+      ctx2.fillText(t('f2nLabel'), leftCx2 + 16, dotCenter - 5 - wLen / 2);
+      // Net = 0
+      if (leftProg > 0.7) {
+        ctx2.globalAlpha = (leftProg - 0.7) / 0.3;
+        ctx2.font = "bold 11px 'Space Grotesk','Noto Sans SC',sans-serif";
+        ctx2.fillStyle = P.primary;
+        ctx2.textAlign = 'center';
+        ctx2.fillText(t('f2netZero'), leftCx2, dotCenter - 5 - wLen - 28);
+        ctx2.font = "9px 'Inter','Noto Sans SC',sans-serif";
+        ctx2.fillStyle = P.muted;
+        ctx2.fillText(t('f2noMotion'), leftCx2, dotCenter + 5 + wLen + 26);
+      }
+      ctx2.globalAlpha = 1;
+    }});
+
+    // RIGHT: Unbalanced
+    var rightProg = easeOutCubic(Math.max(0, Math.min(1, (prog2 - 0.3) * 1.6)));
+    elems2.push({id:'f2rightTitle', type:'label', text:t('f2unbalanced'), x:rightCx2, y:52, color:P.error, size:12, align:'center'});
+    elems2.push({id:'f2rightScene', type:'text', text:t('f2pushed'), x:rightCx2, y:70, color:P.muted, size:9, align:'center'});
+
+    elems2.push({id:'f2rightFBD', type:'custom', x:0, y:0, alpha:1, draw: function(ctx2) {
+      if (rightProg <= 0.01) return;
+      ctx2.globalAlpha = rightProg;
+      var smallBookW = 44, smallBookH = 12;
+      var tableTopY = cy + 50;
+      drawTable(ctx2, rightCx2 - 60, tableTopY, 120, 8, P);
+      var bookShift = rightProg > 0.7 ? (rightProg - 0.7) / 0.3 * 15 : 0;
+      drawBook(ctx2, rightCx2 - smallBookW / 2 + bookShift, tableTopY - smallBookH, smallBookW, smallBookH, '#a0522d', P);
+      var dotCenter = tableTopY - smallBookH / 2;
+      drawDot(ctx2, rightCx2 + bookShift, dotCenter, 5, P.primary, P.glowStrong);
+      // Weight down
+      var wLen = arrowLen2 * easeOutElastic(Math.min(1, rightProg * 1.5));
+      drawForceArrow(ctx2, rightCx2 + bookShift, dotCenter + 5, rightCx2 + bookShift, dotCenter + 5 + wLen, P.error, 2, 8, P.error, 0);
+      ctx2.font = "bold 10px 'Space Grotesk',sans-serif";
+      ctx2.fillStyle = P.error;
+      ctx2.textAlign = 'center';
+      ctx2.fillText(t('f2wLabel'), rightCx2 + bookShift + 16, dotCenter + 5 + wLen / 2);
+      // Normal up
+      drawForceArrow(ctx2, rightCx2 + bookShift, dotCenter - 5, rightCx2 + bookShift, dotCenter - 5 - wLen, P.tertiary, 2, 8, P.tertiary, 1.5);
+      ctx2.fillStyle = P.tertiary;
+      ctx2.fillText(t('f2nLabel'), rightCx2 + bookShift + 16, dotCenter - 5 - wLen / 2);
+      // Push right (longer)
+      var pushLen = 70 * easeOutElastic(Math.min(1, rightProg * 1.3));
+      drawForceArrow(ctx2, rightCx2 + bookShift + 5, dotCenter, rightCx2 + bookShift + 5 + pushLen, dotCenter, '#ffcc00', 2.5, 9, 'rgba(255,204,0,0.3)', 3);
+      ctx2.font = "bold 10px 'Space Grotesk','Noto Sans SC',sans-serif";
+      ctx2.fillStyle = '#ffcc00';
+      ctx2.textAlign = 'left';
+      ctx2.fillText(t('f2fLabel'), rightCx2 + bookShift + 5 + pushLen + 8, dotCenter - 2);
+      // Friction left (shorter)
+      var fricLen = 40 * easeOutElastic(Math.min(1, rightProg * 1.3));
+      drawForceArrow(ctx2, rightCx2 + bookShift - 5, dotCenter, rightCx2 + bookShift - 5 - fricLen, dotCenter, P.secondary, 2, 7, null, 4);
+      ctx2.fillStyle = P.secondary;
+      ctx2.textAlign = 'right';
+      ctx2.fillText(t('f2frLabel'), rightCx2 + bookShift - 5 - fricLen - 8, dotCenter - 2);
+      // Net force (dashed right)
+      if (rightProg > 0.6) {
+        var netProg = (rightProg - 0.6) / 0.4;
+        ctx2.globalAlpha = netProg;
+        var netLen = (pushLen - fricLen) * easeOutCubic(netProg);
+        drawNetForceArrow(ctx2, rightCx2 + bookShift, dotCenter + wLen + 30, rightCx2 + bookShift + netLen, dotCenter + wLen + 30, P.primary, 2.5, 10);
+        ctx2.font = "bold 10px 'Space Grotesk','Noto Sans SC',sans-serif";
+        ctx2.fillStyle = P.primary;
+        ctx2.textAlign = 'center';
+        ctx2.fillText(t('f2netRight'), rightCx2 + bookShift + netLen / 2, dotCenter + wLen + 46);
+        // Particles
+        if (netProg < 0.5) {
+          drawParticles(ctx2, rightCx2 + bookShift + netLen, dotCenter + wLen + 30, 12, 30, netProg * 2, P.primary);
+        }
+        ctx2.font = "bold 11px 'Space Grotesk','Noto Sans SC',sans-serif";
+        ctx2.fillStyle = P.primary;
+        ctx2.fillText(t('f2accel'), rightCx2 + bookShift, dotCenter + wLen + 62);
+      }
+      ctx2.globalAlpha = 1;
+    }});
+
+    return elems2;
+  }
+
+  // ── F3: Rocket on pad ──
+  if (f === 3) {
+    var prog3 = animState.frameTracked === 3 ? animState.progress : 1;
+    var elems3 = [];
+    var staticPhase = Math.min(1, prog3 * 2);
+    var launchPhase = Math.max(0, Math.min(1, (prog3 - 0.5) * 2));
+    var leftCx3 = cx - 160;
+    var rightCx3 = cx + 160;
+    var padY = cy + 70;
+    var shake = launchPhase > 0.3 ? getShake(3, 1 - launchPhase) : {dx: 0, dy: 0};
+
+    elems3.push({id:'f3title', type:'label', text:t('f3title'), x:cx, y:25, color:P.primary, size:14, align:'center', glow:P.glowStrong});
+    elems3.push({id:'f3divider', type:'line', x1:cx, y1:50, x2:cx, y2:H - 20, color:P.outline, lineWidth:0.5, dash:[4,4]});
+
+    // LEFT: Engine OFF
+    elems3.push({id:'f3leftLabel', type:'label', text:t('f3padStatic'), x:leftCx3, y:50, color:P.muted, size:11, align:'center'});
+    elems3.push({id:'f3leftRocket', type:'custom', x:0, y:0, alpha:1, draw: function(ctx2) {
+      var alpha = easeOutCubic(staticPhase);
+      ctx2.globalAlpha = alpha;
+      ctx2.fillStyle = P.surface;
+      ctx2.fillRect(leftCx3 - 30, padY, 60, 6);
+      ctx2.strokeStyle = P.outline;
+      ctx2.lineWidth = 1;
+      ctx2.strokeRect(leftCx3 - 30, padY, 60, 6);
+      var rocketY = padY - 22;
+      drawRocket(ctx2, leftCx3, rocketY, 0.7, P, false);
+      var dotCy = rocketY;
+      drawDot(ctx2, leftCx3, dotCy, 4, P.primary, P.glowStrong);
+      // Weight down
+      var wLen = 50 * easeOutElastic(alpha);
+      drawForceArrow(ctx2, leftCx3, dotCy + 6, leftCx3, dotCy + 6 + wLen, P.error, 2, 8, P.error, 0);
+      ctx2.font = "bold 10px 'Space Grotesk','Noto Sans SC',sans-serif";
+      ctx2.fillStyle = P.error;
+      ctx2.textAlign = 'left';
+      ctx2.fillText(t('f3weight'), leftCx3 + 14, dotCy + 6 + wLen / 2);
+      // Normal up
+      drawForceArrow(ctx2, leftCx3, dotCy - 6, leftCx3, dotCy - 6 - wLen, P.tertiary, 2, 8, P.tertiary, 1.5);
+      ctx2.fillStyle = P.tertiary;
+      ctx2.textAlign = 'left';
+      ctx2.fillText(t('f3normalPad'), leftCx3 + 14, dotCy - 6 - wLen / 2);
+      if (alpha > 0.7) {
+        ctx2.globalAlpha = (alpha - 0.7) / 0.3;
+        ctx2.font = "10px 'Inter','Noto Sans SC',sans-serif";
+        ctx2.fillStyle = P.primary;
+        ctx2.textAlign = 'center';
+        ctx2.fillText(t('f3balanced2'), leftCx3, dotCy - 6 - wLen - 20);
+      }
+      ctx2.globalAlpha = 1;
+    }});
+
+    // RIGHT: Engine ON + launch
+    elems3.push({id:'f3rightLabel', type:'label', text:t('f3padLaunch'), x:rightCx3, y:50, color:P.primaryDim, size:11, align:'center'});
+    elems3.push({id:'f3rightRocket', type:'custom', x:0, y:0, alpha:1, draw: function(ctx2) {
+      var rocketLift = launchPhase > 0 ? easeOutCubic(launchPhase) * 80 : 0;
+      var rocketY = padY - 22 - rocketLift;
+
+      // Parallax stars
+      if (launchPhase > 0.2) {
+        ctx2.save();
+        ctx2.globalAlpha = Math.min(0.4, (launchPhase - 0.2) * 0.8);
+        drawStarfield(ctx2, W, H, 30, rocketLift * 0.3);
+        ctx2.restore();
+      }
+
+      // Pad
+      ctx2.fillStyle = P.surface;
+      ctx2.fillRect(rightCx3 - 30 + shake.dx, padY + shake.dy, 60, 6);
+      ctx2.strokeStyle = P.outline;
+      ctx2.lineWidth = 1;
+      ctx2.strokeRect(rightCx3 - 30 + shake.dx, padY + shake.dy, 60, 6);
+
+      // Exhaust
+      if (launchPhase > 0.1) {
+        drawExhaustTrail(ctx2, rightCx3 + shake.dx, rocketY + 38, 20, launchPhase, P.primaryDim);
+      }
+
+      // Rocket
+      drawRocket(ctx2, rightCx3 + shake.dx, rocketY + shake.dy, 0.7, P, launchPhase > 0.1);
+
+      // FBD next to rocket
+      var dotCy = rocketY + shake.dy;
+      var fbdX = rightCx3 + 50 + shake.dx;
+      drawDot(ctx2, fbdX, dotCy, 4, P.primary, P.glowStrong);
+
+      // Weight down
+      var wLen = 45 * easeOutElastic(Math.min(1, staticPhase));
+      drawForceArrow(ctx2, fbdX, dotCy + 6, fbdX, dotCy + 6 + wLen, P.error, 2, 8, P.error, 0);
+      ctx2.font = "bold 9px 'Space Grotesk',sans-serif";
+      ctx2.fillStyle = P.error;
+      ctx2.textAlign = 'left';
+      ctx2.fillText('W', fbdX + 12, dotCy + 6 + wLen / 2);
+
+      if (launchPhase > 0.05) {
+        // Thrust up (longer than weight)
+        var thrustLen = 75 * easeOutElastic(Math.min(1, launchPhase * 2));
+        drawForceArrow(ctx2, fbdX, dotCy - 6, fbdX, dotCy - 6 - thrustLen, P.primary, 2.5, 9, P.glowStrong, 2);
+        ctx2.fillStyle = P.primary;
+        ctx2.fillText('T', fbdX + 12, dotCy - 6 - thrustLen / 2);
+        // Net up (dashed)
+        if (launchPhase > 0.4) {
+          var netProg3 = (launchPhase - 0.4) / 0.6;
+          ctx2.globalAlpha = netProg3;
+          var netUpLen = (thrustLen - wLen) * easeOutCubic(netProg3);
+          drawNetForceArrow(ctx2, fbdX + 30, dotCy, fbdX + 30, dotCy - netUpLen, P.primary, 2, 8);
+          ctx2.font = "bold 9px 'Space Grotesk','Noto Sans SC',sans-serif";
+          ctx2.fillStyle = P.primary;
+          ctx2.textAlign = 'left';
+          ctx2.fillText(t('f3netUp'), fbdX + 42, dotCy - netUpLen / 2);
+          ctx2.globalAlpha = 1;
+        }
+      } else {
+        // Normal up (before engine on)
+        var nLen = wLen;
+        drawForceArrow(ctx2, fbdX, dotCy - 6, fbdX, dotCy - 6 - nLen, P.tertiary, 2, 8, P.tertiary, 1.5);
+        ctx2.fillStyle = P.tertiary;
+        ctx2.textAlign = 'left';
+        ctx2.fillText('N', fbdX + 12, dotCy - 6 - nLen / 2);
+      }
+
+      // T > W label
+      if (launchPhase > 0.6) {
+        ctx2.globalAlpha = (launchPhase - 0.6) / 0.4;
+        ctx2.font = "bold 11px 'Space Grotesk','Noto Sans SC',sans-serif";
+        ctx2.fillStyle = P.primary;
+        ctx2.textAlign = 'center';
+        ctx2.fillText(t('f3liftoff'), rightCx3, 75);
+        if (launchPhase < 0.9) {
+          drawParticles(ctx2, rightCx3 + shake.dx, padY + shake.dy, 18, 50, (launchPhase - 0.6) / 0.3, P.primaryDim);
+        }
+        ctx2.globalAlpha = 1;
+      }
+
+      // LAUNCH! label
+      if (launchPhase > 0.85) {
+        ctx2.globalAlpha = (launchPhase - 0.85) / 0.15;
+        ctx2.save();
+        ctx2.shadowColor = P.glowStrong;
+        ctx2.shadowBlur = 20;
+        ctx2.font = "bold 16px 'Space Grotesk','Noto Sans SC',sans-serif";
+        ctx2.fillStyle = P.primary;
+        ctx2.textAlign = 'center';
+        ctx2.fillText(t('f3launch'), rightCx3, padY + 35);
+        ctx2.restore();
+        ctx2.globalAlpha = 1;
+      }
+    }});
+
+    return elems3;
+  }
+
+  // ── F4: Rocket in flight (3 phases side by side) ──
+  if (f === 4) {
+    var prog4 = animState.frameTracked === 4 ? animState.progress : 1;
+    var elems4 = [];
+    var phase1X = cx - 210;
+    var phase2X = cx;
+    var phase3X = cx + 210;
+    var rocketBaseY = cy + 20;
+    var arrowLen4 = 45;
+
+    elems4.push({id:'f4title', type:'label', text:t('f4title'), x:cx, y:25, color:P.primary, size:14, align:'center', glow:P.glowStrong});
+    elems4.push({id:'f4div1', type:'line', x1:cx - 105, y1:50, x2:cx - 105, y2:H - 20, color:P.outline, lineWidth:0.5, dash:[4,4]});
+    elems4.push({id:'f4div2', type:'line', x1:cx + 105, y1:50, x2:cx + 105, y2:H - 20, color:P.outline, lineWidth:0.5, dash:[4,4]});
+
+    var p1prog = easeOutCubic(Math.min(1, prog4 * 3));
+    var p2prog = easeOutCubic(Math.max(0, Math.min(1, (prog4 - 0.33) * 3)));
+    var p3prog = easeOutCubic(Math.max(0, Math.min(1, (prog4 - 0.66) * 3)));
+
+    // Stars
+    elems4.push({id:'f4stars', type:'custom', x:0, y:0, alpha:1, draw: function(ctx2) {
+      ctx2.globalAlpha = 0.3;
+      drawStarfield(ctx2, W, H, 50, 0);
+      ctx2.globalAlpha = 1;
+    }});
+
+    // Phase 1: Engine ON ascending
+    elems4.push({id:'f4phase1', type:'custom', x:0, y:0, alpha:1, draw: function(ctx2) {
+      ctx2.globalAlpha = p1prog;
+      drawMultiline(ctx2, t('f4phase1'), phase1X, 58, 14, "bold 10px 'Space Grotesk','Noto Sans SC',sans-serif", P.primaryDim, 'center');
+      drawRocket(ctx2, phase1X, rocketBaseY, 0.6, P, true);
+      // Motion arrow up (dashed)
+      ctx2.strokeStyle = P.muted;
+      ctx2.lineWidth = 1;
+      ctx2.setLineDash([3, 3]);
+      ctx2.beginPath();
+      ctx2.moveTo(phase1X - 30, rocketBaseY + 10);
+      ctx2.lineTo(phase1X - 30, rocketBaseY - 40);
+      ctx2.stroke();
+      ctx2.setLineDash([]);
+      ctx2.fillStyle = P.muted;
+      ctx2.beginPath();
+      ctx2.moveTo(phase1X - 30, rocketBaseY - 42);
+      ctx2.lineTo(phase1X - 34, rocketBaseY - 35);
+      ctx2.lineTo(phase1X - 26, rocketBaseY - 35);
+      ctx2.closePath();
+      ctx2.fill();
+      ctx2.font = "bold 10px 'Space Grotesk',sans-serif";
+      ctx2.textAlign = 'center';
+      ctx2.fillText(t('f4motionUp'), phase1X - 30, rocketBaseY - 52);
+      // FBD
+      var fbdX = phase1X + 40;
+      drawDot(ctx2, fbdX, rocketBaseY, 4, P.primary, P.glowStrong);
+      var tLen = 60 * easeOutElastic(p1prog);
+      drawForceArrow(ctx2, fbdX, rocketBaseY - 5, fbdX, rocketBaseY - 5 - tLen, P.primary, 2, 8, P.glowStrong, 0);
+      ctx2.font = "bold 9px 'Space Grotesk',sans-serif";
+      ctx2.fillStyle = P.primary;
+      ctx2.textAlign = 'left';
+      ctx2.fillText('T', fbdX + 10, rocketBaseY - 5 - tLen / 2);
+      var wLen4 = arrowLen4 * easeOutElastic(p1prog);
+      drawForceArrow(ctx2, fbdX, rocketBaseY + 5, fbdX, rocketBaseY + 5 + wLen4, P.error, 2, 8, P.error, 1.5);
+      ctx2.fillStyle = P.error;
+      ctx2.fillText('W', fbdX + 10, rocketBaseY + 5 + wLen4 / 2);
+      // Net label
+      if (p1prog > 0.6) {
+        ctx2.globalAlpha = (p1prog - 0.6) / 0.4;
+        drawMultiline(ctx2, t('f4netUp'), phase1X, rocketBaseY + 75, 14, "bold 10px 'Space Grotesk','Noto Sans SC',sans-serif", P.primary, 'center');
+        drawNetForceArrow(ctx2, phase1X, rocketBaseY + 95, phase1X, rocketBaseY + 95 - 20, P.primary, 1.5, 6);
+      }
+      ctx2.globalAlpha = 1;
+    }});
+
+    // Phase 2: Engine OFF coasting up
+    elems4.push({id:'f4phase2', type:'custom', x:0, y:0, alpha:1, draw: function(ctx2) {
+      if (p2prog <= 0.01) return;
+      ctx2.globalAlpha = p2prog;
+      drawMultiline(ctx2, t('f4phase2'), phase2X, 58, 14, "bold 10px 'Space Grotesk','Noto Sans SC',sans-serif", P.muted, 'center');
+      drawRocket(ctx2, phase2X, rocketBaseY, 0.6, P, false);
+      // Motion arrow up (shorter, slowing)
+      ctx2.strokeStyle = P.muted;
+      ctx2.lineWidth = 1;
+      ctx2.setLineDash([3, 3]);
+      ctx2.beginPath();
+      ctx2.moveTo(phase2X - 30, rocketBaseY + 10);
+      ctx2.lineTo(phase2X - 30, rocketBaseY - 25);
+      ctx2.stroke();
+      ctx2.setLineDash([]);
+      ctx2.fillStyle = P.muted;
+      ctx2.beginPath();
+      ctx2.moveTo(phase2X - 30, rocketBaseY - 27);
+      ctx2.lineTo(phase2X - 34, rocketBaseY - 20);
+      ctx2.lineTo(phase2X - 26, rocketBaseY - 20);
+      ctx2.closePath();
+      ctx2.fill();
+      ctx2.font = "bold 10px 'Space Grotesk',sans-serif";
+      ctx2.textAlign = 'center';
+      ctx2.fillText(t('f4motionUp'), phase2X - 30, rocketBaseY - 37);
+      // FBD: only weight
+      var fbdX = phase2X + 40;
+      drawDot(ctx2, fbdX, rocketBaseY, 4, P.primary, P.glowStrong);
+      var wLen4 = arrowLen4 * easeOutElastic(p2prog);
+      drawForceArrow(ctx2, fbdX, rocketBaseY + 5, fbdX, rocketBaseY + 5 + wLen4, P.error, 2, 8, P.error, 0);
+      ctx2.font = "bold 9px 'Space Grotesk',sans-serif";
+      ctx2.fillStyle = P.error;
+      ctx2.textAlign = 'left';
+      ctx2.fillText('W', fbdX + 10, rocketBaseY + 5 + wLen4 / 2);
+      ctx2.font = "9px 'Inter',sans-serif";
+      ctx2.fillStyle = P.outline;
+      ctx2.fillText('T = 0', fbdX + 10, rocketBaseY - 12);
+      // Net label
+      if (p2prog > 0.5) {
+        ctx2.globalAlpha = (p2prog - 0.5) / 0.5;
+        drawMultiline(ctx2, t('f4netDown1'), phase2X, rocketBaseY + 75, 14, "bold 10px 'Space Grotesk','Noto Sans SC',sans-serif", P.error, 'center');
+        drawNetForceArrow(ctx2, phase2X, rocketBaseY + 105, phase2X, rocketBaseY + 105 + 15, P.error, 1.5, 6);
+      }
+      ctx2.globalAlpha = 1;
+    }});
+
+    // Phase 3: Falling
+    elems4.push({id:'f4phase3', type:'custom', x:0, y:0, alpha:1, draw: function(ctx2) {
+      if (p3prog <= 0.01) return;
+      ctx2.globalAlpha = p3prog;
+      drawMultiline(ctx2, t('f4phase3'), phase3X, 58, 14, "bold 10px 'Space Grotesk','Noto Sans SC',sans-serif", P.error, 'center');
+      drawRocket(ctx2, phase3X, rocketBaseY, 0.6, P, false);
+      // Motion arrow down
+      ctx2.strokeStyle = P.muted;
+      ctx2.lineWidth = 1;
+      ctx2.setLineDash([3, 3]);
+      ctx2.beginPath();
+      ctx2.moveTo(phase3X - 30, rocketBaseY - 10);
+      ctx2.lineTo(phase3X - 30, rocketBaseY + 35);
+      ctx2.stroke();
+      ctx2.setLineDash([]);
+      ctx2.fillStyle = P.muted;
+      ctx2.beginPath();
+      ctx2.moveTo(phase3X - 30, rocketBaseY + 37);
+      ctx2.lineTo(phase3X - 34, rocketBaseY + 30);
+      ctx2.lineTo(phase3X - 26, rocketBaseY + 30);
+      ctx2.closePath();
+      ctx2.fill();
+      ctx2.font = "bold 10px 'Space Grotesk',sans-serif";
+      ctx2.textAlign = 'center';
+      ctx2.fillText(t('f4motionDn'), phase3X - 30, rocketBaseY + 50);
+      // FBD: only weight
+      var fbdX = phase3X + 40;
+      drawDot(ctx2, fbdX, rocketBaseY, 4, P.primary, P.glowStrong);
+      var wLen4 = arrowLen4 * easeOutElastic(p3prog);
+      drawForceArrow(ctx2, fbdX, rocketBaseY + 5, fbdX, rocketBaseY + 5 + wLen4, P.error, 2, 8, P.error, 0);
+      ctx2.font = "bold 9px 'Space Grotesk',sans-serif";
+      ctx2.fillStyle = P.error;
+      ctx2.textAlign = 'left';
+      ctx2.fillText('W', fbdX + 10, rocketBaseY + 5 + wLen4 / 2);
+      ctx2.font = "9px 'Inter',sans-serif";
+      ctx2.fillStyle = P.outline;
+      ctx2.fillText('T = 0', fbdX + 10, rocketBaseY - 12);
+      // Net label
+      if (p3prog > 0.5) {
+        ctx2.globalAlpha = (p3prog - 0.5) / 0.5;
+        drawMultiline(ctx2, t('f4netDown2'), phase3X, rocketBaseY + 75, 14, "bold 10px 'Space Grotesk','Noto Sans SC',sans-serif", P.error, 'center');
+        drawNetForceArrow(ctx2, phase3X, rocketBaseY + 105, phase3X, rocketBaseY + 105 + 20, P.error, 1.5, 6);
+      }
+      ctx2.globalAlpha = 1;
+    }});
+
+    return elems4;
+  }
+
+  return [];
+}
+
+// ============================================================
+// BOOT
+// ============================================================
+AnimRuntime.boot();
+</script>
+</body>
+</html>

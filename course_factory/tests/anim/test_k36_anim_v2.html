@@ -1,0 +1,1396 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=Inter:wght@400;500&family=Noto+Sans+SC:wght@400;700&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box;}
+html,body{width:100%;height:100vh;overflow:hidden;}
+body{background:var(--bg,#0c0e12);color:var(--text,#f6f6fc);font-family:'Inter','Noto Sans SC',sans-serif;}
+/* ── Outer: sidebar + main ── */
+.wrapper{display:flex;flex-direction:row;height:100vh;overflow:hidden;}
+.sidebar{width:200px;min-width:200px;max-width:200px;display:flex;flex-direction:column;gap:6px;padding:10px;background:rgba(0,0,0,0.5);border-right:1px solid rgba(80,255,176,0.15);overflow-y:auto;}
+.lang-btn{align-self:flex-start;flex-shrink:0;font-family:'Space Grotesk',sans-serif;font-size:10px;font-weight:700;padding:3px 8px;cursor:pointer;border:1px solid rgba(255,181,156,0.25);background:transparent;color:#ffb59c;letter-spacing:1px;}
+.lang-btn:hover{border-color:#ffb59c;background:rgba(255,181,156,0.1);}
+.sidebar h1{font-family:'Space Grotesk',sans-serif;font-size:13px;font-weight:700;color:var(--primary,#50ffb0);margin-top:4px;line-height:1.3;}
+.sidebar .sub{font-size:10px;color:var(--muted,#aaabb0);letter-spacing:0.06em;text-transform:uppercase;}
+.sidebar .frame-ind{font-family:'Space Grotesk',sans-serif;font-size:10px;color:var(--muted,#aaabb0);letter-spacing:0.1em;margin-top:4px;}
+.sidebar .guide-label{font-family:'Space Grotesk',sans-serif;font-size:9px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:var(--primary,#50ffb0);margin-top:8px;}
+.sidebar .guide-content{font-family:'Noto Sans SC',sans-serif;font-size:11px;color:rgba(255,255,255,0.85);line-height:1.5;}
+.sidebar .guide-content ul{padding-left:16px;margin:0;}
+.sidebar .guide-content li{margin-bottom:1px;}
+/* ── Main area: canvas + controls + hud ── */
+.anim-main{flex:1;display:flex;flex-direction:column;min-width:0;}
+.canvas-wrap{flex:1;min-height:0;position:relative;}
+canvas{width:100%;height:100%;display:block;}
+/* ── Controls + HUD ── */
+.controls{display:flex;justify-content:center;align-items:center;gap:12px;padding:6px 16px;}
+.ctrl-btn{font-family:'Space Grotesk',sans-serif;font-size:11px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;padding:5px 16px;border:none;cursor:pointer;color:var(--bg,#0c0e12);background:linear-gradient(135deg,var(--primary,#50ffb0),var(--primary-dim,#17df93));transition:transform 0.1s,box-shadow 0.2s;box-shadow:0 0 10px var(--glow-strong,rgba(80,255,176,0.3));}
+.ctrl-btn:hover{transform:scale(1.04);}
+.ctrl-btn:active{transform:scale(0.96);}
+.ctrl-btn.secondary{background:var(--glass,rgba(23,26,31,0.92));color:var(--muted,#aaabb0);box-shadow:none;backdrop-filter:blur(12px);}
+.ctrl-btn.secondary:hover{color:var(--primary,#50ffb0);}
+.hud{height:40px;display:flex;align-items:center;justify-content:space-around;background:rgba(0,0,0,0.55);backdrop-filter:blur(12px);padding:0 16px;}
+.hud-item{text-align:center;}
+.hud-label{font-family:'Space Grotesk',sans-serif;font-size:8px;letter-spacing:0.15em;text-transform:uppercase;color:var(--muted,#aaabb0);}
+.hud-val{font-family:'Space Grotesk',sans-serif;font-size:13px;font-weight:700;color:var(--primary,#50ffb0);}
+</style>
+</head>
+<body>
+<div class="wrapper">
+<!-- Sidebar: lang-btn, title, guide (completely separate from canvas) -->
+<div class="sidebar">
+<button class="lang-btn" id="langBtn">CN</button>
+<h1 id="title"></h1>
+<div class="sub" id="subtitle"></div>
+<div class="frame-ind" id="frameIndicator"></div>
+<div class="guide-label" id="guideTitle"></div>
+<div class="guide-content" id="guideContent"></div>
+</div>
+<!-- Main: canvas fills all space, nothing overlaps -->
+<div class="anim-main">
+<div class="canvas-wrap"><canvas id="c"></canvas></div>
+<div class="controls">
+<button class="ctrl-btn secondary" id="btnPrev"></button>
+<button class="ctrl-btn" id="btnPlay"></button>
+<button class="ctrl-btn secondary" id="btnNext"></button>
+</div>
+<div class="hud">
+<div class="hud-item"><div class="hud-label" id="hudL1"></div><div class="hud-val" id="hudV1"></div></div>
+<div class="hud-item"><div class="hud-label" id="hudL2"></div><div class="hud-val" id="hudV2"></div></div>
+<div class="hud-item"><div class="hud-label" id="hudL3"></div><div class="hud-val" id="hudV3"></div></div>
+<div class="hud-item"><div class="hud-label" id="hudL4"></div><div class="hud-val" id="hudV4"></div></div>
+</div>
+</div>
+</div>
+
+<!-- Runtime (shared skeleton) -->
+<script src="animation_runtime.js"></script>
+
+<!-- Content -->
+<script>
+// ============================================================
+// K36: Drag Coefficient C_D and Shape
+// WHY ARE ROCKETS BULLET-SHAPED?
+// 5 frames:
+//   F0 - Title: shape progression flat->sphere->bullet->rocket, C_D values
+//   F1 - Nose cone comparison: flat/blunt vs hemisphere vs ogive, airflow lines
+//   F2 - Surface friction: rough vs smooth boundary layer zoom
+//   F3 - Tail cone: abrupt vs conical tail, vortex vs smooth rejoin
+//   F4 - Complete rocket: 3 annotated zones, total C_D, Falcon 9 comparison
+// ============================================================
+
+var soundMuted = true;
+
+// ── Animation state ──
+var animState = {
+  morphProgress: 0, flowProgress: 0, barProgress: 0,
+  frictionProgress: 0, vortexAngle: 0, assemblyProgress: 0,
+  particles: [], idlePulse: 0, glowIntensity: 0,
+  shakeAmount: 0, phase: 0, activeFrame: -1
+};
+var animTimer = null;
+var animTime = 0;
+
+function resetAnimState() {
+  animState.morphProgress = 0;
+  animState.flowProgress = 0;
+  animState.barProgress = 0;
+  animState.frictionProgress = 0;
+  animState.vortexAngle = 0;
+  animState.assemblyProgress = 0;
+  animState.particles = [];
+  animState.glowIntensity = 0;
+  animState.shakeAmount = 0;
+  animState.phase = 0;
+}
+
+function easeOutCubic(x) { return 1 - Math.pow(1 - x, 3); }
+function easeInOutQuad(x) { return x < 0.5 ? 2*x*x : 1 - Math.pow(-2*x+2,2)/2; }
+
+function startAnim(targetFrame) {
+  if (animTimer) { clearInterval(animTimer); animTimer = null; }
+  resetAnimState();
+  animState.activeFrame = targetFrame;
+  animTimer = setInterval(function() {
+    animTime += 0.03;
+    animState.idlePulse = Math.sin(animTime * 2) * 0.5 + 0.5;
+    animState.vortexAngle += 0.06;
+
+    if (targetFrame === 0) {
+      animState.morphProgress += 0.006;
+      if (animState.morphProgress > 1) animState.morphProgress = 1;
+      animState.flowProgress += 0.005;
+      if (animState.flowProgress > 1) animState.flowProgress = 1;
+    } else if (targetFrame === 1) {
+      animState.flowProgress += 0.008;
+      if (animState.flowProgress > 1) animState.flowProgress = 1;
+      animState.barProgress += 0.01;
+      if (animState.barProgress > 1) animState.barProgress = 1;
+    } else if (targetFrame === 2) {
+      animState.frictionProgress += 0.006;
+      if (animState.frictionProgress > 1) animState.frictionProgress = 1;
+      // Spawn boundary-layer particles
+      if (Math.random() < 0.15) {
+        animState.particles.push({
+          x: 0, y: Math.random() * 6 - 3,
+          vx: 1.5 + Math.random(), vy: (Math.random() - 0.5) * 0.3,
+          life: 1.0, size: 1 + Math.random() * 2, side: Math.random() < 0.5 ? 0 : 1
+        });
+      }
+      for (var pk = animState.particles.length - 1; pk >= 0; pk--) {
+        var pp = animState.particles[pk];
+        pp.x += pp.vx;
+        pp.y += pp.vy;
+        pp.life -= 0.008;
+        if (pp.life <= 0 || pp.x > 300) animState.particles.splice(pk, 1);
+      }
+    } else if (targetFrame === 3) {
+      animState.flowProgress += 0.007;
+      if (animState.flowProgress > 1) animState.flowProgress = 1;
+      // Vortex particles for flat end
+      if (Math.random() < 0.2) {
+        animState.particles.push({
+          x: 0, y: 0,
+          angle: Math.random() * Math.PI * 2,
+          radius: 5 + Math.random() * 25,
+          life: 1.0, size: 1.5 + Math.random() * 2,
+          speed: 0.02 + Math.random() * 0.03
+        });
+      }
+      for (var vk = animState.particles.length - 1; vk >= 0; vk--) {
+        var vp = animState.particles[vk];
+        vp.angle += vp.speed;
+        vp.radius += 0.1;
+        vp.life -= 0.01;
+        if (vp.life <= 0) animState.particles.splice(vk, 1);
+      }
+    } else if (targetFrame === 4) {
+      animState.assemblyProgress += 0.005;
+      if (animState.assemblyProgress > 1) animState.assemblyProgress = 1;
+      animState.glowIntensity = 0.15 + Math.sin(animTime * 3) * 0.1;
+      if (animState.assemblyProgress > 0.9 && animState.shakeAmount < 0.1) {
+        animState.shakeAmount = 3;
+      }
+      if (animState.shakeAmount > 0) animState.shakeAmount *= 0.92;
+    }
+
+    AnimRuntime.drawFrame(AnimRuntime.currentFrame);
+  }, 30);
+}
+
+var _prevFrame36 = -1;
+setInterval(function() {
+  var cf = AnimRuntime.currentFrame;
+  if (cf !== _prevFrame36) {
+    _prevFrame36 = cf;
+    if (cf >= 0 && cf <= 4) startAnim(cf);
+    else { if (animTimer) clearInterval(animTimer); animTimer = null; resetAnimState(); }
+  }
+}, 80);
+
+// ── Shape drawing helpers ──
+
+function drawFlatPlate(ctx, cx, cy, size, color) {
+  ctx.fillStyle = color;
+  ctx.fillRect(cx - size * 0.4, cy - size * 0.5, size * 0.8, size);
+  ctx.strokeStyle = 'rgba(255,255,255,0.3)';
+  ctx.lineWidth = 1;
+  ctx.strokeRect(cx - size * 0.4, cy - size * 0.5, size * 0.8, size);
+}
+
+function drawSphere(ctx, cx, cy, radius, color) {
+  ctx.beginPath();
+  ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+  ctx.fillStyle = color;
+  ctx.fill();
+  // Highlight
+  var grad = ctx.createRadialGradient(cx - radius * 0.3, cy - radius * 0.3, radius * 0.1, cx, cy, radius);
+  grad.addColorStop(0, 'rgba(255,255,255,0.2)');
+  grad.addColorStop(1, 'rgba(255,255,255,0)');
+  ctx.fillStyle = grad;
+  ctx.fill();
+}
+
+function drawBullet(ctx, cx, cy, w, h, color) {
+  ctx.beginPath();
+  // Ogive nose
+  ctx.moveTo(cx, cy - h * 0.5);
+  ctx.bezierCurveTo(cx + w * 0.1, cy - h * 0.35, cx + w * 0.25, cy - h * 0.15, cx + w * 0.25, cy + h * 0.1);
+  // Flat bottom
+  ctx.lineTo(cx + w * 0.25, cy + h * 0.5);
+  ctx.lineTo(cx - w * 0.25, cy + h * 0.5);
+  ctx.lineTo(cx - w * 0.25, cy + h * 0.1);
+  ctx.bezierCurveTo(cx - w * 0.25, cy - h * 0.15, cx - w * 0.1, cy - h * 0.35, cx, cy - h * 0.5);
+  ctx.closePath();
+  ctx.fillStyle = color;
+  ctx.fill();
+}
+
+function drawRocketShape(ctx, cx, cy, w, h, color, showDetail) {
+  // Nose cone
+  ctx.beginPath();
+  ctx.moveTo(cx, cy - h * 0.5);
+  ctx.bezierCurveTo(cx + w * 0.08, cy - h * 0.38, cx + w * 0.2, cy - h * 0.2, cx + w * 0.2, cy - h * 0.1);
+  // Body
+  ctx.lineTo(cx + w * 0.2, cy + h * 0.3);
+  // Tail cone
+  ctx.lineTo(cx + w * 0.28, cy + h * 0.5);
+  ctx.lineTo(cx - w * 0.28, cy + h * 0.5);
+  ctx.lineTo(cx - w * 0.2, cy + h * 0.3);
+  // Body left
+  ctx.lineTo(cx - w * 0.2, cy - h * 0.1);
+  ctx.bezierCurveTo(cx - w * 0.2, cy - h * 0.2, cx - w * 0.08, cy - h * 0.38, cx, cy - h * 0.5);
+  ctx.closePath();
+  ctx.fillStyle = color;
+  ctx.fill();
+
+  if (showDetail) {
+    // Nose cone accent line
+    ctx.strokeStyle = 'rgba(255,255,255,0.15)';
+    ctx.lineWidth = 0.5;
+    ctx.beginPath();
+    ctx.moveTo(cx - w * 0.2, cy - h * 0.1);
+    ctx.lineTo(cx + w * 0.2, cy - h * 0.1);
+    ctx.stroke();
+    // Tail section line
+    ctx.beginPath();
+    ctx.moveTo(cx - w * 0.2, cy + h * 0.3);
+    ctx.lineTo(cx + w * 0.2, cy + h * 0.3);
+    ctx.stroke();
+  }
+}
+
+// Draw airflow streamlines around a shape (horizontal flow, shape rotated to horizontal)
+function drawStreamlines(ctx, cx, cy, shapeW, shapeH, numLines, progress, color, turbulent) {
+  ctx.save();
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 1;
+  ctx.globalAlpha = 0.6 * Math.min(progress * 2, 1);
+
+  var halfH = shapeH * 0.6;
+  for (var i = 0; i < numLines; i++) {
+    var frac = (i + 1) / (numLines + 1);
+    var yOff = (frac - 0.5) * shapeH * 1.8;
+    var startX = cx - shapeW * 1.2;
+    var endX = cx + shapeW * 1.2;
+    var drawLen = progress * (endX - startX);
+
+    ctx.beginPath();
+    ctx.moveTo(startX, cy + yOff);
+
+    var steps = 40;
+    for (var s = 1; s <= steps; s++) {
+      var sx = startX + (s / steps) * drawLen;
+      var sy = cy + yOff;
+      // Deflect around shape
+      var relX = (sx - cx) / (shapeW * 0.6);
+      var relY = yOff / halfH;
+      if (Math.abs(relX) < 1.2 && Math.abs(relY) < 1.3) {
+        var deflect = Math.exp(-relX * relX * 2) * (1 - Math.abs(relY)) * halfH * 0.4 * Math.sign(yOff);
+        sy += deflect;
+      }
+      if (turbulent && sx > cx + shapeW * 0.3) {
+        sy += Math.sin((sx - cx) * 0.15 + i * 2) * 4 * (1 - Math.abs(relY) * 0.5);
+      }
+      ctx.lineTo(sx, sy);
+    }
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
+// Draw airflow lines for nose comparison (vertical orientation)
+function drawNoseFlow(ctx, cx, topY, noseH, bodyW, numLines, progress, color, turbulenceLevel) {
+  ctx.save();
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 1;
+  ctx.globalAlpha = Math.min(progress * 2, 1) * 0.7;
+
+  for (var i = 0; i < numLines; i++) {
+    var frac = (i + 1) / (numLines + 1);
+    var xOff = (frac - 0.5) * bodyW * 2.2;
+    var startY = topY - noseH * 0.8;
+    var endY = topY + noseH * 2.0;
+    var drawLen = progress * (endY - startY);
+
+    ctx.beginPath();
+    ctx.moveTo(cx + xOff, startY);
+
+    var steps = 30;
+    for (var s = 1; s <= steps; s++) {
+      var sy = startY + (s / steps) * drawLen;
+      var sx = cx + xOff;
+      var relY = (sy - topY) / noseH;
+      var relX = xOff / (bodyW * 0.6);
+
+      if (relY > -0.2 && relY < 1.5 && Math.abs(relX) < 1.5) {
+        var deflect = Math.exp(-relY * relY) * (1 - Math.abs(relX) * 0.5) * bodyW * 0.25 * Math.sign(xOff);
+        sx += deflect;
+      }
+      if (turbulenceLevel > 0 && sy > topY + noseH * 0.5) {
+        sx += Math.sin((sy - topY) * 0.2 + i * 1.5) * turbulenceLevel * 3;
+      }
+      ctx.lineTo(sx, sy);
+    }
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
+// C_D bar chart helper
+function drawCdBar(ctx, x, y, barW, maxH, cdValue, maxCd, progress, color, label, P) {
+  var barH = (cdValue / maxCd) * maxH * easeOutCubic(Math.min(progress, 1));
+  // Bar fill
+  var grad = ctx.createLinearGradient(x, y, x, y - barH);
+  grad.addColorStop(0, color);
+  grad.addColorStop(1, 'rgba(255,255,255,0.1)');
+  ctx.fillStyle = grad;
+  ctx.fillRect(x, y - barH, barW, barH);
+  // Bar outline glow
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 1;
+  ctx.strokeRect(x, y - barH, barW, barH);
+  // Value label
+  if (progress > 0.5) {
+    ctx.font = "bold 11px 'Space Grotesk',sans-serif";
+    ctx.fillStyle = color;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'bottom';
+    ctx.fillText(cdValue.toFixed(2), x + barW / 2, y - barH - 4);
+  }
+  // Shape label
+  ctx.font = "10px 'Inter','Noto Sans SC',sans-serif";
+  ctx.fillStyle = P.muted;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'top';
+  ctx.fillText(label, x + barW / 2, y + 4);
+}
+
+// ── Web Audio stub (soundMuted=true) ──
+var audioCtx = null;
+function playTone(freq, dur) {
+  if (soundMuted) return;
+  if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  var osc = audioCtx.createOscillator();
+  var gain = audioCtx.createGain();
+  osc.frequency.value = freq;
+  gain.gain.setValueAtTime(0.08, audioCtx.currentTime);
+  gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + dur);
+  osc.connect(gain); gain.connect(audioCtx.destination);
+  osc.start(); osc.stop(audioCtx.currentTime + dur);
+}
+
+// ============================================================
+// CONFIG
+// ============================================================
+
+var CONFIG = {
+  style: 'ares_mission',
+  totalFrames: 5,
+
+  i18n: {
+    title:    {en:'DRAG COEFFICIENT & SHAPE', cn:'\u963b\u529b\u7cfb\u6570\u4e0e\u5916\u5f62'},
+    subtitle: {en:'WHY ROCKETS ARE BULLET-SHAPED', cn:'\u4e3a\u4ec0\u4e48\u706b\u7bad\u662f\u5b50\u5f39\u5f62'},
+
+    f0title:  {en:'WHY BULLETS?', cn:'\u4e3a\u4ec0\u4e48\u662f\u5b50\u5f39\u5f62\uff1f'},
+    f0q:      {en:'Why do all launch vehicles have\na smooth pointed or blunt nose?', cn:'\u4e3a\u4ec0\u4e48\u6240\u6709\u8fd0\u8f7d\u706b\u7bad\u7684\u5934\u90e8\n\u90fd\u662f\u5706\u6ed1\u7684\u5c16\u6216\u949d\u5c16\u5f62\uff1f'},
+    f0flat:   {en:'Flat Plate', cn:'\u5e73\u677f'},
+    f0sphere: {en:'Sphere', cn:'\u7403\u4f53'},
+    f0bullet: {en:'Bullet', cn:'\u5b50\u5f39'},
+    f0rocket: {en:'Rocket', cn:'\u706b\u7bad'},
+
+    f1title:  {en:'NOSE CONE DESIGNS', cn:'\u5934\u9525\u8bbe\u8ba1\u5bf9\u6bd4'},
+    f1flat:   {en:'Flat / Blunt', cn:'\u5e73\u5934 / \u949d\u5934'},
+    f1hemi:   {en:'Hemisphere', cn:'\u534a\u7403'},
+    f1ogive:  {en:'Ogive / Pointed', cn:'\u5f27\u5f62 / \u5c16\u9525'},
+    f1turb:   {en:'Turbulent wake', cn:'\u6e4d\u6d41\u5c3e\u8ff9'},
+    f1lam:    {en:'Smooth laminar flow', cn:'\u5149\u6ed1\u5c42\u6d41'},
+    f1tag:    {en:'Nose Shape Matters!', cn:'\u5934\u9525\u5f62\u72b6\u5f88\u91cd\u8981\uff01'},
+
+    f2title:  {en:'SURFACE FRICTION', cn:'\u8868\u9762\u6469\u64e6\u963b\u529b'},
+    f2rough:  {en:'ROUGH surface', cn:'\u7c97\u7cd9\u8868\u9762'},
+    f2smooth: {en:'SMOOTH surface', cn:'\u5149\u6ed1\u8868\u9762'},
+    f2thick:  {en:'Thick boundary layer', cn:'\u8fb9\u754c\u5c42\u539a'},
+    f2thin:   {en:'Thin boundary layer', cn:'\u8fb9\u754c\u5c42\u8584'},
+    f2msg:    {en:'Polish matters!', cn:'\u629b\u5149\u5f88\u91cd\u8981\uff01'},
+    f2drag:   {en:'High friction drag', cn:'\u6469\u64e6\u963b\u529b\u5927'},
+    f2low:    {en:'Low friction drag', cn:'\u6469\u64e6\u963b\u529b\u5c0f'},
+
+    f3title:  {en:'TAIL CONE EFFECT', cn:'\u5c3e\u9525\u6548\u5e94'},
+    f3flat:   {en:'Flat End (abrupt)', cn:'\u5e73\u5207\u5c3e\u90e8'},
+    f3cone:   {en:'Conical Tail', cn:'\u5706\u9525\u5c3e\u90e8'},
+    f3vortex: {en:'Vortex wake', cn:'\u6da1\u6d41\u5c3e\u8ff9'},
+    f3smooth: {en:'Smooth rejoin', cn:'\u5e73\u987a\u5408\u6d41'},
+    f3pull:   {en:'Low-pressure zone\npulls backward', cn:'\u4f4e\u538b\u533a\n\u5411\u540e\u62d6\u62fd'},
+    f3min:    {en:'Minimal wake', cn:'\u5c3e\u8ff9\u6781\u5c0f'},
+
+    f4title:  {en:'COMPLETE ROCKET', cn:'\u5b8c\u6574\u706b\u7bad\u5916\u5f62'},
+    f4nose:   {en:'Nose Cone', cn:'\u5934\u9525'},
+    f4body:   {en:'Cylinder Body', cn:'\u5706\u67f1\u7bad\u4f53'},
+    f4tail:   {en:'Tail Cone', cn:'\u5c3e\u9525'},
+    f4noseD:  {en:'Reduces pressure drag', cn:'\u51cf\u5c0f\u538b\u5dee\u963b\u529b'},
+    f4bodyD:  {en:'Reduces friction drag', cn:'\u51cf\u5c0f\u6469\u64e6\u963b\u529b'},
+    f4tailD:  {en:'Prevents wake vortex', cn:'\u907f\u514d\u5c3e\u6d41\u6da1\u65cb'},
+    f4total:  {en:'Model rocket C_D ~ 0.3-0.5', cn:'\u6a21\u578b\u706b\u7bad C_D ~ 0.3-0.5'},
+    f4falcon: {en:'Falcon 9 C_D ~ 0.3', cn:'Falcon 9 C_D ~ 0.3'},
+    f4motto:  {en:'Form follows physics', cn:'\u5f62\u72b6\u670d\u4ece\u7269\u7406'},
+
+    hudShape: {en:'SHAPE', cn:'\u5916\u5f62'},
+    hudCd:    {en:'C_D', cn:'C_D'},
+    hudDrag:  {en:'DRAG TYPE', cn:'\u963b\u529b\u7c7b\u578b'},
+    hudEff:   {en:'EFFECT', cn:'\u6548\u679c'},
+
+    guideTitle: {en:'KEY IDEAS', cn:'\u6838\u5fc3\u8981\u70b9'},
+    g1: {en:'Pointed nose reduces pressure drag', cn:'\u5c16\u5934\u9525\u51cf\u5c0f\u538b\u5dee\u963b\u529b'},
+    g2: {en:'Smooth surface reduces friction drag', cn:'\u5149\u6ed1\u8868\u9762\u51cf\u5c0f\u6469\u64e6\u963b\u529b'},
+    g3: {en:'Tail cone prevents wake vortex', cn:'\u5c3e\u9525\u907f\u514d\u5c3e\u6d41\u6da1\u65cb'},
+    g4: {en:'Rocket shape is optimized by physics', cn:'\u706b\u7bad\u5916\u5f62\u7531\u7269\u7406\u89c4\u5f8b\u51b3\u5b9a'},
+  },
+
+  hudLabels: ['hudShape', 'hudCd', 'hudDrag', 'hudEff'],
+  hudValues: [
+    ['--',       '--',    '--',           '--'],
+    ['\u5934\u9525', '0.15-1.0', '\u538b\u5dee\u963b\u529b', '\u51cf\u5c0f\u6e4d\u6d41'],
+    ['\u7bad\u4f53', '--',    '\u6469\u64e6\u963b\u529b', '\u51cf\u8584\u8fb9\u754c\u5c42'],
+    ['\u5c3e\u9525', '--',    '\u5e95\u90e8\u963b\u529b', '\u6d88\u9664\u6da1\u65cb'],
+    ['\u5168\u4f53', '0.3-0.5', '\u7efc\u5408',     '\u6700\u4f18\u5916\u5f62'],
+  ],
+
+  guideTitle: 'guideTitle',
+  guideItems: ['g1', 'g2', 'g3', 'g4'],
+};
+
+// ============================================================
+// FRAME ELEMENTS
+// ============================================================
+
+function getFrameElements(f, W, H) {
+  var t = AnimRuntime.t;
+  var P = AnimRuntime.PAL;
+  var cx = W / 2, cy = H / 2;
+
+  // ── F0: TITLE ──
+  if (f === 0) {
+    return [
+      {id:'f0t', type:'label', text:t('f0title'), x:cx, y:48, color:P.primary, size:24, align:'center', glow:P.glowStrong, bold:true},
+      {id:'f0q', type:'custom', x:0, y:0, alpha:1, draw: function(ctx2) {
+        var lang = AnimRuntime.LANG;
+        var lines = CONFIG.i18n.f0q[lang].split('\n');
+        ctx2.font = "13px 'Inter','Noto Sans SC',sans-serif";
+        ctx2.fillStyle = P.muted;
+        ctx2.textAlign = 'center';
+        for (var i = 0; i < lines.length; i++) {
+          ctx2.fillText(lines[i], cx, 80 + i * 18);
+        }
+      }},
+      {id:'f0shapes', type:'custom', x:0, y:0, alpha:1, draw: function(ctx2) {
+        var lang = AnimRuntime.LANG;
+        var mp = animState.morphProgress;
+        var fp = animState.flowProgress;
+
+        // 4 shapes in a row with decreasing C_D
+        var shapes = [
+          {label: CONFIG.i18n.f0flat[lang], cd: 1.20, color: '#ff6b6b', xFrac: 0.15},
+          {label: CONFIG.i18n.f0sphere[lang], cd: 0.47, color: '#ffb59c', xFrac: 0.38},
+          {label: CONFIG.i18n.f0bullet[lang], cd: 0.30, color: '#00daf3', xFrac: 0.62},
+          {label: CONFIG.i18n.f0rocket[lang], cd: 0.15, color: P.primary, xFrac: 0.85},
+        ];
+
+        var shapeY = H * 0.45;
+        var shapeSize = 50;
+
+        // Morphing arrow connecting them
+        if (mp > 0.3) {
+          ctx2.strokeStyle = 'rgba(255,255,255,0.1)';
+          ctx2.lineWidth = 1;
+          ctx2.setLineDash([4, 4]);
+          for (var a = 0; a < 3; a++) {
+            var arrowProg = Math.min(Math.max((mp - 0.3 - a * 0.15) / 0.2, 0), 1);
+            if (arrowProg > 0) {
+              var ax1 = shapes[a].xFrac * W + 30;
+              var ax2 = ax1 + arrowProg * (shapes[a+1].xFrac * W - 30 - ax1);
+              ctx2.beginPath();
+              ctx2.moveTo(ax1, shapeY);
+              ctx2.lineTo(ax2, shapeY);
+              ctx2.stroke();
+            }
+          }
+          ctx2.setLineDash([]);
+        }
+
+        for (var si = 0; si < shapes.length; si++) {
+          var sx = shapes[si].xFrac * W;
+          var appearProg = Math.min(Math.max((mp - si * 0.2) / 0.25, 0), 1);
+          if (appearProg <= 0) continue;
+
+          ctx2.save();
+          ctx2.globalAlpha = easeOutCubic(appearProg);
+
+          // Draw shape
+          if (si === 0) drawFlatPlate(ctx2, sx, shapeY, shapeSize * 0.7, shapes[si].color);
+          else if (si === 1) drawSphere(ctx2, sx, shapeY, shapeSize * 0.35, shapes[si].color);
+          else if (si === 2) drawBullet(ctx2, sx, shapeY, shapeSize * 1.2, shapeSize * 1.0, shapes[si].color);
+          else drawRocketShape(ctx2, sx, shapeY, shapeSize * 1.4, shapeSize * 1.3, shapes[si].color, false);
+
+          // C_D label
+          ctx2.font = "bold 14px 'Space Grotesk',sans-serif";
+          ctx2.fillStyle = shapes[si].color;
+          ctx2.textAlign = 'center';
+          ctx2.textBaseline = 'top';
+          ctx2.fillText('C_D = ' + shapes[si].cd.toFixed(2), sx, shapeY + shapeSize * 0.6 + 8);
+
+          // Shape name
+          ctx2.font = "11px 'Inter','Noto Sans SC',sans-serif";
+          ctx2.fillStyle = P.muted;
+          ctx2.fillText(shapes[si].label, sx, shapeY + shapeSize * 0.6 + 28);
+
+          ctx2.restore();
+        }
+
+        // Streamlines around the rocket shape (rightmost)
+        if (fp > 0.2) {
+          var rocketX = shapes[3].xFrac * W;
+          drawStreamlines(ctx2, rocketX, shapeY, shapeSize * 0.7, shapeSize * 1.0,
+            6, Math.min((fp - 0.2) / 0.6, 1), P.primary, false);
+        }
+
+        // Decreasing arrow at bottom
+        if (mp > 0.8) {
+          var arrAlpha = Math.min((mp - 0.8) / 0.2, 1);
+          ctx2.save();
+          ctx2.globalAlpha = arrAlpha;
+          ctx2.strokeStyle = P.primary;
+          ctx2.lineWidth = 2;
+          var arrY = H * 0.88;
+          ctx2.beginPath();
+          ctx2.moveTo(W * 0.15, arrY);
+          ctx2.lineTo(W * 0.85, arrY);
+          ctx2.stroke();
+          // Arrow head
+          ctx2.fillStyle = P.primary;
+          ctx2.beginPath();
+          ctx2.moveTo(W * 0.85, arrY);
+          ctx2.lineTo(W * 0.82, arrY - 5);
+          ctx2.lineTo(W * 0.82, arrY + 5);
+          ctx2.closePath();
+          ctx2.fill();
+          ctx2.font = "bold 11px 'Space Grotesk',sans-serif";
+          ctx2.textAlign = 'center';
+          ctx2.fillText('C_D', cx, arrY - 12);
+          ctx2.font = "10px 'Inter','Noto Sans SC',sans-serif";
+          ctx2.fillStyle = P.muted;
+          ctx2.fillText(lang === 'cn' ? '\u963b\u529b\u9012\u51cf' : 'Decreasing drag', cx, arrY + 12);
+          ctx2.restore();
+        }
+      }},
+    ];
+  }
+
+  // ── F1: NOSE SHAPES ──
+  if (f === 1) {
+    return [
+      {id:'f1t', type:'label', text:t('f1title'), x:cx, y:28, color:P.primary, size:18, align:'center', glow:P.glowStrong, bold:true},
+      {id:'f1tag', type:'label', text:t('f1tag'), x:cx, y:H - 22, color:P.secondary, size:11, align:'center'},
+      {id:'f1content', type:'custom', x:0, y:0, alpha:1, draw: function(ctx2) {
+        var lang = AnimRuntime.LANG;
+        var fp = animState.flowProgress;
+        var bp = animState.barProgress;
+
+        var thirdW = W / 3;
+        var noseY = H * 0.22;
+        var noseH = H * 0.28;
+        var bodyW = 36;
+
+        var noses = [
+          {x: thirdW * 0.5, cd: 1.0, label: CONFIG.i18n.f1flat[lang], color: '#ff6b6b', turb: 3},
+          {x: thirdW * 1.5, cd: 0.42, label: CONFIG.i18n.f1hemi[lang], color: '#ffb59c', turb: 1},
+          {x: thirdW * 2.5, cd: 0.15, label: CONFIG.i18n.f1ogive[lang], color: '#00daf3', turb: 0},
+        ];
+
+        for (var ni = 0; ni < noses.length; ni++) {
+          var n = noses[ni];
+
+          // Draw nose + body
+          ctx2.save();
+          if (ni === 0) {
+            // Flat/blunt nose
+            ctx2.fillStyle = n.color;
+            ctx2.fillRect(n.x - bodyW / 2, noseY, bodyW, noseH);
+            ctx2.fillRect(n.x - bodyW / 2 - 4, noseY, bodyW + 8, 6);
+            ctx2.strokeStyle = 'rgba(255,255,255,0.2)';
+            ctx2.lineWidth = 0.5;
+            ctx2.strokeRect(n.x - bodyW / 2, noseY, bodyW, noseH);
+          } else if (ni === 1) {
+            // Hemisphere nose
+            ctx2.fillStyle = n.color;
+            ctx2.beginPath();
+            ctx2.arc(n.x, noseY + bodyW / 2, bodyW / 2, Math.PI, 0);
+            ctx2.lineTo(n.x + bodyW / 2, noseY + noseH);
+            ctx2.lineTo(n.x - bodyW / 2, noseY + noseH);
+            ctx2.closePath();
+            ctx2.fill();
+          } else {
+            // Ogive/pointed nose
+            ctx2.fillStyle = n.color;
+            ctx2.beginPath();
+            ctx2.moveTo(n.x, noseY);
+            ctx2.bezierCurveTo(n.x + 6, noseY + noseH * 0.3, n.x + bodyW / 2, noseY + noseH * 0.5, n.x + bodyW / 2, noseY + noseH * 0.6);
+            ctx2.lineTo(n.x + bodyW / 2, noseY + noseH);
+            ctx2.lineTo(n.x - bodyW / 2, noseY + noseH);
+            ctx2.lineTo(n.x - bodyW / 2, noseY + noseH * 0.6);
+            ctx2.bezierCurveTo(n.x - bodyW / 2, noseY + noseH * 0.5, n.x - 6, noseY + noseH * 0.3, n.x, noseY);
+            ctx2.closePath();
+            ctx2.fill();
+          }
+          ctx2.restore();
+
+          // Draw airflow
+          drawNoseFlow(ctx2, n.x, noseY, noseH, bodyW, 5, fp, n.color, n.turb);
+
+          // Turbulence/laminar label
+          if (fp > 0.6) {
+            var labelAlpha = Math.min((fp - 0.6) / 0.3, 1);
+            ctx2.save();
+            ctx2.globalAlpha = labelAlpha;
+            ctx2.font = "9px 'Inter','Noto Sans SC',sans-serif";
+            ctx2.textAlign = 'center';
+            if (ni === 0) {
+              ctx2.fillStyle = '#ff6b6b';
+              ctx2.fillText(CONFIG.i18n.f1turb[lang], n.x, noseY + noseH + 20);
+            } else if (ni === 2) {
+              ctx2.fillStyle = '#00daf3';
+              ctx2.fillText(CONFIG.i18n.f1lam[lang], n.x, noseY + noseH + 20);
+            }
+            ctx2.restore();
+          }
+
+          // C_D label below
+          ctx2.font = "bold 12px 'Space Grotesk',sans-serif";
+          ctx2.fillStyle = n.color;
+          ctx2.textAlign = 'center';
+          ctx2.fillText('C_D = ' + n.cd.toFixed(2), n.x, noseY + noseH + 34);
+
+          // Shape label
+          ctx2.font = "10px 'Inter','Noto Sans SC',sans-serif";
+          ctx2.fillStyle = P.muted;
+          ctx2.fillText(n.label, n.x, noseY + noseH + 50);
+        }
+
+        // Bar chart at the bottom
+        var barBaseY = H * 0.92;
+        var barMaxH = H * 0.15;
+        var barW = 35;
+        var barGap = (W - 3 * barW) / 4;
+
+        for (var bi = 0; bi < noses.length; bi++) {
+          var bx = barGap + bi * (barW + barGap);
+          drawCdBar(ctx2, bx, barBaseY, barW, barMaxH, noses[bi].cd, 1.2, bp, noses[bi].color, noses[bi].label, P);
+        }
+      }},
+    ];
+  }
+
+  // ── F2: SURFACE FRICTION ──
+  if (f === 2) {
+    return [
+      {id:'f2t', type:'label', text:t('f2title'), x:cx, y:28, color:P.primary, size:18, align:'center', glow:P.glowStrong, bold:true},
+      {id:'f2msg', type:'label', text:t('f2msg'), x:cx, y:H - 18, color:P.secondary, size:13, align:'center', bold:true},
+      {id:'f2content', type:'custom', x:0, y:0, alpha:1, draw: function(ctx2) {
+        var lang = AnimRuntime.LANG;
+        var fp = animState.frictionProgress;
+
+        var halfW = W / 2;
+        var surfaceY = H * 0.50;
+        var surfaceLen = halfW * 0.75;
+
+        // -- LEFT: ROUGH SURFACE --
+        var roughX = halfW * 0.5 - surfaceLen / 2;
+
+        // Title
+        ctx2.font = "bold 12px 'Space Grotesk',sans-serif";
+        ctx2.fillStyle = '#ff6b6b';
+        ctx2.textAlign = 'center';
+        ctx2.fillText(CONFIG.i18n.f2rough[lang], halfW * 0.5, H * 0.14);
+
+        // Surface with bumps
+        ctx2.save();
+        ctx2.strokeStyle = '#ff6b6b';
+        ctx2.lineWidth = 2;
+        ctx2.beginPath();
+        ctx2.moveTo(roughX, surfaceY);
+        var bumpCount = 20;
+        for (var bi = 0; bi < bumpCount; bi++) {
+          var bx = roughX + (bi / bumpCount) * surfaceLen;
+          var bx2 = roughX + ((bi + 1) / bumpCount) * surfaceLen;
+          var bh = 3 + Math.random() * 5;
+          ctx2.lineTo(bx + (bx2 - bx) * 0.3, surfaceY - bh);
+          ctx2.lineTo(bx + (bx2 - bx) * 0.7, surfaceY - bh * 0.5);
+          ctx2.lineTo(bx2, surfaceY);
+        }
+        ctx2.stroke();
+        ctx2.restore();
+
+        // Thick boundary layer (rough)
+        if (fp > 0.1) {
+          var blAlpha = Math.min((fp - 0.1) / 0.3, 1);
+          ctx2.save();
+          ctx2.globalAlpha = blAlpha * 0.3;
+          ctx2.fillStyle = '#ff6b6b';
+          ctx2.beginPath();
+          ctx2.moveTo(roughX, surfaceY);
+          // Thick boundary grows along the surface
+          for (var li = 0; li <= 30; li++) {
+            var lx = roughX + (li / 30) * surfaceLen;
+            var thickness = 12 + (li / 30) * 30 * easeOutCubic(fp);
+            ctx2.lineTo(lx, surfaceY - thickness);
+          }
+          ctx2.lineTo(roughX + surfaceLen, surfaceY);
+          ctx2.closePath();
+          ctx2.fill();
+          ctx2.restore();
+
+          // Boundary layer outline
+          ctx2.save();
+          ctx2.globalAlpha = blAlpha * 0.6;
+          ctx2.strokeStyle = '#ff6b6b';
+          ctx2.lineWidth = 1;
+          ctx2.setLineDash([3, 3]);
+          ctx2.beginPath();
+          for (var lo = 0; lo <= 30; lo++) {
+            var lox = roughX + (lo / 30) * surfaceLen;
+            var lot = 12 + (lo / 30) * 30 * easeOutCubic(fp);
+            if (lo === 0) ctx2.moveTo(lox, surfaceY - lot);
+            else ctx2.lineTo(lox, surfaceY - lot);
+          }
+          ctx2.stroke();
+          ctx2.setLineDash([]);
+          ctx2.restore();
+        }
+
+        // Label: thick boundary layer
+        if (fp > 0.5) {
+          ctx2.save();
+          ctx2.globalAlpha = Math.min((fp - 0.5) / 0.3, 1);
+          ctx2.font = "10px 'Inter','Noto Sans SC',sans-serif";
+          ctx2.fillStyle = '#ff6b6b';
+          ctx2.textAlign = 'center';
+          ctx2.fillText(CONFIG.i18n.f2thick[lang], halfW * 0.5, surfaceY - 50);
+
+          // Friction drag arrows (pointing right, opposing motion)
+          ctx2.strokeStyle = '#ff6b6b';
+          ctx2.lineWidth = 2;
+          var arrowY = surfaceY + 25;
+          ctx2.beginPath();
+          ctx2.moveTo(halfW * 0.5 - 30, arrowY);
+          ctx2.lineTo(halfW * 0.5 + 30, arrowY);
+          ctx2.stroke();
+          ctx2.fillStyle = '#ff6b6b';
+          ctx2.beginPath();
+          ctx2.moveTo(halfW * 0.5 + 30, arrowY);
+          ctx2.lineTo(halfW * 0.5 + 24, arrowY - 4);
+          ctx2.lineTo(halfW * 0.5 + 24, arrowY + 4);
+          ctx2.closePath();
+          ctx2.fill();
+          ctx2.fillText(CONFIG.i18n.f2drag[lang], halfW * 0.5, arrowY + 16);
+          ctx2.restore();
+        }
+
+        // Rivet dots on rough surface
+        ctx2.fillStyle = '#888';
+        for (var ri = 0; ri < 6; ri++) {
+          var rx = roughX + 15 + ri * (surfaceLen - 30) / 5;
+          ctx2.beginPath();
+          ctx2.arc(rx, surfaceY + 4, 2, 0, Math.PI * 2);
+          ctx2.fill();
+        }
+
+        // -- RIGHT: SMOOTH SURFACE --
+        var smoothX = halfW + (halfW * 0.5 - surfaceLen / 2);
+
+        // Title
+        ctx2.font = "bold 12px 'Space Grotesk',sans-serif";
+        ctx2.fillStyle = '#00daf3';
+        ctx2.textAlign = 'center';
+        ctx2.fillText(CONFIG.i18n.f2smooth[lang], halfW * 1.5, H * 0.14);
+
+        // Smooth surface line
+        ctx2.strokeStyle = '#00daf3';
+        ctx2.lineWidth = 2;
+        ctx2.beginPath();
+        ctx2.moveTo(smoothX, surfaceY);
+        ctx2.lineTo(smoothX + surfaceLen, surfaceY);
+        ctx2.stroke();
+
+        // Highlight/sheen on smooth surface
+        ctx2.save();
+        var sheen = ctx2.createLinearGradient(smoothX, surfaceY - 2, smoothX + surfaceLen, surfaceY - 2);
+        sheen.addColorStop(0, 'rgba(0,218,243,0)');
+        sheen.addColorStop(0.3 + animState.idlePulse * 0.2, 'rgba(0,218,243,0.3)');
+        sheen.addColorStop(0.7 + animState.idlePulse * 0.1, 'rgba(0,218,243,0)');
+        ctx2.strokeStyle = sheen;
+        ctx2.lineWidth = 1;
+        ctx2.beginPath();
+        ctx2.moveTo(smoothX, surfaceY - 3);
+        ctx2.lineTo(smoothX + surfaceLen, surfaceY - 3);
+        ctx2.stroke();
+        ctx2.restore();
+
+        // Thin boundary layer (smooth)
+        if (fp > 0.1) {
+          var blAlpha2 = Math.min((fp - 0.1) / 0.3, 1);
+          ctx2.save();
+          ctx2.globalAlpha = blAlpha2 * 0.25;
+          ctx2.fillStyle = '#00daf3';
+          ctx2.beginPath();
+          ctx2.moveTo(smoothX, surfaceY);
+          for (var si2 = 0; si2 <= 30; si2++) {
+            var sx2 = smoothX + (si2 / 30) * surfaceLen;
+            var st = 4 + (si2 / 30) * 8 * easeOutCubic(fp);
+            ctx2.lineTo(sx2, surfaceY - st);
+          }
+          ctx2.lineTo(smoothX + surfaceLen, surfaceY);
+          ctx2.closePath();
+          ctx2.fill();
+          ctx2.restore();
+
+          // Thin boundary outline
+          ctx2.save();
+          ctx2.globalAlpha = blAlpha2 * 0.6;
+          ctx2.strokeStyle = '#00daf3';
+          ctx2.lineWidth = 1;
+          ctx2.setLineDash([3, 3]);
+          ctx2.beginPath();
+          for (var so = 0; so <= 30; so++) {
+            var sox = smoothX + (so / 30) * surfaceLen;
+            var sot = 4 + (so / 30) * 8 * easeOutCubic(fp);
+            if (so === 0) ctx2.moveTo(sox, surfaceY - sot);
+            else ctx2.lineTo(sox, surfaceY - sot);
+          }
+          ctx2.stroke();
+          ctx2.setLineDash([]);
+          ctx2.restore();
+        }
+
+        // Label: thin boundary layer
+        if (fp > 0.5) {
+          ctx2.save();
+          ctx2.globalAlpha = Math.min((fp - 0.5) / 0.3, 1);
+          ctx2.font = "10px 'Inter','Noto Sans SC',sans-serif";
+          ctx2.fillStyle = '#00daf3';
+          ctx2.textAlign = 'center';
+          ctx2.fillText(CONFIG.i18n.f2thin[lang], halfW * 1.5, surfaceY - 22);
+
+          // Small friction arrow
+          ctx2.strokeStyle = '#00daf3';
+          ctx2.lineWidth = 1.5;
+          var arrowY2 = surfaceY + 25;
+          ctx2.beginPath();
+          ctx2.moveTo(halfW * 1.5 - 15, arrowY2);
+          ctx2.lineTo(halfW * 1.5 + 15, arrowY2);
+          ctx2.stroke();
+          ctx2.fillStyle = '#00daf3';
+          ctx2.beginPath();
+          ctx2.moveTo(halfW * 1.5 + 15, arrowY2);
+          ctx2.lineTo(halfW * 1.5 + 10, arrowY2 - 3);
+          ctx2.lineTo(halfW * 1.5 + 10, arrowY2 + 3);
+          ctx2.closePath();
+          ctx2.fill();
+          ctx2.fillText(CONFIG.i18n.f2low[lang], halfW * 1.5, arrowY2 + 16);
+          ctx2.restore();
+        }
+
+        // Flowing particles over both surfaces
+        for (var pi = 0; pi < animState.particles.length; pi++) {
+          var pp = animState.particles[pi];
+          ctx2.save();
+          ctx2.globalAlpha = pp.life * 0.7;
+          var pBaseX = pp.side === 0 ? roughX : smoothX;
+          var pBaseY = pp.side === 0 ? surfaceY - 15 - Math.abs(pp.y) * 4 : surfaceY - 5 - Math.abs(pp.y) * 1.5;
+          ctx2.fillStyle = pp.side === 0 ? '#ff6b6b' : '#00daf3';
+          ctx2.beginPath();
+          ctx2.arc(pBaseX + pp.x, pBaseY + pp.y, pp.size, 0, Math.PI * 2);
+          ctx2.fill();
+          ctx2.restore();
+        }
+
+        // Divider line
+        ctx2.strokeStyle = 'rgba(255,255,255,0.08)';
+        ctx2.lineWidth = 1;
+        ctx2.setLineDash([6, 4]);
+        ctx2.beginPath();
+        ctx2.moveTo(halfW, H * 0.12);
+        ctx2.lineTo(halfW, H * 0.88);
+        ctx2.stroke();
+        ctx2.setLineDash([]);
+      }},
+    ];
+  }
+
+  // ── F3: TAIL CONE ──
+  if (f === 3) {
+    return [
+      {id:'f3t', type:'label', text:t('f3title'), x:cx, y:28, color:P.primary, size:18, align:'center', glow:P.glowStrong, bold:true},
+      {id:'f3content', type:'custom', x:0, y:0, alpha:1, draw: function(ctx2) {
+        var lang = AnimRuntime.LANG;
+        var fp = animState.flowProgress;
+
+        var halfW = W / 2;
+        var bodyY = H * 0.25;
+        var bodyH = H * 0.35;
+        var bodyW = 50;
+
+        // ── LEFT: FLAT END ──
+        var leftCx = halfW * 0.5;
+
+        // Label
+        ctx2.font = "bold 12px 'Space Grotesk',sans-serif";
+        ctx2.fillStyle = '#ff6b6b';
+        ctx2.textAlign = 'center';
+        ctx2.fillText(CONFIG.i18n.f3flat[lang], leftCx, H * 0.14);
+
+        // Rocket body (top part + flat end)
+        ctx2.fillStyle = '#4a4e5a';
+        ctx2.fillRect(leftCx - bodyW / 2, bodyY, bodyW, bodyH);
+        // Flat bottom (abrupt cutoff)
+        ctx2.fillStyle = '#ff6b6b';
+        ctx2.fillRect(leftCx - bodyW / 2 - 3, bodyY + bodyH - 4, bodyW + 6, 4);
+
+        // Vortex swirling behind the flat end
+        var vortexCy = bodyY + bodyH + 35;
+        if (fp > 0.15) {
+          // Low-pressure zone background
+          ctx2.save();
+          var lpAlpha = Math.min((fp - 0.15) / 0.3, 1) * 0.2;
+          ctx2.globalAlpha = lpAlpha;
+          ctx2.fillStyle = '#ff6b6b';
+          ctx2.beginPath();
+          ctx2.ellipse(leftCx, vortexCy, bodyW * 0.8, 30, 0, 0, Math.PI * 2);
+          ctx2.fill();
+          ctx2.restore();
+
+          // Swirling vortex particles
+          var vpAlpha = Math.min((fp - 0.15) / 0.3, 1);
+          for (var vi = 0; vi < animState.particles.length; vi++) {
+            var vp = animState.particles[vi];
+            ctx2.save();
+            ctx2.globalAlpha = vp.life * vpAlpha * 0.8;
+            var vx = leftCx + Math.cos(vp.angle + animState.vortexAngle) * vp.radius;
+            var vy = vortexCy + Math.sin(vp.angle + animState.vortexAngle) * vp.radius * 0.6;
+            ctx2.fillStyle = '#ff6b6b';
+            ctx2.beginPath();
+            ctx2.arc(vx, vy, vp.size, 0, Math.PI * 2);
+            ctx2.fill();
+            ctx2.restore();
+          }
+
+          // Spiral lines
+          ctx2.save();
+          ctx2.globalAlpha = vpAlpha * 0.4;
+          ctx2.strokeStyle = '#ff6b6b';
+          ctx2.lineWidth = 1;
+          for (var sp = 0; sp < 2; sp++) {
+            ctx2.beginPath();
+            for (var sa = 0; sa < 20; sa++) {
+              var sAngle = sp * Math.PI + sa * 0.35 + animState.vortexAngle;
+              var sRadius = 3 + sa * 1.8;
+              var spx = leftCx + Math.cos(sAngle) * sRadius;
+              var spy = vortexCy + Math.sin(sAngle) * sRadius * 0.6;
+              if (sa === 0) ctx2.moveTo(spx, spy);
+              else ctx2.lineTo(spx, spy);
+            }
+            ctx2.stroke();
+          }
+          ctx2.restore();
+
+          // Backward-pulling pressure arrows
+          if (fp > 0.5) {
+            var arrAlpha = Math.min((fp - 0.5) / 0.3, 1);
+            ctx2.save();
+            ctx2.globalAlpha = arrAlpha;
+            ctx2.strokeStyle = '#ff6b6b';
+            ctx2.lineWidth = 2;
+            // Arrows pointing down (backward in rocket flight direction = upward here but showing pull)
+            for (var ai = -1; ai <= 1; ai++) {
+              var ax = leftCx + ai * 15;
+              ctx2.beginPath();
+              ctx2.moveTo(ax, bodyY + bodyH + 5);
+              ctx2.lineTo(ax, bodyY + bodyH + 22);
+              ctx2.stroke();
+              ctx2.fillStyle = '#ff6b6b';
+              ctx2.beginPath();
+              ctx2.moveTo(ax, bodyY + bodyH + 22);
+              ctx2.lineTo(ax - 4, bodyY + bodyH + 16);
+              ctx2.lineTo(ax + 4, bodyY + bodyH + 16);
+              ctx2.closePath();
+              ctx2.fill();
+            }
+            ctx2.restore();
+          }
+        }
+
+        // Vortex label
+        if (fp > 0.6) {
+          ctx2.save();
+          ctx2.globalAlpha = Math.min((fp - 0.6) / 0.3, 1);
+          ctx2.font = "10px 'Inter','Noto Sans SC',sans-serif";
+          ctx2.fillStyle = '#ff6b6b';
+          ctx2.textAlign = 'center';
+          ctx2.fillText(CONFIG.i18n.f3vortex[lang], leftCx, vortexCy + 40);
+
+          // Pull-back description
+          var pullLines = CONFIG.i18n.f3pull[lang].split('\n');
+          ctx2.font = "bold 10px 'Noto Sans SC',sans-serif";
+          for (var pl = 0; pl < pullLines.length; pl++) {
+            ctx2.fillText(pullLines[pl], leftCx, vortexCy + 56 + pl * 15);
+          }
+          ctx2.restore();
+        }
+
+        // ── RIGHT: CONICAL TAIL ──
+        var rightCx = halfW * 1.5;
+
+        // Label
+        ctx2.font = "bold 12px 'Space Grotesk',sans-serif";
+        ctx2.fillStyle = '#00daf3';
+        ctx2.textAlign = 'center';
+        ctx2.fillText(CONFIG.i18n.f3cone[lang], rightCx, H * 0.14);
+
+        // Rocket body + conical tail
+        ctx2.fillStyle = '#4a4e5a';
+        ctx2.fillRect(rightCx - bodyW / 2, bodyY, bodyW, bodyH * 0.75);
+        // Conical tail
+        ctx2.fillStyle = '#00daf3';
+        ctx2.beginPath();
+        ctx2.moveTo(rightCx - bodyW / 2, bodyY + bodyH * 0.75);
+        ctx2.lineTo(rightCx - bodyW * 0.15, bodyY + bodyH);
+        ctx2.lineTo(rightCx + bodyW * 0.15, bodyY + bodyH);
+        ctx2.lineTo(rightCx + bodyW / 2, bodyY + bodyH * 0.75);
+        ctx2.closePath();
+        ctx2.fill();
+
+        // Smooth airflow rejoining behind cone
+        if (fp > 0.2) {
+          var flowAlpha = Math.min((fp - 0.2) / 0.4, 1);
+          ctx2.save();
+          ctx2.globalAlpha = flowAlpha * 0.6;
+          ctx2.strokeStyle = '#00daf3';
+          ctx2.lineWidth = 1;
+
+          for (var fi = 0; fi < 5; fi++) {
+            var frac = (fi + 1) / 6;
+            var fx1Off = bodyW * 0.5 * frac;
+            var fx2Off = bodyW * 0.2 * frac;
+            ctx2.beginPath();
+            // Left side
+            ctx2.moveTo(rightCx - fx1Off, bodyY + bodyH * 0.7);
+            ctx2.bezierCurveTo(
+              rightCx - fx1Off * 0.7, bodyY + bodyH * 0.9,
+              rightCx - fx2Off, bodyY + bodyH + 15,
+              rightCx, bodyY + bodyH + 25 + fi * 5
+            );
+            ctx2.stroke();
+            // Right side
+            ctx2.beginPath();
+            ctx2.moveTo(rightCx + fx1Off, bodyY + bodyH * 0.7);
+            ctx2.bezierCurveTo(
+              rightCx + fx1Off * 0.7, bodyY + bodyH * 0.9,
+              rightCx + fx2Off, bodyY + bodyH + 15,
+              rightCx, bodyY + bodyH + 25 + fi * 5
+            );
+            ctx2.stroke();
+          }
+          ctx2.restore();
+        }
+
+        // Smooth rejoin label
+        if (fp > 0.6) {
+          ctx2.save();
+          ctx2.globalAlpha = Math.min((fp - 0.6) / 0.3, 1);
+          ctx2.font = "10px 'Inter','Noto Sans SC',sans-serif";
+          ctx2.fillStyle = '#00daf3';
+          ctx2.textAlign = 'center';
+          ctx2.fillText(CONFIG.i18n.f3smooth[lang], rightCx, bodyY + bodyH + 55);
+          ctx2.font = "bold 10px 'Noto Sans SC',sans-serif";
+          ctx2.fillText(CONFIG.i18n.f3min[lang], rightCx, bodyY + bodyH + 72);
+          ctx2.restore();
+        }
+
+        // Pressure difference comparison box
+        if (fp > 0.8) {
+          var boxAlpha = Math.min((fp - 0.8) / 0.2, 1);
+          ctx2.save();
+          ctx2.globalAlpha = boxAlpha;
+
+          var boxY2 = H * 0.88;
+          var boxW2 = W * 0.7;
+          var boxX2 = (W - boxW2) / 2;
+          ctx2.fillStyle = 'rgba(255,181,156,0.06)';
+          ctx2.fillRect(boxX2, boxY2 - 15, boxW2, 26);
+          ctx2.strokeStyle = P.primary;
+          ctx2.lineWidth = 1;
+          ctx2.strokeRect(boxX2, boxY2 - 15, boxW2, 26);
+
+          ctx2.font = "bold 11px 'Space Grotesk','Noto Sans SC',sans-serif";
+          ctx2.fillStyle = P.primary;
+          ctx2.textAlign = 'center';
+          ctx2.fillText(
+            lang === 'cn' ? '\u538b\u5dee\u5bf9\u6bd4\uff1a\u5e73\u5207\u5c3e = \u5927\u91cf\u6da1\u65cb\u963b\u529b  vs  \u5706\u9525\u5c3e = \u51e0\u4e4e\u65e0\u5c3e\u6d41\u963b\u529b'
+                          : 'Flat end = massive vortex drag  vs  Cone = near-zero wake drag',
+            cx, boxY2
+          );
+          ctx2.restore();
+        }
+
+        // Divider
+        ctx2.strokeStyle = 'rgba(255,255,255,0.08)';
+        ctx2.lineWidth = 1;
+        ctx2.setLineDash([6, 4]);
+        ctx2.beginPath();
+        ctx2.moveTo(halfW, H * 0.12);
+        ctx2.lineTo(halfW, H * 0.85);
+        ctx2.stroke();
+        ctx2.setLineDash([]);
+      }},
+    ];
+  }
+
+  // ── F4: COMPLETE ROCKET ──
+  if (f === 4) {
+    return [
+      {id:'f4t', type:'label', text:t('f4title'), x:cx, y:28, color:P.primary, size:18, align:'center', glow:P.glowStrong, bold:true},
+      {id:'f4motto', type:'label', text:t('f4motto'), x:cx, y:H - 16, color:P.secondary, size:12, align:'center', bold:true},
+      {id:'f4content', type:'custom', x:0, y:0, alpha:1, draw: function(ctx2) {
+        var lang = AnimRuntime.LANG;
+        var ap = animState.assemblyProgress;
+        var shake = animState.shakeAmount;
+
+        // Rocket center
+        var rocketCx = W * 0.35;
+        var rocketTop = H * 0.12;
+        var rocketH = H * 0.72;
+        var rocketW = 70;
+
+        // Apply subtle shake when assembly completes
+        ctx2.save();
+        if (shake > 0.1) {
+          ctx2.translate(
+            (Math.random() - 0.5) * shake,
+            (Math.random() - 0.5) * shake
+          );
+        }
+
+        // Three zones
+        var noseEnd = rocketTop + rocketH * 0.25;
+        var bodyEnd = rocketTop + rocketH * 0.75;
+        var tailEnd = rocketTop + rocketH;
+
+        // Nose cone (appears first)
+        var noseProg = Math.min(ap / 0.3, 1);
+        if (noseProg > 0) {
+          ctx2.save();
+          ctx2.globalAlpha = easeOutCubic(noseProg);
+          // Glow
+          if (animState.glowIntensity > 0) {
+            ctx2.shadowColor = P.glowStrong;
+            ctx2.shadowBlur = animState.glowIntensity * 20;
+          }
+          ctx2.fillStyle = '#ff7f50';
+          ctx2.beginPath();
+          ctx2.moveTo(rocketCx, rocketTop);
+          ctx2.bezierCurveTo(
+            rocketCx + rocketW * 0.1, rocketTop + (noseEnd - rocketTop) * 0.4,
+            rocketCx + rocketW * 0.3, noseEnd - 10,
+            rocketCx + rocketW * 0.3, noseEnd
+          );
+          ctx2.lineTo(rocketCx - rocketW * 0.3, noseEnd);
+          ctx2.bezierCurveTo(
+            rocketCx - rocketW * 0.3, noseEnd - 10,
+            rocketCx - rocketW * 0.1, rocketTop + (noseEnd - rocketTop) * 0.4,
+            rocketCx, rocketTop
+          );
+          ctx2.closePath();
+          ctx2.fill();
+          ctx2.shadowBlur = 0;
+          ctx2.restore();
+        }
+
+        // Body cylinder (appears second)
+        var bodyProg = Math.min(Math.max((ap - 0.2) / 0.3, 0), 1);
+        if (bodyProg > 0) {
+          ctx2.save();
+          ctx2.globalAlpha = easeOutCubic(bodyProg);
+          ctx2.fillStyle = '#5a5e6a';
+          ctx2.fillRect(rocketCx - rocketW * 0.3, noseEnd, rocketW * 0.6, bodyEnd - noseEnd);
+
+          // Surface sheen
+          var sheenGrad = ctx2.createLinearGradient(rocketCx - rocketW * 0.3, 0, rocketCx + rocketW * 0.3, 0);
+          sheenGrad.addColorStop(0, 'rgba(255,255,255,0)');
+          sheenGrad.addColorStop(0.3, 'rgba(255,255,255,0.08)');
+          sheenGrad.addColorStop(0.7, 'rgba(255,255,255,0)');
+          ctx2.fillStyle = sheenGrad;
+          ctx2.fillRect(rocketCx - rocketW * 0.3, noseEnd, rocketW * 0.6, bodyEnd - noseEnd);
+          ctx2.restore();
+        }
+
+        // Tail cone (appears third)
+        var tailProg = Math.min(Math.max((ap - 0.4) / 0.3, 0), 1);
+        if (tailProg > 0) {
+          ctx2.save();
+          ctx2.globalAlpha = easeOutCubic(tailProg);
+          ctx2.fillStyle = '#00daf3';
+          ctx2.beginPath();
+          ctx2.moveTo(rocketCx - rocketW * 0.3, bodyEnd);
+          ctx2.lineTo(rocketCx - rocketW * 0.42, tailEnd);
+          ctx2.lineTo(rocketCx + rocketW * 0.42, tailEnd);
+          ctx2.lineTo(rocketCx + rocketW * 0.3, bodyEnd);
+          ctx2.closePath();
+          ctx2.fill();
+          ctx2.restore();
+
+          // Nozzle
+          ctx2.save();
+          ctx2.globalAlpha = easeOutCubic(tailProg) * 0.8;
+          ctx2.fillStyle = '#333';
+          ctx2.fillRect(rocketCx - 8, tailEnd - 3, 16, 6);
+          ctx2.restore();
+        }
+
+        // Zone divider lines
+        if (ap > 0.5) {
+          var lineAlpha = Math.min((ap - 0.5) / 0.2, 1);
+          ctx2.save();
+          ctx2.globalAlpha = lineAlpha * 0.5;
+          ctx2.strokeStyle = 'rgba(255,255,255,0.4)';
+          ctx2.lineWidth = 0.5;
+          ctx2.setLineDash([3, 3]);
+          ctx2.beginPath();
+          ctx2.moveTo(rocketCx - rocketW * 0.4, noseEnd);
+          ctx2.lineTo(rocketCx + rocketW * 0.4, noseEnd);
+          ctx2.moveTo(rocketCx - rocketW * 0.4, bodyEnd);
+          ctx2.lineTo(rocketCx + rocketW * 0.4, bodyEnd);
+          ctx2.stroke();
+          ctx2.setLineDash([]);
+          ctx2.restore();
+        }
+
+        ctx2.restore(); // End shake transform
+
+        // ── Annotations (right side) ──
+        var annoX = W * 0.58;
+        var annoW = W * 0.38;
+
+        var zones = [
+          {
+            label: CONFIG.i18n.f4nose[lang],
+            desc: CONFIG.i18n.f4noseD[lang],
+            color: '#ff7f50',
+            y: rocketTop + (noseEnd - rocketTop) / 2,
+            prog: Math.min(Math.max((ap - 0.5) / 0.15, 0), 1)
+          },
+          {
+            label: CONFIG.i18n.f4body[lang],
+            desc: CONFIG.i18n.f4bodyD[lang],
+            color: '#aab0ba',
+            y: noseEnd + (bodyEnd - noseEnd) / 2,
+            prog: Math.min(Math.max((ap - 0.6) / 0.15, 0), 1)
+          },
+          {
+            label: CONFIG.i18n.f4tail[lang],
+            desc: CONFIG.i18n.f4tailD[lang],
+            color: '#00daf3',
+            y: bodyEnd + (tailEnd - bodyEnd) / 2,
+            prog: Math.min(Math.max((ap - 0.7) / 0.15, 0), 1)
+          },
+        ];
+
+        for (var zi = 0; zi < zones.length; zi++) {
+          var z = zones[zi];
+          if (z.prog <= 0) continue;
+
+          ctx2.save();
+          ctx2.globalAlpha = easeOutCubic(z.prog);
+
+          // Connection line from rocket to annotation
+          ctx2.strokeStyle = z.color;
+          ctx2.lineWidth = 1;
+          ctx2.setLineDash([3, 3]);
+          ctx2.beginPath();
+          ctx2.moveTo(rocketCx + rocketW * 0.35, z.y);
+          ctx2.lineTo(annoX - 5, z.y);
+          ctx2.stroke();
+          ctx2.setLineDash([]);
+
+          // Annotation box
+          ctx2.fillStyle = 'rgba(0,0,0,0.3)';
+          ctx2.fillRect(annoX, z.y - 18, annoW, 36);
+          ctx2.strokeStyle = z.color;
+          ctx2.lineWidth = 1;
+          ctx2.strokeRect(annoX, z.y - 18, annoW, 36);
+
+          // Zone label
+          ctx2.font = "bold 12px 'Space Grotesk','Noto Sans SC',sans-serif";
+          ctx2.fillStyle = z.color;
+          ctx2.textAlign = 'left';
+          ctx2.fillText(z.label, annoX + 8, z.y - 4);
+
+          // Description
+          ctx2.font = "10px 'Inter','Noto Sans SC',sans-serif";
+          ctx2.fillStyle = P.muted;
+          ctx2.fillText(z.desc, annoX + 8, z.y + 12);
+
+          ctx2.restore();
+        }
+
+        // ── Bottom: C_D values and Falcon 9 comparison ──
+        if (ap > 0.85) {
+          var btmAlpha = Math.min((ap - 0.85) / 0.15, 1);
+          ctx2.save();
+          ctx2.globalAlpha = easeOutCubic(btmAlpha);
+
+          var compY = H * 0.88;
+
+          // Model rocket C_D
+          ctx2.font = "bold 12px 'Space Grotesk','Noto Sans SC',sans-serif";
+          ctx2.fillStyle = P.primary;
+          ctx2.textAlign = 'center';
+          ctx2.fillText(CONFIG.i18n.f4total[lang], cx * 0.7, compY - 6);
+
+          // Falcon 9 comparison
+          ctx2.font = "11px 'Inter','Noto Sans SC',sans-serif";
+          ctx2.fillStyle = P.tertiary;
+          ctx2.fillText(CONFIG.i18n.f4falcon[lang], cx * 1.3, compY - 6);
+
+          // Small bar comparison
+          var barX1 = cx * 0.7 - 40;
+          var barX2 = cx * 1.3 - 40;
+          var barY2 = compY + 8;
+          var barMaxW = 80;
+
+          // Model rocket bar (0.4 representative)
+          ctx2.fillStyle = P.primary;
+          ctx2.globalAlpha = easeOutCubic(btmAlpha) * 0.7;
+          ctx2.fillRect(barX1, barY2, barMaxW * 0.4 / 0.5, 6);
+
+          // Falcon 9 bar (0.3)
+          ctx2.fillStyle = P.tertiary;
+          ctx2.fillRect(barX2, barY2, barMaxW * 0.3 / 0.5, 6);
+
+          ctx2.restore();
+        }
+      }},
+    ];
+  }
+
+  return [];
+}
+
+// ============================================================
+// BOOT
+// ============================================================
+
+AnimRuntime.boot();
+</script>
+</body>
+</html>

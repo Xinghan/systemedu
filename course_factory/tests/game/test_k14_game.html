@@ -1,0 +1,560 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=Noto+Sans+SC:wght@400;700&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box;}
+html,body{width:100%;height:100vh;overflow:hidden;background:#0c0e14;color:#f6f6fc;font-family:'Noto Sans SC','Inter',sans-serif;}
+.game-wrap{display:flex;flex-direction:row;height:100vh;overflow:hidden;}
+.game-sidebar{width:200px;min-width:200px;max-width:200px;display:flex;flex-direction:column;gap:8px;padding:10px;background:rgba(0,0,0,0.5);border-right:1px solid rgba(80,255,176,0.15);overflow-y:auto;}
+.sidebar-lang{align-self:flex-start;flex-shrink:0;font-family:'Space Grotesk',sans-serif;font-size:11px;font-weight:700;padding:4px 10px;cursor:pointer;border:1px solid rgba(255,181,156,0.3);background:transparent;color:#ffb59c;letter-spacing:1px;}
+.sidebar-lang:hover{border-color:#ffb59c;background:rgba(255,181,156,0.1);}
+.sidebar-title{font-family:'Space Grotesk',sans-serif;font-size:11px;font-weight:700;color:#50ffb0;letter-spacing:0.08em;text-transform:uppercase;margin-top:4px;}
+.sidebar-guide{font-size:12px;color:#aaabb0;line-height:1.6;}
+.game-main{flex:1;display:flex;flex-direction:column;min-width:0;}
+.game-header{padding:8px 16px;display:flex;justify-content:space-between;align-items:center;background:rgba(0,0,0,0.4);}
+.game-header h1{font-family:'Space Grotesk',sans-serif;font-size:clamp(13px,2vw,17px);font-weight:700;color:#50ffb0;}
+.game-header .info{font-family:'Space Grotesk',sans-serif;font-size:12px;color:#aaabb0;}
+.game-body{flex:1;display:flex;flex-direction:column;min-height:0;}
+canvas{width:100%;height:100%;display:block;}
+.control-panel{display:flex;justify-content:center;align-items:center;gap:10px;padding:8px 16px;background:rgba(0,0,0,0.4);}
+.ctrl-btn{font-family:'Space Grotesk',sans-serif;font-size:12px;font-weight:700;padding:6px 16px;border:none;cursor:pointer;color:#0c0e12;background:linear-gradient(135deg,#50ffb0,#17df93);box-shadow:0 0 10px rgba(80,255,176,0.3);}
+.ctrl-btn:hover{transform:scale(1.04);}
+.ctrl-btn.secondary{background:rgba(30,30,45,0.9);color:#aaabb0;box-shadow:none;}
+.hud-bar{height:44px;display:flex;align-items:center;justify-content:space-around;background:rgba(0,0,0,0.55);padding:0 16px;}
+.hud-item{text-align:center;}
+.hud-label{font-family:'Space Grotesk',sans-serif;font-size:9px;letter-spacing:0.12em;color:#aaabb0;text-transform:uppercase;}
+.hud-val{font-family:'Space Grotesk',sans-serif;font-size:14px;font-weight:700;color:#50ffb0;}
+</style>
+</head>
+<body>
+<div class="game-wrap">
+  <div class="game-sidebar">
+    <button class="sidebar-lang" id="langBtn">CN</button>
+    <div class="sidebar-title" id="sidebarTitle"></div>
+    <div class="sidebar-guide" id="guideContent"></div>
+  </div>
+  <div class="game-main">
+    <div class="game-header">
+      <h1 id="gameTitle"></h1>
+      <div class="info" id="roundInfo"></div>
+    </div>
+    <div class="game-body">
+      <canvas id="c"></canvas>
+    </div>
+    <div class="control-panel">
+    <button class="ctrl-btn" id="btnDeploy"></button>
+    <button class="ctrl-btn secondary" id="btnReset"></button>
+  </div>
+    <div class="hud-bar">
+    <div class="hud-item"><div class="hud-label" id="hudL1"></div><div class="hud-val" id="hudV1">--</div></div>
+    <div class="hud-item"><div class="hud-label" id="hudL2"></div><div class="hud-val" id="hudV2">--</div></div>
+    <div class="hud-item"><div class="hud-label" id="hudL3"></div><div class="hud-val" id="hudV3">--</div></div>
+    <div class="hud-item"><div class="hud-label" id="hudL4"></div><div class="hud-val" id="hudV4">--</div></div>
+  </div>
+</div>
+
+
+</div>
+<script>
+// ============================================================
+// Knode 14 Game: Capsule Descent Challenge
+// A space capsule falls from the sky. Player must deploy the
+// parachute at the RIGHT moment - too early = drift off target,
+// too late = land too fast. 5 levels with increasing difficulty.
+// ============================================================
+
+var I18N = {
+  title:     {en:'CAPSULE DESCENT', cn:'\u8fd4\u56de\u8231\u7740\u9646'},
+  guide:     {en:'The capsule is falling! Press DEPLOY at the right moment (200-400m altitude). Too early = drift off target. Too late = land too fast!', cn:'返回舱正在降落！在合适的时机（200-400米海拔）按下"打开降落伞"。太早会偏离目标，太晚速度太快！'},
+  deploy:    {en:'DEPLOY PARACHUTE!', cn:'\u6253\u5f00\u964d\u843d\u4f1e\uff01'},
+  reset:     {en:'RESTART', cn:'\u91cd\u65b0\u5f00\u59cb'},
+  level:     {en:'Level', cn:'\u5173\u5361'},
+  altitude:  {en:'ALTITUDE', cn:'\u6d77\u62d4'},
+  velocity:  {en:'VELOCITY', cn:'\u901f\u5ea6'},
+  status:    {en:'STATUS', cn:'\u72b6\u6001'},
+  score:     {en:'SCORE', cn:'\u5f97\u5206'},
+  falling:   {en:'Falling...', cn:'\u4e0b\u843d\u4e2d...'},
+  deployed:  {en:'Parachute open!', cn:'\u4f1e\u5df2\u6253\u5f00\uff01'},
+  landed:    {en:'Landed!', cn:'\u5df2\u7740\u9646\uff01'},
+  perfect:   {en:'PERFECT LANDING!', cn:'\u5b8c\u7f8e\u7740\u9646\uff01'},
+  safe:      {en:'Safe landing', cn:'\u5b89\u5168\u7740\u9646'},
+  rough:     {en:'Rough landing!', cn:'\u7740\u9646\u8f83\u786c\uff01'},
+  crash:     {en:'CRASH! Too fast!', cn:'\u574f\u4e86\uff01\u592a\u5feb\u4e86\uff01'},
+  tooEarly:  {en:'Deployed too early - drifted off!', cn:'\u6253\u5f00\u592a\u65e9\u2014\u2014\u98d8\u8d70\u4e86\uff01'},
+  hint:      {en:'Deploy between 200-400m altitude', cn:'\u5728200-400\u7c73\u6d77\u62d4\u65f6\u6253\u5f00\u964d\u843d\u4f1e'},
+  complete:  {en:'ALL LEVELS COMPLETE!', cn:'\u5168\u90e8\u901a\u5173\uff01'},
+  insight:   {en:'Parachute timing is critical for safe landing!', cn:'\u964d\u843d\u4f1e\u65f6\u673a\u5bf9\u5b89\u5168\u7740\u9646\u81f3\u5173\u91cd\u8981\uff01'},
+};
+
+var lang = 'cn';
+function t(key) { return I18N[key] ? (I18N[key][lang] || I18N[key].en) : key; }
+
+// Levels: starting altitude, capsule mass
+var LEVELS = [
+  {altitude: 800, mass: 50, name: 'Easy'},
+  {altitude: 1000, mass: 80, name: 'Medium'},
+  {altitude: 600, mass: 50, name: 'Low start'},
+  {altitude: 1200, mass: 120, name: 'Heavy'},
+  {altitude: 900, mass: 100, name: 'Challenge'},
+];
+
+var SAFE_SPEED = 8;    // m/s - safe landing speed
+var MAX_SPEED = 15;    // m/s - crash threshold
+var G = 9.8;
+var DT = 0.02;
+var CHUTE_AREA = 50;   // m^2 when deployed
+var RHO = 1.225;
+var CD = 1.4;
+
+var state = {
+  level: 0,
+  altitude: 800,
+  velocity: 0,
+  chuteDeployed: false,
+  phase: 'ready', // ready, falling, landed
+  scores: [],
+  totalScore: 0,
+  deployAlt: -1,
+};
+
+var canvas, ctx, cw, ch;
+var simTimer = null;
+
+function resize() {
+  canvas = document.getElementById('c');
+  var rect = canvas.parentElement.getBoundingClientRect();
+  cw = Math.floor(rect.width * devicePixelRatio);
+  ch = Math.floor(rect.height * devicePixelRatio);
+  canvas.width = cw;
+  canvas.height = ch;
+  ctx = canvas.getContext('2d');
+  ctx.scale(devicePixelRatio, devicePixelRatio);
+  cw = rect.width;
+  ch = rect.height;
+}
+
+function initUI() {
+  document.getElementById('gameTitle').textContent = t('title');
+  document.getElementById('btnDeploy').textContent = t('deploy');
+  document.getElementById('btnReset').textContent = t('reset');
+  document.getElementById('hudL1').textContent = t('altitude');
+  document.getElementById('hudL2').textContent = t('velocity');
+  document.getElementById('hudL3').textContent = t('status');
+  document.getElementById('hudL4').textContent = t('score');
+  updateLevel();
+}
+
+function updateLevel() {
+  document.getElementById('roundInfo').textContent = t('level') + ' ' + (state.level + 1) + '/' + LEVELS.length;
+}
+
+function updateHUD() {
+  document.getElementById('hudV1').textContent = Math.round(state.altitude) + 'm';
+  document.getElementById('hudV2').textContent = state.velocity.toFixed(1) + ' m/s';
+  var statusText = '--';
+  if (state.phase === 'falling' && !state.chuteDeployed) statusText = t('falling');
+  else if (state.phase === 'falling' && state.chuteDeployed) statusText = t('deployed');
+  else if (state.phase === 'landed') statusText = t('landed');
+  document.getElementById('hudV3').textContent = statusText;
+  document.getElementById('hudV4').textContent = state.totalScore > 0 ? '' + state.totalScore : '--';
+}
+
+function startLevel() {
+  var lv = LEVELS[state.level];
+  state.altitude = lv.altitude;
+  state.velocity = 0;
+  state.chuteDeployed = false;
+  state.phase = 'falling';
+  state.deployAlt = -1;
+  document.getElementById('btnDeploy').disabled = false;
+
+  if (simTimer) clearInterval(simTimer);
+  simTimer = setInterval(function() {
+    if (state.phase !== 'falling') return;
+    var mass = LEVELS[state.level].mass;
+
+    // Drag force
+    var drag = 0;
+    if (state.chuteDeployed) {
+      drag = 0.5 * RHO * CD * CHUTE_AREA * state.velocity * state.velocity / mass;
+    } else {
+      // Small body drag
+      drag = 0.5 * RHO * 0.5 * 0.3 * state.velocity * state.velocity / mass;
+    }
+
+    state.velocity += (G - drag) * DT;
+    if (state.velocity < 0) state.velocity = 0;
+    state.altitude -= state.velocity * DT;
+
+    if (state.altitude <= 0) {
+      state.altitude = 0;
+      state.phase = 'landed';
+      clearInterval(simTimer);
+      simTimer = null;
+      endLevel();
+    }
+
+    updateHUD();
+  }, DT * 1000);
+}
+
+function deployChute() {
+  if (state.phase !== 'falling' || state.chuteDeployed) return;
+  state.chuteDeployed = true;
+  state.deployAlt = state.altitude;
+  document.getElementById('btnDeploy').disabled = true;
+}
+
+function endLevel() {
+  var landingSpeed = state.velocity;
+  var score = 0;
+  var msg = '';
+
+  if (state.deployAlt > 500) {
+    score = 10;
+    msg = t('tooEarly');
+  } else if (landingSpeed <= SAFE_SPEED) {
+    score = Math.round(100 - (landingSpeed / SAFE_SPEED) * 30);
+    if (score > 90) msg = t('perfect');
+    else msg = t('safe');
+  } else if (landingSpeed <= MAX_SPEED) {
+    score = Math.round(50 - (landingSpeed - SAFE_SPEED) / (MAX_SPEED - SAFE_SPEED) * 30);
+    msg = t('rough');
+  } else {
+    score = 0;
+    msg = t('crash');
+  }
+
+  if (!state.chuteDeployed) {
+    score = 0;
+    msg = t('crash');
+  }
+
+  state.scores.push(score);
+  state.totalScore += score;
+  state.resultMsg = msg;
+  state.resultScore = score;
+  updateHUD();
+
+  // Auto-advance after 2.5s
+  if (state.level < LEVELS.length - 1) {
+    setTimeout(function() {
+      state.level++;
+      updateLevel();
+      startLevel();
+    }, 2500);
+  }
+}
+
+function resetGame() {
+  if (simTimer) { clearInterval(simTimer); simTimer = null; }
+  state.level = 0;
+  state.scores = [];
+  state.totalScore = 0;
+  state.phase = 'ready';
+  state.resultMsg = '';
+  updateLevel();
+  updateHUD();
+  startLevel();
+}
+
+// Drawing
+function draw() {
+  if (!ctx) return;
+  // Sky gradient
+  var grad = ctx.createLinearGradient(0, 0, 0, ch);
+  grad.addColorStop(0, '#0a0c18');
+  grad.addColorStop(0.5, '#14203a');
+  grad.addColorStop(0.85, '#1a3030');
+  grad.addColorStop(1, '#2a4a28');
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, cw, ch);
+
+  // Ground
+  var groundScreenY = ch * 0.88;
+  ctx.fillStyle = '#2a3a28';
+  ctx.fillRect(0, groundScreenY, cw, ch - groundScreenY);
+  ctx.strokeStyle = '#50ffb0';
+  ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.moveTo(0, groundScreenY); ctx.lineTo(cw, groundScreenY); ctx.stroke();
+
+  // Landing pad
+  ctx.fillStyle = 'rgba(80,255,176,0.15)';
+  ctx.fillRect(cw/2 - 30, groundScreenY, 60, 6);
+
+  // Altitude scale on left
+  var maxAlt = LEVELS[state.level] ? LEVELS[state.level].altitude : 800;
+  ctx.fillStyle = 'rgba(255,255,255,0.2)';
+  ctx.font = "10px 'Space Grotesk', sans-serif";
+  ctx.textAlign = 'right';
+  for (var a = 0; a <= maxAlt; a += 200) {
+    var sy = groundScreenY - (a / maxAlt) * (groundScreenY - 30);
+    ctx.fillText(a + 'm', 40, sy + 3);
+    ctx.strokeStyle = 'rgba(255,255,255,0.05)';
+    ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(45, sy); ctx.lineTo(cw, sy); ctx.stroke();
+  }
+
+  // Deploy zone indicator
+  var zone200 = groundScreenY - (200 / maxAlt) * (groundScreenY - 30);
+  var zone400 = groundScreenY - (400 / maxAlt) * (groundScreenY - 30);
+  ctx.fillStyle = 'rgba(80,255,176,0.06)';
+  ctx.fillRect(50, zone400, cw - 100, zone200 - zone400);
+  ctx.strokeStyle = 'rgba(80,255,176,0.2)';
+  ctx.setLineDash([5, 5]);
+  ctx.beginPath(); ctx.moveTo(50, zone200); ctx.lineTo(cw-50, zone200); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(50, zone400); ctx.lineTo(cw-50, zone400); ctx.stroke();
+  ctx.setLineDash([]);
+
+  // Capsule
+  var capsuleScreenY = groundScreenY - (state.altitude / maxAlt) * (groundScreenY - 30);
+  if (state.altitude > 0 || state.phase === 'landed') {
+    if (state.phase === 'landed') capsuleScreenY = groundScreenY - 20;
+
+    if (state.chuteDeployed) {
+      // Draw parachute
+      var ps = 1.5;
+      ctx.fillStyle = 'rgba(80,255,176,0.5)';
+      ctx.beginPath();
+      ctx.arc(cw/2, capsuleScreenY - 40*ps, 30*ps, Math.PI, 0);
+      ctx.fill();
+      ctx.strokeStyle = '#50ffb0';
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+      // Lines
+      ctx.strokeStyle = 'rgba(255,255,255,0.3)';
+      ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(cw/2-25*ps, capsuleScreenY-35*ps); ctx.lineTo(cw/2, capsuleScreenY); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(cw/2+25*ps, capsuleScreenY-35*ps); ctx.lineTo(cw/2, capsuleScreenY); ctx.stroke();
+    }
+    // Capsule body
+    ctx.fillStyle = '#888';
+    ctx.beginPath();
+    ctx.moveTo(cw/2 - 12, capsuleScreenY);
+    ctx.lineTo(cw/2 + 12, capsuleScreenY);
+    ctx.lineTo(cw/2 + 8, capsuleScreenY + 16);
+    ctx.lineTo(cw/2 - 8, capsuleScreenY + 16);
+    ctx.closePath();
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(255,255,255,0.3)';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+  }
+
+  // Result message
+  if (state.phase === 'landed' && state.resultMsg) {
+    var isGood = state.resultScore >= 50;
+    ctx.fillStyle = isGood ? '#50ffb0' : '#ff4444';
+    ctx.font = "bold 20px 'Space Grotesk', 'Noto Sans SC', sans-serif";
+    ctx.textAlign = 'center';
+    ctx.fillText(state.resultMsg, cw/2, ch * 0.4);
+    ctx.fillStyle = '#ffffff';
+    ctx.font = "14px 'Space Grotesk', sans-serif";
+    ctx.fillText('+' + state.resultScore, cw/2, ch * 0.46);
+
+    if (state.level >= LEVELS.length - 1 && state.scores.length >= LEVELS.length) {
+      ctx.fillStyle = '#50ffb0';
+      ctx.font = "bold 18px 'Noto Sans SC', sans-serif";
+      ctx.fillText(t('complete'), cw/2, ch * 0.55);
+      ctx.fillStyle = '#ffb59c';
+      ctx.font = "14px 'Noto Sans SC', sans-serif";
+      ctx.fillText(t('insight'), cw/2, ch * 0.62);
+    }
+  }
+
+  // Hint
+  if (state.phase === 'falling' && !state.chuteDeployed) {
+    ctx.fillStyle = 'rgba(255,255,255,0.3)';
+    ctx.font = "11px 'Noto Sans SC', sans-serif";
+    ctx.textAlign = 'center';
+    ctx.fillText(t('hint'), cw/2, ch * 0.95);
+  }
+
+  requestAnimationFrame(draw);
+}
+
+// Events
+document.getElementById('btnDeploy').addEventListener('click', deployChute);
+document.getElementById('btnReset').addEventListener('click', resetGame);
+document.getElementById('langBtn').addEventListener('click', function() {
+  lang = lang === 'cn' ? 'en' : 'cn';
+  this.textContent = lang === 'cn' ? 'CN' : 'EN';
+  initUI();
+});
+
+window.addEventListener('resize', resize);
+resize();
+initUI();
+startLevel();
+draw();
+
+// Sidebar init
+(function(){
+  var gc=document.getElementById('guideContent');
+  var st=document.getElementById('sidebarTitle');
+  function _updateSidebar(){if(gc)gc.textContent=t('guide');if(st)st.textContent=t('title');}
+  _updateSidebar();
+  document.getElementById('langBtn').addEventListener('click',function(){setTimeout(_updateSidebar,10);});
+})();
+</script>
+<script>
+
+(function () {
+  if (window.__systemedu_resize_patched) return;
+  window.__systemedu_resize_patched = true;
+
+  const canvas =
+    document.querySelector('canvas#c') ||
+    document.querySelector('canvas');
+  if (!canvas || !canvas.parentElement) return;
+  let container = canvas.parentElement;
+
+  // 如果 canvas 的父容器还包含 controls/hud 等兄弟元素，
+  // 就给 canvas 包一层 div 作为 host，避免 position:absolute 覆盖按钮
+  try {
+    const siblings = container.querySelectorAll('.controls, .hud, button');
+    if (siblings.length > 0 && container.children.length > 1) {
+      const host = document.createElement('div');
+      host.style.cssText = 'flex:1;min-height:0;min-width:0;';
+      container.insertBefore(host, canvas);
+      host.appendChild(canvas);
+      container = host;
+    }
+  } catch (e) {}
+
+  // 注入防撑大 CSS：canvas 脱离流，父容器约束高度
+  try {
+    const style = document.createElement('style');
+    style.setAttribute('data-systemedu-resize-patch', '1');
+    style.textContent =
+      // canvas 防撑大
+      '.systemedu-canvas-host{position:relative!important;min-width:0!important;min-height:0!important;overflow:hidden!important;}' +
+      '.systemedu-canvas-host > canvas{position:absolute!important;top:0!important;left:0!important;width:100%!important;height:100%!important;}';
+    document.head.appendChild(style);
+    container.classList.add('systemedu-canvas-host');
+  } catch (e) {}
+
+  const redraw = function () {
+    try { if (typeof window.drawCurrent === 'function') { window.drawCurrent(); return; } } catch (e) {}
+    try {
+      if (typeof window.gotoFrame === 'function' &&
+          typeof window.currentFrame !== 'undefined') {
+        window.gotoFrame(window.currentFrame); return;
+      }
+    } catch (e) {}
+    try { if (typeof window.draw === 'function') { window.draw(); return; } } catch (e) {}
+    try { if (typeof window.render === 'function') { window.render(); return; } } catch (e) {}
+  };
+
+  let rafId = 0;
+  let prevW = 0, prevH = 0;
+
+  // 校正 canvas backing store 与 CSS 显示尺寸，保证宽高比一致。
+  // 防止 canvas 被浏览器按不同比例拉伸（典型症状：文字被水平拉宽或压扁）。
+  // 必要时重新调用原 resize() 让动画内部坐标系也更新。
+  const enforceSizeConsistency = function () {
+    const rect = canvas.getBoundingClientRect();
+    if (rect.width < 1 || rect.height < 1) return false;
+    const dpr = Math.max(1, window.devicePixelRatio || 1);
+    const targetW = Math.round(rect.width * dpr);
+    const targetH = Math.round(rect.height * dpr);
+    // 允许 1 像素误差
+    if (Math.abs(canvas.width - targetW) > 1 || Math.abs(canvas.height - targetH) > 1) {
+      return true; // 需要修复
+    }
+    return false;
+  };
+
+  // 调用动画内部的 resize 钩子。优先级：
+  //   1) window.resize（老式全局挂载）
+  //   2) window 上的 'resize' 事件（addEventListener 注册的 local resize）
+  // 多数 knode 动画通过 addEventListener('resize', resize) 挂事件监听，
+  // 此时 window.resize 是 undefined，唯一能驱动它的方式是 dispatchEvent。
+  const callInternalResize = function () {
+    try {
+      if (typeof window.resize === 'function') {
+        window.resize();
+        return true;
+      }
+    } catch (e) {}
+    try {
+      window.dispatchEvent(new Event('resize'));
+      return true;
+    } catch (e) {}
+    return false;
+  };
+
+  const doResize = function () {
+    // 让动画的 local resize 读最新 rect 并重写 canvas backing store
+    callInternalResize();
+
+    // 校正 backing store：若 canvas.width/height 与 CSS 显示尺寸不一致
+    // （典型症状：文字被水平或垂直拉伸），反复触发 local resize 让它
+    // 重新计算。浏览器 layout 已稳定时通常一次就能修复。
+    try {
+      let guard = 0;
+      while (enforceSizeConsistency() && guard < 3) {
+        guard++;
+        // 触发 reflow 让 getBoundingClientRect 读到最新值
+        void canvas.offsetHeight;
+        callInternalResize();
+      }
+      // 最终保障：某些动画的 resize 可能读到错值（例如 parentElement 被
+      // 缓存，或 CSS !important 锁死尺寸）。此时直接硬写 canvas.width/height
+      // 保证宽高比正确；drawCurrent 会把内容重新画到正确的 backing store。
+      const rect = canvas.getBoundingClientRect();
+      const dpr = Math.max(1, window.devicePixelRatio || 1);
+      const tw = Math.round(rect.width * dpr);
+      const th = Math.round(rect.height * dpr);
+      if (rect.width >= 1 && rect.height >= 1 &&
+          (Math.abs(canvas.width - tw) > 1 || Math.abs(canvas.height - th) > 1)) {
+        canvas.width = tw;
+        canvas.height = th;
+        // 同步动画内部坐标系变量（若挂在 window 上）
+        try {
+          if (typeof window.W !== 'undefined') window.W = rect.width;
+          if (typeof window.H !== 'undefined') window.H = rect.height;
+        } catch (e) {}
+        // 再跑一次 local resize，让它重新 setTransform 并更新自身 W/H
+        callInternalResize();
+      }
+    } catch (e) {}
+
+    redraw();
+  };
+
+  const ro = new ResizeObserver(function (entries) {
+    const entry = entries[0];
+    if (!entry) return;
+    const cr = entry.contentRect;
+    const w = cr.width, h = cr.height;
+    if (w < 1 || h < 1) return;
+    if (Math.abs(w - prevW) < 1 && Math.abs(h - prevH) < 1) return;
+    prevW = w; prevH = h;
+
+    // 第一次回调也要处理：iframe 内的动画可能把错值写到 canvas backing
+    // store（例如 load 时 parent rect 还不稳定），第一次 RO 回调正是
+    // layout 已稳定的时机，必须借此纠正。
+    if (rafId) cancelAnimationFrame(rafId);
+    rafId = requestAnimationFrame(function () {
+      rafId = 0;
+      doResize();
+    });
+  });
+
+  try { ro.observe(container); } catch (e) {}
+
+  // iframe 初始化阶段 parent rect 可能不稳定，导致动画原始 resize()
+  // 写入错误的 canvas.width/height（尤其在 iframe 外层 div 宽高变化时）。
+  // load 后始终跑一次 doResize 做最终校正，不依赖 canvas.width<4 的判断。
+  window.addEventListener('load', function () {
+    setTimeout(function () { doResize(); }, 50);
+  });
+})();
+
+</script>
+</body>
+</html>

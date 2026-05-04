@@ -1,0 +1,2190 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=Inter:wght@400;500&family=Noto+Sans+SC:wght@400;700&display=swap" rel="stylesheet">
+<title>Engine Assembly Workshop</title>
+<style>
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box;border-radius:0!important;}
+html,body{width:100%;height:100vh;overflow:hidden;background:#0c0e14;color:#e2e2e9;font-family:'Inter','Noto Sans SC',sans-serif;}
+body{margin:0;padding:0;}
+.game-wrap{display:flex;flex-direction:row;height:100vh;overflow:hidden;}
+.game-sidebar{width:200px;min-width:200px;max-width:200px;display:flex;flex-direction:column;gap:8px;padding:10px;background:rgba(0,0,0,0.5);border-right:1px solid rgba(255,140,60,0.15);overflow-y:auto;}
+.sidebar-lang{align-self:flex-start;flex-shrink:0;font-family:'Space Grotesk',sans-serif;font-size:10px;font-weight:700;padding:3px 8px;cursor:pointer;border:1px solid rgba(255,181,156,0.25);background:transparent;color:#ffb59c;letter-spacing:1px;}
+.sidebar-lang:hover{border-color:#ffb59c;background:rgba(255,181,156,0.08);}
+.sidebar-title{font-family:'Space Grotesk',sans-serif;font-size:11px;font-weight:700;color:#ff8c3c;letter-spacing:0.08em;text-transform:uppercase;margin-top:4px;}
+.sidebar-guide{font-size:12px;color:#aaabb0;line-height:1.6;}
+.game-main{flex:1;display:flex;flex-direction:column;min-width:0;}
+.game-header{padding:8px 16px;display:flex;justify-content:space-between;align-items:center;background:rgba(0,0,0,0.4);}
+.game-header h1{font-family:'Space Grotesk',sans-serif;font-size:clamp(13px,2vw,17px);font-weight:700;color:#ff8c3c;}
+.game-header .info{font-family:'Space Grotesk',sans-serif;font-size:12px;color:#aaabb0;}
+.game-body{flex:1;display:flex;flex-direction:column;min-height:0;}
+canvas{width:100%;height:100%;display:block;}
+.control-panel{display:flex;justify-content:center;align-items:center;gap:12px;padding:8px 16px;background:rgba(0,0,0,0.4);flex-wrap:wrap;}
+.ctrl-btn{font-family:'Space Grotesk',sans-serif;font-size:12px;font-weight:700;padding:6px 18px;border:none;cursor:pointer;color:#0c0e14;background:linear-gradient(135deg,#ff8c3c,#e06020);box-shadow:0 0 10px rgba(255,140,60,0.3);transition:transform 0.1s;}
+.ctrl-btn:hover{transform:scale(1.04);}
+.ctrl-btn:active{transform:scale(0.96);}
+.ctrl-btn:disabled{opacity:0.4;cursor:default;transform:none;}
+.ctrl-btn.secondary{background:rgba(30,30,45,0.9);color:#aaabb0;box-shadow:none;border:1px solid rgba(170,171,176,0.2);}
+.ctrl-btn.secondary:hover{color:#ff8c3c;border-color:rgba(255,140,60,0.3);}
+.hud-bar{height:44px;display:flex;align-items:center;justify-content:space-around;background:rgba(0,0,0,0.55);padding:0 16px;}
+.hud-item{text-align:center;}
+.hud-label{font-family:'Space Grotesk',sans-serif;font-size:9px;letter-spacing:0.12em;color:#aaabb0;text-transform:uppercase;}
+.hud-val{font-family:'Space Grotesk',sans-serif;font-size:14px;font-weight:700;color:#ff8c3c;transition:transform 0.15s;}
+</style>
+</head>
+<body>
+<div class="game-wrap">
+  <div class="game-sidebar">
+    <button class="sidebar-lang" id="langBtn">CN</button>
+    <div class="sidebar-title" id="sidebarTitle"></div>
+    <div class="sidebar-guide" id="guideContent"></div>
+  </div>
+  <div class="game-main">
+    <div class="game-header">
+      <h1 id="gameTitle"></h1>
+      <div class="info" id="roundInfo"></div>
+    </div>
+    <div class="game-body">
+      <canvas id="c"></canvas>
+    </div>
+    <div class="control-panel">
+      <button class="ctrl-btn" id="btnAction"></button>
+      <button class="ctrl-btn secondary" id="btnReset"></button>
+    </div>
+    <div class="hud-bar">
+      <div class="hud-item"><div class="hud-label" id="hudL1"></div><div class="hud-val" id="hudV1"></div></div>
+      <div class="hud-item"><div class="hud-label" id="hudL2"></div><div class="hud-val" id="hudV2"></div></div>
+      <div class="hud-item"><div class="hud-label" id="hudL3"></div><div class="hud-val" id="hudV3"></div></div>
+      <div class="hud-item"><div class="hud-label" id="hudL4"></div><div class="hud-val" id="hudV4"></div></div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ============================================================
+// K30 Game: Engine Assembly Workshop
+// Solid rocket engine construction: fuel, nozzle, igniter
+// 4 levels: Identify Parts, Assembly Line, Burn Sequence, Decode the Name
+// ============================================================
+
+// --- I18N ---
+var I18N = {
+  title:        {en:'ENGINE ASSEMBLY WORKSHOP', cn:'\u53d1\u52a8\u673a\u7ec4\u88c5\u5de5\u574a'},
+  guide:        {en:'Level 1: Drag part names to the correct positions on the cross-section diagram.\nLevel 2: Drag components in correct order (bottom to top) into the engine casing.\nLevel 3: Arrange the 5 burn events in correct timeline order.\nLevel 4: Decode engine codes and select the right engine for a mission.',
+                 cn:'\u7b2c1\u5173\uff1a\u5c06\u96f6\u4ef6\u540d\u79f0\u62d6\u5230\u5256\u9762\u56fe\u7684\u6b63\u786e\u4f4d\u7f6e\u3002\n\u7b2c2\u5173\uff1a\u6309\u6b63\u786e\u987a\u5e8f\uff08\u4ece\u5e95\u5230\u9876\uff09\u62d6\u52a8\u96f6\u4ef6\u5230\u53d1\u52a8\u673a\u5916\u58f3\u4e2d\u3002\n\u7b2c3\u5173\uff1a\u5c06 5 \u4e2a\u71c3\u70e7\u4e8b\u4ef6\u6309\u6b63\u786e\u65f6\u95f4\u987a\u5e8f\u6392\u5217\u3002\n\u7b2c4\u5173\uff1a\u89e3\u8bfb\u53d1\u52a8\u673a\u7f16\u7801\uff0c\u4e3a\u4efb\u52a1\u9009\u62e9\u6b63\u786e\u53d1\u52a8\u673a\u3002'},
+  level1Title:  {en:'IDENTIFY THE PARTS', cn:'\u8fa8\u8bc6\u96f6\u4ef6'},
+  level2Title:  {en:'ASSEMBLY LINE', cn:'\u7ec4\u88c5\u6d41\u6c34\u7ebf'},
+  level3Title:  {en:'BURN SEQUENCE', cn:'\u71c3\u70e7\u5e8f\u5217'},
+  level4Title:  {en:'DECODE THE NAME', cn:'\u89e3\u7801\u547d\u540d'},
+  level1Desc:   {en:'Drag the correct names to each part on the cross-section', cn:'\u5c06\u6b63\u786e\u7684\u540d\u79f0\u62d6\u5230\u5256\u9762\u56fe\u5404\u4f4d\u7f6e'},
+  level2Desc:   {en:'Drag components bottom-to-top into the engine casing', cn:'\u4ece\u5e95\u5230\u9876\u62d6\u52a8\u96f6\u4ef6\u5230\u53d1\u52a8\u673a\u5916\u58f3\u4e2d'},
+  level3Desc:   {en:'Put the 5 events in correct timeline order', cn:'\u5c06 5 \u4e2a\u4e8b\u4ef6\u6309\u65f6\u95f4\u987a\u5e8f\u6392\u5217'},
+  level4Desc:   {en:'Decode engine codes and choose the right one', cn:'\u89e3\u8bfb\u53d1\u52a8\u673a\u7f16\u7801\uff0c\u9009\u62e9\u6b63\u786e\u7684\u53d1\u52a8\u673a'},
+  levelLabel:   {en:'LEVEL', cn:'\u5173\u5361'},
+  scoreLabel:   {en:'SCORE', cn:'\u5f97\u5206'},
+  timeLabel:    {en:'TIME', cn:'\u65f6\u95f4'},
+  partsLabel:   {en:'PLACED', cn:'\u5df2\u653e\u7f6e'},
+  check:        {en:'CHECK', cn:'\u68c0\u67e5'},
+  nextLevel:    {en:'NEXT LEVEL', cn:'\u4e0b\u4e00\u5173'},
+  resetLevel:   {en:'RESET', cn:'\u91cd\u7f6e'},
+  submit:       {en:'SUBMIT', cn:'\u63d0\u4ea4'},
+  simulate:     {en:'SIMULATE', cn:'\u6a21\u62df'},
+  correct:      {en:'CORRECT!', cn:'\u6b63\u786e\uff01'},
+  wrong:        {en:'WRONG!', cn:'\u9519\u8bef\uff01'},
+  tryAgain:     {en:'TRY AGAIN', cn:'\u518d\u8bd5\u4e00\u6b21'},
+  complete:     {en:'ALL LEVELS COMPLETE!', cn:'\u5168\u90e8\u5b8c\u6210\uff01'},
+  summaryTitle: {en:'LEARNING SUMMARY', cn:'\u5b66\u4e60\u603b\u7ed3'},
+  summaryText:  {en:'You have mastered the 7 components of a solid rocket engine, their assembly order, the burn sequence, and how to read engine codes. A solid motor is a single-use, reliable propulsion system where all fuel is pre-packed.', cn:'\u4f60\u5df2\u638c\u63e1\u56fa\u4f53\u706b\u7bad\u53d1\u52a8\u673a\u76847\u4e2a\u7ec4\u6210\u90e8\u5206\u3001\u7ec4\u88c5\u987a\u5e8f\u3001\u71c3\u70e7\u5e8f\u5217\u548c\u53d1\u52a8\u673a\u7f16\u7801\u89e3\u8bfb\u3002\u56fa\u4f53\u53d1\u52a8\u673a\u662f\u4e00\u6b21\u6027\u4f7f\u7528\u7684\u53ef\u9760\u63a8\u8fdb\u7cfb\u7edf\uff0c\u6240\u6709\u71c3\u6599\u9884\u5148\u88c5\u586b\u3002'},
+  // Level 1 part names
+  partIgniter:  {en:'Igniter', cn:'\u70b9\u706b\u5934'},
+  partPropellant:{en:'Propellant Grain', cn:'\u63a8\u8fdb\u5242\u836f\u67f1'},
+  partChamber:  {en:'Combustion Chamber', cn:'\u71c3\u70e7\u5ba4'},
+  partThroat:   {en:'Throat', cn:'\u5589\u90e8'},
+  partNozzle:   {en:'Nozzle', cn:'\u55b7\u7ba1'},
+  partDelay:    {en:'Delay Charge', cn:'\u5ef6\u65f6\u6bb5'},
+  partEjection: {en:'Ejection Charge', cn:'\u5f39\u5c04\u836f'},
+  // Level 3 events
+  evtIgnition:  {en:'Ignition', cn:'\u70b9\u706b'},
+  evtThrust:    {en:'Thrust Phase', cn:'\u63a8\u529b\u9636\u6bb5'},
+  evtDelay:     {en:'Delay Burn', cn:'\u5ef6\u65f6\u71c3\u70e7'},
+  evtEjection:  {en:'Ejection', cn:'\u5f39\u5c04'},
+  evtParachute: {en:'Parachute Deploy', cn:'\u964d\u843d\u4f1e\u5c55\u5f00'},
+  // Level 4
+  decodePrompt: {en:'What does each part of the code mean?', cn:'\u7f16\u7801\u7684\u6bcf\u90e8\u5206\u4ee3\u8868\u4ec0\u4e48\uff1f'},
+  letterMeaning:{en:'Letter = Total Impulse Class', cn:'\u5b57\u6bcd = \u603b\u51b2\u7b49\u7ea7'},
+  numberMeaning:{en:'Number = Average Thrust (N)', cn:'\u6570\u5b57 = \u5e73\u5747\u63a8\u529b(N)'},
+  delayMeaning: {en:'Dash-Number = Delay Time (s)', cn:'\u6a2a\u7ebf\u6570\u5b57 = \u5ef6\u65f6\u65f6\u95f4(s)'},
+  zeroDelay:    {en:'0 = No delay (booster stage)', cn:'0 = \u65e0\u5ef6\u65f6(\u52a9\u63a8\u7ea7)'},
+  missionQ:     {en:'Your rocket: 200g, target 80m, parachute near apex. Which engine?', cn:'\u706b\u7bad200g\uff0c\u76ee\u6807 80m\uff0c\u9876\u70b9\u9644\u8fd1\u5f00\u4f1e\u3002\u9009\u54ea\u4e2a\u53d1\u52a8\u673a\uff1f'},
+  missionExplain:{en:'C6-5: C-class impulse (5-10 N*s) for 200g rocket to ~80m. 6N avg thrust. 5s delay lets rocket coast to apex before ejection.', cn:'C6-5\uff1aC\u7ea7\u51b2\u91cf(5-10 N*s)\u9002\u5408200g\u706b\u7bad\u5230~80m\u30026N\u5e73\u5747\u63a8\u529b\u30025\u79d2\u5ef6\u65f6\u8ba9\u706b\u7bad\u6ed1\u884c\u5230\u9876\u70b9\u518d\u5f39\u5c04\u3002'},
+  optA83:       {en:'A8-3', cn:'A8-3'},
+  optB64:       {en:'B6-4', cn:'B6-4'},
+  optC65:       {en:'C6-5', cn:'C6-5'},
+  optD120:      {en:'D12-0', cn:'D12-0'},
+  codeA:        {en:'A8-3', cn:'A8-3'},
+  codeB:        {en:'B6-4', cn:'B6-4'},
+  codeC:        {en:'C6-5', cn:'C6-5'},
+  codeD:        {en:'D12-0', cn:'D12-0'},
+  phaseDecodeTitle:{en:'DECODE PHASE', cn:'\u89e3\u7801\u9636\u6bb5'},
+  phaseMissionTitle:{en:'MISSION SELECT', cn:'\u4efb\u52a1\u9009\u62e9'},
+  seqCorrect:   {en:'Sequence correct! Launch simulation starting...', cn:'\u5e8f\u5217\u6b63\u786e\uff01\u53d1\u5c04\u6a21\u62df\u5f00\u59cb...'},
+  seqWrong:     {en:'Wrong sequence! The rocket crashed!', cn:'\u5e8f\u5217\u9519\u8bef\uff01\u706b\u7bad\u5760\u6bc1\uff01'},
+  rocketCrash:  {en:'CRASH!', cn:'\u5760\u6bc1\uff01'},
+  rocketSuccess:{en:'SUCCESS!', cn:'\u6210\u529f\uff01'},
+  dragHere:     {en:'Drag here', cn:'\u62d6\u5230\u6b64\u5904'},
+  slotLabel:    {en:'Slot', cn:'\u69fd\u4f4d'}
+};
+
+var LANG = 'cn';
+function t(key) { return (I18N[key] && I18N[key][LANG]) || (I18N[key] && I18N[key]['en']) || key; }
+
+var soundMuted = true;
+function playTone(freq, dur, type) {
+  if (soundMuted) return;
+  var actx = window._audioCtx || (window._audioCtx = new (window.AudioContext || window.webkitAudioContext)());
+  var osc = actx.createOscillator();
+  var gain = actx.createGain();
+  osc.type = type || 'sine';
+  osc.frequency.value = freq;
+  gain.gain.setValueAtTime(0.3, actx.currentTime);
+  gain.gain.exponentialRampToValueAtTime(0.01, actx.currentTime + dur);
+  osc.connect(gain); gain.connect(actx.destination);
+  osc.start(); osc.stop(actx.currentTime + dur);
+}
+function playSnap() { playTone(880, 0.08, 'square'); }
+function playBurn() { playTone(200, 0.4, 'sawtooth'); }
+function playPop() { playTone(1200, 0.1, 'sine'); setTimeout(function(){ playTone(1600, 0.08, 'sine'); }, 80); }
+function playError() { playTone(150, 0.3, 'sawtooth'); }
+function playSuccess() { playTone(523, 0.15, 'sine'); setTimeout(function(){ playTone(659, 0.15, 'sine'); }, 120); setTimeout(function(){ playTone(784, 0.2, 'sine'); }, 240); }
+
+// --- Easing ---
+function easeOutCubic(tt) { return 1 - Math.pow(1 - tt, 3); }
+function easeInOutQuad(tt) { return tt < 0.5 ? 2*tt*tt : 1 - Math.pow(-2*tt+2, 2)/2; }
+
+// --- Particles ---
+var particles = [];
+function spawnParticles(px, py, col, count) {
+  count = count || 12;
+  for (var i = 0; i < count; i++) {
+    var angle = Math.random() * Math.PI * 2;
+    var speed = 60 + Math.random() * 120;
+    particles.push({
+      x: px, y: py,
+      vx: Math.cos(angle) * speed,
+      vy: Math.sin(angle) * speed,
+      life: 1.0,
+      decay: 0.6 + Math.random() * 0.8,
+      size: 2 + Math.random() * 3,
+      color: col || '#ff8c3c'
+    });
+  }
+}
+function updateParticles(dt) {
+  for (var i = particles.length - 1; i >= 0; i--) {
+    var p = particles[i];
+    p.x += p.vx * dt;
+    p.y += p.vy * dt;
+    p.vy += 80 * dt;
+    p.life -= p.decay * dt;
+    if (p.life <= 0) particles.splice(i, 1);
+  }
+}
+function drawParticles(ctx) {
+  for (var i = 0; i < particles.length; i++) {
+    var p = particles[i];
+    ctx.save();
+    ctx.globalAlpha = p.life * 0.8;
+    ctx.shadowColor = p.color;
+    ctx.shadowBlur = 8;
+    ctx.fillStyle = p.color;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, p.size * p.life, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  }
+}
+
+// --- Screen shake ---
+var shakeAmount = 0;
+var shakeDuration = 0;
+var shakeTimer = 0;
+function triggerShake(amount, dur) {
+  shakeAmount = amount || 5;
+  shakeDuration = dur || 0.2;
+  shakeTimer = shakeDuration;
+}
+function getShakeOffset() {
+  if (shakeTimer <= 0) return {x: 0, y: 0};
+  var ratio = shakeTimer / shakeDuration;
+  var amp = shakeAmount * ratio;
+  return {x: (Math.random() - 0.5) * 2 * amp, y: (Math.random() - 0.5) * 2 * amp};
+}
+
+// --- Game state ---
+var currentLevel = 0;
+var totalScore = 0;
+var levelScores = [0, 0, 0, 0];
+var gamePhase = 'playing'; // playing, checking, transition, complete
+var transitionAlpha = 0;
+var transitionTarget = 0;
+var timerVal = 0;
+var timerRunning = false;
+
+// Canvas
+var canvas = document.getElementById('c');
+var ctx2d = canvas.getContext('2d');
+var canvasW = 100, canvasH = 100;
+var dpr = Math.min(window.devicePixelRatio || 1, 2);
+
+// --- Background parallax ---
+var bgStars = [];
+function initBgStars() {
+  bgStars = [];
+  for (var i = 0; i < 60; i++) {
+    bgStars.push({
+      x: Math.random() * 2000,
+      y: Math.random() * 1200,
+      size: 0.5 + Math.random() * 1.5,
+      speed: 0.1 + Math.random() * 0.3,
+      bright: 0.3 + Math.random() * 0.7
+    });
+  }
+}
+initBgStars();
+
+function drawBackground(ctx) {
+  // Deep gradient background
+  var grad = ctx.createRadialGradient(canvasW * 0.5, canvasH * 0.4, 0, canvasW * 0.5, canvasH * 0.4, canvasW * 0.8);
+  grad.addColorStop(0, '#1a1520');
+  grad.addColorStop(0.5, '#0f0e18');
+  grad.addColorStop(1, '#080810');
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, canvasW, canvasH);
+  // Stars parallax layer
+  var now = Date.now() * 0.001;
+  for (var i = 0; i < bgStars.length; i++) {
+    var s = bgStars[i];
+    var sx = (s.x + now * s.speed * 10) % (canvasW + 20) - 10;
+    var sy = s.y % canvasH;
+    var pulse = 0.5 + 0.5 * Math.sin(now * 2 + i);
+    ctx.globalAlpha = s.bright * (0.6 + 0.4 * pulse);
+    ctx.fillStyle = '#ffffff';
+    ctx.beginPath();
+    ctx.arc(sx, sy, s.size, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+}
+
+// ==================== LEVEL 1: Identify the Parts ====================
+var L1_PARTS = [
+  {id: 'partEjection',  key: 'partEjection',  correctSlot: 0},
+  {id: 'partDelay',     key: 'partDelay',      correctSlot: 1},
+  {id: 'partIgniter',   key: 'partIgniter',    correctSlot: 2},
+  {id: 'partPropellant',key: 'partPropellant', correctSlot: 3},
+  {id: 'partChamber',   key: 'partChamber',    correctSlot: 4},
+  {id: 'partThroat',    key: 'partThroat',     correctSlot: 5},
+  {id: 'partNozzle',    key: 'partNozzle',     correctSlot: 6}
+];
+
+// Slot positions relative to the cross-section (fractions of engine area)
+// Engine drawn vertically: top = ejection, bottom = nozzle
+var L1_SLOT_FRACS = [
+  {yFrac: 0.04, label: '1'},  // Ejection charge (top)
+  {yFrac: 0.15, label: '2'},  // Delay charge
+  {yFrac: 0.26, label: '3'},  // Igniter
+  {yFrac: 0.40, label: '4'},  // Propellant grain (large)
+  {yFrac: 0.60, label: '5'},  // Combustion chamber
+  {yFrac: 0.78, label: '6'},  // Throat
+  {yFrac: 0.90, label: '7'}   // Nozzle (bottom)
+];
+
+var l1DragItems = [];
+var l1Slots = [];
+var l1Dragging = -1;
+var l1DragOff = {x: 0, y: 0};
+var l1Placed = [];
+var l1Checked = false;
+var l1Results = [];
+var l1StartTime = 0;
+
+function initLevel1() {
+  l1Checked = false;
+  l1Results = [];
+  l1Placed = [];
+  l1StartTime = Date.now();
+  timerRunning = true;
+  // Shuffle parts for drag pool
+  var shuffled = L1_PARTS.slice();
+  for (var i = shuffled.length - 1; i > 0; i--) {
+    var j = Math.floor(Math.random() * (i + 1));
+    var tmp = shuffled[i]; shuffled[i] = shuffled[j]; shuffled[j] = tmp;
+  }
+  l1DragItems = [];
+  for (var i = 0; i < shuffled.length; i++) {
+    l1DragItems.push({
+      part: shuffled[i],
+      placed: false,
+      slotIdx: -1,
+      homeX: 0, homeY: 0,
+      x: 0, y: 0, w: 0, h: 0,
+      pulse: Math.random() * Math.PI * 2
+    });
+  }
+  l1Slots = [];
+  for (var i = 0; i < 7; i++) {
+    l1Slots.push({filled: false, itemIdx: -1});
+  }
+  l1Dragging = -1;
+  layoutLevel1();
+}
+
+function layoutLevel1() {
+  // Engine cross-section on the right, labels on the left
+  var engineX = canvasW * 0.45;
+  var engineY = canvasH * 0.06;
+  var engineW = canvasW * 0.22;
+  var engineH = canvasH * 0.88;
+  // Drag pool on left
+  var poolX = canvasW * 0.03;
+  var poolW = canvasW * 0.28;
+  var itemH = Math.min(canvasH * 0.10, 36);
+  var startY = canvasH * 0.06;
+  var gap = Math.min((canvasH * 0.88) / 7, itemH + 10);
+  for (var i = 0; i < l1DragItems.length; i++) {
+    var it = l1DragItems[i];
+    it.homeX = poolX;
+    it.homeY = startY + i * gap;
+    it.w = poolW;
+    it.h = itemH;
+    if (!it.placed) {
+      it.x = it.homeX;
+      it.y = it.homeY;
+    }
+  }
+  // Slot positions on the engine
+  for (var i = 0; i < 7; i++) {
+    var sf = L1_SLOT_FRACS[i];
+    l1Slots[i].x = engineX + engineW + 12;
+    l1Slots[i].y = engineY + sf.yFrac * engineH;
+    l1Slots[i].w = canvasW * 0.22;
+    l1Slots[i].h = itemH;
+    l1Slots[i].engineLinkX = engineX + engineW;
+    l1Slots[i].engineLinkY = engineY + sf.yFrac * engineH + itemH * 0.5;
+  }
+}
+
+function drawLevel1(ctx, now) {
+  var engineX = canvasW * 0.45;
+  var engineY = canvasH * 0.06;
+  var engineW = canvasW * 0.22;
+  var engineH = canvasH * 0.88;
+
+  // Draw engine cross-section
+  drawEngineSection(ctx, engineX, engineY, engineW, engineH, now);
+
+  // Draw slots
+  for (var i = 0; i < 7; i++) {
+    var sl = l1Slots[i];
+    // Connector line from engine to slot
+    ctx.strokeStyle = 'rgba(255,140,60,0.25)';
+    ctx.lineWidth = 1;
+    ctx.setLineDash([4, 3]);
+    ctx.beginPath();
+    ctx.moveTo(sl.engineLinkX, sl.engineLinkY);
+    ctx.lineTo(sl.x, sl.y + sl.h * 0.5);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // Slot box
+    var slotColor = 'rgba(255,140,60,0.08)';
+    var borderColor = 'rgba(255,140,60,0.2)';
+    if (l1Checked && l1Results[i] !== undefined) {
+      if (l1Results[i]) {
+        slotColor = 'rgba(80,255,176,0.1)';
+        borderColor = 'rgba(80,255,176,0.5)';
+      } else {
+        slotColor = 'rgba(255,60,60,0.1)';
+        borderColor = 'rgba(255,60,60,0.5)';
+      }
+    }
+    ctx.fillStyle = slotColor;
+    ctx.fillRect(sl.x, sl.y, sl.w, sl.h);
+    ctx.strokeStyle = borderColor;
+    ctx.lineWidth = sl.filled ? 2 : 1;
+    ctx.setLineDash(sl.filled ? [] : [5, 4]);
+    ctx.strokeRect(sl.x, sl.y, sl.w, sl.h);
+    ctx.setLineDash([]);
+
+    // Slot number
+    ctx.fillStyle = '#ff8c3c';
+    ctx.font = "bold 10px 'Space Grotesk',sans-serif";
+    ctx.textAlign = 'right';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(L1_SLOT_FRACS[i].label, sl.x - 4, sl.y + sl.h * 0.5);
+
+    // If slot has an item placed, draw its label
+    if (sl.filled && sl.itemIdx >= 0) {
+      var pit = l1DragItems[sl.itemIdx];
+      ctx.fillStyle = '#e2e2e9';
+      ctx.font = "500 12px 'Noto Sans SC',sans-serif";
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(t(pit.part.key), sl.x + sl.w * 0.5, sl.y + sl.h * 0.5);
+    } else if (!sl.filled) {
+      ctx.fillStyle = 'rgba(170,171,176,0.4)';
+      ctx.font = "11px 'Noto Sans SC',sans-serif";
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(t('dragHere'), sl.x + sl.w * 0.5, sl.y + sl.h * 0.5);
+    }
+  }
+
+  // Draw drag items (unplaced)
+  for (var i = 0; i < l1DragItems.length; i++) {
+    if (l1DragItems[i].placed && l1Dragging !== i) continue;
+    var it = l1DragItems[i];
+    var isDragging = (l1Dragging === i);
+    ctx.save();
+    if (!isDragging && !it.placed) {
+      // Idle pulse
+      var pulse = 0.98 + 0.02 * Math.sin(now * 3 + it.pulse);
+      ctx.translate(it.x + it.w * 0.5, it.y + it.h * 0.5);
+      ctx.scale(pulse, pulse);
+      ctx.translate(-(it.x + it.w * 0.5), -(it.y + it.h * 0.5));
+    }
+    // Card
+    var cardGrad = ctx.createLinearGradient(it.x, it.y, it.x + it.w, it.y + it.h);
+    cardGrad.addColorStop(0, isDragging ? 'rgba(255,140,60,0.25)' : 'rgba(28,27,40,0.9)');
+    cardGrad.addColorStop(1, isDragging ? 'rgba(255,100,30,0.18)' : 'rgba(20,20,35,0.85)');
+    ctx.fillStyle = cardGrad;
+    ctx.fillRect(it.x, it.y, it.w, it.h);
+    ctx.strokeStyle = isDragging ? 'rgba(255,140,60,0.7)' : 'rgba(255,140,60,0.25)';
+    ctx.lineWidth = isDragging ? 2 : 1;
+    ctx.strokeRect(it.x, it.y, it.w, it.h);
+    if (isDragging) {
+      ctx.shadowColor = '#ff8c3c';
+      ctx.shadowBlur = 12;
+      ctx.strokeRect(it.x, it.y, it.w, it.h);
+      ctx.shadowBlur = 0;
+    }
+    ctx.fillStyle = '#e2e2e9';
+    ctx.font = "500 13px 'Noto Sans SC',sans-serif";
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(t(it.part.key), it.x + it.w * 0.5, it.y + it.h * 0.5);
+    ctx.restore();
+  }
+}
+
+function drawEngineSection(ctx, ex, ey, ew, eh, now) {
+  // Outer casing
+  var casingGrad = ctx.createLinearGradient(ex, ey, ex + ew, ey);
+  casingGrad.addColorStop(0, 'rgba(80,80,100,0.6)');
+  casingGrad.addColorStop(0.5, 'rgba(120,120,140,0.5)');
+  casingGrad.addColorStop(1, 'rgba(80,80,100,0.6)');
+  ctx.fillStyle = casingGrad;
+  ctx.fillRect(ex, ey, ew, eh);
+  ctx.strokeStyle = 'rgba(200,200,220,0.3)';
+  ctx.lineWidth = 2;
+  ctx.strokeRect(ex, ey, ew, eh);
+
+  // Internal layers (colored bands showing the 7 sections)
+  var sections = [
+    {yFrac: 0.0,  hFrac: 0.10, color: 'rgba(180,100,60,0.35)',  label: '1'},  // Ejection
+    {yFrac: 0.10, hFrac: 0.10, color: 'rgba(160,160,80,0.35)',  label: '2'},  // Delay
+    {yFrac: 0.20, hFrac: 0.08, color: 'rgba(255,60,40,0.35)',   label: '3'},  // Igniter
+    {yFrac: 0.28, hFrac: 0.25, color: 'rgba(60,180,100,0.35)',  label: '4'},  // Propellant
+    {yFrac: 0.53, hFrac: 0.20, color: 'rgba(100,100,200,0.35)', label: '5'},  // Chamber
+    {yFrac: 0.73, hFrac: 0.10, color: 'rgba(200,140,60,0.35)',  label: '6'},  // Throat
+    {yFrac: 0.83, hFrac: 0.17, color: 'rgba(140,80,200,0.35)',  label: '7'}   // Nozzle
+  ];
+
+  var inset = 4;
+  for (var i = 0; i < sections.length; i++) {
+    var sec = sections[i];
+    var sy = ey + sec.yFrac * eh;
+    var sh = sec.hFrac * eh;
+    ctx.fillStyle = sec.color;
+    ctx.fillRect(ex + inset, sy, ew - inset * 2, sh);
+    ctx.strokeStyle = 'rgba(200,200,220,0.15)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(ex + inset, sy + sh);
+    ctx.lineTo(ex + ew - inset, sy + sh);
+    ctx.stroke();
+  }
+
+  // Nozzle shape (converging section at bottom)
+  ctx.save();
+  ctx.beginPath();
+  var nzTop = ey + 0.78 * eh;
+  var nzBot = ey + eh;
+  ctx.moveTo(ex + inset, nzTop);
+  ctx.lineTo(ex + ew * 0.35, nzBot);
+  ctx.lineTo(ex + ew * 0.65, nzBot);
+  ctx.lineTo(ex + ew - inset, nzTop);
+  ctx.closePath();
+  ctx.fillStyle = 'rgba(140,80,200,0.2)';
+  ctx.fill();
+  ctx.strokeStyle = 'rgba(200,200,220,0.2)';
+  ctx.lineWidth = 1;
+  ctx.stroke();
+  ctx.restore();
+
+  // Center bore (propellant grain core)
+  var coreX = ex + ew * 0.4;
+  var coreW = ew * 0.2;
+  var coreY = ey + 0.28 * eh;
+  var coreH = 0.25 * eh;
+  ctx.fillStyle = 'rgba(0,0,0,0.4)';
+  ctx.fillRect(coreX, coreY, coreW, coreH);
+
+  // Subtle glow on top (ejection charge)
+  var pulse = 0.5 + 0.3 * Math.sin(now * 2);
+  ctx.save();
+  ctx.globalAlpha = pulse * 0.15;
+  var glw = ctx.createRadialGradient(ex + ew * 0.5, ey + eh * 0.05, 0, ex + ew * 0.5, ey + eh * 0.05, ew * 0.4);
+  glw.addColorStop(0, '#ff8c3c');
+  glw.addColorStop(1, 'transparent');
+  ctx.fillStyle = glw;
+  ctx.fillRect(ex, ey, ew, eh * 0.15);
+  ctx.restore();
+}
+
+// ==================== LEVEL 2: Assembly Line ====================
+var L2_COMPONENTS = [
+  {key: 'partNozzle',    correctOrder: 0, color: '#9b59b6'},
+  {key: 'partThroat',    correctOrder: 1, color: '#e67e22'},
+  {key: 'partChamber',   correctOrder: 2, color: '#3498db'},
+  {key: 'partPropellant',correctOrder: 3, color: '#27ae60'},
+  {key: 'partIgniter',   correctOrder: 4, color: '#e74c3c'},
+  {key: 'partDelay',     correctOrder: 5, color: '#f1c40f'},
+  {key: 'partEjection',  correctOrder: 6, color: '#d35400'}
+];
+
+var l2Items = [];
+var l2Slots = [];
+var l2Dragging = -1;
+var l2DragOff = {x: 0, y: 0};
+var l2PlacedCount = 0;
+var l2Checked = false;
+var l2AllCorrect = false;
+
+function initLevel2() {
+  l2Checked = false;
+  l2AllCorrect = false;
+  l2PlacedCount = 0;
+  timerRunning = true;
+  // Shuffle
+  var shuffled = L2_COMPONENTS.slice();
+  for (var i = shuffled.length - 1; i > 0; i--) {
+    var j = Math.floor(Math.random() * (i + 1));
+    var tmp = shuffled[i]; shuffled[i] = shuffled[j]; shuffled[j] = tmp;
+  }
+  l2Items = [];
+  for (var i = 0; i < shuffled.length; i++) {
+    l2Items.push({
+      comp: shuffled[i],
+      placed: false,
+      slotIdx: -1,
+      homeX: 0, homeY: 0,
+      x: 0, y: 0, w: 0, h: 0,
+      pulse: Math.random() * Math.PI * 2,
+      snapAnim: 0
+    });
+  }
+  l2Slots = [];
+  for (var i = 0; i < 7; i++) {
+    l2Slots.push({filled: false, itemIdx: -1, correct: false});
+  }
+  l2Dragging = -1;
+  layoutLevel2();
+}
+
+function layoutLevel2() {
+  // Scattered pool on left side
+  var poolW = canvasW * 0.35;
+  var itemW = poolW * 0.8;
+  var itemH = Math.min(canvasH * 0.09, 34);
+  var startY = canvasH * 0.06;
+  var gap = Math.min((canvasH * 0.88) / 7, itemH + 10);
+  for (var i = 0; i < l2Items.length; i++) {
+    var it = l2Items[i];
+    it.w = itemW;
+    it.h = itemH;
+    it.homeX = canvasW * 0.03 + Math.random() * (poolW - itemW) * 0.5;
+    it.homeY = startY + i * gap;
+    if (!it.placed) {
+      it.x = it.homeX;
+      it.y = it.homeY;
+    }
+  }
+  // Engine casing outline on right (vertical, slots from bottom=0 to top=6)
+  var casingX = canvasW * 0.52;
+  var casingW = canvasW * 0.22;
+  var casingY = canvasH * 0.06;
+  var casingH = canvasH * 0.88;
+  var slotH = casingH / 7;
+  for (var i = 0; i < 7; i++) {
+    // Slot 0 = bottom (nozzle), slot 6 = top (ejection)
+    l2Slots[i].x = casingX;
+    l2Slots[i].y = casingY + (6 - i) * slotH;
+    l2Slots[i].w = casingW;
+    l2Slots[i].h = slotH;
+  }
+}
+
+function drawLevel2(ctx, now) {
+  // Engine casing outline
+  var casingX = canvasW * 0.52;
+  var casingY = canvasH * 0.06;
+  var casingW = canvasW * 0.22;
+  var casingH = canvasH * 0.88;
+
+  // Casing background
+  var casingGrad = ctx.createLinearGradient(casingX, casingY, casingX + casingW, casingY);
+  casingGrad.addColorStop(0, 'rgba(60,60,80,0.4)');
+  casingGrad.addColorStop(0.5, 'rgba(80,80,100,0.35)');
+  casingGrad.addColorStop(1, 'rgba(60,60,80,0.4)');
+  ctx.fillStyle = casingGrad;
+  ctx.fillRect(casingX, casingY, casingW, casingH);
+  ctx.strokeStyle = 'rgba(200,200,220,0.3)';
+  ctx.lineWidth = 2;
+  ctx.strokeRect(casingX, casingY, casingW, casingH);
+
+  // Labels on right side
+  ctx.fillStyle = '#aaabb0';
+  ctx.font = "bold 10px 'Space Grotesk',sans-serif";
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'middle';
+  for (var i = 0; i < 7; i++) {
+    var sl = l2Slots[i];
+    var labelText = (LANG === 'cn' ? '\u5c42 ' : 'L') + (i + 1);
+    ctx.fillText(labelText, casingX + casingW + 6, sl.y + sl.h * 0.5);
+  }
+
+  // Draw slots
+  for (var i = 0; i < 7; i++) {
+    var sl = l2Slots[i];
+    var borderCol = 'rgba(255,140,60,0.15)';
+    var bgCol = 'rgba(0,0,0,0.15)';
+    if (l2Checked) {
+      if (sl.filled) {
+        borderCol = sl.correct ? 'rgba(80,255,176,0.5)' : 'rgba(255,60,60,0.5)';
+        bgCol = sl.correct ? 'rgba(80,255,176,0.08)' : 'rgba(255,60,60,0.08)';
+      }
+    }
+    ctx.fillStyle = bgCol;
+    ctx.fillRect(sl.x + 2, sl.y + 1, sl.w - 4, sl.h - 2);
+    ctx.strokeStyle = borderCol;
+    ctx.lineWidth = 1;
+    ctx.setLineDash([4, 3]);
+    ctx.strokeRect(sl.x + 2, sl.y + 1, sl.w - 4, sl.h - 2);
+    ctx.setLineDash([]);
+
+    if (sl.filled && sl.itemIdx >= 0) {
+      var it = l2Items[sl.itemIdx];
+      drawComponentCard(ctx, sl.x + 4, sl.y + 2, sl.w - 8, sl.h - 4, it, now, false);
+    }
+  }
+
+  // Draw unplaced items
+  for (var i = 0; i < l2Items.length; i++) {
+    if (l2Items[i].placed && l2Dragging !== i) continue;
+    var it = l2Items[i];
+    var isDragging = (l2Dragging === i);
+    drawComponentCard(ctx, it.x, it.y, it.w, it.h, it, now, isDragging);
+  }
+
+  // Arrow indicating "bottom to top" direction
+  ctx.save();
+  var arrowX = casingX + casingW + 30;
+  var arrowTop = casingY + 20;
+  var arrowBot = casingY + casingH - 20;
+  ctx.strokeStyle = 'rgba(255,140,60,0.3)';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(arrowX, arrowBot);
+  ctx.lineTo(arrowX, arrowTop);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(arrowX - 6, arrowTop + 12);
+  ctx.lineTo(arrowX, arrowTop);
+  ctx.lineTo(arrowX + 6, arrowTop + 12);
+  ctx.stroke();
+  ctx.restore();
+}
+
+function drawComponentCard(ctx, cx, cy, cw, ch, item, now, isDragging) {
+  ctx.save();
+  if (!isDragging && !item.placed) {
+    var pulse = 0.98 + 0.02 * Math.sin(now * 3 + item.pulse);
+    ctx.translate(cx + cw * 0.5, cy + ch * 0.5);
+    ctx.scale(pulse, pulse);
+    ctx.translate(-(cx + cw * 0.5), -(cy + ch * 0.5));
+  }
+  var col = item.comp.color;
+  var grad = ctx.createLinearGradient(cx, cy, cx + cw, cy);
+  grad.addColorStop(0, isDragging ? col : 'rgba(28,27,40,0.9)');
+  grad.addColorStop(1, isDragging ? col : 'rgba(20,20,35,0.85)');
+  ctx.globalAlpha = isDragging ? 0.85 : 1;
+  ctx.fillStyle = grad;
+  ctx.fillRect(cx, cy, cw, ch);
+  // Color stripe on left
+  ctx.fillStyle = col;
+  ctx.fillRect(cx, cy, 4, ch);
+  ctx.strokeStyle = isDragging ? col : 'rgba(255,140,60,0.25)';
+  ctx.lineWidth = isDragging ? 2 : 1;
+  ctx.strokeRect(cx, cy, cw, ch);
+  if (isDragging) {
+    ctx.shadowColor = col;
+    ctx.shadowBlur = 14;
+    ctx.strokeRect(cx, cy, cw, ch);
+    ctx.shadowBlur = 0;
+  }
+  ctx.globalAlpha = 1;
+  ctx.fillStyle = '#e2e2e9';
+  ctx.font = "500 12px 'Noto Sans SC',sans-serif";
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(t(item.comp.key), cx + cw * 0.5, cy + ch * 0.5);
+  ctx.restore();
+}
+
+// ==================== LEVEL 3: Burn Sequence ====================
+var L3_EVENTS = [
+  {key: 'evtIgnition',  correctOrder: 0, color: '#e74c3c', icon: 'fire'},
+  {key: 'evtThrust',    correctOrder: 1, color: '#ff8c3c', icon: 'rocket'},
+  {key: 'evtDelay',     correctOrder: 2, color: '#f1c40f', icon: 'clock'},
+  {key: 'evtEjection',  correctOrder: 3, color: '#d35400', icon: 'burst'},
+  {key: 'evtParachute', correctOrder: 4, color: '#3498db', icon: 'chute'}
+];
+
+var l3Cards = [];
+var l3Slots = [];
+var l3Dragging = -1;
+var l3DragOff = {x: 0, y: 0};
+var l3Checked = false;
+var l3AllCorrect = false;
+var l3SimPhase = 'none'; // none, simulating, crashed, success
+var l3SimTime = 0;
+var l3SimRocketY = 0;
+var l3SimRocketVY = 0;
+
+function initLevel3() {
+  l3Checked = false;
+  l3AllCorrect = false;
+  l3SimPhase = 'none';
+  l3SimTime = 0;
+  timerRunning = true;
+  var shuffled = L3_EVENTS.slice();
+  for (var i = shuffled.length - 1; i > 0; i--) {
+    var j = Math.floor(Math.random() * (i + 1));
+    var tmp = shuffled[i]; shuffled[i] = shuffled[j]; shuffled[j] = tmp;
+  }
+  l3Cards = [];
+  for (var i = 0; i < shuffled.length; i++) {
+    l3Cards.push({
+      evt: shuffled[i],
+      placed: false,
+      slotIdx: -1,
+      homeX: 0, homeY: 0,
+      x: 0, y: 0, w: 0, h: 0,
+      pulse: Math.random() * Math.PI * 2
+    });
+  }
+  l3Slots = [];
+  for (var i = 0; i < 5; i++) {
+    l3Slots.push({filled: false, itemIdx: -1, correct: false});
+  }
+  l3Dragging = -1;
+  layoutLevel3();
+}
+
+function layoutLevel3() {
+  // Timeline slots across the bottom half, cards above
+  var cardW = Math.min(canvasW * 0.16, 140);
+  var cardH = Math.min(canvasH * 0.12, 50);
+  var totalCardsW = 5 * cardW + 4 * 12;
+  var startX = (canvasW - totalCardsW) * 0.5;
+  // Cards pool at top
+  for (var i = 0; i < l3Cards.length; i++) {
+    var c = l3Cards[i];
+    c.w = cardW;
+    c.h = cardH;
+    c.homeX = startX + i * (cardW + 12);
+    c.homeY = canvasH * 0.08;
+    if (!c.placed) {
+      c.x = c.homeX;
+      c.y = c.homeY;
+    }
+  }
+  // Timeline slots at bottom
+  var slotY = canvasH * 0.55;
+  for (var i = 0; i < 5; i++) {
+    l3Slots[i].x = startX + i * (cardW + 12);
+    l3Slots[i].y = slotY;
+    l3Slots[i].w = cardW;
+    l3Slots[i].h = cardH;
+  }
+}
+
+function drawLevel3(ctx, now) {
+  // Timeline line
+  var firstSlot = l3Slots[0];
+  var lastSlot = l3Slots[4];
+  var lineY = firstSlot.y + firstSlot.h * 0.5;
+  ctx.strokeStyle = 'rgba(255,140,60,0.3)';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(firstSlot.x - 20, lineY);
+  ctx.lineTo(lastSlot.x + lastSlot.w + 20, lineY);
+  ctx.stroke();
+  // Arrow at end
+  ctx.beginPath();
+  ctx.moveTo(lastSlot.x + lastSlot.w + 10, lineY - 5);
+  ctx.lineTo(lastSlot.x + lastSlot.w + 20, lineY);
+  ctx.lineTo(lastSlot.x + lastSlot.w + 10, lineY + 5);
+  ctx.stroke();
+
+  // Timeline markers
+  ctx.fillStyle = '#aaabb0';
+  ctx.font = "bold 10px 'Space Grotesk',sans-serif";
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'top';
+  for (var i = 0; i < 5; i++) {
+    ctx.fillText((i + 1).toString(), l3Slots[i].x + l3Slots[i].w * 0.5, l3Slots[i].y + l3Slots[i].h + 6);
+    // Dot on timeline
+    ctx.fillStyle = '#ff8c3c';
+    ctx.beginPath();
+    ctx.arc(l3Slots[i].x + l3Slots[i].w * 0.5, lineY, 4, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#aaabb0';
+  }
+
+  // Draw slots
+  for (var i = 0; i < 5; i++) {
+    var sl = l3Slots[i];
+    var bgCol = 'rgba(255,140,60,0.06)';
+    var borderCol = 'rgba(255,140,60,0.2)';
+    if (l3Checked) {
+      if (sl.filled) {
+        borderCol = sl.correct ? 'rgba(80,255,176,0.5)' : 'rgba(255,60,60,0.5)';
+        bgCol = sl.correct ? 'rgba(80,255,176,0.08)' : 'rgba(255,60,60,0.08)';
+      }
+    }
+    ctx.fillStyle = bgCol;
+    ctx.fillRect(sl.x, sl.y, sl.w, sl.h);
+    ctx.strokeStyle = borderCol;
+    ctx.lineWidth = 1;
+    ctx.setLineDash(sl.filled ? [] : [4, 3]);
+    ctx.strokeRect(sl.x, sl.y, sl.w, sl.h);
+    ctx.setLineDash([]);
+
+    if (sl.filled && sl.itemIdx >= 0) {
+      drawEventCard(ctx, sl.x + 2, sl.y + 2, sl.w - 4, sl.h - 4, l3Cards[sl.itemIdx], now, false);
+    }
+  }
+
+  // Unplaced cards
+  for (var i = 0; i < l3Cards.length; i++) {
+    if (l3Cards[i].placed && l3Dragging !== i) continue;
+    var c = l3Cards[i];
+    drawEventCard(ctx, c.x, c.y, c.w, c.h, c, now, l3Dragging === i);
+  }
+
+  // Simulation area (below timeline)
+  if (l3SimPhase !== 'none') {
+    drawBurnSimulation(ctx, now);
+  }
+}
+
+function drawEventCard(ctx, cx, cy, cw, ch, card, now, isDragging) {
+  ctx.save();
+  if (!isDragging && !card.placed) {
+    var pulse = 0.98 + 0.02 * Math.sin(now * 3 + card.pulse);
+    ctx.translate(cx + cw * 0.5, cy + ch * 0.5);
+    ctx.scale(pulse, pulse);
+    ctx.translate(-(cx + cw * 0.5), -(cy + ch * 0.5));
+  }
+  var col = card.evt.color;
+  var grad = ctx.createLinearGradient(cx, cy, cx, cy + ch);
+  grad.addColorStop(0, isDragging ? col : 'rgba(28,27,40,0.9)');
+  grad.addColorStop(1, isDragging ? col : 'rgba(20,20,35,0.85)');
+  ctx.globalAlpha = isDragging ? 0.8 : 1;
+  ctx.fillStyle = grad;
+  ctx.fillRect(cx, cy, cw, ch);
+  ctx.fillStyle = col;
+  ctx.fillRect(cx, cy, cw, 3);
+  ctx.strokeStyle = isDragging ? col : 'rgba(255,140,60,0.2)';
+  ctx.lineWidth = isDragging ? 2 : 1;
+  ctx.strokeRect(cx, cy, cw, ch);
+  if (isDragging) {
+    ctx.shadowColor = col;
+    ctx.shadowBlur = 12;
+    ctx.strokeRect(cx, cy, cw, ch);
+    ctx.shadowBlur = 0;
+  }
+  ctx.globalAlpha = 1;
+  // Icon area
+  drawEventIcon(ctx, cx + 14, cy + ch * 0.5, 10, card.evt.icon, col, now);
+  ctx.fillStyle = '#e2e2e9';
+  ctx.font = "500 11px 'Noto Sans SC',sans-serif";
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(t(card.evt.key), cx + cw * 0.55, cy + ch * 0.5);
+  ctx.restore();
+}
+
+function drawEventIcon(ctx, ix, iy, r, iconType, col, now) {
+  ctx.save();
+  ctx.fillStyle = col;
+  ctx.globalAlpha = 0.7;
+  if (iconType === 'fire') {
+    ctx.beginPath();
+    ctx.moveTo(ix, iy - r);
+    ctx.quadraticCurveTo(ix + r, iy - r * 0.3, ix + r * 0.5, iy + r);
+    ctx.quadraticCurveTo(ix, iy + r * 0.5, ix - r * 0.5, iy + r);
+    ctx.quadraticCurveTo(ix - r, iy - r * 0.3, ix, iy - r);
+    ctx.fill();
+  } else if (iconType === 'rocket') {
+    ctx.beginPath();
+    ctx.moveTo(ix, iy - r);
+    ctx.lineTo(ix + r * 0.5, iy + r * 0.5);
+    ctx.lineTo(ix - r * 0.5, iy + r * 0.5);
+    ctx.closePath();
+    ctx.fill();
+    ctx.fillRect(ix - r * 0.3, iy + r * 0.5, r * 0.6, r * 0.4);
+  } else if (iconType === 'clock') {
+    ctx.beginPath();
+    ctx.arc(ix, iy, r * 0.7, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(ix, iy);
+    ctx.lineTo(ix, iy - r * 0.5);
+    ctx.moveTo(ix, iy);
+    ctx.lineTo(ix + r * 0.35, iy + r * 0.1);
+    ctx.stroke();
+  } else if (iconType === 'burst') {
+    for (var a = 0; a < 6; a++) {
+      var ang = a * Math.PI / 3;
+      ctx.beginPath();
+      ctx.moveTo(ix, iy);
+      ctx.lineTo(ix + Math.cos(ang) * r, iy + Math.sin(ang) * r);
+      ctx.stroke();
+    }
+  } else if (iconType === 'chute') {
+    ctx.beginPath();
+    ctx.arc(ix, iy - r * 0.3, r * 0.7, Math.PI, 0);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.moveTo(ix - r * 0.5, iy - r * 0.3);
+    ctx.lineTo(ix, iy + r);
+    ctx.lineTo(ix + r * 0.5, iy - r * 0.3);
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
+function drawBurnSimulation(ctx, now) {
+  var simAreaY = canvasH * 0.72;
+  var simAreaH = canvasH * 0.26;
+  var groundY = simAreaY + simAreaH - 10;
+  var rocketX = canvasW * 0.5;
+
+  if (l3SimPhase === 'simulating' || l3SimPhase === 'success') {
+    // Draw rocket
+    var ry = groundY - l3SimRocketY;
+    ctx.save();
+    // Rocket body
+    ctx.fillStyle = '#e2e2e9';
+    ctx.beginPath();
+    ctx.moveTo(rocketX, ry - 20);
+    ctx.lineTo(rocketX + 8, ry);
+    ctx.lineTo(rocketX + 6, ry + 15);
+    ctx.lineTo(rocketX - 6, ry + 15);
+    ctx.lineTo(rocketX - 8, ry);
+    ctx.closePath();
+    ctx.fill();
+    // Fins
+    ctx.fillStyle = '#ff8c3c';
+    ctx.beginPath();
+    ctx.moveTo(rocketX - 6, ry + 10);
+    ctx.lineTo(rocketX - 12, ry + 18);
+    ctx.lineTo(rocketX - 6, ry + 15);
+    ctx.closePath();
+    ctx.fill();
+    ctx.beginPath();
+    ctx.moveTo(rocketX + 6, ry + 10);
+    ctx.lineTo(rocketX + 12, ry + 18);
+    ctx.lineTo(rocketX + 6, ry + 15);
+    ctx.closePath();
+    ctx.fill();
+
+    // Flame during thrust
+    if (l3SimTime < 1.2) {
+      var flameLen = 15 + Math.random() * 10;
+      ctx.fillStyle = '#ff4400';
+      ctx.globalAlpha = 0.8;
+      ctx.beginPath();
+      ctx.moveTo(rocketX - 4, ry + 15);
+      ctx.lineTo(rocketX, ry + 15 + flameLen);
+      ctx.lineTo(rocketX + 4, ry + 15);
+      ctx.closePath();
+      ctx.fill();
+      ctx.fillStyle = '#ffaa00';
+      ctx.globalAlpha = 0.6;
+      ctx.beginPath();
+      ctx.moveTo(rocketX - 2, ry + 15);
+      ctx.lineTo(rocketX, ry + 15 + flameLen * 0.6);
+      ctx.lineTo(rocketX + 2, ry + 15);
+      ctx.closePath();
+      ctx.fill();
+      ctx.globalAlpha = 1;
+    }
+
+    // Parachute after ejection
+    if (l3SimTime > 3.0 && l3AllCorrect) {
+      ctx.strokeStyle = '#3498db';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.arc(rocketX, ry - 35, 18, Math.PI, 0);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(rocketX - 16, ry - 35);
+      ctx.lineTo(rocketX, ry - 20);
+      ctx.lineTo(rocketX + 16, ry - 35);
+      ctx.stroke();
+    }
+
+    ctx.restore();
+
+    // Status text
+    var statusText = '';
+    if (l3SimTime < 0.3) statusText = t('evtIgnition');
+    else if (l3SimTime < 1.2) statusText = t('evtThrust');
+    else if (l3SimTime < 2.5) statusText = t('evtDelay');
+    else if (l3SimTime < 3.0) statusText = t('evtEjection');
+    else statusText = l3AllCorrect ? t('evtParachute') : t('rocketCrash');
+
+    ctx.fillStyle = '#ff8c3c';
+    ctx.font = "bold 14px 'Space Grotesk',sans-serif";
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'top';
+    ctx.fillText(statusText, canvasW * 0.5, simAreaY + 4);
+  }
+
+  if (l3SimPhase === 'crashed') {
+    ctx.fillStyle = '#ff4444';
+    ctx.font = "bold 20px 'Space Grotesk',sans-serif";
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.save();
+    ctx.shadowColor = '#ff4444';
+    ctx.shadowBlur = 15;
+    ctx.fillText(t('rocketCrash'), canvasW * 0.5, simAreaY + simAreaH * 0.5);
+    ctx.restore();
+  }
+
+  // Ground line
+  ctx.strokeStyle = 'rgba(255,140,60,0.2)';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(canvasW * 0.2, groundY);
+  ctx.lineTo(canvasW * 0.8, groundY);
+  ctx.stroke();
+}
+
+// ==================== LEVEL 4: Decode the Name ====================
+var L4_CODES = [
+  {code: 'A8-3', impulseClass: 'A (1.26-2.5 N*s)', avgThrust: '8N', delayTime: '3s'},
+  {code: 'B6-4', impulseClass: 'B (2.51-5.0 N*s)', avgThrust: '6N', delayTime: '4s'},
+  {code: 'C6-5', impulseClass: 'C (5.01-10.0 N*s)', avgThrust: '6N', delayTime: '5s'},
+  {code: 'D12-0', impulseClass: 'D (10.01-20.0 N*s)', avgThrust: '12N', delayTime: '0s'}
+];
+
+var l4Phase = 'decode'; // decode, mission
+var l4DecodeIdx = 0;
+var l4DecodeAnswers = []; // user selected meanings
+var l4DecodeOptions = [];
+var l4DecodeCorrect = [];
+var l4MissionAnswer = -1;
+var l4MissionCorrect = false;
+var l4MissionChecked = false;
+var l4HoverOption = -1;
+
+function initLevel4() {
+  l4Phase = 'decode';
+  l4DecodeIdx = 0;
+  l4DecodeAnswers = [];
+  l4DecodeCorrect = [];
+  l4MissionAnswer = -1;
+  l4MissionCorrect = false;
+  l4MissionChecked = false;
+  l4HoverOption = -1;
+  timerRunning = true;
+  layoutLevel4();
+}
+
+function layoutLevel4() {
+  // Level 4 uses canvas-rendered clickable areas, no DOM elements
+}
+
+function drawLevel4(ctx, now) {
+  if (l4Phase === 'decode') {
+    drawDecodePhase(ctx, now);
+  } else {
+    drawMissionPhase(ctx, now);
+  }
+}
+
+function drawDecodePhase(ctx, now) {
+  var codeData = L4_CODES[l4DecodeIdx];
+  // Title
+  ctx.fillStyle = '#ff8c3c';
+  ctx.font = "bold 16px 'Space Grotesk',sans-serif";
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'top';
+  ctx.save();
+  ctx.shadowColor = '#ff8c3c';
+  ctx.shadowBlur = 10;
+  ctx.fillText(t('phaseDecodeTitle') + ' (' + (l4DecodeIdx + 1) + '/4)', canvasW * 0.5, canvasH * 0.05);
+  ctx.restore();
+
+  // Big engine code
+  ctx.fillStyle = '#e2e2e9';
+  ctx.font = "bold 40px 'Space Grotesk',sans-serif";
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.save();
+  ctx.shadowColor = '#ff8c3c';
+  ctx.shadowBlur = 20;
+  ctx.fillText(codeData.code, canvasW * 0.5, canvasH * 0.2);
+  ctx.restore();
+
+  // Parse and color-code the engine code parts
+  var codeStr = codeData.code;
+  var letterPart = codeStr.charAt(0);
+  var dashIdx = codeStr.indexOf('-');
+  var numberPart = codeStr.substring(1, dashIdx);
+  var delayPart = codeStr.substring(dashIdx + 1);
+
+  // Color coding legend
+  var legendY = canvasH * 0.32;
+  var partColors = ['#e74c3c', '#27ae60', '#3498db'];
+  var partLabels = [
+    letterPart + ' = ' + t('letterMeaning'),
+    numberPart + ' = ' + t('numberMeaning'),
+    (delayPart === '0' ? '0' : delayPart) + ' = ' + t('delayMeaning')
+  ];
+  if (delayPart === '0') {
+    partLabels[2] = '0 = ' + t('zeroDelay');
+  }
+
+  for (var i = 0; i < 3; i++) {
+    ctx.fillStyle = partColors[i];
+    ctx.font = "500 13px 'Noto Sans SC',sans-serif";
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    var yy = legendY + i * 30;
+    // Glow
+    ctx.save();
+    ctx.shadowColor = partColors[i];
+    ctx.shadowBlur = 6;
+    ctx.fillText(partLabels[i], canvasW * 0.5, yy);
+    ctx.restore();
+  }
+
+  // Impulse class detail
+  ctx.fillStyle = '#aaabb0';
+  ctx.font = "12px 'Noto Sans SC',sans-serif";
+  ctx.textAlign = 'center';
+  ctx.fillText(codeData.impulseClass, canvasW * 0.5, legendY + 105);
+
+  // Navigation buttons drawn as clickable areas
+  var btnW = 120;
+  var btnH = 36;
+  var btnY = canvasH * 0.78;
+
+  // "Next" or "Mission" button
+  var nextBtnX = canvasW * 0.5 - btnW * 0.5;
+  l4DecodeOptions = [{x: nextBtnX, y: btnY, w: btnW, h: btnH}];
+
+  var btnLabel = l4DecodeIdx < 3 ? t('nextLevel').replace(t('levelLabel'), '').trim() : t('submit');
+  if (l4DecodeIdx < 3) btnLabel = 'NEXT';
+
+  // Button background
+  var btnGrad = ctx.createLinearGradient(nextBtnX, btnY, nextBtnX + btnW, btnY + btnH);
+  btnGrad.addColorStop(0, '#ff8c3c');
+  btnGrad.addColorStop(1, '#e06020');
+  ctx.fillStyle = btnGrad;
+  ctx.fillRect(nextBtnX, btnY, btnW, btnH);
+  ctx.fillStyle = '#0c0e14';
+  ctx.font = "bold 12px 'Space Grotesk',sans-serif";
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(btnLabel, nextBtnX + btnW * 0.5, btnY + btnH * 0.5);
+
+  // Progress dots
+  var dotY = canvasH * 0.88;
+  for (var i = 0; i < 4; i++) {
+    ctx.fillStyle = i <= l4DecodeIdx ? '#ff8c3c' : 'rgba(255,140,60,0.2)';
+    ctx.beginPath();
+    ctx.arc(canvasW * 0.5 + (i - 1.5) * 20, dotY, 4, 0, Math.PI * 2);
+    ctx.fill();
+  }
+}
+
+function drawMissionPhase(ctx, now) {
+  // Title
+  ctx.fillStyle = '#ff8c3c';
+  ctx.font = "bold 16px 'Space Grotesk',sans-serif";
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'top';
+  ctx.save();
+  ctx.shadowColor = '#ff8c3c';
+  ctx.shadowBlur = 10;
+  ctx.fillText(t('phaseMissionTitle'), canvasW * 0.5, canvasH * 0.05);
+  ctx.restore();
+
+  // Mission description
+  ctx.fillStyle = '#e2e2e9';
+  ctx.font = "14px 'Noto Sans SC',sans-serif";
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  var missionText = t('missionQ');
+  // Word wrap
+  var maxLineW = canvasW * 0.7;
+  var words = missionText.split('');
+  var lines = [];
+  var currentLine = '';
+  for (var i = 0; i < words.length; i++) {
+    var testLine = currentLine + words[i];
+    if (ctx.measureText(testLine).width > maxLineW && currentLine.length > 0) {
+      lines.push(currentLine);
+      currentLine = words[i];
+    } else {
+      currentLine = testLine;
+    }
+  }
+  if (currentLine) lines.push(currentLine);
+  var textY = canvasH * 0.18;
+  for (var i = 0; i < lines.length; i++) {
+    ctx.fillText(lines[i], canvasW * 0.5, textY + i * 22);
+  }
+
+  // 4 options as buttons
+  var optBtnW = Math.min(canvasW * 0.35, 200);
+  var optBtnH = 42;
+  var optGap = 14;
+  var optStartY = canvasH * 0.38;
+  var optKeys = ['optA83', 'optB64', 'optC65', 'optD120'];
+  l4DecodeOptions = [];
+
+  for (var i = 0; i < 4; i++) {
+    var ox = canvasW * 0.5 - optBtnW * 0.5;
+    var oy = optStartY + i * (optBtnH + optGap);
+    l4DecodeOptions.push({x: ox, y: oy, w: optBtnW, h: optBtnH});
+
+    var isSelected = (l4MissionAnswer === i);
+    var isHover = (l4HoverOption === i);
+    var isCorrectAnswer = (i === 2); // C6-5
+
+    var bgCol = 'rgba(28,27,40,0.9)';
+    var borderCol = 'rgba(255,140,60,0.2)';
+    if (isSelected) {
+      bgCol = 'rgba(255,140,60,0.2)';
+      borderCol = '#ff8c3c';
+    }
+    if (isHover && !l4MissionChecked) {
+      bgCol = 'rgba(255,140,60,0.12)';
+      borderCol = 'rgba(255,140,60,0.5)';
+    }
+    if (l4MissionChecked) {
+      if (isCorrectAnswer) {
+        bgCol = 'rgba(80,255,176,0.12)';
+        borderCol = 'rgba(80,255,176,0.6)';
+      } else if (isSelected && !isCorrectAnswer) {
+        bgCol = 'rgba(255,60,60,0.12)';
+        borderCol = 'rgba(255,60,60,0.6)';
+      }
+    }
+
+    ctx.fillStyle = bgCol;
+    ctx.fillRect(ox, oy, optBtnW, optBtnH);
+    ctx.strokeStyle = borderCol;
+    ctx.lineWidth = isSelected ? 2 : 1;
+    ctx.strokeRect(ox, oy, optBtnW, optBtnH);
+
+    ctx.fillStyle = '#e2e2e9';
+    ctx.font = "bold 14px 'Space Grotesk',sans-serif";
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(t(optKeys[i]), ox + optBtnW * 0.5, oy + optBtnH * 0.5);
+  }
+
+  // Submit/confirm button
+  if (l4MissionAnswer >= 0 && !l4MissionChecked) {
+    var subBtnW = 120;
+    var subBtnH = 36;
+    var subBtnX = canvasW * 0.5 - subBtnW * 0.5;
+    var subBtnY = optStartY + 4 * (optBtnH + optGap) + 10;
+    l4DecodeOptions.push({x: subBtnX, y: subBtnY, w: subBtnW, h: subBtnH, action: 'submit'});
+
+    var grad = ctx.createLinearGradient(subBtnX, subBtnY, subBtnX + subBtnW, subBtnY + subBtnH);
+    grad.addColorStop(0, '#ff8c3c');
+    grad.addColorStop(1, '#e06020');
+    ctx.fillStyle = grad;
+    ctx.fillRect(subBtnX, subBtnY, subBtnW, subBtnH);
+    ctx.fillStyle = '#0c0e14';
+    ctx.font = "bold 12px 'Space Grotesk',sans-serif";
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(t('check'), subBtnX + subBtnW * 0.5, subBtnY + subBtnH * 0.5);
+  }
+
+  // Explanation after check
+  if (l4MissionChecked) {
+    var explY = optStartY + 4 * (optBtnH + optGap) + 16;
+    ctx.fillStyle = l4MissionCorrect ? '#50ffb0' : '#ff6644';
+    ctx.font = "bold 13px 'Noto Sans SC',sans-serif";
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'top';
+    ctx.fillText(l4MissionCorrect ? t('correct') : t('wrong'), canvasW * 0.5, explY);
+
+    ctx.fillStyle = '#aaabb0';
+    ctx.font = "12px 'Noto Sans SC',sans-serif";
+    var explText = t('missionExplain');
+    var explLines = [];
+    var cl = '';
+    var explMaxW = canvasW * 0.7;
+    for (var ch = 0; ch < explText.length; ch++) {
+      cl += explText[ch];
+      if (ctx.measureText(cl).width > explMaxW) {
+        explLines.push(cl.slice(0, -1));
+        cl = explText[ch];
+      }
+    }
+    if (cl) explLines.push(cl);
+    for (var li = 0; li < explLines.length; li++) {
+      ctx.fillText(explLines[li], canvasW * 0.5, explY + 22 + li * 18);
+    }
+  }
+}
+
+// ==================== COMPLETION SCREEN ====================
+var completionTimer = 0;
+function drawCompletion(ctx, now) {
+  completionTimer += 0.016;
+  var alpha = Math.min(completionTimer * 2, 1);
+
+  ctx.save();
+  ctx.globalAlpha = alpha;
+
+  // Title
+  ctx.fillStyle = '#ff8c3c';
+  ctx.font = "bold 22px 'Space Grotesk',sans-serif";
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.save();
+  ctx.shadowColor = '#ff8c3c';
+  ctx.shadowBlur = 20;
+  ctx.fillText(t('complete'), canvasW * 0.5, canvasH * 0.15);
+  ctx.restore();
+
+  // Score
+  ctx.fillStyle = '#e2e2e9';
+  ctx.font = "bold 36px 'Space Grotesk',sans-serif";
+  ctx.fillText(totalScore.toString(), canvasW * 0.5, canvasH * 0.28);
+  ctx.fillStyle = '#aaabb0';
+  ctx.font = "12px 'Space Grotesk',sans-serif";
+  ctx.fillText(t('scoreLabel'), canvasW * 0.5, canvasH * 0.35);
+
+  // Level bars
+  var barW = canvasW * 0.5;
+  var barH = 18;
+  var barX = canvasW * 0.25;
+  var levelTitleKeys = ['level1Title', 'level2Title', 'level3Title', 'level4Title'];
+  for (var i = 0; i < 4; i++) {
+    var by = canvasH * 0.42 + i * 36;
+    ctx.fillStyle = '#aaabb0';
+    ctx.font = "11px 'Noto Sans SC',sans-serif";
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(t(levelTitleKeys[i]), barX, by);
+    // Score bar
+    var maxPts = (i < 3) ? 25 : 25;
+    var frac = Math.min(levelScores[i] / maxPts, 1);
+    ctx.fillStyle = 'rgba(255,140,60,0.15)';
+    ctx.fillRect(barX + barW * 0.45, by - barH * 0.5, barW * 0.55, barH);
+    var barGrad = ctx.createLinearGradient(barX + barW * 0.45, by, barX + barW * 0.45 + barW * 0.55 * frac, by);
+    barGrad.addColorStop(0, '#ff8c3c');
+    barGrad.addColorStop(1, '#e06020');
+    ctx.fillStyle = barGrad;
+    ctx.fillRect(barX + barW * 0.45, by - barH * 0.5, barW * 0.55 * frac, barH);
+    ctx.fillStyle = '#e2e2e9';
+    ctx.font = "bold 11px 'Space Grotesk',sans-serif";
+    ctx.textAlign = 'right';
+    ctx.fillText(levelScores[i].toString(), barX + barW + 20, by);
+  }
+
+  // Summary
+  ctx.fillStyle = '#ff8c3c';
+  ctx.font = "bold 13px 'Space Grotesk',sans-serif";
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'top';
+  ctx.fillText(t('summaryTitle'), canvasW * 0.5, canvasH * 0.70);
+
+  ctx.fillStyle = '#aaabb0';
+  ctx.font = "12px 'Noto Sans SC',sans-serif";
+  var sumText = t('summaryText');
+  var sumMaxW = canvasW * 0.65;
+  var sumLines = [];
+  var sumCl = '';
+  for (var sc = 0; sc < sumText.length; sc++) {
+    sumCl += sumText[sc];
+    if (ctx.measureText(sumCl).width > sumMaxW) {
+      sumLines.push(sumCl.slice(0, -1));
+      sumCl = sumText[sc];
+    }
+  }
+  if (sumCl) sumLines.push(sumCl);
+  for (var sl = 0; sl < sumLines.length; sl++) {
+    ctx.fillText(sumLines[sl], canvasW * 0.5, canvasH * 0.75 + sl * 20);
+  }
+
+  ctx.restore();
+}
+
+// ==================== RESIZE ====================
+function resizeCanvas() {
+  var rect = canvas.getBoundingClientRect();
+  var availW = rect.width;
+  var availH = rect.height;
+  canvasW = availW;
+  canvasH = availH;
+  canvasW = Math.max(canvasW, 80);
+  canvasH = Math.max(canvasH, 80);
+  canvas.width = Math.round(canvasW * dpr);
+  canvas.height = Math.round(canvasH * dpr);
+  canvas.style.width = canvasW + 'px';
+  canvas.style.height = canvasH + 'px';
+  ctx2d.setTransform(dpr, 0, 0, dpr, 0, 0);
+  // Re-layout current level
+  if (currentLevel === 0) layoutLevel1();
+  else if (currentLevel === 1) layoutLevel2();
+  else if (currentLevel === 2) layoutLevel3();
+  else if (currentLevel === 3) layoutLevel4();
+  for (var i = 0; i < bgStars.length; i++) {
+    bgStars[i].x = Math.random() * canvasW * 1.5;
+    bgStars[i].y = Math.random() * canvasH;
+  }
+}
+
+// ==================== MAIN LOOP ====================
+var lastFrameTime = 0;
+function mainLoop(timestamp) {
+  var dt = Math.min((timestamp - lastFrameTime) / 1000, 0.05);
+  lastFrameTime = timestamp;
+  var now = timestamp * 0.001;
+
+  // Timer
+  if (timerRunning) {
+    timerVal += dt;
+  }
+
+  // Shake
+  if (shakeTimer > 0) shakeTimer -= dt;
+
+  // Particles
+  updateParticles(dt);
+
+  // L3 simulation
+  if (currentLevel === 2 && l3SimPhase === 'simulating') {
+    l3SimTime += dt;
+    if (l3AllCorrect) {
+      // Correct sequence: ignition -> thrust -> delay -> ejection -> parachute
+      if (l3SimTime < 0.3) {
+        // Ignition
+      } else if (l3SimTime < 1.2) {
+        // Thrust phase
+        l3SimRocketVY += 200 * dt;
+        l3SimRocketY += l3SimRocketVY * dt;
+      } else if (l3SimTime < 2.5) {
+        // Delay - coasting (decelerating)
+        l3SimRocketVY -= 40 * dt;
+        l3SimRocketY += l3SimRocketVY * dt;
+      } else if (l3SimTime < 3.0) {
+        // Ejection
+        l3SimRocketVY -= 20 * dt;
+        l3SimRocketY += l3SimRocketVY * dt;
+      } else if (l3SimTime < 5.0) {
+        // Parachute - slow descent
+        l3SimRocketVY = -10;
+        l3SimRocketY += l3SimRocketVY * dt;
+        if (l3SimRocketY <= 0) {
+          l3SimRocketY = 0;
+          l3SimPhase = 'success';
+          playSuccess();
+          spawnParticles(canvasW * 0.5, canvasH * 0.85, '#50ffb0', 20);
+        }
+      } else {
+        l3SimPhase = 'success';
+      }
+    } else {
+      // Wrong sequence: crash
+      if (l3SimTime < 0.5) {
+        l3SimRocketVY += 100 * dt;
+        l3SimRocketY += l3SimRocketVY * dt;
+      } else if (l3SimTime < 1.5) {
+        // Tumble
+        l3SimRocketVY -= 150 * dt;
+        l3SimRocketY += l3SimRocketVY * dt;
+        if (l3SimRocketY <= 0) {
+          l3SimRocketY = 0;
+          l3SimPhase = 'crashed';
+          triggerShake(6, 0.3);
+          playError();
+          spawnParticles(canvasW * 0.5, canvasH * 0.9, '#ff4444', 25);
+        }
+      } else {
+        l3SimPhase = 'crashed';
+        triggerShake(6, 0.3);
+      }
+    }
+  }
+
+  // Draw
+  ctx2d.save();
+  var shake = getShakeOffset();
+  ctx2d.translate(shake.x, shake.y);
+
+  drawBackground(ctx2d);
+
+  if (gamePhase === 'complete') {
+    drawCompletion(ctx2d, now);
+  } else if (currentLevel === 0) {
+    drawLevel1(ctx2d, now);
+  } else if (currentLevel === 1) {
+    drawLevel2(ctx2d, now);
+  } else if (currentLevel === 2) {
+    drawLevel3(ctx2d, now);
+  } else if (currentLevel === 3) {
+    drawLevel4(ctx2d, now);
+  }
+
+  // Transition overlay
+  if (transitionAlpha > 0.01) {
+    ctx2d.fillStyle = 'rgba(12,14,20,' + transitionAlpha.toFixed(2) + ')';
+    ctx2d.fillRect(0, 0, canvasW, canvasH);
+  }
+
+  drawParticles(ctx2d);
+  ctx2d.restore();
+
+  requestAnimationFrame(mainLoop);
+}
+
+// ==================== INPUT HANDLING ====================
+var mouseX = 0, mouseY = 0;
+var mouseDown = false;
+
+function getCanvasPos(e) {
+  var rect = canvas.getBoundingClientRect();
+  var touches = e.touches || e.changedTouches;
+  if (touches && touches.length > 0) {
+    return {x: touches[0].clientX - rect.left, y: touches[0].clientY - rect.top};
+  }
+  return {x: e.clientX - rect.left, y: e.clientY - rect.top};
+}
+
+function hitRect(mx, my, rx, ry, rw, rh) {
+  return mx >= rx && mx <= rx + rw && my >= ry && my <= ry + rh;
+}
+
+// --- MOUSE/TOUCH DOWN ---
+function onPointerDown(e) {
+  e.preventDefault();
+  var pos = getCanvasPos(e);
+  mouseX = pos.x; mouseY = pos.y;
+  mouseDown = true;
+
+  if (gamePhase === 'complete') return;
+
+  if (currentLevel === 0) {
+    // Level 1: pick up a drag item
+    for (var i = l1DragItems.length - 1; i >= 0; i--) {
+      var it = l1DragItems[i];
+      if (it.placed) {
+        // Check if clicking on slot that has this item
+        for (var s = 0; s < 7; s++) {
+          if (l1Slots[s].filled && l1Slots[s].itemIdx === i) {
+            if (hitRect(mouseX, mouseY, l1Slots[s].x, l1Slots[s].y, l1Slots[s].w, l1Slots[s].h)) {
+              if (l1Checked) continue;
+              // Pick up from slot
+              it.placed = false;
+              l1Slots[s].filled = false;
+              l1Slots[s].itemIdx = -1;
+              it.x = mouseX - it.w * 0.5;
+              it.y = mouseY - it.h * 0.5;
+              l1Dragging = i;
+              l1DragOff.x = it.w * 0.5;
+              l1DragOff.y = it.h * 0.5;
+              updateHUD();
+              return;
+            }
+          }
+        }
+      } else {
+        if (hitRect(mouseX, mouseY, it.x, it.y, it.w, it.h)) {
+          l1Dragging = i;
+          l1DragOff.x = mouseX - it.x;
+          l1DragOff.y = mouseY - it.y;
+          return;
+        }
+      }
+    }
+  } else if (currentLevel === 1) {
+    // Level 2: pick up
+    for (var i = l2Items.length - 1; i >= 0; i--) {
+      var it = l2Items[i];
+      if (it.placed) {
+        for (var s = 0; s < 7; s++) {
+          if (l2Slots[s].filled && l2Slots[s].itemIdx === i) {
+            if (hitRect(mouseX, mouseY, l2Slots[s].x, l2Slots[s].y, l2Slots[s].w, l2Slots[s].h)) {
+              if (l2Checked) continue;
+              it.placed = false;
+              l2Slots[s].filled = false;
+              l2Slots[s].itemIdx = -1;
+              l2PlacedCount--;
+              it.x = mouseX - it.w * 0.5;
+              it.y = mouseY - it.h * 0.5;
+              l2Dragging = i;
+              l2DragOff.x = it.w * 0.5;
+              l2DragOff.y = it.h * 0.5;
+              updateHUD();
+              return;
+            }
+          }
+        }
+      } else {
+        if (hitRect(mouseX, mouseY, it.x, it.y, it.w, it.h)) {
+          l2Dragging = i;
+          l2DragOff.x = mouseX - it.x;
+          l2DragOff.y = mouseY - it.y;
+          return;
+        }
+      }
+    }
+  } else if (currentLevel === 2) {
+    // Level 3: pick up
+    for (var i = l3Cards.length - 1; i >= 0; i--) {
+      var c = l3Cards[i];
+      if (c.placed) {
+        for (var s = 0; s < 5; s++) {
+          if (l3Slots[s].filled && l3Slots[s].itemIdx === i) {
+            if (hitRect(mouseX, mouseY, l3Slots[s].x, l3Slots[s].y, l3Slots[s].w, l3Slots[s].h)) {
+              if (l3Checked) continue;
+              c.placed = false;
+              l3Slots[s].filled = false;
+              l3Slots[s].itemIdx = -1;
+              c.x = mouseX - c.w * 0.5;
+              c.y = mouseY - c.h * 0.5;
+              l3Dragging = i;
+              l3DragOff.x = c.w * 0.5;
+              l3DragOff.y = c.h * 0.5;
+              updateHUD();
+              return;
+            }
+          }
+        }
+      } else {
+        if (hitRect(mouseX, mouseY, c.x, c.y, c.w, c.h)) {
+          l3Dragging = i;
+          l3DragOff.x = mouseX - c.x;
+          l3DragOff.y = mouseY - c.y;
+          return;
+        }
+      }
+    }
+  } else if (currentLevel === 3) {
+    // Level 4: click detection
+    if (l4Phase === 'decode') {
+      // Check next/submit button
+      if (l4DecodeOptions.length > 0) {
+        var btn = l4DecodeOptions[0];
+        if (hitRect(mouseX, mouseY, btn.x, btn.y, btn.w, btn.h)) {
+          if (l4DecodeIdx < 3) {
+            l4DecodeIdx++;
+            playSnap();
+          } else {
+            // Move to mission phase
+            l4Phase = 'mission';
+            l4MissionAnswer = -1;
+            l4MissionChecked = false;
+            playPop();
+          }
+        }
+      }
+    } else {
+      // Mission phase: click on options
+      if (!l4MissionChecked) {
+        for (var i = 0; i < 4; i++) {
+          if (i < l4DecodeOptions.length) {
+            var opt = l4DecodeOptions[i];
+            if (hitRect(mouseX, mouseY, opt.x, opt.y, opt.w, opt.h)) {
+              l4MissionAnswer = i;
+              playSnap();
+            }
+          }
+        }
+        // Check submit button
+        if (l4DecodeOptions.length > 4) {
+          var subBtn = l4DecodeOptions[4];
+          if (hitRect(mouseX, mouseY, subBtn.x, subBtn.y, subBtn.w, subBtn.h)) {
+            l4MissionChecked = true;
+            l4MissionCorrect = (l4MissionAnswer === 2);
+            if (l4MissionCorrect) {
+              playSuccess();
+              levelScores[3] = 25;
+              spawnParticles(canvasW * 0.5, canvasH * 0.5, '#50ffb0', 20);
+            } else {
+              playError();
+              levelScores[3] = 10;
+              triggerShake(4, 0.2);
+            }
+            totalScore = levelScores[0] + levelScores[1] + levelScores[2] + levelScores[3];
+            timerRunning = false;
+            updateHUD();
+          }
+        }
+      }
+    }
+  }
+}
+
+// --- MOUSE/TOUCH MOVE ---
+function onPointerMove(e) {
+  e.preventDefault();
+  var pos = getCanvasPos(e);
+  mouseX = pos.x; mouseY = pos.y;
+
+  if (currentLevel === 0 && l1Dragging >= 0) {
+    var it = l1DragItems[l1Dragging];
+    it.x = mouseX - l1DragOff.x;
+    it.y = mouseY - l1DragOff.y;
+  } else if (currentLevel === 1 && l2Dragging >= 0) {
+    var it = l2Items[l2Dragging];
+    it.x = mouseX - l2DragOff.x;
+    it.y = mouseY - l2DragOff.y;
+  } else if (currentLevel === 2 && l3Dragging >= 0) {
+    var c = l3Cards[l3Dragging];
+    c.x = mouseX - l3DragOff.x;
+    c.y = mouseY - l3DragOff.y;
+  } else if (currentLevel === 3 && l4Phase === 'mission' && !l4MissionChecked) {
+    // Hover detection for options
+    l4HoverOption = -1;
+    for (var i = 0; i < Math.min(4, l4DecodeOptions.length); i++) {
+      var opt = l4DecodeOptions[i];
+      if (hitRect(mouseX, mouseY, opt.x, opt.y, opt.w, opt.h)) {
+        l4HoverOption = i;
+      }
+    }
+  }
+}
+
+// --- MOUSE/TOUCH UP ---
+function onPointerUp(e) {
+  e.preventDefault();
+  mouseDown = false;
+
+  if (currentLevel === 0 && l1Dragging >= 0) {
+    var it = l1DragItems[l1Dragging];
+    var placed = false;
+    // Check if dropped on a slot
+    for (var s = 0; s < 7; s++) {
+      var sl = l1Slots[s];
+      if (!sl.filled && hitRect(it.x + it.w * 0.5, it.y + it.h * 0.5, sl.x - 10, sl.y - 10, sl.w + 20, sl.h + 20)) {
+        // Snap to slot
+        it.placed = true;
+        it.slotIdx = s;
+        sl.filled = true;
+        sl.itemIdx = l1Dragging;
+        placed = true;
+        playSnap();
+        spawnParticles(sl.x + sl.w * 0.5, sl.y + sl.h * 0.5, '#ff8c3c', 8);
+        break;
+      }
+    }
+    if (!placed) {
+      // Return to home
+      it.x = it.homeX;
+      it.y = it.homeY;
+    }
+    l1Dragging = -1;
+    updateHUD();
+  } else if (currentLevel === 1 && l2Dragging >= 0) {
+    var it = l2Items[l2Dragging];
+    var placed = false;
+    for (var s = 0; s < 7; s++) {
+      var sl = l2Slots[s];
+      if (!sl.filled && hitRect(it.x + it.w * 0.5, it.y + it.h * 0.5, sl.x - 10, sl.y - 10, sl.w + 20, sl.h + 20)) {
+        it.placed = true;
+        it.slotIdx = s;
+        sl.filled = true;
+        sl.itemIdx = l2Dragging;
+        l2PlacedCount++;
+        placed = true;
+        playSnap();
+        spawnParticles(sl.x + sl.w * 0.5, sl.y + sl.h * 0.5, it.comp.color, 8);
+        break;
+      }
+    }
+    if (!placed) {
+      it.x = it.homeX;
+      it.y = it.homeY;
+    }
+    l2Dragging = -1;
+    updateHUD();
+  } else if (currentLevel === 2 && l3Dragging >= 0) {
+    var c = l3Cards[l3Dragging];
+    var placed = false;
+    for (var s = 0; s < 5; s++) {
+      var sl = l3Slots[s];
+      if (!sl.filled && hitRect(c.x + c.w * 0.5, c.y + c.h * 0.5, sl.x - 10, sl.y - 10, sl.w + 20, sl.h + 20)) {
+        c.placed = true;
+        c.slotIdx = s;
+        sl.filled = true;
+        sl.itemIdx = l3Dragging;
+        placed = true;
+        playSnap();
+        spawnParticles(sl.x + sl.w * 0.5, sl.y + sl.h * 0.5, c.evt.color, 8);
+        break;
+      }
+    }
+    if (!placed) {
+      c.x = c.homeX;
+      c.y = c.homeY;
+    }
+    l3Dragging = -1;
+    updateHUD();
+  }
+}
+
+canvas.addEventListener('mousedown', onPointerDown);
+canvas.addEventListener('mousemove', onPointerMove);
+canvas.addEventListener('mouseup', onPointerUp);
+canvas.addEventListener('touchstart', onPointerDown, {passive: false});
+canvas.addEventListener('touchmove', onPointerMove, {passive: false});
+canvas.addEventListener('touchend', onPointerUp, {passive: false});
+
+// ==================== BUTTONS ====================
+var btnAction = document.getElementById('btnAction');
+var btnReset = document.getElementById('btnReset');
+
+btnAction.addEventListener('click', function() {
+  if (gamePhase === 'complete') return;
+
+  if (currentLevel === 0) {
+    if (!l1Checked) {
+      // Check answers
+      l1Checked = true;
+      var correctCount = 0;
+      for (var s = 0; s < 7; s++) {
+        var sl = l1Slots[s];
+        if (sl.filled && sl.itemIdx >= 0) {
+          var part = l1DragItems[sl.itemIdx].part;
+          l1Results[s] = (part.correctSlot === s);
+          if (l1Results[s]) correctCount++;
+        } else {
+          l1Results[s] = false;
+        }
+      }
+      var elapsed = (Date.now() - l1StartTime) / 1000;
+      // Score: base + time bonus
+      var baseScore = Math.round(correctCount / 7 * 20);
+      var timeBonus = correctCount === 7 ? Math.max(0, Math.round(5 - elapsed * 0.1)) : 0;
+      levelScores[0] = baseScore + timeBonus;
+      totalScore = levelScores[0];
+      timerRunning = false;
+
+      if (correctCount === 7) {
+        playSuccess();
+        spawnParticles(canvasW * 0.5, canvasH * 0.3, '#50ffb0', 20);
+      } else {
+        playError();
+        triggerShake(4, 0.2);
+      }
+      updateHUD();
+      updateBtnState();
+    } else {
+      // Next level
+      transitionToLevel(1);
+    }
+  } else if (currentLevel === 1) {
+    if (!l2Checked) {
+      l2Checked = true;
+      var correctCount = 0;
+      for (var s = 0; s < 7; s++) {
+        var sl = l2Slots[s];
+        if (sl.filled && sl.itemIdx >= 0) {
+          var comp = l2Items[sl.itemIdx].comp;
+          sl.correct = (comp.correctOrder === s);
+          if (sl.correct) correctCount++;
+        } else {
+          sl.correct = false;
+        }
+      }
+      var baseScore = Math.round(correctCount / 7 * 20);
+      var placementBonus = correctCount === 7 ? 5 : 0;
+      levelScores[1] = baseScore + placementBonus;
+      totalScore = levelScores[0] + levelScores[1];
+      timerRunning = false;
+      l2AllCorrect = (correctCount === 7);
+
+      if (l2AllCorrect) {
+        playSuccess();
+        spawnParticles(canvasW * 0.5, canvasH * 0.5, '#50ffb0', 20);
+      } else {
+        playError();
+        triggerShake(4, 0.2);
+      }
+      updateHUD();
+      updateBtnState();
+    } else {
+      transitionToLevel(2);
+    }
+  } else if (currentLevel === 2) {
+    if (!l3Checked) {
+      // Check sequence
+      l3Checked = true;
+      var allFilled = true;
+      var correctCount = 0;
+      for (var s = 0; s < 5; s++) {
+        var sl = l3Slots[s];
+        if (sl.filled && sl.itemIdx >= 0) {
+          var evt = l3Cards[sl.itemIdx].evt;
+          sl.correct = (evt.correctOrder === s);
+          if (sl.correct) correctCount++;
+        } else {
+          sl.correct = false;
+          allFilled = false;
+        }
+      }
+      l3AllCorrect = (correctCount === 5);
+      var baseScore = Math.round(correctCount / 5 * 20);
+      levelScores[2] = baseScore + (l3AllCorrect ? 5 : 0);
+      totalScore = levelScores[0] + levelScores[1] + levelScores[2];
+      timerRunning = false;
+
+      // Start simulation
+      l3SimPhase = 'simulating';
+      l3SimTime = 0;
+      l3SimRocketY = 0;
+      l3SimRocketVY = 0;
+      playBurn();
+
+      if (!l3AllCorrect) {
+        triggerShake(4, 0.2);
+      }
+      updateHUD();
+      updateBtnState();
+    } else {
+      transitionToLevel(3);
+    }
+  } else if (currentLevel === 3) {
+    // Level 4 handled via canvas clicks
+    if (l4MissionChecked) {
+      // Complete
+      gamePhase = 'complete';
+      completionTimer = 0;
+      updateBtnState();
+    }
+  }
+});
+
+btnReset.addEventListener('click', function() {
+  if (gamePhase === 'complete') {
+    // Full restart
+    currentLevel = 0;
+    totalScore = 0;
+    levelScores = [0, 0, 0, 0];
+    gamePhase = 'playing';
+    timerVal = 0;
+    particles = [];
+    completionTimer = 0;
+    initLevel1();
+    resizeCanvas();
+    updateTexts();
+    updateHUD();
+    updateBtnState();
+    return;
+  }
+  timerVal = 0;
+  particles = [];
+  if (currentLevel === 0) initLevel1();
+  else if (currentLevel === 1) initLevel2();
+  else if (currentLevel === 2) initLevel3();
+  else if (currentLevel === 3) initLevel4();
+  resizeCanvas();
+  updateHUD();
+  updateBtnState();
+});
+
+function transitionToLevel(nextLvl) {
+  transitionAlpha = 0;
+  var fadeIn = setInterval(function() {
+    transitionAlpha += 0.08;
+    if (transitionAlpha >= 1) {
+      clearInterval(fadeIn);
+      currentLevel = nextLvl;
+      timerVal = 0;
+      particles = [];
+      if (nextLvl === 0) initLevel1();
+      else if (nextLvl === 1) initLevel2();
+      else if (nextLvl === 2) initLevel3();
+      else if (nextLvl === 3) initLevel4();
+      resizeCanvas();
+      updateTexts();
+      updateHUD();
+      updateBtnState();
+      var fadeOut = setInterval(function() {
+        transitionAlpha -= 0.08;
+        if (transitionAlpha <= 0) {
+          transitionAlpha = 0;
+          clearInterval(fadeOut);
+        }
+      }, 20);
+    }
+  }, 20);
+}
+
+// ==================== HUD & TEXT UPDATES ====================
+function updateTexts() {
+  var titleKeys = ['level1Title', 'level2Title', 'level3Title', 'level4Title'];
+  var descKeys = ['level1Desc', 'level2Desc', 'level3Desc', 'level4Desc'];
+  document.getElementById('gameTitle').textContent = t('title');
+  document.getElementById('roundInfo').textContent = t(titleKeys[currentLevel]);
+}
+
+function updateHUD() {
+  document.getElementById('hudL1').textContent = t('levelLabel');
+  document.getElementById('hudV1').textContent = (currentLevel + 1) + ' / 4';
+  document.getElementById('hudL2').textContent = t('scoreLabel');
+  document.getElementById('hudV2').textContent = totalScore.toString();
+  document.getElementById('hudL3').textContent = t('timeLabel');
+  document.getElementById('hudV3').textContent = Math.floor(timerVal) + 's';
+  document.getElementById('hudL4').textContent = t('partsLabel');
+  var placedCount = 0;
+  var totalParts = 7;
+  if (currentLevel === 0) {
+    for (var i = 0; i < 7; i++) { if (l1Slots[i].filled) placedCount++; }
+  } else if (currentLevel === 1) {
+    placedCount = l2PlacedCount;
+  } else if (currentLevel === 2) {
+    totalParts = 5;
+    for (var i = 0; i < 5; i++) { if (l3Slots[i].filled) placedCount++; }
+  } else {
+    totalParts = 4;
+    placedCount = l4DecodeIdx + (l4Phase === 'mission' ? 1 : 0);
+  }
+  document.getElementById('hudV4').textContent = placedCount + '/' + totalParts;
+  // Scale punch on score change
+  var hudV2 = document.getElementById('hudV2');
+  hudV2.style.transform = 'scale(1.3)';
+  setTimeout(function() { hudV2.style.transform = 'scale(1)'; }, 200);
+}
+
+function updateBtnState() {
+  if (gamePhase === 'complete') {
+    btnAction.textContent = '';
+    btnAction.disabled = true;
+    btnReset.textContent = t('resetLevel');
+    btnReset.disabled = false;
+    return;
+  }
+  if (currentLevel === 0) {
+    if (!l1Checked) {
+      btnAction.textContent = t('check');
+      btnAction.disabled = false;
+    } else {
+      btnAction.textContent = t('nextLevel');
+      btnAction.disabled = false;
+    }
+  } else if (currentLevel === 1) {
+    if (!l2Checked) {
+      btnAction.textContent = t('check');
+      btnAction.disabled = false;
+    } else {
+      btnAction.textContent = t('nextLevel');
+      btnAction.disabled = false;
+    }
+  } else if (currentLevel === 2) {
+    if (!l3Checked) {
+      btnAction.textContent = t('simulate');
+      btnAction.disabled = false;
+    } else {
+      btnAction.textContent = t('nextLevel');
+      btnAction.disabled = false;
+    }
+  } else if (currentLevel === 3) {
+    if (l4MissionChecked) {
+      btnAction.textContent = t('complete');
+      btnAction.disabled = false;
+    } else {
+      btnAction.textContent = '';
+      btnAction.disabled = true;
+    }
+  }
+  btnReset.textContent = t('resetLevel');
+  btnReset.disabled = false;
+}
+
+// ==================== SIDEBAR INIT ====================
+(function(){
+  var gc = document.getElementById('guideContent');
+  var st = document.getElementById('sidebarTitle');
+  function _updateSidebar() {
+    if (gc) gc.textContent = t('guide');
+    if (st) st.textContent = t('title');
+  }
+  _updateSidebar();
+  document.getElementById('langBtn').addEventListener('click', function() {
+    LANG = LANG === 'en' ? 'cn' : 'en';
+    document.getElementById('langBtn').textContent = LANG.toUpperCase();
+    _updateSidebar();
+    updateTexts();
+    updateHUD();
+    updateBtnState();
+  });
+})();
+
+// ==================== INIT ====================
+function refreshI18N() {
+  var gc = document.getElementById('guideContent');
+  var st = document.getElementById('sidebarTitle');
+  if (gc) gc.textContent = t('guide');
+  if (st) st.textContent = t('title');
+  updateTexts();
+  updateHUD();
+  updateBtnState();
+}
+
+initLevel1();
+resizeCanvas();
+updateTexts();
+updateHUD();
+updateBtnState();
+
+window.addEventListener('resize', resizeCanvas);
+document.fonts.ready.then(function() {
+  setTimeout(resizeCanvas, 100);
+});
+
+requestAnimationFrame(mainLoop);
+</script>
+</body>
+</html>

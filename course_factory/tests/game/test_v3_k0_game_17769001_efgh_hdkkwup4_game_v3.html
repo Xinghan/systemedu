@@ -1,0 +1,748 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>推拉感知实验室 | Force Observatory</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@300;400;600;700;900&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+<style>
+:root{--BG-DEEP:#0e1229;--BG-MID:#161b38;--PHOTON:#c8ddf0;--WAVE:#5a8ab5;--MASS:#1a2240;--CONSTANT:#d4c44a;--GLASS-BG:rgba(14,18,41,0.72);--GLASS-BORDER:rgba(106,180,232,0.13);--GLASS-STRONG-BG:rgba(14,18,41,0.88);--GLASS-STRONG-BORDER:rgba(106,180,232,0.18)}
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{height:100vh;min-height:100vh;overflow:hidden}
+body{font-family:'Noto Sans SC',sans-serif;background:var(--BG-DEEP);color:var(--PHOTON);user-select:none;-webkit-user-select:none}
+.font-mono{font-family:'JetBrains Mono',monospace}
+.glass{background:var(--GLASS-BG);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border:1px solid var(--GLASS-BORDER);border-radius:8px}
+.glass-strong{background:var(--GLASS-STRONG-BG);backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);border:1px solid var(--GLASS-STRONG-BORDER);border-radius:8px}
+#simCanvas{position:fixed;top:0;left:0;width:100vw;height:100vh;z-index:0;cursor:crosshair;touch-action:none}
+#leftPanel{position:fixed;top:56px;left:10px;width:170px;z-index:20;padding:10px}
+#rightPanel{position:fixed;top:56px;right:10px;width:196px;z-index:20;padding:10px;max-height:calc(100vh - 72px);overflow-y:auto}
+#topBar{position:fixed;top:0;left:0;right:0;height:44px;z-index:30;display:flex;align-items:center;justify-content:space-between;padding:0 14px}
+.obj-card{transition:all .2s;cursor:pointer;border:1px solid rgba(106,180,232,0.08);border-radius:6px;padding:6px 9px;display:flex;align-items:center;gap:7px;margin-bottom:3px}
+.obj-card:hover{border-color:rgba(106,180,232,0.3);background:rgba(106,180,232,0.06)}
+.obj-card.active{border-color:var(--CONSTANT);background:rgba(212,196,74,0.08);box-shadow:0 0 14px rgba(212,196,74,0.1)}
+.obj-dot{width:13px;height:13px;border-radius:50%;flex-shrink:0}
+.effort-row{display:flex;gap:5px;justify-content:center;margin:7px 0}
+.effort-dot{width:34px;height:34px;border:1.5px solid rgba(106,180,232,0.3);transition:all .15s;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:13px;border-radius:6px}
+.effort-dot:hover{border-color:var(--CONSTANT);background:rgba(212,196,74,0.1)}
+.effort-dot.filled{background:var(--CONSTANT);border-color:var(--CONSTANT);color:#1a2240;font-weight:700}
+.effort-dot.selected{border-color:var(--CONSTANT);background:rgba(212,196,74,0.15);box-shadow:0 0 8px rgba(212,196,74,0.2)}
+.rec-btn{width:100%;padding:7px;border:1px solid rgba(106,180,232,0.2);border-radius:6px;background:rgba(106,180,232,0.08);color:var(--PHOTON);cursor:pointer;font-size:12px;transition:all .2s;text-align:center;font-family:inherit}
+.rec-btn:hover:not(:disabled){background:rgba(106,180,232,0.15);border-color:rgba(106,180,232,0.4)}
+.rec-btn:disabled{opacity:0.35;cursor:not-allowed}
+.rec-row{display:flex;align-items:center;gap:5px;padding:4px 7px;border-radius:5px;background:rgba(106,180,232,0.04);border:1px solid rgba(106,180,232,0.08);margin-bottom:3px;font-size:11px}
+#echoContainer{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);z-index:25;display:flex;flex-direction:column;align-items:center;pointer-events:none}
+#echoIcon{font-size:26px;margin-bottom:5px;color:var(--CONSTANT);animation:echoFloat 3s ease-in-out infinite}
+@keyframes echoFloat{0%,100%{transform:translateY(0)}50%{transform:translateY(-5px)}}
+.echo-bubble{background:rgba(14,18,41,0.92);border:1px solid rgba(106,180,232,0.22);border-radius:10px;padding:7px 13px;font-size:11.5px;max-width:260px;line-height:1.5;backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);box-shadow:0 4px 18px rgba(0,0,0,0.3);text-align:center}
+#completionOverlay{position:fixed;inset:0;z-index:50;display:none;align-items:center;justify-content:center;background:rgba(14,18,41,0.85);backdrop-filter:blur(8px)}
+#completionOverlay.show{display:flex}
+.completion-card{background:var(--GLASS-STRONG-BG);border:1px solid var(--GLASS-STRONG-BORDER);border-radius:12px;padding:30px 36px;text-align:center;max-width:400px;cursor:pointer}
+.lang-btn{background:rgba(106,180,232,0.1);border:1px solid rgba(106,180,232,0.2);border-radius:4px;padding:3px 9px;color:var(--PHOTON);cursor:pointer;font-size:11px;transition:all .2s;font-family:'JetBrains Mono',monospace}
+.lang-btn:hover{background:rgba(106,180,232,0.2)}
+.info-row{display:flex;justify-content:space-between;align-items:center;padding:2px 0;font-size:11.5px}
+.info-label{color:rgba(200,221,240,0.45)}
+.info-value{font-family:'JetBrains Mono',monospace;color:var(--CONSTANT);font-size:12px}
+.section-title{font-size:10px;text-transform:uppercase;letter-spacing:1px;color:rgba(200,221,240,0.35);margin-bottom:5px;margin-top:8px}
+.divider{border:none;border-top:1px solid rgba(106,180,232,0.1);margin:7px 0}
+::-webkit-scrollbar{width:3px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:rgba(106,180,232,0.2);border-radius:2px}
+@media(max-width:640px){#leftPanel{width:130px;left:5px;top:50px;padding:7px}#rightPanel{width:150px;right:5px;top:50px;padding:7px}.obj-card{padding:4px 6px;font-size:11px}.effort-dot{width:28px;height:28px;font-size:11px}}
+</style>
+</head>
+<body>
+<canvas id="simCanvas"></canvas>
+<div id="topBar" class="glass-strong">
+<div style="display:flex;align-items:center;gap:7px">
+<i class="fas fa-magnet" style="color:var(--CONSTANT);font-size:14px"></i>
+<span id="titleText" style="font-weight:700;font-size:14px">推拉感知实验室</span>
+</div>
+<button id="langBtn" class="lang-btn">EN</button>
+</div>
+<div id="leftPanel" class="glass-strong">
+<div class="section-title" data-i18n="select_object">选择物体</div>
+<div id="objList"></div>
+</div>
+<div id="rightPanel" class="glass-strong">
+<div class="section-title" data-i18n="current_object">当前物体</div>
+<div id="objName" style="font-weight:700;font-size:14px;margin-bottom:5px"></div>
+<div class="info-row"><span class="info-label" data-i18n="mass">质量</span><span class="info-value" id="infoMass"></span></div>
+<div class="info-row"><span class="info-label" data-i18n="friction_coeff">摩擦系数</span><span class="info-value" id="infoFriction"></span></div>
+<div class="info-row"><span class="info-label" data-i18n="velocity">速度</span><span class="info-value" id="infoSpeed"></span></div>
+<div class="info-row"><span class="info-label" data-i18n="force">推力</span><span class="info-value" id="infoForce"></span></div>
+<hr class="divider">
+<div class="section-title" data-i18n="effort">费力程度</div>
+<div class="effort-row" id="effortDots"></div>
+<button class="rec-btn" id="recBtn" disabled data-i18n="record_btn">记录此次感受</button>
+<hr class="divider">
+<div class="section-title" data-i18n="record_history">感受记录</div>
+<div id="recordList" style="max-height:170px;overflow-y:auto"></div>
+</div>
+<div id="echoContainer">
+<div id="echoIcon"><i class="fas fa-lightbulb"></i></div>
+<div class="echo-bubble"><span id="echoText">在画布上按住并拖拽，对物体施力</span></div>
+</div>
+<div id="completionOverlay">
+<div class="completion-card" id="completionCard">
+<div style="font-size:34px;margin-bottom:10px;color:var(--CONSTANT)"><i class="fas fa-star"></i></div>
+<h2 id="completionTitle" style="font-size:20px;font-weight:900;margin-bottom:7px">实验完成！</h2>
+<p id="completionDesc" style="font-size:12px;line-height:1.6;color:rgba(200,221,240,0.65)">你已经体验了不同质量物体的推拉感受。回顾你的记录——质量越大，推动越费力，这就是惯性的本质。</p>
+<div style="margin-top:14px;font-size:11px;color:rgba(200,221,240,0.35)" data-i18n="click_dismiss">点击任意处关闭</div>
+</div>
+</div>
+<script>
+(function(){
+var PHYSICS_DT=1/60;
+var MAX_FORCE=50;
+var GRAVITY=9.8;
+var VELOCITY_CAP=30;
+var FORCE_SCALE=0.15;
+
+var canvasEl=null;
+var ctxRef=null;
+var canvasW=0;
+var canvasH=0;
+var timeVal=0;
+var lastTimestamp=0;
+var accumulator=0;
+var prefersReducedMotion=false;
+
+var cam={x:0,y:0};
+
+var objectDefs=[
+{id:'balloon',mass:0.1,friction:0.05,color:'#FF9EAA',accent:'#ff7088',label:{zh:'气球',en:'Balloon'},shape:'circle',size:30},
+{id:'wood',mass:0.5,friction:0.2,color:'#C49A3C',accent:'#e0b84a',label:{zh:'木块',en:'Wood Block'},shape:'rect',size:28},
+{id:'iron',mass:2,friction:0.15,color:'#8A9BAD',accent:'#a8bdd0',label:{zh:'铁球',en:'Iron Ball'},shape:'circle',size:26},
+{id:'stone',mass:5,friction:0.3,color:'#8A8A8A',accent:'#aaaaaa',label:{zh:'石砖',en:'Stone Brick'},shape:'rect',size:32},
+{id:'lead',mass:10,friction:0.5,color:'#7A7A9E',accent:'#9999bb',label:{zh:'铅块',en:'Lead Block'},shape:'rect',size:24}
+];
+
+var objStates=[];
+var currentIdx=0;
+
+var isDragging=false;
+var dragStartX=0;
+var dragStartY=0;
+var dragCurX=0;
+var dragCurY=0;
+var curForceX=0;
+var curForceY=0;
+var curForceMag=0;
+
+var records=[];
+var selectedEffort=0;
+var completedMap={};
+
+var trailParts=[];
+var rippleEffects=[];
+var ambientParts=[];
+
+var currentLang='zh';
+var translations={
+'title':{zh:'推拉感知实验室',en:'Force Observatory'},
+'hint.start':{zh:'在画布上按住并拖拽，对物体施力',en:'Click and drag on canvas to apply force'},
+'hint.slow':{zh:'推力很大但速度很慢——因为质量大！',en:'Large force but slow — heavy mass!'},
+'hint.friction':{zh:'松手后物体逐渐停下——这是摩擦力',en:'Object slows after release — friction!'},
+'hint.record':{zh:'试试记录你的费力感受',en:'Try recording your effort feeling'},
+'hint.complete':{zh:'所有记录完成！你发现了什么？',en:'All records done! What did you discover?'},
+'mass':{zh:'质量',en:'Mass'},
+'velocity':{zh:'速度',en:'Speed'},
+'force':{zh:'推力',en:'Force'},
+'friction_coeff':{zh:'摩擦系数',en:'Friction'},
+'effort':{zh:'费力程度',en:'Effort'},
+'record_btn':{zh:'记录此次感受',en:'Record Feeling'},
+'record_history':{zh:'感受记录',en:'Records'},
+'effort.1':{zh:'很轻松',en:'Very Easy'},
+'effort.2':{zh:'轻松',en:'Easy'},
+'effort.3':{zh:'一般',en:'Medium'},
+'effort.4':{zh:'费力',en:'Hard'},
+'effort.5':{zh:'很费力',en:'Very Hard'},
+'lang_toggle':{zh:'EN',en:'中文'},
+'select_object':{zh:'选择物体',en:'Select Object'},
+'current_object':{zh:'当前物体',en:'Current Object'},
+'completion.title':{zh:'实验完成！',en:'Experiment Complete!'},
+'completion.desc':{zh:'你已经体验了不同质量物体的推拉感受。回顾你的记录——质量越大，推动越费力，这就是惯性的本质。',en:"You've experienced pushing different masses. Heavier objects require more effort. This is inertia."},
+'no_records':{zh:'暂无记录',en:'No records yet'},
+'click_dismiss':{zh:'点击任意处关闭',en:'Click anywhere to dismiss'},
+'unit.kg':{zh:'千克',en:'kg'},
+'unit.ms':{zh:'米/秒',en:'m/s'},
+'unit.n':{zh:'牛',en:'N'}
+};
+
+function t(key){
+var e=translations[key];
+if(!e)return key;
+return e[currentLang]||e.zh||key;
+}
+
+function initObjStates(){
+objStates=[];
+for(var i=0;i<objectDefs.length;i++){
+objStates.push({x:(i-2)*160,y:0,vx:0,vy:0});
+}
+}
+
+function initAmbientParts(){
+ambientParts=[];
+for(var i=0;i<50;i++){
+ambientParts.push({
+x:(Math.random()-0.5)*2400,
+y:(Math.random()-0.5)*2400,
+vx:(Math.random()-0.5)*6,
+vy:(Math.random()-0.5)*6,
+sz:Math.random()*1.8+0.4,
+al:Math.random()*0.25+0.04,
+ph:Math.random()*Math.PI*2
+});
+}
+}
+
+function resizeCanvas(){
+var dpr=window.devicePixelRatio||1;
+canvasW=window.innerWidth;
+canvasH=window.innerHeight;
+canvasEl.width=canvasW*dpr;
+canvasEl.height=canvasH*dpr;
+canvasEl.style.width=canvasW+'px';
+canvasEl.style.height=canvasH+'px';
+ctxRef.setTransform(dpr,0,0,dpr,0,0);
+}
+
+function updatePhysics(dt){
+for(var i=0;i<objStates.length;i++){
+var st=objStates[i];
+var def=objectDefs[i];
+var fx=0,fy=0;
+if(i===currentIdx&&isDragging){
+fx=curForceX;
+fy=curForceY;
+}
+var speed=Math.sqrt(st.vx*st.vx+st.vy*st.vy);
+if(speed>0.01){
+var fricF=def.friction*def.mass*GRAVITY;
+var fricClamp=Math.min(fricF,speed*def.mass/Math.max(dt,0.001));
+fx-=(st.vx/speed)*fricClamp;
+fy-=(st.vy/speed)*fricClamp;
+}
+var ax=fx/def.mass;
+var ay=fy/def.mass;
+st.vx+=ax*dt;
+st.vy+=ay*dt;
+speed=Math.sqrt(st.vx*st.vx+st.vy*st.vy);
+if(speed>VELOCITY_CAP){
+st.vx=(st.vx/speed)*VELOCITY_CAP;
+st.vy=(st.vy/speed)*VELOCITY_CAP;
+}
+if(speed<0.04&&(i!==currentIdx||!isDragging)){
+st.vx=0;st.vy=0;
+}
+st.x+=st.vx*dt;
+st.y+=st.vy*dt;
+}
+}
+
+function spawnTrail(x,y,vx,vy){
+trailParts.push({x:x+(Math.random()-0.5)*8,y:y+(Math.random()-0.5)*8,vx:-vx*0.08+(Math.random()-0.5)*4,vy:-vy*0.08+(Math.random()-0.5)*4,life:1,decay:1.2+Math.random()*0.8,sz:1.5+Math.random()*2.5});
+if(trailParts.length>180)trailParts.shift();
+}
+
+function spawnRipple(x,y,intens){
+rippleEffects.push({x:x,y:y,r:8,maxR:35+intens*55,al:0.25+intens*0.3,spd:55+intens*35});
+if(rippleEffects.length>15)rippleEffects.shift();
+}
+
+function updateParticles(dt){
+for(var i=trailParts.length-1;i>=0;i--){
+var p=trailParts[i];
+p.x+=p.vx*dt;p.y+=p.vy*dt;p.life-=p.decay*dt;
+if(p.life<=0)trailParts.splice(i,1);
+}
+for(var i=rippleEffects.length-1;i>=0;i--){
+var r=rippleEffects[i];
+r.r+=r.spd*dt;r.al-=0.7*dt;
+if(r.al<=0||r.r>=r.maxR)rippleEffects.splice(i,1);
+}
+for(var i=0;i<ambientParts.length;i++){
+var p=ambientParts[i];
+p.x+=p.vx*dt;p.y+=p.vy*dt;
+p.al=0.08+Math.sin(timeVal*0.4+p.ph)*0.06;
+}
+}
+
+function render(){
+var c=ctxRef;
+if(!c)return;
+c.fillStyle='#0e1229';
+c.fillRect(0,0,canvasW,canvasH);
+
+var bgG=c.createRadialGradient(canvasW*0.5,canvasH*0.5,0,canvasW*0.5,canvasH*0.5,Math.max(canvasW,canvasH)*0.65);
+bgG.addColorStop(0,'rgba(22,27,56,0.5)');
+bgG.addColorStop(1,'rgba(14,18,41,0)');
+c.fillStyle=bgG;
+c.fillRect(0,0,canvasW,canvasH);
+
+c.save();
+c.translate(canvasW/2-cam.x,canvasH/2-cam.y);
+
+drawGrid(c);
+
+for(var i=0;i<ambientParts.length;i++){
+var p=ambientParts[i];
+c.beginPath();
+c.arc(p.x,p.y,Math.max(0.3,p.sz),0,Math.PI*2);
+c.fillStyle='rgba(106,180,232,'+Math.max(0,p.al).toFixed(3)+')';
+c.fill();
+}
+
+for(var i=0;i<rippleEffects.length;i++){
+var r=rippleEffects[i];
+c.beginPath();
+c.arc(r.x,r.y,Math.max(1,r.r),0,Math.PI*2);
+c.strokeStyle='rgba(212,196,74,'+Math.max(0,r.al).toFixed(3)+')';
+c.lineWidth=1.5;
+c.stroke();
+}
+
+for(var i=0;i<trailParts.length;i++){
+var p=trailParts[i];
+c.beginPath();
+c.arc(p.x,p.y,Math.max(0.3,p.sz*p.life),0,Math.PI*2);
+c.fillStyle='rgba(106,180,232,'+Math.max(0,p.life*0.4).toFixed(3)+')';
+c.fill();
+}
+
+for(var i=0;i<objectDefs.length;i++){
+drawObj(c,i);
+}
+
+if(isDragging&&curForceMag>0.5){
+drawForceArrow(c);
+}
+
+c.restore();
+
+drawVignette(c);
+}
+
+function drawGrid(c){
+var gs=80;
+var sx=Math.floor((cam.x-canvasW/2)/gs)*gs;
+var sy=Math.floor((cam.y-canvasH/2)/gs)*gs;
+var ex=sx+canvasW+gs*2;
+var ey=sy+canvasH+gs*2;
+c.strokeStyle='rgba(106,180,232,0.05)';
+c.lineWidth=1;
+for(var x=sx;x<=ex;x+=gs){c.beginPath();c.moveTo(x,sy);c.lineTo(x,ey);c.stroke();}
+for(var y=sy;y<=ey;y+=gs){c.beginPath();c.moveTo(sx,y);c.lineTo(ex,y);c.stroke();}
+}
+
+function drawObj(c,idx){
+var def=objectDefs[idx];
+var st=objStates[idx];
+var sel=(idx===currentIdx);
+var spd=Math.sqrt(st.vx*st.vx+st.vy*st.vy);
+c.save();
+c.translate(st.x,st.y);
+
+if(sel){
+c.shadowColor=def.accent;
+c.shadowBlur=22;
+}
+
+c.fillStyle=def.color;
+c.strokeStyle=sel?'#d4c44a':'rgba(200,221,240,0.18)';
+c.lineWidth=sel?2.5:1;
+
+if(def.shape==='circle'){
+var r=Math.max(6,def.size);
+c.beginPath();c.arc(0,0,r,0,Math.PI*2);c.fill();c.stroke();
+c.fillStyle='rgba(255,255,255,0.18)';
+c.beginPath();c.arc(-r*0.25,-r*0.3,r*0.35,0,Math.PI*2);c.fill();
+}else{
+var s=Math.max(6,def.size);
+var hw=s,hh=s*0.72,rr=4;
+c.beginPath();
+c.moveTo(-hw+rr,-hh);c.lineTo(hw-rr,-hh);c.quadraticCurveTo(hw,-hh,hw,-hh+rr);
+c.lineTo(hw,hh-rr);c.quadraticCurveTo(hw,hh,hw-rr,hh);
+c.lineTo(-hw+rr,hh);c.quadraticCurveTo(-hw,hh,-hw,hh-rr);
+c.lineTo(-hw,-hh+rr);c.quadraticCurveTo(-hw,-hh,-hw+rr,-hh);
+c.closePath();c.fill();c.stroke();
+c.fillStyle='rgba(255,255,255,0.08)';
+c.fillRect(-hw+3,-hh+3,(hw*2-6)*0.4,hh*2-6);
+}
+
+if(sel){
+c.shadowBlur=0;
+var pulse=0.5+Math.sin(timeVal*3)*0.2;
+c.strokeStyle='rgba(212,196,74,'+pulse.toFixed(2)+')';
+c.lineWidth=1;
+var outerR=(def.shape==='circle')?def.size+8:def.size+6;
+c.beginPath();c.arc(0,0,outerR,0,Math.PI*2);c.stroke();
+}
+
+if(spd>1.5){
+var ang=Math.atan2(-st.vy,-st.vx);
+var ll=Math.min(spd*2.5,28);
+c.strokeStyle='rgba(200,221,240,0.25)';
+c.lineWidth=1.2;
+for(var li=-1;li<=1;li++){
+var off=li*7;
+var px=Math.cos(ang+Math.PI/2)*off;
+var py=Math.sin(ang+Math.PI/2)*off;
+c.beginPath();c.moveTo(px,py);c.lineTo(px+Math.cos(ang)*ll,py+Math.sin(ang)*ll);c.stroke();
+}
+}
+
+c.shadowBlur=0;
+c.fillStyle=sel?'#d4c44a':'rgba(200,221,240,0.5)';
+c.font='11px "Noto Sans SC",sans-serif';
+c.textAlign='center';
+var ly=(def.shape==='circle')?def.size+18:def.size*0.72+18;
+c.fillText(def.label[currentLang],0,ly);
+c.fillStyle='rgba(200,221,240,0.3)';
+c.font='9px "JetBrains Mono",monospace';
+c.fillText(def.mass+' kg',0,ly+13);
+
+c.restore();
+}
+
+function drawForceArrow(c){
+var st=objStates[currentIdx];
+var mag=curForceMag;
+if(mag<0.5)return;
+var ang=Math.atan2(curForceY,curForceX);
+var aLen=Math.min(mag*2.2,140);
+var sx=st.x,sy=st.y;
+var ex=sx+Math.cos(ang)*aLen;
+var ey=sy+Math.sin(ang)*aLen;
+
+var intens=Math.min(mag/MAX_FORCE,1);
+var cr=Math.round(212*intens+106*(1-intens));
+var cg=Math.round(196*intens+180*(1-intens));
+var cb=Math.round(74*intens+232*(1-intens));
+var col='rgba('+cr+','+cg+','+cb;
+
+c.strokeStyle=col+',0.75)';
+c.lineWidth=3;c.lineCap='round';
+c.beginPath();c.moveTo(sx,sy);c.lineTo(ex,ey);c.stroke();
+
+var hl=11;
+c.fillStyle=col+',0.8)';
+c.beginPath();c.moveTo(ex,ey);
+c.lineTo(ex-hl*Math.cos(ang-0.4),ey-hl*Math.sin(ang-0.4));
+c.lineTo(ex-hl*Math.cos(ang+0.4),ey-hl*Math.sin(ang+0.4));
+c.closePath();c.fill();
+
+c.fillStyle=col+',0.85)';
+c.font='11px "JetBrains Mono",monospace';
+c.textAlign='center';
+var lx=(sx+ex)/2+Math.cos(ang+Math.PI/2)*14;
+var ly=(sy+ey)/2+Math.sin(ang+Math.PI/2)*14;
+c.fillText(mag.toFixed(1)+' N',lx,ly);
+}
+
+function drawVignette(c){
+var vg=c.createRadialGradient(canvasW/2,canvasH/2,canvasW*0.3,canvasW/2,canvasH/2,canvasW*0.75);
+vg.addColorStop(0,'rgba(14,18,41,0)');
+vg.addColorStop(1,'rgba(14,18,41,0.5)');
+c.fillStyle=vg;
+c.fillRect(0,0,canvasW,canvasH);
+}
+
+function updateHUD(){
+var def=objectDefs[currentIdx];
+var st=objStates[currentIdx];
+var spd=Math.sqrt(st.vx*st.vx+st.vy*st.vy);
+document.getElementById('objName').textContent=def.label[currentLang];
+document.getElementById('infoMass').textContent=def.mass+' '+t('unit.kg');
+document.getElementById('infoFriction').textContent=def.friction.toFixed(2);
+document.getElementById('infoSpeed').textContent=spd.toFixed(2)+' '+t('unit.ms');
+document.getElementById('infoForce').textContent=curForceMag.toFixed(1)+' '+t('unit.n');
+}
+
+var echoLastHint='';
+function updateEcho(){
+var st=objStates[currentIdx];
+var spd=Math.sqrt(st.vx*st.vx+st.vy*st.vy);
+var nh='';
+var cCount=0;
+for(var k in completedMap){if(completedMap.hasOwnProperty(k))cCount++;}
+if(cCount>=5){
+nh=t('hint.complete');
+}else if(isDragging&&curForceMag>MAX_FORCE*0.4&&spd<2){
+nh=t('hint.slow');
+}else if(!isDragging&&spd>0.5&&spd<6){
+nh=t('hint.friction');
+}else if(records.length<5&&!isDragging&&spd<0.3){
+nh=t('hint.record');
+}else{
+nh=t('hint.start');
+}
+if(nh!==echoLastHint){
+echoLastHint=nh;
+document.getElementById('echoText').textContent=nh;
+}
+}
+
+function buildObjList(){
+var ctr=document.getElementById('objList');
+ctr.innerHTML='';
+for(var i=0;i<objectDefs.length;i++){
+(function(idx){
+var def=objectDefs[idx];
+var card=document.createElement('div');
+card.className='obj-card'+(idx===currentIdx?' active':'');
+card.setAttribute('data-idx',idx);
+var dot=document.createElement('div');
+dot.className='obj-dot';
+dot.style.background=def.color;
+var nm=document.createElement('span');
+nm.style.fontSize='12px';
+nm.textContent=def.label[currentLang];
+var ms=document.createElement('span');
+ms.className='font-mono';
+ms.style.fontSize='9px';
+ms.style.color='rgba(200,221,240,0.35)';
+ms.style.marginLeft='auto';
+ms.textContent=def.mass+'kg';
+card.appendChild(dot);card.appendChild(nm);card.appendChild(ms);
+card.addEventListener('click',function(){selectObj(idx);});
+ctr.appendChild(card);
+})(i);
+}
+}
+
+function buildEffortDots(){
+var ctr=document.getElementById('effortDots');
+ctr.innerHTML='';
+for(var i=1;i<=5;i++){
+(function(val){
+var d=document.createElement('div');
+d.className='effort-dot';
+d.textContent=val;
+d.setAttribute('data-ev',val);
+d.addEventListener('click',function(){
+selectedEffort=val;
+refreshEffortDots();
+document.getElementById('recBtn').disabled=false;
+});
+ctr.appendChild(d);
+})(i);
+}
+}
+
+function refreshEffortDots(){
+var dots=document.querySelectorAll('.effort-dot');
+for(var i=0;i<dots.length;i++){
+var v=parseInt(dots[i].getAttribute('data-ev'));
+if(v<=selectedEffort){dots[i].classList.add('filled');}else{dots[i].classList.remove('filled');}
+if(v===selectedEffort){dots[i].classList.add('selected');}else{dots[i].classList.remove('selected');}
+}
+}
+
+function updateRecList(){
+var ctr=document.getElementById('recordList');
+if(records.length===0){
+ctr.innerHTML='<div style="font-size:10px;color:rgba(200,221,240,0.25);text-align:center;padding:6px">'+t('no_records')+'</div>';
+return;
+}
+ctr.innerHTML='';
+for(var i=records.length-1;i>=0;i--){
+var rec=records[i];
+var row=document.createElement('div');
+row.className='rec-row';
+var d=document.createElement('div');
+d.style.cssText='width:7px;height:7px;border-radius:50%;flex-shrink:0;background:'+rec.color;
+var n=document.createElement('span');
+n.textContent=rec.name;n.style.flex='1';
+var e=document.createElement('span');
+e.className='font-mono';e.style.color='#d4c44a';e.style.fontSize='9px';
+var ds='';
+for(var j=0;j<rec.effort;j++)ds+='\u25CF';
+for(var j=rec.effort;j<5;j++)ds+='\u25CB';
+e.textContent=ds;
+row.appendChild(d);row.appendChild(n);row.appendChild(e);
+ctr.appendChild(row);
+}
+}
+
+function selectObj(idx){
+currentIdx=idx;
+selectedEffort=0;
+var cards=document.querySelectorAll('.obj-card');
+for(var i=0;i<cards.length;i++){
+if(i===idx){cards[i].classList.add('active');}else{cards[i].classList.remove('active');}
+}
+refreshEffortDots();
+document.getElementById('recBtn').disabled=true;
+updateHUD();
+}
+
+function addRecord(){
+if(selectedEffort<1)return;
+var def=objectDefs[currentIdx];
+records.push({objectId:def.id,name:def.label[currentLang],color:def.color,effort:selectedEffort,mass:def.mass});
+completedMap[def.id]=true;
+selectedEffort=0;
+refreshEffortDots();
+updateRecList();
+document.getElementById('recBtn').disabled=true;
+var cCount=0;
+for(var k in completedMap){if(completedMap.hasOwnProperty(k))cCount++;}
+if(cCount>=5){
+setTimeout(function(){
+document.getElementById('completionOverlay').classList.add('show');
+},600);
+}
+}
+
+function applyI18N(){
+document.getElementById('titleText').textContent=t('title');
+document.getElementById('langBtn').textContent=t('lang_toggle');
+document.getElementById('echoText').textContent=echoLastHint||t('hint.start');
+document.getElementById('completionTitle').textContent=t('completion.title');
+document.getElementById('completionDesc').textContent=t('completion.desc');
+document.getElementById('recBtn').textContent=t('record_btn');
+var els=document.querySelectorAll('[data-i18n]');
+for(var i=0;i<els.length;i++){
+var key=els[i].getAttribute('data-i18n');
+if(translations[key])els[i].textContent=t(key);
+}
+buildObjList();
+updateRecList();
+updateHUD();
+}
+
+function calcForce(){
+var dx=dragCurX-dragStartX;
+var dy=dragCurY-dragStartY;
+var dist=Math.sqrt(dx*dx+dy*dy);
+var fm=Math.min(dist*FORCE_SCALE,MAX_FORCE);
+if(dist>2){
+curForceX=(dx/dist)*fm;
+curForceY=(dy/dist)*fm;
+}else{
+curForceX=0;curForceY=0;
+}
+curForceMag=fm;
+}
+
+function setupInput(){
+canvasEl.addEventListener('mousedown',function(e){
+e.preventDefault();
+isDragging=true;
+dragStartX=e.clientX;dragStartY=e.clientY;
+dragCurX=e.clientX;dragCurY=e.clientY;
+calcForce();
+});
+window.addEventListener('mousemove',function(e){
+if(isDragging){
+dragCurX=e.clientX;dragCurY=e.clientY;
+calcForce();
+}
+});
+window.addEventListener('mouseup',function(){
+if(isDragging){
+isDragging=false;curForceX=0;curForceY=0;curForceMag=0;
+}
+});
+canvasEl.addEventListener('touchstart',function(e){
+e.preventDefault();
+var tc=e.touches[0];
+isDragging=true;
+dragStartX=tc.clientX;dragStartY=tc.clientY;
+dragCurX=tc.clientX;dragCurY=tc.clientY;
+calcForce();
+},{passive:false});
+canvasEl.addEventListener('touchmove',function(e){
+e.preventDefault();
+if(isDragging){
+var tc=e.touches[0];
+dragCurX=tc.clientX;dragCurY=tc.clientY;
+calcForce();
+}
+},{passive:false});
+canvasEl.addEventListener('touchend',function(){
+if(isDragging){
+isDragging=false;curForceX=0;curForceY=0;curForceMag=0;
+}
+});
+document.getElementById('recBtn').addEventListener('click',addRecord);
+document.getElementById('langBtn').addEventListener('click',function(){
+currentLang=(currentLang==='zh')?'en':'zh';
+applyI18N();
+});
+document.getElementById('completionOverlay').addEventListener('click',function(){
+document.getElementById('completionOverlay').classList.remove('show');
+});
+window.addEventListener('resize',resizeCanvas);
+}
+
+function gameLoop(ts){
+var dt=Math.min((ts-lastTimestamp)/1000,0.1);
+lastTimestamp=ts;
+timeVal+=dt;
+accumulator+=dt;
+var steps=0;
+while(accumulator>=PHYSICS_DT&&steps<4){
+updatePhysics(PHYSICS_DT);
+accumulator-=PHYSICS_DT;
+steps++;
+}
+if(steps===0&&accumulator>0){
+updatePhysics(accumulator);
+accumulator=0;
+}
+
+updateParticles(dt);
+
+var st=objStates[currentIdx];
+var spd=Math.sqrt(st.vx*st.vx+st.vy*st.vy);
+if(spd>3&&Math.random()<spd*0.018&&!prefersReducedMotion){
+spawnTrail(st.x,st.y,st.vx,st.vy);
+}
+if(isDragging&&curForceMag>MAX_FORCE*0.25&&Math.random()<0.008&&!prefersReducedMotion){
+spawnRipple(st.x,st.y,curForceMag/MAX_FORCE);
+}
+
+var fs=3.2;
+cam.x+=(st.x-cam.x)*fs*dt;
+cam.y+=(st.y-cam.y)*fs*dt;
+
+render();
+updateHUD();
+updateEcho();
+
+requestAnimationFrame(gameLoop);
+}
+
+function init(){
+canvasEl=document.getElementById('simCanvas');
+if(!canvasEl){console.error('Canvas not found');return;}
+ctxRef=canvasEl.getContext('2d');
+if(!ctxRef){console.error('No 2d context');return;}
+prefersReducedMotion=window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+initObjStates();
+initAmbientParts();
+resizeCanvas();
+buildObjList();
+buildEffortDots();
+updateRecList();
+applyI18N();
+setupInput();
+cam.x=objStates[currentIdx].x;
+cam.y=objStates[currentIdx].y;
+lastTimestamp=performance.now();
+requestAnimationFrame(gameLoop);
+}
+
+if(document.readyState==='loading'){
+document.addEventListener('DOMContentLoaded',init);
+}else{
+init();
+}
+})();
+</script>
+</body>
+</html>

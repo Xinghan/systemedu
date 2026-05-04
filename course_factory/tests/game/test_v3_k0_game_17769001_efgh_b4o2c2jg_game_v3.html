@@ -1,0 +1,923 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>推拉感知实验室 | Force Observatory</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700;900&family=JetBrains+Mono:wght@400;700&family=Noto+Sans+SC:wght@300;400;600;700;900&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+<style>
+:root{
+  --FIELD:oklch(0.78 0.13 215);--WAVE:oklch(0.55 0.13 215);--MASS:oklch(0.35 0.10 215);
+  --PHOTON:oklch(0.92 0.08 215);--CONSTANT:oklch(0.85 0.14 85);
+  --BG-DEEP:#0e1229;--BG-MID:#161b38;
+  --GLASS-BG:rgba(14,18,41,0.72);--GLASS-BORDER:rgba(106,180,232,0.13);
+  --GLASS-STRONG-BG:rgba(14,18,41,0.88);--GLASS-STRONG-BORDER:rgba(106,180,232,0.18);
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{height:100vh;min-height:100vh;overflow:hidden}
+body{font-family:'Noto Sans SC','Inter',sans-serif;background:var(--BG-DEEP);color:var(--PHOTON);user-select:none;-webkit-user-select:none}
+.font-mono{font-family:'JetBrains Mono',monospace}
+.glass{background:var(--GLASS-BG);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border:1px solid var(--GLASS-BORDER);border-radius:8px}
+.glass-strong{background:var(--GLASS-STRONG-BG);backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);border:1px solid var(--GLASS-STRONG-BORDER);border-radius:8px}
+::-webkit-scrollbar{width:3px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:var(--WAVE);border-radius:0}
+#simCanvas{position:fixed;top:0;left:0;width:100vw;height:100vh;z-index:0;cursor:crosshair}
+.obj-card{transition:all .2s ease;cursor:pointer;border:1px solid rgba(106,180,232,0.08);border-radius:6px;padding:7px 10px;display:flex;align-items:center;gap:8px}
+.obj-card:hover{border-color:rgba(106,180,232,0.3);background:rgba(106,180,232,0.06)}
+.obj-card.active{border-color:var(--CONSTANT);background:rgba(212,196,74,0.08);box-shadow:0 0 16px rgba(212,196,74,0.1)}
+.obj-dot{width:14px;height:14px;border-radius:50%;flex-shrink:0}
+.effort-dot{width:32px;height:32px;border:1.5px solid rgba(106,180,232,0.3);transition:all .15s;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:13px;border-radius:5px}
+.effort-dot:hover{border-color:var(--CONSTANT);background:rgba(212,196,74,0.1)}
+.effort-dot.filled{background:var(--CONSTANT);border-color:var(--CONSTANT);color:var(--MASS);font-weight:700}
+.echo-bubble{background:rgba(14,18,41,0.88);border:1px solid rgba(106,180,232,0.22);border-radius:10px;padding:8px 14px;font-size:12px;max-width:220px;line-height:1.5;backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);box-shadow:0 4px 20px rgba(0,0,0,0.3)}
+.rec-row{display:flex;align-items:center;gap:6px;padding:5px 8px;border-radius:5px;background:rgba(106,180,232,0.04);border:1px solid rgba(106,180,232,0.06)}
+.rec-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+@keyframes fadeSlideUp{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
+@keyframes glowPulse{0%,100%{opacity:.5}50%{opacity:1}}
+@keyframes ringExpand{0%{transform:scale(1);opacity:.6}100%{transform:scale(2.5);opacity:0}}
+.anim-fade-up{animation:fadeSlideUp .35s ease-out both}
+.glow-pulse{animation:glowPulse 2s ease-in-out infinite}
+.modal-overlay{position:fixed;inset:0;z-index:50;display:flex;align-items:center;justify-content:center;transition:opacity .25s,transform .25s}
+.modal-overlay.hidden{opacity:0;transform:scale(.95);pointer-events:none}
+.completion-overlay{position:fixed;inset:0;z-index:50;display:flex;align-items:center;justify-content:center;transition:opacity .5s}
+.completion-overlay.hidden{opacity:0;pointer-events:none}
+.panel-scroll{overflow-y:auto;flex:1;min-height:0}
+button:disabled{opacity:.4;cursor:not-allowed}
+button:focus-visible{outline:2px solid var(--CONSTANT);outline-offset:2px}
+@media(prefers-reduced-motion:reduce){
+  .anim-fade-up{animation:none;opacity:1}
+  .glow-pulse{animation:none;opacity:.7}
+}
+</style>
+</head>
+<body>
+
+<canvas id="simCanvas"></canvas>
+
+<!-- 顶部栏 -->
+<header class="fixed top-0 left-0 right-0 z-10 flex items-center justify-between px-4 py-2 glass-strong" style="border-radius:0 0 8px 8px">
+  <div>
+    <h1 id="appTitle" class="text-base font-bold tracking-wide" style="color:var(--PHOTON)">推拉感知实验室</h1>
+    <p id="appSubtitle" class="text-xs" style="color:rgba(168,200,232,0.5)">拖拽施力，感知质量</p>
+  </div>
+  <button id="langToggle" class="glass px-3 py-1 text-xs font-mono cursor-pointer hover:border-[var(--CONSTANT)] transition-colors" aria-label="Toggle language">EN</button>
+</header>
+
+<!-- 左面板：物体列表 -->
+<aside id="objPanel" class="fixed left-3 z-10 glass p-3 flex flex-col gap-2" style="top:56px;bottom:52px;width:168px;border-radius:10px">
+  <div id="objListLabel" class="text-xs font-semibold mb-1" style="color:rgba(168,200,232,0.5)">
+    <i class="fas fa-cubes fa-xs mr-1"></i>实验对象
+  </div>
+  <div id="objList" class="flex flex-col gap-2 panel-scroll"></div>
+</aside>
+
+<!-- 右面板：费力度 + 记录 -->
+<aside id="rightPanel" class="fixed right-3 z-10 glass p-3 flex flex-col gap-3" style="top:56px;bottom:52px;width:196px;border-radius:10px">
+  <div id="objInfoBox" class="text-sm"></div>
+  <div>
+    <div id="effortLabel" class="text-xs mb-1.5" style="color:rgba(168,200,232,0.5)"><i class="fas fa-hand-fist fa-xs mr-1"></i>费力程度</div>
+    <div id="effortDots" class="flex gap-1.5"></div>
+  </div>
+  <button id="recordBtn" class="w-full py-2 rounded-md glass text-sm font-semibold cursor-pointer transition-all" disabled style="color:var(--CONSTANT)">
+    <i class="fas fa-pen-to-square fa-xs mr-1"></i><span id="recordBtnText">记录体验</span>
+  </button>
+  <button id="resetBtn" class="w-full py-1.5 rounded-md glass text-xs cursor-pointer hover:border-[var(--CONSTANT)] transition-colors" style="color:rgba(168,200,232,0.6)">
+    <i class="fas fa-rotate-left fa-xs mr-1"></i><span id="resetBtnText">重置位置</span>
+  </button>
+  <div class="flex-1 min-h-0 flex flex-col">
+    <div id="recordsLabel" class="text-xs mb-1.5" style="color:rgba(168,200,232,0.5)"><i class="fas fa-clipboard-list fa-xs mr-1"></i>记录表 <span id="recordCount">0/5</span></div>
+    <div id="recordList" class="flex flex-col gap-1.5 panel-scroll text-xs"></div>
+  </div>
+</aside>
+
+<!-- 底部 HUD -->
+<footer id="hudBar" class="fixed bottom-0 left-0 right-0 z-10 glass-strong px-6 py-2 flex items-center justify-center gap-8 font-mono text-sm" style="border-radius:8px 8px 0 0">
+  <div><span style="color:rgba(168,200,232,0.4)">F </span><span id="hudForce" style="color:var(--CONSTANT)">0.0</span><span style="color:rgba(168,200,232,0.4)"> N</span></div>
+  <div><span style="color:rgba(168,200,232,0.4)">v </span><span id="hudVel" style="color:var(--FIELD)">0.00</span><span style="color:rgba(168,200,232,0.4)"> m/s</span></div>
+  <div><span style="color:rgba(168,200,232,0.4)">a </span><span id="hudAcc" style="color:var(--WAVE)">0.0</span><span style="color:rgba(168,200,232,0.4)"> m/s²</span></div>
+</footer>
+
+<!-- 回声吉祥物 -->
+<div id="echoMascot" class="fixed z-20 pointer-events-none" style="bottom:64px;left:200px">
+  <div class="echo-bubble" id="echoText">在画布上拖拽来对物体施力</div>
+</div>
+
+<!-- 记录确认弹窗 -->
+<div id="recordModal" class="modal-overlay hidden">
+  <div class="absolute inset-0" style="background:rgba(0,0,0,0.5)"></div>
+  <div class="relative glass-strong p-6 anim-fade-up" style="width:320px;border-radius:14px">
+    <h3 id="modalTitle" class="text-lg font-bold mb-2" style="color:var(--CONSTANT)">确认记录</h3>
+    <p id="modalHint" class="text-xs mb-4" style="color:rgba(168,200,232,0.5)">将此次体验记入记录表</p>
+    <div id="modalDetail" class="text-sm mb-5 font-mono p-3 rounded-md" style="background:rgba(106,180,232,0.05);border:1px solid rgba(106,180,232,0.08)"></div>
+    <div class="flex gap-3">
+      <button id="modalCancel" class="flex-1 py-2.5 rounded-md glass cursor-pointer text-sm hover:border-[var(--CONSTANT)] transition-colors"><span id="modalCancelText">取消</span></button>
+      <button id="modalConfirm" class="flex-1 py-2.5 rounded-md text-sm font-bold cursor-pointer transition-colors" style="background:var(--CONSTANT);color:var(--MASS);border:none"><span id="modalConfirmText">确认</span></button>
+    </div>
+  </div>
+</div>
+
+<!-- 完成覆盖层 -->
+<div id="completionOverlay" class="completion-overlay hidden">
+  <div class="absolute inset-0" style="background:rgba(0,0,0,0.6)"></div>
+  <div class="relative glass-strong p-8 text-center anim-fade-up" style="width:400px;border-radius:16px">
+    <div class="text-5xl mb-4"><i class="fas fa-trophy" style="color:var(--CONSTANT)"></i></div>
+    <h2 id="completeTitle" class="text-2xl font-bold mb-2" style="color:var(--CONSTANT)">实验完成！</h2>
+    <p id="completeMsg" class="text-sm mb-6" style="color:rgba(168,200,232,0.7)">你已感知到：质量越大，推动越费力。这就是惯性的本质！</p>
+    <button id="completionClose" class="px-8 py-2.5 rounded-md glass cursor-pointer text-sm hover:border-[var(--CONSTANT)] transition-colors"><span id="completeCloseText">继续探索</span></button>
+  </div>
+</div>
+
+<script>
+(function(){
+
+/* ==================== 常量 ==================== */
+var PHYSICS_DT = 1/60;
+var MAX_FORCE_DISPLAY = 50;
+var MAX_FORCE_INTERNAL = 220;
+var DRAG_PIXELS_FOR_MAX = 220;
+var MIN_DRAG = 6;
+var REQUIRED_RECORDS = 5;
+
+/* ==================== 物体定义 ==================== */
+var OBJECTS = [
+  {id:'feather',nameZh:'羽毛',nameEn:'Feather',displayMass:'0.1',physMass:1.2,friction:3.2,radius:14,color:'#b0c8e8',shape:'circle',initX:0,initY:0},
+  {id:'ball',nameZh:'橡皮球',nameEn:'Rubber Ball',displayMass:'0.5',physMass:5,friction:2.4,radius:22,color:'#e89050',shape:'circle',initX:300,initY:0},
+  {id:'wood',nameZh:'木块',nameEn:'Wood Block',displayMass:'2',physMass:14,friction:1.8,radius:30,color:'#b08050',shape:'rect',initX:-300,initY:0},
+  {id:'iron',nameZh:'铁球',nameEn:'Iron Ball',displayMass:'5',physMass:28,friction:1.1,radius:26,color:'#8898a8',shape:'circle',initX:0,initY:-280},
+  {id:'stone',nameZh:'石墩',nameEn:'Stone Block',displayMass:'10',physMass:55,friction:0.85,radius:38,color:'#606878',shape:'rect',initX:0,initY:280}
+];
+
+/* ==================== 状态 ==================== */
+var currentIdx = 0;
+var objStates = [];
+var cam = {x:0,y:0};
+var timeVal = 0;
+var lastTimestamp = 0;
+var accumulator = 0;
+var isDragging = false;
+var dragStartX = 0, dragStartY = 0;
+var dragCurX = 0, dragCurY = 0;
+var currentForceMag = 0;
+var currentForceDirX = 0, currentForceDirY = 0;
+var currentAccelX = 0, currentAccelY = 0;
+var peakForce = 0;
+var hasPushedCurrent = false;
+var currentEffort = 0;
+var records = [];
+var lang = 'zh';
+var canvasEl, ctxRef;
+var trailParticles = [];
+var rippleEffects = [];
+var prefersReducedMotion = false;
+var echoTimer = 0;
+var echoCurrentHint = '';
+
+/* ==================== 国际化 ==================== */
+var i18nData = {
+  zh:{
+    title:'推拉感知实验室',subtitle:'拖拽施力，感知质量',
+    objListLabel:'实验对象',effortLabel:'费力程度',
+    recordBtn:'记录体验',resetBtn:'重置位置',
+    recordsLabel:'记录表',emptyRecords:'尚无记录，推拉物体后记录感受',
+    modalTitle:'确认记录',modalHint:'将此次体验记入记录表',
+    modalCancel:'取消',modalConfirm:'确认',
+    completeTitle:'实验完成！',completeMsg:'你已感知到：质量越大，推动越费力。这就是惯性的本质！',completeClose:'继续探索',
+    effortLevels:['很轻松','轻松','适中','费力','很费力'],
+    hint:{start:'在画布上拖拽来对物体施力',light:'感觉好轻松！几乎不用力气',medium:'需要用些力气了',heavy:'好重！得用全力推',afterPush:'点击下方圆点记录你的费力感受',recorded:'已记录！试试其他物体吧',allDone:'所有记录已完成！'},
+    objDesc:{
+      feather:'轻盈的羽毛，一吹就飞',
+      ball:'弹力橡皮球，轻轻一推就滚',
+      wood:'实木木块，需要用些力气',
+      iron:'沉重的铁球，很难推动',
+      stone:'巨大的石墩，几乎推不动'
+    }
+  },
+  en:{
+    title:'Force Observatory',subtitle:'Drag to push, feel the mass',
+    objListLabel:'Objects',effortLabel:'Effort Level',
+    recordBtn:'Record',resetBtn:'Reset Position',
+    recordsLabel:'Records',emptyRecords:'No records yet. Push an object first',
+    modalTitle:'Confirm Record',modalHint:'Save this experience to the record table',
+    modalCancel:'Cancel',modalConfirm:'Confirm',
+    completeTitle:'Experiment Complete!',completeMsg:'You discovered: heavier objects need more force to move. That\'s inertia!',completeClose:'Keep Exploring',
+    effortLevels:['Very Easy','Easy','Medium','Hard','Very Hard'],
+    hint:{start:'Drag on the canvas to apply force',light:'So easy! Barely any effort',medium:'Needs some force now',heavy:'So heavy! Push with all your might',afterPush:'Rate your effort with the dots below',recorded:'Recorded! Try other objects',allDone:'All records complete!'},
+    objDesc:{
+      feather:'A light feather, blown away easily',
+      ball:'A bouncy rubber ball, rolls with a touch',
+      wood:'A solid wood block, needs some force',
+      iron:'A heavy iron ball, hard to push',
+      stone:'A massive stone block, barely moves'
+    }
+  }
+};
+
+function t(key){
+  var parts = key.split('.');
+  var node = i18nData[lang];
+  for(var i=0;i<parts.length;i++){
+    if(node[parts[i]]!==undefined) node=node[parts[i]];
+    else return key;
+  }
+  return typeof node==='string'?node:key;
+}
+
+function objName(idx){return lang==='zh'?OBJECTS[idx].nameZh:OBJECTS[idx].nameEn;}
+function objDesc(idx){return t('objDesc.'+OBJECTS[idx].id);}
+
+/* ==================== 初始化物体状态 ==================== */
+function initObjStates(){
+  objStates = [];
+  for(var i=0;i<OBJECTS.length;i++){
+    objStates.push({
+      objIdx:i,
+      x:OBJECTS[i].initX,
+      y:OBJECTS[i].initY,
+      initX:OBJECTS[i].initX,
+      initY:OBJECTS[i].initY,
+      vx:0,vy:0,
+      ax:0,ay:0
+    });
+  }
+}
+
+/* ==================== DOM 构建 ==================== */
+function buildObjectList(){
+  var container = document.getElementById('objList');
+  container.innerHTML = '';
+  for(var i=0;i<OBJECTS.length;i++){
+    (function(idx){
+      var obj = OBJECTS[idx];
+      var card = document.createElement('div');
+      card.className = 'obj-card' + (idx===currentIdx?' active':'');
+      card.setAttribute('data-idx',idx);
+      card.setAttribute('role','button');
+      card.setAttribute('tabindex','0');
+      card.setAttribute('aria-label',objName(idx));
+      card.innerHTML = '<div class="obj-dot" style="background:'+obj.color+'"></div>'+
+        '<div class="flex-1 min-w-0">'+
+          '<div class="text-xs font-semibold truncate">'+objName(idx)+'</div>'+
+          '<div class="text-xs font-mono" style="color:rgba(168,200,232,0.4)">'+obj.displayMass+' kg</div>'+
+        '</div>';
+      card.addEventListener('click',function(){selectObject(idx);});
+      card.addEventListener('keydown',function(e){if(e.key==='Enter'||e.key===' '){e.preventDefault();selectObject(idx);}});
+      container.appendChild(card);
+    })(i);
+  }
+}
+
+function buildEffortDots(){
+  var container = document.getElementById('effortDots');
+  container.innerHTML = '';
+  for(var i=1;i<=5;i++){
+    (function(level){
+      var dot = document.createElement('div');
+      dot.className = 'effort-dot';
+      dot.setAttribute('data-level',level);
+      dot.setAttribute('role','button');
+      dot.setAttribute('tabindex','0');
+      dot.setAttribute('aria-label',t('effortLevels.'+(level-1)));
+      dot.textContent = level;
+      dot.addEventListener('click',function(){setEffort(level);});
+      dot.addEventListener('keydown',function(e){if(e.key==='Enter'||e.key===' '){e.preventDefault();setEffort(level);}});
+      container.appendChild(dot);
+    })(i);
+  }
+}
+
+function selectObject(idx){
+  currentIdx = idx;
+  currentEffort = 0;
+  hasPushedCurrent = false;
+  peakForce = 0;
+  updateObjCards();
+  updateObjInfo();
+  updateEffortDots();
+  updateRecordBtn();
+}
+
+function updateObjCards(){
+  var cards = document.querySelectorAll('.obj-card');
+  for(var i=0;i<cards.length;i++){
+    if(parseInt(cards[i].getAttribute('data-idx'))===currentIdx){
+      cards[i].classList.add('active');
+    }else{
+      cards[i].classList.remove('active');
+    }
+  }
+}
+
+function updateObjInfo(){
+  var box = document.getElementById('objInfoBox');
+  var obj = OBJECTS[currentIdx];
+  box.innerHTML =
+    '<div class="font-semibold text-sm mb-1" style="color:var(--CONSTANT)">'+objName(currentIdx)+'</div>'+
+    '<div class="text-xs mb-1" style="color:rgba(168,200,232,0.5)">'+objDesc(currentIdx)+'</div>'+
+    '<div class="font-mono text-xs" style="color:var(--FIELD)">m = '+obj.displayMass+' kg</div>';
+}
+
+function setEffort(level){
+  currentEffort = level;
+  updateEffortDots();
+  updateRecordBtn();
+}
+
+function updateEffortDots(){
+  var dots = document.querySelectorAll('.effort-dot');
+  for(var i=0;i<dots.length;i++){
+    var lvl = parseInt(dots[i].getAttribute('data-level'));
+    if(lvl<=currentEffort){
+      dots[i].classList.add('filled');
+    }else{
+      dots[i].classList.remove('filled');
+    }
+  }
+}
+
+function updateRecordBtn(){
+  var btn = document.getElementById('recordBtn');
+  if(currentEffort>0 && hasPushedCurrent){
+    btn.disabled = false;
+    btn.style.borderColor = 'var(--CONSTANT)';
+  }else{
+    btn.disabled = true;
+    btn.style.borderColor = '';
+  }
+}
+
+function updateRecordList(){
+  var container = document.getElementById('recordList');
+  var countEl = document.getElementById('recordCount');
+  countEl.textContent = records.length+'/'+REQUIRED_RECORDS;
+  if(records.length===0){
+    container.innerHTML = '<div class="text-xs" style="color:rgba(168,200,232,0.3)">'+t('emptyRecords')+'</div>';
+    return;
+  }
+  var html = '';
+  for(var i=0;i<records.length;i++){
+    var r = records[i];
+    var dotsHtml = '';
+    for(var d=1;d<=5;d++){
+      dotsHtml += '<span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:'+(d<=r.effort?'var(--CONSTANT)':'rgba(106,180,232,0.15)')+'"></span>';
+    }
+    html += '<div class="rec-row">'+
+      '<div class="rec-dot" style="background:'+OBJECTS[r.objIdx].color+'"></div>'+
+      '<div class="flex-1 truncate">'+objName(r.objIdx)+'</div>'+
+      '<div class="flex gap-0.5">'+dotsHtml+'</div>'+
+      '<div class="font-mono" style="color:var(--CONSTANT);min-width:42px;text-align:right">'+r.force.toFixed(1)+'N</div>'+
+    '</div>';
+  }
+  container.innerHTML = html;
+}
+
+function showModal(){
+  var modal = document.getElementById('recordModal');
+  var detail = document.getElementById('modalDetail');
+  var effortText = t('effortLevels.'+(currentEffort-1));
+  detail.innerHTML =
+    '<div class="mb-1"><span style="color:rgba(168,200,232,0.4)">Object: </span><span style="color:var(--CONSTANT)">'+objName(currentIdx)+'</span></div>'+
+    '<div class="mb-1"><span style="color:rgba(168,200,232,0.4)">Force: </span><span style="color:var(--CONSTANT)">'+peakForce.toFixed(1)+' N</span></div>'+
+    '<div><span style="color:rgba(168,200,232,0.4)">Effort: </span><span style="color:var(--CONSTANT)">'+currentEffort+'/5 '+effortText+'</span></div>';
+  modal.classList.remove('hidden');
+}
+
+function hideModal(){
+  document.getElementById('recordModal').classList.add('hidden');
+}
+
+function confirmRecord(){
+  records.push({objIdx:currentIdx,force:peakForce,effort:currentEffort});
+  currentEffort = 0;
+  hasPushedCurrent = false;
+  peakForce = 0;
+  hideModal();
+  updateEffortDots();
+  updateRecordBtn();
+  updateRecordList();
+  if(records.length>=REQUIRED_RECORDS){
+    setTimeout(function(){
+      document.getElementById('completionOverlay').classList.remove('hidden');
+    },400);
+  }
+}
+
+function toggleLang(){
+  lang = lang==='zh'?'en':'zh';
+  document.getElementById('langToggle').textContent = lang==='zh'?'EN':'中';
+  applyI18N();
+}
+
+function applyI18N(){
+  document.getElementById('appTitle').textContent = t('title');
+  document.getElementById('appSubtitle').textContent = t('subtitle');
+  document.getElementById('objListLabel').innerHTML = '<i class="fas fa-cubes fa-xs mr-1"></i>'+t('objListLabel');
+  document.getElementById('effortLabel').innerHTML = '<i class="fas fa-hand-fist fa-xs mr-1"></i>'+t('effortLabel');
+  document.getElementById('recordBtnText').textContent = t('recordBtn');
+  document.getElementById('resetBtnText').textContent = t('resetBtn');
+  document.getElementById('recordsLabel').innerHTML = '<i class="fas fa-clipboard-list fa-xs mr-1"></i>'+t('recordsLabel')+' <span id="recordCount">'+records.length+'/'+REQUIRED_RECORDS+'</span>';
+  document.getElementById('modalTitle').textContent = t('modalTitle');
+  document.getElementById('modalHint').textContent = t('modalHint');
+  document.getElementById('modalCancelText').textContent = t('modalCancel');
+  document.getElementById('modalConfirmText').textContent = t('modalConfirm');
+  document.getElementById('completeTitle').textContent = t('completeTitle');
+  document.getElementById('completeMsg').textContent = t('completeMsg');
+  document.getElementById('completeCloseText').textContent = t('completeClose');
+  buildObjectList();
+  updateObjInfo();
+  updateEffortDots();
+  updateRecordList();
+  updateEchoMascot(true);
+}
+
+/* ==================== Canvas 尺寸 ==================== */
+function resizeCanvas(){
+  if(!canvasEl) return;
+  var dpr = window.devicePixelRatio||1;
+  canvasEl.width = window.innerWidth*dpr;
+  canvasEl.height = window.innerHeight*dpr;
+  canvasEl.style.width = window.innerWidth+'px';
+  canvasEl.style.height = window.innerHeight+'px';
+  if(ctxRef) ctxRef.setTransform(dpr,0,0,dpr,0,0);
+}
+
+/* ==================== 输入处理 ==================== */
+function setupInput(){
+  canvasEl.addEventListener('mousedown',function(e){
+    e.preventDefault();
+    isDragging = true;
+    dragStartX = e.clientX;
+    dragStartY = e.clientY;
+    dragCurX = e.clientX;
+    dragCurY = e.clientY;
+    peakForce = 0;
+  });
+  window.addEventListener('mousemove',function(e){
+    if(!isDragging) return;
+    dragCurX = e.clientX;
+    dragCurY = e.clientY;
+  });
+  window.addEventListener('mouseup',function(e){
+    if(!isDragging) return;
+    isDragging = false;
+    if(peakForce>2){
+      hasPushedCurrent = true;
+      updateRecordBtn();
+    }
+    currentForceMag = 0;
+  });
+
+  canvasEl.addEventListener('touchstart',function(e){
+    e.preventDefault();
+    if(e.touches.length<1) return;
+    var touch = e.touches[0];
+    isDragging = true;
+    dragStartX = touch.clientX;
+    dragStartY = touch.clientY;
+    dragCurX = touch.clientX;
+    dragCurY = touch.clientY;
+    peakForce = 0;
+  },{passive:false});
+  window.addEventListener('touchmove',function(e){
+    if(!isDragging||e.touches.length<1) return;
+    var touch = e.touches[0];
+    dragCurX = touch.clientX;
+    dragCurY = touch.clientY;
+  },{passive:true});
+  window.addEventListener('touchend',function(e){
+    if(!isDragging) return;
+    isDragging = false;
+    if(peakForce>2){
+      hasPushedCurrent = true;
+      updateRecordBtn();
+    }
+    currentForceMag = 0;
+  });
+
+  document.getElementById('langToggle').addEventListener('click',toggleLang);
+  document.getElementById('recordBtn').addEventListener('click',function(){
+    if(currentEffort>0&&hasPushedCurrent) showModal();
+  });
+  document.getElementById('modalCancel').addEventListener('click',hideModal);
+  document.getElementById('modalConfirm').addEventListener('click',confirmRecord);
+  document.getElementById('resetBtn').addEventListener('click',function(){
+    var st = objStates[currentIdx];
+    st.x = st.initX; st.y = st.initY; st.vx = 0; st.vy = 0;
+    cam.x = st.x; cam.y = st.y;
+  });
+  document.getElementById('completionClose').addEventListener('click',function(){
+    document.getElementById('completionOverlay').classList.add('hidden');
+  });
+  window.addEventListener('resize',resizeCanvas);
+}
+
+/* ==================== 物理引擎 ==================== */
+function updatePhysics(dt){
+  var st = objStates[currentIdx];
+  var obj = OBJECTS[currentIdx];
+
+  if(isDragging){
+    var dx = dragCurX - dragStartX;
+    var dy = dragCurY - dragStartY;
+    var dist = Math.sqrt(dx*dx+dy*dy);
+    if(dist>MIN_DRAG){
+      var ratio = Math.min((dist-MIN_DRAG)/DRAG_PIXELS_FOR_MAX,1);
+      var forceMag = ratio * MAX_FORCE_INTERNAL;
+      currentForceDirX = dx/dist;
+      currentForceDirY = dy/dist;
+      currentForceMag = forceMag;
+      var displayF = ratio * MAX_FORCE_DISPLAY;
+      if(displayF>peakForce) peakForce = displayF;
+      st.ax = currentForceDirX * forceMag / obj.physMass;
+      st.ay = currentForceDirY * forceMag / obj.physMass;
+    }else{
+      currentForceMag = 0;
+      st.ax = 0; st.ay = 0;
+    }
+  }else{
+    st.ax = 0; st.ay = 0;
+    currentForceMag = 0;
+  }
+
+  currentAccelX = st.ax;
+  currentAccelY = st.ay;
+
+  st.vx += st.ax * dt;
+  st.vy += st.ay * dt;
+
+  var fric = obj.friction;
+  var dampFactor = Math.max(0, 1 - fric * dt);
+  st.vx *= dampFactor;
+  st.vy *= dampFactor;
+
+  var speed = Math.sqrt(st.vx*st.vx+st.vy*st.vy);
+  if(!isDragging && speed<0.5){
+    st.vx = 0; st.vy = 0;
+  }
+
+  st.x += st.vx * dt;
+  st.y += st.vy * dt;
+}
+
+/* ==================== 粒子系统 ==================== */
+function spawnTrail(x,y,vx,vy){
+  if(prefersReducedMotion) return;
+  if(trailParticles.length>120) trailParticles.splice(0,20);
+  var obj = OBJECTS[currentIdx];
+  trailParticles.push({
+    x:x+(Math.random()-0.5)*8,
+    y:y+(Math.random()-0.5)*8,
+    vx:-vx*0.05+(Math.random()-0.5)*12,
+    vy:-vy*0.05+(Math.random()-0.5)*12,
+    life:1,
+    decay:0.015+Math.random()*0.02,
+    size:1.5+Math.random()*2.5,
+    color:obj.color
+  });
+}
+
+function spawnRipple(x,y,intensity){
+  if(prefersReducedMotion) return;
+  if(rippleEffects.length>8) rippleEffects.splice(0,2);
+  rippleEffects.push({
+    x:x,y:y,
+    radius:8,
+    maxRadius:25+intensity*50,
+    life:1,
+    decay:0.025
+  });
+}
+
+function updateParticles(dt){
+  for(var i=trailParticles.length-1;i>=0;i--){
+    var p=trailParticles[i];
+    p.x+=p.vx*dt;
+    p.y+=p.vy*dt;
+    p.vx*=0.96;
+    p.vy*=0.96;
+    p.life-=p.decay;
+    if(p.life<=0) trailParticles.splice(i,1);
+  }
+  for(var i=rippleEffects.length-1;i>=0;i--){
+    var r=rippleEffects[i];
+    r.radius+=(r.maxRadius-r.radius)*0.08;
+    r.life-=r.decay;
+    if(r.life<=0) rippleEffects.splice(i,1);
+  }
+}
+
+/* ==================== 渲染 ==================== */
+function render(){
+  var c = ctxRef;
+  var w = canvasEl.width/(window.devicePixelRatio||1);
+  var h = canvasEl.height/(window.devicePixelRatio||1);
+
+  /* 背景 */
+  c.fillStyle = '#0e1229';
+  c.fillRect(0,0,w,h);
+
+  /* 径向微光 */
+  var grd = c.createRadialGradient(w/2,h/2,0,w/2,h/2,w*0.6);
+  grd.addColorStop(0,'rgba(30,40,80,0.4)');
+  grd.addColorStop(1,'rgba(14,18,41,0)');
+  c.fillStyle = grd;
+  c.fillRect(0,0,w,h);
+
+  var offsetX = w/2 - cam.x;
+  var offsetY = h/2 - cam.y;
+
+  c.save();
+  c.translate(offsetX,offsetY);
+
+  drawGrid(c,offsetX,offsetY,w,h);
+  drawRipples(c);
+  drawTrails(c);
+
+  for(var i=0;i<objStates.length;i++){
+    drawObject(c,objStates[i],i===currentIdx);
+  }
+
+  if(isDragging && currentForceMag>1){
+    drawForceArrow(c);
+  }
+
+  c.restore();
+
+  drawScaleBar(c,w,h);
+}
+
+function drawGrid(c,offX,offY,w,h){
+  var gridSize = 60;
+  c.fillStyle = 'rgba(106,180,232,0.06)';
+  var startX = Math.floor(-offX/gridSize)*gridSize;
+  var endX = startX + w + gridSize*2;
+  var startY = Math.floor(-offY/gridSize)*gridSize;
+  var endY = startY + h + gridSize*2;
+  for(var x=startX;x<=endX;x+=gridSize){
+    for(var y=startY;y<=endY;y+=gridSize){
+      c.beginPath();
+      c.arc(x,y,1.2,0,Math.PI*2);
+      c.fill();
+    }
+  }
+}
+
+function drawObject(c,st,isActive){
+  var obj = OBJECTS[st.objIdx];
+  var r = Math.max(obj.radius,4);
+
+  if(isActive){
+    c.shadowColor = obj.color;
+    c.shadowBlur = 24;
+  }
+
+  c.fillStyle = obj.color;
+  c.strokeStyle = isActive?'rgba(212,196,74,0.55)':'rgba(106,180,232,0.15)';
+  c.lineWidth = isActive?2:1;
+
+  if(obj.shape==='circle'){
+    c.beginPath();
+    c.arc(st.x,st.y,r,0,Math.PI*2);
+    c.fill();
+    c.stroke();
+  }else{
+    var rw = r*1.8, rh = r*1.3;
+    c.beginPath();
+    c.roundRect(st.x-rw/2,st.y-rh/2,rw,rh,4);
+    c.fill();
+    c.stroke();
+  }
+
+  c.shadowBlur = 0;
+
+  /* 物体上的高光 */
+  var hlGrd = c.createRadialGradient(st.x-r*0.25,st.y-r*0.3,0,st.x,st.y,r);
+  hlGrd.addColorStop(0,'rgba(255,255,255,0.18)');
+  hlGrd.addColorStop(1,'rgba(255,255,255,0)');
+  c.fillStyle = hlGrd;
+  if(obj.shape==='circle'){
+    c.beginPath();
+    c.arc(st.x,st.y,r,0,Math.PI*2);
+    c.fill();
+  }else{
+    c.beginPath();
+    c.roundRect(st.x-r*0.9,st.y-r*0.65,r*1.8,r*1.3,4);
+    c.fill();
+  }
+
+  /* 标签 */
+  c.fillStyle = isActive?'#ffffff':'rgba(200,220,240,0.45)';
+  c.font = (isActive?'bold ':'')+'11px "Noto Sans SC","Inter",sans-serif';
+  c.textAlign = 'center';
+  c.textBaseline = 'top';
+  c.fillText(objName(st.objIdx),st.x,st.y+r+8);
+  c.fillStyle = isActive?'rgba(212,196,74,0.7)':'rgba(168,200,232,0.3)';
+  c.font = '10px "JetBrains Mono",monospace';
+  c.fillText(obj.displayMass+'kg',st.x,st.y+r+22);
+}
+
+function drawForceArrow(c){
+  var st = objStates[currentIdx];
+  var ratio = currentForceMag/MAX_FORCE_INTERNAL;
+  var arrowLen = 35 + ratio*90;
+  var endX = st.x + currentForceDirX*arrowLen;
+  var endY = st.y + currentForceDirY*arrowLen;
+
+  /* 发光线 */
+  c.beginPath();
+  c.moveTo(st.x,st.y);
+  c.lineTo(endX,endY);
+  c.strokeStyle = 'rgba(212,196,74,'+(0.25+ratio*0.5)+')';
+  c.lineWidth = 6;
+  c.lineCap = 'round';
+  c.stroke();
+
+  /* 主线 */
+  c.beginPath();
+  c.moveTo(st.x,st.y);
+  c.lineTo(endX,endY);
+  c.strokeStyle = 'rgba(212,196,74,'+(0.6+ratio*0.4)+')';
+  c.lineWidth = 2+ratio*2;
+  c.lineCap = 'round';
+  c.stroke();
+
+  /* 箭头 */
+  var headLen = 10+ratio*6;
+  var angle = Math.atan2(currentForceDirY,currentForceDirX);
+  c.beginPath();
+  c.moveTo(endX,endY);
+  c.lineTo(endX-headLen*Math.cos(angle-0.4),endY-headLen*Math.sin(angle-0.4));
+  c.lineTo(endX-headLen*0.4*Math.cos(angle),endY-headLen*0.4*Math.sin(angle));
+  c.lineTo(endX-headLen*Math.cos(angle+0.4),endY-headLen*Math.sin(angle+0.4));
+  c.closePath();
+  c.fillStyle = 'rgba(212,196,74,'+(0.7+ratio*0.3)+')';
+  c.fill();
+
+  /* 力值标签 */
+  var displayF = (ratio*MAX_FORCE_DISPLAY).toFixed(1);
+  c.fillStyle = 'rgba(212,196,74,0.85)';
+  c.font = 'bold 11px "JetBrains Mono",monospace';
+  c.textAlign = 'center';
+  c.textBaseline = 'bottom';
+  c.fillText(displayF+' N',endX+currentForceDirY*16,endY-currentForceDirX*16);
+}
+
+function drawTrails(c){
+  for(var i=0;i<trailParticles.length;i++){
+    var p = trailParticles[i];
+    c.globalAlpha = p.life*0.6;
+    c.fillStyle = p.color;
+    c.beginPath();
+    c.arc(p.x,p.y,Math.max(p.size*p.life,0.5),0,Math.PI*2);
+    c.fill();
+  }
+  c.globalAlpha = 1;
+}
+
+function drawRipples(c){
+  for(var i=0;i<rippleEffects.length;i++){
+    var r = rippleEffects[i];
+    c.beginPath();
+    c.arc(r.x,r.y,Math.max(r.radius,1),0,Math.PI*2);
+    c.strokeStyle = 'rgba(212,196,74,'+(r.life*0.35)+')';
+    c.lineWidth = 1.5;
+    c.stroke();
+  }
+}
+
+function drawScaleBar(c,w,h){
+  var barLen = 60;
+  var x = 24;
+  var y = h - 64;
+  c.strokeStyle = 'rgba(106,180,232,0.25)';
+  c.lineWidth = 1.5;
+  c.beginPath();
+  c.moveTo(x,y);c.lineTo(x+barLen,y);
+  c.moveTo(x,y-4);c.lineTo(x,y+4);
+  c.moveTo(x+barLen,y-4);c.lineTo(x+barLen,y+4);
+  c.stroke();
+  c.fillStyle = 'rgba(106,180,232,0.3)';
+  c.font = '9px "JetBrains Mono",monospace';
+  c.textAlign = 'center';
+  c.textBaseline = 'top';
+  c.fillText('1 m',x+barLen/2,y+6);
+}
+
+/* ==================== HUD ==================== */
+function updateHUD(){
+  var st = objStates[currentIdx];
+  var speed = Math.sqrt(st.vx*st.vx+st.vy*st.vy);
+  var accel = Math.sqrt(currentAccelX*currentAccelX+currentAccelY*currentAccelY);
+  var displayF = (currentForceMag/MAX_FORCE_INTERNAL)*MAX_FORCE_DISPLAY;
+
+  document.getElementById('hudForce').textContent = displayF.toFixed(1);
+  document.getElementById('hudVel').textContent = (speed*0.1).toFixed(2);
+  document.getElementById('hudAcc').textContent = (accel*0.1).toFixed(1);
+}
+
+/* ==================== 回声吉祥物 ==================== */
+function updateEchoMascot(force){
+  var newHint = '';
+  if(records.length>=REQUIRED_RECORDS){
+    newHint = t('hint.allDone');
+  }else if(isDragging && currentForceMag>5){
+    var obj = OBJECTS[currentIdx];
+    if(obj.physMass<6) newHint = t('hint.light');
+    else if(obj.physMass<20) newHint = t('hint.medium');
+    else newHint = t('hint.heavy');
+  }else if(hasPushedCurrent && currentEffort===0){
+    newHint = t('hint.afterPush');
+  }else if(currentEffort>0 && hasPushedCurrent){
+    newHint = t('hint.recorded');
+  }else{
+    newHint = t('hint.start');
+  }
+
+  if(force || newHint!==echoCurrentHint){
+    echoCurrentHint = newHint;
+    document.getElementById('echoText').textContent = newHint;
+  }
+
+  /* 微动画 - 浮动 */
+  var el = document.getElementById('echoMascot');
+  var baseY = 64;
+  var floatY = Math.sin(timeVal*1.5)*4;
+  el.style.bottom = (baseY+floatY)+'px';
+}
+
+/* ==================== 游戏循环 ==================== */
+function gameLoop(timestamp){
+  var dt = Math.min((timestamp-lastTimestamp)/1000,0.1);
+  lastTimestamp = timestamp;
+  timeVal += dt;
+
+  accumulator += dt;
+  var steps = 0;
+  while(accumulator>=PHYSICS_DT && steps<4){
+    updatePhysics(PHYSICS_DT);
+    accumulator -= PHYSICS_DT;
+    steps++;
+  }
+  if(steps===0 && accumulator>0){
+    updatePhysics(accumulator);
+    accumulator = 0;
+  }
+
+  updateParticles(dt);
+
+  /* 生成拖尾粒子 */
+  var st = objStates[currentIdx];
+  var speed = Math.sqrt(st.vx*st.vx+st.vy*st.vy);
+  if(speed>8 && Math.random()<speed*0.04){
+    spawnTrail(st.x,st.y,st.vx,st.vy);
+  }
+
+  /* 施力涟漪 */
+  if(isDragging && currentForceMag>MAX_FORCE_INTERNAL*0.3 && Math.random()<0.015){
+    spawnRipple(st.x,st.y,currentForceMag/MAX_FORCE_INTERNAL);
+  }
+
+  /* 相机跟随 */
+  var followSpeed = 3.5;
+  cam.x += (st.x-cam.x)*followSpeed*dt;
+  cam.y += (st.y-cam.y)*followSpeed*dt;
+
+  render();
+  updateHUD();
+  updateEchoMascot(false);
+
+  requestAnimationFrame(gameLoop);
+}
+
+/* ==================== 初始化 ==================== */
+function init(){
+  canvasEl = document.getElementById('simCanvas');
+  ctxRef = canvasEl.getContext('2d');
+  prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  initObjStates();
+  resizeCanvas();
+
+  buildObjectList();
+  buildEffortDots();
+  updateObjInfo();
+  updateEffortDots();
+  updateRecordBtn();
+  updateRecordList();
+  applyI18N();
+  setupInput();
+
+  cam.x = objStates[currentIdx].x;
+  cam.y = objStates[currentIdx].y;
+
+  lastTimestamp = performance.now();
+  requestAnimationFrame(gameLoop);
+}
+
+init();
+})();
+</script>
+</body>
+</html>

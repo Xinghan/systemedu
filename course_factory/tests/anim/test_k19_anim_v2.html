@@ -1,0 +1,1169 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=Inter:wght@400;500&family=Noto+Sans+SC:wght@400;700&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box;}
+html,body{width:100%;height:100vh;overflow:hidden;}
+body{background:var(--bg,#0c0e12);color:var(--text,#f6f6fc);font-family:'Inter','Noto Sans SC',sans-serif;}
+/* ── Outer: sidebar + main ── */
+.wrapper{display:flex;flex-direction:row;height:100vh;overflow:hidden;}
+.sidebar{width:200px;min-width:200px;max-width:200px;display:flex;flex-direction:column;gap:6px;padding:10px;background:rgba(0,0,0,0.5);border-right:1px solid rgba(255,181,156,0.15);overflow-y:auto;}
+.lang-btn{align-self:flex-start;flex-shrink:0;font-family:'Space Grotesk',sans-serif;font-size:10px;font-weight:700;padding:3px 8px;cursor:pointer;border:1px solid rgba(255,181,156,0.25);background:transparent;color:#ffb59c;letter-spacing:1px;}
+.lang-btn:hover{border-color:#ffb59c;background:rgba(255,181,156,0.1);}
+.sidebar h1{font-family:'Space Grotesk',sans-serif;font-size:13px;font-weight:700;color:var(--primary,#50ffb0);margin-top:4px;line-height:1.3;}
+.sidebar .sub{font-size:10px;color:var(--muted,#aaabb0);letter-spacing:0.06em;text-transform:uppercase;}
+.sidebar .frame-ind{font-family:'Space Grotesk',sans-serif;font-size:10px;color:var(--muted,#aaabb0);letter-spacing:0.1em;margin-top:4px;}
+.sidebar .guide-label{font-family:'Space Grotesk',sans-serif;font-size:9px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:var(--primary,#50ffb0);margin-top:8px;}
+.sidebar .guide-content{font-family:'Noto Sans SC',sans-serif;font-size:11px;color:rgba(255,255,255,0.85);line-height:1.5;}
+.sidebar .guide-content ul{padding-left:16px;margin:0;}
+.sidebar .guide-content li{margin-bottom:1px;}
+/* ── Main area: canvas + controls + hud ── */
+.anim-main{flex:1;display:flex;flex-direction:column;min-width:0;}
+.canvas-wrap{flex:1;min-height:0;position:relative;}
+canvas{width:100%;height:100%;display:block;}
+/* ── Controls + HUD ── */
+.controls{display:flex;justify-content:center;align-items:center;gap:12px;padding:6px 16px;}
+.ctrl-btn{font-family:'Space Grotesk',sans-serif;font-size:11px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;padding:5px 16px;border:none;cursor:pointer;color:var(--bg,#0c0e12);background:linear-gradient(135deg,var(--primary,#50ffb0),var(--primary-dim,#17df93));transition:transform 0.1s,box-shadow 0.2s;box-shadow:0 0 10px var(--glow-strong,rgba(80,255,176,0.3));}
+.ctrl-btn:hover{transform:scale(1.04);}
+.ctrl-btn:active{transform:scale(0.96);}
+.ctrl-btn.secondary{background:var(--glass,rgba(23,26,31,0.92));color:var(--muted,#aaabb0);box-shadow:none;backdrop-filter:blur(12px);}
+.ctrl-btn.secondary:hover{color:var(--primary,#50ffb0);}
+.hud{height:40px;display:flex;align-items:center;justify-content:space-around;background:rgba(0,0,0,0.55);backdrop-filter:blur(12px);padding:0 16px;}
+.hud-item{text-align:center;}
+.hud-label{font-family:'Space Grotesk',sans-serif;font-size:8px;letter-spacing:0.15em;text-transform:uppercase;color:var(--muted,#aaabb0);}
+.hud-val{font-family:'Space Grotesk',sans-serif;font-size:13px;font-weight:700;color:var(--primary,#50ffb0);}
+</style>
+</head>
+<body>
+<div class="wrapper">
+<!-- Sidebar: lang-btn, title, guide (completely separate from canvas) -->
+<div class="sidebar">
+<button class="lang-btn" id="langBtn">CN</button>
+<h1 id="title"></h1>
+<div class="sub" id="subtitle"></div>
+<div class="frame-ind" id="frameIndicator"></div>
+<div class="guide-label" id="guideTitle"></div>
+<div class="guide-content" id="guideContent"></div>
+</div>
+<!-- Main: canvas fills all space, nothing overlaps -->
+<div class="anim-main">
+<div class="canvas-wrap"><canvas id="c"></canvas></div>
+<div class="controls">
+<button class="ctrl-btn secondary" id="btnPrev"></button>
+<button class="ctrl-btn" id="btnPlay"></button>
+<button class="ctrl-btn secondary" id="btnNext"></button>
+</div>
+<div class="hud">
+<div class="hud-item"><div class="hud-label" id="hudL1"></div><div class="hud-val" id="hudV1"></div></div>
+<div class="hud-item"><div class="hud-label" id="hudL2"></div><div class="hud-val" id="hudV2"></div></div>
+<div class="hud-item"><div class="hud-label" id="hudL3"></div><div class="hud-val" id="hudV3"></div></div>
+<div class="hud-item"><div class="hud-label" id="hudL4"></div><div class="hud-val" id="hudV4"></div></div>
+</div>
+</div>
+</div>
+
+<!-- Runtime (shared skeleton) -->
+<script src="animation_runtime.js"></script>
+
+<!-- Content: K19 Newton's Second Law — F=ma Intuition -->
+<script>
+// ============================================================
+// K19: F=ma — Newton's Second Law Intuition
+// One concept: same force pushes light object fast, heavy object slow
+// Core question: why does the light cart accelerate faster?
+//
+// F0: Title — "NEWTON'S SECOND LAW" with F=ma, two carts, question
+// F1: Same force (10N), different mass (1kg vs 5kg) — race
+// F2: Same mass (2kg), different force (5N vs 20N) — bar chart
+// F3: The equation visualized — F = m x a balance
+// F4: Rocket — 200g, 10N thrust, a=(10-1.96)/0.2 = 40 m/s^2
+// ============================================================
+
+// ── Web Audio (muted by default) ──
+var soundMuted = true;
+var _audioCtx = null;
+function _getAudioCtx() {
+  if (!_audioCtx) { try { _audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch(e) { /* noop */ } }
+  return _audioCtx;
+}
+function _playTone(freq, dur, vol) {
+  if (soundMuted) return;
+  var ac = _getAudioCtx(); if (!ac) return;
+  var osc = ac.createOscillator();
+  var gain = ac.createGain();
+  osc.type = 'sine'; osc.frequency.value = freq;
+  gain.gain.setValueAtTime(vol || 0.08, ac.currentTime);
+  gain.gain.exponentialRampToValueAtTime(0.001, ac.currentTime + dur);
+  osc.connect(gain); gain.connect(ac.destination);
+  osc.start(); osc.stop(ac.currentTime + dur);
+}
+
+// ── Particle system ──
+var _particles = [];
+function _spawnParticles(x, y, count, color, spread, life) {
+  for (var i = 0; i < count; i++) {
+    var angle = Math.random() * Math.PI * 2;
+    var speed = 0.5 + Math.random() * (spread || 2);
+    _particles.push({
+      x: x, y: y,
+      vx: Math.cos(angle) * speed,
+      vy: Math.sin(angle) * speed,
+      life: life || 60,
+      maxLife: life || 60,
+      color: color,
+      r: 1 + Math.random() * 2
+    });
+  }
+}
+function _updateParticles(ctx2) {
+  for (var i = _particles.length - 1; i >= 0; i--) {
+    var p = _particles[i];
+    p.x += p.vx; p.y += p.vy;
+    p.vy += 0.02;
+    p.life--;
+    if (p.life <= 0) { _particles.splice(i, 1); continue; }
+    var alpha = p.life / p.maxLife;
+    ctx2.globalAlpha = alpha * 0.8;
+    ctx2.fillStyle = p.color;
+    ctx2.beginPath(); ctx2.arc(p.x, p.y, p.r * alpha, 0, Math.PI * 2); ctx2.fill();
+  }
+  ctx2.globalAlpha = 1;
+}
+
+// ── Screen shake ──
+var _shakeAmount = 0;
+var _shakeDuration = 0;
+function _triggerShake(amount, dur) { _shakeAmount = amount; _shakeDuration = dur || 15; }
+
+// ── Animation tick counter (for idle pulse, easing) ──
+var _tick = 0;
+var _frameStartTick = 0;
+
+// ── Stars for parallax background ──
+var _stars = [];
+(function() {
+  for (var i = 0; i < 80; i++) {
+    _stars.push({
+      x: Math.random(), y: Math.random(),
+      r: 0.3 + Math.random() * 1.2,
+      speed: 0.1 + Math.random() * 0.4,
+      brightness: 0.3 + Math.random() * 0.7
+    });
+  }
+})();
+
+// ── CONFIG ──
+var CONFIG = {
+  style: 'ares_mission',
+  totalFrames: 5,
+
+  i18n: {
+    title:        {en:"NEWTON'S SECOND LAW",                  cn:'\u725b\u987f\u7b2c\u4e8c\u5b9a\u5f8b'},
+    subtitle:     {en:'F = m x a',                             cn:'F = m x a'},
+
+    f0eq:         {en:'F = m x a',                             cn:'F = m x a'},
+    f0q:          {en:'Same push -- why does the light cart\naccelerate faster?', cn:'\u540c\u6837\u7528\u529b\u63a8\uff0c\u4e3a\u4ec0\u4e48\u8f7b\u7684\u5c0f\u8f66\n\u8d77\u6b65\u5feb\u3001\u91cd\u7684\u5c0f\u8f66\u8d77\u6b65\u6162\uff1f'},
+
+    f1title:      {en:'SAME FORCE, DIFFERENT MASS',            cn:'\u540c\u6837\u7684\u529b\uff0c\u4e0d\u540c\u7684\u8d28\u91cf'},
+    f1light:      {en:'Light cart  1 kg',                      cn:'\u8f7b\u8f66  1 kg'},
+    f1heavy:      {en:'Heavy cart  5 kg',                      cn:'\u91cd\u8f66  5 kg'},
+    f1force:      {en:'Force = 10 N',                          cn:'\u529b = 10 N'},
+    f1calc1:      {en:'a = 10/1 = 10 m/s\u00b2',              cn:'a = 10/1 = 10 m/s\u00b2'},
+    f1calc2:      {en:'a = 10/5 = 2 m/s\u00b2',               cn:'a = 10/5 = 2 m/s\u00b2'},
+    f1insight:    {en:'Mass 5x larger -- acceleration 5x smaller', cn:'\u8d28\u91cf\u5927 5 \u500d -- \u52a0\u901f\u5ea6\u5c0f 5 \u500d'},
+    f1gauge1:     {en:'a = 10',                                cn:'a = 10'},
+    f1gauge2:     {en:'a = 2',                                 cn:'a = 2'},
+
+    f2title:      {en:'SAME MASS, DIFFERENT FORCE',            cn:'\u540c\u6837\u7684\u8d28\u91cf\uff0c\u4e0d\u540c\u7684\u529b'},
+    f2mass:       {en:'Mass = 2 kg',                           cn:'\u8d28\u91cf = 2 kg'},
+    f2small:      {en:'Gentle push  5 N',                      cn:'\u8f7b\u63a8  5 N'},
+    f2big:        {en:'Strong push  20 N',                     cn:'\u91cd\u63a8  20 N'},
+    f2calc1:      {en:'a = 5/2 = 2.5 m/s\u00b2',              cn:'a = 5/2 = 2.5 m/s\u00b2'},
+    f2calc2:      {en:'a = 20/2 = 10 m/s\u00b2',              cn:'a = 20/2 = 10 m/s\u00b2'},
+    f2insight:    {en:'Force 4x larger -- acceleration 4x larger', cn:'\u529b\u5927 4 \u500d -- \u52a0\u901f\u5ea6\u5927 4 \u500d'},
+    f2accel1:     {en:'2.5 m/s\u00b2',                         cn:'2.5 m/s\u00b2'},
+    f2accel2:     {en:'10 m/s\u00b2',                          cn:'10 m/s\u00b2'},
+    f2barLabel:   {en:'ACCELERATION COMPARISON',               cn:'\u52a0\u901f\u5ea6\u5bf9\u6bd4'},
+
+    f3title:      {en:'THE EQUATION VISUALIZED',               cn:'\u516c\u5f0f\u53ef\u89c6\u5316'},
+    f3eq:         {en:'F  =  m  x  a',                         cn:'F  =  m  x  a'},
+    f3case1:      {en:'10N = 1kg x 10',                        cn:'10N = 1kg x 10'},
+    f3case2:      {en:'10N = 5kg x 2',                         cn:'10N = 5kg x 2'},
+    f3case3:      {en:'20N = 2kg x 10',                        cn:'20N = 2kg x 10'},
+    f3forceLabel: {en:'FORCE',                                 cn:'\u529b'},
+    f3massLabel:  {en:'MASS',                                  cn:'\u8d28\u91cf'},
+    f3accelLabel: {en:'ACCEL',                                 cn:'\u52a0\u901f\u5ea6'},
+
+    f4title:      {en:'ROCKET APPLICATION',                    cn:'\u706b\u7bad\u5e94\u7528'},
+    f4mass:       {en:'m = 200 g = 0.2 kg',                    cn:'m = 200 g = 0.2 kg'},
+    f4thrust:     {en:'Thrust = 10 N',                         cn:'\u63a8\u529b = 10 N'},
+    f4weight:     {en:'Weight = mg = 0.2x9.8 = 1.96 N',       cn:'\u91cd\u529b = mg = 0.2x9.8 = 1.96 N'},
+    f4net:        {en:'Net F = 10 - 1.96 = 8.04 N',            cn:'\u5408\u529b = 10 - 1.96 = 8.04 N'},
+    f4accel:      {en:'a = 8.04 / 0.2 = 40.2 m/s\u00b2',      cn:'a = 8.04 / 0.2 = 40.2 m/s\u00b2'},
+    f4burn:       {en:'As fuel burns, mass drops,\nacceleration keeps increasing!', cn:'\u71c3\u6599\u71c3\u70e7\u540e\u8d28\u91cf\u51cf\u5c11\uff0c\n\u52a0\u901f\u5ea6\u8d8a\u6765\u8d8a\u5927\uff01'},
+
+    hudForce:     {en:'FORCE(N)',                              cn:'\u529b(N)'},
+    hudMass:      {en:'MASS(kg)',                               cn:'\u8d28\u91cf(kg)'},
+    hudAccel:     {en:'ACCEL(m/s\u00b2)',                      cn:'\u52a0\u901f\u5ea6(m/s\u00b2)'},
+    hudFrame:     {en:'FRAME',                                 cn:'\u573a\u666f'},
+
+    frameTitle:   {en:'Title',                                 cn:'\u6807\u9898'},
+    frameSameF:   {en:'Same Force',                            cn:'\u7b49\u529b'},
+    frameSameM:   {en:'Same Mass',                             cn:'\u7b49\u8d28\u91cf'},
+    frameEq:      {en:'Equation',                              cn:'\u516c\u5f0f'},
+    frameRocket:  {en:'Rocket',                                cn:'\u706b\u7bad'},
+
+    guideTitle:   {en:'KEY IDEAS',                             cn:'\u6838\u5fc3\u8981\u70b9'},
+    g1:           {en:'a = F/m: acceleration = force / mass',  cn:'a = F/m\uff1a\u52a0\u901f\u5ea6 = \u529b / \u8d28\u91cf'},
+    g2:           {en:'Same force: lighter object accelerates faster', cn:'\u540c\u6837\u7684\u529b\uff1a\u8f7b\u7269\u4f53\u52a0\u901f\u5feb'},
+    g3:           {en:'Same mass: bigger force accelerates faster', cn:'\u540c\u6837\u8d28\u91cf\uff1a\u529b\u8d8a\u5927\u52a0\u901f\u8d8a\u5feb'},
+    g4:           {en:'Rocket: as fuel burns mass drops, accel rises', cn:'\u706b\u7bad\u71c3\u6599\u71c3\u70e7\u2192\u8d28\u91cf\u51cf\u5c11\u2192\u52a0\u901f\u5ea6\u589e\u5927'},
+  },
+
+  hudLabels: ['hudForce', 'hudMass', 'hudAccel', 'hudFrame'],
+  hudValues: [
+    ['--',     '--',       '--',        'frameTitle'],
+    ['10 N',   '1 / 5 kg', '10 / 2',   'frameSameF'],
+    ['5 / 20', '2 kg',     '2.5 / 10', 'frameSameM'],
+    ['F',      'm',        'F/m',       'frameEq'],
+    ['10 N',   '0.2 kg',   '40.2',     'frameRocket'],
+  ],
+
+  guideTitle: 'guideTitle',
+  guideItems: ['g1', 'g2', 'g3', 'g4'],
+};
+
+// ============================================================
+// HELPER: draw a cart (rectangle + wheels + gradient body)
+// cx, cy = center-bottom of body, w = width, h = height, color
+// ============================================================
+function _drawCart(ctx2, cx, cy, w, h, color, massText) {
+  // Body gradient
+  var bg = ctx2.createLinearGradient(cx - w/2, cy - h, cx + w/2, cy);
+  bg.addColorStop(0, color);
+  bg.addColorStop(1, _darken(color, 0.6));
+  ctx2.fillStyle = bg;
+  ctx2.fillRect(cx - w/2, cy - h, w, h);
+
+  // Windshield highlight
+  ctx2.fillStyle = 'rgba(255,255,255,0.12)';
+  ctx2.fillRect(cx + w*0.1, cy - h + 3, w*0.22, h - 6);
+
+  // Outline glow
+  ctx2.strokeStyle = _alpha(color, 0.5);
+  ctx2.lineWidth = 1;
+  ctx2.strokeRect(cx - w/2, cy - h, w, h);
+
+  // Ambient glow underneath
+  var glowGrad = ctx2.createRadialGradient(cx, cy, 0, cx, cy, w * 0.6);
+  glowGrad.addColorStop(0, _alpha(color, 0.15));
+  glowGrad.addColorStop(1, 'rgba(0,0,0,0)');
+  ctx2.fillStyle = glowGrad;
+  ctx2.fillRect(cx - w*0.6, cy - 4, w*1.2, 12);
+
+  // Wheels
+  var wheelR = Math.min(h * 0.32, 7);
+  ctx2.fillStyle = '#1a1a1a';
+  ctx2.beginPath(); ctx2.arc(cx - w*0.3, cy, wheelR, 0, Math.PI*2); ctx2.fill();
+  ctx2.beginPath(); ctx2.arc(cx + w*0.3, cy, wheelR, 0, Math.PI*2); ctx2.fill();
+  ctx2.strokeStyle = '#555';
+  ctx2.lineWidth = 1;
+  ctx2.beginPath(); ctx2.arc(cx - w*0.3, cy, wheelR, 0, Math.PI*2); ctx2.stroke();
+  ctx2.beginPath(); ctx2.arc(cx + w*0.3, cy, wheelR, 0, Math.PI*2); ctx2.stroke();
+
+  // Mass text on body
+  if (massText) {
+    ctx2.font = "bold 9px 'Space Grotesk',sans-serif";
+    ctx2.fillStyle = 'rgba(255,255,255,0.85)';
+    ctx2.textAlign = 'center';
+    ctx2.textBaseline = 'middle';
+    ctx2.fillText(massText, cx, cy - h/2);
+  }
+}
+
+function _darken(hex, factor) {
+  var r = parseInt(hex.slice(1,3),16), g = parseInt(hex.slice(3,5),16), b = parseInt(hex.slice(5,7),16);
+  return 'rgb(' + Math.floor(r*factor) + ',' + Math.floor(g*factor) + ',' + Math.floor(b*factor) + ')';
+}
+function _alpha(color, a) {
+  if (color.charAt(0) === '#') {
+    var r2 = parseInt(color.slice(1,3),16), g2 = parseInt(color.slice(3,5),16), b2 = parseInt(color.slice(5,7),16);
+    return 'rgba(' + r2 + ',' + g2 + ',' + b2 + ',' + a + ')';
+  }
+  return color;
+}
+
+// ============================================================
+// HELPER: draw force arrow (thick with label)
+// ============================================================
+function _drawForceArrow(ctx2, x1, y1, x2, y2, label, color, lw) {
+  lw = lw || 4;
+  var angle = Math.atan2(y2 - y1, x2 - x1);
+  var hs = lw * 2.5;
+  // Arrow shaft
+  ctx2.strokeStyle = color;
+  ctx2.lineWidth = lw;
+  ctx2.beginPath(); ctx2.moveTo(x1, y1); ctx2.lineTo(x2, y2); ctx2.stroke();
+  // Arrowhead
+  ctx2.fillStyle = color;
+  ctx2.beginPath();
+  ctx2.moveTo(x2, y2);
+  ctx2.lineTo(x2 - hs * Math.cos(angle - 0.45), y2 - hs * Math.sin(angle - 0.45));
+  ctx2.lineTo(x2 - hs * Math.cos(angle + 0.45), y2 - hs * Math.sin(angle + 0.45));
+  ctx2.closePath();
+  ctx2.fill();
+  // Arrow glow
+  ctx2.shadowColor = color; ctx2.shadowBlur = 6;
+  ctx2.fill();
+  ctx2.shadowBlur = 0;
+  // Label
+  if (label) {
+    ctx2.font = "bold 11px 'Space Grotesk',sans-serif";
+    ctx2.fillStyle = color;
+    ctx2.textAlign = 'center';
+    ctx2.textBaseline = 'bottom';
+    var mx = (x1 + x2) / 2, my = Math.min(y1, y2) - 8;
+    ctx2.fillText(label, mx, my);
+  }
+}
+
+// ============================================================
+// HELPER: draw rocket with flame and physics arrows
+// ============================================================
+function _drawRocket(ctx2, cx, baseY, rh, rw, flameIntensity, bodyLabel) {
+  var noseH = rh * 0.25, bodyH = rh * 0.55, engineH = rh * 0.2;
+  var noseTop = baseY - rh;
+
+  // Nose cone
+  var noseGrad = ctx2.createLinearGradient(cx - rw/2, noseTop, cx + rw/2, noseTop);
+  noseGrad.addColorStop(0, '#cc3333');
+  noseGrad.addColorStop(0.5, '#ff4444');
+  noseGrad.addColorStop(1, '#aa2222');
+  ctx2.fillStyle = noseGrad;
+  ctx2.beginPath();
+  ctx2.moveTo(cx, noseTop);
+  ctx2.lineTo(cx - rw/2, noseTop + noseH);
+  ctx2.lineTo(cx + rw/2, noseTop + noseH);
+  ctx2.closePath();
+  ctx2.fill();
+
+  // Body
+  var bGrad = ctx2.createLinearGradient(cx - rw/2, 0, cx + rw/2, 0);
+  bGrad.addColorStop(0, '#a0a8b8');
+  bGrad.addColorStop(0.3, '#e0e4ec');
+  bGrad.addColorStop(0.7, '#e0e4ec');
+  bGrad.addColorStop(1, '#a0a8b8');
+  ctx2.fillStyle = bGrad;
+  ctx2.fillRect(cx - rw/2, noseTop + noseH, rw, bodyH);
+
+  // Window
+  ctx2.fillStyle = '#3388cc';
+  ctx2.beginPath(); ctx2.arc(cx, noseTop + noseH + bodyH*0.3, rw*0.18, 0, Math.PI*2); ctx2.fill();
+  ctx2.strokeStyle = '#aaa'; ctx2.lineWidth = 1;
+  ctx2.beginPath(); ctx2.arc(cx, noseTop + noseH + bodyH*0.3, rw*0.18, 0, Math.PI*2); ctx2.stroke();
+
+  // Engine
+  ctx2.fillStyle = '#444';
+  ctx2.fillRect(cx - rw*0.6, noseTop + noseH + bodyH, rw*1.2, engineH);
+
+  // Fins
+  ctx2.fillStyle = '#cc3333';
+  ctx2.beginPath();
+  ctx2.moveTo(cx - rw/2, noseTop + noseH + bodyH*0.6);
+  ctx2.lineTo(cx - rw, baseY);
+  ctx2.lineTo(cx - rw/2, baseY);
+  ctx2.closePath();
+  ctx2.fill();
+  ctx2.beginPath();
+  ctx2.moveTo(cx + rw/2, noseTop + noseH + bodyH*0.6);
+  ctx2.lineTo(cx + rw, baseY);
+  ctx2.lineTo(cx + rw/2, baseY);
+  ctx2.closePath();
+  ctx2.fill();
+
+  // Flame
+  if (flameIntensity > 0) {
+    var flicker = 1 + Math.sin(_tick * 0.3) * 0.15;
+    var flameH = (20 + flameIntensity * 50) * flicker;
+    var flameW = rw * 0.5;
+    var fGrad = ctx2.createLinearGradient(cx, baseY, cx, baseY + flameH);
+    fGrad.addColorStop(0, 'rgba(255,220,80,0.95)');
+    fGrad.addColorStop(0.4, 'rgba(255,120,20,0.7)');
+    fGrad.addColorStop(1, 'rgba(255,50,20,0)');
+    ctx2.fillStyle = fGrad;
+    ctx2.beginPath();
+    ctx2.moveTo(cx - flameW, baseY);
+    ctx2.quadraticCurveTo(cx - flameW*0.5, baseY + flameH*0.6, cx, baseY + flameH);
+    ctx2.quadraticCurveTo(cx + flameW*0.5, baseY + flameH*0.6, cx + flameW, baseY);
+    ctx2.closePath();
+    ctx2.fill();
+    // Inner core
+    var iGrad = ctx2.createLinearGradient(cx, baseY, cx, baseY + flameH*0.45);
+    iGrad.addColorStop(0, 'rgba(255,255,230,0.95)');
+    iGrad.addColorStop(1, 'rgba(255,200,80,0)');
+    ctx2.fillStyle = iGrad;
+    ctx2.beginPath();
+    ctx2.moveTo(cx - flameW*0.35, baseY);
+    ctx2.quadraticCurveTo(cx, baseY + flameH*0.35, cx + flameW*0.35, baseY);
+    ctx2.closePath();
+    ctx2.fill();
+    // Flame glow
+    ctx2.shadowColor = 'rgba(255,150,30,0.4)';
+    ctx2.shadowBlur = 18;
+    ctx2.fill();
+    ctx2.shadowBlur = 0;
+  }
+
+  // Body label
+  if (bodyLabel) {
+    ctx2.font = "bold 9px 'Space Grotesk',sans-serif";
+    ctx2.fillStyle = '#333';
+    ctx2.textAlign = 'center';
+    ctx2.textBaseline = 'middle';
+    ctx2.fillText(bodyLabel, cx, noseTop + noseH + bodyH*0.65);
+  }
+}
+
+// ============================================================
+// HELPER: draw ground line
+// ============================================================
+function _drawGround(ctx2, gW, y) {
+  ctx2.strokeStyle = 'rgba(255,255,255,0.15)';
+  ctx2.lineWidth = 2;
+  ctx2.beginPath();
+  ctx2.moveTo(20, y);
+  ctx2.lineTo(gW - 20, y);
+  ctx2.stroke();
+  // Subtle gradient below ground
+  var gGrad = ctx2.createLinearGradient(0, y, 0, y + 10);
+  gGrad.addColorStop(0, 'rgba(255,255,255,0.04)');
+  gGrad.addColorStop(1, 'rgba(0,0,0,0)');
+  ctx2.fillStyle = gGrad;
+  ctx2.fillRect(20, y, gW - 40, 10);
+}
+
+// ============================================================
+// HELPER: draw a gauge (speedometer arc)
+// cx,cy = center, radius, value (0-1 fraction), label
+// ============================================================
+function _drawGauge(ctx2, cx, cy, radius, fraction, label, color) {
+  // Background arc
+  ctx2.strokeStyle = 'rgba(255,255,255,0.08)';
+  ctx2.lineWidth = 4;
+  ctx2.beginPath();
+  ctx2.arc(cx, cy, radius, Math.PI * 0.8, Math.PI * 2.2);
+  ctx2.stroke();
+  // Value arc with easing
+  var eased = fraction;
+  ctx2.strokeStyle = color;
+  ctx2.lineWidth = 4;
+  ctx2.shadowColor = color; ctx2.shadowBlur = 8;
+  ctx2.beginPath();
+  ctx2.arc(cx, cy, radius, Math.PI * 0.8, Math.PI * 0.8 + eased * Math.PI * 1.4);
+  ctx2.stroke();
+  ctx2.shadowBlur = 0;
+  // Label
+  ctx2.font = "bold 10px 'Space Grotesk',sans-serif";
+  ctx2.fillStyle = color;
+  ctx2.textAlign = 'center';
+  ctx2.textBaseline = 'middle';
+  ctx2.fillText(label, cx, cy + 3);
+}
+
+// ============================================================
+// HELPER: draw bar chart
+// ============================================================
+function _drawBar(ctx2, x, y, maxH, fraction, barW, color, label) {
+  var bh = maxH * fraction;
+  // Bar gradient
+  var bGrad = ctx2.createLinearGradient(x, y, x, y - bh);
+  bGrad.addColorStop(0, _darken(color.replace('#','#'), 0.5));
+  bGrad.addColorStop(1, color);
+  ctx2.fillStyle = bGrad;
+  ctx2.fillRect(x - barW/2, y - bh, barW, bh);
+  // Glow
+  ctx2.shadowColor = color; ctx2.shadowBlur = 10;
+  ctx2.fillRect(x - barW/2, y - bh, barW, bh);
+  ctx2.shadowBlur = 0;
+  // Outline
+  ctx2.strokeStyle = _alpha(color, 0.6);
+  ctx2.lineWidth = 1;
+  ctx2.strokeRect(x - barW/2, y - bh, barW, bh);
+  // Label
+  if (label) {
+    ctx2.font = "bold 10px 'Space Grotesk',sans-serif";
+    ctx2.fillStyle = color;
+    ctx2.textAlign = 'center';
+    ctx2.textBaseline = 'bottom';
+    ctx2.fillText(label, x, y - bh - 6);
+  }
+}
+
+// ============================================================
+// HELPER: draw motion lines behind moving object
+// ============================================================
+function _drawMotionLines(ctx2, x, y, count, len, color) {
+  ctx2.strokeStyle = _alpha(color, 0.35);
+  ctx2.lineWidth = 1.5;
+  for (var i = 0; i < count; i++) {
+    var ly = y - 6 + i * 4;
+    ctx2.beginPath();
+    ctx2.moveTo(x, ly);
+    ctx2.lineTo(x - len - Math.random() * 8, ly);
+    ctx2.stroke();
+  }
+}
+
+// ============================================================
+// HELPER: draw an insight box at bottom
+// ============================================================
+function _drawInsightBox(ctx2, cx, y, text, maxW, color) {
+  var P2 = AnimRuntime.PAL;
+  var bw = Math.min(maxW || 340, 360);
+  // Idle pulse glow
+  var pulseA = 0.06 + Math.sin(_tick * 0.04) * 0.03;
+  ctx2.fillStyle = _alpha(color || P2.primary, pulseA);
+  ctx2.fillRect(cx - bw/2, y, bw, 30);
+  ctx2.strokeStyle = color || P2.primary;
+  ctx2.lineWidth = 1;
+  ctx2.strokeRect(cx - bw/2, y, bw, 30);
+  ctx2.font = "bold 12px 'Noto Sans SC',sans-serif";
+  ctx2.fillStyle = color || P2.primary;
+  ctx2.textAlign = 'center';
+  ctx2.textBaseline = 'middle';
+  ctx2.fillText(text, cx, y + 15);
+}
+
+// ============================================================
+// 2-LAYER PARALLAX BACKGROUND
+// ============================================================
+function drawBg(ctx2, rW, rH) {
+  // Base gradient
+  var g = ctx2.createLinearGradient(0, 0, 0, rH);
+  var P2 = AnimRuntime.PAL;
+  g.addColorStop(0, P2.bg);
+  g.addColorStop(1, P2.bg2);
+  ctx2.fillStyle = g;
+  ctx2.fillRect(0, 0, rW, rH);
+
+  // Layer 1: distant grid (slow drift)
+  var drift1 = (_tick * 0.08) % 40;
+  ctx2.strokeStyle = 'rgba(255,255,255,0.02)';
+  ctx2.lineWidth = 0.5;
+  for (var gx = -drift1; gx < rW; gx += 40) {
+    ctx2.beginPath(); ctx2.moveTo(gx, 0); ctx2.lineTo(gx, rH); ctx2.stroke();
+  }
+  for (var gy = 0; gy < rH; gy += 40) {
+    ctx2.beginPath(); ctx2.moveTo(0, gy); ctx2.lineTo(rW, gy); ctx2.stroke();
+  }
+
+  // Layer 2: star field (faster drift)
+  var drift2 = _tick * 0.15;
+  for (var si = 0; si < _stars.length; si++) {
+    var st = _stars[si];
+    var sx = ((st.x * rW + drift2 * st.speed) % (rW + 20)) - 10;
+    var sy = st.y * rH;
+    var twinkle = st.brightness * (0.7 + 0.3 * Math.sin(_tick * 0.05 + si));
+    ctx2.globalAlpha = twinkle;
+    ctx2.fillStyle = '#ffffff';
+    ctx2.beginPath(); ctx2.arc(sx, sy, st.r, 0, Math.PI * 2); ctx2.fill();
+  }
+  ctx2.globalAlpha = 1;
+}
+
+// ============================================================
+// FRAME ELEMENTS
+// ============================================================
+
+function getFrameElements(f, W, H) {
+  var t = AnimRuntime.t;
+  var P = AnimRuntime.PAL;
+  var cx = W / 2, cy = H / 2;
+
+  // ── Frame 0: Title ──
+  if (f === 0) {
+    return [
+      {id:'maintitle', type:'label', text:"NEWTON'S SECOND LAW", x:cx, y:cy - 85, color:P.muted, size:11, align:'center', bold:true},
+      {id:'eq', type:'label', text:t('f0eq'), x:cx, y:cy - 50, color:P.primary, size:38, align:'center', glow:P.glowStrong, bold:true},
+      {id:'sub0', type:'label', text:t('subtitle'), x:cx, y:cy - 15, color:P.muted, size:12, align:'center'},
+      {id:'q0', type:'custom', x:0, y:0, draw:function(ctx2) {
+        var P2 = AnimRuntime.PAL;
+        // Core question
+        var lines = t('f0q').split('\n');
+        ctx2.font = "14px 'Noto Sans SC',sans-serif";
+        ctx2.fillStyle = P2.text;
+        ctx2.textAlign = 'center';
+        ctx2.textBaseline = 'middle';
+        lines.forEach(function(line, i) {
+          ctx2.fillText(line, cx, cy + 20 + i * 22);
+        });
+
+        // Two carts below the question
+        var carY = H * 0.82;
+        _drawGround(ctx2, W, carY + 8);
+
+        // Light cart (small, green) with idle pulse
+        var pulse1 = 1 + Math.sin(_tick * 0.06) * 0.03;
+        ctx2.save();
+        ctx2.translate(cx - 100, 0);
+        ctx2.scale(pulse1, pulse1);
+        ctx2.translate(-(cx - 100), 0);
+        _drawCart(ctx2, cx - 100, carY, 36, 18, '#33cc66', '1kg');
+        ctx2.restore();
+
+        ctx2.font = "9px 'Space Grotesk',sans-serif";
+        ctx2.fillStyle = P2.muted;
+        ctx2.textAlign = 'center';
+
+        // Heavy cart (big, red) with idle pulse
+        var pulse2 = 1 + Math.sin(_tick * 0.06 + 1) * 0.03;
+        ctx2.save();
+        ctx2.translate(cx + 100, 0);
+        ctx2.scale(pulse2, pulse2);
+        ctx2.translate(-(cx + 100), 0);
+        _drawCart(ctx2, cx + 100, carY, 70, 30, '#cc4444', '5kg');
+        ctx2.restore();
+
+        // Ambient glow under carts
+        var glowG = ctx2.createRadialGradient(cx, carY, 0, cx, carY, 200);
+        glowG.addColorStop(0, _alpha(P2.primary, 0.04));
+        glowG.addColorStop(1, 'rgba(0,0,0,0)');
+        ctx2.fillStyle = glowG;
+        ctx2.fillRect(cx - 200, carY - 20, 400, 50);
+      }},
+    ];
+  }
+
+  // ── Frame 1: Same force (10N), different mass (1kg vs 5kg) ──
+  if (f === 1) {
+    return [
+      {id:'f1t', type:'label', text:t('f1title'), x:cx, y:22, color:P.primary, size:16, align:'center', bold:true},
+      {id:'f1force', type:'label', text:t('f1force'), x:cx, y:46, color:P.tertiary, size:12, align:'center'},
+      {id:'f1vis', type:'custom', x:0, y:0, draw:function(ctx2) {
+        var P2 = AnimRuntime.PAL;
+        var topY = H * 0.32;
+        var botY = H * 0.64;
+
+        // ── Top row: light cart (1 kg) ──
+        _drawGround(ctx2, W, topY + 8);
+        _drawCart(ctx2, cx - 80, topY, 36, 18, '#33cc66', '1kg');
+
+        // Force arrow
+        _drawForceArrow(ctx2, cx - 150, topY - 9, cx - 102, topY - 9, '10 N', P2.tertiary, 4);
+
+        // Label
+        ctx2.font = "bold 11px 'Noto Sans SC',sans-serif";
+        ctx2.fillStyle = '#33cc66';
+        ctx2.textAlign = 'left';
+        ctx2.fillText(t('f1light'), cx - 100, topY - 28);
+
+        // Motion lines (long -- fast acceleration)
+        _drawMotionLines(ctx2, cx + 60, topY - 4, 4, 55, '#33cc66');
+
+        // Ghost cart at far destination
+        ctx2.globalAlpha = 0.3;
+        _drawCart(ctx2, cx + 110, topY, 36, 18, '#33cc66');
+        ctx2.globalAlpha = 1;
+
+        // Gauge for acceleration
+        _drawGauge(ctx2, cx + 180, topY - 4, 20, 1.0, t('f1gauge1'), '#33cc66');
+
+        // Calculation box
+        ctx2.fillStyle = 'rgba(51,204,102,0.08)';
+        ctx2.fillRect(cx + 220, topY - 20, 170, 26);
+        ctx2.strokeStyle = '#33cc66';
+        ctx2.lineWidth = 1;
+        ctx2.strokeRect(cx + 220, topY - 20, 170, 26);
+        ctx2.font = "bold 11px 'Space Grotesk',sans-serif";
+        ctx2.fillStyle = '#33cc66';
+        ctx2.textAlign = 'left';
+        ctx2.fillText(t('f1calc1'), cx + 228, topY - 4);
+
+        // ── Bottom row: heavy cart (5 kg) ──
+        _drawGround(ctx2, W, botY + 8);
+        _drawCart(ctx2, cx - 80, botY, 70, 30, '#cc4444', '5kg');
+
+        // Same force arrow
+        _drawForceArrow(ctx2, cx - 165, botY - 15, cx - 118, botY - 15, '10 N', P2.tertiary, 4);
+
+        // Label
+        ctx2.font = "bold 11px 'Noto Sans SC',sans-serif";
+        ctx2.fillStyle = '#cc4444';
+        ctx2.textAlign = 'left';
+        ctx2.fillText(t('f1heavy'), cx - 118, botY - 40);
+
+        // Short motion lines (slow)
+        _drawMotionLines(ctx2, cx - 10, botY - 10, 3, 18, '#cc4444');
+
+        // Ghost cart (barely moved)
+        ctx2.globalAlpha = 0.3;
+        _drawCart(ctx2, cx + 20, botY, 70, 30, '#cc4444');
+        ctx2.globalAlpha = 1;
+
+        // Gauge for acceleration
+        _drawGauge(ctx2, cx + 180, botY - 4, 20, 0.2, t('f1gauge2'), '#cc4444');
+
+        // Calculation box
+        ctx2.fillStyle = 'rgba(204,68,68,0.08)';
+        ctx2.fillRect(cx + 220, botY - 20, 170, 26);
+        ctx2.strokeStyle = '#cc4444';
+        ctx2.lineWidth = 1;
+        ctx2.strokeRect(cx + 220, botY - 20, 170, 26);
+        ctx2.font = "bold 11px 'Space Grotesk',sans-serif";
+        ctx2.fillStyle = '#cc4444';
+        ctx2.textAlign = 'left';
+        ctx2.fillText(t('f1calc2'), cx + 228, botY - 4);
+
+        // Insight box
+        _drawInsightBox(ctx2, cx, H * 0.86, t('f1insight'), 360, P2.primary);
+      }},
+    ];
+  }
+
+  // ── Frame 2: Same mass (2kg), different force (5N vs 20N) ──
+  if (f === 2) {
+    return [
+      {id:'f2t', type:'label', text:t('f2title'), x:cx, y:22, color:P.primary, size:16, align:'center', bold:true},
+      {id:'f2mass', type:'label', text:t('f2mass'), x:cx, y:46, color:P.muted, size:12, align:'center'},
+      {id:'f2vis', type:'custom', x:0, y:0, draw:function(ctx2) {
+        var P2 = AnimRuntime.PAL;
+        var topY = H * 0.30;
+        var botY = H * 0.58;
+
+        // ── Top: small force 5N ──
+        _drawGround(ctx2, W, topY + 8);
+        _drawCart(ctx2, cx - 100, topY, 50, 22, '#4488cc', '2kg');
+        _drawForceArrow(ctx2, cx - 155, topY - 11, cx - 128, topY - 11, '5 N', '#88aacc', 3);
+        ctx2.font = "bold 11px 'Noto Sans SC',sans-serif";
+        ctx2.fillStyle = '#88aacc';
+        ctx2.textAlign = 'left';
+        ctx2.fillText(t('f2small'), cx - 128, topY - 30);
+
+        // Short motion
+        _drawMotionLines(ctx2, cx - 45, topY - 6, 3, 15, '#4488cc');
+        ctx2.globalAlpha = 0.3;
+        _drawCart(ctx2, cx - 20, topY, 50, 22, '#4488cc');
+        ctx2.globalAlpha = 1;
+
+        // Calculation
+        ctx2.fillStyle = 'rgba(68,136,204,0.08)';
+        ctx2.fillRect(cx + 40, topY - 20, 150, 24);
+        ctx2.strokeStyle = '#4488cc';
+        ctx2.lineWidth = 1;
+        ctx2.strokeRect(cx + 40, topY - 20, 150, 24);
+        ctx2.font = "bold 11px 'Space Grotesk',sans-serif";
+        ctx2.fillStyle = '#88aacc';
+        ctx2.textAlign = 'left';
+        ctx2.fillText(t('f2calc1'), cx + 48, topY - 5);
+
+        // ── Bottom: big force 20N ──
+        _drawGround(ctx2, W, botY + 8);
+        _drawCart(ctx2, cx - 100, botY, 50, 22, '#4488cc', '2kg');
+        _drawForceArrow(ctx2, cx - 180, botY - 11, cx - 128, botY - 11, '20 N', '#ff7f50', 5);
+        ctx2.font = "bold 11px 'Noto Sans SC',sans-serif";
+        ctx2.fillStyle = '#ff7f50';
+        ctx2.textAlign = 'left';
+        ctx2.fillText(t('f2big'), cx - 128, botY - 30);
+
+        // Long motion
+        _drawMotionLines(ctx2, cx + 60, botY - 6, 5, 50, '#ff7f50');
+        ctx2.globalAlpha = 0.3;
+        _drawCart(ctx2, cx + 100, botY, 50, 22, '#4488cc');
+        ctx2.globalAlpha = 1;
+
+        // Calculation
+        ctx2.fillStyle = 'rgba(255,127,80,0.08)';
+        ctx2.fillRect(cx + 40, botY - 20, 170, 24);
+        ctx2.strokeStyle = '#ff7f50';
+        ctx2.lineWidth = 1;
+        ctx2.strokeRect(cx + 40, botY - 20, 170, 24);
+        ctx2.font = "bold 11px 'Space Grotesk',sans-serif";
+        ctx2.fillStyle = '#ff7f50';
+        ctx2.textAlign = 'left';
+        ctx2.fillText(t('f2calc2'), cx + 48, botY - 5);
+
+        // ── Bar chart comparison on right ──
+        var barBaseY = H * 0.83;
+        var barMaxH = 80;
+        var barLeft = cx + 170;
+        var barRight = cx + 240;
+
+        // Bar chart title
+        ctx2.font = "bold 9px 'Space Grotesk',sans-serif";
+        ctx2.fillStyle = P2.muted;
+        ctx2.textAlign = 'center';
+        ctx2.fillText(t('f2barLabel'), (barLeft + barRight) / 2, barBaseY - barMaxH - 18);
+
+        // Baseline
+        ctx2.strokeStyle = 'rgba(255,255,255,0.15)';
+        ctx2.lineWidth = 1;
+        ctx2.beginPath();
+        ctx2.moveTo(barLeft - 20, barBaseY);
+        ctx2.lineTo(barRight + 20, barBaseY);
+        ctx2.stroke();
+
+        // Bar for 2.5 m/s^2
+        _drawBar(ctx2, barLeft, barBaseY, barMaxH, 0.25, 28, '#88aacc', t('f2accel1'));
+        // Bar for 10 m/s^2
+        _drawBar(ctx2, barRight, barBaseY, barMaxH, 1.0, 28, '#ff7f50', t('f2accel2'));
+
+        // Insight box
+        _drawInsightBox(ctx2, cx, H * 0.9, t('f2insight'), 360, P2.primary);
+      }},
+    ];
+  }
+
+  // ── Frame 3: The equation visualized ──
+  if (f === 3) {
+    return [
+      {id:'f3t', type:'label', text:t('f3title'), x:cx, y:22, color:P.primary, size:16, align:'center', bold:true},
+      {id:'f3eq', type:'label', text:t('f3eq'), x:cx, y:52, color:P.primary, size:22, align:'center', glow:P.glowStrong, bold:true},
+      {id:'f3vis', type:'custom', x:0, y:0, draw:function(ctx2) {
+        var P2 = AnimRuntime.PAL;
+
+        // Three scenarios as visual equation rows
+        var scenarios = [
+          {force:10, mass:1, accel:10, label:t('f3case1'), forceColor:'#00daf3', massColor:'#33cc66'},
+          {force:10, mass:5, accel:2,  label:t('f3case2'), forceColor:'#00daf3', massColor:'#cc4444'},
+          {force:20, mass:2, accel:10, label:t('f3case3'), forceColor:'#ff7f50', massColor:'#4488cc'},
+        ];
+
+        var rowH = 70;
+        var startY = H * 0.22;
+
+        scenarios.forEach(function(sc, idx) {
+          var ry = startY + idx * rowH;
+          var leftX = cx - 220;
+
+          // Row background
+          var rowBg = ctx2.createLinearGradient(leftX, ry, leftX + 440, ry);
+          rowBg.addColorStop(0, 'rgba(255,255,255,0.02)');
+          rowBg.addColorStop(0.5, 'rgba(255,255,255,0.04)');
+          rowBg.addColorStop(1, 'rgba(255,255,255,0.02)');
+          ctx2.fillStyle = rowBg;
+          ctx2.fillRect(leftX, ry, 440, 50);
+          ctx2.strokeStyle = 'rgba(255,255,255,0.06)';
+          ctx2.lineWidth = 0.5;
+          ctx2.strokeRect(leftX, ry, 440, 50);
+
+          // F -- force arrow (length proportional)
+          var arrowLen = sc.force * 3.5;
+          var arrowX = leftX + 20;
+          _drawForceArrow(ctx2, arrowX, ry + 25, arrowX + arrowLen, ry + 25, sc.force + 'N', sc.forceColor, 3);
+
+          // = sign
+          var eqX = leftX + 110;
+          ctx2.font = "bold 18px 'Space Grotesk',sans-serif";
+          ctx2.fillStyle = P2.muted;
+          ctx2.textAlign = 'center';
+          ctx2.textBaseline = 'middle';
+          ctx2.fillText('=', eqX, ry + 25);
+
+          // m -- block (size proportional to mass)
+          var blockSize = 10 + sc.mass * 5;
+          var blockX = leftX + 160;
+          ctx2.fillStyle = _alpha(sc.massColor, 0.7);
+          ctx2.fillRect(blockX - blockSize/2, ry + 25 - blockSize/2, blockSize, blockSize);
+          ctx2.strokeStyle = sc.massColor;
+          ctx2.lineWidth = 1.5;
+          ctx2.strokeRect(blockX - blockSize/2, ry + 25 - blockSize/2, blockSize, blockSize);
+          ctx2.font = "bold 9px 'Space Grotesk',sans-serif";
+          ctx2.fillStyle = '#fff';
+          ctx2.textAlign = 'center';
+          ctx2.textBaseline = 'middle';
+          ctx2.fillText(sc.mass + 'kg', blockX, ry + 25);
+
+          // x sign
+          ctx2.font = "bold 18px 'Space Grotesk',sans-serif";
+          ctx2.fillStyle = P2.muted;
+          ctx2.fillText('x', leftX + 210, ry + 25);
+
+          // a -- speed lines (length proportional to acceleration)
+          var lineCount = Math.max(2, Math.round(sc.accel / 2));
+          var lineLen = sc.accel * 3;
+          var lineX = leftX + 250;
+          ctx2.strokeStyle = _alpha(P2.primary, 0.6);
+          ctx2.lineWidth = 2;
+          for (var li = 0; li < lineCount; li++) {
+            var ly = ry + 12 + li * (30 / lineCount);
+            ctx2.beginPath();
+            ctx2.moveTo(lineX, ly);
+            ctx2.lineTo(lineX + lineLen, ly);
+            ctx2.stroke();
+          }
+          // Arrow at end
+          ctx2.fillStyle = P2.primary;
+          ctx2.beginPath();
+          ctx2.moveTo(lineX + lineLen + 5, ry + 25);
+          ctx2.lineTo(lineX + lineLen - 3, ry + 18);
+          ctx2.lineTo(lineX + lineLen - 3, ry + 32);
+          ctx2.closePath();
+          ctx2.fill();
+          // Accel value
+          ctx2.font = "bold 11px 'Space Grotesk',sans-serif";
+          ctx2.fillStyle = P2.primary;
+          ctx2.textAlign = 'left';
+          ctx2.textBaseline = 'middle';
+          ctx2.fillText('a=' + sc.accel, lineX + lineLen + 12, ry + 25);
+
+          // Row label on far right
+          ctx2.font = "10px 'Noto Sans SC',sans-serif";
+          ctx2.fillStyle = P2.muted;
+          ctx2.textAlign = 'right';
+          ctx2.fillText(sc.label, leftX + 435, ry + 25);
+        });
+
+        // Column headers
+        var headerY = startY - 14;
+        var leftX2 = cx - 220;
+        ctx2.font = "bold 9px 'Space Grotesk',sans-serif";
+        ctx2.textAlign = 'center';
+        ctx2.textBaseline = 'middle';
+        ctx2.fillStyle = P2.tertiary;
+        ctx2.fillText(t('f3forceLabel'), leftX2 + 50, headerY);
+        ctx2.fillStyle = P2.muted;
+        ctx2.fillText(t('f3massLabel'), leftX2 + 160, headerY);
+        ctx2.fillStyle = P2.primary;
+        ctx2.fillText(t('f3accelLabel'), leftX2 + 290, headerY);
+
+        // Ambient glow at center
+        var ambGlow = ctx2.createRadialGradient(cx, cy, 0, cx, cy, 180);
+        ambGlow.addColorStop(0, _alpha(P2.primary, 0.03));
+        ambGlow.addColorStop(1, 'rgba(0,0,0,0)');
+        ctx2.fillStyle = ambGlow;
+        ctx2.fillRect(cx - 200, cy - 150, 400, 300);
+      }},
+    ];
+  }
+
+  // ── Frame 4: Rocket application ──
+  if (f === 4) {
+    return [
+      {id:'f4t', type:'label', text:t('f4title'), x:cx, y:22, color:P.primary, size:16, align:'center', bold:true},
+      {id:'f4vis', type:'custom', x:0, y:0, draw:function(ctx2) {
+        var P2 = AnimRuntime.PAL;
+
+        // Ground / launchpad
+        var groundY = H * 0.78;
+        ctx2.fillStyle = '#1e2028';
+        ctx2.fillRect(0, groundY, W, H - groundY);
+        ctx2.strokeStyle = 'rgba(255,181,156,0.2)';
+        ctx2.lineWidth = 2;
+        ctx2.beginPath(); ctx2.moveTo(0, groundY); ctx2.lineTo(W, groundY); ctx2.stroke();
+
+        // Launchpad
+        ctx2.fillStyle = '#444';
+        ctx2.fillRect(cx - 180, groundY - 5, 60, 5);
+
+        // Rocket (200g = tiny)
+        var rocketCx = cx - 150;
+        var rocketBaseY = groundY - 5;
+        var rocketH = 70;
+        var rocketW = 18;
+
+        _drawRocket(ctx2, rocketCx, rocketBaseY, rocketH, rocketW, 0.8, '200g');
+
+        // Spawn particles around flame
+        if (_tick % 4 === 0) {
+          _spawnParticles(rocketCx, rocketBaseY + 15, 3, 'rgba(255,180,50,0.8)', 1.5, 30);
+        }
+
+        // ── Force arrows on rocket ──
+        var rocketMidY = rocketBaseY - rocketH / 2;
+
+        // Thrust arrow (up, big, 10N)
+        var thrustX = rocketCx - rocketW - 16;
+        ctx2.strokeStyle = '#33cc66';
+        ctx2.lineWidth = 3;
+        ctx2.shadowColor = '#33cc66'; ctx2.shadowBlur = 6;
+        ctx2.beginPath();
+        ctx2.moveTo(thrustX, rocketBaseY - 10);
+        ctx2.lineTo(thrustX, rocketBaseY - rocketH - 20);
+        ctx2.stroke();
+        ctx2.shadowBlur = 0;
+        // Arrowhead
+        ctx2.fillStyle = '#33cc66';
+        ctx2.beginPath();
+        ctx2.moveTo(thrustX, rocketBaseY - rocketH - 26);
+        ctx2.lineTo(thrustX - 5, rocketBaseY - rocketH - 16);
+        ctx2.lineTo(thrustX + 5, rocketBaseY - rocketH - 16);
+        ctx2.closePath();
+        ctx2.fill();
+        ctx2.font = "bold 10px 'Space Grotesk',sans-serif";
+        ctx2.fillStyle = '#33cc66';
+        ctx2.textAlign = 'center';
+        ctx2.fillText('10N', thrustX, rocketBaseY - rocketH - 30);
+
+        // Weight arrow (down, small, 1.96N)
+        var weightX = rocketCx + rocketW + 16;
+        ctx2.strokeStyle = '#cc4444';
+        ctx2.lineWidth = 2;
+        ctx2.beginPath();
+        ctx2.moveTo(weightX, rocketMidY - 8);
+        ctx2.lineTo(weightX, rocketMidY + 18);
+        ctx2.stroke();
+        ctx2.fillStyle = '#cc4444';
+        ctx2.beginPath();
+        ctx2.moveTo(weightX, rocketMidY + 24);
+        ctx2.lineTo(weightX - 4, rocketMidY + 16);
+        ctx2.lineTo(weightX + 4, rocketMidY + 16);
+        ctx2.closePath();
+        ctx2.fill();
+        ctx2.font = "bold 9px 'Space Grotesk',sans-serif";
+        ctx2.fillStyle = '#cc4444';
+        ctx2.textAlign = 'center';
+        ctx2.fillText('1.96N', weightX, rocketMidY + 34);
+        ctx2.fillText('mg', weightX, rocketMidY + 44);
+
+        // ── Calculation panel on the right ──
+        var panelX = cx + 20;
+        var panelY = H * 0.12;
+        var panelW = 280;
+        var lineH = 26;
+
+        // Panel background
+        ctx2.fillStyle = 'rgba(0,0,0,0.3)';
+        ctx2.fillRect(panelX, panelY, panelW, lineH * 6 + 10);
+        ctx2.strokeStyle = _alpha(P2.primary, 0.2);
+        ctx2.lineWidth = 1;
+        ctx2.strokeRect(panelX, panelY, panelW, lineH * 6 + 10);
+
+        // Lines of calculation
+        var calcLines = [
+          {text: t('f4mass'),   color: P2.text},
+          {text: t('f4thrust'), color: '#33cc66'},
+          {text: t('f4weight'), color: '#cc4444'},
+          {text: t('f4net'),    color: P2.tertiary},
+          {text: t('f4accel'),  color: P2.primary},
+        ];
+
+        calcLines.forEach(function(cl, ci) {
+          var ly = panelY + 18 + ci * lineH;
+          // Highlight the final result line
+          if (ci === 4) {
+            ctx2.fillStyle = _alpha(P2.primary, 0.1);
+            ctx2.fillRect(panelX + 4, ly - 10, panelW - 8, lineH - 2);
+            ctx2.strokeStyle = P2.primary;
+            ctx2.lineWidth = 1;
+            ctx2.strokeRect(panelX + 4, ly - 10, panelW - 8, lineH - 2);
+          }
+          ctx2.font = (ci === 4 ? "bold " : "") + "12px 'Space Grotesk','Noto Sans SC',sans-serif";
+          ctx2.fillStyle = cl.color;
+          ctx2.textAlign = 'left';
+          ctx2.textBaseline = 'middle';
+          ctx2.fillText(cl.text, panelX + 14, ly);
+        });
+
+        // ── "Fuel burns" insight at bottom ──
+        var burnY = panelY + lineH * 6 + 26;
+        var burnLines = t('f4burn').split('\n');
+        ctx2.font = "bold 12px 'Noto Sans SC',sans-serif";
+        ctx2.fillStyle = P2.primary;
+        ctx2.textAlign = 'left';
+        burnLines.forEach(function(bl, bi) {
+          ctx2.fillText(bl, panelX + 14, burnY + bi * 20);
+        });
+
+        // ── Small diagram: mass decreasing over time ──
+        var diagX = cx + 60;
+        var diagY = H * 0.7;
+        var diagW = 180;
+        var diagH = 60;
+
+        // Axes
+        ctx2.strokeStyle = 'rgba(255,255,255,0.2)';
+        ctx2.lineWidth = 1;
+        ctx2.beginPath();
+        ctx2.moveTo(diagX, diagY);
+        ctx2.lineTo(diagX, diagY + diagH);
+        ctx2.lineTo(diagX + diagW, diagY + diagH);
+        ctx2.stroke();
+
+        // Acceleration curve (rising)
+        ctx2.strokeStyle = P2.primary;
+        ctx2.lineWidth = 2;
+        ctx2.shadowColor = P2.primary; ctx2.shadowBlur = 6;
+        ctx2.beginPath();
+        for (var px = 0; px <= diagW; px += 2) {
+          var frac = px / diagW;
+          // Acceleration increases as mass decreases (fuel burn)
+          var accVal = 1 / (1 - frac * 0.6);
+          var py = diagY + diagH - (accVal - 1) * diagH / 2;
+          if (py < diagY) py = diagY;
+          if (px === 0) ctx2.moveTo(diagX + px, py);
+          else ctx2.lineTo(diagX + px, py);
+        }
+        ctx2.stroke();
+        ctx2.shadowBlur = 0;
+
+        // Axis labels
+        ctx2.font = "8px 'Space Grotesk',sans-serif";
+        ctx2.fillStyle = P2.muted;
+        ctx2.textAlign = 'center';
+        ctx2.fillText('TIME', diagX + diagW / 2, diagY + diagH + 12);
+        ctx2.save();
+        ctx2.translate(diagX - 10, diagY + diagH / 2);
+        ctx2.rotate(-Math.PI / 2);
+        ctx2.fillText('ACCEL', 0, 0);
+        ctx2.restore();
+
+        // Draw particles
+        _updateParticles(ctx2);
+      }},
+    ];
+  }
+
+  return [];
+}
+
+// ============================================================
+// CUSTOM DRAW: rAF tick counter for animation + particles + shake
+// ============================================================
+var _lastFrame = -1;
+
+function onReady() {
+  var origTransition = AnimRuntime.transitionTo;
+
+  function animLoop() {
+    _tick++;
+
+    // Screen shake
+    if (_shakeDuration > 0) {
+      _shakeDuration--;
+      var cv2 = document.getElementById('c');
+      var sx = (Math.random() - 0.5) * _shakeAmount * 2;
+      var sy = (Math.random() - 0.5) * _shakeAmount * 2;
+      cv2.style.transform = 'translate(' + sx + 'px,' + sy + 'px)';
+      if (_shakeDuration <= 0) { cv2.style.transform = ''; _shakeAmount = 0; }
+    }
+
+    // Re-render current frame for animated elements (particles, flame flicker, etc)
+    var curFrame = AnimRuntime.currentFrame;
+    if (curFrame === 4 || curFrame === 0) {
+      AnimRuntime.drawFrame(curFrame);
+    }
+
+    // Detect frame change for SFX
+    if (curFrame !== _lastFrame) {
+      _playTone(440 + curFrame * 80, 0.15, 0.06);
+      if (curFrame === 1) { _triggerShake(2, 10); _spawnParticles(350, 200, 15, '#33cc66', 2, 40); }
+      if (curFrame === 4) { _triggerShake(3, 12); _spawnParticles(200, 280, 20, '#ffaa33', 3, 50); }
+      _lastFrame = curFrame;
+    }
+
+    requestAnimationFrame(animLoop);
+  }
+  requestAnimationFrame(animLoop);
+}
+
+// ============================================================
+// BOOT
+// ============================================================
+
+AnimRuntime.boot();
+</script>
+</body>
+</html>

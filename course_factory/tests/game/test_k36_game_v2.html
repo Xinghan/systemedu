@@ -1,0 +1,1688 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=Inter:wght@400;500&family=Noto+Sans+SC:wght@400;700&display=swap" rel="stylesheet">
+<title>Wind Tunnel Designer</title>
+<style>
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box;border-radius:0!important;}
+html,body{width:100%;height:100vh;overflow:hidden;background:#0c0e14;color:#e2e2e9;font-family:'Inter','Noto Sans SC',sans-serif;}
+body{margin:0;padding:0;}
+.game-wrap{display:flex;flex-direction:row;height:100vh;overflow:hidden;}
+.game-sidebar{width:200px;min-width:200px;max-width:200px;display:flex;flex-direction:column;gap:8px;padding:10px;background:rgba(0,0,0,0.5);border-right:1px solid rgba(80,255,176,0.15);overflow-y:auto;}
+.sidebar-lang{align-self:flex-start;flex-shrink:0;font-family:'Space Grotesk',sans-serif;font-size:10px;font-weight:700;padding:3px 8px;cursor:pointer;border:1px solid rgba(255,181,156,0.25);background:transparent;color:#ffb59c;letter-spacing:1px;}
+.sidebar-lang:hover{border-color:#ffb59c;background:rgba(255,181,156,0.08);}
+.sidebar-title{font-family:'Space Grotesk',sans-serif;font-size:11px;font-weight:700;color:#50ffb0;letter-spacing:0.08em;text-transform:uppercase;margin-top:4px;}
+.sidebar-guide{font-size:12px;color:#aaabb0;line-height:1.6;}
+.game-main{flex:1;display:flex;flex-direction:column;min-width:0;}
+.game-header{padding:8px 16px;display:flex;justify-content:space-between;align-items:center;background:rgba(0,0,0,0.4);}
+.game-header h1{font-family:'Space Grotesk',sans-serif;font-size:clamp(13px,2vw,17px);font-weight:700;color:#50ffb0;}
+.game-header .info{font-family:'Space Grotesk',sans-serif;font-size:12px;color:#aaabb0;}
+.game-body{flex:1;display:flex;flex-direction:column;min-height:0;}
+canvas{width:100%;height:100%;display:block;}
+.control-panel{display:flex;justify-content:center;align-items:center;gap:12px;padding:8px 16px;background:rgba(0,0,0,0.4);flex-wrap:wrap;}
+.ctrl-btn{font-family:'Space Grotesk',sans-serif;font-size:12px;font-weight:700;padding:6px 18px;border:none;cursor:pointer;color:#0c0e14;background:linear-gradient(135deg,#50ffb0,#17df93);box-shadow:0 0 10px rgba(80,255,176,0.3);transition:transform 0.1s;}
+.ctrl-btn:hover{transform:scale(1.04);}
+.ctrl-btn:active{transform:scale(0.96);}
+.ctrl-btn:disabled{opacity:0.4;cursor:default;transform:none;}
+.ctrl-btn.secondary{background:rgba(30,30,45,0.9);color:#aaabb0;box-shadow:none;border:1px solid rgba(170,171,176,0.2);}
+.ctrl-btn.secondary:hover{color:#50ffb0;border-color:rgba(80,255,176,0.3);}
+.hud-bar{height:44px;display:flex;align-items:center;justify-content:space-around;background:rgba(0,0,0,0.55);padding:0 16px;}
+.hud-item{text-align:center;}
+.hud-label{font-family:'Space Grotesk',sans-serif;font-size:9px;letter-spacing:0.12em;color:#aaabb0;text-transform:uppercase;}
+.hud-val{font-family:'Space Grotesk',sans-serif;font-size:14px;font-weight:700;color:#50ffb0;transition:transform 0.15s;}
+</style>
+</head>
+<body>
+<div class="game-wrap">
+  <div class="game-sidebar">
+    <button class="sidebar-lang" id="langBtn">CN</button>
+    <div class="sidebar-title" id="sidebarTitle"></div>
+    <div class="sidebar-guide" id="guideContent"></div>
+  </div>
+  <div class="game-main">
+    <div class="game-header">
+      <h1 id="gameTitle"></h1>
+      <div class="info" id="roundInfo"></div>
+    </div>
+    <div class="game-body">
+      <canvas id="c"></canvas>
+    </div>
+    <div class="control-panel">
+      <button class="ctrl-btn" id="btnAction"></button>
+      <button class="ctrl-btn secondary" id="btnReset"></button>
+    </div>
+    <div class="hud-bar">
+      <div class="hud-item"><div class="hud-label" id="hudL1"></div><div class="hud-val" id="hudV1"></div></div>
+      <div class="hud-item"><div class="hud-label" id="hudL2"></div><div class="hud-val" id="hudV2"></div></div>
+      <div class="hud-item"><div class="hud-label" id="hudL3"></div><div class="hud-val" id="hudV3"></div></div>
+      <div class="hud-item"><div class="hud-label" id="hudL4"></div><div class="hud-val" id="hudV4"></div></div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ============================================================
+// K36 Game: Wind Tunnel Designer
+// 3 Levels:
+//   L1 NOSE CONE PICKER - choose lowest drag nose shape
+//   L2 FULL ROCKET BUILDER - assemble nose+body+tail for lowest C_D within budget
+//   L3 RACE - your rocket vs 3 AI rockets, altitude race
+// Physics: F_drag = 0.5 * rho * v^2 * C_D * A
+// ============================================================
+
+// --- I18N ---
+var I18N = {
+  title:       {en:'WIND TUNNEL DESIGNER', cn:'\u98ce\u6d1e\u8bbe\u8ba1\u5e08'},
+  levelLabel:  {en:'LEVEL', cn:'\u5173\u5361'},
+  roundLabel:  {en:'ROUND', cn:'\u56de\u5408'},
+  select:      {en:'SELECT', cn:'\u9009\u62e9'},
+  test:        {en:'TEST', cn:'\u6d4b\u8bd5'},
+  build:       {en:'BUILD', cn:'\u7ec4\u88c5'},
+  launch:      {en:'LAUNCH', cn:'\u53d1\u5c04'},
+  nextLevel:   {en:'NEXT LEVEL', cn:'\u4e0b\u4e00\u5173'},
+  next:        {en:'NEXT', cn:'\u4e0b\u4e00\u6b65'},
+  reset:       {en:'RESET', cn:'\u91cd\u7f6e'},
+  correct:     {en:'CORRECT!', cn:'\u6b63\u786e\uff01'},
+  wrong:       {en:'TRY AGAIN', cn:'\u518d\u8bd5\u4e00\u6b21'},
+  great:       {en:'GREAT!', cn:'\u592a\u68d2\u4e86\uff01'},
+  score:       {en:'SCORE', cn:'\u5f97\u5206'},
+  dragCoeff:   {en:'C_D', cn:'C_D'},
+  budget:      {en:'BUDGET', cn:'\u9884\u7b97'},
+  altitude:    {en:'ALTITUDE', cn:'\u6d77\u62d4'},
+  speed:       {en:'SPEED', cn:'\u901f\u5ea6'},
+  complete:    {en:'ALL LEVELS COMPLETE!', cn:'\u5168\u90e8\u5b8c\u6210\uff01'},
+  you:         {en:'YOU', cn:'\u4f60'},
+  winner:      {en:'WINNER!', cn:'\u80dc\u5229\uff01'},
+  youWin:      {en:'YOU WIN!', cn:'\u4f60\u8d62\u4e86\uff01'},
+  youLose:     {en:'TRY AGAIN', cn:'\u518d\u6765\u4e00\u6b21'},
+  // L1
+  l1title:     {en:'NOSE CONE PICKER', cn:'\u9f3b\u9525\u9009\u62e9\u5668'},
+  l1guide:     {en:'Choose between 4 nose shapes.\nWatch the wind tunnel airflow.\nPick the shape with LOWEST drag coefficient (C_D).\n\nShapes: Flat, Hemisphere, Cone, Ogive', cn:'\u5728 4 \u79cd\u9f3b\u9525\u5f62\u72b6\u4e2d\u9009\u62e9\u3002\n\u89c2\u5bdf\u98ce\u6d1e\u6c14\u6d41\u3002\n\u9009\u62e9\u963b\u529b\u7cfb\u6570 (C_D) \u6700\u4f4e\u7684\u5f62\u72b6\u3002\n\n\u5f62\u72b6\uff1a\u5e73\u5934\u3001\u534a\u7403\u3001\u5706\u9525\u3001\u5375\u5f62'},
+  l1sidebar:   {en:'NOSE CONE TEST', cn:'\u9f3b\u9525\u6d4b\u8bd5'},
+  // L2
+  l2title:     {en:'FULL ROCKET BUILDER', cn:'\u706b\u7bad\u7ec4\u88c5\u5668'},
+  l2guide:     {en:'Assemble a rocket from 3 parts:\nNose + Body + Tail.\nEach part has 3 options with different C_D and cost.\nBuild the lowest-drag rocket within budget!', cn:'\u7528 3 \u4e2a\u90e8\u4ef6\u7ec4\u88c5\u706b\u7bad\uff1a\n\u9f3b\u9525 + \u7bad\u4f53 + \u5c3e\u90e8\u3002\n\u6bcf\u4e2a\u90e8\u4ef6\u6709 3 \u4e2a\u9009\u9879\uff0c\u963b\u529b\u548c\u6210\u672c\u4e0d\u540c\u3002\n\u5728\u9884\u7b97\u5185\u7ec4\u88c5\u6700\u4f4e\u963b\u529b\u706b\u7bad\uff01'},
+  l2sidebar:   {en:'ROCKET ASSEMBLY', cn:'\u706b\u7bad\u7ec4\u88c5'},
+  // L3
+  l3title:     {en:'ALTITUDE RACE', cn:'\u9ad8\u5ea6\u7ade\u8d5b'},
+  l3guide:     {en:'Your rocket vs 3 AI rockets.\nSame engine, same mass.\nLowest drag = highest altitude.\nPreview in wind tunnel, then LAUNCH!', cn:'\u4f60\u7684\u706b\u7bad vs 3 \u4e2a AI \u706b\u7bad\u3002\n\u76f8\u540c\u53d1\u52a8\u673a\uff0c\u76f8\u540c\u8d28\u91cf\u3002\n\u963b\u529b\u6700\u4f4e = \u6d77\u62d4\u6700\u9ad8\u3002\n\u98ce\u6d1e\u9884\u89c8\uff0c\u7136\u540e\u53d1\u5c04\uff01'},
+  l3sidebar:   {en:'RACE MODE', cn:'\u7ade\u8d5b\u6a21\u5f0f'},
+  // Shapes
+  flat:        {en:'Flat', cn:'\u5e73\u5934'},
+  hemisphere:  {en:'Hemisphere', cn:'\u534a\u7403'},
+  cone:        {en:'Cone', cn:'\u5706\u9525'},
+  ogive:       {en:'Ogive', cn:'\u5375\u5f62'},
+  // Parts
+  noseCone:    {en:'NOSE', cn:'\u9f3b\u9525'},
+  bodyTube:    {en:'BODY', cn:'\u7bad\u4f53'},
+  tailCone:    {en:'TAIL', cn:'\u5c3e\u90e8'},
+  // Summary
+  summary:     {en:'Ogive and cone shapes have the lowest drag because they deflect air smoothly. Flat faces create turbulence and high pressure drag. Real rockets use ogive or blunted cone noses to minimize C_D.', cn:'\u5375\u5f62\u548c\u5706\u9525\u5f62\u7684\u963b\u529b\u6700\u4f4e\uff0c\u56e0\u4e3a\u5b83\u4eec\u80fd\u5e73\u6ed1\u5730\u5bfc\u6d41\u7a7a\u6c14\u3002\u5e73\u5934\u4ea7\u751f\u6e4f\u6d41\u548c\u9ad8\u538b\u5dee\u963b\u529b\u3002\u771f\u5b9e\u706b\u7bad\u4f7f\u7528\u5375\u5f62\u6216\u949d\u5706\u9525\u9f3b\u9525\u6765\u6700\u5c0f\u5316 C_D\u3002'},
+  windTunnel:  {en:'WIND TUNNEL', cn:'\u98ce\u6d1e'},
+  airflow:     {en:'AIRFLOW', cn:'\u6c14\u6d41'},
+  testResult:  {en:'TEST RESULT', cn:'\u6d4b\u8bd5\u7ed3\u679c'},
+  cost:        {en:'COST', cn:'\u6210\u672c'},
+  total:       {en:'TOTAL', cn:'\u603b\u8ba1'},
+  overBudget:  {en:'OVER BUDGET!', cn:'\u8d85\u51fa\u9884\u7b97\uff01'},
+  locked:      {en:'LOCKED (over budget)', cn:'\u9501\u5b9a (\u8d85\u9884\u7b97)'},
+  rocketOf:    {en:'Rocket', cn:'\u706b\u7bad'},
+  preview:     {en:'PREVIEW', cn:'\u9884\u89c8'},
+  racing:      {en:'RACING...', cn:'\u7ade\u8d5b\u4e2d...'},
+};
+
+var lang = 'cn';
+function t(key) { return I18N[key] ? (I18N[key][lang] || I18N[key].en || key) : key; }
+
+var soundMuted = true;
+
+// --- NOSE CONE DATA ---
+// Real aerodynamic C_D values for different nose shapes (based on Mach < 1 subsonic)
+var NOSE_SHAPES = [
+  {key:'flat',       cd:0.82, color:'#ff6b6b', nameKey:'flat'},
+  {key:'hemisphere', cd:0.42, color:'#ffa94d', nameKey:'hemisphere'},
+  {key:'cone',       cd:0.20, color:'#74c0fc', nameKey:'cone'},
+  {key:'ogive',      cd:0.14, color:'#50ffb0', nameKey:'ogive'},
+];
+
+// --- ROCKET PARTS DATA (for L2) ---
+var PARTS = {
+  nose: [
+    {name:{en:'Flat Cap',cn:'\u5e73\u5934\u76d6'},      cd:0.35, cost:100, color:'#ff6b6b'},
+    {name:{en:'Cone Nose',cn:'\u5706\u9525\u9f3b'},     cd:0.18, cost:250, color:'#74c0fc'},
+    {name:{en:'Ogive Nose',cn:'\u5375\u5f62\u9f3b'},    cd:0.10, cost:400, color:'#50ffb0'},
+  ],
+  body: [
+    {name:{en:'Rough Cylinder',cn:'\u7c97\u7cd9\u5706\u67f1'}, cd:0.12, cost:80,  color:'#ff6b6b'},
+    {name:{en:'Smooth Cylinder',cn:'\u5149\u6ed1\u5706\u67f1'}, cd:0.06, cost:200, color:'#74c0fc'},
+    {name:{en:'Streamlined',cn:'\u6d41\u7ebf\u578b'},     cd:0.03, cost:350, color:'#50ffb0'},
+  ],
+  tail: [
+    {name:{en:'Blunt End',cn:'\u5e73\u5c3e'},        cd:0.18, cost:60,  color:'#ff6b6b'},
+    {name:{en:'Tapered Skirt',cn:'\u6536\u7f29\u88d9'}, cd:0.08, cost:180, color:'#74c0fc'},
+    {name:{en:'Boat Tail',cn:'\u8239\u5c3e\u5f62'},    cd:0.04, cost:300, color:'#50ffb0'},
+  ],
+};
+var BUDGET = 700;
+
+// --- AI ROCKETS for L3 ---
+var AI_ROCKETS = [
+  {name:{en:'Blunt Bruiser',cn:'\u7c97\u58ee\u53f7'},    noseCd:0.35, bodyCd:0.12, tailCd:0.18, color:'#ff6b6b'},
+  {name:{en:'Balanced Beta',cn:'\u5747\u8861\u53f7'},    noseCd:0.18, bodyCd:0.06, tailCd:0.08, color:'#ffa94d'},
+  {name:{en:'Sleek Sigma',cn:'\u7cbe\u7f8e\u53f7'},     noseCd:0.10, bodyCd:0.06, tailCd:0.04, color:'#74c0fc'},
+];
+
+// --- PHYSICS CONSTANTS ---
+var RHO = 1.225;            // air density at sea level (kg/m^3)
+var ROCKET_AREA = 0.03;     // cross-section area m^2
+var ROCKET_MASS = 50;       // kg
+var ENGINE_THRUST = 5000;   // N
+var BURN_TIME = 8;          // seconds
+var G = 9.80665;
+
+// --- GAME STATE ---
+var currentLevel = 0;       // 0-2
+var totalScore = 0;
+var levelScores = [0,0,0];
+
+// L1 state
+var l1Selected = -1;         // which nose shape is selected
+var l1Phase = 'pick';        // pick, testing, result
+var l1TestTime = 0;          // animation timer for wind tunnel test
+var l1TestingIdx = -1;       // which shape is being tested
+var l1TestedCds = [];        // results shown
+var l1Correct = false;
+var l1ShakeTimer = 0;
+
+// L2 state
+var l2Selections = [-1, -1, -1]; // nose, body, tail indices
+var l2Phase = 'build';       // build, testing, result
+var l2TestTime = 0;
+var l2ShakeTimer = 0;
+var l2ActiveSlot = 0;        // which slot (0=nose,1=body,2=tail) is active
+
+// L3 state
+var l3Phase = 'preview';     // preview, racing, result
+var l3RaceTime = 0;
+var l3Rockets = [];          // [{name, cd, color, alt, vel, y}]
+var l3PlayerCd = 0.30;
+var l3WinnerIdx = -1;
+
+// Transition / animation
+var transitionAlpha = 0;
+var transitionTarget = 0;
+var completionAlpha = 0;
+
+// Wind tunnel particles for airflow visualization
+var windParticles = [];
+var MAX_WIND_PARTICLES = 120;
+
+// Celebration particles
+var particles = [];
+
+// Canvas
+var canvas = document.getElementById('c');
+var ctx = canvas.getContext('2d');
+var canvasW = 100, canvasH = 100;
+var dpr = Math.min(window.devicePixelRatio || 1, 2);
+var animFrame = 0;
+var pulsePhase = 0;
+var mouseX = 0, mouseY = 0;
+var mouseDown = false;
+
+// Parallax stars
+var parallaxStars = [];
+function initParallaxStars() {
+  parallaxStars = [];
+  for (var si = 0; si < 80; si++) {
+    parallaxStars.push({
+      x: Math.random() * canvasW,
+      y: Math.random() * canvasH,
+      r: 0.3 + Math.random() * 1.2,
+      speed: 0.2 + Math.random() * 0.6,
+      bright: 0.3 + Math.random() * 0.7
+    });
+  }
+}
+
+// --- Resize ---
+function resize() {
+  var rect = canvas.getBoundingClientRect();
+  canvasW = rect.width;
+  canvasH = rect.height;
+  canvas.width = canvasW * dpr;
+  canvas.height = canvasH * dpr;
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  initParallaxStars();
+}
+window.addEventListener('resize', resize);
+
+// --- Audio ---
+function playTone(freq, duration, vol) {
+  if (soundMuted) return;
+  try {
+    var actx = new (window.AudioContext || window.webkitAudioContext)();
+    var osc = actx.createOscillator();
+    var gain = actx.createGain();
+    osc.frequency.value = freq;
+    osc.type = 'sine';
+    gain.gain.value = vol || 0.08;
+    osc.connect(gain);
+    gain.connect(actx.destination);
+    osc.start();
+    gain.gain.exponentialRampToValueAtTime(0.001, actx.currentTime + (duration || 0.15));
+    osc.stop(actx.currentTime + (duration || 0.15));
+  } catch(e) {}
+}
+
+// --- Particles ---
+function spawnParticles(cx, cy, count, color, spread) {
+  for (var pi = 0; pi < count; pi++) {
+    var angle = Math.random() * Math.PI * 2;
+    var spd = 1 + Math.random() * (spread || 3);
+    particles.push({
+      x: cx, y: cy,
+      vx: Math.cos(angle) * spd,
+      vy: Math.sin(angle) * spd,
+      life: 1.0,
+      decay: 0.012 + Math.random() * 0.018,
+      r: 2 + Math.random() * 4,
+      color: color || '#50ffb0'
+    });
+  }
+}
+
+function updateParticles() {
+  for (var pi = particles.length - 1; pi >= 0; pi--) {
+    var p = particles[pi];
+    p.x += p.vx;
+    p.y += p.vy;
+    p.vx *= 0.97;
+    p.vy *= 0.97;
+    p.life -= p.decay;
+    if (p.life <= 0) particles.splice(pi, 1);
+  }
+}
+
+function drawParticles() {
+  for (var pi = 0; pi < particles.length; pi++) {
+    var p = particles[pi];
+    ctx.globalAlpha = p.life * 0.8;
+    ctx.fillStyle = p.color;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, p.r * p.life, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+}
+
+// --- Parallax stars ---
+function drawParallax() {
+  var offX = (mouseX - canvasW / 2) * 0.01;
+  var offY = (mouseY - canvasH / 2) * 0.01;
+  for (var si = 0; si < parallaxStars.length; si++) {
+    var s = parallaxStars[si];
+    var sx = s.x + offX * s.speed;
+    var sy = s.y + offY * s.speed;
+    ctx.globalAlpha = s.bright * (0.5 + 0.5 * Math.sin(animFrame * 0.02 + si));
+    ctx.fillStyle = '#e2e2e9';
+    ctx.beginPath();
+    ctx.arc(sx, sy, s.r, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+}
+
+// --- Wind tunnel particles ---
+function initWindParticles(shapeX, shapeY, shapeW, shapeH, cd) {
+  windParticles = [];
+  for (var wi = 0; wi < MAX_WIND_PARTICLES; wi++) {
+    windParticles.push(createWindParticle(shapeX, shapeY, shapeW, shapeH, cd, true));
+  }
+}
+
+function createWindParticle(shapeX, shapeY, shapeW, shapeH, cd, randomX) {
+  var startX = randomX ? (Math.random() * canvasW) : -10;
+  return {
+    x: startX,
+    y: shapeY - shapeH * 1.5 + Math.random() * shapeH * 3,
+    baseY: 0,
+    vx: 2 + Math.random() * 2,
+    vy: 0,
+    life: 1.0,
+    cd: cd,
+    shapeX: shapeX,
+    shapeY: shapeY,
+    shapeW: shapeW,
+    shapeH: shapeH,
+    color: cd < 0.20 ? '#50ffb0' : (cd < 0.45 ? '#74c0fc' : '#ff6b6b'),
+    deflected: false
+  };
+}
+
+function updateWindParticles(shapeX, shapeY, shapeW, shapeH, cd) {
+  for (var wi = windParticles.length - 1; wi >= 0; wi--) {
+    var wp = windParticles[wi];
+    wp.x += wp.vx;
+
+    // Deflection near the shape
+    var dx = wp.x - shapeX;
+    var dy = wp.y - shapeY;
+    var distX = Math.abs(dx);
+    var distY = Math.abs(dy);
+    var nearShape = distX < shapeW * 0.8 && distY < shapeH * 1.2;
+
+    if (nearShape && distX < shapeW * 0.6) {
+      // Higher C_D = more turbulence and deflection
+      var deflectStrength = cd * 3.0;
+      var sign = dy > 0 ? 1 : -1;
+      wp.vy += sign * deflectStrength * 0.3;
+      wp.vx *= (1.0 - cd * 0.15);
+      if (cd > 0.4) {
+        // Turbulence for blunt shapes
+        wp.vy += (Math.random() - 0.5) * cd * 2;
+        wp.vx += (Math.random() - 0.5) * cd;
+      }
+      wp.deflected = true;
+    }
+
+    wp.y += wp.vy;
+    wp.vy *= 0.95;
+
+    // Reset if off screen
+    if (wp.x > canvasW + 20 || wp.y < -50 || wp.y > canvasH + 50) {
+      windParticles[wi] = createWindParticle(shapeX, shapeY, shapeW, shapeH, cd, false);
+    }
+  }
+}
+
+function drawWindParticles() {
+  for (var wi = 0; wi < windParticles.length; wi++) {
+    var wp = windParticles[wi];
+    var alpha = 0.6;
+    if (wp.deflected) {
+      alpha = 0.8;
+    }
+    ctx.globalAlpha = alpha;
+    ctx.fillStyle = wp.color;
+    // Draw as small streaks
+    ctx.beginPath();
+    ctx.ellipse(wp.x, wp.y, 6, 1.5, Math.atan2(wp.vy, wp.vx), 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+}
+
+// ===========================================
+// DRAW ROCKET SHAPES
+// ===========================================
+
+// Draw a nose shape centered at (cx, cy) fitting in (w, h)
+function drawNoseShape(cx, cy, w, h, shapeKey, fillColor) {
+  ctx.fillStyle = fillColor;
+  ctx.strokeStyle = 'rgba(255,255,255,0.3)';
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+
+  var halfW = w / 2;
+  var halfH = h / 2;
+
+  if (shapeKey === 'flat') {
+    // Flat face - rectangle
+    ctx.moveTo(cx - halfW, cy - halfH);
+    ctx.lineTo(cx + halfW, cy - halfH);
+    ctx.lineTo(cx + halfW, cy + halfH);
+    ctx.lineTo(cx - halfW, cy + halfH);
+    ctx.closePath();
+  } else if (shapeKey === 'hemisphere') {
+    // Half sphere on front
+    ctx.moveTo(cx - halfW, cy + halfH);
+    ctx.lineTo(cx - halfW, cy - halfH * 0.3);
+    ctx.quadraticCurveTo(cx - halfW, cy - halfH, cx, cy - halfH);
+    ctx.quadraticCurveTo(cx + halfW, cy - halfH, cx + halfW, cy - halfH * 0.3);
+    ctx.lineTo(cx + halfW, cy + halfH);
+    ctx.closePath();
+  } else if (shapeKey === 'cone') {
+    // Sharp cone
+    ctx.moveTo(cx, cy - halfH);
+    ctx.lineTo(cx + halfW, cy + halfH);
+    ctx.lineTo(cx - halfW, cy + halfH);
+    ctx.closePath();
+  } else if (shapeKey === 'ogive') {
+    // Ogive curve (tangent arc)
+    ctx.moveTo(cx, cy - halfH);
+    ctx.bezierCurveTo(cx + halfW * 0.15, cy - halfH * 0.5, cx + halfW * 0.8, cy, cx + halfW, cy + halfH);
+    ctx.lineTo(cx - halfW, cy + halfH);
+    ctx.bezierCurveTo(cx - halfW * 0.8, cy, cx - halfW * 0.15, cy - halfH * 0.5, cx, cy - halfH);
+    ctx.closePath();
+  }
+  ctx.fill();
+  ctx.stroke();
+}
+
+// Draw a full rocket side view (pointing up) at (cx, cy), total height = h
+function drawRocket(cx, cy, rw, rh, noseCd, bodyCd, tailCd, mainColor) {
+  var noseH = rh * 0.30;
+  var bodyH = rh * 0.45;
+  var tailH = rh * 0.25;
+  var halfW = rw / 2;
+
+  // Determine nose shape key from cd
+  var noseKey = 'flat';
+  if (noseCd <= 0.12) noseKey = 'ogive';
+  else if (noseCd <= 0.20) noseKey = 'cone';
+  else if (noseCd <= 0.36) noseKey = 'hemisphere';
+
+  // Nose
+  ctx.fillStyle = mainColor;
+  ctx.strokeStyle = 'rgba(255,255,255,0.25)';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  var noseTop = cy - rh / 2;
+  var noseBot = noseTop + noseH;
+
+  if (noseKey === 'flat') {
+    ctx.moveTo(cx - halfW, noseTop);
+    ctx.lineTo(cx + halfW, noseTop);
+    ctx.lineTo(cx + halfW, noseBot);
+    ctx.lineTo(cx - halfW, noseBot);
+  } else if (noseKey === 'hemisphere') {
+    ctx.moveTo(cx - halfW, noseBot);
+    ctx.lineTo(cx - halfW, noseTop + noseH * 0.4);
+    ctx.quadraticCurveTo(cx, noseTop, cx + halfW, noseTop + noseH * 0.4);
+    ctx.lineTo(cx + halfW, noseBot);
+  } else if (noseKey === 'cone') {
+    ctx.moveTo(cx, noseTop);
+    ctx.lineTo(cx + halfW, noseBot);
+    ctx.lineTo(cx - halfW, noseBot);
+  } else {
+    // ogive
+    ctx.moveTo(cx, noseTop);
+    ctx.bezierCurveTo(cx + halfW * 0.2, noseTop + noseH * 0.3,
+                       cx + halfW * 0.85, noseTop + noseH * 0.6,
+                       cx + halfW, noseBot);
+    ctx.lineTo(cx - halfW, noseBot);
+    ctx.bezierCurveTo(cx - halfW * 0.85, noseTop + noseH * 0.6,
+                       cx - halfW * 0.2, noseTop + noseH * 0.3,
+                       cx, noseTop);
+  }
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+
+  // Body
+  var bodyTop = noseBot;
+  var bodyBot = bodyTop + bodyH;
+  var bodyAlpha = bodyCd < 0.05 ? 0.9 : (bodyCd < 0.08 ? 0.7 : 0.5);
+  ctx.fillStyle = mainColor;
+  ctx.globalAlpha = bodyAlpha;
+  ctx.beginPath();
+  if (bodyCd <= 0.04) {
+    // Streamlined - slight taper
+    ctx.moveTo(cx - halfW, bodyTop);
+    ctx.lineTo(cx + halfW, bodyTop);
+    ctx.lineTo(cx + halfW * 0.92, bodyBot);
+    ctx.lineTo(cx - halfW * 0.92, bodyBot);
+  } else {
+    // Cylinder
+    ctx.moveTo(cx - halfW, bodyTop);
+    ctx.lineTo(cx + halfW, bodyTop);
+    ctx.lineTo(cx + halfW, bodyBot);
+    ctx.lineTo(cx - halfW, bodyBot);
+  }
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+  ctx.globalAlpha = 1;
+
+  // Surface detail lines for rough body
+  if (bodyCd >= 0.10) {
+    ctx.strokeStyle = 'rgba(255,255,255,0.1)';
+    ctx.lineWidth = 0.5;
+    for (var li = 0; li < 5; li++) {
+      var ly = bodyTop + bodyH * (0.15 + li * 0.18);
+      ctx.beginPath();
+      ctx.moveTo(cx - halfW + 2, ly);
+      ctx.lineTo(cx + halfW - 2, ly);
+      ctx.stroke();
+    }
+  }
+
+  // Tail
+  var tailTop = bodyBot;
+  var tailBot = tailTop + tailH;
+  ctx.fillStyle = mainColor;
+  ctx.strokeStyle = 'rgba(255,255,255,0.25)';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  if (tailCd <= 0.05) {
+    // Boat tail - smooth taper
+    var bw = bodyCd <= 0.04 ? halfW * 0.92 : halfW;
+    ctx.moveTo(cx - bw, tailTop);
+    ctx.lineTo(cx + bw, tailTop);
+    ctx.bezierCurveTo(cx + bw, tailTop + tailH * 0.4,
+                       cx + halfW * 0.5, tailBot,
+                       cx + halfW * 0.45, tailBot);
+    ctx.lineTo(cx - halfW * 0.45, tailBot);
+    ctx.bezierCurveTo(cx - halfW * 0.5, tailBot,
+                       cx - bw, tailTop + tailH * 0.4,
+                       cx - bw, tailTop);
+  } else if (tailCd <= 0.10) {
+    // Tapered skirt
+    var bw2 = bodyCd <= 0.04 ? halfW * 0.92 : halfW;
+    ctx.moveTo(cx - bw2, tailTop);
+    ctx.lineTo(cx + bw2, tailTop);
+    ctx.lineTo(cx + halfW * 0.55, tailBot);
+    ctx.lineTo(cx - halfW * 0.55, tailBot);
+  } else {
+    // Blunt end
+    var bw3 = bodyCd <= 0.04 ? halfW * 0.92 : halfW;
+    ctx.moveTo(cx - bw3, tailTop);
+    ctx.lineTo(cx + bw3, tailTop);
+    ctx.lineTo(cx + bw3, tailBot);
+    ctx.lineTo(cx - bw3, tailBot);
+  }
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+
+  // Engine nozzle
+  var nozW = halfW * 0.35;
+  var nozH = tailH * 0.25;
+  ctx.fillStyle = '#333';
+  ctx.beginPath();
+  ctx.moveTo(cx - nozW, tailBot);
+  ctx.lineTo(cx + nozW, tailBot);
+  ctx.lineTo(cx + nozW * 1.3, tailBot + nozH);
+  ctx.lineTo(cx - nozW * 1.3, tailBot + nozH);
+  ctx.closePath();
+  ctx.fill();
+}
+
+// ===========================================
+// WIND TUNNEL BOX
+// ===========================================
+function drawWindTunnelBox(x, y, w, h) {
+  // Tunnel walls
+  ctx.strokeStyle = 'rgba(80,255,176,0.2)';
+  ctx.lineWidth = 2;
+  ctx.setLineDash([6, 4]);
+  ctx.strokeRect(x, y, w, h);
+  ctx.setLineDash([]);
+
+  // Label
+  ctx.fillStyle = 'rgba(80,255,176,0.4)';
+  ctx.font = '10px "Space Grotesk", sans-serif';
+  ctx.textAlign = 'left';
+  ctx.fillText(t('windTunnel'), x + 6, y + 14);
+
+  // Flow arrows on left
+  ctx.strokeStyle = 'rgba(80,255,176,0.15)';
+  ctx.lineWidth = 1;
+  for (var ai = 0; ai < 5; ai++) {
+    var ay = y + h * (0.15 + ai * 0.18);
+    ctx.beginPath();
+    ctx.moveTo(x + 8, ay);
+    ctx.lineTo(x + 25, ay);
+    ctx.stroke();
+    // arrowhead
+    ctx.beginPath();
+    ctx.moveTo(x + 25, ay);
+    ctx.lineTo(x + 20, ay - 3);
+    ctx.moveTo(x + 25, ay);
+    ctx.lineTo(x + 20, ay + 3);
+    ctx.stroke();
+  }
+}
+
+// ===========================================
+// L1: NOSE CONE PICKER
+// ===========================================
+function drawLevel1() {
+  var tunnelW = Math.min(canvasW * 0.55, 500);
+  var tunnelH = Math.min(canvasH * 0.55, 320);
+  var tunnelX = canvasW * 0.4 - tunnelW / 2;
+  var tunnelY = canvasH * 0.08;
+
+  // Draw wind tunnel box
+  drawWindTunnelBox(tunnelX, tunnelY, tunnelW, tunnelH);
+
+  var shapeCX = tunnelX + tunnelW * 0.45;
+  var shapeCY = tunnelY + tunnelH / 2;
+  var shapeW = 50;
+  var shapeH = 70;
+
+  if (l1Phase === 'testing' || l1Phase === 'result') {
+    var shape = NOSE_SHAPES[l1TestingIdx];
+    // Draw the shape being tested
+    var breathe = 1 + 0.015 * Math.sin(pulsePhase * 2);
+    drawNoseShape(shapeCX, shapeCY, shapeW * breathe, shapeH * breathe, shape.key, shape.color);
+
+    // Wind particles
+    updateWindParticles(shapeCX, shapeCY, shapeW, shapeH, shape.cd);
+    drawWindParticles();
+
+    // C_D readout (animated)
+    if (l1Phase === 'testing') {
+      var progress = Math.min(l1TestTime / 80, 1);
+      var easedProgress = 1 - Math.pow(1 - progress, 3);
+      var displayCd = shape.cd * easedProgress;
+      ctx.fillStyle = '#50ffb0';
+      ctx.font = 'bold 28px "Space Grotesk", sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText('C_D = ' + displayCd.toFixed(2), shapeCX, tunnelY + tunnelH + 36);
+    } else {
+      // Show final result
+      ctx.fillStyle = '#50ffb0';
+      ctx.font = 'bold 28px "Space Grotesk", sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText('C_D = ' + shape.cd.toFixed(2), shapeCX, tunnelY + tunnelH + 36);
+    }
+  }
+
+  // Draw 4 nose shape options on the right
+  var optX = canvasW * 0.78;
+  var optStartY = tunnelY + 10;
+  var optH = (tunnelH - 20) / 4;
+  var optW = Math.min(100, canvasW * 0.12);
+
+  for (var ni = 0; ni < NOSE_SHAPES.length; ni++) {
+    var ns = NOSE_SHAPES[ni];
+    var oy = optStartY + ni * optH + optH / 2;
+    var isSelected = (l1Selected === ni);
+    var isTested = l1TestedCds.indexOf(ni) >= 0;
+
+    // Card background
+    var cardX = optX - optW / 2 - 12;
+    var cardW2 = optW + 24;
+    var cardH2 = optH - 8;
+    var cardY2 = oy - cardH2 / 2;
+
+    if (isSelected) {
+      ctx.shadowColor = '#50ffb0';
+      ctx.shadowBlur = 12;
+      ctx.fillStyle = 'rgba(80,255,176,0.08)';
+    } else {
+      ctx.fillStyle = 'rgba(20,25,40,0.7)';
+    }
+    ctx.fillRect(cardX, cardY2, cardW2, cardH2);
+    ctx.shadowBlur = 0;
+
+    ctx.strokeStyle = isSelected ? 'rgba(80,255,176,0.6)' : 'rgba(80,255,176,0.15)';
+    ctx.lineWidth = isSelected ? 2 : 1;
+    ctx.strokeRect(cardX, cardY2, cardW2, cardH2);
+
+    // Draw mini nose shape
+    drawNoseShape(optX - 20, oy, 22, 30, ns.key, ns.color);
+
+    // Label
+    ctx.fillStyle = isSelected ? '#50ffb0' : '#aaabb0';
+    ctx.font = '11px "Space Grotesk", sans-serif';
+    ctx.textAlign = 'left';
+    ctx.fillText(t(ns.nameKey), optX + 8, oy - 4);
+
+    // Show tested C_D
+    if (isTested) {
+      ctx.fillStyle = ns.color;
+      ctx.font = 'bold 11px "Space Grotesk", sans-serif';
+      ctx.fillText('C_D=' + ns.cd.toFixed(2), optX + 8, oy + 12);
+    }
+  }
+
+  // Result feedback
+  if (l1Phase === 'result') {
+    var feedbackY = tunnelY + tunnelH + 70;
+    if (l1Correct) {
+      ctx.fillStyle = '#50ffb0';
+      ctx.font = 'bold 20px "Space Grotesk", sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText(t('correct') + ' ' + t(NOSE_SHAPES[l1TestingIdx].nameKey) + ' C_D=' + NOSE_SHAPES[l1TestingIdx].cd.toFixed(2), canvasW / 2, feedbackY);
+    } else {
+      var shakeX = l1ShakeTimer > 0 ? (Math.random() - 0.5) * 6 : 0;
+      ctx.fillStyle = '#ff6b6b';
+      ctx.font = 'bold 20px "Space Grotesk", sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText(t('wrong'), canvasW / 2 + shakeX, feedbackY);
+    }
+  }
+
+  // Instruction if in pick phase
+  if (l1Phase === 'pick') {
+    ctx.fillStyle = 'rgba(170,171,176,0.6)';
+    ctx.font = '14px "Inter", "Noto Sans SC", sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText(lang === 'cn' ? '\u70b9\u51fb\u53f3\u4fa7\u5f62\u72b6\uff0c\u7136\u540e\u6309 \u6d4b\u8bd5 \u67e5\u770b\u98ce\u6d1e\u7ed3\u679c' : 'Click a shape, then press TEST to see wind tunnel results', shapeCX, shapeCY);
+  }
+}
+
+// ===========================================
+// L2: FULL ROCKET BUILDER
+// ===========================================
+function drawLevel2() {
+  // Rocket preview on left
+  var rocketCX = canvasW * 0.22;
+  var rocketCY = canvasH * 0.45;
+  var rocketW = 50;
+  var rocketH = Math.min(canvasH * 0.65, 300);
+
+  // Determine current selections
+  var noseIdx = l2Selections[0];
+  var bodyIdx = l2Selections[1];
+  var tailIdx = l2Selections[2];
+
+  var noseCd = noseIdx >= 0 ? PARTS.nose[noseIdx].cd : 0.35;
+  var bodyCd = bodyIdx >= 0 ? PARTS.body[bodyIdx].cd : 0.12;
+  var tailCd = tailIdx >= 0 ? PARTS.tail[tailIdx].cd : 0.18;
+  var totalCd = noseCd + bodyCd + tailCd;
+  var totalCost = (noseIdx >= 0 ? PARTS.nose[noseIdx].cost : 0) +
+                  (bodyIdx >= 0 ? PARTS.body[bodyIdx].cost : 0) +
+                  (tailIdx >= 0 ? PARTS.tail[tailIdx].cost : 0);
+
+  var mainColor = totalCd < 0.25 ? '#50ffb0' : (totalCd < 0.45 ? '#74c0fc' : '#ff6b6b');
+
+  // Wind tunnel for rocket
+  var tunnelX = rocketCX - rocketW - 30;
+  var tunnelY2 = rocketCY - rocketH / 2 - 20;
+  var tunnelW2 = rocketW * 2 + 60;
+  var tunnelH2 = rocketH + 40;
+
+  if (l2Phase === 'testing' || l2Phase === 'result') {
+    drawWindTunnelBox(tunnelX, tunnelY2, tunnelW2, tunnelH2);
+    updateWindParticles(rocketCX, rocketCY, rocketW, rocketH * 0.3, totalCd);
+    drawWindParticles();
+  }
+
+  // Draw rocket with breathe
+  var breathe2 = 1 + 0.01 * Math.sin(pulsePhase * 2);
+  if (noseIdx >= 0 || bodyIdx >= 0 || tailIdx >= 0) {
+    // Ambient glow
+    ctx.shadowColor = mainColor;
+    ctx.shadowBlur = 20 + 5 * Math.sin(pulsePhase * 1.5);
+    drawRocket(rocketCX, rocketCY, rocketW * breathe2, rocketH * breathe2, noseCd, bodyCd, tailCd, mainColor);
+    ctx.shadowBlur = 0;
+  }
+
+  // Part labels on rocket
+  var noseTopY = rocketCY - rocketH * breathe2 / 2;
+  var labelX = rocketCX + rocketW + 15;
+  ctx.font = '9px "Space Grotesk", sans-serif';
+  ctx.textAlign = 'left';
+  ctx.fillStyle = l2ActiveSlot === 0 ? '#50ffb0' : '#aaabb0';
+  ctx.fillText(t('noseCone'), labelX, noseTopY + rocketH * 0.15);
+  ctx.fillStyle = l2ActiveSlot === 1 ? '#50ffb0' : '#aaabb0';
+  ctx.fillText(t('bodyTube'), labelX, noseTopY + rocketH * 0.52);
+  ctx.fillStyle = l2ActiveSlot === 2 ? '#50ffb0' : '#aaabb0';
+  ctx.fillText(t('tailCone'), labelX, noseTopY + rocketH * 0.85);
+
+  // Part selector panel on right
+  var panelX = canvasW * 0.48;
+  var panelW = canvasW * 0.48;
+  var panelY = canvasH * 0.06;
+  var slotNames = ['nose', 'body', 'tail'];
+  var slotTitleKeys = ['noseCone', 'bodyTube', 'tailCone'];
+  var slotH = (canvasH * 0.80) / 3;
+
+  for (var si = 0; si < 3; si++) {
+    var sName = slotNames[si];
+    var parts = PARTS[sName];
+    var slotY = panelY + si * slotH;
+    var isActiveSlot = (l2ActiveSlot === si);
+
+    // Slot title
+    ctx.fillStyle = isActiveSlot ? '#50ffb0' : '#aaabb0';
+    ctx.font = 'bold 12px "Space Grotesk", sans-serif';
+    ctx.textAlign = 'left';
+    ctx.fillText(t(slotTitleKeys[si]), panelX, slotY + 16);
+
+    // 3 option cards
+    var cardW3 = Math.min((panelW - 30) / 3, 140);
+    var cardH3 = slotH - 30;
+
+    for (var oi = 0; oi < 3; oi++) {
+      var part = parts[oi];
+      var cx3 = panelX + oi * (cardW3 + 8) + cardW3 / 2;
+      var cy3 = slotY + 28 + cardH3 / 2;
+      var isChosen = (l2Selections[si] === oi);
+
+      // Check if choosing this would go over budget
+      var tempCost = totalCost;
+      if (!isChosen) {
+        if (l2Selections[si] >= 0) tempCost -= PARTS[sName][l2Selections[si]].cost;
+        tempCost += part.cost;
+      }
+      var wouldOverBudget = (!isChosen && tempCost > BUDGET);
+
+      // Card bg
+      if (isChosen) {
+        ctx.shadowColor = part.color;
+        ctx.shadowBlur = 10;
+        ctx.fillStyle = 'rgba(80,255,176,0.06)';
+      } else if (wouldOverBudget) {
+        ctx.fillStyle = 'rgba(40,20,20,0.5)';
+      } else {
+        ctx.fillStyle = 'rgba(20,25,40,0.7)';
+      }
+      ctx.fillRect(cx3 - cardW3 / 2, cy3 - cardH3 / 2, cardW3, cardH3);
+      ctx.shadowBlur = 0;
+
+      ctx.strokeStyle = isChosen ? part.color : (wouldOverBudget ? 'rgba(255,107,107,0.3)' : 'rgba(80,255,176,0.12)');
+      ctx.lineWidth = isChosen ? 2 : 1;
+      ctx.strokeRect(cx3 - cardW3 / 2, cy3 - cardH3 / 2, cardW3, cardH3);
+
+      // Part name
+      var pName = part.name[lang] || part.name.en;
+      ctx.fillStyle = isChosen ? '#e2e2e9' : '#aaabb0';
+      ctx.font = '11px "Inter", "Noto Sans SC", sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText(pName, cx3, cy3 - cardH3 * 0.18);
+
+      // C_D
+      ctx.fillStyle = part.color;
+      ctx.font = 'bold 13px "Space Grotesk", sans-serif';
+      ctx.fillText('C_D ' + part.cd.toFixed(2), cx3, cy3 + 4);
+
+      // Cost
+      ctx.fillStyle = wouldOverBudget ? '#ff6b6b' : '#aaabb0';
+      ctx.font = '10px "Space Grotesk", sans-serif';
+      ctx.fillText('$' + part.cost, cx3, cy3 + cardH3 * 0.25);
+    }
+  }
+
+  // Budget / Total bar at bottom of panel
+  var barY = panelY + 3 * slotH + 8;
+  ctx.fillStyle = '#aaabb0';
+  ctx.font = '11px "Space Grotesk", sans-serif';
+  ctx.textAlign = 'left';
+  ctx.fillText(t('total') + ' C_D: ', panelX, barY);
+  ctx.fillStyle = mainColor;
+  ctx.font = 'bold 14px "Space Grotesk", sans-serif';
+  ctx.fillText(totalCd.toFixed(2), panelX + 70, barY);
+
+  ctx.fillStyle = '#aaabb0';
+  ctx.font = '11px "Space Grotesk", sans-serif';
+  ctx.fillText(t('budget') + ': ', panelX + 140, barY);
+  var budgetColor = totalCost > BUDGET ? '#ff6b6b' : '#50ffb0';
+  ctx.fillStyle = budgetColor;
+  ctx.font = 'bold 14px "Space Grotesk", sans-serif';
+  ctx.fillText('$' + totalCost + ' / $' + BUDGET, panelX + 190, barY);
+
+  // Result phase
+  if (l2Phase === 'result') {
+    var feedY = barY + 30;
+    if (totalCost > BUDGET) {
+      var shakeX2 = l2ShakeTimer > 0 ? (Math.random() - 0.5) * 6 : 0;
+      ctx.fillStyle = '#ff6b6b';
+      ctx.font = 'bold 18px "Space Grotesk", sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText(t('overBudget'), canvasW * 0.65 + shakeX2, feedY);
+    } else {
+      // Score based on C_D
+      var scoreMsg = totalCd < 0.20 ? t('great') : t('correct');
+      ctx.fillStyle = '#50ffb0';
+      ctx.font = 'bold 18px "Space Grotesk", sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText(scoreMsg + '  C_D = ' + totalCd.toFixed(2), canvasW * 0.65, feedY);
+    }
+  }
+}
+
+// ===========================================
+// L3: ALTITUDE RACE
+// ===========================================
+function drawLevel3() {
+  if (l3Phase === 'preview') {
+    drawL3Preview();
+  } else if (l3Phase === 'racing') {
+    drawL3Race();
+  } else if (l3Phase === 'result') {
+    drawL3Race();
+    drawL3Result();
+  }
+}
+
+function drawL3Preview() {
+  // Show all 4 rockets side by side with their C_D
+  var rCount = l3Rockets.length;
+  var spacing = canvasW / (rCount + 1);
+  var rW = 36;
+  var rH = Math.min(canvasH * 0.45, 180);
+  var topY = canvasH * 0.12;
+
+  for (var ri = 0; ri < rCount; ri++) {
+    var r = l3Rockets[ri];
+    var rx = spacing * (ri + 1);
+    var ry = topY + rH / 2;
+    var breathe3 = 1 + 0.012 * Math.sin(pulsePhase * 2 + ri);
+
+    // Glow
+    ctx.shadowColor = r.color;
+    ctx.shadowBlur = 14;
+    drawRocket(rx, ry, rW * breathe3, rH * breathe3, r.noseCd, r.bodyCd, r.tailCd, r.color);
+    ctx.shadowBlur = 0;
+
+    // Label
+    var labelName = ri === 0 ? t('you') : (r.name[lang] || r.name.en);
+    ctx.fillStyle = r.color;
+    ctx.font = 'bold 12px "Space Grotesk", sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText(labelName, rx, topY + rH + 24);
+
+    // C_D
+    ctx.fillStyle = '#aaabb0';
+    ctx.font = '11px "Space Grotesk", sans-serif';
+    ctx.fillText('C_D = ' + r.cd.toFixed(2), rx, topY + rH + 42);
+  }
+
+  // Wind tunnel hint
+  ctx.fillStyle = 'rgba(80,255,176,0.4)';
+  ctx.font = '13px "Inter", "Noto Sans SC", sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillText(lang === 'cn' ? '\u76f8\u540c\u53d1\u52a8\u673a\uff0c\u76f8\u540c\u8d28\u91cf\u3002\u963b\u529b\u6700\u4f4e = \u98de\u6700\u9ad8\uff01\u6309 \u53d1\u5c04' : 'Same engine, same mass. Lowest drag = highest altitude! Press LAUNCH', canvasW / 2, canvasH * 0.82);
+}
+
+function drawL3Race() {
+  // Vertical race - rockets fly upward
+  var rCount = l3Rockets.length;
+  var spacing = canvasW / (rCount + 1);
+  var rW = 30;
+  var rH = 100;
+
+  // Background altitude markers
+  var maxAlt = 0;
+  for (var mi = 0; mi < rCount; mi++) {
+    if (l3Rockets[mi].alt > maxAlt) maxAlt = l3Rockets[mi].alt;
+  }
+  var altScale = maxAlt > 0 ? (canvasH * 0.7) / Math.max(maxAlt, 1000) : 1;
+
+  // Altitude grid lines
+  var gridStep = maxAlt > 5000 ? 2000 : (maxAlt > 2000 ? 1000 : 500);
+  if (gridStep > 0 && maxAlt > 0) {
+    ctx.strokeStyle = 'rgba(80,255,176,0.08)';
+    ctx.lineWidth = 1;
+    ctx.setLineDash([4, 6]);
+    for (var gAlt = gridStep; gAlt <= maxAlt + gridStep; gAlt += gridStep) {
+      var gy = canvasH * 0.85 - gAlt * altScale;
+      if (gy < 20) break;
+      ctx.beginPath();
+      ctx.moveTo(0, gy);
+      ctx.lineTo(canvasW, gy);
+      ctx.stroke();
+      ctx.fillStyle = 'rgba(170,171,176,0.3)';
+      ctx.font = '9px "Space Grotesk", sans-serif';
+      ctx.textAlign = 'left';
+      ctx.fillText((gAlt / 1000).toFixed(1) + ' km', 4, gy - 3);
+    }
+    ctx.setLineDash([]);
+  }
+
+  // Draw each rocket
+  var groundY = canvasH * 0.85;
+  for (var ri2 = 0; ri2 < rCount; ri2++) {
+    var r2 = l3Rockets[ri2];
+    var rx2 = spacing * (ri2 + 1);
+    var rocketScreenY = groundY - r2.alt * altScale;
+    if (rocketScreenY < rH / 2 + 10) rocketScreenY = rH / 2 + 10;
+
+    // Trail / exhaust
+    if (r2.vel > 10) {
+      var trailLen = Math.min(r2.vel * 0.15, 60);
+      var grad = ctx.createLinearGradient(rx2, rocketScreenY + rH / 2, rx2, rocketScreenY + rH / 2 + trailLen);
+      grad.addColorStop(0, 'rgba(255,140,50,0.8)');
+      grad.addColorStop(0.5, 'rgba(255,80,30,0.4)');
+      grad.addColorStop(1, 'rgba(255,50,20,0)');
+      ctx.fillStyle = grad;
+      ctx.beginPath();
+      ctx.moveTo(rx2 - 8, rocketScreenY + rH / 2);
+      ctx.lineTo(rx2 + 8, rocketScreenY + rH / 2);
+      ctx.lineTo(rx2 + 3, rocketScreenY + rH / 2 + trailLen);
+      ctx.lineTo(rx2 - 3, rocketScreenY + rH / 2 + trailLen);
+      ctx.closePath();
+      ctx.fill();
+
+      // Exhaust particles
+      if (animFrame % 3 === 0) {
+        spawnParticles(rx2, rocketScreenY + rH / 2 + 5, 1, '#ff8c32', 1.5);
+      }
+    }
+
+    // Rocket body
+    var breathe4 = 1 + 0.008 * Math.sin(pulsePhase * 3 + ri2);
+    ctx.shadowColor = r2.color;
+    ctx.shadowBlur = 10;
+    drawRocket(rx2, rocketScreenY, rW * breathe4, rH * breathe4, r2.noseCd, r2.bodyCd, r2.tailCd, r2.color);
+    ctx.shadowBlur = 0;
+
+    // Name tag
+    var labelName2 = ri2 === 0 ? t('you') : (r2.name[lang] || r2.name.en);
+    ctx.fillStyle = r2.color;
+    ctx.font = 'bold 10px "Space Grotesk", sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText(labelName2, rx2, groundY + 16);
+
+    // Altitude readout
+    ctx.fillStyle = '#aaabb0';
+    ctx.font = '9px "Space Grotesk", sans-serif';
+    ctx.fillText((r2.alt / 1000).toFixed(1) + ' km', rx2, groundY + 28);
+  }
+
+  // Ground line
+  ctx.strokeStyle = 'rgba(170,171,176,0.3)';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(0, groundY);
+  ctx.lineTo(canvasW, groundY);
+  ctx.stroke();
+}
+
+function drawL3Result() {
+  // Winner overlay
+  var overlayAlpha = Math.min((l3RaceTime - 500) / 60, 0.85);
+  if (overlayAlpha <= 0) return;
+
+  ctx.globalAlpha = overlayAlpha;
+  ctx.fillStyle = 'rgba(12,14,20,0.7)';
+  ctx.fillRect(0, 0, canvasW, canvasH);
+  ctx.globalAlpha = 1;
+
+  var winner = l3Rockets[l3WinnerIdx];
+  var isPlayer = (l3WinnerIdx === 0);
+  var msgColor = isPlayer ? '#50ffb0' : '#ff6b6b';
+  var msg = isPlayer ? t('youWin') : t('youLose');
+
+  ctx.fillStyle = msgColor;
+  ctx.font = 'bold 32px "Space Grotesk", sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillText(msg, canvasW / 2, canvasH * 0.35);
+
+  // Winner name
+  var winName = isPlayer ? t('you') : (winner.name[lang] || winner.name.en);
+  ctx.fillStyle = winner.color;
+  ctx.font = 'bold 18px "Space Grotesk", sans-serif';
+  ctx.fillText(t('winner') + ' ' + winName + '  C_D = ' + winner.cd.toFixed(2), canvasW / 2, canvasH * 0.45);
+
+  // All results
+  var sortedRockets = l3Rockets.slice().sort(function(a, b) { return b.alt - a.alt; });
+  for (var sr = 0; sr < sortedRockets.length; sr++) {
+    var srr = sortedRockets[sr];
+    var sry = canvasH * 0.55 + sr * 28;
+    var isP = (srr === l3Rockets[0]);
+    ctx.fillStyle = srr.color;
+    ctx.font = (isP ? 'bold ' : '') + '13px "Space Grotesk", sans-serif';
+    ctx.textAlign = 'center';
+    var srName = isP ? t('you') : (srr.name[lang] || srr.name.en);
+    ctx.fillText('#' + (sr + 1) + '  ' + srName + '   C_D=' + srr.cd.toFixed(2) + '   ' + (srr.alt / 1000).toFixed(1) + ' km', canvasW / 2, sry);
+  }
+}
+
+// ===========================================
+// COMPLETION SCREEN
+// ===========================================
+function drawCompletion() {
+  ctx.globalAlpha = completionAlpha;
+  ctx.fillStyle = 'rgba(12,14,20,0.9)';
+  ctx.fillRect(0, 0, canvasW, canvasH);
+
+  ctx.fillStyle = '#50ffb0';
+  ctx.font = 'bold 28px "Space Grotesk", sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillText(t('complete'), canvasW / 2, canvasH * 0.30);
+
+  ctx.fillStyle = '#aaabb0';
+  ctx.font = '14px "Inter", "Noto Sans SC", sans-serif';
+  ctx.fillText(t('score') + ': ' + totalScore, canvasW / 2, canvasH * 0.40);
+
+  // Summary
+  var summaryLines = t('summary').split(/(?<=\u3002|\.)\s*/);
+  ctx.fillStyle = '#e2e2e9';
+  ctx.font = '13px "Inter", "Noto Sans SC", sans-serif';
+  for (var sli = 0; sli < summaryLines.length; sli++) {
+    ctx.fillText(summaryLines[sli], canvasW / 2, canvasH * 0.52 + sli * 22);
+  }
+
+  ctx.globalAlpha = 1;
+}
+
+// ===========================================
+// TRANSITION OVERLAY
+// ===========================================
+function drawTransition() {
+  if (transitionAlpha > 0.01) {
+    ctx.globalAlpha = transitionAlpha;
+    ctx.fillStyle = '#0c0e14';
+    ctx.fillRect(0, 0, canvasW, canvasH);
+    ctx.globalAlpha = 1;
+  }
+}
+
+// ===========================================
+// UI UPDATE
+// ===========================================
+function updateUI() {
+  document.getElementById('langBtn').textContent = lang === 'cn' ? 'CN' : 'EN';
+  document.getElementById('gameTitle').textContent = t('title');
+
+  var titles = ['l1title', 'l2title', 'l3title'];
+  var sidebars = ['l1sidebar', 'l2sidebar', 'l3sidebar'];
+  var guides = ['l1guide', 'l2guide', 'l3guide'];
+
+  if (currentLevel < 3) {
+    document.getElementById('sidebarTitle').textContent = t(sidebars[currentLevel]);
+    document.getElementById('guideContent').textContent = t(guides[currentLevel]);
+    document.getElementById('roundInfo').textContent = t('levelLabel') + ' ' + (currentLevel + 1) + '/3';
+  }
+
+  // HUD
+  document.getElementById('hudL1').textContent = t('levelLabel');
+  document.getElementById('hudV1').textContent = (currentLevel + 1) + '/3';
+  document.getElementById('hudL2').textContent = t('score');
+  document.getElementById('hudV2').textContent = '' + totalScore;
+
+  if (currentLevel === 0) {
+    document.getElementById('hudL3').textContent = t('dragCoeff');
+    document.getElementById('hudV3').textContent = l1TestingIdx >= 0 ? NOSE_SHAPES[l1TestingIdx].cd.toFixed(2) : '--';
+    document.getElementById('hudL4').textContent = '';
+    document.getElementById('hudV4').textContent = '';
+    if (l1Phase === 'pick') {
+      document.getElementById('btnAction').textContent = t('test');
+      document.getElementById('btnAction').disabled = (l1Selected < 0);
+    } else if (l1Phase === 'testing') {
+      document.getElementById('btnAction').textContent = '...';
+      document.getElementById('btnAction').disabled = true;
+    } else {
+      document.getElementById('btnAction').textContent = l1TestedCds.length >= 4 ? t('select') : t('next');
+      document.getElementById('btnAction').disabled = false;
+    }
+    document.getElementById('btnReset').textContent = t('reset');
+  } else if (currentLevel === 1) {
+    var noseIdx = l2Selections[0];
+    var bodyIdx = l2Selections[1];
+    var tailIdx = l2Selections[2];
+    var tCd = (noseIdx >= 0 ? PARTS.nose[noseIdx].cd : 0) +
+              (bodyIdx >= 0 ? PARTS.body[bodyIdx].cd : 0) +
+              (tailIdx >= 0 ? PARTS.tail[tailIdx].cd : 0);
+    document.getElementById('hudL3').textContent = t('dragCoeff');
+    document.getElementById('hudV3').textContent = (noseIdx >= 0 || bodyIdx >= 0 || tailIdx >= 0) ? tCd.toFixed(2) : '--';
+    document.getElementById('hudL4').textContent = t('budget');
+    var tCost = (noseIdx >= 0 ? PARTS.nose[noseIdx].cost : 0) +
+                (bodyIdx >= 0 ? PARTS.body[bodyIdx].cost : 0) +
+                (tailIdx >= 0 ? PARTS.tail[tailIdx].cost : 0);
+    document.getElementById('hudV4').textContent = '$' + tCost + '/$' + BUDGET;
+    if (l2Phase === 'build') {
+      var allSelected = noseIdx >= 0 && bodyIdx >= 0 && tailIdx >= 0;
+      document.getElementById('btnAction').textContent = t('test');
+      document.getElementById('btnAction').disabled = !allSelected;
+    } else if (l2Phase === 'testing') {
+      document.getElementById('btnAction').textContent = '...';
+      document.getElementById('btnAction').disabled = true;
+    } else {
+      document.getElementById('btnAction').textContent = t('nextLevel');
+    }
+    document.getElementById('btnReset').textContent = t('reset');
+  } else if (currentLevel === 2) {
+    document.getElementById('hudL3').textContent = t('dragCoeff');
+    document.getElementById('hudV3').textContent = l3PlayerCd.toFixed(2);
+    document.getElementById('hudL4').textContent = t('altitude');
+    var playerAlt = l3Rockets.length > 0 ? l3Rockets[0].alt : 0;
+    document.getElementById('hudV4').textContent = (playerAlt / 1000).toFixed(1) + ' km';
+    if (l3Phase === 'preview') {
+      document.getElementById('btnAction').textContent = t('launch');
+    } else if (l3Phase === 'racing') {
+      document.getElementById('btnAction').textContent = t('racing') || '...';
+      document.getElementById('btnAction').disabled = true;
+    } else {
+      document.getElementById('btnAction').textContent = currentLevel >= 2 ? t('complete') : t('nextLevel');
+      document.getElementById('btnAction').disabled = false;
+    }
+    document.getElementById('btnReset').textContent = t('reset');
+  }
+}
+
+// ===========================================
+// GAME LOGIC
+// ===========================================
+
+function startLevel(lvl) {
+  currentLevel = lvl;
+  transitionTarget = 1;
+
+  if (lvl === 0) {
+    l1Selected = -1;
+    l1Phase = 'pick';
+    l1TestTime = 0;
+    l1TestingIdx = -1;
+    l1TestedCds = [];
+    l1Correct = false;
+    windParticles = [];
+  } else if (lvl === 1) {
+    l2Selections = [-1, -1, -1];
+    l2Phase = 'build';
+    l2TestTime = 0;
+    l2ActiveSlot = 0;
+    windParticles = [];
+  } else if (lvl === 2) {
+    initL3Race();
+  } else {
+    completionAlpha = 0;
+  }
+  updateUI();
+}
+
+function initL3Race() {
+  l3Phase = 'preview';
+  l3RaceTime = 0;
+  l3WinnerIdx = -1;
+
+  // Player rocket from L2 selections or default
+  var pNoseCd = l2Selections[0] >= 0 ? PARTS.nose[l2Selections[0]].cd : 0.18;
+  var pBodyCd = l2Selections[1] >= 0 ? PARTS.body[l2Selections[1]].cd : 0.06;
+  var pTailCd = l2Selections[2] >= 0 ? PARTS.tail[l2Selections[2]].cd : 0.08;
+  l3PlayerCd = pNoseCd + pBodyCd + pTailCd;
+
+  l3Rockets = [];
+  // Player rocket first
+  l3Rockets.push({
+    name: {en:'Player', cn:'\u73a9\u5bb6'},
+    noseCd: pNoseCd,
+    bodyCd: pBodyCd,
+    tailCd: pTailCd,
+    cd: l3PlayerCd,
+    color: '#50ffb0',
+    alt: 0,
+    vel: 0
+  });
+  // AI rockets
+  for (var ai = 0; ai < AI_ROCKETS.length; ai++) {
+    var ar = AI_ROCKETS[ai];
+    l3Rockets.push({
+      name: ar.name,
+      noseCd: ar.noseCd,
+      bodyCd: ar.bodyCd,
+      tailCd: ar.tailCd,
+      cd: ar.noseCd + ar.bodyCd + ar.tailCd,
+      color: ar.color,
+      alt: 0,
+      vel: 0
+    });
+  }
+}
+
+function simulateRaceStep(dt) {
+  // dt in seconds
+  var raceTimeSec = l3RaceTime / 60; // convert frames to approximate seconds
+
+  for (var ri = 0; ri < l3Rockets.length; ri++) {
+    var r = l3Rockets[ri];
+    // Thrust phase or coast phase
+    var thrust = raceTimeSec < BURN_TIME ? ENGINE_THRUST : 0;
+    // Drag force: F_d = 0.5 * rho * v^2 * C_D * A
+    // Simplify: use altitude-adjusted density
+    var altKm = r.alt / 1000;
+    var rhoLocal = RHO * Math.exp(-altKm / 8.5);
+    var dragForce = 0.5 * rhoLocal * r.vel * r.vel * r.cd * ROCKET_AREA;
+    // Gravity
+    var gravForce = ROCKET_MASS * G;
+    // Net force
+    var netForce = thrust - dragForce - gravForce;
+    // Acceleration
+    var accel = netForce / ROCKET_MASS;
+    // Update velocity
+    r.vel += accel * dt;
+    if (r.vel < 0 && r.alt <= 0) r.vel = 0;
+    // Update altitude
+    r.alt += r.vel * dt;
+    if (r.alt < 0) { r.alt = 0; r.vel = 0; }
+  }
+}
+
+function checkRaceEnd() {
+  // Race ends when all rockets are descending or stopped
+  var allStopped = true;
+  for (var ri = 0; ri < l3Rockets.length; ri++) {
+    if (l3Rockets[ri].vel > 0.5 || l3Rockets[ri].alt > 10) {
+      allStopped = false;
+    }
+  }
+
+  // Also check if all have peaked (vel <= 0 and were going up)
+  var allPeaked = true;
+  for (var ri2 = 0; ri2 < l3Rockets.length; ri2++) {
+    if (l3Rockets[ri2].vel > 0) allPeaked = false;
+  }
+
+  if ((allPeaked && l3RaceTime > 100) || l3RaceTime > 1200) {
+    // Find winner (highest altitude)
+    var maxAltR = 0;
+    l3WinnerIdx = 0;
+    for (var ri3 = 0; ri3 < l3Rockets.length; ri3++) {
+      if (l3Rockets[ri3].alt > maxAltR) {
+        maxAltR = l3Rockets[ri3].alt;
+        l3WinnerIdx = ri3;
+      }
+    }
+    l3Phase = 'result';
+
+    // Score
+    var isPlayerWin = (l3WinnerIdx === 0);
+    var raceScore = isPlayerWin ? 40 : 15;
+    levelScores[2] = raceScore;
+    totalScore += raceScore;
+
+    // Particles
+    if (isPlayerWin) {
+      spawnParticles(canvasW / 2, canvasH * 0.35, 30, '#50ffb0', 5);
+      playTone(880, 0.3, 0.1);
+    } else {
+      playTone(220, 0.3, 0.06);
+    }
+    updateUI();
+  }
+}
+
+// ===========================================
+// CLICK HANDLING
+// ===========================================
+function handleCanvasClick(ex, ey) {
+  if (currentLevel === 0) {
+    handleL1Click(ex, ey);
+  } else if (currentLevel === 1) {
+    handleL2Click(ex, ey);
+  }
+}
+
+function handleL1Click(ex, ey) {
+  if (l1Phase !== 'pick' && l1Phase !== 'result') return;
+
+  // Check nose shape option cards
+  var optX = canvasW * 0.78;
+  var tunnelY = canvasH * 0.08;
+  var tunnelH = Math.min(canvasH * 0.55, 320);
+  var optStartY = tunnelY + 10;
+  var optH = (tunnelH - 20) / 4;
+  var optW = Math.min(100, canvasW * 0.12);
+
+  for (var ni = 0; ni < NOSE_SHAPES.length; ni++) {
+    var oy = optStartY + ni * optH + optH / 2;
+    var cardX = optX - optW / 2 - 12;
+    var cardW2 = optW + 24;
+    var cardH2 = optH - 8;
+    var cardY2 = oy - cardH2 / 2;
+
+    if (ex >= cardX && ex <= cardX + cardW2 && ey >= cardY2 && ey <= cardY2 + cardH2) {
+      l1Selected = ni;
+      l1Phase = 'pick';
+      playTone(600, 0.08, 0.06);
+      updateUI();
+      return;
+    }
+  }
+}
+
+function handleL2Click(ex, ey) {
+  if (l2Phase !== 'build') return;
+
+  var panelX = canvasW * 0.48;
+  var panelW = canvasW * 0.48;
+  var panelY = canvasH * 0.06;
+  var slotNames = ['nose', 'body', 'tail'];
+  var slotH = (canvasH * 0.80) / 3;
+
+  for (var si = 0; si < 3; si++) {
+    var parts = PARTS[slotNames[si]];
+    var slotY = panelY + si * slotH;
+    var cardW3 = Math.min((panelW - 30) / 3, 140);
+    var cardH3 = slotH - 30;
+
+    for (var oi = 0; oi < 3; oi++) {
+      var cx3 = panelX + oi * (cardW3 + 8) + cardW3 / 2;
+      var cy3 = slotY + 28 + cardH3 / 2;
+
+      if (ex >= cx3 - cardW3 / 2 && ex <= cx3 + cardW3 / 2 &&
+          ey >= cy3 - cardH3 / 2 && ey <= cy3 + cardH3 / 2) {
+
+        // Check budget
+        var tempCost = 0;
+        for (var ts = 0; ts < 3; ts++) {
+          if (ts === si) {
+            tempCost += PARTS[slotNames[ts]][oi].cost;
+          } else if (l2Selections[ts] >= 0) {
+            tempCost += PARTS[slotNames[ts]][l2Selections[ts]].cost;
+          }
+        }
+        if (tempCost > BUDGET) {
+          l2ShakeTimer = 15;
+          playTone(150, 0.15, 0.08);
+          return;
+        }
+
+        l2Selections[si] = oi;
+        l2ActiveSlot = si;
+        playTone(500 + oi * 100, 0.08, 0.06);
+        updateUI();
+        return;
+      }
+    }
+  }
+}
+
+// ===========================================
+// BUTTON HANDLERS
+// ===========================================
+function handleAction() {
+  if (currentLevel >= 3) return;
+
+  if (currentLevel === 0) {
+    if (l1Phase === 'pick' && l1Selected >= 0) {
+      // Start wind tunnel test
+      l1Phase = 'testing';
+      l1TestingIdx = l1Selected;
+      l1TestTime = 0;
+      var shape = NOSE_SHAPES[l1TestingIdx];
+      var tunnelW = Math.min(canvasW * 0.55, 500);
+      var tunnelH = Math.min(canvasH * 0.55, 320);
+      var tunnelX = canvasW * 0.4 - tunnelW / 2;
+      var tunnelY = canvasH * 0.08;
+      initWindParticles(tunnelX + tunnelW * 0.45, tunnelY + tunnelH / 2, 50, 70, shape.cd);
+      playTone(400, 0.15, 0.06);
+      updateUI();
+    } else if (l1Phase === 'result') {
+      if (l1TestedCds.length >= 4) {
+        // Ask which is lowest - the last pick is the answer
+        var lowestIdx = 3; // ogive
+        if (l1Selected === lowestIdx) {
+          l1Correct = true;
+          levelScores[0] = 30;
+          totalScore += 30;
+          spawnParticles(canvasW / 2, canvasH * 0.7, 20, '#50ffb0', 4);
+          playTone(880, 0.2, 0.08);
+        } else {
+          l1Correct = false;
+          l1ShakeTimer = 20;
+          levelScores[0] = 10;
+          totalScore += 10;
+          playTone(200, 0.2, 0.06);
+        }
+        // Move to L2 after a moment
+        setTimeout(function() {
+          startLevel(1);
+        }, 1800);
+        updateUI();
+      } else {
+        // Test next shape or let them pick another
+        l1Phase = 'pick';
+        l1Selected = -1;
+        updateUI();
+      }
+    }
+  } else if (currentLevel === 1) {
+    if (l2Phase === 'build') {
+      // Test the build
+      var noseIdx = l2Selections[0];
+      var bodyIdx = l2Selections[1];
+      var tailIdx = l2Selections[2];
+      if (noseIdx < 0 || bodyIdx < 0 || tailIdx < 0) return;
+
+      var totalCost = PARTS.nose[noseIdx].cost + PARTS.body[bodyIdx].cost + PARTS.tail[tailIdx].cost;
+      if (totalCost > BUDGET) {
+        l2ShakeTimer = 20;
+        playTone(150, 0.2, 0.08);
+        return;
+      }
+
+      l2Phase = 'testing';
+      l2TestTime = 0;
+      var noseCd = PARTS.nose[noseIdx].cd;
+      var bodyCd = PARTS.body[bodyIdx].cd;
+      var tailCd = PARTS.tail[tailIdx].cd;
+      var totalCd = noseCd + bodyCd + tailCd;
+      var rocketCX = canvasW * 0.22;
+      var rocketCY = canvasH * 0.45;
+      initWindParticles(rocketCX, rocketCY, 50, 90, totalCd);
+      playTone(450, 0.15, 0.06);
+      updateUI();
+    } else if (l2Phase === 'result') {
+      startLevel(2);
+    }
+  } else if (currentLevel === 2) {
+    if (l3Phase === 'preview') {
+      l3Phase = 'racing';
+      l3RaceTime = 0;
+      playTone(600, 0.3, 0.08);
+      updateUI();
+    } else if (l3Phase === 'result') {
+      // Complete
+      currentLevel = 3;
+      completionAlpha = 0;
+      spawnParticles(canvasW / 2, canvasH / 2, 40, '#50ffb0', 6);
+      spawnParticles(canvasW / 2, canvasH / 2, 20, '#74c0fc', 5);
+      spawnParticles(canvasW / 2, canvasH / 2, 15, '#ffb59c', 4);
+      playTone(880, 0.4, 0.1);
+      updateUI();
+    }
+  }
+}
+
+function handleReset() {
+  startLevel(currentLevel);
+}
+
+// ===========================================
+// MAIN LOOP
+// ===========================================
+function mainLoop() {
+  animFrame++;
+  pulsePhase += 0.03;
+
+  // Clear
+  ctx.clearRect(0, 0, canvasW, canvasH);
+
+  // Background
+  ctx.fillStyle = '#0c0e14';
+  ctx.fillRect(0, 0, canvasW, canvasH);
+
+  // Parallax
+  drawParallax();
+
+  // Transition fade
+  if (transitionTarget > 0) {
+    transitionAlpha += (1 - transitionAlpha) * 0.08;
+    if (transitionAlpha > 0.95) {
+      transitionAlpha = 0;
+      transitionTarget = 0;
+    }
+  }
+
+  // Level-specific update + draw
+  if (currentLevel === 0) {
+    // L1 testing animation
+    if (l1Phase === 'testing') {
+      l1TestTime++;
+      if (l1TestTime > 100) {
+        l1Phase = 'result';
+        if (l1TestedCds.indexOf(l1TestingIdx) < 0) {
+          l1TestedCds.push(l1TestingIdx);
+        }
+        updateUI();
+      }
+    }
+    if (l1ShakeTimer > 0) l1ShakeTimer--;
+    drawLevel1();
+  } else if (currentLevel === 1) {
+    if (l2Phase === 'testing') {
+      l2TestTime++;
+      if (l2TestTime > 100) {
+        l2Phase = 'result';
+        // Score based on total C_D
+        var nIdx = l2Selections[0];
+        var bIdx = l2Selections[1];
+        var tIdx = l2Selections[2];
+        var tCd2 = PARTS.nose[nIdx].cd + PARTS.body[bIdx].cd + PARTS.tail[tIdx].cd;
+        var l2Score = tCd2 < 0.20 ? 40 : (tCd2 < 0.35 ? 25 : 15);
+        levelScores[1] = l2Score;
+        totalScore += l2Score;
+        spawnParticles(canvasW * 0.22, canvasH * 0.45, 15, '#50ffb0', 3);
+        playTone(660, 0.2, 0.08);
+        updateUI();
+      }
+    }
+    if (l2ShakeTimer > 0) l2ShakeTimer--;
+    drawLevel2();
+  } else if (currentLevel === 2) {
+    if (l3Phase === 'racing') {
+      l3RaceTime++;
+      // Physics at 60fps -> dt ~ 1/60
+      simulateRaceStep(1 / 15); // Speed up time for visual drama
+      checkRaceEnd();
+    }
+    drawLevel3();
+  } else {
+    // Completion
+    completionAlpha += (1 - completionAlpha) * 0.03;
+    drawCompletion();
+  }
+
+  // Particles
+  updateParticles();
+  drawParticles();
+
+  // Transition overlay
+  drawTransition();
+
+  requestAnimationFrame(mainLoop);
+}
+
+// ===========================================
+// EVENT LISTENERS
+// ===========================================
+canvas.addEventListener('mousemove', function(e) {
+  var rect = canvas.getBoundingClientRect();
+  mouseX = e.clientX - rect.left;
+  mouseY = e.clientY - rect.top;
+});
+
+canvas.addEventListener('click', function(e) {
+  var rect = canvas.getBoundingClientRect();
+  var ex = e.clientX - rect.left;
+  var ey = e.clientY - rect.top;
+  handleCanvasClick(ex, ey);
+});
+
+canvas.addEventListener('mousedown', function(e) { mouseDown = true; });
+canvas.addEventListener('mouseup', function(e) { mouseDown = false; });
+
+document.getElementById('btnAction').addEventListener('click', handleAction);
+document.getElementById('btnReset').addEventListener('click', handleReset);
+document.getElementById('langBtn').addEventListener('click', function() {
+  lang = lang === 'cn' ? 'en' : 'cn';
+  updateUI();
+});
+
+// --- INIT ---
+resize();
+startLevel(0);
+updateUI();
+mainLoop();
+
+</script>
+</body>
+</html>

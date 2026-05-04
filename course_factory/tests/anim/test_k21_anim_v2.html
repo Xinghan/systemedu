@@ -1,0 +1,1121 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=Inter:wght@400;500&family=Noto+Sans+SC:wght@400;700&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box;}
+html,body{width:100%;height:100vh;overflow:hidden;}
+body{background:var(--bg,#0c0e12);color:var(--text,#f6f6fc);font-family:'Inter','Noto Sans SC',sans-serif;}
+/* ── Outer: sidebar + main ── */
+.wrapper{display:flex;flex-direction:row;height:100vh;overflow:hidden;}
+.sidebar{width:200px;min-width:200px;max-width:200px;display:flex;flex-direction:column;gap:6px;padding:10px;background:rgba(0,0,0,0.5);border-right:1px solid rgba(80,255,176,0.15);overflow-y:auto;}
+.lang-btn{align-self:flex-start;flex-shrink:0;font-family:'Space Grotesk',sans-serif;font-size:10px;font-weight:700;padding:3px 8px;cursor:pointer;border:1px solid rgba(255,181,156,0.25);background:transparent;color:#ffb59c;letter-spacing:1px;}
+.lang-btn:hover{border-color:#ffb59c;background:rgba(255,181,156,0.1);}
+.sidebar h1{font-family:'Space Grotesk',sans-serif;font-size:13px;font-weight:700;color:var(--primary,#50ffb0);margin-top:4px;line-height:1.3;}
+.sidebar .sub{font-size:10px;color:var(--muted,#aaabb0);letter-spacing:0.06em;text-transform:uppercase;}
+.sidebar .frame-ind{font-family:'Space Grotesk',sans-serif;font-size:10px;color:var(--muted,#aaabb0);letter-spacing:0.1em;margin-top:4px;}
+.sidebar .guide-label{font-family:'Space Grotesk',sans-serif;font-size:9px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:var(--primary,#50ffb0);margin-top:8px;}
+.sidebar .guide-content{font-family:'Noto Sans SC',sans-serif;font-size:11px;color:rgba(255,255,255,0.85);line-height:1.5;}
+.sidebar .guide-content ul{padding-left:16px;margin:0;}
+.sidebar .guide-content li{margin-bottom:1px;}
+/* ── Main area: canvas + controls + hud ── */
+.anim-main{flex:1;display:flex;flex-direction:column;min-width:0;}
+.canvas-wrap{flex:1;min-height:0;position:relative;}
+canvas{width:100%;height:100%;display:block;}
+/* ── Controls + HUD ── */
+.controls{display:flex;justify-content:center;align-items:center;gap:12px;padding:6px 16px;}
+.ctrl-btn{font-family:'Space Grotesk',sans-serif;font-size:11px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;padding:5px 16px;border:none;cursor:pointer;color:var(--bg,#0c0e12);background:linear-gradient(135deg,var(--primary,#50ffb0),var(--primary-dim,#17df93));transition:transform 0.1s,box-shadow 0.2s;box-shadow:0 0 10px var(--glow-strong,rgba(80,255,176,0.3));}
+.ctrl-btn:hover{transform:scale(1.04);}
+.ctrl-btn:active{transform:scale(0.96);}
+.ctrl-btn.secondary{background:var(--glass,rgba(23,26,31,0.92));color:var(--muted,#aaabb0);box-shadow:none;backdrop-filter:blur(12px);}
+.ctrl-btn.secondary:hover{color:var(--primary,#50ffb0);}
+.hud{height:40px;display:flex;align-items:center;justify-content:space-around;background:rgba(0,0,0,0.55);backdrop-filter:blur(12px);padding:0 16px;}
+.hud-item{text-align:center;}
+.hud-label{font-family:'Space Grotesk',sans-serif;font-size:8px;letter-spacing:0.15em;text-transform:uppercase;color:var(--muted,#aaabb0);}
+.hud-val{font-family:'Space Grotesk',sans-serif;font-size:13px;font-weight:700;color:var(--primary,#50ffb0);}
+</style>
+</head>
+<body>
+<div class="wrapper">
+<!-- Sidebar: lang-btn, title, guide (completely separate from canvas) -->
+<div class="sidebar">
+<button class="lang-btn" id="langBtn">CN</button>
+<h1 id="title"></h1>
+<div class="sub" id="subtitle"></div>
+<div class="frame-ind" id="frameIndicator"></div>
+<div class="guide-label" id="guideTitle"></div>
+<div class="guide-content" id="guideContent"></div>
+</div>
+<!-- Main: canvas fills all space, nothing overlaps -->
+<div class="anim-main">
+<div class="canvas-wrap"><canvas id="c"></canvas></div>
+<div class="controls">
+<button class="ctrl-btn secondary" id="btnPrev"></button>
+<button class="ctrl-btn" id="btnPlay"></button>
+<button class="ctrl-btn secondary" id="btnNext"></button>
+</div>
+<div class="hud">
+<div class="hud-item"><div class="hud-label" id="hudL1"></div><div class="hud-val" id="hudV1"></div></div>
+<div class="hud-item"><div class="hud-label" id="hudL2"></div><div class="hud-val" id="hudV2"></div></div>
+<div class="hud-item"><div class="hud-label" id="hudL3"></div><div class="hud-val" id="hudV3"></div></div>
+<div class="hud-item"><div class="hud-label" id="hudL4"></div><div class="hud-val" id="hudV4"></div></div>
+</div>
+</div>
+</div>
+
+<!-- Runtime (shared skeleton) -->
+<script src="animation_runtime.js"></script>
+
+<!-- Content -->
+<script>
+// ============================================================
+// K21: Momentum -- p = m * v
+// Core question: Why is a truck collision far worse than a bicycle collision?
+//
+// Frame 0: Title "MOMENTUM" with truck vs bicycle icons, p=mv, core question
+// Frame 1: Same speed -- truck(10000kg) vs bicycle(10kg) at 10m/s, momentum bars
+// Frame 2: Same mass -- two balls(1kg), 5m/s vs 50m/s hitting a wall, crater + particles
+// Frame 3: Momentum transfer -- billiard ball collision, A hits B, conservation bars
+// Frame 4: Rocket momentum -- exhaust gas backward, rocket forward, p_total = 0
+//
+// Style: ares_mission
+// ============================================================
+
+// ── Animation state for continuous rendering ──
+var _animTime = 0;
+var _animRAF = null;
+var _particles = [];
+var _screenShake = {x: 0, y: 0, intensity: 0, decay: 0.92};
+var _soundMuted = true;
+var _audioCtx = null;
+
+function _initAudio() {
+  if (_audioCtx) return;
+  try { _audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch(e) {}
+}
+
+function _playImpact(freq, dur) {
+  if (_soundMuted || !_audioCtx) return;
+  var osc = _audioCtx.createOscillator();
+  var gain = _audioCtx.createGain();
+  osc.type = 'sine';
+  osc.frequency.value = freq;
+  gain.gain.setValueAtTime(0.15, _audioCtx.currentTime);
+  gain.gain.exponentialRampToValueAtTime(0.001, _audioCtx.currentTime + dur);
+  osc.connect(gain);
+  gain.connect(_audioCtx.destination);
+  osc.start();
+  osc.stop(_audioCtx.currentTime + dur);
+}
+
+function _triggerShake(intensity) {
+  _screenShake.intensity = intensity;
+}
+
+function _spawnParticles(x, y, count, color, speedMul) {
+  for (var i = 0; i < count; i++) {
+    var angle = Math.random() * Math.PI * 2;
+    var spd = (1 + Math.random() * 3) * (speedMul || 1);
+    _particles.push({
+      x: x, y: y,
+      vx: Math.cos(angle) * spd,
+      vy: Math.sin(angle) * spd,
+      life: 1.0,
+      decay: 0.015 + Math.random() * 0.015,
+      r: 1.5 + Math.random() * 2.5,
+      color: color
+    });
+  }
+}
+
+function _updateParticles() {
+  for (var i = _particles.length - 1; i >= 0; i--) {
+    var p = _particles[i];
+    p.x += p.vx;
+    p.y += p.vy;
+    p.vy += 0.04;
+    p.life -= p.decay;
+    if (p.life <= 0) _particles.splice(i, 1);
+  }
+}
+
+function _drawParticles(c) {
+  for (var i = 0; i < _particles.length; i++) {
+    var p = _particles[i];
+    c.globalAlpha = p.life * 0.8;
+    c.fillStyle = p.color;
+    c.beginPath();
+    c.arc(p.x, p.y, p.r * p.life, 0, Math.PI * 2);
+    c.fill();
+  }
+  c.globalAlpha = 1;
+}
+
+// ── Easing helpers ──
+function easeOutBack(x) { var c1 = 1.70158; var c3 = c1 + 1; return 1 + c3 * Math.pow(x - 1, 3) + c1 * Math.pow(x - 1, 2); }
+function easeOutBounce(x) { var n1 = 7.5625; var d1 = 2.75; if (x < 1/d1) return n1*x*x; else if (x < 2/d1) return n1*(x-=1.5/d1)*x+0.75; else if (x < 2.5/d1) return n1*(x-=2.25/d1)*x+0.9375; else return n1*(x-=2.625/d1)*x+0.984375; }
+function easeInQuad(x) { return x * x; }
+
+var CONFIG = {
+  style: 'ares_mission',
+  totalFrames: 5,
+
+  i18n: {
+    title:    {en:'MOMENTUM', cn:'\u52a8\u91cf'},
+    subtitle: {en:'p = m \u00d7 v', cn:'p = m \u00d7 v'},
+
+    // Frame 0 -- title
+    f0big:     {en:'MOMENTUM', cn:'\u52a8\u91cf'},
+    f0eq:      {en:'p = m \u00d7 v', cn:'p = m \u00d7 v'},
+    f0q:       {en:'Why is a truck crash\nfar worse than a bicycle crash?', cn:'\u4e3a\u4ec0\u4e48\u5927\u5361\u8f66\u649e\u4eba\u6bd4\n\u81ea\u884c\u8f66\u649e\u4eba\u540e\u679c\u4e25\u91cd\u5f97\u591a\uff1f'},
+    f0hint:    {en:'mass \u00d7 velocity = momentum', cn:'\u8d28\u91cf \u00d7 \u901f\u5ea6 = \u52a8\u91cf'},
+    f0truck:   {en:'TRUCK', cn:'\u5361\u8f66'},
+    f0bike:    {en:'BICYCLE', cn:'\u81ea\u884c\u8f66'},
+
+    // Frame 1 -- same speed comparison
+    f1title:   {en:'SAME SPEED, DIFFERENT MASS', cn:'\u540c\u901f\u5ea6\uff0c\u4e0d\u540c\u8d28\u91cf'},
+    f1speed:   {en:'Both at 10 m/s', cn:'\u90fd\u662f 10 m/s'},
+    f1pTruck:  {en:'p = 100,000 kg\u00b7m/s', cn:'p = 100,000 kg\u00b7m/s'},
+    f1pBike:   {en:'p = 100 kg\u00b7m/s', cn:'p = 100 kg\u00b7m/s'},
+    f1ratio:   {en:'1000x more momentum!', cn:'\u52a8\u91cf\u5dee 1000 \u500d\uff01'},
+
+    // Frame 2 -- same mass, different speed
+    f2title:   {en:'SAME MASS, DIFFERENT SPEED', cn:'\u540c\u8d28\u91cf\uff0c\u4e0d\u540c\u901f\u5ea6'},
+    f2pSlow:   {en:'p = 5 kg\u00b7m/s', cn:'p = 5 kg\u00b7m/s'},
+    f2pFast:   {en:'p = 50 kg\u00b7m/s', cn:'p = 50 kg\u00b7m/s'},
+    f2dent:    {en:'Barely dents', cn:'\u51e0\u4e4e\u6ca1\u6709\u51f9\u75d5'},
+    f2smash:   {en:'Smashes through!', cn:'\u7834\u5899\u800c\u51fa\uff01'},
+
+    // Frame 3 -- billiard ball momentum transfer
+    f3title:   {en:'MOMENTUM TRANSFER', cn:'\u52a8\u91cf\u4f20\u9012'},
+    f3before:  {en:'BEFORE', cn:'\u78b0\u649e\u524d'},
+    f3after:   {en:'AFTER', cn:'\u78b0\u649e\u540e'},
+    f3aMove:   {en:'v = 10 m/s', cn:'v = 10 m/s'},
+    f3bStop:   {en:'v = 0', cn:'v = 0'},
+    f3aStop:   {en:'v = 0', cn:'v = 0'},
+    f3bMove:   {en:'v = 10 m/s', cn:'v = 10 m/s'},
+    f3cons:    {en:'p(before) = p(after)', cn:'p(\u78b0\u524d) = p(\u78b0\u540e)'},
+    f3consVal: {en:'10 kg\u00b7m/s = 10 kg\u00b7m/s', cn:'10 kg\u00b7m/s = 10 kg\u00b7m/s'},
+
+    // Frame 4 -- rocket momentum
+    f4title:   {en:'ROCKET MOMENTUM', cn:'\u706b\u7bad\u52a8\u91cf'},
+    f4exhaust: {en:'Exhaust: small mass,\nHUGE velocity', cn:'\u5c3e\u6c14\uff1a\u8d28\u91cf\u5c0f\uff0c\n\u901f\u5ea6\u5de8\u5927'},
+    f4rocket:  {en:'Rocket: big mass,\ngains velocity', cn:'\u706b\u7bad\uff1a\u8d28\u91cf\u5927\uff0c\n\u83b7\u5f97\u901f\u5ea6'},
+    f4law:     {en:'p(rocket) + p(exhaust) = 0', cn:'p(\u706b\u7bad) + p(\u5c3e\u6c14) = 0'},
+    f4pExh:    {en:'small m \u00d7 huge v', cn:'\u5c0f\u8d28\u91cf \u00d7 \u5927\u901f\u5ea6'},
+    f4pRkt:    {en:'big M \u00d7 small V', cn:'\u5927\u8d28\u91cf \u00d7 \u5c0f\u901f\u5ea6'},
+    f4cons:    {en:'Conservation of Momentum', cn:'\u52a8\u91cf\u5b88\u6052'},
+
+    // HUD labels
+    hudScene:  {en:'SCENE', cn:'\u573a\u666f'},
+    hudMass:   {en:'MASS', cn:'\u8d28\u91cf'},
+    hudVel:    {en:'VELOCITY', cn:'\u901f\u5ea6'},
+    hudMom:    {en:'MOMENTUM', cn:'\u52a8\u91cf'},
+
+    // HUD values
+    hTitle:    {en:'Title', cn:'\u6807\u9898'},
+    hCompare:  {en:'Compare', cn:'\u5bf9\u6bd4'},
+    hWall:     {en:'Wall Test', cn:'\u649e\u5899'},
+    hTransfer: {en:'Transfer', cn:'\u4f20\u9012'},
+    hRocket:   {en:'Rocket', cn:'\u706b\u7bad'},
+    hNone:     {en:'--', cn:'--'},
+    hTruckM:   {en:'10,000 kg', cn:'10,000 kg'},
+    h1kg:      {en:'1 kg', cn:'1 kg'},
+    h10:       {en:'10 m/s', cn:'10 m/s'},
+    h5v50:     {en:'5 / 50 m/s', cn:'5 / 50 m/s'},
+    hBoth10:   {en:'10 m/s', cn:'10 m/s'},
+    h100k:     {en:'100,000', cn:'100,000'},
+    h5vs50:    {en:'5 vs 50', cn:'5 vs 50'},
+    h10eq:     {en:'10 = 10', cn:'10 = 10'},
+    hZero:     {en:'sum = 0', cn:'\u603b\u548c = 0'},
+    hVaries:   {en:'varies', cn:'\u53d8\u5316'},
+
+    // Guide
+    guideT:    {en:'OBSERVE', cn:'\u89c2\u5bdf\u6307\u5357'},
+    g1:        {en:'Momentum = mass x velocity', cn:'\u52a8\u91cf = \u8d28\u91cf x \u901f\u5ea6'},
+    g2:        {en:'Bigger mass OR faster speed = more momentum', cn:'\u8d28\u91cf\u8d8a\u5927\u6216\u901f\u5ea6\u8d8a\u5feb = \u52a8\u91cf\u8d8a\u5927'},
+    g3:        {en:'Momentum is conserved in collisions', cn:'\u78b0\u649e\u4e2d\u52a8\u91cf\u5b88\u6052'},
+    g4:        {en:'Watch the momentum bars to compare', cn:'\u89c2\u5bdf\u52a8\u91cf\u6761\u7684\u5bf9\u6bd4'},
+  },
+
+  hudLabels: ['hudScene', 'hudMass', 'hudVel', 'hudMom'],
+  hudValues: [
+    ['hTitle',    'hNone',   'hNone',   'hNone'],
+    ['hCompare',  'hTruckM', 'h10',     'h100k'],
+    ['hWall',     'h1kg',    'h5v50',   'h5vs50'],
+    ['hTransfer', 'h1kg',    'hBoth10', 'h10eq'],
+    ['hRocket',   'hVaries', 'hVaries', 'hZero'],
+  ],
+
+  guideTitle: 'guideT',
+  guideItems: ['g1', 'g2', 'g3', 'g4'],
+};
+
+// ============================================================
+// 2-LAYER PARALLAX BACKGROUND
+// ============================================================
+
+var _bgStars = [];
+var _bgStarsInit = false;
+
+function drawBg(c, W, H) {
+  // Layer 0: gradient
+  var g = c.createLinearGradient(0, 0, 0, H);
+  g.addColorStop(0, '#131313');
+  g.addColorStop(1, '#1c1b1b');
+  c.fillStyle = g;
+  c.fillRect(0, 0, W, H);
+
+  // Init star field once
+  if (!_bgStarsInit) {
+    _bgStarsInit = true;
+    for (var i = 0; i < 60; i++) {
+      _bgStars.push({
+        x: Math.random() * 2000,
+        y: Math.random() * 1000,
+        r: 0.5 + Math.random() * 1.5,
+        layer: Math.random() < 0.5 ? 0 : 1,
+        twinkle: Math.random() * Math.PI * 2
+      });
+    }
+  }
+
+  // Layer 1+2: parallax stars
+  var time = _animTime * 0.001;
+  for (var i = 0; i < _bgStars.length; i++) {
+    var s = _bgStars[i];
+    var parallax = s.layer === 0 ? 0.3 : 0.6;
+    var sx = (s.x + time * 5 * parallax) % (W + 40) - 20;
+    var sy = s.y % (H + 20) - 10;
+    var twinkleAlpha = 0.3 + 0.4 * Math.sin(time * 2 + s.twinkle);
+    c.globalAlpha = twinkleAlpha;
+    c.fillStyle = s.layer === 0 ? 'rgba(255,200,150,0.6)' : 'rgba(200,220,255,0.5)';
+    c.beginPath();
+    c.arc(sx, sy, s.r, 0, Math.PI * 2);
+    c.fill();
+  }
+  c.globalAlpha = 1;
+
+  // Grid overlay
+  c.strokeStyle = 'rgba(255,255,255,0.02)';
+  c.lineWidth = 0.5;
+  for (var x = 0; x < W; x += 40) { c.beginPath(); c.moveTo(x, 0); c.lineTo(x, H); c.stroke(); }
+  for (var y = 0; y < H; y += 40) { c.beginPath(); c.moveTo(0, y); c.lineTo(W, y); c.stroke(); }
+
+  // Screen shake
+  if (_screenShake.intensity > 0.3) {
+    _screenShake.x = (Math.random() - 0.5) * _screenShake.intensity;
+    _screenShake.y = (Math.random() - 0.5) * _screenShake.intensity;
+    _screenShake.intensity *= _screenShake.decay;
+    c.translate(_screenShake.x, _screenShake.y);
+  } else {
+    _screenShake.intensity = 0;
+  }
+}
+
+// ============================================================
+// FRAME ELEMENTS
+// ============================================================
+
+function getFrameElements(f, W, H) {
+  var t = AnimRuntime.t;
+  var P = AnimRuntime.PAL;
+  var cx = W / 2, cy = H / 2;
+  var time = _animTime * 0.001;
+
+  var RED = '#ff4444';
+  var BLUE = '#4488ff';
+  var GOLD = '#ffcc00';
+
+  // Idle breathe
+  var breathe = Math.sin(time * 1.5) * 2;
+
+  // ── Frame 0: Title ──
+  if (f === 0) {
+    var els = [];
+
+    // Big title with glow + breathe
+    els.push({id:'f0big', type:'label', text:t('f0big'), x:cx, y:cy - 105 + breathe, color:P.primary, size:28, align:'center', glow:P.glowStrong});
+
+    // p = m x v equation
+    els.push({id:'f0eq', type:'label', text:t('f0eq'), x:cx, y:cy - 65 + breathe * 0.7, color:P.tertiary, size:20, align:'center', glow:'rgba(0,218,243,0.3)'});
+
+    // Core question
+    els.push({id:'f0q', type:'custom', x:0, y:0, alpha:1, draw:function(c){
+      c.fillStyle = P.text;
+      c.font = "14px 'Noto Sans SC',sans-serif";
+      c.textAlign = 'center';
+      c.textBaseline = 'middle';
+      var lines = t('f0q').split('\n');
+      for (var i = 0; i < lines.length; i++) c.fillText(lines[i], cx, cy + 5 + i * 22);
+    }});
+
+    // Hint
+    els.push({id:'f0hint', type:'label', text:t('f0hint'), x:cx, y:cy + 60, color:P.muted, size:11, align:'center'});
+
+    // Truck icon (left)
+    var truckX = cx - 150;
+    var truckY = cy + 120;
+    els.push({id:'truckIcon', type:'custom', x:0, y:0, alpha:1, draw:function(c){
+      var tx = truckX;
+      var ty = truckY + breathe * 0.5;
+      // Glow under truck
+      c.shadowColor = 'rgba(255,100,50,0.15)';
+      c.shadowBlur = 15;
+      // Truck body
+      c.fillStyle = '#cc3333';
+      c.fillRect(tx - 50, ty - 28, 70, 28);
+      c.shadowBlur = 0;
+      // Cab
+      c.fillStyle = '#dd4444';
+      c.fillRect(tx + 20, ty - 22, 25, 22);
+      // Window
+      c.fillStyle = '#66ccff';
+      c.fillRect(tx + 24, ty - 18, 16, 10);
+      // Wheels
+      c.fillStyle = '#333';
+      c.beginPath(); c.arc(tx - 30, ty + 4, 7, 0, Math.PI * 2); c.fill();
+      c.beginPath(); c.arc(tx + 10, ty + 4, 7, 0, Math.PI * 2); c.fill();
+      c.beginPath(); c.arc(tx + 35, ty + 4, 7, 0, Math.PI * 2); c.fill();
+      // Rims
+      c.fillStyle = '#666';
+      c.beginPath(); c.arc(tx - 30, ty + 4, 3, 0, Math.PI * 2); c.fill();
+      c.beginPath(); c.arc(tx + 10, ty + 4, 3, 0, Math.PI * 2); c.fill();
+      c.beginPath(); c.arc(tx + 35, ty + 4, 3, 0, Math.PI * 2); c.fill();
+      // Label
+      c.fillStyle = P.muted;
+      c.font = "bold 10px 'Space Grotesk',sans-serif";
+      c.textAlign = 'center';
+      c.fillText(t('f0truck'), tx - 5, ty + 24);
+    }});
+
+    // VS
+    els.push({id:'f0vs', type:'label', text:'VS', x:cx, y:truckY - 10 + breathe * 0.3, color:P.secondary, size:18, align:'center', bold:true});
+
+    // Bicycle icon (right)
+    var bikeX = cx + 150;
+    var bikeY = truckY;
+    els.push({id:'bikeIcon', type:'custom', x:0, y:0, alpha:1, draw:function(c){
+      var bx = bikeX;
+      var by = bikeY + breathe * 0.5;
+      c.strokeStyle = '#888';
+      c.lineWidth = 2;
+      // Wheels
+      c.beginPath(); c.arc(bx - 18, by, 12, 0, Math.PI * 2); c.stroke();
+      c.beginPath(); c.arc(bx + 18, by, 12, 0, Math.PI * 2); c.stroke();
+      // Frame
+      c.strokeStyle = '#22cc66';
+      c.lineWidth = 2;
+      c.beginPath();
+      c.moveTo(bx - 18, by); c.lineTo(bx, by - 16); c.lineTo(bx + 18, by);
+      c.moveTo(bx, by - 16); c.lineTo(bx - 6, by);
+      c.moveTo(bx, by - 16); c.lineTo(bx + 5, by - 26);
+      c.stroke();
+      // Handlebars
+      c.beginPath();
+      c.moveTo(bx + 2, by - 28); c.lineTo(bx + 10, by - 28);
+      c.stroke();
+      // Seat
+      c.fillStyle = '#555';
+      c.fillRect(bx - 8, by - 20, 10, 3);
+      // Label
+      c.fillStyle = P.muted;
+      c.font = "bold 10px 'Space Grotesk',sans-serif";
+      c.textAlign = 'center';
+      c.fillText(t('f0bike'), bx, by + 24);
+    }});
+
+    return els;
+  }
+
+  // ── Frame 1: Same speed, different mass ──
+  if (f === 1) {
+    var els = [];
+    var roadY = cy + 55;
+
+    els.push({id:'ftitle', type:'label', text:t('f1title'), x:cx, y:25, color:P.primary, size:16, align:'center', glow:P.glowStrong});
+    els.push({id:'f1speed', type:'label', text:t('f1speed'), x:cx, y:48, color:P.tertiary, size:12, align:'center'});
+
+    // Road
+    els.push({id:'road', type:'custom', x:0, y:0, alpha:1, draw:function(c){
+      c.fillStyle = '#2a2a2a';
+      c.fillRect(20, roadY, W - 40, 6);
+      c.strokeStyle = '#555';
+      c.lineWidth = 1;
+      c.setLineDash([8, 6]);
+      c.beginPath(); c.moveTo(20, roadY + 3); c.lineTo(W - 20, roadY + 3); c.stroke();
+      c.setLineDash([]);
+    }});
+
+    // Animated truck
+    var truckPhase = (time * 0.4) % 1;
+    var truckAnimX = 60 + truckPhase * (cx - 160);
+    els.push({id:'truck1', type:'custom', x:0, y:0, alpha:1, draw:function(c){
+      var tx = truckAnimX;
+      var ty = roadY - 42;
+      // Shadow
+      c.fillStyle = 'rgba(255,100,50,0.08)';
+      c.beginPath(); c.ellipse(tx, roadY - 1, 55, 5, 0, 0, Math.PI * 2); c.fill();
+      // Body
+      c.fillStyle = '#cc3333';
+      c.fillRect(tx - 50, ty - 5, 70, 28);
+      // Cab
+      c.fillStyle = '#dd4444';
+      c.fillRect(tx + 20, ty, 25, 23);
+      // Window
+      c.fillStyle = '#66ccff';
+      c.fillRect(tx + 24, ty + 3, 16, 10);
+      // Wheels with spin
+      var wheelSpin = time * 8;
+      c.fillStyle = '#222';
+      var wxs = [tx - 30, tx + 10, tx + 35];
+      for (var w = 0; w < 3; w++) {
+        c.beginPath(); c.arc(wxs[w], ty + 26, 7, 0, Math.PI * 2); c.fill();
+        c.strokeStyle = '#555'; c.lineWidth = 1;
+        for (var s = 0; s < 4; s++) {
+          var a = wheelSpin + s * Math.PI / 2;
+          c.beginPath(); c.moveTo(wxs[w], ty + 26);
+          c.lineTo(wxs[w] + Math.cos(a) * 5, ty + 26 + Math.sin(a) * 5); c.stroke();
+        }
+      }
+      // Mass label
+      c.fillStyle = P.text;
+      c.font = "bold 11px 'Space Grotesk',sans-serif";
+      c.textAlign = 'center';
+      c.fillText('10,000 kg', tx, ty - 14);
+    }});
+
+    // Truck speed arrow
+    els.push({id:'f1tArrow', type:'arrow', x1:truckAnimX + 50, y1:roadY - 32, x2:truckAnimX + 90, y2:roadY - 32, color:P.tertiary, lineWidth:2, headSize:7});
+    els.push({id:'f1tV', type:'text', text:'10 m/s', x:truckAnimX + 70, y:roadY - 45, color:P.tertiary, size:9, align:'center'});
+
+    // Animated bicycle
+    var bikePhase = (time * 0.4) % 1;
+    var bikeAnimX = 60 + bikePhase * (cx - 160);
+    els.push({id:'bike1', type:'custom', x:0, y:0, alpha:1, draw:function(c){
+      var bx = bikeAnimX;
+      var by = roadY + 40;
+      // Shadow
+      c.fillStyle = 'rgba(0,218,243,0.06)';
+      c.beginPath(); c.ellipse(bx, by + 16, 25, 3, 0, 0, Math.PI * 2); c.fill();
+      c.strokeStyle = '#666'; c.lineWidth = 1.5;
+      c.beginPath(); c.arc(bx - 14, by + 8, 10, 0, Math.PI * 2); c.stroke();
+      c.beginPath(); c.arc(bx + 14, by + 8, 10, 0, Math.PI * 2); c.stroke();
+      c.strokeStyle = '#22cc66'; c.lineWidth = 1.5;
+      c.beginPath();
+      c.moveTo(bx - 14, by + 8); c.lineTo(bx, by - 6); c.lineTo(bx + 14, by + 8);
+      c.moveTo(bx, by - 6); c.lineTo(bx - 4, by + 8);
+      c.moveTo(bx, by - 6); c.lineTo(bx + 4, by - 16);
+      c.stroke();
+      c.fillStyle = P.text;
+      c.font = "bold 11px 'Space Grotesk',sans-serif";
+      c.textAlign = 'center';
+      c.fillText('10 kg', bx, by - 24);
+    }});
+
+    // Bike speed arrow
+    els.push({id:'f1bArrow', type:'arrow', x1:bikeAnimX + 30, y1:roadY + 40, x2:bikeAnimX + 70, y2:roadY + 40, color:P.tertiary, lineWidth:2, headSize:7});
+    els.push({id:'f1bV', type:'text', text:'10 m/s', x:bikeAnimX + 50, y:roadY + 28, color:P.tertiary, size:9, align:'center'});
+
+    // ── Momentum bars (right side) ──
+    var barX = cx + 110;
+    var barW = 200;
+    var barH = 18;
+
+    // Truck momentum bar
+    els.push({id:'f1tBar', type:'custom', x:0, y:0, alpha:1, draw:function(c){
+      var by = roadY - 55;
+      c.fillStyle = 'rgba(255,255,255,0.05)';
+      c.fillRect(barX, by, barW, barH);
+      var fillProg = Math.min(1, (time % 4) * 0.7);
+      fillProg = easeOutBack(Math.min(fillProg, 1));
+      var gBar = c.createLinearGradient(barX, by, barX + barW * fillProg, by);
+      gBar.addColorStop(0, '#ff4444');
+      gBar.addColorStop(1, '#ff8844');
+      c.fillStyle = gBar;
+      c.fillRect(barX, by, barW * fillProg, barH);
+      // Glow
+      c.shadowColor = 'rgba(255,68,68,0.4)';
+      c.shadowBlur = 10;
+      c.fillRect(barX, by, barW * fillProg, barH);
+      c.shadowBlur = 0;
+      c.fillStyle = P.text;
+      c.font = "bold 9px 'Space Grotesk',sans-serif";
+      c.textAlign = 'left';
+      c.fillText(t('f1pTruck'), barX, by - 6);
+    }});
+
+    // Bicycle momentum bar (tiny sliver)
+    els.push({id:'f1bBar', type:'custom', x:0, y:0, alpha:1, draw:function(c){
+      var by = roadY + 25;
+      c.fillStyle = 'rgba(255,255,255,0.05)';
+      c.fillRect(barX, by, barW, barH);
+      var fillProg = Math.min(1, (time % 4) * 0.7);
+      fillProg = easeOutBack(Math.min(fillProg, 1));
+      var tinyW = Math.max(2, barW * 0.001 * fillProg * 200);
+      c.fillStyle = '#4488ff';
+      c.fillRect(barX, by, tinyW, barH);
+      c.fillStyle = P.text;
+      c.font = "bold 9px 'Space Grotesk',sans-serif";
+      c.textAlign = 'left';
+      c.fillText(t('f1pBike'), barX, by - 6);
+    }});
+
+    // 1000x callout
+    els.push({id:'f1ratio', type:'label', text:t('f1ratio'), x:barX + barW / 2, y:roadY - 2 + breathe * 0.5, color:GOLD, size:15, align:'center', bold:true, glow:'rgba(255,204,0,0.3)'});
+
+    return els;
+  }
+
+  // ── Frame 2: Same mass, different speed -- wall smash ──
+  if (f === 2) {
+    var els = [];
+    var wallX = cx + 50;
+    var upperY = cy - 60;
+    var lowerY = cy + 70;
+
+    els.push({id:'ftitle', type:'label', text:t('f2title'), x:cx, y:25, color:P.primary, size:16, align:'center', glow:P.glowStrong});
+
+    // Wall
+    els.push({id:'wall', type:'custom', x:0, y:0, alpha:1, draw:function(c){
+      c.fillStyle = '#555';
+      c.fillRect(wallX, cy - 130, 18, 260);
+      c.strokeStyle = '#444'; c.lineWidth = 0.5;
+      for (var row = 0; row < 20; row++) {
+        var ry = cy - 130 + row * 13;
+        c.beginPath(); c.moveTo(wallX, ry); c.lineTo(wallX + 18, ry); c.stroke();
+        var off = (row % 2) * 9;
+        c.beginPath(); c.moveTo(wallX + off, ry); c.lineTo(wallX + off, ry + 13); c.stroke();
+      }
+    }});
+
+    // ── Upper: slow ball ──
+    var slowBallX = wallX - 55;
+    els.push({id:'ballSlow', type:'custom', x:0, y:0, alpha:1, draw:function(c){
+      var bx = slowBallX + breathe;
+      var grad = c.createRadialGradient(bx - 2, upperY - 3, 2, bx, upperY, 14);
+      grad.addColorStop(0, '#88aaff');
+      grad.addColorStop(1, '#3366cc');
+      c.fillStyle = grad;
+      c.beginPath(); c.arc(bx, upperY, 14, 0, Math.PI * 2); c.fill();
+      // Shine
+      c.fillStyle = 'rgba(255,255,255,0.3)';
+      c.beginPath(); c.arc(bx - 4, upperY - 5, 4, 0, Math.PI * 2); c.fill();
+      c.fillStyle = P.text;
+      c.font = "10px 'Space Grotesk',sans-serif";
+      c.textAlign = 'center';
+      c.fillText('1 kg', bx, upperY - 22);
+    }});
+
+    // Slow arrow
+    els.push({id:'slowArr', type:'arrow', x1:slowBallX - 35, y1:upperY, x2:slowBallX - 18, y2:upperY, color:BLUE, lineWidth:2, headSize:6});
+    els.push({id:'slowLbl', type:'text', text:'5 m/s', x:slowBallX - 45, y:upperY - 10, color:BLUE, size:10, align:'center'});
+
+    // Small dent
+    els.push({id:'dent', type:'custom', x:0, y:0, alpha:1, draw:function(c){
+      c.fillStyle = '#444';
+      c.beginPath(); c.arc(wallX + 2, upperY, 5, 0, Math.PI * 2); c.fill();
+      c.strokeStyle = '#666'; c.lineWidth = 0.5;
+      c.beginPath(); c.moveTo(wallX + 2, upperY - 5); c.lineTo(wallX + 5, upperY - 12); c.stroke();
+      c.beginPath(); c.moveTo(wallX + 2, upperY + 5); c.lineTo(wallX + 6, upperY + 10); c.stroke();
+    }});
+
+    els.push({id:'f2pSlow', type:'text', text:t('f2pSlow'), x:slowBallX - 65, y:upperY + 18, color:BLUE, size:10, align:'center'});
+    els.push({id:'f2dent', type:'text', text:t('f2dent'), x:wallX + 55, y:upperY, color:P.muted, size:10, align:'left'});
+
+    // ── Lower: fast ball ──
+    var fastBallX = wallX - 95;
+    els.push({id:'ballFast', type:'custom', x:0, y:0, alpha:1, draw:function(c){
+      var bx = fastBallX;
+      // Motion blur trail
+      for (var mb = 3; mb > 0; mb--) {
+        c.globalAlpha = 0.1 * mb;
+        c.fillStyle = '#ff4444';
+        c.beginPath(); c.arc(bx - mb * 20, lowerY, 14, 0, Math.PI * 2); c.fill();
+      }
+      c.globalAlpha = 1;
+      // Ball
+      var grad = c.createRadialGradient(bx - 2, lowerY - 3, 2, bx, lowerY, 14);
+      grad.addColorStop(0, '#ff8888');
+      grad.addColorStop(1, '#cc2222');
+      c.fillStyle = grad;
+      c.beginPath(); c.arc(bx, lowerY, 14, 0, Math.PI * 2); c.fill();
+      // Shine
+      c.fillStyle = 'rgba(255,255,255,0.3)';
+      c.beginPath(); c.arc(bx - 4, lowerY - 5, 4, 0, Math.PI * 2); c.fill();
+      // Speed lines
+      c.strokeStyle = 'rgba(255,100,100,0.4)'; c.lineWidth = 1;
+      for (var sl = 0; sl < 5; sl++) {
+        var sy = lowerY - 10 + sl * 5;
+        c.beginPath(); c.moveTo(bx - 20, sy); c.lineTo(bx - 50 - sl * 8, sy); c.stroke();
+      }
+      c.fillStyle = P.text;
+      c.font = "10px 'Space Grotesk',sans-serif";
+      c.textAlign = 'center';
+      c.fillText('1 kg', bx, lowerY - 22);
+    }});
+
+    // Fast arrow (longer)
+    els.push({id:'fastArr', type:'arrow', x1:fastBallX - 70, y1:lowerY, x2:fastBallX - 18, y2:lowerY, color:RED, lineWidth:3, headSize:8});
+    els.push({id:'fastLbl', type:'text', text:'50 m/s', x:fastBallX - 85, y:lowerY - 10, color:RED, size:11, align:'center'});
+
+    // Wall destruction with debris
+    els.push({id:'wallHole', type:'custom', x:0, y:0, alpha:1, draw:function(c){
+      // Hole
+      c.fillStyle = '#1c1b1b';
+      c.beginPath(); c.ellipse(wallX + 9, lowerY, 20, 22, 0, 0, Math.PI * 2); c.fill();
+      // Cracks
+      c.strokeStyle = '#666'; c.lineWidth = 1.5;
+      var cracks = [
+        [wallX - 5, lowerY - 30, wallX - 12, lowerY - 50],
+        [wallX + 20, lowerY - 25, wallX + 35, lowerY - 45],
+        [wallX - 3, lowerY + 28, wallX - 15, lowerY + 48],
+        [wallX + 22, lowerY + 22, wallX + 38, lowerY + 40],
+        [wallX + 25, lowerY, wallX + 45, lowerY - 5],
+        [wallX - 8, lowerY + 5, wallX - 20, lowerY + 15],
+      ];
+      for (var i = 0; i < cracks.length; i++) {
+        c.beginPath(); c.moveTo(cracks[i][0], cracks[i][1]); c.lineTo(cracks[i][2], cracks[i][3]); c.stroke();
+      }
+      // Animated debris
+      var debrisTime = (time * 2) % 3;
+      if (debrisTime < 2) {
+        c.fillStyle = '#777';
+        for (var d = 0; d < 12; d++) {
+          var angle = (d / 12) * Math.PI * 2;
+          var dist = 15 + debrisTime * 30 + (d % 3) * 10;
+          var dx = wallX + 9 + Math.cos(angle) * dist;
+          var dy = lowerY + Math.sin(angle) * dist + debrisTime * 8;
+          var sz = 2 + (d % 3);
+          c.globalAlpha = Math.max(0, 1 - debrisTime * 0.6);
+          c.save();
+          c.translate(dx, dy);
+          c.rotate(debrisTime * 3 + d);
+          c.fillRect(-sz / 2, -sz / 2, sz, sz);
+          c.restore();
+        }
+        c.globalAlpha = 1;
+      }
+    }});
+
+    els.push({id:'f2pFast', type:'text', text:t('f2pFast'), x:fastBallX - 65, y:lowerY + 18, color:RED, size:10, align:'center'});
+    els.push({id:'f2smash', type:'label', text:t('f2smash'), x:wallX + 60, y:lowerY, color:GOLD, size:12, align:'left', bold:true, glow:'rgba(255,204,0,0.3)'});
+
+    // Divider
+    els.push({id:'divider', type:'line', x1:40, y1:cy, x2:W - 40, y2:cy, color:'rgba(255,255,255,0.08)', lineWidth:1, dash:[4, 4]});
+
+    return els;
+  }
+
+  // ── Frame 3: Billiard ball momentum transfer ──
+  if (f === 3) {
+    var els = [];
+    var tableTop = cy - 20;
+
+    els.push({id:'ftitle', type:'label', text:t('f3title'), x:cx, y:25, color:P.primary, size:16, align:'center', glow:P.glowStrong});
+
+    // Pool table
+    els.push({id:'poolTable', type:'custom', x:0, y:0, alpha:1, draw:function(c){
+      var tw = 400, th = 100;
+      var tx = cx - tw / 2, ty = tableTop - th / 2;
+      c.fillStyle = '#1a5c2a';
+      c.fillRect(tx, ty, tw, th);
+      c.strokeStyle = '#3a2a1a'; c.lineWidth = 6;
+      c.strokeRect(tx, ty, tw, th);
+      // Diamond marks
+      c.fillStyle = '#fffde0';
+      for (var d = 1; d < 4; d++) {
+        c.beginPath(); c.arc(tx + d * (tw / 4), ty - 2, 2, 0, Math.PI * 2); c.fill();
+        c.beginPath(); c.arc(tx + d * (tw / 4), ty + th + 2, 2, 0, Math.PI * 2); c.fill();
+      }
+    }});
+
+    // ── BEFORE ──
+    var beforeY = tableTop - 15;
+    els.push({id:'f3before', type:'label', text:t('f3before'), x:cx - 150, y:beforeY - 28, color:P.primary, size:11, align:'center', bold:true});
+
+    // Ball A (moving)
+    var ballAx = cx - 80;
+    els.push({id:'ballAb', type:'custom', x:0, y:0, alpha:1, draw:function(c){
+      var bx = ballAx + Math.sin(time * 3) * 3;
+      var grad = c.createRadialGradient(bx - 3, beforeY - 3, 2, bx, beforeY, 12);
+      grad.addColorStop(0, '#ffcc44');
+      grad.addColorStop(1, '#cc8800');
+      c.fillStyle = grad;
+      c.beginPath(); c.arc(bx, beforeY, 12, 0, Math.PI * 2); c.fill();
+      c.fillStyle = '#fff';
+      c.font = "bold 10px 'Space Grotesk',sans-serif";
+      c.textAlign = 'center'; c.textBaseline = 'middle';
+      c.fillText('A', bx, beforeY);
+    }});
+
+    // Ball A arrow
+    els.push({id:'f3aArr', type:'arrow', x1:ballAx + 16, y1:beforeY, x2:ballAx + 55, y2:beforeY, color:P.tertiary, lineWidth:2.5, headSize:7});
+    els.push({id:'f3aMvL', type:'text', text:t('f3aMove'), x:ballAx + 36, y:beforeY - 15, color:P.tertiary, size:9, align:'center'});
+
+    // Ball B (stationary)
+    var ballBx = cx + 40;
+    els.push({id:'ballBb', type:'custom', x:0, y:0, alpha:1, draw:function(c){
+      var grad = c.createRadialGradient(ballBx - 3, beforeY - 3, 2, ballBx, beforeY, 12);
+      grad.addColorStop(0, '#ff6666');
+      grad.addColorStop(1, '#cc0000');
+      c.fillStyle = grad;
+      c.beginPath(); c.arc(ballBx, beforeY, 12, 0, Math.PI * 2); c.fill();
+      c.fillStyle = '#fff';
+      c.font = "bold 10px 'Space Grotesk',sans-serif";
+      c.textAlign = 'center'; c.textBaseline = 'middle';
+      c.fillText('B', ballBx, beforeY);
+    }});
+    els.push({id:'f3bStL', type:'text', text:t('f3bStop'), x:ballBx, y:beforeY - 18, color:P.muted, size:9, align:'center'});
+
+    // ── AFTER ──
+    var afterY = tableTop + 18;
+    els.push({id:'f3after', type:'label', text:t('f3after'), x:cx - 150, y:afterY + 28, color:P.primary, size:11, align:'center', bold:true});
+
+    // Ball A (stopped)
+    els.push({id:'ballAa', type:'custom', x:0, y:0, alpha:1, draw:function(c){
+      var grad = c.createRadialGradient(ballAx - 3, afterY - 3, 2, ballAx, afterY, 12);
+      grad.addColorStop(0, '#ffcc44');
+      grad.addColorStop(1, '#cc8800');
+      c.fillStyle = grad;
+      c.beginPath(); c.arc(ballAx, afterY, 12, 0, Math.PI * 2); c.fill();
+      c.fillStyle = '#fff';
+      c.font = "bold 10px 'Space Grotesk',sans-serif";
+      c.textAlign = 'center'; c.textBaseline = 'middle';
+      c.fillText('A', ballAx, afterY);
+    }});
+    els.push({id:'f3aStL', type:'text', text:t('f3aStop'), x:ballAx, y:afterY - 18, color:P.muted, size:9, align:'center'});
+
+    // Ball B (now moving)
+    els.push({id:'ballBa', type:'custom', x:0, y:0, alpha:1, draw:function(c){
+      var bx = ballBx + Math.sin(time * 3) * 3;
+      var grad = c.createRadialGradient(bx - 3, afterY - 3, 2, bx, afterY, 12);
+      grad.addColorStop(0, '#ff6666');
+      grad.addColorStop(1, '#cc0000');
+      c.fillStyle = grad;
+      c.beginPath(); c.arc(bx, afterY, 12, 0, Math.PI * 2); c.fill();
+      c.fillStyle = '#fff';
+      c.font = "bold 10px 'Space Grotesk',sans-serif";
+      c.textAlign = 'center'; c.textBaseline = 'middle';
+      c.fillText('B', bx, afterY);
+    }});
+    els.push({id:'f3bArr', type:'arrow', x1:ballBx + 16, y1:afterY, x2:ballBx + 55, y2:afterY, color:P.tertiary, lineWidth:2.5, headSize:7});
+    els.push({id:'f3bMvL', type:'text', text:t('f3bMove'), x:ballBx + 36, y:afterY - 15, color:P.tertiary, size:9, align:'center'});
+
+    // Collision flash
+    els.push({id:'impactPt', type:'custom', x:0, y:0, alpha:1, draw:function(c){
+      var impX = (ballAx + ballBx) / 2 + 10;
+      var impY = (beforeY + afterY) / 2;
+      var pulse = 0.5 + 0.5 * Math.sin(time * 6);
+      c.strokeStyle = 'rgba(255,255,100,' + (0.3 + pulse * 0.3) + ')';
+      c.lineWidth = 2;
+      c.beginPath(); c.arc(impX, impY, 8 + pulse * 6, 0, Math.PI * 2); c.stroke();
+      c.strokeStyle = 'rgba(255,220,100,0.5)'; c.lineWidth = 1;
+      for (var s = 0; s < 6; s++) {
+        var sa = s * Math.PI / 3 + time * 2;
+        c.beginPath();
+        c.moveTo(impX + Math.cos(sa) * 10, impY + Math.sin(sa) * 10);
+        c.lineTo(impX + Math.cos(sa) * (16 + pulse * 4), impY + Math.sin(sa) * (16 + pulse * 4));
+        c.stroke();
+      }
+    }});
+
+    // ── Conservation bars ──
+    var barY1 = cy + 90;
+    var barY2 = cy + 115;
+    var barW = 160;
+    var barSX = cx - 120;
+
+    // Before bar
+    els.push({id:'f3barB', type:'custom', x:0, y:0, alpha:1, draw:function(c){
+      c.fillStyle = P.muted;
+      c.font = "9px 'Space Grotesk',sans-serif";
+      c.textAlign = 'right';
+      c.fillText(t('f3before') + ':', barSX - 5, barY1 + 8);
+      var gBar = c.createLinearGradient(barSX, barY1, barSX + barW, barY1);
+      gBar.addColorStop(0, '#ffcc44');
+      gBar.addColorStop(1, '#cc8800');
+      c.fillStyle = gBar;
+      c.fillRect(barSX, barY1, barW, 12);
+      c.shadowColor = 'rgba(255,204,68,0.3)'; c.shadowBlur = 6;
+      c.fillRect(barSX, barY1, barW, 12);
+      c.shadowBlur = 0;
+      c.fillStyle = P.text;
+      c.font = "bold 9px 'Space Grotesk',sans-serif";
+      c.textAlign = 'left';
+      c.fillText('A:10 + B:0 = 10', barSX + barW + 10, barY1 + 9);
+    }});
+
+    // After bar
+    els.push({id:'f3barA', type:'custom', x:0, y:0, alpha:1, draw:function(c){
+      c.fillStyle = P.muted;
+      c.font = "9px 'Space Grotesk',sans-serif";
+      c.textAlign = 'right';
+      c.fillText(t('f3after') + ':', barSX - 5, barY2 + 8);
+      var gBar = c.createLinearGradient(barSX, barY2, barSX + barW, barY2);
+      gBar.addColorStop(0, '#ff6666');
+      gBar.addColorStop(1, '#cc0000');
+      c.fillStyle = gBar;
+      c.fillRect(barSX, barY2, barW, 12);
+      c.shadowColor = 'rgba(255,68,68,0.3)'; c.shadowBlur = 6;
+      c.fillRect(barSX, barY2, barW, 12);
+      c.shadowBlur = 0;
+      c.fillStyle = P.text;
+      c.font = "bold 9px 'Space Grotesk',sans-serif";
+      c.textAlign = 'left';
+      c.fillText('A:0 + B:10 = 10', barSX + barW + 10, barY2 + 9);
+    }});
+
+    // Conservation equation
+    els.push({id:'f3cons', type:'label', text:t('f3cons'), x:cx + 60, y:cy + 148, color:P.primary, size:13, align:'center', bold:true, glow:P.glowStrong});
+    els.push({id:'f3cVal', type:'label', text:t('f3consVal'), x:cx + 60, y:cy + 168, color:P.tertiary, size:11, align:'center'});
+
+    // Equals sign between bars
+    els.push({id:'eqSign', type:'label', text:'=', x:barSX + barW + barW + 55, y:(barY1 + barY2) / 2 + 6, color:GOLD, size:20, align:'center', bold:true, glow:'rgba(255,204,0,0.3)'});
+
+    return els;
+  }
+
+  // ── Frame 4: Rocket momentum conservation ──
+  if (f === 4) {
+    var els = [];
+    var rocketX = cx;
+    var rocketTopY = cy - 100;
+
+    els.push({id:'ftitle', type:'label', text:t('f4title'), x:cx, y:25, color:P.primary, size:16, align:'center', glow:P.glowStrong});
+
+    // Space stars
+    els.push({id:'spStars', type:'custom', x:0, y:0, alpha:1, draw:function(c){
+      c.fillStyle = 'rgba(255,255,255,0.6)';
+      var pts = [
+        [50,60],[130,140],[W-70,45],[W-140,160],[90,220],
+        [W-50,210],[180,35],[W-180,90],[40,310],[W-90,300],
+        [280,25],[W-230,180],[160,300],[W-160,350],[360,170]
+      ];
+      for (var i = 0; i < pts.length; i++) {
+        var sz = 0.8 + (i % 3) * 0.5;
+        c.beginPath(); c.arc(pts[i][0], pts[i][1], sz, 0, Math.PI * 2); c.fill();
+      }
+    }});
+
+    // Rocket body with breathe
+    var rktBr = breathe * 0.5;
+    els.push({id:'rktBody', type:'custom', x:0, y:0, alpha:1, draw:function(c){
+      var rx = rocketX;
+      var ry = rocketTopY + rktBr;
+      // Nose cone
+      c.fillStyle = '#cc3333';
+      c.beginPath();
+      c.moveTo(rx, ry - 30);
+      c.lineTo(rx - 20, ry + 8);
+      c.lineTo(rx + 20, ry + 8);
+      c.closePath();
+      c.fill();
+      // Body
+      c.fillStyle = '#e0e0e0';
+      c.fillRect(rx - 20, ry + 8, 40, 90);
+      // Stripe
+      c.fillStyle = '#3366cc';
+      c.fillRect(rx - 20, ry + 30, 40, 16);
+      // Window
+      c.fillStyle = '#66ccff';
+      c.beginPath(); c.arc(rx, ry + 20, 7, 0, Math.PI * 2); c.fill();
+      c.strokeStyle = '#aaa'; c.lineWidth = 1; c.stroke();
+      // Fins
+      c.fillStyle = '#cc3333';
+      c.beginPath();
+      c.moveTo(rx - 20, ry + 75); c.lineTo(rx - 36, ry + 100); c.lineTo(rx - 20, ry + 98);
+      c.closePath(); c.fill();
+      c.beginPath();
+      c.moveTo(rx + 20, ry + 75); c.lineTo(rx + 36, ry + 100); c.lineTo(rx + 20, ry + 98);
+      c.closePath(); c.fill();
+      // Nozzle
+      c.fillStyle = '#666';
+      c.beginPath();
+      c.moveTo(rx - 14, ry + 98); c.lineTo(rx - 18, ry + 108);
+      c.lineTo(rx + 18, ry + 108); c.lineTo(rx + 14, ry + 98);
+      c.closePath(); c.fill();
+    }});
+
+    // Exhaust flame + gas particles
+    els.push({id:'exhaust', type:'custom', x:0, y:0, alpha:1, draw:function(c){
+      var rx = rocketX;
+      var nzY = rocketTopY + 108 + rktBr;
+      // Inner flame
+      var gI = c.createLinearGradient(rx, nzY, rx, nzY + 70);
+      gI.addColorStop(0, 'rgba(255,255,200,0.9)');
+      gI.addColorStop(0.3, 'rgba(255,200,50,0.8)');
+      gI.addColorStop(0.7, 'rgba(255,100,0,0.4)');
+      gI.addColorStop(1, 'rgba(255,50,0,0)');
+      c.fillStyle = gI;
+      var flicker = 1 + Math.sin(time * 20) * 0.15;
+      c.beginPath();
+      c.moveTo(rx - 12 * flicker, nzY);
+      c.quadraticCurveTo(rx - 18 * flicker, nzY + 40, rx, nzY + 75);
+      c.quadraticCurveTo(rx + 18 * flicker, nzY + 40, rx + 12 * flicker, nzY);
+      c.closePath();
+      c.fill();
+      // Outer glow
+      c.shadowColor = 'rgba(255,150,0,0.4)'; c.shadowBlur = 20;
+      c.fill();
+      c.shadowBlur = 0;
+      // Gas particles
+      c.fillStyle = 'rgba(255,180,100,0.5)';
+      for (var i = 0; i < 16; i++) {
+        var phase = (time * 3 + i * 0.4) % 2;
+        var px = rx + (Math.sin(i * 2.7) * 25) * phase;
+        var py = nzY + phase * 60 + i * 3;
+        var pr = (1 - phase * 0.4) * (2 + (i % 3));
+        if (phase < 1.8) {
+          c.globalAlpha = 0.4 * (1 - phase / 2);
+          c.beginPath(); c.arc(px, py, pr, 0, Math.PI * 2); c.fill();
+        }
+      }
+      c.globalAlpha = 1;
+    }});
+
+    // Momentum arrows
+    var arwLX = rocketX - 80;
+    var arwTopY = rocketTopY + 20 + rktBr;
+    // Rocket up (blue)
+    els.push({id:'rktArr', type:'arrow', x1:arwLX, y1:arwTopY + 70, x2:arwLX, y2:arwTopY, color:BLUE, lineWidth:3, headSize:9});
+    // Exhaust down (red)
+    var arwRX = rocketX + 80;
+    els.push({id:'exhArr', type:'arrow', x1:arwRX, y1:arwTopY, x2:arwRX, y2:arwTopY + 70, color:RED, lineWidth:3, headSize:9});
+
+    // Arrow labels
+    els.push({id:'f4rLbl', type:'custom', x:0, y:0, alpha:1, draw:function(c){
+      c.fillStyle = BLUE;
+      c.font = "11px 'Noto Sans SC',sans-serif";
+      c.textAlign = 'right';
+      var lines = t('f4rocket').split('\n');
+      for (var i = 0; i < lines.length; i++) c.fillText(lines[i], arwLX - 8, arwTopY + 25 + i * 16);
+    }});
+    els.push({id:'f4eLbl', type:'custom', x:0, y:0, alpha:1, draw:function(c){
+      c.fillStyle = RED;
+      c.font = "11px 'Noto Sans SC',sans-serif";
+      c.textAlign = 'left';
+      var lines = t('f4exhaust').split('\n');
+      for (var i = 0; i < lines.length; i++) c.fillText(lines[i], arwRX + 8, arwTopY + 25 + i * 16);
+    }});
+
+    els.push({id:'f4pRkt', type:'text', text:t('f4pRkt'), x:arwLX, y:arwTopY + 85, color:BLUE, size:9, align:'center'});
+    els.push({id:'f4pExh', type:'text', text:t('f4pExh'), x:arwRX, y:arwTopY + 85, color:RED, size:9, align:'center'});
+
+    // Conservation equation
+    els.push({id:'f4law', type:'label', text:t('f4law'), x:cx, y:H - 50 + breathe * 0.3, color:GOLD, size:16, align:'center', bold:true, glow:'rgba(255,204,0,0.4)'});
+    els.push({id:'f4cons', type:'label', text:t('f4cons'), x:cx, y:H - 28, color:P.muted, size:11, align:'center'});
+
+    // Momentum bars (side by side)
+    var barBX = cx + 140;
+    var barBY = H - 100;
+    var barMaxH = 60;
+    els.push({id:'momBars', type:'custom', x:0, y:0, alpha:1, draw:function(c){
+      // Rocket bar (up = positive)
+      var bh = barMaxH * 0.8;
+      var gBar = c.createLinearGradient(barBX, barBY, barBX, barBY - bh);
+      gBar.addColorStop(0, '#4488ff'); gBar.addColorStop(1, '#2266dd');
+      c.fillStyle = gBar;
+      c.fillRect(barBX, barBY - bh, 30, bh);
+      c.shadowColor = 'rgba(68,136,255,0.3)'; c.shadowBlur = 8;
+      c.fillRect(barBX, barBY - bh, 30, bh);
+      c.shadowBlur = 0;
+      c.fillStyle = P.text;
+      c.font = "8px 'Space Grotesk',sans-serif";
+      c.textAlign = 'center';
+      c.fillText('+p', barBX + 15, barBY - bh - 8);
+
+      // Exhaust bar (down = negative)
+      c.fillStyle = '#ff4444';
+      c.fillRect(barBX + 40, barBY, 30, bh);
+      c.shadowColor = 'rgba(255,68,68,0.3)'; c.shadowBlur = 8;
+      c.fillRect(barBX + 40, barBY, 30, bh);
+      c.shadowBlur = 0;
+      c.fillStyle = P.text;
+      c.fillText('-p', barBX + 55, barBY + bh + 12);
+
+      // Zero line
+      c.strokeStyle = GOLD; c.lineWidth = 1;
+      c.setLineDash([3, 3]);
+      c.beginPath(); c.moveTo(barBX - 10, barBY); c.lineTo(barBX + 80, barBY); c.stroke();
+      c.setLineDash([]);
+      c.fillStyle = GOLD;
+      c.fillText('0', barBX + 82, barBY + 3);
+    }});
+
+    return els;
+  }
+
+  return [];
+}
+
+// ============================================================
+// CONTINUOUS ANIMATION LOOP
+// ============================================================
+
+var _lastFrameDrawn = -1;
+
+function _animLoop(ts) {
+  _animTime = ts || 0;
+  _updateParticles();
+
+  var cf = AnimRuntime.currentFrame;
+  AnimRuntime.drawFrame(cf);
+
+  // Draw particles overlay
+  AnimRuntime.applyContentScale();
+  _drawParticles(AnimRuntime.ctx);
+  AnimRuntime.restoreContentScale();
+
+  // Trigger effects on frame change
+  if (cf !== _lastFrameDrawn) {
+    if (cf === 1) {
+      _triggerShake(6);
+      _initAudio();
+      _playImpact(80, 0.3);
+    }
+    if (cf === 2) {
+      _triggerShake(12);
+      _initAudio();
+      _playImpact(50, 0.5);
+      var vcx = AnimRuntime.W / 2 + 50;
+      var vcy = AnimRuntime.H / 2 + 70;
+      _spawnParticles(vcx + 9, vcy, 30, '#888', 1.5);
+      _spawnParticles(vcx + 9, vcy, 15, '#ffcc00', 1.2);
+    }
+    if (cf === 3) {
+      _triggerShake(5);
+      _initAudio();
+      _playImpact(200, 0.15);
+      var vcx3 = AnimRuntime.W / 2 - 20;
+      var vcy3 = AnimRuntime.H / 2 - 20;
+      _spawnParticles(vcx3, vcy3, 20, '#ffcc44', 1);
+    }
+    if (cf === 4) {
+      _triggerShake(4);
+      _initAudio();
+      _playImpact(60, 0.4);
+      var vcx4 = AnimRuntime.W / 2;
+      var vcy4 = AnimRuntime.H / 2 + 50;
+      _spawnParticles(vcx4, vcy4, 25, '#ff8844', 1.3);
+    }
+    _lastFrameDrawn = cf;
+  }
+
+  _animRAF = requestAnimationFrame(_animLoop);
+}
+
+// ============================================================
+// BOOT
+// ============================================================
+
+function onReady() {
+  _animRAF = requestAnimationFrame(_animLoop);
+}
+
+AnimRuntime.boot();
+</script>
+</body>
+</html>

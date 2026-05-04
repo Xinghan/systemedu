@@ -1,0 +1,757 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>推拉感知实验室 | Force Observatory</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700;900&family=JetBrains+Mono:wght@400;700&family=Noto+Sans+SC:wght@300;400;600;700;900&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+<style>
+:root{
+  --FIELD:oklch(0.78 0.13 215);--WAVE:oklch(0.55 0.13 215);--MASS:oklch(0.35 0.10 215);
+  --PHOTON:oklch(0.92 0.08 215);--CONSTANT:oklch(0.85 0.14 85);
+  --BG-DEEP:oklch(0.14 0.035 265);--BG-MID:oklch(0.18 0.04 265);
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{height:100vh;min-height:100vh;overflow:hidden}
+body{font-family:'Noto Sans SC','Inter',sans-serif;background:var(--BG-DEEP);color:var(--PHOTON);user-select:none}
+.font-mono{font-family:'JetBrains Mono',monospace}
+.glass{background:rgba(14,18,41,0.72);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border:1px solid rgba(106,180,232,0.13)}
+.glass-strong{background:rgba(14,18,41,0.88);backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);border:1px solid rgba(106,180,232,0.18)}
+::-webkit-scrollbar{width:3px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:var(--WAVE);border-radius:0}
+.obj-card{transition:all .2s ease;cursor:pointer;border:1px solid rgba(106,180,232,0.08);border-radius:6px;padding:8px 10px;display:flex;align-items:center;gap:8px}
+.obj-card:hover{border-color:rgba(106,180,232,0.3);background:rgba(106,180,232,0.06)}
+.obj-card.active{border-color:var(--CONSTANT);background:rgba(212,196,74,0.08);box-shadow:0 0 20px rgba(212,196,74,0.1)}
+.obj-dot{width:14px;height:14px;border-radius:50%;flex-shrink:0}
+.effort-dot{width:30px;height:30px;border:1.5px solid rgba(106,180,232,0.3);transition:all .15s;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:12px;border-radius:4px}
+.effort-dot:hover{border-color:var(--CONSTANT);background:rgba(212,196,74,0.1)}
+.effort-dot.filled{background:var(--CONSTANT);border-color:var(--CONSTANT);color:var(--MASS)}
+@keyframes pingRing{0%{transform:scale(1);opacity:.6}100%{transform:scale(2.5);opacity:0}}
+@keyframes fadeSlideUp{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
+@keyframes glowPulse{0%,100%{opacity:.5}50%{opacity:1}}
+.anim-fade-up{animation:fadeSlideUp .35s ease-out both}
+#recordModal{transition:opacity .25s,transform .25s}
+#recordModal.hidden{opacity:0;transform:scale(.95);pointer-events:none}
+#completionOverlay{transition:opacity .5s}
+#completionOverlay.hidden{opacity:0;pointer-events:none}
+.echo-bubble{background:rgba(14,18,41,0.85);border:1px solid rgba(106,180,232,0.2);border-radius:8px;padding:6px 10px;font-size:12px;max-width:200px;line-height:1.4}
+.rec-row{display:flex;align-items:center;gap:6px;padding:5px 0;border-bottom:1px solid rgba(106,180,232,0.06);font-size:12px}
+.rec-row:last-child{border-bottom:none}
+.btn-primary{background:var(--CONSTANT);color:var(--MASS);font-weight:700;padding:6px 16px;border:none;cursor:pointer;font-size:13px;border-radius:4px;transition:all .15s}
+.btn-primary:hover{filter:brightness(1.1);transform:translateY(-1px)}
+.btn-primary:disabled{opacity:0.4;cursor:not-allowed;transform:none;filter:none}
+.btn-ghost{background:transparent;color:var(--PHOTON);border:1px solid rgba(106,180,232,0.2);padding:6px 16px;cursor:pointer;font-size:13px;border-radius:4px;transition:all .15s}
+.btn-ghost:hover{border-color:rgba(106,180,232,0.5);background:rgba(106,180,232,0.06)}
+.param-label{font-size:11px;color:var(--WAVE);text-transform:uppercase;letter-spacing:0.5px}
+.param-value{font-size:14px;font-weight:600}
+.section-title{font-size:11px;color:var(--WAVE);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;padding-bottom:4px;border-bottom:1px solid rgba(106,180,232,0.08)}
+</style>
+</head>
+<body class="h-screen">
+<div id="app" class="flex h-screen w-screen overflow-hidden">
+  <!-- Canvas Area -->
+  <div id="canvasWrap" class="flex-1 relative overflow-hidden" style="min-width:0">
+    <canvas id="simCanvas" class="block w-full h-full"></canvas>
+    <!-- Echo Mascot -->
+    <div id="echoMascot" class="absolute top-3 left-3 flex items-start gap-2 pointer-events-none">
+      <div class="w-8 h-8 rounded-full flex items-center justify-center text-sm" style="background:rgba(212,196,74,0.15);border:1px solid rgba(212,196,74,0.3)">
+        <i class="fas fa-robot" style="color:var(--CONSTANT)"></i>
+      </div>
+      <div class="echo-bubble" id="echoText"></div>
+    </div>
+    <!-- Force HUD -->
+    <div id="forceHud" class="absolute top-3 right-3 glass rounded-lg px-3 py-2 text-right font-mono text-xs" style="min-width:120px">
+      <div class="param-label" data-i18n="force">推力</div>
+      <div id="hudForceVal" class="param-value" style="color:var(--CONSTANT)">0.0 N</div>
+      <div class="param-label mt-1" data-i18n="velocity">速度</div>
+      <div id="hudVelVal" class="param-value" style="color:var(--FIELD)">0.00 m/s</div>
+    </div>
+    <!-- Drag hint -->
+    <div id="dragHint" class="absolute bottom-3 left-1/2 -translate-x-1/2 glass rounded-full px-4 py-1.5 text-xs" style="color:var(--WAVE)">
+      <i class="fas fa-hand-pointer mr-1"></i><span data-i18n="dragHint">在画布上拖拽来施力</span>
+    </div>
+    <!-- Scale bar -->
+    <div id="scaleBar" class="absolute bottom-3 left-3 flex items-center gap-1 text-xs font-mono" style="color:var(--WAVE)">
+      <div style="width:40px;height:2px;background:var(--WAVE);border-radius:1px"></div>
+      <span id="scaleLabel">1 m</span>
+    </div>
+  </div>
+
+  <!-- Side Panel -->
+  <aside id="sidePanel" class="flex flex-col glass-strong overflow-hidden" style="width:280px;flex-shrink:0">
+    <!-- Header -->
+    <div class="p-3 flex items-center justify-between" style="border-bottom:1px solid rgba(106,180,232,0.1)">
+      <div>
+        <h1 class="text-sm font-bold" data-i18n="title" style="letter-spacing:0.5px">推拉感知实验室</h1>
+        <p class="text-xs font-mono" style="color:var(--WAVE)">Force Observatory</p>
+      </div>
+      <button id="langToggle" class="btn-ghost text-xs px-2 py-1" style="font-size:11px">EN</button>
+    </div>
+
+    <!-- Object List -->
+    <div class="p-3" style="border-bottom:1px solid rgba(106,180,232,0.1)">
+      <div class="section-title" data-i18n="objects">实验对象</div>
+      <div id="objList" class="space-y-1.5"></div>
+    </div>
+
+    <!-- Parameters -->
+    <div class="p-3" style="border-bottom:1px solid rgba(106,180,232,0.1)">
+      <div class="section-title" data-i18n="params">当前参数</div>
+      <div class="grid grid-cols-2 gap-2 text-xs">
+        <div><span class="param-label" data-i18n="mass">质量</span><div id="paramMass" class="param-value font-mono">--</div></div>
+        <div><span class="param-label" data-i18n="friction">摩擦系数</span><div id="paramFric" class="param-value font-mono">--</div></div>
+      </div>
+    </div>
+
+    <!-- Effort Record -->
+    <div class="p-3" style="border-bottom:1px solid rgba(106,180,232,0.1)">
+      <div class="section-title" data-i18n="effortRecord">感受记录</div>
+      <p class="text-xs mb-2" style="color:var(--WAVE)" data-i18n="effortHint">推动后，点选你的费力感受：</p>
+      <div id="effortDots" class="flex gap-1.5 mb-2"></div>
+      <div id="effortLabel" class="text-xs mb-2" style="color:var(--CONSTANT);min-height:16px"></div>
+      <button id="recordBtn" class="btn-primary w-full" disabled data-i18n="record">记录</button>
+    </div>
+
+    <!-- Record Table -->
+    <div class="p-3 flex-1 overflow-y-auto" style="min-height:0">
+      <div class="section-title" data-i18n="experimentLog">实验记录</div>
+      <div class="flex text-xs mb-1" style="color:var(--WAVE)">
+        <span style="width:30px">#</span>
+        <span style="flex:1" data-i18n="objCol">物体</span>
+        <span style="width:55px" data-i18n="forceCol">推力</span>
+        <span style="width:55px" data-i18n="effortCol">感受</span>
+      </div>
+      <div id="recordList"></div>
+      <div id="emptyRecord" class="text-xs text-center py-4" style="color:var(--MASS)" data-i18n="noRecords">尚无记录</div>
+    </div>
+
+    <!-- Reset -->
+    <div class="p-3" style="border-top:1px solid rgba(106,180,232,0.1)">
+      <button id="resetBtn" class="btn-ghost w-full text-xs"><i class="fas fa-undo mr-1"></i><span data-i18n="resetPos">重置位置</span></button>
+    </div>
+  </aside>
+</div>
+
+<!-- Record Modal -->
+<div id="recordModal" class="hidden fixed inset-0 z-50 flex items-center justify-center" style="background:rgba(0,0,0,0.5)">
+  <div class="glass-strong p-5 rounded-lg anim-fade-up" style="width:300px">
+    <h3 class="text-sm font-bold mb-3" data-i18n="recordTitle">记录你的感受</h3>
+    <p class="text-xs mb-3" style="color:var(--WAVE)" data-i18n="effortHint2">这次推拉感觉如何？</p>
+    <div id="modalEffortDots" class="flex gap-2 mb-2 justify-center"></div>
+    <div id="modalEffortLabel" class="text-xs text-center mb-4" style="color:var(--CONSTANT);min-height:18px"></div>
+    <div class="flex gap-2">
+      <button id="modalCancel" class="btn-ghost flex-1 text-xs" data-i18n="cancel">取消</button>
+      <button id="modalConfirm" class="btn-primary flex-1 text-xs" disabled data-i18n="confirm">确认</button>
+    </div>
+  </div>
+</div>
+
+<!-- Completion Overlay -->
+<div id="completionOverlay" class="hidden fixed inset-0 z-50 flex items-center justify-center" style="background:rgba(0,0,0,0.6)">
+  <div class="glass-strong p-8 rounded-lg text-center anim-fade-up" style="max-width:420px">
+    <div class="text-3xl mb-3"><i class="fas fa-flask" style="color:var(--CONSTANT)"></i></div>
+    <h2 class="text-lg font-bold mb-2" data-i18n="completion">实验完成！</h2>
+    <p class="text-xs mb-5 leading-relaxed" style="color:var(--WAVE)" data-i18n="completionMsg">你已记录了五种不同物体的推拉感受。回顾记录，质量越大的物体需要越大的力才能推动，这就是力、质量与运动的关系！</p>
+    <button id="completionClose" class="btn-primary" data-i18n="continueExplore">继续探索</button>
+  </div>
+</div>
+
+<script>
+(function(){
+'use strict';
+
+/* === 常量 === */
+const PHYSICS_DT=1/120;
+const MAX_FORCE=50;
+const GRAVITY=9.8;
+const LINEAR_DRAG=3;
+
+/* === 状态 === */
+let currentLang='zh';
+let currentIdx=0;
+let currentEffort=0;
+let modalEffort=0;
+let records=[];
+let isDragging=false;
+let dragStartScreen={x:0,y:0};
+let mouseScreen={x:0,y:0};
+let lastAppliedForce={x:0,y:0};
+let lastAppliedMag=0;
+let timeVal=0;
+let lastTimestamp=0;
+let accumulator=0;
+let canvasEl=null;
+let ctxRef=null;
+let hintHidden=false;
+let completionShown=false;
+
+const cam={x:0,y:0,zoom:40};
+
+/* === 物体定义 === */
+const objectDefs=[
+  {nameZh:'铁球',nameEn:'Iron Ball',mass:10,friction:0.3,radius:0.4,color:'#5a8abf',shape:'circle'},
+  {nameZh:'木箱',nameEn:'Wood Crate',mass:5,friction:0.4,radius:0.35,color:'#a07848',shape:'rect'},
+  {nameZh:'橡皮球',nameEn:'Rubber Ball',mass:1,friction:0.5,radius:0.25,color:'#c95050',shape:'circle'},
+  {nameZh:'塑料瓶',nameEn:'Plastic Bottle',mass:0.3,friction:0.2,radius:0.18,color:'#50b878',shape:'circle'},
+  {nameZh:'纸杯',nameEn:'Paper Cup',mass:0.1,friction:0.1,radius:0.12,color:'#b8a848',shape:'circle'},
+];
+
+const objStates=objectDefs.map(function(def,i){
+  return{
+    nameZh:def.nameZh,nameEn:def.nameEn,
+    mass:def.mass,friction:def.friction,radius:def.radius,
+    color:def.color,shape:def.shape,
+    x:(i-2)*4,y:0,vx:0,vy:0,
+    initX:(i-2)*4,initY:0
+  };
+});
+
+/* === 粒子 === */
+const particles=[];
+function spawnTrail(x,y,vx,vy){
+  particles.push({x:x,y:y,vx:vx*0.1+(Math.random()-0.5)*0.4,vy:vy*0.1+(Math.random()-0.5)*0.4,life:1,maxLife:1,type:'trail'});
+}
+function spawnRipple(x,y,intensity){
+  particles.push({x:x,y:y,maxRadius:0.4+intensity*1.5,life:1,maxLife:1,type:'ripple'});
+}
+function updateParticles(dt){
+  for(let i=particles.length-1;i>=0;i--){
+    var p=particles[i];
+    p.life-=dt/p.maxLife;
+    if(p.life<=0){particles.splice(i,1);continue;}
+    if(p.type==='trail'){p.x+=p.vx*dt;p.y+=p.vy*dt;}
+  }
+}
+
+/* === i18n === */
+var i18nData={
+  zh:{
+    title:'推拉感知实验室',objects:'实验对象',params:'当前参数',effortRecord:'感受记录',
+    experimentLog:'实验记录',resetPos:'重置位置',mass:'质量',friction:'摩擦系数',
+    velocity:'速度',force:'推力',effort:'费力程度',record:'记录',cancel:'取消',confirm:'确认',
+    recordTitle:'记录你的感受',effortHint:'推动后，点选你的费力感受：',effortHint2:'这次推拉感觉如何？',
+    effort1:'很轻松',effort2:'较轻松',effort3:'一般',effort4:'较费力',effort5:'很费力',
+    completion:'实验完成！',
+    completionMsg:'你已记录了五种不同物体的推拉感受。回顾记录，质量越大的物体需要越大的力才能推动，这就是力、质量与运动的关系！',
+    continueExplore:'继续探索',dragHint:'在画布上拖拽来施力',
+    noRecords:'尚无记录',objCol:'物体',forceCol:'推力',effortCol:'感受',
+    kg:'千克',newton:'牛顿',ms:'米/秒',coeff:'系数'
+  },
+  en:{
+    title:'Force Observatory',objects:'Test Objects',params:'Current Parameters',effortRecord:'Effort Record',
+    experimentLog:'Experiment Log',resetPos:'Reset Position',mass:'Mass',friction:'Friction Coeff.',
+    velocity:'Velocity',force:'Force',effort:'Effort Level',record:'Record',cancel:'Cancel',confirm:'Confirm',
+    recordTitle:'Record Your Feeling',effortHint:'After pushing, rate your effort:',effortHint2:'How did it feel?',
+    effort1:'Very Easy',effort2:'Easy',effort3:'Moderate',effort4:'Hard',effort5:'Very Hard',
+    completion:'Experiment Complete!',
+    completionMsg:'You\'ve recorded five different objects. Heavier objects require more force to move — that\'s the relationship between force, mass, and motion!',
+    continueExplore:'Continue Exploring',dragHint:'Drag on canvas to apply force',
+    noRecords:'No records yet',objCol:'Object',forceCol:'Force',effortCol:'Effort',
+    kg:'kg',newton:'N',ms:'m/s',coeff:'Coeff.'
+  }
+};
+function t(k){return(i18nData[currentLang]||{})[k]||k;}
+function objName(st){return currentLang==='zh'?st.nameZh:st.nameEn;}
+
+/* === 坐标变换 === */
+function worldToScreen(wx,wy){
+  return{sx:(wx-cam.x)*cam.zoom+canvasEl.width/2,sy:(wy-cam.y)*cam.zoom+canvasEl.height/2};
+}
+function screenToWorld(sx,sy){
+  return{wx:(sx-canvasEl.width/2)/cam.zoom+cam.x,wy:(sy-canvasEl.height/2)/cam.zoom+cam.y};
+}
+
+/* === Canvas 大小 === */
+function resizeCanvas(){
+  var wrap=document.getElementById('canvasWrap');
+  canvasEl.width=wrap.clientWidth;
+  canvasEl.height=wrap.clientHeight;
+}
+
+/* === 物理更新 === */
+function updatePhysics(dt){
+  var st=objStates[currentIdx];
+  var fx=0,fy=0;
+
+  if(isDragging){
+    var dx=mouseScreen.x-dragStartScreen.x;
+    var dy=mouseScreen.y-dragStartScreen.y;
+    var dist=Math.sqrt(dx*dx+dy*dy);
+    if(dist>8){
+      var mag=Math.min(dist*0.4,MAX_FORCE);
+      fx=(dx/dist)*mag;
+      fy=(dy/dist)*mag;
+    }
+    lastAppliedForce.x=fx;lastAppliedForce.y=fy;
+    lastAppliedMag=Math.sqrt(fx*fx+fy*fy);
+  }else{
+    lastAppliedForce.x=0;lastAppliedForce.y=0;
+    lastAppliedMag=0;
+  }
+
+  /* 摩擦力 */
+  var speed=Math.sqrt(st.vx*st.vx+st.vy*st.vy);
+  if(speed>0.005){
+    var fricMag=st.friction*st.mass*GRAVITY;
+    var maxFricImpulse=st.mass*speed/dt;
+    var usedFric=Math.min(fricMag,maxFricImpulse);
+    fx-=(st.vx/speed)*usedFric;
+    fy-=(st.vy/speed)*usedFric;
+  }
+
+  /* 线性阻力 */
+  fx-=LINEAR_DRAG*st.vx;
+  fy-=LINEAR_DRAG*st.vy;
+
+  /* 加速度 */
+  var ax=fx/st.mass;
+  var ay=fy/st.mass;
+  st.vx+=ax*dt;
+  st.vy+=ay*dt;
+
+  var newSpeed=Math.sqrt(st.vx*st.vx+st.vy*st.vy);
+  if(!isDragging&&newSpeed<0.02){st.vx=0;st.vy=0;}
+
+  st.x+=st.vx*dt;
+  st.y+=st.vy*dt;
+}
+
+/* === 渲染 === */
+function render(){
+  var ctx=ctxRef;
+  var w=canvasEl.width,h=canvasEl.height;
+  ctx.clearRect(0,0,w,h);
+
+  /* 背景渐变 */
+  var bgGrad=ctx.createRadialGradient(w/2,h/2,0,w/2,h/2,Math.max(w,h)*0.7);
+  bgGrad.addColorStop(0,'#141a35');
+  bgGrad.addColorStop(1,'#0a0e1f');
+  ctx.fillStyle=bgGrad;
+  ctx.fillRect(0,0,w,h);
+
+  /* 网格 */
+  drawGrid(ctx,w,h);
+
+  /* 粒子（涟漪） */
+  for(var pi=0;pi<particles.length;pi++){
+    var p=particles[pi];
+    if(p.type==='ripple'){
+      var progress=1-p.life;
+      var r=p.maxRadius*progress*cam.zoom;
+      var sc=worldToScreen(p.x,p.y);
+      ctx.beginPath();
+      ctx.arc(sc.sx,sc.sy,Math.max(1,r),0,Math.PI*2);
+      ctx.strokeStyle='rgba(212,196,74,'+(0.3*p.life).toFixed(3)+')';
+      ctx.lineWidth=1.5;
+      ctx.stroke();
+    }
+  }
+
+  /* 非当前物体 */
+  for(var i=0;i<objStates.length;i++){
+    if(i===currentIdx)continue;
+    drawObject(ctx,objStates[i],false);
+  }
+
+  /* 当前物体 */
+  drawObject(ctx,objStates[currentIdx],true);
+
+  /* 速度箭头 */
+  var cst=objStates[currentIdx];
+  var csp=Math.sqrt(cst.vx*cst.vx+cst.vy*cst.vy);
+  if(csp>0.05){
+    var arrowLen=Math.min(csp*0.8,4)*cam.zoom;
+    var cs=worldToScreen(cst.x,cst.y);
+    var angle=Math.atan2(cst.vy,cst.vx);
+    drawArrow(ctx,cs.sx,cs.sy,cs.sx+Math.cos(angle)*arrowLen,cs.sy+Math.sin(angle)*arrowLen,'#6ab4e8',2);
+  }
+
+  /* 力箭头 */
+  if(isDragging&&lastAppliedMag>1){
+    var fLen=Math.min(lastAppliedMag*0.6,30)*cam.zoom/40;
+    var fsc=worldToScreen(cst.x,cst.y);
+    var fAngle=Math.atan2(lastAppliedForce.y,lastAppliedForce.x);
+    drawArrow(ctx,fsc.sx,fsc.sy,fsc.sx+Math.cos(fAngle)*fLen,fsc.sy+Math.sin(fAngle)*fLen,'#d4c44a',3);
+  }
+
+  /* 粒子（尾迹） */
+  for(var ti=0;ti<particles.length;ti++){
+    var tp=particles[ti];
+    if(tp.type==='trail'){
+      var tsc=worldToScreen(tp.x,tp.y);
+      var tAlpha=tp.life*0.5;
+      ctx.beginPath();
+      ctx.arc(tsc.sx,tsc.sy,2,0,Math.PI*2);
+      ctx.fillStyle='rgba(106,180,232,'+tAlpha.toFixed(3)+')';
+      ctx.fill();
+    }
+  }
+}
+
+function drawGrid(ctx,w,h){
+  var step=1;
+  if(cam.zoom<20)step=5;
+  if(cam.zoom<8)step=10;
+  var startW=screenToWorld(0,0);
+  var endW=screenToWorld(w,h);
+  ctx.strokeStyle='rgba(106,180,232,0.06)';
+  ctx.lineWidth=1;
+  var sx=Math.floor(startW.wx/step)*step;
+  var sy=Math.floor(startW.wy/step)*step;
+  for(var gx=sx;gx<=endW.wx;gx+=step){
+    var s=worldToScreen(gx,0);
+    ctx.beginPath();ctx.moveTo(s.sx,0);ctx.lineTo(s.sx,h);ctx.stroke();
+  }
+  for(var gy=sy;gy<=endW.wy;gy+=step){
+    var s2=worldToScreen(0,gy);
+    ctx.beginPath();ctx.moveTo(0,s2.sy);ctx.lineTo(w,s2.sy);ctx.stroke();
+  }
+}
+
+function drawObject(ctx,st,isActive){
+  var sc=worldToScreen(st.x,st.y);
+  var r=st.radius*cam.zoom;
+  ctx.save();
+  if(!isActive){ctx.globalAlpha=0.35;}
+
+  if(isActive){
+    ctx.shadowColor=st.color;
+    ctx.shadowBlur=20;
+  }
+
+  if(st.shape==='rect'){
+    ctx.fillStyle=st.color;
+    ctx.fillRect(sc.sx-r,sc.sy-r,r*2,r*2);
+    ctx.strokeStyle='rgba(255,255,255,0.2)';
+    ctx.lineWidth=1;
+    ctx.strokeRect(sc.sx-r,sc.sy-r,r*2,r*2);
+  }else{
+    ctx.beginPath();
+    ctx.arc(sc.sx,sc.sy,Math.max(3,r),0,Math.PI*2);
+    ctx.fillStyle=st.color;
+    ctx.fill();
+    ctx.strokeStyle='rgba(255,255,255,0.2)';
+    ctx.lineWidth=1;
+    ctx.stroke();
+  }
+
+  ctx.shadowBlur=0;
+
+  /* 质量标签 */
+  if(isActive&&cam.zoom>15){
+    ctx.fillStyle='#fff';
+    ctx.font='bold '+Math.max(10,r*0.6)+'px JetBrains Mono,monospace';
+    ctx.textAlign='center';
+    ctx.textBaseline='middle';
+    ctx.fillText(st.mass+'kg',sc.sx,sc.sy);
+  }
+
+  ctx.restore();
+}
+
+function drawArrow(ctx,x1,y1,x2,y2,color,lw){
+  var dx=x2-x1,dy=y2-y1;
+  var len=Math.sqrt(dx*dx+dy*dy);
+  if(len<3)return;
+  var angle=Math.atan2(dy,dx);
+  var headLen=Math.min(12,len*0.3);
+  ctx.save();
+  ctx.strokeStyle=color;
+  ctx.fillStyle=color;
+  ctx.lineWidth=lw;
+  ctx.lineCap='round';
+  ctx.beginPath();ctx.moveTo(x1,y1);ctx.lineTo(x2,y2);ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(x2,y2);
+  ctx.lineTo(x2-headLen*Math.cos(angle-0.4),y2-headLen*Math.sin(angle-0.4));
+  ctx.lineTo(x2-headLen*Math.cos(angle+0.4),y2-headLen*Math.sin(angle+0.4));
+  ctx.closePath();ctx.fill();
+  ctx.restore();
+}
+
+/* === HUD 更新 === */
+function updateHUD(){
+  var st=objStates[currentIdx];
+  var speed=Math.sqrt(st.vx*st.vx+st.vy*st.vy);
+  document.getElementById('hudForceVal').textContent=lastAppliedMag.toFixed(1)+' N';
+  document.getElementById('hudVelVal').textContent=speed.toFixed(2)+' m/s';
+}
+
+function updateScaleBar(){
+  var pxPerMeter=cam.zoom;
+  var barPx=40;
+  var barMeters=barPx/pxPerMeter;
+  document.getElementById('scaleLabel').textContent=barMeters<0.1?(barMeters*100).toFixed(0)+'cm':barMeters.toFixed(1)+'m';
+}
+
+/* === 侧面板构建 === */
+function buildObjectList(){
+  var container=document.getElementById('objList');
+  container.innerHTML='';
+  objStates.forEach(function(st,i){
+    var card=document.createElement('div');
+    card.className='obj-card'+(i===currentIdx?' active':'');
+    card.setAttribute('data-idx',i);
+    card.innerHTML='<div class="obj-dot" style="background:'+st.color+'"></div>'+
+      '<div class="flex-1"><div class="text-xs font-semibold">'+objName(st)+'</div>'+
+      '<div class="text-xs font-mono" style="color:var(--WAVE)">'+st.mass+' '+t('kg')+'</div></div>';
+    card.addEventListener('click',function(){selectObject(i);});
+    container.appendChild(card);
+  });
+}
+
+function selectObject(idx){
+  currentIdx=idx;
+  currentEffort=0;
+  buildObjectList();
+  updateObjInfo();
+  updateEffortDots();
+  updateRecordBtn();
+  cam.x=objStates[idx].x;cam.y=objStates[idx].y;
+}
+
+function updateObjInfo(){
+  var st=objStates[currentIdx];
+  document.getElementById('paramMass').textContent=st.mass+' '+t('kg');
+  document.getElementById('paramFric').textContent=st.friction.toFixed(2);
+}
+
+function buildEffortDots(){
+  var containers=[document.getElementById('effortDots'),document.getElementById('modalEffortDots')];
+  containers.forEach(function(c,ci){
+    c.innerHTML='';
+    for(var i=1;i<=5;i++){
+      var dot=document.createElement('div');
+      dot.className='effort-dot';
+      dot.textContent=i;
+      dot.setAttribute('data-level',i);
+      dot.addEventListener('click',(function(ci2,lvl){
+        return function(){
+          if(ci2===0){currentEffort=lvl;updateEffortDots();updateRecordBtn();}
+          else{modalEffort=lvl;updateModalEffortDots();}
+        };
+      })(ci,i));
+      c.appendChild(dot);
+    }
+  });
+}
+
+function updateEffortDots(){
+  var dots=document.getElementById('effortDots').querySelectorAll('.effort-dot');
+  dots.forEach(function(d){
+    var lvl=parseInt(d.getAttribute('data-level'));
+    if(lvl<=currentEffort)d.classList.add('filled');else d.classList.remove('filled');
+  });
+  var lbl=document.getElementById('effortLabel');
+  lbl.textContent=currentEffort>0?t('effort'+currentEffort):'';
+}
+
+function updateModalEffortDots(){
+  var dots=document.getElementById('modalEffortDots').querySelectorAll('.effort-dot');
+  dots.forEach(function(d){
+    var lvl=parseInt(d.getAttribute('data-level'));
+    if(lvl<=modalEffort)d.classList.add('filled');else d.classList.remove('filled');
+  });
+  var lbl=document.getElementById('modalEffortLabel');
+  lbl.textContent=modalEffort>0?t('effort'+modalEffort):'';
+  document.getElementById('modalConfirm').disabled=modalEffort===0;
+}
+
+function updateRecordBtn(){
+  var st=objStates[currentIdx];
+  var speed=Math.sqrt(st.vx*st.vx+st.vy*st.vy);
+  var hasMoved=speed>0.01||lastAppliedMag>0;
+  document.getElementById('recordBtn').disabled=!(currentEffort>0);
+}
+
+function updateRecordList(){
+  var container=document.getElementById('recordList');
+  var empty=document.getElementById('emptyRecord');
+  container.innerHTML='';
+  if(records.length===0){empty.style.display='';return;}
+  empty.style.display='none';
+  records.forEach(function(rec,i){
+    var row=document.createElement('div');
+    row.className='rec-row';
+    row.innerHTML='<span style="width:30px;color:var(--WAVE)">'+(i+1)+'</span>'+
+      '<span style="flex:1">'+rec.objName+'</span>'+
+      '<span class="font-mono" style="width:55px">'+rec.force.toFixed(1)+' N</span>'+
+      '<span style="width:55px;color:var(--CONSTANT)">'+rec.effort+' '+t('effort'+rec.effort).substring(0,2)+'</span>';
+    container.appendChild(row);
+  });
+}
+
+/* === 模态框 === */
+function showModal(){
+  modalEffort=0;
+  updateModalEffortDots();
+  document.getElementById('recordModal').classList.remove('hidden');
+}
+function hideModal(){
+  document.getElementById('recordModal').classList.add('hidden');
+}
+function confirmRecord(){
+  if(modalEffort===0)return;
+  var st=objStates[currentIdx];
+  records.push({
+    objName:objName(st),
+    objIdx:currentIdx,
+    force:lastAppliedMag,
+    effort:modalEffort,
+    time:timeVal
+  });
+  hideModal();
+  currentEffort=0;
+  updateEffortDots();
+  updateRecordBtn();
+  updateRecordList();
+  if(records.length>=5&&!completionShown){
+    completionShown=true;
+    setTimeout(function(){
+      document.getElementById('completionOverlay').classList.remove('hidden');
+    },400);
+  }
+}
+
+/* === i18n 切换 === */
+function applyI18N(){
+  document.querySelectorAll('[data-i18n]').forEach(function(el){
+    var key=el.getAttribute('data-i18n');
+    if(t(key)!==key)el.textContent=t(key);
+  });
+  buildObjectList();
+  updateObjInfo();
+  updateRecordList();
+  updateEffortDots();
+}
+
+function toggleLang(){
+  currentLang=currentLang==='zh'?'en':'zh';
+  document.getElementById('langToggle').textContent=currentLang==='zh'?'EN':'中';
+  applyI18N();
+}
+
+/* === Echo 吉祥物 === */
+var echoTips={
+  zh:['在画布上拖拽来施力','注意观察速度的变化','试试换个不同的物体','对比轻物体和重物体','质量越大，越难推动'],
+  en:['Drag on canvas to apply force','Watch the velocity change','Try a different object','Compare light vs heavy','Heavier = harder to push']
+};
+var echoIdx=0;
+var echoTimer=0;
+function updateEchoMascot(){
+  echoTimer+=1;
+  if(echoTimer>300){
+    echoTimer=0;
+    echoIdx=(echoIdx+1)%echoTips.zh.length;
+  }
+  var tips=currentLang==='zh'?echoTips.zh:echoTips.en;
+  document.getElementById('echoText').textContent=tips[echoIdx];
+}
+
+/* === 输入处理 === */
+function setupInput(){
+  canvasEl.addEventListener('pointerdown',function(e){
+    var rect=canvasEl.getBoundingClientRect();
+    dragStartScreen.x=e.clientX-rect.left;
+    dragStartScreen.y=e.clientY-rect.top;
+    mouseScreen.x=dragStartScreen.x;
+    mouseScreen.y=dragStartScreen.y;
+    isDragging=true;
+    if(!hintHidden){
+      hintHidden=true;
+      document.getElementById('dragHint').style.opacity='0';
+      document.getElementById('dragHint').style.transition='opacity .5s';
+    }
+  });
+  canvasEl.addEventListener('pointermove',function(e){
+    var rect=canvasEl.getBoundingClientRect();
+    mouseScreen.x=e.clientX-rect.left;
+    mouseScreen.y=e.clientY-rect.top;
+  });
+  canvasEl.addEventListener('pointerup',function(){isDragging=false;});
+  canvasEl.addEventListener('pointerleave',function(){isDragging=false;});
+  canvasEl.style.touchAction='none';
+
+  document.getElementById('langToggle').addEventListener('click',toggleLang);
+  document.getElementById('recordBtn').addEventListener('click',function(){
+    if(currentEffort>0)showModal();
+  });
+  document.getElementById('modalCancel').addEventListener('click',hideModal);
+  document.getElementById('modalConfirm').addEventListener('click',confirmRecord);
+  document.getElementById('resetBtn').addEventListener('click',function(){
+    var st=objStates[currentIdx];
+    st.x=st.initX;st.y=st.initY;st.vx=0;st.vy=0;
+    cam.x=st.x;cam.y=st.y;
+  });
+  document.getElementById('completionClose').addEventListener('click',function(){
+    document.getElementById('completionOverlay').classList.add('hidden');
+  });
+
+  window.addEventListener('resize',resizeCanvas);
+}
+
+/* === 主循环 === */
+function gameLoop(timestamp){
+  var dt=Math.min((timestamp-lastTimestamp)/1000,0.1);
+  lastTimestamp=timestamp;
+  timeVal+=dt;
+
+  accumulator+=dt;
+  while(accumulator>=PHYSICS_DT){
+    updatePhysics(PHYSICS_DT);
+    accumulator-=PHYSICS_DT;
+  }
+
+  updateParticles(dt);
+
+  var st=objStates[currentIdx];
+  var speed=Math.sqrt(st.vx*st.vx+st.vy*st.vy);
+  if(speed>0.3&&Math.random()<speed*0.2){
+    spawnTrail(st.x,st.y,st.vx,st.vy);
+  }
+  if(isDragging&&lastAppliedMag>5&&Math.random()<0.02){
+    spawnRipple(st.x,st.y,lastAppliedMag/MAX_FORCE*0.3);
+  }
+
+  var followSpeed=3;
+  cam.x+=(st.x-cam.x)*followSpeed*dt;
+  cam.y+=(st.y-cam.y)*followSpeed*dt;
+
+  render();
+  updateHUD();
+  updateScaleBar();
+  updateEchoMascot();
+
+  requestAnimationFrame(gameLoop);
+}
+
+/* === 初始化 === */
+function init(){
+  canvasEl=document.getElementById('simCanvas');
+  ctxRef=canvasEl.getContext('2d');
+  resizeCanvas();
+
+  buildObjectList();
+  buildEffortDots();
+  updateObjInfo();
+  updateEffortDots();
+  updateRecordBtn();
+  updateRecordList();
+  applyI18N();
+  setupInput();
+
+  cam.x=objStates[currentIdx].x;
+  cam.y=objStates[currentIdx].y;
+
+  lastTimestamp=performance.now();
+  requestAnimationFrame(gameLoop);
+}
+
+init();
+})();
+</script>
+</body>
+</html>

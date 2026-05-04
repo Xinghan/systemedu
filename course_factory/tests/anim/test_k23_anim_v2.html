@@ -1,0 +1,1064 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=Inter:wght@400;500&family=Noto+Sans+SC:wght@400;700&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box;}
+html,body{width:100%;height:100vh;overflow:hidden;}
+body{background:var(--bg,#0c0e12);color:var(--text,#f6f6fc);font-family:'Inter','Noto Sans SC',sans-serif;}
+/* ── Outer: sidebar + main ── */
+.wrapper{display:flex;flex-direction:row;height:100vh;overflow:hidden;}
+.sidebar{width:200px;min-width:200px;max-width:200px;display:flex;flex-direction:column;gap:6px;padding:10px;background:rgba(0,0,0,0.5);border-right:1px solid rgba(80,255,176,0.15);overflow-y:auto;}
+.lang-btn{align-self:flex-start;flex-shrink:0;font-family:'Space Grotesk',sans-serif;font-size:10px;font-weight:700;padding:3px 8px;cursor:pointer;border:1px solid rgba(255,181,156,0.25);background:transparent;color:#ffb59c;letter-spacing:1px;}
+.lang-btn:hover{border-color:#ffb59c;background:rgba(255,181,156,0.1);}
+.sidebar h1{font-family:'Space Grotesk',sans-serif;font-size:13px;font-weight:700;color:var(--primary,#50ffb0);margin-top:4px;line-height:1.3;}
+.sidebar .sub{font-size:10px;color:var(--muted,#aaabb0);letter-spacing:0.06em;text-transform:uppercase;}
+.sidebar .frame-ind{font-family:'Space Grotesk',sans-serif;font-size:10px;color:var(--muted,#aaabb0);letter-spacing:0.1em;margin-top:4px;}
+.sidebar .guide-label{font-family:'Space Grotesk',sans-serif;font-size:9px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:var(--primary,#50ffb0);margin-top:8px;}
+.sidebar .guide-content{font-family:'Noto Sans SC',sans-serif;font-size:11px;color:rgba(255,255,255,0.85);line-height:1.5;}
+.sidebar .guide-content ul{padding-left:16px;margin:0;}
+.sidebar .guide-content li{margin-bottom:1px;}
+/* ── Main area: canvas + controls + hud ── */
+.anim-main{flex:1;display:flex;flex-direction:column;min-width:0;}
+.canvas-wrap{flex:1;min-height:0;position:relative;}
+canvas{width:100%;height:100%;display:block;}
+/* ── Controls + HUD ── */
+.controls{display:flex;justify-content:center;align-items:center;gap:12px;padding:6px 16px;}
+.ctrl-btn{font-family:'Space Grotesk',sans-serif;font-size:11px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;padding:5px 16px;border:none;cursor:pointer;color:var(--bg,#0c0e12);background:linear-gradient(135deg,var(--primary,#50ffb0),var(--primary-dim,#17df93));transition:transform 0.1s,box-shadow 0.2s;box-shadow:0 0 10px var(--glow-strong,rgba(80,255,176,0.3));}
+.ctrl-btn:hover{transform:scale(1.04);}
+.ctrl-btn:active{transform:scale(0.96);}
+.ctrl-btn.secondary{background:var(--glass,rgba(23,26,31,0.92));color:var(--muted,#aaabb0);box-shadow:none;backdrop-filter:blur(12px);}
+.ctrl-btn.secondary:hover{color:var(--primary,#50ffb0);}
+.hud{height:40px;display:flex;align-items:center;justify-content:space-around;background:rgba(0,0,0,0.55);backdrop-filter:blur(12px);padding:0 16px;}
+.hud-item{text-align:center;}
+.hud-label{font-family:'Space Grotesk',sans-serif;font-size:8px;letter-spacing:0.15em;text-transform:uppercase;color:var(--muted,#aaabb0);}
+.hud-val{font-family:'Space Grotesk',sans-serif;font-size:13px;font-weight:700;color:var(--primary,#50ffb0);}
+</style>
+</head>
+<body>
+<div class="wrapper">
+<!-- Sidebar: lang-btn, title, guide (completely separate from canvas) -->
+<div class="sidebar">
+<button class="lang-btn" id="langBtn">CN</button>
+<h1 id="title"></h1>
+<div class="sub" id="subtitle"></div>
+<div class="frame-ind" id="frameIndicator"></div>
+<div class="guide-label" id="guideTitle"></div>
+<div class="guide-content" id="guideContent"></div>
+</div>
+<!-- Main: canvas fills all space, nothing overlaps -->
+<div class="anim-main">
+<div class="canvas-wrap"><canvas id="c"></canvas></div>
+<div class="controls">
+<button class="ctrl-btn secondary" id="btnPrev"></button>
+<button class="ctrl-btn" id="btnPlay"></button>
+<button class="ctrl-btn secondary" id="btnNext"></button>
+</div>
+<div class="hud">
+<div class="hud-item"><div class="hud-label" id="hudL1"></div><div class="hud-val" id="hudV1"></div></div>
+<div class="hud-item"><div class="hud-label" id="hudL2"></div><div class="hud-val" id="hudV2"></div></div>
+<div class="hud-item"><div class="hud-label" id="hudL3"></div><div class="hud-val" id="hudV3"></div></div>
+<div class="hud-item"><div class="hud-label" id="hudL4"></div><div class="hud-val" id="hudV4"></div></div>
+</div>
+</div>
+</div>
+
+<!-- Runtime (shared skeleton) -->
+<script src="animation_runtime.js"></script>
+
+<!-- Content -->
+<script>
+// ============================================================
+// K23: Parabola and Maximum Height
+// CONCEPT: Vertical projectile trajectory is parabolic;
+//          velocity = 0 at apex, then object falls back.
+// Core Q:  What path does a rocket trace from ignition to landing?
+//
+// F0: Title -- "PROJECTILE MOTION" with parabolic arc trail,
+//     rocket silhouette at apex, core question
+// F1: Vertical throw -- ball with velocity arrows + h-t graph
+// F2: Height-time graph -- clean parabola h(t)=v0t-0.5gt^2
+// F3: Different launch speeds -- 3 rockets, h proportional to v^2
+// F4: Full rocket flight -- engine ON, coast, descent phases
+// ============================================================
+
+var G = 9.8;
+
+var CONFIG = {
+  style: 'ares_mission',
+  totalFrames: 5,
+
+  i18n: {
+    title:    {en:'PROJECTILE MOTION', cn:'\u629b\u4f53\u8fd0\u52a8'},
+    subtitle: {en:'PARABOLA & MAX HEIGHT', cn:'\u629b\u7269\u7ebf\u4e0e\u5c04\u9ad8'},
+
+    guideTitle: {en:'OBSERVATION GUIDE', cn:'\u89c2\u5bdf\u6307\u5357'},
+    g1: {en:'Watch velocity arrows shrink to zero at apex', cn:'\u89c2\u5bdf\u901f\u5ea6\u7bad\u5934\u5728\u9876\u70b9\u7f29\u5c0f\u4e3a\u96f6'},
+    g2: {en:'The height-time curve is always a parabola', cn:'\u9ad8\u5ea6-\u65f6\u95f4\u66f2\u7ebf\u59cb\u7ec8\u662f\u629b\u7269\u7ebf'},
+    g3: {en:'Doubling speed quadruples the max height', cn:'\u901f\u5ea6\u7ffb\u500d\uff0c\u6700\u5927\u9ad8\u5ea6\u7ffb\u56db\u500d'},
+    g4: {en:'Real rockets have powered + coasting phases', cn:'\u771f\u5b9e\u706b\u7bad\u6709\u52a8\u529b+\u6ed1\u884c\u9636\u6bb5'},
+
+    hudPhase:  {en:'PHASE',      cn:'\u9636\u6bb5'},
+    hudV0:     {en:'V0 (m/s)',   cn:'\u521d\u901f(m/s)'},
+    hudMaxH:   {en:'MAX H (m)',  cn:'\u6700\u5927\u9ad8(m)'},
+    hudVelocity:{en:'VELOCITY',  cn:'\u901f\u5ea6'},
+
+    f0core:    {en:'What path does a rocket trace\nfrom ignition to landing?', cn:'\u4e00\u679a\u706b\u7bad\u4ece\u70b9\u706b\u5230\u843d\u5730\n\u5b83\u4e00\u5171\u8d70\u8fc7\u4ec0\u4e48\u6837\u7684\u8def\u7ebf\uff1f'},
+    f0launch:  {en:'LAUNCH', cn:'\u53d1\u5c04'},
+    f0apex:    {en:'APEX', cn:'\u9876\u70b9'},
+    f0land:    {en:'LANDING', cn:'\u843d\u5730'},
+
+    f1title:   {en:'VERTICAL THROW', cn:'\u7ad6\u76f4\u4e0a\u629b'},
+    f1desc:    {en:'v\u2080 = 20 m/s upward', cn:'\u521d\u901f v\u2080 = 20 m/s \u5411\u4e0a'},
+    f1rising:  {en:'RISING: v decreases', cn:'\u4e0a\u5347\uff1a\u901f\u5ea6\u51cf\u5c0f'},
+    f1falling: {en:'FALLING: v increases', cn:'\u4e0b\u964d\uff1a\u901f\u5ea6\u589e\u5927'},
+    f1peak:    {en:'APEX  v = 0', cn:'\u9876\u70b9  v = 0'},
+    f1gravity: {en:'g = 9.8 m/s\u00b2 always down', cn:'g = 9.8 m/s\u00b2 \u59cb\u7ec8\u5411\u4e0b'},
+    f1ht:      {en:'h(t)', cn:'h(t)'},
+
+    f2title:   {en:'HEIGHT-TIME GRAPH', cn:'\u9ad8\u5ea6-\u65f6\u95f4\u56fe'},
+    f2formula: {en:'h(t) = v\u2080t \u2013 \u00bdgt\u00b2', cn:'h(t) = v\u2080t \u2013 \u00bdgt\u00b2'},
+    f2launch:  {en:'Launch: h=0, v=v\u2080', cn:'\u53d1\u5c04\uff1ah=0, v=v\u2080'},
+    f2apex:    {en:'Apex: h=max, v=0', cn:'\u9876\u70b9\uff1ah=\u6700\u5927, v=0'},
+    f2landing: {en:'Landing: h=0, v=\u2013v\u2080', cn:'\u843d\u5730\uff1ah=0, v=\u2013v\u2080'},
+    f2tAxis:   {en:'Time (s)', cn:'\u65f6\u95f4 (s)'},
+    f2hAxis:   {en:'Height (m)', cn:'\u9ad8\u5ea6 (m)'},
+
+    f3title:   {en:'DIFFERENT LAUNCH SPEEDS', cn:'\u4e0d\u540c\u53d1\u5c04\u901f\u5ea6'},
+    f3rule:    {en:'h_max = v\u2080\u00b2 / (2g)  \u2192  double v\u2080 = 4x height', cn:'h_max = v\u2080\u00b2/(2g) \u2192 \u901f\u5ea6\u7ffb\u500d = \u9ad8\u5ea6\u00d74'},
+    f3v20:     {en:'v\u2080=20 m/s', cn:'v\u2080=20 m/s'},
+    f3v40:     {en:'v\u2080=40 m/s', cn:'v\u2080=40 m/s'},
+    f3v60:     {en:'v\u2080=60 m/s', cn:'v\u2080=60 m/s'},
+    f3h20:     {en:'h=20.4m', cn:'h=20.4m'},
+    f3h40:     {en:'h=81.6m', cn:'h=81.6m'},
+    f3h60:     {en:'h=183.7m', cn:'h=183.7m'},
+    f3x1:      {en:'1x', cn:'1x'},
+    f3x4:      {en:'4x', cn:'4x'},
+    f3x9:      {en:'9x', cn:'9x'},
+
+    f4title:   {en:'FULL ROCKET FLIGHT', cn:'\u706b\u7bad\u5b8c\u6574\u98de\u884c'},
+    f4engineOn:{en:'ENGINE ON\nThrust + Gravity\nSteep acceleration', cn:'\u53d1\u52a8\u673a\u5f00\u542f\n\u63a8\u529b+\u91cd\u529b\n\u6025\u901f\u52a0\u901f'},
+    f4coast:   {en:'ENGINE OFF (coast)\nOnly gravity\nParabolic arc', cn:'\u53d1\u52a8\u673a\u5173\u95ed(\u6ed1\u884c)\n\u4ec5\u91cd\u529b\n\u629b\u7269\u7ebf\u5f27'},
+    f4descent: {en:'DESCENT\nSpeed increases\nBack to ground', cn:'\u4e0b\u964d\u6bb5\n\u901f\u5ea6\u589e\u5927\n\u8fd4\u56de\u5730\u9762'},
+    f4burnout: {en:'BURNOUT', cn:'\u71c3\u5c3d\u70b9'},
+    f4realApex:{en:'REAL APEX', cn:'\u771f\u5b9e\u9876\u70b9'},
+    f4note:    {en:'Apex is ABOVE burnout\n(momentum carries rocket higher)', cn:'\u9876\u70b9\u5728\u71c3\u5c3d\u70b9\u4e0a\u65b9\n(\u60ef\u6027\u5c06\u706b\u7bad\u5e26\u5f97\u66f4\u9ad8)'},
+    ground:    {en:'GROUND', cn:'\u5730\u9762'},
+  },
+
+  hudLabels: ['hudPhase', 'hudV0', 'hudMaxH', 'hudVelocity'],
+  hudValues: [
+    ['--',       '--',   '--',      '--'],
+    ['f1title',  '20',   '20.4',    '0~20 m/s'],
+    ['f2title',  '20',   '20.4',    'v\u2080=20 m/s'],
+    ['f3title',  '20/40/60', '20/82/184', 'h\u221dv\u00b2'],
+    ['f4title',  '--',   '--',      'thrust+coast'],
+  ],
+
+  guideTitle: 'guideTitle',
+  guideItems: ['g1', 'g2', 'g3', 'g4'],
+};
+
+// ============================================================
+// Animation state -- drives per-frame progressive reveals
+// ============================================================
+var animState = {progress: 0, frameTracked: -1};
+var animTimer = null;
+
+function startAnim(targetFrame) {
+  if (animTimer) { cancelAnimationFrame(animTimer); animTimer = null; }
+  animState = {progress: 0, frameTracked: targetFrame};
+  var lastTime = 0;
+  function tick(ts) {
+    if (animState.frameTracked !== AnimRuntime.currentFrame) return;
+    if (!lastTime) lastTime = ts;
+    var delta = (ts - lastTime) / 1000;
+    lastTime = ts;
+    animState.progress += delta * 0.4;
+    if (animState.progress > 1.0) animState.progress = 1.0;
+    AnimRuntime.drawFrame(AnimRuntime.currentFrame);
+    if (animState.progress < 1.0) {
+      animTimer = requestAnimationFrame(tick);
+    }
+  }
+  animTimer = requestAnimationFrame(tick);
+}
+
+var _prevFrame23 = -1;
+var _frameCheckTimer23 = null;
+function frameCheck23() {
+  var cf = AnimRuntime.currentFrame;
+  if (cf !== _prevFrame23) {
+    _prevFrame23 = cf;
+    startAnim(cf);
+  }
+  _frameCheckTimer23 = requestAnimationFrame(frameCheck23);
+}
+_frameCheckTimer23 = requestAnimationFrame(frameCheck23);
+
+// ============================================================
+// Parallax stars background
+// ============================================================
+var starField = [];
+(function initStars() {
+  var rng = 12345;
+  for (var i = 0; i < 120; i++) {
+    rng = (rng * 1103515245 + 12345) & 0x7fffffff;
+    var sx = (rng % 10000) / 10000;
+    rng = (rng * 1103515245 + 12345) & 0x7fffffff;
+    var sy = (rng % 10000) / 10000;
+    rng = (rng * 1103515245 + 12345) & 0x7fffffff;
+    var sr = 0.3 + (rng % 15) / 10;
+    rng = (rng * 1103515245 + 12345) & 0x7fffffff;
+    var sa = 0.15 + (rng % 60) / 100;
+    rng = (rng * 1103515245 + 12345) & 0x7fffffff;
+    var sp = (rng % 100) / 100; // parallax depth 0..1
+    starField.push({xf: sx, yf: sy, r: sr, a: sa, depth: sp});
+  }
+})();
+
+function drawBg(ctx, W, H) {
+  var P = AnimRuntime.PAL;
+  var g = ctx.createLinearGradient(0, 0, 0, H);
+  g.addColorStop(0, P.bg);
+  g.addColorStop(0.7, P.bg2);
+  g.addColorStop(1, '#0a0a0a');
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, W, H);
+
+  // Grid
+  ctx.strokeStyle = 'rgba(255,255,255,0.02)';
+  ctx.lineWidth = 0.5;
+  for (var x = 0; x < W; x += 40) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke(); }
+  for (var y = 0; y < H; y += 40) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke(); }
+
+  // Parallax stars -- slight offset based on current frame
+  var cf = AnimRuntime.currentFrame;
+  var offsetX = cf * 8;
+  var offsetY = cf * 3;
+  for (var si = 0; si < starField.length; si++) {
+    var st = starField[si];
+    var px = ((st.xf * W + offsetX * st.depth) % W + W) % W;
+    var py = ((st.yf * H - offsetY * st.depth) % H + H) % H;
+    var twinkle = 0.6 + 0.4 * Math.sin(Date.now() * 0.001 * (si % 5 + 1) + si);
+    ctx.globalAlpha = st.a * twinkle;
+    ctx.fillStyle = '#ffffff';
+    ctx.beginPath();
+    ctx.arc(px, py, st.r, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+}
+
+// ============================================================
+// Physics helpers
+// ============================================================
+
+// Vertical throw: height at time t with initial velocity v0
+function heightAtTime(v0, t) {
+  return v0 * t - 0.5 * G * t * t;
+}
+function velocityAtTime(v0, t) {
+  return v0 - G * t;
+}
+function maxHeight(v0) {
+  return (v0 * v0) / (2 * G);
+}
+function flightTime(v0) {
+  return 2 * v0 / G;
+}
+
+// ============================================================
+// Custom element drawing
+// ============================================================
+
+function customDrawElement(ctx, el, W, H) {
+  var P = AnimRuntime.PAL;
+
+  // --- polyline ---
+  if (el.type === 'polyline') {
+    var pts = el.points;
+    if (!pts || pts.length < 2) return true;
+    ctx.strokeStyle = el.color || P.primary;
+    ctx.lineWidth = el.lineWidth || 2;
+    ctx.lineJoin = 'round';
+    ctx.lineCap = 'round';
+    if (el.dash) ctx.setLineDash(el.dash);
+    if (el.glow) {
+      ctx.save();
+      ctx.shadowColor = el.glow;
+      ctx.shadowBlur = el.glowSize || 8;
+      ctx.beginPath();
+      ctx.moveTo(pts[0].x, pts[0].y);
+      for (var i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y);
+      ctx.stroke();
+      ctx.restore();
+    }
+    ctx.beginPath();
+    ctx.moveTo(pts[0].x, pts[0].y);
+    for (var i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y);
+    ctx.stroke();
+    if (el.dash) ctx.setLineDash([]);
+    return true;
+  }
+
+  // --- rocket ---
+  if (el.type === 'rocket') {
+    var rx = el.x, ry = el.y;
+    var sz = el.size || 14;
+    var ang = el.angle || -Math.PI / 2;
+    ctx.save();
+    ctx.translate(rx, ry);
+    ctx.rotate(ang + Math.PI / 2);
+    // Body
+    ctx.fillStyle = el.bodyColor || '#e0e0e0';
+    ctx.beginPath();
+    ctx.moveTo(0, -sz);
+    ctx.lineTo(-sz * 0.3, sz * 0.4);
+    ctx.lineTo(sz * 0.3, sz * 0.4);
+    ctx.closePath();
+    ctx.fill();
+    // Nose
+    ctx.fillStyle = el.noseColor || P.primary;
+    ctx.beginPath();
+    ctx.moveTo(0, -sz);
+    ctx.lineTo(-sz * 0.15, -sz * 0.5);
+    ctx.lineTo(sz * 0.15, -sz * 0.5);
+    ctx.closePath();
+    ctx.fill();
+    // Fins
+    ctx.fillStyle = el.finColor || P.primaryDim;
+    ctx.beginPath();
+    ctx.moveTo(-sz * 0.3, sz * 0.4);
+    ctx.lineTo(-sz * 0.5, sz * 0.6);
+    ctx.lineTo(-sz * 0.2, sz * 0.2);
+    ctx.closePath();
+    ctx.fill();
+    ctx.beginPath();
+    ctx.moveTo(sz * 0.3, sz * 0.4);
+    ctx.lineTo(sz * 0.5, sz * 0.6);
+    ctx.lineTo(sz * 0.2, sz * 0.2);
+    ctx.closePath();
+    ctx.fill();
+    // Flame
+    if (el.flame) {
+      var fl = sz * (el.flameLen || 0.6);
+      var flicker = 0.85 + 0.15 * Math.sin(Date.now() * 0.012 + rx);
+      ctx.fillStyle = '#ff7f50';
+      ctx.beginPath();
+      ctx.moveTo(-sz * 0.15, sz * 0.4);
+      ctx.lineTo(0, sz * 0.4 + fl * flicker);
+      ctx.lineTo(sz * 0.15, sz * 0.4);
+      ctx.closePath();
+      ctx.fill();
+      ctx.fillStyle = '#ffdd44';
+      ctx.beginPath();
+      ctx.moveTo(-sz * 0.08, sz * 0.4);
+      ctx.lineTo(0, sz * 0.4 + fl * 0.55 * flicker);
+      ctx.lineTo(sz * 0.08, sz * 0.4);
+      ctx.closePath();
+      ctx.fill();
+      // Glow around flame
+      ctx.shadowColor = 'rgba(255,127,80,0.5)';
+      ctx.shadowBlur = 12;
+      ctx.fillStyle = 'rgba(255,127,80,0.01)';
+      ctx.fillRect(-sz * 0.2, sz * 0.4, sz * 0.4, fl * 0.5);
+      ctx.shadowBlur = 0;
+    }
+    ctx.restore();
+    return true;
+  }
+
+  // --- ball with glow + highlight ---
+  if (el.type === 'ball') {
+    ctx.save();
+    if (el.glow) {
+      ctx.shadowColor = el.glow;
+      ctx.shadowBlur = el.glowSize || 10;
+    }
+    ctx.fillStyle = el.fill || P.primary;
+    ctx.beginPath();
+    ctx.arc(el.x, el.y, el.r || 8, 0, Math.PI * 2);
+    ctx.fill();
+    if (el.stroke) {
+      ctx.strokeStyle = el.stroke;
+      ctx.lineWidth = el.lineWidth || 1;
+      ctx.stroke();
+    }
+    // Highlight
+    ctx.fillStyle = 'rgba(255,255,255,0.3)';
+    ctx.beginPath();
+    ctx.arc(el.x - (el.r || 8) * 0.3, el.y - (el.r || 8) * 0.3, (el.r || 8) * 0.3, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+    return true;
+  }
+
+  // --- velocityArrow: thick arrow ---
+  if (el.type === 'velocityArrow') {
+    var dx = el.x2 - el.x1, dy = el.y2 - el.y1;
+    var len = Math.sqrt(dx * dx + dy * dy);
+    if (len < 2) return true;
+    var ang2 = Math.atan2(dy, dx);
+    ctx.strokeStyle = el.color || P.primary;
+    ctx.lineWidth = el.lineWidth || 2.5;
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(el.x1, el.y1);
+    ctx.lineTo(el.x2, el.y2);
+    ctx.stroke();
+    var hs = el.headSize || 8;
+    ctx.fillStyle = el.color || P.primary;
+    ctx.beginPath();
+    ctx.moveTo(el.x2, el.y2);
+    ctx.lineTo(el.x2 - hs * Math.cos(ang2 - 0.4), el.y2 - hs * Math.sin(ang2 - 0.4));
+    ctx.lineTo(el.x2 - hs * Math.cos(ang2 + 0.4), el.y2 - hs * Math.sin(ang2 + 0.4));
+    ctx.closePath();
+    ctx.fill();
+    return true;
+  }
+
+  // --- particles: exhaust / trail particles ---
+  if (el.type === 'particles') {
+    var rng = el.seed || 42;
+    var count = el.count || 20;
+    for (var pi = 0; pi < count; pi++) {
+      rng = (rng * 1103515245 + 12345) & 0x7fffffff;
+      var px = el.x + (rng % (el.spreadX * 2 || 20)) - (el.spreadX || 10);
+      rng = (rng * 1103515245 + 12345) & 0x7fffffff;
+      var py = el.y + (rng % (el.spreadY * 2 || 40)) - (el.spreadY || 20);
+      rng = (rng * 1103515245 + 12345) & 0x7fffffff;
+      var pr = 0.5 + (rng % 20) / 10;
+      var pAlpha = Math.max(0, el.baseAlpha || 0.4);
+      // Animate with time
+      var drift = Math.sin(Date.now() * 0.002 + pi) * 3;
+      ctx.globalAlpha = pAlpha * (0.5 + 0.5 * Math.sin(Date.now() * 0.003 + pi * 0.7));
+      ctx.fillStyle = el.color || P.primary;
+      ctx.beginPath();
+      ctx.arc(px + drift, py, pr, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+    return true;
+  }
+
+  // --- phaseBox: labeled phase box with border ---
+  if (el.type === 'phaseBox') {
+    ctx.save();
+    var lines = el.text.split('\n');
+    ctx.font = (el.size || 9) + "px 'Inter','Noto Sans SC',sans-serif";
+    var lh = (el.size || 9) * 1.4;
+    var maxW = 0;
+    for (var li = 0; li < lines.length; li++) {
+      var mw = ctx.measureText(lines[li]).width;
+      if (mw > maxW) maxW = mw;
+    }
+    var pad = 6;
+    var boxW = maxW + pad * 2;
+    var boxH = lines.length * lh + pad * 2;
+    var offX = -boxW / 2;
+    // Glass background
+    ctx.fillStyle = el.bgColor || 'rgba(32,31,31,0.8)';
+    ctx.fillRect(el.x + offX, el.y - pad, boxW, boxH);
+    ctx.strokeStyle = el.borderColor || P.primaryDim;
+    ctx.lineWidth = 1;
+    ctx.strokeRect(el.x + offX, el.y - pad, boxW, boxH);
+    // Text
+    ctx.fillStyle = el.color || P.text;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'top';
+    for (var li = 0; li < lines.length; li++) {
+      ctx.fillText(lines[li], el.x, el.y + li * lh + 2);
+    }
+    ctx.restore();
+    return true;
+  }
+
+  return false;
+}
+
+// ============================================================
+// Parabolic arc builder (for F0 title decoration)
+// ============================================================
+function buildParabolicArc(v0, baseX, baseY, scaleX, scaleY, steps) {
+  var tTotal = flightTime(v0);
+  var pts = [];
+  for (var i = 0; i <= steps; i++) {
+    var tt = (i / steps) * tTotal;
+    // Treat as 45-degree launch for a nice arc
+    var vx = v0 * 0.707;
+    var vy = v0 * 0.707;
+    var x = vx * tt;
+    var y = vy * tt - 0.5 * G * tt * tt;
+    pts.push({x: baseX + x * scaleX, y: baseY - y * scaleY});
+  }
+  return pts;
+}
+
+// ============================================================
+// FRAME ELEMENTS
+// ============================================================
+function getFrameElements(f, W, H) {
+  var t = AnimRuntime.t;
+  var P = AnimRuntime.PAL;
+  var cx = W / 2, cy = H / 2;
+  var groundY = H * 0.84;
+  var els = [];
+  var prog = animState.frameTracked === f ? animState.progress : 1;
+
+  // ── F0: Title with parabolic arc trail ──
+  if (f === 0) {
+    // Title
+    els.push({id:'mainTitle', type:'label', text:'PROJECTILE MOTION', x:cx, y:H * 0.1, color:P.primary, size:22, align:'center', glow:P.glowStrong});
+    els.push({id:'titleCn', type:'label', text:t('title'), x:cx, y:H * 0.18, color:P.primaryDim, size:14, align:'center'});
+
+    // Ground line
+    els.push({id:'gnd', type:'line', x1:W * 0.06, y1:groundY, x2:W * 0.94, y2:groundY, color:P.muted, lineWidth:1.5, dash:[6,4]});
+    els.push({id:'gndL', type:'label', text:t('ground'), x:W * 0.93, y:groundY + 12, color:P.muted, size:8, align:'right'});
+
+    // Decorative parabolic arc
+    var arcV0 = 30;
+    var vx0 = arcV0 * 0.707;
+    var vy0 = arcV0 * 0.707;
+    var tFlight0 = 2 * vy0 / G;
+    var range0 = vx0 * tFlight0;
+    var maxH0 = (vy0 * vy0) / (2 * G);
+    var arcScX = (W * 0.78) / range0;
+    var arcScY = (H * 0.44) / maxH0;
+    var arcPts = buildParabolicArc(arcV0, W * 0.1, groundY, arcScX, arcScY, 60);
+    els.push({id:'titleArc', type:'polyline', points:arcPts, color:P.primaryDim, lineWidth:2.5, glow:'rgba(255,127,80,0.3)', glowSize:14});
+
+    // Trail particles along arc
+    els.push({id:'trailP', type:'particles', x:cx, y:cy, count:0, spreadX:1, spreadY:1, color:P.primaryDim, baseAlpha:0, seed:99});
+    for (var ti = 0; ti < 12; ti++) {
+      var tidx = Math.round(ti * 5);
+      if (tidx >= arcPts.length) tidx = arcPts.length - 1;
+      var tp = arcPts[tidx];
+      els.push({id:'tp'+ti, type:'circle', x:tp.x, y:tp.y, r:1.5, fill:'rgba(255,181,156,0.25)'});
+    }
+
+    // Rocket at apex
+    var apexPt = arcPts[30];
+    els.push({id:'rApex', type:'rocket', x:apexPt.x, y:apexPt.y - 14, size:18, angle:-Math.PI/2, flame:false, bodyColor:'#d0d0d0', noseColor:P.primary, finColor:P.primaryDim});
+
+    // Rocket at launch
+    var launchPt = arcPts[2];
+    els.push({id:'rLaunch', type:'rocket', x:launchPt.x + 4, y:launchPt.y - 12, size:12, angle:-1.1, flame:true, bodyColor:'#b0b0b0', noseColor:P.primaryDim, finColor:P.outline});
+
+    // Rocket at landing
+    var landPt = arcPts[58];
+    els.push({id:'rLand', type:'rocket', x:landPt.x - 4, y:landPt.y - 12, size:12, angle:-2.0, flame:false, bodyColor:'#b0b0b0', noseColor:P.primaryDim, finColor:P.outline});
+
+    // Position labels
+    els.push({id:'lLaunch', type:'label', text:t('f0launch'), x:launchPt.x, y:groundY + 13, color:P.primary, size:9, align:'center'});
+    els.push({id:'lApex', type:'label', text:t('f0apex'), x:apexPt.x, y:apexPt.y - 36, color:P.secondary, size:10, align:'center', glow:'rgba(198,198,198,0.2)'});
+    els.push({id:'lLand', type:'label', text:t('f0land'), x:landPt.x, y:groundY + 13, color:P.primary, size:9, align:'center'});
+
+    // Core question
+    var qLines = t('f0core').split('\n');
+    for (var qi = 0; qi < qLines.length; qi++) {
+      els.push({id:'coreQ'+qi, type:'label', text:qLines[qi], x:cx, y:H * 0.27 + qi * 16, color:P.text, size:12, align:'center'});
+    }
+
+    // Launch particles
+    els.push({id:'launchP', type:'particles', x:launchPt.x + 2, y:groundY + 4, count:15, spreadX:12, spreadY:8, color:'#ff7f50', baseAlpha:0.35, seed:77});
+
+    return els;
+  }
+
+  // ── F1: Vertical throw with velocity arrows + mini h-t graph ──
+  if (f === 1) {
+    var v0 = 20;
+    var tF = flightTime(v0);
+    var hMax = maxHeight(v0);
+    var topY = H * 0.1;
+    var pathX = W * 0.3;
+    var scaleH = (groundY - topY - 20) / hMax;
+
+    els.push({id:'f1t', type:'label', text:t('f1title'), x:cx, y:H * 0.04, color:P.primary, size:16, align:'center', glow:P.glowStrong});
+    els.push({id:'f1d', type:'label', text:t('f1desc'), x:cx, y:H * 0.12, color:P.muted, size:10, align:'center'});
+
+    // Ground
+    els.push({id:'gnd', type:'line', x1:W * 0.05, y1:groundY, x2:W * 0.55, y2:groundY, color:P.muted, lineWidth:1, dash:[6,4]});
+    els.push({id:'gndR', type:'line', x1:W * 0.58, y1:groundY, x2:W * 0.98, y2:groundY, color:'rgba(255,255,255,0.05)', lineWidth:0.5, dash:[3,3]});
+
+    // Vertical path line (dashed)
+    els.push({id:'vpath', type:'line', x1:pathX, y1:groundY, x2:pathX, y2:topY + 10, color:'rgba(255,181,156,0.12)', lineWidth:1, dash:[3,3]});
+
+    // Key time points: 0, 0.5, 1.0, 1.5, 2.04(peak), 2.5, 3.0, 3.5, 4.08
+    var times = [0, 0.5, 1.0, 1.5, tF/2, 2.5, 3.0, 3.5, tF];
+    var upColor = '#ff7f50';
+    var downColor = '#4488ff';
+    var peakColor = P.secondary;
+
+    // Rising / falling labels
+    els.push({id:'riseLbl', type:'label', text:t('f1rising'), x:pathX - 80, y:cy - 10, color:upColor, size:9, align:'center'});
+    els.push({id:'fallLbl', type:'label', text:t('f1falling'), x:pathX + 80, y:cy + 20, color:downColor, size:9, align:'center'});
+    els.push({id:'gravLbl', type:'label', text:t('f1gravity'), x:pathX, y:groundY + 13, color:P.muted, size:8, align:'center'});
+
+    // Animate ball positions progressively
+    var revealCount = Math.min(times.length, Math.floor(prog * times.length * 1.3) + 1);
+
+    for (var i = 0; i < Math.min(revealCount, times.length); i++) {
+      var tt = times[i];
+      var hh = heightAtTime(v0, tt);
+      var vv = velocityAtTime(v0, tt);
+      var py = groundY - hh * scaleH;
+      var isPeak = (i === 4);
+      var isUp = (tt < tF / 2);
+
+      // Ball
+      var ballR = isPeak ? 9 : 6;
+      var ballColor = isPeak ? peakColor : (isUp ? upColor : downColor);
+      var ballAlpha = (i === 0 || i === times.length - 1 || isPeak) ? 1.0 : 0.5;
+      var offsetX = isUp ? -6 : (isPeak ? 0 : 6);
+      els.push({id:'ball'+i, type:'ball', x:pathX + offsetX, y:py, r:ballR,
+        fill:ballColor, glow:ballColor, glowSize:isPeak ? 12 : 5});
+
+      // Velocity arrow
+      if (Math.abs(vv) > 0.5) {
+        var arrowLen = Math.abs(vv) * 2.2;
+        var arrowDir = vv >= 0 ? -1 : 1;
+        var ax = pathX + offsetX + 14;
+        els.push({id:'varr'+i, type:'velocityArrow',
+          x1:ax, y1:py, x2:ax, y2:py + arrowDir * arrowLen,
+          color:ballColor, lineWidth:2, headSize:7});
+      }
+
+      // Peak label
+      if (isPeak) {
+        els.push({id:'peakLbl', type:'label', text:t('f1peak'), x:pathX, y:py - 18, color:peakColor, size:10, align:'center', glow:'rgba(198,198,198,0.2)'});
+      }
+    }
+
+    // ── Mini h(t) graph on the right side ──
+    var graphL = W * 0.58;
+    var graphR = W * 0.96;
+    var graphT = H * 0.2;
+    var graphB = groundY;
+    var graphW = graphR - graphL;
+    var graphH2 = graphB - graphT;
+
+    // Axes
+    els.push({id:'htAxY', type:'line', x1:graphL, y1:graphB, x2:graphL, y2:graphT - 5, color:P.muted, lineWidth:1.5});
+    els.push({id:'htAxX', type:'line', x1:graphL, y1:graphB, x2:graphR, y2:graphB, color:P.muted, lineWidth:1.5});
+    els.push({id:'htLblY', type:'label', text:t('f1ht'), x:graphL - 12, y:graphT + 5, color:P.primary, size:10, align:'center'});
+
+    // Parabolic curve on graph
+    var curvePts = [];
+    var curveSteps = 50;
+    var drawFrac = Math.min(prog * 1.5, 1.0);
+    var drawSteps = Math.floor(curveSteps * drawFrac);
+    for (var ci = 0; ci <= drawSteps; ci++) {
+      var ct = (ci / curveSteps) * tF;
+      var ch = heightAtTime(v0, ct);
+      var gx = graphL + (ct / tF) * graphW;
+      var gy = graphB - (ch / hMax) * graphH2 * 0.9;
+      curvePts.push({x: gx, y: gy});
+    }
+    if (curvePts.length >= 2) {
+      els.push({id:'htCurve', type:'polyline', points:curvePts, color:P.primary, lineWidth:2.5, glow:'rgba(255,127,80,0.3)', glowSize:8});
+    }
+
+    // Tracing dot at the leading edge
+    if (curvePts.length > 0) {
+      var lastPt = curvePts[curvePts.length - 1];
+      els.push({id:'htDot', type:'ball', x:lastPt.x, y:lastPt.y, r:5, fill:P.primary, glow:P.glowStrong, glowSize:10});
+    }
+
+    return els;
+  }
+
+  // ── F2: Height-time graph (clean parabola) ──
+  if (f === 2) {
+    var v0_2 = 20;
+    var tF2 = flightTime(v0_2);
+    var hMax2 = maxHeight(v0_2);
+
+    els.push({id:'f2t', type:'label', text:t('f2title'), x:cx, y:H * 0.04, color:P.primary, size:16, align:'center', glow:P.glowStrong});
+    els.push({id:'f2f', type:'label', text:t('f2formula'), x:cx, y:H * 0.13, color:P.tertiary, size:12, align:'center'});
+
+    // Graph area
+    var gL = W * 0.14;
+    var gR = W * 0.88;
+    var gT = H * 0.22;
+    var gB = H * 0.78;
+    var gW = gR - gL;
+    var gH2 = gB - gT;
+
+    // Axes
+    els.push({id:'axY', type:'arrow', x1:gL, y1:gB, x2:gL, y2:gT - 10, color:P.muted, lineWidth:1.5, headSize:6});
+    els.push({id:'axX', type:'arrow', x1:gL, y1:gB, x2:gR + 10, y2:gB, color:P.muted, lineWidth:1.5, headSize:6});
+    els.push({id:'lblY', type:'label', text:t('f2hAxis'), x:gL - 10, y:gT - 20, color:P.muted, size:9, align:'center'});
+    els.push({id:'lblX', type:'label', text:t('f2tAxis'), x:gR + 8, y:gB + 14, color:P.muted, size:9, align:'center'});
+
+    // Grid lines (faint)
+    for (var gi = 1; gi <= 4; gi++) {
+      var gy = gB - (gi / 4) * gH2;
+      els.push({id:'gridH'+gi, type:'line', x1:gL, y1:gy, x2:gR, y2:gy, color:'rgba(255,255,255,0.04)', lineWidth:0.5});
+      var hVal = Math.round(hMax2 * gi / 4 * 10) / 10;
+      els.push({id:'gridHL'+gi, type:'label', text:hVal+'', x:gL - 8, y:gy, color:P.muted, size:7, align:'right'});
+    }
+    for (var gi2 = 1; gi2 <= 4; gi2++) {
+      var gx = gL + (gi2 / 4) * gW;
+      els.push({id:'gridV'+gi2, type:'line', x1:gx, y1:gB, x2:gx, y2:gT, color:'rgba(255,255,255,0.04)', lineWidth:0.5});
+      var tVal = (tF2 * gi2 / 4).toFixed(1);
+      els.push({id:'gridVL'+gi2, type:'label', text:tVal+'s', x:gx, y:gB + 10, color:P.muted, size:7, align:'center'});
+    }
+
+    // Parabolic curve -- animated trace
+    var curvePts2 = [];
+    var cSteps = 60;
+    var drawFrac2 = Math.min(prog * 1.6, 1.0);
+    var drawN = Math.floor(cSteps * drawFrac2);
+    for (var ci2 = 0; ci2 <= drawN; ci2++) {
+      var ct2 = (ci2 / cSteps) * tF2;
+      var ch2 = heightAtTime(v0_2, ct2);
+      var px2 = gL + (ct2 / tF2) * gW;
+      var py2 = gB - (ch2 / hMax2) * gH2 * 0.92;
+      curvePts2.push({x: px2, y: py2});
+    }
+    if (curvePts2.length >= 2) {
+      els.push({id:'curve', type:'polyline', points:curvePts2, color:P.primary, lineWidth:3, glow:'rgba(255,127,80,0.35)', glowSize:12});
+    }
+
+    // Animated dot tracing the curve
+    if (curvePts2.length > 0) {
+      var lp2 = curvePts2[curvePts2.length - 1];
+      els.push({id:'traceDot', type:'ball', x:lp2.x, y:lp2.y, r:6, fill:P.primary, glow:P.glowStrong, glowSize:14});
+    }
+
+    // Key point annotations (appear after curve passes them)
+    // Launch (h=0, v=v0)
+    var launchX2 = gL;
+    var launchY2 = gB;
+    if (drawFrac2 > 0.05) {
+      els.push({id:'kpLaunch', type:'circle', x:launchX2, y:launchY2, r:5, fill:P.tertiary, glow:P.tertiary});
+      els.push({id:'kpLaunchL', type:'label', text:t('f2launch'), x:launchX2 + 10, y:launchY2 + 16, color:P.tertiary, size:9, align:'left'});
+    }
+
+    // Apex (h=max, v=0) -- appears after ~50% of curve drawn
+    var apexX2 = gL + 0.5 * gW;
+    var apexY2 = gB - 0.92 * gH2;
+    if (drawFrac2 > 0.55) {
+      els.push({id:'kpApex', type:'circle', x:apexX2, y:apexY2, r:5, fill:P.secondary, glow:'rgba(198,198,198,0.3)'});
+      els.push({id:'kpApexL', type:'label', text:t('f2apex'), x:apexX2, y:apexY2 - 16, color:P.secondary, size:9, align:'center'});
+      // Dashed lines from apex to axes
+      els.push({id:'apexDashH', type:'line', x1:gL, y1:apexY2, x2:apexX2, y2:apexY2, color:'rgba(198,198,198,0.2)', lineWidth:1, dash:[4,4]});
+      els.push({id:'apexDashV', type:'line', x1:apexX2, y1:apexY2, x2:apexX2, y2:gB, color:'rgba(198,198,198,0.2)', lineWidth:1, dash:[4,4]});
+    }
+
+    // Landing (h=0, v=-v0) -- appears near end
+    var landX2 = gR;
+    var landY2 = gB;
+    if (drawFrac2 > 0.92) {
+      els.push({id:'kpLand', type:'circle', x:landX2, y:landY2, r:5, fill:P.tertiary, glow:P.tertiary});
+      els.push({id:'kpLandL', type:'label', text:t('f2landing'), x:landX2 - 10, y:landY2 + 16, color:P.tertiary, size:9, align:'right'});
+    }
+
+    return els;
+  }
+
+  // ── F3: Different launch speeds -- 3 rockets ──
+  if (f === 3) {
+    var speeds = [20, 40, 60];
+    var heights = [];
+    var tFlights = [];
+    for (var si = 0; si < speeds.length; si++) {
+      heights.push(maxHeight(speeds[si]));
+      tFlights.push(flightTime(speeds[si]));
+    }
+    // heights: ~20.4, ~81.6, ~183.7
+    var maxHAll = heights[2]; // 183.7 m
+
+    els.push({id:'f3t', type:'label', text:t('f3title'), x:cx, y:H * 0.04, color:P.primary, size:16, align:'center', glow:P.glowStrong});
+    els.push({id:'f3r', type:'label', text:t('f3rule'), x:cx, y:H * 0.13, color:P.tertiary, size:10, align:'center'});
+
+    // Ground
+    els.push({id:'gnd', type:'line', x1:W * 0.05, y1:groundY, x2:W * 0.95, y2:groundY, color:P.muted, lineWidth:1.5, dash:[6,4]});
+    els.push({id:'gndL', type:'label', text:t('ground'), x:W * 0.93, y:groundY + 12, color:P.muted, size:8, align:'right'});
+
+    // Three vertical columns
+    var colW = W * 0.25;
+    var colCenters = [W * 0.2, W * 0.5, W * 0.8];
+    var topArea = H * 0.2;
+    var scaleAll = (groundY - topArea - 10) / maxHAll;
+    var colors = ['#ff7f50', '#00daf3', '#c6c6c6'];
+    var speedLabels = ['f3v20', 'f3v40', 'f3v60'];
+    var heightLabels = ['f3h20', 'f3h40', 'f3h60'];
+    var multLabels = ['f3x1', 'f3x4', 'f3x9'];
+
+    // Reveal progressively
+    var revealFrac3 = Math.min(prog * 1.5, 1.0);
+
+    for (var ri = 0; ri < 3; ri++) {
+      var colX = colCenters[ri];
+      var hh3 = heights[ri];
+      var tF3 = tFlights[ri];
+      var barH = hh3 * scaleAll;
+      var barFrac = Math.min(revealFrac3 * 3 - ri, 1.0);
+      if (barFrac <= 0) continue;
+      barFrac = Math.min(barFrac, 1.0);
+
+      // Vertical dashed line (trajectory path)
+      var peakY = groundY - barH * barFrac;
+      els.push({id:'vline'+ri, type:'line', x1:colX, y1:groundY, x2:colX, y2:peakY, color:colors[ri], lineWidth:1, dash:[3,3]});
+
+      // Parabolic h-t mini curve beside rocket
+      var miniPts = [];
+      var mSteps = 30;
+      var mDrawN = Math.floor(mSteps * barFrac);
+      var mScaleT = colW * 0.35 / tF3;
+      var mScaleH2 = barH / hh3;
+      for (var mi = 0; mi <= mDrawN; mi++) {
+        var mt = (mi / mSteps) * tF3;
+        var mh = heightAtTime(speeds[ri], mt);
+        miniPts.push({x: colX + 20 + mt * mScaleT, y: groundY - mh * mScaleH2});
+      }
+      if (miniPts.length >= 2) {
+        els.push({id:'minicurve'+ri, type:'polyline', points:miniPts, color:colors[ri], lineWidth:1.5, glow:colors[ri], glowSize:4});
+      }
+
+      // Rocket at current peak position
+      var rocketY = groundY - barH * barFrac;
+      els.push({id:'rkt'+ri, type:'rocket', x:colX, y:rocketY - 10, size:14,
+        angle:-Math.PI/2, flame:barFrac < 0.8, flameLen:0.5,
+        bodyColor:'#d0d0d0', noseColor:colors[ri], finColor:colors[ri]});
+
+      // Launch particles at bottom
+      if (barFrac < 0.5) {
+        els.push({id:'lp'+ri, type:'particles', x:colX, y:groundY + 5, count:10, spreadX:8, spreadY:6, color:colors[ri], baseAlpha:0.3, seed:ri*37+11});
+      }
+
+      // Speed label below ground
+      els.push({id:'vl'+ri, type:'label', text:t(speedLabels[ri]), x:colX, y:groundY + 14, color:colors[ri], size:10, align:'center', bold:true});
+
+      // Height label at peak (once revealed)
+      if (barFrac > 0.9) {
+        els.push({id:'hl'+ri, type:'label', text:t(heightLabels[ri]), x:colX, y:peakY - 22, color:colors[ri], size:10, align:'center'});
+
+        // Multiplier badge
+        els.push({id:'ml'+ri, type:'label', text:t(multLabels[ri]), x:colX + 30, y:peakY - 8, color:P.secondary, size:11, align:'center', bold:true, glow:'rgba(198,198,198,0.2)'});
+
+        // Height bracket line
+        els.push({id:'hbTop'+ri, type:'line', x1:colX - 8, y1:peakY, x2:colX + 8, y2:peakY, color:colors[ri], lineWidth:1});
+        els.push({id:'hbBot'+ri, type:'line', x1:colX - 8, y1:groundY, x2:colX + 8, y2:groundY, color:colors[ri], lineWidth:1});
+      }
+    }
+
+    // Connection lines showing "4x" and "9x" relationships
+    if (revealFrac3 > 0.95) {
+      var y1 = groundY - heights[0] * scaleAll;
+      var y2 = groundY - heights[1] * scaleAll;
+      var y3 = groundY - heights[2] * scaleAll;
+      // Arrow from column 1 peak to column 2 peak
+      els.push({id:'conn12', type:'line', x1:colCenters[0] + 35, y1:y1, x2:colCenters[1] - 35, y2:y2, color:'rgba(198,198,198,0.25)', lineWidth:1, dash:[4,3]});
+      els.push({id:'conn23', type:'line', x1:colCenters[1] + 35, y1:y2, x2:colCenters[2] - 35, y2:y3, color:'rgba(198,198,198,0.25)', lineWidth:1, dash:[4,3]});
+    }
+
+    return els;
+  }
+
+  // ── F4: Full rocket flight profile ──
+  if (f === 4) {
+    els.push({id:'f4t', type:'label', text:t('f4title'), x:cx, y:H * 0.04, color:P.primary, size:16, align:'center', glow:P.glowStrong});
+
+    // Ground
+    els.push({id:'gnd', type:'line', x1:W * 0.02, y1:groundY, x2:W * 0.98, y2:groundY, color:P.muted, lineWidth:1.5, dash:[6,4]});
+    els.push({id:'gndL', type:'label', text:t('ground'), x:W * 0.96, y:groundY + 12, color:P.muted, size:8, align:'right'});
+
+    // Build the full flight path with 3 distinct phases:
+    // Phase A: Engine ON (0 -> burnout ~30% of path) -- steep, accelerating
+    // Phase B: Coast (burnout -> apex ~50%) -- parabolic, decelerating
+    // Phase C: Descent (apex -> landing ~100%) -- parabolic, accelerating down
+    var startX = W * 0.06;
+    var endX = W * 0.92;
+    var totalWidth = endX - startX;
+    var peakH4 = H * 0.62;
+    var numPts4 = 100;
+    var pathPts = [];
+
+    // Burnout fraction along path
+    var burnoutFrac = 0.25;
+    var apexFrac = 0.50;
+
+    for (var i4 = 0; i4 <= numPts4; i4++) {
+      var frac = i4 / numPts4;
+      var px4, py4;
+
+      // x: non-linear progression (steep climb = less horizontal distance)
+      if (frac < burnoutFrac) {
+        // Engine ON: mostly vertical, little horizontal
+        var localF = frac / burnoutFrac;
+        px4 = startX + totalWidth * 0.12 * localF * localF; // accelerating horizontal
+      } else if (frac < apexFrac) {
+        // Coasting up: transitioning to horizontal
+        var localF2 = (frac - burnoutFrac) / (apexFrac - burnoutFrac);
+        px4 = startX + totalWidth * 0.12 + totalWidth * 0.28 * localF2;
+      } else {
+        // Descent: ballistic arc
+        var localF3 = (frac - apexFrac) / (1 - apexFrac);
+        px4 = startX + totalWidth * 0.4 + totalWidth * 0.6 * localF3;
+      }
+
+      // y: altitude profile
+      if (frac < burnoutFrac) {
+        // Engine ON: steep parabolic ascent (thrust > gravity)
+        var localF4 = frac / burnoutFrac;
+        var altFrac = localF4 * localF4 * 0.7; // accelerating climb
+        py4 = groundY - altFrac * peakH4;
+      } else if (frac < apexFrac) {
+        // Coast: decelerating climb to apex
+        var localF5 = (frac - burnoutFrac) / (apexFrac - burnoutFrac);
+        var burnoutAlt = 0.7; // altitude at burnout as fraction of peak
+        var altFrac2 = burnoutAlt + (1 - burnoutAlt) * (1 - (1 - localF5) * (1 - localF5));
+        py4 = groundY - altFrac2 * peakH4;
+      } else {
+        // Descent: parabolic fall
+        var localF6 = (frac - apexFrac) / (1 - apexFrac);
+        var altFrac3 = 1 - localF6 * localF6;
+        py4 = groundY - altFrac3 * peakH4;
+      }
+
+      pathPts.push({x: px4, y: py4});
+    }
+
+    // Draw trajectory -- split into colored segments
+    // Engine ON segment (orange-red)
+    var burnIdx = Math.round(burnoutFrac * numPts4);
+    var apexIdx = Math.round(apexFrac * numPts4);
+
+    var enginePts = pathPts.slice(0, burnIdx + 1);
+    var coastPts = pathPts.slice(burnIdx, apexIdx + 1);
+    var descentPts = pathPts.slice(apexIdx);
+
+    var revealFrac4 = Math.min(prog * 1.4, 1.0);
+
+    // Reveal path progressively
+    var revealIdx = Math.floor(revealFrac4 * numPts4);
+
+    // Engine ON path
+    var showEngine = enginePts.slice(0, Math.min(revealIdx + 1, enginePts.length));
+    if (showEngine.length >= 2) {
+      els.push({id:'pathEngine', type:'polyline', points:showEngine, color:'#ff7f50', lineWidth:3, glow:'rgba(255,127,80,0.4)', glowSize:10});
+    }
+
+    // Coast path
+    if (revealIdx > burnIdx) {
+      var showCoast = coastPts.slice(0, Math.min(revealIdx - burnIdx + 1, coastPts.length));
+      if (showCoast.length >= 2) {
+        els.push({id:'pathCoast', type:'polyline', points:showCoast, color:P.tertiary, lineWidth:2.5, glow:'rgba(0,218,243,0.3)', glowSize:8});
+      }
+    }
+
+    // Descent path
+    if (revealIdx > apexIdx) {
+      var showDescent = descentPts.slice(0, Math.min(revealIdx - apexIdx + 1, descentPts.length));
+      if (showDescent.length >= 2) {
+        els.push({id:'pathDescent', type:'polyline', points:showDescent, color:P.secondary, lineWidth:2, glow:'rgba(198,198,198,0.2)', glowSize:6});
+      }
+    }
+
+    // Trail particles along revealed path
+    var trailSpacing = 5;
+    for (var tri = 0; tri < revealIdx; tri += trailSpacing) {
+      var tp4 = pathPts[tri];
+      var trailColor = tri < burnIdx ? 'rgba(255,127,80,0.15)' : (tri < apexIdx ? 'rgba(0,218,243,0.12)' : 'rgba(198,198,198,0.1)');
+      els.push({id:'trail'+tri, type:'circle', x:tp4.x, y:tp4.y, r:1.2, fill:trailColor});
+    }
+
+    // Rocket at current position
+    if (revealIdx < numPts4) {
+      var curPt = pathPts[Math.min(revealIdx, numPts4)];
+      var prevPt = pathPts[Math.max(0, Math.min(revealIdx, numPts4) - 3)];
+      var rAngle = Math.atan2(curPt.y - prevPt.y, curPt.x - prevPt.x);
+      var hasFlame = revealIdx < burnIdx;
+      els.push({id:'rktCur', type:'rocket', x:curPt.x, y:curPt.y, size:14,
+        angle:rAngle - Math.PI, flame:hasFlame, flameLen:0.7,
+        bodyColor:'#d0d0d0', noseColor:P.primary, finColor:P.primaryDim});
+    }
+
+    // Burnout marker
+    var burnPt = pathPts[burnIdx];
+    if (revealIdx >= burnIdx) {
+      els.push({id:'burnDot', type:'circle', x:burnPt.x, y:burnPt.y, r:5, fill:'#ff7f50', glow:'rgba(255,127,80,0.4)'});
+      els.push({id:'burnLbl', type:'label', text:t('f4burnout'), x:burnPt.x + 16, y:burnPt.y + 6, color:'#ff7f50', size:9, align:'left', bold:true});
+    }
+
+    // Apex marker
+    var apexPt = pathPts[apexIdx];
+    if (revealIdx >= apexIdx) {
+      els.push({id:'apexDot', type:'circle', x:apexPt.x, y:apexPt.y, r:6, fill:P.secondary, glow:'rgba(198,198,198,0.3)'});
+      els.push({id:'apexLbl', type:'label', text:t('f4realApex'), x:apexPt.x, y:apexPt.y - 18, color:P.secondary, size:10, align:'center', bold:true, glow:'rgba(198,198,198,0.2)'});
+
+      // Idle hover effect at apex -- pulsing glow
+      els.push({id:'apexPulse', type:'circle', x:apexPt.x, y:apexPt.y, r:10, fill:'rgba(0,0,0,0)', stroke:P.secondary, lineWidth:1, glow:'rgba(198,198,198,0.15)'});
+    }
+
+    // Phase boxes (appear progressively)
+    // Engine ON box
+    var engineMidIdx = Math.round(burnIdx * 0.5);
+    var engineMid = pathPts[engineMidIdx];
+    if (revealIdx > burnIdx * 0.3) {
+      els.push({id:'boxEngine', type:'phaseBox', text:t('f4engineOn'), x:engineMid.x + 60, y:engineMid.y - 10,
+        size:8, color:P.text, borderColor:'#ff7f50', bgColor:'rgba(32,31,31,0.85)'});
+      // Connector line
+      els.push({id:'connEngine', type:'line', x1:engineMid.x + 8, y1:engineMid.y, x2:engineMid.x + 28, y2:engineMid.y - 5,
+        color:'rgba(255,127,80,0.4)', lineWidth:0.8});
+    }
+
+    // Coast box
+    var coastMidIdx = Math.round((burnIdx + apexIdx) / 2);
+    var coastMid = pathPts[coastMidIdx];
+    if (revealIdx > coastMidIdx) {
+      els.push({id:'boxCoast', type:'phaseBox', text:t('f4coast'), x:coastMid.x, y:coastMid.y - 50,
+        size:8, color:P.text, borderColor:P.tertiary, bgColor:'rgba(32,31,31,0.85)'});
+      els.push({id:'connCoast', type:'line', x1:coastMid.x, y1:coastMid.y - 8, x2:coastMid.x, y2:coastMid.y - 28,
+        color:'rgba(0,218,243,0.4)', lineWidth:0.8});
+    }
+
+    // Descent box
+    var descentMidIdx = Math.round((apexIdx + numPts4) * 0.7);
+    var descentMid = pathPts[descentMidIdx];
+    if (revealIdx > descentMidIdx) {
+      els.push({id:'boxDescent', type:'phaseBox', text:t('f4descent'), x:descentMid.x, y:descentMid.y - 45,
+        size:8, color:P.text, borderColor:P.secondary, bgColor:'rgba(32,31,31,0.85)'});
+      els.push({id:'connDescent', type:'line', x1:descentMid.x, y1:descentMid.y - 8, x2:descentMid.x, y2:descentMid.y - 25,
+        color:'rgba(198,198,198,0.3)', lineWidth:0.8});
+    }
+
+    // Note about apex vs burnout (appears last)
+    if (revealFrac4 > 0.9) {
+      // Vertical dashed line from burnout to apex altitude
+      els.push({id:'burnApexLine', type:'line', x1:burnPt.x, y1:burnPt.y, x2:burnPt.x, y2:apexPt.y, color:'rgba(198,198,198,0.2)', lineWidth:1, dash:[3,3]});
+      // Horizontal from burnout line to apex
+      els.push({id:'burnApexH', type:'line', x1:burnPt.x, y1:apexPt.y, x2:apexPt.x, y2:apexPt.y, color:'rgba(198,198,198,0.15)', lineWidth:1, dash:[3,3]});
+
+      // Note
+      var noteLines = t('f4note').split('\n');
+      for (var ni = 0; ni < noteLines.length; ni++) {
+        els.push({id:'note'+ni, type:'label', text:noteLines[ni], x:cx, y:groundY + 14 + ni * 13, color:P.muted, size:8, align:'center'});
+      }
+    }
+
+    // Landing impact particles (at end)
+    var landPt4 = pathPts[numPts4];
+    if (revealFrac4 > 0.97) {
+      els.push({id:'impactP', type:'particles', x:landPt4.x, y:groundY, count:20, spreadX:18, spreadY:10, color:'#ffb59c', baseAlpha:0.4, seed:999});
+    }
+
+    return els;
+  }
+
+  return [];
+}
+
+// ============================================================
+// BOOT
+// ============================================================
+AnimRuntime.boot();
+</script>
+</body>
+</html>
