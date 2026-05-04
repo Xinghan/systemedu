@@ -409,6 +409,7 @@ async def api_create_project(request: Request) -> JSONResponse:
     # Background: generate cover image via DashScope Wanx
     async def _bg_generate_cover() -> None:
         try:
+            from systemedu.core.config import SYSTEMEDU_HOME
             from systemedu.education.image_gen import generate_project_cover
             desc = meta.get("description", "") if meta else ""
             cover_path = SYSTEMEDU_HOME / "media" / "projects" / name / "cover.jpg"

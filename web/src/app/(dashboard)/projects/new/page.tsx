@@ -4,7 +4,7 @@ import { useCallback, useState } from "react"
 import { useRouter } from "next/navigation"
 import {
   FileJson, Eye, Check, AlertCircle, ArrowLeft, ArrowRight,
-  Sparkles, Brain, ChevronDown, X, Plus,
+  Sparkles, Brain, ChevronDown, X, Plus, Wand2,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
