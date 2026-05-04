@@ -1,0 +1,769 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>推拉力探秘 | Force Lab</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&family=JetBrains+Mono:wght@400;700&family=Noto+Sans+SC:wght@300;400;700;900&display=swap" rel="stylesheet">
+<style>
+:root{--BRASS:oklch(0.75 0.17 55);--FORGE:oklch(0.55 0.16 50);--IRON:oklch(0.35 0.10 60);--EMBER:oklch(0.92 0.08 60);--SPARK:oklch(0.85 0.14 85);--BG1:oklch(0.14 0.035 265);--BG2:oklch(0.18 0.04 265)}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Noto Sans SC','Inter',sans-serif;background:linear-gradient(135deg,var(--BG1),var(--BG2));color:var(--EMBER);overflow:hidden;height:100vh;user-select:none}
+.font-mono{font-family:'JetBrains Mono',monospace}
+.glass{background:rgba(26,26,48,0.75);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border:1px solid rgba(196,154,60,0.12)}
+.glass-spark{background:rgba(26,26,48,0.8);backdrop-filter:blur(12px);border:1px solid rgba(232,208,80,0.25)}
+canvas{display:block;cursor:crosshair}
+::-webkit-scrollbar{width:3px}::-webkit-scrollbar-track{background:transparent}::-webkit-scrollbar-thumb{background:var(--FORGE)}
+input[type=range]{-webkit-appearance:none;width:100%;height:3px;background:var(--IRON);outline:none;border-radius:0}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:14px;height:14px;background:var(--SPARK);cursor:pointer;border:2px solid var(--BRASS);border-radius:0}
+.scene-btn{transition:all .15s}
+.scene-btn:hover{background:rgba(196,154,60,0.15)}
+.scene-btn.active{background:rgba(232,208,80,0.18);border-color:var(--SPARK)!important}
+.badge{display:inline-block;width:10px;height:10px;background:var(--SPARK);clip-path:polygon(50% 0%,61% 35%,98% 35%,68% 57%,79% 91%,50% 70%,21% 91%,32% 57%,2% 35%,39% 35%)}
+@keyframes floatCog{0%,100%{transform:translateY(0) rotate(0deg)}50%{transform:translateY(-4px) rotate(15deg)}}
+@keyframes pulseRing{0%,100%{opacity:.4}50%{opacity:.9}}
+.mode-btn{transition:all .15s}.mode-btn:hover{opacity:.85}.mode-btn.active{background:rgba(232,208,80,0.2)!important;border-color:var(--SPARK)!important;color:var(--SPARK)!important}
+#sketch-overlay{transition:opacity .3s}
+</style>
+</head>
+<body>
+<div class="flex h-screen">
+<!-- LEFT PANEL -->
+<aside class="w-56 flex flex-col p-3 gap-2 z-20 relative glass" style="min-width:220px;border-right:1px solid rgba(196,154,60,0.15)">
+  <div class="text-center mb-1">
+    <div class="font-mono text-[10px] tracking-[0.25em] uppercase" style="color:var(--FORGE)">Gear Foundry</div>
+    <h1 class="text-lg font-black leading-tight" style="color:var(--SPARK)"><span data-zh="推拉力探秘" data-en="Force Lab">推拉力探秘</span></h1>
+    <div class="font-mono text-[10px] mt-0.5" style="color:var(--BRASS)">torque = F &middot; r</div>
+  </div>
+  <!-- Scene Selector -->
+  <div>
+    <div class="text-[10px] font-mono uppercase tracking-wider mb-1" style="color:var(--FORGE)"><span data-zh="场景选择" data-en="SCENES">场景选择</span></div>
+    <div class="flex flex-col gap-0.5" id="scene-list"></div>
+  </div>
+  <!-- Mode Toggle -->
+  <div class="flex gap-1">
+    <button id="mode-apply" class="mode-btn active flex-1 py-1.5 text-[10px] font-mono font-bold glass" style="color:var(--SPARK);border-color:rgba(232,208,80,0.3)"><span data-zh="施力" data-en="APPLY">施力</span></button>
+    <button id="mode-sketch" class="mode-btn flex-1 py-1.5 text-[10px] font-mono font-bold glass" style="color:var(--BRASS);border-color:rgba(196,154,60,0.15)"><span data-zh="标注" data-en="SKETCH">标注</span></button>
+  </div>
+  <!-- Parameters -->
+  <div class="space-y-1.5 mt-1">
+    <div>
+      <label class="text-[10px] font-mono flex justify-between" style="color:var(--FORGE)"><span data-zh="质量" data-en="Mass">质量</span><span id="mass-val" style="color:var(--SPARK)">2.0 kg</span></label>
+      <input type="range" id="sl-mass" min="0.1" max="10" step="0.1" value="2">
+    </div>
+    <div>
+      <label class="text-[10px] font-mono flex justify-between" style="color:var(--FORGE)"><span data-zh="静摩擦 μs" data-en="Static μs">静摩擦 μs</span><span id="mus-val" style="color:var(--SPARK)">0.20</span></label>
+      <input type="range" id="sl-mus" min="0.2" max="0.8" step="0.05" value="0.2">
+    </div>
+    <div>
+      <label class="text-[10px] font-mono flex justify-between" style="color:var(--FORGE)"><span data-zh="动摩擦 μk" data-en="Kinetic μk">动摩擦 μk</span><span id="muk-val" style="color:var(--SPARK)">0.10</span></label>
+      <input type="range" id="sl-muk" min="0.1" max="0.6" step="0.05" value="0.1">
+    </div>
+  </div>
+  <!-- Force Readout -->
+  <div class="glass-spark p-2 mt-1" style="border-color:rgba(232,208,80,0.15)">
+    <div class="text-[10px] font-mono uppercase tracking-wider" style="color:var(--FORGE)"><span data-zh="力的读数" data-en="READOUT">力的读数</span></div>
+    <div class="mt-1 space-y-0.5 text-[11px]">
+      <div class="flex justify-between"><span style="color:var(--BRASS)">F<sub>app</sub></span><span class="font-mono" style="color:var(--SPARK)" id="rd-fapp">0.0 N</span></div>
+      <div class="flex justify-between"><span style="color:var(--BRASS)">F<sub>fric</sub></span><span class="font-mono" style="color:var(--FORGE)" id="rd-ffric">0.0 N</span></div>
+      <div class="flex justify-between"><span style="color:var(--BRASS)">F<sub>net</sub></span><span class="font-mono" style="color:var(--EMBER)" id="rd-fnet">0.0 N</span></div>
+      <div style="border-top:1px solid rgba(90,74,58,0.4);margin:3px 0"></div>
+      <div class="flex justify-between"><span style="color:var(--BRASS)">v</span><span class="font-mono" style="color:var(--SPARK)" id="rd-v">0.00 m/s</span></div>
+      <div class="flex justify-between"><span style="color:var(--BRASS)">a</span><span class="font-mono" style="color:var(--SPARK)" id="rd-a">0.00 m/s&sup2;</span></div>
+    </div>
+  </div>
+  <!-- Strain Gauge -->
+  <div class="glass p-2">
+    <div class="text-[10px] font-mono uppercase tracking-wider" style="color:var(--FORGE)"><span data-zh="费力程度" data-en="EFFORT">费力程度</span></div>
+    <div class="mt-1 h-2 relative" style="background:var(--IRON)">
+      <div id="strain-bar" class="h-full transition-all duration-75" style="width:0%;background:var(--BRASS)"></div>
+      <div id="strain-threshold" class="absolute top-0 h-full w-0.5" style="background:var(--SPARK);left:0%"></div>
+    </div>
+    <div class="flex justify-between text-[9px] font-mono mt-0.5" style="color:var(--FORGE)">
+      <span data-zh="轻松" data-en="Easy">轻松</span>
+      <span data-zh="费力" data-en="Hard">费力</span>
+    </div>
+  </div>
+  <!-- Instructions -->
+  <div class="mt-auto space-y-1">
+    <div class="glass p-1.5 text-[10px] leading-relaxed" style="color:var(--EMBER);border-color:rgba(196,154,60,0.08)">
+      <div id="instr-text"><span data-zh="点击物体拖拽施力" data-en="Click & drag object to apply force">点击物体拖拽施力</span></div>
+    </div>
+    <div class="flex gap-1">
+      <button id="btn-reset" class="flex-1 py-1.5 text-[10px] font-mono font-bold glass hover:opacity-80 transition" style="color:var(--SPARK);border-color:rgba(232,208,80,0.25)"><span data-zh="重置" data-en="RESET">重置</span></button>
+      <button id="btn-clear-sketch" class="flex-1 py-1.5 text-[10px] font-mono font-bold glass hover:opacity-80 transition" style="color:var(--BRASS);border-color:rgba(196,154,60,0.15)"><span data-zh="清除标注" data-en="CLEAR">清除标注</span></button>
+      <button id="btn-lang" class="py-1.5 px-2 text-[10px] font-mono glass hover:opacity-80 transition" style="color:var(--BRASS);border-color:rgba(196,154,60,0.15)">EN</button>
+    </div>
+  </div>
+</aside>
+<!-- MAIN STAGE -->
+<main class="flex-1 relative overflow-hidden">
+  <canvas id="sim"></canvas>
+  <!-- HUD: Scene Title -->
+  <div class="absolute top-3 left-3 glass-spark px-3 py-1.5 font-mono text-xs z-10" style="color:var(--SPARK)" id="hud-title"></div>
+  <!-- HUD: Scale -->
+  <div class="absolute top-3 right-3 glass px-2 py-1 font-mono text-[10px] z-10" style="color:var(--BRASS)" id="hud-scale"></div>
+  <!-- HUD: Hint -->
+  <div class="absolute bottom-3 left-1/2 -translate-x-1/2 glass-spark px-4 py-1.5 font-mono text-[11px] z-10 text-center" style="color:var(--EMBER);max-width:400px" id="hud-hint"></div>
+  <!-- HUD: Challenge -->
+  <div class="absolute top-3 left-1/2 -translate-x-1/2 glass px-3 py-1 font-mono text-[10px] z-10" style="color:var(--FORGE)" id="hud-challenge"></div>
+  <!-- HUD: Force Log -->
+  <div class="absolute bottom-3 right-3 glass px-2 py-1.5 z-10" style="max-width:200px;border-color:rgba(232,208,80,0.12)">
+    <div class="text-[10px] font-mono uppercase tracking-wider" style="color:var(--FORGE)"><span data-zh="施力记录" data-en="FORCE LOG">施力记录</span> <span id="log-count" style="color:var(--SPARK)">0</span></div>
+    <div id="log-entries" class="mt-1 max-h-20 overflow-y-auto space-y-0.5"></div>
+  </div>
+  <!-- HUD: Completion -->
+  <div class="absolute top-14 right-3 glass px-2 py-1 z-10 text-[10px] font-mono" style="color:var(--BRASS)">
+    <span data-zh="完成场景" data-en="Completed">完成场景</span>: <span id="completed-count" style="color:var(--SPARK)">0</span>/5
+  </div>
+</main>
+</div>
+
+<script>
+/* ===== 常量与调色板 ===== */
+const G=9.81,MAX_F=200,PX_PER_N=1.2,DAMP=0.997,STOP_V=0.008;
+const P={
+  brass:'#C49A3C',forge:'#8B5E20',iron:'#5A4A3A',ember:'#F0DCC0',
+  spark:'#E8D050',bg1:'#16162C',bg2:'#201C34',
+  brassA:a=>`rgba(196,154,60,${a})`,forgeA:a=>`rgba(139,94,32,${a})`,
+  sparkA:a=>`rgba(232,208,80,${a})`,ironA:a=>`rgba(90,74,58,${a})`,
+  emberA:a=>`rgba(240,220,192,${a})`
+};
+
+/* ===== 场景定义 ===== */
+const SCENES=[
+  {id:0,name:{zh:'光滑车间',en:'Smooth Floor'},mass:2,w:0.6,h:0.5,shape:'crate',
+   muS:0.2,muK:0.1,surf:'smooth',
+   hint:{zh:'轻轻一推，物体就滑走了！感受力的方向。',en:'A gentle push and it slides! Feel the force direction.'},
+   challenge:{zh:'推动物体移动至少 1 米',en:'Push the object at least 1 meter'}},
+  {id:1,name:{zh:'粗糙铁板',en:'Rough Plate'},mass:2,w:0.6,h:0.5,shape:'crate',
+   muS:0.6,muK:0.4,surf:'rough',
+   hint:{zh:'表面很粗糙，需要更大的力才能推动！',en:'Rough surface — needs much more force!'},
+   challenge:{zh:'克服摩擦力让物体动起来',en:'Overcome friction to make it move'}},
+  {id:2,name:{zh:'重型活塞',en:'Heavy Piston'},mass:8,w:0.55,h:1.1,shape:'piston',
+   muS:0.35,muK:0.25,surf:'medium',
+   hint:{zh:'质量越大，惯性越大，越难改变运动状态。',en:'More mass = more inertia = harder to change motion.'},
+   challenge:{zh:'推动重型活塞至少 0.5 米',en:'Push the heavy piston at least 0.5m'}},
+  {id:3,name:{zh:'齿轮拉拔',en:'Gear Pull'},mass:5,w:0.65,h:0.65,shape:'gear',
+   muS:0.5,muK:0.35,surf:'rough',
+   hint:{zh:'试着向不同方向施力，观察运动方向的变化。',en:'Apply force in different directions, observe motion changes.'},
+   challenge:{zh:'分别向右、向下、向左上方施力各一次',en:'Apply force right, down, and upper-left once each'}},
+  {id:4,name:{zh:'自由铸造',en:'Free Forge'},mass:3,w:0.6,h:0.55,shape:'wrench',
+   muS:0.4,muK:0.25,surf:'medium',
+   hint:{zh:'自由调节参数，探索质量与摩擦力的关系。',en:'Adjust parameters freely. Explore mass vs friction.'},
+   challenge:{zh:'改变质量后，观察需要多少力才能推动',en:'Change mass, observe how much force is needed'}}
+];
+
+/* ===== 状态 ===== */
+let si=0,obj=null,cam={x:0,y:0},ppm=80;
+let dragging=false,dragOrigin={x:0,y:0},mouse={x:0,y:0};
+let Fapp={x:0,y:0},Ffric={x:0,y:0},Fnet={x:0,y:0};
+let isMoving=false,wasStatic=true;
+let particles=[],sketchArrows=[],forceLog=[];
+let mode='apply',lang='zh';
+let completed=new Set(),sceneForces=new Set();
+let cogT=0,cogSparkT=0,lastTS=0;
+let sketchDrag=null;
+
+/* ===== Canvas初始化 ===== */
+const cv=document.getElementById('sim'),cx=cv.getContext('2d');
+function resize(){cv.width=cv.parentElement.clientWidth;cv.height=cv.parentElement.clientHeight}
+window.addEventListener('resize',resize);resize();
+
+/* ===== 坐标转换 ===== */
+function p2s(px,py){return{x:(px-cam.x)*ppm+cv.width/2,y:(py-cam.y)*ppm+cv.height/2}}
+function s2p(sx,sy){return{x:(sx-cv.width/2)/ppm+cam.x,y:(sy-cv.height/2)/ppm+cam.y}}
+
+/* ===== 场景加载 ===== */
+function loadScene(i){
+  si=i;const s=SCENES[i];
+  obj={x:0,y:0,vx:0,vy:0,mass:s.mass,w:s.w,h:s.h,shape:s.shape,muS:s.muS,muK:s.muK,surf:s.surf,rot:0};
+  cam={x:0,y:0};Fapp={x:0,y:0};Ffric={x:0,y:0};Fnet={x:0,y:0};
+  isMoving=false;wasStatic=true;particles=[];sketchArrows=[];
+  sceneForces=new Set();
+  document.getElementById('sl-mass').value=s.mass;
+  document.getElementById('sl-mus').value=s.muS;
+  document.getElementById('sl-muk').value=s.muK;
+  updateSliderLabels();updateSceneBtns();updateHUD();
+}
+
+/* ===== 物理更新 ===== */
+function physics(dt){
+  if(!obj)return;
+  const N=obj.mass*G;
+  const spd=Math.sqrt(obj.vx*obj.vx+obj.vy*obj.vy);
+  const fMag=Math.sqrt(Fapp.x*Fapp.x+Fapp.y*Fapp.y);
+  const fSmax=obj.muS*N,fK=obj.muK*N;
+
+  if(spd<STOP_V){
+    obj.vx=0;obj.vy=0;
+    if(fMag<=fSmax+0.01){
+      Ffric.x=-Fapp.x;Ffric.y=-Fapp.y;
+      isMoving=false;
+    }else{
+      if(wasStatic){emitSparks(obj.x,obj.y,18);wasStatic=false;addLog('break')}
+      isMoving=true;
+      if(fMag>0.01){Ffric.x=-fK*(Fapp.x/fMag);Ffric.y=-fK*(Fapp.y/fMag)}
+      else{Ffric.x=0;Ffric.y=0}
+    }
+  }else{
+    isMoving=true;wasStatic=false;
+    Ffric.x=-fK*(obj.vx/spd);Ffric.y=-fK*(obj.vy/spd);
+    if(fMag<0.1&&spd<0.05){obj.vx=0;obj.vy=0;isMoving=false;wasStatic=true}
+  }
+  Fnet.x=Fapp.x+Ffric.x;Fnet.y=Fapp.y+Ffric.y;
+  obj.vx+=(Fnet.x/obj.mass)*dt;obj.vy+=(Fnet.y/obj.mass)*dt;
+  obj.vx*=DAMP;obj.vy*=DAMP;
+  obj.x+=obj.vx*dt;obj.y+=obj.vy*dt;
+  obj.rot+=spd*dt*0.3;
+  cam.x+=(obj.x-cam.x)*0.04;cam.y+=(obj.y-cam.y)*0.04;
+  if(spd>0.3&&Math.random()<spd*0.12)emitDust(obj.x,obj.y);
+  checkChallenge();
+  /* 粒子更新 */
+  for(let i=particles.length-1;i>=0;i--){
+    const p=particles[i];p.x+=p.vx*dt;p.y+=p.vy*dt;p.vy+=1.5*dt;p.life-=dt;
+    if(p.life<=0)particles.splice(i,1);
+  }
+}
+
+/* ===== 挑战检测 ===== */
+function checkChallenge(){
+  const dist=Math.sqrt(obj.x*obj.x+obj.y*obj.y);
+  const fMag=Math.sqrt(Fapp.x*Fapp.x+Fapp.y*Fapp.y);
+  if(si===0&&dist>=1)completeScene(si);
+  if(si===1&&isMoving&&fMag>0)completeScene(si);
+  if(si===2&&dist>=0.5)completeScene(si);
+  if(si===3){
+    const ang=Math.atan2(Fapp.y,Fapp.x)*180/Math.PI;
+    if(fMag>5){
+      if(ang>-45&&ang<45)sceneForces.add('right');
+      if(ang>45&&ang<135)sceneForces.add('down');
+      if(ang>135||ang<-135)sceneForces.add('left');
+      if(ang>-135&&ang<-45)sceneForces.add('up');
+    }
+    if(sceneForces.size>=3)completeScene(si);
+  }
+  if(si===4&&forceLog.length>=3)completeScene(si);
+}
+function completeScene(i){
+  if(completed.has(i))return;
+  completed.add(i);
+  emitSparks(obj.x,obj.y,30);cogSparkT=1.5;
+  document.getElementById('completed-count').textContent=completed.size;
+  updateSceneBtns();
+}
+
+/* ===== 粒子发射 ===== */
+function emitSparks(x,y,n){
+  for(let i=0;i<n;i++){
+    const a=Math.random()*Math.PI*2,s=1.5+Math.random()*4;
+    particles.push({type:'spark',x,y,vx:Math.cos(a)*s,vy:Math.sin(a)*s,life:0.4+Math.random()*0.5,maxLife:0.9,sz:1.5+Math.random()*2.5});
+  }
+}
+function emitDust(x,y){
+  particles.push({type:'dust',x:x+(Math.random()-0.5)*obj.w*0.4,y:y+(Math.random()-0.5)*obj.h*0.4,
+    vx:(Math.random()-0.5)*0.3,vy:(Math.random()-0.5)*0.3-0.2,life:0.25+Math.random()*0.25,maxLife:0.5,sz:1+Math.random()*1.5});
+}
+
+/* ===== 日志 ===== */
+function addLog(type){
+  const fMag=Math.sqrt(Fapp.x*Fapp.x+Fapp.y*Fapp.y);
+  const ang=Math.round(Math.atan2(Fapp.y,Fapp.x)*180/Math.PI);
+  forceLog.push({scene:si,fMag:fMag.toFixed(1),ang,type});
+  document.getElementById('log-count').textContent=forceLog.length;
+  const el=document.getElementById('log-entries');
+  const d=document.createElement('div');
+  d.className='text-[9px] font-mono';
+  d.style.color=type==='break'?P.spark:P.brass;
+  const arrow=type==='break'?'💥':'→';
+  d.innerHTML=`${arrow} S${si+1} ${fMag.toFixed(0)}N @${ang}°`;
+  el.prepend(d);
+  if(el.children.length>15)el.removeChild(el.lastChild);
+}
+
+/* ===== 渲染 ===== */
+function draw(){
+  cx.clearRect(0,0,cv.width,cv.height);
+  drawBg();drawGrid();drawSurface();
+  particles.filter(p=>p.type==='dust').forEach(drawParticle);
+  drawShadow();drawObj();drawStrain();
+  if(dragging&&mode==='apply')drawForceArrows();
+  drawFrictionArrow();drawNetArrow();
+  particles.filter(p=>p.type==='spark').forEach(drawParticle);
+  sketchArrows.forEach(drawSketchArrow);
+  if(dragging&&mode==='sketch'&&sketchDrag)drawSketchArrow(sketchDrag);
+  drawCog();drawScaleBar();
+  updateReadouts();
+}
+
+function drawBg(){
+  const g=cx.createRadialGradient(cv.width/2,cv.height/2,0,cv.width/2,cv.height/2,Math.max(cv.width,cv.height)*0.7);
+  g.addColorStop(0,P.bg2);g.addColorStop(1,P.bg1);cx.fillStyle=g;cx.fillRect(0,0,cv.width,cv.height);
+  /* 微妙的齿轮装饰 */
+  cx.save();cx.globalAlpha=0.03;
+  for(let i=0;i<3;i++){
+    const gx=cv.width*(0.15+i*0.35),gy=cv.height*0.85,gr=60+i*20;
+    drawGearShape(gx,gy,gr,8+i*2);cx.fillStyle=P.brass;cx.fill();
+  }
+  cx.restore();
+}
+
+function drawGearShape(x,y,r,teeth){
+  cx.beginPath();
+  for(let i=0;i<teeth;i++){
+    const a0=i/teeth*Math.PI*2,a1=(i+0.35)/teeth*Math.PI*2,a2=(i+0.5)/teeth*Math.PI*2,a3=(i+0.85)/teeth*Math.PI*2;
+    const ri=r*0.8,ro=r;
+    cx.lineTo(x+Math.cos(a0)*ri,y+Math.sin(a0)*ri);
+    cx.lineTo(x+Math.cos(a1)*ro,y+Math.sin(a1)*ro);
+    cx.lineTo(x+Math.cos(a2)*ro,y+Math.sin(a2)*ro);
+    cx.lineTo(x+Math.cos(a3)*ri,y+Math.sin(a3)*ri);
+  }
+  cx.closePath();
+}
+
+function drawGrid(){
+  const gs=0.5,gl=1;
+  const l=s2p(0,0),r=s2p(cv.width,cv.height);
+  const pL=l.x,pT=l.y,pR=r.x,pB=r.y;
+  /* 小格 */
+  cx.strokeStyle=P.ironA(0.12);cx.lineWidth=0.5;
+  const sx=Math.floor(s2p(0,0).x/ppm/gl)*gl-gs*3;
+  /* 简化: 直接用物理坐标 */
+  const visL=s2p(0,0).x<0?s2p(0,0):{x:0};
+  const leftP=s2p(0,0),rightP=s2p(cv.width,cv.height);
+  const physL=s2p(0,0),physR=s2p(cv.width,0),physT=s2p(0,0),physB=s2p(0,cv.height);
+  /* 小格线 */
+  cx.strokeStyle=P.ironA(0.1);cx.lineWidth=0.5;
+  let startGX=Math.floor((physR.x)/gs)*gs;
+  for(let gx=-20;gx<=20;gx+=gs){
+    const s=p2s(gx,0);
+    if(s.x<0||s.x>cv.width)continue;
+    cx.beginPath();cx.moveTo(s.x,0);cx.lineTo(s.x,cv.height);cx.stroke();
+  }
+  for(let gy=-15;gy<=15;gy+=gs){
+    const s=p2s(0,gy);
+    if(s.y<0||s.y>cv.height)continue;
+    cx.beginPath();cx.moveTo(0,s.y);cx.lineTo(cv.width,s.y);cx.stroke();
+  }
+  /* 大格线 */
+  cx.strokeStyle=P.ironA(0.25);cx.lineWidth=1;
+  for(let gx=-20;gx<=20;gx+=gl){
+    const s=p2s(gx,0);
+    if(s.x<0||s.x>cv.width)continue;
+    cx.beginPath();cx.moveTo(s.x,0);cx.lineTo(s.x,cv.height);cx.stroke();
+    if(Math.abs(gx)>0.01){
+      cx.fillStyle=P.forgeA(0.35);cx.font='9px "JetBrains Mono"';
+      cx.fillText(gx.toFixed(0)+'m',s.x+3,p2s(0,0).y-4);
+    }
+  }
+  for(let gy=-15;gy<=15;gy+=gl){
+    const s=p2s(0,gy);
+    if(s.y<0||s.y>cv.height)continue;
+    cx.beginPath();cx.moveTo(0,s.y);cx.lineTo(cv.width,s.y);cx.stroke();
+    if(Math.abs(gy)>0.01){
+      cx.fillStyle=P.forgeA(0.35);cx.font='9px "JetBrains Mono"';
+      cx.fillText(gy.toFixed(0)+'m',p2s(0,0).x+4,s.y-3);
+    }
+  }
+  /* 原点 */
+  const o=p2s(0,0);
+  cx.fillStyle=P.brassA(0.35);cx.beginPath();cx.arc(o.x,o.y,4,0,Math.PI*2);cx.fill();
+  cx.strokeStyle=P.brassA(0.2);cx.lineWidth=1;cx.beginPath();cx.moveTo(o.x-8,o.y);cx.lineTo(o.x+8,o.y);cx.stroke();
+  cx.beginPath();cx.moveTo(o.x,o.y-8);cx.lineTo(o.x,o.y+8);cx.stroke();
+}
+
+function drawSurface(){
+  if(!obj)return;
+  const s=obj.surf;
+  const o=p2s(0,0);
+  /* 表面纹理指示 */
+  cx.save();cx.globalAlpha=0.06;
+  if(s==='smooth'){
+    cx.fillStyle=P.spark;
+    for(let i=0;i<40;i++){
+      const px=o.x+(Math.random()-0.5)*cv.width*0.8;
+      const py=o.y+(Math.random()-0.5)*cv.height*0.6;
+      cx.fillRect(px,py,Math.random()*20+5,0.5);
+    }
+  }else if(s==='rough'){
+    cx.fillStyle=P.forge;
+    for(let i=0;i<80;i++){
+      const px=o.x+(Math.random()-0.5)*cv.width*0.8;
+      const py=o.y+(Math.random()-0.5)*cv.height*0.6;
+      cx.beginPath();cx.arc(px,py,Math.random()*2+0.5,0,Math.PI*2);cx.fill();
+    }
+  }else{
+    cx.fillStyle=P.brass;
+    for(let i=0;i<50;i++){
+      const px=o.x+(Math.random()-0.5)*cv.width*0.8;
+      const py=o.y+(Math.random()-0.5)*cv.height*0.6;
+      cx.fillRect(px,py,Math.random()*8+2,0.5);
+    }
+  }
+  cx.restore();
+}
+
+function drawShadow(){
+  if(!obj)return;const s=p2s(obj.x,obj.y);
+  cx.save();cx.globalAlpha=0.25;cx.fillStyle='#000';
+  const sw=obj.w*ppm,sh=obj.h*ppm;
+  cx.beginPath();cx.ellipse(s.x+4,s.y+4,sw/2,sh/2,0,0,Math.PI*2);cx.fill();cx.restore();
+}
+
+function drawObj(){
+  if(!obj)return;const s=p2s(obj.x,obj.y);
+  const hw=obj.w*ppm/2,hh=obj.h*ppm/2;
+  cx.save();cx.translate(s.x,s.y);
+  if(obj.shape==='crate'){
+    /* 箱体 */
+    cx.fillStyle=P.forge;cx.fillRect(-hw,-hh,hw*2,hh*2);
+    cx.strokeStyle=P.brass;cx.lineWidth=2;cx.strokeRect(-hw,-hh,hw*2,hh*2);
+    /* 交叉线 */
+    cx.strokeStyle=P.ironA(0.5);cx.lineWidth=1;
+    cx.beginPath();cx.moveTo(-hw,-hh);cx.lineTo(hw,hh);cx.moveTo(hw,-hh);cx.lineTo(-hw,hh);cx.stroke();
+    /* 角螺栓 */
+    const bsz=3;cx.fillStyle=P.brass;
+    [[-hw+4,-hh+4],[hw-4,-hh+4],[-hw+4,hh-4],[hw-4,hh-4]].forEach(([bx,by])=>{
+      cx.beginPath();cx.arc(bx,by,bsz,0,Math.PI*2);cx.fill();
+    });
+  }else if(obj.shape==='piston'){
+    /* 活塞体 */
+    const gr=cx.createLinearGradient(-hw,0,hw,0);
+    gr.addColorStop(0,P.iron);gr.addColorStop(0.5,P.forge);gr.addColorStop(1,P.iron);
+    cx.fillStyle=gr;cx.fillRect(-hw,-hh,hw*2,hh*2);
+    cx.strokeStyle=P.brass;cx.lineWidth=2;cx.strokeRect(-hw,-hh,hw*2,hh*2);
+    /* 活塞环 */
+    cx.strokeStyle=P.sparkA(0.5);cx.lineWidth=1.5;
+    for(let i=-2;i<=2;i++){
+      const ry=i*hh*0.35;
+      cx.beginPath();cx.moveTo(-hw,ry);cx.lineTo(hw,ry);cx.stroke();
+    }
+  }else if(obj.shape==='gear'){
+    cx.rotate(obj.rot);
+    drawGearShape(0,0,hw,8);
+    cx.fillStyle=P.forge;cx.fill();cx.strokeStyle=P.brass;cx.lineWidth=2;cx.stroke();
+    /* 中心孔 */
+    cx.beginPath();cx.arc(0,0,hw*0.25,0,Math.PI*2);cx.fillStyle=P.iron;cx.fill();
+    cx.strokeStyle=P.brass;cx.lineWidth=1;cx.stroke();
+  }else if(obj.shape==='wrench'){
+    cx.rotate(obj.rot*0.5);
+    /* 扳手形状 */
+    cx.fillStyle=P.forge;cx.beginPath();
+    cx.moveTo(-hw*0.3,-hh);cx.lineTo(hw*0.3,-hh);cx.lineTo(hw*0.3,-hh*0.3);
+    cx.lineTo(hw,-hh*0.6);cx.lineTo(hw,hh*0.6);cx.lineTo(hw*0.3,hh*0.3);
+    cx.lineTo(hw*0.3,hh);cx.lineTo(-hw*0.3,hh);cx.lineTo(-hw*0.3,hh*0.3);
+    cx.lineTo(-hw,hh*0.6);cx.lineTo(-hw,-hh*0.6);cx.lineTo(-hw*0.3,-hh*0.3);
+    cx.closePath();cx.fill();cx.strokeStyle=P.brass;cx.lineWidth=2;cx.stroke();
+  }
+  /* 质量标签 */
+  cx.rotate(-obj.rot*(obj.shape==='gear'?1:obj.shape==='wrench'?0.5:0));
+  cx.fillStyle=P.emberA(0.7);cx.font='bold 11px "JetBrains Mono"';cx.textAlign='center';
+  cx.fillText(obj.mass.toFixed(1)+'kg',0,hh+14);
+  cx.restore();
+}
+
+function drawStrain(){
+  if(!obj)return;
+  const fMag=Math.sqrt(Fapp.x*Fapp.x+Fapp.y*Fapp.y);
+  const fSmax=obj.muS*obj.mass*G;
+  const ratio=Math.min(fMag/Math.max(fSmax,0.01),1.5);
+  if(fMag<0.5)return;
+  const s=p2s(obj.x,obj.y);
+  const r=Math.max(obj.w,obj.h)*ppm/2+12;
+  cx.save();
+  /* 应变环 */
+  const startAngle=-Math.PI/2;
+  const endAngle=startAngle+ratio*Math.PI*2/1.5;
+  const col=ratio<0.6?P.brass:ratio<0.9?P.spark:'#E85050';
+  cx.strokeStyle=col;cx.lineWidth=3;cx.globalAlpha=0.7;
+  cx.beginPath();cx.arc(s.x,s.y,r,startAngle,endAngle);cx.stroke();
+  /* 阈值标记 */
+  const threshAngle=startAngle+(1/1.5)*Math.PI*2;
+  cx.strokeStyle=P.sparkA(0.5);cx.lineWidth=1;
+  cx.beginPath();cx.moveTo(s.x+Math.cos(threshAngle)*(r-5),s.y+Math.sin(threshAngle)*(r-5));
+  cx.lineTo(s.x+Math.cos(threshAngle)*(r+5),s.y+Math.sin(threshAngle)*(r+5));cx.stroke();
+  /* 振动效果 */
+  if(ratio>0.85&&ratio<=1&&!isMoving){
+    const vibrate=(Math.random()-0.5)*3*ratio;
+    cx.globalAlpha=0.15;cx.fillStyle=col;
+    cx.beginPath();cx.arc(s.x+vibrate,s.y+vibrate,r+4,0,Math.PI*2);cx.fill();
+  }
+  cx.restore();
+  /* 更新UI条 */
+  const bar=document.getElementById('strain-bar');
+  bar.style.width=Math.min(ratio/1.5*100,100)+'%';
+  bar.style.background=ratio<0.6?P.brass:ratio<0.9?P.spark:'#E85050';
+  const thrEl=document.getElementById('strain-threshold');
+  thrEl.style.left=(1/1.5*100)+'%';
+}
+
+function drawArrow(fx,fy,tx,ty,color,lw,label){
+  const dx=tx-fx,dy=ty-fy,len=Math.sqrt(dx*dx+dy*dy);
+  if(len<3)return;
+  const ang=Math.atan2(dy,dx);const hl=Math.min(12,len*0.3);
+  cx.save();cx.strokeStyle=color;cx.fillStyle=color;cx.lineWidth=lw;cx.lineCap='round';
+  cx.beginPath();cx.moveTo(fx,fy);cx.lineTo(tx-Math.cos(ang)*hl,ty-Math.sin(ang)*hl);cx.stroke();
+  /* 箭头 */
+  cx.beginPath();cx.moveTo(tx,ty);
+  cx.lineTo(tx-Math.cos(ang-0.4)*hl,ty-Math.sin(ang-0.4)*hl);
+  cx.lineTo(tx-Math.cos(ang+0.4)*hl,ty-Math.sin(ang+0.4)*hl);
+  cx.closePath();cx.fill();
+  /* 标签 */
+  if(label){
+    cx.font='bold 10px "JetBrains Mono"';cx.textAlign='center';
+    const offX=-Math.sin(ang)*14,offY=Math.cos(ang)*14;
+    cx.fillText(label,(fx+tx)/2+offX,(fy+ty)/2+offY);
+  }
+  cx.restore();
+}
+
+function drawForceArrows(){
+  if(!obj)return;const s=p2s(obj.x,obj.y);
+  const fMag=Math.sqrt(Fapp.x*Fapp.x+Fapp.y*Fapp.y);
+  if(fMag<0.5)return;
+  const scale=ppm*0.5;
+  const ex=s.x+Fapp.x/fMag*Math.min(fMag*scale/ppm,200);
+  const ey=s.y+Fapp.y/fMag*Math.min(fMag*scale/ppm,200);
+  /* 实际按力大小缩放 */
+  const fScale=0.6;
+  const ax=s.x+Fapp.x*fScale,ay=s.y+Fapp.y*fScale;
+  drawArrow(s.x,s.y,ax,ay,P.spark,3,fMag.toFixed(0)+'N');
+}
+
+function drawFrictionArrow(){
+  if(!obj)return;
+  const fMag=Math.sqrt(Ffric.x*Ffric.x+Ffric.y*Ffric.y);
+  if(fMag<0.3)return;
+  const s=p2s(obj.x,obj.y);
+  const fScale=0.6;
+  drawArrow(s.x,s.y,s.x+Ffric.x*fScale,s.y+Ffric.y*fScale,P.forge,2,'f='+fMag.toFixed(1)+'N');
+}
+
+function drawNetArrow(){
+  if(!obj)return;
+  const fMag=Math.sqrt(Fnet.x*Fnet.x+Fnet.y*Fnet.y);
+  if(fMag<0.3)return;
+  const s=p2s(obj.x,obj.y);
+  const fScale=0.6;
+  cx.save();cx.setLineDash([4,3]);
+  drawArrow(s.x,s.y,s.x+Fnet.x*fScale,s.y+Fnet.y*fScale,P.ember,2,'F='+fMag.toFixed(1)+'N');
+  cx.setLineDash([]);cx.restore();
+}
+
+function drawParticle(p){
+  const s=p2s(p.x,p.y);
+  const alpha=p.life/p.maxLife;
+  cx.save();cx.globalAlpha=alpha;
+  if(p.type==='spark'){
+    cx.fillStyle=P.spark;cx.shadowColor=P.spark;cx.shadowBlur=6;
+    cx.beginPath();cx.arc(s.x,s.y,p.sz*alpha,0,Math.PI*2);cx.fill();
+  }else{
+    cx.fillStyle=P.ironA(0.6);
+    cx.beginPath();cx.arc(s.x,s.y,p.sz*alpha,0,Math.PI*2);cx.fill();
+  }
+  cx.restore();
+}
+
+function drawSketchArrow(a){
+  drawArrow(a.x1,a.y1,a.x2,a.y2,P.sparkA(0.6),2,a.label||'');
+}
+
+/* Cog吉祥物 */
+function drawCog(){
+  cogT+=0.016;
+  const mx=cv.width-60,my=60;
+  const bob=Math.sin(cogT*2)*4;
+  const rot=cogT*0.8;
+  const sparkGlow=cogSparkT>0;
+  cx.save();cx.translate(mx,my+bob);cx.rotate(rot);
+  /* 翅膀 */
+  cx.fillStyle=P.sparkA(sparkGlow?0.8:0.3);
+  cx.beginPath();cx.moveTo(-6,-12);cx.quadraticCurveTo(-20,-22,-8,-6);cx.fill();
+  cx.beginPath();cx.moveTo(6,-12);cx.quadraticCurveTo(20,-22,8,-6);cx.fill();
+  /* 齿轮体 */
+  drawGearShape(0,0,14,6);
+  cx.fillStyle=sparkGlow?P.spark:P.brass;cx.fill();
+  cx.strokeStyle=P.forge;cx.lineWidth=1.5;cx.stroke();
+  /* 中心 */
+  cx.beginPath();cx.arc(0,0,4,0,Math.PI*2);cx.fillStyle=P.iron;cx.fill();
+  cx.restore();
+  /* 火花粒子 */
+  if(sparkGlow){
+    cogSparkT-=0.016;
+    cx.save();cx.globalAlpha=cogSparkT;
+    cx.fillStyle=P.spark;cx.shadowColor=P.spark;cx.shadowBlur=10;
+    for(let i=0;i<5;i++){
+      const a=cogT*5+i*1.2,r=18+Math.sin(cogT*3+i)*6;
+      cx.beginPath();cx.arc(mx+Math.cos(a)*r,my+bob+Math.sin(a)*r,1.5,0,Math.PI*2);cx.fill();
+    }
+    cx.restore();
+  }
+}
+
+function drawScaleBar(){
+  const barLen=ppm*1;/* 1m */
+  const x=20,y=cv.height-25;
+  cx.strokeStyle=P.brassA(0.5);cx.lineWidth=1.5;
+  cx.beginPath();cx.moveTo(x,y);cx.lineTo(x+barLen,y);cx.stroke();
+  cx.beginPath();cx.moveTo(x,y-4);cx.lineTo(x,y+4);cx.stroke();
+  cx.beginPath();cx.moveTo(x+barLen,y-4);cx.lineTo(x+barLen,y+4);cx.stroke();
+  cx.fillStyle=P.brassA(0.6);cx.font='10px "JetBrains Mono"';cx.textAlign='center';
+  cx.fillText('1 m',x+barLen/2,y-6);
+}
+
+/* ===== UI更新 ===== */
+function updateReadouts(){
+  const fA=Math.sqrt(Fapp.x*Fapp.x+Fapp.y*Fapp.y);
+  const fF=Math.sqrt(Ffric.x*Ffric.x+Ffric.y*Ffric.y);
+  const fN=Math.sqrt(Fnet.x*Fnet.x+Fnet.y*Fnet.y);
+  const v=Math.sqrt(obj?obj.vx*obj.vx+obj.vy*obj.vy:0);
+  const a=Math.sqrt(obj?Fnet.x*Fnet.x+Fnet.y*Fnet.y:0)/(obj?obj.mass:1);
+  document.getElementById('rd-fapp').textContent=fA.toFixed(1)+' N';
+  document.getElementById('rd-ffric').textContent=fF.toFixed(1)+' N';
+  document.getElementById('rd-fnet').textContent=fN.toFixed(1)+' N';
+  document.getElementById('rd-v').textContent=v.toFixed(2)+' m/s';
+  document.getElementById('rd-a').textContent=a.toFixed(2)+' m/s²';
+}
+
+function updateSliderLabels(){
+  document.getElementById('mass-val').textContent=parseFloat(document.getElementById('sl-mass').value).toFixed(1)+' kg';
+  document.getElementById('mus-val').textContent=parseFloat(document.getElementById('sl-mus').value).toFixed(2);
+  document.getElementById('muk-val').textContent=parseFloat(document.getElementById('sl-muk').value).toFixed(2);
+}
+
+function updateSceneBtns(){
+  const el=document.getElementById('scene-list');el.innerHTML='';
+  SCENES.forEach((s,i)=>{
+    const btn=document.createElement('button');
+    btn.className='scene-btn glass w-full text-left px-2 py-1 text-[11px] font-mono'+(i===si?' active':'');
+    btn.style.color=i===si?P.spark:P.brass;
+    btn.style.borderColor=i===si?P.sparkA(0.3):P.brassA(0.1);
+    const badge=completed.has(i)?' <span class="badge ml-1"></span>':'';
+    btn.innerHTML=`${i+1}. ${s.name[lang]}${badge}`;
+    btn.onclick=()=>loadScene(i);el.appendChild(btn);
+  });
+}
+
+function updateHUD(){
+  const s=SCENES[si];
+  document.getElementById('hud-title').textContent=s.name[lang];
+  document.getElementById('hud-hint').innerHTML=s.hint[lang];
+  document.getElementById('hud-challenge').innerHTML='🎯 '+s.challenge[lang];
+}
+
+function updateLang(){
+  document.querySelectorAll('[data-zh]').forEach(el=>{
+    el.textContent=el.getAttribute(lang==='zh'?'data-zh':'data-en');
+  });
+  updateSceneBtns();updateHUD();
+  document.getElementById('btn-lang').textContent=lang==='zh'?'EN':'中';
+  /* 更新说明文字 */
+  const instr=document.getElementById('instr-text');
+  if(mode==='apply'){
+    instr.innerHTML=lang==='zh'?'点击物体拖拽施力':'Click & drag object to apply force';
+  }else{
+    instr.innerHTML=lang==='zh'?'点击拖拽画出力的方向标注':'Click & drag to sketch force direction';
+  }
+}
+
+/* ===== 输入处理 ===== */
+function getObjScreenPos(){
+  if(!obj)return null;return p2s(obj.x,obj.y);
+}
+
+function isOnObj(sx,sy){
+  const s=getObjScreenPos();if(!s)return false;
+  const hw=obj.w*ppm/2+15,hh=obj.h*ppm/2+15;
+  return Math.abs(sx-s.x)<hw&&Math.abs(sy-s.y)<hh;
+}
+
+function onDown(sx,sy){
+  mouse={x:sx,y:sy};
+  if(mode==='sketch'){
+    dragging=true;sketchDrag={x1:sx,y1:sy,x2:sx,y2:sy,label:''};return;
+  }
+  if(isOnObj(sx,sy)){
+    dragging=true;dragOrigin={x:sx,y:sy};
+  }
+}
+function onMove(sx,sy){
+  mouse={x:sx,y:sy};
+  if(!dragging)return;
+  if(mode==='sketch'&&sketchDrag){
+    sketchDrag.x2=sx;sketchDrag.y2=sy;return;
+  }
+  if(mode==='apply'&&obj){
+    const dx=sx-dragOrigin.x,dy=sy-dragOrigin.y;
+    const dist=Math.sqrt(dx*dx+dy*dy);
+    const fMag=Math.min(dist*PX_PER_N,MAX_F);
+    if(dist>3){
+      Fapp.x=dx/dist*fMag;Fapp.y=dy/dist*fMag;
+    }else{Fapp.x=0;Fapp.y=0}
+  }
+}
+function onUp(){
+  if(dragging&&mode==='apply'){
+    const fMag=Math.sqrt(Fapp.x*Fapp.x+Fapp.y*Fapp.y);
+    if(fMag>1)addLog(Fapp.x>0?'push':'push');
+    Fapp.x=0;Fapp.y=0;
+  }
+  if(dragging&&mode==='sketch'&&sketchDrag){
+    const dx=sketchDrag.x2-sketchDrag.x1,dy=sketchDrag.y2-sketchDrag.y1;
+    const dist=Math.sqrt(dx*dx+dy*dy);
+    if(dist>15){
+      const ang=Math.round(Math.atan2(dy,dx)*180/Math.PI);
+      sketchDrag.label=ang+'°';
+      sketchArrows.push({...sketchDrag});
+    }
+    sketchDrag=null;
+  }
+  dragging=false;
+}
+
+cv.addEventListener('mousedown',e=>{const r=cv.getBoundingClientRect();onDown(e.clientX-r.left,e.clientY-r.top)});
+cv.addEventListener('mousemove',e=>{const r=cv.getBoundingClientRect();onMove(e.clientX-r.left,e.clientY-r.top)});
+cv.addEventListener('mouseup',()=>onUp());
+cv.addEventListener('mouseleave',()=>{if(dragging)onUp()});
+cv.addEventListener('touchstart',e=>{e.preventDefault();const t=e.touches[0],r=cv.getBoundingClientRect();onDown(t.clientX-r.left,t.clientY-r.top)},{passive:false});
+cv.addEventListener('touchmove',e=>{e.preventDefault();const t=e.touches[0],r=cv.getBoundingClientRect();onMove(t.clientX-r.left,t.clientY-r.top)},{passive:false});
+cv.addEventListener('touchend',e=>{e.preventDefault();onUp()},{passive:false});
+
+/* 滑块事件 */
+document.getElementById('sl-mass').addEventListener('input',function(){
+  if(obj){obj.mass=parseFloat(this.value);updateSliderLabels()}
+});
+document.getElementById('sl-mus').addEventListener('input',function(){
+  if(obj){obj.muS=parseFloat(this.value);updateSliderLabels()}
+});
+document.getElementById('sl-muk').addEventListener('input',function(){
+  if(obj){obj.muK=parseFloat(this.value);updateSliderLabels()}
+});
+
+/* 按钮 */
+document.getElementById('btn-reset').addEventListener('click',()=>loadScene(si));
+document.getElementById('btn-clear-sketch').addEventListener('click',()=>{sketchArrows=[]});
+document.getElementById('btn-lang').addEventListener('click',()=>{lang=lang==='zh'?'en':'zh';updateLang()});
+document.getElementById('mode-apply').addEventListener('click',function(){
+  mode='apply';this.classList.add('active');document.getElementById('mode-sketch').classList.remove('active');
+  cv.style.cursor='crosshair';updateLang();
+});
+document.getElementById('mode-sketch').addEventListener('click',function(){
+  mode='sketch';this.classList.add('active');document.getElementById('mode-apply').classList.remove('active');
+  cv.style.cursor='default';updateLang();
+});
+
+/* ===== 主循环 ===== */
+function loop(ts){
+  const dt=Math.min((ts-lastTS)/1000,0.033);lastTS=ts;
+  if(mode==='apply')physics(dt);
+  draw();
+  requestAnimationFrame(loop);
+}
+
+/* ===== 启动 ===== */
+loadScene(0);updateLang();
+requestAnimationFrame(ts=>{lastTS=ts;loop(ts)});
+</script>
+</body>
+</html>

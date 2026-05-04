@@ -1,0 +1,789 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=Noto+Sans+SC:wght@400;700&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box;}
+html,body{width:100%;height:100vh;overflow:hidden;background:#0c0e14;color:#f6f6fc;font-family:'Noto Sans SC','Inter',sans-serif;}
+.game-wrap{display:flex;flex-direction:column;height:100vh;}
+.game-header{padding:10px 16px;display:flex;justify-content:space-between;align-items:center;background:rgba(0,0,0,0.4);}
+.game-header h1{font-family:'Space Grotesk',sans-serif;font-size:clamp(13px,2vw,17px);font-weight:700;color:#50ffb0;}
+.game-header .info{font-family:'Space Grotesk',sans-serif;font-size:12px;color:#aaabb0;}
+.game-body{flex:1;display:flex;flex-direction:column;min-height:0;}
+canvas{width:100%;height:100%;display:block;}
+.control-panel{display:flex;justify-content:center;align-items:center;gap:10px;padding:8px 16px;background:rgba(0,0,0,0.4);}
+.ctrl-btn{font-family:'Space Grotesk',sans-serif;font-size:12px;font-weight:700;padding:6px 16px;border:none;cursor:pointer;color:#0c0e12;background:linear-gradient(135deg,#50ffb0,#17df93);box-shadow:0 0 10px rgba(80,255,176,0.3);}
+.ctrl-btn:hover{transform:scale(1.04);}
+.ctrl-btn.secondary{background:rgba(30,30,45,0.9);color:#aaabb0;box-shadow:none;}
+.hud-bar{height:44px;display:flex;align-items:center;justify-content:space-around;background:rgba(0,0,0,0.55);padding:0 16px;}
+.hud-item{text-align:center;}
+.hud-label{font-family:'Space Grotesk',sans-serif;font-size:9px;letter-spacing:0.12em;color:#aaabb0;text-transform:uppercase;}
+.hud-val{font-family:'Space Grotesk',sans-serif;font-size:14px;font-weight:700;color:#50ffb0;}
+.lang-btn{position:fixed;top:8px;right:8px;z-index:200;font-family:'Space Grotesk',sans-serif;font-size:11px;font-weight:700;padding:4px 10px;cursor:pointer;border:1px solid rgba(255,181,156,0.3);background:transparent;color:#ffb59c;}
+</style>
+</head>
+<body>
+<button class="lang-btn" id="langBtn">CN</button>
+<div class="game-wrap">
+  <div class="game-header">
+    <h1 id="gameTitle"></h1>
+    <div class="info" id="levelInfo"></div>
+  </div>
+  <div class="game-body">
+    <canvas id="c"></canvas>
+  </div>
+  <div class="control-panel">
+    <button class="ctrl-btn" id="btnAction"></button>
+    <button class="ctrl-btn secondary" id="btnReset"></button>
+  </div>
+  <div class="hud-bar">
+    <div class="hud-item"><div class="hud-label" id="hudL1"></div><div class="hud-val" id="hudV1">--</div></div>
+    <div class="hud-item"><div class="hud-label" id="hudL2"></div><div class="hud-val" id="hudV2">--</div></div>
+    <div class="hud-item"><div class="hud-label" id="hudL3"></div><div class="hud-val" id="hudV3">--</div></div>
+    <div class="hud-item"><div class="hud-label" id="hudL4"></div><div class="hud-val" id="hudV4">--</div></div>
+  </div>
+</div>
+
+<script>
+// ============================================================
+// Knode 15 Game: Flight Data Logger
+// Two paper airplanes (A and B) fly across the screen. The student
+// must: (1) click to mark landing spots, (2) stop the timer,
+// (3) record distance+time data for each flight. After 5 flights
+// per plane (10 total), they must judge which is better.
+// This teaches measurement, data recording, and evidence-based
+// comparison -- the core_question: "How do you prove one plane
+// flies farther than another?"
+// ============================================================
+
+var I18N = {
+  title:      {en:'FLIGHT DATA LOGGER', cn:'\u98de\u884c\u6570\u636e\u8bb0\u5f55\u5458'},
+  launch:     {en:'LAUNCH!', cn:'\u53d1\u5c04\uff01'},
+  mark:       {en:'MARK LANDING!', cn:'\u6807\u8bb0\u843d\u70b9\uff01'},
+  reset:      {en:'RESTART', cn:'\u91cd\u65b0\u5f00\u59cb'},
+  trial:      {en:'Trial', cn:'\u7b2c'},
+  trialSuffix:{en:'', cn:'\u6b21'},
+  plane:      {en:'Plane', cn:'\u98de\u673a'},
+  distance:   {en:'DISTANCE', cn:'\u8ddd\u79bb'},
+  flightTime: {en:'TIME', cn:'\u65f6\u95f4'},
+  accuracy:   {en:'ACCURACY', cn:'\u7cbe\u5ea6'},
+  score:      {en:'SCORE', cn:'\u5f97\u5206'},
+  flying:     {en:'Flying...', cn:'\u98de\u884c\u4e2d...'},
+  landed:     {en:'Click to mark landing!', cn:'\u70b9\u51fb\u6807\u8bb0\u843d\u70b9\uff01'},
+  recorded:   {en:'Recorded!', cn:'\u5df2\u8bb0\u5f55\uff01'},
+  ready:      {en:'Press Launch', cn:'\u6309\u201c\u53d1\u5c04\u201d'},
+  waiting:    {en:'Watch the plane...', cn:'\u89c2\u5bdf\u98de\u673a...'},
+  goodMark:   {en:'Accurate!', cn:'\u51c6\u786e\uff01'},
+  okMark:     {en:'Close enough', cn:'\u5dee\u4e0d\u591a'},
+  badMark:    {en:'Off target!', cn:'\u504f\u4e86\uff01'},
+  phaseA:     {en:'TESTING PLANE A', cn:'\u6d4b\u8bd5\u98de\u673aA'},
+  phaseB:     {en:'TESTING PLANE B', cn:'\u6d4b\u8bd5\u98de\u673aB'},
+  complete:   {en:'ALL FLIGHTS COMPLETE!', cn:'\u5168\u90e8\u98de\u884c\u5b8c\u6210\uff01'},
+  analysis:   {en:'DATA ANALYSIS', cn:'\u6570\u636e\u5206\u6790'},
+  avgDist:    {en:'Avg Distance', cn:'\u5e73\u5747\u8ddd\u79bb'},
+  avgTime:    {en:'Avg Time', cn:'\u5e73\u5747\u65f6\u95f4'},
+  verdict:    {en:'Plane {x} is the better flyer!', cn:'\u98de\u673a{x}\u98de\u5f97\u66f4\u597d\uff01'},
+  tie:        {en:'Very close - more data needed!', cn:'\u975e\u5e38\u63a5\u8fd1\u2014\u2014\u9700\u8981\u66f4\u591a\u6570\u636e\uff01'},
+  insightLine:{en:'Data tells the truth - not just feelings!', cn:'\u6570\u636e\u8bf4\u4e86\u7b97\u2014\u2014\u4e0d\u80fd\u53ea\u51ed\u611f\u89c9\uff01'},
+  mLabel:     {en:'m', cn:'\u7c73'},
+  sLabel:     {en:'s', cn:'\u79d2'},
+  dataTable:  {en:'YOUR DATA', cn:'\u4f60\u7684\u6570\u636e'},
+};
+
+var lang = 'cn';
+function t(key) { return I18N[key] ? (I18N[key][lang] || I18N[key].en) : key; }
+
+var $ = function(id) { return document.getElementById(id); };
+var langBtn = $('langBtn');
+langBtn.onclick = function() {
+  lang = lang === 'cn' ? 'en' : 'cn';
+  langBtn.textContent = lang === 'cn' ? 'CN' : 'EN';
+  refreshUI();
+};
+
+var canvas = $('c');
+var ctx = canvas.getContext('2d');
+
+// ---------- Sizing (responsive, no hardcoded upper limit) ----------
+var W, H;
+function resize() {
+  var body = canvas.parentElement;
+  var dpr = window.devicePixelRatio || 1;
+  W = body.clientWidth;
+  H = body.clientHeight;
+  canvas.width = W * dpr;
+  canvas.height = H * dpr;
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+}
+window.addEventListener('resize', resize);
+resize();
+
+// ---------- Game constants ----------
+var TRIALS_PER_PLANE = 5;
+var TOTAL_TRIALS = TRIALS_PER_PLANE * 2;
+
+// Plane A: dart (fast, consistent, ~6-8m range)
+// Plane B: glider (slower, variable, ~4-7m range)
+var PLANE_A = {
+  label: 'A',
+  color: '#ff6b6b',
+  baseSpeed: 6.5,   // m/s base
+  baseDist: 7.0,    // meters mean
+  distVar: 0.8,     // meters std
+  baseTime: 1.6,    // seconds mean
+  timeVar: 0.15
+};
+var PLANE_B = {
+  label: 'B',
+  color: '#4ecdc4',
+  baseSpeed: 4.2,
+  baseDist: 5.5,
+  distVar: 1.2,
+  baseTime: 2.1,
+  timeVar: 0.25
+};
+
+// ---------- State ----------
+var STATE_READY = 0, STATE_FLYING = 1, STATE_LANDED = 2, STATE_RECORDED = 3;
+var gameState = STATE_READY;
+var currentTrial = 0;  // 0-9 (0-4 = plane A, 5-9 = plane B)
+var dataLog = [];  // [{plane, trial, actualDist, actualTime, markedDist, markedTime, distError, timeError}]
+var planeX, planeY, planeVx, planeVy;
+var flightStartTime, flightEndTime, actualLandX;
+var markedLandX;
+var trueDistMeters, trueTimeSec;
+var markedDistMeters, markedTimeSec;
+var markAccuracy;
+var totalScore = 0;
+var animFrame;
+var showingSummary = false;
+
+// Precompute actual flight outcomes for each trial (so physics is deterministic)
+var flights = [];
+function generateFlights() {
+  flights = [];
+  for (var i = 0; i < TOTAL_TRIALS; i++) {
+    var plane = i < TRIALS_PER_PLANE ? PLANE_A : PLANE_B;
+    var dist = plane.baseDist + (Math.random() * 2 - 1) * plane.distVar;
+    var time = plane.baseTime + (Math.random() * 2 - 1) * plane.timeVar;
+    dist = Math.max(2, dist);
+    time = Math.max(0.8, time);
+    flights.push({dist: dist, time: time, plane: plane});
+  }
+}
+generateFlights();
+
+// ---------- Coordinate system ----------
+// The "field" is 0-10 meters shown left to right
+var FIELD_MAX_M = 10;
+var LAUNCH_X_FRAC = 0.08;  // launch point at 8% from left
+var FIELD_RIGHT_FRAC = 0.92;  // field ends at 92%
+
+function metersToPixelX(m) {
+  var fieldPxLeft = W * LAUNCH_X_FRAC;
+  var fieldPxRight = W * FIELD_RIGHT_FRAC;
+  return fieldPxLeft + (m / FIELD_MAX_M) * (fieldPxRight - fieldPxLeft);
+}
+
+function pixelXToMeters(px) {
+  var fieldPxLeft = W * LAUNCH_X_FRAC;
+  var fieldPxRight = W * FIELD_RIGHT_FRAC;
+  return ((px - fieldPxLeft) / (fieldPxRight - fieldPxLeft)) * FIELD_MAX_M;
+}
+
+// ---------- Drawing ----------
+function drawBg() {
+  // Sky gradient
+  var grad = ctx.createLinearGradient(0, 0, 0, H);
+  grad.addColorStop(0, '#0c0e14');
+  grad.addColorStop(0.5, '#141830');
+  grad.addColorStop(1, '#1a2840');
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, W, H);
+
+  // Ground
+  var groundY = H * 0.72;
+  ctx.fillStyle = '#1e3a28';
+  ctx.fillRect(0, groundY, W, H - groundY);
+
+  // Grass line
+  ctx.strokeStyle = '#2e6a3e';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(0, groundY);
+  ctx.lineTo(W, groundY);
+  ctx.stroke();
+
+  // Ruler / tape measure on ground
+  var launchPx = W * LAUNCH_X_FRAC;
+  var endPx = W * FIELD_RIGHT_FRAC;
+  var rulerY = groundY + 20;
+
+  ctx.strokeStyle = '#ffcc44';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(launchPx, rulerY);
+  ctx.lineTo(endPx, rulerY);
+  ctx.stroke();
+
+  // Meter marks
+  ctx.font = Math.max(9, W * 0.012) + 'px Space Grotesk';
+  ctx.fillStyle = '#ffcc44';
+  ctx.textAlign = 'center';
+  for (var m = 0; m <= FIELD_MAX_M; m++) {
+    var mx = metersToPixelX(m);
+    var tickH = m % 5 === 0 ? 10 : 5;
+    ctx.beginPath();
+    ctx.moveTo(mx, rulerY - tickH);
+    ctx.lineTo(mx, rulerY + tickH);
+    ctx.stroke();
+    if (m % 2 === 0) {
+      ctx.fillText(m + t('mLabel'), mx, rulerY + tickH + 12);
+    }
+  }
+
+  // Launch position marker
+  ctx.fillStyle = '#50ffb0';
+  ctx.beginPath();
+  ctx.moveTo(launchPx, groundY);
+  ctx.lineTo(launchPx - 6, groundY - 14);
+  ctx.lineTo(launchPx + 6, groundY - 14);
+  ctx.closePath();
+  ctx.fill();
+}
+
+function drawPlane(px, py, planeObj, scale) {
+  scale = scale || 1;
+  var s = Math.max(12, W * 0.025) * scale;
+  ctx.save();
+  ctx.translate(px, py);
+
+  if (planeObj === PLANE_A) {
+    // Dart shape - narrow, pointed
+    ctx.fillStyle = planeObj.color;
+    ctx.beginPath();
+    ctx.moveTo(s, 0);
+    ctx.lineTo(-s * 0.6, -s * 0.35);
+    ctx.lineTo(-s * 0.3, 0);
+    ctx.lineTo(-s * 0.6, s * 0.35);
+    ctx.closePath();
+    ctx.fill();
+    ctx.strokeStyle = '#ff8888';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+  } else {
+    // Glider shape - wider wings
+    ctx.fillStyle = planeObj.color;
+    ctx.beginPath();
+    ctx.moveTo(s * 0.8, 0);
+    ctx.lineTo(-s * 0.3, -s * 0.6);
+    ctx.lineTo(-s * 0.7, -s * 0.5);
+    ctx.lineTo(-s * 0.4, 0);
+    ctx.lineTo(-s * 0.7, s * 0.5);
+    ctx.lineTo(-s * 0.3, s * 0.6);
+    ctx.closePath();
+    ctx.fill();
+    ctx.strokeStyle = '#6ee8dc';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+  }
+
+  ctx.restore();
+}
+
+function drawTimer(elapsed) {
+  // Stopwatch display in upper-left area
+  var sx = W * 0.12;
+  var sy = H * 0.08;
+  var r = Math.max(20, W * 0.035);
+
+  // Watch circle
+  ctx.strokeStyle = '#aaabb0';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.arc(sx, sy, r, 0, Math.PI * 2);
+  ctx.stroke();
+
+  // Time text
+  ctx.font = 'bold ' + Math.max(11, r * 0.6) + 'px Space Grotesk';
+  ctx.fillStyle = '#50ffb0';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(elapsed.toFixed(2) + t('sLabel'), sx, sy);
+
+  // Sweep hand
+  var angle = -Math.PI / 2 + (elapsed % 5) / 5 * Math.PI * 2;
+  ctx.strokeStyle = '#ff6b6b';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(sx, sy);
+  ctx.lineTo(sx + Math.cos(angle) * r * 0.8, sy + Math.sin(angle) * r * 0.8);
+  ctx.stroke();
+}
+
+function drawDataTable() {
+  if (dataLog.length === 0) return;
+
+  var tableX = W * 0.6;
+  var tableY = H * 0.06;
+  var rowH = Math.max(14, H * 0.028);
+  var colW = Math.max(55, W * 0.08);
+  var fontSize = Math.max(9, W * 0.011);
+
+  // Table header
+  ctx.font = 'bold ' + fontSize + 'px Space Grotesk';
+  ctx.fillStyle = 'rgba(0,0,0,0.6)';
+  var totalW = colW * 3.5;
+  var headerH = rowH * 1.2;
+  ctx.fillRect(tableX, tableY, totalW, headerH);
+
+  ctx.fillStyle = '#50ffb0';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(t('dataTable'), tableX + totalW / 2, tableY + headerH / 2);
+
+  // Column headers
+  var hdrY = tableY + headerH;
+  ctx.fillStyle = 'rgba(0,0,0,0.5)';
+  ctx.fillRect(tableX, hdrY, totalW, rowH);
+  ctx.fillStyle = '#aaabb0';
+  ctx.font = fontSize + 'px Space Grotesk';
+  ctx.fillText('#', tableX + colW * 0.3, hdrY + rowH / 2);
+  ctx.fillText(t('plane') + ' / ' + t('trial'), tableX + colW * 1.1, hdrY + rowH / 2);
+  ctx.fillText(t('mLabel'), tableX + colW * 2.1, hdrY + rowH / 2);
+  ctx.fillText(t('sLabel'), tableX + colW * 3.0, hdrY + rowH / 2);
+
+  // Data rows (show last visible rows that fit)
+  var maxRows = Math.min(dataLog.length, Math.floor((H * 0.55) / rowH));
+  var startRow = Math.max(0, dataLog.length - maxRows);
+
+  for (var i = startRow; i < dataLog.length; i++) {
+    var d = dataLog[i];
+    var ry = hdrY + rowH + (i - startRow) * rowH;
+    ctx.fillStyle = i % 2 === 0 ? 'rgba(0,0,0,0.3)' : 'rgba(0,0,0,0.2)';
+    ctx.fillRect(tableX, ry, totalW, rowH);
+
+    ctx.fillStyle = d.plane.color;
+    ctx.font = fontSize + 'px Space Grotesk';
+    ctx.fillText(String(i + 1), tableX + colW * 0.3, ry + rowH / 2);
+    ctx.fillText(d.plane.label + '-' + d.trial, tableX + colW * 1.1, ry + rowH / 2);
+    ctx.fillStyle = '#f6f6fc';
+    ctx.fillText(d.markedDist.toFixed(1), tableX + colW * 2.1, ry + rowH / 2);
+    ctx.fillText(d.markedTime.toFixed(2), tableX + colW * 3.0, ry + rowH / 2);
+  }
+}
+
+function drawLandingMarker() {
+  if (markedLandX === undefined) return;
+  var groundY = H * 0.72;
+
+  // Marked position (student's click)
+  ctx.strokeStyle = '#ffcc44';
+  ctx.lineWidth = 2;
+  ctx.setLineDash([4, 4]);
+  ctx.beginPath();
+  ctx.moveTo(markedLandX, groundY - 30);
+  ctx.lineTo(markedLandX, groundY + 10);
+  ctx.stroke();
+  ctx.setLineDash([]);
+
+  // Actual position (revealed after marking)
+  if (gameState >= STATE_RECORDED) {
+    ctx.strokeStyle = '#50ffb0';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(actualLandX, groundY - 30);
+    ctx.lineTo(actualLandX, groundY + 10);
+    ctx.stroke();
+
+    // Accuracy label
+    var midX = (markedLandX + actualLandX) / 2;
+    var fontSize = Math.max(10, W * 0.013);
+    ctx.font = 'bold ' + fontSize + 'px Space Grotesk';
+    ctx.textAlign = 'center';
+    var errM = Math.abs(markedDistMeters - trueDistMeters);
+    if (errM < 0.3) {
+      ctx.fillStyle = '#50ffb0';
+      ctx.fillText(t('goodMark'), midX, groundY - 35);
+    } else if (errM < 0.8) {
+      ctx.fillStyle = '#ffcc44';
+      ctx.fillText(t('okMark'), midX, groundY - 35);
+    } else {
+      ctx.fillStyle = '#ff6b6b';
+      ctx.fillText(t('badMark'), midX, groundY - 35);
+    }
+  }
+}
+
+function drawSummary() {
+  // Semi-transparent overlay
+  ctx.fillStyle = 'rgba(12, 14, 20, 0.92)';
+  ctx.fillRect(0, 0, W, H);
+
+  var cx = W / 2;
+  var topY = H * 0.06;
+  var fontSize = Math.max(14, W * 0.022);
+  var smallFont = Math.max(10, W * 0.014);
+
+  // Title
+  ctx.font = 'bold ' + (fontSize * 1.4) + 'px Space Grotesk';
+  ctx.fillStyle = '#50ffb0';
+  ctx.textAlign = 'center';
+  ctx.fillText(t('analysis'), cx, topY);
+
+  // Compute averages
+  var aData = dataLog.filter(function(d) { return d.plane === PLANE_A; });
+  var bData = dataLog.filter(function(d) { return d.plane === PLANE_B; });
+
+  function avg(arr, key) {
+    var sum = 0;
+    for (var i = 0; i < arr.length; i++) sum += arr[i][key];
+    return arr.length > 0 ? sum / arr.length : 0;
+  }
+
+  var aAvgDist = avg(aData, 'markedDist');
+  var bAvgDist = avg(bData, 'markedDist');
+  var aAvgTime = avg(aData, 'markedTime');
+  var bAvgTime = avg(bData, 'markedTime');
+
+  // Bar chart: distance comparison
+  var chartY = topY + fontSize * 2;
+  var chartH = H * 0.22;
+  var barW = W * 0.12;
+  var maxDist = Math.max(aAvgDist, bAvgDist, 1) * 1.2;
+
+  // Distance bars
+  ctx.font = 'bold ' + smallFont + 'px Space Grotesk';
+  ctx.fillStyle = '#aaabb0';
+  ctx.fillText(t('avgDist'), cx, chartY);
+
+  var barAx = cx - barW * 1.5;
+  var barBx = cx + barW * 0.5;
+  var barBaseY = chartY + chartH;
+
+  // Bar A
+  var barAH = (aAvgDist / maxDist) * (chartH * 0.8);
+  ctx.fillStyle = PLANE_A.color;
+  ctx.fillRect(barAx, barBaseY - barAH, barW, barAH);
+  ctx.fillStyle = '#f6f6fc';
+  ctx.fillText('A: ' + aAvgDist.toFixed(1) + t('mLabel'), barAx + barW / 2, barBaseY - barAH - 8);
+
+  // Bar B
+  var barBH = (bAvgDist / maxDist) * (chartH * 0.8);
+  ctx.fillStyle = PLANE_B.color;
+  ctx.fillRect(barBx, barBaseY - barBH, barW, barBH);
+  ctx.fillStyle = '#f6f6fc';
+  ctx.fillText('B: ' + bAvgDist.toFixed(1) + t('mLabel'), barBx + barW / 2, barBaseY - barBH - 8);
+
+  // Time bars
+  var chart2Y = barBaseY + fontSize * 2.5;
+  var chart2H = H * 0.18;
+  var maxTime = Math.max(aAvgTime, bAvgTime, 0.5) * 1.2;
+
+  ctx.fillStyle = '#aaabb0';
+  ctx.fillText(t('avgTime'), cx, chart2Y);
+
+  var bar2BaseY = chart2Y + chart2H;
+
+  var bar2AH = (aAvgTime / maxTime) * (chart2H * 0.8);
+  ctx.fillStyle = PLANE_A.color;
+  ctx.fillRect(barAx, bar2BaseY - bar2AH, barW, bar2AH);
+  ctx.fillStyle = '#f6f6fc';
+  ctx.fillText('A: ' + aAvgTime.toFixed(2) + t('sLabel'), barAx + barW / 2, bar2BaseY - bar2AH - 8);
+
+  var bar2BH = (bAvgTime / maxTime) * (chart2H * 0.8);
+  ctx.fillStyle = PLANE_B.color;
+  ctx.fillRect(barBx, bar2BaseY - bar2BH, barW, bar2BH);
+  ctx.fillStyle = '#f6f6fc';
+  ctx.fillText('B: ' + bAvgTime.toFixed(2) + t('sLabel'), barBx + barW / 2, bar2BaseY - bar2BH - 8);
+
+  // Verdict
+  var verdictY = bar2BaseY + fontSize * 3;
+  ctx.font = 'bold ' + (fontSize * 1.2) + 'px Space Grotesk';
+  var diff = Math.abs(aAvgDist - bAvgDist);
+  if (diff < 0.3) {
+    ctx.fillStyle = '#ffcc44';
+    ctx.fillText(t('tie'), cx, verdictY);
+  } else {
+    var better = aAvgDist > bAvgDist ? 'A' : 'B';
+    ctx.fillStyle = '#50ffb0';
+    ctx.fillText(t('verdict').replace('{x}', better), cx, verdictY);
+  }
+
+  // Insight
+  ctx.font = smallFont + 'px Noto Sans SC';
+  ctx.fillStyle = '#aaabb0';
+  ctx.fillText(t('insightLine'), cx, verdictY + fontSize * 2);
+
+  // Score
+  ctx.font = 'bold ' + fontSize + 'px Space Grotesk';
+  ctx.fillStyle = '#50ffb0';
+  ctx.fillText(t('score') + ': ' + totalScore, cx, verdictY + fontSize * 4);
+
+  // Full data table on the left side
+  var tblX = W * 0.04;
+  var tblY = topY + fontSize * 2;
+  var tblRowH = Math.max(13, H * 0.025);
+  var tblFontSize = Math.max(8, W * 0.01);
+  var tblColW = Math.max(40, W * 0.055);
+
+  ctx.font = 'bold ' + tblFontSize + 'px Space Grotesk';
+  ctx.textAlign = 'center';
+
+  // Header
+  ctx.fillStyle = 'rgba(80,255,176,0.15)';
+  ctx.fillRect(tblX, tblY, tblColW * 4, tblRowH);
+  ctx.fillStyle = '#50ffb0';
+  ctx.fillText('#', tblX + tblColW * 0.5, tblY + tblRowH / 2);
+  ctx.fillText(t('plane'), tblX + tblColW * 1.3, tblY + tblRowH / 2);
+  ctx.fillText(t('mLabel'), tblX + tblColW * 2.3, tblY + tblRowH / 2);
+  ctx.fillText(t('sLabel'), tblX + tblColW * 3.3, tblY + tblRowH / 2);
+
+  ctx.font = tblFontSize + 'px Space Grotesk';
+  for (var i = 0; i < dataLog.length; i++) {
+    var d = dataLog[i];
+    var ry = tblY + tblRowH * (i + 1);
+    ctx.fillStyle = i % 2 === 0 ? 'rgba(255,255,255,0.04)' : 'rgba(255,255,255,0.02)';
+    ctx.fillRect(tblX, ry, tblColW * 4, tblRowH);
+
+    ctx.fillStyle = d.plane.color;
+    ctx.fillText(String(i + 1), tblX + tblColW * 0.5, ry + tblRowH / 2);
+    ctx.fillText(d.plane.label + '-' + d.trial, tblX + tblColW * 1.3, ry + tblRowH / 2);
+    ctx.fillStyle = '#f6f6fc';
+    ctx.fillText(d.markedDist.toFixed(1), tblX + tblColW * 2.3, ry + tblRowH / 2);
+    ctx.fillText(d.markedTime.toFixed(2), tblX + tblColW * 3.3, ry + tblRowH / 2);
+  }
+}
+
+// ---------- Flight animation ----------
+var flightT0, flightDuration, flightDist;
+var groundY;
+
+function getCurrentPlane() {
+  return currentTrial < TRIALS_PER_PLANE ? PLANE_A : PLANE_B;
+}
+
+function launchFlight() {
+  var flight = flights[currentTrial];
+  flightDist = flight.dist;
+  flightDuration = flight.time;
+  groundY = H * 0.72;
+
+  var launchPx = W * LAUNCH_X_FRAC;
+  planeX = launchPx;
+  planeY = groundY - H * 0.15;  // launch height
+  actualLandX = metersToPixelX(flightDist);
+
+  flightT0 = performance.now();
+  gameState = STATE_FLYING;
+  markedLandX = undefined;
+  trueDistMeters = flightDist;
+  trueTimeSec = flightDuration;
+
+  refreshUI();
+}
+
+function animateFlight() {
+  resize();
+  drawBg();
+
+  var plane = getCurrentPlane();
+  var phaseLabel = currentTrial < TRIALS_PER_PLANE ? t('phaseA') : t('phaseB');
+
+  // Phase label
+  ctx.font = 'bold ' + Math.max(11, W * 0.014) + 'px Space Grotesk';
+  ctx.fillStyle = plane.color;
+  ctx.textAlign = 'left';
+  ctx.fillText(phaseLabel, W * 0.03, H * 0.96);
+
+  if (gameState === STATE_FLYING) {
+    var elapsed = (performance.now() - flightT0) / 1000;
+    var progress = Math.min(elapsed / flightDuration, 1);
+
+    // Parabolic trajectory
+    var launchPx = W * LAUNCH_X_FRAC;
+    planeX = launchPx + (actualLandX - launchPx) * progress;
+    var arcPeak = H * 0.25;
+    planeY = groundY - H * 0.15 - Math.sin(progress * Math.PI) * arcPeak + progress * H * 0.15;
+
+    drawPlane(planeX, planeY, plane);
+    drawTimer(elapsed);
+
+    if (progress >= 1) {
+      planeX = actualLandX;
+      planeY = groundY - 5;
+      flightEndTime = elapsed;
+      gameState = STATE_LANDED;
+      refreshUI();
+    }
+  } else if (gameState === STATE_LANDED) {
+    // Plane on ground, waiting for mark
+    drawPlane(actualLandX, groundY - 5, plane, 0.8);
+    drawTimer(flightEndTime);
+
+    // Blinking "click to mark" instruction
+    if (Math.floor(performance.now() / 500) % 2 === 0) {
+      ctx.font = 'bold ' + Math.max(12, W * 0.016) + 'px Noto Sans SC';
+      ctx.fillStyle = '#ffcc44';
+      ctx.textAlign = 'center';
+      ctx.fillText(t('landed'), W / 2, H * 0.5);
+    }
+  } else if (gameState === STATE_RECORDED) {
+    // Show both marked and actual positions
+    drawPlane(actualLandX, groundY - 5, plane, 0.8);
+    drawLandingMarker();
+    drawTimer(markedTimeSec);
+  } else if (gameState === STATE_READY) {
+    // Show launch position
+    var launchPx = W * LAUNCH_X_FRAC;
+    drawPlane(launchPx, groundY - H * 0.15, plane);
+
+    ctx.font = 'bold ' + Math.max(12, W * 0.016) + 'px Noto Sans SC';
+    ctx.fillStyle = '#aaabb0';
+    ctx.textAlign = 'center';
+    ctx.fillText(t('ready'), W / 2, H * 0.45);
+  }
+
+  drawDataTable();
+
+  if (showingSummary) {
+    drawSummary();
+  }
+
+  animFrame = requestAnimationFrame(animateFlight);
+}
+
+// ---------- Interaction ----------
+canvas.addEventListener('click', function(e) {
+  if (gameState !== STATE_LANDED || showingSummary) return;
+
+  var rect = canvas.getBoundingClientRect();
+  var dpr = window.devicePixelRatio || 1;
+  var clickX = (e.clientX - rect.left);
+
+  markedLandX = clickX;
+  markedDistMeters = pixelXToMeters(clickX);
+  markedDistMeters = Math.max(0, Math.round(markedDistMeters * 10) / 10);
+
+  // Time: add noise based on reaction (player clicked some time after landing)
+  var reactionDelay = (performance.now() - flightT0) / 1000 - flightEndTime;
+  markedTimeSec = flightEndTime + reactionDelay * 0.3;  // partially count reaction
+  markedTimeSec = Math.round(markedTimeSec * 100) / 100;
+
+  // Calculate accuracy
+  var distErr = Math.abs(markedDistMeters - trueDistMeters);
+  var timeErr = Math.abs(markedTimeSec - trueTimeSec);
+
+  var points = 0;
+  if (distErr < 0.3) points += 15;
+  else if (distErr < 0.8) points += 8;
+  else points += 2;
+
+  totalScore += points;
+  markAccuracy = distErr;
+
+  var trialNum = currentTrial < TRIALS_PER_PLANE
+    ? currentTrial + 1
+    : currentTrial - TRIALS_PER_PLANE + 1;
+
+  dataLog.push({
+    plane: getCurrentPlane(),
+    trial: trialNum,
+    actualDist: trueDistMeters,
+    actualTime: trueTimeSec,
+    markedDist: markedDistMeters,
+    markedTime: markedTimeSec,
+    distError: distErr,
+    timeError: timeErr
+  });
+
+  gameState = STATE_RECORDED;
+  refreshUI();
+
+  // Auto advance to next trial after delay
+  setTimeout(function() {
+    currentTrial++;
+    if (currentTrial >= TOTAL_TRIALS) {
+      showingSummary = true;
+    } else {
+      gameState = STATE_READY;
+    }
+    refreshUI();
+  }, 1800);
+});
+
+// ---------- UI updates ----------
+function refreshUI() {
+  $('gameTitle').textContent = t('title');
+  var trialInPhase = currentTrial < TRIALS_PER_PLANE
+    ? currentTrial + 1
+    : currentTrial - TRIALS_PER_PLANE + 1;
+  var planeLabel = currentTrial < TRIALS_PER_PLANE ? 'A' : 'B';
+  if (!showingSummary && currentTrial < TOTAL_TRIALS) {
+    $('levelInfo').textContent = t('plane') + ' ' + planeLabel + ' | '
+      + t('trial') + ' ' + trialInPhase + '/' + TRIALS_PER_PLANE;
+  } else {
+    $('levelInfo').textContent = t('complete');
+  }
+
+  $('hudL1').textContent = t('distance');
+  $('hudL2').textContent = t('flightTime');
+  $('hudL3').textContent = t('accuracy');
+  $('hudL4').textContent = t('score');
+
+  if (gameState === STATE_RECORDED && dataLog.length > 0) {
+    var last = dataLog[dataLog.length - 1];
+    $('hudV1').textContent = last.markedDist.toFixed(1) + t('mLabel');
+    $('hudV2').textContent = last.markedTime.toFixed(2) + t('sLabel');
+    var err = last.distError;
+    $('hudV3').textContent = err < 0.3 ? t('goodMark') : err < 0.8 ? t('okMark') : t('badMark');
+    $('hudV3').style.color = err < 0.3 ? '#50ffb0' : err < 0.8 ? '#ffcc44' : '#ff6b6b';
+  } else if (gameState === STATE_FLYING) {
+    $('hudV1').textContent = '...';
+    $('hudV2').textContent = '...';
+    $('hudV3').textContent = '--';
+  } else {
+    $('hudV1').textContent = '--';
+    $('hudV2').textContent = '--';
+    $('hudV3').textContent = '--';
+  }
+  $('hudV4').textContent = String(totalScore);
+
+  if (showingSummary || currentTrial >= TOTAL_TRIALS) {
+    $('btnAction').textContent = t('reset');
+    $('btnAction').onclick = resetGame;
+  } else if (gameState === STATE_READY) {
+    $('btnAction').textContent = t('launch');
+    $('btnAction').onclick = launchFlight;
+  } else if (gameState === STATE_LANDED) {
+    $('btnAction').textContent = t('mark');
+    $('btnAction').disabled = true;
+  } else {
+    $('btnAction').textContent = t('waiting');
+    $('btnAction').disabled = true;
+  }
+  $('btnAction').disabled = false;
+
+  $('btnReset').textContent = t('reset');
+  $('btnReset').onclick = resetGame;
+}
+
+function resetGame() {
+  currentTrial = 0;
+  dataLog = [];
+  totalScore = 0;
+  gameState = STATE_READY;
+  showingSummary = false;
+  markedLandX = undefined;
+  generateFlights();
+  refreshUI();
+}
+
+// ---------- Init ----------
+refreshUI();
+animateFlight();
+</script>
+</body>
+</html>

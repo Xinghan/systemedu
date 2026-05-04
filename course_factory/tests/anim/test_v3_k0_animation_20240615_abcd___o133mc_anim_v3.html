@@ -1,0 +1,982 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>力改变运动状态 — Force Observatory</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;900&family=JetBrains+Mono:wght@400;700&family=Noto+Sans+SC:wght@300;400;700;900&display=swap" rel="stylesheet">
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+:root{--FIELD:oklch(0.78 0.13 215);--WAVE:oklch(0.55 0.13 215);--MASS:oklch(0.35 0.10 215);--PHOTON:oklch(0.92 0.08 215);--CONSTANT:oklch(0.85 0.14 85);--BG-S:oklch(0.14 0.035 265);--BG-E:oklch(0.18 0.04 265)}
+*{margin:0;padding:0;box-sizing:border-box}
+body{overflow:hidden;background:var(--BG-S);font-family:'Inter','Noto Sans SC',sans-serif;color:var(--PHOTON)}
+.mono{font-family:'JetBrains Mono',monospace}
+.glass{background:rgba(14,19,32,0.65);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border:1px solid oklch(0.78 0.13 215/0.15);border-radius:0}
+.glass-gold{background:rgba(212,168,48,0.08);backdrop-filter:blur(10px);border:1px solid oklch(0.85 0.14 85/0.25);border-radius:0}
+#subtitle-box{transition:opacity .6s ease}
+.fade-enter{animation:fadeUp .5s ease both}
+@keyframes fadeUp{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+@keyframes pulseGlow{0%,100%{filter:drop-shadow(0 0 6px oklch(0.85 0.14 85/0.4))}50%{filter:drop-shadow(0 0 18px oklch(0.85 0.14 85/0.8))}}
+.pulse-gold{animation:pulseGlow 1.5s ease-in-out infinite}
+@keyframes echoPing{0%{transform:scale(1);opacity:0.7}100%{transform:scale(3.5);opacity:0}}
+</style>
+</head>
+<body>
+<div id="app" class="relative w-screen h-screen overflow-hidden">
+<canvas id="stage" class="absolute inset-0 w-full h-full"></canvas>
+
+<!-- HUD: 场景标题 -->
+<div id="hud-title" class="glass absolute top-5 left-5 px-5 py-3 opacity-0 transition-opacity duration-700" style="max-width:320px">
+  <div class="mono text-xs tracking-widest" style="color:var(--WAVE)">FORCE OBSERVATORY</div>
+  <div id="hud-scene-name" class="text-lg font-bold mt-1" style="color:var(--PHOTON)">力改变运动状态</div>
+</div>
+
+<!-- HUD: 物理量读数 -->
+<div id="hud-physics" class="glass absolute top-5 right-5 px-5 py-4 opacity-0 transition-opacity duration-700 mono text-sm" style="min-width:220px">
+  <div class="text-xs tracking-widest mb-2" style="color:var(--WAVE)">PHYSICS READOUT</div>
+  <div class="flex justify-between py-1 border-b" style="border-color:oklch(0.78 0.13 215/0.1)">
+    <span style="color:var(--FIELD)">m</span><span id="val-m" style="color:var(--PHOTON)">0.10 kg</span>
+  </div>
+  <div class="flex justify-between py-1 border-b" style="border-color:oklch(0.78 0.13 215/0.1)">
+    <span style="color:var(--CONSTANT)">F</span><span id="val-f" style="color:var(--CONSTANT)">0.00 N</span>
+  </div>
+  <div class="flex justify-between py-1 border-b" style="border-color:oklch(0.78 0.13 215/0.1)">
+    <span style="color:var(--FIELD)">a</span><span id="val-a" style="color:var(--PHOTON)">0.00 m/s²</span>
+  </div>
+  <div class="flex justify-between py-1 border-b" style="border-color:oklch(0.78 0.13 215/0.1)">
+    <span style="color:var(--FIELD)">v</span><span id="val-v" style="color:var(--PHOTON)">0.00 m/s</span>
+  </div>
+  <div class="flex justify-between py-1">
+    <span style="color:var(--FIELD)">s</span><span id="val-s" style="color:var(--PHOTON)">0.00 m</span>
+  </div>
+</div>
+
+<!-- HUD: 公式 -->
+<div id="hud-formula" class="glass-gold absolute right-5 px-5 py-3 opacity-0 transition-opacity duration-700 mono text-center" style="top:220px;min-width:220px">
+  <div id="formula-text" class="text-base font-bold" style="color:var(--CONSTANT)">F = m·a</div>
+  <div id="formula-desc" class="text-xs mt-1" style="color:var(--PHOTON);opacity:0.7"></div>
+</div>
+
+<!-- 字幕 -->
+<div id="subtitle-box" class="glass absolute bottom-7 left-1/2 -translate-x-1/2 px-8 py-4 text-center opacity-0 transition-opacity duration-500" style="max-width:720px;min-width:360px">
+  <div id="sub-zh" class="text-lg font-bold" style="color:var(--PHOTON)"></div>
+  <div id="sub-en" class="text-sm italic mt-1" style="color:var(--FIELD)"></div>
+</div>
+
+<!-- 结尾行动提示 -->
+<div id="action-prompt" class="glass-gold absolute bottom-28 left-1/2 -translate-x-1/2 px-8 py-4 text-center opacity-0 transition-opacity duration-1000" style="max-width:600px">
+  <div class="text-base font-bold" style="color:var(--CONSTANT)">动手试试：推/拉至少5种不同物体</div>
+  <div class="text-sm italic mt-1" style="color:var(--PHOTON);opacity:0.7">Try it: push or pull at least 5 different objects</div>
+</div>
+</div>
+
+<script>
+// ============================================================
+//  颜色常量 (Canvas 用 hex，CSS 用 oklch 变量)
+// ============================================================
+const CL = {
+  field: '#6BA3D0', wave: '#3574A8', mass: '#1E4060',
+  photon: '#C8DDEF', constant: '#D4A830',
+  bgS: '#0E1320', bgE: '#131A2C',
+  fieldA: a => `rgba(107,163,208,${a})`,
+  waveA: a => `rgba(53,116,168,${a})`,
+  constantA: a => `rgba(212,168,48,${a})`,
+  photonA: a => `rgba(200,221,239,${a})`,
+  massA: a => `rgba(30,64,96,${a})`,
+};
+
+// ============================================================
+//  物理参数 (真实数值)
+// ============================================================
+const P = {
+  mass: 0.10,          // kg
+  pushF: 0.50,         // N
+  brakeF: -0.30,       // N
+  mu: 0.02,            // 滚动摩擦系数
+  g: 9.80,             // m/s²
+};
+P.frictionF = () => P.mu * P.mass * P.g; // ≈ 0.0196 N
+
+// ============================================================
+//  状态
+// ============================================================
+let ball = { x: 0, v: 0, a: 0 };
+let appliedF = 0;
+let physTime = 0;
+let animStart = null;
+let phase = 'idle';
+let cameraX = 0;
+let vHist = [];          // {t, v} 用于 v-t 图
+let particles = [];
+let ripples = [];
+let echoState = { x: 0, y: 0, visible: false, pingTime: -10, scale: 1 };
+let introAlpha = 1;      // 标题淡出
+let showVtGraph = false;
+let ballResetQueued = false;
+
+// ============================================================
+//  字幕表
+// ============================================================
+const SUBS = [
+  { s:0.3,  e:4,   zh:'力之观测台', en:'Force Observatory' },
+  { s:1.5,  e:4,   zh:'力是改变物体运动状态的原因', en:'Force is the cause of changing motion state' },
+  { s:5,    e:7,   zh:'小球静止在桌面上，速度为零', en:'The ball rests on the table, velocity is zero' },
+  { s:7,    e:9,   zh:'没有外力，运动状态不会改变', en:'Without external force, motion state stays unchanged' },
+  { s:9,    e:11,  zh:'施加推力！F = 0.50 N', en:'Push force applied! F = 0.50 N' },
+  { s:11,   e:14,  zh:'加速度 a = F/m 产生，速度从零开始增加', en:'Acceleration a = F/m emerges, velocity increases from zero' },
+  { s:14,   e:15.5,zh:'运动状态改变了！从静止到运动', en:'Motion state changed! From rest to motion' },
+  { s:15.5, e:17.5,zh:'推力撤除！', en:'Push force removed!' },
+  { s:17.5, e:20,  zh:'没有推力，速度几乎不变——这就是惯性', en:'Without push, velocity barely changes — this is inertia' },
+  { s:20.5, e:22.5,zh:'再看：运动中的小球', en:'Now watch: a ball in motion' },
+  { s:23,   e:25.5,zh:'施加反向拉力 F = −0.30 N', en:'Applying reverse pull F = −0.30 N' },
+  { s:25.5, e:28,  zh:'速度持续减小……负加速度在起作用', en:'Velocity keeps decreasing… negative acceleration at work' },
+  { s:28,   e:29.5,zh:'速度降为零，小球停止！', en:'Velocity drops to zero, the ball stops!' },
+  { s:30,   e:32,  zh:'有力 → 运动状态改变', en:'With force → motion state changes' },
+  { s:32,   e:34,  zh:'无力 → 运动状态不变', en:'Without force → motion state unchanged' },
+  { s:34.5, e:37,  zh:'力不是维持运动的原因', en:'Force is not the cause of maintaining motion' },
+  { s:37,   e:39.5,zh:'而是改变运动状态的原因', en:'But the cause of changing motion state' },
+  { s:39.5, e:43,  zh:'你能用自己的话解释"力"是什么吗？', en:'Can you explain "force" in your own words?' },
+];
+
+// ============================================================
+//  场景阶段 (animation seconds)
+// ============================================================
+const PH = [
+  { name:'intro',     s:0,   e:5   },
+  { name:'observe',   s:5,   e:9   },
+  { name:'push',      s:9,   e:15.5},
+  { name:'coast',     s:15.5,e:20.5},
+  { name:'transition',s:20.5,e:23  },
+  { name:'brake',     s:23,  e:29.5},
+  { name:'insight',   s:29.5,e:34.5},
+  { name:'summary',   s:34.5,e:44  },
+];
+
+function getPhase(t){
+  for(const p of PH) if(t>=p.s && t<p.e) return p.name;
+  return 'end';
+}
+
+// ============================================================
+//  Canvas & 渲染
+// ============================================================
+const canvas = document.getElementById('stage');
+const ctx = canvas.getContext('2d');
+let W, H, SCALE, TABLE_Y, BALL_R;
+
+function resize(){
+  W = canvas.width = window.innerWidth;
+  H = canvas.height = window.innerHeight;
+  SCALE = Math.min(W,H) * 0.11;  // px per meter
+  TABLE_Y = H * 0.62;
+  BALL_R = Math.max(14, SCALE * 0.18);
+}
+resize();
+window.addEventListener('resize', resize);
+
+// ============================================================
+//  物理更新
+// ============================================================
+const TIME_SCALE = 0.35; // 慢放，让动画可观看
+
+function stepPhysics(dt){
+  const pdt = dt * TIME_SCALE;
+  const fricMag = P.frictionF();
+  let fric = 0;
+  if(Math.abs(ball.v) > 0.001){
+    fric = -Math.sign(ball.v) * fricMag;
+  }
+  const net = appliedF + fric;
+  ball.a = net / P.mass;
+  let nv = ball.v + ball.a * pdt;
+  // 防止摩擦反转速度
+  if(ball.v > 0.001 && nv < 0 && appliedF <= 0){ nv = 0; ball.a = 0; }
+  if(ball.v < -0.001 && nv > 0 && appliedF >= 0){ nv = 0; ball.a = 0; }
+  if(Math.abs(nv) < 0.005 && Math.abs(appliedF) < 0.001){ nv = 0; ball.a = 0; }
+  ball.v = nv;
+  ball.x += ball.v * pdt;
+  physTime += pdt;
+  // 记录 v-t
+  if(vHist.length === 0 || physTime - vHist[vHist.length-1].t > 0.04){
+    vHist.push({ t: physTime, v: ball.v });
+    if(vHist.length > 600) vHist.shift();
+  }
+}
+
+// ============================================================
+//  粒子系统
+// ============================================================
+function spawnParticles(wx, wy, count, color, dir){
+  for(let i=0;i<count;i++){
+    particles.push({
+      x: wx + (Math.random()-0.5)*0.1,
+      y: wy + (Math.random()-0.5)*0.05,
+      vx: dir*(0.5+Math.random()*2) + (Math.random()-0.5)*0.8,
+      vy: -(0.3+Math.random()*1.5),
+      life: 1,
+      decay: 0.015 + Math.random()*0.02,
+      r: 1.5 + Math.random()*2,
+      color
+    });
+  }
+}
+function updateParticles(dt){
+  for(let i=particles.length-1;i>=0;i--){
+    const p=particles[i];
+    p.x += p.vx*dt*0.3;
+    p.y += p.vy*dt*0.3;
+    p.vy += 3*dt*0.3;
+    p.life -= p.decay;
+    if(p.life<=0) particles.splice(i,1);
+  }
+}
+
+// ============================================================
+//  涟漪系统
+// ============================================================
+function spawnRipple(sx, sy){
+  ripples.push({ x:sx, y:sy, r:5, maxR:120+Math.random()*60, life:1 });
+}
+function updateRipples(dt){
+  for(let i=ripples.length-1;i>=0;i--){
+    const r=ripples[i];
+    r.r += dt*80;
+    r.life = 1 - r.r/r.maxR;
+    if(r.life<=0) ripples.splice(i,1);
+  }
+}
+
+// ============================================================
+//  绘制函数
+// ============================================================
+
+// 背景
+function drawBG(){
+  const grad = ctx.createLinearGradient(0,0,0,H);
+  grad.addColorStop(0, CL.bgS);
+  grad.addColorStop(1, CL.bgE);
+  ctx.fillStyle = grad;
+  ctx.fillRect(0,0,W,H);
+}
+
+// 场线 (重力场线)
+let fieldLineOffset = 0;
+function drawFieldLines(t){
+  ctx.save();
+  ctx.globalAlpha = 0.06;
+  ctx.strokeStyle = CL.field;
+  ctx.lineWidth = 1;
+  const gap = 60;
+  fieldLineOffset = (t*12) % gap;
+  for(let x = -gap + fieldLineOffset; x < W+gap; x += gap){
+    ctx.beginPath();
+    for(let y=0;y<H;y+=4){
+      const dx = Math.sin(y*0.008 + t*0.5 + x*0.002)*8;
+      if(y===0) ctx.moveTo(x+dx, y);
+      else ctx.lineTo(x+dx, y);
+    }
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
+// 远景装饰：摆锤
+function drawPendulums(t){
+  ctx.save();
+  ctx.globalAlpha = 0.08;
+  const positions = [W*0.1, W*0.25, W*0.75, W*0.9];
+  positions.forEach((px, i)=>{
+    const len = 80 + i*20;
+    const angle = Math.sin(t*0.7 + i*1.5)*0.3;
+    const bx = px + Math.sin(angle)*len;
+    const by = 40 + Math.cos(angle)*len;
+    ctx.strokeStyle = CL.field;
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(px, 0);
+    ctx.lineTo(bx, by);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.arc(bx, by, 6+i*2, 0, Math.PI*2);
+    ctx.fillStyle = CL.wave;
+    ctx.fill();
+  });
+  ctx.restore();
+}
+
+// 桌面
+function drawTable(){
+  const ty = TABLE_Y;
+  // 玻璃面
+  const grad = ctx.createLinearGradient(0, ty, 0, ty+80);
+  grad.addColorStop(0, 'rgba(30,64,96,0.35)');
+  grad.addColorStop(1, 'rgba(14,19,32,0.1)');
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, ty, W, H-ty);
+  // 表面线
+  ctx.strokeStyle = CL.fieldA(0.3);
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.moveTo(0, ty);
+  ctx.lineTo(W, ty);
+  ctx.stroke();
+  // 网格
+  ctx.save();
+  ctx.globalAlpha = 0.07;
+  ctx.strokeStyle = CL.field;
+  ctx.lineWidth = 0.5;
+  const gridW = SCALE; // 1米
+  const startGrid = Math.floor((cameraX - W*0.35)/gridW)*gridW;
+  for(let gx = startGrid; gx < cameraX + W; gx += gridW){
+    const sx = worldToScreenX(gx/SCALE * 1); // gx is in pixels of world
+    // 实际上，gridW 是 1米的像素，gx 是像素偏移
+    const screenGX = -cameraX + gx + W*0.35;
+    if(screenGX < -10 || screenGX > W+10) continue;
+    ctx.beginPath();
+    ctx.moveTo(screenGX, ty);
+    ctx.lineTo(screenGX, ty+60);
+    ctx.stroke();
+    // 刻度标签
+    const meterVal = (gx/SCALE);
+    ctx.fillStyle = CL.fieldA(0.25);
+    ctx.font = '10px JetBrains Mono';
+    ctx.textAlign = 'center';
+    ctx.fillText(meterVal.toFixed(0)+'m', screenGX, ty+72);
+  }
+  ctx.restore();
+}
+
+function worldToScreenX(wx){
+  return wx * SCALE - cameraX + W*0.35;
+}
+
+// 小球
+function drawBall(sx, sy){
+  // 发光
+  ctx.save();
+  ctx.shadowColor = CL.wave;
+  ctx.shadowBlur = 25;
+  const grad = ctx.createRadialGradient(sx - BALL_R*0.3, sy - BALL_R*0.35, BALL_R*0.1, sx, sy, BALL_R);
+  grad.addColorStop(0, CL.field);
+  grad.addColorStop(0.6, CL.wave);
+  grad.addColorStop(1, CL.mass);
+  ctx.fillStyle = grad;
+  ctx.beginPath();
+  ctx.arc(sx, sy, BALL_R, 0, Math.PI*2);
+  ctx.fill();
+  ctx.shadowBlur = 0;
+  // 高光
+  ctx.beginPath();
+  ctx.arc(sx - BALL_R*0.25, sy - BALL_R*0.3, BALL_R*0.2, 0, Math.PI*2);
+  ctx.fillStyle = 'rgba(200,221,239,0.4)';
+  ctx.fill();
+  ctx.restore();
+}
+
+// 力箭头
+function drawForceArrow(sx, sy, force, label){
+  if(Math.abs(force) < 0.001) return;
+  const dir = Math.sign(force);
+  const len = Math.min(Math.abs(force)*120, 160);
+  const fromX = sx - dir*(BALL_R+8);
+  const toX = fromX - dir*len;
+  const y = sy;
+  ctx.save();
+  ctx.shadowColor = CL.constant;
+  ctx.shadowBlur = 14;
+  ctx.strokeStyle = CL.constant;
+  ctx.lineWidth = 3.5;
+  ctx.beginPath();
+  ctx.moveTo(fromX, y);
+  ctx.lineTo(toX, y);
+  ctx.stroke();
+  // 箭头
+  const aLen = 12;
+  ctx.fillStyle = CL.constant;
+  ctx.beginPath();
+  ctx.moveTo(toX, y);
+  ctx.lineTo(toX + dir*aLen, y - 7);
+  ctx.lineTo(toX + dir*aLen, y + 7);
+  ctx.closePath();
+  ctx.fill();
+  ctx.shadowBlur = 0;
+  // 标签
+  ctx.font = 'bold 13px JetBrains Mono';
+  ctx.fillStyle = CL.constant;
+  ctx.textAlign = 'center';
+  ctx.fillText(label, (fromX+toX)/2, y - 14);
+  ctx.restore();
+}
+
+// 速度箭头
+function drawVelocityArrow(sx, sy, vel){
+  if(Math.abs(vel) < 0.05) return;
+  const dir = Math.sign(vel);
+  const len = Math.min(Math.abs(vel)*18, 180);
+  const fromX = sx;
+  const toX = fromX + dir*len;
+  const y = sy - BALL_R - 18;
+  ctx.save();
+  ctx.strokeStyle = CL.photonA(0.7);
+  ctx.lineWidth = 2;
+  ctx.setLineDash([4,3]);
+  ctx.beginPath();
+  ctx.moveTo(fromX, y);
+  ctx.lineTo(toX, y);
+  ctx.stroke();
+  ctx.setLineDash([]);
+  // 箭头
+  const aLen = 8;
+  ctx.fillStyle = CL.photonA(0.7);
+  ctx.beginPath();
+  ctx.moveTo(toX, y);
+  ctx.lineTo(toX - dir*aLen, y - 5);
+  ctx.lineTo(toX - dir*aLen, y + 5);
+  ctx.closePath();
+  ctx.fill();
+  // 标签
+  ctx.font = '11px JetBrains Mono';
+  ctx.fillStyle = CL.photonA(0.6);
+  ctx.textAlign = 'center';
+  ctx.fillText('v='+vel.toFixed(2)+' m/s', (fromX+toX)/2, y-8);
+  ctx.restore();
+}
+
+// 粒子
+function drawParticles(){
+  particles.forEach(p=>{
+    const sx = worldToScreenX(p.x);
+    const sy = TABLE_Y - BALL_R - p.y*SCALE;
+    ctx.save();
+    ctx.globalAlpha = p.life * 0.8;
+    ctx.fillStyle = p.color;
+    ctx.shadowColor = p.color;
+    ctx.shadowBlur = 6;
+    ctx.beginPath();
+    ctx.arc(sx, sy, p.r, 0, Math.PI*2);
+    ctx.fill();
+    ctx.restore();
+  });
+}
+
+// 涟漪
+function drawRipples(){
+  ripples.forEach(r=>{
+    ctx.save();
+    ctx.globalAlpha = r.life * 0.4;
+    ctx.strokeStyle = CL.constant;
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.arc(r.x, r.y, r.r, 0, Math.PI*2);
+    ctx.stroke();
+    ctx.restore();
+  });
+}
+
+// Echo 吉祥物 (音叉)
+function drawEcho(t){
+  if(!echoState.visible) return;
+  const ex = echoState.x;
+  const ey = echoState.y;
+  const sc = echoState.scale;
+  ctx.save();
+  ctx.translate(ex, ey);
+  ctx.scale(sc, sc);
+  // 柄
+  ctx.strokeStyle = CL.photonA(0.6);
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  ctx.moveTo(0, 10);
+  ctx.lineTo(0, 35);
+  ctx.stroke();
+  // 左齿
+  ctx.lineWidth = 2.5;
+  ctx.beginPath();
+  ctx.moveTo(0, 10);
+  ctx.lineTo(-8, 10);
+  ctx.lineTo(-8, -18);
+  ctx.stroke();
+  // 右齿
+  ctx.beginPath();
+  ctx.moveTo(0, 10);
+  ctx.lineTo(8, 10);
+  ctx.lineTo(8, -18);
+  ctx.stroke();
+  // 波形光晕
+  ctx.strokeStyle = CL.constantA(0.3 + 0.15*Math.sin(t*6));
+  ctx.lineWidth = 1;
+  for(let side of [-1,1]){
+    for(let w=0;w<3;w++){
+      ctx.beginPath();
+      for(let y=-18;y<=10;y+=2){
+        const amp = (2+w*1.5) * (1 - (y+18)/28*0.5);
+        const x = side*(8+w*5) + Math.sin(y*0.3 + t*8 + w)*amp;
+        if(y===-18) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      }
+      ctx.stroke();
+    }
+  }
+  ctx.restore();
+  // Ping 涟漪
+  const pingAge = t - echoState.pingTime;
+  if(pingAge < 2){
+    for(let i=0;i<3;i++){
+      const age = pingAge - i*0.25;
+      if(age < 0 || age > 1.8) continue;
+      const r = age * 60 * sc;
+      const alpha = (1 - age/1.8)*0.25;
+      ctx.save();
+      ctx.globalAlpha = alpha;
+      ctx.strokeStyle = CL.constant;
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.arc(ex, ey - 5*sc, r, 0, Math.PI*2);
+      ctx.stroke();
+      ctx.restore();
+    }
+  }
+}
+
+// v-t 图
+function drawVtGraph(t){
+  if(!showVtGraph || vHist.length < 2) return;
+  const gx = W - 260, gy = H - 200, gw = 230, gh = 150;
+  // 背景
+  ctx.save();
+  ctx.fillStyle = 'rgba(14,19,32,0.75)';
+  ctx.fillRect(gx, gy, gw, gh);
+  ctx.strokeStyle = CL.fieldA(0.2);
+  ctx.lineWidth = 1;
+  ctx.strokeRect(gx, gy, gw, gh);
+  // 标签
+  ctx.font = '10px JetBrains Mono';
+  ctx.fillStyle = CL.fieldA(0.5);
+  ctx.textAlign = 'left';
+  ctx.fillText('v-t graph', gx+6, gy+14);
+  // 坐标轴
+  const pad = 30;
+  const ox = gx + pad, oy = gy + gh - pad;
+  const aw = gw - pad - 10, ah = gh - pad - 20;
+  ctx.strokeStyle = CL.fieldA(0.4);
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(ox, gy+15);
+  ctx.lineTo(ox, oy);
+  ctx.lineTo(gx+gw-8, oy);
+  ctx.stroke();
+  // 轴标签
+  ctx.fillStyle = CL.fieldA(0.5);
+  ctx.font = '9px JetBrains Mono';
+  ctx.textAlign = 'center';
+  ctx.fillText('t(s)', ox + aw/2, oy + 16);
+  ctx.save();
+  ctx.translate(ox - 18, oy - ah/2);
+  ctx.rotate(-Math.PI/2);
+  ctx.fillText('v(m/s)', 0, 0);
+  ctx.restore();
+  // 数据
+  if(vHist.length > 1){
+    const maxT = Math.max(vHist[vHist.length-1].t, 1);
+    const maxV = Math.max(...vHist.map(h=>Math.abs(h.v)), 1) * 1.2;
+    ctx.strokeStyle = CL.constant;
+    ctx.lineWidth = 1.8;
+    ctx.beginPath();
+    vHist.forEach((h,i)=>{
+      const px = ox + (h.t/maxT)*aw;
+      const py = oy - (h.v/maxV)*ah;
+      if(i===0) ctx.moveTo(px, py);
+      else ctx.lineTo(px, py);
+    });
+    ctx.stroke();
+    // 当前点
+    const last = vHist[vHist.length-1];
+    const lpx = ox + (last.t/maxT)*aw;
+    const lpy = oy - (last.v/maxV)*ah;
+    ctx.fillStyle = CL.constant;
+    ctx.shadowColor = CL.constant;
+    ctx.shadowBlur = 8;
+    ctx.beginPath();
+    ctx.arc(lpx, lpy, 3.5, 0, Math.PI*2);
+    ctx.fill();
+    ctx.shadowBlur = 0;
+    // 零线
+    ctx.strokeStyle = CL.fieldA(0.15);
+    ctx.lineWidth = 0.5;
+    ctx.setLineDash([3,3]);
+    ctx.beginPath();
+    ctx.moveTo(ox, oy);
+    ctx.lineTo(ox+aw, oy);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    // 刻度
+    ctx.fillStyle = CL.fieldA(0.35);
+    ctx.font = '8px JetBrains Mono';
+    ctx.textAlign = 'right';
+    ctx.fillText(maxV.toFixed(1), ox-4, gy+20);
+    ctx.fillText('0', ox-4, oy+3);
+    ctx.textAlign = 'center';
+    ctx.fillText(maxT.toFixed(1), ox+aw, oy+12);
+  }
+  ctx.restore();
+}
+
+// 比例尺
+function drawScaleBar(){
+  const barW = SCALE; // 1米
+  const bx = 30, by = TABLE_Y + 95;
+  ctx.save();
+  ctx.strokeStyle = CL.fieldA(0.3);
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.moveTo(bx, by);
+  ctx.lineTo(bx+barW, by);
+  ctx.moveTo(bx, by-4);
+  ctx.lineTo(bx, by+4);
+  ctx.moveTo(bx+barW, by-4);
+  ctx.lineTo(bx+barW, by+4);
+  ctx.stroke();
+  ctx.fillStyle = CL.fieldA(0.35);
+  ctx.font = '10px JetBrains Mono';
+  ctx.textAlign = 'center';
+  ctx.fillText('1 m', bx+barW/2, by+16);
+  ctx.restore();
+}
+
+// 拖尾
+let trail = [];
+function updateTrail(sx, sy){
+  trail.push({x:sx, y:sy, life:1});
+  if(trail.length > 60) trail.shift();
+  trail.forEach(t=>t.life -= 0.018);
+  trail = trail.filter(t=>t.life > 0);
+}
+function drawTrail(){
+  trail.forEach(t=>{
+    ctx.save();
+    ctx.globalAlpha = t.life * 0.15;
+    ctx.fillStyle = CL.wave;
+    ctx.beginPath();
+    ctx.arc(t.x, t.y, BALL_R * t.life * 0.6, 0, Math.PI*2);
+    ctx.fill();
+    ctx.restore();
+  });
+}
+
+// ============================================================
+//  HUD 更新
+// ============================================================
+const elM = document.getElementById('val-m');
+const elF = document.getElementById('val-f');
+const elA = document.getElementById('val-a');
+const elV = document.getElementById('val-v');
+const elS = document.getElementById('val-s');
+const elFormula = document.getElementById('formula-text');
+const elFormulaDesc = document.getElementById('formula-desc');
+const elHudTitle = document.getElementById('hud-title');
+const elHudPhys = document.getElementById('hud-physics');
+const elHudFormula = document.getElementById('hud-formula');
+const elSubBox = document.getElementById('subtitle-box');
+const elSubZh = document.getElementById('sub-zh');
+const elSubEn = document.getElementById('sub-en');
+const elSceneName = document.getElementById('hud-scene-name');
+const elAction = document.getElementById('action-prompt');
+
+function updateHUD(t){
+  elM.textContent = P.mass.toFixed(2) + ' kg';
+  elF.textContent = (appliedF >= 0 ? '+' : '') + appliedF.toFixed(2) + ' N';
+  elA.textContent = ball.a.toFixed(2) + ' m/s²';
+  elV.textContent = ball.v.toFixed(2) + ' m/s';
+  elS.textContent = ball.x.toFixed(2) + ' m';
+  // 公式
+  if(Math.abs(appliedF) > 0.001){
+    elFormula.textContent = `a = F/m = ${appliedF.toFixed(2)}/${P.mass.toFixed(2)}`;
+    elFormulaDesc.textContent = `= ${ball.a.toFixed(2)} m/s²`;
+  } else if(Math.abs(ball.v) > 0.05){
+    elFormula.textContent = 'F = 0 → a ≈ 0';
+    elFormulaDesc.textContent = 'v ≈ constant (惯性)';
+  } else {
+    elFormula.textContent = 'F = m·a';
+    elFormulaDesc.textContent = '力是改变运动状态的原因';
+  }
+}
+
+function updateSubtitle(t){
+  let active = null;
+  for(const s of SUBS){
+    if(t >= s.s && t < s.e) { active = s; break; }
+  }
+  if(active){
+    elSubZh.textContent = active.zh;
+    elSubEn.textContent = active.en;
+    elSubBox.style.opacity = '1';
+  } else {
+    elSubBox.style.opacity = '0';
+  }
+}
+
+// ============================================================
+//  场景控制
+// ============================================================
+let lastPhase = '';
+let sceneParticleSpawned = false;
+
+function controlScene(t, dt){
+  const ph = getPhase(t);
+  if(ph !== lastPhase){
+    onPhaseEnter(ph, t);
+    lastPhase = ph;
+  }
+  switch(ph){
+    case 'intro':
+      appliedF = 0;
+      echoState.visible = true;
+      echoState.x = W*0.5;
+      echoState.y = H*0.42;
+      echoState.scale = 2.5;
+      break;
+    case 'observe':
+      appliedF = 0;
+      echoState.visible = true;
+      echoState.x = worldToScreenX(ball.x) + 50;
+      echoState.y = TABLE_Y - BALL_R - 40;
+      echoState.scale = 1;
+      break;
+    case 'push':
+      appliedF = P.pushF;
+      echoState.visible = false;
+      if(!sceneParticleSpawned){
+        spawnParticles(ball.x, 0, 20, CL.constant, -1);
+        spawnRipple(worldToScreenX(ball.x), TABLE_Y);
+        echoState.pingTime = t;
+        sceneParticleSpawned = true;
+      }
+      break;
+    case 'coast':
+      appliedF = 0;
+      sceneParticleSpawned = false;
+      break;
+    case 'transition':
+      // 重置球到新位置，给初速度
+      if(!ballResetQueued){
+        ball.x = -1;
+        ball.v = 3.5;
+        ball.a = 0;
+        appliedF = 0;
+        vHist = [];
+        physTime = 0;
+        ballResetQueued = true;
+        cameraX = 0;
+        trail = [];
+      }
+      break;
+    case 'brake':
+      ballResetQueued = false;
+      if(ball.v > 0.01){
+        appliedF = P.brakeF;
+      } else {
+        appliedF = 0;
+        ball.v = 0;
+        ball.a = 0;
+      }
+      if(!sceneParticleSpawned && ball.v > 0.1){
+        spawnParticles(ball.x, 0, 15, CL.constant, 1);
+        spawnRipple(worldToScreenX(ball.x), TABLE_Y);
+        sceneParticleSpawned = true;
+      }
+      break;
+    case 'insight':
+      appliedF = 0;
+      sceneParticleSpawned = false;
+      break;
+    case 'summary':
+      appliedF = 0;
+      echoState.visible = true;
+      echoState.x = W*0.5;
+      echoState.y = H*0.35;
+      echoState.scale = 2;
+      if(t - echoState.pingTime > 3){
+        echoState.pingTime = t;
+      }
+      // 显示行动提示
+      if(t > 38){
+        elAction.style.opacity = '1';
+      }
+      break;
+  }
+}
+
+function onPhaseEnter(ph, t){
+  sceneParticleSpawned = false;
+  switch(ph){
+    case 'intro':
+      elHudTitle.style.opacity = '0';
+      elHudPhys.style.opacity = '0';
+      elHudFormula.style.opacity = '0';
+      elSceneName.textContent = '力改变运动状态';
+      break;
+    case 'observe':
+      elHudTitle.style.opacity = '1';
+      elHudPhys.style.opacity = '1';
+      elHudFormula.style.opacity = '1';
+      elSceneName.textContent = '观察：静止状态';
+      echoState.pingTime = t;
+      break;
+    case 'push':
+      elSceneName.textContent = '实验：施加推力';
+      showVtGraph = true;
+      break;
+    case 'coast':
+      elSceneName.textContent = '观察：力撤除后';
+      echoState.visible = true;
+      echoState.x = worldToScreenX(ball.x) + 60;
+      echoState.y = TABLE_Y - BALL_R - 50;
+      echoState.scale = 0.8;
+      echoState.pingTime = t;
+      break;
+    case 'transition':
+      elSceneName.textContent = '准备：运动中的小球';
+      break;
+    case 'brake':
+      elSceneName.textContent = '实验：施加反向拉力';
+      vHist = [];
+      physTime = 0;
+      break;
+    case 'insight':
+      elSceneName.textContent = '核心发现';
+      break;
+    case 'summary':
+      elSceneName.textContent = '力改变运动状态';
+      break;
+  }
+}
+
+// ============================================================
+//  主渲染
+// ============================================================
+function render(t, dt){
+  ctx.clearRect(0,0,W,H);
+  drawBG();
+  drawFieldLines(t);
+  drawPendulums(t);
+  
+  // 相机跟随
+  const targetCam = ball.x * SCALE - W * 0.35 + W*0.35;
+  if(getPhase(t) === 'intro'){
+    cameraX = 0;
+  } else {
+    cameraX += (targetCam - cameraX) * 0.06;
+  }
+  
+  drawTable();
+  drawScaleBar();
+  
+  // 球的屏幕坐标
+  const bsx = worldToScreenX(ball.x);
+  const bsy = TABLE_Y - BALL_R;
+  
+  drawTrail();
+  drawBall(bsx, bsy);
+  
+  // 力箭头
+  if(Math.abs(appliedF) > 0.001){
+    const fLabel = `F = ${appliedF >= 0 ? '+' : ''}${appliedF.toFixed(2)} N`;
+    drawForceArrow(bsx, bsy, appliedF, fLabel);
+  }
+  
+  // 速度箭头
+  if(Math.abs(ball.v) > 0.05){
+    drawVelocityArrow(bsx, bsy, ball.v);
+  }
+  
+  // 加速度标注 (小球下方)
+  if(Math.abs(ball.a) > 0.01){
+    ctx.save();
+    ctx.font = '11px JetBrains Mono';
+    ctx.fillStyle = CL.constantA(0.7);
+    ctx.textAlign = 'center';
+    ctx.fillText(`a = ${ball.a.toFixed(2)} m/s²`, bsx, TABLE_Y + 28);
+    ctx.restore();
+  }
+  
+  // 静止状态标注
+  if(Math.abs(ball.v) < 0.01 && Math.abs(appliedF) < 0.001 && getPhase(t) !== 'intro'){
+    ctx.save();
+    ctx.font = '12px Noto Sans SC';
+    ctx.fillStyle = CL.photonA(0.4);
+    ctx.textAlign = 'center';
+    ctx.fillText('静止 — v = 0', bsx, TABLE_Y + 28);
+    ctx.restore();
+  }
+  
+  drawParticles();
+  drawRipples();
+  drawEcho(t);
+  drawVtGraph(t);
+  
+  // 更新拖尾
+  if(Math.abs(ball.v) > 0.1){
+    updateTrail(bsx, bsy);
+  }
+  
+  // 摩擦力小标注
+  if(Math.abs(ball.v) > 0.05 && Math.abs(appliedF) < 0.001){
+    const fricDir = -Math.sign(ball.v);
+    const fSmall = P.frictionF();
+    const fromX = bsx - fricDir*(BALL_R+5);
+    const toX = fromX - fricDir*25;
+    ctx.save();
+    ctx.globalAlpha = 0.35;
+    ctx.strokeStyle = CL.wave;
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(fromX, bsy);
+    ctx.lineTo(toX, bsy);
+    ctx.stroke();
+    const aL = 6;
+    ctx.fillStyle = CL.wave;
+    ctx.beginPath();
+    ctx.moveTo(toX, bsy);
+    ctx.lineTo(toX + fricDir*aL, bsy - 4);
+    ctx.lineTo(toX + fricDir*aL, bsy + 4);
+    ctx.closePath();
+    ctx.fill();
+    ctx.font = '9px JetBrains Mono';
+    ctx.textAlign = 'center';
+    ctx.fillText(`f=${fSmall.toFixed(3)}N`, (fromX+toX)/2, bsy - 10);
+    ctx.restore();
+  }
+}
+
+// ============================================================
+//  主循环
+// ============================================================
+let prevTS = 0;
+
+function loop(ts){
+  if(!animStart) animStart = ts;
+  const elapsed = (ts - animStart) / 1000; // 动画秒
+  const dt = Math.min((ts - prevTS) / 1000, 0.05);
+  prevTS = ts;
+  
+  if(elapsed > 44){
+    // 动画结束，停在总结画面
+    requestAnimationFrame(loop);
+    return;
+  }
+  
+  controlScene(elapsed, dt);
+  stepPhysics(dt);
+  updateParticles(dt);
+  updateRipples(dt);
+  render(elapsed, dt);
+  updateHUD(elapsed);
+  updateSubtitle(elapsed);
+  
+  requestAnimationFrame(loop);
+}
+
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>

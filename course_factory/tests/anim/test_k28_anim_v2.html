@@ -1,0 +1,891 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=Inter:wght@400;500&family=Noto+Sans+SC:wght@400;700&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box;}
+html,body{width:100%;height:100vh;overflow:hidden;}
+body{background:var(--bg,#0c0e12);color:var(--text,#f6f6fc);font-family:'Inter','Noto Sans SC',sans-serif;}
+/* ── Outer: sidebar + main ── */
+.wrapper{display:flex;flex-direction:row;height:100vh;overflow:hidden;}
+.sidebar{width:200px;min-width:200px;max-width:200px;display:flex;flex-direction:column;gap:6px;padding:10px;background:rgba(0,0,0,0.5);border-right:1px solid rgba(80,255,176,0.15);overflow-y:auto;}
+.lang-btn{align-self:flex-start;flex-shrink:0;font-family:'Space Grotesk',sans-serif;font-size:10px;font-weight:700;padding:3px 8px;cursor:pointer;border:1px solid rgba(255,181,156,0.25);background:transparent;color:#ffb59c;letter-spacing:1px;}
+.lang-btn:hover{border-color:#ffb59c;background:rgba(255,181,156,0.1);}
+.sidebar h1{font-family:'Space Grotesk',sans-serif;font-size:13px;font-weight:700;color:var(--primary,#50ffb0);margin-top:4px;line-height:1.3;}
+.sidebar .sub{font-size:10px;color:var(--muted,#aaabb0);letter-spacing:0.06em;text-transform:uppercase;}
+.sidebar .frame-ind{font-family:'Space Grotesk',sans-serif;font-size:10px;color:var(--muted,#aaabb0);letter-spacing:0.1em;margin-top:4px;}
+.sidebar .guide-label{font-family:'Space Grotesk',sans-serif;font-size:9px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:var(--primary,#50ffb0);margin-top:8px;}
+.sidebar .guide-content{font-family:'Noto Sans SC',sans-serif;font-size:11px;color:rgba(255,255,255,0.85);line-height:1.5;}
+.sidebar .guide-content ul{padding-left:16px;margin:0;}
+.sidebar .guide-content li{margin-bottom:1px;}
+/* ── Main area: canvas + controls + hud ── */
+.anim-main{flex:1;display:flex;flex-direction:column;min-width:0;}
+.canvas-wrap{flex:1;min-height:0;position:relative;}
+canvas{width:100%;height:100%;display:block;}
+/* ── Controls + HUD ── */
+.controls{display:flex;justify-content:center;align-items:center;gap:12px;padding:6px 16px;}
+.ctrl-btn{font-family:'Space Grotesk',sans-serif;font-size:11px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;padding:5px 16px;border:none;cursor:pointer;color:var(--bg,#0c0e12);background:linear-gradient(135deg,var(--primary,#50ffb0),var(--primary-dim,#17df93));transition:transform 0.1s,box-shadow 0.2s;box-shadow:0 0 10px var(--glow-strong,rgba(80,255,176,0.3));}
+.ctrl-btn:hover{transform:scale(1.04);}
+.ctrl-btn:active{transform:scale(0.96);}
+.ctrl-btn.secondary{background:var(--glass,rgba(23,26,31,0.92));color:var(--muted,#aaabb0);box-shadow:none;backdrop-filter:blur(12px);}
+.ctrl-btn.secondary:hover{color:var(--primary,#50ffb0);}
+.hud{height:40px;display:flex;align-items:center;justify-content:space-around;background:rgba(0,0,0,0.55);backdrop-filter:blur(12px);padding:0 16px;}
+.hud-item{text-align:center;}
+.hud-label{font-family:'Space Grotesk',sans-serif;font-size:8px;letter-spacing:0.15em;text-transform:uppercase;color:var(--muted,#aaabb0);}
+.hud-val{font-family:'Space Grotesk',sans-serif;font-size:13px;font-weight:700;color:var(--primary,#50ffb0);}
+</style>
+</head>
+<body>
+<div class="wrapper">
+<!-- Sidebar: lang-btn, title, guide (completely separate from canvas) -->
+<div class="sidebar">
+<button class="lang-btn" id="langBtn">CN</button>
+<h1 id="title"></h1>
+<div class="sub" id="subtitle"></div>
+<div class="frame-ind" id="frameIndicator"></div>
+<div class="guide-label" id="guideTitle"></div>
+<div class="guide-content" id="guideContent"></div>
+</div>
+<!-- Main: canvas fills all space, nothing overlaps -->
+<div class="anim-main">
+<div class="canvas-wrap"><canvas id="c"></canvas></div>
+<div class="controls">
+<button class="ctrl-btn secondary" id="btnPrev"></button>
+<button class="ctrl-btn" id="btnPlay"></button>
+<button class="ctrl-btn secondary" id="btnNext"></button>
+</div>
+<div class="hud">
+<div class="hud-item"><div class="hud-label" id="hudL1"></div><div class="hud-val" id="hudV1"></div></div>
+<div class="hud-item"><div class="hud-label" id="hudL2"></div><div class="hud-val" id="hudV2"></div></div>
+<div class="hud-item"><div class="hud-label" id="hudL3"></div><div class="hud-val" id="hudV3"></div></div>
+<div class="hud-item"><div class="hud-label" id="hudL4"></div><div class="hud-val" id="hudV4"></div></div>
+</div>
+</div>
+</div>
+
+<!-- Runtime (shared skeleton) -->
+<script src="animation_runtime.js"></script>
+
+<!-- Content -->
+<script>
+// ============================================================
+// K28: Total Impulse -- Area under the thrust curve
+// CONCEPT: Area under thrust curve = total impulse
+// Core Q: Why do competitions limit total impulse, not thrust?
+// 5 frames:
+//   F0 - Title "TOTAL IMPULSE" with integral icon, core question
+//   F1 - Coordinate system, C6-5 thrust curve draws left-to-right, peak 14.1N
+//   F2 - Area fills with gradient sweep, running counter, area = total impulse
+//   F3 - Grid paper overlay, cell counting animation, estimate vs actual
+//   F4 - Four engines comparison bar chart, competition rules
+// ============================================================
+
+var soundMuted = true;
+
+// ── C6-5 thrust curve data (time, thrust) ──
+// Realistic C6-5 profile: fast rise to ~14.1N, sustain ~6N, taper off
+var C6_POINTS = [
+  [0.0, 0.0], [0.05, 2.0], [0.10, 6.0], [0.15, 11.0], [0.20, 14.1],
+  [0.30, 12.0], [0.40, 9.0], [0.50, 7.0], [0.60, 6.2], [0.80, 5.8],
+  [1.00, 5.5], [1.20, 5.0], [1.40, 4.2], [1.60, 3.0], [1.70, 1.5],
+  [1.80, 0.5], [1.85, 0.0]
+];
+var C6_TOTAL_IMPULSE = 10.0;
+var C6_PEAK = 14.1;
+var C6_BURN = 1.85;
+
+// ── Animation state ──
+var animState = {curveProgress: 0, areaProgress: 0, gridProgress: 0, barProgress: 0,
+  phase: 0, activeFrame: -1, impulseCounter: 0, cellCount: 0, shakeAmount: 0,
+  particles: [], idlePulse: 0, glowIntensity: 0};
+var animTimer = null;
+var animTime = 0;
+
+function resetAnimState() {
+  animState.curveProgress = 0;
+  animState.areaProgress = 0;
+  animState.gridProgress = 0;
+  animState.barProgress = 0;
+  animState.phase = 0;
+  animState.impulseCounter = 0;
+  animState.cellCount = 0;
+  animState.shakeAmount = 0;
+  animState.particles = [];
+  animState.glowIntensity = 0;
+}
+
+function startAnim(targetFrame) {
+  if (animTimer) { clearInterval(animTimer); animTimer = null; }
+  resetAnimState();
+  animState.activeFrame = targetFrame;
+  animTimer = setInterval(function () {
+    animTime += 0.03;
+    animState.idlePulse = Math.sin(animTime * 2) * 0.5 + 0.5;
+
+    if (targetFrame === 1) {
+      animState.curveProgress += 0.008;
+      if (animState.curveProgress > 1) animState.curveProgress = 1;
+    } else if (targetFrame === 2) {
+      if (animState.phase === 0) {
+        animState.areaProgress += 0.006;
+        if (animState.areaProgress >= 1) {
+          animState.areaProgress = 1;
+          animState.phase = 1;
+          for (var pi = 0; pi < 30; pi++) {
+            animState.particles.push({
+              x: 100 + Math.random() * 500,
+              y: 50 + Math.random() * 250,
+              vx: (Math.random() - 0.5) * 4,
+              vy: -Math.random() * 3 - 1,
+              life: 1.0,
+              size: 1 + Math.random() * 3
+            });
+          }
+        }
+        animState.impulseCounter = easeOutCubic(animState.areaProgress) * C6_TOTAL_IMPULSE;
+      }
+      for (var pk = animState.particles.length - 1; pk >= 0; pk--) {
+        var pp = animState.particles[pk];
+        pp.x += pp.vx;
+        pp.y += pp.vy;
+        pp.life -= 0.015;
+        if (pp.life <= 0) animState.particles.splice(pk, 1);
+      }
+      if (animState.phase === 1) {
+        animState.glowIntensity = 0.3 + Math.sin(animTime * 4) * 0.15;
+      }
+    } else if (targetFrame === 3) {
+      animState.gridProgress += 0.005;
+      if (animState.gridProgress > 1) animState.gridProgress = 1;
+      animState.cellCount = Math.floor(easeOutCubic(animState.gridProgress) * 40);
+    } else if (targetFrame === 4) {
+      animState.barProgress += 0.012;
+      if (animState.barProgress > 1) animState.barProgress = 1;
+      if (animState.barProgress > 0.85 && animState.shakeAmount < 1) {
+        animState.shakeAmount = 4;
+      }
+      if (animState.shakeAmount > 0) animState.shakeAmount *= 0.9;
+    }
+
+    AnimRuntime.drawFrame(AnimRuntime.currentFrame);
+  }, 30);
+}
+
+function easeOutCubic(x) { return 1 - Math.pow(1 - x, 3); }
+
+var _prevFrame28 = -1;
+setInterval(function () {
+  var cf = AnimRuntime.currentFrame;
+  if (cf !== _prevFrame28) {
+    _prevFrame28 = cf;
+    if (cf >= 1 && cf <= 4) startAnim(cf);
+    else { if (animTimer) clearInterval(animTimer); animTimer = null; resetAnimState(); }
+  }
+}, 80);
+
+// ── Chart coordinate helpers ──
+var CHART_LEFT = 90;
+var CHART_RIGHT = 620;
+var CHART_TOP = 50;
+var CHART_BOTTOM = 310;
+
+function timeToX(tVal) {
+  return CHART_LEFT + (tVal / C6_BURN) * (CHART_RIGHT - CHART_LEFT);
+}
+
+function thrustToY(thrust) {
+  return CHART_BOTTOM - (thrust / 16) * (CHART_BOTTOM - CHART_TOP);
+}
+
+function thrustAt(timeVal) {
+  if (timeVal <= 0) return 0;
+  if (timeVal >= C6_BURN) return 0;
+  for (var i = 1; i < C6_POINTS.length; i++) {
+    if (timeVal <= C6_POINTS[i][0]) {
+      var frac = (timeVal - C6_POINTS[i-1][0]) / (C6_POINTS[i][0] - C6_POINTS[i-1][0]);
+      return C6_POINTS[i-1][1] + frac * (C6_POINTS[i][1] - C6_POINTS[i-1][1]);
+    }
+  }
+  return 0;
+}
+
+// ── Drawing helpers ──
+
+function drawAxes(ctx, W, H, P, tFn) {
+  var xLabel = tFn('f1xAxis');
+  var yLabel = tFn('f1yAxis');
+  ctx.strokeStyle = P.muted;
+  ctx.lineWidth = 1.5;
+  ctx.beginPath(); ctx.moveTo(CHART_LEFT, CHART_TOP - 10); ctx.lineTo(CHART_LEFT, CHART_BOTTOM); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(CHART_LEFT, CHART_BOTTOM); ctx.lineTo(CHART_RIGHT + 20, CHART_BOTTOM); ctx.stroke();
+  ctx.fillStyle = P.muted;
+  ctx.beginPath(); ctx.moveTo(CHART_LEFT, CHART_TOP - 10); ctx.lineTo(CHART_LEFT - 4, CHART_TOP); ctx.lineTo(CHART_LEFT + 4, CHART_TOP); ctx.closePath(); ctx.fill();
+  ctx.beginPath(); ctx.moveTo(CHART_RIGHT + 20, CHART_BOTTOM); ctx.lineTo(CHART_RIGHT + 10, CHART_BOTTOM - 4); ctx.lineTo(CHART_RIGHT + 10, CHART_BOTTOM + 4); ctx.closePath(); ctx.fill();
+  ctx.font = "11px 'Inter','Noto Sans SC',sans-serif";
+  ctx.fillStyle = P.muted;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'top';
+  ctx.fillText(xLabel, (CHART_LEFT + CHART_RIGHT) / 2, CHART_BOTTOM + 18);
+  ctx.save();
+  ctx.translate(CHART_LEFT - 40, (CHART_TOP + CHART_BOTTOM) / 2);
+  ctx.rotate(-Math.PI / 2);
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(yLabel, 0, 0);
+  ctx.restore();
+  ctx.font = "9px 'Space Grotesk',sans-serif";
+  ctx.textAlign = 'right';
+  ctx.textBaseline = 'middle';
+  ctx.fillStyle = P.muted;
+  for (var tv = 0; tv <= 16; tv += 2) {
+    var ty = thrustToY(tv);
+    ctx.fillText(tv.toString(), CHART_LEFT - 8, ty);
+    ctx.strokeStyle = 'rgba(255,255,255,0.05)';
+    ctx.lineWidth = 0.5;
+    ctx.beginPath(); ctx.moveTo(CHART_LEFT, ty); ctx.lineTo(CHART_RIGHT, ty); ctx.stroke();
+  }
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'top';
+  for (var xt = 0; xt <= 2.0; xt += 0.5) {
+    var xx = timeToX(xt);
+    if (xx <= CHART_RIGHT) {
+      ctx.fillText(xt.toFixed(1), xx, CHART_BOTTOM + 4);
+    }
+  }
+}
+
+function drawThrustCurve(ctx, progress, P, withGlow) {
+  var totalPts = C6_POINTS.length;
+  var drawCount = Math.floor(progress * totalPts);
+  if (drawCount < 2) return;
+  ctx.save();
+  ctx.strokeStyle = P.primary;
+  ctx.lineWidth = 2.5;
+  if (withGlow) { ctx.shadowColor = P.glowStrong; ctx.shadowBlur = 8; }
+  ctx.beginPath();
+  ctx.moveTo(timeToX(C6_POINTS[0][0]), thrustToY(C6_POINTS[0][1]));
+  for (var i = 1; i < drawCount; i++) {
+    ctx.lineTo(timeToX(C6_POINTS[i][0]), thrustToY(C6_POINTS[i][1]));
+  }
+  if (drawCount < totalPts) {
+    var frac = (progress * totalPts) - drawCount;
+    var prevPt = C6_POINTS[drawCount - 1];
+    var nextPt = C6_POINTS[drawCount];
+    ctx.lineTo(
+      timeToX(prevPt[0] + frac * (nextPt[0] - prevPt[0])),
+      thrustToY(prevPt[1] + frac * (nextPt[1] - prevPt[1]))
+    );
+  }
+  ctx.stroke();
+  ctx.restore();
+}
+
+function drawAreaFill(ctx, progress, P) {
+  var maxTime = C6_BURN * easeOutCubic(progress);
+  var steps = 80;
+  var dt = maxTime / steps;
+  if (dt <= 0) return;
+  var grad = ctx.createLinearGradient(CHART_LEFT, 0, timeToX(maxTime), 0);
+  grad.addColorStop(0, 'rgba(255,127,80,0.35)');
+  grad.addColorStop(0.5, 'rgba(255,181,156,0.25)');
+  grad.addColorStop(1, 'rgba(0,218,243,0.2)');
+  ctx.save();
+  ctx.fillStyle = grad;
+  ctx.beginPath();
+  ctx.moveTo(CHART_LEFT, CHART_BOTTOM);
+  for (var i = 0; i <= steps; i++) {
+    var tt = i * dt;
+    ctx.lineTo(timeToX(tt), thrustToY(thrustAt(tt)));
+  }
+  ctx.lineTo(timeToX(maxTime), CHART_BOTTOM);
+  ctx.closePath();
+  ctx.fill();
+  if (animState.glowIntensity > 0) {
+    ctx.strokeStyle = 'rgba(255,181,156,' + animState.glowIntensity + ')';
+    ctx.lineWidth = 1.5;
+    ctx.shadowColor = P.glowStrong;
+    ctx.shadowBlur = 12;
+    ctx.beginPath();
+    ctx.moveTo(CHART_LEFT, CHART_BOTTOM);
+    for (var j = 0; j <= steps; j++) {
+      var tt2 = j * dt;
+      ctx.lineTo(timeToX(tt2), thrustToY(thrustAt(tt2)));
+    }
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
+function drawGlassPanel(ctx, x, y, w, h, P) {
+  ctx.save();
+  ctx.fillStyle = P.glass;
+  ctx.strokeStyle = 'rgba(255,181,156,0.2)';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.rect(x, y, w, h);
+  ctx.fill();
+  ctx.stroke();
+  ctx.restore();
+}
+
+function drawIntegralIcon(ctx, x, y, scale, P) {
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.scale(scale, scale);
+  ctx.strokeStyle = P.muted;
+  ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(-25, 20); ctx.lineTo(25, 20); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(-25, 20); ctx.lineTo(-25, -20); ctx.stroke();
+  ctx.strokeStyle = P.primary;
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.moveTo(-25, 20);
+  ctx.quadraticCurveTo(-15, -15, 0, -10);
+  ctx.quadraticCurveTo(10, -5, 20, 15);
+  ctx.lineTo(25, 20);
+  ctx.stroke();
+  ctx.fillStyle = 'rgba(255,127,80,0.3)';
+  ctx.beginPath();
+  ctx.moveTo(-25, 20);
+  ctx.quadraticCurveTo(-15, -15, 0, -10);
+  ctx.quadraticCurveTo(10, -5, 20, 15);
+  ctx.lineTo(25, 20);
+  ctx.closePath();
+  ctx.fill();
+  ctx.font = "bold 24px 'Space Grotesk',sans-serif";
+  ctx.fillStyle = P.secondary;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText('\u222B', -35, 0);
+  ctx.restore();
+}
+
+function drawParticles(ctx, particleArr, P) {
+  for (var i = 0; i < particleArr.length; i++) {
+    var pp = particleArr[i];
+    ctx.save();
+    ctx.globalAlpha = pp.life * 0.8;
+    ctx.fillStyle = P.primary;
+    ctx.shadowColor = P.primary;
+    ctx.shadowBlur = 6;
+    ctx.beginPath();
+    ctx.arc(pp.x, pp.y, pp.size, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  }
+}
+
+function getGridCells() {
+  var fullCells = [];
+  var partialCells = [];
+  var GRID_SIZE = 20;
+  for (var gx = CHART_LEFT; gx < CHART_RIGHT; gx += GRID_SIZE) {
+    for (var gy = CHART_TOP; gy < CHART_BOTTOM; gy += GRID_SIZE) {
+      var cellCenterTime = ((gx + GRID_SIZE / 2 - CHART_LEFT) / (CHART_RIGHT - CHART_LEFT)) * C6_BURN;
+      var cellTopThrust = ((CHART_BOTTOM - gy) / (CHART_BOTTOM - CHART_TOP)) * 16;
+      var cellBotThrust = ((CHART_BOTTOM - gy - GRID_SIZE) / (CHART_BOTTOM - CHART_TOP)) * 16;
+      var curveThrust = thrustAt(cellCenterTime);
+      if (cellBotThrust < 0) cellBotThrust = 0;
+      if (curveThrust >= cellTopThrust && cellTopThrust >= 0) {
+        fullCells.push({x: gx, y: gy});
+      } else if (curveThrust > cellBotThrust && curveThrust < cellTopThrust && cellBotThrust >= 0) {
+        partialCells.push({x: gx, y: gy});
+      }
+    }
+  }
+  return {fullCells: fullCells, partialCells: partialCells};
+}
+
+// ── Engine data for F4 ──
+var ENGINES = [
+  {letter: 'A', fullName: 'A8-3', impulse: 2.5, peakThrust: 8, burnTime: 0.5, color: '#00daf3'},
+  {letter: 'B', fullName: 'B6-4', impulse: 5.0, peakThrust: 12, burnTime: 0.85, color: '#c6c6c6'},
+  {letter: 'C', fullName: 'C6-5', impulse: 10.0, peakThrust: 14.1, burnTime: 1.85, color: '#ffb59c'},
+  {letter: 'D', fullName: 'D12-5', impulse: 20.0, peakThrust: 30, burnTime: 1.6, color: '#ff7f50'}
+];
+
+// ============================================================
+// CONFIG
+// ============================================================
+
+var CONFIG = {
+  style: 'ares_mission',
+  totalFrames: 5,
+
+  i18n: {
+    title:       {en:'TOTAL IMPULSE', cn:'\u603b\u51b2'},
+    subtitle:    {en:'Thrust x Time Accumulation', cn:'\u63a8\u529b\u00d7\u65f6\u95f4\u7684\u79ef\u7d2f'},
+    f0coreQ:     {en:'Why do competitions limit\ntotal impulse, not thrust?', cn:'\u4e3a\u4ec0\u4e48\u6bd4\u8d5b\u8981\u9650\u5236\u603b\u51b2\n\u800c\u4e0d\u662f\u63a8\u529b\uff1f'},
+    f0totalImp:  {en:'TOTAL IMPULSE', cn:'\u603b\u51b2'},
+    f0eq:        {en:'I = \u222b F dt', cn:'I = \u222b F dt'},
+    f0areaEq:    {en:'= Area under thrust curve', cn:'= \u63a8\u529b\u66f2\u7ebf\u4e0b\u7684\u9762\u79ef'},
+    f1title:     {en:'C6-5 THRUST CURVE', cn:'C6-5 \u63a8\u529b\u66f2\u7ebf'},
+    f1xAxis:     {en:'Time (s)', cn:'\u65f6\u95f4 (s)'},
+    f1yAxis:     {en:'Thrust (N)', cn:'\u63a8\u529b (N)'},
+    f1peak:      {en:'Peak: 14.1 N', cn:'\u5cf0\u503c: 14.1 N'},
+    f1engine:    {en:'C6-5 Engine', cn:'C6-5 \u53d1\u52a8\u673a'},
+    f2title:     {en:'AREA = TOTAL IMPULSE', cn:'\u9762\u79ef = \u603b\u51b2'},
+    f2counter:   {en:'Total Impulse:', cn:'\u603b\u51b2:'},
+    f2unit:      {en:'N\u00b7s', cn:'N\u00b7s'},
+    f2explain:   {en:'Each thin strip: F(t) x dt', cn:'\u6bcf\u4e2a\u7ec6\u6761: F(t) x dt'},
+    f3title:     {en:'GRID ESTIMATION', cn:'\u7f51\u683c\u4f30\u7b97'},
+    f3full:      {en:'Full cells:', cn:'\u5b8c\u6574\u683c:'},
+    f3partial:   {en:'Partial cells:', cn:'\u90e8\u5206\u683c:'},
+    f3estimate:  {en:'Grid estimate:', cn:'\u7f51\u683c\u4f30\u7b97:'},
+    f3actual:    {en:'Actual:', cn:'\u5b9e\u9645\u503c:'},
+    f3cellArea:  {en:'1 cell \u2248', cn:'1 \u683c \u2248'},
+    f4title:     {en:'ENGINE COMPARISON', cn:'\u53d1\u52a8\u673a\u5bf9\u6bd4'},
+    f4primary:   {en:'Primary school: \u226430 N\u00b7s', cn:'\u5c0f\u5b66\u7ec4: \u226430 N\u00b7s'},
+    f4secondary: {en:'Middle/High school: \u226450 N\u00b7s', cn:'\u521d\u9ad8\u4e2d\u7ec4: \u226450 N\u00b7s'},
+    f4rules:     {en:'COMPETITION RULES', cn:'\u7ade\u8d5b\u89c4\u5219'},
+    guideTitle:  {en:'OBSERVATION GUIDE', cn:'\u89c2\u5bdf\u6307\u5357'},
+    g1:          {en:'Total impulse = area under thrust curve', cn:'\u603b\u51b2 = \u63a8\u529b\u66f2\u7ebf\u4e0b\u7684\u9762\u79ef'},
+    g2:          {en:'Grid counting: approximate the integral', cn:'\u7f51\u683c\u8ba1\u6570: \u8fd1\u4f3c\u79ef\u5206'},
+    g3:          {en:'Each engine class doubles the impulse', cn:'\u6bcf\u7ea7\u53d1\u52a8\u673a\u603b\u51b2\u7ffb\u500d'},
+    g4:          {en:'Competitions classify by total impulse', cn:'\u7ade\u8d5b\u6309\u603b\u51b2\u5206\u7ec4'},
+    hudEngine:   {en:'ENGINE', cn:'\u53d1\u52a8\u673a'},
+    hudImpulse:  {en:'IMPULSE(N\u00b7s)', cn:'\u603b\u51b2(N\u00b7s)'},
+    hudPeak:     {en:'PEAK(N)', cn:'\u5cf0\u503c(N)'},
+    hudBurn:     {en:'BURN(s)', cn:'\u71c3\u65f6(s)'},
+  },
+
+  hudLabels: ['hudEngine', 'hudImpulse', 'hudPeak', 'hudBurn'],
+  hudValues: [
+    ['--',   '--',   '--',   '--'],
+    ['C6-5', '10.0', '14.1', '1.85'],
+    ['C6-5', '10.0', '14.1', '1.85'],
+    ['C6-5', '~10',  '14.1', '1.85'],
+    ['A~D',  '2.5~20','8~30','0.5~1.9'],
+  ],
+
+  guideTitle: 'guideTitle',
+  guideItems: ['g1', 'g2', 'g3', 'g4'],
+};
+
+// ============================================================
+// FRAME ELEMENTS
+// ============================================================
+
+function getFrameElements(f, W, H) {
+  var t = AnimRuntime.t;
+  var P = AnimRuntime.PAL;
+  var cx = W / 2, cy = H / 2;
+
+  if (f === 0) {
+    return [
+      {id:'f0title', type:'label', text:t('f0totalImp'), x:cx, y:cy - 80, color:P.primary, size:28, align:'center', glow:P.glowStrong},
+      {id:'f0icon', type:'custom', x:cx, y:cy - 20, draw: function(c2) {
+        drawIntegralIcon(c2, cx, cy - 20, 1.5, P);
+      }},
+      {id:'f0eq', type:'label', text:t('f0eq'), x:cx, y:cy + 40, color:P.secondary, size:18, align:'center'},
+      {id:'f0areaEq', type:'label', text:t('f0areaEq'), x:cx, y:cy + 65, color:P.muted, size:13, align:'center'},
+      {id:'f0q', type:'custom', x:cx, y:cy + 110, draw: function(c2) {
+        var lines = t('f0coreQ').split('\n');
+        c2.font = "13px 'Inter','Noto Sans SC',sans-serif";
+        c2.fillStyle = P.tertiary;
+        c2.textAlign = 'center';
+        c2.textBaseline = 'middle';
+        for (var i = 0; i < lines.length; i++) {
+          c2.fillText(lines[i], cx, cy + 100 + i * 18);
+        }
+      }},
+    ];
+  }
+
+  if (f === 1) {
+    return [
+      {id:'f1header', type:'label', text:t('f1title'), x:cx, y:25, color:P.primary, size:14, align:'center'},
+      {id:'f1axes', type:'custom', x:0, y:0, draw: function(c2) {
+        drawAxes(c2, W, H, P, t);
+      }},
+      {id:'f1curve', type:'custom', x:0, y:0, draw: function(c2) {
+        var prog = animState.activeFrame === 1 ? animState.curveProgress : 1;
+        drawThrustCurve(c2, prog, P, true);
+        if (prog > 0.15) {
+          var peakX = timeToX(0.20);
+          var peakY = thrustToY(14.1);
+          var annotAlpha = Math.min(1, (prog - 0.15) / 0.1);
+          c2.save();
+          c2.globalAlpha = annotAlpha;
+          c2.strokeStyle = P.secondary;
+          c2.lineWidth = 1;
+          c2.setLineDash([3, 3]);
+          c2.beginPath(); c2.moveTo(peakX, peakY); c2.lineTo(peakX, CHART_BOTTOM); c2.stroke();
+          c2.beginPath(); c2.moveTo(CHART_LEFT, peakY); c2.lineTo(peakX, peakY); c2.stroke();
+          c2.setLineDash([]);
+          c2.fillStyle = P.primary;
+          c2.shadowColor = P.primary;
+          c2.shadowBlur = 10;
+          c2.beginPath(); c2.arc(peakX, peakY, 4, 0, Math.PI * 2); c2.fill();
+          c2.shadowBlur = 0;
+          c2.font = "bold 11px 'Space Grotesk','Noto Sans SC',sans-serif";
+          c2.fillStyle = P.secondary;
+          c2.textAlign = 'left';
+          c2.textBaseline = 'bottom';
+          c2.fillText(t('f1peak'), peakX + 10, peakY - 5);
+          c2.restore();
+        }
+      }},
+      {id:'f1engineLabel', type:'label', text:t('f1engine'), x:CHART_RIGHT - 60, y:CHART_TOP + 15, color:P.muted, size:10, align:'center'},
+    ];
+  }
+
+  if (f === 2) {
+    return [
+      {id:'f1header', type:'label', text:t('f2title'), x:cx, y:25, color:P.primary, size:14, align:'center'},
+      {id:'f1axes', type:'custom', x:0, y:0, draw: function(c2) {
+        drawAxes(c2, W, H, P, t);
+      }},
+      {id:'f2area', type:'custom', x:0, y:0, draw: function(c2) {
+        drawThrustCurve(c2, 1, P, false);
+        var prog = animState.activeFrame === 2 ? animState.areaProgress : 1;
+        drawAreaFill(c2, prog, P);
+        if (animState.particles.length > 0) {
+          drawParticles(c2, animState.particles, P);
+        }
+        if (prog > 0.05 && prog < 0.95) {
+          var stripTime = C6_BURN * easeOutCubic(prog);
+          var stripX = timeToX(stripTime);
+          var stripThrust = thrustAt(stripTime);
+          var stripY = thrustToY(stripThrust);
+          c2.save();
+          c2.strokeStyle = P.secondary;
+          c2.lineWidth = 1;
+          c2.globalAlpha = 0.7;
+          c2.setLineDash([2, 2]);
+          c2.beginPath(); c2.moveTo(stripX, CHART_BOTTOM); c2.lineTo(stripX, stripY); c2.stroke();
+          c2.setLineDash([]);
+          c2.font = "9px 'Space Grotesk',sans-serif";
+          c2.fillStyle = P.secondary;
+          c2.textAlign = 'center';
+          c2.fillText('dt', stripX, CHART_BOTTOM + 14);
+          c2.fillText('F(t)', stripX + 14, (stripY + CHART_BOTTOM) / 2);
+          c2.restore();
+        }
+      }},
+      {id:'f2counter', type:'custom', x:0, y:0, draw: function(c2) {
+        var panelX = CHART_RIGHT - 180;
+        var panelY = CHART_TOP + 10;
+        drawGlassPanel(c2, panelX, panelY, 170, 55, P);
+        c2.font = "10px 'Inter','Noto Sans SC',sans-serif";
+        c2.fillStyle = P.muted;
+        c2.textAlign = 'left';
+        c2.fillText(t('f2counter'), panelX + 10, panelY + 18);
+        var counterVal = animState.activeFrame === 2 ? animState.impulseCounter : C6_TOTAL_IMPULSE;
+        var pulse = animState.phase === 1 ? 1 + Math.sin(animTime * 6) * 0.03 : 1;
+        c2.save();
+        c2.translate(panelX + 90, panelY + 40);
+        c2.scale(pulse, pulse);
+        c2.font = "bold 18px 'Space Grotesk',sans-serif";
+        c2.fillStyle = P.primary;
+        c2.textAlign = 'center';
+        c2.shadowColor = P.glowStrong;
+        c2.shadowBlur = animState.phase === 1 ? 10 : 0;
+        c2.fillText(counterVal.toFixed(1) + ' ' + t('f2unit'), 0, 0);
+        c2.restore();
+        c2.font = "9px 'Inter','Noto Sans SC',sans-serif";
+        c2.fillStyle = P.muted;
+        c2.textAlign = 'left';
+        c2.fillText(t('f2explain'), CHART_LEFT + 10, CHART_BOTTOM + 34);
+      }},
+    ];
+  }
+
+  if (f === 3) {
+    var GRID_SIZE = 20;
+    return [
+      {id:'f1header', type:'label', text:t('f3title'), x:cx, y:25, color:P.primary, size:14, align:'center'},
+      {id:'f1axes', type:'custom', x:0, y:0, draw: function(c2) {
+        drawAxes(c2, W, H, P, t);
+      }},
+      {id:'f3grid', type:'custom', x:0, y:0, draw: function(c2) {
+        drawThrustCurve(c2, 1, P, false);
+        c2.strokeStyle = 'rgba(255,255,255,0.08)';
+        c2.lineWidth = 0.5;
+        for (var gx = CHART_LEFT; gx <= CHART_RIGHT; gx += GRID_SIZE) {
+          c2.beginPath(); c2.moveTo(gx, CHART_TOP); c2.lineTo(gx, CHART_BOTTOM); c2.stroke();
+        }
+        for (var gy = CHART_TOP; gy <= CHART_BOTTOM; gy += GRID_SIZE) {
+          c2.beginPath(); c2.moveTo(CHART_LEFT, gy); c2.lineTo(CHART_RIGHT, gy); c2.stroke();
+        }
+        var gridData = getGridCells();
+        var totalFull = gridData.fullCells.length;
+        var totalPartial = gridData.partialCells.length;
+        var prog = animState.activeFrame === 3 ? animState.gridProgress : 1;
+        var countFull = Math.floor(easeOutCubic(prog) * totalFull);
+        var countPartial = Math.floor(easeOutCubic(prog) * totalPartial);
+        for (var i = 0; i < countFull && i < totalFull; i++) {
+          var cell = gridData.fullCells[i];
+          c2.fillStyle = 'rgba(255,127,80,0.35)';
+          c2.fillRect(cell.x + 1, cell.y + 1, GRID_SIZE - 2, GRID_SIZE - 2);
+        }
+        for (var j = 0; j < countPartial && j < totalPartial; j++) {
+          var pcell = gridData.partialCells[j];
+          c2.fillStyle = 'rgba(255,181,156,0.15)';
+          c2.fillRect(pcell.x + 1, pcell.y + 1, GRID_SIZE - 2, GRID_SIZE - 2);
+        }
+        if (prog >= 1) {
+          var pulseAlpha = 0.05 + animState.idlePulse * 0.08;
+          c2.strokeStyle = 'rgba(255,181,156,' + pulseAlpha + ')';
+          c2.lineWidth = 1;
+          for (var gx2 = CHART_LEFT; gx2 <= CHART_RIGHT; gx2 += GRID_SIZE) {
+            c2.beginPath(); c2.moveTo(gx2, CHART_TOP); c2.lineTo(gx2, CHART_BOTTOM); c2.stroke();
+          }
+        }
+      }},
+      {id:'f3stats', type:'custom', x:0, y:0, draw: function(c2) {
+        var panelX = CHART_RIGHT - 190;
+        var panelY = CHART_TOP + 5;
+        drawGlassPanel(c2, panelX, panelY, 180, 95, P);
+        var gridData = getGridCells();
+        var fullCount = gridData.fullCells.length;
+        var partialCount = gridData.partialCells.length;
+        var GS = 20;
+        var cellTimeSpan = (GS / (CHART_RIGHT - CHART_LEFT)) * C6_BURN;
+        var cellThrustSpan = (GS / (CHART_BOTTOM - CHART_TOP)) * 16;
+        var cellArea = cellTimeSpan * cellThrustSpan;
+        var prog = animState.activeFrame === 3 ? animState.gridProgress : 1;
+        var showFull = Math.floor(easeOutCubic(prog) * fullCount);
+        var showPartial = Math.floor(easeOutCubic(prog) * partialCount);
+        var currentEstimate = (showFull + showPartial * 0.5) * cellArea;
+        c2.font = "9px 'Inter','Noto Sans SC',sans-serif";
+        c2.textAlign = 'left';
+        c2.fillStyle = P.muted;
+        c2.fillText(t('f3cellArea') + ' ' + cellArea.toFixed(2) + ' N\u00b7s', panelX + 8, panelY + 15);
+        c2.fillStyle = 'rgba(255,127,80,0.8)';
+        c2.fillRect(panelX + 8, panelY + 24, 8, 8);
+        c2.fillStyle = P.text;
+        c2.fillText(t('f3full') + ' ' + showFull, panelX + 20, panelY + 32);
+        c2.fillStyle = 'rgba(255,181,156,0.4)';
+        c2.fillRect(panelX + 8, panelY + 40, 8, 8);
+        c2.fillStyle = P.text;
+        c2.fillText(t('f3partial') + ' ' + showPartial + ' (x0.5)', panelX + 20, panelY + 48);
+        c2.font = "bold 10px 'Space Grotesk',sans-serif";
+        c2.fillStyle = P.secondary;
+        c2.fillText(t('f3estimate') + ' ' + currentEstimate.toFixed(1) + ' N\u00b7s', panelX + 8, panelY + 66);
+        if (prog >= 0.95) {
+          c2.fillStyle = P.primary;
+          c2.fillText(t('f3actual') + ' ' + C6_TOTAL_IMPULSE.toFixed(1) + ' N\u00b7s', panelX + 8, panelY + 82);
+        }
+      }},
+    ];
+  }
+
+  if (f === 4) {
+    return [
+      {id:'f4header', type:'label', text:t('f4title'), x:cx * 0.55, y:25, color:P.primary, size:14, align:'center'},
+      {id:'f4curves', type:'custom', x:0, y:0, draw: function(c2) {
+        var miniLeft = 50;
+        var miniRight = cx * 1.05 - 20;
+        var miniTop = 55;
+        var miniBot = 200;
+        var miniW = miniRight - miniLeft;
+        var miniH = miniBot - miniTop;
+        c2.strokeStyle = P.muted;
+        c2.lineWidth = 1;
+        c2.beginPath(); c2.moveTo(miniLeft, miniTop - 5); c2.lineTo(miniLeft, miniBot); c2.stroke();
+        c2.beginPath(); c2.moveTo(miniLeft, miniBot); c2.lineTo(miniRight + 10, miniBot); c2.stroke();
+        c2.font = "8px 'Inter','Noto Sans SC',sans-serif";
+        c2.fillStyle = P.muted;
+        c2.textAlign = 'center';
+        c2.fillText(t('f1xAxis'), (miniLeft + miniRight) / 2, miniBot + 12);
+        var prog = animState.activeFrame === 4 ? easeOutCubic(animState.barProgress) : 1;
+        var maxBurn = 2.0;
+        var maxThrust = 32;
+        for (var ei = 0; ei < ENGINES.length; ei++) {
+          var eng = ENGINES[ei];
+          c2.save();
+          c2.globalAlpha = 0.8;
+          var burnPx = (eng.burnTime / maxBurn) * miniW * prog;
+          var peakPx = miniBot - (eng.peakThrust / maxThrust) * miniH * prog;
+          var r = parseInt(eng.color.slice(1,3), 16);
+          var g = parseInt(eng.color.slice(3,5), 16);
+          var b = parseInt(eng.color.slice(5,7), 16);
+          c2.fillStyle = 'rgba(' + r + ',' + g + ',' + b + ',0.15)';
+          c2.beginPath();
+          c2.moveTo(miniLeft, miniBot);
+          c2.lineTo(miniLeft + burnPx * 0.1, peakPx);
+          c2.lineTo(miniLeft + burnPx * 0.3, peakPx + (miniBot - peakPx) * 0.2);
+          c2.lineTo(miniLeft + burnPx * 0.7, peakPx + (miniBot - peakPx) * 0.35);
+          c2.lineTo(miniLeft + burnPx, miniBot);
+          c2.closePath();
+          c2.fill();
+          c2.strokeStyle = eng.color;
+          c2.lineWidth = 1.5;
+          c2.beginPath();
+          c2.moveTo(miniLeft, miniBot);
+          c2.lineTo(miniLeft + burnPx * 0.1, peakPx);
+          c2.lineTo(miniLeft + burnPx * 0.3, peakPx + (miniBot - peakPx) * 0.2);
+          c2.lineTo(miniLeft + burnPx * 0.7, peakPx + (miniBot - peakPx) * 0.35);
+          c2.lineTo(miniLeft + burnPx, miniBot);
+          c2.stroke();
+          if (prog > 0.5) {
+            c2.font = "bold 9px 'Space Grotesk',sans-serif";
+            c2.fillStyle = eng.color;
+            c2.textAlign = 'left';
+            c2.fillText(eng.fullName, miniLeft + burnPx * 0.3 + 5, peakPx + (miniBot - peakPx) * 0.1 + ei * 12);
+          }
+          c2.restore();
+        }
+      }},
+      {id:'f4bars', type:'custom', x:0, y:0, draw: function(c2) {
+        var barAreaLeft = cx * 1.1;
+        var barAreaRight = W - 30;
+        var barTop = 55;
+        var barBot = 200;
+        var barW = barAreaRight - barAreaLeft;
+        var prog = animState.activeFrame === 4 ? easeOutCubic(animState.barProgress) : 1;
+        var maxImpulse = 25;
+        var barHeight = 22;
+        var barGap = 8;
+        c2.font = "bold 10px 'Space Grotesk',sans-serif";
+        c2.fillStyle = P.muted;
+        c2.textAlign = 'left';
+        c2.fillText('N\u00b7s', barAreaRight - 15, barTop - 5);
+        c2.strokeStyle = 'rgba(255,255,255,0.05)';
+        c2.lineWidth = 0.5;
+        for (var sv = 0; sv <= maxImpulse; sv += 5) {
+          var sx = barAreaLeft + (sv / maxImpulse) * barW;
+          c2.beginPath(); c2.moveTo(sx, barTop); c2.lineTo(sx, barBot); c2.stroke();
+          c2.font = "7px 'Space Grotesk',sans-serif";
+          c2.fillStyle = P.muted;
+          c2.textAlign = 'center';
+          c2.fillText(sv.toString(), sx, barBot + 8);
+        }
+        for (var bi = 0; bi < ENGINES.length; bi++) {
+          var eng2 = ENGINES[bi];
+          var by = barTop + bi * (barHeight + barGap);
+          var bw = (eng2.impulse / maxImpulse) * barW * prog;
+          var r2 = parseInt(eng2.color.slice(1,3), 16);
+          var g2 = parseInt(eng2.color.slice(3,5), 16);
+          var b2 = parseInt(eng2.color.slice(5,7), 16);
+          var barGrad = c2.createLinearGradient(barAreaLeft, 0, barAreaLeft + bw, 0);
+          barGrad.addColorStop(0, 'rgba(' + r2 + ',' + g2 + ',' + b2 + ',0.6)');
+          barGrad.addColorStop(1, 'rgba(' + r2 + ',' + g2 + ',' + b2 + ',0.9)');
+          c2.fillStyle = barGrad;
+          c2.fillRect(barAreaLeft, by, bw, barHeight);
+          c2.save();
+          c2.shadowColor = eng2.color;
+          c2.shadowBlur = 6;
+          c2.fillRect(barAreaLeft, by, bw, barHeight);
+          c2.restore();
+          c2.font = "bold 10px 'Space Grotesk',sans-serif";
+          c2.fillStyle = P.text;
+          c2.textAlign = 'right';
+          c2.fillText(eng2.letter, barAreaLeft - 6, by + barHeight / 2 + 3);
+          if (prog > 0.3) {
+            c2.font = "bold 9px 'Space Grotesk',sans-serif";
+            c2.fillStyle = P.text;
+            c2.textAlign = 'left';
+            c2.fillText(eng2.impulse.toFixed(1), barAreaLeft + bw + 5, by + barHeight / 2 + 3);
+          }
+        }
+      }},
+      {id:'f4rules', type:'custom', x:0, y:0, draw: function(c2) {
+        var rulesY = 225;
+        var rulesLeft = 50;
+        c2.font = "bold 11px 'Space Grotesk','Noto Sans SC',sans-serif";
+        c2.fillStyle = P.secondary;
+        c2.textAlign = 'left';
+        c2.fillText(t('f4rules'), rulesLeft, rulesY);
+        var boxW = (W - 120) / 2;
+        var boxH = 65;
+        var box1X = rulesLeft;
+        var box2X = rulesLeft + boxW + 20;
+        var boxY = rulesY + 15;
+        var prog = animState.activeFrame === 4 ? easeOutCubic(animState.barProgress) : 1;
+        drawGlassPanel(c2, box1X, boxY, boxW, boxH, P);
+        c2.font = "bold 10px 'Space Grotesk','Noto Sans SC',sans-serif";
+        c2.fillStyle = P.text;
+        c2.textAlign = 'left';
+        c2.fillText(t('f4primary'), box1X + 10, boxY + 20);
+        if (prog > 0.6) {
+          c2.font = "9px 'Inter','Noto Sans SC',sans-serif";
+          var passEngines = ['A8: 2.5', 'B6: 5.0', 'C6: 10.0', 'D12: 20.0'];
+          for (var pi2 = 0; pi2 < 4; pi2++) {
+            c2.fillStyle = P.primary;
+            c2.fillText('[v] ' + passEngines[pi2], box1X + 10 + (pi2 % 2) * (boxW / 2 - 5), boxY + 38 + Math.floor(pi2 / 2) * 14);
+          }
+        }
+        drawGlassPanel(c2, box2X, boxY, boxW, boxH, P);
+        c2.font = "bold 10px 'Space Grotesk','Noto Sans SC',sans-serif";
+        c2.fillStyle = P.text;
+        c2.textAlign = 'left';
+        c2.fillText(t('f4secondary'), box2X + 10, boxY + 20);
+        if (prog > 0.6) {
+          c2.font = "9px 'Inter','Noto Sans SC',sans-serif";
+          var secEngines = ['A8: 2.5', 'B6: 5.0', 'C6: 10.0', 'D12: 20.0'];
+          for (var si = 0; si < 4; si++) {
+            c2.fillStyle = P.primary;
+            c2.fillText('[v] ' + secEngines[si], box2X + 10 + (si % 2) * (boxW / 2 - 5), boxY + 38 + Math.floor(si / 2) * 14);
+          }
+        }
+        // Screen shake visual feedback
+        if (animState.shakeAmount > 0.5) {
+          c2.save();
+          c2.translate(
+            (Math.random() - 0.5) * animState.shakeAmount * 2,
+            (Math.random() - 0.5) * animState.shakeAmount * 2
+          );
+          c2.restore();
+        }
+        // Parallax depth hint
+        var parallaxOffset = animState.idlePulse * 1.5;
+        c2.strokeStyle = 'rgba(255,181,156,' + (0.05 + animState.idlePulse * 0.05) + ')';
+        c2.lineWidth = 0.5;
+        c2.strokeRect(box1X - parallaxOffset, boxY - parallaxOffset, boxW + parallaxOffset * 2, boxH + parallaxOffset * 2);
+        c2.strokeRect(box2X + parallaxOffset, boxY - parallaxOffset, boxW, boxH + parallaxOffset * 2);
+      }},
+    ];
+  }
+
+  return [];
+}
+
+// ============================================================
+// CUSTOM BACKGROUND with parallax star field
+// ============================================================
+
+var starField = [];
+for (var si2 = 0; si2 < 60; si2++) {
+  starField.push({
+    x: Math.random(),
+    y: Math.random(),
+    size: 0.3 + Math.random() * 1.2,
+    speed: 0.2 + Math.random() * 0.8,
+    twinkle: Math.random() * Math.PI * 2
+  });
+}
+
+function drawBg(ctx, W, H) {
+  var g = ctx.createLinearGradient(0, 0, 0, H);
+  g.addColorStop(0, '#131313');
+  g.addColorStop(1, '#1c1b1b');
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, W, H);
+  ctx.strokeStyle = 'rgba(255,255,255,0.025)';
+  ctx.lineWidth = 0.5;
+  for (var x = 0; x < W; x += 40) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke(); }
+  for (var y = 0; y < H; y += 40) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke(); }
+  for (var i = 0; i < starField.length; i++) {
+    var st = starField[i];
+    var sx = (st.x * W + animTime * st.speed * 5) % W;
+    var sy = st.y * H;
+    var twinkleAlpha = 0.2 + Math.sin(animTime * 2 + st.twinkle) * 0.15;
+    ctx.fillStyle = 'rgba(255,240,220,' + twinkleAlpha + ')';
+    ctx.beginPath();
+    ctx.arc(sx, sy, st.size, 0, Math.PI * 2);
+    ctx.fill();
+  }
+}
+
+// ============================================================
+// BOOT
+// ============================================================
+
+AnimRuntime.boot();
+</script>
+</body>
+</html>

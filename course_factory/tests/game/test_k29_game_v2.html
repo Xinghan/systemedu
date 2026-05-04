@@ -1,0 +1,1518 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=Inter:wght@400;500&family=Noto+Sans+SC:wght@400;700&display=swap" rel="stylesheet">
+<title>Engine Efficiency Ranker</title>
+<style>
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box;border-radius:0!important;}
+html,body{width:100%;height:100vh;overflow:hidden;background:#0c0e14;color:#e2e2e9;font-family:'Inter','Noto Sans SC',sans-serif;}
+body{margin:0;padding:0;}
+.game-wrap{display:flex;flex-direction:row;height:100vh;overflow:hidden;}
+.game-sidebar{width:200px;min-width:200px;max-width:200px;display:flex;flex-direction:column;gap:8px;padding:10px;background:rgba(0,0,0,0.5);border-right:1px solid rgba(80,255,176,0.15);overflow-y:auto;}
+.sidebar-lang{align-self:flex-start;flex-shrink:0;font-family:'Space Grotesk',sans-serif;font-size:10px;font-weight:700;padding:3px 8px;cursor:pointer;border:1px solid rgba(255,181,156,0.25);background:transparent;color:#ffb59c;letter-spacing:1px;}
+.sidebar-lang:hover{border-color:#ffb59c;background:rgba(255,181,156,0.08);}
+.sidebar-title{font-family:'Space Grotesk',sans-serif;font-size:11px;font-weight:700;color:#50ffb0;letter-spacing:0.08em;text-transform:uppercase;margin-top:4px;}
+.sidebar-guide{font-size:12px;color:#aaabb0;line-height:1.6;}
+.game-main{flex:1;display:flex;flex-direction:column;min-width:0;}
+.game-header{padding:8px 16px;display:flex;justify-content:space-between;align-items:center;background:rgba(0,0,0,0.4);}
+.game-header h1{font-family:'Space Grotesk',sans-serif;font-size:clamp(13px,2vw,17px);font-weight:700;color:#50ffb0;}
+.game-header .info{font-family:'Space Grotesk',sans-serif;font-size:12px;color:#aaabb0;}
+.game-body{flex:1;display:flex;flex-direction:column;min-height:0;}
+canvas{width:100%;height:100%;display:block;}
+.control-panel{display:flex;justify-content:center;align-items:center;gap:12px;padding:8px 16px;background:rgba(0,0,0,0.4);flex-wrap:wrap;}
+.ctrl-btn{font-family:'Space Grotesk',sans-serif;font-size:12px;font-weight:700;padding:6px 18px;border:none;cursor:pointer;color:#0c0e14;background:linear-gradient(135deg,#50ffb0,#17df93);box-shadow:0 0 10px rgba(80,255,176,0.3);transition:transform 0.1s;}
+.ctrl-btn:hover{transform:scale(1.04);}
+.ctrl-btn:active{transform:scale(0.96);}
+.ctrl-btn:disabled{opacity:0.4;cursor:default;transform:none;}
+.ctrl-btn.secondary{background:rgba(30,30,45,0.9);color:#aaabb0;box-shadow:none;border:1px solid rgba(170,171,176,0.2);}
+.ctrl-btn.secondary:hover{color:#50ffb0;border-color:rgba(80,255,176,0.3);}
+.hud-bar{height:44px;display:flex;align-items:center;justify-content:space-around;background:rgba(0,0,0,0.55);padding:0 16px;}
+.hud-item{text-align:center;}
+.hud-label{font-family:'Space Grotesk',sans-serif;font-size:9px;letter-spacing:0.12em;color:#aaabb0;text-transform:uppercase;}
+.hud-val{font-family:'Space Grotesk',sans-serif;font-size:14px;font-weight:700;color:#50ffb0;transition:transform 0.15s;}
+</style>
+</head>
+<body>
+<div class="game-wrap">
+  <div class="game-sidebar">
+    <button class="sidebar-lang" id="langBtn">CN</button>
+    <div class="sidebar-title" id="sidebarTitle"></div>
+    <div class="sidebar-guide" id="guideContent"></div>
+  </div>
+  <div class="game-main">
+    <div class="game-header">
+      <h1 id="gameTitle"></h1>
+      <div class="info" id="roundInfo"></div>
+    </div>
+    <div class="game-body">
+      <canvas id="c"></canvas>
+    </div>
+    <div class="control-panel">
+      <button class="ctrl-btn" id="btnAction"></button>
+      <button class="ctrl-btn secondary" id="btnReset"></button>
+    </div>
+    <div class="hud-bar">
+      <div class="hud-item"><div class="hud-label" id="hudL1"></div><div class="hud-val" id="hudV1"></div></div>
+      <div class="hud-item"><div class="hud-label" id="hudL2"></div><div class="hud-val" id="hudV2"></div></div>
+      <div class="hud-item"><div class="hud-label" id="hudL3"></div><div class="hud-val" id="hudV3"></div></div>
+      <div class="hud-item"><div class="hud-label" id="hudL4"></div><div class="hud-val" id="hudV4"></div></div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ============================================================
+// K29 Game: Engine Efficiency Ranker
+// 4 Levels: Calculate Isp, Rank engines, Multiple choice, Tradeoff explorer
+// Physics: Isp = I / (m * g0),  v_e = Isp * g0
+// ============================================================
+
+var G0 = 9.80665; // m/s^2
+
+// --- I18N ---
+var I18N = {
+  title:       {en:'ENGINE EFFICIENCY RANKER', cn:'\u53d1\u52a8\u673a\u6548\u7387\u6392\u884c\u699c'},
+  levelLabel:  {en:'LEVEL', cn:'\u5173\u5361'},
+  roundLabel:  {en:'ROUND', cn:'\u56de\u5408'},
+  submit:      {en:'SUBMIT', cn:'\u63d0\u4ea4'},
+  next:        {en:'NEXT', cn:'\u4e0b\u4e00\u9898'},
+  nextLevel:   {en:'NEXT LEVEL', cn:'\u4e0b\u4e00\u5173'},
+  reset:       {en:'RESET', cn:'\u91cd\u7f6e'},
+  correct:     {en:'CORRECT!', cn:'\u6b63\u786e\uff01'},
+  wrong:       {en:'TRY AGAIN', cn:'\u518d\u8bd5\u4e00\u6b21'},
+  close:       {en:'CLOSE!', cn:'\u63a5\u8fd1\uff01'},
+  perfect:     {en:'PERFECT!', cn:'\u5b8c\u7f8e\uff01'},
+  complete:    {en:'ALL LEVELS COMPLETE!', cn:'\u5168\u90e8\u5b8c\u6210\uff01'},
+  score:       {en:'SCORE', cn:'\u5f97\u5206'},
+  isp:         {en:'Isp', cn:'Isp'},
+  // Level 1
+  l1title:     {en:'CALCULATE Isp', cn:'\u8ba1\u7b97\u6bd4\u51b2'},
+  l1guide:     {en:'Given total impulse I (N*s) and propellant mass m (g), calculate specific impulse:\nIsp = I / (m * g0)\nwhere g0 = 9.80665 m/s2.\nType your answer (seconds) and submit. 10% tolerance.', cn:'\u5df2\u77e5\u603b\u51b2 I (N*s) \u548c\u63a8\u8fdb\u5242\u8d28\u91cf m (g)\uff0c\u8ba1\u7b97\u6bd4\u51b2\uff1a\nIsp = I / (m * g0)\n\u5176\u4e2d g0 = 9.80665 m/s2\u3002\n\u8f93\u5165\u7b54\u6848\uff08\u79d2\uff09\u5e76\u63d0\u4ea4\u3002\u5141\u8bb810%\u8bef\u5dee\u3002'},
+  l1sidebar:   {en:'ISP CALCULATOR', cn:'ISP \u8ba1\u7b97\u5668'},
+  impulse:     {en:'Total Impulse', cn:'\u603b\u51b2'},
+  propMass:    {en:'Propellant Mass', cn:'\u63a8\u8fdb\u5242\u8d28\u91cf'},
+  yourAnswer:  {en:'Your Answer (s)', cn:'\u4f60\u7684\u7b54\u6848 (s)'},
+  step1:       {en:'Step 1: Convert mass', cn:'\u6b651: \u8d28\u91cf\u6362\u7b97'},
+  step2:       {en:'Step 2: Weight force', cn:'\u6b652: \u91cd\u529b'},
+  step3:       {en:'Step 3: Divide', cn:'\u6b653: \u76f8\u9664'},
+  // Level 2
+  l2title:     {en:'RANK BY EFFICIENCY', cn:'\u6309\u6548\u7387\u6392\u5e8f'},
+  l2guide:     {en:'Drag engine cards to rank from LOWEST to HIGHEST Isp.\nEach card shows engine name, type, total impulse, and propellant mass.\nCalculate Isp for each and arrange them in order.', cn:'\u62d6\u62fd\u53d1\u52a8\u673a\u5361\u7247\u4ece\u4f4e\u5230\u9ad8\u6392\u5217 Isp\u3002\n\u6bcf\u5f20\u5361\u7247\u663e\u793a\u53d1\u52a8\u673a\u540d\u79f0\u3001\u7c7b\u578b\u3001\u603b\u51b2\u548c\u63a8\u8fdb\u5242\u8d28\u91cf\u3002\n\u8ba1\u7b97\u6bcf\u4e2a\u7684 Isp \u5e76\u6392\u5e8f\u3002'},
+  l2sidebar:   {en:'ENGINE RANKER', cn:'\u53d1\u52a8\u673a\u6392\u5e8f'},
+  lowest:      {en:'LOWEST Isp', cn:'\u6700\u4f4e Isp'},
+  highest:     {en:'HIGHEST Isp', cn:'\u6700\u9ad8 Isp'},
+  // Level 3
+  l3title:     {en:'WHY LIQUID IS BETTER', cn:'\u4e3a\u4ec0\u4e48\u6db2\u4f53\u66f4\u597d'},
+  l3guide:     {en:'Answer multiple choice questions about what affects Isp and why some propellant types achieve higher efficiency.', cn:'\u56de\u7b54\u5173\u4e8e\u5f71\u54cd Isp \u7684\u56e0\u7d20\u4ee5\u53ca\u4e3a\u4ec0\u4e48\u67d0\u4e9b\u63a8\u8fdb\u5242\u6548\u7387\u66f4\u9ad8\u7684\u9009\u62e9\u9898\u3002'},
+  l3sidebar:   {en:'KNOWLEDGE QUIZ', cn:'\u77e5\u8bc6\u95ee\u7b54'},
+  // Level 4
+  l4title:     {en:'TRADEOFF EXPLORER', cn:'\u6743\u8861\u63a2\u7d22\u5668'},
+  l4guide:     {en:'Use sliders to set Isp and Thrust. Place your "ideal engine" point on the scatter plot.\nMatch the target zone for each mission:\n- LEO launch: high thrust, moderate Isp\n- Deep space: high Isp, low thrust OK\n- Model rocket: low thrust, low Isp', cn:'\u7528\u6ed1\u5757\u8bbe\u7f6e Isp \u548c\u63a8\u529b\u3002\u5728\u6563\u70b9\u56fe\u4e0a\u653e\u7f6e\u201c\u7406\u60f3\u53d1\u52a8\u673a\u201d\u70b9\u3002\n\u5339\u914d\u6bcf\u4e2a\u4efb\u52a1\u7684\u76ee\u6807\u533a\u57df\uff1a\n- LEO\u53d1\u5c04\uff1a\u9ad8\u63a8\u529b\uff0c\u4e2d\u7b49Isp\n- \u6df1\u7a7a\u63a2\u6d4b\uff1a\u9ad8Isp\uff0c\u4f4e\u63a8\u529b\u53ef\u63a5\u53d7\n- \u6a21\u578b\u706b\u7bad\uff1a\u4f4e\u63a8\u529b\uff0c\u4f4eIsp'},
+  l4sidebar:   {en:'TRADEOFF PLOT', cn:'\u6743\u8861\u56fe'},
+  mission:     {en:'MISSION', cn:'\u4efb\u52a1'},
+  thrust:      {en:'Thrust', cn:'\u63a8\u529b'},
+  leoLaunch:   {en:'LEO Launch', cn:'LEO \u53d1\u5c04'},
+  deepSpace:   {en:'Deep Space Probe', cn:'\u6df1\u7a7a\u63a2\u6d4b'},
+  modelRocket: {en:'Model Rocket', cn:'\u6a21\u578b\u706b\u7bad'},
+  inZone:      {en:'IN TARGET ZONE!', cn:'\u547d\u4e2d\u76ee\u6807\u533a\u57df\uff01'},
+  outZone:     {en:'OUTSIDE TARGET', cn:'\u672a\u547d\u4e2d\u76ee\u6807'},
+  summary:     {en:'Isp measures fuel efficiency. High Isp = more delta-v per kg of propellant. But high Isp engines often have low thrust. Mission design means choosing the right tradeoff!', cn:'Isp \u8861\u91cf\u71c3\u6599\u6548\u7387\u3002\u9ad8 Isp = \u6bcf\u5343\u514b\u63a8\u8fdb\u5242\u83b7\u5f97\u66f4\u591a delta-v\u3002\u4f46\u9ad8 Isp \u53d1\u52a8\u673a\u5f80\u5f80\u63a8\u529b\u4f4e\u3002\u4efb\u52a1\u8bbe\u8ba1\u5c31\u662f\u9009\u62e9\u6b63\u786e\u7684\u6743\u8861\uff01'},
+};
+
+var lang = 'cn';
+function t(key) { return I18N[key] ? (I18N[key][lang] || I18N[key].en || key) : key; }
+
+var soundMuted = true;
+
+// --- Real engine data ---
+// Level 1: Estes model rocket engines
+var L1_ENGINES = [
+  {name:'Estes A8',  impulseNs:2.5,   propMassG:3.12,  ispTrue:null},
+  {name:'Estes B6',  impulseNs:5.0,   propMassG:5.76,  ispTrue:null},
+  {name:'Estes C6',  impulseNs:10.0,  propMassG:12.5,  ispTrue:null},
+  {name:'Estes D12', impulseNs:20.0,  propMassG:24.93, ispTrue:null},
+];
+// Pre-compute true Isp
+for (var ei = 0; ei < L1_ENGINES.length; ei++) {
+  var eng = L1_ENGINES[ei];
+  eng.ispTrue = eng.impulseNs / ((eng.propMassG / 1000) * G0);
+}
+
+// Level 2: Mix model + industrial engines for ranking
+var L2_ENGINES = [
+  {name:'Estes A8',        type:{en:'Model Solid',cn:'\u6a21\u578b\u56fa\u4f53'},  impulseNs:2.5,    propMassG:3.12,   ispTrue:null},
+  {name:'AeroTech H128',   type:{en:'High-Power Solid',cn:'\u9ad8\u529f\u7387\u56fa\u4f53'}, impulseNs:219,  propMassG:123,    ispTrue:null},
+  {name:'RD-107 (Soyuz)',  type:{en:'Liquid LOX/Kero',cn:'\u6db2\u4f53 LOX/\u7164\u6cb9'},  impulseNs:2450000, propMassG:795000, ispTrue:null},
+  {name:'RS-25 (Shuttle)', type:{en:'Liquid LOX/LH2',cn:'\u6db2\u4f53 LOX/LH2'},  impulseNs:17600000, propMassG:4100000,  ispTrue:null},
+  {name:'NEXT Ion',        type:{en:'Ion Electric',cn:'\u79bb\u5b50\u7535\u63a8'},  impulseNs:26600,  propMassG:640,    ispTrue:null},
+];
+for (var ei2 = 0; ei2 < L2_ENGINES.length; ei2++) {
+  var eng2 = L2_ENGINES[ei2];
+  eng2.ispTrue = eng2.impulseNs / ((eng2.propMassG / 1000) * G0);
+}
+// Correct order by Isp (lowest to highest): compute and sort
+var L2_SORTED = L2_ENGINES.slice().sort(function(a,b){ return a.ispTrue - b.ispTrue; });
+
+// Level 3: Multiple choice questions
+var L3_QUESTIONS = [
+  {
+    q: {en:'Which factor MOST directly increases Isp?', cn:'\u54ea\u4e2a\u56e0\u7d20\u6700\u76f4\u63a5\u5730\u63d0\u9ad8 Isp\uff1f'},
+    opts: [
+      {text:{en:'Higher combustion chamber pressure',cn:'\u66f4\u9ad8\u7684\u71c3\u70e7\u5ba4\u538b\u529b'}, correct:false},
+      {text:{en:'Higher exhaust velocity',cn:'\u66f4\u9ad8\u7684\u6392\u6c14\u901f\u5ea6'}, correct:true},
+      {text:{en:'Larger nozzle diameter',cn:'\u66f4\u5927\u7684\u55b7\u7ba1\u76f4\u5f84'}, correct:false},
+      {text:{en:'More propellant loaded',cn:'\u88c5\u8f7d\u66f4\u591a\u63a8\u8fdb\u5242'}, correct:false},
+    ],
+    explain: {en:'Isp = v_e / g0. Exhaust velocity (v_e) directly determines Isp.', cn:'Isp = v_e / g0\u3002\u6392\u6c14\u901f\u5ea6 (v_e) \u76f4\u63a5\u51b3\u5b9a\u4e86 Isp\u3002'}
+  },
+  {
+    q: {en:'Why does H2/O2 achieve higher Isp than solid propellant?', cn:'\u4e3a\u4ec0\u4e48 H2/O2 \u6bd4\u56fa\u4f53\u63a8\u8fdb\u5242\u7684 Isp \u66f4\u9ad8\uff1f'},
+    opts: [
+      {text:{en:'H2/O2 burns at lower temperature',cn:'H2/O2 \u71c3\u70e7\u6e29\u5ea6\u66f4\u4f4e'}, correct:false},
+      {text:{en:'Lighter exhaust molecules + higher combustion temp',cn:'\u66f4\u8f7b\u7684\u6392\u6c14\u5206\u5b50 + \u66f4\u9ad8\u7684\u71c3\u70e7\u6e29\u5ea6'}, correct:true},
+      {text:{en:'Liquid fuel is denser',cn:'\u6db2\u4f53\u71c3\u6599\u5bc6\u5ea6\u66f4\u5927'}, correct:false},
+      {text:{en:'Solid motors have friction losses',cn:'\u56fa\u4f53\u53d1\u52a8\u673a\u6709\u6469\u64e6\u635f\u5931'}, correct:false},
+    ],
+    explain: {en:'v_e ~ sqrt(T / M_mol). H2O exhaust (M=18) is much lighter than solid exhaust (M~25-30), and H2/O2 burns hotter (~3500K vs ~3000K).', cn:'v_e ~ sqrt(T / M_mol)\u3002H2O \u6392\u6c14 (M=18) \u6bd4\u56fa\u4f53\u6392\u6c14 (M~25-30) \u8f7b\u5f97\u591a\uff0c\u4e14 H2/O2 \u71c3\u70e7\u6e29\u5ea6\u66f4\u9ad8 (~3500K vs ~3000K)\u3002'}
+  },
+  {
+    q: {en:'An ion engine has Isp ~ 3000s but only 0.2N thrust. Why is it still useful?', cn:'\u79bb\u5b50\u53d1\u52a8\u673a Isp ~ 3000s \u4f46\u63a8\u529b\u4ec5 0.2N\u3002\u4e3a\u4ec0\u4e48\u5b83\u4ecd\u7136\u6709\u7528\uff1f'},
+    opts: [
+      {text:{en:'It can launch rockets from Earth surface',cn:'\u5b83\u80fd\u4ece\u5730\u8868\u53d1\u5c04\u706b\u7bad'}, correct:false},
+      {text:{en:'In space, small thrust over long time gives large delta-v efficiently',cn:'\u5728\u592a\u7a7a\u4e2d\uff0c\u5c0f\u63a8\u529b\u957f\u65f6\u95f4\u8fd0\u884c\u53ef\u9ad8\u6548\u83b7\u5f97\u5927 delta-v'}, correct:true},
+      {text:{en:'Ion engines are cheaper than chemical',cn:'\u79bb\u5b50\u53d1\u52a8\u673a\u6bd4\u5316\u5b66\u53d1\u52a8\u673a\u4fbf\u5b9c'}, correct:false},
+      {text:{en:'Thrust does not matter at all',cn:'\u63a8\u529b\u5b8c\u5168\u4e0d\u91cd\u8981'}, correct:false},
+    ],
+    explain: {en:'In zero-g vacuum, even tiny thrust accumulates delta-v. High Isp means less propellant needed for the same delta-v (Tsiolkovsky equation).', cn:'\u5728\u96f6\u91cd\u529b\u771f\u7a7a\u4e2d\uff0c\u5373\u4f7f\u5fae\u5c0f\u63a8\u529b\u4e5f\u80fd\u7d2f\u79ef delta-v\u3002\u9ad8 Isp \u610f\u5473\u7740\u76f8\u540c delta-v \u9700\u8981\u66f4\u5c11\u63a8\u8fdb\u5242\uff08\u9f50\u5965\u5c14\u79d1\u592b\u65af\u57fa\u65b9\u7a0b\uff09\u3002'}
+  },
+  {
+    q: {en:'What is the relationship between Isp and exhaust velocity?', cn:'Isp \u548c\u6392\u6c14\u901f\u5ea6\u7684\u5173\u7cfb\u662f\u4ec0\u4e48\uff1f'},
+    opts: [
+      {text:{en:'v_e = Isp * g0', cn:'v_e = Isp * g0'}, correct:true},
+      {text:{en:'v_e = Isp / g0', cn:'v_e = Isp / g0'}, correct:false},
+      {text:{en:'v_e = Isp^2', cn:'v_e = Isp^2'}, correct:false},
+      {text:{en:'They are unrelated', cn:'\u5b83\u4eec\u65e0\u5173'}, correct:false},
+    ],
+    explain: {en:'v_e = Isp * g0. Specific impulse (in seconds) times g0 gives exhaust velocity in m/s.', cn:'v_e = Isp * g0\u3002\u6bd4\u51b2\uff08\u79d2\uff09\u4e58\u4ee5 g0 \u5f97\u5230\u6392\u6c14\u901f\u5ea6 (m/s)\u3002'}
+  }
+];
+
+// Level 4: Reference engines for scatter plot
+var L4_REF_ENGINES = [
+  {name:'Estes A8',      isp:82,   thrustN:8,        color:'#ff6b6b'},
+  {name:'Estes C6',      isp:82,   thrustN:6,        color:'#ff6b6b'},
+  {name:'Estes D12',     isp:82,   thrustN:28.6,     color:'#ff6b6b'},
+  {name:'AeroTech M1939',isp:210,  thrustN:1939,     color:'#ffa94d'},
+  {name:'Merlin 1D',     isp:311,  thrustN:845000,   color:'#69db7c'},
+  {name:'RD-180',        isp:338,  thrustN:4152000,  color:'#69db7c'},
+  {name:'RS-25',         isp:452,  thrustN:2279000,  color:'#74c0fc'},
+  {name:'RL-10',         isp:465,  thrustN:110000,   color:'#74c0fc'},
+  {name:'NEXT Ion',      isp:4190, thrustN:0.236,    color:'#da77f2'},
+  {name:'Hall SPT-140',  isp:1770, thrustN:0.29,     color:'#da77f2'},
+  {name:'VASIMR',        isp:3000, thrustN:6,        color:'#e599f7'},
+];
+
+// Level 4: Mission target zones (Isp range, Thrust range in log10)
+var L4_MISSIONS = [
+  {name:'leoLaunch',   ispMin:280, ispMax:470,  thrustMin:500000, thrustMax:5000000, desc:{en:'LEO Launch: Need massive thrust to overcome gravity. Moderate-to-high Isp.',cn:'LEO \u53d1\u5c04\uff1a\u9700\u8981\u5de8\u5927\u63a8\u529b\u514b\u670d\u91cd\u529b\u3002\u4e2d\u9ad8 Isp\u3002'}},
+  {name:'deepSpace',   ispMin:1500,ispMax:4500, thrustMin:0.01,   thrustMax:10,      desc:{en:'Deep Space: Efficiency is king. Low thrust OK, maximize Isp.',cn:'\u6df1\u7a7a\u63a2\u6d4b\uff1a\u6548\u7387\u81f3\u4e0a\u3002\u4f4e\u63a8\u529b\u53ef\u4ee5\uff0c\u6700\u5927\u5316 Isp\u3002'}},
+  {name:'modelRocket', ispMin:60,  ispMax:130,  thrustMin:1,      thrustMax:50,      desc:{en:'Model Rocket: Small solid motors. Low Isp, low thrust.',cn:'\u6a21\u578b\u706b\u7bad\uff1a\u5c0f\u578b\u56fa\u4f53\u53d1\u52a8\u673a\u3002\u4f4e Isp\uff0c\u4f4e\u63a8\u529b\u3002'}},
+];
+
+// --- Game state ---
+var currentLevel = 0;     // 0-3
+var currentRound = 0;     // within level
+var totalScore = 0;
+var levelScores = [0,0,0,0];
+
+// Level 1 state
+var l1InputValue = '';
+var l1Phase = 'input';    // input, showSteps, correct, wrong
+var l1ShowStepIdx = 0;
+var l1ShakeTimer = 0;
+var l1IspReadout = 0;
+var l1IspReadoutTarget = 0;
+
+// Level 2 state
+var l2Cards = [];         // {engineIdx, x, y, slotIdx, dragOffX, dragOffY}
+var l2DragIdx = -1;
+var l2Phase = 'arrange';  // arrange, correct, wrong
+var l2ChainGlow = 0;
+var l2ShakeTimer = 0;
+
+// Level 3 state
+var l3SelectedOpt = -1;
+var l3Phase = 'choose';   // choose, answered
+var l3ExplainAlpha = 0;
+
+// Level 4 state
+var l4IspSlider = 200;
+var l4ThrustSlider = 1000;
+var l4Phase = 'place';    // place, success, fail
+var l4DraggingSlider = null; // 'isp' | 'thrust' | null
+var l4ParticleTimer = 0;
+
+// Transition / animation state
+var transitionAlpha = 0;
+var transitionTarget = 0;
+var completionAlpha = 0;
+
+// Particles
+var particles = [];
+
+// Canvas
+var canvas = document.getElementById('c');
+var ctx = canvas.getContext('2d');
+var canvasW = 100, canvasH = 100;
+var dpr = Math.min(window.devicePixelRatio || 1, 2);
+var animFrame = 0;
+var pulsePhase = 0;
+var mouseX = 0, mouseY = 0;
+var mouseDown = false;
+
+// Parallax
+var parallaxStars = [];
+function initParallaxStars() {
+  parallaxStars = [];
+  for (var si = 0; si < 80; si++) {
+    parallaxStars.push({
+      x: Math.random() * canvasW,
+      y: Math.random() * canvasH,
+      r: 0.3 + Math.random() * 1.2,
+      speed: 0.2 + Math.random() * 0.6,
+      bright: 0.3 + Math.random() * 0.7
+    });
+  }
+}
+
+// --- Resize ---
+function resize() {
+  var rect = canvas.getBoundingClientRect();
+  canvasW = rect.width;
+  canvasH = rect.height;
+  canvas.width = canvasW * dpr;
+  canvas.height = canvasH * dpr;
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  initParallaxStars();
+  if (currentLevel === 1) initL2Cards();
+}
+window.addEventListener('resize', resize);
+
+// --- Audio stub ---
+function playSound(type) {
+  if (soundMuted) return;
+}
+
+// --- Particles ---
+function spawnParticles(cx, cy, count, color, spread) {
+  for (var pi = 0; pi < count; pi++) {
+    var angle = Math.random() * Math.PI * 2;
+    var speed = 1 + Math.random() * (spread || 3);
+    particles.push({
+      x: cx, y: cy,
+      vx: Math.cos(angle) * speed,
+      vy: Math.sin(angle) * speed,
+      life: 1.0,
+      decay: 0.015 + Math.random() * 0.02,
+      r: 2 + Math.random() * 3,
+      color: color || '#50ffb0'
+    });
+  }
+}
+
+function updateParticles() {
+  for (var pi = particles.length - 1; pi >= 0; pi--) {
+    var p = particles[pi];
+    p.x += p.vx;
+    p.y += p.vy;
+    p.vx *= 0.97;
+    p.vy *= 0.97;
+    p.life -= p.decay;
+    if (p.life <= 0) particles.splice(pi, 1);
+  }
+}
+
+function drawParticles() {
+  for (var pi = 0; pi < particles.length; pi++) {
+    var p = particles[pi];
+    ctx.globalAlpha = p.life * 0.8;
+    ctx.fillStyle = p.color;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, p.r * p.life, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+}
+
+// --- Parallax stars ---
+function drawParallax() {
+  var offX = (mouseX - canvasW / 2) * 0.01;
+  var offY = (mouseY - canvasH / 2) * 0.01;
+  for (var si = 0; si < parallaxStars.length; si++) {
+    var s = parallaxStars[si];
+    var sx = s.x + offX * s.speed;
+    var sy = s.y + offY * s.speed;
+    ctx.globalAlpha = s.bright * (0.5 + 0.5 * Math.sin(animFrame * 0.02 + si));
+    ctx.fillStyle = '#e2e2e9';
+    ctx.beginPath();
+    ctx.arc(sx, sy, s.r, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+}
+
+// --- UI update ---
+function updateUI() {
+  document.getElementById('langBtn').textContent = lang === 'cn' ? 'CN' : 'EN';
+  document.getElementById('gameTitle').textContent = t('title');
+
+  var titles = ['l1title','l2title','l3title','l4title'];
+  var sidebars = ['l1sidebar','l2sidebar','l3sidebar','l4sidebar'];
+  var guides = ['l1guide','l2guide','l3guide','l4guide'];
+
+  document.getElementById('sidebarTitle').textContent = t(sidebars[currentLevel]);
+  document.getElementById('guideContent').textContent = t(guides[currentLevel]);
+  document.getElementById('roundInfo').textContent = t('levelLabel') + ' ' + (currentLevel + 1) + '/4  ' + t('roundLabel') + ' ' + (currentRound + 1) + '/' + getRoundsForLevel();
+
+  // HUD
+  document.getElementById('hudL1').textContent = t('levelLabel');
+  document.getElementById('hudV1').textContent = (currentLevel + 1) + '/4';
+  document.getElementById('hudL2').textContent = t('score');
+  document.getElementById('hudV2').textContent = '' + totalScore;
+  document.getElementById('hudL3').textContent = t('isp');
+  document.getElementById('hudL4').textContent = '';
+  document.getElementById('hudV4').textContent = '';
+
+  if (currentLevel === 0) {
+    document.getElementById('hudV3').textContent = l1IspReadout > 0 ? l1IspReadout.toFixed(1) + 's' : '--';
+    document.getElementById('btnAction').textContent = l1Phase === 'input' ? t('submit') : (currentRound < 3 ? t('next') : t('nextLevel'));
+    document.getElementById('btnReset').textContent = t('reset');
+  } else if (currentLevel === 1) {
+    document.getElementById('hudV3').textContent = '--';
+    document.getElementById('btnAction').textContent = l2Phase === 'arrange' ? t('submit') : t('nextLevel');
+    document.getElementById('btnReset').textContent = t('reset');
+  } else if (currentLevel === 2) {
+    document.getElementById('hudV3').textContent = '--';
+    document.getElementById('btnAction').textContent = l3Phase === 'choose' ? t('submit') : (currentRound < 3 ? t('next') : t('nextLevel'));
+    document.getElementById('btnReset').textContent = t('reset');
+  } else if (currentLevel === 3) {
+    document.getElementById('hudV3').textContent = l4IspSlider.toFixed(0) + 's';
+    document.getElementById('hudL4').textContent = t('thrust');
+    document.getElementById('hudV4').textContent = formatThrust(l4ThrustSlider);
+    document.getElementById('btnAction').textContent = l4Phase === 'place' ? t('submit') : (currentRound < 2 ? t('next') : t('nextLevel'));
+    document.getElementById('btnReset').textContent = t('reset');
+  }
+}
+
+function getRoundsForLevel() {
+  if (currentLevel === 0) return 4;
+  if (currentLevel === 1) return 1;
+  if (currentLevel === 2) return 4;
+  if (currentLevel === 3) return 3;
+  return 1;
+}
+
+function formatThrust(n) {
+  if (n >= 1000000) return (n / 1000000).toFixed(1) + ' MN';
+  if (n >= 1000) return (n / 1000).toFixed(1) + ' kN';
+  if (n >= 1) return n.toFixed(1) + ' N';
+  return (n * 1000).toFixed(0) + ' mN';
+}
+
+// ==========================================
+// LEVEL 1: Calculate Isp
+// ==========================================
+function drawLevel1() {
+  var eng = L1_ENGINES[currentRound];
+  var centerX = canvasW / 2;
+  var topY = 50;
+
+  // Engine card
+  var cardW = Math.min(380, canvasW * 0.7);
+  var cardH = 180;
+  var cardX = centerX - cardW / 2;
+  var cardY = topY;
+
+  // Card glow
+  var glowIntensity = 0.3 + 0.15 * Math.sin(pulsePhase * 2);
+  ctx.shadowColor = '#50ffb0';
+  ctx.shadowBlur = 15 * glowIntensity;
+  ctx.fillStyle = 'rgba(20,25,40,0.9)';
+  ctx.fillRect(cardX, cardY, cardW, cardH);
+  ctx.shadowBlur = 0;
+  ctx.strokeStyle = 'rgba(80,255,176,0.4)';
+  ctx.lineWidth = 1;
+  ctx.strokeRect(cardX, cardY, cardW, cardH);
+
+  // Engine name
+  ctx.font = '700 18px "Space Grotesk",sans-serif';
+  ctx.fillStyle = '#50ffb0';
+  ctx.textAlign = 'center';
+  ctx.fillText(eng.name, centerX, cardY + 35);
+
+  // Data
+  ctx.font = '500 14px "Inter","Noto Sans SC",sans-serif';
+  ctx.fillStyle = '#e2e2e9';
+  ctx.fillText(t('impulse') + ': I = ' + eng.impulseNs + ' N\u00b7s', centerX, cardY + 70);
+  ctx.fillText(t('propMass') + ': m = ' + eng.propMassG + ' g', centerX, cardY + 95);
+
+  // Formula
+  ctx.font = '700 13px "Space Grotesk",sans-serif';
+  ctx.fillStyle = '#aaabb0';
+  ctx.fillText('Isp = I / (m \u00d7 g\u2080)', centerX, cardY + 125);
+  ctx.fillText('g\u2080 = 9.80665 m/s\u00b2', centerX, cardY + 145);
+
+  // Shake effect
+  var shakeX = 0;
+  if (l1ShakeTimer > 0) {
+    shakeX = Math.sin(l1ShakeTimer * 15) * 4 * (l1ShakeTimer / 0.3);
+    l1ShakeTimer = Math.max(0, l1ShakeTimer - 0.016);
+  }
+
+  // Input area
+  var inputY = cardY + cardH + 30;
+  ctx.save();
+  ctx.translate(shakeX, 0);
+
+  var inputW = Math.min(280, canvasW * 0.5);
+  var inputX = centerX - inputW / 2;
+  ctx.fillStyle = l1Phase === 'wrong' ? 'rgba(255,80,80,0.15)' : 'rgba(30,35,50,0.9)';
+  ctx.fillRect(inputX, inputY, inputW, 40);
+  ctx.strokeStyle = l1Phase === 'correct' ? '#50ffb0' : (l1Phase === 'wrong' ? '#ff5050' : 'rgba(80,255,176,0.3)');
+  ctx.lineWidth = l1Phase === 'input' ? 1 : 2;
+  ctx.strokeRect(inputX, inputY, inputW, 40);
+
+  ctx.font = '500 15px "Space Grotesk",sans-serif';
+  ctx.textAlign = 'left';
+  ctx.fillStyle = l1InputValue ? '#e2e2e9' : '#666';
+  ctx.fillText(l1InputValue || t('yourAnswer'), inputX + 12, inputY + 26);
+
+  // Cursor blink
+  if (l1Phase === 'input' && Math.floor(animFrame / 30) % 2 === 0) {
+    var tw = ctx.measureText(l1InputValue).width;
+    ctx.fillStyle = '#50ffb0';
+    ctx.fillRect(inputX + 12 + tw + 2, inputY + 8, 2, 24);
+  }
+  ctx.restore();
+
+  // Show step-by-step on correct/wrong
+  if (l1Phase === 'correct' || l1Phase === 'showSteps' || l1Phase === 'wrong') {
+    var stepsY = inputY + 60;
+    var mKg = eng.propMassG / 1000;
+    var weight = mKg * G0;
+    var ispVal = eng.impulseNs / weight;
+
+    ctx.textAlign = 'center';
+    ctx.font = '500 13px "Inter","Noto Sans SC",sans-serif';
+
+    // Step 1
+    ctx.fillStyle = '#ffb59c';
+    ctx.fillText(t('step1') + ': ' + eng.propMassG + ' g = ' + mKg.toFixed(5) + ' kg', centerX, stepsY);
+
+    // Step 2
+    ctx.fillStyle = '#74c0fc';
+    ctx.fillText(t('step2') + ': m\u00d7g\u2080 = ' + mKg.toFixed(5) + ' \u00d7 9.80665 = ' + weight.toFixed(4) + ' N', centerX, stepsY + 25);
+
+    // Step 3
+    ctx.fillStyle = '#50ffb0';
+    ctx.fillText(t('step3') + ': Isp = ' + eng.impulseNs + ' / ' + weight.toFixed(4) + ' = ' + ispVal.toFixed(2) + ' s', centerX, stepsY + 50);
+
+    // Result badge
+    if (l1Phase === 'correct') {
+      ctx.font = '700 16px "Space Grotesk",sans-serif';
+      ctx.fillStyle = '#50ffb0';
+      ctx.fillText(t('correct') + '  Isp = ' + ispVal.toFixed(2) + ' s', centerX, stepsY + 85);
+    } else if (l1Phase === 'wrong') {
+      ctx.font = '700 16px "Space Grotesk",sans-serif';
+      ctx.fillStyle = '#ff5050';
+      ctx.fillText(t('wrong') + '  (' + t('close') + ' \u00b110%: ' + (ispVal * 0.9).toFixed(1) + ' - ' + (ispVal * 1.1).toFixed(1) + ' s)', centerX, stepsY + 85);
+    }
+  }
+
+  // Isp readout juice
+  if (l1IspReadout !== l1IspReadoutTarget) {
+    l1IspReadout += (l1IspReadoutTarget - l1IspReadout) * 0.08;
+    if (Math.abs(l1IspReadout - l1IspReadoutTarget) < 0.1) l1IspReadout = l1IspReadoutTarget;
+  }
+}
+
+// ==========================================
+// LEVEL 2: Rank by efficiency (drag cards)
+// ==========================================
+var L2_CARD_W = 0;
+var L2_CARD_H = 0;
+var L2_SLOT_Y = 0;
+var L2_SLOT_X_START = 0;
+var L2_SLOT_GAP = 0;
+
+function initL2Cards() {
+  L2_CARD_W = Math.min(140, (canvasW - 60) / 5 - 10);
+  L2_CARD_H = Math.min(170, canvasH * 0.45);
+  L2_SLOT_Y = canvasH / 2 - L2_CARD_H / 2;
+  var totalW = L2_ENGINES.length * L2_CARD_W + (L2_ENGINES.length - 1) * 10;
+  L2_SLOT_X_START = (canvasW - totalW) / 2;
+  L2_SLOT_GAP = L2_CARD_W + 10;
+
+  if (l2Cards.length === 0) {
+    // Shuffle engine indices
+    var indices = [];
+    for (var i = 0; i < L2_ENGINES.length; i++) indices.push(i);
+    // Fisher-Yates shuffle
+    for (var j = indices.length - 1; j > 0; j--) {
+      var k = Math.floor(Math.random() * (j + 1));
+      var tmp = indices[j]; indices[j] = indices[k]; indices[k] = tmp;
+    }
+    for (var ci = 0; ci < indices.length; ci++) {
+      l2Cards.push({
+        engineIdx: indices[ci],
+        slotIdx: ci,
+        x: L2_SLOT_X_START + ci * L2_SLOT_GAP,
+        y: L2_SLOT_Y,
+        targetX: L2_SLOT_X_START + ci * L2_SLOT_GAP,
+        targetY: L2_SLOT_Y,
+        dragOffX: 0,
+        dragOffY: 0
+      });
+    }
+  } else {
+    // Recompute positions on resize
+    for (var ri = 0; ri < l2Cards.length; ri++) {
+      l2Cards[ri].targetX = L2_SLOT_X_START + l2Cards[ri].slotIdx * L2_SLOT_GAP;
+      l2Cards[ri].targetY = L2_SLOT_Y;
+      if (l2DragIdx !== ri) {
+        l2Cards[ri].x = l2Cards[ri].targetX;
+        l2Cards[ri].y = l2Cards[ri].targetY;
+      }
+    }
+  }
+}
+
+function drawLevel2() {
+  // Slot labels
+  ctx.font = '700 11px "Space Grotesk",sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillStyle = '#aaabb0';
+  ctx.fillText(t('lowest'), L2_SLOT_X_START + L2_CARD_W / 2, L2_SLOT_Y - 15);
+  ctx.fillText(t('highest'), L2_SLOT_X_START + (L2_ENGINES.length - 1) * L2_SLOT_GAP + L2_CARD_W / 2, L2_SLOT_Y - 15);
+
+  // Arrow
+  var arrowY = L2_SLOT_Y - 8;
+  ctx.strokeStyle = 'rgba(170,171,176,0.3)';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(L2_SLOT_X_START + L2_CARD_W + 5, arrowY);
+  ctx.lineTo(L2_SLOT_X_START + (L2_ENGINES.length - 1) * L2_SLOT_GAP - 5, arrowY);
+  ctx.stroke();
+  // Arrowhead
+  var arrowEndX = L2_SLOT_X_START + (L2_ENGINES.length - 1) * L2_SLOT_GAP - 5;
+  ctx.beginPath();
+  ctx.moveTo(arrowEndX, arrowY);
+  ctx.lineTo(arrowEndX - 6, arrowY - 4);
+  ctx.lineTo(arrowEndX - 6, arrowY + 4);
+  ctx.closePath();
+  ctx.fillStyle = 'rgba(170,171,176,0.3)';
+  ctx.fill();
+
+  // Slot outlines
+  for (var si = 0; si < L2_ENGINES.length; si++) {
+    var sx = L2_SLOT_X_START + si * L2_SLOT_GAP;
+    ctx.strokeStyle = 'rgba(80,255,176,0.15)';
+    ctx.lineWidth = 1;
+    ctx.setLineDash([4, 4]);
+    ctx.strokeRect(sx, L2_SLOT_Y, L2_CARD_W, L2_CARD_H);
+    ctx.setLineDash([]);
+  }
+
+  // Shake
+  var shakeX2 = 0;
+  if (l2ShakeTimer > 0) {
+    shakeX2 = Math.sin(l2ShakeTimer * 15) * 6 * (l2ShakeTimer / 0.4);
+    l2ShakeTimer = Math.max(0, l2ShakeTimer - 0.016);
+  }
+
+  // Draw cards (non-dragged first, dragged last)
+  var drawOrder = [];
+  for (var di = 0; di < l2Cards.length; di++) drawOrder.push(di);
+  if (l2DragIdx >= 0) {
+    drawOrder.splice(drawOrder.indexOf(l2DragIdx), 1);
+    drawOrder.push(l2DragIdx);
+  }
+
+  for (var doi = 0; doi < drawOrder.length; doi++) {
+    var ci = drawOrder[doi];
+    var card = l2Cards[ci];
+    var eng = L2_ENGINES[card.engineIdx];
+    var isDragging = ci === l2DragIdx;
+
+    // Easing
+    if (!isDragging) {
+      card.x += (card.targetX - card.x) * 0.15;
+      card.y += (card.targetY - card.y) * 0.15;
+    }
+
+    var cx = card.x + (l2Phase === 'wrong' ? shakeX2 : 0);
+    var cy = card.y;
+
+    // Card shadow for dragging
+    if (isDragging) {
+      ctx.fillStyle = 'rgba(0,0,0,0.3)';
+      ctx.fillRect(cx + 4, cy + 4, L2_CARD_W, L2_CARD_H);
+    }
+
+    // Chain glow for correct
+    if (l2Phase === 'correct') {
+      ctx.shadowColor = '#50ffb0';
+      ctx.shadowBlur = 12 + 6 * Math.sin(l2ChainGlow);
+      l2ChainGlow += 0.03;
+    }
+
+    // Card background
+    ctx.fillStyle = isDragging ? 'rgba(30,40,60,0.95)' : 'rgba(20,25,40,0.9)';
+    ctx.fillRect(cx, cy, L2_CARD_W, L2_CARD_H);
+    ctx.shadowBlur = 0;
+
+    // Border
+    var borderColor = l2Phase === 'correct' ? '#50ffb0' : (l2Phase === 'wrong' ? '#ff5050' : 'rgba(80,255,176,0.3)');
+    if (isDragging) borderColor = '#ffb59c';
+    ctx.strokeStyle = borderColor;
+    ctx.lineWidth = isDragging ? 2 : 1;
+    ctx.strokeRect(cx, cy, L2_CARD_W, L2_CARD_H);
+
+    // Idle pulse on unranked (all pulse while arranging)
+    var idlePulse = 1;
+    if (l2Phase === 'arrange' && !isDragging) {
+      idlePulse = 0.85 + 0.15 * Math.sin(pulsePhase * 1.5 + ci * 1.2);
+    }
+
+    // Card content
+    ctx.textAlign = 'center';
+    var tcx = cx + L2_CARD_W / 2;
+
+    // Engine name
+    ctx.font = '700 11px "Space Grotesk",sans-serif';
+    ctx.fillStyle = '#50ffb0';
+    ctx.globalAlpha = idlePulse;
+    var nameStr = eng.name;
+    if (nameStr.length > 15) nameStr = nameStr.substring(0, 14) + '..';
+    ctx.fillText(nameStr, tcx, cy + 22);
+
+    // Type
+    ctx.font = '400 9px "Inter","Noto Sans SC",sans-serif';
+    ctx.fillStyle = '#aaabb0';
+    ctx.fillText(eng.type[lang] || eng.type.en, tcx, cy + 38);
+
+    // Divider
+    ctx.strokeStyle = 'rgba(80,255,176,0.1)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(cx + 10, cy + 48);
+    ctx.lineTo(cx + L2_CARD_W - 10, cy + 48);
+    ctx.stroke();
+
+    // Data
+    ctx.font = '500 10px "Inter","Noto Sans SC",sans-serif';
+    ctx.fillStyle = '#e2e2e9';
+    var impulseStr = eng.impulseNs >= 1000 ? (eng.impulseNs / 1000).toFixed(0) + 'k' : eng.impulseNs.toFixed(1);
+    ctx.fillText('I = ' + impulseStr + ' N\u00b7s', tcx, cy + 68);
+    var massStr = eng.propMassG >= 1000 ? (eng.propMassG / 1000).toFixed(1) + ' kg' : eng.propMassG.toFixed(1) + ' g';
+    ctx.fillText('m = ' + massStr, tcx, cy + 85);
+
+    // Show Isp if correct
+    if (l2Phase === 'correct') {
+      ctx.font = '700 13px "Space Grotesk",sans-serif';
+      ctx.fillStyle = '#ffb59c';
+      ctx.fillText('Isp=' + eng.ispTrue.toFixed(0) + 's', tcx, cy + L2_CARD_H - 20);
+    }
+
+    // Active glow (on hover)
+    if (l2Phase === 'arrange' && !isDragging) {
+      var hoverDist = Math.abs(mouseX - tcx) + Math.abs(mouseY - (cy + L2_CARD_H / 2));
+      if (hoverDist < L2_CARD_W) {
+        ctx.strokeStyle = 'rgba(80,255,176,0.5)';
+        ctx.lineWidth = 1;
+        ctx.strokeRect(cx - 1, cy - 1, L2_CARD_W + 2, L2_CARD_H + 2);
+      }
+    }
+
+    ctx.globalAlpha = 1;
+  }
+}
+
+// ==========================================
+// LEVEL 3: Multiple choice
+// ==========================================
+function drawLevel3() {
+  var q = L3_QUESTIONS[currentRound];
+  var centerX = canvasW / 2;
+
+  // Question
+  ctx.textAlign = 'center';
+  ctx.font = '700 15px "Inter","Noto Sans SC",sans-serif';
+  ctx.fillStyle = '#e2e2e9';
+  var qText = q.q[lang] || q.q.en;
+  wrapText(ctx, qText, centerX, 50, canvasW * 0.8, 22);
+
+  // Options
+  var optW = Math.min(500, canvasW * 0.75);
+  var optH = 44;
+  var optGap = 12;
+  var startY = 110;
+  var optX = centerX - optW / 2;
+
+  for (var oi = 0; oi < q.opts.length; oi++) {
+    var oy = startY + oi * (optH + optGap);
+    var isSelected = l3SelectedOpt === oi;
+    var isCorrect = q.opts[oi].correct;
+
+    var bgColor = 'rgba(20,25,40,0.9)';
+    var borderCol = 'rgba(80,255,176,0.2)';
+
+    if (l3Phase === 'answered') {
+      if (isCorrect) {
+        bgColor = 'rgba(80,255,176,0.12)';
+        borderCol = '#50ffb0';
+      } else if (isSelected && !isCorrect) {
+        bgColor = 'rgba(255,80,80,0.12)';
+        borderCol = '#ff5050';
+      }
+    } else if (isSelected) {
+      bgColor = 'rgba(80,255,176,0.08)';
+      borderCol = '#50ffb0';
+    }
+
+    // Hover effect
+    if (l3Phase === 'choose' && mouseY >= oy && mouseY <= oy + optH && mouseX >= optX && mouseX <= optX + optW) {
+      bgColor = 'rgba(40,50,70,0.9)';
+      if (!isSelected) borderCol = 'rgba(80,255,176,0.4)';
+    }
+
+    ctx.fillStyle = bgColor;
+    ctx.fillRect(optX, oy, optW, optH);
+    ctx.strokeStyle = borderCol;
+    ctx.lineWidth = isSelected ? 2 : 1;
+    ctx.strokeRect(optX, oy, optW, optH);
+
+    // Option letter
+    ctx.font = '700 13px "Space Grotesk",sans-serif';
+    ctx.textAlign = 'left';
+    ctx.fillStyle = isSelected ? '#50ffb0' : '#aaabb0';
+    ctx.fillText(String.fromCharCode(65 + oi) + '.', optX + 14, oy + 28);
+
+    // Option text
+    ctx.font = '500 13px "Inter","Noto Sans SC",sans-serif';
+    ctx.fillStyle = '#e2e2e9';
+    ctx.fillText(q.opts[oi].text[lang] || q.opts[oi].text.en, optX + 38, oy + 28);
+  }
+
+  // Explanation (fade in)
+  if (l3Phase === 'answered') {
+    l3ExplainAlpha = Math.min(1, l3ExplainAlpha + 0.03);
+    ctx.globalAlpha = l3ExplainAlpha;
+    var expY = startY + q.opts.length * (optH + optGap) + 20;
+    ctx.fillStyle = 'rgba(20,25,40,0.85)';
+    ctx.fillRect(optX, expY, optW, 60);
+    ctx.strokeStyle = 'rgba(80,255,176,0.2)';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(optX, expY, optW, 60);
+
+    ctx.font = '500 12px "Inter","Noto Sans SC",sans-serif';
+    ctx.fillStyle = '#ffb59c';
+    ctx.textAlign = 'left';
+    wrapText(ctx, q.explain[lang] || q.explain.en, optX + 12, expY + 20, optW - 24, 18);
+    ctx.globalAlpha = 1;
+  }
+
+  ctx.textAlign = 'center';
+}
+
+function wrapText(context, text, x, y, maxWidth, lineHeight) {
+  var words = text.split('');
+  var line = '';
+  var lineCount = 0;
+  for (var wi = 0; wi < words.length; wi++) {
+    var testLine = line + words[wi];
+    var metrics = context.measureText(testLine);
+    if (metrics.width > maxWidth && line.length > 0) {
+      context.fillText(line, x, y + lineCount * lineHeight);
+      line = words[wi];
+      lineCount++;
+    } else {
+      line = testLine;
+    }
+  }
+  context.fillText(line, x, y + lineCount * lineHeight);
+}
+
+// ==========================================
+// LEVEL 4: Tradeoff Explorer (scatter plot)
+// ==========================================
+function drawLevel4() {
+  var mission = L4_MISSIONS[currentRound];
+
+  // Plot area
+  var plotMarginL = 70;
+  var plotMarginR = 30;
+  var plotMarginT = 50;
+  var plotMarginB = 60;
+  var plotW = canvasW - plotMarginL - plotMarginR;
+  var plotH = canvasH - plotMarginT - plotMarginB - 100; // room for sliders
+  if (plotH < 100) plotH = 100;
+
+  var plotX = plotMarginL;
+  var plotY = plotMarginT;
+
+  // Log scales
+  var ispMin = 60, ispMax = 5000;
+  var thrustMin = 0.01, thrustMax = 6000000;
+
+  function logIsp(v) { return (Math.log10(v) - Math.log10(ispMin)) / (Math.log10(ispMax) - Math.log10(ispMin)); }
+  function logThrust(v) { return (Math.log10(v) - Math.log10(thrustMin)) / (Math.log10(thrustMax) - Math.log10(thrustMin)); }
+  function toPlotX(isp) { return plotX + logIsp(isp) * plotW; }
+  function toPlotY(thrust) { return plotY + plotH - logThrust(thrust) * plotH; }
+
+  // Grid
+  ctx.strokeStyle = 'rgba(80,255,176,0.08)';
+  ctx.lineWidth = 1;
+  var ispTicks = [100, 200, 500, 1000, 2000, 4000];
+  for (var it = 0; it < ispTicks.length; it++) {
+    var gx = toPlotX(ispTicks[it]);
+    ctx.beginPath(); ctx.moveTo(gx, plotY); ctx.lineTo(gx, plotY + plotH); ctx.stroke();
+  }
+  var thrustTicks = [0.01, 0.1, 1, 10, 100, 1000, 10000, 100000, 1000000];
+  for (var tt = 0; tt < thrustTicks.length; tt++) {
+    var gy = toPlotY(thrustTicks[tt]);
+    ctx.beginPath(); ctx.moveTo(plotX, gy); ctx.lineTo(plotX + plotW, gy); ctx.stroke();
+  }
+
+  // Axes
+  ctx.strokeStyle = 'rgba(170,171,176,0.3)';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(plotX, plotY);
+  ctx.lineTo(plotX, plotY + plotH);
+  ctx.lineTo(plotX + plotW, plotY + plotH);
+  ctx.stroke();
+
+  // Axis labels
+  ctx.font = '700 11px "Space Grotesk",sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillStyle = '#aaabb0';
+  ctx.fillText('Isp (s)', plotX + plotW / 2, plotY + plotH + 45);
+  ctx.save();
+  ctx.translate(15, plotY + plotH / 2);
+  ctx.rotate(-Math.PI / 2);
+  ctx.fillText(t('thrust') + ' (N)', 0, 0);
+  ctx.restore();
+
+  // Tick labels
+  ctx.font = '400 9px "Space Grotesk",sans-serif';
+  ctx.textAlign = 'center';
+  for (var il = 0; il < ispTicks.length; il++) {
+    ctx.fillStyle = '#666';
+    ctx.fillText(ispTicks[il].toString(), toPlotX(ispTicks[il]), plotY + plotH + 15);
+  }
+  ctx.textAlign = 'right';
+  var thrustLabels = [0.01, 1, 100, 10000, 1000000];
+  for (var tl = 0; tl < thrustLabels.length; tl++) {
+    ctx.fillStyle = '#666';
+    ctx.fillText(formatThrust(thrustLabels[tl]), plotX - 8, toPlotY(thrustLabels[tl]) + 4);
+  }
+
+  // Target zone
+  var zx1 = toPlotX(Math.max(mission.ispMin, ispMin));
+  var zx2 = toPlotX(Math.min(mission.ispMax, ispMax));
+  var zy1 = toPlotY(Math.min(mission.thrustMax, thrustMax));
+  var zy2 = toPlotY(Math.max(mission.thrustMin, thrustMin));
+
+  var zoneAlpha = 0.08 + 0.04 * Math.sin(pulsePhase * 1.5);
+  ctx.fillStyle = 'rgba(80,255,176,' + zoneAlpha + ')';
+  ctx.fillRect(zx1, zy1, zx2 - zx1, zy2 - zy1);
+  ctx.strokeStyle = 'rgba(80,255,176,0.3)';
+  ctx.lineWidth = 1;
+  ctx.setLineDash([4, 4]);
+  ctx.strokeRect(zx1, zy1, zx2 - zx1, zy2 - zy1);
+  ctx.setLineDash([]);
+
+  // Zone label
+  ctx.font = '700 10px "Space Grotesk",sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillStyle = 'rgba(80,255,176,0.5)';
+  var missionName = t(mission.name);
+  ctx.fillText(missionName, (zx1 + zx2) / 2, zy1 - 5);
+
+  // Reference engines
+  for (var ri = 0; ri < L4_REF_ENGINES.length; ri++) {
+    var re = L4_REF_ENGINES[ri];
+    var rpx = toPlotX(re.isp);
+    var rpy = toPlotY(re.thrustN);
+    if (rpx < plotX || rpx > plotX + plotW || rpy < plotY || rpy > plotY + plotH) continue;
+
+    ctx.fillStyle = re.color;
+    ctx.globalAlpha = 0.7;
+    ctx.beginPath();
+    ctx.arc(rpx, rpy, 4, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.globalAlpha = 1;
+
+    // Label
+    ctx.font = '400 8px "Space Grotesk",sans-serif';
+    ctx.fillStyle = re.color;
+    ctx.textAlign = 'left';
+    ctx.fillText(re.name, rpx + 7, rpy + 3);
+  }
+
+  // Player point
+  var ppx = toPlotX(Math.max(ispMin, Math.min(ispMax, l4IspSlider)));
+  var ppy = toPlotY(Math.max(thrustMin, Math.min(thrustMax, l4ThrustSlider)));
+
+  // Glow ring
+  var ringR = 8 + 3 * Math.sin(pulsePhase * 2);
+  ctx.strokeStyle = '#ffb59c';
+  ctx.lineWidth = 2;
+  ctx.globalAlpha = 0.5 + 0.3 * Math.sin(pulsePhase * 2);
+  ctx.beginPath();
+  ctx.arc(ppx, ppy, ringR, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.globalAlpha = 1;
+
+  // Player dot
+  ctx.fillStyle = '#ffb59c';
+  ctx.beginPath();
+  ctx.arc(ppx, ppy, 5, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Crosshair lines
+  ctx.strokeStyle = 'rgba(255,181,156,0.2)';
+  ctx.lineWidth = 1;
+  ctx.setLineDash([3, 5]);
+  ctx.beginPath(); ctx.moveTo(ppx, plotY); ctx.lineTo(ppx, plotY + plotH); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(plotX, ppy); ctx.lineTo(plotX + plotW, ppy); ctx.stroke();
+  ctx.setLineDash([]);
+
+  // Check in zone
+  var inZone = l4IspSlider >= mission.ispMin && l4IspSlider <= mission.ispMax &&
+               l4ThrustSlider >= mission.thrustMin && l4ThrustSlider <= mission.thrustMax;
+
+  // Status
+  if (l4Phase !== 'place') {
+    ctx.font = '700 16px "Space Grotesk",sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillStyle = l4Phase === 'success' ? '#50ffb0' : '#ff5050';
+    ctx.fillText(l4Phase === 'success' ? t('inZone') : t('outZone'), canvasW / 2, plotY - 15);
+  }
+
+  // Sliders
+  var sliderY = plotY + plotH + 65;
+  var sliderW = plotW * 0.8;
+  var sliderX = plotX + (plotW - sliderW) / 2;
+
+  // Isp slider
+  drawSlider(sliderX, sliderY, sliderW, 'Isp (s)', 80, 4100, l4IspSlider, '#50ffb0', 'isp');
+
+  // Thrust slider
+  drawSlider(sliderX, sliderY + 30, sliderW, t('thrust') + ' (N)', -2, 6.3, Math.log10(l4ThrustSlider), '#ffb59c', 'thrust');
+
+  // Mission description
+  ctx.font = '400 11px "Inter","Noto Sans SC",sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillStyle = '#aaabb0';
+  ctx.fillText(mission.desc[lang] || mission.desc.en, canvasW / 2, 35);
+}
+
+function drawSlider(sx, sy, sw, label, minVal, maxVal, currentVal, color, id) {
+  // Track
+  ctx.fillStyle = 'rgba(40,45,60,0.8)';
+  ctx.fillRect(sx, sy, sw, 12);
+  ctx.strokeStyle = 'rgba(80,255,176,0.15)';
+  ctx.lineWidth = 1;
+  ctx.strokeRect(sx, sy, sw, 12);
+
+  // Fill
+  var frac = (currentVal - minVal) / (maxVal - minVal);
+  frac = Math.max(0, Math.min(1, frac));
+  ctx.fillStyle = color;
+  ctx.globalAlpha = 0.3;
+  ctx.fillRect(sx, sy, sw * frac, 12);
+  ctx.globalAlpha = 1;
+
+  // Thumb
+  var thumbX = sx + sw * frac;
+  var thumbR = 7;
+
+  // Easing glow
+  ctx.shadowColor = color;
+  ctx.shadowBlur = 8;
+  ctx.fillStyle = color;
+  ctx.beginPath();
+  ctx.arc(thumbX, sy + 6, thumbR, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.shadowBlur = 0;
+
+  // Label
+  ctx.font = '400 9px "Space Grotesk",sans-serif';
+  ctx.textAlign = 'left';
+  ctx.fillStyle = '#aaabb0';
+  ctx.fillText(label, sx, sy - 3);
+
+  // Value
+  ctx.textAlign = 'right';
+  ctx.fillStyle = color;
+  if (id === 'isp') {
+    ctx.fillText(Math.round(currentVal) + 's', sx + sw, sy - 3);
+  } else {
+    ctx.fillText(formatThrust(Math.pow(10, currentVal)), sx + sw, sy - 3);
+  }
+}
+
+function hitSlider(mx, my) {
+  var plotMarginL = 70, plotMarginR = 30, plotMarginT = 50, plotMarginB = 60;
+  var plotW = canvasW - plotMarginL - plotMarginR;
+  var plotH = canvasH - plotMarginT - plotMarginB - 100;
+  if (plotH < 100) plotH = 100;
+  var plotX = plotMarginL;
+  var plotY = plotMarginT;
+  var sliderY = plotY + plotH + 65;
+  var sliderW = plotW * 0.8;
+  var sliderX = plotX + (plotW - sliderW) / 2;
+
+  if (my >= sliderY - 8 && my <= sliderY + 20 && mx >= sliderX - 10 && mx <= sliderX + sliderW + 10) return 'isp';
+  if (my >= sliderY + 22 && my <= sliderY + 50 && mx >= sliderX - 10 && mx <= sliderX + sliderW + 10) return 'thrust';
+  return null;
+}
+
+function updateSliderValue(mx, sliderId) {
+  var plotMarginL = 70, plotMarginR = 30, plotMarginT = 50, plotMarginB = 60;
+  var plotW = canvasW - plotMarginL - plotMarginR;
+  var sliderW = plotW * 0.8;
+  var sliderX = plotMarginL + (plotW - sliderW) / 2;
+
+  var frac = (mx - sliderX) / sliderW;
+  frac = Math.max(0, Math.min(1, frac));
+
+  if (sliderId === 'isp') {
+    l4IspSlider += (80 + frac * (4100 - 80) - l4IspSlider) * 0.25; // eased motion
+  } else {
+    var logTarget = -2 + frac * (6.3 - (-2));
+    var currentLog = Math.log10(l4ThrustSlider);
+    currentLog += (logTarget - currentLog) * 0.25; // eased motion
+    l4ThrustSlider = Math.pow(10, currentLog);
+  }
+}
+
+// ==========================================
+// Completion screen
+// ==========================================
+function drawCompletion() {
+  completionAlpha = Math.min(1, completionAlpha + 0.02);
+  ctx.globalAlpha = completionAlpha;
+
+  ctx.fillStyle = 'rgba(12,14,20,0.9)';
+  ctx.fillRect(0, 0, canvasW, canvasH);
+
+  ctx.textAlign = 'center';
+
+  ctx.font = '700 24px "Space Grotesk",sans-serif';
+  ctx.fillStyle = '#50ffb0';
+  ctx.fillText(t('complete'), canvasW / 2, canvasH / 2 - 60);
+
+  ctx.font = '700 18px "Space Grotesk",sans-serif';
+  ctx.fillStyle = '#ffb59c';
+  ctx.fillText(t('score') + ': ' + totalScore, canvasW / 2, canvasH / 2 - 20);
+
+  ctx.font = '400 13px "Inter","Noto Sans SC",sans-serif';
+  ctx.fillStyle = '#aaabb0';
+  wrapText(ctx, t('summary'), canvasW / 2, canvasH / 2 + 30, canvasW * 0.7, 20);
+
+  ctx.globalAlpha = 1;
+}
+
+// ==========================================
+// Level transition
+// ==========================================
+function drawTransition() {
+  if (transitionAlpha > 0) {
+    ctx.globalAlpha = transitionAlpha;
+    ctx.fillStyle = '#0c0e14';
+    ctx.fillRect(0, 0, canvasW, canvasH);
+    ctx.globalAlpha = 1;
+  }
+}
+
+// ==========================================
+// Main render loop
+// ==========================================
+function render() {
+  animFrame++;
+  pulsePhase += 0.02;
+
+  ctx.clearRect(0, 0, canvasW, canvasH);
+
+  // Background
+  ctx.fillStyle = '#0c0e14';
+  ctx.fillRect(0, 0, canvasW, canvasH);
+
+  drawParallax();
+  updateParticles();
+
+  if (currentLevel >= 4) {
+    drawCompletion();
+    drawParticles();
+    requestAnimationFrame(render);
+    return;
+  }
+
+  // Transition
+  if (transitionAlpha > 0.01) {
+    transitionAlpha *= 0.92;
+    if (transitionAlpha < 0.01) transitionAlpha = 0;
+  }
+
+  // Draw current level
+  if (currentLevel === 0) drawLevel1();
+  else if (currentLevel === 1) drawLevel2();
+  else if (currentLevel === 2) drawLevel3();
+  else if (currentLevel === 3) drawLevel4();
+
+  drawParticles();
+  drawTransition();
+
+  requestAnimationFrame(render);
+}
+
+// ==========================================
+// Input handling
+// ==========================================
+
+// Keyboard for Level 1
+document.addEventListener('keydown', function(e) {
+  if (currentLevel !== 0 || l1Phase !== 'input') return;
+
+  if (e.key >= '0' && e.key <= '9') {
+    l1InputValue += e.key;
+  } else if (e.key === '.' && l1InputValue.indexOf('.') === -1) {
+    l1InputValue += '.';
+  } else if (e.key === 'Backspace') {
+    l1InputValue = l1InputValue.slice(0, -1);
+  } else if (e.key === 'Enter') {
+    submitAction();
+  }
+});
+
+// Mouse
+canvas.addEventListener('mousemove', function(e) {
+  var rect = canvas.getBoundingClientRect();
+  mouseX = e.clientX - rect.left;
+  mouseY = e.clientY - rect.top;
+
+  if (currentLevel === 1 && l2DragIdx >= 0) {
+    l2Cards[l2DragIdx].x = mouseX - l2Cards[l2DragIdx].dragOffX;
+    l2Cards[l2DragIdx].y = mouseY - l2Cards[l2DragIdx].dragOffY;
+  }
+
+  if (currentLevel === 3 && l4DraggingSlider && l4Phase === 'place') {
+    updateSliderValue(mouseX, l4DraggingSlider);
+  }
+});
+
+canvas.addEventListener('mousedown', function(e) {
+  var rect = canvas.getBoundingClientRect();
+  mouseX = e.clientX - rect.left;
+  mouseY = e.clientY - rect.top;
+  mouseDown = true;
+
+  if (currentLevel === 1 && l2Phase === 'arrange') {
+    // Check card hit
+    for (var ci = l2Cards.length - 1; ci >= 0; ci--) {
+      var card = l2Cards[ci];
+      if (mouseX >= card.x && mouseX <= card.x + L2_CARD_W &&
+          mouseY >= card.y && mouseY <= card.y + L2_CARD_H) {
+        l2DragIdx = ci;
+        card.dragOffX = mouseX - card.x;
+        card.dragOffY = mouseY - card.y;
+        break;
+      }
+    }
+  }
+
+  if (currentLevel === 2 && l3Phase === 'choose') {
+    // Check option hit
+    var optW = Math.min(500, canvasW * 0.75);
+    var optH = 44;
+    var optGap = 12;
+    var startY = 110;
+    var optX = canvasW / 2 - optW / 2;
+    for (var oi = 0; oi < L3_QUESTIONS[currentRound].opts.length; oi++) {
+      var oy = startY + oi * (optH + optGap);
+      if (mouseX >= optX && mouseX <= optX + optW && mouseY >= oy && mouseY <= oy + optH) {
+        l3SelectedOpt = oi;
+        break;
+      }
+    }
+  }
+
+  if (currentLevel === 3 && l4Phase === 'place') {
+    l4DraggingSlider = hitSlider(mouseX, mouseY);
+    if (l4DraggingSlider) {
+      updateSliderValue(mouseX, l4DraggingSlider);
+    }
+  }
+});
+
+canvas.addEventListener('mouseup', function(e) {
+  mouseDown = false;
+
+  if (currentLevel === 1 && l2DragIdx >= 0) {
+    // Drop card into nearest slot
+    var card = l2Cards[l2DragIdx];
+    var nearestSlot = 0;
+    var nearestDist = Infinity;
+    for (var si = 0; si < L2_ENGINES.length; si++) {
+      var sx = L2_SLOT_X_START + si * L2_SLOT_GAP + L2_CARD_W / 2;
+      var dist = Math.abs(card.x + L2_CARD_W / 2 - sx);
+      if (dist < nearestDist) { nearestDist = dist; nearestSlot = si; }
+    }
+
+    // Swap with existing card in that slot
+    var oldSlot = card.slotIdx;
+    for (var oci = 0; oci < l2Cards.length; oci++) {
+      if (oci !== l2DragIdx && l2Cards[oci].slotIdx === nearestSlot) {
+        l2Cards[oci].slotIdx = oldSlot;
+        l2Cards[oci].targetX = L2_SLOT_X_START + oldSlot * L2_SLOT_GAP;
+        l2Cards[oci].targetY = L2_SLOT_Y;
+        break;
+      }
+    }
+    card.slotIdx = nearestSlot;
+    card.targetX = L2_SLOT_X_START + nearestSlot * L2_SLOT_GAP;
+    card.targetY = L2_SLOT_Y;
+    l2DragIdx = -1;
+  }
+
+  if (currentLevel === 3) {
+    l4DraggingSlider = null;
+  }
+});
+
+// Touch support
+canvas.addEventListener('touchstart', function(e) {
+  e.preventDefault();
+  var rect = canvas.getBoundingClientRect();
+  var touch = e.touches[0];
+  mouseX = touch.clientX - rect.left;
+  mouseY = touch.clientY - rect.top;
+  mouseDown = true;
+  canvas.dispatchEvent(new MouseEvent('mousedown', {clientX: touch.clientX, clientY: touch.clientY}));
+}, {passive: false});
+
+canvas.addEventListener('touchmove', function(e) {
+  e.preventDefault();
+  var touch = e.touches[0];
+  var rect = canvas.getBoundingClientRect();
+  mouseX = touch.clientX - rect.left;
+  mouseY = touch.clientY - rect.top;
+  canvas.dispatchEvent(new MouseEvent('mousemove', {clientX: touch.clientX, clientY: touch.clientY}));
+}, {passive: false});
+
+canvas.addEventListener('touchend', function(e) {
+  e.preventDefault();
+  mouseDown = false;
+  canvas.dispatchEvent(new MouseEvent('mouseup'));
+}, {passive: false});
+
+// ==========================================
+// Button actions
+// ==========================================
+function submitAction() {
+  if (currentLevel === 0) {
+    if (l1Phase === 'input') {
+      var eng = L1_ENGINES[currentRound];
+      var answer = parseFloat(l1InputValue);
+      if (isNaN(answer) || answer <= 0) { l1ShakeTimer = 0.3; return; }
+
+      l1IspReadoutTarget = answer;
+      var tolerance = eng.ispTrue * 0.1;
+      if (Math.abs(answer - eng.ispTrue) <= tolerance) {
+        l1Phase = 'correct';
+        totalScore += 25;
+        levelScores[0] += 25;
+        spawnParticles(canvasW / 2, canvasH / 2 + 30, 30, '#50ffb0', 4);
+        playSound('correct');
+      } else {
+        l1Phase = 'wrong';
+        l1ShakeTimer = 0.3;
+        playSound('wrong');
+      }
+    } else {
+      // Next round or level
+      if (currentRound < 3) {
+        currentRound++;
+        l1Phase = 'input';
+        l1InputValue = '';
+        l1IspReadout = 0;
+        l1IspReadoutTarget = 0;
+      } else {
+        advanceLevel();
+      }
+    }
+  } else if (currentLevel === 1) {
+    if (l2Phase === 'arrange') {
+      // Check order
+      var ordered = l2Cards.slice().sort(function(a,b){ return a.slotIdx - b.slotIdx; });
+      var correct = true;
+      for (var ci = 0; ci < ordered.length; ci++) {
+        if (L2_ENGINES[ordered[ci].engineIdx] !== L2_SORTED[ci]) {
+          correct = false;
+          break;
+        }
+      }
+      if (correct) {
+        l2Phase = 'correct';
+        totalScore += 50;
+        levelScores[1] += 50;
+        // Particles on each card
+        for (var pi = 0; pi < l2Cards.length; pi++) {
+          spawnParticles(l2Cards[pi].x + L2_CARD_W / 2, l2Cards[pi].y + L2_CARD_H / 2, 15, '#50ffb0', 3);
+        }
+        playSound('correct');
+      } else {
+        l2Phase = 'wrong';
+        l2ShakeTimer = 0.4;
+        playSound('wrong');
+        // Reset to arrange after shake
+        setTimeout(function(){ l2Phase = 'arrange'; }, 800);
+      }
+    } else if (l2Phase === 'correct') {
+      advanceLevel();
+    }
+  } else if (currentLevel === 2) {
+    if (l3Phase === 'choose') {
+      if (l3SelectedOpt < 0) return;
+      l3Phase = 'answered';
+      var q = L3_QUESTIONS[currentRound];
+      if (q.opts[l3SelectedOpt].correct) {
+        totalScore += 15;
+        levelScores[2] += 15;
+        spawnParticles(canvasW / 2, 200, 20, '#50ffb0', 3);
+        playSound('correct');
+      } else {
+        playSound('wrong');
+      }
+      l3ExplainAlpha = 0;
+    } else {
+      if (currentRound < 3) {
+        currentRound++;
+        l3Phase = 'choose';
+        l3SelectedOpt = -1;
+        l3ExplainAlpha = 0;
+      } else {
+        advanceLevel();
+      }
+    }
+  } else if (currentLevel === 3) {
+    if (l4Phase === 'place') {
+      var mission = L4_MISSIONS[currentRound];
+      var inZone = l4IspSlider >= mission.ispMin && l4IspSlider <= mission.ispMax &&
+                   l4ThrustSlider >= mission.thrustMin && l4ThrustSlider <= mission.thrustMax;
+      if (inZone) {
+        l4Phase = 'success';
+        totalScore += 30;
+        levelScores[3] += 30;
+        // Map player point to canvas coords for particles
+        var plotMarginL = 70, plotMarginR = 30, plotMarginT = 50, plotMarginB = 60;
+        var plotW = canvasW - plotMarginL - plotMarginR;
+        var plotH = canvasH - plotMarginT - plotMarginB - 100;
+        if (plotH < 100) plotH = 100;
+        var ppx = plotMarginL + ((Math.log10(l4IspSlider) - Math.log10(60)) / (Math.log10(5000) - Math.log10(60))) * plotW;
+        var ppy = plotMarginT + plotH - ((Math.log10(l4ThrustSlider) - Math.log10(0.01)) / (Math.log10(6000000) - Math.log10(0.01))) * plotH;
+        spawnParticles(ppx, ppy, 40, '#50ffb0', 5);
+        playSound('correct');
+      } else {
+        l4Phase = 'fail';
+        playSound('wrong');
+        setTimeout(function(){ l4Phase = 'place'; }, 800);
+      }
+    } else if (l4Phase === 'success') {
+      if (currentRound < 2) {
+        currentRound++;
+        l4Phase = 'place';
+        // Reset sliders to middle-ish
+        l4IspSlider = 200;
+        l4ThrustSlider = 1000;
+      } else {
+        advanceLevel();
+      }
+    }
+  }
+  updateUI();
+}
+
+function resetAction() {
+  if (currentLevel === 0) {
+    l1InputValue = '';
+    l1Phase = 'input';
+    l1IspReadout = 0;
+    l1IspReadoutTarget = 0;
+  } else if (currentLevel === 1) {
+    l2Phase = 'arrange';
+    l2Cards = [];
+    l2ChainGlow = 0;
+    initL2Cards();
+  } else if (currentLevel === 2) {
+    l3SelectedOpt = -1;
+    l3Phase = 'choose';
+    l3ExplainAlpha = 0;
+  } else if (currentLevel === 3) {
+    l4Phase = 'place';
+    l4IspSlider = 200;
+    l4ThrustSlider = 1000;
+  }
+  updateUI();
+}
+
+function advanceLevel() {
+  transitionAlpha = 1;
+  currentLevel++;
+  currentRound = 0;
+
+  if (currentLevel < 4) {
+    // Reset level state
+    l1InputValue = '';
+    l1Phase = 'input';
+    l1IspReadout = 0;
+    l1IspReadoutTarget = 0;
+    l2Cards = [];
+    l2Phase = 'arrange';
+    l2ChainGlow = 0;
+    l3SelectedOpt = -1;
+    l3Phase = 'choose';
+    l3ExplainAlpha = 0;
+    l4Phase = 'place';
+    l4IspSlider = 200;
+    l4ThrustSlider = 1000;
+
+    if (currentLevel === 1) initL2Cards();
+  }
+  updateUI();
+}
+
+// Button event listeners
+document.getElementById('btnAction').addEventListener('click', submitAction);
+document.getElementById('btnReset').addEventListener('click', resetAction);
+
+// Language toggle
+document.getElementById('langBtn').addEventListener('click', function() {
+  lang = lang === 'cn' ? 'en' : 'cn';
+  updateUI();
+});
+
+// ==========================================
+// Init
+// ==========================================
+resize();
+updateUI();
+render();
+</script>
+</body>
+</html>

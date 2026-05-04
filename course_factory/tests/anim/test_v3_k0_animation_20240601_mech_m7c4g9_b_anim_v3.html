@@ -1,0 +1,427 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>力改变运动状态 — 齿轮铸造厂</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;700;900&family=JetBrains+Mono:wght@400;700&family=Noto+Sans+SC:wght@300;400;700;900&display=swap" rel="stylesheet">
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+:root{--BRASS:#c9a84c;--FORGE:#b07030;--IRON:#5a5060;--EMBER:#e8ddd0;--SPARK:#f0d870;--PUSH:#e88040;--PULL:#6090d0}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Noto Sans SC','Inter',sans-serif;background:#080614;color:var(--EMBER);overflow:hidden;width:100vw;height:100vh}
+.mono{font-family:'JetBrains Mono',monospace}
+canvas#main{position:absolute;top:0;left:0;width:100%;height:100%}
+@keyframes titleIn{from{opacity:0;transform:scale(0.85);filter:blur(8px)}to{opacity:1;transform:scale(1);filter:blur(0)}}
+.title-anim{animation:titleIn 1.2s ease-out forwards;opacity:0}
+</style>
+</head>
+<body>
+<canvas id="main"></canvas>
+<div id="hud" style="position:absolute;top:16px;left:16px;z-index:10;background:rgba(14,10,30,0.72);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);border:1px solid rgba(201,168,76,0.18);border-radius:10px;padding:14px 16px;min-width:190px">
+  <div class="mono" style="font-size:9px;letter-spacing:0.22em;color:var(--BRASS);margin-bottom:10px">PHYSICS READOUT</div>
+  <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:5px"><span style="font-size:12px;color:var(--EMBER)">力 F</span><span class="mono" style="font-size:15px;font-weight:700;color:var(--IRON)" id="hF">0.0 N</span></div>
+  <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:5px"><span style="font-size:12px;color:var(--EMBER)">质量 m</span><span class="mono" style="font-size:15px;font-weight:700;color:var(--BRASS)">0.50 kg</span></div>
+  <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:5px"><span style="font-size:12px;color:var(--EMBER)">加速度 a</span><span class="mono" style="font-size:15px;font-weight:700;color:var(--IRON)" id="hA">0.0 m/s²</span></div>
+  <div style="display:flex;justify-content:space-between;align-items:baseline"><span style="font-size:12px;color:var(--EMBER)">速度 v</span><span class="mono" style="font-size:15px;font-weight:700;color:var(--SPARK)" id="hV">0.0 m/s</span></div>
+  <div style="display:flex;gap:5px;margin-top:10px" id="pips"></div>
+</div>
+<div id="subs" style="position:absolute;bottom:32px;left:50%;transform:translateX(-50%);z-index:10;text-align:center;max-width:640px;pointer-events:none">
+  <div id="subZh" style="font-size:18px;font-weight:700;color:var(--EMBER);text-shadow:0 2px 14px rgba(0,0,0,0.85);margin-bottom:3px;opacity:0;transition:opacity 0.4s"></div>
+  <div id="subEn" style="font-size:13px;font-weight:400;color:rgba(201,168,76,0.65);text-shadow:0 2px 10px rgba(0,0,0,0.85);opacity:0;transition:opacity 0.4s"></div>
+</div>
+<div id="titleOL" style="position:absolute;inset:0;z-index:20;display:flex;flex-direction:column;align-items:center;justify-content:center;background:rgba(8,6,20,0.9);transition:opacity 1s;opacity:1">
+  <div class="title-anim" style="font-size:42px;font-weight:900;color:var(--BRASS);letter-spacing:0.06em">力改变运动状态</div>
+  <div class="title-anim" style="font-size:16px;font-weight:300;color:rgba(201,168,76,0.55);margin-top:10px;animation-delay:0.3s">Force Changes Motion — Gear Foundry</div>
+</div>
+<script>
+const cv=document.getElementById('main'),cx=cv.getContext('2d');
+let W,H;
+function resize(){W=cv.width=window.innerWidth;H=cv.height=window.innerHeight;initEnv();}
+resize();window.addEventListener('resize',resize);
+
+const CL={BRASS:'#c9a84c',FORGE:'#b07030',IRON:'#5a5060',EMBER:'#e8ddd0',SPARK:'#f0d870',PUSH:'#e88040',PULL:'#6090d0'};
+
+const P={F:0,m:0.5,a:0,v:0,x:0};
+let aT=0,lastTS=0;
+const PH=[
+  {n:'TITLE',s:0,d:3200},
+  {n:'REST',s:3200,d:2800},
+  {n:'PUSH',s:6000,d:5500},
+  {n:'COAST',s:11500,d:5500},
+  {n:'PULL',s:17000,d:5500},
+  {n:'STOP',s:22500,d:2500},
+  {n:'RECAP',s:25000,d:5500},
+  {n:'TAKE',s:30500,d:4500}
+];
+const TOTAL=35000;
+
+const cog={x:0,y:0,r:72,rot:0,teeth:16,vis:false};
+let parts=[],MAXP=280;
+let bgGears=[],embers=[],dustMotes=[];
+let vHist=[];
+let curPh=0,phInit={},titleGone=false;
+let screenFlash=0;
+
+function initEnv(){
+  bgGears=[];
+  for(let i=0;i<7;i++){
+    bgGears.push({x:Math.random()*W,y:Math.random()*H,r:20+Math.random()*50,rot:Math.random()*6.28,spd:(Math.random()-0.5)*0.007,a:0.025+Math.random()*0.035,drift:Math.random()*6.28});
+  }
+  embers=[];
+  for(let i=0;i<55;i++){
+    embers.push({x:Math.random()*W,y:Math.random()*H,vy:-(0.12+Math.random()*0.35),vx:(Math.random()-0.5)*0.18,sz:0.6+Math.random()*1.6,a:0.12+Math.random()*0.3,ph:Math.random()*6.28});
+  }
+  dustMotes=[];
+  for(let i=0;i<35;i++){
+    dustMotes.push({x:Math.random()*W,y:Math.random()*H,vx:(Math.random()-0.5)*0.3,vy:(Math.random()-0.5)*0.2,sz:1+Math.random()*2.5,a:0.04+Math.random()*0.06,ph:Math.random()*6.28});
+  }
+}
+
+const SUBS=[
+  {s:3200,d:2300,zh:'齿轮静止，没有力的作用',en:'Gear at rest — no force acting'},
+  {s:6000,d:2000,zh:'施加推力！齿轮开始加速',en:'Push applied! Gear starts accelerating'},
+  {s:9500,d:1800,zh:'力持续，速度不断增大',en:'Force continues, velocity keeps rising'},
+  {s:11500,d:2200,zh:'撤去推力 — 会怎样？',en:'Force removed — what happens?'},
+  {s:14000,d:2500,zh:'没有力，加速度为零，速度不变！',en:'No force → a=0 → velocity stays constant!'},
+  {s:17000,d:2000,zh:'反向拉力，齿轮减速',en:'Pull force applied, gear decelerates'},
+  {s:20500,d:1800,zh:'拉力持续，速度降至零',en:'Pull continues, velocity drops to zero'},
+  {s:25000,d:2200,zh:'力 → 加速度 → 速度变化',en:'Force → Acceleration → Velocity change'},
+  {s:27500,d:2200,zh:'F=0 时物体保持匀速或静止',en:'When F=0, object stays at constant v or rest'},
+  {s:30500,d:3500,zh:'每次推拉，感受力如何改变运动',en:'Every push & pull changes motion — feel it!'}
+];
+
+const pipsEl=document.getElementById('pips');
+['静止','推力','滑行','拉力','停止'].forEach(()=>{
+  const d=document.createElement('div');
+  d.style.cssText='width:7px;height:7px;border-radius:50%;background:#5a5060;transition:all 0.3s';
+  pipsEl.appendChild(d);
+});
+
+function drawGear(x,y,r,teeth,rot,fill,stroke,alpha){
+  cx.save();cx.globalAlpha=Math.max(0.01,alpha);cx.translate(x,y);cx.rotate(rot);
+  const iR=Math.max(1,r*0.72),oR=Math.max(2,r),tw=6.2832/teeth;
+  cx.beginPath();
+  for(let i=0;i<teeth;i++){
+    const a=i*tw,a1=a+tw*0.15,a2=a+tw*0.35,a3=a+tw*0.65,a4=a+tw*0.85;
+    if(i===0)cx.moveTo(Math.cos(a)*iR,Math.sin(a)*iR);
+    cx.lineTo(Math.cos(a1)*iR,Math.sin(a1)*iR);
+    cx.lineTo(Math.cos(a2)*oR,Math.sin(a2)*oR);
+    cx.lineTo(Math.cos(a3)*oR,Math.sin(a3)*oR);
+    cx.lineTo(Math.cos(a4)*iR,Math.sin(a4)*iR);
+    cx.lineTo(Math.cos(a+tw)*iR,Math.sin(a+tw)*iR);
+  }
+  cx.closePath();cx.fillStyle=fill;cx.fill();cx.strokeStyle=stroke;cx.lineWidth=1.5;cx.stroke();
+  cx.beginPath();cx.arc(0,0,Math.max(1,r*0.2),0,6.28);cx.fillStyle=stroke;cx.fill();
+  cx.beginPath();cx.arc(0,0,Math.max(0.5,r*0.07),0,6.28);cx.fillStyle=fill;cx.fill();
+  cx.strokeStyle=stroke;cx.lineWidth=1.5;
+  for(let i=0;i<4;i++){const sa=i*1.5708;cx.beginPath();cx.moveTo(Math.cos(sa)*r*0.2,Math.sin(sa)*r*0.2);cx.lineTo(Math.cos(sa)*r*0.62,Math.sin(sa)*r*0.62);cx.stroke();}
+  cx.restore();
+}
+
+function spawnP(x,y,n,col,spread,spd){
+  for(let i=0;i<n&&parts.length<MAXP;i++){
+    const a=Math.random()*6.28,s=(0.3+Math.random())*spd;
+    parts.push({x:x+(Math.random()-0.5)*spread,y:y+(Math.random()-0.5)*spread,vx:Math.cos(a)*s,vy:Math.sin(a)*s-0.7,life:1,decay:0.013+Math.random()*0.018,sz:1.5+Math.random()*2.8,col:col});
+  }
+}
+
+function drawParts(){
+  for(let i=parts.length-1;i>=0;i--){
+    const p=parts[i];p.x+=p.vx;p.y+=p.vy;p.vy+=0.04;p.life-=p.decay;
+    if(p.life<=0){parts.splice(i,1);continue;}
+    cx.save();cx.globalAlpha=Math.max(0.01,p.life*0.8);cx.fillStyle=p.col;
+    cx.beginPath();cx.arc(p.x,p.y,Math.max(0.3,p.sz*p.life),0,6.28);cx.fill();cx.restore();
+  }
+}
+
+function drawBg(){
+  const t=aT*0.0004;
+  const rg=cx.createRadialGradient(W*0.5+Math.sin(t)*90,H*0.38+Math.cos(t*0.7)*60,0,W*0.5,H*0.5,Math.max(1,Math.max(W,H)*0.72));
+  rg.addColorStop(0,'#141020');rg.addColorStop(0.6,'#0c0a1a');rg.addColorStop(1,'#060410');
+  cx.fillStyle=rg;cx.fillRect(0,0,W,H);
+
+  cx.save();cx.globalAlpha=0.03;cx.strokeStyle=CL.BRASS;cx.lineWidth=0.5;
+  const gs=52,ox=(aT*0.028)%gs,oy=(aT*0.014)%gs;
+  for(let x=-gs+ox;x<W+gs;x+=gs){cx.beginPath();cx.moveTo(x,0);cx.lineTo(x,H);cx.stroke();}
+  for(let y=-gs+oy;y<H+gs;y+=gs){cx.beginPath();cx.moveTo(0,y);cx.lineTo(W,y);cx.stroke();}
+  cx.restore();
+
+  for(const g of bgGears){
+    g.rot+=g.spd;g.x+=Math.sin(aT*0.00018+g.drift)*0.12;g.y+=Math.cos(aT*0.00014+g.drift)*0.09;
+    if(g.x<-90)g.x=W+90;if(g.x>W+90)g.x=-90;if(g.y<-90)g.y=H+90;if(g.y>H+90)g.y=-90;
+    drawGear(g.x,g.y,g.r,12,g.rot,'rgba(90,70,35,0.1)','rgba(90,70,35,0.16)',g.a);
+  }
+
+  for(const e of embers){
+    e.x+=e.vx+Math.sin(aT*0.002+e.ph)*0.08;e.y+=e.vy;
+    if(e.y<-12){e.y=H+12;e.x=Math.random()*W;}
+    cx.save();cx.globalAlpha=e.a*(0.45+0.55*Math.sin(aT*0.004+e.ph));
+    cx.fillStyle=CL.SPARK;cx.beginPath();cx.arc(e.x,e.y,Math.max(0.3,e.sz),0,6.28);cx.fill();cx.restore();
+  }
+
+  for(const d of dustMotes){
+    d.x+=d.vx+Math.sin(aT*0.001+d.ph)*0.06;d.y+=d.vy+Math.cos(aT*0.0008+d.ph)*0.04;
+    if(d.x<-20)d.x=W+20;if(d.x>W+20)d.x=-20;if(d.y<-20)d.y=H+20;if(d.y>H+20)d.y=-20;
+    cx.save();cx.globalAlpha=d.a*(0.5+0.5*Math.sin(aT*0.003+d.ph));
+    cx.fillStyle='#8a7a60';cx.beginPath();cx.arc(d.x,d.y,Math.max(0.3,d.sz),0,6.28);cx.fill();cx.restore();
+  }
+
+  if(Math.abs(P.F)>0.1){
+    cx.save();cx.globalAlpha=0.025+0.015*Math.sin(aT*0.009);
+    cx.fillStyle=P.F>0?CL.PUSH:CL.PULL;cx.fillRect(0,0,W,H);cx.restore();
+  }
+
+  if(screenFlash>0){
+    cx.save();cx.globalAlpha=Math.max(0.01,screenFlash);cx.fillStyle='#fff';cx.fillRect(0,0,W,H);cx.restore();
+    screenFlash*=0.88;if(screenFlash<0.005)screenFlash=0;
+  }
+}
+
+function drawVignette(){
+  const vg=cx.createRadialGradient(W*0.5,H*0.5,Math.max(1,Math.min(W,H)*0.25),W*0.5,H*0.5,Math.max(1,Math.max(W,H)*0.72));
+  vg.addColorStop(0,'rgba(0,0,0,0)');vg.addColorStop(1,'rgba(0,0,0,0.45)');
+  cx.fillStyle=vg;cx.fillRect(0,0,W,H);
+}
+
+function drawArrow(x1,y1,x2,y2,col,glow){
+  const dx=x2-x1,dy=y2-y1,len=Math.sqrt(dx*dx+dy*dy);
+  if(len<5)return;const ang=Math.atan2(dy,dx);
+  cx.save();
+  if(glow){cx.shadowColor=col;cx.shadowBlur=14;}
+  cx.strokeStyle=col;cx.lineWidth=4;cx.lineCap='round';
+  cx.beginPath();cx.moveTo(x1,y1);cx.lineTo(x2,y2);cx.stroke();
+  const hl=13;cx.fillStyle=col;cx.beginPath();cx.moveTo(x2,y2);
+  cx.lineTo(x2-hl*Math.cos(ang-0.38),y2-hl*Math.sin(ang-0.38));
+  cx.lineTo(x2-hl*Math.cos(ang+0.38),y2-hl*Math.sin(ang+0.38));
+  cx.closePath();cx.fill();cx.restore();
+}
+
+function drawGraph(){
+  const gx=W-250,gy=H-138,gw=210,gh=105;
+  cx.save();cx.globalAlpha=0.6;
+  cx.fillStyle='rgba(10,8,24,0.5)';cx.fillRect(gx,gy,gw,gh);
+  cx.strokeStyle='rgba(100,80,40,0.2)';cx.lineWidth=1;cx.strokeRect(gx,gy,gw,gh);
+  cx.strokeStyle='rgba(201,168,76,0.3)';
+  cx.beginPath();cx.moveTo(gx,gy+gh);cx.lineTo(gx+gw,gy+gh);cx.moveTo(gx,gy+gh);cx.lineTo(gx,gy);cx.stroke();
+  if(vHist.length>1){
+    cx.beginPath();cx.strokeStyle=CL.SPARK;cx.lineWidth=2;
+    const mx=12;
+    for(let i=0;i<vHist.length;i++){
+      const px=gx+(i/vHist.length)*gw,py=gy+gh-Math.min(1,vHist[i]/mx)*gh;
+      i===0?cx.moveTo(px,py):cx.lineTo(px,py);
+    }cx.stroke();
+  }
+  cx.fillStyle='rgba(201,168,76,0.45)';cx.font="10px 'JetBrains Mono',monospace";
+  cx.textAlign='left';cx.fillText('v-t',gx+4,gy+12);cx.restore();
+}
+
+function updHUD(){
+  document.getElementById('hF').textContent=P.F.toFixed(1)+' N';
+  document.getElementById('hA').textContent=P.a.toFixed(1)+' m/s\u00B2';
+  document.getElementById('hV').textContent=P.v.toFixed(1)+' m/s';
+  const fe=document.getElementById('hF');
+  fe.style.color=Math.abs(P.F)>0.1?(P.F>0?CL.PUSH:CL.PULL):CL.IRON;
+  const ae=document.getElementById('hA');
+  ae.style.color=Math.abs(P.a)>0.1?(P.a>0?CL.PUSH:CL.PULL):CL.IRON;
+  const ve=document.getElementById('hV');
+  ve.style.color=Math.abs(P.v)>0.1?CL.SPARK:CL.IRON;
+  const pips=pipsEl.children;
+  const map=[1,2,3,4,5];
+  for(let i=0;i<5;i++){
+    if(curPh===map[i]+1){pips[i].style.background=CL.SPARK;pips[i].style.boxShadow='0 0 6px '+CL.SPARK;}
+    else{pips[i].style.background=CL.IRON;pips[i].style.boxShadow='none';}
+  }
+}
+
+function updSubs(){
+  let zh='',en='',show=false;
+  for(const s of SUBS){if(aT>=s.s&&aT<s.s+s.d){zh=s.zh;en=s.en;show=true;break;}}
+  document.getElementById('subZh').textContent=zh;
+  document.getElementById('subEn').textContent=en;
+  document.getElementById('subZh').style.opacity=show?'1':'0';
+  document.getElementById('subEn').style.opacity=show?'1':'0';
+}
+
+function updPhysics(ph,lt,dt){
+  const ds=dt/1000;
+  switch(ph){
+    case 2:P.F=0;P.a=0;P.v=0;break;
+    case 3:{
+      const pp=lt/PH[2].d;
+      P.F=pp<0.15?5*(pp/0.15):5;P.a=P.F/P.m;P.v+=P.a*ds;P.x+=P.v*ds;break;}
+    case 4:P.F=0;P.a=0;P.x+=P.v*ds;break;
+    case 5:{
+      const pp=lt/PH[3].d;
+      P.F=pp<0.15?-5*(pp/0.15):-5;P.a=P.F/P.m;P.v+=P.a*ds;
+      if(P.v<0)P.v=0;P.x+=P.v*ds;break;}
+    case 6:P.F=0;P.a=0;P.v=0;break;
+    default:break;
+  }
+  P.v=Math.max(0,Math.min(15,P.v));
+  if(ph>=2&&ph<=6){vHist.push(P.v);if(vHist.length>360)vHist.shift();}
+}
+
+function initPh(n){
+  const ty=H*0.55;
+  switch(n){
+    case'REST':cog.vis=true;cog.x=W*0.18;cog.y=ty;screenFlash=0.12;break;
+    case'PUSH':screenFlash=0.15;break;
+    case'COAST':screenFlash=0.1;break;
+    case'PULL':screenFlash=0.15;break;
+    case'STOP':screenFlash=0.08;break;
+    case'RECAP':cog.r=88;break;
+    case'TAKE':cog.vis=false;break;
+  }
+}
+
+function loop(ts){
+  if(!lastTS)lastTS=ts;
+  const dt=Math.min(ts-lastTS,50);
+  lastTS=ts;aT+=dt;
+
+  curPh=0;let lt=0;
+  for(let i=0;i<PH.length;i++){
+    if(aT>=PH[i].s&&aT<PH[i].s+PH[i].d){curPh=i+1;lt=aT-PH[i].s;break;}
+  }
+  const phN=curPh>0?PH[curPh-1].n:'';
+  if(!phInit[phN]&&curPh>0){phInit[phN]=true;initPh(phN);}
+
+  if(curPh>=2&&!titleGone){
+    titleGone=true;
+    const ol=document.getElementById('titleOL');
+    ol.style.opacity='0';setTimeout(()=>{ol.style.display='none';},1000);
+  }
+
+  updPhysics(curPh,lt,dt);
+
+  const ty=H*0.55,tL=W*0.12,tR=W*0.88,maxPx=22;
+  if(cog.vis&&curPh>=2&&curPh<=6){
+    cog.x=tL+(P.x/maxPx)*(tR-tL);cog.y=ty;cog.rot+=P.v*0.012;
+  }else if(cog.vis&&curPh===7){
+    cog.x+=(W*0.5-cog.x)*0.06;cog.y+=(H*0.38-cog.y)*0.06;cog.rot+=0.004;
+  }
+
+  drawBg();
+
+  if(curPh>=2&&curPh<=6){
+    cx.save();cx.strokeStyle='rgba(100,80,40,0.22)';cx.lineWidth=2;
+    cx.setLineDash([5,5]);cx.beginPath();cx.moveTo(W*0.08,ty+cog.r+12);cx.lineTo(W*0.92,ty+cog.r+12);cx.stroke();
+    cx.setLineDash([]);cx.restore();
+
+    for(let i=0;i<8;i++){
+      const mx=tL+(i/7)*(tR-tL);
+      cx.save();cx.globalAlpha=0.08;cx.fillStyle=CL.BRASS;
+      cx.beginPath();cx.arc(mx,ty+cog.r+12,2,0,6.28);cx.fill();cx.restore();
+    }
+  }
+
+  if(cog.vis){
+    cx.save();cx.globalAlpha=0.2;cx.fillStyle='#000';
+    cx.beginPath();cx.ellipse(cog.x+4,cog.y+cog.r+8,Math.max(1,cog.r*0.82),Math.max(1,cog.r*0.18),0,0,6.28);cx.fill();cx.restore();
+
+    const gc=Math.abs(P.F)>0.1?(P.F>0?'#c88035':'#5578a8'):CL.BRASS;
+    const gs=Math.abs(P.F)>0.1?(P.F>0?CL.PUSH:CL.PULL):'#8a7040';
+    drawGear(cog.x,cog.y,cog.r,cog.teeth,cog.rot,gc,gs,1);
+
+    if(Math.abs(P.F)>0.1){
+      cx.save();cx.globalAlpha=0.1+0.06*Math.sin(aT*0.011);
+      const glc=P.F>0?CL.PUSH:CL.PULL;cx.shadowColor=glc;cx.shadowBlur=28;
+      cx.beginPath();cx.arc(cog.x,cog.y,Math.max(1,cog.r*1.12),0,6.28);cx.fillStyle=glc;cx.fill();cx.restore();
+    }
+
+    if(Math.abs(P.F)>0.1){
+      const al=Math.abs(P.F)*15;
+      if(P.F>0)drawArrow(cog.x-cog.r-al-10,cog.y,cog.x-cog.r-10,cog.y,CL.PUSH,true);
+      else drawArrow(cog.x+cog.r+al+10,cog.y,cog.x+cog.r+10,cog.y,CL.PULL,true);
+      cx.save();cx.fillStyle=P.F>0?CL.PUSH:CL.PULL;
+      cx.font="bold 12px 'JetBrains Mono',monospace";cx.textAlign='center';
+      const lx=P.F>0?cog.x-cog.r-al/2-10:cog.x+cog.r+al/2+10;
+      cx.fillText('F='+Math.abs(P.F).toFixed(1)+'N',lx,cog.y-20);cx.restore();
+    }
+
+    if(Math.abs(P.v)>0.3){
+      cx.save();cx.fillStyle=CL.SPARK;
+      cx.font="bold 11px 'JetBrains Mono',monospace";cx.textAlign='center';
+      cx.fillText('v='+P.v.toFixed(1),cog.x,cog.y+cog.r+30);cx.restore();
+    }
+
+    if(Math.abs(P.F)>0.1){
+      spawnP(cog.x,cog.y,3,P.F>0?CL.PUSH:CL.PULL,cog.r*0.5,2.2);
+      spawnP(cog.x,cog.y,1,CL.SPARK,cog.r*0.35,1.4);
+    }
+    if(Math.abs(P.v)>1.5&&Math.random()<0.3){
+      spawnP(cog.x-P.v*1.8,cog.y+cog.r*0.35,1,'rgba(201,168,76,0.35)',10,0.5);
+    }
+  }
+
+  if(curPh>=2&&curPh<=6){
+    const lb=['REST','PUSH','COAST','PULL','STOP'];
+    cx.save();cx.fillStyle=CL.BRASS;cx.font="bold 13px 'JetBrains Mono',monospace";
+    cx.textAlign='center';cx.fillText(lb[curPh-2],W/2,H*0.13);cx.restore();
+  }
+
+  if(curPh===4){
+    const t2=aT-PH[3].s,d2=PH[3].d;
+    const al=Math.min(1,t2/900)*Math.min(1,(d2-t2)/700);
+    if(al>0){
+      cx.save();cx.globalAlpha=Math.max(0.01,al*0.85);cx.fillStyle=CL.SPARK;
+      cx.font="bold 22px 'Noto Sans SC','Inter',sans-serif";cx.textAlign='center';
+      cx.fillText('F = 0 \u2192 a = 0 \u2192 v \u4E0D\u53D8\uFF01',W/2,H*0.24);
+      cx.font="italic 13px 'Inter',sans-serif";cx.fillStyle=CL.BRASS;
+      cx.fillText('No force \u2192 no acceleration \u2192 velocity constant',W/2,H*0.24+26);
+      cx.restore();
+    }
+  }
+
+  if(curPh===7){
+    const rp=(aT-PH[6].s)/PH[6].d;
+    if(rp>0.15){
+      const al2=Math.min(1,(rp-0.15)/0.25);
+      cx.save();cx.globalAlpha=Math.max(0.01,al2*0.88);cx.textAlign='center';
+      cx.fillStyle=CL.SPARK;cx.font="bold 20px 'Noto Sans SC','Inter',sans-serif";
+      cx.fillText('\u6838\u5FC3\u5173\u7CFB Core Relations',W/2,H*0.12);
+      cx.font="15px 'Noto Sans SC','Inter',sans-serif";cx.fillStyle=CL.EMBER;
+      cx.fillText('F \u2260 0 \u2192 a \u2260 0 \u2192 v \u53D8\u5316',W/2,H*0.12+30);
+      cx.fillText('F = 0 \u2192 a = 0 \u2192 v \u4E0D\u53D8',W/2,H*0.12+55);
+      cx.restore();
+    }
+  }
+
+  if(curPh===8){
+    const tp=(aT-PH[7].s)/PH[7].d;
+    const al=Math.min(1,tp/0.3)*Math.min(1,(1-tp)/0.2);
+    if(al>0){
+      cx.save();cx.globalAlpha=Math.max(0.01,al);cx.textAlign='center';
+      cx.fillStyle=CL.SPARK;cx.font="bold 26px 'Noto Sans SC','Inter',sans-serif";
+      cx.fillText('\u529B\u662F\u6539\u53D8\u8FD0\u52A8\u72B6\u6001\u7684\u539F\u56E0',W/2,H*0.38);
+      cx.font="15px 'Inter',sans-serif";cx.fillStyle=CL.BRASS;
+      cx.fillText('Force is what changes motion',W/2,H*0.38+32);
+      cx.font="13px 'Noto Sans SC','Inter',sans-serif";cx.fillStyle=CL.EMBER;
+      cx.fillText('\u6BCF\u6B21\u63A8\u62C9\u7269\u4F53\uFF0C\u6CE8\u610F\u5B83\u662F\u5426\u4ECE\u9759\u6B62\u52A8\u8D77\u6765\u3001\u52A8\u5F97\u66F4\u5FEB\u3001\u53D8\u6162\u6216\u505C\u4E0B',W/2,H*0.52);
+      cx.restore();
+    }
+  }
+
+  drawParts();
+  drawVignette();
+  drawGraph();
+  updHUD();
+  updSubs();
+
+  if(aT>TOTAL){
+    aT=0;lastTS=0;P.F=0;P.a=0;P.v=0;P.x=0;
+    vHist.length=0;phInit={};titleGone=false;cog.vis=false;cog.rot=0;cog.r=72;
+    parts.length=0;screenFlash=0;
+    const ol=document.getElementById('titleOL');
+    ol.style.display='flex';ol.style.opacity='1';
+    document.querySelectorAll('.title-anim').forEach(e=>{e.style.animation='none';e.offsetHeight;e.style.animation='';});
+  }
+
+  requestAnimationFrame(loop);
+}
+
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>

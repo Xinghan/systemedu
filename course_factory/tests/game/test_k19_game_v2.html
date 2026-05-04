@@ -1,0 +1,1472 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=Inter:wght@400;500&family=Noto+Sans+SC:wght@400;700&display=swap" rel="stylesheet">
+<title>Cart Lab</title>
+<style>
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box;border-radius:0!important;}
+html,body{width:100%;height:100vh;overflow:hidden;background:#0c0e14;color:#e2e2e9;font-family:'Inter','Noto Sans SC',sans-serif;}
+body{margin:0;padding:0;}
+.game-wrap{display:flex;flex-direction:row;height:100vh;overflow:hidden;}
+.game-sidebar{width:200px;min-width:200px;max-width:200px;display:flex;flex-direction:column;gap:8px;padding:10px;background:rgba(0,0,0,0.5);border-right:1px solid rgba(80,255,176,0.15);overflow-y:auto;}
+.sidebar-btns{display:flex;gap:6px;align-self:flex-start;}
+.sidebar-lang,.sidebar-sound{flex-shrink:0;font-family:'Space Grotesk',sans-serif;font-size:10px;font-weight:700;padding:3px 8px;cursor:pointer;border:1px solid rgba(255,181,156,0.25);background:transparent;color:#ffb59c;letter-spacing:1px;}
+.sidebar-lang:hover,.sidebar-sound:hover{border-color:#ffb59c;background:rgba(255,181,156,0.08);}
+.sidebar-title{font-family:'Space Grotesk',sans-serif;font-size:11px;font-weight:700;color:#50ffb0;letter-spacing:0.08em;text-transform:uppercase;margin-top:4px;}
+.sidebar-guide{font-size:12px;color:#aaabb0;line-height:1.6;}
+.game-main{flex:1;display:flex;flex-direction:column;min-width:0;}
+.game-header{padding:8px 16px;display:flex;justify-content:space-between;align-items:center;background:rgba(0,0,0,0.4);}
+.game-header h1{font-family:'Space Grotesk',sans-serif;font-size:clamp(13px,2vw,17px);font-weight:700;color:#50ffb0;}
+.game-header .info{font-family:'Space Grotesk',sans-serif;font-size:12px;color:#aaabb0;}
+.game-body{flex:1;display:flex;flex-direction:column;min-height:0;}
+canvas{width:100%;height:100%;display:block;}
+.control-panel{display:flex;justify-content:center;align-items:center;gap:12px;padding:8px 16px;background:rgba(0,0,0,0.4);flex-wrap:wrap;}
+.ctrl-btn{font-family:'Space Grotesk',sans-serif;font-size:12px;font-weight:700;padding:6px 18px;border:none;cursor:pointer;color:#0c0e14;background:linear-gradient(135deg,#50ffb0,#17df93);box-shadow:0 0 10px rgba(80,255,176,0.3);transition:transform 0.1s;}
+.ctrl-btn:hover{transform:scale(1.04);}
+.ctrl-btn:active{transform:scale(0.96);}
+.ctrl-btn:disabled{opacity:0.4;cursor:default;transform:none;}
+.ctrl-btn.secondary{background:rgba(30,30,45,0.9);color:#aaabb0;box-shadow:none;border:1px solid rgba(170,171,176,0.2);}
+.ctrl-btn.secondary:hover{color:#50ffb0;border-color:rgba(80,255,176,0.3);}
+.slider-wrap{display:flex;align-items:center;gap:6px;}
+.slider-wrap label{font-family:'Space Grotesk',sans-serif;font-size:11px;color:#aaabb0;white-space:nowrap;}
+.slider-wrap input[type=range]{width:110px;accent-color:#50ffb0;}
+.slider-val{font-family:'Space Grotesk',sans-serif;font-size:12px;color:#50ffb0;font-weight:700;min-width:40px;text-align:center;}
+.predict-wrap{display:flex;align-items:center;gap:6px;}
+.predict-wrap label{font-family:'Space Grotesk',sans-serif;font-size:11px;color:#aaabb0;white-space:nowrap;}
+.predict-wrap input[type=number]{width:60px;background:rgba(80,255,176,0.08);border:1px solid rgba(80,255,176,0.3);color:#e2e2e9;font-family:'Space Grotesk',sans-serif;font-size:12px;padding:3px 6px;text-align:center;}
+.predict-wrap input[type=number]:focus{outline:none;border-color:#50ffb0;}
+.mass-options{display:flex;gap:6px;align-items:center;}
+.mass-options label{font-family:'Space Grotesk',sans-serif;font-size:11px;color:#aaabb0;white-space:nowrap;}
+.mass-btn{font-family:'Space Grotesk',sans-serif;font-size:11px;font-weight:700;padding:4px 12px;border:1px solid rgba(80,255,176,0.3);background:transparent;color:#aaabb0;cursor:pointer;transition:all 0.15s;}
+.mass-btn:hover{border-color:#50ffb0;color:#50ffb0;background:rgba(80,255,176,0.08);}
+.mass-btn.selected{background:rgba(80,255,176,0.15);color:#50ffb0;border-color:#50ffb0;}
+.hud-bar{height:44px;display:flex;align-items:center;justify-content:space-around;background:rgba(0,0,0,0.55);padding:0 16px;}
+.hud-item{text-align:center;}
+.hud-label{font-family:'Space Grotesk',sans-serif;font-size:9px;letter-spacing:0.12em;color:#aaabb0;text-transform:uppercase;}
+.hud-val{font-family:'Space Grotesk',sans-serif;font-size:14px;font-weight:700;color:#50ffb0;transition:transform 0.15s;}
+</style>
+</head>
+<body>
+<div class="game-wrap">
+  <div class="game-sidebar">
+    <div class="sidebar-btns">
+      <button class="sidebar-lang" id="langBtn">CN</button>
+      <button class="sidebar-sound" id="soundBtn">MUTE</button>
+    </div>
+    <div class="sidebar-title" id="sidebarTitle"></div>
+    <div class="sidebar-guide" id="guideContent"></div>
+  </div>
+  <div class="game-main">
+    <div class="game-header">
+      <h1 id="gameTitle"></h1>
+      <div class="info" id="roundInfo"></div>
+    </div>
+    <div class="game-body">
+      <canvas id="cv"></canvas>
+    </div>
+    <div class="control-panel" id="controlPanel"></div>
+    <div class="hud-bar">
+      <div class="hud-item"><div class="hud-label" id="hudL1"></div><div class="hud-val" id="hudV1">--</div></div>
+      <div class="hud-item"><div class="hud-label" id="hudL2"></div><div class="hud-val" id="hudV2">--</div></div>
+      <div class="hud-item"><div class="hud-label" id="hudL3"></div><div class="hud-val" id="hudV3">--</div></div>
+      <div class="hud-item"><div class="hud-label" id="hudL4"></div><div class="hud-val" id="hudV4">--</div></div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ============================================================
+// K19 Game: Cart Lab -- F=ma Intuition Builder
+//
+// Level 1: Push the cart (force slider, fixed mass, match target a)
+// Level 2: Mass matters (fixed force, pick mass, predict winner)
+// Level 3: Calculate a (F and m given, compute a=F/m, numeric input)
+// Level 4: Rocket designer (thrust + mass sliders, reach altitude)
+// ============================================================
+
+// --- I18N ---
+var I18N = {
+  title:         {en:'CART LAB', cn:'\u63a8\u8f66\u5b9e\u9a8c\u5ba4'},
+  guide_l1:      {en:'Adjust force with the slider and push the cart. Match the target acceleration within 15%. Complete 3 trials.', cn:'\u8c03\u6574\u6ed1\u5757\u8bbe\u5b9a\u529b\u7684\u5927\u5c0f\uff0c\u63a8\u52a8\u5c0f\u8f66\u3002\u52a0\u901f\u5ea6\u8bef\u5dee\u4e0d\u8d85\u8fc715%\u5373\u53ef\u8fc7\u5173\u3002\u5b8c\u62103\u6b21\u5b9e\u9a8c\u3002'},
+  guide_l2:      {en:'Force is fixed at 10N. Choose which cart will reach the finish first, then watch the race! 4 rounds.', cn:'\u529b\u56fa\u5b9a\u4e3a10N\u3002\u9009\u62e9\u4f60\u8ba4\u4e3a\u6700\u5148\u5230\u8fbe\u7ec8\u70b9\u7684\u5c0f\u8f66\uff0c\u7136\u540e\u89c2\u770b\u6bd4\u8d5b\uff014\u8f6e\u3002'},
+  guide_l3:      {en:'Given F and m, calculate a = F/m (some rounds include friction). Enter your answer within 10% tolerance. 5 rounds.', cn:'\u5df2\u77e5F\u548cm\uff0c\u8ba1\u7b97a = F/m\uff08\u90e8\u5206\u5173\u5361\u542b\u6469\u64e6\u529b\uff09\u3002\u7b54\u6848\u8bef\u5dee\u4e0d\u8d8510%\u30025\u8f6e\u3002'},
+  guide_l4:      {en:'Design a rocket: pick engine thrust and rocket mass. Reach the target altitude! Fuel burns for 3s then runs out. Adjust and retry!', cn:'\u8bbe\u8ba1\u706b\u7bad\uff1a\u9009\u62e9\u53d1\u52a8\u673a\u63a8\u529b\u548c\u706b\u7bad\u8d28\u91cf\u3002\u8fbe\u5230\u76ee\u6807\u9ad8\u5ea6\u5373\u53ef\uff01\u71c3\u6599\u71c33\u79d2\u540e\u8017\u5c3d\u3002\u53ef\u53cd\u590d\u8c03\u6574\uff01'},
+  push:          {en:'PUSH', cn:'\u63a8\uff01'},
+  launch:        {en:'LAUNCH', cn:'\u53d1\u5c04\uff01'},
+  submit:        {en:'SUBMIT', cn:'\u63d0\u4ea4'},
+  nextRound:     {en:'NEXT', cn:'\u4e0b\u4e00\u9898'},
+  nextLevel:     {en:'NEXT LEVEL', cn:'\u4e0b\u4e00\u5173'},
+  reset:         {en:'RESET', cn:'\u91cd\u7f6e'},
+  retry:         {en:'RETRY', cn:'\u91cd\u8bd5'},
+  race:          {en:'RACE!', cn:'\u6bd4\u8d5b\uff01'},
+  force:         {en:'Force', cn:'\u529b'},
+  mass:          {en:'Mass', cn:'\u8d28\u91cf'},
+  accel:         {en:'Accel', cn:'\u52a0\u901f\u5ea6'},
+  target:        {en:'Target', cn:'\u76ee\u6807'},
+  level:         {en:'Level', cn:'\u5173\u5361'},
+  round:         {en:'Round', cn:'\u7b2c'},
+  trial:         {en:'Trial', cn:'\u5b9e\u9a8c'},
+  correct:       {en:'CORRECT', cn:'\u6b63\u786e'},
+  wrong:         {en:'WRONG', cn:'\u8bef\u5dee\u8fc7\u5927'},
+  forceN:        {en:'N', cn:'N'},
+  massKg:        {en:'kg', cn:'kg'},
+  accelUnit:     {en:'m/s\u00b2', cn:'m/s\u00b2'},
+  altM:          {en:'m', cn:'m'},
+  thrust:        {en:'Thrust', cn:'\u63a8\u529b'},
+  altitude:      {en:'Altitude', cn:'\u9ad8\u5ea6'},
+  targetAlt:     {en:'Target Alt', cn:'\u76ee\u6807\u9ad8\u5ea6'},
+  vel:           {en:'Velocity', cn:'\u901f\u5ea6'},
+  friction:      {en:'friction', cn:'\u6469\u64e6\u529b'},
+  netF:          {en:'Net F', cn:'\u5408\u529b'},
+  l1Name:        {en:'Level 1: Push the Cart', cn:'\u7b2c1\u5173\uff1a\u63a8\u52a8\u5c0f\u8f66'},
+  l2Name:        {en:'Level 2: Mass Matters', cn:'\u7b2c2\u5173\uff1a\u8d28\u91cf\u7684\u79d8\u5bc6'},
+  l3Name:        {en:'Level 3: Calculate a', cn:'\u7b2c3\u5173\uff1a\u8ba1\u7b97\u52a0\u901f\u5ea6'},
+  l4Name:        {en:'Level 4: Rocket Designer', cn:'\u7b2c4\u5173\uff1a\u706b\u7bad\u8bbe\u8ba1\u5e08'},
+  predLabel:     {en:'Your pick:', cn:'\u4f60\u7684\u9009\u62e9\uff1a'},
+  fastest:       {en:'Fastest:', cn:'\u6700\u5feb\uff1a'},
+  complete:      {en:'ALL LEVELS COMPLETE!', cn:'\u5168\u90e8\u901a\u5173\uff01'},
+  completeMsg:   {en:'You mastered F = ma! Larger force means greater acceleration. Larger mass means smaller acceleration.', cn:'\u4f60\u638c\u63e1\u4e86 F = ma\uff01\u529b\u8d8a\u5927\u2192\u52a0\u901f\u8d8a\u5feb\u3002\u8d28\u91cf\u8d8a\u5927\u2192\u52a0\u901f\u8d8a\u6162\u3002'},
+  reachedAlt:    {en:'Target reached!', cn:'\u5230\u8fbe\u76ee\u6807\u9ad8\u5ea6\uff01'},
+  crashMsg:      {en:'Rocket fell back! Try more thrust or less mass.', cn:'\u706b\u7bad\u843d\u56de\u5730\u9762\uff01\u8bd5\u8bd5\u589e\u52a0\u63a8\u529b\u6216\u51cf\u5c11\u8d28\u91cf\u3002'},
+  notEnough:     {en:'Not enough altitude! Adjust and retry.', cn:'\u9ad8\u5ea6\u4e0d\u591f\uff01\u8c03\u6574\u53c2\u6570\u91cd\u8bd5\u3002'},
+  massG:         {en:'g', cn:'g'},
+  calcHint:      {en:'Calculate: a = (F - f) / m', cn:'\u8ba1\u7b97\uff1aa = (F - f) / m'},
+};
+
+var lang = 'cn';
+function t(key) { return I18N[key] ? (I18N[key][lang] || I18N[key].en || key) : key; }
+
+var soundMuted = true;
+
+// --- Audio ---
+var audioCtx = null;
+function ensureAudio() { if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)(); }
+function playTone(freq, dur, vol) {
+  if (soundMuted) return;
+  ensureAudio();
+  var osc = audioCtx.createOscillator();
+  var gain = audioCtx.createGain();
+  osc.type = 'sine';
+  osc.frequency.value = freq;
+  gain.gain.value = vol || 0.08;
+  gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + dur);
+  osc.connect(gain);
+  gain.connect(audioCtx.destination);
+  osc.start();
+  osc.stop(audioCtx.currentTime + dur);
+}
+function playCorrect() { playTone(523, 0.1, 0.07); setTimeout(function(){ playTone(659, 0.1, 0.07); }, 100); setTimeout(function(){ playTone(784, 0.15, 0.07); }, 200); }
+function playWrong() { playTone(200, 0.15, 0.06); setTimeout(function(){ playTone(160, 0.2, 0.06); }, 150); }
+function playLaunch() { playTone(120, 0.3, 0.08); setTimeout(function(){ playTone(180, 0.4, 0.06); }, 100); }
+function playPush() { playTone(300, 0.08, 0.05); setTimeout(function(){ playTone(400, 0.06, 0.05); }, 60); }
+
+// --- Particles ---
+var particles = [];
+function spawnParticles(x, y, count, color, vScale) {
+  for (var i = 0; i < count; i++) {
+    var angle = Math.random() * Math.PI * 2;
+    var speed = (Math.random() * 2 + 1) * (vScale || 1);
+    particles.push({ x:x, y:y, vx: Math.cos(angle)*speed, vy: Math.sin(angle)*speed, life:1, color: color, size: Math.random()*3+1 });
+  }
+}
+function updateParticles(dt) {
+  for (var i = particles.length - 1; i >= 0; i--) {
+    var p = particles[i];
+    p.x += p.vx;
+    p.y += p.vy;
+    p.life -= dt * 2;
+    if (p.life <= 0) particles.splice(i, 1);
+  }
+}
+function drawParticles(c) {
+  for (var i = 0; i < particles.length; i++) {
+    var p = particles[i];
+    c.globalAlpha = p.life * 0.8;
+    c.fillStyle = p.color;
+    c.fillRect(p.x - p.size/2, p.y - p.size/2, p.size, p.size);
+  }
+  c.globalAlpha = 1;
+}
+
+// --- Screen shake ---
+var shakeAmount = 0;
+var shakeDecay = 0.9;
+
+// --- Canvas ---
+var canvas = document.getElementById('cv');
+var ctx = canvas.getContext('2d');
+var cW = 100, cH = 100;
+var dpr = Math.min(window.devicePixelRatio || 1, 2);
+
+function resizeCanvas() {
+  var rect = canvas.getBoundingClientRect();
+  cW = rect.width;
+  cH = rect.height;
+  if (cW < 80) cW = 80;
+  if (cH < 80) cH = 80;
+  canvas.width = Math.round(cW * dpr);
+  canvas.height = Math.round(cH * dpr);
+  canvas.style.width = cW + 'px';
+  canvas.style.height = cH + 'px';
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+}
+
+// === GAME STATE ===
+var currentLevel = 0; // 0..3
+var currentRound = 0;
+var phase = 'idle'; // idle, running, result, levelDone, complete
+var feedbackText = ''; // 'correct' or 'wrong'
+
+// Level 1 state
+var l1Force = 10;
+var l1Mass = 2;
+var l1TargetAccels = [3.0, 7.5, 5.0];
+var l1Successes = 0;
+var l1CartX = 0;
+var l1CartVel = 0;
+var l1SimTime = 0;
+var l1SimRunning = false;
+
+// Level 2 state
+var l2FixedForce = 10;
+var l2Rounds = [
+  { masses: [1, 5], correctIdx: 0 },
+  { masses: [2, 10], correctIdx: 0 },
+  { masses: [5, 1], correctIdx: 1 },
+  { masses: [10, 2], correctIdx: 1 }
+];
+var l2Prediction = -1;
+var l2CartPositions = [];
+var l2CartVels = [];
+var l2SimRunning = false;
+var l2SimTime = 0;
+var l2Winner = -1;
+var l2Correct = 0;
+
+// Level 3 state
+var l3Problems = [
+  { F: 10, m: 2, friction: 0, answer: 5 },
+  { F: 20, m: 4, friction: 0, answer: 5 },
+  { F: 15, m: 3, friction: 0, answer: 5 },
+  { F: 12, m: 4, friction: 4, answer: 2 },
+  { F: 20, m: 5, friction: 5, answer: 3 }
+];
+var l3UserAnswer = 0;
+var l3Correct = 0;
+
+// Level 4 state
+var l4Thrust = 10;
+var l4MassG = 200;
+var l4TargetAlt = 50;
+var l4RocketY = 0;
+var l4RocketVel = 0;
+var l4SimTime = 0;
+var l4BurnTime = 3;
+var l4SimRunning = false;
+var l4MaxAlt = 0;
+var l4FuelMassG = 20;
+var l4Result = ''; // 'reached', 'crash', 'notEnough'
+var l4Attempts = 0;
+
+// Idle animation
+var idleTime = 0;
+
+// Parallax background stars
+var bgStars = [];
+(function initStars() {
+  for (var i = 0; i < 60; i++) {
+    bgStars.push({ x: Math.random(), y: Math.random(), size: Math.random() * 1.5 + 0.5, speed: Math.random() * 0.3 + 0.1 });
+  }
+})();
+
+// Ambient glow phase
+var glowPhase = 0;
+
+// Level transition
+var levelTransAlpha = 0;
+var levelTransDir = 0; // 0=none, 1=fading out, 2=fading in
+
+// ========================
+// EASING HELPERS
+// ========================
+function easeOutCubic(x) { return 1 - Math.pow(1 - x, 3); }
+function easeInOutQuad(x) { return x < 0.5 ? 2*x*x : 1 - Math.pow(-2*x+2,2)/2; }
+
+// ========================
+// CONTROL PANEL BUILDING
+// ========================
+function buildControls() {
+  var cp = document.getElementById('controlPanel');
+  cp.innerHTML = '';
+  if (currentLevel === 0) {
+    cp.innerHTML =
+      '<div class="slider-wrap"><label id="forceLabel"></label><input type="range" id="forceSlider" min="1" max="20" value="' + l1Force + '" step="0.5"><span class="slider-val" id="forceVal"></span></div>' +
+      '<button class="ctrl-btn" id="btnAction"></button>' +
+      '<button class="ctrl-btn secondary" id="btnReset"></button>';
+    document.getElementById('forceSlider').addEventListener('input', function() {
+      l1Force = parseFloat(this.value);
+      updateControlVals();
+    });
+  } else if (currentLevel === 1) {
+    var rd = l2Rounds[currentRound];
+    var massHtml = '<div class="mass-options"><label id="massLabel"></label>';
+    for (var i = 0; i < rd.masses.length; i++) {
+      massHtml += '<button class="mass-btn pick-btn" data-idx="' + i + '">' + rd.masses[i] + 'kg</button>';
+    }
+    massHtml += '</div>';
+    cp.innerHTML = massHtml +
+      '<button class="ctrl-btn" id="btnAction"></button>' +
+      '<button class="ctrl-btn secondary" id="btnReset"></button>';
+    var massBtns = cp.querySelectorAll('.pick-btn');
+    for (var j = 0; j < massBtns.length; j++) {
+      massBtns[j].addEventListener('click', function() {
+        l2Prediction = parseInt(this.getAttribute('data-idx'));
+        var all = cp.querySelectorAll('.pick-btn');
+        for (var k = 0; k < all.length; k++) all[k].classList.remove('selected');
+        this.classList.add('selected');
+        updateBtnLabels();
+      });
+    }
+  } else if (currentLevel === 2) {
+    cp.innerHTML =
+      '<div class="predict-wrap"><label id="calcLabel"></label><input type="number" id="answerInput" min="0" max="999" step="0.1" value="0"></div>' +
+      '<button class="ctrl-btn" id="btnAction"></button>' +
+      '<button class="ctrl-btn secondary" id="btnReset"></button>';
+    document.getElementById('answerInput').addEventListener('input', function() {
+      l3UserAnswer = parseFloat(this.value) || 0;
+    });
+  } else if (currentLevel === 3) {
+    cp.innerHTML =
+      '<div class="mass-options"><label id="thrustLabel"></label>' +
+      '<button class="mass-btn thrust-btn" data-t="5">5N</button>' +
+      '<button class="mass-btn thrust-btn" data-t="10">10N</button>' +
+      '<button class="mass-btn thrust-btn" data-t="15">15N</button>' +
+      '<button class="mass-btn thrust-btn" data-t="20">20N</button></div>' +
+      '<div class="slider-wrap"><label id="massLabel4"></label><input type="range" id="massSlider" min="100" max="500" value="' + l4MassG + '" step="10"><span class="slider-val" id="massVal4"></span></div>' +
+      '<button class="ctrl-btn" id="btnAction"></button>' +
+      '<button class="ctrl-btn secondary" id="btnReset"></button>';
+    var thrustBtns = cp.querySelectorAll('.thrust-btn');
+    for (var ti = 0; ti < thrustBtns.length; ti++) {
+      if (parseInt(thrustBtns[ti].getAttribute('data-t')) === l4Thrust) thrustBtns[ti].classList.add('selected');
+      thrustBtns[ti].addEventListener('click', function() {
+        l4Thrust = parseInt(this.getAttribute('data-t'));
+        var all = cp.querySelectorAll('.thrust-btn');
+        for (var k = 0; k < all.length; k++) all[k].classList.remove('selected');
+        this.classList.add('selected');
+        updateControlVals();
+      });
+    }
+    document.getElementById('massSlider').addEventListener('input', function() {
+      l4MassG = parseInt(this.value);
+      updateControlVals();
+    });
+  }
+
+  // Attach button listeners
+  var btnAction = document.getElementById('btnAction');
+  var btnReset = document.getElementById('btnReset');
+  if (btnAction) btnAction.addEventListener('click', onAction);
+  if (btnReset) btnReset.addEventListener('click', onReset);
+
+  updateControlVals();
+  updateBtnLabels();
+}
+
+function updateControlVals() {
+  if (currentLevel === 0) {
+    var fl = document.getElementById('forceLabel');
+    var fv = document.getElementById('forceVal');
+    if (fl) fl.textContent = t('force') + ':';
+    if (fv) fv.textContent = l1Force + t('forceN');
+  }
+  if (currentLevel === 1) {
+    var ml = document.getElementById('massLabel');
+    if (ml) ml.textContent = t('fastest') + ' ';
+  }
+  if (currentLevel === 2) {
+    var cl = document.getElementById('calcLabel');
+    var prob = l3Problems[currentRound];
+    if (cl) {
+      if (prob.friction > 0) {
+        cl.textContent = 'F=' + prob.F + 'N, m=' + prob.m + 'kg, f=' + prob.friction + 'N  a=?';
+      } else {
+        cl.textContent = 'F=' + prob.F + 'N, m=' + prob.m + 'kg  a=?';
+      }
+    }
+  }
+  if (currentLevel === 3) {
+    var tl = document.getElementById('thrustLabel');
+    if (tl) tl.textContent = t('thrust') + ':';
+    var ml4 = document.getElementById('massLabel4');
+    if (ml4) ml4.textContent = t('mass') + ':';
+    var mv4 = document.getElementById('massVal4');
+    if (mv4) mv4.textContent = l4MassG + t('massG');
+  }
+}
+
+function updateBtnLabels() {
+  var btnAction = document.getElementById('btnAction');
+  var btnReset = document.getElementById('btnReset');
+  if (!btnAction || !btnReset) return;
+
+  if (phase === 'complete') {
+    btnAction.textContent = t('complete');
+    btnAction.disabled = true;
+    btnReset.textContent = t('reset');
+    return;
+  }
+  if (phase === 'levelDone') {
+    btnAction.textContent = currentLevel < 3 ? t('nextLevel') : t('complete');
+    btnAction.disabled = false;
+    btnReset.textContent = t('reset');
+    return;
+  }
+  if (phase === 'result') {
+    if (currentLevel === 3) {
+      btnAction.textContent = l4Result === 'reached' ? t('complete') : t('retry');
+    } else {
+      btnAction.textContent = t('nextRound');
+    }
+    btnAction.disabled = false;
+    btnReset.textContent = t('reset');
+    return;
+  }
+  if (phase === 'running') {
+    btnAction.textContent = '...';
+    btnAction.disabled = true;
+    btnReset.textContent = t('reset');
+    return;
+  }
+  // idle
+  if (currentLevel === 0) {
+    btnAction.textContent = t('push');
+    btnAction.disabled = false;
+  } else if (currentLevel === 1) {
+    btnAction.textContent = t('race');
+    btnAction.disabled = l2Prediction < 0;
+  } else if (currentLevel === 2) {
+    btnAction.textContent = t('submit');
+    btnAction.disabled = false;
+  } else if (currentLevel === 3) {
+    btnAction.textContent = t('launch');
+    btnAction.disabled = false;
+  }
+  btnReset.textContent = t('reset');
+}
+
+// ========================
+// ACTIONS
+// ========================
+function onAction() {
+  if (phase === 'complete') return;
+
+  if (phase === 'levelDone') {
+    if (currentLevel < 3) {
+      startLevelTransition(currentLevel + 1);
+    } else {
+      phase = 'complete';
+      updateBtnLabels();
+      spawnParticles(cW / 2, cH / 2, 40, '#50ffb0', 2);
+      playCorrect();
+    }
+    return;
+  }
+
+  if (phase === 'result') {
+    if (currentLevel === 3) {
+      if (l4Result === 'reached') {
+        phase = 'complete';
+        updateBtnLabels();
+        spawnParticles(cW / 2, cH / 2, 40, '#50ffb0', 2);
+        playCorrect();
+        return;
+      }
+      // retry rocket
+      l4RocketY = 0;
+      l4RocketVel = 0;
+      l4SimTime = 0;
+      l4MaxAlt = 0;
+      l4FuelMassG = 20;
+      l4Result = '';
+      phase = 'idle';
+      updateBtnLabels();
+      return;
+    }
+    // next round for L1-L3
+    currentRound++;
+    var maxRounds = currentLevel === 0 ? 3 : currentLevel === 1 ? 4 : 5;
+    if (currentRound >= maxRounds) {
+      phase = 'levelDone';
+      updateBtnLabels();
+      return;
+    }
+    phase = 'idle';
+    feedbackText = '';
+    if (currentLevel === 0) {
+      l1CartX = 0;
+      l1CartVel = 0;
+      l1SimTime = 0;
+    }
+    if (currentLevel === 1) {
+      l2Prediction = -1;
+      l2CartPositions = []; l2CartVels = []; l2Winner = -1; l2SimTime = 0;
+    }
+    if (currentLevel === 2) {
+      l3UserAnswer = 0;
+    }
+    buildControls();
+    updateBtnLabels();
+    return;
+  }
+
+  // Idle -> action
+  if (currentLevel === 0) {
+    l1CartX = 0;
+    l1CartVel = 0;
+    l1SimTime = 0;
+    l1SimRunning = true;
+    phase = 'running';
+    playPush();
+    spawnParticles(80, cH * 0.6, 8, '#50ffb0', 0.8);
+    updateBtnLabels();
+  } else if (currentLevel === 1) {
+    if (l2Prediction < 0) return;
+    var rd = l2Rounds[currentRound];
+    l2CartPositions = [];
+    l2CartVels = [];
+    for (var ci = 0; ci < rd.masses.length; ci++) { l2CartPositions.push(0); l2CartVels.push(0); }
+    l2SimTime = 0;
+    l2SimRunning = true;
+    l2Winner = -1;
+    phase = 'running';
+    playPush();
+    updateBtnLabels();
+  } else if (currentLevel === 2) {
+    var prob = l3Problems[currentRound];
+    var correctA = prob.answer;
+    var userA = l3UserAnswer;
+    var err = Math.abs(userA - correctA) / Math.max(correctA, 0.01);
+    if (err <= 0.10) {
+      l3Correct++;
+      feedbackText = 'correct';
+      playCorrect();
+      spawnParticles(cW / 2, cH / 2, 15, '#50ffb0', 1.2);
+    } else {
+      feedbackText = 'wrong';
+      playWrong();
+      shakeAmount = 6;
+    }
+    phase = 'result';
+    updateBtnLabels();
+  } else if (currentLevel === 3) {
+    l4RocketY = 0;
+    l4RocketVel = 0;
+    l4SimTime = 0;
+    l4MaxAlt = 0;
+    l4FuelMassG = 20;
+    l4SimRunning = true;
+    l4Result = '';
+    l4Attempts++;
+    phase = 'running';
+    playLaunch();
+    spawnParticles(cW / 2, cH * 0.85, 20, '#ffb59c', 1.5);
+    updateBtnLabels();
+  }
+}
+
+function onReset() {
+  if (currentLevel === 0) {
+    l1CartX = 0; l1CartVel = 0; l1SimTime = 0; l1SimRunning = false;
+    currentRound = 0; l1Successes = 0;
+  } else if (currentLevel === 1) {
+    l2Prediction = -1; l2SimRunning = false; l2SimTime = 0;
+    l2CartPositions = []; l2CartVels = []; l2Winner = -1;
+    currentRound = 0; l2Correct = 0;
+  } else if (currentLevel === 2) {
+    currentRound = 0; l3Correct = 0; feedbackText = ''; l3UserAnswer = 0;
+  } else if (currentLevel === 3) {
+    l4RocketY = 0; l4RocketVel = 0; l4SimTime = 0; l4SimRunning = false;
+    l4MaxAlt = 0; l4FuelMassG = 20; l4Result = '';
+  }
+  phase = 'idle';
+  feedbackText = '';
+  buildControls();
+  updateBtnLabels();
+}
+
+function startLevelTransition(newLevel) {
+  levelTransDir = 1;
+  levelTransAlpha = 0;
+  var targetLv = newLevel;
+  var _interval = setInterval(function() {
+    if (levelTransDir === 1) {
+      levelTransAlpha += 0.05;
+      if (levelTransAlpha >= 1) {
+        levelTransAlpha = 1;
+        levelTransDir = 2;
+        currentLevel = targetLv;
+        currentRound = 0;
+        phase = 'idle';
+        feedbackText = '';
+        l1Successes = 0; l2Correct = 0; l3Correct = 0;
+        l2Prediction = -1;
+        l1CartX = 0; l1CartVel = 0; l1SimTime = 0; l1SimRunning = false;
+        l2CartPositions = []; l2CartVels = []; l2Winner = -1; l2SimRunning = false; l2SimTime = 0;
+        l3UserAnswer = 0;
+        l4RocketY = 0; l4RocketVel = 0; l4SimTime = 0; l4SimRunning = false;
+        l4MaxAlt = 0; l4FuelMassG = 20; l4Result = ''; l4Attempts = 0;
+        buildControls();
+        updateTexts();
+      }
+    } else if (levelTransDir === 2) {
+      levelTransAlpha -= 0.05;
+      if (levelTransAlpha <= 0) {
+        levelTransAlpha = 0;
+        levelTransDir = 0;
+        clearInterval(_interval);
+      }
+    }
+  }, 20);
+}
+
+// ========================
+// PHYSICS SIMULATION
+// ========================
+var lastFrameTime = 0;
+
+function simulateLevel1(dt) {
+  if (!l1SimRunning) return;
+  l1SimTime += dt;
+  var accel = l1Force / l1Mass;
+  l1CartVel += accel * dt;
+  l1CartX += l1CartVel * dt;
+
+  if (l1SimTime >= 2.0) {
+    l1SimRunning = false;
+    var targetA = l1TargetAccels[currentRound];
+    var err = Math.abs(accel - targetA) / targetA;
+    if (err <= 0.15) {
+      l1Successes++;
+      feedbackText = 'correct';
+      playCorrect();
+      spawnParticles(cW * 0.7, cH * 0.55, 15, '#50ffb0', 1);
+    } else {
+      feedbackText = 'wrong';
+      playWrong();
+      shakeAmount = 5;
+    }
+    phase = 'result';
+    updateBtnLabels();
+  }
+}
+
+function simulateLevel2(dt) {
+  if (!l2SimRunning) return;
+  l2SimTime += dt;
+  var rd = l2Rounds[currentRound];
+  var finishDist = 18; // in simulation meters
+
+  for (var i = 0; i < rd.masses.length; i++) {
+    var accel = l2FixedForce / rd.masses[i];
+    l2CartVels[i] += accel * dt;
+    l2CartPositions[i] += l2CartVels[i] * dt;
+  }
+
+  // Check finish
+  var finished = false;
+  for (var j = 0; j < rd.masses.length; j++) {
+    if (l2CartPositions[j] >= finishDist && l2Winner < 0) {
+      l2Winner = j;
+      finished = true;
+    }
+  }
+
+  if (finished || l2SimTime > 5) {
+    l2SimRunning = false;
+    if (l2Winner < 0) l2Winner = l2CartPositions[0] > l2CartPositions[1] ? 0 : 1;
+    if (l2Prediction === rd.correctIdx) {
+      l2Correct++;
+      feedbackText = 'correct';
+      playCorrect();
+      spawnParticles(cW * 0.75, cH * 0.4, 15, '#50ffb0', 1);
+    } else {
+      feedbackText = 'wrong';
+      playWrong();
+      shakeAmount = 5;
+    }
+    phase = 'result';
+    updateBtnLabels();
+  }
+}
+
+function simulateLevel4(dt) {
+  if (!l4SimRunning) return;
+  l4SimTime += dt;
+
+  var g = 9.8;
+  var currentThrust = l4SimTime <= l4BurnTime ? l4Thrust : 0;
+  var currentMassKg;
+
+  // Fuel burn: subtract fuel mass linearly over burn time
+  if (l4SimTime <= l4BurnTime) {
+    var fuelRemaining = l4FuelMassG * (1 - l4SimTime / l4BurnTime);
+    currentMassKg = (l4MassG - l4FuelMassG + fuelRemaining) / 1000;
+  } else {
+    currentMassKg = (l4MassG - l4FuelMassG) / 1000;
+  }
+  if (currentMassKg < 0.05) currentMassKg = 0.05;
+
+  var netForce = currentThrust - currentMassKg * g;
+  var accel = netForce / currentMassKg;
+  l4RocketVel += accel * dt;
+  l4RocketY += l4RocketVel * dt;
+
+  if (l4RocketY > l4MaxAlt) l4MaxAlt = l4RocketY;
+
+  // Exhaust particles during burn
+  if (currentThrust > 0 && Math.random() < 0.3) {
+    var rsy = rocketScreenY();
+    spawnParticles(cW / 2 + (Math.random()-0.5)*6, rsy + 20, 2, '#ffb59c', 0.6);
+  }
+
+  // Landed back
+  if (l4RocketY <= 0 && l4SimTime > 0.5) {
+    l4RocketY = 0;
+    l4SimRunning = false;
+    if (l4MaxAlt >= l4TargetAlt) {
+      l4Result = 'reached';
+      playCorrect();
+      spawnParticles(cW / 2, cH * 0.2, 30, '#50ffb0', 2);
+    } else {
+      l4Result = 'crash';
+      playWrong();
+      shakeAmount = 10;
+    }
+    phase = 'result';
+    updateBtnLabels();
+  }
+
+  // Timeout
+  if (l4SimTime > 15) {
+    l4SimRunning = false;
+    if (l4MaxAlt >= l4TargetAlt) {
+      l4Result = 'reached';
+      playCorrect();
+    } else {
+      l4Result = 'notEnough';
+      playWrong();
+    }
+    phase = 'result';
+    updateBtnLabels();
+  }
+}
+
+function rocketScreenY() {
+  var groundY = cH * 0.85;
+  var topY = cH * 0.05;
+  var maxDisplay = Math.max(l4TargetAlt * 1.5, 80);
+  var ratio = l4RocketY / maxDisplay;
+  if (ratio > 1) ratio = 1;
+  if (ratio < 0) ratio = 0;
+  return groundY - ratio * (groundY - topY);
+}
+
+// ========================
+// DRAWING
+// ========================
+function drawBackground() {
+  var grad = ctx.createLinearGradient(0, 0, 0, cH);
+  grad.addColorStop(0, '#0a0c12');
+  grad.addColorStop(1, '#0c0e14');
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, cW, cH);
+
+  // Parallax stars
+  glowPhase += 0.005;
+  for (var i = 0; i < bgStars.length; i++) {
+    var s = bgStars[i];
+    var sx = s.x * cW;
+    var sy = ((s.y + glowPhase * s.speed * 0.1) % 1.0) * cH;
+    var alpha = 0.3 + 0.2 * Math.sin(glowPhase * 2 + i);
+    ctx.globalAlpha = alpha;
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(sx, sy, s.size, s.size);
+  }
+  ctx.globalAlpha = 1;
+
+  // Ambient glow
+  var glowX = cW * 0.5 + Math.sin(glowPhase) * cW * 0.2;
+  var glowY = cH * 0.3;
+  var glowGrad = ctx.createRadialGradient(glowX, glowY, 0, glowX, glowY, cW * 0.4);
+  glowGrad.addColorStop(0, 'rgba(80,255,176,0.03)');
+  glowGrad.addColorStop(1, 'rgba(80,255,176,0)');
+  ctx.fillStyle = glowGrad;
+  ctx.fillRect(0, 0, cW, cH);
+}
+
+function drawTrack(y, label) {
+  ctx.strokeStyle = 'rgba(80,255,176,0.2)';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(60, y);
+  ctx.lineTo(cW - 30, y);
+  ctx.stroke();
+  for (var x = 100; x < cW - 30; x += 80) {
+    ctx.strokeStyle = 'rgba(80,255,176,0.1)';
+    ctx.beginPath();
+    ctx.moveTo(x, y - 4);
+    ctx.lineTo(x, y + 4);
+    ctx.stroke();
+  }
+  if (label) {
+    ctx.font = '700 10px "Space Grotesk", sans-serif';
+    ctx.fillStyle = '#aaabb0';
+    ctx.textAlign = 'left';
+    ctx.fillText(label, 10, y + 4);
+  }
+}
+
+function drawCart(x, y, w, h, color, massLabel) {
+  // Easing: slight glow behind cart
+  ctx.fillStyle = color.replace('0.7', '0.12').replace('0.5', '0.08');
+  ctx.fillRect(x - 3, y - h - 3, w + 6, h + 6);
+
+  ctx.fillStyle = color;
+  ctx.fillRect(x, y - h, w, h);
+
+  // Wheels
+  ctx.fillStyle = '#aaabb0';
+  var wheelR = Math.min(6, h * 0.35);
+  ctx.beginPath();
+  ctx.arc(x + w * 0.25, y + 1, wheelR, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.beginPath();
+  ctx.arc(x + w * 0.75, y + 1, wheelR, 0, Math.PI * 2);
+  ctx.fill();
+
+  if (massLabel) {
+    ctx.font = '700 10px "Space Grotesk", sans-serif';
+    ctx.fillStyle = '#0c0e14';
+    ctx.textAlign = 'center';
+    ctx.fillText(massLabel, x + w / 2, y - h / 2 + 4);
+  }
+}
+
+function drawForceArrow(x, y, forceN, maxForce) {
+  var maxLen = 80;
+  var len = (forceN / maxForce) * maxLen;
+  if (len < 5) len = 5;
+  ctx.strokeStyle = '#ffb59c';
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  ctx.moveTo(x, y);
+  ctx.lineTo(x + len, y);
+  ctx.stroke();
+  // Arrowhead
+  ctx.fillStyle = '#ffb59c';
+  ctx.beginPath();
+  ctx.moveTo(x + len + 8, y);
+  ctx.lineTo(x + len - 2, y - 5);
+  ctx.lineTo(x + len - 2, y + 5);
+  ctx.closePath();
+  ctx.fill();
+  // Force label
+  ctx.font = '700 11px "Space Grotesk", sans-serif';
+  ctx.fillStyle = '#ffb59c';
+  ctx.textAlign = 'center';
+  ctx.fillText(forceN.toFixed(1) + 'N', x + len / 2, y - 10);
+}
+
+function drawFrictionArrow(x, y, frictionN, maxForce) {
+  var maxLen = 80;
+  var len = (frictionN / maxForce) * maxLen;
+  if (len < 5) len = 5;
+  ctx.strokeStyle = '#ff6b6b';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(x, y);
+  ctx.lineTo(x - len, y);
+  ctx.stroke();
+  ctx.fillStyle = '#ff6b6b';
+  ctx.beginPath();
+  var tipX = x - len - 6;
+  ctx.moveTo(tipX, y);
+  ctx.lineTo(tipX + 8, y - 4);
+  ctx.lineTo(tipX + 8, y + 4);
+  ctx.closePath();
+  ctx.fill();
+  ctx.font = '10px "Space Grotesk", sans-serif';
+  ctx.fillStyle = '#ff6b6b';
+  ctx.textAlign = 'center';
+  ctx.fillText('f=' + frictionN + 'N', x - len / 2, y - 10);
+}
+
+function drawRocket(x, y, scale) {
+  var h = 40 * scale;
+  var w = 14 * scale;
+  // Body
+  ctx.fillStyle = '#e2e2e9';
+  ctx.fillRect(x - w / 2, y - h, w, h);
+  // Nose cone
+  ctx.fillStyle = '#ffb59c';
+  ctx.beginPath();
+  ctx.moveTo(x, y - h - 12 * scale);
+  ctx.lineTo(x - w / 2, y - h);
+  ctx.lineTo(x + w / 2, y - h);
+  ctx.closePath();
+  ctx.fill();
+  // Fins
+  ctx.fillStyle = '#50ffb0';
+  ctx.beginPath();
+  ctx.moveTo(x - w / 2, y);
+  ctx.lineTo(x - w / 2 - 6 * scale, y + 5 * scale);
+  ctx.lineTo(x - w / 2, y - 8 * scale);
+  ctx.closePath();
+  ctx.fill();
+  ctx.beginPath();
+  ctx.moveTo(x + w / 2, y);
+  ctx.lineTo(x + w / 2 + 6 * scale, y + 5 * scale);
+  ctx.lineTo(x + w / 2, y - 8 * scale);
+  ctx.closePath();
+  ctx.fill();
+  // Flame during burn
+  if (l4SimRunning && l4SimTime <= l4BurnTime) {
+    var flameH = (10 + Math.random() * 15) * scale;
+    var flameGrad = ctx.createLinearGradient(x, y, x, y + flameH);
+    flameGrad.addColorStop(0, 'rgba(255,181,156,0.9)');
+    flameGrad.addColorStop(0.5, 'rgba(255,120,50,0.6)');
+    flameGrad.addColorStop(1, 'rgba(255,80,30,0)');
+    ctx.fillStyle = flameGrad;
+    ctx.beginPath();
+    ctx.moveTo(x - w * 0.3, y);
+    ctx.lineTo(x, y + flameH);
+    ctx.lineTo(x + w * 0.3, y);
+    ctx.closePath();
+    ctx.fill();
+  }
+}
+
+// ========================
+// LEVEL DRAWING
+// ========================
+function drawLevel1() {
+  var trackY = cH * 0.6;
+  drawTrack(trackY, l1Mass + 'kg');
+
+  // Cart position on screen
+  var cartScreenX = 80 + l1CartX * 15;
+  if (cartScreenX > cW - 80) cartScreenX = cW - 80;
+  var cartW = 50;
+  var cartH = 28;
+
+  // Idle wobble
+  var wobbleY = 0;
+  if (!l1SimRunning && phase === 'idle') {
+    wobbleY = Math.sin(idleTime * 3) * 1.5;
+  }
+
+  drawCart(cartScreenX, trackY + wobbleY, cartW, cartH, 'rgba(80,255,176,0.7)', l1Mass + 'kg');
+
+  // Force arrow
+  if (l1SimRunning || phase === 'idle') {
+    drawForceArrow(cartScreenX - 10, trackY - cartH / 2 + wobbleY, l1Force, 20);
+  }
+
+  // Target acceleration
+  var targetA = l1TargetAccels[currentRound];
+  ctx.font = '700 14px "Space Grotesk", sans-serif';
+  ctx.fillStyle = '#ffb59c';
+  ctx.textAlign = 'center';
+  ctx.fillText(t('target') + ' a = ' + targetA.toFixed(1) + ' ' + t('accelUnit'), cW / 2, cH * 0.18);
+
+  // Current a = F/m
+  if (phase === 'running' || phase === 'result') {
+    var yourA = l1Force / l1Mass;
+    ctx.font = '700 13px "Space Grotesk", sans-serif';
+    ctx.fillStyle = '#50ffb0';
+    ctx.fillText('a = F/m = ' + l1Force.toFixed(1) + '/' + l1Mass + ' = ' + yourA.toFixed(2) + ' ' + t('accelUnit'), cW / 2, cH * 0.28);
+  }
+
+  // Velocity during sim
+  if (l1SimRunning) {
+    ctx.font = '11px "Space Grotesk", sans-serif';
+    ctx.fillStyle = '#aaabb0';
+    ctx.textAlign = 'center';
+    ctx.fillText('v = ' + l1CartVel.toFixed(1) + ' m/s    t = ' + l1SimTime.toFixed(1) + 's', cW / 2, cH * 0.8);
+  }
+
+  // Feedback
+  if (phase === 'result') {
+    drawFeedbackBanner(cW / 2, cH * 0.4);
+  }
+}
+
+function drawLevel2() {
+  var rd = l2Rounds[currentRound];
+  var trackSpacing = cH * 0.25;
+  var baseY = cH * 0.38;
+
+  // Title
+  ctx.font = '700 13px "Space Grotesk", sans-serif';
+  ctx.fillStyle = '#ffb59c';
+  ctx.textAlign = 'center';
+  ctx.fillText('F = ' + l2FixedForce + 'N (' + t('force') + ')', cW / 2, cH * 0.08);
+
+  // Prediction display
+  if (l2Prediction >= 0 && phase === 'idle') {
+    ctx.font = '11px "Space Grotesk", sans-serif';
+    ctx.fillStyle = '#50ffb0';
+    ctx.fillText(t('predLabel') + ' ' + rd.masses[l2Prediction] + 'kg', cW / 2, cH * 0.15);
+  }
+
+  // Finish line
+  var finScreenX = cW * 0.82;
+  ctx.strokeStyle = 'rgba(255,181,156,0.4)';
+  ctx.lineWidth = 2;
+  ctx.setLineDash([4, 4]);
+  ctx.beginPath();
+  ctx.moveTo(finScreenX, baseY - 35);
+  ctx.lineTo(finScreenX, baseY + trackSpacing + 20);
+  ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.font = '9px "Space Grotesk", sans-serif';
+  ctx.fillStyle = '#ffb59c';
+  ctx.textAlign = 'center';
+  ctx.fillText('FINISH', finScreenX, baseY - 40);
+
+  var finishDist = 18; // simulation meters
+
+  for (var i = 0; i < rd.masses.length; i++) {
+    var trackY = baseY + i * trackSpacing;
+    var mLabel = rd.masses[i] + 'kg';
+    drawTrack(trackY, mLabel);
+
+    // Cart screen position
+    var posRatio = (l2CartPositions[i] || 0) / finishDist;
+    if (posRatio > 1) posRatio = 1;
+    var cartScreenX = 80 + posRatio * (finScreenX - 80 - 50);
+    var cartW = 40 + rd.masses[i] * 2;
+    if (cartW > 70) cartW = 70;
+    var cartH = 24;
+    var color = i === 0 ? 'rgba(80,255,176,0.7)' : 'rgba(255,181,156,0.7)';
+
+    var wobbleY = 0;
+    if (!l2SimRunning && phase === 'idle') {
+      wobbleY = Math.sin(idleTime * 3 + i * 1.5) * 1.5;
+    }
+    drawCart(cartScreenX, trackY + wobbleY, cartW, cartH, color, mLabel);
+
+    // Force arrow
+    if (l2SimRunning || phase === 'idle') {
+      drawForceArrow(cartScreenX - 10, trackY - cartH / 2 + wobbleY, l2FixedForce, 15);
+    }
+
+    // a label
+    if (l2SimRunning || phase === 'result') {
+      var a = l2FixedForce / rd.masses[i];
+      ctx.font = '10px "Space Grotesk", sans-serif';
+      ctx.fillStyle = '#aaabb0';
+      ctx.textAlign = 'left';
+      ctx.fillText('a=' + a.toFixed(1) + t('accelUnit'), cartScreenX + cartW + 10, trackY - 8);
+    }
+  }
+
+  // Feedback
+  if (phase === 'result') {
+    drawFeedbackBanner(cW / 2, cH * 0.87);
+  }
+}
+
+function drawLevel3() {
+  var prob = l3Problems[currentRound];
+  var centerX = cW / 2;
+
+  // F=ma formula
+  ctx.font = '700 20px "Space Grotesk", sans-serif';
+  ctx.fillStyle = '#50ffb0';
+  ctx.textAlign = 'center';
+  ctx.fillText('F = m a', centerX, cH * 0.13);
+
+  // Given values
+  ctx.font = '700 15px "Space Grotesk", sans-serif';
+  ctx.fillStyle = '#e2e2e9';
+  var probText = 'F = ' + prob.F + 'N    m = ' + prob.m + 'kg';
+  if (prob.friction > 0) {
+    probText += '    f = ' + prob.friction + 'N';
+  }
+  ctx.fillText(probText, centerX, cH * 0.25);
+
+  // Formula hint
+  if (prob.friction > 0) {
+    ctx.font = '12px "Noto Sans SC", sans-serif';
+    ctx.fillStyle = '#aaabb0';
+    ctx.fillText(t('calcHint'), centerX, cH * 0.33);
+    ctx.fillText('a = (' + prob.F + ' - ' + prob.friction + ') / ' + prob.m + ' = ?', centerX, cH * 0.39);
+  } else {
+    ctx.font = '12px "Noto Sans SC", sans-serif';
+    ctx.fillStyle = '#aaabb0';
+    ctx.fillText('a = ' + prob.F + ' / ' + prob.m + ' = ?', centerX, cH * 0.35);
+  }
+
+  // Cart visual
+  var trackY = cH * 0.6;
+  drawTrack(trackY, '');
+
+  var cartW = 50;
+  var cartH = 28;
+  var cartX = centerX - cartW / 2;
+
+  var wobbleY = 0;
+  if (phase === 'idle') {
+    wobbleY = Math.sin(idleTime * 3) * 1.5;
+  }
+
+  drawCart(cartX, trackY + wobbleY, cartW, cartH, 'rgba(80,255,176,0.5)', prob.m + 'kg');
+  drawForceArrow(cartX - 10, trackY - cartH / 2 + wobbleY, prob.F, 25);
+
+  // Friction arrow
+  if (prob.friction > 0) {
+    drawFrictionArrow(cartX + cartW + 10, trackY - cartH / 2 + wobbleY, prob.friction, 25);
+  }
+
+  // Feedback with correct answer
+  if (phase === 'result') {
+    ctx.font = '700 16px "Space Grotesk", sans-serif';
+    ctx.textAlign = 'center';
+    if (feedbackText === 'correct') {
+      ctx.fillStyle = '#50ffb0';
+      ctx.fillText(t('correct') + '!  a = ' + prob.answer + ' ' + t('accelUnit'), centerX, cH * 0.78);
+    } else {
+      ctx.fillStyle = '#ff6b6b';
+      ctx.fillText(t('wrong') + '  |  a = ' + prob.answer + ' ' + t('accelUnit'), centerX, cH * 0.78);
+    }
+  }
+}
+
+function drawLevel4() {
+  var groundY = cH * 0.85;
+
+  // Ground
+  ctx.fillStyle = 'rgba(80,255,176,0.05)';
+  ctx.fillRect(0, groundY, cW, cH - groundY);
+  ctx.strokeStyle = 'rgba(80,255,176,0.3)';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(0, groundY);
+  ctx.lineTo(cW, groundY);
+  ctx.stroke();
+
+  // Target altitude line
+  var maxDisplay = Math.max(l4TargetAlt * 1.5, 80);
+  var targetScreenY = groundY - (l4TargetAlt / maxDisplay) * (groundY - cH * 0.05);
+  ctx.strokeStyle = 'rgba(255,181,156,0.4)';
+  ctx.lineWidth = 1;
+  ctx.setLineDash([6, 4]);
+  ctx.beginPath();
+  ctx.moveTo(cW * 0.1, targetScreenY);
+  ctx.lineTo(cW * 0.9, targetScreenY);
+  ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.font = '10px "Space Grotesk", sans-serif';
+  ctx.fillStyle = '#ffb59c';
+  ctx.textAlign = 'left';
+  ctx.fillText(t('targetAlt') + ': ' + l4TargetAlt + 'm', cW * 0.1, targetScreenY - 6);
+
+  // Altitude scale
+  for (var alt = 0; alt <= maxDisplay; alt += 10) {
+    var sy = groundY - (alt / maxDisplay) * (groundY - cH * 0.05);
+    ctx.fillStyle = 'rgba(170,171,176,0.3)';
+    ctx.fillRect(cW * 0.05, sy, 10, 1);
+    if (alt % 20 === 0) {
+      ctx.font = '8px "Space Grotesk", sans-serif';
+      ctx.fillStyle = '#aaabb0';
+      ctx.textAlign = 'right';
+      ctx.fillText(alt + 'm', cW * 0.05 - 2, sy + 3);
+    }
+  }
+
+  // Rocket
+  var rsy = rocketScreenY();
+  drawRocket(cW / 2, rsy, 1);
+
+  // Max altitude marker
+  if (l4MaxAlt > 1) {
+    var maxAltSY = groundY - (l4MaxAlt / maxDisplay) * (groundY - cH * 0.05);
+    if (maxAltSY < cH * 0.05) maxAltSY = cH * 0.05;
+    ctx.strokeStyle = 'rgba(80,255,176,0.15)';
+    ctx.lineWidth = 1;
+    ctx.setLineDash([3, 3]);
+    ctx.beginPath();
+    ctx.moveTo(cW / 2 + 20, maxAltSY);
+    ctx.lineTo(cW / 2 + 50, maxAltSY);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.font = '9px "Space Grotesk", sans-serif';
+    ctx.fillStyle = '#50ffb0';
+    ctx.textAlign = 'left';
+    ctx.fillText('max: ' + l4MaxAlt.toFixed(1) + 'm', cW / 2 + 52, maxAltSY + 3);
+  }
+
+  // Info
+  ctx.font = '700 12px "Space Grotesk", sans-serif';
+  ctx.textAlign = 'right';
+  ctx.fillStyle = '#e2e2e9';
+  ctx.fillText('T = ' + l4Thrust + 'N  m = ' + l4MassG + 'g', cW * 0.9, cH * 0.05 + 14);
+
+  if (l4SimRunning) {
+    var currentMassKg;
+    if (l4SimTime <= l4BurnTime) {
+      var fuelRem = l4FuelMassG * (1 - l4SimTime / l4BurnTime);
+      currentMassKg = (l4MassG - l4FuelMassG + fuelRem) / 1000;
+    } else {
+      currentMassKg = (l4MassG - l4FuelMassG) / 1000;
+    }
+    if (currentMassKg < 0.05) currentMassKg = 0.05;
+    var curThrust = l4SimTime <= l4BurnTime ? l4Thrust : 0;
+    var weight = currentMassKg * 9.8;
+    var netF = curThrust - weight;
+    ctx.font = '10px "Space Grotesk", sans-serif';
+    ctx.fillStyle = '#aaabb0';
+    ctx.fillText('a = (' + curThrust.toFixed(1) + ' - ' + weight.toFixed(2) + ') / ' + currentMassKg.toFixed(3) + ' = ' + (netF / currentMassKg).toFixed(1) + ' m/s\u00b2', cW * 0.9, cH * 0.05 + 30);
+  }
+
+  // Result
+  if (phase === 'result') {
+    ctx.font = '700 15px "Space Grotesk", sans-serif';
+    ctx.textAlign = 'center';
+    if (l4Result === 'reached') {
+      ctx.fillStyle = '#50ffb0';
+      ctx.fillText(t('reachedAlt'), cW / 2, cH * 0.45);
+    } else if (l4Result === 'crash') {
+      ctx.fillStyle = '#ff6b6b';
+      wrapText(ctx, t('crashMsg'), cW / 2, cH * 0.45, cW * 0.7, 20);
+    } else {
+      ctx.fillStyle = '#ffb59c';
+      wrapText(ctx, t('notEnough'), cW / 2, cH * 0.45, cW * 0.7, 20);
+    }
+    ctx.font = '11px "Space Grotesk", sans-serif';
+    ctx.fillStyle = '#aaabb0';
+    ctx.fillText('Max alt: ' + l4MaxAlt.toFixed(1) + 'm / ' + l4TargetAlt + 'm', cW / 2, cH * 0.53);
+  }
+}
+
+function drawFeedbackBanner(x, y) {
+  if (!feedbackText) return;
+  ctx.font = '700 16px "Space Grotesk", sans-serif';
+  ctx.textAlign = 'center';
+  if (feedbackText === 'correct') {
+    ctx.fillStyle = '#50ffb0';
+    ctx.fillText(t('correct'), x, y);
+  } else {
+    ctx.fillStyle = '#ff6b6b';
+    ctx.fillText(t('wrong'), x, y);
+  }
+}
+
+function drawCompletionOverlay() {
+  ctx.fillStyle = 'rgba(12,14,20,0.85)';
+  ctx.fillRect(0, 0, cW, cH);
+
+  var cx = cW / 2;
+  ctx.font = '700 22px "Space Grotesk", sans-serif';
+  ctx.fillStyle = '#50ffb0';
+  ctx.textAlign = 'center';
+  ctx.fillText(t('complete'), cx, cH * 0.3);
+
+  ctx.font = '14px "Noto Sans SC", "Inter", sans-serif';
+  ctx.fillStyle = '#e2e2e9';
+  wrapText(ctx, t('completeMsg'), cx, cH * 0.45, cW * 0.7, 22);
+
+  // F=ma formula
+  ctx.font = '700 28px "Space Grotesk", sans-serif';
+  ctx.fillStyle = '#ffb59c';
+  ctx.fillText('F = m a', cx, cH * 0.7);
+}
+
+function wrapText(context, text, x, y, maxWidth, lineHeight) {
+  var chars = text.split('');
+  var line = '';
+  var lineY = y;
+  context.textAlign = 'center';
+  for (var ci = 0; ci < chars.length; ci++) {
+    var testLine = line + chars[ci];
+    var metrics = context.measureText(testLine);
+    if (metrics.width > maxWidth && line.length > 0) {
+      context.fillText(line, x, lineY);
+      line = chars[ci];
+      lineY += lineHeight;
+    } else {
+      line = testLine;
+    }
+  }
+  if (line.length > 0) context.fillText(line, x, lineY);
+}
+
+// ========================
+// MAIN LOOP
+// ========================
+function drawFrame(timestamp) {
+  if (!lastFrameTime) lastFrameTime = timestamp;
+  var dt = (timestamp - lastFrameTime) / 1000;
+  if (dt > 0.1) dt = 0.1;
+  lastFrameTime = timestamp;
+
+  idleTime += dt;
+
+  // Screen shake
+  if (shakeAmount > 0.1) {
+    ctx.save();
+    var sx = (Math.random() - 0.5) * shakeAmount;
+    var sy = (Math.random() - 0.5) * shakeAmount;
+    ctx.translate(sx, sy);
+    shakeAmount *= shakeDecay;
+  }
+
+  // Physics
+  if (currentLevel === 0) simulateLevel1(dt);
+  if (currentLevel === 1) simulateLevel2(dt);
+  if (currentLevel === 3) simulateLevel4(dt);
+
+  updateParticles(dt);
+
+  // Draw
+  drawBackground();
+
+  if (phase === 'complete') {
+    drawCompletionOverlay();
+  } else if (currentLevel === 0) {
+    drawLevel1();
+  } else if (currentLevel === 1) {
+    drawLevel2();
+  } else if (currentLevel === 2) {
+    drawLevel3();
+  } else if (currentLevel === 3) {
+    drawLevel4();
+  }
+
+  drawParticles(ctx);
+
+  // Level transition overlay
+  if (levelTransAlpha > 0) {
+    ctx.fillStyle = 'rgba(12,14,20,' + levelTransAlpha + ')';
+    ctx.fillRect(0, 0, cW, cH);
+  }
+
+  if (shakeAmount > 0.1) {
+    ctx.restore();
+  }
+
+  requestAnimationFrame(drawFrame);
+}
+
+// ========================
+// HUD
+// ========================
+function updateHUD() {
+  var h1 = document.getElementById('hudL1');
+  var v1 = document.getElementById('hudV1');
+  var h2 = document.getElementById('hudL2');
+  var v2 = document.getElementById('hudV2');
+  var h3 = document.getElementById('hudL3');
+  var v3 = document.getElementById('hudV3');
+  var h4 = document.getElementById('hudL4');
+  var v4 = document.getElementById('hudV4');
+
+  h1.textContent = t('level');
+  v1.textContent = (currentLevel + 1) + ' / 4';
+
+  if (currentLevel === 0) {
+    h2.textContent = t('trial');
+    v2.textContent = (currentRound + 1) + ' / 3';
+    h3.textContent = t('force');
+    v3.textContent = l1Force + t('forceN');
+    h4.textContent = t('accel');
+    v4.textContent = l1SimRunning ? (l1Force / l1Mass).toFixed(1) + t('accelUnit') : '--';
+  } else if (currentLevel === 1) {
+    h2.textContent = t('round');
+    v2.textContent = (currentRound + 1) + ' / 4';
+    h3.textContent = t('force');
+    v3.textContent = l2FixedForce + t('forceN');
+    h4.textContent = t('correct');
+    v4.textContent = l2Correct + '';
+  } else if (currentLevel === 2) {
+    h2.textContent = t('round');
+    v2.textContent = (currentRound + 1) + ' / 5';
+    h3.textContent = t('correct');
+    v3.textContent = l3Correct + '';
+    h4.textContent = t('accel');
+    v4.textContent = '--';
+  } else if (currentLevel === 3) {
+    h2.textContent = t('thrust');
+    v2.textContent = l4Thrust + t('forceN');
+    h3.textContent = t('altitude');
+    v3.textContent = l4RocketY > 0 ? l4RocketY.toFixed(1) + t('altM') : '0' + t('altM');
+    h4.textContent = t('vel');
+    v4.textContent = l4SimRunning ? l4RocketVel.toFixed(1) + 'm/s' : '--';
+  }
+}
+
+setInterval(updateHUD, 100);
+
+// ========================
+// TEXT + SIDEBAR
+// ========================
+function updateTexts() {
+  var levelNames = [t('l1Name'), t('l2Name'), t('l3Name'), t('l4Name')];
+  document.getElementById('gameTitle').textContent = t('title');
+  document.getElementById('roundInfo').textContent = levelNames[currentLevel];
+}
+
+(function initSidebar() {
+  var gc = document.getElementById('guideContent');
+  var st = document.getElementById('sidebarTitle');
+  function _update() {
+    if (st) st.textContent = t('title');
+    var guides = [t('guide_l1'), t('guide_l2'), t('guide_l3'), t('guide_l4')];
+    if (gc) gc.textContent = guides[currentLevel];
+  }
+  _update();
+
+  document.getElementById('langBtn').addEventListener('click', function() {
+    lang = lang === 'cn' ? 'en' : 'cn';
+    document.getElementById('langBtn').textContent = lang === 'cn' ? 'CN' : 'EN';
+    _update();
+    updateTexts();
+    updateBtnLabels();
+    updateControlVals();
+  });
+
+  document.getElementById('soundBtn').addEventListener('click', function() {
+    soundMuted = !soundMuted;
+    document.getElementById('soundBtn').textContent = soundMuted ? 'MUTE' : 'SFX';
+  });
+
+  setInterval(function() { _update(); }, 500);
+})();
+
+// ========================
+// RESIZE
+// ========================
+window.addEventListener('resize', function() {
+  setTimeout(resizeCanvas, 50);
+});
+
+// ========================
+// INIT
+// ========================
+buildControls();
+updateTexts();
+
+setTimeout(function() {
+  resizeCanvas();
+  requestAnimationFrame(drawFrame);
+}, 100);
+
+document.fonts.ready.then(function() {
+  setTimeout(resizeCanvas, 100);
+});
+</script>
+</body>
+</html>

@@ -1,0 +1,1166 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=Inter:wght@400;500&family=Noto+Sans+SC:wght@400;700&display=swap" rel="stylesheet">
+<title>Grid Area Estimator</title>
+<style>
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box;}
+html,body{width:100%;height:100vh;overflow:hidden;background:#0c0e14;color:#e2e2e9;font-family:'Inter','Noto Sans SC',sans-serif;}
+body{margin:0;padding:0;}
+.game-wrap{display:flex;flex-direction:row;height:100vh;overflow:hidden;}
+.game-sidebar{width:200px;min-width:200px;max-width:200px;display:flex;flex-direction:column;gap:8px;padding:10px;background:rgba(0,0,0,0.5);border-right:1px solid rgba(80,255,176,0.15);overflow-y:auto;}
+.sidebar-btns{display:flex;gap:6px;align-self:flex-start;}
+.sidebar-lang,.sidebar-sound{flex-shrink:0;font-family:'Space Grotesk',sans-serif;font-size:10px;font-weight:700;padding:3px 8px;cursor:pointer;border:1px solid rgba(255,181,156,0.25);background:transparent;color:#ffb59c;letter-spacing:1px;}
+.sidebar-lang:hover,.sidebar-sound:hover{border-color:#ffb59c;background:rgba(255,181,156,0.08);}
+.sidebar-title{font-family:'Space Grotesk',sans-serif;font-size:11px;font-weight:700;color:#50ffb0;letter-spacing:0.08em;text-transform:uppercase;margin-top:4px;}
+.sidebar-guide{font-size:12px;color:#aaabb0;line-height:1.6;}
+.game-main{flex:1;display:flex;flex-direction:column;min-width:0;}
+.game-header{padding:8px 16px;display:flex;justify-content:space-between;align-items:center;background:rgba(0,0,0,0.4);}
+.game-header h1{font-family:'Space Grotesk',sans-serif;font-size:clamp(13px,2vw,17px);font-weight:700;color:#50ffb0;}
+.game-header .info{font-family:'Space Grotesk',sans-serif;font-size:12px;color:#aaabb0;}
+.game-body{flex:1;display:flex;flex-direction:column;min-height:0;}
+canvas{width:100%;height:100%;display:block;}
+.control-panel{display:flex;justify-content:center;align-items:center;gap:12px;padding:8px 16px;background:rgba(0,0,0,0.4);flex-wrap:wrap;}
+.ctrl-btn{font-family:'Space Grotesk',sans-serif;font-size:12px;font-weight:700;padding:6px 18px;border:none;cursor:pointer;color:#0c0e14;background:linear-gradient(135deg,#50ffb0,#17df93);box-shadow:0 0 10px rgba(80,255,176,0.3);transition:transform 0.1s;}
+.ctrl-btn:hover{transform:scale(1.04);}
+.ctrl-btn:active{transform:scale(0.96);}
+.ctrl-btn:disabled{opacity:0.4;cursor:default;transform:none;}
+.ctrl-btn.secondary{background:rgba(30,30,45,0.9);color:#aaabb0;box-shadow:none;border:1px solid rgba(170,171,176,0.2);}
+.ctrl-btn.secondary:hover{color:#50ffb0;border-color:rgba(80,255,176,0.3);}
+.hud-bar{height:44px;display:flex;align-items:center;justify-content:space-around;background:rgba(0,0,0,0.55);padding:0 16px;}
+.hud-item{text-align:center;}
+.hud-label{font-family:'Space Grotesk',sans-serif;font-size:9px;letter-spacing:0.12em;color:#aaabb0;text-transform:uppercase;}
+.hud-val{font-family:'Space Grotesk',sans-serif;font-size:14px;font-weight:700;color:#50ffb0;transition:transform 0.15s ease-out;}
+.hud-val.juice{animation:hudJuice 0.35s ease-out;}
+@keyframes hudJuice{0%{transform:scale(1.3);color:#ffb59c;}100%{transform:scale(1);color:#50ffb0;}}
+</style>
+</head>
+<body>
+<div class="game-wrap">
+  <div class="game-sidebar">
+    <div class="sidebar-btns">
+      <button class="sidebar-lang" id="langBtn">CN</button>
+      <button class="sidebar-sound" id="soundBtn">MUTE</button>
+    </div>
+    <div class="sidebar-title" id="sidebarTitle"></div>
+    <div class="sidebar-guide" id="guideContent"></div>
+  </div>
+  <div class="game-main">
+    <div class="game-header">
+      <h1 id="gameTitle"></h1>
+      <div class="info" id="roundInfo"></div>
+    </div>
+    <div class="game-body">
+      <canvas id="c"></canvas>
+    </div>
+    <div class="control-panel">
+      <button class="ctrl-btn" id="btnAction"></button>
+      <button class="ctrl-btn secondary" id="btnReset"></button>
+    </div>
+    <div class="hud-bar">
+      <div class="hud-item"><div class="hud-label" id="hudL1"></div><div class="hud-val" id="hudV1"></div></div>
+      <div class="hud-item"><div class="hud-label" id="hudL2"></div><div class="hud-val" id="hudV2"></div></div>
+      <div class="hud-item"><div class="hud-label" id="hudL3"></div><div class="hud-val" id="hudV3"></div></div>
+      <div class="hud-item"><div class="hud-label" id="hudL4"></div><div class="hud-val" id="hudV4"></div></div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ============================================================
+// K28 Game: Grid Paper Area Estimator (v2)
+// Estimate total impulse by clicking grid cells under thrust curves.
+// 3 levels: Rectangle (A8), Triangle (B6), C6 mountain curve.
+// Pattern: Sandbox Simulation
+// ============================================================
+
+// --- I18N ---
+var I18N = {
+  title:        {en:'GRID AREA ESTIMATOR',     cn:'\u65b9\u683c\u7eb8\u9762\u79ef\u4f30\u7b97\u5668'},
+  guide:        {en:'Click grid cells under the thrust curve to mark them.\nClick once = full cell (green), twice = half cell (orange diagonal), three times = clear.\nFull cells count as 1 unit area, half cells as 0.5.\nEstimate the area under the curve, then submit!',
+                 cn:'\u70b9\u51fb\u63a8\u529b\u66f2\u7ebf\u4e0b\u65b9\u7684\u65b9\u683c\u6765\u6807\u8bb0\u3002\n\u70b9\u4e00\u6b21=\u6574\u683c\uff08\u7eff\u8272\uff09\uff0c\u70b9\u4e24\u6b21=\u534a\u683c\uff08\u6a59\u8272\u659c\u7ebf\uff09\uff0c\u70b9\u4e09\u6b21=\u6e05\u9664\u3002\n\u6574\u683c\u8ba1 1 \u4e2a\u5355\u4f4d\u9762\u79ef\uff0c\u534a\u683c\u8ba1 0.5\u3002\n\u4f30\u7b97\u66f2\u7ebf\u4e0b\u9762\u79ef\uff0c\u7136\u540e\u63d0\u4ea4\uff01'},
+  submit:       {en:'SUBMIT',         cn:'\u63d0\u4ea4'},
+  nextLevel:    {en:'NEXT LEVEL',     cn:'\u4e0b\u4e00\u5173'},
+  resetLevel:   {en:'RESET',          cn:'\u91cd\u7f6e'},
+  levelLabel:   {en:'LEVEL',          cn:'\u5173\u5361'},
+  estimateLabel:{en:'ESTIMATE',       cn:'\u4f30\u7b97\u503c'},
+  actualLabel:  {en:'ACTUAL',         cn:'\u5b9e\u9645\u503c'},
+  errorLabel:   {en:'ERROR',          cn:'\u8bef\u5dee'},
+  level1Name:   {en:'Level 1: Rectangle Curve',    cn:'\u7b2c1\u5173\uff1a\u77e9\u5f62\u66f2\u7ebf'},
+  level2Name:   {en:'Level 2: Triangle Curve',     cn:'\u7b2c2\u5173\uff1a\u4e09\u89d2\u5f62\u66f2\u7ebf'},
+  level3Name:   {en:'Level 3: C6 Engine Curve',    cn:'\u7b2c3\u5173\uff1aC6\u53d1\u52a8\u673a\u66f2\u7ebf'},
+  level1Desc:   {en:'Constant thrust (A8 engine) -- Easy counting!',               cn:'\u6052\u5b9a\u63a8\u529b\uff08A8\u53d1\u52a8\u673a\uff09-- \u5bb9\u6613\u6570\uff01'},
+  level2Desc:   {en:'Linearly decreasing thrust -- Watch the diagonal!',           cn:'\u7ebf\u6027\u9012\u51cf\u63a8\u529b -- \u6ce8\u610f\u659c\u8fb9\uff01'},
+  level3Desc:   {en:'Realistic C6 mountain curve -- Many partial cells!',          cn:'\u771f\u5b9eC6\u5c71\u5f62\u66f2\u7ebf -- \u5f88\u591a\u90e8\u5206\u683c\uff01'},
+  stars3:       {en:'Excellent! Error <= 10%',                cn:'\u4f18\u79c0\uff01\u8bef\u5dee<=10%'},
+  stars2:       {en:'Good! Error <= 20%',                     cn:'\u826f\u597d\uff01\u8bef\u5dee<=20%'},
+  stars1:       {en:'Try again for better accuracy',          cn:'\u518d\u8bd5\u8bd5\u63d0\u9ad8\u7cbe\u5ea6'},
+  complete:     {en:'ALL LEVELS COMPLETE!',                   cn:'\u5168\u90e8\u5b8c\u6210\uff01'},
+  insight:      {en:'Grid paper method can estimate area under any irregular curve -- this is the foundation of integral calculus!',
+                 cn:'\u65b9\u683c\u7eb8\u6cd5\u53ef\u4ee5\u4f30\u7b97\u4efb\u4f55\u4e0d\u89c4\u5219\u66f2\u7ebf\u4e0b\u7684\u9762\u79ef -- \u8fd9\u662f\u79ef\u5206\u7684\u57fa\u7840\uff01'},
+  unitNs:       {en:'N\u00b7s',  cn:'N\u00b7s'},
+  fullCell:     {en:'Full',      cn:'\u6574\u683c'},
+  halfCell:     {en:'Half',      cn:'\u534a\u683c'},
+  thrustAxis:   {en:'Thrust (N)',  cn:'\u63a8\u529b (N)'},
+  timeAxis:     {en:'Time (s)',    cn:'\u65f6\u95f4 (s)'},
+  clickToMark:  {en:'Click cells under the curve',  cn:'\u70b9\u51fb\u66f2\u7ebf\u4e0b\u65b9\u7684\u683c\u5b50'},
+  resultTitle:  {en:'RESULT',              cn:'\u7ed3\u679c'},
+  yourEstimate: {en:'Your estimate',       cn:'\u4f60\u7684\u4f30\u7b97'},
+  actualValue:  {en:'Actual value',        cn:'\u5b9e\u9645\u503c'},
+  errorPct:     {en:'Error',               cn:'\u8bef\u5dee'},
+  summaryTitle: {en:'LEARNING SUMMARY',    cn:'\u5b66\u4e60\u603b\u7ed3'},
+  summaryText:  {en:'Total impulse = area under thrust-time curve. Grid paper method: count full cells + half cells to estimate the area. This works for any curve shape!',
+                 cn:'\u603b\u51b2 = \u63a8\u529b-\u65f6\u95f4\u66f2\u7ebf\u4e0b\u7684\u9762\u79ef\u3002\u65b9\u683c\u7eb8\u6cd5\uff1a\u6570\u6574\u683c + \u534a\u683c\u6765\u4f30\u7b97\u9762\u79ef\u3002\u8fd9\u5bf9\u4efb\u4f55\u66f2\u7ebf\u5f62\u72b6\u90fd\u6709\u6548\uff01'},
+};
+
+var lang = 'cn';
+function t(key) { return I18N[key] ? (I18N[key][lang] || I18N[key].en || key) : key; }
+
+// --- Audio (soundMuted=true default) ---
+var soundMuted = true;
+var audioCtx = null;
+function ensureAudioCtx() {
+  if (!audioCtx) {
+    try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch(e) {}
+  }
+}
+function playTone(freq, dur, vol) {
+  if (soundMuted || !audioCtx) return;
+  try {
+    var osc = audioCtx.createOscillator();
+    var gain = audioCtx.createGain();
+    osc.type = 'sine';
+    osc.frequency.value = freq;
+    gain.gain.setValueAtTime(vol || 0.08, audioCtx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + (dur || 0.1));
+    osc.connect(gain);
+    gain.connect(audioCtx.destination);
+    osc.start();
+    osc.stop(audioCtx.currentTime + (dur || 0.1));
+  } catch(e) {}
+}
+function playClickSound(cellState) {
+  if (cellState === 1) playTone(660, 0.08, 0.06);
+  else if (cellState === 2) playTone(520, 0.1, 0.05);
+  else playTone(330, 0.06, 0.04);
+}
+function playSubmitSound(stars) {
+  if (soundMuted) return;
+  ensureAudioCtx();
+  var freqs = stars >= 3 ? [523, 659, 784] : (stars >= 2 ? [440, 523, 587] : [330, 294, 262]);
+  for (var si = 0; si < freqs.length; si++) {
+    (function(i) {
+      setTimeout(function() { playTone(freqs[i], 0.15, 0.07); }, i * 120);
+    })(si);
+  }
+}
+function playLevelTransitionSound() {
+  if (soundMuted) return;
+  ensureAudioCtx();
+  var seq = [440, 554, 659, 880];
+  for (var i = 0; i < seq.length; i++) {
+    (function(j) { setTimeout(function() { playTone(seq[j], 0.12, 0.06); }, j * 80); })(i);
+  }
+}
+
+// --- Level definitions ---
+var LEVELS = [
+  {
+    // Level 1: Rectangle - A8 constant ~5N for 0.7s => ~3.5 N*s
+    thrustFn: function(tt) { return tt <= 0.7 ? 5.0 : 0; },
+    maxTime: 1.0,
+    maxThrust: 8,
+    gridCols: 10,
+    gridRows: 8,
+    actualImpulse: 3.5,
+    engineLabel: 'A8'
+  },
+  {
+    // Level 2: Triangle - peak 10N at t=0, drops to 0 at t=1.5s => area=7.5 N*s
+    thrustFn: function(tt) { return tt <= 1.5 ? 10.0 * (1.0 - tt / 1.5) : 0; },
+    maxTime: 2.0,
+    maxThrust: 12,
+    gridCols: 10,
+    gridRows: 12,
+    actualImpulse: 7.5,
+    engineLabel: 'B6'
+  },
+  {
+    // Level 3: C6 mountain curve - peak ~14N, realistic shape
+    thrustFn: function(tt) {
+      if (tt < 0 || tt > 1.8) return 0;
+      if (tt <= 0.15) return 14.0 * (tt / 0.15);
+      if (tt <= 0.4) return 14.0 * Math.exp(-(tt - 0.15) * 2.5);
+      if (tt <= 1.8) return 5.0 * Math.exp(-(tt - 0.4) * 1.8);
+      return 0;
+    },
+    maxTime: 2.0,
+    maxThrust: 16,
+    gridCols: 10,
+    gridRows: 16,
+    actualImpulse: 10.0,
+    engineLabel: 'C6'
+  }
+];
+
+// Precisely compute actual impulse via trapezoidal numerical integration
+(function computeActualImpulse() {
+  var steps = 10000;
+  for (var li = 0; li < LEVELS.length; li++) {
+    var lv = LEVELS[li];
+    var dt = lv.maxTime / steps;
+    var totalArea = 0;
+    for (var si = 0; si < steps; si++) {
+      var t0 = si * dt;
+      var t1 = (si + 1) * dt;
+      totalArea += (lv.thrustFn(t0) + lv.thrustFn(t1)) * 0.5 * dt;
+    }
+    lv.actualImpulse = Math.round(totalArea * 100) / 100;
+  }
+})();
+
+// --- Game state ---
+var currentLevel = 0;
+var gamePhase = 'playing'; // playing, submitted, transitioning, complete
+var gridCells = [];
+var playerEstimate = 0;
+var errorPct = 0;
+var levelStars = [0, 0, 0];
+var levelErrors = [0, 0, 0];
+
+// Canvas references
+var canvas = document.getElementById('c');
+var ctx2d = canvas.getContext('2d');
+var canvasW = 100, canvasH = 100;
+var dpr = Math.min(window.devicePixelRatio || 1, 2);
+
+// Grid layout parameters
+var gridOriginX = 0, gridOriginY = 0;
+var gridPixelW = 0, gridPixelH = 0;
+var cellW = 0, cellH = 0;
+
+// Animation state
+var animFrame = 0;
+var pulsePhase = 0;
+var resultAlpha = 0;
+var completionAlpha = 0;
+var transitionAlpha = 0;
+var transitionDir = 0; // 0=none, 1=fading out, 2=fading in
+var pendingLevel = -1;
+
+// Screen shake state
+var shakeIntensity = 0;
+var shakeDecay = 0.92;
+var shakeOffX = 0, shakeOffY = 0;
+
+// Parallax grid background offset
+var parallaxOffset = 0;
+
+// Particle system
+var particles = [];
+
+// Cell glow animation timestamps
+var cellGlowTimestamps = {};
+
+// Idle pulse tracking
+var lastInteractionTime = 0;
+var idlePulseActive = false;
+
+// HUD juice
+var hudJuiceTimer = 0;
+
+// --- Easing functions ---
+function easeOutCubic(x) { return 1 - Math.pow(1 - x, 3); }
+function easeInOutQuad(x) { return x < 0.5 ? 2 * x * x : 1 - Math.pow(-2 * x + 2, 2) / 2; }
+function easeOutElastic(x) {
+  if (x === 0 || x === 1) return x;
+  return Math.pow(2, -10 * x) * Math.sin((x * 10 - 0.75) * (2 * Math.PI / 3)) + 1;
+}
+
+// --- Particle class ---
+function spawnParticles(x, y, count, color, spread) {
+  for (var i = 0; i < count; i++) {
+    var angle = Math.random() * Math.PI * 2;
+    var speed = (Math.random() * 0.5 + 0.5) * (spread || 3);
+    particles.push({
+      x: x, y: y,
+      vx: Math.cos(angle) * speed,
+      vy: Math.sin(angle) * speed - 1,
+      life: 1.0,
+      decay: 0.015 + Math.random() * 0.015,
+      size: 2 + Math.random() * 3,
+      color: color || '#50ffb0'
+    });
+  }
+}
+
+function updateParticles() {
+  for (var i = particles.length - 1; i >= 0; i--) {
+    var p = particles[i];
+    p.x += p.vx;
+    p.y += p.vy;
+    p.vy += 0.05;
+    p.life -= p.decay;
+    if (p.life <= 0) particles.splice(i, 1);
+  }
+}
+
+function drawParticles() {
+  for (var i = 0; i < particles.length; i++) {
+    var p = particles[i];
+    var alpha = easeOutCubic(Math.max(0, p.life));
+    ctx2d.save();
+    ctx2d.globalAlpha = alpha;
+    ctx2d.fillStyle = p.color;
+    ctx2d.beginPath();
+    ctx2d.arc(p.x, p.y, p.size * alpha, 0, Math.PI * 2);
+    ctx2d.fill();
+    ctx2d.restore();
+  }
+}
+
+// --- Grid init ---
+function initGrid() {
+  var lv = LEVELS[currentLevel];
+  gridCells = [];
+  for (var row = 0; row < lv.gridRows; row++) {
+    gridCells[row] = [];
+    for (var col = 0; col < lv.gridCols; col++) {
+      gridCells[row][col] = 0;
+    }
+  }
+  playerEstimate = 0;
+  errorPct = 0;
+  gamePhase = 'playing';
+  resultAlpha = 0;
+  completionAlpha = 0;
+  cellGlowTimestamps = {};
+  lastInteractionTime = Date.now();
+  idlePulseActive = false;
+}
+
+function computeGridLayout() {
+  var lv = LEVELS[currentLevel];
+  var marginLeft = 60;
+  var marginRight = 30;
+  var marginTop = 40;
+  var marginBottom = 50;
+  gridOriginX = marginLeft;
+  gridOriginY = marginTop;
+  gridPixelW = canvasW - marginLeft - marginRight;
+  gridPixelH = canvasH - marginTop - marginBottom;
+  cellW = gridPixelW / lv.gridCols;
+  cellH = gridPixelH / lv.gridRows;
+}
+
+function resizeCanvas() {
+  var rect = canvas.getBoundingClientRect();
+  canvasW = rect.width;
+  canvasH = rect.height;
+  canvasW = Math.max(canvasW, 80);
+  canvasH = Math.max(canvasH, 80);
+  canvas.width = Math.round(canvasW * dpr);
+  canvas.height = Math.round(canvasH * dpr);
+  canvas.style.width = canvasW + 'px';
+  canvas.style.height = canvasH + 'px';
+  ctx2d.setTransform(dpr, 0, 0, dpr, 0, 0);
+  computeGridLayout();
+}
+
+// --- Compute estimate ---
+function computeEstimate() {
+  var lv = LEVELS[currentLevel];
+  var timePerCol = lv.maxTime / lv.gridCols;
+  var thrustPerRow = lv.maxThrust / lv.gridRows;
+  var cellArea = timePerCol * thrustPerRow;
+  var fullCount = 0, halfCount = 0;
+  for (var row = 0; row < lv.gridRows; row++) {
+    for (var col = 0; col < lv.gridCols; col++) {
+      if (gridCells[row][col] === 1) fullCount++;
+      else if (gridCells[row][col] === 2) halfCount++;
+    }
+  }
+  playerEstimate = Math.round((fullCount * cellArea + halfCount * cellArea * 0.5) * 100) / 100;
+  return playerEstimate;
+}
+
+function submitEstimate() {
+  if (gamePhase !== 'playing') return;
+  computeEstimate();
+  var lv = LEVELS[currentLevel];
+  var actual = lv.actualImpulse;
+  if (actual > 0) {
+    errorPct = Math.round(Math.abs(playerEstimate - actual) / actual * 100 * 10) / 10;
+  } else {
+    errorPct = 0;
+  }
+  var starsVal = errorPct <= 10 ? 3 : (errorPct <= 20 ? 2 : 1);
+  levelStars[currentLevel] = starsVal;
+  levelErrors[currentLevel] = errorPct;
+  gamePhase = 'submitted';
+  resultAlpha = 0;
+
+  // Polish: particles on good accuracy, shake on poor
+  if (starsVal >= 2) {
+    var cx = canvasW / 2, cy = canvasH / 2;
+    var particleColor = starsVal >= 3 ? '#50ffb0' : '#ffb59c';
+    spawnParticles(cx, cy, starsVal >= 3 ? 60 : 30, particleColor, starsVal >= 3 ? 5 : 3);
+  }
+  if (starsVal <= 1) {
+    shakeIntensity = 8;
+  }
+
+  playSubmitSound(starsVal);
+  updateBtnState();
+  updateHUD();
+}
+
+function nextLevel() {
+  if (currentLevel < 2) {
+    // Polish: level transition animation
+    transitionDir = 1;
+    transitionAlpha = 0;
+    pendingLevel = currentLevel + 1;
+    playLevelTransitionSound();
+  } else {
+    gamePhase = 'complete';
+    completionAlpha = 0;
+    spawnParticles(canvasW / 2, canvasH / 3, 80, '#50ffb0', 6);
+    spawnParticles(canvasW / 2, canvasH / 3, 40, '#ffb59c', 4);
+    updateBtnState();
+  }
+}
+
+function finishTransitionIn() {
+  currentLevel = pendingLevel;
+  pendingLevel = -1;
+  initGrid();
+  computeGridLayout();
+  updateTexts();
+  updateBtnState();
+  updateHUD();
+  transitionDir = 2;
+  transitionAlpha = 1;
+}
+
+function resetCurrentLevel() {
+  initGrid();
+  computeGridLayout();
+  updateBtnState();
+  updateHUD();
+}
+
+// --- Cell click handling ---
+function getCellFromPos(px, py) {
+  var lv = LEVELS[currentLevel];
+  var col = Math.floor((px - gridOriginX) / cellW);
+  var row = Math.floor((py - gridOriginY) / cellH);
+  if (col < 0 || col >= lv.gridCols || row < 0 || row >= lv.gridRows) return null;
+  return {row: row, col: col};
+}
+
+function toggleCell(px, py) {
+  if (gamePhase !== 'playing') return;
+  var cell = getCellFromPos(px, py);
+  if (!cell) return;
+  var current = gridCells[cell.row][cell.col];
+  var next = (current + 1) % 3;
+  gridCells[cell.row][cell.col] = next;
+
+  // Track glow timestamp
+  var key = cell.row + '_' + cell.col;
+  cellGlowTimestamps[key] = Date.now();
+
+  // Audio feedback
+  ensureAudioCtx();
+  playClickSound(next);
+
+  // Update idle timer
+  lastInteractionTime = Date.now();
+  idlePulseActive = false;
+
+  computeEstimate();
+  triggerHudJuice();
+  updateHUD();
+}
+
+function getCanvasCoords(ev) {
+  var rect = canvas.getBoundingClientRect();
+  var clientX, clientY;
+  if (ev.touches && ev.touches.length > 0) {
+    clientX = ev.touches[0].clientX;
+    clientY = ev.touches[0].clientY;
+  } else {
+    clientX = ev.clientX;
+    clientY = ev.clientY;
+  }
+  return {
+    x: clientX - rect.left,
+    y: clientY - rect.top
+  };
+}
+
+canvas.addEventListener('click', function(ev) {
+  var coords = getCanvasCoords(ev);
+  toggleCell(coords.x, coords.y);
+});
+
+canvas.addEventListener('touchstart', function(ev) {
+  ev.preventDefault();
+  var coords = getCanvasCoords(ev);
+  toggleCell(coords.x, coords.y);
+}, {passive: false});
+
+// --- HUD juice ---
+function triggerHudJuice() {
+  hudJuiceTimer = Date.now();
+  var el = document.getElementById('hudV2');
+  if (el) {
+    el.classList.remove('juice');
+    void el.offsetWidth;
+    el.classList.add('juice');
+  }
+}
+
+// --- Drawing ---
+function drawBackground() {
+  var grad = ctx2d.createLinearGradient(0, 0, 0, canvasH);
+  grad.addColorStop(0, '#0c0e14');
+  grad.addColorStop(1, '#10131c');
+  ctx2d.fillStyle = grad;
+  ctx2d.fillRect(0, 0, canvasW, canvasH);
+
+  // Polish: parallax grid background
+  parallaxOffset += 0.15;
+  var spacing = 40;
+  ctx2d.strokeStyle = 'rgba(80, 255, 176, 0.025)';
+  ctx2d.lineWidth = 0.5;
+  var offY = parallaxOffset % spacing;
+  for (var gy = -spacing + offY; gy < canvasH + spacing; gy += spacing) {
+    ctx2d.beginPath();
+    ctx2d.moveTo(0, gy);
+    ctx2d.lineTo(canvasW, gy);
+    ctx2d.stroke();
+  }
+  var offX = (parallaxOffset * 0.5) % spacing;
+  for (var gx = -spacing + offX; gx < canvasW + spacing; gx += spacing) {
+    ctx2d.beginPath();
+    ctx2d.moveTo(gx, 0);
+    ctx2d.lineTo(gx, canvasH);
+    ctx2d.stroke();
+  }
+}
+
+function drawGrid() {
+  var lv = LEVELS[currentLevel];
+  ctx2d.save();
+
+  // Grid lines
+  ctx2d.strokeStyle = 'rgba(80, 255, 176, 0.12)';
+  ctx2d.lineWidth = 0.5;
+  for (var col = 0; col <= lv.gridCols; col++) {
+    var gx = gridOriginX + col * cellW;
+    ctx2d.beginPath();
+    ctx2d.moveTo(gx, gridOriginY);
+    ctx2d.lineTo(gx, gridOriginY + gridPixelH);
+    ctx2d.stroke();
+  }
+  for (var row = 0; row <= lv.gridRows; row++) {
+    var gy = gridOriginY + row * cellH;
+    ctx2d.beginPath();
+    ctx2d.moveTo(gridOriginX, gy);
+    ctx2d.lineTo(gridOriginX + gridPixelW, gy);
+    ctx2d.stroke();
+  }
+
+  // Axis labels
+  ctx2d.font = '10px "Space Grotesk", sans-serif';
+  ctx2d.fillStyle = '#aaabb0';
+  ctx2d.textAlign = 'center';
+
+  // Time axis (bottom)
+  var timePerCol = lv.maxTime / lv.gridCols;
+  for (var col2 = 0; col2 <= lv.gridCols; col2 += 2) {
+    var lx = gridOriginX + col2 * cellW;
+    var timeVal = (col2 * timePerCol).toFixed(1);
+    ctx2d.fillText(timeVal + 's', lx, gridOriginY + gridPixelH + 18);
+  }
+  ctx2d.font = '11px "Noto Sans SC", "Inter", sans-serif';
+  ctx2d.fillText(t('timeAxis'), gridOriginX + gridPixelW / 2, gridOriginY + gridPixelH + 38);
+
+  // Thrust axis (left)
+  ctx2d.textAlign = 'right';
+  ctx2d.font = '10px "Space Grotesk", sans-serif';
+  var thrustPerRow = lv.maxThrust / lv.gridRows;
+  for (var row2 = 0; row2 <= lv.gridRows; row2 += 2) {
+    var ly = gridOriginY + row2 * cellH;
+    var thrustVal = (lv.maxThrust - row2 * thrustPerRow).toFixed(0);
+    ctx2d.fillText(thrustVal, gridOriginX - 8, ly + 4);
+  }
+  ctx2d.save();
+  ctx2d.translate(14, gridOriginY + gridPixelH / 2);
+  ctx2d.rotate(-Math.PI / 2);
+  ctx2d.textAlign = 'center';
+  ctx2d.font = '11px "Noto Sans SC", "Inter", sans-serif';
+  ctx2d.fillText(t('thrustAxis'), 0, 0);
+  ctx2d.restore();
+
+  ctx2d.restore();
+}
+
+function drawCells() {
+  var lv = LEVELS[currentLevel];
+  var now = Date.now();
+  for (var row = 0; row < lv.gridRows; row++) {
+    for (var col = 0; col < lv.gridCols; col++) {
+      var cellState = gridCells[row][col];
+      var cx = gridOriginX + col * cellW;
+      var cy = gridOriginY + row * cellH;
+      var key = row + '_' + col;
+
+      if (cellState === 0) {
+        // Polish: idle pulse on empty unclicked cells
+        if (idlePulseActive && gamePhase === 'playing') {
+          // Check if cell is under curve
+          var colCenter = (col + 0.5);
+          var rowCenter = lv.gridRows - (row + 0.5);
+          var tAtCol = colCenter * lv.maxTime / lv.gridCols;
+          var thrustAtCol = lv.thrustFn(tAtCol);
+          var rowThrust = rowCenter * lv.maxThrust / lv.gridRows;
+          if (rowThrust < thrustAtCol) {
+            var pulseA = 0.03 + 0.02 * Math.sin(now * 0.003 + col * 0.5 + row * 0.3);
+            ctx2d.fillStyle = 'rgba(80, 255, 176, ' + pulseA + ')';
+            ctx2d.fillRect(cx + 1, cy + 1, cellW - 2, cellH - 2);
+          }
+        }
+        continue;
+      }
+
+      // Glow easing animation
+      var glowTime = cellGlowTimestamps[key] || 0;
+      var glowAge = Math.min((now - glowTime) / 400, 1);
+      var glowEased = easeOutElastic(glowAge);
+      var glowScale = 0.85 + 0.15 * glowEased;
+      var glowAlpha = glowAge < 1 ? (0.15 * (1 - glowAge)) : 0;
+
+      ctx2d.save();
+
+      if (cellState === 1) {
+        // Full cell - green gradient with glow
+        var cGrad = ctx2d.createLinearGradient(cx, cy, cx + cellW, cy + cellH);
+        cGrad.addColorStop(0, 'rgba(80, 255, 176, 0.45)');
+        cGrad.addColorStop(1, 'rgba(80, 255, 176, 0.25)');
+        ctx2d.fillStyle = cGrad;
+
+        var inset = (1 - glowScale) * cellW * 0.5;
+        ctx2d.fillRect(cx + 1 + inset, cy + 1 + inset, (cellW - 2) * glowScale, (cellH - 2) * glowScale);
+
+        // Glow effect on recently marked cells
+        if (glowAlpha > 0.01) {
+          ctx2d.shadowColor = 'rgba(80, 255, 176, ' + glowAlpha + ')';
+          ctx2d.shadowBlur = 12;
+          ctx2d.fillStyle = 'rgba(80, 255, 176, ' + (glowAlpha * 0.5) + ')';
+          ctx2d.fillRect(cx + 2, cy + 2, cellW - 4, cellH - 4);
+          ctx2d.shadowBlur = 0;
+        }
+      } else if (cellState === 2) {
+        // Half cell - orange gradient with diagonal
+        var hGrad = ctx2d.createLinearGradient(cx, cy, cx + cellW, cy + cellH);
+        hGrad.addColorStop(0, 'rgba(255, 181, 156, 0.35)');
+        hGrad.addColorStop(1, 'rgba(255, 181, 156, 0.15)');
+        ctx2d.fillStyle = hGrad;
+
+        var inset2 = (1 - glowScale) * cellW * 0.5;
+        ctx2d.fillRect(cx + 1 + inset2, cy + 1 + inset2, (cellW - 2) * glowScale, (cellH - 2) * glowScale);
+
+        // Diagonal line to indicate half
+        ctx2d.strokeStyle = 'rgba(255, 181, 156, 0.55)';
+        ctx2d.lineWidth = 1;
+        ctx2d.beginPath();
+        ctx2d.moveTo(cx + 1, cy + 1);
+        ctx2d.lineTo(cx + cellW - 1, cy + cellH - 1);
+        ctx2d.stroke();
+
+        // Glow
+        if (glowAlpha > 0.01) {
+          ctx2d.shadowColor = 'rgba(255, 181, 156, ' + glowAlpha + ')';
+          ctx2d.shadowBlur = 10;
+          ctx2d.fillStyle = 'rgba(255, 181, 156, ' + (glowAlpha * 0.4) + ')';
+          ctx2d.fillRect(cx + 2, cy + 2, cellW - 4, cellH - 4);
+          ctx2d.shadowBlur = 0;
+        }
+      }
+
+      ctx2d.restore();
+    }
+  }
+}
+
+function drawThrustCurve() {
+  var lv = LEVELS[currentLevel];
+  ctx2d.save();
+
+  // Draw the curve with glow
+  ctx2d.strokeStyle = '#ffb59c';
+  ctx2d.lineWidth = 2.5;
+  ctx2d.shadowColor = 'rgba(255, 181, 156, 0.6)';
+  ctx2d.shadowBlur = 8;
+  ctx2d.beginPath();
+
+  var resolution = 200;
+  var firstPoint = true;
+
+  for (var si = 0; si <= resolution; si++) {
+    var tt = (si / resolution) * lv.maxTime;
+    var thrust = lv.thrustFn(tt);
+    var px = gridOriginX + (tt / lv.maxTime) * gridPixelW;
+    var py = gridOriginY + (1 - thrust / lv.maxThrust) * gridPixelH;
+    py = Math.max(gridOriginY, Math.min(gridOriginY + gridPixelH, py));
+    if (firstPoint) { ctx2d.moveTo(px, py); firstPoint = false; }
+    else ctx2d.lineTo(px, py);
+  }
+  ctx2d.stroke();
+  ctx2d.shadowBlur = 0;
+
+  // Ambient fill under curve
+  ctx2d.beginPath();
+  firstPoint = true;
+  for (var si2 = 0; si2 <= resolution; si2++) {
+    var tt2 = (si2 / resolution) * lv.maxTime;
+    var thrust2 = lv.thrustFn(tt2);
+    var px2 = gridOriginX + (tt2 / lv.maxTime) * gridPixelW;
+    var py2 = gridOriginY + (1 - thrust2 / lv.maxThrust) * gridPixelH;
+    py2 = Math.max(gridOriginY, Math.min(gridOriginY + gridPixelH, py2));
+    if (firstPoint) { ctx2d.moveTo(px2, py2); firstPoint = false; }
+    else ctx2d.lineTo(px2, py2);
+  }
+  ctx2d.lineTo(gridOriginX + gridPixelW, gridOriginY + gridPixelH);
+  ctx2d.lineTo(gridOriginX, gridOriginY + gridPixelH);
+  ctx2d.closePath();
+  var fillGrad = ctx2d.createLinearGradient(0, gridOriginY, 0, gridOriginY + gridPixelH);
+  fillGrad.addColorStop(0, 'rgba(255, 181, 156, 0.06)');
+  fillGrad.addColorStop(1, 'rgba(255, 181, 156, 0.02)');
+  ctx2d.fillStyle = fillGrad;
+  ctx2d.fill();
+
+  ctx2d.restore();
+}
+
+function drawLevelInfo() {
+  var lv = LEVELS[currentLevel];
+  ctx2d.save();
+
+  ctx2d.font = '600 12px "Space Grotesk", sans-serif';
+  ctx2d.fillStyle = '#50ffb0';
+  ctx2d.textAlign = 'left';
+  var levelNames = [t('level1Name'), t('level2Name'), t('level3Name')];
+  ctx2d.fillText(levelNames[currentLevel], gridOriginX, gridOriginY - 14);
+
+  ctx2d.font = '10px "Space Grotesk", sans-serif';
+  ctx2d.fillStyle = '#aaabb0';
+  ctx2d.textAlign = 'right';
+  ctx2d.fillText(lv.engineLabel + ' | ' + t('actualLabel') + ': ??? ' + t('unitNs'), gridOriginX + gridPixelW, gridOriginY - 14);
+
+  // Cell counts
+  var fullCount = 0, halfCount = 0;
+  for (var r = 0; r < lv.gridRows; r++) {
+    for (var cc = 0; cc < lv.gridCols; cc++) {
+      if (gridCells[r][cc] === 1) fullCount++;
+      else if (gridCells[r][cc] === 2) halfCount++;
+    }
+  }
+  ctx2d.font = '10px "Space Grotesk", sans-serif';
+  ctx2d.textAlign = 'right';
+  ctx2d.fillStyle = 'rgba(80, 255, 176, 0.6)';
+  ctx2d.fillText(t('fullCell') + ': ' + fullCount + '  |  ' + t('halfCell') + ': ' + halfCount, gridOriginX + gridPixelW, gridOriginY + gridPixelH + 38);
+
+  ctx2d.restore();
+}
+
+function drawHoverHint() {
+  if (gamePhase !== 'playing') return;
+  pulsePhase += 0.03;
+  var alpha = 0.4 + 0.2 * Math.sin(pulsePhase);
+  ctx2d.save();
+  ctx2d.font = '12px "Noto Sans SC", "Inter", sans-serif';
+  ctx2d.fillStyle = 'rgba(170, 171, 176, ' + alpha + ')';
+  ctx2d.textAlign = 'center';
+  ctx2d.fillText(t('clickToMark'), gridOriginX + gridPixelW / 2, gridOriginY + gridPixelH + 26);
+  ctx2d.restore();
+}
+
+function drawResultOverlay() {
+  if (gamePhase !== 'submitted') return;
+  resultAlpha = Math.min(resultAlpha + 0.04, 1.0);
+  var alpha = easeOutCubic(resultAlpha);
+
+  ctx2d.save();
+
+  ctx2d.fillStyle = 'rgba(12, 14, 20, ' + (0.75 * alpha) + ')';
+  ctx2d.fillRect(0, 0, canvasW, canvasH);
+
+  var panelW = Math.min(360, canvasW * 0.7);
+  var panelH = 240;
+  var panelX = (canvasW - panelW) / 2;
+  var panelY = (canvasH - panelH) / 2;
+
+  // Eased panel slide-in
+  var slideOff = (1 - alpha) * 30;
+  panelY += slideOff;
+
+  ctx2d.fillStyle = 'rgba(20, 24, 40, ' + (0.9 * alpha) + ')';
+  ctx2d.fillRect(panelX, panelY, panelW, panelH);
+  ctx2d.strokeStyle = 'rgba(80, 255, 176, ' + (0.3 * alpha) + ')';
+  ctx2d.lineWidth = 1;
+  ctx2d.strokeRect(panelX, panelY, panelW, panelH);
+
+  ctx2d.globalAlpha = alpha;
+
+  // Title
+  ctx2d.font = '700 18px "Space Grotesk", sans-serif';
+  ctx2d.fillStyle = '#50ffb0';
+  ctx2d.textAlign = 'center';
+  ctx2d.fillText(t('resultTitle'), canvasW / 2, panelY + 35);
+
+  // Stars
+  var starsVal = levelStars[currentLevel];
+  var starStr = '';
+  for (var si3 = 0; si3 < 3; si3++) {
+    starStr += si3 < starsVal ? '* ' : '. ';
+  }
+  ctx2d.font = '700 22px "Space Grotesk", sans-serif';
+  ctx2d.fillStyle = starsVal >= 3 ? '#50ffb0' : (starsVal >= 2 ? '#ffb59c' : '#aaabb0');
+  ctx2d.fillText(starStr.trim(), canvasW / 2, panelY + 65);
+
+  // Estimate vs Actual
+  ctx2d.font = '13px "Noto Sans SC", "Inter", sans-serif';
+  ctx2d.fillStyle = '#e2e2e9';
+  ctx2d.textAlign = 'left';
+  var colX = panelX + 40;
+  var valX = panelX + panelW - 40;
+
+  ctx2d.fillText(t('yourEstimate') + ':', colX, panelY + 100);
+  ctx2d.textAlign = 'right';
+  ctx2d.fillStyle = '#ffb59c';
+  ctx2d.font = '700 14px "Space Grotesk", sans-serif';
+  ctx2d.fillText(playerEstimate.toFixed(2) + ' ' + t('unitNs'), valX, panelY + 100);
+
+  ctx2d.textAlign = 'left';
+  ctx2d.fillStyle = '#e2e2e9';
+  ctx2d.font = '13px "Noto Sans SC", "Inter", sans-serif';
+  ctx2d.fillText(t('actualValue') + ':', colX, panelY + 125);
+  ctx2d.textAlign = 'right';
+  ctx2d.fillStyle = '#50ffb0';
+  ctx2d.font = '700 14px "Space Grotesk", sans-serif';
+  ctx2d.fillText(LEVELS[currentLevel].actualImpulse.toFixed(2) + ' ' + t('unitNs'), valX, panelY + 125);
+
+  ctx2d.textAlign = 'left';
+  ctx2d.fillStyle = '#e2e2e9';
+  ctx2d.font = '13px "Noto Sans SC", "Inter", sans-serif';
+  ctx2d.fillText(t('errorPct') + ':', colX, panelY + 150);
+  ctx2d.textAlign = 'right';
+  ctx2d.fillStyle = errorPct <= 10 ? '#50ffb0' : (errorPct <= 20 ? '#ffb59c' : '#ff6b6b');
+  ctx2d.font = '700 14px "Space Grotesk", sans-serif';
+  ctx2d.fillText(errorPct.toFixed(1) + '%', valX, panelY + 150);
+
+  // Feedback
+  ctx2d.textAlign = 'center';
+  ctx2d.font = '11px "Noto Sans SC", "Inter", sans-serif';
+  ctx2d.fillStyle = '#aaabb0';
+  var feedbackKey = starsVal >= 3 ? 'stars3' : (starsVal >= 2 ? 'stars2' : 'stars1');
+  ctx2d.fillText(t(feedbackKey), canvasW / 2, panelY + 185);
+
+  // Level description
+  var descKeys = ['level1Desc', 'level2Desc', 'level3Desc'];
+  ctx2d.font = '10px "Noto Sans SC", "Inter", sans-serif';
+  ctx2d.fillStyle = 'rgba(170, 171, 176, 0.7)';
+  ctx2d.fillText(t(descKeys[currentLevel]), canvasW / 2, panelY + 210);
+
+  ctx2d.globalAlpha = 1;
+  ctx2d.restore();
+}
+
+function drawCompletionOverlay() {
+  if (gamePhase !== 'complete') return;
+  completionAlpha = Math.min(completionAlpha + 0.03, 1.0);
+  var alpha = easeOutCubic(completionAlpha);
+
+  ctx2d.save();
+  ctx2d.fillStyle = 'rgba(12, 14, 20, ' + (0.88 * alpha) + ')';
+  ctx2d.fillRect(0, 0, canvasW, canvasH);
+
+  var panelW = Math.min(420, canvasW * 0.8);
+  var panelH = 320;
+  var panelX = (canvasW - panelW) / 2;
+  var panelY = (canvasH - panelH) / 2;
+
+  var slideOff = (1 - alpha) * 40;
+  panelY += slideOff;
+
+  ctx2d.fillStyle = 'rgba(20, 24, 40, ' + (0.95 * alpha) + ')';
+  ctx2d.fillRect(panelX, panelY, panelW, panelH);
+  ctx2d.strokeStyle = 'rgba(80, 255, 176, ' + (0.4 * alpha) + ')';
+  ctx2d.lineWidth = 1.5;
+  ctx2d.strokeRect(panelX, panelY, panelW, panelH);
+
+  ctx2d.globalAlpha = alpha;
+
+  ctx2d.font = '700 20px "Space Grotesk", sans-serif';
+  ctx2d.fillStyle = '#50ffb0';
+  ctx2d.textAlign = 'center';
+  ctx2d.fillText(t('complete'), canvasW / 2, panelY + 40);
+
+  // Level results
+  var levelLabels = [t('level1Name'), t('level2Name'), t('level3Name')];
+  for (var li2 = 0; li2 < 3; li2++) {
+    var rowY = panelY + 75 + li2 * 32;
+    ctx2d.font = '12px "Noto Sans SC", "Inter", sans-serif';
+    ctx2d.fillStyle = '#e2e2e9';
+    ctx2d.textAlign = 'left';
+    ctx2d.fillText(levelLabels[li2], panelX + 25, rowY);
+
+    var starText = '';
+    for (var sj = 0; sj < 3; sj++) {
+      starText += sj < levelStars[li2] ? '*' : '.';
+    }
+    ctx2d.textAlign = 'right';
+    ctx2d.fillStyle = levelStars[li2] >= 3 ? '#50ffb0' : (levelStars[li2] >= 2 ? '#ffb59c' : '#aaabb0');
+    ctx2d.font = '14px "Space Grotesk", sans-serif';
+    ctx2d.fillText(starText + '  ' + levelErrors[li2].toFixed(1) + '%', panelX + panelW - 25, rowY);
+  }
+
+  // Divider
+  var divY = panelY + 170;
+  ctx2d.strokeStyle = 'rgba(80, 255, 176, 0.2)';
+  ctx2d.lineWidth = 1;
+  ctx2d.beginPath();
+  ctx2d.moveTo(panelX + 25, divY);
+  ctx2d.lineTo(panelX + panelW - 25, divY);
+  ctx2d.stroke();
+
+  ctx2d.font = '700 13px "Space Grotesk", sans-serif';
+  ctx2d.fillStyle = '#ffb59c';
+  ctx2d.textAlign = 'center';
+  ctx2d.fillText(t('summaryTitle'), canvasW / 2, divY + 25);
+
+  ctx2d.font = '12px "Noto Sans SC", "Inter", sans-serif';
+  ctx2d.fillStyle = '#e2e2e9';
+  wrapText(ctx2d, t('summaryText'), canvasW / 2, divY + 50, panelW - 50, 18);
+
+  ctx2d.font = '700 11px "Noto Sans SC", "Inter", sans-serif';
+  ctx2d.fillStyle = '#50ffb0';
+  wrapText(ctx2d, t('insight'), canvasW / 2, divY + 100, panelW - 50, 16);
+
+  ctx2d.globalAlpha = 1;
+  ctx2d.restore();
+}
+
+function drawTransitionOverlay() {
+  if (transitionDir === 0) return;
+
+  if (transitionDir === 1) {
+    transitionAlpha = Math.min(transitionAlpha + 0.06, 1.0);
+    if (transitionAlpha >= 1.0) {
+      finishTransitionIn();
+    }
+  } else if (transitionDir === 2) {
+    transitionAlpha = Math.max(transitionAlpha - 0.06, 0);
+    if (transitionAlpha <= 0) {
+      transitionDir = 0;
+    }
+  }
+
+  var alpha = easeInOutQuad(transitionAlpha);
+  ctx2d.save();
+  ctx2d.fillStyle = 'rgba(12, 14, 20, ' + alpha + ')';
+  ctx2d.fillRect(0, 0, canvasW, canvasH);
+
+  if (transitionAlpha > 0.3 && transitionAlpha < 0.95) {
+    ctx2d.globalAlpha = Math.min((transitionAlpha - 0.3) / 0.3, 1);
+    ctx2d.font = '700 24px "Space Grotesk", sans-serif';
+    ctx2d.fillStyle = '#50ffb0';
+    ctx2d.textAlign = 'center';
+    var nextLvIdx = transitionDir === 1 ? pendingLevel : currentLevel;
+    var lvNames = [t('level1Name'), t('level2Name'), t('level3Name')];
+    if (nextLvIdx >= 0 && nextLvIdx < 3) {
+      ctx2d.fillText(lvNames[nextLvIdx], canvasW / 2, canvasH / 2);
+    }
+    ctx2d.globalAlpha = 1;
+  }
+
+  ctx2d.restore();
+}
+
+function wrapText(context, text, x, y, maxWidth, lineHeight) {
+  var chars = text.split('');
+  var line = '';
+  var lineY = y;
+  context.textAlign = 'center';
+  for (var ci = 0; ci < chars.length; ci++) {
+    var testLine = line + chars[ci];
+    var metrics = context.measureText(testLine);
+    if (metrics.width > maxWidth && line.length > 0) {
+      context.fillText(line, x, lineY);
+      line = chars[ci];
+      lineY += lineHeight;
+    } else {
+      line = testLine;
+    }
+  }
+  if (line.length > 0) {
+    context.fillText(line, x, lineY);
+  }
+}
+
+// --- Main render loop ---
+function drawFrame() {
+  animFrame++;
+
+  // Update idle pulse
+  if (gamePhase === 'playing' && Date.now() - lastInteractionTime > 4000) {
+    idlePulseActive = true;
+  }
+
+  // Update screen shake
+  if (shakeIntensity > 0.1) {
+    shakeOffX = (Math.random() - 0.5) * shakeIntensity;
+    shakeOffY = (Math.random() - 0.5) * shakeIntensity;
+    shakeIntensity *= shakeDecay;
+  } else {
+    shakeOffX = 0;
+    shakeOffY = 0;
+    shakeIntensity = 0;
+  }
+
+  // Update particles
+  updateParticles();
+
+  ctx2d.save();
+  ctx2d.translate(shakeOffX, shakeOffY);
+
+  drawBackground();
+
+  if (gamePhase === 'complete') {
+    drawCompletionOverlay();
+  } else {
+    drawGrid();
+    drawCells();
+    drawThrustCurve();
+    drawLevelInfo();
+    drawHoverHint();
+    drawResultOverlay();
+  }
+
+  // Particles always on top (unshaken)
+  ctx2d.restore();
+  drawParticles();
+
+  // Level transition overlay
+  drawTransitionOverlay();
+
+  requestAnimationFrame(drawFrame);
+}
+
+// --- HUD ---
+function updateHUD() {
+  var lv = LEVELS[currentLevel];
+  document.getElementById('hudL1').textContent = t('levelLabel');
+  document.getElementById('hudV1').textContent = (currentLevel + 1) + ' / 3';
+  document.getElementById('hudL2').textContent = t('estimateLabel');
+  document.getElementById('hudV2').textContent = playerEstimate.toFixed(2) + ' ' + t('unitNs');
+  document.getElementById('hudL3').textContent = t('actualLabel');
+  document.getElementById('hudV3').textContent = gamePhase === 'submitted' || gamePhase === 'complete' ? lv.actualImpulse.toFixed(2) + ' ' + t('unitNs') : '???';
+  document.getElementById('hudL4').textContent = t('errorLabel');
+  document.getElementById('hudV4').textContent = gamePhase === 'submitted' || gamePhase === 'complete' ? errorPct.toFixed(1) + '%' : '--';
+}
+
+// --- Text updates ---
+function updateTexts() {
+  document.getElementById('gameTitle').textContent = t('title');
+  var levelDescs = [t('level1Desc'), t('level2Desc'), t('level3Desc')];
+  document.getElementById('roundInfo').textContent = levelDescs[currentLevel];
+  updateSidebar();
+  updateHUD();
+}
+
+function updateSidebar() {
+  var gc = document.getElementById('guideContent');
+  var st = document.getElementById('sidebarTitle');
+  if (gc) gc.textContent = t('guide');
+  if (st) st.textContent = t('title');
+}
+
+function updateBtnState() {
+  var btnAction = document.getElementById('btnAction');
+  var btnReset = document.getElementById('btnReset');
+  if (gamePhase === 'playing') {
+    btnAction.textContent = t('submit');
+    btnAction.disabled = false;
+    btnReset.textContent = t('resetLevel');
+  } else if (gamePhase === 'submitted') {
+    btnAction.textContent = t('nextLevel');
+    btnAction.disabled = false;
+    btnReset.textContent = t('resetLevel');
+  } else if (gamePhase === 'complete') {
+    btnAction.textContent = t('complete');
+    btnAction.disabled = true;
+    btnReset.textContent = t('resetLevel');
+  }
+}
+
+// --- Button events ---
+document.getElementById('btnAction').addEventListener('click', function() {
+  if (gamePhase === 'playing') {
+    submitEstimate();
+  } else if (gamePhase === 'submitted') {
+    nextLevel();
+  }
+});
+
+document.getElementById('btnReset').addEventListener('click', function() {
+  if (gamePhase === 'complete') {
+    currentLevel = 0;
+    levelStars = [0, 0, 0];
+    levelErrors = [0, 0, 0];
+  }
+  resetCurrentLevel();
+  updateTexts();
+});
+
+// --- Lang toggle ---
+document.getElementById('langBtn').addEventListener('click', function() {
+  lang = lang === 'cn' ? 'en' : 'cn';
+  document.getElementById('langBtn').textContent = lang === 'cn' ? 'CN' : 'EN';
+  updateTexts();
+  updateBtnState();
+});
+
+// --- Sound toggle ---
+document.getElementById('soundBtn').addEventListener('click', function() {
+  soundMuted = !soundMuted;
+  document.getElementById('soundBtn').textContent = soundMuted ? 'MUTE' : 'SFX';
+  if (!soundMuted) ensureAudioCtx();
+});
+
+// --- Resize ---
+window.addEventListener('resize', function() {
+  setTimeout(function() { resizeCanvas(); }, 100);
+});
+
+// --- Init ---
+initGrid();
+setTimeout(function() {
+  resizeCanvas();
+  updateTexts();
+  updateBtnState();
+  requestAnimationFrame(drawFrame);
+}, 100);
+
+document.fonts.ready.then(function() {
+  setTimeout(function() { resizeCanvas(); }, 100);
+});
+</script>
+</body>
+</html>

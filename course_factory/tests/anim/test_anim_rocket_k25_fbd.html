@@ -1,0 +1,612 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Space+Grotesk:wght@400;500;700&family=Inter:wght@400;500&family=Noto+Sans+SC:wght@400;700&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box;}
+html,body{width:100%;height:100vh;overflow:hidden;}
+body{background:var(--bg,#0c0e12);color:var(--text,#f6f6fc);font-family:'Inter','Noto Sans SC',sans-serif;}
+/* ── Outer: sidebar + main ── */
+.wrapper{display:flex;flex-direction:row;height:100vh;overflow:hidden;}
+.sidebar{width:200px;min-width:200px;max-width:200px;display:flex;flex-direction:column;gap:6px;padding:10px;background:var(--sb-bg,rgba(5,6,15,0.92));border-right:1px solid var(--sb-border,rgba(80,255,176,0.15));overflow-y:auto;transition:background 0.3s,border-color 0.3s;}
+.lang-btn{align-self:flex-start;flex-shrink:0;font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:700;padding:3px 8px;cursor:pointer;border:1px solid var(--sb-btn-bd,transparent);background:var(--sb-btn-bg,transparent);color:var(--sb-accent,var(--primary,#50ffb0));letter-spacing:1px;text-transform:uppercase;}
+.lang-btn:hover{border-color:var(--sb-accent,var(--primary));background:rgba(128,128,128,0.1);}
+/* ── Style switcher ── */
+.style-switcher{display:flex;gap:4px;margin:4px 0 2px;}
+.vm-btn{font-family:'JetBrains Mono',monospace;font-size:8px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;padding:3px 6px;cursor:pointer;border:1px solid var(--sb-btn-bd,rgba(128,128,128,0.2));background:var(--sb-btn-bg,transparent);color:var(--sb-dim,rgba(128,128,128,0.5));transition:all 0.2s;}
+.vm-btn:hover{color:var(--sb-accent,var(--primary));border-color:var(--sb-accent,var(--primary));}
+.vm-btn.vm-active{color:var(--sb-accent,var(--primary));border-color:var(--sb-accent,var(--primary));background:rgba(128,128,128,0.12);}
+/* ── Sidebar text ── */
+.sidebar h1{font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:700;color:var(--sb-accent,var(--primary,#50ffb0));margin-top:4px;line-height:1.3;text-transform:uppercase;letter-spacing:0.04em;}
+.sidebar .sub{font-family:'Noto Sans SC',sans-serif;font-size:10px;color:var(--sb-dim,rgba(128,128,128,0.7));letter-spacing:0.06em;}
+.sidebar .frame-ind{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--sb-mute,rgba(128,128,128,0.5));letter-spacing:0.1em;margin-top:4px;}
+.sidebar .guide-label{font-family:'JetBrains Mono',monospace;font-size:9px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:var(--sb-accent,var(--primary,#50ffb0));margin-top:8px;}
+.sidebar .guide-content{font-family:'Noto Sans SC',sans-serif;font-size:11px;color:var(--sb-dim,rgba(255,255,255,0.7));line-height:1.5;}
+.sidebar .guide-content ul{padding-left:16px;margin:0;}
+.sidebar .guide-content li{margin-bottom:1px;}
+/* ── Main area: canvas + controls + hud ── */
+.anim-main{flex:1;display:flex;flex-direction:column;min-width:0;}
+.canvas-wrap{flex:1;min-height:0;position:relative;}
+canvas{width:100%;height:100%;display:block;}
+/* ── Controls + HUD ── */
+.controls{display:flex;justify-content:center;align-items:center;gap:12px;padding:6px 16px;background:rgba(0,0,0,0.35);}
+.ctrl-btn{font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;padding:5px 16px;border:none;cursor:pointer;color:var(--ctrl-color,var(--bg,#0c0e12));background:linear-gradient(135deg,var(--ctrl-bg,var(--primary,#50ffb0)),var(--primary-dim,#17df93));transition:transform 0.1s,box-shadow 0.2s;box-shadow:0 0 10px var(--glow-strong,rgba(80,255,176,0.3));}
+.ctrl-btn:hover{transform:scale(1.04);}
+.ctrl-btn:active{transform:scale(0.96);}
+.ctrl-btn.secondary{background:var(--sb-btn-bg,rgba(23,26,31,0.92));color:var(--sb-mute,rgba(128,128,128,0.6));box-shadow:none;border:1px solid var(--sb-btn-bd,rgba(128,128,128,0.15));}
+.ctrl-btn.secondary:hover{color:var(--sb-accent,var(--primary,#50ffb0));border-color:var(--sb-accent,var(--primary));}
+.hud{height:40px;display:flex;align-items:center;justify-content:space-around;background:var(--hud-bg,rgba(0,0,0,0.55));border-top:1px solid var(--hud-border,transparent);padding:0 16px;transition:background 0.3s;}
+.hud-item{text-align:center;}
+.hud-label{font-family:'JetBrains Mono',monospace;font-size:7px;letter-spacing:0.15em;text-transform:uppercase;color:var(--hud-label,var(--sb-mute));}
+.hud-val{font-family:'JetBrains Mono',monospace;font-size:13px;font-weight:700;color:var(--hud-value,var(--sb-accent,var(--primary,#50ffb0)));}
+</style>
+</head>
+<body>
+<div class="wrapper">
+<!-- Sidebar: lang-btn, style switcher, title, guide -->
+<div class="sidebar">
+<button class="lang-btn" id="langBtn">CN</button>
+<div class="style-switcher" id="styleSwitcher"></div>
+<h1 id="title"></h1>
+<div class="sub" id="subtitle"></div>
+<div class="frame-ind" id="frameIndicator"></div>
+<div class="guide-label" id="guideTitle"></div>
+<div class="guide-content" id="guideContent"></div>
+</div>
+<!-- Main: canvas fills all space, nothing overlaps -->
+<div class="anim-main">
+<div class="canvas-wrap"><canvas id="c"></canvas></div>
+<div class="controls">
+<button class="ctrl-btn secondary" id="btnPrev"></button>
+<button class="ctrl-btn" id="btnPlay"></button>
+<button class="ctrl-btn secondary" id="btnNext"></button>
+</div>
+<div class="hud">
+<div class="hud-item"><div class="hud-label" id="hudL1"></div><div class="hud-val" id="hudV1"></div></div>
+<div class="hud-item"><div class="hud-label" id="hudL2"></div><div class="hud-val" id="hudV2"></div></div>
+<div class="hud-item"><div class="hud-label" id="hudL3"></div><div class="hud-val" id="hudV3"></div></div>
+<div class="hud-item"><div class="hud-label" id="hudL4"></div><div class="hud-val" id="hudV4"></div></div>
+</div>
+</div>
+</div>
+
+<!-- Runtime (shared skeleton) -->
+<script src="animation_runtime.js"></script>
+
+<!-- Content: Rocket Free Body Diagram -->
+<script>
+// ============================================================
+// K25 - Free Body Diagram of Rocket Flight Stages
+// Style: phys (Physics, ACCENT #5ba3d9)
+// 5 frames: Title, Ground Static, Launch Ascent, Peak, Descent
+// ============================================================
+
+var CONFIG = {
+  style: 'phys',
+  totalFrames: 5,
+
+  i18n: {
+    title:    {en:'FREE BODY DIAGRAM', cn:'\u529B\u7684\u793A\u610F\u56FE'},
+    subtitle: {en:'Rocket Flight Stages', cn:'\u706B\u7BAD\u98DE\u884C\u9636\u6BB5\u53D7\u529B\u5206\u6790'},
+    // Frame titles
+    f0_title: {en:'FREE BODY DIAGRAM', cn:'\u529B\u7684\u793A\u610F\u56FE'},
+    f0_sub:   {en:'Draw all forces on one picture', cn:'\u4E00\u5F20\u56FE\u770B\u6E05\u6240\u6709\u7684\u529B'},
+    f1_title: {en:'GROUND STATIC', cn:'\u5730\u9762\u9759\u6B62'},
+    f1_desc:  {en:'Gravity = Normal Force\nRocket stays still', cn:'\u91CD\u529B = \u652F\u6301\u529B\n\u706B\u7BAD\u9759\u6B62\u4E0D\u52A8'},
+    f2_title: {en:'LAUNCH ASCENT', cn:'\u53D1\u5C04\u4E0A\u5347'},
+    f2_desc:  {en:'Thrust > Gravity + Drag\nRocket accelerates up', cn:'\u63A8\u529B > \u91CD\u529B + \u963B\u529B\n\u706B\u7BAD\u52A0\u901F\u4E0A\u5347'},
+    f3_title: {en:'ENGINE OFF (PEAK)', cn:'\u5F15\u64CE\u7184\u706B\uFF08\u6700\u9AD8\u70B9\uFF09'},
+    f3_desc:  {en:'Thrust = 0\nOnly gravity + drag', cn:'\u63A8\u529B = 0\n\u53EA\u5269\u91CD\u529B + \u963B\u529B'},
+    f4_title: {en:'DESCENT', cn:'\u4E0B\u964D\u56DE\u843D'},
+    f4_desc:  {en:'Gravity pulls down\nDrag slows the fall', cn:'\u91CD\u529B\u5411\u4E0B\u62C9\n\u963B\u529B\u51CF\u7F13\u4E0B\u964D'},
+    // Force labels
+    gravity:  {en:'GRAVITY', cn:'\u91CD\u529B'},
+    normal:   {en:'NORMAL', cn:'\u652F\u6301\u529B'},
+    thrust:   {en:'THRUST', cn:'\u63A8\u529B'},
+    drag:     {en:'DRAG', cn:'\u7A7A\u6C14\u963B\u529B'},
+    // HUD
+    hudL1_txt:{en:'STAGE', cn:'\u9636\u6BB5'},
+    hudL2_txt:{en:'FORCES', cn:'\u529B\u7684\u6570\u91CF'},
+    hudL3_txt:{en:'NET FORCE', cn:'\u5408\u529B\u65B9\u5411'},
+    hudL4_txt:{en:'MOTION', cn:'\u8FD0\u52A8\u72B6\u6001'},
+    hud_title:{en:'TITLE', cn:'\u6807\u9898'},
+    hud_static:{en:'STATIC', cn:'\u9759\u6B62'},
+    hud_launch:{en:'LAUNCH', cn:'\u53D1\u5C04'},
+    hud_peak:  {en:'PEAK', cn:'\u6700\u9AD8\u70B9'},
+    hud_fall:  {en:'DESCENT', cn:'\u4E0B\u964D'},
+    hud_zero:  {en:'ZERO', cn:'\u4E3A\u96F6'},
+    hud_up:    {en:'UP', cn:'\u5411\u4E0A'},
+    hud_down:  {en:'DOWN', cn:'\u5411\u4E0B'},
+    hud_still: {en:'STILL', cn:'\u9759\u6B62'},
+    hud_accel_up:{en:'ACCEL UP', cn:'\u52A0\u901F\u4E0A\u5347'},
+    hud_decel:   {en:'DECEL', cn:'\u51CF\u901F'},
+    hud_accel_dn:{en:'ACCEL DN', cn:'\u52A0\u901F\u4E0B\u964D'},
+    hud_dash:    {en:'--', cn:'--'},
+    // Guide
+    guideTitle: {en:'OBSERVATION GUIDE', cn:'\u89C2\u770B\u6307\u5357'},
+    g1: {en:'Arrow direction = force direction', cn:'\u7BAD\u5934\u65B9\u5411 = \u529B\u7684\u65B9\u5411'},
+    g2: {en:'Arrow length = force magnitude', cn:'\u7BAD\u5934\u957F\u5EA6 = \u529B\u7684\u5927\u5C0F'},
+    g3: {en:'Colors distinguish different forces', cn:'\u4E0D\u540C\u989C\u8272\u533A\u5206\u4E0D\u540C\u7684\u529B'},
+    g4: {en:'Compare forces across stages', cn:'\u5BF9\u6BD4\u4E0D\u540C\u9636\u6BB5\u7684\u529B\u56FE\u53D8\u5316'},
+  },
+
+  hudLabels: ['hudL1_txt', 'hudL2_txt', 'hudL3_txt', 'hudL4_txt'],
+  hudValues: [
+    ['hud_title', 'hud_dash', 'hud_dash', 'hud_dash'],
+    ['hud_static', '2', 'hud_zero', 'hud_still'],
+    ['hud_launch', '3', 'hud_up', 'hud_accel_up'],
+    ['hud_peak', '2', 'hud_down', 'hud_decel'],
+    ['hud_fall', '2', 'hud_down', 'hud_accel_dn'],
+  ],
+
+  guideTitle: 'guideTitle',
+  guideItems: ['g1', 'g2', 'g3', 'g4'],
+};
+
+// ============================================================
+// Force arrow colors -- consistent across all frames
+// ============================================================
+var FORCE_COLORS = {
+  gravity: '#ef4444',     // red -- always present
+  normal:  '#22c55e',     // green -- support/normal force
+  thrust:  '#f59e0b',     // amber -- engine thrust
+  drag:    '#a855f7',     // purple -- air resistance
+};
+
+// ============================================================
+// Draw a force arrow with label
+// ctx: canvas 2d context
+// x, y: start point (on the object)
+// dx, dy: direction vector (magnitude = visual length)
+// color: arrow color
+// label: text label
+// mc: mode colors object
+// ============================================================
+function drawForceArrow(ctx, x, y, dx, dy, color, label, mc, labelSide) {
+  var ex = x + dx, ey = y + dy;
+  var len = Math.sqrt(dx*dx + dy*dy);
+  if (len < 2) return;
+
+  // Shaft
+  ctx.save();
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 2.5;
+  ctx.lineCap = 'round';
+  ctx.shadowColor = color;
+  ctx.shadowBlur = 8;
+  ctx.beginPath();
+  ctx.moveTo(x, y);
+  ctx.lineTo(ex, ey);
+  ctx.stroke();
+  ctx.shadowBlur = 0;
+
+  // Arrowhead
+  var angle = Math.atan2(dy, dx);
+  var headLen = Math.min(12, len * 0.3);
+  ctx.fillStyle = color;
+  ctx.beginPath();
+  ctx.moveTo(ex, ey);
+  ctx.lineTo(ex - headLen * Math.cos(angle - 0.4), ey - headLen * Math.sin(angle - 0.4));
+  ctx.lineTo(ex - headLen * Math.cos(angle + 0.4), ey - headLen * Math.sin(angle + 0.4));
+  ctx.closePath();
+  ctx.fill();
+
+  // Label
+  ctx.font = "700 10px 'JetBrains Mono', monospace";
+  ctx.fillStyle = color;
+  ctx.textAlign = 'center';
+  var lx, ly;
+  if (labelSide === 'left') {
+    lx = (x + ex) / 2 - 20;
+    ly = (y + ey) / 2;
+  } else if (labelSide === 'right') {
+    lx = (x + ex) / 2 + 20;
+    ly = (y + ey) / 2;
+  } else {
+    // default: offset perpendicular
+    var nx = -dy / len * 14;
+    var ny = dx / len * 14;
+    lx = (x + ex) / 2 + nx;
+    ly = (y + ey) / 2 + ny;
+  }
+  ctx.fillText(label, lx, ly);
+  ctx.restore();
+}
+
+// ============================================================
+// Draw simplified rocket shape
+// cx, cy: center of rocket body
+// rw, rh: half-width, half-height of body
+// flameOn: whether to draw engine flame
+// mc: mode colors
+// ============================================================
+function drawRocket(ctx, cx, cy, rw, rh, flameOn, mc) {
+  var P = AnimRuntime.PAL;
+
+  // Nose cone (triangle)
+  ctx.save();
+  ctx.fillStyle = mc.text;
+  ctx.globalAlpha = 0.85;
+  ctx.beginPath();
+  ctx.moveTo(cx, cy - rh - rh * 0.5);
+  ctx.lineTo(cx - rw, cy - rh);
+  ctx.lineTo(cx + rw, cy - rh);
+  ctx.closePath();
+  ctx.fill();
+
+  // Body (rectangle)
+  ctx.fillStyle = P.primary;
+  ctx.globalAlpha = 0.7;
+  ctx.fillRect(cx - rw, cy - rh, rw * 2, rh * 2);
+  // Body outline
+  ctx.strokeStyle = P.primary;
+  ctx.lineWidth = 1.5;
+  ctx.globalAlpha = 1;
+  ctx.strokeRect(cx - rw, cy - rh, rw * 2, rh * 2);
+
+  // Fins
+  ctx.fillStyle = mc.dim;
+  ctx.globalAlpha = 0.6;
+  // Left fin
+  ctx.beginPath();
+  ctx.moveTo(cx - rw, cy + rh);
+  ctx.lineTo(cx - rw - rw * 0.6, cy + rh + rh * 0.3);
+  ctx.lineTo(cx - rw, cy + rh - rh * 0.3);
+  ctx.closePath();
+  ctx.fill();
+  // Right fin
+  ctx.beginPath();
+  ctx.moveTo(cx + rw, cy + rh);
+  ctx.lineTo(cx + rw + rw * 0.6, cy + rh + rh * 0.3);
+  ctx.lineTo(cx + rw, cy + rh - rh * 0.3);
+  ctx.closePath();
+  ctx.fill();
+  ctx.globalAlpha = 1;
+
+  // Engine flame
+  if (flameOn) {
+    var flameH = rh * 0.8;
+    var gf = ctx.createLinearGradient(cx, cy + rh, cx, cy + rh + flameH);
+    gf.addColorStop(0, '#f59e0b');
+    gf.addColorStop(0.5, '#ef4444');
+    gf.addColorStop(1, 'rgba(239,68,68,0)');
+    ctx.fillStyle = gf;
+    ctx.beginPath();
+    ctx.moveTo(cx - rw * 0.5, cy + rh);
+    ctx.quadraticCurveTo(cx, cy + rh + flameH, cx + rw * 0.5, cy + rh);
+    ctx.closePath();
+    ctx.fill();
+  }
+
+  ctx.restore();
+}
+
+// ============================================================
+// Draw ground / launch pad
+// ============================================================
+function drawGround(ctx, W, H, groundY, mc) {
+  var P = AnimRuntime.PAL;
+  // Ground line
+  ctx.strokeStyle = mc.strokeDim;
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(W * 0.15, groundY);
+  ctx.lineTo(W * 0.85, groundY);
+  ctx.stroke();
+
+  // Launch pad (small rectangle)
+  ctx.fillStyle = mc.dim;
+  ctx.globalAlpha = 0.3;
+  ctx.fillRect(W * 0.4, groundY, W * 0.2, 4);
+  ctx.globalAlpha = 1;
+
+  // Ground label
+  ctx.font = "500 9px 'JetBrains Mono', monospace";
+  ctx.fillStyle = mc.dim;
+  ctx.textAlign = 'center';
+  ctx.fillText('GROUND', W * 0.5, groundY + 16);
+}
+
+// ============================================================
+// Draw corner tick marks on info panel
+// ============================================================
+function drawCornerTicks(ctx, x, y, w, h, color) {
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 1;
+  ctx.globalAlpha = 0.5;
+  var s = 10;
+  ctx.beginPath(); ctx.moveTo(x+8, y+8); ctx.lineTo(x+8, y+8+s); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(x+8, y+8); ctx.lineTo(x+8+s, y+8); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(x+w-8, y+h-8); ctx.lineTo(x+w-8, y+h-8-s); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(x+w-8, y+h-8); ctx.lineTo(x+w-8-s, y+h-8); ctx.stroke();
+  ctx.globalAlpha = 1;
+}
+
+// ============================================================
+// Draw info panel with title and description
+// ============================================================
+function drawInfoPanel(ctx, x, y, w, h, titleText, descText, mc) {
+  var P = AnimRuntime.PAL;
+  // Panel background
+  ctx.fillStyle = 'rgba(5,6,15,0.6)';
+  ctx.fillRect(x, y, w, h);
+  ctx.strokeStyle = mc.strokeDim;
+  ctx.lineWidth = 0.5;
+  ctx.strokeRect(x, y, w, h);
+  drawCornerTicks(ctx, x, y, w, h, P.primary);
+
+  // Title
+  ctx.font = "700 12px 'JetBrains Mono', monospace";
+  ctx.fillStyle = P.primary;
+  ctx.textAlign = 'left';
+  ctx.fillText(titleText, x + 14, y + 22);
+
+  // Description lines
+  ctx.font = "400 11px 'Noto Sans SC', sans-serif";
+  ctx.fillStyle = mc.dim;
+  var lines = descText.split('\n');
+  for (var i = 0; i < lines.length; i++) {
+    ctx.fillText(lines[i], x + 14, y + 40 + i * 16);
+  }
+}
+
+// ============================================================
+// FRAME ELEMENTS
+// ============================================================
+function getFrameElements(f, W, H) {
+  var t = AnimRuntime.t;
+  var P = AnimRuntime.PAL;
+  var cx = W / 2, cy = H / 2;
+
+  // Frame 0: Title
+  if (f === 0) {
+    return [
+      {id:'title', type:'label', text:t('f0_title'), x:cx, y:cy-50, color:P.primary, size:22, align:'center', font:'Space Grotesk'},
+      {id:'sub',   type:'label', text:t('f0_sub'), x:cx, y:cy-10, color:P.muted, size:13, align:'center'},
+      {id:'hint',  type:'label', text:t('g1'), x:cx, y:cy+40, color:P.text, size:11, align:'center', alpha:0.6},
+    ];
+  }
+
+  // For frames 1-4, we use custom drawing
+  return [
+    {id:'stage_label', type:'label', text:'', x:0, y:0, color:'transparent', size:1},
+  ];
+}
+
+// ============================================================
+// CUSTOM DRAW: frames 1-4 use full custom rendering
+// ============================================================
+function customDrawElement(ctx, el, W, H) {
+  if (el.id !== 'stage_label') return false;
+
+  var t = AnimRuntime.t;
+  var P = AnimRuntime.PAL;
+  var mc = AnimRuntime.modeColors;
+  var f = AnimRuntime._currentFrame || 0;
+  if (f === 0) return true;
+
+  var cx = W / 2;
+  var groundY = H * 0.78;
+  var rw = 16, rh = 36;
+
+  // ── Frame 1: Ground Static ──
+  if (f === 1) {
+    var rocketY = groundY - rh;
+    drawGround(ctx, W, H, groundY, mc);
+    drawRocket(ctx, cx, rocketY, rw, rh, false, mc);
+
+    // Forces: gravity down, normal up (equal length)
+    var arrowLen = 70;
+    drawForceArrow(ctx, cx, rocketY, 0, arrowLen, FORCE_COLORS.gravity, t('gravity'), mc, 'right');
+    drawForceArrow(ctx, cx, rocketY, 0, -arrowLen, FORCE_COLORS.normal, t('normal'), mc, 'right');
+
+    // Equal sign between arrows
+    ctx.font = "700 14px 'JetBrains Mono', monospace";
+    ctx.fillStyle = mc.text;
+    ctx.textAlign = 'center';
+    ctx.globalAlpha = 0.7;
+    ctx.fillText('=', cx + 55, rocketY);
+    ctx.globalAlpha = 1;
+
+    // Info panel
+    drawInfoPanel(ctx, W * 0.05, 20, 200, 70, t('f1_title'), t('f1_desc'), mc);
+  }
+
+  // ── Frame 2: Launch Ascent ──
+  if (f === 2) {
+    var rocketY2 = H * 0.45;
+    // Small ground hint at bottom
+    drawGround(ctx, W, H, groundY, mc);
+    drawRocket(ctx, cx, rocketY2, rw, rh, true, mc);
+
+    // Forces: thrust up (long), gravity down (medium), drag down (short)
+    drawForceArrow(ctx, cx, rocketY2, 0, -120, FORCE_COLORS.thrust, t('thrust'), mc, 'right');
+    drawForceArrow(ctx, cx, rocketY2, 0, 70, FORCE_COLORS.gravity, t('gravity'), mc, 'left');
+    drawForceArrow(ctx, cx + 25, rocketY2 - rh, 0, -30, FORCE_COLORS.drag, t('drag'), mc, 'right');
+
+    // Net force arrow indicator
+    ctx.font = "700 10px 'JetBrains Mono', monospace";
+    ctx.fillStyle = mc.accent;
+    ctx.textAlign = 'center';
+    ctx.globalAlpha = 0.8;
+
+    // Draw dashed net force arrow on the side
+    ctx.setLineDash([4, 4]);
+    ctx.strokeStyle = mc.accent;
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(cx - 45, rocketY2 + 10);
+    ctx.lineTo(cx - 45, rocketY2 - 40);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // Arrowhead for net force
+    ctx.fillStyle = mc.accent;
+    ctx.beginPath();
+    ctx.moveTo(cx - 45, rocketY2 - 44);
+    ctx.lineTo(cx - 50, rocketY2 - 34);
+    ctx.lineTo(cx - 40, rocketY2 - 34);
+    ctx.closePath();
+    ctx.fill();
+
+    ctx.font = "500 8px 'JetBrains Mono', monospace";
+    ctx.fillText('NET', cx - 45, rocketY2 - 50);
+    ctx.globalAlpha = 1;
+
+    drawInfoPanel(ctx, W * 0.05, 20, 220, 70, t('f2_title'), t('f2_desc'), mc);
+  }
+
+  // ── Frame 3: Engine Off (Peak) ──
+  if (f === 3) {
+    var rocketY3 = H * 0.3;
+    drawRocket(ctx, cx, rocketY3, rw, rh, false, mc);
+
+    // Forces: gravity down, drag down (both pulling it down, no thrust)
+    drawForceArrow(ctx, cx - 10, rocketY3 + 5, 0, 80, FORCE_COLORS.gravity, t('gravity'), mc, 'left');
+    drawForceArrow(ctx, cx + 10, rocketY3 - rh, 0, 35, FORCE_COLORS.drag, t('drag'), mc, 'right');
+
+    // Crossed out thrust
+    ctx.font = "700 9px 'JetBrains Mono', monospace";
+    ctx.fillStyle = FORCE_COLORS.thrust;
+    ctx.globalAlpha = 0.4;
+    ctx.textAlign = 'center';
+    var thrustLabel = t('thrust') + ' = 0';
+    ctx.fillText(thrustLabel, cx, rocketY3 + rh + 30);
+    // Strikethrough line
+    var tw = ctx.measureText(thrustLabel).width;
+    ctx.strokeStyle = FORCE_COLORS.thrust;
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(cx - tw/2 - 4, rocketY3 + rh + 27);
+    ctx.lineTo(cx + tw/2 + 4, rocketY3 + rh + 27);
+    ctx.stroke();
+    ctx.globalAlpha = 1;
+
+    // Altitude indicator
+    ctx.setLineDash([3, 3]);
+    ctx.strokeStyle = mc.strokeDim;
+    ctx.lineWidth = 0.5;
+    ctx.beginPath();
+    ctx.moveTo(W * 0.15, groundY);
+    ctx.lineTo(W * 0.85, groundY);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.font = "400 8px 'JetBrains Mono', monospace";
+    ctx.fillStyle = mc.dim;
+    ctx.fillText('GROUND', W * 0.5, groundY + 12);
+
+    // Height arrow
+    ctx.setLineDash([2, 2]);
+    ctx.strokeStyle = mc.dim;
+    ctx.lineWidth = 0.5;
+    ctx.beginPath();
+    ctx.moveTo(W * 0.82, rocketY3 + rh);
+    ctx.lineTo(W * 0.82, groundY);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.font = "400 8px 'JetBrains Mono', monospace";
+    ctx.fillStyle = mc.dim;
+    ctx.textAlign = 'center';
+    ctx.fillText('MAX H', W * 0.82, (rocketY3 + rh + groundY) / 2);
+
+    drawInfoPanel(ctx, W * 0.05, 20, 220, 70, t('f3_title'), t('f3_desc'), mc);
+  }
+
+  // ── Frame 4: Descent ──
+  if (f === 4) {
+    var rocketY4 = H * 0.5;
+    drawGround(ctx, W, H, groundY, mc);
+    drawRocket(ctx, cx, rocketY4, rw, rh, false, mc);
+
+    // Motion direction indicator (downward arrow)
+    ctx.setLineDash([4, 3]);
+    ctx.strokeStyle = mc.dim;
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(cx + 50, rocketY4 - 30);
+    ctx.lineTo(cx + 50, rocketY4 + 40);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    // Motion arrowhead
+    ctx.fillStyle = mc.dim;
+    ctx.beginPath();
+    ctx.moveTo(cx + 50, rocketY4 + 44);
+    ctx.lineTo(cx + 45, rocketY4 + 36);
+    ctx.lineTo(cx + 55, rocketY4 + 36);
+    ctx.closePath();
+    ctx.fill();
+    ctx.font = "400 8px 'JetBrains Mono', monospace";
+    ctx.fillStyle = mc.dim;
+    ctx.textAlign = 'center';
+    ctx.fillText('v', cx + 50, rocketY4 + 56);
+
+    // Forces: gravity down (long), drag up (shorter, opposing motion)
+    drawForceArrow(ctx, cx, rocketY4 + 5, 0, 80, FORCE_COLORS.gravity, t('gravity'), mc, 'left');
+    drawForceArrow(ctx, cx, rocketY4 - rh, 0, -50, FORCE_COLORS.drag, t('drag'), mc, 'left');
+
+    drawInfoPanel(ctx, W * 0.05, 20, 210, 70, t('f4_title'), t('f4_desc'), mc);
+  }
+
+  // ── Force legend (frames 1-4) ──
+  var legendX = W * 0.68, legendY = H * 0.72;
+  var legendW = W * 0.28, legendH = 90;
+
+  ctx.fillStyle = 'rgba(5,6,15,0.5)';
+  ctx.fillRect(legendX, legendY, legendW, legendH);
+  ctx.strokeStyle = mc.strokeDim;
+  ctx.lineWidth = 0.5;
+  ctx.strokeRect(legendX, legendY, legendW, legendH);
+  drawCornerTicks(ctx, legendX, legendY, legendW, legendH, P.primary);
+
+  ctx.font = "700 9px 'JetBrains Mono', monospace";
+  ctx.textAlign = 'left';
+  var forceNames = [
+    {key:'gravity', color: FORCE_COLORS.gravity},
+    {key:'normal',  color: FORCE_COLORS.normal},
+    {key:'thrust',  color: FORCE_COLORS.thrust},
+    {key:'drag',    color: FORCE_COLORS.drag},
+  ];
+  for (var i = 0; i < forceNames.length; i++) {
+    var fy = legendY + 18 + i * 18;
+    // Color swatch
+    ctx.fillStyle = forceNames[i].color;
+    ctx.fillRect(legendX + 12, fy - 5, 16, 3);
+    // Arrow tip
+    ctx.beginPath();
+    ctx.moveTo(legendX + 30, fy - 3.5);
+    ctx.lineTo(legendX + 26, fy - 6);
+    ctx.lineTo(legendX + 26, fy - 1);
+    ctx.closePath();
+    ctx.fill();
+    // Label
+    ctx.fillStyle = forceNames[i].color;
+    ctx.fillText(t(forceNames[i].key), legendX + 36, fy);
+  }
+
+  return true;
+}
+
+// ============================================================
+// Track current frame for custom draw
+// ============================================================
+var _origBoot = AnimRuntime.boot;
+AnimRuntime._currentFrame = 0;
+
+// Monkey-patch: we read frame from DOM after boot
+var _checkFrame = setInterval(function(){
+  var ind = document.getElementById('frameIndicator');
+  if (!ind) return;
+  var txt = ind.textContent || '';
+  var m = txt.match(/(\d+)/);
+  if (m) AnimRuntime._currentFrame = parseInt(m[1]) - 1;
+}, 100);
+
+// ============================================================
+// BOOT
+// ============================================================
+AnimRuntime.boot();
+</script>
+</body>
+</html>

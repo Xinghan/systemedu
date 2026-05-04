@@ -1,0 +1,849 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=Inter:wght@400;500&family=Noto+Sans+SC:wght@400;700&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box;}
+html,body{width:100%;height:100vh;overflow:hidden;}
+body{background:var(--bg,#0c0e12);color:var(--text,#f6f6fc);font-family:'Inter','Noto Sans SC',sans-serif;}
+/* ── Outer: sidebar + main ── */
+.wrapper{display:flex;flex-direction:row;height:100vh;overflow:hidden;}
+.sidebar{width:200px;min-width:200px;max-width:200px;display:flex;flex-direction:column;gap:6px;padding:10px;background:rgba(0,0,0,0.5);border-right:1px solid rgba(80,255,176,0.15);overflow-y:auto;}
+.lang-btn{align-self:flex-start;flex-shrink:0;font-family:'Space Grotesk',sans-serif;font-size:10px;font-weight:700;padding:3px 8px;cursor:pointer;border:1px solid rgba(255,181,156,0.25);background:transparent;color:#ffb59c;letter-spacing:1px;}
+.lang-btn:hover{border-color:#ffb59c;background:rgba(255,181,156,0.1);}
+.sidebar h1{font-family:'Space Grotesk',sans-serif;font-size:13px;font-weight:700;color:var(--primary,#50ffb0);margin-top:4px;line-height:1.3;}
+.sidebar .sub{font-size:10px;color:var(--muted,#aaabb0);letter-spacing:0.06em;text-transform:uppercase;}
+.sidebar .frame-ind{font-family:'Space Grotesk',sans-serif;font-size:10px;color:var(--muted,#aaabb0);letter-spacing:0.1em;margin-top:4px;}
+.sidebar .guide-label{font-family:'Space Grotesk',sans-serif;font-size:9px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:var(--primary,#50ffb0);margin-top:8px;}
+.sidebar .guide-content{font-family:'Noto Sans SC',sans-serif;font-size:11px;color:rgba(255,255,255,0.85);line-height:1.5;}
+.sidebar .guide-content ul{padding-left:16px;margin:0;}
+.sidebar .guide-content li{margin-bottom:1px;}
+/* ── Main area: canvas + controls + hud ── */
+.anim-main{flex:1;display:flex;flex-direction:column;min-width:0;}
+.canvas-wrap{flex:1;min-height:0;position:relative;}
+canvas{width:100%;height:100%;display:block;}
+/* ── Controls + HUD ── */
+.controls{display:flex;justify-content:center;align-items:center;gap:12px;padding:6px 16px;}
+.ctrl-btn{font-family:'Space Grotesk',sans-serif;font-size:11px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;padding:5px 16px;border:none;cursor:pointer;color:var(--bg,#0c0e12);background:linear-gradient(135deg,var(--primary,#50ffb0),var(--primary-dim,#17df93));transition:transform 0.1s,box-shadow 0.2s;box-shadow:0 0 10px var(--glow-strong,rgba(80,255,176,0.3));}
+.ctrl-btn:hover{transform:scale(1.04);}
+.ctrl-btn:active{transform:scale(0.96);}
+.ctrl-btn.secondary{background:var(--glass,rgba(23,26,31,0.92));color:var(--muted,#aaabb0);box-shadow:none;backdrop-filter:blur(12px);}
+.ctrl-btn.secondary:hover{color:var(--primary,#50ffb0);}
+.hud{height:40px;display:flex;align-items:center;justify-content:space-around;background:rgba(0,0,0,0.55);backdrop-filter:blur(12px);padding:0 16px;}
+.hud-item{text-align:center;}
+.hud-label{font-family:'Space Grotesk',sans-serif;font-size:8px;letter-spacing:0.15em;text-transform:uppercase;color:var(--muted,#aaabb0);}
+.hud-val{font-family:'Space Grotesk',sans-serif;font-size:13px;font-weight:700;color:var(--primary,#50ffb0);}
+</style>
+</head>
+<body>
+<div class="wrapper">
+<!-- Sidebar: lang-btn, title, guide (completely separate from canvas) -->
+<div class="sidebar">
+<button class="lang-btn" id="langBtn">CN</button>
+<h1 id="title"></h1>
+<div class="sub" id="subtitle"></div>
+<div class="frame-ind" id="frameIndicator"></div>
+<div class="guide-label" id="guideTitle"></div>
+<div class="guide-content" id="guideContent"></div>
+</div>
+<!-- Main: canvas fills all space, nothing overlaps -->
+<div class="anim-main">
+<div class="canvas-wrap"><canvas id="c"></canvas></div>
+<div class="controls">
+<button class="ctrl-btn secondary" id="btnPrev"></button>
+<button class="ctrl-btn" id="btnPlay"></button>
+<button class="ctrl-btn secondary" id="btnNext"></button>
+</div>
+<div class="hud">
+<div class="hud-item"><div class="hud-label" id="hudL1"></div><div class="hud-val" id="hudV1"></div></div>
+<div class="hud-item"><div class="hud-label" id="hudL2"></div><div class="hud-val" id="hudV2"></div></div>
+<div class="hud-item"><div class="hud-label" id="hudL3"></div><div class="hud-val" id="hudV3"></div></div>
+<div class="hud-item"><div class="hud-label" id="hudL4"></div><div class="hud-val" id="hudV4"></div></div>
+</div>
+</div>
+</div>
+
+<!-- Runtime (shared skeleton) -->
+<script src="animation_runtime.js"></script>
+
+<!-- Content -->
+<script>
+// ============================================================
+// K31: Thrust-to-Weight Ratio -- the minimum threshold for liftoff
+// CONCEPT: TWR = thrust / (m * g). TWR < 1 can't lift. TWR < 3-5 unstable. TWR >= 5 recommended.
+// Core question: "400g rocket + HT-0 engine -- can it lift off?"
+// 5 frames:
+//   0 - Title frame: rocket on pad with weight/thrust arrows + equation
+//   1 - TWR < 1: rocket jiggling on pad but stuck (TWR=0.6)
+//   2 - TWR ~ 2: slow wobbly liftoff (TWR=2.0)
+//   3 - TWR >= 5: clean fast launch with exhaust particles (TWR=7.5)
+//   4 - Matrix: 4x4 grid engines x masses with color-coded TWR values
+// ============================================================
+
+var CONFIG = {
+  style: 'ares_mission',
+  totalFrames: 5,
+
+  i18n: {
+    title:       {en:'THRUST-WEIGHT RATIO', cn:'\u63a8\u91cd\u6bd4'},
+    subtitle:    {en:'The Liftoff Threshold', cn:'\u706b\u7bad\u79bb\u67b6\u7684\u6700\u4f4e\u95e8\u69db'},
+    f0question:  {en:'Can a 400g rocket lift off\nwith an HT-0 engine?', cn:'400g\u7684\u706b\u7bad\u80fd\u7528HT-0\n\u53d1\u52a8\u673a\u63a8\u8d77\u6765\u5417\uff1f'},
+    f0formula:   {en:'TWR = F / (m \u00d7 g)', cn:'TWR = F / (m \u00d7 g)'},
+    f0thrust:    {en:'THRUST', cn:'\u63a8\u529b'},
+    f0weight:    {en:'WEIGHT', cn:'\u91cd\u529b'},
+    f1title:     {en:'TWR < 1 : STUCK ON PAD', cn:'TWR < 1 : \u56f0\u5728\u53d1\u5c04\u53f0'},
+    f1twr:       {en:'TWR = 0.6', cn:'TWR = 0.6'},
+    f1notEnough: {en:'NOT ENOUGH', cn:'\u63a8\u529b\u4e0d\u8db3'},
+    f1explain:   {en:'Thrust < Weight\nRocket cannot leave the pad', cn:'\u63a8\u529b < \u91cd\u529b\n\u706b\u7bad\u65e0\u6cd5\u79bb\u5f00\u53d1\u5c04\u53f0'},
+    f2title:     {en:'TWR ~ 2 : WOBBLY ASCENT', cn:'TWR \u2248 2 : \u6643\u6643\u60a0\u60a0\u5730\u5347'},
+    f2twr:       {en:'TWR = 2.0', cn:'TWR = 2.0'},
+    f2unstable:  {en:'UNSTABLE', cn:'\u4e0d\u7a33\u5b9a'},
+    f2explain:   {en:'Thrust barely exceeds weight\nSlow, vulnerable to wind gusts', cn:'\u63a8\u529b\u521a\u521a\u8d85\u8fc7\u91cd\u529b\n\u7f13\u6162\u4e0a\u5347\uff0c\u6613\u53d7\u98ce\u5e72\u6270'},
+    f3title:     {en:'TWR \u2265 5 : CLEAN LAUNCH', cn:'TWR \u2265 5 : \u5e72\u51c0\u5229\u843d'},
+    f3twr:       {en:'TWR = 7.5', cn:'TWR = 7.5'},
+    f3optimal:   {en:'OPTIMAL', cn:'\u6700\u4f73'},
+    f3explain:   {en:'Strong thrust overwhelms weight\nFast, straight, stable ascent', cn:'\u63a8\u529b\u8fdc\u8d85\u91cd\u529b\n\u5feb\u901f\u3001\u7b14\u76f4\u3001\u7a33\u5b9a\u4e0a\u5347'},
+    f4title:     {en:'ENGINE \u00d7 MASS MATRIX', cn:'\u53d1\u52a8\u673a \u00d7 \u8d28\u91cf \u77e9\u9635'},
+    f4engine:    {en:'ENGINE', cn:'\u53d1\u52a8\u673a'},
+    f4mass:      {en:'MASS', cn:'\u8d28\u91cf'},
+    f4safe:      {en:'\u2265 5 SAFE', cn:'\u2265 5 \u5b89\u5168'},
+    f4caution:   {en:'3-5 CAUTION', cn:'3-5 \u8b66\u544a'},
+    f4danger:    {en:'< 3 DANGER', cn:'< 3 \u5371\u9669'},
+    f4conclusion:{en:'Heavier rockets need stronger engines', cn:'\u8d8a\u91cd\u7684\u706b\u7bad\u9700\u8981\u8d8a\u5f3a\u7684\u53d1\u52a8\u673a'},
+    guideTitle:  {en:'OBSERVATION GUIDE', cn:'\u89c2\u5bdf\u6307\u5357'},
+    g1:          {en:'TWR = thrust / (mass \u00d7 g)', cn:'TWR = \u63a8\u529b / (\u8d28\u91cf \u00d7 g)'},
+    g2:          {en:'TWR < 1 means it cannot lift off', cn:'TWR < 1 \u610f\u5473\u7740\u65e0\u6cd5\u8d77\u98de'},
+    g3:          {en:'TWR \u2265 5 recommended for stable flight', cn:'TWR \u2265 5 \u63a8\u8350\u7528\u4e8e\u7a33\u5b9a\u98de\u884c'},
+    hudEngine:   {en:'ENGINE', cn:'\u53d1\u52a8\u673a'},
+    hudTWR:      {en:'TWR', cn:'\u63a8\u91cd\u6bd4'},
+    hudThrust:   {en:'THRUST', cn:'\u63a8\u529b'},
+    hudStatus:   {en:'STATUS', cn:'\u72b6\u6001'},
+    hudStuck:    {en:'STUCK', cn:'\u56f0\u4f4f'},
+    hudWobbly:   {en:'WOBBLY', cn:'\u6643\u60a0'},
+    hudClean:    {en:'CLEAN', cn:'\u5e72\u51c0'},
+    hudMatrix:   {en:'MATRIX', cn:'\u77e9\u9635'},
+  },
+
+  hudLabels: ['hudEngine', 'hudThrust', 'hudTWR', 'hudStatus'],
+  hudValues: [
+    ['--',   '--',    '--',   '--'],
+    ['HT-0', '8 N',   '0.6',  'hudStuck'],
+    ['C5-0', '12 N',  '2.0',  'hudWobbly'],
+    ['C5-3', '12 N',  '7.5',  'hudClean'],
+    ['4x4',  '--',    '--',   'hudMatrix'],
+  ],
+
+  guideTitle: 'guideTitle',
+  guideItems: ['g1', 'g2', 'g3'],
+};
+
+// ============================================================
+// Engine + mass data for the matrix (frame 4)
+// ============================================================
+var engineData = [
+  {name:'HT-0',  thrust: 8},
+  {name:'HT-3',  thrust: 8},
+  {name:'C5-0',  thrust: 12},
+  {name:'C5-3',  thrust: 12}
+];
+var massData = [0.2, 0.3, 0.4, 0.5]; // kg
+var G = 9.8;
+
+function computeTWR(thrustN, massKg) {
+  return thrustN / (massKg * G);
+}
+
+// ============================================================
+// Particle system
+// ============================================================
+var particles = [];
+var animTime = 0;
+var lastTime = 0;
+var rocketShake = {x: 0, y: 0, decay: 0};
+
+function spawnParticle(x, y, vx, vy, life, color, sz) {
+  particles.push({
+    x: x, y: y, vx: vx, vy: vy,
+    life: life, maxLife: life,
+    color: color, size: sz || 2
+  });
+}
+
+function updateParticles(dt) {
+  for (var i = particles.length - 1; i >= 0; i--) {
+    var p = particles[i];
+    p.x += p.vx * dt;
+    p.y += p.vy * dt;
+    p.vy += 20 * dt;
+    p.life -= dt;
+    if (p.life <= 0) particles.splice(i, 1);
+  }
+}
+
+function updateShake(dt) {
+  if (rocketShake.decay > 0) {
+    rocketShake.x = (Math.random() - 0.5) * rocketShake.decay * 6;
+    rocketShake.y = (Math.random() - 0.5) * rocketShake.decay * 6;
+    rocketShake.decay -= dt * 5;
+    if (rocketShake.decay < 0) rocketShake.decay = 0;
+  } else {
+    rocketShake.x = 0;
+    rocketShake.y = 0;
+  }
+}
+
+// ============================================================
+// Easing
+// ============================================================
+function easeOutCubic(t) { return 1 - Math.pow(1 - t, 3); }
+
+// ============================================================
+// Audio (muted by default)
+// ============================================================
+var soundMuted = true;
+var audioCtx = null;
+function playTone(freq, dur, type) {
+  if (soundMuted) return;
+  if (!audioCtx) { try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch(e) { return; } }
+  var osc = audioCtx.createOscillator();
+  var gain = audioCtx.createGain();
+  osc.type = type || 'sine';
+  osc.frequency.value = freq;
+  gain.gain.setValueAtTime(0.1, audioCtx.currentTime);
+  gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + dur);
+  osc.connect(gain); gain.connect(audioCtx.destination);
+  osc.start(); osc.stop(audioCtx.currentTime + dur);
+}
+
+// ============================================================
+// Stars for parallax background
+// ============================================================
+var bgStars = [];
+var bgStarsInited = false;
+
+function initBgStars(W, H) {
+  bgStars = [];
+  for (var i = 0; i < 80; i++) {
+    bgStars.push({
+      x: Math.random() * W * 1.2,
+      y: Math.random() * H,
+      r: Math.random() * 1.2 + 0.3,
+      speed: Math.random() * 0.3 + 0.1,
+      brightness: Math.random() * 0.5 + 0.3
+    });
+  }
+  bgStarsInited = true;
+}
+
+// ============================================================
+// drawBg: parallax stars + subtle grid
+// ============================================================
+function drawBg(ctx, W, H) {
+  var P = AnimRuntime.PAL;
+  var g = ctx.createLinearGradient(0, 0, 0, H);
+  g.addColorStop(0, P.bg); g.addColorStop(1, P.bg2);
+  ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+
+  if (!bgStarsInited || bgStars.length === 0) initBgStars(W, H);
+
+  // slow stars layer
+  for (var i = 0; i < bgStars.length; i++) {
+    var s = bgStars[i];
+    var pulse = 0.6 + 0.4 * Math.sin(animTime * 1.5 + i * 0.7);
+    ctx.beginPath();
+    ctx.arc(s.x, s.y, s.r * pulse, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(255,255,255,' + (s.brightness * pulse * 0.6) + ')';
+    ctx.fill();
+  }
+
+  // fast grid layer
+  ctx.strokeStyle = 'rgba(255,255,255,0.02)';
+  ctx.lineWidth = 0.5;
+  var gridOff = (animTime * 8) % 40;
+  for (var x = -40 + gridOff; x < W + 40; x += 40) {
+    ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke();
+  }
+  for (var y = 0; y < H; y += 40) {
+    ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke();
+  }
+}
+
+// ============================================================
+// Helper: draw a rocket shape
+// ============================================================
+function drawRocket(ctx, rx, ry, rw, rh, bodyColor, noseColor, finColor) {
+  var P = AnimRuntime.PAL;
+  // body
+  ctx.fillStyle = bodyColor || P.secondary;
+  ctx.fillRect(rx - rw / 2, ry, rw, rh);
+  // nose cone
+  ctx.fillStyle = noseColor || P.primary;
+  ctx.beginPath();
+  ctx.moveTo(rx - rw / 2, ry);
+  ctx.lineTo(rx, ry - rh * 0.35);
+  ctx.lineTo(rx + rw / 2, ry);
+  ctx.closePath();
+  ctx.fill();
+  // fins
+  ctx.fillStyle = finColor || P.error;
+  var finW = rw * 0.45;
+  var finH = rh * 0.3;
+  // left fin
+  ctx.beginPath();
+  ctx.moveTo(rx - rw / 2, ry + rh);
+  ctx.lineTo(rx - rw / 2 - finW, ry + rh + finH * 0.3);
+  ctx.lineTo(rx - rw / 2, ry + rh - finH);
+  ctx.closePath();
+  ctx.fill();
+  // right fin
+  ctx.beginPath();
+  ctx.moveTo(rx + rw / 2, ry + rh);
+  ctx.lineTo(rx + rw / 2 + finW, ry + rh + finH * 0.3);
+  ctx.lineTo(rx + rw / 2, ry + rh - finH);
+  ctx.closePath();
+  ctx.fill();
+  // window
+  ctx.beginPath();
+  ctx.arc(rx, ry + rh * 0.3, rw * 0.18, 0, Math.PI * 2);
+  ctx.fillStyle = 'rgba(0,218,243,0.7)';
+  ctx.fill();
+  ctx.strokeStyle = 'rgba(0,218,243,0.3)';
+  ctx.lineWidth = 1;
+  ctx.stroke();
+}
+
+// ============================================================
+// Helper: draw exhaust flame
+// ============================================================
+function drawExhaust(ctx, rx, ry, rw, rh, intensity) {
+  var flicker = 0.85 + 0.15 * Math.sin(animTime * 20);
+  var flameH = rh * intensity * flicker;
+  var grad = ctx.createLinearGradient(rx, ry, rx, ry + flameH);
+  grad.addColorStop(0, 'rgba(255,200,80,0.9)');
+  grad.addColorStop(0.4, 'rgba(255,127,80,0.7)');
+  grad.addColorStop(1, 'rgba(255,80,40,0)');
+  ctx.fillStyle = grad;
+  ctx.beginPath();
+  ctx.moveTo(rx - rw * 0.4, ry);
+  var cx1 = rx - rw * 0.6 * flicker;
+  var cx2 = rx + rw * 0.6 * flicker;
+  ctx.quadraticCurveTo(cx1, ry + flameH * 0.6, rx, ry + flameH);
+  ctx.quadraticCurveTo(cx2, ry + flameH * 0.6, rx + rw * 0.4, ry);
+  ctx.closePath();
+  ctx.fill();
+
+  // glow
+  ctx.shadowColor = 'rgba(255,160,40,0.4)';
+  ctx.shadowBlur = 15 * intensity;
+  ctx.fill();
+  ctx.shadowBlur = 0;
+}
+
+// ============================================================
+// Helper: draw force arrow (vertical, with label)
+// ============================================================
+function drawForceArrow(ctx, x, yStart, yEnd, color, labelText, labelSide, lineW) {
+  var lw = lineW || 3;
+  var headSize = 8;
+  ctx.strokeStyle = color;
+  ctx.lineWidth = lw;
+  ctx.beginPath();
+  ctx.moveTo(x, yStart);
+  ctx.lineTo(x, yEnd);
+  ctx.stroke();
+
+  // arrowhead
+  var dir = yEnd > yStart ? 1 : -1;
+  ctx.fillStyle = color;
+  ctx.beginPath();
+  ctx.moveTo(x, yEnd);
+  ctx.lineTo(x - headSize, yEnd - dir * headSize * 1.5);
+  ctx.lineTo(x + headSize, yEnd - dir * headSize * 1.5);
+  ctx.closePath();
+  ctx.fill();
+
+  // label
+  if (labelText) {
+    ctx.font = "bold 10px 'Space Grotesk','Inter',sans-serif";
+    ctx.fillStyle = color;
+    var midY = (yStart + yEnd) / 2;
+    if (labelSide === 'left') {
+      ctx.textAlign = 'right';
+      ctx.fillText(labelText, x - 10, midY);
+    } else {
+      ctx.textAlign = 'left';
+      ctx.fillText(labelText, x + 10, midY);
+    }
+  }
+}
+
+// ============================================================
+// Helper: draw launch pad
+// ============================================================
+function drawLaunchPad(ctx, cx, y, padW) {
+  var P = AnimRuntime.PAL;
+  ctx.fillStyle = P.outline;
+  ctx.fillRect(cx - padW / 2, y, padW, 6);
+  // support legs
+  ctx.fillStyle = 'rgba(255,255,255,0.15)';
+  ctx.fillRect(cx - padW / 2 + 4, y + 6, 4, 12);
+  ctx.fillRect(cx + padW / 2 - 8, y + 6, 4, 12);
+  // base
+  ctx.fillStyle = P.outline;
+  ctx.fillRect(cx - padW / 2 - 6, y + 18, padW + 12, 4);
+}
+
+// ============================================================
+// getFrameElements
+// ============================================================
+function getFrameElements(f, W, H) {
+  var t = AnimRuntime.t;
+  var P = AnimRuntime.PAL;
+  var cx = W / 2, cy = H / 2;
+
+  if (f === 0) {
+    return [
+      {id:'f0title', type:'label', text:t('title'), x:cx, y:50, color:P.primary, size:22, align:'center', glow:P.glowStrong},
+      {id:'f0formula', type:'label', text:t('f0formula'), x:cx, y:82, color:P.tertiary, size:14, align:'center', glow:'rgba(0,218,243,0.3)'},
+      {id:'f0question', type:'custom', x:cx, y:H - 50,
+        draw: function(c, el) {
+          var lines = t('f0question').split('\n');
+          c.font = "12px 'Inter','Noto Sans SC',sans-serif";
+          c.fillStyle = P.muted;
+          c.textAlign = 'center';
+          for (var i = 0; i < lines.length; i++) {
+            c.fillText(lines[i], el.x, el.y + i * 18);
+          }
+        }
+      },
+      {id:'f0rocket', type:'custom', x:cx, y:cy,
+        draw: function(c, el) {
+          var rw = 30, rh = 70;
+          var rocketY = cy - 10;
+          var padY = rocketY + rh;
+
+          // idle breathing
+          var breath = 0.98 + 0.04 * Math.sin(animTime * 2);
+          c.save();
+          c.translate(el.x, rocketY + rh / 2);
+          c.scale(breath, breath);
+          c.translate(-el.x, -(rocketY + rh / 2));
+
+          drawRocket(c, el.x, rocketY, rw, rh, P.secondary, P.primary, P.error);
+          c.restore();
+
+          drawLaunchPad(c, el.x, padY, 60);
+
+          // thrust arrow (green, up)
+          var thrustLen = 60;
+          drawForceArrow(c, el.x - 25, rocketY + rh / 2, rocketY + rh / 2 - thrustLen, '#50ffb0', t('f0thrust'), 'left', 3);
+
+          // weight arrow (red, down)
+          var weightLen = 60;
+          drawForceArrow(c, el.x + 25, rocketY + rh / 2, rocketY + rh / 2 + weightLen, '#ff6b4a', t('f0weight'), 'right', 3);
+
+          // glow on arrows
+          c.shadowBlur = 0;
+        }
+      },
+    ];
+  }
+
+  if (f === 1) {
+    return [
+      {id:'f1hdr', type:'label', text:t('f1title'), x:cx, y:30, color:P.error, size:16, align:'center', glow:'rgba(255,107,74,0.4)'},
+      {id:'f1twr', type:'label', text:t('f1twr'), x:cx, y:55, color:P.error, size:20, align:'center', bold:true, glow:'rgba(255,107,74,0.5)'},
+      {id:'f1badge', type:'label', text:t('f1notEnough'), x:cx, y:80, color:P.error, size:12, align:'center'},
+      {id:'f1rocket', type:'custom', x:cx, y:cy,
+        draw: function(c, el) {
+          var rw = 32, rh = 75;
+          var padY = cy + 55;
+          var rocketBaseY = padY - rh;
+
+          // jiggle -- rocket tries to lift but can't
+          var jigX = Math.sin(animTime * 12) * 2.5;
+          var jigY = Math.abs(Math.sin(animTime * 8)) * 3;
+
+          c.save();
+          c.translate(jigX, -jigY);
+
+          drawRocket(c, el.x, rocketBaseY, rw, rh, P.secondary, '#ff6b4a', P.error);
+
+          // small weak exhaust
+          drawExhaust(c, el.x, padY, rw, 0.4, 0.3);
+
+          c.restore();
+
+          drawLaunchPad(c, el.x, padY, 70);
+
+          // thrust arrow (short, green)
+          var thrustLen = 35;
+          drawForceArrow(c, el.x - 30, rocketBaseY + rh / 2, rocketBaseY + rh / 2 - thrustLen, '#50ffb0', t('f0thrust'), 'left', 2);
+
+          // weight arrow (longer, red)
+          var weightLen = 58;
+          drawForceArrow(c, el.x + 30, rocketBaseY + rh / 2, rocketBaseY + rh / 2 + weightLen, '#ff6b4a', t('f0weight'), 'right', 3);
+        }
+      },
+      {id:'f1explain', type:'custom', x:cx, y:H - 45,
+        draw: function(c, el) {
+          var lines = t('f1explain').split('\n');
+          c.font = "11px 'Inter','Noto Sans SC',sans-serif";
+          c.fillStyle = P.muted;
+          c.textAlign = 'center';
+          for (var i = 0; i < lines.length; i++) {
+            c.fillText(lines[i], el.x, el.y + i * 16);
+          }
+        }
+      },
+    ];
+  }
+
+  if (f === 2) {
+    return [
+      {id:'f2hdr', type:'label', text:t('f2title'), x:cx, y:30, color:'#f0c040', size:16, align:'center', glow:'rgba(240,192,64,0.3)'},
+      {id:'f2twr', type:'label', text:t('f2twr'), x:cx, y:55, color:'#f0c040', size:20, align:'center', bold:true, glow:'rgba(240,192,64,0.4)'},
+      {id:'f2badge', type:'label', text:t('f2unstable'), x:cx, y:80, color:'#f0c040', size:12, align:'center'},
+      {id:'f2rocket', type:'custom', x:cx, y:cy,
+        draw: function(c, el) {
+          var rw = 32, rh = 75;
+          var padY = cy + 80;
+
+          // slow lift with wobble
+          var liftPhase = (animTime * 0.4) % 1.0;
+          var liftY = easeOutCubic(Math.min(liftPhase * 1.5, 1)) * 80;
+          var wobbleX = Math.sin(animTime * 4) * 6;
+          var wobbleAngle = Math.sin(animTime * 3.5) * 0.06;
+
+          var rocketBaseY = padY - rh - liftY;
+
+          c.save();
+          c.translate(el.x + wobbleX, rocketBaseY + rh / 2);
+          c.rotate(wobbleAngle);
+          c.translate(-(el.x + wobbleX), -(rocketBaseY + rh / 2));
+
+          drawRocket(c, el.x + wobbleX, rocketBaseY, rw, rh, P.secondary, '#f0c040', P.error);
+
+          // medium exhaust
+          drawExhaust(c, el.x + wobbleX, rocketBaseY + rh, rw, 0.8, 0.6);
+
+          c.restore();
+
+          drawLaunchPad(c, el.x, padY, 70);
+
+          // spawn particles occasionally
+          if (Math.random() < 0.15) {
+            spawnParticle(
+              el.x + wobbleX + (Math.random() - 0.5) * 20,
+              rocketBaseY + rh + 10,
+              (Math.random() - 0.5) * 30,
+              Math.random() * 40 + 20,
+              0.5, '#ff9040', 2
+            );
+          }
+
+          // thrust arrow (slightly longer than weight)
+          var arrowBaseY = rocketBaseY + rh / 2;
+          drawForceArrow(c, el.x - 40, arrowBaseY, arrowBaseY - 48, '#50ffb0', t('f0thrust'), 'left', 2.5);
+          drawForceArrow(c, el.x + 40, arrowBaseY, arrowBaseY + 38, '#ff6b4a', t('f0weight'), 'right', 2);
+
+          // motion lines (showing slow upward movement)
+          c.strokeStyle = 'rgba(255,255,255,0.15)';
+          c.lineWidth = 1;
+          c.setLineDash([4, 4]);
+          for (var ml = 0; ml < 3; ml++) {
+            var mlx = el.x + wobbleX + (ml - 1) * 20;
+            c.beginPath();
+            c.moveTo(mlx, rocketBaseY + rh + 20);
+            c.lineTo(mlx, rocketBaseY + rh + 40);
+            c.stroke();
+          }
+          c.setLineDash([]);
+        }
+      },
+      {id:'f2explain', type:'custom', x:cx, y:H - 45,
+        draw: function(c, el) {
+          var lines = t('f2explain').split('\n');
+          c.font = "11px 'Inter','Noto Sans SC',sans-serif";
+          c.fillStyle = P.muted;
+          c.textAlign = 'center';
+          for (var i = 0; i < lines.length; i++) {
+            c.fillText(lines[i], el.x, el.y + i * 16);
+          }
+        }
+      },
+    ];
+  }
+
+  if (f === 3) {
+    return [
+      {id:'f3rocket', type:'custom', x:cx, y:cy,
+        draw: function(c, el) {
+          var rw = 32, rh = 75;
+          var padY = cy + 80;
+
+          // fast ascent -- clamp so rocket nose stays below y=100
+          var launchPhase = (animTime * 0.6) % 1.5;
+          var maxLift = padY - rh - 105; // keep nose above y=105
+          var liftY = easeOutCubic(Math.min(launchPhase, 1)) * maxLift;
+          if (liftY > maxLift) liftY = maxLift;
+
+          var rocketBaseY = padY - rh - liftY;
+
+          c.save();
+          drawRocket(c, el.x, rocketBaseY, rw, rh, P.secondary, '#50ffb0', '#00daf3');
+
+          // big bright exhaust
+          drawExhaust(c, el.x, rocketBaseY + rh, rw, 1.5, 1.0);
+          c.restore();
+
+          drawLaunchPad(c, el.x, padY, 70);
+
+          // heavy particle spawning
+          if (Math.random() < 0.4) {
+            spawnParticle(
+              el.x + (Math.random() - 0.5) * 25,
+              rocketBaseY + rh + 15,
+              (Math.random() - 0.5) * 60,
+              Math.random() * 60 + 30,
+              0.5, Math.random() > 0.5 ? '#ffb59c' : '#ff7f50', 2.5
+            );
+          }
+
+          // thrust arrow (much bigger) -- draw to the left of rocket
+          var arrowBaseY = rocketBaseY + rh / 2;
+          var thrustEnd = arrowBaseY - 70;
+          if (thrustEnd < 10) thrustEnd = 10;
+          drawForceArrow(c, el.x - 35, arrowBaseY, thrustEnd, '#50ffb0', t('f0thrust'), 'left', 4);
+
+          // weight arrow (short)
+          drawForceArrow(c, el.x + 35, arrowBaseY, arrowBaseY + 22, '#ff6b4a', t('f0weight'), 'right', 2);
+
+          // motion lines (fast upward)
+          c.strokeStyle = 'rgba(255,255,255,0.25)';
+          c.lineWidth = 1.5;
+          for (var ml = 0; ml < 5; ml++) {
+            var mlx = el.x + (ml - 2) * 16;
+            var mlLen = 20 + Math.random() * 20;
+            c.beginPath();
+            c.moveTo(mlx, rocketBaseY + rh + 25);
+            c.lineTo(mlx, rocketBaseY + rh + 25 + mlLen);
+            c.stroke();
+          }
+        }
+      },
+      {id:'f3hdr', type:'label', text:t('f3title'), x:cx, y:30, color:'#50ffb0', size:16, align:'center', glow:P.glowStrong},
+      {id:'f3twr', type:'label', text:t('f3twr'), x:cx, y:55, color:'#50ffb0', size:20, align:'center', bold:true, glow:'rgba(80,255,176,0.5)'},
+      {id:'f3badge', type:'label', text:t('f3optimal'), x:cx, y:80, color:'#50ffb0', size:12, align:'center'},
+      {id:'f3explain', type:'custom', x:cx, y:H - 45,
+        draw: function(c, el) {
+          var lines = t('f3explain').split('\n');
+          c.font = "11px 'Inter','Noto Sans SC',sans-serif";
+          c.fillStyle = P.muted;
+          c.textAlign = 'center';
+          for (var i = 0; i < lines.length; i++) {
+            c.fillText(lines[i], el.x, el.y + i * 16);
+          }
+        }
+      },
+    ];
+  }
+
+  if (f === 4) {
+    return [
+      {id:'f4hdr', type:'label', text:t('f4title'), x:cx, y:28, color:P.primary, size:16, align:'center', glow:P.glowStrong},
+      {id:'f4matrix', type:'custom', x:cx, y:cy,
+        draw: function(c, el) {
+          var rows = 4; // engines
+          var cols = 4; // masses
+          var cellW = 80;
+          var cellH = 40;
+          var headerH = 28;
+          var headerW = 90;
+          var tableW = headerW + cols * cellW;
+          var tableH = headerH + rows * cellH;
+          var startX = cx - tableW / 2;
+          var startY = 55;
+
+          // column headers (masses)
+          c.font = "bold 10px 'Space Grotesk','Inter',sans-serif";
+          c.textAlign = 'center';
+          for (var ci = 0; ci < cols; ci++) {
+            var colX = startX + headerW + ci * cellW + cellW / 2;
+            c.fillStyle = P.tertiary;
+            c.fillText(massData[ci] * 1000 + 'g', colX, startY + headerH / 2 + 3);
+          }
+
+          // mass header label
+          c.fillStyle = P.muted;
+          c.font = "bold 9px 'Space Grotesk',sans-serif";
+          c.textAlign = 'center';
+          c.fillText(t('f4mass'), startX + headerW + (cols * cellW) / 2, startY + 8);
+
+          // engine header label
+          c.save();
+          c.translate(startX + 12, startY + headerH + (rows * cellH) / 2);
+          c.rotate(-Math.PI / 2);
+          c.fillStyle = P.muted;
+          c.font = "bold 9px 'Space Grotesk',sans-serif";
+          c.textAlign = 'center';
+          c.fillText(t('f4engine'), 0, 0);
+          c.restore();
+
+          // row headers (engines) + cells
+          for (var ri = 0; ri < rows; ri++) {
+            var rowY = startY + headerH + ri * cellH;
+            var eng = engineData[ri];
+
+            // engine name + thrust
+            c.font = "bold 10px 'Space Grotesk','Inter',sans-serif";
+            c.textAlign = 'right';
+            c.fillStyle = P.text;
+            c.fillText(eng.name, startX + headerW - 8, rowY + cellH / 2 - 4);
+            c.font = "9px 'Inter',sans-serif";
+            c.fillStyle = P.muted;
+            c.fillText(eng.thrust + 'N', startX + headerW - 8, rowY + cellH / 2 + 10);
+
+            for (var ci2 = 0; ci2 < cols; ci2++) {
+              var cellX = startX + headerW + ci2 * cellW;
+              var twr = computeTWR(eng.thrust, massData[ci2]);
+              var twrStr = twr.toFixed(1);
+
+              // color code
+              var bgColor, textColor;
+              if (twr >= 5) {
+                bgColor = 'rgba(80,255,176,0.15)';
+                textColor = '#50ffb0';
+              } else if (twr >= 3) {
+                bgColor = 'rgba(240,192,64,0.15)';
+                textColor = '#f0c040';
+              } else {
+                bgColor = 'rgba(255,107,74,0.15)';
+                textColor = '#ff6b4a';
+              }
+
+              // cell background
+              c.fillStyle = bgColor;
+              c.fillRect(cellX + 1, rowY + 1, cellW - 2, cellH - 2);
+
+              // cell border
+              c.strokeStyle = 'rgba(255,255,255,0.08)';
+              c.lineWidth = 1;
+              c.strokeRect(cellX, rowY, cellW, cellH);
+
+              // TWR value
+              c.font = "bold 14px 'Space Grotesk',sans-serif";
+              c.textAlign = 'center';
+              c.fillStyle = textColor;
+
+              // scale punch on render (simulated via glow)
+              c.shadowColor = textColor;
+              c.shadowBlur = 6;
+              c.fillText(twrStr, cellX + cellW / 2, rowY + cellH / 2 + 5);
+              c.shadowBlur = 0;
+            }
+          }
+
+          // legend at bottom
+          var legendY = startY + headerH + rows * cellH + 20;
+          var legendItems = [
+            {color: '#50ffb0', label: t('f4safe')},
+            {color: '#f0c040', label: t('f4caution')},
+            {color: '#ff6b4a', label: t('f4danger')}
+          ];
+          var legendTotalW = legendItems.length * 110;
+          var legendStartX = cx - legendTotalW / 2;
+
+          for (var li = 0; li < legendItems.length; li++) {
+            var lx = legendStartX + li * 110;
+            c.fillStyle = legendItems[li].color;
+            c.fillRect(lx, legendY, 12, 12);
+            c.font = "10px 'Space Grotesk','Inter',sans-serif";
+            c.textAlign = 'left';
+            c.fillText(legendItems[li].label, lx + 18, legendY + 10);
+          }
+
+          // conclusion
+          c.font = "11px 'Inter','Noto Sans SC',sans-serif";
+          c.fillStyle = P.muted;
+          c.textAlign = 'center';
+          c.fillText(t('f4conclusion'), cx, legendY + 34);
+        }
+      },
+    ];
+  }
+
+  return [];
+}
+
+// ============================================================
+// customDrawElement: draw particles on top
+// ============================================================
+function customDrawElement(ctx, el, W, H) {
+  if (el.type === 'custom' && typeof el.draw === 'function') {
+    el.draw(ctx, el);
+    return true;
+  }
+  return false;
+}
+
+// ============================================================
+// Animation loop for particles + time tracking
+// ============================================================
+var _animRunning = false;
+
+function startAnimLoop() {
+  if (_animRunning) return;
+  _animRunning = true;
+  var prev = performance.now();
+
+  function tick(now) {
+    var dt = (now - prev) / 1000;
+    if (dt > 0.1) dt = 0.1;
+    prev = now;
+    animTime += dt;
+
+    updateParticles(dt);
+    updateShake(dt);
+
+    // redraw current frame to get continuous animation
+    AnimRuntime.drawFrame(AnimRuntime.currentFrame);
+
+    // draw particles on top (in real pixel coords, after content scale)
+    if (particles.length > 0) {
+      var c = AnimRuntime.ctx;
+      AnimRuntime.applyContentScale();
+      for (var i = 0; i < particles.length; i++) {
+        var p = particles[i];
+        var alpha = p.life / p.maxLife;
+        c.beginPath();
+        c.arc(p.x, p.y, p.size * alpha, 0, Math.PI * 2);
+        c.fillStyle = p.color;
+        c.globalAlpha = alpha * 0.8;
+        c.shadowColor = p.color;
+        c.shadowBlur = 8;
+        c.fill();
+        c.shadowBlur = 0;
+        c.globalAlpha = 1;
+      }
+      AnimRuntime.restoreContentScale();
+    }
+
+    requestAnimationFrame(tick);
+  }
+  requestAnimationFrame(tick);
+}
+
+function onReady() {
+  startAnimLoop();
+}
+
+// ============================================================
+// BOOT
+// ============================================================
+AnimRuntime.boot();
+</script>
+</body>
+</html>

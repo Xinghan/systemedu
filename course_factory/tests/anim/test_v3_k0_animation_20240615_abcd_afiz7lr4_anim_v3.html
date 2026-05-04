@@ -1,0 +1,559 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>力改变运动状态 — Force Observatory</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:ital,wght@0,300;0,500;0,700;1,300;1,500&family=JetBrains+Mono:wght@400;700&family=Noto+Sans+SC:wght@300;500;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --FIELD: oklch(0.78 0.13 215);
+  --WAVE: oklch(0.55 0.13 215);
+  --MASS: oklch(0.35 0.10 215);
+  --PHOTON: oklch(0.92 0.08 215);
+  --CONSTANT: oklch(0.85 0.14 85);
+  --BG: oklch(0.14 0.035 265);
+  --BG2: oklch(0.18 0.04 265);
+  --ui-glass: rgba(10,14,36,0.65);
+}
+* { margin:0; padding:0; box-sizing:border-box; }
+html,body{
+  width:100%; height:100vh; min-height:100vh; overflow:hidden;
+  background: radial-gradient(1200px 800px at 20% 10%, var(--BG2), var(--BG));
+  font-family: 'Inter', 'Noto Sans SC', sans-serif;
+  color: var(--PHOTON);
+}
+.glass{
+  background: var(--ui-glass);
+  backdrop-filter: blur(12px) saturate(120%);
+  border: 1px solid rgba(140,200,255,0.08);
+  box-shadow: 0 0 40px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.04);
+}
+.mono{ font-family: 'JetBrains Mono', monospace; }
+.corner-accent{
+  position:relative;
+}
+.corner-accent::before{
+  content:''; position:absolute; top:0; left:0; width:12px; height:12px;
+  border-top:2px solid var(--CONSTANT); border-left:2px solid var(--CONSTANT); opacity:0.9;
+}
+.corner-accent::after{
+  content:''; position:absolute; bottom:0; right:0; width:12px; height:12px;
+  border-bottom:2px solid var(--CONSTANT); border-right:2px solid var(--CONSTANT); opacity:0.9;
+}
+
+/* Subtitle area */
+#subtitle-box{
+  position:absolute; bottom:44px; left:50%; transform:translateX(-50%);
+  width:min(920px, 92vw); text-align:center; pointer-events:none; z-index:20;
+}
+.sub-zh{
+  font-size: clamp(18px, 2.4vw, 32px);
+  font-weight:700; color: var(--PHOTON);
+  text-shadow: 0 2px 24px rgba(0,0,0,0.6);
+  letter-spacing: 0.02em; line-height:1.25;
+}
+.sub-en{
+  font-size: clamp(12px, 1.2vw, 16px);
+  font-style: italic; color: var(--FIELD);
+  margin-top:6px; opacity:0.85;
+  text-shadow: 0 1px 12px rgba(0,0,0,0.5);
+}
+
+/* HUD panels */
+.hud-label{ font-size:11px; letter-spacing:0.12em; text-transform:uppercase; color:var(--WAVE); }
+.hud-value{ font-size:20px; font-weight:700; color:var(--PHOTON); }
+.hud-unit{ font-size:12px; color:var(--FIELD); margin-left:2px; }
+
+canvas{ display:block; }
+
+.fade-enter{ animation: fadeIn 0.8s ease both; }
+.fade-exit{ animation: fadeOut 0.6s ease both; }
+@keyframes fadeIn{ from{opacity:0; transform:translateY(8px);} to{opacity:1; transform:translateY(0);} }
+@keyframes fadeOut{ from{opacity:1; transform:translateY(0);} to{opacity:0; transform:translateY(-6px);} }
+
+#title-overlay{
+  position:absolute; inset:0; display:flex; align-items:center; justify-content:center; z-index:50;
+}
+</style>
+</head>
+<body class="h-screen min-h-screen overflow-hidden">
+
+<canvas id="sim" class="absolute inset-0 w-full h-full"></canvas>
+
+<!-- Title Overlay -->
+<div id="title-overlay" class="glass">
+  <div class="text-center p-10 corner-accent">
+    <h1 class="text-4xl md:text-6xl font-bold tracking-tight mb-3" style="color:var(--PHOTON)">力改变运动状态</h1>
+    <p class="text-lg md:text-xl italic mb-8" style="color:var(--FIELD)">Force Changes Motion</p>
+    <div class="mono text-sm" style="color:var(--CONSTANT)">F = m · a</div>
+    <div class="mt-8 text-xs tracking-widest uppercase opacity-60">Press any key or click to begin</div>
+  </div>
+</div>
+
+<!-- HUD Top Left -->
+<div class="absolute top-6 left-6 glass rounded-lg p-4 corner-accent hidden" id="hud-left">
+  <div class="hud-label mb-1">Velocity / 速度</div>
+  <div><span class="hud-value mono" id="hud-v">0.00</span><span class="hud-unit">m/s</span></div>
+  <div class="hud-label mt-3 mb-1">Acceleration / 加速度</div>
+  <div><span class="hud-value mono" id="hud-a">0.00</span><span class="hud-unit">m/s²</span></div>
+</div>
+
+<!-- HUD Top Right -->
+<div class="absolute top-6 right-6 glass rounded-lg p-4 corner-accent hidden" id="hud-right">
+  <div class="hud-label mb-1">Net Force / 合外力</div>
+  <div><span class="hud-value mono" id="hud-f">0.0</span><span class="hud-unit">N</span></div>
+  <div class="hud-label mt-3 mb-1">Mass / 质量</div>
+  <div><span class="hud-value mono">1.50</span><span class="hud-unit">kg</span></div>
+</div>
+
+<!-- Subtitles -->
+<div id="subtitle-box">
+  <div id="sub-zh" class="sub-zh fade-enter">准备就绪</div>
+  <div id="sub-en" class="sub-en fade-enter">Ready</div>
+</div>
+
+<script>
+const canvas = document.getElementById('sim');
+const ctx = canvas.getContext('2d');
+let W, H;
+
+function resize(){
+  W = canvas.width = window.innerWidth;
+  H = canvas.height = window.innerHeight;
+}
+window.addEventListener('resize', resize);
+resize();
+
+// State
+let started = false;
+let sceneIndex = 0;
+let sceneTime = 0;
+let globalTime = 0;
+
+// Physics
+const PHYS = {
+  m: 1.5,
+  x: 0,
+  v: 0,
+  a: 0,
+  f: 0,
+  pxPerMeter: 120,
+  groundY: 0
+};
+
+const CAM = { x: 0, targetX: 0 };
+
+// Echo ghost
+const ECHO = { x: 0, y: 0, v: 0, t: 0 };
+
+// Particles
+const particles = Array.from({length: 60}, () => ({
+  x: Math.random()*2000-1000, y: Math.random()*1000,
+  vx: (Math.random()-0.5)*10, vy: (Math.random()-0.5)*10,
+  size: Math.random()*2+0.5, alpha: Math.random()*0.3+0.1
+}));
+
+// Pendulums
+const pendulums = Array.from({length: 5}, (_,i) => ({
+  x: (i-2)*300, len: 180+Math.random()*60, angle: (Math.random()-0.5)*0.5, speed: 0.3+Math.random()*0.4, phase: Math.random()*Math.PI*2
+}));
+
+// Scene definitions
+const SCENES = [
+  {
+    key: 'push-start',
+    dur: 6,
+    enter(){
+      PHYS.x = -4; PHYS.v = 0; PHYS.a = 0; PHYS.f = 4.5;
+      setSubtitle('静止小车受到向右推力', 'A stationary cart receives a rightward push');
+    },
+    update(dt){
+      PHYS.f = 4.5;
+      if(sceneTime > 1 && sceneTime < 4) PHYS.f = 4.5;
+      else if(sceneTime >= 4) PHYS.f = 0;
+    }
+  },
+  {
+    key: 'coast',
+    dur: 4,
+    enter(){
+      setSubtitle('合外力为零，小车匀速运动', 'Net force zero — cart moves at constant velocity');
+    },
+    update(dt){
+      PHYS.f = 0;
+    }
+  },
+  {
+    key: 'pull-back',
+    dur: 6,
+    enter(){
+      setSubtitle('受到向左拉力，小车减速', 'Leftward pull — cart decelerates');
+    },
+    update(dt){
+      if(sceneTime > 0.5 && sceneTime < 4.5) PHYS.f = -6;
+      else PHYS.f = 0;
+    }
+  },
+  {
+    key: 'stop',
+    dur: 4,
+    enter(){
+      setSubtitle('速度降为零，运动状态改变', 'Velocity drops to zero — motion state changed');
+    },
+    update(dt){
+      PHYS.f = 0;
+      if(Math.abs(PHYS.v) < 0.01) PHYS.v = 0;
+    }
+  }
+];
+
+function setSubtitle(zh, en){
+  const box = document.getElementById('subtitle-box');
+  box.innerHTML = `
+    <div class="sub-zh fade-enter">${zh}</div>
+    <div class="sub-en fade-enter">${en}</div>
+  `;
+}
+
+function stepPhysics(dt){
+  PHYS.a = PHYS.f / PHYS.m;
+  PHYS.v += PHYS.a * dt;
+  PHYS.x += PHYS.v * dt;
+  
+  // Echo
+  ECHO.t += dt;
+  if(ECHO.t > 0.5){
+    ECHO.t = 0;
+    ECHO.x = PHYS.x;
+    ECHO.v = PHYS.v;
+  }
+}
+
+function drawAmbientParticles(camX){
+  ctx.save();
+  particles.forEach(p => {
+    p.x += p.vx * 0.02;
+    p.y += p.vy * 0.02;
+    if(p.x < camX - W) p.x += W*2;
+    if(p.x > camX + W) p.x -= W*2;
+    const sx = p.x - camX*0.3 + W*0.5;
+    const sy = p.y;
+    if(sx < -50 || sx > W+50) return;
+    ctx.fillStyle = `oklch(0.78 0.13 215 / ${p.alpha})`;
+    ctx.beginPath();
+    ctx.arc(sx, sy, p.size, 0, Math.PI*2);
+    ctx.fill();
+  });
+  ctx.restore();
+}
+
+function drawPendulums(camX){
+  ctx.save();
+  const cy = H*0.25;
+  pendulums.forEach((p,i) => {
+    const px = W*0.5 + (p.x - camX*0.2);
+    if(px < -100 || px > W+100) return;
+    const angle = p.angle * Math.sin(globalTime*p.speed + p.phase);
+    const bx = px + Math.sin(angle)*p.len;
+    const by = cy + Math.cos(angle)*p.len;
+    
+    ctx.strokeStyle = 'oklch(0.35 0.10 215 / 0.4)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(px, cy);
+    ctx.lineTo(bx, by);
+    ctx.stroke();
+    
+    ctx.fillStyle = 'oklch(0.55 0.13 215 / 0.6)';
+    ctx.beginPath();
+    ctx.arc(bx, by, 6, 0, Math.PI*2);
+    ctx.fill();
+  });
+  ctx.restore();
+}
+
+function drawGrid(camX, groundY){
+  ctx.save();
+  ctx.strokeStyle = 'oklch(0.35 0.10 215 / 0.15)';
+  ctx.lineWidth = 1;
+  
+  const startX = -camX % 60;
+  for(let x = startX; x < W; x += 60){
+    ctx.beginPath();
+    ctx.moveTo(x, 0);
+    ctx.lineTo(x, H);
+    ctx.stroke();
+  }
+  for(let y = groundY % 60; y < H; y += 60){
+    ctx.beginPath();
+    ctx.moveTo(0, y);
+    ctx.lineTo(W, y);
+    ctx.stroke();
+  }
+  
+  // Ground line
+  ctx.strokeStyle = 'oklch(0.78 0.13 215 / 0.4)';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(0, groundY);
+  ctx.lineTo(W, groundY);
+  ctx.stroke();
+  ctx.restore();
+}
+
+function drawForceField(camX, groundY){
+  if(Math.abs(PHYS.f) < 0.1) return;
+  ctx.save();
+  const dir = PHYS.f > 0 ? 1 : -1;
+  const strength = Math.abs(PHYS.f);
+  const alpha = Math.min(strength/10, 0.25);
+  ctx.fillStyle = PHYS.f > 0 ? `oklch(0.85 0.14 85 / ${alpha})` : `oklch(0.65 0.18 25 / ${alpha})`;
+  
+  const cx = W*0.5;
+  const fieldW = 300;
+  const fieldH = 200;
+  ctx.fillRect(cx - fieldW/2, groundY - fieldH - 60, fieldW, fieldH);
+  
+  // Arrows
+  ctx.strokeStyle = PHYS.f > 0 ? 'oklch(0.85 0.14 85 / 0.6)' : 'oklch(0.65 0.18 25 / 0.6)';
+  ctx.lineWidth = 2;
+  for(let i=0; i<5; i++){
+    const y = groundY - 80 - i*30;
+    const len = 40 + strength*3;
+    ctx.beginPath();
+    ctx.moveTo(cx, y);
+    ctx.lineTo(cx + dir*len, y);
+    ctx.stroke();
+    // Arrowhead
+    ctx.fillStyle = ctx.strokeStyle;
+    ctx.beginPath();
+    ctx.moveTo(cx + dir*len, y);
+    ctx.lineTo(cx + dir*len - dir*8, y-4);
+    ctx.lineTo(cx + dir*len - dir*8, y+4);
+    ctx.fill();
+  }
+  ctx.restore();
+}
+
+function drawCart(camX, groundY, tilt){
+  const cx = W*0.5;
+  const cartW = 80;
+  const cartH = 40;
+  const wheelR = 12;
+  const x = cx - cartW/2;
+  const y = groundY - cartH - wheelR;
+  
+  ctx.save();
+  ctx.translate(cx, groundY - wheelR);
+  ctx.rotate(tilt);
+  ctx.translate(-cx, -(groundY - wheelR));
+  
+  // Body
+  ctx.fillStyle = 'oklch(0.35 0.10 215)';
+  ctx.strokeStyle = 'oklch(0.78 0.13 215 / 0.6)';
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.roundRect(x, y, cartW, cartH, 4);
+  ctx.fill();
+  ctx.stroke();
+  
+  // Glow
+  ctx.shadowColor = 'oklch(0.55 0.13 215 / 0.5)';
+  ctx.shadowBlur = 20;
+  ctx.stroke();
+  ctx.shadowBlur = 0;
+  
+  // Wheels
+  ctx.fillStyle = 'oklch(0.14 0.035 265)';
+  ctx.strokeStyle = 'oklch(0.78 0.13 215 / 0.5)';
+  [-cartW/2 + 15, cartW/2 - 15].forEach(dx => {
+    ctx.beginPath();
+    ctx.arc(cx + dx, groundY - wheelR, wheelR, 0, Math.PI*2);
+    ctx.fill();
+    ctx.stroke();
+    // Spokes
+    const ang = globalTime * PHYS.v * 2;
+    ctx.beginPath();
+    ctx.moveTo(cx + dx, groundY - wheelR);
+    ctx.lineTo(cx + dx + Math.cos(ang)*wheelR, groundY - wheelR + Math.sin(ang)*wheelR);
+    ctx.stroke();
+  });
+  
+  // Velocity vector on cart
+  if(Math.abs(PHYS.v) > 0.1){
+    ctx.strokeStyle = 'oklch(0.92 0.08 215)';
+    ctx.lineWidth = 2;
+    const vScale = PHYS.v * 15;
+    ctx.beginPath();
+    ctx.moveTo(cx, y - 10);
+    ctx.lineTo(cx + vScale, y - 10);
+    ctx.stroke();
+    // Arrowhead
+    ctx.fillStyle = 'oklch(0.92 0.08 215)';
+    ctx.beginPath();
+    ctx.moveTo(cx + vScale, y - 10);
+    ctx.lineTo(cx + vScale - Math.sign(vScale)*6, y - 14);
+    ctx.lineTo(cx + vScale - Math.sign(vScale)*6, y - 6);
+    ctx.fill();
+  }
+  
+  ctx.restore();
+}
+
+function drawEcho(){
+  if(Math.abs(PHYS.v) < 0.2) return;
+  const ghostX = W*0.5 - (PHYS.x - ECHO.x)*PHYS.pxPerMeter;
+  const ghostY = PHYS.groundY - 52;
+  ctx.save();
+  ctx.globalAlpha = 0.25;
+  ctx.strokeStyle = 'oklch(0.55 0.13 215)';
+  ctx.setLineDash([4,4]);
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.moveTo(ghostX, ghostY - 20);
+  ctx.lineTo(ghostX, ghostY + 20);
+  ctx.stroke();
+  ctx.fillStyle = 'oklch(0.55 0.13 215)';
+  ctx.font = '10px JetBrains Mono';
+  ctx.textAlign = 'center';
+  ctx.fillText('Δt = 0.5s', ghostX, ghostY - 25);
+  ctx.restore();
+}
+
+function drawVectorHUD(){
+  // Draw force vector on right side
+  const hudX = W - 140;
+  const hudY = H*0.45;
+  const maxArrow = 80;
+  const fScale = Math.max(-maxArrow, Math.min(maxArrow, PHYS.f * 8));
+  
+  ctx.save();
+  ctx.strokeStyle = PHYS.f > 0 ? 'oklch(0.85 0.14 85)' : PHYS.f < 0 ? 'oklch(0.65 0.18 25)' : 'oklch(0.55 0.13 215)';
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  ctx.moveTo(hudX, hudY);
+  ctx.lineTo(hudX + fScale, hudY);
+  ctx.stroke();
+  
+  if(Math.abs(PHYS.f) > 0.1){
+    ctx.fillStyle = ctx.strokeStyle;
+    ctx.beginPath();
+    ctx.moveTo(hudX + fScale, hudY);
+    ctx.lineTo(hudX + fScale - Math.sign(fScale)*10, hudY-5);
+    ctx.lineTo(hudX + fScale - Math.sign(fScale)*10, hudY+5);
+    ctx.fill();
+  }
+  
+  ctx.fillStyle = 'oklch(0.78 0.13 215)';
+  ctx.font = '11px JetBrains Mono';
+  ctx.textAlign = 'center';
+  ctx.fillText('F_net', hudX, hudY + 24);
+  ctx.restore();
+  
+  // Update DOM HUD
+  document.getElementById('hud-v').textContent = PHYS.v.toFixed(2);
+  document.getElementById('hud-a').textContent = PHYS.a.toFixed(2);
+  document.getElementById('hud-f').textContent = PHYS.f.toFixed(1);
+}
+
+function drawFormulaOverlay(){
+  if(!started) return;
+  const progress = Math.min(1, sceneTime / 1.5);
+  if(progress <= 0) return;
+  const alpha = progress * 0.9;
+  ctx.save();
+  ctx.globalAlpha = alpha;
+  ctx.font = 'bold 18px JetBrains Mono';
+  ctx.textAlign = 'center';
+  ctx.fillStyle = 'oklch(0.85 0.14 85)';
+  ctx.shadowColor = 'oklch(0.85 0.14 85 / 0.4)';
+  ctx.shadowBlur = 10;
+  const cx = W*0.5, y = 80;
+  ctx.fillText('F = m · a', cx, y);
+  ctx.font = '12px JetBrains Mono';
+  ctx.fillStyle = 'oklch(0.78 0.13 215)';
+  ctx.shadowBlur = 0;
+  const aCalc = (PHYS.f/PHYS.m).toFixed(2);
+  ctx.fillText(`${PHYS.f.toFixed(1)} N = 1.50 kg · ${aCalc} m/s²`, cx, y+22);
+  ctx.restore();
+}
+
+// ===== Main Loop =====
+let last = performance.now();
+function loop(now){
+  const rawDt = (now - last)/1000;
+  last = now;
+  const dt = Math.min(rawDt, 0.05);
+  globalTime += dt;
+
+  if(started){
+    const cur = SCENES[sceneIndex];
+    if(cur){
+      if(sceneTime===0 && cur.enter) cur.enter();
+      sceneTime += dt;
+      if(cur.update) cur.update(dt);
+      if(sceneTime >= cur.dur){
+        if(cur.leave) cur.leave();
+        sceneIndex++;
+        sceneTime = 0;
+        if(sceneIndex >= SCENES.length){
+          sceneIndex = 0;
+          PHYS.x = -4; PHYS.v = 0;
+        }
+      }
+    }
+    stepPhysics(dt);
+  }
+
+  const target = (PHYS.x * PHYS.pxPerMeter);
+  CAM.targetX = target;
+  CAM.x += (CAM.targetX - CAM.x) * 0.08;
+  const camX = CAM.x;
+
+  PHYS.groundY = H * 0.75;
+
+  ctx.clearRect(0,0,W,H);
+
+  drawAmbientParticles(camX);
+  drawPendulums(camX);
+  drawGrid(camX, PHYS.groundY);
+  drawForceField(camX, PHYS.groundY);
+  
+  const tilt = -PHYS.a * 0.015;
+  drawCart(camX, PHYS.groundY, tilt);
+  drawVectorHUD();
+  
+  ECHO.x = W - 100;
+  ECHO.y = H*0.22;
+  drawEcho();
+  drawFormulaOverlay();
+
+  requestAnimationFrame(loop);
+}
+
+// Interaction
+function start(){
+  if(started) return;
+  started = true;
+  document.getElementById('title-overlay').classList.add('fade-exit');
+  setTimeout(() => {
+    document.getElementById('title-overlay').style.display = 'none';
+    document.getElementById('hud-left').classList.remove('hidden');
+    document.getElementById('hud-right').classList.remove('hidden');
+  }, 600);
+  sceneIndex = 0;
+  sceneTime = 0;
+  PHYS.x = -4; PHYS.v = 0; PHYS.a = 0; PHYS.f = 0;
+}
+
+window.addEventListener('keydown', start);
+window.addEventListener('pointerdown', start);
+
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>

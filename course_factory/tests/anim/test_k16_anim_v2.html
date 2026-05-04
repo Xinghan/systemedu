@@ -1,0 +1,683 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=Inter:wght@400;500&family=Noto+Sans+SC:wght@400;700&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box;}
+html,body{width:100%;height:100vh;overflow:hidden;}
+body{background:var(--bg,#0c0e12);color:var(--text,#f6f6fc);font-family:'Inter','Noto Sans SC',sans-serif;}
+.wrapper{display:flex;flex-direction:row;height:100vh;overflow:hidden;}
+.sidebar{width:200px;min-width:200px;max-width:200px;display:flex;flex-direction:column;gap:6px;padding:10px;background:rgba(0,0,0,0.5);border-right:1px solid rgba(80,255,176,0.15);overflow-y:auto;}
+.lang-btn{align-self:flex-start;flex-shrink:0;font-family:'Space Grotesk',sans-serif;font-size:10px;font-weight:700;padding:3px 8px;cursor:pointer;border:1px solid rgba(255,181,156,0.25);background:transparent;color:#ffb59c;letter-spacing:1px;}
+.lang-btn:hover{border-color:#ffb59c;background:rgba(255,181,156,0.1);}
+.sidebar h1{font-family:'Space Grotesk',sans-serif;font-size:13px;font-weight:700;color:var(--primary,#50ffb0);margin-top:4px;line-height:1.3;}
+.sidebar .sub{font-size:10px;color:var(--muted,#aaabb0);letter-spacing:0.06em;text-transform:uppercase;}
+.sidebar .frame-ind{font-family:'Space Grotesk',sans-serif;font-size:10px;color:var(--muted,#aaabb0);letter-spacing:0.1em;margin-top:4px;}
+.sidebar .guide-label{font-family:'Space Grotesk',sans-serif;font-size:9px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:var(--primary,#50ffb0);margin-top:8px;}
+.sidebar .guide-content{font-family:'Noto Sans SC',sans-serif;font-size:11px;color:rgba(255,255,255,0.85);line-height:1.5;}
+.sidebar .guide-content ul{padding-left:16px;margin:0;}
+.sidebar .guide-content li{margin-bottom:1px;}
+.anim-main{flex:1;display:flex;flex-direction:column;min-width:0;}
+.canvas-wrap{flex:1;min-height:0;position:relative;}
+canvas{width:100%;height:100%;display:block;}
+.controls{display:flex;justify-content:center;align-items:center;gap:12px;padding:6px 16px;}
+.ctrl-btn{font-family:'Space Grotesk',sans-serif;font-size:11px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;padding:5px 16px;border:none;cursor:pointer;color:var(--bg,#0c0e12);background:linear-gradient(135deg,var(--primary,#50ffb0),var(--primary-dim,#17df93));transition:transform 0.1s,box-shadow 0.2s;box-shadow:0 0 10px var(--glow-strong,rgba(80,255,176,0.3));}
+.ctrl-btn:hover{transform:scale(1.04);}
+.ctrl-btn:active{transform:scale(0.96);}
+.ctrl-btn.secondary{background:var(--glass,rgba(23,26,31,0.92));color:var(--muted,#aaabb0);box-shadow:none;backdrop-filter:blur(12px);}
+.ctrl-btn.secondary:hover{color:var(--primary,#50ffb0);}
+.hud{height:40px;display:flex;align-items:center;justify-content:space-around;background:rgba(0,0,0,0.55);backdrop-filter:blur(12px);padding:0 16px;}
+.hud-item{text-align:center;}
+.hud-label{font-family:'Space Grotesk',sans-serif;font-size:8px;letter-spacing:0.15em;text-transform:uppercase;color:var(--muted,#aaabb0);}
+.hud-val{font-family:'Space Grotesk',sans-serif;font-size:13px;font-weight:700;color:var(--primary,#50ffb0);}
+</style>
+</head>
+<body>
+<div class="wrapper">
+<div class="sidebar">
+<button class="lang-btn" id="langBtn">CN</button>
+<h1 id="title"></h1>
+<div class="sub" id="subtitle"></div>
+<div class="frame-ind" id="frameIndicator"></div>
+<div class="guide-label" id="guideTitle"></div>
+<div class="guide-content" id="guideContent"></div>
+</div>
+<div class="anim-main">
+<div class="canvas-wrap"><canvas id="c"></canvas></div>
+<div class="controls">
+<button class="ctrl-btn secondary" id="btnPrev"></button>
+<button class="ctrl-btn" id="btnPlay"></button>
+<button class="ctrl-btn secondary" id="btnNext"></button>
+</div>
+<div class="hud">
+<div class="hud-item"><div class="hud-label" id="hudL1"></div><div class="hud-val" id="hudV1"></div></div>
+<div class="hud-item"><div class="hud-label" id="hudL2"></div><div class="hud-val" id="hudV2"></div></div>
+<div class="hud-item"><div class="hud-label" id="hudL3"></div><div class="hud-val" id="hudV3"></div></div>
+<div class="hud-item"><div class="hud-label" id="hudL4"></div><div class="hud-val" id="hudV4"></div></div>
+</div>
+</div>
+</div>
+
+<script src="../../../course_factory/runtime/animation_runtime.js"></script>
+
+<script>
+// ============================================================
+// K16: S1 Capstone - 3 Paper Airplanes Comparison Experiment
+// Concept: How to design a fair comparison experiment
+// ============================================================
+
+// Plane colors
+var COL_A = '#ff716c';  // red
+var COL_B = '#85ecff';  // blue
+var COL_C = '#acf900';  // green
+
+// Sample data for 3 planes, 5 flights each
+var DATA = {
+  A: {dist:[4.2,3.8,4.5,4.0,4.3], time:[1.1,0.9,1.2,1.0,1.1]},
+  B: {dist:[5.8,6.2,5.5,6.0,5.9], time:[1.5,1.6,1.4,1.5,1.5]},
+  C: {dist:[3.5,4.8,2.9,5.1,3.2], time:[0.8,1.3,0.7,1.4,0.9]},
+};
+function avg(arr) { var s=0; for(var i=0;i<arr.length;i++) s+=arr[i]; return s/arr.length; }
+var AVG_A = avg(DATA.A.dist), AVG_B = avg(DATA.B.dist), AVG_C = avg(DATA.C.dist);
+
+var CONFIG = {
+  style: 'helix_lab',
+  totalFrames: 5,
+
+  i18n: {
+    title:    {en:'3 Planes Experiment', cn:'3\u6b3e\u98de\u673a\u5bf9\u6bd4\u5b9e\u9a8c'},
+    subtitle: {en:'CAPSTONE PROJECT S1', cn:'S1 \u5927\u4f5c\u4e1a'},
+    coreQ:    {en:'How to make a FAIR comparison?', cn:'\u600e\u4e48\u505a\u4e00\u6b21\u201c\u516c\u5e73\u6bd4\u8f83\u201d\uff1f'},
+    answer:   {en:'Control the variables!', cn:'\u63a7\u5236\u53d8\u91cf\uff01'},
+    // Frame 1: Fair test conditions
+    f1title:  {en:'3 Rules for a Fair Test', cn:'\u516c\u5e73\u6d4b\u8bd5\u7684 3 \u4e2a\u6761\u4ef6'},
+    rule1:    {en:'Same place', cn:'\u540c\u4e00\u573a\u5730'},
+    rule1d:   {en:'Same room, no wind change', cn:'\u540c\u4e00\u4e2a\u623f\u95f4\uff0c\u6ca1\u6709\u98ce\u53d8\u5316'},
+    rule2:    {en:'Same person', cn:'\u540c\u4e00\u4e2a\u4eba\u6295'},
+    rule2d:   {en:'Same throwing technique', cn:'\u540c\u6837\u7684\u6295\u63b7\u65b9\u5f0f'},
+    rule3:    {en:'Same tools', cn:'\u540c\u6837\u7684\u5de5\u5177'},
+    rule3d:   {en:'Same tape measure & timer', cn:'\u540c\u4e00\u628a\u76ae\u5c3a\u548c\u79d2\u8868'},
+    ruleIcon1:{en:'PLACE', cn:'\u573a\u5730'},
+    ruleIcon2:{en:'PERSON', cn:'\u4eba\u5458'},
+    ruleIcon3:{en:'TOOLS', cn:'\u5de5\u5177'},
+    // Frame 2: Data collection
+    f2title:  {en:'Collect Data: 3 Planes x 5 Flights', cn:'\u6536\u96c6\u6570\u636e\uff1a3\u6b3e x 5\u6b21'},
+    planeA:   {en:'Dart A', cn:'\u98de\u9556A'},
+    planeB:   {en:'Glider B', cn:'\u6ed1\u7fd4B'},
+    planeC:   {en:'Wild C', cn:'\u72c2\u91ceC'},
+    dist:     {en:'Dist(m)', cn:'\u8ddd\u79bb(m)'},
+    timeh:    {en:'Time(s)', cn:'\u65f6\u95f4(s)'},
+    trial:    {en:'#', cn:'#'},
+    // Frame 3: Data analysis
+    f3title:  {en:'Analyze: Which Plane Wins?', cn:'\u5206\u6790\uff1a\u54ea\u6b3e\u98de\u673a\u8d62\uff1f'},
+    avgDist:  {en:'Average Distance', cn:'\u5e73\u5747\u98de\u884c\u8ddd\u79bb'},
+    consist:  {en:'Consistency (5 flights)', cn:'\u4e00\u81f4\u6027\uff085\u6b21\u98de\u884c\uff09'},
+    winner:   {en:'B wins! Farthest AND most consistent', cn:'B\u80dc\u51fa\uff01\u98de\u5f97\u6700\u8fdc\u4e14\u6700\u7a33\u5b9a'},
+    meters:   {en:'m', cn:'\u7c73'},
+    // Frame 4: Report structure
+    f4title:  {en:'Your Experiment Report', cn:'\u4f60\u7684\u5b9e\u9a8c\u62a5\u544a'},
+    rp1:      {en:'Question', cn:'\u95ee\u9898'},
+    rp1d:     {en:'Which plane flies farthest?', cn:'\u54ea\u6b3e\u98de\u673a\u98de\u5f97\u6700\u8fdc\uff1f'},
+    rp2:      {en:'Method', cn:'\u65b9\u6cd5'},
+    rp2d:     {en:'3 planes, 5 flights each, measure distance & time', cn:'3\u6b3e\u98de\u673a\uff0c\u5404\u98de5\u6b21\uff0c\u6d4b\u8ddd\u79bb\u548c\u65f6\u95f4'},
+    rp3:      {en:'Data', cn:'\u6570\u636e'},
+    rp3d:     {en:'15 flights recorded in table', cn:'15\u6b21\u98de\u884c\u8bb0\u5f55\u5728\u8868\u683c\u4e2d'},
+    rp4:      {en:'Conclusion', cn:'\u7ed3\u8bba'},
+    rp4d:     {en:'Plane B is best: avg 5.88m, most stable', cn:'\u98de\u673aB\u6700\u597d\uff1a\u5e73\u57485.88m\uff0c\u6700\u7a33\u5b9a'},
+    rp5:      {en:'Next Steps', cn:'\u6539\u8fdb\u5efa\u8bae'},
+    rp5d:     {en:'Try adding wing flaps, test outdoors', cn:'\u5c1d\u8bd5\u52a0\u7ffc\u5c16\u3001\u5ba4\u5916\u6d4b\u8bd5'},
+    motto:    {en:'Data speaks, not feelings!', cn:'\u7528\u6570\u636e\u8bf4\u8bdd\uff0c\u4e0d\u7528\u611f\u89c9\uff01'},
+    // HUD
+    hudFrame: {en:'FRAME', cn:'\u5e27'},
+    hudPhase: {en:'PHASE', cn:'\u9636\u6bb5'},
+    hudPlanes:{en:'PLANES', cn:'\u98de\u673a'},
+    hudFlights:{en:'FLIGHTS', cn:'\u8bd5\u98de'},
+    phDesign: {en:'DESIGN', cn:'\u8bbe\u8ba1'},
+    phCollect:{en:'COLLECT', cn:'\u6536\u96c6'},
+    phAnalyze:{en:'ANALYZE', cn:'\u5206\u6790'},
+    phReport: {en:'REPORT', cn:'\u62a5\u544a'},
+    phIntro:  {en:'INTRO', cn:'\u5f15\u5165'},
+    // Guide
+    guideTitle:{en:'EXPERIMENT GUIDE', cn:'\u5b9e\u9a8c\u6307\u5357'},
+    g1: {en:'Design a fair test with controlled variables', cn:'\u8bbe\u8ba1\u4e00\u4e2a\u63a7\u5236\u53d8\u91cf\u7684\u516c\u5e73\u6d4b\u8bd5'},
+    g2: {en:'Collect data: distance & time for each flight', cn:'\u6536\u96c6\u6570\u636e\uff1a\u6bcf\u6b21\u98de\u884c\u7684\u8ddd\u79bb\u548c\u65f6\u95f4'},
+    g3: {en:'Analyze using averages and consistency', cn:'\u7528\u5e73\u5747\u503c\u548c\u4e00\u81f4\u6027\u5206\u6790'},
+    g4: {en:'Write a report with data-backed conclusions', cn:'\u7528\u6570\u636e\u652f\u6491\u7ed3\u8bba\u5199\u62a5\u544a'},
+  },
+
+  hudLabels: ['hudFrame', 'hudPhase', 'hudPlanes', 'hudFlights'],
+  hudValues: [
+    ['1/5', 'phIntro',  '3', '15'],
+    ['2/5', 'phDesign', '3', '15'],
+    ['3/5', 'phCollect','3', '15'],
+    ['4/5', 'phAnalyze','3', '15'],
+    ['5/5', 'phReport', '3', '15'],
+  ],
+
+  guideTitle: 'guideTitle',
+  guideItems: ['g1', 'g2', 'g3', 'g4'],
+};
+
+// ============================================================
+// HELPER: draw a paper airplane shape
+// ============================================================
+function drawPlane(ctx, x, y, size, color, angle) {
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.rotate(angle || 0);
+  ctx.beginPath();
+  ctx.moveTo(size, 0);
+  ctx.lineTo(-size*0.7, -size*0.45);
+  ctx.lineTo(-size*0.3, 0);
+  ctx.lineTo(-size*0.7, size*0.45);
+  ctx.closePath();
+  ctx.fillStyle = color;
+  ctx.fill();
+  ctx.strokeStyle = 'rgba(255,255,255,0.4)';
+  ctx.lineWidth = 1;
+  ctx.stroke();
+  // fold line
+  ctx.beginPath();
+  ctx.moveTo(size, 0);
+  ctx.lineTo(-size*0.3, 0);
+  ctx.strokeStyle = 'rgba(255,255,255,0.6)';
+  ctx.lineWidth = 0.8;
+  ctx.stroke();
+  ctx.restore();
+}
+
+// ============================================================
+// HELPER: draw a rounded rect card
+// ============================================================
+function drawCard(ctx, x, y, w, h, bg, borderColor) {
+  var r = 6;
+  ctx.beginPath();
+  ctx.moveTo(x+r, y);
+  ctx.lineTo(x+w-r, y);
+  ctx.arcTo(x+w, y, x+w, y+r, r);
+  ctx.lineTo(x+w, y+h-r);
+  ctx.arcTo(x+w, y+h, x+w-r, y+h, r);
+  ctx.lineTo(x+r, y+h);
+  ctx.arcTo(x, y+h, x, y+h-r, r);
+  ctx.lineTo(x, y+r);
+  ctx.arcTo(x, y, x+r, y, r);
+  ctx.closePath();
+  ctx.fillStyle = bg;
+  ctx.fill();
+  if (borderColor) {
+    ctx.strokeStyle = borderColor;
+    ctx.lineWidth = 1;
+    ctx.stroke();
+  }
+}
+
+// ============================================================
+// HELPER: draw flight arc (parabola) for a plane
+// ============================================================
+function drawFlightArc(ctx, x0, y0, dist, peakH, color, alpha, progress) {
+  var prog = progress !== undefined ? progress : 1;
+  var steps = Math.floor(40 * prog);
+  if (steps < 2) return;
+  ctx.beginPath();
+  for (var i = 0; i <= steps; i++) {
+    var t = i / 40;
+    var px = x0 + t * dist;
+    var py = y0 - 4 * peakH * t * (1 - t);
+    if (i === 0) ctx.moveTo(px, py);
+    else ctx.lineTo(px, py);
+  }
+  ctx.strokeStyle = color;
+  ctx.globalAlpha = alpha || 0.6;
+  ctx.lineWidth = 1.5;
+  ctx.setLineDash([4, 3]);
+  ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.globalAlpha = 1;
+  // draw plane at end of arc
+  var et = steps / 40;
+  var ex = x0 + et * dist;
+  var ey = y0 - 4 * peakH * et * (1 - et);
+  // angle from tangent
+  var dt = 0.01;
+  var et2 = Math.min(et + dt, 1);
+  var ex2 = x0 + et2 * dist;
+  var ey2 = y0 - 4 * peakH * et2 * (1 - et2);
+  var angle = Math.atan2(ey2 - ey, ex2 - ex);
+  drawPlane(ctx, ex, ey, 10, color, angle);
+}
+
+// ============================================================
+// FRAME ELEMENTS
+// ============================================================
+function getFrameElements(f, W, H) {
+  var t = AnimRuntime.t;
+  var P = AnimRuntime.PAL;
+  var cx = W / 2, cy = H / 2;
+
+  // Frame 0: Title
+  if (f === 0) {
+    return [
+      {id:'t0', type:'label', text:t('title'), x:cx, y:cy-60, color:P.primary, size:22, align:'center',
+        anim:{prop:'alpha', from:0, to:1, dur:600, ease:'easeOutCubic'}},
+      {id:'t0sub', type:'label', text:t('subtitle'), x:cx, y:cy-35, color:P.muted, size:10, align:'center',
+        anim:{prop:'y', from:cy-25, to:cy-35, dur:500, ease:'easeOutCubic'}},
+      {id:'t0q', type:'label', text:t('coreQ'), x:cx, y:cy+10, color:P.tertiary, size:13, align:'center',
+        anim:{prop:'alpha', from:0, to:1, dur:800, ease:'easeOutCubic'}},
+      {id:'t0a', type:'label', text:t('answer'), x:cx, y:cy+35, color:P.secondary, size:15, align:'center',
+        anim:{prop:'alpha', from:0, to:1, dur:1200, ease:'easeOutCubic'}},
+      // Three planes flying in from left
+      {id:'pa', type:'custom', kind:'titlePlane', color:COL_A, baseX:cx-80, baseY:cy+80, size:16,
+        anim:{prop:'x', from:-20, to:cx-80, dur:700, ease:'easeOutCubic'}},
+      {id:'pb', type:'custom', kind:'titlePlane', color:COL_B, baseX:cx, baseY:cy+90, size:18,
+        anim:{prop:'x', from:-20, to:cx, dur:900, ease:'easeOutCubic'}},
+      {id:'pc', type:'custom', kind:'titlePlane', color:COL_C, baseX:cx+80, baseY:cy+80, size:16,
+        anim:{prop:'x', from:-20, to:cx+80, dur:1100, ease:'easeOutCubic'}},
+    ];
+  }
+
+  // Frame 1: Fair test conditions
+  if (f === 1) {
+    var cardW = 140, cardH = 110, gap = 20;
+    var totalW = cardW * 3 + gap * 2;
+    var sx = cx - totalW / 2;
+    var cardY = cy - 20;
+    var els = [
+      {id:'f1t', type:'label', text:t('f1title'), x:cx, y:40, color:P.primary, size:16, align:'center',
+        anim:{prop:'alpha', from:0, to:1, dur:500}},
+    ];
+    var rules = [
+      {icon:t('ruleIcon1'), title:t('rule1'), desc:t('rule1d'), col:COL_A},
+      {icon:t('ruleIcon2'), title:t('rule2'), desc:t('rule2d'), col:COL_B},
+      {icon:t('ruleIcon3'), title:t('rule3'), desc:t('rule3d'), col:COL_C},
+    ];
+    for (var i = 0; i < 3; i++) {
+      var cx2 = sx + i * (cardW + gap) + cardW / 2;
+      els.push({id:'c1_'+i, type:'custom', kind:'ruleCard', cx:cx2, cy:cardY+cardH/2,
+        w:cardW, h:cardH, rule:rules[i], idx:i,
+        anim:{prop:'alpha', from:0, to:1, dur:600+i*300, ease:'easeOutCubic'}});
+    }
+    // Bottom emphasis
+    els.push({id:'f1eq', type:'label', text:'= ' + t('answer'), x:cx, y:cardY+cardH+40,
+      color:P.secondary, size:14, align:'center',
+      anim:{prop:'alpha', from:0, to:1, dur:1500}});
+    return els;
+  }
+
+  // Frame 2: Data collection - flight arcs + table
+  if (f === 2) {
+    return [
+      {id:'f2t', type:'label', text:t('f2title'), x:cx, y:25, color:P.primary, size:14, align:'center'},
+      {id:'f2arcs', type:'custom', kind:'flightArcs', W:W, H:H},
+      {id:'f2table', type:'custom', kind:'dataTable', W:W, H:H,
+        anim:{prop:'alpha', from:0, to:1, dur:1000, ease:'easeOutCubic'}},
+    ];
+  }
+
+  // Frame 3: Data analysis - bar chart + consistency
+  if (f === 3) {
+    return [
+      {id:'f3t', type:'label', text:t('f3title'), x:cx, y:25, color:P.primary, size:14, align:'center'},
+      {id:'f3bar', type:'custom', kind:'barChart', W:W, H:H,
+        anim:{prop:'alpha', from:0, to:1, dur:600, ease:'easeOutCubic'}},
+      {id:'f3line', type:'custom', kind:'lineChart', W:W, H:H,
+        anim:{prop:'alpha', from:0, to:1, dur:1000, ease:'easeOutCubic'}},
+      {id:'f3win', type:'label', text:t('winner'), x:cx, y:H-25, color:P.secondary, size:11, align:'center',
+        anim:{prop:'alpha', from:0, to:1, dur:1500}},
+    ];
+  }
+
+  // Frame 4: Report structure
+  if (f === 4) {
+    return [
+      {id:'f4t', type:'label', text:t('f4title'), x:cx, y:25, color:P.primary, size:16, align:'center'},
+      {id:'f4rp', type:'custom', kind:'reportCard', W:W, H:H,
+        anim:{prop:'alpha', from:0, to:1, dur:600, ease:'easeOutCubic'}},
+      {id:'f4motto', type:'label', text:t('motto'), x:cx, y:H-20, color:P.secondary, size:13, align:'center',
+        anim:{prop:'alpha', from:0, to:1, dur:1800}},
+    ];
+  }
+
+  return [];
+}
+
+// ============================================================
+// CUSTOM DRAW
+// ============================================================
+function customDrawElement(ctx, el, W, H) {
+  var t = AnimRuntime.t;
+  var P = AnimRuntime.PAL;
+
+  // Title planes
+  if (el.kind === 'titlePlane') {
+    var bx = el._anim_x !== undefined ? el._anim_x : el.baseX;
+    drawPlane(ctx, bx, el.baseY, el.size, el.color, -0.15);
+    return true;
+  }
+
+  // Rule card (frame 1)
+  if (el.kind === 'ruleCard') {
+    var a = el._anim_alpha !== undefined ? el._anim_alpha : 1;
+    ctx.globalAlpha = a;
+    var x = el.cx - el.w/2, y = el.cy - el.h/2;
+    drawCard(ctx, x, y, el.w, el.h, 'rgba(23,26,31,0.7)', el.rule.col);
+    // Icon circle
+    ctx.beginPath();
+    ctx.arc(el.cx, y+28, 16, 0, Math.PI*2);
+    ctx.fillStyle = el.rule.col;
+    ctx.globalAlpha = a * 0.2;
+    ctx.fill();
+    ctx.globalAlpha = a;
+    // Icon text
+    ctx.fillStyle = el.rule.col;
+    ctx.font = '700 8px "Space Grotesk"';
+    ctx.textAlign = 'center';
+    ctx.fillText(el.rule.icon, el.cx, y+31);
+    // Title
+    ctx.fillStyle = '#f6f6fc';
+    ctx.font = '700 12px "Noto Sans SC"';
+    ctx.fillText(el.rule.title, el.cx, y+58);
+    // Description
+    ctx.fillStyle = P.muted;
+    ctx.font = '10px "Noto Sans SC"';
+    // Word wrap the description
+    var words = el.rule.desc;
+    var maxW = el.w - 16;
+    var lines = [];
+    var line = '';
+    for (var ci = 0; ci < words.length; ci++) {
+      line += words[ci];
+      if (ctx.measureText(line).width > maxW) {
+        lines.push(line.slice(0, -1));
+        line = words[ci];
+      }
+    }
+    if (line) lines.push(line);
+    for (var li = 0; li < lines.length; li++) {
+      ctx.fillText(lines[li], el.cx, y+76+li*13);
+    }
+    ctx.globalAlpha = 1;
+    return true;
+  }
+
+  // Flight arcs (frame 2)
+  if (el.kind === 'flightArcs') {
+    var groundY = H * 0.72;
+    var startX = 60;
+    var scale = (W - 140) / 8; // 8m range fits canvas
+    // Ground line
+    ctx.beginPath();
+    ctx.moveTo(40, groundY);
+    ctx.lineTo(W-20, groundY);
+    ctx.strokeStyle = P.outline;
+    ctx.lineWidth = 1;
+    ctx.stroke();
+    // Distance markers
+    ctx.fillStyle = P.muted;
+    ctx.font = '9px "Space Grotesk"';
+    ctx.textAlign = 'center';
+    for (var dm = 0; dm <= 8; dm++) {
+      var dx = startX + dm * scale;
+      ctx.fillText(dm+'m', dx, groundY+14);
+      ctx.beginPath(); ctx.moveTo(dx, groundY-3); ctx.lineTo(dx, groundY+3);
+      ctx.strokeStyle = P.outline; ctx.lineWidth = 0.5; ctx.stroke();
+    }
+    // Draw arcs for each plane (representative flights)
+    var planes = [
+      {id:'A', color:COL_A, flights:[4.2,3.8,4.5], peakH:[55,45,60]},
+      {id:'B', color:COL_B, flights:[5.8,6.2,5.5], peakH:[70,75,65]},
+      {id:'C', color:COL_C, flights:[3.5,4.8,2.9], peakH:[40,55,35]},
+    ];
+    for (var pi = 0; pi < planes.length; pi++) {
+      var pp = planes[pi];
+      for (var fi = 0; fi < pp.flights.length; fi++) {
+        var fdist = pp.flights[fi] * scale;
+        var fpeak = pp.peakH[fi];
+        var fa = 0.3 + fi * 0.15;
+        drawFlightArc(ctx, startX, groundY, fdist, fpeak, pp.color, fa, 1);
+      }
+      // Label
+      ctx.fillStyle = pp.color;
+      ctx.font = '700 10px "Space Grotesk"';
+      ctx.textAlign = 'left';
+      var avgD = avg(pp.flights);
+      ctx.fillText(pp.id, startX + avgD * scale + 14, groundY - 8 - pi*14);
+    }
+    return true;
+  }
+
+  // Data table (frame 2)
+  if (el.kind === 'dataTable') {
+    var a = el._anim_alpha !== undefined ? el._anim_alpha : 1;
+    ctx.globalAlpha = a;
+    var tw = 240, th = 185;
+    var tx = W - tw - 30, ty = 45;
+    drawCard(ctx, tx, ty, tw, th, 'rgba(12,14,18,0.85)', P.outline);
+    // Header
+    var cols = [t('trial'), t('planeA'), t('dist'), t('timeh')];
+    var colW = [28, 55, 55, 55];
+    var cx2 = tx + 10;
+    ctx.font = '700 9px "Space Grotesk"';
+    ctx.textAlign = 'center';
+    for (var ci = 0; ci < 4; ci++) {
+      ctx.fillStyle = ci === 0 ? P.muted : (ci === 1 ? P.primary : (ci === 2 ? COL_B : '#ffb59c'));
+      ctx.fillText(cols[ci], cx2 + colW[ci]/2, ty+16);
+      cx2 += colW[ci] + 6;
+    }
+    // Rows (show subset: A x3, B x3)
+    ctx.font = '10px "Space Grotesk"';
+    var rows = [
+      ['1', t('planeA'), '4.2', '1.1'],
+      ['2', t('planeA'), '3.8', '0.9'],
+      ['3', t('planeA'), '4.5', '1.2'],
+      ['1', t('planeB'), '5.8', '1.5'],
+      ['2', t('planeB'), '6.2', '1.6'],
+      ['3', t('planeB'), '5.5', '1.4'],
+      ['1', t('planeC'), '3.5', '0.8'],
+      ['2', t('planeC'), '4.8', '1.3'],
+      ['3', t('planeC'), '2.9', '0.7'],
+    ];
+    for (var ri = 0; ri < Math.min(rows.length, 9); ri++) {
+      var ry = ty + 30 + ri * 16;
+      cx2 = tx + 10;
+      for (var rci = 0; rci < 4; rci++) {
+        ctx.fillStyle = rci === 0 ? P.muted : (ri < 3 ? COL_A : (ri < 6 ? COL_B : COL_C));
+        if (rci >= 2) ctx.fillStyle = P.text;
+        ctx.fillText(rows[ri][rci], cx2 + colW[rci]/2, ry);
+        cx2 += colW[rci] + 6;
+      }
+    }
+    ctx.globalAlpha = 1;
+    return true;
+  }
+
+  // Bar chart (frame 3)
+  if (el.kind === 'barChart') {
+    var a = el._anim_alpha !== undefined ? el._anim_alpha : 1;
+    ctx.globalAlpha = a;
+    var bx0 = 60, by0 = H * 0.5, bw = 60, bh0 = H * 0.32;
+    var gap2 = 30;
+    var maxDist = 7;
+    // Title
+    ctx.fillStyle = P.muted;
+    ctx.font = '10px "Noto Sans SC"';
+    ctx.textAlign = 'center';
+    ctx.fillText(t('avgDist'), bx0 + (bw*3+gap2*2)/2, 50);
+    // Y axis
+    ctx.beginPath();
+    ctx.moveTo(bx0-10, by0); ctx.lineTo(bx0-10, by0-bh0-10);
+    ctx.strokeStyle = P.outline; ctx.lineWidth = 1; ctx.stroke();
+    for (var yi = 0; yi <= maxDist; yi += 2) {
+      var yy = by0 - (yi/maxDist)*bh0;
+      ctx.fillStyle = P.muted; ctx.font = '8px "Space Grotesk"'; ctx.textAlign = 'right';
+      ctx.fillText(yi+'m', bx0-14, yy+3);
+      ctx.beginPath(); ctx.moveTo(bx0-10, yy); ctx.lineTo(bx0+bw*3+gap2*2+10, yy);
+      ctx.strokeStyle = 'rgba(116,117,122,0.2)'; ctx.stroke();
+    }
+    // Bars
+    var avgs = [AVG_A, AVG_B, AVG_C];
+    var colors = [COL_A, COL_B, COL_C];
+    var labels = [t('planeA'), t('planeB'), t('planeC')];
+    for (var bi = 0; bi < 3; bi++) {
+      var bxx = bx0 + bi * (bw + gap2);
+      var barH = (avgs[bi] / maxDist) * bh0;
+      // Bar
+      ctx.fillStyle = colors[bi];
+      ctx.globalAlpha = a * 0.8;
+      ctx.fillRect(bxx, by0-barH, bw, barH);
+      ctx.globalAlpha = a;
+      // Value on top
+      ctx.fillStyle = colors[bi];
+      ctx.font = '700 11px "Space Grotesk"';
+      ctx.textAlign = 'center';
+      ctx.fillText(avgs[bi].toFixed(1)+'m', bxx+bw/2, by0-barH-6);
+      // Label below
+      ctx.fillStyle = P.text;
+      ctx.font = '10px "Noto Sans SC"';
+      ctx.fillText(labels[bi], bxx+bw/2, by0+14);
+    }
+    // Winner star on B
+    ctx.fillStyle = P.secondary;
+    ctx.font = '700 14px "Space Grotesk"';
+    var starX = bx0 + 1*(bw+gap2) + bw/2;
+    var starY = by0 - (AVG_B/maxDist)*bh0 - 20;
+    ctx.fillText('\u2605', starX, starY);
+    ctx.globalAlpha = 1;
+    return true;
+  }
+
+  // Line chart (frame 3) - consistency
+  if (el.kind === 'lineChart') {
+    var a = el._anim_alpha !== undefined ? el._anim_alpha : 1;
+    ctx.globalAlpha = a;
+    var lx0 = W * 0.52, ly0 = H * 0.5, lw = W * 0.4, lh = H * 0.32;
+    var maxD = 7;
+    // Title
+    ctx.fillStyle = P.muted;
+    ctx.font = '10px "Noto Sans SC"';
+    ctx.textAlign = 'center';
+    ctx.fillText(t('consist'), lx0 + lw/2, 50);
+    // Y axis
+    ctx.beginPath();
+    ctx.moveTo(lx0, ly0); ctx.lineTo(lx0, ly0-lh-10);
+    ctx.strokeStyle = P.outline; ctx.lineWidth = 1; ctx.stroke();
+    // X axis
+    ctx.beginPath();
+    ctx.moveTo(lx0, ly0); ctx.lineTo(lx0+lw+10, ly0);
+    ctx.stroke();
+    // X labels (flight #)
+    ctx.font = '8px "Space Grotesk"'; ctx.textAlign = 'center'; ctx.fillStyle = P.muted;
+    for (var xi = 0; xi < 5; xi++) {
+      var xx = lx0 + (xi+0.5) * lw / 5;
+      ctx.fillText('#'+(xi+1), xx, ly0+12);
+    }
+    // Y labels
+    ctx.textAlign = 'right';
+    for (var yli = 0; yli <= maxD; yli += 2) {
+      var lyy = ly0 - (yli/maxD)*lh;
+      ctx.fillText(yli+'', lx0-6, lyy+3);
+    }
+    // Lines
+    var dsets = [
+      {data:DATA.A.dist, color:COL_A, label:t('planeA')},
+      {data:DATA.B.dist, color:COL_B, label:t('planeB')},
+      {data:DATA.C.dist, color:COL_C, label:t('planeC')},
+    ];
+    for (var di = 0; di < dsets.length; di++) {
+      var ds = dsets[di];
+      ctx.beginPath();
+      for (var dpi = 0; dpi < ds.data.length; dpi++) {
+        var dpx = lx0 + (dpi+0.5) * lw / 5;
+        var dpy = ly0 - (ds.data[dpi] / maxD) * lh;
+        if (dpi === 0) ctx.moveTo(dpx, dpy);
+        else ctx.lineTo(dpx, dpy);
+      }
+      ctx.strokeStyle = ds.color;
+      ctx.lineWidth = 2;
+      ctx.stroke();
+      // Dots
+      for (var ddi = 0; ddi < ds.data.length; ddi++) {
+        var ddx = lx0 + (ddi+0.5) * lw / 5;
+        var ddy = ly0 - (ds.data[ddi] / maxD) * lh;
+        ctx.beginPath(); ctx.arc(ddx, ddy, 3, 0, Math.PI*2);
+        ctx.fillStyle = ds.color; ctx.fill();
+      }
+    }
+    // Legend
+    for (var lgi = 0; lgi < dsets.length; lgi++) {
+      var lgx = lx0 + lgi * 80;
+      var lgy = ly0 + 26;
+      ctx.fillStyle = dsets[lgi].color;
+      ctx.fillRect(lgx, lgy-4, 10, 3);
+      ctx.font = '9px "Noto Sans SC"';
+      ctx.textAlign = 'left';
+      ctx.fillText(dsets[lgi].label, lgx+14, lgy);
+    }
+    ctx.globalAlpha = 1;
+    return true;
+  }
+
+  // Report card (frame 4)
+  if (el.kind === 'reportCard') {
+    var a = el._anim_alpha !== undefined ? el._anim_alpha : 1;
+    ctx.globalAlpha = a;
+    var rw = Math.min(W * 0.7, 500), rh = 280;
+    var rx = (W - rw) / 2, ry = 50;
+    drawCard(ctx, rx, ry, rw, rh, 'rgba(23,26,31,0.7)', P.primaryDim);
+    // Report items
+    var items = [
+      {icon:'\u2753', label:t('rp1'), desc:t('rp1d'), col:'#85ecff'},
+      {icon:'\u2699', label:t('rp2'), desc:t('rp2d'), col:'#acf900'},
+      {icon:'\u2630', label:t('rp3'), desc:t('rp3d'), col:'#ffb59c'},
+      {icon:'\u2714', label:t('rp4'), desc:t('rp4d'), col:P.primary},
+      {icon:'\u2197', label:t('rp5'), desc:t('rp5d'), col:P.secondary},
+    ];
+    for (var ii = 0; ii < items.length; ii++) {
+      var itm = items[ii];
+      var iy = ry + 24 + ii * 50;
+      // Icon circle
+      ctx.beginPath();
+      ctx.arc(rx+30, iy+10, 14, 0, Math.PI*2);
+      ctx.fillStyle = itm.col;
+      ctx.globalAlpha = a * 0.15;
+      ctx.fill();
+      ctx.globalAlpha = a;
+      // Icon
+      ctx.fillStyle = itm.col;
+      ctx.font = '14px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText(itm.icon, rx+30, iy+15);
+      // Label
+      ctx.fillStyle = itm.col;
+      ctx.font = '700 12px "Noto Sans SC"';
+      ctx.textAlign = 'left';
+      ctx.fillText(itm.label, rx+54, iy+6);
+      // Description
+      ctx.fillStyle = P.text;
+      ctx.font = '10px "Noto Sans SC"';
+      ctx.fillText(itm.desc, rx+54, iy+22);
+      // Separator line
+      if (ii < items.length - 1) {
+        ctx.beginPath();
+        ctx.moveTo(rx+20, iy+38);
+        ctx.lineTo(rx+rw-20, iy+38);
+        ctx.strokeStyle = 'rgba(116,117,122,0.2)';
+        ctx.lineWidth = 0.5;
+        ctx.stroke();
+      }
+    }
+    ctx.globalAlpha = 1;
+    return true;
+  }
+
+  return false;
+}
+
+// ============================================================
+// BOOT
+// ============================================================
+AnimRuntime.boot();
+</script>
+</body>
+</html>

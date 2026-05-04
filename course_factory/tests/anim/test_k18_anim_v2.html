@@ -1,0 +1,1201 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=Inter:wght@400;500&family=Noto+Sans+SC:wght@400;700&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box;}
+html,body{width:100%;height:100vh;overflow:hidden;}
+body{background:var(--bg,#0c0e12);color:var(--text,#f6f6fc);font-family:'Inter','Noto Sans SC',sans-serif;}
+/* ── Outer: sidebar + main ── */
+.wrapper{display:flex;flex-direction:row;height:100vh;overflow:hidden;}
+.sidebar{width:200px;min-width:200px;max-width:200px;display:flex;flex-direction:column;gap:6px;padding:10px;background:rgba(0,0,0,0.5);border-right:1px solid rgba(80,255,176,0.15);overflow-y:auto;}
+.lang-btn{align-self:flex-start;flex-shrink:0;font-family:'Space Grotesk',sans-serif;font-size:10px;font-weight:700;padding:3px 8px;cursor:pointer;border:1px solid rgba(255,181,156,0.25);background:transparent;color:#ffb59c;letter-spacing:1px;}
+.lang-btn:hover{border-color:#ffb59c;background:rgba(255,181,156,0.1);}
+.sidebar h1{font-family:'Space Grotesk',sans-serif;font-size:13px;font-weight:700;color:var(--primary,#50ffb0);margin-top:4px;line-height:1.3;}
+.sidebar .sub{font-size:10px;color:var(--muted,#aaabb0);letter-spacing:0.06em;text-transform:uppercase;}
+.sidebar .frame-ind{font-family:'Space Grotesk',sans-serif;font-size:10px;color:var(--muted,#aaabb0);letter-spacing:0.1em;margin-top:4px;}
+.sidebar .guide-label{font-family:'Space Grotesk',sans-serif;font-size:9px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:var(--primary,#50ffb0);margin-top:8px;}
+.sidebar .guide-content{font-family:'Noto Sans SC',sans-serif;font-size:11px;color:rgba(255,255,255,0.85);line-height:1.5;}
+.sidebar .guide-content ul{padding-left:16px;margin:0;}
+.sidebar .guide-content li{margin-bottom:1px;}
+/* ── Main area: canvas + controls + hud ── */
+.anim-main{flex:1;display:flex;flex-direction:column;min-width:0;}
+.canvas-wrap{flex:1;min-height:0;position:relative;}
+canvas{width:100%;height:100%;display:block;}
+/* ── Controls + HUD ── */
+.controls{display:flex;justify-content:center;align-items:center;gap:12px;padding:6px 16px;}
+.ctrl-btn{font-family:'Space Grotesk',sans-serif;font-size:11px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;padding:5px 16px;border:none;cursor:pointer;color:var(--bg,#0c0e12);background:linear-gradient(135deg,var(--primary,#50ffb0),var(--primary-dim,#17df93));transition:transform 0.1s,box-shadow 0.2s;box-shadow:0 0 10px var(--glow-strong,rgba(80,255,176,0.3));}
+.ctrl-btn:hover{transform:scale(1.04);}
+.ctrl-btn:active{transform:scale(0.96);}
+.ctrl-btn.secondary{background:var(--glass,rgba(23,26,31,0.92));color:var(--muted,#aaabb0);box-shadow:none;backdrop-filter:blur(12px);}
+.ctrl-btn.secondary:hover{color:var(--primary,#50ffb0);}
+.hud{height:40px;display:flex;align-items:center;justify-content:space-around;background:rgba(0,0,0,0.55);backdrop-filter:blur(12px);padding:0 16px;}
+.hud-item{text-align:center;}
+.hud-label{font-family:'Space Grotesk',sans-serif;font-size:8px;letter-spacing:0.15em;text-transform:uppercase;color:var(--muted,#aaabb0);}
+.hud-val{font-family:'Space Grotesk',sans-serif;font-size:13px;font-weight:700;color:var(--primary,#50ffb0);}
+</style>
+</head>
+<body>
+<div class="wrapper">
+<!-- Sidebar: lang-btn, title, guide (completely separate from canvas) -->
+<div class="sidebar">
+<button class="lang-btn" id="langBtn">CN</button>
+<h1 id="title"></h1>
+<div class="sub" id="subtitle"></div>
+<div class="frame-ind" id="frameIndicator"></div>
+<div class="guide-label" id="guideTitle"></div>
+<div class="guide-content" id="guideContent"></div>
+</div>
+<!-- Main: canvas fills all space, nothing overlaps -->
+<div class="anim-main">
+<div class="canvas-wrap"><canvas id="c"></canvas></div>
+<div class="controls">
+<button class="ctrl-btn secondary" id="btnPrev"></button>
+<button class="ctrl-btn" id="btnPlay"></button>
+<button class="ctrl-btn secondary" id="btnNext"></button>
+</div>
+<div class="hud">
+<div class="hud-item"><div class="hud-label" id="hudL1"></div><div class="hud-val" id="hudV1"></div></div>
+<div class="hud-item"><div class="hud-label" id="hudL2"></div><div class="hud-val" id="hudV2"></div></div>
+<div class="hud-item"><div class="hud-label" id="hudL3"></div><div class="hud-val" id="hudV3"></div></div>
+<div class="hud-item"><div class="hud-label" id="hudL4"></div><div class="hud-val" id="hudV4"></div></div>
+</div>
+</div>
+</div>
+
+<!-- Runtime (shared skeleton) -->
+<script src="animation_runtime.js"></script>
+
+<!-- Content -->
+<script>
+// ============================================================
+// K18: Mass vs Weight -- mass stays constant, weight changes with gravity
+// Concept: mass is invariant but weight follows gravity
+// Core question: astronauts jump higher on moon -- did they get thinner?
+// 5 frames:
+//   F0 - Title: MASS vs WEIGHT, astronaut silhouette, core question
+//   F1 - Earth: 80kg/784N, g=9.8, jump ~0.5m
+//   F2 - Moon: 80kg/131N, g=1.6, jump ~3m
+//   F3 - Jupiter: 80kg/1984N, g=24.8, jump ~0.2m, screen shake
+//   F4 - Space: 80kg/0N, g=0, float + inertia demo with satellite
+// ============================================================
+
+var CONFIG = {
+  style: 'ares_mission',
+  totalFrames: 5,
+
+  i18n: {
+    title:       {en:'MASS vs WEIGHT', cn:'\u8d28\u91cf vs \u91cd\u91cf'},
+    subtitle:    {en:'Mass is invariant, weight follows gravity', cn:'\u8d28\u91cf\u4e0d\u53d8\uff0c\u91cd\u91cf\u968f\u91cd\u529b\u53d8\u5316'},
+    f0question:  {en:'Why can astronauts jump higher on the Moon?\nDid they lose weight?', cn:'\u6708\u7403\u4e0a\u7684\u5b87\u822a\u5458\u4e3a\u4ec0\u4e48\u80fd\u8df3\u5f97\u6bd4\u5730\u7403\u9ad8\uff1f\n\u4ed6\u4eec\u53d8\u7626\u4e86\u5417\uff1f'},
+    f0massEq:    {en:'Mass = amount of matter (constant)', cn:'\u8d28\u91cf = \u7269\u8d28\u7684\u91cf (\u6052\u5b9a\u4e0d\u53d8)'},
+    f0weightEq:  {en:'Weight = Mass x Gravity (changes!)', cn:'\u91cd\u91cf = \u8d28\u91cf x \u91cd\u529b\u52a0\u901f\u5ea6 (\u4f1a\u53d8!)'},
+    f1title:     {en:'EARTH', cn:'\u5730\u7403'},
+    f1gravity:   {en:'g = 9.8 m/s\u00b2', cn:'g = 9.8 m/s\u00b2'},
+    f1mass:      {en:'Mass: 80 kg', cn:'\u8d28\u91cf: 80 kg'},
+    f1weight:    {en:'Weight: 784 N', cn:'\u91cd\u91cf: 784 N'},
+    f1jump:      {en:'Jump: ~0.5 m', cn:'\u8df3\u8dc3: ~0.5 m'},
+    f1formula:   {en:'W = m x g = 80 x 9.8 = 784 N', cn:'W = m x g = 80 x 9.8 = 784 N'},
+    f2title:     {en:'MOON', cn:'\u6708\u7403'},
+    f2gravity:   {en:'g = 1.6 m/s\u00b2', cn:'g = 1.6 m/s\u00b2'},
+    f2mass:      {en:'Mass: 80 kg (same!)', cn:'\u8d28\u91cf: 80 kg (\u4e0d\u53d8!)'},
+    f2weight:    {en:'Weight: 131 N', cn:'\u91cd\u91cf: 131 N'},
+    f2jump:      {en:'Jump: ~3 m!', cn:'\u8df3\u8dc3: ~3 m!'},
+    f2formula:   {en:'W = m x g = 80 x 1.6 = 131 N', cn:'W = m x g = 80 x 1.6 = 131 N'},
+    f2same:      {en:'Same person, same mass!', cn:'\u540c\u4e00\u4e2a\u4eba\uff0c\u540c\u6837\u7684\u8d28\u91cf!'},
+    f3title:     {en:'JUPITER', cn:'\u6728\u661f'},
+    f3gravity:   {en:'g = 24.8 m/s\u00b2', cn:'g = 24.8 m/s\u00b2'},
+    f3mass:      {en:'Mass: 80 kg (same!)', cn:'\u8d28\u91cf: 80 kg (\u4e0d\u53d8!)'},
+    f3weight:    {en:'Weight: 1984 N', cn:'\u91cd\u91cf: 1984 N'},
+    f3jump:      {en:'Jump: ~0.2 m', cn:'\u8df3\u8dc3: ~0.2 m'},
+    f3formula:   {en:'W = m x g = 80 x 24.8 = 1984 N', cn:'W = m x g = 80 x 24.8 = 1984 N'},
+    f3heavy:     {en:'2.5x Earth weight!', cn:'\u5730\u7403\u91cd\u91cf\u76842.5\u500d!'},
+    f4title:     {en:'DEEP SPACE (zero-g)', cn:'\u6df1\u7a7a (\u96f6\u91cd\u529b)'},
+    f4gravity:   {en:'g = 0', cn:'g = 0'},
+    f4mass:      {en:'Mass: 80 kg (still!)', cn:'\u8d28\u91cf: 80 kg (\u4ecd\u7136!)'},
+    f4weight:    {en:'Weight: 0 N', cn:'\u91cd\u91cf: 0 N'},
+    f4float:     {en:'Floats freely', cn:'\u81ea\u7531\u6f02\u6d6e'},
+    f4inertia:   {en:'But pushing heavy things\nis still hard -- INERTIA!', cn:'\u4f46\u63a8\u52a8\u91cd\u7269\u4ecd\u7136\u5f88\u96be\n\u8fd9\u5c31\u662f\u60ef\u6027!'},
+    f4satellite: {en:'5000 kg satellite', cn:'5000 kg \u536b\u661f'},
+    f4push:      {en:'Push!', cn:'\u63a8!'},
+    f4barely:    {en:'Barely moves...', cn:'\u51e0\u4e4e\u4e0d\u52a8...'},
+    f4key:       {en:'Mass = resistance to acceleration\nWeight = gravitational pull', cn:'\u8d28\u91cf = \u62b5\u6297\u52a0\u901f\u7684\u80fd\u529b\n\u91cd\u91cf = \u91cd\u529b\u7684\u62c9\u529b'},
+    guideTitle:  {en:'OBSERVATION GUIDE', cn:'\u89c2\u5bdf\u6307\u5357'},
+    g1:          {en:'Mass stays 80 kg everywhere', cn:'\u8d28\u91cf\u5728\u4efb\u4f55\u5730\u65b9\u90fd\u662f 80 kg'},
+    g2:          {en:'Weight = Mass x g, changes with location', cn:'\u91cd\u91cf = \u8d28\u91cf x g\uff0c\u968f\u5730\u70b9\u53d8\u5316'},
+    g3:          {en:'Zero-g: weight=0 but mass unchanged (inertia)', cn:'\u96f6\u91cd\u529b: \u91cd\u91cf=0 \u4f46\u8d28\u91cf\u4e0d\u53d8(\u60ef\u6027)'},
+    hudLocation: {en:'LOCATION', cn:'\u5730\u70b9'},
+    hudMass:     {en:'MASS', cn:'\u8d28\u91cf'},
+    hudWeight:   {en:'WEIGHT', cn:'\u91cd\u91cf'},
+    hudGravity:  {en:'GRAVITY', cn:'\u91cd\u529b'},
+  },
+
+  hudLabels: ['hudLocation', 'hudMass', 'hudWeight', 'hudGravity'],
+  hudValues: [
+    ['--',       '--',    '--',      '--'],
+    ['f1title',  '80 kg', '784 N',  '9.8 m/s\u00b2'],
+    ['f2title',  '80 kg', '131 N',  '1.6 m/s\u00b2'],
+    ['f3title',  '80 kg', '1984 N', '24.8 m/s\u00b2'],
+    ['f4title',  '80 kg', '0 N',    '0 m/s\u00b2'],
+  ],
+
+  guideTitle: 'guideTitle',
+  guideItems: ['g1', 'g2', 'g3'],
+};
+
+// ============================================================
+// Animation state
+// ============================================================
+var animState = {progress: 0, frameTracked: -1};
+var animTimer = null;
+var soundMuted = true;
+
+// Web Audio synth (muted by default)
+var audioCtx = null;
+function initAudio() {
+  if (!audioCtx) {
+    try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); }
+    catch (e) { audioCtx = null; }
+  }
+}
+function playTone(freq, dur, vol) {
+  if (soundMuted || !audioCtx) return;
+  var osc = audioCtx.createOscillator();
+  var gain = audioCtx.createGain();
+  osc.frequency.value = freq;
+  osc.type = 'sine';
+  gain.gain.setValueAtTime(vol || 0.05, audioCtx.currentTime);
+  gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + dur);
+  osc.connect(gain);
+  gain.connect(audioCtx.destination);
+  osc.start();
+  osc.stop(audioCtx.currentTime + dur);
+}
+
+function startAnim(targetFrame) {
+  if (animTimer) { cancelAnimationFrame(animTimer); animTimer = null; }
+  animState = {progress: 0, frameTracked: targetFrame};
+  var lastTime = 0;
+  function tick(ts) {
+    if (animState.frameTracked !== AnimRuntime.currentFrame) return;
+    if (!lastTime) lastTime = ts;
+    var delta = (ts - lastTime) / 1000;
+    lastTime = ts;
+    animState.progress += delta * 0.35;
+    if (animState.progress > 1.0) animState.progress = 1.0;
+    AnimRuntime.drawFrame(AnimRuntime.currentFrame);
+    if (animState.progress < 1.0) {
+      animTimer = requestAnimationFrame(tick);
+    }
+  }
+  animTimer = requestAnimationFrame(tick);
+}
+
+// Frame change detector
+var _prevFrame18 = -1;
+var _frameCheckTimer18 = null;
+function frameCheck18() {
+  var cf = AnimRuntime.currentFrame;
+  if (cf !== _prevFrame18) {
+    _prevFrame18 = cf;
+    initAudio();
+    particles = [];
+    shakeAmount = 0;
+    if (cf >= 1 && cf <= 4) {
+      startAnim(cf);
+    } else {
+      if (animTimer) { cancelAnimationFrame(animTimer); animTimer = null; }
+    }
+  }
+  _frameCheckTimer18 = requestAnimationFrame(frameCheck18);
+}
+_frameCheckTimer18 = requestAnimationFrame(frameCheck18);
+
+// ============================================================
+// Star field (2-layer parallax)
+// ============================================================
+var starLayerFar = [];
+var starLayerNear = [];
+var starsGenW = 0;
+var starsGenH = 0;
+
+function generateStars(tw, th) {
+  if (starsGenW === tw && starsGenH === th) return;
+  starsGenW = tw; starsGenH = th;
+  starLayerFar = [];
+  starLayerNear = [];
+  var rng = 54321;
+  function nxt() { rng = (rng * 1103515245 + 12345) & 0x7fffffff; return rng; }
+  var farCount = 140;
+  var nearCount = 70;
+  for (var si = 0; si < farCount; si++) {
+    starLayerFar.push({
+      x: nxt() % Math.max(1, Math.floor(tw * 1.1)),
+      y: nxt() % Math.max(1, Math.floor(th)),
+      r: 0.3 + (nxt() % 10) / 20,
+      phase: (nxt() % 1000) / 1000,
+      bright: 0.25 + (nxt() % 50) / 100
+    });
+  }
+  for (var sj = 0; sj < nearCount; sj++) {
+    starLayerNear.push({
+      x: nxt() % Math.max(1, Math.floor(tw * 1.1)),
+      y: nxt() % Math.max(1, Math.floor(th * 0.75)),
+      r: 0.5 + (nxt() % 15) / 20,
+      phase: (nxt() % 1000) / 1000,
+      bright: 0.45 + (nxt() % 40) / 100
+    });
+  }
+}
+
+// ============================================================
+// Particle system -- jump bursts, landing impacts
+// ============================================================
+var particles = [];
+var pSeed = 77;
+function nextPSeed() { pSeed = (pSeed * 1103515245 + 12345) & 0x7fffffff; return pSeed; }
+
+function spawnBurst(bx, by, count, speedMax, col, maxLife) {
+  for (var pi = 0; pi < count; pi++) {
+    var ang = (nextPSeed() % 360) * Math.PI / 180;
+    var spd = 0.4 + (nextPSeed() % Math.floor(speedMax * 100)) / 100;
+    particles.push({
+      x: bx, y: by,
+      vx: Math.cos(ang) * spd,
+      vy: Math.sin(ang) * spd - 0.8,
+      life: maxLife || 1,
+      maxLife: maxLife || 1,
+      col: col,
+      sz: 0.8 + (nextPSeed() % 25) / 10
+    });
+  }
+}
+
+function tickParticles(ctx2, dt) {
+  var alive = [];
+  for (var pi = 0; pi < particles.length; pi++) {
+    var pp = particles[pi];
+    pp.x += pp.vx;
+    pp.y += pp.vy;
+    pp.vy += 0.04;
+    pp.life -= dt * 0.025;
+    if (pp.life <= 0) continue;
+    alive.push(pp);
+    var al = pp.life / pp.maxLife;
+    ctx2.globalAlpha = al * 0.75;
+    ctx2.fillStyle = pp.col;
+    ctx2.beginPath();
+    ctx2.arc(pp.x, pp.y, pp.sz * al, 0, Math.PI * 2);
+    ctx2.fill();
+  }
+  ctx2.globalAlpha = 1;
+  particles = alive;
+}
+
+// ============================================================
+// Screen shake (Jupiter landing)
+// ============================================================
+var shakeAmount = 0;
+var shakeDecay = 0.9;
+
+// Track whether burst already spawned per frame to avoid duplicates
+var burstSpawned = {};
+
+// ============================================================
+// Drawing helpers
+// ============================================================
+
+function drawAstronaut(ctx2, centerX, footY, bodyH, P, breathePhase) {
+  var bOff = breathePhase !== undefined ? Math.sin(breathePhase) * 1.2 : 0;
+  var headR = bodyH * 0.2;
+  var torsoH = bodyH * 0.38;
+  var torsoW = bodyH * 0.30;
+  var legH = bodyH * 0.32;
+  var legW = bodyH * 0.09;
+
+  // Legs
+  ctx2.fillStyle = P.secondary;
+  ctx2.fillRect(centerX - torsoW * 0.33, footY - legH, legW, legH);
+  ctx2.fillRect(centerX + torsoW * 0.33 - legW, footY - legH, legW, legH);
+
+  // Boots
+  ctx2.fillStyle = P.surface;
+  ctx2.fillRect(centerX - torsoW * 0.33 - 2, footY - 4, legW + 4, 4);
+  ctx2.fillRect(centerX + torsoW * 0.33 - legW - 2, footY - 4, legW + 4, 4);
+
+  // Torso
+  var torsoY = footY - legH - torsoH + bOff;
+  var tg = ctx2.createLinearGradient(centerX - torsoW / 2, torsoY, centerX + torsoW / 2, torsoY + torsoH);
+  tg.addColorStop(0, 'rgba(240,240,245,0.92)');
+  tg.addColorStop(1, 'rgba(190,190,200,0.75)');
+  ctx2.fillStyle = tg;
+  ctx2.fillRect(centerX - torsoW / 2, torsoY, torsoW, torsoH);
+
+  // Backpack (life support)
+  ctx2.fillStyle = P.surface;
+  ctx2.fillRect(centerX + torsoW / 2, torsoY + 4, torsoW * 0.28, torsoH - 8);
+  ctx2.strokeStyle = P.outline;
+  ctx2.lineWidth = 0.5;
+  ctx2.strokeRect(centerX + torsoW / 2, torsoY + 4, torsoW * 0.28, torsoH - 8);
+
+  // Arms
+  ctx2.fillStyle = 'rgba(220,220,230,0.8)';
+  ctx2.fillRect(centerX - torsoW / 2 - legW, torsoY + 4, legW, torsoH * 0.7);
+  ctx2.fillRect(centerX + torsoW / 2 + torsoW * 0.28, torsoY + 4, legW, torsoH * 0.7);
+
+  // Helmet
+  var headCy = torsoY - headR * 0.5 + bOff;
+  ctx2.beginPath();
+  ctx2.arc(centerX, headCy, headR, 0, Math.PI * 2);
+  ctx2.fillStyle = 'rgba(245,245,250,0.95)';
+  ctx2.fill();
+  ctx2.strokeStyle = P.outline;
+  ctx2.lineWidth = 0.8;
+  ctx2.stroke();
+
+  // Visor
+  ctx2.beginPath();
+  ctx2.arc(centerX, headCy + 1, headR * 0.62, 0, Math.PI * 2);
+  var visorG = ctx2.createRadialGradient(centerX - 2, headCy - 1, 0, centerX, headCy, headR * 0.62);
+  visorG.addColorStop(0, 'rgba(160,200,255,0.55)');
+  visorG.addColorStop(1, 'rgba(40,70,110,0.88)');
+  ctx2.fillStyle = visorG;
+  ctx2.fill();
+
+  // Visor highlight
+  ctx2.beginPath();
+  ctx2.arc(centerX - headR * 0.2, headCy - headR * 0.18, headR * 0.13, 0, Math.PI * 2);
+  ctx2.fillStyle = 'rgba(255,255,255,0.3)';
+  ctx2.fill();
+}
+
+function drawScale(ctx2, centerX, baseY, sw, massText, weightText, P) {
+  // Platform
+  var platH = 5;
+  var platG = ctx2.createLinearGradient(centerX - sw / 2, baseY, centerX + sw / 2, baseY);
+  platG.addColorStop(0, P.surface);
+  platG.addColorStop(0.5, 'rgba(255,255,255,0.12)');
+  platG.addColorStop(1, P.surface);
+  ctx2.fillStyle = platG;
+  ctx2.fillRect(centerX - sw / 2, baseY, sw, platH);
+  ctx2.strokeStyle = P.outline;
+  ctx2.lineWidth = 0.8;
+  ctx2.strokeRect(centerX - sw / 2, baseY, sw, platH);
+
+  // Stand
+  ctx2.fillStyle = P.surface;
+  ctx2.fillRect(centerX - 2.5, baseY + platH, 5, 12);
+
+  // Display
+  var dw = sw * 0.75;
+  var dh = 30;
+  var dx = centerX - dw / 2;
+  var dy = baseY + platH + 14;
+  ctx2.fillStyle = 'rgba(0,0,0,0.55)';
+  ctx2.fillRect(dx, dy, dw, dh);
+  ctx2.strokeStyle = P.primaryDim;
+  ctx2.lineWidth = 0.6;
+  ctx2.strokeRect(dx, dy, dw, dh);
+
+  // Mass readout
+  ctx2.font = "bold 8px 'Space Grotesk',sans-serif";
+  ctx2.fillStyle = P.primary;
+  ctx2.textAlign = 'center';
+  ctx2.shadowColor = P.primary;
+  ctx2.shadowBlur = 6;
+  ctx2.fillText(massText, centerX, dy + 11);
+  ctx2.shadowBlur = 0;
+
+  // Weight readout
+  ctx2.fillStyle = P.tertiary;
+  ctx2.fillText(weightText, centerX, dy + 23);
+}
+
+function drawGravityArrow(ctx2, arrowX, startY, arrowLen, gLabel, P, glowCol) {
+  var col = glowCol || P.primaryDim;
+  ctx2.strokeStyle = col;
+  ctx2.lineWidth = Math.min(4, 1.5 + arrowLen / 40);
+  ctx2.shadowColor = col;
+  ctx2.shadowBlur = 10;
+  ctx2.beginPath();
+  ctx2.moveTo(arrowX, startY);
+  ctx2.lineTo(arrowX, startY + arrowLen);
+  ctx2.stroke();
+  ctx2.shadowBlur = 0;
+
+  // Head
+  var hs = Math.min(8, 4 + arrowLen / 30);
+  ctx2.fillStyle = col;
+  ctx2.beginPath();
+  ctx2.moveTo(arrowX, startY + arrowLen + hs);
+  ctx2.lineTo(arrowX - hs, startY + arrowLen);
+  ctx2.lineTo(arrowX + hs, startY + arrowLen);
+  ctx2.closePath();
+  ctx2.fill();
+
+  // Label
+  ctx2.font = "bold 9px 'Space Grotesk',sans-serif";
+  ctx2.fillStyle = col;
+  ctx2.textAlign = 'left';
+  ctx2.fillText(gLabel, arrowX + hs + 4, startY + arrowLen / 2 + 3);
+}
+
+function drawGround(ctx2, gy, gw, col1, col2) {
+  var gg = ctx2.createLinearGradient(0, gy, 0, gy + 50);
+  gg.addColorStop(0, col1);
+  gg.addColorStop(1, col2);
+  ctx2.fillStyle = gg;
+  ctx2.fillRect(0, gy, gw, 60);
+  // Texture
+  ctx2.strokeStyle = 'rgba(255,255,255,0.03)';
+  ctx2.lineWidth = 0.4;
+  for (var gx = 0; gx < gw; gx += 18) {
+    ctx2.beginPath();
+    ctx2.moveTo(gx, gy);
+    ctx2.lineTo(gx + 8, gy + 4);
+    ctx2.stroke();
+  }
+}
+
+function drawJumpArc(ctx2, arcCx, groundY, jumpH, prog, P) {
+  if (prog < 0.15) return;
+  var ap = Math.min(1, (prog - 0.15) / 0.6);
+  ctx2.strokeStyle = P.primaryDim;
+  ctx2.lineWidth = 1;
+  ctx2.setLineDash([3, 3]);
+  ctx2.globalAlpha = 0.45 * ap;
+  ctx2.beginPath();
+  var segs = 28;
+  for (var ai = 0; ai <= segs * ap; ai++) {
+    var at = ai / segs;
+    var ax = arcCx - 25 + at * 50;
+    var ay = groundY - jumpH * 4 * at * (1 - at);
+    if (ai === 0) ctx2.moveTo(ax, ay);
+    else ctx2.lineTo(ax, ay);
+  }
+  ctx2.stroke();
+  ctx2.setLineDash([]);
+  ctx2.globalAlpha = 1;
+
+  // Height bracket
+  if (ap > 0.6) {
+    var ba = Math.min(1, (ap - 0.6) * 2.5);
+    ctx2.globalAlpha = ba;
+    ctx2.strokeStyle = P.tertiary;
+    ctx2.lineWidth = 0.7;
+    ctx2.setLineDash([2, 3]);
+    ctx2.beginPath();
+    ctx2.moveTo(arcCx + 35, groundY);
+    ctx2.lineTo(arcCx + 35, groundY - jumpH);
+    ctx2.stroke();
+    ctx2.setLineDash([]);
+    // Arrows at ends
+    ctx2.fillStyle = P.tertiary;
+    ctx2.beginPath();
+    ctx2.moveTo(arcCx + 35, groundY - jumpH);
+    ctx2.lineTo(arcCx + 32, groundY - jumpH + 3);
+    ctx2.lineTo(arcCx + 38, groundY - jumpH + 3);
+    ctx2.closePath();
+    ctx2.fill();
+    ctx2.beginPath();
+    ctx2.moveTo(arcCx + 35, groundY);
+    ctx2.lineTo(arcCx + 32, groundY - 3);
+    ctx2.lineTo(arcCx + 38, groundY - 3);
+    ctx2.closePath();
+    ctx2.fill();
+    ctx2.globalAlpha = 1;
+  }
+}
+
+function drawSatellite(ctx2, satCx, satCy, satW, P) {
+  var bw = satW * 0.28;
+  var bh = satW * 0.18;
+
+  // Solar panels (left + right)
+  ctx2.fillStyle = 'rgba(35,55,110,0.8)';
+  ctx2.fillRect(satCx - satW / 2, satCy - bh * 0.35, satW * 0.28, bh * 0.7);
+  ctx2.fillRect(satCx + bw / 2 + 2, satCy - bh * 0.35, satW * 0.28, bh * 0.7);
+  // Grid lines on panels
+  ctx2.strokeStyle = 'rgba(90,130,200,0.35)';
+  ctx2.lineWidth = 0.4;
+  var pLeft = satCx - satW / 2;
+  var pRight = satCx + bw / 2 + 2;
+  for (var gi = 0; gi < 5; gi++) {
+    var gx1 = pLeft + gi * satW * 0.056;
+    ctx2.beginPath(); ctx2.moveTo(gx1, satCy - bh * 0.35); ctx2.lineTo(gx1, satCy + bh * 0.35); ctx2.stroke();
+    var gx2 = pRight + gi * satW * 0.056;
+    ctx2.beginPath(); ctx2.moveTo(gx2, satCy - bh * 0.35); ctx2.lineTo(gx2, satCy + bh * 0.35); ctx2.stroke();
+  }
+
+  // Body
+  var bodyG = ctx2.createLinearGradient(satCx - bw / 2, satCy - bh / 2, satCx + bw / 2, satCy + bh / 2);
+  bodyG.addColorStop(0, 'rgba(190,190,195,0.9)');
+  bodyG.addColorStop(1, 'rgba(110,110,115,0.7)');
+  ctx2.fillStyle = bodyG;
+  ctx2.fillRect(satCx - bw / 2, satCy - bh / 2, bw, bh);
+  ctx2.strokeStyle = P.outline;
+  ctx2.lineWidth = 0.8;
+  ctx2.strokeRect(satCx - bw / 2, satCy - bh / 2, bw, bh);
+
+  // Antenna
+  ctx2.strokeStyle = 'rgba(200,200,205,0.6)';
+  ctx2.lineWidth = 1;
+  ctx2.beginPath();
+  ctx2.moveTo(satCx, satCy - bh / 2);
+  ctx2.lineTo(satCx - 4, satCy - bh / 2 - 14);
+  ctx2.stroke();
+  ctx2.beginPath();
+  ctx2.arc(satCx - 4, satCy - bh / 2 - 17, 5, 0, Math.PI, true);
+  ctx2.stroke();
+}
+
+// ============================================================
+// Custom background: 2-layer parallax star field
+// ============================================================
+function drawBg(ctx2, realW, realH) {
+  var P = AnimRuntime.PAL;
+  var bg = ctx2.createLinearGradient(0, 0, 0, realH);
+  bg.addColorStop(0, '#050508');
+  bg.addColorStop(0.55, P.bg);
+  bg.addColorStop(1, P.bg2);
+  ctx2.fillStyle = bg;
+  ctx2.fillRect(0, 0, realW, realH);
+
+  generateStars(realW, realH);
+
+  var nowSec = Date.now() / 1000;
+
+  // Far layer
+  for (var fi = 0; fi < starLayerFar.length; fi++) {
+    var fs = starLayerFar[fi];
+    var tw = 0.5 + 0.5 * Math.sin(nowSec * 0.7 + fs.phase * 6.28);
+    ctx2.globalAlpha = fs.bright * tw * 0.45;
+    ctx2.fillStyle = '#b8c0d8';
+    ctx2.beginPath();
+    ctx2.arc(fs.x, fs.y, fs.r, 0, Math.PI * 2);
+    ctx2.fill();
+  }
+
+  // Near layer
+  for (var ni = 0; ni < starLayerNear.length; ni++) {
+    var ns = starLayerNear[ni];
+    var twN = 0.35 + 0.65 * Math.sin(nowSec * 1.4 + ns.phase * 6.28);
+    ctx2.globalAlpha = ns.bright * twN * 0.65;
+    ctx2.fillStyle = '#e0e8ff';
+    ctx2.beginPath();
+    ctx2.arc(ns.x, ns.y, ns.r, 0, Math.PI * 2);
+    ctx2.fill();
+    if (ns.bright > 0.7) {
+      ctx2.shadowColor = '#a0bbff';
+      ctx2.shadowBlur = 4;
+      ctx2.fill();
+      ctx2.shadowBlur = 0;
+    }
+  }
+  ctx2.globalAlpha = 1;
+
+  // Screen shake (applied via translate, decays each frame)
+  if (shakeAmount > 0.3) {
+    var sx = (Math.sin(nowSec * 60) * 0.5 + 0.5 - 0.5) * shakeAmount;
+    var sy = (Math.cos(nowSec * 73) * 0.5 + 0.5 - 0.5) * shakeAmount;
+    ctx2.translate(sx, sy);
+    shakeAmount *= shakeDecay;
+  }
+}
+
+// ============================================================
+// getFrameElements
+// ============================================================
+function getFrameElements(f, W, H) {
+  var t = AnimRuntime.t;
+  var P = AnimRuntime.PAL;
+  var cx = W / 2, cy = H / 2;
+  var nowSec = Date.now() / 1000;
+  var breathe = nowSec * 2;
+
+  // ── F0: Title frame ──
+  if (f === 0) {
+    return [
+      {id:'f0titleEN', type:'label', text:'MASS vs WEIGHT', x:cx, y:cy - 105, color:P.primary, size:28, align:'center', glow:P.glowStrong},
+      {id:'f0titleCN', type:'label', text:t('title'), x:cx, y:cy - 75, color:P.primaryDim, size:15, align:'center'},
+      {id:'f0divider', type:'line', x1:cx - 150, y1:cy - 58, x2:cx + 150, y2:cy - 58, color:P.outline, lineWidth:0.5, dash:[4,4]},
+      {id:'f0massEq', type:'text', text:t('f0massEq'), x:cx, y:cy - 40, color:P.tertiary, size:10, align:'center'},
+      {id:'f0weightEq', type:'text', text:t('f0weightEq'), x:cx, y:cy - 24, color:P.primaryDim, size:10, align:'center'},
+      {id:'f0question', type:'custom', x:0, y:0, alpha:1, draw: function(ctx2) {
+        var lines = t('f0question').split('\n');
+        ctx2.font = "13px 'Inter','Noto Sans SC',sans-serif";
+        ctx2.textAlign = 'center';
+        ctx2.fillStyle = P.text;
+        for (var li = 0; li < lines.length; li++) {
+          ctx2.fillText(lines[li], cx, cy + 8 + li * 22);
+        }
+      }},
+      // Astronaut silhouette on moon (bottom right corner)
+      {id:'f0astro', type:'custom', x:0, y:0, alpha:1, draw: function(ctx2) {
+        // Moon surface arc
+        ctx2.fillStyle = 'rgba(160,160,170,0.1)';
+        ctx2.beginPath();
+        ctx2.ellipse(cx + 130, H + 35, 190, 80, 0, 0, Math.PI * 2);
+        ctx2.fill();
+        // Floating astronaut
+        var ax = cx + 130;
+        var ay = H - 55 + Math.sin(nowSec * 1.3) * 10;
+        ctx2.globalAlpha = 0.65;
+        drawAstronaut(ctx2, ax, ay, 48, P, breathe);
+        ctx2.globalAlpha = 1;
+        // Jump trail dashes
+        ctx2.strokeStyle = P.primaryDim;
+        ctx2.lineWidth = 0.8;
+        ctx2.setLineDash([2, 5]);
+        ctx2.globalAlpha = 0.25;
+        ctx2.beginPath();
+        ctx2.moveTo(ax, ay);
+        ctx2.lineTo(ax, ay + 22);
+        ctx2.stroke();
+        ctx2.setLineDash([]);
+        ctx2.globalAlpha = 1;
+      }},
+    ];
+  }
+
+  // ── F1: Earth scene ──
+  if (f === 1) {
+    var prog1 = animState.frameTracked === 1 ? animState.progress : 1;
+    var ease1 = AnimRuntime.easeInOut(Math.min(1, prog1 * 1.4));
+    var groundY = H - 50;
+    var astroH = 62;
+    var jumpH1 = 32;
+    var jumpY1 = 0;
+
+    // Jump: start 0.4, peak 0.6, land 0.8
+    if (prog1 > 0.4 && prog1 <= 0.8) {
+      var jp = (prog1 - 0.4) / 0.4;
+      jumpY1 = -jumpH1 * 4 * jp * (1 - jp);
+    }
+    // Launch burst
+    var bk1L = 'f1launch';
+    if (prog1 > 0.39 && prog1 < 0.43 && !burstSpawned[bk1L]) {
+      burstSpawned[bk1L] = true;
+      spawnBurst(cx - 55, groundY, 10, 1.8, P.primaryDim, 0.7);
+      playTone(400, 0.15, 0.02);
+    }
+    // Landing burst
+    var bk1D = 'f1land';
+    if (prog1 > 0.79 && prog1 < 0.83 && !burstSpawned[bk1D]) {
+      burstSpawned[bk1D] = true;
+      spawnBurst(cx - 55, groundY, 14, 2.2, P.tertiary, 0.85);
+      playTone(110, 0.2, 0.03);
+    }
+
+    return [
+      {id:'f0titleEN', type:'label', text:t('f1title'), x:cx, y:22, color:P.primary, size:16, align:'center', glow:P.glowStrong},
+      // Earth glow
+      {id:'f1earthGlow', type:'custom', x:0, y:0, alpha:1, draw: function(ctx2) {
+        var eg = ctx2.createRadialGradient(cx, H + 70, 25, cx, H + 70, 220);
+        eg.addColorStop(0, 'rgba(50,110,200,0.12)');
+        eg.addColorStop(1, 'rgba(0,0,0,0)');
+        ctx2.fillStyle = eg;
+        ctx2.fillRect(0, 0, W, H);
+      }},
+      // Ground
+      {id:'f1ground', type:'custom', x:0, y:0, alpha:1, draw: function(ctx2) {
+        drawGround(ctx2, groundY, W, 'rgba(55,95,55,0.5)', 'rgba(35,65,35,0.3)');
+      }},
+      // Astronaut
+      {id:'f1astro', type:'custom', x:0, y:0, alpha:1, draw: function(ctx2) {
+        drawAstronaut(ctx2, cx - 55, groundY + jumpY1, astroH, P, breathe);
+      }},
+      // Scale
+      {id:'f1scale', type:'custom', x:0, y:0, alpha:1, draw: function(ctx2) {
+        if (ease1 < 0.08) return;
+        ctx2.globalAlpha = Math.min(1, ease1 * 2);
+        drawScale(ctx2, cx + 80, groundY - 5, 68, t('f1mass'), t('f1weight'), P);
+        ctx2.globalAlpha = 1;
+      }},
+      // Gravity arrow
+      {id:'f1grav', type:'custom', x:0, y:0, alpha:1, draw: function(ctx2) {
+        if (ease1 < 0.18) return;
+        ctx2.globalAlpha = Math.min(1, (ease1 - 0.18) * 2);
+        drawGravityArrow(ctx2, cx + 175, 65, 75, t('f1gravity'), P, P.primaryDim);
+        ctx2.globalAlpha = 1;
+      }},
+      // Jump arc + height
+      {id:'f1arc', type:'custom', x:0, y:0, alpha:1, draw: function(ctx2) {
+        drawJumpArc(ctx2, cx - 55, groundY, jumpH1, prog1, P);
+      }},
+      // Jump label
+      {id:'f1jumpLbl', type:'custom', x:0, y:0, alpha:1, draw: function(ctx2) {
+        if (prog1 < 0.55) return;
+        var a = Math.min(1, (prog1 - 0.55) * 3);
+        ctx2.globalAlpha = a;
+        ctx2.font = "bold 10px 'Space Grotesk','Noto Sans SC',sans-serif";
+        ctx2.fillStyle = P.tertiary;
+        ctx2.textAlign = 'left';
+        ctx2.fillText(t('f1jump'), cx - 55 + 48, groundY - jumpH1 - 10);
+        ctx2.globalAlpha = 1;
+      }},
+      // Formula
+      {id:'f1form', type:'custom', x:0, y:0, alpha:1, draw: function(ctx2) {
+        if (ease1 < 0.35) return;
+        var a = Math.min(1, (ease1 - 0.35) * 2);
+        ctx2.globalAlpha = a;
+        ctx2.font = "10px 'Inter','Noto Sans SC',sans-serif";
+        ctx2.fillStyle = P.muted;
+        ctx2.textAlign = 'center';
+        ctx2.fillText(t('f1formula'), cx, 46);
+        ctx2.globalAlpha = 1;
+      }},
+      // Particles
+      {id:'f1parts', type:'custom', x:0, y:0, alpha:1, draw: function(ctx2) {
+        tickParticles(ctx2, 1);
+      }},
+    ];
+  }
+
+  // ── F2: Moon scene ──
+  if (f === 2) {
+    var prog2 = animState.frameTracked === 2 ? animState.progress : 1;
+    var ease2 = AnimRuntime.easeInOut(Math.min(1, prog2 * 1.4));
+    var groundY2 = H - 50;
+    var astroH2 = 62;
+    var jumpH2 = 135;
+    var jumpY2 = 0;
+
+    // Slower, higher arc: 0.28 to 0.82
+    if (prog2 > 0.28 && prog2 <= 0.82) {
+      var jp2 = (prog2 - 0.28) / 0.54;
+      jumpY2 = -jumpH2 * 4 * jp2 * (1 - jp2);
+    }
+    var bk2L = 'f2launch';
+    if (prog2 > 0.27 && prog2 < 0.31 && !burstSpawned[bk2L]) {
+      burstSpawned[bk2L] = true;
+      spawnBurst(cx - 55, groundY2, 18, 2.8, P.tertiary, 1.1);
+      playTone(500, 0.25, 0.02);
+    }
+    var bk2D = 'f2land';
+    if (prog2 > 0.81 && prog2 < 0.85 && !burstSpawned[bk2D]) {
+      burstSpawned[bk2D] = true;
+      spawnBurst(cx - 55, groundY2, 22, 3.2, '#c8c8d0', 1.1);
+      playTone(90, 0.3, 0.03);
+    }
+
+    return [
+      {id:'f0titleEN', type:'label', text:t('f2title'), x:cx, y:22, color:P.primary, size:16, align:'center', glow:P.glowStrong},
+      // Moon glow
+      {id:'f2moonGlow', type:'custom', x:0, y:0, alpha:1, draw: function(ctx2) {
+        var mg = ctx2.createRadialGradient(cx, H + 70, 25, cx, H + 70, 210);
+        mg.addColorStop(0, 'rgba(175,175,190,0.08)');
+        mg.addColorStop(1, 'rgba(0,0,0,0)');
+        ctx2.fillStyle = mg;
+        ctx2.fillRect(0, 0, W, H);
+      }},
+      // Moon ground + craters
+      {id:'f1ground', type:'custom', x:0, y:0, alpha:1, draw: function(ctx2) {
+        drawGround(ctx2, groundY2, W, 'rgba(135,135,145,0.35)', 'rgba(75,75,85,0.2)');
+        ctx2.fillStyle = 'rgba(100,100,110,0.12)';
+        ctx2.beginPath(); ctx2.ellipse(cx - 80, groundY2 + 7, 16, 4, 0, 0, Math.PI * 2); ctx2.fill();
+        ctx2.beginPath(); ctx2.ellipse(cx + 55, groundY2 + 11, 11, 3, 0.3, 0, Math.PI * 2); ctx2.fill();
+        ctx2.beginPath(); ctx2.ellipse(cx + 160, groundY2 + 5, 20, 5, -0.2, 0, Math.PI * 2); ctx2.fill();
+      }},
+      // Astronaut (big jump)
+      {id:'f1astro', type:'custom', x:0, y:0, alpha:1, draw: function(ctx2) {
+        drawAstronaut(ctx2, cx - 55, groundY2 + jumpY2, astroH2, P, breathe);
+      }},
+      // Scale
+      {id:'f1scale', type:'custom', x:0, y:0, alpha:1, draw: function(ctx2) {
+        if (ease2 < 0.08) return;
+        ctx2.globalAlpha = Math.min(1, ease2 * 2);
+        drawScale(ctx2, cx + 80, groundY2 - 5, 68, t('f2mass'), t('f2weight'), P);
+        ctx2.globalAlpha = 1;
+      }},
+      // Gravity arrow (small!)
+      {id:'f1grav', type:'custom', x:0, y:0, alpha:1, draw: function(ctx2) {
+        if (ease2 < 0.18) return;
+        ctx2.globalAlpha = Math.min(1, (ease2 - 0.18) * 2);
+        drawGravityArrow(ctx2, cx + 175, 65, 22, t('f2gravity'), P, P.tertiary);
+        ctx2.globalAlpha = 1;
+      }},
+      // Jump arc
+      {id:'f2arc', type:'custom', x:0, y:0, alpha:1, draw: function(ctx2) {
+        drawJumpArc(ctx2, cx - 55, groundY2, jumpH2, prog2, P);
+      }},
+      // Jump label
+      {id:'f2jumpLbl', type:'custom', x:0, y:0, alpha:1, draw: function(ctx2) {
+        if (prog2 < 0.48) return;
+        var a = Math.min(1, (prog2 - 0.48) * 3);
+        ctx2.globalAlpha = a;
+        ctx2.font = "bold 11px 'Space Grotesk','Noto Sans SC',sans-serif";
+        ctx2.fillStyle = P.primary;
+        ctx2.textAlign = 'left';
+        // Glow on the exciting jump height
+        ctx2.shadowColor = P.primary;
+        ctx2.shadowBlur = 8;
+        ctx2.fillText(t('f2jump'), cx - 55 + 48, groundY2 - jumpH2 - 10);
+        ctx2.shadowBlur = 0;
+        ctx2.globalAlpha = 1;
+      }},
+      // "Same person same mass" callout
+      {id:'f2same', type:'custom', x:0, y:0, alpha:1, draw: function(ctx2) {
+        if (ease2 < 0.45) return;
+        var a = Math.min(1, (ease2 - 0.45) * 2.5);
+        ctx2.globalAlpha = a;
+        var bxW = 165;
+        ctx2.fillStyle = 'rgba(255,181,156,0.07)';
+        ctx2.fillRect(cx - bxW / 2, 42, bxW, 20);
+        ctx2.strokeStyle = P.primaryDim;
+        ctx2.lineWidth = 0.5;
+        ctx2.strokeRect(cx - bxW / 2, 42, bxW, 20);
+        ctx2.shadowColor = P.primaryDim;
+        ctx2.shadowBlur = 5;
+        ctx2.font = "bold 10px 'Space Grotesk','Noto Sans SC',sans-serif";
+        ctx2.fillStyle = P.primaryDim;
+        ctx2.textAlign = 'center';
+        ctx2.fillText(t('f2same'), cx, 55);
+        ctx2.shadowBlur = 0;
+        ctx2.globalAlpha = 1;
+      }},
+      // Formula
+      {id:'f2form', type:'custom', x:0, y:0, alpha:1, draw: function(ctx2) {
+        if (ease2 < 0.35) return;
+        var a = Math.min(1, (ease2 - 0.35) * 2);
+        ctx2.globalAlpha = a;
+        ctx2.font = "10px 'Inter','Noto Sans SC',sans-serif";
+        ctx2.fillStyle = P.muted;
+        ctx2.textAlign = 'center';
+        ctx2.fillText(t('f2formula'), cx, 72);
+        ctx2.globalAlpha = 1;
+      }},
+      // Particles
+      {id:'f2parts', type:'custom', x:0, y:0, alpha:1, draw: function(ctx2) {
+        tickParticles(ctx2, 1);
+      }},
+    ];
+  }
+
+  // ── F3: Jupiter scene ──
+  if (f === 3) {
+    var prog3 = animState.frameTracked === 3 ? animState.progress : 1;
+    var ease3 = AnimRuntime.easeInOut(Math.min(1, prog3 * 1.4));
+    var groundY3 = H - 50;
+    var astroH3 = 62;
+    var jumpH3 = 10;
+    var jumpY3 = 0;
+
+    // Tiny jump: 0.5 to 0.72
+    if (prog3 > 0.5 && prog3 <= 0.72) {
+      var jp3 = (prog3 - 0.5) / 0.22;
+      jumpY3 = -jumpH3 * 4 * jp3 * (1 - jp3);
+    }
+    // Strain vibration before jump
+    var strainOff = 0;
+    if (prog3 > 0.35 && prog3 < 0.5) {
+      strainOff = Math.sin((prog3 - 0.35) * 90) * 2;
+    }
+    // Landing: shake + burst
+    var bk3D = 'f3land';
+    if (prog3 > 0.71 && prog3 < 0.75 && !burstSpawned[bk3D]) {
+      burstSpawned[bk3D] = true;
+      shakeAmount = 14;
+      spawnBurst(cx - 55, groundY3, 28, 3.8, P.error, 1.3);
+      playTone(55, 0.6, 0.04);
+    }
+
+    return [
+      {id:'f0titleEN', type:'label', text:t('f3title'), x:cx, y:22, color:P.primary, size:16, align:'center', glow:P.glowStrong},
+      // Jupiter atmosphere glow
+      {id:'f3jupGlow', type:'custom', x:0, y:0, alpha:1, draw: function(ctx2) {
+        var jg = ctx2.createRadialGradient(cx, H + 110, 40, cx, H + 110, 310);
+        jg.addColorStop(0, 'rgba(195,115,45,0.14)');
+        jg.addColorStop(0.5, 'rgba(175,75,25,0.06)');
+        jg.addColorStop(1, 'rgba(0,0,0,0)');
+        ctx2.fillStyle = jg;
+        ctx2.fillRect(0, 0, W, H);
+        // Atmospheric bands
+        ctx2.globalAlpha = 0.035;
+        for (var bi = 0; bi < 6; bi++) {
+          var bY = 28 + bi * 48;
+          var bandG = ctx2.createLinearGradient(0, bY, 0, bY + 22);
+          bandG.addColorStop(0, '#c07028');
+          bandG.addColorStop(1, '#8b4513');
+          ctx2.fillStyle = bandG;
+          ctx2.fillRect(0, bY, W, 22);
+        }
+        ctx2.globalAlpha = 1;
+      }},
+      // Jupiter ground (orange-brown)
+      {id:'f1ground', type:'custom', x:0, y:0, alpha:1, draw: function(ctx2) {
+        drawGround(ctx2, groundY3, W, 'rgba(175,95,35,0.45)', 'rgba(115,55,18,0.3)');
+      }},
+      // Astronaut (squashed, straining)
+      {id:'f1astro', type:'custom', x:0, y:0, alpha:1, draw: function(ctx2) {
+        drawAstronaut(ctx2, cx - 55 + strainOff, groundY3 + jumpY3, astroH3 * 0.88, P, breathe * 0.4);
+      }},
+      // Scale
+      {id:'f1scale', type:'custom', x:0, y:0, alpha:1, draw: function(ctx2) {
+        if (ease3 < 0.08) return;
+        ctx2.globalAlpha = Math.min(1, ease3 * 2);
+        drawScale(ctx2, cx + 80, groundY3 - 5, 68, t('f3mass'), t('f3weight'), P);
+        ctx2.globalAlpha = 1;
+      }},
+      // Gravity arrow (huge!)
+      {id:'f1grav', type:'custom', x:0, y:0, alpha:1, draw: function(ctx2) {
+        if (ease3 < 0.18) return;
+        ctx2.globalAlpha = Math.min(1, (ease3 - 0.18) * 2);
+        drawGravityArrow(ctx2, cx + 175, 48, 195, t('f3gravity'), P, P.error);
+        // Heavy label with ambient glow
+        ctx2.shadowColor = P.error;
+        ctx2.shadowBlur = 14;
+        ctx2.font = "bold 10px 'Space Grotesk','Noto Sans SC',sans-serif";
+        ctx2.fillStyle = P.error;
+        ctx2.textAlign = 'center';
+        ctx2.fillText(t('f3heavy'), cx + 175, 272);
+        ctx2.shadowBlur = 0;
+        ctx2.globalAlpha = 1;
+      }},
+      // Tiny jump arc
+      {id:'f3arc', type:'custom', x:0, y:0, alpha:1, draw: function(ctx2) {
+        if (prog3 > 0.45) {
+          drawJumpArc(ctx2, cx - 55, groundY3, jumpH3, prog3, P);
+        }
+      }},
+      // Jump label
+      {id:'f3jumpLbl', type:'custom', x:0, y:0, alpha:1, draw: function(ctx2) {
+        if (prog3 < 0.65) return;
+        var a = Math.min(1, (prog3 - 0.65) * 4);
+        ctx2.globalAlpha = a;
+        ctx2.font = "bold 10px 'Space Grotesk','Noto Sans SC',sans-serif";
+        ctx2.fillStyle = P.error;
+        ctx2.textAlign = 'left';
+        ctx2.fillText(t('f3jump'), cx - 55 + 48, groundY3 - jumpH3 - 15);
+        ctx2.globalAlpha = 1;
+      }},
+      // Formula
+      {id:'f3form', type:'custom', x:0, y:0, alpha:1, draw: function(ctx2) {
+        if (ease3 < 0.35) return;
+        var a = Math.min(1, (ease3 - 0.35) * 2);
+        ctx2.globalAlpha = a;
+        ctx2.font = "10px 'Inter','Noto Sans SC',sans-serif";
+        ctx2.fillStyle = P.muted;
+        ctx2.textAlign = 'center';
+        ctx2.fillText(t('f3formula'), cx, 46);
+        ctx2.globalAlpha = 1;
+      }},
+      // Particles
+      {id:'f3parts', type:'custom', x:0, y:0, alpha:1, draw: function(ctx2) {
+        tickParticles(ctx2, 1);
+      }},
+    ];
+  }
+
+  // ── F4: Deep space (zero-g) ──
+  if (f === 4) {
+    var prog4 = animState.frameTracked === 4 ? animState.progress : 1;
+    var ease4 = AnimRuntime.easeInOut(Math.min(1, prog4 * 1.2));
+
+    // Astronaut floats gently
+    var floatY = cy - 15 + Math.sin(nowSec * 0.7) * 16;
+    var floatX = cx - 125 + Math.sin(nowSec * 0.45) * 6;
+    var floatRot = Math.sin(nowSec * 0.28) * 0.06;
+
+    // Satellite push: small displacement after push
+    var satBaseX = cx + 100;
+    var satOff = 0;
+    if (prog4 > 0.5 && prog4 <= 0.9) {
+      var pushP = (prog4 - 0.5) / 0.4;
+      satOff = AnimRuntime.easeInOut(pushP) * 10;
+    } else if (prog4 > 0.9) {
+      satOff = 10;
+    }
+    // Push burst
+    var bk4P = 'f4push';
+    if (prog4 > 0.53 && prog4 < 0.57 && !burstSpawned[bk4P]) {
+      burstSpawned[bk4P] = true;
+      spawnBurst(cx + 48, cy, 12, 1.6, P.secondary, 0.9);
+      playTone(190, 0.15, 0.02);
+    }
+
+    return [
+      {id:'f0titleEN', type:'label', text:t('f4title'), x:cx, y:22, color:P.primary, size:16, align:'center', glow:P.glowStrong},
+      // No-gravity marker
+      {id:'f4noGrav', type:'custom', x:0, y:0, alpha:1, draw: function(ctx2) {
+        if (ease4 < 0.18) return;
+        ctx2.globalAlpha = Math.min(1, (ease4 - 0.18) * 2.5);
+        ctx2.font = "bold 10px 'Space Grotesk','Noto Sans SC',sans-serif";
+        ctx2.fillStyle = P.muted;
+        ctx2.textAlign = 'right';
+        ctx2.fillText(t('f4gravity'), W - 28, 52);
+        // Cancelled gravity symbol
+        var symX = W - 95, symY = 72;
+        ctx2.strokeStyle = P.error;
+        ctx2.lineWidth = 1.4;
+        ctx2.beginPath();
+        ctx2.arc(symX, symY, 11, 0, Math.PI * 2);
+        ctx2.stroke();
+        // Arrow inside
+        ctx2.beginPath();
+        ctx2.moveTo(symX, symY - 5);
+        ctx2.lineTo(symX, symY + 5);
+        ctx2.stroke();
+        ctx2.beginPath();
+        ctx2.moveTo(symX, symY + 5);
+        ctx2.lineTo(symX - 3, symY + 2);
+        ctx2.moveTo(symX, symY + 5);
+        ctx2.lineTo(symX + 3, symY + 2);
+        ctx2.stroke();
+        // Slash
+        ctx2.beginPath();
+        ctx2.moveTo(symX - 9, symY - 9);
+        ctx2.lineTo(symX + 9, symY + 9);
+        ctx2.stroke();
+        ctx2.globalAlpha = 1;
+      }},
+      // Floating astronaut
+      {id:'f1astro', type:'custom', x:0, y:0, alpha:1, draw: function(ctx2) {
+        ctx2.save();
+        ctx2.translate(floatX, floatY);
+        ctx2.rotate(floatRot);
+        drawAstronaut(ctx2, 0, 28, 56, P, breathe);
+        ctx2.restore();
+      }},
+      // Mass/weight readout
+      {id:'f4mBox', type:'custom', x:0, y:0, alpha:1, draw: function(ctx2) {
+        if (ease4 < 0.12) return;
+        ctx2.globalAlpha = Math.min(1, (ease4 - 0.12) * 3);
+        var bx = floatX - 52, by = floatY + 38;
+        ctx2.fillStyle = 'rgba(0,0,0,0.4)';
+        ctx2.fillRect(bx, by, 104, 38);
+        ctx2.strokeStyle = P.primaryDim;
+        ctx2.lineWidth = 0.5;
+        ctx2.strokeRect(bx, by, 104, 38);
+        // Mass (glowing)
+        ctx2.font = "bold 9px 'Space Grotesk','Noto Sans SC',sans-serif";
+        ctx2.textAlign = 'center';
+        ctx2.fillStyle = P.primary;
+        ctx2.shadowColor = P.primary;
+        ctx2.shadowBlur = 7;
+        ctx2.fillText(t('f4mass'), floatX, by + 14);
+        ctx2.shadowBlur = 0;
+        // Weight
+        ctx2.fillStyle = P.tertiary;
+        ctx2.fillText(t('f4weight'), floatX, by + 28);
+        ctx2.globalAlpha = 1;
+      }},
+      // Float label (pulsing)
+      {id:'f4floatLbl', type:'custom', x:0, y:0, alpha:1, draw: function(ctx2) {
+        if (ease4 < 0.25) return;
+        ctx2.globalAlpha = Math.min(1, (ease4 - 0.25) * 2) * (0.55 + 0.45 * Math.sin(nowSec * 2.2));
+        ctx2.font = "10px 'Inter','Noto Sans SC',sans-serif";
+        ctx2.fillStyle = P.secondary;
+        ctx2.textAlign = 'center';
+        ctx2.fillText(t('f4float'), floatX, floatY - 42);
+        ctx2.globalAlpha = 1;
+      }},
+      // Satellite
+      {id:'f4sat', type:'custom', x:0, y:0, alpha:1, draw: function(ctx2) {
+        if (ease4 < 0.25) return;
+        ctx2.globalAlpha = Math.min(1, (ease4 - 0.25) * 2);
+        var sCx = satBaseX + satOff;
+        var sCy = cy + Math.sin(nowSec * 0.55 + 1.2) * 9;
+        drawSatellite(ctx2, sCx, sCy, 115, P);
+        // Label
+        ctx2.font = "9px 'Space Grotesk','Noto Sans SC',sans-serif";
+        ctx2.fillStyle = P.muted;
+        ctx2.textAlign = 'center';
+        ctx2.fillText(t('f4satellite'), sCx, sCy + 26);
+        ctx2.globalAlpha = 1;
+      }},
+      // Push arrow
+      {id:'f4pushArrow', type:'custom', x:0, y:0, alpha:1, draw: function(ctx2) {
+        if (prog4 < 0.42) return;
+        var pa = Math.min(1, (prog4 - 0.42) * 4);
+        ctx2.globalAlpha = pa;
+        var arX1 = floatX + 32;
+        var arX2 = cx + 48;
+        var arY = cy;
+        ctx2.strokeStyle = P.secondary;
+        ctx2.lineWidth = 2;
+        ctx2.beginPath();
+        ctx2.moveTo(arX1, arY);
+        ctx2.lineTo(arX2, arY);
+        ctx2.stroke();
+        ctx2.fillStyle = P.secondary;
+        ctx2.beginPath();
+        ctx2.moveTo(arX2 + 5, arY);
+        ctx2.lineTo(arX2 - 4, arY - 4);
+        ctx2.lineTo(arX2 - 4, arY + 4);
+        ctx2.closePath();
+        ctx2.fill();
+        // Push label
+        ctx2.font = "bold 11px 'Space Grotesk','Noto Sans SC',sans-serif";
+        ctx2.fillStyle = P.secondary;
+        ctx2.textAlign = 'center';
+        ctx2.fillText(t('f4push'), (arX1 + arX2) / 2, arY - 13);
+        ctx2.globalAlpha = 1;
+      }},
+      // "Barely moves" label
+      {id:'f4barelyLbl', type:'custom', x:0, y:0, alpha:1, draw: function(ctx2) {
+        if (prog4 < 0.68) return;
+        var a = Math.min(1, (prog4 - 0.68) * 3.5);
+        ctx2.globalAlpha = a;
+        ctx2.font = "bold 10px 'Space Grotesk','Noto Sans SC',sans-serif";
+        ctx2.fillStyle = P.error;
+        ctx2.textAlign = 'center';
+        ctx2.fillText(t('f4barely'), satBaseX + satOff, cy - 38);
+        ctx2.globalAlpha = 1;
+      }},
+      // Inertia explanation
+      {id:'f4inertia', type:'custom', x:0, y:0, alpha:1, draw: function(ctx2) {
+        if (prog4 < 0.58) return;
+        var a = Math.min(1, (prog4 - 0.58) * 2.5);
+        ctx2.globalAlpha = a;
+        var lines = t('f4inertia').split('\n');
+        ctx2.font = "11px 'Inter','Noto Sans SC',sans-serif";
+        ctx2.textAlign = 'center';
+        ctx2.fillStyle = P.text;
+        for (var li = 0; li < lines.length; li++) {
+          ctx2.fillText(lines[li], cx, H - 68 + li * 18);
+        }
+        ctx2.globalAlpha = 1;
+      }},
+      // Key takeaway (glass panel)
+      {id:'f4key', type:'custom', x:0, y:0, alpha:1, draw: function(ctx2) {
+        if (prog4 < 0.82) return;
+        var a = Math.min(1, (prog4 - 0.82) * 6);
+        ctx2.globalAlpha = a;
+        var lines = t('f4key').split('\n');
+        var panW = 250, panH = 34;
+        ctx2.fillStyle = 'rgba(0,0,0,0.5)';
+        ctx2.fillRect(cx - panW / 2, H - 34 - panH, panW, panH);
+        ctx2.strokeStyle = P.primary;
+        ctx2.lineWidth = 0.5;
+        ctx2.strokeRect(cx - panW / 2, H - 34 - panH, panW, panH);
+        ctx2.font = "bold 10px 'Space Grotesk','Noto Sans SC',sans-serif";
+        ctx2.fillStyle = P.primary;
+        ctx2.textAlign = 'center';
+        ctx2.shadowColor = P.primary;
+        ctx2.shadowBlur = 6;
+        for (var ki = 0; ki < lines.length; ki++) {
+          ctx2.fillText(lines[ki], cx, H - 34 - panH + 14 + ki * 15);
+        }
+        ctx2.shadowBlur = 0;
+        ctx2.globalAlpha = 1;
+      }},
+      // Particles
+      {id:'f4parts', type:'custom', x:0, y:0, alpha:1, draw: function(ctx2) {
+        tickParticles(ctx2, 1);
+      }},
+    ];
+  }
+
+  return [];
+}
+
+// ============================================================
+// BOOT
+// ============================================================
+AnimRuntime.boot();
+</script>
+</body>
+</html>

@@ -1,0 +1,1211 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <title>力改变运动状态 — 齿轮铸造厂</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@300;400;500;600;700&family=Noto+Sans+SC:wght@300;400;500;600;700;900&display=swap" rel="stylesheet">
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Noto Sans SC', 'Inter', 'sans-serif'],
+            mono: ['JetBrains Mono', 'monospace'],
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    :root {
+      --BRASS: oklch(0.75 0.17 55);
+      --FORGE: oklch(0.55 0.16 50);
+      --IRON: oklch(0.35 0.10 60);
+      --EMBER: oklch(0.92 0.08 60);
+      --SPARK: oklch(0.85 0.14 85);
+      --bg-deep: oklch(0.14 0.035 265);
+      --bg-deep-2: oklch(0.18 0.04 265);
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      background: var(--bg-deep);
+      overflow: hidden;
+      font-family: 'Noto Sans SC', 'Inter', sans-serif;
+      width: 100vw;
+      height: 100vh;
+    }
+
+    #main-stage {
+      width: 100%;
+      height: 100%;
+      position: relative;
+      background:
+        radial-gradient(ellipse 80% 60% at 50% 30%, var(--bg-deep-2), transparent 70%),
+        radial-gradient(ellipse 40% 30% at 20% 80%, oklch(0.18 0.05 265 / 0.4), transparent),
+        var(--bg-deep);
+    }
+
+    canvas#world {
+      position: absolute;
+      top: 0; left: 0;
+      width: 100%; height: 100%;
+      z-index: 1;
+    }
+
+    /* ---- HUD ---- */
+    .hud-glass {
+      background: oklch(0.18 0.03 265 / 0.55);
+      backdrop-filter: blur(14px);
+      -webkit-backdrop-filter: blur(14px);
+      border: 1px solid oklch(0.85 0.06 85 / 0.18);
+      border-radius: 0;
+      box-shadow: 0 0 40px oklch(0.0 0 0 / 0.35), inset 0 1px 0 oklch(1 0 0 / 0.06);
+    }
+
+    .hud-value {
+      font-family: 'JetBrains Mono', monospace;
+      font-variant-numeric: tabular-nums;
+      color: var(--EMBER);
+      letter-spacing: 0.04em;
+    }
+
+    .hud-label {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.14em;
+      color: oklch(0.55 0.08 265);
+    }
+
+    .hud-unit {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 10px;
+      color: oklch(0.5 0.06 265);
+    }
+
+    /* ---- Subtitles ---- */
+    .subtitle-box {
+      position: absolute;
+      bottom: 56px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: min(820px, 90vw);
+      z-index: 20;
+      text-align: center;
+      padding: 24px 36px;
+      transition: opacity 0.5s ease, transform 0.5s ease;
+    }
+
+    .subtitle-zh {
+      font-size: 22px;
+      font-weight: 700;
+      color: var(--EMBER);
+      line-height: 1.5;
+      text-shadow: 0 2px 24px oklch(0.0 0 0 / 0.6);
+      margin-bottom: 6px;
+    }
+
+    .subtitle-en {
+      font-size: 13px;
+      font-style: italic;
+      color: oklch(0.7 0.06 265);
+      font-family: 'Inter', sans-serif;
+      letter-spacing: 0.02em;
+      line-height: 1.4;
+    }
+
+    .subtitle-enter { opacity: 1; transform: translateX(-50%) translateY(0); }
+    .subtitle-exit  { opacity: 0; transform: translateX(-50%) translateY(16px); }
+
+    /* ---- Title Overlay ---- */
+    .title-overlay {
+      position: absolute;
+      top: 50%; left: 50%;
+      transform: translate(-50%, -50%);
+      text-align: center;
+      z-index: 30;
+      pointer-events: none;
+      transition: opacity 0.8s ease;
+    }
+
+    .title-main {
+      font-size: 56px;
+      font-weight: 900;
+      color: var(--EMBER);
+      letter-spacing: 0.12em;
+      text-shadow: 0 4px 60px oklch(0.0 0 0 / 0.5), 0 0 120px oklch(0.55 0.12 50 / 0.25);
+      line-height: 1.1;
+    }
+
+    .title-sub {
+      font-size: 14px;
+      font-family: 'JetBrains Mono', monospace;
+      color: var(--BRASS);
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      margin-top: 16px;
+      text-shadow: 0 2px 12px oklch(0.0 0 0 / 0.4);
+    }
+
+    .title-formula {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 16px;
+      color: var(--SPARK);
+      margin-top: 24px;
+      letter-spacing: 0.08em;
+    }
+
+    /* ---- Scene markers ---- */
+    .scene-indicator {
+      position: absolute;
+      top: 28px;
+      right: 36px;
+      z-index: 20;
+      padding: 10px 18px;
+    }
+
+    .scene-dot {
+      width: 6px; height: 6px;
+      background: oklch(0.35 0.06 265);
+      display: inline-block;
+      margin: 0 3px;
+      transition: all 0.4s ease;
+    }
+
+    .scene-dot.active {
+      background: var(--SPARK);
+      box-shadow: 0 0 10px var(--SPARK);
+    }
+
+    .scene-label {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 10px;
+      color: oklch(0.5 0.06 265);
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      margin-bottom: 6px;
+      text-align: right;
+    }
+
+    /* ---- Cog mascot (SVG in overlay) ---- */
+    .cog-mascot {
+      position: absolute;
+      z-index: 15;
+      transition: all 0.6s cubic-bezier(0.34, 1.56, 0.64, 1);
+      filter: drop-shadow(0 4px 16px oklch(0.0 0 0 / 0.4));
+    }
+
+    .cog-wing {
+      animation: wingFlap 0.12s ease-in-out infinite alternate;
+    }
+
+    @keyframes wingFlap {
+      from { transform: scaleY(1); }
+      to   { transform: scaleY(0.65); }
+    }
+
+    @keyframes cogSpin {
+      from { transform: rotate(0deg); }
+      to   { transform: rotate(360deg); }
+    }
+
+    .cog-body-spin {
+      animation: cogSpin 2s linear infinite;
+      transform-origin: center;
+    }
+
+    /* ---- Spark particles ---- */
+    .spark {
+      position: absolute;
+      width: 2px; height: 2px;
+      background: var(--SPARK);
+      border-radius: 0;
+      pointer-events: none;
+      z-index: 12;
+      animation: sparkFade 0.6s ease-out forwards;
+    }
+
+    @keyframes sparkFade {
+      0% { opacity: 1; transform: scale(1); }
+      100% { opacity: 0; transform: scale(0) translate(var(--dx), var(--dy)); }
+    }
+
+    /* ---- Blueprint unroll effect ---- */
+    .blueprint {
+      position: absolute;
+      z-index: 5;
+      background:
+        linear-gradient(90deg, oklch(0.22 0.04 265 / 0.7) 0%, oklch(0.18 0.03 265 / 0.5) 100%);
+      border-top: 1px solid oklch(0.85 0.06 85 / 0.12);
+      border-bottom: 1px solid oklch(0.85 0.06 85 / 0.12);
+      overflow: hidden;
+    }
+
+    .blueprint-grid {
+      position: absolute;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background-image:
+        linear-gradient(oklch(0.85 0.04 85 / 0.04) 1px, transparent 1px),
+        linear-gradient(90deg, oklch(0.85 0.04 85 / 0.04) 1px, transparent 1px);
+      background-size: 24px 24px;
+    }
+
+    /* ---- Takeaway card at end ---- */
+    .takeaway-card {
+      position: absolute;
+      top: 50%; left: 50%;
+      transform: translate(-50%, -50%) scale(0.9);
+      z-index: 40;
+      width: 560px;
+      padding: 40px 48px;
+      opacity: 0;
+      transition: all 0.8s cubic-bezier(0.22, 1, 0.36, 1);
+      pointer-events: none;
+    }
+
+    .takeaway-card.show {
+      opacity: 1;
+      transform: translate(-50%, -50%) scale(1);
+    }
+
+    .takeaway-title {
+      font-size: 28px;
+      font-weight: 800;
+      color: var(--SPARK);
+      margin-bottom: 20px;
+      letter-spacing: 0.06em;
+    }
+
+    .takeaway-body {
+      font-size: 16px;
+      color: var(--EMBER);
+      line-height: 1.8;
+      font-weight: 400;
+    }
+
+    .takeaway-callout {
+      margin-top: 24px;
+      padding: 16px 20px;
+      background: oklch(0.22 0.04 265 / 0.5);
+      border-left: 3px solid var(--FORGE);
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 12px;
+      color: var(--BRASS);
+      line-height: 1.7;
+    }
+
+    /* ---- Decorative gear in background ---- */
+    .bg-gear {
+      position: absolute;
+      z-index: 2;
+      opacity: 0.04;
+      animation: bgGearSpin 60s linear infinite;
+    }
+
+    @keyframes bgGearSpin {
+      from { transform: rotate(0deg); }
+      to   { transform: rotate(360deg); }
+    }
+
+    /* ---- HUD bottom bar ---- */
+    .hud-bottom {
+      position: absolute;
+      bottom: 0; left: 0; right: 0;
+      z-index: 20;
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-end;
+      padding: 20px 36px 28px;
+      background: linear-gradient(to top, oklch(0.1 0.02 265 / 0.7), transparent);
+      pointer-events: none;
+    }
+
+    .hud-col { display: flex; gap: 28px; align-items: flex-end; }
+
+    .hud-metric {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 2px;
+    }
+
+    .metric-row { display: flex; align-items: baseline; gap: 6px; }
+
+    /* ---- Steam vent effect ---- */
+    .steam-puff {
+      position: absolute;
+      pointer-events: none;
+      z-index: 6;
+      opacity: 0;
+      animation: steamRise 2s ease-out forwards;
+    }
+
+    @keyframes steamRise {
+      0%   { opacity: 0.3; transform: translateY(0) scale(0.5); }
+      50%  { opacity: 0.15; }
+      100% { opacity: 0; transform: translateY(-80px) scale(2); }
+    }
+  </style>
+</head>
+<body>
+
+  <div id="main-stage">
+    <canvas id="world"></canvas>
+
+    <!-- Background blueprint strip -->
+    <div class="blueprint" id="blueprint-strip" style="top: 52%; left: 0; right: 0; height: 160px; opacity: 0; transition: opacity 1.2s ease;">
+      <div class="blueprint-grid"></div>
+    </div>
+
+    <!-- Background decorative gears -->
+    <svg class="bg-gear" style="top: -80px; right: -80px; width: 320px;" viewBox="0 0 100 100">
+      <path d="M50 10 L54 10 L56 22 L60 23 L68 14 L72 17 L66 27 L70 31 L82 26 L84 30 L74 38 L76 42 L88 44 L88 48 L76 50 L76 54 L88 56 L88 60 L76 62 L74 66 L84 74 L82 78 L70 73 L66 77 L72 87 L68 90 L60 81 L56 82 L54 94 L50 94 L48 82 L44 81 L36 90 L32 87 L38 77 L34 73 L22 78 L20 74 L30 66 L28 62 L16 60 L16 56 L28 54 L28 50 L16 48 L16 44 L28 42 L30 38 L20 30 L22 26 L34 31 L38 27 L32 17 L36 14 L44 23 L48 22 Z" fill="none" stroke="var(--BRASS)" stroke-width="0.8"/>
+    </svg>
+    <svg class="bg-gear" style="bottom: 60px; left: 40px; width: 200px; animation-direction: reverse; animation-duration: 90s;" viewBox="0 0 100 100">
+      <path d="M50 10 L54 10 L56 22 L60 23 L68 14 L72 17 L66 27 L70 31 L82 26 L84 30 L74 38 L76 42 L88 44 L88 48 L76 50 L76 54 L88 56 L88 60 L76 62 L74 66 L84 74 L82 78 L70 73 L66 77 L72 87 L68 90 L60 81 L56 82 L54 94 L50 94 L48 82 L44 81 L36 90 L32 87 L38 77 L34 73 L22 78 L20 74 L30 66 L28 62 L16 60 L16 56 L28 54 L28 50 L16 48 L16 44 L28 42 L30 38 L20 30 L22 26 L34 31 L38 27 L32 17 L36 14 L44 23 L48 22 Z" fill="none" stroke="var(--FORGE)" stroke-width="0.6"/>
+    </svg>
+
+    <!-- Cog mascot -->
+    <div class="cog-mascot" id="cog" style="left: -100px; top: 50%;">
+      <svg width="48" height="48" viewBox="0 0 48 48">
+        <!-- Wings -->
+        <ellipse class="cog-wing" cx="8" cy="16" rx="10" ry="6" fill="oklch(0.75 0.12 55 / 0.6)" transform="rotate(-20 8 16)"/>
+        <ellipse class="cog-wing" cx="40" cy="16" rx="10" ry="6" fill="oklch(0.75 0.12 55 / 0.6)" transform="rotate(20 40 16)" style="animation-delay: 0.06s;"/>
+        <!-- Gear body -->
+        <g class="cog-body-spin">
+          <path d="M24 4 L26.5 4 L27.5 10.5 L30 11 L34 6.5 L36.5 8.5 L33 13.5 L35 16 L41.5 14 L42.5 16.5 L36.5 19.5 L37 22.5 L44 23.5 L44 26.5 L37 27.5 L36.5 30.5 L42.5 33.5 L41.5 36 L35 34 L33 36.5 L36.5 41.5 L34 43.5 L30 39 L27.5 39.5 L26.5 46 L24 46 L22.5 46 L21.5 39.5 L19 39 L15 43.5 L12.5 41.5 L16 36.5 L14 34 L7.5 36 L6.5 33.5 L12.5 30.5 L12 27.5 L5 26.5 L5 23.5 L12 22.5 L12.5 19.5 L6.5 16.5 L7.5 14 L14 16 L16 13.5 L12.5 8.5 L15 6.5 L19 11 L21.5 10.5 L22.5 4 Z" fill="var(--BRASS)" stroke="var(--FORGE)" stroke-width="1"/>
+          <circle cx="24" cy="25" r="8" fill="var(--bg-deep)" stroke="var(--FORGE)" stroke-width="1.5"/>
+          <circle cx="24" cy="25" r="3" fill="var(--SPARK)"/>
+        </g>
+      </svg>
+    </div>
+
+    <!-- Scene indicator -->
+    <div class="scene-indicator hud-glass" id="scene-indicator">
+      <div class="scene-label" id="scene-label">SCENE 01 / 06</div>
+      <div style="text-align: right;">
+        <span class="scene-dot active" data-scene="0"></span>
+        <span class="scene-dot" data-scene="1"></span>
+        <span class="scene-dot" data-scene="2"></span>
+        <span class="scene-dot" data-scene="3"></span>
+        <span class="scene-dot" data-scene="4"></span>
+        <span class="scene-dot" data-scene="5"></span>
+      </div>
+    </div>
+
+    <!-- Title overlay -->
+    <div class="title-overlay" id="title-overlay">
+      <div class="title-main">力改变运动状态</div>
+      <div class="title-sub">Gear Foundry · Mechanical Workshop</div>
+      <div class="title-formula">F = m · a &nbsp;&nbsp;|&nbsp;&nbsp; a = Δv / Δt</div>
+    </div>
+
+    <!-- Subtitle -->
+    <div class="subtitle-box hud-glass subtitle-exit" id="subtitle">
+      <div class="subtitle-zh" id="sub-zh"></div>
+      <div class="subtitle-en" id="sub-en"></div>
+    </div>
+
+    <!-- Bottom HUD -->
+    <div class="hud-bottom" id="hud-bottom">
+      <div class="hud-col">
+        <div class="hud-metric">
+          <span class="hud-label">Mass</span>
+          <div class="metric-row">
+            <span class="hud-value" id="hud-mass">0.50</span>
+            <span class="hud-unit">kg</span>
+          </div>
+        </div>
+        <div class="hud-metric">
+          <span class="hud-label">Force</span>
+          <div class="metric-row">
+            <span class="hud-value" id="hud-force">0.0</span>
+            <span class="hud-unit">N</span>
+          </div>
+        </div>
+      </div>
+      <div class="hud-col">
+        <div class="hud-metric">
+          <span class="hud-label">Velocity</span>
+          <div class="metric-row">
+            <span class="hud-value" id="hud-vel">0.00</span>
+            <span class="hud-unit">m/s</span>
+          </div>
+        </div>
+        <div class="hud-metric">
+          <span class="hud-label">Acceleration</span>
+          <div class="metric-row">
+            <span class="hud-value" id="hud-acc">0.00</span>
+            <span class="hud-unit">m/s²</span>
+          </div>
+        </div>
+        <div class="hud-metric">
+          <span class="hud-label">Direction</span>
+          <div class="metric-row">
+            <span class="hud-value" id="hud-dir">0°</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Takeaway card -->
+    <div class="takeaway-card hud-glass" id="takeaway">
+      <div class="takeaway-title">记住这个核心观点</div>
+      <div class="takeaway-body">
+        力不是让物体动起来的原因，而是让物体<strong style="color:var(--SPARK);">变速</strong>或<strong style="color:var(--SPARK);">变向</strong>的原因。
+        <br><br>
+        看到物体启动、加速或转弯，就知道有力在作用。
+      </div>
+      <div class="takeaway-callout">
+        Force is not what keeps an object moving.<br>
+        Force is what changes how it moves — speed or direction.
+      </div>
+      <div style="margin-top: 24px; text-align: center;">
+        <span style="font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--BRASS); letter-spacing:0.1em;">
+          ∴ F = ma &nbsp;&nbsp;·&nbsp;&nbsp; build the machine.
+        </span>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // =========================
+    //  PHYSICS & RENDER ENGINE
+    // =========================
+    const canvas = document.getElementById('world');
+    const ctx = canvas.getContext('2d');
+
+    let W, H, cx, cy;
+    function resize() {
+      W = canvas.width = window.innerWidth;
+      H = canvas.height = window.innerHeight;
+      cx = W / 2; cy = H / 2;
+    }
+    window.addEventListener('resize', resize);
+    resize();
+
+    // Physics world
+    const m = 0.50; // kg
+    let px = 0, py = 0; // position (meters)
+    let vx = 0, vy = 0; // velocity (m/s)
+    let ax = 0, ay = 0; // acceleration (m/s²)
+    let Fx = 0, Fy = 0; // force (N)
+    let angle = 0; // visual rotation (deg)
+    let friction = 0; // 0 = no friction
+
+    // Visual scale: 1 meter = ? pixels
+    let scale = 140;
+    let camX = 0, camY = 0; // camera offset in world pixels
+
+    // State machine
+    const state = {
+      showVectors: false,
+      showGrid: true,
+      showForceArrow: false,
+      showVelocityArrow: false,
+      showAccelerationArrow: false,
+      showDirectionArc: false,
+      cogActive: false,
+      cogX: -100, cogY: H/2,
+      titleVisible: true,
+      blueprintOpacity: 0,
+      frictionNotice: false,
+      sceneIndex: 0,
+    };
+
+    // Particles
+    const sparks = [];
+    const steam = [];
+    const trail = []; // {x,y,t}
+
+    function spawnSpark(x, y, count = 4) {
+      for (let i = 0; i < count; i++) {
+        sparks.push({
+          x, y,
+          vx: (Math.random() - 0.5) * 120,
+          vy: (Math.random() - 0.5) * 120 - 40,
+          life: 1.0,
+          size: 1 + Math.random() * 2,
+        });
+      }
+    }
+
+    function spawnSteam(x, y) {
+      steam.push({ x, y, life: 1.0, r: 10 + Math.random() * 15 });
+    }
+
+    // =========================
+    //  DRAWING HELPERS
+    // =========================
+    function toScreen(wx, wy) {
+      return {
+        x: cx + (wx * scale) - camX,
+        y: cy + (wy * scale) - camY,
+      };
+    }
+
+    function worldToScreenVec(vx, vy) {
+      return { x: vx * scale, y: -vy * scale }; // Y is up in physics, down on screen
+    }
+
+    function drawGearPath(ctx, x, y, r, teeth, holeR) {
+      const outer = r;
+      const inner = r * 0.78;
+      const toothH = r * 0.18;
+      ctx.beginPath();
+      for (let i = 0; i < teeth * 2; i++) {
+        const a = (Math.PI * 2 * i) / (teeth * 2) - Math.PI / 2;
+        const rad = i % 2 === 0 ? outer : inner;
+        const px = x + Math.cos(a) * rad;
+        const py = y + Math.sin(a) * rad;
+        if (i === 0) ctx.moveTo(px, py);
+        else ctx.lineTo(px, py);
+      }
+      ctx.closePath();
+      // Hole
+      ctx.moveTo(x + holeR, y);
+      ctx.arc(x, y, holeR, 0, Math.PI * 2, true);
+    }
+
+    function drawArrow(ctx, x1, y1, x2, y2, color, label, width = 2) {
+      const dx = x2 - x1, dy = y2 - y1;
+      const len = Math.sqrt(dx * dx + dy * dy);
+      if (len < 4) return;
+      const nx = dx / len, ny = dy / len;
+      const head = 10;
+
+      ctx.save();
+      ctx.strokeStyle = color;
+      ctx.fillStyle = color;
+      ctx.lineWidth = width;
+      ctx.lineCap = 'square';
+
+      // Glow
+      ctx.shadowColor = color;
+      ctx.shadowBlur = 8;
+
+      ctx.beginPath();
+      ctx.moveTo(x1, y1);
+      ctx.lineTo(x2, y2);
+      ctx.stroke();
+
+      // Arrowhead
+      ctx.beginPath();
+      ctx.moveTo(x2, y2);
+      ctx.lineTo(x2 - nx * head - ny * head * 0.5, y2 - ny * head + nx * head * 0.5);
+      ctx.lineTo(x2 - nx * head + ny * head * 0.5, y2 - ny * head - nx * head * 0.5);
+      ctx.closePath();
+      ctx.fill();
+
+      // Label
+      if (label) {
+        ctx.shadowBlur = 0;
+        ctx.font = '500 11px "JetBrains Mono", monospace';
+        ctx.fillStyle = color;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'bottom';
+        const mx = (x1 + x2) / 2, my = (y1 + y2) / 2;
+        const perpX = -ny * 16, perpY = nx * 16;
+        ctx.fillText(label, mx + perpX, my + perpY);
+      }
+
+      ctx.restore();
+    }
+
+    function drawGrid() {
+      if (!state.showGrid) return;
+      const gridSizeM = 1.0; // 1 meter
+      const gridSize = gridSizeM * scale;
+
+      const startX = Math.floor((camX - cx) / gridSize) * gridSize;
+      const endX = startX + W + gridSize * 2;
+      const startY = Math.floor((camY - cy) / gridSize) * gridSize;
+      const endY = startY + H + gridSize * 2;
+
+      ctx.save();
+      ctx.strokeStyle = 'oklch(0.85 0.04 85 / 0.06)';
+      ctx.lineWidth = 1;
+
+      for (let x = startX; x < endX; x += gridSize) {
+        ctx.beginPath();
+        ctx.moveTo(x - camX + cx, 0);
+        ctx.lineTo(x - camX + cx, H);
+        ctx.stroke();
+      }
+      for (let y = startY; y < endY; y += gridSize) {
+        ctx.beginPath();
+        ctx.moveTo(0, y - camY + cy);
+        ctx.lineTo(W, y - camY + cy);
+        ctx.stroke();
+      }
+
+      // Axis labels every 2 meters
+      ctx.fillStyle = 'oklch(0.5 0.06 265 / 0.5)';
+      ctx.font = '300 10px "JetBrains Mono", monospace';
+      ctx.textAlign = 'center';
+      for (let wx = Math.floor((camX - cx) / scale); wx <= Math.ceil((camX - cx + W) / scale); wx += 2) {
+        if (wx === 0) continue;
+        const sx = cx + wx * scale - camX;
+        ctx.fillText(wx + 'm', sx, cy - camY + 4);
+      }
+
+      ctx.restore();
+    }
+
+    function drawFloor() {
+      const floorY = cy + 1.2 * scale - camY;
+      if (floorY < 0 || floorY > H) return;
+
+      ctx.save();
+      // Floor line
+      ctx.strokeStyle = 'oklch(0.75 0.12 55 / 0.35)';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(0, floorY);
+      ctx.lineTo(W, floorY);
+      ctx.stroke();
+
+      // Measurement ticks
+      ctx.strokeStyle = 'oklch(0.75 0.12 55 / 0.2)';
+      ctx.lineWidth = 1;
+      const tickM = 0.5;
+      const startWX = Math.floor((camX - cx) / scale / tickM) * tickM;
+      for (let wx = startWX; wx <= startWX + W / scale + 2; wx += tickM) {
+        const sx = cx + wx * scale - camX;
+        ctx.beginPath();
+        ctx.moveTo(sx, floorY);
+        ctx.lineTo(sx, floorY + (wx % 1 === 0 ? 10 : 5));
+        ctx.stroke();
+      }
+
+      ctx.restore();
+    }
+
+    function drawCart() {
+      const pos = toScreen(px, py);
+      const x = pos.x;
+      const y = pos.y;
+
+      // Trail
+      ctx.save();
+      for (let i = 0; i < trail.length - 1; i++) {
+        const t1 = trail[i];
+        const t2 = trail[i + 1];
+        const p1 = toScreen(t1.x, t1.y);
+        const p2 = toScreen(t2.x, t2.y);
+        const age = 1 - (Date.now() - t1.t) / 4000;
+        if (age <= 0) continue;
+        ctx.strokeStyle = `oklch(0.75 0.17 55 / ${age * 0.3})`;
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(p1.x, p1.y);
+        ctx.lineTo(p2.x, p2.y);
+        ctx.stroke();
+      }
+      ctx.restore();
+
+      // Cart body (mechanical style)
+      ctx.save();
+      ctx.translate(x, y);
+      ctx.rotate(-angle * Math.PI / 180); // Visual rotation for turning
+
+      const w = 56, h = 32;
+
+      // Shadow
+      ctx.fillStyle = 'oklch(0.0 0 0 / 0.3)';
+      ctx.fillRect(-w/2 + 4, -h/2 + 14, w, h);
+
+      // Main chassis
+      ctx.fillStyle = 'oklch(0.35 0.10 60)';
+      ctx.fillRect(-w/2, -h/2, w, h);
+
+      // Brass trim
+      ctx.strokeStyle = 'var(--BRASS)';
+      ctx.lineWidth = 2;
+      ctx.strokeRect(-w/2, -h/2, w, h);
+
+      // Engine block detail
+      ctx.fillStyle = 'oklch(0.25 0.06 60)';
+      ctx.fillRect(-w/2 + 6, -h/2 + 6, w - 12, h - 12);
+
+      // Center gear
+      ctx.strokeStyle = 'var(--FORGE)';
+      ctx.lineWidth = 1.5;
+      drawGearPath(ctx, 0, 0, 10, 8, 3);
+      ctx.stroke();
+      ctx.fillStyle = 'var(--SPARK)';
+      ctx.fill();
+
+      // Piston indicator
+      const pistonX = 14;
+      ctx.fillStyle = 'var(--FORGE)';
+      ctx.fillRect(pistonX - 3, -h/2 + 4, 6, h - 8);
+      ctx.fillStyle = 'var(--EMBER)';
+      ctx.fillRect(pistonX - 1, -h/2 + 6, 2, h - 12);
+
+      // Wheels
+      const wheelY = h/2 + 4;
+      [-18, 18].forEach(wx => {
+        ctx.beginPath();
+        ctx.arc(wx, wheelY, 7, 0, Math.PI * 2);
+        ctx.fillStyle = 'oklch(0.2 0.04 60)';
+        ctx.fill();
+        ctx.strokeStyle = 'var(--IRON)';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+        // Hub
+        ctx.beginPath();
+        ctx.arc(wx, wheelY, 3, 0, Math.PI * 2);
+        ctx.fillStyle = 'var(--BRASS)';
+        ctx.fill();
+      });
+
+      ctx.restore();
+
+      // VECTORS (drawn in world space, not rotated with cart)
+      if (state.showForceArrow && (Fx !== 0 || Fy !== 0)) {
+        const fLen = Math.sqrt(Fx * Fx + Fy * Fy);
+        const fScale = Math.min(fLen * 25, 100);
+        const fv = worldToScreenVec(Fx / fLen * fScale / scale, Fy / fLen * fScale / scale);
+        drawArrow(ctx, x, y, x + fv.x, y + fv.y, 'var(--FORGE)', `F = ${fLen.toFixed(1)} N`, 2.5);
+      }
+
+      if (state.showVelocityArrow && (vx !== 0 || vy !== 0)) {
+        const vLen = Math.sqrt(vx * vx + vy * vy);
+        const vScale = Math.min(vLen * 40, 140);
+        const vv = worldToScreenVec(vx / vLen * vScale / scale, vy / vLen * vScale / scale);
+        drawArrow(ctx, x, y - 20, x + vv.x, y - 20 + vv.y, 'var(--SPARK)', `v = ${vLen.toFixed(2)} m/s`, 2);
+      }
+
+      if (state.showAccelerationArrow && (ax !== 0 || ay !== 0)) {
+        const aLen = Math.sqrt(ax * ax + ay * ay);
+        const aScale = Math.min(aLen * 60, 120);
+        const av = worldToScreenVec(ax / aLen * aScale / scale, ay / aLen * aScale / scale);
+        drawArrow(ctx, x, y + 20, x + av.x, y + 20 + av.y, 'var(--BRASS)', `a = ${aLen.toFixed(2)} m/s²`, 2);
+      }
+
+      // Direction arc
+      if (state.showDirectionArc && (vx !== 0 || vy !== 0)) {
+        const vAngle = Math.atan2(-vy, vx);
+        ctx.save();
+        ctx.strokeStyle = 'oklch(0.85 0.14 85 / 0.4)';
+        ctx.lineWidth = 1;
+        ctx.setLineDash([3, 3]);
+        ctx.beginPath();
+        ctx.arc(x, y, 45, 0, vAngle, vy > 0);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.restore();
+      }
+    }
+
+    function drawCogMascotOverlay() {
+      const el = document.getElementById('cog');
+      el.style.left = state.cogX + 'px';
+      el.style.top = state.cogY + 'px';
+      el.style.opacity = state.cogActive ? '1' : '0';
+      el.style.transform = state.cogActive ? 'scale(1)' : 'scale(0.6)';
+    }
+
+    function drawParticles(dt) {
+      // Sparks
+      for (let i = sparks.length - 1; i >= 0; i--) {
+        const s = sparks[i];
+        s.x += s.vx * dt;
+        s.y += s.vy * dt;
+        s.life -= dt * 2;
+        s.vy += 60 * dt; // gravity
+        if (s.life <= 0) {
+          sparks.splice(i, 1);
+          continue;
+        }
+        ctx.save();
+        ctx.globalAlpha = s.life;
+        ctx.fillStyle = 'var(--SPARK)';
+        ctx.fillRect(s.x - s.size/2, s.y - s.size/2, s.size, s.size);
+        ctx.restore();
+      }
+
+      // Steam
+      for (let i = steam.length - 1; i >= 0; i--) {
+        const s = steam[i];
+        s.y -= 30 * dt;
+        s.life -= dt * 0.5;
+        s.r += 15 * dt;
+        if (s.life <= 0) {
+          steam.splice(i, 1);
+          continue;
+        }
+        ctx.save();
+        ctx.globalAlpha = s.life * 0.12;
+        ctx.strokeStyle = 'var(--EMBER)';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.restore();
+      }
+    }
+
+    // =========================
+    //  PHYSICS UPDATE
+    // =========================
+    let lastTime = performance.now();
+
+    function physicsStep(dt) {
+      // Clamp dt
+      if (dt > 0.05) dt = 0.05;
+
+      // Net force
+      let netFx = Fx;
+      let netFy = Fy;
+
+      // Friction (if any)
+      if (friction > 0) {
+        const v = Math.sqrt(vx * vx + vy * vy);
+        if (v > 0.01) {
+          const fDirX = -vx / v;
+          const fDirY = -vy / v;
+          netFx += fDirX * friction;
+          netFy += fDirY * friction;
+        } else if (Fx === 0 && Fy === 0) {
+          vx = 0; vy = 0;
+        }
+      }
+
+      ax = netFx / m;
+      ay = netFy / m;
+
+      vx += ax * dt;
+      vy += ay * dt;
+
+      px += vx * dt;
+      py += vy * dt;
+
+      // Visual rotation follows velocity
+      if (Math.abs(vx) > 0.05 || Math.abs(vy) > 0.05) {
+        const targetAngle = Math.atan2(-vy, vx) * 180 / Math.PI;
+        const diff = targetAngle - angle;
+        // shortest path
+        let d = ((diff + 180) % 360 + 360) % 360 - 180;
+        angle += d * Math.min(1, dt * 4);
+      }
+
+      // Trail
+      if (Math.abs(vx) > 0.01 || Math.abs(vy) > 0.01) {
+        if (trail.length === 0 || Math.hypot(px - trail[trail.length - 1].x, py - trail[trail.length - 1].y) > 0.05) {
+          trail.push({ x: px, y: py, t: Date.now() });
+        }
+      }
+      while (trail.length > 0 && Date.now() - trail[0].t > 4000) trail.shift();
+
+      // Camera follow
+      const targetCamX = px * scale;
+      const targetCamY = py * scale;
+      camX += (targetCamX - camX) * Math.min(1, dt * 3);
+      camY += (targetCamY - camY) * Math.min(1, dt * 3);
+
+      // HUD updates
+      document.getElementById('hud-force').textContent = Math.sqrt(Fx*Fx + Fy*Fy).toFixed(1);
+      document.getElementById('hud-vel').textContent = Math.sqrt(vx*vx + vy*vy).toFixed(2);
+      document.getElementById('hud-acc').textContent = Math.sqrt(ax*ax + ay*ay).toFixed(2);
+      document.getElementById('hud-dir').textContent = Math.round(((Math.atan2(-vy, vx) * 180 / Math.PI) % 360 + 360) % 360) + '°';
+
+      // Sparks from force
+      if (Math.sqrt(Fx*Fx + Fy*Fy) > 0.5) {
+        const pos = toScreen(px, py);
+        if (Math.random() < 0.3) spawnSpark(pos.x + (Math.random()-0.5)*30, pos.y + (Math.random()-0.5)*20, 1);
+      }
+    }
+
+    // =========================
+    //  RENDER LOOP
+    // =========================
+    function loop() {
+      const now = performance.now();
+      const dt = (now - lastTime) / 1000;
+      lastTime = now;
+
+      physicsStep(dt);
+
+      ctx.clearRect(0, 0, W, H);
+
+      drawGrid();
+      drawFloor();
+      drawCart();
+      drawParticles(dt);
+
+      // Blueprint strip opacity
+      document.getElementById('blueprint-strip').style.opacity = state.blueprintOpacity;
+
+      drawCogMascotOverlay();
+
+      requestAnimationFrame(loop);
+    }
+
+    // =========================
+    //  TIMELINE / SCENES
+    // =========================
+    function setSubtitle(zh, en) {
+      const box = document.getElementById('subtitle');
+      const zhEl = document.getElementById('sub-zh');
+      const enEl = document.getElementById('sub-en');
+
+      box.classList.remove('subtitle-enter');
+      box.classList.add('subtitle-exit');
+
+      setTimeout(() => {
+        zhEl.textContent = zh;
+        enEl.textContent = en;
+        box.classList.remove('subtitle-exit');
+        box.classList.add('subtitle-enter');
+      }, 500);
+    }
+
+    function setSceneDots(idx) {
+      state.sceneIndex = idx;
+      document.querySelectorAll('.scene-dot').forEach((d, i) => {
+        d.classList.toggle('active', i === idx);
+      });
+      document.getElementById('scene-label').textContent = `SCENE 0${idx + 1} / 06`;
+    }
+
+    function hideTitle() {
+      const el = document.getElementById('title-overlay');
+      el.style.opacity = '0';
+      setTimeout(() => el.style.display = 'none', 800);
+    }
+
+    function showTitle() {
+      const el = document.getElementById('title-overlay');
+      el.style.display = 'block';
+      requestAnimationFrame(() => { el.style.opacity = '1'; });
+    }
+
+    // Scene definitions
+    const scenes = [
+      // ---- SCENE 0: Title & Setup ----
+      {
+        start: 0,
+        end: 3500,
+        enter() {
+          showTitle();
+          setSubtitle('', '');
+          setSceneDots(0);
+          state.showGrid = true;
+          state.blueprintOpacity = 0;
+          state.cogActive = false;
+          // Reset physics
+          px = 0; py = 0; vx = 0; vy = 0; Fx = 0; Fy = 0; angle = 0; friction = 0;
+          camX = 0; camY = 0;
+        },
+        tick(t) {
+          if (t > 2500) hideTitle();
+        }
+      },
+
+      // ---- SCENE 1: At rest, force arrives ----
+      {
+        start: 3500,
+        end: 7500,
+        enter() {
+          setSubtitle(
+            '小车静止在铸造厂地面上。此时合力为零，运动状态保持不变。',
+            'The cart rests on the foundry floor. Net force is zero — its state of motion does not change.'
+          );
+          setSceneDots(1);
+          state.showVectors = true;
+          state.showForceArrow = true;
+          state.showVelocityArrow = true;
+          state.showAccelerationArrow = true;
+          state.cogActive = true;
+          state.cogX = W * 0.15;
+          state.cogY = H * 0.35;
+          state.blueprintOpacity = '0.6';
+          px = 0; py = 0; vx = 0; vy = 0;
+        },
+        tick(t) {
+          // Cog approaches cart
+          const progress = Math.min((t - 3500) / 2000, 1);
+          state.cogX = W * 0.15 + progress * (W * 0.25);
+          state.cogY = H * 0.35 + Math.sin(progress * Math.PI) * (-40);
+
+          // At ~1.5s in, apply force
+          if (t > 5000) {
+            Fx = 3.0; // 3N forward
+            Fy = 0;
+          }
+
+          // Steam puffs from "engine start"
+          if (t > 5200 && t < 5600 && Math.random() < 0.15) {
+            const pos = toScreen(px, py);
+            spawnSteam(pos.x + 20, pos.y);
+          }
+        }
+      },
+
+      // ---- SCENE 2: Acceleration ----
+      {
+        start: 7500,
+        end: 12000,
+        enter() {
+          setSubtitle(
+            '推力与加速度方向一致，小车速度从零持续增加。',
+            'Force and acceleration point the same way. The cart speeds up from zero.'
+          );
+          setSceneDots(2);
+          Fx = 3.0; Fy = 0;
+          state.cogActive = true;
+          state.cogX = cx + 80;
+          state.cogY = cy - 100;
+        },
+        tick(t) {
+          // Cog follows alongside
+          const pos = toScreen(px, py);
+          state.cogX = pos.x + 90;
+          state.cogY = pos.y - 90;
+
+          // Periodic sparks
+          if (Math.random() < 0.08) {
+            spawnSpark(pos.x + 28, pos.y, 2);
+          }
+        }
+      },
+
+      // ---- SCENE 3: Direction change (turning) ----
+      {
+        start: 12000,
+        end: 17500,
+        enter() {
+          setSubtitle(
+            '推力方向改变，小车运动方向随之偏转——力改变了运动的方向。',
+            'The push changes direction — and the cart turns. Force changes the direction of motion.'
+          );
+          setSceneDots(3);
+          state.showDirectionArc = true;
+        },
+        tick(t) {
+          const phase = (t - 12000) / 5500;
+
+          // Smoothly rotate force vector
+          const forceAngle = -Math.PI / 4 * Math.min(phase * 1.8, 1); // -45 deg
+          const fMag = 3.0;
+          Fx = Math.cos(forceAngle) * fMag;
+          Fy = Math.sin(forceAngle) * fMag;
+
+          const pos = toScreen(px, py);
+          state.cogX = pos.x + Math.cos(forceAngle - 0.5) * 100;
+          state.cogY = pos.y + Math.sin(forceAngle - 0.5) * 100;
+
+          if (Math.random() < 0.06) {
+            spawnSpark(pos.x + Math.cos(forceAngle)*35, pos.y + Math.sin(forceAngle)*35, 2);
+          }
+        }
+      },
+
+      // ---- SCENE 4: Force removed (inertia / frictionless) ----
+      {
+        start: 17500,
+        end: 23000,
+        enter() {
+          setSubtitle(
+            '推力撤除。在理想无摩擦条件下，小车保持匀速直线运动——运动状态不再改变。',
+            'The push is removed. With no friction, the cart keeps moving at constant velocity — its state of motion stays unchanged.'
+          );
+          setSceneDots(4);
+          Fx = 0; Fy = 0; friction = 0;
+          state.showDirectionArc = false;
+        },
+        tick(t) {
+          const pos = toScreen(px, py);
+          state.cogX = pos.x + 100;
+          state.cogY = pos.y - 60;
+
+          // Cog "inspects" then flies off
+          if (t > 21000) {
+            const leave = (t - 21000) / 2000;
+            state.cogX = pos.x + 100 + leave * 200;
+            state.cogY = pos.y - 60 - leave * 150;
+            if (leave >= 1) state.cogActive = false;
+          }
+        }
+      },
+
+      // ---- SCENE 5: With friction (optional contrast) ----
+      {
+        start: 23000,
+        end: 28000,
+        enter() {
+          setSubtitle(
+            '若地面存在摩擦，小车将逐渐减速直至停止——只有合外力不为零，运动状态才会改变。',
+            'With friction, the cart slows to a halt. Only when net force is nonzero does the state of motion change.'
+          );
+          setSceneDots(5);
+          friction = 0.8; // 0.8N friction
+          vx = Math.sqrt(vx*vx + vy*vy); vy = 0; // normalize for clarity
+          angle = 0;
+          px = 0; py = 0; // Reset for visual clarity
+          camX = 0; camY = 0;
+        },
+        tick(t) {
+          const pos = toScreen(px, py);
+          // Small friction sparks
+          if (Math.sqrt(vx*vx + vy*vy) > 0.2 && Math.random() < 0.1) {
+            spawnSpark(pos.x + (Math.random()-0.5)*40, pos.y + 20, 1);
+          }
+        }
+      },
+
+      // ---- SCENE 6: Takeaway ----
+      {
+        start: 28000,
+        end: 999999,
+        enter() {
+          setSubtitle('', '');
+          document.getElementById('takeaway').classList.add('show');
+          document.getElementById('hud-bottom').style.opacity = '0.3';
+          document.getElementById('scene-indicator').style.opacity = '0.3';
+          state.blueprintOpacity = '0.3';
+          state.showGrid = false;
+          state.showForceArrow = false;
+          state.showVelocityArrow = false;
+          state.showAccelerationArrow = false;
+          Fx = 0; Fy = 0; friction = 0;
+        },
+        tick(t) {}
+      }
+    ];
+
+    // Timeline runner
+    const startTime = performance.now();
+
+    function runTimeline() {
+      const t = performance.now() - startTime;
+
+      for (const scene of scenes) {
+        if (t >= scene.start && (!scene._entered || scene._entered < scene.start)) {
+          scene._entered = t;
+          scene.enter();
+        }
+        if (t >= scene.start && t < scene.end) {
+          scene.tick(t);
+        }
+      }
+
+      requestAnimationFrame(runTimeline);
+    }
+
+    // Start
+    loop();
+    runTimeline();
+
+    // Initialize first scene
+    scenes[0].enter();
+
+  </script>
+</body>
+</html>

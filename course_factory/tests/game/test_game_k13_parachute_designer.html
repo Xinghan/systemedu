@@ -1,0 +1,473 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=Noto+Sans+SC:wght@400;700&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box;}
+html,body{width:100%;height:100vh;overflow:hidden;background:#0c0e14;color:#f6f6fc;font-family:'Noto Sans SC','Inter',sans-serif;}
+.game-wrap{display:flex;flex-direction:column;height:100vh;}
+.game-header{padding:10px 16px;display:flex;justify-content:space-between;align-items:center;background:rgba(0,0,0,0.4);}
+.game-header h1{font-family:'Space Grotesk',sans-serif;font-size:clamp(13px,2vw,17px);font-weight:700;color:#50ffb0;letter-spacing:-0.02em;}
+.game-header .round-info{font-family:'Space Grotesk',sans-serif;font-size:12px;color:#aaabb0;letter-spacing:0.1em;}
+.game-body{flex:1;display:flex;flex-direction:column;min-height:0;position:relative;}
+canvas{width:100%;height:100%;display:block;}
+.control-panel{display:flex;justify-content:center;align-items:center;gap:10px;padding:8px 16px;background:rgba(0,0,0,0.4);}
+.ctrl-btn{font-family:'Space Grotesk',sans-serif;font-size:12px;font-weight:700;letter-spacing:0.08em;padding:6px 16px;border:none;cursor:pointer;color:#0c0e12;background:linear-gradient(135deg,#50ffb0,#17df93);box-shadow:0 0 10px rgba(80,255,176,0.3);transition:transform 0.1s;}
+.ctrl-btn:hover{transform:scale(1.04);}
+.ctrl-btn:active{transform:scale(0.96);}
+.ctrl-btn:disabled{opacity:0.4;cursor:default;transform:none;}
+.ctrl-btn.secondary{background:rgba(30,30,45,0.9);color:#aaabb0;box-shadow:none;}
+.ctrl-btn.secondary:hover{color:#50ffb0;}
+.hud-bar{height:44px;display:flex;align-items:center;justify-content:space-around;background:rgba(0,0,0,0.55);padding:0 16px;}
+.hud-item{text-align:center;}
+.hud-label{font-family:'Space Grotesk',sans-serif;font-size:9px;letter-spacing:0.12em;color:#aaabb0;text-transform:uppercase;}
+.hud-val{font-family:'Space Grotesk',sans-serif;font-size:14px;font-weight:700;color:#50ffb0;}
+.lang-btn{position:fixed;top:8px;right:8px;z-index:200;font-family:'Space Grotesk',sans-serif;font-size:11px;font-weight:700;padding:4px 10px;cursor:pointer;border:1px solid rgba(255,181,156,0.3);background:transparent;backdrop-filter:blur(12px);color:#ffb59c;letter-spacing:1px;}
+.size-selector{position:absolute;left:12px;top:50%;transform:translateY(-50%);display:flex;flex-direction:column;gap:8px;z-index:50;}
+.size-btn{width:60px;height:60px;border:2px solid rgba(80,255,176,0.3);background:rgba(20,20,40,0.8);backdrop-filter:blur(8px);cursor:pointer;display:flex;flex-direction:column;align-items:center;justify-content:center;transition:border-color 0.2s,box-shadow 0.2s;color:#ccc;font-size:10px;font-family:'Noto Sans SC',sans-serif;}
+.size-btn:hover{border-color:#50ffb0;}
+.size-btn.selected{border-color:#50ffb0;box-shadow:0 0 12px rgba(80,255,176,0.4);}
+.size-btn canvas{pointer-events:none;}
+</style>
+</head>
+<body>
+<button class="lang-btn" id="langBtn">CN</button>
+<div class="game-wrap">
+  <div class="game-header">
+    <h1 id="gameTitle"></h1>
+    <div class="round-info" id="roundInfo"></div>
+  </div>
+  <div class="game-body">
+    <canvas id="c"></canvas>
+    <div class="size-selector" id="sizeSelector"></div>
+  </div>
+  <div class="control-panel">
+    <button class="ctrl-btn" id="btnDrop" disabled></button>
+    <button class="ctrl-btn secondary" id="btnReset"></button>
+  </div>
+  <div class="hud-bar">
+    <div class="hud-item"><div class="hud-label" id="hudL1"></div><div class="hud-val" id="hudV1">--</div></div>
+    <div class="hud-item"><div class="hud-label" id="hudL2"></div><div class="hud-val" id="hudV2">--</div></div>
+    <div class="hud-item"><div class="hud-label" id="hudL3"></div><div class="hud-val" id="hudV3">--</div></div>
+    <div class="hud-item"><div class="hud-label" id="hudL4"></div><div class="hud-val" id="hudV4">--</div></div>
+  </div>
+</div>
+
+<script>
+// ============================================================
+// Knode 13 Game: Parachute Designer
+// Pick umbrella size to control fall time. 5 rounds with
+// increasing ball mass. Target: land in 3-5 second window.
+// ============================================================
+
+var I18N = {
+  title:     {en:'PARACHUTE DESIGNER', cn:'\u964d\u843d\u4f1e\u8bbe\u8ba1\u5e08'},
+  round:     {en:'Round', cn:'\u7b2c'},
+  of:        {en:'of', cn:'\u8f6e\uff0c\u5171'},
+  rounds:    {en:'', cn:'\u8f6e'},
+  drop:      {en:'DROP!', cn:'\u91ca\u653e\uff01'},
+  reset:     {en:'RESTART', cn:'\u91cd\u65b0\u5f00\u59cb'},
+  selectSize:{en:'Select umbrella size', cn:'\u9009\u62e9\u4f1e\u5927\u5c0f'},
+  mass:      {en:'BALL MASS', cn:'\u7403\u7684\u8d28\u91cf'},
+  umbrella:  {en:'UMBRELLA', cn:'\u4f1e\u5927\u5c0f'},
+  fallTime:  {en:'FALL TIME', cn:'\u4e0b\u843d\u65f6\u95f4'},
+  score:     {en:'SCORE', cn:'\u5f97\u5206'},
+  target:    {en:'TARGET: 3-5s', cn:'\u76ee\u6807: 3-5\u79d2'},
+  perfect:   {en:'PERFECT!', cn:'\u5b8c\u7f8e\uff01'},
+  good:      {en:'Good!', cn:'\u4e0d\u9519\uff01'},
+  tooFast:   {en:'Too fast! Need bigger umbrella', cn:'\u592a\u5feb\u4e86\uff01\u9700\u8981\u66f4\u5927\u7684\u4f1e'},
+  tooSlow:   {en:'Too slow! Need smaller umbrella', cn:'\u592a\u6162\u4e86\uff01\u9700\u8981\u66f4\u5c0f\u7684\u4f1e'},
+  tiny:      {en:'Tiny', cn:'\u8ff7\u4f60'},
+  small:     {en:'Small', cn:'\u5c0f'},
+  medium:    {en:'Medium', cn:'\u4e2d'},
+  large:     {en:'Large', cn:'\u5927'},
+  huge:      {en:'Huge', cn:'\u8d85\u5927'},
+  gameOver:  {en:'ALL ROUNDS COMPLETE!', cn:'\u5168\u90e8\u56de\u5408\u5b8c\u6210\uff01'},
+  totalScore:{en:'Total Score', cn:'\u603b\u5206'},
+  insight:   {en:'Heavier balls need bigger umbrellas!', cn:'\u8d8a\u91cd\u7684\u7403\u9700\u8981\u8d8a\u5927\u7684\u4f1e\uff01'},
+};
+
+var lang = 'cn';
+function t(key) { return I18N[key] ? (I18N[key][lang] || I18N[key].en) : key; }
+
+// Game config
+var SIZES = [
+  {key:'tiny',   area: 0.05, radius: 0.15},
+  {key:'small',  area: 0.15, radius: 0.25},
+  {key:'medium', area: 0.35, radius: 0.38},
+  {key:'large',  area: 0.60, radius: 0.50},
+  {key:'huge',   area: 1.00, radius: 0.65},
+];
+
+var ROUNDS = [
+  {mass: 0.1,  label: '10g'},
+  {mass: 0.3,  label: '30g'},
+  {mass: 0.6,  label: '60g'},
+  {mass: 1.0,  label: '100g'},
+  {mass: 2.0,  label: '200g'},
+];
+
+var TARGET_MIN = 3.0;
+var TARGET_MAX = 5.0;
+
+// Game state
+var state = {
+  currentRound: 0,
+  selectedSize: -1,
+  phase: 'select',  // select, falling, result
+  fallTime: 0,
+  ballY: 0,
+  ballVy: 0,
+  scores: [],
+  totalScore: 0,
+};
+
+// Physics
+var G = 9.8;
+var RHO = 1.225;
+var CD = 1.2;
+var DT = 0.016;
+var FALL_HEIGHT = 50; // meters (virtual)
+
+function calcTerminalVelocity(mass, area) {
+  // v_t = sqrt(2mg / (rho * Cd * A))
+  var effectiveArea = 0.01 + area * 2.0; // scale area for physics
+  return Math.sqrt(2 * mass * G / (RHO * CD * effectiveArea));
+}
+
+// Canvas
+var canvas, ctx;
+var cw, ch;
+
+function resize() {
+  canvas = document.getElementById('c');
+  var rect = canvas.parentElement.getBoundingClientRect();
+  cw = Math.floor(rect.width * devicePixelRatio);
+  ch = Math.floor(rect.height * devicePixelRatio);
+  canvas.width = cw;
+  canvas.height = ch;
+  ctx = canvas.getContext('2d');
+  ctx.scale(devicePixelRatio, devicePixelRatio);
+  cw = rect.width;
+  ch = rect.height;
+}
+
+function initUI() {
+  document.getElementById('gameTitle').textContent = t('title');
+  document.getElementById('btnDrop').textContent = t('drop');
+  document.getElementById('btnReset').textContent = t('reset');
+  document.getElementById('hudL1').textContent = t('mass');
+  document.getElementById('hudL2').textContent = t('umbrella');
+  document.getElementById('hudL3').textContent = t('fallTime');
+  document.getElementById('hudL4').textContent = t('score');
+
+  updateRoundInfo();
+  buildSizeButtons();
+  updateHUD();
+}
+
+function updateRoundInfo() {
+  var el = document.getElementById('roundInfo');
+  if (lang === 'cn') {
+    el.textContent = t('round') + (state.currentRound + 1) + t('of') + ROUNDS.length + t('rounds');
+  } else {
+    el.textContent = t('round') + ' ' + (state.currentRound + 1) + ' ' + t('of') + ' ' + ROUNDS.length;
+  }
+}
+
+function buildSizeButtons() {
+  var sel = document.getElementById('sizeSelector');
+  sel.innerHTML = '';
+  SIZES.forEach(function(s, i) {
+    var btn = document.createElement('button');
+    btn.className = 'size-btn';
+    btn.setAttribute('data-idx', i);
+
+    // Draw mini umbrella preview
+    var mc = document.createElement('canvas');
+    mc.width = 40; mc.height = 30;
+    var mctx = mc.getContext('2d');
+    var r = s.radius * 28;
+    mctx.fillStyle = '#50ffb0';
+    mctx.beginPath();
+    mctx.arc(20, 18, r, Math.PI, 0);
+    mctx.fill();
+    mctx.strokeStyle = '#fff';
+    mctx.lineWidth = 1;
+    mctx.beginPath();
+    mctx.moveTo(20, 18); mctx.lineTo(20, 28);
+    mctx.stroke();
+
+    btn.appendChild(mc);
+    var label = document.createElement('span');
+    label.textContent = t(s.key);
+    label.style.fontSize = '9px';
+    btn.appendChild(label);
+
+    btn.addEventListener('click', function() {
+      if (state.phase !== 'select') return;
+      state.selectedSize = i;
+      document.querySelectorAll('.size-btn').forEach(function(b) { b.classList.remove('selected'); });
+      btn.classList.add('selected');
+      document.getElementById('btnDrop').disabled = false;
+      updateHUD();
+    });
+    sel.appendChild(btn);
+  });
+}
+
+function updateHUD() {
+  var round = ROUNDS[state.currentRound];
+  document.getElementById('hudV1').textContent = round ? round.label : '--';
+  document.getElementById('hudV2').textContent = state.selectedSize >= 0 ? t(SIZES[state.selectedSize].key) : '--';
+  document.getElementById('hudV3').textContent = state.phase === 'result' ? state.fallTime.toFixed(2) + 's' : '--';
+  document.getElementById('hudV4').textContent = state.totalScore > 0 ? state.totalScore + '' : '--';
+}
+
+// Drawing
+function draw() {
+  if (!ctx) return;
+  // Background
+  var grad = ctx.createLinearGradient(0, 0, 0, ch);
+  grad.addColorStop(0, '#0a0c16');
+  grad.addColorStop(0.7, '#141830');
+  grad.addColorStop(1, '#1a2040');
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, cw, ch);
+
+  // Ground
+  var groundY = ch * 0.88;
+  ctx.fillStyle = '#2a3040';
+  ctx.fillRect(0, groundY, cw, ch - groundY);
+  ctx.strokeStyle = '#50ffb0';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(0, groundY); ctx.lineTo(cw, groundY);
+  ctx.stroke();
+
+  // Target zone indicator
+  ctx.fillStyle = 'rgba(80,255,176,0.08)';
+  ctx.font = "11px 'Space Grotesk', sans-serif";
+  ctx.textAlign = 'center';
+  ctx.fillStyle = 'rgba(80,255,176,0.5)';
+  ctx.fillText(t('target'), cw / 2, groundY + 20);
+
+  if (state.phase === 'select' && state.currentRound < ROUNDS.length) {
+    // Draw ball at top waiting
+    drawBallWithUmbrella(cw / 2, ch * 0.08, state.selectedSize, false);
+
+    // Instruction
+    if (state.selectedSize < 0) {
+      ctx.fillStyle = '#aaabb0';
+      ctx.font = "14px 'Noto Sans SC', sans-serif";
+      ctx.textAlign = 'center';
+      ctx.fillText(t('selectSize'), cw / 2, ch * 0.5);
+    }
+  } else if (state.phase === 'falling') {
+    var normY = state.ballY / FALL_HEIGHT;
+    var screenY = ch * 0.08 + normY * (groundY - ch * 0.08);
+    drawBallWithUmbrella(cw / 2, screenY, state.selectedSize, true);
+
+    // Timer
+    ctx.fillStyle = '#ffffff';
+    ctx.font = "bold 20px 'Space Grotesk', sans-serif";
+    ctx.textAlign = 'center';
+    ctx.fillText(state.fallTime.toFixed(1) + 's', cw / 2, ch * 0.5);
+  } else if (state.phase === 'result') {
+    // Ball on ground
+    drawBallWithUmbrella(cw / 2, groundY - 15, state.selectedSize, false);
+
+    // Result text
+    var roundScore = state.scores[state.scores.length - 1] || 0;
+    var msg = '';
+    if (roundScore >= 90) msg = t('perfect');
+    else if (roundScore >= 50) msg = t('good');
+    else if (state.fallTime < TARGET_MIN) msg = t('tooFast');
+    else msg = t('tooSlow');
+
+    ctx.fillStyle = roundScore >= 50 ? '#50ffb0' : '#ff6666';
+    ctx.font = "bold 22px 'Space Grotesk', 'Noto Sans SC', sans-serif";
+    ctx.textAlign = 'center';
+    ctx.fillText(msg, cw / 2, ch * 0.35);
+
+    ctx.fillStyle = '#ffffff';
+    ctx.font = "16px 'Space Grotesk', sans-serif";
+    ctx.fillText(state.fallTime.toFixed(2) + 's  |  +' + roundScore, cw / 2, ch * 0.42);
+
+    if (state.currentRound >= ROUNDS.length) {
+      ctx.fillStyle = '#50ffb0';
+      ctx.font = "bold 18px 'Space Grotesk', 'Noto Sans SC', sans-serif";
+      ctx.fillText(t('gameOver'), cw / 2, ch * 0.55);
+      ctx.fillStyle = '#ffffff';
+      ctx.font = "16px 'Noto Sans SC', sans-serif";
+      ctx.fillText(t('totalScore') + ': ' + state.totalScore, cw / 2, ch * 0.62);
+      ctx.fillStyle = '#ffb59c';
+      ctx.font = "14px 'Noto Sans SC', sans-serif";
+      ctx.fillText(t('insight'), cw / 2, ch * 0.69);
+    }
+  }
+
+  requestAnimationFrame(draw);
+}
+
+function drawBallWithUmbrella(x, y, sizeIdx, open) {
+  // Ball
+  var ballR = 10;
+  ctx.fillStyle = '#f0c040';
+  ctx.beginPath();
+  ctx.arc(x, y, ballR, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = 'rgba(255,255,255,0.3)';
+  ctx.lineWidth = 1;
+  ctx.stroke();
+
+  // Mass label
+  var round = ROUNDS[state.currentRound < ROUNDS.length ? state.currentRound : ROUNDS.length - 1];
+  ctx.fillStyle = '#0c0e12';
+  ctx.font = "bold 8px 'Space Grotesk', sans-serif";
+  ctx.textAlign = 'center';
+  ctx.fillText(round.label, x, y + 3);
+
+  // Umbrella
+  if (sizeIdx >= 0) {
+    var sz = SIZES[sizeIdx];
+    var umbR = sz.radius * 80;
+
+    // Stem
+    ctx.strokeStyle = '#888';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(x, y - ballR); ctx.lineTo(x, y - ballR - 20);
+    ctx.stroke();
+
+    // Canopy
+    var canopyY = y - ballR - 20;
+    ctx.fillStyle = open ? 'rgba(80,255,176,0.6)' : 'rgba(80,255,176,0.3)';
+    ctx.beginPath();
+    ctx.arc(x, canopyY, umbR, Math.PI, 0);
+    ctx.fill();
+    ctx.strokeStyle = '#50ffb0';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.arc(x, canopyY, umbR, Math.PI, 0);
+    ctx.stroke();
+
+    // Size label on canopy
+    ctx.fillStyle = '#0c0e14';
+    ctx.font = "bold 10px 'Noto Sans SC', sans-serif";
+    ctx.textAlign = 'center';
+    ctx.fillText(t(sz.key), x, canopyY - 2);
+  }
+}
+
+// Game logic
+var fallTimer = null;
+
+function startFall() {
+  if (state.selectedSize < 0 || state.currentRound >= ROUNDS.length) return;
+  state.phase = 'falling';
+  state.ballY = 0;
+  state.ballVy = 0;
+  state.fallTime = 0;
+
+  var round = ROUNDS[state.currentRound];
+  var sizeData = SIZES[state.selectedSize];
+
+  document.getElementById('btnDrop').disabled = true;
+
+  fallTimer = setInterval(function() {
+    var vt = calcTerminalVelocity(round.mass, sizeData.area);
+
+    // Euler integration with drag
+    var drag = 0;
+    if (state.ballVy > 0) {
+      drag = (state.ballVy / vt) * (state.ballVy / vt) * G;
+    }
+    var accel = G - drag;
+    state.ballVy += accel * DT;
+    state.ballY += state.ballVy * DT;
+    state.fallTime += DT;
+
+    if (state.ballY >= FALL_HEIGHT) {
+      state.ballY = FALL_HEIGHT;
+      clearInterval(fallTimer);
+      fallTimer = null;
+      endRound();
+    }
+
+    updateHUD();
+  }, DT * 1000);
+}
+
+function endRound() {
+  state.phase = 'result';
+  var ft = state.fallTime;
+  var roundScore = 0;
+
+  if (ft >= TARGET_MIN && ft <= TARGET_MAX) {
+    // In target zone
+    var center = (TARGET_MIN + TARGET_MAX) / 2;
+    var dev = Math.abs(ft - center) / (TARGET_MAX - TARGET_MIN) * 2;
+    roundScore = Math.round(100 - dev * 50);
+    if (roundScore < 50) roundScore = 50;
+  } else {
+    // Outside target
+    var dist = ft < TARGET_MIN ? TARGET_MIN - ft : ft - TARGET_MAX;
+    roundScore = Math.max(0, Math.round(30 - dist * 10));
+  }
+
+  state.scores.push(roundScore);
+  state.totalScore += roundScore;
+  state.currentRound++;
+
+  updateHUD();
+  updateRoundInfo();
+
+  if (state.currentRound < ROUNDS.length) {
+    // Auto advance after 2s
+    setTimeout(function() {
+      state.phase = 'select';
+      state.selectedSize = -1;
+      document.querySelectorAll('.size-btn').forEach(function(b) { b.classList.remove('selected'); });
+      document.getElementById('btnDrop').disabled = true;
+      updateHUD();
+      updateRoundInfo();
+    }, 2500);
+  }
+}
+
+function resetGame() {
+  if (fallTimer) { clearInterval(fallTimer); fallTimer = null; }
+  state.currentRound = 0;
+  state.selectedSize = -1;
+  state.phase = 'select';
+  state.fallTime = 0;
+  state.ballY = 0;
+  state.ballVy = 0;
+  state.scores = [];
+  state.totalScore = 0;
+  document.querySelectorAll('.size-btn').forEach(function(b) { b.classList.remove('selected'); });
+  document.getElementById('btnDrop').disabled = true;
+  updateHUD();
+  updateRoundInfo();
+}
+
+// Event listeners
+document.getElementById('btnDrop').addEventListener('click', startFall);
+document.getElementById('btnReset').addEventListener('click', resetGame);
+document.getElementById('langBtn').addEventListener('click', function() {
+  lang = lang === 'cn' ? 'en' : 'cn';
+  this.textContent = lang === 'cn' ? 'CN' : 'EN';
+  initUI();
+});
+
+// Init
+window.addEventListener('resize', resize);
+resize();
+initUI();
+draw();
+</script>
+</body>
+</html>

@@ -1,0 +1,1141 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=Inter:wght@400;500&family=Noto+Sans+SC:wght@400;700&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box;}
+html,body{width:100%;height:100vh;overflow:hidden;}
+body{background:var(--bg,#0c0e12);color:var(--text,#f6f6fc);font-family:'Inter','Noto Sans SC',sans-serif;}
+/* ── Outer: sidebar + main ── */
+.wrapper{display:flex;flex-direction:row;height:100vh;overflow:hidden;}
+.sidebar{width:200px;min-width:200px;max-width:200px;display:flex;flex-direction:column;gap:6px;padding:10px;background:rgba(0,0,0,0.5);border-right:1px solid rgba(80,255,176,0.15);overflow-y:auto;}
+.lang-btn{align-self:flex-start;flex-shrink:0;font-family:'Space Grotesk',sans-serif;font-size:10px;font-weight:700;padding:3px 8px;cursor:pointer;border:1px solid rgba(255,181,156,0.25);background:transparent;color:#ffb59c;letter-spacing:1px;}
+.lang-btn:hover{border-color:#ffb59c;background:rgba(255,181,156,0.1);}
+.sidebar h1{font-family:'Space Grotesk',sans-serif;font-size:13px;font-weight:700;color:var(--primary,#50ffb0);margin-top:4px;line-height:1.3;}
+.sidebar .sub{font-size:10px;color:var(--muted,#aaabb0);letter-spacing:0.06em;text-transform:uppercase;}
+.sidebar .frame-ind{font-family:'Space Grotesk',sans-serif;font-size:10px;color:var(--muted,#aaabb0);letter-spacing:0.1em;margin-top:4px;}
+.sidebar .guide-label{font-family:'Space Grotesk',sans-serif;font-size:9px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:var(--primary,#50ffb0);margin-top:8px;}
+.sidebar .guide-content{font-family:'Noto Sans SC',sans-serif;font-size:11px;color:rgba(255,255,255,0.85);line-height:1.5;}
+.sidebar .guide-content ul{padding-left:16px;margin:0;}
+.sidebar .guide-content li{margin-bottom:1px;}
+/* ── Main area: canvas + controls + hud ── */
+.anim-main{flex:1;display:flex;flex-direction:column;min-width:0;}
+.canvas-wrap{flex:1;min-height:0;position:relative;}
+canvas{width:100%;height:100%;display:block;}
+/* ── Controls + HUD ── */
+.controls{display:flex;justify-content:center;align-items:center;gap:12px;padding:6px 16px;}
+.ctrl-btn{font-family:'Space Grotesk',sans-serif;font-size:11px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;padding:5px 16px;border:none;cursor:pointer;color:var(--bg,#0c0e12);background:linear-gradient(135deg,var(--primary,#50ffb0),var(--primary-dim,#17df93));transition:transform 0.1s,box-shadow 0.2s;box-shadow:0 0 10px var(--glow-strong,rgba(80,255,176,0.3));}
+.ctrl-btn:hover{transform:scale(1.04);}
+.ctrl-btn:active{transform:scale(0.96);}
+.ctrl-btn.secondary{background:var(--glass,rgba(23,26,31,0.92));color:var(--muted,#aaabb0);box-shadow:none;backdrop-filter:blur(12px);}
+.ctrl-btn.secondary:hover{color:var(--primary,#50ffb0);}
+.hud{height:40px;display:flex;align-items:center;justify-content:space-around;background:rgba(0,0,0,0.55);backdrop-filter:blur(12px);padding:0 16px;}
+.hud-item{text-align:center;}
+.hud-label{font-family:'Space Grotesk',sans-serif;font-size:8px;letter-spacing:0.15em;text-transform:uppercase;color:var(--muted,#aaabb0);}
+.hud-val{font-family:'Space Grotesk',sans-serif;font-size:13px;font-weight:700;color:var(--primary,#50ffb0);}
+</style>
+</head>
+<body>
+<div class="wrapper">
+<!-- Sidebar: lang-btn, title, guide (completely separate from canvas) -->
+<div class="sidebar">
+<button class="lang-btn" id="langBtn">CN</button>
+<h1 id="title"></h1>
+<div class="sub" id="subtitle"></div>
+<div class="frame-ind" id="frameIndicator"></div>
+<div class="guide-label" id="guideTitle"></div>
+<div class="guide-content" id="guideContent"></div>
+</div>
+<!-- Main: canvas fills all space, nothing overlaps -->
+<div class="anim-main">
+<div class="canvas-wrap"><canvas id="c"></canvas></div>
+<div class="controls">
+<button class="ctrl-btn secondary" id="btnPrev"></button>
+<button class="ctrl-btn" id="btnPlay"></button>
+<button class="ctrl-btn secondary" id="btnNext"></button>
+</div>
+<div class="hud">
+<div class="hud-item"><div class="hud-label" id="hudL1"></div><div class="hud-val" id="hudV1"></div></div>
+<div class="hud-item"><div class="hud-label" id="hudL2"></div><div class="hud-val" id="hudV2"></div></div>
+<div class="hud-item"><div class="hud-label" id="hudL3"></div><div class="hud-val" id="hudV3"></div></div>
+<div class="hud-item"><div class="hud-label" id="hudL4"></div><div class="hud-val" id="hudV4"></div></div>
+</div>
+</div>
+</div>
+
+<!-- Runtime (shared skeleton) -->
+<script src="animation_runtime.js"></script>
+
+<!-- Content -->
+<script>
+// ============================================================
+// K32: Ideal Altitude Estimation -- Simplest Energy Model
+// CONCEPT: v = (I_total - m*g*t_burn) / m, ideal h = v^2/(2g) + burn climb
+// Core Q: "How high can a 30 N-s engine push a 300g rocket?"
+// 5 frames:
+//   0 - Title "IDEAL ALTITUDE" + rocket silhouette + formula glow
+//   1 - Burn phase: rocket accelerating, force arrows, a = (F-mg)/m
+//   2 - Coast phase: flame off, decelerating, v shrinking
+//   3 - Full profile: h-t graph with burn + coast curves, peak marked
+//   4 - Reality check: ideal vs real curve, drag losses labeled
+// ============================================================
+
+// -- Physics constants for the example --
+var MASS = 0.3;         // kg
+var G = 9.81;           // m/s^2
+var IMPULSE = 30;       // N-s
+var T_BURN = 1.5;       // s (approx C6 burn time)
+var THRUST = IMPULSE / T_BURN;  // ~20 N
+var ACC = (THRUST - MASS * G) / MASS;  // ~56.9 m/s^2
+var V_BURNOUT = ACC * T_BURN;  // ~85.3 m/s
+var H_BURN = 0.5 * ACC * T_BURN * T_BURN;  // ~64.0 m
+var H_COAST = V_BURNOUT * V_BURNOUT / (2 * G);  // ~371.0 m (approx)
+var H_TOTAL = H_BURN + H_COAST;
+var H_REAL = H_TOTAL * 0.38;  // ~40% of ideal due to drag
+var T_COAST = V_BURNOUT / G;  // time to reach apex in coast
+
+var CONFIG = {
+  style: 'ares_mission',
+  totalFrames: 5,
+
+  i18n: {
+    title:       {en:'IDEAL ALTITUDE', cn:'\u7406\u60f3\u5c04\u9ad8'},
+    subtitle:    {en:'Simplest Energy Model', cn:'\u6700\u7b80\u80fd\u91cf\u6a21\u578b'},
+    f0question:  {en:'How high can a 30 N-s engine\npush a 300 g rocket?', cn:'\u603b\u51b230 N-s\u7684\u53d1\u52a8\u673a\n\u80fd\u628a300g\u706b\u7bad\u63a8\u5230\u591a\u9ad8\uff1f'},
+    f0formula:   {en:'h = v\u00b2 / (2g)', cn:'h = v\u00b2 / (2g)'},
+    f0silhouette:{en:'HEIGHT SCALE', cn:'\u9ad8\u5ea6\u6807\u5c3a'},
+    f1title:     {en:'BURN PHASE', cn:'\u71c3\u70e7\u9636\u6bb5'},
+    f1thrust:    {en:'Thrust', cn:'\u63a8\u529b'},
+    f1weight:    {en:'Weight', cn:'\u91cd\u529b'},
+    f1accel:     {en:'a = (F - mg) / m', cn:'a = (F - mg) / m'},
+    f1accelVal:  {en:'a = (20 - 2.94) / 0.3', cn:'a = (20 - 2.94) / 0.3'},
+    f1accelRes:  {en:'\u2248 56.9 m/s\u00b2', cn:'\u2248 56.9 m/s\u00b2'},
+    f1hBurn:     {en:'h_burn = 0.5 a t\u00b2', cn:'h_burn = 0.5 a t\u00b2'},
+    f1hBurnVal:  {en:'\u2248 64 m', cn:'\u2248 64 m'},
+    f1timer:     {en:'BURN TIME', cn:'\u71c3\u70e7\u65f6\u95f4'},
+    f2title:     {en:'COAST PHASE', cn:'\u6ed1\u884c\u9636\u6bb5'},
+    f2engineOff: {en:'ENGINE OFF', cn:'\u53d1\u52a8\u673a\u5173\u95ed'},
+    f2vDecay:    {en:'v decreasing...', cn:'v \u9012\u51cf\u4e2d...'},
+    f2hCoast:    {en:'h_coast = v\u00b2 / (2g)', cn:'h_coast = v\u00b2 / (2g)'},
+    f2hCoastVal: {en:'\u2248 371 m', cn:'\u2248 371 m'},
+    f2stillUp:   {en:'Still climbing, but slowing', cn:'\u4ecd\u5728\u4e0a\u5347\uff0c\u4f46\u51cf\u901f'},
+    f3title:     {en:'ALTITUDE PROFILE', cn:'\u9ad8\u5ea6\u5256\u9762'},
+    f3hAxis:     {en:'Height (m)', cn:'\u9ad8\u5ea6 (m)'},
+    f3tAxis:     {en:'Time (s)', cn:'\u65f6\u95f4 (s)'},
+    f3burn:      {en:'BURN', cn:'\u71c3\u70e7'},
+    f3coast:     {en:'COAST', cn:'\u6ed1\u884c'},
+    f3peak:      {en:'PEAK', cn:'\u5cf0\u503c'},
+    f3total:     {en:'h_total = h_burn + h_coast', cn:'h_total = h_burn + h_coast'},
+    f3totalVal:  {en:'\u2248 64 + 371 = 435 m', cn:'\u2248 64 + 371 = 435 m'},
+    f4title:     {en:'REALITY CHECK', cn:'\u73b0\u5b9e\u6821\u9a8c'},
+    f4ideal:     {en:'Ideal: ~435 m', cn:'\u7406\u60f3: ~435 m'},
+    f4real:      {en:'Real: ~165 m', cn:'\u5b9e\u9645: ~165 m'},
+    f4drag:      {en:'Air Drag Losses', cn:'\u7a7a\u6c14\u963b\u529b\u635f\u5931'},
+    f4insight:   {en:'Simple model overestimates\nbut gives useful upper bound', cn:'\u7b80\u5355\u6a21\u578b\u4f1a\u9ad8\u4f30\n\u4f46\u7ed9\u51fa\u6709\u7528\u7684\u4e0a\u754c'},
+    guideTitle:  {en:'OBSERVATION GUIDE', cn:'\u89c2\u5bdf\u6307\u5357'},
+    g1:          {en:'Two phases: burn (engine on) + coast (engine off)', cn:'\u4e24\u4e2a\u9636\u6bb5\uff1a\u71c3\u70e7(\u53d1\u52a8\u673a\u5f00) + \u6ed1\u884c(\u53d1\u52a8\u673a\u5173)'},
+    g2:          {en:'Most altitude comes from coast phase', cn:'\u5927\u90e8\u5206\u9ad8\u5ea6\u6765\u81ea\u6ed1\u884c\u9636\u6bb5'},
+    g3:          {en:'Real altitude is 30-50% less due to drag', cn:'\u7a7a\u6c14\u963b\u529b\u4f7f\u5b9e\u9645\u9ad8\u5ea6\u4f4e30-50%'},
+    hudPhase:    {en:'PHASE', cn:'\u9636\u6bb5'},
+    hudAlt:      {en:'ALT(m)', cn:'\u9ad8\u5ea6(m)'},
+    hudVel:      {en:'VEL(m/s)', cn:'\u901f\u5ea6(m/s)'},
+    hudModel:    {en:'MODEL', cn:'\u6a21\u578b'},
+  },
+
+  hudLabels: ['hudPhase', 'hudAlt', 'hudVel', 'hudModel'],
+  hudValues: [
+    ['--',        '--',      '--',     '--'],
+    ['hudBurn',   '0-64',    '0-85',   'a=(F-mg)/m'],
+    ['hudCoast',  '64-435',  '85-0',   'v\u00b2/(2g)'],
+    ['hudBurn',   '435',     '--',     'h_b+h_c'],
+    ['hudReal',   '~165',    '--',     '-60% drag'],
+  ],
+
+  guideTitle: 'guideTitle',
+  guideItems: ['g1', 'g2', 'g3'],
+};
+
+// ============================================================
+// Particle system
+// ============================================================
+var particles = [];
+var apexParticles = [];
+
+function spawnParticle(x, y, vx, vy, life, color, size) {
+  particles.push({x:x, y:y, vx:vx, vy:vy, life:life, maxLife:life, color:color, size:size||2});
+}
+
+function spawnApexParticle(x, y, vx, vy, life, color, size) {
+  apexParticles.push({x:x, y:y, vx:vx, vy:vy, life:life, maxLife:life, color:color, size:size||2});
+}
+
+function updateParticleList(list, dt) {
+  for (var i = list.length - 1; i >= 0; i--) {
+    var p = list[i];
+    p.x += p.vx * dt;
+    p.y += p.vy * dt;
+    p.life -= dt;
+    if (p.life <= 0) list.splice(i, 1);
+  }
+}
+
+function drawParticleList(ctx, list) {
+  for (var i = 0; i < list.length; i++) {
+    var p = list[i];
+    var alpha = p.life / p.maxLife;
+    var eased = alpha * alpha;
+    ctx.fillStyle = p.color;
+    ctx.globalAlpha = eased * 0.8;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, p.size * (0.4 + eased * 0.6), 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+}
+
+// ============================================================
+// Animation state
+// ============================================================
+var animState = {progress:0, frameTracked:-1};
+var animTimer = null;
+var globalTime = 0;
+var soundMuted = true;
+var shakeIntensity = 0;
+var burnTimerVal = 0;
+var rocketY = 0;  // normalized rocket position within frame
+var coastVel = 0; // normalized velocity for coast phase display
+
+// Web Audio placeholder
+var audioCtx = null;
+function playTone(freq, dur, vol) {
+  if (soundMuted) return;
+  try {
+    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    var osc = audioCtx.createOscillator();
+    var gain = audioCtx.createGain();
+    osc.frequency.value = freq;
+    gain.gain.value = vol || 0.05;
+    osc.connect(gain);
+    gain.connect(audioCtx.destination);
+    osc.start();
+    gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + (dur || 0.15));
+    osc.stop(audioCtx.currentTime + (dur || 0.15));
+  } catch(e) {}
+}
+
+function easeOutCubic(x) { return 1 - Math.pow(1 - x, 3); }
+
+function startAnim(targetFrame) {
+  if (animTimer) { cancelAnimationFrame(animTimer); animTimer = null; }
+  particles = [];
+  apexParticles = [];
+  burnTimerVal = 0;
+  rocketY = 0;
+  coastVel = 1;
+  shakeIntensity = 0;
+  animState = {progress:0, frameTracked:targetFrame};
+  var lastTime = 0;
+  var ignitionPlayed = false;
+
+  function tick(ts) {
+    if (animState.frameTracked !== AnimRuntime.currentFrame) return;
+    if (!lastTime) lastTime = ts;
+    var delta = (ts - lastTime) / 1000;
+    lastTime = ts;
+    globalTime += delta;
+    animState.progress += delta * 0.3;
+    if (animState.progress > 1.0) animState.progress = 1.0;
+
+    // Frame-specific animation updates
+    if (animState.frameTracked === 1) {
+      burnTimerVal = Math.min(burnTimerVal + delta * 0.5, T_BURN);
+      rocketY = Math.min(rocketY + delta * 0.25, 1);
+      // Screen shake on ignition
+      if (!ignitionPlayed && animState.progress > 0.05) {
+        shakeIntensity = 6;
+        ignitionPlayed = true;
+        playTone(120, 0.3, 0.08);
+      }
+      if (shakeIntensity > 0) shakeIntensity *= 0.92;
+      if (shakeIntensity < 0.1) shakeIntensity = 0;
+    }
+    if (animState.frameTracked === 2) {
+      coastVel = Math.max(1 - animState.progress * 1.1, 0);
+      rocketY = Math.min(rocketY + delta * 0.15 * coastVel, 1);
+    }
+
+    updateParticleList(particles, delta);
+    updateParticleList(apexParticles, delta);
+    AnimRuntime.drawFrame(AnimRuntime.currentFrame);
+    animTimer = requestAnimationFrame(tick);
+  }
+  animTimer = requestAnimationFrame(tick);
+}
+
+var _prevFrameK32 = -1;
+function frameCheck() {
+  var cf = AnimRuntime.currentFrame;
+  if (cf !== _prevFrameK32) {
+    _prevFrameK32 = cf;
+    startAnim(cf);
+  }
+  requestAnimationFrame(frameCheck);
+}
+requestAnimationFrame(frameCheck);
+
+// ============================================================
+// Parallax star field (2 layers)
+// ============================================================
+var starsNear = [];
+var starsFar = [];
+(function initStars() {
+  for (var i = 0; i < 35; i++) {
+    starsFar.push({x:Math.random(), y:Math.random(), size:0.4+Math.random()*0.8, speed:0.01+Math.random()*0.02, brightness:0.15+Math.random()*0.3});
+  }
+  for (var j = 0; j < 25; j++) {
+    starsNear.push({x:Math.random(), y:Math.random(), size:0.8+Math.random()*1.5, speed:0.04+Math.random()*0.06, brightness:0.3+Math.random()*0.5});
+  }
+})();
+
+// ============================================================
+// Custom background with parallax
+// ============================================================
+function drawBg(ctx, W, H) {
+  var g = ctx.createLinearGradient(0, 0, 0, H);
+  g.addColorStop(0, '#131313');
+  g.addColorStop(0.6, '#1c1b1b');
+  g.addColorStop(1, '#201f1f');
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, W, H);
+
+  // Grid
+  ctx.strokeStyle = 'rgba(255,255,255,0.02)';
+  ctx.lineWidth = 0.5;
+  for (var x = 0; x < W; x += 40) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke(); }
+  for (var y = 0; y < H; y += 40) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke(); }
+
+  // Far stars (layer 1)
+  var t1 = globalTime * 0.2;
+  for (var i = 0; i < starsFar.length; i++) {
+    var s = starsFar[i];
+    var sx = ((s.x + t1 * s.speed) % 1.0) * W;
+    var sy = s.y * H;
+    var flicker = 0.6 + 0.4 * Math.sin(globalTime * 1.5 + i * 2.3);
+    ctx.fillStyle = 'rgba(255,200,180,' + (s.brightness * flicker) + ')';
+    ctx.beginPath();
+    ctx.arc(sx, sy, s.size, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  // Near stars (layer 2)
+  var t2 = globalTime * 0.4;
+  for (var j = 0; j < starsNear.length; j++) {
+    var sn = starsNear[j];
+    var snx = ((sn.x + t2 * sn.speed) % 1.0) * W;
+    var sny = sn.y * H;
+    var flicker2 = 0.5 + 0.5 * Math.sin(globalTime * 2.2 + j * 3.1);
+    ctx.fillStyle = 'rgba(255,220,200,' + (sn.brightness * flicker2) + ')';
+    ctx.beginPath();
+    ctx.arc(snx, sny, sn.size, 0, Math.PI * 2);
+    ctx.fill();
+  }
+}
+
+// ============================================================
+// Drawing helpers
+// ============================================================
+function drawRocket(ctx, x, y, scale, showFlame, flameIntensity) {
+  var P = AnimRuntime.PAL;
+  var s = scale || 1;
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.scale(s, s);
+
+  // Nose cone
+  ctx.fillStyle = P.primary;
+  ctx.beginPath();
+  ctx.moveTo(0, -30);
+  ctx.lineTo(-8, -10);
+  ctx.lineTo(8, -10);
+  ctx.closePath();
+  ctx.fill();
+
+  // Body
+  var bodyGrad = ctx.createLinearGradient(-8, -10, 8, -10);
+  bodyGrad.addColorStop(0, '#c0c0c0');
+  bodyGrad.addColorStop(0.5, '#e0e0e0');
+  bodyGrad.addColorStop(1, '#a0a0a0');
+  ctx.fillStyle = bodyGrad;
+  ctx.fillRect(-8, -10, 16, 35);
+
+  // Fins
+  ctx.fillStyle = P.primaryDim;
+  ctx.beginPath();
+  ctx.moveTo(-8, 25);
+  ctx.lineTo(-16, 32);
+  ctx.lineTo(-8, 20);
+  ctx.closePath();
+  ctx.fill();
+  ctx.beginPath();
+  ctx.moveTo(8, 25);
+  ctx.lineTo(16, 32);
+  ctx.lineTo(8, 20);
+  ctx.closePath();
+  ctx.fill();
+
+  // Nozzle
+  ctx.fillStyle = '#555';
+  ctx.beginPath();
+  ctx.moveTo(-5, 25);
+  ctx.lineTo(-7, 32);
+  ctx.lineTo(7, 32);
+  ctx.lineTo(5, 25);
+  ctx.closePath();
+  ctx.fill();
+
+  // Flame
+  if (showFlame) {
+    var fi = flameIntensity || 1;
+    var flicker = 0.7 + 0.3 * Math.sin(globalTime * 25);
+    var flameLen = 20 + fi * 15 * flicker;
+    var flameGrad = ctx.createLinearGradient(0, 32, 0, 32 + flameLen);
+    flameGrad.addColorStop(0, 'rgba(255,200,80,0.95)');
+    flameGrad.addColorStop(0.4, 'rgba(255,120,30,0.8)');
+    flameGrad.addColorStop(1, 'rgba(255,60,20,0)');
+    ctx.fillStyle = flameGrad;
+    ctx.beginPath();
+    ctx.moveTo(-6, 32);
+    ctx.quadraticCurveTo(-3 + Math.sin(globalTime*18)*2, 32 + flameLen * 0.6, 0, 32 + flameLen);
+    ctx.quadraticCurveTo(3 + Math.sin(globalTime*22)*2, 32 + flameLen * 0.6, 6, 32);
+    ctx.closePath();
+    ctx.fill();
+
+    // Flame glow
+    ctx.shadowColor = 'rgba(255,127,80,0.4)';
+    ctx.shadowBlur = 12 * fi;
+    ctx.fillStyle = 'rgba(255,160,60,0.15)';
+    ctx.beginPath();
+    ctx.arc(0, 32, 10 * fi, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.shadowBlur = 0;
+
+    // Exhaust particles
+    for (var ep = 0; ep < 3; ep++) {
+      spawnParticle(
+        x + (Math.random()-0.5)*8*s,
+        y + (32 + flameLen * 0.8) * s,
+        (Math.random()-0.5)*30,
+        20 + Math.random()*40,
+        0.4 + Math.random()*0.5,
+        Math.random() > 0.5 ? '#ffb59c' : '#ff7f50',
+        1 + Math.random()*2
+      );
+    }
+  }
+
+  ctx.restore();
+}
+
+function drawForceArrow(ctx, x, y1, y2, color, label, labelSide) {
+  var P = AnimRuntime.PAL;
+  var headSize = 7;
+  var dir = y2 < y1 ? -1 : 1;
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 2.5;
+  ctx.beginPath();
+  ctx.moveTo(x, y1);
+  ctx.lineTo(x, y2);
+  ctx.stroke();
+
+  // Arrowhead
+  ctx.fillStyle = color;
+  ctx.beginPath();
+  ctx.moveTo(x, y2);
+  ctx.lineTo(x - headSize, y2 - dir * headSize * 1.5);
+  ctx.lineTo(x + headSize, y2 - dir * headSize * 1.5);
+  ctx.closePath();
+  ctx.fill();
+
+  // Label
+  ctx.fillStyle = color;
+  ctx.font = "bold 10px 'Space Grotesk',sans-serif";
+  ctx.textAlign = labelSide === 'left' ? 'right' : 'left';
+  ctx.textBaseline = 'middle';
+  var lx = labelSide === 'left' ? x - 12 : x + 12;
+  ctx.fillText(label, lx, (y1 + y2) / 2);
+}
+
+function drawHeightScale(ctx, x, y, h, maxH, ticks) {
+  var P = AnimRuntime.PAL;
+  ctx.strokeStyle = P.outline;
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(x, y);
+  ctx.lineTo(x, y - h);
+  ctx.stroke();
+
+  ctx.fillStyle = P.muted;
+  ctx.font = "9px 'Space Grotesk',sans-serif";
+  ctx.textAlign = 'right';
+  ctx.textBaseline = 'middle';
+  for (var i = 0; i <= ticks; i++) {
+    var frac = i / ticks;
+    var ty = y - h * frac;
+    ctx.beginPath();
+    ctx.moveTo(x - 4, ty);
+    ctx.lineTo(x, ty);
+    ctx.stroke();
+    ctx.fillText(Math.round(maxH * frac) + 'm', x - 7, ty);
+  }
+}
+
+// Screen shake helper
+function applyShake(ctx) {
+  if (shakeIntensity > 0.1) {
+    ctx.translate((Math.random()-0.5)*shakeIntensity, (Math.random()-0.5)*shakeIntensity);
+  }
+}
+
+// ============================================================
+// FRAME ELEMENTS
+// ============================================================
+function getFrameElements(f, W, H) {
+  var t = AnimRuntime.t;
+  var P = AnimRuntime.PAL;
+  var cx = W / 2, cy = H / 2;
+  var prog = animState.progress;
+  var eased = easeOutCubic(Math.min(prog * 1.3, 1));
+
+  // ---- FRAME 0: Title ----
+  if (f === 0) {
+    var breathe = 1 + 0.015 * Math.sin(globalTime * 2.5);
+    var formulaGlow = 0.4 + 0.3 * Math.sin(globalTime * 3);
+
+    return [
+      {id:'f0_title', type:'label', text:t('title'), x:cx, y:50, color:P.primary, size:28, align:'center', glow:P.glowStrong, bold:true},
+      {id:'f0_sub', type:'label', text:t('subtitle'), x:cx, y:75, color:P.muted, size:11, align:'center'},
+      // Rocket silhouette with idle breathing
+      {id:'f0_rocket', type:'custom', x:0, y:0, alpha:eased, draw: function(ctx) {
+        ctx.save();
+        ctx.translate(cx - 120, cy + 20);
+        ctx.scale(breathe, breathe);
+        ctx.translate(-(cx - 120), -(cy + 20));
+        drawRocket(ctx, cx - 120, cy + 20, 1.8, false, 0);
+        ctx.restore();
+      }},
+      // Height scale alongside rocket
+      {id:'f0_scale', type:'custom', x:0, y:0, alpha:eased * 0.8, draw: function(ctx) {
+        drawHeightScale(ctx, cx - 165, cy + 75, 150, 500, 5);
+      }},
+      // Formula with ambient glow
+      {id:'f0_formula', type:'custom', x:0, y:0, alpha:eased, draw: function(ctx) {
+        ctx.save();
+        ctx.shadowColor = 'rgba(255,127,80,' + formulaGlow + ')';
+        ctx.shadowBlur = 18;
+        ctx.fillStyle = P.primary;
+        ctx.font = "bold 20px 'Space Grotesk',sans-serif";
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(t('f0formula'), cx + 80, cy - 10);
+        ctx.shadowBlur = 0;
+        ctx.restore();
+      }},
+      // Core question
+      {id:'f0_q', type:'custom', x:0, y:0, alpha:eased, draw: function(ctx) {
+        var lines = t('f0question').split('\n');
+        ctx.fillStyle = P.text;
+        ctx.font = "13px 'Inter','Noto Sans SC',sans-serif";
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        for (var i = 0; i < lines.length; i++) {
+          ctx.fillText(lines[i], cx + 80, cy + 40 + i * 20);
+        }
+      }},
+      // Decorative line
+      {id:'f0_line', type:'line', x1:cx - 30, y1:cy + 80, x2:cx + 190, y2:cy + 80, color:P.outline, lineWidth:0.5, dash:[4,4], alpha:0.5},
+      // 30 N-s / 300g params
+      {id:'f0_params', type:'custom', x:0, y:0, alpha:eased * 0.7, draw: function(ctx) {
+        ctx.fillStyle = P.tertiary;
+        ctx.font = "bold 11px 'Space Grotesk',sans-serif";
+        ctx.textAlign = 'center';
+        ctx.fillText('I = 30 N\u00b7s    m = 300 g', cx + 80, cy + 100);
+      }},
+    ];
+  }
+
+  // ---- FRAME 1: Burn Phase ----
+  if (f === 1) {
+    var rocketBaseY = cy + 60;
+    var rocketLift = rocketY * 120;
+    var ry = rocketBaseY - rocketLift;
+    var flameI = 0.6 + 0.4 * eased;
+    var timerDisplay = (burnTimerVal).toFixed(1);
+    // Scale-punch on accel value
+    var accelPunch = 1 + 0.08 * Math.max(0, Math.sin((prog - 0.3) * 8));
+
+    return [
+      {id:'f1_title', type:'label', text:t('f1title'), x:cx, y:25, color:P.primary, size:16, align:'center', glow:P.glowStrong},
+      // Rocket with flame
+      {id:'f1_rocket', type:'custom', x:0, y:0, alpha:1, draw: function(ctx) {
+        applyShake(ctx);
+        drawRocket(ctx, cx - 100, ry, 1.5, true, flameI);
+      }},
+      // Thrust arrow (up)
+      {id:'f1_thrustArr', type:'custom', x:0, y:0, alpha:eased, draw: function(ctx) {
+        var arrTop = ry - 30 * 1.5 - 10;
+        drawForceArrow(ctx, cx - 100, ry - 5, arrTop - 40 * eased, '#ffb59c', t('f1thrust') + ' 20N', 'left');
+      }},
+      // Weight arrow (down)
+      {id:'f1_weightArr', type:'custom', x:0, y:0, alpha:eased, draw: function(ctx) {
+        drawForceArrow(ctx, cx - 100, ry + 32 * 1.5 + 5, ry + 32 * 1.5 + 25 * eased + 5, '#00daf3', t('f1weight') + ' 2.94N', 'right');
+      }},
+      // Acceleration calculation panel
+      {id:'f1_panel', type:'box', x:cx + 20, y:cy - 70, w:260, h:100, fill:'rgba(32,31,31,0.7)', stroke:P.outline, lineWidth:0.5, alpha:eased},
+      {id:'f1_accelLabel', type:'label', text:t('f1accel'), x:cx + 150, y:cy - 50, color:P.primary, size:13, align:'center', glow:P.glowStrong},
+      {id:'f1_accelCalc', type:'label', text:t('f1accelVal'), x:cx + 150, y:cy - 30, color:P.muted, size:11, align:'center'},
+      {id:'f1_accelResult', type:'custom', x:0, y:0, alpha:eased, draw: function(ctx) {
+        ctx.save();
+        ctx.translate(cx + 150, cy - 8);
+        ctx.scale(accelPunch, accelPunch);
+        ctx.fillStyle = P.secondary;
+        ctx.font = "bold 15px 'Space Grotesk',sans-serif";
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(t('f1accelRes'), 0, 0);
+        ctx.restore();
+      }},
+      // h_burn formula
+      {id:'f1_hBurn', type:'label', text:t('f1hBurn'), x:cx + 150, y:cy + 40, color:P.tertiary, size:11, align:'center', alpha:eased},
+      {id:'f1_hBurnVal', type:'label', text:t('f1hBurnVal'), x:cx + 150, y:cy + 58, color:P.text, size:13, align:'center', bold:true, alpha:eased},
+      // Height accumulation bar
+      {id:'f1_hBar', type:'custom', x:0, y:0, alpha:eased, draw: function(ctx) {
+        var barX = cx - 170;
+        var barY = cy + 80;
+        var barW = 140;
+        var barH = 10;
+        ctx.strokeStyle = P.outline;
+        ctx.lineWidth = 1;
+        ctx.strokeRect(barX, barY, barW, barH);
+        var fillW = barW * rocketY;
+        if (fillW > 0) {
+          var grd = ctx.createLinearGradient(barX, barY, barX + fillW, barY);
+          grd.addColorStop(0, P.primaryDim);
+          grd.addColorStop(1, P.primary);
+          ctx.fillStyle = grd;
+          ctx.fillRect(barX + 1, barY + 1, fillW - 2, barH - 2);
+        }
+        ctx.fillStyle = P.muted;
+        ctx.font = "9px 'Space Grotesk',sans-serif";
+        ctx.textAlign = 'center';
+        ctx.fillText(Math.round(rocketY * 64) + ' m', barX + barW / 2, barY + barH + 12);
+      }},
+      // Timer display
+      {id:'f1_timer', type:'custom', x:0, y:0, alpha:eased, draw: function(ctx) {
+        ctx.fillStyle = P.muted;
+        ctx.font = "bold 9px 'Space Grotesk',sans-serif";
+        ctx.textAlign = 'center';
+        ctx.fillText(t('f1timer'), cx - 30, rocketBaseY + 20);
+        ctx.fillStyle = P.primary;
+        ctx.font = "bold 14px 'Space Grotesk',sans-serif";
+        ctx.fillText(timerDisplay + ' s', cx - 30, rocketBaseY + 36);
+      }},
+      // Exhaust trail particles
+      {id:'f1_particles', type:'custom', x:0, y:0, alpha:1, draw: function(ctx) {
+        drawParticleList(ctx, particles);
+      }},
+    ];
+  }
+
+  // ---- FRAME 2: Coast Phase ----
+  if (f === 2) {
+    var coastRocketY = cy + 40 - rocketY * 80;
+    var velArrowLen = coastVel * 50;
+    // Engine off flash
+    var offFlash = prog < 0.15 ? (1 - prog / 0.15) : 0;
+
+    return [
+      {id:'f2_title', type:'label', text:t('f2title'), x:cx, y:25, color:P.primary, size:16, align:'center', glow:P.glowStrong},
+      // Rocket (no flame)
+      {id:'f2_rocket', type:'custom', x:0, y:0, alpha:1, draw: function(ctx) {
+        drawRocket(ctx, cx - 100, coastRocketY, 1.5, false, 0);
+        // Engine off flash ring
+        if (offFlash > 0.01) {
+          ctx.strokeStyle = 'rgba(255,127,80,' + offFlash * 0.6 + ')';
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          ctx.arc(cx - 100, coastRocketY + 32 * 1.5, 20 + (1 - offFlash) * 30, 0, Math.PI * 2);
+          ctx.stroke();
+        }
+      }},
+      // Engine OFF label at burnout point
+      {id:'f2_offLabel', type:'custom', x:0, y:0, alpha:eased, draw: function(ctx) {
+        var ly = cy + 65;
+        ctx.fillStyle = P.error;
+        ctx.font = "bold 11px 'Space Grotesk',sans-serif";
+        ctx.textAlign = 'center';
+        ctx.fillText(t('f2engineOff'), cx - 100, ly);
+        // Dashed line from engine off point
+        ctx.strokeStyle = P.error;
+        ctx.lineWidth = 0.8;
+        ctx.setLineDash([3, 3]);
+        ctx.beginPath();
+        ctx.moveTo(cx - 140, ly - 5);
+        ctx.lineTo(cx - 60, ly - 5);
+        ctx.stroke();
+        ctx.setLineDash([]);
+      }},
+      // Velocity arrow (shrinking upward)
+      {id:'f2_velArr', type:'custom', x:0, y:0, alpha:eased, draw: function(ctx) {
+        if (velArrowLen > 3) {
+          drawForceArrow(ctx, cx - 60, coastRocketY + 10, coastRocketY + 10 - velArrowLen, P.tertiary, 'v=' + Math.round(coastVel * 85) + ' m/s', 'right');
+        }
+      }},
+      // v decreasing label
+      {id:'f2_vDecay', type:'label', text:t('f2vDecay'), x:cx + 30, y:cy - 30, color:P.muted, size:11, align:'left', alpha:eased},
+      // Still climbing label
+      {id:'f2_stillUp', type:'label', text:t('f2stillUp'), x:cx + 30, y:cy - 10, color:P.text, size:10, align:'left', alpha:eased},
+      // Coast formula panel
+      {id:'f2_panel', type:'box', x:cx + 20, y:cy + 20, w:250, h:70, fill:'rgba(32,31,31,0.7)', stroke:P.outline, lineWidth:0.5, alpha:eased},
+      {id:'f2_hCoast', type:'label', text:t('f2hCoast'), x:cx + 145, y:cy + 40, color:P.tertiary, size:13, align:'center', glow:'rgba(0,218,243,0.3)'},
+      {id:'f2_hCoastVal', type:'custom', x:0, y:0, alpha:eased, draw: function(ctx) {
+        var punch = 1 + 0.06 * Math.max(0, Math.sin((prog - 0.5) * 6));
+        ctx.save();
+        ctx.translate(cx + 145, cy + 65);
+        ctx.scale(punch, punch);
+        ctx.fillStyle = P.text;
+        ctx.font = "bold 15px 'Space Grotesk',sans-serif";
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(t('f2hCoastVal'), 0, 0);
+        ctx.restore();
+      }},
+      // Height gauge on left
+      {id:'f2_heightGauge', type:'custom', x:0, y:0, alpha:eased * 0.7, draw: function(ctx) {
+        drawHeightScale(ctx, cx - 170, cy + 80, 130, 435, 4);
+        // Current height marker
+        var curH = 64 + rocketY * 371;
+        var markerY = cy + 80 - (curH / 435) * 130;
+        ctx.fillStyle = P.primary;
+        ctx.beginPath();
+        ctx.moveTo(cx - 170, markerY);
+        ctx.lineTo(cx - 163, markerY - 4);
+        ctx.lineTo(cx - 163, markerY + 4);
+        ctx.closePath();
+        ctx.fill();
+        ctx.fillStyle = P.primary;
+        ctx.font = "bold 9px 'Space Grotesk',sans-serif";
+        ctx.textAlign = 'left';
+        ctx.fillText(Math.round(curH) + 'm', cx - 160, markerY);
+      }},
+      // Apex particles spawn near peak
+      {id:'f2_apexP', type:'custom', x:0, y:0, alpha:1, draw: function(ctx) {
+        if (coastVel < 0.05 && apexParticles.length < 15) {
+          for (var ap = 0; ap < 10; ap++) {
+            var angle = Math.random() * Math.PI * 2;
+            var spd = 15 + Math.random() * 35;
+            spawnApexParticle(cx - 100, coastRocketY - 30,
+              Math.cos(angle) * spd, Math.sin(angle) * spd,
+              0.5 + Math.random() * 0.8,
+              Math.random() > 0.5 ? P.primary : P.tertiary,
+              1.5 + Math.random() * 2);
+          }
+          playTone(800, 0.2, 0.04);
+        }
+        drawParticleList(ctx, apexParticles);
+      }},
+    ];
+  }
+
+  // ---- FRAME 3: Full altitude-time profile ----
+  if (f === 3) {
+    // Graph area
+    var gx = 100, gy = 45;
+    var gw = W - 200, gh = H - 130;
+    var maxT = T_BURN + T_COAST + 0.5;
+    var maxH_g = H_TOTAL * 1.15;
+
+    return [
+      {id:'f3_title', type:'label', text:t('f3title'), x:cx, y:22, color:P.primary, size:16, align:'center', glow:P.glowStrong},
+      // Graph axes and curves
+      {id:'f3_graph', type:'custom', x:0, y:0, alpha:1, draw: function(ctx) {
+        var drawProg = easeOutCubic(Math.min(prog * 1.5, 1));
+
+        // Axes
+        ctx.strokeStyle = P.outline;
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.moveTo(gx, gy);
+        ctx.lineTo(gx, gy + gh);
+        ctx.lineTo(gx + gw, gy + gh);
+        ctx.stroke();
+
+        // Y axis label
+        ctx.save();
+        ctx.translate(gx - 45, gy + gh / 2);
+        ctx.rotate(-Math.PI / 2);
+        ctx.fillStyle = P.muted;
+        ctx.font = "10px 'Space Grotesk',sans-serif";
+        ctx.textAlign = 'center';
+        ctx.fillText(t('f3hAxis'), 0, 0);
+        ctx.restore();
+
+        // X axis label
+        ctx.fillStyle = P.muted;
+        ctx.font = "10px 'Space Grotesk',sans-serif";
+        ctx.textAlign = 'center';
+        ctx.fillText(t('f3tAxis'), gx + gw / 2, gy + gh + 30);
+
+        // Y ticks
+        ctx.fillStyle = P.muted;
+        ctx.font = "9px 'Space Grotesk',sans-serif";
+        ctx.textAlign = 'right';
+        for (var yt = 0; yt <= 5; yt++) {
+          var yv = (yt / 5) * maxH_g;
+          var yy = gy + gh - (yt / 5) * gh;
+          ctx.fillText(Math.round(yv), gx - 8, yy + 3);
+          ctx.strokeStyle = 'rgba(255,255,255,0.05)';
+          ctx.lineWidth = 0.5;
+          ctx.beginPath();
+          ctx.moveTo(gx, yy);
+          ctx.lineTo(gx + gw, yy);
+          ctx.stroke();
+        }
+
+        // X ticks
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'top';
+        for (var xt = 0; xt <= 5; xt++) {
+          var xv = (xt / 5) * maxT;
+          var xx = gx + (xt / 5) * gw;
+          ctx.fillText(xv.toFixed(1) + 's', xx, gy + gh + 5);
+        }
+
+        // Burn phase curve (orange, parabolic acceleration)
+        var burnSteps = Math.floor(40 * drawProg);
+        ctx.strokeStyle = P.primaryDim;
+        ctx.lineWidth = 2.5;
+        ctx.beginPath();
+        for (var bi = 0; bi <= burnSteps; bi++) {
+          var bt = (bi / 40) * T_BURN;
+          var bh = 0.5 * ACC * bt * bt;
+          var bx = gx + (bt / maxT) * gw;
+          var by = gy + gh - (bh / maxH_g) * gh;
+          if (bi === 0) ctx.moveTo(bx, by);
+          else ctx.lineTo(bx, by);
+        }
+        ctx.stroke();
+
+        // Burn label
+        if (drawProg > 0.3) {
+          var burnMidT = T_BURN * 0.5;
+          var burnMidH = 0.5 * ACC * burnMidT * burnMidT;
+          var blx = gx + (burnMidT / maxT) * gw;
+          var bly = gy + gh - (burnMidH / maxH_g) * gh;
+          ctx.fillStyle = P.primaryDim;
+          ctx.font = "bold 10px 'Space Grotesk',sans-serif";
+          ctx.textAlign = 'left';
+          ctx.textBaseline = 'bottom';
+          ctx.fillText(t('f3burn'), blx + 8, bly - 2);
+        }
+
+        // Burnout point marker
+        var boX = gx + (T_BURN / maxT) * gw;
+        var boY = gy + gh - (H_BURN / maxH_g) * gh;
+        if (drawProg > 0.4) {
+          ctx.fillStyle = P.secondary;
+          ctx.beginPath();
+          ctx.arc(boX, boY, 4, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.shadowColor = P.secondary;
+          ctx.shadowBlur = 6;
+          ctx.fill();
+          ctx.shadowBlur = 0;
+        }
+
+        // Coast phase curve (cyan, parabolic deceleration)
+        if (drawProg > 0.4) {
+          var coastProg = Math.min((drawProg - 0.4) / 0.6, 1);
+          var coastSteps = Math.floor(40 * coastProg);
+          ctx.strokeStyle = P.tertiary;
+          ctx.lineWidth = 2.5;
+          ctx.beginPath();
+          ctx.moveTo(boX, boY);
+          for (var ci = 1; ci <= coastSteps; ci++) {
+            var ct = (ci / 40) * T_COAST;
+            var ch = H_BURN + V_BURNOUT * ct - 0.5 * G * ct * ct;
+            var ccx = gx + ((T_BURN + ct) / maxT) * gw;
+            var ccy = gy + gh - (ch / maxH_g) * gh;
+            ctx.lineTo(ccx, ccy);
+          }
+          ctx.stroke();
+
+          // Coast label
+          if (coastProg > 0.3) {
+            var coastMidT = T_COAST * 0.4;
+            var coastMidH = H_BURN + V_BURNOUT * coastMidT - 0.5 * G * coastMidT * coastMidT;
+            var clx = gx + ((T_BURN + coastMidT) / maxT) * gw;
+            var cly = gy + gh - (coastMidH / maxH_g) * gh;
+            ctx.fillStyle = P.tertiary;
+            ctx.font = "bold 10px 'Space Grotesk',sans-serif";
+            ctx.textAlign = 'left';
+            ctx.textBaseline = 'bottom';
+            ctx.fillText(t('f3coast'), clx + 8, cly - 2);
+          }
+        }
+
+        // Peak marker with glow
+        if (drawProg > 0.85) {
+          var peakX = gx + ((T_BURN + T_COAST) / maxT) * gw;
+          var peakY = gy + gh - (H_TOTAL / maxH_g) * gh;
+          var peakGlow = 0.3 + 0.3 * Math.sin(globalTime * 3);
+          // Ambient glow
+          ctx.shadowColor = 'rgba(255,127,80,' + peakGlow + ')';
+          ctx.shadowBlur = 14;
+          ctx.fillStyle = P.primary;
+          ctx.beginPath();
+          ctx.arc(peakX, peakY, 6, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.shadowBlur = 0;
+          // Peak label
+          ctx.fillStyle = P.primary;
+          ctx.font = "bold 11px 'Space Grotesk',sans-serif";
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'bottom';
+          ctx.fillText(t('f3peak'), peakX, peakY - 12);
+        }
+      }},
+      // Total formula
+      {id:'f3_total', type:'label', text:t('f3total'), x:cx + 60, y:H - 55, color:P.muted, size:11, align:'center', alpha:eased},
+      {id:'f3_totalVal', type:'custom', x:0, y:0, alpha:eased, draw: function(ctx) {
+        var punch = 1 + 0.05 * Math.max(0, Math.sin((prog - 0.7) * 8));
+        ctx.save();
+        ctx.translate(cx + 60, H - 38);
+        ctx.scale(punch, punch);
+        ctx.fillStyle = P.primary;
+        ctx.font = "bold 14px 'Space Grotesk',sans-serif";
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(t('f3totalVal'), 0, 0);
+        ctx.restore();
+      }},
+      // Legend
+      {id:'f3_legendBurn', type:'custom', x:0, y:0, alpha:eased, draw: function(ctx) {
+        var lx = gx + 20, ly = gy + 15;
+        ctx.fillStyle = P.primaryDim;
+        ctx.fillRect(lx, ly, 14, 3);
+        ctx.fillStyle = P.muted;
+        ctx.font = "9px 'Space Grotesk',sans-serif";
+        ctx.textAlign = 'left';
+        ctx.fillText(t('f3burn') + ' (h_burn)', lx + 20, ly + 3);
+
+        ctx.fillStyle = P.tertiary;
+        ctx.fillRect(lx, ly + 14, 14, 3);
+        ctx.fillStyle = P.muted;
+        ctx.fillText(t('f3coast') + ' (h_coast)', lx + 20, ly + 17);
+      }},
+      // Numeric params
+      {id:'f3_params', type:'label', text:'I=30 N\u00b7s  m=300g  t_burn=1.5s', x:cx + 60, y:H - 18, color:P.outline, size:9, align:'center', alpha:0.6},
+    ];
+  }
+
+  // ---- FRAME 4: Reality Check ----
+  if (f === 4) {
+    var gx4 = 100, gy4 = 50;
+    var gw4 = W - 200, gh4 = H - 140;
+    var maxT4 = T_BURN + T_COAST + 0.5;
+    var maxH4 = H_TOTAL * 1.15;
+    var dragFactor = 0.38;
+
+    return [
+      {id:'f4_title', type:'label', text:t('f4title'), x:cx, y:22, color:P.primary, size:16, align:'center', glow:P.glowStrong},
+      // Graph with both curves
+      {id:'f4_graph', type:'custom', x:0, y:0, alpha:1, draw: function(ctx) {
+        var drawProg = easeOutCubic(Math.min(prog * 1.4, 1));
+
+        // Axes
+        ctx.strokeStyle = P.outline;
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.moveTo(gx4, gy4);
+        ctx.lineTo(gx4, gy4 + gh4);
+        ctx.lineTo(gx4 + gw4, gy4 + gh4);
+        ctx.stroke();
+
+        // Y axis label
+        ctx.save();
+        ctx.translate(gx4 - 45, gy4 + gh4 / 2);
+        ctx.rotate(-Math.PI / 2);
+        ctx.fillStyle = P.muted;
+        ctx.font = "10px 'Space Grotesk',sans-serif";
+        ctx.textAlign = 'center';
+        ctx.fillText(t('f3hAxis'), 0, 0);
+        ctx.restore();
+
+        // X axis
+        ctx.fillStyle = P.muted;
+        ctx.font = "10px 'Space Grotesk',sans-serif";
+        ctx.textAlign = 'center';
+        ctx.fillText(t('f3tAxis'), gx4 + gw4 / 2, gy4 + gh4 + 30);
+
+        // Y ticks
+        ctx.textAlign = 'right';
+        ctx.textBaseline = 'middle';
+        for (var yt = 0; yt <= 5; yt++) {
+          var yv = (yt / 5) * maxH4;
+          var yy = gy4 + gh4 - (yt / 5) * gh4;
+          ctx.fillText(Math.round(yv), gx4 - 8, yy);
+          ctx.strokeStyle = 'rgba(255,255,255,0.04)';
+          ctx.lineWidth = 0.5;
+          ctx.beginPath();
+          ctx.moveTo(gx4, yy);
+          ctx.lineTo(gx4 + gw4, yy);
+          ctx.stroke();
+        }
+
+        // Full ideal curve (burn + coast) solid
+        ctx.strokeStyle = P.primaryDim;
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        for (var bi = 0; bi <= 60; bi++) {
+          var bt = (bi / 60) * T_BURN;
+          var bh = 0.5 * ACC * bt * bt;
+          var bx = gx4 + (bt / maxT4) * gw4;
+          var by = gy4 + gh4 - (bh / maxH4) * gh4;
+          if (bi === 0) ctx.moveTo(bx, by);
+          else ctx.lineTo(bx, by);
+        }
+        for (var ci = 0; ci <= 60; ci++) {
+          var ct = (ci / 60) * T_COAST;
+          var ch = H_BURN + V_BURNOUT * ct - 0.5 * G * ct * ct;
+          var ccx = gx4 + ((T_BURN + ct) / maxT4) * gw4;
+          var ccy = gy4 + gh4 - (ch / maxH4) * gh4;
+          ctx.lineTo(ccx, ccy);
+        }
+        ctx.stroke();
+
+        // Ideal peak label
+        var idealPeakX = gx4 + ((T_BURN + T_COAST) / maxT4) * gw4;
+        var idealPeakY = gy4 + gh4 - (H_TOTAL / maxH4) * gh4;
+        ctx.fillStyle = P.primaryDim;
+        ctx.font = "bold 10px 'Space Grotesk',sans-serif";
+        ctx.textAlign = 'left';
+        ctx.fillText(t('f4ideal'), idealPeakX + 10, idealPeakY + 3);
+
+        // Real altitude curve (red dashed)
+        if (drawProg > 0.25) {
+          var realProg = Math.min((drawProg - 0.25) / 0.75, 1);
+          // Simulated real curve with drag -- shorter burn effect + much lower coast
+          var realAcc = ACC * 0.65;
+          var realVBurnout = realAcc * T_BURN;
+          var realHBurn = 0.5 * realAcc * T_BURN * T_BURN;
+          var realTCoast = realVBurnout / G;
+          var realHCoast = realVBurnout * realVBurnout / (2 * G);
+          var realHTotal = realHBurn + realHCoast;
+
+          ctx.strokeStyle = P.error;
+          ctx.lineWidth = 2;
+          ctx.setLineDash([6, 4]);
+          var totalRealSteps = Math.floor(80 * realProg);
+          ctx.beginPath();
+          for (var ri = 0; ri <= totalRealSteps; ri++) {
+            var rawT = (ri / 80) * (T_BURN + realTCoast);
+            var rh;
+            if (rawT <= T_BURN) {
+              rh = 0.5 * realAcc * rawT * rawT;
+            } else {
+              var dt2 = rawT - T_BURN;
+              rh = realHBurn + realVBurnout * dt2 - 0.5 * G * dt2 * dt2;
+            }
+            if (rh < 0) rh = 0;
+            var rx = gx4 + (rawT / maxT4) * gw4;
+            var ry2 = gy4 + gh4 - (rh / maxH4) * gh4;
+            if (ri === 0) ctx.moveTo(rx, ry2);
+            else ctx.lineTo(rx, ry2);
+          }
+          ctx.stroke();
+          ctx.setLineDash([]);
+
+          // Real peak label
+          if (realProg > 0.6) {
+            var realPeakX = gx4 + ((T_BURN + realTCoast) / maxT4) * gw4;
+            var realPeakY = gy4 + gh4 - (realHTotal / maxH4) * gh4;
+            ctx.fillStyle = P.error;
+            ctx.font = "bold 10px 'Space Grotesk',sans-serif";
+            ctx.textAlign = 'left';
+            ctx.fillText(t('f4real'), realPeakX + 10, realPeakY + 3);
+
+            // Gap bracket with drag label
+            var gapMidY = (idealPeakY + realPeakY) / 2;
+            ctx.strokeStyle = P.error;
+            ctx.lineWidth = 1;
+            ctx.setLineDash([3, 3]);
+            ctx.beginPath();
+            ctx.moveTo(idealPeakX + 5, idealPeakY);
+            ctx.lineTo(idealPeakX + 5, realPeakY);
+            ctx.stroke();
+            ctx.setLineDash([]);
+
+            // Drag label with glow
+            ctx.shadowColor = 'rgba(255,180,171,0.3)';
+            ctx.shadowBlur = 8;
+            ctx.fillStyle = P.error;
+            ctx.font = "bold 10px 'Space Grotesk',sans-serif";
+            ctx.textAlign = 'left';
+            ctx.fillText(t('f4drag'), idealPeakX + 14, gapMidY);
+            ctx.shadowBlur = 0;
+          }
+        }
+      }},
+      // Insight text
+      {id:'f4_insight', type:'custom', x:0, y:0, alpha:eased, draw: function(ctx) {
+        var lines = t('f4insight').split('\n');
+        ctx.fillStyle = P.text;
+        ctx.font = "12px 'Inter','Noto Sans SC',sans-serif";
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        for (var i = 0; i < lines.length; i++) {
+          ctx.fillText(lines[i], cx, H - 50 + i * 18);
+        }
+      }},
+      // Legend
+      {id:'f4_legend', type:'custom', x:0, y:0, alpha:eased, draw: function(ctx) {
+        var lx = gx4 + 20, ly = gy4 + 12;
+        // Ideal line
+        ctx.strokeStyle = P.primaryDim;
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(lx, ly);
+        ctx.lineTo(lx + 16, ly);
+        ctx.stroke();
+        ctx.fillStyle = P.muted;
+        ctx.font = "9px 'Space Grotesk',sans-serif";
+        ctx.textAlign = 'left';
+        ctx.fillText(t('f4ideal'), lx + 22, ly + 3);
+
+        // Real line (dashed)
+        ctx.strokeStyle = P.error;
+        ctx.lineWidth = 2;
+        ctx.setLineDash([4, 3]);
+        ctx.beginPath();
+        ctx.moveTo(lx, ly + 15);
+        ctx.lineTo(lx + 16, ly + 15);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.fillStyle = P.muted;
+        ctx.fillText(t('f4real'), lx + 22, ly + 18);
+      }},
+    ];
+  }
+
+  return [];
+}
+
+// ============================================================
+// BOOT
+// ============================================================
+AnimRuntime.boot();
+</script>
+</body>
+</html>

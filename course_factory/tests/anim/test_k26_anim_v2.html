@@ -1,0 +1,984 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=Inter:wght@400;500&family=Noto+Sans+SC:wght@400;700&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box;}
+html,body{width:100%;height:100vh;overflow:hidden;}
+body{background:var(--bg,#0c0e12);color:var(--text,#f6f6fc);font-family:'Inter','Noto Sans SC',sans-serif;}
+/* ── Outer: sidebar + main ── */
+.wrapper{display:flex;flex-direction:row;height:100vh;overflow:hidden;}
+.sidebar{width:200px;min-width:200px;max-width:200px;display:flex;flex-direction:column;gap:6px;padding:10px;background:rgba(0,0,0,0.5);border-right:1px solid rgba(80,255,176,0.15);overflow-y:auto;}
+.lang-btn{align-self:flex-start;flex-shrink:0;font-family:'Space Grotesk',sans-serif;font-size:10px;font-weight:700;padding:3px 8px;cursor:pointer;border:1px solid rgba(255,181,156,0.25);background:transparent;color:#ffb59c;letter-spacing:1px;}
+.lang-btn:hover{border-color:#ffb59c;background:rgba(255,181,156,0.1);}
+.sidebar h1{font-family:'Space Grotesk',sans-serif;font-size:13px;font-weight:700;color:var(--primary,#50ffb0);margin-top:4px;line-height:1.3;}
+.sidebar .sub{font-size:10px;color:var(--muted,#aaabb0);letter-spacing:0.06em;text-transform:uppercase;}
+.sidebar .frame-ind{font-family:'Space Grotesk',sans-serif;font-size:10px;color:var(--muted,#aaabb0);letter-spacing:0.1em;margin-top:4px;}
+.sidebar .guide-label{font-family:'Space Grotesk',sans-serif;font-size:9px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:var(--primary,#50ffb0);margin-top:8px;}
+.sidebar .guide-content{font-family:'Noto Sans SC',sans-serif;font-size:11px;color:rgba(255,255,255,0.85);line-height:1.5;}
+.sidebar .guide-content ul{padding-left:16px;margin:0;}
+.sidebar .guide-content li{margin-bottom:1px;}
+/* ── Main area: canvas + controls + hud ── */
+.anim-main{flex:1;display:flex;flex-direction:column;min-width:0;}
+.canvas-wrap{flex:1;min-height:0;position:relative;}
+canvas{width:100%;height:100%;display:block;}
+/* ── Controls + HUD ── */
+.controls{display:flex;justify-content:center;align-items:center;gap:12px;padding:6px 16px;}
+.ctrl-btn{font-family:'Space Grotesk',sans-serif;font-size:11px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;padding:5px 16px;border:none;cursor:pointer;color:var(--bg,#0c0e12);background:linear-gradient(135deg,var(--primary,#50ffb0),var(--primary-dim,#17df93));transition:transform 0.1s,box-shadow 0.2s;box-shadow:0 0 10px var(--glow-strong,rgba(80,255,176,0.3));}
+.ctrl-btn:hover{transform:scale(1.04);}
+.ctrl-btn:active{transform:scale(0.96);}
+.ctrl-btn.secondary{background:var(--glass,rgba(23,26,31,0.92));color:var(--muted,#aaabb0);box-shadow:none;backdrop-filter:blur(12px);}
+.ctrl-btn.secondary:hover{color:var(--primary,#50ffb0);}
+.hud{height:40px;display:flex;align-items:center;justify-content:space-around;background:rgba(0,0,0,0.55);backdrop-filter:blur(12px);padding:0 16px;}
+.hud-item{text-align:center;}
+.hud-label{font-family:'Space Grotesk',sans-serif;font-size:8px;letter-spacing:0.15em;text-transform:uppercase;color:var(--muted,#aaabb0);}
+.hud-val{font-family:'Space Grotesk',sans-serif;font-size:13px;font-weight:700;color:var(--primary,#50ffb0);}
+</style>
+</head>
+<body>
+<div class="wrapper">
+<!-- Sidebar: lang-btn, title, guide (completely separate from canvas) -->
+<div class="sidebar">
+<button class="lang-btn" id="langBtn">CN</button>
+<h1 id="title"></h1>
+<div class="sub" id="subtitle"></div>
+<div class="frame-ind" id="frameIndicator"></div>
+<div class="guide-label" id="guideTitle"></div>
+<div class="guide-content" id="guideContent"></div>
+</div>
+<!-- Main: canvas fills all space, nothing overlaps -->
+<div class="anim-main">
+<div class="canvas-wrap"><canvas id="c"></canvas></div>
+<div class="controls">
+<button class="ctrl-btn secondary" id="btnPrev"></button>
+<button class="ctrl-btn" id="btnPlay"></button>
+<button class="ctrl-btn secondary" id="btnNext"></button>
+</div>
+<div class="hud">
+<div class="hud-item"><div class="hud-label" id="hudL1"></div><div class="hud-val" id="hudV1"></div></div>
+<div class="hud-item"><div class="hud-label" id="hudL2"></div><div class="hud-val" id="hudV2"></div></div>
+<div class="hud-item"><div class="hud-label" id="hudL3"></div><div class="hud-val" id="hudV3"></div></div>
+<div class="hud-item"><div class="hud-label" id="hudL4"></div><div class="hud-val" id="hudV4"></div></div>
+</div>
+</div>
+</div>
+
+<!-- Runtime (shared skeleton) -->
+<script src="animation_runtime.js"></script>
+
+<!-- Content -->
+<script>
+// ============================================================
+// K26: Rocket Thrust = Exhaust Velocity x Mass Flow Rate
+// T = v_e x m_dot
+// 5 frames:
+//   0 - Title with balloon rocket trailing air, equation, core question
+//   1 - Balloon experiment: slower vs faster exhaust, forward flight
+//   2 - Quantifying thrust: water hose analogy, interactive bar graph
+//   3 - Real engine comparison: Estes C6, Merlin, Ion thruster
+//   4 - Why exhaust velocity matters: twin rockets, same fuel, diff v_e
+// ============================================================
+
+var CONFIG = {
+  style: 'ares_mission',
+  totalFrames: 5,
+
+  i18n: {
+    title:         {en:'ROCKET EQUATION', cn:'\u706b\u7bad\u65b9\u7a0b'},
+    subtitle:      {en:'T = v_e x m_dot', cn:'T = v_e x m_dot'},
+    coreQ:         {en:'Why does a balloon rocket fly farther when air shoots out faster?', cn:'\u4e3a\u4ec0\u4e48\u6c14\u7403\u706b\u7bad\u55b7\u6c14\u8d8a\u5feb\u98de\u5f97\u8d8a\u8fdc\uff1f'},
+    f1Title:       {en:'BALLOON EXPERIMENT', cn:'\u6c14\u7403\u5b9e\u9a8c'},
+    f1Slow:        {en:'Slow exhaust', cn:'\u6162\u901f\u55b7\u6c14'},
+    f1Fast:        {en:'Fast exhaust', cn:'\u5feb\u901f\u55b7\u6c14'},
+    f1Short:       {en:'Short flight', cn:'\u77ed\u8ddd\u79bb'},
+    f1Long:        {en:'Long flight!', cn:'\u957f\u8ddd\u79bb\uff01'},
+    f1Air:         {en:'Air shoots backward', cn:'\u7a7a\u6c14\u5411\u540e\u55b7\u51fa'},
+    f1Fly:         {en:'Balloon flies forward', cn:'\u6c14\u7403\u5411\u524d\u98de'},
+    f2Title:       {en:'QUANTIFYING THRUST', cn:'\u91cf\u5316\u63a8\u529b'},
+    f2Hose:        {en:'Water hose analogy', cn:'\u6c34\u7ba1\u7c7b\u6bd4'},
+    f2HoseDesc:    {en:'More water x faster flow = more push-back force', cn:'\u66f4\u591a\u6c34 x \u66f4\u5feb\u6d41\u901f = \u66f4\u5927\u53cd\u51b2\u529b'},
+    f2Eq:          {en:'T = v_e x m_dot', cn:'T = v_e x m_dot'},
+    f2Ve:          {en:'Exhaust Velocity (v_e)', cn:'\u55b7\u6c14\u901f\u5ea6 (v_e)'},
+    f2Mdot:        {en:'Mass Flow Rate (m_dot)', cn:'\u8d28\u91cf\u6d41\u7387 (m_dot)'},
+    f2Thrust:      {en:'Thrust (T)', cn:'\u63a8\u529b (T)'},
+    f2Up:          {en:'UP', cn:'\u589e\u5927'},
+    f3Title:       {en:'REAL ENGINE COMPARISON', cn:'\u771f\u5b9e\u53d1\u52a8\u673a\u5bf9\u6bd4'},
+    f3Estes:       {en:'Estes C6', cn:'Estes C6'},
+    f3Merlin:      {en:'Merlin 1D', cn:'Merlin 1D'},
+    f3Ion:         {en:'Ion Thruster', cn:'\u79bb\u5b50\u63a8\u8fdb\u5668'},
+    f3Ve:          {en:'v_e', cn:'v_e'},
+    f3Mdot:        {en:'m_dot', cn:'m_dot'},
+    f3T:           {en:'T', cn:'T'},
+    f3EstesVe:     {en:'800 m/s', cn:'800 m/s'},
+    f3MerlinVe:    {en:'3050 m/s', cn:'3050 m/s'},
+    f3IonVe:       {en:'40000 m/s', cn:'40000 m/s'},
+    f3EstesMdot:   {en:'0.007 kg/s', cn:'0.007 kg/s'},
+    f3MerlinMdot:  {en:'287 kg/s', cn:'287 kg/s'},
+    f3IonMdot:     {en:'0.000005 kg/s', cn:'0.000005 kg/s'},
+    f3EstesT:      {en:'5.6 N', cn:'5.6 N'},
+    f3MerlinT:     {en:'845 kN', cn:'845 kN'},
+    f3IonT:        {en:'0.2 N', cn:'0.2 N'},
+    f3ParticleNote:{en:'Particle density = mass flow, speed = exhaust velocity', cn:'\u7c92\u5b50\u5bc6\u5ea6 = \u8d28\u91cf\u6d41\u7387\uff0c\u901f\u5ea6 = \u55b7\u6c14\u901f\u5ea6'},
+    f4Title:       {en:'WHY EXHAUST VELOCITY MATTERS', cn:'\u4e3a\u4ec0\u4e48\u55b7\u6c14\u901f\u5ea6\u91cd\u8981'},
+    f4SameFuel:    {en:'Same fuel mass: 1 kg', cn:'\u76f8\u540c\u71c3\u6599\u8d28\u91cf\uff1a1 kg'},
+    f4LowVe:       {en:'Low v_e = 500 m/s', cn:'\u4f4e v_e = 500 m/s'},
+    f4HighVe:      {en:'High v_e = 3000 m/s', cn:'\u9ad8 v_e = 3000 m/s'},
+    f4LowAlt:      {en:'Low altitude', cn:'\u4f4e\u9ad8\u5ea6'},
+    f4HighAlt:     {en:'6x altitude!', cn:'6\u500d\u9ad8\u5ea6\uff01'},
+    f4Dramatic:    {en:'Same fuel, 6x the height -- exhaust velocity is the key!', cn:'\u540c\u6837\u7684\u71c3\u6599\uff0c6\u500d\u7684\u9ad8\u5ea6 -- \u55b7\u6c14\u901f\u5ea6\u662f\u5173\u952e\uff01'},
+    guideTitle:    {en:'OBSERVATION GUIDE', cn:'\u89c2\u5bdf\u6307\u5357'},
+    g1:            {en:'Thrust = exhaust velocity x mass flow rate', cn:'\u63a8\u529b = \u55b7\u6c14\u901f\u5ea6 x \u8d28\u91cf\u6d41\u7387'},
+    g2:            {en:'Faster exhaust = more thrust per kg of fuel', cn:'\u55b7\u6c14\u8d8a\u5feb = \u6bcf\u516c\u65a4\u71c3\u6599\u63a8\u529b\u8d8a\u5927'},
+    g3:            {en:'Ion thrusters: tiny mass, extreme speed, low thrust', cn:'\u79bb\u5b50\u63a8\u8fdb\u5668\uff1a\u6781\u5c11\u8d28\u91cf\uff0c\u6781\u9ad8\u901f\u5ea6\uff0c\u4f4e\u63a8\u529b'},
+    g4:            {en:'Same fuel, higher v_e = much higher altitude', cn:'\u76f8\u540c\u71c3\u6599\uff0c\u66f4\u9ad8 v_e = \u66f4\u9ad8\u9ad8\u5ea6'},
+    hudFrame:      {en:'FRAME', cn:'\u5e27'},
+    hudVe:         {en:'EXHAUST V', cn:'\u55b7\u6c14\u901f\u5ea6'},
+    hudMdot:       {en:'MASS FLOW', cn:'\u8d28\u91cf\u6d41\u7387'},
+    hudThrust:     {en:'THRUST', cn:'\u63a8\u529b'},
+  },
+
+  hudLabels: ['hudFrame', 'hudVe', 'hudMdot', 'hudThrust'],
+  hudValues: [
+    ['TITLE',   '--',        '--',          '--'],
+    ['BALLOON', '~5 m/s',    '~0.01 kg/s',  '~0.05 N'],
+    ['EQUATION','v_e',       'm_dot',       'T=v_e*m_dot'],
+    ['ENGINES', '800~40000', '5e-6~287',    '0.2N~845kN'],
+    ['COMPARE', '500 vs 3000','1 kg each',  '6x height'],
+  ],
+
+  guideTitle: 'guideTitle',
+  guideItems: ['g1', 'g2', 'g3', 'g4'],
+};
+
+// ============================================================
+// Animation state -- continuous rendering for particles & motion
+// ============================================================
+var animState = {time: 0, frame: -1};
+var animTimer = null;
+var soundMuted = true;
+
+// Particle pools
+var exhaustParticles = [];
+var f1Particles = [];
+var f3Particles = {estes: [], merlin: [], ion: []};
+var f4Particles = {low: [], high: []};
+
+// F2 interactive slider state
+var f2VeSlider = 0.5;
+var f2MdotSlider = 0.5;
+var f2VeTarget = 0.5;
+var f2MdotTarget = 0.5;
+var f2CycleTime = 0;
+
+// F1 balloon positions
+var f1SlowBalloonX = 0;
+var f1FastBalloonX = 0;
+var f1Phase = 0;
+
+// F4 rocket altitudes
+var f4LowAlt = 0;
+var f4HighAlt = 0;
+var f4Phase = 0;
+var f4ShakeAmount = 0;
+
+// Idle wobble for balloons
+var idleWobble = 0;
+
+function startAnim(frame) {
+  if (animTimer) { clearInterval(animTimer); animTimer = null; }
+  animState = {time: 0, frame: frame};
+  // Reset per-frame state
+  if (frame === 1) {
+    f1SlowBalloonX = 0;
+    f1FastBalloonX = 0;
+    f1Phase = 0;
+    f1Particles = [];
+  }
+  if (frame === 2) {
+    f2CycleTime = 0;
+  }
+  if (frame === 3) {
+    f3Particles = {estes: [], merlin: [], ion: []};
+  }
+  if (frame === 4) {
+    f4LowAlt = 0;
+    f4HighAlt = 0;
+    f4Phase = 0;
+    f4ShakeAmount = 5;
+    f4Particles = {low: [], high: []};
+  }
+  animTimer = setInterval(function () {
+    animState.time += 0.03;
+    idleWobble += 0.06;
+    AnimRuntime.drawFrame(AnimRuntime.currentFrame);
+  }, 30);
+}
+
+var _prevFrame = -1;
+setInterval(function () {
+  var cf = AnimRuntime.currentFrame;
+  if (cf !== _prevFrame) {
+    _prevFrame = cf;
+    startAnim(cf);
+  }
+}, 80);
+
+// ============================================================
+// Custom background
+// ============================================================
+function drawBg(ctx, W, H) {
+  var P = AnimRuntime.PAL;
+  var g = ctx.createLinearGradient(0, 0, 0, H);
+  g.addColorStop(0, P.bg); g.addColorStop(1, P.bg2);
+  ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+  // Grid
+  ctx.strokeStyle = 'rgba(255,181,156,0.03)'; ctx.lineWidth = 0.5;
+  for (var gx = 0; gx < W; gx += 40) { ctx.beginPath(); ctx.moveTo(gx, 0); ctx.lineTo(gx, H); ctx.stroke(); }
+  for (var gy = 0; gy < H; gy += 40) { ctx.beginPath(); ctx.moveTo(0, gy); ctx.lineTo(W, gy); ctx.stroke(); }
+
+  var f = AnimRuntime.currentFrame;
+  if (f === 0) {
+    // Parallax star field for title
+    var seed = 42;
+    for (var i = 0; i < 80; i++) {
+      seed = (seed * 1103515245 + 12345) & 0x7fffffff;
+      var sx = (seed % W + animState.time * (2 + (i % 3))) % W;
+      seed = (seed * 1103515245 + 12345) & 0x7fffffff;
+      var sy = seed % H;
+      var br = 0.12 + (seed % 30) / 100;
+      ctx.fillStyle = 'rgba(255,255,255,' + br + ')';
+      ctx.beginPath(); ctx.arc(sx, sy, 0.3 + (seed % 3) * 0.2, 0, Math.PI * 2); ctx.fill();
+    }
+  }
+  if (f === 4) {
+    // Parallax sky gradient for launch scene
+    var sg = ctx.createLinearGradient(0, 0, 0, H);
+    sg.addColorStop(0, 'rgba(10,10,40,0.6)');
+    sg.addColorStop(0.4, 'rgba(20,15,50,0.3)');
+    sg.addColorStop(1, 'rgba(30,20,15,0.1)');
+    ctx.fillStyle = sg; ctx.fillRect(0, 0, W, H);
+  }
+}
+
+// ============================================================
+// Drawing helpers
+// ============================================================
+
+function drawBalloonBody(ctx, x, y, rw, rh, color, wobble) {
+  var w = wobble || 0;
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.rotate(Math.sin(w) * 0.04);
+  ctx.fillStyle = color;
+  ctx.beginPath();
+  ctx.ellipse(0, 0, rw, rh, 0, 0, Math.PI * 2);
+  ctx.fill();
+  // Highlight
+  ctx.fillStyle = 'rgba(255,255,255,0.18)';
+  ctx.beginPath();
+  ctx.ellipse(-rw * 0.3, -rh * 0.3, rw * 0.25, rh * 0.2, -0.3, 0, Math.PI * 2);
+  ctx.fill();
+  // Nozzle
+  ctx.fillStyle = color;
+  ctx.beginPath();
+  ctx.moveTo(-rw * 0.2, rh);
+  ctx.lineTo(rw * 0.2, rh);
+  ctx.lineTo(rw * 0.12, rh + 5);
+  ctx.lineTo(-rw * 0.12, rh + 5);
+  ctx.fill();
+  ctx.restore();
+}
+
+function drawRocketBody(ctx, x, y, scale, color) {
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.scale(scale, scale);
+  // Body
+  ctx.fillStyle = color || '#d8d8d8';
+  ctx.beginPath();
+  ctx.moveTo(-10, -45);
+  ctx.lineTo(-12, 30);
+  ctx.lineTo(12, 30);
+  ctx.lineTo(10, -45);
+  ctx.closePath();
+  ctx.fill();
+  // Nose
+  ctx.fillStyle = '#cc3322';
+  ctx.beginPath();
+  ctx.moveTo(-10, -45);
+  ctx.quadraticCurveTo(0, -70, 10, -45);
+  ctx.closePath();
+  ctx.fill();
+  // Fins
+  ctx.fillStyle = '#cc3322';
+  ctx.beginPath(); ctx.moveTo(-12, 22); ctx.lineTo(-20, 38); ctx.lineTo(-12, 30); ctx.fill();
+  ctx.beginPath(); ctx.moveTo(12, 22); ctx.lineTo(20, 38); ctx.lineTo(12, 30); ctx.fill();
+  // Nozzle
+  ctx.fillStyle = '#555';
+  ctx.beginPath();
+  ctx.moveTo(-7, 30); ctx.lineTo(-9, 38); ctx.lineTo(9, 38); ctx.lineTo(7, 30); ctx.fill();
+  // Window
+  ctx.fillStyle = '#4488bb';
+  ctx.beginPath(); ctx.arc(0, -20, 4, 0, Math.PI * 2); ctx.fill();
+  ctx.restore();
+}
+
+function drawExhaustParticle(ctx, px, py, r, speed, color, alpha) {
+  ctx.globalAlpha = alpha;
+  ctx.fillStyle = color;
+  ctx.beginPath(); ctx.arc(px, py, r, 0, Math.PI * 2); ctx.fill();
+  // Glow on fast particles
+  if (speed > 1.5) {
+    ctx.shadowColor = color;
+    ctx.shadowBlur = 6;
+    ctx.beginPath(); ctx.arc(px, py, r * 0.6, 0, Math.PI * 2); ctx.fill();
+    ctx.shadowBlur = 0;
+  }
+  ctx.globalAlpha = 1;
+}
+
+function drawVelocityArrow(ctx, x1, y1, x2, y2, color, lw, glow) {
+  var angle = Math.atan2(y2 - y1, x2 - x1);
+  var hs = 8;
+  ctx.strokeStyle = color; ctx.lineWidth = lw || 2;
+  if (glow) { ctx.shadowColor = color; ctx.shadowBlur = 8; }
+  ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+  ctx.fillStyle = color; ctx.beginPath();
+  ctx.moveTo(x2, y2);
+  ctx.lineTo(x2 - hs * Math.cos(angle - 0.4), y2 - hs * Math.sin(angle - 0.4));
+  ctx.lineTo(x2 - hs * Math.cos(angle + 0.4), y2 - hs * Math.sin(angle + 0.4));
+  ctx.fill();
+  if (glow) { ctx.shadowBlur = 0; }
+}
+
+function drawBarH(ctx, x, y, maxW, frac, h, color, labelText, P) {
+  ctx.fillStyle = 'rgba(255,255,255,0.05)';
+  ctx.fillRect(x, y - h / 2, maxW, h);
+  var barW = maxW * Math.max(frac, 0.01);
+  ctx.fillStyle = color;
+  ctx.fillRect(x, y - h / 2, barW, h);
+  ctx.shadowColor = color; ctx.shadowBlur = 5;
+  ctx.fillRect(x, y - h / 2, barW, 2);
+  ctx.shadowBlur = 0;
+  if (labelText) {
+    ctx.fillStyle = P.text;
+    ctx.font = "10px 'Inter','Noto Sans SC',sans-serif";
+    ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+    ctx.fillText(labelText, x + barW + 6, y);
+  }
+}
+
+function drawNozzle(ctx, x, y, w, h) {
+  var P = AnimRuntime.PAL;
+  ctx.strokeStyle = P.muted; ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.moveTo(x, y - h);
+  ctx.lineTo(x + w * 0.4, y - h * 0.3);
+  ctx.lineTo(x + w, y - h * 0.6);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(x, y + h);
+  ctx.lineTo(x + w * 0.4, y + h * 0.3);
+  ctx.lineTo(x + w, y + h * 0.6);
+  ctx.stroke();
+  ctx.fillStyle = 'rgba(255,181,156,0.04)';
+  ctx.beginPath();
+  ctx.moveTo(x, y - h); ctx.lineTo(x + w * 0.4, y - h * 0.3);
+  ctx.lineTo(x + w, y - h * 0.6); ctx.lineTo(x + w, y + h * 0.6);
+  ctx.lineTo(x + w * 0.4, y + h * 0.3); ctx.lineTo(x, y + h);
+  ctx.closePath(); ctx.fill();
+}
+
+function spawnParticle(pool, x, y, vx, vy, r, color, life) {
+  pool.push({x: x, y: y, vx: vx, vy: vy, r: r, color: color, life: life, maxLife: life});
+}
+
+function updateParticles(pool, dt) {
+  for (var i = pool.length - 1; i >= 0; i--) {
+    var p = pool[i];
+    p.x += p.vx * dt;
+    p.y += p.vy * dt;
+    p.life -= dt;
+    if (p.life <= 0) pool.splice(i, 1);
+  }
+}
+
+function renderParticles(ctx, pool) {
+  for (var i = 0; i < pool.length; i++) {
+    var p = pool[i];
+    var alpha = Math.max(0, p.life / p.maxLife) * 0.8;
+    drawExhaustParticle(ctx, p.x, p.y, p.r * (0.5 + 0.5 * p.life / p.maxLife), p.vx > 3 ? 2 : 1, p.color, alpha);
+  }
+}
+
+// ============================================================
+// getFrameElements + customDrawElement
+// ============================================================
+
+function getFrameElements(f, W, H) {
+  return [{id:'scene_' + f, type:'custom_scene', frame:f}];
+}
+
+function customDrawElement(ctx, el, W, H) {
+  if (el.type !== 'custom_scene') return false;
+  var f = el.frame;
+  var t = AnimRuntime.t;
+  var P = AnimRuntime.PAL;
+  var cx = W / 2, cy = H / 2;
+
+  if (f === 0) drawF0Title(ctx, W, H, t, P, cx, cy);
+  else if (f === 1) drawF1Balloon(ctx, W, H, t, P, cx, cy);
+  else if (f === 2) drawF2Quantify(ctx, W, H, t, P, cx, cy);
+  else if (f === 3) drawF3Engines(ctx, W, H, t, P, cx, cy);
+  else if (f === 4) drawF4Compare(ctx, W, H, t, P, cx, cy);
+  return true;
+}
+
+// ── Frame 0: Title ──
+function drawF0Title(ctx, W, H, t, P, cx, cy) {
+  // Animated balloon rocket trailing air across the top
+  var balloonTrailX = (animState.time * 60) % (W + 100) - 50;
+  var balloonTrailY = cy - 90;
+
+  // Trailing air particles behind balloon
+  for (var i = 0; i < 15; i++) {
+    var px = balloonTrailX - 20 - i * 12 + Math.sin(animState.time * 3 + i) * 3;
+    var py = balloonTrailY + 12 + Math.cos(animState.time * 4 + i * 0.7) * 4;
+    var alpha = 0.4 - i * 0.025;
+    if (alpha > 0 && px > 0) {
+      ctx.globalAlpha = alpha;
+      ctx.fillStyle = 'rgba(200,220,255,0.6)';
+      ctx.beginPath(); ctx.arc(px, py, 2 + Math.random() * 1.5, 0, Math.PI * 2); ctx.fill();
+    }
+  }
+  ctx.globalAlpha = 1;
+
+  // Balloon body
+  drawBalloonBody(ctx, balloonTrailX, balloonTrailY, 12, 16, '#ff6666', idleWobble);
+
+  // Title
+  ctx.fillStyle = P.primary;
+  ctx.font = "bold 26px 'Space Grotesk','Noto Sans SC',sans-serif";
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.shadowColor = P.glowStrong; ctx.shadowBlur = 18;
+  ctx.fillText(t('title'), cx, cy - 40);
+  ctx.shadowBlur = 0;
+
+  // Equation
+  ctx.fillStyle = P.secondary;
+  ctx.font = "bold 18px 'Space Grotesk',sans-serif";
+  ctx.fillText('T = v_e \u00b7 m_dot', cx, cy + 5);
+
+  // Glow on equation
+  ctx.shadowColor = P.secondary; ctx.shadowBlur = 12;
+  ctx.fillText('T = v_e \u00b7 m_dot', cx, cy + 5);
+  ctx.shadowBlur = 0;
+
+  // Core question
+  ctx.fillStyle = P.muted;
+  ctx.font = "12px 'Inter','Noto Sans SC',sans-serif";
+  ctx.fillText(t('coreQ'), cx, cy + 50);
+
+  // Decorative equation breakdown at bottom
+  ctx.fillStyle = P.tertiary;
+  ctx.font = "10px 'Space Grotesk',sans-serif";
+  ctx.globalAlpha = 0.6;
+  ctx.fillText('T = Thrust  |  v_e = Exhaust Velocity  |  m_dot = Mass Flow Rate', cx, cy + 90);
+  ctx.globalAlpha = 1;
+}
+
+// ── Frame 1: Balloon experiment ──
+function drawF1Balloon(ctx, W, H, t, P, cx, cy) {
+  var dt = 0.03;
+  f1Phase += dt;
+
+  // Title
+  ctx.fillStyle = P.primary;
+  ctx.font = "bold 16px 'Space Grotesk','Noto Sans SC',sans-serif";
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillText(t('f1Title'), cx, 25);
+
+  // Two lanes: slow exhaust (top), fast exhaust (bottom)
+  var laneTop = cy - 55;
+  var laneBot = cy + 55;
+  var startX = 100;
+  var endX = W - 60;
+
+  // Lane lines
+  ctx.strokeStyle = 'rgba(255,255,255,0.08)'; ctx.lineWidth = 1;
+  ctx.setLineDash([4, 4]);
+  ctx.beginPath(); ctx.moveTo(startX - 20, laneTop); ctx.lineTo(endX + 20, laneTop); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(startX - 20, laneBot); ctx.lineTo(endX + 20, laneBot); ctx.stroke();
+  ctx.setLineDash([]);
+
+  // Slow balloon: moves slowly, short distance
+  var slowMax = (endX - startX) * 0.35;
+  var slowSpeed = 0.3;
+  if (f1SlowBalloonX < slowMax) {
+    f1SlowBalloonX += slowSpeed;
+  }
+  var slowBX = startX + f1SlowBalloonX;
+
+  // Fast balloon: moves faster, longer distance
+  var fastMax = (endX - startX) * 0.85;
+  var fastSpeed = 1.2;
+  if (f1FastBalloonX < fastMax) {
+    f1FastBalloonX += fastSpeed;
+  }
+  var fastBX = startX + f1FastBalloonX;
+
+  // Spawn exhaust particles continuously
+  if (f1SlowBalloonX < slowMax && f1Phase % 0.12 < 0.04) {
+    spawnParticle(f1Particles, slowBX - 14, laneTop + 2 + (Math.random() - 0.5) * 6, -1.5 - Math.random(), (Math.random() - 0.5) * 0.5, 1.5 + Math.random(), 'rgba(180,200,240,0.7)', 1.2);
+  }
+  if (f1FastBalloonX < fastMax && f1Phase % 0.06 < 0.04) {
+    spawnParticle(f1Particles, fastBX - 14, laneBot + 2 + (Math.random() - 0.5) * 6, -4 - Math.random() * 2, (Math.random() - 0.5) * 1, 2 + Math.random(), 'rgba(255,180,140,0.8)', 0.8);
+  }
+  updateParticles(f1Particles, dt);
+  renderParticles(ctx, f1Particles);
+
+  // Slow balloon
+  drawBalloonBody(ctx, slowBX, laneTop, 12, 16, '#7799cc', idleWobble);
+  // Velocity arrow (small)
+  if (f1SlowBalloonX < slowMax) {
+    drawVelocityArrow(ctx, slowBX + 18, laneTop, slowBX + 38, laneTop, P.tertiary, 1.5, false);
+  }
+
+  // Fast balloon
+  drawBalloonBody(ctx, fastBX, laneBot, 14, 18, '#ff7755', idleWobble * 1.3);
+  // Velocity arrow (big, with glow)
+  if (f1FastBalloonX < fastMax) {
+    drawVelocityArrow(ctx, fastBX + 20, laneBot, fastBX + 55, laneBot, P.primary, 2.5, true);
+  }
+
+  // Labels
+  ctx.textAlign = 'left';
+  ctx.fillStyle = P.muted;
+  ctx.font = "11px 'Inter','Noto Sans SC',sans-serif";
+  ctx.fillText(t('f1Slow'), 20, laneTop - 22);
+  ctx.fillStyle = P.primary;
+  ctx.fillText(t('f1Fast'), 20, laneBot - 22);
+
+  // Flight result labels
+  ctx.textAlign = 'right';
+  ctx.fillStyle = P.muted;
+  ctx.font = "10px 'Inter','Noto Sans SC',sans-serif";
+  if (f1SlowBalloonX >= slowMax) {
+    ctx.fillText(t('f1Short'), slowBX + 30, laneTop - 22);
+  }
+  if (f1FastBalloonX >= fastMax) {
+    ctx.fillStyle = P.primary;
+    ctx.font = "bold 11px 'Inter','Noto Sans SC',sans-serif";
+    ctx.shadowColor = P.primaryDim; ctx.shadowBlur = 8;
+    ctx.fillText(t('f1Long'), fastBX + 30, laneBot - 22);
+    ctx.shadowBlur = 0;
+  }
+
+  // Explanation labels
+  ctx.textAlign = 'center';
+  ctx.fillStyle = P.tertiary;
+  ctx.font = "10px 'Inter','Noto Sans SC',sans-serif";
+  ctx.fillText(t('f1Air'), cx, H - 40);
+  ctx.fillStyle = P.secondary;
+  ctx.fillText(t('f1Fly'), cx, H - 25);
+}
+
+// ── Frame 2: Quantifying thrust ──
+function drawF2Quantify(ctx, W, H, t, P, cx, cy) {
+  f2CycleTime += 0.015;
+
+  // Animated slider cycling
+  f2VeTarget = 0.3 + 0.5 * (0.5 + 0.5 * Math.sin(f2CycleTime * 1.7));
+  f2MdotTarget = 0.3 + 0.5 * (0.5 + 0.5 * Math.sin(f2CycleTime * 1.1 + 1.5));
+  f2VeSlider += (f2VeTarget - f2VeSlider) * 0.08;
+  f2MdotSlider += (f2MdotTarget - f2MdotSlider) * 0.08;
+
+  var thrust = f2VeSlider * f2MdotSlider;
+
+  // Title
+  ctx.fillStyle = P.primary;
+  ctx.font = "bold 16px 'Space Grotesk','Noto Sans SC',sans-serif";
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillText(t('f2Title'), cx, 22);
+
+  // Water hose analogy (left side)
+  var hoseX = 60;
+  var hoseY = cy - 20;
+
+  // Hose shape
+  ctx.strokeStyle = P.muted; ctx.lineWidth = 3;
+  ctx.beginPath();
+  ctx.moveTo(hoseX, hoseY);
+  ctx.quadraticCurveTo(hoseX + 40, hoseY - 10, hoseX + 80, hoseY);
+  ctx.lineTo(hoseX + 120, hoseY);
+  ctx.stroke();
+
+  // Water spray from hose
+  var sprayIntensity = f2MdotSlider;
+  var spraySpeed = f2VeSlider;
+  for (var wi = 0; wi < 12; wi++) {
+    var wfrac = wi / 12;
+    var wx = hoseX + 120 + wfrac * 80 * spraySpeed;
+    var wy = hoseY + (Math.sin(animState.time * 6 + wi) * 8 * sprayIntensity) + wfrac * 15;
+    var wr = (1.5 + sprayIntensity * 2) * (1 - wfrac * 0.5);
+    var walpha = (0.6 - wfrac * 0.4) * sprayIntensity;
+    ctx.globalAlpha = walpha;
+    ctx.fillStyle = P.tertiary;
+    ctx.beginPath(); ctx.arc(wx, wy, wr, 0, Math.PI * 2); ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+
+  // Push-back arrow on person holding hose
+  var pushLen = 20 + thrust * 40;
+  drawVelocityArrow(ctx, hoseX, hoseY, hoseX - pushLen, hoseY, P.primary, 2, thrust > 0.3);
+
+  // Hose label
+  ctx.fillStyle = P.muted;
+  ctx.font = "10px 'Inter','Noto Sans SC',sans-serif";
+  ctx.textAlign = 'center';
+  ctx.fillText(t('f2Hose'), hoseX + 60, hoseY - 25);
+  ctx.font = "9px 'Inter','Noto Sans SC',sans-serif";
+  ctx.fillText(t('f2HoseDesc'), hoseX + 90, hoseY + 35);
+
+  // Equation (right side, centered)
+  var eqX = W - 200;
+  var eqY = 65;
+  ctx.fillStyle = P.primary;
+  ctx.font = "bold 18px 'Space Grotesk',sans-serif";
+  ctx.textAlign = 'center';
+  ctx.shadowColor = P.glowStrong; ctx.shadowBlur = 10;
+  ctx.fillText(t('f2Eq'), eqX, eqY);
+  ctx.shadowBlur = 0;
+
+  // Bar graphs (right side)
+  var barX = W - 310;
+  var barMaxW = 200;
+  var barH = 14;
+
+  // v_e bar
+  var veBarY = cy - 20;
+  ctx.fillStyle = P.tertiary;
+  ctx.font = "bold 10px 'Space Grotesk',sans-serif";
+  ctx.textAlign = 'left';
+  ctx.fillText(t('f2Ve'), barX, veBarY - 12);
+  drawBarH(ctx, barX, veBarY, barMaxW, f2VeSlider, barH, P.tertiary, '', P);
+  // UP indicator
+  if (f2VeSlider > 0.6) {
+    ctx.fillStyle = P.primary;
+    ctx.font = "bold 9px 'Space Grotesk',sans-serif";
+    ctx.fillText(t('f2Up'), barX + barMaxW * f2VeSlider + 10, veBarY);
+  }
+
+  // m_dot bar
+  var mdotBarY = cy + 20;
+  ctx.fillStyle = P.secondary;
+  ctx.font = "bold 10px 'Space Grotesk',sans-serif";
+  ctx.textAlign = 'left';
+  ctx.fillText(t('f2Mdot'), barX, mdotBarY - 12);
+  drawBarH(ctx, barX, mdotBarY, barMaxW, f2MdotSlider, barH, P.secondary, '', P);
+  if (f2MdotSlider > 0.6) {
+    ctx.fillStyle = P.primary;
+    ctx.font = "bold 9px 'Space Grotesk',sans-serif";
+    ctx.fillText(t('f2Up'), barX + barMaxW * f2MdotSlider + 10, mdotBarY);
+  }
+
+  // Thrust result bar (bottom)
+  var thrustBarY = cy + 70;
+  ctx.fillStyle = P.primary;
+  ctx.font = "bold 11px 'Space Grotesk',sans-serif";
+  ctx.textAlign = 'left';
+  ctx.fillText(t('f2Thrust'), barX, thrustBarY - 14);
+  drawBarH(ctx, barX, thrustBarY, barMaxW, thrust * 2, barH + 4, P.primary, (thrust * 100).toFixed(0) + '%', P);
+
+  // Glow on thrust bar
+  ctx.shadowColor = P.primary; ctx.shadowBlur = 12;
+  ctx.fillStyle = P.primary;
+  ctx.fillRect(barX, thrustBarY - (barH + 4) / 2, barMaxW * thrust * 2, 2);
+  ctx.shadowBlur = 0;
+
+  // "x" symbol connecting bars
+  ctx.fillStyle = P.muted;
+  ctx.font = "bold 14px 'Space Grotesk',sans-serif";
+  ctx.textAlign = 'center';
+  ctx.fillText('\u00d7', barX - 15, cy);
+  ctx.fillText('=', barX - 15, cy + 45);
+}
+
+// ── Frame 3: Real engine comparison ──
+function drawF3Engines(ctx, W, H, t, P, cx, cy) {
+  var dt = 0.03;
+
+  // Title
+  ctx.fillStyle = P.primary;
+  ctx.font = "bold 16px 'Space Grotesk','Noto Sans SC',sans-serif";
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillText(t('f3Title'), cx, 22);
+
+  // 3 columns
+  var col1 = W * 0.2;
+  var col2 = W * 0.5;
+  var col3 = W * 0.78;
+  var engineY = cy - 30;
+
+  // -- Estes C6 --
+  drawRocketBody(ctx, col1, engineY - 10, 0.45, '#aaaacc');
+  // Nozzle
+  drawNozzle(ctx, col1 + 8, engineY + 15, 25, 8);
+  // Exhaust: few particles, moderate speed
+  if (animState.time % 0.15 < 0.04) {
+    spawnParticle(f3Particles.estes, col1 + 35, engineY + 15 + (Math.random() - 0.5) * 6, 2 + Math.random(), (Math.random() - 0.5) * 0.8, 1.2 + Math.random() * 0.5, '#ffaa66', 0.8);
+  }
+  updateParticles(f3Particles.estes, dt);
+  renderParticles(ctx, f3Particles.estes);
+
+  ctx.textAlign = 'center';
+  ctx.fillStyle = P.primary;
+  ctx.font = "bold 11px 'Space Grotesk',sans-serif";
+  ctx.fillText(t('f3Estes'), col1, engineY + 50);
+
+  ctx.fillStyle = P.muted;
+  ctx.font = "9px 'Inter',sans-serif";
+  ctx.fillText(t('f3Ve') + ': ' + t('f3EstesVe'), col1, engineY + 65);
+  ctx.fillText(t('f3Mdot') + ': ' + t('f3EstesMdot'), col1, engineY + 78);
+  ctx.fillStyle = P.secondary;
+  ctx.font = "bold 10px 'Space Grotesk',sans-serif";
+  ctx.fillText('T = ' + t('f3EstesT'), col1, engineY + 95);
+
+  // -- Merlin 1D --
+  drawRocketBody(ctx, col2, engineY - 20, 0.7, '#d8d8d8');
+  drawNozzle(ctx, col2 + 14, engineY + 10, 35, 14);
+  // Exhaust: dense particles, high speed
+  if (animState.time % 0.04 < 0.035) {
+    for (var mi = 0; mi < 3; mi++) {
+      spawnParticle(f3Particles.merlin, col2 + 50, engineY + 10 + (Math.random() - 0.5) * 16, 5 + Math.random() * 3, (Math.random() - 0.5) * 2, 2.5 + Math.random() * 1.5, '#ff8844', 0.6);
+    }
+  }
+  updateParticles(f3Particles.merlin, dt);
+  renderParticles(ctx, f3Particles.merlin);
+
+  // Screen shake on Merlin (simulated via jitter on label)
+  var shakeX = Math.sin(animState.time * 40) * 0.5;
+  var shakeY = Math.cos(animState.time * 35) * 0.4;
+  ctx.textAlign = 'center';
+  ctx.fillStyle = P.primary;
+  ctx.font = "bold 11px 'Space Grotesk',sans-serif";
+  ctx.fillText(t('f3Merlin'), col2 + shakeX, engineY + 50 + shakeY);
+
+  ctx.fillStyle = P.muted;
+  ctx.font = "9px 'Inter',sans-serif";
+  ctx.fillText(t('f3Ve') + ': ' + t('f3MerlinVe'), col2, engineY + 65);
+  ctx.fillText(t('f3Mdot') + ': ' + t('f3MerlinMdot'), col2, engineY + 78);
+  ctx.fillStyle = P.primary;
+  ctx.font = "bold 11px 'Space Grotesk',sans-serif";
+  ctx.shadowColor = P.glowStrong; ctx.shadowBlur = 8;
+  ctx.fillText('T = ' + t('f3MerlinT'), col2, engineY + 95);
+  ctx.shadowBlur = 0;
+
+  // -- Ion Thruster --
+  // Small box shape
+  ctx.fillStyle = '#334466';
+  ctx.fillRect(col3 - 12, engineY - 15, 24, 30);
+  ctx.strokeStyle = P.tertiary; ctx.lineWidth = 1;
+  ctx.strokeRect(col3 - 12, engineY - 15, 24, 30);
+  // Grid at exit
+  ctx.strokeStyle = P.tertiary; ctx.lineWidth = 0.5;
+  for (var gi = 0; gi < 5; gi++) {
+    var gy = engineY - 12 + gi * 6;
+    ctx.beginPath(); ctx.moveTo(col3 + 12, gy); ctx.lineTo(col3 + 18, gy); ctx.stroke();
+  }
+  // Exhaust: very sparse, extremely fast tiny particles (ions)
+  if (animState.time % 0.3 < 0.04) {
+    spawnParticle(f3Particles.ion, col3 + 20, engineY + (Math.random() - 0.5) * 10, 8 + Math.random() * 4, (Math.random() - 0.5) * 0.3, 0.8, '#88ddff', 0.5);
+  }
+  updateParticles(f3Particles.ion, dt);
+  renderParticles(ctx, f3Particles.ion);
+
+  // Ion glow at exit
+  ctx.globalAlpha = 0.3 + Math.sin(animState.time * 5) * 0.15;
+  ctx.fillStyle = P.tertiary;
+  ctx.beginPath(); ctx.arc(col3 + 16, engineY, 5, 0, Math.PI * 2); ctx.fill();
+  ctx.globalAlpha = 1;
+
+  ctx.textAlign = 'center';
+  ctx.fillStyle = P.tertiary;
+  ctx.font = "bold 11px 'Space Grotesk',sans-serif";
+  ctx.fillText(t('f3Ion'), col3, engineY + 50);
+
+  ctx.fillStyle = P.muted;
+  ctx.font = "9px 'Inter',sans-serif";
+  ctx.fillText(t('f3Ve') + ': ' + t('f3IonVe'), col3, engineY + 65);
+  ctx.fillText(t('f3Mdot') + ': ' + t('f3IonMdot'), col3, engineY + 78);
+  ctx.fillStyle = P.tertiary;
+  ctx.font = "bold 10px 'Space Grotesk',sans-serif";
+  ctx.fillText('T = ' + t('f3IonT'), col3, engineY + 95);
+
+  // Bottom note
+  ctx.fillStyle = P.muted;
+  ctx.font = "9px 'Inter','Noto Sans SC',sans-serif";
+  ctx.textAlign = 'center';
+  ctx.fillText(t('f3ParticleNote'), cx, H - 15);
+
+  // Divider lines
+  ctx.strokeStyle = 'rgba(255,255,255,0.06)'; ctx.lineWidth = 1;
+  ctx.setLineDash([3, 3]);
+  var divX1 = (col1 + col2) / 2;
+  var divX2 = (col2 + col3) / 2;
+  ctx.beginPath(); ctx.moveTo(divX1, 40); ctx.lineTo(divX1, H - 25); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(divX2, 40); ctx.lineTo(divX2, H - 25); ctx.stroke();
+  ctx.setLineDash([]);
+}
+
+// ── Frame 4: Why exhaust velocity matters ──
+function drawF4Compare(ctx, W, H, t, P, cx, cy) {
+  var dt = 0.03;
+  f4Phase += dt;
+
+  // Screen shake decay
+  if (f4ShakeAmount > 0.1) {
+    f4ShakeAmount *= 0.97;
+    ctx.save();
+    ctx.translate(Math.sin(f4Phase * 50) * f4ShakeAmount, Math.cos(f4Phase * 40) * f4ShakeAmount * 0.6);
+  }
+
+  // Title
+  ctx.fillStyle = P.primary;
+  ctx.font = "bold 16px 'Space Grotesk','Noto Sans SC',sans-serif";
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillText(t('f4Title'), cx, 22);
+
+  // Same fuel label
+  ctx.fillStyle = P.secondary;
+  ctx.font = "bold 11px 'Space Grotesk','Noto Sans SC',sans-serif";
+  ctx.fillText(t('f4SameFuel'), cx, 42);
+
+  // Two rocket launch pads, side by side
+  var leftX = cx - 110;
+  var rightX = cx + 110;
+  var groundY = H - 50;
+  var maxAltLow = 100;
+  var maxAltHigh = 280;
+
+  // Ground line
+  ctx.strokeStyle = P.muted; ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(leftX - 60, groundY); ctx.lineTo(rightX + 60, groundY); ctx.stroke();
+
+  // Launch pads
+  ctx.fillStyle = P.surface;
+  ctx.fillRect(leftX - 15, groundY, 30, 8);
+  ctx.fillRect(rightX - 15, groundY, 30, 8);
+
+  // Animate altitudes
+  var launchDelay = 0.8;
+  var burnDuration = 3.5;
+
+  if (f4Phase > launchDelay) {
+    var elapsed = f4Phase - launchDelay;
+    var frac = Math.min(elapsed / burnDuration, 1);
+    var easedFrac = AnimRuntime.easeInOut(frac);
+    f4LowAlt = maxAltLow * easedFrac;
+    f4HighAlt = maxAltHigh * easedFrac;
+
+    // Exhaust particles during burn
+    if (frac < 1) {
+      // Low v_e rocket: fewer, slower particles
+      if (f4Phase % 0.1 < 0.04) {
+        var lowRY = groundY - f4LowAlt;
+        spawnParticle(f4Particles.low, leftX + (Math.random() - 0.5) * 6, lowRY + 35, (Math.random() - 0.5) * 0.5, 2 + Math.random(), 1.5 + Math.random(), '#ff9966', 0.6);
+      }
+      // High v_e rocket: more, faster particles
+      if (f4Phase % 0.05 < 0.04) {
+        var highRY = groundY - f4HighAlt;
+        for (var pi = 0; pi < 2; pi++) {
+          spawnParticle(f4Particles.high, rightX + (Math.random() - 0.5) * 8, highRY + 35, (Math.random() - 0.5) * 1, 4 + Math.random() * 2, 2 + Math.random(), '#ffcc44', 0.5);
+        }
+      }
+    }
+  }
+
+  updateParticles(f4Particles.low, dt);
+  updateParticles(f4Particles.high, dt);
+  renderParticles(ctx, f4Particles.low);
+  renderParticles(ctx, f4Particles.high);
+
+  // Draw rockets at their altitudes
+  var lowRocketY = groundY - f4LowAlt;
+  var highRocketY = groundY - f4HighAlt;
+
+  drawRocketBody(ctx, leftX, lowRocketY, 0.5, '#8899bb');
+  drawRocketBody(ctx, rightX, highRocketY, 0.5, '#ddaa44');
+
+  // Engine glow during burn
+  if (f4Phase > launchDelay && f4Phase < launchDelay + burnDuration) {
+    // Low v_e glow
+    ctx.globalAlpha = 0.4 + Math.sin(f4Phase * 8) * 0.2;
+    ctx.fillStyle = '#ff6633';
+    ctx.beginPath(); ctx.arc(leftX, lowRocketY + 22, 5, 0, Math.PI * 2); ctx.fill();
+    // High v_e glow (brighter)
+    ctx.globalAlpha = 0.6 + Math.sin(f4Phase * 10) * 0.2;
+    ctx.fillStyle = '#ffdd33';
+    ctx.shadowColor = '#ffdd33'; ctx.shadowBlur = 15;
+    ctx.beginPath(); ctx.arc(rightX, highRocketY + 22, 7, 0, Math.PI * 2); ctx.fill();
+    ctx.shadowBlur = 0;
+    ctx.globalAlpha = 1;
+  }
+
+  // Altitude markers
+  if (f4LowAlt > 10) {
+    ctx.strokeStyle = P.muted; ctx.lineWidth = 1;
+    ctx.setLineDash([2, 3]);
+    ctx.beginPath(); ctx.moveTo(leftX + 20, lowRocketY); ctx.lineTo(leftX + 40, lowRocketY); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(leftX + 40, groundY); ctx.lineTo(leftX + 40, lowRocketY); ctx.stroke();
+    ctx.setLineDash([]);
+  }
+  if (f4HighAlt > 10) {
+    ctx.strokeStyle = P.primary; ctx.lineWidth = 1;
+    ctx.setLineDash([2, 3]);
+    ctx.beginPath(); ctx.moveTo(rightX + 20, highRocketY); ctx.lineTo(rightX + 45, highRocketY); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(rightX + 45, groundY); ctx.lineTo(rightX + 45, highRocketY); ctx.stroke();
+    ctx.setLineDash([]);
+  }
+
+  // Labels under rockets
+  ctx.textAlign = 'center';
+  ctx.fillStyle = P.muted;
+  ctx.font = "10px 'Inter','Noto Sans SC',sans-serif";
+  ctx.fillText(t('f4LowVe'), leftX, groundY + 20);
+  ctx.fillStyle = P.primary;
+  ctx.fillText(t('f4HighVe'), rightX, groundY + 20);
+
+  // Result labels when rockets reach peak
+  var frac2 = f4Phase > launchDelay ? Math.min((f4Phase - launchDelay) / burnDuration, 1) : 0;
+  if (frac2 >= 1) {
+    ctx.fillStyle = P.muted;
+    ctx.font = "10px 'Inter','Noto Sans SC',sans-serif";
+    ctx.fillText(t('f4LowAlt'), leftX, lowRocketY - 25);
+
+    ctx.fillStyle = P.primary;
+    ctx.font = "bold 12px 'Space Grotesk','Noto Sans SC',sans-serif";
+    ctx.shadowColor = P.glowStrong; ctx.shadowBlur = 10;
+    ctx.fillText(t('f4HighAlt'), rightX, highRocketY - 25);
+    ctx.shadowBlur = 0;
+
+    // Bottom dramatic text
+    ctx.fillStyle = P.secondary;
+    ctx.font = "bold 11px 'Inter','Noto Sans SC',sans-serif";
+    ctx.textAlign = 'center';
+    ctx.fillText(t('f4Dramatic'), cx, groundY + 38);
+  }
+
+  // Restore shake transform
+  if (f4ShakeAmount > 0.1) {
+    ctx.restore();
+  }
+}
+
+// ============================================================
+// BOOT
+// ============================================================
+
+AnimRuntime.boot();
+</script>
+</body>
+</html>

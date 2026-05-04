@@ -1,0 +1,1436 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=Noto+Sans+SC:wght@400;700&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box;}
+html,body{width:100%;height:100vh;overflow:hidden;background:#0c0e14;color:#f6f6fc;font-family:'Noto Sans SC','Inter',sans-serif;}
+.game-wrap{display:flex;flex-direction:row;height:100vh;overflow:hidden;}
+.game-sidebar{width:200px;min-width:200px;max-width:200px;display:flex;flex-direction:column;gap:8px;padding:10px;background:rgba(0,0,0,0.5);border-right:1px solid rgba(80,255,176,0.15);overflow-y:auto;}
+.sidebar-btns{display:flex;gap:6px;align-self:flex-start;}
+.sidebar-lang,.sidebar-sound{flex-shrink:0;font-family:'Space Grotesk',sans-serif;font-size:11px;font-weight:700;padding:4px 10px;cursor:pointer;border:1px solid rgba(255,181,156,0.3);background:transparent;color:#ffb59c;letter-spacing:1px;}
+.sidebar-lang:hover,.sidebar-sound:hover{border-color:#ffb59c;background:rgba(255,181,156,0.1);}
+.sidebar-title{font-family:'Space Grotesk',sans-serif;font-size:11px;font-weight:700;color:#50ffb0;letter-spacing:0.08em;text-transform:uppercase;margin-top:4px;}
+.sidebar-guide{font-size:12px;color:#aaabb0;line-height:1.6;}
+.game-main{flex:1;display:flex;flex-direction:column;min-width:0;}
+.game-header{padding:8px 16px;display:flex;justify-content:space-between;align-items:center;background:rgba(0,0,0,0.4);}
+.game-header h1{font-family:'Space Grotesk',sans-serif;font-size:clamp(13px,2vw,17px);font-weight:700;color:#50ffb0;}
+.game-header .info{font-family:'Space Grotesk',sans-serif;font-size:12px;color:#aaabb0;}
+.game-body{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;position:relative;overflow:hidden;}
+.game-body canvas{display:block;}
+.control-panel{padding:8px 16px;display:flex;gap:12px;align-items:center;justify-content:center;background:rgba(0,0,0,0.3);flex-wrap:wrap;}
+.hud-bar{display:flex;justify-content:space-around;padding:6px 16px;background:rgba(0,0,0,0.55);backdrop-filter:blur(12px);}
+.hud-item{text-align:center;}
+.hud-label{font-family:'Space Grotesk',sans-serif;font-size:8px;letter-spacing:0.15em;text-transform:uppercase;color:#aaabb0;}
+.hud-val{font-family:'Space Grotesk',sans-serif;font-size:13px;font-weight:700;color:#50ffb0;}
+.btn{font-family:'Space Grotesk',sans-serif;font-size:12px;font-weight:700;padding:6px 18px;border:none;cursor:pointer;color:#0c0e14;background:linear-gradient(135deg,#50ffb0,#17df93);letter-spacing:0.08em;transition:transform 0.1s;}
+.btn:hover{transform:scale(1.04);}
+.btn:disabled{opacity:0.4;cursor:not-allowed;transform:none;}
+.btn-secondary{background:rgba(23,26,31,0.92);color:#aaabb0;backdrop-filter:blur(12px);border:none;font-family:'Space Grotesk',sans-serif;font-size:12px;font-weight:700;padding:6px 18px;cursor:pointer;letter-spacing:0.08em;transition:transform 0.1s;}
+.btn-secondary:hover{color:#50ffb0;}
+.plane-sel{display:flex;gap:6px;}
+.plane-btn{font-family:'Space Grotesk',sans-serif;font-size:11px;font-weight:700;padding:4px 12px;border:2px solid rgba(80,255,176,0.3);background:transparent;color:#aaabb0;cursor:pointer;transition:all 0.15s;}
+.plane-btn.active{border-color:#50ffb0;color:#50ffb0;background:rgba(80,255,176,0.08);}
+.plane-btn:hover{border-color:#50ffb0;}
+.data-table-wrap{max-height:180px;overflow-y:auto;margin-top:6px;scrollbar-width:thin;scrollbar-color:#333 transparent;}
+.data-table{width:100%;border-collapse:collapse;font-size:10px;}
+.data-table th{font-family:'Space Grotesk',sans-serif;font-size:9px;letter-spacing:0.08em;text-transform:uppercase;color:#50ffb0;padding:3px 4px;border-bottom:1px solid rgba(80,255,176,0.2);text-align:center;position:sticky;top:0;background:rgba(0,0,0,0.8);}
+.data-table td{font-family:'Space Grotesk',sans-serif;font-size:10px;color:#aaabb0;padding:2px 4px;text-align:center;border-bottom:1px solid rgba(255,255,255,0.04);}
+.data-table td.val{color:#f6f6fc;font-weight:700;}
+.data-table tr.new-row td{animation:rowFlash 0.6s ease-out;}
+@keyframes rowFlash{0%{background:rgba(80,255,176,0.2);}100%{background:transparent;}}
+.tape-overlay{display:none;position:absolute;top:0;left:0;width:100%;height:100%;cursor:crosshair;z-index:10;}
+.stopwatch-display{font-family:'Space Grotesk',sans-serif;font-size:11px;color:#ffb59c;font-weight:700;min-width:60px;text-align:center;}
+.result-panel{display:none;position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);background:rgba(12,14,20,0.95);border:1px solid rgba(80,255,176,0.3);padding:20px 28px;text-align:center;z-index:20;min-width:260px;}
+.result-panel h2{font-family:'Space Grotesk',sans-serif;font-size:18px;color:#50ffb0;margin-bottom:8px;}
+.result-panel p{font-size:13px;color:#aaabb0;margin:4px 0;}
+.result-panel .verdict{font-size:15px;color:#ffb59c;font-weight:700;margin-top:10px;}
+.result-panel .insight{font-size:12px;color:#666;margin-top:8px;font-style:italic;}
+</style>
+</head>
+<body>
+<div class="game-wrap">
+  <div class="game-sidebar">
+    <div class="sidebar-btns">
+      <button class="sidebar-lang" id="langBtn">CN</button>
+      <button class="sidebar-sound" id="soundBtn">MUTE</button>
+    </div>
+    <div class="sidebar-title" id="sidebarTitle"></div>
+    <div class="sidebar-guide" id="guideContent"></div>
+    <div class="data-table-wrap" id="dataTableWrap">
+      <table class="data-table" id="dataTable">
+        <thead><tr><th id="thPlane">#</th><th id="thTrial">N</th><th id="thDist">m</th><th id="thTime">s</th></tr></thead>
+        <tbody id="dataBody"></tbody>
+      </table>
+    </div>
+  </div>
+  <div class="game-main">
+    <div class="game-header">
+      <h1 id="gameTitle"></h1>
+      <div class="info" id="roundInfo"></div>
+    </div>
+    <div class="game-body" id="gameBody">
+      <canvas id="cv"></canvas>
+      <div class="tape-overlay" id="tapeOverlay"></div>
+      <div class="result-panel" id="resultPanel">
+        <h2 id="rpTitle"></h2>
+        <p id="rpAvgA"></p>
+        <p id="rpAvgB"></p>
+        <p id="rpAvgC" style="display:none;"></p>
+        <div class="verdict" id="rpVerdict"></div>
+        <div class="insight" id="rpInsight"></div>
+      </div>
+    </div>
+    <div class="control-panel" id="controlPanel">
+      <div class="plane-sel" id="planeSel"></div>
+      <button class="btn" id="btnLaunch"></button>
+      <button class="btn" id="btnMeasure" style="display:none;"></button>
+      <span class="stopwatch-display" id="stopwatch">0.00s</span>
+      <button class="btn-secondary" id="btnReset"></button>
+    </div>
+    <div class="hud-bar">
+      <div class="hud-item"><div class="hud-label" id="hudL1"></div><div class="hud-val" id="hudV1">--</div></div>
+      <div class="hud-item"><div class="hud-label" id="hudL2"></div><div class="hud-val" id="hudV2">--</div></div>
+      <div class="hud-item"><div class="hud-label" id="hudL3"></div><div class="hud-val" id="hudV3">--</div></div>
+      <div class="hud-item"><div class="hud-label" id="hudL4"></div><div class="hud-val" id="hudV4">--</div></div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ============================================================
+// K15 Game v2: Paper Airplane Measurement Lab
+//
+// The student launches paper airplanes, measures distance with
+// a virtual tape measure, reads the stopwatch, records data,
+// and makes evidence-based comparisons. 5 levels of increasing
+// complexity teach measurement, data recording, and analysis.
+//
+// Canvas 2D rendering. Sidebar standard layout. Dark theme.
+// ============================================================
+
+// --- I18N ---
+var I18N = {
+  title:        {en:'FLIGHT MEASUREMENT LAB', cn:'\u98de\u884c\u6d4b\u91cf\u5b9e\u9a8c\u5ba4'},
+  sideTitle:    {en:'GUIDE', cn:'\u64cd\u4f5c\u6307\u5357'},
+  guide1:       {en:'1. Click LAUNCH to throw\n2. After landing, drag the tape to measure distance\n3. Read the stopwatch time\n4. Record data in the table', cn:'1. \u70b9\u51fb\u201c\u53d1\u5c04\u201d\u629b\u51fa\u98de\u673a\n2. \u843d\u5730\u540e\uff0c\u62d6\u52a8\u76ae\u5c3a\u91cf\u8ddd\u79bb\n3. \u8bfb\u53d6\u79d2\u8868\u65f6\u95f4\n4. \u5c06\u6570\u636e\u8bb0\u5f55\u5230\u8868\u683c'},
+  guide2:       {en:'Compare 2 planes, fly each 3 times. Which is better?', cn:'\u5bf9\u6bd42\u6b3e\u98de\u673a\uff0c\u5404\u98de3\u6b21\u3002\u54ea\u6b3e\u66f4\u597d\uff1f'},
+  guide3:       {en:'Precision challenge! Tape measure must be within +/-0.5m of actual landing.', cn:'\u7cbe\u786e\u6311\u6218\uff01\u76ae\u5c3a\u6d4b\u91cf\u8bef\u5dee\u5fc5\u987b\u5728+/-0.5m\u4ee5\u5185\u3002'},
+  guide4:       {en:'5 flights, calculate the average. Which plane truly performs better?', cn:'\u98de5\u6b21\uff0c\u8ba1\u7b97\u5e73\u5747\u503c\u3002\u54ea\u6b3e\u98de\u673a\u771f\u7684\u66f4\u597d\uff1f'},
+  guide5:       {en:'3 planes + wind! Full experiment with all variables.', cn:'3\u6b3e\u98de\u673a+\u98ce\u529b\u53d8\u5316\uff01\u5b8c\u6574\u5b9e\u9a8c\u3002'},
+  launch:       {en:'LAUNCH', cn:'\u53d1\u5c04'},
+  measure:      {en:'CONFIRM', cn:'\u786e\u8ba4\u6d4b\u91cf'},
+  reset:        {en:'RESTART', cn:'\u91cd\u65b0\u5f00\u59cb'},
+  level:        {en:'Level', cn:'\u5173\u5361'},
+  dist:         {en:'DISTANCE', cn:'\u8ddd\u79bb'},
+  flightTime:   {en:'TIME', cn:'\u65f6\u95f4'},
+  trials:       {en:'TRIALS', cn:'\u6d4b\u91cf\u6b21\u6570'},
+  score:        {en:'SCORE', cn:'\u5f97\u5206'},
+  plane:        {en:'PLANE', cn:'\u98de\u673a'},
+  trial:        {en:'#', cn:'\u7b2c'},
+  distH:        {en:'DIST(m)', cn:'\u8ddd\u79bb(m)'},
+  timeH:        {en:'TIME(s)', cn:'\u65f6\u95f4(s)'},
+  flying:       {en:'Flying...', cn:'\u98de\u884c\u4e2d...'},
+  landed:       {en:'Drag tape to measure!', cn:'\u62d6\u52a8\u76ae\u5c3a\u6d4b\u91cf\uff01'},
+  recorded:     {en:'Data recorded!', cn:'\u6570\u636e\u5df2\u8bb0\u5f55\uff01'},
+  ready:        {en:'Select & Launch', cn:'\u9009\u62e9\u5e76\u53d1\u5c04'},
+  tapeDrag:     {en:'Drag the tape end to the landing spot', cn:'\u62d6\u52a8\u76ae\u5c3a\u7aef\u70b9\u5230\u843d\u70b9'},
+  accurate:     {en:'Accurate!', cn:'\u6d4b\u91cf\u7cbe\u786e\uff01'},
+  close:        {en:'Close enough', cn:'\u5dee\u4e0d\u591a'},
+  offTarget:    {en:'Off target!', cn:'\u504f\u5dee\u8f83\u5927\uff01'},
+  analysis:     {en:'DATA ANALYSIS', cn:'\u6570\u636e\u5206\u6790'},
+  avgDist:      {en:'Avg Distance', cn:'\u5e73\u5747\u8ddd\u79bb'},
+  avgTime:      {en:'Avg Time', cn:'\u5e73\u5747\u65f6\u95f4'},
+  verdictWin:   {en:'Plane {x} flies farther!', cn:'\u98de\u673a{x}\u98de\u5f97\u66f4\u8fdc\uff01'},
+  verdictTie:   {en:'Very close - need more data!', cn:'\u975e\u5e38\u63a5\u8fd1\u2014\u2014\u9700\u8981\u66f4\u591a\u6570\u636e\uff01'},
+  insight:      {en:'Data tells the truth - measure, record, compare!', cn:'\u6570\u636e\u8bf4\u4e86\u7b97\u2014\u2014\u6d4b\u91cf\u3001\u8bb0\u5f55\u3001\u5bf9\u6bd4\uff01'},
+  complete:     {en:'ALL LEVELS COMPLETE!', cn:'\u5168\u90e8\u5173\u5361\u5b8c\u6210\uff01'},
+  totalScore:   {en:'Total Score', cn:'\u603b\u5206'},
+  nextLevel:    {en:'NEXT LEVEL', cn:'\u4e0b\u4e00\u5173'},
+  wind:         {en:'WIND', cn:'\u98ce\u901f'},
+  noWind:       {en:'No wind', cn:'\u65e0\u98ce'},
+  levelDone:    {en:'Level Complete!', cn:'\u672c\u5173\u5b8c\u6210\uff01'},
+  levelScore:   {en:'Level Score', cn:'\u672c\u5173\u5f97\u5206'},
+};
+
+var lang = 'cn';
+function t(key) { return I18N[key] ? (I18N[key][lang] || I18N[key].en) : key; }
+
+// --- DOM refs ---
+var $ = function(id) { return document.getElementById(id); };
+var langBtn = $('langBtn');
+var soundBtn = $('soundBtn');
+var sidebarTitle = $('sidebarTitle');
+var guideContent = $('guideContent');
+var gameTitle = $('gameTitle');
+var roundInfo = $('roundInfo');
+var gameBody = $('gameBody');
+var canvas = $('cv');
+var ctx = canvas.getContext('2d');
+var tapeOverlay = $('tapeOverlay');
+var controlPanel = $('controlPanel');
+var planeSel = $('planeSel');
+var btnLaunch = $('btnLaunch');
+var btnMeasure = $('btnMeasure');
+var stopwatchEl = $('stopwatch');
+var btnReset = $('btnReset');
+var dataBody = $('dataBody');
+var resultPanel = $('resultPanel');
+
+// --- Audio (Web Audio API synth, default muted) ---
+var audioCtx = null;
+var soundMuted = true;
+function getAudio() {
+  if (!audioCtx) {
+    try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch(e) {}
+  }
+  return audioCtx;
+}
+function playTone(freq, dur, type, vol) {
+  if (soundMuted) return;
+  var ac = getAudio();
+  if (!ac) return;
+  try {
+    var osc = ac.createOscillator();
+    var gain = ac.createGain();
+    osc.type = type || 'sine';
+    osc.frequency.value = freq;
+    gain.gain.value = vol || 0.15;
+    gain.gain.exponentialRampToValueAtTime(0.001, ac.currentTime + dur);
+    osc.connect(gain); gain.connect(ac.destination);
+    osc.start(ac.currentTime); osc.stop(ac.currentTime + dur);
+  } catch(e) {}
+}
+function sndLaunch() { playTone(440,0.12,'sine',0.1); setTimeout(function(){playTone(660,0.15,'sine',0.08);},60); }
+function sndLand() { playTone(180,0.25,'triangle',0.12); playTone(120,0.3,'triangle',0.08); }
+function sndRecord() { playTone(523,0.1,'sine',0.1); setTimeout(function(){playTone(659,0.1,'sine',0.08);},60); setTimeout(function(){playTone(784,0.15,'sine',0.08);},120); }
+function sndClick() { playTone(660,0.06,'sine',0.06); }
+function sndComplete() { playTone(523,0.15,'triangle',0.12); setTimeout(function(){playTone(659,0.12,'triangle',0.1);},100); setTimeout(function(){playTone(784,0.12,'triangle',0.1);},200); setTimeout(function(){playTone(1047,0.25,'triangle',0.12);},300); }
+function sndWind() { playTone(200,0.4,'sawtooth',0.04); }
+
+// --- Sound / Lang buttons ---
+soundBtn.onclick = function() {
+  soundMuted = !soundMuted;
+  soundBtn.textContent = soundMuted ? 'MUTE' : 'SND';
+  if (!soundMuted) getAudio();
+};
+langBtn.onclick = function() {
+  lang = lang === 'cn' ? 'en' : 'cn';
+  langBtn.textContent = lang === 'cn' ? 'CN' : 'EN';
+  refreshUI();
+};
+
+// --- Canvas sizing ---
+var W = 100, H = 100;
+function resizeCanvas() {
+  var parent = gameBody;
+  var availW = parent.clientWidth;
+  var availH = parent.clientHeight;
+  var dpr = window.devicePixelRatio || 1;
+  W = availW;
+  H = availH;
+  canvas.style.width = W + 'px';
+  canvas.style.height = H + 'px';
+  canvas.width = Math.round(W * dpr);
+  canvas.height = Math.round(H * dpr);
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+}
+window.addEventListener('resize', function() { resizeCanvas(); });
+
+// --- Easing ---
+function easeOutCubic(x) { return 1 - Math.pow(1 - x, 3); }
+function easeInOutQuad(x) { return x < 0.5 ? 2*x*x : 1 - Math.pow(-2*x+2,2)/2; }
+function easeOutBounce(x) { var n1=7.5625,d1=2.75; if(x<1/d1){return n1*x*x;}else if(x<2/d1){return n1*(x-=1.5/d1)*x+0.75;}else if(x<2.5/d1){return n1*(x-=2.25/d1)*x+0.9375;}else{return n1*(x-=2.625/d1)*x+0.984375;} }
+
+// --- Plane definitions ---
+var PLANES = [
+  { id:'A', labelEn:'Dart A', labelCn:'\u98de\u9556A', color:'#ff6b6b', colorAlt:'#ff9999',
+    v0Min:7, v0Max:10, angleMin:20, angleMax:35, liftK:0.015, dragK:0.04, distVar:0.7, timeVar:0.12 },
+  { id:'B', labelEn:'Glider B', labelCn:'\u6ed1\u7fd4B', color:'#4ecdc4', colorAlt:'#7ee8e0',
+    v0Min:5, v0Max:7.5, angleMin:25, angleMax:45, liftK:0.035, dragK:0.03, distVar:1.0, timeVar:0.2 },
+  { id:'C', labelEn:'Wing C', labelCn:'\u5bbd\u7fc5C', color:'#ffd93d', colorAlt:'#ffe680',
+    v0Min:4, v0Max:6, angleMin:30, angleMax:50, liftK:0.05, dragK:0.025, distVar:1.3, timeVar:0.3 },
+];
+
+// --- Level definitions ---
+var LEVELS = [
+  { planeIds:['A'], trialsPerPlane:3, needAccuracy:false, calcAvg:false, windRange:[0,0],
+    guideKey:'guide1' },
+  { planeIds:['A','B'], trialsPerPlane:3, needAccuracy:false, calcAvg:false, windRange:[0,0],
+    guideKey:'guide2' },
+  { planeIds:['A'], trialsPerPlane:3, needAccuracy:true, accuracyThreshold:0.5, calcAvg:false, windRange:[0,0],
+    guideKey:'guide3' },
+  { planeIds:['A','B'], trialsPerPlane:5, needAccuracy:false, calcAvg:true, windRange:[0,0],
+    guideKey:'guide4' },
+  { planeIds:['A','B','C'], trialsPerPlane:3, needAccuracy:false, calcAvg:true, windRange:[-2,2],
+    guideKey:'guide5' },
+];
+
+// --- Game state ---
+var PHASE_TITLE = 0, PHASE_SELECT = 1, PHASE_FLYING = 2, PHASE_MEASURE = 3,
+    PHASE_RECORDED = 4, PHASE_LEVEL_DONE = 5, PHASE_COMPLETE = 6;
+
+var gs = {
+  phase: PHASE_TITLE,
+  levelIdx: 0,
+  currentPlaneIdx: 0,
+  trialCounts: {},      // { 'A':0, 'B':0, ... }
+  trialData: [],        // { planeId, trialNum, realDist, realTime, measuredDist, measuredTime, accuracy }
+  levelScore: 0,
+  totalScore: 0,
+  // flight physics
+  planeX: 0, planeY: 0,
+  planeVx: 0, planeVy: 0,
+  planeAngle: 0,
+  flightPath: [],       // [{x,y}]
+  flightTime: 0,
+  flightDone: false,
+  landingX: 0,
+  windSpeed: 0,
+  // tape measure
+  tapeStartX: 0,
+  tapeEndX: 0,
+  tapeDragging: false,
+  tapeActive: false,
+  measuredDist: 0,
+  // stopwatch
+  swRunning: false,
+  swTime: 0,
+  // dust particles
+  dustParticles: [],
+  // launch origin (pixel coords)
+  launchPxX: 0,
+  launchPxY: 0,
+  // animation timers
+  titleBlink: 0,
+  feedbackMsg: '',
+  feedbackTimer: 0,
+  feedbackColor: '#50ffb0',
+};
+
+// world scale: 1 meter = how many pixels
+var METER_PX = 60;
+var GROUND_Y_FRAC = 0.78; // ground line at 78% of canvas height
+var LAUNCH_X_FRAC = 0.08; // launch from 8% of width
+
+function groundY() { return H * GROUND_Y_FRAC; }
+function launchPxX() { return W * LAUNCH_X_FRAC; }
+
+function getPlane(id) {
+  for (var i = 0; i < PLANES.length; i++) {
+    if (PLANES[i].id === id) return PLANES[i];
+  }
+  return PLANES[0];
+}
+
+function curLevel() { return LEVELS[gs.levelIdx]; }
+function curPlane() {
+  var lv = curLevel();
+  return getPlane(lv.planeIds[gs.currentPlaneIdx]);
+}
+
+// --- Physics: simulate flight and return path ---
+function simulateFlight(plane, windSpd) {
+  var v0 = plane.v0Min + Math.random() * (plane.v0Max - plane.v0Min);
+  var angleDeg = plane.angleMin + Math.random() * (plane.angleMax - plane.angleMin);
+  var angleRad = angleDeg * Math.PI / 180;
+  var vx = v0 * Math.cos(angleRad);
+  var vy = -v0 * Math.sin(angleRad); // negative = upward
+  var dt = 1 / 60;
+  var grav = 9.81;
+  var liftK = plane.liftK;
+  var dragK = plane.dragK;
+  var px = 0, py = 0;
+  var path = [{x:0, y:0}];
+  var totalTime = 0;
+  var maxIter = 3000; // safety
+
+  for (var i = 0; i < maxIter; i++) {
+    var speed = Math.sqrt(vx * vx + vy * vy);
+    // drag opposes velocity
+    var dragX = -dragK * speed * vx;
+    var dragY = -dragK * speed * vy;
+    // lift perpendicular to velocity (upward component)
+    var liftMag = liftK * speed * speed;
+    // lift acts upward when moving forward
+    var liftY = -liftMag;
+    // wind affects horizontal
+    var windForce = windSpd * 0.15;
+
+    vx += (dragX + windForce) * dt;
+    vy += (grav + dragY + liftY) * dt;
+    px += vx * dt;
+    py += vy * dt;
+    totalTime += dt;
+
+    path.push({x: px, y: py});
+
+    if (py >= 0 && i > 10) {
+      // landed
+      break;
+    }
+  }
+
+  // add small random variation to distance and time
+  var distNoise = (Math.random() - 0.5) * 2 * plane.distVar * 0.3;
+  var finalDist = Math.max(0.5, px + distNoise);
+  var timeNoise = (Math.random() - 0.5) * 2 * plane.timeVar * 0.3;
+  var finalTime = Math.max(0.3, totalTime + timeNoise);
+
+  return { path: path, dist: finalDist, totalTime: finalTime };
+}
+
+// --- Convert world coords to pixel coords ---
+function worldToPixel(wx, wy) {
+  var gY = groundY();
+  var lx = launchPxX();
+  return {
+    x: lx + wx * METER_PX,
+    y: gY + wy * METER_PX
+  };
+}
+function pixelToWorldX(px) {
+  return (px - launchPxX()) / METER_PX;
+}
+
+// --- Dust particles ---
+function spawnDust(px, py, count) {
+  for (var i = 0; i < count; i++) {
+    gs.dustParticles.push({
+      x: px + (Math.random() - 0.5) * 10,
+      y: py,
+      vx: (Math.random() - 0.5) * 60,
+      vy: -Math.random() * 40 - 10,
+      life: 0.4 + Math.random() * 0.4,
+      maxLife: 0.4 + Math.random() * 0.4,
+      sz: 1.5 + Math.random() * 2.5,
+    });
+  }
+}
+
+// --- Stars background ---
+var bgStars = [];
+function initBgStars() {
+  bgStars = [];
+  for (var i = 0; i < 60; i++) {
+    bgStars.push({
+      x: Math.random() * 2000,
+      y: Math.random() * 800,
+      sz: 0.3 + Math.random() * 1.2,
+      alpha: 0.2 + Math.random() * 0.4,
+      twinklePhase: Math.random() * Math.PI * 2,
+      twinkleSpeed: 0.5 + Math.random() * 2,
+    });
+  }
+}
+initBgStars();
+
+// ================================================================
+// RENDERING
+// ================================================================
+
+function drawBg(time) {
+  // sky gradient
+  var grad = ctx.createLinearGradient(0, 0, 0, H);
+  grad.addColorStop(0, '#0a0c18');
+  grad.addColorStop(0.5, '#0f1224');
+  grad.addColorStop(1, '#151830');
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, W, H);
+
+  // stars
+  for (var i = 0; i < bgStars.length; i++) {
+    var s = bgStars[i];
+    var alpha = s.alpha * (0.5 + 0.5 * Math.sin(time * s.twinkleSpeed + s.twinklePhase));
+    ctx.globalAlpha = alpha;
+    ctx.fillStyle = '#ffffff';
+    ctx.beginPath();
+    ctx.arc(s.x % W, s.y % (H * 0.7), s.sz, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+}
+
+function drawGround() {
+  var gY = groundY();
+  // ground fill
+  var gGrad = ctx.createLinearGradient(0, gY, 0, H);
+  gGrad.addColorStop(0, '#1a2a1a');
+  gGrad.addColorStop(1, '#0d150d');
+  ctx.fillStyle = gGrad;
+  ctx.fillRect(0, gY, W, H - gY);
+
+  // grass line
+  ctx.strokeStyle = '#2a5a2a';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(0, gY);
+  for (var x = 0; x < W; x += 4) {
+    ctx.lineTo(x, gY + Math.sin(x * 0.1) * 1.5);
+  }
+  ctx.stroke();
+
+  // distance markers every 2 meters
+  ctx.font = '9px "Space Grotesk", sans-serif';
+  ctx.textAlign = 'center';
+  var lx = launchPxX();
+  var maxMeters = Math.ceil((W - lx) / METER_PX);
+  for (var m = 0; m <= maxMeters; m += 2) {
+    var mx = lx + m * METER_PX;
+    if (mx > W) break;
+    ctx.fillStyle = 'rgba(80,255,176,0.2)';
+    ctx.fillRect(mx, gY, 1, 6);
+    if (m > 0) {
+      ctx.fillStyle = 'rgba(170,171,176,0.4)';
+      ctx.fillText(m + 'm', mx, gY + 16);
+    }
+  }
+
+  // launch line
+  ctx.strokeStyle = 'rgba(255,107,107,0.4)';
+  ctx.lineWidth = 1;
+  ctx.setLineDash([4, 4]);
+  ctx.beginPath();
+  ctx.moveTo(lx, gY - 60);
+  ctx.lineTo(lx, gY);
+  ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.fillStyle = 'rgba(255,107,107,0.5)';
+  ctx.font = '8px "Space Grotesk", sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillText('START', lx, gY - 64);
+}
+
+function drawWind() {
+  if (gs.windSpeed === 0) return;
+  var arrowX = W * 0.5;
+  var arrowY = 24;
+  var dir = gs.windSpeed > 0 ? 1 : -1;
+  var strength = Math.abs(gs.windSpeed);
+  var arrowLen = strength * 18;
+
+  ctx.strokeStyle = 'rgba(100,180,255,0.5)';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(arrowX - dir * arrowLen / 2, arrowY);
+  ctx.lineTo(arrowX + dir * arrowLen / 2, arrowY);
+  // arrowhead
+  ctx.lineTo(arrowX + dir * arrowLen / 2 - dir * 6, arrowY - 4);
+  ctx.moveTo(arrowX + dir * arrowLen / 2, arrowY);
+  ctx.lineTo(arrowX + dir * arrowLen / 2 - dir * 6, arrowY + 4);
+  ctx.stroke();
+
+  ctx.fillStyle = 'rgba(100,180,255,0.5)';
+  ctx.font = '9px "Space Grotesk", sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillText(t('wind') + ': ' + gs.windSpeed.toFixed(1) + ' m/s', arrowX, arrowY + 14);
+}
+
+// Draw a paper airplane shape
+function drawPlaneShape(cx, cy, angle, planeObj, scale) {
+  scale = scale || 1;
+  ctx.save();
+  ctx.translate(cx, cy);
+  ctx.rotate(angle);
+  ctx.scale(scale, scale);
+
+  var c = planeObj.color;
+  var cAlt = planeObj.colorAlt;
+
+  // fuselage (main triangle)
+  ctx.fillStyle = c;
+  ctx.beginPath();
+  ctx.moveTo(18, 0);     // nose
+  ctx.lineTo(-10, -6);   // top wing back
+  ctx.lineTo(-6, 0);     // center notch
+  ctx.lineTo(-10, 6);    // bottom wing back
+  ctx.closePath();
+  ctx.fill();
+
+  // top wing highlight
+  ctx.fillStyle = cAlt;
+  ctx.beginPath();
+  ctx.moveTo(18, 0);
+  ctx.lineTo(-10, -6);
+  ctx.lineTo(-6, 0);
+  ctx.closePath();
+  ctx.fill();
+
+  // center fold line
+  ctx.strokeStyle = 'rgba(0,0,0,0.3)';
+  ctx.lineWidth = 0.8;
+  ctx.beginPath();
+  ctx.moveTo(18, 0);
+  ctx.lineTo(-8, 0);
+  ctx.stroke();
+
+  // tail fin
+  ctx.fillStyle = c;
+  ctx.beginPath();
+  ctx.moveTo(-6, 0);
+  ctx.lineTo(-12, -4);
+  ctx.lineTo(-10, 0);
+  ctx.closePath();
+  ctx.fill();
+
+  ctx.restore();
+}
+
+function drawFlightPath() {
+  if (gs.flightPath.length < 2) return;
+  var plane = curPlane();
+
+  ctx.save();
+  ctx.setLineDash([3, 5]);
+  ctx.lineWidth = 1.5;
+
+  for (var i = 1; i < gs.flightPath.length; i++) {
+    var p0 = worldToPixel(gs.flightPath[i-1].x, gs.flightPath[i-1].y);
+    var p1 = worldToPixel(gs.flightPath[i].x, gs.flightPath[i].y);
+    var alpha = 0.1 + 0.5 * (i / gs.flightPath.length);
+    ctx.strokeStyle = plane.color.replace(')', ',' + alpha + ')').replace('rgb', 'rgba');
+    // Hex to rgba
+    var r = parseInt(plane.color.slice(1,3),16);
+    var g = parseInt(plane.color.slice(3,5),16);
+    var b = parseInt(plane.color.slice(5,7),16);
+    ctx.strokeStyle = 'rgba(' + r + ',' + g + ',' + b + ',' + alpha + ')';
+    ctx.beginPath();
+    ctx.moveTo(p0.x, p0.y);
+    ctx.lineTo(p1.x, p1.y);
+    ctx.stroke();
+  }
+  ctx.setLineDash([]);
+  ctx.restore();
+}
+
+function drawLandingMark() {
+  if (!gs.flightDone) return;
+  var lPx = worldToPixel(gs.landingX, 0);
+  var gY = groundY();
+
+  // landing flag
+  ctx.save();
+  // pole
+  ctx.strokeStyle = 'rgba(255,181,156,0.6)';
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.moveTo(lPx.x, gY);
+  ctx.lineTo(lPx.x, gY - 20);
+  ctx.stroke();
+  // flag
+  ctx.fillStyle = 'rgba(255,107,107,0.7)';
+  ctx.beginPath();
+  ctx.moveTo(lPx.x, gY - 20);
+  ctx.lineTo(lPx.x + 10, gY - 16);
+  ctx.lineTo(lPx.x, gY - 12);
+  ctx.closePath();
+  ctx.fill();
+  // pulsing ring
+  var pulse = 0.5 + 0.5 * Math.sin(performance.now() * 0.005);
+  ctx.strokeStyle = 'rgba(255,107,107,' + (0.2 + pulse * 0.3) + ')';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.arc(lPx.x, gY, 4 + pulse * 4, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.restore();
+}
+
+function drawTapeMeasure() {
+  if (!gs.tapeActive) return;
+  var gY = groundY();
+  var startPx = launchPxX();
+  var endPx = gs.tapeEndX;
+
+  // tape line
+  ctx.save();
+  ctx.strokeStyle = '#ffb59c';
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  ctx.moveTo(startPx, gY + 26);
+  ctx.lineTo(endPx, gY + 26);
+  ctx.stroke();
+
+  // tick marks every 0.5 meters
+  var startWorld = 0;
+  var endWorld = pixelToWorldX(endPx);
+  var maxWorld = pixelToWorldX(Math.max(startPx, endPx));
+  var minWorld = pixelToWorldX(Math.min(startPx, endPx));
+  ctx.font = '7px "Space Grotesk", sans-serif';
+  ctx.textAlign = 'center';
+
+  var tapeDir = endPx >= startPx ? 1 : -1;
+  var mLen = Math.abs(endWorld);
+
+  for (var m = 0; m <= Math.ceil(mLen * 2) / 2; m += 0.5) {
+    var tx = startPx + m * METER_PX * tapeDir;
+    if ((tapeDir > 0 && tx > endPx) || (tapeDir < 0 && tx < endPx)) break;
+    var isMeter = (m % 1 === 0);
+    var tickH = isMeter ? 6 : 3;
+    ctx.strokeStyle = isMeter ? '#ffb59c' : 'rgba(255,181,156,0.5)';
+    ctx.lineWidth = isMeter ? 1.5 : 0.8;
+    ctx.beginPath();
+    ctx.moveTo(tx, gY + 23);
+    ctx.lineTo(tx, gY + 23 + tickH);
+    ctx.stroke();
+    if (isMeter && m > 0) {
+      ctx.fillStyle = '#ffb59c';
+      ctx.fillText(m.toFixed(0), tx, gY + 38);
+    }
+  }
+
+  // start handle
+  ctx.fillStyle = '#ff6b6b';
+  ctx.fillRect(startPx - 3, gY + 22, 6, 10);
+
+  // end handle (draggable)
+  ctx.fillStyle = gs.tapeDragging ? '#50ffb0' : '#ffb59c';
+  ctx.fillRect(endPx - 5, gY + 20, 10, 14);
+  ctx.fillStyle = '#0c0e14';
+  ctx.font = '7px "Space Grotesk", sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillText('||', endPx, gY + 30);
+
+  // distance readout above tape
+  var displayDist = Math.abs(pixelToWorldX(endPx));
+  ctx.fillStyle = '#ffb59c';
+  ctx.font = 'bold 13px "Space Grotesk", sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillText(displayDist.toFixed(2) + ' m', (startPx + endPx) / 2, gY + 50);
+
+  ctx.restore();
+}
+
+function drawDust(dt) {
+  for (var i = gs.dustParticles.length - 1; i >= 0; i--) {
+    var p = gs.dustParticles[i];
+    p.x += p.vx * dt;
+    p.y += p.vy * dt;
+    p.vy += 60 * dt; // gravity on dust
+    p.life -= dt;
+    if (p.life <= 0) {
+      gs.dustParticles.splice(i, 1);
+      continue;
+    }
+    var alpha = p.life / p.maxLife;
+    ctx.globalAlpha = alpha * 0.6;
+    ctx.fillStyle = '#8a7a5a';
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, p.sz * alpha, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+}
+
+function drawFeedback(time) {
+  if (gs.feedbackTimer <= 0) return;
+  var alpha = Math.min(1, gs.feedbackTimer / 0.3);
+  ctx.globalAlpha = alpha;
+  ctx.fillStyle = gs.feedbackColor;
+  ctx.font = 'bold 16px "Noto Sans SC", sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillText(gs.feedbackMsg, W / 2, H * 0.25);
+  ctx.globalAlpha = 1;
+}
+
+function drawTitleScreen(time) {
+  var cx = W / 2;
+  var cy = H * 0.38;
+  // glow
+  var glowR = 80 + 10 * Math.sin(time * 2);
+  var grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, glowR);
+  grad.addColorStop(0, 'rgba(80,255,176,0.1)');
+  grad.addColorStop(1, 'rgba(80,255,176,0)');
+  ctx.fillStyle = grad;
+  ctx.fillRect(cx - glowR, cy - glowR, glowR * 2, glowR * 2);
+
+  ctx.fillStyle = '#50ffb0';
+  ctx.font = 'bold 28px "Space Grotesk", sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillText(lang === 'cn' ? '\u98de\u884c\u6d4b\u91cf' : 'FLIGHT', cx, cy - 14);
+  ctx.fillText(lang === 'cn' ? '\u5b9e\u9a8c\u5ba4' : 'MEASUREMENT LAB', cx, cy + 20);
+
+  // blinking prompt
+  var blinkAlpha = 0.3 + 0.7 * Math.abs(Math.sin(time * 2.5));
+  ctx.globalAlpha = blinkAlpha;
+  ctx.fillStyle = '#aaabb0';
+  ctx.font = '14px "Noto Sans SC", sans-serif';
+  ctx.fillText(lang === 'cn' ? '\u70b9\u51fb\u5f00\u59cb' : 'CLICK TO START', cx, cy + 60);
+  ctx.globalAlpha = 1;
+
+  // decorative planes
+  var p1x = cx - 100 + Math.sin(time * 1.2) * 20;
+  var p1y = cy - 60 + Math.cos(time * 0.8) * 8;
+  drawPlaneShape(p1x, p1y, -0.3 + Math.sin(time) * 0.1, PLANES[0], 1.2);
+
+  var p2x = cx + 80 + Math.sin(time * 0.9 + 1) * 15;
+  var p2y = cy - 40 + Math.cos(time * 1.1 + 2) * 10;
+  drawPlaneShape(p2x, p2y, -0.2 + Math.sin(time * 0.7) * 0.08, PLANES[1], 1.0);
+}
+
+function drawLevelDoneOverlay() {
+  ctx.fillStyle = 'rgba(12,14,20,0.7)';
+  ctx.fillRect(0, 0, W, H);
+  ctx.fillStyle = '#50ffb0';
+  ctx.font = 'bold 22px "Space Grotesk", "Noto Sans SC", sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillText(t('levelDone'), W/2, H * 0.35);
+  ctx.fillStyle = '#ffb59c';
+  ctx.font = 'bold 18px "Space Grotesk", sans-serif';
+  ctx.fillText(t('levelScore') + ': ' + gs.levelScore, W/2, H * 0.43);
+}
+
+function drawCompleteOverlay() {
+  ctx.fillStyle = 'rgba(12,14,20,0.8)';
+  ctx.fillRect(0, 0, W, H);
+  ctx.fillStyle = '#50ffb0';
+  ctx.font = 'bold 26px "Space Grotesk", "Noto Sans SC", sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillText(t('complete'), W/2, H * 0.33);
+  ctx.fillStyle = '#ffb59c';
+  ctx.font = 'bold 20px "Space Grotesk", sans-serif';
+  ctx.fillText(t('totalScore') + ': ' + gs.totalScore, W/2, H * 0.42);
+  ctx.fillStyle = '#aaabb0';
+  ctx.font = '14px "Noto Sans SC", sans-serif';
+  ctx.fillText(t('insight'), W/2, H * 0.52);
+}
+
+// ================================================================
+// GAME LOGIC
+// ================================================================
+
+function initLevel() {
+  var lv = curLevel();
+  gs.phase = PHASE_SELECT;
+  gs.currentPlaneIdx = 0;
+  gs.trialCounts = {};
+  for (var i = 0; i < lv.planeIds.length; i++) {
+    gs.trialCounts[lv.planeIds[i]] = 0;
+  }
+  gs.trialData = [];
+  gs.levelScore = 0;
+  gs.flightPath = [];
+  gs.flightDone = false;
+  gs.tapeActive = false;
+  gs.dustParticles = [];
+  gs.feedbackTimer = 0;
+  gs.windSpeed = 0;
+  dataBody.innerHTML = '';
+  resultPanel.style.display = 'none';
+  buildPlaneButtons();
+  updateControlState();
+  refreshUI();
+}
+
+function buildPlaneButtons() {
+  planeSel.innerHTML = '';
+  var lv = curLevel();
+  for (var i = 0; i < lv.planeIds.length; i++) {
+    var p = getPlane(lv.planeIds[i]);
+    var btn = document.createElement('button');
+    btn.className = 'plane-btn' + (i === gs.currentPlaneIdx ? ' active' : '');
+    btn.textContent = lang === 'cn' ? p.labelCn : p.labelEn;
+    btn.style.borderColor = p.color;
+    if (i === gs.currentPlaneIdx) btn.style.color = p.color;
+    btn.setAttribute('data-idx', i);
+    btn.onclick = function() {
+      if (gs.phase !== PHASE_SELECT && gs.phase !== PHASE_RECORDED) return;
+      gs.currentPlaneIdx = parseInt(this.getAttribute('data-idx'));
+      buildPlaneButtons();
+      sndClick();
+    };
+    planeSel.appendChild(btn);
+  }
+}
+
+function updateControlState() {
+  var lv = curLevel();
+  var allDone = isLevelComplete();
+
+  btnLaunch.textContent = t('launch');
+  btnMeasure.textContent = t('measure');
+  btnReset.textContent = t('reset');
+
+  if (gs.phase === PHASE_TITLE) {
+    btnLaunch.style.display = 'none';
+    btnMeasure.style.display = 'none';
+    planeSel.style.display = 'none';
+    stopwatchEl.style.display = 'none';
+  } else if (gs.phase === PHASE_COMPLETE) {
+    btnLaunch.style.display = 'none';
+    btnMeasure.style.display = 'none';
+    planeSel.style.display = 'none';
+    stopwatchEl.style.display = 'none';
+  } else if (gs.phase === PHASE_LEVEL_DONE) {
+    btnLaunch.textContent = gs.levelIdx < LEVELS.length - 1 ? t('nextLevel') : t('complete');
+    btnLaunch.style.display = '';
+    btnLaunch.disabled = false;
+    btnMeasure.style.display = 'none';
+    planeSel.style.display = 'none';
+    stopwatchEl.style.display = 'none';
+  } else {
+    planeSel.style.display = lv.planeIds.length > 1 ? 'flex' : 'none';
+    stopwatchEl.style.display = '';
+
+    btnLaunch.style.display = '';
+    btnLaunch.disabled = !(gs.phase === PHASE_SELECT || gs.phase === PHASE_RECORDED);
+
+    btnMeasure.style.display = gs.phase === PHASE_MEASURE ? '' : 'none';
+  }
+}
+
+function isLevelComplete() {
+  var lv = curLevel();
+  for (var i = 0; i < lv.planeIds.length; i++) {
+    if ((gs.trialCounts[lv.planeIds[i]] || 0) < lv.trialsPerPlane) return false;
+  }
+  return true;
+}
+
+function getTrialsRemaining() {
+  var lv = curLevel();
+  var total = 0;
+  for (var i = 0; i < lv.planeIds.length; i++) {
+    total += lv.trialsPerPlane - (gs.trialCounts[lv.planeIds[i]] || 0);
+  }
+  return total;
+}
+
+function autoSelectNextPlane() {
+  var lv = curLevel();
+  // if current plane still has trials, stay
+  var cp = curPlane();
+  if ((gs.trialCounts[cp.id] || 0) < lv.trialsPerPlane) return;
+  // find next plane with remaining trials
+  for (var i = 0; i < lv.planeIds.length; i++) {
+    if ((gs.trialCounts[lv.planeIds[i]] || 0) < lv.trialsPerPlane) {
+      gs.currentPlaneIdx = i;
+      buildPlaneButtons();
+      return;
+    }
+  }
+}
+
+function doLaunch() {
+  if (gs.phase !== PHASE_SELECT && gs.phase !== PHASE_RECORDED) return;
+
+  var lv = curLevel();
+  var plane = curPlane();
+  if ((gs.trialCounts[plane.id] || 0) >= lv.trialsPerPlane) {
+    showFeedback(lang === 'cn' ? '\u8fd9\u6b3e\u98de\u673a\u5df2\u5b8c\u6210\u6240\u6709\u6d4b\u8bd5' : 'This plane has completed all trials', '#ffb59c');
+    autoSelectNextPlane();
+    return;
+  }
+
+  // determine wind
+  gs.windSpeed = 0;
+  if (lv.windRange[1] > 0 || lv.windRange[0] < 0) {
+    gs.windSpeed = lv.windRange[0] + Math.random() * (lv.windRange[1] - lv.windRange[0]);
+    gs.windSpeed = Math.round(gs.windSpeed * 10) / 10;
+    sndWind();
+  }
+
+  var sim = simulateFlight(plane, gs.windSpeed);
+  gs.flightPath = sim.path;
+  gs.landingX = sim.dist;
+  gs.flightDone = false;
+  gs.tapeActive = false;
+  gs.tapeEndX = launchPxX();
+  gs.dustParticles = [];
+  gs.phase = PHASE_FLYING;
+  gs.swRunning = true;
+  gs.swTime = 0;
+  gs.planeAnimIdx = 0;
+  gs.planeAnimTime = 0;
+  gs.planeAnimDuration = sim.totalTime;
+  gs.realFlightTime = sim.totalTime;
+  gs.measuredDist = 0;
+  resultPanel.style.display = 'none';
+
+  sndLaunch();
+  updateControlState();
+}
+
+function onFlightComplete() {
+  gs.flightDone = true;
+  gs.swRunning = false;
+  gs.phase = PHASE_MEASURE;
+
+  // spawn dust at landing
+  var landPx = worldToPixel(gs.landingX, 0);
+  spawnDust(landPx.x, landPx.y, 12);
+  sndLand();
+
+  // activate tape
+  gs.tapeActive = true;
+  gs.tapeEndX = launchPxX() + 30;
+  tapeOverlay.style.display = 'block';
+
+  showFeedback(t('landed'), '#50ffb0');
+  updateControlState();
+}
+
+function doConfirmMeasure() {
+  if (gs.phase !== PHASE_MEASURE) return;
+
+  var lv = curLevel();
+  var plane = curPlane();
+  var measuredDist = Math.abs(pixelToWorldX(gs.tapeEndX));
+  var realDist = gs.landingX;
+  var measuredTime = gs.swTime;
+  var realTime = gs.realFlightTime;
+  var accuracy = Math.abs(measuredDist - realDist);
+
+  // accuracy scoring
+  var accuracyScore = 0;
+  var feedbackKey = '';
+  if (accuracy < 0.3) {
+    accuracyScore = 100;
+    feedbackKey = 'accurate';
+    gs.feedbackColor = '#50ffb0';
+  } else if (accuracy < 0.8) {
+    accuracyScore = 70;
+    feedbackKey = 'close';
+    gs.feedbackColor = '#ffb59c';
+  } else {
+    accuracyScore = 30;
+    feedbackKey = 'offTarget';
+    gs.feedbackColor = '#ff6b6b';
+  }
+
+  // precision level check
+  if (lv.needAccuracy && accuracy > lv.accuracyThreshold) {
+    showFeedback(t('offTarget') + ' (' + accuracy.toFixed(2) + 'm)', '#ff6b6b');
+    accuracyScore = Math.max(10, accuracyScore - 30);
+  } else {
+    showFeedback(t(feedbackKey) + ' (' + accuracy.toFixed(2) + 'm)', gs.feedbackColor);
+  }
+
+  gs.levelScore += accuracyScore;
+
+  var trialNum = (gs.trialCounts[plane.id] || 0) + 1;
+  gs.trialCounts[plane.id] = trialNum;
+
+  gs.trialData.push({
+    planeId: plane.id,
+    trialNum: trialNum,
+    realDist: realDist,
+    realTime: realTime,
+    measuredDist: measuredDist,
+    measuredTime: measuredTime,
+    accuracy: accuracy,
+    score: accuracyScore,
+  });
+
+  // add row to table
+  addDataRow(plane, trialNum, measuredDist, measuredTime);
+
+  gs.tapeActive = false;
+  tapeOverlay.style.display = 'none';
+  gs.phase = PHASE_RECORDED;
+
+  sndRecord();
+
+  // check if level complete
+  if (isLevelComplete()) {
+    setTimeout(function() { finishLevel(); }, 600);
+  } else {
+    autoSelectNextPlane();
+  }
+
+  updateControlState();
+}
+
+function addDataRow(plane, trialNum, dist, time) {
+  var tr = document.createElement('tr');
+  tr.className = 'new-row';
+  var tdP = document.createElement('td');
+  tdP.textContent = plane.id;
+  tdP.style.color = plane.color;
+  tdP.style.fontWeight = '700';
+  var tdN = document.createElement('td');
+  tdN.textContent = trialNum;
+  var tdD = document.createElement('td');
+  tdD.className = 'val';
+  tdD.textContent = dist.toFixed(2);
+  var tdT = document.createElement('td');
+  tdT.className = 'val';
+  tdT.textContent = time.toFixed(2);
+  tr.appendChild(tdP);
+  tr.appendChild(tdN);
+  tr.appendChild(tdD);
+  tr.appendChild(tdT);
+  dataBody.appendChild(tr);
+  // scroll to bottom
+  var wrap = $('dataTableWrap');
+  wrap.scrollTop = wrap.scrollHeight;
+}
+
+function finishLevel() {
+  var lv = curLevel();
+
+  if (lv.calcAvg || lv.planeIds.length > 1) {
+    showAnalysis();
+  }
+
+  gs.totalScore += gs.levelScore;
+  gs.phase = PHASE_LEVEL_DONE;
+  updateControlState();
+}
+
+function showAnalysis() {
+  var lv = curLevel();
+  resultPanel.style.display = 'block';
+
+  var rpTitle = $('rpTitle');
+  rpTitle.textContent = t('analysis');
+
+  // compute averages per plane
+  var avgs = {};
+  for (var i = 0; i < lv.planeIds.length; i++) {
+    var pid = lv.planeIds[i];
+    var dists = [], times = [];
+    for (var j = 0; j < gs.trialData.length; j++) {
+      if (gs.trialData[j].planeId === pid) {
+        dists.push(gs.trialData[j].measuredDist);
+        times.push(gs.trialData[j].measuredTime);
+      }
+    }
+    var avgD = dists.reduce(function(a,b){return a+b;}, 0) / dists.length;
+    var avgT = times.reduce(function(a,b){return a+b;}, 0) / times.length;
+    avgs[pid] = { dist: avgD, time: avgT };
+  }
+
+  var rpAvgA = $('rpAvgA');
+  var rpAvgB = $('rpAvgB');
+  var rpAvgC = $('rpAvgC');
+  rpAvgC.style.display = 'none';
+
+  var ids = lv.planeIds;
+  rpAvgA.textContent = ids[0] + ': ' + t('avgDist') + ' ' + avgs[ids[0]].dist.toFixed(2) + 'm, ' + t('avgTime') + ' ' + avgs[ids[0]].time.toFixed(2) + 's';
+  rpAvgA.style.color = getPlane(ids[0]).color;
+
+  if (ids.length >= 2) {
+    rpAvgB.textContent = ids[1] + ': ' + t('avgDist') + ' ' + avgs[ids[1]].dist.toFixed(2) + 'm, ' + t('avgTime') + ' ' + avgs[ids[1]].time.toFixed(2) + 's';
+    rpAvgB.style.color = getPlane(ids[1]).color;
+    rpAvgB.style.display = '';
+  } else {
+    rpAvgB.style.display = 'none';
+  }
+
+  if (ids.length >= 3) {
+    rpAvgC.textContent = ids[2] + ': ' + t('avgDist') + ' ' + avgs[ids[2]].dist.toFixed(2) + 'm, ' + t('avgTime') + ' ' + avgs[ids[2]].time.toFixed(2) + 's';
+    rpAvgC.style.color = getPlane(ids[2]).color;
+    rpAvgC.style.display = '';
+  }
+
+  // verdict
+  var rpVerdict = $('rpVerdict');
+  if (ids.length >= 2) {
+    var bestId = ids[0];
+    var bestDist = avgs[ids[0]].dist;
+    for (var k = 1; k < ids.length; k++) {
+      if (avgs[ids[k]].dist > bestDist) {
+        bestDist = avgs[ids[k]].dist;
+        bestId = ids[k];
+      }
+    }
+    // check if close
+    var second = 0;
+    for (var k2 = 0; k2 < ids.length; k2++) {
+      if (ids[k2] !== bestId && avgs[ids[k2]].dist > second) {
+        second = avgs[ids[k2]].dist;
+      }
+    }
+    if (bestDist - second < 0.5) {
+      rpVerdict.textContent = t('verdictTie');
+    } else {
+      rpVerdict.textContent = t('verdictWin').replace('{x}', bestId);
+    }
+  } else {
+    rpVerdict.textContent = t('avgDist') + ': ' + avgs[ids[0]].dist.toFixed(2) + 'm';
+  }
+
+  $('rpInsight').textContent = t('insight');
+  sndComplete();
+}
+
+function advanceLevel() {
+  resultPanel.style.display = 'none';
+  if (gs.levelIdx < LEVELS.length - 1) {
+    gs.levelIdx++;
+    initLevel();
+  } else {
+    gs.phase = PHASE_COMPLETE;
+    updateControlState();
+  }
+}
+
+function resetGame() {
+  gs.levelIdx = 0;
+  gs.totalScore = 0;
+  gs.phase = PHASE_TITLE;
+  gs.dustParticles = [];
+  gs.flightPath = [];
+  gs.flightDone = false;
+  gs.tapeActive = false;
+  tapeOverlay.style.display = 'none';
+  resultPanel.style.display = 'none';
+  dataBody.innerHTML = '';
+  updateControlState();
+  refreshUI();
+}
+
+function showFeedback(msg, color) {
+  gs.feedbackMsg = msg;
+  gs.feedbackColor = color || '#50ffb0';
+  gs.feedbackTimer = 1.5;
+}
+
+// ================================================================
+// INPUT
+// ================================================================
+
+// Title screen click
+canvas.addEventListener('click', function() {
+  if (gs.phase === PHASE_TITLE) {
+    sndClick();
+    initLevel();
+  }
+});
+
+// Tape measure dragging
+var tapeDragStartX = 0;
+tapeOverlay.addEventListener('mousedown', function(e) {
+  if (gs.phase !== PHASE_MEASURE || !gs.tapeActive) return;
+  gs.tapeDragging = true;
+  tapeDragStartX = e.clientX;
+});
+tapeOverlay.addEventListener('mousemove', function(e) {
+  if (!gs.tapeDragging) return;
+  var rect = gameBody.getBoundingClientRect();
+  var mx = e.clientX - rect.left;
+  // clamp to valid range
+  var minX = launchPxX();
+  var maxX = W - 10;
+  gs.tapeEndX = Math.max(minX, Math.min(maxX, mx));
+  gs.measuredDist = Math.abs(pixelToWorldX(gs.tapeEndX));
+});
+tapeOverlay.addEventListener('mouseup', function() {
+  gs.tapeDragging = false;
+});
+tapeOverlay.addEventListener('mouseleave', function() {
+  gs.tapeDragging = false;
+});
+
+// Touch support for tape
+tapeOverlay.addEventListener('touchstart', function(e) {
+  if (gs.phase !== PHASE_MEASURE || !gs.tapeActive) return;
+  e.preventDefault();
+  gs.tapeDragging = true;
+}, {passive: false});
+tapeOverlay.addEventListener('touchmove', function(e) {
+  if (!gs.tapeDragging) return;
+  e.preventDefault();
+  var touch = e.touches[0];
+  var rect = gameBody.getBoundingClientRect();
+  var mx = touch.clientX - rect.left;
+  var minX = launchPxX();
+  var maxX = W - 10;
+  gs.tapeEndX = Math.max(minX, Math.min(maxX, mx));
+  gs.measuredDist = Math.abs(pixelToWorldX(gs.tapeEndX));
+}, {passive: false});
+tapeOverlay.addEventListener('touchend', function() {
+  gs.tapeDragging = false;
+});
+
+// Buttons
+btnLaunch.addEventListener('click', function() {
+  if (gs.phase === PHASE_LEVEL_DONE) {
+    advanceLevel();
+  } else {
+    doLaunch();
+  }
+});
+btnMeasure.addEventListener('click', function() { doConfirmMeasure(); });
+btnReset.addEventListener('click', function() { resetGame(); });
+
+// ================================================================
+// UI REFRESH
+// ================================================================
+
+function refreshUI() {
+  gameTitle.textContent = t('title');
+  sidebarTitle.textContent = t('sideTitle');
+
+  // guide text based on level
+  if (gs.phase === PHASE_TITLE) {
+    guideContent.textContent = t('guide1');
+  } else {
+    guideContent.textContent = t(curLevel().guideKey);
+  }
+
+  // round info
+  if (gs.phase !== PHASE_TITLE && gs.phase !== PHASE_COMPLETE) {
+    var lv = curLevel();
+    var remaining = getTrialsRemaining();
+    roundInfo.textContent = t('level') + ' ' + (gs.levelIdx + 1) + '/' + LEVELS.length +
+      '  |  ' + t('trials') + ': ' + remaining;
+  } else {
+    roundInfo.textContent = '';
+  }
+
+  // HUD
+  $('hudL1').textContent = t('dist');
+  $('hudL2').textContent = t('flightTime');
+  $('hudL3').textContent = t('score');
+  $('hudL4').textContent = gs.windSpeed !== 0 ? t('wind') : '';
+
+  if (gs.trialData.length > 0) {
+    var last = gs.trialData[gs.trialData.length - 1];
+    $('hudV1').textContent = last.measuredDist.toFixed(2) + 'm';
+    $('hudV2').textContent = last.measuredTime.toFixed(2) + 's';
+  } else {
+    $('hudV1').textContent = '--';
+    $('hudV2').textContent = '--';
+  }
+  $('hudV3').textContent = gs.totalScore + gs.levelScore;
+  $('hudV4').textContent = gs.windSpeed !== 0 ? gs.windSpeed.toFixed(1) + ' m/s' : t('noWind');
+
+  // table headers
+  $('thPlane').textContent = t('plane');
+  $('thTrial').textContent = '#';
+  $('thDist').textContent = t('distH');
+  $('thTime').textContent = t('timeH');
+
+  buildPlaneButtons();
+  updateControlState();
+}
+
+// ================================================================
+// MAIN LOOP
+// ================================================================
+
+var lastTime = 0;
+function mainLoop(timestamp) {
+  var dt = Math.min((timestamp - lastTime) / 1000, 0.05);
+  lastTime = timestamp;
+  var timeS = timestamp / 1000;
+
+  resizeCanvas();
+
+  // update stopwatch
+  if (gs.swRunning) {
+    gs.swTime += dt;
+    stopwatchEl.textContent = gs.swTime.toFixed(2) + 's';
+    stopwatchEl.style.color = '#50ffb0';
+  } else {
+    stopwatchEl.style.color = '#ffb59c';
+  }
+
+  // update feedback timer
+  if (gs.feedbackTimer > 0) gs.feedbackTimer -= dt;
+
+  // --- DRAW ---
+  drawBg(timeS);
+
+  if (gs.phase === PHASE_TITLE) {
+    drawGround();
+    drawTitleScreen(timeS);
+    drawDust(dt);
+    requestAnimationFrame(mainLoop);
+    return;
+  }
+
+  if (gs.phase === PHASE_COMPLETE) {
+    drawGround();
+    drawCompleteOverlay();
+    requestAnimationFrame(mainLoop);
+    return;
+  }
+
+  drawGround();
+  drawWind();
+
+  // animate flight
+  if (gs.phase === PHASE_FLYING && gs.flightPath.length > 1) {
+    gs.planeAnimTime += dt;
+    var prog = Math.min(1, gs.planeAnimTime / gs.planeAnimDuration);
+    var easedProg = easeOutCubic(prog);
+    var pathIdx = Math.floor(easedProg * (gs.flightPath.length - 1));
+    pathIdx = Math.min(pathIdx, gs.flightPath.length - 1);
+
+    // draw trail up to current position
+    var trailEnd = pathIdx;
+    if (trailEnd > 1) {
+      var plane = curPlane();
+      ctx.save();
+      ctx.setLineDash([3, 5]);
+      ctx.lineWidth = 1.5;
+      for (var ti = 1; ti <= trailEnd; ti++) {
+        var tp0 = worldToPixel(gs.flightPath[ti-1].x, gs.flightPath[ti-1].y);
+        var tp1 = worldToPixel(gs.flightPath[ti].x, gs.flightPath[ti].y);
+        var tAlpha = 0.1 + 0.4 * (ti / gs.flightPath.length);
+        var r = parseInt(plane.color.slice(1,3),16);
+        var g = parseInt(plane.color.slice(3,5),16);
+        var b = parseInt(plane.color.slice(5,7),16);
+        ctx.strokeStyle = 'rgba(' + r + ',' + g + ',' + b + ',' + tAlpha + ')';
+        ctx.beginPath();
+        ctx.moveTo(tp0.x, tp0.y);
+        ctx.lineTo(tp1.x, tp1.y);
+        ctx.stroke();
+      }
+      ctx.setLineDash([]);
+      ctx.restore();
+    }
+
+    // draw plane at current position
+    var cp = gs.flightPath[pathIdx];
+    var ppx = worldToPixel(cp.x, cp.y);
+    // compute angle from path direction
+    var nextIdx = Math.min(pathIdx + 1, gs.flightPath.length - 1);
+    var np = gs.flightPath[nextIdx];
+    var dx = np.x - cp.x;
+    var dy = np.y - cp.y;
+    var flyAngle = Math.atan2(dy, dx);
+    drawPlaneShape(ppx.x, ppx.y, flyAngle, curPlane(), 1.3);
+
+    if (prog >= 1) {
+      onFlightComplete();
+    }
+  }
+
+  // draw completed flight path and landed plane
+  if (gs.flightDone) {
+    drawFlightPath();
+    var landPx = worldToPixel(gs.landingX, 0);
+    // landed plane tilted on ground
+    drawPlaneShape(landPx.x, groundY() - 4, 0.15, curPlane(), 1.0);
+    drawLandingMark();
+  }
+
+  // tape measure
+  drawTapeMeasure();
+
+  // dust
+  drawDust(dt);
+
+  // feedback text
+  drawFeedback(timeS);
+
+  // level done overlay
+  if (gs.phase === PHASE_LEVEL_DONE) {
+    drawLevelDoneOverlay();
+  }
+
+  requestAnimationFrame(mainLoop);
+}
+
+// --- Kick off ---
+resizeCanvas();
+refreshUI();
+requestAnimationFrame(mainLoop);
+</script>
+</body>
+</html>

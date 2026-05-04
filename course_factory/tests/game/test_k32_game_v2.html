@@ -1,0 +1,1410 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=Inter:wght@400;500&family=Noto+Sans+SC:wght@400;700&display=swap" rel="stylesheet">
+<title>Altitude Predictor</title>
+<style>
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box;}
+html,body{width:100%;height:100vh;overflow:hidden;background:#0c0e12;color:#e2e2e9;font-family:'Inter','Noto Sans SC',sans-serif;}
+body{margin:0;padding:0;}
+.game-wrap{display:flex;flex-direction:row;height:100vh;overflow:hidden;}
+.game-sidebar{width:200px;min-width:200px;max-width:200px;display:flex;flex-direction:column;gap:8px;padding:10px;background:rgba(0,0,0,0.5);border-right:1px solid rgba(80,255,176,0.15);overflow-y:auto;}
+.sidebar-btns{display:flex;gap:6px;align-self:flex-start;}
+.sidebar-lang,.sidebar-sound{flex-shrink:0;font-family:'Space Grotesk',sans-serif;font-size:10px;font-weight:700;padding:3px 8px;cursor:pointer;border:1px solid rgba(255,181,156,0.25);background:transparent;color:#ffb59c;letter-spacing:1px;}
+.sidebar-lang:hover,.sidebar-sound:hover{border-color:#ffb59c;background:rgba(255,181,156,0.08);}
+.sidebar-title{font-family:'Space Grotesk',sans-serif;font-size:11px;font-weight:700;color:#50ffb0;letter-spacing:0.08em;text-transform:uppercase;margin-top:4px;}
+.sidebar-subtitle{font-size:11px;color:#ffb59c;margin-top:2px;}
+.sidebar-guide{font-size:12px;color:#aaabb0;line-height:1.6;margin-top:4px;}
+.sidebar-specs{margin-top:8px;font-size:11px;color:#c0c0c8;line-height:1.7;}
+.sidebar-specs .spec-label{color:#50ffb0;font-family:'Space Grotesk',sans-serif;font-size:10px;letter-spacing:0.06em;text-transform:uppercase;}
+.sidebar-specs .spec-val{color:#e2e2e9;font-weight:500;}
+.game-main{flex:1;display:flex;flex-direction:column;min-width:0;}
+.game-header{padding:8px 16px;display:flex;justify-content:space-between;align-items:center;background:rgba(0,0,0,0.4);}
+.game-header h1{font-family:'Space Grotesk',sans-serif;font-size:clamp(13px,2vw,17px);font-weight:700;color:#50ffb0;}
+.game-header .info{font-family:'Space Grotesk',sans-serif;font-size:12px;color:#aaabb0;}
+.game-body{flex:1;display:flex;flex-direction:column;min-height:0;}
+canvas{width:100%;height:100%;display:block;}
+.control-panel{display:flex;justify-content:center;align-items:center;gap:12px;padding:8px 16px;background:rgba(0,0,0,0.4);flex-wrap:wrap;}
+.ctrl-btn{font-family:'Space Grotesk',sans-serif;font-size:12px;font-weight:700;padding:6px 18px;border:none;cursor:pointer;color:#0c0e14;background:linear-gradient(135deg,#50ffb0,#17df93);box-shadow:0 0 10px rgba(80,255,176,0.3);transition:transform 0.1s;}
+.ctrl-btn:hover{transform:scale(1.04);}
+.ctrl-btn:active{transform:scale(0.96);}
+.ctrl-btn:disabled{opacity:0.4;cursor:default;transform:none;}
+.ctrl-btn.secondary{background:rgba(30,30,45,0.9);color:#aaabb0;box-shadow:none;border:1px solid rgba(170,171,176,0.2);}
+.ctrl-btn.secondary:hover{color:#50ffb0;border-color:rgba(80,255,176,0.3);}
+.hud-bar{height:44px;display:flex;align-items:center;justify-content:space-around;background:rgba(0,0,0,0.55);padding:0 16px;}
+.hud-item{text-align:center;}
+.hud-label{font-family:'Space Grotesk',sans-serif;font-size:9px;letter-spacing:0.12em;color:#aaabb0;text-transform:uppercase;}
+.hud-val{font-family:'Space Grotesk',sans-serif;font-size:14px;font-weight:700;color:#50ffb0;transition:transform 0.15s ease-out;}
+.hud-val.juice{animation:hudJuice 0.35s ease-out;}
+@keyframes hudJuice{0%{transform:scale(1.3);color:#ffb59c;}100%{transform:scale(1);color:#50ffb0;}}
+.input-row{display:flex;align-items:center;gap:6px;margin-top:4px;}
+.input-row label{font-size:11px;color:#aaabb0;min-width:24px;}
+.input-row input{width:60px;font-family:'Space Grotesk',sans-serif;font-size:12px;font-weight:700;padding:3px 6px;border:1px solid rgba(80,255,176,0.3);background:rgba(0,0,0,0.5);color:#50ffb0;outline:none;}
+.input-row input:focus{border-color:#50ffb0;box-shadow:0 0 6px rgba(80,255,176,0.2);}
+.input-row input.correct{border-color:#50ffb0;background:rgba(80,255,176,0.1);}
+.input-row input.wrong{border-color:#ff6b6b;background:rgba(255,107,107,0.1);}
+.input-row .unit{font-size:10px;color:#aaabb0;}
+.input-row .feedback{font-size:10px;margin-left:4px;}
+.engine-card{margin-top:4px;padding:6px 8px;border:1px solid rgba(80,255,176,0.2);background:rgba(0,0,0,0.3);cursor:pointer;transition:border-color 0.15s,background 0.15s;}
+.engine-card:hover{border-color:rgba(80,255,176,0.5);background:rgba(80,255,176,0.05);}
+.engine-card.selected{border-color:#50ffb0;background:rgba(80,255,176,0.1);}
+.engine-card .ec-name{font-family:'Space Grotesk',sans-serif;font-size:11px;font-weight:700;color:#50ffb0;}
+.engine-card .ec-specs{font-size:10px;color:#aaabb0;margin-top:2px;}
+</style>
+</head>
+<body>
+<div class="game-wrap">
+  <div class="game-sidebar">
+    <div class="sidebar-btns">
+      <button class="sidebar-lang" id="langBtn">CN</button>
+      <button class="sidebar-sound" id="soundBtn">MUTE</button>
+    </div>
+    <div class="sidebar-title" id="sidebarTitle"></div>
+    <div class="sidebar-subtitle" id="sidebarSubtitle"></div>
+    <div class="sidebar-guide" id="guideContent"></div>
+    <div class="sidebar-specs" id="specsPanel"></div>
+    <div id="inputPanel"></div>
+  </div>
+  <div class="game-main">
+    <div class="game-header">
+      <h1 id="gameTitle"></h1>
+      <div class="info" id="roundInfo"></div>
+    </div>
+    <div class="game-body">
+      <canvas id="gc"></canvas>
+    </div>
+    <div class="control-panel">
+      <button class="ctrl-btn" id="btnAction"></button>
+      <button class="ctrl-btn secondary" id="btnReset"></button>
+    </div>
+    <div class="hud-bar">
+      <div class="hud-item"><div class="hud-label" id="hudL1"></div><div class="hud-val" id="hudV1"></div></div>
+      <div class="hud-item"><div class="hud-label" id="hudL2"></div><div class="hud-val" id="hudV2"></div></div>
+      <div class="hud-item"><div class="hud-label" id="hudL3"></div><div class="hud-val" id="hudV3"></div></div>
+      <div class="hud-item"><div class="hud-label" id="hudL4"></div><div class="hud-val" id="hudV4"></div></div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ============================================================
+// K32 Game: Altitude Predictor (v2)
+// Estimate ideal altitude from engine specs + rocket mass.
+// 3 levels: guided calc, independent calc, engine selection.
+// Pattern: Prediction-Verification Simulation
+// ============================================================
+
+// --- I18N ---
+var I18N = {
+  title:          {en:'ALTITUDE PREDICTOR',          cn:'\u7406\u60f3\u5c04\u9ad8\u4f30\u7b97'},
+  guide1:         {en:'Step-by-step guided calculation.\nFill in each blank to compute ideal altitude.\nLaunch to verify your calculation!',
+                   cn:'\u5206\u6b65\u5f15\u5bfc\u8ba1\u7b97\u3002\n\u586b\u5199\u6bcf\u4e2a\u7a7a\u683c\u8ba1\u7b97\u7406\u60f3\u5c04\u9ad8\u3002\n\u53d1\u5c04\u9a8c\u8bc1\u4f60\u7684\u8ba1\u7b97\uff01'},
+  guide2:         {en:'Compute altitude independently.\nYou have engine specs and rocket mass.\nPredict altitude, then launch to check!',
+                   cn:'\u72ec\u7acb\u8ba1\u7b97\u5c04\u9ad8\u3002\n\u5df2\u77e5\u53d1\u52a8\u673a\u53c2\u6570\u548c\u706b\u7bad\u8d28\u91cf\u3002\n\u9884\u6d4b\u5c04\u9ad8\uff0c\u7136\u540e\u53d1\u5c04\u9a8c\u8bc1\uff01'},
+  guide3:         {en:'Choose the right engine to reach target altitude!\nPick an engine, predict altitude, launch to verify.',
+                   cn:'\u9009\u62e9\u6b63\u786e\u7684\u53d1\u52a8\u673a\u8fbe\u5230\u76ee\u6807\u9ad8\u5ea6\uff01\n\u9009\u53d1\u52a8\u673a\uff0c\u9884\u6d4b\u5c04\u9ad8\uff0c\u53d1\u5c04\u9a8c\u8bc1\u3002'},
+  level1:         {en:'L1: GUIDED',                  cn:'L1: \u5f15\u5bfc'},
+  level2:         {en:'L2: INDEPENDENT',             cn:'L2: \u72ec\u7acb'},
+  level3:         {en:'L3: ENGINE SELECT',           cn:'L3: \u9009\u53d1\u52a8\u673a'},
+  levelLabel:     {en:'LEVEL',                       cn:'\u5173\u5361'},
+  predLabel:      {en:'PREDICTION',                  cn:'\u9884\u6d4b\u503c'},
+  simLabel:       {en:'SIMULATED',                   cn:'\u6a21\u62df\u503c'},
+  errorLabel:     {en:'ERROR',                       cn:'\u8bef\u5dee'},
+  scoreLabel:     {en:'SCORE',                       cn:'\u5f97\u5206'},
+  launch:         {en:'LAUNCH',                      cn:'\u53d1\u5c04'},
+  predict:        {en:'PREDICT',                     cn:'\u9884\u6d4b'},
+  nextLevel:      {en:'NEXT LEVEL',                  cn:'\u4e0b\u4e00\u5173'},
+  reset:          {en:'RESET',                       cn:'\u91cd\u7f6e'},
+  check:          {en:'CHECK',                       cn:'\u68c0\u67e5'},
+  thrustLabel:    {en:'Thrust F',                    cn:'\u63a8\u529b F'},
+  burnLabel:      {en:'Burn time t',                 cn:'\u71c3\u70e7\u65f6\u95f4 t'},
+  impulseLabel:   {en:'Total impulse I',             cn:'\u603b\u51b2 I'},
+  massLabel:      {en:'Rocket mass m',               cn:'\u706b\u7bad\u8d28\u91cf m'},
+  accelQ:         {en:'Accel a = F/m =',             cn:'\u52a0\u901f\u5ea6 a = F/m ='},
+  vBurnQ:         {en:'v_burnout = a*t =',           cn:'\u71c3\u5c3d\u901f\u5ea6 v = a*t ='},
+  hBurnQ:         {en:'h_burn = 0.5*a*t^2 =',       cn:'\u52a8\u529b\u6bb5\u9ad8\u5ea6 h1 = 0.5*a*t^2 ='},
+  hCoastQ:        {en:'h_coast = v^2/(2g) =',       cn:'\u6ed1\u884c\u6bb5\u9ad8\u5ea6 h2 = v^2/(2g) ='},
+  hTotalQ:        {en:'h_total = h1 + h2 =',        cn:'\u603b\u9ad8\u5ea6 h = h1 + h2 ='},
+  predAlt:        {en:'Your predicted altitude:',    cn:'\u4f60\u7684\u9884\u6d4b\u5c04\u9ad8:'},
+  targetAlt:      {en:'Target altitude',             cn:'\u76ee\u6807\u9ad8\u5ea6'},
+  pickEngine:     {en:'Pick an engine:',             cn:'\u9009\u62e9\u53d1\u52a8\u673a:'},
+  stars3:         {en:'Excellent! Error <= 5%',      cn:'\u4f18\u79c0\uff01\u8bef\u5dee<=5%'},
+  stars2:         {en:'Good! Error <= 15%',          cn:'\u826f\u597d\uff01\u8bef\u5dee<=15%'},
+  stars1:         {en:'Keep practicing!',            cn:'\u7ee7\u7eed\u52a0\u6cb9\uff01'},
+  complete:       {en:'ALL LEVELS COMPLETE!',        cn:'\u5168\u90e8\u5b8c\u6210\uff01'},
+  insight:        {en:'Ideal altitude = burn climb + coast climb. Real flights are lower due to drag and gravity turn losses.',
+                   cn:'\u7406\u60f3\u5c04\u9ad8 = \u52a8\u529b\u6bb5\u9ad8\u5ea6 + \u6ed1\u884c\u6bb5\u9ad8\u5ea6\u3002\u5b9e\u9645\u98de\u884c\u56e0\u7a7a\u6c14\u963b\u529b\u548c\u91cd\u529b\u635f\u5931\u4f1a\u66f4\u4f4e\u3002'},
+  mUnit:          {en:'m',                           cn:'m'},
+  msUnit:         {en:'m/s',                         cn:'m/s'},
+  ms2Unit:        {en:'m/s\u00b2',                   cn:'m/s\u00b2'},
+  correctFb:      {en:'Correct!',                    cn:'\u6b63\u786e\uff01'},
+  wrongFb:        {en:'Try again',                   cn:'\u518d\u8bd5\u8bd5'},
+  closeFb:        {en:'Close enough!',               cn:'\u63a5\u8fd1\u6b63\u786e\uff01'},
+  engineSpecs:    {en:'ENGINE SPECS',                cn:'\u53d1\u52a8\u673a\u53c2\u6570'},
+  rocketSpecs:    {en:'ROCKET SPECS',                cn:'\u706b\u7bad\u53c2\u6570'},
+  calcSteps:      {en:'CALCULATION',                 cn:'\u8ba1\u7b97\u6b65\u9aa4'},
+  simulating:     {en:'Simulating...',               cn:'\u6a21\u62df\u4e2d...'},
+  result:         {en:'RESULT',                      cn:'\u7ed3\u679c'}
+};
+
+var lang = 'cn';
+function t(key) { return I18N[key] ? (I18N[key][lang] || I18N[key].en || key) : key; }
+
+// --- Audio (soundMuted=true default) ---
+var soundMuted = true;
+var audioCtx = null;
+function ensureAudioCtx() {
+  if (!audioCtx) {
+    try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch(e) {}
+  }
+}
+function playTone(freq, dur, vol) {
+  if (soundMuted || !audioCtx) return;
+  try {
+    var osc = audioCtx.createOscillator();
+    var gain = audioCtx.createGain();
+    osc.type = 'sine';
+    osc.frequency.value = freq;
+    gain.gain.setValueAtTime(vol || 0.08, audioCtx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + (dur || 0.1));
+    osc.connect(gain);
+    gain.connect(audioCtx.destination);
+    osc.start();
+    osc.stop(audioCtx.currentTime + (dur || 0.1));
+  } catch(e) {}
+}
+function playLaunchSound() {
+  if (soundMuted) return;
+  ensureAudioCtx();
+  var freqs = [220, 330, 440, 660, 880];
+  for (var i = 0; i < freqs.length; i++) {
+    (function(j) { setTimeout(function() { playTone(freqs[j], 0.15, 0.06 + j * 0.01); }, j * 60); })(i);
+  }
+}
+function playSuccessSound(stars) {
+  if (soundMuted) return;
+  ensureAudioCtx();
+  var freqs = stars >= 3 ? [523, 659, 784, 1047] : (stars >= 2 ? [440, 523, 587] : [330, 294, 262]);
+  for (var i = 0; i < freqs.length; i++) {
+    (function(j) { setTimeout(function() { playTone(freqs[j], 0.15, 0.07); }, j * 120); })(i);
+  }
+}
+function playClickSound() {
+  playTone(660, 0.06, 0.04);
+}
+function playErrorSound() {
+  playTone(220, 0.15, 0.06);
+}
+
+// --- Physics constants ---
+var G = 9.81;
+
+// --- Engine database ---
+var ENGINES = [
+  { id: 'HT-0', thrust: 8,  burnTime: 0.31, impulse: 2.5  },
+  { id: 'HT-3', thrust: 8,  burnTime: 0.31, impulse: 2.5  },
+  { id: 'C5-0', thrust: 12, burnTime: 0.83, impulse: 10   },
+  { id: 'C5-3', thrust: 12, burnTime: 0.83, impulse: 10   }
+];
+
+// --- Compute ideal altitude for given engine + mass ---
+function computeIdeal(engine, mass) {
+  var a = engine.thrust / mass - G;
+  var vBurnout = a * engine.burnTime;
+  var hBurn = 0.5 * a * engine.burnTime * engine.burnTime;
+  var hCoast = (vBurnout * vBurnout) / (2 * G);
+  var hTotal = hBurn + hCoast;
+  return {
+    accel: a,
+    vBurnout: vBurnout,
+    hBurn: hBurn,
+    hCoast: hCoast,
+    hTotal: Math.max(0, hTotal)
+  };
+}
+
+// --- Level definitions ---
+var LEVELS = [
+  {
+    engine: ENGINES[2],   // C5-0: F=12N, t=0.83s, I=10Ns
+    mass: 0.3,            // 300g
+    mode: 'guided'
+  },
+  {
+    engine: ENGINES[0],   // HT-0: F=8N, t=0.31s, I=2.5Ns
+    mass: 0.15,           // 150g
+    mode: 'independent'
+  },
+  {
+    targetAlt: 25,        // target ~25m
+    mass: 0.2,            // 200g
+    correctEngineIdx: 2,  // C5-0 is the right choice
+    mode: 'select'
+  }
+];
+
+// Pre-compute ideal altitudes for L1, L2
+for (var li = 0; li < 2; li++) {
+  LEVELS[li].ideal = computeIdeal(LEVELS[li].engine, LEVELS[li].mass);
+}
+// L3: compute for all engines
+LEVELS[2].engineIdeals = [];
+for (var ei = 0; ei < ENGINES.length; ei++) {
+  LEVELS[2].engineIdeals.push(computeIdeal(ENGINES[ei], LEVELS[2].mass));
+}
+// Find best engine for target
+var bestDiff = Infinity;
+for (var ci = 0; ci < ENGINES.length; ci++) {
+  var diff = Math.abs(LEVELS[2].engineIdeals[ci].hTotal - LEVELS[2].targetAlt);
+  if (diff < bestDiff) {
+    bestDiff = diff;
+    LEVELS[2].correctEngineIdx = ci;
+  }
+}
+
+// --- Game state ---
+var currentLevel = 0;
+var gamePhase = 'input';  // input, simulating, result, transitioning, complete
+var levelScores = [0, 0, 0];
+var levelStars = [0, 0, 0];
+var totalScore = 0;
+
+// L1 guided answers
+var guidedAnswers = { a: 0, v: 0, h1: 0, h2: 0, hTotal: 0 };
+var guidedChecked = { a: false, v: false, h1: false, h2: false, hTotal: false };
+var guidedCorrect = { a: false, v: false, h1: false, h2: false, hTotal: false };
+
+// L2 independent
+var playerPrediction = 0;
+
+// L3 select
+var selectedEngineIdx = -1;
+var l3Prediction = 0;
+
+// Simulation state
+var simTime = 0;
+var simAlt = 0;
+var simVel = 0;
+var simMaxAlt = 0;
+var simPhaseStr = 'burn'; // burn, coast, descent, done
+var simEngine = null;
+var simMass = 0;
+var simIdeal = null;
+var simTrail = [];
+var simDone = false;
+
+// Canvas
+var canvas = document.getElementById('gc');
+var ctx2d = canvas.getContext('2d');
+var canvasW = 100, canvasH = 100;
+var dpr = Math.min(window.devicePixelRatio || 1, 2);
+
+// Animation
+var animFrame = 0;
+var pulsePhase = 0;
+var shakeX = 0, shakeY = 0;
+var shakeDecay = 0;
+var resultAlpha = 0;
+var transitionAlpha = 0;
+
+// Particles
+var particles = [];
+function spawnParticles(x, y, count, color, speed) {
+  for (var i = 0; i < count; i++) {
+    var angle = Math.random() * Math.PI * 2;
+    var spd = (Math.random() * 0.6 + 0.4) * (speed || 3);
+    particles.push({
+      x: x, y: y,
+      vx: Math.cos(angle) * spd,
+      vy: Math.sin(angle) * spd,
+      life: 1.0,
+      decay: 0.015 + Math.random() * 0.015,
+      size: 2 + Math.random() * 3,
+      color: color || '#50ffb0'
+    });
+  }
+}
+function updateParticles() {
+  for (var i = particles.length - 1; i >= 0; i--) {
+    var p = particles[i];
+    p.x += p.vx;
+    p.y += p.vy;
+    p.vy += 0.05;
+    p.life -= p.decay;
+    if (p.life <= 0) particles.splice(i, 1);
+  }
+}
+function drawParticles(c) {
+  for (var i = 0; i < particles.length; i++) {
+    var p = particles[i];
+    c.globalAlpha = p.life * 0.8;
+    c.fillStyle = p.color;
+    c.beginPath();
+    c.arc(p.x, p.y, p.size * p.life, 0, Math.PI * 2);
+    c.fill();
+  }
+  c.globalAlpha = 1;
+}
+
+// Exhaust particles (rocket engine)
+var exhaustParticles = [];
+function spawnExhaust(x, y) {
+  for (var i = 0; i < 3; i++) {
+    exhaustParticles.push({
+      x: x + (Math.random() - 0.5) * 6,
+      y: y,
+      vx: (Math.random() - 0.5) * 1.5,
+      vy: Math.random() * 3 + 2,
+      life: 1.0,
+      decay: 0.03 + Math.random() * 0.02,
+      size: 3 + Math.random() * 4,
+      hue: Math.random() > 0.5 ? '#ff6b3a' : '#ffb59c'
+    });
+  }
+}
+function updateExhaust() {
+  for (var i = exhaustParticles.length - 1; i >= 0; i--) {
+    var p = exhaustParticles[i];
+    p.x += p.vx;
+    p.y += p.vy;
+    p.size *= 0.97;
+    p.life -= p.decay;
+    if (p.life <= 0) exhaustParticles.splice(i, 1);
+  }
+}
+function drawExhaust(c) {
+  for (var i = 0; i < exhaustParticles.length; i++) {
+    var p = exhaustParticles[i];
+    c.globalAlpha = p.life * 0.7;
+    c.fillStyle = p.hue;
+    c.beginPath();
+    c.arc(p.x, p.y, p.size * p.life, 0, Math.PI * 2);
+    c.fill();
+  }
+  c.globalAlpha = 1;
+}
+
+// Stars background
+var stars = [];
+function initStars() {
+  stars = [];
+  for (var i = 0; i < 120; i++) {
+    stars.push({
+      x: Math.random(),
+      y: Math.random(),
+      r: 0.5 + Math.random() * 1.5,
+      twinkle: Math.random() * Math.PI * 2,
+      speed: 0.005 + Math.random() * 0.02
+    });
+  }
+}
+initStars();
+
+// --- Resize ---
+var resizeTimer = null;
+function resizeCanvas() {
+  var rect = canvas.parentElement.getBoundingClientRect();
+  canvasW = rect.width;
+  canvasH = rect.height;
+  canvas.width = canvasW * dpr;
+  canvas.height = canvasH * dpr;
+  canvas.style.width = canvasW + 'px';
+  canvas.style.height = canvasH + 'px';
+  ctx2d.setTransform(dpr, 0, 0, dpr, 0, 0);
+}
+window.addEventListener('resize', function() {
+  clearTimeout(resizeTimer);
+  resizeTimer = setTimeout(resizeCanvas, 100);
+});
+resizeCanvas();
+
+// --- UI References ---
+var sidebarTitle = document.getElementById('sidebarTitle');
+var sidebarSubtitle = document.getElementById('sidebarSubtitle');
+var guideContent = document.getElementById('guideContent');
+var specsPanel = document.getElementById('specsPanel');
+var inputPanel = document.getElementById('inputPanel');
+var gameTitle = document.getElementById('gameTitle');
+var roundInfo = document.getElementById('roundInfo');
+var btnAction = document.getElementById('btnAction');
+var btnReset = document.getElementById('btnReset');
+var langBtn = document.getElementById('langBtn');
+var soundBtn = document.getElementById('soundBtn');
+
+// HUD
+var hudL1 = document.getElementById('hudL1');
+var hudV1 = document.getElementById('hudV1');
+var hudL2 = document.getElementById('hudL2');
+var hudV2 = document.getElementById('hudV2');
+var hudL3 = document.getElementById('hudL3');
+var hudV3 = document.getElementById('hudV3');
+var hudL4 = document.getElementById('hudL4');
+var hudV4 = document.getElementById('hudV4');
+
+// --- Language toggle ---
+langBtn.addEventListener('click', function() {
+  ensureAudioCtx();
+  lang = lang === 'cn' ? 'en' : 'cn';
+  langBtn.textContent = lang === 'cn' ? 'CN' : 'EN';
+  playClickSound();
+  updateUI();
+});
+
+// --- Sound toggle ---
+soundBtn.addEventListener('click', function() {
+  ensureAudioCtx();
+  soundMuted = !soundMuted;
+  soundBtn.textContent = soundMuted ? 'MUTE' : 'SFX';
+  if (!soundMuted) playTone(660, 0.08, 0.05);
+});
+
+// --- Format number ---
+function fmt(v, dec) {
+  if (dec === undefined) dec = 1;
+  return (Math.round(v * Math.pow(10, dec)) / Math.pow(10, dec)).toFixed(dec);
+}
+
+// --- Update sidebar + HUD ---
+function updateUI() {
+  var lv = LEVELS[currentLevel];
+  gameTitle.textContent = t('title');
+  var lvNames = ['level1', 'level2', 'level3'];
+  roundInfo.textContent = t(lvNames[currentLevel]);
+
+  // HUD
+  hudL1.textContent = t('levelLabel');
+  hudV1.textContent = (currentLevel + 1) + '/3';
+  hudL2.textContent = t('predLabel');
+  hudL3.textContent = t('simLabel');
+  hudL4.textContent = t('scoreLabel');
+  hudV4.textContent = totalScore;
+
+  if (gamePhase === 'complete') {
+    hudV2.textContent = '--';
+    hudV3.textContent = '--';
+  }
+
+  // Sidebar
+  sidebarTitle.textContent = t('title');
+
+  if (gamePhase === 'complete') {
+    sidebarSubtitle.textContent = t('complete');
+    guideContent.textContent = t('insight');
+    specsPanel.innerHTML = '';
+    inputPanel.innerHTML = '';
+    btnAction.style.display = 'none';
+    btnReset.textContent = t('reset');
+    btnReset.style.display = '';
+    return;
+  }
+
+  var guideKeys = ['guide1', 'guide2', 'guide3'];
+  guideContent.textContent = t(guideKeys[currentLevel]);
+
+  // Build specs
+  if (lv.mode === 'guided' || lv.mode === 'independent') {
+    var eng = lv.engine;
+    sidebarSubtitle.textContent = t(lvNames[currentLevel]);
+    specsPanel.innerHTML =
+      '<div class="spec-label">' + t('engineSpecs') + '</div>' +
+      '<div>' + t('thrustLabel') + ': <span class="spec-val">' + eng.thrust + ' N</span></div>' +
+      '<div>' + t('burnLabel') + ': <span class="spec-val">' + eng.burnTime + ' s</span></div>' +
+      '<div>' + t('impulseLabel') + ': <span class="spec-val">' + eng.impulse + ' N*s</span></div>' +
+      '<div style="margin-top:6px" class="spec-label">' + t('rocketSpecs') + '</div>' +
+      '<div>' + t('massLabel') + ': <span class="spec-val">' + (lv.mass * 1000) + ' g (' + lv.mass + ' kg)</span></div>';
+  } else {
+    sidebarSubtitle.textContent = t(lvNames[currentLevel]);
+    specsPanel.innerHTML =
+      '<div class="spec-label">' + t('rocketSpecs') + '</div>' +
+      '<div>' + t('massLabel') + ': <span class="spec-val">' + (lv.mass * 1000) + ' g (' + lv.mass + ' kg)</span></div>' +
+      '<div style="margin-top:4px">' + t('targetAlt') + ': <span class="spec-val" style="color:#ffb59c;font-weight:700">' + lv.targetAlt + ' m</span></div>';
+  }
+
+  // Build input panel
+  buildInputPanel();
+
+  // Buttons
+  if (gamePhase === 'input') {
+    if (lv.mode === 'guided') {
+      btnAction.textContent = t('check');
+      btnAction.style.display = '';
+    } else if (lv.mode === 'independent') {
+      btnAction.textContent = t('launch');
+      btnAction.style.display = '';
+    } else {
+      btnAction.textContent = t('launch');
+      btnAction.style.display = '';
+    }
+    btnReset.textContent = t('reset');
+    btnReset.style.display = '';
+  } else if (gamePhase === 'simulating') {
+    btnAction.textContent = t('simulating');
+    btnAction.disabled = true;
+    btnAction.style.display = '';
+    btnReset.style.display = 'none';
+  } else if (gamePhase === 'result') {
+    if (currentLevel < 2) {
+      btnAction.textContent = t('nextLevel');
+    } else {
+      btnAction.textContent = t('complete');
+    }
+    btnAction.disabled = false;
+    btnAction.style.display = '';
+    btnReset.textContent = t('reset');
+    btnReset.style.display = '';
+  }
+}
+
+// --- Build input panel for each level ---
+function buildInputPanel() {
+  var lv = LEVELS[currentLevel];
+  var html = '';
+
+  if (lv.mode === 'guided' && gamePhase === 'input') {
+    html += '<div style="margin-top:8px;font-size:10px;color:#50ffb0;font-family:\'Space Grotesk\',sans-serif;letter-spacing:0.06em;text-transform:uppercase">' + t('calcSteps') + '</div>';
+    var fields = [
+      { key: 'a', label: t('accelQ'), unit: t('ms2Unit') },
+      { key: 'v', label: t('vBurnQ'), unit: t('msUnit') },
+      { key: 'h1', label: t('hBurnQ'), unit: t('mUnit') },
+      { key: 'h2', label: t('hCoastQ'), unit: t('mUnit') },
+      { key: 'hTotal', label: t('hTotalQ'), unit: t('mUnit') }
+    ];
+    for (var i = 0; i < fields.length; i++) {
+      var f = fields[i];
+      var cls = '';
+      var fb = '';
+      if (guidedChecked[f.key]) {
+        cls = guidedCorrect[f.key] ? 'correct' : 'wrong';
+        fb = guidedCorrect[f.key]
+          ? '<span class="feedback" style="color:#50ffb0">' + t('correctFb') + '</span>'
+          : '<span class="feedback" style="color:#ff6b6b">' + t('wrongFb') + '</span>';
+      }
+      var disabled = '';
+      if (f.key !== 'a' && !guidedCorrect[getPrevKey(f.key)]) {
+        disabled = ' disabled';
+      }
+      html += '<div class="input-row">' +
+        '<label>' + f.label + '</label>' +
+        '<input type="number" step="0.1" id="inp_' + f.key + '" class="' + cls + '"' + disabled + '>' +
+        '<span class="unit">' + f.unit + '</span>' + fb +
+        '</div>';
+    }
+  } else if (lv.mode === 'independent' && gamePhase === 'input') {
+    html += '<div style="margin-top:8px;font-size:11px;color:#aaabb0">' + t('predAlt') + '</div>';
+    html += '<div class="input-row">' +
+      '<input type="number" step="0.1" id="inp_pred" style="width:80px">' +
+      '<span class="unit">' + t('mUnit') + '</span>' +
+      '</div>';
+  } else if (lv.mode === 'select' && gamePhase === 'input') {
+    html += '<div style="margin-top:6px;font-size:11px;color:#aaabb0">' + t('pickEngine') + '</div>';
+    for (var ei = 0; ei < ENGINES.length; ei++) {
+      var eng = ENGINES[ei];
+      var selCls = selectedEngineIdx === ei ? ' selected' : '';
+      html += '<div class="engine-card' + selCls + '" data-eidx="' + ei + '">' +
+        '<div class="ec-name">' + eng.id + '</div>' +
+        '<div class="ec-specs">F=' + eng.thrust + 'N, t=' + eng.burnTime + 's, I=' + eng.impulse + 'N*s</div>' +
+        '</div>';
+    }
+    if (selectedEngineIdx >= 0) {
+      html += '<div style="margin-top:6px;font-size:11px;color:#aaabb0">' + t('predAlt') + '</div>';
+      html += '<div class="input-row">' +
+        '<input type="number" step="0.1" id="inp_l3pred" style="width:80px">' +
+        '<span class="unit">' + t('mUnit') + '</span>' +
+        '</div>';
+    }
+  }
+
+  inputPanel.innerHTML = html;
+
+  // Bind engine cards
+  if (lv.mode === 'select' && gamePhase === 'input') {
+    var cards = inputPanel.querySelectorAll('.engine-card');
+    for (var ci = 0; ci < cards.length; ci++) {
+      cards[ci].addEventListener('click', function() {
+        var idx = parseInt(this.getAttribute('data-eidx'));
+        selectedEngineIdx = idx;
+        playClickSound();
+        updateUI();
+      });
+    }
+  }
+}
+
+function getPrevKey(key) {
+  var order = ['a', 'v', 'h1', 'h2', 'hTotal'];
+  var idx = order.indexOf(key);
+  return idx > 0 ? order[idx - 1] : null;
+}
+
+// --- Check guided answers ---
+function checkGuided() {
+  var lv = LEVELS[currentLevel];
+  var ideal = lv.ideal;
+  var answers = {
+    a: ideal.accel,
+    v: ideal.vBurnout,
+    h1: ideal.hBurn,
+    h2: ideal.hCoast,
+    hTotal: ideal.hTotal
+  };
+  var allCorrect = true;
+  var order = ['a', 'v', 'h1', 'h2', 'hTotal'];
+  for (var i = 0; i < order.length; i++) {
+    var key = order[i];
+    var inp = document.getElementById('inp_' + key);
+    if (!inp || inp.disabled) {
+      if (!guidedCorrect[key]) allCorrect = false;
+      continue;
+    }
+    var val = parseFloat(inp.value);
+    if (isNaN(val)) {
+      allCorrect = false;
+      continue;
+    }
+    var expected = answers[key];
+    var tolerance = Math.max(Math.abs(expected) * 0.05, 0.3);
+    guidedChecked[key] = true;
+    if (Math.abs(val - expected) <= tolerance) {
+      guidedCorrect[key] = true;
+      guidedAnswers[key] = val;
+      playTone(880, 0.1, 0.05);
+    } else {
+      guidedCorrect[key] = false;
+      allCorrect = false;
+      playErrorSound();
+    }
+  }
+  updateUI();
+
+  // If all correct, auto switch to launch
+  if (allCorrect) {
+    btnAction.textContent = t('launch');
+    btnAction.onclick = null;
+    playerPrediction = guidedAnswers.hTotal;
+    hudV2.textContent = fmt(playerPrediction) + 'm';
+    juiceHud('hudV2');
+    setTimeout(function() { startSimulation(); }, 600);
+  }
+}
+
+function juiceHud(id) {
+  var el = document.getElementById(id);
+  if (el) {
+    el.classList.remove('juice');
+    void el.offsetWidth;
+    el.classList.add('juice');
+  }
+}
+
+// --- Start simulation ---
+function startSimulation() {
+  var lv = LEVELS[currentLevel];
+  gamePhase = 'simulating';
+  simTime = 0;
+  simAlt = 0;
+  simVel = 0;
+  simMaxAlt = 0;
+  simPhaseStr = 'burn';
+  simTrail = [];
+  simDone = false;
+  exhaustParticles = [];
+
+  if (lv.mode === 'guided') {
+    simEngine = lv.engine;
+    simMass = lv.mass;
+    simIdeal = lv.ideal;
+  } else if (lv.mode === 'independent') {
+    simEngine = lv.engine;
+    simMass = lv.mass;
+    simIdeal = lv.ideal;
+    var inp = document.getElementById('inp_pred');
+    playerPrediction = inp ? parseFloat(inp.value) || 0 : 0;
+    hudV2.textContent = fmt(playerPrediction) + 'm';
+    juiceHud('hudV2');
+  } else {
+    if (selectedEngineIdx < 0) return;
+    simEngine = ENGINES[selectedEngineIdx];
+    simMass = lv.mass;
+    simIdeal = computeIdeal(simEngine, simMass);
+    var inp3 = document.getElementById('inp_l3pred');
+    l3Prediction = inp3 ? parseFloat(inp3.value) || 0 : 0;
+    playerPrediction = l3Prediction;
+    hudV2.textContent = fmt(playerPrediction) + 'm';
+    juiceHud('hudV2');
+  }
+
+  // Screen shake
+  shakeDecay = 1.0;
+  playLaunchSound();
+  updateUI();
+}
+
+// --- Simulation step (called in rAF) ---
+function stepSimulation(dt) {
+  if (simDone) return;
+  var simDt = dt * 4; // speed up 4x for visual
+  simTime += simDt;
+
+  if (simPhaseStr === 'burn') {
+    if (simTime <= simEngine.burnTime) {
+      var accel = simEngine.thrust / simMass - G;
+      simVel += accel * simDt;
+      simAlt += simVel * simDt;
+    } else {
+      simPhaseStr = 'coast';
+    }
+  }
+
+  if (simPhaseStr === 'coast') {
+    simVel -= G * simDt;
+    simAlt += simVel * simDt;
+    if (simVel <= 0) {
+      simPhaseStr = 'descent';
+      simMaxAlt = simAlt;
+    }
+  }
+
+  if (simPhaseStr === 'descent') {
+    simVel -= G * simDt;
+    simAlt += simVel * simDt;
+    if (simAlt <= 0) {
+      simAlt = 0;
+      simDone = true;
+      simPhaseStr = 'done';
+      onSimComplete();
+    }
+  }
+
+  if (simAlt > simMaxAlt) simMaxAlt = simAlt;
+
+  // Record trail
+  simTrail.push({ t: simTime, alt: simAlt });
+  if (simTrail.length > 500) simTrail.shift();
+}
+
+// --- Simulation complete ---
+function onSimComplete() {
+  gamePhase = 'result';
+  var idealAlt = simIdeal.hTotal;
+  hudV3.textContent = fmt(idealAlt) + 'm';
+  juiceHud('hudV3');
+
+  // Score based on prediction accuracy
+  var errPct = idealAlt > 0 ? Math.abs(playerPrediction - idealAlt) / idealAlt * 100 : 100;
+  var starsEarned = errPct <= 5 ? 3 : (errPct <= 15 ? 2 : 1);
+  var points = starsEarned === 3 ? 100 : (starsEarned === 2 ? 70 : 30);
+
+  // L3 bonus: picked correct engine
+  if (LEVELS[currentLevel].mode === 'select') {
+    var bestIdx = LEVELS[currentLevel].correctEngineIdx;
+    if (selectedEngineIdx !== bestIdx) {
+      starsEarned = Math.max(1, starsEarned - 1);
+      points = Math.max(20, points - 30);
+    }
+  }
+
+  levelStars[currentLevel] = starsEarned;
+  levelScores[currentLevel] = points;
+  totalScore = 0;
+  for (var i = 0; i < levelScores.length; i++) totalScore += levelScores[i];
+  hudV4.textContent = totalScore;
+  juiceHud('hudV4');
+
+  resultAlpha = 0;
+  playSuccessSound(starsEarned);
+
+  // Spawn celebration particles
+  spawnParticles(canvasW / 2, canvasH / 3, 20, '#50ffb0', 4);
+  spawnParticles(canvasW / 2, canvasH / 3, 12, '#ffb59c', 3);
+
+  updateUI();
+}
+
+// --- Reset current level ---
+function resetLevel() {
+  gamePhase = 'input';
+  guidedAnswers = { a: 0, v: 0, h1: 0, h2: 0, hTotal: 0 };
+  guidedChecked = { a: false, v: false, h1: false, h2: false, hTotal: false };
+  guidedCorrect = { a: false, v: false, h1: false, h2: false, hTotal: false };
+  playerPrediction = 0;
+  selectedEngineIdx = -1;
+  l3Prediction = 0;
+  simTime = 0;
+  simAlt = 0;
+  simVel = 0;
+  simMaxAlt = 0;
+  simTrail = [];
+  simDone = false;
+  exhaustParticles = [];
+  particles = [];
+  resultAlpha = 0;
+  hudV2.textContent = '--';
+  hudV3.textContent = '--';
+  btnAction.disabled = false;
+  updateUI();
+}
+
+// --- Action button handler ---
+btnAction.addEventListener('click', function() {
+  ensureAudioCtx();
+  if (gamePhase === 'input') {
+    var lv = LEVELS[currentLevel];
+    if (lv.mode === 'guided') {
+      checkGuided();
+    } else if (lv.mode === 'independent') {
+      startSimulation();
+    } else {
+      if (selectedEngineIdx < 0) return;
+      startSimulation();
+    }
+  } else if (gamePhase === 'result') {
+    if (currentLevel < 2) {
+      currentLevel++;
+      resetLevel();
+    } else {
+      gamePhase = 'complete';
+      updateUI();
+    }
+  }
+});
+
+btnReset.addEventListener('click', function() {
+  ensureAudioCtx();
+  playClickSound();
+  if (gamePhase === 'complete') {
+    currentLevel = 0;
+    totalScore = 0;
+    levelScores = [0, 0, 0];
+    levelStars = [0, 0, 0];
+  }
+  resetLevel();
+});
+
+// --- Drawing ---
+function easeOutCubic(x) { return 1 - Math.pow(1 - x, 3); }
+function easeInOutQuad(x) { return x < 0.5 ? 2 * x * x : 1 - Math.pow(-2 * x + 2, 2) / 2; }
+function lerp(a, b, t) { return a + (b - a) * t; }
+
+function drawStarsBg(c) {
+  for (var i = 0; i < stars.length; i++) {
+    var s = stars[i];
+    var sx = s.x * canvasW;
+    var sy = s.y * canvasH;
+    // Parallax shift during simulation
+    if (gamePhase === 'simulating' && !simDone) {
+      sy += (simAlt / (simIdeal ? simIdeal.hTotal : 50)) * 30 * (0.3 + s.r * 0.2);
+      sy = ((sy % canvasH) + canvasH) % canvasH;
+    }
+    var tw = 0.4 + 0.6 * (0.5 + 0.5 * Math.sin(s.twinkle + animFrame * s.speed));
+    c.globalAlpha = tw * 0.6;
+    c.fillStyle = '#e2e2e9';
+    c.beginPath();
+    c.arc(sx, sy, s.r, 0, Math.PI * 2);
+    c.fill();
+  }
+  c.globalAlpha = 1;
+}
+
+function drawGround(c) {
+  var groundY = canvasH - 40;
+  // Ground line
+  var grad = c.createLinearGradient(0, groundY, 0, canvasH);
+  grad.addColorStop(0, 'rgba(80,255,176,0.15)');
+  grad.addColorStop(1, 'rgba(80,255,176,0.02)');
+  c.fillStyle = grad;
+  c.fillRect(0, groundY, canvasW, canvasH - groundY);
+
+  c.strokeStyle = 'rgba(80,255,176,0.3)';
+  c.lineWidth = 1;
+  c.beginPath();
+  c.moveTo(0, groundY);
+  c.lineTo(canvasW, groundY);
+  c.stroke();
+
+  // Pad
+  var padX = canvasW * 0.35;
+  var padW = 60;
+  c.fillStyle = 'rgba(80,255,176,0.2)';
+  c.fillRect(padX - padW / 2, groundY - 3, padW, 3);
+  c.strokeStyle = '#50ffb0';
+  c.lineWidth = 1;
+  c.strokeRect(padX - padW / 2, groundY - 3, padW, 3);
+}
+
+function drawRocket(c, rx, ry, scale, burning) {
+  c.save();
+  c.translate(rx, ry);
+  c.scale(scale, scale);
+
+  // Body
+  c.fillStyle = '#e2e2e9';
+  c.beginPath();
+  c.moveTo(0, -24);
+  c.lineTo(-6, -8);
+  c.lineTo(-6, 12);
+  c.lineTo(6, 12);
+  c.lineTo(6, -8);
+  c.closePath();
+  c.fill();
+
+  // Nose cone
+  c.fillStyle = '#ff6b3a';
+  c.beginPath();
+  c.moveTo(0, -30);
+  c.lineTo(-5, -20);
+  c.lineTo(5, -20);
+  c.closePath();
+  c.fill();
+
+  // Fins
+  c.fillStyle = '#50ffb0';
+  c.beginPath();
+  c.moveTo(-6, 8);
+  c.lineTo(-12, 16);
+  c.lineTo(-6, 12);
+  c.closePath();
+  c.fill();
+  c.beginPath();
+  c.moveTo(6, 8);
+  c.lineTo(12, 16);
+  c.lineTo(6, 12);
+  c.closePath();
+  c.fill();
+
+  // Engine nozzle
+  c.fillStyle = '#aaabb0';
+  c.fillRect(-3, 12, 6, 4);
+
+  // Glow when burning
+  if (burning) {
+    var glow = c.createRadialGradient(0, 18, 2, 0, 22, 14);
+    glow.addColorStop(0, 'rgba(255,107,58,0.6)');
+    glow.addColorStop(0.5, 'rgba(255,181,156,0.2)');
+    glow.addColorStop(1, 'rgba(255,107,58,0)');
+    c.fillStyle = glow;
+    c.beginPath();
+    c.arc(0, 20, 14, 0, Math.PI * 2);
+    c.fill();
+  }
+
+  c.restore();
+}
+
+function drawAltitudeScale(c) {
+  if (!simIdeal) return;
+  var maxH = simIdeal.hTotal * 1.3;
+  if (maxH < 5) maxH = 5;
+  var scaleX = canvasW - 50;
+  var scaleTop = 60;
+  var scaleBot = canvasH - 50;
+  var scaleH = scaleBot - scaleTop;
+
+  // Axis line
+  c.strokeStyle = 'rgba(170,171,176,0.3)';
+  c.lineWidth = 1;
+  c.beginPath();
+  c.moveTo(scaleX, scaleTop);
+  c.lineTo(scaleX, scaleBot);
+  c.stroke();
+
+  // Tick marks
+  var step = maxH > 100 ? 50 : (maxH > 30 ? 10 : 5);
+  c.font = '10px "Space Grotesk",sans-serif';
+  c.fillStyle = '#aaabb0';
+  c.textAlign = 'right';
+  for (var h = 0; h <= maxH; h += step) {
+    var y = scaleBot - (h / maxH) * scaleH;
+    c.beginPath();
+    c.moveTo(scaleX - 4, y);
+    c.lineTo(scaleX + 4, y);
+    c.stroke();
+    c.fillText(h + 'm', scaleX - 8, y + 3);
+  }
+
+  // Prediction marker
+  if (playerPrediction > 0) {
+    var predY = scaleBot - (Math.min(playerPrediction, maxH) / maxH) * scaleH;
+    c.strokeStyle = '#ffb59c';
+    c.lineWidth = 1;
+    c.setLineDash([4, 4]);
+    c.beginPath();
+    c.moveTo(scaleX - 30, predY);
+    c.lineTo(scaleX + 20, predY);
+    c.stroke();
+    c.setLineDash([]);
+    c.fillStyle = '#ffb59c';
+    c.textAlign = 'left';
+    c.fillText(lang === 'cn' ? '\u9884\u6d4b' : 'Pred', scaleX + 8, predY - 5);
+  }
+
+  // Ideal altitude marker (after sim)
+  if (gamePhase === 'result' && simIdeal) {
+    var idealY = scaleBot - (Math.min(simIdeal.hTotal, maxH) / maxH) * scaleH;
+    c.strokeStyle = '#50ffb0';
+    c.lineWidth = 1.5;
+    c.setLineDash([4, 4]);
+    c.beginPath();
+    c.moveTo(scaleX - 30, idealY);
+    c.lineTo(scaleX + 20, idealY);
+    c.stroke();
+    c.setLineDash([]);
+    c.fillStyle = '#50ffb0';
+    c.textAlign = 'left';
+    c.fillText(lang === 'cn' ? '\u7406\u60f3' : 'Ideal', scaleX + 8, idealY - 5);
+  }
+
+  // Current altitude during sim
+  if (gamePhase === 'simulating' && simAlt > 0) {
+    var curY = scaleBot - (Math.min(simAlt, maxH) / maxH) * scaleH;
+    c.fillStyle = '#50ffb0';
+    c.beginPath();
+    c.arc(scaleX, curY, 4, 0, Math.PI * 2);
+    c.fill();
+  }
+
+  // Target altitude for L3
+  if (LEVELS[currentLevel].mode === 'select' && LEVELS[currentLevel].targetAlt) {
+    var tgt = LEVELS[currentLevel].targetAlt;
+    var tgtY = scaleBot - (Math.min(tgt, maxH) / maxH) * scaleH;
+    c.strokeStyle = 'rgba(255,181,156,0.6)';
+    c.lineWidth = 2;
+    c.setLineDash([6, 3]);
+    c.beginPath();
+    c.moveTo(scaleX - 40, tgtY);
+    c.lineTo(scaleX + 25, tgtY);
+    c.stroke();
+    c.setLineDash([]);
+    c.fillStyle = '#ffb59c';
+    c.textAlign = 'left';
+    c.font = '11px "Space Grotesk",sans-serif';
+    c.fillText(lang === 'cn' ? '\u76ee\u6807 ' + tgt + 'm' : 'Target ' + tgt + 'm', scaleX + 8, tgtY - 7);
+  }
+}
+
+function drawFormulas(c) {
+  if (gamePhase !== 'input' && gamePhase !== 'result') return;
+  var lv = LEVELS[currentLevel];
+  if (lv.mode === 'select' && selectedEngineIdx < 0) return;
+
+  var x = 20;
+  var y = 50;
+  c.font = '11px "Space Grotesk",sans-serif';
+  c.fillStyle = 'rgba(170,171,176,0.5)';
+  c.textAlign = 'left';
+
+  var formulas = [
+    'a = F/m - g',
+    'v = a * t',
+    'h1 = 0.5 * a * t^2',
+    'h2 = v^2 / (2g)',
+    'H = h1 + h2'
+  ];
+
+  for (var i = 0; i < formulas.length; i++) {
+    c.fillText(formulas[i], x, y + i * 18);
+  }
+
+  // Show computed values in result phase
+  if (gamePhase === 'result' && simIdeal) {
+    c.fillStyle = 'rgba(80,255,176,0.4)';
+    x = 160;
+    var vals = [
+      fmt(simIdeal.accel, 2) + ' m/s\u00b2',
+      fmt(simIdeal.vBurnout, 2) + ' m/s',
+      fmt(simIdeal.hBurn, 2) + ' m',
+      fmt(simIdeal.hCoast, 2) + ' m',
+      fmt(simIdeal.hTotal, 2) + ' m'
+    ];
+    for (var vi = 0; vi < vals.length; vi++) {
+      c.fillText('= ' + vals[vi], x, y + vi * 18);
+    }
+  }
+}
+
+function drawResult(c) {
+  if (gamePhase !== 'result') return;
+  resultAlpha = Math.min(1, resultAlpha + 0.03);
+  var alpha = easeOutCubic(resultAlpha);
+
+  // Glass panel
+  var pw = Math.min(340, canvasW * 0.5);
+  var ph = 160;
+  var px = (canvasW - pw) / 2;
+  var py = canvasH * 0.35;
+
+  c.globalAlpha = alpha * 0.85;
+  c.fillStyle = 'rgba(12,14,18,0.92)';
+  c.fillRect(px, py, pw, ph);
+  c.strokeStyle = 'rgba(80,255,176,0.3)';
+  c.lineWidth = 1;
+  c.strokeRect(px, py, pw, ph);
+  c.globalAlpha = alpha;
+
+  c.font = '13px "Space Grotesk",sans-serif';
+  c.fillStyle = '#50ffb0';
+  c.textAlign = 'center';
+  c.fillText(t('result'), px + pw / 2, py + 22);
+
+  c.font = '12px "Inter","Noto Sans SC",sans-serif';
+  c.fillStyle = '#e2e2e9';
+  c.textAlign = 'left';
+
+  var rows = [
+    [t('predLabel'), fmt(playerPrediction, 2) + ' m'],
+    [t('simLabel') + ' (' + (lang === 'cn' ? '\u7406\u60f3' : 'ideal') + ')', fmt(simIdeal.hTotal, 2) + ' m'],
+  ];
+
+  var errPct = simIdeal.hTotal > 0 ? Math.abs(playerPrediction - simIdeal.hTotal) / simIdeal.hTotal * 100 : 100;
+  rows.push([t('errorLabel'), fmt(errPct, 1) + '%']);
+
+  for (var i = 0; i < rows.length; i++) {
+    c.fillStyle = '#aaabb0';
+    c.fillText(rows[i][0] + ':', px + 20, py + 48 + i * 22);
+    c.fillStyle = i === 2 ? (errPct <= 5 ? '#50ffb0' : (errPct <= 15 ? '#ffb59c' : '#ff6b6b')) : '#e2e2e9';
+    c.textAlign = 'right';
+    c.fillText(rows[i][1], px + pw - 20, py + 48 + i * 22);
+    c.textAlign = 'left';
+  }
+
+  // Stars
+  var strs = levelStars[currentLevel];
+  var starY = py + ph - 35;
+  c.font = '14px "Space Grotesk",sans-serif';
+  c.textAlign = 'center';
+  for (var si = 0; si < 3; si++) {
+    c.fillStyle = si < strs ? '#ffb59c' : 'rgba(170,171,176,0.3)';
+    c.fillText('*', px + pw / 2 - 20 + si * 20, starY);
+  }
+
+  // Stars message
+  var msgKey = strs >= 3 ? 'stars3' : (strs >= 2 ? 'stars2' : 'stars1');
+  c.font = '11px "Inter","Noto Sans SC",sans-serif';
+  c.fillStyle = '#aaabb0';
+  c.fillText(t(msgKey), px + pw / 2, starY + 18);
+
+  c.globalAlpha = 1;
+}
+
+function drawComplete(c) {
+  if (gamePhase !== 'complete') return;
+  transitionAlpha = Math.min(1, transitionAlpha + 0.02);
+  var alpha = easeOutCubic(transitionAlpha);
+
+  c.globalAlpha = alpha;
+  var pw = Math.min(400, canvasW * 0.6);
+  var ph = 200;
+  var px = (canvasW - pw) / 2;
+  var py = canvasH * 0.25;
+
+  c.fillStyle = 'rgba(12,14,18,0.95)';
+  c.fillRect(px, py, pw, ph);
+  c.strokeStyle = 'rgba(80,255,176,0.4)';
+  c.lineWidth = 1;
+  c.strokeRect(px, py, pw, ph);
+
+  c.font = '16px "Space Grotesk",sans-serif';
+  c.fillStyle = '#50ffb0';
+  c.textAlign = 'center';
+  c.fillText(t('complete'), px + pw / 2, py + 30);
+
+  c.font = '12px "Inter","Noto Sans SC",sans-serif';
+  c.fillStyle = '#e2e2e9';
+  var lvNames = ['level1', 'level2', 'level3'];
+  for (var i = 0; i < 3; i++) {
+    var ly = py + 55 + i * 28;
+    c.textAlign = 'left';
+    c.fillStyle = '#aaabb0';
+    c.fillText(t(lvNames[i]), px + 20, ly);
+    c.textAlign = 'right';
+    // Stars
+    for (var si = 0; si < 3; si++) {
+      c.fillStyle = si < levelStars[i] ? '#ffb59c' : 'rgba(170,171,176,0.3)';
+      c.fillText('*', px + pw - 60 + si * 16, ly);
+    }
+    c.fillStyle = '#50ffb0';
+    c.fillText(levelScores[i] + 'pts', px + pw - 20, ly);
+  }
+
+  c.textAlign = 'center';
+  c.fillStyle = '#50ffb0';
+  c.font = '14px "Space Grotesk",sans-serif';
+  c.fillText(t('scoreLabel') + ': ' + totalScore + '/300', px + pw / 2, py + ph - 35);
+
+  c.font = '11px "Inter","Noto Sans SC",sans-serif';
+  c.fillStyle = '#aaabb0';
+  var insightText = t('insight');
+  // Word wrap
+  var words = insightText.split('');
+  var line = '';
+  var lineY = py + ph - 12;
+  var maxW = pw - 40;
+  // Simple approach for CJK
+  c.fillText(insightText.substring(0, Math.floor(maxW / 11)), px + pw / 2, lineY);
+
+  c.globalAlpha = 1;
+}
+
+function drawIdleRocket(c) {
+  var groundY = canvasH - 40;
+  var rocketX = canvasW * 0.35;
+  var rocketY = groundY - 20;
+
+  // Idle breathe
+  var breathe = Math.sin(animFrame * 0.03) * 2;
+  drawRocket(c, rocketX, rocketY + breathe, 1.2, false);
+
+  // Ambient glow under rocket
+  var ambGlow = c.createRadialGradient(rocketX, groundY, 5, rocketX, groundY, 40);
+  ambGlow.addColorStop(0, 'rgba(80,255,176,0.08)');
+  ambGlow.addColorStop(1, 'rgba(80,255,176,0)');
+  c.fillStyle = ambGlow;
+  c.beginPath();
+  c.arc(rocketX, groundY, 40, 0, Math.PI * 2);
+  c.fill();
+}
+
+function drawSimRocket(c) {
+  if (!simIdeal) return;
+  var groundY = canvasH - 40;
+  var maxH = simIdeal.hTotal * 1.3;
+  if (maxH < 5) maxH = 5;
+  var topY = 60;
+  var rocketX = canvasW * 0.35;
+
+  var altFrac = Math.min(simAlt / maxH, 1);
+  var rocketY = groundY - altFrac * (groundY - topY);
+
+  var isBurning = simPhaseStr === 'burn';
+  drawRocket(c, rocketX, rocketY - 16, 1.2, isBurning);
+
+  // Exhaust during burn
+  if (isBurning && animFrame % 2 === 0) {
+    spawnExhaust(rocketX, rocketY);
+  }
+
+  // Trail
+  if (simTrail.length > 1) {
+    c.strokeStyle = 'rgba(80,255,176,0.15)';
+    c.lineWidth = 1;
+    c.beginPath();
+    for (var ti = 0; ti < simTrail.length; ti++) {
+      var trailFrac = Math.min(simTrail[ti].alt / maxH, 1);
+      var ty = groundY - trailFrac * (groundY - topY);
+      if (ti === 0) c.moveTo(rocketX, ty);
+      else c.lineTo(rocketX, ty);
+    }
+    c.stroke();
+  }
+}
+
+// --- Main render loop ---
+var lastTime = 0;
+function render(timestamp) {
+  var dt = lastTime ? Math.min((timestamp - lastTime) / 1000, 0.05) : 0.016;
+  lastTime = timestamp;
+  animFrame++;
+  pulsePhase += 0.04;
+
+  // Screen shake decay
+  if (shakeDecay > 0) {
+    shakeDecay *= 0.92;
+    shakeX = (Math.random() - 0.5) * shakeDecay * 8;
+    shakeY = (Math.random() - 0.5) * shakeDecay * 8;
+    if (shakeDecay < 0.01) {
+      shakeDecay = 0;
+      shakeX = 0;
+      shakeY = 0;
+    }
+  }
+
+  // Simulation step
+  if (gamePhase === 'simulating') {
+    stepSimulation(dt);
+  }
+
+  // Update particles
+  updateParticles();
+  updateExhaust();
+
+  // Clear
+  ctx2d.save();
+  ctx2d.translate(shakeX, shakeY);
+  ctx2d.clearRect(-10, -10, canvasW + 20, canvasH + 20);
+
+  // Background gradient
+  var bgGrad = ctx2d.createLinearGradient(0, 0, 0, canvasH);
+  bgGrad.addColorStop(0, '#0a0c10');
+  bgGrad.addColorStop(0.6, '#0c0e14');
+  bgGrad.addColorStop(1, '#101318');
+  ctx2d.fillStyle = bgGrad;
+  ctx2d.fillRect(0, 0, canvasW, canvasH);
+
+  // Stars
+  drawStarsBg(ctx2d);
+
+  // Ground
+  drawGround(ctx2d);
+
+  // Altitude scale
+  if (gamePhase === 'simulating' || gamePhase === 'result') {
+    drawAltitudeScale(ctx2d);
+  }
+
+  // Formulas reference
+  drawFormulas(ctx2d);
+
+  // Rocket
+  if (gamePhase === 'input') {
+    drawIdleRocket(ctx2d);
+
+    // Draw altitude scale preview when prediction entered
+    if (simIdeal || (LEVELS[currentLevel].mode !== 'select') || selectedEngineIdx >= 0) {
+      var lv = LEVELS[currentLevel];
+      if (lv.mode !== 'select') {
+        simIdeal = lv.ideal;
+      } else if (selectedEngineIdx >= 0) {
+        simIdeal = computeIdeal(ENGINES[selectedEngineIdx], lv.mass);
+      }
+      if (simIdeal && playerPrediction <= 0) {
+        // Show scale even before prediction
+        drawAltitudeScale(ctx2d);
+      }
+    }
+  } else if (gamePhase === 'simulating') {
+    drawSimRocket(ctx2d);
+  } else if (gamePhase === 'result') {
+    // Rocket at top
+    var groundY = canvasH - 40;
+    var maxH = simIdeal.hTotal * 1.3;
+    if (maxH < 5) maxH = 5;
+    var topY = 60;
+    var altFrac = Math.min(simIdeal.hTotal / maxH, 1);
+    var rocketFinalY = groundY - altFrac * (groundY - topY);
+    drawRocket(ctx2d, canvasW * 0.35, rocketFinalY - 16, 1.2, false);
+  }
+
+  // Exhaust particles
+  drawExhaust(ctx2d);
+
+  // Celebration particles
+  drawParticles(ctx2d);
+
+  // Result overlay
+  drawResult(ctx2d);
+
+  // Complete overlay
+  drawComplete(ctx2d);
+
+  ctx2d.restore();
+
+  requestAnimationFrame(render);
+}
+
+// --- Initialize ---
+updateUI();
+requestAnimationFrame(render);
+</script>
+</body>
+</html>

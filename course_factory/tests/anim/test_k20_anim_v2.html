@@ -1,0 +1,961 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=Inter:wght@400;500&family=Noto+Sans+SC:wght@400;700&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box;}
+html,body{width:100%;height:100vh;overflow:hidden;}
+body{background:var(--bg,#0c0e12);color:var(--text,#f6f6fc);font-family:'Inter','Noto Sans SC',sans-serif;}
+/* ── Outer: sidebar + main ── */
+.wrapper{display:flex;flex-direction:row;height:100vh;overflow:hidden;}
+.sidebar{width:200px;min-width:200px;max-width:200px;display:flex;flex-direction:column;gap:6px;padding:10px;background:rgba(0,0,0,0.5);border-right:1px solid rgba(80,255,176,0.15);overflow-y:auto;}
+.lang-btn{align-self:flex-start;flex-shrink:0;font-family:'Space Grotesk',sans-serif;font-size:10px;font-weight:700;padding:3px 8px;cursor:pointer;border:1px solid rgba(255,181,156,0.25);background:transparent;color:#ffb59c;letter-spacing:1px;}
+.lang-btn:hover{border-color:#ffb59c;background:rgba(255,181,156,0.1);}
+.sidebar h1{font-family:'Space Grotesk',sans-serif;font-size:13px;font-weight:700;color:var(--primary,#50ffb0);margin-top:4px;line-height:1.3;}
+.sidebar .sub{font-size:10px;color:var(--muted,#aaabb0);letter-spacing:0.06em;text-transform:uppercase;}
+.sidebar .frame-ind{font-family:'Space Grotesk',sans-serif;font-size:10px;color:var(--muted,#aaabb0);letter-spacing:0.1em;margin-top:4px;}
+.sidebar .guide-label{font-family:'Space Grotesk',sans-serif;font-size:9px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:var(--primary,#50ffb0);margin-top:8px;}
+.sidebar .guide-content{font-family:'Noto Sans SC',sans-serif;font-size:11px;color:rgba(255,255,255,0.85);line-height:1.5;}
+.sidebar .guide-content ul{padding-left:16px;margin:0;}
+.sidebar .guide-content li{margin-bottom:1px;}
+/* ── Main area: canvas + controls + hud ── */
+.anim-main{flex:1;display:flex;flex-direction:column;min-width:0;}
+.canvas-wrap{flex:1;min-height:0;position:relative;}
+canvas{width:100%;height:100%;display:block;}
+/* ── Controls + HUD ── */
+.controls{display:flex;justify-content:center;align-items:center;gap:12px;padding:6px 16px;}
+.ctrl-btn{font-family:'Space Grotesk',sans-serif;font-size:11px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;padding:5px 16px;border:none;cursor:pointer;color:var(--bg,#0c0e12);background:linear-gradient(135deg,var(--primary,#50ffb0),var(--primary-dim,#17df93));transition:transform 0.1s,box-shadow 0.2s;box-shadow:0 0 10px var(--glow-strong,rgba(80,255,176,0.3));}
+.ctrl-btn:hover{transform:scale(1.04);}
+.ctrl-btn:active{transform:scale(0.96);}
+.ctrl-btn.secondary{background:var(--glass,rgba(23,26,31,0.92));color:var(--muted,#aaabb0);box-shadow:none;backdrop-filter:blur(12px);}
+.ctrl-btn.secondary:hover{color:var(--primary,#50ffb0);}
+.hud{height:40px;display:flex;align-items:center;justify-content:space-around;background:rgba(0,0,0,0.55);backdrop-filter:blur(12px);padding:0 16px;}
+.hud-item{text-align:center;}
+.hud-label{font-family:'Space Grotesk',sans-serif;font-size:8px;letter-spacing:0.15em;text-transform:uppercase;color:var(--muted,#aaabb0);}
+.hud-val{font-family:'Space Grotesk',sans-serif;font-size:13px;font-weight:700;color:var(--primary,#50ffb0);}
+</style>
+</head>
+<body>
+<div class="wrapper">
+<!-- Sidebar: lang-btn, title, guide (completely separate from canvas) -->
+<div class="sidebar">
+<button class="lang-btn" id="langBtn">CN</button>
+<h1 id="title"></h1>
+<div class="sub" id="subtitle"></div>
+<div class="frame-ind" id="frameIndicator"></div>
+<div class="guide-label" id="guideTitle"></div>
+<div class="guide-content" id="guideContent"></div>
+</div>
+<!-- Main: canvas fills all space, nothing overlaps -->
+<div class="anim-main">
+<div class="canvas-wrap"><canvas id="c"></canvas></div>
+<div class="controls">
+<button class="ctrl-btn secondary" id="btnPrev"></button>
+<button class="ctrl-btn" id="btnPlay"></button>
+<button class="ctrl-btn secondary" id="btnNext"></button>
+</div>
+<div class="hud">
+<div class="hud-item"><div class="hud-label" id="hudL1"></div><div class="hud-val" id="hudV1"></div></div>
+<div class="hud-item"><div class="hud-label" id="hudL2"></div><div class="hud-val" id="hudV2"></div></div>
+<div class="hud-item"><div class="hud-label" id="hudL3"></div><div class="hud-val" id="hudV3"></div></div>
+<div class="hud-item"><div class="hud-label" id="hudL4"></div><div class="hud-val" id="hudV4"></div></div>
+</div>
+</div>
+</div>
+
+<!-- Runtime (shared skeleton) -->
+<script src="animation_runtime.js"></script>
+
+<!-- Content -->
+<script>
+// ============================================================
+// K20: Action & Reaction -- Newton's Third Law
+// Concept: Every force has an equal and opposite reaction force
+// Core question: Why does your hand hurt when you slap the table?
+//
+// F0: Title -- "ACTION & REACTION" with hand-table icon, equal
+//     opposing arrows, core question text
+// F1: Hand hits table -- impact moment, two equal arrows, pain
+//     stars, screen shake, both forces labeled F=20N
+// F2: Skating push -- two skaters push apart, lighter one faster,
+//     equal force arrows, different acceleration arrows (a=F/m)
+// F3: Balloon rocket -- inflated balloon released, air shoots
+//     backward (action), balloon flies forward (reaction),
+//     animated particle stream
+// F4: Real rocket -- hot gas exhausts downward (action arrow),
+//     rocket accelerates upward (reaction arrow), both equal,
+//     key insight about pushing its own exhaust, not air
+//
+// Style: ares_mission
+// ============================================================
+
+// ── Web Audio (soundMuted = true by default) ──
+var soundMuted = true;
+var audioCtx = null;
+function initAudio() {
+  if (audioCtx) return;
+  try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch(e) {}
+}
+function playImpact() {
+  if (soundMuted || !audioCtx) return;
+  var osc = audioCtx.createOscillator();
+  var gain = audioCtx.createGain();
+  osc.type = 'square';
+  osc.frequency.setValueAtTime(120, audioCtx.currentTime);
+  osc.frequency.exponentialRampToValueAtTime(40, audioCtx.currentTime + 0.15);
+  gain.gain.setValueAtTime(0.3, audioCtx.currentTime);
+  gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.2);
+  osc.connect(gain); gain.connect(audioCtx.destination);
+  osc.start(); osc.stop(audioCtx.currentTime + 0.25);
+}
+function playWhoosh() {
+  if (soundMuted || !audioCtx) return;
+  var bufSz = audioCtx.sampleRate * 0.3;
+  var buf = audioCtx.createBuffer(1, bufSz, audioCtx.sampleRate);
+  var d = buf.getChannelData(0);
+  for (var i = 0; i < bufSz; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / bufSz);
+  var src = audioCtx.createBufferSource();
+  var gain = audioCtx.createGain();
+  src.buffer = buf;
+  gain.gain.setValueAtTime(0.15, audioCtx.currentTime);
+  gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.3);
+  src.connect(gain); gain.connect(audioCtx.destination);
+  src.start();
+}
+function playRocketLoop() {
+  if (soundMuted || !audioCtx) return;
+  var bufSz = audioCtx.sampleRate * 0.5;
+  var buf = audioCtx.createBuffer(1, bufSz, audioCtx.sampleRate);
+  var d = buf.getChannelData(0);
+  for (var i = 0; i < bufSz; i++) {
+    var env = Math.min(1, i / (bufSz * 0.1)) * Math.max(0, 1 - i / bufSz);
+    d[i] = (Math.random() * 2 - 1) * 0.5 * env + Math.sin(i * 0.02) * 0.3 * env;
+  }
+  var src = audioCtx.createBufferSource();
+  var gain = audioCtx.createGain();
+  src.buffer = buf;
+  gain.gain.setValueAtTime(0.08, audioCtx.currentTime);
+  src.connect(gain); gain.connect(audioCtx.destination);
+  src.start();
+}
+
+// ── Animation state ──
+var animTime = 0;
+var shakeAmount = 0;
+var shakeDecay = 0;
+var _prevFrame = -1;
+var _animRaf = null;
+
+// Deterministic pseudo-random for particle positions
+function seededRng(seed) {
+  var s = seed;
+  return function() { s = (s * 1103515245 + 12345) & 0x7fffffff; return s / 0x7fffffff; };
+}
+
+// ── Parallax star layers (2-layer) ──
+var starsLayerA = [];
+var starsLayerB = [];
+(function(){
+  var rng = seededRng(1701);
+  for (var i = 0; i < 30; i++) starsLayerA.push({x: rng() * 900, y: rng() * 420, r: 0.8 + rng() * 0.6, a: 0.4 + rng() * 0.4});
+  for (var i = 0; i < 50; i++) starsLayerB.push({x: rng() * 900, y: rng() * 420, r: 0.3 + rng() * 0.5, a: 0.15 + rng() * 0.25});
+})();
+
+// ── CONFIG ──
+var CONFIG = {
+  style: 'ares_mission',
+  totalFrames: 5,
+
+  i18n: {
+    title:     {en:'ACTION & REACTION', cn:'\u4f5c\u7528\u4e0e\u53cd\u4f5c\u7528'},
+    subtitle:  {en:"NEWTON'S THIRD LAW", cn:'\u725b\u987f\u7b2c\u4e09\u5b9a\u5f8b'},
+
+    // F0 -- title
+    f0big:     {en:'ACTION & REACTION', cn:'\u4f5c\u7528 & \u53cd\u4f5c\u7528'},
+    f0q:       {en:'Why does your hand hurt\nwhen you slap the table?', cn:'\u4f60\u62cd\u684c\u5b50\u7684\u65f6\u5019\n\u624b\u4e3a\u4ec0\u4e48\u4f1a\u75bc\uff1f'},
+    f0law:     {en:'Every force has an equal\nand opposite reaction', cn:'\u6bcf\u4e2a\u529b\u90fd\u6709\u4e00\u4e2a\n\u5927\u5c0f\u76f8\u7b49\u3001\u65b9\u5411\u76f8\u53cd\u7684\u53cd\u4f5c\u7528\u529b'},
+
+    // F1 -- hand hits table
+    f1title:   {en:'HAND vs TABLE', cn:'\u624b vs \u684c\u5b50'},
+    f1cap:     {en:'You slap the table,\nthe table slaps you back!', cn:'\u4f60\u62cd\u684c\u5b50\uff0c\n\u684c\u5b50\u4e5f\u62cd\u4f60\uff01'},
+    f1action:  {en:'Hand pushes table', cn:'\u624b\u538b\u684c\u5b50'},
+    f1react:   {en:'Table pushes hand', cn:'\u684c\u5b50\u53cd\u63a8\u624b'},
+    f1force:   {en:'F = 20 N', cn:'F = 20 N'},
+    f1pain:    {en:'OUCH!', cn:'\u597d\u75bc\uff01'},
+
+    // F2 -- skating push
+    f2title:   {en:'SKATING PUSH', cn:'\u6ed1\u51b0\u63a8\u64a9'},
+    f2cap:     {en:'Same force, different mass\n-> different acceleration!', cn:'\u76f8\u540c\u7684\u529b\uff0c\u4e0d\u540c\u7684\u8d28\u91cf\n-> \u4e0d\u540c\u7684\u52a0\u901f\u5ea6\uff01'},
+    f2action:  {en:'A pushes B', cn:'A \u63a8 B'},
+    f2react:   {en:'B pushes A', cn:'B \u63a8 A'},
+    f2force:   {en:'F = F', cn:'F = F'},
+    f2accel:   {en:'a = F/m', cn:'a = F/m'},
+    f2light:   {en:'40 kg -- faster', cn:'40 kg -- \u66f4\u5feb'},
+    f2heavy:   {en:'80 kg -- slower', cn:'80 kg -- \u66f4\u6162'},
+
+    // F3 -- balloon rocket
+    f3title:   {en:'BALLOON ROCKET', cn:'\u6c14\u7403\u706b\u7bad'},
+    f3cap:     {en:'Air streams out backward (action),\nballoon flies forward (reaction)!', cn:'\u7a7a\u6c14\u5411\u540e\u55b7\u51fa\uff08\u4f5c\u7528\u529b\uff09\uff0c\n\u6c14\u7403\u5411\u524d\u98de\uff08\u53cd\u4f5c\u7528\u529b\uff09\uff01'},
+    f3action:  {en:'Balloon pushes air back', cn:'\u6c14\u7403\u5411\u540e\u63a8\u7a7a\u6c14'},
+    f3react:   {en:'Air pushes balloon fwd', cn:'\u7a7a\u6c14\u5411\u524d\u63a8\u6c14\u7403'},
+    f3law:     {en:"Newton's 3rd Law in action!", cn:'\u725b\u987f\u7b2c\u4e09\u5b9a\u5f8b\u7684\u5b9e\u9645\u5e94\u7528\uff01'},
+
+    // F4 -- real rocket
+    f4title:   {en:'REAL ROCKET', cn:'\u771f\u5b9e\u706b\u7bad'},
+    f4cap:     {en:'Hot gas exhausts downward,\nrocket accelerates upward!', cn:'\u9ad8\u6e29\u71c3\u6c14\u5411\u4e0b\u55b7\u51fa\uff0c\n\u706b\u7bad\u5411\u4e0a\u52a0\u901f\uff01'},
+    f4action:  {en:'Rocket pushes gas down', cn:'\u706b\u7bad\u5411\u4e0b\u63a8\u6c14\u4f53'},
+    f4react:   {en:'Gas pushes rocket up', cn:'\u6c14\u4f53\u5411\u4e0a\u63a8\u706b\u7bad'},
+    f4insight: {en:'The rocket pushes its OWN exhaust,\nnot the air -- works in vacuum!', cn:'\u706b\u7bad\u63a8\u7684\u662f\u81ea\u5df1\u55b7\u51fa\u7684\u6c14\u4f53\uff0c\n\u4e0d\u662f\u7a7a\u6c14 -- \u5728\u771f\u7a7a\u4e2d\u4e5f\u80fd\u5de5\u4f5c\uff01'},
+
+    // HUD
+    hudScene:  {en:'SCENE', cn:'\u573a\u666f'},
+    hudAction: {en:'ACTION', cn:'\u4f5c\u7528\u529b'},
+    hudReact:  {en:'REACTION', cn:'\u53cd\u4f5c\u7528\u529b'},
+    hudPair:   {en:'PAIR', cn:'\u529b\u5bf9'},
+
+    hTitle:    {en:'Title', cn:'\u6807\u9898'},
+    hTable:    {en:'Slap', cn:'\u62cd\u684c'},
+    hSkate:    {en:'Skate', cn:'\u6ed1\u51b0'},
+    hBalloon:  {en:'Balloon', cn:'\u6c14\u7403'},
+    hRocket:   {en:'Rocket', cn:'\u706b\u7bad'},
+    hNone:     {en:'--', cn:'--'},
+    h20d:      {en:'20 N down', cn:'20 N \u2193'},
+    h20u:      {en:'20 N up', cn:'20 N \u2191'},
+    hPushR:    {en:'F right', cn:'F \u2192'},
+    hPushL:    {en:'F left', cn:'F \u2190'},
+    hAirBack:  {en:'F back', cn:'F \u2190'},
+    hBallFwd:  {en:'F fwd', cn:'F \u2192'},
+    hGasDown:  {en:'F down', cn:'F \u2193'},
+    hRktUp:    {en:'F up', cn:'F \u2191'},
+    hHandTbl:  {en:'Hand+Table', cn:'\u624b+\u684c'},
+    hSkaters:  {en:'A+B', cn:'A+B'},
+    hBallAir:  {en:'Ball+Air', cn:'\u7403+\u6c14'},
+    hRktGas:   {en:'Rkt+Gas', cn:'\u7bad+\u6c14'},
+
+    // Guide
+    guideT:    {en:'OBSERVE', cn:'\u89c2\u5bdf\u6307\u5357'},
+    g1:        {en:'Force arrows always come in pairs', cn:'\u529b\u7684\u7bad\u5934\u603b\u662f\u6210\u5bf9\u51fa\u73b0'},
+    g2:        {en:'Same length = same magnitude', cn:'\u7b49\u957f = \u7b49\u5927'},
+    g3:        {en:'Opposite directions, on different objects', cn:'\u65b9\u5411\u76f8\u53cd\uff0c\u4f5c\u7528\u5728\u4e0d\u540c\u7269\u4f53'},
+    g4:        {en:'Red = action, Cyan = reaction', cn:'\u7ea2\u8272 = \u4f5c\u7528\u529b\uff0c\u9752\u8272 = \u53cd\u4f5c\u7528\u529b'},
+  },
+
+  hudLabels: ['hudScene', 'hudAction', 'hudReact', 'hudPair'],
+  hudValues: [
+    ['hTitle',   'hNone',   'hNone',   'hNone'],
+    ['hTable',   'h20d',    'h20u',    'hHandTbl'],
+    ['hSkate',   'hPushR',  'hPushL',  'hSkaters'],
+    ['hBalloon', 'hAirBack','hBallFwd','hBallAir'],
+    ['hRocket',  'hGasDown','hRktUp',  'hRktGas'],
+  ],
+
+  guideTitle: 'guideT',
+  guideItems: ['g1', 'g2', 'g3', 'g4'],
+};
+
+// ============================================================
+// Animation loop -- drives animTime, shake, breathe, particles
+// ============================================================
+var _loopRaf = null;
+var _lastLoopTs = 0;
+function _animLoop(ts) {
+  if (!_lastLoopTs) _lastLoopTs = ts;
+  var dt = (ts - _lastLoopTs) / 1000;
+  _lastLoopTs = ts;
+  if (dt > 0.1) dt = 0.1;
+
+  animTime += dt;
+
+  // Shake decay
+  if (shakeAmount > 0.05) {
+    shakeAmount *= Math.pow(0.02, dt);
+    if (shakeAmount < 0.05) shakeAmount = 0;
+  }
+
+  // Detect frame changes
+  var cf = AnimRuntime.currentFrame;
+  if (cf !== _prevFrame) {
+    _prevFrame = cf;
+    initAudio();
+    if (cf === 1) { shakeAmount = 6; playImpact(); }
+    if (cf === 3) { playWhoosh(); }
+    if (cf === 4) { playRocketLoop(); }
+  }
+
+  // Redraw every tick for particles and breathe
+  AnimRuntime.drawFrame(cf);
+  _loopRaf = requestAnimationFrame(_animLoop);
+}
+_loopRaf = requestAnimationFrame(_animLoop);
+
+// ============================================================
+// Drawing helpers
+// ============================================================
+var RED = '#ff5544';
+var CYAN = '#00daf3';
+var ARROW_LEN = 70;
+
+// Easing helpers
+function easeOutBack(x) { var c1 = 1.70158; var c3 = c1 + 1; return 1 + c3 * Math.pow(x - 1, 3) + c1 * Math.pow(x - 1, 2); }
+function easeOutElastic(x) { if (x === 0 || x === 1) return x; return Math.pow(2, -10 * x) * Math.sin((x * 10 - 0.75) * (2 * Math.PI / 3)) + 1; }
+
+// Idle breathe offset for labels -- slow sine wave
+function breatheY(baseY, seed) {
+  return baseY + Math.sin(animTime * 1.2 + seed) * 2;
+}
+
+// Particle system for impacts / exhaust
+function drawParticles(ctx2, cx, cy, count, spread, sizeRange, color, seed, speed, gravY) {
+  var rng = seededRng(seed + Math.floor(animTime * 2));
+  for (var i = 0; i < count; i++) {
+    var angle = rng() * Math.PI * 2;
+    var dist = rng() * spread;
+    var age = (animTime * speed + rng() * 6.28) % 1.0;
+    var px = cx + Math.cos(angle) * dist * age;
+    var py = cy + Math.sin(angle) * dist * age + (gravY || 0) * age * age;
+    var pr = sizeRange[0] + rng() * (sizeRange[1] - sizeRange[0]);
+    var alpha = Math.max(0, 1 - age);
+    ctx2.globalAlpha = alpha * 0.7;
+    ctx2.fillStyle = color;
+    ctx2.beginPath();
+    ctx2.arc(px, py, pr * (1 - age * 0.5), 0, Math.PI * 2);
+    ctx2.fill();
+  }
+  ctx2.globalAlpha = 1;
+}
+
+// Exhaust stream particles (directional, for balloon and rocket)
+function drawStreamParticles(ctx2, startX, startY, dirX, dirY, count, length, color, seed) {
+  var rng = seededRng(seed);
+  for (var i = 0; i < count; i++) {
+    var t = ((animTime * 1.5 + rng() * 10) % 1.0);
+    var spread = (rng() - 0.5) * 20;
+    var px = startX + dirX * length * t + (dirY !== 0 ? spread : 0);
+    var py = startY + dirY * length * t + (dirX !== 0 ? spread : 0);
+    var pr = 1 + rng() * 2.5;
+    var alpha = Math.max(0, (1 - t) * 0.6);
+    ctx2.globalAlpha = alpha;
+    ctx2.fillStyle = color;
+    ctx2.beginPath();
+    ctx2.arc(px, py, pr, 0, Math.PI * 2);
+    ctx2.fill();
+  }
+  ctx2.globalAlpha = 1;
+}
+
+// Draw ambient glow halo
+function drawAmbientGlow(ctx2, cx, cy, radius, color) {
+  var pulse = 0.7 + 0.3 * Math.sin(animTime * 2);
+  var g = ctx2.createRadialGradient(cx, cy, 0, cx, cy, radius);
+  g.addColorStop(0, color);
+  g.addColorStop(1, 'rgba(0,0,0,0)');
+  ctx2.globalAlpha = 0.15 * pulse;
+  ctx2.fillStyle = g;
+  ctx2.beginPath();
+  ctx2.arc(cx, cy, radius, 0, Math.PI * 2);
+  ctx2.fill();
+  ctx2.globalAlpha = 1;
+}
+
+// ============================================================
+// Custom background: dark gradient + 2-layer parallax stars
+// ============================================================
+function drawBg(ctx2, W, H) {
+  // Apply screen shake
+  if (shakeAmount > 0.1) {
+    var sx = (Math.sin(animTime * 80) * shakeAmount);
+    var sy = (Math.cos(animTime * 60) * shakeAmount * 0.7);
+    ctx2.translate(sx, sy);
+  }
+
+  var g = ctx2.createLinearGradient(0, 0, 0, H);
+  g.addColorStop(0, '#131313');
+  g.addColorStop(1, '#1c1b1b');
+  ctx2.fillStyle = g;
+  ctx2.fillRect(-10, -10, W + 20, H + 20);
+
+  // Grid
+  ctx2.strokeStyle = 'rgba(255,255,255,0.02)';
+  ctx2.lineWidth = 0.5;
+  for (var x = 0; x < W; x += 40) { ctx2.beginPath(); ctx2.moveTo(x, 0); ctx2.lineTo(x, H); ctx2.stroke(); }
+  for (var y = 0; y < H; y += 40) { ctx2.beginPath(); ctx2.moveTo(0, y); ctx2.lineTo(W, y); ctx2.stroke(); }
+
+  // Parallax layer B (far, slower drift)
+  var driftB = animTime * 3;
+  ctx2.fillStyle = 'rgba(255,255,255,0.12)';
+  for (var i = 0; i < starsLayerB.length; i++) {
+    var s = starsLayerB[i];
+    var sx = (s.x + driftB * 0.3) % (W + 20) - 10;
+    var twinkle = 0.5 + 0.5 * Math.sin(animTime * 1.5 + i * 2.1);
+    ctx2.globalAlpha = s.a * twinkle;
+    ctx2.beginPath();
+    ctx2.arc(sx, s.y, s.r, 0, Math.PI * 2);
+    ctx2.fill();
+  }
+
+  // Parallax layer A (near, faster drift)
+  var driftA = animTime * 8;
+  ctx2.fillStyle = 'rgba(255,255,255,0.6)';
+  for (var i = 0; i < starsLayerA.length; i++) {
+    var s = starsLayerA[i];
+    var sx = (s.x + driftA * 0.5) % (W + 20) - 10;
+    var twinkle = 0.6 + 0.4 * Math.sin(animTime * 2.3 + i * 1.7);
+    ctx2.globalAlpha = s.a * twinkle;
+    ctx2.beginPath();
+    ctx2.arc(sx, s.y, s.r, 0, Math.PI * 2);
+    ctx2.fill();
+  }
+  ctx2.globalAlpha = 1;
+}
+
+// ============================================================
+// FRAME ELEMENTS
+// ============================================================
+function getFrameElements(f, W, H) {
+  var t = AnimRuntime.t;
+  var P = AnimRuntime.PAL;
+  var cx = W / 2, cy = H / 2;
+
+  // ── F0: Title ──
+  if (f === 0) {
+    var els = [];
+    var bY = breatheY(0, 0);
+
+    // Ambient glow behind title
+    els.push({id:'f0glow', type:'custom', x:0, y:0, draw:function(c){
+      drawAmbientGlow(c, cx, cy - 40 + bY, 160, 'rgba(255,127,80,0.3)');
+    }});
+
+    // Big title
+    els.push({id:'f0big', type:'label', text:t('f0big'), x:cx, y:cy - 80 + bY, color:P.primary, size:24, align:'center', glow:P.glowStrong});
+
+    // Hand slapping table icon (small pictogram)
+    els.push({id:'f0icon', type:'custom', x:0, y:0, draw:function(c){
+      var iconX = cx;
+      var iconY = cy - 30 + bY;
+      // Small table
+      c.fillStyle = '#6b4226';
+      c.fillRect(iconX - 30, iconY + 8, 60, 5);
+      c.fillStyle = '#5a3520';
+      c.fillRect(iconX - 24, iconY + 13, 4, 14);
+      c.fillRect(iconX + 20, iconY + 13, 4, 14);
+      // Small hand coming down
+      c.fillStyle = '#e8c49a';
+      c.beginPath();
+      c.ellipse(iconX, iconY, 14, 8, 0, 0, Math.PI * 2);
+      c.fill();
+      // Impact lines
+      c.strokeStyle = '#ffcc00';
+      c.lineWidth = 1.5;
+      for (var i = 0; i < 4; i++) {
+        var angle = -Math.PI * 0.8 + i * 0.5;
+        c.beginPath();
+        c.moveTo(iconX + Math.cos(angle) * 16, iconY + Math.sin(angle) * 10);
+        c.lineTo(iconX + Math.cos(angle) * 24, iconY + Math.sin(angle) * 16);
+        c.stroke();
+      }
+    }});
+
+    // Equal opposing arrows beside icon
+    els.push({id:'f0arrL', type:'arrow', x1:cx - 80, y1:cy - 30 + bY, x2:cx - 45, y2:cy - 30 + bY, color:RED, lineWidth:2.5, headSize:7});
+    els.push({id:'f0arrR', type:'arrow', x1:cx + 80, y1:cy - 30 + bY, x2:cx + 45, y2:cy - 30 + bY, color:CYAN, lineWidth:2.5, headSize:7});
+
+    // Core question
+    els.push({id:'f0q', type:'custom', x:0, y:0, draw:function(c){
+      c.fillStyle = P.text;
+      c.font = "14px 'Noto Sans SC',sans-serif";
+      c.textAlign = 'center';
+      c.textBaseline = 'middle';
+      var lines = t('f0q').split('\n');
+      for (var i = 0; i < lines.length; i++) {
+        c.fillText(lines[i], cx, cy + 40 + bY + i * 22);
+      }
+    }});
+
+    // Law statement
+    els.push({id:'f0law', type:'custom', x:0, y:0, draw:function(c){
+      c.fillStyle = P.muted;
+      c.font = "11px 'Inter','Noto Sans SC',sans-serif";
+      c.textAlign = 'center';
+      var lines = t('f0law').split('\n');
+      for (var i = 0; i < lines.length; i++) {
+        c.fillText(lines[i], cx, cy + 110 + bY + i * 16);
+      }
+    }});
+
+    // Divider
+    els.push({id:'f0div', type:'line', x1:cx - 100, y1:cy + 95 + bY, x2:cx + 100, y2:cy + 95 + bY, color:P.outline, lineWidth:0.5, dash:[4,4]});
+
+    return els;
+  }
+
+  // ── F1: Hand hits table ──
+  if (f === 1) {
+    var els = [];
+    var tableY = cy + 50;
+    var handCx = cx;
+    var handTop = tableY - 38;
+
+    // Title
+    els.push({id:'ftitle', type:'label', text:t('f1title'), x:cx, y:breatheY(28, 1), color:P.primary, size:16, align:'center', glow:P.glowStrong});
+
+    // Table surface
+    els.push({id:'table', type:'custom', x:0, y:0, draw:function(c){
+      c.fillStyle = '#8b5e3c';
+      c.fillRect(cx - 200, tableY, 400, 4);
+      c.fillStyle = '#6b4226';
+      c.fillRect(cx - 200, tableY + 4, 400, 12);
+      // Wood grain
+      c.strokeStyle = 'rgba(139,94,60,0.3)';
+      c.lineWidth = 0.5;
+      for (var i = 0; i < 8; i++) {
+        c.beginPath();
+        c.moveTo(cx - 190 + i * 50, tableY + 5);
+        c.lineTo(cx - 170 + i * 50, tableY + 14);
+        c.stroke();
+      }
+      // Table legs
+      c.fillStyle = '#5a3520';
+      c.fillRect(cx - 170, tableY + 16, 10, 55);
+      c.fillRect(cx + 160, tableY + 16, 10, 55);
+    }});
+
+    // Hand (palm slapping down)
+    els.push({id:'hand1', type:'custom', x:0, y:0, draw:function(c){
+      c.fillStyle = '#e8c49a';
+      // Palm
+      c.beginPath();
+      c.ellipse(handCx, handTop, 28, 16, 0, 0, Math.PI * 2);
+      c.fill();
+      // Fingers
+      for (var i = 0; i < 4; i++) {
+        var fx = handCx - 16 + i * 11;
+        c.beginPath();
+        c.roundRect(fx - 3, handTop - 26, 7, 15, 3);
+        c.fill();
+      }
+      // Thumb
+      c.beginPath();
+      c.roundRect(handCx - 34, handTop - 8, 9, 7, 3);
+      c.fill();
+      // Wrist
+      c.fillStyle = '#d4a574';
+      c.fillRect(handCx - 10, handTop + 14, 20, 28);
+    }});
+
+    // Impact particles (sparks/stars)
+    els.push({id:'impactFx', type:'custom', x:0, y:0, draw:function(c){
+      drawParticles(c, handCx, tableY - 2, 12, 35, [1, 3.5], '#ffcc00', 42, 3, 0);
+      // Pain stars around hand
+      c.strokeStyle = '#ffcc00';
+      c.lineWidth = 1.5;
+      var sparkCount = 6;
+      for (var i = 0; i < sparkCount; i++) {
+        var angle = (i / sparkCount) * Math.PI * 2 + animTime * 2;
+        var r1 = 36 + Math.sin(animTime * 4 + i) * 4;
+        var r2 = r1 + 8;
+        c.beginPath();
+        c.moveTo(handCx + Math.cos(angle) * r1, handTop + Math.sin(angle) * r1 * 0.5);
+        c.lineTo(handCx + Math.cos(angle) * r2, handTop + Math.sin(angle) * r2 * 0.5);
+        c.stroke();
+      }
+    }});
+
+    // Pain text
+    els.push({id:'f1pain', type:'label', text:t('f1pain'), x:handCx + 70, y:handTop - 20, color:'#ff4444', size:14, align:'left', bold:true, glow:'rgba(255,68,68,0.4)'});
+
+    // Action force arrow: hand -> table (down, red)
+    var arrowBaseY = handTop - 55;
+    els.push({id:'f1arrowAct', type:'arrow', x1:handCx - 55, y1:arrowBaseY, x2:handCx - 55, y2:arrowBaseY + ARROW_LEN, color:RED, lineWidth:2.5, headSize:8});
+    els.push({id:'f1lblAct', type:'text', text:t('f1action'), x:handCx - 60, y:arrowBaseY + ARROW_LEN / 2, color:RED, size:10, align:'right'});
+    els.push({id:'f1fAct', type:'label', text:t('f1force'), x:handCx - 60, y:arrowBaseY + ARROW_LEN / 2 + 14, color:RED, size:11, align:'right', bold:true});
+
+    // Reaction force arrow: table -> hand (up, cyan)
+    els.push({id:'f1arrowRe', type:'arrow', x1:handCx + 55, y1:arrowBaseY + ARROW_LEN, x2:handCx + 55, y2:arrowBaseY, color:CYAN, lineWidth:2.5, headSize:8});
+    els.push({id:'f1lblRe', type:'text', text:t('f1react'), x:handCx + 60, y:arrowBaseY + ARROW_LEN / 2, color:CYAN, size:10, align:'left'});
+    els.push({id:'f1fRe', type:'label', text:t('f1force'), x:handCx + 60, y:arrowBaseY + ARROW_LEN / 2 + 14, color:CYAN, size:11, align:'left', bold:true});
+
+    // Caption
+    els.push({id:'f1cap', type:'custom', x:0, y:0, draw:function(c){
+      c.fillStyle = P.text;
+      c.font = "bold 13px 'Noto Sans SC',sans-serif";
+      c.textAlign = 'center';
+      var lines = t('f1cap').split('\n');
+      for (var i = 0; i < lines.length; i++) c.fillText(lines[i], cx, H - 30 + i * 18);
+    }});
+
+    // Ambient glow at impact
+    els.push({id:'f1glow', type:'custom', x:0, y:0, draw:function(c){
+      drawAmbientGlow(c, handCx, tableY, 80, 'rgba(255,204,0,0.3)');
+    }});
+
+    return els;
+  }
+
+  // ── F2: Skating push ──
+  if (f === 2) {
+    var els = [];
+    var iceY = cy + 90;
+    var skaterAx = cx - 90;
+    var skaterBx = cx + 90;
+
+    // Title
+    els.push({id:'ftitle', type:'label', text:t('f2title'), x:cx, y:breatheY(28, 2), color:P.primary, size:16, align:'center', glow:P.glowStrong});
+
+    // Ice surface
+    els.push({id:'ice', type:'custom', x:0, y:0, draw:function(c){
+      var ig = c.createLinearGradient(0, iceY, 0, iceY + 8);
+      ig.addColorStop(0, 'rgba(150,200,255,0.3)');
+      ig.addColorStop(1, 'rgba(150,200,255,0.05)');
+      c.fillStyle = ig;
+      c.fillRect(30, iceY, W - 60, 8);
+      // Ice reflections
+      c.strokeStyle = 'rgba(200,230,255,0.15)';
+      c.lineWidth = 0.5;
+      for (var i = 0; i < 12; i++) {
+        c.beginPath();
+        c.moveTo(50 + i * 60, iceY + 2);
+        c.lineTo(70 + i * 60, iceY + 6);
+        c.stroke();
+      }
+    }});
+
+    // Push contact effect (particles at center)
+    els.push({id:'pushFx', type:'custom', x:0, y:0, draw:function(c){
+      drawParticles(c, cx, cy + 20, 8, 25, [1, 2.5], 'rgba(200,230,255,0.5)', 77, 2, 0);
+    }});
+
+    // Skater A (lighter, 40kg) -- left, moving left after push
+    var slideA = Math.sin(animTime * 0.8) * 8;
+    els.push({id:'skaterA', type:'custom', x:0, y:0, draw:function(c){
+      var sx = skaterAx - slideA;
+      var headY = iceY - 80;
+      // Body
+      c.strokeStyle = P.primary;
+      c.lineWidth = 2.5;
+      c.lineCap = 'round';
+      // Head
+      c.beginPath(); c.arc(sx, headY, 9, 0, Math.PI * 2); c.stroke();
+      // Torso
+      c.beginPath(); c.moveTo(sx, headY + 9); c.lineTo(sx, headY + 38); c.stroke();
+      // Arms (pushing right)
+      c.beginPath(); c.moveTo(sx, headY + 16); c.lineTo(sx + 22, headY + 22); c.stroke();
+      // Legs
+      c.beginPath(); c.moveTo(sx, headY + 38); c.lineTo(sx - 10, headY + 56); c.stroke();
+      c.beginPath(); c.moveTo(sx, headY + 38); c.lineTo(sx + 8, headY + 56); c.stroke();
+      // Skates
+      c.lineWidth = 3;
+      c.beginPath(); c.moveTo(sx - 16, headY + 57); c.lineTo(sx - 4, headY + 57); c.stroke();
+      c.beginPath(); c.moveTo(sx + 2, headY + 57); c.lineTo(sx + 14, headY + 57); c.stroke();
+      // Label
+      c.fillStyle = P.primary;
+      c.font = "bold 10px 'Space Grotesk',sans-serif";
+      c.textAlign = 'center';
+      c.fillText('A', sx, headY - 16);
+    }});
+
+    // Skater B (heavier, 80kg) -- right, moving right after push
+    var slideB = Math.sin(animTime * 0.8) * 4;
+    els.push({id:'skaterB', type:'custom', x:0, y:0, draw:function(c){
+      var sx = skaterBx + slideB;
+      var headY = iceY - 88;
+      // Body (slightly bigger)
+      c.strokeStyle = P.text;
+      c.lineWidth = 3;
+      c.lineCap = 'round';
+      // Head
+      c.beginPath(); c.arc(sx, headY, 11, 0, Math.PI * 2); c.stroke();
+      // Torso
+      c.beginPath(); c.moveTo(sx, headY + 11); c.lineTo(sx, headY + 44); c.stroke();
+      // Arms (pushing left)
+      c.beginPath(); c.moveTo(sx, headY + 18); c.lineTo(sx - 24, headY + 24); c.stroke();
+      // Legs
+      c.beginPath(); c.moveTo(sx, headY + 44); c.lineTo(sx - 12, headY + 64); c.stroke();
+      c.beginPath(); c.moveTo(sx, headY + 44); c.lineTo(sx + 10, headY + 64); c.stroke();
+      // Skates
+      c.lineWidth = 3.5;
+      c.beginPath(); c.moveTo(sx - 18, headY + 65); c.lineTo(sx - 4, headY + 65); c.stroke();
+      c.beginPath(); c.moveTo(sx + 4, headY + 65); c.lineTo(sx + 16, headY + 65); c.stroke();
+      // Label
+      c.fillStyle = P.text;
+      c.font = "bold 10px 'Space Grotesk',sans-serif";
+      c.textAlign = 'center';
+      c.fillText('B', sx, headY - 18);
+    }});
+
+    // Motion arrows (different lengths: lighter=longer, heavier=shorter)
+    // Skater A moves left faster (longer arrow)
+    var motionALen = 50;
+    els.push({id:'f2motionA', type:'arrow', x1:skaterAx - 5, y1:iceY - 95, x2:skaterAx - 5 - motionALen, y2:iceY - 95, color:P.secondary, lineWidth:1.5, headSize:6});
+    els.push({id:'f2massA', type:'text', text:t('f2light'), x:skaterAx - 5, y:iceY + 20, color:P.primary, size:10, align:'center'});
+
+    // Skater B moves right slower (shorter arrow)
+    var motionBLen = 25;
+    els.push({id:'f2motionB', type:'arrow', x1:skaterBx + 5, y1:iceY - 103, x2:skaterBx + 5 + motionBLen, y2:iceY - 103, color:P.secondary, lineWidth:1.5, headSize:6});
+    els.push({id:'f2massB', type:'text', text:t('f2heavy'), x:skaterBx + 5, y:iceY + 20, color:P.muted, size:10, align:'center'});
+
+    // Equal force arrows (same length, opposite directions)
+    var forceY = cy - 30;
+    // A pushes B right (red)
+    els.push({id:'f2arrowAct', type:'arrow', x1:cx - 5, y1:forceY, x2:cx - 5 + ARROW_LEN, y2:forceY, color:RED, lineWidth:2.5, headSize:8});
+    els.push({id:'f2lblAct', type:'text', text:t('f2action'), x:cx + ARROW_LEN / 2, y:forceY - 14, color:RED, size:10, align:'center'});
+
+    // B pushes A left (cyan)
+    els.push({id:'f2arrowRe', type:'arrow', x1:cx + 5, y1:forceY + 20, x2:cx + 5 - ARROW_LEN, y2:forceY + 20, color:CYAN, lineWidth:2.5, headSize:8});
+    els.push({id:'f2lblRe', type:'text', text:t('f2react'), x:cx - ARROW_LEN / 2, y:forceY + 34, color:CYAN, size:10, align:'center'});
+
+    // a = F/m label
+    els.push({id:'f2accel', type:'label', text:t('f2accel'), x:cx, y:forceY + 50, color:P.muted, size:11, align:'center'});
+
+    // Caption
+    els.push({id:'f2cap', type:'custom', x:0, y:0, draw:function(c){
+      c.fillStyle = P.text;
+      c.font = "13px 'Noto Sans SC',sans-serif";
+      c.textAlign = 'center';
+      var lines = t('f2cap').split('\n');
+      for (var i = 0; i < lines.length; i++) c.fillText(lines[i], cx, H - 30 + i * 18);
+    }});
+
+    return els;
+  }
+
+  // ── F3: Balloon rocket ──
+  if (f === 3) {
+    var els = [];
+    var stringY = cy - 10;
+    var balloonX = cx - 20;
+    var balloonDrift = Math.sin(animTime * 0.6) * 6;
+
+    // Title
+    els.push({id:'ftitle', type:'label', text:t('f3title'), x:cx, y:breatheY(28, 3), color:P.primary, size:16, align:'center', glow:P.glowStrong});
+
+    // String (horizontal guide line)
+    els.push({id:'string', type:'custom', x:0, y:0, draw:function(c){
+      c.strokeStyle = P.muted;
+      c.lineWidth = 1;
+      c.setLineDash([4, 3]);
+      c.beginPath();
+      c.moveTo(40, stringY);
+      c.lineTo(W - 40, stringY);
+      c.stroke();
+      c.setLineDash([]);
+      // Anchor dots
+      c.fillStyle = P.muted;
+      c.beginPath(); c.arc(40, stringY, 3, 0, Math.PI * 2); c.fill();
+      c.beginPath(); c.arc(W - 40, stringY, 3, 0, Math.PI * 2); c.fill();
+    }});
+
+    // Air stream particles (action: air going backward)
+    els.push({id:'airFx', type:'custom', x:0, y:0, draw:function(c){
+      var nozzleX = balloonX - 48 + balloonDrift;
+      drawStreamParticles(c, nozzleX, stringY, -1, 0, 25, 100, 'rgba(150,200,255,0.5)', 99);
+    }});
+
+    // Balloon body
+    els.push({id:'balloon', type:'custom', x:0, y:0, draw:function(c){
+      var bx = balloonX + balloonDrift;
+      // Balloon body
+      c.fillStyle = '#ff5555';
+      c.beginPath();
+      c.ellipse(bx, stringY, 42, 24, 0, 0, Math.PI * 2);
+      c.fill();
+      // Highlight
+      c.fillStyle = 'rgba(255,200,200,0.3)';
+      c.beginPath();
+      c.ellipse(bx - 8, stringY - 7, 14, 7, -0.3, 0, Math.PI * 2);
+      c.fill();
+      // Nozzle (open end)
+      c.fillStyle = '#cc3333';
+      c.beginPath();
+      c.moveTo(bx - 42, stringY - 5);
+      c.lineTo(bx - 52, stringY - 3);
+      c.lineTo(bx - 52, stringY + 3);
+      c.lineTo(bx - 42, stringY + 5);
+      c.closePath();
+      c.fill();
+      // Glow around balloon
+      drawAmbientGlow(c, bx, stringY, 60, 'rgba(255,85,85,0.2)');
+    }});
+
+    // Motion lines (balloon flying forward)
+    els.push({id:'motionLines', type:'custom', x:0, y:0, draw:function(c){
+      var bRight = balloonX + 42 + balloonDrift;
+      c.strokeStyle = 'rgba(255,181,156,0.4)';
+      c.lineWidth = 1.5;
+      for (var i = 0; i < 4; i++) {
+        var dy = -10 + i * 7;
+        var len = 15 + (i % 2) * 12;
+        c.beginPath();
+        c.moveTo(bRight + 8, stringY + dy);
+        c.lineTo(bRight + 8 + len, stringY + dy);
+        c.stroke();
+      }
+    }});
+
+    // Action force arrow: balloon pushes air BACKWARD (red, left)
+    var arrowActY = stringY + 50;
+    els.push({id:'f3arrowAct', type:'arrow', x1:balloonX, y1:arrowActY, x2:balloonX - ARROW_LEN, y2:arrowActY, color:RED, lineWidth:2.5, headSize:8});
+    els.push({id:'f3lblAct', type:'text', text:t('f3action'), x:balloonX - ARROW_LEN / 2, y:arrowActY + 16, color:RED, size:10, align:'center'});
+
+    // Reaction force arrow: air pushes balloon FORWARD (cyan, right)
+    var arrowReY = stringY - 50;
+    els.push({id:'f3arrowRe', type:'arrow', x1:balloonX, y1:arrowReY, x2:balloonX + ARROW_LEN, y2:arrowReY, color:CYAN, lineWidth:2.5, headSize:8});
+    els.push({id:'f3lblRe', type:'text', text:t('f3react'), x:balloonX + ARROW_LEN / 2, y:arrowReY - 14, color:CYAN, size:10, align:'center'});
+
+    // Caption
+    els.push({id:'f3cap', type:'custom', x:0, y:0, draw:function(c){
+      c.fillStyle = P.text;
+      c.font = "13px 'Noto Sans SC',sans-serif";
+      c.textAlign = 'center';
+      var lines = t('f3cap').split('\n');
+      for (var i = 0; i < lines.length; i++) c.fillText(lines[i], cx + 120, cy - 60 + i * 18);
+    }});
+
+    // Law statement
+    els.push({id:'f3law', type:'label', text:t('f3law'), x:cx, y:H - 18, color:P.primaryDim, size:11, align:'center'});
+
+    return els;
+  }
+
+  // ── F4: Real rocket ──
+  if (f === 4) {
+    var els = [];
+    var rocketX = cx;
+    var rocketTopY = cy - 90;
+    var rocketDrift = breatheY(0, 4) * 0.5;
+
+    // Title
+    els.push({id:'ftitle', type:'label', text:t('f4title'), x:cx, y:breatheY(28, 4), color:P.primary, size:16, align:'center', glow:P.glowStrong});
+
+    // Vacuum label
+    els.push({id:'vacuumTag', type:'text', text:'VACUUM', x:W - 60, y:50, color:'rgba(255,255,255,0.15)', size:9, align:'center'});
+
+    // Rocket body
+    els.push({id:'rocket', type:'custom', x:0, y:0, draw:function(c){
+      var ry = rocketTopY + rocketDrift;
+      // Nose cone (red)
+      c.fillStyle = '#cc3333';
+      c.beginPath();
+      c.moveTo(rocketX, ry - 28);
+      c.lineTo(rocketX - 18, ry + 8);
+      c.lineTo(rocketX + 18, ry + 8);
+      c.closePath();
+      c.fill();
+      // Main body (white/light grey)
+      c.fillStyle = '#e0e0e0';
+      c.fillRect(rocketX - 18, ry + 8, 36, 85);
+      // Body stripe
+      c.fillStyle = '#3366cc';
+      c.fillRect(rocketX - 18, ry + 28, 36, 16);
+      // Window
+      c.fillStyle = '#66ccff';
+      c.beginPath();
+      c.arc(rocketX, ry + 20, 7, 0, Math.PI * 2);
+      c.fill();
+      c.strokeStyle = '#999';
+      c.lineWidth = 1;
+      c.stroke();
+      // Fins (red)
+      c.fillStyle = '#cc3333';
+      c.beginPath();
+      c.moveTo(rocketX - 18, ry + 72);
+      c.lineTo(rocketX - 34, ry + 98);
+      c.lineTo(rocketX - 18, ry + 93);
+      c.closePath();
+      c.fill();
+      c.beginPath();
+      c.moveTo(rocketX + 18, ry + 72);
+      c.lineTo(rocketX + 34, ry + 98);
+      c.lineTo(rocketX + 18, ry + 93);
+      c.closePath();
+      c.fill();
+      // Nozzle
+      c.fillStyle = '#666';
+      c.beginPath();
+      c.moveTo(rocketX - 12, ry + 93);
+      c.lineTo(rocketX - 18, ry + 105);
+      c.lineTo(rocketX + 18, ry + 105);
+      c.lineTo(rocketX + 12, ry + 93);
+      c.closePath();
+      c.fill();
+    }});
+
+    // Rocket exhaust flame and particles
+    els.push({id:'exhaust', type:'custom', x:0, y:0, draw:function(c){
+      var nozzleY = rocketTopY + rocketDrift + 105;
+      // Inner flame
+      var gInner = c.createLinearGradient(rocketX, nozzleY, rocketX, nozzleY + 70);
+      gInner.addColorStop(0, 'rgba(255,255,200,0.9)');
+      gInner.addColorStop(0.3, 'rgba(255,200,50,0.7)');
+      gInner.addColorStop(1, 'rgba(255,100,0,0)');
+      c.fillStyle = gInner;
+      var flicker = 1 + Math.sin(animTime * 20) * 0.08;
+      c.beginPath();
+      c.moveTo(rocketX - 12 * flicker, nozzleY);
+      c.quadraticCurveTo(rocketX - 16 * flicker, nozzleY + 40, rocketX, nozzleY + 70 * flicker);
+      c.quadraticCurveTo(rocketX + 16 * flicker, nozzleY + 40, rocketX + 12 * flicker, nozzleY);
+      c.closePath();
+      c.fill();
+      // Outer flame
+      var gOuter = c.createLinearGradient(rocketX, nozzleY, rocketX, nozzleY + 100);
+      gOuter.addColorStop(0, 'rgba(255,150,50,0.4)');
+      gOuter.addColorStop(0.5, 'rgba(255,80,0,0.2)');
+      gOuter.addColorStop(1, 'rgba(200,50,0,0)');
+      c.fillStyle = gOuter;
+      c.beginPath();
+      c.moveTo(rocketX - 18, nozzleY);
+      c.quadraticCurveTo(rocketX - 24, nozzleY + 55, rocketX, nozzleY + 100);
+      c.quadraticCurveTo(rocketX + 24, nozzleY + 55, rocketX + 18, nozzleY);
+      c.closePath();
+      c.fill();
+      // Exhaust particles streaming downward
+      drawStreamParticles(c, rocketX, nozzleY + 20, 0, 1, 30, 90, 'rgba(255,180,100,0.5)', 303);
+      // Glow at nozzle
+      drawAmbientGlow(c, rocketX, nozzleY + 30, 60, 'rgba(255,150,50,0.4)');
+    }});
+
+    // Action force arrow: rocket pushes gas DOWN (red, down)
+    var arrowActX = rocketX - 70;
+    var arrowMidY = rocketTopY + 60 + rocketDrift;
+    els.push({id:'f4arrowAct', type:'arrow', x1:arrowActX, y1:arrowMidY, x2:arrowActX, y2:arrowMidY + ARROW_LEN, color:RED, lineWidth:2.5, headSize:8});
+    els.push({id:'f4lblAct', type:'text', text:t('f4action'), x:arrowActX - 5, y:arrowMidY + ARROW_LEN / 2, color:RED, size:10, align:'right'});
+
+    // Reaction force arrow: gas pushes rocket UP (cyan, up)
+    var arrowReX = rocketX + 70;
+    els.push({id:'f4arrowRe', type:'arrow', x1:arrowReX, y1:arrowMidY + ARROW_LEN, x2:arrowReX, y2:arrowMidY, color:CYAN, lineWidth:2.5, headSize:8});
+    els.push({id:'f4lblRe', type:'text', text:t('f4react'), x:arrowReX + 5, y:arrowMidY + ARROW_LEN / 2, color:CYAN, size:10, align:'left'});
+
+    // Caption
+    els.push({id:'f4cap', type:'custom', x:0, y:0, draw:function(c){
+      c.fillStyle = P.primary;
+      c.font = "bold 13px 'Noto Sans SC',sans-serif";
+      c.textAlign = 'center';
+      var lines = t('f4cap').split('\n');
+      for (var i = 0; i < lines.length; i++) c.fillText(lines[i], cx + 160, cy - 70 + i * 20);
+    }});
+
+    // Key insight (the defining statement for this animation)
+    els.push({id:'f4insight', type:'custom', x:0, y:0, draw:function(c){
+      c.fillStyle = P.text;
+      c.font = "12px 'Noto Sans SC',sans-serif";
+      c.textAlign = 'center';
+      var lines = t('f4insight').split('\n');
+      for (var i = 0; i < lines.length; i++) c.fillText(lines[i], cx, H - 25 + i * 16);
+    }});
+
+    return els;
+  }
+
+  return [];
+}
+
+// ============================================================
+// BOOT
+// ============================================================
+
+AnimRuntime.boot();
+</script>
+</body>
+</html>

@@ -1,0 +1,361 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>推拉力探秘 | Force Lab</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=Noto+Sans+SC:wght@300;400;700;900&display=swap" rel="stylesheet">
+<style>
+:root{--BRASS:#C49B3C;--FORGE:#8B6914;--IRON:#4A4A5A;--EMBER:#E8D0A0;--SPARK:#E8C840;--BG1:#151525;--BG2:#1E1E38}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Noto Sans SC',sans-serif;background:linear-gradient(135deg,var(--BG1),var(--BG2));color:var(--EMBER);overflow:hidden;height:100vh;user-select:none}
+.fm{font-family:'JetBrains Mono',monospace}
+.glass{background:rgba(21,21,37,0.88);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);border:1px solid rgba(196,155,60,0.15)}
+canvas{display:block}
+input[type=range]{-webkit-appearance:none;width:100%;height:4px;background:var(--IRON);outline:none;border-radius:2px}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:16px;height:16px;background:var(--SPARK);cursor:pointer;border:2px solid var(--BRASS);border-radius:2px}
+.sb{transition:all .15s;cursor:pointer}.sb:hover{background:rgba(196,155,60,0.15)}.sb.on{background:rgba(232,200,64,0.18);border-color:var(--SPARK)!important}
+.mb{transition:all .15s;cursor:pointer}.mb:hover{opacity:.85}.mb.on{background:rgba(232,200,64,0.2)!important;border-color:var(--SPARK)!important;color:var(--SPARK)!important}
+.ab{transition:all .15s;cursor:pointer}.ab:hover{background:rgba(196,155,60,0.2)}
+@keyframes gearRot{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
+</style>
+</head>
+<body>
+<div class="flex h-screen">
+<aside class="w-56 flex flex-col p-3 gap-2 z-20 glass overflow-y-auto" style="min-width:210px;border-right:1px solid rgba(196,155,60,0.2)">
+  <div class="text-center mb-1">
+    <div class="fm text-[10px] tracking-[0.2em] uppercase" style="color:var(--FORGE)">Gear Foundry</div>
+    <h1 class="text-lg font-black leading-tight" style="color:var(--SPARK)"><span data-zh="推拉力探秘" data-en="Force Lab">推拉力探秘</span></h1>
+    <div class="fm text-[10px] mt-0.5" style="color:var(--BRASS)">F = m &middot; a</div>
+  </div>
+  <div>
+    <div class="fm text-[10px] mb-1 uppercase tracking-wider" style="color:var(--FORGE)"><span data-zh="选择场景" data-en="SCENE">选择场景</span></div>
+    <div class="flex flex-col gap-1" id="scene-list">
+      <button class="sb glass text-left px-2 py-1.5 text-xs rounded on" data-idx="0"><span data-zh="水平推箱" data-en="Push Box">水平推箱</span></button>
+      <button class="sb glass text-left px-2 py-1.5 text-xs rounded" data-idx="1"><span data-zh="拉力挑战" data-en="Pull Cart">拉力挑战</span></button>
+      <button class="sb glass text-left px-2 py-1.5 text-xs rounded" data-idx="2"><span data-zh="斜面攀爬" data-en="Ramp Climb">斜面攀爬</span></button>
+      <button class="sb glass text-left px-2 py-1.5 text-xs rounded" data-idx="3"><span data-zh="冰面对决" data-en="Ice Slide">冰面对决</span></button>
+    </div>
+  </div>
+  <div class="mt-2">
+    <div class="fm text-[10px] mb-1 uppercase tracking-wider" style="color:var(--FORGE)"><span data-zh="参数调节" data-en="PARAMS">参数调节</span></div>
+    <div class="mb-2"><div class="flex justify-between text-[10px]"><span data-zh="质量" data-en="Mass">质量</span><span class="fm" id="lbl-mass" style="color:var(--SPARK)">5.0 kg</span></div><input type="range" id="sl-mass" min="0.5" max="20" step="0.5" value="5"></div>
+    <div class="mb-2"><div class="flex justify-between text-[10px]"><span data-zh="静摩擦系数" data-en="mu_s">静摩擦系数</span><span class="fm" id="lbl-mus" style="color:var(--SPARK)">0.40</span></div><input type="range" id="sl-mus" min="0.05" max="1.0" step="0.05" value="0.4"></div>
+    <div class="mb-2"><div class="flex justify-between text-[10px]"><span data-zh="动摩擦系数" data-en="mu_k">动摩擦系数</span><span class="fm" id="lbl-muk" style="color:var(--SPARK)">0.30</span></div><input type="range" id="sl-muk" min="0.02" max="0.8" step="0.02" value="0.3"></div>
+  </div>
+  <div>
+    <div class="fm text-[10px] mb-1 uppercase tracking-wider" style="color:var(--FORGE)"><span data-zh="交互模式" data-en="MODE">交互模式</span></div>
+    <div class="flex gap-1">
+      <button id="mode-apply" class="mb glass flex-1 text-[11px] py-1 rounded on" style="border:1px solid var(--FORGE)"><span data-zh="施力" data-en="Force">施力</span></button>
+      <button id="mode-sketch" class="mb glass flex-1 text-[11px] py-1 rounded" style="border:1px solid var(--IRON)"><span data-zh="标注" data-en="Sketch">标注</span></button>
+    </div>
+  </div>
+  <div class="flex gap-1 mt-2">
+    <button id="btn-reset" class="ab glass flex-1 text-[11px] py-1.5 rounded" style="border:1px solid var(--IRON)"><span data-zh="重置" data-en="Reset">重置</span></button>
+    <button id="btn-clear" class="ab glass flex-1 text-[11px] py-1.5 rounded" style="border:1px solid var(--IRON)"><span data-zh="清除标注" data-en="Clear">清除标注</span></button>
+    <button id="btn-lang" class="ab glass text-[11px] py-1.5 px-2 rounded" style="border:1px solid var(--IRON)">EN</button>
+  </div>
+  <div class="mt-auto pt-2" style="border-top:1px solid rgba(196,155,60,0.15)">
+    <div class="fm text-[10px] mb-1 uppercase tracking-wider" style="color:var(--FORGE)"><span data-zh="实时数据" data-en="LIVE DATA">实时数据</span></div>
+    <div class="grid grid-cols-2 gap-x-2 gap-y-0.5 text-[10px] fm">
+      <div><span data-zh="施力" data-en="F_app">施力</span></div><div id="rd-fa" class="text-right" style="color:#E06040">0 N</div>
+      <div><span data-zh="摩擦力" data-en="F_fric">摩擦力</span></div><div id="rd-ff" class="text-right" style="color:#4090E0">0 N</div>
+      <div><span data-zh="合力" data-en="F_net">合力</span></div><div id="rd-fn" class="text-right" style="color:#40D060">0 N</div>
+      <div><span data-zh="速度" data-en="Vel">速度</span></div><div id="rd-v" class="text-right" style="color:var(--SPARK)">0 m/s</div>
+      <div><span data-zh="状态" data-en="State">状态</span></div><div id="rd-st" class="text-right" style="color:var(--EMBER)">静止</div>
+    </div>
+  </div>
+  <div class="text-[10px] mt-2 leading-relaxed" style="color:var(--FORGE)"><span data-zh="在画布上拖拽施加推拉力，松开后物体惯性滑行！" data-en="Drag on canvas to apply force, release to let it coast!">在画布上拖拽施加推拉力，松开后物体惯性滑行！</span></div>
+</aside>
+<main class="flex-1 relative" id="canvas-wrap"><canvas id="gc"></canvas></main>
+</div>
+<script>
+(function(){
+/* ===== 常量 ===== */
+var G=9.8, PPM=80, MAXF=300, DSC=1.5;
+
+/* ===== 状态 ===== */
+var si=0, lang='zh', mode='apply';
+var dragging=false, dStart={x:0,y:0}, dCur={x:0,y:0};
+var fApp=0, lastTS=0;
+var sketchArrows=[];
+var particles=[];
+var trail=[];
+
+/* 物体 */
+var obj={s:0,vel:0,mass:5,muS:0.4,muK:0.3,moving:false};
+
+/* 场景 */
+var scenes=[
+  {name:{zh:'水平推箱',en:'Push Box'},desc:{zh:'在粗糙地面上推箱子',en:'Push a box on rough ground'},type:'box',incline:0,mass:5,muS:0.4,muK:0.3,groundF:0.72,pathLen:8},
+  {name:{zh:'拉力挑战',en:'Pull Cart'},desc:{zh:'用绳子拉动小车',en:'Pull a cart with a rope'},type:'cart',incline:0,mass:8,muS:0.3,muK:0.2,groundF:0.72,pathLen:8},
+  {name:{zh:'斜面攀爬',en:'Ramp Climb'},desc:{zh:'在斜面上推物体上坡',en:'Push object up a ramp'},type:'box',incline:25,mass:4,muS:0.5,muK:0.35,groundF:0.72,pathLen:7},
+  {name:{zh:'冰面对决',en:'Ice Slide'},desc:{zh:'在光滑冰面上推物体',en:'Push object on slippery ice'},type:'ball',incline:0,mass:2,muS:0.08,muK:0.04,groundF:0.72,pathLen:10}
+];
+
+/* ===== DOM ===== */
+var cv=document.getElementById('gc');
+var ctx=cv.getContext('2d');
+var wrap=document.getElementById('canvas-wrap');
+
+function resizeCV(){
+  cv.width=wrap.clientWidth;
+  cv.height=wrap.clientHeight;
+}
+window.addEventListener('resize',resizeCV);
+resizeCV();
+
+/* ===== 场景加载 ===== */
+function loadScene(idx){
+  si=idx;
+  var sc=scenes[idx];
+  obj.s=sc.pathLen*0.25;
+  obj.vel=0;
+  obj.mass=sc.mass;
+  obj.muS=sc.muS;
+  obj.muK=sc.muK;
+  obj.moving=false;
+  fApp=0;
+  dragging=false;
+  trail=[];
+  particles=[];
+  document.getElementById('sl-mass').value=obj.mass;
+  document.getElementById('sl-mus').value=obj.muS;
+  document.getElementById('sl-muk').value=obj.muK;
+  updSliders();
+  document.querySelectorAll('.sb').forEach(function(b){
+    b.classList.toggle('on',parseInt(b.dataset.idx)===idx);
+  });
+  updLang();
+}
+
+function updSliders(){
+  document.getElementById('lbl-mass').textContent=obj.mass.toFixed(1)+' kg';
+  document.getElementById('lbl-mus').textContent=obj.muS.toFixed(2);
+  document.getElementById('lbl-muk').textContent=obj.muK.toFixed(2);
+}
+
+function updLang(){
+  document.querySelectorAll('[data-zh]').forEach(function(el){
+    el.textContent=el.getAttribute('data-'+lang);
+  });
+  document.getElementById('btn-lang').textContent=lang==='zh'?'EN':'中';
+}
+
+/* ===== 物体屏幕坐标 ===== */
+function objScreen(){
+  var sc=scenes[si],W=cv.width,H=cv.height;
+  var gY=sc.groundF*H;
+  var iRad=(sc.incline||0)*Math.PI/180;
+  var spanS=W*0.08,spanE=W*0.92,spanPx=spanE-spanS;
+  var ppm=spanPx/sc.pathLen;
+  if(sc.incline>0){ppm=spanPx/(sc.pathLen*Math.cos(iRad));}
+  var sx=spanS+obj.s*Math.cos(iRad)*ppm;
+  var sy=gY-obj.s*Math.sin(iRad)*ppm;
+  return {x:sx,y:sy,ppm:ppm,gY:gY};
+}
+
+/* ===== 物理 ===== */
+var friction=0,netForce=0,gravComp=0,normalF=0;
+
+function physics(dt){
+  if(dt<=0)return;
+  var sc=scenes[si];
+  var iRad=(sc.incline||0)*Math.PI/180;
+  gravComp=obj.mass*G*Math.sin(iRad);
+  normalF=obj.mass*G*Math.cos(iRad);
+  var absV=Math.abs(obj.vel);
+  var eps=0.05;
+  friction=0;
+
+  if(absV<eps&&!obj.moving){
+    var net0=fApp-gravComp;
+    var maxS=obj.muS*normalF;
+    if(Math.abs(net0)<=maxS){
+      friction=net0;
+      obj.vel=0;
+      obj.moving=false;
+    }else{
+      friction=Math.sign(net0)*maxS;
+      obj.moving=true;
+    }
+  }else{
+    var dir=obj.vel>0?1:(obj.vel<0?-1:(fApp>gravComp?1:-1));
+    friction=dir*obj.muK*normalF;
+    obj.moving=true;
+  }
+
+  netForce=fApp-friction-gravComp;
+  var acc=netForce/Math.max(obj.mass,0.01);
+  obj.vel+=acc*dt;
+
+  if(obj.moving&&Math.abs(obj.vel)<eps){
+    var nc=fApp-gravComp;
+    if(Math.abs(nc)<=obj.muS*normalF){
+      obj.vel=0;obj.moving=false;
+    }
+  }
+
+  obj.s+=obj.vel*dt;
+
+  if(obj.s<0){obj.s=0;if(obj.vel<0){spawnP(objScreen().x,objScreen().y,8);obj.vel*=-0.2;}}
+  if(obj.s>sc.pathLen){obj.s=sc.pathLen;if(obj.vel>0){spawnP(objScreen().x,objScreen().y,8);obj.vel*=-0.2;}}
+
+  /* 拖尾 */
+  var sp=objScreen();
+  if(Math.abs(obj.vel)>0.1){
+    trail.push({x:sp.x,y:sp.y,t:performance.now()});
+  }
+  var now=performance.now();
+  while(trail.length>0&&now-trail[0].t>600)trail.shift();
+
+  /* 粒子更新 */
+  for(var i=particles.length-1;i>=0;i--){
+    var p=particles[i];
+    p.age+=dt;
+    if(p.age>=p.life){particles.splice(i,1);}
+  }
+
+  /* 读数 */
+  document.getElementById('rd-fa').textContent=Math.abs(fApp).toFixed(1)+' N';
+  document.getElementById('rd-ff').textContent=Math.abs(friction).toFixed(1)+' N';
+  document.getElementById('rd-fn').textContent=Math.abs(netForce).toFixed(1)+' N';
+  document.getElementById('rd-v').textContent=obj.vel.toFixed(2)+' m/s';
+  var stEl=document.getElementById('rd-st');
+  if(!obj.moving&&Math.abs(obj.vel)<eps){
+    stEl.textContent=lang==='zh'?'静止':'Still';
+  }else if(obj.vel>0){
+    stEl.textContent=lang==='zh'?'→ 运动':'→ Moving';
+  }else{
+    stEl.textContent=lang==='zh'?'← 运动':'← Moving';
+  }
+}
+
+/* ===== 粒子 ===== */
+function spawnP(x,y,n){
+  for(var i=0;i<n;i++){
+    particles.push({
+      x:x,y:y,
+      vx:(Math.random()-0.5)*180,
+      vy:-Math.random()*120-30,
+      life:0.4+Math.random()*0.3,age:0,
+      sz:2+Math.random()*3,
+      c:Math.random()>0.5?'#E8C840':'#C49B3C'
+    });
+  }
+}
+
+function hexRgba(h,a){
+  var r=parseInt(h.slice(1,3),16),g=parseInt(h.slice(3,5),16),b=parseInt(h.slice(5,7),16);
+  return 'rgba('+r+','+g+','+b+','+a+')';
+}
+
+/* ===== 绘制 ===== */
+function draw(){
+  var W=cv.width,H=cv.height;
+  if(W<=0||H<=0)return;
+  var sc=scenes[si];
+  var sp=objScreen();
+  var gY=sc.groundF*H;
+  var iRad=(sc.incline||0)*Math.PI/180;
+
+  /* 背景 */
+  var bg=ctx.createLinearGradient(0,0,W,H);
+  bg.addColorStop(0,'#151525');bg.addColorStop(1,'#1E1E38');
+  ctx.fillStyle=bg;ctx.fillRect(0,0,W,H);
+
+  /* 背景网格 */
+  ctx.strokeStyle='rgba(196,155,60,0.03)';ctx.lineWidth=1;
+  for(var gx=0;gx<W;gx+=60){ctx.beginPath();ctx.moveTo(gx,0);ctx.lineTo(gx,H);ctx.stroke();}
+  for(var gy=0;gy<H;gy+=60){ctx.beginPath();ctx.moveTo(0,gy);ctx.lineTo(W,gy);ctx.stroke();}
+
+  /* 地面 */
+  drawGround(W,H,gY,sc);
+
+  /* 拖尾 */
+  var now=performance.now();
+  trail.forEach(function(t){
+    var age=(now-t.t)/600;
+    if(age<1){
+      ctx.fillStyle='rgba(232,200,64,'+(0.25*(1-age))+')';
+      ctx.beginPath();ctx.arc(t.x,t.y,3*(1-age*0.5),0,Math.PI*2);ctx.fill();
+    }
+  });
+
+  /* 物体 */
+  drawObj(sp.x,sp.y,sc,iRad);
+
+  /* 力箭头 */
+  drawForces(sp.x,sp.y,sc,iRad);
+
+  /* 拖拽指示 */
+  if(dragging&&mode==='apply'){
+    var dx=dCur.x-dStart.x,dy=dCur.y-dStart.y;
+    var dist=Math.sqrt(dx*dx+dy*dy);
+    if(dist>5){
+      ctx.beginPath();ctx.moveTo(dStart.x,dStart.y);ctx.lineTo(dCur.x,dCur.y);
+      ctx.strokeStyle='rgba(232,200,64,0.5)';ctx.lineWidth=2;ctx.setLineDash([6,4]);ctx.stroke();ctx.setLineDash([]);
+      var fShow=Math.min(dist*DSC,MAXF);
+      ctx.font='12px "JetBrains Mono"';ctx.fillStyle='#E8C840';ctx.textAlign='center';
+      ctx.fillText(fShow.toFixed(0)+' N',(dStart.x+dCur.x)/2,(dStart.y+dCur.y)/2-10);
+    }
+  }
+
+  /* 标注箭头 */
+  sketchArrows.forEach(function(a){drawArrow(a.x1,a.y1,a.x2,a.y2,'#E8C840',2);});
+
+  /* 粒子 */
+  particles.forEach(function(p){
+    var a=1-p.age/p.life;
+    if(a>0){
+      ctx.fillStyle=hexRgba(p.c,a);
+      ctx.beginPath();
+      ctx.arc(p.x+p.vx*p.age,p.y+p.vy*p.age+200*p.age*p.age,p.sz*a,0,Math.PI*2);
+      ctx.fill();
+    }
+  });
+
+  /* 自由体图 */
+  drawFBD(W,H,sc,iRad);
+
+  /* 场景标题 */
+  ctx.font='700 16px "Noto Sans SC"';ctx.fillStyle='rgba(232,200,64,0.55)';ctx.textAlign='center';
+  ctx.fillText(sc.name[lang],W/2,28);
+  ctx.font='12px "Noto Sans SC"';ctx.fillStyle='rgba(232,208,160,0.35)';
+  ctx.fillText(sc.desc[lang],W/2,46);
+
+  /* 装饰齿轮 */
+  drawGear(W-45,45,22,8);
+  drawGear(45,H-45,18,6);
+}
+
+function drawGround(W,H,gY,sc){
+  if(sc.incline>0){
+    var iRad=sc.incline*Math.PI/180;
+    var rSx=W*0.08,rEx=W*0.92,rW=rEx-rSx;
+    var rTy=gY-rW*Math.tan(iRad);
+    ctx.beginPath();ctx.moveTo(rSx,gY);ctx.lineTo(rEx,rTy);ctx.lineTo(rEx,gY);ctx.closePath();
+    var rg=ctx.createLinearGradient(0,rTy,0,gY);
+    rg.addColorStop(0,'#3A3530');rg.addColorStop(1,'#2A2520');
+    ctx.fillStyle=rg;ctx.fill();
+    ctx.strokeStyle='#5A5040';ctx.lineWidth=2;ctx.stroke();
+    ctx.save();ctx.clip();
+    for(var i=0;i<20;i++){
+      var lx=rSx+i*(rW/19);
+      ctx.beginPath();ctx.moveTo(lx,gY);ctx.lineTo(lx,rTy);
+      ctx.strokeStyle='rgba(90,80,64,0.2)';ctx.lineWidth=1;ctx.stroke();
+    }
+    ctx.restore();
+    ctx.fillStyle='#2A2520';ctx.fillRect(0,gY,W,H-gY);
+    ctx.beginPath();ctx.moveTo(rSx,gY);ctx.lineTo(rEx,gY);ctx.strokeStyle='#5A5040';ctx.lineWidth=2;ctx.stroke();
+  }else{
+    var isIce=sc.type==='ball';
+    var gg=ctx.createLinearGradient(0,gY,0,H);
+    if(isIce){gg.addColorStop(0,'#3A4A5A');gg.addColorStop(0.1,'#2A3A4A');gg.addColorStop(1,'#1A2A3A');}
+    else{gg.addColorStop(0,'#3A3530');gg.addColorStop(0.1,'#2A2520');gg.addColorStop(1,'#1A1A15');}
+    ctx.fillStyle=gg;ctx.fillRect(0,gY,W,H-gY);
+    if(isIce){
+      for(var i=0;i<12;i++){
+        var lx=W*(0.04+i*0.08);
+        ctx.beginPath();ctx.moveTo(lx,gY

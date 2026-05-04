@@ -1,0 +1,581 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=Inter:wght@400;500&family=Noto+Sans+SC:wght@400;700&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box;}
+html,body{width:100%;height:100vh;overflow:hidden;}
+body{background:var(--bg,#0c0e12);color:var(--text,#f6f6fc);font-family:'Inter','Noto Sans SC',sans-serif;display:flex;flex-direction:column;}
+.wrapper{display:flex;flex-direction:column;height:100vh;overflow:hidden;}
+/* ── Top bar: lang-btn + title + guide toggle + frame indicator ── */
+.top-bar{display:flex;align-items:center;gap:8px;padding:6px 12px 4px;min-height:36px;}
+.lang-btn{font-family:'Space Grotesk',sans-serif;font-size:10px;font-weight:700;padding:3px 8px;cursor:pointer;border:1px solid rgba(255,181,156,0.25);background:transparent;color:#ffb59c;letter-spacing:1px;flex-shrink:0;}
+.top-bar .titles{flex:1;min-width:0;overflow:hidden;}
+.top-bar h1{font-family:'Space Grotesk',sans-serif;font-size:clamp(12px,1.8vw,16px);font-weight:700;letter-spacing:-0.02em;color:var(--primary,#50ffb0);text-shadow:0 0 12px var(--glow,rgba(80,255,176,0.3));white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.top-bar .sub{font-size:10px;color:var(--muted,#aaabb0);letter-spacing:0.08em;text-transform:uppercase;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.top-bar .frame-ind{font-family:'Space Grotesk',sans-serif;font-size:10px;color:var(--muted,#aaabb0);letter-spacing:0.1em;flex-shrink:0;white-space:nowrap;}
+/* ── Guide panel: collapsible, in document flow ── */
+.guide-bar{background:rgba(0,0,0,0.3);overflow:hidden;transition:max-height 0.25s ease;}
+.guide-bar.collapsed{max-height:0!important;padding:0 12px!important;}
+.guide-bar-inner{padding:4px 12px 6px;font-family:'Noto Sans SC',sans-serif;font-size:11px;color:rgba(255,255,255,0.85);line-height:1.5;}
+.guide-bar-inner ul{padding-left:16px;margin:0;}
+.guide-bar-inner li{margin-bottom:1px;}
+.guide-toggle{font-family:'Space Grotesk',sans-serif;font-size:9px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;padding:3px 8px;cursor:pointer;border:1px solid rgba(255,181,156,0.2);background:transparent;color:var(--primary,#50ffb0);flex-shrink:0;}
+.guide-toggle .arrow{display:inline-block;transition:transform 0.2s;font-size:8px;margin-left:3px;}
+.guide-bar.collapsed+.top-bar .guide-toggle .arrow,
+.guide-toggle.collapsed .arrow{transform:rotate(-90deg);}
+/* ── Canvas area ── */
+.canvas-wrap{flex:1;min-height:0;position:relative;}
+canvas{width:100%;height:100%;display:block;}
+/* ── Controls + HUD ── */
+.controls{display:flex;justify-content:center;align-items:center;gap:12px;padding:6px 16px;}
+.ctrl-btn{font-family:'Space Grotesk',sans-serif;font-size:11px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;padding:5px 16px;border:none;cursor:pointer;color:var(--bg,#0c0e12);background:linear-gradient(135deg,var(--primary,#50ffb0),var(--primary-dim,#17df93));transition:transform 0.1s,box-shadow 0.2s;box-shadow:0 0 10px var(--glow-strong,rgba(80,255,176,0.3));}
+.ctrl-btn:hover{transform:scale(1.04);}
+.ctrl-btn:active{transform:scale(0.96);}
+.ctrl-btn.secondary{background:var(--glass,rgba(23,26,31,0.92));color:var(--muted,#aaabb0);box-shadow:none;backdrop-filter:blur(12px);}
+.ctrl-btn.secondary:hover{color:var(--primary,#50ffb0);}
+.hud{height:40px;display:flex;align-items:center;justify-content:space-around;background:rgba(0,0,0,0.55);backdrop-filter:blur(12px);padding:0 16px;}
+.hud-item{text-align:center;}
+.hud-label{font-family:'Space Grotesk',sans-serif;font-size:8px;letter-spacing:0.15em;text-transform:uppercase;color:var(--muted,#aaabb0);}
+.hud-val{font-family:'Space Grotesk',sans-serif;font-size:13px;font-weight:700;color:var(--primary,#50ffb0);}
+</style>
+</head>
+<body>
+<div class="wrapper">
+<!-- Top bar: lang button, title, guide toggle, frame indicator -->
+<div class="top-bar">
+<button class="lang-btn" id="langBtn">CN</button>
+<div class="titles"><h1 id="title"></h1><div class="sub" id="subtitle"></div></div>
+<button class="guide-toggle" id="guideToggle"><span id="guideTitle"></span><span class="arrow">&#9660;</span></button>
+<div class="frame-ind" id="frameIndicator"></div>
+</div>
+<!-- Guide panel: document flow, collapsible -->
+<div class="guide-bar" id="guide">
+<div class="guide-bar-inner" id="guideContent"></div>
+</div>
+<!-- Canvas: fills remaining space, nothing overlaps it -->
+<div class="canvas-wrap"><canvas id="c"></canvas></div>
+<div class="controls">
+<button class="ctrl-btn secondary" id="btnPrev"></button>
+<button class="ctrl-btn" id="btnPlay"></button>
+<button class="ctrl-btn secondary" id="btnNext"></button>
+</div>
+<div class="hud">
+<div class="hud-item"><div class="hud-label" id="hudL1"></div><div class="hud-val" id="hudV1"></div></div>
+<div class="hud-item"><div class="hud-label" id="hudL2"></div><div class="hud-val" id="hudV2"></div></div>
+<div class="hud-item"><div class="hud-label" id="hudL3"></div><div class="hud-val" id="hudV3"></div></div>
+<div class="hud-item"><div class="hud-label" id="hudL4"></div><div class="hud-val" id="hudV4"></div></div>
+</div>
+</div>
+
+<script src="animation_runtime.js"></script>
+
+<script>
+// ============================================================
+// Knode 16 (Capstone): Complete Experiment Workflow
+// Shows the full process of a 3-plane comparison experiment:
+// Frame 0: Title - "Your experiment report looks like this"
+// Frame 1: Prepare 3 planes (dart, glider, stunt)
+// Frame 2: Fly & measure (split-screen 3 lanes)
+// Frame 3: Data table fills in
+// Frame 4: Bar chart comparison + written conclusion
+// ============================================================
+
+var CONFIG = {
+  style: 'helix_lab',
+  totalFrames: 5,
+
+  i18n: {
+    title:     {en:'EXPERIMENT WORKFLOW', cn:'\u5b9e\u9a8c\u6d41\u7a0b\u5168\u89c8'},
+    subtitle:  {en:'3-PLANE COMPARISON', cn:'3\u6b3e\u7eb8\u98de\u673a\u5bf9\u6bd4'},
+
+    f0title:   {en:'YOUR EXPERIMENT\nLOOKS LIKE THIS', cn:'\u4f60\u7684\u5b9e\u9a8c\n\u957f\u8fd9\u6837'},
+    f0sub:     {en:'5 steps to a complete report', cn:'5\u6b65\u5b8c\u6210\u4e00\u4efd\u5b9e\u9a8c\u62a5\u544a'},
+
+    f1title:   {en:'STEP 1: PREPARE 3 PLANES', cn:'\u7b2c1\u6b65\uff1a\u51c6\u5907 3 \u6b3e\u98de\u673a'},
+    planeA:    {en:'Plane A: Dart', cn:'\u98de\u673aA: \u6296\u9556\u578b'},
+    planeB:    {en:'Plane B: Glider', cn:'\u98de\u673aB: \u6ed1\u7fd4\u578b'},
+    planeC:    {en:'Plane C: Stunt', cn:'\u98de\u673aC: \u7279\u6280\u578b'},
+    labelA:    {en:'narrow + heavy nose', cn:'\u7a84\u957f + \u91cd\u5934'},
+    labelB:    {en:'wide wings + light', cn:'\u5bbd\u7fc5 + \u8f7b\u5de7'},
+    labelC:    {en:'angled wingtips', cn:'\u7fc5\u5c16\u4e0a\u7fc7'},
+
+    f2title:   {en:'STEP 2: FLY & MEASURE', cn:'\u7b2c2\u6b65\uff1a\u98de\u884c\u4e0e\u6d4b\u91cf'},
+    eachFive:  {en:'5 flights each = 15 total', cn:'\u6bcf\u67b6\u98de5\u6b21 = \u5171\u8ba115\u6b21'},
+    ruler:     {en:'ruler', cn:'\u76ae\u5c3a'},
+    stopwatch: {en:'stopwatch', cn:'\u79d2\u8868'},
+
+    f3title:   {en:'STEP 3: DATA TABLE', cn:'\u7b2c3\u6b65\uff1a\u6570\u636e\u8868\u683c'},
+    colPlane:  {en:'Plane', cn:'\u98de\u673a'},
+    colTrial:  {en:'Trial', cn:'\u7b2c\u51e0\u6b21'},
+    colDist:   {en:'Dist(m)', cn:'\u8ddd\u79bb(\u7c73)'},
+    colTime:   {en:'Time(s)', cn:'\u65f6\u95f4(\u79d2)'},
+
+    f4title:   {en:'STEP 4-5: COMPARE & CONCLUDE', cn:'\u7b2c4-5\u6b65\uff1a\u5bf9\u6bd4\u4e0e\u7ed3\u8bba'},
+    avgLabel:  {en:'Average Distance', cn:'\u5e73\u5747\u8ddd\u79bb'},
+    conclusion:{en:'Conclusion', cn:'\u7ed3\u8bba'},
+    conclusionText:{en:'Dart flies farthest and most\nconsistently. Next: try adding\nweight to the nose.', cn:'\u6296\u9556\u578b\u98de\u5f97\u6700\u8fdc\u4e14\u6700\u7a33\u5b9a\u3002\n\u4e0b\u4e00\u6b65\uff1a\u8bd5\u8bd5\u52a0\u91cd\u673a\u5934\u3002'},
+    improve:   {en:'IMPROVEMENTS', cn:'\u6539\u8fdb\u5efa\u8bae'},
+    imp1:      {en:'1. Add a paper clip to nose', cn:'1. \u5728\u673a\u5934\u52a0\u4e00\u4e2a\u56de\u5f62\u9488'},
+    imp2:      {en:'2. Try folding wingtips up', cn:'2. \u8bd5\u8bd5\u5c06\u7fc5\u5c16\u4e0a\u6298'},
+    imp3:      {en:'3. Test outdoors vs indoors', cn:'3. \u5bf9\u6bd4\u5ba4\u5185\u548c\u5ba4\u5916\u98de\u884c'},
+
+    hudStep:   {en:'STEP', cn:'\u6b65\u9aa4'},
+    hudPlanes: {en:'PLANES', cn:'\u98de\u673a\u6570'},
+    hudFlights:{en:'FLIGHTS', cn:'\u98de\u884c\u6b21\u6570'},
+    hudData:   {en:'DATA ROWS', cn:'\u6570\u636e\u884c\u6570'},
+
+    guideTitle:{en:'Experiment Guide', cn:'\u5b9e\u9a8c\u6307\u5357'},
+    g1:        {en:'Prepare 3 different planes', cn:'\u51c6\u59073\u6b3e\u4e0d\u540c\u7684\u98de\u673a'},
+    g2:        {en:'5 flights per plane, measure each', cn:'\u6bcf\u6b3e\u98de5\u6b21\uff0c\u6bcf\u6b21\u90fd\u6d4b\u91cf'},
+    g3:        {en:'Fill data table, calculate averages', cn:'\u586b\u8868\u683c\uff0c\u7b97\u5e73\u5747\u503c'},
+    g4:        {en:'Write conclusion with evidence', cn:'\u7528\u6570\u636e\u5199\u7ed3\u8bba'},
+  },
+
+  hudLabels: ['hudStep', 'hudPlanes', 'hudFlights', 'hudData'],
+  hudValues: [
+    ['--',   '--',  '--',  '--'],
+    ['1/5',  '3',   '0',   '0'],
+    ['2/5',  '3',   '15',  '0'],
+    ['3/5',  '3',   '15',  '15'],
+    ['4-5/5','3',   '15',  '15'],
+  ],
+
+  guideTitle: 'guideTitle',
+  guideItems: ['g1', 'g2', 'g3', 'g4'],
+};
+
+// ============================================================
+// Sample data for the experiment
+// ============================================================
+var SAMPLE_DATA = [
+  {plane:'A', trial:1, dist:6.8, time:1.52},
+  {plane:'A', trial:2, dist:7.1, time:1.58},
+  {plane:'A', trial:3, dist:6.5, time:1.49},
+  {plane:'A', trial:4, dist:7.0, time:1.55},
+  {plane:'A', trial:5, dist:6.9, time:1.53},
+  {plane:'B', trial:1, dist:5.2, time:2.31},
+  {plane:'B', trial:2, dist:4.8, time:2.18},
+  {plane:'B', trial:3, dist:5.5, time:2.42},
+  {plane:'B', trial:4, dist:4.3, time:2.05},
+  {plane:'B', trial:5, dist:5.0, time:2.25},
+  {plane:'C', trial:1, dist:3.8, time:1.91},
+  {plane:'C', trial:2, dist:4.5, time:2.02},
+  {plane:'C', trial:3, dist:2.1, time:1.15},
+  {plane:'C', trial:4, dist:4.2, time:1.88},
+  {plane:'C', trial:5, dist:3.9, time:1.95},
+];
+
+var PLANE_COLORS = {A:'#ff6b6b', B:'#4ecdc4', C:'#ffd93d'};
+var PLANE_AVG = {};
+['A','B','C'].forEach(function(p) {
+  var rows = SAMPLE_DATA.filter(function(d){return d.plane===p;});
+  var sum = 0; rows.forEach(function(d){sum+=d.dist;});
+  PLANE_AVG[p] = sum / rows.length;
+});
+
+// ============================================================
+// Drawing helpers
+// ============================================================
+function drawPlaneShape(ctx, cx, cy, type, scale) {
+  scale = scale || 1;
+  var s = 20 * scale;
+  ctx.save();
+  ctx.translate(cx, cy);
+
+  if (type === 'A') {
+    // Dart: narrow, fast
+    ctx.fillStyle = '#ff6b6b';
+    ctx.beginPath();
+    ctx.moveTo(s, 0);
+    ctx.lineTo(-s*0.6, -s*0.3);
+    ctx.lineTo(-s*0.2, 0);
+    ctx.lineTo(-s*0.6, s*0.3);
+    ctx.closePath();
+    ctx.fill();
+  } else if (type === 'B') {
+    // Glider: wide wings
+    ctx.fillStyle = '#4ecdc4';
+    ctx.beginPath();
+    ctx.moveTo(s*0.7, 0);
+    ctx.lineTo(-s*0.2, -s*0.6);
+    ctx.lineTo(-s*0.6, -s*0.5);
+    ctx.lineTo(-s*0.3, 0);
+    ctx.lineTo(-s*0.6, s*0.5);
+    ctx.lineTo(-s*0.2, s*0.6);
+    ctx.closePath();
+    ctx.fill();
+  } else {
+    // Stunt: angled tips
+    ctx.fillStyle = '#ffd93d';
+    ctx.beginPath();
+    ctx.moveTo(s*0.7, 0);
+    ctx.lineTo(-s*0.3, -s*0.4);
+    ctx.lineTo(-s*0.5, -s*0.6);
+    ctx.lineTo(-s*0.4, -s*0.15);
+    ctx.lineTo(-s*0.4, s*0.15);
+    ctx.lineTo(-s*0.5, s*0.6);
+    ctx.lineTo(-s*0.3, s*0.4);
+    ctx.closePath();
+    ctx.fill();
+  }
+  ctx.restore();
+}
+
+// ============================================================
+// FRAME ELEMENTS
+// ============================================================
+function getFrameElements(f, W, H) {
+  var els = [];
+  var t = CONFIG.i18n;
+
+  if (f === 0) {
+    // Title frame
+    els.push({type:'text', text:t.f0title, x:W/2, y:H*0.35, font:'bold 32px Space Grotesk', fill:'#50ffb0', align:'center', baseline:'middle'});
+    els.push({type:'text', text:t.f0sub, x:W/2, y:H*0.55, font:'16px Noto Sans SC', fill:'#aaabb0', align:'center', baseline:'middle'});
+
+    // 5 step icons as circles
+    var stepX0 = W*0.15, stepXEnd = W*0.85;
+    for (var i = 0; i < 5; i++) {
+      var sx = stepX0 + (stepXEnd - stepX0) * i / 4;
+      var sy = H * 0.75;
+      els.push({type:'custom', draw: (function(sx, sy, i) {
+        return function(ctx) {
+          ctx.beginPath();
+          ctx.arc(sx, sy, 14, 0, Math.PI*2);
+          ctx.fillStyle = '#50ffb0';
+          ctx.fill();
+          ctx.font = 'bold 14px Space Grotesk';
+          ctx.fillStyle = '#0c0e12';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText(String(i+1), sx, sy);
+          // connecting line
+          if (i < 4) {
+            var nx = stepX0 + (stepXEnd - stepX0) * (i+1) / 4;
+            ctx.strokeStyle = 'rgba(80,255,176,0.3)';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(sx + 16, sy);
+            ctx.lineTo(nx - 16, sy);
+            ctx.stroke();
+          }
+        };
+      })(sx, sy, i)});
+    }
+  }
+
+  else if (f === 1) {
+    // Prepare 3 planes
+    els.push({type:'text', text:t.f1title, x:W/2, y:H*0.08, font:'bold 18px Space Grotesk', fill:'#50ffb0', align:'center'});
+
+    var lanes = [
+      {type:'A', name:t.planeA, desc:t.labelA, color:'#ff6b6b'},
+      {type:'B', name:t.planeB, desc:t.labelB, color:'#4ecdc4'},
+      {type:'C', name:t.planeC, desc:t.labelC, color:'#ffd93d'},
+    ];
+
+    lanes.forEach(function(lane, idx) {
+      var lx = W * (0.18 + idx * 0.32);
+      var ly = H * 0.42;
+
+      // Plane drawing
+      els.push({type:'custom', draw: (function(lx, ly, lt) {
+        return function(ctx) {
+          drawPlaneShape(ctx, lx, ly, lt, 2.5);
+        };
+      })(lx, ly, lane.type)});
+
+      // Label
+      els.push({type:'text', text:lane.name, x:lx, y:ly + 50, font:'bold 14px Noto Sans SC', fill:lane.color, align:'center'});
+      els.push({type:'text', text:lane.desc, x:lx, y:ly + 72, font:'11px Noto Sans SC', fill:'#aaabb0', align:'center'});
+
+      // Card outline
+      els.push({type:'custom', draw: (function(lx, ly, col) {
+        return function(ctx) {
+          ctx.strokeStyle = col;
+          ctx.lineWidth = 1;
+          ctx.globalAlpha = 0.3;
+          ctx.strokeRect(lx - 60, ly - 45, 120, 140);
+          ctx.globalAlpha = 1;
+        };
+      })(lx, ly, lane.color)});
+    });
+  }
+
+  else if (f === 2) {
+    // Fly & Measure - 3 lanes with flights
+    els.push({type:'text', text:t.f2title, x:W/2, y:H*0.06, font:'bold 16px Space Grotesk', fill:'#50ffb0', align:'center'});
+    els.push({type:'text', text:t.eachFive, x:W/2, y:H*0.13, font:'12px Noto Sans SC', fill:'#aaabb0', align:'center'});
+
+    // Three horizontal lanes
+    var laneH = H * 0.2;
+    var laneY0 = H * 0.2;
+    var types = ['A','B','C'];
+    var colors = ['#ff6b6b','#4ecdc4','#ffd93d'];
+    var dists = [6.9, 5.0, 3.7]; // representative avg distances
+
+    types.forEach(function(tp, idx) {
+      var ly = laneY0 + idx * (laneH + H*0.03);
+
+      // Lane background
+      els.push({type:'custom', draw: (function(ly, laneH, col) {
+        return function(ctx) {
+          ctx.fillStyle = 'rgba(255,255,255,0.03)';
+          ctx.fillRect(0, ly, W, laneH);
+          // Dashed lane separator
+          ctx.strokeStyle = 'rgba(255,255,255,0.1)';
+          ctx.lineWidth = 1;
+          ctx.setLineDash([4,4]);
+          ctx.beginPath();
+          ctx.moveTo(0, ly + laneH);
+          ctx.lineTo(W, ly + laneH);
+          ctx.stroke();
+          ctx.setLineDash([]);
+        };
+      })(ly, laneH, colors[idx])});
+
+      // Launch line
+      var launchX = W * 0.08;
+      els.push({type:'custom', draw: (function(launchX, ly, laneH) {
+        return function(ctx) {
+          ctx.strokeStyle = '#50ffb0';
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          ctx.moveTo(launchX, ly + 5);
+          ctx.lineTo(launchX, ly + laneH - 5);
+          ctx.stroke();
+        };
+      })(launchX, ly, laneH)});
+
+      // Plane + flight path
+      var landX = launchX + (W * 0.8) * (dists[idx] / 10);
+      els.push({type:'custom', draw: (function(launchX, landX, ly, laneH, tp, col, dist) {
+        return function(ctx) {
+          // Dotted flight path
+          ctx.strokeStyle = col;
+          ctx.lineWidth = 1;
+          ctx.globalAlpha = 0.4;
+          ctx.setLineDash([3,3]);
+          ctx.beginPath();
+          var midY = ly + laneH/2;
+          ctx.moveTo(launchX, midY);
+          ctx.quadraticCurveTo((launchX+landX)/2, midY - laneH*0.3, landX, midY);
+          ctx.stroke();
+          ctx.setLineDash([]);
+          ctx.globalAlpha = 1;
+
+          // Plane at landing
+          drawPlaneShape(ctx, landX, midY, tp, 1.2);
+
+          // Distance label
+          ctx.font = 'bold 12px Space Grotesk';
+          ctx.fillStyle = col;
+          ctx.textAlign = 'center';
+          ctx.fillText(dist.toFixed(1) + 'm', landX, midY + 22);
+
+          // Plane label
+          ctx.font = 'bold 13px Space Grotesk';
+          ctx.fillText(tp, launchX - 15, midY);
+        };
+      })(launchX, landX, ly, laneH, tp, colors[idx], dists[idx])});
+    });
+
+    // Ruler + stopwatch icons
+    els.push({type:'custom', draw: function(ctx) {
+      var ix = W * 0.88;
+      var iy = H * 0.25;
+      // Ruler icon
+      ctx.strokeStyle = '#ffcc44';
+      ctx.lineWidth = 2;
+      ctx.strokeRect(ix - 8, iy, 16, 50);
+      for (var i = 0; i < 5; i++) {
+        ctx.beginPath();
+        ctx.moveTo(ix - 8, iy + i*10 + 10);
+        ctx.lineTo(ix - 3, iy + i*10 + 10);
+        ctx.stroke();
+      }
+      ctx.font = '10px Space Grotesk';
+      ctx.fillStyle = '#ffcc44';
+      ctx.textAlign = 'center';
+      ctx.fillText(CONFIG.i18n.ruler[window.__anim_lang||'cn'], ix, iy + 65);
+
+      // Stopwatch icon
+      var sy = iy + 80;
+      ctx.beginPath();
+      ctx.arc(ix, sy + 15, 12, 0, Math.PI*2);
+      ctx.strokeStyle = '#50ffb0';
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(ix, sy + 15);
+      ctx.lineTo(ix + 6, sy + 9);
+      ctx.stroke();
+      ctx.fillStyle = '#50ffb0';
+      ctx.fillText(CONFIG.i18n.stopwatch[window.__anim_lang||'cn'], ix, sy + 35);
+    }});
+  }
+
+  else if (f === 3) {
+    // Data table
+    els.push({type:'text', text:t.f3title, x:W/2, y:H*0.06, font:'bold 16px Space Grotesk', fill:'#50ffb0', align:'center'});
+
+    els.push({type:'custom', draw: function(ctx) {
+      var lang = window.__anim_lang || 'cn';
+      var tblX = W * 0.1;
+      var tblW = W * 0.8;
+      var colW = tblW / 4;
+      var rowH = Math.max(18, H * 0.038);
+      var fontSize = Math.max(10, W * 0.015);
+      var startY = H * 0.13;
+
+      // Header row
+      ctx.fillStyle = 'rgba(80,255,176,0.12)';
+      ctx.fillRect(tblX, startY, tblW, rowH * 1.2);
+      ctx.font = 'bold ' + fontSize + 'px Space Grotesk';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillStyle = '#50ffb0';
+      var headers = [
+        CONFIG.i18n.colPlane[lang],
+        CONFIG.i18n.colTrial[lang],
+        CONFIG.i18n.colDist[lang],
+        CONFIG.i18n.colTime[lang]
+      ];
+      headers.forEach(function(h, ci) {
+        ctx.fillText(h, tblX + colW * (ci + 0.5), startY + rowH * 0.6);
+      });
+
+      // Data rows
+      ctx.font = fontSize + 'px Space Grotesk';
+      SAMPLE_DATA.forEach(function(d, ri) {
+        var ry = startY + rowH * 1.2 + ri * rowH;
+        ctx.fillStyle = ri % 2 === 0 ? 'rgba(255,255,255,0.03)' : 'rgba(255,255,255,0.01)';
+        ctx.fillRect(tblX, ry, tblW, rowH);
+
+        ctx.fillStyle = PLANE_COLORS[d.plane];
+        ctx.fillText(d.plane, tblX + colW * 0.5, ry + rowH / 2);
+        ctx.fillText(String(d.trial), tblX + colW * 1.5, ry + rowH / 2);
+        ctx.fillStyle = '#f6f6fc';
+        ctx.fillText(d.dist.toFixed(1), tblX + colW * 2.5, ry + rowH / 2);
+        ctx.fillText(d.time.toFixed(2), tblX + colW * 3.5, ry + rowH / 2);
+      });
+
+      // Table border
+      ctx.strokeStyle = 'rgba(255,255,255,0.15)';
+      ctx.lineWidth = 1;
+      ctx.strokeRect(tblX, startY, tblW, rowH * 1.2 + SAMPLE_DATA.length * rowH);
+    }});
+  }
+
+  else if (f === 4) {
+    // Bar chart + conclusion
+    els.push({type:'text', text:t.f4title, x:W/2, y:H*0.06, font:'bold 16px Space Grotesk', fill:'#50ffb0', align:'center'});
+
+    // Bar chart on left half
+    els.push({type:'custom', draw: function(ctx) {
+      var lang = window.__anim_lang || 'cn';
+      var chartX = W * 0.05;
+      var chartW = W * 0.45;
+      var chartY = H * 0.14;
+      var chartH = H * 0.55;
+
+      // Avg distance label
+      ctx.font = 'bold 12px Space Grotesk';
+      ctx.fillStyle = '#aaabb0';
+      ctx.textAlign = 'center';
+      ctx.fillText(CONFIG.i18n.avgLabel[lang], chartX + chartW / 2, chartY);
+
+      var barBase = chartY + chartH;
+      var maxVal = 8;
+      var barW = chartW * 0.2;
+      var gap = chartW * 0.08;
+      var startX = chartX + gap;
+
+      var planes = ['A','B','C'];
+      var colors = ['#ff6b6b','#4ecdc4','#ffd93d'];
+
+      planes.forEach(function(p, i) {
+        var bx = startX + i * (barW + gap);
+        var val = PLANE_AVG[p];
+        var bh = (val / maxVal) * (chartH * 0.8);
+
+        // Bar
+        ctx.fillStyle = colors[i];
+        ctx.fillRect(bx, barBase - bh, barW, bh);
+
+        // Value label
+        ctx.font = 'bold 13px Space Grotesk';
+        ctx.fillStyle = colors[i];
+        ctx.textAlign = 'center';
+        ctx.fillText(val.toFixed(1) + 'm', bx + barW/2, barBase - bh - 8);
+
+        // Plane label
+        ctx.fillText(p, bx + barW/2, barBase + 16);
+      });
+
+      // Y axis
+      ctx.strokeStyle = 'rgba(255,255,255,0.2)';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(chartX, chartY + chartH * 0.1);
+      ctx.lineTo(chartX, barBase);
+      ctx.lineTo(chartX + chartW, barBase);
+      ctx.stroke();
+    }});
+
+    // Conclusion on right half
+    els.push({type:'custom', draw: function(ctx) {
+      var lang = window.__anim_lang || 'cn';
+      var rx = W * 0.55;
+      var ry = H * 0.16;
+      var rw = W * 0.4;
+
+      // Conclusion box
+      ctx.fillStyle = 'rgba(80,255,176,0.08)';
+      ctx.fillRect(rx, ry, rw, H * 0.28);
+      ctx.strokeStyle = '#50ffb0';
+      ctx.lineWidth = 1;
+      ctx.strokeRect(rx, ry, rw, H * 0.28);
+
+      ctx.font = 'bold 13px Space Grotesk';
+      ctx.fillStyle = '#50ffb0';
+      ctx.textAlign = 'left';
+      ctx.fillText(CONFIG.i18n.conclusion[lang], rx + 12, ry + 20);
+
+      ctx.font = '12px Noto Sans SC';
+      ctx.fillStyle = '#f6f6fc';
+      var lines = CONFIG.i18n.conclusionText[lang].split('\n');
+      lines.forEach(function(line, i) {
+        ctx.fillText(line, rx + 12, ry + 42 + i * 18);
+      });
+
+      // Improvement suggestions
+      var iy = ry + H * 0.32;
+      ctx.fillStyle = 'rgba(255,217,61,0.08)';
+      ctx.fillRect(rx, iy, rw, H * 0.3);
+      ctx.strokeStyle = '#ffd93d';
+      ctx.strokeRect(rx, iy, rw, H * 0.3);
+
+      ctx.font = 'bold 13px Space Grotesk';
+      ctx.fillStyle = '#ffd93d';
+      ctx.fillText(CONFIG.i18n.improve[lang], rx + 12, iy + 20);
+
+      ctx.font = '12px Noto Sans SC';
+      ctx.fillStyle = '#f6f6fc';
+      var imps = [CONFIG.i18n.imp1[lang], CONFIG.i18n.imp2[lang], CONFIG.i18n.imp3[lang]];
+      imps.forEach(function(imp, i) {
+        ctx.fillText(imp, rx + 12, iy + 42 + i * 22);
+      });
+    }});
+  }
+
+  return els;
+}
+
+// Expose to runtime
+window.getFrameElements = getFrameElements;
+</script>
+</body>
+</html>

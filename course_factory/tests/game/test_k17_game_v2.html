@@ -1,0 +1,1585 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=Inter:wght@400;500&family=Noto+Sans+SC:wght@400;700&display=swap" rel="stylesheet">
+<title>Tablecloth Pull Challenge</title>
+<style>
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box;border-radius:0!important;}
+html,body{width:100%;height:100vh;overflow:hidden;background:#0c0e14;color:#e2e2e9;font-family:'Inter','Noto Sans SC',sans-serif;}
+body{margin:0;padding:0;}
+.game-wrap{display:flex;flex-direction:row;height:100vh;overflow:hidden;}
+.game-sidebar{width:200px;min-width:200px;max-width:200px;display:flex;flex-direction:column;gap:8px;padding:10px;background:rgba(0,0,0,0.5);border-right:1px solid rgba(80,255,176,0.15);overflow-y:auto;}
+.sidebar-lang{align-self:flex-start;flex-shrink:0;font-family:'Space Grotesk',sans-serif;font-size:10px;font-weight:700;padding:3px 8px;cursor:pointer;border:1px solid rgba(255,181,156,0.25);background:transparent;color:#ffb59c;letter-spacing:1px;}
+.sidebar-lang:hover{border-color:#ffb59c;background:rgba(255,181,156,0.08);}
+.sidebar-title{font-family:'Space Grotesk',sans-serif;font-size:11px;font-weight:700;color:#50ffb0;letter-spacing:0.08em;text-transform:uppercase;margin-top:4px;}
+.sidebar-guide{font-size:12px;color:#aaabb0;line-height:1.6;}
+.game-main{flex:1;display:flex;flex-direction:column;min-width:0;}
+.game-header{padding:8px 16px;display:flex;justify-content:space-between;align-items:center;background:rgba(0,0,0,0.4);}
+.game-header h1{font-family:'Space Grotesk',sans-serif;font-size:clamp(13px,2vw,17px);font-weight:700;color:#50ffb0;}
+.game-header .info{font-family:'Space Grotesk',sans-serif;font-size:12px;color:#aaabb0;}
+.game-body{flex:1;display:flex;flex-direction:column;min-height:0;}
+canvas{width:100%;height:100%;display:block;}
+.control-panel{display:flex;justify-content:center;align-items:center;gap:12px;padding:8px 16px;background:rgba(0,0,0,0.4);flex-wrap:wrap;}
+.ctrl-btn{font-family:'Space Grotesk',sans-serif;font-size:12px;font-weight:700;padding:6px 18px;border:none;cursor:pointer;color:#0c0e14;background:linear-gradient(135deg,#50ffb0,#17df93);box-shadow:0 0 10px rgba(80,255,176,0.3);transition:transform 0.1s;}
+.ctrl-btn:hover{transform:scale(1.04);}
+.ctrl-btn:active{transform:scale(0.96);}
+.ctrl-btn:disabled{opacity:0.4;cursor:default;transform:none;}
+.ctrl-btn.secondary{background:rgba(30,30,45,0.9);color:#aaabb0;box-shadow:none;border:1px solid rgba(170,171,176,0.2);}
+.ctrl-btn.secondary:hover{color:#50ffb0;border-color:rgba(80,255,176,0.3);}
+.hud-bar{height:44px;display:flex;align-items:center;justify-content:space-around;background:rgba(0,0,0,0.55);padding:0 16px;}
+.hud-item{text-align:center;}
+.hud-label{font-family:'Space Grotesk',sans-serif;font-size:9px;letter-spacing:0.12em;color:#aaabb0;text-transform:uppercase;}
+.hud-val{font-family:'Space Grotesk',sans-serif;font-size:14px;font-weight:700;color:#50ffb0;transition:transform 0.15s;}
+</style>
+</head>
+<body>
+<div class="game-wrap">
+  <div class="game-sidebar">
+    <button class="sidebar-lang" id="langBtn">CN</button>
+    <div class="sidebar-title" id="sidebarTitle"></div>
+    <div class="sidebar-guide" id="guideContent"></div>
+  </div>
+  <div class="game-main">
+    <div class="game-header">
+      <h1 id="gameTitle"></h1>
+      <div class="info" id="roundInfo"></div>
+    </div>
+    <div class="game-body">
+      <canvas id="c"></canvas>
+    </div>
+    <div class="control-panel">
+      <button class="ctrl-btn" id="btnAction"></button>
+      <button class="ctrl-btn secondary" id="btnReset"></button>
+    </div>
+    <div class="hud-bar">
+      <div class="hud-item"><div class="hud-label" id="hudL1"></div><div class="hud-val" id="hudV1"></div></div>
+      <div class="hud-item"><div class="hud-label" id="hudL2"></div><div class="hud-val" id="hudV2"></div></div>
+      <div class="hud-item"><div class="hud-label" id="hudL3"></div><div class="hud-val" id="hudV3"></div></div>
+      <div class="hud-item"><div class="hud-label" id="hudL4"></div><div class="hud-val" id="hudV4"></div></div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ============================================================
+// K17 Game: Tablecloth Pull Challenge
+// Newton's First Law - Inertia demonstration
+// 4 levels: Speed, Mass, Friction surface, Space station
+// ============================================================
+
+// --- I18N ---
+var I18N = {
+  title:        {en:'TABLECLOTH PULL CHALLENGE', cn:'\u684c\u5e03\u62bd\u53d6\u6311\u6218'},
+  sideTitle:    {en:'NEWTON\'S 1ST LAW', cn:'\u725b\u987f\u7b2c\u4e00\u5b9a\u5f8b'},
+  guide1:       {en:'Drag the slider to set pull speed, then click PULL. Faster pulls give less time for friction to act. Try to keep the cup on the table!', cn:'\u62d6\u52a8\u6ed1\u5757\u8bbe\u7f6e\u62bd\u5e03\u901f\u5ea6\uff0c\u7136\u540e\u70b9\u51fb\u62bd\uff01\u901f\u5ea6\u8d8a\u5feb\uff0c\u6469\u64e6\u529b\u4f5c\u7528\u65f6\u95f4\u8d8a\u77ed\u3002\u8bd5\u8bd5\u8ba9\u676f\u5b50\u7559\u5728\u684c\u4e0a\uff01'},
+  guide2:       {en:'Different objects have different masses. Heavier = more inertia = harder to move. Predict which objects will stay, then pull!', cn:'\u4e0d\u540c\u7269\u4f53\u8d28\u91cf\u4e0d\u540c\u3002\u8d8a\u91cd = \u60ef\u6027\u8d8a\u5927 = \u8d8a\u96be\u88ab\u79fb\u52a8\u3002\u9884\u6d4b\u54ea\u4e9b\u7269\u4f53\u4f1a\u7559\u4e0b\uff0c\u7136\u540e\u62bd\uff01'},
+  guide3:       {en:'Change the tablecloth material. Lower friction + faster pull = objects stay. Find the right combination!', cn:'\u6362\u4e0d\u540c\u7684\u684c\u5e03\u6750\u8d28\u3002\u6469\u64e6\u529b\u8d8a\u5c0f + \u901f\u5ea6\u8d8a\u5feb = \u7269\u4f53\u8d8a\u5bb9\u6613\u7559\u4e0b\u3002\u627e\u5230\u6b63\u786e\u7ec4\u5408\uff01'},
+  guide4:       {en:'In space, there is no friction! Objects keep moving forever once pushed. Gently push the crate to dock - not too fast, not too slow!', cn:'\u592a\u7a7a\u4e2d\u6ca1\u6709\u6469\u64e6\u529b\uff01\u7269\u4f53\u4e00\u65e6\u63a8\u52a8\u5c31\u6c38\u8fdc\u4e0d\u505c\u3002\u8f7b\u8f7b\u63a8\u52a8\u8d27\u7bb1\u5bf9\u63a5\u7a7a\u95f4\u7ad9\u2014\u2014\u4e0d\u8981\u592a\u5feb\uff0c\u4e5f\u4e0d\u8981\u592a\u6162\uff01'},
+  pull:         {en:'PULL!', cn:'\u62bd\uff01'},
+  push:         {en:'PUSH', cn:'\u63a8\uff01'},
+  reset:        {en:'RESET', cn:'\u91cd\u7f6e'},
+  nextLevel:    {en:'NEXT LEVEL', cn:'\u4e0b\u4e00\u5173'},
+  levelLabel:   {en:'LEVEL', cn:'\u5173\u5361'},
+  speedLabel:   {en:'SPEED', cn:'\u901f\u5ea6'},
+  massLabel:    {en:'MASS', cn:'\u8d28\u91cf'},
+  scoreLabel:   {en:'SCORE', cn:'\u5f97\u5206'},
+  frictionLabel:{en:'FRICTION', cn:'\u6469\u64e6\u529b'},
+  level1:       {en:'Lv1: Speed Matters', cn:'\u7b2c1\u5173\uff1a\u901f\u5ea6\u5f88\u91cd\u8981'},
+  level2:       {en:'Lv2: Mass Matters', cn:'\u7b2c2\u5173\uff1a\u8d28\u91cf\u5f88\u91cd\u8981'},
+  level3:       {en:'Lv3: Friction Surface', cn:'\u7b2c3\u5173\uff1a\u6469\u64e6\u8868\u9762'},
+  level4:       {en:'Lv4: Space Station', cn:'\u7b2c4\u5173\uff1a\u592a\u7a7a\u7ad9'},
+  slow:         {en:'SLOW', cn:'\u6162'},
+  fast:         {en:'FAST', cn:'\u5feb'},
+  success:      {en:'SUCCESS! Object stays!', cn:'\u6210\u529f\uff01\u7269\u4f53\u7559\u4e0b\u4e86\uff01'},
+  fail:         {en:'FAILED! Object moved off!', cn:'\u5931\u8d25\uff01\u7269\u4f53\u88ab\u5e26\u8d70\u4e86\uff01'},
+  docked:       {en:'DOCKED! Perfect approach!', cn:'\u5bf9\u63a5\u6210\u529f\uff01\u5b8c\u7f8e\u63a5\u8fd1\uff01'},
+  crashed:      {en:'CRASHED! Too fast!', cn:'\u649e\u6bc1\u4e86\uff01\u592a\u5feb\u4e86\uff01'},
+  missed:       {en:'MISSED! Too slow!', cn:'\u6ca1\u8ffd\u4e0a\uff01\u592a\u6162\u4e86\uff01'},
+  drifting:     {en:'DRIFTING... No friction to stop it!', cn:'\u6f02\u6d6e\u4e2d\u2026\u6ca1\u6709\u6469\u64e6\u529b\u963b\u6b62\u5b83\uff01'},
+  coin:         {en:'Coin (5g)', cn:'\u786c\u5e01 (5g)'},
+  cup:          {en:'Cup (200g)', cn:'\u676f\u5b50 (200g)'},
+  book:         {en:'Book (500g)', cn:'\u4e66 (500g)'},
+  bowling:      {en:'Bowling Ball (5kg)', cn:'\u4fdd\u9f84\u7403 (5kg)'},
+  silk:         {en:'Silk', cn:'\u4e1d\u7ef8'},
+  cotton:       {en:'Cotton', cn:'\u68c9\u5e03'},
+  rubber:       {en:'Rubber', cn:'\u6a61\u80f6'},
+  predict:      {en:'PREDICT: Will it stay?', cn:'\u9884\u6d4b\uff1a\u5b83\u4f1a\u7559\u4e0b\u5417\uff1f'},
+  yes:          {en:'YES', cn:'\u4f1a'},
+  no:           {en:'NO', cn:'\u4e0d\u4f1a'},
+  correct:      {en:'Correct prediction!', cn:'\u9884\u6d4b\u6b63\u786e\uff01'},
+  wrong:        {en:'Wrong prediction!', cn:'\u9884\u6d4b\u9519\u8bef\uff01'},
+  complete:     {en:'ALL LEVELS COMPLETE!', cn:'\u5168\u90e8\u5b8c\u6210\uff01'},
+  insight:      {en:'Objects at rest tend to stay at rest (inertia). Quick pulls minimize friction impulse. In space with no friction, objects move forever!', cn:'\u9759\u6b62\u7684\u7269\u4f53\u503e\u5411\u4e8e\u4fdd\u6301\u9759\u6b62\uff08\u60ef\u6027\uff09\u3002\u5feb\u901f\u62bd\u53d6\u51cf\u5c11\u6469\u64e6\u51b2\u91cf\u3002\u592a\u7a7a\u4e2d\u6ca1\u6709\u6469\u64e6\u529b\uff0c\u7269\u4f53\u4f1a\u6c38\u8fdc\u8fd0\u52a8\uff01'},
+  forceTime:    {en:'Friction Force x Time = Impulse', cn:'\u6469\u64e6\u529b x \u65f6\u95f4 = \u51b2\u91cf'},
+  pullFaster:   {en:'Pull faster to reduce impulse!', cn:'\u62bd\u5f97\u66f4\u5feb\u6765\u51cf\u5c11\u51b2\u91cf\uff01'},
+  inertiaHigh:  {en:'High mass = High inertia = Stays!', cn:'\u8d28\u91cf\u5927 = \u60ef\u6027\u5927 = \u7559\u4e0b\uff01'},
+  inertiaLow:   {en:'Low mass = Low inertia = Moves!', cn:'\u8d28\u91cf\u5c0f = \u60ef\u6027\u5c0f = \u88ab\u5e26\u8d70\uff01'},
+  selectObj:    {en:'Select an object:', cn:'\u9009\u62e9\u4e00\u4e2a\u7269\u4f53\uff1a'},
+  selectCloth:  {en:'Select tablecloth:', cn:'\u9009\u62e9\u684c\u5e03\uff1a'},
+  pushForce:    {en:'Push force:', cn:'\u63a8\u529b\uff1a'},
+  gentle:       {en:'GENTLE', cn:'\u8f7b'},
+  strong:       {en:'STRONG', cn:'\u91cd'},
+  noFriction:   {en:'NO FRICTION', cn:'\u65e0\u6469\u64e6'},
+};
+
+var lang = 'cn';
+function t(key) { return I18N[key] ? (I18N[key][lang] || I18N[key].en || key) : key; }
+
+var soundMuted = true;
+
+// --- Audio ---
+var audioCtx = null;
+function initAudio() {
+  if (!audioCtx) {
+    try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch(e) {}
+  }
+}
+function playTone(freq, dur, type, vol) {
+  if (soundMuted || !audioCtx) return;
+  try {
+    var osc = audioCtx.createOscillator();
+    var gain = audioCtx.createGain();
+    osc.type = type || 'sine';
+    osc.frequency.value = freq;
+    gain.gain.setValueAtTime(vol || 0.15, audioCtx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + dur);
+    osc.connect(gain);
+    gain.connect(audioCtx.destination);
+    osc.start();
+    osc.stop(audioCtx.currentTime + dur);
+  } catch(e) {}
+}
+function playSuccess() { playTone(523, 0.15, 'sine', 0.12); setTimeout(function(){ playTone(659, 0.15, 'sine', 0.12); }, 100); setTimeout(function(){ playTone(784, 0.25, 'sine', 0.12); }, 200); }
+function playFail() { playTone(200, 0.3, 'triangle', 0.15); setTimeout(function(){ playTone(150, 0.4, 'triangle', 0.12); }, 150); }
+function playScore() { playTone(880, 0.1, 'sine', 0.1); }
+function playComplete() { playTone(523, 0.2, 'sine', 0.1); setTimeout(function(){ playTone(659, 0.2, 'sine', 0.1); }, 150); setTimeout(function(){ playTone(784, 0.2, 'sine', 0.1); }, 300); setTimeout(function(){ playTone(1047, 0.4, 'sine', 0.12); }, 450); }
+function playClick() { playTone(600, 0.05, 'square', 0.05); }
+
+// --- Easing ---
+function easeOutCubic(x) { return 1 - Math.pow(1 - x, 3); }
+function easeInOutCubic(x) { return x < 0.5 ? 4*x*x*x : 1 - Math.pow(-2*x+2,3)/2; }
+function easeOutBack(x) { var c1=1.70158; var c3=c1+1; return 1+c3*Math.pow(x-1,3)+c1*Math.pow(x-1,2); }
+
+// --- Particles ---
+var particles = [];
+function spawnParticles(cx, cy, count, color1, color2, speedMult) {
+  var sm = speedMult || 1;
+  for (var pi = 0; pi < count; pi++) {
+    var angle = Math.random() * Math.PI * 2;
+    var spd = (1.5 + Math.random() * 3) * sm;
+    particles.push({
+      x: cx, y: cy,
+      vx: Math.cos(angle) * spd,
+      vy: Math.sin(angle) * spd - Math.random() * 2,
+      life: 1.0,
+      decay: 0.015 + Math.random() * 0.01,
+      size: 2 + Math.random() * 3,
+      color: Math.random() > 0.5 ? color1 : color2
+    });
+  }
+}
+function updateParticles() {
+  for (var pi = particles.length - 1; pi >= 0; pi--) {
+    var p = particles[pi];
+    p.x += p.vx;
+    p.y += p.vy;
+    p.vy += 0.08;
+    p.life -= p.decay;
+    if (p.life <= 0) particles.splice(pi, 1);
+  }
+}
+function drawParticles(ctx) {
+  for (var pi = 0; pi < particles.length; pi++) {
+    var p = particles[pi];
+    ctx.save();
+    ctx.globalAlpha = p.life * 0.8;
+    ctx.shadowColor = p.color;
+    ctx.shadowBlur = 4;
+    ctx.fillStyle = p.color;
+    ctx.fillRect(p.x - p.size/2, p.y - p.size/2, p.size, p.size);
+    ctx.restore();
+  }
+}
+
+// --- Screen Shake ---
+var shakeAmount = 0;
+var shakeDuration = 0;
+var shakeTimer = 0;
+function triggerShake(amount, duration) {
+  shakeAmount = amount;
+  shakeDuration = duration;
+  shakeTimer = 0;
+}
+function getShakeOffset() {
+  if (shakeTimer >= shakeDuration) return {x: 0, y: 0};
+  var progress = shakeTimer / shakeDuration;
+  var decay = 1 - progress;
+  var amp = shakeAmount * decay;
+  return {
+    x: (Math.random() - 0.5) * 2 * amp,
+    y: (Math.random() - 0.5) * 2 * amp
+  };
+}
+
+// --- Parallax Stars ---
+var bgStars = [];
+function initStars() {
+  bgStars = [];
+  for (var si = 0; si < 80; si++) {
+    bgStars.push({
+      x: Math.random() * 2000,
+      y: Math.random() * 1200,
+      size: 0.5 + Math.random() * 1.5,
+      speed: 0.1 + Math.random() * 0.3,
+      brightness: 0.3 + Math.random() * 0.7,
+      layer: Math.random() > 0.5 ? 0 : 1
+    });
+  }
+}
+initStars();
+
+// --- Game Constants ---
+var OBJECTS_L2 = [
+  {key:'coin',    mass:0.005, w:20, h:4,  color:'#ffd700', label:'coin'},
+  {key:'cup',     mass:0.2,   w:28, h:32, color:'#e8e8f0', label:'cup'},
+  {key:'book',    mass:0.5,   w:40, h:14, color:'#8b4513', label:'book'},
+  {key:'bowling', mass:5.0,   w:32, h:32, color:'#333340', label:'bowling'}
+];
+
+var CLOTHS_L3 = [
+  {key:'silk',   mu:0.10, color:'rgba(200,180,220,0.6)', label:'silk'},
+  {key:'cotton', mu:0.30, color:'rgba(220,200,180,0.6)', label:'cotton'},
+  {key:'rubber', mu:0.70, color:'rgba(100,100,100,0.6)', label:'rubber'}
+];
+
+// --- Game State ---
+var currentLevel = 0;
+var gamePhase = 'idle'; // idle, pulling, result, predicting, pushing, drifting, docked, crashed, missed, complete
+var totalScore = 0;
+var levelScores = [0, 0, 0, 0];
+
+// Level 1 state
+var pullSpeed = 0.5; // 0..1
+var sliderDragging = false;
+
+// Level 2 state
+var selectedObject = 0;
+var prediction = -1; // -1=none, 0=no, 1=yes
+
+// Level 3 state
+var selectedCloth = 0;
+
+// Level 4 state (space)
+var pushForce = 0.5; // 0..1
+var crateX = 0;
+var crateVx = 0;
+var stationX = 0;
+var spacePhase = 'idle'; // idle, drifting, docked, crashed, missed
+
+// Physics sim
+var clothX = 0; // cloth offset during pull
+var objX = 0;   // object offset
+var objVx = 0;
+var pullTimer = 0;
+var pullDuration = 0;
+var pullActive = false;
+var simTime = 0;
+var simResult = ''; // 'success' or 'fail'
+
+// Animation
+var animTime = 0;
+var idlePulse = 0;
+var resultAlpha = 0;
+var completeAlpha = 0;
+var transitionAlpha = 0;
+var transitioning = false;
+var hudScales = [1, 1, 1, 1];
+
+// Canvas
+var canvas = document.getElementById('c');
+var ctx2d = canvas.getContext('2d');
+var canvasW = 100;
+var canvasH = 100;
+var dpr = Math.min(window.devicePixelRatio || 1, 2);
+
+// --- Resize ---
+function resizeCanvas() {
+  var rect = canvas.getBoundingClientRect();
+  canvasW = rect.width;
+  canvasH = rect.height;
+  if (canvasW < 80) canvasW = 80;
+  if (canvasH < 80) canvasH = 80;
+  canvas.width = Math.round(canvasW * dpr);
+  canvas.height = Math.round(canvasH * dpr);
+  canvas.style.width = canvasW + 'px';
+  canvas.style.height = canvasH + 'px';
+  ctx2d.setTransform(dpr, 0, 0, dpr, 0, 0);
+}
+
+// --- UI Update ---
+function updateTexts() {
+  document.getElementById('sidebarTitle').textContent = t('sideTitle');
+  var guideKeys = ['guide1','guide2','guide3','guide4'];
+  document.getElementById('guideContent').textContent = t(guideKeys[currentLevel]);
+  var levelKeys = ['level1','level2','level3','level4'];
+  document.getElementById('gameTitle').textContent = t('title');
+  document.getElementById('roundInfo').textContent = t(levelKeys[currentLevel]);
+  document.getElementById('hudL1').textContent = t('levelLabel');
+  document.getElementById('hudL2').textContent = currentLevel === 3 ? t('pushForce') : t('speedLabel');
+  document.getElementById('hudL3').textContent = currentLevel === 1 ? t('massLabel') : t('frictionLabel');
+  document.getElementById('hudL4').textContent = t('scoreLabel');
+}
+
+function updateHUD() {
+  document.getElementById('hudV1').textContent = (currentLevel + 1) + '/4';
+  if (currentLevel === 3) {
+    document.getElementById('hudV2').textContent = Math.round(pushForce * 100) + '%';
+  } else {
+    document.getElementById('hudV2').textContent = Math.round(pullSpeed * 100) + '%';
+  }
+  if (currentLevel === 1) {
+    document.getElementById('hudV3').textContent = OBJECTS_L2[selectedObject].mass + 'kg';
+  } else if (currentLevel === 2) {
+    document.getElementById('hudV3').textContent = CLOTHS_L3[selectedCloth].label;
+  } else if (currentLevel === 3) {
+    document.getElementById('hudV3').textContent = t('noFriction');
+  } else {
+    document.getElementById('hudV3').textContent = '\u03BC=0.25';
+  }
+  document.getElementById('hudV4').textContent = totalScore + '';
+  // Score punch
+  hudScales[3] = 1.3;
+}
+
+function updateBtnState() {
+  var btnA = document.getElementById('btnAction');
+  var btnR = document.getElementById('btnReset');
+  if (gamePhase === 'idle') {
+    btnA.textContent = currentLevel === 3 ? t('push') : t('pull');
+    btnA.disabled = false;
+    btnR.textContent = t('reset');
+    btnR.disabled = true;
+  } else if (gamePhase === 'result' || gamePhase === 'docked' || gamePhase === 'crashed' || gamePhase === 'missed') {
+    if (currentLevel < 3 || gamePhase === 'docked' || gamePhase === 'crashed' || gamePhase === 'missed') {
+      btnA.textContent = t('nextLevel');
+      btnA.disabled = false;
+    } else {
+      btnA.textContent = t('pull');
+      btnA.disabled = true;
+    }
+    btnR.textContent = t('reset');
+    btnR.disabled = false;
+  } else if (gamePhase === 'predicting') {
+    btnA.textContent = t('pull');
+    btnA.disabled = true;
+    btnR.textContent = t('reset');
+    btnR.disabled = false;
+  } else if (gamePhase === 'complete') {
+    btnA.textContent = t('nextLevel');
+    btnA.disabled = true;
+    btnR.textContent = t('reset');
+    btnR.disabled = false;
+  } else {
+    btnA.disabled = true;
+    btnR.disabled = true;
+  }
+}
+
+// --- Physics ---
+// Returns whether object stays on table
+// friction_coefficient, object_mass, pull_speed_normalized(0..1)
+function simulatePull(mu, mass, speedNorm) {
+  // pull_speed maps to pull_duration: fast=0.05s, slow=1.0s
+  var pullTime = 0.05 + (1 - speedNorm) * 0.95;
+  // Friction force = mu * m * g
+  var g = 9.8;
+  var frictionForce = mu * mass * g;
+  // Impulse = F * t
+  var impulse = frictionForce * pullTime;
+  // Object velocity after pull = impulse / mass = mu * g * t
+  var objVelocity = impulse / mass; // = mu * g * pullTime
+  // If velocity is high enough, object "moves off" table
+  // Threshold: object moves more than ~5cm of the edge
+  var displacement = objVelocity * 0.3; // displacement over 0.3s after pull
+  // Success if displacement < threshold (object stays)
+  var threshold = 0.05; // 5cm
+  return {
+    pullTime: pullTime,
+    frictionForce: frictionForce,
+    impulse: impulse,
+    objVelocity: objVelocity,
+    displacement: displacement,
+    stays: displacement < threshold,
+    objFinalVx: objVelocity
+  };
+}
+
+// --- Level init ---
+function initLevel() {
+  gamePhase = 'idle';
+  clothX = 0;
+  objX = 0;
+  objVx = 0;
+  pullTimer = 0;
+  pullActive = false;
+  simTime = 0;
+  simResult = '';
+  resultAlpha = 0;
+  completeAlpha = 0;
+  prediction = -1;
+  spacePhase = 'idle';
+  crateVx = 0;
+
+  if (currentLevel === 0) {
+    pullSpeed = 0.5;
+  } else if (currentLevel === 1) {
+    selectedObject = 0;
+    pullSpeed = 0.85; // fixed fast pull for level 2
+    gamePhase = 'predicting';
+  } else if (currentLevel === 2) {
+    selectedCloth = 0;
+    pullSpeed = 0.5;
+  } else if (currentLevel === 3) {
+    pushForce = 0.5;
+    crateX = canvasW * 0.15;
+    stationX = canvasW * 0.82;
+  }
+
+  updateTexts();
+  updateHUD();
+  updateBtnState();
+}
+
+// --- Actions ---
+function doAction() {
+  initAudio();
+  if (gamePhase === 'result' || gamePhase === 'docked' || gamePhase === 'crashed' || gamePhase === 'missed') {
+    // Next level
+    if (currentLevel < 3) {
+      transitioning = true;
+      transitionAlpha = 0;
+      setTimeout(function() {
+        currentLevel++;
+        initLevel();
+        transitioning = false;
+      }, 400);
+      return;
+    } else {
+      gamePhase = 'complete';
+      completeAlpha = 0;
+      playComplete();
+      spawnParticles(canvasW/2, canvasH/2, 30, '#50ffb0', '#ffb59c', 2);
+      updateBtnState();
+      return;
+    }
+  }
+
+  if (currentLevel === 3) {
+    // Space push
+    if (gamePhase !== 'idle') return;
+    gamePhase = 'drifting';
+    spacePhase = 'drifting';
+    // Push force -> initial velocity. Range: 0.3 to 5 px/frame
+    crateVx = 0.3 + pushForce * 4.7;
+    playClick();
+    updateBtnState();
+    return;
+  }
+
+  if (gamePhase !== 'idle') return;
+  gamePhase = 'pulling';
+  pullActive = true;
+  pullTimer = 0;
+
+  // Compute physics
+  var mu = 0.25; // default friction
+  var mass = 0.2; // default cup mass
+  if (currentLevel === 1) {
+    mass = OBJECTS_L2[selectedObject].mass;
+    mu = 0.25;
+  } else if (currentLevel === 2) {
+    mu = CLOTHS_L3[selectedCloth].mu;
+    mass = 0.2; // cup
+  }
+
+  var result = simulatePull(mu, mass, pullSpeed);
+  pullDuration = result.pullTime;
+  simResult = result.stays ? 'success' : 'fail';
+  objVx = result.stays ? 0 : result.objFinalVx * 80; // scale for visual
+
+  updateBtnState();
+}
+
+function doReset() {
+  initLevel();
+}
+
+document.getElementById('btnAction').addEventListener('click', doAction);
+document.getElementById('btnReset').addEventListener('click', doReset);
+
+// --- Language toggle ---
+document.getElementById('langBtn').addEventListener('click', function() {
+  lang = lang === 'cn' ? 'en' : 'cn';
+  document.getElementById('langBtn').textContent = lang === 'cn' ? 'CN' : 'EN';
+  updateTexts();
+  updateHUD();
+  updateBtnState();
+});
+
+// --- Canvas interaction ---
+var mouseX = 0;
+var mouseY = 0;
+var mouseDown = false;
+
+function getCanvasCoords(ev) {
+  var rect = canvas.getBoundingClientRect();
+  var cx, cy;
+  if (ev.touches && ev.touches.length > 0) {
+    cx = ev.touches[0].clientX;
+    cy = ev.touches[0].clientY;
+  } else {
+    cx = ev.clientX;
+    cy = ev.clientY;
+  }
+  return { x: cx - rect.left, y: cy - rect.top };
+}
+
+canvas.addEventListener('mousedown', function(ev) {
+  initAudio();
+  mouseDown = true;
+  var c = getCanvasCoords(ev);
+  mouseX = c.x; mouseY = c.y;
+  handleCanvasDown(c.x, c.y);
+});
+canvas.addEventListener('mousemove', function(ev) {
+  var c = getCanvasCoords(ev);
+  mouseX = c.x; mouseY = c.y;
+  handleCanvasMove(c.x, c.y);
+});
+canvas.addEventListener('mouseup', function() {
+  mouseDown = false;
+  sliderDragging = false;
+});
+canvas.addEventListener('touchstart', function(ev) {
+  ev.preventDefault();
+  initAudio();
+  mouseDown = true;
+  var c = getCanvasCoords(ev);
+  mouseX = c.x; mouseY = c.y;
+  handleCanvasDown(c.x, c.y);
+}, {passive: false});
+canvas.addEventListener('touchmove', function(ev) {
+  ev.preventDefault();
+  var c = getCanvasCoords(ev);
+  mouseX = c.x; mouseY = c.y;
+  handleCanvasMove(c.x, c.y);
+}, {passive: false});
+canvas.addEventListener('touchend', function() {
+  mouseDown = false;
+  sliderDragging = false;
+});
+
+// --- Slider / UI hit areas (computed relative to canvas) ---
+function getSliderRect() {
+  var sx = canvasW * 0.15;
+  var sy = canvasH * 0.82;
+  var sw = canvasW * 0.45;
+  var sh = 20;
+  return {x: sx, y: sy, w: sw, h: sh};
+}
+
+function getObjectBtnRects() {
+  var rects = [];
+  var startY = canvasH * 0.72;
+  var bw = 70;
+  var bh = 28;
+  var gap = 8;
+  var totalW = OBJECTS_L2.length * bw + (OBJECTS_L2.length - 1) * gap;
+  var startX = (canvasW - totalW) / 2;
+  for (var oi = 0; oi < OBJECTS_L2.length; oi++) {
+    rects.push({x: startX + oi * (bw + gap), y: startY, w: bw, h: bh, idx: oi});
+  }
+  return rects;
+}
+
+function getClothBtnRects() {
+  var rects = [];
+  var startY = canvasH * 0.72;
+  var bw = 80;
+  var bh = 28;
+  var gap = 12;
+  var totalW = CLOTHS_L3.length * bw + (CLOTHS_L3.length - 1) * gap;
+  var startX = (canvasW - totalW) / 2;
+  for (var ci = 0; ci < CLOTHS_L3.length; ci++) {
+    rects.push({x: startX + ci * (bw + gap), y: startY, w: bw, h: bh, idx: ci});
+  }
+  return rects;
+}
+
+function getPredictBtnRects() {
+  var bw = 60;
+  var bh = 28;
+  var gap = 20;
+  var cy = canvasH * 0.78;
+  var cx = canvasW / 2;
+  return [
+    {x: cx - bw - gap/2, y: cy, w: bw, h: bh, val: 1},
+    {x: cx + gap/2, y: cy, w: bw, h: bh, val: 0}
+  ];
+}
+
+function handleCanvasDown(px, py) {
+  if (currentLevel === 0 || currentLevel === 2) {
+    // Slider
+    var sr = getSliderRect();
+    if (py >= sr.y - 10 && py <= sr.y + sr.h + 10 && px >= sr.x - 10 && px <= sr.x + sr.w + 10) {
+      sliderDragging = true;
+      handleSliderDrag(px);
+      return;
+    }
+  }
+
+  if (currentLevel === 3 && gamePhase === 'idle') {
+    // Space slider (push force)
+    var sr2 = getSliderRect();
+    if (py >= sr2.y - 10 && py <= sr2.y + sr2.h + 10 && px >= sr2.x - 10 && px <= sr2.x + sr2.w + 10) {
+      sliderDragging = true;
+      handleSliderDrag(px);
+      return;
+    }
+  }
+
+  if (currentLevel === 1 && (gamePhase === 'idle' || gamePhase === 'predicting')) {
+    // Object selection
+    var objRects = getObjectBtnRects();
+    for (var oi = 0; oi < objRects.length; oi++) {
+      var r = objRects[oi];
+      if (px >= r.x && px <= r.x + r.w && py >= r.y && py <= r.y + r.h) {
+        selectedObject = r.idx;
+        gamePhase = 'predicting';
+        prediction = -1;
+        playClick();
+        updateHUD();
+        updateBtnState();
+        return;
+      }
+    }
+    // Prediction buttons
+    if (gamePhase === 'predicting') {
+      var predRects = getPredictBtnRects();
+      for (var pi = 0; pi < predRects.length; pi++) {
+        var pr = predRects[pi];
+        if (px >= pr.x && px <= pr.x + pr.w && py >= pr.y && py <= pr.y + pr.h) {
+          prediction = pr.val;
+          playClick();
+          // Now do the pull
+          gamePhase = 'idle';
+          pullSpeed = 0.85;
+          doAction();
+          return;
+        }
+      }
+    }
+  }
+
+  if (currentLevel === 2 && gamePhase === 'idle') {
+    // Cloth selection
+    var clothRects = getClothBtnRects();
+    for (var ci = 0; ci < clothRects.length; ci++) {
+      var cr = clothRects[ci];
+      if (px >= cr.x && px <= cr.x + cr.w && py >= cr.y && py <= cr.y + cr.h) {
+        selectedCloth = cr.idx;
+        playClick();
+        updateHUD();
+        return;
+      }
+    }
+  }
+}
+
+function handleCanvasMove(px, py) {
+  if (sliderDragging) {
+    handleSliderDrag(px);
+  }
+}
+
+function handleSliderDrag(px) {
+  var sr = getSliderRect();
+  var val = (px - sr.x) / sr.w;
+  val = Math.max(0, Math.min(1, val));
+  if (currentLevel === 3) {
+    pushForce = val;
+  } else {
+    pullSpeed = val;
+  }
+  updateHUD();
+}
+
+// --- Drawing Helpers ---
+function drawRoundedRect(ctx, rx, ry, rw, rh, radius) {
+  // Rectangles only (border-radius:0 rule) but we need a path
+  ctx.beginPath();
+  ctx.rect(rx, ry, rw, rh);
+}
+
+// --- Draw Background ---
+function drawBackground() {
+  var grad = ctx2d.createLinearGradient(0, 0, 0, canvasH);
+  if (currentLevel === 3) {
+    grad.addColorStop(0, '#050510');
+    grad.addColorStop(1, '#0a0a20');
+  } else {
+    grad.addColorStop(0, '#0c0e14');
+    grad.addColorStop(1, '#10131c');
+  }
+  ctx2d.fillStyle = grad;
+  ctx2d.fillRect(0, 0, canvasW, canvasH);
+}
+
+function drawStars(scrollOffset) {
+  for (var si = 0; si < bgStars.length; si++) {
+    var s = bgStars[si];
+    var speedMult = s.layer === 0 ? 0.3 : 1.0;
+    var sx = (s.x - scrollOffset * speedMult) % canvasW;
+    if (sx < 0) sx += canvasW;
+    var sy = s.y % canvasH;
+    var twinkle = 0.6 + 0.4 * Math.sin(animTime * 0.5 + s.x);
+    ctx2d.fillStyle = 'rgba(200,210,255,' + (s.brightness * twinkle * 0.5) + ')';
+    ctx2d.fillRect(sx, sy, s.size, s.size);
+  }
+}
+
+function drawGridPattern() {
+  // Subtle floor grid for depth
+  ctx2d.strokeStyle = 'rgba(80,255,176,0.03)';
+  ctx2d.lineWidth = 0.5;
+  var gridSize = 40;
+  for (var gx = 0; gx < canvasW; gx += gridSize) {
+    ctx2d.beginPath();
+    ctx2d.moveTo(gx, canvasH * 0.5);
+    ctx2d.lineTo(gx, canvasH);
+    ctx2d.stroke();
+  }
+  for (var gy = canvasH * 0.5; gy < canvasH; gy += gridSize) {
+    ctx2d.beginPath();
+    ctx2d.moveTo(0, gy);
+    ctx2d.lineTo(canvasW, gy);
+    ctx2d.stroke();
+  }
+}
+
+// --- Draw Table Scene ---
+function drawTableScene() {
+  var tableY = canvasH * 0.48;
+  var tableW = canvasW * 0.55;
+  var tableX = (canvasW - tableW) / 2;
+  var tableH = 14;
+  var legW = 10;
+  var legH = canvasH * 0.25;
+
+  // Table legs
+  var legGrad = ctx2d.createLinearGradient(0, tableY, 0, tableY + legH);
+  legGrad.addColorStop(0, '#3a2a1a');
+  legGrad.addColorStop(1, '#2a1a0a');
+  ctx2d.fillStyle = legGrad;
+  ctx2d.fillRect(tableX + 15, tableY + tableH, legW, legH);
+  ctx2d.fillRect(tableX + tableW - 25, tableY + tableH, legW, legH);
+
+  // Table top
+  var topGrad = ctx2d.createLinearGradient(tableX, tableY, tableX, tableY + tableH);
+  topGrad.addColorStop(0, '#5a3a1a');
+  topGrad.addColorStop(1, '#4a2a10');
+  ctx2d.fillStyle = topGrad;
+  ctx2d.fillRect(tableX, tableY, tableW, tableH);
+
+  // Tablecloth
+  var clothW = tableW * 0.7;
+  var clothH = 6;
+  var clothBaseX = tableX + (tableW - clothW) / 2;
+  var clothColor = 'rgba(220,60,60,0.7)';
+  var clothMu = 0.25;
+  if (currentLevel === 2) {
+    clothColor = CLOTHS_L3[selectedCloth].color;
+    clothMu = CLOTHS_L3[selectedCloth].mu;
+  }
+  // Cloth slides during pull
+  var clothDrawX = clothBaseX + clothX;
+  var clothGrad = ctx2d.createLinearGradient(clothDrawX, tableY - clothH, clothDrawX + clothW, tableY);
+  if (currentLevel === 2) {
+    clothGrad.addColorStop(0, clothColor);
+    clothGrad.addColorStop(1, 'rgba(150,120,100,0.4)');
+  } else {
+    clothGrad.addColorStop(0, 'rgba(220,60,60,0.7)');
+    clothGrad.addColorStop(1, 'rgba(180,40,40,0.5)');
+  }
+  ctx2d.fillStyle = clothGrad;
+  ctx2d.fillRect(clothDrawX, tableY - clothH, clothW, clothH);
+
+  // Hanging edge of cloth
+  var hangLen = 30 + Math.max(0, -clothX) * 0.3;
+  var hangGrad = ctx2d.createLinearGradient(0, tableY, 0, tableY + hangLen);
+  hangGrad.addColorStop(0, currentLevel === 2 ? clothColor : 'rgba(220,60,60,0.6)');
+  hangGrad.addColorStop(1, 'rgba(100,30,30,0.1)');
+  ctx2d.fillStyle = hangGrad;
+  ctx2d.fillRect(clothDrawX + clothW - 2, tableY, 8, hangLen);
+
+  // Object on cloth
+  var objDrawX = tableX + tableW * 0.45 + objX;
+  var objDrawY = tableY - clothH;
+  drawObject(objDrawX, objDrawY);
+
+  // Force diagram (small, bottom right)
+  if (gamePhase === 'pulling' || gamePhase === 'result') {
+    drawForceDiagram(tableX + tableW + 20, tableY - 20);
+  }
+
+  return {tableX: tableX, tableY: tableY, tableW: tableW};
+}
+
+function drawObject(dx, dy) {
+  var objDef = currentLevel === 1 ? OBJECTS_L2[selectedObject] : {w:28, h:32, color:'#e8e8f0', key:'cup'};
+
+  // Idle breathing
+  var breathScale = 1 + Math.sin(idlePulse) * 0.008;
+  var ow = objDef.w * breathScale;
+  var oh = objDef.h * breathScale;
+
+  ctx2d.save();
+
+  // Ambient glow
+  ctx2d.shadowColor = '#50ffb0';
+  ctx2d.shadowBlur = gamePhase === 'idle' || gamePhase === 'predicting' ? 8 + Math.sin(idlePulse * 1.5) * 4 : 0;
+
+  if (objDef.key === 'cup') {
+    // Cup shape
+    var cupGrad = ctx2d.createLinearGradient(dx - ow/2, dy - oh, dx + ow/2, dy);
+    cupGrad.addColorStop(0, '#f0f0f8');
+    cupGrad.addColorStop(1, '#c0c0d0');
+    ctx2d.fillStyle = cupGrad;
+    ctx2d.beginPath();
+    ctx2d.moveTo(dx - ow/2 + 3, dy - oh);
+    ctx2d.lineTo(dx + ow/2 - 3, dy - oh);
+    ctx2d.lineTo(dx + ow/2, dy);
+    ctx2d.lineTo(dx - ow/2, dy);
+    ctx2d.closePath();
+    ctx2d.fill();
+    // Handle
+    ctx2d.strokeStyle = '#d0d0e0';
+    ctx2d.lineWidth = 2;
+    ctx2d.beginPath();
+    ctx2d.arc(dx + ow/2 + 5, dy - oh * 0.5, 6, -Math.PI/2, Math.PI/2);
+    ctx2d.stroke();
+  } else if (objDef.key === 'coin') {
+    // Coin (ellipse)
+    ctx2d.fillStyle = '#ffd700';
+    ctx2d.beginPath();
+    ctx2d.ellipse(dx, dy - oh/2, ow/2, oh/2, 0, 0, Math.PI * 2);
+    ctx2d.fill();
+    ctx2d.strokeStyle = '#cc9900';
+    ctx2d.lineWidth = 1;
+    ctx2d.stroke();
+  } else if (objDef.key === 'book') {
+    // Book (rectangle)
+    var bookGrad = ctx2d.createLinearGradient(dx - ow/2, dy - oh, dx + ow/2, dy);
+    bookGrad.addColorStop(0, '#a0522d');
+    bookGrad.addColorStop(1, '#6b3410');
+    ctx2d.fillStyle = bookGrad;
+    ctx2d.fillRect(dx - ow/2, dy - oh, ow, oh);
+    // Pages edge
+    ctx2d.fillStyle = '#f5f0e0';
+    ctx2d.fillRect(dx - ow/2 + 2, dy - oh + 2, 3, oh - 4);
+  } else if (objDef.key === 'bowling') {
+    // Bowling ball
+    var ballGrad = ctx2d.createRadialGradient(dx - 4, dy - oh/2 - 4, 2, dx, dy - oh/2, ow/2);
+    ballGrad.addColorStop(0, '#555570');
+    ballGrad.addColorStop(1, '#222230');
+    ctx2d.fillStyle = ballGrad;
+    ctx2d.beginPath();
+    ctx2d.arc(dx, dy - oh/2, ow/2, 0, Math.PI * 2);
+    ctx2d.fill();
+    // Finger holes
+    ctx2d.fillStyle = 'rgba(0,0,0,0.4)';
+    ctx2d.beginPath();
+    ctx2d.arc(dx - 4, dy - oh/2 - 5, 2.5, 0, Math.PI * 2);
+    ctx2d.fill();
+    ctx2d.beginPath();
+    ctx2d.arc(dx + 4, dy - oh/2 - 5, 2.5, 0, Math.PI * 2);
+    ctx2d.fill();
+    ctx2d.beginPath();
+    ctx2d.arc(dx, dy - oh/2 - 9, 2, 0, Math.PI * 2);
+    ctx2d.fill();
+  }
+
+  ctx2d.shadowBlur = 0;
+  ctx2d.restore();
+}
+
+function drawForceDiagram(fx, fy) {
+  ctx2d.save();
+  ctx2d.globalAlpha = 0.7;
+  ctx2d.font = '9px "Space Grotesk", sans-serif';
+  ctx2d.fillStyle = '#aaabb0';
+  ctx2d.textAlign = 'left';
+
+  // Friction force arrow
+  var mu = 0.25;
+  var mass = 0.2;
+  if (currentLevel === 1) mass = OBJECTS_L2[selectedObject].mass;
+  if (currentLevel === 2) mu = CLOTHS_L3[selectedCloth].mu;
+  var fForce = mu * mass * 9.8;
+  var arrowLen = Math.min(40, fForce * 50);
+
+  ctx2d.strokeStyle = '#ffb59c';
+  ctx2d.lineWidth = 2;
+  ctx2d.beginPath();
+  ctx2d.moveTo(fx, fy);
+  ctx2d.lineTo(fx + arrowLen, fy);
+  ctx2d.stroke();
+  // Arrowhead
+  ctx2d.fillStyle = '#ffb59c';
+  ctx2d.beginPath();
+  ctx2d.moveTo(fx + arrowLen, fy);
+  ctx2d.lineTo(fx + arrowLen - 5, fy - 3);
+  ctx2d.lineTo(fx + arrowLen - 5, fy + 3);
+  ctx2d.closePath();
+  ctx2d.fill();
+
+  ctx2d.fillStyle = '#aaabb0';
+  ctx2d.fillText('F=' + fForce.toFixed(2) + 'N', fx, fy - 8);
+
+  var pullTime = 0.05 + (1 - pullSpeed) * 0.95;
+  ctx2d.fillText('t=' + pullTime.toFixed(2) + 's', fx, fy + 14);
+  ctx2d.fillText('I=' + (fForce * pullTime).toFixed(3) + 'Ns', fx, fy + 26);
+
+  ctx2d.restore();
+}
+
+// --- Draw Space Scene ---
+function drawSpaceScene() {
+  drawStars(animTime * 10);
+
+  var centerY = canvasH * 0.45;
+
+  // Station
+  var stX = stationX;
+  var stY = centerY;
+  var stW = 60;
+  var stH = 40;
+
+  // Station body
+  ctx2d.save();
+  ctx2d.shadowColor = '#50ffb0';
+  ctx2d.shadowBlur = 12;
+  var stGrad = ctx2d.createLinearGradient(stX - stW/2, stY - stH/2, stX + stW/2, stY + stH/2);
+  stGrad.addColorStop(0, '#303050');
+  stGrad.addColorStop(1, '#1a1a30');
+  ctx2d.fillStyle = stGrad;
+  ctx2d.fillRect(stX - stW/2, stY - stH/2, stW, stH);
+  ctx2d.shadowBlur = 0;
+  // Solar panels
+  ctx2d.fillStyle = '#2040a0';
+  ctx2d.fillRect(stX - stW/2 - 25, stY - 5, 25, 10);
+  ctx2d.fillRect(stX + stW/2, stY - 5, 25, 10);
+  // Panel lines
+  ctx2d.strokeStyle = 'rgba(80,255,176,0.3)';
+  ctx2d.lineWidth = 0.5;
+  for (var pl = 0; pl < 4; pl++) {
+    var plx = stX - stW/2 - 25 + pl * 6 + 3;
+    ctx2d.beginPath();
+    ctx2d.moveTo(plx, stY - 5);
+    ctx2d.lineTo(plx, stY + 5);
+    ctx2d.stroke();
+    plx = stX + stW/2 + pl * 6 + 3;
+    ctx2d.beginPath();
+    ctx2d.moveTo(plx, stY - 5);
+    ctx2d.lineTo(plx, stY + 5);
+    ctx2d.stroke();
+  }
+  // Docking port (left side)
+  ctx2d.fillStyle = '#ffb59c';
+  ctx2d.fillRect(stX - stW/2 - 4, stY - 6, 4, 12);
+  ctx2d.restore();
+
+  // Crate
+  var crDrawX = crateX;
+  var crDrawY = centerY;
+  var crW = 30;
+  var crH = 24;
+
+  ctx2d.save();
+  // Crate glow
+  var crateGlowIntensity = gamePhase === 'idle' ? 6 + Math.sin(idlePulse * 1.5) * 3 : 4;
+  ctx2d.shadowColor = spacePhase === 'crashed' ? '#ff4444' : '#ffb59c';
+  ctx2d.shadowBlur = crateGlowIntensity;
+  var crGrad = ctx2d.createLinearGradient(crDrawX - crW/2, crDrawY - crH/2, crDrawX + crW/2, crDrawY + crH/2);
+  crGrad.addColorStop(0, '#8b6914');
+  crGrad.addColorStop(1, '#5a4510');
+  ctx2d.fillStyle = crGrad;
+  ctx2d.fillRect(crDrawX - crW/2, crDrawY - crH/2, crW, crH);
+  ctx2d.shadowBlur = 0;
+  // Crate straps
+  ctx2d.strokeStyle = 'rgba(255,181,156,0.4)';
+  ctx2d.lineWidth = 1.5;
+  ctx2d.beginPath();
+  ctx2d.moveTo(crDrawX - crW/2, crDrawY - crH/4);
+  ctx2d.lineTo(crDrawX + crW/2, crDrawY - crH/4);
+  ctx2d.stroke();
+  ctx2d.beginPath();
+  ctx2d.moveTo(crDrawX - crW/2, crDrawY + crH/4);
+  ctx2d.lineTo(crDrawX + crW/2, crDrawY + crH/4);
+  ctx2d.stroke();
+  ctx2d.restore();
+
+  // Speed indicator
+  if (spacePhase === 'drifting') {
+    ctx2d.font = '10px "Space Grotesk", sans-serif';
+    ctx2d.fillStyle = '#aaabb0';
+    ctx2d.textAlign = 'center';
+    ctx2d.fillText('v=' + crateVx.toFixed(1) + ' m/s', crDrawX, crDrawY + crH/2 + 16);
+    ctx2d.fillText(t('drifting'), crDrawX, crDrawY + crH/2 + 30);
+  }
+
+  // Docking zone indicator
+  if (gamePhase === 'idle' || spacePhase === 'drifting') {
+    ctx2d.save();
+    var dzAlpha = 0.3 + Math.sin(animTime * 2) * 0.1;
+    ctx2d.strokeStyle = 'rgba(80,255,176,' + dzAlpha + ')';
+    ctx2d.lineWidth = 1;
+    ctx2d.setLineDash([4, 4]);
+    ctx2d.beginPath();
+    ctx2d.moveTo(stX - stW/2 - 20, stY - 30);
+    ctx2d.lineTo(stX - stW/2 - 20, stY + 30);
+    ctx2d.stroke();
+    ctx2d.setLineDash([]);
+    ctx2d.restore();
+  }
+}
+
+// --- Draw Slider ---
+function drawSlider(label1, label2) {
+  var sr = getSliderRect();
+  var val = currentLevel === 3 ? pushForce : pullSpeed;
+
+  // Track
+  ctx2d.fillStyle = 'rgba(30,30,50,0.8)';
+  ctx2d.fillRect(sr.x, sr.y, sr.w, sr.h);
+  ctx2d.strokeStyle = 'rgba(80,255,176,0.2)';
+  ctx2d.lineWidth = 1;
+  ctx2d.strokeRect(sr.x, sr.y, sr.w, sr.h);
+
+  // Filled portion
+  var fillGrad = ctx2d.createLinearGradient(sr.x, 0, sr.x + sr.w * val, 0);
+  fillGrad.addColorStop(0, 'rgba(80,255,176,0.3)');
+  fillGrad.addColorStop(1, 'rgba(80,255,176,0.15)');
+  ctx2d.fillStyle = fillGrad;
+  ctx2d.fillRect(sr.x, sr.y, sr.w * val, sr.h);
+
+  // Thumb
+  var thumbX = sr.x + sr.w * val;
+  ctx2d.save();
+  ctx2d.shadowColor = '#50ffb0';
+  ctx2d.shadowBlur = 8;
+  ctx2d.fillStyle = '#50ffb0';
+  ctx2d.fillRect(thumbX - 4, sr.y - 3, 8, sr.h + 6);
+  ctx2d.shadowBlur = 0;
+  ctx2d.restore();
+
+  // Labels
+  ctx2d.font = '10px "Space Grotesk", sans-serif';
+  ctx2d.fillStyle = '#aaabb0';
+  ctx2d.textAlign = 'left';
+  ctx2d.fillText(t(label1), sr.x, sr.y - 6);
+  ctx2d.textAlign = 'right';
+  ctx2d.fillText(t(label2), sr.x + sr.w, sr.y - 6);
+
+  // Value
+  ctx2d.textAlign = 'center';
+  ctx2d.fillStyle = '#50ffb0';
+  ctx2d.font = '700 11px "Space Grotesk", sans-serif';
+  ctx2d.fillText(Math.round(val * 100) + '%', thumbX, sr.y + sr.h + 16);
+}
+
+// --- Draw Object Selection (Level 2) ---
+function drawObjectSelection() {
+  var rects = getObjectBtnRects();
+  ctx2d.font = '10px "Noto Sans SC", "Inter", sans-serif';
+
+  for (var oi = 0; oi < rects.length; oi++) {
+    var r = rects[oi];
+    var selected = oi === selectedObject;
+
+    // Button bg
+    if (selected) {
+      var selGrad = ctx2d.createLinearGradient(r.x, r.y, r.x, r.y + r.h);
+      selGrad.addColorStop(0, 'rgba(80,255,176,0.2)');
+      selGrad.addColorStop(1, 'rgba(80,255,176,0.08)');
+      ctx2d.fillStyle = selGrad;
+    } else {
+      ctx2d.fillStyle = 'rgba(30,30,50,0.6)';
+    }
+    ctx2d.fillRect(r.x, r.y, r.w, r.h);
+
+    // Border
+    ctx2d.strokeStyle = selected ? 'rgba(80,255,176,0.5)' : 'rgba(100,100,120,0.3)';
+    ctx2d.lineWidth = selected ? 1.5 : 0.5;
+    ctx2d.strokeRect(r.x, r.y, r.w, r.h);
+
+    // Label
+    ctx2d.fillStyle = selected ? '#50ffb0' : '#aaabb0';
+    ctx2d.textAlign = 'center';
+    ctx2d.fillText(t(OBJECTS_L2[oi].label), r.x + r.w/2, r.y + r.h/2 + 4);
+  }
+
+  // "Select an object" label
+  ctx2d.font = '11px "Noto Sans SC", "Inter", sans-serif';
+  ctx2d.fillStyle = '#aaabb0';
+  ctx2d.textAlign = 'center';
+  ctx2d.fillText(t('selectObj'), canvasW/2, rects[0].y - 10);
+}
+
+// --- Draw Cloth Selection (Level 3) ---
+function drawClothSelection() {
+  var rects = getClothBtnRects();
+  ctx2d.font = '10px "Noto Sans SC", "Inter", sans-serif';
+
+  for (var ci = 0; ci < rects.length; ci++) {
+    var r = rects[ci];
+    var selected = ci === selectedCloth;
+
+    if (selected) {
+      var selGrad = ctx2d.createLinearGradient(r.x, r.y, r.x, r.y + r.h);
+      selGrad.addColorStop(0, 'rgba(80,255,176,0.2)');
+      selGrad.addColorStop(1, 'rgba(80,255,176,0.08)');
+      ctx2d.fillStyle = selGrad;
+    } else {
+      ctx2d.fillStyle = 'rgba(30,30,50,0.6)';
+    }
+    ctx2d.fillRect(r.x, r.y, r.w, r.h);
+    ctx2d.strokeStyle = selected ? 'rgba(80,255,176,0.5)' : 'rgba(100,100,120,0.3)';
+    ctx2d.lineWidth = selected ? 1.5 : 0.5;
+    ctx2d.strokeRect(r.x, r.y, r.w, r.h);
+
+    ctx2d.fillStyle = selected ? '#50ffb0' : '#aaabb0';
+    ctx2d.textAlign = 'center';
+    var muText = t(CLOTHS_L3[ci].label) + ' (\u03BC=' + CLOTHS_L3[ci].mu.toFixed(2) + ')';
+    ctx2d.fillText(muText, r.x + r.w/2, r.y + r.h/2 + 4);
+  }
+
+  ctx2d.font = '11px "Noto Sans SC", "Inter", sans-serif';
+  ctx2d.fillStyle = '#aaabb0';
+  ctx2d.textAlign = 'center';
+  ctx2d.fillText(t('selectCloth'), canvasW/2, rects[0].y - 10);
+}
+
+// --- Draw Prediction Buttons (Level 2) ---
+function drawPredictionButtons() {
+  if (gamePhase !== 'predicting') return;
+
+  var rects = getPredictBtnRects();
+  ctx2d.font = '700 12px "Space Grotesk", sans-serif';
+
+  // "Predict" label
+  ctx2d.font = '12px "Noto Sans SC", "Inter", sans-serif';
+  ctx2d.fillStyle = '#ffb59c';
+  ctx2d.textAlign = 'center';
+  ctx2d.fillText(t('predict'), canvasW/2, rects[0].y - 10);
+
+  ctx2d.font = '700 12px "Space Grotesk", sans-serif';
+  for (var pi = 0; pi < rects.length; pi++) {
+    var r = rects[pi];
+    var isYes = r.val === 1;
+
+    ctx2d.fillStyle = isYes ? 'rgba(80,255,176,0.2)' : 'rgba(255,100,100,0.2)';
+    ctx2d.fillRect(r.x, r.y, r.w, r.h);
+    ctx2d.strokeStyle = isYes ? 'rgba(80,255,176,0.4)' : 'rgba(255,100,100,0.4)';
+    ctx2d.lineWidth = 1;
+    ctx2d.strokeRect(r.x, r.y, r.w, r.h);
+
+    ctx2d.fillStyle = isYes ? '#50ffb0' : '#ff6b6b';
+    ctx2d.textAlign = 'center';
+    ctx2d.fillText(isYes ? t('yes') : t('no'), r.x + r.w/2, r.y + r.h/2 + 5);
+  }
+}
+
+// --- Draw Result Overlay ---
+function drawResultOverlay() {
+  if (gamePhase !== 'result') return;
+  resultAlpha = Math.min(resultAlpha + 0.04, 1.0);
+  var alpha = resultAlpha;
+
+  ctx2d.save();
+  ctx2d.fillStyle = 'rgba(12,14,20,' + (0.6 * alpha) + ')';
+  ctx2d.fillRect(0, 0, canvasW, canvasH);
+
+  var panelW = Math.min(360, canvasW * 0.7);
+  var panelH = 160;
+  var panelX = (canvasW - panelW) / 2;
+  // Slide in from bottom
+  var slideOffset = (1 - easeOutCubic(alpha)) * 40;
+  var panelY = (canvasH - panelH) / 2 + slideOffset;
+
+  // Glass panel
+  ctx2d.fillStyle = 'rgba(20,24,40,' + (0.92 * alpha) + ')';
+  ctx2d.fillRect(panelX, panelY, panelW, panelH);
+  ctx2d.strokeStyle = 'rgba(80,255,176,' + (0.3 * alpha) + ')';
+  ctx2d.lineWidth = 1;
+  ctx2d.strokeRect(panelX, panelY, panelW, panelH);
+
+  ctx2d.globalAlpha = alpha;
+
+  // Result text
+  var isSuccess = simResult === 'success';
+  ctx2d.font = '700 18px "Space Grotesk", sans-serif';
+  ctx2d.fillStyle = isSuccess ? '#50ffb0' : '#ff6b6b';
+  ctx2d.textAlign = 'center';
+  ctx2d.fillText(isSuccess ? t('success') : t('fail'), canvasW/2, panelY + 35);
+
+  // Explanation
+  ctx2d.font = '12px "Noto Sans SC", "Inter", sans-serif';
+  ctx2d.fillStyle = '#e2e2e9';
+  if (currentLevel === 0) {
+    ctx2d.fillText(t('forceTime'), canvasW/2, panelY + 65);
+    ctx2d.fillText(isSuccess ? '' : t('pullFaster'), canvasW/2, panelY + 85);
+  } else if (currentLevel === 1) {
+    ctx2d.fillText(isSuccess ? t('inertiaHigh') : t('inertiaLow'), canvasW/2, panelY + 65);
+    // Prediction feedback
+    if (prediction !== -1) {
+      var predCorrect = (prediction === 1 && isSuccess) || (prediction === 0 && !isSuccess);
+      ctx2d.fillStyle = predCorrect ? '#50ffb0' : '#ffb59c';
+      ctx2d.fillText(predCorrect ? t('correct') : t('wrong'), canvasW/2, panelY + 90);
+    }
+  } else if (currentLevel === 2) {
+    var clothName = t(CLOTHS_L3[selectedCloth].label);
+    ctx2d.fillText(clothName + ' \u03BC=' + CLOTHS_L3[selectedCloth].mu.toFixed(2), canvasW/2, panelY + 65);
+  }
+
+  // Score
+  var pts = isSuccess ? 25 : 5;
+  ctx2d.font = '700 14px "Space Grotesk", sans-serif';
+  ctx2d.fillStyle = '#ffb59c';
+  ctx2d.fillText('+' + pts + ' pts', canvasW/2, panelY + panelH - 25);
+
+  ctx2d.globalAlpha = 1;
+  ctx2d.restore();
+}
+
+// --- Draw Space Result ---
+function drawSpaceResult() {
+  if (spacePhase !== 'docked' && spacePhase !== 'crashed' && spacePhase !== 'missed') return;
+  resultAlpha = Math.min(resultAlpha + 0.04, 1.0);
+  var alpha = resultAlpha;
+
+  ctx2d.save();
+  ctx2d.fillStyle = 'rgba(12,14,20,' + (0.6 * alpha) + ')';
+  ctx2d.fillRect(0, 0, canvasW, canvasH);
+
+  var panelW = Math.min(360, canvasW * 0.7);
+  var panelH = 140;
+  var panelX = (canvasW - panelW) / 2;
+  var slideOffset = (1 - easeOutCubic(alpha)) * 40;
+  var panelY = (canvasH - panelH) / 2 + slideOffset;
+
+  ctx2d.fillStyle = 'rgba(20,24,40,' + (0.92 * alpha) + ')';
+  ctx2d.fillRect(panelX, panelY, panelW, panelH);
+  ctx2d.strokeStyle = 'rgba(80,255,176,' + (0.3 * alpha) + ')';
+  ctx2d.lineWidth = 1;
+  ctx2d.strokeRect(panelX, panelY, panelW, panelH);
+
+  ctx2d.globalAlpha = alpha;
+
+  var msgKey = spacePhase === 'docked' ? 'docked' : (spacePhase === 'crashed' ? 'crashed' : 'missed');
+  var msgColor = spacePhase === 'docked' ? '#50ffb0' : '#ff6b6b';
+  ctx2d.font = '700 18px "Space Grotesk", sans-serif';
+  ctx2d.fillStyle = msgColor;
+  ctx2d.textAlign = 'center';
+  ctx2d.fillText(t(msgKey), canvasW/2, panelY + 40);
+
+  ctx2d.font = '12px "Noto Sans SC", "Inter", sans-serif';
+  ctx2d.fillStyle = '#e2e2e9';
+  ctx2d.fillText(t('insight'), canvasW/2, panelY + 70);
+
+  var pts = spacePhase === 'docked' ? 50 : 10;
+  ctx2d.font = '700 14px "Space Grotesk", sans-serif';
+  ctx2d.fillStyle = '#ffb59c';
+  ctx2d.fillText('+' + pts + ' pts', canvasW/2, panelY + panelH - 20);
+
+  ctx2d.globalAlpha = 1;
+  ctx2d.restore();
+}
+
+// --- Draw Completion ---
+function drawCompletionOverlay() {
+  if (gamePhase !== 'complete') return;
+  completeAlpha = Math.min(completeAlpha + 0.03, 1.0);
+  var alpha = completeAlpha;
+
+  ctx2d.save();
+  ctx2d.fillStyle = 'rgba(12,14,20,' + (0.88 * alpha) + ')';
+  ctx2d.fillRect(0, 0, canvasW, canvasH);
+
+  var panelW = Math.min(420, canvasW * 0.8);
+  var panelH = 260;
+  var panelX = (canvasW - panelW) / 2;
+  var panelY = (canvasH - panelH) / 2;
+
+  ctx2d.fillStyle = 'rgba(20,24,40,' + (0.95 * alpha) + ')';
+  ctx2d.fillRect(panelX, panelY, panelW, panelH);
+  ctx2d.strokeStyle = 'rgba(80,255,176,' + (0.4 * alpha) + ')';
+  ctx2d.lineWidth = 1.5;
+  ctx2d.strokeRect(panelX, panelY, panelW, panelH);
+
+  ctx2d.globalAlpha = alpha;
+
+  // Title
+  ctx2d.font = '700 20px "Space Grotesk", sans-serif';
+  ctx2d.fillStyle = '#50ffb0';
+  ctx2d.textAlign = 'center';
+  ctx2d.fillText(t('complete'), canvasW/2, panelY + 40);
+
+  // Level scores
+  var levelKeys = ['level1','level2','level3','level4'];
+  for (var li = 0; li < 4; li++) {
+    var rowY = panelY + 70 + li * 28;
+    ctx2d.font = '12px "Noto Sans SC", "Inter", sans-serif';
+    ctx2d.fillStyle = '#e2e2e9';
+    ctx2d.textAlign = 'left';
+    ctx2d.fillText(t(levelKeys[li]), panelX + 30, rowY);
+    ctx2d.textAlign = 'right';
+    ctx2d.fillStyle = '#ffb59c';
+    ctx2d.font = '700 13px "Space Grotesk", sans-serif';
+    ctx2d.fillText(levelScores[li] + ' pts', panelX + panelW - 30, rowY);
+  }
+
+  // Total
+  ctx2d.font = '700 16px "Space Grotesk", sans-serif';
+  ctx2d.fillStyle = '#50ffb0';
+  ctx2d.textAlign = 'center';
+  ctx2d.fillText('TOTAL: ' + totalScore + ' pts', canvasW/2, panelY + 195);
+
+  // Insight
+  ctx2d.font = '11px "Noto Sans SC", "Inter", sans-serif';
+  ctx2d.fillStyle = '#aaabb0';
+  // Word wrap the insight text
+  var insightText = t('insight');
+  var maxLineW = panelW - 60;
+  var words = insightText.split('');
+  var lines = [];
+  var currentLine = '';
+  for (var wi = 0; wi < words.length; wi++) {
+    var testLine = currentLine + words[wi];
+    var metrics = ctx2d.measureText(testLine);
+    if (metrics.width > maxLineW && currentLine.length > 0) {
+      lines.push(currentLine);
+      currentLine = words[wi];
+    } else {
+      currentLine = testLine;
+    }
+  }
+  if (currentLine.length > 0) lines.push(currentLine);
+  for (var lni = 0; lni < lines.length; lni++) {
+    ctx2d.fillText(lines[lni], canvasW/2, panelY + 220 + lni * 16);
+  }
+
+  ctx2d.globalAlpha = 1;
+  ctx2d.restore();
+}
+
+// --- Draw Transition ---
+function drawTransition() {
+  if (!transitioning) return;
+  transitionAlpha = Math.min(transitionAlpha + 0.06, 1.0);
+  ctx2d.fillStyle = 'rgba(12,14,20,' + transitionAlpha + ')';
+  ctx2d.fillRect(0, 0, canvasW, canvasH);
+}
+
+// --- Update Logic ---
+function updateSim(dt) {
+  animTime += dt;
+  idlePulse += dt * 2.5;
+  shakeTimer += dt * 1000;
+
+  // HUD scale decay
+  for (var hi = 0; hi < 4; hi++) {
+    hudScales[hi] += (1 - hudScales[hi]) * 0.15;
+    var el = document.getElementById('hudV' + (hi + 1));
+    if (el) el.style.transform = 'scale(' + hudScales[hi].toFixed(3) + ')';
+  }
+
+  updateParticles();
+
+  if (currentLevel < 3) {
+    // Table levels: pulling animation
+    if (gamePhase === 'pulling') {
+      pullTimer += dt;
+      var pullDur = 0.05 + (1 - pullSpeed) * 0.95;
+      var pullProgress = Math.min(pullTimer / pullDur, 1.0);
+      var easedProgress = easeOutCubic(pullProgress);
+
+      // Cloth slides to the right
+      var clothTarget = canvasW * 0.35;
+      clothX = easedProgress * clothTarget;
+
+      if (simResult === 'fail') {
+        // Object gets dragged with cloth (but slower)
+        objX = easedProgress * clothTarget * 0.7;
+      } else {
+        // Object barely moves
+        objX = easedProgress * 3;
+      }
+
+      if (pullProgress >= 1.0) {
+        // After pull, continue object motion or settle
+        simTime += dt;
+        if (simResult === 'fail') {
+          objX += objVx * dt * 0.5;
+          objVx *= 0.95;
+        }
+        if (simTime > 0.8) {
+          gamePhase = 'result';
+          resultAlpha = 0;
+          var pts = simResult === 'success' ? 25 : 5;
+          if (currentLevel === 1 && prediction !== -1) {
+            var predCorrect = (prediction === 1 && simResult === 'success') || (prediction === 0 && simResult === 'fail');
+            if (predCorrect) pts += 10;
+          }
+          totalScore += pts;
+          levelScores[currentLevel] = pts;
+          if (simResult === 'success') {
+            playSuccess();
+            spawnParticles(canvasW * 0.5, canvasH * 0.4, 20, '#50ffb0', '#ffb59c', 1.5);
+          } else {
+            playFail();
+            triggerShake(5, 250);
+          }
+          updateHUD();
+          updateBtnState();
+        }
+      }
+    }
+  } else {
+    // Space level
+    if (spacePhase === 'drifting') {
+      // No friction! Constant velocity
+      crateX += crateVx * dt * 60;
+
+      // Check docking
+      var dockZone = stationX - 35;
+      if (crateX + 15 >= dockZone && crateX + 15 <= dockZone + 15) {
+        // Speed check
+        if (crateVx < 2.0) {
+          // Docked!
+          spacePhase = 'docked';
+          gamePhase = 'docked';
+          crateX = dockZone - 10;
+          var pts2 = 50;
+          totalScore += pts2;
+          levelScores[3] = pts2;
+          playSuccess();
+          spawnParticles(crateX, canvasH * 0.45, 25, '#50ffb0', '#ffb59c', 1.5);
+          updateHUD();
+          updateBtnState();
+        } else {
+          // Crashed!
+          spacePhase = 'crashed';
+          gamePhase = 'crashed';
+          crateVx = 0;
+          var pts3 = 10;
+          totalScore += pts3;
+          levelScores[3] = pts3;
+          playFail();
+          triggerShake(6, 300);
+          spawnParticles(crateX, canvasH * 0.45, 20, '#ff6b6b', '#ffb59c', 2);
+          updateHUD();
+          updateBtnState();
+        }
+      } else if (crateX > canvasW + 50) {
+        // Missed - flew past
+        spacePhase = 'missed';
+        gamePhase = 'missed';
+        var pts4 = 10;
+        totalScore += pts4;
+        levelScores[3] = pts4;
+        playFail();
+        updateHUD();
+        updateBtnState();
+      }
+    }
+  }
+}
+
+// --- Main Draw ---
+function draw() {
+  ctx2d.save();
+
+  // Apply screen shake
+  var shake = getShakeOffset();
+  ctx2d.translate(shake.x, shake.y);
+
+  drawBackground();
+
+  if (currentLevel === 3) {
+    drawStars(animTime * 10);
+  } else {
+    drawStars(animTime * 3);
+    drawGridPattern();
+  }
+
+  if (currentLevel === 3) {
+    drawSpaceScene();
+    if (gamePhase === 'idle') {
+      drawSlider('gentle', 'strong');
+    }
+    drawSpaceResult();
+  } else {
+    drawTableScene();
+    if (currentLevel === 0 && (gamePhase === 'idle' || gamePhase === 'pulling')) {
+      drawSlider('slow', 'fast');
+    }
+    if (currentLevel === 1) {
+      drawObjectSelection();
+      drawPredictionButtons();
+    }
+    if (currentLevel === 2 && gamePhase === 'idle') {
+      drawSlider('slow', 'fast');
+      drawClothSelection();
+    }
+    drawResultOverlay();
+  }
+
+  drawParticles(ctx2d);
+  drawCompletionOverlay();
+  drawTransition();
+
+  ctx2d.restore();
+}
+
+// --- Main Loop ---
+var lastTime = 0;
+function gameLoop(timestamp) {
+  var dt = Math.min((timestamp - lastTime) / 1000, 0.05);
+  lastTime = timestamp;
+
+  resizeCanvas();
+  updateSim(dt);
+  draw();
+
+  requestAnimationFrame(gameLoop);
+}
+
+// --- Init ---
+initLevel();
+resizeCanvas();
+requestAnimationFrame(function(ts) {
+  lastTime = ts;
+  gameLoop(ts);
+});
+
+// --- Window resize ---
+window.addEventListener('resize', function() {
+  setTimeout(resizeCanvas, 50);
+});
+</script>
+</body>
+</html>

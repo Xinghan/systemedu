@@ -1,0 +1,1679 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=Inter:wght@400;500&family=Noto+Sans+SC:wght@400;700&display=swap" rel="stylesheet">
+<title>Engine Selection Challenge</title>
+<style>
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box;}
+html,body{width:100%;height:100vh;overflow:hidden;background:#0c0e14;color:#e2e2e9;font-family:'Inter','Noto Sans SC',sans-serif;}
+body{margin:0;padding:0;}
+.game-wrap{display:flex;flex-direction:row;height:100vh;overflow:hidden;}
+.game-sidebar{width:200px;min-width:200px;max-width:200px;display:flex;flex-direction:column;gap:8px;padding:10px;background:rgba(0,0,0,0.5);border-right:1px solid rgba(80,255,176,0.15);overflow-y:auto;}
+.sidebar-btns{display:flex;gap:6px;align-self:flex-start;}
+.sidebar-lang,.sidebar-sound{flex-shrink:0;font-family:'Space Grotesk',sans-serif;font-size:10px;font-weight:700;padding:3px 8px;cursor:pointer;border:1px solid rgba(255,181,156,0.25);background:transparent;color:#ffb59c;letter-spacing:1px;}
+.sidebar-lang:hover,.sidebar-sound:hover{border-color:#ffb59c;background:rgba(255,181,156,0.08);}
+.sidebar-title{font-family:'Space Grotesk',sans-serif;font-size:11px;font-weight:700;color:#50ffb0;letter-spacing:0.08em;text-transform:uppercase;margin-top:4px;}
+.sidebar-guide{font-size:12px;color:#aaabb0;line-height:1.6;}
+.game-main{flex:1;display:flex;flex-direction:column;min-width:0;}
+.game-header{padding:8px 16px;display:flex;justify-content:space-between;align-items:center;background:rgba(0,0,0,0.4);}
+.game-header h1{font-family:'Space Grotesk',sans-serif;font-size:clamp(13px,2vw,17px);font-weight:700;color:#50ffb0;}
+.game-header .info{font-family:'Space Grotesk',sans-serif;font-size:12px;color:#aaabb0;}
+.game-body{flex:1;display:flex;flex-direction:column;min-height:0;}
+canvas{width:100%;height:100%;display:block;}
+.control-panel{display:flex;justify-content:center;align-items:center;gap:12px;padding:8px 16px;background:rgba(0,0,0,0.4);flex-wrap:wrap;}
+.ctrl-btn{font-family:'Space Grotesk',sans-serif;font-size:12px;font-weight:700;padding:6px 18px;border:none;cursor:pointer;color:#0c0e14;background:linear-gradient(135deg,#50ffb0,#17df93);box-shadow:0 0 10px rgba(80,255,176,0.3);transition:transform 0.1s;}
+.ctrl-btn:hover{transform:scale(1.04);}
+.ctrl-btn:active{transform:scale(0.96);}
+.ctrl-btn:disabled{opacity:0.4;cursor:default;transform:none;}
+.ctrl-btn.secondary{background:rgba(30,30,45,0.9);color:#aaabb0;box-shadow:none;border:1px solid rgba(170,171,176,0.2);}
+.ctrl-btn.secondary:hover{color:#50ffb0;border-color:rgba(80,255,176,0.3);}
+.hud-bar{height:44px;display:flex;align-items:center;justify-content:space-around;background:rgba(0,0,0,0.55);padding:0 16px;}
+.hud-item{text-align:center;}
+.hud-label{font-family:'Space Grotesk',sans-serif;font-size:9px;letter-spacing:0.12em;color:#aaabb0;text-transform:uppercase;}
+.hud-val{font-family:'Space Grotesk',sans-serif;font-size:14px;font-weight:700;color:#50ffb0;transition:transform 0.15s ease-out;}
+.hud-val.juice{animation:hudJuice 0.35s ease-out;}
+@keyframes hudJuice{0%{transform:scale(1.3);color:#ffb59c;}100%{transform:scale(1);color:#50ffb0;}}
+</style>
+</head>
+<body>
+<div class="game-wrap">
+  <div class="game-sidebar">
+    <div class="sidebar-btns">
+      <button class="sidebar-lang" id="langBtn">CN</button>
+      <button class="sidebar-sound" id="soundBtn">MUTE</button>
+    </div>
+    <div class="sidebar-title" id="sidebarTitle"></div>
+    <div class="sidebar-guide" id="guideContent"></div>
+  </div>
+  <div class="game-main">
+    <div class="game-header">
+      <h1 id="gameTitle"></h1>
+      <div class="info" id="roundInfo"></div>
+    </div>
+    <div class="game-body">
+      <canvas id="c"></canvas>
+    </div>
+    <div class="control-panel">
+      <button class="ctrl-btn" id="btnAction"></button>
+      <button class="ctrl-btn secondary" id="btnReset"></button>
+    </div>
+    <div class="hud-bar">
+      <div class="hud-item"><div class="hud-label" id="hudL1"></div><div class="hud-val" id="hudV1"></div></div>
+      <div class="hud-item"><div class="hud-label" id="hudL2"></div><div class="hud-val" id="hudV2"></div></div>
+      <div class="hud-item"><div class="hud-label" id="hudL3"></div><div class="hud-val" id="hudV3"></div></div>
+      <div class="hud-item"><div class="hud-label" id="hudL4"></div><div class="hud-val" id="hudV4"></div></div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ============================================================
+// K33 Game: Engine Selection Challenge (Capstone v2)
+// S3 -- 300g rocket targeting 150m altitude.
+// 4 phases: Spec Review, TWR Check, Altitude Prediction,
+//           Final Selection + Launch Simulation.
+// Pattern: Multi-phase integrative challenge
+// ============================================================
+
+// --- I18N ---
+var I18N = {
+  title:         {en:'ENGINE SELECTION CHALLENGE', cn:'\u53d1\u52a8\u673a\u9009\u578b\u6311\u6218'},
+  guide_p1:      {en:'PHASE 1: SPEC REVIEW\nDrag each spec value to the correct field on the engine card.\nMatch all 4 engines to proceed.',
+                  cn:'\u7b2c1\u9636\u6bb5\uff1a\u53c2\u6570\u8ba4\u8bc6\n\u5c06\u6bcf\u4e2a\u53c2\u6570\u503c\u62d6\u5230\u53d1\u52a8\u673a\u5361\u7247\u7684\u6b63\u786e\u5b57\u6bb5\u3002\n\u5b8c\u6210\u51684\u53f0\u53d1\u52a8\u673a\u5373\u53ef\u8fdb\u5165\u4e0b\u4e00\u9636\u6bb5\u3002'},
+  guide_p2:      {en:'PHASE 2: TWR CHECK\nCalculate TWR = Thrust / Weight for each engine with a 300g rocket.\nEnter your answers.\nTWR must be > 5 to pass.',
+                  cn:'\u7b2c2\u9636\u6bb5\uff1a\u63a8\u91cd\u6bd4\u68c0\u67e5\nTWR = \u63a8\u529b / \u91cd\u529b\n\u706b\u7bad\u8d28\u91cf 300g\n\u8f93\u5165\u6bcf\u53f0\u53d1\u52a8\u673a\u7684TWR\u3002\nTWR > 5 \u624d\u80fd\u901a\u8fc7\u3002'},
+  guide_p3:      {en:'PHASE 3: ALTITUDE PREDICTION\nFor engines that passed TWR check, estimate ideal altitude using energy model:\nh = I^2 / (2*m*g*t_burn) - drag losses\nEnter predictions in meters.',
+                  cn:'\u7b2c3\u9636\u6bb5\uff1a\u5c04\u9ad8\u9884\u62a5\n\u5bf9\u901a\u8fc7\u63a8\u91cd\u6bd4\u68c0\u67e5\u7684\u53d1\u52a8\u673a\uff0c\n\u7528\u80fd\u91cf\u6a21\u578b\u4f30\u7b97\u7406\u60f3\u5c04\u9ad8\uff1a\nh \u2248 I\u00b2/(2mg\u00b7t)\n\u8f93\u5165\u9884\u6d4b\u503c\uff08\u7c73\uff09\u3002'},
+  guide_p4:      {en:'PHASE 4: FINAL SELECTION\nReview all data. Select the best engine for reaching 150m with 300g rocket.\nChoose your reasoning, then watch the launch!',
+                  cn:'\u7b2c4\u9636\u6bb5\uff1a\u6700\u7ec8\u9009\u578b\n\u7efc\u5408\u6240\u6709\u6570\u636e\uff0c\u4e3a300g\u706b\u7bad\u9009\u62e9\u6700\u4f73\u53d1\u52a8\u673a\uff0c\u76ee\u6807150m\u3002\n\u9009\u62e9\u7406\u7531\uff0c\u7136\u540e\u89c2\u770b\u53d1\u5c04\u6a21\u62df\uff01'},
+  phase:         {en:'PHASE', cn:'\u9636\u6bb5'},
+  rocket_mass:   {en:'Rocket: 300g', cn:'\u706b\u7bad: 300g'},
+  target_alt:    {en:'Target: 150m', cn:'\u76ee\u6807: 150m'},
+  score:         {en:'SCORE', cn:'\u5f97\u5206'},
+  confirm:       {en:'CONFIRM', cn:'\u786e\u8ba4'},
+  next_phase:    {en:'NEXT PHASE', cn:'\u4e0b\u4e00\u9636\u6bb5'},
+  reset:         {en:'RESET', cn:'\u91cd\u7f6e'},
+  launch:        {en:'LAUNCH', cn:'\u53d1\u5c04'},
+  submit:        {en:'SUBMIT', cn:'\u63d0\u4ea4'},
+  select_engine: {en:'SELECT ENGINE', cn:'\u9009\u62e9\u53d1\u52a8\u673a'},
+  thrust:        {en:'Thrust', cn:'\u63a8\u529b'},
+  burn_time:     {en:'Burn Time', cn:'\u71c3\u70e7\u65f6\u95f4'},
+  total_impulse: {en:'Total Impulse', cn:'\u603b\u51b2\u91cf'},
+  delay:         {en:'Delay', cn:'\u5ef6\u65f6'},
+  twr:           {en:'TWR', cn:'\u63a8\u91cd\u6bd4'},
+  altitude:      {en:'Altitude', cn:'\u5c04\u9ad8'},
+  pass:          {en:'PASS', cn:'\u901a\u8fc7'},
+  fail:          {en:'FAIL', cn:'\u672a\u901a\u8fc7'},
+  correct:       {en:'Correct!', cn:'\u6b63\u786e\uff01'},
+  wrong:         {en:'Try again', cn:'\u518d\u8bd5\u8bd5'},
+  close:         {en:'Close enough!', cn:'\u63a5\u8fd1\u6b63\u786e\uff01'},
+  excellent:     {en:'EXCELLENT!', cn:'\u592a\u68d2\u4e86\uff01'},
+  good_job:      {en:'GOOD JOB!', cn:'\u505a\u5f97\u597d\uff01'},
+  try_harder:    {en:'KEEP TRYING!', cn:'\u7ee7\u7eed\u52aa\u529b\uff01'},
+  reason_c5_3:   {en:'C5-3: Highest impulse (10Ns) gives best altitude for 300g rocket. Delay charge allows coast to apogee.',
+                  cn:'C5-3\uff1a\u603b\u51b2\u91cf\u6700\u5927(10Ns)\uff0c300g\u706b\u7bad\u80fd\u83b7\u5f97\u6700\u4f73\u5c04\u9ad8\u3002\u5ef6\u65f6\u88c5\u7f6e\u5141\u8bb8\u6ed1\u884c\u81f3\u8fdc\u5730\u70b9\u3002'},
+  reason_c5_0:   {en:'C5-0: Same impulse as C5-3 but no delay -- ejects at burnout, bad for max altitude.',
+                  cn:'C5-0\uff1a\u603b\u51b2\u91cf\u4e0eC5-3\u76f8\u540c\u4f46\u65e0\u5ef6\u65f6\u2014\u2014\u71c3\u5c3d\u5373\u5f39\u5c04\uff0c\u4e0d\u5229\u4e8e\u6700\u5927\u5c04\u9ad8\u3002'},
+  reason_ht:     {en:'HT engines: Only 2.5Ns impulse -- too low to reach 150m with 300g rocket.',
+                  cn:'HT\u53d1\u52a8\u673a\uff1a\u4ec5\u6709 2.5Ns \u603b\u51b2\u91cf\u2014\u2014\u592a\u5c0f\uff0c300g\u706b\u7bad\u65e0\u6cd5\u8fbe\u5230150m\u3002'},
+  final_correct: {en:'You chose correctly! C5-3 is the optimal engine.\nHigh impulse + delay charge = maximum altitude.',
+                  cn:'\u9009\u62e9\u6b63\u786e\uff01C5-3\u662f\u6700\u4f18\u53d1\u52a8\u673a\u3002\n\u9ad8\u603b\u51b2\u91cf + \u5ef6\u65f6\u88c5\u7f6e = \u6700\u5927\u5c04\u9ad8\u3002'},
+  final_wrong:   {en:'Not the best choice. C5-3 would be optimal.\nHighest impulse (10Ns) + delay allows coast to apogee.',
+                  cn:'\u4e0d\u662f\u6700\u4f73\u9009\u62e9\u3002C5-3\u624d\u662f\u6700\u4f18\u89e3\u3002\n\u6700\u5927\u603b\u51b2\u91cf(10Ns) + \u5ef6\u65f6\u5141\u8bb8\u6ed1\u884c\u81f3\u8fdc\u5730\u70b9\u3002'},
+  sim_launching: {en:'LAUNCHING...', cn:'\u53d1\u5c04\u4e2d...'},
+  sim_coasting:  {en:'COASTING...', cn:'\u6ed1\u884c\u4e2d...'},
+  sim_apogee:    {en:'APOGEE!', cn:'\u8fdc\u5730\u70b9\uff01'},
+  sim_descending:{en:'DESCENDING', cn:'\u4e0b\u964d\u4e2d'},
+  report_title:  {en:'MISSION REPORT', cn:'\u4efb\u52a1\u62a5\u544a'},
+  report_engine: {en:'Engine:', cn:'\u53d1\u52a8\u673a\uff1a'},
+  report_alt:    {en:'Peak Altitude:', cn:'\u6700\u9ad8\u5c04\u9ad8\uff1a'},
+  report_target: {en:'Target: 150m', cn:'\u76ee\u6807: 150m'},
+  report_score:  {en:'Final Score:', cn:'\u6700\u7ec8\u5f97\u5206\uff1a'},
+  recap:         {en:'Engine selection is about matching impulse to mission requirements.\nTWR ensures safe liftoff. Total impulse determines altitude.\nDelay charge timing matters for recovery deployment.',
+                  cn:'\u53d1\u52a8\u673a\u9009\u578b\u7684\u6838\u5fc3\u662f\u5c06\u603b\u51b2\u91cf\u4e0e\u4efb\u52a1\u9700\u6c42\u5339\u914d\u3002\nTWR\u4fdd\u8bc1\u5b89\u5168\u8d77\u98de\u3002\u603b\u51b2\u91cf\u51b3\u5b9a\u5c04\u9ad8\u3002\n\u5ef6\u65f6\u88c5\u7f6e\u65f6\u5e8f\u5173\u7cfb\u5230\u56de\u6536\u90e8\u7f72\u3002'}
+};
+
+var lang = 'cn';
+function t(key) { return I18N[key] ? (I18N[key][lang] || I18N[key].en || key) : key; }
+
+// --- Audio (soundMuted=true default) ---
+var soundMuted = true;
+var audioCtx = null;
+function ensureAudioCtx() {
+  if (!audioCtx) {
+    try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch(e) {}
+  }
+}
+function playTone(freq, dur, vol) {
+  if (soundMuted || !audioCtx) return;
+  try {
+    var osc = audioCtx.createOscillator();
+    var gain = audioCtx.createGain();
+    osc.type = 'sine';
+    osc.frequency.value = freq;
+    gain.gain.setValueAtTime(vol || 0.08, audioCtx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + (dur || 0.1));
+    osc.connect(gain);
+    gain.connect(audioCtx.destination);
+    osc.start();
+    osc.stop(audioCtx.currentTime + (dur || 0.1));
+  } catch(e) {}
+}
+function playCorrectSound() { playTone(660, 0.12, 0.07); setTimeout(function(){ playTone(880, 0.12, 0.06); }, 100); }
+function playWrongSound() { playTone(220, 0.2, 0.06); }
+function playPhaseSound() {
+  if (soundMuted) return; ensureAudioCtx();
+  var seq = [440, 554, 659, 880];
+  for (var i = 0; i < seq.length; i++) { (function(j){ setTimeout(function(){ playTone(seq[j], 0.12, 0.06); }, j*80); })(i); }
+}
+function playLaunchSound() {
+  if (soundMuted) return; ensureAudioCtx();
+  playTone(80, 0.5, 0.1);
+  setTimeout(function(){ playTone(120, 0.4, 0.08); }, 200);
+  setTimeout(function(){ playTone(200, 0.3, 0.06); }, 500);
+}
+function playSuccessSound() {
+  if (soundMuted) return; ensureAudioCtx();
+  var notes = [523, 659, 784, 1047];
+  for (var i = 0; i < notes.length; i++) { (function(j){ setTimeout(function(){ playTone(notes[j], 0.18, 0.07); }, j*120); })(i); }
+}
+
+// --- Engine data ---
+var ENGINES = [
+  { id:'HT-0',  thrust:8,  burnTime:0.31, impulse:2.5,  delay:0, color:'#ff6b6b' },
+  { id:'HT-3',  thrust:8,  burnTime:0.31, impulse:2.5,  delay:3, color:'#ff9f43' },
+  { id:'C5-0',  thrust:12, burnTime:0.83, impulse:10.0, delay:0, color:'#54a0ff' },
+  { id:'C5-3',  thrust:12, burnTime:0.83, impulse:10.0, delay:3, color:'#5f27cd' }
+];
+
+var ROCKET_MASS = 0.3;   // kg
+var GRAVITY = 9.81;       // m/s^2
+var TARGET_ALT = 150;     // m
+var TWR_THRESHOLD = 5;
+
+// Compute reference TWR and altitude for each engine
+for (var ei = 0; ei < ENGINES.length; ei++) {
+  var eng = ENGINES[ei];
+  eng.weight = ROCKET_MASS * GRAVITY;
+  eng.twr = eng.thrust / eng.weight;
+  eng.twrPass = eng.twr > TWR_THRESHOLD;
+  // Simplified energy model: v_burnout = I/m, h = v^2/(2g)
+  var vBurnout = eng.impulse / ROCKET_MASS;
+  eng.idealAlt = Math.round((vBurnout * vBurnout) / (2 * GRAVITY));
+  // With drag losses ~15%
+  eng.estAlt = Math.round(eng.idealAlt * 0.85);
+}
+
+// --- Game state ---
+var phase = 1;       // 1-4
+var totalScore = 0;
+var phaseScores = [0, 0, 0, 0];
+
+// Phase 1: spec matching
+var specSlots = [];  // {engineIdx, field, value, filled}
+var draggedSpec = null;
+var dragX = 0, dragY = 0;
+var specChips = [];  // {value, label, field, engineIdx, x, y, w, h, placed}
+var p1Complete = false;
+var p1Errors = 0;
+
+// Phase 2: TWR input
+var twrInputs = [null, null, null, null];
+var twrChecked = [false, false, false, false];
+var twrCorrect = [false, false, false, false];
+var p2ActiveInput = -1;
+var p2InputStr = ['', '', '', ''];
+var p2Complete = false;
+
+// Phase 3: altitude prediction
+var altInputs = [null, null, null, null];
+var altChecked = [false, false, false, false];
+var altCorrect = [false, false, false, false];
+var p3ActiveInput = -1;
+var p3InputStr = ['', '', '', ''];
+var p3Complete = false;
+
+// Phase 4: selection
+var selectedEngine = -1;
+var selectedReason = -1;
+var p4Confirmed = false;
+var p4Correct = false;
+
+// Launch simulation
+var simActive = false;
+var simTime = 0;
+var simRocketY = 0;
+var simRocketVy = 0;
+var simPhase = 'idle'; // idle, burning, coasting, apogee, descending, landed
+var simMaxAlt = 0;
+var simTrail = [];
+
+// Completion
+var gameComplete = false;
+var completionAlpha = 0;
+
+// Canvas
+var canvas = document.getElementById('c');
+var ctx2d = canvas.getContext('2d');
+var canvasW = 100, canvasH = 100;
+var dpr = Math.min(window.devicePixelRatio || 1, 2);
+
+// Easing
+function easeOutCubic(x) { return 1 - Math.pow(1 - x, 3); }
+function easeInOutQuad(x) { return x < 0.5 ? 2*x*x : 1 - Math.pow(-2*x+2,2)/2; }
+function easeOutElastic(x) {
+  if (x===0||x===1) return x;
+  return Math.pow(2,-10*x)*Math.sin((x*10-0.75)*(2*Math.PI/3))+1;
+}
+function easeOutBack(x) { var c1=1.70158; var c3=c1+1; return 1+c3*Math.pow(x-1,3)+c1*Math.pow(x-1,2); }
+
+// Particles
+var particles = [];
+function spawnParticles(x, y, count, color, spread) {
+  for (var i = 0; i < count; i++) {
+    var angle = Math.random() * Math.PI * 2;
+    var speed = (Math.random()*0.5+0.5) * (spread||3);
+    particles.push({ x:x, y:y, vx:Math.cos(angle)*speed, vy:Math.sin(angle)*speed-1, life:1.0, decay:0.015+Math.random()*0.015, size:2+Math.random()*3, color:color||'#50ffb0' });
+  }
+}
+function updateParticles() {
+  for (var i = particles.length-1; i >= 0; i--) {
+    var p = particles[i]; p.x+=p.vx; p.y+=p.vy; p.vy+=0.05; p.life-=p.decay;
+    if (p.life<=0) particles.splice(i,1);
+  }
+}
+function drawParticles() {
+  for (var i = 0; i < particles.length; i++) {
+    var p = particles[i]; var alpha = easeOutCubic(Math.max(0,p.life));
+    ctx2d.save(); ctx2d.globalAlpha=alpha; ctx2d.fillStyle=p.color;
+    ctx2d.beginPath(); ctx2d.arc(p.x,p.y,p.size*alpha,0,Math.PI*2); ctx2d.fill(); ctx2d.restore();
+  }
+}
+
+// Shake
+var shakeIntensity = 0;
+var shakeDecay = 0.9;
+var shakeOffX = 0, shakeOffY = 0;
+function triggerShake(intensity) { shakeIntensity = intensity; }
+
+// Parallax
+var parallaxOffset = 0;
+
+// Idle breathe
+var lastInteractionTime = Date.now();
+var animFrame = 0;
+var pulsePhase = 0;
+
+// Phase transition
+var transitionAlpha = 0;
+var transitionDir = 0;
+var pendingPhase = -1;
+
+// --- Resize ---
+function resizeCanvas() {
+  var rect = canvas.getBoundingClientRect();
+  canvasW = Math.max(rect.width, 80);
+  canvasH = Math.max(rect.height, 80);
+  canvas.width = Math.round(canvasW * dpr);
+  canvas.height = Math.round(canvasH * dpr);
+  canvas.style.width = canvasW + 'px';
+  canvas.style.height = canvasH + 'px';
+  ctx2d.setTransform(dpr, 0, 0, dpr, 0, 0);
+  computeLayout();
+}
+
+// --- Layout computation ---
+var cardW = 0, cardH = 0, cardGap = 0, cardsStartX = 0, cardsStartY = 0;
+var inputBoxes = []; // {x,y,w,h} for each engine input
+var reasonBoxes = []; // for phase 4 reasons
+var engineSelectBoxes = []; // for phase 4 engine selection
+
+function computeLayout() {
+  cardW = Math.min(Math.floor((canvasW - 80) / 4 - 12), 200);
+  cardH = Math.min(canvasH - 140, 340);
+  cardGap = 12;
+  var totalW = cardW * 4 + cardGap * 3;
+  cardsStartX = (canvasW - totalW) / 2;
+  cardsStartY = 50;
+
+  // Input boxes for phases 2/3
+  inputBoxes = [];
+  for (var i = 0; i < 4; i++) {
+    var cx = cardsStartX + i * (cardW + cardGap) + cardW/2;
+    inputBoxes.push({ x: cx - 35, y: cardsStartY + cardH - 80, w: 70, h: 26 });
+  }
+
+  // Phase 1 spec chips
+  if (phase === 1 && !p1Complete) buildSpecChips();
+}
+
+// --- Phase 1: Spec chip building ---
+var specFields = ['thrust', 'burnTime', 'impulse'];
+var specFieldLabels = {
+  thrust:   {en:'Thrust (N)', cn:'\u63a8\u529b (N)'},
+  burnTime: {en:'Burn (s)', cn:'\u71c3\u65f6 (s)'},
+  impulse:  {en:'Impulse (Ns)', cn:'\u51b2\u91cf (Ns)'}
+};
+
+function buildSpecChips() {
+  specChips = [];
+  specSlots = [];
+  var allValues = [];
+  for (var i = 0; i < ENGINES.length; i++) {
+    for (var f = 0; f < specFields.length; f++) {
+      var field = specFields[f];
+      var val = ENGINES[i][field];
+      allValues.push({ value: val, field: field, engineIdx: i });
+      specSlots.push({ engineIdx: i, field: field, value: val, filled: false, placedValue: null });
+    }
+  }
+  // Shuffle values for chips
+  for (var si = allValues.length - 1; si > 0; si--) {
+    var rj = Math.floor(Math.random() * (si + 1));
+    var tmp = allValues[si]; allValues[si] = allValues[rj]; allValues[rj] = tmp;
+  }
+  var chipW = 55, chipH = 22, chipGap = 6;
+  var chipsPerRow = Math.min(Math.floor((canvasW - 40) / (chipW + chipGap)), 6);
+  var totalChipW = chipsPerRow * (chipW + chipGap) - chipGap;
+  var chipStartX = (canvasW - totalChipW) / 2;
+  var chipStartY = cardsStartY + cardH + 16;
+  for (var ci = 0; ci < allValues.length; ci++) {
+    var row = Math.floor(ci / chipsPerRow);
+    var col = ci % chipsPerRow;
+    specChips.push({
+      value: allValues[ci].value,
+      field: allValues[ci].field,
+      engineIdx: allValues[ci].engineIdx,
+      label: '' + allValues[ci].value,
+      x: chipStartX + col * (chipW + chipGap),
+      y: chipStartY + row * (chipH + chipGap),
+      w: chipW,
+      h: chipH,
+      placed: false,
+      animT: 0
+    });
+  }
+}
+
+// --- HUD juice ---
+function juiceHud(idx) {
+  var el = document.getElementById('hudV' + (idx+1));
+  if (el) { el.classList.remove('juice'); void el.offsetWidth; el.classList.add('juice'); }
+}
+
+// --- Text update ---
+function updateTexts() {
+  document.getElementById('gameTitle').textContent = t('title');
+  var guideKey = 'guide_p' + phase;
+  document.getElementById('sidebarTitle').textContent = t('phase') + ' ' + phase + '/4';
+  document.getElementById('guideContent').textContent = t(guideKey);
+  document.getElementById('roundInfo').textContent = t('phase') + ' ' + phase + '/4';
+  document.getElementById('hudL1').textContent = t('phase');
+  document.getElementById('hudV1').textContent = phase + '/4';
+  document.getElementById('hudL2').textContent = t('score');
+  document.getElementById('hudV2').textContent = '' + totalScore;
+  document.getElementById('hudL3').textContent = t('rocket_mass');
+  document.getElementById('hudV3').textContent = '300g';
+  document.getElementById('hudL4').textContent = t('target_alt');
+  document.getElementById('hudV4').textContent = '150m';
+  updateBtnState();
+}
+
+function updateBtnState() {
+  var btnAction = document.getElementById('btnAction');
+  var btnReset = document.getElementById('btnReset');
+  btnReset.textContent = t('reset');
+
+  if (gameComplete) {
+    btnAction.textContent = t('reset');
+    btnAction.disabled = false;
+  } else if (simActive) {
+    btnAction.textContent = t('sim_launching');
+    btnAction.disabled = true;
+  } else if (phase === 1) {
+    btnAction.textContent = t('confirm');
+    btnAction.disabled = !p1Complete;
+  } else if (phase === 2) {
+    btnAction.textContent = p2Complete ? t('next_phase') : t('submit');
+    btnAction.disabled = false;
+  } else if (phase === 3) {
+    btnAction.textContent = p3Complete ? t('next_phase') : t('submit');
+    btnAction.disabled = false;
+  } else if (phase === 4) {
+    if (p4Confirmed) {
+      btnAction.textContent = t('launch');
+      btnAction.disabled = simActive;
+    } else {
+      btnAction.textContent = t('confirm');
+      btnAction.disabled = selectedEngine < 0;
+    }
+  }
+}
+
+// --- Drawing helpers ---
+function drawRoundedRect(x, y, w, h, fillColor, strokeColor) {
+  ctx2d.beginPath();
+  ctx2d.moveTo(x, y);
+  ctx2d.lineTo(x + w, y);
+  ctx2d.lineTo(x + w, y + h);
+  ctx2d.lineTo(x, y + h);
+  ctx2d.closePath();
+  if (fillColor) { ctx2d.fillStyle = fillColor; ctx2d.fill(); }
+  if (strokeColor) { ctx2d.strokeStyle = strokeColor; ctx2d.lineWidth = 1; ctx2d.stroke(); }
+}
+
+function drawStarShape(cx, cy, r) {
+  ctx2d.beginPath();
+  for (var si = 0; si < 5; si++) {
+    var angle = -Math.PI/2 + si * Math.PI*2/5;
+    var px = cx + Math.cos(angle) * r;
+    var py = cy + Math.sin(angle) * r;
+    if (si === 0) ctx2d.moveTo(px, py); else ctx2d.lineTo(px, py);
+    var innerAngle = angle + Math.PI/5;
+    var ipx = cx + Math.cos(innerAngle) * r * 0.4;
+    var ipy = cy + Math.sin(innerAngle) * r * 0.4;
+    ctx2d.lineTo(ipx, ipy);
+  }
+  ctx2d.closePath();
+}
+
+// --- Ambient glow ---
+function drawAmbientGlow() {
+  var t2 = animFrame * 0.003;
+  var glowX = canvasW * 0.5 + Math.sin(t2) * canvasW * 0.2;
+  var glowY = canvasH * 0.3 + Math.cos(t2 * 0.7) * canvasH * 0.1;
+  var grad = ctx2d.createRadialGradient(glowX, glowY, 0, glowX, glowY, canvasW * 0.5);
+  grad.addColorStop(0, 'rgba(80,255,176,0.03)');
+  grad.addColorStop(0.5, 'rgba(80,255,176,0.01)');
+  grad.addColorStop(1, 'rgba(0,0,0,0)');
+  ctx2d.fillStyle = grad;
+  ctx2d.fillRect(0, 0, canvasW, canvasH);
+}
+
+// --- Parallax grid ---
+function drawParallaxGrid() {
+  ctx2d.save();
+  ctx2d.globalAlpha = 0.06;
+  ctx2d.strokeStyle = '#50ffb0';
+  ctx2d.lineWidth = 0.5;
+  var spacing = 40;
+  var offY = (parallaxOffset * 0.3) % spacing;
+  for (var gy = -spacing + offY; gy < canvasH + spacing; gy += spacing) {
+    ctx2d.beginPath(); ctx2d.moveTo(0, gy); ctx2d.lineTo(canvasW, gy); ctx2d.stroke();
+  }
+  var offX = (parallaxOffset * 0.15) % spacing;
+  for (var gx = -spacing + offX; gx < canvasW + spacing; gx += spacing) {
+    ctx2d.beginPath(); ctx2d.moveTo(gx, 0); ctx2d.lineTo(gx, canvasH); ctx2d.stroke();
+  }
+  ctx2d.restore();
+}
+
+// --- Draw engine card ---
+function drawEngineCard(idx, x, y, w, h, highlight) {
+  var eng = ENGINES[idx];
+  var borderColor = highlight ? eng.color : 'rgba(80,255,176,0.2)';
+  var bgAlpha = highlight ? 0.15 : 0.08;
+
+  // Idle breathe
+  var idleMs = Date.now() - lastInteractionTime;
+  var breathe = idleMs > 3000 ? Math.sin(animFrame * 0.02 + idx * 1.5) * 2 : 0;
+
+  ctx2d.save();
+  ctx2d.translate(0, breathe);
+
+  // Card bg
+  drawRoundedRect(x, y, w, h, 'rgba(20,22,30,' + (0.8+bgAlpha) + ')', borderColor);
+
+  // Glow under card
+  if (highlight) {
+    ctx2d.save();
+    ctx2d.globalAlpha = 0.15;
+    ctx2d.shadowColor = eng.color;
+    ctx2d.shadowBlur = 20;
+    drawRoundedRect(x, y, w, h, 'transparent', eng.color);
+    ctx2d.restore();
+  }
+
+  // Engine name
+  ctx2d.font = '700 15px "Space Grotesk", sans-serif';
+  ctx2d.fillStyle = eng.color;
+  ctx2d.textAlign = 'center';
+  ctx2d.fillText(eng.id, x + w/2, y + 24);
+
+  // Colored top line
+  ctx2d.fillStyle = eng.color;
+  ctx2d.fillRect(x + 1, y + 1, w - 2, 3);
+
+  ctx2d.restore();
+}
+
+// --- Draw Phase 1: Spec Review ---
+function drawPhase1() {
+  var titleY = 24;
+  ctx2d.font = '700 14px "Space Grotesk", sans-serif';
+  ctx2d.fillStyle = '#50ffb0';
+  ctx2d.textAlign = 'center';
+  ctx2d.fillText(lang === 'cn' ? '\u53c2\u6570\u8ba4\u8bc6 -- \u5c06\u53c2\u6570\u62d6\u5230\u5bf9\u5e94\u5361\u7247' : 'SPEC REVIEW -- Drag values to cards', canvasW/2, titleY);
+
+  // Draw 4 engine cards with slots
+  for (var i = 0; i < 4; i++) {
+    var cx = cardsStartX + i * (cardW + cardGap);
+    var filled = 0;
+    for (var si = 0; si < specSlots.length; si++) {
+      if (specSlots[si].engineIdx === i && specSlots[si].filled) filled++;
+    }
+    drawEngineCard(i, cx, cardsStartY, cardW, cardH, filled === 3);
+
+    // Spec fields with slots
+    for (var f = 0; f < specFields.length; f++) {
+      var field = specFields[f];
+      var slotIdx = i * 3 + f;
+      var slot = specSlots[slotIdx];
+      var fy = cardsStartY + 44 + f * 50;
+
+      // Field label
+      ctx2d.font = '500 11px "Space Grotesk", sans-serif';
+      ctx2d.fillStyle = '#aaabb0';
+      ctx2d.textAlign = 'center';
+      var fieldLabel = specFieldLabels[field][lang] || specFieldLabels[field].en;
+      ctx2d.fillText(fieldLabel, cx + cardW/2, fy);
+
+      // Slot box
+      var slotX = cx + cardW/2 - 30;
+      var slotY = fy + 6;
+      var slotW2 = 60, slotH2 = 24;
+      if (slot.filled) {
+        drawRoundedRect(slotX, slotY, slotW2, slotH2, 'rgba(80,255,176,0.12)', '#50ffb0');
+        ctx2d.font = '700 13px "Space Grotesk", sans-serif';
+        ctx2d.fillStyle = '#50ffb0';
+        ctx2d.textAlign = 'center';
+        ctx2d.fillText('' + slot.placedValue, cx + cardW/2, slotY + 17);
+      } else {
+        drawRoundedRect(slotX, slotY, slotW2, slotH2, 'rgba(40,42,55,0.6)', 'rgba(80,255,176,0.15)');
+        ctx2d.font = '400 10px "Inter", sans-serif';
+        ctx2d.fillStyle = 'rgba(170,171,176,0.4)';
+        ctx2d.textAlign = 'center';
+        ctx2d.fillText('?', cx + cardW/2, slotY + 16);
+      }
+    }
+
+    // Delay info (always shown, not draggable)
+    ctx2d.font = '400 10px "Inter", sans-serif';
+    ctx2d.fillStyle = '#aaabb0';
+    ctx2d.textAlign = 'center';
+    ctx2d.fillText((lang === 'cn' ? '\u5ef6\u65f6: ' : 'Delay: ') + ENGINES[i].delay + 's', cx + cardW/2, cardsStartY + cardH - 16);
+  }
+
+  // Draw spec chips
+  for (var ci = 0; ci < specChips.length; ci++) {
+    var chip = specChips[ci];
+    if (chip.placed || (draggedSpec && draggedSpec === ci)) continue;
+
+    var chipAlpha = 1.0;
+    drawRoundedRect(chip.x, chip.y, chip.w, chip.h, 'rgba(30,32,45,0.9)', 'rgba(255,181,156,0.3)');
+    ctx2d.font = '700 11px "Space Grotesk", sans-serif';
+    ctx2d.fillStyle = '#ffb59c';
+    ctx2d.textAlign = 'center';
+    ctx2d.fillText(chip.label, chip.x + chip.w/2, chip.y + chip.h/2 + 4);
+  }
+
+  // Draw dragged chip
+  if (draggedSpec !== null && draggedSpec >= 0) {
+    var dc = specChips[draggedSpec];
+    ctx2d.save();
+    ctx2d.globalAlpha = 0.9;
+    ctx2d.shadowColor = '#ffb59c';
+    ctx2d.shadowBlur = 12;
+    drawRoundedRect(dragX - dc.w/2, dragY - dc.h/2, dc.w, dc.h, 'rgba(50,40,35,0.95)', '#ffb59c');
+    ctx2d.font = '700 12px "Space Grotesk", sans-serif';
+    ctx2d.fillStyle = '#ffb59c';
+    ctx2d.textAlign = 'center';
+    ctx2d.fillText(dc.label, dragX, dragY + 4);
+    ctx2d.restore();
+  }
+
+  // Check if complete
+  var allFilled = true;
+  for (var si2 = 0; si2 < specSlots.length; si2++) {
+    if (!specSlots[si2].filled) { allFilled = false; break; }
+  }
+  p1Complete = allFilled;
+}
+
+// --- Draw Phase 2: TWR Check ---
+function drawPhase2() {
+  var titleY = 24;
+  ctx2d.font = '700 14px "Space Grotesk", sans-serif';
+  ctx2d.fillStyle = '#50ffb0';
+  ctx2d.textAlign = 'center';
+  ctx2d.fillText(lang === 'cn' ? 'TWR = \u63a8\u529b / \u91cd\u529b \u00a0|\u00a0 \u91cd\u529b = 0.3kg \u00d7 9.81 = 2.94N \u00a0|\u00a0 TWR > 5 \u624d\u80fd\u901a\u8fc7' : 'TWR = Thrust / Weight | Weight = 0.3kg x 9.81 = 2.94N | TWR > 5 to pass', canvasW/2, titleY);
+
+  for (var i = 0; i < 4; i++) {
+    var cx = cardsStartX + i * (cardW + cardGap);
+    drawEngineCard(i, cx, cardsStartY, cardW, cardH, twrCorrect[i]);
+
+    // Engine specs summary
+    var specY = cardsStartY + 40;
+    ctx2d.font = '400 11px "Inter", sans-serif';
+    ctx2d.fillStyle = '#aaabb0';
+    ctx2d.textAlign = 'center';
+    ctx2d.fillText(t('thrust') + ': ' + ENGINES[i].thrust + 'N', cx + cardW/2, specY);
+    ctx2d.fillText('m = 300g = 0.3kg', cx + cardW/2, specY + 18);
+    ctx2d.fillText('W = m\u00d7g = 2.94N', cx + cardW/2, specY + 36);
+
+    // Formula hint
+    ctx2d.font = '700 12px "Space Grotesk", sans-serif';
+    ctx2d.fillStyle = '#ffb59c';
+    ctx2d.fillText('TWR = ' + ENGINES[i].thrust + ' / 2.94 = ?', cx + cardW/2, specY + 64);
+
+    // Input box
+    var box = inputBoxes[i];
+    var boxBorder = twrChecked[i] ? (twrCorrect[i] ? '#50ffb0' : '#ff6b6b') : (p2ActiveInput === i ? '#ffb59c' : 'rgba(80,255,176,0.25)');
+    var boxBg = p2ActiveInput === i ? 'rgba(50,40,35,0.4)' : 'rgba(20,22,30,0.6)';
+    drawRoundedRect(box.x, box.y, box.w, box.h, boxBg, boxBorder);
+
+    ctx2d.font = '700 13px "Space Grotesk", sans-serif';
+    ctx2d.fillStyle = twrChecked[i] ? (twrCorrect[i] ? '#50ffb0' : '#ff6b6b') : '#e2e2e9';
+    ctx2d.textAlign = 'center';
+    var displayStr = p2InputStr[i] || (p2ActiveInput === i ? '_' : '');
+    ctx2d.fillText(displayStr, box.x + box.w/2, box.y + 18);
+
+    // Result label
+    if (twrChecked[i]) {
+      var resultY = box.y + box.h + 18;
+      ctx2d.font = '700 12px "Space Grotesk", sans-serif';
+      ctx2d.fillStyle = twrCorrect[i] ? '#50ffb0' : '#ff6b6b';
+      ctx2d.fillText(twrCorrect[i] ? t('correct') : t('wrong'), cx + cardW/2, resultY);
+
+      // Show actual TWR
+      ctx2d.font = '400 10px "Inter", sans-serif';
+      ctx2d.fillStyle = '#aaabb0';
+      ctx2d.fillText('TWR = ' + ENGINES[i].twr.toFixed(1), cx + cardW/2, resultY + 16);
+
+      // Pass/Fail badge
+      var passY = resultY + 34;
+      ctx2d.font = '700 13px "Space Grotesk", sans-serif';
+      ctx2d.fillStyle = ENGINES[i].twrPass ? '#50ffb0' : '#ff6b6b';
+      ctx2d.fillText(ENGINES[i].twrPass ? t('pass') : t('fail'), cx + cardW/2, passY);
+    }
+  }
+}
+
+// --- Draw Phase 3: Altitude Prediction ---
+function drawPhase3() {
+  var titleY = 24;
+  ctx2d.font = '700 14px "Space Grotesk", sans-serif';
+  ctx2d.fillStyle = '#50ffb0';
+  ctx2d.textAlign = 'center';
+  ctx2d.fillText(lang === 'cn' ? '\u5c04\u9ad8\u9884\u62a5 -- h \u2248 (I/m)\u00b2 / (2g) \u00a0|\u00a0 \u76ee\u6807 150m' : 'ALTITUDE PREDICTION -- h = (I/m)^2 / (2g) | Target 150m', canvasW/2, titleY);
+
+  for (var i = 0; i < 4; i++) {
+    var cx = cardsStartX + i * (cardW + cardGap);
+    var enabled = ENGINES[i].twrPass;
+    drawEngineCard(i, cx, cardsStartY, cardW, cardH, altCorrect[i]);
+
+    if (!enabled) {
+      // Dim overlay for failed TWR
+      ctx2d.save();
+      ctx2d.globalAlpha = 0.6;
+      drawRoundedRect(cx, cardsStartY, cardW, cardH, 'rgba(12,14,20,0.85)', null);
+      ctx2d.restore();
+      ctx2d.font = '700 12px "Space Grotesk", sans-serif';
+      ctx2d.fillStyle = '#ff6b6b';
+      ctx2d.textAlign = 'center';
+      ctx2d.fillText('TWR ' + t('fail'), cx + cardW/2, cardsStartY + cardH/2);
+      continue;
+    }
+
+    // Show specs and formula
+    var specY = cardsStartY + 40;
+    ctx2d.font = '400 11px "Inter", sans-serif';
+    ctx2d.fillStyle = '#aaabb0';
+    ctx2d.textAlign = 'center';
+    ctx2d.fillText('I = ' + ENGINES[i].impulse + ' Ns', cx + cardW/2, specY);
+    ctx2d.fillText('m = 0.3 kg', cx + cardW/2, specY + 16);
+    ctx2d.fillText('v = I/m = ' + (ENGINES[i].impulse / ROCKET_MASS).toFixed(1) + ' m/s', cx + cardW/2, specY + 34);
+
+    ctx2d.font = '700 11px "Space Grotesk", sans-serif';
+    ctx2d.fillStyle = '#ffb59c';
+    ctx2d.fillText('h = v\u00b2/(2g) = ?', cx + cardW/2, specY + 58);
+
+    // Input box
+    var box = inputBoxes[i];
+    var boxBorder = altChecked[i] ? (altCorrect[i] ? '#50ffb0' : '#ffb59c') : (p3ActiveInput === i ? '#ffb59c' : 'rgba(80,255,176,0.25)');
+    var boxBg = p3ActiveInput === i ? 'rgba(50,40,35,0.4)' : 'rgba(20,22,30,0.6)';
+    drawRoundedRect(box.x, box.y, box.w, box.h, boxBg, boxBorder);
+
+    ctx2d.font = '700 13px "Space Grotesk", sans-serif';
+    ctx2d.fillStyle = altChecked[i] ? (altCorrect[i] ? '#50ffb0' : '#ffb59c') : '#e2e2e9';
+    ctx2d.textAlign = 'center';
+    var displayStr = p3InputStr[i] || (p3ActiveInput === i ? '_' : '');
+    ctx2d.fillText(displayStr + 'm', box.x + box.w/2, box.y + 18);
+
+    // Result
+    if (altChecked[i]) {
+      var resultY = box.y + box.h + 18;
+      ctx2d.font = '700 12px "Space Grotesk", sans-serif';
+      ctx2d.fillStyle = altCorrect[i] ? '#50ffb0' : '#ffb59c';
+      ctx2d.fillText(altCorrect[i] ? t('correct') : t('close'), cx + cardW/2, resultY);
+
+      ctx2d.font = '400 10px "Inter", sans-serif';
+      ctx2d.fillStyle = '#aaabb0';
+      ctx2d.fillText((lang === 'cn' ? '\u7406\u60f3: ' : 'Ideal: ') + ENGINES[i].idealAlt + 'm', cx + cardW/2, resultY + 16);
+      ctx2d.fillText((lang === 'cn' ? '\u4f30\u7b97: ~' : 'Est: ~') + ENGINES[i].estAlt + 'm', cx + cardW/2, resultY + 30);
+    }
+  }
+}
+
+// --- Draw Phase 4: Final Selection ---
+function drawPhase4() {
+  if (simActive || (gameComplete && simPhase !== 'idle')) {
+    drawLaunchSim();
+    return;
+  }
+
+  if (gameComplete) {
+    drawMissionReport();
+    return;
+  }
+
+  var titleY = 24;
+  ctx2d.font = '700 14px "Space Grotesk", sans-serif';
+  ctx2d.fillStyle = '#50ffb0';
+  ctx2d.textAlign = 'center';
+  ctx2d.fillText(lang === 'cn' ? '\u6700\u7ec8\u9009\u578b -- \u9009\u62e9\u6700\u4f73\u53d1\u52a8\u673a\u5e76\u7ed9\u51fa\u7406\u7531' : 'FINAL SELECTION -- Choose the best engine and give your reasoning', canvasW/2, titleY);
+
+  // Summary table header
+  var tableX = cardsStartX;
+  var tableY = cardsStartY;
+  var colW = cardW + cardGap;
+
+  // Draw comparison cards
+  for (var i = 0; i < 4; i++) {
+    var cx = cardsStartX + i * colW;
+    var isSelected = selectedEngine === i;
+    drawEngineCard(i, cx, tableY, cardW, cardH * 0.65, isSelected);
+
+    // Summary data
+    var sy = tableY + 40;
+    ctx2d.font = '400 11px "Inter", sans-serif';
+    ctx2d.textAlign = 'center';
+    ctx2d.fillStyle = '#aaabb0';
+    ctx2d.fillText(t('thrust') + ': ' + ENGINES[i].thrust + 'N', cx + cardW/2, sy);
+    ctx2d.fillText(t('burn_time') + ': ' + ENGINES[i].burnTime + 's', cx + cardW/2, sy + 16);
+    ctx2d.fillText(t('total_impulse') + ': ' + ENGINES[i].impulse + 'Ns', cx + cardW/2, sy + 32);
+    ctx2d.fillText(t('delay') + ': ' + ENGINES[i].delay + 's', cx + cardW/2, sy + 48);
+
+    // TWR result
+    ctx2d.font = '700 11px "Space Grotesk", sans-serif';
+    ctx2d.fillStyle = ENGINES[i].twrPass ? '#50ffb0' : '#ff6b6b';
+    ctx2d.fillText('TWR: ' + ENGINES[i].twr.toFixed(1) + ' ' + (ENGINES[i].twrPass ? t('pass') : t('fail')), cx + cardW/2, sy + 68);
+
+    // Altitude estimate
+    if (ENGINES[i].twrPass) {
+      ctx2d.fillStyle = '#54a0ff';
+      ctx2d.fillText('h \u2248 ' + ENGINES[i].idealAlt + 'm', cx + cardW/2, sy + 84);
+    }
+
+    // Selection button area
+    var btnY = tableY + cardH * 0.65 - 36;
+    var btnW2 = cardW - 20;
+    var btnX2 = cx + 10;
+    var btnColor = isSelected ? ENGINES[i].color : 'rgba(80,255,176,0.15)';
+    drawRoundedRect(btnX2, btnY, btnW2, 26, isSelected ? 'rgba(80,255,176,0.12)' : 'rgba(20,22,30,0.5)', btnColor);
+    ctx2d.font = '700 11px "Space Grotesk", sans-serif';
+    ctx2d.fillStyle = isSelected ? '#50ffb0' : '#aaabb0';
+    ctx2d.textAlign = 'center';
+    ctx2d.fillText(isSelected ? (lang === 'cn' ? '\u5df2\u9009\u62e9' : 'SELECTED') : t('select_engine'), cx + cardW/2, btnY + 17);
+  }
+
+  // Reasoning display after confirmation
+  if (p4Confirmed) {
+    var reasonY = tableY + cardH * 0.65 + 16;
+    ctx2d.font = '700 13px "Space Grotesk", sans-serif';
+    ctx2d.fillStyle = p4Correct ? '#50ffb0' : '#ffb59c';
+    ctx2d.textAlign = 'center';
+    var resultText = p4Correct ? t('final_correct') : t('final_wrong');
+    var lines = resultText.split('\n');
+    for (var li = 0; li < lines.length; li++) {
+      ctx2d.fillText(lines[li], canvasW/2, reasonY + li * 20);
+    }
+  }
+
+  // Store engine select boxes for click detection
+  engineSelectBoxes = [];
+  for (var bi = 0; bi < 4; bi++) {
+    var bx = cardsStartX + bi * colW + 10;
+    var by = tableY + cardH * 0.65 - 36;
+    engineSelectBoxes.push({ x: bx, y: by, w: cardW - 20, h: 26 });
+  }
+}
+
+// --- Launch Simulation ---
+function drawLaunchSim() {
+  // Sky gradient
+  var skyGrad = ctx2d.createLinearGradient(0, 0, 0, canvasH);
+  skyGrad.addColorStop(0, '#050510');
+  skyGrad.addColorStop(0.4, '#0a0a20');
+  skyGrad.addColorStop(1, '#101025');
+  ctx2d.fillStyle = skyGrad;
+  ctx2d.fillRect(0, 0, canvasW, canvasH);
+
+  // Stars
+  var starSeed = 42;
+  for (var si = 0; si < 60; si++) {
+    starSeed = (starSeed * 1103515245 + 12345) & 0x7fffffff;
+    var sx = (starSeed % 1000) / 1000 * canvasW;
+    starSeed = (starSeed * 1103515245 + 12345) & 0x7fffffff;
+    var sy2 = (starSeed % 1000) / 1000 * canvasH * 0.6;
+    var twinkle = 0.3 + 0.7 * Math.abs(Math.sin(animFrame * 0.01 + si));
+    ctx2d.fillStyle = 'rgba(200,210,255,' + (twinkle * 0.5) + ')';
+    ctx2d.fillRect(sx, sy2, 1.5, 1.5);
+  }
+
+  // Ground
+  ctx2d.fillStyle = '#1a1a2e';
+  ctx2d.fillRect(0, canvasH - 40, canvasW, 40);
+  ctx2d.fillStyle = '#252540';
+  ctx2d.fillRect(0, canvasH - 40, canvasW, 2);
+
+  // Launch pad
+  var padX = canvasW / 2;
+  var padY = canvasH - 40;
+  ctx2d.fillStyle = '#333355';
+  ctx2d.fillRect(padX - 20, padY - 8, 40, 8);
+  ctx2d.fillStyle = '#444466';
+  ctx2d.fillRect(padX - 3, padY - 24, 6, 16);
+
+  // Altitude scale
+  var maxDisplayAlt = Math.max(200, simMaxAlt * 1.2);
+  var scaleH = canvasH - 80;
+
+  // Scale markings
+  ctx2d.font = '400 9px "Space Grotesk", sans-serif';
+  ctx2d.fillStyle = '#aaabb0';
+  ctx2d.textAlign = 'right';
+  for (var am = 0; am <= maxDisplayAlt; am += 50) {
+    var ay = padY - 10 - (am / maxDisplayAlt) * scaleH;
+    if (ay < 20) break;
+    ctx2d.fillText(am + 'm', padX - 35, ay + 3);
+    ctx2d.strokeStyle = 'rgba(80,255,176,0.08)';
+    ctx2d.lineWidth = 0.5;
+    ctx2d.beginPath();
+    ctx2d.moveTo(padX - 28, ay);
+    ctx2d.lineTo(padX + 28, ay);
+    ctx2d.stroke();
+  }
+
+  // Target line
+  var targetY = padY - 10 - (TARGET_ALT / maxDisplayAlt) * scaleH;
+  ctx2d.strokeStyle = '#ffb59c';
+  ctx2d.lineWidth = 1;
+  ctx2d.setLineDash([4, 4]);
+  ctx2d.beginPath();
+  ctx2d.moveTo(padX - 40, targetY);
+  ctx2d.lineTo(padX + 40, targetY);
+  ctx2d.stroke();
+  ctx2d.setLineDash([]);
+  ctx2d.font = '700 10px "Space Grotesk", sans-serif';
+  ctx2d.fillStyle = '#ffb59c';
+  ctx2d.textAlign = 'left';
+  ctx2d.fillText('150m', padX + 42, targetY + 4);
+
+  // Trail
+  if (simTrail.length > 1) {
+    ctx2d.beginPath();
+    ctx2d.strokeStyle = 'rgba(80,255,176,0.3)';
+    ctx2d.lineWidth = 2;
+    for (var ti = 0; ti < simTrail.length; ti++) {
+      var trailAlt = simTrail[ti];
+      var trailY = padY - 10 - (trailAlt / maxDisplayAlt) * scaleH;
+      var trailX = padX + Math.sin(ti * 0.05) * 2;
+      if (ti === 0) ctx2d.moveTo(trailX, trailY); else ctx2d.lineTo(trailX, trailY);
+    }
+    ctx2d.stroke();
+  }
+
+  // Rocket
+  var rocketScreenY = padY - 10 - (simRocketY / maxDisplayAlt) * scaleH;
+  rocketScreenY = Math.max(30, rocketScreenY);
+
+  // Engine flame
+  if (simPhase === 'burning') {
+    var flameLen = 12 + Math.random() * 8;
+    var flameW = 5 + Math.random() * 3;
+    ctx2d.save();
+    ctx2d.globalAlpha = 0.8;
+    var flameGrad = ctx2d.createLinearGradient(padX, rocketScreenY + 10, padX, rocketScreenY + 10 + flameLen);
+    flameGrad.addColorStop(0, '#ffb59c');
+    flameGrad.addColorStop(0.4, '#ff6b6b');
+    flameGrad.addColorStop(1, 'rgba(255,107,107,0)');
+    ctx2d.fillStyle = flameGrad;
+    ctx2d.beginPath();
+    ctx2d.moveTo(padX - flameW, rocketScreenY + 10);
+    ctx2d.lineTo(padX, rocketScreenY + 10 + flameLen);
+    ctx2d.lineTo(padX + flameW, rocketScreenY + 10);
+    ctx2d.closePath();
+    ctx2d.fill();
+    ctx2d.restore();
+
+    // Exhaust particles
+    if (animFrame % 2 === 0) {
+      spawnParticles(padX, rocketScreenY + 12, 3, '#ffb59c', 2);
+    }
+  }
+
+  // Rocket body
+  ctx2d.fillStyle = ENGINES[selectedEngine >= 0 ? selectedEngine : 0].color;
+  ctx2d.beginPath();
+  ctx2d.moveTo(padX, rocketScreenY - 14);
+  ctx2d.lineTo(padX - 5, rocketScreenY + 4);
+  ctx2d.lineTo(padX - 5, rocketScreenY + 10);
+  ctx2d.lineTo(padX + 5, rocketScreenY + 10);
+  ctx2d.lineTo(padX + 5, rocketScreenY + 4);
+  ctx2d.closePath();
+  ctx2d.fill();
+
+  // Nose cone
+  ctx2d.fillStyle = '#e2e2e9';
+  ctx2d.beginPath();
+  ctx2d.moveTo(padX, rocketScreenY - 14);
+  ctx2d.lineTo(padX - 3, rocketScreenY - 6);
+  ctx2d.lineTo(padX + 3, rocketScreenY - 6);
+  ctx2d.closePath();
+  ctx2d.fill();
+
+  // Fins
+  ctx2d.fillStyle = 'rgba(255,181,156,0.6)';
+  ctx2d.beginPath();
+  ctx2d.moveTo(padX - 5, rocketScreenY + 8);
+  ctx2d.lineTo(padX - 9, rocketScreenY + 14);
+  ctx2d.lineTo(padX - 5, rocketScreenY + 10);
+  ctx2d.closePath();
+  ctx2d.fill();
+  ctx2d.beginPath();
+  ctx2d.moveTo(padX + 5, rocketScreenY + 8);
+  ctx2d.lineTo(padX + 9, rocketScreenY + 14);
+  ctx2d.lineTo(padX + 5, rocketScreenY + 10);
+  ctx2d.closePath();
+  ctx2d.fill();
+
+  // Apogee marker
+  if (simPhase === 'apogee' || simPhase === 'descending' || simPhase === 'landed') {
+    var apogeeY = padY - 10 - (simMaxAlt / maxDisplayAlt) * scaleH;
+    ctx2d.strokeStyle = '#50ffb0';
+    ctx2d.lineWidth = 1;
+    ctx2d.setLineDash([2, 3]);
+    ctx2d.beginPath();
+    ctx2d.moveTo(padX - 30, apogeeY);
+    ctx2d.lineTo(padX + 30, apogeeY);
+    ctx2d.stroke();
+    ctx2d.setLineDash([]);
+    ctx2d.font = '700 10px "Space Grotesk", sans-serif';
+    ctx2d.fillStyle = '#50ffb0';
+    ctx2d.textAlign = 'left';
+    ctx2d.fillText(Math.round(simMaxAlt) + 'm', padX + 34, apogeeY + 4);
+  }
+
+  // Phase label
+  var phaseLabel = '';
+  if (simPhase === 'burning') phaseLabel = t('sim_launching');
+  else if (simPhase === 'coasting') phaseLabel = t('sim_coasting');
+  else if (simPhase === 'apogee') phaseLabel = t('sim_apogee');
+  else if (simPhase === 'descending') phaseLabel = t('sim_descending');
+
+  if (phaseLabel) {
+    ctx2d.font = '700 16px "Space Grotesk", sans-serif';
+    ctx2d.fillStyle = '#50ffb0';
+    ctx2d.textAlign = 'center';
+    ctx2d.fillText(phaseLabel, canvasW / 2, 40);
+  }
+
+  // Altitude readout
+  ctx2d.font = '700 20px "Space Grotesk", sans-serif';
+  ctx2d.fillStyle = '#e2e2e9';
+  ctx2d.textAlign = 'center';
+  ctx2d.fillText(Math.round(simRocketY) + 'm', canvasW / 2, 70);
+
+  // Engine info
+  if (selectedEngine >= 0) {
+    ctx2d.font = '400 11px "Inter", sans-serif';
+    ctx2d.fillStyle = ENGINES[selectedEngine].color;
+    ctx2d.textAlign = 'center';
+    ctx2d.fillText(ENGINES[selectedEngine].id + ' | ' + ENGINES[selectedEngine].impulse + 'Ns', canvasW / 2, 90);
+  }
+}
+
+// --- Mission Report ---
+function drawMissionReport() {
+  // Fade in
+  if (completionAlpha < 1) completionAlpha += 0.02;
+
+  ctx2d.save();
+  ctx2d.globalAlpha = Math.min(completionAlpha, 1);
+
+  // Background
+  var bgGrad = ctx2d.createRadialGradient(canvasW/2, canvasH/2, 0, canvasW/2, canvasH/2, canvasW*0.6);
+  bgGrad.addColorStop(0, 'rgba(20,22,35,0.95)');
+  bgGrad.addColorStop(1, 'rgba(12,14,20,0.98)');
+  ctx2d.fillStyle = bgGrad;
+  ctx2d.fillRect(0, 0, canvasW, canvasH);
+
+  // Title
+  ctx2d.font = '700 22px "Space Grotesk", sans-serif';
+  ctx2d.fillStyle = '#50ffb0';
+  ctx2d.textAlign = 'center';
+  ctx2d.fillText(t('report_title'), canvasW/2, 60);
+
+  // Report data
+  var reportY = 100;
+  var lineH = 28;
+  ctx2d.font = '400 14px "Inter", sans-serif';
+  ctx2d.fillStyle = '#aaabb0';
+
+  ctx2d.fillText(t('report_engine') + ' ' + (selectedEngine >= 0 ? ENGINES[selectedEngine].id : '--'), canvasW/2, reportY);
+  ctx2d.fillText(t('report_alt') + ' ' + Math.round(simMaxAlt) + 'm', canvasW/2, reportY + lineH);
+  ctx2d.fillText(t('report_target'), canvasW/2, reportY + lineH * 2);
+
+  // Score
+  ctx2d.font = '700 18px "Space Grotesk", sans-serif';
+  ctx2d.fillStyle = totalScore >= 80 ? '#50ffb0' : (totalScore >= 50 ? '#ffb59c' : '#ff6b6b');
+  ctx2d.fillText(t('report_score') + ' ' + totalScore + '/100', canvasW/2, reportY + lineH * 3.5);
+
+  // Grade
+  var gradeText = totalScore >= 80 ? t('excellent') : (totalScore >= 50 ? t('good_job') : t('try_harder'));
+  ctx2d.font = '700 24px "Space Grotesk", sans-serif';
+  ctx2d.fillText(gradeText, canvasW/2, reportY + lineH * 5);
+
+  // Recap
+  ctx2d.font = '400 12px "Inter", sans-serif';
+  ctx2d.fillStyle = '#888';
+  var recapLines = t('recap').split('\n');
+  for (var ri = 0; ri < recapLines.length; ri++) {
+    ctx2d.fillText(recapLines[ri], canvasW/2, reportY + lineH * 6.5 + ri * 18);
+  }
+
+  // Phase scores breakdown
+  var breakdownY = reportY + lineH * 9;
+  ctx2d.font = '700 11px "Space Grotesk", sans-serif';
+  ctx2d.fillStyle = '#aaabb0';
+  var phaseNames = [
+    lang === 'cn' ? 'P1 \u53c2\u6570\u8ba4\u8bc6' : 'P1 Spec Review',
+    lang === 'cn' ? 'P2 \u63a8\u91cd\u6bd4' : 'P2 TWR Check',
+    lang === 'cn' ? 'P3 \u5c04\u9ad8\u9884\u62a5' : 'P3 Altitude',
+    lang === 'cn' ? 'P4 \u6700\u7ec8\u9009\u578b' : 'P4 Selection'
+  ];
+  for (var pi = 0; pi < 4; pi++) {
+    var barX = canvasW/2 - 120;
+    var barY2 = breakdownY + pi * 22;
+    ctx2d.textAlign = 'left';
+    ctx2d.fillText(phaseNames[pi], barX, barY2 + 12);
+    // Score bar
+    var barW = 100;
+    var maxPScore = pi < 3 ? 25 : 25;
+    var filled = (phaseScores[pi] / maxPScore) * barW;
+    drawRoundedRect(barX + 110, barY2 + 2, barW, 12, 'rgba(40,42,55,0.6)', 'rgba(80,255,176,0.15)');
+    if (filled > 0) drawRoundedRect(barX + 110, barY2 + 2, filled, 12, 'rgba(80,255,176,0.3)', null);
+    ctx2d.textAlign = 'right';
+    ctx2d.fillText(phaseScores[pi] + '/' + maxPScore, barX + 110 + barW + 30, barY2 + 13);
+  }
+
+  ctx2d.restore();
+}
+
+// --- Main draw ---
+function drawFrame() {
+  animFrame++;
+  pulsePhase += 0.02;
+  parallaxOffset += 0.5;
+
+  // Shake update
+  if (shakeIntensity > 0.5) {
+    shakeOffX = (Math.random() - 0.5) * shakeIntensity;
+    shakeOffY = (Math.random() - 0.5) * shakeIntensity;
+    shakeIntensity *= shakeDecay;
+  } else {
+    shakeIntensity = 0; shakeOffX = 0; shakeOffY = 0;
+  }
+
+  // Sim update
+  if (simActive) updateSim();
+
+  // Transition update
+  if (transitionDir === 1) {
+    transitionAlpha += 0.04;
+    if (transitionAlpha >= 1) {
+      transitionDir = 2;
+      phase = pendingPhase;
+      computeLayout();
+      updateTexts();
+    }
+  } else if (transitionDir === 2) {
+    transitionAlpha -= 0.04;
+    if (transitionAlpha <= 0) { transitionAlpha = 0; transitionDir = 0; }
+  }
+
+  updateParticles();
+
+  // Clear
+  ctx2d.save();
+  ctx2d.translate(shakeOffX, shakeOffY);
+  ctx2d.fillStyle = '#0c0e14';
+  ctx2d.fillRect(-10, -10, canvasW+20, canvasH+20);
+
+  drawParallaxGrid();
+  drawAmbientGlow();
+
+  // Phase drawing
+  if (phase === 1) drawPhase1();
+  else if (phase === 2) drawPhase2();
+  else if (phase === 3) drawPhase3();
+  else if (phase === 4) drawPhase4();
+
+  drawParticles();
+
+  // Transition overlay
+  if (transitionAlpha > 0) {
+    ctx2d.fillStyle = 'rgba(12,14,20,' + transitionAlpha + ')';
+    ctx2d.fillRect(-10, -10, canvasW+20, canvasH+20);
+  }
+
+  ctx2d.restore();
+
+  requestAnimationFrame(drawFrame);
+}
+
+// --- Simulation update ---
+function updateSim() {
+  var eng = ENGINES[selectedEngine];
+  var dt = 0.016; // ~60fps
+  simTime += dt;
+
+  if (simPhase === 'burning') {
+    var thrustForce = eng.thrust;
+    var accel = (thrustForce / ROCKET_MASS) - GRAVITY;
+    simRocketVy += accel * dt;
+    simRocketY += simRocketVy * dt;
+    if (simRocketY < 0) simRocketY = 0;
+    simTrail.push(simRocketY);
+    if (simMaxAlt < simRocketY) simMaxAlt = simRocketY;
+    if (simTime >= eng.burnTime) {
+      simPhase = 'coasting';
+      if (animFrame % 3 === 0) spawnParticles(canvasW/2, canvasH - 60, 5, '#ffb59c', 3);
+    }
+    // Screen shake during burn
+    triggerShake(3);
+  } else if (simPhase === 'coasting') {
+    simRocketVy -= GRAVITY * dt;
+    // Add drag
+    var drag = 0.5 * 0.004 * 1.2 * simRocketVy * Math.abs(simRocketVy) * 0.001;
+    simRocketVy -= drag * dt;
+    simRocketY += simRocketVy * dt;
+    if (simMaxAlt < simRocketY) simMaxAlt = simRocketY;
+    simTrail.push(simRocketY);
+    if (simRocketVy <= 0) {
+      simPhase = 'apogee';
+      simMaxAlt = simRocketY;
+      spawnParticles(canvasW/2, 40, 12, '#50ffb0', 5);
+      playCorrectSound();
+      triggerShake(6);
+    }
+  } else if (simPhase === 'apogee') {
+    // Pause at apogee briefly
+    if (simTime > eng.burnTime + 3) {
+      simPhase = 'descending';
+    }
+  } else if (simPhase === 'descending') {
+    simRocketVy -= GRAVITY * dt * 0.3; // parachute
+    simRocketY += simRocketVy * dt;
+    simTrail.push(simRocketY);
+    if (simRocketY <= 0) {
+      simRocketY = 0;
+      simPhase = 'landed';
+      simActive = false;
+      gameComplete = true;
+      completionAlpha = 0;
+      // Score phase 4
+      scorePhase4();
+      playSuccessSound();
+      triggerShake(8);
+      spawnParticles(canvasW/2, canvasH - 50, 20, '#50ffb0', 6);
+      updateTexts();
+    }
+  }
+}
+
+// --- Scoring ---
+function scorePhase1() {
+  // Check all slots
+  var correct = 0;
+  for (var si = 0; si < specSlots.length; si++) {
+    if (specSlots[si].filled && specSlots[si].placedValue === specSlots[si].value) {
+      correct++;
+    }
+  }
+  var score = Math.round((correct / specSlots.length) * 25);
+  phaseScores[0] = score;
+  totalScore += score;
+  juiceHud(1);
+}
+
+function scorePhase2() {
+  var correct = 0;
+  for (var i = 0; i < 4; i++) {
+    if (twrCorrect[i]) correct++;
+  }
+  var score = Math.round((correct / 4) * 25);
+  phaseScores[1] = score;
+  totalScore += score;
+  juiceHud(1);
+}
+
+function scorePhase3() {
+  var eligible = 0;
+  var correct = 0;
+  for (var i = 0; i < 4; i++) {
+    if (ENGINES[i].twrPass) {
+      eligible++;
+      if (altCorrect[i]) correct++;
+    }
+  }
+  var score = eligible > 0 ? Math.round((correct / eligible) * 25) : 0;
+  phaseScores[2] = score;
+  totalScore += score;
+  juiceHud(1);
+}
+
+function scorePhase4() {
+  // Best engine is C5-3 (index 3)
+  var score = 0;
+  if (selectedEngine === 3) {
+    score = 25;
+    p4Correct = true;
+  } else if (selectedEngine === 2) {
+    // C5-0 is decent but not optimal
+    score = 15;
+    p4Correct = false;
+  } else {
+    score = 5;
+    p4Correct = false;
+  }
+  phaseScores[3] = score;
+  totalScore += score;
+  juiceHud(1);
+}
+
+// --- Phase transitions ---
+function goToPhase(nextPhase) {
+  pendingPhase = nextPhase;
+  transitionDir = 1;
+  transitionAlpha = 0;
+  playPhaseSound();
+}
+
+// --- Click handling ---
+function getCanvasPos(e) {
+  var rect = canvas.getBoundingClientRect();
+  var cx2 = (e.clientX - rect.left);
+  var cy2 = (e.clientY - rect.top);
+  return { x: cx2, y: cy2 };
+}
+
+function hitBox(px, py, box) {
+  return px >= box.x && px <= box.x + box.w && py >= box.y && py <= box.y + box.h;
+}
+
+// Phase 1: drag start
+canvas.addEventListener('mousedown', function(e) {
+  lastInteractionTime = Date.now();
+  var pos = getCanvasPos(e);
+
+  if (phase === 1 && !p1Complete) {
+    // Check if clicking a spec chip
+    for (var ci = 0; ci < specChips.length; ci++) {
+      var chip = specChips[ci];
+      if (chip.placed) continue;
+      if (pos.x >= chip.x && pos.x <= chip.x + chip.w && pos.y >= chip.y && pos.y <= chip.y + chip.h) {
+        draggedSpec = ci;
+        dragX = pos.x;
+        dragY = pos.y;
+        break;
+      }
+    }
+  }
+});
+
+canvas.addEventListener('mousemove', function(e) {
+  if (draggedSpec !== null) {
+    var pos = getCanvasPos(e);
+    dragX = pos.x;
+    dragY = pos.y;
+  }
+});
+
+canvas.addEventListener('mouseup', function(e) {
+  if (draggedSpec !== null) {
+    var pos = getCanvasPos(e);
+    var chip = specChips[draggedSpec];
+
+    // Check if dropped on a matching slot
+    var dropped = false;
+    for (var si = 0; si < specSlots.length; si++) {
+      var slot = specSlots[si];
+      if (slot.filled) continue;
+      var slotEngIdx = slot.engineIdx;
+      var slotFieldIdx = specFields.indexOf(slot.field);
+      var sx = cardsStartX + slotEngIdx * (cardW + cardGap) + cardW/2 - 30;
+      var sy = cardsStartY + 44 + slotFieldIdx * 50 + 6;
+      var sw = 60, sh = 24;
+
+      if (pos.x >= sx && pos.x <= sx + sw && pos.y >= sy && pos.y <= sy + sh) {
+        // Check if this chip matches the slot
+        if (chip.field === slot.field && chip.engineIdx === slotEngIdx) {
+          slot.filled = true;
+          slot.placedValue = chip.value;
+          chip.placed = true;
+          dropped = true;
+          playCorrectSound();
+          spawnParticles(sx + sw/2, sy + sh/2, 8, '#50ffb0', 3);
+          break;
+        } else {
+          // Wrong slot
+          playWrongSound();
+          triggerShake(4);
+          p1Errors++;
+          break;
+        }
+      }
+    }
+    draggedSpec = null;
+  }
+});
+
+// Phase 2/3: click input boxes
+canvas.addEventListener('click', function(e) {
+  lastInteractionTime = Date.now();
+  var pos = getCanvasPos(e);
+
+  if (phase === 2 && !p2Complete) {
+    p2ActiveInput = -1;
+    for (var i = 0; i < 4; i++) {
+      if (!twrChecked[i] && hitBox(pos.x, pos.y, inputBoxes[i])) {
+        p2ActiveInput = i;
+        playTone(440, 0.05, 0.04);
+        break;
+      }
+    }
+  }
+
+  if (phase === 3 && !p3Complete) {
+    p3ActiveInput = -1;
+    for (var i = 0; i < 4; i++) {
+      if (!altChecked[i] && ENGINES[i].twrPass && hitBox(pos.x, pos.y, inputBoxes[i])) {
+        p3ActiveInput = i;
+        playTone(440, 0.05, 0.04);
+        break;
+      }
+    }
+  }
+
+  if (phase === 4 && !p4Confirmed && !simActive && !gameComplete) {
+    for (var i = 0; i < engineSelectBoxes.length; i++) {
+      if (hitBox(pos.x, pos.y, engineSelectBoxes[i])) {
+        selectedEngine = i;
+        playTone(550, 0.08, 0.05);
+        updateBtnState();
+        break;
+      }
+    }
+  }
+});
+
+// Keyboard input for number boxes
+document.addEventListener('keydown', function(e) {
+  lastInteractionTime = Date.now();
+
+  if (phase === 2 && p2ActiveInput >= 0 && !twrChecked[p2ActiveInput]) {
+    var idx = p2ActiveInput;
+    if (e.key >= '0' && e.key <= '9') {
+      p2InputStr[idx] += e.key;
+      playTone(520, 0.04, 0.03);
+    } else if (e.key === '.' && p2InputStr[idx].indexOf('.') < 0) {
+      p2InputStr[idx] += '.';
+    } else if (e.key === 'Backspace') {
+      p2InputStr[idx] = p2InputStr[idx].slice(0, -1);
+    } else if (e.key === 'Enter' && p2InputStr[idx].length > 0) {
+      checkTWR(idx);
+    }
+  }
+
+  if (phase === 3 && p3ActiveInput >= 0 && !altChecked[p3ActiveInput]) {
+    var idx2 = p3ActiveInput;
+    if (e.key >= '0' && e.key <= '9') {
+      p3InputStr[idx2] += e.key;
+      playTone(520, 0.04, 0.03);
+    } else if (e.key === '.' && p3InputStr[idx2].indexOf('.') < 0) {
+      p3InputStr[idx2] += '.';
+    } else if (e.key === 'Backspace') {
+      p3InputStr[idx2] = p3InputStr[idx2].slice(0, -1);
+    } else if (e.key === 'Enter' && p3InputStr[idx2].length > 0) {
+      checkAltitude(idx2);
+    }
+  }
+});
+
+// --- Check functions ---
+function checkTWR(idx) {
+  var input = parseFloat(p2InputStr[idx]);
+  if (isNaN(input)) return;
+  twrChecked[idx] = true;
+  var actual = ENGINES[idx].twr;
+  // Accept within 0.5
+  twrCorrect[idx] = Math.abs(input - actual) < 0.5;
+  if (twrCorrect[idx]) {
+    playCorrectSound();
+    spawnParticles(inputBoxes[idx].x + 35, inputBoxes[idx].y + 13, 10, '#50ffb0', 3);
+  } else {
+    playWrongSound();
+    triggerShake(4);
+  }
+
+  // Check if all done
+  var allDone = true;
+  for (var i = 0; i < 4; i++) {
+    if (!twrChecked[i]) { allDone = false; break; }
+  }
+  if (allDone) {
+    p2Complete = true;
+    scorePhase2();
+  }
+  updateBtnState();
+}
+
+function checkAltitude(idx) {
+  var input = parseFloat(p3InputStr[idx]);
+  if (isNaN(input)) return;
+  altChecked[idx] = true;
+  var actual = ENGINES[idx].idealAlt;
+  // Accept within 25% tolerance
+  altCorrect[idx] = Math.abs(input - actual) / actual < 0.25;
+  if (altCorrect[idx]) {
+    playCorrectSound();
+    spawnParticles(inputBoxes[idx].x + 35, inputBoxes[idx].y + 13, 10, '#50ffb0', 3);
+  } else {
+    playTone(400, 0.1, 0.05);
+  }
+
+  var allDone = true;
+  for (var i = 0; i < 4; i++) {
+    if (ENGINES[i].twrPass && !altChecked[i]) { allDone = false; break; }
+  }
+  if (allDone) {
+    p3Complete = true;
+    scorePhase3();
+  }
+  updateBtnState();
+}
+
+function submitCurrentPhaseInputs() {
+  if (phase === 2) {
+    for (var i = 0; i < 4; i++) {
+      if (!twrChecked[i] && p2InputStr[i].length > 0) {
+        checkTWR(i);
+      }
+    }
+    // Fill remaining unchecked with wrong
+    for (var j = 0; j < 4; j++) {
+      if (!twrChecked[j]) {
+        twrChecked[j] = true;
+        twrCorrect[j] = false;
+      }
+    }
+    p2Complete = true;
+    scorePhase2();
+    updateBtnState();
+  } else if (phase === 3) {
+    for (var i2 = 0; i2 < 4; i2++) {
+      if (ENGINES[i2].twrPass && !altChecked[i2] && p3InputStr[i2].length > 0) {
+        checkAltitude(i2);
+      }
+    }
+    for (var j2 = 0; j2 < 4; j2++) {
+      if (ENGINES[j2].twrPass && !altChecked[j2]) {
+        altChecked[j2] = true;
+        altCorrect[j2] = false;
+      }
+    }
+    p3Complete = true;
+    scorePhase3();
+    updateBtnState();
+  }
+}
+
+// --- Start simulation ---
+function startLaunchSim() {
+  simActive = true;
+  simTime = 0;
+  simRocketY = 0;
+  simRocketVy = 0;
+  simMaxAlt = 0;
+  simTrail = [];
+  simPhase = 'burning';
+  playLaunchSound();
+  triggerShake(5);
+  updateBtnState();
+}
+
+// --- Reset ---
+function resetGame() {
+  phase = 1;
+  totalScore = 0;
+  phaseScores = [0, 0, 0, 0];
+  p1Complete = false;
+  p1Errors = 0;
+  draggedSpec = null;
+  twrInputs = [null, null, null, null];
+  twrChecked = [false, false, false, false];
+  twrCorrect = [false, false, false, false];
+  p2ActiveInput = -1;
+  p2InputStr = ['', '', '', ''];
+  p2Complete = false;
+  altInputs = [null, null, null, null];
+  altChecked = [false, false, false, false];
+  altCorrect = [false, false, false, false];
+  p3ActiveInput = -1;
+  p3InputStr = ['', '', '', ''];
+  p3Complete = false;
+  selectedEngine = -1;
+  selectedReason = -1;
+  p4Confirmed = false;
+  p4Correct = false;
+  simActive = false;
+  simPhase = 'idle';
+  simTime = 0;
+  simRocketY = 0;
+  simRocketVy = 0;
+  simMaxAlt = 0;
+  simTrail = [];
+  gameComplete = false;
+  completionAlpha = 0;
+  particles = [];
+  computeLayout();
+  updateTexts();
+}
+
+// --- Button handlers ---
+document.getElementById('btnAction').addEventListener('click', function() {
+  lastInteractionTime = Date.now();
+  ensureAudioCtx();
+
+  if (gameComplete) {
+    resetGame();
+    return;
+  }
+
+  if (phase === 1 && p1Complete) {
+    scorePhase1();
+    goToPhase(2);
+  } else if (phase === 2) {
+    if (p2Complete) {
+      goToPhase(3);
+    } else {
+      submitCurrentPhaseInputs();
+    }
+  } else if (phase === 3) {
+    if (p3Complete) {
+      goToPhase(4);
+    } else {
+      submitCurrentPhaseInputs();
+    }
+  } else if (phase === 4) {
+    if (p4Confirmed) {
+      startLaunchSim();
+    } else if (selectedEngine >= 0) {
+      p4Confirmed = true;
+      updateBtnState();
+    }
+  }
+});
+
+document.getElementById('btnReset').addEventListener('click', function() {
+  lastInteractionTime = Date.now();
+  resetGame();
+});
+
+// --- Lang toggle ---
+document.getElementById('langBtn').addEventListener('click', function() {
+  lang = lang === 'cn' ? 'en' : 'cn';
+  document.getElementById('langBtn').textContent = lang === 'cn' ? 'CN' : 'EN';
+  updateTexts();
+});
+
+// --- Sound toggle ---
+document.getElementById('soundBtn').addEventListener('click', function() {
+  soundMuted = !soundMuted;
+  document.getElementById('soundBtn').textContent = soundMuted ? 'MUTE' : 'SFX';
+  if (!soundMuted) ensureAudioCtx();
+});
+
+// --- Resize ---
+window.addEventListener('resize', function() {
+  setTimeout(function() { resizeCanvas(); }, 100);
+});
+
+// --- Init ---
+setTimeout(function() {
+  resizeCanvas();
+  updateTexts();
+  updateBtnState();
+  requestAnimationFrame(drawFrame);
+}, 100);
+
+document.fonts.ready.then(function() {
+  setTimeout(function() { resizeCanvas(); }, 100);
+});
+</script>
+</body>
+</html>

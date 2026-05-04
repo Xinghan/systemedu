@@ -1,0 +1,536 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=Noto+Sans+SC:wght@400;700&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box;}
+html,body{width:100%;height:100vh;overflow:hidden;background:#0c0e14;color:#f6f6fc;font-family:'Noto Sans SC','Inter',sans-serif;}
+.game-wrap{display:flex;flex-direction:column;height:100vh;}
+.game-header{padding:10px 16px;display:flex;justify-content:space-between;align-items:center;background:rgba(0,0,0,0.4);}
+.game-header h1{font-family:'Space Grotesk',sans-serif;font-size:clamp(13px,2vw,17px);font-weight:700;color:#50ffb0;}
+.game-header .info{font-family:'Space Grotesk',sans-serif;font-size:12px;color:#aaabb0;}
+.game-body{flex:1;display:flex;flex-direction:column;min-height:0;}
+canvas{width:100%;height:100%;display:block;}
+.control-panel{display:flex;justify-content:center;align-items:center;gap:10px;padding:8px 16px;background:rgba(0,0,0,0.4);}
+.ctrl-btn{font-family:'Space Grotesk',sans-serif;font-size:12px;font-weight:700;padding:6px 16px;border:none;cursor:pointer;color:#0c0e12;background:linear-gradient(135deg,#50ffb0,#17df93);box-shadow:0 0 10px rgba(80,255,176,0.3);}
+.ctrl-btn:hover{transform:scale(1.04);}
+.ctrl-btn.secondary{background:rgba(30,30,45,0.9);color:#aaabb0;box-shadow:none;}
+.hud-bar{height:44px;display:flex;align-items:center;justify-content:space-around;background:rgba(0,0,0,0.55);padding:0 16px;}
+.hud-item{text-align:center;}
+.hud-label{font-family:'Space Grotesk',sans-serif;font-size:9px;letter-spacing:0.12em;color:#aaabb0;text-transform:uppercase;}
+.hud-val{font-family:'Space Grotesk',sans-serif;font-size:14px;font-weight:700;color:#50ffb0;}
+.lang-btn{position:fixed;top:8px;right:8px;z-index:200;font-family:'Space Grotesk',sans-serif;font-size:11px;font-weight:700;padding:4px 10px;cursor:pointer;border:1px solid rgba(255,181,156,0.3);background:transparent;color:#ffb59c;}
+</style>
+</head>
+<body>
+<button class="lang-btn" id="langBtn">CN</button>
+<div class="game-wrap">
+  <div class="game-header">
+    <h1 id="gameTitle"></h1>
+    <div class="info" id="levelInfo"></div>
+  </div>
+  <div class="game-body">
+    <canvas id="c"></canvas>
+  </div>
+  <div class="control-panel">
+    <button class="ctrl-btn" id="btnPull"></button>
+    <button class="ctrl-btn secondary" id="btnReset"></button>
+  </div>
+  <div class="hud-bar">
+    <div class="hud-item"><div class="hud-label" id="hudL1"></div><div class="hud-val" id="hudV1">--</div></div>
+    <div class="hud-item"><div class="hud-label" id="hudL2"></div><div class="hud-val" id="hudV2">--</div></div>
+    <div class="hud-item"><div class="hud-label" id="hudL3"></div><div class="hud-val" id="hudV3">--</div></div>
+    <div class="hud-item"><div class="hud-label" id="hudL4"></div><div class="hud-val" id="hudV4">--</div></div>
+  </div>
+</div>
+
+<script>
+// ============================================================
+// Knode 17 Game: Tablecloth Pull Challenge
+// Player controls pull speed with a slider/click-hold.
+// Objects on a tablecloth: pull too slow = objects slide off.
+// Pull fast enough = inertia keeps objects in place.
+// 6 levels with increasing difficulty (more objects, heavier,
+// taller stacks). Core physics: impulse duration vs friction.
+// ============================================================
+
+var I18N = {
+  title:     {en:'TABLECLOTH PULL', cn:'\u62bd\u684c\u5e03\u6311\u6218'},
+  pull:      {en:'PULL!', cn:'\u62bd\uff01'},
+  holdPull:  {en:'HOLD & RELEASE', cn:'\u6309\u4f4f\u84c4\u529b \u677e\u5f00\u62bd'},
+  reset:     {en:'RESTART', cn:'\u91cd\u65b0\u5f00\u59cb'},
+  level:     {en:'Level', cn:'\u5173\u5361'},
+  speed:     {en:'PULL SPEED', cn:'\u62bd\u62c9\u901f\u5ea6'},
+  objectsCt: {en:'OBJECTS', cn:'\u7269\u4f53\u6570'},
+  result:    {en:'RESULT', cn:'\u7ed3\u679c'},
+  score:     {en:'SCORE', cn:'\u5f97\u5206'},
+  charging:  {en:'Charging...', cn:'\u84c4\u529b\u4e2d...'},
+  ready:     {en:'Hold button to charge', cn:'\u6309\u4f4f\u6309\u94ae\u84c4\u529b'},
+  perfect:   {en:'PERFECT! Objects stayed!', cn:'\u5b8c\u7f8e\uff01\u4e1c\u897f\u90fd\u4e0d\u52a8\uff01'},
+  good:      {en:'Almost! Minor wobble', cn:'\u5dee\u4e00\u70b9\uff01\u5c0f\u6643'},
+  fail:      {en:'Too slow! Objects fell!', cn:'\u592a\u6162\u4e86\uff01\u4e1c\u897f\u5012\u4e86\uff01'},
+  tooFast:   {en:'Too violent! Table flipped!', cn:'\u592a\u731b\u4e86\uff01\u684c\u5b50\u7ffb\u4e86\uff01'},
+  complete:  {en:'ALL LEVELS COMPLETE!', cn:'\u5168\u90e8\u901a\u5173\uff01'},
+  insight:   {en:'Inertia: objects resist\nchanges to their state!', cn:'\u60ef\u6027\uff1a\u7269\u4f53\u4f1a\u62b5\u6297\n\u8fd0\u52a8\u72b6\u6001\u7684\u6539\u53d8\uff01'},
+  inertiaWin:{en:'Inertia wins!', cn:'\u60ef\u6027\u83b7\u80dc\uff01'},
+};
+
+var lang = 'cn';
+function t(key) { return I18N[key] ? (I18N[key][lang] || I18N[key].en) : key; }
+
+var $ = function(id) { return document.getElementById(id); };
+var langBtn = $('langBtn');
+langBtn.onclick = function() {
+  lang = lang === 'cn' ? 'en' : 'cn';
+  langBtn.textContent = lang === 'cn' ? 'CN' : 'EN';
+  refreshUI();
+};
+
+var canvas = $('c');
+var ctx = canvas.getContext('2d');
+
+var W, H;
+function resize() {
+  var body = canvas.parentElement;
+  var dpr = window.devicePixelRatio || 1;
+  W = body.clientWidth;
+  H = body.clientHeight;
+  canvas.width = W * dpr;
+  canvas.height = H * dpr;
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+}
+window.addEventListener('resize', resize);
+resize();
+
+// ── Level definitions ──
+// Each level: objects on the cloth, minimum speed threshold
+var LEVELS = [
+  { // Level 1: just a cup
+    objects: [{type:'cup', x:0.5, w:30, h:40, mass:1, color:'#4488cc'}],
+    minSpeed: 0.55, maxSpeed: 0.95,
+    clothColor: '#cc4444'
+  },
+  { // Level 2: cup + plate
+    objects: [
+      {type:'cup', x:0.4, w:30, h:40, mass:1, color:'#4488cc'},
+      {type:'plate', x:0.6, w:50, h:12, mass:0.8, color:'#ddd'}
+    ],
+    minSpeed: 0.5, maxSpeed: 0.92,
+    clothColor: '#cc4444'
+  },
+  { // Level 3: 3 items including a tall vase
+    objects: [
+      {type:'cup', x:0.3, w:28, h:38, mass:1, color:'#4488cc'},
+      {type:'vase', x:0.5, w:22, h:55, mass:1.5, color:'#77bb55'},
+      {type:'plate', x:0.7, w:50, h:12, mass:0.8, color:'#ddd'}
+    ],
+    minSpeed: 0.6, maxSpeed: 0.9,
+    clothColor: '#bb3333'
+  },
+  { // Level 4: cup with ball on top
+    objects: [
+      {type:'cup', x:0.35, w:30, h:40, mass:1, color:'#4488cc'},
+      {type:'ball', x:0.35, w:20, h:20, mass:0.3, color:'#ff6b6b', onTop:'cup'},
+      {type:'vase', x:0.65, w:22, h:55, mass:1.5, color:'#77bb55'}
+    ],
+    minSpeed: 0.62, maxSpeed: 0.88,
+    clothColor: '#aa3333'
+  },
+  { // Level 5: 4 objects, narrow window
+    objects: [
+      {type:'cup', x:0.25, w:28, h:38, mass:1, color:'#4488cc'},
+      {type:'vase', x:0.42, w:22, h:55, mass:1.5, color:'#77bb55'},
+      {type:'plate', x:0.58, w:50, h:12, mass:0.8, color:'#ddd'},
+      {type:'cup', x:0.75, w:30, h:40, mass:1.2, color:'#cc8844'}
+    ],
+    minSpeed: 0.65, maxSpeed: 0.88,
+    clothColor: '#993333'
+  },
+  { // Level 6: tall stack + 2 items, very narrow window
+    objects: [
+      {type:'vase', x:0.35, w:22, h:60, mass:2, color:'#77bb55'},
+      {type:'ball', x:0.35, w:18, h:18, mass:0.2, color:'#ff6b6b', onTop:'vase'},
+      {type:'cup', x:0.55, w:30, h:40, mass:1, color:'#4488cc'},
+      {type:'plate', x:0.75, w:50, h:12, mass:0.8, color:'#eee'}
+    ],
+    minSpeed: 0.68, maxSpeed: 0.86,
+    clothColor: '#882222'
+  }
+];
+
+// ── State ──
+var STATE_READY = 0, STATE_CHARGING = 1, STATE_PULLING = 2, STATE_RESULT = 3;
+var gameState = STATE_READY;
+var currentLevel = 0;
+var chargeAmount = 0;   // 0-1
+var pullSpeed = 0;      // determined at release
+var clothOffset = 0;    // how far cloth has been pulled (animation)
+var objectStates = [];  // per-object: {fallen, wobble, offsetX, offsetY, rotation}
+var totalScore = 0;
+var resultText = '';
+var showingComplete = false;
+var animFrame;
+
+function initLevel() {
+  gameState = STATE_READY;
+  chargeAmount = 0;
+  pullSpeed = 0;
+  clothOffset = 0;
+  resultText = '';
+
+  var lvl = LEVELS[currentLevel];
+  objectStates = lvl.objects.map(function() {
+    return {fallen: false, wobble: 0, offsetX: 0, offsetY: 0, rotation: 0, vy: 0};
+  });
+}
+
+initLevel();
+
+// ── Charging (hold button) ──
+var chargeInterval = null;
+var chargeStartTime = 0;
+
+function startCharge() {
+  if (gameState !== STATE_READY) return;
+  gameState = STATE_CHARGING;
+  chargeStartTime = performance.now();
+  chargeInterval = setInterval(function() {
+    var elapsed = (performance.now() - chargeStartTime) / 1000;
+    chargeAmount = Math.min(elapsed / 2.0, 1);  // 2 seconds to full charge
+    refreshUI();
+  }, 30);
+  refreshUI();
+}
+
+function releaseCharge() {
+  if (gameState !== STATE_CHARGING) return;
+  clearInterval(chargeInterval);
+  pullSpeed = chargeAmount;
+  gameState = STATE_PULLING;
+  refreshUI();
+}
+
+// Button listeners
+var btnPull = $('btnPull');
+btnPull.addEventListener('mousedown', startCharge);
+btnPull.addEventListener('mouseup', releaseCharge);
+btnPull.addEventListener('mouseleave', function() {
+  if (gameState === STATE_CHARGING) releaseCharge();
+});
+btnPull.addEventListener('touchstart', function(e) { e.preventDefault(); startCharge(); });
+btnPull.addEventListener('touchend', function(e) { e.preventDefault(); releaseCharge(); });
+
+// ── Physics + animation ──
+function drawScene() {
+  resize();
+  var lvl = LEVELS[currentLevel];
+  var tableY = H * 0.62;
+  var tableLeft = W * 0.15;
+  var tableRight = W * 0.85;
+  var tableW = tableRight - tableLeft;
+
+  // Background
+  var grad = ctx.createLinearGradient(0, 0, 0, H);
+  grad.addColorStop(0, '#0c0e14');
+  grad.addColorStop(0.6, '#141825');
+  grad.addColorStop(1, '#1a2030');
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, W, H);
+
+  // Table
+  ctx.fillStyle = '#3a3022';
+  ctx.fillRect(tableLeft - 10, tableY, tableW + 20, 12);
+  // Table legs
+  ctx.fillStyle = '#2a2018';
+  ctx.fillRect(tableLeft, tableY + 12, 8, H*0.25);
+  ctx.fillRect(tableRight - 8, tableY + 12, 8, H*0.25);
+
+  // Tablecloth (slides right as pulled)
+  var clothW = tableW * 0.85;
+  var clothLeft = tableLeft + (tableW - clothW)/2 + clothOffset;
+  ctx.fillStyle = lvl.clothColor;
+  ctx.globalAlpha = 0.8;
+  ctx.fillRect(clothLeft, tableY - 3, clothW, 6);
+  ctx.globalAlpha = 1;
+
+  // Pull direction indicator (when charging)
+  if (gameState === STATE_CHARGING) {
+    var arrowLen = chargeAmount * 80;
+    ctx.strokeStyle = '#50ffb0';
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(clothLeft + clothW, tableY);
+    ctx.lineTo(clothLeft + clothW + arrowLen, tableY);
+    ctx.stroke();
+    if (arrowLen > 10) {
+      ctx.fillStyle = '#50ffb0';
+      ctx.beginPath();
+      ctx.moveTo(clothLeft + clothW + arrowLen, tableY - 6);
+      ctx.lineTo(clothLeft + clothW + arrowLen + 10, tableY);
+      ctx.lineTo(clothLeft + clothW + arrowLen, tableY + 6);
+      ctx.closePath();
+      ctx.fill();
+    }
+
+    // Speed meter
+    var meterX = W * 0.5;
+    var meterY = H * 0.15;
+    var meterW = W * 0.4;
+    var meterH = 16;
+
+    ctx.fillStyle = 'rgba(0,0,0,0.5)';
+    ctx.fillRect(meterX - meterW/2, meterY, meterW, meterH);
+
+    // Green zone (good speed range)
+    var minFrac = lvl.minSpeed;
+    var maxFrac = lvl.maxSpeed;
+    ctx.fillStyle = 'rgba(80,255,176,0.3)';
+    ctx.fillRect(meterX - meterW/2 + minFrac * meterW, meterY, (maxFrac - minFrac) * meterW, meterH);
+
+    // Charge bar
+    var barColor = chargeAmount < minFrac ? '#ff6b6b' :
+                   chargeAmount > maxFrac ? '#ffcc44' : '#50ffb0';
+    ctx.fillStyle = barColor;
+    ctx.fillRect(meterX - meterW/2, meterY, chargeAmount * meterW, meterH);
+
+    ctx.strokeStyle = '#aaabb0';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(meterX - meterW/2, meterY, meterW, meterH);
+
+    ctx.font = 'bold 11px Space Grotesk';
+    ctx.fillStyle = '#f6f6fc';
+    ctx.textAlign = 'center';
+    ctx.fillText(t('charging') + ' ' + Math.round(chargeAmount*100) + '%', meterX, meterY - 6);
+  }
+
+  // Objects
+  lvl.objects.forEach(function(obj, idx) {
+    var state = objectStates[idx];
+    var baseX = tableLeft + obj.x * tableW + state.offsetX;
+    var baseY = tableY;
+
+    // If this object sits on top of another
+    if (obj.onTop) {
+      var parentIdx = -1;
+      for (var pi = 0; pi < lvl.objects.length; pi++) {
+        if (lvl.objects[pi].type === obj.onTop && pi !== idx) { parentIdx = pi; break; }
+      }
+      if (parentIdx >= 0) {
+        baseY = tableY - lvl.objects[parentIdx].h;
+        baseX = tableLeft + lvl.objects[parentIdx].x * tableW + objectStates[parentIdx].offsetX;
+      }
+    }
+
+    ctx.save();
+    ctx.translate(baseX, baseY + state.offsetY);
+    ctx.rotate(state.rotation);
+
+    if (obj.type === 'cup') {
+      ctx.fillStyle = obj.color;
+      ctx.beginPath();
+      ctx.moveTo(-obj.w/2 * 0.8, 0);
+      ctx.lineTo(-obj.w/2, -obj.h);
+      ctx.lineTo(obj.w/2, -obj.h);
+      ctx.lineTo(obj.w/2 * 0.8, 0);
+      ctx.closePath();
+      ctx.fill();
+      ctx.strokeStyle = 'rgba(255,255,255,0.2)';
+      ctx.lineWidth = 1;
+      ctx.stroke();
+    } else if (obj.type === 'plate') {
+      ctx.fillStyle = obj.color;
+      ctx.beginPath();
+      ctx.ellipse(0, -obj.h/2, obj.w/2, obj.h/2, 0, 0, Math.PI*2);
+      ctx.fill();
+      ctx.strokeStyle = 'rgba(0,0,0,0.2)';
+      ctx.stroke();
+    } else if (obj.type === 'vase') {
+      ctx.fillStyle = obj.color;
+      ctx.beginPath();
+      ctx.moveTo(-obj.w/2 * 0.7, 0);
+      ctx.quadraticCurveTo(-obj.w/2 * 1.2, -obj.h * 0.4, -obj.w/2 * 0.5, -obj.h * 0.8);
+      ctx.lineTo(-obj.w/2 * 0.4, -obj.h);
+      ctx.lineTo(obj.w/2 * 0.4, -obj.h);
+      ctx.lineTo(obj.w/2 * 0.5, -obj.h * 0.8);
+      ctx.quadraticCurveTo(obj.w/2 * 1.2, -obj.h * 0.4, obj.w/2 * 0.7, 0);
+      ctx.closePath();
+      ctx.fill();
+      ctx.strokeStyle = 'rgba(255,255,255,0.15)';
+      ctx.stroke();
+    } else if (obj.type === 'ball') {
+      ctx.fillStyle = obj.color;
+      ctx.beginPath();
+      ctx.arc(0, -obj.h/2, obj.w/2, 0, Math.PI*2);
+      ctx.fill();
+    }
+
+    ctx.restore();
+  });
+
+  // Result text
+  if (gameState === STATE_RESULT && resultText) {
+    ctx.font = 'bold ' + Math.max(16, W * 0.025) + 'px Noto Sans SC';
+    ctx.textAlign = 'center';
+    ctx.fillStyle = resultText === t('perfect') || resultText === t('good') ? '#50ffb0' : '#ff6b6b';
+    ctx.fillText(resultText, W/2, H * 0.35);
+  }
+
+  // Complete screen
+  if (showingComplete) {
+    ctx.fillStyle = 'rgba(12, 14, 20, 0.9)';
+    ctx.fillRect(0, 0, W, H);
+
+    ctx.font = 'bold ' + Math.max(20, W * 0.03) + 'px Space Grotesk';
+    ctx.fillStyle = '#50ffb0';
+    ctx.textAlign = 'center';
+    ctx.fillText(t('complete'), W/2, H * 0.3);
+
+    ctx.font = 'bold ' + Math.max(14, W * 0.02) + 'px Space Grotesk';
+    ctx.fillText(t('score') + ': ' + totalScore, W/2, H * 0.4);
+
+    var insightLines = t('insight').split('\n');
+    ctx.font = Math.max(13, W * 0.018) + 'px Noto Sans SC';
+    ctx.fillStyle = '#aaabb0';
+    insightLines.forEach(function(line, i) {
+      ctx.fillText(line, W/2, H * 0.55 + i * 24);
+    });
+
+    ctx.font = 'bold ' + Math.max(16, W * 0.022) + 'px Noto Sans SC';
+    ctx.fillStyle = '#ffcc44';
+    ctx.fillText(t('inertiaWin'), W/2, H * 0.75);
+  }
+
+  animFrame = requestAnimationFrame(drawScene);
+}
+
+// Pull animation
+var pullAnimStart = 0;
+function updatePull() {
+  if (gameState !== STATE_PULLING) return;
+
+  var elapsed = (performance.now() - pullAnimStart) / 1000;
+  var lvl = LEVELS[currentLevel];
+  var tableW = W * 0.7;
+
+  // Cloth moves out
+  var pullDuration = 0.3 + (1 - pullSpeed) * 0.5;  // faster = shorter duration
+  var progress = Math.min(elapsed / pullDuration, 1);
+  clothOffset = progress * tableW * 0.6;
+
+  // Physics: determine if objects fall
+  if (progress >= 1 && gameState === STATE_PULLING) {
+    var success = pullSpeed >= lvl.minSpeed && pullSpeed <= lvl.maxSpeed;
+    var tooFastFlag = pullSpeed > lvl.maxSpeed;
+
+    if (success) {
+      // Objects wobble slightly but stay
+      objectStates.forEach(function(state, idx) {
+        state.wobble = (1 - pullSpeed) * 3;  // slight wobble
+        state.offsetX = Math.sin(performance.now() * 0.01) * state.wobble;
+      });
+      if (pullSpeed >= lvl.minSpeed + (lvl.maxSpeed - lvl.minSpeed) * 0.3) {
+        resultText = t('perfect');
+        totalScore += 20;
+      } else {
+        resultText = t('good');
+        totalScore += 10;
+      }
+    } else if (tooFastFlag) {
+      resultText = t('tooFast');
+      objectStates.forEach(function(state) {
+        state.fallen = true;
+        state.offsetX = (Math.random() - 0.5) * 60;
+        state.offsetY = 30 + Math.random() * 20;
+        state.rotation = (Math.random() - 0.5) * 1.5;
+      });
+      totalScore += 0;
+    } else {
+      resultText = t('fail');
+      objectStates.forEach(function(state, idx) {
+        state.fallen = true;
+        state.offsetX = 40 + Math.random() * 30;
+        state.offsetY = 20 + Math.random() * 20;
+        state.rotation = 0.3 + Math.random() * 0.5;
+      });
+      totalScore += 0;
+    }
+
+    gameState = STATE_RESULT;
+    refreshUI();
+
+    // Auto advance
+    setTimeout(function() {
+      currentLevel++;
+      if (currentLevel >= LEVELS.length) {
+        showingComplete = true;
+      } else {
+        initLevel();
+      }
+      refreshUI();
+    }, 2200);
+  }
+
+  requestAnimationFrame(updatePull);
+}
+
+// Override release to start pull animation
+var _origRelease = releaseCharge;
+releaseCharge = function() {
+  if (gameState !== STATE_CHARGING) return;
+  clearInterval(chargeInterval);
+  pullSpeed = chargeAmount;
+  gameState = STATE_PULLING;
+  pullAnimStart = performance.now();
+  updatePull();
+  refreshUI();
+};
+
+// ── UI ──
+function refreshUI() {
+  $('gameTitle').textContent = t('title');
+  if (!showingComplete && currentLevel < LEVELS.length) {
+    $('levelInfo').textContent = t('level') + ' ' + (currentLevel + 1) + '/' + LEVELS.length;
+  } else {
+    $('levelInfo').textContent = t('complete');
+  }
+
+  $('hudL1').textContent = t('speed');
+  $('hudL2').textContent = t('objectsCt');
+  $('hudL3').textContent = t('result');
+  $('hudL4').textContent = t('score');
+
+  if (currentLevel < LEVELS.length) {
+    var lvl = LEVELS[currentLevel];
+    $('hudV1').textContent = gameState === STATE_CHARGING ? Math.round(chargeAmount*100) + '%' :
+                             gameState >= STATE_PULLING ? Math.round(pullSpeed*100) + '%' : '--';
+    $('hudV2').textContent = String(lvl.objects.length);
+  }
+  $('hudV3').textContent = resultText || '--';
+  $('hudV3').style.color = (resultText === t('perfect') || resultText === t('good')) ? '#50ffb0' : '#ff6b6b';
+  $('hudV4').textContent = String(totalScore);
+
+  if (gameState === STATE_READY) {
+    $('btnPull').textContent = t('holdPull');
+  } else if (gameState === STATE_CHARGING) {
+    $('btnPull').textContent = t('charging');
+  } else {
+    $('btnPull').textContent = t('pull');
+  }
+
+  $('btnReset').textContent = t('reset');
+  $('btnReset').onclick = function() {
+    currentLevel = 0;
+    totalScore = 0;
+    showingComplete = false;
+    initLevel();
+    refreshUI();
+  };
+}
+
+refreshUI();
+drawScene();
+</script>
+</body>
+</html>

@@ -1,0 +1,1759 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=Noto+Sans+SC:wght@400;700&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box;}
+html,body{width:100%;height:100vh;overflow:hidden;background:#0c0e14;color:#f6f6fc;font-family:'Noto Sans SC','Inter',sans-serif;}
+.game-wrap{display:flex;flex-direction:row;height:100vh;overflow:hidden;}
+.game-sidebar{width:200px;min-width:200px;max-width:200px;display:flex;flex-direction:column;gap:8px;padding:10px;background:rgba(0,0,0,0.5);border-right:1px solid rgba(80,255,176,0.15);overflow-y:auto;}
+.sidebar-btns{display:flex;gap:6px;align-self:flex-start;}
+.sidebar-lang,.sidebar-sound{flex-shrink:0;font-family:'Space Grotesk',sans-serif;font-size:11px;font-weight:700;padding:4px 10px;cursor:pointer;border:1px solid rgba(255,181,156,0.3);background:transparent;color:#ffb59c;letter-spacing:1px;}
+.sidebar-lang:hover,.sidebar-sound:hover{border-color:#ffb59c;background:rgba(255,181,156,0.1);}
+.sidebar-title{font-family:'Space Grotesk',sans-serif;font-size:11px;font-weight:700;color:#50ffb0;letter-spacing:0.08em;text-transform:uppercase;margin-top:4px;}
+.sidebar-guide{font-size:12px;color:#aaabb0;line-height:1.6;}
+.game-main{flex:1;display:flex;flex-direction:column;min-width:0;}
+.game-header{padding:8px 16px;display:flex;justify-content:space-between;align-items:center;background:rgba(0,0,0,0.4);}
+.game-header h1{font-family:'Space Grotesk',sans-serif;font-size:clamp(13px,2vw,17px);font-weight:700;color:#50ffb0;}
+.game-header .info{font-family:'Space Grotesk',sans-serif;font-size:12px;color:#aaabb0;}
+.game-body{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;position:relative;overflow:hidden;}
+.game-body canvas{display:block;}
+.control-panel{padding:8px 16px;display:flex;gap:12px;align-items:center;justify-content:center;background:rgba(0,0,0,0.3);flex-wrap:wrap;}
+.hud-bar{display:flex;justify-content:space-around;padding:6px 16px;background:rgba(0,0,0,0.55);backdrop-filter:blur(12px);}
+.hud-item{text-align:center;}
+.hud-label{font-family:'Space Grotesk',sans-serif;font-size:8px;letter-spacing:0.15em;text-transform:uppercase;color:#aaabb0;}
+.hud-val{font-family:'Space Grotesk',sans-serif;font-size:13px;font-weight:700;color:#50ffb0;}
+.btn{font-family:'Space Grotesk',sans-serif;font-size:12px;font-weight:700;padding:6px 18px;border:none;cursor:pointer;color:#0c0e14;background:linear-gradient(135deg,#50ffb0,#17df93);letter-spacing:0.08em;transition:transform 0.1s;}
+.btn:hover{transform:scale(1.04);}
+.btn:disabled{opacity:0.4;cursor:not-allowed;transform:none;}
+.btn-secondary{background:rgba(23,26,31,0.92);color:#aaabb0;backdrop-filter:blur(12px);border:none;font-family:'Space Grotesk',sans-serif;font-size:12px;font-weight:700;padding:6px 18px;cursor:pointer;letter-spacing:0.08em;transition:transform 0.1s;}
+.btn-secondary:hover{color:#50ffb0;}
+.slider-wrap{display:flex;align-items:center;gap:6px;}
+.slider-wrap label{font-family:'Space Grotesk',sans-serif;font-size:11px;color:#aaabb0;white-space:nowrap;}
+.slider-wrap input[type=range]{width:120px;accent-color:#50ffb0;}
+.slider-val{font-family:'Space Grotesk',sans-serif;font-size:12px;color:#50ffb0;font-weight:700;min-width:40px;text-align:center;}
+.predict-wrap{display:flex;align-items:center;gap:6px;}
+.predict-wrap label{font-family:'Space Grotesk',sans-serif;font-size:11px;color:#aaabb0;white-space:nowrap;}
+.predict-wrap input[type=number]{width:80px;background:rgba(80,255,176,0.08);border:1px solid rgba(80,255,176,0.3);color:#f6f6fc;font-family:'Space Grotesk',sans-serif;font-size:12px;padding:3px 6px;text-align:center;}
+.predict-wrap input[type=number]:focus{outline:none;border-color:#50ffb0;}
+.result-panel{display:none;position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);background:rgba(12,14,20,0.95);border:1px solid rgba(80,255,176,0.3);padding:20px 28px;text-align:center;z-index:20;min-width:280px;}
+.result-panel h2{font-family:'Space Grotesk',sans-serif;font-size:18px;color:#50ffb0;margin-bottom:8px;}
+.result-panel p{font-size:13px;color:#aaabb0;margin:4px 0;}
+.result-panel .verdict{font-size:15px;color:#ffb59c;font-weight:700;margin-top:10px;}
+.result-panel .insight{font-size:12px;color:#666;margin-top:8px;font-style:italic;}
+</style>
+</head>
+<body>
+<div class="game-wrap">
+  <div class="game-sidebar">
+    <div class="sidebar-btns">
+      <button class="sidebar-lang" id="langBtn">CN</button>
+      <button class="sidebar-sound" id="soundBtn">MUTE</button>
+    </div>
+    <div class="sidebar-title" id="sidebarTitle"></div>
+    <div class="sidebar-guide" id="guideContent"></div>
+  </div>
+  <div class="game-main">
+    <div class="game-header">
+      <h1 id="gameTitle"></h1>
+      <div class="info" id="roundInfo"></div>
+    </div>
+    <div class="game-body" id="gameBody">
+      <canvas id="cv"></canvas>
+      <div class="result-panel" id="resultPanel">
+        <h2 id="rpTitle"></h2>
+        <p id="rpLine1"></p>
+        <p id="rpLine2"></p>
+        <p id="rpLine3"></p>
+        <div class="verdict" id="rpVerdict"></div>
+        <div class="insight" id="rpInsight"></div>
+      </div>
+    </div>
+    <div class="control-panel" id="controlPanel">
+      <div class="slider-wrap" id="sliderWrap1">
+        <label id="sliderLabel1"></label>
+        <input type="range" id="slider1" min="0" max="100" value="50">
+        <span class="slider-val" id="sliderVal1">50</span>
+      </div>
+      <div class="slider-wrap" id="sliderWrap2" style="display:none;">
+        <label id="sliderLabel2"></label>
+        <input type="range" id="slider2" min="0" max="100" value="50">
+        <span class="slider-val" id="sliderVal2">50</span>
+      </div>
+      <div class="predict-wrap" id="predictWrap" style="display:none;">
+        <label id="predictLabel"></label>
+        <input type="number" id="predictInput" min="0" max="999999" value="0" step="1">
+      </div>
+      <button class="btn" id="btnAction"></button>
+      <button class="btn-secondary" id="btnReset"></button>
+    </div>
+    <div class="hud-bar">
+      <div class="hud-item"><div class="hud-label" id="hudL1"></div><div class="hud-val" id="hudV1">--</div></div>
+      <div class="hud-item"><div class="hud-label" id="hudL2"></div><div class="hud-val" id="hudV2">--</div></div>
+      <div class="hud-item"><div class="hud-label" id="hudL3"></div><div class="hud-val" id="hudV3">--</div></div>
+      <div class="hud-item"><div class="hud-label" id="hudL4"></div><div class="hud-val" id="hudV4">--</div></div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ============================================================
+// K26 Game v2: Thrust Designer
+//
+// Quantitative thrust: T = v_e x m_dot
+// 4 levels:
+//   1. Thrust Calculator   - given v_e & m_dot, calculate T (5 rounds, real engines)
+//   2. Balloon Lab          - sliders for nozzle size & squeeze, hit 3 target distances
+//   3. Engine Designer      - given target T, adjust v_e & m_dot on curve (3 missions)
+//   4. Efficiency Tradeoff  - budget + fuel mass constraint, reach altitude (2 missions)
+//
+// Canvas 2D rendering. Sidebar standard layout. Dark theme.
+// ============================================================
+
+// --- I18N ---
+var I18N = {
+  title:        {en:'THRUST DESIGNER', cn:'\u63a8\u529b\u8bbe\u8ba1\u5e08'},
+  sideTitle:    {en:'GUIDE', cn:'\u64cd\u4f5c\u6307\u5357'},
+  guide1:       {en:'You are given exhaust velocity (v_e)\nand mass flow rate (m_dot)\nfor real rocket engines.\nCalculate thrust: T = v_e x m_dot\nType your answer. 10% tolerance.\n5 rounds.', cn:'\u7ed9\u5b9a\u55b7\u5c04\u901f\u5ea6 (v_e)\n\u548c\u8d28\u91cf\u6d41\u7387 (m_dot)\u3002\n\u8fd9\u4e9b\u662f\u771f\u5b9e\u706b\u7bad\u53d1\u52a8\u673a\u6570\u636e\u3002\n\u8ba1\u7b97\u63a8\u529b\uff1aT = v_e x m_dot\n\u5141\u8bb810%\u8bef\u5dee\u30025\u8f6e\u3002'},
+  guide2:       {en:'Virtual balloon launcher!\nNozzle size controls mass flow (m_dot).\nSqueeze force controls exhaust speed (v_e).\nLaunch and hit 3 target distances.\nWatch the exhaust particles!', cn:'\u865a\u62df\u6c14\u7403\u53d1\u5c04\u5668\uff01\n\u55b7\u53e3\u5927\u5c0f\u63a7\u5236\u8d28\u91cf\u6d41\u7387 (m_dot)\u3002\n\u6324\u538b\u529b\u63a7\u5236\u55b7\u5c04\u901f\u5ea6 (v_e)\u3002\n\u53d1\u5c04\u5e76\u547d\u4e2d3\u4e2a\u76ee\u6807\u8ddd\u79bb\u3002\n\u89c2\u5bdf\u5c3e\u6c14\u7c92\u5b50\uff01'},
+  guide3:       {en:'Given a target thrust,\nadjust v_e and m_dot sliders.\nThe T = v_e x m_dot curve shows\nall valid combinations.\nMatch the target! 3 missions.', cn:'\u7ed9\u5b9a\u76ee\u6807\u63a8\u529b\uff0c\n\u8c03\u6574 v_e \u548c m_dot \u6ed1\u5757\u3002\nT = v_e x m_dot \u66f2\u7ebf\u663e\u793a\n\u6240\u6709\u6709\u6548\u7ec4\u5408\u3002\n\u5339\u914d\u76ee\u6807\uff013\u4e2a\u4efb\u52a1\u3002'},
+  guide4:       {en:'Design an engine for a mission!\nHigh v_e = expensive but fuel-efficient.\nHigh m_dot = cheap but heavy fuel.\nBudget + fuel mass constraints.\nReach target altitude at minimum cost!\n2 missions.', cn:'\u4e3a\u4efb\u52a1\u8bbe\u8ba1\u53d1\u52a8\u673a\uff01\n\u9ad8 v_e = \u6602\u8d35\u4f46\u7701\u71c3\u6599\u3002\n\u9ad8 m_dot = \u4fbf\u5b9c\u4f46\u71c3\u6599\u91cd\u3002\n\u9884\u7b97 + \u71c3\u6599\u8d28\u91cf\u7ea6\u675f\u3002\n\u4ee5\u6700\u4f4e\u6210\u672c\u8fbe\u5230\u76ee\u6807\u9ad8\u5ea6\uff01\n2\u4e2a\u4efb\u52a1\u3002'},
+  submit:       {en:'SUBMIT', cn:'\u63d0\u4ea4'},
+  launch:       {en:'LAUNCH', cn:'\u53d1\u5c04'},
+  reset:        {en:'RESTART', cn:'\u91cd\u65b0\u5f00\u59cb'},
+  next:         {en:'NEXT', cn:'\u4e0b\u4e00\u9898'},
+  nextLevel:    {en:'NEXT LEVEL', cn:'\u4e0b\u4e00\u5173'},
+  design:       {en:'DESIGN', cn:'\u8bbe\u8ba1'},
+  level:        {en:'LEVEL', cn:'\u5173\u5361'},
+  score:        {en:'SCORE', cn:'\u5f97\u5206'},
+  round:        {en:'Round', cn:'\u7b2c'},
+  of:           {en:'of', cn:'/'},
+  thrust:       {en:'THRUST', cn:'\u63a8\u529b'},
+  exhaustV:     {en:'v_e (m/s)', cn:'\u55b7\u5c04\u901f\u5ea6 v_e (m/s)'},
+  massFlow:     {en:'m_dot (kg/s)', cn:'\u8d28\u91cf\u6d41\u7387 m_dot (kg/s)'},
+  nozzleSize:   {en:'Nozzle Size', cn:'\u55b7\u53e3\u5927\u5c0f'},
+  squeezeForce: {en:'Squeeze Force', cn:'\u6324\u538b\u529b'},
+  target:       {en:'TARGET', cn:'\u76ee\u6807'},
+  distance:     {en:'DISTANCE', cn:'\u8ddd\u79bb'},
+  altitude:     {en:'ALTITUDE', cn:'\u9ad8\u5ea6'},
+  budget:       {en:'BUDGET', cn:'\u9884\u7b97'},
+  fuelMass:     {en:'FUEL MASS', cn:'\u71c3\u6599\u8d28\u91cf'},
+  cost:         {en:'COST', cn:'\u6210\u672c'},
+  yourAnswer:   {en:'Your T (N)', cn:'\u4f60\u7684 T (N)'},
+  correct:      {en:'Correct!', cn:'\u6b63\u786e\uff01'},
+  wrong:        {en:'Try again', cn:'\u518d\u8bd5\u8bd5'},
+  perfect:      {en:'Perfect!', cn:'\u5b8c\u7f8e\uff01'},
+  close:        {en:'Close!', cn:'\u63a5\u8fd1\uff01'},
+  miss:         {en:'Miss!', cn:'\u672a\u547d\u4e2d\uff01'},
+  complete:     {en:'ALL LEVELS COMPLETE!', cn:'\u5168\u90e8\u5173\u5361\u5b8c\u6210\uff01'},
+  totalScore:   {en:'Total Score', cn:'\u603b\u5206'},
+  levelDone:    {en:'Level Complete!', cn:'\u672c\u5173\u5b8c\u6210\uff01'},
+  levelScore:   {en:'Level Score', cn:'\u672c\u5173\u5f97\u5206'},
+  actual:       {en:'Actual', cn:'\u5b9e\u9645'},
+  engine:       {en:'Engine', cn:'\u53d1\u52a8\u673a'},
+  mission:      {en:'Mission', cn:'\u4efb\u52a1'},
+  targetThrust: {en:'Target Thrust', cn:'\u76ee\u6807\u63a8\u529b'},
+  yourThrust:   {en:'Your Thrust', cn:'\u4f60\u7684\u63a8\u529b'},
+  targetAlt:    {en:'Target Alt', cn:'\u76ee\u6807\u9ad8\u5ea6'},
+  reachedAlt:   {en:'Reached Alt', cn:'\u8fbe\u5230\u9ad8\u5ea6'},
+  totalCost:    {en:'Total Cost', cn:'\u603b\u6210\u672c'},
+  insight1:     {en:'Thrust = exhaust velocity x mass flow rate. Real rocket engines use this exact equation! T = v_e x m_dot', cn:'\u63a8\u529b = \u55b7\u5c04\u901f\u5ea6 x \u8d28\u91cf\u6d41\u7387\u3002\u771f\u5b9e\u706b\u7bad\u53d1\u52a8\u673a\u7528\u7684\u5c31\u662f\u8fd9\u4e2a\u516c\u5f0f\uff01T = v_e x m_dot'},
+  insight2:     {en:'Bigger nozzle = more air escapes per second (higher m_dot). Harder squeeze = faster air (higher v_e). Both affect thrust!', cn:'\u55b7\u53e3\u8d8a\u5927 = \u6bcf\u79d2\u9003\u51fa\u7a7a\u6c14\u8d8a\u591a (m_dot\u8d8a\u5927)\u3002\u6324\u538b\u8d8a\u7528\u529b = \u7a7a\u6c14\u8d8a\u5feb (v_e\u8d8a\u5927)\u3002\u4e24\u8005\u90fd\u5f71\u54cd\u63a8\u529b\uff01'},
+  insight3:     {en:'Many v_e and m_dot combos give the same thrust! High v_e + low m_dot, or low v_e + high m_dot. The curve T=const is a hyperbola.', cn:'\u5f88\u591a v_e \u548c m_dot \u7ec4\u5408\u80fd\u4ea7\u751f\u76f8\u540c\u63a8\u529b\uff01\u9ad8 v_e + \u4f4e m_dot\uff0c\u6216\u4f4e v_e + \u9ad8 m_dot\u3002\u7b49\u63a8\u529b\u7ebf\u662f\u53cc\u66f2\u7ebf\u3002'},
+  insight4:     {en:'High v_e engines are expensive to build but need less fuel. High m_dot is cheap but burns through fuel fast. Real engineering is all about this tradeoff!', cn:'\u9ad8 v_e \u53d1\u52a8\u673a\u9020\u4ef7\u8d35\u4f46\u7701\u71c3\u6599\u3002\u9ad8 m_dot \u4fbf\u5b9c\u4f46\u8017\u71c3\u6599\u5feb\u3002\u771f\u5b9e\u5de5\u7a0b\u5c31\u662f\u5728\u8fd9\u4e2a\u6743\u8861\u4e2d\u505a\u51b3\u7b56\uff01'},
+  lvl1Name:     {en:'Thrust Calculator', cn:'\u63a8\u529b\u8ba1\u7b97\u5668'},
+  lvl2Name:     {en:'Balloon Lab', cn:'\u6c14\u7403\u5b9e\u9a8c\u5ba4'},
+  lvl3Name:     {en:'Engine Designer', cn:'\u53d1\u52a8\u673a\u8bbe\u8ba1\u5e08'},
+  lvl4Name:     {en:'Efficiency Tradeoff', cn:'\u6548\u7387\u6743\u8861'},
+  estesA8:      {en:'Estes A8-3', cn:'Estes A8-3\u6a21\u578b\u706b\u7bad'},
+  estesC6:      {en:'Estes C6-5', cn:'Estes C6-5\u6a21\u578b\u706b\u7bad'},
+  merlin1d:     {en:'SpaceX Merlin 1D', cn:'SpaceX Merlin 1D'},
+  ssme:         {en:'RS-25 (SSME)', cn:'RS-25 (\u822a\u5929\u98de\u673a\u4e3b\u53d1\u52a8\u673a)'},
+  raptorV2:     {en:'SpaceX Raptor v2', cn:'SpaceX Raptor v2'},
+  modelRocket:  {en:'Model Rocket', cn:'\u6a21\u578b\u706b\u7bad'},
+  heavyLift:    {en:'Heavy Lift', cn:'\u91cd\u578b\u8fd0\u8f7d'},
+  orbital:      {en:'Orbital', cn:'\u8f68\u9053\u7ea7'},
+  suborbital:   {en:'Suborbital Hop', cn:'\u4e9a\u8f68\u9053\u8df3\u8dc3'},
+  orbitalMission:{en:'Orbital Delivery', cn:'\u8f68\u9053\u8fd0\u8f93'},
+  budgetLeft:   {en:'Budget Left', cn:'\u5269\u4f59\u9884\u7b97'},
+  fuelLeft:     {en:'Fuel Left', cn:'\u5269\u4f59\u71c3\u6599'},
+  overBudget:   {en:'Over Budget!', cn:'\u8d85\u51fa\u9884\u7b97\uff01'},
+  overFuel:     {en:'Over Fuel Limit!', cn:'\u8d85\u51fa\u71c3\u6599\u9650\u5236\uff01'},
+  success:      {en:'Mission Success!', cn:'\u4efb\u52a1\u6210\u529f\uff01'},
+  failure:      {en:'Mission Failed', cn:'\u4efb\u52a1\u5931\u8d25'},
+};
+
+var lang = 'cn';
+function t(key) { return I18N[key] ? (I18N[key][lang] || I18N[key].en) : key; }
+
+// --- DOM refs ---
+var $ = function(id) { return document.getElementById(id); };
+var langBtn = $('langBtn');
+var soundBtn = $('soundBtn');
+var sidebarTitle = $('sidebarTitle');
+var guideContent = $('guideContent');
+var gameTitle = $('gameTitle');
+var roundInfo = $('roundInfo');
+var gameBody = $('gameBody');
+var canvas = $('cv');
+var ctx = canvas.getContext('2d');
+var controlPanel = $('controlPanel');
+var sliderWrap1 = $('sliderWrap1');
+var slider1 = $('slider1');
+var sliderLabel1 = $('sliderLabel1');
+var sliderVal1El = $('sliderVal1');
+var sliderWrap2 = $('sliderWrap2');
+var slider2 = $('slider2');
+var sliderLabel2 = $('sliderLabel2');
+var sliderVal2El = $('sliderVal2');
+var predictWrap = $('predictWrap');
+var predictLabel = $('predictLabel');
+var predictInput = $('predictInput');
+var btnAction = $('btnAction');
+var btnReset = $('btnReset');
+var resultPanel = $('resultPanel');
+
+// --- Audio (Web Audio API synth, default muted) ---
+var audioCtx = null;
+var soundMuted = true;
+function getAudio() {
+  if (!audioCtx) {
+    try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch(e) {}
+  }
+  return audioCtx;
+}
+function playTone(freq, dur, type, vol) {
+  if (soundMuted) return;
+  var ac = getAudio();
+  if (!ac) return;
+  try {
+    var osc = ac.createOscillator();
+    var gain = ac.createGain();
+    osc.type = type || 'sine';
+    osc.frequency.value = freq;
+    gain.gain.value = vol || 0.15;
+    gain.gain.exponentialRampToValueAtTime(0.001, ac.currentTime + dur);
+    osc.connect(gain); gain.connect(ac.destination);
+    osc.start(ac.currentTime); osc.stop(ac.currentTime + dur);
+  } catch(e) {}
+}
+function playNoise(dur, vol) {
+  if (soundMuted) return;
+  var ac = getAudio();
+  if (!ac) return;
+  try {
+    var bufSize = Math.floor(ac.sampleRate * dur);
+    var buf = ac.createBuffer(1, bufSize, ac.sampleRate);
+    var data = buf.getChannelData(0);
+    for (var i = 0; i < bufSize; i++) data[i] = (Math.random() * 2 - 1) * (vol || 0.05);
+    var src = ac.createBufferSource();
+    src.buffer = buf;
+    var gain = ac.createGain();
+    gain.gain.value = 1;
+    gain.gain.exponentialRampToValueAtTime(0.001, ac.currentTime + dur);
+    src.connect(gain); gain.connect(ac.destination);
+    src.start(ac.currentTime);
+  } catch(e) {}
+}
+function sndCorrect() { playTone(523, 0.1, 'sine', 0.1); setTimeout(function(){playTone(659, 0.1, 'sine', 0.08);}, 60); setTimeout(function(){playTone(784, 0.15, 'sine', 0.08);}, 120); }
+function sndWrong() { playTone(200, 0.3, 'sawtooth', 0.08); playTone(150, 0.4, 'sawtooth', 0.06); }
+function sndLaunch() { playNoise(0.4, 0.06); playTone(80, 0.5, 'sawtooth', 0.04); }
+function sndThrust() { playNoise(0.2, 0.03); playTone(120, 0.2, 'sawtooth', 0.02); }
+function sndComplete() { playTone(523, 0.15, 'triangle', 0.12); setTimeout(function(){playTone(659, 0.12, 'triangle', 0.1);}, 100); setTimeout(function(){playTone(784, 0.12, 'triangle', 0.1);}, 200); setTimeout(function(){playTone(1047, 0.25, 'triangle', 0.12);}, 300); }
+function sndClick() { playTone(660, 0.06, 'sine', 0.06); }
+
+// --- Sound / Lang buttons ---
+soundBtn.onclick = function() {
+  soundMuted = !soundMuted;
+  soundBtn.textContent = soundMuted ? 'MUTE' : 'SND';
+  if (!soundMuted) getAudio();
+};
+langBtn.onclick = function() {
+  lang = lang === 'cn' ? 'en' : 'cn';
+  langBtn.textContent = lang === 'cn' ? 'CN' : 'EN';
+  refreshUI();
+};
+
+// --- Canvas sizing ---
+var W = 100, H = 100;
+function resizeCanvas() {
+  var parent = gameBody;
+  var availW = parent.clientWidth;
+  var availH = parent.clientHeight;
+  var dpr = window.devicePixelRatio || 1;
+  W = availW;
+  H = availH;
+  canvas.style.width = W + 'px';
+  canvas.style.height = H + 'px';
+  canvas.width = Math.round(W * dpr);
+  canvas.height = Math.round(H * dpr);
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+}
+window.addEventListener('resize', function() { resizeCanvas(); });
+
+// --- Utils ---
+function lerp(a, b, tt) { return a + (b - a) * tt; }
+function clamp(v, mn, mx) { return Math.max(mn, Math.min(mx, v)); }
+function easeOutCubic(x) { return 1 - Math.pow(1 - x, 3); }
+function easeOutBack(x) { var c1 = 1.70158; var c3 = c1 + 1; return 1 + c3 * Math.pow(x - 1, 3) + c1 * Math.pow(x - 1, 2); }
+function easeInOutQuad(x) { return x < 0.5 ? 2 * x * x : 1 - Math.pow(-2 * x + 2, 2) / 2; }
+
+// ============================================================
+// GAME STATE
+// ============================================================
+var PHASE_READY = 0, PHASE_ANIM = 1, PHASE_DONE = 2, PHASE_LEVEL_DONE = 3, PHASE_ALL_DONE = 4;
+
+// --- Level 1 data: Real engine specs ---
+// { name, v_e (m/s), m_dot (kg/s), thrust (N) }
+var L1_ENGINES = [
+  { nameKey: 'estesA8',   ve: 600,     mdot: 0.0035,  thrust: 2.1 },
+  { nameKey: 'estesC6',   ve: 800,     mdot: 0.0125,  thrust: 10 },
+  { nameKey: 'merlin1d',  ve: 3050,    mdot: 287,     thrust: 845350 },
+  { nameKey: 'ssme',      ve: 4436,    mdot: 468,     thrust: 2075900 },
+  { nameKey: 'raptorV2',  ve: 3282,    mdot: 650,     thrust: 2256000 },
+];
+
+// --- Level 2 data: Balloon target distances ---
+var L2_TARGETS = [2.5, 5.0, 8.0];
+
+// --- Level 3 data: Target thrust missions ---
+var L3_MISSIONS = [
+  { nameKey: 'modelRocket', targetT: 15,     veMin: 300, veMax: 1500, mdotMin: 0.005, mdotMax: 0.1 },
+  { nameKey: 'heavyLift',   targetT: 500000, veMin: 2000, veMax: 5000, mdotMin: 50, mdotMax: 500 },
+  { nameKey: 'orbital',     targetT: 2000000,veMin: 2500, veMax: 5000, mdotMin: 200, mdotMax: 1200 },
+];
+
+// --- Level 4 data: Optimization missions ---
+var L4_MISSIONS = [
+  { nameKey: 'suborbital', targetAlt: 100000, budgetMax: 500000, fuelMax: 5000, rocketMass: 200, burnTime: 60, gravity: 9.81 },
+  { nameKey: 'orbitalMission', targetAlt: 400000, budgetMax: 2000000, fuelMax: 50000, rocketMass: 5000, burnTime: 300, gravity: 9.81 },
+];
+
+var gs = {
+  level: 1,
+  roundIdx: 0,
+  phase: PHASE_READY,
+  score: 0,
+  levelScore: 0,
+  animT: 0,
+  shakeT: 0,
+  shakeIntensity: 0,
+
+  // Level 1: Calculator
+  l1_engineIdx: 0,
+  l1_userAnswer: 0,
+  l1_displayThrust: 0,
+  l1_thrustGlow: 0,
+  l1_enginePulseT: 0,
+
+  // Level 2: Balloon lab
+  l2_nozzle: 50,
+  l2_squeeze: 50,
+  l2_balloonX: 0,
+  l2_balloonVX: 0,
+  l2_flying: false,
+  l2_landed: false,
+  l2_dist: 0,
+  l2_particles: [],
+  l2_targetIdx: 0,
+
+  // Level 3: Engine designer
+  l3_ve: 1000,
+  l3_mdot: 0.05,
+  l3_missionIdx: 0,
+  l3_curvePoints: [],
+  l3_thrustReadout: 0,
+  l3_matched: false,
+
+  // Level 4: Efficiency
+  l4_ve: 3000,
+  l4_mdot: 200,
+  l4_missionIdx: 0,
+  l4_simAlt: 0,
+  l4_simVel: 0,
+  l4_simTime: 0,
+  l4_flying: false,
+  l4_done: false,
+  l4_particles: [],
+  l4_maxAlt: 0,
+  l4_trailY: [],
+
+  // Parallax stars
+  stars: [],
+};
+
+// Initialize stars
+function initStars() {
+  gs.stars = [];
+  for (var i = 0; i < 80; i++) {
+    gs.stars.push({
+      x: Math.random(),
+      y: Math.random(),
+      size: Math.random() * 1.8 + 0.3,
+      brightness: Math.random() * 0.6 + 0.3,
+      speed: Math.random() * 0.3 + 0.1,
+    });
+  }
+}
+initStars();
+
+// ============================================================
+// UI REFRESH
+// ============================================================
+function refreshUI() {
+  var lvlNames = ['lvl1Name', 'lvl2Name', 'lvl3Name', 'lvl4Name'];
+  gameTitle.textContent = t('title') + ' - ' + t(lvlNames[gs.level - 1]);
+  sidebarTitle.textContent = t('sideTitle');
+  guideContent.textContent = t('guide' + gs.level);
+
+  var maxRounds = [5, 3, 3, 2];
+  roundInfo.textContent = t('level') + ' ' + gs.level + '/4  |  ' + t('round') + (gs.roundIdx + 1) + t('of') + maxRounds[gs.level - 1];
+
+  $('hudL1').textContent = t('level');
+  $('hudV1').textContent = gs.level + '/4';
+  $('hudL2').textContent = t('score');
+  $('hudV2').textContent = gs.score;
+  $('hudL3').textContent = t('thrust');
+  $('hudL4').textContent = t('target');
+
+  if (gs.level === 1) {
+    setupLevel1UI();
+  } else if (gs.level === 2) {
+    setupLevel2UI();
+  } else if (gs.level === 3) {
+    setupLevel3UI();
+  } else if (gs.level === 4) {
+    setupLevel4UI();
+  }
+}
+
+// --- Level 1 UI ---
+function setupLevel1UI() {
+  sliderWrap1.style.display = 'none';
+  sliderWrap2.style.display = 'none';
+  predictWrap.style.display = 'flex';
+  predictLabel.textContent = t('yourAnswer');
+  predictInput.value = '';
+  predictInput.step = '0.1';
+
+  var eng = L1_ENGINES[gs.l1_engineIdx];
+  $('hudV3').textContent = '--';
+  $('hudV4').textContent = eng.thrust.toFixed(eng.thrust < 100 ? 1 : 0) + ' N';
+
+  if (gs.phase === PHASE_READY) {
+    btnAction.textContent = t('submit');
+    btnAction.disabled = false;
+  } else if (gs.phase === PHASE_DONE) {
+    btnAction.textContent = t('next');
+    btnAction.disabled = false;
+  } else if (gs.phase === PHASE_LEVEL_DONE) {
+    btnAction.textContent = t('nextLevel');
+    btnAction.disabled = false;
+  }
+  btnReset.textContent = t('reset');
+}
+
+// --- Level 2 UI ---
+function setupLevel2UI() {
+  sliderWrap1.style.display = 'flex';
+  sliderWrap2.style.display = 'flex';
+  predictWrap.style.display = 'none';
+
+  sliderLabel1.textContent = t('nozzleSize');
+  sliderLabel2.textContent = t('squeezeForce');
+  slider1.min = 10; slider1.max = 100; slider1.step = 1;
+  slider2.min = 10; slider2.max = 100; slider2.step = 1;
+  slider1.value = gs.l2_nozzle;
+  slider2.value = gs.l2_squeeze;
+  sliderVal1El.textContent = gs.l2_nozzle;
+  sliderVal2El.textContent = gs.l2_squeeze;
+
+  var tgt = L2_TARGETS[gs.l2_targetIdx];
+  $('hudV3').textContent = gs.l2_dist > 0 ? gs.l2_dist.toFixed(2) + ' m' : '--';
+  $('hudV4').textContent = tgt.toFixed(1) + ' m';
+
+  if (gs.phase === PHASE_READY) {
+    btnAction.textContent = t('launch');
+    btnAction.disabled = false;
+  } else if (gs.phase === PHASE_ANIM) {
+    btnAction.textContent = t('launch');
+    btnAction.disabled = true;
+  } else if (gs.phase === PHASE_DONE) {
+    btnAction.textContent = t('next');
+    btnAction.disabled = false;
+  } else if (gs.phase === PHASE_LEVEL_DONE) {
+    btnAction.textContent = t('nextLevel');
+    btnAction.disabled = false;
+  }
+  btnReset.textContent = t('reset');
+}
+
+// --- Level 3 UI ---
+function setupLevel3UI() {
+  sliderWrap1.style.display = 'flex';
+  sliderWrap2.style.display = 'flex';
+  predictWrap.style.display = 'none';
+
+  var m = L3_MISSIONS[gs.l3_missionIdx];
+  sliderLabel1.textContent = t('exhaustV');
+  sliderLabel2.textContent = t('massFlow');
+  slider1.min = 0; slider1.max = 100; slider1.step = 1;
+  slider2.min = 0; slider2.max = 100; slider2.step = 1;
+
+  var veNorm = (gs.l3_ve - m.veMin) / (m.veMax - m.veMin) * 100;
+  var mdotNorm = (gs.l3_mdot - m.mdotMin) / (m.mdotMax - m.mdotMin) * 100;
+  slider1.value = clamp(veNorm, 0, 100);
+  slider2.value = clamp(mdotNorm, 0, 100);
+  sliderVal1El.textContent = gs.l3_ve.toFixed(0);
+  sliderVal2El.textContent = gs.l3_mdot < 1 ? gs.l3_mdot.toFixed(3) : gs.l3_mdot.toFixed(0);
+
+  var currentT = gs.l3_ve * gs.l3_mdot;
+  $('hudV3').textContent = formatThrust(currentT);
+  $('hudV4').textContent = formatThrust(m.targetT);
+
+  if (gs.phase === PHASE_READY) {
+    btnAction.textContent = t('design');
+    btnAction.disabled = false;
+  } else if (gs.phase === PHASE_DONE) {
+    btnAction.textContent = t('next');
+    btnAction.disabled = false;
+  } else if (gs.phase === PHASE_LEVEL_DONE) {
+    btnAction.textContent = t('nextLevel');
+    btnAction.disabled = false;
+  }
+  btnReset.textContent = t('reset');
+}
+
+// --- Level 4 UI ---
+function setupLevel4UI() {
+  sliderWrap1.style.display = 'flex';
+  sliderWrap2.style.display = 'flex';
+  predictWrap.style.display = 'none';
+
+  sliderLabel1.textContent = t('exhaustV');
+  sliderLabel2.textContent = t('massFlow');
+  slider1.min = 0; slider1.max = 100; slider1.step = 1;
+  slider2.min = 0; slider2.max = 100; slider2.step = 1;
+
+  var veRange = [1500, 5000];
+  var mdotRange = [20, 800];
+  var veNorm = (gs.l4_ve - veRange[0]) / (veRange[1] - veRange[0]) * 100;
+  var mdotNorm = (gs.l4_mdot - mdotRange[0]) / (mdotRange[1] - mdotRange[0]) * 100;
+  slider1.value = clamp(veNorm, 0, 100);
+  slider2.value = clamp(mdotNorm, 0, 100);
+  sliderVal1El.textContent = gs.l4_ve.toFixed(0);
+  sliderVal2El.textContent = gs.l4_mdot.toFixed(0);
+
+  var mis = L4_MISSIONS[gs.l4_missionIdx];
+  var costInfo = computeL4Cost(gs.l4_ve, gs.l4_mdot, mis);
+  $('hudL3').textContent = t('altitude');
+  $('hudV3').textContent = gs.l4_maxAlt > 0 ? (gs.l4_maxAlt / 1000).toFixed(1) + ' km' : '--';
+  $('hudL4').textContent = t('budget');
+  $('hudV4').textContent = '$' + (mis.budgetMax / 1000).toFixed(0) + 'k';
+
+  if (gs.phase === PHASE_READY) {
+    btnAction.textContent = t('launch');
+    btnAction.disabled = false;
+  } else if (gs.phase === PHASE_ANIM) {
+    btnAction.textContent = t('launch');
+    btnAction.disabled = true;
+  } else if (gs.phase === PHASE_DONE) {
+    btnAction.textContent = t('next');
+    btnAction.disabled = false;
+  } else if (gs.phase === PHASE_LEVEL_DONE) {
+    btnAction.textContent = t('nextLevel');
+    btnAction.disabled = false;
+  }
+  btnReset.textContent = t('reset');
+}
+
+function formatThrust(thr) {
+  if (thr >= 1e6) return (thr / 1e6).toFixed(2) + ' MN';
+  if (thr >= 1e3) return (thr / 1e3).toFixed(1) + ' kN';
+  return thr.toFixed(1) + ' N';
+}
+
+// ============================================================
+// SLIDER INPUT
+// ============================================================
+slider1.oninput = function() {
+  var v = parseFloat(slider1.value);
+  if (gs.level === 2) {
+    gs.l2_nozzle = v;
+    sliderVal1El.textContent = v;
+  } else if (gs.level === 3) {
+    var m = L3_MISSIONS[gs.l3_missionIdx];
+    gs.l3_ve = lerp(m.veMin, m.veMax, v / 100);
+    sliderVal1El.textContent = gs.l3_ve.toFixed(0);
+    updateL3Readout();
+  } else if (gs.level === 4) {
+    gs.l4_ve = lerp(1500, 5000, v / 100);
+    sliderVal1El.textContent = gs.l4_ve.toFixed(0);
+  }
+};
+slider2.oninput = function() {
+  var v = parseFloat(slider2.value);
+  if (gs.level === 2) {
+    gs.l2_squeeze = v;
+    sliderVal2El.textContent = v;
+  } else if (gs.level === 3) {
+    var m = L3_MISSIONS[gs.l3_missionIdx];
+    gs.l3_mdot = lerp(m.mdotMin, m.mdotMax, v / 100);
+    sliderVal2El.textContent = gs.l3_mdot < 1 ? gs.l3_mdot.toFixed(3) : gs.l3_mdot.toFixed(0);
+    updateL3Readout();
+  } else if (gs.level === 4) {
+    gs.l4_mdot = lerp(20, 800, v / 100);
+    sliderVal2El.textContent = gs.l4_mdot.toFixed(0);
+  }
+};
+
+function updateL3Readout() {
+  var currentT = gs.l3_ve * gs.l3_mdot;
+  gs.l3_thrustReadout = currentT;
+  $('hudV3').textContent = formatThrust(currentT);
+}
+
+// ============================================================
+// BUTTON ACTIONS
+// ============================================================
+btnAction.onclick = function() {
+  if (gs.phase === PHASE_LEVEL_DONE) {
+    nextLevel();
+    return;
+  }
+  if (gs.phase === PHASE_ALL_DONE) return;
+  if (gs.phase === PHASE_DONE) {
+    nextRound();
+    return;
+  }
+
+  if (gs.level === 1) actionLevel1();
+  else if (gs.level === 2) actionLevel2();
+  else if (gs.level === 3) actionLevel3();
+  else if (gs.level === 4) actionLevel4();
+};
+
+btnReset.onclick = function() {
+  sndClick();
+  resetGame();
+};
+
+// --- Level 1 action: check answer ---
+function actionLevel1() {
+  if (gs.phase !== PHASE_READY) return;
+  var eng = L1_ENGINES[gs.l1_engineIdx];
+  var expected = eng.ve * eng.mdot;
+  var userVal = parseFloat(predictInput.value);
+  if (isNaN(userVal) || userVal <= 0) { sndWrong(); return; }
+
+  gs.l1_userAnswer = userVal;
+  gs.l1_displayThrust = expected;
+
+  var ratio = Math.abs(userVal - expected) / expected;
+  var pts = 0;
+  var verdictKey = '';
+  if (ratio <= 0.02) { pts = 100; verdictKey = 'perfect'; sndCorrect(); }
+  else if (ratio <= 0.10) { pts = 80; verdictKey = 'correct'; sndCorrect(); }
+  else if (ratio <= 0.20) { pts = 40; verdictKey = 'close'; sndClick(); }
+  else { pts = 0; verdictKey = 'wrong'; sndWrong(); }
+
+  gs.score += pts;
+  gs.levelScore += pts;
+  gs.l1_thrustGlow = 1.0;
+
+  // Show result
+  $('rpTitle').textContent = t(verdictKey);
+  $('rpLine1').textContent = t('engine') + ': ' + t(eng.nameKey);
+  $('rpLine2').textContent = 'T = ' + eng.ve + ' x ' + eng.mdot + ' = ' + expected.toFixed(eng.thrust < 100 ? 1 : 0) + ' N';
+  $('rpLine3').textContent = t('yourAnswer') + ': ' + userVal + ' N  (' + (ratio * 100).toFixed(1) + '%)';
+  $('rpVerdict').textContent = '+' + pts;
+  $('rpInsight').textContent = '';
+  resultPanel.style.display = 'block';
+
+  $('hudV3').textContent = formatThrust(expected);
+
+  if (gs.roundIdx >= 4) {
+    gs.phase = PHASE_LEVEL_DONE;
+    $('rpInsight').textContent = t('insight1');
+  } else {
+    gs.phase = PHASE_DONE;
+  }
+  refreshUI();
+}
+
+// --- Level 2 action: launch balloon ---
+function actionLevel2() {
+  if (gs.phase !== PHASE_READY) return;
+  gs.l2_flying = true;
+  gs.l2_landed = false;
+  gs.l2_balloonX = 0;
+  gs.l2_dist = 0;
+  gs.l2_particles = [];
+  gs.phase = PHASE_ANIM;
+  gs.animT = 0;
+
+  // Physics: nozzle controls m_dot, squeeze controls v_e
+  var mdot = gs.l2_nozzle / 100;
+  var ve = gs.l2_squeeze / 100;
+  var thrustScale = mdot * ve;
+  gs.l2_balloonVX = thrustScale * 14;
+
+  sndLaunch();
+  gs.shakeT = 0.3;
+  gs.shakeIntensity = thrustScale * 6;
+  refreshUI();
+}
+
+// --- Level 3 action: submit design ---
+function actionLevel3() {
+  if (gs.phase !== PHASE_READY) return;
+  var m = L3_MISSIONS[gs.l3_missionIdx];
+  var currentT = gs.l3_ve * gs.l3_mdot;
+  var ratio = Math.abs(currentT - m.targetT) / m.targetT;
+
+  var pts = 0;
+  var verdictKey = '';
+  if (ratio <= 0.02) { pts = 100; verdictKey = 'perfect'; sndCorrect(); }
+  else if (ratio <= 0.10) { pts = 80; verdictKey = 'correct'; sndCorrect(); }
+  else if (ratio <= 0.20) { pts = 40; verdictKey = 'close'; sndClick(); }
+  else { pts = 0; verdictKey = 'miss'; sndWrong(); }
+
+  gs.score += pts;
+  gs.levelScore += pts;
+  gs.l3_matched = ratio <= 0.10;
+
+  $('rpTitle').textContent = t(verdictKey);
+  $('rpLine1').textContent = t('mission') + ': ' + t(m.nameKey);
+  $('rpLine2').textContent = t('targetThrust') + ': ' + formatThrust(m.targetT);
+  $('rpLine3').textContent = t('yourThrust') + ': ' + formatThrust(currentT) + '  (' + (ratio * 100).toFixed(1) + '%)';
+  $('rpVerdict').textContent = '+' + pts;
+  $('rpInsight').textContent = '';
+  resultPanel.style.display = 'block';
+
+  if (gs.roundIdx >= 2) {
+    gs.phase = PHASE_LEVEL_DONE;
+    $('rpInsight').textContent = t('insight3');
+  } else {
+    gs.phase = PHASE_DONE;
+  }
+  refreshUI();
+}
+
+// --- Level 4 action: launch ---
+function actionLevel4() {
+  if (gs.phase !== PHASE_READY) return;
+  var mis = L4_MISSIONS[gs.l4_missionIdx];
+  var costInfo = computeL4Cost(gs.l4_ve, gs.l4_mdot, mis);
+
+  if (costInfo.totalCost > mis.budgetMax) {
+    $('rpTitle').textContent = t('overBudget');
+    $('rpLine1').textContent = t('totalCost') + ': $' + (costInfo.totalCost / 1000).toFixed(0) + 'k';
+    $('rpLine2').textContent = t('budget') + ': $' + (mis.budgetMax / 1000).toFixed(0) + 'k';
+    $('rpLine3').textContent = '';
+    $('rpVerdict').textContent = '';
+    $('rpInsight').textContent = '';
+    resultPanel.style.display = 'block';
+    sndWrong();
+    return;
+  }
+  if (costInfo.fuelNeeded > mis.fuelMax) {
+    $('rpTitle').textContent = t('overFuel');
+    $('rpLine1').textContent = t('fuelMass') + ': ' + costInfo.fuelNeeded.toFixed(0) + ' kg';
+    $('rpLine2').textContent = t('fuelLeft') + ': ' + mis.fuelMax + ' kg';
+    $('rpLine3').textContent = '';
+    $('rpVerdict').textContent = '';
+    $('rpInsight').textContent = '';
+    resultPanel.style.display = 'block';
+    sndWrong();
+    return;
+  }
+
+  // Start simulation
+  gs.l4_flying = true;
+  gs.l4_done = false;
+  gs.l4_simAlt = 0;
+  gs.l4_simVel = 0;
+  gs.l4_simTime = 0;
+  gs.l4_maxAlt = 0;
+  gs.l4_particles = [];
+  gs.l4_trailY = [];
+  gs.phase = PHASE_ANIM;
+  gs.animT = 0;
+
+  sndLaunch();
+  gs.shakeT = 0.5;
+  gs.shakeIntensity = 8;
+  refreshUI();
+}
+
+function computeL4Cost(ve, mdot, mis) {
+  // Higher v_e = exponentially more expensive engine
+  var engineCost = 1000 * Math.pow(ve / 1000, 2.5);
+  // Fuel needed = mdot * burnTime
+  var fuelNeeded = mdot * mis.burnTime;
+  // Fuel cost = $2/kg (cheap)
+  var fuelCost = fuelNeeded * 2;
+  var totalCost = engineCost + fuelCost;
+  return { engineCost: engineCost, fuelCost: fuelCost, totalCost: totalCost, fuelNeeded: fuelNeeded };
+}
+
+// ============================================================
+// LEVEL TRANSITIONS
+// ============================================================
+function nextRound() {
+  resultPanel.style.display = 'none';
+  gs.roundIdx++;
+  gs.phase = PHASE_READY;
+
+  if (gs.level === 1) {
+    gs.l1_engineIdx = gs.roundIdx;
+    gs.l1_thrustGlow = 0;
+    predictInput.value = '';
+  } else if (gs.level === 2) {
+    gs.l2_targetIdx = gs.roundIdx;
+    gs.l2_balloonX = 0;
+    gs.l2_balloonVX = 0;
+    gs.l2_flying = false;
+    gs.l2_landed = false;
+    gs.l2_dist = 0;
+    gs.l2_particles = [];
+  } else if (gs.level === 3) {
+    gs.l3_missionIdx = gs.roundIdx;
+    gs.l3_matched = false;
+    var m = L3_MISSIONS[gs.l3_missionIdx];
+    gs.l3_ve = (m.veMin + m.veMax) / 2;
+    gs.l3_mdot = (m.mdotMin + m.mdotMax) / 2;
+  } else if (gs.level === 4) {
+    gs.l4_missionIdx = gs.roundIdx;
+    gs.l4_ve = 3000;
+    gs.l4_mdot = 200;
+    gs.l4_flying = false;
+    gs.l4_done = false;
+    gs.l4_maxAlt = 0;
+  }
+  refreshUI();
+}
+
+function nextLevel() {
+  resultPanel.style.display = 'none';
+  gs.level++;
+  gs.roundIdx = 0;
+  gs.levelScore = 0;
+  gs.phase = PHASE_READY;
+
+  if (gs.level > 4) {
+    gs.phase = PHASE_ALL_DONE;
+    sndComplete();
+    showFinalResult();
+    return;
+  }
+
+  if (gs.level === 2) {
+    gs.l2_targetIdx = 0;
+    gs.l2_nozzle = 50;
+    gs.l2_squeeze = 50;
+    gs.l2_balloonX = 0;
+    gs.l2_balloonVX = 0;
+    gs.l2_flying = false;
+    gs.l2_particles = [];
+  } else if (gs.level === 3) {
+    gs.l3_missionIdx = 0;
+    var m = L3_MISSIONS[0];
+    gs.l3_ve = (m.veMin + m.veMax) / 2;
+    gs.l3_mdot = (m.mdotMin + m.mdotMax) / 2;
+    gs.l3_matched = false;
+  } else if (gs.level === 4) {
+    gs.l4_missionIdx = 0;
+    gs.l4_ve = 3000;
+    gs.l4_mdot = 200;
+  }
+  sndClick();
+  refreshUI();
+}
+
+function showFinalResult() {
+  $('rpTitle').textContent = t('complete');
+  $('rpLine1').textContent = t('totalScore') + ': ' + gs.score;
+  $('rpLine2').textContent = '';
+  $('rpLine3').textContent = '';
+  $('rpVerdict').textContent = '';
+  $('rpInsight').textContent = t('insight4');
+  resultPanel.style.display = 'block';
+}
+
+function resetGame() {
+  gs.level = 1;
+  gs.roundIdx = 0;
+  gs.phase = PHASE_READY;
+  gs.score = 0;
+  gs.levelScore = 0;
+  gs.animT = 0;
+  gs.l1_engineIdx = 0;
+  gs.l1_thrustGlow = 0;
+  gs.l2_targetIdx = 0;
+  gs.l2_nozzle = 50;
+  gs.l2_squeeze = 50;
+  gs.l2_balloonX = 0;
+  gs.l2_flying = false;
+  gs.l2_particles = [];
+  gs.l3_missionIdx = 0;
+  gs.l3_matched = false;
+  gs.l4_missionIdx = 0;
+  gs.l4_ve = 3000;
+  gs.l4_mdot = 200;
+  gs.l4_flying = false;
+  gs.l4_maxAlt = 0;
+  resultPanel.style.display = 'none';
+  initStars();
+  refreshUI();
+}
+
+// ============================================================
+// RENDERING
+// ============================================================
+var frameTime = 0;
+var lastFrameTime = 0;
+function gameLoop(now) {
+  var dt = lastFrameTime ? Math.min((now - lastFrameTime) / 1000, 0.05) : 0.016;
+  lastFrameTime = now;
+  frameTime = now / 1000;
+
+  resizeCanvas();
+  updatePhysics(dt);
+  drawFrame(dt);
+  requestAnimationFrame(gameLoop);
+}
+
+function updatePhysics(dt) {
+  // Screen shake decay
+  if (gs.shakeT > 0) {
+    gs.shakeT -= dt;
+    if (gs.shakeT < 0) gs.shakeT = 0;
+  }
+
+  // Engine idle pulse
+  gs.l1_enginePulseT += dt * 2;
+
+  // Thrust glow decay
+  if (gs.l1_thrustGlow > 0) {
+    gs.l1_thrustGlow -= dt * 0.8;
+    if (gs.l1_thrustGlow < 0) gs.l1_thrustGlow = 0;
+  }
+
+  // Level 2 balloon physics
+  if (gs.level === 2 && gs.l2_flying && !gs.l2_landed) {
+    gs.animT += dt;
+    var mdot = gs.l2_nozzle / 100;
+    var ve = gs.l2_squeeze / 100;
+    var thrustDuration = 0.3 + mdot * 0.7;
+
+    if (gs.animT < thrustDuration) {
+      // Still thrusting
+      var thrustForce = mdot * ve * 14;
+      gs.l2_balloonVX = thrustForce * (1 - gs.animT / thrustDuration);
+
+      // Spawn exhaust particles proportional to mdot
+      var particleRate = Math.floor(mdot * 8) + 1;
+      for (var i = 0; i < particleRate; i++) {
+        gs.l2_particles.push({
+          x: gs.l2_balloonX + 60,
+          y: H * 0.55 + (Math.random() - 0.5) * 10 * mdot,
+          vx: -ve * 100 * (0.8 + Math.random() * 0.4),
+          vy: (Math.random() - 0.5) * 30,
+          life: 0.6 + Math.random() * 0.4,
+          maxLife: 0.6 + Math.random() * 0.4,
+          size: 2 + mdot * 4,
+        });
+      }
+      if (Math.random() < 0.3) sndThrust();
+    } else {
+      // Coasting with friction
+      gs.l2_balloonVX *= 0.97;
+    }
+
+    gs.l2_balloonX += gs.l2_balloonVX * dt * 40;
+
+    // Stop when velocity is very low
+    if (gs.animT > thrustDuration + 0.5 && Math.abs(gs.l2_balloonVX) < 0.05) {
+      gs.l2_landed = true;
+      gs.l2_flying = false;
+      // Convert pixel distance to meters (scale: W pixels = 10m)
+      gs.l2_dist = (gs.l2_balloonX / (W - 200)) * 10;
+      finishL2Round();
+    }
+
+    // Update particles
+    for (var p = gs.l2_particles.length - 1; p >= 0; p--) {
+      var part = gs.l2_particles[p];
+      part.x += part.vx * dt;
+      part.y += part.vy * dt;
+      part.life -= dt;
+      if (part.life <= 0) gs.l2_particles.splice(p, 1);
+    }
+  }
+
+  // Level 4 rocket physics
+  if (gs.level === 4 && gs.l4_flying && !gs.l4_done) {
+    gs.animT += dt;
+    gs.l4_simTime += dt * 10; // 10x time acceleration for vis
+
+    var mis = L4_MISSIONS[gs.l4_missionIdx];
+    var thrust = gs.l4_ve * gs.l4_mdot;
+    var totalMass = mis.rocketMass + computeL4Cost(gs.l4_ve, gs.l4_mdot, mis).fuelNeeded;
+    var fuelBurned = gs.l4_mdot * gs.l4_simTime;
+    var currentMass = totalMass - fuelBurned;
+
+    if (currentMass < mis.rocketMass) currentMass = mis.rocketMass;
+    var burning = gs.l4_simTime < mis.burnTime;
+
+    var accel = burning ? (thrust / currentMass - mis.gravity) : -mis.gravity;
+    gs.l4_simVel += accel * dt * 10;
+    gs.l4_simAlt += gs.l4_simVel * dt * 10;
+
+    if (gs.l4_simAlt > gs.l4_maxAlt) gs.l4_maxAlt = gs.l4_simAlt;
+
+    // Spawn exhaust particles while burning
+    if (burning) {
+      var pCount = Math.floor(gs.l4_mdot / 50) + 1;
+      for (var pi = 0; pi < pCount; pi++) {
+        gs.l4_particles.push({
+          x: W / 2 + (Math.random() - 0.5) * 8,
+          y: 0,
+          vx: (Math.random() - 0.5) * 40,
+          vy: gs.l4_ve * 0.02 * (0.5 + Math.random() * 0.5),
+          life: 0.5 + Math.random() * 0.5,
+          maxLife: 0.5 + Math.random() * 0.5,
+          size: 2 + (gs.l4_mdot / 200) * 3,
+        });
+      }
+      if (gs.animT % 0.2 < dt) sndThrust();
+    }
+
+    // Trail
+    gs.l4_trailY.push(gs.l4_simAlt);
+    if (gs.l4_trailY.length > 200) gs.l4_trailY.shift();
+
+    // Update particles
+    for (var pp = gs.l4_particles.length - 1; pp >= 0; pp--) {
+      var pr = gs.l4_particles[pp];
+      pr.x += pr.vx * dt;
+      pr.y += pr.vy * dt;
+      pr.life -= dt;
+      if (pr.life <= 0) gs.l4_particles.splice(pp, 1);
+    }
+
+    // Landing check
+    if (gs.l4_simAlt < 0 && gs.l4_simTime > 1) {
+      gs.l4_simAlt = 0;
+      gs.l4_done = true;
+      gs.l4_flying = false;
+      finishL4Round();
+    }
+
+    $('hudV3').textContent = (gs.l4_maxAlt / 1000).toFixed(1) + ' km';
+  }
+}
+
+function finishL2Round() {
+  var tgt = L2_TARGETS[gs.l2_targetIdx];
+  var ratio = Math.abs(gs.l2_dist - tgt) / tgt;
+  var pts = 0;
+  var verdictKey = '';
+  if (ratio <= 0.05) { pts = 100; verdictKey = 'perfect'; sndCorrect(); }
+  else if (ratio <= 0.15) { pts = 80; verdictKey = 'correct'; sndCorrect(); }
+  else if (ratio <= 0.30) { pts = 40; verdictKey = 'close'; sndClick(); }
+  else { pts = 0; verdictKey = 'miss'; sndWrong(); }
+
+  gs.score += pts;
+  gs.levelScore += pts;
+
+  $('rpTitle').textContent = t(verdictKey);
+  $('rpLine1').textContent = t('target') + ': ' + tgt.toFixed(1) + ' m';
+  $('rpLine2').textContent = t('actual') + ': ' + gs.l2_dist.toFixed(2) + ' m';
+  $('rpLine3').textContent = 'T = m_dot x v_e  (' + (ratio * 100).toFixed(1) + '% off)';
+  $('rpVerdict').textContent = '+' + pts;
+  $('rpInsight').textContent = '';
+  resultPanel.style.display = 'block';
+
+  $('hudV3').textContent = gs.l2_dist.toFixed(2) + ' m';
+
+  if (gs.roundIdx >= 2) {
+    gs.phase = PHASE_LEVEL_DONE;
+    $('rpInsight').textContent = t('insight2');
+  } else {
+    gs.phase = PHASE_DONE;
+  }
+  refreshUI();
+}
+
+function finishL4Round() {
+  var mis = L4_MISSIONS[gs.l4_missionIdx];
+  var costInfo = computeL4Cost(gs.l4_ve, gs.l4_mdot, mis);
+  var reachedTarget = gs.l4_maxAlt >= mis.targetAlt;
+
+  var pts = 0;
+  var verdictKey = '';
+  if (reachedTarget) {
+    var costRatio = costInfo.totalCost / mis.budgetMax;
+    if (costRatio <= 0.5) { pts = 100; verdictKey = 'perfect'; }
+    else if (costRatio <= 0.75) { pts = 80; verdictKey = 'correct'; }
+    else { pts = 60; verdictKey = 'close'; }
+    sndCorrect();
+    gs.shakeT = 0;
+  } else {
+    pts = 20;
+    verdictKey = 'failure';
+    sndWrong();
+  }
+
+  gs.score += pts;
+  gs.levelScore += pts;
+
+  $('rpTitle').textContent = reachedTarget ? t('success') : t('failure');
+  $('rpLine1').textContent = t('targetAlt') + ': ' + (mis.targetAlt / 1000).toFixed(0) + ' km  |  ' + t('reachedAlt') + ': ' + (gs.l4_maxAlt / 1000).toFixed(1) + ' km';
+  $('rpLine2').textContent = t('totalCost') + ': $' + (costInfo.totalCost / 1000).toFixed(0) + 'k  (' + t('budget') + ': $' + (mis.budgetMax / 1000).toFixed(0) + 'k)';
+  $('rpLine3').textContent = 'v_e=' + gs.l4_ve.toFixed(0) + ' m/s,  m_dot=' + gs.l4_mdot.toFixed(0) + ' kg/s,  T=' + formatThrust(gs.l4_ve * gs.l4_mdot);
+  $('rpVerdict').textContent = '+' + pts;
+  $('rpInsight').textContent = '';
+  resultPanel.style.display = 'block';
+
+  if (gs.roundIdx >= 1) {
+    gs.phase = PHASE_LEVEL_DONE;
+    $('rpInsight').textContent = t('insight4');
+  } else {
+    gs.phase = PHASE_DONE;
+  }
+  refreshUI();
+}
+
+// ============================================================
+// DRAW
+// ============================================================
+function drawFrame(dt) {
+  ctx.clearRect(0, 0, W, H);
+
+  // Apply screen shake
+  var shakeX = 0, shakeY = 0;
+  if (gs.shakeT > 0) {
+    var shakeAmp = gs.shakeIntensity * (gs.shakeT / 0.5);
+    shakeX = (Math.random() - 0.5) * shakeAmp;
+    shakeY = (Math.random() - 0.5) * shakeAmp;
+    ctx.save();
+    ctx.translate(shakeX, shakeY);
+  }
+
+  // Draw parallax stars
+  drawStars(dt);
+
+  if (gs.level === 1) drawLevel1(dt);
+  else if (gs.level === 2) drawLevel2(dt);
+  else if (gs.level === 3) drawLevel3(dt);
+  else if (gs.level === 4) drawLevel4(dt);
+
+  if (gs.shakeT > 0) ctx.restore();
+}
+
+function drawStars(dt) {
+  for (var i = 0; i < gs.stars.length; i++) {
+    var s = gs.stars[i];
+    var twinkle = 0.5 + 0.5 * Math.sin(frameTime * 2 + i * 0.7);
+    var alpha = s.brightness * twinkle;
+    ctx.fillStyle = 'rgba(200,210,255,' + alpha + ')';
+    var sx = s.x * W;
+    var sy = s.y * H;
+
+    // Parallax scroll for level 4
+    if (gs.level === 4 && gs.l4_flying) {
+      sy = ((s.y + gs.l4_simAlt * 0.000001 * s.speed) % 1) * H;
+    }
+
+    ctx.beginPath();
+    ctx.arc(sx, sy, s.size, 0, Math.PI * 2);
+    ctx.fill();
+  }
+}
+
+// --- Level 1 Drawing: Engine spec cards + thrust readout ---
+function drawLevel1(dt) {
+  var eng = L1_ENGINES[gs.l1_engineIdx];
+  var cx = W / 2;
+  var cy = H / 2;
+
+  // Draw engine schematic (nozzle shape)
+  var nozzleW = 60 + Math.sin(gs.l1_enginePulseT) * 2;
+  var nozzleH = 80;
+  ctx.save();
+  ctx.translate(cx, cy - 20);
+
+  // Combustion chamber
+  ctx.fillStyle = 'rgba(80,255,176,0.08)';
+  ctx.strokeStyle = 'rgba(80,255,176,0.4)';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.rect(-nozzleW / 2, -nozzleH / 2, nozzleW, nozzleH * 0.5);
+  ctx.fill();
+  ctx.stroke();
+
+  // Nozzle (converging-diverging bell shape)
+  ctx.beginPath();
+  ctx.moveTo(-nozzleW / 2, 0);
+  ctx.quadraticCurveTo(-nozzleW / 4, nozzleH * 0.2, -nozzleW * 0.15, nozzleH * 0.15);
+  ctx.lineTo(-nozzleW * 0.3, nozzleH * 0.5);
+  ctx.lineTo(nozzleW * 0.3, nozzleH * 0.5);
+  ctx.lineTo(nozzleW * 0.15, nozzleH * 0.15);
+  ctx.quadraticCurveTo(nozzleW / 4, nozzleH * 0.2, nozzleW / 2, 0);
+  ctx.fillStyle = 'rgba(80,255,176,0.06)';
+  ctx.fill();
+  ctx.strokeStyle = 'rgba(80,255,176,0.5)';
+  ctx.stroke();
+
+  // Idle pulse glow
+  var pulseAlpha = 0.15 + 0.1 * Math.sin(gs.l1_enginePulseT * 1.5);
+  ctx.fillStyle = 'rgba(255,181,156,' + pulseAlpha + ')';
+  ctx.beginPath();
+  ctx.ellipse(0, nozzleH * 0.5, nozzleW * 0.2, 8, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.restore();
+
+  // Engine name label
+  ctx.fillStyle = '#50ffb0';
+  ctx.font = '700 16px "Space Grotesk", sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillText(t(eng.nameKey), cx, cy - nozzleH - 10);
+
+  // Spec card
+  var cardY = cy + 60;
+  ctx.fillStyle = 'rgba(0,0,0,0.4)';
+  ctx.strokeStyle = 'rgba(80,255,176,0.2)';
+  ctx.lineWidth = 1;
+  roundRect(cx - 120, cardY, 240, 70, 6);
+  ctx.fill();
+  ctx.stroke();
+
+  ctx.fillStyle = '#aaabb0';
+  ctx.font = '13px "Space Grotesk", sans-serif';
+  ctx.textAlign = 'left';
+  ctx.fillText('v_e = ' + eng.ve.toLocaleString() + ' m/s', cx - 100, cardY + 25);
+  ctx.fillText('m_dot = ' + eng.mdot + ' kg/s', cx - 100, cardY + 48);
+
+  // Formula reminder
+  ctx.fillStyle = 'rgba(80,255,176,0.6)';
+  ctx.font = '700 14px "Space Grotesk", sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillText('T = v_e x m_dot = ?', cx, cardY + 95);
+
+  // Thrust readout with glow effect (after answer)
+  if (gs.l1_thrustGlow > 0) {
+    var glowAlpha = gs.l1_thrustGlow * 0.6;
+    ctx.fillStyle = 'rgba(80,255,176,' + glowAlpha + ')';
+    ctx.font = '700 22px "Space Grotesk", sans-serif';
+    ctx.textAlign = 'center';
+    var thrStr = 'T = ' + formatThrust(gs.l1_displayThrust);
+    ctx.fillText(thrStr, cx, cardY + 120);
+
+    // Glow ring
+    ctx.strokeStyle = 'rgba(80,255,176,' + (glowAlpha * 0.4) + ')';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(cx, cardY + 115, 50 + (1 - gs.l1_thrustGlow) * 30, 0, Math.PI * 2);
+    ctx.stroke();
+  }
+
+  // Round indicators
+  drawRoundChips(5, cx, 30);
+}
+
+// --- Level 2 Drawing: Balloon launcher ---
+function drawLevel2(dt) {
+  var groundY = H * 0.7;
+  var startX = 80;
+  var trackLen = W - 200;
+
+  // Draw track
+  ctx.strokeStyle = 'rgba(80,255,176,0.3)';
+  ctx.lineWidth = 2;
+  ctx.setLineDash([6, 4]);
+  ctx.beginPath();
+  ctx.moveTo(startX, groundY);
+  ctx.lineTo(startX + trackLen, groundY);
+  ctx.stroke();
+  ctx.setLineDash([]);
+
+  // Target distance marker
+  var tgt = L2_TARGETS[gs.l2_targetIdx];
+  var tgtX = startX + (tgt / 10) * trackLen;
+  ctx.fillStyle = 'rgba(255,181,156,0.6)';
+  ctx.strokeStyle = '#ffb59c';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(tgtX, groundY - 30);
+  ctx.lineTo(tgtX - 6, groundY - 18);
+  ctx.lineTo(tgtX + 6, groundY - 18);
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+  ctx.fillStyle = '#ffb59c';
+  ctx.font = '11px "Space Grotesk", sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillText(tgt.toFixed(1) + 'm', tgtX, groundY - 34);
+
+  // Distance scale markers
+  for (var dm = 0; dm <= 10; dm += 2) {
+    var mx = startX + (dm / 10) * trackLen;
+    ctx.fillStyle = 'rgba(170,171,176,0.4)';
+    ctx.fillRect(mx - 0.5, groundY, 1, 8);
+    ctx.fillStyle = 'rgba(170,171,176,0.5)';
+    ctx.font = '9px "Space Grotesk", sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText(dm + 'm', mx, groundY + 18);
+  }
+
+  // Draw balloon
+  var balloonX = startX + gs.l2_balloonX;
+  var balloonY = groundY - 20;
+  var bSize = 14 + (gs.l2_nozzle / 100) * 10;
+
+  // Balloon body
+  ctx.fillStyle = 'rgba(80,255,176,0.25)';
+  ctx.strokeStyle = 'rgba(80,255,176,0.7)';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.ellipse(balloonX, balloonY - bSize * 0.6, bSize, bSize * 1.2, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.stroke();
+
+  // Nozzle
+  var nozzleScale = gs.l2_nozzle / 100;
+  ctx.fillStyle = 'rgba(255,181,156,0.6)';
+  ctx.beginPath();
+  ctx.moveTo(balloonX + bSize - 2, balloonY - 2);
+  ctx.lineTo(balloonX + bSize + 8, balloonY - 4 * nozzleScale);
+  ctx.lineTo(balloonX + bSize + 8, balloonY + 4 * nozzleScale);
+  ctx.closePath();
+  ctx.fill();
+
+  // Exhaust particles
+  for (var pi = 0; pi < gs.l2_particles.length; pi++) {
+    var pp = gs.l2_particles[pi];
+    var lifeRatio = pp.life / pp.maxLife;
+    var pAlpha = lifeRatio * 0.7;
+    var pr = Math.floor(lerp(255, 80, lifeRatio));
+    var pg = Math.floor(lerp(120, 255, lifeRatio));
+    var pb = Math.floor(lerp(80, 176, lifeRatio));
+    ctx.fillStyle = 'rgba(' + pr + ',' + pg + ',' + pb + ',' + pAlpha + ')';
+    ctx.beginPath();
+    ctx.arc(startX + pp.x, pp.y, pp.size * lifeRatio, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  // m_dot / v_e readout near balloon
+  if (gs.phase === PHASE_READY) {
+    var mdotVal = (gs.l2_nozzle / 100).toFixed(2);
+    var veVal = (gs.l2_squeeze / 100).toFixed(2);
+    ctx.fillStyle = 'rgba(170,171,176,0.7)';
+    ctx.font = '10px "Space Grotesk", sans-serif';
+    ctx.textAlign = 'left';
+    ctx.fillText('m_dot ~ ' + mdotVal, balloonX + bSize + 15, balloonY - 10);
+    ctx.fillText('v_e ~ ' + veVal, balloonX + bSize + 15, balloonY + 4);
+    ctx.fillStyle = 'rgba(80,255,176,0.5)';
+    ctx.fillText('T ~ ' + (gs.l2_nozzle / 100 * gs.l2_squeeze / 100).toFixed(2), balloonX + bSize + 15, balloonY + 18);
+  }
+
+  // Round indicators
+  drawRoundChips(3, W / 2, 30);
+
+  // Title
+  ctx.fillStyle = 'rgba(80,255,176,0.6)';
+  ctx.font = '700 12px "Space Grotesk", sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillText('T = v_e x m_dot', W / 2, H * 0.2);
+}
+
+// --- Level 3 Drawing: Thrust curve + sliders ---
+function drawLevel3(dt) {
+  var m = L3_MISSIONS[gs.l3_missionIdx];
+  var cx = W / 2;
+  var cy = H / 2;
+
+  // Draw T = v_e * m_dot hyperbola curve
+  var plotLeft = 60;
+  var plotRight = W - 40;
+  var plotTop = 50;
+  var plotBottom = H - 40;
+  var plotW = plotRight - plotLeft;
+  var plotH = plotBottom - plotTop;
+
+  // Axes
+  ctx.strokeStyle = 'rgba(170,171,176,0.3)';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(plotLeft, plotTop);
+  ctx.lineTo(plotLeft, plotBottom);
+  ctx.lineTo(plotRight, plotBottom);
+  ctx.stroke();
+
+  // Axis labels
+  ctx.fillStyle = '#aaabb0';
+  ctx.font = '10px "Space Grotesk", sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillText('v_e (m/s)', cx, plotBottom + 25);
+  ctx.save();
+  ctx.translate(plotLeft - 25, cy);
+  ctx.rotate(-Math.PI / 2);
+  ctx.fillText('m_dot (kg/s)', 0, 0);
+  ctx.restore();
+
+  // Target thrust hyperbola: m_dot = T / v_e
+  ctx.strokeStyle = 'rgba(255,181,156,0.5)';
+  ctx.lineWidth = 2;
+  ctx.setLineDash([4, 4]);
+  ctx.beginPath();
+  var first = true;
+  for (var px = 0; px <= plotW; px += 2) {
+    var ve = lerp(m.veMin, m.veMax, px / plotW);
+    var mdotNeeded = m.targetT / ve;
+    var mdotNorm = (mdotNeeded - m.mdotMin) / (m.mdotMax - m.mdotMin);
+    if (mdotNorm < 0 || mdotNorm > 1) { first = true; continue; }
+    var py = plotBottom - mdotNorm * plotH;
+    if (first) { ctx.moveTo(plotLeft + px, py); first = false; }
+    else ctx.lineTo(plotLeft + px, py);
+  }
+  ctx.stroke();
+  ctx.setLineDash([]);
+
+  // Curve label
+  ctx.fillStyle = 'rgba(255,181,156,0.7)';
+  ctx.font = '11px "Space Grotesk", sans-serif';
+  ctx.textAlign = 'right';
+  ctx.fillText('T = ' + formatThrust(m.targetT), plotRight - 10, plotTop + 20);
+
+  // Current point (user's v_e, m_dot)
+  var userVeNorm = (gs.l3_ve - m.veMin) / (m.veMax - m.veMin);
+  var userMdotNorm = (gs.l3_mdot - m.mdotMin) / (m.mdotMax - m.mdotMin);
+  var userPX = plotLeft + userVeNorm * plotW;
+  var userPY = plotBottom - userMdotNorm * plotH;
+
+  // Current thrust indicator lines
+  ctx.strokeStyle = 'rgba(80,255,176,0.2)';
+  ctx.lineWidth = 1;
+  ctx.setLineDash([2, 3]);
+  ctx.beginPath();
+  ctx.moveTo(userPX, plotBottom);
+  ctx.lineTo(userPX, userPY);
+  ctx.lineTo(plotLeft, userPY);
+  ctx.stroke();
+  ctx.setLineDash([]);
+
+  // User point with glow
+  var currentT = gs.l3_ve * gs.l3_mdot;
+  var matchRatio = Math.abs(currentT - m.targetT) / m.targetT;
+  var matchGlow = matchRatio < 0.1 ? 1 : matchRatio < 0.2 ? 0.5 : 0;
+
+  if (matchGlow > 0) {
+    var glowR = 12 + Math.sin(frameTime * 4) * 4;
+    ctx.fillStyle = 'rgba(80,255,176,' + (matchGlow * 0.2) + ')';
+    ctx.beginPath();
+    ctx.arc(userPX, userPY, glowR, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  ctx.fillStyle = '#50ffb0';
+  ctx.beginPath();
+  ctx.arc(userPX, userPY, 6, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Value labels at point
+  ctx.fillStyle = 'rgba(80,255,176,0.8)';
+  ctx.font = '10px "Space Grotesk", sans-serif';
+  ctx.textAlign = 'left';
+  ctx.fillText('v_e=' + gs.l3_ve.toFixed(0), userPX + 10, userPY - 8);
+  ctx.fillText('m_dot=' + (gs.l3_mdot < 1 ? gs.l3_mdot.toFixed(3) : gs.l3_mdot.toFixed(0)), userPX + 10, userPY + 6);
+
+  // Thrust readout with juice
+  var thrustStr = formatThrust(currentT);
+  var thrustColor = matchRatio < 0.1 ? '#50ffb0' : matchRatio < 0.2 ? '#ffb59c' : '#aaabb0';
+  ctx.fillStyle = thrustColor;
+  ctx.font = '700 16px "Space Grotesk", sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillText('T = ' + thrustStr, cx, plotTop - 10);
+
+  // Axis tick labels
+  ctx.fillStyle = 'rgba(170,171,176,0.5)';
+  ctx.font = '9px "Space Grotesk", sans-serif';
+  for (var ti = 0; ti <= 4; ti++) {
+    var veT = lerp(m.veMin, m.veMax, ti / 4);
+    var mdotT = lerp(m.mdotMin, m.mdotMax, ti / 4);
+    ctx.textAlign = 'center';
+    ctx.fillText(veT.toFixed(0), plotLeft + (ti / 4) * plotW, plotBottom + 14);
+    ctx.textAlign = 'right';
+    ctx.fillText(mdotT < 1 ? mdotT.toFixed(3) : mdotT.toFixed(0), plotLeft - 4, plotBottom - (ti / 4) * plotH + 4);
+  }
+
+  // Mission name
+  ctx.fillStyle = 'rgba(255,181,156,0.6)';
+  ctx.font = '11px "Space Grotesk", sans-serif';
+  ctx.textAlign = 'left';
+  ctx.fillText(t('mission') + ': ' + t(m.nameKey), plotLeft, plotTop - 10);
+
+  // Round indicators
+  drawRoundChips(3, cx, H - 10);
+}
+
+// --- Level 4 Drawing: Rocket sim with altitude trace ---
+function drawLevel4(dt) {
+  var mis = L4_MISSIONS[gs.l4_missionIdx];
+  var cx = W / 2;
+
+  if (!gs.l4_flying && !gs.l4_done) {
+    // Design phase: show cost/constraint gauges
+    var costInfo = computeL4Cost(gs.l4_ve, gs.l4_mdot, mis);
+
+    // Cost gauge
+    var gaugeX = 60;
+    var gaugeW = W - 120;
+    var gaugeY = 60;
+
+    drawGauge(gaugeX, gaugeY, gaugeW, t('cost'), costInfo.totalCost, mis.budgetMax, '$');
+    drawGauge(gaugeX, gaugeY + 50, gaugeW, t('fuelMass'), costInfo.fuelNeeded, mis.fuelMax, 'kg');
+
+    // Estimated thrust readout
+    var thrust = gs.l4_ve * gs.l4_mdot;
+    ctx.fillStyle = '#50ffb0';
+    ctx.font = '700 16px "Space Grotesk", sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('T = v_e x m_dot = ' + formatThrust(thrust), cx, gaugeY + 120);
+
+    // Cost breakdown
+    ctx.fillStyle = '#aaabb0';
+    ctx.font = '11px "Space Grotesk", sans-serif';
+    ctx.fillText(lang === 'cn' ?
+      '\u53d1\u52a8\u673a\u6210\u672c: $' + (costInfo.engineCost / 1000).toFixed(0) + 'k  |  \u71c3\u6599\u6210\u672c: $' + (costInfo.fuelCost / 1000).toFixed(0) + 'k' :
+      'Engine: $' + (costInfo.engineCost / 1000).toFixed(0) + 'k  |  Fuel: $' + (costInfo.fuelCost / 1000).toFixed(0) + 'k',
+      cx, gaugeY + 145);
+
+    // Draw rocket schematic
+    drawRocketSchematic(cx, H * 0.6, 0, gs.l4_mdot);
+
+    // Mission info
+    ctx.fillStyle = 'rgba(255,181,156,0.6)';
+    ctx.font = '11px "Space Grotesk", sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText(t('mission') + ': ' + t(mis.nameKey) + '  |  ' + t('targetAlt') + ': ' + (mis.targetAlt / 1000).toFixed(0) + ' km', cx, H - 30);
+
+  } else {
+    // Flying or done: show altitude trace
+    var traceLeft = 60;
+    var traceRight = W - 40;
+    var traceTop = 40;
+    var traceBottom = H - 30;
+    var traceW = traceRight - traceLeft;
+    var traceH = traceBottom - traceTop;
+
+    // Find max for scale
+    var scaleMax = Math.max(mis.targetAlt * 1.2, gs.l4_maxAlt * 1.1);
+    if (scaleMax < 1) scaleMax = 1;
+
+    // Target altitude line
+    var tgtY = traceBottom - (mis.targetAlt / scaleMax) * traceH;
+    ctx.strokeStyle = 'rgba(255,181,156,0.4)';
+    ctx.lineWidth = 1;
+    ctx.setLineDash([6, 4]);
+    ctx.beginPath();
+    ctx.moveTo(traceLeft, tgtY);
+    ctx.lineTo(traceRight, tgtY);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = '#ffb59c';
+    ctx.font = '10px "Space Grotesk", sans-serif';
+    ctx.textAlign = 'left';
+    ctx.fillText((mis.targetAlt / 1000).toFixed(0) + ' km', traceRight + 4, tgtY + 4);
+
+    // Altitude trace
+    if (gs.l4_trailY.length > 1) {
+      ctx.strokeStyle = '#50ffb0';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      for (var ti = 0; ti < gs.l4_trailY.length; ti++) {
+        var tx = traceLeft + (ti / 200) * traceW;
+        var ty = traceBottom - (gs.l4_trailY[ti] / scaleMax) * traceH;
+        if (ti === 0) ctx.moveTo(tx, ty);
+        else ctx.lineTo(tx, ty);
+      }
+      ctx.stroke();
+
+      // Rocket icon at current position
+      if (gs.l4_flying) {
+        var lastTI = gs.l4_trailY.length - 1;
+        var rX = traceLeft + (lastTI / 200) * traceW;
+        var rY = traceBottom - (gs.l4_trailY[lastTI] / scaleMax) * traceH;
+        drawRocketIcon(rX, rY, 12);
+
+        // Exhaust particles on trace
+        for (var epi = 0; epi < gs.l4_particles.length; epi++) {
+          var ep = gs.l4_particles[epi];
+          var epAlpha = ep.life / ep.maxLife * 0.6;
+          ctx.fillStyle = 'rgba(255,181,156,' + epAlpha + ')';
+          ctx.beginPath();
+          ctx.arc(rX + (ep.x - W / 2) * 0.3, rY + ep.y * 0.3, ep.size * (ep.life / ep.maxLife), 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+    }
+
+    // Axes
+    ctx.strokeStyle = 'rgba(170,171,176,0.3)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(traceLeft, traceTop);
+    ctx.lineTo(traceLeft, traceBottom);
+    ctx.lineTo(traceRight, traceBottom);
+    ctx.stroke();
+
+    // Y-axis labels
+    ctx.fillStyle = 'rgba(170,171,176,0.5)';
+    ctx.font = '9px "Space Grotesk", sans-serif';
+    ctx.textAlign = 'right';
+    for (var yi = 0; yi <= 4; yi++) {
+      var yAlt = (yi / 4) * scaleMax;
+      var yy = traceBottom - (yi / 4) * traceH;
+      ctx.fillText((yAlt / 1000).toFixed(0) + ' km', traceLeft - 4, yy + 3);
+    }
+
+    // Max altitude readout
+    ctx.fillStyle = '#50ffb0';
+    ctx.font = '700 14px "Space Grotesk", sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText(t('altitude') + ': ' + (gs.l4_maxAlt / 1000).toFixed(1) + ' km', cx, traceTop - 10);
+  }
+
+  // Round indicators
+  drawRoundChips(2, cx, 20);
+}
+
+function drawGauge(x, y, w, label, value, maxVal, unit) {
+  var ratio = clamp(value / maxVal, 0, 1.5);
+  var overBudget = ratio > 1;
+
+  // Background
+  ctx.fillStyle = 'rgba(0,0,0,0.3)';
+  roundRect(x, y, w, 28, 4);
+  ctx.fill();
+
+  // Fill bar
+  var fillW = Math.min(ratio, 1) * (w - 4);
+  ctx.fillStyle = overBudget ? 'rgba(255,100,100,0.6)' : 'rgba(80,255,176,0.3)';
+  roundRect(x + 2, y + 2, fillW, 24, 3);
+  ctx.fill();
+
+  // Label
+  ctx.fillStyle = overBudget ? '#ff6464' : '#aaabb0';
+  ctx.font = '11px "Space Grotesk", sans-serif';
+  ctx.textAlign = 'left';
+  var valStr = '';
+  if (unit === '$') valStr = '$' + (value / 1000).toFixed(0) + 'k / $' + (maxVal / 1000).toFixed(0) + 'k';
+  else valStr = value.toFixed(0) + ' / ' + maxVal + ' ' + unit;
+  ctx.fillText(label + ': ' + valStr, x + 8, y + 18);
+}
+
+function drawRocketSchematic(cx, cy, alt, mdot) {
+  ctx.save();
+  ctx.translate(cx, cy);
+
+  // Rocket body
+  ctx.fillStyle = 'rgba(80,255,176,0.1)';
+  ctx.strokeStyle = 'rgba(80,255,176,0.5)';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(0, -40);
+  ctx.lineTo(-12, -20);
+  ctx.lineTo(-12, 25);
+  ctx.lineTo(-18, 35);
+  ctx.lineTo(18, 35);
+  ctx.lineTo(12, 25);
+  ctx.lineTo(12, -20);
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+
+  // Idle engine glow
+  var glowSize = 5 + Math.sin(frameTime * 3) * 2;
+  var gAlpha = 0.3 + Math.sin(frameTime * 2) * 0.1;
+  ctx.fillStyle = 'rgba(255,181,156,' + gAlpha + ')';
+  ctx.beginPath();
+  ctx.ellipse(0, 38, glowSize, glowSize * 1.5, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.restore();
+}
+
+function drawRocketIcon(x, y, size) {
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.fillStyle = '#50ffb0';
+  ctx.beginPath();
+  ctx.moveTo(0, -size);
+  ctx.lineTo(-size * 0.4, 0);
+  ctx.lineTo(-size * 0.6, size * 0.5);
+  ctx.lineTo(size * 0.6, size * 0.5);
+  ctx.lineTo(size * 0.4, 0);
+  ctx.closePath();
+  ctx.fill();
+  ctx.restore();
+}
+
+function drawRoundChips(total, cx, y) {
+  var chipW = 18;
+  var gap = 6;
+  var totalW = total * chipW + (total - 1) * gap;
+  var startX = cx - totalW / 2;
+
+  for (var i = 0; i < total; i++) {
+    var chipX = startX + i * (chipW + gap);
+    var done = i < gs.roundIdx;
+    var current = i === gs.roundIdx;
+
+    if (done) {
+      ctx.fillStyle = 'rgba(80,255,176,0.6)';
+    } else if (current) {
+      ctx.fillStyle = 'rgba(80,255,176,0.3)';
+      ctx.strokeStyle = '#50ffb0';
+      ctx.lineWidth = 1;
+    } else {
+      ctx.fillStyle = 'rgba(80,255,176,0.08)';
+    }
+
+    roundRect(chipX, y - 5, chipW, 10, 3);
+    ctx.fill();
+    if (current) {
+      roundRect(chipX, y - 5, chipW, 10, 3);
+      ctx.stroke();
+    }
+  }
+}
+
+function roundRect(x, y, w, h, r) {
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.lineTo(x + w - r, y);
+  ctx.arcTo(x + w, y, x + w, y + r, r);
+  ctx.lineTo(x + w, y + h - r);
+  ctx.arcTo(x + w, y + h, x + w - r, y + h, r);
+  ctx.lineTo(x + r, y + h);
+  ctx.arcTo(x, y + h, x, y + h - r, r);
+  ctx.lineTo(x, y + r);
+  ctx.arcTo(x, y, x + r, y, r);
+  ctx.closePath();
+}
+
+// ============================================================
+// INIT
+// ============================================================
+resizeCanvas();
+refreshUI();
+requestAnimationFrame(gameLoop);
+</script>
+</body>
+</html>

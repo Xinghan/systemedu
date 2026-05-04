@@ -1,0 +1,923 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=Noto+Sans+SC:wght@400;700&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box;}
+html,body{width:100%;height:100vh;overflow:hidden;background:#0c0e14;color:#f6f6fc;font-family:'Noto Sans SC','Inter',sans-serif;}
+.game-wrap{display:flex;flex-direction:row;height:100vh;overflow:hidden;}
+.game-sidebar{width:200px;min-width:200px;max-width:200px;display:flex;flex-direction:column;gap:8px;padding:10px;background:rgba(0,0,0,0.5);border-right:1px solid rgba(80,255,176,0.15);overflow-y:auto;}
+.sidebar-lang{align-self:flex-start;flex-shrink:0;font-family:'Space Grotesk',sans-serif;font-size:11px;font-weight:700;padding:4px 10px;cursor:pointer;border:1px solid rgba(255,181,156,0.3);background:transparent;color:#ffb59c;letter-spacing:1px;}
+.sidebar-lang:hover{border-color:#ffb59c;background:rgba(255,181,156,0.1);}
+.sidebar-btns{display:flex;gap:6px;align-self:flex-start;}
+.sidebar-sound{flex-shrink:0;font-family:'Space Grotesk',sans-serif;font-size:11px;font-weight:700;padding:4px 10px;cursor:pointer;border:1px solid rgba(255,181,156,0.3);background:transparent;color:#ffb59c;letter-spacing:1px;}
+.sidebar-sound:hover{border-color:#ffb59c;background:rgba(255,181,156,0.1);}
+.sidebar-title{font-family:'Space Grotesk',sans-serif;font-size:11px;font-weight:700;color:#50ffb0;letter-spacing:0.08em;text-transform:uppercase;margin-top:4px;}
+.sidebar-guide{font-size:12px;color:#aaabb0;line-height:1.6;}
+.game-main{flex:1;display:flex;flex-direction:column;min-width:0;}
+.game-header{padding:8px 16px;display:flex;justify-content:space-between;align-items:center;background:rgba(0,0,0,0.4);}
+.game-header h1{font-family:'Space Grotesk',sans-serif;font-size:clamp(13px,2vw,17px);font-weight:700;color:#50ffb0;}
+.game-header .info{font-family:'Space Grotesk',sans-serif;font-size:12px;color:#aaabb0;}
+.game-body{flex:1;display:flex;flex-direction:column;min-height:0;}
+.game-body canvas{width:100%!important;height:100%!important;display:block;}
+.control-panel{display:flex;justify-content:center;align-items:center;gap:12px;padding:8px 16px;background:rgba(0,0,0,0.4);flex-wrap:wrap;}
+.ctrl-btn{font-family:'Space Grotesk',sans-serif;font-size:12px;font-weight:700;padding:6px 16px;border:none;cursor:pointer;color:#0c0e12;background:linear-gradient(135deg,#50ffb0,#17df93);box-shadow:0 0 10px rgba(80,255,176,0.3);transition:transform 0.1s;}
+.ctrl-btn:hover{transform:scale(1.04);}
+.ctrl-btn:active{transform:scale(0.96);}
+.ctrl-btn:disabled{opacity:0.4;cursor:default;transform:none;}
+.ctrl-btn.secondary{background:rgba(30,30,45,0.9);color:#aaabb0;box-shadow:none;}
+.ctrl-btn.secondary:hover{color:#50ffb0;}
+.hud-bar{height:44px;display:flex;align-items:center;justify-content:space-around;background:rgba(0,0,0,0.55);padding:0 16px;}
+.hud-item{text-align:center;}
+.hud-label{font-family:'Space Grotesk',sans-serif;font-size:9px;letter-spacing:0.12em;color:#aaabb0;text-transform:uppercase;}
+.hud-val{font-family:'Space Grotesk',sans-serif;font-size:14px;font-weight:700;color:#50ffb0;transition:transform 0.15s;}
+</style>
+</head>
+<body>
+<div class="game-wrap">
+  <div class="game-sidebar">
+    <div class="sidebar-btns">
+      <button class="sidebar-lang" id="langBtn">CN</button>
+      <button class="sidebar-sound" id="soundBtn">MUTE</button>
+    </div>
+    <div class="sidebar-title" id="sidebarTitle"></div>
+    <div class="sidebar-guide" id="guideContent"></div>
+  </div>
+  <div class="game-main">
+    <div class="game-header">
+      <h1 id="gameTitle"></h1>
+      <div class="info" id="roundInfo"></div>
+    </div>
+    <div class="game-body" id="gameBody">
+      <canvas id="gameCanvas"></canvas>
+    </div>
+    <div class="control-panel" id="controlPanel">
+      <button class="ctrl-btn" id="btnDrop"></button>
+      <button class="ctrl-btn secondary" id="btnReset"></button>
+    </div>
+    <div class="hud-bar">
+      <div class="hud-item"><div class="hud-label" id="hudL1"></div><div class="hud-val" id="hudV1">--</div></div>
+      <div class="hud-item"><div class="hud-label" id="hudL2"></div><div class="hud-val" id="hudV2">--</div></div>
+      <div class="hud-item"><div class="hud-label" id="hudL3"></div><div class="hud-val" id="hudV3">--</div></div>
+      <div class="hud-item"><div class="hud-label" id="hudL4"></div><div class="hud-val" id="hudV4">--</div></div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ============================================================
+// Knode 13 Game v2: Air Drag Lab
+// Release objects from height, predict which lands first.
+// Real drag physics: F_drag = 0.5 * rho * Cd * A * v^2
+// 5 levels, Canvas 2D, dark theme, I18N bilingual.
+// ============================================================
+
+// --- I18N ---
+var I18N = {
+  title:        {en:'AIR DRAG LAB',         cn:'\u7a7a\u6c14\u963b\u529b\u5b9e\u9a8c\u5ba4'},
+  sideTitle:    {en:'AIR DRAG LAB',         cn:'\u7a7a\u6c14\u963b\u529b\u5b9e\u9a8c\u5ba4'},
+  guide:        {en:'Pick which object lands first! Objects with larger area have more air drag and fall slower. Click on the object you think will land first, then press DROP to see!', cn:'\u9009\u51fa\u54ea\u4e2a\u7269\u4f53\u5148\u7740\u5730\uff01\u9762\u79ef\u8d8a\u5927\u7684\u7269\u4f53\u7a7a\u6c14\u963b\u529b\u8d8a\u5927\uff0c\u4e0b\u843d\u8d8a\u6162\u3002\u70b9\u51fb\u4f60\u8ba4\u4e3a\u4f1a\u5148\u843d\u5730\u7684\u7269\u4f53\uff0c\u7136\u540e\u6309\u201c\u91ca\u653e\u201d\u770b\u7ed3\u679c\uff01'},
+  drop:         {en:'DROP',        cn:'\u91ca\u653e'},
+  reset:        {en:'RESTART',     cn:'\u91cd\u65b0\u5f00\u59cb'},
+  levelWord:    {en:'Level',       cn:'\u5173\u5361'},
+  levelLabel:   {en:'LEVEL',       cn:'\u5173\u5361'},
+  scoreLabel:   {en:'SCORE',       cn:'\u5f97\u5206'},
+  timeLabel:    {en:'TIME',        cn:'\u65f6\u95f4'},
+  dragLabel:    {en:'MAX DRAG',    cn:'\u6700\u5927\u963b\u529b'},
+  correct:      {en:'CORRECT!',    cn:'\u6b63\u786e\uff01'},
+  wrong:        {en:'WRONG!',      cn:'\u9519\u4e86\uff01'},
+  clickStart:   {en:'Click to Start', cn:'\u70b9\u51fb\u5f00\u59cb'},
+  selectFirst:  {en:'Click the object that lands FIRST', cn:'\u70b9\u51fb\u4f60\u8ba4\u4e3a\u4f1a\u5148\u843d\u5730\u7684\u7269\u4f53'},
+  gameName1:    {en:'AIR DRAG',    cn:'\u7a7a\u6c14\u963b\u529b'},
+  gameName2:    {en:'LAB',         cn:'\u5b9e\u9a8c\u5ba4'},
+  complete:     {en:'ALL LEVELS COMPLETE!', cn:'\u5168\u90e8\u901a\u5173\uff01'},
+  totalScore:   {en:'Total Score', cn:'\u603b\u5206'},
+  insight:      {en:'Area controls air drag. No air (vacuum) = everything falls the same!', cn:'\u9762\u79ef\u51b3\u5b9a\u7a7a\u6c14\u963b\u529b\u3002\u6ca1\u6709\u7a7a\u6c14\uff08\u771f\u7a7a\uff09= \u6240\u6709\u7269\u4f53\u540c\u65f6\u843d\u5730\uff01'},
+  l1name:       {en:'Coin vs Feather',       cn:'\u786c\u5e01 vs \u7fbd\u6bdb'},
+  l2name:       {en:'Three Objects',         cn:'\u4e09\u4e2a\u7269\u4f53\u6392\u5e8f'},
+  l3name:       {en:'Same Weight, Diff Shape', cn:'\u540c\u91cd\u4e0d\u540c\u5f62'},
+  l4name:       {en:'Different Heights',     cn:'\u4e0d\u540c\u9ad8\u5ea6'},
+  l5name:       {en:'Vacuum Chamber!',       cn:'\u771f\u7a7a\u5ba4\uff01'},
+  l1desc:       {en:'Which lands first: coin or feather?', cn:'\u786c\u5e01\u8fd8\u662f\u7fbd\u6bdb\u5148\u843d\u5730\uff1f'},
+  l2desc:       {en:'Order: stone, paper, feather -- which is first?', cn:'\u77f3\u5934\u3001\u7eb8\u3001\u7fbd\u6bdb -- \u8c01\u7b2c\u4e00\uff1f'},
+  l3desc:       {en:'Same weight paper: flat, folded, crumpled', cn:'\u540c\u6837\u91cd\u7684\u7eb8\uff1a\u6446\u5f00\u3001\u6298\u53e0\u3001\u63c9\u56e2'},
+  l4desc:       {en:'Same object from different heights -- same time?', cn:'\u540c\u4e00\u7269\u4f53\u4e0d\u540c\u9ad8\u5ea6 -- \u540c\u65f6\u843d\u5730\uff1f'},
+  l5desc:       {en:'No air! Everything falls together!', cn:'\u6ca1\u6709\u7a7a\u6c14\uff01\u6240\u6709\u7269\u4f53\u4e00\u8d77\u843d\uff01'},
+  coin:         {en:'Coin',       cn:'\u786c\u5e01'},
+  feather:      {en:'Feather',    cn:'\u7fbd\u6bdb'},
+  stone:        {en:'Stone',      cn:'\u77f3\u5934'},
+  paper:        {en:'Paper',      cn:'\u7eb8'},
+  flatPaper:    {en:'Flat',       cn:'\u6446\u5f00'},
+  foldedPaper:  {en:'Folded',     cn:'\u6298\u53e0'},
+  crumpled:     {en:'Crumpled',   cn:'\u63c9\u56e2'},
+  ball:         {en:'Ball',       cn:'\u7403'},
+  vacuum:       {en:'VACUUM',     cn:'\u771f\u7a7a'},
+  air:          {en:'AIR',        cn:'\u7a7a\u6c14'},
+  predictOrder: {en:'Click objects in order: 1st to land, 2nd, 3rd', cn:'\u6309\u987a\u5e8f\u70b9\u51fb\uff1a\u7b2c1\u4e2a\u843d\u5730\u3001\u7b2c2\u4e2a\u3001\u7b2c3\u4e2a'},
+  noOrder:      {en:'They all land together!', cn:'\u5b83\u4eec\u540c\u65f6\u843d\u5730\uff01'},
+  vacuumReveal: {en:'Without air, only gravity matters -- everything falls equally!', cn:'\u6ca1\u6709\u7a7a\u6c14\uff0c\u53ea\u6709\u91cd\u529b -- \u6240\u6709\u7269\u4f53\u4e00\u6837\u5feb\uff01'},
+  next:         {en:'NEXT',       cn:'\u4e0b\u4e00\u5173'},
+};
+
+var lang = 'cn';
+function t(key) { return I18N[key] ? (I18N[key][lang] || I18N[key].en) : key; }
+
+// --- Audio (Web Audio API synth, default muted) ---
+var audioCtx = null;
+var soundMuted = true;
+function getAudio() {
+  if (!audioCtx) {
+    try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch(e) {}
+  }
+  return audioCtx;
+}
+function playTone(freq, dur, type, vol) {
+  if (soundMuted) return;
+  var ac = getAudio();
+  if (!ac) return;
+  try {
+    var osc = ac.createOscillator();
+    var gain = ac.createGain();
+    osc.type = type || 'sine';
+    osc.frequency.value = freq;
+    gain.gain.value = vol || 0.15;
+    gain.gain.exponentialRampToValueAtTime(0.001, ac.currentTime + dur);
+    osc.connect(gain); gain.connect(ac.destination);
+    osc.start(ac.currentTime); osc.stop(ac.currentTime + dur);
+  } catch(e) {}
+}
+function sndCorrect() { playTone(523,0.15,'triangle',0.12); setTimeout(function(){playTone(659,0.1,'triangle',0.1);},80); setTimeout(function(){playTone(784,0.2,'triangle',0.1);},160); }
+function sndWrong() { playTone(200,0.3,'sawtooth',0.15); playTone(150,0.4,'square',0.08); }
+function sndDrop() { playTone(440,0.1,'sine',0.1); setTimeout(function(){playTone(330,0.15,'sine',0.08);},50); }
+function sndLand() { playTone(100,0.2,'triangle',0.12); }
+function sndClick() { playTone(660,0.06,'sine',0.06); }
+
+// --- Physics constants ---
+var G = 9.81;
+var RHO = 1.225; // air density kg/m^3
+var SIM_DT = 1/60;
+
+// --- Object definitions ---
+// Each has: mass (kg), Cd (drag coefficient), area (m^2 cross-section), label key
+var OBJ_DEFS = {
+  coin:     {mass: 0.007, cd: 0.5,  area: 0.00035,  color: '#ffd700', labelKey: 'coin'},
+  feather:  {mass: 0.001, cd: 1.2,  area: 0.003,    color: '#c8dcff', labelKey: 'feather'},
+  stone:    {mass: 0.2,   cd: 0.47, area: 0.001,    color: '#8888aa', labelKey: 'stone'},
+  paper:    {mass: 0.005, cd: 1.1,  area: 0.06,     color: '#fffff0', labelKey: 'paper'},
+  flat:     {mass: 0.005, cd: 1.1,  area: 0.06,     color: '#fffff0', labelKey: 'flatPaper'},
+  folded:   {mass: 0.005, cd: 0.8,  area: 0.015,    color: '#eeeee0', labelKey: 'foldedPaper'},
+  crumpled: {mass: 0.005, cd: 0.47, area: 0.002,    color: '#ddddd0', labelKey: 'crumpled'},
+  ball:     {mass: 0.05,  cd: 0.47, area: 0.003,    color: '#ff9966', labelKey: 'ball'},
+};
+
+// --- Level configs ---
+var LEVELS = [
+  {
+    nameKey: 'l1name', descKey: 'l1desc', mode: 'pick_first',
+    objects: ['coin', 'feather'],
+    correctFirst: 'coin',
+    dropHeight: 10, vacuum: false,
+  },
+  {
+    nameKey: 'l2name', descKey: 'l2desc', mode: 'pick_first',
+    objects: ['stone', 'paper', 'feather'],
+    correctFirst: 'stone',
+    dropHeight: 10, vacuum: false,
+  },
+  {
+    nameKey: 'l3name', descKey: 'l3desc', mode: 'pick_first',
+    objects: ['flat', 'folded', 'crumpled'],
+    correctFirst: 'crumpled',
+    dropHeight: 10, vacuum: false,
+  },
+  {
+    nameKey: 'l4name', descKey: 'l4desc', mode: 'pick_first',
+    objects: ['coin', 'coin', 'coin'],
+    heights: [10, 6, 3],
+    correctFirst: 2,
+    dropHeight: 10, vacuum: false,
+    customLabels: [{en:'10m',cn:'10\u7c73'},{en:'6m',cn:'6\u7c73'},{en:'3m',cn:'3\u7c73'}],
+  },
+  {
+    nameKey: 'l5name', descKey: 'l5desc', mode: 'vacuum_reveal',
+    objects: ['coin', 'feather', 'paper'],
+    correctFirst: null,
+    dropHeight: 10, vacuum: true,
+  },
+];
+
+// --- Stars ---
+var stars = [];
+function initStars(sw, sh) {
+  stars = [];
+  for (var i = 0; i < 80; i++) {
+    stars.push({
+      x: Math.random() * sw,
+      y: Math.random() * sh * 0.7,
+      sz: 0.4 + Math.random() * 1.4,
+      phase: Math.random() * Math.PI * 2,
+      speed: 0.5 + Math.random() * 1.5,
+      alpha: 0.2 + Math.random() * 0.4,
+    });
+  }
+}
+
+// --- Game state ---
+var gs = {
+  phase: 'title',  // title, select, falling, result, complete
+  levelIdx: 0,
+  score: 0,
+  selectedIdx: -1,
+  selectedOrder: [],
+  fallingObjs: [],
+  landedCount: 0,
+  resultMsg: '',
+  resultCorrect: false,
+  simTime: 0,
+  shakeTime: 0,
+  shakeIntensity: 0,
+  msgTimer: 0,
+};
+
+// --- Canvas setup ---
+var canvas = document.getElementById('gameCanvas');
+var ctxG = canvas.getContext('2d');
+var cw = 100, ch = 100;
+
+var gameBody = document.getElementById('gameBody');
+
+function resize() {
+  var rect = gameBody.getBoundingClientRect();
+  cw = rect.width; ch = rect.height;
+  if (cw < 1 || ch < 1) return;
+  var dpr = Math.min(window.devicePixelRatio || 1, 2);
+  var sz = Math.min(cw, ch);
+  sz = Math.max(sz, 80);
+  canvas.width = cw * dpr;
+  canvas.height = ch * dpr;
+  canvas.style.width = cw + 'px';
+  canvas.style.height = ch + 'px';
+  ctxG.setTransform(dpr, 0, 0, dpr, 0, 0);
+  initStars(cw, ch);
+}
+
+var ro = new ResizeObserver(function() { resize(); });
+ro.observe(gameBody);
+resize();
+
+// --- Coordinate helpers ---
+function groundY() { return ch * 0.88; }
+function topY() { return ch * 0.08; }
+
+// --- Simulate one object falling ---
+function simFallTime(objDef, dropH, isVacuum) {
+  var velY = 0;
+  var posY = 0;
+  var dt = 1/120;
+  var totalT = 0;
+  var m = objDef.mass;
+  var cd = objDef.cd;
+  var area = objDef.area;
+  while (posY < dropH && totalT < 60) {
+    var fGrav = m * G;
+    var fDrag = isVacuum ? 0 : 0.5 * RHO * cd * area * velY * velY;
+    var accel = (fGrav - fDrag) / m;
+    velY += accel * dt;
+    if (velY < 0) velY = 0;
+    posY += velY * dt;
+    totalT += dt;
+  }
+  return totalT;
+}
+
+// --- Init falling objects for current level ---
+function initFallingObjects() {
+  var lv = LEVELS[gs.levelIdx];
+  gs.fallingObjs = [];
+  gs.landedCount = 0;
+  gs.simTime = 0;
+  var n = lv.objects.length;
+  var spacing = cw / (n + 1);
+
+  for (var i = 0; i < n; i++) {
+    var defKey = lv.objects[i];
+    var def = OBJ_DEFS[defKey];
+    var h = lv.heights ? lv.heights[i] : lv.dropHeight;
+    var labelKey = def.labelKey;
+    if (lv.customLabels) labelKey = null;
+
+    gs.fallingObjs.push({
+      defKey: defKey,
+      mass: def.mass,
+      cd: def.cd,
+      area: def.area,
+      color: def.color,
+      labelKey: labelKey,
+      customLabel: lv.customLabels ? lv.customLabels[i] : null,
+      dropHeight: h,
+      posY: 0,
+      velY: 0,
+      screenX: spacing * (i + 1),
+      landed: false,
+      landOrder: -1,
+      wobble: 0,
+    });
+  }
+}
+
+// --- Physics step ---
+function physicsTick() {
+  var lv = LEVELS[gs.levelIdx];
+  var isVac = lv.vacuum;
+  var anyActive = false;
+
+  for (var i = 0; i < gs.fallingObjs.length; i++) {
+    var obj = gs.fallingObjs[i];
+    if (obj.landed) continue;
+    anyActive = true;
+
+    var fGrav = obj.mass * G;
+    var fDrag = isVac ? 0 : 0.5 * RHO * obj.cd * obj.area * obj.velY * obj.velY;
+    var accel = (fGrav - fDrag) / obj.mass;
+    obj.velY += accel * SIM_DT;
+    if (obj.velY < 0) obj.velY = 0;
+    obj.posY += obj.velY * SIM_DT;
+    obj.wobble += 0.05;
+
+    if (obj.posY >= obj.dropHeight) {
+      obj.posY = obj.dropHeight;
+      obj.velY = 0;
+      obj.landed = true;
+      obj.landOrder = gs.landedCount;
+      gs.landedCount++;
+      sndLand();
+      gs.shakeTime = 0.15;
+      gs.shakeIntensity = 3;
+    }
+  }
+
+  gs.simTime += SIM_DT;
+
+  if (!anyActive && gs.fallingObjs.length > 0) {
+    // All landed -- check result
+    setTimeout(checkResult, 400);
+    gs.phase = 'result_pending';
+  }
+}
+
+// --- Check prediction ---
+function checkResult() {
+  var lv = LEVELS[gs.levelIdx];
+  gs.phase = 'result';
+
+  if (lv.mode === 'vacuum_reveal') {
+    // All land together -- always correct
+    gs.resultCorrect = true;
+    gs.resultMsg = t('noOrder');
+    gs.score += 20;
+    sndCorrect();
+  } else if (lv.mode === 'pick_first') {
+    // Check if selected object is the one that lands first
+    var firstLanded = -1;
+    for (var i = 0; i < gs.fallingObjs.length; i++) {
+      if (gs.fallingObjs[i].landOrder === 0) {
+        firstLanded = i;
+        break;
+      }
+    }
+    if (typeof lv.correctFirst === 'number') {
+      // Index-based (level 4)
+      gs.resultCorrect = (gs.selectedIdx === lv.correctFirst);
+    } else {
+      gs.resultCorrect = (gs.selectedIdx === firstLanded);
+    }
+    if (gs.resultCorrect) {
+      gs.resultMsg = t('correct');
+      gs.score += 20;
+      sndCorrect();
+    } else {
+      gs.resultMsg = t('wrong');
+      sndWrong();
+    }
+  }
+  gs.msgTimer = 0;
+  updateUI();
+}
+
+// --- Drawing functions ---
+function drawSky() {
+  var grad = ctxG.createLinearGradient(0, 0, 0, ch);
+  grad.addColorStop(0, '#050710');
+  grad.addColorStop(0.4, '#0a0f1e');
+  grad.addColorStop(0.85, '#101a20');
+  grad.addColorStop(1, '#1a2a20');
+  ctxG.fillStyle = grad;
+  ctxG.fillRect(0, 0, cw, ch);
+
+  // Stars
+  for (var i = 0; i < stars.length; i++) {
+    var s = stars[i];
+    s.phase += s.speed * 0.015;
+    var a = s.alpha * (0.5 + Math.sin(s.phase) * 0.5);
+    ctxG.fillStyle = 'rgba(255,255,255,' + a + ')';
+    ctxG.beginPath();
+    ctxG.arc(s.x, s.y, s.sz, 0, Math.PI * 2);
+    ctxG.fill();
+  }
+}
+
+function drawGround() {
+  var gy = groundY();
+  ctxG.fillStyle = '#1a2a1a';
+  ctxG.fillRect(0, gy, cw, ch - gy);
+
+  ctxG.strokeStyle = 'rgba(80,255,176,0.5)';
+  ctxG.lineWidth = 2;
+  ctxG.beginPath();
+  ctxG.moveTo(0, gy);
+  ctxG.lineTo(cw, gy);
+  ctxG.stroke();
+}
+
+function drawVacuumOverlay() {
+  var lv = LEVELS[gs.levelIdx];
+  if (!lv.vacuum) return;
+
+  // Vacuum chamber border
+  var margin = 30;
+  ctxG.strokeStyle = 'rgba(100,200,255,0.25)';
+  ctxG.lineWidth = 2;
+  ctxG.setLineDash([6, 4]);
+  ctxG.strokeRect(margin, topY() - 10, cw - margin * 2, groundY() - topY() + 20);
+  ctxG.setLineDash([]);
+
+  // Label
+  ctxG.font = "bold 11px 'Space Grotesk','Noto Sans SC',sans-serif";
+  ctxG.fillStyle = 'rgba(100,200,255,0.6)';
+  ctxG.textAlign = 'center';
+  ctxG.fillText(t('vacuum'), cw / 2, topY() - 16);
+}
+
+function objScreenY(obj) {
+  var gy = groundY();
+  var ty = topY();
+  var maxH = obj.dropHeight;
+  var frac = obj.posY / maxH;
+  return ty + (gy - ty) * frac;
+}
+
+function drawObject(obj, idx) {
+  var sx = obj.screenX;
+  var sy = objScreenY(obj);
+  var defKey = obj.defKey;
+  var r = 14;
+
+  ctxG.save();
+
+  // Wobble for feather/paper
+  if (defKey === 'feather' || defKey === 'flat' || defKey === 'paper') {
+    var wobAngle = Math.sin(obj.wobble * 3) * 0.2;
+    ctxG.translate(sx, sy);
+    ctxG.rotate(wobAngle);
+    ctxG.translate(-sx, -sy);
+  }
+
+  if (defKey === 'coin') {
+    // Gold coin
+    var coinGrad = ctxG.createRadialGradient(sx-2, sy-2, 2, sx, sy, r);
+    coinGrad.addColorStop(0, '#ffd700');
+    coinGrad.addColorStop(0.7, '#daa520');
+    coinGrad.addColorStop(1, '#b8860b');
+    ctxG.fillStyle = coinGrad;
+    ctxG.beginPath(); ctxG.arc(sx, sy, r, 0, Math.PI*2); ctxG.fill();
+    ctxG.strokeStyle = 'rgba(255,255,200,0.5)';
+    ctxG.lineWidth = 1.5;
+    ctxG.beginPath(); ctxG.arc(sx, sy, r, 0, Math.PI*2); ctxG.stroke();
+    ctxG.strokeStyle = 'rgba(255,255,200,0.3)';
+    ctxG.lineWidth = 0.7;
+    ctxG.beginPath(); ctxG.arc(sx, sy, r*0.65, 0, Math.PI*2); ctxG.stroke();
+  } else if (defKey === 'feather') {
+    // Feather
+    ctxG.save();
+    ctxG.translate(sx, sy);
+    ctxG.scale(0.9, 0.9);
+    ctxG.strokeStyle = 'rgba(255,255,255,0.6)';
+    ctxG.lineWidth = 1;
+    ctxG.beginPath(); ctxG.moveTo(-22,0); ctxG.lineTo(22,0); ctxG.stroke();
+    ctxG.fillStyle = 'rgba(200,220,255,0.45)';
+    ctxG.beginPath(); ctxG.moveTo(-18,0); ctxG.quadraticCurveTo(-6,-12,4,-10); ctxG.quadraticCurveTo(12,-8,20,-3); ctxG.lineTo(22,0); ctxG.closePath(); ctxG.fill();
+    ctxG.fillStyle = 'rgba(180,200,240,0.35)';
+    ctxG.beginPath(); ctxG.moveTo(-18,0); ctxG.quadraticCurveTo(-6,10,4,9); ctxG.quadraticCurveTo(12,7,20,3); ctxG.lineTo(22,0); ctxG.closePath(); ctxG.fill();
+    ctxG.restore();
+  } else if (defKey === 'stone') {
+    // Gray stone
+    var stoneGrad = ctxG.createRadialGradient(sx-3, sy-3, 2, sx, sy, r+2);
+    stoneGrad.addColorStop(0, '#999');
+    stoneGrad.addColorStop(0.7, '#666');
+    stoneGrad.addColorStop(1, '#444');
+    ctxG.fillStyle = stoneGrad;
+    ctxG.beginPath();
+    for (var a = 0; a < Math.PI*2; a += 0.5) {
+      var rr = r + Math.sin(a*3)*2 + Math.cos(a*5)*1.5;
+      var px = sx + Math.cos(a)*rr;
+      var py = sy + Math.sin(a)*rr;
+      if (a === 0) ctxG.moveTo(px, py); else ctxG.lineTo(px, py);
+    }
+    ctxG.closePath(); ctxG.fill();
+  } else if (defKey === 'paper' || defKey === 'flat') {
+    // Flat paper
+    ctxG.fillStyle = 'rgba(255,255,240,0.65)';
+    ctxG.strokeStyle = 'rgba(255,255,255,0.4)';
+    ctxG.lineWidth = 1;
+    var pw = 36, ph = 22;
+    ctxG.beginPath();
+    ctxG.moveTo(sx-pw/2, sy-ph/2);
+    ctxG.quadraticCurveTo(sx, sy-ph/2-2, sx+pw/2, sy-ph/2);
+    ctxG.lineTo(sx+pw/2, sy+ph/2);
+    ctxG.quadraticCurveTo(sx, sy+ph/2+2, sx-pw/2, sy+ph/2);
+    ctxG.closePath(); ctxG.fill(); ctxG.stroke();
+    ctxG.strokeStyle = 'rgba(180,180,200,0.25)';
+    ctxG.lineWidth = 0.4;
+    for (var li = -ph/2+4; li < ph/2; li += 4) {
+      ctxG.beginPath(); ctxG.moveTo(sx-pw/2+3, sy+li); ctxG.lineTo(sx+pw/2-3, sy+li); ctxG.stroke();
+    }
+  } else if (defKey === 'folded') {
+    // Folded paper (narrower rectangle)
+    ctxG.fillStyle = 'rgba(240,240,230,0.6)';
+    ctxG.strokeStyle = 'rgba(255,255,255,0.4)';
+    ctxG.lineWidth = 1;
+    ctxG.fillRect(sx-10, sy-14, 20, 28);
+    ctxG.strokeRect(sx-10, sy-14, 20, 28);
+    // fold line
+    ctxG.strokeStyle = 'rgba(200,200,200,0.3)';
+    ctxG.beginPath(); ctxG.moveTo(sx, sy-14); ctxG.lineTo(sx, sy+14); ctxG.stroke();
+  } else if (defKey === 'crumpled') {
+    // Crumpled paper ball
+    var ballGrad = ctxG.createRadialGradient(sx-1, sy-1, 1, sx, sy, 10);
+    ballGrad.addColorStop(0, 'rgba(255,255,240,0.75)');
+    ballGrad.addColorStop(0.7, 'rgba(220,220,210,0.55)');
+    ballGrad.addColorStop(1, 'rgba(180,180,170,0.35)');
+    ctxG.fillStyle = ballGrad;
+    ctxG.beginPath();
+    for (var ba = 0; ba < Math.PI*2; ba += 0.4) {
+      var br = 10 + Math.sin(ba*5)*1.2 + Math.cos(ba*3)*0.8;
+      var bx = sx + Math.cos(ba)*br;
+      var by = sy + Math.sin(ba)*br;
+      if (ba === 0) ctxG.moveTo(bx, by); else ctxG.lineTo(bx, by);
+    }
+    ctxG.closePath(); ctxG.fill();
+    // Crinkle lines
+    ctxG.strokeStyle = 'rgba(150,150,140,0.35)';
+    ctxG.lineWidth = 0.5;
+    for (var ci = 0; ci < 4; ci++) {
+      var ca = ci*1.5+0.3;
+      ctxG.beginPath();
+      ctxG.moveTo(sx+Math.cos(ca)*3, sy+Math.sin(ca)*3);
+      ctxG.lineTo(sx+Math.cos(ca+0.7)*8, sy+Math.sin(ca+0.5)*7);
+      ctxG.stroke();
+    }
+  } else if (defKey === 'ball') {
+    // Ball
+    var ballG = ctxG.createRadialGradient(sx-3, sy-3, 2, sx, sy, r);
+    ballG.addColorStop(0, '#ff9966');
+    ballG.addColorStop(1, '#cc6633');
+    ctxG.fillStyle = ballG;
+    ctxG.beginPath(); ctxG.arc(sx, sy, r, 0, Math.PI*2); ctxG.fill();
+    ctxG.strokeStyle = 'rgba(255,255,255,0.3)';
+    ctxG.lineWidth = 1;
+    ctxG.beginPath(); ctxG.arc(sx, sy, r, 0, Math.PI*2); ctxG.stroke();
+  }
+
+  ctxG.restore();
+
+  // Selection highlight
+  if (gs.phase === 'select' && gs.selectedIdx === idx) {
+    ctxG.strokeStyle = '#50ffb0';
+    ctxG.lineWidth = 2;
+    ctxG.shadowColor = 'rgba(80,255,176,0.5)';
+    ctxG.shadowBlur = 10;
+    ctxG.beginPath();
+    ctxG.arc(sx, sy, r + 8, 0, Math.PI * 2);
+    ctxG.stroke();
+    ctxG.shadowBlur = 0;
+  }
+
+  // Landing order indicator
+  if (obj.landed && obj.landOrder >= 0) {
+    ctxG.font = "bold 14px 'Space Grotesk',sans-serif";
+    ctxG.fillStyle = '#50ffb0';
+    ctxG.textAlign = 'center';
+    ctxG.fillText('#' + (obj.landOrder + 1), sx, sy - r - 12);
+  }
+
+  // Label
+  var label = obj.customLabel ? (obj.customLabel[lang] || obj.customLabel.en) : t(obj.labelKey);
+  ctxG.font = "10px 'Noto Sans SC','Inter',sans-serif";
+  ctxG.fillStyle = '#aaabb0';
+  ctxG.textAlign = 'center';
+  ctxG.fillText(label, sx, objScreenY({posY:0, dropHeight:obj.dropHeight}) - 20);
+
+  // Air drag visualization (upward particles while falling)
+  if (gs.phase === 'falling' && !obj.landed && !LEVELS[gs.levelIdx].vacuum) {
+    var dragForce = 0.5 * RHO * obj.cd * obj.area * obj.velY * obj.velY;
+    var particleCount = Math.min(12, Math.floor(dragForce * 200) + 1);
+    ctxG.fillStyle = 'rgba(100,200,255,0.3)';
+    for (var pi = 0; pi < particleCount; pi++) {
+      var ppx = sx - 15 + (pi / particleCount) * 30 + Math.sin(gs.simTime * 3 + pi * 2) * 5;
+      var ppy = sy + r + 5 + (gs.simTime * 40 + pi * 8) % 25;
+      ctxG.beginPath();
+      ctxG.arc(ppx, ppy, 1.2, 0, Math.PI * 2);
+      ctxG.fill();
+    }
+  }
+}
+
+function drawTitle() {
+  ctxG.font = "bold 32px 'Space Grotesk','Noto Sans SC',sans-serif";
+  ctxG.fillStyle = '#50ffb0';
+  ctxG.textAlign = 'center';
+  ctxG.shadowColor = 'rgba(80,255,176,0.4)';
+  ctxG.shadowBlur = 20;
+  ctxG.fillText(t('gameName1'), cw/2, ch*0.35);
+  ctxG.fillText(t('gameName2'), cw/2, ch*0.35 + 42);
+  ctxG.shadowBlur = 0;
+
+  ctxG.font = "14px 'Noto Sans SC',sans-serif";
+  ctxG.fillStyle = '#aaabb0';
+  var pulse = 0.5 + Math.sin(Date.now() * 0.003) * 0.5;
+  ctxG.globalAlpha = 0.5 + pulse * 0.5;
+  ctxG.fillText(t('clickStart'), cw/2, ch*0.6);
+  ctxG.globalAlpha = 1.0;
+}
+
+function drawSelectPrompt() {
+  var lv = LEVELS[gs.levelIdx];
+  ctxG.font = "12px 'Noto Sans SC','Inter',sans-serif";
+  ctxG.fillStyle = '#ffb59c';
+  ctxG.textAlign = 'center';
+  if (lv.mode === 'vacuum_reveal') {
+    ctxG.fillText(t('l5desc'), cw/2, topY() - 2);
+  } else {
+    ctxG.fillText(t('selectFirst'), cw/2, topY() - 2);
+  }
+}
+
+function drawResult() {
+  ctxG.font = "bold 22px 'Space Grotesk','Noto Sans SC',sans-serif";
+  ctxG.textAlign = 'center';
+
+  var msgColor = gs.resultCorrect ? '#50ffb0' : '#ff716c';
+  ctxG.fillStyle = msgColor;
+  ctxG.shadowColor = gs.resultCorrect ? 'rgba(80,255,176,0.5)' : 'rgba(255,113,108,0.5)';
+  ctxG.shadowBlur = 15;
+  ctxG.fillText(gs.resultMsg, cw/2, ch * 0.4);
+  ctxG.shadowBlur = 0;
+
+  // Vacuum reveal text
+  var lv = LEVELS[gs.levelIdx];
+  if (lv.mode === 'vacuum_reveal') {
+    ctxG.font = "13px 'Noto Sans SC',sans-serif";
+    ctxG.fillStyle = 'rgba(100,200,255,0.9)';
+    ctxG.fillText(t('vacuumReveal'), cw/2, ch * 0.5);
+  }
+
+  // Next button prompt
+  gs.msgTimer += 0.016;
+  if (gs.msgTimer > 1.0) {
+    ctxG.font = "bold 12px 'Space Grotesk','Noto Sans SC',sans-serif";
+    ctxG.fillStyle = '#aaabb0';
+    var pulse = 0.5 + Math.sin(Date.now() * 0.004) * 0.5;
+    ctxG.globalAlpha = 0.4 + pulse * 0.6;
+    ctxG.fillText(t('next'), cw/2, ch * 0.65);
+    ctxG.globalAlpha = 1.0;
+  }
+}
+
+function drawComplete() {
+  ctxG.font = "bold 24px 'Space Grotesk','Noto Sans SC',sans-serif";
+  ctxG.fillStyle = '#50ffb0';
+  ctxG.textAlign = 'center';
+  ctxG.shadowColor = 'rgba(80,255,176,0.4)';
+  ctxG.shadowBlur = 20;
+  ctxG.fillText(t('complete'), cw/2, ch * 0.3);
+  ctxG.shadowBlur = 0;
+
+  ctxG.font = "bold 18px 'Space Grotesk','Noto Sans SC',sans-serif";
+  ctxG.fillStyle = '#ffb59c';
+  ctxG.fillText(t('totalScore') + ': ' + gs.score, cw/2, ch * 0.42);
+
+  ctxG.font = "13px 'Noto Sans SC',sans-serif";
+  ctxG.fillStyle = '#aaabb0';
+  // Word wrap insight text
+  var insightText = t('insight');
+  var maxW = cw * 0.7;
+  ctxG.fillText(insightText, cw/2, ch * 0.56);
+}
+
+// --- Main render ---
+function render() {
+  ctxG.clearRect(0, 0, cw, ch);
+
+  // Shake
+  if (gs.shakeTime > 0) {
+    gs.shakeTime -= 0.016;
+    var sx = (Math.random() - 0.5) * gs.shakeIntensity * 2;
+    var sy = (Math.random() - 0.5) * gs.shakeIntensity * 2;
+    ctxG.save();
+    ctxG.translate(sx, sy);
+  }
+
+  drawSky();
+  drawGround();
+
+  if (gs.phase === 'title') {
+    drawTitle();
+  } else if (gs.phase === 'complete') {
+    drawComplete();
+  } else {
+    drawVacuumOverlay();
+
+    // Draw objects
+    for (var i = 0; i < gs.fallingObjs.length; i++) {
+      drawObject(gs.fallingObjs[i], i);
+    }
+
+    if (gs.phase === 'select') {
+      drawSelectPrompt();
+    }
+    if (gs.phase === 'result') {
+      drawResult();
+    }
+  }
+
+  if (gs.shakeTime > 0) {
+    ctxG.restore();
+  }
+
+  // Physics update
+  if (gs.phase === 'falling') {
+    physicsTick();
+  }
+
+  requestAnimationFrame(render);
+}
+
+// --- UI updates ---
+function updateUI() {
+  var titleEl = document.getElementById('gameTitle');
+  var roundEl = document.getElementById('roundInfo');
+  var sideTitle = document.getElementById('sidebarTitle');
+  var guideEl = document.getElementById('guideContent');
+  var btnDrop = document.getElementById('btnDrop');
+  var btnReset = document.getElementById('btnReset');
+
+  sideTitle.textContent = t('sideTitle');
+  guideEl.textContent = t('guide');
+  btnDrop.textContent = t('drop');
+  btnReset.textContent = t('reset');
+
+  if (gs.phase === 'title') {
+    titleEl.textContent = t('title');
+    roundEl.textContent = '';
+    btnDrop.disabled = true;
+  } else if (gs.phase === 'complete') {
+    titleEl.textContent = t('title');
+    roundEl.textContent = t('complete');
+    btnDrop.disabled = true;
+  } else {
+    var lv = LEVELS[gs.levelIdx];
+    titleEl.textContent = t(lv.nameKey);
+    roundEl.textContent = t('levelWord') + ' ' + (gs.levelIdx + 1) + '/5';
+    guideEl.textContent = t(lv.descKey);
+    btnDrop.disabled = (gs.phase !== 'select' || (gs.selectedIdx < 0 && lv.mode !== 'vacuum_reveal'));
+  }
+
+  // HUD
+  document.getElementById('hudL1').textContent = t('levelLabel');
+  document.getElementById('hudV1').textContent = gs.phase === 'title' ? '--' : (gs.levelIdx + 1) + '/5';
+  document.getElementById('hudL2').textContent = t('scoreLabel');
+  document.getElementById('hudV2').textContent = gs.score;
+  document.getElementById('hudL3').textContent = t('timeLabel');
+  document.getElementById('hudV3').textContent = gs.simTime > 0 ? gs.simTime.toFixed(1) + 's' : '--';
+  document.getElementById('hudL4').textContent = t('dragLabel');
+  // Show max drag of current falling objects
+  var maxDrag = 0;
+  for (var i = 0; i < gs.fallingObjs.length; i++) {
+    var fo = gs.fallingObjs[i];
+    var d = 0.5 * RHO * fo.cd * fo.area * fo.velY * fo.velY;
+    if (d > maxDrag) maxDrag = d;
+  }
+  document.getElementById('hudV4').textContent = maxDrag > 0 ? maxDrag.toFixed(3) + 'N' : '--';
+}
+
+// --- Start level ---
+function startLevel() {
+  gs.phase = 'select';
+  gs.selectedIdx = -1;
+  gs.selectedOrder = [];
+  gs.resultMsg = '';
+  gs.resultCorrect = false;
+  gs.msgTimer = 0;
+  initFallingObjects();
+  updateUI();
+}
+
+// --- Event handlers ---
+document.getElementById('langBtn').addEventListener('click', function() {
+  lang = lang === 'cn' ? 'en' : 'cn';
+  this.textContent = lang === 'cn' ? 'CN' : 'EN';
+  sndClick();
+  updateUI();
+});
+
+document.getElementById('soundBtn').addEventListener('click', function() {
+  soundMuted = !soundMuted;
+  this.textContent = soundMuted ? 'MUTE' : 'SOUND';
+  if (!soundMuted) {
+    getAudio();
+    sndClick();
+  }
+});
+
+document.getElementById('btnDrop').addEventListener('click', function() {
+  if (gs.phase !== 'select') return;
+  var lv = LEVELS[gs.levelIdx];
+  if (gs.selectedIdx < 0 && lv.mode !== 'vacuum_reveal') return;
+  gs.phase = 'falling';
+  sndDrop();
+  updateUI();
+});
+
+document.getElementById('btnReset').addEventListener('click', function() {
+  sndClick();
+  gs.phase = 'title';
+  gs.levelIdx = 0;
+  gs.score = 0;
+  gs.fallingObjs = [];
+  gs.simTime = 0;
+  updateUI();
+});
+
+// Canvas click -- select object or advance
+canvas.addEventListener('click', function(e) {
+  var rect = canvas.getBoundingClientRect();
+  var mx = (e.clientX - rect.left);
+  var my = (e.clientY - rect.top);
+
+  if (gs.phase === 'title') {
+    sndClick();
+    startLevel();
+    return;
+  }
+
+  if (gs.phase === 'select') {
+    var lv = LEVELS[gs.levelIdx];
+    if (lv.mode === 'vacuum_reveal') {
+      // No selection needed for vacuum level -- just drop
+      return;
+    }
+    // Find closest object
+    var bestDist = 40;
+    var bestIdx = -1;
+    for (var i = 0; i < gs.fallingObjs.length; i++) {
+      var obj = gs.fallingObjs[i];
+      var sy = objScreenY(obj);
+      var dx = mx - obj.screenX;
+      var dy = my - sy;
+      var dist = Math.sqrt(dx*dx + dy*dy);
+      if (dist < bestDist) {
+        bestDist = dist;
+        bestIdx = i;
+      }
+    }
+    if (bestIdx >= 0) {
+      gs.selectedIdx = bestIdx;
+      sndClick();
+      updateUI();
+    }
+    return;
+  }
+
+  if (gs.phase === 'result') {
+    if (gs.msgTimer < 1.0) return;
+    sndClick();
+    // Advance to next level
+    gs.levelIdx++;
+    if (gs.levelIdx >= LEVELS.length) {
+      gs.phase = 'complete';
+      updateUI();
+    } else {
+      startLevel();
+    }
+    return;
+  }
+});
+
+// --- Boot ---
+updateUI();
+render();
+</script>
+</body>
+</html>

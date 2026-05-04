@@ -1,0 +1,860 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=Inter:wght@400;500&family=Noto+Sans+SC:wght@400;700&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box;}
+html,body{width:100%;height:100vh;overflow:hidden;}
+body{background:var(--bg,#0c0e12);color:var(--text,#f6f6fc);font-family:'Inter','Noto Sans SC',sans-serif;}
+.wrapper{display:flex;flex-direction:row;height:100vh;overflow:hidden;}
+.sidebar{width:200px;min-width:200px;max-width:200px;display:flex;flex-direction:column;gap:6px;padding:10px;background:rgba(0,0,0,0.5);border-right:1px solid rgba(80,255,176,0.15);overflow-y:auto;}
+.lang-btn{align-self:flex-start;flex-shrink:0;font-family:'Space Grotesk',sans-serif;font-size:10px;font-weight:700;padding:3px 8px;cursor:pointer;border:1px solid rgba(255,181,156,0.25);background:transparent;color:#ffb59c;letter-spacing:1px;}
+.lang-btn:hover{border-color:#ffb59c;background:rgba(255,181,156,0.1);}
+.sidebar h1{font-family:'Space Grotesk',sans-serif;font-size:13px;font-weight:700;color:var(--primary,#50ffb0);margin-top:4px;line-height:1.3;}
+.sidebar .sub{font-size:10px;color:var(--muted,#aaabb0);letter-spacing:0.06em;text-transform:uppercase;}
+.sidebar .frame-ind{font-family:'Space Grotesk',sans-serif;font-size:10px;color:var(--muted,#aaabb0);letter-spacing:0.1em;margin-top:4px;}
+.sidebar .guide-label{font-family:'Space Grotesk',sans-serif;font-size:9px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:var(--primary,#50ffb0);margin-top:8px;}
+.sidebar .guide-content{font-family:'Noto Sans SC',sans-serif;font-size:11px;color:rgba(255,255,255,0.85);line-height:1.5;}
+.sidebar .guide-content ul{padding-left:16px;margin:0;}
+.sidebar .guide-content li{margin-bottom:1px;}
+.anim-main{flex:1;display:flex;flex-direction:column;min-width:0;}
+.canvas-wrap{flex:1;min-height:0;position:relative;}
+canvas{width:100%;height:100%;display:block;}
+.controls{display:flex;justify-content:center;align-items:center;gap:12px;padding:6px 16px;}
+.ctrl-btn{font-family:'Space Grotesk',sans-serif;font-size:11px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;padding:5px 16px;border:none;cursor:pointer;color:var(--bg,#0c0e12);background:linear-gradient(135deg,var(--primary,#50ffb0),var(--primary-dim,#17df93));transition:transform 0.1s,box-shadow 0.2s;box-shadow:0 0 10px var(--glow-strong,rgba(80,255,176,0.3));}
+.ctrl-btn:hover{transform:scale(1.04);}
+.ctrl-btn:active{transform:scale(0.96);}
+.ctrl-btn.secondary{background:var(--glass,rgba(23,26,31,0.92));color:var(--muted,#aaabb0);box-shadow:none;backdrop-filter:blur(12px);}
+.ctrl-btn.secondary:hover{color:var(--primary,#50ffb0);}
+.hud{height:40px;display:flex;align-items:center;justify-content:space-around;background:rgba(0,0,0,0.55);backdrop-filter:blur(12px);padding:0 16px;}
+.hud-item{text-align:center;}
+.hud-label{font-family:'Space Grotesk',sans-serif;font-size:8px;letter-spacing:0.15em;text-transform:uppercase;color:var(--muted,#aaabb0);}
+.hud-val{font-family:'Space Grotesk',sans-serif;font-size:13px;font-weight:700;color:var(--primary,#50ffb0);}
+</style>
+</head>
+<body>
+<div class="wrapper">
+<div class="sidebar">
+<button class="lang-btn" id="langBtn">CN</button>
+<h1 id="title"></h1>
+<div class="sub" id="subtitle"></div>
+<div class="frame-ind" id="frameIndicator"></div>
+<div class="guide-label" id="guideTitle"></div>
+<div class="guide-content" id="guideContent"></div>
+</div>
+<div class="anim-main">
+<div class="canvas-wrap"><canvas id="c"></canvas></div>
+<div class="controls">
+<button class="ctrl-btn secondary" id="btnPrev"></button>
+<button class="ctrl-btn" id="btnPlay"></button>
+<button class="ctrl-btn secondary" id="btnNext"></button>
+</div>
+<div class="hud">
+<div class="hud-item"><div class="hud-label" id="hudL1"></div><div class="hud-val" id="hudV1"></div></div>
+<div class="hud-item"><div class="hud-label" id="hudL2"></div><div class="hud-val" id="hudV2"></div></div>
+<div class="hud-item"><div class="hud-label" id="hudL3"></div><div class="hud-val" id="hudV3"></div></div>
+<div class="hud-item"><div class="hud-label" id="hudL4"></div><div class="hud-val" id="hudV4"></div></div>
+</div>
+</div>
+</div>
+
+<script src="../../../course_factory/runtime/animation_runtime.js"></script>
+
+<script>
+// ============================================================
+// K15: Measure a Flight -- Distance, Time and Simple Data
+// Concept: How to scientifically measure one paper airplane flight
+//
+// Frame 0: Title
+// Frame 1: Measure distance (tape from start to landing)
+// Frame 2: Measure time (stopwatch from launch to landing)
+// Frame 3: Record data (table with multiple trials, two planes)
+// ============================================================
+
+// Sample flight data for Frame 3
+var FLIGHT_DATA = [
+  {plane:'A', color:'#85ecff', trials:[
+    {d:3.2, t:1.4}, {d:3.8, t:1.6}, {d:3.0, t:1.3},
+    {d:3.5, t:1.5}, {d:3.4, t:1.5}
+  ]},
+  {plane:'B', color:'#acf900', trials:[
+    {d:5.1, t:2.2}, {d:4.8, t:2.0}, {d:5.4, t:2.4},
+    {d:4.6, t:1.9}, {d:5.0, t:2.1}
+  ]},
+];
+
+// Animation state for continuous motion
+var anim = {time: 0, frame: -1};
+var animTimer = null;
+
+function startFrameAnim(f) {
+  if (animTimer) clearInterval(animTimer);
+  anim = {time: 0, frame: f};
+  if (f === 0) return;
+  animTimer = setInterval(function() {
+    anim.time += 0.02;
+    if (anim.time > 6) anim.time = 0;
+    AnimRuntime.drawFrame(AnimRuntime.currentFrame);
+  }, 20);
+}
+
+var CONFIG = {
+  style: 'helix_lab',
+  totalFrames: 4,
+
+  i18n: {
+    title:    {en:'MEASURE A FLIGHT', cn:'\u6d4b\u4e00\u6b21\u98de\u884c'},
+    subtitle: {en:'Distance, time & data', cn:'\u8ddd\u79bb\u3001\u65f6\u95f4\u548c\u7b80\u5355\u6570\u636e'},
+
+    // Frame 0 - Title
+    f0_q:     {en:'How to PROVE one plane flies farther?', cn:'\u600e\u4e48\u8bc1\u660e\u8fd9\u67b6\u98de\u673a\u771f\u7684\u6bd4\u90a3\u67b6\u98de\u5f97\u8fdc\uff1f'},
+    f0_a:     {en:'Measure it!', cn:'\u6d4b\u91cf\u5b83\uff01'},
+
+    // Frame 1 - Distance
+    f1_title: {en:'Step 1: Measure Distance', cn:'\u7b2c\u4e00\u6b65\uff1a\u6d4b\u8ddd\u79bb'},
+    f1_key:   {en:'Straight line: start to landing spot', cn:'\u76f4\u7ebf\u8ddd\u79bb\uff1a\u8d77\u70b9\u5230\u843d\u70b9'},
+    f1_start: {en:'START', cn:'\u8d77\u70b9'},
+    f1_land:  {en:'LANDING', cn:'\u843d\u70b9'},
+    f1_dist:  {en:'3.8 m', cn:'3.8 \u7c73'},
+    f1_tape:  {en:'Tape measure', cn:'\u76ae\u5c3a'},
+    f1_warn:  {en:'Not rolling distance! Where it first touches down.', cn:'\u4e0d\u662f\u6eda\u505c\u8ddd\u79bb\uff01\u662f\u7b2c\u4e00\u6b21\u843d\u5730\u7684\u70b9\u3002'},
+
+    // Frame 2 - Time
+    f2_title: {en:'Step 2: Measure Time', cn:'\u7b2c\u4e8c\u6b65\uff1a\u6d4b\u65f6\u95f4'},
+    f2_key:   {en:'Timer: hand release to first ground touch', cn:'\u8ba1\u65f6\uff1a\u624b\u677e\u5f00\u5230\u7b2c\u4e00\u6b21\u7740\u5730'},
+    f2_release:{en:'RELEASE', cn:'\u677e\u624b'},
+    f2_touch:  {en:'TOUCHDOWN', cn:'\u843d\u5730'},
+    f2_time:   {en:'1.6 s', cn:'1.6 \u79d2'},
+    f2_start:  {en:'START', cn:'\u5f00\u59cb'},
+    f2_stop:   {en:'STOP', cn:'\u505c\u6b62'},
+
+    // Frame 3 - Data table
+    f3_title: {en:'Step 3: Record Data', cn:'\u7b2c\u4e09\u6b65\uff1a\u8bb0\u5f55\u6570\u636e'},
+    f3_key:   {en:'Same plane, 5+ trials. Compare with data!', cn:'\u540c\u4e00\u67b6\u98de\u673a\u81f3\u5c115\u6b21\uff0c\u7528\u6570\u636e\u6bd4\u8f83\uff01'},
+    f3_trial: {en:'#', cn:'\u6b21'},
+    f3_plane: {en:'Plane', cn:'\u98de\u673a'},
+    f3_dist:  {en:'Dist(m)', cn:'\u8ddd\u79bb(m)'},
+    f3_time:  {en:'Time(s)', cn:'\u65f6\u95f4(s)'},
+    f3_avg:   {en:'AVG', cn:'\u5e73\u5747'},
+    f3_result:{en:'Plane B flies farther on average!', cn:'\u98de\u673aB\u5e73\u5747\u98de\u5f97\u66f4\u8fdc\uff01'},
+
+    // HUD
+    hudFrame: {en:'FRAME', cn:'\u5e27'},
+    hudTool:  {en:'TOOL', cn:'\u5de5\u5177'},
+    hudMeasure:{en:'MEASURING', cn:'\u6d4b\u91cf'},
+    hudUnit:  {en:'UNIT', cn:'\u5355\u4f4d'},
+
+    // Guide
+    guideTitle:{en:'Measurement Guide', cn:'\u6d4b\u91cf\u6307\u5357'},
+    g1: {en:'Always throw from the same line', cn:'\u6bcf\u6b21\u4ece\u540c\u4e00\u6761\u7ebf\u8d77\u98de'},
+    g2: {en:'Measure to landing spot, not rolling stop', cn:'\u91cf\u5230\u843d\u5730\u70b9\uff0c\u4e0d\u662f\u6eda\u505c\u70b9'},
+    g3: {en:'At least 5 throws per plane', cn:'\u6bcf\u67b6\u98de\u673a\u81f3\u5c115\u6b21'},
+    g4: {en:'Compare averages, not single throws', cn:'\u6bd4\u8f83\u5e73\u5747\u503c\uff0c\u4e0d\u662f\u5355\u6b21'},
+  },
+
+  hudLabels: ['hudFrame', 'hudTool', 'hudMeasure', 'hudUnit'],
+  hudValues: [
+    ['--', '--', '--', '--'],
+    ['1/3', '\u76ae\u5c3a', '\u8ddd\u79bb', 'm (\u7c73)'],
+    ['2/3', '\u79d2\u8868', '\u65f6\u95f4', 's (\u79d2)'],
+    ['3/3', '\u8868\u683c', '\u591a\u6b21\u6570\u636e', '\u5e73\u5747\u503c'],
+  ],
+
+  guideTitle: 'guideTitle',
+  guideItems: ['g1', 'g2', 'g3', 'g4'],
+};
+
+// ── Background ──
+function drawBg(ctx, W, H) {
+  var grad = ctx.createLinearGradient(0, 0, 0, H);
+  grad.addColorStop(0, '#0a0d14');
+  grad.addColorStop(1, '#101820');
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, W, H);
+  // subtle grid
+  ctx.strokeStyle = 'rgba(80,255,176,0.03)';
+  ctx.lineWidth = 0.5;
+  for (var x = 0; x < W; x += 40) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke(); }
+  for (var y = 0; y < H; y += 40) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke(); }
+}
+
+// ── Helper: draw a paper airplane shape ──
+function drawPlane(ctx, x, y, scale, angle, bodyColor) {
+  var s = scale || 1;
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.rotate(angle || 0);
+  // fuselage
+  ctx.fillStyle = bodyColor || '#e0e8f8';
+  ctx.beginPath();
+  ctx.moveTo(22 * s, 0);
+  ctx.lineTo(-14 * s, -7 * s);
+  ctx.lineTo(-10 * s, 0);
+  ctx.lineTo(-14 * s, 7 * s);
+  ctx.closePath();
+  ctx.fill();
+  // top wing highlight
+  ctx.fillStyle = 'rgba(255,255,255,0.25)';
+  ctx.beginPath();
+  ctx.moveTo(22 * s, 0);
+  ctx.lineTo(-14 * s, -7 * s);
+  ctx.lineTo(-10 * s, 0);
+  ctx.closePath();
+  ctx.fill();
+  ctx.restore();
+}
+
+// ── Helper: draw stopwatch ──
+function drawStopwatch(ctx, x, y, r, displayText, progress) {
+  ctx.save();
+  // outer ring
+  ctx.beginPath();
+  ctx.arc(x, y, r, 0, Math.PI * 2);
+  ctx.fillStyle = 'rgba(15,18,25,0.9)';
+  ctx.fill();
+  ctx.strokeStyle = '#50ffb0';
+  ctx.lineWidth = 2.5;
+  ctx.stroke();
+  // crown button
+  ctx.fillStyle = '#50ffb0';
+  ctx.fillRect(x - 4, y - r - 7, 8, 7);
+  // glow ring for progress
+  if (progress !== undefined && progress > 0) {
+    ctx.strokeStyle = '#acf900';
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.arc(x, y, r - 4, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * Math.min(progress, 1));
+    ctx.stroke();
+  }
+  // tick marks
+  ctx.strokeStyle = 'rgba(170,171,176,0.4)';
+  ctx.lineWidth = 1;
+  for (var i = 0; i < 12; i++) {
+    var a = (i / 12) * Math.PI * 2 - Math.PI / 2;
+    var inner = r - 8, outer = r - 3;
+    ctx.beginPath();
+    ctx.moveTo(x + Math.cos(a) * inner, y + Math.sin(a) * inner);
+    ctx.lineTo(x + Math.cos(a) * outer, y + Math.sin(a) * outer);
+    ctx.stroke();
+  }
+  // digital display
+  ctx.fillStyle = '#50ffb0';
+  ctx.font = "bold " + Math.round(r * 0.5) + "px 'Space Grotesk',sans-serif";
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.shadowColor = 'rgba(80,255,176,0.5)';
+  ctx.shadowBlur = 8;
+  ctx.fillText(displayText || '0.0', x, y + 2);
+  ctx.shadowBlur = 0;
+  ctx.restore();
+}
+
+// ── Helper: draw tape measure segment ──
+function drawTape(ctx, x1, y, x2, tapeColor) {
+  ctx.save();
+  var col = tapeColor || '#acf900';
+  // tape body
+  ctx.fillStyle = col;
+  ctx.globalAlpha = 0.85;
+  ctx.fillRect(x1, y - 5, x2 - x1, 10);
+  ctx.globalAlpha = 1;
+  // tick marks
+  var totalLen = x2 - x1;
+  var numTicks = 20;
+  var step = totalLen / numTicks;
+  ctx.strokeStyle = 'rgba(0,0,0,0.5)';
+  ctx.lineWidth = 1;
+  for (var i = 0; i <= numTicks; i++) {
+    var tx = x1 + i * step;
+    var tickH = (i % 5 === 0) ? 10 : 5;
+    ctx.beginPath();
+    ctx.moveTo(tx, y - tickH / 2);
+    ctx.lineTo(tx, y + tickH / 2);
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
+// ── Helper: draw flight arc trail ──
+function drawTrail(ctx, points, color, alpha) {
+  if (points.length < 2) return;
+  ctx.save();
+  ctx.globalAlpha = alpha || 0.4;
+  ctx.strokeStyle = color || '#50ffb0';
+  ctx.lineWidth = 2;
+  ctx.setLineDash([4, 4]);
+  ctx.beginPath();
+  ctx.moveTo(points[0][0], points[0][1]);
+  for (var i = 1; i < points.length; i++) {
+    ctx.lineTo(points[i][0], points[i][1]);
+  }
+  ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.restore();
+}
+
+// ── Helper: parabolic flight path points ──
+function flightPath(startX, startY, endX, endY, peakHeight, steps) {
+  var pts = [];
+  for (var i = 0; i <= steps; i++) {
+    var t = i / steps;
+    var x = startX + (endX - startX) * t;
+    var yBase = startY + (endY - startY) * t;
+    var arch = -4 * peakHeight * t * (t - 1);
+    pts.push([x, yBase - arch]);
+  }
+  return pts;
+}
+
+// ── Helper: glow particles ──
+function drawParticles(ctx, x, y, count, spread, color, time) {
+  ctx.save();
+  for (var i = 0; i < count; i++) {
+    var seed = i * 137.508;
+    var angle = seed + time * 2;
+    var dist = (spread * 0.3) + (spread * 0.7) * ((Math.sin(seed * 0.7 + time * 3) + 1) / 2);
+    var px = x + Math.cos(angle) * dist;
+    var py = y + Math.sin(angle) * dist;
+    var sz = 1 + Math.sin(seed + time * 5) * 0.8;
+    var alpha = 0.3 + 0.5 * ((Math.sin(seed * 1.3 + time * 4) + 1) / 2);
+    ctx.globalAlpha = alpha;
+    ctx.fillStyle = color || '#50ffb0';
+    ctx.beginPath();
+    ctx.arc(px, py, sz, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+  ctx.restore();
+}
+
+// ── Helper: draw data table ──
+function drawTable(ctx, x, y, w, data, t_fn, revealRows, W) {
+  var cols = [0.08, 0.22, 0.20, 0.25, 0.25];
+  var colX = [];
+  var accum = 0;
+  for (var ci = 0; ci < cols.length; ci++) {
+    colX.push(x + accum * w);
+    accum += cols[ci];
+  }
+  var rowH = 22;
+  var headers = [t_fn('f3_trial'), t_fn('f3_plane'), t_fn('f3_dist'), t_fn('f3_time'), t_fn('f3_avg')];
+
+  // header row
+  ctx.fillStyle = 'rgba(80,255,176,0.12)';
+  ctx.fillRect(x, y, w, rowH);
+  ctx.fillStyle = '#50ffb0';
+  ctx.font = "bold 10px 'Space Grotesk','Noto Sans SC',sans-serif";
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  for (var h = 0; h < headers.length; h++) {
+    ctx.fillText(headers[h], colX[h] + cols[h] * w / 2, y + rowH / 2);
+  }
+
+  // data rows
+  var rowIdx = 0;
+  for (var p = 0; p < data.length; p++) {
+    var plane = data[p];
+    var avgD = 0, avgT = 0;
+    for (var ti = 0; ti < plane.trials.length; ti++) {
+      avgD += plane.trials[ti].d;
+      avgT += plane.trials[ti].t;
+    }
+    avgD /= plane.trials.length;
+    avgT /= plane.trials.length;
+
+    for (var tr = 0; tr < plane.trials.length; tr++) {
+      var ry = y + rowH * (rowIdx + 1);
+      var show = rowIdx < revealRows;
+      if (!show) { rowIdx++; continue; }
+
+      ctx.fillStyle = rowIdx % 2 === 0 ? 'rgba(255,255,255,0.02)' : 'rgba(255,255,255,0.05)';
+      ctx.fillRect(x, ry, w, rowH);
+
+      ctx.font = "11px 'Space Grotesk',sans-serif";
+      ctx.textAlign = 'center';
+      // trial #
+      ctx.fillStyle = '#aaabb0';
+      ctx.fillText(String(tr + 1), colX[0] + cols[0] * w / 2, ry + rowH / 2);
+      // plane
+      ctx.fillStyle = plane.color;
+      ctx.fillText(plane.plane, colX[1] + cols[1] * w / 2, ry + rowH / 2);
+      // distance
+      ctx.fillStyle = '#85ecff';
+      ctx.fillText(plane.trials[tr].d.toFixed(1), colX[2] + cols[2] * w / 2, ry + rowH / 2);
+      // time
+      ctx.fillStyle = '#ffb59c';
+      ctx.fillText(plane.trials[tr].t.toFixed(1), colX[3] + cols[3] * w / 2, ry + rowH / 2);
+      // avg only on last row of this plane
+      if (tr === plane.trials.length - 1) {
+        ctx.fillStyle = '#acf900';
+        ctx.font = "bold 11px 'Space Grotesk',sans-serif";
+        ctx.fillText(avgD.toFixed(1) + '/' + avgT.toFixed(1), colX[4] + cols[4] * w / 2, ry + rowH / 2);
+      }
+      rowIdx++;
+    }
+  }
+
+  // table border
+  ctx.strokeStyle = 'rgba(80,255,176,0.15)';
+  ctx.lineWidth = 1;
+  var totalRows = Math.min(revealRows, 10) + 1;
+  ctx.strokeRect(x, y, w, rowH * totalRows);
+  // column lines
+  for (var cl = 1; cl < cols.length; cl++) {
+    ctx.beginPath();
+    ctx.moveTo(colX[cl], y);
+    ctx.lineTo(colX[cl], y + rowH * totalRows);
+    ctx.stroke();
+  }
+}
+
+// ============================================================
+// getFrameElements + customDrawElement
+// ============================================================
+
+function getFrameElements(f, W, H) {
+  var t = AnimRuntime.t;
+  var P = AnimRuntime.PAL;
+  var cx = W / 2;
+
+  // Ensure animation is running for the current frame
+  if (anim.frame !== f) startFrameAnim(f);
+
+  if (f === 0) {
+    // Title frame
+    return [
+      {id:'t0_title', type:'label', text:t('title'), x:cx, y:H*0.32, color:P.primary, size:24, align:'center',
+       anim:{prop:'y', from:H*0.32+25, to:H*0.32, dur:600, ease:'easeOutCubic'}},
+      {id:'t0_sub', type:'label', text:t('subtitle'), x:cx, y:H*0.42, color:P.muted, size:12, align:'center',
+       anim:{prop:'alpha', from:0, to:1, dur:500, ease:'easeOutCubic'}},
+      {id:'t0_q', type:'label', text:t('f0_q'), x:cx, y:H*0.58, color:'#ffffff', size:14, align:'center',
+       anim:{prop:'y', from:H*0.58+20, to:H*0.58, dur:700, ease:'easeOutCubic'}},
+      {id:'t0_a', type:'label', text:t('f0_a'), x:cx, y:H*0.70, color:'#acf900', size:20, align:'center',
+       glow:'rgba(172,249,0,0.4)',
+       anim:{prop:'alpha', from:0, to:1, dur:800, ease:'easeOutCubic'}},
+      // decorative plane
+      {id:'t0_plane', type:'custom_plane_deco', x:cx, y:H*0.85, alpha:1},
+    ];
+  }
+
+  // Frames 1-3 are fully custom-drawn
+  return [{id:'_scene_' + f, type:'custom_scene', frame:f, alpha:1}];
+}
+
+function customDrawElement(ctx, el, W, H) {
+
+  // Decorative plane on title frame
+  if (el.type === 'custom_plane_deco') {
+    var tm = anim.time || 0;
+    var bx = el.x - 60 + Math.sin(tm * 0.8) * 30;
+    var by = el.y + Math.sin(tm * 1.2) * 8;
+    drawPlane(ctx, bx, by, 1.8, -0.15 + Math.sin(tm) * 0.05, '#d0e0ff');
+    drawParticles(ctx, bx - 15, by, 6, 15, '#50ffb0', tm);
+    return true;
+  }
+
+  if (el.type !== 'custom_scene') return false;
+
+  var f = el.frame;
+  var t_fn = AnimRuntime.t;
+  var P = AnimRuntime.PAL;
+  var cx = W / 2;
+  var tm = anim.time || 0;
+
+  // Ground line (shared by frames 1 & 2)
+  var groundY = H * 0.78;
+
+  if (f === 1) {
+    // ── FRAME 1: Measure Distance ──
+    // ground
+    ctx.fillStyle = '#1a2a1e';
+    ctx.fillRect(0, groundY, W, H - groundY);
+    ctx.strokeStyle = 'rgba(80,255,176,0.25)';
+    ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(0, groundY); ctx.lineTo(W, groundY); ctx.stroke();
+
+    // title
+    ctx.fillStyle = P.primary;
+    ctx.font = "bold 17px 'Space Grotesk','Noto Sans SC',sans-serif";
+    ctx.textAlign = 'center';
+    ctx.fillText(t_fn('f1_title'), cx, 30);
+
+    // start line (red dashed)
+    var startX = W * 0.1;
+    ctx.strokeStyle = '#ff716c';
+    ctx.lineWidth = 2.5;
+    ctx.setLineDash([8, 5]);
+    ctx.beginPath(); ctx.moveTo(startX, groundY - 5); ctx.lineTo(startX, groundY - 90); ctx.stroke();
+    ctx.setLineDash([]);
+    // start label
+    ctx.fillStyle = '#ff716c';
+    ctx.font = "bold 11px 'Space Grotesk','Noto Sans SC',sans-serif";
+    ctx.textAlign = 'center';
+    ctx.fillText(t_fn('f1_start'), startX, groundY - 96);
+
+    // landing spot
+    var landX = W * 0.72;
+    ctx.fillStyle = '#50ffb0';
+    ctx.shadowColor = 'rgba(80,255,176,0.6)';
+    ctx.shadowBlur = 12;
+    ctx.beginPath(); ctx.arc(landX, groundY - 3, 7, 0, Math.PI * 2); ctx.fill();
+    ctx.shadowBlur = 0;
+    // landing label
+    ctx.fillStyle = '#50ffb0';
+    ctx.font = "bold 11px 'Space Grotesk','Noto Sans SC',sans-serif";
+    ctx.fillText(t_fn('f1_land'), landX, groundY - 96);
+    // landing line
+    ctx.strokeStyle = 'rgba(80,255,176,0.4)';
+    ctx.lineWidth = 1.5;
+    ctx.setLineDash([6, 4]);
+    ctx.beginPath(); ctx.moveTo(landX, groundY - 5); ctx.lineTo(landX, groundY - 88); ctx.stroke();
+    ctx.setLineDash([]);
+
+    // Tape measure (animated unroll)
+    var tapeProgress = Math.min(1, tm * 0.6);
+    var tapeEndX = startX + (landX - startX) * tapeProgress;
+    drawTape(ctx, startX, groundY - 30, tapeEndX, '#acf900');
+    // tape label
+    if (tapeProgress > 0.3) {
+      ctx.fillStyle = '#acf900';
+      ctx.font = "9px 'Noto Sans SC',sans-serif";
+      ctx.textAlign = 'center';
+      ctx.fillText(t_fn('f1_tape'), (startX + tapeEndX) / 2, groundY - 45);
+    }
+
+    // Distance value (fade in after tape finishes)
+    if (tapeProgress >= 0.95) {
+      var distAlpha = Math.min(1, (tm - 1.6) * 2);
+      if (distAlpha > 0) {
+        ctx.globalAlpha = distAlpha;
+        ctx.fillStyle = '#acf900';
+        ctx.font = "bold 22px 'Space Grotesk',sans-serif";
+        ctx.textAlign = 'center';
+        ctx.shadowColor = 'rgba(172,249,0,0.5)';
+        ctx.shadowBlur = 10;
+        ctx.fillText(t_fn('f1_dist'), (startX + landX) / 2, groundY - 55);
+        ctx.shadowBlur = 0;
+        // particles around distance
+        drawParticles(ctx, (startX + landX) / 2, groundY - 55, 10, 30, '#acf900', tm);
+        ctx.globalAlpha = 1;
+      }
+    }
+
+    // Paper airplane: fly arc then land
+    var flightProgress = Math.min(1, tm * 0.5);
+    var path = flightPath(startX, groundY - 50, landX, groundY - 8, 100, 30);
+    // trail
+    var trailEnd = Math.floor(flightProgress * path.length);
+    drawTrail(ctx, path.slice(0, trailEnd + 1), '#85ecff', 0.35);
+    // plane position
+    var pIdx = Math.min(trailEnd, path.length - 1);
+    var planeX = path[pIdx][0];
+    var planeY = path[pIdx][1];
+    var planeAngle = 0;
+    if (pIdx > 0) {
+      planeAngle = Math.atan2(path[pIdx][1] - path[pIdx - 1][1], path[pIdx][0] - path[pIdx - 1][0]);
+    }
+    drawPlane(ctx, planeX, planeY, 1.5, planeAngle, '#d0e0ff');
+
+    // Key instruction at bottom
+    ctx.fillStyle = '#aaabb0';
+    ctx.font = "11px 'Noto Sans SC',sans-serif";
+    ctx.textAlign = 'center';
+    ctx.fillText(t_fn('f1_warn'), cx, groundY + 28);
+
+    // Distance arrow (below tape)
+    if (tapeProgress > 0.1) {
+      ctx.strokeStyle = 'rgba(172,249,0,0.4)';
+      ctx.lineWidth = 1;
+      // left arrowhead
+      ctx.beginPath(); ctx.moveTo(startX + 5, groundY - 17); ctx.lineTo(startX, groundY - 20); ctx.lineTo(startX + 5, groundY - 23); ctx.stroke();
+      // right arrowhead
+      ctx.beginPath(); ctx.moveTo(tapeEndX - 5, groundY - 17); ctx.lineTo(tapeEndX, groundY - 20); ctx.lineTo(tapeEndX - 5, groundY - 23); ctx.stroke();
+      // connecting line
+      ctx.beginPath(); ctx.moveTo(startX, groundY - 20); ctx.lineTo(tapeEndX, groundY - 20); ctx.stroke();
+    }
+  }
+
+  else if (f === 2) {
+    // ── FRAME 2: Measure Time ──
+    ctx.fillStyle = '#1a2a1e';
+    ctx.fillRect(0, groundY, W, H - groundY);
+    ctx.strokeStyle = 'rgba(80,255,176,0.25)';
+    ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(0, groundY); ctx.lineTo(W, groundY); ctx.stroke();
+
+    // title
+    ctx.fillStyle = P.primary;
+    ctx.font = "bold 17px 'Space Grotesk','Noto Sans SC',sans-serif";
+    ctx.textAlign = 'center';
+    ctx.fillText(t_fn('f2_title'), cx, 30);
+
+    // Flight cycle: launch -> fly -> land (loops every ~4s)
+    var cycleDur = 4.0;
+    var cycleT = tm % cycleDur;
+    var launchPhase = Math.min(1, cycleT / 0.3);    // 0-0.3s: launch
+    var flyPhase = Math.max(0, Math.min(1, (cycleT - 0.3) / 1.3)); // 0.3-1.6s: fly
+    var landPhase = Math.max(0, Math.min(1, (cycleT - 1.6) / 0.2)); // 1.6-1.8s: land
+    var showResult = cycleT > 2.0;
+    var waitPhase = cycleT > 3.5; // brief pause before restart
+
+    var startX = W * 0.12;
+    var landX = W * 0.68;
+
+    // Hand / release zone
+    if (launchPhase < 1) {
+      // hand shape (simple)
+      ctx.fillStyle = '#e8d0b0';
+      ctx.beginPath();
+      ctx.arc(startX - 10, groundY - 55, 10, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillRect(startX - 15, groundY - 55, 10, 20);
+      // RELEASE label
+      ctx.fillStyle = '#85ecff';
+      ctx.font = "bold 10px 'Space Grotesk','Noto Sans SC',sans-serif";
+      ctx.textAlign = 'center';
+      ctx.fillText(t_fn('f2_release'), startX, groundY - 80);
+      // flash
+      ctx.globalAlpha = 1 - launchPhase;
+      ctx.fillStyle = '#85ecff';
+      ctx.beginPath(); ctx.arc(startX, groundY - 55, 20 * (1 - launchPhase) + 5, 0, Math.PI * 2); ctx.fill();
+      ctx.globalAlpha = 1;
+    }
+
+    // Plane in flight
+    var path = flightPath(startX, groundY - 55, landX, groundY - 8, 90, 40);
+    var pIdx = Math.floor(flyPhase * (path.length - 1));
+    if (cycleT < 1.8) {
+      drawTrail(ctx, path.slice(0, pIdx + 1), '#85ecff', 0.3);
+      var px = path[pIdx][0], py = path[pIdx][1];
+      var pAngle = pIdx > 0 ? Math.atan2(path[pIdx][1] - path[pIdx - 1][1], path[pIdx][0] - path[pIdx - 1][0]) : -0.3;
+      drawPlane(ctx, px, py, 1.4, pAngle, '#d0e0ff');
+    } else {
+      // plane on ground
+      drawTrail(ctx, path, '#85ecff', 0.2);
+      drawPlane(ctx, landX, groundY - 10, 1.4, 0.05, '#d0e0ff');
+      // TOUCHDOWN label
+      if (!waitPhase) {
+        ctx.fillStyle = '#50ffb0';
+        ctx.font = "bold 10px 'Space Grotesk','Noto Sans SC',sans-serif";
+        ctx.textAlign = 'center';
+        ctx.fillText(t_fn('f2_touch'), landX, groundY - 30);
+        // impact ring
+        var ringAlpha = Math.max(0, 1 - (cycleT - 1.8) * 2);
+        ctx.globalAlpha = ringAlpha;
+        ctx.strokeStyle = '#50ffb0';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(landX, groundY - 5, 10 + (cycleT - 1.8) * 30, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.globalAlpha = 1;
+      }
+    }
+
+    // ── Stopwatch ──
+    var swX = W * 0.86, swY = H * 0.3, swR = 38;
+    var timerVal = 0;
+    var swProgress = 0;
+    var timerRunning = cycleT > 0.15 && cycleT < 1.8;
+    if (cycleT <= 0.15) {
+      timerVal = 0;
+    } else if (cycleT < 1.8) {
+      timerVal = cycleT - 0.15;
+      swProgress = timerVal / 1.6;
+    } else {
+      timerVal = 1.6;
+      swProgress = 1;
+    }
+    var timerStr = timerVal.toFixed(1);
+    drawStopwatch(ctx, swX, swY, swR, timerStr, swProgress);
+
+    // START / STOP labels near stopwatch
+    if (timerRunning) {
+      ctx.fillStyle = '#acf900';
+      ctx.font = "bold 10px 'Space Grotesk','Noto Sans SC',sans-serif";
+      ctx.textAlign = 'center';
+      ctx.fillText(t_fn('f2_start'), swX, swY + swR + 18);
+      // running indicator glow
+      ctx.fillStyle = '#acf900';
+      ctx.globalAlpha = 0.3 + 0.3 * Math.sin(tm * 10);
+      ctx.beginPath(); ctx.arc(swX, swY - swR - 14, 3, 0, Math.PI * 2); ctx.fill();
+      ctx.globalAlpha = 1;
+    } else if (cycleT >= 1.8 && !waitPhase) {
+      ctx.fillStyle = '#ff716c';
+      ctx.font = "bold 10px 'Space Grotesk','Noto Sans SC',sans-serif";
+      ctx.textAlign = 'center';
+      ctx.fillText(t_fn('f2_stop'), swX, swY + swR + 18);
+    }
+
+    // Result time display (big, glowing)
+    if (showResult && !waitPhase) {
+      var resAlpha = Math.min(1, (cycleT - 2.0) * 2);
+      ctx.globalAlpha = resAlpha;
+      ctx.fillStyle = '#85ecff';
+      ctx.font = "bold 26px 'Space Grotesk',sans-serif";
+      ctx.textAlign = 'center';
+      ctx.shadowColor = 'rgba(133,236,255,0.5)';
+      ctx.shadowBlur = 12;
+      ctx.fillText(t_fn('f2_time'), cx * 0.75, H * 0.25);
+      ctx.shadowBlur = 0;
+      drawParticles(ctx, cx * 0.75, H * 0.25, 8, 25, '#85ecff', tm);
+      ctx.globalAlpha = 1;
+    }
+
+    // Key instruction
+    ctx.fillStyle = '#aaabb0';
+    ctx.font = "11px 'Noto Sans SC',sans-serif";
+    ctx.textAlign = 'center';
+    ctx.fillText(t_fn('f2_key'), cx, groundY + 28);
+
+    // Timeline bar at bottom showing the process
+    var tlY = H * 0.50;
+    var tlLeft = W * 0.05, tlRight = W * 0.65;
+    // line
+    ctx.strokeStyle = 'rgba(170,171,176,0.3)';
+    ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(tlLeft, tlY); ctx.lineTo(tlRight, tlY); ctx.stroke();
+    // release marker
+    ctx.fillStyle = '#85ecff';
+    ctx.beginPath(); ctx.arc(tlLeft, tlY, 5, 0, Math.PI * 2); ctx.fill();
+    ctx.font = "9px 'Noto Sans SC',sans-serif";
+    ctx.textAlign = 'center';
+    ctx.fillText(t_fn('f2_release'), tlLeft, tlY + 16);
+    // touchdown marker
+    ctx.fillStyle = '#50ffb0';
+    ctx.beginPath(); ctx.arc(tlRight, tlY, 5, 0, Math.PI * 2); ctx.fill();
+    ctx.fillText(t_fn('f2_touch'), tlRight, tlY + 16);
+    // progress indicator
+    var progX = tlLeft + (tlRight - tlLeft) * Math.min(1, (cycleT < 1.8 ? flyPhase : 1));
+    ctx.fillStyle = '#acf900';
+    ctx.beginPath(); ctx.arc(progX, tlY, 4, 0, Math.PI * 2); ctx.fill();
+    // filled portion
+    ctx.strokeStyle = '#acf900';
+    ctx.lineWidth = 2.5;
+    ctx.beginPath(); ctx.moveTo(tlLeft, tlY); ctx.lineTo(progX, tlY); ctx.stroke();
+  }
+
+  else if (f === 3) {
+    // ── FRAME 3: Record Data ──
+    // title
+    ctx.fillStyle = P.primary;
+    ctx.font = "bold 17px 'Space Grotesk','Noto Sans SC',sans-serif";
+    ctx.textAlign = 'center';
+    ctx.fillText(t_fn('f3_title'), cx, 28);
+
+    // sub instruction
+    ctx.fillStyle = P.muted;
+    ctx.font = "11px 'Noto Sans SC',sans-serif";
+    ctx.fillText(t_fn('f3_key'), cx, 48);
+
+    // Animated table row reveal
+    var totalDataRows = FLIGHT_DATA[0].trials.length + FLIGHT_DATA[1].trials.length;
+    var revealSpeed = 0.5; // rows per second
+    var revealRows = Math.min(totalDataRows, Math.floor(tm * revealSpeed * 3));
+
+    // Draw table
+    var tableW = W * 0.88;
+    var tableX = (W - tableW) / 2;
+    var tableY = 62;
+    drawTable(ctx, tableX, tableY, tableW, FLIGHT_DATA, t_fn, revealRows, W);
+
+    // result text (after all rows revealed)
+    if (revealRows >= totalDataRows) {
+      var resAlpha = Math.min(1, (tm - totalDataRows / (revealSpeed * 3) ) * 1.5);
+      if (resAlpha > 0) {
+        ctx.globalAlpha = resAlpha;
+
+        // Bar comparison below table
+        var barY = tableY + 22 * (totalDataRows + 1) + 20;
+        var barMaxW = W * 0.55;
+        var barLeft = W * 0.22;
+        var barH = 18;
+
+        // Plane A avg
+        var avgA = 0;
+        FLIGHT_DATA[0].trials.forEach(function(tr) { avgA += tr.d; });
+        avgA /= FLIGHT_DATA[0].trials.length;
+        var avgB = 0;
+        FLIGHT_DATA[1].trials.forEach(function(tr) { avgB += tr.d; });
+        avgB /= FLIGHT_DATA[1].trials.length;
+        var maxAvg = Math.max(avgA, avgB);
+
+        // Plane A bar
+        ctx.fillStyle = 'rgba(133,236,255,0.4)';
+        var barWA = (avgA / maxAvg) * barMaxW;
+        ctx.fillRect(barLeft, barY, barWA, barH);
+        ctx.strokeStyle = '#85ecff';
+        ctx.lineWidth = 1;
+        ctx.strokeRect(barLeft, barY, barWA, barH);
+        ctx.fillStyle = '#85ecff';
+        ctx.font = "bold 10px 'Space Grotesk',sans-serif";
+        ctx.textAlign = 'left';
+        ctx.fillText('A: ' + avgA.toFixed(1) + 'm', barLeft + barWA + 6, barY + barH / 2 + 1);
+        // label
+        ctx.textAlign = 'right';
+        ctx.fillText('A', barLeft - 6, barY + barH / 2 + 1);
+
+        // Plane B bar
+        var barWB = (avgB / maxAvg) * barMaxW;
+        ctx.fillStyle = 'rgba(172,249,0,0.4)';
+        ctx.fillRect(barLeft, barY + barH + 6, barWB, barH);
+        ctx.strokeStyle = '#acf900';
+        ctx.lineWidth = 1;
+        ctx.strokeRect(barLeft, barY + barH + 6, barWB, barH);
+        ctx.fillStyle = '#acf900';
+        ctx.font = "bold 10px 'Space Grotesk',sans-serif";
+        ctx.textAlign = 'left';
+        ctx.fillText('B: ' + avgB.toFixed(1) + 'm', barLeft + barWB + 6, barY + barH + 6 + barH / 2 + 1);
+        ctx.textAlign = 'right';
+        ctx.fillText('B', barLeft - 6, barY + barH + 6 + barH / 2 + 1);
+
+        // Winner text
+        var winY = barY + barH * 2 + 26;
+        ctx.fillStyle = '#acf900';
+        ctx.font = "bold 14px 'Space Grotesk','Noto Sans SC',sans-serif";
+        ctx.textAlign = 'center';
+        ctx.shadowColor = 'rgba(172,249,0,0.4)';
+        ctx.shadowBlur = 8;
+        ctx.fillText(t_fn('f3_result'), cx, winY);
+        ctx.shadowBlur = 0;
+
+        drawParticles(ctx, cx, winY, 12, 40, '#acf900', tm);
+
+        ctx.globalAlpha = 1;
+      }
+    }
+
+    // Highlight effect on currently-filling row
+    if (revealRows < totalDataRows) {
+      var highlightY = tableY + 22 * (revealRows + 1);
+      ctx.fillStyle = 'rgba(80,255,176,0.08)';
+      ctx.fillRect(tableX, highlightY, tableW, 22);
+      // blinking cursor effect
+      var cursorAlpha = 0.4 + 0.4 * Math.sin(tm * 6);
+      ctx.globalAlpha = cursorAlpha;
+      ctx.fillStyle = '#50ffb0';
+      ctx.fillRect(tableX + tableW * 0.45, highlightY + 5, 2, 12);
+      ctx.globalAlpha = 1;
+    }
+  }
+
+  return true;
+}
+
+// ── Frame change hook ──
+var _lastFrame = -1;
+setInterval(function() {
+  if (typeof AnimRuntime !== 'undefined' && AnimRuntime.currentFrame !== undefined) {
+    if (AnimRuntime.currentFrame !== _lastFrame) {
+      _lastFrame = AnimRuntime.currentFrame;
+      startFrameAnim(_lastFrame);
+    }
+  }
+}, 100);
+
+AnimRuntime.boot();
+</script>
+</body>
+</html>

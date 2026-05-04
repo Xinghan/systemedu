@@ -1,0 +1,1857 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=Inter:wght@400;500&family=Noto+Sans+SC:wght@400;700&display=swap" rel="stylesheet">
+<title>Drag Force Lab</title>
+<style>
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box;border-radius:0!important;}
+html,body{width:100%;height:100vh;overflow:hidden;background:#0c0e14;color:#e2e2e9;font-family:'Inter','Noto Sans SC',sans-serif;}
+body{margin:0;padding:0;}
+.game-wrap{display:flex;flex-direction:row;height:100vh;overflow:hidden;}
+.game-sidebar{width:200px;min-width:200px;max-width:200px;display:flex;flex-direction:column;gap:8px;padding:10px;background:rgba(0,0,0,0.5);border-right:1px solid rgba(80,255,176,0.15);overflow-y:auto;}
+.sidebar-lang{align-self:flex-start;flex-shrink:0;font-family:'Space Grotesk',sans-serif;font-size:10px;font-weight:700;padding:3px 8px;cursor:pointer;border:1px solid rgba(255,181,156,0.25);background:transparent;color:#ffb59c;letter-spacing:1px;}
+.sidebar-lang:hover{border-color:#ffb59c;background:rgba(255,181,156,0.08);}
+.sidebar-title{font-family:'Space Grotesk',sans-serif;font-size:11px;font-weight:700;color:#50ffb0;letter-spacing:0.08em;text-transform:uppercase;margin-top:4px;}
+.sidebar-guide{font-size:12px;color:#aaabb0;line-height:1.6;}
+.game-main{flex:1;display:flex;flex-direction:column;min-width:0;}
+.game-header{padding:8px 16px;display:flex;justify-content:space-between;align-items:center;background:rgba(0,0,0,0.4);}
+.game-header h1{font-family:'Space Grotesk',sans-serif;font-size:clamp(13px,2vw,17px);font-weight:700;color:#50ffb0;}
+.game-header .info{font-family:'Space Grotesk',sans-serif;font-size:12px;color:#aaabb0;}
+.game-body{flex:1;display:flex;flex-direction:column;min-height:0;}
+canvas{width:100%;height:100%;display:block;}
+.control-panel{display:flex;justify-content:center;align-items:center;gap:12px;padding:8px 16px;background:rgba(0,0,0,0.4);flex-wrap:wrap;}
+.ctrl-btn{font-family:'Space Grotesk',sans-serif;font-size:12px;font-weight:700;padding:6px 18px;border:none;cursor:pointer;color:#0c0e14;background:linear-gradient(135deg,#50ffb0,#17df93);box-shadow:0 0 10px rgba(80,255,176,0.3);transition:transform 0.1s;}
+.ctrl-btn:hover{transform:scale(1.04);}
+.ctrl-btn:active{transform:scale(0.96);}
+.ctrl-btn:disabled{opacity:0.4;cursor:default;transform:none;}
+.ctrl-btn.secondary{background:rgba(30,30,45,0.9);color:#aaabb0;box-shadow:none;border:1px solid rgba(170,171,176,0.2);}
+.ctrl-btn.secondary:hover{color:#50ffb0;border-color:rgba(80,255,176,0.3);}
+.hud-bar{height:44px;display:flex;align-items:center;justify-content:space-around;background:rgba(0,0,0,0.55);padding:0 16px;}
+.hud-item{text-align:center;}
+.hud-label{font-family:'Space Grotesk',sans-serif;font-size:9px;letter-spacing:0.12em;color:#aaabb0;text-transform:uppercase;}
+.hud-val{font-family:'Space Grotesk',sans-serif;font-size:14px;font-weight:700;color:#50ffb0;transition:transform 0.15s;}
+</style>
+</head>
+<body>
+<div class="game-wrap">
+  <div class="game-sidebar">
+    <button class="sidebar-lang" id="langBtn">CN</button>
+    <div class="sidebar-title" id="sidebarTitle"></div>
+    <div class="sidebar-guide" id="guideContent"></div>
+  </div>
+  <div class="game-main">
+    <div class="game-header">
+      <h1 id="gameTitle"></h1>
+      <div class="info" id="roundInfo"></div>
+    </div>
+    <div class="game-body">
+      <canvas id="c"></canvas>
+    </div>
+    <div class="control-panel">
+      <button class="ctrl-btn" id="btnAction"></button>
+      <button class="ctrl-btn secondary" id="btnReset"></button>
+    </div>
+    <div class="hud-bar">
+      <div class="hud-item"><div class="hud-label" id="hudL1"></div><div class="hud-val" id="hudV1"></div></div>
+      <div class="hud-item"><div class="hud-label" id="hudL2"></div><div class="hud-val" id="hudV2"></div></div>
+      <div class="hud-item"><div class="hud-label" id="hudL3"></div><div class="hud-val" id="hudV3"></div></div>
+      <div class="hud-item"><div class="hud-label" id="hudL4"></div><div class="hud-val" id="hudV4"></div></div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ============================================================
+// K35 Game: Drag Force Lab
+// F_drag = 0.5 * rho * v^2 * C_D * A
+// L1: Velocity challenge (v^2 scaling)
+// L2: Shape challenge (C_D ranking + matching)
+// L3: Rocket optimizer (cost-performance tradeoff)
+// ============================================================
+
+// --- I18N ---
+var I18N = {
+  title:       {en:'DRAG FORCE LAB', cn:'\u7a7a\u6c14\u963b\u529b\u5b9e\u9a8c\u5ba4'},
+  levelLabel:  {en:'LEVEL', cn:'\u5173\u5361'},
+  roundLabel:  {en:'ROUND', cn:'\u56de\u5408'},
+  submit:      {en:'SUBMIT', cn:'\u63d0\u4ea4'},
+  next:        {en:'NEXT', cn:'\u4e0b\u4e00\u9898'},
+  nextLevel:   {en:'NEXT LEVEL', cn:'\u4e0b\u4e00\u5173'},
+  reset:       {en:'RESET', cn:'\u91cd\u7f6e'},
+  correct:     {en:'CORRECT!', cn:'\u6b63\u786e\uff01'},
+  wrong:       {en:'TRY AGAIN', cn:'\u518d\u8bd5\u4e00\u6b21'},
+  perfect:     {en:'PERFECT!', cn:'\u5b8c\u7f8e\uff01'},
+  complete:    {en:'ALL LEVELS COMPLETE!', cn:'\u5168\u90e8\u5b8c\u6210\uff01'},
+  score:       {en:'SCORE', cn:'\u5f97\u5206'},
+  dragForce:   {en:'Drag Force', cn:'\u963b\u529b'},
+  velocity:    {en:'Velocity', cn:'\u901f\u5ea6'},
+  density:     {en:'Density', cn:'\u5bc6\u5ea6'},
+  area:        {en:'Area', cn:'\u622a\u9762\u79ef'},
+  dragCoeff:   {en:'Drag Coeff', cn:'\u963b\u529b\u7cfb\u6570'},
+
+  // Level 1
+  l1title:     {en:'VELOCITY CHALLENGE', cn:'\u901f\u5ea6\u6311\u6218'},
+  l1guide:     {en:'F = 0.5 * rho * v^2 * C_D * A\nDrag grows with v SQUARED!\nSlide velocity and watch the force bar.\nThen predict: if v doubles, how many times does drag increase?', cn:'F = 0.5 * \u03c1 * v\u00b2 * C_D * A\n\u963b\u529b\u968f\u901f\u5ea6\u7684\u5e73\u65b9\u589e\u957f\uff01\n\u62d6\u52a8\u901f\u5ea6\u6ed1\u5757\u89c2\u5bdf\u529b\u7684\u53d8\u5316\u3002\n\u7136\u540e\u9884\u6d4b\uff1a\u901f\u5ea6\u53d8\u4e3aN\u500d\uff0c\u963b\u529b\u53d8\u4e3a\u51e0\u500d\uff1f'},
+  l1sidebar:   {en:'VELOCITY LAB', cn:'\u901f\u5ea6\u5b9e\u9a8c\u5ba4'},
+  l1predict:   {en:'Drag increases by how many times?', cn:'\u963b\u529b\u53d8\u4e3a\u539f\u6765\u7684\u51e0\u500d\uff1f'},
+  l1formula:   {en:'F_drag = 0.5 * rho * v^2 * C_D * A', cn:'F_drag = 0.5 * \u03c1 * v\u00b2 * C_D * A'},
+  l1vChange:   {en:'v changes from {v1} to {v2} m/s', cn:'v \u4ece {v1} \u53d8\u4e3a {v2} m/s'},
+  l1ratio:     {en:'Ratio = (v2/v1)^2 = ({v2}/{v1})^2 = {ans}x', cn:'\u6bd4\u503c = (v2/v1)\u00b2 = ({v2}/{v1})\u00b2 = {ans}\u00d7'},
+  times:       {en:'times', cn:'\u500d'},
+
+  // Level 2
+  l2title:     {en:'SHAPE CHALLENGE', cn:'\u5f62\u72b6\u6311\u6218'},
+  l2guide:     {en:'4 shapes with hidden C_D values.\nFirst: RANK them by drag (low to high).\nThen: MATCH each shape to its C_D value.\nSleeker shapes have lower C_D!', cn:'4\u79cd\u5f62\u72b6\uff0cC_D \u503c\u672a\u77e5\u3002\n\u7b2c\u4e00\u6b65\uff1a\u6309\u963b\u529b\u4ece\u4f4e\u5230\u9ad8\u6392\u5e8f\u3002\n\u7b2c\u4e8c\u6b65\uff1a\u5c06\u6bcf\u4e2a\u5f62\u72b6\u4e0e C_D \u503c\u914d\u5bf9\u3002\n\u66f4\u6d41\u7ebf\u7684\u5f62\u72b6 C_D \u66f4\u4f4e\uff01'},
+  l2sidebar:   {en:'SHAPE RANKER', cn:'\u5f62\u72b6\u6392\u5e8f'},
+  l2rank:      {en:'RANK: low drag -> high drag', cn:'\u6392\u5e8f\uff1a\u4f4e\u963b\u529b -> \u9ad8\u963b\u529b'},
+  l2match:     {en:'MATCH shapes to C_D values', cn:'\u5c06\u5f62\u72b6\u4e0e C_D \u503c\u914d\u5bf9'},
+  l2reveal:    {en:'C_D VALUES REVEALED!', cn:'C_D \u503c\u63ed\u6653\uff01'},
+  lowest:      {en:'LOW DRAG', cn:'\u4f4e\u963b\u529b'},
+  highest:     {en:'HIGH DRAG', cn:'\u9ad8\u963b\u529b'},
+
+  // Level 3
+  l3title:     {en:'ROCKET OPTIMIZER', cn:'\u706b\u7bad\u4f18\u5316\u5668'},
+  l3guide:     {en:'Choose nose cone shape (C_D) and body diameter (A) to minimize drag at target speed.\nSleeker shapes cost more! Budget: $100.\nFind the best cost-performance combo.\nTarget: minimize F_drag under budget.', cn:'\u9009\u62e9\u9f3b\u9525\u5f62\u72b6 (C_D) \u548c\u7bad\u4f53\u76f4\u5f84 (A) \u4ee5\u5728\u76ee\u6807\u901f\u5ea6\u4e0b\u6700\u5c0f\u5316\u963b\u529b\u3002\n\u66f4\u6d41\u7ebf\u7684\u5f62\u72b6\u66f4\u8d35\uff01\u9884\u7b97\uff1a$100\u3002\n\u627e\u5230\u6700\u4f73\u6027\u4ef7\u6bd4\u7ec4\u5408\u3002\n\u76ee\u6807\uff1a\u5728\u9884\u7b97\u5185\u6700\u5c0f\u5316 F_drag\u3002'},
+  l3sidebar:   {en:'OPTIMIZER', cn:'\u4f18\u5316\u5668'},
+  budget:      {en:'BUDGET', cn:'\u9884\u7b97'},
+  cost:        {en:'COST', cn:'\u82b1\u8d39'},
+  remaining:   {en:'REMAINING', cn:'\u5269\u4f59'},
+  overBudget:  {en:'OVER BUDGET!', cn:'\u8d85\u51fa\u9884\u7b97\uff01'},
+  targetSpeed: {en:'Target Speed', cn:'\u76ee\u6807\u901f\u5ea6'},
+  altitude:    {en:'Altitude', cn:'\u9ad8\u5ea6'},
+  noseCone:    {en:'Nose Cone', cn:'\u9f3b\u9525'},
+  bodyDiam:    {en:'Body Diameter', cn:'\u7bad\u4f53\u76f4\u5f84'},
+  launch:      {en:'LAUNCH TEST', cn:'\u53d1\u5c04\u6d4b\u8bd5'},
+  excellent:   {en:'EXCELLENT! Optimal design!', cn:'\u51fa\u8272\uff01\u6700\u4f18\u8bbe\u8ba1\uff01'},
+  good:        {en:'GOOD! But can you do better?', cn:'\u4e0d\u9519\uff01\u4f46\u8fd8\u80fd\u66f4\u597d\u5417\uff1f'},
+  poor:        {en:'TOO MUCH DRAG! Try again.', cn:'\u963b\u529b\u592a\u5927\uff01\u518d\u8bd5\u8bd5\u3002'},
+  summary:     {en:'F = 0.5 * rho * v^2 * C_D * A\nDoubling speed = 4x drag.\nSleeker shapes = lower C_D.\nSmaller cross-section = less drag.\nEngineering is about tradeoffs!', cn:'F = 0.5 * \u03c1 * v\u00b2 * C_D * A\n\u901f\u5ea6\u52a0\u500d = \u963b\u529b4\u500d\u3002\n\u66f4\u6d41\u7ebf\u7684\u5f62\u72b6 = \u66f4\u4f4e\u7684 C_D\u3002\n\u66f4\u5c0f\u7684\u622a\u9762\u79ef = \u66f4\u5c0f\u7684\u963b\u529b\u3002\n\u5de5\u7a0b\u5c31\u662f\u6743\u8861\u7684\u827a\u672f\uff01'},
+};
+
+var lang = 'cn';
+function t(key) { return I18N[key] ? (I18N[key][lang] || I18N[key].en || key) : key; }
+
+var soundMuted = true;
+
+// --- Physics constants ---
+var RHO_SEA = 1.225;  // kg/m^3 air density at sea level
+
+// --- Shape data for L2 ---
+var SHAPES = [
+  {name:{en:'Streamlined Body',cn:'\u6d41\u7ebf\u4f53'}, cd:0.04, color:'#50ffb0', drawFn:'drawStreamlined'},
+  {name:{en:'Sphere',cn:'\u7403\u4f53'}, cd:0.47, color:'#74c0fc', drawFn:'drawSphere'},
+  {name:{en:'Cylinder',cn:'\u5706\u67f1\u4f53'}, cd:0.82, color:'#ffa94d', drawFn:'drawCylinder'},
+  {name:{en:'Flat Plate',cn:'\u5e73\u677f'}, cd:1.17, color:'#ff6b6b', drawFn:'drawFlatPlate'},
+];
+var SHAPES_SORTED = SHAPES.slice().sort(function(a,b){ return a.cd - b.cd; });
+
+// --- L1 challenge data ---
+var L1_CHALLENGES = [
+  {v1:10, v2:20, answer:4},
+  {v1:10, v2:50, answer:25},
+  {v1:20, v2:60, answer:9},
+  {v1:5,  v2:25, answer:25},
+];
+
+// --- L3 mission data ---
+var NOSE_CONES = [
+  {name:{en:'Blunt Cone',cn:'\u949d\u5f62\u9f3b\u9525'}, cd:0.50, cost:10},
+  {name:{en:'Ogive Cone',cn:'\u5f27\u5f62\u9f3b\u9525'}, cd:0.35, cost:25},
+  {name:{en:'Von Karman',cn:'\u51af\u5361\u95e8\u66f2\u7ebf'}, cd:0.20, cost:50},
+  {name:{en:'Haack Series',cn:'\u54c8\u514b\u66f2\u7ebf'}, cd:0.12, cost:80},
+];
+
+var BODY_DIAMETERS = [
+  {label:'15 cm', area:0.01767, cost:10},
+  {label:'12 cm', area:0.01131, cost:20},
+  {label:'10 cm', area:0.00785, cost:35},
+  {label:'8 cm',  area:0.00503, cost:55},
+];
+
+var L3_MISSIONS = [
+  {targetV:80,  altitude:{en:'Sea Level',cn:'\u6d77\u5e73\u9762'}, rho:1.225, bestDragMax:12},
+  {targetV:150, altitude:{en:'5 km',cn:'5 km \u9ad8\u7a7a'}, rho:0.7364, bestDragMax:20},
+  {targetV:300, altitude:{en:'10 km',cn:'10 km \u9ad8\u7a7a'}, rho:0.4135, bestDragMax:50},
+];
+
+// --- Game state ---
+var currentLevel = 0;
+var currentRound = 0;
+var totalScore = 0;
+var levelScores = [0,0,0];
+
+// L1 state
+var l1SliderV = 10;
+var l1Phase = 'explore';  // explore, predict, correct, wrong
+var l1InputValue = '';
+var l1ShakeTimer = 0;
+var l1ForceBarAnim = 0;
+var l1ForceBarTarget = 0;
+var l1ShowAnswer = false;
+var l1DraggingSlider = false;
+
+// L2 state
+var l2Cards = [];
+var l2DragIdx = -1;
+var l2Phase = 'rank';     // rank, rankResult, match, matchResult
+var l2ShakeTimer = 0;
+var l2MatchSlots = [];    // for match phase
+var l2MatchDragIdx = -1;
+var l2RevealAlpha = 0;
+
+// L3 state
+var l3NoseIdx = 0;
+var l3DiamIdx = 0;
+var l3Phase = 'choose';   // choose, launching, result
+var l3LaunchProgress = 0;
+var l3ResultDrag = 0;
+var l3RocketY = 0;
+var l3RocketShake = 0;
+var l3TrailParticles = [];
+var l3DragSlider = null;  // 'nose' or 'diam' or null
+
+// Transition / completion
+var transitionAlpha = 0;
+var completionAlpha = 0;
+var gameComplete = false;
+
+// Particles
+var particles = [];
+
+// Canvas
+var canvas = document.getElementById('c');
+var ctx = canvas.getContext('2d');
+var canvasW = 100, canvasH = 100;
+var dpr = Math.min(window.devicePixelRatio || 1, 2);
+var animFrame = 0;
+var pulsePhase = 0;
+var mouseX = 0, mouseY = 0;
+var mouseDown = false;
+
+// Parallax stars
+var parallaxStars = [];
+function initParallaxStars() {
+  parallaxStars = [];
+  for (var si = 0; si < 90; si++) {
+    parallaxStars.push({
+      x: Math.random() * canvasW,
+      y: Math.random() * canvasH,
+      r: 0.3 + Math.random() * 1.2,
+      speed: 0.2 + Math.random() * 0.6,
+      bright: 0.3 + Math.random() * 0.7
+    });
+  }
+}
+
+// --- Resize ---
+function resize() {
+  var rect = canvas.getBoundingClientRect();
+  canvasW = rect.width;
+  canvasH = rect.height;
+  canvas.width = canvasW * dpr;
+  canvas.height = canvasH * dpr;
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  initParallaxStars();
+  if (currentLevel === 1) initL2Cards();
+}
+window.addEventListener('resize', resize);
+
+// --- Audio stub ---
+function playSound(type) {
+  if (soundMuted) return;
+}
+
+// --- Particles ---
+function spawnParticles(cx, cy, count, color, spread) {
+  for (var pi = 0; pi < count; pi++) {
+    var angle = Math.random() * Math.PI * 2;
+    var speed = 1 + Math.random() * (spread || 3);
+    particles.push({
+      x: cx, y: cy,
+      vx: Math.cos(angle) * speed,
+      vy: Math.sin(angle) * speed,
+      life: 1.0,
+      decay: 0.015 + Math.random() * 0.02,
+      r: 2 + Math.random() * 3,
+      color: color || '#50ffb0'
+    });
+  }
+}
+
+function updateParticles() {
+  for (var pi = particles.length - 1; pi >= 0; pi--) {
+    var p = particles[pi];
+    p.x += p.vx;
+    p.y += p.vy;
+    p.vx *= 0.97;
+    p.vy *= 0.97;
+    p.life -= p.decay;
+    if (p.life <= 0) particles.splice(pi, 1);
+  }
+}
+
+function drawParticles() {
+  for (var pi = 0; pi < particles.length; pi++) {
+    var p = particles[pi];
+    ctx.globalAlpha = p.life * 0.8;
+    ctx.fillStyle = p.color;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, p.r * p.life, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+}
+
+// --- Parallax stars ---
+function drawParallax() {
+  var offX = (mouseX - canvasW / 2) * 0.01;
+  var offY = (mouseY - canvasH / 2) * 0.01;
+  for (var si = 0; si < parallaxStars.length; si++) {
+    var s = parallaxStars[si];
+    var sx = s.x + offX * s.speed;
+    var sy = s.y + offY * s.speed;
+    ctx.globalAlpha = s.bright * (0.5 + 0.5 * Math.sin(animFrame * 0.02 + si));
+    ctx.fillStyle = '#e2e2e9';
+    ctx.beginPath();
+    ctx.arc(sx, sy, s.r, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+}
+
+// --- Easing ---
+function easeOutCubic(x) { return 1 - Math.pow(1 - x, 3); }
+function easeInOutQuad(x) { return x < 0.5 ? 2*x*x : 1-Math.pow(-2*x+2,2)/2; }
+
+// --- Drag force calculation ---
+function calcDrag(rho, vel, cd, area) {
+  return 0.5 * rho * vel * vel * cd * area;
+}
+
+// --- Shape drawing functions ---
+function drawStreamlinedShape(cx, cy, size) {
+  ctx.beginPath();
+  ctx.moveTo(cx + size * 1.5, cy);
+  ctx.bezierCurveTo(cx + size * 1.2, cy - size * 0.35, cx - size * 0.5, cy - size * 0.4, cx - size * 1.2, cy - size * 0.15);
+  ctx.lineTo(cx - size * 1.2, cy + size * 0.15);
+  ctx.bezierCurveTo(cx - size * 0.5, cy + size * 0.4, cx + size * 1.2, cy + size * 0.35, cx + size * 1.5, cy);
+  ctx.closePath();
+}
+
+function drawSphereShape(cx, cy, size) {
+  ctx.beginPath();
+  ctx.arc(cx, cy, size * 0.6, 0, Math.PI * 2);
+  ctx.closePath();
+}
+
+function drawCylinderShape(cx, cy, size) {
+  ctx.beginPath();
+  ctx.rect(cx - size * 0.9, cy - size * 0.4, size * 1.8, size * 0.8);
+  ctx.closePath();
+}
+
+function drawFlatPlateShape(cx, cy, size) {
+  ctx.beginPath();
+  ctx.rect(cx - size * 0.08, cy - size * 0.6, size * 0.16, size * 1.2);
+  ctx.closePath();
+}
+
+var shapeDrawFns = [drawStreamlinedShape, drawSphereShape, drawCylinderShape, drawFlatPlateShape];
+
+// --- Air flow lines ---
+function drawAirFlow(cx, cy, vel, cd, size) {
+  var lineCount = 8;
+  var spacing = size * 1.5 / lineCount;
+  var deflection = cd * 15;
+  var flowSpeed = vel / 50;
+
+  for (var li = 0; li < lineCount; li++) {
+    var ly = cy - size * 0.75 + li * spacing + spacing * 0.5;
+    var distFromCenter = Math.abs(ly - cy) / (size * 0.75);
+
+    ctx.beginPath();
+    ctx.strokeStyle = 'rgba(80,255,176,' + (0.15 + 0.15 * flowSpeed) + ')';
+    ctx.lineWidth = 1;
+
+    var startX = cx - size * 2.5;
+    var segments = 20;
+    var segW = size * 5 / segments;
+    ctx.moveTo(startX, ly);
+
+    for (var seg = 1; seg <= segments; seg++) {
+      var sx = startX + seg * segW;
+      var nearShape = Math.max(0, 1 - Math.abs(sx - cx) / (size * 1.5));
+      var waveAmp = nearShape * deflection * (1 - distFromCenter) * Math.sign(ly - cy);
+      var waveOff = Math.sin((animFrame * 0.05 * flowSpeed + seg * 0.5)) * 2 * nearShape;
+      ctx.lineTo(sx, ly + waveAmp + waveOff);
+    }
+    ctx.stroke();
+  }
+}
+
+// --- UI update ---
+function updateUI() {
+  document.getElementById('langBtn').textContent = lang === 'cn' ? 'CN' : 'EN';
+  document.getElementById('gameTitle').textContent = t('title');
+
+  var sidebars = ['l1sidebar','l2sidebar','l3sidebar'];
+  var guides = ['l1guide','l2guide','l3guide'];
+
+  document.getElementById('sidebarTitle').textContent = t(sidebars[currentLevel]);
+  document.getElementById('guideContent').textContent = t(guides[currentLevel]);
+  document.getElementById('roundInfo').textContent = t('levelLabel') + ' ' + (currentLevel + 1) + '/3  ' + t('roundLabel') + ' ' + (currentRound + 1) + '/' + getRoundsForLevel();
+
+  // HUD
+  document.getElementById('hudL1').textContent = t('levelLabel');
+  document.getElementById('hudV1').textContent = (currentLevel + 1) + '/3';
+  document.getElementById('hudL2').textContent = t('score');
+  document.getElementById('hudV2').textContent = '' + totalScore;
+  document.getElementById('hudL3').textContent = t('dragForce');
+  document.getElementById('hudL4').textContent = '';
+  document.getElementById('hudV4').textContent = '';
+
+  if (currentLevel === 0) {
+    var fNow = calcDrag(RHO_SEA, l1SliderV, 0.3, 0.01);
+    document.getElementById('hudV3').textContent = fNow.toFixed(2) + ' N';
+    if (l1Phase === 'explore') {
+      document.getElementById('btnAction').textContent = t('submit');
+    } else if (l1Phase === 'predict') {
+      document.getElementById('btnAction').textContent = t('submit');
+    } else {
+      document.getElementById('btnAction').textContent = currentRound < L1_CHALLENGES.length - 1 ? t('next') : t('nextLevel');
+    }
+    document.getElementById('btnReset').textContent = t('reset');
+  } else if (currentLevel === 1) {
+    document.getElementById('hudV3').textContent = '--';
+    if (l2Phase === 'rank') {
+      document.getElementById('btnAction').textContent = t('submit');
+    } else if (l2Phase === 'rankResult') {
+      document.getElementById('btnAction').textContent = t('next');
+    } else if (l2Phase === 'match') {
+      document.getElementById('btnAction').textContent = t('submit');
+    } else {
+      document.getElementById('btnAction').textContent = t('nextLevel');
+    }
+    document.getElementById('btnReset').textContent = t('reset');
+  } else if (currentLevel === 2) {
+    var mission = L3_MISSIONS[currentRound];
+    var nose = NOSE_CONES[l3NoseIdx];
+    var body = BODY_DIAMETERS[l3DiamIdx];
+    var totalCost = nose.cost + body.cost;
+    var dragNow = calcDrag(mission.rho, mission.targetV, nose.cd, body.area);
+    document.getElementById('hudV3').textContent = dragNow.toFixed(1) + ' N';
+    document.getElementById('hudL4').textContent = t('cost');
+    document.getElementById('hudV4').textContent = '$' + totalCost + (totalCost > 100 ? ' (!)' : '');
+    if (l3Phase === 'choose') {
+      document.getElementById('btnAction').textContent = t('launch');
+    } else {
+      document.getElementById('btnAction').textContent = currentRound < L3_MISSIONS.length - 1 ? t('next') : t('nextLevel');
+    }
+    document.getElementById('btnReset').textContent = t('reset');
+  }
+}
+
+function getRoundsForLevel() {
+  if (currentLevel === 0) return L1_CHALLENGES.length;
+  if (currentLevel === 1) return 2;  // rank + match
+  if (currentLevel === 2) return L3_MISSIONS.length;
+  return 1;
+}
+
+// ==========================================
+// LEVEL 1: Velocity Challenge
+// ==========================================
+function drawLevel1() {
+  var chal = L1_CHALLENGES[currentRound];
+  var centerX = canvasW / 2;
+  var topY = 30;
+
+  // Formula card
+  var cardW = Math.min(500, canvasW * 0.85);
+  var cardH = 65;
+  var cardX = centerX - cardW / 2;
+  ctx.fillStyle = 'rgba(20,25,40,0.9)';
+  ctx.shadowColor = '#50ffb0';
+  ctx.shadowBlur = 8;
+  ctx.fillRect(cardX, topY, cardW, cardH);
+  ctx.shadowBlur = 0;
+  ctx.strokeStyle = 'rgba(80,255,176,0.3)';
+  ctx.lineWidth = 1;
+  ctx.strokeRect(cardX, topY, cardW, cardH);
+
+  ctx.font = '700 14px "Space Grotesk",sans-serif';
+  ctx.fillStyle = '#50ffb0';
+  ctx.textAlign = 'center';
+  ctx.fillText(t('l1formula'), centerX, topY + 25);
+  ctx.font = '500 12px "Inter","Noto Sans SC",sans-serif';
+  ctx.fillStyle = '#aaabb0';
+  ctx.fillText('\u03c1=' + RHO_SEA + ' kg/m\u00b3  C_D=0.30  A=0.01 m\u00b2', centerX, topY + 48);
+
+  // Visualization area: shape + airflow
+  var vizY = topY + cardH + 25;
+  var vizH = Math.min(180, canvasH * 0.3);
+  var shapeSize = Math.min(40, vizH * 0.2);
+  var shapeCX = centerX;
+  var shapeCY = vizY + vizH * 0.45;
+
+  // Draw the rocket-ish object
+  drawAirFlow(shapeCX, shapeCY, l1SliderV, 0.3, shapeSize);
+
+  ctx.fillStyle = '#50ffb0';
+  drawStreamlinedShape(shapeCX, shapeCY, shapeSize);
+  ctx.fill();
+  ctx.strokeStyle = 'rgba(255,255,255,0.3)';
+  ctx.lineWidth = 1;
+  drawStreamlinedShape(shapeCX, shapeCY, shapeSize);
+  ctx.stroke();
+
+  // Force bar (right side)
+  var barX = centerX + cardW * 0.3;
+  var barW = 28;
+  var barMaxH = vizH - 10;
+  var barY = vizY + 5;
+
+  // Calculate force for current slider
+  var fCurrent = calcDrag(RHO_SEA, l1SliderV, 0.3, 0.01);
+  var fMax = calcDrag(RHO_SEA, 100, 0.3, 0.01);
+
+  // Animate force bar
+  l1ForceBarTarget = fCurrent / fMax;
+  l1ForceBarAnim += (l1ForceBarTarget - l1ForceBarAnim) * 0.1;
+
+  // Bar background
+  ctx.fillStyle = 'rgba(30,35,50,0.8)';
+  ctx.fillRect(barX, barY, barW, barMaxH);
+  ctx.strokeStyle = 'rgba(80,255,176,0.2)';
+  ctx.lineWidth = 1;
+  ctx.strokeRect(barX, barY, barW, barMaxH);
+
+  // Bar fill
+  var fillH = l1ForceBarAnim * barMaxH;
+  var barGrad = ctx.createLinearGradient(barX, barY + barMaxH - fillH, barX, barY + barMaxH);
+  barGrad.addColorStop(0, '#50ffb0');
+  barGrad.addColorStop(1, '#17df93');
+  ctx.fillStyle = barGrad;
+  ctx.fillRect(barX, barY + barMaxH - fillH, barW, fillH);
+
+  // Bar glow at top
+  if (fillH > 5) {
+    ctx.shadowColor = '#50ffb0';
+    ctx.shadowBlur = 10;
+    ctx.fillRect(barX, barY + barMaxH - fillH, barW, 3);
+    ctx.shadowBlur = 0;
+  }
+
+  // Force label
+  ctx.font = '700 12px "Space Grotesk",sans-serif';
+  ctx.fillStyle = '#50ffb0';
+  ctx.textAlign = 'center';
+  ctx.fillText(fCurrent.toFixed(2) + ' N', barX + barW / 2, barY + barMaxH - fillH - 8);
+  ctx.fillStyle = '#aaabb0';
+  ctx.font = '500 9px "Space Grotesk",sans-serif';
+  ctx.fillText('F_drag', barX + barW / 2, barY - 5);
+
+  // Velocity slider
+  var sliderY = vizY + vizH + 15;
+  var sliderW = Math.min(400, canvasW * 0.6);
+  var sliderX = centerX - sliderW / 2;
+  var sliderH = 8;
+
+  // Slider track
+  ctx.fillStyle = 'rgba(30,35,50,0.9)';
+  ctx.fillRect(sliderX, sliderY, sliderW, sliderH);
+  ctx.strokeStyle = 'rgba(80,255,176,0.3)';
+  ctx.lineWidth = 1;
+  ctx.strokeRect(sliderX, sliderY, sliderW, sliderH);
+
+  // Slider fill
+  var sliderFrac = (l1SliderV - 1) / 99;
+  var sliderFillW = sliderFrac * sliderW;
+  ctx.fillStyle = '#17df93';
+  ctx.fillRect(sliderX, sliderY, sliderFillW, sliderH);
+
+  // Slider knob
+  var knobX = sliderX + sliderFillW;
+  var knobR = 10;
+  ctx.fillStyle = '#50ffb0';
+  ctx.shadowColor = '#50ffb0';
+  ctx.shadowBlur = 8;
+  ctx.beginPath();
+  ctx.arc(knobX, sliderY + sliderH / 2, knobR, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.shadowBlur = 0;
+
+  // Velocity label
+  ctx.font = '700 14px "Space Grotesk",sans-serif';
+  ctx.fillStyle = '#e2e2e9';
+  ctx.textAlign = 'center';
+  ctx.fillText('v = ' + l1SliderV.toFixed(0) + ' m/s', centerX, sliderY + sliderH + 22);
+
+  // Slider ticks
+  ctx.font = '400 9px "Space Grotesk",sans-serif';
+  ctx.fillStyle = '#666';
+  ctx.textAlign = 'left';
+  ctx.fillText('1', sliderX, sliderY + sliderH + 14);
+  ctx.textAlign = 'right';
+  ctx.fillText('100', sliderX + sliderW, sliderY + sliderH + 14);
+
+  // Store slider geometry for interaction
+  canvas._l1Slider = {x: sliderX, y: sliderY - 10, w: sliderW, h: sliderH + 20, min: 1, max: 100};
+
+  // Prediction area (below slider)
+  var predY = sliderY + sliderH + 45;
+
+  if (l1Phase === 'explore') {
+    // Show challenge prompt
+    ctx.font = '500 14px "Inter","Noto Sans SC",sans-serif';
+    ctx.fillStyle = '#ffb59c';
+    ctx.textAlign = 'center';
+    var changeText = t('l1vChange').replace('{v1}', chal.v1).replace('{v2}', chal.v2);
+    ctx.fillText(changeText, centerX, predY);
+    ctx.font = '500 13px "Inter","Noto Sans SC",sans-serif';
+    ctx.fillStyle = '#aaabb0';
+    ctx.fillText(t('l1predict'), centerX, predY + 25);
+
+    // Idle hint: pulsing arrow on slider
+    var arrowPulse = Math.sin(pulsePhase * 3) * 3;
+    ctx.fillStyle = 'rgba(80,255,176,' + (0.4 + 0.2 * Math.sin(pulsePhase * 2)) + ')';
+    ctx.font = '500 18px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('\u2194', centerX, sliderY - 8 + arrowPulse);
+  }
+
+  if (l1Phase === 'predict' || l1Phase === 'correct' || l1Phase === 'wrong') {
+    // Show challenge question
+    ctx.font = '500 14px "Inter","Noto Sans SC",sans-serif';
+    ctx.fillStyle = '#ffb59c';
+    ctx.textAlign = 'center';
+    var changeText2 = t('l1vChange').replace('{v1}', chal.v1).replace('{v2}', chal.v2);
+    ctx.fillText(changeText2, centerX, predY);
+
+    // Input box
+    var shakeX = 0;
+    if (l1ShakeTimer > 0) {
+      shakeX = Math.sin(l1ShakeTimer * 15) * 4 * (l1ShakeTimer / 0.3);
+      l1ShakeTimer = Math.max(0, l1ShakeTimer - 0.016);
+    }
+
+    ctx.save();
+    ctx.translate(shakeX, 0);
+
+    var inputW = Math.min(200, canvasW * 0.35);
+    var inputH = 36;
+    var inputX = centerX - inputW / 2;
+    var inputY = predY + 12;
+
+    ctx.fillStyle = l1Phase === 'wrong' ? 'rgba(255,80,80,0.15)' : 'rgba(30,35,50,0.9)';
+    ctx.fillRect(inputX, inputY, inputW, inputH);
+    ctx.strokeStyle = l1Phase === 'correct' ? '#50ffb0' : (l1Phase === 'wrong' ? '#ff5050' : 'rgba(80,255,176,0.3)');
+    ctx.lineWidth = l1Phase === 'predict' ? 1 : 2;
+    ctx.strokeRect(inputX, inputY, inputW, inputH);
+
+    ctx.font = '500 15px "Space Grotesk",sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillStyle = l1InputValue ? '#e2e2e9' : '#666';
+    ctx.fillText(l1InputValue ? l1InputValue + '\u00d7' : '?\u00d7', centerX, inputY + 24);
+
+    // Cursor blink
+    if (l1Phase === 'predict' && Math.floor(animFrame / 30) % 2 === 0) {
+      ctx.fillStyle = '#50ffb0';
+      var tw = ctx.measureText(l1InputValue ? l1InputValue + '\u00d7' : '').width;
+      ctx.fillRect(centerX + tw / 2 + 2, inputY + 6, 2, inputH - 12);
+    }
+    ctx.restore();
+
+    // Show answer
+    if (l1Phase === 'correct' || l1Phase === 'wrong') {
+      var ansY = inputY + inputH + 20;
+      ctx.textAlign = 'center';
+      ctx.font = '500 13px "Inter","Noto Sans SC",sans-serif';
+      ctx.fillStyle = '#74c0fc';
+      var ratioText = t('l1ratio').replace('{v2}', chal.v2).replace('{v1}', chal.v1).replace('{ans}', chal.answer);
+      ctx.fillText(ratioText, centerX, ansY);
+
+      ctx.font = '700 16px "Space Grotesk",sans-serif';
+      if (l1Phase === 'correct') {
+        ctx.fillStyle = '#50ffb0';
+        ctx.fillText(t('correct'), centerX, ansY + 28);
+      } else {
+        ctx.fillStyle = '#ff5050';
+        ctx.fillText(t('wrong') + '  (' + chal.answer + '\u00d7)', centerX, ansY + 28);
+      }
+    }
+  }
+}
+
+// ==========================================
+// LEVEL 2: Shape Challenge
+// ==========================================
+var L2_CARD_W = 0;
+var L2_CARD_H = 0;
+var L2_SLOT_Y = 0;
+var L2_SLOT_X_START = 0;
+var L2_SLOT_GAP = 0;
+
+function initL2Cards() {
+  L2_CARD_W = Math.min(150, (canvasW - 60) / 4 - 12);
+  L2_CARD_H = Math.min(180, canvasH * 0.5);
+  L2_SLOT_Y = canvasH * 0.25;
+  var totalW = 4 * L2_CARD_W + 3 * 12;
+  L2_SLOT_X_START = (canvasW - totalW) / 2;
+  L2_SLOT_GAP = L2_CARD_W + 12;
+
+  if (l2Cards.length === 0) {
+    var indices = [0,1,2,3];
+    // Fisher-Yates shuffle
+    for (var j = indices.length - 1; j > 0; j--) {
+      var k = Math.floor(Math.random() * (j + 1));
+      var tmp = indices[j]; indices[j] = indices[k]; indices[k] = tmp;
+    }
+    for (var ci = 0; ci < indices.length; ci++) {
+      l2Cards.push({
+        shapeIdx: indices[ci],
+        slotIdx: ci,
+        x: L2_SLOT_X_START + ci * L2_SLOT_GAP,
+        y: L2_SLOT_Y,
+        targetX: L2_SLOT_X_START + ci * L2_SLOT_GAP,
+        targetY: L2_SLOT_Y,
+        dragOffX: 0,
+        dragOffY: 0
+      });
+    }
+  } else {
+    for (var ri = 0; ri < l2Cards.length; ri++) {
+      l2Cards[ri].targetX = L2_SLOT_X_START + l2Cards[ri].slotIdx * L2_SLOT_GAP;
+      l2Cards[ri].targetY = L2_SLOT_Y;
+      if (l2DragIdx !== ri) {
+        l2Cards[ri].x = l2Cards[ri].targetX;
+        l2Cards[ri].y = l2Cards[ri].targetY;
+      }
+    }
+  }
+}
+
+function initL2Match() {
+  // For match phase: 4 Cd values in shuffled order on right side
+  var cdValues = SHAPES.map(function(s){ return s.cd; });
+  // Shuffle
+  for (var j = cdValues.length - 1; j > 0; j--) {
+    var k = Math.floor(Math.random() * (j + 1));
+    var tmp = cdValues[j]; cdValues[j] = cdValues[k]; cdValues[k] = tmp;
+  }
+  l2MatchSlots = [];
+  for (var mi = 0; mi < 4; mi++) {
+    l2MatchSlots.push({
+      cd: cdValues[mi],
+      assignedShape: -1,  // shape index assigned here
+      x: 0, y: 0
+    });
+  }
+}
+
+function drawLevel2() {
+  var centerX = canvasW / 2;
+
+  if (l2Phase === 'rank' || l2Phase === 'rankResult') {
+    // Title
+    ctx.font = '700 13px "Space Grotesk",sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#ffb59c';
+    ctx.fillText(t('l2rank'), centerX, L2_SLOT_Y - 30);
+
+    // Slot labels
+    ctx.font = '700 10px "Space Grotesk",sans-serif';
+    ctx.fillStyle = '#aaabb0';
+    ctx.textAlign = 'center';
+    ctx.fillText(t('lowest'), L2_SLOT_X_START + L2_CARD_W / 2, L2_SLOT_Y - 12);
+    ctx.fillText(t('highest'), L2_SLOT_X_START + 3 * L2_SLOT_GAP + L2_CARD_W / 2, L2_SLOT_Y - 12);
+
+    // Arrow
+    ctx.strokeStyle = 'rgba(170,171,176,0.3)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(L2_SLOT_X_START + L2_CARD_W + 5, L2_SLOT_Y - 8);
+    ctx.lineTo(L2_SLOT_X_START + 3 * L2_SLOT_GAP - 5, L2_SLOT_Y - 8);
+    ctx.stroke();
+    var arrowEnd = L2_SLOT_X_START + 3 * L2_SLOT_GAP - 5;
+    ctx.beginPath();
+    ctx.moveTo(arrowEnd, L2_SLOT_Y - 8);
+    ctx.lineTo(arrowEnd - 6, L2_SLOT_Y - 12);
+    ctx.lineTo(arrowEnd - 6, L2_SLOT_Y - 4);
+    ctx.closePath();
+    ctx.fillStyle = 'rgba(170,171,176,0.3)';
+    ctx.fill();
+
+    // Slot outlines
+    for (var si = 0; si < 4; si++) {
+      var sx = L2_SLOT_X_START + si * L2_SLOT_GAP;
+      ctx.strokeStyle = 'rgba(80,255,176,0.15)';
+      ctx.lineWidth = 1;
+      ctx.setLineDash([4, 4]);
+      ctx.strokeRect(sx, L2_SLOT_Y, L2_CARD_W, L2_CARD_H);
+      ctx.setLineDash([]);
+    }
+
+    // Shake
+    var shakeX = 0;
+    if (l2ShakeTimer > 0) {
+      shakeX = Math.sin(l2ShakeTimer * 15) * 6 * (l2ShakeTimer / 0.4);
+      l2ShakeTimer = Math.max(0, l2ShakeTimer - 0.016);
+    }
+
+    // Draw cards
+    var drawOrder = [];
+    for (var di = 0; di < l2Cards.length; di++) drawOrder.push(di);
+    if (l2DragIdx >= 0) {
+      drawOrder.splice(drawOrder.indexOf(l2DragIdx), 1);
+      drawOrder.push(l2DragIdx);
+    }
+
+    for (var doi = 0; doi < drawOrder.length; doi++) {
+      var ci = drawOrder[doi];
+      var card = l2Cards[ci];
+      var shape = SHAPES[card.shapeIdx];
+      var isDragging = ci === l2DragIdx;
+
+      // Easing to target position
+      if (!isDragging) {
+        card.x += (card.targetX - card.x) * 0.15;
+        card.y += (card.targetY - card.y) * 0.15;
+      }
+
+      var cx = card.x + shakeX * (isDragging ? 0 : 1);
+      var cy = card.y;
+
+      // Card background
+      ctx.save();
+      if (isDragging) {
+        ctx.shadowColor = shape.color;
+        ctx.shadowBlur = 20;
+      }
+      ctx.fillStyle = isDragging ? 'rgba(25,30,50,0.95)' : 'rgba(20,25,40,0.9)';
+      ctx.fillRect(cx, cy, L2_CARD_W, L2_CARD_H);
+      ctx.restore();
+
+      // Card border
+      var isCorrectPos = false;
+      if (l2Phase === 'rankResult') {
+        var correctIdx = SHAPES_SORTED.indexOf(shape);
+        isCorrectPos = card.slotIdx === correctIdx;
+      }
+      ctx.strokeStyle = l2Phase === 'rankResult' ? (isCorrectPos ? '#50ffb0' : '#ff5050') : 'rgba(' + hexToRgb(shape.color) + ',0.5)';
+      ctx.lineWidth = isDragging ? 2 : 1;
+      ctx.strokeRect(cx, cy, L2_CARD_W, L2_CARD_H);
+
+      // Shape drawing
+      var shapeCX = cx + L2_CARD_W / 2;
+      var shapeCY = cy + L2_CARD_H * 0.35;
+      var shapeSize = L2_CARD_W * 0.25;
+
+      ctx.fillStyle = shape.color;
+      shapeDrawFns[card.shapeIdx](shapeCX, shapeCY, shapeSize);
+      ctx.fill();
+
+      // Shape name
+      ctx.font = '700 11px "Space Grotesk",sans-serif';
+      ctx.fillStyle = shape.color;
+      ctx.textAlign = 'center';
+      ctx.fillText(shape.name[lang] || shape.name.en, shapeCX, cy + L2_CARD_H * 0.65);
+
+      // Show C_D on reveal
+      if (l2Phase === 'rankResult') {
+        ctx.font = '700 14px "Space Grotesk",sans-serif';
+        ctx.fillStyle = '#e2e2e9';
+        ctx.fillText('C_D = ' + shape.cd.toFixed(2), shapeCX, cy + L2_CARD_H * 0.82);
+
+        if (isCorrectPos) {
+          ctx.fillStyle = 'rgba(80,255,176,0.15)';
+          ctx.fillRect(cx, cy, L2_CARD_W, L2_CARD_H);
+        }
+      }
+    }
+
+  } else if (l2Phase === 'match' || l2Phase === 'matchResult') {
+    // Match phase: shapes on left, C_D slots on right
+    ctx.font = '700 13px "Space Grotesk",sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#ffb59c';
+    ctx.fillText(t('l2match'), centerX, 30);
+
+    var matchLeft = canvasW * 0.15;
+    var matchRight = canvasW * 0.65;
+    var matchCardH = Math.min(70, (canvasH - 80) / 4 - 10);
+    var matchStartY = 55;
+
+    // Draw shape cards on left
+    for (var smi = 0; smi < 4; smi++) {
+      var shape2 = SHAPES[smi];
+      var sy2 = matchStartY + smi * (matchCardH + 10);
+      var sw2 = Math.min(160, canvasW * 0.3);
+
+      ctx.fillStyle = 'rgba(20,25,40,0.9)';
+      ctx.fillRect(matchLeft, sy2, sw2, matchCardH);
+      ctx.strokeStyle = 'rgba(' + hexToRgb(shape2.color) + ',0.4)';
+      ctx.lineWidth = 1;
+      ctx.strokeRect(matchLeft, sy2, sw2, matchCardH);
+
+      // Shape mini-drawing
+      var sMiniCX = matchLeft + 35;
+      var sMiniCY = sy2 + matchCardH / 2;
+      ctx.fillStyle = shape2.color;
+      shapeDrawFns[smi](sMiniCX, sMiniCY, 15);
+      ctx.fill();
+
+      // Name
+      ctx.font = '500 11px "Inter","Noto Sans SC",sans-serif';
+      ctx.fillStyle = shape2.color;
+      ctx.textAlign = 'left';
+      ctx.fillText(shape2.name[lang] || shape2.name.en, matchLeft + 60, sy2 + matchCardH / 2 + 4);
+
+      // Connection line to assigned slot
+      var assignedSlot = -1;
+      for (var asi = 0; asi < l2MatchSlots.length; asi++) {
+        if (l2MatchSlots[asi].assignedShape === smi) { assignedSlot = asi; break; }
+      }
+      if (assignedSlot >= 0) {
+        var slotY = matchStartY + assignedSlot * (matchCardH + 10) + matchCardH / 2;
+        ctx.strokeStyle = 'rgba(' + hexToRgb(shape2.color) + ',0.4)';
+        ctx.lineWidth = 2;
+        ctx.setLineDash([4,4]);
+        ctx.beginPath();
+        ctx.moveTo(matchLeft + sw2, sy2 + matchCardH / 2);
+        ctx.lineTo(matchRight, slotY);
+        ctx.stroke();
+        ctx.setLineDash([]);
+      }
+    }
+
+    // Draw C_D value slots on right
+    var slotW = Math.min(120, canvasW * 0.2);
+    for (var sli = 0; sli < l2MatchSlots.length; sli++) {
+      var slot = l2MatchSlots[sli];
+      var slotY2 = matchStartY + sli * (matchCardH + 10);
+      slot.x = matchRight;
+      slot.y = slotY2;
+
+      var hasShape = slot.assignedShape >= 0;
+      var isCorrectMatch = false;
+      if (l2Phase === 'matchResult' && hasShape) {
+        isCorrectMatch = Math.abs(SHAPES[slot.assignedShape].cd - slot.cd) < 0.001;
+      }
+
+      ctx.fillStyle = hasShape ? 'rgba(25,30,50,0.95)' : 'rgba(20,25,40,0.7)';
+      ctx.fillRect(matchRight, slotY2, slotW, matchCardH);
+      ctx.strokeStyle = l2Phase === 'matchResult' ?
+        (hasShape ? (isCorrectMatch ? '#50ffb0' : '#ff5050') : 'rgba(80,255,176,0.15)') :
+        (hasShape ? 'rgba(80,255,176,0.5)' : 'rgba(80,255,176,0.15)');
+      ctx.lineWidth = 1;
+      ctx.strokeRect(matchRight, slotY2, slotW, matchCardH);
+
+      ctx.font = '700 16px "Space Grotesk",sans-serif';
+      ctx.fillStyle = '#e2e2e9';
+      ctx.textAlign = 'center';
+      ctx.fillText('C_D = ' + slot.cd.toFixed(2), matchRight + slotW / 2, slotY2 + matchCardH / 2 + 6);
+
+      // Show assigned shape mini icon
+      if (hasShape) {
+        var aShape = SHAPES[slot.assignedShape];
+        ctx.fillStyle = aShape.color;
+        shapeDrawFns[slot.assignedShape](matchRight + slotW - 20, slotY2 + matchCardH / 2, 10);
+        ctx.fill();
+      }
+    }
+
+    // Clickable shape selector (bottom)
+    if (l2Phase === 'match') {
+      var selY = matchStartY + 4 * (matchCardH + 10) + 10;
+      ctx.font = '500 11px "Inter","Noto Sans SC",sans-serif';
+      ctx.fillStyle = '#aaabb0';
+      ctx.textAlign = 'center';
+      ctx.fillText(lang === 'cn' ? '\u70b9\u51fb\u5f62\u72b6\uff0c\u518d\u70b9\u51fb C_D \u69fd\u4f4d\u8fdb\u884c\u914d\u5bf9' : 'Click a shape, then click a C_D slot to assign', centerX, selY);
+    }
+  }
+}
+
+// ==========================================
+// LEVEL 3: Rocket Optimizer
+// ==========================================
+function drawLevel3() {
+  var mission = L3_MISSIONS[currentRound];
+  var centerX = canvasW / 2;
+  var topY = 20;
+
+  // Mission info card
+  var cardW = Math.min(500, canvasW * 0.85);
+  var cardH = 50;
+  var cardX = centerX - cardW / 2;
+
+  ctx.fillStyle = 'rgba(20,25,40,0.9)';
+  ctx.shadowColor = '#ffb59c';
+  ctx.shadowBlur = 6;
+  ctx.fillRect(cardX, topY, cardW, cardH);
+  ctx.shadowBlur = 0;
+  ctx.strokeStyle = 'rgba(255,181,156,0.3)';
+  ctx.lineWidth = 1;
+  ctx.strokeRect(cardX, topY, cardW, cardH);
+
+  ctx.font = '700 13px "Space Grotesk",sans-serif';
+  ctx.fillStyle = '#ffb59c';
+  ctx.textAlign = 'center';
+  var altText = mission.altitude[lang] || mission.altitude.en;
+  ctx.fillText(t('targetSpeed') + ': ' + mission.targetV + ' m/s  |  ' + t('altitude') + ': ' + altText + '  |  \u03c1 = ' + mission.rho + ' kg/m\u00b3', centerX, topY + 22);
+
+  ctx.font = '500 11px "Inter","Noto Sans SC",sans-serif';
+  ctx.fillStyle = '#aaabb0';
+  ctx.fillText(t('budget') + ': $100', centerX, topY + 42);
+
+  // Selection area
+  var selY = topY + cardH + 20;
+  var selW = Math.min(480, canvasW * 0.8);
+  var selX = centerX - selW / 2;
+
+  // Nose cone selector
+  ctx.font = '700 11px "Space Grotesk",sans-serif';
+  ctx.fillStyle = '#50ffb0';
+  ctx.textAlign = 'left';
+  ctx.fillText(t('noseCone') + ' (C_D)', selX, selY);
+
+  var noseCardW = (selW - 30) / 4;
+  var noseCardH = Math.min(100, canvasH * 0.16);
+  var noseY = selY + 10;
+
+  for (var ni = 0; ni < NOSE_CONES.length; ni++) {
+    var nose = NOSE_CONES[ni];
+    var nx = selX + ni * (noseCardW + 10);
+    var isSelected = ni === l3NoseIdx;
+
+    ctx.fillStyle = isSelected ? 'rgba(80,255,176,0.1)' : 'rgba(20,25,40,0.8)';
+    ctx.fillRect(nx, noseY, noseCardW, noseCardH);
+    ctx.strokeStyle = isSelected ? '#50ffb0' : 'rgba(80,255,176,0.15)';
+    ctx.lineWidth = isSelected ? 2 : 1;
+    ctx.strokeRect(nx, noseY, noseCardW, noseCardH);
+
+    if (isSelected) {
+      ctx.shadowColor = '#50ffb0';
+      ctx.shadowBlur = 8;
+      ctx.strokeRect(nx, noseY, noseCardW, noseCardH);
+      ctx.shadowBlur = 0;
+    }
+
+    // Draw nose cone shape
+    var ncx = nx + noseCardW / 2;
+    var ncy = noseY + noseCardH * 0.35;
+    var nSize = Math.min(noseCardW * 0.3, 20);
+    drawNoseCone(ncx, ncy, nSize, nose.cd);
+
+    // Name
+    ctx.font = '500 10px "Inter","Noto Sans SC",sans-serif';
+    ctx.fillStyle = isSelected ? '#50ffb0' : '#aaabb0';
+    ctx.textAlign = 'center';
+    ctx.fillText(nose.name[lang] || nose.name.en, ncx, noseY + noseCardH * 0.68);
+
+    // Stats
+    ctx.font = '700 10px "Space Grotesk",sans-serif';
+    ctx.fillStyle = '#74c0fc';
+    ctx.fillText('C_D ' + nose.cd.toFixed(2), ncx, noseY + noseCardH * 0.82);
+    ctx.fillStyle = '#ffa94d';
+    ctx.fillText('$' + nose.cost, ncx, noseY + noseCardH * 0.95);
+
+    // Store for click detection
+    if (!canvas._l3NoseCards) canvas._l3NoseCards = [];
+    canvas._l3NoseCards[ni] = {x:nx, y:noseY, w:noseCardW, h:noseCardH};
+  }
+
+  // Body diameter selector
+  var diamY = noseY + noseCardH + 20;
+  ctx.font = '700 11px "Space Grotesk",sans-serif';
+  ctx.fillStyle = '#50ffb0';
+  ctx.textAlign = 'left';
+  ctx.fillText(t('bodyDiam') + ' (A)', selX, diamY);
+
+  var diamCardW = (selW - 30) / 4;
+  var diamCardH = Math.min(80, canvasH * 0.12);
+  var diamRowY = diamY + 10;
+
+  for (var bdi = 0; bdi < BODY_DIAMETERS.length; bdi++) {
+    var body = BODY_DIAMETERS[bdi];
+    var bx = selX + bdi * (diamCardW + 10);
+    var isSelectedB = bdi === l3DiamIdx;
+
+    ctx.fillStyle = isSelectedB ? 'rgba(80,255,176,0.1)' : 'rgba(20,25,40,0.8)';
+    ctx.fillRect(bx, diamRowY, diamCardW, diamCardH);
+    ctx.strokeStyle = isSelectedB ? '#50ffb0' : 'rgba(80,255,176,0.15)';
+    ctx.lineWidth = isSelectedB ? 2 : 1;
+    ctx.strokeRect(bx, diamRowY, diamCardW, diamCardH);
+
+    if (isSelectedB) {
+      ctx.shadowColor = '#50ffb0';
+      ctx.shadowBlur = 8;
+      ctx.strokeRect(bx, diamRowY, diamCardW, diamCardH);
+      ctx.shadowBlur = 0;
+    }
+
+    // Circle representing cross-section
+    var cirR = Math.min(diamCardH * 0.25, diamCardW * 0.2) * (0.5 + 0.5 * (1 - bdi / 3));
+    ctx.fillStyle = isSelectedB ? 'rgba(80,255,176,0.3)' : 'rgba(80,255,176,0.1)';
+    ctx.beginPath();
+    ctx.arc(bx + diamCardW / 2, diamRowY + diamCardH * 0.35, cirR, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = isSelectedB ? '#50ffb0' : 'rgba(80,255,176,0.3)';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+
+    // Label
+    ctx.font = '700 11px "Space Grotesk",sans-serif';
+    ctx.fillStyle = isSelectedB ? '#e2e2e9' : '#aaabb0';
+    ctx.textAlign = 'center';
+    ctx.fillText(body.label, bx + diamCardW / 2, diamRowY + diamCardH * 0.7);
+
+    ctx.font = '500 9px "Space Grotesk",sans-serif';
+    ctx.fillStyle = '#74c0fc';
+    ctx.fillText('A=' + body.area.toFixed(4) + ' m\u00b2', bx + diamCardW / 2, diamRowY + diamCardH * 0.85);
+    ctx.fillStyle = '#ffa94d';
+    ctx.fillText('$' + body.cost, bx + diamCardW / 2, diamRowY + diamCardH * 0.97);
+
+    if (!canvas._l3DiamCards) canvas._l3DiamCards = [];
+    canvas._l3DiamCards[bdi] = {x:bx, y:diamRowY, w:diamCardW, h:diamCardH};
+  }
+
+  // Cost & drag summary bar
+  var sumY = diamRowY + diamCardH + 15;
+  var nose3 = NOSE_CONES[l3NoseIdx];
+  var body3 = BODY_DIAMETERS[l3DiamIdx];
+  var totalCost = nose3.cost + body3.cost;
+  var dragVal = calcDrag(mission.rho, mission.targetV, nose3.cd, body3.area);
+  var overBudget = totalCost > 100;
+
+  ctx.fillStyle = 'rgba(20,25,40,0.8)';
+  ctx.fillRect(selX, sumY, selW, 40);
+  ctx.strokeStyle = overBudget ? 'rgba(255,80,80,0.5)' : 'rgba(80,255,176,0.2)';
+  ctx.lineWidth = 1;
+  ctx.strokeRect(selX, sumY, selW, 40);
+
+  ctx.font = '700 13px "Space Grotesk",sans-serif';
+  ctx.textAlign = 'left';
+  ctx.fillStyle = overBudget ? '#ff5050' : '#ffa94d';
+  ctx.fillText(t('cost') + ': $' + totalCost + '/100' + (overBudget ? '  ' + t('overBudget') : ''), selX + 15, sumY + 18);
+
+  ctx.textAlign = 'right';
+  ctx.fillStyle = '#50ffb0';
+  ctx.fillText('F_drag = ' + dragVal.toFixed(2) + ' N', selX + selW - 15, sumY + 18);
+
+  ctx.font = '500 10px "Inter","Noto Sans SC",sans-serif';
+  ctx.textAlign = 'left';
+  ctx.fillStyle = '#aaabb0';
+  ctx.fillText('F = 0.5 \u00d7 ' + mission.rho + ' \u00d7 ' + mission.targetV + '\u00b2 \u00d7 ' + nose3.cd.toFixed(2) + ' \u00d7 ' + body3.area.toFixed(4), selX + 15, sumY + 34);
+
+  // Launch animation / result
+  if (l3Phase === 'launching' || l3Phase === 'result') {
+    var rocketX = centerX;
+    var rocketBaseY = sumY + 60;
+
+    if (l3Phase === 'launching') {
+      l3LaunchProgress += 0.015;
+      l3RocketY = easeOutCubic(Math.min(l3LaunchProgress, 1)) * (canvasH * 0.3);
+
+      // Trail particles
+      if (animFrame % 2 === 0) {
+        spawnParticles(rocketX, rocketBaseY - l3RocketY + 15, 2, '#ffa94d', 2);
+      }
+
+      // Drag resistance visual
+      var dragIntensity = Math.min(dragVal / 50, 1);
+      if (dragIntensity > 0.3) {
+        l3RocketShake = Math.sin(animFrame * 0.3) * dragIntensity * 3;
+      }
+
+      if (l3LaunchProgress >= 1.2) {
+        l3Phase = 'result';
+        evaluateL3();
+      }
+    }
+
+    // Draw rocket
+    var rktX = rocketX + l3RocketShake;
+    var rktY = rocketBaseY - l3RocketY;
+    drawMiniRocket(rktX, rktY, 12, nose3.cd);
+
+    // Drag arrows
+    if (l3Phase === 'launching') {
+      var arrowCount = Math.ceil(dragVal / 5);
+      arrowCount = Math.min(arrowCount, 8);
+      for (var ai = 0; ai < arrowCount; ai++) {
+        var aoffY = (ai - arrowCount / 2) * 8;
+        var aLen = 10 + dragVal * 0.5;
+        ctx.strokeStyle = 'rgba(255,107,107,' + (0.4 + 0.3 * Math.sin(animFrame * 0.1 + ai)) + ')';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(rktX + 20 + aLen, rktY + aoffY);
+        ctx.lineTo(rktX + 20, rktY + aoffY);
+        ctx.stroke();
+        // arrowhead
+        ctx.beginPath();
+        ctx.moveTo(rktX + 20, rktY + aoffY);
+        ctx.lineTo(rktX + 25, rktY + aoffY - 3);
+        ctx.lineTo(rktX + 25, rktY + aoffY + 3);
+        ctx.closePath();
+        ctx.fillStyle = 'rgba(255,107,107,0.5)';
+        ctx.fill();
+      }
+    }
+
+    // Result text
+    if (l3Phase === 'result') {
+      var resY = rocketBaseY + 20;
+      ctx.textAlign = 'center';
+
+      var optimalDrag = findOptimalDrag(mission);
+      var dragRatio = dragVal / optimalDrag;
+
+      ctx.font = '700 16px "Space Grotesk",sans-serif';
+      if (overBudget) {
+        ctx.fillStyle = '#ff5050';
+        ctx.fillText(t('overBudget'), centerX, resY);
+      } else if (dragRatio <= 1.2) {
+        ctx.fillStyle = '#50ffb0';
+        ctx.fillText(t('excellent'), centerX, resY);
+        levelScores[2] += 30;
+        totalScore += 30;
+      } else if (dragRatio <= 2.0) {
+        ctx.fillStyle = '#ffa94d';
+        ctx.fillText(t('good'), centerX, resY);
+        levelScores[2] += 15;
+        totalScore += 15;
+      } else {
+        ctx.fillStyle = '#ff6b6b';
+        ctx.fillText(t('poor'), centerX, resY);
+        levelScores[2] += 5;
+        totalScore += 5;
+      }
+
+      ctx.font = '500 12px "Inter","Noto Sans SC",sans-serif';
+      ctx.fillStyle = '#aaabb0';
+      ctx.fillText('F_drag = ' + dragVal.toFixed(2) + ' N  (optimal: ' + optimalDrag.toFixed(2) + ' N)', centerX, resY + 25);
+    }
+  }
+}
+
+function findOptimalDrag(mission) {
+  var bestDrag = Infinity;
+  for (var ni = 0; ni < NOSE_CONES.length; ni++) {
+    for (var di = 0; di < BODY_DIAMETERS.length; di++) {
+      var cost = NOSE_CONES[ni].cost + BODY_DIAMETERS[di].cost;
+      if (cost <= 100) {
+        var drag = calcDrag(mission.rho, mission.targetV, NOSE_CONES[ni].cd, BODY_DIAMETERS[di].area);
+        if (drag < bestDrag) bestDrag = drag;
+      }
+    }
+  }
+  return bestDrag;
+}
+
+function evaluateL3() {
+  // Score is computed in drawLevel3 result section
+}
+
+function drawNoseCone(cx, cy, size, cd) {
+  // Bluntness based on C_D: higher cd = blunter
+  var sharpness = 1 - (cd / 1.2);
+  sharpness = Math.max(0.1, Math.min(1, sharpness));
+
+  ctx.fillStyle = '#50ffb0';
+  ctx.beginPath();
+  ctx.moveTo(cx, cy - size * (0.8 + sharpness * 0.8));
+  var cpOff = size * (1 - sharpness) * 0.8;
+  ctx.bezierCurveTo(cx + cpOff, cy - size * 0.3, cx + size * 0.6, cy + size * 0.2, cx + size * 0.5, cy + size);
+  ctx.lineTo(cx - size * 0.5, cy + size);
+  ctx.bezierCurveTo(cx - size * 0.6, cy + size * 0.2, cx - cpOff, cy - size * 0.3, cx, cy - size * (0.8 + sharpness * 0.8));
+  ctx.closePath();
+  ctx.fill();
+  ctx.strokeStyle = 'rgba(255,255,255,0.3)';
+  ctx.lineWidth = 1;
+  ctx.stroke();
+}
+
+function drawMiniRocket(cx, cy, size, cd) {
+  // Body
+  ctx.fillStyle = '#aaabb0';
+  ctx.fillRect(cx - size * 0.3, cy - size * 0.5, size * 0.6, size * 2);
+
+  // Nose
+  drawNoseCone(cx, cy - size * 0.5, size * 0.4, cd);
+
+  // Fins
+  ctx.fillStyle = '#ff6b6b';
+  ctx.beginPath();
+  ctx.moveTo(cx - size * 0.3, cy + size * 1.5);
+  ctx.lineTo(cx - size * 0.7, cy + size * 2);
+  ctx.lineTo(cx - size * 0.3, cy + size * 1.2);
+  ctx.closePath();
+  ctx.fill();
+  ctx.beginPath();
+  ctx.moveTo(cx + size * 0.3, cy + size * 1.5);
+  ctx.lineTo(cx + size * 0.7, cy + size * 2);
+  ctx.lineTo(cx + size * 0.3, cy + size * 1.2);
+  ctx.closePath();
+  ctx.fill();
+
+  // Flame
+  var flameH = size * (0.5 + Math.random() * 0.3);
+  ctx.fillStyle = '#ffa94d';
+  ctx.beginPath();
+  ctx.moveTo(cx - size * 0.2, cy + size * 1.5);
+  ctx.lineTo(cx, cy + size * 1.5 + flameH);
+  ctx.lineTo(cx + size * 0.2, cy + size * 1.5);
+  ctx.closePath();
+  ctx.fill();
+}
+
+// --- Completion overlay ---
+function drawCompletion() {
+  if (!gameComplete) return;
+  completionAlpha += (1 - completionAlpha) * 0.04;
+
+  ctx.fillStyle = 'rgba(12,14,20,' + (completionAlpha * 0.85) + ')';
+  ctx.fillRect(0, 0, canvasW, canvasH);
+
+  ctx.globalAlpha = completionAlpha;
+  ctx.textAlign = 'center';
+
+  ctx.font = '700 28px "Space Grotesk",sans-serif';
+  ctx.fillStyle = '#50ffb0';
+  ctx.shadowColor = '#50ffb0';
+  ctx.shadowBlur = 20;
+  ctx.fillText(t('complete'), canvasW / 2, canvasH * 0.25);
+  ctx.shadowBlur = 0;
+
+  ctx.font = '700 20px "Space Grotesk",sans-serif';
+  ctx.fillStyle = '#e2e2e9';
+  ctx.fillText(t('score') + ': ' + totalScore, canvasW / 2, canvasH * 0.35);
+
+  // Level breakdown
+  var breakLabels = ['l1title', 'l2title', 'l3title'];
+  for (var bi = 0; bi < 3; bi++) {
+    ctx.font = '500 14px "Inter","Noto Sans SC",sans-serif';
+    ctx.fillStyle = '#aaabb0';
+    ctx.fillText(t(breakLabels[bi]) + ': ' + levelScores[bi], canvasW / 2, canvasH * 0.43 + bi * 28);
+  }
+
+  // Summary text
+  var summaryLines = t('summary').split('\n');
+  ctx.font = '500 12px "Inter","Noto Sans SC",sans-serif';
+  ctx.fillStyle = '#74c0fc';
+  for (var sli = 0; sli < summaryLines.length; sli++) {
+    ctx.fillText(summaryLines[sli], canvasW / 2, canvasH * 0.62 + sli * 20);
+  }
+
+  ctx.globalAlpha = 1;
+}
+
+// --- Hex to RGB helper ---
+function hexToRgb(hex) {
+  var result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+  return result ? parseInt(result[1],16)+','+parseInt(result[2],16)+','+parseInt(result[3],16) : '255,255,255';
+}
+
+// ==========================================
+// MAIN GAME LOOP
+// ==========================================
+function gameLoop() {
+  animFrame++;
+  pulsePhase += 0.016;
+
+  // Clear
+  ctx.fillStyle = '#0c0e14';
+  ctx.fillRect(0, 0, canvasW, canvasH);
+
+  // Parallax background
+  drawParallax();
+
+  // Draw current level
+  if (!gameComplete) {
+    if (currentLevel === 0) drawLevel1();
+    else if (currentLevel === 1) drawLevel2();
+    else if (currentLevel === 2) drawLevel3();
+  }
+
+  // Particles
+  updateParticles();
+  drawParticles();
+
+  // Completion overlay
+  if (gameComplete) drawCompletion();
+
+  // Transition fade
+  if (transitionAlpha > 0.01) {
+    ctx.fillStyle = 'rgba(12,14,20,' + transitionAlpha + ')';
+    ctx.fillRect(0, 0, canvasW, canvasH);
+    transitionAlpha *= 0.93;
+    if (transitionAlpha < 0.02) transitionAlpha = 0;
+  }
+
+  requestAnimationFrame(gameLoop);
+}
+
+// ==========================================
+// INPUT HANDLING
+// ==========================================
+
+// Keyboard input for L1
+document.addEventListener('keydown', function(e) {
+  if (currentLevel === 0 && (l1Phase === 'predict' || l1Phase === 'explore')) {
+    if (e.key >= '0' && e.key <= '9') {
+      if (l1Phase === 'explore') l1Phase = 'predict';
+      if (l1InputValue.length < 6) l1InputValue += e.key;
+    } else if (e.key === '.' && l1InputValue.indexOf('.') === -1) {
+      if (l1Phase === 'explore') l1Phase = 'predict';
+      l1InputValue += '.';
+    } else if (e.key === 'Backspace') {
+      l1InputValue = l1InputValue.slice(0, -1);
+    } else if (e.key === 'Enter') {
+      handleAction();
+    }
+  }
+});
+
+// Mouse/touch for sliders and cards
+canvas.addEventListener('mousedown', function(e) {
+  var rect = canvas.getBoundingClientRect();
+  mouseX = e.clientX - rect.left;
+  mouseY = e.clientY - rect.top;
+  mouseDown = true;
+  handleCanvasDown(mouseX, mouseY);
+});
+
+canvas.addEventListener('mousemove', function(e) {
+  var rect = canvas.getBoundingClientRect();
+  mouseX = e.clientX - rect.left;
+  mouseY = e.clientY - rect.top;
+  handleCanvasMove(mouseX, mouseY);
+});
+
+canvas.addEventListener('mouseup', function(e) {
+  mouseDown = false;
+  handleCanvasUp();
+});
+
+canvas.addEventListener('touchstart', function(e) {
+  e.preventDefault();
+  var rect = canvas.getBoundingClientRect();
+  var t1 = e.touches[0];
+  mouseX = t1.clientX - rect.left;
+  mouseY = t1.clientY - rect.top;
+  mouseDown = true;
+  handleCanvasDown(mouseX, mouseY);
+}, {passive:false});
+
+canvas.addEventListener('touchmove', function(e) {
+  e.preventDefault();
+  var rect = canvas.getBoundingClientRect();
+  var t1 = e.touches[0];
+  mouseX = t1.clientX - rect.left;
+  mouseY = t1.clientY - rect.top;
+  handleCanvasMove(mouseX, mouseY);
+}, {passive:false});
+
+canvas.addEventListener('touchend', function(e) {
+  mouseDown = false;
+  handleCanvasUp();
+});
+
+function handleCanvasDown(mx, my) {
+  // Level 1: velocity slider
+  if (currentLevel === 0 && canvas._l1Slider) {
+    var sl = canvas._l1Slider;
+    if (mx >= sl.x - 15 && mx <= sl.x + sl.w + 15 && my >= sl.y && my <= sl.y + sl.h) {
+      l1DraggingSlider = true;
+      updateL1Slider(mx);
+      return;
+    }
+  }
+
+  // Level 2: drag cards (rank phase)
+  if (currentLevel === 1 && l2Phase === 'rank') {
+    for (var ci = l2Cards.length - 1; ci >= 0; ci--) {
+      var card = l2Cards[ci];
+      if (mx >= card.x && mx <= card.x + L2_CARD_W && my >= card.y && my <= card.y + L2_CARD_H) {
+        l2DragIdx = ci;
+        card.dragOffX = mx - card.x;
+        card.dragOffY = my - card.y;
+        return;
+      }
+    }
+  }
+
+  // Level 2: match phase click
+  if (currentLevel === 1 && l2Phase === 'match') {
+    handleL2MatchClick(mx, my);
+    return;
+  }
+
+  // Level 3: nose cone selection
+  if (currentLevel === 2 && l3Phase === 'choose' && canvas._l3NoseCards) {
+    for (var ni = 0; ni < canvas._l3NoseCards.length; ni++) {
+      var nc = canvas._l3NoseCards[ni];
+      if (mx >= nc.x && mx <= nc.x + nc.w && my >= nc.y && my <= nc.y + nc.h) {
+        l3NoseIdx = ni;
+        playSound('click');
+        updateUI();
+        return;
+      }
+    }
+  }
+
+  // Level 3: body diameter selection
+  if (currentLevel === 2 && l3Phase === 'choose' && canvas._l3DiamCards) {
+    for (var di = 0; di < canvas._l3DiamCards.length; di++) {
+      var dc = canvas._l3DiamCards[di];
+      if (mx >= dc.x && mx <= dc.x + dc.w && my >= dc.y && my <= dc.y + dc.h) {
+        l3DiamIdx = di;
+        playSound('click');
+        updateUI();
+        return;
+      }
+    }
+  }
+}
+
+function handleCanvasMove(mx, my) {
+  if (currentLevel === 0 && l1DraggingSlider) {
+    updateL1Slider(mx);
+    return;
+  }
+
+  if (currentLevel === 1 && l2DragIdx >= 0) {
+    var card = l2Cards[l2DragIdx];
+    card.x = mx - card.dragOffX;
+    card.y = my - card.dragOffY;
+    return;
+  }
+}
+
+function handleCanvasUp() {
+  if (currentLevel === 0) {
+    l1DraggingSlider = false;
+  }
+
+  if (currentLevel === 1 && l2DragIdx >= 0) {
+    // Find nearest slot
+    var card = l2Cards[l2DragIdx];
+    var bestSlot = card.slotIdx;
+    var bestDist = Infinity;
+    for (var si = 0; si < 4; si++) {
+      var slotCX = L2_SLOT_X_START + si * L2_SLOT_GAP + L2_CARD_W / 2;
+      var slotCY = L2_SLOT_Y + L2_CARD_H / 2;
+      var dist = Math.abs(card.x + L2_CARD_W / 2 - slotCX) + Math.abs(card.y + L2_CARD_H / 2 - slotCY);
+      if (dist < bestDist) { bestDist = dist; bestSlot = si; }
+    }
+
+    // Swap with occupant if any
+    var occupant = -1;
+    for (var oi = 0; oi < l2Cards.length; oi++) {
+      if (oi !== l2DragIdx && l2Cards[oi].slotIdx === bestSlot) { occupant = oi; break; }
+    }
+    if (occupant >= 0) {
+      l2Cards[occupant].slotIdx = card.slotIdx;
+      l2Cards[occupant].targetX = L2_SLOT_X_START + l2Cards[occupant].slotIdx * L2_SLOT_GAP;
+      l2Cards[occupant].targetY = L2_SLOT_Y;
+    }
+
+    card.slotIdx = bestSlot;
+    card.targetX = L2_SLOT_X_START + bestSlot * L2_SLOT_GAP;
+    card.targetY = L2_SLOT_Y;
+
+    l2DragIdx = -1;
+    playSound('drop');
+  }
+}
+
+function updateL1Slider(mx) {
+  var sl = canvas._l1Slider;
+  if (!sl) return;
+  var frac = (mx - sl.x) / sl.w;
+  frac = Math.max(0, Math.min(1, frac));
+  l1SliderV = Math.round(sl.min + frac * (sl.max - sl.min));
+  updateUI();
+}
+
+// L2 match click handler
+var l2SelectedShape = -1;
+
+function handleL2MatchClick(mx, my) {
+  var matchLeft = canvasW * 0.15;
+  var matchRight = canvasW * 0.65;
+  var matchCardH = Math.min(70, (canvasH - 80) / 4 - 10);
+  var matchStartY = 55;
+  var sw = Math.min(160, canvasW * 0.3);
+  var slotW = Math.min(120, canvasW * 0.2);
+
+  // Check shape click (left side)
+  for (var si = 0; si < 4; si++) {
+    var sy = matchStartY + si * (matchCardH + 10);
+    if (mx >= matchLeft && mx <= matchLeft + sw && my >= sy && my <= sy + matchCardH) {
+      l2SelectedShape = si;
+      playSound('click');
+      return;
+    }
+  }
+
+  // Check slot click (right side)
+  if (l2SelectedShape >= 0) {
+    for (var sli = 0; sli < l2MatchSlots.length; sli++) {
+      var slotY = matchStartY + sli * (matchCardH + 10);
+      if (mx >= matchRight && mx <= matchRight + slotW && my >= slotY && my <= slotY + matchCardH) {
+        // Remove shape from any previous slot
+        for (var ri = 0; ri < l2MatchSlots.length; ri++) {
+          if (l2MatchSlots[ri].assignedShape === l2SelectedShape) {
+            l2MatchSlots[ri].assignedShape = -1;
+          }
+        }
+        // Remove whatever was in this slot
+        l2MatchSlots[sli].assignedShape = l2SelectedShape;
+        l2SelectedShape = -1;
+        playSound('drop');
+        return;
+      }
+    }
+  }
+}
+
+// ==========================================
+// ACTION / RESET BUTTONS
+// ==========================================
+document.getElementById('btnAction').addEventListener('click', handleAction);
+document.getElementById('btnReset').addEventListener('click', handleReset);
+
+function handleAction() {
+  if (gameComplete) return;
+
+  if (currentLevel === 0) {
+    handleL1Action();
+  } else if (currentLevel === 1) {
+    handleL2Action();
+  } else if (currentLevel === 2) {
+    handleL3Action();
+  }
+  updateUI();
+}
+
+function handleL1Action() {
+  if (l1Phase === 'explore') {
+    l1Phase = 'predict';
+  } else if (l1Phase === 'predict') {
+    var answer = parseFloat(l1InputValue);
+    var chal = L1_CHALLENGES[currentRound];
+    if (isNaN(answer) || l1InputValue === '') return;
+
+    if (Math.abs(answer - chal.answer) < 0.5) {
+      l1Phase = 'correct';
+      levelScores[0] += 25;
+      totalScore += 25;
+      spawnParticles(canvasW / 2, canvasH / 2, 30, '#50ffb0', 5);
+      playSound('correct');
+    } else {
+      l1Phase = 'wrong';
+      l1ShakeTimer = 0.3;
+      levelScores[0] += 5;
+      totalScore += 5;
+      playSound('wrong');
+    }
+  } else if (l1Phase === 'correct' || l1Phase === 'wrong') {
+    if (currentRound < L1_CHALLENGES.length - 1) {
+      currentRound++;
+      l1Phase = 'explore';
+      l1InputValue = '';
+      l1ShowAnswer = false;
+      transitionAlpha = 0.8;
+    } else {
+      advanceLevel();
+    }
+  }
+}
+
+function handleL2Action() {
+  if (l2Phase === 'rank') {
+    // Check order
+    var userOrder = [];
+    var slots = [null,null,null,null];
+    for (var ci = 0; ci < l2Cards.length; ci++) {
+      slots[l2Cards[ci].slotIdx] = l2Cards[ci].shapeIdx;
+    }
+    userOrder = slots;
+
+    var correctOrder = SHAPES_SORTED.map(function(s){ return SHAPES.indexOf(s); });
+    var allCorrect = true;
+    for (var ci2 = 0; ci2 < 4; ci2++) {
+      if (userOrder[ci2] !== correctOrder[ci2]) { allCorrect = false; break; }
+    }
+
+    l2Phase = 'rankResult';
+    if (allCorrect) {
+      levelScores[1] += 30;
+      totalScore += 30;
+      spawnParticles(canvasW / 2, canvasH / 2, 40, '#50ffb0', 5);
+      playSound('correct');
+    } else {
+      levelScores[1] += 10;
+      totalScore += 10;
+      l2ShakeTimer = 0.4;
+      playSound('wrong');
+    }
+  } else if (l2Phase === 'rankResult') {
+    // Move to match phase
+    l2Phase = 'match';
+    currentRound = 1;
+    l2SelectedShape = -1;
+    initL2Match();
+    transitionAlpha = 0.8;
+  } else if (l2Phase === 'match') {
+    // Check matches
+    var allAssigned = true;
+    var matchCorrect = 0;
+    for (var mi = 0; mi < l2MatchSlots.length; mi++) {
+      if (l2MatchSlots[mi].assignedShape < 0) { allAssigned = false; break; }
+      if (Math.abs(SHAPES[l2MatchSlots[mi].assignedShape].cd - l2MatchSlots[mi].cd) < 0.001) {
+        matchCorrect++;
+      }
+    }
+    if (!allAssigned) return;
+
+    l2Phase = 'matchResult';
+    if (matchCorrect === 4) {
+      levelScores[1] += 30;
+      totalScore += 30;
+      spawnParticles(canvasW / 2, canvasH / 2, 40, '#50ffb0', 5);
+      playSound('correct');
+    } else {
+      levelScores[1] += matchCorrect * 5;
+      totalScore += matchCorrect * 5;
+      l2ShakeTimer = 0.4;
+      playSound('wrong');
+    }
+  } else if (l2Phase === 'matchResult') {
+    advanceLevel();
+  }
+}
+
+function handleL3Action() {
+  if (l3Phase === 'choose') {
+    var nose = NOSE_CONES[l3NoseIdx];
+    var body = BODY_DIAMETERS[l3DiamIdx];
+    var totalCost = nose.cost + body.cost;
+    if (totalCost > 100) {
+      l3RocketShake = 5;
+      playSound('wrong');
+      return;
+    }
+    l3Phase = 'launching';
+    l3LaunchProgress = 0;
+    l3RocketY = 0;
+    l3RocketShake = 0;
+    var mission = L3_MISSIONS[currentRound];
+    l3ResultDrag = calcDrag(mission.rho, mission.targetV, nose.cd, body.area);
+    playSound('launch');
+  } else if (l3Phase === 'result') {
+    if (currentRound < L3_MISSIONS.length - 1) {
+      currentRound++;
+      l3Phase = 'choose';
+      l3NoseIdx = 0;
+      l3DiamIdx = 0;
+      l3LaunchProgress = 0;
+      l3RocketY = 0;
+      canvas._l3NoseCards = null;
+      canvas._l3DiamCards = null;
+      transitionAlpha = 0.8;
+    } else {
+      advanceLevel();
+    }
+  }
+}
+
+function handleReset() {
+  if (gameComplete) {
+    // Full reset
+    currentLevel = 0;
+    currentRound = 0;
+    totalScore = 0;
+    levelScores = [0,0,0];
+    gameComplete = false;
+    completionAlpha = 0;
+  }
+
+  if (currentLevel === 0) {
+    l1Phase = 'explore';
+    l1InputValue = '';
+    l1ShakeTimer = 0;
+    l1ShowAnswer = false;
+    l1SliderV = 10;
+    l1ForceBarAnim = 0;
+  } else if (currentLevel === 1) {
+    if (l2Phase === 'match' || l2Phase === 'matchResult') {
+      l2Phase = 'match';
+      l2SelectedShape = -1;
+      initL2Match();
+    } else {
+      l2Phase = 'rank';
+      l2Cards = [];
+      l2DragIdx = -1;
+      l2ShakeTimer = 0;
+      initL2Cards();
+    }
+  } else if (currentLevel === 2) {
+    l3Phase = 'choose';
+    l3NoseIdx = 0;
+    l3DiamIdx = 0;
+    l3LaunchProgress = 0;
+    l3RocketY = 0;
+    l3RocketShake = 0;
+    canvas._l3NoseCards = null;
+    canvas._l3DiamCards = null;
+  }
+  updateUI();
+}
+
+function advanceLevel() {
+  if (currentLevel < 2) {
+    currentLevel++;
+    currentRound = 0;
+    transitionAlpha = 1.0;
+
+    if (currentLevel === 1) {
+      l2Cards = [];
+      initL2Cards();
+    } else if (currentLevel === 2) {
+      l3NoseIdx = 0;
+      l3DiamIdx = 0;
+      l3Phase = 'choose';
+      canvas._l3NoseCards = null;
+      canvas._l3DiamCards = null;
+    }
+  } else {
+    gameComplete = true;
+    spawnParticles(canvasW / 2, canvasH / 3, 60, '#50ffb0', 8);
+    spawnParticles(canvasW / 2, canvasH / 3, 30, '#ffb59c', 6);
+    spawnParticles(canvasW / 2, canvasH / 3, 30, '#74c0fc', 6);
+  }
+  updateUI();
+}
+
+// ==========================================
+// LANG TOGGLE
+// ==========================================
+document.getElementById('langBtn').addEventListener('click', function() {
+  lang = lang === 'cn' ? 'en' : 'cn';
+  updateUI();
+});
+
+// ==========================================
+// INIT
+// ==========================================
+resize();
+updateUI();
+gameLoop();
+</script>
+</body>
+</html>
