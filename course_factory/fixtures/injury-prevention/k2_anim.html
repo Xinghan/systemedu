@@ -1,0 +1,430 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Space+Grotesk:wght@400;500;700&family=Inter:wght@400;500&family=Noto+Sans+SC:wght@400;700&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box;}
+html,body{width:100%;height:100vh;overflow:hidden;}
+body{background:var(--bg,#0c0e12);color:var(--text,#f6f6fc);font-family:'Inter','Noto Sans SC',sans-serif;}
+.wrapper{display:flex;flex-direction:row;height:100vh;overflow:hidden;}
+.sidebar{width:200px;min-width:200px;max-width:200px;display:flex;flex-direction:column;gap:6px;padding:10px;background:var(--sb-bg,rgba(5,6,15,0.92));border-right:1px solid var(--sb-border,rgba(80,255,176,0.15));overflow-y:auto;transition:background 0.3s,border-color 0.3s;}
+.lang-btn{align-self:flex-start;flex-shrink:0;font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:700;padding:3px 8px;cursor:pointer;border:1px solid var(--sb-btn-bd,transparent);background:var(--sb-btn-bg,transparent);color:var(--sb-accent,var(--primary,#50ffb0));letter-spacing:1px;text-transform:uppercase;}
+.lang-btn:hover{border-color:var(--sb-accent,var(--primary));background:rgba(128,128,128,0.1);}
+.style-switcher{display:flex;gap:4px;margin:4px 0 2px;}
+.vm-btn{font-family:'JetBrains Mono',monospace;font-size:8px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;padding:3px 6px;cursor:pointer;border:1px solid var(--sb-btn-bd,rgba(128,128,128,0.2));background:var(--sb-btn-bg,transparent);color:var(--sb-dim,rgba(128,128,128,0.5));transition:all 0.2s;}
+.vm-btn:hover{color:var(--sb-accent,var(--primary));border-color:var(--sb-accent,var(--primary));}
+.vm-btn.vm-active{color:var(--sb-accent,var(--primary));border-color:var(--sb-accent,var(--primary));background:rgba(128,128,128,0.12);}
+.sidebar h1{font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:700;color:var(--sb-accent,var(--primary,#50ffb0));margin-top:4px;line-height:1.3;text-transform:uppercase;letter-spacing:0.04em;}
+.sidebar .sub{font-family:'Noto Sans SC',sans-serif;font-size:10px;color:var(--sb-dim,rgba(128,128,128,0.7));letter-spacing:0.06em;}
+.sidebar .frame-ind{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--sb-mute,rgba(128,128,128,0.5));letter-spacing:0.1em;margin-top:4px;}
+.sidebar .guide-label{font-family:'JetBrains Mono',monospace;font-size:9px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:var(--sb-accent,var(--primary,#50ffb0));margin-top:8px;}
+.sidebar .guide-content{font-family:'Noto Sans SC',sans-serif;font-size:11px;color:var(--sb-dim,rgba(255,255,255,0.7));line-height:1.5;}
+.sidebar .guide-content ul{padding-left:16px;margin:0;}
+.sidebar .guide-content li{margin-bottom:2px;}
+.anim-main{flex:1;display:flex;flex-direction:column;min-width:0;}
+.canvas-wrap{flex:1;min-height:0;position:relative;}
+canvas{width:100%;height:100%;display:block;}
+.controls{display:flex;justify-content:center;align-items:center;gap:12px;padding:6px 16px;background:rgba(0,0,0,0.35);}
+.ctrl-btn{font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;padding:5px 16px;border:none;cursor:pointer;color:var(--ctrl-color,var(--bg,#0c0e12));background:linear-gradient(135deg,var(--ctrl-bg,var(--primary,#50ffb0)),var(--primary-dim,#17df93));transition:transform 0.1s,box-shadow 0.2s;box-shadow:0 0 10px var(--glow-strong,rgba(80,255,176,0.3));}
+.ctrl-btn:hover{transform:scale(1.04);}
+.ctrl-btn:active{transform:scale(0.96);}
+.ctrl-btn.secondary{background:var(--sb-btn-bg,rgba(23,26,31,0.92));color:var(--sb-mute,rgba(128,128,128,0.6));box-shadow:none;border:1px solid var(--sb-btn-bd,rgba(128,128,128,0.15));}
+.ctrl-btn.secondary:hover{color:var(--sb-accent,var(--primary,#50ffb0));border-color:var(--sb-accent,var(--primary));}
+.hud{height:40px;display:flex;align-items:center;justify-content:space-around;background:var(--hud-bg,rgba(0,0,0,0.55));border-top:1px solid var(--hud-border,transparent);padding:0 16px;transition:background 0.3s;}
+.hud-item{text-align:center;}
+.hud-label{font-family:'JetBrains Mono',monospace;font-size:7px;letter-spacing:0.15em;text-transform:uppercase;color:var(--hud-label,var(--sb-mute));}
+.hud-val{font-family:'JetBrains Mono',monospace;font-size:13px;font-weight:700;color:var(--hud-value,var(--sb-accent,var(--primary,#50ffb0)));}
+#frameInd{display:none;}
+</style>
+</head>
+<body>
+<div class="wrapper">
+  <div class="sidebar">
+    <button class="lang-btn" id="langBtn">CN</button>
+    <div class="style-switcher" id="styleSwitcher"></div>
+    <h1 id="title"></h1>
+    <div class="sub" id="subtitle"></div>
+    <div class="frame-ind" id="frameIndicator"></div>
+    <div id="frameInd"></div>
+    <div class="guide-label" id="guideTitle"></div>
+    <div class="guide-content" id="guideContent"></div>
+  </div>
+  <div class="anim-main">
+    <div class="canvas-wrap"><canvas id="c"></canvas></div>
+    <div class="controls">
+      <button class="ctrl-btn secondary" id="btnPrev"></button>
+      <button class="ctrl-btn" id="btnPlay"></button>
+      <button class="ctrl-btn secondary" id="btnNext"></button>
+    </div>
+    <div class="hud">
+      <div class="hud-item"><div class="hud-label" id="hudL1"></div><div class="hud-val" id="hudV1"></div></div>
+      <div class="hud-item"><div class="hud-label" id="hudL2"></div><div class="hud-val" id="hudV2"></div></div>
+      <div class="hud-item"><div class="hud-label" id="hudL3"></div><div class="hud-val" id="hudV3"></div></div>
+      <div class="hud-item"><div class="hud-label" id="hudL4"></div><div class="hud-val" id="hudV4"></div></div>
+    </div>
+  </div>
+</div>
+
+<script src="../../runtime/animation_runtime.js"></script>
+<script>
+var CONFIG = {
+  style: 'mech',
+  totalFrames: 5,
+  i18n: {
+    title:{en:'GB 6441 ACCIDENT ATLAS',cn:'GB 6441 事故分类总图'},
+    subtitle:{en:'P-IJP-01-M002 · FOUNDATION',cn:'P-IJP-01-M002 · foundation'},
+    guideTitle:{en:'READING PATH',cn:'观看路径'},
+    g1:{en:'Frame 1 maps the 20 legal categories into memory clusters without changing the legal names.',cn:'第 1 帧先看 20 类法定名称，再看便于记忆的学习分组。'},
+    g2:{en:'Frames 2-4 separate category boundary, four-factor causation, and barrier failure.',cn:'第 2 到第 4 帧依次区分类别边界、四要素链条和多重防线。'},
+    g3:{en:'Frame 5 tells you what to write on the quick-reference card before moving to risk identification.',cn:'第 5 帧把本节产物压缩成“先分类、再拆因、再写防线”的速查卡口诀。'},
+    hudType:{en:'FOCUS',cn:'焦点'},
+    hudEnergy:{en:'MAIN ENERGY',cn:'主导能量'},
+    hudTrigger:{en:'TRIGGER',cn:'直接触发'},
+    hudBarrier:{en:'BLOCK POINT',cn:'阻断点'},
+    btnPrev:{en:'PREV',cn:'上一帧'},
+    btnPlay:{en:'PLAY',cn:'播放'},
+    btnPause:{en:'PAUSE',cn:'暂停'},
+    btnNext:{en:'NEXT',cn:'下一帧'},
+    f0title:{en:'20 LEGAL CATEGORIES, ONE SHARED LANGUAGE',cn:'20 类法定事故，一套统一语言'},
+    f1title:{en:'BOUNDARY CASES MUST BE NAMED CORRECTLY',cn:'边界案例一定要叫对名字'},
+    f2title:{en:'FOUR FACTORS REBUILD THE INCIDENT CHAIN',cn:'四要素把事故链重新搭出来'},
+    f3title:{en:'ACCIDENTS BREAK THROUGH WHEN DEFENSES ALIGN',cn:'当多重防线同时失守，事故才会穿透'},
+    f4title:{en:'WRITE THE CARD: CATEGORY -> FACTORS -> BARRIER',cn:'速查卡口诀：先分类，再拆因，最后写防线'},
+    cardLaw:{en:'LEGAL NAME FIRST',cn:'法定口径优先'},
+    cardMove:{en:'MOVING / MECHANICAL',cn:'运动与机械'},
+    cardSpace:{en:'HEIGHT / COLLAPSE / SPACE',cn:'高处与结构空间'},
+    cardEnergy:{en:'ELECTRIC / HEAT / FIRE / BLAST',cn:'电热火爆能量'},
+    cardExposure:{en:'TOXIC / ASPHYXIA / OTHER',cn:'中毒窒息与其他'},
+    misA:{en:'REVERSING FORKLIFT HITS WALKER',cn:'叉车倒车撞到行人'},
+    misB:{en:'DROPPED LOAD FROM HOIST',cn:'吊装构件脱钩坠落'},
+    misC:{en:'HAND PULLED INTO BELT',cn:'手被运转皮带卷入'},
+    misAType:{en:'VEHICLE INJURY',cn:'车辆伤害'},
+    misBType:{en:'LIFTING INJURY',cn:'起重伤害'},
+    misCType:{en:'MECHANICAL INJURY',cn:'机械伤害'},
+    human:{en:'HUMAN',cn:'人'},
+    machine:{en:'MACHINE',cn:'机'},
+    env:{en:'ENVIRONMENT',cn:'环境'},
+    mgmt:{en:'MANAGEMENT',cn:'管理'},
+    p1:{en:'Did not confirm blind zone',cn:'未确认盲区'},
+    p2:{en:'Reversing alarm failed',cn:'倒车报警器失效'},
+    p3:{en:'Mixed traffic lane',cn:'人车混行'},
+    p4:{en:'No spotter arranged',cn:'未安排指挥监护'},
+    swiss1:{en:'TRAINING',cn:'培训'},
+    swiss2:{en:'ISOLATION',cn:'隔离'},
+    swiss3:{en:'CHECK',cn:'检查'},
+    swiss4:{en:'MONITOR',cn:'监护'},
+    beam:{en:'ACCIDENT PATH',cn:'事故穿透路径'},
+    out1:{en:'1. Name the legal category',cn:'1. 先写法定类别'},
+    out2:{en:'2. Sort evidence into four factors',cn:'2. 再把证据分到四要素'},
+    out3:{en:'3. Add the missing barrier',cn:'3. 最后补上最缺的防线'},
+    out4:{en:'This card becomes the language base for risk identification.',cn:'这张卡会直接变成下一节做风险识别时的统一语言底板。'},
+  },
+  hudLabels:['hudType','hudEnergy','hudTrigger','hudBarrier'],
+  hudValues:[
+    ['20 TYPES','IMPACT / FIRE / ELECTRIC','MIS-NAMING','STANDARD NAME'],
+    ['BOUNDARY CASES','VEHICLE / LOAD / BELT','WRONG LABEL','CATEGORY EDGE'],
+    ['4 FACTORS','MOVING VEHICLE','BLIND ZONE','UPSTREAM MGMT'],
+    ['BARRIERS','STACKED DEFENSES','HOLES ALIGN','BREAK ONE LAYER'],
+    ['QUICK CARD','MATCH TO SCENE','WRITE EVIDENCE','WRITE BARRIER']
+  ],
+  guideTitle:'guideTitle',
+  guideItems:['g1','g2','g3']
+};
+
+function t(k){return AnimRuntime.t(k);}
+
+var GROUPS = [
+  {title:'cardMove', x:86, y:108, items:['物体打击','车辆伤害','机械伤害','起重伤害']},
+  {title:'cardSpace', x:392, y:108, items:['高处坠落','坍塌','冒顶片帮','透水','淹溺']},
+  {title:'cardEnergy', x:86, y:246, items:['触电','灼烫','火灾','放炮','火药爆炸','瓦斯爆炸','锅炉爆炸','容器爆炸','其他爆炸']},
+  {title:'cardExposure', x:392, y:246, items:['中毒和窒息','其他伤害']},
+];
+
+function roundedPanel(ctx, x, y, w, h, fill, stroke, radius) {
+  var r = radius || 14;
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.arcTo(x + w, y, x + w, y + h, r);
+  ctx.arcTo(x + w, y + h, x, y + h, r);
+  ctx.arcTo(x, y + h, x, y, r);
+  ctx.arcTo(x, y, x + w, y, r);
+  ctx.closePath();
+  if (fill) { ctx.fillStyle = fill; ctx.fill(); }
+  if (stroke) { ctx.strokeStyle = stroke; ctx.lineWidth = 1; ctx.stroke(); }
+}
+
+function tickMark(ctx, x, y, w, h, color) {
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 1.2;
+  ctx.beginPath();
+  ctx.moveTo(x + 8, y + 18); ctx.lineTo(x + 8, y + 8); ctx.lineTo(x + 18, y + 8);
+  ctx.moveTo(x + w - 18, y + 8); ctx.lineTo(x + w - 8, y + 8); ctx.lineTo(x + w - 8, y + 18);
+  ctx.moveTo(x + 8, y + h - 18); ctx.lineTo(x + 8, y + h - 8); ctx.lineTo(x + 18, y + h - 8);
+  ctx.moveTo(x + w - 18, y + h - 8); ctx.lineTo(x + w - 8, y + h - 8); ctx.lineTo(x + w - 8, y + h - 18);
+  ctx.stroke();
+}
+
+function drawChip(ctx, x, y, w, h, text, tone) {
+  var P = AnimRuntime.PAL;
+  var fill = tone || 'rgba(255,176,0,0.10)';
+  var stroke = 'rgba(255,176,0,0.35)';
+  roundedPanel(ctx, x, y, w, h, fill, stroke, 999);
+  ctx.fillStyle = P.text;
+  ctx.font = "11px 'Inter','Noto Sans SC',sans-serif";
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(text, x + w * 0.5, y + h * 0.5);
+}
+
+function drawArrowCard(ctx, x, y, w, h, title, body, accent) {
+  var P = AnimRuntime.PAL;
+  roundedPanel(ctx, x, y, w, h, 'rgba(8,10,18,0.58)', 'rgba(255,176,0,0.18)', 18);
+  tickMark(ctx, x, y, w, h, 'rgba(255,176,0,0.45)');
+  ctx.fillStyle = accent || P.primary;
+  ctx.font = "bold 11px 'JetBrains Mono','Noto Sans SC',sans-serif";
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(title, x + 16, y + 22);
+  ctx.fillStyle = 'rgba(230,231,240,0.88)';
+  ctx.font = "12px 'Inter','Noto Sans SC',sans-serif";
+  var lines = body.split('\n');
+  for (var i = 0; i < lines.length; i += 1) {
+    ctx.fillText(lines[i], x + 16, y + 48 + i * 18);
+  }
+}
+
+function drawSwissSlice(ctx, x, y, w, h, title, holes) {
+  var P = AnimRuntime.PAL;
+  roundedPanel(ctx, x, y, w, h, 'rgba(255,176,0,0.12)', 'rgba(255,176,0,0.32)', 12);
+  ctx.fillStyle = P.text;
+  ctx.font = "bold 11px 'JetBrains Mono','Noto Sans SC',sans-serif";
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(title, x + w * 0.5, y - 12);
+  ctx.save();
+  ctx.globalCompositeOperation = 'destination-out';
+  for (var i = 0; i < holes.length; i += 1) {
+    ctx.beginPath();
+    ctx.arc(x + holes[i][0], y + holes[i][1], holes[i][2], 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.restore();
+}
+
+function drawHazardBeam(ctx, x1, y1, x2, y2) {
+  var g = ctx.createLinearGradient(x1, y1, x2, y2);
+  g.addColorStop(0, 'rgba(255,90,60,0.0)');
+  g.addColorStop(0.25, 'rgba(255,90,60,0.72)');
+  g.addColorStop(0.75, 'rgba(255,210,80,0.9)');
+  g.addColorStop(1, 'rgba(255,210,80,0.0)');
+  ctx.strokeStyle = g;
+  ctx.lineWidth = 5;
+  ctx.shadowColor = 'rgba(255,110,60,0.45)';
+  ctx.shadowBlur = 12;
+  ctx.beginPath();
+  ctx.moveTo(x1, y1);
+  ctx.lineTo(x2, y2);
+  ctx.stroke();
+  ctx.shadowBlur = 0;
+}
+
+function getFrameElements(f, W, H) {
+  var P = AnimRuntime.PAL;
+  var topY = 40;
+  if (f === 0) {
+    return [
+      {id:'f0',type:'label',text:t('f0title'),x:W/2,y:32,color:P.primary,size:18,align:'center',bold:true},
+      {id:'f0note',type:'text',text:t('cardLaw'),x:W/2-90,y:64,color:P.secondary,size:12,align:'center'},
+    ];
+  }
+  if (f === 1) {
+    return [
+      {id:'f1',type:'label',text:t('f1title'),x:W/2,y:34,color:P.primary,size:18,align:'center',bold:true},
+    ];
+  }
+  if (f === 2) {
+    return [
+      {id:'f2',type:'label',text:t('f2title'),x:W/2,y:34,color:P.primary,size:18,align:'center',bold:true},
+      {id:'lane1',type:'line',x1:160,y1:118,x2:160,y2:330,color:'rgba(255,176,0,0.22)',lineWidth:1},
+      {id:'lane2',type:'line',x1:315,y1:118,x2:315,y2:330,color:'rgba(255,176,0,0.22)',lineWidth:1},
+      {id:'lane3',type:'line',x1:470,y1:118,x2:470,y2:330,color:'rgba(255,176,0,0.22)',lineWidth:1},
+    ];
+  }
+  if (f === 3) {
+    return [
+      {id:'f3',type:'label',text:t('f3title'),x:W/2,y:34,color:P.primary,size:18,align:'center',bold:true},
+      {id:'beamLabel',type:'text',text:t('beam'),x:W/2,y:286,color:P.error,size:12,align:'center'},
+    ];
+  }
+  return [
+    {id:'f4',type:'label',text:t('f4title'),x:W/2,y:34,color:P.primary,size:18,align:'center',bold:true},
+  ];
+}
+
+function drawBg(ctx, W, H) {
+  var P = AnimRuntime.PAL;
+  var g = ctx.createLinearGradient(0, 0, W, H);
+  g.addColorStop(0, 'rgba(13,15,23,1)');
+  g.addColorStop(1, 'rgba(21,18,12,1)');
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, W, H);
+  ctx.strokeStyle = 'rgba(255,176,0,0.06)';
+  ctx.lineWidth = 0.8;
+  for (var x = 0; x < W; x += 36) {
+    ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke();
+  }
+  for (var y = 0; y < H; y += 36) {
+    ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke();
+  }
+  ctx.strokeStyle = 'rgba(255,176,0,0.12)';
+  ctx.beginPath();
+  ctx.moveTo(0, 0.5); ctx.lineTo(W, 0.5);
+  ctx.stroke();
+}
+
+function customDrawElement(ctx, el, W, H) {
+  var P = AnimRuntime.PAL;
+  var f = AnimRuntime.currentFrame;
+  if (el.id === 'f0note') {
+    for (var i = 0; i < GROUPS.length; i += 1) {
+      var g = GROUPS[i];
+      roundedPanel(ctx, g.x, g.y, 220, g.items.length > 4 ? 118 : 96, 'rgba(8,10,18,0.56)', 'rgba(255,176,0,0.18)', 18);
+      tickMark(ctx, g.x, g.y, 220, g.items.length > 4 ? 118 : 96, 'rgba(255,176,0,0.45)');
+      ctx.fillStyle = P.primary;
+      ctx.font = "bold 10px 'JetBrains Mono','Noto Sans SC',sans-serif";
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(t(g.title), g.x + 16, g.y + 18);
+      var chipY = g.y + 34;
+      for (var j = 0; j < g.items.length; j += 1) {
+        drawChip(ctx, g.x + 14, chipY + j * 18, 192, 15, g.items[j], 'rgba(255,176,0,0.08)');
+      }
+    }
+    return true;
+  }
+  if (f === 1 && el.id === 'f1') {
+    drawArrowCard(ctx, 74, 96, 180, 116, t('misAType'), t('misA'), P.primary);
+    drawArrowCard(ctx, 286, 96, 180, 116, t('misBType'), t('misB'), P.secondary);
+    drawArrowCard(ctx, 498, 96, 180, 116, t('misCType'), t('misC'), P.tertiary || '#ffcf70');
+    ctx.fillStyle = 'rgba(230,231,240,0.86)';
+    ctx.font = "13px 'Inter','Noto Sans SC',sans-serif";
+    ctx.textAlign = 'left';
+    ctx.fillText('同样像“被撞 / 被砸 / 被卷入”，分类仍要看作业过程与主导机理。', 88, 270);
+    ctx.fillText('先叫对法定名称，后面的统计、整改和培训动作才不会跑偏。', 88, 294);
+    return true;
+  }
+  if (f === 2 && el.id === 'f2') {
+    drawArrowCard(ctx, 66, 118, 118, 82, t('human'), t('p1'), P.primary);
+    drawArrowCard(ctx, 222, 118, 118, 82, t('machine'), t('p2'), P.secondary);
+    drawArrowCard(ctx, 378, 118, 118, 82, t('env'), t('p3'), '#7ad1ff');
+    drawArrowCard(ctx, 534, 118, 118, 82, t('mgmt'), t('p4'), '#ffd56a');
+    roundedPanel(ctx, 208, 244, 300, 96, 'rgba(8,10,18,0.58)', 'rgba(255,176,0,0.2)', 20);
+    tickMark(ctx, 208, 244, 300, 96, 'rgba(255,176,0,0.42)');
+    ctx.fillStyle = P.primary;
+    ctx.font = "bold 13px 'JetBrains Mono','Noto Sans SC',sans-serif";
+    ctx.textAlign = 'center';
+    ctx.fillText('CASE: REVERSING FORKLIFT', 358, 270);
+    ctx.fillStyle = 'rgba(230,231,240,0.9)';
+    ctx.font = "13px 'Inter','Noto Sans SC',sans-serif";
+    ctx.fillText('事故复盘不是只写“司机没看见”，而是把四类证据摆齐。', 358, 300);
+    ctx.fillText('证据一齐摆出来，真正缺失的上游防线才会显形。', 358, 322);
+    return true;
+  }
+  if (f === 3 && el.id === 'f3') {
+    var startX = 112;
+    var y = 148;
+    drawSwissSlice(ctx, startX + 0, y, 110, 72, t('swiss1'), [[22, 26, 12], [78, 47, 10]]);
+    drawSwissSlice(ctx, startX + 138, y, 110, 72, t('swiss2'), [[56, 22, 11], [88, 51, 9]]);
+    drawSwissSlice(ctx, startX + 276, y, 110, 72, t('swiss3'), [[28, 45, 12], [70, 26, 8]]);
+    drawSwissSlice(ctx, startX + 414, y, 110, 72, t('swiss4'), [[56, 48, 11], [90, 23, 8]]);
+    drawHazardBeam(ctx, 70, 184, 640, 184);
+    ctx.fillStyle = 'rgba(230,231,240,0.9)';
+    ctx.font = "13px 'Inter','Noto Sans SC',sans-serif";
+    ctx.textAlign = 'left';
+    ctx.fillText('培训、隔离、检查、监护分别都是一层防线。', 88, 258);
+    ctx.fillText('事故真正发生，往往不是只错一处，而是几层漏洞在同一时刻对齐。', 88, 284);
+    ctx.fillText('整改最有价值的地方，是找到哪一层最该先加厚。', 88, 310);
+    return true;
+  }
+  if (f === 4 && el.id === 'f4') {
+    drawArrowCard(ctx, 82, 108, 184, 104, 'STEP 1', t('out1'), P.primary);
+    drawArrowCard(ctx, 290, 108, 184, 104, 'STEP 2', t('out2'), P.secondary);
+    drawArrowCard(ctx, 498, 108, 184, 104, 'STEP 3', t('out3'), '#ffd56a');
+    roundedPanel(ctx, 114, 250, 532, 88, 'rgba(8,10,18,0.58)', 'rgba(255,176,0,0.2)', 18);
+    tickMark(ctx, 114, 250, 532, 88, 'rgba(255,176,0,0.42)');
+    ctx.fillStyle = 'rgba(230,231,240,0.92)';
+    ctx.font = "14px 'Inter','Noto Sans SC',sans-serif";
+    ctx.textAlign = 'left';
+    ctx.fillText(t('out4'), 138, 286);
+    ctx.fillText('下一节做危险源识别时，你会直接用这套语言给现场风险“命名”。', 138, 314);
+    return true;
+  }
+  return false;
+}
+
+function syncFrameInd() {
+  var src = document.getElementById('frameIndicator');
+  var dst = document.getElementById('frameInd');
+  if (src && dst) dst.textContent = src.textContent || '';
+}
+
+window.__CF_FRAME_TEXT_LAYOUT = function(frameIndex) {
+  var W = AnimRuntime.W || 720;
+  var map = {
+    0: [
+      {id:'title', text:t('f0title'), left:250, top:20, right:610, bottom:46},
+      {id:'move', text:t('cardMove'), left:102, top:112, right:220, bottom:130},
+      {id:'space', text:t('cardSpace'), left:408, top:112, right:546, bottom:130},
+      {id:'energy', text:t('cardEnergy'), left:102, top:250, right:250, bottom:268},
+      {id:'expo', text:t('cardExposure'), left:408, top:250, right:540, bottom:268}
+    ],
+    1: [
+      {id:'title', text:t('f1title'), left:210, top:20, right:650, bottom:46},
+      {id:'c1', text:t('misAType'), left:92, top:105, right:190, bottom:124},
+      {id:'c2', text:t('misBType'), left:304, top:105, right:400, bottom:124},
+      {id:'c3', text:t('misCType'), left:517, top:105, right:626, bottom:124},
+      {id:'tip1', text:'同样像“被撞 / 被砸 / 被卷入”，分类仍要看作业过程与主导机理。', left:90, top:258, right:630, bottom:276},
+      {id:'tip2', text:'先叫对法定名称，后面的统计、整改和培训动作才不会跑偏。', left:90, top:282, right:560, bottom:300}
+    ],
+    2: [
+      {id:'title', text:t('f2title'), left:220, top:20, right:640, bottom:46},
+      {id:'h', text:t('human'), left:84, top:118, right:132, bottom:136},
+      {id:'m', text:t('machine'), left:242, top:118, right:304, bottom:136},
+      {id:'e', text:t('env'), left:402, top:118, right:456, bottom:136},
+      {id:'g', text:t('mgmt'), left:560, top:118, right:642, bottom:136},
+      {id:'case', text:'CASE: REVERSING FORKLIFT', left:278, top:256, right:446, bottom:274},
+      {id:'note1', text:'事故复盘不是只写“司机没看见”，而是把四类证据摆齐。', left:258, top:286, right:546, bottom:304},
+      {id:'note2', text:'证据一齐摆出来，真正缺失的上游防线才会显形。', left:272, top:308, right:530, bottom:326}
+    ],
+    3: [
+      {id:'title', text:t('f3title'), left:176, top:20, right:680, bottom:46},
+      {id:'s1', text:t('swiss1'), left:128, top:128, right:206, bottom:146},
+      {id:'s2', text:t('swiss2'), left:266, top:128, right:344, bottom:146},
+      {id:'s3', text:t('swiss3'), left:404, top:128, right:472, bottom:146},
+      {id:'s4', text:t('swiss4'), left:542, top:128, right:622, bottom:146},
+      {id:'n1', text:'培训、隔离、检查、监护分别都是一层防线。', left:90, top:250, right:430, bottom:268},
+      {id:'n2', text:'事故真正发生，往往不是只错一处，而是几层漏洞在同一时刻对齐。', left:90, top:276, right:614, bottom:294},
+      {id:'n3', text:'整改最有价值的地方，是找到哪一层最该先加厚。', left:90, top:302, right:484, bottom:320}
+    ],
+    4: [
+      {id:'title', text:t('f4title'), left:150, top:20, right:706, bottom:46},
+      {id:'a', text:'STEP 1', left:146, top:112, right:202, bottom:130},
+      {id:'b', text:'STEP 2', left:354, top:112, right:410, bottom:130},
+      {id:'c', text:'STEP 3', left:562, top:112, right:618, bottom:130},
+      {id:'out', text:t('out4'), left:138, top:274, right:630, bottom:292}
+    ]
+  };
+  return map[frameIndex] || [];
+};
+
+function onReady() {
+  syncFrameInd();
+  setInterval(syncFrameInd, 120);
+}
+
+AnimRuntime.boot();
+</script>
+</body>
+</html>

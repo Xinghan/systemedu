@@ -1,0 +1,1508 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Space+Grotesk:wght@400;500;700&family=Inter:wght@400;500&family=Noto+Sans+SC:wght@400;700&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box;}
+html,body{width:100%;height:100vh;overflow:hidden;}
+body{background:var(--bg,#0c0e12);color:var(--text,#f6f6fc);font-family:'Inter','Noto Sans SC',sans-serif;}
+/* ── Outer: sidebar + main ── */
+.wrapper{display:flex;flex-direction:row;height:100vh;overflow:hidden;}
+.sidebar{width:200px;min-width:200px;max-width:200px;display:flex;flex-direction:column;gap:6px;padding:10px;background:var(--sb-bg,rgba(5,6,15,0.92));border-right:1px solid var(--sb-border,rgba(80,255,176,0.15));overflow-y:auto;transition:background 0.3s,border-color 0.3s;}
+.lang-btn{align-self:flex-start;flex-shrink:0;font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:700;padding:3px 8px;cursor:pointer;border:1px solid var(--sb-btn-bd,transparent);background:var(--sb-btn-bg,transparent);color:var(--sb-accent,var(--primary,#50ffb0));letter-spacing:1px;text-transform:uppercase;}
+.lang-btn:hover{border-color:var(--sb-accent,var(--primary));background:rgba(128,128,128,0.1);}
+/* ── Style switcher ── */
+.style-switcher{display:flex;gap:4px;margin:4px 0 2px;}
+.vm-btn{font-family:'JetBrains Mono',monospace;font-size:8px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;padding:3px 6px;cursor:pointer;border:1px solid var(--sb-btn-bd,rgba(128,128,128,0.2));background:var(--sb-btn-bg,transparent);color:var(--sb-dim,rgba(128,128,128,0.5));transition:all 0.2s;}
+.vm-btn:hover{color:var(--sb-accent,var(--primary));border-color:var(--sb-accent,var(--primary));}
+.vm-btn.vm-active{color:var(--sb-accent,var(--primary));border-color:var(--sb-accent,var(--primary));background:rgba(128,128,128,0.12);}
+/* ── Sidebar text ── */
+.sidebar h1{font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:700;color:var(--sb-accent,var(--primary,#50ffb0));margin-top:4px;line-height:1.3;text-transform:uppercase;letter-spacing:0.04em;}
+.sidebar .sub{font-family:'Noto Sans SC',sans-serif;font-size:10px;color:var(--sb-dim,rgba(128,128,128,0.7));letter-spacing:0.06em;}
+.sidebar .frame-ind{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--sb-mute,rgba(128,128,128,0.5));letter-spacing:0.1em;margin-top:4px;}
+.sidebar .guide-label{font-family:'JetBrains Mono',monospace;font-size:9px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:var(--sb-accent,var(--primary,#50ffb0));margin-top:8px;}
+.sidebar .guide-content{font-family:'Noto Sans SC',sans-serif;font-size:11px;color:var(--sb-dim,rgba(255,255,255,0.7));line-height:1.5;}
+.sidebar .guide-content ul{padding-left:16px;margin:0;}
+.sidebar .guide-content li{margin-bottom:1px;}
+/* ── Main area: canvas + controls + hud ── */
+.anim-main{flex:1;display:flex;flex-direction:column;min-width:0;}
+.canvas-wrap{flex:1;min-height:0;position:relative;}
+canvas{width:100%;height:100%;display:block;}
+/* ── Controls + HUD ── */
+.controls{display:flex;justify-content:center;align-items:center;gap:12px;padding:6px 16px;background:rgba(0,0,0,0.35);}
+.ctrl-btn{font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;padding:5px 16px;border:none;cursor:pointer;color:var(--ctrl-color,var(--bg,#0c0e12));background:linear-gradient(135deg,var(--ctrl-bg,var(--primary,#50ffb0)),var(--primary-dim,#17df93));transition:transform 0.1s,box-shadow 0.2s;box-shadow:0 0 10px var(--glow-strong,rgba(80,255,176,0.3));}
+.ctrl-btn:hover{transform:scale(1.04);}
+.ctrl-btn:active{transform:scale(0.96);}
+.ctrl-btn.secondary{background:var(--sb-btn-bg,rgba(23,26,31,0.92));color:var(--sb-mute,rgba(128,128,128,0.6));box-shadow:none;border:1px solid var(--sb-btn-bd,rgba(128,128,128,0.15));}
+.ctrl-btn.secondary:hover{color:var(--sb-accent,var(--primary,#50ffb0));border-color:var(--sb-accent,var(--primary));}
+.hud{height:40px;display:flex;align-items:center;justify-content:space-around;background:var(--hud-bg,rgba(0,0,0,0.55));border-top:1px solid var(--hud-border,transparent);padding:0 16px;transition:background 0.3s;}
+.hud-item{text-align:center;}
+.hud-label{font-family:'JetBrains Mono',monospace;font-size:7px;letter-spacing:0.15em;text-transform:uppercase;color:var(--hud-label,var(--sb-mute));}
+.hud-val{font-family:'JetBrains Mono',monospace;font-size:13px;font-weight:700;color:var(--hud-value,var(--sb-accent,var(--primary,#50ffb0)));}
+</style>
+</head>
+<body>
+<div class="wrapper">
+<!-- Sidebar: lang-btn, style switcher, title, guide -->
+<div class="sidebar">
+<button class="lang-btn" id="langBtn">CN</button>
+<div class="style-switcher" id="styleSwitcher"></div>
+<h1 id="title"></h1>
+<div class="sub" id="subtitle"></div>
+<div class="frame-ind" id="frameIndicator"></div>
+<div class="guide-label" id="guideTitle"></div>
+<div class="guide-content" id="guideContent"></div>
+</div>
+<!-- Main: canvas fills all space, nothing overlaps -->
+<div class="anim-main">
+<div class="canvas-wrap"><canvas id="c"></canvas></div>
+<div class="controls">
+<button class="ctrl-btn secondary" id="btnPrev"></button>
+<button class="ctrl-btn" id="btnPlay"></button>
+<button class="ctrl-btn secondary" id="btnNext"></button>
+</div>
+<div class="hud">
+<div class="hud-item"><div class="hud-label" id="hudL1"></div><div class="hud-val" id="hudV1"></div></div>
+<div class="hud-item"><div class="hud-label" id="hudL2"></div><div class="hud-val" id="hudV2"></div></div>
+<div class="hud-item"><div class="hud-label" id="hudL3"></div><div class="hud-val" id="hudV3"></div></div>
+<div class="hud-item"><div class="hud-label" id="hudL4"></div><div class="hud-val" id="hudV4"></div></div>
+</div>
+</div>
+</div>
+
+<!-- Runtime (inlined) -->
+<script>
+/**
+ * Animation Runtime -- shared skeleton for all course factory animations.
+ *
+ * Layout: sidebar (200px left column) contains lang-btn, style-mode
+ * switcher, title, subtitle, frame indicator, and guide panel. The canvas
+ * occupies the remaining right area with ZERO overlapping elements.
+ *
+ * Visual Modes: three built-in visual modes switchable via sidebar buttons:
+ *   - 'light'     Technical Blueprint -- light bg, dark linework, CAD grid
+ *   - 'dark'      Dark Editorial -- near-black, single-hue accent, minimal
+ *   - 'cyberpunk' Sci-Fi Hologram -- deep blue, glow, scanlines, brackets
+ *
+ * Required globals before boot():
+ *   - CONFIG: { title, subtitle, totalFrames, hudLabels, hudValues, guideItems, style }
+ *   - getFrameElements(f, W, H): returns element array for frame f
+ *
+ * Optional globals:
+ *   - drawBg(ctx, W, H, mode): draws background (mode = 'light'|'dark'|'cyberpunk')
+ *   - customDrawElement(ctx, el, W, H): return true if handled
+ *   - onReady(): called after boot
+ */
+
+var AnimRuntime = (function () {
+  'use strict';
+
+  // --- State ---
+  var cv, ctx, W = 800, H = 400;
+  var DPR = Math.min(window.devicePixelRatio || 1, 2);
+  var currentFrame = 0, totalFrames = 4;
+  var transitioning = false, playing = false, playTimer = null;
+  var LANG = 'cn';
+  var I18N = {};
+
+  // --- Sprite cache ---
+  // Sprites are SVGs embedded as hidden <svg id="sprite-{name}"> in the HTML.
+  // On first use, we rasterize to an offscreen canvas and cache the Image.
+  var _spriteCache = {};
+
+  // --- Visual Mode ---
+  // Three visual modes inspired by physics-vivid design system.
+  // Each mode provides colors for canvas drawing and sidebar CSS.
+  var VISUAL_MODE = 'cyberpunk'; // default
+  var VISUAL_MODES = {
+    light: {
+      label: 'LIGHT',
+      // Canvas drawing colors
+      canvasBg1: '#fafaf5', canvasBg2: '#f0f0ea',
+      canvasGrid: 'rgba(15,23,42,0.04)', canvasGridWidth: 0.5,
+      canvasText: '#0f172a', canvasTextDim: '#475569', canvasTextMute: '#94a3b8',
+      canvasStroke: '#0f172a', canvasStrokeDim: 'rgba(15,23,42,0.3)',
+      canvasAccent: null, // uses PAL.primary
+      canvasGlow: false,
+      canvasCornerBrackets: false,
+      canvasScanlines: false,
+      // Inner border (CAD style)
+      canvasInnerBorder: true, canvasInnerBorderColor: 'rgba(15,23,42,0.2)',
+      // Sidebar CSS
+      sidebarBg: 'rgba(250,250,245,0.96)', sidebarBorder: '#d4d4c8',
+      sidebarText: '#0f172a', sidebarTextDim: '#475569', sidebarTextMute: '#94a3b8',
+      sidebarAccent: null, // uses PAL.primary
+      sidebarBtnBg: 'transparent', sidebarBtnBorder: null,
+      // HUD
+      hudBg: 'rgba(250,250,245,0.92)', hudBorder: '#d4d4c8',
+      hudLabel: '#64748b', hudValue: '#0f172a',
+      // Controls
+      ctrlBg: '#0f172a', ctrlColor: '#fafaf5',
+    },
+    dark: {
+      label: 'DARK',
+      canvasBg1: '#0a0a0a', canvasBg2: '#111111',
+      canvasGrid: 'rgba(255,255,255,0.03)', canvasGridWidth: 0.5,
+      canvasText: '#e5e5e5', canvasTextDim: '#a3a3a3', canvasTextMute: '#525252',
+      canvasStroke: '#e5e5e5', canvasStrokeDim: 'rgba(255,255,255,0.2)',
+      canvasAccent: null,
+      canvasGlow: false,
+      canvasCornerBrackets: false,
+      canvasScanlines: false,
+      canvasInnerBorder: false,
+      // Top accent line (dark editorial signature)
+      canvasTopLine: true,
+      sidebarBg: 'rgba(10,10,10,0.96)', sidebarBorder: '#1f1f1f',
+      sidebarText: '#fafafa', sidebarTextDim: '#737373', sidebarTextMute: '#525252',
+      sidebarAccent: null,
+      sidebarBtnBg: 'transparent', sidebarBtnBorder: '#262626',
+      hudBg: 'rgba(10,10,10,0.9)', hudBorder: '#1f1f1f',
+      hudLabel: '#525252', hudValue: null,
+      ctrlBg: null, ctrlColor: null,
+    },
+    cyberpunk: {
+      label: 'CYBER',
+      canvasBg1: '#05060f', canvasBg2: '#0d0e1a',
+      canvasGrid: null, canvasGridWidth: 0.5, // uses accent at low opacity
+      canvasText: '#e2e8f0', canvasTextDim: '#cbd5e1', canvasTextMute: '#64748b',
+      canvasStroke: '#e2e8f0', canvasStrokeDim: 'rgba(255,255,255,0.12)',
+      canvasAccent: null,
+      canvasGlow: true,
+      canvasCornerBrackets: true,
+      canvasScanlines: true,
+      canvasInnerBorder: false,
+      canvasTopLine: false,
+      sidebarBg: 'rgba(5,6,15,0.92)', sidebarBorder: null, // uses accent at 0.2
+      sidebarText: null, sidebarTextDim: null, sidebarTextMute: null,
+      sidebarAccent: null,
+      sidebarBtnBg: 'transparent', sidebarBtnBorder: null,
+      hudBg: 'rgba(5,6,15,0.9)', hudBorder: null,
+      hudLabel: null, hudValue: null,
+      ctrlBg: null, ctrlColor: '#05060f',
+    },
+  };
+
+  // Reference coordinate system -- content is authored against this.
+  // The runtime scales to fit the actual canvas while preserving aspect.
+  var REF_W = 700, REF_H = 400;
+
+  // Virtual dimensions passed to getFrameElements / customDrawElement.
+  // Computed by _contentTransform() on each resize.
+  var _vw = REF_W, _vh = REF_H;
+
+  // --- Palette presets ---
+  // 12 subject themes — aligned with theme_style/themes.js
+  // All share deep-space-indigo base (oklch 0.14-0.28, hue 265)
+  // Per-subject accent via oklch signature hue
+  var _BASE = {
+    bg: 'oklch(0.14 0.035 265)', bg2: 'oklch(0.18 0.04 265)', surface: 'oklch(0.22 0.045 265)',
+    text: 'oklch(0.96 0.01 265)', muted: 'oklch(0.55 0.03 265)',
+    error: 'oklch(0.70 0.18 25)', outline: 'oklch(0.55 0.03 265)',
+    glass: 'oklch(0.18 0.04 265 / 0.7)', glassBlur: 12,
+    radius: '14px',
+  };
+  function _theme(primary, primaryDim, secondary, secondaryDim, tertiary, tertiaryDim, glow, glowStrong) {
+    return Object.assign({}, _BASE, {
+      primary: primary, primaryDim: primaryDim,
+      secondary: secondary, secondaryDim: secondaryDim,
+      tertiary: tertiary, tertiaryDim: tertiaryDim,
+      glow: glow, glowStrong: glowStrong,
+    });
+  }
+  var PALETTES = {
+    cs: _theme(
+      'oklch(0.75 0.17 200)', 'oklch(0.55 0.16 200)',
+      'oklch(0.92 0.08 190)', 'oklch(0.35 0.10 210)',
+      'oklch(0.85 0.14 85)', 'oklch(0.65 0.12 85)',
+      'oklch(0.75 0.17 200 / 0.1)', 'oklch(0.75 0.17 200 / 0.25)'),
+    bio: _theme(
+      'oklch(0.75 0.17 155)', 'oklch(0.55 0.16 155)',
+      'oklch(0.92 0.08 150)', 'oklch(0.35 0.10 160)',
+      'oklch(0.85 0.14 85)', 'oklch(0.65 0.12 85)',
+      'oklch(0.75 0.17 155 / 0.1)', 'oklch(0.75 0.17 155 / 0.25)'),
+    space: _theme(
+      'oklch(0.72 0.17 295)', 'oklch(0.52 0.16 295)',
+      'oklch(0.92 0.08 295)', 'oklch(0.35 0.10 290)',
+      'oklch(0.85 0.14 85)', 'oklch(0.65 0.12 85)',
+      'oklch(0.72 0.17 295 / 0.1)', 'oklch(0.72 0.17 295 / 0.25)'),
+    mech: _theme(
+      'oklch(0.75 0.17 55)', 'oklch(0.55 0.16 50)',
+      'oklch(0.92 0.08 60)', 'oklch(0.35 0.10 60)',
+      'oklch(0.85 0.14 85)', 'oklch(0.65 0.12 85)',
+      'oklch(0.75 0.17 55 / 0.1)', 'oklch(0.75 0.17 55 / 0.25)'),
+    ai: _theme(
+      'oklch(0.72 0.17 335)', 'oklch(0.52 0.16 335)',
+      'oklch(0.92 0.08 335)', 'oklch(0.35 0.10 330)',
+      'oklch(0.85 0.14 85)', 'oklch(0.65 0.12 85)',
+      'oklch(0.72 0.17 335 / 0.1)', 'oklch(0.72 0.17 335 / 0.25)'),
+    math: _theme(
+      'oklch(0.72 0.17 245)', 'oklch(0.52 0.16 245)',
+      'oklch(0.92 0.08 240)', 'oklch(0.35 0.10 245)',
+      'oklch(0.85 0.14 85)', 'oklch(0.65 0.12 85)',
+      'oklch(0.72 0.17 245 / 0.1)', 'oklch(0.72 0.17 245 / 0.25)'),
+    med: _theme(
+      'oklch(0.75 0.16 15)', 'oklch(0.55 0.15 15)',
+      'oklch(0.92 0.08 15)', 'oklch(0.35 0.10 15)',
+      'oklch(0.85 0.14 85)', 'oklch(0.65 0.12 85)',
+      'oklch(0.75 0.16 15 / 0.1)', 'oklch(0.75 0.16 15 / 0.25)'),
+    chem: _theme(
+      'oklch(0.82 0.17 125)', 'oklch(0.62 0.16 125)',
+      'oklch(0.95 0.08 120)', 'oklch(0.35 0.10 130)',
+      'oklch(0.85 0.14 85)', 'oklch(0.65 0.12 85)',
+      'oklch(0.82 0.17 125 / 0.1)', 'oklch(0.82 0.17 125 / 0.25)'),
+    phys: _theme(
+      'oklch(0.78 0.13 215)', 'oklch(0.55 0.13 215)',
+      'oklch(0.92 0.08 215)', 'oklch(0.35 0.10 215)',
+      'oklch(0.85 0.14 85)', 'oklch(0.65 0.12 85)',
+      'oklch(0.78 0.13 215 / 0.1)', 'oklch(0.78 0.13 215 / 0.25)'),
+    env: _theme(
+      'oklch(0.72 0.15 140)', 'oklch(0.52 0.13 140)',
+      'oklch(0.92 0.08 140)', 'oklch(0.35 0.10 140)',
+      'oklch(0.85 0.14 85)', 'oklch(0.65 0.12 85)',
+      'oklch(0.72 0.15 140 / 0.1)', 'oklch(0.72 0.15 140 / 0.25)'),
+    robo: _theme(
+      'oklch(0.82 0.15 95)', 'oklch(0.55 0.14 95)',
+      'oklch(0.95 0.08 95)', 'oklch(0.35 0.10 95)',
+      'oklch(0.85 0.14 85)', 'oklch(0.65 0.12 85)',
+      'oklch(0.82 0.15 95 / 0.1)', 'oklch(0.82 0.15 95 / 0.25)'),
+    elec: _theme(
+      'oklch(0.72 0.17 275)', 'oklch(0.52 0.16 275)',
+      'oklch(0.92 0.08 275)', 'oklch(0.35 0.10 275)',
+      'oklch(0.85 0.14 85)', 'oklch(0.65 0.12 85)',
+      'oklch(0.72 0.17 275 / 0.1)', 'oklch(0.72 0.17 275 / 0.25)'),
+    // Expansion set — 14 more sciences
+    astro: _theme(
+      'oklch(0.78 0.13 260)', 'oklch(0.52 0.14 260)',
+      'oklch(0.92 0.08 260)', 'oklch(0.30 0.08 260)',
+      'oklch(0.85 0.14 85)', 'oklch(0.65 0.12 85)',
+      'oklch(0.78 0.13 260 / 0.1)', 'oklch(0.78 0.13 260 / 0.25)'),
+    geo: _theme(
+      'oklch(0.72 0.15 40)', 'oklch(0.55 0.14 40)',
+      'oklch(0.90 0.08 50)', 'oklch(0.32 0.10 40)',
+      'oklch(0.85 0.14 85)', 'oklch(0.65 0.12 85)',
+      'oklch(0.72 0.15 40 / 0.1)', 'oklch(0.72 0.15 40 / 0.25)'),
+    ocean: _theme(
+      'oklch(0.72 0.15 230)', 'oklch(0.45 0.13 230)',
+      'oklch(0.92 0.08 220)', 'oklch(0.22 0.08 250)',
+      'oklch(0.85 0.14 85)', 'oklch(0.65 0.12 85)',
+      'oklch(0.72 0.15 230 / 0.1)', 'oklch(0.72 0.15 230 / 0.25)'),
+    meteo: _theme(
+      'oklch(0.82 0.10 245)', 'oklch(0.62 0.13 245)',
+      'oklch(0.95 0.05 245)', 'oklch(0.38 0.10 245)',
+      'oklch(0.85 0.14 85)', 'oklch(0.65 0.12 85)',
+      'oklch(0.82 0.10 245 / 0.1)', 'oklch(0.82 0.10 245 / 0.25)'),
+    paleo: _theme(
+      'oklch(0.72 0.13 70)', 'oklch(0.55 0.12 70)',
+      'oklch(0.92 0.06 75)', 'oklch(0.32 0.08 70)',
+      'oklch(0.85 0.14 85)', 'oklch(0.65 0.12 85)',
+      'oklch(0.72 0.13 70 / 0.1)', 'oklch(0.72 0.13 70 / 0.25)'),
+    quant: _theme(
+      'oklch(0.72 0.17 310)', 'oklch(0.52 0.16 310)',
+      'oklch(0.92 0.08 310)', 'oklch(0.30 0.10 310)',
+      'oklch(0.85 0.14 85)', 'oklch(0.65 0.12 85)',
+      'oklch(0.72 0.17 310 / 0.1)', 'oklch(0.72 0.17 310 / 0.25)'),
+    nuke: _theme(
+      'oklch(0.82 0.17 135)', 'oklch(0.62 0.16 135)',
+      'oklch(0.95 0.08 130)', 'oklch(0.32 0.10 135)',
+      'oklch(0.85 0.14 85)', 'oklch(0.65 0.12 85)',
+      'oklch(0.82 0.17 135 / 0.1)', 'oklch(0.82 0.17 135 / 0.25)'),
+    neuro: _theme(
+      'oklch(0.75 0.17 25)', 'oklch(0.55 0.15 25)',
+      'oklch(0.92 0.08 25)', 'oklch(0.32 0.10 25)',
+      'oklch(0.85 0.14 85)', 'oklch(0.65 0.12 85)',
+      'oklch(0.75 0.17 25 / 0.1)', 'oklch(0.75 0.17 25 / 0.25)'),
+    mat: _theme(
+      'oklch(0.78 0.12 190)', 'oklch(0.55 0.12 190)',
+      'oklch(0.92 0.06 190)', 'oklch(0.32 0.08 190)',
+      'oklch(0.85 0.14 85)', 'oklch(0.65 0.12 85)',
+      'oklch(0.78 0.12 190 / 0.1)', 'oklch(0.78 0.12 190 / 0.25)'),
+    micro: _theme(
+      'oklch(0.82 0.17 110)', 'oklch(0.62 0.16 110)',
+      'oklch(0.95 0.08 110)', 'oklch(0.32 0.10 120)',
+      'oklch(0.85 0.14 85)', 'oklch(0.65 0.12 85)',
+      'oklch(0.82 0.17 110 / 0.1)', 'oklch(0.82 0.17 110 / 0.25)'),
+    zoo: _theme(
+      'oklch(0.75 0.15 75)', 'oklch(0.55 0.13 75)',
+      'oklch(0.92 0.08 80)', 'oklch(0.32 0.08 75)',
+      'oklch(0.85 0.14 85)', 'oklch(0.65 0.12 85)',
+      'oklch(0.75 0.15 75 / 0.1)', 'oklch(0.75 0.15 75 / 0.25)'),
+    bot: _theme(
+      'oklch(0.78 0.15 120)', 'oklch(0.55 0.13 120)',
+      'oklch(0.92 0.08 120)', 'oklch(0.32 0.08 120)',
+      'oklch(0.85 0.14 85)', 'oklch(0.65 0.12 85)',
+      'oklch(0.78 0.15 120 / 0.1)', 'oklch(0.78 0.15 120 / 0.25)'),
+    arch: _theme(
+      'oklch(0.75 0.13 55)', 'oklch(0.55 0.12 55)',
+      'oklch(0.92 0.06 60)', 'oklch(0.32 0.08 55)',
+      'oklch(0.85 0.14 85)', 'oklch(0.65 0.12 85)',
+      'oklch(0.75 0.13 55 / 0.1)', 'oklch(0.75 0.13 55 / 0.25)'),
+    agri: _theme(
+      'oklch(0.82 0.14 100)', 'oklch(0.62 0.13 100)',
+      'oklch(0.92 0.08 100)', 'oklch(0.32 0.08 100)',
+      'oklch(0.85 0.14 85)', 'oklch(0.65 0.12 85)',
+      'oklch(0.82 0.14 100 / 0.1)', 'oklch(0.82 0.14 100 / 0.25)'),
+    // Legacy aliases for backward compatibility with existing content
+    helix_lab: null, aether_clinic: null, ares_mission: null,
+    celestial_observatory: null, neural_circuit: null, subatomic_matrix: null,
+    rocketry_control: null, aqua_flow: null, ember_forge: null, flora_pulse: null,
+  };
+  // Map legacy keys to new theme keys
+  PALETTES.helix_lab = PALETTES.bio;
+  PALETTES.aether_clinic = PALETTES.med;
+  PALETTES.ares_mission = PALETTES.space;
+  PALETTES.celestial_observatory = PALETTES.phys;
+  PALETTES.neural_circuit = PALETTES.ai;
+  PALETTES.subatomic_matrix = PALETTES.math;
+  PALETTES.rocketry_control = PALETTES.space;
+  PALETTES.aqua_flow = PALETTES.env;
+  PALETTES.ember_forge = PALETTES.mech;
+  PALETTES.flora_pulse = PALETTES.bio;
+
+  var PAL = PALETTES.cs;
+
+  // --- Math helpers ---
+  function lerp(a, b, p) { return a + (b - a) * p; }
+  function easeInOut(x) { return x < 0.5 ? 2 * x * x : 1 - Math.pow(-2 * x + 2, 2) / 2; }
+
+  /**
+   * interpolate -- Remotion-style multi-segment frame interpolation.
+   */
+  function interpolate(value, input, output, opts) {
+    var n = input.length;
+    var easing = (opts && opts.easing) || null;
+    var clamp = !(opts && opts.extrapolate === 'extend');
+
+    if (value <= input[0]) {
+      if (clamp) return output[0];
+      var p0 = (value - input[0]) / (input[1] - input[0]);
+      return lerp(output[0], output[1], easing ? easing(p0) : p0);
+    }
+    if (value >= input[n - 1]) {
+      if (clamp) return output[n - 1];
+      var pn = (value - input[n - 2]) / (input[n - 1] - input[n - 2]);
+      return lerp(output[n - 2], output[n - 1], easing ? easing(pn) : pn);
+    }
+
+    for (var i = 1; i < n; i++) {
+      if (value <= input[i]) {
+        var p = (value - input[i - 1]) / (input[i] - input[i - 1]);
+        if (easing) p = easing(p);
+        return lerp(output[i - 1], output[i], p);
+      }
+    }
+    return output[n - 1];
+  }
+  function merge(base, ov) { var r = {}; for (var k in base) r[k] = base[k]; for (var k2 in ov) r[k2] = ov[k2]; return r; }
+
+  // --- i18n ---
+  function t(key) { return (I18N[key] && I18N[key][LANG]) || (I18N[key] && I18N[key]['en']) || key; }
+
+  function _buildI18N(cfg) {
+    I18N = {
+      btnPlay:  { en: 'PLAY',  cn: '\u64ad\u653e' },
+      btnPause: { en: 'PAUSE', cn: '\u6682\u505c' },
+      btnPrev:  { en: 'PREV',  cn: '\u4e0a\u4e00\u5e27' },
+      btnNext:  { en: 'NEXT',  cn: '\u4e0b\u4e00\u5e27' },
+      guideDefault: { en: 'GUIDE', cn: '\u89c2\u770b\u6307\u5357' },
+    };
+    if (cfg.i18n) {
+      for (var k in cfg.i18n) I18N[k] = cfg.i18n[k];
+    }
+  }
+
+  // --- Visual Mode helpers ---
+  function _modeColors() {
+    var m = VISUAL_MODES[VISUAL_MODE] || VISUAL_MODES.cyberpunk;
+    return {
+      bg1:   m.canvasBg1,
+      bg2:   m.canvasBg2,
+      grid:  m.canvasGrid,
+      gridW: m.canvasGridWidth || 0.5,
+      text:  m.canvasText  || PAL.text,
+      dim:   m.canvasTextDim || PAL.muted,
+      mute:  m.canvasTextMute || PAL.muted,
+      stroke:    m.canvasStroke || PAL.text,
+      strokeDim: m.canvasStrokeDim || PAL.muted,
+      accent:    m.canvasAccent || PAL.primary,
+      glow:          !!m.canvasGlow,
+      cornerBrackets:!!m.canvasCornerBrackets,
+      scanlines:     !!m.canvasScanlines,
+      innerBorder:   !!m.canvasInnerBorder,
+      innerBorderColor: m.canvasInnerBorderColor || 'rgba(0,0,0,0.15)',
+      topLine:       !!m.canvasTopLine,
+    };
+  }
+
+  // Apply visual mode to sidebar / HUD / controls via CSS custom properties
+  function _applyVisualMode(mode) {
+    VISUAL_MODE = mode;
+    var m = VISUAL_MODES[mode] || VISUAL_MODES.cyberpunk;
+    var root = document.documentElement;
+
+    // Sidebar
+    root.style.setProperty('--sb-bg',     m.sidebarBg || 'rgba(5,6,15,0.92)');
+    root.style.setProperty('--sb-border', m.sidebarBorder || (m.canvasAccent || PAL.primary));
+    root.style.setProperty('--sb-text',   m.sidebarText || PAL.text);
+    root.style.setProperty('--sb-dim',    m.sidebarTextDim || PAL.muted);
+    root.style.setProperty('--sb-mute',   m.sidebarTextMute || PAL.muted);
+    root.style.setProperty('--sb-accent', m.sidebarAccent || PAL.primary);
+    root.style.setProperty('--sb-btn-bg', m.sidebarBtnBg || 'transparent');
+    root.style.setProperty('--sb-btn-bd', m.sidebarBtnBorder || 'transparent');
+
+    // HUD
+    root.style.setProperty('--hud-bg',    m.hudBg || 'rgba(5,6,15,0.9)');
+    root.style.setProperty('--hud-border',m.hudBorder || 'transparent');
+    root.style.setProperty('--hud-label', m.hudLabel || PAL.muted);
+    root.style.setProperty('--hud-value', m.hudValue || PAL.text);
+
+    // Controls
+    root.style.setProperty('--ctrl-bg',   m.ctrlBg || PAL.primary);
+    root.style.setProperty('--ctrl-color',m.ctrlColor || PAL.bg);
+
+    // Update switcher button active states
+    var btns = document.querySelectorAll('.vm-btn');
+    btns.forEach(function(b) {
+      b.classList.toggle('vm-active', b.dataset.mode === mode);
+    });
+
+    // Redraw canvas with new mode
+    drawFrame(currentFrame);
+  }
+
+  // Build style-mode switcher in sidebar
+  function _buildStyleSwitcher() {
+    var container = document.getElementById('styleSwitcher');
+    if (!container) return;
+    container.innerHTML = '';
+    var modes = ['light', 'dark', 'cyberpunk'];
+    modes.forEach(function(mKey) {
+      var m = VISUAL_MODES[mKey];
+      var btn = document.createElement('button');
+      btn.className = 'vm-btn' + (mKey === VISUAL_MODE ? ' vm-active' : '');
+      btn.dataset.mode = mKey;
+      btn.textContent = m.label;
+      btn.addEventListener('click', function() { _applyVisualMode(mKey); });
+      container.appendChild(btn);
+    });
+  }
+
+  // --- Default background (mode-aware) ---
+  function _defaultDrawBg(c, w, h) {
+    var mc = _modeColors();
+
+    // Background gradient
+    var g = c.createLinearGradient(0, 0, 0, h);
+    g.addColorStop(0, mc.bg1); g.addColorStop(1, mc.bg2);
+    c.fillStyle = g; c.fillRect(0, 0, w, h);
+
+    // Grid
+    var gridColor = mc.grid || (mc.accent ? mc.accent.replace(/[\d.]+\)$/, '0.06)') : 'rgba(255,255,255,0.04)');
+    c.strokeStyle = gridColor; c.lineWidth = mc.gridW;
+    var step = VISUAL_MODE === 'light' ? 24 : 64;
+    for (var x = 0; x < w; x += step) { c.beginPath(); c.moveTo(x, 0); c.lineTo(x, h); c.stroke(); }
+    for (var y = 0; y < h; y += step) { c.beginPath(); c.moveTo(0, y); c.lineTo(w, y); c.stroke(); }
+
+    // Inner border (light / technical blueprint)
+    if (mc.innerBorder) {
+      c.strokeStyle = mc.innerBorderColor; c.lineWidth = 0.5;
+      c.strokeRect(6, 6, w - 12, h - 12);
+    }
+
+    // Top accent line (dark editorial)
+    if (mc.topLine) {
+      var tg = c.createLinearGradient(w * 0.15, 0, w * 0.85, 0);
+      tg.addColorStop(0, 'transparent');
+      tg.addColorStop(0.4, mc.accent); tg.addColorStop(0.6, mc.accent);
+      tg.addColorStop(1, 'transparent');
+      c.strokeStyle = tg; c.lineWidth = 1;
+      c.beginPath(); c.moveTo(0, 0.5); c.lineTo(w, 0.5); c.stroke();
+    }
+
+    // Scanlines (cyberpunk)
+    if (mc.scanlines) {
+      c.strokeStyle = 'rgba(255,255,255,0.025)'; c.lineWidth = 1;
+      for (var sy = 0; sy < h; sy += 3) {
+        c.beginPath(); c.moveTo(0, sy); c.lineTo(w, sy); c.stroke();
+      }
+    }
+
+    // Corner brackets (cyberpunk)
+    if (mc.cornerBrackets) {
+      var bLen = Math.min(w, h) * 0.06;
+      c.strokeStyle = mc.accent; c.lineWidth = 1.5; c.globalAlpha = 0.5;
+      // top-left
+      c.beginPath(); c.moveTo(8, 8 + bLen); c.lineTo(8, 8); c.lineTo(8 + bLen, 8); c.stroke();
+      // top-right
+      c.beginPath(); c.moveTo(w - 8 - bLen, 8); c.lineTo(w - 8, 8); c.lineTo(w - 8, 8 + bLen); c.stroke();
+      // bottom-left
+      c.beginPath(); c.moveTo(8, h - 8 - bLen); c.lineTo(8, h - 8); c.lineTo(8 + bLen, h - 8); c.stroke();
+      // bottom-right
+      c.beginPath(); c.moveTo(w - 8 - bLen, h - 8); c.lineTo(w - 8, h - 8); c.lineTo(w - 8, h - 8 + bLen); c.stroke();
+      c.globalAlpha = 1;
+    }
+
+    // Radial glow (cyberpunk)
+    if (mc.glow) {
+      var rg = c.createRadialGradient(w * 0.5, h * 0.3, 0, w * 0.5, h * 0.3, w * 0.6);
+      rg.addColorStop(0, PAL.glow || 'rgba(100,100,255,0.06)');
+      rg.addColorStop(1, 'transparent');
+      c.fillStyle = rg; c.fillRect(0, 0, w, h);
+    }
+  }
+
+  // --- Element drawing ---
+  function drawElement(el) {
+    if (!el || el.alpha <= 0.01) return;
+    ctx.save();
+    ctx.globalAlpha = el.alpha;
+
+    // Allow user override -- pass virtual W/H (same as getFrameElements receives)
+    if (typeof customDrawElement === 'function' && customDrawElement(ctx, el, _vw, _vh)) {
+      ctx.restore();
+      return;
+    }
+
+    switch (el.type) {
+      case 'label':
+        ctx.fillStyle = el.color || _modeColors().text;
+        var isBold = el.bold !== undefined ? el.bold : (el.size >= 14);
+        ctx.font = (isBold ? 'bold ' : '') + (el.size || 12) + "px " +
+          (isBold ? "'Space Grotesk','Inter','Noto Sans SC'" : "'Inter','Noto Sans SC'") + ",sans-serif";
+        ctx.textAlign = el.align || 'center';
+        ctx.textBaseline = el.baseline || 'middle';
+        if (el.glow) { ctx.shadowColor = el.glow; ctx.shadowBlur = 10; }
+        ctx.fillText(el.text, el.x, el.y);
+        break;
+
+      case 'text':
+        ctx.fillStyle = el.color || _modeColors().dim;
+        ctx.font = (el.size || 11) + "px 'Inter','Noto Sans SC',sans-serif";
+        ctx.textAlign = el.align || 'left';
+        ctx.textBaseline = el.baseline || 'middle';
+        ctx.fillText(el.text, el.x, el.y);
+        break;
+
+      case 'box':
+        if (el.fill) { ctx.fillStyle = el.fill; ctx.fillRect(el.x, el.y, el.w, el.h); }
+        if (el.stroke) { ctx.strokeStyle = el.stroke; ctx.lineWidth = el.lineWidth || 1; ctx.strokeRect(el.x, el.y, el.w, el.h); }
+        break;
+
+      case 'circle':
+        ctx.beginPath(); ctx.arc(el.x, el.y, el.r || 10, 0, Math.PI * 2);
+        if (el.fill) { ctx.fillStyle = el.fill; ctx.fill(); }
+        if (el.stroke) { ctx.strokeStyle = el.stroke; ctx.lineWidth = el.lineWidth || 1; ctx.stroke(); }
+        if (el.glow) { ctx.shadowColor = el.glow; ctx.shadowBlur = el.glowSize || 12; ctx.fill(); ctx.shadowBlur = 0; }
+        break;
+
+      case 'arrow':
+        _drawArrow(el.x1, el.y1, el.x2, el.y2, el.color || PAL.primary, el.lineWidth || 1.5, el.headSize || 6);
+        break;
+
+      case 'line':
+        ctx.strokeStyle = el.color || PAL.muted;
+        ctx.lineWidth = el.lineWidth || 1;
+        if (el.dash) ctx.setLineDash(el.dash);
+        ctx.beginPath(); ctx.moveTo(el.x1, el.y1); ctx.lineTo(el.x2, el.y2); ctx.stroke();
+        if (el.dash) ctx.setLineDash([]);
+        break;
+
+      case 'gradient_box':
+        var gb = ctx.createLinearGradient(el.x, el.y, el.x + el.w, el.y + el.h);
+        gb.addColorStop(0, el.color1 || PAL.primary); gb.addColorStop(1, el.color2 || PAL.secondary);
+        ctx.fillStyle = gb; ctx.fillRect(el.x, el.y, el.w, el.h);
+        if (el.glow) { ctx.shadowColor = el.glow; ctx.shadowBlur = 8; ctx.fillRect(el.x, el.y, el.w, el.h); ctx.shadowBlur = 0; }
+        break;
+
+      case 'sprite':
+        _drawSprite(el);
+        break;
+
+      case 'custom':
+        if (typeof el.draw === 'function') el.draw(ctx, el);
+        break;
+
+      default:
+        if (typeof el.draw === 'function') el.draw(ctx, el);
+        break;
+    }
+    ctx.restore();
+  }
+
+  function _drawArrow(x1, y1, x2, y2, color, lw, hs) {
+    var angle = Math.atan2(y2 - y1, x2 - x1);
+    ctx.strokeStyle = color; ctx.lineWidth = lw;
+    ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+    ctx.fillStyle = color; ctx.beginPath();
+    ctx.moveTo(x2, y2);
+    ctx.lineTo(x2 - hs * Math.cos(angle - 0.4), y2 - hs * Math.sin(angle - 0.4));
+    ctx.lineTo(x2 - hs * Math.cos(angle + 0.4), y2 - hs * Math.sin(angle + 0.4));
+    ctx.fill();
+  }
+
+  // --- Sprite drawing ---
+  // Usage: {type:'sprite', name:'bicycle', x:100, y:200, w:80, h:50}
+  // The sprite SVG must be embedded in the HTML as:
+  //   <svg id="sprite-bicycle" style="display:none" viewBox="0 0 ...">...</svg>
+  // Optional: flipX (boolean), opacity (0-1), rotate (degrees)
+  function _drawSprite(el) {
+    var name = el.name;
+    if (!name) return;
+    var img = _spriteCache[name];
+    if (!img) {
+      // Try to find and rasterize the SVG element
+      var svgEl = document.getElementById('sprite-' + name);
+      if (!svgEl) return;
+      var svgStr = new XMLSerializer().serializeToString(svgEl);
+      var blob = new Blob([svgStr], {type: 'image/svg+xml;charset=utf-8'});
+      var url = URL.createObjectURL(blob);
+      img = new Image();
+      img._loaded = false;
+      img.onload = function () { img._loaded = true; drawFrame(currentFrame); URL.revokeObjectURL(url); };
+      img.src = url;
+      _spriteCache[name] = img;
+      return; // will render on next frame when image is loaded
+    }
+    if (!img._loaded) return;
+    var w = el.w || img.naturalWidth;
+    var h = el.h || img.naturalHeight;
+    // Maintain aspect ratio if only w or h is specified
+    if (el.w && !el.h) h = (img.naturalHeight / img.naturalWidth) * w;
+    if (el.h && !el.w) w = (img.naturalWidth / img.naturalHeight) * h;
+    ctx.save();
+    if (el.opacity !== undefined) ctx.globalAlpha = el.opacity;
+    ctx.translate(el.x, el.y);
+    if (el.rotate) ctx.rotate(el.rotate * Math.PI / 180);
+    if (el.flipX) ctx.scale(-1, 1);
+    ctx.drawImage(img, -w / 2, -h / 2, w, h);
+    ctx.restore();
+  }
+
+  // --- Content scaling ---
+  // Scale based on canvas height to fit REF_H. Virtual width adapts
+  // to fill the actual canvas width so content uses the full area.
+  // No safe-area offsets -- nothing overlaps the canvas.
+  function _contentTransform() {
+    var s = H / REF_H;
+    _vh = REF_H;
+    _vw = W / s;
+    if (_vw < REF_W) _vw = REF_W;
+    return { s: s, ox: 0, oy: 0, vw: _vw, vh: _vh };
+  }
+
+  function _applyContentScale(ct) {
+    ctx.save();
+    ctx.scale(ct.s, ct.s);
+  }
+
+  // --- Frame rendering ---
+  function drawFrame(f) {
+    var bgFn = (typeof drawBg === 'function') ? drawBg : _defaultDrawBg;
+    bgFn(ctx, W, H, VISUAL_MODE);
+    var ct = _contentTransform();
+    _applyContentScale(ct);
+    var elems = getFrameElements(f, ct.vw, ct.vh);
+    elems.forEach(function (el) { drawElement(el); });
+    ctx.restore();
+  }
+
+  // --- Shared element transition ---
+  function transitionTo(nf) {
+    if (nf < 0) nf = 0;
+    if (nf >= totalFrames) nf = totalFrames - 1;
+    if (nf === currentFrame && !transitioning) { drawFrame(currentFrame); _updateHUD(currentFrame); return; }
+    if (transitioning) return;
+
+    var ct0 = _contentTransform();
+    var oldElems = getFrameElements(currentFrame, ct0.vw, ct0.vh);
+    var newElems = getFrameElements(nf, ct0.vw, ct0.vh);
+    var oldMap = {}; oldElems.forEach(function (e) { oldMap[e.id] = e; });
+    var newMap = {}; newElems.forEach(function (e) { newMap[e.id] = e; });
+
+    currentFrame = nf;
+    _updateHUD(nf);
+    transitioning = true;
+
+    var startTime = null, duration = 500;
+    var bgFn = (typeof drawBg === 'function') ? drawBg : _defaultDrawBg;
+
+    function step(ts) {
+      if (!startTime) startTime = ts;
+      var raw = Math.min((ts - startTime) / duration, 1);
+      var p = easeInOut(raw);
+
+      bgFn(ctx, W, H, VISUAL_MODE);
+      var ct = _contentTransform();
+      _applyContentScale(ct);
+
+      oldElems.forEach(function (oe) {
+        if (!newMap[oe.id]) drawElement(merge(oe, { alpha: 1 - p }));
+      });
+
+      newElems.forEach(function (ne) {
+        var oe = oldMap[ne.id];
+        if (oe) {
+          var merged = merge(ne, {
+            x: lerp(oe.x || 0, ne.x || 0, p),
+            y: lerp(oe.y || 0, ne.y || 0, p),
+            w: lerp(oe.w || 0, ne.w || 0, p),
+            h: lerp(oe.h || 0, ne.h || 0, p),
+            r: lerp(oe.r || 0, ne.r || 0, p),
+            alpha: 1
+          });
+          if (ne.type === 'arrow' && oe.type === 'arrow') {
+            merged.x1 = lerp(oe.x1, ne.x1, p); merged.y1 = lerp(oe.y1, ne.y1, p);
+            merged.x2 = lerp(oe.x2, ne.x2, p); merged.y2 = lerp(oe.y2, ne.y2, p);
+          }
+          if (ne.type === 'line' && oe.type === 'line') {
+            merged.x1 = lerp(oe.x1, ne.x1, p); merged.y1 = lerp(oe.y1, ne.y1, p);
+            merged.x2 = lerp(oe.x2, ne.x2, p); merged.y2 = lerp(oe.y2, ne.y2, p);
+          }
+          if ((ne.type === 'label' || ne.type === 'text') && oe.text !== ne.text) {
+            drawElement(merge(oe, { alpha: 1 - p }));
+            drawElement(merge(ne, { alpha: p }));
+          } else {
+            drawElement(merged);
+          }
+        } else {
+          drawElement(merge(ne, { alpha: p }));
+        }
+      });
+
+      ctx.restore();
+
+      if (raw < 1) { requestAnimationFrame(step); }
+      else { transitioning = false; }
+    }
+    requestAnimationFrame(step);
+  }
+
+  // --- HUD ---
+  function _updateHUD(f) {
+    var cfg = window.CONFIG || {};
+    var labels = cfg.hudLabels || [];
+    var values = cfg.hudValues || [];
+    for (var i = 0; i < 4; i++) {
+      var lEl = document.getElementById('hudL' + (i + 1));
+      var vEl = document.getElementById('hudV' + (i + 1));
+      if (lEl && labels[i]) lEl.textContent = t(labels[i]);
+      if (vEl && values[f] && values[f][i] !== undefined) {
+        var val = values[f][i];
+        vEl.textContent = (typeof val === 'string' && I18N[val]) ? t(val) : val;
+      }
+    }
+    var fi = document.getElementById('frameIndicator');
+    if (fi) fi.textContent = (f + 1) + ' / ' + totalFrames;
+  }
+
+  // --- Guide panel (sidebar layout -- always visible, no collapse) ---
+  function _buildGuide() {
+    var cfg = window.CONFIG || {};
+    var guideTitle = document.getElementById('guideTitle');
+    var guideContent = document.getElementById('guideContent');
+    if (!guideContent) return;
+
+    if (guideTitle) guideTitle.textContent = t(cfg.guideTitle || 'guideDefault');
+
+    var items = cfg.guideItems || [];
+    var html = '<ul>';
+    items.forEach(function (key) { html += '<li>' + t(key) + '</li>'; });
+    html += '</ul>';
+    guideContent.innerHTML = html;
+  }
+
+  // --- refreshI18N ---
+  function refreshI18N() {
+    var titleEl = document.getElementById('title');
+    var subEl = document.getElementById('subtitle');
+    if (titleEl) titleEl.textContent = t('title');
+    if (subEl) subEl.textContent = t('subtitle');
+
+    var btnPrev = document.getElementById('btnPrev');
+    var btnNext = document.getElementById('btnNext');
+    var btnPlay = document.getElementById('btnPlay');
+    if (btnPrev) btnPrev.textContent = t('btnPrev');
+    if (btnNext) btnNext.textContent = t('btnNext');
+    if (btnPlay) btnPlay.textContent = playing ? t('btnPause') : t('btnPlay');
+
+    var langBtn = document.getElementById('langBtn');
+    if (langBtn) langBtn.textContent = LANG.toUpperCase();
+
+    _buildGuide();
+    _updateHUD(currentFrame);
+    drawFrame(currentFrame);
+  }
+
+  // --- Resize ---
+  function _resize() {
+    var wrap = cv.parentElement;
+    var rect = wrap.getBoundingClientRect();
+    if (rect.width < 1 || rect.height < 1) return;
+    W = rect.width; H = rect.height;
+    cv.width = W * DPR; cv.height = H * DPR;
+    cv.style.width = W + 'px'; cv.style.height = H + 'px';
+    ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+    drawFrame(currentFrame);
+  }
+
+  // --- Play / Pause ---
+  function _togglePlay() {
+    if (playing) {
+      playing = false;
+      if (playTimer) clearTimeout(playTimer);
+      document.getElementById('btnPlay').textContent = t('btnPlay');
+      return;
+    }
+    playing = true;
+    document.getElementById('btnPlay').textContent = t('btnPause');
+    function autoNext() {
+      if (!playing) return;
+      if (currentFrame < totalFrames - 1) {
+        transitionTo(currentFrame + 1);
+        playTimer = setTimeout(autoNext, 1800);
+      } else {
+        playing = false;
+        document.getElementById('btnPlay').textContent = t('btnPlay');
+      }
+    }
+    if (currentFrame >= totalFrames - 1) { currentFrame = -1; }
+    autoNext();
+  }
+
+  // --- Boot ---
+  function boot() {
+    var cfg = window.CONFIG || {};
+    totalFrames = cfg.totalFrames || 4;
+
+    // Apply palette
+    if (cfg.style && PALETTES[cfg.style]) {
+      PAL = PALETTES[cfg.style];
+    }
+
+    // Inject CSS custom properties (palette + theme_style shared tokens)
+    var root = document.documentElement;
+    // Palette-specific
+    root.style.setProperty('--bg', PAL.bg);
+    root.style.setProperty('--bg2', PAL.bg2);
+    root.style.setProperty('--surface', PAL.surface);
+    root.style.setProperty('--primary', PAL.primary);
+    root.style.setProperty('--primary-dim', PAL.primaryDim);
+    root.style.setProperty('--secondary', PAL.secondary);
+    root.style.setProperty('--secondary-dim', PAL.secondaryDim);
+    root.style.setProperty('--text', PAL.text);
+    root.style.setProperty('--muted', PAL.muted);
+    root.style.setProperty('--error', PAL.error);
+    root.style.setProperty('--outline', PAL.outline);
+    root.style.setProperty('--glow', PAL.glow);
+    root.style.setProperty('--glow-strong', PAL.glowStrong);
+    root.style.setProperty('--glass', PAL.glass);
+    root.style.setProperty('--glass-blur', PAL.glassBlur + 'px');
+    root.style.setProperty('--radius', PAL.radius);
+    // theme_style shared tokens
+    root.style.setProperty('--bg-0', 'oklch(0.14 0.035 265)');
+    root.style.setProperty('--bg-1', 'oklch(0.18 0.04 265)');
+    root.style.setProperty('--bg-2', 'oklch(0.22 0.045 265)');
+    root.style.setProperty('--bg-3', 'oklch(0.28 0.05 265)');
+    root.style.setProperty('--line', 'oklch(0.35 0.05 265 / 0.35)');
+    root.style.setProperty('--fg', 'oklch(0.96 0.01 265)');
+    root.style.setProperty('--fg-dim', 'oklch(0.75 0.02 265)');
+    root.style.setProperty('--fg-mute', 'oklch(0.55 0.03 265)');
+    root.style.setProperty('--gold', 'oklch(0.85 0.14 85)');
+
+    _buildI18N(cfg);
+
+    // Canvas init (must be before _applyVisualMode which calls drawFrame)
+    cv = document.getElementById('c');
+    ctx = cv.getContext('2d');
+
+    // Visual mode: default to cyberpunk, allow CONFIG override
+    if (cfg.visualMode && VISUAL_MODES[cfg.visualMode]) {
+      VISUAL_MODE = cfg.visualMode;
+    }
+
+    // Build style switcher UI and apply initial mode CSS vars (no draw yet)
+    _buildStyleSwitcher();
+    // Set CSS vars without redrawing (canvas size not yet set)
+    var _m = VISUAL_MODES[VISUAL_MODE] || VISUAL_MODES.cyberpunk;
+    var _r = document.documentElement;
+    _r.style.setProperty('--sb-bg',     _m.sidebarBg || 'rgba(5,6,15,0.92)');
+    _r.style.setProperty('--sb-border', _m.sidebarBorder || (_m.canvasAccent || PAL.primary));
+    _r.style.setProperty('--sb-text',   _m.sidebarText || PAL.text);
+    _r.style.setProperty('--sb-dim',    _m.sidebarTextDim || PAL.muted);
+    _r.style.setProperty('--sb-mute',   _m.sidebarTextMute || PAL.muted);
+    _r.style.setProperty('--sb-accent', _m.sidebarAccent || PAL.primary);
+    _r.style.setProperty('--sb-btn-bg', _m.sidebarBtnBg || 'transparent');
+    _r.style.setProperty('--sb-btn-bd', _m.sidebarBtnBorder || 'transparent');
+    _r.style.setProperty('--hud-bg',    _m.hudBg || 'rgba(5,6,15,0.9)');
+    _r.style.setProperty('--hud-border',_m.hudBorder || 'transparent');
+    _r.style.setProperty('--hud-label', _m.hudLabel || PAL.muted);
+    _r.style.setProperty('--hud-value', _m.hudValue || PAL.text);
+    _r.style.setProperty('--ctrl-bg',   _m.ctrlBg || PAL.primary);
+    _r.style.setProperty('--ctrl-color',_m.ctrlColor || PAL.bg);
+
+    // Events
+    window.addEventListener('resize', _resize);
+    setTimeout(_resize, 200);
+    setTimeout(_resize, 600);
+    document.fonts.ready.then(function () { _resize(); });
+
+    // Lang toggle
+    var langBtn = document.getElementById('langBtn');
+    if (langBtn) {
+      langBtn.addEventListener('click', function () {
+        LANG = LANG === 'en' ? 'cn' : 'en';
+        refreshI18N();
+      });
+    }
+
+    // Controls
+    var btnPrev = document.getElementById('btnPrev');
+    var btnNext = document.getElementById('btnNext');
+    var btnPlay = document.getElementById('btnPlay');
+
+    if (btnPrev) btnPrev.addEventListener('click', function () {
+      if (playing) { playing = false; if (playTimer) clearTimeout(playTimer); }
+      transitionTo(currentFrame - 1);
+    });
+    if (btnNext) btnNext.addEventListener('click', function () {
+      if (playing) { playing = false; if (playTimer) clearTimeout(playTimer); }
+      transitionTo(currentFrame + 1);
+    });
+    if (btnPlay) btnPlay.addEventListener('click', _togglePlay);
+
+    // Guide
+    _buildGuide();
+
+    // Initial render
+    refreshI18N();
+
+    // Callback
+    if (typeof onReady === 'function') onReady();
+  }
+
+  // --- Public API ---
+  return {
+    boot: boot,
+    t: t,
+    lerp: lerp,
+    interpolate: interpolate,
+    easeInOut: easeInOut,
+    merge: merge,
+    drawElement: drawElement,
+    drawFrame: drawFrame,
+    transitionTo: transitionTo,
+    refreshI18N: refreshI18N,
+    get PAL() { return PAL; },
+    get W() { return _vw; },
+    get H() { return _vh; },
+    get ctx() { return ctx; },
+    get currentFrame() { return currentFrame; },
+    get totalFrames() { return totalFrames; },
+    get LANG() { return LANG; },
+    get _lang() { return LANG; },
+    get lang() { return LANG; },
+    get mode() { return VISUAL_MODE; },
+    get modeColors() { return _modeColors(); },
+    setMode: function(m) { if (VISUAL_MODES[m]) _applyVisualMode(m); },
+    get REF_W() { return REF_W; },
+    get REF_H() { return REF_H; },
+    get realW() { return W; },
+    get realH() { return H; },
+    applyContentScale: function () { var ct = _contentTransform(); _applyContentScale(ct); },
+    restoreContentScale: function () { ctx.restore(); },
+  };
+})();
+
+</script>
+
+<!-- Content -->
+<script>
+// ============================================================
+// CONFIG
+// ============================================================
+
+var CONFIG = {
+  style: 'phys',
+  totalFrames: 5,
+
+  i18n: {
+    title:    {en:'MOMENTUM', cn:'\u52a8\u91cf'},
+    subtitle: {en:'The motion "weight" of objects', cn:'\u7269\u4f53\u7684\u8fd0\u52a8\u201c\u5206\u91cf\u201d'},
+    // Frame 0
+    f0_main:    {en:'MOMENTUM: p = m \u00d7 v', cn:'\u52a8\u91cf\uff1ap = m \u00d7 v'},
+    f0_sub:     {en:'Why does a truck hit harder than a bicycle?', cn:'\u4e3a\u4ec0\u4e48\u5361\u8f66\u649e\u4eba\u6bd4\u81ea\u884c\u8f66\u649e\u4eba\u540e\u679c\u4e25\u91cd\u5f97\u591a\uff1f'},
+    f0_desc:    {en:'Momentum = mass \u00d7 velocity. Heavier or faster means more momentum.', cn:'\u52a8\u91cf = \u8d28\u91cf \u00d7 \u901f\u5ea6\u3002\u8d8a\u91cd\u6216\u8d8a\u5feb\uff0c\u52a8\u91cf\u8d8a\u5927\u3002'},
+    // Frame 1
+    f1_title:   {en:'SAME SPEED, DIFFERENT MOMENTUM', cn:'\u540c\u6837\u901f\u5ea6\uff0c\u52a8\u91cf\u5dee\u5f02\u5de8\u5927'},
+    f1_bike:    {en:'Bicycle', cn:'\u81ea\u884c\u8f66'},
+    f1_truck:   {en:'Truck', cn:'\u5361\u8f66'},
+    f1_bikeM:   {en:'m = 15 kg', cn:'m = 15 kg'},
+    f1_truckM:  {en:'m = 10,000 kg', cn:'m = 10,000 kg'},
+    f1_bikeV:   {en:'v = 5 m/s', cn:'v = 5 m/s'},
+    f1_truckV:  {en:'v = 5 m/s', cn:'v = 5 m/s'},
+    f1_bikeP:   {en:'p = 75 kg\u00b7m/s', cn:'p = 75 kg\u00b7m/s'},
+    f1_truckP:  {en:'p = 50,000 kg\u00b7m/s', cn:'p = 50,000 kg\u00b7m/s'},
+    f1_ratio:   {en:'Truck momentum is 667x bicycle!', cn:'\u5361\u8f66\u52a8\u91cf\u662f\u81ea\u884c\u8f66\u768467\u500d\uff01'},
+    // Frame 2
+    f2_title:   {en:'COLLISION: BIG HITS SMALL', cn:'\u78b0\u649e\uff1a\u5927\u7403\u649e\u5c0f\u7403'},
+    f2_before:  {en:'BEFORE', cn:'\u78b0\u649e\u524d'},
+    f2_after:   {en:'AFTER', cn:'\u78b0\u649e\u540e'},
+    f2_big:     {en:'Heavy ball', cn:'\u91cd\u7403'},
+    f2_small:   {en:'Light ball', cn:'\u8f7b\u7403'},
+    f2_note:    {en:'Heavy ball barely slows down; light ball flies away!', cn:'\u91cd\u7403\u51e0\u4e4e\u4e0d\u51cf\u901f\uff0c\u8f7b\u7403\u88ab\u5f39\u98de\uff01'},
+    // Frame 3
+    f3_title:   {en:'MOMENTUM CONSERVATION', cn:'\u52a8\u91cf\u5b88\u6052'},
+    f3_law:     {en:'Total momentum BEFORE = Total momentum AFTER', cn:'\u78b0\u649e\u524d\u603b\u52a8\u91cf = \u78b0\u649e\u540e\u603b\u52a8\u91cf'},
+    f3_before:  {en:'Before collision', cn:'\u78b0\u649e\u524d'},
+    f3_after:   {en:'After collision', cn:'\u78b0\u649e\u540e'},
+    f3_p1:      {en:'Ball 1', cn:'\u7403 1'},
+    f3_p2:      {en:'Ball 2', cn:'\u7403 2'},
+    f3_total:   {en:'Total', cn:'\u603b\u8ba1'},
+    // Frame 4
+    f4_title:   {en:'ROCKET & MOMENTUM', cn:'\u706b\u7bad\u4e0e\u52a8\u91cf'},
+    f4_gas:     {en:'Exhaust gas', cn:'\u71c3\u6c14'},
+    f4_rocket:  {en:'Rocket', cn:'\u706b\u7bad'},
+    f4_gasP:    {en:'Gas momentum \u2190', cn:'\u71c3\u6c14\u52a8\u91cf \u2190'},
+    f4_rocketP: {en:'Rocket momentum \u2192', cn:'\u706b\u7bad\u52a8\u91cf \u2192'},
+    f4_note:    {en:'Gas goes left, rocket goes right. Total momentum = 0', cn:'\u71c3\u6c14\u5411\u5de6\uff0c\u706b\u7bad\u5411\u53f3\u3002\u603b\u52a8\u91cf = 0'},
+    f4_eq:      {en:'p_gas + p_rocket = 0', cn:'p_\u71c3\u6c14 + p_\u706b\u7bad = 0'},
+    // HUD
+    hudFrame:   {en:'FRAME', cn:'\u5e27'},
+    hudMass:    {en:'MASS', cn:'\u8d28\u91cf'},
+    hudVel:     {en:'VELOCITY', cn:'\u901f\u5ea6'},
+    hudMom:     {en:'MOMENTUM', cn:'\u52a8\u91cf'},
+    // Guide
+    guideTitle: {en:'GUIDE', cn:'\u89c2\u770b\u6307\u5357'},
+    g1:         {en:'Frame 1: Compare bike vs truck momentum', cn:'\u7b2c1\u5e27\uff1a\u5bf9\u6bd4\u81ea\u884c\u8f66\u548c\u5361\u8f66\u7684\u52a8\u91cf'},
+    g2:         {en:'Frame 2: Watch collision between heavy and light balls', cn:'\u7b2c2\u5e27\uff1a\u89c2\u5bdf\u5927\u7403\u649e\u5c0f\u7403'},
+    g3:         {en:'Frame 3: Verify momentum conservation with bar chart', cn:'\u7b2c3\u5e27\uff1a\u7528\u67f1\u72b6\u56fe\u9a8c\u8bc1\u52a8\u91cf\u5b88\u6052'},
+    g4:         {en:'Frame 4: See how rockets use momentum to fly', cn:'\u7b2c4\u5e27\uff1a\u770b\u706b\u7bad\u5982\u4f55\u5229\u7528\u52a8\u91cf\u98de\u884c'},
+  },
+
+  hudLabels: ['hudFrame', 'hudMass', 'hudVel', 'hudMom'],
+  hudValues: [
+    ['0/4', '--', '--', 'p = m \u00d7 v'],
+    ['1/4', '15 / 10000 kg', '5 m/s', '75 / 50000'],
+    ['2/4', '8 / 2 kg', '6 / 0 m/s', '48 / 0'],
+    ['3/4', '8+2 kg', '--', '48 = 48'],
+    ['4/4', '--', '--', '0 = 0'],
+  ],
+
+  guideTitle: 'guideTitle',
+  guideItems: ['g1', 'g2', 'g3', 'g4'],
+};
+
+// ============================================================
+// FRAME ELEMENTS
+// ============================================================
+
+function getFrameElements(f, W, H) {
+  var t = AnimRuntime.t;
+  var P = AnimRuntime.PAL;
+  var MC = AnimRuntime.modeColors;
+  var cx = W / 2, cy = H / 2;
+
+  // ---------- Frame 0: Title ----------
+  if (f === 0) {
+    return [
+      {id:'t0', type:'label', text:t('f0_main'), x:cx, y:cy - 60, color:P.primary, size:22, align:'center', glow:P.glow},
+      {id:'s0', type:'label', text:t('f0_sub'), x:cx, y:cy - 20, color:MC.dim, size:14, align:'center'},
+      {id:'d0', type:'label', text:t('f0_desc'), x:cx, y:cy + 30, color:MC.mute, size:11, align:'center'},
+      // momentum formula decoration
+      {id:'fl', type:'label', text:'p = m \u00d7 v', x:cx, y:cy + 80, color:P.secondary, size:16, align:'center', bold:true},
+    ];
+  }
+
+  // ---------- Frame 1: Bike vs Truck ----------
+  if (f === 1) {
+    var bikeX = W * 0.25, truckX = W * 0.7;
+    var baseY = H * 0.5;
+
+    var els = [
+      {id:'f1t', type:'label', text:t('f1_title'), x:cx, y:22, color:P.primary, size:14, align:'center'},
+      // Bike sprite
+      {id:'f1bk', type:'sprite', name:'bicycle', x:bikeX, y:baseY - 30, w:80},
+      {id:'f1bl', type:'label', text:t('f1_bike'), x:bikeX, y:baseY - 75, color:MC.text, size:11, align:'center'},
+      {id:'f1bm', type:'label', text:t('f1_bikeM'), x:bikeX, y:baseY + 16, color:MC.dim, size:10, align:'center'},
+      {id:'f1bv', type:'label', text:t('f1_bikeV'), x:bikeX, y:baseY + 30, color:MC.dim, size:10, align:'center'},
+      {id:'f1bp', type:'label', text:t('f1_bikeP'), x:bikeX, y:baseY + 48, color:P.primary, size:11, align:'center', bold:true},
+      // Truck sprite
+      {id:'f1tk', type:'sprite', name:'truck', x:truckX, y:baseY - 30, w:180},
+      {id:'f1tl', type:'label', text:t('f1_truck'), x:truckX, y:baseY - 80, color:MC.text, size:11, align:'center'},
+      {id:'f1tm', type:'label', text:t('f1_truckM'), x:truckX, y:baseY + 20, color:MC.dim, size:10, align:'center'},
+      {id:'f1tv', type:'label', text:t('f1_truckV'), x:truckX, y:baseY + 34, color:MC.dim, size:10, align:'center'},
+      {id:'f1tp', type:'label', text:t('f1_truckP'), x:truckX, y:baseY + 52, color:P.primary, size:11, align:'center', bold:true},
+      // Ratio label
+      {id:'f1r', type:'label', text:t('f1_ratio'), x:cx, y:H - 20, color:P.tertiary, size:12, align:'center', bold:true},
+    ];
+    return els;
+  }
+
+  // ---------- Frame 2: Collision ----------
+  if (f === 2) {
+    // Before collision: big ball moving right, small ball stationary
+    var bx1 = W * 0.2, bx2 = W * 0.45;
+    // After collision: big ball barely moved, small ball flew right
+    var ax1 = W * 0.55, ax2 = W * 0.85;
+    var ballY = H * 0.4;
+    var bigR = 30, smallR = 14;
+
+    return [
+      {id:'f2t', type:'label', text:t('f2_title'), x:cx, y:22, color:P.primary, size:14, align:'center'},
+      // BEFORE section
+      {id:'f2bf', type:'label', text:t('f2_before'), x:W * 0.33, y:ballY - 65, color:MC.dim, size:10, align:'center'},
+      // Big ball before
+      {id:'f2b1', type:'circle', x:bx1, y:ballY, r:bigR, fill:P.primary},
+      {id:'f2b1a', type:'label', text:'\u2192 6 m/s', x:bx1 + bigR + 8, y:ballY, color:P.primary, size:10, align:'left'},
+      {id:'f2b1l', type:'label', text:t('f2_big') + ' (8 kg)', x:bx1, y:ballY + bigR + 14, color:MC.dim, size:9, align:'center'},
+      // Small ball before (stationary)
+      {id:'f2s1', type:'circle', x:bx2, y:ballY, r:smallR, fill:P.secondary},
+      {id:'f2s1a', type:'label', text:'0 m/s', x:bx2 + smallR + 6, y:ballY, color:MC.dim, size:10, align:'left'},
+      {id:'f2s1l', type:'label', text:t('f2_small') + ' (2 kg)', x:bx2, y:ballY + smallR + 14, color:MC.dim, size:9, align:'center'},
+      // Arrow showing collision
+      {id:'f2arr', type:'label', text:'\u21e8', x:W * 0.5, y:H * 0.55, color:MC.mute, size:20, align:'center'},
+      // AFTER section
+      {id:'f2af', type:'label', text:t('f2_after'), x:W * 0.7, y:ballY - 65, color:MC.dim, size:10, align:'center'},
+      // Big ball after (barely slowed: ~4 m/s)
+      {id:'f2b2', type:'circle', x:ax1, y:H * 0.7, r:bigR, fill:P.primary},
+      {id:'f2b2a', type:'label', text:'\u2192 4 m/s', x:ax1 + bigR + 8, y:H * 0.7, color:P.primary, size:10, align:'left'},
+      // Small ball after (flew away: ~12 m/s)
+      {id:'f2s2', type:'circle', x:ax2, y:H * 0.7, r:smallR, fill:P.secondary},
+      {id:'f2s2a', type:'label', text:'\u2192 12 m/s', x:ax2 - smallR - 8, y:H * 0.7, color:P.tertiary, size:10, align:'right'},
+      // Note
+      {id:'f2n', type:'label', text:t('f2_note'), x:cx, y:H - 18, color:P.tertiary, size:11, align:'center'},
+    ];
+  }
+
+  // ---------- Frame 3: Momentum Conservation Bar Chart ----------
+  if (f === 3) {
+    var barW = 50, gap = 20;
+    var chartBase = H * 0.82;
+    var maxBarH = H * 0.48;
+    // Values: before collision p1=48, p2=0, total=48
+    // After collision p1'=32, p2'=16 (total still 48... wait, elastic: p1'=4*8=32 p2'=12*2=24... total=56 hmm)
+    // Correct elastic: m1=8, v1=6, m2=2, v2=0 -> v1'=(8-2)/(8+2)*6=3.6, v2'=2*8/(8+2)*6=9.6
+    // p1'=8*3.6=28.8, p2'=2*9.6=19.2, total=48. Good.
+    var scale = maxBarH / 48;
+    var p1b = 48, p2b = 0, totalB = 48;
+    var p1a = 28.8, p2a = 19.2, totalA = 48;
+
+    var leftStart = cx - (barW * 3 + gap * 2) - 30;
+    var rightStart = cx + 30;
+
+    return [
+      {id:'f3t', type:'label', text:t('f3_title'), x:cx, y:22, color:P.primary, size:14, align:'center'},
+      {id:'f3law', type:'label', text:t('f3_law'), x:cx, y:48, color:MC.text, size:11, align:'center'},
+      // Before section label
+      {id:'f3bl', type:'label', text:t('f3_before'), x:leftStart + barW * 1.5 + gap, y:70, color:MC.dim, size:10, align:'center'},
+      // Before bars
+      {id:'f3b1', type:'rect', x:leftStart, y:chartBase - p1b * scale, w:barW, h:p1b * scale, fill:P.primary},
+      {id:'f3b1l', type:'label', text:t('f3_p1'), x:leftStart + barW / 2, y:chartBase + 14, color:MC.dim, size:9, align:'center'},
+      {id:'f3b1v', type:'label', text:'48', x:leftStart + barW / 2, y:chartBase - p1b * scale - 10, color:P.primary, size:10, align:'center', bold:true},
+      {id:'f3b2', type:'rect', x:leftStart + barW + gap, y:chartBase - Math.max(p2b * scale, 2), w:barW, h:Math.max(p2b * scale, 2), fill:P.secondary},
+      {id:'f3b2l', type:'label', text:t('f3_p2'), x:leftStart + barW * 1.5 + gap, y:chartBase + 14, color:MC.dim, size:9, align:'center'},
+      {id:'f3b2v', type:'label', text:'0', x:leftStart + barW * 1.5 + gap, y:chartBase - 12, color:MC.dim, size:10, align:'center'},
+      {id:'f3bt', type:'rect', x:leftStart + (barW + gap) * 2, y:chartBase - totalB * scale, w:barW, h:totalB * scale, fill:P.tertiary},
+      {id:'f3btl', type:'label', text:t('f3_total'), x:leftStart + (barW + gap) * 2 + barW / 2, y:chartBase + 14, color:MC.dim, size:9, align:'center'},
+      {id:'f3btv', type:'label', text:'48', x:leftStart + (barW + gap) * 2 + barW / 2, y:chartBase - totalB * scale - 10, color:P.tertiary, size:10, align:'center', bold:true},
+      // Equals sign between sections
+      {id:'f3eq', type:'label', text:'=', x:cx, y:chartBase - maxBarH * 0.4, color:P.primary, size:22, align:'center', bold:true},
+      // After section label
+      {id:'f3al', type:'label', text:t('f3_after'), x:rightStart + barW * 1.5 + gap, y:70, color:MC.dim, size:10, align:'center'},
+      // After bars
+      {id:'f3a1', type:'rect', x:rightStart, y:chartBase - p1a * scale, w:barW, h:p1a * scale, fill:P.primary},
+      {id:'f3a1l', type:'label', text:t('f3_p1'), x:rightStart + barW / 2, y:chartBase + 14, color:MC.dim, size:9, align:'center'},
+      {id:'f3a1v', type:'label', text:'28.8', x:rightStart + barW / 2, y:chartBase - p1a * scale - 10, color:P.primary, size:10, align:'center', bold:true},
+      {id:'f3a2', type:'rect', x:rightStart + barW + gap, y:chartBase - p2a * scale, w:barW, h:p2a * scale, fill:P.secondary},
+      {id:'f3a2l', type:'label', text:t('f3_p2'), x:rightStart + barW * 1.5 + gap, y:chartBase + 14, color:MC.dim, size:9, align:'center'},
+      {id:'f3a2v', type:'label', text:'19.2', x:rightStart + barW * 1.5 + gap, y:chartBase - p2a * scale - 10, color:P.secondary, size:10, align:'center', bold:true},
+      {id:'f3at', type:'rect', x:rightStart + (barW + gap) * 2, y:chartBase - totalA * scale, w:barW, h:totalA * scale, fill:P.tertiary},
+      {id:'f3atl', type:'label', text:t('f3_total'), x:rightStart + (barW + gap) * 2 + barW / 2, y:chartBase + 14, color:MC.dim, size:9, align:'center'},
+      {id:'f3atv', type:'label', text:'48', x:rightStart + (barW + gap) * 2 + barW / 2, y:chartBase - totalA * scale - 10, color:P.tertiary, size:10, align:'center', bold:true},
+    ];
+  }
+
+  // ---------- Frame 4: Rocket & Momentum ----------
+  if (f === 4) {
+    var rocketX = cx + 40;
+    var rocketY = cy - 10;
+    var rocketW = 70, rocketH = 30;
+
+    return [
+      {id:'f4t', type:'label', text:t('f4_title'), x:cx, y:22, color:P.primary, size:14, align:'center'},
+      // Rocket body
+      {id:'f4rk', type:'rect', x:rocketX - rocketW / 2, y:rocketY - rocketH / 2, w:rocketW, h:rocketH, fill:P.primary, stroke:P.secondary},
+      {id:'f4rl', type:'label', text:t('f4_rocket'), x:rocketX, y:rocketY, color:MC.text, size:10, align:'center'},
+      // Exhaust particles (left side)
+      {id:'f4e1', type:'circle', x:rocketX - rocketW / 2 - 25, y:rocketY - 8, r:6, fill:P.tertiary},
+      {id:'f4e2', type:'circle', x:rocketX - rocketW / 2 - 40, y:rocketY + 4, r:8, fill:P.tertiaryDim},
+      {id:'f4e3', type:'circle', x:rocketX - rocketW / 2 - 58, y:rocketY - 3, r:5, fill:P.tertiaryDim},
+      {id:'f4e4', type:'circle', x:rocketX - rocketW / 2 - 72, y:rocketY + 6, r:7, fill:P.secondaryDim},
+      {id:'f4gl', type:'label', text:t('f4_gas'), x:rocketX - rocketW / 2 - 48, y:rocketY + 30, color:MC.dim, size:9, align:'center'},
+      // Gas momentum arrow (left)
+      {id:'f4ga', type:'label', text:'\u2190\u2190\u2190', x:rocketX - rocketW / 2 - 48, y:rocketY - 30, color:P.tertiary, size:14, align:'center'},
+      {id:'f4gp', type:'label', text:t('f4_gasP'), x:rocketX - rocketW / 2 - 48, y:rocketY - 48, color:P.tertiary, size:10, align:'center'},
+      // Rocket momentum arrow (right)
+      {id:'f4ra', type:'label', text:'\u2192\u2192\u2192', x:rocketX + rocketW / 2 + 40, y:rocketY - 30, color:P.primary, size:14, align:'center'},
+      {id:'f4rp', type:'label', text:t('f4_rocketP'), x:rocketX + rocketW / 2 + 40, y:rocketY - 48, color:P.primary, size:10, align:'center'},
+      // Conservation equation
+      {id:'f4eq', type:'label', text:t('f4_eq'), x:cx, y:H * 0.72, color:P.secondary, size:14, align:'center', bold:true},
+      // Note
+      {id:'f4n', type:'label', text:t('f4_note'), x:cx, y:H * 0.85, color:MC.dim, size:11, align:'center'},
+    ];
+  }
+
+  return [];
+}
+
+// ============================================================
+// BOOT
+// ============================================================
+
+AnimRuntime.boot();
+</script>
+<script>
+
+(function () {
+  if (window.__systemedu_resize_patched) return;
+  window.__systemedu_resize_patched = true;
+
+  const canvas =
+    document.querySelector('canvas#c') ||
+    document.querySelector('canvas');
+  if (!canvas || !canvas.parentElement) return;
+  let container = canvas.parentElement;
+
+  // 如果 canvas 的父容器还包含 controls/hud 等兄弟元素，
+  // 就给 canvas 包一层 div 作为 host，避免 position:absolute 覆盖按钮
+  try {
+    const siblings = container.querySelectorAll('.controls, .hud, button');
+    if (siblings.length > 0 && container.children.length > 1) {
+      const host = document.createElement('div');
+      host.style.cssText = 'flex:1;min-height:0;min-width:0;';
+      container.insertBefore(host, canvas);
+      host.appendChild(canvas);
+      container = host;
+    }
+  } catch (e) {}
+
+  // 注入防撑大 CSS：canvas 脱离流，父容器约束高度
+  // 同时把浮动的操作指南面板（.guide-panel 等）改成可折叠，避免
+  // 在小视口（iframe 缩小）下覆盖标题栏和控件。
+  try {
+    const style = document.createElement('style');
+    style.setAttribute('data-systemedu-resize-patch', '1');
+    style.textContent =
+      // canvas 防撑大
+      '.systemedu-canvas-host{position:relative!important;width:100%!important;min-width:0!important;min-height:0!important;overflow:hidden!important;}' +
+      '.systemedu-canvas-host > canvas{position:absolute!important;top:0!important;left:0!important;width:100%!important;height:100%!important;}' +
+      // lang-btn 移到左下角，避免遮挡标题；背景完全透明只留细边框
+      '.lang-btn{top:auto!important;bottom:8px!important;left:8px!important;right:auto!important;' +
+      'background:transparent!important;backdrop-filter:none!important;-webkit-backdrop-filter:none!important;' +
+      'border:1px solid rgba(255,181,156,0.45)!important;box-shadow:none!important;opacity:0.75!important;z-index:50!important;}' +
+      '.lang-btn:hover{opacity:1!important;background:rgba(20,20,35,0.7)!important;}' +
+      // 浮动指南面板折叠态（默认折叠为一个小按钮，避免遮挡）；背景透明只留圆圈
+      '.guide-panel.systemedu-guide-collapsed{max-width:28px!important;max-height:28px!important;min-width:28px!important;min-height:28px!important;' +
+      'padding:0!important;overflow:hidden!important;cursor:pointer!important;display:flex!important;align-items:center!important;justify-content:center!important;' +
+      'border-radius:50%!important;background:transparent!important;backdrop-filter:none!important;-webkit-backdrop-filter:none!important;' +
+      'border:1px solid rgba(56,189,248,0.55)!important;box-shadow:none!important;opacity:0.75!important;}' +
+      '.guide-panel.systemedu-guide-collapsed:hover{opacity:1!important;background:rgba(20,20,35,0.7)!important;}' +
+      '.guide-panel.systemedu-guide-collapsed > *{display:none!important;}' +
+      '.guide-panel.systemedu-guide-collapsed::before{content:"?";color:#38bdf8;font-weight:700;font-size:14px;}' +
+      // 小视口时强制 guide-panel 宽度收紧（展开态仍保留毛玻璃背景以便阅读）
+      '.guide-panel{max-width:min(220px,35vw)!important;z-index:50!important;}';
+    document.head.appendChild(style);
+    container.classList.add('systemedu-canvas-host');
+  } catch (e) {}
+
+  // 让 .guide-panel 默认折叠为问号按钮，点击展开/收起
+  try {
+    const guides = document.querySelectorAll('.guide-panel');
+    guides.forEach(function (g) {
+      g.classList.add('systemedu-guide-collapsed');
+      g.setAttribute('title', '点击查看操作指南');
+      g.addEventListener('click', function (e) {
+        // 折叠时点击任意处展开；展开时只有点击面板本身（不是内部链接）才收回
+        if (g.classList.contains('systemedu-guide-collapsed')) {
+          g.classList.remove('systemedu-guide-collapsed');
+          e.stopPropagation();
+        } else {
+          // 展开状态下点击面板空白区域也能再次折叠
+          if (e.target === g) {
+            g.classList.add('systemedu-guide-collapsed');
+          }
+        }
+      });
+    });
+  } catch (e) {}
+
+  const redraw = function () {
+    try { if (typeof window.drawCurrent === 'function') { window.drawCurrent(); return; } } catch (e) {}
+    try {
+      if (typeof window.gotoFrame === 'function' &&
+          typeof window.currentFrame !== 'undefined') {
+        window.gotoFrame(window.currentFrame); return;
+      }
+    } catch (e) {}
+    try { if (typeof window.draw === 'function') { window.draw(); return; } } catch (e) {}
+    try { if (typeof window.render === 'function') { window.render(); return; } } catch (e) {}
+  };
+
+  let rafId = 0;
+  let prevW = 0, prevH = 0;
+
+  // 校正 canvas backing store 与 CSS 显示尺寸，保证宽高比一致。
+  // 防止 canvas 被浏览器按不同比例拉伸（典型症状：文字被水平拉宽或压扁）。
+  // 必要时重新调用原 resize() 让动画内部坐标系也更新。
+  const enforceSizeConsistency = function () {
+    const rect = canvas.getBoundingClientRect();
+    if (rect.width < 1 || rect.height < 1) return false;
+    const dpr = Math.max(1, window.devicePixelRatio || 1);
+    const targetW = Math.round(rect.width * dpr);
+    const targetH = Math.round(rect.height * dpr);
+    // 允许 1 像素误差
+    if (Math.abs(canvas.width - targetW) > 1 || Math.abs(canvas.height - targetH) > 1) {
+      return true; // 需要修复
+    }
+    return false;
+  };
+
+  // 调用动画内部的 resize 钩子。优先级：
+  //   1) window.resize（老式全局挂载）
+  //   2) window 上的 'resize' 事件（addEventListener 注册的 local resize）
+  // 多数 knode 动画通过 addEventListener('resize', resize) 挂事件监听，
+  // 此时 window.resize 是 undefined，唯一能驱动它的方式是 dispatchEvent。
+  const callInternalResize = function () {
+    try {
+      if (typeof window.resize === 'function') {
+        window.resize();
+        return true;
+      }
+    } catch (e) {}
+    try {
+      window.dispatchEvent(new Event('resize'));
+      return true;
+    } catch (e) {}
+    return false;
+  };
+
+  const doResize = function () {
+    // 让动画的 local resize 读最新 rect 并重写 canvas backing store
+    callInternalResize();
+
+    // 校正 backing store：若 canvas.width/height 与 CSS 显示尺寸不一致
+    // （典型症状：文字被水平或垂直拉伸），反复触发 local resize 让它
+    // 重新计算。浏览器 layout 已稳定时通常一次就能修复。
+    try {
+      let guard = 0;
+      while (enforceSizeConsistency() && guard < 3) {
+        guard++;
+        // 触发 reflow 让 getBoundingClientRect 读到最新值
+        void canvas.offsetHeight;
+        callInternalResize();
+      }
+      // 最终保障：某些动画的 resize 可能读到错值（例如 parentElement 被
+      // 缓存，或 CSS !important 锁死尺寸）。此时直接硬写 canvas.width/height
+      // 保证宽高比正确；drawCurrent 会把内容重新画到正确的 backing store。
+      const rect = canvas.getBoundingClientRect();
+      const dpr = Math.max(1, window.devicePixelRatio || 1);
+      const tw = Math.round(rect.width * dpr);
+      const th = Math.round(rect.height * dpr);
+      if (rect.width >= 1 && rect.height >= 1 &&
+          (Math.abs(canvas.width - tw) > 1 || Math.abs(canvas.height - th) > 1)) {
+        canvas.width = tw;
+        canvas.height = th;
+        // 同步动画内部坐标系变量（若挂在 window 上）
+        try {
+          if (typeof window.W !== 'undefined') window.W = rect.width;
+          if (typeof window.H !== 'undefined') window.H = rect.height;
+        } catch (e) {}
+        // 再跑一次 local resize，让它重新 setTransform 并更新自身 W/H
+        callInternalResize();
+      }
+    } catch (e) {}
+
+    redraw();
+  };
+
+  const ro = new ResizeObserver(function (entries) {
+    const entry = entries[0];
+    if (!entry) return;
+    const cr = entry.contentRect;
+    const w = cr.width, h = cr.height;
+    if (w < 1 || h < 1) return;
+    if (Math.abs(w - prevW) < 1 && Math.abs(h - prevH) < 1) return;
+    prevW = w; prevH = h;
+
+    // 第一次回调也要处理：iframe 内的动画可能把错值写到 canvas backing
+    // store（例如 load 时 parent rect 还不稳定），第一次 RO 回调正是
+    // layout 已稳定的时机，必须借此纠正。
+    if (rafId) cancelAnimationFrame(rafId);
+    rafId = requestAnimationFrame(function () {
+      rafId = 0;
+      doResize();
+    });
+  });
+
+  try { ro.observe(container); } catch (e) {}
+
+  // iframe 初始化阶段 parent rect 可能不稳定，导致动画原始 resize()
+  // 写入错误的 canvas.width/height（尤其在 iframe 外层 div 宽高变化时）。
+  // load 后始终跑一次 doResize 做最终校正，不依赖 canvas.width<4 的判断。
+  window.addEventListener('load', function () {
+    setTimeout(function () { doResize(); }, 50);
+  });
+})();
+
+</script>
+
+<!-- Sprites -->
+<svg id="sprite-bicycle" style="display:none" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 80" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+  <!-- rear wheel -->
+  <circle cx="28" cy="58" r="18" stroke="#5ba3d9" fill="none"/>
+  <!-- front wheel -->
+  <circle cx="92" cy="58" r="18" stroke="#5ba3d9" fill="none"/>
+  <!-- frame -->
+  <path d="M28 58 L52 30 L78 30 L92 58 M52 30 L42 58 M52 30 L60 58" stroke="#78b8e8"/>
+  <!-- seat -->
+  <line x1="46" y1="26" x2="58" y2="26" stroke="#a0c8f0" stroke-width="3"/>
+  <!-- handlebar -->
+  <path d="M78 30 L82 22 M76 22 L88 22" stroke="#a0c8f0" stroke-width="2.5"/>
+  <!-- pedal area -->
+  <circle cx="52" cy="58" r="4" fill="#5ba3d9" stroke="none"/>
+  <!-- spokes hint -->
+  <line x1="28" y1="40" x2="28" y2="76" stroke="#5ba3d9" stroke-width="0.5" opacity="0.3"/>
+  <line x1="10" y1="58" x2="46" y2="58" stroke="#5ba3d9" stroke-width="0.5" opacity="0.3"/>
+  <line x1="92" y1="40" x2="92" y2="76" stroke="#5ba3d9" stroke-width="0.5" opacity="0.3"/>
+  <line x1="74" y1="58" x2="110" y2="58" stroke="#5ba3d9" stroke-width="0.5" opacity="0.3"/>
+</svg>
+
+<svg id="sprite-truck" style="display:none" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 80" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+  <!-- cargo body -->
+  <rect x="4" y="8" width="100" height="48" rx="3" fill="#2a4a6a" stroke="#5ba3d9"/>
+  <!-- cargo detail lines -->
+  <line x1="4" y1="32" x2="104" y2="32" stroke="#5ba3d9" stroke-width="0.8" opacity="0.4"/>
+  <!-- cabin -->
+  <path d="M104 20 L104 56 L140 56 L140 30 L125 20 Z" fill="#1e3a54" stroke="#5ba3d9"/>
+  <!-- windshield -->
+  <path d="M125 22 L138 30 L138 42 L118 42 L118 30 Z" fill="#3a6a8e" stroke="#78b8e8" stroke-width="1.5" opacity="0.7"/>
+  <!-- headlight -->
+  <rect x="138" y="42" width="6" height="6" rx="1" fill="#ffd866" stroke="none" opacity="0.9"/>
+  <!-- chassis -->
+  <line x1="4" y1="56" x2="140" y2="56" stroke="#5ba3d9" stroke-width="2.5"/>
+  <!-- rear wheels (dual) -->
+  <circle cx="30" cy="64" r="12" fill="#1a2a3a" stroke="#78b8e8" stroke-width="2.5"/>
+  <circle cx="30" cy="64" r="5" fill="#2a4a6a" stroke="#5ba3d9" stroke-width="1.5"/>
+  <circle cx="52" cy="64" r="12" fill="#1a2a3a" stroke="#78b8e8" stroke-width="2.5"/>
+  <circle cx="52" cy="64" r="5" fill="#2a4a6a" stroke="#5ba3d9" stroke-width="1.5"/>
+  <!-- front wheel -->
+  <circle cx="124" cy="64" r="12" fill="#1a2a3a" stroke="#78b8e8" stroke-width="2.5"/>
+  <circle cx="124" cy="64" r="5" fill="#2a4a6a" stroke="#5ba3d9" stroke-width="1.5"/>
+  <!-- bumper -->
+  <line x1="140" y1="52" x2="148" y2="52" stroke="#5ba3d9" stroke-width="3"/>
+  <line x1="148" y1="52" x2="148" y2="58" stroke="#5ba3d9" stroke-width="3"/>
+</svg>
+
+</body>
+</html>

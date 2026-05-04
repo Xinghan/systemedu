@@ -1,0 +1,930 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<script>window.__systemedu_resize_patch_optout=true;</script>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Space+Grotesk:wght@400;500;700&family=Inter:wght@400;500&family=Noto+Sans+SC:wght@400;700&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box;}
+html,body{width:100%;height:100vh;overflow:hidden;background:var(--bg,#05060f);color:#e2e2e9;font-family:'Inter','Noto Sans SC',sans-serif;}
+.game-wrap{display:flex;flex-direction:row;height:100vh;overflow:hidden;}
+.game-sidebar{width:200px;min-width:200px;max-width:200px;display:flex;flex-direction:column;gap:6px;padding:10px;background:var(--sb-bg,rgba(5,6,15,0.95));border-right:1px solid var(--sb-border,rgba(128,128,128,0.2));overflow-y:auto;transition:background 0.3s,border-color 0.3s;}
+.sidebar-lang{align-self:flex-start;flex-shrink:0;font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:700;padding:3px 8px;cursor:pointer;border:1px solid var(--sb-btn-bd,transparent);background:var(--sb-btn-bg,transparent);color:var(--sb-accent,var(--primary,#50ffb0));letter-spacing:0.15em;text-transform:uppercase;}
+.sidebar-lang:hover{border-color:var(--sb-accent,var(--primary));background:rgba(128,128,128,0.1);}
+.style-switcher{display:flex;gap:4px;margin:2px 0;}
+.vm-btn{font-family:'JetBrains Mono',monospace;font-size:8px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;padding:3px 6px;cursor:pointer;border:1px solid var(--sb-btn-bd,rgba(128,128,128,0.2));background:var(--sb-btn-bg,transparent);color:var(--sb-dim,rgba(128,128,128,0.5));transition:all 0.2s;}
+.vm-btn:hover{color:var(--sb-accent,var(--primary));border-color:var(--sb-accent,var(--primary));}
+.vm-btn.vm-active{color:var(--sb-accent,var(--primary));border-color:var(--sb-accent,var(--primary));background:rgba(128,128,128,0.12);}
+.sidebar-title{font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:700;color:var(--sb-accent,var(--primary));letter-spacing:0.08em;text-transform:uppercase;margin-top:4px;}
+.sidebar-sub{font-size:11px;color:var(--sb-dim,#8e90a6);line-height:1.55;}
+.sidebar-divider{height:1px;background:var(--sb-btn-bd,rgba(128,128,128,0.15));margin:4px 0;}
+.sidebar-section{font-family:'JetBrains Mono',monospace;font-size:9px;font-weight:700;color:var(--sb-mute,rgba(128,128,128,0.6));letter-spacing:0.15em;text-transform:uppercase;margin-top:4px;}
+.game-main{flex:1;display:flex;flex-direction:column;min-width:0;}
+.game-hud{display:flex;align-items:center;justify-content:flex-start;gap:16px;padding:6px 16px;background:var(--hud-bg,rgba(5,6,15,0.9));border-bottom:1px solid var(--hud-border,transparent);flex-shrink:0;flex-wrap:wrap;}
+.hud-tag{font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:700;color:var(--sb-accent,var(--primary));letter-spacing:0.15em;text-transform:uppercase;}
+.hud-item{display:flex;flex-direction:column;align-items:center;gap:1px;}
+.hud-label{font-family:'JetBrains Mono',monospace;font-size:8px;letter-spacing:0.15em;color:var(--hud-label,#5e6070);text-transform:uppercase;}
+.hud-val{font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:700;color:var(--hud-value,var(--sb-accent,var(--primary)));letter-spacing:0.15em;}
+.game-body{flex:1;position:relative;min-height:0;}
+.game-body canvas{width:100%!important;height:100%!important;display:block;}
+.board-overlay{position:absolute;left:20px;right:20px;bottom:18px;display:grid;grid-template-columns:1.1fr 1fr;gap:16px;align-items:stretch;}
+.glass-panel{background:var(--panel-bg,rgba(8,10,18,0.72));border:1px solid var(--panel-border,rgba(255,176,0,0.16));backdrop-filter:blur(12px);border-radius:14px;box-shadow:0 0 14px var(--panel-glow,rgba(255,176,0,0.08));position:relative;}
+.glass-panel::before,.glass-panel::after{content:"";position:absolute;width:12px;height:12px;border-color:var(--panel-tick,rgba(255,176,0,0.38));pointer-events:none;}
+.glass-panel::before{left:10px;top:10px;border-left:1px solid var(--panel-tick,rgba(255,176,0,0.38));border-top:1px solid var(--panel-tick,rgba(255,176,0,0.38));}
+.glass-panel::after{right:10px;bottom:10px;border-right:1px solid var(--panel-tick,rgba(255,176,0,0.38));border-bottom:1px solid var(--panel-tick,rgba(255,176,0,0.38));}
+.evidence-panel{padding:16px 16px 14px;display:flex;flex-direction:column;gap:12px;min-height:292px;}
+.factor-panel{padding:16px 16px 14px;display:flex;flex-direction:column;gap:12px;min-height:292px;}
+.case-header{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;}
+.case-title{font-family:'Space Grotesk','Noto Sans SC',sans-serif;font-size:20px;font-weight:700;color:var(--title-color,#f4efe6);letter-spacing:0.02em;line-height:1.15;}
+.case-sub{font-size:12px;color:var(--body-dim,#aab1bf);line-height:1.6;}
+.case-pill{display:inline-flex;align-items:center;justify-content:center;padding:5px 11px;border-radius:999px;border:1px solid var(--pill-border,rgba(255,176,0,0.35));background:var(--pill-bg,rgba(255,176,0,0.12));font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:var(--pill-text,#ffd580);}
+.panel-title{font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:700;letter-spacing:0.15em;text-transform:uppercase;color:var(--sb-accent,var(--primary));}
+.deck{display:flex;flex-wrap:wrap;gap:10px;align-content:flex-start;min-height:110px;}
+.evidence-card{padding:10px 12px;border-radius:14px;border:1px solid var(--card-border,rgba(255,176,0,0.25));background:var(--card-bg,rgba(255,176,0,0.08));color:var(--card-text,#eef1f5);font-size:12px;line-height:1.45;cursor:grab;max-width:calc(50% - 5px);user-select:none;transition:transform 0.12s,border-color 0.12s,box-shadow 0.12s,background 0.12s;}
+.evidence-card:hover{transform:translateY(-2px);border-color:var(--sb-accent,var(--primary));box-shadow:0 0 10px var(--panel-glow,rgba(255,176,0,0.08));}
+.evidence-card:active{cursor:grabbing;}
+.evidence-card.dragging{opacity:0.55;transform:scale(0.98);}
+.factor-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;min-height:188px;}
+.factor-bin{padding:10px;border-radius:14px;border:1px dashed var(--bin-border,rgba(255,176,0,0.24));background:var(--bin-bg,rgba(255,255,255,0.03));display:flex;flex-direction:column;gap:8px;min-height:128px;transition:border-color 0.12s,background 0.12s;}
+.factor-bin.active{border-color:var(--sb-accent,var(--primary));background:rgba(255,176,0,0.08);}
+.bin-title{font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:700;letter-spacing:0.14em;text-transform:uppercase;color:var(--sb-accent,var(--primary));}
+.bin-desc{font-size:11px;line-height:1.45;color:var(--body-dim,#aab1bf);}
+.bin-slot{display:flex;flex-wrap:wrap;gap:6px;align-content:flex-start;min-height:52px;}
+.mini-card{padding:6px 8px;border-radius:999px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.06);font-size:11px;line-height:1.25;color:var(--card-text,#eef1f5);cursor:grab;}
+.chain-strip{display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:14px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);}
+.chain-cell{flex:1;min-width:0;height:32px;border-radius:999px;border:1px solid rgba(255,176,0,0.18);background:rgba(255,176,0,0.04);display:flex;align-items:center;justify-content:center;font-family:'JetBrains Mono',monospace;font-size:9px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:var(--chain-text,#95a0b3);}
+.chain-cell.ready{background:rgba(255,176,0,0.14);color:#ffdda0;border-color:rgba(255,176,0,0.34);}
+.chain-cell.fail{background:rgba(255,90,60,0.18);color:#ffb49b;border-color:rgba(255,90,60,0.38);}
+.status-bar{display:flex;align-items:center;justify-content:center;gap:12px;padding:5px 16px;background:var(--hud-bg,rgba(5,6,15,0.9));border-top:1px solid var(--hud-border,transparent);flex-shrink:0;}
+.status-label{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--hud-label,#5e6070);letter-spacing:0.15em;text-transform:uppercase;}
+.status-val{font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:700;color:var(--sb-accent,var(--primary));letter-spacing:0.15em;}
+.status-result{font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:700;letter-spacing:0.15em;text-transform:uppercase;}
+.status-result.pass{color:#22c55e;}
+.status-result.fail{color:#ef4444;}
+.action-row{display:flex;gap:8px;margin-top:auto;}
+.action-btn{font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:700;padding:8px 12px;border:none;cursor:pointer;background:linear-gradient(135deg,var(--ctrl-bg,var(--primary)),var(--primary-dim));color:var(--ctrl-color,var(--bg));letter-spacing:0.15em;text-transform:uppercase;box-shadow:0 0 14px var(--glow-strong);flex:1;border-radius:999px;}
+.action-btn:hover{box-shadow:0 0 18px var(--glow-strong);}
+.action-btn:disabled{opacity:0.35;cursor:not-allowed;box-shadow:none;}
+.reset-btn{font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:700;padding:8px 12px;border:1px solid var(--sb-btn-bd,rgba(128,128,128,0.25));cursor:pointer;color:var(--sb-dim,#8e90a6);background:transparent;letter-spacing:0.12em;text-transform:uppercase;border-radius:999px;}
+.reset-btn:hover{color:var(--sb-accent,var(--primary));border-color:var(--sb-accent,var(--primary));}
+.result-panel{display:none;position:absolute;top:22px;right:24px;width:min(360px,42%);padding:18px 18px 16px;border-radius:18px;background:rgba(8,10,18,0.92);border:1px solid rgba(255,176,0,0.2);backdrop-filter:blur(12px);z-index:10;box-shadow:0 0 24px rgba(0,0,0,0.28);}
+.result-panel.show{display:block;}
+.result-title{font-family:'Space Grotesk','Noto Sans SC',sans-serif;font-size:18px;font-weight:700;color:#f7f0de;}
+.result-body{margin-top:8px;font-size:12px;line-height:1.65;color:#d4dae4;}
+.result-foot{margin-top:10px;font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:0.14em;text-transform:uppercase;color:#ffd580;}
+.hidden{display:none!important;}
+</style>
+</head>
+<body>
+<div class="game-wrap">
+  <div class="game-sidebar">
+    <button class="sidebar-lang" id="langBtn">CN</button>
+    <div class="style-switcher" id="styleSwitcher"></div>
+    <div class="sidebar-title" id="sideTitle">INCIDENT TEARDOWN LAB</div>
+    <div class="sidebar-sub" id="sideSub"></div>
+    <div class="sidebar-divider"></div>
+    <div class="sidebar-section" id="guideLabel"></div>
+    <div class="sidebar-sub" id="guideText"></div>
+    <div class="sidebar-divider"></div>
+    <div class="sidebar-section" id="legendLabel"></div>
+    <div class="sidebar-sub" id="legendText"></div>
+  </div>
+  <div class="game-main">
+    <div class="game-hud">
+      <div class="hud-tag" id="gameTitle"></div>
+      <div class="hud-item"><div class="hud-label" id="hudL1"></div><div class="hud-val" id="hudV1">--</div></div>
+      <div class="hud-item"><div class="hud-label" id="hudL2"></div><div class="hud-val" id="hudV2">--</div></div>
+      <div class="hud-item"><div class="hud-label" id="hudL3"></div><div class="hud-val" id="hudV3">--</div></div>
+      <div class="hud-item"><div class="hud-label" id="hudL4"></div><div class="hud-val" id="hudV4">--</div></div>
+    </div>
+    <div class="game-body">
+      <canvas id="gc"></canvas>
+      <div class="board-overlay">
+        <div class="glass-panel evidence-panel">
+          <div class="case-header">
+            <div>
+              <div class="case-title" id="caseTitle"></div>
+              <div class="case-sub" id="caseSubtitle"></div>
+            </div>
+            <div class="case-pill" id="casePill"></div>
+          </div>
+          <div class="panel-title" id="deckLabel"></div>
+          <div class="deck" id="evidenceDeck"></div>
+          <div class="panel-title" id="chainLabel"></div>
+          <div class="chain-strip" id="chainStrip">
+            <div class="chain-cell" data-chain="human"></div>
+            <div class="chain-cell" data-chain="machine"></div>
+            <div class="chain-cell" data-chain="environment"></div>
+            <div class="chain-cell" data-chain="management"></div>
+          </div>
+          <div class="action-row">
+            <button class="action-btn" id="btnAction"></button>
+            <button class="reset-btn" id="btnReset"></button>
+          </div>
+        </div>
+        <div class="glass-panel factor-panel">
+          <div class="panel-title" id="binsLabel"></div>
+          <div class="factor-grid">
+            <div class="factor-bin" data-bin="human">
+              <div class="bin-title" id="binHumanTitle"></div>
+              <div class="bin-desc" id="binHumanDesc"></div>
+              <div class="bin-slot" data-slot="human"></div>
+            </div>
+            <div class="factor-bin" data-bin="machine">
+              <div class="bin-title" id="binMachineTitle"></div>
+              <div class="bin-desc" id="binMachineDesc"></div>
+              <div class="bin-slot" data-slot="machine"></div>
+            </div>
+            <div class="factor-bin" data-bin="environment">
+              <div class="bin-title" id="binEnvTitle"></div>
+              <div class="bin-desc" id="binEnvDesc"></div>
+              <div class="bin-slot" data-slot="environment"></div>
+            </div>
+            <div class="factor-bin" data-bin="management">
+              <div class="bin-title" id="binMgmtTitle"></div>
+              <div class="bin-desc" id="binMgmtDesc"></div>
+              <div class="bin-slot" data-slot="management"></div>
+            </div>
+          </div>
+          <div class="panel-title" id="hintLabel"></div>
+          <div class="sidebar-sub" id="hintText"></div>
+        </div>
+      </div>
+      <div class="result-panel" id="resultPanel">
+        <div class="result-title" id="resultTitle"></div>
+        <div class="result-body" id="resultBody"></div>
+        <div class="result-foot" id="resultFoot"></div>
+      </div>
+    </div>
+    <div class="status-bar">
+      <div class="status-label" id="statusLabel"></div>
+      <div class="status-val" id="statusValue"></div>
+      <div class="status-result" id="statusResult"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+var VISUAL_MODES = {
+  light: {
+    label:'LIGHT', bg:'#fafaf5', canvasBg1:'#fafaf5', canvasBg2:'#f0efe8',
+    canvasGrid:'rgba(15,23,42,0.04)', text:'#102033', dim:'#51607c', stroke:'#102033',
+    sbBg:'rgba(250,250,245,0.96)', sbBorder:'#d8d5c8', sbText:'#102033', sbDim:'#51607c',
+    hudBg:'rgba(250,250,245,0.92)', hudBorder:'#d8d5c8', hudLabel:'#7d8798', hudValue:'#102033',
+    panelBg:'rgba(255,255,255,0.82)', panelBorder:'rgba(16,32,51,0.14)', panelGlow:'rgba(16,32,51,0.04)',
+    pillBg:'rgba(16,32,51,0.06)', pillBorder:'rgba(16,32,51,0.18)', pillText:'#102033',
+    cardBg:'rgba(16,32,51,0.04)', cardBorder:'rgba(16,32,51,0.14)', cardText:'#102033',
+    binBg:'rgba(16,32,51,0.03)', binBorder:'rgba(16,32,51,0.16)', bodyDim:'#51607c',
+    ctrlBg:'#102033', ctrlColor:'#fafaf5'
+  },
+  dark: {
+    label:'DARK', bg:'#0b0d12', canvasBg1:'#0b0d12', canvasBg2:'#131720', canvasGrid:'rgba(255,255,255,0.03)',
+    text:'#eef1f5', dim:'#9aa4b3', stroke:'#eef1f5',
+    sbBg:'rgba(11,13,18,0.96)', sbBorder:'#1b202a', sbText:'#eef1f5', sbDim:'#9aa4b3',
+    hudBg:'rgba(11,13,18,0.92)', hudBorder:'#1b202a', hudLabel:'#6e7a8d', hudValue:'#eef1f5',
+    panelBg:'rgba(12,15,22,0.82)', panelBorder:'rgba(255,176,0,0.12)', panelGlow:'rgba(255,176,0,0.06)',
+    pillBg:'rgba(255,176,0,0.12)', pillBorder:'rgba(255,176,0,0.24)', pillText:'#ffd580',
+    cardBg:'rgba(255,176,0,0.08)', cardBorder:'rgba(255,176,0,0.22)', cardText:'#eef1f5',
+    binBg:'rgba(255,255,255,0.03)', binBorder:'rgba(255,176,0,0.22)', bodyDim:'#aab1bf',
+    ctrlBg:null, ctrlColor:null
+  },
+  cyberpunk: {
+    label:'CYBER', bg:'#05060f', canvasBg1:'#05060f', canvasBg2:'#0d1020', canvasGrid:'rgba(0,218,243,0.06)',
+    text:'#e2e8f0', dim:'#99a9bf', stroke:'#e2e8f0',
+    sbBg:'rgba(5,6,15,0.92)', sbBorder:'rgba(255,176,0,0.16)', sbText:'#e2e8f0', sbDim:'#99a9bf',
+    hudBg:'rgba(5,6,15,0.9)', hudBorder:'rgba(255,176,0,0.1)', hudLabel:'#6f7d91', hudValue:'#e2e8f0',
+    panelBg:'rgba(8,10,18,0.72)', panelBorder:'rgba(255,176,0,0.16)', panelGlow:'rgba(255,176,0,0.08)',
+    pillBg:'rgba(255,176,0,0.14)', pillBorder:'rgba(255,176,0,0.28)', pillText:'#ffd580',
+    cardBg:'rgba(255,176,0,0.08)', cardBorder:'rgba(255,176,0,0.25)', cardText:'#eef1f5',
+    binBg:'rgba(255,255,255,0.03)', binBorder:'rgba(255,176,0,0.24)', bodyDim:'#aab1bf',
+    ctrlColor:'#05060f'
+  }
+};
+
+var MODE = 'cyberpunk';
+var ACCENT = '#ffb000';
+var ACCENT_DIM = '#ff7b2c';
+var LANG = 'cn';
+
+var I18N = {
+  gameTitle:{en:'INCIDENT TEARDOWN LAB',cn:'事故拆解台'},
+  sideTitle:{en:'WHY THIS GAME',cn:'为什么这样玩'},
+  sideSub:{en:'Drag every evidence card into HUMAN / MACHINE / ENVIRONMENT / MANAGEMENT, then run the chain and see whether the hazard breaks through.',cn:'把每张事故证据卡拖进人、机、环境、管理四个仓位，再运行事故链，看危险是否会穿透防线。'},
+  guideLabel:{en:'GUIDE',cn:'操作指南'},
+  guideText:{en:'A complete review is not “someone made a mistake”. It is a chain: direct trigger, equipment state, environmental amplifier, and upstream management gap.',cn:'完整复盘不是“某个人犯错了”一句话，而是把直接触发、设备状态、环境放大项和上游管理缺陷一起拼成一条链。'},
+  legendLabel:{en:'WHAT TO WATCH',cn:'看什么'},
+  legendText:{en:'If one factor bucket is empty, the barrier strip will stay open. The fastest fix is usually not punishment alone, but thickening the missing barrier.',cn:'如果某个因素仓位为空，右侧事故链就会留下漏洞。真正有效的整改，往往不是只处罚当事人，而是把缺的那层防线加厚。'},
+  hudRound:{en:'ROUND',cn:'轮次'},
+  hudScore:{en:'SCORE',cn:'得分'},
+  hudPlaced:{en:'PLACED',cn:'已放置'},
+  hudState:{en:'STATE',cn:'状态'},
+  deckLabel:{en:'EVIDENCE DECK',cn:'证据卡组'},
+  chainLabel:{en:'CHAIN STATUS',cn:'事故链状态'},
+  binsLabel:{en:'FOUR FACTORS',cn:'四要素仓位'},
+  hintLabel:{en:'REVIEW HINT',cn:'复盘提醒'},
+  hintText:{en:'First restore the chain honestly, then ask which barrier should have stopped it upstream.',cn:'先把事故链诚实地还原，再追问哪一层防线本来应该更早把它拦住。'},
+  binHumanTitle:{en:'HUMAN',cn:'人'},
+  binHumanDesc:{en:'Unsafe act, omission, fatigue, shortcut.',cn:'违章操作、漏确认、疲劳冒险、抄近路。'},
+  binMachineTitle:{en:'MACHINE',cn:'机'},
+  binMachineDesc:{en:'Equipment defect, failed guard, broken alarm.',cn:'设备缺陷、防护缺失、报警失效。'},
+  binEnvTitle:{en:'ENVIRONMENT',cn:'环境'},
+  binEnvDesc:{en:'Blind zone, poor lighting, cluttered lane, bad air.',cn:'盲区、照明差、通道混乱、通风不足。'},
+  binMgmtTitle:{en:'MANAGEMENT',cn:'管理'},
+  binMgmtDesc:{en:'Missing permit, missing training, missing spotter.',cn:'审批缺失、培训不足、监护不到位。'},
+  runChain:{en:'RUN CHAIN',cn:'运行事故链'},
+  nextCase:{en:'NEXT CASE',cn:'下一案例'},
+  restart:{en:'RESTART',cn:'重新开始'},
+  stateReady:{en:'READY TO SORT',cn:'等待归类'},
+  stateSorted:{en:'READY TO RUN',cn:'可以运行'},
+  stateRunning:{en:'CHAIN RUNNING',cn:'事故链运行中'},
+  stateDone:{en:'ROUND COMPLETE',cn:'本轮完成'},
+  statusLabel:{en:'CURRENT VERDICT',cn:'当前结论'},
+  perfect:{en:'CHAIN FULLY REBUILT',cn:'事故链完整还原'},
+  partial:{en:'CHAIN STILL HAS GAPS',cn:'事故链仍有缺口'},
+  resultFoot:{en:'UPSTREAM FIX > SINGLE BLAME',cn:'上游防线 > 单点归责'},
+  chainHuman:{en:'HUMAN',cn:'人'},
+  chainMachine:{en:'MACHINE',cn:'机'},
+  chainEnvironment:{en:'ENV',cn:'环境'},
+  chainManagement:{en:'MGMT',cn:'管理'},
+  roundPill:{en:'LEGAL CATEGORY',cn:'法定类别'},
+  forkliftTitle:{en:'REVERSING FORKLIFT CASE',cn:'叉车倒车伤人案例'},
+  forkliftSub:{en:'A walker is struck in a mixed traffic lane. Recover the full incident chain before naming the root fix.',cn:'一名步行员工在混行通道中被倒车叉车撞伤。先把事故链补齐，再谈整改。'},
+  forkliftPill:{en:'VEHICLE INJURY',cn:'车辆伤害'},
+  fk1:{en:'Driver reversed without reconfirming the blind zone.',cn:'司机倒车前没有再次确认盲区。'},
+  fk2:{en:'The reversing alarm failed to warn nearby workers.',cn:'倒车报警器失效，没有提前提醒周边人员。'},
+  fk3:{en:'People and vehicles shared the same narrow lane.',cn:'人车共用同一条狭窄通道。'},
+  fk4:{en:'No signaler or spotter was assigned for the reverse move.',cn:'现场没有安排倒车指挥或监护。'},
+  fk5:{en:'Pedestrian shortcut crossed the vehicle lane.',cn:'步行员工图省事横穿了车道。'},
+  forkResultPass:{en:'You rebuilt the forklift incident chain: two human triggers were amplified by machine failure, a mixed lane, and missing traffic control.',cn:'你把叉车事故链补齐了：两个“人”的触发，被设备报警失效、混行环境和缺失的交通管理一起放大。'},
+  forkResultFail:{en:'Some cards are still misplaced. The case cannot be reduced to “driver error” alone until the machine, environment, and management layers are checked.',cn:'还有证据放错了。这个案例不能只归结为“司机失误”，必须把设备、环境和管理层都翻出来看。'},
+  mechTitle:{en:'CONVEYOR ENTANGLEMENT CASE',cn:'传送带卷入案例'},
+  mechSub:{en:'A gloved hand is pulled into a running belt during a quick cleaning task.',cn:'一名员工在设备未停机时图快清理杂物，戴着手套的手被运转皮带卷入。'},
+  mechPill:{en:'MECHANICAL INJURY',cn:'机械伤害'},
+  mc1:{en:'Worker reached into the running belt to clear residue.',cn:'员工把手伸进运转中的皮带清理残料。'},
+  mc2:{en:'The guard was removed and not restored.',cn:'设备防护罩被拆下后没有恢复。'},
+  mc3:{en:'The work area was cramped and visibility was poor.',cn:'操作位狭窄，观察角度差。'},
+  mc4:{en:'No lockout-tagout confirmation was enforced before cleaning.',cn:'清理前没有执行停机挂牌确认。'},
+  mc5:{en:'Gloves increased the risk of being caught by rotation.',cn:'手套反而增大了被旋转部件卷住的风险。'},
+  mechResultPass:{en:'Good review. This is a classic mechanical injury chain: unsafe contact with moving parts became possible because guarding and LOTO discipline failed.',cn:'复盘到位。这是典型机械伤害链：人与运动部件接触，本来就该由防护和停机挂牌纪律先挡住。'},
+  mechResultFail:{en:'The belt case still has hidden gaps. If you ignore the removed guard or the missing LOTO step, the review stays too shallow.',cn:'这个皮带案例还有遗漏。如果忽略拆掉的防护罩或缺失的停机挂牌，复盘就会停留在表面。'},
+  fallTitle:{en:'EDGE FALL CASE',cn:'临边坠落案例'},
+  fallSub:{en:'A worker falls from an unfinished platform while rushing to finish a short task.',cn:'一名工人在未封闭的临边平台上赶工处理短时任务时坠落。'},
+  fallPill:{en:'FALL FROM HEIGHT',cn:'高处坠落'},
+  fl1:{en:'The worker clipped in too late because the task seemed quick.',cn:'员工觉得只是“很快处理一下”，所以迟迟没有挂安全带。'},
+  fl2:{en:'The temporary edge guard was missing.',cn:'临边临时防护栏缺失。'},
+  fl3:{en:'The platform edge was cluttered and visually confusing.',cn:'平台边缘堆料，视线和落脚点都被干扰。'},
+  fl4:{en:'The shift pressed the team to finish before handover, so supervision loosened.',cn:'班组赶交接，监督和复核被放松。'},
+  fl5:{en:'The worker carried material while stepping near the edge.',cn:'员工边搬料边靠近临边。'},
+  fallResultPass:{en:'You captured the classic fall pattern: a “quick task” mindset meets missing edge protection, poor edge condition, and weak supervision.',cn:'你抓住了高处坠落的典型模式：短时侥幸 + 临边防护缺失 + 边缘环境差 + 监督放松。'},
+  fallResultFail:{en:'The edge fall case still looks too personal if you leave out guardrail loss or shift pressure. Falls are rarely just one person’s momentary mistake.',cn:'如果漏掉防护栏缺失或赶工压力，这个坠落案例就会被误写成“个人一时失误”。'},
+  spaceTitle:{en:'CONFINED SPACE CASE',cn:'受限空间缺氧案例'},
+  spaceSub:{en:'A worker enters a tank without full preparation and collapses in a low-oxygen atmosphere.',cn:'一名员工在准备不足的情况下进入储罐，因低氧环境倒地。'},
+  spacePill:{en:'POISONING / ASPHYXIA',cn:'中毒和窒息'},
+  sp1:{en:'Entry began before atmosphere confirmation was repeated.',cn:'进入前没有再次确认罐内气体条件。'},
+  sp2:{en:'Portable gas detection was unavailable at the point of entry.',cn:'入口位置没有可用的便携式气体检测设备。'},
+  sp3:{en:'Ventilation in the tank was insufficient and the space was enclosed.',cn:'罐内通风不足，空间封闭。'},
+  sp4:{en:'The permit and standby rescue arrangement were incomplete.',cn:'作业许可和外部监护救援安排都不完整。'},
+  sp5:{en:'The entrant assumed the tank had “aired out enough”.',cn:'进入者主观认为“已经晾得差不多了”。'},
+  spaceResultPass:{en:'Correct. This confined-space event is not just one wrong step inside the tank; it starts outside with gas testing, ventilation, permit, and standby control.',cn:'正确。受限空间事故绝不只是罐里的一步做错，它往往从罐外的检测、通风、许可和监护就开始失守。'},
+  spaceResultFail:{en:'The tank case still misses upstream controls. Without gas testing, ventilation, and permit control, the chain analysis is incomplete.',cn:'这个储罐案例还漏了关键上游控制。没有把检测、通风和作业许可补齐，事故链就不完整。'},
+  solveHint:{en:'Drag every card into the factor bucket that explains where it belongs in the chain.',cn:'把每张证据卡拖进它真正属于的那一层因素仓位。'},
+  solvedHint:{en:'Now run the chain. Full coverage means you rebuilt the incident honestly enough to choose a real fix.',cn:'现在运行事故链。四层都补齐，才说明你已经把案例还原得足够诚实。'}
+};
+
+var ROUNDS = [
+  {
+    key:'forklift',
+    titleKey:'forkliftTitle',
+    subKey:'forkliftSub',
+    pillKey:'forkliftPill',
+    hintKey:'solveHint',
+    resultPassKey:'forkResultPass',
+    resultFailKey:'forkResultFail',
+    scene:'forklift',
+    cards:[
+      {id:'fk1', labelKey:'fk1', bin:'human'},
+      {id:'fk2', labelKey:'fk2', bin:'machine'},
+      {id:'fk3', labelKey:'fk3', bin:'environment'},
+      {id:'fk4', labelKey:'fk4', bin:'management'},
+      {id:'fk5', labelKey:'fk5', bin:'human'}
+    ]
+  },
+  {
+    key:'mechanical',
+    titleKey:'mechTitle',
+    subKey:'mechSub',
+    pillKey:'mechPill',
+    hintKey:'solveHint',
+    resultPassKey:'mechResultPass',
+    resultFailKey:'mechResultFail',
+    scene:'mechanical',
+    cards:[
+      {id:'mc1', labelKey:'mc1', bin:'human'},
+      {id:'mc2', labelKey:'mc2', bin:'machine'},
+      {id:'mc3', labelKey:'mc3', bin:'environment'},
+      {id:'mc4', labelKey:'mc4', bin:'management'},
+      {id:'mc5', labelKey:'mc5', bin:'human'}
+    ]
+  },
+  {
+    key:'fall',
+    titleKey:'fallTitle',
+    subKey:'fallSub',
+    pillKey:'fallPill',
+    hintKey:'solveHint',
+    resultPassKey:'fallResultPass',
+    resultFailKey:'fallResultFail',
+    scene:'fall',
+    cards:[
+      {id:'fl1', labelKey:'fl1', bin:'human'},
+      {id:'fl2', labelKey:'fl2', bin:'machine'},
+      {id:'fl3', labelKey:'fl3', bin:'environment'},
+      {id:'fl4', labelKey:'fl4', bin:'management'},
+      {id:'fl5', labelKey:'fl5', bin:'human'}
+    ]
+  },
+  {
+    key:'space',
+    titleKey:'spaceTitle',
+    subKey:'spaceSub',
+    pillKey:'spacePill',
+    hintKey:'solveHint',
+    resultPassKey:'spaceResultPass',
+    resultFailKey:'spaceResultFail',
+    scene:'space',
+    cards:[
+      {id:'sp1', labelKey:'sp1', bin:'human'},
+      {id:'sp2', labelKey:'sp2', bin:'machine'},
+      {id:'sp3', labelKey:'sp3', bin:'environment'},
+      {id:'sp4', labelKey:'sp4', bin:'management'},
+      {id:'sp5', labelKey:'sp5', bin:'human'}
+    ]
+  }
+];
+
+var state = {
+  round:0,
+  totalScore:0,
+  placedCount:0,
+  phase:'sort',
+  placed:{},
+  animProgress:0,
+  animStart:0,
+  lastVerdict:'--',
+};
+
+var canvas = document.getElementById('gc');
+var ctx = canvas.getContext('2d');
+var DPR = Math.min(window.devicePixelRatio || 1, 2);
+
+function t(key){return (I18N[key] && I18N[key][LANG]) || (I18N[key] && I18N[key].en) || key;}
+
+function currentRound(){ return ROUNDS[state.round]; }
+
+function shuffle(list) {
+  var arr = list.slice();
+  for (var i = arr.length - 1; i > 0; i -= 1) {
+    var j = Math.floor(Math.random() * (i + 1));
+    var tmp = arr[i];
+    arr[i] = arr[j];
+    arr[j] = tmp;
+  }
+  return arr;
+}
+
+function modeColors() {
+  var m = VISUAL_MODES[MODE];
+  return {
+    bg1:m.canvasBg1, bg2:m.canvasBg2, grid:m.canvasGrid, text:m.text, dim:m.dim, stroke:m.stroke,
+    accent:ACCENT, accent2:ACCENT_DIM
+  };
+}
+
+function applyMode(mode) {
+  MODE = mode;
+  var m = VISUAL_MODES[mode];
+  var r = document.documentElement;
+  r.style.setProperty('--bg', m.bg || '#05060f');
+  r.style.setProperty('--sb-bg', m.sbBg);
+  r.style.setProperty('--sb-border', m.sbBorder || ACCENT);
+  r.style.setProperty('--sb-accent', ACCENT);
+  r.style.setProperty('--sb-dim', m.sbDim || '#8e90a6');
+  r.style.setProperty('--sb-mute', m.hudLabel || '#5e6070');
+  r.style.setProperty('--hud-bg', m.hudBg);
+  r.style.setProperty('--hud-border', m.hudBorder || 'transparent');
+  r.style.setProperty('--hud-label', m.hudLabel || '#5e6070');
+  r.style.setProperty('--hud-value', m.hudValue || ACCENT);
+  r.style.setProperty('--panel-bg', m.panelBg);
+  r.style.setProperty('--panel-border', m.panelBorder);
+  r.style.setProperty('--panel-glow', m.panelGlow);
+  r.style.setProperty('--panel-tick', m.pillBorder || 'rgba(255,176,0,0.38)');
+  r.style.setProperty('--pill-bg', m.pillBg);
+  r.style.setProperty('--pill-border', m.pillBorder);
+  r.style.setProperty('--pill-text', m.pillText);
+  r.style.setProperty('--card-bg', m.cardBg);
+  r.style.setProperty('--card-border', m.cardBorder);
+  r.style.setProperty('--card-text', m.cardText);
+  r.style.setProperty('--bin-bg', m.binBg);
+  r.style.setProperty('--bin-border', m.binBorder);
+  r.style.setProperty('--body-dim', m.bodyDim);
+  r.style.setProperty('--ctrl-bg', m.ctrlBg || ACCENT);
+  r.style.setProperty('--ctrl-color', m.ctrlColor || '#05060f');
+  r.style.setProperty('--primary', ACCENT);
+  r.style.setProperty('--primary-dim', ACCENT_DIM);
+  r.style.setProperty('--glow-strong', 'rgba(255,176,0,0.45)');
+  document.querySelectorAll('.vm-btn').forEach(function(btn){
+    btn.classList.toggle('vm-active', btn.dataset.mode === mode);
+  });
+  draw();
+}
+
+function buildStyleSwitcher() {
+  var host = document.getElementById('styleSwitcher');
+  host.innerHTML = '';
+  ['light','dark','cyberpunk'].forEach(function(mode){
+    var btn = document.createElement('button');
+    btn.className = 'vm-btn' + (mode === MODE ? ' vm-active' : '');
+    btn.dataset.mode = mode;
+    btn.textContent = VISUAL_MODES[mode].label;
+    btn.addEventListener('click', function(){ applyMode(mode); });
+    host.appendChild(btn);
+  });
+}
+
+function resize() {
+  var rect = canvas.getBoundingClientRect();
+  canvas.width = Math.round(rect.width * DPR);
+  canvas.height = Math.round(rect.height * DPR);
+  draw();
+}
+
+function drawBg(c, W, H) {
+  var mc = modeColors();
+  var g = c.createLinearGradient(0, 0, W, H);
+  g.addColorStop(0, mc.bg1);
+  g.addColorStop(1, mc.bg2);
+  c.fillStyle = g;
+  c.fillRect(0, 0, W, H);
+  c.strokeStyle = mc.grid;
+  c.lineWidth = 0.6;
+  for (var x = 0; x < W; x += 34) { c.beginPath(); c.moveTo(x, 0); c.lineTo(x, H); c.stroke(); }
+  for (var y = 0; y < H; y += 34) { c.beginPath(); c.moveTo(0, y); c.lineTo(W, y); c.stroke(); }
+  if (MODE === 'cyberpunk') {
+    c.strokeStyle = 'rgba(255,255,255,0.025)';
+    for (var sy = 0; sy < H; sy += 3) { c.beginPath(); c.moveTo(0, sy); c.lineTo(W, sy); c.stroke(); }
+  }
+}
+
+function rounded(c, x, y, w, h, r, fill, stroke) {
+  c.beginPath();
+  c.moveTo(x + r, y);
+  c.arcTo(x + w, y, x + w, y + h, r);
+  c.arcTo(x + w, y + h, x, y + h, r);
+  c.arcTo(x, y + h, x, y, r);
+  c.arcTo(x, y, x + w, y, r);
+  c.closePath();
+  if (fill) { c.fillStyle = fill; c.fill(); }
+  if (stroke) { c.strokeStyle = stroke; c.lineWidth = 1; c.stroke(); }
+}
+
+function drawSceneLabel(c, W) {
+  var mc = modeColors();
+  c.fillStyle = mc.text;
+  c.font = "700 22px 'Space Grotesk','Noto Sans SC',sans-serif";
+  c.textAlign = 'left';
+  c.textBaseline = 'middle';
+  c.fillText(t(currentRound().titleKey), 38, 48);
+  c.fillStyle = mc.dim;
+  c.font = "14px 'Inter','Noto Sans SC',sans-serif";
+  c.fillText(t(currentRound().subKey), 38, 76);
+}
+
+function drawForklift(c, W, H) {
+  var mc = modeColors();
+  var gx = 120, gy = 126;
+  c.fillStyle = 'rgba(255,176,0,0.12)';
+  c.fillRect(68, gy + 92, W - 140, 8);
+  c.strokeStyle = 'rgba(255,176,0,0.18)';
+  c.lineWidth = 2;
+  c.beginPath(); c.moveTo(74, gy + 84); c.lineTo(W - 74, gy + 84); c.stroke();
+  rounded(c, gx, gy, 120, 54, 16, 'rgba(255,176,0,0.15)', 'rgba(255,176,0,0.38)');
+  c.fillStyle = mc.text;
+  c.fillRect(gx + 18, gy + 18, 42, 24);
+  c.fillRect(gx + 72, gy + 10, 18, 18);
+  c.fillStyle = 'rgba(255,176,0,0.85)';
+  c.fillRect(gx + 108, gy - 6, 10, 70);
+  c.fillRect(gx + 116, gy + 30, 58, 6);
+  c.beginPath(); c.arc(gx + 28, gy + 60, 15, 0, Math.PI * 2); c.fillStyle = '#20252f'; c.fill();
+  c.beginPath(); c.arc(gx + 86, gy + 60, 15, 0, Math.PI * 2); c.fill();
+  c.beginPath(); c.arc(gx + 310, gy + 82, 14, 0, Math.PI * 2); c.fillStyle = 'rgba(255,255,255,0.8)'; c.fill();
+  c.beginPath(); c.arc(gx + 310, gy + 82, 8, 0, Math.PI * 2); c.fillStyle = mc.accent2; c.fill();
+  c.strokeStyle = 'rgba(255,90,60,0.45)';
+  c.setLineDash([6,6]);
+  c.strokeRect(gx + 182, gy + 42, 180, 64);
+  c.setLineDash([]);
+  c.fillStyle = mc.accent2;
+  c.font = "700 12px 'JetBrains Mono','Noto Sans SC',sans-serif";
+  c.fillText('BLIND ZONE', gx + 192, gy + 34);
+}
+
+function drawMechanical(c, W, H) {
+  var mc = modeColors();
+  var x = 120, y = 126;
+  rounded(c, x, y + 12, 260, 64, 18, 'rgba(255,176,0,0.10)', 'rgba(255,176,0,0.28)');
+  c.fillStyle = '#d6dde7';
+  c.fillRect(x + 22, y + 34, 216, 12);
+  c.strokeStyle = 'rgba(255,176,0,0.45)';
+  c.lineWidth = 3;
+  for (var i = 0; i < 8; i += 1) {
+    c.beginPath();
+    c.moveTo(x + 34 + i * 26, y + 34);
+    c.lineTo(x + 46 + i * 26, y + 46);
+    c.stroke();
+  }
+  c.beginPath(); c.arc(x + 278, y + 42, 16, 0, Math.PI * 2); c.fillStyle = 'rgba(255,176,0,0.82)'; c.fill();
+  c.beginPath(); c.arc(x + 278, y + 42, 7, 0, Math.PI * 2); c.fillStyle = '#18202b'; c.fill();
+  c.fillStyle = mc.accent2;
+  c.fillRect(x + 110, y + 4, 84, 10);
+  c.fillStyle = mc.text;
+  c.font = "700 12px 'JetBrains Mono','Noto Sans SC',sans-serif";
+  c.fillText('GUARD MISSING', x + 108, y - 10);
+  c.strokeStyle = 'rgba(255,90,60,0.55)';
+  c.lineWidth = 2;
+  c.beginPath();
+  c.moveTo(x + 394, y + 22); c.lineTo(x + 442, y + 54);
+  c.lineTo(x + 410, y + 92);
+  c.stroke();
+}
+
+function drawFall(c, W, H) {
+  var mc = modeColors();
+  var x = 126, y = 120;
+  rounded(c, x, y + 86, 320, 18, 8, 'rgba(255,176,0,0.10)', 'rgba(255,176,0,0.28)');
+  c.fillStyle = 'rgba(255,176,0,0.16)';
+  c.fillRect(x + 252, y - 18, 16, 104);
+  c.fillRect(x + 312, y + 4, 16, 82);
+  c.fillStyle = mc.text;
+  c.beginPath(); c.arc(x + 278, y + 8, 11, 0, Math.PI * 2); c.fill();
+  c.fillRect(x + 272, y + 18, 12, 32);
+  c.beginPath(); c.moveTo(x + 278, y + 30); c.lineTo(x + 250, y + 56); c.strokeStyle = mc.text; c.lineWidth = 4; c.stroke();
+  c.beginPath(); c.moveTo(x + 278, y + 30); c.lineTo(x + 302, y + 48); c.stroke();
+  c.beginPath(); c.moveTo(x + 278, y + 48); c.lineTo(x + 260, y + 84); c.stroke();
+  c.beginPath(); c.moveTo(x + 278, y + 48); c.lineTo(x + 300, y + 88); c.stroke();
+  c.strokeStyle = 'rgba(255,90,60,0.45)';
+  c.setLineDash([7,7]);
+  c.beginPath(); c.moveTo(x + 334, y - 4); c.lineTo(x + 334, y + 120); c.stroke();
+  c.setLineDash([]);
+  c.fillStyle = mc.accent2;
+  c.font = "700 12px 'JetBrains Mono','Noto Sans SC',sans-serif";
+  c.fillText('OPEN EDGE', x + 340, y + 10);
+}
+
+function drawSpace(c, W, H) {
+  var mc = modeColors();
+  var x = 150, y = 110;
+  rounded(c, x, y, 170, 110, 24, 'rgba(255,176,0,0.10)', 'rgba(255,176,0,0.28)');
+  c.fillStyle = 'rgba(255,176,0,0.18)';
+  c.fillRect(x + 16, y + 24, 138, 62);
+  c.beginPath(); c.arc(x + 85, y - 4, 22, 0, Math.PI * 2); c.fillStyle = 'rgba(255,176,0,0.78)'; c.fill();
+  c.beginPath(); c.arc(x + 85, y - 4, 12, 0, Math.PI * 2); c.fillStyle = '#18202b'; c.fill();
+  c.fillStyle = mc.text;
+  c.beginPath(); c.arc(x + 280, y + 74, 12, 0, Math.PI * 2); c.fill();
+  c.fillRect(x + 274, y + 84, 12, 30);
+  c.strokeStyle = 'rgba(255,90,60,0.55)';
+  c.lineWidth = 3;
+  c.beginPath();
+  c.moveTo(x + 360, y + 18); c.lineTo(x + 420, y + 18);
+  c.lineTo(x + 420, y + 88); c.lineTo(x + 360, y + 88); c.stroke();
+  c.fillStyle = mc.accent2;
+  c.font = "700 12px 'JetBrains Mono','Noto Sans SC',sans-serif";
+  c.fillText('LOW OXYGEN', x + 358, y + 106);
+}
+
+function drawBarrierStack(c, W, H) {
+  var keys = ['human','machine','environment','management'];
+  var x = W - 210;
+  var baseY = 118;
+  for (var i = 0; i < keys.length; i += 1) {
+    var good = state.phase === 'result' && chainVerdict(keys[i]);
+    rounded(c, x, baseY + i * 50, 138, 34, 999, good ? 'rgba(34,197,94,0.18)' : 'rgba(255,176,0,0.08)', good ? 'rgba(34,197,94,0.42)' : 'rgba(255,176,0,0.22)');
+    c.fillStyle = good ? '#bcf7d0' : '#ffd580';
+    c.font = "700 10px 'JetBrains Mono','Noto Sans SC',sans-serif";
+    c.textAlign = 'center';
+    c.textBaseline = 'middle';
+    c.fillText(t('chain' + keys[i].charAt(0).toUpperCase() + keys[i].slice(1)), x + 69, baseY + i * 50 + 17);
+  }
+  if (state.phase === 'running' || state.phase === 'result') {
+    var progress = state.phase === 'running' ? state.animProgress : 1;
+    var stopIndex = state.resultData ? state.resultData.stopIndex : keys.length;
+    var beamX = 56 + Math.min(progress * (W - 300), W - 300);
+    c.strokeStyle = 'rgba(255,120,60,0.92)';
+    c.lineWidth = 6;
+    c.shadowColor = 'rgba(255,120,60,0.45)';
+    c.shadowBlur = 18;
+    c.beginPath();
+    c.moveTo(72, 205);
+    c.lineTo(Math.min(beamX, x + stopIndex * 0), 205);
+    c.stroke();
+    c.shadowBlur = 0;
+    if (state.phase === 'result') {
+      c.fillStyle = state.resultData.allCorrect ? '#22c55e' : '#ef4444';
+      c.font = "700 12px 'JetBrains Mono','Noto Sans SC',sans-serif";
+      c.fillText(state.resultData.allCorrect ? t('perfect') : t('partial'), x + 69, baseY + 214);
+    }
+  }
+}
+
+function chainVerdict(binKey) {
+  if (!state.resultData) return false;
+  return state.resultData.correctBins.indexOf(binKey) >= 0;
+}
+
+function draw() {
+  var rect = canvas.getBoundingClientRect();
+  var W = rect.width;
+  var H = rect.height;
+  canvas.width = Math.round(W * DPR);
+  canvas.height = Math.round(H * DPR);
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  drawBg(ctx, W, H);
+  drawSceneLabel(ctx, W);
+  if (currentRound().scene === 'forklift') drawForklift(ctx, W, H);
+  if (currentRound().scene === 'mechanical') drawMechanical(ctx, W, H);
+  if (currentRound().scene === 'fall') drawFall(ctx, W, H);
+  if (currentRound().scene === 'space') drawSpace(ctx, W, H);
+  drawBarrierStack(ctx, W, H);
+}
+
+function allCardsPlaced() {
+  return Object.keys(state.placed).length === currentRound().cards.length;
+}
+
+function buildDeck() {
+  var host = document.getElementById('evidenceDeck');
+  host.innerHTML = '';
+  var placed = state.placed;
+  currentRound().cards.forEach(function(card){
+    if (placed[card.id]) return;
+    var el = document.createElement('div');
+    el.className = 'evidence-card';
+    el.draggable = true;
+    el.dataset.cardId = card.id;
+    el.textContent = t(card.labelKey);
+    el.addEventListener('dragstart', onDragStart);
+    el.addEventListener('dragend', onDragEnd);
+    host.appendChild(el);
+  });
+}
+
+function buildBins() {
+  document.querySelectorAll('.bin-slot').forEach(function(slot){
+    slot.innerHTML = '';
+  });
+  Object.keys(state.placed).forEach(function(cardId){
+    var bin = state.placed[cardId];
+    var card = currentRound().cards.find(function(item){ return item.id === cardId; });
+    if (!card) return;
+    var mini = document.createElement('div');
+    mini.className = 'mini-card';
+    mini.draggable = true;
+    mini.dataset.cardId = card.id;
+    mini.textContent = t(card.labelKey);
+    mini.addEventListener('dragstart', onDragStart);
+    mini.addEventListener('dragend', onDragEnd);
+    var slot = document.querySelector('.bin-slot[data-slot="'+bin+'"]');
+    if (slot) slot.appendChild(mini);
+  });
+}
+
+function setHint() {
+  document.getElementById('hintText').textContent = t(state.phase === 'sort' ? currentRound().hintKey : 'solvedHint');
+}
+
+function refreshI18N() {
+  document.getElementById('langBtn').textContent = LANG.toUpperCase();
+  document.getElementById('gameTitle').textContent = t('gameTitle');
+  document.getElementById('sideTitle').textContent = t('sideTitle');
+  document.getElementById('sideSub').textContent = t('sideSub');
+  document.getElementById('guideLabel').textContent = t('guideLabel');
+  document.getElementById('guideText').textContent = t('guideText');
+  document.getElementById('legendLabel').textContent = t('legendLabel');
+  document.getElementById('legendText').textContent = t('legendText');
+  document.getElementById('hudL1').textContent = t('hudRound');
+  document.getElementById('hudL2').textContent = t('hudScore');
+  document.getElementById('hudL3').textContent = t('hudPlaced');
+  document.getElementById('hudL4').textContent = t('hudState');
+  document.getElementById('deckLabel').textContent = t('deckLabel');
+  document.getElementById('chainLabel').textContent = t('chainLabel');
+  document.getElementById('binsLabel').textContent = t('binsLabel');
+  document.getElementById('hintLabel').textContent = t('hintLabel');
+  document.getElementById('binHumanTitle').textContent = t('binHumanTitle');
+  document.getElementById('binHumanDesc').textContent = t('binHumanDesc');
+  document.getElementById('binMachineTitle').textContent = t('binMachineTitle');
+  document.getElementById('binMachineDesc').textContent = t('binMachineDesc');
+  document.getElementById('binEnvTitle').textContent = t('binEnvTitle');
+  document.getElementById('binEnvDesc').textContent = t('binEnvDesc');
+  document.getElementById('binMgmtTitle').textContent = t('binMgmtTitle');
+  document.getElementById('binMgmtDesc').textContent = t('binMgmtDesc');
+  document.querySelector('[data-chain="human"]').textContent = t('chainHuman');
+  document.querySelector('[data-chain="machine"]').textContent = t('chainMachine');
+  document.querySelector('[data-chain="environment"]').textContent = t('chainEnvironment');
+  document.querySelector('[data-chain="management"]').textContent = t('chainManagement');
+  updateRoundText();
+  draw();
+}
+
+function updateHud() {
+  document.getElementById('hudV1').textContent = (state.round + 1) + ' / ' + ROUNDS.length;
+  document.getElementById('hudV2').textContent = String(state.totalScore);
+  document.getElementById('hudV3').textContent = Object.keys(state.placed).length + ' / ' + currentRound().cards.length;
+  document.getElementById('hudV4').textContent = t(state.phase === 'sort' ? (allCardsPlaced() ? 'stateSorted' : 'stateReady') : state.phase === 'running' ? 'stateRunning' : 'stateDone');
+  document.getElementById('statusLabel').textContent = t('statusLabel');
+  document.getElementById('statusValue').textContent = t(state.phase === 'sort' ? (allCardsPlaced() ? 'stateSorted' : 'stateReady') : state.phase === 'running' ? 'stateRunning' : 'stateDone');
+  document.getElementById('statusResult').textContent = state.lastVerdict === '--' ? '--' : state.lastVerdict;
+  document.getElementById('statusResult').className = 'status-result ' + (state.lastVerdict === t('perfect') ? 'pass' : state.lastVerdict === t('partial') ? 'fail' : '');
+}
+
+function updateRoundText() {
+  document.getElementById('caseTitle').textContent = t(currentRound().titleKey);
+  document.getElementById('caseSubtitle').textContent = t(currentRound().subKey);
+  document.getElementById('casePill').textContent = t(currentRound().pillKey);
+  document.getElementById('btnAction').textContent = t(state.phase === 'result' ? 'nextCase' : 'runChain');
+  document.getElementById('btnReset').textContent = t('restart');
+  setHint();
+  updateHud();
+  updateChainStrip();
+}
+
+function updateChainStrip() {
+  var correctBins = state.resultData ? state.resultData.correctBins : [];
+  var hasPlacedCards = Object.keys(state.placed).length > 0;
+  document.querySelectorAll('.chain-cell').forEach(function(cell){
+    var key = cell.dataset.chain;
+    cell.classList.remove('ready','fail');
+    if (state.phase === 'result') {
+      cell.classList.add(correctBins.indexOf(key) >= 0 ? 'ready' : 'fail');
+    } else if (hasPlacedCards) {
+      cell.classList.add('ready');
+    }
+  });
+}
+
+function onDragStart(e) {
+  e.dataTransfer.setData('text/plain', e.target.dataset.cardId);
+  e.target.classList.add('dragging');
+}
+
+function onDragEnd(e) {
+  e.target.classList.remove('dragging');
+  document.querySelectorAll('.factor-bin').forEach(function(bin){ bin.classList.remove('active'); });
+}
+
+function placeCard(cardId, binKey) {
+  state.placed[cardId] = binKey;
+  state.placedCount = Object.keys(state.placed).length;
+  buildDeck();
+  buildBins();
+  updateHud();
+}
+
+function attachDropTargets() {
+  document.querySelectorAll('.factor-bin').forEach(function(bin){
+    bin.addEventListener('dragover', function(e){ e.preventDefault(); bin.classList.add('active'); });
+    bin.addEventListener('dragleave', function(){ bin.classList.remove('active'); });
+    bin.addEventListener('drop', function(e){
+      e.preventDefault();
+      var cardId = e.dataTransfer.getData('text/plain');
+      bin.classList.remove('active');
+      if (cardId) placeCard(cardId, bin.dataset.bin);
+    });
+  });
+  document.getElementById('evidenceDeck').addEventListener('dragover', function(e){ e.preventDefault(); });
+  document.getElementById('evidenceDeck').addEventListener('drop', function(e){
+    e.preventDefault();
+    var cardId = e.dataTransfer.getData('text/plain');
+    if (cardId && state.placed[cardId]) {
+      delete state.placed[cardId];
+      state.placedCount = Object.keys(state.placed).length;
+      buildDeck();
+      buildBins();
+      updateHud();
+    }
+  });
+}
+
+function evaluateRound() {
+  var correctBins = [];
+  currentRound().cards.forEach(function(card){
+    if (state.placed[card.id] === card.bin && correctBins.indexOf(card.bin) < 0) {
+      correctBins.push(card.bin);
+    }
+  });
+  var exact = currentRound().cards.filter(function(card){ return state.placed[card.id] === card.bin; }).length;
+  return {
+    exact: exact,
+    allCorrect: exact === currentRound().cards.length,
+    correctBins: correctBins,
+    stopIndex: correctBins.length
+  };
+}
+
+function showResult() {
+  var panel = document.getElementById('resultPanel');
+  document.getElementById('resultTitle').textContent = state.resultData.allCorrect ? t('perfect') : t('partial');
+  document.getElementById('resultBody').textContent = state.resultData.allCorrect ? t(currentRound().resultPassKey) : t(currentRound().resultFailKey);
+  document.getElementById('resultFoot').textContent = t('resultFoot');
+  panel.classList.add('show');
+}
+
+function hideResult() {
+  document.getElementById('resultPanel').classList.remove('show');
+}
+
+function runChain() {
+  if (!allCardsPlaced()) return;
+  hideResult();
+  state.phase = 'running';
+  state.animProgress = 0;
+  state.animStart = performance.now();
+  state.resultData = evaluateRound();
+  function tick(now) {
+    var dt = Math.min((now - state.animStart) / 1200, 1);
+    state.animProgress = dt;
+    draw();
+    updateHud();
+    if (dt < 1) {
+      requestAnimationFrame(tick);
+      return;
+    }
+    state.phase = 'result';
+    state.totalScore += state.resultData.exact;
+    state.lastVerdict = state.resultData.allCorrect ? t('perfect') : t('partial');
+    updateRoundText();
+    showResult();
+    draw();
+  }
+  requestAnimationFrame(tick);
+}
+
+function resetRound() {
+  hideResult();
+  state.placed = {};
+  state.placedCount = 0;
+  state.phase = 'sort';
+  state.resultData = null;
+  state.lastVerdict = '--';
+  buildDeck();
+  buildBins();
+  updateRoundText();
+  draw();
+}
+
+function nextRound() {
+  if (state.round >= ROUNDS.length - 1) {
+    state.round = 0;
+    state.totalScore = 0;
+  } else {
+    state.round += 1;
+  }
+  resetRound();
+}
+
+function initRound() {
+  var shuffled = shuffle(currentRound().cards);
+  currentRound().cards = shuffled;
+  resetRound();
+}
+
+document.getElementById('langBtn').addEventListener('click', function(){
+  LANG = LANG === 'cn' ? 'en' : 'cn';
+  refreshI18N();
+  buildDeck();
+  buildBins();
+});
+
+document.getElementById('btnAction').addEventListener('click', function(){
+  if (state.phase === 'result') nextRound();
+  else runChain();
+});
+
+document.getElementById('btnReset').addEventListener('click', function(){
+  state.totalScore = 0;
+  resetRound();
+});
+
+window.__CF_SOLVE_CURRENT_ROUND = function() {
+  currentRound().cards.forEach(function(card){ placeCard(card.id, card.bin); });
+  if (state.phase !== 'result') runChain();
+};
+
+buildStyleSwitcher();
+attachDropTargets();
+applyMode('cyberpunk');
+refreshI18N();
+initRound();
+window.addEventListener('resize', resize);
+resize();
+</script>
+</body>
+</html>

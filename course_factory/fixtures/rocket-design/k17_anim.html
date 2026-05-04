@@ -1,0 +1,1735 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Space+Grotesk:wght@400;500;700&family=Inter:wght@400;500&family=Noto+Sans+SC:wght@400;700&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box;}
+html,body{width:100%;height:100vh;overflow:hidden;}
+body{background:#05060f;color:#f6f6fc;font-family:'Inter','Noto Sans SC',sans-serif;}
+.wrapper{display:flex;flex-direction:row;height:100vh;overflow:hidden;}
+.sidebar{width:200px;min-width:200px;max-width:200px;display:flex;flex-direction:column;gap:6px;padding:10px;background:rgba(5,6,15,0.92);border-right:1px solid rgba(249,115,22,0.2);overflow-y:auto;}
+.lang-btn{align-self:flex-start;flex-shrink:0;font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:700;padding:3px 8px;cursor:pointer;border:1px solid rgba(249,115,22,0.35);background:transparent;color:#f97316;letter-spacing:1px;text-transform:uppercase;}
+.lang-btn:hover{border-color:#f97316;background:rgba(249,115,22,0.1);}
+.sidebar h1{font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:700;color:#f97316;margin-top:4px;line-height:1.3;text-transform:uppercase;letter-spacing:0.04em;text-shadow:0 0 14px #f97316;}
+.sidebar .sub{font-family:'Noto Sans SC',sans-serif;font-size:10px;color:rgba(249,115,22,0.7);letter-spacing:0.06em;}
+.sidebar .frame-ind{font-family:'JetBrains Mono',monospace;font-size:10px;color:rgba(249,115,22,0.5);letter-spacing:0.1em;margin-top:4px;}
+.sidebar .guide-label{font-family:'JetBrains Mono',monospace;font-size:9px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:#f97316;margin-top:8px;text-shadow:0 0 8px rgba(249,115,22,0.4);}
+.sidebar .guide-content{font-family:'Noto Sans SC',sans-serif;font-size:11px;color:rgba(249,115,22,0.7);line-height:1.5;}
+.sidebar .guide-content ul{padding-left:16px;margin:0;}
+.sidebar .guide-content li{margin-bottom:1px;}
+.anim-main{flex:1;display:flex;flex-direction:column;min-width:0;}
+.canvas-wrap{flex:1;min-height:0;position:relative;}
+canvas{width:100%;height:100%;display:block;}
+.controls{display:flex;justify-content:center;align-items:center;gap:12px;padding:6px 16px;background:rgba(5,6,15,0.85);}
+.ctrl-btn{font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;padding:5px 16px;border:none;cursor:pointer;color:#05060f;background:linear-gradient(135deg,#f97316,#c2410c);transition:transform 0.1s,box-shadow 0.2s;box-shadow:0 0 12px rgba(249,115,22,0.35);}
+.ctrl-btn:hover{transform:scale(1.04);}
+.ctrl-btn:active{transform:scale(0.96);}
+.ctrl-btn.secondary{background:rgba(249,115,22,0.08);color:rgba(249,115,22,0.6);box-shadow:none;border:1px solid rgba(249,115,22,0.15);}
+.ctrl-btn.secondary:hover{color:#f97316;border-color:rgba(249,115,22,0.4);}
+.hud{height:40px;display:flex;align-items:center;justify-content:space-around;background:rgba(5,6,15,0.9);border-top:1px solid rgba(249,115,22,0.12);padding:0 16px;}
+.hud-item{text-align:center;}
+.hud-label{font-family:'JetBrains Mono',monospace;font-size:7px;letter-spacing:0.15em;text-transform:uppercase;color:rgba(249,115,22,0.45);}
+.hud-val{font-family:'JetBrains Mono',monospace;font-size:13px;font-weight:700;color:#f97316;text-shadow:0 0 10px rgba(249,115,22,0.3);}
+</style>
+</head>
+<body>
+<div class="wrapper">
+<div class="sidebar">
+<button class="lang-btn" id="langBtn">CN</button>
+<h1 id="title"></h1>
+<div class="sub" id="subtitle"></div>
+<div class="frame-ind" id="frameIndicator"></div>
+<div class="guide-label" id="guideTitle"></div>
+<div class="guide-content" id="guideContent"></div>
+</div>
+<div class="anim-main">
+<div class="canvas-wrap"><canvas id="c"></canvas></div>
+<div class="controls">
+<button class="ctrl-btn secondary" id="btnPrev"></button>
+<button class="ctrl-btn" id="btnPlay"></button>
+<button class="ctrl-btn secondary" id="btnNext"></button>
+</div>
+<div class="hud">
+<div class="hud-item"><div class="hud-label" id="hudL1"></div><div class="hud-val" id="hudV1"></div></div>
+<div class="hud-item"><div class="hud-label" id="hudL2"></div><div class="hud-val" id="hudV2"></div></div>
+<div class="hud-item"><div class="hud-label" id="hudL3"></div><div class="hud-val" id="hudV3"></div></div>
+<div class="hud-item"><div class="hud-label" id="hudL4"></div><div class="hud-val" id="hudV4"></div></div>
+</div>
+</div>
+</div>
+
+<script>
+/**
+ * Animation Runtime -- shared skeleton for all course factory animations.
+ *
+ * Layout: sidebar (200px left column) contains lang-btn, title, subtitle,
+ * frame indicator, and guide panel. The canvas occupies the remaining right
+ * area with ZERO overlapping elements. All coordinates passed to
+ * getFrameElements and customDrawElement are the full canvas virtual
+ * dimensions -- no safe-area offsets needed.
+ *
+ * Required globals before boot():
+ *   - CONFIG: { title, subtitle, totalFrames, hudLabels, hudValues, guideItems, style }
+ *   - getFrameElements(f, W, H): returns element array for frame f
+ *
+ * Optional globals:
+ *   - drawBg(ctx, W, H): draws background (default: dark gradient + grid)
+ *   - customDrawElement(ctx, el, W, H): return true if handled
+ *   - onReady(): called after boot
+ */
+
+var AnimRuntime = (function () {
+  'use strict';
+
+  // --- State ---
+  var cv, ctx, W = 800, H = 400;
+  var DPR = Math.min(window.devicePixelRatio || 1, 2);
+  var currentFrame = 0, totalFrames = 4;
+  var transitioning = false, playing = false, playTimer = null;
+  var LANG = 'cn';
+  var I18N = {};
+
+  // Reference coordinate system -- content is authored against this.
+  // The runtime scales to fit the actual canvas while preserving aspect.
+  var REF_W = 700, REF_H = 400;
+
+  // Virtual dimensions passed to getFrameElements / customDrawElement.
+  // Computed by _contentTransform() on each resize.
+  var _vw = REF_W, _vh = REF_H;
+
+  // --- Palette presets ---
+  // 12 subject themes — aligned with theme_style/themes.js
+  // All share deep-space-indigo base (oklch 0.14-0.28, hue 265)
+  // Per-subject accent via oklch signature hue
+  var _BASE = {
+    bg: 'oklch(0.14 0.035 265)', bg2: 'oklch(0.18 0.04 265)', surface: 'oklch(0.22 0.045 265)',
+    text: 'oklch(0.96 0.01 265)', muted: 'oklch(0.55 0.03 265)',
+    error: 'oklch(0.70 0.18 25)', outline: 'oklch(0.55 0.03 265)',
+    glass: 'oklch(0.18 0.04 265 / 0.7)', glassBlur: 12,
+    radius: '14px',
+  };
+  function _theme(primary, primaryDim, secondary, secondaryDim, tertiary, tertiaryDim, glow, glowStrong) {
+    return Object.assign({}, _BASE, {
+      primary: primary, primaryDim: primaryDim,
+      secondary: secondary, secondaryDim: secondaryDim,
+      tertiary: tertiary, tertiaryDim: tertiaryDim,
+      glow: glow, glowStrong: glowStrong,
+    });
+  }
+  var PALETTES = {
+    cs: _theme(
+      'oklch(0.75 0.17 200)', 'oklch(0.55 0.16 200)',
+      'oklch(0.92 0.08 190)', 'oklch(0.35 0.10 210)',
+      'oklch(0.85 0.14 85)', 'oklch(0.65 0.12 85)',
+      'oklch(0.75 0.17 200 / 0.1)', 'oklch(0.75 0.17 200 / 0.25)'),
+    bio: _theme(
+      'oklch(0.75 0.17 155)', 'oklch(0.55 0.16 155)',
+      'oklch(0.92 0.08 150)', 'oklch(0.35 0.10 160)',
+      'oklch(0.85 0.14 85)', 'oklch(0.65 0.12 85)',
+      'oklch(0.75 0.17 155 / 0.1)', 'oklch(0.75 0.17 155 / 0.25)'),
+    space: _theme(
+      'oklch(0.72 0.17 295)', 'oklch(0.52 0.16 295)',
+      'oklch(0.92 0.08 295)', 'oklch(0.35 0.10 290)',
+      'oklch(0.85 0.14 85)', 'oklch(0.65 0.12 85)',
+      'oklch(0.72 0.17 295 / 0.1)', 'oklch(0.72 0.17 295 / 0.25)'),
+    mech: _theme(
+      'oklch(0.75 0.17 55)', 'oklch(0.55 0.16 50)',
+      'oklch(0.92 0.08 60)', 'oklch(0.35 0.10 60)',
+      'oklch(0.85 0.14 85)', 'oklch(0.65 0.12 85)',
+      'oklch(0.75 0.17 55 / 0.1)', 'oklch(0.75 0.17 55 / 0.25)'),
+    ai: _theme(
+      'oklch(0.72 0.17 335)', 'oklch(0.52 0.16 335)',
+      'oklch(0.92 0.08 335)', 'oklch(0.35 0.10 330)',
+      'oklch(0.85 0.14 85)', 'oklch(0.65 0.12 85)',
+      'oklch(0.72 0.17 335 / 0.1)', 'oklch(0.72 0.17 335 / 0.25)'),
+    math: _theme(
+      'oklch(0.72 0.17 245)', 'oklch(0.52 0.16 245)',
+      'oklch(0.92 0.08 240)', 'oklch(0.35 0.10 245)',
+      'oklch(0.85 0.14 85)', 'oklch(0.65 0.12 85)',
+      'oklch(0.72 0.17 245 / 0.1)', 'oklch(0.72 0.17 245 / 0.25)'),
+    med: _theme(
+      'oklch(0.75 0.16 15)', 'oklch(0.55 0.15 15)',
+      'oklch(0.92 0.08 15)', 'oklch(0.35 0.10 15)',
+      'oklch(0.85 0.14 85)', 'oklch(0.65 0.12 85)',
+      'oklch(0.75 0.16 15 / 0.1)', 'oklch(0.75 0.16 15 / 0.25)'),
+    chem: _theme(
+      'oklch(0.82 0.17 125)', 'oklch(0.62 0.16 125)',
+      'oklch(0.95 0.08 120)', 'oklch(0.35 0.10 130)',
+      'oklch(0.85 0.14 85)', 'oklch(0.65 0.12 85)',
+      'oklch(0.82 0.17 125 / 0.1)', 'oklch(0.82 0.17 125 / 0.25)'),
+    phys: _theme(
+      'oklch(0.78 0.13 215)', 'oklch(0.55 0.13 215)',
+      'oklch(0.92 0.08 215)', 'oklch(0.35 0.10 215)',
+      'oklch(0.85 0.14 85)', 'oklch(0.65 0.12 85)',
+      'oklch(0.78 0.13 215 / 0.1)', 'oklch(0.78 0.13 215 / 0.25)'),
+    env: _theme(
+      'oklch(0.72 0.15 140)', 'oklch(0.52 0.13 140)',
+      'oklch(0.92 0.08 140)', 'oklch(0.35 0.10 140)',
+      'oklch(0.85 0.14 85)', 'oklch(0.65 0.12 85)',
+      'oklch(0.72 0.15 140 / 0.1)', 'oklch(0.72 0.15 140 / 0.25)'),
+    robo: _theme(
+      'oklch(0.82 0.15 95)', 'oklch(0.55 0.14 95)',
+      'oklch(0.95 0.08 95)', 'oklch(0.35 0.10 95)',
+      'oklch(0.85 0.14 85)', 'oklch(0.65 0.12 85)',
+      'oklch(0.82 0.15 95 / 0.1)', 'oklch(0.82 0.15 95 / 0.25)'),
+    elec: _theme(
+      'oklch(0.72 0.17 275)', 'oklch(0.52 0.16 275)',
+      'oklch(0.92 0.08 275)', 'oklch(0.35 0.10 275)',
+      'oklch(0.85 0.14 85)', 'oklch(0.65 0.12 85)',
+      'oklch(0.72 0.17 275 / 0.1)', 'oklch(0.72 0.17 275 / 0.25)'),
+    // Expansion set — 14 more sciences
+    astro: _theme(
+      'oklch(0.78 0.13 260)', 'oklch(0.52 0.14 260)',
+      'oklch(0.92 0.08 260)', 'oklch(0.30 0.08 260)',
+      'oklch(0.85 0.14 85)', 'oklch(0.65 0.12 85)',
+      'oklch(0.78 0.13 260 / 0.1)', 'oklch(0.78 0.13 260 / 0.25)'),
+    geo: _theme(
+      'oklch(0.72 0.15 40)', 'oklch(0.55 0.14 40)',
+      'oklch(0.90 0.08 50)', 'oklch(0.32 0.10 40)',
+      'oklch(0.85 0.14 85)', 'oklch(0.65 0.12 85)',
+      'oklch(0.72 0.15 40 / 0.1)', 'oklch(0.72 0.15 40 / 0.25)'),
+    ocean: _theme(
+      'oklch(0.72 0.15 230)', 'oklch(0.45 0.13 230)',
+      'oklch(0.92 0.08 220)', 'oklch(0.22 0.08 250)',
+      'oklch(0.85 0.14 85)', 'oklch(0.65 0.12 85)',
+      'oklch(0.72 0.15 230 / 0.1)', 'oklch(0.72 0.15 230 / 0.25)'),
+    meteo: _theme(
+      'oklch(0.82 0.10 245)', 'oklch(0.62 0.13 245)',
+      'oklch(0.95 0.05 245)', 'oklch(0.38 0.10 245)',
+      'oklch(0.85 0.14 85)', 'oklch(0.65 0.12 85)',
+      'oklch(0.82 0.10 245 / 0.1)', 'oklch(0.82 0.10 245 / 0.25)'),
+    paleo: _theme(
+      'oklch(0.72 0.13 70)', 'oklch(0.55 0.12 70)',
+      'oklch(0.92 0.06 75)', 'oklch(0.32 0.08 70)',
+      'oklch(0.85 0.14 85)', 'oklch(0.65 0.12 85)',
+      'oklch(0.72 0.13 70 / 0.1)', 'oklch(0.72 0.13 70 / 0.25)'),
+    quant: _theme(
+      'oklch(0.72 0.17 310)', 'oklch(0.52 0.16 310)',
+      'oklch(0.92 0.08 310)', 'oklch(0.30 0.10 310)',
+      'oklch(0.85 0.14 85)', 'oklch(0.65 0.12 85)',
+      'oklch(0.72 0.17 310 / 0.1)', 'oklch(0.72 0.17 310 / 0.25)'),
+    nuke: _theme(
+      'oklch(0.82 0.17 135)', 'oklch(0.62 0.16 135)',
+      'oklch(0.95 0.08 130)', 'oklch(0.32 0.10 135)',
+      'oklch(0.85 0.14 85)', 'oklch(0.65 0.12 85)',
+      'oklch(0.82 0.17 135 / 0.1)', 'oklch(0.82 0.17 135 / 0.25)'),
+    neuro: _theme(
+      'oklch(0.75 0.17 25)', 'oklch(0.55 0.15 25)',
+      'oklch(0.92 0.08 25)', 'oklch(0.32 0.10 25)',
+      'oklch(0.85 0.14 85)', 'oklch(0.65 0.12 85)',
+      'oklch(0.75 0.17 25 / 0.1)', 'oklch(0.75 0.17 25 / 0.25)'),
+    mat: _theme(
+      'oklch(0.78 0.12 190)', 'oklch(0.55 0.12 190)',
+      'oklch(0.92 0.06 190)', 'oklch(0.32 0.08 190)',
+      'oklch(0.85 0.14 85)', 'oklch(0.65 0.12 85)',
+      'oklch(0.78 0.12 190 / 0.1)', 'oklch(0.78 0.12 190 / 0.25)'),
+    micro: _theme(
+      'oklch(0.82 0.17 110)', 'oklch(0.62 0.16 110)',
+      'oklch(0.95 0.08 110)', 'oklch(0.32 0.10 120)',
+      'oklch(0.85 0.14 85)', 'oklch(0.65 0.12 85)',
+      'oklch(0.82 0.17 110 / 0.1)', 'oklch(0.82 0.17 110 / 0.25)'),
+    zoo: _theme(
+      'oklch(0.75 0.15 75)', 'oklch(0.55 0.13 75)',
+      'oklch(0.92 0.08 80)', 'oklch(0.32 0.08 75)',
+      'oklch(0.85 0.14 85)', 'oklch(0.65 0.12 85)',
+      'oklch(0.75 0.15 75 / 0.1)', 'oklch(0.75 0.15 75 / 0.25)'),
+    bot: _theme(
+      'oklch(0.78 0.15 120)', 'oklch(0.55 0.13 120)',
+      'oklch(0.92 0.08 120)', 'oklch(0.32 0.08 120)',
+      'oklch(0.85 0.14 85)', 'oklch(0.65 0.12 85)',
+      'oklch(0.78 0.15 120 / 0.1)', 'oklch(0.78 0.15 120 / 0.25)'),
+    arch: _theme(
+      'oklch(0.75 0.13 55)', 'oklch(0.55 0.12 55)',
+      'oklch(0.92 0.06 60)', 'oklch(0.32 0.08 55)',
+      'oklch(0.85 0.14 85)', 'oklch(0.65 0.12 85)',
+      'oklch(0.75 0.13 55 / 0.1)', 'oklch(0.75 0.13 55 / 0.25)'),
+    agri: _theme(
+      'oklch(0.82 0.14 100)', 'oklch(0.62 0.13 100)',
+      'oklch(0.92 0.08 100)', 'oklch(0.32 0.08 100)',
+      'oklch(0.85 0.14 85)', 'oklch(0.65 0.12 85)',
+      'oklch(0.82 0.14 100 / 0.1)', 'oklch(0.82 0.14 100 / 0.25)'),
+    // Legacy aliases for backward compatibility with existing content
+    helix_lab: null, aether_clinic: null, ares_mission: null,
+    celestial_observatory: null, neural_circuit: null, subatomic_matrix: null,
+    rocketry_control: null, aqua_flow: null, ember_forge: null, flora_pulse: null,
+  };
+  // Map legacy keys to new theme keys
+  PALETTES.helix_lab = PALETTES.bio;
+  PALETTES.aether_clinic = PALETTES.med;
+  PALETTES.ares_mission = PALETTES.space;
+  PALETTES.celestial_observatory = PALETTES.phys;
+  PALETTES.neural_circuit = PALETTES.ai;
+  PALETTES.subatomic_matrix = PALETTES.math;
+  PALETTES.rocketry_control = PALETTES.space;
+  PALETTES.aqua_flow = PALETTES.env;
+  PALETTES.ember_forge = PALETTES.mech;
+  PALETTES.flora_pulse = PALETTES.bio;
+
+  var PAL = PALETTES.cs;
+
+  // --- Math helpers ---
+  function lerp(a, b, p) { return a + (b - a) * p; }
+  function easeInOut(x) { return x < 0.5 ? 2 * x * x : 1 - Math.pow(-2 * x + 2, 2) / 2; }
+
+  /**
+   * interpolate -- Remotion-style multi-segment frame interpolation.
+   */
+  function interpolate(value, input, output, opts) {
+    var n = input.length;
+    var easing = (opts && opts.easing) || null;
+    var clamp = !(opts && opts.extrapolate === 'extend');
+
+    if (value <= input[0]) {
+      if (clamp) return output[0];
+      var p0 = (value - input[0]) / (input[1] - input[0]);
+      return lerp(output[0], output[1], easing ? easing(p0) : p0);
+    }
+    if (value >= input[n - 1]) {
+      if (clamp) return output[n - 1];
+      var pn = (value - input[n - 2]) / (input[n - 1] - input[n - 2]);
+      return lerp(output[n - 2], output[n - 1], easing ? easing(pn) : pn);
+    }
+
+    for (var i = 1; i < n; i++) {
+      if (value <= input[i]) {
+        var p = (value - input[i - 1]) / (input[i] - input[i - 1]);
+        if (easing) p = easing(p);
+        return lerp(output[i - 1], output[i], p);
+      }
+    }
+    return output[n - 1];
+  }
+  function merge(base, ov) { var r = {}; for (var k in base) r[k] = base[k]; for (var k2 in ov) r[k2] = ov[k2]; return r; }
+
+  // --- i18n ---
+  function t(key) { return (I18N[key] && I18N[key][LANG]) || (I18N[key] && I18N[key]['en']) || key; }
+
+  function _buildI18N(cfg) {
+    I18N = {
+      btnPlay:  { en: 'PLAY',  cn: '\u64ad\u653e' },
+      btnPause: { en: 'PAUSE', cn: '\u6682\u505c' },
+      btnPrev:  { en: 'PREV',  cn: '\u4e0a\u4e00\u5e27' },
+      btnNext:  { en: 'NEXT',  cn: '\u4e0b\u4e00\u5e27' },
+      guideDefault: { en: 'GUIDE', cn: '\u89c2\u770b\u6307\u5357' },
+    };
+    if (cfg.i18n) {
+      for (var k in cfg.i18n) I18N[k] = cfg.i18n[k];
+    }
+  }
+
+  // --- Default background (deep-space-indigo + 64px grid) ---
+  function _defaultDrawBg(c, w, h) {
+    var g = c.createLinearGradient(0, 0, 0, h);
+    g.addColorStop(0, PAL.bg); g.addColorStop(1, PAL.bg2);
+    c.fillStyle = g; c.fillRect(0, 0, w, h);
+    c.strokeStyle = 'oklch(0.35 0.05 265 / 0.08)'; c.lineWidth = 0.5;
+    for (var x = 0; x < w; x += 64) { c.beginPath(); c.moveTo(x, 0); c.lineTo(x, h); c.stroke(); }
+    for (var y = 0; y < h; y += 64) { c.beginPath(); c.moveTo(0, y); c.lineTo(w, y); c.stroke(); }
+  }
+
+  // --- Element drawing ---
+  function drawElement(el) {
+    if (!el || el.alpha <= 0.01) return;
+    ctx.save();
+    ctx.globalAlpha = el.alpha;
+
+    // Allow user override -- pass virtual W/H (same as getFrameElements receives)
+    if (typeof customDrawElement === 'function' && customDrawElement(ctx, el, _vw, _vh)) {
+      ctx.restore();
+      return;
+    }
+
+    switch (el.type) {
+      case 'label':
+        ctx.fillStyle = el.color || PAL.text;
+        var isBold = el.bold !== undefined ? el.bold : (el.size >= 14);
+        ctx.font = (isBold ? 'bold ' : '') + (el.size || 12) + "px " +
+          (isBold ? "'Space Grotesk','Inter','Noto Sans SC'" : "'Inter','Noto Sans SC'") + ",sans-serif";
+        ctx.textAlign = el.align || 'center';
+        ctx.textBaseline = el.baseline || 'middle';
+        if (el.glow) { ctx.shadowColor = el.glow; ctx.shadowBlur = 10; }
+        ctx.fillText(el.text, el.x, el.y);
+        break;
+
+      case 'text':
+        ctx.fillStyle = el.color || PAL.muted;
+        ctx.font = (el.size || 11) + "px 'Inter','Noto Sans SC',sans-serif";
+        ctx.textAlign = el.align || 'left';
+        ctx.textBaseline = el.baseline || 'middle';
+        ctx.fillText(el.text, el.x, el.y);
+        break;
+
+      case 'box':
+        if (el.fill) { ctx.fillStyle = el.fill; ctx.fillRect(el.x, el.y, el.w, el.h); }
+        if (el.stroke) { ctx.strokeStyle = el.stroke; ctx.lineWidth = el.lineWidth || 1; ctx.strokeRect(el.x, el.y, el.w, el.h); }
+        break;
+
+      case 'circle':
+        ctx.beginPath(); ctx.arc(el.x, el.y, el.r || 10, 0, Math.PI * 2);
+        if (el.fill) { ctx.fillStyle = el.fill; ctx.fill(); }
+        if (el.stroke) { ctx.strokeStyle = el.stroke; ctx.lineWidth = el.lineWidth || 1; ctx.stroke(); }
+        if (el.glow) { ctx.shadowColor = el.glow; ctx.shadowBlur = el.glowSize || 12; ctx.fill(); ctx.shadowBlur = 0; }
+        break;
+
+      case 'arrow':
+        _drawArrow(el.x1, el.y1, el.x2, el.y2, el.color || PAL.primary, el.lineWidth || 1.5, el.headSize || 6);
+        break;
+
+      case 'line':
+        ctx.strokeStyle = el.color || PAL.muted;
+        ctx.lineWidth = el.lineWidth || 1;
+        if (el.dash) ctx.setLineDash(el.dash);
+        ctx.beginPath(); ctx.moveTo(el.x1, el.y1); ctx.lineTo(el.x2, el.y2); ctx.stroke();
+        if (el.dash) ctx.setLineDash([]);
+        break;
+
+      case 'gradient_box':
+        var gb = ctx.createLinearGradient(el.x, el.y, el.x + el.w, el.y + el.h);
+        gb.addColorStop(0, el.color1 || PAL.primary); gb.addColorStop(1, el.color2 || PAL.secondary);
+        ctx.fillStyle = gb; ctx.fillRect(el.x, el.y, el.w, el.h);
+        if (el.glow) { ctx.shadowColor = el.glow; ctx.shadowBlur = 8; ctx.fillRect(el.x, el.y, el.w, el.h); ctx.shadowBlur = 0; }
+        break;
+
+      case 'custom':
+        if (typeof el.draw === 'function') el.draw(ctx, el);
+        break;
+
+      default:
+        if (typeof el.draw === 'function') el.draw(ctx, el);
+        break;
+    }
+    ctx.restore();
+  }
+
+  function _drawArrow(x1, y1, x2, y2, color, lw, hs) {
+    var angle = Math.atan2(y2 - y1, x2 - x1);
+    ctx.strokeStyle = color; ctx.lineWidth = lw;
+    ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+    ctx.fillStyle = color; ctx.beginPath();
+    ctx.moveTo(x2, y2);
+    ctx.lineTo(x2 - hs * Math.cos(angle - 0.4), y2 - hs * Math.sin(angle - 0.4));
+    ctx.lineTo(x2 - hs * Math.cos(angle + 0.4), y2 - hs * Math.sin(angle + 0.4));
+    ctx.fill();
+  }
+
+  // --- Content scaling ---
+  // Scale based on canvas height to fit REF_H. Virtual width adapts
+  // to fill the actual canvas width so content uses the full area.
+  // No safe-area offsets -- nothing overlaps the canvas.
+  function _contentTransform() {
+    var s = H / REF_H;
+    _vh = REF_H;
+    _vw = W / s;
+    if (_vw < REF_W) _vw = REF_W;
+    return { s: s, ox: 0, oy: 0, vw: _vw, vh: _vh };
+  }
+
+  function _applyContentScale(ct) {
+    ctx.save();
+    ctx.scale(ct.s, ct.s);
+  }
+
+  // --- Frame rendering ---
+  function drawFrame(f) {
+    var bgFn = (typeof drawBg === 'function') ? drawBg : _defaultDrawBg;
+    bgFn(ctx, W, H);
+    var ct = _contentTransform();
+    _applyContentScale(ct);
+    var elems = getFrameElements(f, ct.vw, ct.vh);
+    elems.forEach(function (el) { drawElement(el); });
+    ctx.restore();
+  }
+
+  // --- Shared element transition ---
+  function transitionTo(nf) {
+    if (nf < 0) nf = 0;
+    if (nf >= totalFrames) nf = totalFrames - 1;
+    if (nf === currentFrame && !transitioning) { drawFrame(currentFrame); _updateHUD(currentFrame); return; }
+    if (transitioning) return;
+
+    var ct0 = _contentTransform();
+    var oldElems = getFrameElements(currentFrame, ct0.vw, ct0.vh);
+    var newElems = getFrameElements(nf, ct0.vw, ct0.vh);
+    var oldMap = {}; oldElems.forEach(function (e) { oldMap[e.id] = e; });
+    var newMap = {}; newElems.forEach(function (e) { newMap[e.id] = e; });
+
+    currentFrame = nf;
+    _updateHUD(nf);
+    transitioning = true;
+
+    var startTime = null, duration = 500;
+    var bgFn = (typeof drawBg === 'function') ? drawBg : _defaultDrawBg;
+
+    function step(ts) {
+      if (!startTime) startTime = ts;
+      var raw = Math.min((ts - startTime) / duration, 1);
+      var p = easeInOut(raw);
+
+      bgFn(ctx, W, H);
+      var ct = _contentTransform();
+      _applyContentScale(ct);
+
+      oldElems.forEach(function (oe) {
+        if (!newMap[oe.id]) drawElement(merge(oe, { alpha: 1 - p }));
+      });
+
+      newElems.forEach(function (ne) {
+        var oe = oldMap[ne.id];
+        if (oe) {
+          var merged = merge(ne, {
+            x: lerp(oe.x || 0, ne.x || 0, p),
+            y: lerp(oe.y || 0, ne.y || 0, p),
+            w: lerp(oe.w || 0, ne.w || 0, p),
+            h: lerp(oe.h || 0, ne.h || 0, p),
+            r: lerp(oe.r || 0, ne.r || 0, p),
+            alpha: 1
+          });
+          if (ne.type === 'arrow' && oe.type === 'arrow') {
+            merged.x1 = lerp(oe.x1, ne.x1, p); merged.y1 = lerp(oe.y1, ne.y1, p);
+            merged.x2 = lerp(oe.x2, ne.x2, p); merged.y2 = lerp(oe.y2, ne.y2, p);
+          }
+          if (ne.type === 'line' && oe.type === 'line') {
+            merged.x1 = lerp(oe.x1, ne.x1, p); merged.y1 = lerp(oe.y1, ne.y1, p);
+            merged.x2 = lerp(oe.x2, ne.x2, p); merged.y2 = lerp(oe.y2, ne.y2, p);
+          }
+          if ((ne.type === 'label' || ne.type === 'text') && oe.text !== ne.text) {
+            drawElement(merge(oe, { alpha: 1 - p }));
+            drawElement(merge(ne, { alpha: p }));
+          } else {
+            drawElement(merged);
+          }
+        } else {
+          drawElement(merge(ne, { alpha: p }));
+        }
+      });
+
+      ctx.restore();
+
+      if (raw < 1) { requestAnimationFrame(step); }
+      else { transitioning = false; }
+    }
+    requestAnimationFrame(step);
+  }
+
+  // --- HUD ---
+  function _updateHUD(f) {
+    var cfg = window.CONFIG || {};
+    var labels = cfg.hudLabels || [];
+    var values = cfg.hudValues || [];
+    for (var i = 0; i < 4; i++) {
+      var lEl = document.getElementById('hudL' + (i + 1));
+      var vEl = document.getElementById('hudV' + (i + 1));
+      if (lEl && labels[i]) lEl.textContent = t(labels[i]);
+      if (vEl && values[f] && values[f][i] !== undefined) {
+        var val = values[f][i];
+        vEl.textContent = (typeof val === 'string' && I18N[val]) ? t(val) : val;
+      }
+    }
+    var fi = document.getElementById('frameIndicator');
+    if (fi) fi.textContent = (f + 1) + ' / ' + totalFrames;
+  }
+
+  // --- Guide panel (sidebar layout -- always visible, no collapse) ---
+  function _buildGuide() {
+    var cfg = window.CONFIG || {};
+    var guideTitle = document.getElementById('guideTitle');
+    var guideContent = document.getElementById('guideContent');
+    if (!guideContent) return;
+
+    if (guideTitle) guideTitle.textContent = t(cfg.guideTitle || 'guideDefault');
+
+    var items = cfg.guideItems || [];
+    var html = '<ul>';
+    items.forEach(function (key) { html += '<li>' + t(key) + '</li>'; });
+    html += '</ul>';
+    guideContent.innerHTML = html;
+  }
+
+  // --- refreshI18N ---
+  function refreshI18N() {
+    var titleEl = document.getElementById('title');
+    var subEl = document.getElementById('subtitle');
+    if (titleEl) titleEl.textContent = t('title');
+    if (subEl) subEl.textContent = t('subtitle');
+
+    var btnPrev = document.getElementById('btnPrev');
+    var btnNext = document.getElementById('btnNext');
+    var btnPlay = document.getElementById('btnPlay');
+    if (btnPrev) btnPrev.textContent = t('btnPrev');
+    if (btnNext) btnNext.textContent = t('btnNext');
+    if (btnPlay) btnPlay.textContent = playing ? t('btnPause') : t('btnPlay');
+
+    var langBtn = document.getElementById('langBtn');
+    if (langBtn) langBtn.textContent = LANG.toUpperCase();
+
+    _buildGuide();
+    _updateHUD(currentFrame);
+    drawFrame(currentFrame);
+  }
+
+  // --- Resize ---
+  function _resize() {
+    var wrap = cv.parentElement;
+    var rect = wrap.getBoundingClientRect();
+    if (rect.width < 1 || rect.height < 1) return;
+    W = rect.width; H = rect.height;
+    cv.width = W * DPR; cv.height = H * DPR;
+    cv.style.width = W + 'px'; cv.style.height = H + 'px';
+    ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+    drawFrame(currentFrame);
+  }
+
+  // --- Play / Pause ---
+  function _togglePlay() {
+    if (playing) {
+      playing = false;
+      if (playTimer) clearTimeout(playTimer);
+      document.getElementById('btnPlay').textContent = t('btnPlay');
+      return;
+    }
+    playing = true;
+    document.getElementById('btnPlay').textContent = t('btnPause');
+    function autoNext() {
+      if (!playing) return;
+      if (currentFrame < totalFrames - 1) {
+        transitionTo(currentFrame + 1);
+        playTimer = setTimeout(autoNext, 1800);
+      } else {
+        playing = false;
+        document.getElementById('btnPlay').textContent = t('btnPlay');
+      }
+    }
+    if (currentFrame >= totalFrames - 1) { currentFrame = -1; }
+    autoNext();
+  }
+
+  // --- Boot ---
+  function boot() {
+    var cfg = window.CONFIG || {};
+    totalFrames = cfg.totalFrames || 4;
+
+    // Apply palette
+    if (cfg.style && PALETTES[cfg.style]) {
+      PAL = PALETTES[cfg.style];
+    }
+
+    // Inject CSS custom properties (palette + theme_style shared tokens)
+    var root = document.documentElement;
+    // Palette-specific
+    root.style.setProperty('--bg', PAL.bg);
+    root.style.setProperty('--bg2', PAL.bg2);
+    root.style.setProperty('--surface', PAL.surface);
+    root.style.setProperty('--primary', PAL.primary);
+    root.style.setProperty('--primary-dim', PAL.primaryDim);
+    root.style.setProperty('--secondary', PAL.secondary);
+    root.style.setProperty('--secondary-dim', PAL.secondaryDim);
+    root.style.setProperty('--text', PAL.text);
+    root.style.setProperty('--muted', PAL.muted);
+    root.style.setProperty('--error', PAL.error);
+    root.style.setProperty('--outline', PAL.outline);
+    root.style.setProperty('--glow', PAL.glow);
+    root.style.setProperty('--glow-strong', PAL.glowStrong);
+    root.style.setProperty('--glass', PAL.glass);
+    root.style.setProperty('--glass-blur', PAL.glassBlur + 'px');
+    root.style.setProperty('--radius', PAL.radius);
+    // theme_style shared tokens
+    root.style.setProperty('--bg-0', 'oklch(0.14 0.035 265)');
+    root.style.setProperty('--bg-1', 'oklch(0.18 0.04 265)');
+    root.style.setProperty('--bg-2', 'oklch(0.22 0.045 265)');
+    root.style.setProperty('--bg-3', 'oklch(0.28 0.05 265)');
+    root.style.setProperty('--line', 'oklch(0.35 0.05 265 / 0.35)');
+    root.style.setProperty('--fg', 'oklch(0.96 0.01 265)');
+    root.style.setProperty('--fg-dim', 'oklch(0.75 0.02 265)');
+    root.style.setProperty('--fg-mute', 'oklch(0.55 0.03 265)');
+    root.style.setProperty('--gold', 'oklch(0.85 0.14 85)');
+
+    _buildI18N(cfg);
+
+    // Canvas init
+    cv = document.getElementById('c');
+    ctx = cv.getContext('2d');
+
+    // Events
+    window.addEventListener('resize', _resize);
+    setTimeout(_resize, 200);
+    setTimeout(_resize, 600);
+    document.fonts.ready.then(function () { _resize(); });
+
+    // Lang toggle
+    var langBtn = document.getElementById('langBtn');
+    if (langBtn) {
+      langBtn.addEventListener('click', function () {
+        LANG = LANG === 'en' ? 'cn' : 'en';
+        refreshI18N();
+      });
+    }
+
+    // Controls
+    var btnPrev = document.getElementById('btnPrev');
+    var btnNext = document.getElementById('btnNext');
+    var btnPlay = document.getElementById('btnPlay');
+
+    if (btnPrev) btnPrev.addEventListener('click', function () {
+      if (playing) { playing = false; if (playTimer) clearTimeout(playTimer); }
+      transitionTo(currentFrame - 1);
+    });
+    if (btnNext) btnNext.addEventListener('click', function () {
+      if (playing) { playing = false; if (playTimer) clearTimeout(playTimer); }
+      transitionTo(currentFrame + 1);
+    });
+    if (btnPlay) btnPlay.addEventListener('click', _togglePlay);
+
+    // Guide
+    _buildGuide();
+
+    // Initial render
+    refreshI18N();
+
+    // Callback
+    if (typeof onReady === 'function') onReady();
+  }
+
+  // --- Public API ---
+  return {
+    boot: boot,
+    t: t,
+    lerp: lerp,
+    interpolate: interpolate,
+    easeInOut: easeInOut,
+    merge: merge,
+    drawElement: drawElement,
+    drawFrame: drawFrame,
+    transitionTo: transitionTo,
+    refreshI18N: refreshI18N,
+    get PAL() { return PAL; },
+    get W() { return _vw; },
+    get H() { return _vh; },
+    get ctx() { return ctx; },
+    get currentFrame() { return currentFrame; },
+    get totalFrames() { return totalFrames; },
+    get LANG() { return LANG; },
+    get _lang() { return LANG; },
+    get lang() { return LANG; },
+    get REF_W() { return REF_W; },
+    get REF_H() { return REF_H; },
+    get realW() { return W; },
+    get realH() { return H; },
+    applyContentScale: function () { var ct = _contentTransform(); _applyContentScale(ct); },
+    restoreContentScale: function () { ctx.restore(); },
+  };
+})();
+
+</script>
+
+<script>
+// ============================================================
+// K17: Newton's First Law -- Objects don't move by themselves
+// Concept: Inertia -- objects maintain their state when no
+//          external force acts on them
+//
+// idea_id: anim_1776504642216_ulhz
+// Visual: Sci-Fi Hologram (holo) style with #f97316 orange accent
+//
+// Frame 0: Scene setup -- tablecloth trick scene, HUD standby
+// Frame 1: Slow pull -- friction wins, objects slide with cloth
+// Frame 2: Fast pull -- inertia wins, objects stay put
+// Frame 3: Ice surface -- frictionless uniform motion
+// Frame 4: Space -- zero net force, constant velocity + formula
+// ============================================================
+
+// --- Holo color constants ---
+var HOLO = '#f97316';
+var HOLO_DIM = 'rgba(249,115,22,0.5)';
+var HOLO_FAINT = 'rgba(249,115,22,0.25)';
+var HOLO_GLOW = 'rgba(249,115,22,0.12)';
+var HOLO_BG = '#05060f';
+var HOLO_BG2 = '#0d0e1a';
+
+// --- Continuous animation state ---
+var tick = 0;
+var tickTimer = null;
+
+function startTick() {
+  if (tickTimer) return;
+  tickTimer = setInterval(function () {
+    tick++;
+    AnimRuntime.drawFrame(AnimRuntime.currentFrame);
+  }, 30);
+}
+
+// ============================================================
+// CONFIG
+// ============================================================
+
+var CONFIG = {
+  style: 'phys',
+  totalFrames: 5,
+
+  i18n: {
+    title:    { en: 'NEWTON\'S FIRST LAW', cn: '\u725b\u987f\u7b2c\u4e00\u5b9a\u5f8b' },
+    subtitle: { en: 'INERTIA DEMONSTRATION', cn: '\u60ef\u6027\u6f14\u793a' },
+
+    // Frame 0
+    f0_title:  { en: 'INERTIA TEST', cn: '\u60ef\u6027\u6d4b\u8bd5' },
+    f0_status: { en: 'STANDBY', cn: '\u5f85\u673a' },
+    f0_desc:   { en: 'Tablecloth trick setup', cn: '\u62bd\u684c\u5e03\u5b9e\u9a8c\u573a\u666f' },
+    f0_cup:    { en: 'CUP', cn: '\u676f\u5b50' },
+    f0_plate:  { en: 'PLATE', cn: '\u76d8\u5b50' },
+    f0_cloth:  { en: 'TABLECLOTH', cn: '\u684c\u5e03' },
+    f0_table:  { en: 'TABLE', cn: '\u684c\u9762' },
+    f0_q:      { en: 'Why do objects stay when you yank the cloth?', cn: '\u4e3a\u4ec0\u4e48\u62bd\u684c\u5e03\u65f6\u4e0a\u9762\u7684\u4e1c\u897f\u4e0d\u4f1a\u98de\u8d70\uff1f' },
+
+    // Frame 1
+    f1_title:  { en: 'SLOW PULL', cn: '\u6162\u901f\u62bd\u53d6' },
+    f1_result: { en: 'Objects slide with cloth', cn: '\u7269\u54c1\u968f\u684c\u5e03\u6ed1\u52a8' },
+    f1_why:    { en: 'Friction has enough time to transfer motion', cn: '\u6469\u64e6\u529b\u6709\u8db3\u591f\u65f6\u95f4\u4f20\u9012\u8fd0\u52a8' },
+    f1_ff:     { en: 'F_friction', cn: '\u6469\u64e6\u529b' },
+
+    // Frame 2
+    f2_title:  { en: 'FAST PULL', cn: '\u5feb\u901f\u62bd\u53d6' },
+    f2_result: { en: 'Objects stay in place!', cn: '\u7269\u54c1\u4fdd\u6301\u539f\u4f4d\uff01' },
+    f2_why:    { en: 'Inertia resists change -- too fast for friction', cn: '\u60ef\u6027\u62b5\u6297\u53d8\u5316 -- \u592a\u5feb\u4e86\u6469\u64e6\u529b\u6765\u4e0d\u53ca\u4f20\u9012' },
+    f2_locked: { en: 'LOCKED', cn: '\u9501\u5b9a' },
+
+    // Frame 3
+    f3_title:  { en: 'ICE SURFACE GLIDE', cn: '\u51b0\u9762\u6ed1\u884c' },
+    f3_desc:   { en: 'Near-zero friction: uniform motion persists', cn: '\u63a5\u8fd1\u96f6\u6469\u64e6\uff1a\u5300\u901f\u76f4\u7ebf\u8fd0\u52a8\u6301\u7eed' },
+    f3_equal:  { en: 'Equal spacing = constant velocity', cn: '\u7b49\u8ddd\u6807\u8bb0 = \u5300\u901f' },
+
+    // Frame 4
+    f4_title:  { en: 'DEEP SPACE', cn: '\u6df1\u7a7a' },
+    f4_desc:   { en: 'Zero net force: velocity never changes', cn: '\u5408\u529b\u4e3a\u96f6\uff1a\u901f\u5ea6\u6c38\u4e0d\u6539\u53d8' },
+    f4_law:    { en: 'Newton\'s First Law', cn: '\u725b\u987f\u7b2c\u4e00\u5b9a\u5f8b' },
+
+    // Guide
+    guideTitle: { en: 'OBSERVATION GUIDE', cn: '\u89c2\u5bdf\u6307\u5357' },
+    g1: { en: 'Frame 1: Slow pull -- friction drags objects along', cn: '\u5e27 1\uff1a\u6162\u62bd -- \u6469\u64e6\u529b\u628a\u7269\u54c1\u62d6\u8d70' },
+    g2: { en: 'Frame 2: Fast pull -- inertia keeps objects still', cn: '\u5e27 2\uff1a\u5feb\u62bd -- \u60ef\u6027\u8ba9\u7269\u54c1\u7559\u5728\u539f\u5730' },
+    g3: { en: 'Frame 3: Ice -- no friction, constant speed', cn: '\u5e27 3\uff1a\u51b0\u9762 -- \u65e0\u6469\u64e6\uff0c\u5300\u901f\u8fd0\u52a8' },
+    g4: { en: 'Frame 4: Space -- the purest inertia demo', cn: '\u5e27 4\uff1a\u592a\u7a7a -- \u6700\u7eaf\u7cb9\u7684\u60ef\u6027\u6f14\u793a' },
+
+    // HUD labels
+    hudScene:    { en: 'SCENE', cn: '\u573a\u666f' },
+    hudVelocity: { en: 'VELOCITY', cn: '\u901f\u5ea6' },
+    hudFriction: { en: 'FRICTION', cn: '\u6469\u64e6\u529b' },
+    hudInertia:  { en: 'INERTIA', cn: '\u60ef\u6027' },
+  },
+
+  hudLabels: ['hudScene', 'hudVelocity', 'hudFriction', 'hudInertia'],
+  hudValues: [
+    ['STANDBY',  'v = 0',      '--',        '--'       ],
+    ['SLOW',     'v = LOW',    'F > 0',     'OVERCOME' ],
+    ['FAST',     'v = HIGH',   'F ~ 0 (dt)', 'DOMINANT'],
+    ['ICE',      'v = CONST',  '\u03bc \u2248 0', 'ACTIVE'   ],
+    ['SPACE',    'v = CONST',  'F_net = 0', '\u03a3F=0 \u2192 \u0394v=0'],
+  ],
+
+  guideTitle: 'guideTitle',
+  guideItems: ['g1', 'g2', 'g3', 'g4'],
+};
+
+// ============================================================
+// drawBg -- Holo background: deep blue-black + radial glow +
+//           grid + corner brackets + scanlines
+// ============================================================
+
+function drawBg(ctx, W, H) {
+  // Deep blue-black gradient
+  var g = ctx.createLinearGradient(0, 0, 0, H);
+  g.addColorStop(0, HOLO_BG);
+  g.addColorStop(1, HOLO_BG2);
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, W, H);
+
+  // Radial hue glow at center
+  var rg = ctx.createRadialGradient(W * 0.5, H * 0.55, 0, W * 0.5, H * 0.55, W * 0.65);
+  rg.addColorStop(0, 'rgba(249,115,22,0.08)');
+  rg.addColorStop(1, 'rgba(249,115,22,0)');
+  ctx.fillStyle = rg;
+  ctx.fillRect(0, 0, W, H);
+
+  // 10x10 grid lines (hue color, low opacity)
+  ctx.strokeStyle = 'rgba(249,115,22,0.06)';
+  ctx.lineWidth = 0.5;
+  var gs = 40;
+  for (var x = 0; x < W; x += gs) {
+    ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke();
+  }
+  for (var y = 0; y < H; y += gs) {
+    ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke();
+  }
+
+  // Scanlines (subtle horizontal lines)
+  ctx.strokeStyle = 'rgba(249,115,22,0.02)';
+  ctx.lineWidth = 0.5;
+  for (var sy = 0; sy < H; sy += 3) {
+    ctx.beginPath(); ctx.moveTo(0, sy); ctx.lineTo(W, sy); ctx.stroke();
+  }
+
+  // Corner brackets
+  ctx.strokeStyle = 'rgba(249,115,22,0.5)';
+  ctx.lineWidth = 1.5;
+  var m = 15, L = 30;
+  ctx.beginPath(); ctx.moveTo(m, m + L); ctx.lineTo(m, m); ctx.lineTo(m + L, m); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(W - m - L, m); ctx.lineTo(W - m, m); ctx.lineTo(W - m, m + L); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(m, H - m - L); ctx.lineTo(m, H - m); ctx.lineTo(m + L, H - m); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(W - m - L, H - m); ctx.lineTo(W - m, H - m); ctx.lineTo(W - m, H - m - L); ctx.stroke();
+}
+
+// ============================================================
+// Holo drawing helpers
+// ============================================================
+
+// Draw text with glow effect (JetBrains Mono style)
+function holoText(ctx, text, x, y, size, opts) {
+  opts = opts || {};
+  var align = opts.align || 'center';
+  var alpha = opts.alpha !== undefined ? opts.alpha : 1;
+  var bold = opts.bold !== false;
+  ctx.save();
+  ctx.globalAlpha = alpha;
+  ctx.font = (bold ? 'bold ' : '') + size + "px 'JetBrains Mono','Space Grotesk',monospace";
+  ctx.textAlign = align;
+  ctx.textBaseline = opts.baseline || 'middle';
+  ctx.fillStyle = opts.color || HOLO;
+  if (opts.glow !== false) {
+    ctx.shadowColor = HOLO;
+    ctx.shadowBlur = opts.glowSize || 14;
+  }
+  ctx.fillText(text, x, y);
+  ctx.restore();
+}
+
+// Draw Chinese text with Noto Sans SC
+function holoCnText(ctx, text, x, y, size, opts) {
+  opts = opts || {};
+  ctx.save();
+  ctx.globalAlpha = opts.alpha !== undefined ? opts.alpha : 0.7;
+  ctx.font = (opts.bold ? 'bold ' : '') + size + "px 'Noto Sans SC','Inter',sans-serif";
+  ctx.textAlign = opts.align || 'center';
+  ctx.textBaseline = opts.baseline || 'middle';
+  ctx.fillStyle = opts.color || HOLO;
+  if (opts.glow !== false) {
+    ctx.shadowColor = HOLO;
+    ctx.shadowBlur = 8;
+  }
+  ctx.fillText(text, x, y);
+  ctx.restore();
+}
+
+// Draw a glowing arrow (force vector)
+function holoArrow(ctx, x1, y1, x2, y2, opts) {
+  opts = opts || {};
+  var lw = opts.lineWidth || 2;
+  var hs = opts.headSize || 8;
+  var angle = Math.atan2(y2 - y1, x2 - x1);
+  ctx.save();
+  ctx.globalAlpha = opts.alpha !== undefined ? opts.alpha : 1;
+  ctx.strokeStyle = opts.color || HOLO;
+  ctx.fillStyle = opts.color || HOLO;
+  ctx.lineWidth = lw;
+  if (opts.glow !== false) {
+    ctx.shadowColor = opts.color || HOLO;
+    ctx.shadowBlur = opts.glowSize || 10;
+  }
+  if (opts.dash) ctx.setLineDash(opts.dash);
+  ctx.beginPath();
+  ctx.moveTo(x1, y1);
+  ctx.lineTo(x2, y2);
+  ctx.stroke();
+  if (opts.dash) ctx.setLineDash([]);
+  // Arrowhead
+  ctx.beginPath();
+  ctx.moveTo(x2, y2);
+  ctx.lineTo(x2 - hs * Math.cos(angle - 0.4), y2 - hs * Math.sin(angle - 0.4));
+  ctx.lineTo(x2 - hs * Math.cos(angle + 0.4), y2 - hs * Math.sin(angle + 0.4));
+  ctx.closePath();
+  ctx.fill();
+  ctx.restore();
+}
+
+// Draw a HUD panel (top label bar + bottom readout bar)
+function holoPanel(ctx, x, y, w, h, opts) {
+  opts = opts || {};
+  ctx.save();
+  ctx.globalAlpha = opts.alpha !== undefined ? opts.alpha : 0.85;
+
+  // Panel border
+  ctx.strokeStyle = HOLO_DIM;
+  ctx.lineWidth = 1;
+  ctx.strokeRect(x, y, w, h);
+
+  // Fill
+  ctx.fillStyle = 'rgba(249,115,22,0.03)';
+  ctx.fillRect(x, y, w, h);
+
+  // Top bar
+  if (opts.label) {
+    ctx.fillStyle = 'rgba(5,6,15,0.7)';
+    ctx.fillRect(x, y, w, 16);
+    ctx.strokeStyle = 'rgba(249,115,22,0.2)';
+    ctx.beginPath(); ctx.moveTo(x, y + 16); ctx.lineTo(x + w, y + 16); ctx.stroke();
+
+    holoText(ctx, '\u25b8 ' + opts.label, x + 6, y + 8, 7,
+      { align: 'left', glow: false, glowSize: 4, alpha: 0.8 });
+
+    // LIVE indicator
+    ctx.fillStyle = HOLO;
+    ctx.beginPath(); ctx.arc(x + w - 16, y + 8, 2.5, 0, Math.PI * 2); ctx.fill();
+    holoText(ctx, 'LIVE', x + w - 8, y + 8, 6,
+      { align: 'left', glow: false, alpha: 0.6 });
+  }
+
+  // Bottom bar
+  if (opts.readout) {
+    ctx.fillStyle = 'rgba(5,6,15,0.7)';
+    ctx.fillRect(x, y + h - 14, w, 14);
+    ctx.strokeStyle = 'rgba(249,115,22,0.2)';
+    ctx.beginPath(); ctx.moveTo(x, y + h - 14); ctx.lineTo(x + w, y + h - 14); ctx.stroke();
+
+    holoText(ctx, opts.readout, x + 6, y + h - 7, 6,
+      { align: 'left', glow: false, alpha: 0.5 });
+
+    holoText(ctx, '\u25c7 SIM-07', x + w - 6, y + h - 7, 6,
+      { align: 'right', glow: false, alpha: 0.4 });
+  }
+
+  // Corner brackets inside panel
+  var cb = 8, ci = 3;
+  ctx.strokeStyle = HOLO_DIM;
+  ctx.lineWidth = 0.8;
+  ctx.beginPath(); ctx.moveTo(x + ci, y + ci + cb); ctx.lineTo(x + ci, y + ci); ctx.lineTo(x + ci + cb, y + ci); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(x + w - ci - cb, y + ci); ctx.lineTo(x + w - ci, y + ci); ctx.lineTo(x + w - ci, y + ci + cb); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(x + ci, y + h - ci - cb); ctx.lineTo(x + ci, y + h - ci); ctx.lineTo(x + ci + cb, y + h - ci); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(x + w - ci - cb, y + h - ci); ctx.lineTo(x + w - ci, y + h - ci); ctx.lineTo(x + w - ci, y + h - ci + cb); ctx.stroke();
+
+  ctx.restore();
+}
+
+// Draw holo icon: force/gravity pendulum (mech icon 1)
+function drawIconPendulum(ctx, cx, cy, sz) {
+  var s = sz / 100;
+  ctx.save();
+  ctx.translate(cx - 50 * s, cy - 50 * s);
+  ctx.scale(s, s);
+
+  // Glow layer
+  ctx.strokeStyle = HOLO;
+  ctx.fillStyle = 'none';
+  ctx.lineWidth = 2;
+  ctx.globalAlpha = 0.35;
+  ctx.shadowColor = HOLO;
+  ctx.shadowBlur = 6;
+  ctx.beginPath(); ctx.arc(50, 30, 8, 0, Math.PI * 2); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(50, 38); ctx.lineTo(50, 72); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(44, 68); ctx.lineTo(50, 76); ctx.lineTo(56, 68); ctx.stroke();
+  ctx.shadowBlur = 0;
+
+  // Clear layer
+  ctx.globalAlpha = 0.9;
+  ctx.lineWidth = 1.2;
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  ctx.beginPath(); ctx.arc(50, 30, 8, 0, Math.PI * 2); ctx.stroke();
+  ctx.beginPath(); ctx.arc(50, 30, 12, 0, Math.PI * 2);
+  ctx.globalAlpha = 0.4;
+  ctx.stroke();
+  ctx.globalAlpha = 0.9;
+  ctx.beginPath(); ctx.moveTo(50, 38); ctx.lineTo(50, 72); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(44, 68); ctx.lineTo(50, 76); ctx.lineTo(56, 68); ctx.stroke();
+
+  ctx.restore();
+}
+
+// Draw holo icon: projectile trajectory (mech icon 2)
+function drawIconTrajectory(ctx, cx, cy, sz) {
+  var s = sz / 100;
+  ctx.save();
+  ctx.translate(cx - 50 * s, cy - 50 * s);
+  ctx.scale(s, s);
+
+  // Glow layer
+  ctx.strokeStyle = HOLO;
+  ctx.fillStyle = HOLO;
+  ctx.lineWidth = 2;
+  ctx.globalAlpha = 0.35;
+  ctx.shadowColor = HOLO;
+  ctx.shadowBlur = 6;
+  ctx.beginPath(); ctx.moveTo(10, 82); ctx.lineTo(90, 82); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(10, 82); ctx.quadraticCurveTo(50, 10, 90, 82); ctx.stroke();
+  ctx.shadowBlur = 0;
+
+  // Clear layer
+  ctx.globalAlpha = 0.9;
+  ctx.lineWidth = 1.2;
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  ctx.beginPath(); ctx.moveTo(10, 82); ctx.lineTo(90, 82); ctx.stroke();
+  ctx.setLineDash([3, 2]);
+  ctx.beginPath(); ctx.moveTo(10, 82); ctx.quadraticCurveTo(50, 10, 90, 82); ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.beginPath(); ctx.arc(10, 82, 3.5, 0, Math.PI * 2); ctx.stroke();
+  ctx.beginPath(); ctx.arc(90, 82, 3.5, 0, Math.PI * 2); ctx.stroke();
+  ctx.beginPath(); ctx.arc(50, 26, 2, 0, Math.PI * 2); ctx.fill();
+
+  ctx.restore();
+}
+
+// Draw holo icon: lever fulcrum (mech icon 3)
+function drawIconLever(ctx, cx, cy, sz) {
+  var s = sz / 100;
+  ctx.save();
+  ctx.translate(cx - 50 * s, cy - 50 * s);
+  ctx.scale(s, s);
+
+  ctx.strokeStyle = HOLO;
+  ctx.fillStyle = 'none';
+  ctx.lineWidth = 1.2;
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  ctx.globalAlpha = 0.9;
+
+  // Lever bar
+  ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.moveTo(12, 55); ctx.lineTo(88, 55); ctx.stroke();
+  ctx.lineWidth = 1.2;
+  // Fulcrum triangle
+  ctx.beginPath(); ctx.moveTo(50, 55); ctx.lineTo(43, 72); ctx.lineTo(57, 72); ctx.closePath(); ctx.stroke();
+  // Left weight
+  ctx.strokeRect(14, 42, 14, 13);
+  // Right weight
+  ctx.strokeRect(72, 48, 12, 7);
+
+  ctx.restore();
+}
+
+// Draw holo icon: gears (mech icon 4)
+function drawIconGear(ctx, cx, cy, sz) {
+  var s = sz / 100;
+  ctx.save();
+  ctx.translate(cx - 50 * s, cy - 50 * s);
+  ctx.scale(s, s);
+
+  ctx.strokeStyle = HOLO;
+  ctx.fillStyle = HOLO;
+  ctx.lineWidth = 1.2;
+  ctx.lineCap = 'round';
+  ctx.globalAlpha = 0.9;
+
+  // Large gear
+  ctx.beginPath(); ctx.arc(38, 55, 16, 0, Math.PI * 2); ctx.stroke();
+  ctx.beginPath(); ctx.arc(38, 55, 3, 0, Math.PI * 2); ctx.fill();
+  // Gear teeth (10 lines)
+  for (var i = 0; i < 10; i++) {
+    var a = (Math.PI * 2 / 10) * i;
+    ctx.beginPath();
+    ctx.moveTo(38 + 14 * Math.cos(a), 55 + 14 * Math.sin(a));
+    ctx.lineTo(38 + 19 * Math.cos(a), 55 + 19 * Math.sin(a));
+    ctx.stroke();
+  }
+  // Small gear
+  ctx.beginPath(); ctx.arc(68, 55, 9, 0, Math.PI * 2); ctx.stroke();
+  ctx.beginPath(); ctx.arc(68, 55, 2, 0, Math.PI * 2); ctx.fill();
+  for (var j = 0; j < 7; j++) {
+    var a2 = (Math.PI * 2 / 7) * j;
+    ctx.beginPath();
+    ctx.moveTo(68 + 7 * Math.cos(a2), 55 + 7 * Math.sin(a2));
+    ctx.lineTo(68 + 11 * Math.cos(a2), 55 + 11 * Math.sin(a2));
+    ctx.stroke();
+  }
+
+  ctx.restore();
+}
+
+// Draw a wireframe cup (holo style)
+function drawCup(ctx, bx, by, cw, ch, label) {
+  ctx.save();
+  ctx.strokeStyle = HOLO;
+  ctx.lineWidth = 1.2;
+  ctx.lineCap = 'round';
+
+  // Cup body (trapezoid)
+  var topW = cw * 0.9;
+  var botW = cw * 0.6;
+  ctx.beginPath();
+  ctx.moveTo(bx - topW / 2, by - ch);
+  ctx.lineTo(bx + topW / 2, by - ch);
+  ctx.lineTo(bx + botW / 2, by);
+  ctx.lineTo(bx - botW / 2, by);
+  ctx.closePath();
+  ctx.stroke();
+
+  // Handle
+  ctx.beginPath();
+  ctx.arc(bx + topW / 2 + 4, by - ch / 2, 5, -Math.PI / 2, Math.PI / 2);
+  ctx.stroke();
+
+  // Liquid line
+  ctx.strokeStyle = HOLO_DIM;
+  ctx.setLineDash([2, 2]);
+  var liqY = by - ch * 0.65;
+  var liqHW = cw * 0.38;
+  ctx.beginPath(); ctx.moveTo(bx - liqHW, liqY); ctx.lineTo(bx + liqHW, liqY); ctx.stroke();
+  ctx.setLineDash([]);
+
+  // Label
+  if (label) {
+    holoText(ctx, label, bx, by - ch - 10, 7, { glow: false, alpha: 0.6 });
+  }
+  ctx.restore();
+}
+
+// Draw a wireframe plate (holo style)
+function drawPlate(ctx, bx, by, pw, ph, label) {
+  ctx.save();
+  ctx.strokeStyle = HOLO;
+  ctx.lineWidth = 1.2;
+
+  // Ellipse for plate
+  ctx.beginPath();
+  ctx.ellipse(bx, by - ph / 2, pw / 2, ph / 2, 0, 0, Math.PI * 2);
+  ctx.stroke();
+
+  // Inner ellipse
+  ctx.strokeStyle = HOLO_DIM;
+  ctx.beginPath();
+  ctx.ellipse(bx, by - ph / 2, pw / 2 - 4, ph / 2 - 2, 0, 0, Math.PI * 2);
+  ctx.stroke();
+
+  if (label) {
+    holoText(ctx, label, bx, by - ph - 6, 7, { glow: false, alpha: 0.6 });
+  }
+  ctx.restore();
+}
+
+// Draw tablecloth
+function drawCloth(ctx, x, y, cw, ch, pullOffset) {
+  ctx.save();
+  ctx.strokeStyle = HOLO;
+  ctx.lineWidth = 1;
+  ctx.fillStyle = 'rgba(249,115,22,0.04)';
+
+  var px = pullOffset || 0;
+  // Cloth rectangle (slightly shifted by pull)
+  ctx.beginPath();
+  ctx.moveTo(x + px, y);
+  ctx.lineTo(x + cw + px, y);
+  ctx.lineTo(x + cw + px + 5, y + ch);
+  ctx.lineTo(x + px - 5, y + ch);
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+
+  // Cross-hatch pattern on cloth
+  ctx.strokeStyle = 'rgba(249,115,22,0.08)';
+  ctx.lineWidth = 0.5;
+  for (var i = 0; i < cw; i += 12) {
+    ctx.beginPath();
+    ctx.moveTo(x + px + i, y);
+    ctx.lineTo(x + px + i + 3, y + ch);
+    ctx.stroke();
+  }
+
+  ctx.restore();
+}
+
+// Draw table
+function drawTable(ctx, tx, ty, tw, th) {
+  ctx.save();
+  ctx.strokeStyle = HOLO_DIM;
+  ctx.lineWidth = 1.5;
+
+  // Tabletop
+  ctx.beginPath();
+  ctx.moveTo(tx, ty);
+  ctx.lineTo(tx + tw, ty);
+  ctx.stroke();
+
+  // Table thickness
+  ctx.fillStyle = 'rgba(249,115,22,0.03)';
+  ctx.fillRect(tx, ty, tw, 4);
+  ctx.strokeStyle = 'rgba(249,115,22,0.15)';
+  ctx.strokeRect(tx, ty, tw, 4);
+
+  // Legs
+  ctx.strokeStyle = HOLO_DIM;
+  ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(tx + 15, ty + 4); ctx.lineTo(tx + 10, ty + th); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(tx + tw - 15, ty + 4); ctx.lineTo(tx + tw - 10, ty + th); ctx.stroke();
+
+  ctx.restore();
+}
+
+// Draw stars for space scene
+function drawStars(ctx, W, H, seed) {
+  ctx.save();
+  var rng = seed || 42;
+  function rand() { rng = (rng * 1103515245 + 12345) & 0x7fffffff; return rng / 0x7fffffff; }
+
+  for (var i = 0; i < 80; i++) {
+    var sx = rand() * W;
+    var sy = rand() * H;
+    var sr = rand() * 1.2 + 0.3;
+    var sa = rand() * 0.5 + 0.1;
+    // Twinkle based on tick
+    var twinkle = 0.5 + 0.5 * Math.sin(tick * 0.05 + i * 0.7);
+    ctx.globalAlpha = sa * twinkle;
+    ctx.fillStyle = '#ffffff';
+    ctx.beginPath();
+    ctx.arc(sx, sy, sr, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.restore();
+}
+
+// ============================================================
+// getFrameElements
+// ============================================================
+
+function getFrameElements(f, W, H) {
+  var t = AnimRuntime.t;
+  var cx = W / 2, cy = H / 2;
+  var els = [];
+
+  // Frame 0: Scene setup -- tablecloth trick
+  if (f === 0) {
+    els.push(
+      { id: 'f0_title', type: 'label', text: t('f0_title'), x: cx, y: 35, color: HOLO,
+        size: 20, align: 'center', glow: HOLO },
+      { id: 'f0_status', type: 'label', text: '[ ' + t('f0_status') + ' ]', x: cx, y: 55,
+        color: HOLO_DIM, size: 9, align: 'center' },
+      { id: 'f0_q', type: 'text', text: t('f0_q'), x: cx, y: H - 35,
+        color: HOLO_DIM, size: 11, align: 'center' },
+      // Table label
+      { id: 'f0_tbl', type: 'custom', x: 0, y: 0, alpha: 1, draw: function (c) {
+        // Table
+        var tblX = cx - 160, tblY = cy + 50, tblW = 320, tblH = 70;
+        drawTable(c, tblX, tblY, tblW, tblH);
+        holoText(c, t('f0_table'), cx, tblY + 15, 7, { glow: false, alpha: 0.4 });
+
+        // Cloth on table
+        drawCloth(c, tblX + 20, tblY - 5, tblW - 40, 10, 0);
+        holoText(c, t('f0_cloth'), cx, tblY + 2, 7, { glow: false, alpha: 0.5 });
+
+        // Cup
+        drawCup(c, cx - 60, tblY - 5, 28, 35, t('f0_cup'));
+
+        // Plate
+        drawPlate(c, cx + 60, tblY - 5, 40, 10, t('f0_plate'));
+
+        // Pendulum icon (bottom-left)
+        drawIconPendulum(c, 55, H - 55, 45);
+        // Trajectory icon (bottom-right)
+        drawIconTrajectory(c, W - 55, H - 55, 45);
+      }}
+    );
+    return els;
+  }
+
+  // Frame 1: Slow pull -- friction drags objects along
+  if (f === 1) {
+    var pullSlow = 25 + 15 * Math.sin(tick * 0.04);
+    els.push(
+      { id: 'f1_title', type: 'label', text: t('f1_title'), x: cx, y: 30, color: HOLO,
+        size: 16, align: 'center', glow: HOLO },
+      { id: 'f1_result', type: 'text', text: t('f1_result'), x: cx, y: 50,
+        color: HOLO_DIM, size: 10, align: 'center' },
+      { id: 'f1_why', type: 'text', text: t('f1_why'), x: cx, y: H - 30,
+        color: HOLO_DIM, size: 10, align: 'center' },
+
+      // HUD panel
+      { id: 'f1_panel', type: 'custom', x: 0, y: 0, alpha: 1, draw: function (c) {
+        holoPanel(c, W - 170, 20, 155, 65, {
+          label: 'INERTIA TEST',
+          readout: 'v=LOW . FRICTION>INERTIA'
+        });
+        holoText(c, 'FRICTION WINS', W - 92, 55, 9, { alpha: 0.7, glow: true, glowSize: 6 });
+      }},
+
+      { id: 'f1_scene', type: 'custom', x: 0, y: 0, alpha: 1, draw: function (c) {
+        var tblX = cx - 160, tblY = cy + 50, tblW = 320, tblH = 70;
+        drawTable(c, tblX, tblY, tblW, tblH);
+
+        // Cloth being pulled slowly to the right
+        drawCloth(c, tblX + 20, tblY - 5, tblW - 40, 10, pullSlow);
+
+        // Objects sliding WITH cloth (following the pull)
+        var objShift = pullSlow * 0.8;
+        drawCup(c, cx - 60 + objShift, tblY - 5, 28, 35, null);
+        drawPlate(c, cx + 60 + objShift, tblY - 5, 40, 10, null);
+
+        // Friction force arrows (on each object, pointing right = direction of motion)
+        holoArrow(c, cx - 85 + objShift, tblY - 22, cx - 45 + objShift, tblY - 22,
+          { glowSize: 8 });
+        holoText(c, t('f1_ff'), cx - 65 + objShift, tblY - 32, 7, { alpha: 0.7, glow: false });
+
+        holoArrow(c, cx + 35 + objShift, tblY - 12, cx + 75 + objShift, tblY - 12,
+          { glowSize: 8 });
+        holoText(c, t('f1_ff'), cx + 55 + objShift, tblY - 22, 7, { alpha: 0.7, glow: false });
+
+        // Pull direction indicator
+        holoArrow(c, cx + 100, tblY + 2, cx + 150, tblY + 2,
+          { dash: [4, 3], alpha: 0.6, color: HOLO_DIM });
+        holoText(c, 'PULL', cx + 160, tblY + 2, 7, { alpha: 0.5, glow: false, align: 'left' });
+
+        // Speed bar
+        var barW = 40 + pullSlow * 0.5;
+        c.save();
+        c.fillStyle = 'rgba(249,115,22,0.15)';
+        c.fillRect(55, cy - 20, barW, 8);
+        c.strokeStyle = HOLO_DIM;
+        c.lineWidth = 0.8;
+        c.strokeRect(55, cy - 20, barW, 8);
+        c.restore();
+        holoText(c, 'v', 45, cy - 16, 8, { align: 'right', glow: false, alpha: 0.5 });
+      }}
+    );
+    return els;
+  }
+
+  // Frame 2: Fast pull -- inertia keeps objects in place
+  if (f === 2) {
+    var clothPull = 60 + 40 * Math.sin(tick * 0.08);
+    var lockPulse = 0.5 + 0.5 * Math.sin(tick * 0.1);
+
+    els.push(
+      { id: 'f2_title', type: 'label', text: t('f2_title'), x: cx, y: 30, color: HOLO,
+        size: 16, align: 'center', glow: HOLO },
+      { id: 'f2_result', type: 'label', text: t('f2_result'), x: cx, y: 50,
+        color: HOLO, size: 12, align: 'center', glow: HOLO },
+      { id: 'f2_why', type: 'text', text: t('f2_why'), x: cx, y: H - 30,
+        color: HOLO_DIM, size: 10, align: 'center' },
+
+      // HUD panel
+      { id: 'f2_panel', type: 'custom', x: 0, y: 0, alpha: 1, draw: function (c) {
+        holoPanel(c, W - 170, 20, 155, 65, {
+          label: 'INERTIA TEST',
+          readout: 'v=HIGH . INERTIA>FRICTION'
+        });
+        holoText(c, 'INERTIA WINS', W - 92, 55, 9, { alpha: 0.7, glow: true, glowSize: 6 });
+      }},
+
+      { id: 'f2_scene', type: 'custom', x: 0, y: 0, alpha: 1, draw: function (c) {
+        var tblX = cx - 160, tblY = cy + 50, tblW = 320, tblH = 70;
+        drawTable(c, tblX, tblY, tblW, tblH);
+
+        // Cloth yanked far to the right
+        drawCloth(c, tblX + 20, tblY - 5, tblW - 40, 10, clothPull);
+
+        // Objects STAY in original position (inertia!)
+        drawCup(c, cx - 60, tblY - 5, 28, 35, null);
+        drawPlate(c, cx + 60, tblY - 5, 40, 10, null);
+
+        // LOCKED glow rings around objects
+        c.save();
+        c.strokeStyle = HOLO;
+        c.lineWidth = 1.5;
+        c.globalAlpha = lockPulse * 0.6;
+        c.shadowColor = HOLO;
+        c.shadowBlur = 12;
+        // Ring around cup
+        c.beginPath(); c.arc(cx - 60, tblY - 22, 24, 0, Math.PI * 2); c.stroke();
+        // Ring around plate
+        c.beginPath(); c.ellipse(cx + 60, tblY - 6, 28, 12, 0, 0, Math.PI * 2); c.stroke();
+        c.restore();
+
+        // LOCKED labels
+        holoText(c, '[ ' + t('f2_locked') + ' ]', cx - 60, tblY - 52, 8,
+          { alpha: 0.6 + lockPulse * 0.3, glow: true, glowSize: 10 });
+        holoText(c, '[ ' + t('f2_locked') + ' ]', cx + 60, tblY - 24, 8,
+          { alpha: 0.6 + lockPulse * 0.3, glow: true, glowSize: 10 });
+
+        // Fast pull arrow
+        holoArrow(c, cx + 80, tblY + 2, cx + 170, tblY + 2,
+          { lineWidth: 2.5, headSize: 10, glowSize: 14 });
+        holoText(c, 'FAST!', cx + 180, tblY + 2, 8, { alpha: 0.8, align: 'left' });
+
+        // Lever icon (bottom-left decoration)
+        drawIconLever(c, 55, H - 55, 40);
+      }}
+    );
+    return els;
+  }
+
+  // Frame 3: Ice surface -- frictionless uniform motion
+  if (f === 3) {
+    var slidePos = (tick * 1.2) % (W - 80);
+
+    els.push(
+      { id: 'f3_title', type: 'label', text: t('f3_title'), x: cx, y: 30, color: HOLO,
+        size: 16, align: 'center', glow: HOLO },
+      { id: 'f3_desc', type: 'text', text: t('f3_desc'), x: cx, y: 50,
+        color: HOLO_DIM, size: 10, align: 'center' },
+
+      // HUD panel
+      { id: 'f3_panel', type: 'custom', x: 0, y: 0, alpha: 1, draw: function (c) {
+        holoPanel(c, W - 185, 20, 170, 65, {
+          label: 'FRICTION-FREE SIM',
+          readout: 'READOUT . \u03bc\u22480 . v=CONST'
+        });
+        holoText(c, '\u03bc \u2248 0 : UNIFORM MOTION', W - 100, 55, 8, { alpha: 0.7, glow: false });
+      }},
+
+      // Ice surface scene
+      { id: 'f3_ice', type: 'custom', x: 0, y: 0, alpha: 1, draw: function (c) {
+        var iceY = cy + 40;
+
+        // Ice surface line with glow
+        c.save();
+        c.strokeStyle = HOLO;
+        c.lineWidth = 2;
+        c.shadowColor = HOLO;
+        c.shadowBlur = 8;
+        c.beginPath(); c.moveTo(30, iceY); c.lineTo(W - 30, iceY); c.stroke();
+        c.shadowBlur = 0;
+
+        // Ice texture -- short dashes
+        c.strokeStyle = 'rgba(249,115,22,0.1)';
+        c.lineWidth = 0.5;
+        for (var ix = 40; ix < W - 40; ix += 18) {
+          var iy = iceY + 3 + Math.sin(ix * 0.2) * 2;
+          c.beginPath(); c.moveTo(ix, iy); c.lineTo(ix + 8, iy + 1); c.stroke();
+        }
+        c.restore();
+
+        // Equal-spacing markers on ice
+        var markerSpacing = 55;
+        var markerCount = Math.floor((W - 80) / markerSpacing);
+        c.strokeStyle = HOLO_DIM;
+        c.lineWidth = 0.8;
+        for (var mi = 0; mi < markerCount; mi++) {
+          var mx = 40 + mi * markerSpacing;
+          c.beginPath(); c.moveTo(mx, iceY + 5); c.lineTo(mx, iceY + 12); c.stroke();
+        }
+        holoText(c, t('f3_equal'), cx, iceY + 25, 8, { alpha: 0.5, glow: false });
+
+        // Sliding object (puck/block)
+        var puckX = 40 + slidePos;
+        var puckY = iceY - 12;
+        var puckW = 30, puckH = 10;
+
+        // Glow ring around puck
+        c.save();
+        c.strokeStyle = HOLO;
+        c.lineWidth = 1;
+        c.shadowColor = HOLO;
+        c.shadowBlur = 10;
+        c.strokeRect(puckX - puckW / 2, puckY - puckH / 2, puckW, puckH);
+        c.shadowBlur = 0;
+        c.fillStyle = 'rgba(249,115,22,0.12)';
+        c.fillRect(puckX - puckW / 2, puckY - puckH / 2, puckW, puckH);
+        c.restore();
+
+        // Velocity arrow above puck
+        holoArrow(c, puckX + 20, puckY - 4, puckX + 50, puckY - 4,
+          { lineWidth: 1.5, headSize: 6, glowSize: 8 });
+        holoText(c, 'v', puckX + 55, puckY - 4, 8, { alpha: 0.7, align: 'left', glow: false });
+
+        // Trail dots showing equal spacing (past positions)
+        c.save();
+        c.fillStyle = HOLO;
+        for (var di = 1; di <= 5; di++) {
+          var dotX = puckX - di * 30;
+          if (dotX > 30) {
+            c.globalAlpha = 0.15 + 0.05 * (5 - di);
+            c.beginPath(); c.arc(dotX, puckY, 2, 0, Math.PI * 2); c.fill();
+          }
+        }
+        c.restore();
+
+        // Gear icon (decoration, bottom-right)
+        drawIconGear(c, W - 55, H - 55, 40);
+
+        // No-friction indicator
+        c.save();
+        c.strokeStyle = 'rgba(249,115,22,0.3)';
+        c.lineWidth = 0.8;
+        c.setLineDash([2, 3]);
+        // Crossed-out friction arrow (to show friction = 0)
+        var fxA = 60, fxY = cy - 15;
+        c.beginPath(); c.moveTo(fxA, fxY); c.lineTo(fxA + 30, fxY); c.stroke();
+        // X mark
+        c.strokeStyle = 'rgba(249,115,22,0.5)';
+        c.setLineDash([]);
+        c.lineWidth = 1.2;
+        c.beginPath(); c.moveTo(fxA + 8, fxY - 6); c.lineTo(fxA + 22, fxY + 6); c.stroke();
+        c.beginPath(); c.moveTo(fxA + 22, fxY - 6); c.lineTo(fxA + 8, fxY + 6); c.stroke();
+        c.restore();
+        holoText(c, '\u03bc\u22480', 60 + 15, cy - 28, 7, { alpha: 0.5, glow: false });
+      }}
+    );
+    return els;
+  }
+
+  // Frame 4: Deep space -- zero net force, constant velocity
+  if (f === 4) {
+    var driftX = (tick * 0.8) % (W - 60);
+    var formulaPulse = 0.6 + 0.4 * Math.sin(tick * 0.06);
+
+    els.push(
+      { id: 'f4_title', type: 'label', text: t('f4_title'), x: cx, y: 30, color: HOLO,
+        size: 16, align: 'center', glow: HOLO },
+      { id: 'f4_desc', type: 'text', text: t('f4_desc'), x: cx, y: 50,
+        color: HOLO_DIM, size: 10, align: 'center' },
+
+      // Space scene
+      { id: 'f4_space', type: 'custom', x: 0, y: 0, alpha: 1, draw: function (c) {
+        // Stars
+        drawStars(c, W, H, 137);
+
+        // Drifting object (small satellite/probe)
+        var objX = 30 + driftX;
+        var objY = cy - 10;
+
+        // Probe body (hexagon-ish shape)
+        c.save();
+        c.strokeStyle = HOLO;
+        c.lineWidth = 1.5;
+        c.shadowColor = HOLO;
+        c.shadowBlur = 10;
+        c.beginPath();
+        c.moveTo(objX + 12, objY);
+        c.lineTo(objX + 6, objY - 10);
+        c.lineTo(objX - 6, objY - 10);
+        c.lineTo(objX - 12, objY);
+        c.lineTo(objX - 6, objY + 10);
+        c.lineTo(objX + 6, objY + 10);
+        c.closePath();
+        c.stroke();
+        c.shadowBlur = 0;
+
+        // Solar panels
+        c.lineWidth = 1;
+        c.strokeRect(objX - 28, objY - 4, 14, 8);
+        c.strokeRect(objX + 14, objY - 4, 14, 8);
+        // Panel lines
+        c.strokeStyle = HOLO_DIM;
+        c.lineWidth = 0.5;
+        for (var pi = 1; pi < 4; pi++) {
+          c.beginPath(); c.moveTo(objX - 28 + pi * 3.5, objY - 4);
+          c.lineTo(objX - 28 + pi * 3.5, objY + 4); c.stroke();
+          c.beginPath(); c.moveTo(objX + 14 + pi * 3.5, objY - 4);
+          c.lineTo(objX + 14 + pi * 3.5, objY + 4); c.stroke();
+        }
+
+        // Core glow dot
+        c.fillStyle = HOLO;
+        c.globalAlpha = formulaPulse;
+        c.beginPath(); c.arc(objX, objY, 2.5, 0, Math.PI * 2); c.fill();
+        c.globalAlpha = 1;
+        c.restore();
+
+        // Velocity vector
+        holoArrow(c, objX + 15, objY - 16, objX + 50, objY - 16,
+          { lineWidth: 1.5, headSize: 6, glowSize: 8 });
+        holoText(c, 'v = const', objX + 55, objY - 16, 7,
+          { alpha: 0.7, align: 'left', glow: false });
+
+        // Trail dots
+        c.save();
+        c.fillStyle = HOLO;
+        for (var ti = 1; ti <= 8; ti++) {
+          var tdx = objX - ti * 25;
+          if (tdx > 20) {
+            c.globalAlpha = 0.08 + 0.03 * (8 - ti);
+            c.beginPath(); c.arc(tdx, objY, 1.5, 0, Math.PI * 2); c.fill();
+          }
+        }
+        c.restore();
+
+        // No force indicators (crossed arrows in 4 directions)
+        c.save();
+        c.strokeStyle = 'rgba(249,115,22,0.2)';
+        c.lineWidth = 0.8;
+        var dirs = [
+          [objX, objY - 25, objX, objY - 40],
+          [objX, objY + 25, objX, objY + 40],
+          [objX - 35, objY, objX - 50, objY],
+          [objX + 35, objY, objX + 50, objY],
+        ];
+        for (var di = 0; di < dirs.length; di++) {
+          var d = dirs[di];
+          c.setLineDash([2, 3]);
+          c.beginPath(); c.moveTo(d[0], d[1]); c.lineTo(d[2], d[3]); c.stroke();
+          // X mark at end
+          c.setLineDash([]);
+          var xm = d[2], ym = d[3];
+          c.beginPath(); c.moveTo(xm - 3, ym - 3); c.lineTo(xm + 3, ym + 3); c.stroke();
+          c.beginPath(); c.moveTo(xm + 3, ym - 3); c.lineTo(xm - 3, ym + 3); c.stroke();
+        }
+        c.restore();
+      }},
+
+      // Newton's First Law formula panel
+      { id: 'f4_formula', type: 'custom', x: 0, y: 0, alpha: 1, draw: function (c) {
+        // Large formula with glow
+        var fmY = cy + 60;
+        c.save();
+        c.shadowColor = HOLO;
+        c.shadowBlur = 18 * formulaPulse;
+        c.font = "bold 22px 'JetBrains Mono',monospace";
+        c.textAlign = 'center';
+        c.textBaseline = 'middle';
+        c.fillStyle = HOLO;
+        c.globalAlpha = 0.8 + 0.2 * formulaPulse;
+        c.fillText('\u03a3F = 0  \u2192  v = const', cx, fmY);
+        c.shadowBlur = 0;
+        c.restore();
+
+        // Law name
+        holoText(c, t('f4_law'), cx, fmY + 25, 10, { alpha: 0.6, glow: true, glowSize: 8 });
+
+        // F_net = 0 and delta-v = 0 readouts
+        holoText(c, 'F_net = 0', cx - 80, fmY + 45, 8, { alpha: 0.5, glow: false });
+        holoText(c, '\u0394v = 0', cx + 80, fmY + 45, 8, { alpha: 0.5, glow: false });
+      }},
+
+      // HUD panel (top-right)
+      { id: 'f4_panel', type: 'custom', x: 0, y: 0, alpha: 1, draw: function (c) {
+        holoPanel(c, W - 185, 20, 170, 65, {
+          label: 'DEEP SPACE SIM',
+          readout: 'READOUT . F_net=0 . \u0394v=0'
+        });
+        holoText(c, 'NO EXTERNAL FORCE', W - 100, 55, 8, { alpha: 0.7, glow: false });
+
+        // Pendulum + trajectory icons as decoration
+        drawIconPendulum(c, 55, 50, 35);
+        drawIconGear(c, 55, H - 50, 35);
+      }}
+    );
+    return els;
+  }
+
+  return els;
+}
+
+// ============================================================
+// customDrawElement -- handle 'custom' type elements
+// ============================================================
+
+function customDrawElement(ctx, el, W, H) {
+  if (el.type === 'custom' && typeof el.draw === 'function') {
+    el.draw(ctx, el);
+    return true;
+  }
+  return false;
+}
+
+// ============================================================
+// onReady -- start continuous animation tick
+// ============================================================
+
+function onReady() {
+  startTick();
+}
+
+// ============================================================
+// BOOT
+// ============================================================
+
+AnimRuntime.boot();
+</script>
+</body>
+</html>
