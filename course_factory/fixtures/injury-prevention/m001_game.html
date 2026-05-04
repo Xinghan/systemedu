@@ -1,0 +1,872 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Space+Grotesk:wght@400;500;700&family=Inter:wght@400;500&family=Noto+Sans+SC:wght@400;700&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box;}
+:root{
+  --primary:oklch(0.75 0.16 15);
+  --primary-dim:oklch(0.60 0.18 15);
+  --bg:oklch(0.14 0.035 265);
+  --bg-2:oklch(0.20 0.04 265);
+  --fg:oklch(0.96 0.01 265);
+  --fg-dim:oklch(0.75 0.02 265);
+  --fg-mute:oklch(0.55 0.03 265);
+  --line:oklch(0.35 0.05 265 / 0.35);
+  --gold:oklch(0.85 0.14 85);
+  --error:oklch(0.68 0.20 25);
+  --glow-strong:oklch(0.75 0.16 15 / 0.5);
+}
+html,body{width:100%;height:100vh;overflow:hidden;background:var(--bg);color:var(--fg);font-family:'Inter','Noto Sans SC',sans-serif;}
+.game-wrap{display:flex;flex-direction:row;height:100vh;overflow:hidden;}
+.game-sidebar{width:200px;min-width:200px;max-width:200px;display:flex;flex-direction:column;gap:6px;padding:10px;background:var(--sb-bg,rgba(5,6,15,0.95));border-right:1px solid var(--sb-border,var(--line));overflow-y:auto;transition:background 0.3s,border-color 0.3s;}
+.sidebar-lang{align-self:flex-start;flex-shrink:0;font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:700;padding:3px 8px;cursor:pointer;border:1px solid var(--sb-btn-bd,transparent);background:var(--sb-btn-bg,transparent);color:var(--sb-accent,var(--primary));letter-spacing:0.15em;text-transform:uppercase;}
+.sidebar-lang:hover{border-color:var(--sb-accent,var(--primary));background:rgba(128,128,128,0.1);}
+.style-switcher{display:flex;gap:4px;margin:2px 0;}
+.vm-btn{font-family:'JetBrains Mono',monospace;font-size:8px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;padding:3px 6px;cursor:pointer;border:1px solid var(--sb-btn-bd,rgba(128,128,128,0.2));background:var(--sb-btn-bg,transparent);color:var(--sb-dim,rgba(128,128,128,0.5));transition:all 0.2s;}
+.vm-btn:hover{color:var(--sb-accent,var(--primary));border-color:var(--sb-accent,var(--primary));}
+.vm-btn.vm-active{color:var(--sb-accent,var(--primary));border-color:var(--sb-accent,var(--primary));background:rgba(128,128,128,0.12);}
+.sidebar-title{font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:700;color:var(--sb-accent,var(--primary));letter-spacing:0.08em;text-transform:uppercase;margin-top:4px;line-height:1.3;}
+.sidebar-divider{height:1px;background:var(--sb-btn-bd,rgba(128,128,128,0.15));margin:4px 0;}
+.sidebar-section{font-family:'JetBrains Mono',monospace;font-size:9px;font-weight:700;color:var(--sb-mute,var(--fg-mute));letter-spacing:0.15em;text-transform:uppercase;margin-top:4px;}
+.sidebar-guide{font-family:'Noto Sans SC',sans-serif;font-size:11px;color:var(--sb-dim,var(--fg-dim));line-height:1.55;}
+.game-main{flex:1;display:flex;flex-direction:column;min-width:0;}
+.game-hud{display:flex;align-items:center;justify-content:flex-start;gap:18px;padding:8px 16px;background:var(--hud-bg,rgba(5,6,15,0.9));border-bottom:1px solid var(--hud-border,var(--line));flex-shrink:0;flex-wrap:wrap;transition:background 0.3s;}
+.hud-tag{font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:700;color:var(--sb-accent,var(--primary));letter-spacing:0.15em;text-transform:uppercase;}
+.hud-item{display:flex;flex-direction:column;align-items:center;gap:1px;}
+.hud-label{font-family:'JetBrains Mono',monospace;font-size:8px;letter-spacing:0.15em;text-transform:uppercase;color:var(--hud-label,var(--fg-mute));}
+.hud-val{font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:700;color:var(--hud-value,var(--sb-accent,var(--primary)));letter-spacing:0.12em;}
+.game-body{flex:1;display:flex;flex-direction:column;min-height:0;position:relative;}
+#c{width:100%;height:100%;display:block;cursor:crosshair;}
+.controls{display:flex;justify-content:center;align-items:center;gap:12px;padding:6px 16px;background:var(--hud-bg,rgba(5,6,15,0.9));border-top:1px solid var(--hud-border,var(--line));}
+.ctrl-btn{font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:700;padding:6px 14px;border:none;cursor:pointer;background:linear-gradient(135deg,var(--ctrl-bg,var(--primary)),var(--primary-dim));color:var(--ctrl-color,var(--bg));letter-spacing:0.15em;text-transform:uppercase;border-radius:999px;box-shadow:0 0 12px var(--glow-strong);}
+.ctrl-btn:hover{transform:scale(1.03);}
+.ctrl-btn.secondary{background:transparent;border:1px solid var(--primary);color:var(--fg);box-shadow:none;}
+.ctrl-btn:disabled{opacity:0.4;cursor:not-allowed;box-shadow:none;}
+.overlay{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(5,6,15,0.82);backdrop-filter:blur(6px);z-index:10;}
+.overlay.hidden{display:none;}
+.panel{background:linear-gradient(180deg,oklch(0.19 0.04 265 / 0.92),oklch(0.15 0.035 265 / 0.92));border:1px solid var(--line);border-radius:14px;padding:24px 28px;max-width:640px;width:92%;position:relative;}
+.panel::before,.panel::after{content:"";position:absolute;width:14px;height:14px;border:1px solid var(--primary);opacity:0.6;}
+.panel::before{top:10px;left:10px;border-right:none;border-bottom:none;}
+.panel::after{bottom:10px;right:10px;border-left:none;border-top:none;}
+.panel h2{font-family:'Space Grotesk',sans-serif;font-size:20px;color:var(--primary);margin-bottom:10px;letter-spacing:0.02em;}
+.panel p{font-family:'Noto Sans SC',sans-serif;font-size:13px;color:var(--fg-dim);line-height:1.7;margin-bottom:12px;}
+.panel .summary-list{font-family:'Noto Sans SC',sans-serif;font-size:12px;color:var(--fg-dim);line-height:1.8;margin-bottom:16px;padding-left:18px;}
+.panel .summary-list li{margin-bottom:4px;}
+.panel .actions{display:flex;gap:12px;justify-content:center;margin-top:8px;}
+</style>
+</head>
+<body>
+<div class="game-wrap">
+  <div class="game-sidebar">
+    <button class="sidebar-lang" id="langBtn">CN</button>
+    <div class="style-switcher" id="styleSwitcher"></div>
+    <div class="sidebar-title" id="sidebarTitle"></div>
+    <div class="sidebar-divider"></div>
+    <div class="sidebar-section" id="opsLabel"></div>
+    <div class="sidebar-guide" id="guideContent"></div>
+    <div class="sidebar-divider"></div>
+    <div class="sidebar-section" id="legendLabel"></div>
+    <div class="sidebar-guide" id="legendContent"></div>
+  </div>
+  <div class="game-main">
+    <div class="game-hud">
+      <div class="hud-tag" id="sceneTag"></div>
+      <div class="hud-item"><div class="hud-label" id="hudL1"></div><div class="hud-val" id="hudV1"></div></div>
+      <div class="hud-item"><div class="hud-label" id="hudL2"></div><div class="hud-val" id="hudV2"></div></div>
+      <div class="hud-item"><div class="hud-label" id="hudL3"></div><div class="hud-val" id="hudV3"></div></div>
+      <div class="hud-item"><div class="hud-label" id="hudL4"></div><div class="hud-val" id="hudV4"></div></div>
+    </div>
+    <div class="game-body">
+      <canvas id="c"></canvas>
+      <div class="overlay hidden" id="overlay">
+        <div class="panel">
+          <h2 id="ovTitle"></h2>
+          <p id="ovBody"></p>
+          <ul class="summary-list" id="ovList"></ul>
+          <div class="actions">
+            <button class="ctrl-btn" id="ovPrimary"></button>
+            <button class="ctrl-btn secondary" id="ovSecondary"></button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="controls">
+      <button class="ctrl-btn secondary" id="btnHint"></button>
+      <button class="ctrl-btn" id="btnSubmit"></button>
+      <button class="ctrl-btn secondary" id="btnReset"></button>
+    </div>
+  </div>
+</div>
+
+<script>
+"use strict";
+// ============================================================
+// i18n
+// ============================================================
+var LANG = 'cn';
+var I18N = {
+  title:   {en:'HAZARD HUNT: 3 REAL SCENES', cn:'隐患侦查：3个真实场景'},
+  guide:   {en:'You are a safety inspector. Click red-zone hazards on each scene. Every hit is classified into man/machine/env/management. Find all to unlock the next scene. Miss one and an incident triggers.',
+            cn:'你是安全员。在每个场景里点击红色隐患点。每击中一个系统会按"人/物/环境/管理"分类。全部找到解锁下一关。漏掉一个就会触发事故。'},
+  legend:  {en:'MAN · unsafe behavior\nMACHINE · unsafe state\nENV · hazardous environment\nMGMT · management gap',
+            cn:'人 · 不安全行为\n物 · 不安全状态\n环境 · 有害环境\n管理 · 管理缺陷'},
+  opsLabel:{en:'HOW TO PLAY',   cn:'操作说明'},
+  legendLabel:{en:'FOUR FACTORS', cn:'四要素图例'},
+
+  scene1:  {en:'SCENE 1 · CNC MACHINING',  cn:'场景 1 · 数控加工车间'},
+  scene2:  {en:'SCENE 2 · HIGH WORK',      cn:'场景 2 · 高处作业'},
+  scene3:  {en:'SCENE 3 · CHEM STORAGE',   cn:'场景 3 · 化学品仓库'},
+  done:    {en:'INCIDENT REVIEW',          cn:'事故复盘'},
+
+  hudL1:   {en:'SCENE', cn:'场景'},
+  hudL2:   {en:'FOUND', cn:'已找到'},
+  hudL3:   {en:'MISSED',cn:'漏报'},
+  hudL4:   {en:'SCORE', cn:'得分'},
+
+  btnSubmit: {en:'END SCENE', cn:'结束本关'},
+  btnSubmitNext: {en:'NEXT SCENE', cn:'下一关'},
+  btnSubmitFinal: {en:'SEE REVIEW', cn:'查看复盘'},
+  btnHint:  {en:'HINT (-1)',  cn:'提示 (-1)'},
+  btnReset: {en:'RESET',      cn:'重来'},
+
+  // hazard names
+  hz1_1: {en:'Guard removed',      cn:'防护罩被取下'},
+  hz1_2: {en:'No goggles',         cn:'未戴护目镜'},
+  hz1_3: {en:'Oil spill on floor', cn:'地面油污未清'},
+  hz1_4: {en:'No safety sign',     cn:'缺少警示标识'},
+  hz2_1: {en:'Harness unhooked',   cn:'安全带未挂钩'},
+  hz2_2: {en:'Broken scaffold board', cn:'脚手架板开裂'},
+  hz2_3: {en:'No helmet',          cn:'未戴安全帽'},
+  hz2_4: {en:'No toe board',       cn:'无挡脚板'},
+  hz3_1: {en:'Leaking drum',       cn:'化学品桶泄漏'},
+  hz3_2: {en:'Cigarette nearby',   cn:'附近有烟头'},
+  hz3_3: {en:'No ventilation',     cn:'通风关闭'},
+  hz3_4: {en:'No MSDS posted',     cn:'未张贴安全说明'},
+
+  // factor labels
+  fMan: {en:'MAN',    cn:'人'},
+  fMach:{en:'MACHINE',cn:'物'},
+  fEnv: {en:'ENV',    cn:'环境'},
+  fMgmt:{en:'MGMT',   cn:'管理'},
+
+  clickHint: {en:'Click on suspicious red hot spots', cn:'点击可疑的红色热点'},
+  missedWarn: {en:'Missed hazards trigger the incident chain', cn:'漏报的隐患会触发事故链'},
+
+  // overlays
+  sceneDone:{en:'Scene complete', cn:'本关完成'},
+  scoreMsg: {en:'Score', cn:'得分'},
+  allFound: {en:'All hazards found!', cn:'全部找到！'},
+  someMissed: {en:'Some hazards missed.', cn:'还有隐患未发现。'},
+  missedThem: {en:'Missed:', cn:'漏报：'},
+  continueMsg:{en:'Continue to next scene', cn:'进入下一关'},
+  reviewTitle:{en:'INCIDENT REVIEW', cn:'三场景事故复盘'},
+  reviewBody:{en:'You inspected 3 real-world scenarios. Each missed hazard would have caused a real injury. Now write a promise sentence to yourself for your own post.',
+              cn:'你检查了3个真实场景。每一处漏报都对应一次真实工伤的起点。现在为你自己的岗位写下一句承诺。'},
+  reviewPrompt:{en:'Open the "Pledge" card to draft your promise.',
+                cn:'打开右侧的"承诺卡"模块撰写你的承诺书。'},
+
+  // incident chain labels
+  chainMan:{en:'Man: risky behavior',       cn:'人: 违章行为'},
+  chainMachine:{en:'Machine: unsafe state', cn:'物: 不安全状态'},
+  chainEnv:{en:'Environment: hazard',       cn:'环境: 有害因素'},
+  chainMgmt:{en:'Mgmt: management gap',     cn:'管理: 管理缺陷'},
+};
+function t(k){return (I18N[k]&&I18N[k][LANG])||(I18N[k]&&I18N[k]['en'])||k;}
+
+// ============================================================
+// Visual modes
+// ============================================================
+var GAME_VISUAL_MODES = {
+  cyberpunk: {
+    label:'CYBER',
+    vars:{
+      '--sb-bg':'rgba(5,6,15,0.95)','--sb-border':'var(--line)',
+      '--sb-accent':'var(--primary)','--sb-dim':'var(--fg-dim)','--sb-mute':'var(--fg-mute)',
+      '--sb-btn-bg':'transparent','--sb-btn-bd':'rgba(128,128,128,0.2)',
+      '--hud-bg':'rgba(5,6,15,0.9)','--hud-border':'var(--line)',
+      '--hud-label':'var(--fg-mute)','--hud-value':'var(--primary)',
+      '--ctrl-bg':'var(--primary)','--ctrl-color':'var(--bg)',
+    },
+    bg1:'#05060f', bg2:'#0d0e1a',
+    text:'#e2e8f0', dim:'oklch(0.75 0.02 265)', mute:'oklch(0.55 0.03 265)',
+    accent:'oklch(0.75 0.16 15)', accentDim:'oklch(0.60 0.18 15)', error:'oklch(0.68 0.20 25)', gold:'oklch(0.85 0.14 85)',
+    gridColor:'oklch(0.35 0.05 265 / 0.08)', gridStep:64,
+  },
+  dark:{
+    label:'DARK',
+    vars:{
+      '--sb-bg':'rgba(10,10,10,0.95)','--sb-border':'rgba(255,255,255,0.06)',
+      '--sb-accent':'var(--primary)','--sb-dim':'rgba(229,229,229,0.75)','--sb-mute':'rgba(229,229,229,0.45)',
+      '--sb-btn-bg':'transparent','--sb-btn-bd':'rgba(255,255,255,0.1)',
+      '--hud-bg':'rgba(10,10,10,0.9)','--hud-border':'rgba(255,255,255,0.06)',
+      '--hud-label':'rgba(229,229,229,0.55)','--hud-value':'var(--primary)',
+      '--ctrl-bg':'var(--primary)','--ctrl-color':'#0a0a0a',
+    },
+    bg1:'#0a0a0a', bg2:'#111111',
+    text:'#e5e5e5', dim:'rgba(229,229,229,0.75)', mute:'rgba(229,229,229,0.45)',
+    accent:'oklch(0.75 0.16 15)', accentDim:'oklch(0.60 0.18 15)', error:'oklch(0.68 0.20 25)', gold:'oklch(0.85 0.14 85)',
+    gridColor:'rgba(255,255,255,0.03)', gridStep:64,
+  },
+  light:{
+    label:'LIGHT',
+    vars:{
+      '--sb-bg':'rgba(248,245,255,0.98)','--sb-border':'rgba(15,23,42,0.08)',
+      '--sb-accent':'var(--primary-dim)','--sb-dim':'rgba(15,23,42,0.72)','--sb-mute':'rgba(15,23,42,0.5)',
+      '--sb-btn-bg':'transparent','--sb-btn-bd':'rgba(15,23,42,0.12)',
+      '--hud-bg':'rgba(248,245,255,0.95)','--hud-border':'rgba(15,23,42,0.08)',
+      '--hud-label':'rgba(15,23,42,0.5)','--hud-value':'var(--primary-dim)',
+      '--ctrl-bg':'var(--primary-dim)','--ctrl-color':'#ffffff',
+    },
+    bg1:'#fafaf5', bg2:'#f0f0ea',
+    text:'#0f172a', dim:'rgba(15,23,42,0.72)', mute:'rgba(15,23,42,0.5)',
+    accent:'oklch(0.60 0.18 15)', accentDim:'oklch(0.50 0.17 15)', error:'oklch(0.55 0.22 25)', gold:'oklch(0.70 0.15 80)',
+    gridColor:'rgba(15,23,42,0.04)', gridStep:24,
+  }
+};
+var currentMode = 'cyberpunk';
+function gameModeColors(){return GAME_VISUAL_MODES[currentMode];}
+function applyGameMode(mode){
+  currentMode = mode;
+  var m = GAME_VISUAL_MODES[mode];
+  var root = document.documentElement;
+  Object.keys(m.vars).forEach(function(k){root.style.setProperty(k, m.vars[k]);});
+  var btns = document.querySelectorAll('.vm-btn');
+  btns.forEach(function(b){b.classList.toggle('vm-active', b.dataset.mode===mode);});
+  draw();
+}
+function buildGameStyleSwitcher(){
+  var el = document.getElementById('styleSwitcher');
+  el.innerHTML = '';
+  Object.keys(GAME_VISUAL_MODES).forEach(function(mode){
+    var btn = document.createElement('button');
+    btn.className = 'vm-btn'+(mode===currentMode?' vm-active':'');
+    btn.dataset.mode = mode;
+    btn.textContent = GAME_VISUAL_MODES[mode].label;
+    btn.addEventListener('click', function(){applyGameMode(mode);});
+    el.appendChild(btn);
+  });
+}
+
+// ============================================================
+// Scene data (logical 1000x600 world coords -> scaled to canvas)
+// ============================================================
+var SCENES = [
+  {
+    id:1,
+    titleKey:'scene1',
+    // background: CNC workshop silhouette
+    bg: function(ctx, W, H){
+      drawWorkshopBg(ctx, W, H);
+    },
+    hazards:[
+      {nameKey:'hz1_1', factor:'fMach', x:430, y:290, r:38, rule:'人+物', desc:{en:'Guard removed means blade exposed — caught hand.', cn:'防护罩被取下后刀具裸露，手会被卷入。'}},
+      {nameKey:'hz1_2', factor:'fMan',  x:300, y:220, r:34, rule:'人', desc:{en:'Without goggles, flying chips hit eyes.', cn:'不戴护目镜，飞屑会击伤眼睛。'}},
+      {nameKey:'hz1_3', factor:'fEnv',  x:520, y:440, r:38, rule:'环境', desc:{en:'Oil spill makes operator slip into the machine.', cn:'地面油污使操作工滑倒扑向机器。'}},
+      {nameKey:'hz1_4', factor:'fMgmt', x:780, y:150, r:34, rule:'管理', desc:{en:'No safety sign means no warning enforcement.', cn:'缺少警示标识，等于没有现场约束。'}},
+    ],
+  },
+  {
+    id:2,
+    titleKey:'scene2',
+    bg: function(ctx, W, H){
+      drawHighWorkBg(ctx, W, H);
+    },
+    hazards:[
+      {nameKey:'hz2_1', factor:'fMan',  x:420, y:270, r:36, rule:'人', desc:{en:'Harness unhooked -> direct fall at first slip.', cn:'安全带未挂钩，脚一滑就直坠落。'}},
+      {nameKey:'hz2_2', factor:'fMach', x:540, y:420, r:38, rule:'物', desc:{en:'Cracked scaffold board snaps under load.', cn:'脚手架板开裂，受力瞬间断裂。'}},
+      {nameKey:'hz2_3', factor:'fMan',  x:300, y:180, r:34, rule:'人', desc:{en:'No helmet -> falling tool -> skull injury.', cn:'不戴安全帽，掉落工具直击头部。'}},
+      {nameKey:'hz2_4', factor:'fMgmt', x:760, y:430, r:36, rule:'管理', desc:{en:'No toe board -> tools fall on people below.', cn:'缺挡脚板，工具掉下砸伤下方人员。'}},
+    ],
+  },
+  {
+    id:3,
+    titleKey:'scene3',
+    bg: function(ctx, W, H){
+      drawChemStoreBg(ctx, W, H);
+    },
+    hazards:[
+      {nameKey:'hz3_1', factor:'fMach', x:430, y:360, r:38, rule:'物', desc:{en:'Leaking drum -> vapor pool on the floor.', cn:'化学品桶泄漏，蒸气在地面积聚。'}},
+      {nameKey:'hz3_2', factor:'fMan',  x:260, y:420, r:30, rule:'人', desc:{en:'Cigarette + flammable vapor = fire.', cn:'烟头 + 可燃蒸气 = 起火。'}},
+      {nameKey:'hz3_3', factor:'fEnv',  x:780, y:170, r:34, rule:'环境', desc:{en:'No ventilation -> vapor concentration above LEL.', cn:'通风关闭 → 蒸气超过爆炸下限。'}},
+      {nameKey:'hz3_4', factor:'fMgmt', x:620, y:150, r:32, rule:'管理', desc:{en:'No MSDS posted -> no safe handling knowledge.', cn:'未张贴安全说明，操作工不知如何处置。'}},
+    ],
+  },
+];
+
+// ============================================================
+// Canvas & game state
+// ============================================================
+var canvas = document.getElementById('c');
+var ctx = canvas.getContext('2d');
+var DPR = 1;
+var sceneIdx = 0;
+var found = []; // indices of found hazards in current scene
+var hinted = false;
+var scoreTotal = 0;
+var scenesDone = []; // per-scene result {found:n, total:n, missed:[names]}
+var hoverIdx = -1;
+var flashAlpha = 0;
+var flashColor = null;
+var particles = [];
+
+// particle helper
+function spawnParticles(wx, wy, color){
+  for (var i=0;i<10;i++){
+    var ang = Math.random()*Math.PI*2;
+    var sp = 1 + Math.random()*2;
+    particles.push({
+      x:wx, y:wy, vx:Math.cos(ang)*sp, vy:Math.sin(ang)*sp,
+      life:1, color: (i%4===0?'oklch(0.85 0.14 85)':color),
+    });
+  }
+}
+
+function resizeCanvas(){
+  var body = document.querySelector('.game-body');
+  if(!body) return;
+  var rect = body.getBoundingClientRect();
+  if(rect.width<1||rect.height<1){setTimeout(resizeCanvas,80);return;}
+  DPR = Math.max(1, window.devicePixelRatio||1);
+  canvas.width  = Math.round(rect.width * DPR);
+  canvas.height = Math.round(rect.height * DPR);
+  canvas.style.width = rect.width+'px';
+  canvas.style.height = rect.height+'px';
+  draw();
+}
+window.addEventListener('resize', resizeCanvas);
+
+// world -> screen helpers (world = 1000x600, preserve aspect via uniform scale)
+function worldTransform(){
+  var W = canvas.width, H = canvas.height;
+  var targetW = 1000, targetH = 600;
+  var s = Math.min(W/targetW, H/targetH);
+  var ox = (W - targetW*s)/2;
+  var oy = (H - targetH*s)/2;
+  return {s:s, ox:ox, oy:oy, W:W, H:H};
+}
+
+function clientToWorld(cx, cy){
+  var rect = canvas.getBoundingClientRect();
+  var x = (cx - rect.left) * DPR;
+  var y = (cy - rect.top)  * DPR;
+  var tf = worldTransform();
+  return {x: (x - tf.ox)/tf.s, y: (y - tf.oy)/tf.s};
+}
+
+// ============================================================
+// Background scenes (drawn in world coords 0..1000 x 0..600)
+// ============================================================
+function drawGrid(ctx, W, H, tf){
+  var cm = gameModeColors();
+  ctx.save();
+  ctx.strokeStyle = cm.gridColor;
+  ctx.lineWidth = 0.5;
+  var step = cm.gridStep;
+  for(var x=0;x<=1000;x+=step){
+    var p = toScr(tf, x, 0), q = toScr(tf, x, 600);
+    ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.lineTo(q.x, q.y); ctx.stroke();
+  }
+  for(var y=0;y<=600;y+=step){
+    var p = toScr(tf, 0, y), q = toScr(tf, 1000, y);
+    ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.lineTo(q.x, q.y); ctx.stroke();
+  }
+  ctx.restore();
+}
+
+function toScr(tf, wx, wy){ return {x: tf.ox + wx*tf.s, y: tf.oy + wy*tf.s}; }
+
+function drawRect(ctx, tf, x, y, w, h, fill, stroke, lw){
+  var p = toScr(tf, x, y);
+  ctx.fillStyle = fill || 'transparent';
+  if (fill) ctx.fillRect(p.x, p.y, w*tf.s, h*tf.s);
+  if (stroke){
+    ctx.strokeStyle = stroke;
+    ctx.lineWidth = (lw||1);
+    ctx.strokeRect(p.x, p.y, w*tf.s, h*tf.s);
+  }
+}
+function drawLine(ctx, tf, x1,y1,x2,y2, stroke, lw){
+  var a=toScr(tf,x1,y1), b=toScr(tf,x2,y2);
+  ctx.strokeStyle = stroke; ctx.lineWidth = lw||1;
+  ctx.beginPath(); ctx.moveTo(a.x,a.y); ctx.lineTo(b.x,b.y); ctx.stroke();
+}
+function drawText(ctx, tf, wx, wy, txt, color, size, align, font){
+  var p = toScr(tf, wx, wy);
+  ctx.fillStyle = color;
+  ctx.font = (font||('600 '+(size||11)+'px "JetBrains Mono", monospace'));
+  ctx.textAlign = align||'left';
+  ctx.textBaseline = 'alphabetic';
+  ctx.fillText(txt, p.x, p.y);
+}
+
+function drawWorkshopBg(ctx, W, H){
+  var tf = worldTransform();
+  var cm = gameModeColors();
+
+  // floor gradient
+  var p0 = toScr(tf, 0, 0), p1 = toScr(tf, 1000, 600);
+  var g = ctx.createLinearGradient(p0.x, p0.y, p0.x, p1.y);
+  g.addColorStop(0, cm.bg1); g.addColorStop(1, cm.bg2);
+  ctx.fillStyle = g;
+  ctx.fillRect(p0.x, p0.y, 1000*tf.s, 600*tf.s);
+
+  drawGrid(ctx, W, H, tf);
+
+  // CNC machine body (right)
+  drawRect(ctx, tf, 370, 250, 260, 200, 'oklch(0.28 0.04 265 / 0.6)', cm.dim, 1);
+  drawRect(ctx, tf, 390, 270, 220, 140, 'oklch(0.20 0.035 265)', cm.mute, 0.8);
+  // spinning blade indicator
+  var blade = toScr(tf, 500, 340);
+  ctx.save(); ctx.translate(blade.x, blade.y);
+  ctx.strokeStyle = cm.accent; ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  for(var i=0;i<6;i++){ ctx.moveTo(0,0); var a=i*Math.PI/3; ctx.lineTo(Math.cos(a)*18*tf.s, Math.sin(a)*18*tf.s); }
+  ctx.stroke();
+  ctx.restore();
+  drawText(ctx, tf, 500, 240, 'CNC-03', cm.accent, 10, 'center', '700 10px "JetBrains Mono",monospace');
+
+  // worker silhouette (left)
+  var head = toScr(tf, 200, 260);
+  ctx.fillStyle = cm.gold; ctx.globalAlpha = 0.85;
+  ctx.beginPath(); ctx.arc(head.x, head.y, 18*tf.s, 0, Math.PI*2); ctx.fill();
+  ctx.globalAlpha = 1;
+  drawRect(ctx, tf, 180, 285, 40, 80, cm.gold+' / 0.7', cm.gold, 0);
+  // arms to machine
+  drawLine(ctx, tf, 220, 310, 380, 320, cm.gold, 2);
+  drawText(ctx, tf, 200, 400, 'OPERATOR', cm.dim, 10, 'center', '700 10px "JetBrains Mono",monospace');
+
+  // floor line
+  drawLine(ctx, tf, 0, 500, 1000, 500, cm.mute, 1);
+
+  // exit sign
+  drawRect(ctx, tf, 860, 60, 100, 40, 'oklch(0.28 0.04 265 / 0.4)', cm.dim, 1);
+  drawText(ctx, tf, 910, 85, 'EXIT', cm.dim, 11, 'center', '700 11px "JetBrains Mono",monospace');
+}
+
+function drawHighWorkBg(ctx, W, H){
+  var tf = worldTransform();
+  var cm = gameModeColors();
+  var p0 = toScr(tf, 0, 0);
+  var g = ctx.createLinearGradient(p0.x, p0.y, p0.x, p0.y + 600*tf.s);
+  g.addColorStop(0, cm.bg1); g.addColorStop(1, cm.bg2);
+  ctx.fillStyle = g; ctx.fillRect(p0.x, p0.y, 1000*tf.s, 600*tf.s);
+  drawGrid(ctx, W, H, tf);
+
+  // scaffold frame (center)
+  drawRect(ctx, tf, 340, 130, 360, 340, 'transparent', cm.dim, 1);
+  // horizontal boards
+  drawRect(ctx, tf, 340, 200, 360, 10, cm.mute, null, 0);
+  drawRect(ctx, tf, 340, 300, 360, 10, cm.mute, null, 0);
+  drawRect(ctx, tf, 340, 400, 360, 10, cm.mute, null, 0);
+  // vertical poles
+  drawRect(ctx, tf, 340, 130, 6, 340, cm.dim, null, 0);
+  drawRect(ctx, tf, 694, 130, 6, 340, cm.dim, null, 0);
+  drawRect(ctx, tf, 517, 130, 6, 340, cm.mute, null, 0);
+  // worker on scaffold
+  var h2 = toScr(tf, 420, 250);
+  ctx.fillStyle = cm.gold;
+  ctx.beginPath(); ctx.arc(h2.x, h2.y, 15*tf.s, 0, Math.PI*2); ctx.fill();
+  drawRect(ctx, tf, 404, 270, 32, 60, cm.gold+' / 0.6', cm.gold, 0);
+  drawText(ctx, tf, 420, 345, 'WORKER', cm.dim, 9, 'center', '700 9px "JetBrains Mono",monospace');
+  // ground
+  drawLine(ctx, tf, 0, 520, 1000, 520, cm.mute, 1);
+  drawText(ctx, tf, 50, 540, 'H = 6 m', cm.dim, 10, 'left', '700 10px "JetBrains Mono",monospace');
+  // sky tag
+  drawText(ctx, tf, 920, 60, 'SKY', cm.dim, 10, 'center', '400 10px "JetBrains Mono",monospace');
+}
+
+function drawChemStoreBg(ctx, W, H){
+  var tf = worldTransform();
+  var cm = gameModeColors();
+  var p0 = toScr(tf, 0, 0);
+  var g = ctx.createLinearGradient(p0.x, p0.y, p0.x, p0.y + 600*tf.s);
+  g.addColorStop(0, cm.bg1); g.addColorStop(1, cm.bg2);
+  ctx.fillStyle = g; ctx.fillRect(p0.x, p0.y, 1000*tf.s, 600*tf.s);
+  drawGrid(ctx, W, H, tf);
+
+  // shelves
+  drawRect(ctx, tf, 500, 180, 380, 240, 'oklch(0.24 0.035 265 / 0.4)', cm.dim, 1);
+  drawLine(ctx, tf, 500, 260, 880, 260, cm.mute, 0.8);
+  drawLine(ctx, tf, 500, 340, 880, 340, cm.mute, 0.8);
+
+  // drums on shelf + floor
+  function drum(x, y, r, leak){
+    var p = toScr(tf, x, y);
+    ctx.fillStyle = 'oklch(0.40 0.08 265)'; ctx.globalAlpha = 0.8;
+    ctx.beginPath(); ctx.arc(p.x, p.y, r*tf.s, 0, Math.PI*2); ctx.fill();
+    ctx.globalAlpha = 1;
+    ctx.strokeStyle = cm.dim; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.arc(p.x, p.y, r*tf.s, 0, Math.PI*2); ctx.stroke();
+    if (leak){
+      ctx.fillStyle = cm.error; ctx.globalAlpha = 0.4;
+      var pp = toScr(tf, x, y+r+10);
+      ctx.beginPath(); ctx.ellipse(pp.x, pp.y, 40*tf.s, 8*tf.s, 0, 0, Math.PI*2); ctx.fill();
+      ctx.globalAlpha = 1;
+    }
+  }
+  drum(570, 220, 18, false);
+  drum(700, 220, 18, false);
+  drum(830, 220, 18, false);
+  drum(570, 300, 18, false);
+  drum(700, 300, 18, false);
+  drum(830, 300, 18, false);
+  drum(430, 360, 22, true); // leaking drum on floor left
+
+  // worker on left
+  var h3 = toScr(tf, 150, 320);
+  ctx.fillStyle = cm.gold;
+  ctx.beginPath(); ctx.arc(h3.x, h3.y, 18*tf.s, 0, Math.PI*2); ctx.fill();
+  drawRect(ctx, tf, 130, 345, 40, 80, cm.gold+' / 0.6', cm.gold, 0);
+  drawText(ctx, tf, 150, 450, 'WORKER', cm.dim, 10, 'center', '700 10px "JetBrains Mono",monospace');
+  // door
+  drawRect(ctx, tf, 60, 160, 60, 260, 'oklch(0.18 0.03 265 / 0.6)', cm.dim, 1);
+  drawText(ctx, tf, 90, 150, 'DOOR', cm.dim, 9, 'center', '400 9px "JetBrains Mono",monospace');
+  // ventilation vent (top right, closed)
+  drawRect(ctx, tf, 740, 140, 80, 30, 'oklch(0.20 0.04 265 / 0.6)', cm.mute, 1);
+  drawText(ctx, tf, 780, 160, 'VENT OFF', cm.error, 9, 'center', '700 9px "JetBrains Mono",monospace');
+  // floor
+  drawLine(ctx, tf, 0, 500, 1000, 500, cm.mute, 1);
+}
+
+// ============================================================
+// Draw hazard hotspots + corner ticks + HUD redraw
+// ============================================================
+function drawHotspots(ctx, hazards, tf){
+  var cm = gameModeColors();
+  for(var i=0;i<hazards.length;i++){
+    var hz = hazards[i];
+    var p = toScr(tf, hz.x, hz.y);
+    var r = hz.r*tf.s;
+    var isFound = found.indexOf(i) >= 0;
+    var isHover = hoverIdx === i;
+    // pulsing ring
+    if(!isFound){
+      ctx.save();
+      var pulse = 0.5 + 0.5*Math.sin(performance.now()/400 + i);
+      ctx.globalAlpha = 0.25 + 0.35*pulse;
+      ctx.strokeStyle = cm.error;
+      ctx.lineWidth = isHover ? 2.5 : 1.5;
+      ctx.setLineDash(isHover?[]:[4,4]);
+      ctx.beginPath(); ctx.arc(p.x, p.y, r, 0, Math.PI*2); ctx.stroke();
+      ctx.setLineDash([]);
+      // inner fill subtle
+      ctx.globalAlpha = 0.08 + 0.08*pulse;
+      ctx.fillStyle = cm.error;
+      ctx.beginPath(); ctx.arc(p.x, p.y, r*0.88, 0, Math.PI*2); ctx.fill();
+      ctx.restore();
+      if (hinted && !isFound){
+        // show question mark
+        ctx.fillStyle = cm.error;
+        ctx.font = '700 '+Math.max(12,r*0.5)+'px "Space Grotesk",sans-serif';
+        ctx.textAlign='center'; ctx.textBaseline='middle';
+        ctx.fillText('?', p.x, p.y);
+      }
+    } else {
+      // found: solid green-ish + check
+      ctx.save();
+      ctx.strokeStyle = cm.accent;
+      ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.arc(p.x, p.y, r, 0, Math.PI*2); ctx.stroke();
+      ctx.fillStyle = cm.accent; ctx.globalAlpha = 0.18;
+      ctx.beginPath(); ctx.arc(p.x, p.y, r*0.9, 0, Math.PI*2); ctx.fill();
+      ctx.globalAlpha = 1;
+      // factor tag
+      var tag = t(hz.factor);
+      ctx.fillStyle = cm.accent;
+      ctx.font = '700 11px "JetBrains Mono",monospace';
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText(tag, p.x, p.y - r - 12);
+      // name
+      ctx.fillStyle = cm.text;
+      ctx.font = '500 10px "Noto Sans SC",sans-serif';
+      ctx.fillText(t(hz.nameKey), p.x, p.y + r + 14);
+      ctx.restore();
+    }
+  }
+}
+
+function drawParticles(ctx){
+  for(var i=particles.length-1;i>=0;i--){
+    var p = particles[i];
+    ctx.save();
+    ctx.globalAlpha = Math.max(0, p.life);
+    ctx.fillStyle = p.color;
+    ctx.shadowColor = p.color; ctx.shadowBlur = 8;
+    ctx.beginPath(); ctx.arc(p.x, p.y, 2.5, 0, Math.PI*2); ctx.fill();
+    ctx.restore();
+    p.x += p.vx; p.y += p.vy; p.vy -= 0.04;
+    p.life -= 0.02;
+    if (p.life <= 0) particles.splice(i, 1);
+  }
+}
+
+function drawFlash(ctx){
+  if (flashAlpha > 0){
+    ctx.save();
+    ctx.globalAlpha = flashAlpha;
+    ctx.fillStyle = flashColor||'white';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.restore();
+    flashAlpha = Math.max(0, flashAlpha - 0.04);
+  }
+}
+
+function draw(){
+  if (!canvas.width || !canvas.height) return;
+  var tf = worldTransform();
+  ctx.fillStyle = gameModeColors().bg1;
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  var scene = SCENES[sceneIdx];
+  scene.bg(ctx, canvas.width, canvas.height);
+  drawHotspots(ctx, scene.hazards, tf);
+  drawParticles(ctx);
+  drawFlash(ctx);
+}
+
+function tick(){
+  draw();
+  requestAnimationFrame(tick);
+}
+
+// ============================================================
+// Interaction
+// ============================================================
+canvas.addEventListener('click', function(e){
+  var wp = clientToWorld(e.clientX, e.clientY);
+  var scene = SCENES[sceneIdx];
+  for(var i=0;i<scene.hazards.length;i++){
+    if (found.indexOf(i) >= 0) continue;
+    var hz = scene.hazards[i];
+    var dx = wp.x - hz.x, dy = wp.y - hz.y;
+    if (dx*dx + dy*dy <= hz.r*hz.r){
+      found.push(i);
+      var tf = worldTransform();
+      var sp = toScr(tf, hz.x, hz.y);
+      spawnParticles(sp.x, sp.y, gameModeColors().accent);
+      flashAlpha = 0.18; flashColor = gameModeColors().accent;
+      updateHud();
+      playTone(620, 0.12, 'sine');
+      return;
+    }
+  }
+  // miss -> small shake effect by subtle flash
+  flashAlpha = 0.08; flashColor = gameModeColors().mute;
+  playTone(180, 0.08, 'triangle');
+});
+canvas.addEventListener('mousemove', function(e){
+  var wp = clientToWorld(e.clientX, e.clientY);
+  var scene = SCENES[sceneIdx];
+  var newHover = -1;
+  for(var i=0;i<scene.hazards.length;i++){
+    var hz = scene.hazards[i];
+    var dx = wp.x-hz.x, dy = wp.y-hz.y;
+    if (dx*dx+dy*dy <= hz.r*hz.r){ newHover = i; break; }
+  }
+  if (newHover !== hoverIdx){
+    hoverIdx = newHover;
+    canvas.style.cursor = hoverIdx >= 0 ? 'pointer' : 'crosshair';
+  }
+});
+
+// ============================================================
+// Sound (Web Audio)
+// ============================================================
+var soundMuted = false;
+function playTone(freq, dur, type){
+  if (soundMuted) return;
+  try{
+    var a = window._audioCtx || (window._audioCtx = new (window.AudioContext||window.webkitAudioContext)());
+    var o = a.createOscillator(); var g = a.createGain();
+    o.type = type||'sine'; o.frequency.value = freq;
+    g.gain.setValueAtTime(0.14, a.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.001, a.currentTime + dur);
+    o.connect(g); g.connect(a.destination);
+    o.start(); o.stop(a.currentTime + dur);
+  }catch(e){}
+}
+
+// ============================================================
+// HUD + buttons
+// ============================================================
+function updateHud(){
+  var scene = SCENES[sceneIdx];
+  document.getElementById('sceneTag').textContent = t(scene.titleKey);
+  document.getElementById('hudL1').textContent = t('hudL1');
+  document.getElementById('hudL2').textContent = t('hudL2');
+  document.getElementById('hudL3').textContent = t('hudL3');
+  document.getElementById('hudL4').textContent = t('hudL4');
+  document.getElementById('hudV1').textContent = (sceneIdx+1) + '/3';
+  document.getElementById('hudV2').textContent = found.length + '/' + scene.hazards.length;
+  var missed = scene.hazards.length - found.length;
+  document.getElementById('hudV3').textContent = String(missed);
+  document.getElementById('hudV4').textContent = String(scoreTotal);
+
+  // submit button label
+  var btnS = document.getElementById('btnSubmit');
+  if (sceneIdx === SCENES.length - 1){
+    btnS.textContent = t('btnSubmit');
+  } else {
+    btnS.textContent = t('btnSubmit');
+  }
+}
+
+function refreshI18N(){
+  document.getElementById('langBtn').textContent = LANG.toUpperCase();
+  document.getElementById('sidebarTitle').textContent = t('title');
+  document.getElementById('opsLabel').textContent = t('opsLabel');
+  document.getElementById('guideContent').textContent = t('guide');
+  document.getElementById('legendLabel').textContent = t('legendLabel');
+  document.getElementById('legendContent').innerText = t('legend');
+  document.getElementById('btnSubmit').textContent = t('btnSubmit');
+  document.getElementById('btnHint').textContent = t('btnHint');
+  document.getElementById('btnReset').textContent = t('btnReset');
+  updateHud();
+  draw();
+}
+
+document.getElementById('langBtn').addEventListener('click', function(){
+  LANG = (LANG === 'cn') ? 'en' : 'cn';
+  refreshI18N();
+});
+
+document.getElementById('btnHint').addEventListener('click', function(){
+  if (!hinted){
+    hinted = true;
+    scoreTotal = Math.max(0, scoreTotal - 1);
+    playTone(400, 0.1, 'sine');
+    updateHud();
+  }
+});
+
+document.getElementById('btnReset').addEventListener('click', function(){
+  sceneIdx = 0; found = []; scoreTotal = 0; scenesDone = []; hinted = false;
+  hideOverlay();
+  refreshI18N();
+});
+
+document.getElementById('btnSubmit').addEventListener('click', function(){
+  var scene = SCENES[sceneIdx];
+  var missedList = [];
+  var missedFactors = [];
+  for(var i=0;i<scene.hazards.length;i++){
+    if (found.indexOf(i) < 0){
+      missedList.push(t(scene.hazards[i].nameKey));
+      missedFactors.push(t(scene.hazards[i].factor));
+    }
+  }
+  var gained = found.length * 3 - (missedList.length * 1);
+  scoreTotal += Math.max(0, gained);
+  scenesDone.push({
+    idx: sceneIdx,
+    found: found.length,
+    total: scene.hazards.length,
+    missed: missedList,
+    factors: missedFactors,
+  });
+
+  if (sceneIdx < SCENES.length - 1){
+    showSceneResult(missedList);
+  } else {
+    showFinalReview();
+  }
+});
+
+// ============================================================
+// Overlay
+// ============================================================
+var ov = document.getElementById('overlay');
+function hideOverlay(){ ov.classList.add('hidden'); }
+function showOverlay(title, body, listItems, primaryText, primaryHandler, secondaryText, secondaryHandler){
+  document.getElementById('ovTitle').textContent = title;
+  document.getElementById('ovBody').textContent = body;
+  var listEl = document.getElementById('ovList');
+  listEl.innerHTML = '';
+  if (listItems && listItems.length){
+    listItems.forEach(function(it){
+      var li = document.createElement('li');
+      li.textContent = it;
+      listEl.appendChild(li);
+    });
+  }
+  var p = document.getElementById('ovPrimary');
+  var s = document.getElementById('ovSecondary');
+  p.textContent = primaryText;
+  p.onclick = primaryHandler;
+  if (secondaryText){
+    s.style.display = '';
+    s.textContent = secondaryText;
+    s.onclick = secondaryHandler;
+  } else {
+    s.style.display = 'none';
+  }
+  ov.classList.remove('hidden');
+}
+
+function showSceneResult(missedList){
+  var scene = SCENES[sceneIdx];
+  var allGot = missedList.length === 0;
+  var body = (allGot ? t('allFound') : t('someMissed')) + ' ' + t('scoreMsg') + ': ' + scoreTotal;
+  showOverlay(
+    t('sceneDone'),
+    body,
+    missedList.length ? missedList.map(function(m){ return t('missedThem') + ' ' + m; }) : [],
+    t('btnSubmitNext'),
+    function(){
+      sceneIdx += 1;
+      found = []; hinted = false;
+      hideOverlay();
+      refreshI18N();
+    },
+    null, null
+  );
+  playTone(allGot?720:360, 0.18, 'sine');
+}
+
+function showFinalReview(){
+  var lines = [];
+  var totalFound = 0, totalCount = 0;
+  scenesDone.forEach(function(s){
+    var sc = SCENES[s.idx];
+    lines.push(t(sc.titleKey) + ' — ' + s.found + '/' + s.total);
+    totalFound += s.found; totalCount += s.total;
+    if (s.missed && s.missed.length){
+      s.missed.forEach(function(m, i){
+        lines.push('  · ' + m + ' (' + (s.factors[i]||'') + ')');
+      });
+    }
+  });
+  lines.push('');
+  lines.push(t('scoreMsg') + ': ' + scoreTotal + '    ' + totalFound + '/' + totalCount);
+  showOverlay(
+    t('reviewTitle'),
+    t('reviewBody') + ' ' + t('reviewPrompt'),
+    lines,
+    t('btnReset'),
+    function(){
+      sceneIdx = 0; found = []; scoreTotal = 0; scenesDone = []; hinted = false;
+      hideOverlay(); refreshI18N();
+    },
+    null, null
+  );
+  playTone(640, 0.25, 'sine');
+  setTimeout(function(){ playTone(800, 0.20, 'sine'); }, 160);
+  setTimeout(function(){ playTone(960, 0.28, 'sine'); }, 340);
+}
+
+// ============================================================
+// Boot
+// ============================================================
+buildGameStyleSwitcher();
+applyGameMode('cyberpunk');
+refreshI18N();
+resizeCanvas();
+requestAnimationFrame(tick);
+document.fonts && document.fonts.ready && document.fonts.ready.then(function(){ resizeCanvas(); });
+setTimeout(resizeCanvas, 200);
+setTimeout(resizeCanvas, 600);
+</script>
+</body>
+</html>

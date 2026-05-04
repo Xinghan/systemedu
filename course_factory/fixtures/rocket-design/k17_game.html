@@ -1,0 +1,1198 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Inter:wght@400;500&family=Noto+Sans+SC:wght@400;700&display=swap" rel="stylesheet">
+<title>Inertia Lab - Tablecloth Pull</title>
+<style>
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box;border-radius:0!important;}
+html,body{width:100%;height:100vh;overflow:hidden;background:#05060f;color:#e2e2e9;font-family:'Inter','Noto Sans SC',sans-serif;}
+body{margin:0;padding:0;}
+.game-wrap{display:flex;flex-direction:row;height:100vh;overflow:hidden;}
+.game-sidebar{width:200px;min-width:200px;max-width:200px;display:flex;flex-direction:column;gap:8px;padding:10px;background:rgba(5,6,15,0.85);border-right:1px solid rgba(249,115,22,0.2);overflow-y:auto;}
+.sidebar-lang{align-self:flex-start;flex-shrink:0;font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:700;padding:3px 8px;cursor:pointer;border:1px solid rgba(249,115,22,0.35);background:transparent;color:#f97316;letter-spacing:0.15em;text-transform:uppercase;}
+.sidebar-lang:hover{border-color:#f97316;background:rgba(249,115,22,0.08);}
+.sidebar-title{font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:700;color:#f97316;letter-spacing:0.04em;text-transform:uppercase;margin-top:6px;text-shadow:0 0 14px rgba(249,115,22,0.6);}
+.sidebar-subtitle{font-family:'Noto Sans SC',sans-serif;font-size:11px;color:rgba(249,115,22,0.7);margin-top:2px;}
+.sidebar-divider{height:1px;background:linear-gradient(90deg,rgba(249,115,22,0.3),transparent);margin:4px 0;}
+.sidebar-guide-label{font-family:'JetBrains Mono',monospace;font-size:7px;letter-spacing:0.15em;color:rgba(249,115,22,0.5);text-transform:uppercase;margin-bottom:2px;}
+.sidebar-guide{font-family:'Noto Sans SC',sans-serif;font-size:11px;color:rgba(226,226,233,0.7);line-height:1.6;}
+.game-main{flex:1;display:flex;flex-direction:column;min-width:0;}
+.game-header{padding:8px 16px;display:flex;justify-content:space-between;align-items:center;background:rgba(5,6,15,0.7);border-bottom:1px solid rgba(249,115,22,0.1);}
+.game-header h1{font-family:'JetBrains Mono',monospace;font-size:clamp(12px,1.8vw,15px);font-weight:700;color:#f97316;letter-spacing:0.04em;text-transform:uppercase;text-shadow:0 0 14px rgba(249,115,22,0.5);}
+.game-header .info{font-family:'JetBrains Mono',monospace;font-size:10px;color:rgba(249,115,22,0.6);letter-spacing:0.15em;}
+.game-body{flex:1;display:flex;flex-direction:column;min-height:0;}
+canvas{width:100%;height:100%;display:block;}
+.control-panel{display:flex;justify-content:center;align-items:center;gap:12px;padding:8px 16px;background:rgba(5,6,15,0.7);border-top:1px solid rgba(249,115,22,0.1);flex-wrap:wrap;}
+.ctrl-btn{font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:700;padding:6px 18px;border:1px solid #f97316;cursor:pointer;color:#05060f;background:linear-gradient(135deg,#f97316,#ea580c);box-shadow:0 0 12px rgba(249,115,22,0.3);letter-spacing:0.04em;text-transform:uppercase;transition:transform 0.1s;}
+.ctrl-btn:hover{transform:scale(1.04);box-shadow:0 0 18px rgba(249,115,22,0.5);}
+.ctrl-btn:active{transform:scale(0.96);}
+.ctrl-btn:disabled{opacity:0.3;cursor:default;transform:none;box-shadow:none;}
+.ctrl-btn.secondary{background:rgba(5,6,15,0.9);color:rgba(249,115,22,0.7);box-shadow:none;border:1px solid rgba(249,115,22,0.25);}
+.ctrl-btn.secondary:hover{color:#f97316;border-color:rgba(249,115,22,0.5);}
+.hud-bar{height:40px;display:flex;align-items:center;justify-content:space-around;background:rgba(5,6,15,0.8);padding:0 16px;border-top:1px solid rgba(249,115,22,0.08);}
+.hud-item{text-align:center;}
+.hud-label{font-family:'JetBrains Mono',monospace;font-size:7px;letter-spacing:0.15em;color:rgba(249,115,22,0.5);text-transform:uppercase;}
+.hud-val{font-family:'JetBrains Mono',monospace;font-size:13px;font-weight:700;color:#f97316;text-shadow:0 0 10px rgba(249,115,22,0.4);}
+</style>
+</head>
+<body>
+<div class="game-wrap">
+  <div class="game-sidebar">
+    <button class="sidebar-lang" id="langBtn">CN</button>
+    <div class="sidebar-title" id="sidebarTitle"></div>
+    <div class="sidebar-subtitle" id="sidebarSub"></div>
+    <div class="sidebar-divider"></div>
+    <div class="sidebar-guide-label" id="guideLabel"></div>
+    <div class="sidebar-guide" id="guideContent"></div>
+  </div>
+  <div class="game-main">
+    <div class="game-header">
+      <h1 id="gameTitle"></h1>
+      <div class="info" id="roundInfo"></div>
+    </div>
+    <div class="game-body">
+      <canvas id="cv"></canvas>
+    </div>
+    <div class="control-panel">
+      <button class="ctrl-btn" id="btnAction"></button>
+      <button class="ctrl-btn secondary" id="btnReset"></button>
+    </div>
+    <div class="hud-bar">
+      <div class="hud-item"><div class="hud-label" id="hudL1"></div><div class="hud-val" id="hudV1">--</div></div>
+      <div class="hud-item"><div class="hud-label" id="hudL2"></div><div class="hud-val" id="hudV2">--</div></div>
+      <div class="hud-item"><div class="hud-label" id="hudL3"></div><div class="hud-val" id="hudV3">--</div></div>
+      <div class="hud-item"><div class="hud-label" id="hudL4"></div><div class="hud-val" id="hudV4">--</div></div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ============================================================
+// K17 Game: Tablecloth Pull Challenge (physics-vivid holo style)
+// Newton's First Law - Inertia demonstration
+// idea_id: game_1776504642216_kcze
+//
+// 5 rounds with different objects. Player drags a slider to
+// control pull speed. Fast pull = friction acts briefly = object
+// stays (inertia wins). Slow pull = friction drags it off.
+// Real-time force vector visualization + holo HUD.
+// ============================================================
+
+var LANG = 'cn';
+
+var I18N = {
+  title:      {en:'INERTIA LAB', cn:'\u60ef\u6027\u5b9e\u9a8c\u5ba4'},
+  sideTitle:  {en:'INERTIA LAB', cn:'INERTIA LAB'},
+  sideSub:    {en:'Newton\'s 1st Law', cn:'\u725b\u987f\u7b2c\u4e00\u5b9a\u5f8b'},
+  guideLabel: {en:'MISSION BRIEF', cn:'MISSION BRIEF'},
+  guide:      {en:'Drag the speed slider left/right, then hit PULL. The faster you pull the tablecloth, the less time friction has to push the object. Keep every item on the table to score!',
+               cn:'\u62d6\u52a8\u901f\u5ea6\u6ed1\u5757\u8c03\u6574\u62bd\u5e03\u901f\u5ea6\uff0c\u7136\u540e\u70b9\u51fb\u201c\u62bd\uff01\u201d\u3002\u62bd\u5f97\u8d8a\u5feb\uff0c\u6469\u64e6\u529b\u4f5c\u7528\u65f6\u95f4\u8d8a\u77ed\uff0c\u7269\u4f53\u8d8a\u5bb9\u6613\u7559\u4e0b\u3002\u6bcf\u8f6e\u90fd\u8ba9\u7269\u54c1\u7559\u5728\u684c\u4e0a\u5427\uff01'},
+  pull:       {en:'PULL!', cn:'\u62bd\uff01'},
+  reset:      {en:'RESET', cn:'\u91cd\u7f6e'},
+  nextRound:  {en:'NEXT', cn:'\u4e0b\u4e00\u8f6e'},
+  round:      {en:'ROUND', cn:'\u56de\u5408'},
+  speed:      {en:'SPEED', cn:'\u901f\u5ea6'},
+  friction:   {en:'FRICTION', cn:'\u6469\u64e6\u7cfb\u6570'},
+  inertia:    {en:'INERTIA', cn:'\u60ef\u6027'},
+  score:      {en:'SCORE', cn:'\u5f97\u5206'},
+  dominant:   {en:'DOMINANT', cn:'\u4e3b\u5bfc'},
+  overcome:   {en:'OVERCOME', cn:'\u88ab\u514b\u670d'},
+  success:    {en:'INERTIA WINS! Object stays!', cn:'\u60ef\u6027\u53d6\u80dc\uff01\u7269\u54c1\u7559\u4e0b\u4e86\uff01'},
+  fail:       {en:'FRICTION WINS! Object dragged off!', cn:'\u6469\u64e6\u529b\u53d6\u80dc\uff01\u7269\u54c1\u88ab\u62d6\u8d70\u4e86\uff01'},
+  complete:   {en:'ALL ROUNDS COMPLETE!', cn:'\u5168\u90e8\u56de\u5408\u5b8c\u6210\uff01'},
+  insight:    {en:'Inertia keeps objects still unless a force acts long enough. Quick pulls = short friction time = objects stay.',
+               cn:'\u60ef\u6027\u8ba9\u7269\u4f53\u4fdd\u6301\u9759\u6b62\uff0c\u9664\u975e\u6709\u529b\u4f5c\u7528\u8db3\u591f\u4e45\u3002\u62bd\u5f97\u5feb = \u6469\u64e6\u65f6\u95f4\u77ed = \u7269\u54c1\u7559\u4e0b\u3002'},
+  slow:       {en:'SLOW', cn:'\u6162'},
+  fast:       {en:'FAST', cn:'\u5feb'},
+  cup:        {en:'CUP', cn:'\u676f\u5b50'},
+  plate:      {en:'PLATE', cn:'\u76d8\u5b50'},
+  vase:       {en:'VASE', cn:'\u82b1\u74f6'},
+  bottle:     {en:'BOTTLE', cn:'\u74f6\u5b50'},
+  teapot:     {en:'TEAPOT', cn:'\u8336\u58f6'},
+  frictionF:  {en:'Friction Force', cn:'\u6469\u64e6\u529b'},
+  inertiaF:   {en:'Inertia', cn:'\u60ef\u6027'},
+  velocity:   {en:'v', cn:'v'},
+  dragHint:   {en:'<< Drag slider to set speed >>', cn:'<< \u62d6\u52a8\u6ed1\u5757\u8bbe\u7f6e\u901f\u5ea6 >>'},
+  tryAgain:   {en:'Try again - pull faster!', cn:'\u518d\u8bd5\u4e00\u6b21\u2014\u2014\u62bd\u5f97\u518d\u5feb\u70b9\uff01'},
+};
+
+function t(k) { return I18N[k] ? (I18N[k][LANG] || I18N[k].en || k) : k; }
+
+// --- Rounds config ---
+// Each round: object name, mass (kg), friction coeff, visual shape
+var ROUNDS = [
+  {key:'cup',    mass:0.15, mu:0.25, w:30, h:36, color:'#f97316'},
+  {key:'plate',  mass:0.30, mu:0.20, w:48, h:10, color:'#f97316'},
+  {key:'vase',   mass:0.50, mu:0.30, w:24, h:44, color:'#f97316'},
+  {key:'bottle', mass:0.40, mu:0.22, w:18, h:48, color:'#f97316'},
+  {key:'teapot', mass:0.80, mu:0.35, w:44, h:32, color:'#f97316'},
+];
+
+var ACCENT = '#f97316';
+var ACCENT_RGB = '249,115,22';
+var BG_DARK = '#05060f';
+
+// --- Game state ---
+var currentRound = 0;
+var pullSpeed = 0.5;       // 0..1 normalized
+var gamePhase = 'idle';    // idle, pulling, result, complete
+var totalScore = 0;
+var roundScores = [];
+
+// Physics sim vars
+var clothOffsetX = 0;      // how far cloth has moved
+var objOffsetX = 0;         // how far object moved from start
+var objVx = 0;              // object velocity px/frame
+var pullTimer = 0;
+var pullDuration = 0;       // seconds
+var pullActive = false;
+var simResult = '';         // 'success' or 'fail'
+var simFrictionForce = 0;
+var simImpulse = 0;
+
+// Slider drag
+var sliderDragging = false;
+
+// Animation
+var animFrame = 0;
+var resultShowTime = 0;
+
+// Particles
+var particles = [];
+
+// Canvas
+var cv = document.getElementById('cv');
+var ctx = cv.getContext('2d');
+var W = 100, H = 100;
+var dpr = Math.min(window.devicePixelRatio || 1, 2);
+
+// --- Resize ---
+function resize() {
+  var rect = cv.parentElement.getBoundingClientRect();
+  W = rect.width;
+  H = rect.height;
+  if (W < 80) W = 80;
+  if (H < 80) H = 80;
+  cv.width = Math.round(W * dpr);
+  cv.height = Math.round(H * dpr);
+  cv.style.width = W + 'px';
+  cv.style.height = H + 'px';
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+}
+
+// --- UI ---
+function updateUI() {
+  document.getElementById('sidebarTitle').textContent = t('sideTitle');
+  document.getElementById('sidebarSub').textContent = t('sideSub');
+  document.getElementById('guideLabel').textContent = t('guideLabel');
+  document.getElementById('guideContent').textContent = t('guide');
+  document.getElementById('gameTitle').textContent = t('title');
+  document.getElementById('roundInfo').textContent = t('round') + ' ' + (currentRound + 1) + '/' + ROUNDS.length;
+
+  document.getElementById('hudL1').textContent = t('round');
+  document.getElementById('hudL2').textContent = t('speed');
+  document.getElementById('hudL3').textContent = t('friction');
+  document.getElementById('hudL4').textContent = t('score');
+  updateHUD();
+  updateBtnState();
+}
+
+function updateHUD() {
+  document.getElementById('hudV1').textContent = (currentRound + 1) + '/' + ROUNDS.length;
+  document.getElementById('hudV2').textContent = 'v=' + (pullSpeed * 5).toFixed(1) + ' m/s';
+  document.getElementById('hudV3').textContent = '\u03BC=' + ROUNDS[currentRound].mu.toFixed(2);
+  document.getElementById('hudV4').textContent = totalScore + '/500';
+}
+
+function updateBtnState() {
+  var btnA = document.getElementById('btnAction');
+  var btnR = document.getElementById('btnReset');
+  if (gamePhase === 'idle') {
+    btnA.textContent = t('pull');
+    btnA.disabled = false;
+    btnR.textContent = t('reset');
+    btnR.disabled = true;
+  } else if (gamePhase === 'result') {
+    btnA.textContent = currentRound < ROUNDS.length - 1 ? t('nextRound') : t('reset');
+    btnA.disabled = false;
+    btnR.textContent = t('reset');
+    btnR.disabled = false;
+  } else if (gamePhase === 'complete') {
+    btnA.textContent = t('reset');
+    btnA.disabled = false;
+    btnR.textContent = t('reset');
+    btnR.disabled = false;
+  } else {
+    btnA.disabled = true;
+    btnR.disabled = true;
+  }
+}
+
+// --- Physics ---
+function simulatePull(mu, mass, speedNorm) {
+  // pull duration: fast (speedNorm=1) = 0.04s, slow (speedNorm=0) = 1.2s
+  var pullTime = 0.04 + (1 - speedNorm) * 1.16;
+  var g = 9.8;
+  var frictionForce = mu * mass * g;
+  var impulse = frictionForce * pullTime;
+  var objVelocity = impulse / mass; // = mu * g * pullTime
+  // displacement over 0.25s after pull ends
+  var displacement = objVelocity * 0.25;
+  // object stays if displacement < 4cm
+  var threshold = 0.04;
+  return {
+    pullTime: pullTime,
+    frictionForce: frictionForce,
+    impulse: impulse,
+    objVelocity: objVelocity,
+    displacement: displacement,
+    stays: displacement < threshold
+  };
+}
+
+function scoreRound(stays, speedNorm) {
+  if (!stays) return 0;
+  // Higher speed = more impressive = more points
+  return Math.round(40 + speedNorm * 60);
+}
+
+// --- Init round ---
+function initRound() {
+  gamePhase = 'idle';
+  clothOffsetX = 0;
+  objOffsetX = 0;
+  objVx = 0;
+  pullTimer = 0;
+  pullActive = false;
+  simResult = '';
+  simFrictionForce = 0;
+  simImpulse = 0;
+  resultShowTime = 0;
+  pullSpeed = 0.5;
+  particles = [];
+  updateUI();
+}
+
+// --- Actions ---
+function doAction() {
+  if (gamePhase === 'result') {
+    if (currentRound < ROUNDS.length - 1) {
+      currentRound++;
+      initRound();
+    } else {
+      gamePhase = 'complete';
+      spawnBurst(W * 0.5, H * 0.4, 40);
+      updateBtnState();
+    }
+    return;
+  }
+  if (gamePhase === 'complete') {
+    currentRound = 0;
+    totalScore = 0;
+    roundScores = [];
+    initRound();
+    return;
+  }
+  if (gamePhase !== 'idle') return;
+
+  var rd = ROUNDS[currentRound];
+  var result = simulatePull(rd.mu, rd.mass, pullSpeed);
+  pullDuration = result.pullTime;
+  simResult = result.stays ? 'success' : 'fail';
+  simFrictionForce = result.frictionForce;
+  simImpulse = result.impulse;
+  objVx = result.stays ? 0 : result.objVelocity * 120; // visual scale
+
+  var sc = scoreRound(result.stays, pullSpeed);
+  roundScores.push(sc);
+  totalScore += sc;
+
+  gamePhase = 'pulling';
+  pullActive = true;
+  pullTimer = 0;
+  resultShowTime = 0;
+  updateHUD();
+  updateBtnState();
+}
+
+function doReset() {
+  currentRound = 0;
+  totalScore = 0;
+  roundScores = [];
+  initRound();
+}
+
+document.getElementById('btnAction').addEventListener('click', doAction);
+document.getElementById('btnReset').addEventListener('click', doReset);
+
+// --- Language toggle ---
+document.getElementById('langBtn').addEventListener('click', function() {
+  LANG = LANG === 'cn' ? 'en' : 'cn';
+  document.getElementById('langBtn').textContent = LANG === 'cn' ? 'CN' : 'EN';
+  updateUI();
+});
+
+// --- Canvas interaction (slider drag) ---
+function getCanvasCoords(ev) {
+  var rect = cv.getBoundingClientRect();
+  var cx, cy;
+  if (ev.touches && ev.touches.length > 0) {
+    cx = ev.touches[0].clientX;
+    cy = ev.touches[0].clientY;
+  } else {
+    cx = ev.clientX;
+    cy = ev.clientY;
+  }
+  return { x: cx - rect.left, y: cy - rect.top };
+}
+
+function getSliderRect() {
+  var sx = W * 0.15;
+  var sy = H * 0.85;
+  var sw = W * 0.50;
+  var sh = 16;
+  return {x: sx, y: sy, w: sw, h: sh};
+}
+
+function handleDown(px, py) {
+  if (gamePhase !== 'idle') return;
+  var sr = getSliderRect();
+  if (py >= sr.y - 14 && py <= sr.y + sr.h + 14 && px >= sr.x - 14 && px <= sr.x + sr.w + 14) {
+    sliderDragging = true;
+    handleSliderDrag(px);
+  }
+}
+
+function handleMove(px, py) {
+  if (sliderDragging) handleSliderDrag(px);
+}
+
+function handleSliderDrag(px) {
+  var sr = getSliderRect();
+  var val = (px - sr.x) / sr.w;
+  val = Math.max(0, Math.min(1, val));
+  pullSpeed = val;
+  updateHUD();
+}
+
+cv.addEventListener('mousedown', function(ev) { var c = getCanvasCoords(ev); handleDown(c.x, c.y); });
+cv.addEventListener('mousemove', function(ev) { var c = getCanvasCoords(ev); handleMove(c.x, c.y); });
+cv.addEventListener('mouseup', function() { sliderDragging = false; });
+cv.addEventListener('touchstart', function(ev) { ev.preventDefault(); var c = getCanvasCoords(ev); handleDown(c.x, c.y); }, {passive:false});
+cv.addEventListener('touchmove', function(ev) { ev.preventDefault(); var c = getCanvasCoords(ev); handleMove(c.x, c.y); }, {passive:false});
+cv.addEventListener('touchend', function() { sliderDragging = false; });
+
+// --- Particles ---
+function spawnBurst(cx, cy, count) {
+  for (var i = 0; i < count; i++) {
+    var angle = Math.random() * Math.PI * 2;
+    var spd = 1.5 + Math.random() * 3.5;
+    particles.push({
+      x: cx, y: cy,
+      vx: Math.cos(angle) * spd,
+      vy: Math.sin(angle) * spd - Math.random() * 2,
+      life: 1.0,
+      decay: 0.012 + Math.random() * 0.01,
+      sz: 1.5 + Math.random() * 3
+    });
+  }
+}
+
+function updateParticles() {
+  for (var i = particles.length - 1; i >= 0; i--) {
+    var p = particles[i];
+    p.x += p.vx;
+    p.y += p.vy;
+    p.vy += 0.06;
+    p.life -= p.decay;
+    if (p.life <= 0) particles.splice(i, 1);
+  }
+}
+
+function drawParticles() {
+  for (var i = 0; i < particles.length; i++) {
+    var p = particles[i];
+    ctx.save();
+    ctx.globalAlpha = p.life * 0.7;
+    ctx.shadowColor = ACCENT;
+    ctx.shadowBlur = 6;
+    ctx.fillStyle = ACCENT;
+    ctx.fillRect(p.x - p.sz / 2, p.y - p.sz / 2, p.sz, p.sz);
+    ctx.restore();
+  }
+}
+
+// ========================================
+// DRAWING
+// ========================================
+
+function drawBg() {
+  // Deep blue-black gradient
+  var g = ctx.createLinearGradient(0, 0, 0, H);
+  g.addColorStop(0, '#05060f');
+  g.addColorStop(1, '#0d0e1a');
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, W, H);
+
+  // Radial hue glow
+  var rg = ctx.createRadialGradient(W * 0.5, H * 0.55, 0, W * 0.5, H * 0.55, W * 0.65);
+  rg.addColorStop(0, 'rgba(' + ACCENT_RGB + ',0.08)');
+  rg.addColorStop(1, 'rgba(' + ACCENT_RGB + ',0)');
+  ctx.fillStyle = rg;
+  ctx.fillRect(0, 0, W, H);
+
+  // Grid lines
+  ctx.strokeStyle = 'rgba(' + ACCENT_RGB + ',0.06)';
+  ctx.lineWidth = 0.5;
+  var gs = 40;
+  var x, y;
+  for (x = 0; x < W; x += gs) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke(); }
+  for (y = 0; y < H; y += gs) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke(); }
+
+  // Scanlines
+  ctx.fillStyle = 'rgba(0,0,0,0.04)';
+  for (y = 0; y < H; y += 3) {
+    ctx.fillRect(0, y, W, 1);
+  }
+
+  // 4 corner brackets
+  ctx.strokeStyle = 'rgba(' + ACCENT_RGB + ',0.5)';
+  ctx.lineWidth = 1.5;
+  var m = 15, L = 30;
+  ctx.beginPath(); ctx.moveTo(m, m + L); ctx.lineTo(m, m); ctx.lineTo(m + L, m); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(W - m - L, m); ctx.lineTo(W - m, m); ctx.lineTo(W - m, m + L); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(m, H - m - L); ctx.lineTo(m, H - m); ctx.lineTo(m + L, H - m); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(W - m - L, H - m); ctx.lineTo(W - m, H - m); ctx.lineTo(W - m, H - m - L); ctx.stroke();
+}
+
+// Draw HUD top bar on canvas
+function drawHudTop() {
+  var rd = ROUNDS[currentRound];
+  var label = '\u25b8 INERTIA TEST \u00b7 ' + t('round') + ' ' + (currentRound + 1);
+  ctx.save();
+  ctx.font = '700 9px "JetBrains Mono", monospace';
+  ctx.fillStyle = 'rgba(' + ACCENT_RGB + ',0.6)';
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'top';
+  ctx.shadowColor = ACCENT;
+  ctx.shadowBlur = 8;
+  ctx.fillText(label, 28, 24);
+  ctx.shadowBlur = 0;
+
+  // Object name
+  ctx.fillStyle = 'rgba(' + ACCENT_RGB + ',0.4)';
+  ctx.font = '500 8px "JetBrains Mono", monospace';
+  ctx.textAlign = 'right';
+  ctx.fillText(t(rd.key).toUpperCase() + ' \u00b7 ' + rd.mass + 'kg', W - 28, 24);
+  ctx.restore();
+}
+
+// Draw HUD bottom bar on canvas
+function drawHudBottom() {
+  var rd = ROUNDS[currentRound];
+  ctx.save();
+  ctx.font = '500 7px "JetBrains Mono", monospace';
+  ctx.fillStyle = 'rgba(' + ACCENT_RGB + ',0.45)';
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'bottom';
+  var readout = 'READOUT \u00b7 v=' + (pullSpeed * 5).toFixed(2) + ' m/s \u00b7 \u03BC=' + rd.mu.toFixed(2);
+  ctx.fillText(readout, 28, H - 18);
+
+  ctx.textAlign = 'right';
+  var inertiaState = simResult === 'success' ? t('dominant') : (simResult === 'fail' ? t('overcome') : '--');
+  ctx.fillText('\u25c7 SIM-07 \u00b7 ' + t('inertia') + ': ' + inertiaState, W - 28, H - 18);
+  ctx.restore();
+}
+
+// Draw the table (holo wireframe style)
+function drawTable() {
+  var tableY = H * 0.48;
+  var tableW = W * 0.58;
+  var tableX = (W - tableW) / 2;
+  var tableH = 8;
+  var legH = H * 0.22;
+  var legW = 4;
+
+  ctx.save();
+  ctx.strokeStyle = 'rgba(' + ACCENT_RGB + ',0.35)';
+  ctx.lineWidth = 1.5;
+  ctx.shadowColor = ACCENT;
+  ctx.shadowBlur = 6;
+
+  // Table top
+  ctx.beginPath();
+  ctx.moveTo(tableX, tableY);
+  ctx.lineTo(tableX + tableW, tableY);
+  ctx.lineTo(tableX + tableW, tableY + tableH);
+  ctx.lineTo(tableX, tableY + tableH);
+  ctx.closePath();
+  ctx.stroke();
+
+  // Legs
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(tableX + 20, tableY + tableH);
+  ctx.lineTo(tableX + 20, tableY + tableH + legH);
+  ctx.moveTo(tableX + 20 - legW, tableY + tableH + legH);
+  ctx.lineTo(tableX + 20 + legW + 4, tableY + tableH + legH);
+  ctx.stroke();
+
+  ctx.beginPath();
+  ctx.moveTo(tableX + tableW - 20, tableY + tableH);
+  ctx.lineTo(tableX + tableW - 20, tableY + tableH + legH);
+  ctx.moveTo(tableX + tableW - 20 - legW - 4, tableY + tableH + legH);
+  ctx.lineTo(tableX + tableW - 20 + legW, tableY + tableH + legH);
+  ctx.stroke();
+
+  ctx.shadowBlur = 0;
+  ctx.restore();
+
+  return {x: tableX, y: tableY, w: tableW, h: tableH};
+}
+
+// Draw tablecloth (holo wireframe)
+function drawCloth(table) {
+  var clothW = table.w * 0.65;
+  var clothH = 4;
+  var clothX = table.x + (table.w - clothW) / 2 + clothOffsetX;
+  var clothY = table.y - clothH;
+
+  ctx.save();
+  // Blur glow layer
+  ctx.strokeStyle = 'rgba(' + ACCENT_RGB + ',0.15)';
+  ctx.lineWidth = 6;
+  ctx.shadowColor = ACCENT;
+  ctx.shadowBlur = 12;
+  ctx.beginPath();
+  ctx.moveTo(clothX, clothY + clothH / 2);
+  ctx.lineTo(clothX + clothW, clothY + clothH / 2);
+  ctx.stroke();
+
+  // Clear layer
+  ctx.shadowBlur = 0;
+  ctx.strokeStyle = 'rgba(' + ACCENT_RGB + ',0.7)';
+  ctx.lineWidth = 2;
+  ctx.setLineDash([6, 3]);
+  ctx.beginPath();
+  ctx.moveTo(clothX, clothY);
+  ctx.lineTo(clothX + clothW, clothY);
+  ctx.lineTo(clothX + clothW, clothY + clothH);
+  ctx.lineTo(clothX, clothY + clothH);
+  ctx.closePath();
+  ctx.stroke();
+  ctx.setLineDash([]);
+
+  // Cloth label
+  ctx.font = '500 6px "JetBrains Mono", monospace';
+  ctx.fillStyle = 'rgba(' + ACCENT_RGB + ',0.4)';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'top';
+  ctx.fillText('CLOTH', clothX + clothW / 2, clothY + clothH + 3);
+
+  ctx.restore();
+  return {x: clothX, y: clothY, w: clothW, h: clothH};
+}
+
+// Draw holo object on table
+function drawObject(table) {
+  var rd = ROUNDS[currentRound];
+  var ox = table.x + table.w * 0.5 + objOffsetX;
+  var oy = table.y;
+
+  ctx.save();
+
+  // Object holo icon - double layer rendering
+  // Blur glow layer
+  ctx.strokeStyle = 'rgba(' + ACCENT_RGB + ',0.2)';
+  ctx.lineWidth = 4;
+  ctx.shadowColor = ACCENT;
+  ctx.shadowBlur = 14;
+
+  drawObjectShape(ox, oy, rd, true);
+
+  // Clear layer
+  ctx.shadowBlur = 0;
+  ctx.strokeStyle = ACCENT;
+  ctx.lineWidth = 1.5;
+  drawObjectShape(ox, oy, rd, false);
+
+  // Object label (holo style tag)
+  ctx.font = '700 7px "JetBrains Mono", monospace';
+  ctx.fillStyle = 'rgba(' + ACCENT_RGB + ',0.7)';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'bottom';
+  ctx.shadowColor = ACCENT;
+  ctx.shadowBlur = 8;
+  ctx.fillText(t(rd.key).toUpperCase(), ox, oy - rd.h - 10);
+  ctx.shadowBlur = 0;
+  ctx.font = '400 6px "JetBrains Mono", monospace';
+  ctx.fillStyle = 'rgba(' + ACCENT_RGB + ',0.4)';
+  ctx.fillText(rd.mass + 'kg \u00b7 \u03BC=' + rd.mu, ox, oy - rd.h - 2);
+
+  // Mini corner brackets around object
+  var bm = 4, bL = 8;
+  var bx1 = ox - rd.w / 2 - bm;
+  var by1 = oy - rd.h - bm;
+  var bx2 = ox + rd.w / 2 + bm;
+  var by2 = oy + bm;
+  ctx.strokeStyle = 'rgba(' + ACCENT_RGB + ',0.3)';
+  ctx.lineWidth = 0.8;
+  ctx.beginPath(); ctx.moveTo(bx1, by1 + bL); ctx.lineTo(bx1, by1); ctx.lineTo(bx1 + bL, by1); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(bx2 - bL, by1); ctx.lineTo(bx2, by1); ctx.lineTo(bx2, by1 + bL); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(bx1, by2 - bL); ctx.lineTo(bx1, by2); ctx.lineTo(bx1 + bL, by2); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(bx2 - bL, by2); ctx.lineTo(bx2, by2); ctx.lineTo(bx2, by2 - bL); ctx.stroke();
+
+  ctx.restore();
+  return {x: ox, y: oy, hw: rd.w / 2, hh: rd.h};
+}
+
+function drawObjectShape(cx, baseY, rd, isBlur) {
+  var hw = rd.w / 2;
+  var hh = rd.h;
+  ctx.beginPath();
+  if (rd.key === 'cup') {
+    // Trapezoid cup
+    ctx.moveTo(cx - hw * 0.7, baseY);
+    ctx.lineTo(cx - hw, baseY - hh);
+    ctx.lineTo(cx + hw, baseY - hh);
+    ctx.lineTo(cx + hw * 0.7, baseY);
+    ctx.closePath();
+    // Handle
+    if (!isBlur) {
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(cx + hw, baseY - hh * 0.7);
+      ctx.quadraticCurveTo(cx + hw + 10, baseY - hh * 0.5, cx + hw, baseY - hh * 0.3);
+    }
+  } else if (rd.key === 'plate') {
+    // Flat ellipse plate
+    ctx.ellipse(cx, baseY - hh / 2, hw, hh / 2, 0, 0, Math.PI * 2);
+  } else if (rd.key === 'vase') {
+    // Vase outline
+    ctx.moveTo(cx - hw * 0.6, baseY);
+    ctx.quadraticCurveTo(cx - hw, baseY - hh * 0.4, cx - hw * 0.5, baseY - hh * 0.6);
+    ctx.quadraticCurveTo(cx - hw * 0.3, baseY - hh * 0.75, cx - hw * 0.4, baseY - hh * 0.85);
+    ctx.lineTo(cx - hw * 0.35, baseY - hh);
+    ctx.lineTo(cx + hw * 0.35, baseY - hh);
+    ctx.lineTo(cx + hw * 0.4, baseY - hh * 0.85);
+    ctx.quadraticCurveTo(cx + hw * 0.3, baseY - hh * 0.75, cx + hw * 0.5, baseY - hh * 0.6);
+    ctx.quadraticCurveTo(cx + hw, baseY - hh * 0.4, cx + hw * 0.6, baseY);
+    ctx.closePath();
+  } else if (rd.key === 'bottle') {
+    // Bottle
+    ctx.moveTo(cx - hw * 0.8, baseY);
+    ctx.lineTo(cx - hw * 0.8, baseY - hh * 0.55);
+    ctx.quadraticCurveTo(cx - hw * 0.8, baseY - hh * 0.7, cx - hw * 0.3, baseY - hh * 0.72);
+    ctx.lineTo(cx - hw * 0.3, baseY - hh);
+    ctx.lineTo(cx + hw * 0.3, baseY - hh);
+    ctx.lineTo(cx + hw * 0.3, baseY - hh * 0.72);
+    ctx.quadraticCurveTo(cx + hw * 0.8, baseY - hh * 0.7, cx + hw * 0.8, baseY - hh * 0.55);
+    ctx.lineTo(cx + hw * 0.8, baseY);
+    ctx.closePath();
+  } else if (rd.key === 'teapot') {
+    // Teapot body
+    ctx.moveTo(cx - hw * 0.8, baseY);
+    ctx.quadraticCurveTo(cx - hw, baseY - hh * 0.5, cx - hw * 0.6, baseY - hh * 0.8);
+    ctx.lineTo(cx - hw * 0.3, baseY - hh);
+    ctx.lineTo(cx + hw * 0.3, baseY - hh);
+    ctx.quadraticCurveTo(cx + hw, baseY - hh * 0.5, cx + hw * 0.8, baseY);
+    ctx.closePath();
+    if (!isBlur) {
+      ctx.stroke();
+      // Spout
+      ctx.beginPath();
+      ctx.moveTo(cx - hw, baseY - hh * 0.6);
+      ctx.quadraticCurveTo(cx - hw - 14, baseY - hh * 0.8, cx - hw - 10, baseY - hh);
+      // Handle
+      ctx.moveTo(cx + hw * 0.7, baseY - hh * 0.7);
+      ctx.quadraticCurveTo(cx + hw + 12, baseY - hh * 0.5, cx + hw * 0.7, baseY - hh * 0.3);
+    }
+  }
+  ctx.stroke();
+}
+
+// Draw speed slider (holo style)
+function drawSlider() {
+  if (gamePhase !== 'idle') return;
+
+  var sr = getSliderRect();
+  ctx.save();
+
+  // Track background
+  ctx.fillStyle = 'rgba(' + ACCENT_RGB + ',0.08)';
+  ctx.fillRect(sr.x, sr.y, sr.w, sr.h);
+  ctx.strokeStyle = 'rgba(' + ACCENT_RGB + ',0.25)';
+  ctx.lineWidth = 1;
+  ctx.strokeRect(sr.x, sr.y, sr.w, sr.h);
+
+  // Filled portion
+  var fillW = sr.w * pullSpeed;
+  var fillGrad = ctx.createLinearGradient(sr.x, 0, sr.x + sr.w, 0);
+  fillGrad.addColorStop(0, 'rgba(' + ACCENT_RGB + ',0.15)');
+  fillGrad.addColorStop(1, 'rgba(' + ACCENT_RGB + ',0.4)');
+  ctx.fillStyle = fillGrad;
+  ctx.fillRect(sr.x, sr.y, fillW, sr.h);
+
+  // Thumb
+  var thumbX = sr.x + fillW;
+  ctx.fillStyle = ACCENT;
+  ctx.shadowColor = ACCENT;
+  ctx.shadowBlur = 10;
+  ctx.fillRect(thumbX - 3, sr.y - 3, 6, sr.h + 6);
+  ctx.shadowBlur = 0;
+
+  // Tick marks
+  ctx.strokeStyle = 'rgba(' + ACCENT_RGB + ',0.2)';
+  ctx.lineWidth = 0.5;
+  for (var ti = 0; ti <= 10; ti++) {
+    var tx = sr.x + sr.w * ti / 10;
+    ctx.beginPath();
+    ctx.moveTo(tx, sr.y + sr.h);
+    ctx.lineTo(tx, sr.y + sr.h + 4);
+    ctx.stroke();
+  }
+
+  // Labels
+  ctx.font = '600 7px "JetBrains Mono", monospace';
+  ctx.textBaseline = 'top';
+  ctx.fillStyle = 'rgba(' + ACCENT_RGB + ',0.4)';
+  ctx.textAlign = 'left';
+  ctx.fillText(t('slow'), sr.x, sr.y + sr.h + 6);
+  ctx.textAlign = 'right';
+  ctx.fillText(t('fast'), sr.x + sr.w, sr.y + sr.h + 6);
+
+  // Speed readout above slider
+  ctx.textAlign = 'center';
+  ctx.font = '700 10px "JetBrains Mono", monospace';
+  ctx.fillStyle = ACCENT;
+  ctx.shadowColor = ACCENT;
+  ctx.shadowBlur = 8;
+  ctx.textBaseline = 'bottom';
+  ctx.fillText('v = ' + (pullSpeed * 5).toFixed(1) + ' m/s', sr.x + sr.w / 2, sr.y - 6);
+  ctx.shadowBlur = 0;
+
+  // Drag hint
+  ctx.font = '400 8px "Noto Sans SC", sans-serif';
+  ctx.fillStyle = 'rgba(' + ACCENT_RGB + ',0.25)';
+  var pulse = 0.5 + 0.5 * Math.sin(animFrame * 0.03);
+  ctx.globalAlpha = 0.4 + pulse * 0.3;
+  ctx.fillText(t('dragHint'), sr.x + sr.w / 2, sr.y - 20);
+  ctx.globalAlpha = 1;
+
+  ctx.restore();
+}
+
+// Draw force vectors during pull
+function drawForceVectors(table, objPos) {
+  if (gamePhase !== 'pulling' && gamePhase !== 'result') return;
+
+  var rd = ROUNDS[currentRound];
+  var arrowY = table.y - rd.h * 0.5;
+  var ox = table.x + table.w * 0.5 + objOffsetX;
+
+  ctx.save();
+
+  // Friction force arrow (pointing in pull direction, acting on object)
+  if (simFrictionForce > 0) {
+    var fLen = Math.min(simFrictionForce * 80, W * 0.15);
+    var fDir = clothOffsetX > 0 ? 1 : -1;
+    // During pull, friction tries to drag object with cloth (leftward)
+    fDir = -1;
+    drawArrow(ox, arrowY, ox + fDir * fLen, arrowY, 'rgba(' + ACCENT_RGB + ',0.6)', 2);
+
+    ctx.font = '600 7px "JetBrains Mono", monospace';
+    ctx.fillStyle = 'rgba(' + ACCENT_RGB + ',0.5)';
+    ctx.textAlign = fDir > 0 ? 'left' : 'right';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('F_friction=' + simFrictionForce.toFixed(2) + 'N', ox + fDir * (fLen + 6), arrowY);
+  }
+
+  // Inertia indicator (opposite to friction)
+  var iLen = Math.min(rd.mass * 60, W * 0.12);
+  drawArrow(ox, arrowY - 16, ox + iLen, arrowY - 16, 'rgba(100,200,255,0.5)', 1.5);
+  ctx.font = '600 6px "JetBrains Mono", monospace';
+  ctx.fillStyle = 'rgba(100,200,255,0.4)';
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(t('inertiaF') + ' (m=' + rd.mass + 'kg)', ox + iLen + 6, arrowY - 16);
+
+  ctx.restore();
+}
+
+function drawArrow(x1, y1, x2, y2, color, lw) {
+  var dx = x2 - x1;
+  var dy = y2 - y1;
+  var len = Math.sqrt(dx * dx + dy * dy);
+  if (len < 2) return;
+  var nx = dx / len;
+  var ny = dy / len;
+  var headLen = Math.min(8, len * 0.3);
+
+  ctx.save();
+  ctx.strokeStyle = color;
+  ctx.fillStyle = color;
+  ctx.lineWidth = lw;
+  ctx.shadowColor = color;
+  ctx.shadowBlur = 4;
+
+  // Shaft
+  ctx.beginPath();
+  ctx.moveTo(x1, y1);
+  ctx.lineTo(x2 - nx * headLen, y2 - ny * headLen);
+  ctx.stroke();
+
+  // Head
+  ctx.beginPath();
+  ctx.moveTo(x2, y2);
+  ctx.lineTo(x2 - nx * headLen - ny * headLen * 0.5, y2 - ny * headLen + nx * headLen * 0.5);
+  ctx.lineTo(x2 - nx * headLen + ny * headLen * 0.5, y2 - ny * headLen - nx * headLen * 0.5);
+  ctx.closePath();
+  ctx.fill();
+
+  ctx.restore();
+}
+
+// Draw speed gauge (arc style, holo)
+function drawGauge() {
+  var gx = W * 0.82;
+  var gy = H * 0.30;
+  var gr = Math.min(W, H) * 0.12;
+  if (gr < 20) gr = 20;
+
+  ctx.save();
+
+  // Arc background
+  var startA = Math.PI * 0.75;
+  var endA = Math.PI * 2.25;
+  ctx.strokeStyle = 'rgba(' + ACCENT_RGB + ',0.12)';
+  ctx.lineWidth = 4;
+  ctx.beginPath();
+  ctx.arc(gx, gy, gr, startA, endA);
+  ctx.stroke();
+
+  // Arc fill
+  var fillA = startA + (endA - startA) * pullSpeed;
+  ctx.strokeStyle = ACCENT;
+  ctx.lineWidth = 4;
+  ctx.shadowColor = ACCENT;
+  ctx.shadowBlur = 10;
+  ctx.beginPath();
+  ctx.arc(gx, gy, gr, startA, fillA);
+  ctx.stroke();
+  ctx.shadowBlur = 0;
+
+  // Tick marks on arc
+  ctx.strokeStyle = 'rgba(' + ACCENT_RGB + ',0.3)';
+  ctx.lineWidth = 1;
+  for (var ti = 0; ti <= 10; ti++) {
+    var a = startA + (endA - startA) * ti / 10;
+    var inner = gr - 6;
+    var outer = gr + 2;
+    ctx.beginPath();
+    ctx.moveTo(gx + Math.cos(a) * inner, gy + Math.sin(a) * inner);
+    ctx.lineTo(gx + Math.cos(a) * outer, gy + Math.sin(a) * outer);
+    ctx.stroke();
+  }
+
+  // Needle
+  var needleA = startA + (endA - startA) * pullSpeed;
+  ctx.strokeStyle = ACCENT;
+  ctx.lineWidth = 2;
+  ctx.shadowColor = ACCENT;
+  ctx.shadowBlur = 6;
+  ctx.beginPath();
+  ctx.moveTo(gx, gy);
+  ctx.lineTo(gx + Math.cos(needleA) * (gr - 10), gy + Math.sin(needleA) * (gr - 10));
+  ctx.stroke();
+  ctx.shadowBlur = 0;
+
+  // Center dot
+  ctx.fillStyle = ACCENT;
+  ctx.beginPath();
+  ctx.arc(gx, gy, 3, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Speed text
+  ctx.font = '700 14px "JetBrains Mono", monospace';
+  ctx.fillStyle = ACCENT;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'top';
+  ctx.shadowColor = ACCENT;
+  ctx.shadowBlur = 10;
+  ctx.fillText((pullSpeed * 5).toFixed(1), gx, gy + gr * 0.3);
+  ctx.shadowBlur = 0;
+  ctx.font = '400 7px "JetBrains Mono", monospace';
+  ctx.fillStyle = 'rgba(' + ACCENT_RGB + ',0.5)';
+  ctx.fillText('m/s', gx, gy + gr * 0.3 + 16);
+
+  // Gauge label
+  ctx.font = '700 7px "JetBrains Mono", monospace';
+  ctx.fillStyle = 'rgba(' + ACCENT_RGB + ',0.5)';
+  ctx.letterSpacing = '0.15em';
+  ctx.fillText('PULL SPEED', gx, gy - gr - 10);
+
+  ctx.restore();
+}
+
+// Draw result overlay
+function drawResult() {
+  if (gamePhase !== 'result') return;
+  resultShowTime++;
+  var alpha = Math.min(resultShowTime / 30, 1);
+
+  ctx.save();
+  ctx.globalAlpha = alpha * 0.7;
+
+  // Semi-transparent overlay
+  ctx.fillStyle = 'rgba(5,6,15,0.5)';
+  ctx.fillRect(0, 0, W, H);
+
+  ctx.globalAlpha = alpha;
+
+  // Result box
+  var bw = Math.min(W * 0.6, 320);
+  var bh = 120;
+  var bx = (W - bw) / 2;
+  var by = H * 0.25;
+
+  ctx.strokeStyle = simResult === 'success' ? 'rgba(100,255,180,0.5)' : 'rgba(255,100,80,0.5)';
+  ctx.lineWidth = 1;
+  ctx.strokeRect(bx, by, bw, bh);
+  ctx.fillStyle = 'rgba(5,6,15,0.9)';
+  ctx.fillRect(bx, by, bw, bh);
+
+  // Corner brackets on result box
+  var bm2 = 6, bL2 = 14;
+  ctx.strokeStyle = simResult === 'success' ? 'rgba(100,255,180,0.4)' : 'rgba(255,100,80,0.4)';
+  ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(bx + bm2, by + bm2 + bL2); ctx.lineTo(bx + bm2, by + bm2); ctx.lineTo(bx + bm2 + bL2, by + bm2); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(bx + bw - bm2 - bL2, by + bm2); ctx.lineTo(bx + bw - bm2, by + bm2); ctx.lineTo(bx + bw - bm2, by + bm2 + bL2); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(bx + bm2, by + bh - bm2 - bL2); ctx.lineTo(bx + bm2, by + bh - bm2); ctx.lineTo(bx + bm2 + bL2, by + bh - bm2); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(bx + bw - bm2 - bL2, by + bh - bm2); ctx.lineTo(bx + bw - bm2, by + bh - bm2); ctx.lineTo(bx + bw - bm2, by + bh - bm2 - bL2); ctx.stroke();
+
+  // Result text
+  var resultColor = simResult === 'success' ? 'rgba(100,255,180,0.9)' : 'rgba(255,100,80,0.9)';
+  ctx.font = '700 14px "JetBrains Mono", monospace';
+  ctx.fillStyle = resultColor;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.shadowColor = resultColor;
+  ctx.shadowBlur = 12;
+  ctx.fillText(simResult === 'success' ? t('success') : t('fail'), bx + bw / 2, by + 30);
+  ctx.shadowBlur = 0;
+
+  // Physics readout
+  ctx.font = '400 9px "JetBrains Mono", monospace';
+  ctx.fillStyle = 'rgba(' + ACCENT_RGB + ',0.6)';
+  ctx.fillText('F_friction = ' + simFrictionForce.toFixed(2) + ' N', bx + bw / 2, by + 55);
+  ctx.fillText('impulse = ' + simImpulse.toFixed(3) + ' N\u00b7s', bx + bw / 2, by + 70);
+
+  // Score
+  var sc = roundScores[roundScores.length - 1] || 0;
+  ctx.font = '700 11px "JetBrains Mono", monospace';
+  ctx.fillStyle = 'rgba(' + ACCENT_RGB + ',0.8)';
+  ctx.fillText('+' + sc + ' pts \u00b7 TOTAL: ' + totalScore, bx + bw / 2, by + 95);
+
+  // Hint for failure
+  if (simResult === 'fail') {
+    ctx.font = '400 9px "Noto Sans SC", sans-serif';
+    ctx.fillStyle = 'rgba(255,100,80,0.5)';
+    ctx.fillText(t('tryAgain'), bx + bw / 2, by + bh + 16);
+  }
+
+  ctx.restore();
+}
+
+// Draw completion screen
+function drawComplete() {
+  if (gamePhase !== 'complete') return;
+
+  ctx.save();
+  ctx.fillStyle = 'rgba(5,6,15,0.7)';
+  ctx.fillRect(0, 0, W, H);
+
+  ctx.font = '700 18px "JetBrains Mono", monospace';
+  ctx.fillStyle = ACCENT;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.shadowColor = ACCENT;
+  ctx.shadowBlur = 16;
+  ctx.fillText(t('complete'), W / 2, H * 0.3);
+  ctx.shadowBlur = 0;
+
+  ctx.font = '700 24px "JetBrains Mono", monospace';
+  ctx.fillStyle = ACCENT;
+  ctx.shadowColor = ACCENT;
+  ctx.shadowBlur = 14;
+  ctx.fillText(totalScore + ' / 500', W / 2, H * 0.4);
+  ctx.shadowBlur = 0;
+
+  ctx.font = '400 11px "Noto Sans SC", sans-serif';
+  ctx.fillStyle = 'rgba(' + ACCENT_RGB + ',0.6)';
+  ctx.fillText(t('insight'), W / 2, H * 0.55);
+
+  // Holo decorative icons at bottom
+  drawHoloIcon1(W * 0.3, H * 0.72, 28);
+  drawHoloIcon2(W * 0.5, H * 0.72, 28);
+  drawHoloIcon3(W * 0.7, H * 0.72, 28);
+
+  ctx.restore();
+}
+
+// Mini holo icons (from the spec)
+function drawHoloIcon1(cx, cy, sz) {
+  // Pendulum / force icon
+  var s = sz / 50;
+  ctx.save();
+  ctx.translate(cx - sz, cy - sz);
+  ctx.scale(s, s);
+  ctx.strokeStyle = ACCENT;
+  ctx.lineWidth = 2;
+  ctx.shadowColor = ACCENT;
+  ctx.shadowBlur = 6;
+  ctx.beginPath();
+  ctx.arc(50, 30, 8, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(50, 38); ctx.lineTo(50, 72);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(44, 68); ctx.lineTo(50, 76); ctx.lineTo(56, 68);
+  ctx.stroke();
+  ctx.shadowBlur = 0;
+  ctx.strokeStyle = 'rgba(' + ACCENT_RGB + ',0.3)';
+  ctx.beginPath();
+  ctx.arc(50, 30, 12, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.restore();
+}
+
+function drawHoloIcon2(cx, cy, sz) {
+  // Projectile trajectory
+  var s = sz / 50;
+  ctx.save();
+  ctx.translate(cx - sz, cy - sz);
+  ctx.scale(s, s);
+  ctx.strokeStyle = ACCENT;
+  ctx.lineWidth = 1.5;
+  ctx.shadowColor = ACCENT;
+  ctx.shadowBlur = 6;
+  ctx.beginPath();
+  ctx.moveTo(10, 82); ctx.lineTo(90, 82);
+  ctx.stroke();
+  ctx.setLineDash([3, 2]);
+  ctx.beginPath();
+  ctx.moveTo(10, 82);
+  ctx.quadraticCurveTo(50, 10, 90, 82);
+  ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.beginPath(); ctx.arc(10, 82, 3.5, 0, Math.PI * 2); ctx.stroke();
+  ctx.beginPath(); ctx.arc(90, 82, 3.5, 0, Math.PI * 2); ctx.stroke();
+  ctx.shadowBlur = 0;
+  ctx.fillStyle = ACCENT;
+  ctx.beginPath(); ctx.arc(50, 26, 2, 0, Math.PI * 2); ctx.fill();
+  ctx.restore();
+}
+
+function drawHoloIcon3(cx, cy, sz) {
+  // Lever / fulcrum
+  var s = sz / 50;
+  ctx.save();
+  ctx.translate(cx - sz, cy - sz);
+  ctx.scale(s, s);
+  ctx.strokeStyle = ACCENT;
+  ctx.lineWidth = 2;
+  ctx.shadowColor = ACCENT;
+  ctx.shadowBlur = 6;
+  ctx.beginPath();
+  ctx.moveTo(12, 55); ctx.lineTo(88, 55);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(50, 55); ctx.lineTo(43, 72); ctx.lineTo(57, 72); ctx.closePath();
+  ctx.stroke();
+  ctx.shadowBlur = 0;
+  ctx.strokeStyle = 'rgba(' + ACCENT_RGB + ',0.6)';
+  ctx.strokeRect(14, 42, 14, 13);
+  ctx.strokeRect(72, 48, 12, 7);
+  ctx.restore();
+}
+
+// ========================================
+// SIMULATION UPDATE
+// ========================================
+
+function updateSim() {
+  if (gamePhase === 'pulling') {
+    pullTimer += 1 / 60;
+    // Cloth moves out to the left
+    var pullProgress = Math.min(pullTimer / pullDuration, 1);
+    var eased = 1 - Math.pow(1 - pullProgress, 3); // easeOutCubic
+    clothOffsetX = -eased * W * 0.35;
+
+    // Object gets dragged by friction during pull
+    if (simResult === 'fail') {
+      // Object follows with some lag
+      var dragFactor = pullProgress * 0.6;
+      objOffsetX = clothOffsetX * dragFactor;
+    } else {
+      // Object barely moves (slight wobble)
+      objOffsetX = Math.sin(pullProgress * Math.PI * 4) * 2 * (1 - pullProgress);
+    }
+
+    if (pullProgress >= 1) {
+      pullActive = false;
+      if (simResult === 'fail') {
+        // Object continues sliding off
+        gamePhase = 'result';
+        spawnBurst(W * 0.5 + objOffsetX, H * 0.45, 15);
+      } else {
+        gamePhase = 'result';
+        spawnBurst(W * 0.5, H * 0.45, 20);
+      }
+      updateBtnState();
+    }
+
+    // After pull, object slides further if fail
+    if (!pullActive && simResult === 'fail') {
+      objOffsetX -= 2;
+    }
+  }
+
+  updateParticles();
+  animFrame++;
+}
+
+// ========================================
+// MAIN DRAW
+// ========================================
+
+function draw() {
+  resize();
+  updateSim();
+
+  drawBg();
+  drawHudTop();
+
+  var table = drawTable();
+  drawCloth(table);
+  var objPos = drawObject(table);
+  drawForceVectors(table, objPos);
+  drawSlider();
+  drawGauge();
+  drawParticles();
+  drawResult();
+  drawComplete();
+  drawHudBottom();
+
+  requestAnimationFrame(draw);
+}
+
+// --- Init ---
+initRound();
+resize();
+draw();
+</script>
+</body>
+</html>

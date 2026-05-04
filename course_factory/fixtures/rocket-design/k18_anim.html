@@ -1,0 +1,807 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Space+Grotesk:wght@400;500;700&family=Inter:wght@400;500&family=Noto+Sans+SC:wght@400;700&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box;}
+html,body{width:100%;height:100vh;overflow:hidden;}
+body{background:var(--bg,#0c0e12);color:var(--text,#f6f6fc);font-family:'Inter','Noto Sans SC',sans-serif;}
+/* ── Outer: sidebar + main ── */
+.wrapper{display:flex;flex-direction:row;height:100vh;overflow:hidden;}
+.sidebar{width:200px;min-width:200px;max-width:200px;display:flex;flex-direction:column;gap:6px;padding:10px;background:var(--sb-bg,rgba(5,6,15,0.92));border-right:1px solid var(--sb-border,rgba(80,255,176,0.15));overflow-y:auto;transition:background 0.3s,border-color 0.3s;}
+.lang-btn{align-self:flex-start;flex-shrink:0;font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:700;padding:3px 8px;cursor:pointer;border:1px solid var(--sb-btn-bd,transparent);background:var(--sb-btn-bg,transparent);color:var(--sb-accent,var(--primary,#50ffb0));letter-spacing:1px;text-transform:uppercase;}
+.lang-btn:hover{border-color:var(--sb-accent,var(--primary));background:rgba(128,128,128,0.1);}
+/* ── Style switcher ── */
+.style-switcher{display:flex;gap:4px;margin:4px 0 2px;}
+.vm-btn{font-family:'JetBrains Mono',monospace;font-size:8px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;padding:3px 6px;cursor:pointer;border:1px solid var(--sb-btn-bd,rgba(128,128,128,0.2));background:var(--sb-btn-bg,transparent);color:var(--sb-dim,rgba(128,128,128,0.5));transition:all 0.2s;}
+.vm-btn:hover{color:var(--sb-accent,var(--primary));border-color:var(--sb-accent,var(--primary));}
+.vm-btn.vm-active{color:var(--sb-accent,var(--primary));border-color:var(--sb-accent,var(--primary));background:rgba(128,128,128,0.12);}
+/* ── Sidebar text ── */
+.sidebar h1{font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:700;color:var(--sb-accent,var(--primary,#50ffb0));margin-top:4px;line-height:1.3;text-transform:uppercase;letter-spacing:0.04em;}
+.sidebar .sub{font-family:'Noto Sans SC',sans-serif;font-size:10px;color:var(--sb-dim,rgba(128,128,128,0.7));letter-spacing:0.06em;}
+.sidebar .frame-ind{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--sb-mute,rgba(128,128,128,0.5));letter-spacing:0.1em;margin-top:4px;}
+.sidebar .guide-label{font-family:'JetBrains Mono',monospace;font-size:9px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:var(--sb-accent,var(--primary,#50ffb0));margin-top:8px;}
+.sidebar .guide-content{font-family:'Noto Sans SC',sans-serif;font-size:11px;color:var(--sb-dim,rgba(255,255,255,0.7));line-height:1.5;}
+.sidebar .guide-content ul{padding-left:16px;margin:0;}
+.sidebar .guide-content li{margin-bottom:1px;}
+/* ── Main area: canvas + controls + hud ── */
+.anim-main{flex:1;display:flex;flex-direction:column;min-width:0;}
+.canvas-wrap{flex:1;min-height:0;position:relative;}
+canvas{width:100%;height:100%;display:block;}
+/* ── Controls + HUD ── */
+.controls{display:flex;justify-content:center;align-items:center;gap:12px;padding:6px 16px;background:rgba(0,0,0,0.35);}
+.ctrl-btn{font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;padding:5px 16px;border:none;cursor:pointer;color:var(--ctrl-color,var(--bg,#0c0e12));background:linear-gradient(135deg,var(--ctrl-bg,var(--primary,#50ffb0)),var(--primary-dim,#17df93));transition:transform 0.1s,box-shadow 0.2s;box-shadow:0 0 10px var(--glow-strong,rgba(80,255,176,0.3));}
+.ctrl-btn:hover{transform:scale(1.04);}
+.ctrl-btn:active{transform:scale(0.96);}
+.ctrl-btn.secondary{background:var(--sb-btn-bg,rgba(23,26,31,0.92));color:var(--sb-mute,rgba(128,128,128,0.6));box-shadow:none;border:1px solid var(--sb-btn-bd,rgba(128,128,128,0.15));}
+.ctrl-btn.secondary:hover{color:var(--sb-accent,var(--primary,#50ffb0));border-color:var(--sb-accent,var(--primary));}
+.hud{height:40px;display:flex;align-items:center;justify-content:space-around;background:var(--hud-bg,rgba(0,0,0,0.55));border-top:1px solid var(--hud-border,transparent);padding:0 16px;transition:background 0.3s;}
+.hud-item{text-align:center;}
+.hud-label{font-family:'JetBrains Mono',monospace;font-size:7px;letter-spacing:0.15em;text-transform:uppercase;color:var(--hud-label,var(--sb-mute));}
+.hud-val{font-family:'JetBrains Mono',monospace;font-size:13px;font-weight:700;color:var(--hud-value,var(--sb-accent,var(--primary,#50ffb0)));}
+</style>
+</head>
+<body>
+<div class="wrapper">
+<!-- Sidebar: lang-btn, style switcher, title, guide -->
+<div class="sidebar">
+<button class="lang-btn" id="langBtn">CN</button>
+<div class="style-switcher" id="styleSwitcher"></div>
+<h1 id="title"></h1>
+<div class="sub" id="subtitle"></div>
+<div class="frame-ind" id="frameIndicator"></div>
+<div class="guide-label" id="guideTitle"></div>
+<div class="guide-content" id="guideContent"></div>
+</div>
+<!-- Main: canvas fills all space, nothing overlaps -->
+<div class="anim-main">
+<div class="canvas-wrap"><canvas id="c"></canvas></div>
+<div class="controls">
+<button class="ctrl-btn secondary" id="btnPrev"></button>
+<button class="ctrl-btn" id="btnPlay"></button>
+<button class="ctrl-btn secondary" id="btnNext"></button>
+</div>
+<div class="hud">
+<div class="hud-item"><div class="hud-label" id="hudL1"></div><div class="hud-val" id="hudV1"></div></div>
+<div class="hud-item"><div class="hud-label" id="hudL2"></div><div class="hud-val" id="hudV2"></div></div>
+<div class="hud-item"><div class="hud-label" id="hudL3"></div><div class="hud-val" id="hudV3"></div></div>
+<div class="hud-item"><div class="hud-label" id="hudL4"></div><div class="hud-val" id="hudV4"></div></div>
+</div>
+</div>
+</div>
+
+<!-- Runtime (inlined) -->
+<script>
+/**
+ * Animation Runtime -- shared skeleton for all course factory animations.
+ */
+
+var AnimRuntime = (function () {
+  'use strict';
+
+  var cv, ctx, W = 800, H = 400;
+  var DPR = Math.min(window.devicePixelRatio || 1, 2);
+  var currentFrame = 0, totalFrames = 4;
+  var transitioning = false, playing = false, playTimer = null;
+  var LANG = 'cn';
+  var I18N = {};
+
+  var VISUAL_MODE = 'cyberpunk';
+  var VISUAL_MODES = {
+    light: {
+      label: 'LIGHT',
+      canvasBg1: '#fafaf5', canvasBg2: '#f0f0ea',
+      canvasGrid: 'rgba(15,23,42,0.04)', canvasGridWidth: 0.5,
+      canvasText: '#0f172a', canvasTextDim: '#475569', canvasTextMute: '#94a3b8',
+      canvasStroke: '#0f172a', canvasStrokeDim: 'rgba(15,23,42,0.3)',
+      canvasAccent: null, canvasGlow: false, canvasCornerBrackets: false, canvasScanlines: false,
+      canvasInnerBorder: true, canvasInnerBorderColor: 'rgba(15,23,42,0.2)',
+      sidebarBg: 'rgba(250,250,245,0.96)', sidebarBorder: '#d4d4c8',
+      sidebarText: '#0f172a', sidebarTextDim: '#475569', sidebarTextMute: '#94a3b8',
+      sidebarAccent: null, sidebarBtnBg: 'transparent', sidebarBtnBorder: null,
+      hudBg: 'rgba(250,250,245,0.92)', hudBorder: '#d4d4c8', hudLabel: '#64748b', hudValue: '#0f172a',
+      ctrlBg: '#0f172a', ctrlColor: '#fafaf5',
+    },
+    dark: {
+      label: 'DARK',
+      canvasBg1: '#0a0a0a', canvasBg2: '#111111',
+      canvasGrid: 'rgba(255,255,255,0.03)', canvasGridWidth: 0.5,
+      canvasText: '#e5e5e5', canvasTextDim: '#a3a3a3', canvasTextMute: '#525252',
+      canvasStroke: '#e5e5e5', canvasStrokeDim: 'rgba(255,255,255,0.2)',
+      canvasAccent: null, canvasGlow: false, canvasCornerBrackets: false, canvasScanlines: false,
+      canvasInnerBorder: false, canvasTopLine: true,
+      sidebarBg: 'rgba(10,10,10,0.96)', sidebarBorder: '#1f1f1f',
+      sidebarText: '#fafafa', sidebarTextDim: '#737373', sidebarTextMute: '#525252',
+      sidebarAccent: null, sidebarBtnBg: 'transparent', sidebarBtnBorder: '#262626',
+      hudBg: 'rgba(10,10,10,0.9)', hudBorder: '#1f1f1f', hudLabel: '#525252', hudValue: null,
+      ctrlBg: null, ctrlColor: null,
+    },
+    cyberpunk: {
+      label: 'CYBER',
+      canvasBg1: '#05060f', canvasBg2: '#0d0e1a',
+      canvasGrid: null, canvasGridWidth: 0.5,
+      canvasText: '#e2e8f0', canvasTextDim: '#cbd5e1', canvasTextMute: '#64748b',
+      canvasStroke: '#e2e8f0', canvasStrokeDim: 'rgba(255,255,255,0.12)',
+      canvasAccent: null, canvasGlow: true, canvasCornerBrackets: true, canvasScanlines: true,
+      canvasInnerBorder: false, canvasTopLine: false,
+      sidebarBg: 'rgba(5,6,15,0.92)', sidebarBorder: null,
+      sidebarText: null, sidebarTextDim: null, sidebarTextMute: null,
+      sidebarAccent: null, sidebarBtnBg: 'transparent', sidebarBtnBorder: null,
+      hudBg: 'rgba(5,6,15,0.9)', hudBorder: null, hudLabel: null, hudValue: null,
+      ctrlBg: null, ctrlColor: '#05060f',
+    },
+  };
+
+  var REF_W = 700, REF_H = 400;
+  var _vw = REF_W, _vh = REF_H;
+
+  var _BASE = {
+    bg: 'oklch(0.14 0.035 265)', bg2: 'oklch(0.18 0.04 265)', surface: 'oklch(0.22 0.045 265)',
+    text: 'oklch(0.96 0.01 265)', muted: 'oklch(0.55 0.03 265)',
+    error: 'oklch(0.70 0.18 25)', outline: 'oklch(0.55 0.03 265)',
+    glass: 'oklch(0.18 0.04 265 / 0.7)', glassBlur: 12, radius: '14px',
+  };
+  function _theme(primary, primaryDim, secondary, secondaryDim, tertiary, tertiaryDim, glow, glowStrong) {
+    return Object.assign({}, _BASE, {
+      primary: primary, primaryDim: primaryDim,
+      secondary: secondary, secondaryDim: secondaryDim,
+      tertiary: tertiary, tertiaryDim: tertiaryDim,
+      glow: glow, glowStrong: glowStrong,
+    });
+  }
+  var PALETTES = {
+    cs: _theme('oklch(0.75 0.17 200)','oklch(0.55 0.16 200)','oklch(0.92 0.08 190)','oklch(0.35 0.10 210)','oklch(0.85 0.14 85)','oklch(0.65 0.12 85)','oklch(0.75 0.17 200 / 0.1)','oklch(0.75 0.17 200 / 0.25)'),
+    bio: _theme('oklch(0.75 0.17 155)','oklch(0.55 0.16 155)','oklch(0.92 0.08 150)','oklch(0.35 0.10 160)','oklch(0.85 0.14 85)','oklch(0.65 0.12 85)','oklch(0.75 0.17 155 / 0.1)','oklch(0.75 0.17 155 / 0.25)'),
+    space: _theme('oklch(0.72 0.17 295)','oklch(0.52 0.16 295)','oklch(0.92 0.08 295)','oklch(0.35 0.10 290)','oklch(0.85 0.14 85)','oklch(0.65 0.12 85)','oklch(0.72 0.17 295 / 0.1)','oklch(0.72 0.17 295 / 0.25)'),
+    mech: _theme('oklch(0.75 0.17 55)','oklch(0.55 0.16 50)','oklch(0.92 0.08 60)','oklch(0.35 0.10 60)','oklch(0.85 0.14 85)','oklch(0.65 0.12 85)','oklch(0.75 0.17 55 / 0.1)','oklch(0.75 0.17 55 / 0.25)'),
+    ai: _theme('oklch(0.72 0.17 335)','oklch(0.52 0.16 335)','oklch(0.92 0.08 335)','oklch(0.35 0.10 330)','oklch(0.85 0.14 85)','oklch(0.65 0.12 85)','oklch(0.72 0.17 335 / 0.1)','oklch(0.72 0.17 335 / 0.25)'),
+    math: _theme('oklch(0.72 0.17 245)','oklch(0.52 0.16 245)','oklch(0.92 0.08 240)','oklch(0.35 0.10 245)','oklch(0.85 0.14 85)','oklch(0.65 0.12 85)','oklch(0.72 0.17 245 / 0.1)','oklch(0.72 0.17 245 / 0.25)'),
+    med: _theme('oklch(0.75 0.16 15)','oklch(0.55 0.15 15)','oklch(0.92 0.08 15)','oklch(0.35 0.10 15)','oklch(0.85 0.14 85)','oklch(0.65 0.12 85)','oklch(0.75 0.16 15 / 0.1)','oklch(0.75 0.16 15 / 0.25)'),
+    chem: _theme('oklch(0.82 0.17 125)','oklch(0.62 0.16 125)','oklch(0.95 0.08 120)','oklch(0.35 0.10 130)','oklch(0.85 0.14 85)','oklch(0.65 0.12 85)','oklch(0.82 0.17 125 / 0.1)','oklch(0.82 0.17 125 / 0.25)'),
+    phys: _theme('oklch(0.78 0.13 215)','oklch(0.55 0.13 215)','oklch(0.92 0.08 215)','oklch(0.35 0.10 215)','oklch(0.85 0.14 85)','oklch(0.65 0.12 85)','oklch(0.78 0.13 215 / 0.1)','oklch(0.78 0.13 215 / 0.25)'),
+    env: _theme('oklch(0.72 0.15 140)','oklch(0.52 0.13 140)','oklch(0.92 0.08 140)','oklch(0.35 0.10 140)','oklch(0.85 0.14 85)','oklch(0.65 0.12 85)','oklch(0.72 0.15 140 / 0.1)','oklch(0.72 0.15 140 / 0.25)'),
+    robo: _theme('oklch(0.82 0.15 95)','oklch(0.55 0.14 95)','oklch(0.95 0.08 95)','oklch(0.35 0.10 95)','oklch(0.85 0.14 85)','oklch(0.65 0.12 85)','oklch(0.82 0.15 95 / 0.1)','oklch(0.82 0.15 95 / 0.25)'),
+    elec: _theme('oklch(0.72 0.17 275)','oklch(0.52 0.16 275)','oklch(0.92 0.08 275)','oklch(0.35 0.10 275)','oklch(0.85 0.14 85)','oklch(0.65 0.12 85)','oklch(0.72 0.17 275 / 0.1)','oklch(0.72 0.17 275 / 0.25)'),
+    helix_lab: null, aether_clinic: null, ares_mission: null,
+    celestial_observatory: null, neural_circuit: null, subatomic_matrix: null,
+    rocketry_control: null, aqua_flow: null, ember_forge: null, flora_pulse: null,
+  };
+  PALETTES.helix_lab = PALETTES.bio;
+  PALETTES.aether_clinic = PALETTES.med;
+  PALETTES.ares_mission = PALETTES.space;
+  PALETTES.celestial_observatory = PALETTES.phys;
+  PALETTES.neural_circuit = PALETTES.ai;
+  PALETTES.subatomic_matrix = PALETTES.math;
+  PALETTES.rocketry_control = PALETTES.space;
+  PALETTES.aqua_flow = PALETTES.env;
+  PALETTES.ember_forge = PALETTES.mech;
+  PALETTES.flora_pulse = PALETTES.bio;
+
+  var PAL = PALETTES.cs;
+
+  function lerp(a, b, p) { return a + (b - a) * p; }
+  function easeInOut(x) { return x < 0.5 ? 2 * x * x : 1 - Math.pow(-2 * x + 2, 2) / 2; }
+
+  function interpolate(value, input, output, opts) {
+    var n = input.length;
+    var easing = (opts && opts.easing) || null;
+    var clamp = !(opts && opts.extrapolate === 'extend');
+    if (value <= input[0]) {
+      if (clamp) return output[0];
+      var p0 = (value - input[0]) / (input[1] - input[0]);
+      return lerp(output[0], output[1], easing ? easing(p0) : p0);
+    }
+    if (value >= input[n - 1]) {
+      if (clamp) return output[n - 1];
+      var pn = (value - input[n - 2]) / (input[n - 1] - input[n - 2]);
+      return lerp(output[n - 2], output[n - 1], easing ? easing(pn) : pn);
+    }
+    for (var i = 1; i < n; i++) {
+      if (value <= input[i]) {
+        var p = (value - input[i - 1]) / (input[i] - input[i - 1]);
+        if (easing) p = easing(p);
+        return lerp(output[i - 1], output[i], p);
+      }
+    }
+    return output[n - 1];
+  }
+  function merge(base, ov) { var r = {}; for (var k in base) r[k] = base[k]; for (var k2 in ov) r[k2] = ov[k2]; return r; }
+
+  function t(key) { return (I18N[key] && I18N[key][LANG]) || (I18N[key] && I18N[key]['en']) || key; }
+
+  function _buildI18N(cfg) {
+    I18N = {
+      btnPlay:  { en: 'PLAY',  cn: '\u64ad\u653e' },
+      btnPause: { en: 'PAUSE', cn: '\u6682\u505c' },
+      btnPrev:  { en: 'PREV',  cn: '\u4e0a\u4e00\u5e27' },
+      btnNext:  { en: 'NEXT',  cn: '\u4e0b\u4e00\u5e27' },
+      guideDefault: { en: 'GUIDE', cn: '\u89c2\u770b\u6307\u5357' },
+    };
+    if (cfg.i18n) { for (var k in cfg.i18n) I18N[k] = cfg.i18n[k]; }
+  }
+
+  function _modeColors() {
+    var m = VISUAL_MODES[VISUAL_MODE] || VISUAL_MODES.cyberpunk;
+    return {
+      bg1: m.canvasBg1, bg2: m.canvasBg2,
+      grid: m.canvasGrid, gridW: m.canvasGridWidth || 0.5,
+      text: m.canvasText || PAL.text, dim: m.canvasTextDim || PAL.muted, mute: m.canvasTextMute || PAL.muted,
+      stroke: m.canvasStroke || PAL.text, strokeDim: m.canvasStrokeDim || PAL.muted,
+      accent: m.canvasAccent || PAL.primary,
+      glow: !!m.canvasGlow, cornerBrackets: !!m.canvasCornerBrackets, scanlines: !!m.canvasScanlines,
+      innerBorder: !!m.canvasInnerBorder, innerBorderColor: m.canvasInnerBorderColor || 'rgba(0,0,0,0.15)',
+      topLine: !!m.canvasTopLine,
+    };
+  }
+
+  function _applyVisualMode(mode) {
+    VISUAL_MODE = mode;
+    var m = VISUAL_MODES[mode] || VISUAL_MODES.cyberpunk;
+    var root = document.documentElement;
+    root.style.setProperty('--sb-bg', m.sidebarBg || 'rgba(5,6,15,0.92)');
+    root.style.setProperty('--sb-border', m.sidebarBorder || (m.canvasAccent || PAL.primary));
+    root.style.setProperty('--sb-text', m.sidebarText || PAL.text);
+    root.style.setProperty('--sb-dim', m.sidebarTextDim || PAL.muted);
+    root.style.setProperty('--sb-mute', m.sidebarTextMute || PAL.muted);
+    root.style.setProperty('--sb-accent', m.sidebarAccent || PAL.primary);
+    root.style.setProperty('--sb-btn-bg', m.sidebarBtnBg || 'transparent');
+    root.style.setProperty('--sb-btn-bd', m.sidebarBtnBorder || 'transparent');
+    root.style.setProperty('--hud-bg', m.hudBg || 'rgba(5,6,15,0.9)');
+    root.style.setProperty('--hud-border', m.hudBorder || 'transparent');
+    root.style.setProperty('--hud-label', m.hudLabel || PAL.muted);
+    root.style.setProperty('--hud-value', m.hudValue || PAL.text);
+    root.style.setProperty('--ctrl-bg', m.ctrlBg || PAL.primary);
+    root.style.setProperty('--ctrl-color', m.ctrlColor || PAL.bg);
+    var btns = document.querySelectorAll('.vm-btn');
+    btns.forEach(function(b) { b.classList.toggle('vm-active', b.dataset.mode === mode); });
+    drawFrame(currentFrame);
+  }
+
+  function _buildStyleSwitcher() {
+    var container = document.getElementById('styleSwitcher');
+    if (!container) return;
+    container.innerHTML = '';
+    ['light', 'dark', 'cyberpunk'].forEach(function(mKey) {
+      var m = VISUAL_MODES[mKey];
+      var btn = document.createElement('button');
+      btn.className = 'vm-btn' + (mKey === VISUAL_MODE ? ' vm-active' : '');
+      btn.dataset.mode = mKey;
+      btn.textContent = m.label;
+      btn.addEventListener('click', function() { _applyVisualMode(mKey); });
+      container.appendChild(btn);
+    });
+  }
+
+  function _defaultDrawBg(c, w, h) {
+    var mc = _modeColors();
+    var g = c.createLinearGradient(0, 0, 0, h);
+    g.addColorStop(0, mc.bg1); g.addColorStop(1, mc.bg2);
+    c.fillStyle = g; c.fillRect(0, 0, w, h);
+    var gridColor = mc.grid || (mc.accent ? mc.accent.replace(/[\d.]+\)$/, '0.06)') : 'rgba(255,255,255,0.04)');
+    c.strokeStyle = gridColor; c.lineWidth = mc.gridW;
+    var step = VISUAL_MODE === 'light' ? 24 : 64;
+    for (var x = 0; x < w; x += step) { c.beginPath(); c.moveTo(x, 0); c.lineTo(x, h); c.stroke(); }
+    for (var y = 0; y < h; y += step) { c.beginPath(); c.moveTo(0, y); c.lineTo(w, y); c.stroke(); }
+    if (mc.innerBorder) { c.strokeStyle = mc.innerBorderColor; c.lineWidth = 0.5; c.strokeRect(6, 6, w - 12, h - 12); }
+    if (mc.topLine) {
+      var tg = c.createLinearGradient(w * 0.15, 0, w * 0.85, 0);
+      tg.addColorStop(0, 'transparent'); tg.addColorStop(0.4, mc.accent); tg.addColorStop(0.6, mc.accent); tg.addColorStop(1, 'transparent');
+      c.strokeStyle = tg; c.lineWidth = 1; c.beginPath(); c.moveTo(0, 0.5); c.lineTo(w, 0.5); c.stroke();
+    }
+    if (mc.scanlines) { c.strokeStyle = 'rgba(255,255,255,0.025)'; c.lineWidth = 1; for (var sy = 0; sy < h; sy += 3) { c.beginPath(); c.moveTo(0, sy); c.lineTo(w, sy); c.stroke(); } }
+    if (mc.cornerBrackets) {
+      var bLen = Math.min(w, h) * 0.06;
+      c.strokeStyle = mc.accent; c.lineWidth = 1.5; c.globalAlpha = 0.5;
+      c.beginPath(); c.moveTo(8, 8 + bLen); c.lineTo(8, 8); c.lineTo(8 + bLen, 8); c.stroke();
+      c.beginPath(); c.moveTo(w - 8 - bLen, 8); c.lineTo(w - 8, 8); c.lineTo(w - 8, 8 + bLen); c.stroke();
+      c.beginPath(); c.moveTo(8, h - 8 - bLen); c.lineTo(8, h - 8); c.lineTo(8 + bLen, h - 8); c.stroke();
+      c.beginPath(); c.moveTo(w - 8 - bLen, h - 8); c.lineTo(w - 8, h - 8); c.lineTo(w - 8, h - 8 + bLen); c.stroke();
+      c.globalAlpha = 1;
+    }
+    if (mc.glow) {
+      var rg = c.createRadialGradient(w * 0.5, h * 0.3, 0, w * 0.5, h * 0.3, w * 0.6);
+      rg.addColorStop(0, PAL.glow || 'rgba(100,100,255,0.06)'); rg.addColorStop(1, 'transparent');
+      c.fillStyle = rg; c.fillRect(0, 0, w, h);
+    }
+  }
+
+  function drawElement(el) {
+    if (!el || el.alpha <= 0.01) return;
+    ctx.save();
+    ctx.globalAlpha = el.alpha;
+    if (typeof customDrawElement === 'function' && customDrawElement(ctx, el, _vw, _vh)) { ctx.restore(); return; }
+    switch (el.type) {
+      case 'label':
+        ctx.fillStyle = el.color || _modeColors().text;
+        var isBold = el.bold !== undefined ? el.bold : (el.size >= 14);
+        ctx.font = (isBold ? 'bold ' : '') + (el.size || 12) + "px " + (isBold ? "'Space Grotesk','Inter','Noto Sans SC'" : "'Inter','Noto Sans SC'") + ",sans-serif";
+        ctx.textAlign = el.align || 'center'; ctx.textBaseline = el.baseline || 'middle';
+        if (el.glow) { ctx.shadowColor = el.glow; ctx.shadowBlur = 10; }
+        ctx.fillText(el.text, el.x, el.y);
+        break;
+      case 'text':
+        ctx.fillStyle = el.color || _modeColors().dim;
+        ctx.font = (el.size || 11) + "px 'Inter','Noto Sans SC',sans-serif";
+        ctx.textAlign = el.align || 'left'; ctx.textBaseline = el.baseline || 'middle';
+        ctx.fillText(el.text, el.x, el.y);
+        break;
+      case 'box':
+        if (el.fill) { ctx.fillStyle = el.fill; ctx.fillRect(el.x, el.y, el.w, el.h); }
+        if (el.stroke) { ctx.strokeStyle = el.stroke; ctx.lineWidth = el.lineWidth || 1; ctx.strokeRect(el.x, el.y, el.w, el.h); }
+        break;
+      case 'circle':
+        ctx.beginPath(); ctx.arc(el.x, el.y, el.r || 10, 0, Math.PI * 2);
+        if (el.fill) { ctx.fillStyle = el.fill; ctx.fill(); }
+        if (el.stroke) { ctx.strokeStyle = el.stroke; ctx.lineWidth = el.lineWidth || 1; ctx.stroke(); }
+        if (el.glow) { ctx.shadowColor = el.glow; ctx.shadowBlur = el.glowSize || 12; ctx.fill(); ctx.shadowBlur = 0; }
+        break;
+      case 'arrow':
+        _drawArrow(el.x1, el.y1, el.x2, el.y2, el.color || PAL.primary, el.lineWidth || 1.5, el.headSize || 6);
+        break;
+      case 'line':
+        ctx.strokeStyle = el.color || PAL.muted; ctx.lineWidth = el.lineWidth || 1;
+        if (el.dash) ctx.setLineDash(el.dash);
+        ctx.beginPath(); ctx.moveTo(el.x1, el.y1); ctx.lineTo(el.x2, el.y2); ctx.stroke();
+        if (el.dash) ctx.setLineDash([]);
+        break;
+      case 'gradient_box':
+        var gb = ctx.createLinearGradient(el.x, el.y, el.x + el.w, el.y + el.h);
+        gb.addColorStop(0, el.color1 || PAL.primary); gb.addColorStop(1, el.color2 || PAL.secondary);
+        ctx.fillStyle = gb; ctx.fillRect(el.x, el.y, el.w, el.h);
+        if (el.glow) { ctx.shadowColor = el.glow; ctx.shadowBlur = 8; ctx.fillRect(el.x, el.y, el.w, el.h); ctx.shadowBlur = 0; }
+        break;
+      case 'custom':
+        if (typeof el.draw === 'function') el.draw(ctx, el);
+        break;
+      default:
+        if (typeof el.draw === 'function') el.draw(ctx, el);
+        break;
+    }
+    ctx.restore();
+  }
+
+  function _drawArrow(x1, y1, x2, y2, color, lw, hs) {
+    var angle = Math.atan2(y2 - y1, x2 - x1);
+    ctx.strokeStyle = color; ctx.lineWidth = lw;
+    ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+    ctx.fillStyle = color; ctx.beginPath();
+    ctx.moveTo(x2, y2);
+    ctx.lineTo(x2 - hs * Math.cos(angle - 0.4), y2 - hs * Math.sin(angle - 0.4));
+    ctx.lineTo(x2 - hs * Math.cos(angle + 0.4), y2 - hs * Math.sin(angle + 0.4));
+    ctx.fill();
+  }
+
+  function _contentTransform() {
+    var s = H / REF_H; _vh = REF_H; _vw = W / s;
+    if (_vw < REF_W) _vw = REF_W;
+    return { s: s, ox: 0, oy: 0, vw: _vw, vh: _vh };
+  }
+  function _applyContentScale(ct) { ctx.save(); ctx.scale(ct.s, ct.s); }
+
+  function drawFrame(f) {
+    var bgFn = (typeof drawBg === 'function') ? drawBg : _defaultDrawBg;
+    bgFn(ctx, W, H, VISUAL_MODE);
+    var ct = _contentTransform(); _applyContentScale(ct);
+    var elems = getFrameElements(f, ct.vw, ct.vh);
+    elems.forEach(function (el) { drawElement(el); });
+    ctx.restore();
+  }
+
+  function transitionTo(nf) {
+    if (nf < 0) nf = 0;
+    if (nf >= totalFrames) nf = totalFrames - 1;
+    if (nf === currentFrame && !transitioning) { drawFrame(currentFrame); _updateHUD(currentFrame); return; }
+    if (transitioning) return;
+    var ct0 = _contentTransform();
+    var oldElems = getFrameElements(currentFrame, ct0.vw, ct0.vh);
+    var newElems = getFrameElements(nf, ct0.vw, ct0.vh);
+    var oldMap = {}; oldElems.forEach(function (e) { oldMap[e.id] = e; });
+    var newMap = {}; newElems.forEach(function (e) { newMap[e.id] = e; });
+    currentFrame = nf; _updateHUD(nf); transitioning = true;
+    var startTime = null, duration = 500;
+    var bgFn = (typeof drawBg === 'function') ? drawBg : _defaultDrawBg;
+    function step(ts) {
+      if (!startTime) startTime = ts;
+      var raw = Math.min((ts - startTime) / duration, 1);
+      var p = easeInOut(raw);
+      bgFn(ctx, W, H, VISUAL_MODE);
+      var ct = _contentTransform(); _applyContentScale(ct);
+      oldElems.forEach(function (oe) { if (!newMap[oe.id]) drawElement(merge(oe, { alpha: 1 - p })); });
+      newElems.forEach(function (ne) {
+        var oe = oldMap[ne.id];
+        if (oe) {
+          var merged = merge(ne, { x: lerp(oe.x||0,ne.x||0,p), y: lerp(oe.y||0,ne.y||0,p), w: lerp(oe.w||0,ne.w||0,p), h: lerp(oe.h||0,ne.h||0,p), r: lerp(oe.r||0,ne.r||0,p), alpha: 1 });
+          if (ne.type==='arrow'&&oe.type==='arrow') { merged.x1=lerp(oe.x1,ne.x1,p);merged.y1=lerp(oe.y1,ne.y1,p);merged.x2=lerp(oe.x2,ne.x2,p);merged.y2=lerp(oe.y2,ne.y2,p); }
+          if (ne.type==='line'&&oe.type==='line') { merged.x1=lerp(oe.x1,ne.x1,p);merged.y1=lerp(oe.y1,ne.y1,p);merged.x2=lerp(oe.x2,ne.x2,p);merged.y2=lerp(oe.y2,ne.y2,p); }
+          if ((ne.type==='label'||ne.type==='text')&&oe.text!==ne.text) { drawElement(merge(oe,{alpha:1-p}));drawElement(merge(ne,{alpha:p})); }
+          else { drawElement(merged); }
+        } else { drawElement(merge(ne, { alpha: p })); }
+      });
+      ctx.restore();
+      if (raw < 1) requestAnimationFrame(step); else transitioning = false;
+    }
+    requestAnimationFrame(step);
+  }
+
+  function _updateHUD(f) {
+    var cfg = window.CONFIG || {};
+    var labels = cfg.hudLabels || []; var values = cfg.hudValues || [];
+    for (var i = 0; i < 4; i++) {
+      var lEl = document.getElementById('hudL' + (i + 1));
+      var vEl = document.getElementById('hudV' + (i + 1));
+      if (lEl && labels[i]) lEl.textContent = t(labels[i]);
+      if (vEl && values[f] && values[f][i] !== undefined) {
+        var val = values[f][i];
+        vEl.textContent = (typeof val === 'string' && I18N[val]) ? t(val) : val;
+      }
+    }
+    var fi = document.getElementById('frameIndicator');
+    if (fi) fi.textContent = (f + 1) + ' / ' + totalFrames;
+  }
+
+  function _buildGuide() {
+    var cfg = window.CONFIG || {};
+    var guideTitle = document.getElementById('guideTitle');
+    var guideContent = document.getElementById('guideContent');
+    if (!guideContent) return;
+    if (guideTitle) guideTitle.textContent = t(cfg.guideTitle || 'guideDefault');
+    var items = cfg.guideItems || [];
+    var html = '<ul>'; items.forEach(function (key) { html += '<li>' + t(key) + '</li>'; }); html += '</ul>';
+    guideContent.innerHTML = html;
+  }
+
+  function refreshI18N() {
+    var titleEl = document.getElementById('title'); var subEl = document.getElementById('subtitle');
+    if (titleEl) titleEl.textContent = t('title');
+    if (subEl) subEl.textContent = t('subtitle');
+    var btnPrev = document.getElementById('btnPrev'); var btnNext = document.getElementById('btnNext'); var btnPlay = document.getElementById('btnPlay');
+    if (btnPrev) btnPrev.textContent = t('btnPrev');
+    if (btnNext) btnNext.textContent = t('btnNext');
+    if (btnPlay) btnPlay.textContent = playing ? t('btnPause') : t('btnPlay');
+    var langBtn = document.getElementById('langBtn');
+    if (langBtn) langBtn.textContent = LANG.toUpperCase();
+    _buildGuide(); _updateHUD(currentFrame); drawFrame(currentFrame);
+  }
+
+  function _resize() {
+    var wrap = cv.parentElement; var rect = wrap.getBoundingClientRect();
+    if (rect.width < 1 || rect.height < 1) return;
+    W = rect.width; H = rect.height;
+    cv.width = W * DPR; cv.height = H * DPR;
+    cv.style.width = W + 'px'; cv.style.height = H + 'px';
+    ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+    drawFrame(currentFrame);
+  }
+
+  function _togglePlay() {
+    if (playing) { playing = false; if (playTimer) clearTimeout(playTimer); document.getElementById('btnPlay').textContent = t('btnPlay'); return; }
+    playing = true; document.getElementById('btnPlay').textContent = t('btnPause');
+    function autoNext() {
+      if (!playing) return;
+      if (currentFrame < totalFrames - 1) { transitionTo(currentFrame + 1); playTimer = setTimeout(autoNext, 1800); }
+      else { playing = false; document.getElementById('btnPlay').textContent = t('btnPlay'); }
+    }
+    if (currentFrame >= totalFrames - 1) { currentFrame = -1; }
+    autoNext();
+  }
+
+  function boot() {
+    var cfg = window.CONFIG || {};
+    totalFrames = cfg.totalFrames || 4;
+    if (cfg.style && PALETTES[cfg.style]) PAL = PALETTES[cfg.style];
+    var root = document.documentElement;
+    root.style.setProperty('--bg', PAL.bg); root.style.setProperty('--bg2', PAL.bg2);
+    root.style.setProperty('--surface', PAL.surface); root.style.setProperty('--primary', PAL.primary);
+    root.style.setProperty('--primary-dim', PAL.primaryDim); root.style.setProperty('--secondary', PAL.secondary);
+    root.style.setProperty('--secondary-dim', PAL.secondaryDim); root.style.setProperty('--text', PAL.text);
+    root.style.setProperty('--muted', PAL.muted); root.style.setProperty('--error', PAL.error);
+    root.style.setProperty('--outline', PAL.outline); root.style.setProperty('--glow', PAL.glow);
+    root.style.setProperty('--glow-strong', PAL.glowStrong); root.style.setProperty('--glass', PAL.glass);
+    root.style.setProperty('--glass-blur', PAL.glassBlur + 'px'); root.style.setProperty('--radius', PAL.radius);
+    root.style.setProperty('--bg-0', 'oklch(0.14 0.035 265)'); root.style.setProperty('--bg-1', 'oklch(0.18 0.04 265)');
+    root.style.setProperty('--bg-2', 'oklch(0.22 0.045 265)'); root.style.setProperty('--bg-3', 'oklch(0.28 0.05 265)');
+    root.style.setProperty('--line', 'oklch(0.35 0.05 265 / 0.35)'); root.style.setProperty('--fg', 'oklch(0.96 0.01 265)');
+    root.style.setProperty('--fg-dim', 'oklch(0.75 0.02 265)'); root.style.setProperty('--fg-mute', 'oklch(0.55 0.03 265)');
+    root.style.setProperty('--gold', 'oklch(0.85 0.14 85)');
+    _buildI18N(cfg);
+    cv = document.getElementById('c'); ctx = cv.getContext('2d');
+    if (cfg.visualMode && VISUAL_MODES[cfg.visualMode]) VISUAL_MODE = cfg.visualMode;
+    _buildStyleSwitcher();
+    var _m = VISUAL_MODES[VISUAL_MODE] || VISUAL_MODES.cyberpunk; var _r = document.documentElement;
+    _r.style.setProperty('--sb-bg', _m.sidebarBg || 'rgba(5,6,15,0.92)');
+    _r.style.setProperty('--sb-border', _m.sidebarBorder || (_m.canvasAccent || PAL.primary));
+    _r.style.setProperty('--sb-text', _m.sidebarText || PAL.text);
+    _r.style.setProperty('--sb-dim', _m.sidebarTextDim || PAL.muted);
+    _r.style.setProperty('--sb-mute', _m.sidebarTextMute || PAL.muted);
+    _r.style.setProperty('--sb-accent', _m.sidebarAccent || PAL.primary);
+    _r.style.setProperty('--sb-btn-bg', _m.sidebarBtnBg || 'transparent');
+    _r.style.setProperty('--sb-btn-bd', _m.sidebarBtnBorder || 'transparent');
+    _r.style.setProperty('--hud-bg', _m.hudBg || 'rgba(5,6,15,0.9)');
+    _r.style.setProperty('--hud-border', _m.hudBorder || 'transparent');
+    _r.style.setProperty('--hud-label', _m.hudLabel || PAL.muted);
+    _r.style.setProperty('--hud-value', _m.hudValue || PAL.text);
+    _r.style.setProperty('--ctrl-bg', _m.ctrlBg || PAL.primary);
+    _r.style.setProperty('--ctrl-color', _m.ctrlColor || PAL.bg);
+    window.addEventListener('resize', _resize);
+    setTimeout(_resize, 200); setTimeout(_resize, 600);
+    document.fonts.ready.then(function () { _resize(); });
+    var langBtn = document.getElementById('langBtn');
+    if (langBtn) langBtn.addEventListener('click', function () { LANG = LANG === 'en' ? 'cn' : 'en'; refreshI18N(); });
+    var btnPrev = document.getElementById('btnPrev'); var btnNext = document.getElementById('btnNext'); var btnPlay = document.getElementById('btnPlay');
+    if (btnPrev) btnPrev.addEventListener('click', function () { if (playing) { playing = false; if (playTimer) clearTimeout(playTimer); } transitionTo(currentFrame - 1); });
+    if (btnNext) btnNext.addEventListener('click', function () { if (playing) { playing = false; if (playTimer) clearTimeout(playTimer); } transitionTo(currentFrame + 1); });
+    if (btnPlay) btnPlay.addEventListener('click', _togglePlay);
+    _buildGuide(); refreshI18N();
+    if (typeof onReady === 'function') onReady();
+  }
+
+  return {
+    boot: boot, t: t, lerp: lerp, interpolate: interpolate, easeInOut: easeInOut, merge: merge,
+    drawElement: drawElement, drawFrame: drawFrame, transitionTo: transitionTo, refreshI18N: refreshI18N,
+    get PAL() { return PAL; }, get W() { return _vw; }, get H() { return _vh; },
+    get ctx() { return ctx; }, get currentFrame() { return currentFrame; }, get totalFrames() { return totalFrames; },
+    get LANG() { return LANG; }, get _lang() { return LANG; }, get lang() { return LANG; },
+    get mode() { return VISUAL_MODE; }, get modeColors() { return _modeColors(); },
+    setMode: function(m) { if (VISUAL_MODES[m]) _applyVisualMode(m); },
+    get REF_W() { return REF_W; }, get REF_H() { return REF_H; },
+    get realW() { return W; }, get realH() { return H; },
+    applyContentScale: function () { var ct = _contentTransform(); _applyContentScale(ct); },
+    restoreContentScale: function () { ctx.restore(); },
+  };
+})();
+</script>
+
+<!-- Content: K18 Newton's First Law - Inertia Visualization -->
+<script>
+// ============================================================
+// CONFIG
+// ============================================================
+var CONFIG = {
+  style: 'phys',
+  totalFrames: 4,
+
+  i18n: {
+    title:    {en:'NEWTON\'S FIRST LAW', cn:'\u725b\u987f\u7b2c\u4e00\u5b9a\u5f8b'},
+    subtitle: {en:'INERTIA VISUALIZATION', cn:'\u60ef\u6027\u53ef\u89c6\u5316'},
+    // Frame 0
+    f0_main:    {en:'WHY DON\'T THINGS FLY OFF\nWHEN YOU PULL THE TABLECLOTH?', cn:'\u4e3a\u4ec0\u4e48\u62bd\u684c\u5e03\u7684\u65f6\u5019\n\u4e0a\u9762\u7684\u4e1c\u897f\u4e0d\u4f1a\u98de\u8d70\uff1f'},
+    f0_tap:     {en:'TAP NEXT TO EXPLORE', cn:'\u70b9\u51fb\u4e0b\u4e00\u5e27\u63a2\u7d22'},
+    // Frame 1
+    f1_title:   {en:'OBJECTS AT REST', cn:'\u9759\u6b62\u7684\u7269\u4f53'},
+    f1_desc:    {en:'A cup sits on a tablecloth. Both are still.', cn:'\u676f\u5b50\u7ad9\u5728\u684c\u5e03\u4e0a\u3002\u4e24\u8005\u90fd\u9759\u6b62\u4e0d\u52a8\u3002'},
+    f1_law:     {en:'Objects at rest tend to stay at rest', cn:'\u9759\u6b62\u7684\u7269\u4f53\u503e\u5411\u4e8e\u4fdd\u6301\u9759\u6b62'},
+    f1_cup:     {en:'CUP', cn:'\u676f\u5b50'},
+    f1_cloth:   {en:'TABLECLOTH', cn:'\u684c\u5e03'},
+    f1_table:   {en:'TABLE', cn:'\u684c\u5b50'},
+    f1_gravity: {en:'Gravity', cn:'\u91cd\u529b'},
+    f1_normal:  {en:'Support', cn:'\u652f\u6491\u529b'},
+    // Frame 2
+    f2_title:   {en:'PULL THE TABLECLOTH!', cn:'\u62bd\u684c\u5e03\uff01'},
+    f2_desc:    {en:'The cloth is pulled fast. The cup barely moves!', cn:'\u684c\u5e03\u88ab\u5feb\u901f\u62bd\u8d70\u3002\u676f\u5b50\u51e0\u4e4e\u4e0d\u52a8\uff01'},
+    f2_friction:{en:'Friction: brief, small', cn:'\u6469\u64e6\u529b\uff1a\u77ed\u6682\u3001\u5fae\u5c0f'},
+    f2_inertia: {en:'Inertia: keeps cup still', cn:'\u60ef\u6027\uff1a\u8ba9\u676f\u5b50\u7559\u5728\u539f\u5730'},
+    f2_pull:    {en:'PULL!', cn:'\u62bd\uff01'},
+    f2_fast:    {en:'FAST', cn:'\u5feb\u901f'},
+    // Frame 3
+    f3_title:   {en:'NEWTON\'S FIRST LAW', cn:'\u725b\u987f\u7b2c\u4e00\u5b9a\u5f8b'},
+    f3_law:     {en:'An object stays at rest or in uniform motion\nunless acted upon by an external force.', cn:'\u7269\u4f53\u5728\u4e0d\u53d7\u5916\u529b\u4f5c\u7528\u65f6\uff0c\n\u4fdd\u6301\u9759\u6b62\u6216\u5300\u901f\u76f4\u7ebf\u8fd0\u52a8\u3002'},
+    f3_ex1:     {en:'Emergency brake: body lurches forward', cn:'\u6025\u5239\u8f66\uff1a\u4eba\u5f80\u524d\u503e'},
+    f3_ex2:     {en:'Coin on cardboard: flick card, coin drops in cup', cn:'\u786c\u5e01\u5361\u7247\uff1a\u5f39\u5f00\u5361\u7247\uff0c\u786c\u5e01\u843d\u676f\u4e2d'},
+    f3_ex3:     {en:'Spacecraft: no friction, keeps going forever', cn:'\u822a\u5929\u5668\uff1a\u65e0\u6469\u64e6\uff0c\u6c38\u8fdc\u98de\u884c'},
+    f3_summary: {en:'INERTIA = resistance to change in motion', cn:'\u60ef\u6027 = \u7269\u4f53\u62b5\u6297\u8fd0\u52a8\u72b6\u6001\u6539\u53d8\u7684\u6027\u8d28'},
+    // HUD
+    hudL1: {en:'CONCEPT', cn:'\u6982\u5ff5'},
+    hudL2: {en:'FORCE', cn:'\u529b'},
+    hudL3: {en:'MOTION', cn:'\u8fd0\u52a8'},
+    hudL4: {en:'RESULT', cn:'\u7ed3\u679c'},
+    // Guide
+    guideTitle: {en:'VIEWING GUIDE', cn:'\u89c2\u770b\u6307\u5357'},
+    g1: {en:'Frame 1: Observe the still scene', cn:'\u7b2c1\u5e27\uff1a\u89c2\u5bdf\u9759\u6b62\u573a\u666f'},
+    g2: {en:'Frame 2: Watch the tablecloth trick', cn:'\u7b2c2\u5e27\uff1a\u770b\u62bd\u684c\u5e03\u9b54\u672f'},
+    g3: {en:'Frame 3: Learn Newton\'s First Law + examples', cn:'\u7b2c3\u5e27\uff1a\u5b66\u4e60\u725b\u987f\u7b2c\u4e00\u5b9a\u5f8b + \u751f\u6d3b\u4e2d\u7684\u4f8b\u5b50'},
+  },
+
+  hudLabels: ['hudL1', 'hudL2', 'hudL3', 'hudL4'],
+  hudValues: [
+    ['--', '--', '--', '--'],
+    ['\u60ef\u6027', '\u5e73\u8861', '\u9759\u6b62', '\u4e0d\u52a8'],
+    ['\u60ef\u6027', '\u6469\u64e6\u529b\u5c0f', '\u684c\u5e03\u52a8', '\u676f\u5b50\u7559'],
+    ['\u60ef\u6027', '\u5916\u529b=0', '\u4fdd\u6301\u4e0d\u53d8', 'N1L'],
+  ],
+
+  guideTitle: 'guideTitle',
+  guideItems: ['g1', 'g2', 'g3'],
+};
+
+// ============================================================
+// FRAME ELEMENTS
+// ============================================================
+
+function getFrameElements(f, W, H) {
+  var t = AnimRuntime.t;
+  var P = AnimRuntime.PAL;
+  var cx = W / 2, cy = H / 2;
+
+  // Shared drawing helpers
+  function drawTable(ctx, el) {
+    // Table surface
+    ctx.fillStyle = '#6b4226';
+    ctx.fillRect(el.x - 180, el.y, 360, 12);
+    // Table legs
+    ctx.fillStyle = '#5a3520';
+    ctx.fillRect(el.x - 160, el.y + 12, 12, 50);
+    ctx.fillRect(el.x + 148, el.y + 12, 12, 50);
+  }
+
+  function drawCloth(ctx, el) {
+    var offsetX = el.offsetX || 0;
+    ctx.fillStyle = el.clothColor || '#c0392b';
+    ctx.globalAlpha = (el.alpha || 1) * 0.85;
+    // Main cloth body
+    ctx.beginPath();
+    ctx.moveTo(el.x - 150 + offsetX, el.y - 3);
+    ctx.lineTo(el.x + 150 + offsetX, el.y - 3);
+    ctx.lineTo(el.x + 160 + offsetX, el.y + 5);
+    ctx.lineTo(el.x - 160 + offsetX, el.y + 5);
+    ctx.closePath();
+    ctx.fill();
+    // Cloth draping edge
+    ctx.fillStyle = '#a93226';
+    ctx.beginPath();
+    ctx.moveTo(el.x + 150 + offsetX, el.y - 3);
+    ctx.lineTo(el.x + 160 + offsetX, el.y + 5);
+    ctx.lineTo(el.x + 165 + offsetX, el.y + 25);
+    ctx.lineTo(el.x + 155 + offsetX, el.y + 22);
+    ctx.closePath();
+    ctx.fill();
+    ctx.globalAlpha = el.alpha || 1;
+  }
+
+  function drawCup(ctx, el) {
+    var cupX = el.x, cupY = el.y;
+    // Cup body
+    ctx.fillStyle = '#ecf0f1';
+    ctx.beginPath();
+    ctx.moveTo(cupX - 18, cupY - 45);
+    ctx.lineTo(cupX + 18, cupY - 45);
+    ctx.lineTo(cupX + 15, cupY);
+    ctx.lineTo(cupX - 15, cupY);
+    ctx.closePath();
+    ctx.fill();
+    // Cup rim
+    ctx.strokeStyle = '#bdc3c7';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(cupX - 20, cupY - 45);
+    ctx.lineTo(cupX + 20, cupY - 45);
+    ctx.stroke();
+    // Handle
+    ctx.strokeStyle = '#bdc3c7';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(cupX + 22, cupY - 25, 10, -Math.PI * 0.4, Math.PI * 0.4);
+    ctx.stroke();
+    // Liquid inside
+    ctx.fillStyle = 'rgba(91,163,217,0.5)';
+    ctx.beginPath();
+    ctx.moveTo(cupX - 16, cupY - 30);
+    ctx.lineTo(cupX + 16, cupY - 30);
+    ctx.lineTo(cupX + 15, cupY - 2);
+    ctx.lineTo(cupX - 15, cupY - 2);
+    ctx.closePath();
+    ctx.fill();
+  }
+
+  // ----- Frame 0: Title -----
+  if (f === 0) {
+    var lines = t('f0_main').split('\n');
+    var els = [
+      {id:'title0', type:'label', text:t('title'), x:cx, y:cy-80, color:P.primary, size:22, align:'center', glow:P.glowStrong},
+    ];
+    for (var i = 0; i < lines.length; i++) {
+      els.push({id:'f0_l'+i, type:'label', text:lines[i], x:cx, y:cy-20+i*28, color:P.text, size:16, align:'center'});
+    }
+    els.push({id:'f0_tap', type:'text', text:t('f0_tap'), x:cx, y:cy+80, color:P.muted, size:11, align:'center'});
+    // Decorative question mark
+    els.push({id:'f0_q', type:'label', text:'?', x:cx+180, y:cy-60, color:P.primaryDim, size:60, align:'center', bold:true});
+    return els;
+  }
+
+  // ----- Frame 1: Objects at rest -----
+  if (f === 1) {
+    var tableY = cy + 40;
+    var cupBaseY = tableY - 5;
+    return [
+      {id:'f1_title', type:'label', text:t('f1_title'), x:cx, y:40, color:P.primary, size:16, align:'center'},
+      {id:'f1_desc', type:'text', text:t('f1_desc'), x:cx, y:65, color:P.muted, size:11, align:'center'},
+      // Table
+      {id:'table', type:'custom', x:cx, y:tableY, draw: drawTable, alpha:1},
+      // Tablecloth
+      {id:'cloth', type:'custom', x:cx, y:tableY-1, offsetX:0, clothColor:'#c0392b', draw: drawCloth, alpha:1},
+      // Cup
+      {id:'cup', type:'custom', x:cx, y:cupBaseY, draw: drawCup, alpha:1},
+      // Labels
+      {id:'lbl_cup', type:'text', text:t('f1_cup'), x:cx+45, y:cupBaseY-25, color:P.primary, size:10, align:'left'},
+      {id:'lbl_cloth', type:'text', text:t('f1_cloth'), x:cx-190, y:tableY, color:'#c0392b', size:10, align:'left'},
+      {id:'lbl_table', type:'text', text:t('f1_table'), x:cx+185, y:tableY+30, color:'#6b4226', size:10, align:'left'},
+      // Force arrows
+      {id:'gravity', type:'arrow', x1:cx, y1:cupBaseY-20, x2:cx, y2:cupBaseY+25, color:'#e74c3c', lineWidth:2, headSize:8},
+      {id:'normal', type:'arrow', x1:cx, y1:cupBaseY+10, x2:cx, y2:cupBaseY-35, color:'#2ecc71', lineWidth:2, headSize:8},
+      {id:'lbl_grav', type:'text', text:t('f1_gravity'), x:cx+8, y:cupBaseY+30, color:'#e74c3c', size:9, align:'left'},
+      {id:'lbl_norm', type:'text', text:t('f1_normal'), x:cx+8, y:cupBaseY-42, color:'#2ecc71', size:9, align:'left'},
+      // Law statement
+      {id:'f1_law', type:'label', text:t('f1_law'), x:cx, y:H-35, color:P.secondary, size:12, align:'center'},
+    ];
+  }
+
+  // ----- Frame 2: Pull the tablecloth -----
+  if (f === 2) {
+    var tableY2 = cy + 40;
+    var cupBaseY2 = tableY2 - 5;
+    return [
+      {id:'f1_title', type:'label', text:t('f2_title'), x:cx, y:40, color:'#e74c3c', size:16, align:'center'},
+      {id:'f1_desc', type:'text', text:t('f2_desc'), x:cx, y:65, color:P.muted, size:11, align:'center'},
+      // Table
+      {id:'table', type:'custom', x:cx, y:tableY2, draw: drawTable, alpha:1},
+      // Tablecloth pulled to the right
+      {id:'cloth', type:'custom', x:cx, y:tableY2-1, offsetX:220, clothColor:'#c0392b', draw: drawCloth, alpha:0.7},
+      // Cup stays!
+      {id:'cup', type:'custom', x:cx, y:cupBaseY2, draw: drawCup, alpha:1},
+      // Pull arrow
+      {id:'pull_arrow', type:'arrow', x1:cx+170, y1:tableY2-1, x2:cx+280, y2:tableY2-1, color:'#f39c12', lineWidth:3, headSize:10},
+      {id:'lbl_pull', type:'label', text:t('f2_pull'), x:cx+290, y:tableY2-15, color:'#f39c12', size:14, align:'left', bold:true},
+      {id:'lbl_fast', type:'text', text:t('f2_fast'), x:cx+290, y:tableY2+5, color:'#f39c12', size:10, align:'left'},
+      // Friction annotation
+      {id:'friction_line', type:'line', x1:cx-25, y1:cupBaseY2+5, x2:cx+25, y2:cupBaseY2+5, color:'#e67e22', lineWidth:1.5, dash:[4,3]},
+      {id:'lbl_friction', type:'text', text:t('f2_friction'), x:cx-120, y:cupBaseY2+20, color:'#e67e22', size:10, align:'center'},
+      // Inertia annotation
+      {id:'inertia_box', type:'box', x:cx-70, y:cupBaseY2-80, w:140, h:24, stroke:P.primary, lineWidth:1.5, alpha:1},
+      {id:'lbl_inertia', type:'label', text:t('f2_inertia'), x:cx, y:cupBaseY2-68, color:P.primary, size:11, align:'center'},
+      // Inertia arrow pointing down to cup
+      {id:'inertia_arrow', type:'arrow', x1:cx, y1:cupBaseY2-56, x2:cx, y2:cupBaseY2-48, color:P.primaryDim, lineWidth:1, headSize:5},
+    ];
+  }
+
+  // ----- Frame 3: Summary + life examples -----
+  if (f === 3) {
+    var lines3 = t('f3_law').split('\n');
+    var els3 = [
+      {id:'f1_title', type:'label', text:t('f3_title'), x:cx, y:35, color:P.primary, size:18, align:'center', glow:P.glowStrong},
+    ];
+    for (var j = 0; j < lines3.length; j++) {
+      els3.push({id:'f3_law_'+j, type:'label', text:lines3[j], x:cx, y:70+j*22, color:P.text, size:13, align:'center'});
+    }
+    // Divider
+    els3.push({id:'f3_div', type:'line', x1:cx-180, y1:125, x2:cx+180, y2:125, color:P.primaryDim, lineWidth:1, dash:[6,4]});
+    // Life examples with icons
+    var exY = 155;
+    // Example 1: Emergency brake
+    els3.push({id:'ex1_icon', type:'circle', x:cx-180, y:exY, r:14, fill:P.primaryDim, alpha:0.6});
+    els3.push({id:'ex1_num', type:'label', text:'1', x:cx-180, y:exY, color:P.bg, size:12, align:'center'});
+    els3.push({id:'ex1_txt', type:'text', text:t('f3_ex1'), x:cx-160, y:exY, color:P.text, size:11, align:'left'});
+    // Example 2: Coin on card
+    els3.push({id:'ex2_icon', type:'circle', x:cx-180, y:exY+40, r:14, fill:P.primaryDim, alpha:0.6});
+    els3.push({id:'ex2_num', type:'label', text:'2', x:cx-180, y:exY+40, color:P.bg, size:12, align:'center'});
+    els3.push({id:'ex2_txt', type:'text', text:t('f3_ex2'), x:cx-160, y:exY+40, color:P.text, size:11, align:'left'});
+    // Example 3: Spacecraft
+    els3.push({id:'ex3_icon', type:'circle', x:cx-180, y:exY+80, r:14, fill:P.primaryDim, alpha:0.6});
+    els3.push({id:'ex3_num', type:'label', text:'3', x:cx-180, y:exY+80, color:P.bg, size:12, align:'center'});
+    els3.push({id:'ex3_txt', type:'text', text:t('f3_ex3'), x:cx-160, y:exY+80, color:P.text, size:11, align:'left'});
+    // Summary box
+    els3.push({id:'f3_sumbox', type:'box', x:cx-200, y:H-55, w:400, h:30, stroke:P.primary, lineWidth:1.5, alpha:0.8});
+    els3.push({id:'f3_sum', type:'label', text:t('f3_summary'), x:cx, y:H-40, color:P.primary, size:12, align:'center'});
+    return els3;
+  }
+
+  return [];
+}
+
+// ============================================================
+// BOOT
+// ============================================================
+AnimRuntime.boot();
+</script>
+</body>
+</html>

@@ -1,0 +1,785 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Space+Grotesk:wght@400;500;700&family=Inter:wght@400;500&family=Noto+Sans+SC:wght@400;700&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box;}
+:root{
+  --primary:oklch(0.72 0.17 245);
+  --primary-dim:oklch(0.55 0.17 245);
+  --bg:oklch(0.14 0.035 265);
+  --bg-2:oklch(0.20 0.04 265);
+  --fg:oklch(0.96 0.01 265);
+  --fg-dim:oklch(0.75 0.02 265);
+  --fg-mute:oklch(0.55 0.03 265);
+  --line:oklch(0.35 0.05 265 / 0.35);
+  --gold:oklch(0.85 0.14 85);
+  --error:oklch(0.68 0.20 25);
+  --amber:oklch(0.78 0.17 55);
+  --ok:oklch(0.72 0.17 155);
+  --glow-strong:oklch(0.72 0.17 245 / 0.5);
+}
+html,body{width:100%;height:100vh;overflow:hidden;background:var(--bg);color:var(--fg);font-family:'Inter','Noto Sans SC',sans-serif;}
+.game-wrap{display:flex;flex-direction:row;height:100vh;overflow:hidden;}
+.game-sidebar{width:200px;min-width:200px;max-width:200px;display:flex;flex-direction:column;gap:6px;padding:10px;background:var(--sb-bg,rgba(5,6,15,0.95));border-right:1px solid var(--sb-border,var(--line));overflow-y:auto;transition:background 0.3s,border-color 0.3s;}
+.sidebar-lang{align-self:flex-start;flex-shrink:0;font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:700;padding:3px 8px;cursor:pointer;border:1px solid var(--sb-btn-bd,transparent);background:var(--sb-btn-bg,transparent);color:var(--sb-accent,var(--primary));letter-spacing:0.15em;text-transform:uppercase;}
+.sidebar-lang:hover{border-color:var(--sb-accent,var(--primary));background:rgba(128,128,128,0.1);}
+.style-switcher{display:flex;gap:4px;margin:2px 0;}
+.vm-btn{font-family:'JetBrains Mono',monospace;font-size:8px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;padding:3px 6px;cursor:pointer;border:1px solid var(--sb-btn-bd,rgba(128,128,128,0.2));background:var(--sb-btn-bg,transparent);color:var(--sb-dim,rgba(128,128,128,0.5));transition:all 0.2s;}
+.vm-btn:hover{color:var(--sb-accent,var(--primary));border-color:var(--sb-accent,var(--primary));}
+.vm-btn.vm-active{color:var(--sb-accent,var(--primary));border-color:var(--sb-accent,var(--primary));background:rgba(128,128,128,0.12);}
+.sidebar-title{font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:700;color:var(--sb-accent,var(--primary));letter-spacing:0.08em;text-transform:uppercase;margin-top:4px;line-height:1.3;}
+.sidebar-divider{height:1px;background:var(--sb-btn-bd,rgba(128,128,128,0.15));margin:4px 0;}
+.sidebar-section{font-family:'JetBrains Mono',monospace;font-size:9px;font-weight:700;color:var(--sb-mute,var(--fg-mute));letter-spacing:0.15em;text-transform:uppercase;margin-top:4px;}
+.sidebar-guide{font-family:'Noto Sans SC',sans-serif;font-size:11px;color:var(--sb-dim,var(--fg-dim));line-height:1.55;}
+.game-main{flex:1;display:flex;flex-direction:column;min-width:0;}
+.game-hud{display:flex;align-items:center;justify-content:flex-start;gap:18px;padding:8px 16px;background:var(--hud-bg,rgba(5,6,15,0.9));border-bottom:1px solid var(--hud-border,var(--line));flex-shrink:0;flex-wrap:wrap;transition:background 0.3s;}
+.hud-tag{font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:700;color:var(--sb-accent,var(--primary));letter-spacing:0.15em;text-transform:uppercase;}
+.hud-item{display:flex;flex-direction:column;align-items:center;gap:1px;}
+.hud-label{font-family:'JetBrains Mono',monospace;font-size:8px;letter-spacing:0.15em;text-transform:uppercase;color:var(--hud-label,var(--fg-mute));}
+.hud-val{font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:700;color:var(--hud-value,var(--sb-accent,var(--primary)));letter-spacing:0.12em;}
+.game-body{flex:1;display:flex;min-height:0;position:relative;}
+#c{flex:1;display:block;width:100%;height:100%;}
+.controls{display:flex;justify-content:center;align-items:center;gap:12px;padding:6px 16px;background:var(--hud-bg,rgba(5,6,15,0.9));border-top:1px solid var(--hud-border,var(--line));flex-wrap:wrap;}
+.ctrl-btn{font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:700;padding:6px 14px;border:none;cursor:pointer;background:linear-gradient(135deg,var(--ctrl-bg,var(--primary)),var(--primary-dim));color:var(--ctrl-color,var(--bg));letter-spacing:0.15em;text-transform:uppercase;border-radius:999px;box-shadow:0 0 12px var(--glow-strong);}
+.ctrl-btn:hover{transform:scale(1.03);}
+.ctrl-btn.secondary{background:transparent;border:1px solid var(--primary);color:var(--fg);box-shadow:none;}
+.ctrl-btn.active{background:linear-gradient(135deg,var(--gold),var(--amber));color:#16181f;}
+.ctrl-btn:disabled{opacity:0.4;cursor:not-allowed;box-shadow:none;}
+.overlay{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(5,6,15,0.82);backdrop-filter:blur(6px);z-index:10;}
+.overlay.hidden{display:none;}
+.panel{background:linear-gradient(180deg,oklch(0.19 0.04 265 / 0.92),oklch(0.15 0.035 265 / 0.92));border:1px solid var(--line);border-radius:14px;padding:24px 28px;max-width:640px;width:92%;position:relative;}
+.panel::before,.panel::after{content:"";position:absolute;width:14px;height:14px;border:1px solid var(--primary);opacity:0.6;}
+.panel::before{top:10px;left:10px;border-right:none;border-bottom:none;}
+.panel::after{bottom:10px;right:10px;border-left:none;border-top:none;}
+.panel h2{font-family:'Space Grotesk',sans-serif;font-size:20px;color:var(--primary);margin-bottom:10px;letter-spacing:0.02em;}
+.panel p{font-family:'Noto Sans SC',sans-serif;font-size:13px;color:var(--fg-dim);line-height:1.7;margin-bottom:12px;}
+.panel .summary-list{font-family:'Noto Sans SC',sans-serif;font-size:12px;color:var(--fg-dim);line-height:1.8;margin-bottom:16px;padding-left:18px;}
+.panel .actions{display:flex;gap:12px;justify-content:center;margin-top:8px;}
+</style>
+</head>
+<body>
+<div class="game-wrap">
+  <div class="game-sidebar">
+    <button class="sidebar-lang" id="langBtn">CN</button>
+    <div class="style-switcher" id="styleSwitcher"></div>
+    <div class="sidebar-title" id="sidebarTitle"></div>
+    <div class="sidebar-divider"></div>
+    <div class="sidebar-section" id="opsLabel"></div>
+    <div class="sidebar-guide" id="guideContent"></div>
+    <div class="sidebar-divider"></div>
+    <div class="sidebar-section" id="legendLabel"></div>
+    <div class="sidebar-guide" id="legendContent"></div>
+  </div>
+  <div class="game-main">
+    <div class="game-hud">
+      <div class="hud-tag" id="sceneTag"></div>
+      <div class="hud-item"><div class="hud-label" id="hudL1"></div><div class="hud-val" id="hudV1"></div></div>
+      <div class="hud-item"><div class="hud-label" id="hudL2"></div><div class="hud-val" id="hudV2"></div></div>
+      <div class="hud-item"><div class="hud-label" id="hudL3"></div><div class="hud-val" id="hudV3"></div></div>
+      <div class="hud-item"><div class="hud-label" id="hudL4"></div><div class="hud-val" id="hudV4"></div></div>
+    </div>
+    <div class="game-body">
+      <canvas id="c"></canvas>
+      <div class="overlay hidden" id="overlay">
+        <div class="panel">
+          <h2 id="ovTitle"></h2>
+          <p id="ovBody"></p>
+          <ul class="summary-list" id="ovList"></ul>
+          <div class="actions">
+            <button class="ctrl-btn" id="ovPrimary"></button>
+            <button class="ctrl-btn secondary" id="ovSecondary"></button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="controls">
+      <button class="ctrl-btn secondary" id="btnBaseline"></button>
+      <button class="ctrl-btn" id="btnMeasure"></button>
+      <button class="ctrl-btn" id="btnCheck"></button>
+      <button class="ctrl-btn secondary" id="btnReset"></button>
+    </div>
+  </div>
+</div>
+
+<script>
+"use strict";
+
+// ============================================================
+// i18n
+// ============================================================
+var LANG = 'cn';
+var I18N = {
+  title: {en:'LEC RISK LAB', cn:'LEC 风险评估实验室'},
+  guide: {en:'You are a safety engineer. Pick a hazard card from the shelf (bottom). Adjust the three sliders L / E / C to match the situation. Watch D = L x E x C update live and see which matrix cell it lands in. Switch between BASELINE (current) and MITIGATED (with extra controls) to watch risk shrink. Target: get all 6 hazards below HIGH.',
+          cn:'你是安全员。从底部卡片架上选一个危险源。拖动左下 L / E / C 三个滑块让数值贴近真实作业，实时看到 D = L × E × C 和它在风险矩阵中的位置。在「当前措施」与「加强措施」之间切换，观察风险是否下降。目标：把 6 个危险源全部降到"高"以下。'},
+  legend: {en:'L · Likelihood (0.1~10)\nE · Exposure frequency (0.5~10)\nC · Consequence (1~100)\nD = L x E x C\n<=20 low  20~70 med  70~160 high  >160 critical',
+           cn:'L · 可能性 (0.1~10)\nE · 暴露频率 (0.5~10)\nC · 后果严重度 (1~100)\nD = L × E × C\n≤20 低  20~70 中  70~160 高  >160 极高'},
+  opsLabel: {en:'HOW TO PLAY', cn:'操作说明'},
+  legendLabel:{en:'LEC SCALE',  cn:'LEC 分级'},
+
+  // HUD
+  hudL1:{en:'HAZARD', cn:'危险源'},
+  hudL2:{en:'D VALUE',cn:'D 值'},
+  hudL3:{en:'LEVEL',  cn:'等级'},
+  hudL4:{en:'CLEARED',cn:'已达标'},
+  sceneTag:{en:'CNC TOOL CHANGE', cn:'数控刀具更换作业'},
+
+  // buttons
+  btnBaseline:{en:'BASELINE (CURRENT)', cn:'当前措施'},
+  btnMitig:   {en:'MITIGATED',          cn:'加强措施'},
+  btnMeasure: {en:'USE LEC RULER',      cn:'LEC 尺子'},
+  btnCheck:   {en:'CHECK ALL',          cn:'检查全部'},
+  btnReset:   {en:'RESET',              cn:'重来'},
+
+  // level labels
+  lvLow:  {en:'LOW',       cn:'低'},
+  lvMed:  {en:'MEDIUM',    cn:'中'},
+  lvHigh: {en:'HIGH',      cn:'高'},
+  lvCrit: {en:'CRITICAL',  cn:'极高'},
+  lvNone: {en:'--',        cn:'--'},
+
+  // axis
+  axisL:  {en:'Likelihood L', cn:'可能性 L'},
+  axisS:  {en:'Consequence C',cn:'后果 C'},
+  matrix: {en:'RISK MATRIX',  cn:'风险矩阵'},
+
+  // hazards
+  hz1:  {en:'Sudden restart (main switch not locked)',     cn:'误启动（总开关未上锁）'},
+  hz2:  {en:'Cut by rotating blade',                        cn:'旋转刀具切伤手'},
+  hz3:  {en:'Spring-loaded collet release',                 cn:'夹头弹簧回弹击手'},
+  hz4:  {en:'Oil/coolant splash to eye',                    cn:'冷却液飞溅入眼'},
+  hz5:  {en:'Falling tool (no toe board)',                  cn:'刀具坠落（无挡脚板）'},
+  hz6:  {en:'Slip on oily floor',                           cn:'油污地面滑倒'},
+
+  // recommended ref
+  refL:{en:'Ref L', cn:'参考 L'},
+  refE:{en:'Ref E', cn:'参考 E'},
+  refC:{en:'Ref C', cn:'参考 C'},
+
+  selectTip:{en:'Pick a hazard card', cn:'请先从底部选一个危险源'},
+
+  finalTitle:{en:'RISK ASSESSMENT COMPLETE', cn:'风险评估完成'},
+  finalOk:   {en:'All hazards below HIGH.', cn:'6 个危险源全部降到"高"以下。'},
+  finalMiss: {en:'Some hazards still HIGH or CRITICAL.', cn:'仍有危险源处于"高"或"极高"等级。'},
+  finalBody: {en:'Export this assessment into your job risk register. Remember: LEC is a comparative tool, not an absolute verdict. The ranking is more important than the exact number.',
+              cn:'把这次评估写入岗位风险清单。记住：LEC 是相对排序工具，不是绝对判决。排序顺序比数字本身更重要。'},
+  missedLabel:{en:'Still above HIGH:', cn:'仍高于"高"等级：'},
+  allCleared:{en:'All 6 hazards cleared', cn:'全部 6 个危险源已达标'},
+  btnContinue:{en:'RESET & TRY AGAIN', cn:'重新挑战'},
+
+  lTip: {en:'L: how likely (1 rare, 10 near-certain)',  cn:'L: 发生可能性（1 极少, 10 几乎必然）'},
+  eTip: {en:'E: how often exposed (0.5 yearly, 10 continuous)', cn:'E: 暴露频率（0.5 每年, 10 持续）'},
+  cTip: {en:'C: severity (1 scratch, 100 multi-fatality)', cn:'C: 后果严重度（1 轻微, 100 多人死亡）'},
+
+  picked:{en:'Selected', cn:'已选'},
+  cleared:{en:'CLEARED', cn:'已达标'},
+};
+function t(k){return (I18N[k]&&I18N[k][LANG])||(I18N[k]&&I18N[k]['en'])||k;}
+
+// ============================================================
+// Visual modes
+// ============================================================
+var GAME_VISUAL_MODES = {
+  cyberpunk:{
+    label:'CYBER',
+    vars:{
+      '--sb-bg':'rgba(5,6,15,0.95)','--sb-border':'var(--line)',
+      '--sb-accent':'var(--primary)','--sb-dim':'var(--fg-dim)','--sb-mute':'var(--fg-mute)',
+      '--sb-btn-bg':'transparent','--sb-btn-bd':'rgba(128,128,128,0.2)',
+      '--hud-bg':'rgba(5,6,15,0.9)','--hud-border':'var(--line)',
+      '--hud-label':'var(--fg-mute)','--hud-value':'var(--primary)',
+      '--ctrl-bg':'var(--primary)','--ctrl-color':'var(--bg)',
+    },
+    bg1:'#05060f', bg2:'#0d0e1a',
+    text:'#e2e8f0', dim:'rgba(226,232,240,0.75)', mute:'rgba(226,232,240,0.5)',
+    accent:'oklch(0.72 0.17 245)', accentDim:'oklch(0.55 0.17 245)',
+    error:'oklch(0.68 0.20 25)', amber:'oklch(0.78 0.17 55)', ok:'oklch(0.72 0.17 155)', gold:'oklch(0.85 0.14 85)',
+    gridColor:'oklch(0.35 0.05 265 / 0.08)', gridStep:64,
+  },
+  dark:{
+    label:'DARK',
+    vars:{
+      '--sb-bg':'rgba(10,10,10,0.95)','--sb-border':'rgba(255,255,255,0.06)',
+      '--sb-accent':'var(--primary)','--sb-dim':'rgba(229,229,229,0.75)','--sb-mute':'rgba(229,229,229,0.45)',
+      '--sb-btn-bg':'transparent','--sb-btn-bd':'rgba(255,255,255,0.1)',
+      '--hud-bg':'rgba(10,10,10,0.9)','--hud-border':'rgba(255,255,255,0.06)',
+      '--hud-label':'rgba(229,229,229,0.55)','--hud-value':'var(--primary)',
+      '--ctrl-bg':'var(--primary)','--ctrl-color':'#0a0a0a',
+    },
+    bg1:'#0a0a0a', bg2:'#111111',
+    text:'#e5e5e5', dim:'rgba(229,229,229,0.75)', mute:'rgba(229,229,229,0.45)',
+    accent:'oklch(0.72 0.17 245)', accentDim:'oklch(0.55 0.17 245)',
+    error:'oklch(0.68 0.20 25)', amber:'oklch(0.78 0.17 55)', ok:'oklch(0.72 0.17 155)', gold:'oklch(0.85 0.14 85)',
+    gridColor:'rgba(255,255,255,0.03)', gridStep:64,
+  },
+  light:{
+    label:'LIGHT',
+    vars:{
+      '--sb-bg':'rgba(248,245,255,0.98)','--sb-border':'rgba(15,23,42,0.08)',
+      '--sb-accent':'var(--primary-dim)','--sb-dim':'rgba(15,23,42,0.72)','--sb-mute':'rgba(15,23,42,0.5)',
+      '--sb-btn-bg':'transparent','--sb-btn-bd':'rgba(15,23,42,0.12)',
+      '--hud-bg':'rgba(248,245,255,0.95)','--hud-border':'rgba(15,23,42,0.08)',
+      '--hud-label':'rgba(15,23,42,0.5)','--hud-value':'var(--primary-dim)',
+      '--ctrl-bg':'var(--primary-dim)','--ctrl-color':'#ffffff',
+    },
+    bg1:'#fafaf5', bg2:'#f0f0ea',
+    text:'#0f172a', dim:'rgba(15,23,42,0.72)', mute:'rgba(15,23,42,0.5)',
+    accent:'oklch(0.55 0.17 245)', accentDim:'oklch(0.45 0.16 245)',
+    error:'oklch(0.55 0.22 25)', amber:'oklch(0.62 0.17 55)', ok:'oklch(0.58 0.17 155)', gold:'oklch(0.70 0.15 80)',
+    gridColor:'rgba(15,23,42,0.04)', gridStep:24,
+  }
+};
+var currentMode='cyberpunk';
+function gameModeColors(){return GAME_VISUAL_MODES[currentMode];}
+function applyGameMode(mode){
+  currentMode=mode;
+  var m=GAME_VISUAL_MODES[mode];var root=document.documentElement;
+  Object.keys(m.vars).forEach(function(k){root.style.setProperty(k,m.vars[k]);});
+  document.querySelectorAll('.vm-btn').forEach(function(b){b.classList.toggle('vm-active', b.dataset.mode===mode);});
+  draw();
+}
+function buildGameStyleSwitcher(){
+  var el=document.getElementById('styleSwitcher'); el.innerHTML='';
+  Object.keys(GAME_VISUAL_MODES).forEach(function(mode){
+    var btn=document.createElement('button');
+    btn.className='vm-btn'+(mode===currentMode?' vm-active':'');
+    btn.dataset.mode=mode;
+    btn.textContent=GAME_VISUAL_MODES[mode].label;
+    btn.addEventListener('click',function(){applyGameMode(mode);});
+    el.appendChild(btn);
+  });
+}
+
+// ============================================================
+// Game model
+// ============================================================
+// Each hazard: reference baseline values (without extra mitigation) and mitigated values (with proper controls)
+var HAZARDS = [
+  {key:'hz1', refL:{b:3, m:0.5}, refE:{b:6, m:3},  refC:{b:40, m:15}, target:70},
+  {key:'hz2', refL:{b:6, m:1},   refE:{b:6, m:6},  refC:{b:40, m:15}, target:70},
+  {key:'hz3', refL:{b:3, m:1},   refE:{b:6, m:6},  refC:{b:15, m:3},  target:70},
+  {key:'hz4', refL:{b:3, m:1},   refE:{b:10,m:10}, refC:{b:7,  m:3},  target:70},
+  {key:'hz5', refL:{b:3, m:1},   refE:{b:6, m:6},  refC:{b:15, m:3},  target:70},
+  {key:'hz6', refL:{b:3, m:1},   refE:{b:10,m:10}, refC:{b:7,  m:3},  target:70},
+];
+
+// Mutable per-hazard current L/E/C chosen by the user
+var state = HAZARDS.map(function(h){
+  return {L:h.refL.b, E:h.refE.b, C:h.refC.b, cleared:false};
+});
+var mode='baseline'; // or 'mitigated'
+var selected = 0;
+
+function computeD(i){
+  var s = state[i];
+  return +(s.L * s.E * s.C).toFixed(1);
+}
+function levelOf(D){
+  if (D <= 20) return 0; // low
+  if (D <= 70) return 1; // med
+  if (D <= 160) return 2; // high
+  return 3; // crit
+}
+function levelLabel(lv){return ['lvLow','lvMed','lvHigh','lvCrit'][lv];}
+function levelColor(lv){
+  var cm = gameModeColors();
+  return [cm.ok, cm.gold, cm.amber, cm.error][lv];
+}
+function clearedCount(){
+  var n=0; for(var i=0;i<HAZARDS.length;i++) if (state[i].cleared) n++;
+  return n;
+}
+
+// ============================================================
+// Canvas layout (world 1000 x 600)
+// ============================================================
+var canvas=document.getElementById('c');
+var ctx=canvas.getContext('2d'); var DPR=1;
+
+function resizeCanvas(){
+  var body=document.querySelector('.game-body');
+  if(!body) return;
+  var rect=body.getBoundingClientRect();
+  if(rect.width<1||rect.height<1){setTimeout(resizeCanvas,80);return;}
+  DPR=Math.max(1,window.devicePixelRatio||1);
+  canvas.width=Math.round(rect.width*DPR);
+  canvas.height=Math.round(rect.height*DPR);
+  canvas.style.width=rect.width+'px';
+  canvas.style.height=rect.height+'px';
+  draw();
+}
+window.addEventListener('resize',resizeCanvas);
+
+function tf(){
+  var W=canvas.width,H=canvas.height;
+  var tw=1000,th=600;
+  var s=Math.min(W/tw,H/th);
+  var ox=(W-tw*s)/2, oy=(H-th*s)/2;
+  return {s:s,ox:ox,oy:oy,W:W,H:H};
+}
+function p(tf, wx, wy){return {x:tf.ox+wx*tf.s, y:tf.oy+wy*tf.s};}
+function client2world(cx,cy){
+  var r=canvas.getBoundingClientRect();
+  var x=(cx-r.left)*DPR, y=(cy-r.top)*DPR;
+  var T=tf(); return {x:(x-T.ox)/T.s, y:(y-T.oy)/T.s};
+}
+
+function drawRect(x,y,w,h,fill,stroke,lw,alpha){
+  var T=tf(); var q=p(T,x,y);
+  ctx.save();
+  if (alpha!==undefined) ctx.globalAlpha=alpha;
+  if (fill){ctx.fillStyle=fill; ctx.fillRect(q.x,q.y,w*T.s,h*T.s);}
+  if (stroke){ctx.strokeStyle=stroke; ctx.lineWidth=lw||1; ctx.strokeRect(q.x,q.y,w*T.s,h*T.s);}
+  ctx.restore();
+}
+function drawText(x,y,txt,color,size,align,weight,tracking){
+  var T=tf(); var q=p(T,x,y);
+  ctx.fillStyle=color;
+  ctx.font=(weight||'600')+' '+size+'px "JetBrains Mono", monospace';
+  ctx.textAlign=align||'left'; ctx.textBaseline='middle';
+  if (tracking){
+    // letterSpacing is not supported on all canvases; emulate with multiple chars
+    ctx.save();
+    var s=String(txt);
+    var totalW = ctx.measureText(s).width + (s.length-1)*tracking*size;
+    var x0 = align==='center' ? q.x - totalW/2 : (align==='right' ? q.x - totalW : q.x);
+    ctx.textAlign='left';
+    var cur=x0;
+    for(var i=0;i<s.length;i++){
+      var ch=s[i];
+      ctx.fillText(ch, cur, q.y);
+      cur += ctx.measureText(ch).width + tracking*size;
+    }
+    ctx.restore();
+  } else {
+    ctx.fillText(String(txt), q.x, q.y);
+  }
+}
+function drawLine(x1,y1,x2,y2,color,lw,dash){
+  var T=tf(); var a=p(T,x1,y1), b=p(T,x2,y2);
+  ctx.save(); ctx.strokeStyle=color; ctx.lineWidth=lw||1;
+  if (dash) ctx.setLineDash(dash);
+  ctx.beginPath(); ctx.moveTo(a.x,a.y); ctx.lineTo(b.x,b.y); ctx.stroke();
+  ctx.restore();
+}
+function drawCircle(x,y,r,fill,stroke,lw,alpha){
+  var T=tf(); var q=p(T,x,y);
+  ctx.save(); if (alpha!==undefined) ctx.globalAlpha=alpha;
+  if (fill){ctx.fillStyle=fill; ctx.beginPath(); ctx.arc(q.x,q.y,r*T.s,0,Math.PI*2); ctx.fill();}
+  if (stroke){ctx.strokeStyle=stroke; ctx.lineWidth=lw||1; ctx.beginPath(); ctx.arc(q.x,q.y,r*T.s,0,Math.PI*2); ctx.stroke();}
+  ctx.restore();
+}
+
+function drawBg(){
+  var cm=gameModeColors();
+  var T=tf(); var p0=p(T,0,0);
+  var g=ctx.createLinearGradient(p0.x,p0.y,p0.x,p0.y+600*T.s);
+  g.addColorStop(0,cm.bg1); g.addColorStop(1,cm.bg2);
+  ctx.fillStyle=g; ctx.fillRect(0,0,canvas.width,canvas.height);
+  ctx.save();
+  ctx.strokeStyle=cm.gridColor; ctx.lineWidth=0.5;
+  for(var x=0;x<=1000;x+=cm.gridStep){
+    var a=p(T,x,0), b=p(T,x,600);
+    ctx.beginPath(); ctx.moveTo(a.x,a.y); ctx.lineTo(b.x,b.y); ctx.stroke();
+  }
+  for(var y=0;y<=600;y+=cm.gridStep){
+    var a=p(T,0,y), b=p(T,1000,y);
+    ctx.beginPath(); ctx.moveTo(a.x,a.y); ctx.lineTo(b.x,b.y); ctx.stroke();
+  }
+  ctx.restore();
+}
+
+// ============================================================
+// Sliders (interactive)
+// ============================================================
+// Each slider world rect: {x,y,w,h} ; drag returns value in [min,max]
+var sliders = [
+  {key:'L', x:40,  y:130, w:260, h:20, min:0.1, max:10,  step:0.1, label:'lblL',refKey:'refL'},
+  {key:'E', x:40,  y:210, w:260, h:20, min:0.5, max:10,  step:0.5, label:'lblE',refKey:'refE'},
+  {key:'C', x:40,  y:290, w:260, h:20, min:1,   max:100, step:1,   label:'lblC',refKey:'refC'},
+];
+var draggingSlider = -1;
+
+function sliderValueToX(s, v){
+  var frac = (v - s.min) / (s.max - s.min);
+  return s.x + Math.max(0, Math.min(1, frac)) * s.w;
+}
+function sliderXToValue(s, wx){
+  var frac = (wx - s.x) / s.w;
+  frac = Math.max(0, Math.min(1, frac));
+  var v = s.min + frac*(s.max-s.min);
+  v = Math.round(v/s.step)*s.step;
+  return +v.toFixed(2);
+}
+function hitSlider(wx, wy){
+  for(var i=0;i<sliders.length;i++){
+    var s=sliders[i];
+    if (wx>=s.x-10 && wx<=s.x+s.w+10 && wy>=s.y-12 && wy<=s.y+s.h+18) return i;
+  }
+  return -1;
+}
+
+function drawSliders(){
+  var cm=gameModeColors();
+  var hz = HAZARDS[selected];
+  var st = state[selected];
+  // title
+  drawText(40, 90, 'L / E / C', cm.accent, 14, 'left', '700', 0.18);
+  drawText(160, 90, '=> D = L x E x C', cm.dim, 12, 'left', '500');
+  for(var i=0;i<sliders.length;i++){
+    var s=sliders[i];
+    var v = st[s.key];
+    // label
+    drawText(s.x, s.y-14, t(s.label), cm.accent, 11, 'left', '700', 0.12);
+    // refs (baseline/mitigated)
+    var ref = hz[s.refKey];
+    drawText(s.x+s.w, s.y-14, '['+t('refL')[0]+' b='+ref.b+'  m='+ref.m+']', cm.mute, 9, 'right', '500');
+    // track
+    drawRect(s.x, s.y+s.h/2-2, s.w, 4, cm.mute, null, 0, 0.4);
+    // fill portion up to value
+    var vx = sliderValueToX(s, v) - s.x;
+    drawRect(s.x, s.y+s.h/2-2, vx, 4, cm.accent, null, 0, 0.9);
+    // baseline tick
+    var xb = sliderValueToX(s, ref.b);
+    drawLine(xb, s.y-4, xb, s.y+s.h+4, cm.gold, 1.2, [3,3]);
+    // mitigated tick
+    var xm = sliderValueToX(s, ref.m);
+    drawLine(xm, s.y-4, xm, s.y+s.h+4, cm.ok, 1.2, [3,3]);
+    // thumb
+    var tx = sliderValueToX(s, v);
+    drawCircle(tx, s.y+s.h/2, 8, cm.accent, cm.text, 1, 1);
+    // value readout
+    drawText(s.x+s.w+80, s.y+s.h/2, String(v), cm.accent, 14, 'right', '700');
+  }
+  // D value big
+  var D = computeD(selected);
+  var lv = levelOf(D);
+  var lvCol = levelColor(lv);
+  drawRect(40, 380, 260, 110, lvCol, lvCol, 1.4, 0.18);
+  drawText(170, 408, 'D = L x E x C', cm.dim, 11, 'center', '600', 0.12);
+  drawText(170, 446, String(D), lvCol, 34, 'center', '700');
+  drawText(170, 478, t(levelLabel(lv)), lvCol, 14, 'center', '700', 0.15);
+
+  // hints
+  drawText(40, 520, t('lTip'), cm.mute, 9, 'left', '500');
+  drawText(40, 540, t('eTip'), cm.mute, 9, 'left', '500');
+  drawText(40, 560, t('cTip'), cm.mute, 9, 'left', '500');
+}
+
+// ============================================================
+// Risk matrix (right side)
+// ============================================================
+var MAT = {x:360, y:80, cellW:80, cellH:80, cols:4, rows:4};
+// matrix cell level: [rowFromTop][col] ; axis: x=L bins, y=C bins top=low severity? we invert so top=high
+// We bin D by level for display but position by (L, C). Use log-ish bins.
+function binL(L){ if (L<=1) return 0; if (L<=3) return 1; if (L<=6) return 2; return 3; }
+function binC(C){ if (C<=3) return 0; if (C<=15) return 1; if (C<=40) return 2; return 3; }
+var cellLevel = [ // rows low severity -> high severity (but we render top = high)
+  [0,0,1,1],
+  [0,1,1,2],
+  [1,1,2,3],
+  [1,2,3,3],
+];
+
+function drawMatrix(){
+  var cm=gameModeColors();
+  drawText(MAT.x + MAT.cols*MAT.cellW/2, MAT.y - 16, t('matrix'), cm.accent, 13, 'center', '700', 0.18);
+  // cells
+  for (var r=0;r<MAT.rows;r++){
+    for (var c=0;c<MAT.cols;c++){
+      var lv = cellLevel[r][c];
+      var col = levelColor(lv);
+      var x = MAT.x + c*MAT.cellW;
+      var y = MAT.y + (MAT.rows-1-r)*MAT.cellH;
+      drawRect(x, y, MAT.cellW-2, MAT.cellH-2, col, col, 0.8, 0.14);
+    }
+  }
+  // axes
+  drawText(MAT.x + MAT.cols*MAT.cellW/2, MAT.y + MAT.rows*MAT.cellH + 18, t('axisL'), cm.mute, 11, 'center', '600', 0.12);
+  drawText(MAT.x - 30, MAT.y + MAT.rows*MAT.cellH/2, t('axisS'), cm.mute, 11, 'center', '600', 0.12);
+  // plot each hazard as a dot (baseline or current state)
+  for (var i=0;i<HAZARDS.length;i++){
+    var s = state[i];
+    var lb = binL(s.L), cb = binC(s.C);
+    var cx = MAT.x + lb*MAT.cellW + MAT.cellW/2;
+    var cy = MAT.y + (MAT.rows-1-cb)*MAT.cellH + MAT.cellH/2;
+    var lv = levelOf(s.L*s.E*s.C);
+    var col = levelColor(lv);
+    var isSel = (i===selected);
+    drawCircle(cx, cy, isSel?12:8, col, cm.text, isSel?2:1, isSel?1:0.75);
+    drawText(cx, cy, String(i+1), cm.bg1, 11, 'center', '700');
+    if (s.cleared){
+      // green ring
+      drawCircle(cx, cy, 16, null, cm.ok, 1.5, 0.8);
+    }
+  }
+}
+
+// ============================================================
+// Hazard card shelf (bottom)
+// ============================================================
+var CARDS = {x:360, y:470, w:580, h:100, cardW:88, cardH:70, gap:6};
+function drawCards(){
+  var cm = gameModeColors();
+  for (var i=0;i<HAZARDS.length;i++){
+    var x = CARDS.x + i*(CARDS.cardW + CARDS.gap);
+    var y = CARDS.y;
+    var isSel = i===selected;
+    var s = state[i];
+    var D = s.L*s.E*s.C;
+    var lv = levelOf(D);
+    var col = levelColor(lv);
+    drawRect(x, y, CARDS.cardW, CARDS.cardH, isSel?col:cm.mute, isSel?col:cm.accent, isSel?1.8:1, isSel?0.24:0.1);
+    drawText(x+CARDS.cardW/2, y+14, (i+1)+'', col, 14, 'center', '700');
+    drawText(x+CARDS.cardW/2, y+30, t(HAZARDS[i].key).slice(0,6)+(t(HAZARDS[i].key).length>6?'..':''), cm.text, 10, 'center', '600');
+    drawText(x+CARDS.cardW/2, y+50, 'D='+D.toFixed(0), col, 12, 'center', '700');
+    if (s.cleared){
+      drawText(x+CARDS.cardW/2, y+64, t('cleared'), cm.ok, 8, 'center', '700', 0.15);
+    }
+  }
+  // full name of selected
+  drawText(CARDS.x, CARDS.y-14, t(HAZARDS[selected].key), cm.accent, 11, 'left', '600');
+}
+
+function hitCard(wx, wy){
+  for (var i=0;i<HAZARDS.length;i++){
+    var x = CARDS.x + i*(CARDS.cardW + CARDS.gap);
+    var y = CARDS.y;
+    if (wx>=x && wx<=x+CARDS.cardW && wy>=y && wy<=y+CARDS.cardH) return i;
+  }
+  return -1;
+}
+
+// ============================================================
+// Mode controls: baseline vs mitigated auto-apply
+// ============================================================
+function applyMode(m){
+  mode = m;
+  for (var i=0;i<HAZARDS.length;i++){
+    var h = HAZARDS[i];
+    var s = state[i];
+    if (m === 'baseline'){
+      s.L = h.refL.b; s.E = h.refE.b; s.C = h.refC.b;
+    } else {
+      s.L = h.refL.m; s.E = h.refE.m; s.C = h.refC.m;
+    }
+    s.cleared = computeD(i) <= h.target;
+  }
+  updateModeButtons();
+  updateHud();
+  draw();
+}
+
+function updateModeButtons(){
+  var bBase = document.getElementById('btnBaseline');
+  var bMit  = document.getElementById('btnMeasure');
+  bBase.classList.toggle('active', mode==='baseline');
+  bMit.classList.toggle('active', mode==='mitigated');
+  bBase.textContent = t('btnBaseline');
+  bMit.textContent  = mode==='mitigated' ? t('btnMitig') : t('btnMitig');
+}
+
+// ============================================================
+// Interaction
+// ============================================================
+canvas.addEventListener('mousedown', function(e){
+  var w = client2world(e.clientX, e.clientY);
+  var c = hitCard(w.x, w.y);
+  if (c >= 0){ selected = c; draw(); return; }
+  var s = hitSlider(w.x, w.y);
+  if (s >= 0){ draggingSlider = s; updateSliderFromEvent(e); draw(); return; }
+});
+canvas.addEventListener('mousemove', function(e){
+  if (draggingSlider >= 0){ updateSliderFromEvent(e); }
+});
+window.addEventListener('mouseup', function(){
+  if (draggingSlider >= 0){
+    // recompute cleared
+    var s = state[selected];
+    s.cleared = computeD(selected) <= HAZARDS[selected].target;
+    updateHud();
+    draggingSlider = -1;
+    draw();
+  }
+});
+canvas.addEventListener('touchstart', function(e){
+  if (!e.touches[0]) return;
+  var w = client2world(e.touches[0].clientX, e.touches[0].clientY);
+  var c = hitCard(w.x, w.y);
+  if (c >= 0){ selected = c; draw(); return; }
+  var s = hitSlider(w.x, w.y);
+  if (s >= 0){ draggingSlider = s; updateSliderFromTouch(e); e.preventDefault(); }
+}, {passive:false});
+canvas.addEventListener('touchmove', function(e){
+  if (draggingSlider >= 0){ updateSliderFromTouch(e); e.preventDefault(); }
+}, {passive:false});
+canvas.addEventListener('touchend', function(){
+  if (draggingSlider >= 0){
+    var s = state[selected];
+    s.cleared = computeD(selected) <= HAZARDS[selected].target;
+    updateHud();
+    draggingSlider = -1;
+    draw();
+  }
+});
+
+function updateSliderFromEvent(e){
+  var w = client2world(e.clientX, e.clientY);
+  var s = sliders[draggingSlider];
+  var v = sliderXToValue(s, w.x);
+  state[selected][s.key] = v;
+  state[selected].cleared = computeD(selected) <= HAZARDS[selected].target;
+  updateHud();
+  draw();
+  playTone(320 + draggingSlider*180, 0.04, 'sine');
+}
+function updateSliderFromTouch(e){
+  if (!e.touches[0]) return;
+  var w = client2world(e.touches[0].clientX, e.touches[0].clientY);
+  var s = sliders[draggingSlider];
+  var v = sliderXToValue(s, w.x);
+  state[selected][s.key] = v;
+  state[selected].cleared = computeD(selected) <= HAZARDS[selected].target;
+  updateHud();
+  draw();
+}
+
+// ============================================================
+// Sound
+// ============================================================
+var soundMuted=false;
+function playTone(freq,dur,type){
+  if(soundMuted) return;
+  try{
+    var a=window._audioCtx||(window._audioCtx=new (window.AudioContext||window.webkitAudioContext)());
+    var o=a.createOscillator(),g=a.createGain();
+    o.type=type||'sine'; o.frequency.value=freq;
+    g.gain.setValueAtTime(0.12,a.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.001,a.currentTime+dur);
+    o.connect(g); g.connect(a.destination);
+    o.start(); o.stop(a.currentTime+dur);
+  }catch(e){}
+}
+
+// ============================================================
+// HUD + buttons
+// ============================================================
+function updateHud(){
+  document.getElementById('sceneTag').textContent = t('sceneTag');
+  document.getElementById('hudL1').textContent = t('hudL1');
+  document.getElementById('hudL2').textContent = t('hudL2');
+  document.getElementById('hudL3').textContent = t('hudL3');
+  document.getElementById('hudL4').textContent = t('hudL4');
+  document.getElementById('hudV1').textContent = (selected+1) + '/6';
+  var D = computeD(selected);
+  document.getElementById('hudV2').textContent = String(D);
+  var lv = levelOf(D);
+  document.getElementById('hudV3').textContent = t(levelLabel(lv));
+  document.getElementById('hudV4').textContent = clearedCount() + '/6';
+}
+
+function refreshI18N(){
+  document.getElementById('langBtn').textContent = LANG.toUpperCase();
+  document.getElementById('sidebarTitle').textContent = t('title');
+  document.getElementById('opsLabel').textContent = t('opsLabel');
+  document.getElementById('guideContent').textContent = t('guide');
+  document.getElementById('legendLabel').textContent = t('legendLabel');
+  document.getElementById('legendContent').innerText = t('legend');
+  document.getElementById('btnBaseline').textContent = t('btnBaseline');
+  document.getElementById('btnMeasure').textContent = t('btnMitig');
+  document.getElementById('btnCheck').textContent = t('btnCheck');
+  document.getElementById('btnReset').textContent = t('btnReset');
+  updateHud();
+  draw();
+}
+
+document.getElementById('langBtn').addEventListener('click', function(){
+  LANG = (LANG==='cn')?'en':'cn';
+  refreshI18N();
+});
+document.getElementById('btnBaseline').addEventListener('click', function(){
+  applyMode('baseline');
+  playTone(360,0.1,'sine');
+});
+document.getElementById('btnMeasure').addEventListener('click', function(){
+  applyMode('mitigated');
+  playTone(620,0.1,'sine');
+});
+document.getElementById('btnReset').addEventListener('click', function(){
+  state = HAZARDS.map(function(h){return {L:h.refL.b, E:h.refE.b, C:h.refC.b, cleared:false};});
+  selected = 0; mode='baseline';
+  updateModeButtons();
+  refreshI18N();
+  hideOverlay();
+});
+document.getElementById('btnCheck').addEventListener('click', function(){
+  // recompute cleared for all
+  for (var i=0;i<HAZARDS.length;i++){
+    state[i].cleared = computeD(i) <= HAZARDS[i].target;
+  }
+  var n = clearedCount();
+  var missed = [];
+  for (var i=0;i<HAZARDS.length;i++){
+    if (!state[i].cleared){
+      missed.push('#'+(i+1)+' '+t(HAZARDS[i].key)+' (D='+computeD(i).toFixed(0)+', '+t(levelLabel(levelOf(computeD(i))))+')');
+    }
+  }
+  var title = t('finalTitle');
+  var body = (missed.length===0 ? t('finalOk') : t('finalMiss')) + ' ' + t('finalBody');
+  var listItems = missed.length===0 ? [t('allCleared')] : [t('missedLabel')].concat(missed);
+  showOverlay(title, body, listItems, t('btnContinue'), function(){
+    state = HAZARDS.map(function(h){return {L:h.refL.b, E:h.refE.b, C:h.refC.b, cleared:false};});
+    selected = 0; mode='baseline';
+    updateModeButtons(); hideOverlay(); refreshI18N();
+  });
+  playTone(missed.length===0?720:360, 0.22, 'sine');
+});
+
+// ============================================================
+// Overlay
+// ============================================================
+var ov = document.getElementById('overlay');
+function hideOverlay(){ov.classList.add('hidden');}
+function showOverlay(title, body, listItems, primaryText, primaryHandler){
+  document.getElementById('ovTitle').textContent = title;
+  document.getElementById('ovBody').textContent = body;
+  var listEl = document.getElementById('ovList'); listEl.innerHTML='';
+  if (listItems){
+    listItems.forEach(function(it){
+      var li = document.createElement('li'); li.textContent = it; listEl.appendChild(li);
+    });
+  }
+  var p = document.getElementById('ovPrimary');
+  p.textContent = primaryText; p.onclick = primaryHandler;
+  document.getElementById('ovSecondary').style.display = 'none';
+  ov.classList.remove('hidden');
+}
+
+// ============================================================
+// Draw everything
+// ============================================================
+function draw(){
+  if (!canvas.width || !canvas.height) return;
+  drawBg();
+  drawMatrix();
+  drawSliders();
+  drawCards();
+}
+
+// ============================================================
+// Boot
+// ============================================================
+buildGameStyleSwitcher();
+applyGameMode('cyberpunk');
+updateModeButtons();
+refreshI18N();
+resizeCanvas();
+document.fonts && document.fonts.ready && document.fonts.ready.then(function(){resizeCanvas();});
+setTimeout(resizeCanvas,200);
+setTimeout(resizeCanvas,600);
+</script>
+</body>
+</html>
