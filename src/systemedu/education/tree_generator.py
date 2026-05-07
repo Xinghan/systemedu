@@ -74,6 +74,8 @@ async def generate_knowledge_tree(
     config = AgentConfig(name="planner", type="builtin:planner", llm_provider=llm_provider)
     planner = PlannerAgent(config)
 
+    from systemedu.core.llm_client import LLMNotConfigured
+
     last_error = None
     for attempt in range(1, max_retries + 1):
         try:
@@ -85,6 +87,9 @@ async def generate_knowledge_tree(
             tree_data = _extract_json(content)
             return parse_knowledge_tree(tree_data)
 
+        except LLMNotConfigured:
+            # spec 017: 不重试，直接抛给 gateway 全局 412 handler
+            raise
         except Exception as e:
             last_error = e
             logger.warning(
