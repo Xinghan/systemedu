@@ -52,9 +52,14 @@ class LLMProviderConfig(BaseModel):
 
 
 class LLMConfig(BaseModel):
-    """LLM configuration with multiple providers."""
+    """LLM configuration with multiple providers.
 
-    default: str = "qwen"
+    spec 017: default 固定为 "creative"，由用户在 web /config 配置。
+    fast 角色（v3 pipeline 评判 / audio_script / assignment）由代码层
+    硬编码到 "qwen" provider，不暴露给用户。
+    """
+
+    default: str = "creative"
     providers: dict[str, LLMProviderConfig] = Field(default_factory=dict)
 
 
@@ -195,11 +200,11 @@ def _default_config_dict() -> dict:
     """Return the default config as a dict (for writing to YAML)."""
     return {
         "llm": {
-            "default": "kimi",
+            # spec 017: default = creative，由用户在 web /config 配置
+            "default": "creative",
             "providers": {
-                "kimi": {
-                    # creative 档默认 (provider 名保留 "kimi" 减少代码改动): GLM-5.1 @ 智谱 BigModel
-                    # 切换原因 (2026-04-28): kimi-k2.6 reasoning 太慢, anim/game 单次 5-8 分钟
+                "creative": {
+                    # 用户可配的高质量 LLM，用于 idea / 知识树 / anim / game / HTML 静态图
                     "base_url": "https://open.bigmodel.cn/api/paas/v4",
                     "api_key": "${ZHIPU_API_KEY}",
                     "model": "glm-5.1",
@@ -207,6 +212,8 @@ def _default_config_dict() -> dict:
                     "max_tokens": 65536,
                 },
                 "qwen": {
+                    # 系统侧固定，用于 fast 角色（评判 / JSON 抽取 / audio / assignment），
+                    # 不暴露给用户
                     "base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1",
                     "api_key": "${DASHSCOPE_API_KEY}",
                     "model": "qwen3.6-plus",
@@ -268,6 +275,68 @@ def save_config(config_dict: dict, path: Path | None = None) -> None:
     reset_config()
 
 
+def _migrate_legacy_config(raw: dict, config_path: Path) -> dict:
+    """spec 017 迁移：
+
+    - llm.providers.kimi → creative（保留 url/key/model 等所有字段）
+    - 没有 qwen 时写一条空 key 占位（让 fast 路径错误信息友好）
+    - 强制 llm.default = "creative"
+
+    幂等：若已迁移过则不动文件。发生改动时备份原文件到
+    config.yaml.bak.<unix_ts> 再写回。
+    """
+    import time
+
+    llm = raw.setdefault("llm", {})
+    providers = llm.setdefault("providers", {})
+
+    changed = False
+
+    # 1. kimi → creative 改名（保留所有字段）
+    if "kimi" in providers and "creative" not in providers:
+        providers["creative"] = providers.pop("kimi")
+        changed = True
+
+    # 2. creative 不存在则写占位，让 UI 有可编辑入口
+    if "creative" not in providers:
+        providers["creative"] = {
+            "base_url": "https://open.bigmodel.cn/api/paas/v4",
+            "api_key": "",
+            "model": "glm-5.1",
+            "temperature": 1.0,
+            "max_tokens": 65536,
+        }
+        changed = True
+
+    # 3. qwen 不存在则写占位（fast 路径需要它，缺失时报错信息友好）
+    if "qwen" not in providers:
+        providers["qwen"] = {
+            "base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1",
+            "api_key": "",
+            "model": "qwen3.6-plus",
+            "temperature": 0.3,
+            "max_tokens": 8192,
+        }
+        changed = True
+
+    # 4. default 强制 = creative
+    if llm.get("default") != "creative":
+        llm["default"] = "creative"
+        changed = True
+
+    if changed and config_path.exists():
+        # 备份再写回
+        ts = int(time.time())
+        backup = config_path.with_suffix(f".yaml.bak.{ts}")
+        backup.write_bytes(config_path.read_bytes())
+        config_path.write_text(
+            yaml.dump(raw, default_flow_style=False, allow_unicode=True),
+            encoding="utf-8",
+        )
+
+    return raw
+
+
 def load_config(path: Path | None = None) -> SystemEduConfig:
     """Load and parse the config file, expanding environment variables."""
     config_path = path or CONFIG_FILE
@@ -276,6 +345,7 @@ def load_config(path: Path | None = None) -> SystemEduConfig:
         return SystemEduConfig()
 
     raw = yaml.safe_load(config_path.read_text(encoding="utf-8")) or {}
+    raw = _migrate_legacy_config(raw, config_path)
     expanded = _expand_env_recursive(raw)
 
     return SystemEduConfig.model_validate(expanded)
