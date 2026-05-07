@@ -171,11 +171,58 @@ Route("/api/config/test-llm", api_test_llm, methods=["POST"]),
 - `kimi_client.llm_for("creative")` 用 `creative` provider，
   `llm_for("fast")` 用 `qwen` provider
 
-## 验收记录（本文件，实施后填）
+## 验收记录
 
-> 实现完成后在此处填写：
-> - mock E2E 通过截图 / 日志摘录
-> - 真实 LLM 三步链路实际响应
+### Mock E2E (pytest)
+
+`tests/test_017_*.py` 共 30 个测试 + 现有 test_auth.py 12 个回归全
+通过 (42 passed, ~1.1s):
+
+```
+tests/test_017_config_migration.py   ::  7 passed
+tests/test_017_e2e_llm_routing.py    ::  4 passed
+tests/test_017_gateway_config.py     :: 16 passed
+tests/test_017_v3_role_routing.py    ::  5 passed
+tests/test_auth.py                   :: 12 passed (回归)
+```
+
+### 真实 LLM 三步验证 (2026-05-07)
+
+迁移自动触发，`~/.systemedu/config.yaml` 自动:
+- `kimi` 重命名为 `creative`，所有字段保留
+- `default` 改为 `creative`
+- 备份原 yaml 到 `config.yaml.bak.1778143778`
+
+三步实测 (使用真实 GLM-5.1 / 智谱 BigModel):
+
+**[1] Ping test (test_llm 端点等价调用)**
+```
+creative: OK (4618ms) -> 'ok'
+qwen:     OK (3982ms) -> 'ok'
+```
+
+**[2] generate_description (走 creative)**
+```
+status: 200
+description: "欢迎来到《小学生编程入门》！在这里，你将像搭积木一样学习编程，
+              掌握顺序、循环和条件判断等核心概念。通过拖拽彩色代码块，你可以
+              轻松创造出属于自己的互动小游戏和趣味动画。..."
+tags: ['编程思维', '积木编程', '创意设计', '游戏制作']
+```
+
+**[3] generate_knowledge_tree (走 creative)**
+```
+耗时: 132143ms (~2分10秒，含多步 outline + knode 详化)
+title: 小学生编程入门 (V5KnowledgeTree)
+schema_version: V5
+stages + modules: 正常返回结构化树
+```
+
+(脚本 print 字段名 `tree.milestones` 是旧版 V4 schema 残留，V5 用
+`tree.stages + tree.modules`，不影响 spec 017 验收：LLM 返回正常)
+
+结论: 整条 web/api 路径上 LLM 路由按 spec 017 工作，creative provider
+可由用户在 web /config 配置后立即生效，不再依赖固定 `kimi` 名字。
 
 ## 上线步骤
 

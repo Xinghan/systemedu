@@ -333,14 +333,27 @@ Course Factory 手册新增两个必做步骤，补全课程内容的"练习"和
 ## 6. Configuration
 
 ### Global Config: `~/.systemedu/config.yaml`
+
+**LLM provider 路由 (spec 017)**：
+- `creative`：用户在 web `/config` 自助配，用于项目 idea / 知识树 /
+  anim / game / HTML 静态图等需要质量的任务（**默认 default**）
+- `qwen`：系统侧固定，用于 audio_script / assignment / 评判 / JSON
+  抽取 等 fast 角色任务，UI 不暴露（运维侧由部署方提供 key）
+
 ```yaml
 llm:
-  default: qwen
+  default: creative
   providers:
+    creative:
+      base_url: https://open.bigmodel.cn/api/paas/v4
+      api_key: ${ZHIPU_API_KEY}    # 用户在 /config 填，覆盖 env var
+      model: glm-5.1
+      temperature: 1.0
+      max_tokens: 65536
     qwen:
       base_url: https://dashscope.aliyuncs.com/compatible-mode/v1
-      api_key: ${DASHSCOPE_API_KEY}
-      model: qwen3-max
+      api_key: ${DASHSCOPE_API_KEY}  # 系统侧；UI 不显示
+      model: qwen3.6-plus
 sandbox:
   enabled: true
   blocked_commands: ["rm -rf /"]
@@ -366,8 +379,9 @@ memory:
 | Method | Path | Description |
 |--------|------|-------------|
 | GET | `/api/status` | 系统状态 (版本, uptime, LLM, 会话数) |
-| GET | `/api/config` | 当前配置 (API key 脱敏) |
-| PUT | `/api/config` | 更新配置 |
+| GET | `/api/config` | 当前配置 (API key 脱敏 + `llm.user_editable` 白名单) |
+| PUT | `/api/config` | 更新配置 (deep merge; mask 串提交时保留旧 api_key) |
+| POST | `/api/config/test-llm` | 测试 provider 连通性 (`{provider}` → `{ok, message, latency_ms}`) |
 | GET | `/api/sessions` | 会话列表 |
 | GET | `/api/sessions/full` | 会话列表 (含完整消息) |
 | GET | `/api/sessions/:id` | 会话详情 |
