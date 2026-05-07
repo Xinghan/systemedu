@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { TreeFlow } from "@/components/knowledge-tree/tree-flow"
 import { gateway } from "@/lib/api"
+import { handleLLMError } from "@/lib/api/handle-llm-error"
 import type { TreePreviewResponse } from "@/lib/types/api"
 import { useT } from "@/lib/hooks/use-t"
 
@@ -138,6 +139,7 @@ export default function NewProjectPage() {
       setProjectName(generateSlug(aiTitle.trim()))
       setStep("preview")
     } catch (e) {
+      if (handleLLMError(e)) return
       setError(e instanceof Error ? e.message : "AI generation failed, please retry")
     } finally {
       clearTimeout(stepTimer1); clearTimeout(stepTimer2)
@@ -158,6 +160,7 @@ export default function NewProjectPage() {
       // Cover is auto-generated server-side after project creation; no upload needed here
       router.push(`/projects/${slug}`)
     } catch (e) {
+      if (handleLLMError(e)) return
       setError(e instanceof Error ? e.message : "Create failed")
     } finally {
       setLoading(false)
@@ -596,7 +599,7 @@ export default function NewProjectPage() {
                       const res = await gateway.generateDescription({ title: aiTitle, age: aiAge, node_count: aiNodeCount })
                       setAiDescription(res.description)
                       if (res.tags && res.tags.length > 0) setTags(res.tags)
-                    } catch { /* silently ignore */ }
+                    } catch (e) { handleLLMError(e) /* 静默吞其他错 */ }
                     finally { setGeneratingDesc(false) }
                   }}
                   className="inline-flex items-center gap-1.5 text-xs text-primary hover:text-primary/80 font-[var(--font-manrope)] font-semibold transition-colors disabled:opacity-40">

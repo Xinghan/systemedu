@@ -2,6 +2,18 @@
 
 import { clearToken, getToken } from "@/lib/auth"
 
+/** spec 017: API error 携带 code 字段，前端按 code 决定 UX
+ * (例: code === "LLM_NOT_CONFIGURED" 时弹引导 toast 跳 /config) */
+export class ApiError extends Error {
+  code?: string
+  status?: number
+  constructor(message: string, opts: { code?: string; status?: number } = {}) {
+    super(message)
+    this.code = opts.code
+    this.status = opts.status
+  }
+}
+
 const GATEWAY_URL =
   process.env.NEXT_PUBLIC_GATEWAY_URL || "http://localhost:18820"
 
@@ -30,7 +42,10 @@ async function fetchAPI<T>(path: string, init?: RequestInit): Promise<T> {
 
   if (!res.ok) {
     const body = await res.json().catch(() => ({}))
-    throw new Error(body.error || `API error ${res.status}`)
+    throw new ApiError(body.message || body.error || `API error ${res.status}`, {
+      code: body.error,
+      status: res.status,
+    })
   }
   return res.json()
 }
