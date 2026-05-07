@@ -270,8 +270,13 @@ def generate_assignment(knode: dict, milestone: dict, plan_markdown: str = "") -
     from systemedu.core.config import get_config
 
     cfg = get_config()
-    # assignment 用 fast provider (qwen) — 文本任务不需要 creative
-    provider = cfg.llm.providers.get("qwen") or cfg.llm.providers[cfg.llm.default]
+    # spec 017: assignment 是 fast 角色 (评判 / 文本结构化)，固定走 qwen
+    if "qwen" not in cfg.llm.providers:
+        raise RuntimeError("系统侧 qwen provider 未配置，请检查 ~/.systemedu/config.yaml")
+    provider = cfg.llm.providers["qwen"]
+    if not provider.api_key:
+        from systemedu.core.llm_client import LLMNotConfigured
+        raise LLMNotConfigured("qwen")
     _api_url = provider.base_url.rstrip("/") + "/chat/completions"
     _headers = {
         "Authorization": f"Bearer {provider.api_key}",
@@ -444,8 +449,13 @@ def generate_audio_scripts(project_name: str, knode_id: int,
         # httpx has SSL incompatibility with DashScope on this machine.
         import requests as _requests
         cfg = get_config()
-        # audio scripts 用 fast provider (qwen) — 文本任务不需要 creative
-        provider = cfg.llm.providers.get("qwen") or cfg.llm.providers[cfg.llm.default]
+        # spec 017: audio_script 是 fast 角色，固定走 qwen
+        if "qwen" not in cfg.llm.providers:
+            raise RuntimeError("系统侧 qwen provider 未配置，请检查 ~/.systemedu/config.yaml")
+        provider = cfg.llm.providers["qwen"]
+        if not provider.api_key:
+            from systemedu.core.llm_client import LLMNotConfigured
+            raise LLMNotConfigured("qwen")
         _api_url = provider.base_url.rstrip("/") + "/chat/completions"
         _api_key = provider.api_key
         _model = provider.model
