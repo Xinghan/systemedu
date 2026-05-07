@@ -47,9 +47,13 @@ RETRY_BACKOFF_BASE = 2.0
 
 Role = Literal["creative", "fast"]
 
-# 角色 → provider 映射 (config 中必须配好对应 provider)
+# spec 017: 角色 → provider 映射
+# - creative: 用户在 web /config 配的 provider (key 名固定为 "creative")，
+#   生成 anim/game/HTML 静态图等创意内容
+# - fast: 系统侧固定 qwen，生成评判/JSON 抽取/audio_script/assignment 等
+#   文本快任务，用户不可见也不可改
 ROLE_TO_PROVIDER: dict[str, str] = {
-    "creative": "kimi",
+    "creative": "creative",
     "fast": "qwen",
 }
 
@@ -57,11 +61,11 @@ ROLE_TO_PROVIDER: dict[str, str] = {
 def llm_for(role: Role = "fast", *, streaming: bool = False, max_tokens: int | None = None) -> ChatOpenAI:
     """按角色获取 LLM 实例。
 
-    用法:
-        llm_for("creative")   # kimi-k2.6, 用于复杂创意/HTML 实现
-        llm_for("fast")       # qwen3-max, 用于评判/JSON 抽取/科普文本
+    spec 017:
+    - llm_for("creative") → "creative" provider，用户在 web /config 配
+    - llm_for("fast")     → "qwen" provider，系统侧固定，用户不可见
     """
-    provider = ROLE_TO_PROVIDER.get(role, "qwen")
+    provider = ROLE_TO_PROVIDER.get(role, "creative")
     return get_llm(provider=provider, streaming=streaming, max_tokens=max_tokens)
 
 
@@ -113,8 +117,11 @@ async def astream_html(
     from systemedu.core.config import get_config
 
     cfg = get_config()
-    provider_name = ROLE_TO_PROVIDER.get(role, "kimi")
+    provider_name = ROLE_TO_PROVIDER.get(role, "creative")
     prov = cfg.llm.providers[provider_name]
+    if not prov.api_key:
+        from systemedu.core.llm_client import LLMNotConfigured
+        raise LLMNotConfigured(provider_name)
 
     # push/pop proxy env (避免本机 proxy 拦截 Moonshot)
     saved_env = {k: os.environ.get(k) for k in _PROXY_ENV_KEYS_STREAM}
