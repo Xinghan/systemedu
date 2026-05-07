@@ -4171,11 +4171,21 @@ def create_app() -> Starlette:
             status_code=412,
         )
 
+    # Starlette 1.0 lifespan API (替代 on_startup / on_shutdown 弃用参数)
+    from contextlib import asynccontextmanager
+
+    @asynccontextmanager
+    async def _lifespan(_app):
+        await _on_startup()
+        try:
+            yield
+        finally:
+            await _on_shutdown()
+
     app = Starlette(
         routes=routes,
         middleware=middleware,
-        on_startup=[_on_startup],
-        on_shutdown=[_on_shutdown],
+        lifespan=_lifespan,
         exception_handlers={LLMNotConfigured: _llm_not_configured_handler},
     )
     return app
