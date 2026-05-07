@@ -6,6 +6,21 @@ from langchain_openai import ChatOpenAI
 from .config import LLMProviderConfig, get_config
 
 
+class LLMNotConfigured(Exception):
+    """provider 存在但 api_key 未填写。
+
+    Gateway 路由层 catch 后返回 HTTP 412 + error code "LLM_NOT_CONFIGURED"，
+    前端识别后引导用户去 /config。
+    """
+
+    def __init__(self, provider_name: str):
+        self.provider_name = provider_name
+        super().__init__(
+            f"LLM provider '{provider_name}' has no api_key configured. "
+            "请先在设置里配置 LLM。"
+        )
+
+
 def get_provider_config(provider_name: str | None = None) -> LLMProviderConfig:
     """Get the LLM provider config by name, or the default provider."""
     config = get_config()
@@ -40,10 +55,7 @@ def get_llm(
     prov = get_provider_config(provider)
 
     if not prov.api_key:
-        raise ValueError(
-            f"API key not set for provider '{provider or get_config().llm.default}'. "
-            "Set it in ~/.systemedu/config.yaml or via environment variable."
-        )
+        raise LLMNotConfigured(provider or get_config().llm.default)
 
     # Bypass system HTTP proxy to avoid SSL errors with LLM API endpoints
     # proxy=None does NOT disable env vars; trust_env=False is required
