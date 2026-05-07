@@ -113,25 +113,48 @@ async def api_status(request: Request) -> JSONResponse:
     )
 
 
+def _mask_api_key(key: str) -> str:
+    """spec 017: 脱敏展示 api_key。
+
+    - 空字符串 → ""
+    - 长度 <= 8 → 全 ***
+    - 长度 > 8 → 前 3 字符 + *** + 后 4 字符（如 sk-***abcd）
+    """
+    if not key:
+        return ""
+    if len(key) <= 8:
+        return "***"
+    return f"{key[:3]}***{key[-4:]}"
+
+
+# spec 017: web /config 页面只渲染这些 provider；其他系统侧 provider
+# (qwen / 未来 wanx 等) UI 不显示。
+LLM_USER_EDITABLE_PROVIDERS: tuple[str, ...] = ("creative",)
+
+
 async def api_config(request: Request) -> JSONResponse:
-    """GET /api/config - Current config (sanitized, no API keys)."""
+    """GET /api/config - Current config (sanitized, no raw API keys)."""
     from systemedu.core.config import get_config
 
     config = get_config()
 
-    # Sanitize: mask API keys
     providers = {}
     for name, prov in config.llm.providers.items():
         providers[name] = {
             "base_url": prov.base_url,
             "model": prov.model,
-            "api_key": "***" if prov.api_key else "(not set)",
+            "api_key": _mask_api_key(prov.api_key),
             "temperature": prov.temperature,
+            "max_tokens": prov.max_tokens,
         }
 
     return JSONResponse(
         {
-            "llm": {"default": config.llm.default, "providers": providers},
+            "llm": {
+                "default": config.llm.default,
+                "user_editable": list(LLM_USER_EDITABLE_PROVIDERS),
+                "providers": providers,
+            },
             "gateway": {"port": config.gateway.port, "host": config.gateway.host},
             "sandbox": {"enabled": config.sandbox.enabled},
             "memory": {"enabled": config.memory.enabled, "backend": config.memory.backend},
@@ -526,6 +549,7 @@ async def api_generate_description(request: Request) -> JSONResponse:
         f"标签要求：3-5个简短标签（2-6字），反映学科领域、技能或特色，例如：编程思维、数学建模、实验探究等。"
     )
 
+    from systemedu.core.llm_client import LLMNotConfigured
     try:
         import json as json_lib
         llm = get_llm(streaming=False)
@@ -551,6 +575,9 @@ async def api_generate_description(request: Request) -> JSONResponse:
             description = content
             tags = []
         return JSONResponse({"description": description, "tags": tags})
+    except LLMNotConfigured:
+        # spec 017: 透传给全局 handler → 412 LLM_NOT_CONFIGURED
+        raise
     except Exception as e:
         logger.error(f"Description generation failed: {e}")
         return JSONResponse({"error": f"生成失败: {e}"}, status_code=500)
@@ -571,8 +598,12 @@ async def api_generate_tree(request: Request) -> JSONResponse:
             {"error": "title and description are required"}, status_code=400
         )
 
+    from systemedu.core.llm_client import LLMNotConfigured
     try:
         tree = await generate_knowledge_tree(title, description, user_age=age, target_nodes=node_count)
+    except LLMNotConfigured:
+        # spec 017: 透传给全局 handler → 412 LLM_NOT_CONFIGURED
+        raise
     except Exception as e:
         logger.error(f"AI tree generation failed: {e}")
         return JSONResponse(
@@ -2331,29 +2362,94 @@ async def api_mcp_remove(request: Request) -> JSONResponse:
     return JSONResponse({"status": "removed", "name": name})
 
 
+def _deep_merge(base: dict, patch: dict) -> dict:
+    """递归 merge patch 进 base, dict 字段递归 merge, 其他字段覆盖。"""
+    result = dict(base)
+    for k, v in patch.items():
+        if isinstance(v, dict) and isinstance(result.get(k), dict):
+            result[k] = _deep_merge(result[k], v)
+        else:
+            result[k] = v
+    return result
+
+
+def _looks_like_mask(value: str) -> bool:
+    """spec 017: 判断字段是否是脱敏 mask 而不是真 key。
+
+    UI 把后端返回的 mask 原样回显时（用户没改），PUT 不应覆盖。
+    mask 的判断标准: 包含 '***' 子串。
+    """
+    return isinstance(value, str) and "***" in value
+
+
 async def api_config_update(request: Request) -> JSONResponse:
-    """PUT /api/config - Update config values."""
+    """PUT /api/config - Update config values (deep merge).
+
+    spec 017: api_key 字段如果是 mask 串（含 ***），保留旧 key 不覆盖。
+    """
     import yaml as _yaml
 
-    from systemedu.core.config import CONFIG_FILE, reset_config, save_config
+    from systemedu.core.config import CONFIG_FILE, save_config
 
     body = await request.json()
 
     config_path = CONFIG_FILE
-    raw = {}
+    raw: dict = {}
     if config_path.exists():
         raw = _yaml.safe_load(config_path.read_text(encoding="utf-8")) or {}
 
-    # Merge top-level keys
-    for key, value in body.items():
-        if isinstance(value, dict) and isinstance(raw.get(key), dict):
-            raw[key].update(value)
-        else:
-            raw[key] = value
+    # spec 017: 在 deep merge 前清掉 patch 里的 mask api_key
+    providers_patch = body.get("llm", {}).get("providers")
+    if isinstance(providers_patch, dict):
+        for prov_name, prov_fields in providers_patch.items():
+            if isinstance(prov_fields, dict) and "api_key" in prov_fields:
+                if _looks_like_mask(prov_fields["api_key"]) or prov_fields["api_key"] == "":
+                    # 删掉这条字段，让 deep merge 保留旧 key
+                    del prov_fields["api_key"]
+
+    raw = _deep_merge(raw, body)
 
     save_config(raw)
-
     return JSONResponse({"status": "updated"})
+
+
+async def api_test_llm(request: Request) -> JSONResponse:
+    """POST /api/config/test-llm - 用指定 provider 发一次最小 ping 验证连通性。
+
+    body: {"provider": "creative"}
+    返回: {ok: bool, message: str, latency_ms: int}
+    """
+    import asyncio
+
+    from langchain_core.messages import HumanMessage, SystemMessage
+
+    from systemedu.core.llm_client import LLMNotConfigured, get_llm
+
+    body = await request.json()
+    provider = body.get("provider", "")
+    if not provider:
+        return JSONResponse({"ok": False, "message": "provider 字段必填", "latency_ms": 0}, status_code=400)
+
+    started = time.time()
+    try:
+        llm = get_llm(provider=provider, streaming=False, max_tokens=8)
+        async def _ping():
+            return await llm.ainvoke([
+                SystemMessage(content="reply with the single word: ok"),
+                HumanMessage(content="ping"),
+            ])
+        await asyncio.wait_for(_ping(), timeout=10.0)
+        elapsed = int((time.time() - started) * 1000)
+        return JSONResponse({"ok": True, "message": "OK", "latency_ms": elapsed})
+    except LLMNotConfigured as e:
+        return JSONResponse(
+            {"ok": False, "message": f"未配置 API Key: {e.provider_name}", "latency_ms": 0}
+        )
+    except asyncio.TimeoutError:
+        return JSONResponse({"ok": False, "message": "超时（10s）", "latency_ms": 10000})
+    except Exception as e:
+        elapsed = int((time.time() - started) * 1000)
+        return JSONResponse({"ok": False, "message": str(e)[:200], "latency_ms": elapsed})
 
 
 async def dashboard(request: Request) -> HTMLResponse:
@@ -3943,6 +4039,7 @@ def create_app() -> Starlette:
         Route("/api/status", api_status),
         Route("/api/config", api_config, methods=["GET"]),
         Route("/api/config", api_config_update, methods=["PUT"]),
+        Route("/api/config/test-llm", api_test_llm, methods=["POST"]),
         Route("/api/sessions", api_sessions),
         Route("/api/sessions/full", api_sessions_full),
         Route("/api/sessions/{id}", api_session_detail),
@@ -4061,11 +4158,25 @@ def create_app() -> Starlette:
         except Exception:
             pass
 
+    # spec 017: 全局 412 LLM_NOT_CONFIGURED
+    from systemedu.core.llm_client import LLMNotConfigured
+
+    async def _llm_not_configured_handler(request: Request, exc: LLMNotConfigured) -> JSONResponse:
+        return JSONResponse(
+            {
+                "error": "LLM_NOT_CONFIGURED",
+                "message": str(exc),
+                "provider": exc.provider_name,
+            },
+            status_code=412,
+        )
+
     app = Starlette(
         routes=routes,
         middleware=middleware,
         on_startup=[_on_startup],
         on_shutdown=[_on_shutdown],
+        exception_handlers={LLMNotConfigured: _llm_not_configured_handler},
     )
     return app
 
