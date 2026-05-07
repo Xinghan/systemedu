@@ -1,6 +1,6 @@
 # 017-config-llm-editable
 
-**Status**: draft
+**Status**: shipped (2026-05-07)
 **Owner**: xinghan
 **Created**: 2026-05-07
 
