@@ -29,16 +29,25 @@ export interface LLMProviderInfo {
   model: string
   api_key: string
   temperature: number
+  max_tokens?: number | null
 }
 
 export interface ConfigResponse {
   llm: {
     default: string
+    /** spec 017: UI 只渲染白名单里的 provider */
+    user_editable: string[]
     providers: Record<string, LLMProviderInfo>
   }
   gateway: { port: number; host: string }
   sandbox: { enabled: boolean }
   memory: { enabled: boolean; backend: string }
+}
+
+export interface TestLLMResponse {
+  ok: boolean
+  message: string
+  latency_ms: number
 }
 
 export interface SessionSummary {

@@ -1,8 +1,8 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useState } from "react"
 import { toast } from "sonner"
-import { Save, Settings, Shield } from "lucide-react"
+import { Save, Settings, Shield, Loader2, Plug } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -11,28 +11,102 @@ import { AppHeader } from "@/components/layout/app-header"
 import { useAppStore } from "@/lib/stores/app-store"
 import { gateway } from "@/lib/api"
 import { useT } from "@/lib/hooks/use-t"
+import type { LLMProviderInfo } from "@/lib/types/api"
+
+interface CreativeForm {
+  model: string
+  base_url: string
+  api_key: string
+  temperature: string
+  max_tokens: string
+  /** 后端返回的原 mask 串，提交时若 api_key 仍等于此值则跳过覆盖 */
+  api_key_mask: string
+}
+
+function providerToForm(p: LLMProviderInfo): CreativeForm {
+  return {
+    model: p.model,
+    base_url: p.base_url,
+    api_key: p.api_key,
+    temperature: String(p.temperature ?? ""),
+    max_tokens: p.max_tokens != null ? String(p.max_tokens) : "",
+    api_key_mask: p.api_key,
+  }
+}
 
 export default function ConfigPage() {
   const config = useAppStore((s) => s.config)
-  const [saving, setSaving] = useState(false)
-  const [defaultProvider, setDefaultProvider] = useState("")
+  const setConfig = useAppStore((s) => s.setConfig)
   const t = useT()
+  const [overrideForm, setOverrideForm] = useState<CreativeForm | null>(null)
+  const [savedKey, setSavedKey] = useState<string | null>(null)
+  const [saving, setSaving] = useState(false)
+  const [testing, setTesting] = useState(false)
 
-  useEffect(() => {
-    if (config) {
-      setDefaultProvider(config.llm.default)
+  // 派生 form：用 store 里的 config 同步 + 用户编辑覆盖
+  const baseProvider = config?.llm.providers.creative
+  // 当 config 重新拉取（saved 后）替换 store 里的 mask 串时重置 overrideForm
+  const baseSig = baseProvider ? baseProvider.api_key + "|" + baseProvider.model + "|" + baseProvider.base_url : ""
+  if (baseSig !== savedKey) {
+    setSavedKey(baseSig)
+    setOverrideForm(null)
+  }
+  const creative: CreativeForm | null = overrideForm
+    ? overrideForm
+    : baseProvider
+    ? providerToForm(baseProvider)
+    : null
+
+  if (!creative) {
+    return (
+      <>
+        <AppHeader title={t("config.title")} />
+        <div className="p-8">
+          <p className="text-muted-foreground">{t("config.load_error")}</p>
+        </div>
+      </>
+    )
+  }
+
+  const handleField = <K extends keyof CreativeForm>(k: K, v: CreativeForm[K]) => {
+    setOverrideForm((prev) => {
+      const base = prev ?? creative
+      if (!base) return prev
+      return { ...base, [k]: v }
+    })
+  }
+
+  const handleTest = async () => {
+    if (!creative) return
+    setTesting(true)
+    // 先保存当前编辑值，再测试
+    try {
+      await persistCreative(creative)
+      const res = await gateway.testLLM("creative")
+      if (res.ok) {
+        toast.success(t("config.test.ok").replace("{ms}", String(res.latency_ms)))
+      } else {
+        toast.error(t("config.test.fail").replace("{msg}", res.message))
+      }
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : "unknown"
+      toast.error(t("config.test.fail").replace("{msg}", msg))
     }
-  }, [config])
+    setTesting(false)
+  }
 
   const handleSave = async () => {
+    if (!creative) return
     setSaving(true)
     try {
-      await gateway.updateConfig({
-        llm: { default: defaultProvider },
-      })
+      await persistCreative(creative)
+      // 重新拉一次 config 让 mask 重置
+      const fresh = await gateway.config()
+      setConfig(fresh)
       toast.success(t("config.saved"))
     } catch (e: unknown) {
-      toast.error(`${t("config.save_error")} ${e instanceof Error ? e.message : "未知错误"}`)
+      const msg = e instanceof Error ? e.message : "unknown"
+      toast.error(`${t("config.save_error")} ${msg}`)
     }
     setSaving(false)
   }
@@ -41,69 +115,88 @@ export default function ConfigPage() {
     <>
       <AppHeader title={t("config.title")} />
       <div className="p-8 space-y-8 max-w-2xl">
-        {/* LLM config */}
+        {/* Creative LLM 卡片（用户唯一可配的 provider） */}
         <div className="rounded-2xl border bg-white dark:bg-card shadow-sm overflow-hidden">
           <div className="px-6 py-5 border-b bg-muted/30">
             <div className="flex items-center gap-4">
               <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-cyan-50 dark:bg-cyan-950/40">
                 <Settings className="h-5 w-5 text-cyan-600 dark:text-cyan-400" />
               </div>
-              <h2 className="text-lg font-bold text-foreground">{t("config.llm")}</h2>
+              <div>
+                <h2 className="text-lg font-bold text-foreground">{t("config.creative.title")}</h2>
+                <p className="text-sm text-muted-foreground mt-1">{t("config.creative.desc")}</p>
+              </div>
             </div>
           </div>
-          <div className="p-6 space-y-6">
+          <div className="p-6 space-y-5">
             <div>
-              <Label>{t("config.default_provider")}</Label>
+              <Label className="mb-2 block">{t("config.field.model")}</Label>
               <Input
-                value={defaultProvider}
-                onChange={(e) => setDefaultProvider(e.target.value)}
-                placeholder="qwen"
-                className="mt-2"
+                value={creative.model}
+                onChange={(e) => handleField("model", e.target.value)}
+                placeholder="glm-5.1"
               />
             </div>
-
-            <div className="h-px bg-border" />
-
             <div>
-              <Label className="mb-4 block">{t("config.providers")}</Label>
-              {config?.llm.providers ? (
-                <div className="space-y-4">
-                  {Object.entries(config.llm.providers).map(([name, prov]) => (
-                    <div
-                      key={name}
-                      className="p-5 rounded-xl border bg-muted/20 space-y-2"
-                    >
-                      <div className="flex items-center justify-between">
-                        <span className="font-semibold text-base text-foreground">{name}</span>
-                        {name === config.llm.default && (
-                          <Badge>{t("config.default_badge")}</Badge>
-                        )}
-                      </div>
-                      <p className="text-sm text-muted-foreground">
-                        {t("config.model")} {prov.model}
-                      </p>
-                      <p className="text-sm text-muted-foreground">
-                        {t("config.api")} {prov.base_url}
-                      </p>
-                      <p className="text-sm text-muted-foreground">
-                        {t("config.key")} {prov.api_key} · {t("config.temperature")} {prov.temperature}
-                      </p>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <p className="text-base text-muted-foreground">{t("config.load_error")}</p>
-              )}
+              <Label className="mb-2 block">{t("config.field.base_url")}</Label>
+              <Input
+                value={creative.base_url}
+                onChange={(e) => handleField("base_url", e.target.value)}
+                placeholder="https://open.bigmodel.cn/api/paas/v4"
+              />
+            </div>
+            <div>
+              <Label className="mb-2 block">{t("config.field.api_key")}</Label>
+              <Input
+                type="password"
+                value={creative.api_key}
+                onChange={(e) => handleField("api_key", e.target.value)}
+                placeholder={t("config.field.api_key_placeholder")}
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label className="mb-2 block">{t("config.field.temperature")}</Label>
+                <Input
+                  type="number"
+                  step="0.1"
+                  min="0"
+                  max="2"
+                  value={creative.temperature}
+                  onChange={(e) => handleField("temperature", e.target.value)}
+                />
+              </div>
+              <div>
+                <Label className="mb-2 block">{t("config.field.max_tokens")}</Label>
+                <Input
+                  type="number"
+                  min="0"
+                  step="1"
+                  value={creative.max_tokens}
+                  onChange={(e) => handleField("max_tokens", e.target.value)}
+                  placeholder={t("config.field.max_tokens_placeholder")}
+                />
+              </div>
             </div>
 
-            <Button onClick={handleSave} disabled={saving}>
-              <Save className="h-5 w-5 mr-2" />
-              {saving ? t("config.saving") : t("config.save")}
-            </Button>
+            <div className="flex items-center gap-3 pt-2">
+              <Button onClick={handleTest} disabled={testing || saving} variant="secondary">
+                {testing ? (
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                ) : (
+                  <Plug className="h-4 w-4 mr-2" />
+                )}
+                {testing ? t("config.test.testing") : t("config.test.btn")}
+              </Button>
+              <Button onClick={handleSave} disabled={saving || testing}>
+                <Save className="h-4 w-4 mr-2" />
+                {saving ? t("config.saving") : t("config.save")}
+              </Button>
+            </div>
           </div>
         </div>
 
-        {/* System settings */}
+        {/* System settings (read-only) */}
         <div className="rounded-2xl border bg-white dark:bg-card shadow-sm overflow-hidden">
           <div className="px-6 py-5 border-b bg-muted/30">
             <div className="flex items-center gap-4">
@@ -148,4 +241,31 @@ export default function ConfigPage() {
       </div>
     </>
   )
+}
+
+/** 提交 creative 表单到 gateway。
+ *
+ * - api_key 等于原 mask 串或为空，提交空字符串（gateway PUT 端会保留旧 key）
+ * - max_tokens 空字符串视为 null，传给 gateway
+ */
+async function persistCreative(form: CreativeForm): Promise<void> {
+  const apiKeyToSend = form.api_key === form.api_key_mask ? "" : form.api_key
+
+  const provider: Record<string, unknown> = {
+    model: form.model,
+    base_url: form.base_url,
+    temperature: parseFloat(form.temperature) || 0,
+  }
+  if (apiKeyToSend !== "") {
+    provider.api_key = apiKeyToSend
+  }
+  if (form.max_tokens !== "") {
+    provider.max_tokens = parseInt(form.max_tokens, 10)
+  } else {
+    provider.max_tokens = null
+  }
+
+  await gateway.updateConfig({
+    llm: { providers: { creative: provider } },
+  })
 }
