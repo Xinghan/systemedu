@@ -3,14 +3,11 @@
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import {
-  Bot,
   Brain,
   FolderKanban,
   LayoutDashboard,
   MessageSquare,
-  Plug,
   Settings,
-  Sparkles,
   History,
   Plus,
   HelpCircle,
@@ -46,9 +43,6 @@ export function AppSidebar() {
   ]
 
   const manageItems = [
-    { href: "/agents", label: t("nav.agents"), icon: Bot },
-    { href: "/skills", label: t("nav.skills"), icon: Sparkles },
-    { href: "/mcp", label: t("nav.mcp"), icon: Plug },
     { href: "/config", label: t("nav.settings"), icon: Settings },
     { href: "/sessions", label: t("nav.history"), icon: History },
   ]
