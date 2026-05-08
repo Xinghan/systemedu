@@ -12,6 +12,32 @@ from systemedu.core.llm_client import get_llm
 logger = logging.getLogger(__name__)
 
 
+async def _astream_to_text(llm, messages) -> str:
+    """spec 020: 用 astream 收集 chunk 拼成完整文本。
+
+    streaming 模式下 nginx / OpenAI SDK 不会触发"总响应时间超时", 因为
+    chunk 持续涌出。reasoning 阶段虽然没字符输出, 但 GLM 在 thinking
+    完成后立即开始流 content 阶段, 后续 chunk 间隔短。
+
+    每收到一个 chunk 都 log 一次 chunk 数量, 便于线上诊断进度。
+    """
+    buf: list[str] = []
+    n_chunks = 0
+    last_log_chunks = 0
+    async for chunk in llm.astream(messages):
+        text = getattr(chunk, "content", "") or ""
+        if text:
+            buf.append(text)
+            n_chunks += 1
+            # 每 50 个 chunk log 一次, 避免日志爆炸
+            if n_chunks - last_log_chunks >= 50:
+                logger.info(f"[Planner] streaming: {n_chunks} chunks, {sum(len(s) for s in buf)} chars so far")
+                last_log_chunks = n_chunks
+    full = "".join(buf)
+    logger.info(f"[Planner] stream done: {n_chunks} chunks, {len(full)} chars")
+    return full
+
+
 def _compute_tree_scale(target_nodes: int) -> dict:
     """Compute milestone and node ranges based on target node count."""
     if target_nodes <= 15:
@@ -220,12 +246,17 @@ class PlannerAgent(BaseAgent):
         description = lines[1].replace("项目描述：", "").strip() if len(lines) > 1 else ""
 
         provider = self.config.llm_provider if self.config else None
-        llm = get_llm(provider=provider, temperature=0.4, streaming=False)
+        # spec 020: streaming=True + max_retries=0
+        # - streaming 让 nginx / SDK 按"chunk 间空闲"判活, 避免长请求被
+        #   "总响应时间超时"杀掉
+        # - max_retries=0 关掉 SDK 自动重试, 由 tree_generator 外层 max_retries=3
+        #   接管, 避免双倍累计超时
+        llm = get_llm(provider=provider, temperature=0.4, streaming=True, max_retries=0)
         scale = _compute_tree_scale(target_nodes)
 
         # ── Step 1: Structured outline with parallel/serial grouping ──────
         logger.info(f"[Planner] Step 1: outline for '{title}' (~{target_nodes} nodes)")
-        outline_resp = await llm.ainvoke([
+        outline_text = await _astream_to_text(llm, [
             SystemMessage(content="你是课程架构师，只输出要求的JSON，不添加任何说明。"),
             HumanMessage(content=OUTLINE_PROMPT.format(
                 title=title,
@@ -235,13 +266,13 @@ class PlannerAgent(BaseAgent):
                 milestones=scale["milestones"],
             )),
         ])
-        outline_json = _extract_json(outline_resp.content)
+        outline_json = _extract_json(outline_text)
         n_milestones = len(outline_json.get("milestones", []))
         logger.info(f"[Planner] Step 1 done: {n_milestones} milestones")
 
         # ── Step 2: Expand to full node tree ──────────────────────────────
         logger.info(f"[Planner] Step 2: expanding to full node tree")
-        expand_resp = await llm.ainvoke([
+        expand_text = await _astream_to_text(llm, [
             SystemMessage(content="你是课程节点设计师，只输出要求的JSON，不添加任何说明。"),
             HumanMessage(content=EXPAND_PROMPT.format(
                 title=title,
@@ -249,7 +280,7 @@ class PlannerAgent(BaseAgent):
                 outline=json.dumps(outline_json, ensure_ascii=False, indent=2),
             )),
         ])
-        tree_json = _extract_json(expand_resp.content)
+        tree_json = _extract_json(expand_text)
         total_nodes = sum(len(m.get("knodes", [])) for m in tree_json.get("milestones", []))
         logger.info(f"[Planner] Step 2 done: {total_nodes} total nodes")
 

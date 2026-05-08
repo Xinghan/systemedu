@@ -53,6 +53,7 @@ def get_llm(
     model: str | None = None,
     temperature: float | None = None,
     streaming: bool = True,
+    max_retries: int | None = None,
     **kwargs,
 ) -> ChatOpenAI:
     """Create a ChatOpenAI instance for the specified provider.
@@ -63,6 +64,10 @@ def get_llm(
         model: Override the provider's default model.
         temperature: Override temperature. Defaults to provider config.
         streaming: Enable streaming.
+        max_retries: spec 020: 控制 OpenAI SDK 自动重试次数. 默认不传 (用
+            SDK 默认 2 次). 调用方想避免双倍累计超时时显式传 max_retries=0,
+            把"失败重试"留给上层业务逻辑控制 (例如 tree_generator 已有
+            max_retries=3 包装).
         **kwargs: Extra kwargs passed to ChatOpenAI.
     """
     prov = get_provider_config(provider)
@@ -89,6 +94,8 @@ def get_llm(
     }
     if prov.max_tokens:
         llm_kwargs["max_tokens"] = prov.max_tokens
+    if max_retries is not None:
+        llm_kwargs["max_retries"] = max_retries
 
     llm_kwargs.update(kwargs)
     return ChatOpenAI(**llm_kwargs)
