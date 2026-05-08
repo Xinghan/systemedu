@@ -127,9 +127,11 @@ def _mask_api_key(key: str) -> str:
     return f"{key[:3]}***{key[-4:]}"
 
 
-# spec 017: web /config 页面只渲染这些 provider；其他系统侧 provider
-# (qwen / 未来 wanx 等) UI 不显示。
-LLM_USER_EDITABLE_PROVIDERS: tuple[str, ...] = ("creative",)
+# spec 021: web /config 页面渲染 3 张可编辑 provider 卡片
+# - thinking: 知识树规划 / reasoning (GLM-5.1)
+# - coding:   anim/game/HTML 实现 (GLM-4.6, 非 thinking)
+# - fast:     idea / 评判 / audio_script / assignment (GLM-4.6, 低 temp)
+LLM_USER_EDITABLE_PROVIDERS: tuple[str, ...] = ("thinking", "coding", "fast")
 
 
 async def api_config(request: Request) -> JSONResponse:
@@ -559,7 +561,9 @@ async def api_generate_description(request: Request) -> JSONResponse:
     from systemedu.core.llm_client import LLMNotConfigured
     try:
         import json as json_lib
-        llm = get_llm(streaming=False)
+        # spec 021: idea/description 是文本快任务, 显式走 fast (fallback chain)
+        from systemedu.core.llm_client import resolve_role_provider
+        llm = get_llm(provider=resolve_role_provider("fast"), streaming=False)
         response = await llm.ainvoke([
             SystemMessage(content="你是一名教育内容策划专家。严格按照要求的JSON格式输出，不添加任何额外文字。"),
             HumanMessage(content=prompt),
@@ -1442,9 +1446,10 @@ async def api_node_context(request: Request) -> JSONResponse:
             f"（推荐相关的延伸学习方向和高阶主题）"
         )
 
-        from systemedu.core.llm_client import get_llm
+        from systemedu.core.llm_client import get_llm, resolve_role_provider
 
-        llm = get_llm(streaming=False)
+        # spec 021: prerequisite trace 是文本生成, 走 fast
+        llm = get_llm(provider=resolve_role_provider("fast"), streaming=False)
         from langchain_core.messages import HumanMessage
 
         response = llm.invoke([HumanMessage(content=prompt)])
@@ -2783,10 +2788,11 @@ async def api_submit_practice(request: Request) -> JSONResponse:
             elif ex_type == "short_answer":
                 # Use LLM to grade short answers
                 try:
-                    from systemedu.core.llm_client import get_llm
+                    from systemedu.core.llm_client import get_llm, resolve_role_provider
                     from langchain_core.messages import HumanMessage
 
-                    grading_llm = get_llm(streaming=False)
+                    # spec 021: 阅卷是评判任务, 走 fast
+                    grading_llm = get_llm(provider=resolve_role_provider("fast"), streaming=False)
                     grading_prompt = (
                         f"你是一位严格但公正的阅卷老师。请根据参考答案批改学生的简答题回答。\n\n"
                         f"题目：{ex.get('question', '')}\n"
@@ -2947,9 +2953,10 @@ def _grade_capstone_sync(
 
             try:
                 from langchain_core.messages import HumanMessage
-                from systemedu.core.llm_client import get_llm
+                from systemedu.core.llm_client import get_llm, resolve_role_provider
 
-                grading_llm = get_llm(streaming=False)
+                # spec 021: 大作业评判, 走 fast
+                grading_llm = get_llm(provider=resolve_role_provider("fast"), streaming=False)
                 prompt = (
                     f"你是一位严格但公正的阅卷老师，正在批改学生的大作业自评说明。\n\n"
                     f"验收标准：{criterion}\n"
@@ -3511,10 +3518,11 @@ async def api_evaluate_qa(request: Request) -> JSONResponse:
     error_analysis = ""
 
     try:
-        from systemedu.core.llm_client import get_llm
+        from systemedu.core.llm_client import get_llm, resolve_role_provider
         from langchain_core.messages import HumanMessage
 
-        grading_llm = get_llm(streaming=False)
+        # spec 021: 阅卷评判, 走 fast
+        grading_llm = get_llm(provider=resolve_role_provider("fast"), streaming=False)
         grading_prompt = (
             f"你是一位耐心且严格的阅卷老师，正在批改一道面向青少年学生的开放性问答题。\n\n"
             f"题目：{question}\n"

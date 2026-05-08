@@ -108,7 +108,7 @@ class MockLLMServer:
 @pytest.fixture
 def mock_creative():
     s = MockLLMServer(
-        label="creative",
+        label="thinking",
         default_response='{"description": "测试描述", "tags": ["t1", "t2"]}',
     )
     s.start()
@@ -121,13 +121,28 @@ def isolated_config(tmp_path: Path, monkeypatch, mock_creative):
     cfg_path = tmp_path / "config.yaml"
     cfg_path.write_text(yaml.dump({
         "llm": {
-            "default": "creative",
+            "default": "thinking",
             "providers": {
-                "creative": {
+                # spec 021: 3 角色都指向同一个 mock server, 简化 e2e 测试
+                "thinking": {
                     "base_url": mock_creative.base_url,
-                    "api_key": "sk-creative-test",
-                    "model": "test-model-creative",
-                    "temperature": 0.4,
+                    "api_key": "sk-thinking-test",
+                    "model": "test-model-thinking",
+                    "temperature": 1.0,
+                    "max_tokens": 4096,
+                },
+                "coding": {
+                    "base_url": mock_creative.base_url,
+                    "api_key": "sk-coding-test",
+                    "model": "test-model-coding",
+                    "temperature": 0.7,
+                    "max_tokens": 4096,
+                },
+                "fast": {
+                    "base_url": mock_creative.base_url,
+                    "api_key": "sk-fast-test",
+                    "model": "test-model-fast",
+                    "temperature": 0.3,
                     "max_tokens": 4096,
                 },
             },
@@ -161,19 +176,23 @@ def auth_client(isolated_config):
 # Tests
 # ---------------------------------------------------------------------------
 
-def test_generate_description_routes_to_creative(auth_client, mock_creative) -> None:
+def test_generate_description_routes_to_fast(auth_client, mock_creative) -> None:
+    """spec 021: idea/description 走 fast role"""
+    mock_creative.requests.clear()
     res = auth_client.post(
         "/api/projects/generate-description",
         json={"title": "测试项目", "age": 9, "node_count": 25},
     )
     assert res.status_code == 200, res.text
 
-    assert len(mock_creative.requests) >= 1, "creative server 应至少收到 1 个请求"
-    assert mock_creative.requests[0]["model"] == "test-model-creative"
-    assert mock_creative.requests[0]["headers"]["Authorization"] == "Bearer sk-creative-test"
+    assert len(mock_creative.requests) >= 1, "fast server 应至少收到 1 个请求"
+    assert mock_creative.requests[0]["model"] == "test-model-fast"
+    assert mock_creative.requests[0]["headers"]["Authorization"] == "Bearer sk-fast-test"
 
 
-def test_generate_tree_routes_to_creative(auth_client, mock_creative) -> None:
+def test_generate_tree_routes_to_thinking(auth_client, mock_creative) -> None:
+    """spec 021: 知识树规划走 thinking role (planner default)"""
+    mock_creative.requests.clear()
     mock_creative.default_response = json.dumps({
         "title": "测试项目",
         "milestones": [{
@@ -192,11 +211,13 @@ def test_generate_tree_routes_to_creative(auth_client, mock_creative) -> None:
         json={"title": "测试", "description": "一个测试项目", "age": 9, "node_count": 5},
     )
     assert len(mock_creative.requests) >= 1
-    assert all(r["model"] == "test-model-creative" for r in mock_creative.requests)
+    # 所有请求都打到 thinking provider (test-model-thinking)
+    assert all(r["model"] == "test-model-thinking" for r in mock_creative.requests)
 
 
-def test_factory_assignment_routes_to_creative(isolated_config, mock_creative) -> None:
-    """spec 019: factory.generate_assignment 也走 creative (合并 fast → creative)。"""
+def test_factory_assignment_routes_to_fast(isolated_config, mock_creative) -> None:
+    """spec 021: factory.generate_assignment 走 fast role"""
+    mock_creative.requests.clear()
     from course_factory.factory import generate_assignment
 
     result = generate_assignment(
@@ -205,19 +226,22 @@ def test_factory_assignment_routes_to_creative(isolated_config, mock_creative) -
         plan_markdown="## test\n",
     )
     assert isinstance(result, str)
-    # 应该打到 creative
     assert len(mock_creative.requests) >= 1
-    assert mock_creative.requests[0]["model"] == "test-model-creative"
-    assert mock_creative.requests[0]["headers"]["Authorization"] == "Bearer sk-creative-test"
+    assert mock_creative.requests[0]["model"] == "test-model-fast"
+    assert mock_creative.requests[0]["headers"]["Authorization"] == "Bearer sk-fast-test"
 
 
-def test_412_when_creative_key_empty(auth_client, isolated_config, mock_creative) -> None:
+def test_412_when_all_keys_empty(auth_client, isolated_config, mock_creative) -> None:
+    """spec 021: 三个 provider 全没 key, generate-description -> 412"""
     raw = yaml.safe_load(isolated_config.read_text(encoding="utf-8"))
-    raw["llm"]["providers"]["creative"]["api_key"] = ""
+    for r in ("thinking", "coding", "fast"):
+        raw["llm"]["providers"][r]["api_key"] = ""
     isolated_config.write_text(yaml.dump(raw, default_flow_style=False), encoding="utf-8")
     from systemedu.core import config as cfg_mod
     cfg_mod.reset_config()
 
+    # 清掉旧请求记录, 因为 mock fixture 复用
+    mock_creative.requests.clear()
     res = auth_client.post(
         "/api/projects/generate-description",
         json={"title": "测试", "age": 9, "node_count": 25},
@@ -225,6 +249,4 @@ def test_412_when_creative_key_empty(auth_client, isolated_config, mock_creative
     assert res.status_code == 412
     body = res.json()
     assert body["error"] == "LLM_NOT_CONFIGURED"
-    assert body["provider"] == "creative"
-    # 请求不应打出去
     assert len(mock_creative.requests) == 0

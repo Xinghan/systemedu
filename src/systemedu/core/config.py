@@ -54,12 +54,12 @@ class LLMProviderConfig(BaseModel):
 class LLMConfig(BaseModel):
     """LLM configuration with multiple providers.
 
-    spec 017: default 固定为 "creative"，由用户在 web /config 配置。
-    fast 角色（v3 pipeline 评判 / audio_script / assignment）由代码层
-    硬编码到 "qwen" provider，不暴露给用户。
+    spec 021: default = "thinking"。用户在 web /config 配 3 张 LLM 卡片
+    (Thinking / Coding / Fast) + 1 张 TTS 卡片。代码层按角色路由到
+    对应 provider, 没配 key 时按 fallback 链向后退档。
     """
 
-    default: str = "creative"
+    default: str = "thinking"
     providers: dict[str, LLMProviderConfig] = Field(default_factory=dict)
 
 
@@ -205,16 +205,32 @@ def _default_config_dict() -> dict:
     """Return the default config as a dict (for writing to YAML)."""
     return {
         "llm": {
-            # spec 017/019: 唯一 provider, 用户在 web /config 自助配
-            "default": "creative",
+            # spec 021: 3 角色 provider (Thinking / Coding / Fast)
+            "default": "thinking",
             "providers": {
-                "creative": {
-                    # 所有 LLM 调用 (idea / 知识树 / anim / game / HTML / assignment / audio_script / 评判)
+                "thinking": {
+                    # 知识树规划 / 长程 reasoning, GLM-5.1 (默认 thinking 模式)
                     "base_url": "https://open.bigmodel.cn/api/paas/v4",
                     "api_key": "${ZHIPU_API_KEY}",
                     "model": "glm-5.1",
                     "temperature": 1.0,
                     "max_tokens": 65536,
+                },
+                "coding": {
+                    # anim / game / HTML 静态图, GLM-4.6 非 thinking 速度快 2-3 倍
+                    "base_url": "https://open.bigmodel.cn/api/paas/v4",
+                    "api_key": "${ZHIPU_API_KEY}",
+                    "model": "glm-4.6",
+                    "temperature": 0.7,
+                    "max_tokens": 65536,
+                },
+                "fast": {
+                    # idea / 评判 / audio_script / assignment / JSON 抽取
+                    "base_url": "https://open.bigmodel.cn/api/paas/v4",
+                    "api_key": "${ZHIPU_API_KEY}",
+                    "model": "glm-4.6",
+                    "temperature": 0.3,
+                    "max_tokens": 8192,
                 },
             },
         },
@@ -281,18 +297,16 @@ def save_config(config_dict: dict, path: Path | None = None) -> None:
 
 
 def _migrate_legacy_config(raw: dict, config_path: Path) -> dict:
-    """spec 017 迁移：
+    """spec 017+019+021 迁移：
 
-    spec 017:
-    - llm.providers.kimi → creative（保留 url/key/model 等所有字段）
-    - 强制 llm.default = "creative"
+    spec 017: kimi → creative (改名)
+    spec 019: 删除 qwen provider, 把 qwen.api_key 拷到 tts.api_key
+    spec 021: 拆分 creative → thinking (规划) + coding (anim/game) + fast (评判)
+              creative 改名为 thinking (保留 GLM-5.1 那套);
+              coding / fast 写空占位让 UI 有入口。
+              llm.default 强制 = "thinking"
 
-    spec 019:
-    - llm.providers.qwen 完全删除（合并到 creative）
-    - qwen.api_key 自动拷到 tts.api_key（保持 TTS 不需重新填）
-
-    幂等：若已迁移过则不动文件。发生改动时备份原文件到
-    config.yaml.bak.<unix_ts> 再写回。
+    幂等：若已迁移过则不动文件。改动时备份到 config.yaml.bak.<ts>
     """
     import time
 
@@ -302,14 +316,19 @@ def _migrate_legacy_config(raw: dict, config_path: Path) -> dict:
 
     changed = False
 
-    # 1. kimi → creative 改名（保留所有字段）
-    if "kimi" in providers and "creative" not in providers:
+    # 1. spec 017: kimi → creative 改名 (历史路径)
+    if "kimi" in providers and "creative" not in providers and "thinking" not in providers:
         providers["creative"] = providers.pop("kimi")
         changed = True
 
-    # 2. creative 不存在则写占位，让 UI 有可编辑入口
-    if "creative" not in providers:
-        providers["creative"] = {
+    # 2. spec 021: creative → thinking 改名
+    if "creative" in providers and "thinking" not in providers:
+        providers["thinking"] = providers.pop("creative")
+        changed = True
+
+    # 3. spec 021: thinking 不存在则写占位 (GLM-5.1)
+    if "thinking" not in providers:
+        providers["thinking"] = {
             "base_url": "https://open.bigmodel.cn/api/paas/v4",
             "api_key": "",
             "model": "glm-5.1",
@@ -318,7 +337,29 @@ def _migrate_legacy_config(raw: dict, config_path: Path) -> dict:
         }
         changed = True
 
-    # 3. spec 019: 删除 qwen provider（如有，把 api_key 迁到 tts）
+    # 4. spec 021: coding 占位 (GLM-4.6, 非 thinking, 速度快)
+    if "coding" not in providers:
+        providers["coding"] = {
+            "base_url": "https://open.bigmodel.cn/api/paas/v4",
+            "api_key": "",
+            "model": "glm-4.6",
+            "temperature": 0.7,
+            "max_tokens": 65536,
+        }
+        changed = True
+
+    # 5. spec 021: fast 占位 (GLM-4.6, 评判 / 文本任务)
+    if "fast" not in providers:
+        providers["fast"] = {
+            "base_url": "https://open.bigmodel.cn/api/paas/v4",
+            "api_key": "",
+            "model": "glm-4.6",
+            "temperature": 0.3,
+            "max_tokens": 8192,
+        }
+        changed = True
+
+    # 6. spec 019: 删除 qwen provider (qwen.api_key 迁 tts.api_key)
     if "qwen" in providers:
         qwen_key = providers["qwen"].get("api_key", "") or ""
         if qwen_key and not tts.get("api_key"):
@@ -326,9 +367,9 @@ def _migrate_legacy_config(raw: dict, config_path: Path) -> dict:
         del providers["qwen"]
         changed = True
 
-    # 4. default 强制 = creative
-    if llm.get("default") != "creative":
-        llm["default"] = "creative"
+    # 7. spec 021: default 强制 = thinking
+    if llm.get("default") != "thinking":
+        llm["default"] = "thinking"
         changed = True
 
     if changed and config_path.exists():

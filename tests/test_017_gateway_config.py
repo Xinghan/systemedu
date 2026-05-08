@@ -57,19 +57,26 @@ def isolated_config(tmp_path: Path, monkeypatch):
     cfg_path = tmp_path / "config.yaml"
     cfg_path.write_text(yaml.dump({
         "llm": {
-            "default": "creative",
+            "default": "thinking",
             "providers": {
-                "creative": {
+                "thinking": {
                     "base_url": "https://example.com/v1",
                     "api_key": "sk-realkey1234567890",
                     "model": "glm-5.1",
                     "temperature": 1.0,
                     "max_tokens": 65536,
                 },
-                "qwen": {
-                    "base_url": "https://qwen.example.com/v1",
-                    "api_key": "sk-qwenkey9876543210",
-                    "model": "qwen3.6-plus",
+                "coding": {
+                    "base_url": "https://coding.example.com/v1",
+                    "api_key": "sk-coding-keyabcdefgh",
+                    "model": "glm-4.6",
+                    "temperature": 0.7,
+                    "max_tokens": 65536,
+                },
+                "fast": {
+                    "base_url": "https://fast.example.com/v1",
+                    "api_key": "sk-fast-keyabcdefgh",
+                    "model": "glm-4.6",
                     "temperature": 0.3,
                     "max_tokens": 8192,
                 },
@@ -106,19 +113,20 @@ def test_get_config_masks_api_key(auth_client) -> None:
     res = auth_client.get("/api/config")
     assert res.status_code == 200
     body = res.json()
-    creative = body["llm"]["providers"]["creative"]
+    creative = body["llm"]["providers"]["thinking"]
     assert "***" in creative["api_key"]
     assert "realkey" not in creative["api_key"]
 
 
 def test_get_config_includes_user_editable(auth_client) -> None:
     res = auth_client.get("/api/config")
-    assert res.json()["llm"]["user_editable"] == ["creative"]
+    # spec 021: 3 角色都暴露
+    assert res.json()["llm"]["user_editable"] == ["thinking", "coding", "fast"]
 
 
 def test_get_config_includes_max_tokens(auth_client) -> None:
     res = auth_client.get("/api/config")
-    creative = res.json()["llm"]["providers"]["creative"]
+    creative = res.json()["llm"]["providers"]["thinking"]
     assert creative["max_tokens"] == 65536
 
 
@@ -129,7 +137,7 @@ def test_get_config_includes_max_tokens(auth_client) -> None:
 def test_put_config_preserves_key_when_mask_sent(auth_client, isolated_config) -> None:
     # 用户回传 mask 串，期望旧 key 被保留
     res = auth_client.put("/api/config", json={
-        "llm": {"providers": {"creative": {
+        "llm": {"providers": {"thinking": {
             "api_key": "sk-***7890",
             "model": "glm-5.1-new",
         }}},
@@ -137,28 +145,28 @@ def test_put_config_preserves_key_when_mask_sent(auth_client, isolated_config) -
     assert res.status_code == 200
 
     saved = yaml.safe_load(isolated_config.read_text(encoding="utf-8"))
-    assert saved["llm"]["providers"]["creative"]["api_key"] == "sk-realkey1234567890"
-    assert saved["llm"]["providers"]["creative"]["model"] == "glm-5.1-new"
+    assert saved["llm"]["providers"]["thinking"]["api_key"] == "sk-realkey1234567890"
+    assert saved["llm"]["providers"]["thinking"]["model"] == "glm-5.1-new"
 
 
 def test_put_config_overwrites_with_real_key(auth_client, isolated_config) -> None:
     res = auth_client.put("/api/config", json={
-        "llm": {"providers": {"creative": {"api_key": "sk-newrealkey"}}},
+        "llm": {"providers": {"thinking": {"api_key": "sk-newrealkey"}}},
     })
     assert res.status_code == 200
 
     saved = yaml.safe_load(isolated_config.read_text(encoding="utf-8"))
-    assert saved["llm"]["providers"]["creative"]["api_key"] == "sk-newrealkey"
+    assert saved["llm"]["providers"]["thinking"]["api_key"] == "sk-newrealkey"
 
 
 def test_put_config_empty_key_does_not_clear(auth_client, isolated_config) -> None:
     res = auth_client.put("/api/config", json={
-        "llm": {"providers": {"creative": {"api_key": ""}}},
+        "llm": {"providers": {"thinking": {"api_key": ""}}},
     })
     assert res.status_code == 200
 
     saved = yaml.safe_load(isolated_config.read_text(encoding="utf-8"))
-    assert saved["llm"]["providers"]["creative"]["api_key"] == "sk-realkey1234567890"
+    assert saved["llm"]["providers"]["thinking"]["api_key"] == "sk-realkey1234567890"
 
 
 # ---------------------------------------------------------------------------
@@ -182,7 +190,7 @@ def test_test_llm_ok(auth_client) -> None:
     fake.ainvoke.return_value = type("R", (), {"content": "ok"})()
     # api_test_llm 内部 lazy import: from systemedu.core.llm_client import get_llm
     with patch("systemedu.core.llm_client.get_llm", return_value=fake):
-        res = auth_client.post("/api/config/test-llm", json={"provider": "creative"})
+        res = auth_client.post("/api/config/test-llm", json={"provider": "thinking"})
     body = res.json()
     assert body["ok"] is True
     assert body["latency_ms"] >= 0
@@ -191,12 +199,12 @@ def test_test_llm_ok(auth_client) -> None:
 def test_test_llm_not_configured(auth_client, isolated_config) -> None:
     # 把 creative.api_key 清空
     raw = yaml.safe_load(isolated_config.read_text(encoding="utf-8"))
-    raw["llm"]["providers"]["creative"]["api_key"] = ""
+    raw["llm"]["providers"]["thinking"]["api_key"] = ""
     isolated_config.write_text(yaml.dump(raw, default_flow_style=False), encoding="utf-8")
     from systemedu.core import config as cfg_mod
     cfg_mod.reset_config()
 
-    res = auth_client.post("/api/config/test-llm", json={"provider": "creative"})
+    res = auth_client.post("/api/config/test-llm", json={"provider": "thinking"})
     body = res.json()
     assert body["ok"] is False
     assert "API Key" in body["message"] or "未配置" in body["message"]
@@ -207,8 +215,10 @@ def test_test_llm_not_configured(auth_client, isolated_config) -> None:
 # ---------------------------------------------------------------------------
 
 def test_412_when_creative_not_configured_in_generate_description(auth_client, isolated_config) -> None:
+    """spec 021: 三个 provider 全没 key, generate-description (走 fast) -> 412"""
     raw = yaml.safe_load(isolated_config.read_text(encoding="utf-8"))
-    raw["llm"]["providers"]["creative"]["api_key"] = ""
+    for r in ("thinking", "coding", "fast"):
+        raw["llm"]["providers"][r]["api_key"] = ""
     isolated_config.write_text(yaml.dump(raw, default_flow_style=False), encoding="utf-8")
     from systemedu.core import config as cfg_mod
     cfg_mod.reset_config()
@@ -220,12 +230,12 @@ def test_412_when_creative_not_configured_in_generate_description(auth_client, i
     assert res.status_code == 412
     body = res.json()
     assert body["error"] == "LLM_NOT_CONFIGURED"
-    assert body["provider"] == "creative"
 
 
 def test_412_when_creative_not_configured_in_generate_tree(auth_client, isolated_config) -> None:
+    """spec 021: thinking 没 key (planner 必须 thinking) -> 412"""
     raw = yaml.safe_load(isolated_config.read_text(encoding="utf-8"))
-    raw["llm"]["providers"]["creative"]["api_key"] = ""
+    raw["llm"]["providers"]["thinking"]["api_key"] = ""
     isolated_config.write_text(yaml.dump(raw, default_flow_style=False), encoding="utf-8")
     from systemedu.core import config as cfg_mod
     cfg_mod.reset_config()

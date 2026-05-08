@@ -47,24 +47,30 @@ RETRY_BACKOFF_BASE = 2.0
 
 Role = Literal["creative", "fast"]
 
-# spec 019: 唯一 LLM provider = creative，所有调用都走它。
-# 用户在 web /config 配；没配 api_key 时抛 LLMNotConfigured → 412。
-# (spec 017 的 fast 角色已合并到 creative，不再有"系统侧 qwen"这个东西)
+# spec 021: 多角色 provider, 每个角色按 fallback 链解析到实际 provider
+# - creative (旧名, 兼容): anim / game / HTML 实现 → coding
+# - fast: 评判 / JSON 抽取 / 文本结构化 → fast
+# resolve 在 llm_for() 里调 resolve_role_provider() 实时解析
 ROLE_TO_PROVIDER: dict[str, str] = {
-    "creative": "creative",
-    "fast": "creative",
+    "creative": "coding",
+    "fast": "fast",
 }
 
 
 def llm_for(role: Role = "fast", *, streaming: bool = False, max_tokens: int | None = None) -> ChatOpenAI:
-    """按角色获取 LLM 实例。
+    """按角色获取 LLM 实例 (spec 021).
 
-    spec 017:
-    - llm_for("creative") → "creative" provider，用户在 web /config 配
-    - llm_for("fast")     → "qwen" provider，系统侧固定，用户不可见
+    role:
+    - "creative": anim / game / HTML 等创意实现 → coding (没配 fallback fast/thinking)
+    - "fast":     评判 / JSON 抽取 / 文本快任务 → fast (没配 fallback coding/thinking)
+
+    fallback 链由 resolve_role_provider 处理, 用户填一个 thinking key 全链路就能跑。
     """
-    provider = ROLE_TO_PROVIDER.get(role, "creative")
-    return get_llm(provider=provider, streaming=streaming, max_tokens=max_tokens)
+    from systemedu.core.llm_client import resolve_role_provider
+
+    target = ROLE_TO_PROVIDER.get(role, "coding")
+    actual = resolve_role_provider(target)
+    return get_llm(provider=actual, streaming=streaming, max_tokens=max_tokens)
 
 
 def kimi(*, streaming: bool = False, max_tokens: int | None = None) -> ChatOpenAI:
@@ -114,11 +120,12 @@ async def astream_html(
     from openai import AsyncOpenAI
     from systemedu.core.config import get_config
 
+    from systemedu.core.llm_client import LLMNotConfigured, resolve_role_provider
     cfg = get_config()
-    provider_name = ROLE_TO_PROVIDER.get(role, "creative")
-    prov = cfg.llm.providers[provider_name]
-    if not prov.api_key:
-        from systemedu.core.llm_client import LLMNotConfigured
+    target = ROLE_TO_PROVIDER.get(role, "coding")
+    provider_name = resolve_role_provider(target)
+    prov = cfg.llm.providers.get(provider_name)
+    if not prov or not prov.api_key:
         raise LLMNotConfigured(provider_name)
 
     # push/pop proxy env (避免本机 proxy 拦截 Moonshot)
