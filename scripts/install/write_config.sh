@@ -19,7 +19,7 @@ if [ -f "$CFG" ]; then
     exit 0
 fi
 
-say "首次安装 → 写 $CFG (creative.api_key 留空, 待用户在 web /config 填)"
+say "首次安装 → 写 $CFG (空 key, 待用户在 web /config 填)"
 cat > "$CFG" <<'YAMLEOF'
 channels:
   cli:
@@ -40,12 +40,6 @@ llm:
       model: glm-5.1
       temperature: 1.0
       max_tokens: 65536
-    qwen:
-      base_url: https://dashscope.aliyuncs.com/compatible-mode/v1
-      api_key: ""
-      model: qwen3.6-plus
-      temperature: 0.3
-      max_tokens: 8192
 mcp:
   servers: {}
 memory:
@@ -66,6 +60,7 @@ sandbox:
   network: true
 tts:
   enabled: true
+  api_key: ""
   model: qwen3-tts-flash
   voice: Cherry
 YAMLEOF
@@ -74,5 +69,5 @@ YAMLEOF
 sed -i.bak "s|\$HOME|$HOME|g" "$CFG" && rm -f "${CFG}.bak"
 
 say "已写入 $CFG"
-say "  llm.default = creative (空 api_key, 在 web /config 填)"
-say "  qwen 系统侧 (api_key 也空, 用户不可见)"
+say "  llm.creative.api_key = 空 (在 web /config 填)"
+say "  tts.api_key          = 空 (在 web /config 填)"
