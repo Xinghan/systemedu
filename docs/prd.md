@@ -462,7 +462,31 @@ agents:
 knowledge_tree: ./knowledge_tree.json
 ```
 
-## 7. CLI Commands
+## 7. 一键安装 (`./scripts/install.sh`)
+
+从仓库根目录跑，自动检测平台 + 模式，幂等：
+
+```bash
+./scripts/install.sh                  # 自动检测 (macOS / Ubuntu)
+./scripts/install.sh --minimal        # 跳过 manim/texlive/playwright (~3GB)
+./scripts/install.sh --host=1.2.3.4   # server 模式指定对外 IP/域名
+./scripts/install.sh --help
+```
+
+**模式**：
+- **local** (macOS / 非 root Ubuntu)：装依赖 + venv + npm install，
+  完成后让你跑 `./scripts/restart.sh` 启 dev server
+- **server** (Ubuntu root + systemd)：另外装 systemd unit + nginx，
+  监听 80，启动后 `http://<host>` 即可访问
+
+**首次安装** 会写空 `creative.api_key` 占位的 `~/.systemedu/config.yaml`，
+登录 web UI 后到 `/config` 填 API Key。
+
+**支持平台**：macOS (brew) + Ubuntu 24.04 (apt)。其他 Linux 暂不支持。
+
+详见 `specs/018-install-script/spec.md`。
+
+## 8. CLI Commands
 
 ```bash
 # 安装与初始化
@@ -491,7 +515,7 @@ systemedu channel list/add/remove    # Channel 管理
 systemedu hub login/search/pull/push # Hub 操作 (Phase 4)
 ```
 
-## 8. Non-Functional Requirements
+## 9. Non-Functional Requirements
 
 | Category | Requirement |
 |----------|-------------|
