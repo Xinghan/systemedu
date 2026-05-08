@@ -87,7 +87,9 @@ server {
         proxy_set_header Upgrade \$http_upgrade;
         proxy_set_header Connection 'upgrade';
         proxy_set_header Host \$host;
-        proxy_read_timeout 300s;
+        # 知识树生成 / 课程内容生成等 LLM 调用偶尔慢, 给到 10 分钟
+        proxy_read_timeout 600s;
+        proxy_send_timeout 600s;
     }
 
     # WebSocket / SSE
