@@ -5,6 +5,7 @@ import { toast } from "sonner"
 import { GATEWAY_URL } from "@/lib/api/client"
 import { getToken } from "@/lib/auth"
 import { useChatStore } from "@/lib/stores/chat-store"
+import { randomUUID } from "@/lib/utils/uuid"
 import type { WSMessage } from "@/lib/types/api"
 
 const MAX_RETRIES = 10
@@ -83,7 +84,7 @@ export function useWebSocketChat() {
         // generated UUID is not found in its SessionManager.
         const targetSessionId = state.activeSessionId || data.session_id
         addMessage(targetSessionId, {
-          id: crypto.randomUUID(),
+          id: randomUUID(),
           role: "assistant",
           content: state.streamContent,
           timestamp: new Date(),
@@ -129,7 +130,7 @@ export function useWebSocketChat() {
 
       if (!currentSessionId) {
         // Create local session first
-        const newId = crypto.randomUUID()
+        const newId = randomUUID()
         addSession({
           id: newId,
           agent: options?.agent,
@@ -143,7 +144,7 @@ export function useWebSocketChat() {
 
       // Add user message locally
       addMessage(currentSessionId, {
-        id: crypto.randomUUID(),
+        id: randomUUID(),
         role: "user",
         content: message,
         timestamp: new Date(),
