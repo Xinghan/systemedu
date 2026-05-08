@@ -270,14 +270,12 @@ def generate_assignment(knode: dict, milestone: dict, plan_markdown: str = "") -
     from systemedu.core.config import get_config
 
     cfg = get_config()
-    # spec 019: assignment 走唯一的 creative provider（用户在 /config 配）
-    if "creative" not in cfg.llm.providers:
-        from systemedu.core.llm_client import LLMNotConfigured
-        raise LLMNotConfigured("creative")
-    provider = cfg.llm.providers["creative"]
-    if not provider.api_key:
-        from systemedu.core.llm_client import LLMNotConfigured
-        raise LLMNotConfigured("creative")
+    # spec 021: assignment 是文本 fast 任务, 走 fast provider (fallback chain)
+    from systemedu.core.llm_client import LLMNotConfigured, resolve_role_provider
+    provider_name = resolve_role_provider("fast")
+    provider = cfg.llm.providers.get(provider_name)
+    if not provider or not provider.api_key:
+        raise LLMNotConfigured(provider_name)
     _api_url = provider.base_url.rstrip("/") + "/chat/completions"
     _headers = {
         "Authorization": f"Bearer {provider.api_key}",
@@ -450,14 +448,12 @@ def generate_audio_scripts(project_name: str, knode_id: int,
         # httpx has SSL incompatibility with DashScope on this machine.
         import requests as _requests
         cfg = get_config()
-        # spec 019: audio_script (讲课稿文本) 走 creative provider
-        if "creative" not in cfg.llm.providers:
-            from systemedu.core.llm_client import LLMNotConfigured
-            raise LLMNotConfigured("creative")
-        provider = cfg.llm.providers["creative"]
-        if not provider.api_key:
-            from systemedu.core.llm_client import LLMNotConfigured
-            raise LLMNotConfigured("creative")
+        # spec 021: audio_script (讲课稿文本) 走 fast provider (fallback chain)
+        from systemedu.core.llm_client import LLMNotConfigured, resolve_role_provider
+        provider_name = resolve_role_provider("fast")
+        provider = cfg.llm.providers.get(provider_name)
+        if not provider or not provider.api_key:
+            raise LLMNotConfigured(provider_name)
         _api_url = provider.base_url.rstrip("/") + "/chat/completions"
         _api_key = provider.api_key
         _model = provider.model

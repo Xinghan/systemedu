@@ -45,17 +45,17 @@ def test_migrate_renames_kimi_to_creative(tmp_path: Path) -> None:
     raw = _read_yaml(cfg_path)
     migrated = _migrate_legacy_config(raw, cfg_path)
 
-    assert "creative" in migrated["llm"]["providers"]
+    assert "thinking" in migrated["llm"]["providers"]
     assert "kimi" not in migrated["llm"]["providers"]
-    creative = migrated["llm"]["providers"]["creative"]
+    creative = migrated["llm"]["providers"]["thinking"]
     assert creative["api_key"] == "sk-test"
     assert creative["model"] == "glm-5.1"
-    assert migrated["llm"]["default"] == "creative"
+    assert migrated["llm"]["default"] == "thinking"
 
     # 写回磁盘
     on_disk = _read_yaml(cfg_path)
-    assert on_disk["llm"]["default"] == "creative"
-    assert "creative" in on_disk["llm"]["providers"]
+    assert on_disk["llm"]["default"] == "thinking"
+    assert "thinking" in on_disk["llm"]["providers"]
     assert "kimi" not in on_disk["llm"]["providers"]
 
 
@@ -67,9 +67,9 @@ def test_migrate_removes_qwen_and_copies_key_to_tts(tmp_path: Path) -> None:
     cfg_path = tmp_path / "config.yaml"
     _write_yaml(cfg_path, {
         "llm": {
-            "default": "creative",
+            "default": "thinking",
             "providers": {
-                "creative": {
+                "thinking": {
                     "base_url": "https://example.com/v1",
                     "api_key": "sk-creative",
                     "model": "glm-5.1",
@@ -93,9 +93,9 @@ def test_migrate_does_not_overwrite_existing_tts_key(tmp_path: Path) -> None:
     cfg_path = tmp_path / "config.yaml"
     _write_yaml(cfg_path, {
         "llm": {
-            "default": "creative",
+            "default": "thinking",
             "providers": {
-                "creative": {"base_url": "x", "api_key": "y", "model": "z"},
+                "thinking": {"base_url": "x", "api_key": "y", "model": "z"},
                 "qwen": {"base_url": "a", "api_key": "old-qwen-key", "model": "c"},
             },
         },
@@ -116,14 +116,14 @@ def test_migrate_forces_default_creative(tmp_path: Path) -> None:
         "llm": {
             "default": "qwen",
             "providers": {
-                "creative": {"base_url": "x", "api_key": "y", "model": "z"},
+                "thinking": {"base_url": "x", "api_key": "y", "model": "z"},
                 "qwen": {"base_url": "a", "api_key": "b", "model": "c"},
             },
         },
     })
 
     migrated = _migrate_legacy_config(_read_yaml(cfg_path), cfg_path)
-    assert migrated["llm"]["default"] == "creative"
+    assert migrated["llm"]["default"] == "thinking"
 
 
 # ---------------------------------------------------------------------------
@@ -131,13 +131,15 @@ def test_migrate_forces_default_creative(tmp_path: Path) -> None:
 # ---------------------------------------------------------------------------
 
 def test_migrate_is_idempotent(tmp_path: Path) -> None:
-    """spec 019: 已迁移过的 config (无 qwen, default=creative) 重跑不动。"""
+    """spec 021: 已迁移过的 config (3 角色齐全 default=thinking 无 qwen) 重跑不动。"""
     cfg_path = tmp_path / "config.yaml"
     initial = {
         "llm": {
-            "default": "creative",
+            "default": "thinking",
             "providers": {
-                "creative": {"base_url": "x", "api_key": "y", "model": "z"},
+                "thinking": {"base_url": "x", "api_key": "y", "model": "z"},
+                "coding":   {"base_url": "x", "api_key": "y", "model": "z"},
+                "fast":     {"base_url": "x", "api_key": "y", "model": "z"},
             },
         },
         "tts": {"api_key": "tts-key", "model": "qwen3-tts-flash", "voice": "Cherry"},
@@ -199,10 +201,10 @@ def test_load_config_triggers_migration(tmp_path: Path) -> None:
     })
 
     cfg = load_config(cfg_path)
-    assert cfg.llm.default == "creative"
-    assert "creative" in cfg.llm.providers
+    assert cfg.llm.default == "thinking"
+    assert "thinking" in cfg.llm.providers
     assert "kimi" not in cfg.llm.providers
-    assert cfg.llm.providers["creative"].api_key == "sk-creative"
+    assert cfg.llm.providers["thinking"].api_key == "sk-creative"
 
 
 # ---------------------------------------------------------------------------
@@ -213,9 +215,9 @@ def test_get_llm_raises_when_no_api_key(tmp_path: Path, monkeypatch) -> None:
     cfg_path = tmp_path / "config.yaml"
     _write_yaml(cfg_path, {
         "llm": {
-            "default": "creative",
+            "default": "thinking",
             "providers": {
-                "creative": {"base_url": "https://x/v1", "api_key": "", "model": "m"},
+                "thinking": {"base_url": "https://x/v1", "api_key": "", "model": "m"},
                 "qwen": {"base_url": "https://y/v1", "api_key": "", "model": "n"},
             },
         },
@@ -227,5 +229,5 @@ def test_get_llm_raises_when_no_api_key(tmp_path: Path, monkeypatch) -> None:
     cfg_mod.reset_config()
 
     with pytest.raises(LLMNotConfigured) as exc_info:
-        get_llm(provider="creative")
-    assert exc_info.value.provider_name == "creative"
+        get_llm(provider="thinking")
+    assert exc_info.value.provider_name == "thinking"

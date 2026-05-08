@@ -48,6 +48,39 @@ def get_provider_config(provider_name: str | None = None) -> LLMProviderConfig:
     return config.llm.providers[name]
 
 
+# spec 021: 角色 → provider 映射 + fallback 链
+# 用户可只填 thinking 一个, coding/fast 自动 fallback
+_ROLE_FALLBACK_CHAINS: dict[str, tuple[str, ...]] = {
+    "thinking": ("thinking",),                       # 必须配, 没配 → 412
+    "coding":   ("coding", "fast", "thinking"),      # 找不到就退 fast/thinking
+    "fast":     ("fast", "coding", "thinking"),      # 找不到就退 coding/thinking
+}
+
+
+def resolve_role_provider(role: str) -> str:
+    """spec 021: 把 role 名解析成实际 provider 名 (按 fallback 链).
+
+    Args:
+        role: "thinking" / "coding" / "fast" (旧名 "creative" 也接受, 等价 coding)
+
+    Returns:
+        实际可用的 provider 名 (cfg.llm.providers 里存在且 api_key 非空)。
+        没有任何一个可用时返回链头 (调用方 get_llm 会抛 LLMNotConfigured)。
+    """
+    # 兼容 spec 019 旧 role 名
+    if role == "creative":
+        role = "coding"
+
+    chain = _ROLE_FALLBACK_CHAINS.get(role, (role,))
+    cfg = get_config()
+    for name in chain:
+        prov = cfg.llm.providers.get(name)
+        if prov and prov.api_key:
+            return name
+    # 全都没配 → 返回链头, get_llm 会抛 LLMNotConfigured
+    return chain[0]
+
+
 def get_llm(
     provider: str | None = None,
     model: str | None = None,

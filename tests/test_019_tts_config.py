@@ -15,9 +15,9 @@ def isolated_config(tmp_path: Path, monkeypatch):
     cfg_path = tmp_path / "config.yaml"
     cfg_path.write_text(yaml.dump({
         "llm": {
-            "default": "creative",
+            "default": "thinking",
             "providers": {
-                "creative": {
+                "thinking": {
                     "base_url": "https://example.com/v1",
                     "api_key": "sk-creative",
                     "model": "glm-5.1",
