@@ -124,9 +124,14 @@ class MemoryConfig(BaseModel):
 
 
 class TTSConfig(BaseModel):
-    """Text-to-speech configuration (DashScope qwen3-tts)."""
+    """Text-to-speech configuration (DashScope qwen-tts).
+
+    spec 019: api_key 独立，不再从 llm.providers.qwen 借。
+    用户必须在 web /config 单独填，或设 DASHSCOPE_API_KEY env var。
+    """
 
     enabled: bool = True
+    api_key: str = ""
     model: str = "qwen3-tts-flash"
     voice: str = "Cherry"
 
@@ -200,23 +205,16 @@ def _default_config_dict() -> dict:
     """Return the default config as a dict (for writing to YAML)."""
     return {
         "llm": {
-            # spec 017: default = creative，由用户在 web /config 配置
+            # spec 017/019: 唯一 provider, 用户在 web /config 自助配
             "default": "creative",
             "providers": {
                 "creative": {
-                    # 用户可配的高质量 LLM，用于 idea / 知识树 / anim / game / HTML 静态图
+                    # 所有 LLM 调用 (idea / 知识树 / anim / game / HTML / assignment / audio_script / 评判)
                     "base_url": "https://open.bigmodel.cn/api/paas/v4",
                     "api_key": "${ZHIPU_API_KEY}",
                     "model": "glm-5.1",
                     "temperature": 1.0,
                     "max_tokens": 65536,
-                },
-                "qwen": {
-                    # 系统侧固定，用于 fast 角色（评判 / JSON 抽取 / audio / assignment），
-                    # 不暴露给用户
-                    "base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1",
-                    "api_key": "${DASHSCOPE_API_KEY}",
-                    "model": "qwen3.6-plus",
                 },
             },
         },
@@ -236,6 +234,13 @@ def _default_config_dict() -> dict:
         "hub": {"url": "https://hub.systemedu.com"},
         "memory": {"enabled": True, "backend": "mem0"},
         "agent": {"backend": "auto"},
+        "tts": {
+            # spec 019: TTS api_key 独立字段, 用户在 web /config 单独填 DashScope key
+            "enabled": True,
+            "api_key": "${DASHSCOPE_API_KEY}",
+            "model": "qwen3-tts-flash",
+            "voice": "Cherry",
+        },
         "tutor": {
             "checkpoint_backend": "sqlite",
             "checkpoint_sqlite_path": str(SYSTEMEDU_HOME / "tutor_checkpoints.db"),
@@ -278,9 +283,13 @@ def save_config(config_dict: dict, path: Path | None = None) -> None:
 def _migrate_legacy_config(raw: dict, config_path: Path) -> dict:
     """spec 017 迁移：
 
+    spec 017:
     - llm.providers.kimi → creative（保留 url/key/model 等所有字段）
-    - 没有 qwen 时写一条空 key 占位（让 fast 路径错误信息友好）
     - 强制 llm.default = "creative"
+
+    spec 019:
+    - llm.providers.qwen 完全删除（合并到 creative）
+    - qwen.api_key 自动拷到 tts.api_key（保持 TTS 不需重新填）
 
     幂等：若已迁移过则不动文件。发生改动时备份原文件到
     config.yaml.bak.<unix_ts> 再写回。
@@ -289,6 +298,7 @@ def _migrate_legacy_config(raw: dict, config_path: Path) -> dict:
 
     llm = raw.setdefault("llm", {})
     providers = llm.setdefault("providers", {})
+    tts = raw.setdefault("tts", {})
 
     changed = False
 
@@ -308,15 +318,12 @@ def _migrate_legacy_config(raw: dict, config_path: Path) -> dict:
         }
         changed = True
 
-    # 3. qwen 不存在则写占位（fast 路径需要它，缺失时报错信息友好）
-    if "qwen" not in providers:
-        providers["qwen"] = {
-            "base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1",
-            "api_key": "",
-            "model": "qwen3.6-plus",
-            "temperature": 0.3,
-            "max_tokens": 8192,
-        }
+    # 3. spec 019: 删除 qwen provider（如有，把 api_key 迁到 tts）
+    if "qwen" in providers:
+        qwen_key = providers["qwen"].get("api_key", "") or ""
+        if qwen_key and not tts.get("api_key"):
+            tts["api_key"] = qwen_key
+        del providers["qwen"]
         changed = True
 
     # 4. default 强制 = creative

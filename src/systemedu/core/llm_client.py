@@ -21,6 +21,19 @@ class LLMNotConfigured(Exception):
         )
 
 
+class TTSNotConfigured(Exception):
+    """spec 019: tts.api_key 未配置（DashScope qwen-tts 需要 key）。
+
+    Gateway 路由层 catch 后返回 HTTP 412 + error code "TTS_NOT_CONFIGURED"，
+    前端识别后引导用户去 /config 填写 TTS API Key。
+    """
+
+    def __init__(self):
+        super().__init__(
+            "TTS api_key 未配置。请在设置里填写 DashScope qwen-tts 的 API Key。"
+        )
+
+
 def get_provider_config(provider_name: str | None = None) -> LLMProviderConfig:
     """Get the LLM provider config by name, or the default provider."""
     config = get_config()

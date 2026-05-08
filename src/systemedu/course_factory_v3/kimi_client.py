@@ -47,14 +47,12 @@ RETRY_BACKOFF_BASE = 2.0
 
 Role = Literal["creative", "fast"]
 
-# spec 017: 角色 → provider 映射
-# - creative: 用户在 web /config 配的 provider (key 名固定为 "creative")，
-#   生成 anim/game/HTML 静态图等创意内容
-# - fast: 系统侧固定 qwen，生成评判/JSON 抽取/audio_script/assignment 等
-#   文本快任务，用户不可见也不可改
+# spec 019: 唯一 LLM provider = creative，所有调用都走它。
+# 用户在 web /config 配；没配 api_key 时抛 LLMNotConfigured → 412。
+# (spec 017 的 fast 角色已合并到 creative，不再有"系统侧 qwen"这个东西)
 ROLE_TO_PROVIDER: dict[str, str] = {
     "creative": "creative",
-    "fast": "qwen",
+    "fast": "creative",
 }
 
 

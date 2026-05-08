@@ -60,10 +60,10 @@ def test_migrate_renames_kimi_to_creative(tmp_path: Path) -> None:
 
 
 # ---------------------------------------------------------------------------
-# 迁移: 添加 qwen 占位
+# spec 019 迁移: 删除 qwen provider，把 qwen.api_key 拷到 tts.api_key
 # ---------------------------------------------------------------------------
 
-def test_migrate_adds_qwen_placeholder(tmp_path: Path) -> None:
+def test_migrate_removes_qwen_and_copies_key_to_tts(tmp_path: Path) -> None:
     cfg_path = tmp_path / "config.yaml"
     _write_yaml(cfg_path, {
         "llm": {
@@ -71,17 +71,39 @@ def test_migrate_adds_qwen_placeholder(tmp_path: Path) -> None:
             "providers": {
                 "creative": {
                     "base_url": "https://example.com/v1",
-                    "api_key": "sk-test",
+                    "api_key": "sk-creative",
                     "model": "glm-5.1",
                 },
-                # 没有 qwen
+                "qwen": {
+                    "base_url": "https://qwen.example.com/v1",
+                    "api_key": "sk-dashscope-key",
+                    "model": "qwen3.6-plus",
+                },
             },
         },
     })
 
     migrated = _migrate_legacy_config(_read_yaml(cfg_path), cfg_path)
-    assert "qwen" in migrated["llm"]["providers"]
-    assert migrated["llm"]["providers"]["qwen"]["api_key"] == ""
+    assert "qwen" not in migrated["llm"]["providers"]
+    # qwen.api_key 自动拷到 tts.api_key（保持 TTS 不需重新填）
+    assert migrated["tts"]["api_key"] == "sk-dashscope-key"
+
+
+def test_migrate_does_not_overwrite_existing_tts_key(tmp_path: Path) -> None:
+    cfg_path = tmp_path / "config.yaml"
+    _write_yaml(cfg_path, {
+        "llm": {
+            "default": "creative",
+            "providers": {
+                "creative": {"base_url": "x", "api_key": "y", "model": "z"},
+                "qwen": {"base_url": "a", "api_key": "old-qwen-key", "model": "c"},
+            },
+        },
+        "tts": {"api_key": "existing-tts-key", "model": "qwen3-tts-flash"},
+    })
+    migrated = _migrate_legacy_config(_read_yaml(cfg_path), cfg_path)
+    assert migrated["tts"]["api_key"] == "existing-tts-key"
+    assert "qwen" not in migrated["llm"]["providers"]
 
 
 # ---------------------------------------------------------------------------
@@ -109,15 +131,16 @@ def test_migrate_forces_default_creative(tmp_path: Path) -> None:
 # ---------------------------------------------------------------------------
 
 def test_migrate_is_idempotent(tmp_path: Path) -> None:
+    """spec 019: 已迁移过的 config (无 qwen, default=creative) 重跑不动。"""
     cfg_path = tmp_path / "config.yaml"
     initial = {
         "llm": {
             "default": "creative",
             "providers": {
                 "creative": {"base_url": "x", "api_key": "y", "model": "z"},
-                "qwen": {"base_url": "a", "api_key": "b", "model": "c"},
             },
         },
+        "tts": {"api_key": "tts-key", "model": "qwen3-tts-flash", "voice": "Cherry"},
     }
     _write_yaml(cfg_path, initial)
     mtime_before = cfg_path.stat().st_mtime_ns

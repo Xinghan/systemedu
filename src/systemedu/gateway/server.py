@@ -155,6 +155,13 @@ async def api_config(request: Request) -> JSONResponse:
                 "user_editable": list(LLM_USER_EDITABLE_PROVIDERS),
                 "providers": providers,
             },
+            "tts": {
+                # spec 019: TTS 是用户可配的第二张卡片
+                "enabled": config.tts.enabled,
+                "api_key": _mask_api_key(config.tts.api_key),
+                "model": config.tts.model,
+                "voice": config.tts.voice,
+            },
             "gateway": {"port": config.gateway.port, "host": config.gateway.host},
             "sandbox": {"enabled": config.sandbox.enabled},
             "memory": {"enabled": config.memory.enabled, "backend": config.memory.backend},
@@ -2404,8 +2411,13 @@ async def api_config_update(request: Request) -> JSONResponse:
         for prov_name, prov_fields in providers_patch.items():
             if isinstance(prov_fields, dict) and "api_key" in prov_fields:
                 if _looks_like_mask(prov_fields["api_key"]) or prov_fields["api_key"] == "":
-                    # 删掉这条字段，让 deep merge 保留旧 key
                     del prov_fields["api_key"]
+
+    # spec 019: tts.api_key 同样保护
+    tts_patch = body.get("tts")
+    if isinstance(tts_patch, dict) and "api_key" in tts_patch:
+        if _looks_like_mask(tts_patch["api_key"]) or tts_patch["api_key"] == "":
+            del tts_patch["api_key"]
 
     raw = _deep_merge(raw, body)
 
@@ -2447,6 +2459,51 @@ async def api_test_llm(request: Request) -> JSONResponse:
         )
     except asyncio.TimeoutError:
         return JSONResponse({"ok": False, "message": "超时（10s）", "latency_ms": 10000})
+    except Exception as e:
+        elapsed = int((time.time() - started) * 1000)
+        return JSONResponse({"ok": False, "message": str(e)[:200], "latency_ms": elapsed})
+
+
+async def api_test_tts(request: Request) -> JSONResponse:
+    """POST /api/config/test-tts - 测试 TTS api_key 是否有效。
+
+    spec 019: 用一个最短文本调一次 DashScope qwen-tts，返回 ok / latency。
+    """
+    import asyncio
+    import os as _os
+
+    started = time.time()
+    try:
+        from systemedu.core.config import get_config
+        from systemedu.core.llm_client import TTSNotConfigured
+
+        cfg = get_config()
+        api_key = cfg.tts.api_key or _os.environ.get("DASHSCOPE_API_KEY", "")
+        if not api_key:
+            raise TTSNotConfigured()
+
+        # dashscope SDK 是同步的，扔到线程跑 + 超时
+        def _sync_call():
+            import dashscope
+            from http import HTTPStatus
+            response = dashscope.audio.qwen_tts.SpeechSynthesizer.call(
+                model=cfg.tts.model,
+                api_key=api_key,
+                text="ok",
+                voice=cfg.tts.voice,
+            )
+            return response.status_code, getattr(response, "message", "")
+
+        status_code, msg = await asyncio.wait_for(
+            asyncio.to_thread(_sync_call), timeout=15.0
+        )
+        elapsed = int((time.time() - started) * 1000)
+        from http import HTTPStatus
+        if status_code == HTTPStatus.OK:
+            return JSONResponse({"ok": True, "message": "OK", "latency_ms": elapsed})
+        return JSONResponse({"ok": False, "message": f"{status_code}: {msg}"[:200], "latency_ms": elapsed})
+    except asyncio.TimeoutError:
+        return JSONResponse({"ok": False, "message": "超时（15s）", "latency_ms": 15000})
     except Exception as e:
         elapsed = int((time.time() - started) * 1000)
         return JSONResponse({"ok": False, "message": str(e)[:200], "latency_ms": elapsed})
@@ -4040,6 +4097,7 @@ def create_app() -> Starlette:
         Route("/api/config", api_config, methods=["GET"]),
         Route("/api/config", api_config_update, methods=["PUT"]),
         Route("/api/config/test-llm", api_test_llm, methods=["POST"]),
+        Route("/api/config/test-tts", api_test_tts, methods=["POST"]),
         Route("/api/sessions", api_sessions),
         Route("/api/sessions/full", api_sessions_full),
         Route("/api/sessions/{id}", api_session_detail),
@@ -4159,7 +4217,8 @@ def create_app() -> Starlette:
             pass
 
     # spec 017: 全局 412 LLM_NOT_CONFIGURED
-    from systemedu.core.llm_client import LLMNotConfigured
+    # spec 019: 同样模式处理 TTS_NOT_CONFIGURED
+    from systemedu.core.llm_client import LLMNotConfigured, TTSNotConfigured
 
     async def _llm_not_configured_handler(request: Request, exc: LLMNotConfigured) -> JSONResponse:
         return JSONResponse(
@@ -4168,6 +4227,12 @@ def create_app() -> Starlette:
                 "message": str(exc),
                 "provider": exc.provider_name,
             },
+            status_code=412,
+        )
+
+    async def _tts_not_configured_handler(request: Request, exc: TTSNotConfigured) -> JSONResponse:
+        return JSONResponse(
+            {"error": "TTS_NOT_CONFIGURED", "message": str(exc)},
             status_code=412,
         )
 
@@ -4186,7 +4251,10 @@ def create_app() -> Starlette:
         routes=routes,
         middleware=middleware,
         lifespan=_lifespan,
-        exception_handlers={LLMNotConfigured: _llm_not_configured_handler},
+        exception_handlers={
+            LLMNotConfigured: _llm_not_configured_handler,
+            TTSNotConfigured: _tts_not_configured_handler,
+        },
     )
     return app
 

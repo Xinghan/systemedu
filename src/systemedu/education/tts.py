@@ -152,17 +152,11 @@ def synthesize_speech(
 
     config = get_config()
 
-    # Resolve API key: env var → qwen provider key (same DashScope account)
-    api_key = os.environ.get("DASHSCOPE_API_KEY", "")
+    # spec 019: TTS api_key 独立 (cfg.tts.api_key)；env var 仍可作 fallback
+    api_key = config.tts.api_key or os.environ.get("DASHSCOPE_API_KEY", "")
     if not api_key:
-        qwen = config.llm.providers.get("qwen")
-        if qwen:
-            api_key = qwen.api_key
-    if not api_key:
-        raise RuntimeError(
-            "No DashScope API key found. Set DASHSCOPE_API_KEY env var "
-            "or configure llm.providers.qwen.api_key"
-        )
+        from systemedu.core.llm_client import TTSNotConfigured
+        raise TTSNotConfigured()
 
     voice = config.tts.voice  # e.g. "Cherry"
     model = config.tts.model  # e.g. "qwen3-tts-flash"
