@@ -179,7 +179,7 @@ export default function NewProjectPage() {
     const tip = COGNITIVE_TIPS[loadingStep % COGNITIVE_TIPS.length]
     return (
       <div
-        className="fixed inset-0 overflow-hidden"
+        className="absolute inset-0 overflow-hidden"
         style={{ background: "#f8f5ff", fontFamily: "var(--font-manrope, sans-serif)" }}
       >
         {/* Dot-grid mesh background */}
