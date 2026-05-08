@@ -7,6 +7,7 @@ import { DighumanWsClient } from "./ws/client"
 import { PlaybackScheduler } from "./playback/scheduler"
 import { useDighumanAvatarStore, useDighumanPlaybackStore } from "./store"
 import type { Lang, VisemeFrame } from "./shared/ws-messages"
+import { randomUUID } from "@/lib/utils/uuid"
 
 const SERVER_ORIGIN =
   process.env.NEXT_PUBLIC_DIGHUMAN_URL ?? "http://localhost:8787"
@@ -35,7 +36,7 @@ export function useDighumanSession(): UseDighumanResult {
   useEffect(() => {
     if (typeof window === "undefined") return
 
-    const sessionId = crypto.randomUUID()
+    const sessionId = randomUUID()
     sessionIdRef.current = sessionId
     const wsOrigin = SERVER_ORIGIN.replace(/^http/, "ws")
     const wsUrl = `${wsOrigin}/ws?session_id=${sessionId}`

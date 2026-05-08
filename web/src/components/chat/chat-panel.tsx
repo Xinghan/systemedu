@@ -5,6 +5,7 @@ import { useChatStore } from "@/lib/stores/chat-store"
 import { useWebSocketChat } from "@/lib/hooks/use-websocket-chat"
 import { gateway } from "@/lib/api"
 import { useT } from "@/lib/hooks/use-t"
+import { randomUUID } from "@/lib/utils/uuid"
 import { ChatInput } from "./chat-input"
 import { MessageBubble, StreamingBubble, ToolCallIndicator, TypingIndicator } from "./message-bubble"
 
@@ -77,7 +78,7 @@ export function ChatPanel({ project, agent, nodeId, activeTab, pageIndex }: Chat
       if (existing) {
         setActiveSession(existing.id)
       } else {
-        const newId = crypto.randomUUID()
+        const newId = randomUUID()
         addSession({ id: newId, agent, project, messages: [], createdAt: new Date() })
         setActiveSession(newId)
       }
@@ -95,7 +96,7 @@ export function ChatPanel({ project, agent, nodeId, activeTab, pageIndex }: Chat
         messages: s.messages
           .filter((m) => m.role === "user" || m.role === "assistant")
           .map((m) => ({
-            id: crypto.randomUUID(),
+            id: randomUUID(),
             role: m.role as "user" | "assistant",
             content: m.content,
             timestamp: new Date(m.timestamp),
