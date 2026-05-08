@@ -32,6 +32,13 @@ export interface LLMProviderInfo {
   max_tokens?: number | null
 }
 
+export interface TTSInfo {
+  enabled: boolean
+  api_key: string
+  model: string
+  voice: string
+}
+
 export interface ConfigResponse {
   llm: {
     default: string
@@ -39,6 +46,8 @@ export interface ConfigResponse {
     user_editable: string[]
     providers: Record<string, LLMProviderInfo>
   }
+  /** spec 019: TTS 单独可配 (DashScope qwen-tts) */
+  tts: TTSInfo
   gateway: { port: number; host: string }
   sandbox: { enabled: boolean }
   memory: { enabled: boolean; backend: string }

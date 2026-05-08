@@ -270,13 +270,14 @@ def generate_assignment(knode: dict, milestone: dict, plan_markdown: str = "") -
     from systemedu.core.config import get_config
 
     cfg = get_config()
-    # spec 017: assignment 是 fast 角色 (评判 / 文本结构化)，固定走 qwen
-    if "qwen" not in cfg.llm.providers:
-        raise RuntimeError("系统侧 qwen provider 未配置，请检查 ~/.systemedu/config.yaml")
-    provider = cfg.llm.providers["qwen"]
+    # spec 019: assignment 走唯一的 creative provider（用户在 /config 配）
+    if "creative" not in cfg.llm.providers:
+        from systemedu.core.llm_client import LLMNotConfigured
+        raise LLMNotConfigured("creative")
+    provider = cfg.llm.providers["creative"]
     if not provider.api_key:
         from systemedu.core.llm_client import LLMNotConfigured
-        raise LLMNotConfigured("qwen")
+        raise LLMNotConfigured("creative")
     _api_url = provider.base_url.rstrip("/") + "/chat/completions"
     _headers = {
         "Authorization": f"Bearer {provider.api_key}",
@@ -449,13 +450,14 @@ def generate_audio_scripts(project_name: str, knode_id: int,
         # httpx has SSL incompatibility with DashScope on this machine.
         import requests as _requests
         cfg = get_config()
-        # spec 017: audio_script 是 fast 角色，固定走 qwen
-        if "qwen" not in cfg.llm.providers:
-            raise RuntimeError("系统侧 qwen provider 未配置，请检查 ~/.systemedu/config.yaml")
-        provider = cfg.llm.providers["qwen"]
+        # spec 019: audio_script (讲课稿文本) 走 creative provider
+        if "creative" not in cfg.llm.providers:
+            from systemedu.core.llm_client import LLMNotConfigured
+            raise LLMNotConfigured("creative")
+        provider = cfg.llm.providers["creative"]
         if not provider.api_key:
             from systemedu.core.llm_client import LLMNotConfigured
-            raise LLMNotConfigured("qwen")
+            raise LLMNotConfigured("creative")
         _api_url = provider.base_url.rstrip("/") + "/chat/completions"
         _api_key = provider.api_key
         _model = provider.model

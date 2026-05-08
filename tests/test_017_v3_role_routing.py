@@ -28,12 +28,6 @@ def isolated_config(tmp_path: Path, monkeypatch):
                     "model": "glm-5.1",
                     "temperature": 1.0,
                 },
-                "qwen": {
-                    "base_url": "https://qwen.example.com/v1",
-                    "api_key": "sk-qwen-key",
-                    "model": "qwen3.6-plus",
-                    "temperature": 0.3,
-                },
             },
         },
     }, default_flow_style=False), encoding="utf-8")
@@ -44,9 +38,9 @@ def isolated_config(tmp_path: Path, monkeypatch):
 
 
 def test_role_to_provider_constant() -> None:
-    """硬编码常量 = {creative: creative, fast: qwen}（不再是 kimi/qwen）"""
+    """spec 019: 两个角色都映射到 creative (合并 fast 到 creative)"""
     from systemedu.course_factory_v3.kimi_client import ROLE_TO_PROVIDER
-    assert ROLE_TO_PROVIDER == {"creative": "creative", "fast": "qwen"}
+    assert ROLE_TO_PROVIDER == {"creative": "creative", "fast": "creative"}
 
 
 def test_llm_for_creative_uses_creative_provider(isolated_config) -> None:
@@ -63,7 +57,8 @@ def test_llm_for_creative_uses_creative_provider(isolated_config) -> None:
     assert captured["provider"] == "creative"
 
 
-def test_llm_for_fast_uses_qwen_provider(isolated_config) -> None:
+def test_llm_for_fast_also_uses_creative_provider(isolated_config) -> None:
+    """spec 019: fast 角色也走 creative (不再有 qwen)"""
     captured: dict = {}
 
     def fake_get_llm(*, provider=None, **kw):
@@ -74,17 +69,15 @@ def test_llm_for_fast_uses_qwen_provider(isolated_config) -> None:
         from systemedu.course_factory_v3.kimi_client import llm_for
         llm_for("fast")
 
-    assert captured["provider"] == "qwen"
+    assert captured["provider"] == "creative"
 
 
-def test_factory_assignment_uses_qwen_calls_correct_url(isolated_config, monkeypatch) -> None:
-    """course_factory/factory.py:generate_assignment 应该读 qwen provider 的 url，
-    不再 fallback 到 default。"""
+def test_factory_assignment_uses_creative_calls_correct_url(isolated_config, monkeypatch) -> None:
+    """spec 019: factory.generate_assignment 应该路由到 creative provider 的 url。"""
     captured: dict = {}
 
     class _FakeResp:
         status_code = 200
-        text = '{"choices":[{"message":{"content":"# Test\\n"}}]}'
 
         def json(self):
             return {"choices": [{"message": {"content": "# Test\n"}}]}
@@ -107,16 +100,15 @@ def test_factory_assignment_uses_qwen_calls_correct_url(isolated_config, monkeyp
         plan_markdown="## test",
     )
 
-    # 应该打到 qwen.example.com，不是 creative.example.com
-    assert "qwen.example.com" in captured["url"]
-    assert "creative.example.com" not in captured["url"]
-    assert captured["headers"]["Authorization"] == "Bearer sk-qwen-key"
+    # 应该打到 creative.example.com (不是 qwen)
+    assert "creative.example.com" in captured["url"]
+    assert captured["headers"]["Authorization"] == "Bearer sk-creative-key"
 
 
-def test_factory_assignment_qwen_no_key_raises_llm_not_configured(isolated_config) -> None:
-    """qwen 存在但 api_key 为空，应该抛 LLMNotConfigured。"""
+def test_factory_assignment_creative_no_key_raises_llm_not_configured(isolated_config) -> None:
+    """spec 019: creative 存在但 api_key 为空，应该抛 LLMNotConfigured。"""
     raw = yaml.safe_load(isolated_config.read_text(encoding="utf-8"))
-    raw["llm"]["providers"]["qwen"]["api_key"] = ""
+    raw["llm"]["providers"]["creative"]["api_key"] = ""
     isolated_config.write_text(yaml.dump(raw, default_flow_style=False), encoding="utf-8")
     cfg_mod.reset_config()
 
@@ -129,4 +121,4 @@ def test_factory_assignment_qwen_no_key_raises_llm_not_configured(isolated_confi
             milestone={"title": "test"},
             plan_markdown="## test",
         )
-    assert exc_info.value.provider_name == "qwen"
+    assert exc_info.value.provider_name == "creative"

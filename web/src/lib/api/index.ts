@@ -82,6 +82,8 @@ export const gateway = {
     api.put<{ status: string }>("/api/config", body),
   testLLM: (provider: string) =>
     api.post<import("@/lib/types/api").TestLLMResponse>("/api/config/test-llm", { provider }),
+  testTTS: () =>
+    api.post<import("@/lib/types/api").TestLLMResponse>("/api/config/test-tts", {}),
   sessions: () => api.get<SessionSummary[]>("/api/sessions"),
   sessionsFull: () => api.get<FullSession[]>("/api/sessions/full"),
   session: (id: string) => api.get<SessionDetail>(`/api/sessions/${id}`),

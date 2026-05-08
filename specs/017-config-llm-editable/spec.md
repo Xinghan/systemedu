@@ -1,8 +1,25 @@
 # 017-config-llm-editable
 
-**Status**: shipped (2026-05-07)
+**Status**: shipped (2026-05-07), **amended 2026-05-08 (spec 019)**
 **Owner**: xinghan
 **Created**: 2026-05-07
+
+## 修订记录 (2026-05-08, spec 019)
+
+本 spec 原决策"系统侧 qwen 不暴露给用户"被推翻：
+
+- **删除 qwen provider**：所有 LLM 调用（含 fast 角色: assignment /
+  audio_script / 评判 / JSON 抽取）合并到唯一的 `creative` provider。
+  没配 api_key 直接 412 LLM_NOT_CONFIGURED，不再 fallback 到 qwen。
+- **TTS 拆出独立 `api_key` 字段** (`tts.api_key`)，不再从
+  `llm.providers.qwen.api_key` 借。新增 412 TTS_NOT_CONFIGURED 错误码。
+- **UI**：`/config` 页面除 Creative LLM 卡片外，新增 TTS 卡片
+  (api_key / model / voice + 测试连接按钮)。
+- 老 config 自动迁移：`llm.providers.qwen.api_key` 自动拷贝到
+  `tts.api_key`（用户原 DashScope key 不需重新填）；qwen 这条 provider
+  从 yaml 中删除。
+
+详见 `specs/019-drop-qwen-fast/spec.md`。
 
 ## 背景 / 问题
 

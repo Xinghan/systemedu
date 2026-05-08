@@ -1,13 +1,12 @@
-"""spec 017 E2E: 验证 web/api 路径上 LLM 请求被路由到正确的 provider URL。
+"""spec 017/019 E2E: 验证 web/api 路径上 LLM 请求被路由到 creative provider。
 
-起两个 aiohttp mock 子 server (creative_port, qwen_port)，把 config 里
-两个 provider 的 base_url 指过去。然后:
+spec 019 合并了 fast → creative，所有 LLM 调用都走唯一 creative provider。
+起 1 个 aiohttp mock server，把 config.creative.base_url 指过去，断言:
 
-1. 调 api_generate_description / api_generate_tree → 应打到 creative
-   port (不是 qwen)
-2. 调 course_factory.factory.generate_assignment → 应打到 qwen port
-   (不是 creative)
-3. 清空 creative.api_key 后再调 generate-description → 412 LLM_NOT_CONFIGURED
+1. api_generate_description → 打到 creative
+2. api_generate_tree         → 打到 creative
+3. factory.generate_assignment → 也打到 creative (spec 019 改动)
+4. 清空 creative.api_key 后调 generate-description → 412 LLM_NOT_CONFIGURED
 """
 
 from __future__ import annotations
@@ -118,16 +117,7 @@ def mock_creative():
 
 
 @pytest.fixture
-def mock_qwen():
-    # qwen 用于 v3 fast 路径（audio_script / assignment 等纯文本）
-    s = MockLLMServer(label="qwen", default_response="# Test Assignment\n\nContent\n")
-    s.start()
-    yield s
-    s.stop()
-
-
-@pytest.fixture
-def isolated_config(tmp_path: Path, monkeypatch, mock_creative, mock_qwen):
+def isolated_config(tmp_path: Path, monkeypatch, mock_creative):
     cfg_path = tmp_path / "config.yaml"
     cfg_path.write_text(yaml.dump({
         "llm": {
@@ -140,15 +130,9 @@ def isolated_config(tmp_path: Path, monkeypatch, mock_creative, mock_qwen):
                     "temperature": 0.4,
                     "max_tokens": 4096,
                 },
-                "qwen": {
-                    "base_url": mock_qwen.base_url,
-                    "api_key": "sk-qwen-test",
-                    "model": "test-model-qwen",
-                    "temperature": 0.3,
-                    "max_tokens": 8192,
-                },
             },
         },
+        "tts": {"api_key": "tts-test", "model": "qwen3-tts-flash", "voice": "Cherry"},
         "gateway": {"host": "127.0.0.1", "port": 18820},
         "sandbox": {"enabled": False},
         "memory": {"enabled": False, "backend": "mem0"},
@@ -177,22 +161,19 @@ def auth_client(isolated_config):
 # Tests
 # ---------------------------------------------------------------------------
 
-def test_generate_description_routes_to_creative(auth_client, mock_creative, mock_qwen) -> None:
+def test_generate_description_routes_to_creative(auth_client, mock_creative) -> None:
     res = auth_client.post(
         "/api/projects/generate-description",
         json={"title": "测试项目", "age": 9, "node_count": 25},
     )
     assert res.status_code == 200, res.text
 
-    # 应该打到 creative 不到 qwen
     assert len(mock_creative.requests) >= 1, "creative server 应至少收到 1 个请求"
     assert mock_creative.requests[0]["model"] == "test-model-creative"
     assert mock_creative.requests[0]["headers"]["Authorization"] == "Bearer sk-creative-test"
-    assert len(mock_qwen.requests) == 0, "qwen server 不应收到请求"
 
 
-def test_generate_tree_routes_to_creative(auth_client, mock_creative, mock_qwen) -> None:
-    # 让 mock 返回最简合法的知识树 JSON
+def test_generate_tree_routes_to_creative(auth_client, mock_creative) -> None:
     mock_creative.default_response = json.dumps({
         "title": "测试项目",
         "milestones": [{
@@ -210,14 +191,12 @@ def test_generate_tree_routes_to_creative(auth_client, mock_creative, mock_qwen)
         "/api/projects/generate-tree",
         json={"title": "测试", "description": "一个测试项目", "age": 9, "node_count": 5},
     )
-    # 即使解析后的树不完美，gateway 也至少要打了请求到 creative
     assert len(mock_creative.requests) >= 1
     assert all(r["model"] == "test-model-creative" for r in mock_creative.requests)
-    assert len(mock_qwen.requests) == 0
 
 
-def test_factory_assignment_routes_to_qwen(isolated_config, mock_creative, mock_qwen) -> None:
-    """course_factory/factory.py:generate_assignment 应该打到 qwen 而非 creative。"""
+def test_factory_assignment_routes_to_creative(isolated_config, mock_creative) -> None:
+    """spec 019: factory.generate_assignment 也走 creative (合并 fast → creative)。"""
     from course_factory.factory import generate_assignment
 
     result = generate_assignment(
@@ -225,16 +204,14 @@ def test_factory_assignment_routes_to_qwen(isolated_config, mock_creative, mock_
         milestone={"title": "M1"},
         plan_markdown="## test\n",
     )
-    # 调用成功
     assert isinstance(result, str)
-    # 应该打到 qwen 不到 creative
-    assert len(mock_qwen.requests) >= 1
-    assert mock_qwen.requests[0]["model"] == "test-model-qwen"
-    assert mock_qwen.requests[0]["headers"]["Authorization"] == "Bearer sk-qwen-test"
-    assert len(mock_creative.requests) == 0
+    # 应该打到 creative
+    assert len(mock_creative.requests) >= 1
+    assert mock_creative.requests[0]["model"] == "test-model-creative"
+    assert mock_creative.requests[0]["headers"]["Authorization"] == "Bearer sk-creative-test"
 
 
-def test_412_when_creative_key_empty(auth_client, isolated_config, mock_creative, mock_qwen) -> None:
+def test_412_when_creative_key_empty(auth_client, isolated_config, mock_creative) -> None:
     raw = yaml.safe_load(isolated_config.read_text(encoding="utf-8"))
     raw["llm"]["providers"]["creative"]["api_key"] = ""
     isolated_config.write_text(yaml.dump(raw, default_flow_style=False), encoding="utf-8")
@@ -251,4 +228,3 @@ def test_412_when_creative_key_empty(auth_client, isolated_config, mock_creative
     assert body["provider"] == "creative"
     # 请求不应打出去
     assert len(mock_creative.requests) == 0
-    assert len(mock_qwen.requests) == 0
