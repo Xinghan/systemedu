@@ -334,29 +334,45 @@ Course Factory 手册新增两个必做步骤，补全课程内容的"练习"和
 
 ### Global Config: `~/.systemedu/config.yaml`
 
-**用户可配的 LLM / TTS (spec 017 + 019)**：
-- `llm.providers.creative`：用户在 web `/config` 自助配，**所有 LLM 调用**
-  都走它（idea / 知识树 / anim / game / HTML / audio_script 文本 /
-  assignment / 评判 / JSON 抽取）。没配 api_key → 412 LLM_NOT_CONFIGURED
-- `tts`：用户在 web `/config` 单独配 DashScope qwen-tts，字段
-  api_key / model / voice。没配 → 412 TTS_NOT_CONFIGURED
+**用户可配的 LLM / TTS (spec 021)**：4 张卡片
 
-spec 019 删除了原 spec 017 的"系统侧 qwen"双 provider 设计——所有
-LLM 角色合并到 creative；TTS api_key 拆出独立字段（不再借 qwen 的）。
+- `llm.providers.thinking`：知识树规划 / 长程 reasoning。推荐 GLM-5.1
+- `llm.providers.coding`：anim / game / HTML 静态图实现。推荐 GLM-4.6
+  (非 thinking, 速度快 2-3 倍)
+- `llm.providers.fast`：idea / 评判 / audio_script / assignment / JSON
+  抽取。推荐 GLM-4.6 或 GLM-4.7-flash
+- `tts`：DashScope qwen-tts 语音合成
+
+**Fallback 链**（用户只填 thinking 一个 key 也能跑）：
+- `coding` 没配 → 用 `fast` → 还没配用 `thinking`
+- `fast` 没配 → 用 `coding` → 还没配用 `thinking`
+- `thinking` 必填，没配 → 412 LLM_NOT_CONFIGURED
 
 ```yaml
 llm:
-  default: creative
+  default: thinking
   providers:
-    creative:
+    thinking:
       base_url: https://open.bigmodel.cn/api/paas/v4
-      api_key: ${ZHIPU_API_KEY}    # 用户在 /config 填
+      api_key: ${ZHIPU_API_KEY}
       model: glm-5.1
       temperature: 1.0
       max_tokens: 65536
+    coding:
+      base_url: https://open.bigmodel.cn/api/paas/v4
+      api_key: ${ZHIPU_API_KEY}
+      model: glm-4.6
+      temperature: 0.7
+      max_tokens: 65536
+    fast:
+      base_url: https://open.bigmodel.cn/api/paas/v4
+      api_key: ${ZHIPU_API_KEY}
+      model: glm-4.6
+      temperature: 0.3
+      max_tokens: 8192
 tts:
   enabled: true
-  api_key: ${DASHSCOPE_API_KEY}    # 用户在 /config 填 (独立字段)
+  api_key: ${DASHSCOPE_API_KEY}
   model: qwen3-tts-flash
   voice: Cherry
 sandbox:
@@ -377,6 +393,40 @@ memory:
   enabled: true
   backend: mem0
 ```
+
+### 用本地 LLM (LM Studio / Ollama / vLLM)
+
+systemedu 走 OpenAI-compatible API，任何兼容 `/v1/chat/completions`
+协议的本地服务都能配。
+
+**LM Studio 例子**：
+
+1. 下载并启动 LM Studio，加载一个模型（如 `qwen2.5-coder-32b-instruct`）
+2. 点 **Local Server → Start**，记录监听地址（默认 `http://localhost:1234`）
+3. 在 web `/config` 任意一张 LLM 卡片填：
+
+   | 字段 | 填什么 |
+   |---|---|
+   | `base_url` | `http://localhost:1234/v1`（注意 `/v1` 后缀） |
+   | `api_key` | LM Studio 不验证 key，但 systemedu 不允许空 — 填任意非空字符串如 `lm-studio` |
+   | `model` | LM Studio 加载的模型 ID（在 "Loaded models" 看） |
+   | `temperature` | 0.0-2.0 |
+   | `max_tokens` | 看模型 card；多数是 8192-32768 |
+
+4. 点"测试连接" → 看 ok 即可
+
+**多模型分工**：LM Studio 可以同时 load 多个模型，所有卡片 `base_url`
+一样、`model` 字段不同即可——例如 thinking 用 reasoning model，
+coding 用 coder model。
+
+**Ollama**：`base_url=http://localhost:11434/v1`，其余同上。
+
+**注意**：
+- LM Studio / Ollama 跑在 macOS 本地 → systemedu 也得跑在同一台 Mac
+  上 (`localhost`)；要让远程 systemedu 服务器调 → 需端口映射（ngrok / frp）
+- 本地 30B 级模型在 M3 Max 约 20-30 tokens/s，处理 anim/game 这类
+  长生成会比 GLM 云端慢一些但完全免费
+- streaming 已支持（spec 020），不用额外配置
 
 ### Gateway API Endpoints
 
