@@ -27,10 +27,11 @@ runtime / course_factory / DB schema models / library client SDK)，需要
 **目标布局** (spec 022 完成后)：
 
 ```
-systemedu/
-├── packages/
-│   ├── core/                   # 共享 Python lib (闭源)
-│   │   ├── pyproject.toml      # name: systemedu-core
+systemedu/                                  闭源 monorepo
+│
+├── packages/                               ── 服务代码层 ──
+│   ├── core/                               共享 Python lib
+│   │   ├── pyproject.toml                  name: systemedu-core
 │   │   └── src/systemedu/core/
 │   │       ├── config.py
 │   │       ├── llm_client.py
@@ -39,22 +40,57 @@ systemedu/
 │   │       ├── education/
 │   │       ├── storage/
 │   │       ├── tutor/
-│   │       └── library_client/  # spec 023 实现
-│   └── cloud-app/              # 多租户 SaaS gateway (闭源)
-│       ├── pyproject.toml      # depends on systemedu-core
-│       └── src/systemedu/cloud/
-│           ├── gateway/        # FastAPI/Starlette web server
-│           └── (tutor_runner / API handlers, ...)
-├── (packages/library-app/)     # spec 023 加, 内容服务
-├── (packages/cloud-cli/)       # 备用: 你内部运维 CLI (项目导入 / 用户管理), 不必现在做
-├── web/                        # Next.js 前端
-├── course_factory/             # Claude Code SKILL (不变, 用作内容生产工具)
-├── content-data/               # 你的内容工作区, gitignored
+│   │       └── library_client/             spec 023 实现
+│   ├── cloud-app/                          多租户 SaaS gateway
+│   │   ├── pyproject.toml                  depends on systemedu-core
+│   │   └── src/systemedu/cloud/
+│   │       └── gateway/                    FastAPI/Starlette web server
+│   └── (library-app/)                      spec 023 加, 内容服务
+│       └── library_data/                   gitignored, library 运行时数据 (DB + media)
+│
+├── tools/                                  ── 内容流水线工具, 不属于 packages ──
+│   └── content-pipeline/                   独立 Python 包, dev 才装, 不进生产
+│       ├── pyproject.toml                  name: systemedu-content-pipeline
+│       └── src/content_pipeline/
+│           ├── cli.py                      systemedu-content 命令入口 (typer)
+│           └── (compile / publish / export / import 子命令)
+│
+├── content-workspace/                      ── 内容创作层, gitignored ──
+│   ├── README.md                          说明本目录工作流
+│   ├── blueprints/                        蓝图 (从 systemeduidea sync 来, 你手动维护)
+│   │   └── <slug>/
+│   │       └── README.md (+ README.zh.md)
+│   ├── generated/                         生成产物 (Claude Code 跑 SKILL 输出到这里)
+│   │   └── <slug>/                        spec 023 package layout
+│   │       ├── manifest.json
+│   │       ├── tree/knowledge_tree.json
+│   │       ├── knodes/<id>/{lesson, sections, audio, assignment, media}/
+│   │       └── shared/
+│   └── dist/                              导出 tarball, 给 cloud 上线用
+│       └── <slug>-v1.0.0.tar.gz
+│
+├── course_factory/                         Claude Code SKILL 路径 (不变)
+│   ├── SKILL.md
+│   └── factory.py                          Python helper (核心抽到 packages/core/, 这里
+│                                           保留 SKILL 协议入口)
+├── web/                                    Next.js 前端
+├── docs/
 ├── scripts/
+├── specs/
 ├── tests/
-├── pyproject.toml              # uv workspace
+├── pyproject.toml                          uv workspace
 └── ...
 ```
+
+**关键边界**:
+
+1. **content-workspace/ 独立, gitignored**: 内容资产不污染代码 repo
+2. **tools/content-pipeline 不属于 packages**: cloud-app / library-app 部署
+   时**不装它**; 它只在你本地跑用来生成内容 + publish
+3. **library-app 不依赖 content-pipeline**: library 只是个 HTTP service,
+   吃 manifest 包, 写自己 DB; content-pipeline 通过 admin API 调它
+4. **`systemedu-content` CLI 不进 PyPI / 不进 install.sh**: 单独 `pip
+   install -e tools/content-pipeline` 装 (开发模式)
 
 **不做 local-app**: 当前 src/systemedu/cli/ 的 typer CLI 是给单机本地
 用的, 暂时**搁置 (mv 到 packages/cloud-cli/ 但不投入维护, 等需要 ops
@@ -196,6 +232,8 @@ course_factory 实际上是**你内容生产的工具链**——用 Claude Code
 - [ ] 46+ 测试通过
 - [ ] 生产 47.106.220.119 部署 OK
 - [ ] CLAUDE.md 项目结构章节同步更新
+- [ ] .gitignore 加 `content-workspace/` 和 `library_data/`
+- [ ] tools/content-pipeline/ 创建 (空 stub, 实质实现见 spec 023)
 
 ## 后续 spec
 
