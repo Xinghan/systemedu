@@ -72,38 +72,38 @@
 - [ ] T2.14 跑 `pytest packages/core/tests/` 全过
 - [ ] T2.15 commit `refactor(022-P2): 抽出 packages/core (config/llm/agents/edu/v3/storage/tutor)`
 
-## Phase 3: 抽 local-app (2-3 天)
+## Phase 3: 抽 cloud-app (2-3 天)
 
-- [ ] T3.1 `mkdir -p packages/local-app/src/systemedu/local packages/local-app/tests`
-- [ ] T3.2 写 `packages/local-app/pyproject.toml` (按 plan.md 模板)
-- [ ] T3.3 mv `src/systemedu/gateway/*` → `packages/local-app/src/systemedu/local/gateway/`
-        - sed: `from systemedu.gateway` → `from systemedu.local.gateway`
-- [ ] T3.4 mv `src/systemedu/cli/*` → `packages/local-app/src/systemedu/local/cli/`
-        - sed: `from systemedu.cli` → `from systemedu.local.cli`
-        - 改 entry point: `pyproject.toml [project.scripts] systemedu = "systemedu.local.cli.main:app"`
-- [ ] T3.5 mv 对应测试到 packages/local-app/tests/
+- [ ] T3.1 `mkdir -p packages/cloud-app/src/systemedu/local packages/cloud-app/tests`
+- [ ] T3.2 写 `packages/cloud-app/pyproject.toml` (按 plan.md 模板)
+- [ ] T3.3 mv `src/systemedu/gateway/*` → `packages/cloud-app/src/systemedu/local/gateway/`
+        - sed: `from systemedu.gateway` → `from systemedu.cloud.gateway`
+- [ ] T3.4 mv `src/systemedu/cli/*` → `packages/cloud-app/src/systemedu/local/cli/`
+        - sed: `from systemedu.cli` → `from systemedu.cloud.cli`
+        - 改 entry point: `pyproject.toml [project.scripts] systemedu = "systemedu.cloud.cli.main:app"`
+- [ ] T3.5 mv 对应测试到 packages/cloud-app/tests/
 - [ ] T3.6 删除空的 `src/systemedu/` 目录 (此时 src/ 应该完全空了, rm -r)
 - [ ] T3.7 全局检查: `grep -rn "from systemedu\." packages/ tests/ course_factory/ scripts/ web/` 应该
-        全部走新路径 (systemedu.core.* 或 systemedu.local.*), 不能有
+        全部走新路径 (systemedu.core.* 或 systemedu.cloud.*), 不能有
         裸 `systemedu.gateway` `systemedu.agents` 之类
-- [ ] T3.8 `pip install -e packages/core -e packages/local-app` 装两个包
+- [ ] T3.8 `pip install -e packages/core -e packages/cloud-app` 装两个包
 - [ ] T3.9 跑全测试 49+ passed
-- [ ] T3.10 commit `refactor(022-P3): 抽出 packages/local-app (gateway/cli)`
+- [ ] T3.10 commit `refactor(022-P3): 抽出 packages/cloud-app (gateway/cli)`
 
 ## Phase 4: 配套调整 (1 天)
 
 - [ ] T4.1 根 `pyproject.toml` 改 workspace root:
         ```toml
         [tool.uv.workspace]
-        members = ["packages/core", "packages/local-app"]
+        members = ["packages/core", "packages/cloud-app"]
         ```
         旧的 `[project] name = "systemedu"` 等字段全部清掉 (或保留为 stub)
 - [ ] T4.2 改 `scripts/install/install_macos.sh`:
-        - `python -m pip install -e .` → `python -m pip install -e packages/core -e packages/local-app`
+        - `python -m pip install -e .` → `python -m pip install -e packages/core -e packages/cloud-app`
         - 装前先 `pip uninstall -y systemedu 2>/dev/null \|\| true`
 - [ ] T4.3 改 `scripts/install/install_ubuntu.sh`: 同上
 - [ ] T4.4 改 `scripts/restart.sh`:
-        - `python -m systemedu.gateway.server` → `python -m systemedu.local.gateway.server`
+        - `python -m systemedu.gateway.server` → `python -m systemedu.cloud.gateway.server`
 - [ ] T4.5 改 `scripts/install/write_systemd_nginx.sh`:
         - systemd unit ExecStart 改新 path
 - [ ] T4.6 改 `course_factory/factory.py` 里所有 `from systemedu.` import:
@@ -130,7 +130,7 @@
         看 dashboard / projects 列表 (如有项目) / config 都正常渲染
 - [ ] T5.8 spec.md 改 Status: shipped (2026-MM-DD)
 - [ ] T5.9 CLAUDE.md 项目结构章节更新 (`src/systemedu/` → `packages/core/`
-        + `packages/local-app/`)
+        + `packages/cloud-app/`)
 - [ ] T5.10 commit `docs(022): 标 shipped + CLAUDE.md 项目结构同步`
 
 ## 估算总时长
@@ -148,6 +148,6 @@
 ## 卡点应对
 
 - **mv 后 import 错乱无法启动**: git checkout 回上一 phase commit, 一步步小步走
-- **uv workspace 配置错**: 退化到 `pip install -e packages/core -e packages/local-app` 直接装也能用
+- **uv workspace 配置错**: 退化到 `pip install -e packages/core -e packages/cloud-app` 直接装也能用
 - **生产部署后 systemd 起不来**: 看 journalctl 报错; 大概率是 ExecStart 路径或 venv 没刷新, ssh 上去手动 source venv 试一次
 - **测试有 50%+ 失败**: 大概率是某一处 sed 改过头/不全, 用 git diff 对比哪个 phase 的 import 改丢了

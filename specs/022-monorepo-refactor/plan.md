@@ -24,7 +24,7 @@
 
 ```toml
 [tool.uv.workspace]
-members = ["packages/core", "packages/local-app"]
+members = ["packages/core", "packages/cloud-app"]
 
 [tool.uv.sources]
 systemedu-core = { workspace = true }
@@ -53,10 +53,10 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 ```
 
-`packages/local-app/pyproject.toml`:
+`packages/cloud-app/pyproject.toml`:
 ```toml
 [project]
-name = "systemedu-local"
+name = "systemedu-cloud"
 version = "0.1.0"
 dependencies = [
     "systemedu-core",  # workspace dep
@@ -67,7 +67,7 @@ dependencies = [
 ]
 
 [project.scripts]
-systemedu = "systemedu.local.cli.main:app"
+systemedu = "systemedu.cloud.cli.main:app"
 
 [build-system]
 requires = ["hatchling"]
@@ -78,8 +78,8 @@ build-backend = "hatchling.build"
 
 ### 1. 包命名
 
-- **PyPI 名**: `systemedu-core` / `systemedu-local`（带 dash）
-- **Python import 名**: `systemedu.core.*` / `systemedu.local.*`（带 dot）
+- **PyPI 名**: `systemedu-core` / `systemedu-cloud`（带 dash）
+- **Python import 名**: `systemedu.core.*` / `systemedu.cloud.*`（带 dot）
 - 用 PEP 420 namespace package 让两个 package 共用 `systemedu` 顶层
   namespace（不需要 `__init__.py` 在 namespace 层）
 
@@ -97,7 +97,7 @@ cloud-app 起步（spec 024+）才会引入 `UserContext` 让 LLM 路由 per-use
 ```
 packages/core/tests/        # 跟 core 走的: config / llm_client / planner /
                            #   course_factory / library_client (spec 023)
-packages/local-app/tests/   # 跟 gateway / cli 走的: 017_gateway_config
+packages/cloud-app/tests/   # 跟 gateway / cli 走的: 017_gateway_config
                            #   017_e2e_routing 等
 tests/                      # 仓库根仍保留, 跨 package 集成测试
 ```
@@ -105,7 +105,7 @@ tests/                      # 仓库根仍保留, 跨 package 集成测试
 仓库根 `pyproject.toml`:
 ```toml
 [tool.pytest.ini_options]
-testpaths = ["packages/core/tests", "packages/local-app/tests", "tests"]
+testpaths = ["packages/core/tests", "packages/cloud-app/tests", "tests"]
 ```
 
 ### 4. course_factory/ 顶层目录处理
@@ -125,8 +125,8 @@ Next.js 前端 + `web/public/dighuman/` 不属于 Python workspace，仍在
 | 模块 | 影响 |
 |---|---|
 | 测试 | 49 个全部要跟着改 import path |
-| `scripts/install.sh` + `install/install_macos.sh` + `install_ubuntu.sh` | `pip install -e .` → `uv sync` 或 `pip install -e packages/core -e packages/local-app` |
-| `scripts/restart.sh` | `python -m systemedu.gateway.server` → `python -m systemedu.local.gateway.server` |
+| `scripts/install.sh` + `install/install_macos.sh` + `install_ubuntu.sh` | `pip install -e .` → `uv sync` 或 `pip install -e packages/core -e packages/cloud-app` |
+| `scripts/restart.sh` | `python -m systemedu.gateway.server` → `python -m systemedu.cloud.gateway.server` |
 | systemd unit | 同上, ExecStart 路径要改 |
 | `course_factory/factory.py` 等 | import 路径全部要改 |
 | 前端 | **不动** (NEXT_PUBLIC_GATEWAY_URL 连后端不变) |
@@ -168,7 +168,7 @@ python -m pytest tests/test_017_*.py tests/test_019_*.py tests/test_020_*.py tes
 - [ ] Phase 0 删 dead code + 前端封面 commit
 - [ ] Phase 1 准备 + import 依赖图扫描
 - [ ] Phase 2 抽 core
-- [ ] Phase 3 抽 local-app
+- [ ] Phase 3 抽 cloud-app
 - [ ] Phase 4 配套调整 (install.sh / restart.sh / systemd)
 - [ ] Phase 5 验证 (49+ 测试 + 生产 smoke)
 - [ ] CLAUDE.md 项目结构章节更新
