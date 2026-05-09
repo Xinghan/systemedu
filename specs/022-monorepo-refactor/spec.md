@@ -45,8 +45,10 @@ systemedu/                                  闭源 monorepo
 │   │   ├── pyproject.toml                  depends on systemedu-core
 │   │   └── src/systemedu/cloud/
 │   │       └── gateway/                    FastAPI/Starlette web server
-│   └── (library-app/)                      spec 023 加, 内容服务
-│       └── library_data/                   gitignored, library 运行时数据 (DB + media)
+│   ├── (library-app/)                      spec 023 加, 内容服务后端
+│   │   └── library_data/                   gitignored, 运行时数据 (DB + media)
+│   └── (library-admin-ui/)                  spec 023 加, 内容管理员 SPA (独立 Next.js)
+│       └── (Next.js 应用, 部署独立, 通过 API 跟 library-app 交互)
 │
 ├── tools/                                  ── 内容流水线工具, 不属于 packages ──
 │   └── content-pipeline/                   独立 Python 包, dev 才装, 不进生产
