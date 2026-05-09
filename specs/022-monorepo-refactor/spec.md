@@ -34,7 +34,7 @@ systemedu/
 │   │       ├── llm_client.py   (← 同上)
 │   │       ├── agents/         (← src/systemedu/agents/)
 │   │       ├── course_factory_v3/ (← 同上)
-│   │       ├── education/      (← src/systemedu/education/, 但移除 image_gen, 它属于 local)
+│   │       ├── education/      (← src/systemedu/education/)
 │   │       ├── storage/        (← src/systemedu/storage/, DB schema 模型)
 │   │       ├── tutor/          (← src/systemedu/tutor/)
 │   │       └── library_client/ (新增, spec 023 实现)
@@ -42,8 +42,7 @@ systemedu/
 │       ├── pyproject.toml      # depends on systemedu-core
 │       └── src/systemedu/local/
 │           ├── gateway/        (← src/systemedu/gateway/)
-│           ├── cli/            (← src/systemedu/cli/)
-│           └── ... (image_gen, channels, hub 等单用户 only 模块)
+│           └── cli/            (← src/systemedu/cli/)
 ├── web/                        # 仍在根目录, Next.js 前端
 ├── course_factory/             # 仍在根目录, Claude Code SKILL (不变)
 ├── scripts/                    # install.sh 等 (调整路径感知)
@@ -51,6 +50,20 @@ systemedu/
 ├── pyproject.toml              # workspace root (uv workspace 或 hatch monorepo)
 └── ...
 ```
+
+**spec 022 顺便清理**：
+
+- **删除 `src/systemedu/channels/`**: 旧 OpenClaw 通讯通道抽象 (CLI/Web/IM)
+  - 当前 dead code, `grep -rn "from systemedu.channels"` 无任何引用
+  - cli_channel + web_channel 早被 gateway 直接 HTTP/WS 取代
+  - 直接 `rm -r`, 不进 core 也不进 local
+- **删除 `src/systemedu/education/image_gen.py`**: Wanx 文生图调用
+  - 多模态 LLM 配置本期不做; local 不要这个能力
+  - 前端用 CSS 渲染封面 (项目标题首字 + slug-hash 颜色), 零 LLM 调用
+  - 同时砍掉 gateway/server.py 里 `_bg_generate_cover` / `_bg_gen_cover_on_detail`
+    两个后台任务的调用 (函数本身可以保留为 stub 或一并删除)
+- **删除 `src/systemedu/hub/`** (如果存在 + 没引用): 旧 hub client 占位
+  代码; 真 hub 设计已经被 spec 023 content-library 取代
 
 **关键不变量**：
 - 测试套件全部保持通过 (49 个 spec 017+019+020+021 测试)
@@ -130,6 +143,19 @@ systemedu/
 
 ## 实现策略 (high-level，详细 plan/tasks 后续单独写)
 
+### Phase 0: 清理 dead code (半天)
+
+- 删 `src/systemedu/channels/` (无引用)
+- 删 `src/systemedu/hub/` (无引用)
+- 删 `src/systemedu/education/image_gen.py` 及 gateway 里两个 `_bg_*_cover` 调用
+- 前端 `web/src/components/projects/` 加一个 CSS 封面渲染组件:
+  从 project.title[0] (中文一字 / 英文首字) + slug 计算固定色板色 (例:
+  10 色循环 hash) → 圆角卡片背景 + 大字白色叠加
+- 删后端 `/api/projects/<name>/cover` 端点 (cover_image_url 字段保留, 给
+  spec 023 留口子: cloud-app 可以从 library 拉精选项目的封面图;
+  local 用户自己生成的项目 → cover_image_url 空 → 前端走 CSS fallback)
+- 跑测试 + commit
+
 ### Phase 1: 准备 (0.5 天)
 
 1. 备份当前 main 到 `pre-022-monorepo` tag
@@ -170,14 +196,11 @@ systemedu/
    name = "systemedu-local"
    dependencies = ["systemedu-core"]  # 依赖 core
    ```
-2. mv 剩余的：
+2. mv 剩余的（channels / hub / image_gen 已在 Phase 0 删除，不进 local）：
    - mv src/systemedu/gateway → packages/local-app/src/systemedu/local/gateway
    - mv src/systemedu/cli → packages/local-app/src/systemedu/local/cli
-   - mv src/systemedu/channels → packages/local-app/src/systemedu/local/channels
-   - mv src/systemedu/education/image_gen.py → packages/local-app/src/systemedu/local/image_gen.py
 3. import rewrite：
    - 凡是 `systemedu.gateway` `systemedu.cli` 改 `systemedu.local.gateway` `systemedu.local.cli`
-   - 旧的 `from systemedu.education.image_gen import xxx` → `from systemedu.local.image_gen import xxx`
 
 ### Phase 4: 配套调整 (1 天)
 

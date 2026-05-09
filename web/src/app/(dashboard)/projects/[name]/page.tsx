@@ -26,6 +26,7 @@ import {
 } from "@/components/ui/dialog"
 import { gateway } from "@/lib/api"
 import { LearningStatsCard } from "@/components/learning/learning-stats-card"
+import { CoverFallback } from "@/components/projects/cover-fallback"
 import type { KnowledgeLevel, LessonStatus, MilestoneInfo, ProjectBrief, ProjectDetail, SubProjectInfo } from "@/lib/types/api"
 import { KNOWLEDGE_LEVEL_LABELS } from "@/lib/types/api"
 import { useT } from "@/lib/hooks/use-t"
@@ -697,23 +698,8 @@ const [editCoverFile, setEditCoverFile] = useState<File | null>(null)
         setEditTags(d.project.tags.join(", "))
         setEditKnowledgeLevel((d.project as { knowledge_level?: KnowledgeLevel }).knowledge_level || "K1")
 
-        // If no cover yet, poll until backend finishes generating it
-        if (!d.project.cover_image_url) {
-          let attempts = 0
-          const timer = setInterval(async () => {
-            attempts++
-            if (attempts > 20) { clearInterval(timer); return }
-            try {
-              const latest = await gateway.project(params.name)
-              if (latest.project.cover_image_url) {
-                clearInterval(timer)
-                setCoverCacheBust(Date.now())
-                setDetail((prev) => prev ? { ...prev, project: { ...prev.project, cover_image_url: latest.project.cover_image_url } } : prev)
-              }
-            } catch { clearInterval(timer) }
-          }, 5000)
-          return () => clearInterval(timer)
-        }
+        // spec 022: 不再后台生成 cover; 没 cover 时前端 CSS fallback 渲染,
+        // 不轮询
       })
       .catch((e) => setError(e.message))
       .finally(() => setLoading(false))
@@ -1061,14 +1047,8 @@ const [editCoverFile, setEditCoverFile] = useState<File | null>(null)
                   </div>
                 ) : (
                   <div className="bg-white rounded-[20px] p-3 shadow-[0_8px_40px_0_rgba(109,40,217,0.22)]">
-                    <div className="w-[260px] h-[220px] rounded-[14px] bg-gradient-to-br from-violet-600 via-purple-600 to-purple-800 flex flex-col items-center justify-center gap-3">
-                      <span className="text-7xl font-extrabold text-white/80 tracking-tight leading-none">
-                        {detail.project.title.charAt(0).toUpperCase()}
-                      </span>
-                      <div className="flex items-center gap-1.5 text-white/50 text-[11px]">
-                        <div className="h-3 w-3 rounded-full border-2 border-white/40 border-t-transparent animate-spin" />
-                        <span style={{ fontFamily: "var(--font-manrope, sans-serif)" }}>生成封面中...</span>
-                      </div>
+                    <div className="w-[260px] h-[220px] rounded-[14px] overflow-hidden">
+                      <CoverFallback title={detail.project.title} slug={detail.project.name} />
                     </div>
                   </div>
                 )}

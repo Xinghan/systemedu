@@ -438,33 +438,8 @@ async def api_create_project(request: Request) -> JSONResponse:
     finally:
         db.close()
 
-    # Background: generate cover image via DashScope Wanx
-    async def _bg_generate_cover() -> None:
-        try:
-            from systemedu.core.config import SYSTEMEDU_HOME
-            from systemedu.education.image_gen import generate_project_cover
-            desc = meta.get("description", "") if meta else ""
-            cover_path = SYSTEMEDU_HOME / "media" / "projects" / name / "cover.jpg"
-            ok = await generate_project_cover(title, desc, cover_path)
-            if ok:
-                cover_url = f"/api/media/projects/{name}/cover.jpg"
-                from systemedu.storage.db import LocalProject, get_session as get_db_session
-                _db = get_db_session()
-                try:
-                    _proj = _db.query(LocalProject).filter_by(name=name).first()
-                    if _proj:
-                        _proj.cover_image_url = cover_url
-                        _db.commit()
-                        logger.info(f"Cover image URL saved for {name!r}: {cover_url}")
-                except Exception:
-                    _db.rollback()
-                    logger.exception("Failed to update cover_image_url in DB")
-                finally:
-                    _db.close()
-        except Exception:
-            logger.exception(f"Background cover generation failed for {name!r}")
-
-    asyncio.ensure_future(_bg_generate_cover())
+    # spec 022: 不再后台生成 cover (Wanx 多模态 LLM 已删除); cover_image_url
+    # 留空, 前端 CSS fallback 渲染 (项目首字 + slug-hash 色)
 
     return JSONResponse({"name": name, "created": True, "path": str(project_dir)})
 
@@ -770,35 +745,7 @@ async def api_project_detail(request: Request) -> JSONResponse:
                 except Exception:
                     _db.rollback()
 
-            # If still no cover, trigger background generation
-            if not cover_url:
-                _cover_name = name
-                _cover_title = ctx.project.title
-                _cover_desc = ctx.project.description
-
-                async def _bg_gen_cover_on_detail() -> None:
-                    try:
-                        from systemedu.education.image_gen import generate_project_cover
-
-                        _path = SYSTEMEDU_HOME / "media" / "projects" / _cover_name / "cover.jpg"
-                        ok = await generate_project_cover(_cover_title, _cover_desc, _path)
-                        if ok:
-                            _url = f"/api/media/projects/{_cover_name}/cover.jpg"
-                            _s = get_db_session()
-                            try:
-                                _p = _s.query(LocalProject).filter_by(name=_cover_name).first()
-                                if _p:
-                                    _p.cover_image_url = _url
-                                    _s.commit()
-                                    logger.info(f"Auto-generated cover for {_cover_name!r}")
-                            except Exception:
-                                _s.rollback()
-                            finally:
-                                _s.close()
-                    except Exception:
-                        logger.exception(f"Background cover generation failed for {_cover_name!r}")
-
-                asyncio.ensure_future(_bg_gen_cover_on_detail())
+            # spec 022: 不再后台生成 cover; 留空让前端 CSS fallback 渲染
         finally:
             _db.close()
 
