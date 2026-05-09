@@ -1,34 +1,29 @@
-"""Node tests: StoryGenAgent."""
+"""StoryGenAgent test (spec 022: text-only, no image gen)."""
 
 import pytest
 
 
 class TestStoryGenNode:
     @pytest.mark.asyncio
-    async def test_generate_normalizes_prompt_and_returns_image_url(self, monkeypatch):
+    async def test_generate_returns_text_only_paragraphs(self):
+        """spec 022: image_gen.py 已删, story 只产出 text + 空 image_url"""
         from systemedu.agents.builtin import story_gen_agent as story_mod
-
-        captured = {"prompt": ""}
-
-        async def _fake_gen_image(prompt: str) -> str:
-            captured["prompt"] = prompt
-            return "/api/media/story_images/a.png"
-
-        monkeypatch.setattr(
-            "systemedu.education.image_gen.generate_image_url",
-            _fake_gen_image,
-        )
 
         detail = {
             "style_key": "storybook_vivid",
             "paragraphs": [
-                {
-                    "text": "小明在做实验，观察到了变化。",
-                    "image_prompt": "a kid in classroom",
-                }
+                {"text": "小明在做实验，观察到了变化。", "image_prompt": "a kid"},
+                {"text": "他记录了实验结果。", "image_prompt": "writing notes"},
             ],
         }
         out = await story_mod.StoryGenAgent().generate(detail)
-        assert len(out) == 1
-        assert out[0]["image_url"] == "/api/media/story_images/a.png"
-        assert "no text" in captured["prompt"].lower()
+        assert len(out) == 2
+        assert out[0]["text"] == "小明在做实验，观察到了变化。"
+        assert out[0]["image_url"] == ""
+        assert out[1]["image_url"] == ""
+
+    @pytest.mark.asyncio
+    async def test_generate_empty_paragraphs(self):
+        from systemedu.agents.builtin import story_gen_agent as story_mod
+        out = await story_mod.StoryGenAgent().generate({"paragraphs": []})
+        assert out == []
