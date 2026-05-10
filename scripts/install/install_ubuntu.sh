@@ -97,8 +97,14 @@ say "venv python: $(python --version 2>&1)"
 say "升级 pip"
 python -m pip install --upgrade pip setuptools wheel >/tmp/sysedu_pip_bootstrap.log 2>&1
 
-say "pip install -e . (项目依赖)"
-python -m pip install -e . >/tmp/sysedu_pip_install.log 2>&1
+# spec 022: 移除老 systemedu 单包 (避免冲突), 装 monorepo 的 core + cloud-app
+python -m pip uninstall -y systemedu 2>/dev/null || true
+
+say "pip install -e packages/core"
+python -m pip install -e packages/core >/tmp/sysedu_pip_install.log 2>&1
+
+say "pip install -e packages/cloud-app"
+python -m pip install -e packages/cloud-app >>/tmp/sysedu_pip_install.log 2>&1
 tail -n 1 /tmp/sysedu_pip_install.log
 
 say "pip install aiohttp"
