@@ -1,9 +1,9 @@
 # 022-monorepo-refactor
 
-**Status**: in-progress (Phase 0 shipped 2026-05-08, Phase 1+ 待实施)
+**Status**: shipped (Phase 0-5 完成 2026-05-11)
 **Owner**: xinghan
 **Created**: 2026-05-08
-**Last revised**: 2026-05-08 (产品定位变更: 不做 local; 全部 cloud SaaS)
+**Last revised**: 2026-05-11 (Phase 5 部署生产 + 标 shipped)
 
 ## 背景
 
