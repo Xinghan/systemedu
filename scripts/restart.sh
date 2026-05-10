@@ -31,7 +31,7 @@ echo ""
 echo "=== Starting backend ==="
 cd "$PROJECT_DIR"
 mkdir -p "$PROJECT_DIR/.run"
-nohup bash -lc "cd '$PROJECT_DIR' && source .venv/bin/activate && python -m systemedu.gateway.server" > "$PROJECT_DIR/.run/backend.log" 2>&1 &
+nohup bash -lc "cd '$PROJECT_DIR' && source .venv/bin/activate && python -m systemedu.cloud.gateway.server" > "$PROJECT_DIR/.run/backend.log" 2>&1 &
 BACKEND_PID=$!
 echo "Backend starting (PID: $BACKEND_PID)"
 
