@@ -14,15 +14,19 @@ SystemEdu 是一款**本地优先的 AI Agent Sandbox 平台**，教育为核心
 
 ## Tech Stack
 
-### Core (`/src/systemedu/`)
+### Core (`packages/core/`, spec 022 monorepo)
 - **Language**: Python 3.12+
-- **CLI**: Typer + Rich
 - **Config**: YAML + Pydantic models
 - **Agent Runtime**: LangGraph + LangChain + OpenAI-compatible LLM
 - **Memory**: Mem0 (optional, vector+graph hybrid)
-- **Storage**: SQLite (local) + SQLAlchemy
-- **MCP**: Python MCP SDK (Phase 2)
-- **Skills**: SKILL.md format (compatible with OpenClaw)
+- **Storage**: SQLite (local) + SQLAlchemy (spec 025 上 PostgreSQL)
+- **MCP**: Python MCP SDK
+- **Skills**: SKILL.md format
+
+### Cloud App (`packages/cloud-app/`, spec 022 monorepo)
+- **Web server**: Starlette + uvicorn
+- **Auth**: JWT (spec 024 多租户)
+- **Frontend**: Next.js 16 + TypeScript (`web/`, 同仓库)
 
 ### LLM Support (multi-provider, OpenAI-compatible API)
 - Qwen (DashScope): `qwen-plus`, `qwen-turbo`
@@ -38,73 +42,62 @@ SystemEdu 是一款**本地优先的 AI Agent Sandbox 平台**，教育为核心
 - Next.js 16 + TypeScript (reused from legacy frontend)
 
 ### Legacy (removed)
-旧的 `backend/` `frontend/` `adminsite/` `adminsite-fe/` 已于 2026-04-15 删除，历史版本在 git 中可追溯。Gateway API 走 `src/systemedu/gateway/`，前端走 `web/`。
+- 旧的 `backend/` `frontend/` `adminsite/` `adminsite-fe/` 已于 2026-04-15 删除
+- spec 022 (2026-05-11) 拆 monorepo: `src/systemedu/` → `packages/{core, cloud-app}/`;
+  删除 `cli/` `channels/` `hub/` `image_gen.py` (OpenClaw 残留 / Wanx 文生图)
+- Gateway API 现在走 `packages/cloud-app/src/systemedu/cloud/gateway/`
 
-## Project Structure
+## Project Structure (spec 022 monorepo, shipped 2026-05-11)
 
 ```
-systemedu/
+systemedu/                              uv workspace, 闭源 monorepo
 ├── CLAUDE.md
-├── pyproject.toml              # Python package, CLI entry point
-├── src/systemedu/              # Main package
-│   ├── cli/                    # CLI commands (typer)
-│   │   ├── main.py             # Entry point: `systemedu`
-│   │   ├── agent.py            # systemedu agent start/stop/status
-│   │   ├── project.py          # systemedu project init/list/info
-│   │   ├── config_cmd.py       # systemedu config show/set/get/edit
-│   │   ├── mcp.py              # systemedu mcp add/list/remove
-│   │   ├── skill.py            # systemedu skill list/add/remove
-│   │   └── channel.py          # systemedu channel list/add/remove
-│   ├── core/                   # Agent runtime core
-│   │   ├── config.py           # Config loading (Pydantic + YAML)
-│   │   ├── runtime.py          # Agent runtime (msg → LLM → tools → response)
-│   │   ├── llm_client.py       # Multi-provider LLM client
-│   │   ├── tool_executor.py    # Tool execution (bash, file read/write)
-│   │   ├── session.py          # Session management
-│   │   └── sandbox.py          # Process-level sandbox
-│   ├── agents/                 # Agent definitions
-│   │   ├── base.py             # BaseAgent abstract class
-│   │   ├── manager.py          # Agent instance management
-│   │   └── builtin/            # Built-in agents
-│   │       ├── tutor.py        # AI 导师
-│   │       ├── planner.py      # 知识树生成
-│   │       └── assessor.py     # 知识评估
-│   ├── channels/               # Communication channels
-│   │   ├── base.py             # Channel abstract interface
-│   │   ├── registry.py         # Channel registry
-│   │   ├── cli_channel.py      # Terminal interaction
-│   │   └── web_channel.py      # WebSocket (Phase 5)
-│   ├── education/              # Education layer
-│   │   ├── models.py           # Pydantic models (Project, KnowledgeNode, etc.)
-│   │   ├── services.py         # Knowledge tree validation/import
-│   │   ├── progress.py         # Learning progress tracking
-│   │   └── tree_generator.py   # AI knowledge tree generation
-│   ├── mcp/                    # MCP server management (Phase 2)
-│   ├── skills/                 # Skills system
-│   │   ├── loader.py           # SKILL.md parser, hierarchical loading
-│   │   ├── registry.py         # Skill registry
-│   │   └── builtin/            # Built-in skills (SKILL.md files)
-│   ├── memory/                 # Mem0 memory client
-│   ├── hub/                    # Hub client (Phase 4)
-│   └── storage/                # Local SQLite storage
-│       ├── db.py               # SQLAlchemy models
-│       └── files.py            # Project file operations
-├── projects/                   # Example projects
-│   └── train-ai-model/
-│       ├── project.yaml
-│       └── knowledge_tree.json
-├── tests/                      # pytest test suite
-├── scripts/                    # Ops-only (restart.sh, deploy.sh, server-ssh.sh, ...)
-├── course_factory/             # Course Factory component (factory.py, runtime,
-│                               #   validate, tests, fixtures, images;
-│                               #   SKILL.md is symlink to .claude/skills/...)
-├── specs/                      # Per-feature spec/plan/tasks (speckit)
-├── docs/                       # Long-lived docs (prd.md, todolist, archive/)
-├── .claude/skills/             # Claude Code skills (speckit-*, course_factory)
-└── .specify/                   # spec-kit templates, scripts, constitution
+├── pyproject.toml                      uv workspace root (无代码)
+│
+├── packages/                           ── 服务代码层 ──
+│   ├── core/                           共享 lib (systemedu-core)
+│   │   ├── pyproject.toml
+│   │   └── src/systemedu/core/
+│   │       ├── config.py               Pydantic + YAML 配置
+│   │       ├── llm_client.py           multi-provider LLM router (spec 017+021)
+│   │       ├── sandbox.py / tool_executor.py
+│   │       ├── agents/                 BaseAgent + planner / tutor / 等
+│   │       ├── course_factory_v3/      12 步课程生成流水线 (spec 016)
+│   │       ├── education/              models / services / tree_generator
+│   │       ├── storage/                SQLAlchemy DB schema
+│   │       ├── tutor/                  记忆 / 工具 / agent runtime (spec 014)
+│   │       ├── memory/                 mem0 客户端
+│   │       ├── mcp/                    MCP servers
+│   │       └── skills/                 SKILL.md loader + builtin
+│   ├── cloud-app/                      多租户 SaaS gateway (systemedu-cloud)
+│   │   ├── pyproject.toml              depends on systemedu-core
+│   │   └── src/systemedu/cloud/gateway/
+│   │       ├── server.py               FastAPI/Starlette HTTP server
+│   │       ├── auth.py                 JWT (spec 024 强化)
+│   │       ├── tutor_runner.py         LangGraph runner
+│   │       └── session.py              chat session 管理
+│   └── (library-app/)                  spec 023 起步, 内容服务
+│
+├── tools/
+│   └── content-pipeline/               内容流水线 CLI (dev 装, 不进生产, spec 023)
+│
+├── content-workspace/                  gitignored, 内容创作工作区 (spec 023)
+├── web/                                Next.js 前端
+├── course_factory/                     Claude Code SKILL.md (内容生产手册)
+├── scripts/
+│   ├── install.sh                      一键安装入口
+│   ├── restart.sh                      本地启 backend + frontend + dighuman
+│   └── install/                        平台特定脚本
+├── tests/                              跨 package 集成测试
+├── specs/                              per-feature spec/plan/tasks (speckit)
+└── docs/                               prd.md / 长期文档
 ```
 
-Course Factory 流程（Claude Code 作为 skill 调用）：见 `.claude/skills/course_factory/SKILL.md`。Python API 通过 `from course_factory import ...` 调用。
+**关键依赖单向**: `cloud-app → core`; core 不知道 cloud 存在。
+
+**Course Factory** 流程 (Claude Code 作为 skill 调用): 见 `course_factory/SKILL.md`。
+Python API 通过 `from course_factory import ...` 调用; 内部依赖
+`from systemedu.core.* import ...` (spec 022 后)。
 
 ## Common Commands
 
@@ -114,7 +107,7 @@ Course Factory 流程（Claude Code 作为 skill 调用）：见 `.claude/skills
 ```
 Kills existing processes on ports 18820 (backend) and 3000 (frontend), then starts both.
 
-- Backend: `source .venv/bin/activate && python -m systemedu.gateway.server` (port 18820)
+- Backend: `source .venv/bin/activate && python -m systemedu.cloud.gateway.server` (port 18820, spec 022 后)
 - Frontend: `cd web && npm run dev` (port 3000)
 - Note: 本机有 HTTP proxy (`http_proxy=http://127.0.0.1:7890`)，curl 测试时需加 `--noproxy '*'`
 
